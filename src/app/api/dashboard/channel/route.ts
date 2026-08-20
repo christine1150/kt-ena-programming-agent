@@ -108,6 +108,7 @@ export async function GET(request: Request) {
       topPrograms: [],
       periodDemographics: [],
       periodProgramMovers: [],
+      demographicHighlights: [],
     });
   }
   // 기존 코드/변수명과의 호환을 위해 asOfDate = dateTo로 둔다(모든 trailing-window 계산의 기준일).
@@ -377,6 +378,26 @@ export async function GET(request: Request) {
   });
   const narrativeSignal = narrativeData?.[0] ?? null;
 
+  // 오늘의 브리핑 고도화(사용자 지시 2026-08-20): "타깃상세 탭의 5대 지표(시청률/점유율/도달율/
+  // 시청시간/시청시간비율)까지 포함한 편성 Intelligence 브리핑" — 위 narrativeSignal의 대표
+  // 4개 연령대(20/40대)보다 넓게, 전체 연령대(10~60대+ × 남/여 12개)를 대상으로 오늘 상위 3개
+  // 프로그램의 "본방 슬롯" 대비 이상치를 찾는다(get_channel_demographic_program_highlights).
+  const fullDemographicTargets = isNationalScope
+    ? ["전국 남10대", "전국 여10대", "전국 남20대", "전국 여20대", "전국 남30대", "전국 여30대", "전국 남40대", "전국 여40대", "전국 남50대", "전국 여50대", "전국 남60대+", "전국 여60대+"]
+    : ["수도권 남10대", "수도권 여10대", "수도권 남20대", "수도권 여20대", "수도권 남30대", "수도권 여30대", "수도권 남40대", "수도권 여40대", "수도권 남50대", "수도권 여50대", "수도권 남60대+", "수도권 여60대+"];
+  let demographicHighlights: { program_name: string; program_start_time: string; demographic_label: string; metric: string; today_value: number | null; baseline_avg: number | null; baseline_days: number; delta_pct: number | null }[] = [];
+  if (channel.code !== "SKYUHD" && !isRangeMode) {
+    const { data: highlightsData } = await supabase.rpc("get_channel_demographic_program_highlights", {
+      p_channel_code: channel.code,
+      p_kpi_target_label: programTargetLabel,
+      p_demographic_labels: fullDemographicTargets,
+      p_as_of_date: dateTo,
+      p_top_n_programs: 3,
+      p_program_baseline_weeks: 8,
+    });
+    demographicHighlights = highlightsData ?? [];
+  }
+
   // WHO IS WATCHING? — 대표 연령대 4개의 Affinity. 자사 6개 채널끼리만 비교 가능하다(경쟁채널엔
   // 세부 타깃 데이터가 없음). 연령대별 데이터가 채널의 시장 스코프(수도권/전국)에 따라 다른
   // 표기로만 존재해서(예: OLIFE/ONCE/ENA Story는 "전국 여20대"만 있고 "수도권 여20대"는 없음,
@@ -452,6 +473,7 @@ export async function GET(request: Request) {
     hourlyProgramTitles: hourlyProgramTitles ?? [],
     targetAchievement,
     narrativeSignal,
+    demographicHighlights,
     compareChannelCode,
     competitorInsightReport: competitorInsightReport ?? [],
     competitorProgramOverlap: overlapData ?? [],

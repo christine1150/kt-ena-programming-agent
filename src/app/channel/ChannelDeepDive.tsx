@@ -188,6 +188,33 @@ interface NarrativeSignal {
   dow_baseline_avg_rating: number | null;
 }
 
+// 오늘의 브리핑 고도화(사용자 지시 2026-08-20) — 타깃상세 탭 5대 지표(시청률/점유율/도달율/
+// 시청시간/시청시간비율) × 연령대(10개 안팎) × 오늘 상위 3개 프로그램 단위 이상치.
+// get_channel_demographic_program_highlights 그대로.
+interface DemographicHighlightRow {
+  program_name: string;
+  program_start_time: string;
+  demographic_label: string;
+  metric: "rating" | "share" | "reach" | "time_spent_seconds" | "time_spent_share";
+  today_value: number | null;
+  baseline_avg: number | null;
+  baseline_days: number;
+  delta_pct: number | null;
+}
+const METRIC_LABEL: Record<DemographicHighlightRow["metric"], string> = {
+  rating: "시청률",
+  share: "점유율",
+  reach: "도달율",
+  time_spent_seconds: "시청시간",
+  time_spent_share: "시청시간 비율",
+};
+function fmtMetricValue(metric: DemographicHighlightRow["metric"], v: number | null): string {
+  if (v === null) return "—";
+  if (metric === "rating") return fmt(v, 3);
+  if (metric === "time_spent_seconds") return fmtSeconds(v);
+  return `${v.toFixed(1)}%`; // share/reach/time_spent_share는 이미 %(0~100) 단위로 저장됨
+}
+
 // 기간 설정(사용자 지시, 2026-08-20) — 선택 기간 요약(get_rating_period_report). 단일 일자든
 // 범위든 항상 내려온다: 기간 평균, 직전 동일 길이 기간 대비, 최근 12주 평균 대비, 기간 중 최고/최저일.
 interface PeriodReport {
@@ -292,6 +319,7 @@ interface ChannelData {
   opportunityAlert: OpportunityAlert | null;
   targetAchievement: { achievement_pct: number | null; gap: number | null; target_rating: number | null } | null;
   narrativeSignal: NarrativeSignal | null;
+  demographicHighlights: DemographicHighlightRow[];
 }
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -589,6 +617,53 @@ function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string 
 // (시청률/점유율/시청시간/기여 프로그램)를 중심으로 편성 인사이트를 준다. 기간 범위를
 // 선택했으면(사용자 지시 2026-08-20) "오늘" 단일 일자 서술 대신 기간 요약으로 시작한다.
 // refLabel: "어제" 등 오늘이 아닌 날을 볼 때 "오늘"이라고 서술하지 않기 위한 표시(사용자 지시).
+// ── 연령대·프로그램별 특이사항(DEMOGRAPHIC HIGHLIGHTS) — 사용자 지시(2026-08-20): "타깃상세
+// 탭의 5대 지표까지 포함해 편성 Intelligence 수준으로" 브리핑을 올려달라는 요청에 따라, 오늘
+// 방영된 상위 프로그램들의 연령대별 이상치(강세 1건·약세 1건)를 짚는다. get_channel_demographic_
+// program_highlights가 이미 노이즈(작은 표본) 바닥과 "본방 슬롯" 비교를 처리해 내려주므로,
+// 여기서는 프로그램+연령대 단위로 묶어 가장 큰 변화 1건씩만 뽑아 문장화한다 — 참고 예시의
+// "Expected Share Increase: +1.8%p" 같은 예측 수치는 실제로 계산한 값이 아니므로 만들어내지
+// 않고, 실측 데이터(격차 축소 등 이미 OPPORTUNITY?에서 검증된 값)만으로 방향성 제안을 낸다.
+function buildDemographicHighlightsParagraph(rows: DemographicHighlightRow[]): string | null {
+  if (rows.length === 0) return null;
+  // 같은 프로그램+연령대에 5개 지표가 다 있을 수 있으니, 그중 |delta_pct|가 가장 큰 지표 하나만
+  // 그 조합의 대표값으로 삼는다(한 조합을 5줄로 반복 언급하지 않기 위함).
+  const byGroup = new Map<string, DemographicHighlightRow>();
+  for (const r of rows) {
+    if (r.delta_pct === null) continue;
+    const key = `${r.program_name}__${r.program_start_time}__${r.demographic_label}`;
+    const existing = byGroup.get(key);
+    if (!existing || Math.abs(r.delta_pct) > Math.abs(existing.delta_pct ?? 0)) byGroup.set(key, r);
+  }
+  const grouped = [...byGroup.values()].sort((a, b) => Math.abs(b.delta_pct!) - Math.abs(a.delta_pct!));
+  const riser = grouped.find((r) => r.delta_pct! >= 30);
+  const faller = grouped.find((r) => r.delta_pct! <= -30 && r !== riser);
+  if (!riser && !faller) return null;
+
+  const sentences: string[] = [];
+  if (riser) {
+    const demo = shortDemoLabel(riser.demographic_label);
+    let text = `'${riser.program_name}'(${fmtTime(riser.program_start_time)}) ${demo}${josaIga(demo)} ${METRIC_LABEL[riser.metric]} ${fmtMetricValue(riser.metric, riser.today_value)}로, 같은 시간대 최근 8주 평균(${fmtMetricValue(riser.metric, riser.baseline_avg)})보다 ${riser.delta_pct!.toFixed(0)}% 높게 나타나 이 연령대의 몰입도가 눈에 띄게 높았습니다.`;
+    // 같은 조합에 reach·time_spent_share가 둘 다 있으면(둘 다 실측치) "도달 대비 체류시간" 인사이트를 덧붙인다.
+    const sameCombo = grouped.filter((r) => r.program_name === riser.program_name && r.program_start_time === riser.program_start_time && r.demographic_label === riser.demographic_label);
+    const reachRow = sameCombo.find((r) => r.metric === "reach");
+    const tsShareRow = sameCombo.find((r) => r.metric === "time_spent_share");
+    if (riser.metric === "time_spent_share" && reachRow && reachRow.delta_pct !== null && reachRow.delta_pct < riser.delta_pct! - 20) {
+      text += ` 도달율(${reachRow.delta_pct >= 0 ? "▲" : "▼"} ${Math.abs(reachRow.delta_pct).toFixed(0)}%)보다 시청시간 비율 증가폭이 더 커, 실제로 본 사람들의 집중도가 강했던 것으로 보입니다.`;
+    } else if (riser.metric !== "time_spent_share" && tsShareRow && tsShareRow.delta_pct !== null && tsShareRow.delta_pct >= 20) {
+      text += ` 시청시간 비율도 최근 8주 평균 대비 ${tsShareRow.delta_pct >= 0 ? "▲" : "▼"} ${Math.abs(tsShareRow.delta_pct).toFixed(0)}%로 함께 높아, 단순 시청을 넘어 집중해서 본 것으로 보입니다.`;
+    }
+    sentences.push(text);
+  }
+  if (faller) {
+    const demo = shortDemoLabel(faller.demographic_label);
+    sentences.push(
+      `반대로 '${faller.program_name}'(${fmtTime(faller.program_start_time)}) ${demo}${josaEunNeun(demo)} ${METRIC_LABEL[faller.metric]} ${fmtMetricValue(faller.metric, faller.today_value)}로, 같은 시간대 최근 8주 평균(${fmtMetricValue(faller.metric, faller.baseline_avg)})보다 ${Math.abs(faller.delta_pct!).toFixed(0)}% 낮아 이 연령대의 이탈 가능성을 점검해볼 필요가 있습니다.`
+    );
+  }
+  return sentences.join(" ");
+}
+
 function buildBriefingReport(
   data: ChannelData,
   refLabel: string,
@@ -677,6 +752,27 @@ function buildBriefingReport(
 
   if (paragraphs.length === 0) {
     return ["브리핑을 작성할 데이터가 아직 부족합니다."];
+  }
+
+  // 연령대·프로그램별 특이사항(DEMOGRAPHIC HIGHLIGHTS, 사용자 지시 2026-08-20) — 기간 범위
+  // 선택 시에는 API가 계산하지 않으므로(단일 일자 "오늘 상위 3개 프로그램" 개념이라 기간에는
+  // 적용하지 않음) 자연히 비어 있어 문단이 생략된다.
+  const demoHighlight = buildDemographicHighlightsParagraph(data.demographicHighlights);
+  if (demoHighlight) paragraphs.push(demoHighlight);
+
+  // AI 편성 추천 브릿지 문장 — 사용자가 참고로 준 예시는 "Expected Share Increase: +1.8%p" 같은
+  // 예측 수치를 포함했지만, 이 프로젝트는 실제로 계산하지 않은 값을 만들어내지 않는다(CLAUDE.md
+  // 원칙: 추측 금지, 상관관계를 인과관계로 단정하지 않음). 대신 이미 실측·검증된 OPPORTUNITY?의
+  // daypart별 경쟁채널 격차 축소값과 위 연령대 강세를 연결해 방향성만 제안하고, 근거는 아래
+  // OPPORTUNITY? 섹션을 보라고 안내한다.
+  if (demoHighlight) {
+    const validOpp = data.daypartOpportunity.filter((d) => d.gap_change !== null);
+    const bestOpp = validOpp.length > 0 ? [...validOpp].sort((a, b) => (b.gap_change ?? 0) - (a.gap_change ?? 0))[0] : null;
+    if (bestOpp && bestOpp.gap_change !== null && bestOpp.gap_change > 0) {
+      paragraphs.push(
+        `참고로 ${DAYPART_LABEL[bestOpp.daypart] ?? bestOpp.daypart}는 최근 경쟁채널과의 격차가 좁혀지고 있는 시간대입니다(근거는 아래 OPPORTUNITY? 참고) — 위에서 반응이 좋았던 콘텐츠 특성을 이 시간대 편성에도 참고해볼 만합니다(정확한 기대 효과는 예측하지 않으며, 실제 편성 결과로 확인이 필요합니다).`
+      );
+    }
   }
 
   // 원인 추적·기회 탐지 — 상관관계 참고 정보로 자연스럽게 이어붙임(기간 선택과 무관하게
