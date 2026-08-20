@@ -1,124 +1,24 @@
 {
   "fileEditCounts": {
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\app\\channel\\ChannelDeepDive.tsx": {
-      "count": 121,
-      "ts": 1787205949891
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\app\\Dashboard.tsx": {
-      "count": 55,
-      "ts": 1787205932132
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\app\\api\\dashboard\\channel\\route.ts": {
-      "count": 23,
-      "ts": 1787201724549
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\app\\api\\dashboard\\page1\\route.ts": {
-      "count": 12,
-      "ts": 1787199399722
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\supabase\\migrations\\20260820180000_fit_score_current_daypart.sql": {
-      "count": 1,
-      "ts": 1787191753680
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\lib\\intent\\types.ts": {
-      "count": 1,
-      "ts": 1787192360562
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\lib\\intent\\timeResolver.ts": {
+    "C:\\Users\\sky tv\\Desktop\\my-app\\.vercelignore": {
       "count": 2,
-      "ts": 1787192413956
+      "ts": 1787207358032
     },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\lib\\intent\\referenceData.ts": {
+    "C:\\Users\\sky tv\\Desktop\\my-app\\README.md": {
       "count": 1,
-      "ts": 1787192430683
+      "ts": 1787208032704
     },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\lib\\intent\\parameterExtractor.ts": {
-      "count": 1,
-      "ts": 1787192477583
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\lib\\intent\\intentRegistry.ts": {
+    "C:\\Users\\SKYTV~1\\AppData\\Local\\Temp\\claude\\C--Users-sky-tv-Desktop-my-app\\8c2f6f9b-e28f-4d9c-8018-9cfb1d90cc12\\scratchpad\\deck\\build.js": {
       "count": 3,
-      "ts": 1787192893715
+      "ts": 1787208166841
     },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\lib\\intent\\intentRouter.ts": {
+    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\app\\channel\\ChannelSidebar.tsx": {
       "count": 1,
-      "ts": 1787192529393
+      "ts": 1787220259771
     },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\lib\\intent\\executors.ts": {
-      "count": 4,
-      "ts": 1787192907473
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\lib\\intent\\responseTemplates.ts": {
-      "count": 9,
-      "ts": 1787198064417
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\app\\api\\ask\\route.ts": {
-      "count": 3,
-      "ts": 1787200894086
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\scripts\\test-intent-router.ts": {
-      "count": 3,
-      "ts": 1787192945798
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\package.json": {
+    "C:\\Users\\SKYTV~1\\AppData\\Local\\Temp\\claude\\C--Users-sky-tv-Desktop-my-app\\1d90c2a3-3f4f-4b84-9e69-9fd03cbbed91\\scratchpad\\commit-msg.txt": {
       "count": 1,
-      "ts": 1787192854017
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\CLAUDE.md": {
-      "count": 5,
-      "ts": 1787201260877
-    },
-    "C:\\Users\\SKYTV~1\\AppData\\Local\\Temp\\claude\\C--Users-sky-tv-Desktop-my-app\\bbeaeb78-685a-4875-97e3-f33fdd06be70\\scratchpad\\pdfread\\extract.mjs": {
-      "count": 3,
-      "ts": 1787194703187
-    },
-    "C:\\Users\\SKYTV~1\\AppData\\Local\\Temp\\claude\\C--Users-sky-tv-Desktop-my-app\\bbeaeb78-685a-4875-97e3-f33fdd06be70\\scratchpad\\pdfread\\render.mjs": {
-      "count": 1,
-      "ts": 1787194748382
-    },
-    "C:\\Users\\SKYTV~1\\AppData\\Local\\Temp\\claude\\C--Users-sky-tv-Desktop-my-app\\bbeaeb78-685a-4875-97e3-f33fdd06be70\\scratchpad\\pdfread\\montage.mjs": {
-      "count": 1,
-      "ts": 1787194816020
-    },
-    "C:\\Users\\sky tv\\.claude\\projects\\C--Users-sky-tv-Desktop-my-app\\memory\\market-context-2026-h1.md": {
-      "count": 1,
-      "ts": 1787194993538
-    },
-    "C:\\Users\\sky tv\\.claude\\projects\\C--Users-sky-tv-Desktop-my-app\\memory\\MEMORY.md": {
-      "count": 1,
-      "ts": 1787195000739
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\supabase\\migrations\\20260820190000_competitor_overlap_full_rank.sql": {
-      "count": 2,
-      "ts": 1787196198893
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\lib\\josa.ts": {
-      "count": 3,
-      "ts": 1787197904305
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\components\\ChannelLogo.tsx": {
-      "count": 1,
-      "ts": 1787198948226
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\supabase\\migrations\\20260820200000_dow_hourblock_heatmap.sql": {
-      "count": 1,
-      "ts": 1787199584581
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\lib\\nielsenIngest.ts": {
-      "count": 2,
-      "ts": 1787200468325
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\supabase\\migrations\\20260820210000_ratings_first_run_fit_score.sql": {
-      "count": 1,
-      "ts": 1787200554767
-    },
-    "C:\\Users\\sky tv\\Desktop\\my-app\\src\\lib\\intent\\llmClassifier.ts": {
-      "count": 2,
-      "ts": 1787201775891
-    },
-    "C:\\Users\\SKYTV~1\\AppData\\Local\\Temp\\claude\\C--Users-sky-tv-Desktop-my-app\\bbeaeb78-685a-4875-97e3-f33fdd06be70\\scratchpad\\pptx-build\\build.js": {
-      "count": 1,
-      "ts": 1787202431073
+      "ts": 1787220748132
     }
   }
 }

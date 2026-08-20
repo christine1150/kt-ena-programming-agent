@@ -35,6 +35,28 @@ export default function ChannelSidebar({ channels }: { channels: ChannelOption[]
           </Link>
         );
       })}
+      {/* 사용자 지시(2026-08-20): 좌측 하단에 1페이지(종합 대시보드)로 돌아가는 홈 아이콘 —
+          위 채널 아이콘들과 같은 모양·간격으로 통일감 있게, mt-auto로 사이드바 맨 아래 고정. */}
+      <Link
+        href="/"
+        title="메인 화면으로"
+        aria-label="메인 화면으로"
+        className="mt-auto flex w-16 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center transition hover:bg-white/70"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-6 w-6 text-zinc-500"
+        >
+          <path d="M3 11.5 12 4l9 7.5" />
+          <path d="M5.5 9.5V20a1 1 0 0 0 1 1H10a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h0a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h3.5a1 1 0 0 0 1-1V9.5" />
+        </svg>
+        <span className="text-[10px] text-zinc-500">홈</span>
+      </Link>
     </nav>
   );
 }
