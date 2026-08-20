@@ -1,0 +1,116 @@
+// INTENT REGISTRY — 스펙 30번. 첫 슬라이스로 5개 Macro 중 자주 쓰일 9개 Intent를 등록했다
+// (스펙 원안은 11개 Macro/수십 개 Intent였지만, CLAUDE.md "최소부터 시작, 확장은 필요할 때마다"
+// 원칙에 따라 이미 있는 SQL 함수로 바로 답할 수 있는 것부터 시작 — 새 SQL을 만들지 않았다).
+// 여기 없는 질문은 스펙 29번 그대로 "현재 버전에서는 지원하지 않는다"로 안내한다.
+import type { IntentDefinition } from "./types";
+
+export const INTENT_REGISTRY: IntentDefinition[] = [
+  {
+    intent_id: "PORTFOLIO_RANKING",
+    macro_intent: "PORTFOLIO_HEALTH",
+    description: "7개 채널 중 시청률/등락 기준으로 가장 잘한(부진한)/많이 상승(하락)한 채널을 찾는다.",
+    examples: ["어제 채널 중 가장 잘한 채널은?", "전일 대비 가장 많이 상승한 채널은?", "최근 4주 평균이 가장 높은 채널은?"],
+    keywords: [
+      "채널 중",
+      "가장 잘한",
+      "가장 부진한",
+      "가장 강한 채널",
+      "가장 높은 채널",
+      "가장 안정적인",
+      "가장 많이 상승",
+      "가장 많이 하락",
+      "많이 오른",
+      "많이 상승",
+      "많이 하락",
+    ],
+    required_parameters: [],
+    data_mart: "get_rating_period_report (7개 채널 반복 조회)",
+    specificity: 1,
+  },
+  {
+    intent_id: "PORTFOLIO_KPI_GAP",
+    macro_intent: "PORTFOLIO_HEALTH",
+    description: "채널별 목표(KPI) 달성률과 Gap을 비교한다.",
+    examples: ["각 채널 KPI 달성률을 보여줘.", "KPI 대비 가장 크게 부족한 채널은?"],
+    keywords: ["KPI", "목표 달성률", "목표 대비", "미달"],
+    required_parameters: [],
+    data_mart: "get_target_achievement (7개 채널 반복 조회)",
+    specificity: 2,
+  },
+  {
+    intent_id: "PORTFOLIO_ALERT",
+    macro_intent: "PORTFOLIO_HEALTH",
+    description: "즉시 편성 검토가 필요한(하락 3일 연속) 채널, 기회가 있는 채널을 찾는다.",
+    examples: ["지금 가장 위험한 채널은?", "즉시 편성 검토가 필요한 채널은?", "가장 큰 Opportunity가 있는 채널은?"],
+    keywords: ["위험한 채널", "즉시 편성 검토", "opportunity가 있는 채널", "기회가 있는 채널"],
+    required_parameters: [],
+    data_mart: "get_root_cause_alert + get_opportunity_alert (7개 채널 반복 조회)",
+    specificity: 2,
+  },
+  {
+    intent_id: "CHANNEL_PERFORMANCE",
+    macro_intent: "CHANNEL_PERFORMANCE",
+    description: "특정 채널의 지정 기간 성과(시청률/점유율/도달율/시청시간, 직전 기간·12주 평균 대비)를 요약한다.",
+    examples: ["어제 ENA DRAMA는 어땠어?", "최근 7일 ENA PLAY 추이는?", "지난달 대비 OLIFE는 좋아졌나?"],
+    keywords: ["어땠", "성과를 요약", "추이는", "좋아졌나", "성과는"],
+    required_parameters: ["channelCode"],
+    data_mart: "get_rating_period_report / get_channel_daily_narrative",
+    specificity: 3,
+  },
+  {
+    intent_id: "CHANNEL_DAYPART",
+    macro_intent: "CHANNEL_PERFORMANCE",
+    description: "특정 채널의 최근 12주 기준 최강/최약 시간대(daypart)를 찾는다.",
+    examples: ["ENA DRAMA에서 가장 강한 시간대는?", "ONCE의 Golden Slot은?", "OLIFE의 약세 시간대는?"],
+    keywords: ["강한 시간대", "약한 시간대", "약세 시간대", "golden slot", "최강 시간대", "최약 시간대"],
+    required_parameters: ["channelCode"],
+    data_mart: "get_channel_dow_daypart_pattern",
+    specificity: 4,
+  },
+  {
+    intent_id: "PROGRAM_TOP",
+    macro_intent: "PROGRAM_PERFORMANCE",
+    description: "특정 채널의 최근 12주 기준 시청률 상위 프로그램을 나열한다.",
+    examples: ["ENA DRAMA 프로그램 TOP 10?", "ONCE 상위 프로그램 알려줘"],
+    keywords: ["프로그램 top", "상위 프로그램", "top 10", "top 5"],
+    required_parameters: ["channelCode"],
+    data_mart: "get_channel_top_programs",
+    specificity: 4,
+  },
+  {
+    intent_id: "TARGET_AFFINITY",
+    macro_intent: "AUDIENCE_INTELLIGENCE",
+    description: "특정 채널에서 특정 연령대의 Affinity(비교 채널 대비 시청 비중 지수)를 확인한다. 채널 단위로만 계산된다(프로그램 단위 아님).",
+    examples: ["ENA PLAY에서 가장 강한 연령대는?", "2049 Affinity가 높은 채널은?", "여3049 친화도는?"],
+    keywords: ["affinity", "친화도", "핵심 시청자", "가장 강한 연령대"],
+    // targetLabel은 필수가 아니다 — "가장 강한 연령대는?"처럼 특정 타깃을 안 짚는 질문은
+    // 대표 연령대 4개를 모두 계산해 그중 가장 높은 것을 답한다(실행부에서 처리).
+    required_parameters: ["channelCode"],
+    data_mart: "get_target_affinity",
+    specificity: 5,
+  },
+  {
+    intent_id: "COMPETITIVE_POSITION",
+    macro_intent: "COMPETITIVE_INTELLIGENCE",
+    description: "특정 채널의 등록 경쟁채널 순위·최근 12주 평균 대비 등락을 비교한다.",
+    examples: ["어제 ENA PLAY와 경쟁채널 비교?", "경쟁채널 대비 우리 순위는?"],
+    keywords: ["경쟁채널 비교", "경쟁구도", "경쟁채널 대비", "경쟁력"],
+    required_parameters: ["channelCode"],
+    data_mart: "get_competitor_insight_report",
+    specificity: 3,
+  },
+  {
+    intent_id: "COMPETITIVE_HEAD_TO_HEAD",
+    macro_intent: "COMPETITIVE_INTELLIGENCE",
+    description: "특정 채널의 프로그램과 동시간대 방영된 등록 경쟁채널 프로그램을 나란히 비교한다.",
+    examples: ["동시간대 경쟁 프로그램은?", "ONCE와 겹치는 경쟁 프로그램은?"],
+    keywords: ["동시간대", "동시간대 경쟁", "겹치는 경쟁"],
+    required_parameters: ["channelCode"],
+    data_mart: "get_competitor_program_overlap",
+    specificity: 4,
+  },
+];
+
+export function findIntentById(id: string): IntentDefinition | undefined {
+  return INTENT_REGISTRY.find((i) => i.intent_id === id);
+}

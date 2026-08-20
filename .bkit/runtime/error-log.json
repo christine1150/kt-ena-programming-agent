@@ -1,0 +1,74 @@
+[
+  {
+    "timestamp": "2026-08-19T06:10:21.849Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": null,
+    "agentType": null,
+    "sessionId": "bbeaeb78-685a-4875-97e3-f33fdd06be70",
+    "message": "",
+    "parseStatus": "partial",
+    "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
+  },
+  {
+    "timestamp": "2026-08-19T09:08:50.798Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": null,
+    "agentType": null,
+    "sessionId": "bbeaeb78-685a-4875-97e3-f33fdd06be70",
+    "message": "",
+    "parseStatus": "partial",
+    "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
+  },
+  {
+    "timestamp": "2026-08-20T05:07:12.234Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": null,
+    "agentType": null,
+    "sessionId": "bbeaeb78-685a-4875-97e3-f33fdd06be70",
+    "message": "",
+    "parseStatus": "partial",
+    "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
+  },
+  {
+    "timestamp": "2026-08-20T05:07:13.189Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": null,
+    "agentType": null,
+    "sessionId": "bbeaeb78-685a-4875-97e3-f33fdd06be70",
+    "message": "",
+    "parseStatus": "partial",
+    "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
+  },
+  {
+    "timestamp": "2026-08-20T05:29:40.385Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": null,
+    "agentType": null,
+    "sessionId": "bbeaeb78-685a-4875-97e3-f33fdd06be70",
+    "message": "",
+    "parseStatus": "partial",
+    "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
+  },
+  {
+    "timestamp": "2026-08-20T05:44:04.798Z",
+    "errorType": "unknown",
+    "category": "unknown",
+    "severity": "low",
+    "agentId": null,
+    "agentType": null,
+    "sessionId": "bbeaeb78-685a-4875-97e3-f33fdd06be70",
+    "message": "",
+    "parseStatus": "partial",
+    "parseWarnings": "StopFailure payload missing useful fields (keys: session_id,transcript_path,cwd,prompt_id,effort,hook_event_name,error,last_assistant_message)"
+  }
+]
