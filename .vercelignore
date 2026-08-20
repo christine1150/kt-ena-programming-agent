@@ -1,0 +1,7 @@
+node_modules
+.next
+.git
+.bkit
+Nielsen Data
+trash-can
+*.log
