@@ -98,8 +98,7 @@ export async function GET(request: Request) {
       hourlyPattern: [],
       hourlyEffectiveDate: null,
       hourlyBaselinePattern: [],
-      hourlyAltPattern: [],
-      hourlyAltTargetLabel: null,
+      hourlyExtraPatterns: [],
       hourlyProgramTitles: [],
       competitorInsightReport: [],
       competitorProgramOverlap: [],
@@ -213,20 +212,31 @@ export async function GET(request: Request) {
   });
 
   // 사용자 지시(2026-08-20): 02~26시 그래프에서 "각 채널의 타깃 시청률"(위 programTargetLabel,
-  // 디폴트로 보임)에 더해, 수도권 2049가 타깃인 채널(ENA/ENA Play/ENA Drama)은 전국 유료가구
-  // 시청률을, 전국 유료가구가 타깃인 채널(OLIFE/ONCE/ENA Story)은 수도권 2049 시청률을 체크박스로
-  // 켜서 볼 수 있게 한다(skyUHD는 타깃 구분이 없는 채널이라 제외). 새 계산을 만들지 않고
-  // get_hourly_rating_pattern을 반대 타깃 라벨로 한 번 더 호출한다.
-  const altProgramTargetLabel = programTargetLabel === "전국 유료가구" ? "수도권 2049" : "전국 유료가구";
-  let hourlyAltPattern: { broadcast_hour: number; avg_rating: number | null; avg_share: number | null; avg_reach: number | null; avg_time_spent_seconds: number | null; program_count: number }[] = [];
-  if (channel.code !== "SKYUHD") {
-    const { data: altData } = await supabase.rpc("get_hourly_rating_pattern", {
+  // 디폴트로 보임)에 더해 여러 개의 추가 타깃을 체크박스로 켜서 볼 수 있게 한다(skyUHD는 타깃
+  // 구분이 없는 채널이라 제외). 채널군마다 실제로 §1.3 타깃상세 시트에 그 타깃 컬럼이 있는지
+  // DB로 직접 확인한 뒤 목록을 정했다(존재하지 않는 조합을 임의로 만들지 않는다 — CLAUDE.md
+  // 원칙):
+  //  - ENA/ENA Play/ENA Drama(수도권 2049 KPI): 전국 유료가구 + 수도권 2039 (둘 다 그 채널들의
+  //    타깃상세 시트에 실제로 있는 컬럼 — 단, ENA Drama는 실측 결과 "수도권 2039" 컬럼 자체가
+  //    없어 체크박스를 눌러도 데이터가 없을 수 있다, 아래에서 자연히 빈 값으로 처리됨).
+  //  - OLIFE/ONCE/ENA Story(전국 유료가구 KPI): 전국 5064 — 사용자가 "수도권 2049, 수도권 5064"를
+  //    요청했지만, 실제 §1.3 타깃상세 시트(이 세 채널 공용)에는 "수도권" 스코프 타깃 자체가
+  //    없고("전국"만 있음) "전국 2049"/"전국 2039" 컬럼도 없다(DB 직접 조회로 확인, 2026-08-20) —
+  //    있는 것(전국 5064)만 추가하고, 없는 조합은 만들지 않는다(원인은 아래 CLAUDE.md 기록 참고).
+  const EXTRA_TARGET_LABELS_BY_KPI: Record<string, string[]> = {
+    "수도권 2049": ["전국 유료가구", "수도권 2039"],
+    "전국 유료가구": ["전국 5064"],
+  };
+  const extraTargetLabels = channel.code === "SKYUHD" ? [] : (EXTRA_TARGET_LABELS_BY_KPI[programTargetLabel] ?? []);
+  const hourlyExtraPatterns: { targetLabel: string; rows: { broadcast_hour: number; avg_rating: number | null; avg_share: number | null; avg_reach: number | null; avg_time_spent_seconds: number | null; program_count: number }[] }[] = [];
+  for (const targetLabel of extraTargetLabels) {
+    const { data: extraData } = await supabase.rpc("get_hourly_rating_pattern", {
       p_channel_code: channel.code,
-      p_target_label: altProgramTargetLabel,
+      p_target_label: targetLabel,
       p_date_from: dateFrom,
       p_date_to: dateTo,
     });
-    hourlyAltPattern = altData ?? [];
+    hourlyExtraPatterns.push({ targetLabel, rows: extraData ?? [] });
   }
 
   // 기간 요약(WHAT HAPPENED?/HOW DEEPLY?의 기간 범위 버전) — 기간 평균, 직전 동일 길이 기간 대비,
@@ -438,8 +448,7 @@ export async function GET(request: Request) {
     hourlyPattern: hourlyPattern ?? [],
     hourlyEffectiveDate: dateFrom === dateTo && hourlyEffectiveDate !== dateTo ? hourlyEffectiveDate : null,
     hourlyBaselinePattern: hourlyBaselinePattern ?? [],
-    hourlyAltPattern,
-    hourlyAltTargetLabel: channel.code !== "SKYUHD" ? altProgramTargetLabel : null,
+    hourlyExtraPatterns,
     hourlyProgramTitles: hourlyProgramTitles ?? [],
     targetAchievement,
     narrativeSignal,

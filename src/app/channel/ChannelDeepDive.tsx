@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDow } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun, josaEulReul } from "@/lib/josa";
+import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import type { EvidenceAnswer as AskAnswer } from "@/lib/intent/types";
 
 interface TrendRow {
@@ -277,10 +278,10 @@ interface ChannelData {
   // 이 필드에 그 날짜가 채워진다(null이면 선택한 날짜 그대로 조회됨).
   hourlyEffectiveDate: string | null;
   hourlyBaselinePattern: HourlyRow[];
-  // 사용자 지시(2026-08-20): 수도권 2049 타깃 채널은 전국 유료가구 시청률을, 전국 유료가구 타깃
-  // 채널은 수도권 2049 시청률을 체크박스로 볼 수 있게(skyUHD 제외, hourlyAltTargetLabel이 null).
-  hourlyAltPattern: HourlyRow[];
-  hourlyAltTargetLabel: string | null;
+  // 사용자 지시(2026-08-20, 두 차례 반영): 채널 KPI 타깃 외에 실제로 §1.3 타깃상세 시트에 있는
+  // 추가 타깃(들)을 체크박스로 볼 수 있게 — 채널군마다 개수가 다르다(ENA류는 2개, 전국류는 1개,
+  // skyUHD는 0개). 단일 hourlyAltPattern/hourlyAltTargetLabel(1개 고정)에서 배열로 일반화.
+  hourlyExtraPatterns: { targetLabel: string; rows: HourlyRow[] }[];
   hourlyProgramTitles: HourlyProgramTitleRow[];
   competitorInsightReport: CompetitorInsightRow[];
   competitorProgramOverlap: CompetitorOverlapRow[];
@@ -325,6 +326,11 @@ function fmtSeconds(v: number | null): string {
 function shortDemoLabel(label: string): string {
   return label.replace(/^(수도권|전국)\s*/, "");
 }
+// 02~26시 그래프의 추가 타깃 체크박스 라벨용 — "수도권 2049" → "수도권2049"(공백만 제거, 스코프는
+// 유지해 "전국 5064"와 "수도권 2049"를 혼동하지 않게 한다).
+function shortTargetLabel(label: string): string {
+  return label.replace(/\s+/g, "");
+}
 
 const TAG_STYLE: Record<string, string> = {
   STRENGTHEN: "bg-emerald-100 text-emerald-700",
@@ -350,19 +356,45 @@ const TAG_DESC: Record<string, string> = {
 // 그 결과 WoW의 "이번 기간"은 "지난 7일" 프리셋과 날짜가 같아지지만(둘 다 트레일링 7일), "지난
 // 7일"은 그 기간 자체의 종합 데이터를 보여주는 용도이고 WoW는 명시적으로 전주와 비교하는 분석
 // 프레이밍이라는 점에서 여전히 별개 항목으로 유지한다.
-type PeriodPreset = "today" | "custom" | "yesterday" | "last7" | "last30" | "ytd" | "dod" | "wow" | "mom" | "qoq" | "yoy";
-const PERIOD_PRESET_OPTIONS: { value: PeriodPreset; label: string }[] = [
-  { value: "today", label: "오늘(최신)" },
-  { value: "custom", label: "직접 선택" },
-  { value: "yesterday", label: "어제" },
-  { value: "last7", label: "지난 7일" },
-  { value: "last30", label: "지난 1달" },
-  { value: "ytd", label: "연간(1월 1일~오늘)" },
-  { value: "dod", label: "어제 대비 오늘 분석" },
-  { value: "wow", label: "전주 대비 이번주 분석(WoW)" },
-  { value: "mom", label: "전월 대비 이번달 분석(MoM)" },
-  { value: "qoq", label: "전분기 대비 이번분기 분석(QoQ)" },
-  { value: "yoy", label: "전년 동기 대비 이번년도 누적 분석(YoY)" },
+// 사용자 지시(2026-08-20): WTD/MTD/QTD(주초·월초·분기초~오늘 누적)를 YTD 옆에 추가하고, 전체
+// 목록을 "종류별로"(빠른 선택 / 기간 누적 / 트레일링 기간 / 비교 분석) 다시 묶었다 — <optgroup>으로
+// 시각적으로도 구분(아래 PERIOD_PRESET_GROUPS).
+type PeriodPreset =
+  | "today"
+  | "custom"
+  | "yesterday"
+  | "wtd"
+  | "mtd"
+  | "qtd"
+  | "ytd"
+  | "last7"
+  | "last30"
+  | "dod"
+  | "wow"
+  | "mom"
+  | "qoq"
+  | "yoy";
+const PERIOD_PRESET_LABELS: Record<PeriodPreset, string> = {
+  today: "오늘(최신)",
+  custom: "직접 선택",
+  yesterday: "어제",
+  wtd: "이번 주 누적(WTD)",
+  mtd: "이번 달 누적(MTD)",
+  qtd: "이번 분기 누적(QTD)",
+  ytd: "연간 누적(YTD, 1월 1일~오늘)",
+  last7: "지난 7일",
+  last30: "지난 1달",
+  dod: "어제 대비 오늘 분석(DoD)",
+  wow: "전주 대비 이번주 분석(WoW)",
+  mom: "전월 대비 이번달 분석(MoM)",
+  qoq: "전분기 대비 이번분기 분석(QoQ)",
+  yoy: "전년 동기 대비 이번년도 누적 분석(YoY)",
+};
+const PERIOD_PRESET_GROUPS: { group: string; values: PeriodPreset[] }[] = [
+  { group: "빠른 선택", values: ["today", "custom", "yesterday"] },
+  { group: "기간 누적(-to-Date)", values: ["wtd", "mtd", "qtd", "ytd"] },
+  { group: "트레일링 기간", values: ["last7", "last30"] },
+  { group: "비교 분석", values: ["dod", "wow", "mom", "qoq", "yoy"] },
 ];
 const COMPARISON_PRESETS = new Set<PeriodPreset>(["dod", "wow", "mom", "qoq", "yoy"]);
 // 비교 분석 프리셋에서 "직전 동일 길이 기간" 대신 쓸 구체적인 라벨.
@@ -401,6 +433,12 @@ function startOfQuarterStr(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`);
   const qStartMonth = Math.floor(d.getMonth() / 3) * 3;
   return toDateStr(new Date(d.getFullYear(), qStartMonth, 1));
+}
+// WTD(이번 주 누적)용 — ISO 주(월요일 시작) 기준 이번 주의 첫날.
+function startOfWeekStr(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const isoDow = ((d.getDay() + 6) % 7) + 1; // 1=월 ... 7=일
+  return addDaysStr(dateStr, -(isoDow - 1));
 }
 // 비교 분석 프리셋(DoD/WoW/MoM/QoQ/YoY): "이번 기간"과 달력 기준으로 정확히 맞춘 "전 기간"을
 // 함께 계산한다. 전 기간의 길이는 항상 이번 기간과 같은 상대적 위치를 갖도록 시작일·종료일을
@@ -451,6 +489,9 @@ function computePeriodPreset(
     return { from: yesterday, to: yesterday };
   }
   if (preset === "ytd") return { from: `${latest.slice(0, 4)}-01-01`, to: latest };
+  if (preset === "wtd") return { from: startOfWeekStr(latest), to: latest };
+  if (preset === "mtd") return { from: `${latest.slice(0, 7)}-01`, to: latest };
+  if (preset === "qtd") return { from: startOfQuarterStr(latest), to: latest };
   if (preset === "last7" || preset === "last30") {
     const daysBack: Record<"last7" | "last30", number> = { last7: 6, last30: 29 };
     return { from: addDaysStr(latest, -daysBack[preset]), to: latest };
@@ -823,7 +864,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 사용자 지시(2026-08-20): 02~26시 그래프에서 채널의 반대쪽 타깃 시청률(수도권2049↔전국유료가구)을
   // 체크박스 하나로 켜서 볼 수 있게(skyUHD 제외). 기본은 꺼짐 — 채널 고유 타깃 시청률이 디폴트로
   // 먼저 보이고, 이건 opt-in으로 추가되는 참고 지표.
-  const [showAltTarget, setShowAltTarget] = useState(false);
+  // 사용자 지시(2026-08-20, 두 차례 반영): 02~26시 그래프에서 채널의 KPI 타깃 외에 실제로 존재하는
+  // 추가 타깃(들)을 체크박스로 켜서 볼 수 있게(채널군마다 개수가 다름, skyUHD 제외). 기본은 전부
+  // 꺼짐 — 채널 고유 타깃 시청률이 디폴트로 먼저 보이고, 이건 opt-in으로 추가되는 참고 지표.
+  const [selectedExtraTargets, setSelectedExtraTargets] = useState<Set<string>>(new Set());
   const [fitScoreItems, setFitScoreItems] = useState<FitScoreItem[] | null>(null);
   const [fitScoreLoading, setFitScoreLoading] = useState(true);
   const [expandedProgram, setExpandedProgram] = useState<string | null>(null);
@@ -947,8 +991,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     hourlyPattern,
     hourlyEffectiveDate,
     hourlyBaselinePattern,
-    hourlyAltPattern,
-    hourlyAltTargetLabel,
+    hourlyExtraPatterns,
     hourlyProgramTitles,
     competitorInsightReport,
     competitorProgramOverlap,
@@ -962,6 +1005,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   } = data;
   const current = trend.find((t) => t.period === "current");
   const dod = trend.find((t) => t.period === "DoD");
+  // 사용자 지시(2026-08-20): 전일 대비 옆에 전주 대비(정확히 7일 전 같은 요일, get_rating_trend_summary가
+  // 이미 계산)도 실제 시청률 값과 함께 표시.
+  const wow = trend.find((t) => t.period === "WoW");
   const accentColor = channel.themeColor ?? "#3b82f6";
   // 사용자 지시(2026-08-20): skyUHD만 예외적으로 2페이지에서 소수점 5자리까지 표기.
   const fmtR = (v: number | null) => fmt(v, code === "SKYUHD" ? 5 : 3);
@@ -974,13 +1020,20 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     avg_reach: Math.max(1e-9, ...hourlyPattern.map((h) => Number(h.avg_reach) || 0)),
     avg_time_spent_seconds: Math.max(1e-9, ...hourlyPattern.map((h) => Number(h.avg_time_spent_seconds) || 0)),
   };
-  // 반대쪽 타깃 시청률(수도권2049↔전국유료가구) — 시간대(hour) 기준으로 조회해 막대 높이 계산에 쓴다.
-  const altByHour = new Map(hourlyAltPattern.map((h) => [h.broadcast_hour, h.avg_rating]));
-  const altMax = Math.max(1e-9, ...hourlyAltPattern.map((h) => Number(h.avg_rating) || 0));
-  const altColor = "#e11d48"; // rose — 기존 4개 지표 색(indigo/sky/emerald/amber)과 겹치지 않게
-  // 사용자 지시(2026-08-20): 두 타깃 시청률을 함께 볼 때는 각자 따로 정규화하지 않고 같은
-  // 상한선(둘 중 큰 쪽 — 보통 유료가구)으로 맞춰야 막대 높이가 실제 크기 비교로 읽힌다.
-  const ratingScaleMax = showAltTarget ? Math.max(maxByMetric.avg_rating, altMax) : maxByMetric.avg_rating;
+  // 추가 타깃 시청률(들) — 채널 KPI 외의 참고 타깃, 시간대(hour) 기준으로 조회해 막대 높이 계산에
+  // 쓴다. 기존 4개 지표 색(indigo/sky/emerald/amber)과 겹치지 않는 색을 순서대로 배정.
+  const EXTRA_TARGET_COLORS = ["#e11d48", "#7c3aed", "#0891b2", "#65a30d"]; // rose/violet/cyan/lime
+  const extraTargetsWithMeta = hourlyExtraPatterns.map((ep, i) => ({
+    targetLabel: ep.targetLabel,
+    shortLabel: shortTargetLabel(ep.targetLabel),
+    color: EXTRA_TARGET_COLORS[i % EXTRA_TARGET_COLORS.length],
+    byHour: new Map(ep.rows.map((h) => [h.broadcast_hour, h.avg_rating])),
+    max: Math.max(1e-9, ...ep.rows.map((h) => Number(h.avg_rating) || 0)),
+  }));
+  const selectedExtraTargetsWithMeta = extraTargetsWithMeta.filter((e) => selectedExtraTargets.has(e.targetLabel));
+  // 사용자 지시(2026-08-20): 여러 타깃 시청률을 함께 볼 때는 각자 따로 정규화하지 않고 같은
+  // 상한선(가장 큰 쪽 — 보통 유료가구)으로 맞춰야 막대 높이가 실제 크기 비교로 읽힌다.
+  const ratingScaleMax = Math.max(maxByMetric.avg_rating, ...selectedExtraTargetsWithMeta.map((e) => e.max));
   const contentFitsRows = fitScoreItems ? [...fitScoreItems].sort((a, b) => contentFitsHelpScore(b) - contentFitsHelpScore(a)) : [];
   // HOW DEEPLY?: 기간/비교 분석 프리셋이면 기간 평균(periodReport), 단일 일자 서술 모드면
   // 기존처럼 그날 값(current). DoD(하루짜리 비교 분석)도 periodReport 쪽을 쓴다 — 값 자체는
@@ -1051,10 +1104,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   onChange={(e) => setPeriodPreset(e.target.value as PeriodPreset)}
                   className="rounded-full bg-white/20 px-3 py-1.5 text-xs font-medium text-white outline-none [&>option]:text-zinc-900"
                 >
-                  {PERIOD_PRESET_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
+                  {PERIOD_PRESET_GROUPS.map((g) => (
+                    <optgroup key={g.group} label={g.group}>
+                      {g.values.map((v) => (
+                        <option key={v} value={v}>
+                          {PERIOD_PRESET_LABELS[v]}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
                 {periodPreset === "custom" && (
@@ -1084,9 +1141,21 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               )}
             </div>
           </div>
-          {!showComparisonView && dod?.rating_change_pct !== null && dod?.rating_change_pct !== undefined && (
-            <p className="mt-2 text-sm text-white/90">
-              전일 대비 {dod.rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(dod.rating_change_pct).toFixed(1)}%
+          {/* 사용자 지시(2026-08-20): "전일(실제 시청률) 대비 상승/하락률", "전주(실제 시청률) 대비
+              상승/하락률" 형식으로 나란히 — 두 비교 모두 get_rating_trend_summary가 이미 계산해준
+              값(dod.rating/wow.rating이 그 비교일 실제 시청률)을 그대로 쓴다. */}
+          {!showComparisonView && ((dod?.rating_change_pct !== null && dod?.rating_change_pct !== undefined) || (wow?.rating_change_pct !== null && wow?.rating_change_pct !== undefined)) && (
+            <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/90">
+              {dod?.rating_change_pct !== null && dod?.rating_change_pct !== undefined && (
+                <span>
+                  전일({fmtR(dod.rating)}) 대비 {dod.rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(dod.rating_change_pct).toFixed(1)}%
+                </span>
+              )}
+              {wow?.rating_change_pct !== null && wow?.rating_change_pct !== undefined && (
+                <span>
+                  전주({fmtR(wow.rating)}) 대비 {wow.rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(wow.rating_change_pct).toFixed(1)}%
+                </span>
+              )}
             </p>
           )}
           {showComparisonView && data.periodReport?.prior_period_change_pct !== null && data.periodReport?.prior_period_change_pct !== undefined && (
@@ -1186,33 +1255,41 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   />
                   <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: m.color }} />
                   {/* 사용자 지시(2026-08-20): 디폴트로 보이는 시청률이 "이 채널의 어떤 타깃" 시청률인지
-                      명확하게 — 수도권2049 타깃 채널이면 "시청률(수도권2049)", 전국유료가구
-                      타깃이면 "시청률(전국유료가구)"로 표시(skyUHD는 타깃 구분이 없어 그대로 "시청률"). */}
-                  {m.key === "avg_rating" && hourlyAltTargetLabel
-                    ? `시청률(${hourlyAltTargetLabel === "전국 유료가구" ? "수도권2049" : "전국유료가구"})`
+                      명확하게 — 예: 수도권2049 타깃 채널이면 "시청률(수도권2049)"로 표시(skyUHD는
+                      타깃 구분이 없어 그대로 "시청률"). */}
+                  {m.key === "avg_rating" && code !== "SKYUHD"
+                    ? `시청률(${shortTargetLabel(resolveProgramLevelTargetLabel(channel.primaryTarget))})`
                     : m.label}
                 </label>
               ))}
-              {/* 사용자 지시(2026-08-20): 수도권2049 타깃 채널은 전국유료가구 시청률을, 전국유료가구
-                  타깃 채널은 수도권2049 시청률을 체크박스로 추가로 볼 수 있게(skyUHD 제외). */}
-              {hourlyAltTargetLabel && (
-                <label className="flex cursor-pointer items-center gap-1.5 text-zinc-600">
+              {/* 사용자 지시(2026-08-20, 두 차례 반영): 채널 KPI 타깃 외에 §1.3 타깃상세 시트에
+                  실제로 있는 추가 타깃(들)을 체크박스로 하나씩 켜서 볼 수 있게(skyUHD 제외, 채널군마다
+                  개수가 다름 — ENA류는 전국유료가구+수도권2039, 전국류는 전국5064). */}
+              {extraTargetsWithMeta.map((e) => (
+                <label key={e.targetLabel} className="flex cursor-pointer items-center gap-1.5 text-zinc-600">
                   <input
                     type="checkbox"
-                    checked={showAltTarget}
-                    onChange={() => setShowAltTarget((v) => !v)}
+                    checked={selectedExtraTargets.has(e.targetLabel)}
+                    onChange={() => {
+                      setSelectedExtraTargets((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(e.targetLabel)) next.delete(e.targetLabel);
+                        else next.add(e.targetLabel);
+                        return next;
+                      });
+                    }}
                     className="h-3.5 w-3.5 rounded border-zinc-300"
-                    style={{ accentColor: altColor }}
+                    style={{ accentColor: e.color }}
                   />
-                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: altColor }} />
-                  시청률({hourlyAltTargetLabel === "전국 유료가구" ? "전국유료가구" : "수도권2049"})
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: e.color }} />
+                  시청률({e.shortLabel})
                 </label>
-              )}
+              ))}
             </div>
           </div>
           {hourlyPattern.length === 0 ? (
             <p className="text-sm text-zinc-400">선택한 기간의 프로그램 단위 데이터가 없습니다.</p>
-          ) : hourlyMetrics.size === 0 && !showAltTarget ? (
+          ) : hourlyMetrics.size === 0 && selectedExtraTargetsWithMeta.length === 0 ? (
             <p className="text-sm text-zinc-400">위 체크박스에서 볼 지표를 하나 이상 선택하세요.</p>
           ) : (
             <>
@@ -1275,20 +1352,19 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                               />
                             );
                           })}
-                          {showAltTarget &&
-                            hourlyAltTargetLabel &&
-                            (() => {
-                              const altValue = altByHour.get(h.broadcast_hour);
-                              if (altValue === null || altValue === undefined) return null;
-                              const heightPct = Math.max(2, (altValue / ratingScaleMax) * 100);
-                              return (
-                                <div
-                                  title={`${h.broadcast_hour}시 시청률(${hourlyAltTargetLabel}): ${altValue.toFixed(3)}`}
-                                  className="w-full max-w-2 rounded-t"
-                                  style={{ height: `${heightPct}%`, backgroundColor: altColor }}
-                                />
-                              );
-                            })()}
+                          {selectedExtraTargetsWithMeta.map((e) => {
+                            const value = e.byHour.get(h.broadcast_hour);
+                            if (value === null || value === undefined) return null;
+                            const heightPct = Math.max(2, (value / ratingScaleMax) * 100);
+                            return (
+                              <div
+                                key={e.targetLabel}
+                                title={`${h.broadcast_hour}시 시청률(${e.targetLabel}): ${value.toFixed(3)}`}
+                                className="w-full max-w-2 rounded-t"
+                                style={{ height: `${heightPct}%`, backgroundColor: e.color }}
+                              />
+                            );
+                          })}
                         </div>
                       </div>
                     );

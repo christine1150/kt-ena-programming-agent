@@ -14,8 +14,14 @@ interface ChannelOption {
 export default function ChannelSidebar({ channels }: { channels: ChannelOption[] }) {
   const pathname = usePathname();
 
+  // 사용자 피드백(2026-08-20): 홈 아이콘이 mt-auto로 사이드바 맨 아래에 있었는데, 사이드바가
+  // 페이지 본문과 함께 스크롤되는 일반 문서 흐름 안에 있어서 본문이 길어지면(8대 질문 섹션
+  // 전부) 홈 아이콘이 화면 맨 아래로 밀려나 스크롤을 끝까지 내려야만 보이는 문제가 있었다 —
+  // sticky + h-screen으로 사이드바 자체를 뷰포트에 고정해, 본문을 얼마나 스크롤하든 채널
+  // 아이콘들과 홈 아이콘이 항상 화면에 보이게 한다(내용이 뷰포트보다 많아지면 사이드바 자체만
+  // 세로 스크롤).
   return (
-    <nav className="flex w-20 flex-col items-center gap-3 border-r border-zinc-100 bg-white/60 py-6 sm:w-24">
+    <nav className="sticky top-0 flex h-screen w-20 shrink-0 flex-col items-center gap-3 overflow-y-auto border-r border-zinc-100 bg-white/60 py-6 sm:w-24">
       {channels.map((c) => {
         const active = pathname === `/channel/${c.code}`;
         return (
