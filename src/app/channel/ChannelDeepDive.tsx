@@ -599,7 +599,10 @@ function buildBriefingReport(
       }
     }
 
-    // 기여 프로그램: 해당 날짜 1위 프로그램이 자기 자신의 12주 평균 대비 얼마나 기여/비기여했는지
+    // 기여 프로그램: 해당 날짜 1위 프로그램이 자기 자신의 같은 요일·시간대(본방 슬롯) 기준 최근
+    // 8주 평균 대비 얼마나 기여/비기여했는지. 사용자 피드백(2026-08-20): 요일·시간대 구분 없이
+    // 같은 이름의 모든 방영분(재방송 포함)을 평균 내면 주 1회 편성되는 오리지널의 등락률이
+    // 비정상적으로 부풀려졌다(예: 712%) — get_channel_daily_narrative가 이제 본방 슬롯만 비교한다.
     if (
       s.top_program_name &&
       s.top_program_baseline_days !== null &&
@@ -611,7 +614,7 @@ function buildBriefingReport(
       const pct = ((s.top_program_rating - s.top_program_baseline_avg) / s.top_program_baseline_avg) * 100;
       if (Math.abs(pct) >= 20) {
         sentences.push(
-          `${refLabel} 가장 시청률이 높았던 프로그램은 '${s.top_program_name}'(${fmtR(s.top_program_rating)}, ${s.top_program_start_time ? fmtTime(s.top_program_start_time) : ""})으로, 이 프로그램의 최근 12주 평균(${fmtR(s.top_program_baseline_avg)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높게 기여했습니다" : "낮아 비기여했습니다"}.`
+          `${refLabel} 가장 시청률이 높았던 프로그램은 '${s.top_program_name}'(${fmtR(s.top_program_rating)}, ${s.top_program_start_time ? fmtTime(s.top_program_start_time) : ""})으로, 이 프로그램의 같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균(${fmtR(s.top_program_baseline_avg)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높게 기여했습니다" : "낮아 비기여했습니다"}.`
         );
       }
     }

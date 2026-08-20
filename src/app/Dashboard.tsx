@@ -236,20 +236,23 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
     if (Math.abs(pct) >= 30) {
       sentences.push({
         priority: Math.abs(pct),
-        text: `'${s.top_program_name}'${josaIga(s.top_program_name)} 오늘 ${formatRating(s.top_program_rating)}(${s.top_program_start_time ? fmtTime(s.top_program_start_time) : ""})로, 최근 평균(${formatRating(s.top_program_baseline_avg)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높은" : "낮은"} 성적을 냈습니다.`,
+        text: `'${s.top_program_name}'${josaIga(s.top_program_name)} 오늘 ${formatRating(s.top_program_rating)}(${s.top_program_start_time ? fmtTime(s.top_program_start_time) : ""})로, 같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균(${formatRating(s.top_program_baseline_avg)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높은" : "낮은"} 성적을 냈습니다.`,
       });
     }
   }
 
   // 사용자 지시(2026-08-20): "평균 대비 엄청난 하락을 이끌었을 경우 그 부분도 코멘트" — 위
   // top_program은 "오늘 최고 시청률" 프로그램 기준이라 그 프로그램 자체가 하락한 경우만 잡힌다.
-  // decline_program은 오늘 방영된 프로그램 중 자기 자신의 최근 12주 평균 대비 가장 크게(-30%
-  // 이상) 부진했던 프로그램을 별도로 짚어(SQL이 이미 -30% 이하만 채워서 내려줌), top_program과
-  // 같은 프로그램이면 중복 언급을 피한다.
+  // decline_program은 오늘 방영된 프로그램 중 자기 자신의 같은 요일·시간대(본방 슬롯) 기준 최근
+  // 8주 평균 대비 가장 크게(-30% 이상) 부진했던 프로그램을 별도로 짚어(SQL이 이미 -30% 이하만
+  // 채워서 내려줌), top_program과 같은 프로그램이면 중복 언급을 피한다.
+  // 사용자 피드백(2026-08-20): 이전엔 요일·시간대 구분 없이 같은 이름의 모든 방영분(재방송 포함)을
+  // 평균 냈더니 "최근 평균"이 실제 본방 대비 비정상적으로 낮게 나와 등락률이 왜곡됐다(예: 712%) —
+  // get_channel_daily_narrative가 2026-08-20부터 같은 요일·시간대(본방 슬롯)로 좁혀서 계산한다.
   if (s.decline_program_name && s.decline_program_name !== s.top_program_name && s.decline_program_delta_pct !== null) {
     sentences.push({
       priority: Math.abs(s.decline_program_delta_pct) * 0.9,
-      text: `'${s.decline_program_name}'${josaEunNeun(s.decline_program_name)} 오늘 ${formatRating(s.decline_program_rating)}(${s.decline_program_start_time ? fmtTime(s.decline_program_start_time) : ""})로, 이 프로그램의 최근 12주 평균(${formatRating(s.decline_program_baseline_avg)})보다 ${Math.abs(s.decline_program_delta_pct).toFixed(0)}% 하락해 평균을 끌어내렸습니다.`,
+      text: `'${s.decline_program_name}'${josaEunNeun(s.decline_program_name)} 오늘 ${formatRating(s.decline_program_rating)}(${s.decline_program_start_time ? fmtTime(s.decline_program_start_time) : ""})로, 이 프로그램의 같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균(${formatRating(s.decline_program_baseline_avg)})보다 ${Math.abs(s.decline_program_delta_pct).toFixed(0)}% 하락해 평균을 끌어내렸습니다.`,
     });
   }
 
@@ -261,8 +264,10 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
   }
 
   // 사용자 지시: ENA/ENA Play/ENA Drama는 KPI(2049)와 별개로, 유료가구 시청률·점유율에서
-  // 최근 12주 평균 대비 유의미하게(±30%) 기여한 타이틀이 있으면 함께 언급한다.
-  if (s.household?.today_top_program && s.household.baseline_days !== null && s.household.baseline_days >= 5) {
+  // 같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균 대비 유의미하게(±30%) 기여한 타이틀이 있으면
+  // 함께 언급한다. baseline_days는 최대 8주라(주 1회 편성 기준) >=3으로 top_program과 기준을
+  // 맞춘다(사용자 피드백 2026-08-20 이전엔 요일·시간대 무관 최근 84일 평균이라 >=5였음).
+  if (s.household?.today_top_program && s.household.baseline_days !== null && s.household.baseline_days >= 3) {
     const h = s.household;
     const todayTopProgram = h.today_top_program;
     if (todayTopProgram && h.today_top_rating !== null && h.baseline_avg_rating !== null && h.baseline_avg_rating > 0) {
@@ -274,7 +279,7 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
           : `2049 타깃과 별개로, 유료가구 기준으로는 '${todayTopProgram}'${josaIga(todayTopProgram)}`;
         sentences.push({
           priority: Math.abs(pct) * 0.8,
-          text: `${lead} 오늘 시청률 ${formatRating(h.today_top_rating)}(점유율 ${h.today_top_share?.toFixed(2) ?? "—"}%)로 최근 12주 평균(${formatRating(h.baseline_avg_rating)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높은" : "낮은"} 성과를 냈습니다.`,
+          text: `${lead} 오늘 시청률 ${formatRating(h.today_top_rating)}(점유율 ${h.today_top_share?.toFixed(2) ?? "—"}%)로 같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균(${formatRating(h.baseline_avg_rating)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높은" : "낮은"} 성과를 냈습니다.`,
         });
       }
     }
@@ -588,7 +593,11 @@ function buildOriginalDailyBriefing(daily: OriginalDailyItem[]): string | null {
   // 화이트리스트가 보통 1~2편이라 어색하게 읽혀 삭제 — 개별 프로그램의 정확한 순위는 위 헤드라인
   // ("<프로그램> N회 본방송 시청률 ... 동시간대 타깃 #위")에서 이미 프로그램명·회차로 정확히 보여준다.
   const parts: string[] = [];
-  if (withChange.length > 0) {
+  // 사용자 피드백(2026-08-20): 화이트리스트가 보통 1~2편이라 "1편 상승, 0편 하락"처럼 표본 1개를
+  // 집계 문장으로 말하면 당연한 소리를 부자연스럽게 반복하는 것으로 읽힌다 — 비교할 프로그램이
+  // 2편 이상일 때만 이 집계 문장을 쓰고, 1편뿐이면 아래 mostMoved 문장이 그 프로그램의 등락을
+  // 이미 개별적으로 설명하므로 생략한다.
+  if (withChange.length >= 2) {
     parts.push(`전회 대비로는 ${risingCount}편 상승, ${fallingCount}편 하락했습니다.`);
   }
   const mostMoved = [...withChange].sort((a, b) => Math.abs(b.prior_rating_change_pct!) - Math.abs(a.prior_rating_change_pct!))[0];
