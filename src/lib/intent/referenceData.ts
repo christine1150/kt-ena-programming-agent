@@ -45,15 +45,33 @@ export async function getChannelRefs(): Promise<ChannelRef[]> {
   return cachedChannels;
 }
 
+// 사용자 지시(2026-08-20): 자연어 검색에서는 ENA Play/ENA Drama가 ENA를 경쟁채널로 인식하지
+// 않는다 — Channel Master "채널 별 경쟁채널" 시트에는 ENA가 실제로 등록돼 있지만(같은 KT ENA
+// 계열 채널이라 시트에 올라간 것으로 보임), 자연어 질의응답에서 "ENA Play의 경쟁채널"이라고
+// 하면 ENA 자체가 나오는 건 PD 입장에서 의미가 없다. Page 2 COMPARED WITH?는 등록된 값을
+// 그대로 보여줘야 하므로(사용자 지시가 "자연어 검색에서"로 범위를 명시적으로 좁힘) 이 예외는
+// competitors 테이블이나 Page 2 조회 SQL이 아니라 자연어 검색 전용 계층(이 파일)에만 둔다.
+const NL_COMPETITOR_EXCLUSIONS: Record<string, string[]> = {
+  ENA_PLAY: ["ENA"],
+  ENA_DRAMA: ["ENA"],
+};
+
+export function isNlCompetitorExcluded(channelCode: string, competitorName: string): boolean {
+  return (NL_COMPETITOR_EXCLUSIONS[channelCode] ?? []).includes(competitorName);
+}
+
 export async function getCompetitorRefs(): Promise<CompetitorRef[]> {
   if (cachedCompetitors) return cachedCompetitors;
   const { data } = await supabase.from("competitors").select("competitor_name, channels(code)");
-  cachedCompetitors = (data ?? []).map((c: { competitor_name: string; channels: { code: string } | { code: string }[] | null }) => ({
-    channelCode: Array.isArray(c.channels) ? (c.channels[0]?.code ?? "") : (c.channels?.code ?? ""),
-    competitorName: c.competitor_name,
-  }));
+  cachedCompetitors = (data ?? [])
+    .map((c: { competitor_name: string; channels: { code: string } | { code: string }[] | null }) => ({
+      channelCode: Array.isArray(c.channels) ? (c.channels[0]?.code ?? "") : (c.channels?.code ?? ""),
+      competitorName: c.competitor_name,
+    }))
+    .filter((c) => !isNlCompetitorExcluded(c.channelCode, c.competitorName));
   return cachedCompetitors;
 }
+
 
 export async function getTargetLabels(): Promise<string[]> {
   if (cachedTargetLabels) return cachedTargetLabels;

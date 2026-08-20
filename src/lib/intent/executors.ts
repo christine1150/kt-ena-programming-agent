@@ -4,7 +4,7 @@
 import { supabase } from "@/lib/supabase";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import type { ExtractedParameters, TimeContext } from "./types";
-import { getChannelRefs, type ChannelRef } from "./referenceData";
+import { getChannelRefs, isNlCompetitorExcluded, type ChannelRef } from "./referenceData";
 
 async function getMatchedTargetLabel(channelCode: string, dateFrom: string, dateTo: string): Promise<string | null> {
   const year = parseInt(dateTo.slice(0, 4), 10);
@@ -194,7 +194,10 @@ export async function execCompetitivePosition(params: ExtractedParameters, timeC
     p_as_of_date: timeContext.dateTo,
     p_date_from: timeContext.dateFrom,
   });
-  return { channel, rows: data ?? [] };
+  // 사용자 지시(2026-08-20): 자연어 검색에서는 ENA Play/ENA Drama가 ENA를 경쟁채널로 인식하지
+  // 않는다(referenceData.ts의 NL_COMPETITOR_EXCLUSIONS 참고).
+  const rows = (data ?? []).filter((r: { competitor_name: string }) => !isNlCompetitorExcluded(channel.code, r.competitor_name));
+  return { channel, rows };
 }
 
 // ── COMPETITIVE_HEAD_TO_HEAD ────────────────────────────────────────────
@@ -208,5 +211,8 @@ export async function execCompetitiveHeadToHead(params: ExtractedParameters, tim
     p_target_label: programTargetLabel,
     p_as_of_date: timeContext.dateTo,
   });
-  return { channel, rows: data ?? [] };
+  // 사용자 지시(2026-08-20): 자연어 검색에서는 ENA Play/ENA Drama가 ENA를 경쟁채널로 인식하지
+  // 않는다(referenceData.ts의 NL_COMPETITOR_EXCLUSIONS 참고).
+  const rows = (data ?? []).filter((r: { competitor_name: string }) => !isNlCompetitorExcluded(channel.code, r.competitor_name));
+  return { channel, rows };
 }
