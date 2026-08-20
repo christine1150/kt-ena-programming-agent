@@ -455,9 +455,19 @@ function ChannelStatusCard({ channels }: { channels: Map<string, ChannelSummary>
     .map((c) => channels.get(c))
     .filter((c): c is ChannelSummary => !!c);
 
+  // 사용자 지시(2026-08-20, 참고 이미지 반영): ENA 히어로를 참고 이미지의 큰 컬러 패널처럼
+  // 채널 테마색을 옅게 은은하게 깐 패널로 감싸, 나머지 압축 채널 목록과 시각적으로 구분되게 했다.
+  const enaAccent = ena?.themeColor ?? "#6366f1";
   return (
     <div className={CARD}>
-      {ena && <ChannelHero channel={ena} />}
+      {ena && (
+        <div
+          className="rounded-2xl p-5"
+          style={{ background: `linear-gradient(135deg, ${enaAccent}1f, ${enaAccent}08)` }}
+        >
+          <ChannelHero channel={ena} />
+        </div>
+      )}
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {rest.map((c) => (
           <CompactChannelRow key={c.code} channel={c} logoReference={ena} />
@@ -900,6 +910,9 @@ function KillerContentCard({ rows }: { rows: KillerContentDaypartRow[] }) {
 
 // 사용자 지시(2026-08-20): 채널명을 앞에, 🔴🟢🟡 상태 라벨은 채널명 뒤에 — 라벨은 영어
 // (STRENGTHEN/WATCH/RISK) 대신 한국어로. 채널명 폰트 색은 그 채널 로고 색(bold)로 표시.
+// 사용자 지시(2026-08-20, 참고 이미지 반영): 한 줄 나열 대신 참고 이미지의 AI Insights 카드
+// 처럼 상태 배지(pill) → 채널명(굵게) → 설명 순으로 세로 배치 — 데이터·톤 로직은 그대로 두고
+// 시각 스타일만 바꿨다(사용자 확인: "비주얼 스타일만 차용").
 function InsightCard({
   channelName,
   themeColor,
@@ -912,18 +925,20 @@ function InsightCard({
   text: string;
 }) {
   const styles = {
-    positive: { emoji: "🟢", bg: "bg-emerald-50", label: "강세" },
-    watch: { emoji: "🟡", bg: "bg-amber-50", label: "주의" },
-    risk: { emoji: "🔴", bg: "bg-rose-50", label: "위험" },
+    positive: { pillBg: "bg-emerald-100", pillText: "text-emerald-700", dot: "bg-emerald-500", label: "강세" },
+    watch: { pillBg: "bg-amber-100", pillText: "text-amber-700", dot: "bg-amber-500", label: "주의" },
+    risk: { pillBg: "bg-rose-100", pillText: "text-rose-700", dot: "bg-rose-500", label: "위험" },
   }[tone];
   return (
-    <div className={`rounded-2xl ${styles.bg} px-3 py-2 text-xs text-zinc-700`}>
-      <span className="mr-1.5 font-bold" style={{ color: themeColor ?? undefined }}>
+    <div className="flex flex-col gap-1.5 rounded-2xl bg-white/70 p-3 ring-1 ring-zinc-100">
+      <span className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${styles.pillBg} ${styles.pillText}`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${styles.dot}`} />
+        {styles.label}
+      </span>
+      <span className="text-sm font-bold" style={{ color: themeColor ?? undefined }}>
         {channelName}
       </span>
-      <span className="mr-1">{styles.emoji}</span>
-      <span className="mr-1.5 font-semibold text-zinc-500">{styles.label}</span>
-      {text}
+      <span className="text-xs leading-relaxed text-zinc-500">{text}</span>
     </div>
   );
 }
@@ -981,11 +996,14 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-gradient-to-br from-indigo-50 via-sky-50 to-violet-50 px-6 py-8">
-      {/* 참고 이미지 톤앤매너: 흐릿한 파스텔 블롭 장식(고정 배경, 콘텐츠와 상호작용 없음) */}
+      {/* 참고 이미지 톤앤매너: 흐릿한 파스텔 블롭 장식(고정 배경, 콘텐츠와 상호작용 없음).
+          사용자 지시(2026-08-20): 참고로 준 건강앱 이미지의 블루·퍼플에 핑크 계열 블롭을
+          하나 더해 색감을 좀 더 가깝게 맞췄다(비주얼 스타일만 차용, 레이아웃은 유지). */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-indigo-200 opacity-40 blur-3xl" />
         <div className="absolute -right-24 top-1/4 h-80 w-80 rounded-full bg-violet-200 opacity-40 blur-3xl" />
         <div className="absolute bottom-0 left-1/4 h-72 w-72 rounded-full bg-sky-200 opacity-30 blur-3xl" />
+        <div className="absolute right-1/4 bottom-1/4 h-64 w-64 rounded-full bg-pink-200 opacity-25 blur-3xl" />
       </div>
 
       <div className="mx-auto max-w-6xl">
@@ -1031,13 +1049,14 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 ⚙
               </a>
             )}
-            {/* 사용자 지시(2026-08-20): 새로고침도 관리자 아이콘처럼 작게. */}
+            {/* 사용자 지시(2026-08-20): 새로고침도 관리자 아이콘처럼 작게. 참고 이미지의 주요
+                버튼(그라디언트) 톤을 반영해 단색 대신 인디고→바이올렛 그라디언트로. */}
             <button
               onClick={load}
               disabled={loading}
               title="새로고침"
               aria-label="새로고침"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-base text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-base text-white shadow-sm hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50"
             >
               {loading ? "…" : "🔄"}
             </button>
