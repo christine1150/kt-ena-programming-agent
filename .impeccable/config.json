@@ -1,0 +1,20 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "ai-color-palette",
+        "value": "from-indigo-50",
+        "createdAt": "2026-08-21T12:34:29.328Z",
+        "reason": "사용자 확인: Page 1 배경 파스텔 그라디언트(indigo-50/sky-50/violet-50)는 사용자가 제공한 참고 이미지(건강앱 톤앤매너) 기반으로 이전 세션에서 의도적으로 선택한 디자인 — 2026-08-21 대화에서 카드 강조색만 ENA 브랜드색으로 바꾸고 배경은 그대로 유지하기로 재확인함"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "from-indigo-50 gradient",
+        "createdAt": "2026-08-21T12:34:50.138Z",
+        "reason": "사용자 확인: Page 1 배경 파스텔 그라디언트(indigo-50/sky-50/violet-50)는 참고 이미지 기반으로 이전 세션에서 의도적으로 선택, 2026-08-21 대화에서 배경 유지로 재확인"
+      }
+    ]
+  }
+}

@@ -22,5 +22,9 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* impeccable 지적(overused-font: Arial) 확인 중 발견 — layout.tsx가 next/font로 Geist를
+     불러와 --font-geist-sans 변수까지 만들어두고도 정작 body에는 한 번도 연결되지 않아서
+     (create-next-app 기본 스캐폴딩이 그대로 남아있던 것으로 보임) 화면 전체가 실제로는
+     Arial로 렌더링되고 있었다 — 이미 불러온 Geist를 실제로 적용하도록 연결한다. */
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
