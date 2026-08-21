@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
-import { formatDateWithDow } from "@/lib/dateFormat";
+import { formatDateWithDowDots } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun } from "@/lib/josa";
 
 interface ChannelSummary {
@@ -20,6 +20,9 @@ interface ChannelSummary {
   currentRating: number | null;
   currentRank: number | null;
   dodChangePct: number | null;
+  // 사용자 지시(2026-08-21, Page 1 매거진 개편): "오늘의 시청률" 채널 타일 증감을 시청률(%) 대신
+  // 전일 대비 순위 증감으로. 양수=순위 개선.
+  rankChangeDod: number | null;
   wowChangePct: number | null; // 전주 동요일(정확히 7일 전) 대비 — 사용자 지시(2026-08-20)
   targetRating: number | null;
   targetRank: string | null;
@@ -63,6 +66,9 @@ interface OriginalDailyItem {
   rerun_rating: number | null;
   retention_pct: number | null;
   competitorHighlights: OriginalCompetitorHighlight[];
+  // 사용자 지시(2026-08-21, 179회 리뷰 재학습): "동시간대 타깃 #위"뿐 아니라 "동시간대 가구 #위"도
+  // — ENA/ENA Play/ENA Drama만(전국 유료가구 타깃 있는 채널), 나머지는 null.
+  householdRank: number | null;
   // 사용자 지시(2026-08-20): 본방 전 선행 재방(전주 회차)·본방 후 당일 자체 재방·직전 방영
   // 대비·회차 번호(회차제 프로그램만, 관리자가 seed를 심어둔 것만 채워짐).
   pre_rerun_start_time: string | null;
@@ -142,6 +148,13 @@ interface ChannelNarrativeSignal {
   decline_program_baseline_days: number | null;
   decline_program_delta_pct: number | null;
   demographics: NarrativeDemographic[] | null;
+  // 사용자 지시(2026-08-21, Page 1 매거진 개편): "최근 4주 평균뿐 아니라 전주·전전주 동일 요일
+  // 흐름도 다각도로 비교" — 정확히 7일 전/14일 전(같은 요일) 채널 단위 시청률.
+  priorWeekRating: number | null;
+  priorWeek2Rating: number | null;
+  // get_channel_daily_narrative가 이미 계산해 내려주는 값(오늘과 같은 요일의 baseline 기간
+  // 평균) — "4주 넘게 반복되는 요일 패턴이라도 핵심적이면 언급"에 사용.
+  dow_baseline_avg_rating: number | null;
   household?: {
     today_top_program: string | null;
     today_top_rating: number | null;
@@ -233,27 +246,69 @@ function shortDemoLabel(label: string): string {
   return label.replace(/^(수도권|전국)\s*/, "");
 }
 
-// 사용자 지시: "최근 4주 평균 동향과 오늘의 데이터를 보았을 때 독특한 인사이트를 주는 시간대·
-// 프로그램·시청률·점유율·시청시간·시청 연령에서 독특한 모습... 4주 이상 같은 패턴이 반복되는
-// 내용은 가급적 피함". SQL이 준 편차값 중 임계값을 넘는 것만 골라 문장으로 만든다 — 편차가
-// 작다는 건 곧 "평소와 같은 반복 패턴"이라는 뜻이라 자연히 걸러진다.
+// 사용자 지시(2026-08-21, Page 1 매거진 개편 — 분석 로직 재설정):
+// 1) 비교 축: 최근 4주 평균뿐 아니라 전주·전전주 동일 요일 흐름도 다각도로 비교.
+// 2) 패턴 언급 규칙 변경: "4주 넘게 반복되는 패턴이라도 일일 시청률에 큰 영향을 미치는 핵심
+//    패턴이면 가급적 언급" — 오늘 요일이 평소(4주) 이 채널의 강세/약세 요일인지(dow_baseline_
+//    avg_rating vs baseline_avg_rating)는 매주 반복되는 사실이지만, 오늘 숫자를 해석하는 데
+//    직접적으로 중요하므로 예외적으로 항상 확인해 포함한다(단, 편차가 뚜렷할 때만).
+// 3) 배치 위계: 앞부분엔 PD·임원진이 바로 이해할 총평(전체 시청률·순위·요일패턴·주간추세·1위
+//    프로그램), 뒷부분엔 전문 데이터(연령대 이동·피크시간대·유료가구 기여)를 배치 — tier 1/2로
+//    나눠 정렬한다.
+// 4) [Strict Warning] 상식적 배경 설명(예: "중장년층이 높은 건 일반적 패턴")은 본문에서 제외 —
+//    이 함수엔 애초에 그런 문장이 없었으므로 유지.
 function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): { channelName: string; text: string } {
-  const sentences: { priority: number; text: string }[] = [];
+  const sentences: { tier: 1 | 2; priority: number; text: string }[] = [];
 
   if (s.rating_delta_pct !== null && Math.abs(s.rating_delta_pct) >= 15 && s.today_rating !== null) {
     const dir = s.rating_delta_pct >= 0 ? "상승" : "하락";
     sentences.push({
+      tier: 1,
       priority: Math.abs(s.rating_delta_pct),
       text: `시청률이 최근 4주 평균(${formatRating(s.baseline_avg_rating)}) 대비 ${Math.abs(s.rating_delta_pct).toFixed(1)}% ${dir}한 ${formatRating(s.today_rating)}을 기록했습니다.`,
     });
+  }
+
+  // 사용자 지시(2026-08-21): "전주·전전주 동일 요일 흐름"도 비교 — 2주 연속 같은 방향으로
+  // 움직이는(단조 증가/감소) 뚜렷한(±15% 이상 누적) 추세만 짚는다(노이즈성 등락 제외).
+  if (s.today_rating !== null && s.priorWeekRating !== null && s.priorWeek2Rating !== null) {
+    const t = s.today_rating, w1 = s.priorWeekRating, w2 = s.priorWeek2Rating;
+    const isRising = t > w1 && w1 > w2;
+    const isFalling = t < w1 && w1 < w2;
+    if ((isRising || isFalling) && w2 > 0) {
+      const totalPct = ((t - w2) / w2) * 100;
+      if (Math.abs(totalPct) >= 15) {
+        sentences.push({
+          tier: 1,
+          priority: Math.abs(totalPct) * 1.2,
+          text: `같은 요일 기준 전전주(${formatRating(w2)}) → 전주(${formatRating(w1)}) → 오늘(${formatRating(t)})로 ${isRising ? "2주 연속 상승" : "2주 연속 하락"} 추세입니다.`,
+        });
+      }
+    }
   }
 
   if (s.today_rank !== null && s.baseline_avg_rank !== null) {
     const diff = s.baseline_avg_rank - s.today_rank; // 양수면 순위 상승(숫자가 작아짐)
     if (Math.abs(diff) >= 3) {
       sentences.push({
+        tier: 1,
         priority: Math.abs(diff) * 3,
         text: `순위가 평소(평균 ${s.baseline_avg_rank.toFixed(1)}위)보다 ${Math.abs(diff).toFixed(1)}위 ${diff >= 0 ? "상승" : "하락"}한 ${s.today_rank}위입니다.`,
+      });
+    }
+  }
+
+  // 사용자 지시(2026-08-21): "4주 넘게 반복되는 패턴이라도 일일 시청률에 큰 영향을 미치는 핵심
+  // 패턴이면 가급적 언급" — 오늘 요일이 평소(4주) 이 채널의 강세/약세 요일인지는 매주 똑같이
+  // 반복되는 사실이지만, 오늘 수치 해석에 직접 관련이 있어 예외적으로 포함한다.
+  const dowBaseline = s.dow_baseline_avg_rating;
+  if (dowBaseline !== null && s.baseline_avg_rating !== null && s.baseline_avg_rating > 0) {
+    const dowPct = ((dowBaseline - s.baseline_avg_rating) / s.baseline_avg_rating) * 100;
+    if (Math.abs(dowPct) >= 15) {
+      sentences.push({
+        tier: 1,
+        priority: Math.abs(dowPct) * 0.7,
+        text: `오늘 요일은 평소(최근 4주) 이 채널이 ${dowPct >= 0 ? "강세" : "약세"}를 보이는 요일입니다(같은 요일 평균 ${formatRating(dowBaseline)} vs 전체 평균 ${formatRating(s.baseline_avg_rating)}).`,
       });
     }
   }
@@ -269,6 +324,7 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
     const pct = ((s.top_program_rating - s.top_program_baseline_avg) / s.top_program_baseline_avg) * 100;
     if (Math.abs(pct) >= 30) {
       sentences.push({
+        tier: 1,
         priority: Math.abs(pct),
         text: `'${s.top_program_name}'${josaIga(s.top_program_name)} 오늘 ${formatRating(s.top_program_rating)}(${s.top_program_start_time ? fmtTime(s.top_program_start_time) : ""})로, 같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균(${formatRating(s.top_program_baseline_avg)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높은" : "낮은"} 성적을 냈습니다.`,
       });
@@ -285,11 +341,13 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
   // get_channel_daily_narrative가 2026-08-20부터 같은 요일·시간대(본방 슬롯)로 좁혀서 계산한다.
   if (s.decline_program_name && s.decline_program_name !== s.top_program_name && s.decline_program_delta_pct !== null) {
     sentences.push({
+      tier: 1,
       priority: Math.abs(s.decline_program_delta_pct) * 0.9,
       text: `'${s.decline_program_name}'${josaEunNeun(s.decline_program_name)} 오늘 ${formatRating(s.decline_program_rating)}(${s.decline_program_start_time ? fmtTime(s.decline_program_start_time) : ""})로, 이 프로그램의 같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균(${formatRating(s.decline_program_baseline_avg)})보다 ${Math.abs(s.decline_program_delta_pct).toFixed(0)}% 하락해 평균을 끌어내렸습니다.`,
     });
   }
 
+  // 아래부터는 전문 데이터(tier 2) — 피크 시간대·유료가구 기여·연령대 이동.
   if (s.today_peak_hour !== null && s.baseline_peak_hour !== null && s.today_peak_hour !== s.baseline_peak_hour) {
     // 사용자 지시(2026-08-21): "17시대에 가장 높은 시청률" 대신 그 시간대 실제 최고 시청률
     // 프로그램명(회차/부제 포함)과 시청률을 괄호로 함께 표기 — 프로그램이 없으면 기존처럼
@@ -298,6 +356,7 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
       ? `${s.today_peak_program_name} ${formatRating(s.today_peak_program_rating)}`
       : formatRating(s.today_peak_rating);
     sentences.push({
+      tier: 2,
       priority: 20,
       text: `평소 강세 시간대(${s.baseline_peak_hour}시대)와 달리 오늘은 ${s.today_peak_hour}시대에 가장 높은 시청률(${peakDetail})을 보였습니다.`,
     });
@@ -318,6 +377,7 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
           ? `'${todayTopProgram}'${josaEunNeun(todayTopProgram)} 수도권 2049뿐 아니라 유료가구 기준으로도`
           : `2049 타깃과 별개로, 유료가구 기준으로는 '${todayTopProgram}'${josaIga(todayTopProgram)}`;
         sentences.push({
+          tier: 2,
           priority: Math.abs(pct) * 0.8,
           text: `${lead} 오늘 시청률 ${formatRating(h.today_top_rating)}(점유율 ${h.today_top_share?.toFixed(2) ?? "—"}%)로 같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균(${formatRating(h.baseline_avg_rating)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높은" : "낮은"} 성과를 냈습니다.`,
         });
@@ -337,6 +397,7 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
     const notable = meaningful[0] ?? zeroed[0];
     if (notable) {
       sentences.push({
+        tier: 2,
         priority: isZeroedOut(notable) ? 1 : Math.abs(notable.delta_pct!),
         text: `${shortDemoLabel(notable.label)} 시청률이 평소보다 ${Math.abs(notable.delta_pct!).toFixed(0)}% ${notable.delta_pct! >= 0 ? "상승한" : "하락한"} ${formatRating(notable.today)}을 기록했습니다.`,
       });
@@ -348,13 +409,14 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
   if (sentences.length === 0) {
     return { channelName, text: "특별한 변화 없이 평소 수준을 유지했습니다." };
   }
-  sentences.sort((a, b) => b.priority - a.priority);
+  // 사용자 지시(2026-08-21): 배치 위계 — tier 1(총평, PD·임원진이 바로 이해)을 앞에, tier 2(전문
+  // 데이터: 연령대·시간대·유료가구)를 뒤에. 각 tier 안에서는 편차 크기(priority) 순.
+  const tier1 = sentences.filter((s2) => s2.tier === 1).sort((a, b) => b.priority - a.priority);
+  const tier2 = sentences.filter((s2) => s2.tier === 2).sort((a, b) => b.priority - a.priority);
+  const ordered = [...tier1.slice(0, 3), ...tier2.slice(0, 2)];
   return {
     channelName,
-    text: sentences
-      .slice(0, 3)
-      .map((s2) => s2.text)
-      .join(" "),
+    text: ordered.map((s2) => s2.text).join(" "),
   };
 }
 
@@ -374,7 +436,10 @@ function buildSkyUhdNarrative(s: ChannelNarrativeSignal | undefined): { channelN
 // 하락은 채도를 낮춘 짙은 버건디로 교체(Tailwind rose-600의 "신호등" 느낌 대신 절제된 톤).
 // 방향성 자체(상승/하락 구분)는 시청률 데이터의 핵심 정보라 유지하되, 색만 더 차분하게 다듬었다.
 const ACCENT_UP = "#281fc7"; // ENA 브랜드 색 계열(카드 제목과 동일 톤)
-const ACCENT_DOWN = "#9f1239"; // 짙은 버건디(rose-800) — 경고성 원색 대신 절제된 톤
+// 사용자 재지시(2026-08-21, Page 1 매거진 개편): "하락 표시(레드)의 채도가 너무 낮다 — 고급스러움을
+// 유지하는 선에서 채도를 살짝 높여 시인성 확보." rose-800(#9f1239)에서 rose-700(#be123c)으로 한
+// 단계만 올렸다(더 밝은 rose-600/500은 다시 "신호등" 원색에 가까워져 제외).
+const ACCENT_DOWN = "#be123c"; // 짙은 버건디(rose-700) — 절제된 톤 유지하면서 시인성 보강
 
 // 사용자 지시: pill 배지 대신 절제된 텍스트+화살표(레퍼런스 tvn.cjenm.com 실측: 숫자 위주
 // 데이터에 배경 배지를 쓰지 않고 굵은 글씨+색상만으로 강조하는 방식을 참고).
@@ -399,7 +464,10 @@ const ACCENT_BADGE_BG = "bg-[#f1f0f9]"; // 원래 bg-indigo-50 자리
 const ACCENT_BADGE_TEXT = "text-[#2017bb]"; // 원래 text-indigo-500/600(배지) 자리
 // 사용자 지시(2026-08-21): tvn.cjenm.com 레퍼런스의 자간(대부분 -1.5~-3%)을 참고해 카드 제목·
 // 큰 숫자류에 일관되게 자간을 좁힌다(Tailwind tracking-tight = -2.5%).
-const SECTION_TITLE = `mb-1 text-sm font-semibold tracking-tight ${ACCENT_HEADING}`;
+// 사용자 지시(2026-08-21, Page 1 매거진 개편): "메인 제목·섹션 헤더는 옴니고딕 계열, 굵고
+// 임팩트 있게 크기 확대" — text-sm/font-semibold(14px/600)에서 font-heading(Pretendard)
+// text-xl/font-bold(20px/700)로. 서브 설명문은 반대로 작게(각 카드에서 text-xs로 별도 조정).
+const SECTION_TITLE = `font-heading mb-1.5 text-xl font-bold tracking-tight ${ACCENT_HEADING}`;
 
 // 올해 1/1~오늘 누적 평균 시청률·순위 + 목표 순위(6위 등) 대비 몇 위 차이인지(사용자 지시).
 // target_rank는 target_goals에 자유 텍스트로 저장돼 있어(예: skyUHD "경쟁채널 중 2위") 숫자로
@@ -470,48 +538,68 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
 const WIDTH_CAPPED_LOGO_CODES = new Set(["ONCE", "SKYUHD"]);
 const TILE_LOGO_MAX_WIDTH_PX = 52;
 
-// 사용자 지시(2026-08-21, Page 1 전면 개편): 가로로 긴 압축 리스트 행 대신, 위젯형 미니 카드
-// 그리드로 재배열(4번 요구사항: "데이터는 유지, 배열 방식은 자유") — 로고·채널명·시청률·순위·
-// 증감을 세로로 쌓아 한 칸씩 또렷하게 구분되는 카드로. 채널명은 로고 메인 색 유지 규칙 그대로.
+// 사용자 지시(2026-08-21, Page 1 매거진 개편): 전일 대비 "순위 증감"만 정수로 표시(#위 단어 없이,
+// +1/-3/변동없음="-"). target_goals.target_rank는 자유 텍스트라(예: skyUHD "경쟁채널 중 2위")
+// 숫자로 못 읽으면 null — 그 경우 "순위/목표순위" 표기에서 목표순위 자리는 "-"로 대체한다(단정 금지).
+function parseTargetRankNum(targetRank: string | null): number | null {
+  if (!targetRank) return null;
+  const n = parseInt(targetRank, 10);
+  return Number.isFinite(n) ? n : null;
+}
+function RankChangeIndicator({ rankChangeDod }: { rankChangeDod: number | null }) {
+  if (rankChangeDod === null || rankChangeDod === 0) {
+    return <span className="text-xs font-semibold text-zinc-300">-</span>;
+  }
+  const improved = rankChangeDod > 0; // 순위 숫자가 작아짐 = 개선
+  return (
+    <span className="text-xs font-bold tabular-nums" style={{ color: improved ? ACCENT_UP : ACCENT_DOWN }}>
+      {improved ? `+${rankChangeDod}` : rankChangeDod}
+    </span>
+  );
+}
+
+// 사용자 지시(2026-08-21, Page 1 전면 개편/매거진 개편): 가로로 긴 압축 리스트 행 대신, 위젯형
+// 미니 카드 그리드로 재배열 — 로고만(채널명 텍스트 제거), "시청률 (순위/목표순위)" 한 줄, 증감은
+// 전일 대비 순위 증감(정수)으로.
 function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logoReference?: ChannelSummary }) {
   const isSkyUhd = channel.code === "SKYUHD";
+  const targetRankNum = parseTargetRankNum(channel.targetRank);
   return (
     <Link
       href={`/channel/${channel.code}`}
       className="flex flex-col gap-2 rounded-xl bg-zinc-50 p-3.5 ring-1 ring-zinc-100 transition hover:bg-zinc-100/70 hover:ring-zinc-200"
     >
-      <div className="flex items-center gap-1.5">
-        <ChannelLogo
-          channel={{
-            logoPath: channel.logoPath,
-            name: channel.name,
-            logoVisibleRatio: channel.logoVisibleRatio,
-            logoVisibleTopRatio: channel.logoVisibleTopRatio,
-          }}
-          reference={
-            logoReference
-              ? {
-                  logoPath: logoReference.logoPath,
-                  name: logoReference.name,
-                  logoVisibleRatio: logoReference.logoVisibleRatio,
-                  logoVisibleTopRatio: logoReference.logoVisibleTopRatio,
-                }
-              : undefined
-          }
-          heightPx={18}
-          maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
-        />
-        <span className="truncate text-[13px] font-bold tracking-tight" style={{ color: channel.themeColor ?? undefined }}>
-          {channel.name}
-        </span>
-      </div>
-      <div className="flex items-baseline gap-1.5">
+      {/* 사용자 지시: 채널명 텍스트 제거, 로고만 깔끔하게. */}
+      <ChannelLogo
+        channel={{
+          logoPath: channel.logoPath,
+          name: channel.name,
+          logoVisibleRatio: channel.logoVisibleRatio,
+          logoVisibleTopRatio: channel.logoVisibleTopRatio,
+        }}
+        reference={
+          logoReference
+            ? {
+                logoPath: logoReference.logoPath,
+                name: logoReference.name,
+                logoVisibleRatio: logoReference.logoVisibleRatio,
+                logoVisibleTopRatio: logoReference.logoVisibleTopRatio,
+              }
+            : undefined
+        }
+        heightPx={20}
+        maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
+      />
+      {/* 사용자 지시: "시청률 (순위/목표 순위)" 한 줄 + 전일 대비 순위 증감. */}
+      <div className="flex items-baseline justify-between gap-1.5">
         <span className={`font-bold tabular-nums tracking-tight text-zinc-900 ${isSkyUhd ? "text-base" : "text-lg"}`}>
           {formatRating(channel.currentRating, channel.code)}
+          <span className="ml-1 text-xs font-medium text-zinc-400">
+            ({channel.currentRank ?? "-"}/{targetRankNum ?? "-"})
+          </span>
         </span>
-        <span className="text-xs text-zinc-400">{channel.currentRank !== null ? `${channel.currentRank}위` : ""}</span>
+        <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
-      <ChangeBadge pct={channel.dodChangePct} />
     </Link>
   );
 }
@@ -590,10 +678,39 @@ interface OriginalInsightBlock {
 function buildOriginalInsight(
   item: OriginalDailyItem,
   rank: number | null,
-  beatenBy: OriginalCompetitorHighlight[]
+  beatenBy: OriginalCompetitorHighlight[],
+  // 사용자 지시(2026-08-21, 179회 리뷰 재학습): 참고 리포트의 첫 줄("[179회_이슈] 전회 대비
+  // 타깃 및 가구 전 지표 감소, 도달율 1% 이하... / 목표 대비 누적 104.0% 달성")처럼 여러 지표를
+  // 한 문장으로 종합하는 헤드라인 요약을 만들려면 채널의 "목표 대비 누적 달성률"이 필요 —
+  // Dashboard 최상위에서 이미 계산된 achievementPct를 그대로 전달받는다(새 계산 없음).
+  channelAchievementPct: number | null
 ): OriginalInsightBlock {
   const bullets: string[] = [];
   const broadcastChannelName = CHANNEL_NAME_BY_CODE[item.broadcast_channel_code] ?? item.broadcast_channel_code;
+
+  // ⓪ 핵심 요약(참고 리포트의 "[회차_이슈] 전회 대비 ... / 목표 대비 누적 ..." 형식을 학습해
+  // 추가) — 여러 지표를 한 문장으로 종합해 가장 먼저 보여준다. 전회 대비 등락, 도달율 경고,
+  // 동시간대 타깃·가구 순위, 목표 대비 누적 달성률을 한 번에 짚는다(전부 이미 계산된 값).
+  if (item.matched_rating !== null) {
+    const summaryParts: string[] = [];
+    if (item.prior_rating_change_pct !== null) {
+      summaryParts.push(`전회 대비 ${item.prior_rating_change_pct >= 0 ? "상승" : "하락"}`);
+    }
+    if (item.matched_reach !== null && item.matched_reach < 1) {
+      summaryParts.push("도달율 1% 미만");
+    }
+    if (rank !== null) {
+      const rankText =
+        item.householdRank !== null ? `동시간대 타깃 ${rank}위 및 가구 ${item.householdRank}위` : `동시간대 타깃 ${rank}위`;
+      summaryParts.push(rankText);
+    }
+    if (channelAchievementPct !== null) {
+      summaryParts.push(`목표 대비 누적 ${channelAchievementPct.toFixed(1)}% 달성`);
+    }
+    if (summaryParts.length > 0) {
+      bullets.push(`핵심 요약: ${summaryParts.join(", ")}`);
+    }
+  }
 
   // ① 리드인(선행 재방) — 있을 때만
   if (item.pre_rerun_rating !== null && item.matched_rating !== null && item.pre_rerun_rating > 0) {
@@ -666,19 +783,14 @@ function buildOriginalInsight(
     bullets.push(`도달율(Reach) ${item.matched_reach.toFixed(2)}%로 1% 미만 — 시청은 유지되고 있으나 시청 가구의 폭 자체는 좁음`);
   }
 
-  // ⑥ 연령대별 세분화 — 같은 PD 리뷰 보고서를 학습해 추가. 10살 단위 연령대 실측 데이터(ratings
-  // 테이블, 새 계산 없음)를 보여준다.
-  // 사용자 지시(2026-08-21, 정정): "타깃 시청률보다 50대·60대·40대가 원래 더 높다 — 수도권
-  // 2049는 광고주가 선호하는 구매력 있는 연령대라 그 시청률을 보는 것일 뿐" — 즉 중장년층
-  // 시청률이 타깃 시청률보다 높은 건 예외적 발견이 아니라 일반적인 패턴이므로, "발견"처럼
-  // 과장하지 않고 담백하게 수치만 보여준다("KPI 타깃"이라는 표현도 빼고 그냥 "타깃"으로).
-  const strongerAgeSegments =
-    item.matched_rating !== null && item.age_breakdown
-      ? item.age_breakdown.filter((a) => a.rating > item.matched_rating!).slice(0, 3)
-      : [];
-  if (strongerAgeSegments.length > 0) {
+  // ⑥ 연령대별 세분화 — 참고 리포트를 재학습해 기준 조정(2026-08-21): "타깃 시청률보다 높은
+  // 연령대"(상대 기준) 대신 참고 리포트와 동일하게 "시청률 1% 이상"(절대 기준)으로 나열한다.
+  // [Strict Warning] 사용자 재지시(2026-08-21): "중장년층이 높은 건 일반적 패턴"이라는 상식적
+  // 배경 설명은 보고서 본문에서 완전히 제거 — 수치만 담백하게 보여준다("KPI 타깃" 대신 "타깃").
+  const strongAgeSegments = item.age_breakdown ? item.age_breakdown.filter((a) => a.rating >= 1).slice(0, 4) : [];
+  if (strongAgeSegments.length > 0) {
     bullets.push(
-      `연령대별로는 ${strongerAgeSegments.map((a) => `${shortDemoLabel(a.label)}(${formatRating(a.rating)}%)`).join(", ")} 순으로 타깃 시청률(${formatRating(item.matched_rating)}%)보다 높음(광고주가 선호하는 구매력 있는 연령대를 타깃으로 보는 것으로, 중장년층 시청률이 더 높은 것은 일반적인 패턴)`
+      `연령대별 시청률 1% 이상: ${strongAgeSegments.map((a) => `${shortDemoLabel(a.label)}(${formatRating(a.rating)}%)`).join(", ")}`
     );
   }
 
@@ -742,11 +854,20 @@ function buildOriginalDailyBriefing(daily: OriginalDailyItem[]): string | null {
   return parts.join(" ");
 }
 
-function OriginalContentReportCard({ report, enaAccentColor }: { report: OriginalContentSummary; enaAccentColor: string }) {
+function OriginalContentReportCard({
+  report,
+  enaAccentColor,
+  achievementPctByCode,
+}: {
+  report: OriginalContentSummary;
+  enaAccentColor: string;
+  // 사용자 지시(2026-08-21, 179회 리뷰 재학습): 핵심 요약 문장의 "목표 대비 누적 N% 달성"용.
+  achievementPctByCode: Map<string, number | null>;
+}) {
   return (
     <div className={CARD}>
       {/* 사용자 지시(2026-08-21): 카드 제목을 "주요 컨텐츠 리뷰"로. */}
-      <h2 className={`mb-4 text-sm font-semibold tracking-tight ${ACCENT_HEADING}`}>주요 컨텐츠 리뷰</h2>
+      <h2 className={`font-heading mb-4 text-xl font-bold tracking-tight ${ACCENT_HEADING}`}>주요 컨텐츠 리뷰</h2>
 
       {report.mode === "daily" ? (
         report.daily.length === 0 ? (
@@ -758,7 +879,12 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
           <div className="flex flex-col gap-5">
             {report.daily.map((h) => {
               const headline = buildOriginalHeadline(h);
-              const insight = buildOriginalInsight(h, headline?.rank ?? null, headline?.beatenBy ?? []);
+              const insight = buildOriginalInsight(
+                h,
+                headline?.rank ?? null,
+                headline?.beatenBy ?? [],
+                achievementPctByCode.get(h.broadcast_channel_code) ?? null
+              );
               const rowKey = `${h.broadcast_channel_code}-${h.matched_start_time}`;
               return (
                 <div key={rowKey}>
@@ -769,7 +895,8 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                       들어가도록 글씨 크기를 줄이고(text-[13px]→[11px]) 넘치면 말줄임(truncate). */}
                   {(headline || h.featured_category) && (
                     <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-[#281fc7]">{headline ? headline.text : h.matched_program_name}</span>
+                      {/* 사용자 지시(2026-08-21, Page 1 매거진 개편): 콘텐츠 제목 두꺼운 폰트(Bold). */}
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#281fc7]">{headline ? headline.text : h.matched_program_name}</span>
                       {h.featured_category && (
                         <span className={`shrink-0 rounded-full ${ACCENT_BADGE_BG} px-2 py-0.5 text-[12px] font-medium ${ACCENT_HEADING}`}>
                           {h.featured_category}
@@ -783,7 +910,7 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                       1열로 줄바꿈되어(그리드 reflow) 가로 스크롤이 생기지 않는다. 데이터·계산은
                       전부 그대로, 표시 방식만 바꿨다. */}
                   <div className="mb-3 rounded-xl bg-zinc-50 p-3">
-                    <p className="font-semibold text-zinc-800">{h.matched_program_name}</p>
+                    <p className="font-bold text-zinc-800">{h.matched_program_name}</p>
                     {h.pre_rerun_rating !== null && (
                       <p className="mt-1 text-[12px] text-zinc-500">
                         전회 직전 재방 {h.pre_rerun_start_time ? fmtTime(h.pre_rerun_start_time) : ""} · {formatRating(h.pre_rerun_rating)}
@@ -840,15 +967,20 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                       )}
                     </div>
                     <div className="rounded-xl bg-zinc-50 p-3 text-sm">
-                      <p className="mb-1.5 text-[11px] font-medium text-zinc-400">동시간대 경쟁</p>
+                      {/* 사용자 지시(2026-08-21, Page 1 매거진 개편): "동시간대 경쟁"→"동시간대
+                          경쟁 프로그램"으로 명칭 변경. */}
+                      <p className="mb-1.5 text-[11px] font-medium text-zinc-400">동시간대 경쟁 프로그램</p>
                       {h.competitorHighlights.length === 0 ? (
                         <span className="text-zinc-300">—</span>
                       ) : (
                         <div className="flex flex-col gap-1">
+                          {/* 사용자 지시: [채널명(작게)] [시간] [제목] [시청률(소수점 2자리)] 한 줄. */}
                           {h.competitorHighlights.slice(0, 3).map((c, i) => (
-                            <p key={i} className="text-zinc-600">
-                              <span className="font-medium text-zinc-700">{c.competitor_name}</span> {fmtTime(c.competitor_start_time)}{" "}
-                              <span className="font-semibold tabular-nums">{formatRating(c.competitor_rating)}</span>
+                            <p key={i} className="truncate text-zinc-600">
+                              <span className="text-[11px] font-medium text-zinc-400">{c.competitor_name}</span>{" "}
+                              <span className="text-zinc-400">{fmtTime(c.competitor_start_time)}</span>{" "}
+                              <span className="font-medium text-zinc-700">{c.competitor_program_name}</span>{" "}
+                              <span className="font-semibold tabular-nums">{c.competitor_rating !== null ? c.competitor_rating.toFixed(2) : "—"}</span>
                             </p>
                           ))}
                         </div>
@@ -952,9 +1084,11 @@ function ChannelNarrativeCard({
   return (
     <div className={CARD}>
       <h2 className={SECTION_TITLE}>채널별 인사이트</h2>
-      <p className="mb-4 text-sm text-zinc-400">
-        오늘 데이터를 최근 4주 평균과 비교해 눈에 띄는 변화만 짚었습니다(4주 넘게 반복되는 평소
-        패턴은 가급적 언급을 피합니다).
+      {/* 사용자 지시(2026-08-21, 분석 로직 재설정): 패턴 언급 규칙 변경 반영 — "무조건 회피"에서
+          "일일 시청률에 큰 영향을 주는 핵심 패턴이면 예외적으로 언급"으로. */}
+      <p className="mb-4 text-xs text-zinc-400">
+        오늘 데이터를 최근 4주 평균·전주·전전주(동일 요일)와 비교해 눈에 띄는 변화를 짚었습니다
+        (반복되는 패턴이라도 오늘 수치에 큰 영향을 주면 예외적으로 언급합니다).
       </p>
       <div className="flex flex-col gap-3 text-base leading-relaxed text-zinc-700">
         {lines.length === 0 ? (
@@ -1054,7 +1188,7 @@ function KillerContentCard({
   return (
     <div className={`${CARD} lg:col-span-2`}>
       <h2 className={SECTION_TITLE}>채널별 킬러 콘텐츠</h2>
-      <p className="mb-4 text-sm text-zinc-400">최근 4주 평균 시청률 상위 프로그램 — 강세·약세 시간대가 있으면 함께 표시합니다.</p>
+      <p className="mb-4 text-xs text-zinc-400">최근 4주 평균 시청률 상위 프로그램 — 강세·약세 시간대가 있으면 함께 표시합니다.</p>
       {rows.length === 0 ? (
         <p className="text-sm text-zinc-400">데이터가 아직 부족합니다.</p>
       ) : (
@@ -1092,8 +1226,10 @@ function TodayTopProgramsCard({
 
   return (
     <div className={CARD}>
-      <h2 className={SECTION_TITLE}>오늘의 상위 프로그램</h2>
-      <p className="mb-4 text-sm text-zinc-400">오늘 하루 채널별 시청률 상위 3개 프로그램입니다.</p>
+      {/* 사용자 지시(2026-08-21, Page 1 매거진 개편): 섹션 타이틀 "오늘의 상위 프로그램"→
+          "채널별 상위 프로그램"으로 변경. */}
+      <h2 className={SECTION_TITLE}>채널별 상위 프로그램</h2>
+      <p className="mb-4 text-xs text-zinc-400">오늘 하루 채널별 시청률 상위 3개 프로그램입니다.</p>
       <div className="flex flex-col gap-3 text-sm">
         {INSIGHT_CHANNEL_ORDER.map((code) => {
           const list = byChannel.get(code) ?? [];
@@ -1161,26 +1297,12 @@ function TodayTopProgramsCard({
 }
 
 // 사용자 지시(2026-08-21): "주요뉴스의 카테고리별로 색상을 표시" — category는 관리자가 자유
-// 텍스트로 입력해(고정 목록이 없음) 특정 카테고리에 색을 미리 지정해둘 수 없다. 대신 카테고리
-// 이름을 해시해 고정 팔레트에서 하나를 결정적으로 골라, 같은 카테고리는 항상 같은 색을 쓰되
-// 새 카테고리가 추가돼도 코드를 고칠 필요가 없게 했다.
-// 사용자 재지시(2026-08-21): "색이 너무 알록달록하다 — 푸른 계열로 통일" — 무지개색 팔레트
-// 대신 남색~하늘색 범위의 톤(진하기만 다름)으로만 구성해 통일감을 준다.
-const NEWS_CATEGORY_COLORS = [
-  "text-blue-900",
-  "text-blue-700",
-  "text-indigo-700",
-  "text-indigo-500",
-  "text-sky-700",
-  "text-sky-500",
-  "text-cyan-700",
-  "text-slate-700",
-];
-function categoryColorClass(category: string): string {
-  let hash = 0;
-  for (let i = 0; i < category.length; i++) hash = (hash * 31 + category.charCodeAt(i)) >>> 0;
-  return NEWS_CATEGORY_COLORS[hash % NEWS_CATEGORY_COLORS.length];
-}
+// 텍스트로 입력해(고정 목록이 없음) 특정 카테고리에 색을 미리 지정해둘 수 없었다. 처음엔 카테고리
+// 이름을 해시해 8가지 파란 계열 중 하나를 결정적으로 고르는 방식이었는데, 사용자 재지시
+// (2026-08-21, Page 1 매거진 개편): "그래도 색이 어지럽다 — 통일성 있는 모던 톤으로 일괄 정리."
+// 여러 파란 톤을 섞는 대신, 페이지 전체가 이미 쓰는 단일 강조색(ENA 브랜드색) 하나로 못박아
+// 카테고리 구분은 색이 아니라 굵기/여백만으로 하도록 단순화했다(색상 일관성 원칙 재확인) — 카테고리
+// 이름별로 색을 고를 필요가 없어져 함수 자체를 없애고 ACCENT_HEADING을 바로 쓴다.
 
 // 주요 뉴스(베타) 카드 — R2.5(사용자 지시: "오늘의 빠른 요약 위에"). 링크 주소는 화면에 노출하지
 // 않고 제목만 하이퍼링크로 연결한다.
@@ -1194,13 +1316,13 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
   return (
     <div className={`${CARD} lg:col-span-2`}>
       <div className="mb-1 flex items-center gap-2">
-        <h2 className={`text-sm font-semibold tracking-tight ${ACCENT_HEADING}`}>주요 뉴스</h2>
+        <h2 className={`font-heading text-xl font-bold tracking-tight ${ACCENT_HEADING}`}>주요 뉴스</h2>
         <span className={`rounded-full ${ACCENT_BADGE_BG} px-2 py-0.5 text-[12px] font-medium ${ACCENT_BADGE_TEXT}`}>베타</span>
       </div>
       <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
         {[...byCategory.entries()].map(([category, list]) => (
           <div key={category}>
-            <p className={`mb-1 text-sm font-semibold ${categoryColorClass(category)}`}>{category}</p>
+            <p className={`mb-1 text-sm font-semibold ${ACCENT_HEADING}`}>{category}</p>
             <ul className="flex flex-col gap-0.5">
               {list.map((item, i) => (
                 <li key={i} className="flex items-baseline gap-1.5">
@@ -1278,12 +1400,16 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           넓혀 화면을 더 넓게 쓰도록 한다(작은 화면은 mx-auto+반응형 그리드가 그대로 처리). */}
       <div className="mx-auto max-w-screen-2xl">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          {/* 사용자 지시(2026-08-21, Page 1 매거진 개편): 로고를 줄이고, 로고 하단 라인과 제목
+              텍스트 하단 라인을 베이스라인 정렬 — items-center(시각적 중앙 정렬) 대신
+              items-baseline으로(이미지의 CSS 베이스라인은 하단 가장자리와 같아 텍스트 베이스
+              라인과 자연스럽게 맞물린다). 제목은 Pretendard(옴니고딕 대체) 헤딩 폰트로 크게. */}
+          <div className="flex items-baseline gap-3">
             {/* 사용자 지시(2026-08-20): 좌측 최상단은 채널별 로고가 아니라 고정 KT ENA CI 마크. */}
             {/* eslint-disable-next-line @next/next/no-img-element -- 고정 정적 브랜드 마크(픽셀 크롭 불필요) */}
-            <img src="/kt-ena-ci-black.png" alt="KT ENA" style={{ height: 36, width: "auto" }} />
-            <h1 className="text-xl font-bold tracking-tight text-zinc-900">
-              {formatDateWithDow(data?.asOfDate)} 채널 종합 리포트
+            <img src="/kt-ena-ci-black.png" alt="KT ENA" style={{ height: 26, width: "auto" }} />
+            <h1 className="font-heading text-2xl font-bold tracking-tight text-zinc-900">
+              {formatDateWithDowDots(data?.asOfDate)} 채널 종합리포트
             </h1>
           </div>
           <div className="flex items-center gap-2">
@@ -1365,7 +1491,11 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           // 삭제. 채널별 킬러 콘텐츠는 좌/우 2컬럼 하나의 통합 섹션(전체 폭)으로 마지막에 배치.
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <ChannelStatusCard channels={byCode} />
-            <OriginalContentReportCard report={data.originalContentReport} enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"} />
+            <OriginalContentReportCard
+              report={data.originalContentReport}
+              enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
+              achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
+            />
 
             <ChannelNarrativeCard
               signals={data.narrativeSignals}

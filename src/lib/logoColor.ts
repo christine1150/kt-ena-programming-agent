@@ -9,14 +9,17 @@ function isNearWhiteOrBlack(r: number, g: number, b: number): boolean {
   return brightness > 245 || brightness < 12;
 }
 
-/** PNG 파일의 Buffer를 받아 대표 색상을 "#rrggbb" 형태로 돌려준다. 실패 시 null. */
+/** PNG 파일의 Buffer를 받아 대표 색상을 "#rrggbb" 형태로 돌려준다. 실패 시 null.
+ * 사용자 지시(2026-08-21) 확인 중 발견한 버그: 단순 평균(모든 비-배경 픽셀의 RGB 평균)은
+ * 로고 안에 미세한 그림자/그라디언트 음영(예: ENA Story 로고 "N" 안쪽의 어두운 사선 음영)이
+ * 섞여 있으면 그 소수 픽셀에 이끌려 실제 브랜드색보다 어둡고 탁하게 나온다 — 실측: ENA Story는
+ * 평균색 #673a92(칙칙한 보라)이 나왔지만, 실제 로고의 99% 이상 픽셀은 #7828e0(선명한 보라)
+ * 하나였다(양자화 히스토그램으로 최빈값 확인). 평균 대신 최빈값(mode) 방식으로 바꿔, 로고의
+ * 실제 "가장 많이 쓰인 색"을 대표색으로 삼는다(그림자 등 소수 픽셀에 흔들리지 않음). */
 export function extractDominantColor(pngBuffer: Buffer): string | null {
   try {
     const png = PNG.sync.read(pngBuffer);
-    let rSum = 0;
-    let gSum = 0;
-    let bSum = 0;
-    let count = 0;
+    const counts = new Map<string, number>();
 
     for (let i = 0; i < png.data.length; i += 4) {
       const r = png.data[i];
@@ -27,16 +30,25 @@ export function extractDominantColor(pngBuffer: Buffer): string | null {
       if (a < 128) continue; // 투명 픽셀 제외
       if (isNearWhiteOrBlack(r, g, b)) continue; // 배경으로 추정되는 흰색/검은색 제외
 
-      rSum += r;
-      gSum += g;
-      bSum += b;
-      count += 1;
+      // 8단위로 양자화해 미세하게 다른 색(안티앨리어싱 등)을 같은 색으로 묶는다.
+      const key = `${Math.round(r / 8)},${Math.round(g / 8)},${Math.round(b / 8)}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
     }
 
-    if (count === 0) return null;
+    if (counts.size === 0) return null;
 
-    const toHex = (value: number) => Math.round(value / count).toString(16).padStart(2, "0");
-    return `#${toHex(rSum)}${toHex(gSum)}${toHex(bSum)}`;
+    let bestKey: string | null = null;
+    let bestCount = -1;
+    for (const [key, count] of counts) {
+      if (count > bestCount) {
+        bestKey = key;
+        bestCount = count;
+      }
+    }
+    if (!bestKey) return null;
+    const [qr, qg, qb] = bestKey.split(",").map((n) => parseInt(n, 10) * 8);
+    const toHex = (value: number) => Math.min(255, value).toString(16).padStart(2, "0");
+    return `#${toHex(qr)}${toHex(qg)}${toHex(qb)}`;
   } catch {
     return null;
   }

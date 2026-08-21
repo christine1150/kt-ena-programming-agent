@@ -14,3 +14,16 @@ export function formatDateWithDow(dateStr: string | null | undefined): string {
   const dow = new Date(y, m - 1, d).getDay();
   return `${dateStr} (${DOW_LABEL[dow]})`;
 }
+
+// 사용자 지시(2026-08-21, Page 1 매거진 개편): Page 1 헤더 제목 전용 — "2026. 8. 20. (목)"처럼
+// 점으로 구분하는 한국식 날짜 표기(월/일은 0 없이). 다른 화면(Page 2 등)은 기존 formatDateWithDow
+// (YYYY-MM-DD)를 그대로 쓰므로, 영향 범위를 좁히기 위해 별도 함수로 분리했다.
+export function formatDateWithDowDots(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) return dateStr;
+  const [y, m, d] = parts.map((p) => Number(p));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return dateStr;
+  const dow = new Date(y, m - 1, d).getDay();
+  return `${y}. ${m}. ${d}. (${DOW_LABEL[dow]})`;
+}

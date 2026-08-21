@@ -16,6 +16,15 @@ import { mapWithConcurrency } from "@/lib/concurrency";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
+// 사용자 지시(2026-08-21, Page 1 매거진 개편): "전일 대비 순위 증감"·"전주/전전주 동일 요일"
+// 비교에 쓸 날짜 계산 — 로컬 타임존 안전(getFullYear/getMonth/getDate로 직접 조립, toISOString
+// 금지. Page 2 기간 프리셋 구현에서 이미 겪은 자정 근처 날짜 밀림 버그와 같은 함정, 재발 방지).
+function offsetDateStr(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 // Original 리포트: 관리자가 채널기본정보.xlsx "요일 별 리뷰 프로그램" 시트에 지정한 화이트리스트
 // 프로그램만 분석한다(사용자 지시 — "Original 분석은 그 프로그램들만 하면 돼"). 화이트리스트가
 // 없는 요일(예: 금요일)에는 최근 7일 종합 리뷰로 대체한다.
@@ -102,6 +111,9 @@ interface ChannelSummary {
   currentRating: number | null;
   currentRank: number | null;
   dodChangePct: number | null;
+  // 사용자 지시(2026-08-21): "오늘의 시청률" 채널 타일 증감 표시를 시청률(%) 대신 순위 증감으로.
+  // 양수=순위 개선(+1위), 음수=순위 하락(-3위), null=전일 데이터 없어 비교 불가.
+  rankChangeDod: number | null;
   wowChangePct: number | null; // 전주 동요일(정확히 7일 전) 대비 — 사용자 지시(2026-08-20)
   targetRating: number | null;
   targetRank: string | null;
@@ -151,6 +163,12 @@ interface ChannelNarrativeSignal {
   decline_program_baseline_days: number | null;
   decline_program_delta_pct: number | null;
   demographics: { label: string; today: number | null; baseline_avg: number | null; delta_pct: number | null }[] | null;
+  // 사용자 지시(2026-08-21, Page 1 매거진 개편): 최근 4주 평균뿐 아니라 정확히 7일 전/14일 전
+  // (같은 요일) 채널 단위 시청률도 함께 — "전주·전전주 동일 요일 흐름" 다각도 비교용.
+  priorWeekRating: number | null;
+  priorWeek2Rating: number | null;
+  // get_channel_daily_narrative가 이미 계산해 내려주는 값(오늘과 같은 요일의 baseline 기간 평균).
+  dow_baseline_avg_rating: number | null;
   // ENA/ENA Play/ENA Drama 전용 — 사용자 지시: "KPI는 수도권 2049지만, 유료가구 시청률·점유율
   // 부분에서 유의미한 기여를 한 타이틀이 있으면 함께 명시".
   household?: {
@@ -263,6 +281,8 @@ export async function GET() {
       //    "개인2049"로 3가지 다 다름 — "개인" 랭킹 시트 자체가 수도권 기준이라 "수도권"을
       //    반복하지 않기 때문). 그래서 후보 라벨을 순서대로 시도해 rank가 있는 것을 쓴다.
       let currentRank: number | null = null;
+      let priorDayRank: number | null = null;
+      let rankChangeDod: number | null = null;
       let dodChangePct: number | null = null;
       let wowChangePct: number | null = null;
       let ytdAvgRating: number | null = null;
@@ -296,6 +316,24 @@ export async function GET() {
               if (rankRow?.rank !== undefined && rankRow?.rank !== null) {
                 currentRank = rankRow.rank;
                 resolvedRankTargetId = targetRow.id;
+                // 사용자 지시(2026-08-21): "오늘의 시청률" 6개 채널 타일의 증감 표시를 시청률
+                // 등락(%) 대신 "전일 대비 순위 증감"(정수, +1/-3/변동없음="-")으로 교체 — 같은
+                // target_id로 어제 rank도 한 번 더 조회한다(계산 없이 저장된 값 조회).
+                const { data: priorRankRow } = await supabase
+                  .from("ratings")
+                  .select("rank")
+                  .eq("channel_id", channel.id)
+                  .eq("target_id", targetRow.id)
+                  .eq("source_type", "nielsen_daily")
+                  .is("program_id", null)
+                  .eq("broadcast_date", offsetDateStr(asOfDate, -1))
+                  .not("rank", "is", null)
+                  .maybeSingle();
+                priorDayRank = priorRankRow?.rank ?? null;
+                if (priorDayRank !== null && currentRank !== null) {
+                  // 순위는 숫자가 작을수록 좋음 — "개선(+)"은 어제보다 숫자가 작아진 경우.
+                  rankChangeDod = priorDayRank - currentRank;
+                }
                 break;
               }
             }
@@ -364,6 +402,7 @@ export async function GET() {
           currentRating,
           currentRank,
           dodChangePct,
+          rankChangeDod,
           wowChangePct,
           targetRating,
           targetRank: achievementRow?.target_rank ?? null,
@@ -396,7 +435,7 @@ export async function GET() {
 
   let originalContentReport: {
     mode: "daily" | "weekly_review";
-    daily: (OriginalDailyRow & { competitorHighlights: CompetitorOverlapRow[] })[];
+    daily: (OriginalDailyRow & { competitorHighlights: CompetitorOverlapRow[]; householdRank: number | null })[];
     weekly: OriginalWeeklyRow[];
   };
 
@@ -413,17 +452,45 @@ export async function GET() {
     // 성능 개선(2026-08-21): 채널마다 독립적인 조회라 병렬로 돌린다(로직은 그대로, 실행 순서만 변경).
     const channelByCode = new Map(channels.map((c) => [c.code, c]));
     const overlapByChannel = new Map<string, CompetitorOverlapRow[]>();
+    // 사용자 지시(2026-08-21, Page 1 매거진 개편): 참고 리포트(나는SOLO 179회 분석)를 학습해 반영 —
+    // "동시간대 타깃 #위"뿐 아니라 "동시간대 가구 #위"도 함께 계산한다(ENA/ENA Play/ENA Drama만
+    // 전국 유료가구 타깃이 있음). get_competitor_program_overlap을 전국 유료가구 타깃으로 한 번
+    // 더 호출 — 그 함수가 이미 우리 프로그램의 해당 타깃 실측 시청률로 rating_gap을 계산해주므로
+    // (양수=경쟁 프로그램이 더 높음), 새 계산 없이 gap>0 개수만 세면 순위가 나온다.
+    const HOUSEHOLD_TARGET_LABEL = "전국 유료가구";
+    const HOUSEHOLD_ELIGIBLE_CODES = new Set(["ENA", "ENA_PLAY", "ENA_DRAMA"]);
+    const householdOverlapByChannel = new Map<string, CompetitorOverlapRow[]>();
     await Promise.all(
       [...new Set(daily.map((r) => r.broadcast_channel_code))].map(async (code) => {
         const ch = channelByCode.get(code);
         if (!ch?.primary_target) return;
-        const { data: overlap } = await supabase.rpc("get_competitor_program_overlap", {
-          p_channel_code: code,
-          p_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
-          p_as_of_date: asOfDate,
-          p_limit: 30,
-        });
-        overlapByChannel.set(code, (overlap ?? []) as CompetitorOverlapRow[]);
+        const tasks: PromiseLike<void>[] = [
+          supabase
+            .rpc("get_competitor_program_overlap", {
+              p_channel_code: code,
+              p_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
+              p_as_of_date: asOfDate,
+              p_limit: 30,
+            })
+            .then(({ data: overlap }) => {
+              overlapByChannel.set(code, (overlap ?? []) as CompetitorOverlapRow[]);
+            }),
+        ];
+        if (HOUSEHOLD_ELIGIBLE_CODES.has(code)) {
+          tasks.push(
+            supabase
+              .rpc("get_competitor_program_overlap", {
+                p_channel_code: code,
+                p_target_label: HOUSEHOLD_TARGET_LABEL,
+                p_as_of_date: asOfDate,
+                p_limit: 30,
+              })
+              .then(({ data: overlap }) => {
+                householdOverlapByChannel.set(code, (overlap ?? []) as CompetitorOverlapRow[]);
+              })
+          );
+        }
+        await Promise.all(tasks);
       })
     );
 
@@ -489,9 +556,16 @@ export async function GET() {
       const sortedHighlights = [...sameChannelOverlap, ...crossChannelOverlap].sort(
         (a, b) => (b.competitor_rating ?? -Infinity) - (a.competitor_rating ?? -Infinity)
       );
+      // 사용자 지시(2026-08-21): "동시간대 가구 #위"도 함께 — get_competitor_program_overlap이
+      // 전국 유료가구 타깃으로 이미 계산해준 rating_gap(양수=경쟁 프로그램이 더 높음) 개수만 센다.
+      const householdOverlap = (householdOverlapByChannel.get(row.broadcast_channel_code) ?? []).filter(
+        (o) => o.our_start_time === row.matched_start_time && o.our_program_name === row.matched_program_name
+      );
+      const householdRank = householdOverlap.length > 0 ? 1 + householdOverlap.filter((o) => (o.rating_gap ?? 0) > 0).length : null;
       return {
         ...row,
         competitorHighlights: sortedHighlights,
+        householdRank,
       };
     });
 
@@ -531,7 +605,10 @@ export async function GET() {
     // ENA/ENA Play/ENA Drama만 — 유료가구 기여 프로그램 신호(최근 12주 대비). 필요 없는
     // 채널은 즉시 resolve되는 null Promise로 채워 Promise.all 배열 형태를 통일한다.
     const needsHousehold = code === "ENA" || code === "ENA_PLAY" || code === "ENA_DRAMA";
-    const [{ data, error }, householdData] = await Promise.all([
+    // 사용자 지시(2026-08-21, Page 1 매거진 개편): "채널별 인사이트"가 오늘 vs 최근 4주 평균뿐
+    // 아니라 전주·전전주 동일 요일 흐름도 다각도로 비교하도록 — 새 SQL 없이(계산이 아니라 저장된
+    // 값 조회) 정확히 7일 전/14일 전(같은 요일) 채널 단위 시청률을 함께 가져온다.
+    const [{ data, error }, householdData, weekAgoResult, twoWeeksAgoResult] = await Promise.all([
       supabase.rpc("get_channel_daily_narrative", {
         p_channel_code: code,
         p_target_label: targetLabel,
@@ -542,7 +619,27 @@ export async function GET() {
       needsHousehold
         ? supabase.rpc("get_channel_household_top_program", { p_channel_code: code, p_as_of_date: asOfDate }).then((r) => r.data)
         : Promise.resolve(null),
+      supabase
+        .from("ratings")
+        .select("rating, channels!inner(code), targets!inner(label)")
+        .eq("channels.code", code)
+        .eq("targets.label", targetLabel)
+        .eq("source_type", "nielsen_daily")
+        .is("program_id", null)
+        .eq("broadcast_date", offsetDateStr(asOfDate, -7))
+        .maybeSingle(),
+      supabase
+        .from("ratings")
+        .select("rating, channels!inner(code), targets!inner(label)")
+        .eq("channels.code", code)
+        .eq("targets.label", targetLabel)
+        .eq("source_type", "nielsen_daily")
+        .is("program_id", null)
+        .eq("broadcast_date", offsetDateStr(asOfDate, -14))
+        .maybeSingle(),
     ]);
+    const priorWeekRating: number | null = weekAgoResult.data?.rating ?? null;
+    const priorWeek2Rating: number | null = twoWeeksAgoResult.data?.rating ?? null;
     // 사용자 피드백(2026-08-21, 재확인): "0820자 채널별 인사이트에 ENA·OLIFE가 안 보인다" — 개별
     // RPC는 정상(약 2초)이지만, mapWithConcurrency.ts에 문서화된 대로 6개 채널분(+household까지
     // 겹치면 최대 16개) 무거운 SQL을 동시에 쏘면 Supabase Postgres 인스턴스가 경합해 일부 호출이
@@ -568,7 +665,7 @@ export async function GET() {
       return null;
     }
     if (!narrativeData?.[0]) return null;
-    const signal: ChannelNarrativeSignal = { channelCode: code, ...narrativeData[0] };
+    const signal: ChannelNarrativeSignal = { channelCode: code, ...narrativeData[0], priorWeekRating, priorWeek2Rating };
     if (needsHousehold) signal.household = householdData?.[0] ?? null;
     return signal;
   }

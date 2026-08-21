@@ -10,6 +10,9 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* 사용자 지시(2026-08-21, Page 1 매거진 개편): 메인 제목·섹션 헤더 전용 폰트(Pretendard,
+     옴니고딕 대체) — 어디서든 `font-heading` 유틸리티 클래스로 쓸 수 있게 Tailwind 테마에 등록. */
+  --font-heading: var(--font-pretendard), var(--font-noto-sans-kr), sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
