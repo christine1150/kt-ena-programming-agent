@@ -80,6 +80,9 @@ async function main() {
     console.error("컨텍스트 로드 실패:", ctx.error);
     process.exit(1);
   }
+  // TS는 const 변수에 대한 타입 좁히기를 중첩 클로저(worker) 안까지 유지하지 않으므로,
+  // 위에서 이미 런타임 검사를 마친 뒤 명시적으로 좁혀진 타입으로 재바인딩한다.
+  const readyCtx = ctx;
 
   let successCount = 0;
   let parseFailCount = 0;
@@ -105,7 +108,7 @@ async function main() {
       const fileName = path.basename(filePath);
       try {
         const buffer = fs.readFileSync(filePath);
-        const summary = await ingestNielsenDailyFile(buffer, fileName, ctx);
+        const summary = await ingestNielsenDailyFile(buffer, fileName, readyCtx);
         if (summary.alert === "DATA_QUALITY_ALERT") {
           parseFailCount++;
           const key = (summary.message ?? "").slice(0, 60);

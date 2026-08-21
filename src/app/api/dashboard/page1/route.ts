@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -189,120 +190,138 @@ export async function GET() {
     return NextResponse.json({ ok: false, message: channelsError?.message ?? "채널 조회 실패" }, { status: 500 });
   }
 
-  const summaries: ChannelSummary[] = [];
-  const matchedTargetLabelByCode = new Map<string, string>(); // 아래 인사이트/킬러콘텐츠 조회에 재사용
+  // 성능 개선(2026-08-21, 사용자 지시 — "1페이지 접속·채널 이동 로딩 속도가 느림"): 채널 7개를
+  // 순차 for 루프로 돌면서 채널마다 5~7번씩 Supabase 호출을 기다리면(약 40~50회 순차 왕복)
+  // 왕복 지연이 그대로 누적된다. 채널끼리는 서로 독립적인 계산이라 Promise.all로 병렬화해도
+  // 결과가 같다(각자 자기 channel_id/target_id만 건드림, 공유 상태 없음) — 계산 로직 자체는
+  // 그대로 두고 실행 순서만 바꿨다.
+  const summaryResults = await mapWithConcurrency(channels, 4, async (channel) => {
+      // 1) 목표 대비 달성률 (오늘 하루 기준) — 이 함수가 Channel Master 표기("수도권 개인2049")와
+      //    Nielsen 표기("수도권 2049")가 다른 채널의 동의어 매칭까지 이미 처리해주므로,
+      //    여기서 나온 matched_target_label을 아래 순위·DoD 조회에도 그대로 재사용한다.
+      let targetRating: number | null = null;
+      let achievementPct: number | null = null;
+      let gap: number | null = null;
+      let currentRating: number | null = null;
+      let matchedTargetLabel: string | null = null;
+      const { data: achievement } = await supabase.rpc("get_target_achievement", {
+        p_channel_code: channel.code,
+        p_date_from: asOfDate,
+        p_date_to: asOfDate,
+        p_year: year,
+      });
+      const achievementRow = achievement?.[0];
+      if (achievementRow) {
+        targetRating = achievementRow.target_rating;
+        achievementPct = achievementRow.achievement_pct;
+        gap = achievementRow.gap;
+        matchedTargetLabel = achievementRow.matched_target_label;
+        if (currentRating === null) currentRating = achievementRow.actual_avg_rating;
+      }
 
-  for (const channel of channels) {
-    // 1) 목표 대비 달성률 (오늘 하루 기준) — 이 함수가 Channel Master 표기("수도권 개인2049")와
-    //    Nielsen 표기("수도권 2049")가 다른 채널의 동의어 매칭까지 이미 처리해주므로,
-    //    여기서 나온 matched_target_label을 아래 순위·DoD 조회에도 그대로 재사용한다.
-    let targetRating: number | null = null;
-    let achievementPct: number | null = null;
-    let gap: number | null = null;
-    let currentRating: number | null = null;
-    let matchedTargetLabel: string | null = null;
-    const { data: achievement } = await supabase.rpc("get_target_achievement", {
-      p_channel_code: channel.code,
-      p_date_from: asOfDate,
-      p_date_to: asOfDate,
-      p_year: year,
-    });
-    const achievementRow = achievement?.[0];
-    if (achievementRow) {
-      targetRating = achievementRow.target_rating;
-      achievementPct = achievementRow.achievement_pct;
-      gap = achievementRow.gap;
-      matchedTargetLabel = achievementRow.matched_target_label;
-      if (currentRating === null) currentRating = achievementRow.actual_avg_rating;
-    }
+      // 2) 오늘 순위 (원본 값을 그대로 조회 — 계산이 아니라 저장된 값 조회) + DoD 등락률
+      //    실제로 겪은 문제: "순위"는 "유료방송가입가구"/"개인" 랭킹 시트에서만 나오는데,
+      //    그 시트의 타깃 라벨 표기가 또 다르다(같은 ENA의 수도권 개인 2049가 target_goals
+      //    표기로는 "수도권 개인2049", 타깃상세 시트로는 "수도권 2049", 랭킹 시트로는
+      //    "개인2049"로 3가지 다 다름 — "개인" 랭킹 시트 자체가 수도권 기준이라 "수도권"을
+      //    반복하지 않기 때문). 그래서 후보 라벨을 순서대로 시도해 rank가 있는 것을 쓴다.
+      let currentRank: number | null = null;
+      let dodChangePct: number | null = null;
+      let wowChangePct: number | null = null;
+      let ytdAvgRating: number | null = null;
+      let ytdAvgRank: number | null = null;
+      if (matchedTargetLabel && channel.primary_target) {
+        const rankLabelCandidates = Array.from(
+          new Set([
+            matchedTargetLabel,
+            channel.primary_target,
+            channel.primary_target.replace("수도권 개인", "개인").replace("National ", ""),
+          ])
+        );
+        let resolvedRankTargetId: string | null = null;
+        // 순위 후보 라벨 탐색(순서 의존 — 먼저 매치되는 라벨을 써야 함, 순차 유지)과 DoD/WoW
+        // 추이(matchedTargetLabel만 있으면 독립적으로 계산 가능)를 병렬로 돌린다.
+        const [, trendResult] = await Promise.all([
+          (async () => {
+            for (const label of rankLabelCandidates) {
+              const { data: targetRow } = await supabase.from("targets").select("id").eq("label", label).maybeSingle();
+              if (!targetRow) continue;
+              const { data: rankRow } = await supabase
+                .from("ratings")
+                .select("rank")
+                .eq("channel_id", channel.id)
+                .eq("target_id", targetRow.id)
+                .eq("source_type", "nielsen_daily")
+                .is("program_id", null)
+                .eq("broadcast_date", asOfDate)
+                .not("rank", "is", null)
+                .maybeSingle();
+              if (rankRow?.rank !== undefined && rankRow?.rank !== null) {
+                currentRank = rankRow.rank;
+                resolvedRankTargetId = targetRow.id;
+                break;
+              }
+            }
+          })(),
+          supabase.rpc("get_rating_trend_summary", {
+            p_channel_code: channel.code,
+            p_target_label: matchedTargetLabel,
+            p_as_of_date: asOfDate,
+          }),
+        ]);
+        const trend = trendResult.data;
+        const dodRow = trend?.find((t: { period: string }) => t.period === "DoD");
+        dodChangePct = dodRow?.rating_change_pct ?? null;
+        // 사용자 지시(2026-08-20): 전일 대비 옆에 전주 동요일(정확히 7일 전, WoW) 대비도 함께 —
+        // get_rating_trend_summary가 이미 계산해주는 WoW 행을 그대로 재사용(새 계산 없음).
+        const wowRow = trend?.find((t: { period: string }) => t.period === "WoW");
+        wowChangePct = wowRow?.rating_change_pct ?? null;
 
-    // 2) 오늘 순위 (원본 값을 그대로 조회 — 계산이 아니라 저장된 값 조회) + DoD 등락률
-    //    실제로 겪은 문제: "순위"는 "유료방송가입가구"/"개인" 랭킹 시트에서만 나오는데,
-    //    그 시트의 타깃 라벨 표기가 또 다르다(같은 ENA의 수도권 개인 2049가 target_goals
-    //    표기로는 "수도권 개인2049", 타깃상세 시트로는 "수도권 2049", 랭킹 시트로는
-    //    "개인2049"로 3가지 다 다름 — "개인" 랭킹 시트 자체가 수도권 기준이라 "수도권"을
-    //    반복하지 않기 때문). 그래서 후보 라벨을 순서대로 시도해 rank가 있는 것을 쓴다.
-    let currentRank: number | null = null;
-    let dodChangePct: number | null = null;
-    let wowChangePct: number | null = null;
-    let ytdAvgRating: number | null = null;
-    let ytdAvgRank: number | null = null;
-    if (matchedTargetLabel && channel.primary_target) {
-      const rankLabelCandidates = Array.from(
-        new Set([
-          matchedTargetLabel,
-          channel.primary_target,
-          channel.primary_target.replace("수도권 개인", "개인").replace("National ", ""),
-        ])
-      );
-      let resolvedRankTargetId: string | null = null;
-      for (const label of rankLabelCandidates) {
-        const { data: targetRow } = await supabase.from("targets").select("id").eq("label", label).maybeSingle();
-        if (!targetRow) continue;
-        const { data: rankRow } = await supabase
-          .from("ratings")
-          .select("rank")
-          .eq("channel_id", channel.id)
-          .eq("target_id", targetRow.id)
-          .eq("source_type", "nielsen_daily")
-          .is("program_id", null)
-          .eq("broadcast_date", asOfDate)
-          .not("rank", "is", null)
-          .maybeSingle();
-        if (rankRow?.rank !== undefined && rankRow?.rank !== null) {
-          currentRank = rankRow.rank;
-          resolvedRankTargetId = targetRow.id;
-          break;
+        // ENA 히어로 카드용 — 올해 1월 1일~오늘 누적 평균 시청률·평균 순위(사용자 지시). "오늘
+        // 순위" 조회에서 이미 라벨 표기 불일치를 해결해 찾아둔 target_id를 그대로 재사용한다
+        // (경쟁채널 재계산 없이 Nielsen이 매일 계산해 저장한 rank 컬럼의 기간 평균만 낸다) —
+        // resolvedRankTargetId가 위 병렬 블록에서 정해져야 하므로 그 이후에 실행.
+        if (resolvedRankTargetId) {
+          const { data: ytdData } = await supabase.rpc("get_channel_period_rank_and_rating", {
+            p_channel_id: channel.id,
+            p_target_id: resolvedRankTargetId,
+            p_date_from: `${year}-01-01`,
+            p_date_to: asOfDate,
+          });
+          ytdAvgRank = ytdData?.[0]?.avg_rank ?? null;
+          ytdAvgRating = ytdData?.[0]?.avg_rating ?? null;
         }
       }
 
-      // ENA 히어로 카드용 — 올해 1월 1일~오늘 누적 평균 시청률·평균 순위(사용자 지시). "오늘 순위"
-      // 조회에서 이미 라벨 표기 불일치를 해결해 찾아둔 target_id를 그대로 재사용한다(경쟁채널
-      // 재계산 없이 Nielsen이 매일 계산해 저장한 rank 컬럼의 기간 평균만 낸다).
-      if (resolvedRankTargetId) {
-        const { data: ytdData } = await supabase.rpc("get_channel_period_rank_and_rating", {
-          p_channel_id: channel.id,
-          p_target_id: resolvedRankTargetId,
-          p_date_from: `${year}-01-01`,
-          p_date_to: asOfDate,
-        });
-        ytdAvgRank = ytdData?.[0]?.avg_rank ?? null;
-        ytdAvgRating = ytdData?.[0]?.avg_rating ?? null;
-      }
-
-      const { data: trend } = await supabase.rpc("get_rating_trend_summary", {
-        p_channel_code: channel.code,
-        p_target_label: matchedTargetLabel,
-        p_as_of_date: asOfDate,
-      });
-      const dodRow = trend?.find((t: { period: string }) => t.period === "DoD");
-      dodChangePct = dodRow?.rating_change_pct ?? null;
-      // 사용자 지시(2026-08-20): 전일 대비 옆에 전주 동요일(정확히 7일 전, WoW) 대비도 함께 —
-      // get_rating_trend_summary가 이미 계산해주는 WoW 행을 그대로 재사용(새 계산 없음).
-      const wowRow = trend?.find((t: { period: string }) => t.period === "WoW");
-      wowChangePct = wowRow?.rating_change_pct ?? null;
-      matchedTargetLabelByCode.set(channel.code, matchedTargetLabel);
-    }
-
-    summaries.push({
-      code: channel.code,
-      name: channel.name,
-      logoPath: channel.logo_path,
-      themeColor: channel.theme_color,
-      logoVisibleRatio: channel.logo_visible_ratio,
-      logoVisibleTopRatio: channel.logo_visible_top_ratio,
-      primaryTarget: channel.primary_target,
-      currentRating,
-      currentRank,
-      dodChangePct,
-      wowChangePct,
-      targetRating,
-      targetRank: achievementRow?.target_rank ?? null,
-      achievementPct,
-      gap,
-      ytdAvgRating,
-      ytdAvgRank,
-    });
+      return {
+        matchedTargetLabel,
+        summary: {
+          code: channel.code,
+          name: channel.name,
+          logoPath: channel.logo_path,
+          themeColor: channel.theme_color,
+          logoVisibleRatio: channel.logo_visible_ratio,
+          logoVisibleTopRatio: channel.logo_visible_top_ratio,
+          primaryTarget: channel.primary_target,
+          currentRating,
+          currentRank,
+          dodChangePct,
+          wowChangePct,
+          targetRating,
+          targetRank: achievementRow?.target_rank ?? null,
+          achievementPct,
+          gap,
+          ytdAvgRating,
+          ytdAvgRank,
+        } as ChannelSummary,
+      };
+  });
+  // mapWithConcurrency도 입력 순서를 그대로 보존하므로 channels(코드순 정렬) 순서와 summaries
+  // 순서가 기존 순차 루프와 동일하게 유지된다.
+  const summaries: ChannelSummary[] = summaryResults.map((r) => r.summary);
+  const matchedTargetLabelByCode = new Map<string, string>(); // 아래 인사이트/킬러콘텐츠 조회에 재사용
+  for (const r of summaryResults) {
+    if (r.matchedTargetLabel) matchedTargetLabelByCode.set(r.summary.code, r.matchedTargetLabel);
   }
 
   // 4) Original 콘텐츠 리포트 — 화이트리스트(original_review_programs) 기반. 오늘 요일에 지정된
@@ -331,44 +350,65 @@ export async function GET() {
     // 사용자 지시(2026-08-20): "동시간대 타깃 #위" 순위를 정확히 매기려면 상위 3개만으로는
     // 부족하다(4위 이하가 우리보다 높은지 낮은지 판단 불가) — p_limit을 크게 넘겨 등록된 경쟁
     // 프로그램 전체를 받는다(화면 표시는 여전히 상위 3개만, 순위 계산에만 전체를 쓴다).
+    // 성능 개선(2026-08-21): 채널마다 독립적인 조회라 병렬로 돌린다(로직은 그대로, 실행 순서만 변경).
     const channelByCode = new Map(channels.map((c) => [c.code, c]));
     const overlapByChannel = new Map<string, CompetitorOverlapRow[]>();
-    for (const code of new Set(daily.map((r) => r.broadcast_channel_code))) {
-      const ch = channelByCode.get(code);
-      if (!ch?.primary_target) continue;
-      const { data: overlap } = await supabase.rpc("get_competitor_program_overlap", {
-        p_channel_code: code,
-        p_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
-        p_as_of_date: asOfDate,
-        p_limit: 30,
-      });
-      overlapByChannel.set(code, (overlap ?? []) as CompetitorOverlapRow[]);
-    }
+    await Promise.all(
+      [...new Set(daily.map((r) => r.broadcast_channel_code))].map(async (code) => {
+        const ch = channelByCode.get(code);
+        if (!ch?.primary_target) return;
+        const { data: overlap } = await supabase.rpc("get_competitor_program_overlap", {
+          p_channel_code: code,
+          p_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
+          p_as_of_date: asOfDate,
+          p_limit: 30,
+        });
+        overlapByChannel.set(code, (overlap ?? []) as CompetitorOverlapRow[]);
+      })
+    );
 
     // 사용자 지시: SBS Plus처럼 "우리 채널의" 등록 경쟁채널 시트가 아니라 "다른 채널의" 등록
     // 경쟁채널 시트에만 있는 동시방송 데이터를 추가로 붙인다(예: ENA "나는 SOLO" ↔ ENA Drama
     // 시트의 SBS Plus). CROSS_CHANNEL_COMPETITOR_LOOKUPS에 채널이 등록된 화이트리스트 행에만
     // 적용되고, 결과는 기존 competitorHighlights와 같은 모양으로 합쳐서 화면 로직을 그대로 재사용.
-    const crossChannelByProgram = new Map<string, CrossChannelCompetitorRow[]>();
+    // 성능 개선(2026-08-21): 대상 행을 먼저 중복 제거(키 기준)한 뒤 병렬로 조회한다 — 동시에
+    // 돌리면서 Map.has()로 중복을 걸러내면 경쟁 상태(둘 다 "아직 없음"으로 보고 중복 호출)가
+    // 생길 수 있어, 호출할 목록을 먼저 순차로 확정하고 그다음에만 병렬화했다.
+    const crossChannelTargets = new Map<
+      string,
+      { lookupChannelCode: string; competitorName: string; effectiveDateStr: string; startTime: string; endTime: string }
+    >();
     for (const row of daily) {
       if (!row.matched_program_name || !row.matched_start_time) continue;
       const lookup = CROSS_CHANNEL_COMPETITOR_LOOKUPS.find((l) => l.whitelistChannelCode === row.broadcast_channel_code);
       if (!lookup) continue;
       const key = `${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`;
-      if (crossChannelByProgram.has(key)) continue;
+      if (crossChannelTargets.has(key)) continue;
       // get_original_content_daily 내부와 동일한 규칙: 기대 편성시각이 02시 이전이면(자정을
       // 넘기는 프로그램) 실제 데이터는 하루 전 날짜 파일에 들어있다(effective_date).
       const effectiveDate = row.expected_time < "02:00:00" ? new Date(new Date(`${asOfDate}T00:00:00`).getTime() - 86400000) : new Date(`${asOfDate}T00:00:00`);
       const effectiveDateStr = `${effectiveDate.getFullYear()}-${String(effectiveDate.getMonth() + 1).padStart(2, "0")}-${String(effectiveDate.getDate()).padStart(2, "0")}`;
-      const { data: crossOverlap } = await supabase.rpc("get_competitor_overlap_via_channel", {
-        p_lookup_channel_code: lookup.lookupChannelCode,
-        p_competitor_name: lookup.competitorName,
-        p_broadcast_date: effectiveDateStr,
-        p_our_start_time: row.matched_start_time,
-        p_our_end_time: row.matched_end_time,
+      crossChannelTargets.set(key, {
+        lookupChannelCode: lookup.lookupChannelCode,
+        competitorName: lookup.competitorName,
+        effectiveDateStr,
+        startTime: row.matched_start_time,
+        endTime: row.matched_end_time,
       });
-      crossChannelByProgram.set(key, (crossOverlap ?? []) as CrossChannelCompetitorRow[]);
     }
+    const crossChannelByProgram = new Map<string, CrossChannelCompetitorRow[]>();
+    await Promise.all(
+      [...crossChannelTargets.entries()].map(async ([key, t]) => {
+        const { data: crossOverlap } = await supabase.rpc("get_competitor_overlap_via_channel", {
+          p_lookup_channel_code: t.lookupChannelCode,
+          p_competitor_name: t.competitorName,
+          p_broadcast_date: t.effectiveDateStr,
+          p_our_start_time: t.startTime,
+          p_our_end_time: t.endTime,
+        });
+        crossChannelByProgram.set(key, (crossOverlap ?? []) as CrossChannelCompetitorRow[]);
+      })
+    );
 
     const dailyWithOverlap = daily.map((row) => {
       const sameChannelOverlap = (overlapByChannel.get(row.broadcast_channel_code) ?? []).filter(
@@ -412,42 +452,54 @@ export async function GET() {
 
   // 6) 채널별 인사이트(줄글) 원시 신호 — ENA/ENA Play/ENA Drama/OLIFE/ONCE/ENA Story 순
   //    (사용자 지시 순서). skyUHD는 등위만 확인(아래 별도 처리).
+  // 성능 개선(2026-08-21): 채널별 신호 조회(6번)와 킬러 콘텐츠 daypart 조회(7번)는 서로 독립적
+  // 이고, 채널끼리도 서로 독립적이며, 한 채널 안에서도 narrative RPC와 household RPC가 서로
+  // 독립적이다(둘 다 code/asOfDate만 필요, 서로의 결과를 안 씀) — 전부 Promise.all로 병렬화
+  // 했다. Promise.all은 입력 순서를 보존하므로 INSIGHT_CHANNEL_ORDER 순서는 그대로 유지된다.
   const channelByCode = new Map(channels.map((c) => [c.code, c]));
-  const narrativeSignals: ChannelNarrativeSignal[] = [];
-  for (const code of INSIGHT_CHANNEL_ORDER) {
+
+  async function fetchNarrativeSignal(code: string): Promise<ChannelNarrativeSignal | null> {
     const ch = channelByCode.get(code);
     const targetLabel = matchedTargetLabelByCode.get(code);
-    if (!ch?.primary_target || !targetLabel) continue;
+    if (!ch?.primary_target || !targetLabel) return null;
     const programTargetLabel = resolveProgramLevelTargetLabel(ch.primary_target);
     const isNationalScope = ch.market === "전국";
     const demographicLabels = isNationalScope
       ? ["전국 여20대", "전국 남20대", "전국 여40대", "전국 남40대"]
       : ["수도권 여20대", "수도권 남20대", "수도권 여40대", "수도권 남40대"];
 
-    const { data } = await supabase.rpc("get_channel_daily_narrative", {
-      p_channel_code: code,
-      p_target_label: targetLabel,
-      p_program_target_label: programTargetLabel,
-      p_demographic_labels: demographicLabels,
-      p_as_of_date: asOfDate,
-    });
-    if (!data?.[0]) continue;
-    const signal: ChannelNarrativeSignal = { channelCode: code, ...data[0] };
-
-    // ENA/ENA Play/ENA Drama만 — 유료가구 기여 프로그램 신호(최근 12주 대비).
-    if (code === "ENA" || code === "ENA_PLAY" || code === "ENA_DRAMA") {
-      const { data: householdData } = await supabase.rpc("get_channel_household_top_program", {
+    // ENA/ENA Play/ENA Drama만 — 유료가구 기여 프로그램 신호(최근 12주 대비). 필요 없는
+    // 채널은 즉시 resolve되는 null Promise로 채워 Promise.all 배열 형태를 통일한다.
+    const needsHousehold = code === "ENA" || code === "ENA_PLAY" || code === "ENA_DRAMA";
+    const [{ data }, householdData] = await Promise.all([
+      supabase.rpc("get_channel_daily_narrative", {
         p_channel_code: code,
+        p_target_label: targetLabel,
+        p_program_target_label: programTargetLabel,
+        p_demographic_labels: demographicLabels,
         p_as_of_date: asOfDate,
-      });
-      signal.household = householdData?.[0] ?? null;
-    }
-    narrativeSignals.push(signal);
+      }),
+      needsHousehold
+        ? supabase.rpc("get_channel_household_top_program", { p_channel_code: code, p_as_of_date: asOfDate }).then((r) => r.data)
+        : Promise.resolve(null),
+    ]);
+    if (!data?.[0]) return null;
+    const signal: ChannelNarrativeSignal = { channelCode: code, ...data[0] };
+    if (needsHousehold) signal.household = householdData?.[0] ?? null;
+    return signal;
   }
-  // skyUHD — 사용자 지시: "등위가 10위 이상 바뀌지 않으면 내용 작성하지 않는다" (프로그램/연령대
-  // 신호는 skyUHD에 타깃 구분이 없어 계산되지 않으므로 등위만 본다).
-  const skyuhdTargetLabel = matchedTargetLabelByCode.get("SKYUHD");
-  if (skyuhdTargetLabel) {
+
+  // 성능 개선(2026-08-21) 실측으로 발견: get_channel_daily_narrative/get_channel_killer_content_daypart
+  // 둘 다 12주 집계·"본방 슬롯" 비교가 들어간 무거운 함수라, 6개 채널분(+household까지 겹치면
+  // 최대 16개)을 전부 한꺼번에 병렬로 쏘면 오히려 Supabase Postgres 인스턴스가 경합해 18초까지
+  // 걸렸다(단독 호출은 1초 안팎). mapWithConcurrency로 동시 실행 개수를 3개로 제한하고, 두
+  // 그룹(narrative/killerContentDaypart)도 동시에 겹치지 않게 순서대로 돌린다.
+  const narrativeSignalResults = await mapWithConcurrency(INSIGHT_CHANNEL_ORDER, 3, (code) => fetchNarrativeSignal(code));
+  // skyUHD — 사용자 지시: "등위가 10위 이상 바뀌지 않으면 내용 작성하지 않는다" (프로그램/
+  // 연령대 신호는 skyUHD에 타깃 구분이 없어 계산되지 않으므로 등위만 본다).
+  const skyuhdSignalResult = await (async () => {
+    const skyuhdTargetLabel = matchedTargetLabelByCode.get("SKYUHD");
+    if (!skyuhdTargetLabel) return null;
     const { data } = await supabase.rpc("get_channel_daily_narrative", {
       p_channel_code: "SKYUHD",
       p_target_label: skyuhdTargetLabel,
@@ -455,21 +507,22 @@ export async function GET() {
       p_demographic_labels: [],
       p_as_of_date: asOfDate,
     });
-    if (data?.[0]) narrativeSignals.push({ channelCode: "SKYUHD", ...data[0] });
-  }
-
+    return data?.[0] ? ({ channelCode: "SKYUHD", ...data[0] } as ChannelNarrativeSignal) : null;
+  })();
   // 7) 채널별 킬러 콘텐츠의 강세/약세 시간대 — 같은 순서.
-  const killerContentDaypart: KillerContentDaypartRow[] = [];
-  for (const code of INSIGHT_CHANNEL_ORDER) {
+  const killerContentDaypartResults = await mapWithConcurrency(INSIGHT_CHANNEL_ORDER, 3, async (code) => {
     const ch = channelByCode.get(code);
-    if (!ch?.primary_target) continue;
+    if (!ch?.primary_target) return [] as KillerContentDaypartRow[];
     const { data } = await supabase.rpc("get_channel_killer_content_daypart", {
       p_channel_code: code,
       p_program_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
       p_as_of_date: asOfDate,
     });
-    for (const row of data ?? []) killerContentDaypart.push({ channelCode: code, ...row });
-  }
+    return (data ?? []).map((row: object) => ({ channelCode: code, ...row }) as KillerContentDaypartRow);
+  });
+  const narrativeSignals: ChannelNarrativeSignal[] = narrativeSignalResults.filter((s): s is ChannelNarrativeSignal => s !== null);
+  if (skyuhdSignalResult) narrativeSignals.push(skyuhdSignalResult);
+  const killerContentDaypart: KillerContentDaypartRow[] = killerContentDaypartResults.flat();
 
   return NextResponse.json({
     ok: true,
