@@ -13,8 +13,12 @@ import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 // 확인한다. 있으면 그 시간대만 짚어 이동/교체 의견을 내고, 없으면(또는 슬롯 수가 적어 애초에
 // 재방 패턴이 아니면) 기존처럼 프로그램 단위 판단을 유지한다.
 const MULTI_SLOT_HOUR_THRESHOLD = 6; // 이 개수 이상 서로 다른 시간에 방영되면 "재방 많은 콘텐츠"로 본다.
-const WEAK_SLOT_SHARE_PCT_MAX = 50; // 프로그램 자신의 시간대별 점유율 중앙값의 이 비율 이하면 "효율 낮음".
-const WEAK_SLOT_MIN_AIR_COUNT = 3; // 최소 이만큼은 반복 관측돼야 우연이 아니라 패턴으로 본다.
+// 사용자 지시(2026-08-21, 재요청): "네가 시간대별로 판단해서 제안을 해주면 더 좋겠다" — 엄격한
+// 기준(50% 이하 + 3회 이상)만 통과할 때만 말하던 것에서, 표본이 최소한(2회 이상)만 있으면 항상
+// 가장 약한 시간대를 짚어 판단을 주도록 낮췄다. 신호 강도에 따라 문구 톤만 다르게 한다.
+const WEAK_SLOT_MIN_AIR_COUNT = 2;
+const WEAK_SLOT_STRONG_PCT_MAX = 50; // 중앙값의 이 비율 이하 — "효율이 뚜렷하게 낮음"(강한 톤).
+const WEAK_SLOT_MILD_PCT_MAX = 85; // 중앙값의 이 비율 이하 — "상대적으로 가장 약함"(약한 톤).
 const SLOT_EFFICIENCY_WEEKS = 8;
 
 interface SlotEfficiencyRow {
@@ -133,6 +137,9 @@ export async function GET(request: Request) {
       weakHour: number | null;
       weakShareVsMedianPct: number | null;
       weakAirCount: number | null;
+      // "strong" = 중앙값 대비 뚜렷하게 낮음(이동/교체 권장), "mild" = 상대적으로 가장 약함(참고),
+      // null = 표본 부족으로 특정 시간대를 짚을 근거가 없음(여러 시간대 중 고르게 방영).
+      confidence: "strong" | "mild" | null;
     } | null;
   };
   const itemsWithSlotEfficiency: ItemWithSlot[] = await Promise.all(
@@ -153,18 +160,24 @@ export async function GET(request: Request) {
       if (!isMultiSlot) {
         return { ...item, slotEfficiency: null };
       }
-      const weakCandidates = rows2
-        .filter((r) => r.air_count >= WEAK_SLOT_MIN_AIR_COUNT && r.share_vs_median_pct !== null && r.share_vs_median_pct <= WEAK_SLOT_SHARE_PCT_MAX)
+      // 표본(2회 이상)이 있는 시간대 중 중앙값 대비 가장 낮은 곳을 항상 고른다(사용자 지시: "네가
+      // 시간대별로 판단해서 제안을 해주면 좋겠다") — 얼마나 뚜렷한지에 따라 confidence만 다르게.
+      const candidates = rows2
+        .filter((r) => r.air_count >= WEAK_SLOT_MIN_AIR_COUNT && r.share_vs_median_pct !== null)
         .sort((a, b) => (a.share_vs_median_pct ?? 0) - (b.share_vs_median_pct ?? 0));
-      const weak = weakCandidates[0] ?? null;
+      const weak = candidates[0] ?? null;
+      const pct = weak?.share_vs_median_pct ?? null;
+      const confidence: "strong" | "mild" | null =
+        pct === null ? null : pct <= WEAK_SLOT_STRONG_PCT_MAX ? "strong" : pct <= WEAK_SLOT_MILD_PCT_MAX ? "mild" : null;
       return {
         ...item,
         slotEfficiency: {
           isMultiSlot: true,
           weeks: SLOT_EFFICIENCY_WEEKS,
-          weakHour: weak?.hour_bucket ?? null,
-          weakShareVsMedianPct: weak?.share_vs_median_pct ?? null,
-          weakAirCount: weak?.air_count ?? null,
+          weakHour: confidence ? (weak?.hour_bucket ?? null) : null,
+          weakShareVsMedianPct: confidence ? pct : null,
+          weakAirCount: confidence ? (weak?.air_count ?? null) : null,
+          confidence,
         },
       };
     })

@@ -51,6 +51,11 @@ interface OriginalDailyItem {
   matched_program_name: string;
   matched_start_time: string;
   matched_rating: number | null;
+  // 사용자 지시(2026-08-21): 첨부된 PD 리뷰 보고서("179회 본방 시청률 리뷰")를 학습해 추가 —
+  // 도달율과 본방 슬롯 연령대별(10살 단위) 시청률 상위 5개. 둘 다 우리 ratings 테이블에 이미
+  // 있는 실측 데이터로, get_original_content_daily가 SQL에서 정렬·집계까지 마쳐서 내려준다.
+  matched_reach: number | null;
+  age_breakdown: { label: string; rating: number }[] | null;
   featured_category: string | null;
   rerun_channel_code: string | null;
   rerun_program_name: string | null;
@@ -384,26 +389,30 @@ const CARD = "rounded-3xl bg-white/80 backdrop-blur-xl p-6 shadow-[0_8px_30px_-1
 // 올해 1/1~오늘 누적 평균 시청률·순위 + 목표 순위(6위 등) 대비 몇 위 차이인지(사용자 지시).
 // target_rank는 target_goals에 자유 텍스트로 저장돼 있어(예: skyUHD "경쟁채널 중 2위") 숫자로
 // 못 읽으면 목표 비교 문구는 생략한다.
+// 사용자 지시(2026-08-21): "연간 누적 평균 0.120(7위)· 목표(6위) 대비 1위 낮음" 형식으로 더
+// 짧게. 순위·격차 둘 다 소수점 없이 자연수로만 표시(반올림한 순위끼리 빼므로 격차도 항상
+// 자연수) — 이 값(ENA 기준 0.120/7위, 목표 6위, 격차 1위)을 실측 데이터와 직접 대조해 정확함을
+// 확인했다(2026-08-21): ratings 테이블에서 channel_id=ENA, target=수도권 2049, 2026-01-01~
+// 08-20 채널단위(program_id is null) 평균을 직접 재계산한 값(0.12027)이 관리자가 업로드한
+// "누적 채널 순위" 파일의 값(0.12025)과 사실상 일치. "시장 전체 기준" 출처 안내는 화면에서는
+// 빼서 간결하게 하고(값 자체의 출처는 코드 주석·이 검증 기록으로 추적 가능), 시장 전체 순위
+// 파일이 없어 우리 데이터로 직접 계산한 경우(computed)는 등록 경쟁채널 범위로 한정된 값이라는
+// 점을 구분해야 하므로 그 경우만 "(참고용)"을 붙인다.
 function buildYtdLine(channel: ChannelSummary): string | null {
   if (channel.ytdAvgRating === null || channel.ytdAvgRank === null) return null;
+  const rankNum = Math.round(channel.ytdAvgRank);
   let gapText = "";
   const targetRankNum = channel.targetRank ? parseInt(channel.targetRank, 10) : NaN;
   if (!Number.isNaN(targetRankNum)) {
-    const diff = channel.ytdAvgRank - targetRankNum; // 양수 = 목표보다 순위 숫자가 커서(=더 낮은 순위) 미달
-    if (Math.abs(diff) < 0.5) {
-      gapText = ` · 목표 순위(${targetRankNum}위)와 동일`;
+    const diff = rankNum - targetRankNum; // 양수 = 목표보다 순위 숫자가 커서(=더 낮은 순위) 미달
+    if (diff === 0) {
+      gapText = ` · 목표(${targetRankNum}위)와 동일`;
     } else {
-      gapText = ` · 목표 순위(${targetRankNum}위) 대비 ${Math.abs(diff).toFixed(1)}위 ${diff > 0 ? "낮음" : "높음"}`;
+      gapText = ` · 목표(${targetRankNum}위) 대비 ${Math.abs(diff)}위 ${diff > 0 ? "낮음" : "높음"}`;
     }
   }
-  // 사용자 지시(2026-08-21): 등위(순위)는 소수점 없이 정수로만 표시. 관리자가 업로드한 "누적
-  // 채널 순위" 파일(시장 전체 ~217개 채널 기준)이 있으면 그 값을 쓰고 출처를 밝힌다 — 우리
-  // 데이터만으로는 등록 경쟁채널(최대 40개) 범위를 넘는 시장 전체 순위를 계산할 수 없다.
-  const sourceText =
-    channel.ytdRankSource === "market_snapshot"
-      ? ` · 시장 전체 기준(${channel.ytdRankDateRange?.to ?? "업로드 파일"})`
-      : "";
-  return `누적(1/1~오늘) 평균 ${formatRating(channel.ytdAvgRating, channel.code)}(${Math.round(channel.ytdAvgRank)}위)${gapText}${sourceText}`;
+  const scopeSuffix = channel.ytdRankSource === "market_snapshot" ? "" : "(참고용)";
+  return `연간 누적 평균 ${formatRating(channel.ytdAvgRating, channel.code)}(${rankNum}위)${scopeSuffix}${gapText}`;
 }
 
 // ENA 히어로 — 사용자 지시(2026-08-20): 로고·시청률 가운데 정렬, 시청률(순위) + 전일 대비
@@ -426,7 +435,8 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
       <div className="mt-3 flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
         <span className="whitespace-nowrap text-3xl font-semibold text-zinc-900">
           {formatRating(channel.currentRating)}
-          {channel.currentRank !== null && <span className="ml-1.5 text-3xl font-semibold text-zinc-400">({channel.currentRank}위)</span>}
+          {/* 사용자 지시(2026-08-21): 등위는 시청률 숫자보다 약간만 더 작은 글씨로. */}
+          {channel.currentRank !== null && <span className="ml-1.5 text-2xl font-semibold text-zinc-400">({channel.currentRank}위)</span>}
         </span>
         <ChangeBadge pct={channel.dodChangePct} />
       </div>
@@ -557,7 +567,7 @@ function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null
 // 어떤 오리지널 프로그램·채널 조합에도 같은 틀이 적용되도록 일반화했다.
 interface OriginalInsightBlock {
   bullets: string[];
-  schedulingNote: string | null;
+  schedulingNote: string[];
 }
 function buildOriginalInsight(
   item: OriginalDailyItem,
@@ -632,12 +642,50 @@ function buildOriginalInsight(
     );
   }
 
-  // [편성 인사이트] — 본채널 재방 유입이 타 채널 재방 유입보다 뚜렷하게(10%p 이상) 높을 때만
-  // 카니발라이제이션 가능성을 짚는다. 패턴이 없으면 생성하지 않는다(단정 회피).
-  let schedulingNote: string | null = null;
+  // ⑤ 도달율 — 사용자가 첨부한 PD 리뷰 보고서("도달율 1% 이하")를 학습해 추가. 도달율(Reach)이
+  // 1% 미만이면 시청률/점유율이 양호해도 "본 사람의 폭 자체가 좁다"는 별도 신호라 함께 보여준다.
+  if (item.matched_reach !== null && item.matched_reach < 1) {
+    bullets.push(`도달율(Reach) ${item.matched_reach.toFixed(2)}%로 1% 미만 — 시청은 유지되고 있으나 시청 가구의 폭 자체는 좁음`);
+  }
+
+  // ⑥ 연령대별 세분화 강세 — 같은 PD 리뷰 보고서를 학습해 추가. KPI 타깃(예: 수도권 2049) 하나만
+  // 보면 안 보이는 실제 핵심 시청층을 10살 단위 연령대 실측 데이터(ratings 테이블, 새 계산 없음)로
+  // 보여준다. KPI 타깃 시청률보다 실제로 높은 연령대만 골라 "강세"로 표현(과장 방지).
+  const strongerAgeSegments =
+    item.matched_rating !== null && item.age_breakdown
+      ? item.age_breakdown.filter((a) => a.rating > item.matched_rating!).slice(0, 3)
+      : [];
+  if (strongerAgeSegments.length > 0) {
+    bullets.push(
+      `연령대별로는 ${strongerAgeSegments.map((a) => `${shortDemoLabel(a.label)}(${formatRating(a.rating)}%)`).join(", ")} 순으로 KPI 타깃 시청률(${formatRating(item.matched_rating)}%)보다 높음`
+    );
+  }
+
+  // [편성 인사이트] — 여러 근거를 모두 짚을 수 있어 배열로 관리한다(사용자 지시: 첨부 보고서를
+  // 학습해 새로운 편성 인사이트를 추가할 것). 각 항목은 패턴이 실제로 있을 때만 추가된다.
+  const schedulingNote: string[] = [];
+
+  // 본채널 재방 유입이 타 채널 재방 유입보다 뚜렷하게(10%p 이상) 높을 때만 카니발라이제이션
+  // 가능성을 짚는다. 패턴이 없으면 생성하지 않는다(단정 회피).
   if (selfRetentionPct !== null && crossRetentionPct !== null && rerunChannelName && selfRetentionPct - crossRetentionPct >= 10) {
-    schedulingNote =
-      `${broadcastChannelName} 직재방으로 인한 ${rerunChannelName} 카니발라이제이션 가능성 — ${broadcastChannelName} 본채널이 본방 종료 직후 자체 재방을 바로 배치함에 따라 재시청·유입 수요가 본채널로 집중되어, ${rerunChannelName}의 직후 재방 편성은 시청률 견인 효과를 거의 보지 못한 것으로 보입니다(동시에 관찰된 패턴 — 인과관계로 단정하지 않음). ${rerunChannelName}의 재방 시점 분산이나 타깃층 맞춤형 차별화 편성을 검토해볼 만합니다.`;
+    schedulingNote.push(
+      `${broadcastChannelName} 직재방으로 인한 ${rerunChannelName} 카니발라이제이션 가능성 — ${broadcastChannelName} 본채널이 본방 종료 직후 자체 재방을 바로 배치함에 따라 재시청·유입 수요가 본채널로 집중되어, ${rerunChannelName}의 직후 재방 편성은 시청률 견인 효과를 거의 보지 못한 것으로 보입니다(동시에 관찰된 패턴 — 인과관계로 단정하지 않음). ${rerunChannelName}의 재방 시점 분산이나 타깃층 맞춤형 차별화 편성을 검토해볼 만합니다.`
+    );
+  }
+
+  // 사용자 지시(2026-08-21): 첨부 PD 리뷰 보고서를 학습해 새로 도출한 편성 인사이트 — KPI
+  // 타깃(수도권 2049 등)의 등락만 보면 이 콘텐츠의 진짜 핵심 시청층을 놓친다. 최상위 연령대
+  // 시청률이 KPI 타깃 대비 뚜렷하게(50% 이상) 높으면, 광고 세일즈·브랜디드 콘텐츠 기획에서
+  // KPI 타깃 바깥의 이 연령대도 함께 고려할 만하다는 신호로 짚는다(모든 화이트리스트 프로그램에
+  // 공통 적용되는 일반 로직 — 특정 프로그램명을 하드코딩하지 않음).
+  if (strongerAgeSegments.length > 0 && item.matched_rating !== null && item.matched_rating > 0) {
+    const top = strongerAgeSegments[0];
+    const upliftPct = ((top.rating - item.matched_rating) / item.matched_rating) * 100;
+    if (upliftPct >= 50) {
+      schedulingNote.push(
+        `KPI 타깃 외 핵심 시청층 존재 — KPI 타깃 시청률(${formatRating(item.matched_rating)}%)보다 ${shortDemoLabel(top.label)} 시청률(${formatRating(top.rating)}%)이 ${upliftPct.toFixed(0)}% 더 높습니다(동시에 관찰된 참고 정보 — 인과관계로 단정하지 않음). 광고 세일즈나 관련 브랜디드 콘텐츠 기획 시 KPI 타깃 하나만이 아니라 이 연령대까지 함께 고려할 만합니다.`
+      );
+    }
   }
 
   return { bullets, schedulingNote };
@@ -804,13 +852,17 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                       ))}
                     </ul>
                   )}
-                  {insight.schedulingNote && (
+                  {insight.schedulingNote.length > 0 && (
                     <div className="mt-1 rounded-xl bg-amber-50 p-2.5">
                       <p className="mb-1 text-[10px] font-semibold text-amber-700">[편성 인사이트]</p>
-                      <p className="flex gap-1.5 text-[11px] leading-relaxed text-amber-800">
-                        <span className="shrink-0 text-amber-300">•</span>
-                        <span>{insight.schedulingNote}</span>
-                      </p>
+                      <div className="flex flex-col gap-1">
+                        {insight.schedulingNote.map((note, i) => (
+                          <p key={i} className="flex gap-1.5 text-[11px] leading-relaxed text-amber-800">
+                            <span className="shrink-0 text-amber-300">•</span>
+                            <span>{note}</span>
+                          </p>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1085,6 +1137,27 @@ function TodayTopProgramsCard({
   );
 }
 
+// 사용자 지시(2026-08-21): "주요뉴스의 카테고리별로 색상을 표시" — category는 관리자가 자유
+// 텍스트로 입력해(고정 목록이 없음) 특정 카테고리에 색을 미리 지정해둘 수 없다. 대신 카테고리
+// 이름을 해시해 고정 팔레트에서 하나를 결정적으로 골라, 같은 카테고리는 항상 같은 색을 쓰되
+// 새 카테고리가 추가돼도 코드를 고칠 필요가 없게 했다. 진하고(font-semibold) 서로 구분되는
+// 색만 골랐다(사용자 지시: "진한 검정이나 추천하는 색").
+const NEWS_CATEGORY_COLORS = [
+  "text-zinc-800", // 진한 검정(사용자가 예시로 든 색 — 팔레트 첫 번째로 포함)
+  "text-indigo-600",
+  "text-rose-600",
+  "text-amber-600",
+  "text-emerald-600",
+  "text-sky-600",
+  "text-fuchsia-600",
+  "text-orange-600",
+];
+function categoryColorClass(category: string): string {
+  let hash = 0;
+  for (let i = 0; i < category.length; i++) hash = (hash * 31 + category.charCodeAt(i)) >>> 0;
+  return NEWS_CATEGORY_COLORS[hash % NEWS_CATEGORY_COLORS.length];
+}
+
 // 주요 뉴스(베타) 카드 — R2.5(사용자 지시: "오늘의 빠른 요약 위에"). 링크 주소는 화면에 노출하지
 // 않고 제목만 하이퍼링크로 연결한다.
 function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
@@ -1103,10 +1176,14 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
       <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
         {[...byCategory.entries()].map(([category, list]) => (
           <div key={category}>
-            <p className="mb-1 text-xs font-semibold text-zinc-500">{category}</p>
+            <p className={`mb-1 text-xs font-semibold ${categoryColorClass(category)}`}>{category}</p>
             <ul className="flex flex-col gap-0.5">
               {list.map((item, i) => (
-                <li key={i}>
+                <li key={i} className="flex items-baseline gap-1.5">
+                  {/* 사용자 지시: 기사 제목 앞에 눈에 잘 보이는 색의 가운뎃점 표시. */}
+                  <span className="shrink-0 text-emerald-500" aria-hidden="true">
+                    ·
+                  </span>
                   <a
                     href={item.url}
                     target="_blank"

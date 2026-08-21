@@ -287,6 +287,75 @@ function findCompetitorBlocks(rows: Row[]): { headerRowIdx: number; col: number;
   return blocks;
 }
 
+// 버그 수정(2026-08-21, 사용자가 실제 시트 스크린샷을 제시해 재확인): "OOO경쟁채널시청률" 시트는
+// DATA_DICTIONARY.md에 이미 문서화된 함정대로 자사 채널 1~2개가 자기 자신의 블록으로 나란히
+// 들어있는데(예: "ONCE,OLIFE경쟁채널시청률"→ONCE+OLIFE, "ENA DRAMA경쟁채널시청률"→ENA
+// DRAMA+ENA STORY), 지금까지 이 자사 블록은 "§1.3 타깃상세에서 이미 확보한 데이터"로 보고 전부
+// 건너뛰었다(위 parseCompetitorProgramSheet의 self-name skip). 그런데 사용자가 제시한 실제
+// 시트를 보면 이 자사 블록엔 §1.3에 아예 없는 타깃이 섞여 있다 — ONCE/OLIFE는 "개인2049(수도권)"이,
+// ENA STORY는 "개인2049(수도권)"·"여자3049(수도권)"가 §1.3 타깃상세(ONCE,OLIFE,ENA SPORTS 공동
+// 시트)에 없는데(그 시트는 전국 유료가구·전국 5064·10살 단위 연령대만 있고 복합 연령대 컬럼이
+// 없음, DB 직접 재조회로 확인) 여기엔 있다. "유료방송가구"/"개인5064"는 §1.3에 "전국 유료가구"/
+// "전국 5064"로 이미 있어 중복이라 제외하고(값도 전국 스코프로 동일한 지표), 아래 맵에 있는
+// (자사채널명, 이 시트의 타깃 라벨) 조합만 이미 있는 target_id(ENA류가 쓰는 "수도권 2049"/
+// "수도권 여3049"와 동일 — 채널 간 직접 비교가 가능하도록)로 매핑해 새로 반영한다.
+const SELF_BLOCK_EXTRA_TARGETS: Record<string, Record<string, string>> = {
+  ONCE: { 개인2049: "수도권 2049" },
+  OLIFE: { 개인2049: "수도권 2049" },
+  "ENA STORY": { 개인2049: "수도권 2049", 여자3049: "수도권 여3049" },
+};
+
+/** "OOO경쟁채널시청률" 시트의 자사 채널 블록(ONCE/OLIFE/ENA STORY)에서, §1.3에 없는 타깃(위 맵)만
+ *  뽑아 ProgramTargetRow[]로 반환한다. 이 시트는 시청률/점유율만 있고 도달율/시청시간/시청시간
+ *  비율 컬럼이 없어 그 세 값은 null로 채운다(만들어내지 않음, CLAUDE.md 원칙). */
+function parseSelfExtraTargetBlocks(rows: Row[]): ProgramTargetRow[] {
+  const results: ProgramTargetRow[] = [];
+  for (const block of findCompetitorBlocks(rows)) {
+    const remap = SELF_BLOCK_EXTRA_TARGETS[block.name];
+    if (!remap) continue; // 경쟁채널 블록이거나, 이 매핑 대상이 아닌 자사 채널(ENA/ENA DRAMA/ENA PLAY — 이미 §1.3에 충분)
+
+    const channelCode = toChannelCode(block.name);
+    const labelRow = rows[block.headerRowIdx + 1];
+    // 이 시트는 "시청률" 3칸(col+3~5) 다음에 "점유율" 3칸(col+6~8)이 같은 순서로 온다
+    // (도달율/시청시간 컬럼 없음 — §1.3의 5칸-반복 레이아웃과 다름).
+    const targetCols = [block.col + 3, block.col + 4, block.col + 5]
+      .map((ratingCol) => ({ ratingCol, mappedLabel: remap[String(labelRow?.[ratingCol] ?? "").trim()] }))
+      .filter((t): t is { ratingCol: number; mappedLabel: string } => !!t.mappedLabel);
+    if (targetCols.length === 0) continue;
+
+    for (let r = block.headerRowIdx + 2; r < rows.length; r++) {
+      const row = rows[r];
+      const firstCell = String(row?.[block.col] ?? "").trim();
+      const isDailyAggregate = firstCell === "하루 전체" || firstCell === "하루전체";
+      // 버그 수정(2026-08-21, 실측으로 발견): 이 시트는 옆으로 나란히 놓인 두 블록(예: ONCE/OLIFE)의
+      // 프로그램 개수가 서로 달라, 방영 편수가 적은 쪽은 "하루 전체" 행 바로 위에 빈 행이 낀다
+      // (parseCompetitorProgramSheet가 이미 이 문제를 `continue`로 처리하고 있던 것과 동일 — 여기서도
+      // `break` 대신 `continue`를 써서 빈 행을 건너뛰고 "하루 전체" 행까지 계속 스캔해야 한다).
+      if (!isDailyAggregate && !firstCell) continue;
+      const programNameRaw = isDailyAggregate ? "하루전체" : String(row?.[block.col + 2] ?? "").trim();
+      if (!isDailyAggregate && !programNameRaw) continue;
+
+      for (const { ratingCol, mappedLabel } of targetCols) {
+        results.push({
+          channelCode,
+          startTime: isDailyAggregate ? null : normalizeTime(row[block.col]),
+          endTime: isDailyAggregate ? null : normalizeTime(row?.[block.col + 1]),
+          isDailyAggregate,
+          rawProgramName: programNameRaw,
+          targetLabel: mappedLabel,
+          rating: parseNumberCell(row?.[ratingCol]),
+          share: parseNumberCell(row?.[ratingCol + 3]),
+          reach: null,
+          timeSpentSeconds: null,
+          timeSpentShare: null,
+        });
+      }
+      if (isDailyAggregate) break; // 이 채널 섹션 끝
+    }
+  }
+  return results;
+}
+
 // ourChannelCode는 빈 문자열로 두고 반환 — 이 풀링된 데이터는 호출부(parseNielsenDailyWorkbook)가
 // 분석 대상 채널 전체로 복제해서 내보내고, 실제 귀속은 다운스트림(nielsenIngest.ts)의 등록
 // 경쟁채널 필터가 정한다(위 설명 참고).
@@ -441,6 +510,9 @@ export function parseNielsenDailyWorkbook(
     if (!sheet) continue; // 필수 시트가 아니므로(경고만) 없으면 조용히 건너뜀
     const rows = XLSX.utils.sheet_to_json<Row>(sheet, { header: 1, blankrows: true });
     pooledCompetitorRows.push(...parseCompetitorProgramSheet(rows));
+    // 버그 수정(2026-08-21): 이 4개 시트에 섞여 있는 자사 채널 블록(ONCE/OLIFE/ENA STORY)에서
+    // §1.3엔 없는 타깃(개인2049/여자3049)만 뽑아 programRows에 합친다(위 설명 참고).
+    programRows.push(...parseSelfExtraTargetBlocks(rows));
   }
   // 분석 대상 6개 채널 전부에 복제해서 내보낸다 — 실제로 어느 채널에 붙을지는 nielsenIngest.ts의
   // 등록 경쟁채널 필터(registeredCompetitorByChannel)가 정한다.

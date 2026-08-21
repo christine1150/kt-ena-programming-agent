@@ -57,6 +57,9 @@ interface CompetitorInsightRow {
   top_program_name: string | null;
   top_program_start_time: string | null;
   top_program_rating: number | null;
+  // 사용자 지시(2026-08-21): 기간(멀티데이) 조회에서는 프로그램명 단위 평균 시청률로 최고 성적
+  // 프로그램을 고른다 — 몇 회 방영분을 평균 냈는지 근거로 함께 보여준다(단일 일자 조회는 null).
+  top_program_air_count: number | null;
 }
 interface CompetitorOverlapRow {
   our_program_name: string;
@@ -152,6 +155,7 @@ interface FitScoreItem {
     weakHour: number | null;
     weakShareVsMedianPct: number | null;
     weakAirCount: number | null;
+    confidence: "strong" | "mild" | null;
   } | null;
 }
 
@@ -700,7 +704,10 @@ function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string 
     const enoughSample = movers.filter(hasEnoughSample);
     const pool = enoughSample.length > 0 ? enoughSample : movers;
     const dropped = pool.filter((m) => m.period_avg_rating === null && m.prior_avg_rating !== null).sort((a, b) => (b.prior_avg_rating ?? 0) - (a.prior_avg_rating ?? 0));
-    const withPeriodRating = pool.filter((m) => m.period_avg_rating !== null);
+    // 사용자 지시(2026-08-21): "직전 기간엔 편성하지 않았던 게 편성돼서 기여한 건 크게 상승했다고
+    // 분석하기 어렵다" — "가장 크게 상승"은 직전 실적이 실제로 있는(prior_avg_rating not null)
+    // 프로그램만 후보로 삼는다. 신규 편성은 아래에서 별도로, 성과가 좋을 때만 언급한다.
+    const withPeriodRating = pool.filter((m) => m.period_avg_rating !== null && m.prior_avg_rating !== null);
     // 사용자 지시(2026-08-21): 단순 평균 등락률이 아니라 "합산 시청률(기여도)" 기준으로 정렬한다.
     const risers = withPeriodRating.filter((m) => m.rating_delta! > 0).sort((a, b) => contributionScore(b) - contributionScore(a));
     const fallers = withPeriodRating.filter((m) => m.rating_delta! < 0).sort((a, b) => contributionScore(a) - contributionScore(b));
@@ -716,9 +723,20 @@ function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string 
         `'${top.canonical_name}'${josaEunNeun(top.canonical_name)} 이전 기간엔 평균 ${fmtR(top.prior_avg_rating)}였으나 이번 기간엔 편성되지 않았습니다(동시에 관찰된 참고 정보 — 인과관계로 단정하지 않음).`
       );
     } else if (top) {
-      const priorText = top.prior_avg_rating !== null ? `이전(${fmtR(top.prior_avg_rating)})보다` : "이전 기간엔 없었다가 새로 편성되어";
       sentences.push(
-        `'${top.canonical_name}'${josaIga(top.canonical_name)} ${fmtR(top.period_avg_rating)}로 ${priorText} 가장 크게 ${top.rating_delta! >= 0 ? "상승" : "하락"}해, 전체 ${p.prior_period_change_pct >= 0 ? "상승" : "하락"}에 가장 크게 기여한 것으로 보입니다(동시에 관찰된 참고 정보 — 인과관계로 단정하지 않음).`
+        `'${top.canonical_name}'${josaIga(top.canonical_name)} ${fmtR(top.period_avg_rating)}로 이전(${fmtR(top.prior_avg_rating)})보다 가장 크게 ${top.rating_delta! >= 0 ? "상승" : "하락"}해, 전체 ${p.prior_period_change_pct >= 0 ? "상승" : "하락"}에 가장 크게 기여한 것으로 보입니다(동시에 관찰된 참고 정보 — 인과관계로 단정하지 않음).`
+      );
+    }
+    // 신규 편성 — "상승" 비교 표현 대신 "신규 편성"으로 정확히 서술하고, 채널 평균 이상(성과가
+    // 좋을 때)만 코멘트한다(사용자 지시). 평균 이하인 신규 편성은 언급하지 않는다.
+    const newEntries = pool.filter((m) => m.prior_avg_rating === null && m.period_avg_rating !== null);
+    const goodNewEntry =
+      p.avg_rating !== null
+        ? [...newEntries].filter((m) => (m.period_avg_rating ?? 0) >= p.avg_rating!).sort((a, b) => contributionScore(b) - contributionScore(a))[0]
+        : undefined;
+    if (goodNewEntry) {
+      sentences.push(
+        `'${goodNewEntry.canonical_name}'${josaEunNeun(goodNewEntry.canonical_name)} 이번 기간 새로 편성되어 ${fmtR(goodNewEntry.period_avg_rating)}로 채널 평균(${fmtR(p.avg_rating)}) 이상의 성과를 냈습니다.`
       );
     }
   }
@@ -735,7 +753,16 @@ function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string 
 // 사용자 지시(2026-08-21): "WHAT HAPPENED? 기간별 비교도... 어떤것이 여전히 시청률/점유율/
 // 시청시간 상위이며, 어떤것이 달라졌는지 리포트" — periodProgramMovers(이미 조회된 값)로
 // "이 기간에도 여전히 상위인 프로그램"과 "가장 크게 오르내린 프로그램"을 짧게 짚는다.
-function buildWhatHappenedInsight(movers: PeriodProgramMoverRow[], fmtR: (v: number | null) => string): string | null {
+// 사용자 지시(2026-08-21): "직전 기간에는 편성하지 않았던 것이 편성을 해서 기여한 것은 크게
+// 상승했다고 분석하기 어렵다 — 신규 론칭 컨텐츠는 시청률/효율이 좋을 때만 코멘트하고, '상승'
+// 같은 비교 표현 대신 '신규 편성' 상황을 정확히 설명할 것." prior_avg_rating이 null인 프로그램은
+// "가장 크게 상승" 후보에서 아예 제외하고(비교 대상이 없어 등락률 자체가 성립하지 않음), 채널
+// 평균 이상으로 성과가 좋을 때만 별도 문장으로 "신규 편성 + 좋은 성과"를 설명한다.
+function buildWhatHappenedInsight(
+  movers: PeriodProgramMoverRow[],
+  fmtR: (v: number | null) => string,
+  channelAvgRating: number | null
+): string | null {
   const withRating = movers.filter((m) => m.period_avg_rating !== null);
   if (withRating.length === 0) return null;
   const sentences: string[] = [];
@@ -749,7 +776,9 @@ function buildWhatHappenedInsight(movers: PeriodProgramMoverRow[], fmtR: (v: num
 
   // 사용자 지시(2026-08-21): 10회 미만 편성 프로그램의 등락은 총 등락에 영향이 적으므로, 단순
   // 평균 등락률이 아니라 합산 시청률(기여도) 기준으로 고르고, 가능하면 10회 이상 표본만 본다.
-  const withDelta = movers.filter((m) => m.rating_delta !== null && m.period_avg_rating !== null);
+  // "가장 크게 상승/하락"은 직전 기간 실적이 실제로 있는(prior_avg_rating not null) 프로그램만
+  // 후보로 삼는다 — 신규 편성은 비교 자체가 성립하지 않는다.
+  const withDelta = movers.filter((m) => m.rating_delta !== null && m.period_avg_rating !== null && m.prior_avg_rating !== null);
   const withDeltaEnoughSample = withDelta.filter(hasEnoughSample);
   const deltaPool = withDeltaEnoughSample.length > 0 ? withDeltaEnoughSample : withDelta;
   const biggestRiser = [...deltaPool].filter((m) => m.rating_delta! > 0).sort((a, b) => contributionScore(b) - contributionScore(a))[0];
@@ -764,7 +793,18 @@ function buildWhatHappenedInsight(movers: PeriodProgramMoverRow[], fmtR: (v: num
       `'${biggestFaller.canonical_name}'${josaEunNeun(biggestFaller.canonical_name)} 직전 기간(${fmtR(biggestFaller.prior_avg_rating)}) 대비 가장 크게 하락해 ${fmtR(biggestFaller.period_avg_rating)}로 내려왔습니다.`
     );
   }
+  // 신규 편성 — "상승"이 아니라 "신규 편성"으로 정확히 서술하고, 채널 평균 이상(성과가 좋을 때)만
+  // 코멘트한다. 성과가 평균 이하인 신규 편성은 언급하지 않는다(사용자 지시).
   const newEntries = withRating.filter((m) => m.prior_avg_rating === null);
+  const goodNewEntry =
+    channelAvgRating !== null
+      ? [...newEntries].filter((m) => (m.period_avg_rating ?? 0) >= channelAvgRating).sort((a, b) => contributionScore(b) - contributionScore(a))[0]
+      : undefined;
+  if (goodNewEntry) {
+    sentences.push(
+      `'${goodNewEntry.canonical_name}'${josaEunNeun(goodNewEntry.canonical_name)} 이 기간 새로 편성되어 ${fmtR(goodNewEntry.period_avg_rating)}로 채널 평균(${fmtR(channelAvgRating)}) 이상의 성과를 냈습니다.`
+    );
+  }
   if (newEntries.length > 0) {
     sentences.push(`이전 기간엔 없던 신규 편성 ${newEntries.length}건이 이 기간에 새로 포착됐습니다.`);
   }
@@ -1541,11 +1581,18 @@ function buildScheduleRecommendationNote(
   // 아래 daypart 재배치 추천보다 이 판단을 우선한다.
   if (item.slotEfficiency?.isMultiSlot) {
     const programName = item.programs?.canonical_name ?? "이 프로그램";
-    const { weeks, weakHour, weakShareVsMedianPct, weakAirCount } = item.slotEfficiency;
-    if (weakHour !== null) {
-      return `최근 ${weeks}주 분석을 통해 ${weakHour}시대의 '${programName}'${josaEunNeun(programName)} 효율이 좋지 않습니다(이 프로그램의 시간대별 점유율 중앙값 대비 ${weakShareVsMedianPct?.toFixed(0)}% 수준, ${weakAirCount}회 관측) — 그 시간대만 이동 또는 교체 검토를 권장합니다(다른 시간대는 상대적으로 양호).`;
+    const { weeks, weakHour, weakShareVsMedianPct, weakAirCount, confidence } = item.slotEfficiency;
+    // 사용자 지시(2026-08-21): "네가 시간대별로 판단해서 제안을 해주면 더 좋겠다" — 표본이 있으면
+    // (confidence가 strong/mild) 항상 가장 약한 시간대를 짚어 판단을 준다. strong(중앙값 대비
+    // 뚜렷하게 낮음)은 이동/교체를 권장하고, mild(상대적으로 가장 약함 정도)는 참고 수준으로
+    // 톤을 낮춘다. 문장은 짧게(사용자 지시: "말이 너무 기므로 줄여줘").
+    if (confidence === "strong" && weakHour !== null) {
+      return `최근 ${weeks}주 분석 결과 ${weakHour}시대 '${programName}'${josaEunNeun(programName)} 효율이 낮음(중앙값 대비 ${weakShareVsMedianPct?.toFixed(0)}%, ${weakAirCount}회) — 그 시간대만 이동/교체 검토`;
     }
-    return `여러 시간대에 반복 편성돼 있어(최근 ${weeks}주 기준) 프로그램 전체보다는 시간대별로 판단이 필요합니다 — 다만 뚜렷하게 효율이 낮은 특정 시간대는 아직 발견되지 않았습니다.`;
+    if (confidence === "mild" && weakHour !== null) {
+      return `최근 ${weeks}주 기준 ${weakHour}시대가 '${programName}'의 시간대 중 상대적으로 가장 약함(중앙값 대비 ${weakShareVsMedianPct?.toFixed(0)}%) — 우선 점검 대상으로 참고`;
+    }
+    return "여러 시간대 반복 편성 프로그램으로, 전체보다 시간대별 판단이 필요하나 뚜렷한 저효율 시간대는 없음";
   }
   if (recommendedDaypart) {
     // 사용자 지시(2026-08-21): "격차가 더 좁혀지는 중"이 무슨 뜻인지 알기 쉽게 — 그 시간대에서
@@ -2307,9 +2354,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
             </div>
           )}
-          {showComparisonView && data.periodProgramMovers.length > 0 && (
+          {showComparisonView && data.periodProgramMovers.length > 0 && data.periodReport && (
             <p className="mb-3 text-sm leading-relaxed text-zinc-700">
-              {buildWhatHappenedInsight(data.periodProgramMovers, fmtR)}
+              {buildWhatHappenedInsight(data.periodProgramMovers, fmtR, data.periodReport.avg_rating)}
             </p>
           )}
           {showComparisonView && (
@@ -2665,9 +2712,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           className="cursor-pointer border-t border-zinc-100 align-top hover:bg-zinc-50"
                           onClick={() => setExpandedProgram(isOpen ? null : item.program_id)}
                         >
-                          <td className="py-2 pr-2">
+                          <td className="whitespace-nowrap py-2 pr-2">
                             <span
-                              className={`inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                              className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                                 item.tag ? TAG_STYLE[item.tag] : "bg-zinc-100 text-zinc-500"
                               }`}
                             >
@@ -2738,7 +2785,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 const ourTopProgram = isRangeMode
                   ? [...data.periodProgramMovers].filter((m) => m.period_avg_rating !== null).sort((a, b) => (b.period_avg_rating ?? 0) - (a.period_avg_rating ?? 0))[0] ?? null
                   : null;
-                type MergedRow = { competitor_name: string; today_rating: number | null; delta_pct: number | null; top_program_name: string | null; top_program_start_time: string | null; top_program_rating: number | null; isOurs: boolean };
+                type MergedRow = { competitor_name: string; today_rating: number | null; delta_pct: number | null; top_program_name: string | null; top_program_start_time: string | null; top_program_rating: number | null; top_program_air_count: number | null; isOurs: boolean };
                 const merged: MergedRow[] = competitorInsightReport.map((c) => ({ ...c, isOurs: false }));
                 if (ourRating !== null) {
                   merged.push({
@@ -2748,6 +2795,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     top_program_name: isRangeMode ? (ourTopProgram?.canonical_name ?? null) : (narrativeSignal?.top_program_name ?? null),
                     top_program_start_time: isRangeMode ? null : (narrativeSignal?.top_program_start_time ?? null),
                     top_program_rating: isRangeMode ? (ourTopProgram?.period_avg_rating ?? null) : (narrativeSignal?.top_program_rating ?? null),
+                    top_program_air_count: isRangeMode ? (ourTopProgram?.period_air_count ?? null) : null,
                     isOurs: true,
                   });
                 }
@@ -2793,7 +2841,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                   {c.top_program_start_time
                                     ? `(${fmtTime(c.top_program_start_time)}, ${fmtR(c.top_program_rating)})`
                                     : c.top_program_rating !== null
-                                      ? `(${fmtR(c.top_program_rating)})`
+                                      ? `(평균 ${fmtR(c.top_program_rating)}${c.top_program_air_count ? `, ${c.top_program_air_count}회` : ""})`
                                       : ""}
                                 </>
                               ) : (

@@ -30,6 +30,11 @@ interface OriginalDailyRow {
   matched_end_time: string;
   matched_rating: number | null;
   matched_share: number | null;
+  // 사용자 지시(2026-08-21): 첨부된 PD 리뷰 보고서를 학습해 추가 — 도달율(낮으면 report의 "도달율
+  // 1% 이하" 같은 경고 신호)과 본방 슬롯 연령대별 시청률 상위 5개(우리 ratings 테이블에 이미 있는
+  // 실측 데이터, 새 SQL 계산 없이 get_original_content_daily가 함께 반환).
+  matched_reach: number | null;
+  age_breakdown: { label: string; rating: number }[] | null;
   featured_category: string | null;
   rerun_channel_code: string | null;
   rerun_program_name: string | null;
