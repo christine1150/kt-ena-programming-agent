@@ -114,9 +114,12 @@ export async function GET(request: Request) {
       hourlyBaselinePatternPrior: [],
       hasPriorRange: false,
       competitorPeriodTopPrograms: [],
+      competitorPeriodTopProgramsPrior: [],
       periodWindowDays: 84,
       dowHourBlockPatternPrior: [],
       topProgramsPrior: [],
+      topSharePrograms: [],
+      priorTopSharePrograms: [],
     });
   }
   // 기존 코드/변수명과의 호환을 위해 asOfDate = dateTo로 둔다(모든 trailing-window 계산의 기준일).
@@ -259,6 +262,9 @@ export async function GET(request: Request) {
     topProgramsPriorRes,
     whoIsWatchingDemographicsRes,
     hourlyBaselinePatternPriorRes,
+    topSharePatternsRes,
+    topSharePatternsPriorRes,
+    competitorPeriodTopProgramsPriorRes,
   ] = await Promise.all([
     // WHAT HAPPENED? — 채널 단위 랭킹 데이터로 DoD/WoW/MoM/QoQ/YoY/YTD
     supabase.rpc("get_rating_trend_summary", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: asOfDate }),
@@ -388,6 +394,17 @@ export async function GET(request: Request) {
     // 동일한 방식, 기준일만 다름).
     hasPriorRange
       ? supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: addDaysStr(priorDateTo, -83), p_date_to: priorDateTo })
+      : Promise.resolve({ data: [] as unknown[] }),
+    // 사용자 지시(2026-08-21): "TOP20에는 없지만 전체 점유율 1~5위인 콘텐츠가 있으면 별도 명기" —
+    // TOP20(시청률 기준)과 별개로 점유율 기준 상위 5개를 직접 조회한다(get_channel_top_share_programs).
+    supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 5 }),
+    hasPriorRange
+      ? supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: periodWindowDays, p_limit: 5 })
+      : Promise.resolve({ data: [] as unknown[] }),
+    // 사용자 지시(2026-08-21): "비교 분석 시에는 두 기간의 각각 Top7이 나와야 한다" — 전 기간도
+    // 같은 함수(프로그램별 기간 평균 재설계 버전)로 한 번 더 조회.
+    hasPriorRange
+      ? supabase.rpc("get_competitor_period_top_programs", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_date_from: priorDateFrom, p_date_to: priorDateTo, p_channel_limit: 5, p_program_limit: 7 })
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
 
@@ -564,5 +581,9 @@ export async function GET(request: Request) {
     periodWindowDays,
     dowHourBlockPatternPrior: dowHourBlockPatternPriorRes.data ?? [],
     topProgramsPrior: topProgramsPriorRes.data ?? [],
+    // 사용자 지시(2026-08-21): TOP20 밖 점유율 상위 5개 + 비교 분석 두 기간 각각의 경쟁사 Top7.
+    topSharePrograms: topSharePatternsRes.data ?? [],
+    priorTopSharePrograms: topSharePatternsPriorRes.data ?? [],
+    competitorPeriodTopProgramsPrior: competitorPeriodTopProgramsPriorRes.data ?? [],
   });
 }

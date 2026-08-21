@@ -276,17 +276,26 @@ interface TopProgramRow {
   top_daypart: string | null;
   most_common_start_hour: number | null;
 }
+// 사용자 지시(2026-08-21): "TOP20에는 없지만 전체 점유율 1~5위인 콘텐츠"를 TOP20 아래 별도 표기.
+interface TopShareProgramRow {
+  program_name: string;
+  avg_rating: number | null;
+  avg_share: number | null;
+  air_count: number;
+}
 
 // 기능 #15-11(2026-08-21): COMPARED WITH? 기간 모드 — 상위 5개 채널 안의 상위 7개 프로그램.
+// 재설계(2026-08-21, 사용자 지시): 개별 방영일 단위(일회성 편성)가 아니라 프로그램별 "그 기간
+// 평균 시청률"로 뽑는다 — get_competitor_period_top_programs가 이미 group by로 계산해 같은
+// 프로그램이 두 번 나오지 않는다.
 interface CompetitorPeriodTopProgramRow {
   competitor_name: string;
   channel_period_avg_rating: number | null;
   channel_rank: number;
   program_name: string;
-  start_time: string;
-  end_time: string | null;
-  rating: number | null;
-  broadcast_date: string;
+  program_avg_rating: number | null;
+  air_count: number;
+  typical_start_hour: number | null;
 }
 
 interface ChannelData {
@@ -351,6 +360,11 @@ interface ChannelData {
   // 기능 #15-3/#15-4(2026-08-21): "대비" 분석의 전 기간 히트맵·TOP20.
   dowHourBlockPatternPrior: DowHourBlockRow[];
   topProgramsPrior: TopProgramRow[];
+  // 사용자 지시(2026-08-21): TOP20 밖 점유율 상위 5개(이번 기간/전 기간) + 비교 분석 두 기간
+  // 각각의 경쟁사 Top7.
+  topSharePrograms: TopShareProgramRow[];
+  priorTopSharePrograms: TopShareProgramRow[];
+  competitorPeriodTopProgramsPrior: CompetitorPeriodTopProgramRow[];
 }
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -578,6 +592,21 @@ function computePeriodPreset(
   return computeComparisonRange(latest, preset);
 }
 
+// 사용자 지시(2026-08-21): "10회 미만으로 편성한 프로그램의 상승/하락은 총 하락 또는 상승에 큰
+// 영향을 줄 수 없다 — 평균 시청률뿐 아니라 합산 시청률과 기여도도 고려하자." 방영 횟수가 적은
+// 프로그램은 평균 시청률 하나만으로도 우연히 크게 튈 수 있어(표본 문제), "가장 크게 상승/하락한
+// 프로그램"을 고를 때 단순 평균 등락률이 아니라 "합산 시청률(평균×방영횟수)의 변화량"을 기준으로
+// 삼는다 — 이게 실제로 채널 전체 총량에 기여한 크기에 더 가깝다. 그리고 두 기간 중 더 적은
+// 방영횟수가 10회 미만이면(표본 부족) 1차 후보에서 제외하고, 10회 이상인 프로그램이 하나도 없을
+// 때만 예외적으로 전체 후보에서 고른다(아예 아무것도 못 짚는 것보다는 낫다는 판단).
+const MIN_AIR_COUNT_FOR_MOVER = 10;
+function contributionScore(m: PeriodProgramMoverRow): number {
+  return (m.period_avg_rating ?? 0) * (m.period_air_count ?? 0) - (m.prior_avg_rating ?? 0) * (m.prior_air_count ?? 0);
+}
+function hasEnoughSample(m: PeriodProgramMoverRow): boolean {
+  return Math.max(m.period_air_count ?? 0, m.prior_air_count ?? 0) >= MIN_AIR_COUNT_FOR_MOVER;
+}
+
 // ── 기간 범위 선택 시 브리핑 — 기간 평균, 직전 동일 길이 기간 대비, 최근 12주 평균 대비,
 // 기간 중 최고/최저일(get_rating_period_report 그대로 문장화, 새 계산 없음).
 // comparisonLabel: 비교 분석 프리셋(DoD/WoW/MoM/QoQ/YoY)이면 "전일"/"전주"/"전월"/"전분기"/
@@ -657,10 +686,14 @@ function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string 
   // period_avg_rating이 null인 경우(이번 기간에 편성 자체가 없어짐)는 별도 문구로 처리한다.
   if (p.prior_period_change_pct !== null) {
     const movers = [...data.periodProgramMovers].filter((m) => m.rating_delta !== null);
-    const dropped = movers.filter((m) => m.period_avg_rating === null && m.prior_avg_rating !== null).sort((a, b) => (b.prior_avg_rating ?? 0) - (a.prior_avg_rating ?? 0));
-    const withPeriodRating = movers.filter((m) => m.period_avg_rating !== null);
-    const risers = withPeriodRating.filter((m) => m.rating_delta! > 0).sort((a, b) => b.rating_delta! - a.rating_delta!);
-    const fallers = withPeriodRating.filter((m) => m.rating_delta! < 0).sort((a, b) => a.rating_delta! - b.rating_delta!);
+    // 표본(10회 미만) 필터를 1차로 적용하고, 걸러진 후보가 없을 때만 전체로 되돌아간다.
+    const enoughSample = movers.filter(hasEnoughSample);
+    const pool = enoughSample.length > 0 ? enoughSample : movers;
+    const dropped = pool.filter((m) => m.period_avg_rating === null && m.prior_avg_rating !== null).sort((a, b) => (b.prior_avg_rating ?? 0) - (a.prior_avg_rating ?? 0));
+    const withPeriodRating = pool.filter((m) => m.period_avg_rating !== null);
+    // 사용자 지시(2026-08-21): 단순 평균 등락률이 아니라 "합산 시청률(기여도)" 기준으로 정렬한다.
+    const risers = withPeriodRating.filter((m) => m.rating_delta! > 0).sort((a, b) => contributionScore(b) - contributionScore(a));
+    const fallers = withPeriodRating.filter((m) => m.rating_delta! < 0).sort((a, b) => contributionScore(a) - contributionScore(b));
     // 하락 방향이면서 "편성이 아예 사라진" 쪽이 등락폭 자체는 더 클 수 있어 함께 비교해 더 큰 쪽을 고른다.
     const topFaller =
       dropped.length > 0 && (fallers.length === 0 || (dropped[0].prior_avg_rating ?? 0) >= Math.abs((fallers[0].rating_delta ?? 0)))
@@ -704,9 +737,13 @@ function buildWhatHappenedInsight(movers: PeriodProgramMoverRow[], fmtR: (v: num
     );
   }
 
-  const withDelta = withRating.filter((m) => m.rating_delta !== null);
-  const biggestRiser = [...withDelta].filter((m) => m.rating_delta! > 0).sort((a, b) => b.rating_delta! - a.rating_delta!)[0];
-  const biggestFaller = [...withDelta].filter((m) => m.rating_delta! < 0).sort((a, b) => a.rating_delta! - b.rating_delta!)[0];
+  // 사용자 지시(2026-08-21): 10회 미만 편성 프로그램의 등락은 총 등락에 영향이 적으므로, 단순
+  // 평균 등락률이 아니라 합산 시청률(기여도) 기준으로 고르고, 가능하면 10회 이상 표본만 본다.
+  const withDelta = movers.filter((m) => m.rating_delta !== null && m.period_avg_rating !== null);
+  const withDeltaEnoughSample = withDelta.filter(hasEnoughSample);
+  const deltaPool = withDeltaEnoughSample.length > 0 ? withDeltaEnoughSample : withDelta;
+  const biggestRiser = [...deltaPool].filter((m) => m.rating_delta! > 0).sort((a, b) => contributionScore(b) - contributionScore(a))[0];
+  const biggestFaller = [...deltaPool].filter((m) => m.rating_delta! < 0).sort((a, b) => contributionScore(a) - contributionScore(b))[0];
   if (biggestRiser) {
     sentences.push(
       `'${biggestRiser.canonical_name}'${josaIga(biggestRiser.canonical_name)} 직전 기간(${fmtR(biggestRiser.prior_avg_rating)}) 대비 가장 크게 상승해 ${fmtR(biggestRiser.period_avg_rating)}을 기록했습니다.`
@@ -1145,6 +1182,7 @@ function HourlyGraphPanel({
   primaryTargetLabel,
   baselinePattern,
   accentColor,
+  baselineLabel,
 }: {
   pattern: HourlyRow[];
   programTitles: HourlyProgramTitleRow[];
@@ -1155,8 +1193,13 @@ function HourlyGraphPanel({
   // 사용자 지시(2026-08-21): "기준이 되는 기간(비교분석 등)의 시간대별 평균도 '오늘' 때와
   // 동일하게 연한 꺾은선 그래프로" — 이 패널 자신의 기준 시점(dateTo 또는 priorDateTo) 기준
   // 최근 12주 평균을 연한 선으로 겹쳐 그린다.
+  // 사용자 지시(2026-08-21, 재요청): "비교 분석 시에는 이번 기간 그래프에 비교 기간의 평균
+  // 시청률이 연한 선으로" — "이번 기간" 패널만 baselinePattern을 12주 자체 기준선 대신 실제
+  // "전 기간"의 시간대별 평균(hourlyPatternPrior)으로 바꿔 받는다(호출부에서 결정). 어느 값을
+  // 넣었는지에 따라 캡션 문구가 달라져야 해서 baselineLabel을 별도로 받는다.
   baselinePattern?: HourlyRow[];
   accentColor?: string;
+  baselineLabel?: string;
 }) {
   const programTitleByHour = new Map(programTitles.map((h) => [h.broadcast_hour, h.program_names]));
   const maxByMetric: Record<HourlyMetricKey, number> = {
@@ -1241,7 +1284,7 @@ function HourlyGraphPanel({
           {showBaseline && (
             <p className="mt-1 text-[11px] text-zinc-400">
               <span className="mr-1 inline-block h-0.5 w-3 align-middle" style={{ backgroundColor: accentColor ?? "#6366f1", opacity: 0.35 }} />
-              연한 선 = 이 기간 기준 최근 12주(84일) 같은 시간대 평균 시청률 기준선
+              {baselineLabel ?? "연한 선 = 이 기간 기준 최근 12주(84일) 같은 시간대 평균 시청률 기준선"}
             </p>
           )}
         </>
@@ -1260,14 +1303,19 @@ function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlo
   if (pattern.length === 0) {
     return <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>;
   }
+  // 사용자 지시(2026-08-21): "좌우로 마우스를 움직이지 않도록" — 강제 min-width로 가로 스크롤을
+  // 만들던 방식을 버리고, 셀 크기·글자·여백을 줄여 카드 폭 안에 8행 전체가 들어오게 한다.
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] text-center text-xs">
+    <div className="w-full overflow-x-auto">
+      <table className="w-full table-fixed text-center text-[10px]">
+        <colgroup>
+          <col className="w-11" />
+        </colgroup>
         <thead>
           <tr>
-            <th className="pb-1.5 text-left font-medium text-zinc-400">시간대 \ 요일</th>
+            <th className="pb-1 text-left font-medium text-zinc-400">시간대</th>
             {["월", "화", "수", "목", "금", "토", "일"].map((label) => (
-              <th key={label} className={`pb-1.5 font-medium ${label === "토" ? "text-blue-500" : label === "일" ? "text-rose-500" : "text-zinc-400"}`}>
+              <th key={label} className={`pb-1 font-medium ${label === "토" ? "text-blue-500" : label === "일" ? "text-rose-500" : "text-zinc-400"}`}>
                 {label}
               </th>
             ))}
@@ -1276,23 +1324,23 @@ function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlo
         <tbody>
           {HOUR_BLOCK_ORDER.map((hb) => (
             <tr key={hb} className="border-t border-zinc-100">
-              <td className="py-1.5 text-left font-medium text-zinc-700">{hourBlockLabel(hb)}</td>
+              <td className="py-0.5 pr-0.5 text-left font-medium text-zinc-700">{hourBlockLabel(hb)}</td>
               {["월", "화", "수", "목", "금", "토", "일"].map((label, i) => {
                 const dow = i + 1;
                 const cell = byCell.get(`${dow}__${hb}`);
                 const rating = cell?.avg_rating ?? null;
                 const intensity = rating !== null ? Math.min(1, rating / maxRating) : 0;
                 return (
-                  <td key={dow} className="py-1.5">
+                  <td key={dow} className="py-0.5 px-0.5">
                     <div
-                      className="mx-auto flex h-9 w-full items-center justify-center rounded-lg text-[11px] font-medium"
+                      className="mx-auto flex h-6 w-full items-center justify-center rounded font-medium"
                       style={{
                         backgroundColor: rating !== null ? `${accentColor}${Math.round(intensity * 200 + 20).toString(16).padStart(2, "0")}` : "#f4f4f5",
                         color: rating !== null && intensity > 0.5 ? "#fff" : "#52525b",
                       }}
                       title={cell ? `${label} ${hourBlockLabel(hb)}: ${fmtR(rating)} (표본 ${cell.sample_count}건)` : "표본 없음"}
                     >
-                      {rating !== null ? rating.toFixed(3) : "—"}
+                      {rating !== null ? rating.toFixed(2) : "—"}
                     </div>
                   </td>
                 );
@@ -1329,8 +1377,7 @@ function TopProgramListItems({ rows, fmtR, indexOffset = 0 }: { rows: TopProgram
             </div>
             {shareRank !== undefined && (
               <p className="ml-7 mt-0.5 text-xs text-sky-600">
-                시청률 순위는 {i + 1 + indexOffset}위이지만, 점유율은 이 목록 중 {shareRank}위로 상대적으로 높습니다
-                {p.avg_share !== null ? ` (점유율 ${p.avg_share.toFixed(2)}%)` : ""}.
+                시청률 {i + 1 + indexOffset}위, 목록 중 점유율 {shareRank}위{p.avg_share !== null ? ` (${p.avg_share.toFixed(2)}%)` : ""}
               </p>
             )}
           </li>
@@ -1340,15 +1387,81 @@ function TopProgramListItems({ rows, fmtR, indexOffset = 0 }: { rows: TopProgram
   );
 }
 
+// 사용자 지시(2026-08-21): "선택기간 동기간 경쟁사 주요프로그램은 일회성 편성이 아니라 프로그램별
+// 기간 평균으로 뽑고, 비교 분석 시엔 두 기간 각각 Top7" — get_competitor_period_top_programs가
+// 이미 프로그램 단위로 묶어 내려주므로(같은 프로그램 중복 없음), 목록만 렌더링한다.
+function CompetitorPeriodTopProgramsList({ rows, fmtR }: { rows: CompetitorPeriodTopProgramRow[]; fmtR: (v: number | null) => string }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-zinc-400">이 기간 등록 경쟁채널 프로그램 데이터가 없습니다.</p>;
+  }
+  return (
+    <ol className="space-y-1.5 text-xs">
+      {rows.map((p, i) => (
+        <li key={`${p.competitor_name}__${p.program_name}`} className="flex items-center gap-2">
+          <span className="w-4 shrink-0 text-right font-medium text-zinc-400">{i + 1}</span>
+          <span className="font-medium text-zinc-700">{p.competitor_name}</span>
+          <span className="text-[10px] text-zinc-400">(채널 {p.channel_rank}위, 기간 평균 {fmtR(p.channel_period_avg_rating)})</span>
+          <span className="min-w-0 flex-1 truncate text-zinc-500">
+            {p.typical_start_hour !== null ? `${p.typical_start_hour}시경 ` : ""}
+            {p.program_name}
+            <span className="text-zinc-400"> · {p.air_count}회 평균</span>
+          </span>
+          <span className="ml-auto shrink-0 font-semibold text-zinc-800">{fmtR(p.program_avg_rating)}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// 사용자 지시(2026-08-21): "TOP20에는 없지만 전체 점유율 1~5위인 콘텐츠가 있으면 TOP20 아래
+// 별도 표기" — get_channel_top_share_programs로 뽑은 점유율 상위 5개 중, 이미 TOP20 목록에 있는
+// 것(대부분 이미 위의 "점유율 N위" 인라인 표시로 언급됨)은 제외하고 나머지만 보여준다.
+function TopShareOutsideList({ shareTop, topRows, fmtR }: { shareTop: TopShareProgramRow[]; topRows: TopProgramRow[]; fmtR: (v: number | null) => string }) {
+  const topNames = new Set(topRows.map((r) => r.program_name));
+  const outside = shareTop.filter((s) => !topNames.has(s.program_name));
+  if (outside.length === 0) return null;
+  return (
+    <div className="mt-3 border-t border-dashed border-zinc-200 pt-3">
+      <p className="mb-1 text-xs text-zinc-400">TOP20 밖이지만 점유율 상위인 콘텐츠</p>
+      <ol className="space-y-1 text-sm">
+        {outside.map((p, i) => (
+          <li key={p.program_name} className="flex items-center gap-2 border-t border-zinc-100 py-1 first:border-t-0">
+            <span className="w-5 shrink-0 text-right font-medium text-sky-500">{i + 1}</span>
+            <span className="min-w-0 flex-1 truncate font-medium text-zinc-700">{p.program_name}</span>
+            <span className="shrink-0 text-xs text-zinc-400">{p.air_count}회 방영</span>
+            <span className="shrink-0 text-xs text-sky-600">점유율 {p.avg_share !== null ? `${p.avg_share.toFixed(2)}%` : "—"}</span>
+            <span className="w-16 shrink-0 text-right text-xs text-zinc-500">{fmtR(p.avg_rating)}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 // 사용자 지시(2026-08-21): "skyUHD의 시청률 상위 콘텐츠 TOP 20은 편성횟수 5회 미만은 별도
 // 케이스로 따로 표기" — 수기 누적 파일 특성상 skyUHD는 표본이 적은 프로그램이 우연히 상위권에
 // 섞이기 쉬워, 이 채널에서만 5회 미만을 별도 구획으로 분리한다(다른 채널은 기존 그대로).
-function TopProgramsList({ rows, fmtR, isSkyUhd }: { rows: TopProgramRow[]; fmtR: (v: number | null) => string; isSkyUhd?: boolean }) {
+function TopProgramsList({
+  rows,
+  fmtR,
+  isSkyUhd,
+  shareTop,
+}: {
+  rows: TopProgramRow[];
+  fmtR: (v: number | null) => string;
+  isSkyUhd?: boolean;
+  shareTop?: TopShareProgramRow[];
+}) {
   if (rows.length === 0) {
     return <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>;
   }
   if (!isSkyUhd) {
-    return <ol className="space-y-1 text-sm">{<TopProgramListItems rows={rows} fmtR={fmtR} />}</ol>;
+    return (
+      <div>
+        <ol className="space-y-1 text-sm">{<TopProgramListItems rows={rows} fmtR={fmtR} />}</ol>
+        {shareTop && <TopShareOutsideList shareTop={shareTop} topRows={rows} fmtR={fmtR} />}
+      </div>
+    );
   }
   const mainRows = rows.filter((p) => p.air_count >= 5);
   const lowSampleRows = rows.filter((p) => p.air_count < 5);
@@ -1361,6 +1474,7 @@ function TopProgramsList({ rows, fmtR, isSkyUhd }: { rows: TopProgramRow[]; fmtR
           <ol className="space-y-1 text-sm">{<TopProgramListItems rows={lowSampleRows} fmtR={fmtR} indexOffset={mainRows.length} />}</ol>
         </div>
       )}
+      {shareTop && <TopShareOutsideList shareTop={shareTop} topRows={rows} fmtR={fmtR} />}
     </div>
   );
 }
@@ -1413,7 +1527,10 @@ function buildScheduleRecommendationNote(
     return `표본 부족(표본 ${item.sample_days}건) — 데이터를 더 쌓은 뒤 재평가 필요`;
   }
   if (recommendedDaypart) {
-    return `${DAYPART_LABEL[recommendedDaypart] ?? recommendedDaypart}로 이동 검토(경쟁채널과의 격차가 더 좁혀지는 중)`;
+    // 사용자 지시(2026-08-21): "격차가 더 좁혀지는 중"이 무슨 뜻인지 알기 쉽게 — 그 시간대에서
+    // 우리와 경쟁채널의 시청률 차이가 최근 들어 줄어들고 있다(=경쟁채널이 상대적으로 약해지고
+    // 있다)는 뜻임을 짧게 풀어 쓴다(위 OPPORTUNITY? 표의 상세 수치와 같은 근거).
+    return `${DAYPART_LABEL[recommendedDaypart] ?? recommendedDaypart}로 이동 검토 — 그 시간대는 경쟁채널과의 시청률 격차가 최근 들어 좁혀지는 중이라(경쟁채널이 상대적으로 약해짐) 편성 시 유리할 수 있음`;
   }
   switch (item.tag) {
     case "STRENGTHEN":
@@ -1585,6 +1702,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     periodWindowDays,
     dowHourBlockPatternPrior,
     topProgramsPrior,
+    topSharePrograms,
+    priorTopSharePrograms,
+    competitorPeriodTopProgramsPrior,
   } = data;
   const current = trend.find((t) => t.period === "current");
   const dod = trend.find((t) => t.period === "DoD");
@@ -1901,8 +2021,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   }}
                   code={code}
                   primaryTargetLabel={resolveProgramLevelTargetLabel(channel.primaryTarget)}
-                  baselinePattern={hourlyBaselinePattern}
+                  // 사용자 지시(2026-08-21): 비교 분석 시 "이번 기간" 그래프엔 12주 자체 기준선
+                  // 대신 실제 "{comparisonLabel} 기간"의 시간대별 평균(hourlyPatternPrior)을
+                  // 연한 선으로 겹쳐, 두 기간을 직접 시간대별로 비교할 수 있게 한다.
+                  baselinePattern={hourlyPatternPrior}
                   accentColor={accentColor}
+                  baselineLabel={`연한 선 = ${comparisonLabel ?? "이전"} 기간의 같은 시간대 평균 시청률`}
                 />
               </div>
               <div>
@@ -2087,11 +2211,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
                   <p className="mb-2 text-xs font-semibold text-zinc-600">이번 기간</p>
-                  <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} />
+                  <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} />
                 </div>
                 <div>
                   <p className="mb-2 text-xs font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
-                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} />
+                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={priorTopSharePrograms} />
                 </div>
               </div>
               {buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior) && (
@@ -2102,7 +2226,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>
           ) : (
             <>
-              <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} />
+              <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
                 <p className="mt-3 text-sm leading-relaxed text-zinc-700">
                   위 상위 콘텐츠들과 같은 기간 기준으로 볼 때,
@@ -2587,6 +2711,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 // 시청률 기준(기간 평균/단일 일자)과 동일한 우리 채널 값을 끼워 넣고, 시청률
                 // 순으로 다시 정렬해 순위를 매긴다(새 계산 없이 이미 있는 값 재사용).
                 const ourRating = isRangeMode ? (data.periodReport?.avg_rating ?? null) : (narrativeSignal?.today_rating ?? null);
+                // 사용자 지시(2026-08-21): "비교 대상이 되는 자기 채널도 오늘 최고 성적 프로그램이
+                // 나올 수 있게" — 기간 모드는 periodProgramMovers(이미 조회된 이번 기간 평균)에서
+                // 가장 높은 프로그램을, 단일 일자 모드는 narrativeSignal의 그날 1위 프로그램을 쓴다.
+                const ourTopProgram = isRangeMode
+                  ? [...data.periodProgramMovers].filter((m) => m.period_avg_rating !== null).sort((a, b) => (b.period_avg_rating ?? 0) - (a.period_avg_rating ?? 0))[0] ?? null
+                  : null;
                 type MergedRow = { competitor_name: string; today_rating: number | null; delta_pct: number | null; top_program_name: string | null; top_program_start_time: string | null; top_program_rating: number | null; isOurs: boolean };
                 const merged: MergedRow[] = competitorInsightReport.map((c) => ({ ...c, isOurs: false }));
                 if (ourRating !== null) {
@@ -2594,9 +2724,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     competitor_name: data.channel.name,
                     today_rating: ourRating,
                     delta_pct: null,
-                    top_program_name: null,
-                    top_program_start_time: null,
-                    top_program_rating: null,
+                    top_program_name: isRangeMode ? (ourTopProgram?.canonical_name ?? null) : (narrativeSignal?.top_program_name ?? null),
+                    top_program_start_time: isRangeMode ? null : (narrativeSignal?.top_program_start_time ?? null),
+                    top_program_rating: isRangeMode ? (ourTopProgram?.period_avg_rating ?? null) : (narrativeSignal?.top_program_rating ?? null),
                     isOurs: true,
                   });
                 }
@@ -2636,7 +2766,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             <td className="py-1.5 text-zinc-600">
                               {c.top_program_name ? (
                                 <>
-                                  {c.top_program_name} {c.top_program_start_time ? `(${fmtTime(c.top_program_start_time)}, ${fmtR(c.top_program_rating)})` : ""}
+                                  {c.top_program_name}{" "}
+                                  {c.top_program_start_time
+                                    ? `(${fmtTime(c.top_program_start_time)}, ${fmtR(c.top_program_rating)})`
+                                    : c.top_program_rating !== null
+                                      ? `(${fmtR(c.top_program_rating)})`
+                                      : ""}
                                 </>
                               ) : (
                                 <span className="text-zinc-300">—</span>
@@ -2737,25 +2872,24 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               {comparisonLabel ? `${comparisonLabel} 대비 이번 기간` : "선택 기간"} 동기간 경쟁사 주요 프로그램 리뷰
             </h3>
             <p className="mb-3 text-xs text-zinc-400">
-              이 기간 평균 시청률이 가장 높았던 등록 경쟁채널 상위 5개({periodWindowDays === 84 ? "" : `${data.dateFrom}~${data.dateTo}, `}
-              동기간) 안에서, 프로그램 단위 시청률 상위 7개를 뽑았습니다(시장 전체 동향 참고용).
+              이 기간 평균 시청률이 가장 높았던 등록 경쟁채널 상위 5개 안에서, 그 기간 동안의{" "}
+              <b>프로그램별 평균 시청률</b>이 높은 상위 7개를 뽑았습니다(일회성 반짝 편성이 아니라
+              그 기간 내내 꾸준히 강했던 프로그램 기준 — 같은 프로그램은 한 번만 표시, 시장 전체
+              동향 참고용).
             </p>
-            {competitorPeriodTopPrograms.length === 0 ? (
-              <p className="text-sm text-zinc-400">이 기간 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
+            {hasPriorRange ? (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-zinc-600">이번 기간</p>
+                  <CompetitorPeriodTopProgramsList rows={competitorPeriodTopPrograms} fmtR={fmtR} />
+                </div>
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
+                  <CompetitorPeriodTopProgramsList rows={competitorPeriodTopProgramsPrior} fmtR={fmtR} />
+                </div>
+              </div>
             ) : (
-              <ol className="space-y-1.5 text-xs">
-                {competitorPeriodTopPrograms.map((p, i) => (
-                  <li key={i} className="flex items-center gap-2">
-                    <span className="w-4 shrink-0 text-right font-medium text-zinc-400">{i + 1}</span>
-                    <span className="font-medium text-zinc-700">{p.competitor_name}</span>
-                    <span className="text-[10px] text-zinc-400">(채널 {p.channel_rank}위, 기간 평균 {fmtR(p.channel_period_avg_rating)})</span>
-                    <span className="text-zinc-500">
-                      {p.broadcast_date} {p.start_time.slice(0, 5)} {p.program_name}
-                    </span>
-                    <span className="ml-auto font-semibold text-zinc-800">{fmtR(p.rating)}</span>
-                  </li>
-                ))}
-              </ol>
+              <CompetitorPeriodTopProgramsList rows={competitorPeriodTopPrograms} fmtR={fmtR} />
             )}
           </div>
           )}
