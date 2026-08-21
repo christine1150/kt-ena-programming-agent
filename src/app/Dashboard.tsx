@@ -35,6 +35,9 @@ interface ChannelSummary {
   // 그 값을 우선 쓴다 — 어느 쪽인지 표시해 출처를 분명히 한다.
   ytdRankSource: "market_snapshot" | "computed" | null;
   ytdRankDateRange: { from: string; to: string } | null;
+  // 인포그래픽 제안 #4(사용자 지시 2026-08-22): "오늘의 시청률" 6개 채널 타일 스파크라인용 —
+  // 최근 7일(오늘 포함) 채널 단위 시청률, 오래된 날짜부터 순서대로. 데이터 없는 날은 null.
+  recentRatings: (number | null)[];
 }
 
 // Original 리포트: 관리자가 지정한 요일별 화이트리스트 프로그램만 분석한다(사용자 지시).
@@ -502,6 +505,10 @@ function buildYtdLine(channel: ChannelSummary): string | null {
 // 증감률, 그 아래 작은 글씨로 올해 누적 평균 시청률(순위)과 목표 순위 대비 격차.
 // 사용자 재지시(2026-08-21, Page 1 전면 개편): 대각선 그라디언트 패널 대신 옅은 단색 톤 +
 // 하단 강조선(무채색 베이스 + 로고색 포인트)으로, 큰 숫자는 자간을 좁혀 더 또렷하게.
+// 사용자 재지시(2026-08-22, UI 정렬 요청): "로고·시청률·순위가 카드 중앙에 완벽히 오도록" +
+// "증감 수치는 오른쪽 여백으로 이동" — 배지가 옆에 나란히 붙어있으면 배지 폭만큼 중앙이
+// 한쪽으로 쏠려 보이던 문제를, 배지를 중앙 정렬 흐름에서 완전히 분리(absolute)해 해결한다.
+// 시청률(순위) 행은 그 자체로만 justify-center되므로 배지 유무와 무관하게 항상 정중앙에 온다.
 function ChannelHero({ channel }: { channel: ChannelSummary }) {
   const ytdLine = buildYtdLine(channel);
   return (
@@ -515,9 +522,7 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
         }}
         heightPx={56}
       />
-      {/* 사용자 지시(2026-08-21): 시청률부터 등위까지 가운데 정렬 + 동일한 글씨 크기 유지,
-          전일 대비 증감은 등위 바로 오른쪽에(줄바꿈 없이) 배치. */}
-      <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+      <div className="relative mt-3 flex w-full items-center justify-center">
         <span className="whitespace-nowrap text-4xl font-bold tabular-nums tracking-tight text-zinc-900">
           {formatRating(channel.currentRating)}
           {/* 사용자 지시(2026-08-21): 등위는 시청률 숫자보다 약간만 더 작은 글씨로. */}
@@ -525,10 +530,51 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
             <span className="ml-1.5 text-2xl font-semibold tracking-tight text-zinc-400">({channel.currentRank}위)</span>
           )}
         </span>
-        <ChangeBadge pct={channel.dodChangePct} />
+        <div className="absolute right-0 top-1/2 -translate-y-1/2">
+          <ChangeBadge pct={channel.dodChangePct} />
+        </div>
       </div>
       {ytdLine && <p className="mt-3 text-sm text-zinc-500">{ytdLine}</p>}
+      {/* 인포그래픽 제안 반영(사용자 지시 2026-08-22, "목표 대비 달성률을 도넛 게이지로") —
+          achievementPct는 get_target_achievement가 이미 계산한 "오늘 목표 시청률 대비 달성률"
+          (새 계산 없음) 그대로. 100%를 꽉 찬 원으로 클램프해서 보여준다(100% 초과분은 게이지
+          자체로는 표현하지 않되, 아래 숫자는 실제 값을 그대로 표시). */}
+      {channel.achievementPct !== null && <AchievementGauge pct={channel.achievementPct} accentColor={channel.themeColor ?? "#281fc7"} />}
     </Link>
+  );
+}
+
+// 인포그래픽 제안 #3(사용자 지시 2026-08-22): 목표 대비 오늘 달성률 도넛 게이지. SVG 하나로
+// 구현(외부 차트 라이브러리 없음 — 이 프로젝트에 이미 차트 라이브러리가 없어 최소 구성 원칙 유지).
+function AchievementGauge({ pct, accentColor }: { pct: number; accentColor: string }) {
+  const size = 60;
+  const strokeWidth = 6;
+  const r = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(100, pct));
+  const dash = (clamped / 100) * circumference;
+  return (
+    <div className="mt-4 flex flex-col items-center gap-1.5">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#efeff4" strokeWidth={strokeWidth} />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={accentColor}
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${dash} ${circumference}`}
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-[13px] font-bold tabular-nums text-zinc-800">{pct.toFixed(0)}%</span>
+        </div>
+      </div>
+      <span className="text-[11px] text-zinc-400">목표 대비 오늘 달성률</span>
+    </div>
   );
 }
 
@@ -546,6 +592,37 @@ function parseTargetRankNum(targetRank: string | null): number | null {
   const n = parseInt(targetRank, 10);
   return Number.isFinite(n) ? n : null;
 }
+// 인포그래픽 제안 #4(사용자 지시 2026-08-22): 채널 타일에 최근 7일 추이를 초소형 스파크라인으로 —
+// 순위 등락만으로는 안 보이던 "최근 며칠간 흐름"을 곁들여 보여준다. 외부 차트 라이브러리 없이
+// SVG 폴리라인 하나로 구현(최소 구성 원칙). 값이 2개 미만(표본 부족)이면 그리지 않는다.
+function MiniSparkline({ values, color }: { values: (number | null)[]; color: string }) {
+  const nums = values.filter((v): v is number => v !== null);
+  if (nums.length < 2) return null;
+  const w = 60;
+  const h = 14;
+  const max = Math.max(...nums);
+  const min = Math.min(...nums);
+  const range = max - min || 1;
+  const step = values.length > 1 ? w / (values.length - 1) : 0;
+  let path = "";
+  let drawing = false;
+  values.forEach((v, i) => {
+    if (v === null) {
+      drawing = false;
+      return;
+    }
+    const x = i * step;
+    const y = h - ((v - min) / range) * h;
+    path += `${drawing ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)} `;
+    drawing = true;
+  });
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="block" aria-hidden="true">
+      <path d={path.trim()} fill="none" stroke={color} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" opacity={0.75} />
+    </svg>
+  );
+}
+
 // 사용자 지시(2026-08-21): "+1 왼쪽에 ▲, 하락은 ▼도 표시."
 function RankChangeIndicator({ rankChangeDod }: { rankChangeDod: number | null }) {
   if (rankChangeDod === null || rankChangeDod === 0) {
@@ -601,6 +678,7 @@ function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logo
         </span>
         <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
+      <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#a1a1aa"} />
     </Link>
   );
 }
@@ -675,6 +753,9 @@ function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null
 interface OriginalInsightBlock {
   bullets: string[];
   schedulingNote: string[];
+  // 인포그래픽 제안 #5(사용자 지시 2026-08-22): 연령대별 시청률 나열을 텍스트 대신 미니 막대
+  // 차트로 — bullets 문자열에서 분리해 렌더링 전용 구조로 반환한다(값 자체는 동일, 표시만 변경).
+  ageChart: { label: string; rating: number }[];
 }
 function buildOriginalInsight(
   item: OriginalDailyItem,
@@ -737,7 +818,7 @@ function buildOriginalInsight(
       const named = beatenBy.slice(0, 3).map((c) => `${c.competitor_name}(${formatRating(c.competitor_rating)}%)`).join(", ");
       const extra = beatenBy.length > 3 ? ` 외 ${beatenBy.length - 3}개` : "";
       bullets.push(
-        `동시간대 ${rank}위 기록: 본방송 시청률 ${formatRating(item.matched_rating)}%${changeText ? `(${changeText})` : ""}로, ${named}${extra}보다 낮았음(동시에 관찰된 참고 정보 — 인과관계로 단정하지 않음)`
+        `동시간대 ${rank}위 기록: 본방송 시청률 ${formatRating(item.matched_rating)}%${changeText ? `(${changeText})` : ""}로, ${named}${extra}보다 낮았음[참고] 인과관계 미확정`
       );
     } else {
       bullets.push(`본방송 시청률 ${formatRating(item.matched_rating)}%${changeText ? `(${changeText})` : ""} 기록`);
@@ -788,12 +869,9 @@ function buildOriginalInsight(
   // 연령대"(상대 기준) 대신 참고 리포트와 동일하게 "시청률 1% 이상"(절대 기준)으로 나열한다.
   // [Strict Warning] 사용자 재지시(2026-08-21): "중장년층이 높은 건 일반적 패턴"이라는 상식적
   // 배경 설명은 보고서 본문에서 완전히 제거 — 수치만 담백하게 보여준다("KPI 타깃" 대신 "타깃").
+  // 사용자 재지시(2026-08-22): 숫자 나열보다 상대적 크기가 직관적으로 보이도록 텍스트 bullet
+  // 대신 미니 막대 차트로 — 값은 동일, ageChart로 반환해 렌더링 쪽에서 막대로 그린다.
   const strongAgeSegments = item.age_breakdown ? item.age_breakdown.filter((a) => a.rating >= 1).slice(0, 4) : [];
-  if (strongAgeSegments.length > 0) {
-    bullets.push(
-      `연령대별 시청률 1% 이상: ${strongAgeSegments.map((a) => `${shortDemoLabel(a.label)}(${formatRating(a.rating)}%)`).join(", ")}`
-    );
-  }
 
   // [편성 인사이트] — 여러 근거를 모두 짚을 수 있어 배열로 관리한다(사용자 지시: 첨부 보고서를
   // 학습해 새로운 편성 인사이트를 추가할 것). 각 항목은 패턴이 실제로 있을 때만 추가된다.
@@ -815,7 +893,30 @@ function buildOriginalInsight(
   // 편성 판단에 실제로 의미 있는 경우(예: 타깃 확장 검토가 필요할 만큼 편차가 극단적인 경우)는
   // 사용자가 별도로 요청하면 그때 근거를 갖춰 추가한다.
 
-  return { bullets, schedulingNote };
+  return { bullets, schedulingNote, ageChart: strongAgeSegments };
+}
+
+// 인포그래픽 제안 #5(사용자 지시 2026-08-22): 연령대별 시청률 미니 막대 차트 — 각 막대는 이
+// 카드 안에서의 최댓값 기준으로 정규화(채널마다 스케일이 다르므로 카드 단위로 상대 비교).
+function AgeMiniBarChart({ items, accentColor }: { items: { label: string; rating: number }[]; accentColor: string }) {
+  if (items.length === 0) return null;
+  const max = Math.max(...items.map((a) => a.rating), 0.01);
+  return (
+    <div className="mt-2 rounded-xl bg-zinc-50 p-3">
+      <p className="mb-2 text-[11px] font-medium text-zinc-400">연령대별 시청률 1% 이상</p>
+      <div className="flex flex-col gap-1.5">
+        {items.map((a) => (
+          <div key={a.label} className="flex items-center gap-2">
+            <span className="w-14 shrink-0 text-[12px] text-zinc-500">{shortDemoLabel(a.label)}</span>
+            <span className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-100">
+              <span className="block h-full rounded-full" style={{ width: `${(a.rating / max) * 100}%`, backgroundColor: accentColor }} />
+            </span>
+            <span className="w-12 shrink-0 text-right text-[12px] font-semibold tabular-nums text-zinc-700">{formatRating(a.rating)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // 사용자 지시(2026-08-20): 안내 문구("동시간대 경쟁 프로그램은 Competitor Master에 등록되고...")
@@ -975,14 +1076,18 @@ function OriginalContentReportCard({
                         <span className="text-zinc-300">—</span>
                       ) : (
                         <div className="flex flex-col gap-1">
-                          {/* 사용자 지시: [채널명(작게)] [시간] [제목] [시청률(소수점 2자리)] 한 줄. */}
+                          {/* 사용자 지시(2026-08-22, UI 정렬 요청): [채널명] [시간] [제목] [시청률]이
+                              행마다 들쭉날쭉하지 않도록 고정 폭 그리드로 — 시청률은 우측 세로선에
+                              맞춰 정렬. */}
                           {h.competitorHighlights.slice(0, 3).map((c, i) => (
-                            <p key={i} className="truncate text-zinc-600">
-                              <span className="text-[11px] font-medium text-zinc-400">{c.competitor_name}</span>{" "}
-                              <span className="text-zinc-400">{fmtTime(c.competitor_start_time)}</span>{" "}
-                              <span className="font-medium text-zinc-700">{c.competitor_program_name}</span>{" "}
-                              <span className="font-semibold tabular-nums">{c.competitor_rating !== null ? c.competitor_rating.toFixed(2) : "—"}</span>
-                            </p>
+                            <div key={i} className="grid grid-cols-[44px_34px_1fr_38px] items-baseline gap-x-1.5">
+                              <span className="truncate text-[11px] font-medium text-zinc-400">{c.competitor_name}</span>
+                              <span className="text-zinc-400">{fmtTime(c.competitor_start_time)}</span>
+                              <span className="truncate font-medium text-zinc-700">{c.competitor_program_name}</span>
+                              <span className="text-right font-semibold tabular-nums text-zinc-600">
+                                {c.competitor_rating !== null ? c.competitor_rating.toFixed(2) : "—"}
+                              </span>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -998,6 +1103,7 @@ function OriginalContentReportCard({
                       ))}
                     </ul>
                   )}
+                  <AgeMiniBarChart items={insight.ageChart} accentColor={enaAccentColor} />
                   {insight.schedulingNote.length > 0 && (
                     <div className="mt-1 rounded-xl bg-amber-50 p-2.5">
                       <p className="mb-1 text-[12px] font-semibold text-amber-700">[편성 인사이트]</p>
@@ -1064,6 +1170,24 @@ function OriginalContentReportCard({
   );
 }
 
+// 인포그래픽 제안 #1(사용자 지시 2026-08-22, 추천 순서 1번): 채널명 옆 미니 막대 — 최근 4주
+// 평균 대비 오늘 등락률(rating_delta_pct, 이미 SQL이 계산한 값)을 양수/음수 색으로 구분해
+// 보여준다. 줄글을 다 읽지 않아도 어느 채널이 좋고 나쁜지 스캔할 수 있게 하기 위함. ±50%를
+// 만관(꽉 참) 기준으로 정규화(그 이상은 막대가 꽉 찬 채로 고정, 숫자는 title로 정확히 노출).
+function MiniDeltaBar({ pct }: { pct: number }) {
+  const capped = Math.min(50, Math.abs(pct));
+  const widthPct = (capped / 50) * 100;
+  const up = pct >= 0;
+  return (
+    <span
+      className="inline-flex h-2 w-9 shrink-0 items-center overflow-hidden rounded-full bg-zinc-100"
+      title={`최근 4주 평균 대비 ${Math.abs(pct).toFixed(1)}% ${up ? "상승" : "하락"}`}
+    >
+      <span className="h-full rounded-full" style={{ width: `${widthPct}%`, backgroundColor: up ? ACCENT_UP : ACCENT_DOWN }} />
+    </span>
+  );
+}
+
 // ③ 채널별 인사이트(줄글) — R2C1. 사용자 지시(2026-08-20): 채널명은 그 채널 로고의 메인
 // 색상(channels.theme_color)으로 굵게 표시.
 function ChannelNarrativeCard({
@@ -1074,13 +1198,14 @@ function ChannelNarrativeCard({
   themeColorByCode: Map<string, string | null>;
 }) {
   const byCode = new Map(signals.map((s) => [s.channelCode, s]));
-  const lines: { channelName: string; text: string; color: string | null }[] = [];
+  const lines: { channelName: string; text: string; color: string | null; deltaPct: number | null }[] = [];
   for (const code of INSIGHT_CHANNEL_ORDER) {
     const s = byCode.get(code);
-    if (s) lines.push({ ...buildChannelNarrative(CHANNEL_NAME_BY_CODE[code], s), color: themeColorByCode.get(code) ?? null });
+    if (s) lines.push({ ...buildChannelNarrative(CHANNEL_NAME_BY_CODE[code], s), color: themeColorByCode.get(code) ?? null, deltaPct: s.rating_delta_pct });
   }
-  const skyuhdLine = buildSkyUhdNarrative(byCode.get("SKYUHD"));
-  if (skyuhdLine) lines.push({ ...skyuhdLine, color: themeColorByCode.get("SKYUHD") ?? null });
+  const skyuhdSignal = byCode.get("SKYUHD");
+  const skyuhdLine = buildSkyUhdNarrative(skyuhdSignal);
+  if (skyuhdLine) lines.push({ ...skyuhdLine, color: themeColorByCode.get("SKYUHD") ?? null, deltaPct: skyuhdSignal?.rating_delta_pct ?? null });
 
   return (
     <div className={CARD}>
@@ -1096,12 +1221,15 @@ function ChannelNarrativeCard({
           <p className="text-zinc-400">아직 인사이트를 계산할 데이터가 부족합니다.</p>
         ) : (
           lines.map((line, i) => (
-            <p key={i}>
-              <span className="font-bold" style={{ color: line.color ?? undefined }}>
-                {line.channelName}
+            <div key={i} className="flex flex-wrap items-start gap-x-2 gap-y-1">
+              <span className="inline-flex shrink-0 items-center gap-1.5">
+                <span className="font-bold" style={{ color: line.color ?? undefined }}>
+                  {line.channelName}
+                </span>
+                {line.deltaPct !== null && <MiniDeltaBar pct={line.deltaPct} />}
               </span>
-              : {line.text}
-            </p>
+              <span className="min-w-0 flex-1">: {line.text}</span>
+            </div>
           ))
         )}
       </div>
@@ -1116,17 +1244,18 @@ function ChannelNarrativeCard({
 // 짧게(DAYPART_LABEL은 "저녁·심야(19~25시)"처럼 길어서 한 줄 요약에는 이 짧은 버전을 쓴다).
 const SHORT_DAYPART_LABEL: Record<string, string> = { 새벽: "새벽", 오전: "오전", 오후: "오후", 저녁_심야: "저녁심야" };
 
-// 사용자 지시(2026-08-21): 콘텐츠당 설명을 1줄로 압축(핵심 정보는 유지) — 방영횟수·총합·강세/
-// 약세 시간대·점유율/유료가구 보너스 코멘트를 " · "로 이어붙인 문장 하나로 조립.
-function buildKillerContentOneLiner(k: KillerContentDaypartRow): string {
+// 사용자 지시(2026-08-22, UI 정렬 요청 #4): "한 줄로 길게 늘어진 데이터의 간격과 폰트 위계를
+// 정리해 시각적 피로도를 줄여달라" — 하나의 긴 " · " 문자열 대신 배지(pill) 배열로 쪼갠다
+// (값·계산 로직은 기존 buildKillerContentOneLiner와 동일, 표시 방식만 분리).
+function buildKillerContentBadges(k: KillerContentDaypartRow): string[] {
   const totalRating = k.avg_rating * k.airing_count;
-  const parts: string[] = [`${k.airing_count}회·총합${formatRating(totalRating)}`];
-  if (k.best_daypart) parts.push(`강세${SHORT_DAYPART_LABEL[k.best_daypart] ?? k.best_daypart}(${formatRating(k.best_daypart_avg)})`);
-  if (k.worst_daypart) parts.push(`약세${SHORT_DAYPART_LABEL[k.worst_daypart] ?? k.worst_daypart}(${formatRating(k.worst_daypart_avg)})`);
+  const parts: string[] = [`${k.airing_count}회 · 총합 ${formatRating(totalRating)}`];
+  if (k.best_daypart) parts.push(`강세 ${SHORT_DAYPART_LABEL[k.best_daypart] ?? k.best_daypart} ${formatRating(k.best_daypart_avg)}`);
+  if (k.worst_daypart) parts.push(`약세 ${SHORT_DAYPART_LABEL[k.worst_daypart] ?? k.worst_daypart} ${formatRating(k.worst_daypart_avg)}`);
   // 사용자 지시(2026-08-20): 시청률은 약해도 점유율/유료가구 시청률이 채널 평균보다 좋으면(±15%
   // 이상) 짧게 코멘트.
   if (k.avg_share !== null && k.channel_avg_share_baseline !== null && k.channel_avg_share_baseline > 0 && k.avg_share / k.channel_avg_share_baseline - 1 >= 0.15) {
-    parts.push(`점유율↑${k.avg_share.toFixed(2)}%`);
+    parts.push(`점유율↑ ${k.avg_share.toFixed(2)}%`);
   }
   if (
     k.household_avg_rating !== null &&
@@ -1134,9 +1263,38 @@ function buildKillerContentOneLiner(k: KillerContentDaypartRow): string {
     k.household_baseline_avg_rating > 0 &&
     k.household_avg_rating / k.household_baseline_avg_rating - 1 >= 0.15
   ) {
-    parts.push(`유료가구↑${formatRating(k.household_avg_rating)}`);
+    parts.push(`유료가구↑ ${formatRating(k.household_avg_rating)}`);
   }
-  return parts.join(" · ");
+  return parts;
+}
+
+// 인포그래픽 제안 #2(사용자 지시 2026-08-22, 추천 순서 2번): daypart(새벽/오전/오후/저녁심야)
+// 강세·약세를 텍스트("강세저녁심야/약세새벽") 대신 4칸 미니 타일로 한눈에. best_daypart/
+// worst_daypart 2개 극값만 SQL이 내려주므로(get_channel_killer_content_daypart), 나머지 2칸은
+// "강세도 약세도 아님"이라는 사실 그대로 중립색으로 표시한다(값을 지어내지 않음).
+const DAYPART_ORDER: { key: string; label: string }[] = [
+  { key: "새벽", label: "새벽" },
+  { key: "오전", label: "오전" },
+  { key: "오후", label: "오후" },
+  { key: "저녁_심야", label: "저녁심야" },
+];
+function KillerContentDaypartTiles({ k, accentColor }: { k: KillerContentDaypartRow; accentColor: string }) {
+  if (!k.best_daypart && !k.worst_daypart) return null;
+  return (
+    <div className="flex shrink-0 gap-0.5" aria-hidden="true">
+      {DAYPART_ORDER.map((dp) => {
+        const isBest = k.best_daypart === dp.key;
+        const isWorst = k.worst_daypart === dp.key;
+        const bg = isBest ? accentColor : isWorst ? "#d4d4d8" : "#f0f0f3";
+        const title = isBest
+          ? `강세: ${dp.label} ${formatRating(k.best_daypart_avg)}`
+          : isWorst
+            ? `약세: ${dp.label} ${formatRating(k.worst_daypart_avg)}`
+            : `${dp.label}: 강세·약세 아님`;
+        return <span key={dp.key} className="h-2 w-3.5 rounded-[2px]" style={{ backgroundColor: bg }} title={title} />;
+      })}
+    </div>
+  );
 }
 
 // 사용자 지시(2026-08-21): "좌/우로 분리되어 있던 섹션을 하나로 통합, 좌우 높이 균형" — 좌측
@@ -1169,16 +1327,30 @@ function KillerContentCard({
         <p className="mb-1 text-sm font-bold tracking-tight" style={{ color: themeColorByCode.get(code) ?? undefined }}>
           {CHANNEL_NAME_BY_CODE[code]}
         </p>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-2.5">
           {list.map((k) => {
             // 사용자 지시(2026-08-21, Page 1 개편): emerald/rose 원색 대신 ACCENT_UP/DOWN.
             const ytdColor = ytdAvg === null ? "#71717a" : k.avg_rating >= ytdAvg ? ACCENT_UP : ACCENT_DOWN;
+            const accent = themeColorByCode.get(code) ?? "#71717a";
             return (
-              <p key={k.canonical_name} className="truncate text-sm text-zinc-600" title={buildKillerContentOneLiner(k)}>
-                <span className="font-medium text-zinc-800">{k.canonical_name}</span>{" "}
-                <span className="font-semibold tabular-nums" style={{ color: ytdColor }}>{formatRating(k.avg_rating)}</span>{" "}
-                <span className="text-zinc-400">· {buildKillerContentOneLiner(k)}</span>
-              </p>
+              <div key={k.canonical_name} className="rounded-lg px-0.5 py-0.5">
+                {/* 사용자 지시(2026-08-22, UI 정렬 요청 #4): 프로그램명·시청률(1줄)과 세부
+                    정보(배지, 2줄)를 분리하고 여백·폰트 크기 위계를 줘 가독성을 높였다. */}
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-medium text-zinc-800">{k.canonical_name}</span>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums" style={{ color: ytdColor }}>
+                    {formatRating(k.avg_rating)}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <KillerContentDaypartTiles k={k} accentColor={accent} />
+                  {buildKillerContentBadges(k).map((b, i) => (
+                    <span key={i} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10.5px] font-medium text-zinc-500">
+                      {b}
+                    </span>
+                  ))}
+                </div>
+              </div>
             );
           })}
         </div>
@@ -1238,20 +1410,30 @@ function TodayTopProgramsCard({
           const ytdAvg = ytdAvgByCode.get(code) ?? null;
           return (
             <div key={code}>
-              {/* 사용자 지시(2026-08-21): 채널명 옆에 각 열이 무엇을 뜻하는지(시간대/시청률/비교
-                  시청률) 알아볼 수 있게 표시 — 아래 데이터 열과 같은 폭으로 우측 정렬해 바로
-                  위에서 라벨 역할을 하도록 배치. */}
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
-                  {CHANNEL_NAME_BY_CODE[code]}
-                </span>
-                <span className="flex gap-2 text-[12px] text-zinc-400">
-                  <span className="w-12 text-right">시간대</span>
-                  <span className="w-14 text-right">시청률</span>
-                  <span className="w-14 text-right">비교</span>
-                </span>
-              </div>
-              <table className="mt-1 w-full text-left text-sm">
+              {/* 사용자 지시(2026-08-22, UI 정렬 요청 #3): 헤더 라벨(시간대/시청률/비교)과 데이터
+                  행이 별개 요소(flex 헤더 + table 바디)라 폭이 미세하게 어긋나던 문제 —
+                  하나의 <table>에 <colgroup>으로 열 폭을 고정하고 <thead>를 그 안에 포함시켜
+                  헤더·데이터가 항상 같은 기준선에 세로 정렬되도록 구조를 통일했다. */}
+              <table className="mt-1 w-full table-fixed text-left text-sm">
+                <colgroup>
+                  <col className="w-4" />
+                  <col />
+                  <col className="w-12" />
+                  <col className="w-14" />
+                  <col className="w-14" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th colSpan={2} className="pb-1 text-left">
+                      <span className="text-sm font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
+                        {CHANNEL_NAME_BY_CODE[code]}
+                      </span>
+                    </th>
+                    <th className="pb-1 text-right text-[12px] font-normal text-zinc-400">시간대</th>
+                    <th className="pb-1 text-right text-[12px] font-normal text-zinc-400">시청률</th>
+                    <th className="pb-1 text-right text-[12px] font-normal text-zinc-400">비교</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {list.map((p, i) => {
                     // 사용자 지시(2026-08-21): 채널 누적 평균 대비 상회/동일/하회 색상.
@@ -1266,7 +1448,7 @@ function TodayTopProgramsCard({
                       p.episodeNumber !== null ? `${p.episodeNumber}회${p.episodeSubtitle ? ` ${p.episodeSubtitle}` : ""}` : null;
                     return (
                       <tr key={i} className="border-t border-zinc-50 align-top">
-                        <td className="w-4 py-1 text-zinc-400">{i + 1}</td>
+                        <td className="py-1 text-zinc-400">{i + 1}</td>
                         <td className="py-1 text-zinc-700">
                           <div>
                             {p.canonical_name}
@@ -1276,11 +1458,11 @@ function TodayTopProgramsCard({
                           </div>
                           {episodeText && <div className="text-[12px] text-zinc-400">{episodeText}</div>}
                         </td>
-                        <td className="w-12 py-1 text-right text-zinc-400">{fmtTime(p.start_time)}</td>
-                        <td className="w-14 py-1 text-right font-semibold" style={{ color: ratingColor }}>
+                        <td className="py-1 text-right text-zinc-400">{fmtTime(p.start_time)}</td>
+                        <td className="py-1 text-right font-semibold" style={{ color: ratingColor }}>
                           {formatRating(p.rating)}
                         </td>
-                        <td className="w-14 py-1 text-right text-zinc-400">
+                        <td className="py-1 text-right text-zinc-400">
                           {p.comparisonRating !== null ? formatRating(p.comparisonRating) : "—"}
                         </td>
                       </tr>

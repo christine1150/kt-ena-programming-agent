@@ -838,11 +838,11 @@ function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string 
     if (top && top.period_avg_rating === null) {
       // 이번 기간에 편성 자체가 사라진 경우 — 등락률 문구 대신 "편성되지 않음"으로 명확히.
       sentences.push(
-        `'${top.canonical_name}'${josaEunNeun(top.canonical_name)} 이전 기간엔 평균 ${fmtR(top.prior_avg_rating)}였으나 이번 기간엔 편성되지 않았습니다(동시에 관찰된 참고 정보 — 인과관계로 단정하지 않음).`
+        `'${top.canonical_name}'${josaEunNeun(top.canonical_name)} 이전 기간엔 평균 ${fmtR(top.prior_avg_rating)}였으나 이번 기간엔 편성되지 않았습니다[참고] 인과관계 미확정.`
       );
     } else if (top) {
       sentences.push(
-        `'${top.canonical_name}'${josaIga(top.canonical_name)} ${fmtR(top.period_avg_rating)}로 이전(${fmtR(top.prior_avg_rating)})보다 가장 크게 ${top.rating_delta! >= 0 ? "상승" : "하락"}해, 전체 ${p.prior_period_change_pct >= 0 ? "상승" : "하락"}에 가장 크게 기여한 것으로 보입니다(동시에 관찰된 참고 정보 — 인과관계로 단정하지 않음).`
+        `'${top.canonical_name}'${josaIga(top.canonical_name)} ${fmtR(top.period_avg_rating)}로 이전(${fmtR(top.prior_avg_rating)})보다 가장 크게 ${top.rating_delta! >= 0 ? "상승" : "하락"}해, 전체 ${p.prior_period_change_pct >= 0 ? "상승" : "하락"}에 가장 크게 기여한 것으로 보입니다[참고] 인과관계 미확정.`
       );
     }
     // 신규 편성 — "상승" 비교 표현 대신 "신규 편성"으로 정확히 서술하고, 채널 평균 이상(성과가
@@ -1101,7 +1101,7 @@ function buildBriefingReport(
       const top = [...moves].sort((a, b) => Math.abs(b.change_pct) - Math.abs(a.change_pct))[0];
       // 사용자 지시(2026-08-21): "변동해 동시에 관찰됐습니다"는 어색한 표현 — 실제 등락 방향과
       // 시청률 값을 그대로 문장에 넣어 자연스럽게(상관관계 참고라는 취지는 그대로 유지).
-      text += ` 같은 기간 ${top.competitor_name}${josaIga(top.competitor_name)} 전주 대비 ${top.change_pct >= 0 ? "▲" : "▼"} ${Math.abs(top.change_pct).toFixed(1)}%(실제시청률 ${fmtR(top.today_rating)}) ${top.change_pct >= 0 ? "상승" : "하락"}했습니다(동시에 관찰된 참고 정보 — 인과관계로 단정하지 않음).`;
+      text += ` 같은 기간 ${top.competitor_name}${josaIga(top.competitor_name)} 전주 대비 ${top.change_pct >= 0 ? "▲" : "▼"} ${Math.abs(top.change_pct).toFixed(1)}%(실제시청률 ${fmtR(top.today_rating)}) ${top.change_pct >= 0 ? "상승" : "하락"}했습니다[참고] 인과관계 미확정.`;
     }
     paragraphs.push(text);
   } else if (data.opportunityAlert?.triggered) {
@@ -1749,13 +1749,16 @@ function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlo
   // 만들던 방식을 버리고, 셀 크기·글자·여백을 줄여 카드 폭 안에 8행 전체가 들어오게 한다.
   return (
     <div className="w-full overflow-x-auto">
+      {/* 사용자 지시(2026-08-22): "시간대(예: 23~25시) 라벨이 두 줄로 내려가지 않고 1줄에
+          보이도록" — 첫 열 폭(w-11=44px)이 라벨 폭(6자 내외)보다 좁아 줄바꿈되던 문제. 열 폭을
+          넓히고 whitespace-nowrap을 명시해 항상 한 줄로 고정한다. */}
       <table className="w-full table-fixed text-center text-[13px]">
         <colgroup>
-          <col className="w-11" />
+          <col className="w-14" />
         </colgroup>
         <thead>
           <tr>
-            <th className="pb-1 text-left font-medium text-zinc-400">시간대</th>
+            <th className="whitespace-nowrap pb-1 text-left font-medium text-zinc-400">시간대</th>
             {["월", "화", "수", "목", "금", "토", "일"].map((label) => (
               <th key={label} className={`pb-1 font-medium ${label === "토" ? "text-blue-500" : label === "일" ? "text-rose-500" : "text-zinc-400"}`}>
                 {label}
@@ -1766,7 +1769,7 @@ function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlo
         <tbody>
           {HOUR_BLOCK_ORDER.map((hb) => (
             <tr key={hb} className="border-t border-zinc-100">
-              <td className="py-0.5 pr-0.5 text-left font-medium text-zinc-700">{hourBlockLabel(hb)}</td>
+              <td className="whitespace-nowrap py-0.5 pr-0.5 text-left font-medium text-zinc-700">{hourBlockLabel(hb)}</td>
               {["월", "화", "수", "목", "금", "토", "일"].map((label, i) => {
                 const dow = i + 1;
                 const cell = byCell.get(`${dow}__${hb}`);

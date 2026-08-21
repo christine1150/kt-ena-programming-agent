@@ -126,6 +126,9 @@ interface ChannelSummary {
   // 있으면 그 순위를 우선 쓴다 — 등록 경쟁채널만으로는 계산 불가능한 시장 전체 기준 순위라서.
   ytdRankSource: "market_snapshot" | "computed" | null;
   ytdRankDateRange: { from: string; to: string } | null;
+  // 인포그래픽 제안 #4(사용자 지시 2026-08-22) — 최근 7일(오늘 포함) 채널 단위 시청률, 오래된
+  // 날짜부터 순서대로. 데이터 없는 날은 null.
+  recentRatings: (number | null)[];
 }
 
 // 채널별 인사이트(줄글) — 사용자 지시: "최근 4주 평균 동향과 오늘의 데이터를 보았을 때
@@ -287,6 +290,10 @@ export async function GET() {
       let wowChangePct: number | null = null;
       let ytdAvgRating: number | null = null;
       let ytdAvgRank: number | null = null;
+      // 인포그래픽 제안 #4(사용자 지시 2026-08-22): "오늘의 시청률" 채널 타일 스파크라인용 —
+      // 최근 7일(오늘 포함) 채널 단위 시청률. 새 계산 없이 단순 조회(집계 없음)라 SQL 함수 없이
+      // 바로 supabase-js로 처리한다(CLAUDE.md 원칙 — 위 todayTopPrograms 조회와 동일한 패턴).
+      let recentRatings: (number | null)[] = [];
       if (matchedTargetLabel && channel.primary_target) {
         const rankLabelCandidates = Array.from(
           new Set([
@@ -357,14 +364,28 @@ export async function GET() {
         // (경쟁채널 재계산 없이 Nielsen이 매일 계산해 저장한 rank 컬럼의 기간 평균만 낸다) —
         // resolvedRankTargetId가 위 병렬 블록에서 정해져야 하므로 그 이후에 실행.
         if (resolvedRankTargetId) {
-          const { data: ytdData } = await supabase.rpc("get_channel_period_rank_and_rating", {
-            p_channel_id: channel.id,
-            p_target_id: resolvedRankTargetId,
-            p_date_from: `${year}-01-01`,
-            p_date_to: asOfDate,
-          });
+          const sparklineDateFrom = offsetDateStr(asOfDate, -6);
+          const [{ data: ytdData }, { data: recentRows }] = await Promise.all([
+            supabase.rpc("get_channel_period_rank_and_rating", {
+              p_channel_id: channel.id,
+              p_target_id: resolvedRankTargetId,
+              p_date_from: `${year}-01-01`,
+              p_date_to: asOfDate,
+            }),
+            supabase
+              .from("ratings")
+              .select("broadcast_date, rating")
+              .eq("channel_id", channel.id)
+              .eq("target_id", resolvedRankTargetId)
+              .in("source_type", ["nielsen_daily", "skyuhd"])
+              .is("program_id", null)
+              .gte("broadcast_date", sparklineDateFrom)
+              .lte("broadcast_date", asOfDate),
+          ]);
           ytdAvgRank = ytdData?.[0]?.avg_rank ?? null;
           ytdAvgRating = ytdData?.[0]?.avg_rating ?? null;
+          const ratingByDate = new Map((recentRows ?? []).map((r: { broadcast_date: string; rating: number | null }) => [r.broadcast_date, r.rating]));
+          recentRatings = Array.from({ length: 7 }, (_, i) => ratingByDate.get(offsetDateStr(sparklineDateFrom, i)) ?? null);
         }
       }
 
@@ -412,6 +433,7 @@ export async function GET() {
           ytdAvgRank,
           ytdRankSource,
           ytdRankDateRange,
+          recentRatings,
         } as ChannelSummary,
       };
   });
