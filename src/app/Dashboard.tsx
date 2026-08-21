@@ -370,11 +370,11 @@ function buildSkyUhdNarrative(s: ChannelNarrativeSignal | undefined): { channelN
 }
 
 function ChangeBadge({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-xs text-zinc-400">전일 비교 자료 없음</span>;
+  if (pct === null) return <span className="text-sm text-zinc-400">전일 비교 자료 없음</span>;
   const up = pct >= 0;
   return (
     <span
-      className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+      className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-sm font-medium ${
         up ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
       }`}
     >
@@ -440,7 +440,7 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
         </span>
         <ChangeBadge pct={channel.dodChangePct} />
       </div>
-      {ytdLine && <p className="mt-3 text-xs text-zinc-400">{ytdLine}</p>}
+      {ytdLine && <p className="mt-3 text-sm text-zinc-400">{ytdLine}</p>}
     </Link>
   );
 }
@@ -485,10 +485,10 @@ function CompactChannelRow({ channel, logoReference }: { channel: ChannelSummary
       {/* 사용자 지시: 시청률 표현의 "0."이 왼쪽으로 동일하게 정렬되도록 고정폭+왼쪽정렬+숫자
           전용 자간(tabular-nums). skyUHD는 소수점 넷째 자리까지 표기해 자릿수가 하나 더
           많으므로, 폰트를 줄여 전체 숫자 폭을 다른 채널과 비슷하게 맞춘다. */}
-      <span className={`w-12 shrink-0 text-left font-semibold tabular-nums text-zinc-800 ${isSkyUhd ? "text-xs" : "text-sm"}`}>
+      <span className={`w-12 shrink-0 text-left font-semibold tabular-nums text-zinc-800 ${isSkyUhd ? "text-sm" : "text-sm"}`}>
         {formatRating(channel.currentRating, channel.code)}
       </span>
-      <span className="shrink-0 whitespace-nowrap text-xs font-normal text-zinc-400">
+      <span className="shrink-0 whitespace-nowrap text-sm font-normal text-zinc-400">
         {channel.currentRank !== null ? `(${channel.currentRank}위)` : ""}
       </span>
       {/* 사용자 지시(2026-08-20): 전주 대비 줄은 삭제 — 채널당 데이터가 한 줄에 깔끔하게 보이도록. */}
@@ -752,16 +752,16 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                       들어가도록 글씨 크기를 줄이고(text-[13px]→[11px]) 넘치면 말줄임(truncate). */}
                   {(headline || h.featured_category) && (
                     <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[11px] text-indigo-700">{headline ? headline.text : h.matched_program_name}</span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-indigo-700">{headline ? headline.text : h.matched_program_name}</span>
                       {h.featured_category && (
-                        <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600">
+                        <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[12px] font-medium text-indigo-600">
                           {h.featured_category}
                         </span>
                       )}
                     </div>
                   )}
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
+                    <table className="w-full text-left text-sm">
                       <thead>
                         <tr className="text-zinc-400">
                           <th className="pb-1.5 pr-2 font-medium">프로그램</th>
@@ -775,12 +775,12 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                           <td className="py-2 pr-2">
                             <div className="font-medium text-zinc-800">{h.matched_program_name}</div>
                             {h.pre_rerun_rating !== null && (
-                              <div className="mt-1 text-[10px] text-zinc-400">
+                              <div className="mt-1 text-[12px] text-zinc-400">
                                 전회 직전 재방 {h.pre_rerun_start_time ? fmtTime(h.pre_rerun_start_time) : ""} · {formatRating(h.pre_rerun_rating)}
                               </div>
                             )}
                             {h.self_rerun_rating !== null && (
-                              <div className="text-[10px] text-zinc-400">
+                              <div className="text-[12px] text-zinc-400">
                                 당일 자체재방 {h.self_rerun_start_time ? fmtTime(h.self_rerun_start_time) : ""} · {formatRating(h.self_rerun_rating)}
                               </div>
                             )}
@@ -805,7 +805,7 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                               {formatRating(h.matched_rating)}
                             </span>
                             {h.prior_rating_change_pct !== null && (
-                              <div className="mt-0.5 text-[10px]">
+                              <div className="mt-0.5 text-[12px]">
                                 <span className={h.prior_rating_change_pct >= 0 ? "text-emerald-600" : "text-rose-600"}>
                                   전회 대비 {h.prior_rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(h.prior_rating_change_pct).toFixed(1)}%
                                 </span>
@@ -844,7 +844,7 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                   {insight.bullets.length > 0 && (
                     <ul className="mt-1.5 space-y-1 pb-1">
                       {insight.bullets.map((b, i) => (
-                        <li key={i} className="flex gap-1.5 text-[11px] leading-relaxed text-zinc-500">
+                        <li key={i} className="flex gap-1.5 text-[13px] leading-relaxed text-zinc-500">
                           <span className="shrink-0 text-zinc-300">•</span>
                           <span>{b}</span>
                         </li>
@@ -853,10 +853,10 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                   )}
                   {insight.schedulingNote.length > 0 && (
                     <div className="mt-1 rounded-xl bg-amber-50 p-2.5">
-                      <p className="mb-1 text-[10px] font-semibold text-amber-700">[편성 인사이트]</p>
+                      <p className="mb-1 text-[12px] font-semibold text-amber-700">[편성 인사이트]</p>
                       <div className="flex flex-col gap-1">
                         {insight.schedulingNote.map((note, i) => (
-                          <p key={i} className="flex gap-1.5 text-[11px] leading-relaxed text-amber-800">
+                          <p key={i} className="flex gap-1.5 text-[13px] leading-relaxed text-amber-800">
                             <span className="shrink-0 text-amber-300">•</span>
                             <span>{note}</span>
                           </p>
@@ -873,11 +873,11 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
         <p className="text-sm text-zinc-400">최근 7일간 오리지널 프로그램 방영 기록을 찾지 못했습니다.</p>
       ) : (
         <div>
-          <p className="mb-2 text-xs text-zinc-400">
+          <p className="mb-2 text-sm text-zinc-400">
             오늘은 지정된 오리지널 프로그램이 없는 요일입니다 — 최근 7일 종합 리뷰를 대신 보여드립니다.
           </p>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-sm">
               <thead>
                 <tr className="text-zinc-400">
                   <th className="pb-1.5 pr-2 font-medium">프로그램</th>
@@ -913,7 +913,7 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
         report.daily.length > 0 &&
         (() => {
           const briefing = buildOriginalDailyBriefing(report.daily);
-          return briefing ? <p className="mt-3 text-sm leading-relaxed text-zinc-700">{briefing}</p> : null;
+          return briefing ? <p className="mt-3 text-base leading-relaxed text-zinc-700">{briefing}</p> : null;
         })()}
     </div>
   );
@@ -940,11 +940,11 @@ function ChannelNarrativeCard({
   return (
     <div className={CARD}>
       <h2 className="mb-1 text-sm font-semibold text-indigo-600">채널별 인사이트</h2>
-      <p className="mb-4 text-xs text-zinc-400">
+      <p className="mb-4 text-sm text-zinc-400">
         오늘 데이터를 최근 4주 평균과 비교해 눈에 띄는 변화만 짚었습니다(4주 넘게 반복되는 평소
         패턴은 가급적 언급을 피합니다).
       </p>
-      <div className="flex flex-col gap-3 text-sm leading-relaxed text-zinc-700">
+      <div className="flex flex-col gap-3 text-base leading-relaxed text-zinc-700">
         {lines.length === 0 ? (
           <p className="text-zinc-400">아직 인사이트를 계산할 데이터가 부족합니다.</p>
         ) : (
@@ -1019,14 +1019,14 @@ function KillerContentCard({
     const ytdAvg = ytdAvgByCode.get(code) ?? null;
     return (
       <div key={code}>
-        <p className="mb-1 text-xs font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
+        <p className="mb-1 text-sm font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
           {CHANNEL_NAME_BY_CODE[code]}
         </p>
         <div className="flex flex-col gap-1">
           {list.map((k) => {
             const ytdColorClass = ytdAvg === null ? "text-zinc-500" : k.avg_rating >= ytdAvg ? "text-emerald-600" : "text-rose-500";
             return (
-              <p key={k.canonical_name} className="truncate text-xs text-zinc-600" title={buildKillerContentOneLiner(k)}>
+              <p key={k.canonical_name} className="truncate text-sm text-zinc-600" title={buildKillerContentOneLiner(k)}>
                 <span className="font-medium text-zinc-800">{k.canonical_name}</span>{" "}
                 <span className={`font-semibold ${ytdColorClass}`}>{formatRating(k.avg_rating)}</span>{" "}
                 <span className="text-zinc-400">· {buildKillerContentOneLiner(k)}</span>
@@ -1041,7 +1041,7 @@ function KillerContentCard({
   return (
     <div className={`${CARD} lg:col-span-2`}>
       <h2 className="mb-1 text-sm font-semibold text-indigo-600">채널별 킬러 콘텐츠</h2>
-      <p className="mb-4 text-xs text-zinc-400">최근 4주 평균 시청률 상위 프로그램 — 강세·약세 시간대가 있으면 함께 표시합니다.</p>
+      <p className="mb-4 text-sm text-zinc-400">최근 4주 평균 시청률 상위 프로그램 — 강세·약세 시간대가 있으면 함께 표시합니다.</p>
       {rows.length === 0 ? (
         <p className="text-sm text-zinc-400">데이터가 아직 부족합니다.</p>
       ) : (
@@ -1080,7 +1080,7 @@ function TodayTopProgramsCard({
   return (
     <div className={CARD}>
       <h2 className="mb-1 text-sm font-semibold text-indigo-600">오늘의 상위 프로그램</h2>
-      <p className="mb-4 text-xs text-zinc-400">오늘 하루 채널별 시청률 상위 3개 프로그램입니다.</p>
+      <p className="mb-4 text-sm text-zinc-400">오늘 하루 채널별 시청률 상위 3개 프로그램입니다.</p>
       <div className="flex flex-col gap-3 text-sm">
         {INSIGHT_CHANNEL_ORDER.map((code) => {
           const list = byChannel.get(code) ?? [];
@@ -1092,16 +1092,16 @@ function TodayTopProgramsCard({
                   시청률) 알아볼 수 있게 표시 — 아래 데이터 열과 같은 폭으로 우측 정렬해 바로
                   위에서 라벨 역할을 하도록 배치. */}
               <div className="flex items-baseline justify-between">
-                <span className="text-xs font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
+                <span className="text-sm font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
                   {CHANNEL_NAME_BY_CODE[code]}
                 </span>
-                <span className="flex gap-2 text-[10px] text-zinc-400">
+                <span className="flex gap-2 text-[12px] text-zinc-400">
                   <span className="w-12 text-right">시간대</span>
                   <span className="w-14 text-right">시청률</span>
                   <span className="w-14 text-right">비교</span>
                 </span>
               </div>
-              <table className="mt-1 w-full text-left text-xs">
+              <table className="mt-1 w-full text-left text-sm">
                 <tbody>
                   {list.map((p, i) => {
                     // 사용자 지시(2026-08-21): 채널 누적 평균 대비 상회/동일/하회 색상.
@@ -1120,10 +1120,10 @@ function TodayTopProgramsCard({
                           <div>
                             {p.canonical_name}
                             {p.isFirstRun !== null && (
-                              <span className="ml-1 text-[10px] text-zinc-400">{p.isFirstRun ? "<본>" : "<재>"}</span>
+                              <span className="ml-1 text-[12px] text-zinc-400">{p.isFirstRun ? "<본>" : "<재>"}</span>
                             )}
                           </div>
-                          {episodeText && <div className="text-[10px] text-zinc-400">{episodeText}</div>}
+                          {episodeText && <div className="text-[12px] text-zinc-400">{episodeText}</div>}
                         </td>
                         <td className="w-12 py-1 text-right text-zinc-400">{fmtTime(p.start_time)}</td>
                         <td className="w-14 py-1 text-right font-semibold" style={{ color: ratingColor }}>
@@ -1181,12 +1181,12 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
     <div className={`${CARD} lg:col-span-2`}>
       <div className="mb-1 flex items-center gap-2">
         <h2 className="text-sm font-semibold text-indigo-600">주요 뉴스</h2>
-        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-500">베타</span>
+        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[12px] font-medium text-indigo-500">베타</span>
       </div>
       <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
         {[...byCategory.entries()].map(([category, list]) => (
           <div key={category}>
-            <p className={`mb-1 text-xs font-semibold ${categoryColorClass(category)}`}>{category}</p>
+            <p className={`mb-1 text-sm font-semibold ${categoryColorClass(category)}`}>{category}</p>
             <ul className="flex flex-col gap-0.5">
               {list.map((item, i) => (
                 <li key={i} className="flex items-baseline gap-1.5">
@@ -1198,7 +1198,7 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs leading-relaxed text-zinc-700 hover:text-indigo-600 hover:underline"
+                    className="text-base leading-relaxed text-zinc-700 hover:text-indigo-600 hover:underline"
                   >
                     {item.title}
                   </a>
@@ -1264,7 +1264,10 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
         <div className="absolute right-1/4 bottom-1/4 h-64 w-64 rounded-full bg-pink-200 opacity-25 blur-3xl" />
       </div>
 
-      <div className="mx-auto max-w-6xl">
+      {/* 사용자 지시(2026-08-21): "PC 화면에서 레이아웃이 너무 중앙에 쏠려있다" — 좁은 max-w-6xl
+          (1152px)이 넓은 모니터에서 양옆 여백만 크게 남기던 문제. max-w-screen-2xl(1536px)로
+          넓혀 화면을 더 넓게 쓰도록 한다(작은 화면은 mx-auto+반응형 그리드가 그대로 처리). */}
+      <div className="mx-auto max-w-screen-2xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             {/* 사용자 지시(2026-08-20): 좌측 최상단은 채널별 로고가 아니라 고정 KT ENA CI 마크. */}

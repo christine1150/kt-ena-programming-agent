@@ -1538,7 +1538,7 @@ function HourlyGraphPanel({
     : [];
   return (
     <div>
-      <div className="mb-2 flex flex-wrap gap-3 text-xs">
+      <div className="mb-2 flex flex-wrap gap-3 text-sm">
         {HOURLY_METRICS.map((m) => (
           <label key={m.key} className="flex cursor-pointer items-center gap-1.5 text-zinc-600">
             <input
@@ -1597,7 +1597,7 @@ function HourlyGraphPanel({
             ))}
           </div>
           {showBaseline && (
-            <p className="mt-1 text-[11px] text-zinc-400">
+            <p className="mt-1 text-[13px] text-zinc-400">
               <span className="mr-1 inline-block h-0.5 w-3 align-middle" style={{ backgroundColor: accentColor ?? "#6366f1", opacity: 0.35 }} />
               {baselineLabel ?? "연한 선 = 이 기간 기준 최근 12주(84일) 같은 시간대 평균 시청률 기준선"}
             </p>
@@ -1642,7 +1642,7 @@ function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlo
   // 만들던 방식을 버리고, 셀 크기·글자·여백을 줄여 카드 폭 안에 8행 전체가 들어오게 한다.
   return (
     <div className="w-full overflow-x-auto">
-      <table className="w-full table-fixed text-center text-[11px]">
+      <table className="w-full table-fixed text-center text-[13px]">
         <colgroup>
           <col className="w-11" />
         </colgroup>
@@ -1704,15 +1704,15 @@ function TopProgramListItems({ rows, fmtR, indexOffset = 0 }: { rows: TopProgram
             <div className="flex items-center gap-2">
               <span className="w-5 shrink-0 text-right font-medium text-zinc-400">{i + 1 + indexOffset}</span>
               <span className="min-w-0 flex-1 truncate font-medium text-zinc-800">{p.program_name}</span>
-              <span className="shrink-0 text-xs text-zinc-500">
+              <span className="shrink-0 text-sm text-zinc-500">
                 {p.top_daypart ? DAYPART_LABEL[p.top_daypart]?.split("(")[0] ?? p.top_daypart : "—"}
                 {p.most_common_start_hour !== null ? ` · 주로 ${p.most_common_start_hour}시` : ""}
               </span>
-              <span className="shrink-0 text-xs text-zinc-400">{p.air_count}회 방영</span>
+              <span className="shrink-0 text-sm text-zinc-400">{p.air_count}회 방영</span>
               <span className="w-16 shrink-0 text-right font-semibold text-zinc-900">{fmtR(p.avg_rating)}</span>
             </div>
             {shareRank !== undefined && (
-              <p className="ml-7 mt-0.5 text-xs text-sky-600">
+              <p className="ml-7 mt-0.5 text-sm text-sky-600">
                 시청률 {i + 1 + indexOffset}위, 목록 중 점유율 {shareRank}위{p.avg_share !== null ? ` (${p.avg_share.toFixed(2)}%)` : ""}
               </p>
             )}
@@ -1731,12 +1731,12 @@ function CompetitorPeriodTopProgramsList({ rows, fmtR }: { rows: CompetitorPerio
     return <p className="text-sm text-zinc-400">이 기간 등록 경쟁채널 프로그램 데이터가 없습니다.</p>;
   }
   return (
-    <ol className="space-y-1.5 text-xs">
+    <ol className="space-y-1.5 text-sm">
       {rows.map((p, i) => (
         <li key={`${p.competitor_name}__${p.program_name}`} className="flex items-center gap-2">
           <span className="w-4 shrink-0 text-right font-medium text-zinc-400">{i + 1}</span>
           <span className="font-medium text-zinc-700">{p.competitor_name}</span>
-          <span className="text-[10px] text-zinc-400">(채널 {p.channel_rank}위, 기간 평균 {fmtR(p.channel_period_avg_rating)})</span>
+          <span className="text-[12px] text-zinc-400">(채널 {p.channel_rank}위, 기간 평균 {fmtR(p.channel_period_avg_rating)})</span>
           <span className="min-w-0 flex-1 truncate text-zinc-500">
             {p.typical_start_hour !== null ? `${p.typical_start_hour}시경 ` : ""}
             {p.program_name}
@@ -1758,15 +1758,15 @@ function TopShareOutsideList({ shareTop, topRows, fmtR }: { shareTop: TopSharePr
   if (outside.length === 0) return null;
   return (
     <div className="mt-3 border-t border-dashed border-zinc-200 pt-3">
-      <p className="mb-1 text-xs text-zinc-400">TOP20 밖이지만 점유율 상위인 콘텐츠</p>
+      <p className="mb-1 text-sm text-zinc-400">TOP20 밖이지만 점유율 상위인 콘텐츠</p>
       <ol className="space-y-1 text-sm">
         {outside.map((p, i) => (
           <li key={p.program_name} className="flex items-center gap-2 border-t border-zinc-100 py-1 first:border-t-0">
             <span className="w-5 shrink-0 text-right font-medium text-sky-500">{i + 1}</span>
             <span className="min-w-0 flex-1 truncate font-medium text-zinc-700">{p.program_name}</span>
-            <span className="shrink-0 text-xs text-zinc-400">{p.air_count}회 방영</span>
-            <span className="shrink-0 text-xs text-sky-600">점유율 {p.avg_share !== null ? `${p.avg_share.toFixed(2)}%` : "—"}</span>
-            <span className="w-16 shrink-0 text-right text-xs text-zinc-500">{fmtR(p.avg_rating)}</span>
+            <span className="shrink-0 text-sm text-zinc-400">{p.air_count}회 방영</span>
+            <span className="shrink-0 text-sm text-sky-600">점유율 {p.avg_share !== null ? `${p.avg_share.toFixed(2)}%` : "—"}</span>
+            <span className="w-16 shrink-0 text-right text-sm text-zinc-500">{fmtR(p.avg_rating)}</span>
           </li>
         ))}
       </ol>
@@ -1806,7 +1806,7 @@ function TopProgramsList({
       <ol className="space-y-1 text-sm">{<TopProgramListItems rows={mainRows} fmtR={fmtR} />}</ol>
       {lowSampleRows.length > 0 && (
         <div className="mt-3 border-t border-dashed border-zinc-200 pt-3">
-          <p className="mb-1 text-xs text-zinc-400">표본 부족(편성 5회 미만) — 참고용으로만 활용하세요.</p>
+          <p className="mb-1 text-sm text-zinc-400">표본 부족(편성 5회 미만) — 참고용으로만 활용하세요.</p>
           <ol className="space-y-1 text-sm">{<TopProgramListItems rows={lowSampleRows} fmtR={fmtR} indexOffset={mainRows.length} />}</ol>
         </div>
       )}
@@ -2183,7 +2183,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
 
   return (
     <div className="px-6 py-8" style={{ ["--accent" as string]: accentColor }}>
-      <div className="mx-auto flex max-w-5xl flex-col gap-6">
+      {/* 사용자 지시(2026-08-21): "PC 화면에서 레이아웃이 너무 중앙에 쏠려있다" — max-w-5xl
+          (1024px)은 특히 표·그래프가 많은 이 페이지에서 넓은 모니터의 화면을 못 쓰던 문제.
+          max-w-7xl(1280px)로 넓혀 표·시간대 그래프가 더 여유 있게 보이도록 한다(줄글 문단은
+          카드 padding 안에서 여전히 읽기 좋은 길이 — 화면 전체를 다 채우진 않음). */}
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
         {/* 헤더 */}
         <div
           className="rounded-3xl p-8 text-white shadow-sm"
@@ -2213,7 +2217,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     <span className="ml-1.5 text-lg font-normal text-white/70">({narrativeSignal.today_rank}위)</span>
                   )}
                 </p>
-                {showComparisonView && <p className="text-xs text-white/70">{isComparisonPreset ? "이번 기간 평균" : "선택 기간 평균"}</p>}
+                {showComparisonView && <p className="text-sm text-white/70">{isComparisonPreset ? "이번 기간 평균" : "선택 기간 평균"}</p>}
               </div>
             </div>
             {/* 기간 설정(사용자 지시 2026-08-20, 두 차례 반영): 오늘/어제/지난 7일/지난 1달/연간
@@ -2230,7 +2234,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <select
                   value={periodPreset}
                   onChange={(e) => setPeriodPreset(e.target.value as PeriodPreset)}
-                  className="rounded-full bg-white/20 px-3 py-1.5 text-xs font-medium text-white outline-none [&_option]:text-zinc-900 [&_optgroup]:text-zinc-500"
+                  className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none [&_option]:text-zinc-900 [&_optgroup]:text-zinc-500"
                 >
                   {PERIOD_PRESET_GROUPS.map((g) => (
                     <optgroup key={g.group} label={g.group}>
@@ -2248,24 +2252,24 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       type="date"
                       value={customFrom}
                       onChange={(e) => setCustomFrom(e.target.value)}
-                      className="rounded-full bg-white/20 px-2.5 py-1.5 text-xs font-medium text-white outline-none"
+                      className="rounded-full bg-white/20 px-2.5 py-1.5 text-sm font-medium text-white outline-none"
                     />
                     <span className="text-white/70">~</span>
                     <input
                       type="date"
                       value={customTo}
                       onChange={(e) => setCustomTo(e.target.value)}
-                      className="rounded-full bg-white/20 px-2.5 py-1.5 text-xs font-medium text-white outline-none"
+                      className="rounded-full bg-white/20 px-2.5 py-1.5 text-sm font-medium text-white outline-none"
                     />
                   </div>
                 )}
               </div>
               {isRangeMode ? (
-                <p className="text-xs text-white/80">
+                <p className="text-sm text-white/80">
                   기간: {formatDateWithDow(data.dateFrom)} ~ {formatDateWithDow(data.dateTo)}
                 </p>
               ) : (
-                data.asOfDate && <p className="text-xs text-white/80">기준일: {formatDateWithDow(data.asOfDate)}</p>
+                data.asOfDate && <p className="text-sm text-white/80">기준일: {formatDateWithDow(data.asOfDate)}</p>
               )}
             </div>
           </div>
@@ -2298,7 +2302,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <h2 className="mb-3 text-sm font-semibold text-zinc-500">{buildBriefingTitle(periodPreset)}</h2>
           <div className="flex flex-col gap-3">
             {buildBriefingReport(data, referenceLabel, showComparisonView, comparisonLabel).map((para, i) => (
-              <p key={i} className="text-sm leading-relaxed text-zinc-700">
+              <p key={i} className="text-base leading-relaxed text-zinc-700">
                 {para}
               </p>
             ))}
@@ -2313,7 +2317,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           {/* 사용자 지시(2026-08-21): 제목을 "질문하기 · AI 편성 비서"로. */}
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">질문하기 · AI 편성 비서</h2>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-3 text-sm text-zinc-400">
             OpenAI를 활용해 자연어 질문을 이해하고, DB의 검증된 데이터로 답합니다. 채널 성과·프로그램 TOP·시간대·Target
             Affinity·경쟁채널 비교·포트폴리오 랭킹/KPI/알림 질문을 지원합니다. 어느 채널 페이지에서 물어도 질문 속 채널명을
             다시 인식합니다.
@@ -2346,7 +2350,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               {askAnswer.evidence !== "—" && <p className="text-zinc-600">Evidence: {askAnswer.evidence}</p>}
               {askAnswer.interpretation && <p className="text-zinc-700">해석: {askAnswer.interpretation}</p>}
               {askAnswer.programmingAction !== "—" && <p className="text-indigo-700">Action: {askAnswer.programmingAction}</p>}
-              <p className="text-xs text-zinc-400">
+              <p className="text-sm text-zinc-400">
                 Confidence: {askAnswer.confidence}({askAnswer.confidenceNote})
               </p>
             </div>
@@ -2360,13 +2364,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <h2 className="text-sm font-semibold text-zinc-500">
               시간대별 그래프{isRangeMode ? " (선택 기간 평균)" : ""}
               {hourlyEffectiveDate && (
-                <span className="ml-2 text-xs font-normal text-amber-600">
+                <span className="ml-2 text-sm font-normal text-amber-600">
                   (선택한 날짜에 프로그램 데이터가 아직 없어 최근 데이터 기준 {formatDateWithDow(hourlyEffectiveDate)}로 대신 표시)
                 </span>
               )}
             </h2>
             {!hasPriorRange && (
-            <div className="flex flex-wrap gap-3 text-xs">
+            <div className="flex flex-wrap gap-3 text-sm">
               {HOURLY_METRICS.map((m) => (
                 <label key={m.key} className="flex cursor-pointer items-center gap-1.5 text-zinc-600">
                   <input
@@ -2425,7 +2429,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {hasPriorRange ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
-                <p className="mb-2 text-xs font-semibold text-zinc-600">이번 기간</p>
+                <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
                 <HourlyGraphPanel
                   pattern={hourlyPattern}
                   programTitles={hourlyProgramTitles}
@@ -2449,7 +2453,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 />
               </div>
               <div>
-                <p className="mb-2 text-xs font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
+                <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
                 <HourlyGraphPanel
                   pattern={hourlyPatternPrior}
                   programTitles={hourlyProgramTitlesPrior}
@@ -2561,7 +2565,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 ))}
               </div>
               {hourlyMetrics.has("avg_rating") && hourlyBaselinePattern.length > 0 && (
-                <p className="mt-1 text-[11px] text-zinc-400">
+                <p className="mt-1 text-[13px] text-zinc-400">
                   <span className="mr-1 inline-block h-0.5 w-3 align-middle" style={{ backgroundColor: accentColor, opacity: 0.35 }} />
                   연한 선 = 최근 12주(84일) 같은 시간대 평균 시청률 기준선
                 </p>
@@ -2569,7 +2573,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               {/* 사용자 지시: 시간대별로 어떤 타이틀이 편성됐는지 알 수 있도록 — 막대 위에는 다
                   들어가지 않으므로 아래에 시간대: 프로그램명 목록을 함께 보여준다. */}
               {hourlyProgramTitles.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-zinc-100 pt-3 text-[11px] text-zinc-500">
+                <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-zinc-100 pt-3 text-[13px] text-zinc-500">
                   {hourlyProgramTitles.map((h) => (
                     <span key={h.broadcast_hour}>
                       <span className="font-medium text-zinc-700">{h.broadcast_hour}시</span> {h.program_names}
@@ -2589,18 +2593,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">
             {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일) 요일 × 시간대 강세 시간대` : "최근 12주 요일 × 시간대 강세 시간대"}
           </h2>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-3 text-sm text-zinc-400">
             {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 누적 기준, 월~일 요일과 3시간 단위
             시간대(02~04시부터 23~25시까지 8구간) 조합별 평균 시청률입니다. 색이 진할수록 그 요일·시간대 조합이 강세입니다.
           </p>
           {hasPriorRange ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
-                <p className="mb-2 text-xs font-semibold text-zinc-600">이번 기간</p>
+                <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
                 <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} />
               </div>
               <div>
-                <p className="mb-2 text-xs font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
+                <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
                 <DowHourBlockTable pattern={dowHourBlockPatternPrior} accentColor={accentColor} fmtR={fmtR} />
               </div>
             </div>
@@ -2608,7 +2612,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <>
               <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
-                <p className="mt-3 text-sm leading-relaxed text-zinc-700">
+                <p className="mt-3 text-base leading-relaxed text-zinc-700">
                   {hourBlockStrength.strongest !== null && `전체적으로 ${hourBlockLabel(hourBlockStrength.strongest)}가 가장 강세이고`}
                   {hourBlockStrength.strongest !== null && hourBlockStrength.weakest !== null && ", "}
                   {hourBlockStrength.weakest !== null && `${hourBlockLabel(hourBlockStrength.weakest)}가 가장 약세입니다`}
@@ -2622,23 +2626,23 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         {/* 시청률 상위 콘텐츠 TOP 20 — 신규 섹션(사용자 지시 2026-08-20). 최근 12주 고정 윈도우. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">시청률 상위 콘텐츠 TOP 20</h2>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-3 text-sm text-zinc-400">
             {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 평균 시청률이 높은 순으로 정렬했습니다.
           </p>
           {hasPriorRange ? (
             <>
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-zinc-600">이번 기간</p>
+                  <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
                   <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} />
                 </div>
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
+                  <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
                   <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={priorTopSharePrograms} />
                 </div>
               </div>
               {buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior) && (
-                <p className="mt-3 text-sm leading-relaxed text-zinc-700">{buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior)}</p>
+                <p className="mt-3 text-base leading-relaxed text-zinc-700">{buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior)}</p>
               )}
             </>
           ) : topPrograms.length === 0 ? (
@@ -2647,7 +2651,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <>
               <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
-                <p className="mt-3 text-sm leading-relaxed text-zinc-700">
+                <p className="mt-3 text-base leading-relaxed text-zinc-700">
                   위 상위 콘텐츠들과 같은 기간 기준으로 볼 때,
                   {hourBlockStrength.strongest !== null && ` 강세 시간대는 ${hourBlockLabel(hourBlockStrength.strongest)}`}
                   {hourBlockStrength.strongest !== null && hourBlockStrength.weakest !== null && ", "}
@@ -2666,13 +2670,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {showComparisonView && data.periodReport && (
             <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-2xl bg-zinc-50 p-3">
-                <p className="text-xs text-zinc-500">
+                <p className="text-sm text-zinc-500">
                   {isComparisonPreset ? "이번 기간" : "선택 기간"} 평균({data.periodReport.days_with_data}일)
                 </p>
                 <p className="mt-1 text-base font-semibold text-zinc-900">{fmtR(data.periodReport.avg_rating)}</p>
               </div>
               <div className="rounded-2xl bg-zinc-50 p-3">
-                <p className="text-xs text-zinc-500">{comparisonLabel ?? "직전 동일 길이 기간"} 대비</p>
+                <p className="text-sm text-zinc-500">{comparisonLabel ?? "직전 동일 길이 기간"} 대비</p>
                 <p className="mt-1 text-base font-semibold text-zinc-900">
                   {data.periodReport.prior_period_change_pct === null ? (
                     "—"
@@ -2684,7 +2688,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </p>
               </div>
               <div className="rounded-2xl bg-zinc-50 p-3">
-                <p className="text-xs text-zinc-500">최근 12주 평균 대비</p>
+                <p className="text-sm text-zinc-500">최근 12주 평균 대비</p>
                 <p className="mt-1 text-base font-semibold text-zinc-900">
                   {data.periodReport.baseline_change_pct === null ? (
                     "—"
@@ -2696,8 +2700,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </p>
               </div>
               <div className="rounded-2xl bg-zinc-50 p-3">
-                <p className="text-xs text-zinc-500">기간 중 최고 / 최저</p>
-                <p className="mt-1 text-xs font-medium text-zinc-700">
+                <p className="text-sm text-zinc-500">기간 중 최고 / 최저</p>
+                <p className="mt-1 text-sm font-medium text-zinc-700">
                   {data.periodReport.best_date ? `${data.periodReport.best_date} (${fmtR(data.periodReport.best_rating)})` : "—"}
                   <br />
                   {data.periodReport.worst_date ? `${data.periodReport.worst_date} (${fmtR(data.periodReport.worst_rating)})` : "—"}
@@ -2706,12 +2710,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </div>
           )}
           {showComparisonView && data.periodProgramMovers.length > 0 && data.periodReport && (
-            <p className="mb-3 text-sm leading-relaxed text-zinc-700">
+            <p className="mb-3 text-base leading-relaxed text-zinc-700">
               {buildWhatHappenedInsight(data.periodProgramMovers, fmtR, data.periodReport.avg_rating)}
             </p>
           )}
           {showComparisonView && (
-            <p className="mb-2 text-xs text-zinc-400">
+            <p className="mb-2 text-sm text-zinc-400">
               아래 표는 (참고) 선택 기간 마지막 날짜({data.dateTo}) 시점 기준 DoD/WoW/MoM/QoQ/YoY/YTD 비교입니다.
             </p>
           )}
@@ -2743,7 +2747,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         </span>
                       )}
                     </td>
-                    <td className="py-1.5 text-xs text-zinc-400">
+                    <td className="py-1.5 text-sm text-zinc-400">
                       {row.value_source === "annual_2025_fallback" ? "2025 연간 평균 대체" : row.value_source === "nielsen_daily" ? "" : "—"}
                     </td>
                   </tr>
@@ -2756,7 +2760,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         {/* WHY? — 원인 추적(Root-Cause 참고 분석) */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">WHY?</h2>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-3 text-sm text-zinc-400">
             원인 추적(1차 단순 기준): 채널 평균(최근 28일) 대비 -10%p 이상 하락이 3일 연속되면 트리거합니다.
             하루짜리 변동은 노이즈로 보고 표시하지 않습니다. 경쟁채널의 &ldquo;편성 변화&rdquo; 자체(신규
             편성·시간 이동 등)는 원본 자료에 프로그램 단위 데이터가 없어 확인할 수 없어, 대신 경쟁채널
@@ -2768,7 +2772,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               <p className="text-sm font-semibold text-rose-700">
                 🔻 최근 {rootCauseAlert.streak_days}일 연속 채널 평균 대비 하락 감지
               </p>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-rose-600">
+              <div className="mt-2 flex flex-wrap gap-2 text-sm text-rose-600">
                 {[...rootCauseAlert.daily].reverse().map((d) => (
                   <span key={d.date} className="rounded-full bg-white px-2 py-1 ring-1 ring-rose-200">
                     {d.date}: {fmtR(d.rating)} ({d.change_pct !== null ? `${d.change_pct.toFixed(1)}%` : "—"})
@@ -2777,8 +2781,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
               {rootCauseAlert.competitor_moves.length > 0 ? (
                 <div className="mt-3 border-t border-rose-200 pt-3">
-                  <p className="text-xs text-rose-600">같은 기간 경쟁채널 시청률 변동(전주 대비, 참고 정보):</p>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-zinc-600">
+                  <p className="text-sm text-rose-600">같은 기간 경쟁채널 시청률 변동(전주 대비, 참고 정보):</p>
+                  <div className="mt-1 flex flex-wrap gap-2 text-sm text-zinc-600">
                     {rootCauseAlert.competitor_moves.map((c) => (
                       <span key={c.competitor_name} className="rounded-full bg-white px-2 py-1 ring-1 ring-zinc-200">
                         {c.competitor_name} {c.change_pct >= 0 ? "▲" : "▼"} {Math.abs(c.change_pct).toFixed(1)}%
@@ -2787,7 +2791,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   </div>
                 </div>
               ) : (
-                <p className="mt-3 text-xs text-zinc-400">같은 기간 5%p 이상 변동한 경쟁채널은 없습니다.</p>
+                <p className="mt-3 text-sm text-zinc-400">같은 기간 5%p 이상 변동한 경쟁채널은 없습니다.</p>
               )}
               {/* 사용자 지시(2026-08-21, 8-Step Insight Flow): CONTRIBUTOR(편차가 가장 큰 요인)를
                   주도 요인으로, 나머지는 함께 관찰된 요인으로, 그다음 DECISION+ACTION을 덧붙인다. */}
@@ -2796,14 +2800,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 if (!why) return null;
                 return (
                   <div className="mt-3 border-t border-rose-200 pt-3">
-                    <p className="text-xs font-semibold text-rose-700">주도 요인(편차가 가장 큰 변수)</p>
-                    <p className="mt-1 text-xs text-zinc-600">{why.leadSentence}</p>
+                    <p className="text-sm font-semibold text-rose-700">주도 요인(편차가 가장 큰 변수)</p>
+                    <p className="mt-1 text-sm text-zinc-600">{why.leadSentence}</p>
                     {why.supportingBullets.length > 0 && (
                       <>
-                        <p className="mt-2 text-xs font-semibold text-rose-700">함께 관찰된 요인</p>
+                        <p className="mt-2 text-sm font-semibold text-rose-700">함께 관찰된 요인</p>
                         <ul className="mt-1 space-y-1">
                           {why.supportingBullets.map((b, i) => (
-                            <li key={i} className="flex gap-1.5 text-xs text-zinc-600">
+                            <li key={i} className="flex gap-1.5 text-sm text-zinc-600">
                               <span className="shrink-0 text-rose-300">•</span>
                               <span>{b}</span>
                             </li>
@@ -2812,10 +2816,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       </>
                     )}
                     <div className="mt-3 rounded-xl bg-white p-2.5 ring-1 ring-rose-200">
-                      <p className="text-xs text-zinc-600">
+                      <p className="text-sm text-zinc-600">
                         <span className="font-semibold text-rose-700">DECISION</span> {why.decision}
                       </p>
-                      <p className="mt-1 text-xs text-zinc-600">
+                      <p className="mt-1 text-sm text-zinc-600">
                         <span className="font-semibold text-rose-700">ACTION</span> {WHY_ACTION_LABEL[why.action]}
                       </p>
                     </div>
@@ -2839,7 +2843,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 {fmtR(data.opportunityAlert.our_recent_avg)} vs 이전 7일 {fmtR(data.opportunityAlert.our_prior_avg)})
               </p>
               {data.opportunityAlert.weak_competitors.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-600">
+                <div className="mt-2 flex flex-wrap gap-2 text-sm text-zinc-600">
                   <span className="text-emerald-600">같은 기간 약세를 보인 경쟁채널(참고 정보):</span>
                   {data.opportunityAlert.weak_competitors.map((c) => (
                     <span key={c.competitor_name} className="rounded-full bg-white px-2 py-1 ring-1 ring-emerald-200">
@@ -2848,7 +2852,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   ))}
                 </div>
               )}
-              <p className="mt-2 text-[11px] text-zinc-400">동시에 관찰된 참고 정보 — 인과관계로 단정하지 않습니다.</p>
+              <p className="mt-2 text-[13px] text-zinc-400">동시에 관찰된 참고 정보 — 인과관계로 단정하지 않습니다.</p>
             </div>
           )}
         </div>
@@ -2858,7 +2862,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             한 달(28일) baseline(사용자 지시 재확인), 그 외 기간은 이번 기간 vs 전 기간 비교. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">WHO IS WATCHING?</h2>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-3 text-sm text-zinc-400">
             왼쪽 2개는 가장 많이 본 연령대, 오른쪽 2개는 등락폭이 가장 커서 주목해야 할 연령대입니다(전체 12개
             연령대 중 선정). 등락률은 {showComparisonView ? `${comparisonLabel ?? "전"} 기간` : "최근 한 달 평균"} 대비입니다.
           </p>
@@ -2877,14 +2881,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 {tiles.map((item, i) => (
                   <div key={`${item.label}-${i}`} className="rounded-2xl bg-zinc-50 p-4">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-zinc-500">{shortDemoLabel(item.label)}</p>
+                      <p className="text-sm text-zinc-500">{shortDemoLabel(item.label)}</p>
                       <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${item.badge === "최다 시청" ? "bg-indigo-100 text-indigo-600" : "bg-amber-100 text-amber-600"}`}>
                         {item.badge}
                       </span>
                     </div>
                     <p className="mt-1 text-lg font-semibold text-zinc-900">{fmtR(item.value)}</p>
                     {item.deltaPct !== null && (
-                      <p className={`mt-0.5 text-xs font-medium ${item.deltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      <p className={`mt-0.5 text-sm font-medium ${item.deltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                         {item.deltaPct >= 0 ? "▲" : "▼"} {Math.abs(item.deltaPct).toFixed(1)}%
                       </p>
                     )}
@@ -2893,12 +2897,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
             );
           })()}
-          <p className="mt-3 text-sm leading-relaxed text-zinc-700">
+          <p className="mt-3 text-base leading-relaxed text-zinc-700">
             {buildInternalDemographicNarrative(showComparisonView, data.whoIsWatchingDemographics, data.periodDemographics, fmtR, referenceLabel)}
           </p>
           {!showComparisonView &&
             buildDemographicHighlightsParagraph(data.demographicHighlights) && (
-              <p className="mt-2 text-sm leading-relaxed text-zinc-700">
+              <p className="mt-2 text-base leading-relaxed text-zinc-700">
                 {buildDemographicHighlightsParagraph(data.demographicHighlights)}
               </p>
             )}
@@ -2918,18 +2922,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               { label: "시청시간", value: fmtSeconds(howDeeplyStats?.time_spent_seconds ?? null) },
             ].map((stat) => (
               <div key={stat.label} className="rounded-2xl bg-zinc-50 p-4">
-                <p className="text-xs text-zinc-500">{stat.label}</p>
+                <p className="text-sm text-zinc-500">{stat.label}</p>
                 <p className="mt-1 text-lg font-semibold text-zinc-900">{stat.value}</p>
               </div>
             ))}
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-zinc-700">{buildHowDeeplyExplanation(howDeeplyStats, howDeeplyPeriodLabel, code === "SKYUHD")}</p>
+          <p className="mt-3 text-base leading-relaxed text-zinc-700">{buildHowDeeplyExplanation(howDeeplyStats, howDeeplyPeriodLabel, code === "SKYUHD")}</p>
         </div>
 
         {/* CONTENT FITS? — 표 + 줄글, 채널 기여도 높은 순(사용자 지시) */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">CONTENT FITS?</h2>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-3 text-sm text-zinc-400">
             Fit Score 하위지표 — Target Performance(시청률·슬롯·데이파트) / Target Affinity(연령대 적합도, 채널
             단위) / Audience Engagement(Reach·시청시간비율). 전부 최근 12주 자사 채널 내 percentile(0~100),
             채널에 도움이 되는 순으로 정렬했습니다.
@@ -2964,7 +2968,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   </tbody>
                 </table>
               </div>
-              <p className="mt-3 text-sm leading-relaxed text-zinc-700">
+              <p className="mt-3 text-base leading-relaxed text-zinc-700">
                 {contentFitsRows.length >= 2
                   ? (() => {
                       const bestName = contentFitsRows[0].programs?.canonical_name ?? "";
@@ -2985,7 +2989,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         <>
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">OPPORTUNITY?</h2>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-3 text-sm text-zinc-400">
             시간대(daypart)별로, 우리 채널과 등록 경쟁채널의 시청률 격차가 그 이전(보유 기간) 평균 대비
             {isRangeMode ? " 선택 기간 " : " 최근 1주 "}사이 어떻게 바뀌었는지 계산합니다. 격차가 좁혀진(경쟁채널이
             상대적으로 약해진) 시간대가 편성 기회입니다.
@@ -2993,7 +2997,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </p>
           {daypartOpportunity.length > 0 && (
             <div className="mb-3 overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-xs">
+              <table className="w-full min-w-[520px] text-left text-sm">
                 <thead>
                   <tr className="text-zinc-400">
                     <th className="pb-1.5 pr-2 font-medium">시간대</th>
@@ -3031,7 +3035,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </table>
             </div>
           )}
-          <p className="mb-3 text-sm leading-relaxed text-zinc-700">{buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD")}</p>
+          <p className="mb-3 text-base leading-relaxed text-zinc-700">{buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD")}</p>
           {/* 사용자 지시(2026-08-21): WHY?/OPPORTUNITY?/WHAT TO SCHEDULE? 세 결과가 같은 daypart를
               가리킬 때만 종합 판단 문장(Executive Programming Insight)을 보여준다 — 조건이 안
               맞으면 표시하지 않는다(추정으로 억지 연결 금지). 기존 카드 안에 콜아웃으로만 추가. */}
@@ -3041,13 +3045,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             if (!insight) return null;
             return (
               <div className="mb-3 rounded-2xl bg-indigo-50 p-4">
-                <p className="mb-1 text-xs font-semibold text-indigo-700">Executive Programming Insight</p>
-                <p className="text-sm leading-relaxed text-indigo-900">{insight}</p>
+                <p className="mb-1 text-sm font-semibold text-indigo-700">Executive Programming Insight</p>
+                <p className="text-base leading-relaxed text-indigo-900">{insight}</p>
               </div>
             );
           })()}
 
-          <p className="mb-2 text-xs text-zinc-400">
+          <p className="mb-2 text-sm text-zinc-400">
             기회 탐지(Opportunity Alert, 참고): 자사 최근 7일 평균이 이전 7일 대비 +10%p 이상 강세이면서,
             등록 경쟁채널 중 같은 기간 -10%p 이상 약세인 채널이 있으면 표시합니다.
           </p>
@@ -3057,7 +3061,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 🟢 기회 슬롯 감지 — 자사 ▲ {data.opportunityAlert.our_change_pct?.toFixed(1)}% (최근 7일 {fmtR(data.opportunityAlert.our_recent_avg)} vs
                 이전 7일 {fmtR(data.opportunityAlert.our_prior_avg)})
               </p>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-600">
+              <div className="mt-2 flex flex-wrap gap-2 text-sm text-zinc-600">
                 {data.opportunityAlert.weak_competitors.map((c) => (
                   <span key={c.competitor_name} className="rounded-full bg-white px-2 py-1 ring-1 ring-emerald-200">
                     {c.competitor_name} ▼ {Math.abs(c.change_pct).toFixed(1)}%
@@ -3073,7 +3077,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         {/* WHAT TO SCHEDULE? */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">WHAT TO SCHEDULE?</h2>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-3 text-sm text-zinc-400">
             Fit Score(0~100) = 30% Target Performance + 20% Target Affinity + 15% Audience Engagement + 15% Slot
             Performance + 10% Competitive Opportunity + 10% Audience Flow. Confidence(표본 신뢰도)가 낮으면 점수와
             무관하게 TEST로 표시한다. 위 OPPORTUNITY?에서 찾은 기회 시간대에 STRENGTHEN/TEST 태그 프로그램을
@@ -3087,7 +3091,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             // 사용자 지시(2026-08-21): 표 형태로 재구성 — 태그는 한글, 제목은 한 줄(truncate),
             // 가운데 열에 제안 사항 한 줄, Fit Score/Confidence는 오른쪽. 클릭하면 아래에 근거 펼침.
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-sm">
                 <thead>
                   <tr className="text-zinc-400">
                     <th className="pb-1.5 pr-2 font-medium">태그</th>
@@ -3114,7 +3118,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         >
                           <td className="whitespace-nowrap py-2 pr-2">
                             <span
-                              className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                              className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[13px] font-semibold ${
                                 item.tag ? TAG_STYLE[item.tag] : "bg-zinc-100 text-zinc-500"
                               }`}
                             >
@@ -3128,7 +3132,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           <td className="py-2 pr-2 text-zinc-600">{note}</td>
                           <td className="whitespace-nowrap py-2 text-zinc-500">
                             {item.fit_score?.toFixed(1) ?? "—"}
-                            <span className="ml-1 text-[10px] text-zinc-400">
+                            <span className="ml-1 text-[12px] text-zinc-400">
                               ({item.confidence_pct?.toFixed(0) ?? "—"}%)
                             </span>
                           </td>
@@ -3136,7 +3140,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         {isOpen && (
                           <tr className="border-t border-zinc-100 bg-zinc-50/60">
                             <td colSpan={4} className="p-3">
-                              <div className="grid grid-cols-2 gap-2 text-xs text-zinc-600 sm:grid-cols-3">
+                              <div className="grid grid-cols-2 gap-2 text-sm text-zinc-600 sm:grid-cols-3">
                                 <p>평균 시청률: {fmtR(item.evidence.avg_rating)}</p>
                                 <p>Reach: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
                                 <p>
@@ -3152,17 +3156,17 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                 const fi = buildFitScoreInterpretation(item);
                                 return (
                                   <div className="mt-3 border-t border-zinc-200 pt-3">
-                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-zinc-500">
                                       {fi.subScores.map((s) => (
                                         <span key={s.label}>
                                           {s.label} {s.value ?? "—"}
                                         </span>
                                       ))}
                                     </div>
-                                    {fi.interpretation && <p className="mt-2 text-xs text-zinc-600">{fi.interpretation}</p>}
-                                    {fi.sampleNote && <p className="mt-1 text-xs text-amber-600">{fi.sampleNote}</p>}
+                                    {fi.interpretation && <p className="mt-2 text-sm text-zinc-600">{fi.interpretation}</p>}
+                                    {fi.sampleNote && <p className="mt-1 text-sm text-amber-600">{fi.sampleNote}</p>}
                                     {fi.decision && (
-                                      <p className="mt-2 text-xs text-zinc-600">
+                                      <p className="mt-2 text-sm text-zinc-600">
                                         <span className="font-semibold text-indigo-600">DECISION</span> {fi.decision}
                                       </p>
                                     )}
@@ -3188,7 +3192,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             그 기간 평균으로 집계된다(사용자 지시 2026-08-20). */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">COMPARED WITH?</h2>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-3 text-sm text-zinc-400">
             시간대별(전일/전주/전월/전분기/전년) 비교는 위 WHAT HAPPENED?를 참고하세요. 아래는 등록 경쟁채널을
             {isRangeMode ? " 선택 기간 평균 순위가 높은 순으로 나열하고, 그 이전 12주 평균 대비 등락과 기간 중 가장 잘 된 프로그램(시간대)을" : ` ${referenceLabel} 순위가 높은 순으로 나열하고, 최근 12주 평균 대비 ${referenceLabel} 등락과 ${referenceLabel} 가장 잘 된 프로그램(시간대)을`}
             함께 보여줍니다.
@@ -3226,7 +3230,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 merged.sort((a, b) => (b.today_rating ?? -Infinity) - (a.today_rating ?? -Infinity));
                 return (
                   <div className="mb-3 overflow-x-auto">
-                    <table className="w-full min-w-[560px] text-left text-xs">
+                    <table className="w-full min-w-[560px] text-left text-sm">
                       <thead>
                         <tr className="text-zinc-400">
                           {/* 사용자 지시(2026-08-21): 이 번호는 등수(순위)가 아니라 단순 나열 번호 —
@@ -3279,7 +3283,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   </div>
                 );
               })()}
-              <p className="mb-4 text-sm leading-relaxed text-zinc-700">{buildCompetitorNarrative(competitorInsightReport)}</p>
+              <p className="mb-4 text-base leading-relaxed text-zinc-700">{buildCompetitorNarrative(competitorInsightReport)}</p>
             </>
           )}
 
@@ -3289,8 +3293,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               상위 5개 채널로 좁힌 뒤 그 안에서 상위 7개 프로그램. */}
           {!showComparisonView && (
           <div className="mt-6 border-t border-zinc-100 pt-5">
-            <h3 className="mb-1 text-xs font-semibold text-zinc-500">{referenceLabel} 시간대별 경쟁 프로그램</h3>
-            <p className="mb-3 text-xs text-zinc-400">
+            <h3 className="mb-1 text-sm font-semibold text-zinc-500">{referenceLabel} 시간대별 경쟁 프로그램</h3>
+            <p className="mb-3 text-sm text-zinc-400">
               방영 시간이 겹치는 등록 경쟁채널 프로그램(시청률 상위 3개)을 나란히
               보여줍니다 — &ldquo;그 시간대에 경쟁채널이 무엇으로 잘했는가&rdquo;를 직접 비교할 수 있습니다.
             </p>
@@ -3305,7 +3309,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     return acc;
                   }, {})
                 ).map(([key, rows]) => (
-                  <div key={key} className="rounded-xl bg-zinc-50 p-3 text-xs">
+                  <div key={key} className="rounded-xl bg-zinc-50 p-3 text-sm">
                     <p className="mb-1.5 font-medium text-zinc-800">
                       {rows[0].our_start_time.slice(0, 5)} {rows[0].our_program_name}{" "}
                       <span className="font-normal text-zinc-500">({fmtR(rows[0].our_rating)})</span>
@@ -3339,15 +3343,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
 
           {!showComparisonView ? (
           <div className="mt-5 border-t border-zinc-100 pt-5">
-            <h3 className="mb-1 text-xs font-semibold text-zinc-500">{referenceLabel} 경쟁채널 TOP 5 프로그램</h3>
-            <p className="mb-3 text-xs text-zinc-400">
+            <h3 className="mb-1 text-sm font-semibold text-zinc-500">{referenceLabel} 경쟁채널 TOP 5 프로그램</h3>
+            <p className="mb-3 text-sm text-zinc-400">
               이 채널의 프로그램과 무관하게, 등록된 경쟁채널 중 {referenceLabel} 시청률이 가장
               높았던 방영 순위입니다(시장 전체 동향 참고용).
             </p>
             {competitorTopPrograms.length === 0 ? (
               <p className="text-sm text-zinc-400">{referenceLabel} 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
             ) : (
-              <ol className="space-y-1.5 text-xs">
+              <ol className="space-y-1.5 text-sm">
                 {competitorTopPrograms.map((p, i) => (
                   <li key={i} className="flex items-center gap-2">
                     <span className="w-4 shrink-0 text-right font-medium text-zinc-400">{i + 1}</span>
@@ -3363,10 +3367,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </div>
           ) : (
           <div className="mt-5 border-t border-zinc-100 pt-5">
-            <h3 className="mb-1 text-xs font-semibold text-zinc-500">
+            <h3 className="mb-1 text-sm font-semibold text-zinc-500">
               {comparisonLabel ? `${comparisonLabel} 대비 이번 기간` : "선택 기간"} 동기간 경쟁사 주요 프로그램 리뷰
             </h3>
-            <p className="mb-3 text-xs text-zinc-400">
+            <p className="mb-3 text-sm text-zinc-400">
               이 기간 평균 시청률이 가장 높았던 등록 경쟁채널 상위 5개 안에서, 그 기간 동안의{" "}
               <b>프로그램별 평균 시청률</b>이 높은 상위 7개를 뽑았습니다(일회성 반짝 편성이 아니라
               그 기간 내내 꾸준히 강했던 프로그램 기준 — 같은 프로그램은 한 번만 표시, 시장 전체
@@ -3375,11 +3379,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {hasPriorRange ? (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-zinc-600">이번 기간</p>
+                  <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
                   <CompetitorPeriodTopProgramsList rows={competitorPeriodTopPrograms} fmtR={fmtR} />
                 </div>
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
+                  <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
                   <CompetitorPeriodTopProgramsList rows={competitorPeriodTopProgramsPrior} fmtR={fmtR} />
                 </div>
               </div>
