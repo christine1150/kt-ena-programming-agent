@@ -1612,6 +1612,26 @@ function HourlyGraphPanel({
 // 나란히 비교할 수 있도록 표 렌더링을 재사용 가능한 컴포넌트로 뽑았다(색·수치 로직은 기존과 동일,
 // 각 패널은 자기 기간 안에서만 정규화한다 — 기간마다 표본 절대량이 달라 공유 스케일은 오히려
 // 오해를 줄 수 있음).
+// 사용자 지시(2026-08-21): 히트맵 셀의 시청률 숫자가 "잘 안 보인다" — 원인은 흰 배경 위에
+// accentColor를 알파 블렌딩한 배경색의 밝기와 무관하게 "농도(intensity)>0.5"라는 값 자체
+// 기준으로만 흰 글씨/회색 글씨를 골라서, accentColor가 밝은 채널(예: 하늘색 계열)은 흰 글씨가
+// 밝은 배경 위에서 대비가 낮았기 때문 — 배경색의 실제 밝기(luminance)를 계산해 진짜 어두울
+// 때만 흰 글씨를 쓰도록 고치고, 글씨도 좀 더 크고 굵게 키웠다.
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function cellTextColor(accentColor: string, alpha: number): string {
+  const ratio = alpha / 255;
+  const [r, g, b] = hexToRgb(accentColor);
+  const blendedR = 255 * (1 - ratio) + r * ratio;
+  const blendedG = 255 * (1 - ratio) + g * ratio;
+  const blendedB = 255 * (1 - ratio) + b * ratio;
+  const luminance = 0.299 * blendedR + 0.587 * blendedG + 0.114 * blendedB;
+  return luminance < 150 ? "#ffffff" : "#27272a"; // 배경이 실제로 어두울 때만 흰 글씨, 아니면 진한 글씨
+}
 function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlockRow[]; accentColor: string; fmtR: (v: number | null) => string }) {
   const byCell = new Map(pattern.map((r) => [`${r.dow}__${r.hour_block}`, r]));
   const maxRating = Math.max(1e-9, ...pattern.map((r) => r.avg_rating ?? 0));
@@ -1622,7 +1642,7 @@ function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlo
   // 만들던 방식을 버리고, 셀 크기·글자·여백을 줄여 카드 폭 안에 8행 전체가 들어오게 한다.
   return (
     <div className="w-full overflow-x-auto">
-      <table className="w-full table-fixed text-center text-[10px]">
+      <table className="w-full table-fixed text-center text-[11px]">
         <colgroup>
           <col className="w-11" />
         </colgroup>
@@ -1645,13 +1665,14 @@ function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlo
                 const cell = byCell.get(`${dow}__${hb}`);
                 const rating = cell?.avg_rating ?? null;
                 const intensity = rating !== null ? Math.min(1, rating / maxRating) : 0;
+                const alpha = Math.round(intensity * 200 + 20);
                 return (
                   <td key={dow} className="py-0.5 px-0.5">
                     <div
-                      className="mx-auto flex h-6 w-full items-center justify-center rounded font-medium"
+                      className="mx-auto flex h-6 w-full items-center justify-center rounded font-bold"
                       style={{
-                        backgroundColor: rating !== null ? `${accentColor}${Math.round(intensity * 200 + 20).toString(16).padStart(2, "0")}` : "#f4f4f5",
-                        color: rating !== null && intensity > 0.5 ? "#fff" : "#52525b",
+                        backgroundColor: rating !== null ? `${accentColor}${alpha.toString(16).padStart(2, "0")}` : "#f4f4f5",
+                        color: rating !== null ? cellTextColor(accentColor, alpha) : "#a1a1aa",
                       }}
                       title={cell ? `${label} ${hourBlockLabel(hb)}: ${fmtR(rating)} (표본 ${cell.sample_count}건)` : "표본 없음"}
                     >
@@ -3068,7 +3089,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     <th className="pb-1.5 pr-2 font-medium">태그</th>
                     <th className="pb-1.5 pr-2 font-medium">프로그램</th>
                     <th className="pb-1.5 pr-2 font-medium">제안 사항</th>
-                    <th className="pb-1.5 font-medium">Fit Score</th>
+                    {/* 사용자 지시(2026-08-21): "Fit Score"를 한국말로, 그 옆에 (신뢰도) 표기를
+                        붙여 아래 셀의 괄호 숫자가 무엇인지 헤더에서 바로 알 수 있게 한다. */}
+                    <th className="pb-1.5 font-medium">적합도(신뢰도)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3094,14 +3117,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                               {item.tag ? TAG_LABEL_KO[item.tag] : "—"}
                             </span>
                           </td>
-                          <td className="max-w-[180px] truncate py-2 pr-2 font-medium text-zinc-800">
+                          {/* 사용자 지시(2026-08-21): 프로그램 타이틀은 가독성이 좋게 볼드로. */}
+                          <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">
                             {item.programs?.canonical_name ?? "이름 없음"}
                           </td>
                           <td className="py-2 pr-2 text-zinc-600">{note}</td>
                           <td className="whitespace-nowrap py-2 text-zinc-500">
                             {item.fit_score?.toFixed(1) ?? "—"}
                             <span className="ml-1 text-[10px] text-zinc-400">
-                              (Confidence {item.confidence_pct?.toFixed(0) ?? "—"}%)
+                              ({item.confidence_pct?.toFixed(0) ?? "—"}%)
                             </span>
                           </td>
                         </tr>
