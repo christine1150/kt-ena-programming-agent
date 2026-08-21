@@ -100,6 +100,36 @@ const DAYPART_LABEL: Record<string, string> = {
   오후: "오후(14~18시)",
   저녁_심야: "저녁·심야(19~25시)",
 };
+// 사용자 지시(2026-08-21, 8-Step Insight Flow): WHY?의 Day/Time Slot 진단이 찾은 시간대를
+// OPPORTUNITY?/WHAT TO SCHEDULE?의 daypart 분류와 맞춰보기 위한 시간→daypart 매핑 —
+// get_channel_daypart_opportunity(SQL)가 쓰는 것과 동일한 고정 구간(새벽 02~08/오전 09~13/
+// 오후 14~18/저녁·심야 19~25)을 그대로 재사용한다(새 구간 정의 없음).
+function hourToDaypart(hour: number): string {
+  if (hour >= 2 && hour <= 8) return "새벽";
+  if (hour >= 9 && hour <= 13) return "오전";
+  if (hour >= 14 && hour <= 18) return "오후";
+  return "저녁_심야";
+}
+
+// 사용자 지시(2026-08-21, 8-Step Insight Flow): OPPORTUNITY?를 "성과 좋은 슬롯" 단일 축이 아니라
+// 4분류로 — 이미 있는 our_full_avg(보유 기간 전체 평균)/our_recent_avg(최근 1주)/gap_change(경쟁
+// 채널과의 격차가 좁혀지는 중인지)만으로 판단한다(새 데이터 없음).
+type OpportunityClass = "PROTECT" | "DEFEND" | "IMPROVE" | "OPPORTUNITY";
+const OPPORTUNITY_CLASS_LABEL: Record<OpportunityClass, string> = {
+  PROTECT: "PROTECT(유지)",
+  DEFEND: "DEFEND(방어 필요)",
+  IMPROVE: "IMPROVE(개선 필요)",
+  OPPORTUNITY: "OPPORTUNITY(성장 기회)",
+};
+function classifyDaypartOpportunity(d: DaypartOpportunityRow): OpportunityClass | null {
+  if (d.our_full_avg === null || d.our_recent_avg === null || d.gap_change === null) return null;
+  const strong = d.our_recent_avg >= d.our_full_avg; // 최근 1주가 보유 기간 전체 평균 이상이면 "성과 강함"
+  const pressureEasing = d.gap_change >= 0; // 격차가 좁혀지거나 안정 = 경쟁압력 완화
+  if (strong && pressureEasing) return "PROTECT";
+  if (strong && !pressureEasing) return "DEFEND";
+  if (!strong && !pressureEasing) return "IMPROVE";
+  return "OPPORTUNITY";
+}
 
 interface AffinityResult {
   channel_composition: number | null;
@@ -1122,6 +1152,182 @@ function contentFitsHelpScore(item: FitScoreItem): number {
   return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
 }
 
+// ── WHY? 진단(8-Step Insight Flow, 사용자 지시 2026-08-21) ──────────────
+// rootCauseAlert가 triggered일 때, PRD가 정한 6개 후보 변수 중 Repetition/Fatigue를 뺀 5개
+// (Lead-in/Target Profile/Day-Time Slot/Program 자체 성과/Competitive Environment)를 각각
+// 검증해 "실제 신호가 있는 것만" 후보로 모으고, 검증 순서가 아니라 편차 크기(strengthPct)가
+// 가장 큰 것을 CONTRIBUTOR로 선택한다("1순위로 확인했다고 원인으로 서술하지 않는다" 원칙).
+type WhyAction = "KEEP" | "STRENGTHEN" | "WATCH" | "TEST" | "MOVE" | "REPLACE";
+const WHY_ACTION_LABEL: Record<WhyAction, string> = {
+  KEEP: "KEEP — 안정적, 변경 필요성 낮음",
+  STRENGTHEN: "STRENGTHEN — 성과 우수, 확대 투입 검토",
+  WATCH: "WATCH — 이상징후는 있으나 표본/근거 부족, 추가 관찰 필요",
+  TEST: "TEST — 편성 변경 가설은 있으나 효과 미검증",
+  MOVE: "MOVE — 프로그램 경쟁력은 있으나 현재 슬롯 적합도 낮음",
+  REPLACE: "REPLACE — 장기 반복 약세 확인, 교체 적극 검토",
+};
+interface WhyCandidate {
+  variable: string;
+  strengthPct: number;
+  sentence: string;
+  daypart: string | null;
+  programName: string | null;
+}
+interface WhyDiagnosisResult {
+  leadSentence: string;
+  supportingBullets: string[];
+  decision: string;
+  action: WhyAction;
+  daypart: string | null;
+}
+function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | null): WhyDiagnosisResult | null {
+  const alert = data.rootCauseAlert;
+  if (!alert?.triggered) return null;
+  const ns = data.narrativeSignal;
+  const fmtR = (v: number | null) => fmt(v, data.channel.code === "SKYUHD" ? 5 : 3);
+  const candidates: WhyCandidate[] = [];
+
+  // ① Target Profile — 채널 전체 등락률보다 뚜렷이(1.3배 이상) 크고 음수인 연령대만.
+  if (ns?.demographics && ns.rating_delta_pct !== null) {
+    const worse = ns.demographics.filter(
+      (d) => d.delta_pct !== null && d.delta_pct < 0 && Math.abs(d.delta_pct) > Math.abs(ns.rating_delta_pct!) * 1.3
+    );
+    if (worse.length > 0) {
+      const worst = [...worse].sort((a, b) => (a.delta_pct ?? 0) - (b.delta_pct ?? 0))[0];
+      candidates.push({
+        variable: "Target Profile",
+        strengthPct: Math.abs(worst.delta_pct!),
+        sentence: `${shortDemoLabel(worst.label)}${josaIga(shortDemoLabel(worst.label))} ${fmtR(worst.today)}로 평소 대비 ${Math.abs(worst.delta_pct!).toFixed(1)}% 감소해, 전체 하락 대비 성과 감소폭이 가장 컸습니다.`,
+        daypart: null,
+        programName: null,
+      });
+    }
+  }
+
+  // ② Day/Time Slot — 오늘 vs 12주 baseline 시간대별 격차가 가장 큰(15% 이상) 구간.
+  const hourDeltas = data.hourlyPattern
+    .map((h) => {
+      const base = data.hourlyBaselinePattern.find((b) => b.broadcast_hour === h.broadcast_hour);
+      if (h.avg_rating === null || !base?.avg_rating) return null;
+      return { hour: h.broadcast_hour, deltaPct: ((h.avg_rating - base.avg_rating) / base.avg_rating) * 100 };
+    })
+    .filter((x): x is { hour: number; deltaPct: number } => x !== null && x.deltaPct < 0);
+  let slotDaypart: string | null = null;
+  let slotProgramName: string | null = null;
+  if (hourDeltas.length > 0) {
+    const worstHour = [...hourDeltas].sort((a, b) => a.deltaPct - b.deltaPct)[0];
+    if (Math.abs(worstHour.deltaPct) >= 15) {
+      const titleRow = data.hourlyProgramTitles.find((t) => t.broadcast_hour === worstHour.hour);
+      slotDaypart = hourToDaypart(worstHour.hour);
+      slotProgramName = titleRow?.program_names ?? null;
+      candidates.push({
+        variable: "Day/Time Slot",
+        strengthPct: Math.abs(worstHour.deltaPct),
+        sentence: `하락은 ${worstHour.hour}시대에 집중됐습니다(평소 대비 ${Math.abs(worstHour.deltaPct).toFixed(1)}% 낮음)${titleRow ? ` — 이 시간대 방영: ${titleRow.program_names}` : ""}.`,
+        daypart: slotDaypart,
+        programName: slotProgramName,
+      });
+    }
+  }
+
+  // ③ Program 자체 성과 — 기여도 산식(contributionScore)이 있으면 "기여"로, 없으면(단일 일자)
+  // "주요 변화 구간"으로만 표현(사용자 지시의 CONTRIBUTOR 단계 규칙).
+  let programCandidateName: string | null = null;
+  if (data.isRangeMode && data.periodProgramMovers.length > 0) {
+    const fallers = data.periodProgramMovers.filter((m) => m.rating_delta !== null && m.rating_delta < 0 && hasEnoughSample(m));
+    if (fallers.length > 0) {
+      const top = [...fallers].sort((a, b) => contributionScore(a) - contributionScore(b))[0];
+      if (top.prior_avg_rating && top.prior_avg_rating !== 0 && top.period_avg_rating !== null) {
+        const pctChange = ((top.period_avg_rating - top.prior_avg_rating) / top.prior_avg_rating) * 100;
+        programCandidateName = top.canonical_name;
+        candidates.push({
+          variable: "Program 자체 성과",
+          strengthPct: Math.abs(pctChange),
+          sentence: `'${top.canonical_name}'${josaIga(top.canonical_name)} 이전 대비 ${Math.abs(pctChange).toFixed(1)}% 하락해, 전체 하락에 가장 크게 기여한 것으로 보입니다.`,
+          daypart: null,
+          programName: top.canonical_name,
+        });
+      }
+    }
+  } else if (ns?.top_program_name && ns.top_program_rating !== null && ns.top_program_baseline_avg) {
+    const pctChange = ((ns.top_program_rating - ns.top_program_baseline_avg) / ns.top_program_baseline_avg) * 100;
+    if (pctChange < 0) {
+      programCandidateName = ns.top_program_name;
+      candidates.push({
+        variable: "Program 자체 성과",
+        strengthPct: Math.abs(pctChange),
+        sentence: `'${ns.top_program_name}'${josaEunNeun(ns.top_program_name)} 같은 슬롯 최근 평균 대비 ${Math.abs(pctChange).toFixed(1)}% 낮아, 주요 변화 구간으로 관찰됩니다.`,
+        daypart: null,
+        programName: ns.top_program_name,
+      });
+    }
+  }
+
+  // ④ Competitive Environment — rootCauseAlert가 이미 계산해둔 경쟁채널 변동(전주 대비 5%p 이상).
+  const compMoves = (alert.competitor_moves ?? []).filter((c) => c.change_pct > 0 && Math.abs(c.change_pct) >= 5);
+  if (compMoves.length > 0) {
+    const top = [...compMoves].sort((a, b) => b.change_pct - a.change_pct)[0];
+    candidates.push({
+      variable: "Competitive Environment",
+      strengthPct: Math.abs(top.change_pct),
+      sentence: `같은 기간 ${top.competitor_name}${josaIga(top.competitor_name)} ▲${top.change_pct.toFixed(1)}% 상승해, 경쟁채널로의 상대적 유출 가능성이 관찰됩니다.`,
+      daypart: null,
+      programName: null,
+    });
+  }
+
+  // ⑤ Lead-in — Day/Time Slot에서 찾은 프로그램명으로 fitScoreItems를 매칭했을 때만(추정 금지).
+  const leadInSourceName = slotProgramName ?? programCandidateName;
+  if (leadInSourceName && fitScoreItems) {
+    const match = fitScoreItems.find((f) => f.programs?.canonical_name && leadInSourceName.includes(f.programs.canonical_name));
+    const retention = match?.evidence.avg_lead_in_retention;
+    if (retention !== null && retention !== undefined && retention < 1) {
+      const deviationPct = Math.abs(retention - 1) * 100;
+      if (deviationPct >= 15) {
+        candidates.push({
+          variable: "Lead-in",
+          strengthPct: deviationPct,
+          sentence: `직전 프로그램 대비 유입 비율(Lead-in Retention)이 ${retention.toFixed(2)}로 낮아, Lead-in 영향 가능성이 관찰됩니다.`,
+          daypart: slotDaypart,
+          programName: leadInSourceName,
+        });
+      }
+    }
+  }
+
+  if (candidates.length === 0) {
+    return {
+      leadSentence: "하락은 확인되나 특정 요인을 판단할 근거가 부족합니다(판단 근거 부족).",
+      supportingBullets: [],
+      decision: "추가 데이터가 쌓인 뒤 재검토가 필요합니다.",
+      action: "WATCH",
+      daypart: null,
+    };
+  }
+
+  candidates.sort((a, b) => b.strengthPct - a.strengthPct);
+  const primary = candidates[0];
+  const daypart = primary.daypart ?? slotDaypart;
+  const slotLabel = daypart ? DAYPART_LABEL[daypart] ?? daypart : "이 구간";
+
+  // ACTION — WHY?의 새 narrative는 독자적으로 REPLACE를 판정하지 않고, 원인으로 지목된 프로그램이
+  // fitScoreItems에서 이미 SQL이 REPLACE/MOVE로 태그해둔 경우에만 그 태그를 그대로 echo한다.
+  let action: WhyAction = "WATCH";
+  const contributorProgramName = primary.programName;
+  if (contributorProgramName && fitScoreItems) {
+    const match = fitScoreItems.find((f) => f.programs?.canonical_name && contributorProgramName.includes(f.programs.canonical_name));
+    if (match?.tag === "REPLACE" || match?.tag === "MOVE") action = match.tag;
+  }
+
+  return {
+    leadSentence: primary.sentence,
+    supportingBullets: candidates.slice(1).map((c) => c.sentence),
+    decision: `${slotLabel}의 현재 편성을 유지할지, 이동/교체를 검토할지 우선 확인이 필요합니다.`,
+    action,
+    daypart,
+  };
+}
+
 // ── OPPORTUNITY?/WHAT TO SCHEDULE? 줄글 ──────────────────────────────
 // recentLabel: 기간 범위를 선택하면(사용자 지시) "최근 구간"이 그 선택한 기간 길이로 바뀐다
 // (route.ts에서 p_recent_days를 선택 기간 일수로 넘김) — 문구도 그에 맞춰 바꾼다.
@@ -1147,12 +1353,71 @@ function buildOpportunityNarrative(
     text += `반대로 ${DAYPART_LABEL[worst.daypart] ?? worst.daypart}는 ${recentLabel} 들어 경쟁채널이 오히려 더 강해지고 있어(격차 이전 평균 ${fmtR(worst.gap_full)} → ${recentLabel} ${fmtR(worst.gap_recent)}) 신규 편성보다는 기존 콘텐츠를 지키는 전략이 필요합니다. `;
   }
 
+  // 사용자 지시(2026-08-21, 8-Step Insight Flow): "성과 좋은 슬롯"이 아니라 4분류(PROTECT/DEFEND/
+  // IMPROVE/OPPORTUNITY)로 — WEAK SLOT과 OPPORTUNITY SLOT을 구분해서 보여준다.
+  const classified = valid
+    .map((d) => ({ d, cls: classifyDaypartOpportunity(d) }))
+    .filter((x): x is { d: DaypartOpportunityRow; cls: OpportunityClass } => x.cls !== null);
+  const opportunitySlots = classified.filter((x) => x.cls === "OPPORTUNITY");
+  const defendSlots = classified.filter((x) => x.cls === "DEFEND");
+  if (opportunitySlots.length > 0) {
+    const names = opportunitySlots.map((x) => DAYPART_LABEL[x.d.daypart] ?? x.d.daypart).join(", ");
+    text += `${names}${josaEunNeun(names)} 현재 평균 성과 자체는 낮지만 경쟁채널과의 격차가 개선되고 있어, 단순 약세 슬롯이 아니라 성장 기회(OPPORTUNITY) 슬롯으로 분류됩니다. `;
+  }
+  if (defendSlots.length > 0) {
+    const names = defendSlots.map((x) => DAYPART_LABEL[x.d.daypart] ?? x.d.daypart).join(", ");
+    text += `${names}${josaEunNeun(names)} 성과는 강하지만 경쟁압력이 높아지고 있어 방어(DEFEND)가 필요한 슬롯입니다. `;
+  }
+
   const candidates = (fitScoreItems ?? []).filter((i) => i.tag === "STRENGTHEN" || i.tag === "TEST").slice(0, 2);
   if (candidates.length > 0 && best.gap_change !== null && best.gap_change > 0) {
     const candidateText = candidates.map((c) => `'${c.programs?.canonical_name}'`).join(", ");
-    text += `아래 WHAT TO SCHEDULE?의 ${candidateText}${josaEulReul(candidateText)} ${DAYPART_LABEL[best.daypart] ?? best.daypart}에 배치하는 것을 검토해볼 만합니다.`;
+    text += `아래 WHAT TO SCHEDULE?의 ${candidateText}${josaEulReul(candidateText)} ${DAYPART_LABEL[best.daypart] ?? best.daypart}에 배치하는 것을 검토해볼 만합니다. `;
+    // 사용자 지시: STRENGTHEN/TEST 후보의 Target Affinity·Audience Flow가 높으면 그 근거를 덧붙인다.
+    const strongCandidate = candidates.find((c) => (c.target_affinity_score ?? 0) >= 70 || (c.audience_flow_score ?? 0) >= 70);
+    if (strongCandidate) {
+      const parts: string[] = [];
+      if ((strongCandidate.target_affinity_score ?? 0) >= 70) parts.push(`Target Affinity ${strongCandidate.target_affinity_score}`);
+      if ((strongCandidate.audience_flow_score ?? 0) >= 70) parts.push(`Audience Flow ${strongCandidate.audience_flow_score}`);
+      const partsText = parts.join(", ");
+      text += `'${strongCandidate.programs?.canonical_name}'${josaEunNeun(strongCandidate.programs?.canonical_name ?? "")} ${partsText}${josaIga(partsText)} 높아 해당 daypart로의 유입 가능성이 확인됩니다.`;
+    }
   }
   return text;
+}
+
+// ── Executive Programming Insight (사용자 지시 2026-08-21) ──────────────
+// WHY?/OPPORTUNITY?/WHAT TO SCHEDULE? 세 결과가 같은 daypart를 가리킬 때만 하나의 종합 판단
+// 문장을 만든다. 조건이 안 맞으면 null(추정으로 억지 연결 금지 — 세 섹션은 각자 독립적으로 표시).
+function buildExecutiveProgrammingInsight(
+  why: WhyDiagnosisResult | null,
+  daypartOpportunity: DaypartOpportunityRow[],
+  fitScoreItems: FitScoreItem[] | null
+): string | null {
+  if (!why || !why.daypart) return null;
+  const oppRow = daypartOpportunity.find((d) => d.daypart === why.daypart);
+  if (!oppRow) return null;
+  const cls = classifyDaypartOpportunity(oppRow);
+  if (cls !== "OPPORTUNITY" && cls !== "DEFEND") return null;
+  // findRecommendedDaypart와 같은 기준(이미 OPPORTUNITY?/WHAT TO SCHEDULE?가 쓰는 로직)으로,
+  // "지금은 다른 daypart에 있지만 why.daypart로 옮기면 좋을" STRENGTHEN/TEST 후보를 찾는다.
+  const candidate = (fitScoreItems ?? []).find(
+    (i) =>
+      (i.tag === "STRENGTHEN" || i.tag === "TEST") &&
+      findRecommendedDaypart(i.evidence.current_daypart, daypartOpportunity) === why.daypart
+  );
+  if (!candidate?.programs?.canonical_name || candidate.fit_score === null) return null;
+
+  const slotLabel = DAYPART_LABEL[why.daypart] ?? why.daypart;
+  const sentences: string[] = [];
+  sentences.push(`${slotLabel} 성과는 ${why.leadSentence.replace(/\.$/, "")}로, 단순 약세 슬롯보다는 ${OPPORTUNITY_CLASS_LABEL[cls]} 슬롯으로 판단됩니다.`);
+  sentences.push(
+    `'${candidate.programs.canonical_name}'의 Fit Score가 ${candidate.fit_score.toFixed(1)}로 확인돼, 이 슬롯에 우선 ${candidate.tag === "TEST" ? "TEST" : "배치"} 편성을 검토할 가치가 있습니다.`
+  );
+  if ((candidate.evidence.competitive_pressure ?? 0) >= 90) {
+    sentences.push(`다만 이 daypart의 경쟁압력이 높은 편이라(Competitive Pressure ${candidate.evidence.competitive_pressure?.toFixed(0)}) 즉각적인 REPLACE보다는 TEST 후 성과 확인을 권고합니다.`);
+  }
+  return sentences.join(" ");
 }
 
 // ── COMPARED WITH? 줄글 ──────────────────────────────────────────────
@@ -1612,6 +1877,67 @@ function buildScheduleRecommendationNote(
     default:
       return "—";
   }
+}
+
+// 사용자 지시(2026-08-21, 8-Step Insight Flow): WHAT TO SCHEDULE?의 Fit Score를 "결과값"이 아니라
+// "설명 가능한 점수"로 — 6개 하위지표는 이미 API가 내려주지만 지금은 펼침 패널에 표시가 안 된다.
+// 강점(≥70)·주의(≤40)를 항상 쌍으로 문장화하고(둘 다 없으면 그 문장은 생략), 태그별 DECISION
+// 질문 한 줄을 덧붙인다. 임의의 시청률 상승 수치나 Fatigue는 만들지 않는다(데이터 없음).
+const FIT_SUBSCORE_LABELS: { key: keyof FitScoreItem; label: string }[] = [
+  { key: "target_performance_score", label: "Target Performance" },
+  { key: "target_affinity_score", label: "Target Affinity" },
+  { key: "audience_engagement_score", label: "Audience Engagement" },
+  { key: "slot_performance_score", label: "Slot Performance" },
+  { key: "competitive_opportunity_score", label: "Competitive Opportunity" },
+  { key: "audience_flow_score", label: "Audience Flow" },
+];
+interface FitScoreInterpretation {
+  subScores: { label: string; value: number | null }[];
+  interpretation: string | null;
+  sampleNote: string | null;
+  decision: string | null;
+}
+function buildFitScoreInterpretation(item: FitScoreItem): FitScoreInterpretation {
+  const subScores = FIT_SUBSCORE_LABELS.map(({ key, label }) => ({ label, value: item[key] as number | null }));
+  const strengths = subScores
+    .filter((s) => s.value !== null && s.value >= 70)
+    .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+    .slice(0, 2);
+  const cautions = subScores
+    .filter((s) => s.value !== null && s.value <= 40)
+    .sort((a, b) => (a.value ?? 0) - (b.value ?? 0))
+    .slice(0, 2);
+  const strengthLabel = strengths.map((s) => `${s.label}(${s.value})`).join(", ");
+  const cautionLabel = cautions.map((s) => `${s.label}(${s.value})`).join(", ");
+  let interpretation: string | null = null;
+  if (strengths.length > 0 && cautions.length > 0) {
+    interpretation = `${strengthLabel}${josaIga(strengthLabel)} 높아 추천되었지만, ${cautionLabel}${josaEunNeun(cautionLabel)} 낮아 주의가 필요합니다.`;
+  } else if (strengths.length > 0) {
+    interpretation = `${strengthLabel}${josaIga(strengthLabel)} 높아 추천됩니다.`;
+  } else if (cautions.length > 0) {
+    interpretation = `${cautionLabel}${josaEunNeun(cautionLabel)} 낮아 주의가 필요합니다.`;
+  }
+  const sampleNote =
+    item.confidence_pct !== null && item.confidence_pct < 60
+      ? `표본 신뢰도가 낮아(${item.confidence_pct.toFixed(0)}%) 참고용으로만 활용하는 것을 권장합니다.`
+      : null;
+  const decision = (() => {
+    switch (item.tag) {
+      case "REPLACE":
+        return "이 편성을 교체할지 검토가 필요합니다.";
+      case "MOVE":
+        return "다른 시간대로 이동할지 검토가 필요합니다.";
+      case "STRENGTHEN":
+        return "자원을 추가 투입할지 검토가 필요합니다.";
+      case "KEEP":
+        return "현재 편성 유지가 타당한지 재확인이 필요합니다.";
+      case "TEST":
+        return "표본을 더 쌓은 뒤 재평가가 필요합니다.";
+      default:
+        return null;
+    }
+  })();
+  return { subScores, interpretation, sampleNote, decision };
 }
 
 export default function ChannelDeepDive({ code }: { code: string }) {
@@ -2438,6 +2764,39 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               ) : (
                 <p className="mt-3 text-xs text-zinc-400">같은 기간 5%p 이상 변동한 경쟁채널은 없습니다.</p>
               )}
+              {/* 사용자 지시(2026-08-21, 8-Step Insight Flow): CONTRIBUTOR(편차가 가장 큰 요인)를
+                  주도 요인으로, 나머지는 함께 관찰된 요인으로, 그다음 DECISION+ACTION을 덧붙인다. */}
+              {(() => {
+                const why = buildWhyDiagnosis(data, fitScoreItems);
+                if (!why) return null;
+                return (
+                  <div className="mt-3 border-t border-rose-200 pt-3">
+                    <p className="text-xs font-semibold text-rose-700">주도 요인(편차가 가장 큰 변수)</p>
+                    <p className="mt-1 text-xs text-zinc-600">{why.leadSentence}</p>
+                    {why.supportingBullets.length > 0 && (
+                      <>
+                        <p className="mt-2 text-xs font-semibold text-rose-700">함께 관찰된 요인</p>
+                        <ul className="mt-1 space-y-1">
+                          {why.supportingBullets.map((b, i) => (
+                            <li key={i} className="flex gap-1.5 text-xs text-zinc-600">
+                              <span className="shrink-0 text-rose-300">•</span>
+                              <span>{b}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    <div className="mt-3 rounded-xl bg-white p-2.5 ring-1 ring-rose-200">
+                      <p className="text-xs text-zinc-600">
+                        <span className="font-semibold text-rose-700">DECISION</span> {why.decision}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-600">
+                        <span className="font-semibold text-rose-700">ACTION</span> {WHY_ACTION_LABEL[why.action]}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             <p className="text-sm text-zinc-400">현재 이상 하락 패턴이 감지되지 않았습니다.</p>
@@ -2648,6 +3007,20 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </div>
           )}
           <p className="mb-3 text-sm leading-relaxed text-zinc-700">{buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD")}</p>
+          {/* 사용자 지시(2026-08-21): WHY?/OPPORTUNITY?/WHAT TO SCHEDULE? 세 결과가 같은 daypart를
+              가리킬 때만 종합 판단 문장(Executive Programming Insight)을 보여준다 — 조건이 안
+              맞으면 표시하지 않는다(추정으로 억지 연결 금지). 기존 카드 안에 콜아웃으로만 추가. */}
+          {(() => {
+            const why = buildWhyDiagnosis(data, fitScoreItems);
+            const insight = buildExecutiveProgrammingInsight(why, daypartOpportunity, fitScoreItems);
+            if (!insight) return null;
+            return (
+              <div className="mb-3 rounded-2xl bg-indigo-50 p-4">
+                <p className="mb-1 text-xs font-semibold text-indigo-700">Executive Programming Insight</p>
+                <p className="text-sm leading-relaxed text-indigo-900">{insight}</p>
+              </div>
+            );
+          })()}
 
           <p className="mb-2 text-xs text-zinc-400">
             기회 탐지(Opportunity Alert, 참고): 자사 최근 7일 평균이 이전 7일 대비 +10%p 이상 강세이면서,
@@ -2745,6 +3118,29 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                 <p>Competitive Pressure: {item.evidence.competitive_pressure?.toFixed(1) ?? "—"}</p>
                                 <p>Lead-in Retention: {item.evidence.avg_lead_in_retention?.toFixed(2) ?? "— (직전 프로그램 없음)"}</p>
                               </div>
+                              {/* 사용자 지시(2026-08-21, 8-Step Insight Flow): Fit Score를 "결과값"이
+                                  아니라 "설명 가능한 점수"로 — 6개 하위지표 + 강점/주의 해석 + DECISION. */}
+                              {(() => {
+                                const fi = buildFitScoreInterpretation(item);
+                                return (
+                                  <div className="mt-3 border-t border-zinc-200 pt-3">
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+                                      {fi.subScores.map((s) => (
+                                        <span key={s.label}>
+                                          {s.label} {s.value ?? "—"}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    {fi.interpretation && <p className="mt-2 text-xs text-zinc-600">{fi.interpretation}</p>}
+                                    {fi.sampleNote && <p className="mt-1 text-xs text-amber-600">{fi.sampleNote}</p>}
+                                    {fi.decision && (
+                                      <p className="mt-2 text-xs text-zinc-600">
+                                        <span className="font-semibold text-indigo-600">DECISION</span> {fi.decision}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </td>
                           </tr>
                         )}
