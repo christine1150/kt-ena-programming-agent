@@ -515,15 +515,16 @@ const SECTION_TITLE_P2 = "font-heading mb-1 text-xl font-bold tracking-tight tex
 // 기능·데이터는 그대로, 표기만 추가).
 const ENG_TITLE_ANNOTATION = "ml-2 align-middle text-sm font-normal text-zinc-400";
 
-// 2026-08-21 리파인: "태그들도 디자인적으로 예쁘게 색감도 잘 조율" 지시 — 색상마다 bg-100/
-// text-700로 진하기가 제각각이던 것을 bg-50 + text-700 + ring-1(같은 색 200단계) 한 패턴으로
-// 통일해 톤을 맞추고, 옅은 배경 위에 은은한 테두리를 둬 더 정교한 느낌을 냈다.
-const TAG_STYLE: Record<string, string> = {
-  STRENGTHEN: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
-  KEEP: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200",
-  MOVE: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
-  REPLACE: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200",
-  TEST: "bg-zinc-100 text-zinc-600 ring-1 ring-inset ring-zinc-200",
+// 사용자 재지시(2026-08-22): "태그 디자인이 AI 느낌이 난다" — 채도 높은 파스텔 배경(bg-50)의
+// 둥근 필(rounded-full) 배지는 챗봇/생성형 UI에서 흔히 보이는 패턴이라, Linear/Stripe 류 프로덕트
+// UI에서 흔한 "점(dot) 표시자 + 화이트 배경 + 각진 모서리" 태그로 교체했다 — 색은 배경이 아니라
+// 작은 점 하나에만 쓰고 나머지는 무채색으로 절제해 더 차분하고 전문적인 느낌을 낸다.
+const TAG_DOT_COLOR: Record<string, string> = {
+  STRENGTHEN: "#059669", // emerald-600
+  KEEP: "#0284c7", // sky-600
+  MOVE: "#d97706", // amber-600
+  REPLACE: "#e11d48", // rose-600
+  TEST: "#71717a", // zinc-500
 };
 // 사용자 지시(2026-08-21): WHAT TO SCHEDULE? 배지의 영문 태그(STRENGTHEN/KEEP/MOVE/REPLACE/
 // TEST)를 한글로 — "유지, 테스트, 이동 검토, 교체 검토 등으로".
@@ -536,13 +537,24 @@ const TAG_LABEL_KO: Record<string, string> = {
 };
 
 // skyUHD 전용 대체 지표(SkyuhdScorecardItem)의 4단계 분류 — PRD Fit Score의 5태그(STRENGTHEN 등)
-// 와는 별개 개념이라 이름·스타일을 겹치지 않게 분리한다(사용자 지시, 2026-08-21).
-const SKYUHD_TIER_STYLE: Record<string, string> = {
-  강세: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
-  보통: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200",
-  약세: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
-  표본부족: "bg-zinc-100 text-zinc-600 ring-1 ring-inset ring-zinc-200",
+// 와는 별개 개념이라 이름·스타일을 겹치지 않게 분리한다(사용자 지시, 2026-08-21). 색은 TAG_DOT_COLOR와
+// 같은 점(dot) 방식으로 통일(2026-08-22 리파인).
+const SKYUHD_TIER_DOT_COLOR: Record<string, string> = {
+  강세: "#059669",
+  보통: "#0284c7",
+  약세: "#d97706",
+  표본부족: "#71717a",
 };
+// 사용자 재지시(2026-08-22): 태그 하나를 이 함수로 통일 렌더링 — 흰 배경 + 얇은 테두리 + 작은
+// 색 점(dot) + 무채색 텍스트(각진 rounded-md, 파스텔 배경 없음)로 "생성형 UI 배지" 인상을 줄였다.
+function DotTag({ label, color }: { label: string; color: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-[12.5px] font-semibold tracking-tight text-zinc-700">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      {label}
+    </span>
+  );
+}
 const SKYUHD_MIN_AIR_COUNT_FOR_TIER = 5; // 이 미만이면 percentile을 믿지 않고 "표본부족"으로 표시.
 
 function skyuhdScorecardTier(item: SkyuhdScorecardItem): "강세" | "보통" | "약세" | "표본부족" {
@@ -1715,6 +1727,46 @@ function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(full, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
+// 사용자 지시(2026-08-22, ENA STORY 특화 디자인 확장): "도표·차트·인포그래픽의 분위기도 같은
+// 톤(분홍·보라·하양·주황 그라데이션)으로" — 크기/강도를 나타내는 시각 요소(히트맵·미니 막대 등)
+// 전용 3단 그라데이션(보라→핑크→주황, 헤더와 동일한 색상 앵커)을 t(0~1)로 보간한다. 상승/하락
+// 같은 의미(sentiment) 색(초록/빨강)은 가독성을 위해 그대로 유지 — 크기만 나타내는 요소에만 적용.
+function enaStoryGradientRgb(t: number): [number, number, number] {
+  const clamped = Math.max(0, Math.min(1, t));
+  const stops: [number, [number, number, number]][] = [
+    [0, [120, 40, 224]], // #7828e0
+    [0.5, [244, 63, 196]], // #f43fc4
+    [1, [255, 176, 32]], // #ffb020
+  ];
+  let lo = stops[0];
+  let hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (clamped >= stops[i][0] && clamped <= stops[i + 1][0]) {
+      lo = stops[i];
+      hi = stops[i + 1];
+      break;
+    }
+  }
+  const span = hi[0] - lo[0] || 1;
+  const localT = (clamped - lo[0]) / span;
+  return [
+    Math.round(lo[1][0] + (hi[1][0] - lo[1][0]) * localT),
+    Math.round(lo[1][1] + (hi[1][1] - lo[1][1]) * localT),
+    Math.round(lo[1][2] + (hi[1][2] - lo[1][2]) * localT),
+  ];
+}
+function enaStoryGradientColor(t: number): string {
+  const [r, g, b] = enaStoryGradientRgb(t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+// 히트맵처럼 흰 배경 위에서 강도(0~1)만큼 그라데이션 색을 옅게/짙게 섞어야 할 때(기존
+// accentColor+16진 alpha 채널 방식과 같은 시각 효과, rgb() 튜플이라 hex alpha를 못 써서
+// 직접 흰색과 블렌딩).
+function enaStoryGradientBlendWithWhite(t: number, alpha01: number): string {
+  const [r, g, b] = enaStoryGradientRgb(t);
+  const mix = (c: number) => Math.round(255 * (1 - alpha01) + c * alpha01);
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
 function cellTextColor(accentColor: string, alpha: number): string {
   const ratio = alpha / 255;
   const [r, g, b] = hexToRgb(accentColor);
@@ -1774,7 +1826,7 @@ const OPPORTUNITY_DAYPART_ORDER: { key: string; label: string }[] = [
   { key: "오후", label: "오후" },
   { key: "저녁_심야", label: "저녁심야" },
 ];
-function OpportunityDaypartTiles({ rows, fmtR }: { rows: DaypartOpportunityRow[]; fmtR: (v: number | null) => string }) {
+function OpportunityDaypartTiles({ rows, fmtR, isEnaStory }: { rows: DaypartOpportunityRow[]; fmtR: (v: number | null) => string; isEnaStory?: boolean }) {
   const byDaypart = new Map(rows.map((r) => [r.daypart, r]));
   return (
     <div className="mb-4 flex gap-1.5">
@@ -1782,7 +1834,10 @@ function OpportunityDaypartTiles({ rows, fmtR }: { rows: DaypartOpportunityRow[]
         const row = byDaypart.get(dp.key);
         const gapChange = row?.gap_change ?? null;
         const isOpportunity = gapChange !== null && gapChange >= 0;
-        const bg = gapChange === null ? "#f0f0f3" : isOpportunity ? "#059669" : "#e11d48";
+        // 사용자 지시(2026-08-22, ENA STORY 특화 디자인 확장): 원색 초록/빨강이 분홍·보라·주황
+        // 팔레트와 부딪혀, 이 채널만 핑크(기회)/짙은 보라(약세)로 톤을 맞췄다(의미는 동일 — 방향
+        // 판단은 색이 아니라 title 텍스트로도 항상 확인 가능).
+        const bg = gapChange === null ? "#f0f0f3" : isEnaStory ? (isOpportunity ? "#f43fc4" : "#7828e0") : isOpportunity ? "#059669" : "#e11d48";
         const opacity = gapChange === null ? 1 : Math.min(1, 0.35 + Math.min(1, Math.abs(gapChange) / 0.05) * 0.65);
         const title = row
           ? `${dp.label}: 격차 ${fmtR(row.gap_full)} → ${fmtR(row.gap_recent)}(${gapChange !== null ? (gapChange >= 0 ? "기회 ▲" : "약세 ▼") + " " + Math.abs(gapChange).toFixed(4) : "—"})`
@@ -1798,20 +1853,33 @@ function OpportunityDaypartTiles({ rows, fmtR }: { rows: DaypartOpportunityRow[]
   );
 }
 
-function MiniPctlBar({ value, accentColor }: { value: number | null; accentColor: string }) {
+function MiniPctlBar({ value, accentColor, isEnaStory }: { value: number | null; accentColor: string; isEnaStory?: boolean }) {
   if (value === null) return <span className="text-zinc-600">—</span>;
   const clamped = Math.max(0, Math.min(100, value));
+  // 사용자 지시(2026-08-22, ENA STORY 특화 디자인 확장): CONTENT FITS?/TOP20 미니 막대도 값
+  // 크기에 따라 보라→핑크→주황으로 색이 이어지는 그라데이션으로.
+  const barColor = isEnaStory ? enaStoryGradientColor(clamped / 100) : accentColor;
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-zinc-100">
-        <span className="block h-full rounded-full" style={{ width: `${clamped}%`, backgroundColor: accentColor }} />
+        <span className="block h-full rounded-full" style={{ width: `${clamped}%`, backgroundColor: barColor }} />
       </span>
       <span className="tabular-nums text-zinc-600">{value.toFixed(0)}</span>
     </span>
   );
 }
 
-function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlockRow[]; accentColor: string; fmtR: (v: number | null) => string }) {
+function DowHourBlockTable({
+  pattern,
+  accentColor,
+  fmtR,
+  isEnaStory,
+}: {
+  pattern: DowHourBlockRow[];
+  accentColor: string;
+  fmtR: (v: number | null) => string;
+  isEnaStory?: boolean;
+}) {
   const byCell = new Map(pattern.map((r) => [`${r.dow}__${r.hour_block}`, r]));
   const maxRating = Math.max(1e-9, ...pattern.map((r) => r.avg_rating ?? 0));
   if (pattern.length === 0) {
@@ -1848,13 +1916,17 @@ function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlo
                 const rating = cell?.avg_rating ?? null;
                 const intensity = rating !== null ? Math.min(1, rating / maxRating) : 0;
                 const alpha = Math.round(intensity * 200 + 20);
+                // 사용자 지시(2026-08-22, ENA STORY 특화 디자인 확장): 히트맵도 보라→핑크→주황
+                // 그라데이션으로 — 강도(alpha)는 그대로 흰 배경과의 블렌딩 비율로 재사용한다.
+                const bgColor = rating === null ? "#f4f4f5" : isEnaStory ? enaStoryGradientBlendWithWhite(intensity, alpha / 255) : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
+                const textColor = rating === null ? "#a1a1aa" : isEnaStory ? cellTextColor(enaStoryGradientColor(intensity), alpha) : cellTextColor(accentColor, alpha);
                 return (
                   <td key={dow} className="py-0.5 px-0.5">
                     <div
                       className="mx-auto flex h-6 w-full items-center justify-center rounded font-bold"
                       style={{
-                        backgroundColor: rating !== null ? `${accentColor}${alpha.toString(16).padStart(2, "0")}` : "#f4f4f5",
-                        color: rating !== null ? cellTextColor(accentColor, alpha) : "#a1a1aa",
+                        backgroundColor: bgColor,
+                        color: textColor,
                       }}
                       title={cell ? `${label} ${hourBlockLabel(hb)}: ${fmtR(rating)} (표본 ${cell.sample_count}건)` : "표본 없음"}
                     >
@@ -1878,16 +1950,29 @@ function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlo
 // 인포그래픽 제안(사용자 지시 2026-08-22, Page 2 전체 구현): TOP 20 표에 미니 막대 — 목록 안
 // 최댓값 기준으로 상대 크기를 시각화(값이 없는(prior) 기간 데이터 요구 없이 이미 있는 avg_rating만
 // 재사용, Page 1의 MiniPctlBar와 같은 패턴).
-function TopProgramMiniBar({ value, max, accentColor }: { value: number | null; max: number; accentColor: string }) {
+function TopProgramMiniBar({ value, max, accentColor, isEnaStory }: { value: number | null; max: number; accentColor: string; isEnaStory?: boolean }) {
   if (value === null || max <= 0) return null;
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  const barColor = isEnaStory ? enaStoryGradientColor(pct / 100) : accentColor;
   return (
     <span className="inline-block h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-zinc-100" title={`목록 내 최고 대비 ${pct.toFixed(0)}%`}>
-      <span className="block h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: accentColor }} />
+      <span className="block h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: barColor }} />
     </span>
   );
 }
-function TopProgramListItems({ rows, fmtR, indexOffset = 0, accentColor = "#71717a" }: { rows: TopProgramRow[]; fmtR: (v: number | null) => string; indexOffset?: number; accentColor?: string }) {
+function TopProgramListItems({
+  rows,
+  fmtR,
+  indexOffset = 0,
+  accentColor = "#71717a",
+  isEnaStory,
+}: {
+  rows: TopProgramRow[];
+  fmtR: (v: number | null) => string;
+  indexOffset?: number;
+  accentColor?: string;
+  isEnaStory?: boolean;
+}) {
   const shareOutliers = findShareOutliers(rows);
   const maxRating = Math.max(0.0001, ...rows.map((r) => r.avg_rating ?? 0));
   return (
@@ -1904,7 +1989,7 @@ function TopProgramListItems({ rows, fmtR, indexOffset = 0, accentColor = "#7171
                 {p.most_common_start_hour !== null ? ` · 주로 ${p.most_common_start_hour}시` : ""}
               </span>
               <span className="shrink-0 text-sm text-zinc-400">{p.air_count}회 방영</span>
-              <TopProgramMiniBar value={p.avg_rating} max={maxRating} accentColor={accentColor} />
+              <TopProgramMiniBar value={p.avg_rating} max={maxRating} accentColor={accentColor} isEnaStory={isEnaStory} />
               <span className="w-16 shrink-0 text-right font-semibold text-zinc-900">{fmtR(p.avg_rating)}</span>
             </div>
             {shareRank !== undefined && (
@@ -1979,12 +2064,14 @@ function TopProgramsList({
   isSkyUhd,
   shareTop,
   accentColor,
+  isEnaStory,
 }: {
   rows: TopProgramRow[];
   fmtR: (v: number | null) => string;
   isSkyUhd?: boolean;
   shareTop?: TopShareProgramRow[];
   accentColor?: string;
+  isEnaStory?: boolean;
 }) {
   if (rows.length === 0) {
     return <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>;
@@ -1992,7 +2079,7 @@ function TopProgramsList({
   if (!isSkyUhd) {
     return (
       <div>
-        <ol className="space-y-1 text-sm">{<TopProgramListItems rows={rows} fmtR={fmtR} accentColor={accentColor} />}</ol>
+        <ol className="space-y-1 text-sm">{<TopProgramListItems rows={rows} fmtR={fmtR} accentColor={accentColor} isEnaStory={isEnaStory} />}</ol>
         {shareTop && <TopShareOutsideList shareTop={shareTop} topRows={rows} fmtR={fmtR} />}
       </div>
     );
@@ -2001,11 +2088,11 @@ function TopProgramsList({
   const lowSampleRows = rows.filter((p) => p.air_count < 5);
   return (
     <div>
-      <ol className="space-y-1 text-sm">{<TopProgramListItems rows={mainRows} fmtR={fmtR} accentColor={accentColor} />}</ol>
+      <ol className="space-y-1 text-sm">{<TopProgramListItems rows={mainRows} fmtR={fmtR} accentColor={accentColor} isEnaStory={isEnaStory} />}</ol>
       {lowSampleRows.length > 0 && (
         <div className="mt-3 border-t border-dashed border-zinc-200 pt-3">
           <p className="mb-1 text-sm text-zinc-400">표본 부족(편성 5회 미만) — 참고용으로만 활용하세요.</p>
-          <ol className="space-y-1 text-sm">{<TopProgramListItems rows={lowSampleRows} fmtR={fmtR} indexOffset={mainRows.length} accentColor={accentColor} />}</ol>
+          <ol className="space-y-1 text-sm">{<TopProgramListItems rows={lowSampleRows} fmtR={fmtR} indexOffset={mainRows.length} accentColor={accentColor} isEnaStory={isEnaStory} />}</ol>
         </div>
       )}
       {shareTop && <TopShareOutsideList shareTop={shareTop} topRows={rows} fmtR={fmtR} />}
@@ -2880,16 +2967,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
                 <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
-                <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} />
+                <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
               </div>
               <div>
                 <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
-                <DowHourBlockTable pattern={dowHourBlockPatternPrior} accentColor={accentColor} fmtR={fmtR} />
+                <DowHourBlockTable pattern={dowHourBlockPatternPrior} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
               </div>
             </div>
           ) : (
             <>
-              <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} />
+              <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
                 <p className="mt-3 text-base leading-relaxed text-zinc-700">
                   {hourBlockStrength.strongest !== null && `전체적으로 ${hourBlockLabel(hourBlockStrength.strongest)}가 가장 강세이고`}
@@ -2913,11 +3000,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
-                  <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} />
+                  <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} />
                 </div>
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
-                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={priorTopSharePrograms} accentColor={accentColor} />
+                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={priorTopSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} />
                 </div>
               </div>
               {buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior) && (
@@ -2928,7 +3015,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>
           ) : (
             <>
-              <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} />
+              <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
                 <p className="mt-3 text-base leading-relaxed text-zinc-700">
                   위 상위 콘텐츠들과 같은 기간 기준으로 볼 때,
@@ -3198,6 +3285,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <p className="mb-3 text-sm text-zinc-400">
             왼쪽 2개는 가장 많이 본 연령대, 오른쪽 2개는 등락폭이 가장 커서 주목해야 할 연령대입니다(전체 12개
             연령대 중 선정). 등락률은 {showComparisonView ? `${comparisonLabel ?? "전"} 기간` : "최근 한 달 평균"} 대비입니다.
+            {/* 사용자 질문(2026-08-22): "하단 색깔 그래프가 뭘 표현하는지" — 각 타일 하단의 막대는
+                위 등락률(▲▼ %)을 가운데 기준선(0%) 기준 좌우로 그린 것입니다(오른쪽·초록=상승,
+                왼쪽·빨강=하락, 막대 길이=등락폭 크기·±50% 이상은 꽉 찬 채로 고정). */}
+            {" "}각 타일 하단의 막대는 그 등락률을 가운데(0%) 기준선에서 좌우로 그린 것입니다 — 오른쪽/초록은
+            상승, 왼쪽/빨강은 하락, 막대가 길수록 등락폭이 큽니다.
           </p>
           {(() => {
             const items: WhoIsWatchingItem[] = showComparisonView
@@ -3315,7 +3407,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             </td>
                             <td className="py-1.5 font-semibold text-zinc-900">
                               <span className="inline-flex items-center gap-1.5">
-                                <MiniPctlBar value={item.rating_pctl} accentColor={accentColor} />
+                                <MiniPctlBar value={item.rating_pctl} accentColor={accentColor} isEnaStory={isEnaStory} />
                                 {item.rating_pctl !== null && <span className="text-[12px] font-normal text-zinc-400">(상위 {(100 - item.rating_pctl).toFixed(0)}%)</span>}
                               </span>
                             </td>
@@ -3364,9 +3456,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         {contentFitsRows.map((item) => (
                           <tr key={item.program_id} className="border-t border-zinc-100">
                             <td className="py-1.5 font-medium text-zinc-800">{item.programs?.canonical_name ?? "이름 없음"}</td>
-                            <td className="py-1.5"><MiniPctlBar value={item.target_performance_score ?? null} accentColor={accentColor} /></td>
-                            <td className="py-1.5"><MiniPctlBar value={item.target_affinity_score ?? null} accentColor={accentColor} /></td>
-                            <td className="py-1.5"><MiniPctlBar value={item.audience_engagement_score ?? null} accentColor={accentColor} /></td>
+                            <td className="py-1.5"><MiniPctlBar value={item.target_performance_score ?? null} accentColor={accentColor} isEnaStory={isEnaStory} /></td>
+                            <td className="py-1.5"><MiniPctlBar value={item.target_affinity_score ?? null} accentColor={accentColor} isEnaStory={isEnaStory} /></td>
+                            <td className="py-1.5"><MiniPctlBar value={item.audience_engagement_score ?? null} accentColor={accentColor} isEnaStory={isEnaStory} /></td>
                             <td className="py-1.5 font-semibold text-zinc-900">{contentFitsHelpScore(item).toFixed(0)}</td>
                           </tr>
                         ))}
@@ -3404,7 +3496,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             상대적으로 약해진) 시간대가 편성 기회입니다.
             {isRangeMode && " 기간을 선택하면 \"최근 구간\"이 그 선택한 기간 길이로 바뀝니다."}
           </p>
-          {daypartOpportunity.length > 0 && <OpportunityDaypartTiles rows={daypartOpportunity} fmtR={fmtR} />}
+          {daypartOpportunity.length > 0 && <OpportunityDaypartTiles rows={daypartOpportunity} fmtR={fmtR} isEnaStory={isEnaStory} />}
           {daypartOpportunity.length > 0 && (
             <div className="mb-3 overflow-x-auto">
               <table className="w-full min-w-[520px] text-left text-sm">
@@ -3522,9 +3614,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         return (
                           <tr key={item.program_id} className="border-t border-zinc-100 align-top">
                             <td className="whitespace-nowrap py-2 pr-2">
-                              <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[13px] font-semibold ${SKYUHD_TIER_STYLE[tier]}`}>
-                                {tier}
-                              </span>
+                              <DotTag label={tier} color={SKYUHD_TIER_DOT_COLOR[tier]} />
                             </td>
                             <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">{item.program_name}</td>
                             <td className="py-2 pr-2 text-zinc-600">{buildSkyuhdScorecardNote(item)}</td>
@@ -3579,13 +3669,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           onClick={() => setExpandedProgram(isOpen ? null : item.program_id)}
                         >
                           <td className="whitespace-nowrap py-2 pr-2">
-                            <span
-                              className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[13px] font-semibold ${
-                                item.tag ? TAG_STYLE[item.tag] : "bg-zinc-100 text-zinc-500"
-                              }`}
-                            >
-                              {item.tag ? TAG_LABEL_KO[item.tag] : "—"}
-                            </span>
+                            {item.tag ? <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} /> : <span className="text-zinc-400">—</span>}
                           </td>
                           {/* 사용자 지시(2026-08-21): 프로그램 타이틀은 가독성이 좋게 볼드로. */}
                           <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">
@@ -3797,14 +3881,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                               )}
                             </td>
                             <td className="py-1.5 text-zinc-600">
+                              {/* 사용자 재지시(2026-08-22): 프로그램명만 채널명과 같은 굵기(font-medium)로
+                                  잘 보이게, 뒤 괄호(평균/회차 등 부가 정보)는 기존처럼 옅게. */}
                               {c.top_program_name ? (
                                 <>
-                                  {c.top_program_name}{" "}
-                                  {c.top_program_start_time
-                                    ? `(${fmtTime(c.top_program_start_time)}, ${fmtR(c.top_program_rating)})`
-                                    : c.top_program_rating !== null
-                                      ? `(평균 ${fmtR(c.top_program_rating)}${c.top_program_air_count ? `, ${c.top_program_air_count}회` : ""})`
-                                      : ""}
+                                  <span className="font-medium text-zinc-800">{c.top_program_name}</span>{" "}
+                                  <span className="text-zinc-500">
+                                    {c.top_program_start_time
+                                      ? `(${fmtTime(c.top_program_start_time)}, ${fmtR(c.top_program_rating)})`
+                                      : c.top_program_rating !== null
+                                        ? `(평균 ${fmtR(c.top_program_rating)}${c.top_program_air_count ? `, ${c.top_program_air_count}회` : ""})`
+                                        : ""}
+                                  </span>
                                 </>
                               ) : (
                                 <span className="text-zinc-300">—</span>
@@ -3835,42 +3923,70 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {competitorProgramOverlap.length === 0 ? (
               <p className="text-sm text-zinc-400">{referenceLabel} 시간대가 겹치는 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
             ) : (
-              <div className="space-y-2">
-                {Object.entries(
+              // 사용자 재지시(2026-08-22): "당사 윗줄/경쟁사 아랫줄" 2줄 구조 대신 당사 프로그램당
+              // 한 줄(표 행)로 — 시간·당사 프로그램은 왼쪽 고정 열, 경쟁 프로그램 최대 3개는
+              // 각자의 열에 나란히(칸 안에서만 2줄: 채널·시간 / 프로그램명·시청률·격차).
+              (() => {
+                const grouped = Object.entries(
                   competitorProgramOverlap.reduce<Record<string, CompetitorOverlapRow[]>>((acc, row) => {
                     const key = `${row.our_start_time}__${row.our_program_name}`;
                     (acc[key] ??= []).push(row);
                     return acc;
                   }, {})
-                ).map(([key, rows]) => (
-                  <div key={key} className="rounded-xl bg-zinc-50 p-3 text-sm">
-                    <p className="mb-1.5 font-medium text-zinc-800">
-                      {rows[0].our_start_time.slice(0, 5)} {rows[0].our_program_name}{" "}
-                      <span className="font-normal text-zinc-500">({fmtR(rows[0].our_rating)})</span>
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {rows.map((r, i) => (
-                        <span
-                          key={i}
-                          className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 ring-1 ring-zinc-200"
-                        >
-                          <span className="font-medium text-zinc-700">{r.competitor_name}</span>
-                          <span className="text-zinc-500">
-                            {r.competitor_start_time.slice(0, 5)} {r.competitor_program_name}
-                          </span>
-                          <span className="text-zinc-800">{fmtR(r.competitor_rating)}</span>
-                          {r.rating_gap !== null && (
-                            <span className={r.rating_gap >= 0 ? "text-rose-600" : "text-emerald-600"}>
-                              ({r.rating_gap >= 0 ? "+" : ""}
-                              {r.rating_gap.toFixed(4)})
-                            </span>
-                          )}
-                        </span>
-                      ))}
-                    </div>
+                );
+                return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-left text-sm">
+                      <thead>
+                        <tr className="text-zinc-400">
+                          <th className="w-14 pb-1.5 pr-2 font-medium">시간</th>
+                          <th className="pb-1.5 pr-3 font-medium">당사 프로그램</th>
+                          <th className="pb-1.5 pr-3 font-medium">경쟁 1</th>
+                          <th className="pb-1.5 pr-3 font-medium">경쟁 2</th>
+                          <th className="pb-1.5 font-medium">경쟁 3</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {grouped.map(([key, rows]) => (
+                          <tr key={key} className="border-t border-zinc-100 align-top">
+                            <td className="py-2 pr-2 text-zinc-500">{rows[0].our_start_time.slice(0, 5)}</td>
+                            <td className="py-2 pr-3">
+                              <span className="font-medium text-zinc-800">{rows[0].our_program_name}</span>{" "}
+                              <span className="text-zinc-500">({fmtR(rows[0].our_rating)})</span>
+                            </td>
+                            {[0, 1, 2].map((idx) => {
+                              const r = rows[idx];
+                              return (
+                                <td key={idx} className="py-2 pr-3">
+                                  {r ? (
+                                    <div>
+                                      <p className="text-[11px] text-zinc-400">
+                                        {r.competitor_name} · {r.competitor_start_time.slice(0, 5)}
+                                      </p>
+                                      <p className="text-zinc-700">
+                                        {r.competitor_program_name} <span className="font-semibold text-zinc-800">{fmtR(r.competitor_rating)}</span>
+                                        {r.rating_gap !== null && (
+                                          <span className={r.rating_gap >= 0 ? "text-rose-600" : "text-emerald-600"}>
+                                            {" "}
+                                            ({r.rating_gap >= 0 ? "+" : ""}
+                                            {r.rating_gap.toFixed(3)})
+                                          </span>
+                                        )}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <span className="text-zinc-300">—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
+                );
+              })()
             )}
           </div>
           )}
@@ -3885,15 +4001,21 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {competitorTopPrograms.length === 0 ? (
               <p className="text-sm text-zinc-400">{referenceLabel} 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
             ) : (
+              // 사용자 재지시(2026-08-22): "시청률이 제목과 우측 끝으로 멀리 떨어져 가독성이
+              // 떨어진다" — ml-auto(카드 전체 폭 끝까지 밀어냄) 대신, 제목 열에 고정 폭(줄바꿈
+              // 허용)을 줘 시청률이 그 바로 뒤에 오도록 했다. 모든 행이 같은 고정 폭을 쓰므로
+              // 시청률끼리는 여전히 세로로 정렬된다(요청한 두 조건 모두 충족).
               <ol className="space-y-1.5 text-sm">
                 {competitorTopPrograms.map((p, i) => (
-                  <li key={i} className="flex items-center gap-2">
+                  <li key={i} className="flex items-baseline gap-2">
                     <span className="w-4 shrink-0 text-right font-medium text-zinc-400">{i + 1}</span>
-                    <span className="font-medium text-zinc-700">{p.competitor_name}</span>
-                    <span className="text-zinc-500">
-                      {p.start_time.slice(0, 5)} {p.program_name}
+                    <span className="w-56 shrink-0">
+                      <span className="font-medium text-zinc-700">{p.competitor_name}</span>{" "}
+                      <span className="text-zinc-500">
+                        {p.start_time.slice(0, 5)} {p.program_name}
+                      </span>
                     </span>
-                    <span className="ml-auto font-semibold text-zinc-800">{fmtR(p.rating)}</span>
+                    <span className="font-semibold text-zinc-800">{fmtR(p.rating)}</span>
                   </li>
                 ))}
               </ol>

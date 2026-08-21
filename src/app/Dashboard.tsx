@@ -547,8 +547,11 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
       </div>
       {ytdLine && <p className="mt-3 text-sm text-zinc-500">{ytdLine}</p>}
       {/* 사용자 재지시(2026-08-22): "목표 대비 오늘 달성률" 도넛 게이지 대신, 다른 6개 채널
-          타일과 동일한 최근 7일 스파크라인으로 통일(같은 컴포넌트 재사용). */}
-      <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} />
+          타일과 동일한 최근 7일 스파크라인으로 통일(같은 컴포넌트 재사용). 위 "연간 누적평균..."
+          줄과 바짝 붙어있던 것을 mt-4로 띄워 레이아웃 여백을 정돈. */}
+      <div className="mt-4">
+        <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} />
+      </div>
     </Link>
   );
 }
@@ -1009,11 +1012,14 @@ function OriginalContentReportCard({
   report,
   enaAccentColor,
   achievementPctByCode,
+  themeColorByCode,
 }: {
   report: OriginalContentSummary;
   enaAccentColor: string;
   // 사용자 지시(2026-08-21, 179회 리뷰 재학습): 핵심 요약 문장의 "목표 대비 누적 N% 달성"용.
   achievementPctByCode: Map<string, number | null>;
+  // 사용자 지시(2026-08-22): 본방/직후재방 채널명을 그 채널 로고 색으로 굵게 표시하기 위해.
+  themeColorByCode: Map<string, string | null>;
 }) {
   return (
     <div className={CARD}>
@@ -1079,8 +1085,12 @@ function OriginalContentReportCard({
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                     <div className="rounded-xl bg-zinc-50 p-3 text-sm">
                       <p className="mb-1.5 text-[11px] font-medium text-zinc-400">본방</p>
+                      {/* 사용자 지시(2026-08-22): 채널명을 그 채널 로고 색+볼드로. */}
                       <p className="text-zinc-600">
-                        {CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code} · {fmtTime(h.matched_start_time)}
+                        <span className="font-bold" style={{ color: themeColorByCode.get(h.broadcast_channel_code) ?? undefined }}>
+                          {CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
+                        </span>{" "}
+                        · {fmtTime(h.matched_start_time)}
                       </p>
                       {/* 사용자 지시(2026-08-21): 본방송 시청률 볼드, 전회 대비 증가=푸른색(ENA
                           로고색)/감소=붉은색. 사용자 재지시(2026-08-21, Page 1 개편): 원색
@@ -1109,7 +1119,10 @@ function OriginalContentReportCard({
                       {h.rerun_program_name && h.rerun_start_time ? (
                         <>
                           <p className="text-zinc-600">
-                            {CHANNEL_NAME_BY_CODE[h.rerun_channel_code ?? ""] ?? h.rerun_channel_code} · {fmtTime(h.rerun_start_time)}
+                            <span className="font-bold" style={{ color: themeColorByCode.get(h.rerun_channel_code ?? "") ?? undefined }}>
+                              {CHANNEL_NAME_BY_CODE[h.rerun_channel_code ?? ""] ?? h.rerun_channel_code}
+                            </span>{" "}
+                            · {fmtTime(h.rerun_start_time)}
                           </p>
                           <p className="mt-0.5 text-lg font-bold tabular-nums tracking-tight text-zinc-800">
                             {formatRating(h.rerun_rating)}
@@ -1280,10 +1293,12 @@ function ChannelNarrativeCard({
         ) : (
           lines.map((line, i) => (
             // 사용자 재지시(2026-08-22): 막대를 채널명 다음 줄로 내리고, 설명 텍스트는 모든
-            // 채널이 채널명 길이와 무관하게 같은 x 위치에서 시작하도록 고정 폭 그리드로.
-            <div key={i} className="grid grid-cols-[84px_1fr] items-start gap-x-3">
+            // 채널이 채널명 길이와 무관하게 같은 x 위치에서 시작하도록 고정 폭 그리드로. 84px는
+            // "ENA Drama"/"ENA Story"(9자)가 두 줄로 접히기에 딱 부족한 폭이었다 — 104px로
+            // 넓히고 whitespace-nowrap을 명시해 항상 한 줄로 고정.
+            <div key={i} className="grid grid-cols-[104px_1fr] items-start gap-x-3">
               <div className="flex flex-col gap-1">
-                <span className="font-bold" style={{ color: line.color ?? undefined }}>
+                <span className="whitespace-nowrap font-bold" style={{ color: line.color ?? undefined }}>
                   {line.channelName}
                 </span>
                 {line.deltaPct !== null && <MiniDeltaBar pct={line.deltaPct} />}
@@ -1745,6 +1760,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               report={data.originalContentReport}
               enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
               achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
+              themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
             />
 
             <ChannelNarrativeCard
