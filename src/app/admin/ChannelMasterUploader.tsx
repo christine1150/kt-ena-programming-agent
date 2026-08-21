@@ -19,7 +19,13 @@ export default function ChannelMasterUploader() {
 
   async function handleUpload() {
     const file = fileInputRef.current?.files?.[0];
-    if (!file) return;
+    // 사용자 지시(2026-08-22): "버튼을 눌러도 반응이 없다" — 파일을 고르지 않고 누르면 여기서
+    // 조용히 아무 일도 없이 끝나던 게 원인이었다(에러 메시지도, 아무 표시도 없었음). 항상 눈에
+    // 보이는 결과를 남기도록 수정.
+    if (!file) {
+      setResult({ ok: false, message: "업로드할 파일을 먼저 선택해주세요." });
+      return;
+    }
 
     setUploading(true);
     setResult(null);

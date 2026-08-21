@@ -23,7 +23,12 @@ export default function MarketYtdRankUploader() {
 
   async function handleUpload() {
     const file = fileInputRef.current?.files?.[0];
-    if (!file) return;
+    // 사용자 지시(2026-08-22): "버튼을 눌러도 반응이 없다" — 파일 미선택 시 조용히 종료되던
+    // 것을 항상 눈에 보이는 메시지로.
+    if (!file) {
+      setResult({ ok: false, message: "업로드할 파일을 먼저 선택해주세요." });
+      return;
+    }
 
     setUploading(true);
     setResult(null);

@@ -21,7 +21,12 @@ export default function OlifeEpgUploader() {
 
   async function handleUpload() {
     const files = fileInputRef.current?.files;
-    if (!files || files.length === 0) return;
+    // 사용자 지시(2026-08-22): "버튼을 눌러도 반응이 없다" — 파일 미선택 시 조용히 종료되던
+    // 것을 항상 눈에 보이는 메시지로.
+    if (!files || files.length === 0) {
+      setErrorMessage("업로드할 파일을 먼저 선택해주세요.");
+      return;
+    }
 
     setUploading(true);
     setErrorMessage(null);
