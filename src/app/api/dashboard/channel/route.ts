@@ -247,6 +247,8 @@ export async function GET(request: Request) {
     topProgramsCompetitorRes,
     rootCauseRes,
     opportunityAlertRes,
+    trendHighlightRes,
+    competitorScheduleChangesRes,
     daypartOpportunityRes,
     dowHourBlockPatternRes,
     topProgramsRes,
@@ -304,6 +306,11 @@ export async function GET(request: Request) {
     supabase.rpc("get_root_cause_alert", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: dateTo }),
     // OPPORTUNITY? — 기회 탐지(Opportunity Alert). 같은 매칭 타깃 라벨 기준, dateTo 기준일.
     supabase.rpc("get_opportunity_alert", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: dateTo }),
+    // 사용자 지시(2026-08-21, WHY? 고도화): 하락/상승 트리거가 둘 다 안 걸려도 "가장 눈에 띈
+    // 하루"를 항상 짚어주기 위한 폴백.
+    supabase.rpc("get_daily_trend_highlight", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: dateTo }),
+    // 등록 경쟁채널의 실제 편성 변화 참고 정보(§1.2 프로그램 단위 데이터 기반).
+    supabase.rpc("get_competitor_schedule_changes", { p_channel_code: channel.code, p_as_of_date: dateTo }),
     supabase.rpc("get_channel_daypart_opportunity", {
       p_channel_code: channel.code,
       p_program_target_label: programTargetLabel,
@@ -476,6 +483,8 @@ export async function GET(request: Request) {
   const topProgramsData = topProgramsCompetitorRes.data;
   const rootCauseAlert = rootCauseRes.data?.[0] ?? null;
   const opportunityAlert = opportunityAlertRes.data?.[0] ?? null;
+  const trendHighlight = trendHighlightRes.data?.[0] ?? null;
+  const competitorScheduleChanges = competitorScheduleChangesRes.data ?? [];
   const daypartOpportunity = daypartOpportunityRes.data;
   const dowHourBlockPattern = dowHourBlockPatternRes.data;
   const topPrograms = topProgramsRes.data;
@@ -592,6 +601,8 @@ export async function GET(request: Request) {
     affinity: { compareChannelCode, items: affinity },
     rootCauseAlert,
     opportunityAlert,
+    trendHighlight,
+    competitorScheduleChanges,
     // 기능 #15-2: "대비" 분석 전 기간의 시간대별 그래프(이번 기간 패널 옆에 나란히).
     hourlyPatternPrior: hourlyPatternPriorRes.data ?? [],
     hourlyProgramTitlesPrior: hourlyProgramTitlesPriorRes.data ?? [],

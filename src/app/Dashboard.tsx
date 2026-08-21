@@ -546,14 +546,15 @@ function parseTargetRankNum(targetRank: string | null): number | null {
   const n = parseInt(targetRank, 10);
   return Number.isFinite(n) ? n : null;
 }
+// 사용자 지시(2026-08-21): "+1 왼쪽에 ▲, 하락은 ▼도 표시."
 function RankChangeIndicator({ rankChangeDod }: { rankChangeDod: number | null }) {
   if (rankChangeDod === null || rankChangeDod === 0) {
     return <span className="text-xs font-semibold text-zinc-300">-</span>;
   }
   const improved = rankChangeDod > 0; // 순위 숫자가 작아짐 = 개선
   return (
-    <span className="text-xs font-bold tabular-nums" style={{ color: improved ? ACCENT_UP : ACCENT_DOWN }}>
-      {improved ? `+${rankChangeDod}` : rankChangeDod}
+    <span className="inline-flex items-center gap-0.5 text-xs font-bold tabular-nums" style={{ color: improved ? ACCENT_UP : ACCENT_DOWN }}>
+      {improved ? "▲" : "▼"} {improved ? `+${rankChangeDod}` : rankChangeDod}
     </span>
   );
 }
