@@ -189,6 +189,23 @@ interface FitScoreItem {
   } | null;
 }
 
+// skyUHD 전용 CONTENT FITS?/WHAT TO SCHEDULE? 대체 지표 — get_skyuhd_program_scorecard() 반환값
+// 그대로. skyUHD는 타깃 구분이 없는 원본 자료 한계로 PRD Fit Score(타깃 기반)를 계산할 수 없어
+// (사용자 확인, 2026-08-21) 채널 내 시청률 percentile + 최근 4주/이전 8주 추세만 쓰는 별도
+// 지표다 — FitScoreItem과 절대 섞어 쓰지 않는다(5태그·가중치 공식이 다름).
+interface SkyuhdScorecardItem {
+  program_id: string;
+  program_name: string;
+  avg_rating: number | null;
+  air_count: number;
+  top_daypart: string | null;
+  most_common_start_hour: number | null;
+  rating_pctl: number | null;
+  recent_avg_rating: number | null;
+  prior_avg_rating: number | null;
+  trend_pct: number | null;
+}
+
 interface RootCauseAlert {
   triggered: boolean;
   streak_days: number;
@@ -480,6 +497,40 @@ const TAG_LABEL_KO: Record<string, string> = {
   REPLACE: "교체 검토",
   TEST: "테스트",
 };
+
+// skyUHD 전용 대체 지표(SkyuhdScorecardItem)의 4단계 분류 — PRD Fit Score의 5태그(STRENGTHEN 등)
+// 와는 별개 개념이라 이름·스타일을 겹치지 않게 분리한다(사용자 지시, 2026-08-21).
+const SKYUHD_TIER_STYLE: Record<string, string> = {
+  강세: "bg-emerald-100 text-emerald-700",
+  보통: "bg-blue-100 text-blue-700",
+  약세: "bg-amber-100 text-amber-700",
+  표본부족: "bg-zinc-200 text-zinc-600",
+};
+const SKYUHD_MIN_AIR_COUNT_FOR_TIER = 5; // 이 미만이면 percentile을 믿지 않고 "표본부족"으로 표시.
+
+function skyuhdScorecardTier(item: SkyuhdScorecardItem): "강세" | "보통" | "약세" | "표본부족" {
+  if (item.air_count < SKYUHD_MIN_AIR_COUNT_FOR_TIER || item.rating_pctl === null) return "표본부족";
+  if (item.rating_pctl >= 70) return "강세";
+  if (item.rating_pctl <= 30) return "약세";
+  return "보통";
+}
+
+// skyUHD 대체 지표 표의 "제안 사항" 문장 — 임의의 새 공식을 만들지 않고, 계산된 percentile·
+// 추세 숫자를 그대로 문장화한다(해석만 담당).
+function buildSkyuhdScorecardNote(item: SkyuhdScorecardItem): string {
+  const tier = skyuhdScorecardTier(item);
+  if (tier === "표본부족") {
+    return `표본 부족(방영 ${item.air_count}회) — 데이터를 더 쌓은 뒤 재평가 필요`;
+  }
+  const pctlText = `채널 내 시청률 상위 ${(100 - (item.rating_pctl ?? 0)).toFixed(0)}%`;
+  const trendText =
+    item.trend_pct === null
+      ? ""
+      : ` (최근 4주 ${item.trend_pct >= 0 ? "▲" : "▼"} ${Math.abs(item.trend_pct).toFixed(0)}%, 이전 8주 대비)`;
+  if (tier === "강세") return `${pctlText}로 강세${trendText} — 편성 확대·시간대 확장을 검토해볼 만합니다.`;
+  if (tier === "약세") return `${pctlText}로 약세${trendText} — 편성 축소·시간대 조정을 검토해볼 만합니다.`;
+  return `${pctlText} 수준${trendText}.`;
+}
 
 // ── 기간 설정(우측 상단) ─────────────────────────────────────────────────
 // 사용자 지시(2026-08-20, 네 차례에 걸쳐 다듬음 — 마지막 순서·정의가 최종): "직접 선택"을 "오늘"
@@ -1986,6 +2037,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const [selectedExtraTargets, setSelectedExtraTargets] = useState<Set<string>>(new Set());
   const [fitScoreItems, setFitScoreItems] = useState<FitScoreItem[] | null>(null);
   const [fitScoreLoading, setFitScoreLoading] = useState(true);
+  // skyUHD 전용 대체 지표(사용자 지시, 2026-08-21) — code==="SKYUHD"일 때만 채워진다.
+  const [skyuhdScorecard, setSkyuhdScorecard] = useState<SkyuhdScorecardItem[] | null>(null);
+  const [skyuhdScorecardLoading, setSkyuhdScorecardLoading] = useState(true);
   const [expandedProgram, setExpandedProgram] = useState<string | null>(null);
   // 자연어 질문(18번, 규칙 기반 Intent Router) — PRD.md "자연어 질문은 Page 2의 한 섹션으로
   // 배치" 원칙대로 여기 둔다. 채널을 안 짚어도(예: "가장 잘한 채널은?") 질문 자체에서 채널을
@@ -2091,6 +2145,28 @@ export default function ChannelDeepDive({ code }: { code: string }) {
       cancelled = true;
     };
 
+  }, [code, fitScoreDateQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (code !== "SKYUHD") {
+        setSkyuhdScorecard(null);
+        setSkyuhdScorecardLoading(false);
+        return;
+      }
+      setSkyuhdScorecardLoading(true);
+      const res = await fetch(`/api/scheduling/skyuhd-scorecard${fitScoreDateQuery ? `?${fitScoreDateQuery.slice(1)}` : ""}`);
+      const body = await res.json().catch(() => ({ ok: false }));
+      if (cancelled) return;
+      if (res.ok && body.ok) {
+        setSkyuhdScorecard(body.items ?? []);
+      }
+      setSkyuhdScorecardLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [code, fitScoreDateQuery]);
 
   if (loading && !data) {
@@ -2935,53 +3011,113 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <p className="mt-3 text-base leading-relaxed text-zinc-700">{buildHowDeeplyExplanation(howDeeplyStats, howDeeplyPeriodLabel, code === "SKYUHD")}</p>
         </div>
 
-        {/* CONTENT FITS? — 표 + 줄글, 채널 기여도 높은 순(사용자 지시) */}
+        {/* CONTENT FITS? — 표 + 줄글, 채널 기여도 높은 순(사용자 지시). skyUHD는 타깃 구분이
+            없는 원본 자료 한계로 PRD Fit Score(타깃 기반)를 계산할 수 없어(사용자 확인,
+            2026-08-21) 별도 채널 단위 대체 지표(skyuhdScorecard)를 대신 보여준다. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">CONTENT FITS?</h2>
-          <p className="mb-3 text-sm text-zinc-400">
-            Fit Score 하위지표 — Target Performance(시청률·슬롯·데이파트) / Target Affinity(연령대 적합도, 채널
-            단위) / Audience Engagement(Reach·시청시간비율). 전부 최근 12주 자사 채널 내 percentile(0~100),
-            채널에 도움이 되는 순으로 정렬했습니다.
-          </p>
-          {fitScoreLoading ? (
-            <p className="text-sm text-zinc-400">불러오는 중...</p>
-          ) : contentFitsRows.length === 0 ? (
-            <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
+          {code === "SKYUHD" ? (
+            <>
+              <p className="mb-3 text-sm text-zinc-400">
+                skyUHD는 원본 자료에 타깃(연령대) 구분이 없어 타깃 기반 Fit Score를 계산할 수 없습니다 — 대신
+                채널 내 시청률 percentile과 최근 4주/이전 8주 추세로 계산한 대체 지표입니다(다른 채널의
+                Target Performance/Affinity/Engagement 표와는 별개 개념).
+              </p>
+              {skyuhdScorecardLoading ? (
+                <p className="text-sm text-zinc-400">불러오는 중...</p>
+              ) : !skyuhdScorecard || skyuhdScorecard.length === 0 ? (
+                <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[520px] text-left text-sm">
+                      <thead>
+                        <tr className="text-zinc-400">
+                          <th className="pb-2 font-medium">프로그램</th>
+                          <th className="pb-2 font-medium">시청률</th>
+                          <th className="pb-2 font-medium">방영횟수</th>
+                          <th className="pb-2 font-medium">주요 시간대</th>
+                          <th className="pb-2 font-medium">채널 내 순위(percentile)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {skyuhdScorecard.map((item) => (
+                          <tr key={item.program_id} className="border-t border-zinc-100">
+                            <td className="py-1.5 font-medium text-zinc-800">{item.program_name}</td>
+                            <td className="py-1.5 text-zinc-600">{fmtR(item.avg_rating)}</td>
+                            <td className="py-1.5 text-zinc-600">{item.air_count}회</td>
+                            <td className="py-1.5 text-zinc-600">
+                              {DAYPART_LABEL[item.top_daypart ?? ""] ?? item.top_daypart ?? "—"}
+                              {item.most_common_start_hour !== null ? ` · 주로 ${item.most_common_start_hour}시` : ""}
+                            </td>
+                            <td className="py-1.5 font-semibold text-zinc-900">
+                              {item.rating_pctl !== null ? `상위 ${(100 - item.rating_pctl).toFixed(0)}%` : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-3 text-base leading-relaxed text-zinc-700">
+                    {skyuhdScorecard.length >= 2
+                      ? (() => {
+                          const bestName = skyuhdScorecard[0].program_name;
+                          const worstName = skyuhdScorecard[skyuhdScorecard.length - 1].program_name;
+                          return `'${bestName}'${josaIga(bestName)} 채널 내 시청률 상위권(${skyuhdScorecard[0].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[0].rating_pctl).toFixed(0)}%` : "—"})으로 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 가장 낮아(${skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl!).toFixed(0)}%` : "—"}) 편성 조정을 검토해볼 만합니다.`;
+                        })()
+                      : ""}
+                  </p>
+                </>
+              )}
+            </>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[520px] text-left text-sm">
-                  <thead>
-                    <tr className="text-zinc-400">
-                      <th className="pb-2 font-medium">프로그램</th>
-                      <th className="pb-2 font-medium">Target Performance</th>
-                      <th className="pb-2 font-medium">Target Affinity</th>
-                      <th className="pb-2 font-medium">Audience Engagement</th>
-                      <th className="pb-2 font-medium">종합(3개 평균)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contentFitsRows.map((item) => (
-                      <tr key={item.program_id} className="border-t border-zinc-100">
-                        <td className="py-1.5 font-medium text-zinc-800">{item.programs?.canonical_name ?? "이름 없음"}</td>
-                        <td className="py-1.5 text-zinc-600">{item.target_performance_score?.toFixed(0) ?? "—"}</td>
-                        <td className="py-1.5 text-zinc-600">{item.target_affinity_score?.toFixed(0) ?? "—"}</td>
-                        <td className="py-1.5 text-zinc-600">{item.audience_engagement_score?.toFixed(0) ?? "—"}</td>
-                        <td className="py-1.5 font-semibold text-zinc-900">{contentFitsHelpScore(item).toFixed(0)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="mt-3 text-base leading-relaxed text-zinc-700">
-                {contentFitsRows.length >= 2
-                  ? (() => {
-                      const bestName = contentFitsRows[0].programs?.canonical_name ?? "";
-                      const worstName = contentFitsRows[contentFitsRows.length - 1].programs?.canonical_name ?? "";
-                      return `'${bestName}'${josaIga(bestName)} 종합 ${contentFitsHelpScore(contentFitsRows[0]).toFixed(0)}점으로 채널에 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 종합 ${contentFitsHelpScore(contentFitsRows[contentFitsRows.length - 1]).toFixed(0)}점으로 가장 낮아 편성 조정을 검토해볼 만합니다.`;
-                    })()
-                  : ""}
+              <p className="mb-3 text-sm text-zinc-400">
+                Fit Score 하위지표 — Target Performance(시청률·슬롯·데이파트) / Target Affinity(연령대 적합도, 채널
+                단위) / Audience Engagement(Reach·시청시간비율). 전부 최근 12주 자사 채널 내 percentile(0~100),
+                채널에 도움이 되는 순으로 정렬했습니다.
               </p>
+              {fitScoreLoading ? (
+                <p className="text-sm text-zinc-400">불러오는 중...</p>
+              ) : contentFitsRows.length === 0 ? (
+                <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[520px] text-left text-sm">
+                      <thead>
+                        <tr className="text-zinc-400">
+                          <th className="pb-2 font-medium">프로그램</th>
+                          <th className="pb-2 font-medium">Target Performance</th>
+                          <th className="pb-2 font-medium">Target Affinity</th>
+                          <th className="pb-2 font-medium">Audience Engagement</th>
+                          <th className="pb-2 font-medium">종합(3개 평균)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {contentFitsRows.map((item) => (
+                          <tr key={item.program_id} className="border-t border-zinc-100">
+                            <td className="py-1.5 font-medium text-zinc-800">{item.programs?.canonical_name ?? "이름 없음"}</td>
+                            <td className="py-1.5 text-zinc-600">{item.target_performance_score?.toFixed(0) ?? "—"}</td>
+                            <td className="py-1.5 text-zinc-600">{item.target_affinity_score?.toFixed(0) ?? "—"}</td>
+                            <td className="py-1.5 text-zinc-600">{item.audience_engagement_score?.toFixed(0) ?? "—"}</td>
+                            <td className="py-1.5 font-semibold text-zinc-900">{contentFitsHelpScore(item).toFixed(0)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-3 text-base leading-relaxed text-zinc-700">
+                    {contentFitsRows.length >= 2
+                      ? (() => {
+                          const bestName = contentFitsRows[0].programs?.canonical_name ?? "";
+                          const worstName = contentFitsRows[contentFitsRows.length - 1].programs?.canonical_name ?? "";
+                          return `'${bestName}'${josaIga(bestName)} 종합 ${contentFitsHelpScore(contentFitsRows[0]).toFixed(0)}점으로 채널에 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 종합 ${contentFitsHelpScore(contentFitsRows[contentFitsRows.length - 1]).toFixed(0)}점으로 가장 낮아 편성 조정을 검토해볼 만합니다.`;
+                        })()
+                      : ""}
+                  </p>
+                </>
+              )}
             </>
           )}
         </div>
@@ -3079,9 +3215,55 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
-        {/* WHAT TO SCHEDULE? */}
+        {/* WHAT TO SCHEDULE? — skyUHD는 타깃 구분이 없는 원본 자료 한계로 PRD Fit Score를 계산할
+            수 없어(사용자 확인, 2026-08-21) 채널 단위 대체 지표(skyuhdScorecard) 표로 대체한다. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">WHAT TO SCHEDULE?</h2>
+          {code === "SKYUHD" ? (
+            <>
+              <p className="mb-3 text-sm text-zinc-400">
+                skyUHD는 타깃 구분이 없는 원본 자료 한계로 PRD 고정 Fit Score(타깃 기반) 공식을 적용할 수
+                없습니다 — 대신 채널 내 시청률 percentile과 최근 4주/이전 8주 추세만으로 분류한 참고 지표입니다
+                (다른 채널의 STRENGTHEN/KEEP/MOVE/REPLACE/TEST 5태그와는 별개 개념).
+              </p>
+              {skyuhdScorecardLoading ? (
+                <p className="text-sm text-zinc-400">불러오는 중...</p>
+              ) : !skyuhdScorecard || skyuhdScorecard.length === 0 ? (
+                <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-left text-sm">
+                    <thead>
+                      <tr className="text-zinc-400">
+                        <th className="pb-1.5 pr-2 font-medium">분류</th>
+                        <th className="pb-1.5 pr-2 font-medium">프로그램</th>
+                        <th className="pb-1.5 pr-2 font-medium">제안 사항</th>
+                        <th className="pb-1.5 font-medium">방영횟수</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {skyuhdScorecard.map((item) => {
+                        const tier = skyuhdScorecardTier(item);
+                        return (
+                          <tr key={item.program_id} className="border-t border-zinc-100 align-top">
+                            <td className="whitespace-nowrap py-2 pr-2">
+                              <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[13px] font-semibold ${SKYUHD_TIER_STYLE[tier]}`}>
+                                {tier}
+                              </span>
+                            </td>
+                            <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">{item.program_name}</td>
+                            <td className="py-2 pr-2 text-zinc-600">{buildSkyuhdScorecardNote(item)}</td>
+                            <td className="whitespace-nowrap py-2 text-zinc-500">{item.air_count}회</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          ) : (
+          <>
           <p className="mb-3 text-sm text-zinc-400">
             Fit Score(0~100) = 30% Target Performance + 20% Target Affinity + 15% Audience Engagement + 15% Slot
             Performance + 10% Competitive Opportunity + 10% Audience Flow. Confidence(표본 신뢰도)가 낮으면 점수와
@@ -3187,6 +3369,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </tbody>
               </table>
             </div>
+          )}
+          </>
           )}
         </div>
         </>
