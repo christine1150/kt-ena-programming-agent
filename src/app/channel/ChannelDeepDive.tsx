@@ -1687,6 +1687,25 @@ function cellTextColor(accentColor: string, alpha: number): string {
   const luminance = 0.299 * blendedR + 0.587 * blendedG + 0.114 * blendedB;
   return luminance < 150 ? "#ffffff" : "#27272a"; // 배경이 실제로 어두울 때만 흰 글씨, 아니면 진한 글씨
 }
+// 사용자 지시(2026-08-21): 채널 상세 페이지의 메인 컬러를 채널 로고 색(accentColor)으로 통일 —
+// 밝은 로고 색(예: 하늘색 계열)도 흰 배경 위 본문 텍스트로 쓸 때 읽히도록 검정 쪽으로 섞어
+// 어둡게 만든다(factor 0~1, 클수록 더 어둡게).
+function accentShade(accentColor: string, factor: number): string {
+  const [r, g, b] = hexToRgb(accentColor);
+  const mix = (c: number) => Math.round(c * (1 - factor));
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
+// 사용자 지시(2026-08-21) + 실측 확인: OLIFE(#b9db01, 라임)처럼 밝은 로고 색을 흰/연한 배경 위
+// 텍스트로 그대로 쓰면(예: "질문하기" 버튼의 흰 글씨, "최다 시청" 배지) 대비가 거의 없어 안
+// 보임 — accentColor 자체 밝기(luminance)를 계산해, 밝을수록 더 많이 어둡게 섞어 항상 흰/연한
+// 배경 위에서 읽히는 "본문 글씨용" 색을 만든다. 이미 충분히 어두운 색(예: ENA 블루)은 그대로.
+function accentForegroundColor(accentColor: string): string {
+  const [r, g, b] = hexToRgb(accentColor);
+  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  if (luminance < 130) return accentColor;
+  const factor = Math.min(0.7, 0.35 + (luminance - 130) / 250);
+  return accentShade(accentColor, factor);
+}
 function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlockRow[]; accentColor: string; fmtR: (v: number | null) => string }) {
   const byCell = new Map(pattern.map((r) => [`${r.dow}__${r.hour_block}`, r]));
   const maxRating = Math.max(1e-9, ...pattern.map((r) => r.avg_rating ?? 0));
@@ -2412,12 +2431,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 if (e.key === "Enter") submitAskQuestion();
               }}
               placeholder="예: 어제 ENA DRAMA는 어땠어? / 전일 대비 가장 많이 상승한 채널은?"
-              className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-indigo-300 focus:outline-none"
+              className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-[var(--accent)] focus:outline-none"
             />
+            {/* 사용자 지시(2026-08-21): 채널 상세 페이지 메인 컬러를 채널 로고 색(accentColor)으로.
+                OLIFE(라임 계열)처럼 밝은 로고 색은 흰 글씨가 안 보여, 배경색 밝기에 따라
+                흰/진한 글씨를 자동 선택(cellTextColor 재사용, alpha=255=배경색 그대로). */}
             <button
               onClick={submitAskQuestion}
               disabled={askLoading || !askQuestion.trim()}
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+              className="rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-40"
+              style={{ backgroundColor: accentColor, color: cellTextColor(accentColor, 255) }}
             >
               {askLoading ? "확인 중..." : "질문하기"}
             </button>
@@ -2430,7 +2453,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               {askAnswer.comparisonBasis !== "—" && <p className="text-zinc-500">비교 기준: {askAnswer.comparisonBasis}</p>}
               {askAnswer.evidence !== "—" && <p className="text-zinc-600">Evidence: {askAnswer.evidence}</p>}
               {askAnswer.interpretation && <p className="text-zinc-700">해석: {askAnswer.interpretation}</p>}
-              {askAnswer.programmingAction !== "—" && <p className="text-indigo-700">Action: {askAnswer.programmingAction}</p>}
+              {askAnswer.programmingAction !== "—" && (
+                <p style={{ color: accentForegroundColor(accentColor) }}>Action: {askAnswer.programmingAction}</p>
+              )}
               <p className="text-sm text-zinc-400">
                 Confidence: {askAnswer.confidence}({askAnswer.confidenceNote})
               </p>
@@ -2963,7 +2988,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <div key={`${item.label}-${i}`} className="rounded-2xl bg-zinc-50 p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm text-zinc-500">{shortDemoLabel(item.label)}</p>
-                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${item.badge === "최다 시청" ? "bg-indigo-100 text-indigo-600" : "bg-amber-100 text-amber-600"}`}>
+                      {/* 사용자 지시(2026-08-21): 채널 상세 페이지는 채널 로고 색(accentColor)을
+                          메인 컬러로 — "최다 시청" 배지도 고정 indigo 대신 채널색 기반 톤. */}
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${item.badge === "최다 시청" ? "" : "bg-amber-100 text-amber-600"}`}
+                        style={item.badge === "최다 시청" ? { backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) } : undefined}
+                      >
                         {item.badge}
                       </span>
                     </div>
@@ -3184,10 +3214,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             const why = buildWhyDiagnosis(data, fitScoreItems);
             const insight = buildExecutiveProgrammingInsight(why, daypartOpportunity, fitScoreItems);
             if (!insight) return null;
+            // 사용자 지시(2026-08-21): 채널 상세 페이지 메인 컬러를 채널 로고 색으로.
             return (
-              <div className="mb-3 rounded-2xl bg-indigo-50 p-4">
-                <p className="mb-1 text-sm font-semibold text-indigo-700">Executive Programming Insight</p>
-                <p className="text-base leading-relaxed text-indigo-900">{insight}</p>
+              <div className="mb-3 rounded-2xl p-4" style={{ backgroundColor: `${accentColor}14` }}>
+                <p className="mb-1 text-sm font-semibold" style={{ color: accentForegroundColor(accentColor) }}>
+                  Executive Programming Insight
+                </p>
+                {/* 본문은 다른 카드의 줄글과 통일감 있게 중립색 유지(제목만 브랜드색으로 강조). */}
+                <p className="text-base leading-relaxed text-zinc-700">{insight}</p>
               </div>
             );
           })()}
@@ -3354,7 +3388,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                     {fi.sampleNote && <p className="mt-1 text-sm text-amber-600">{fi.sampleNote}</p>}
                                     {fi.decision && (
                                       <p className="mt-2 text-sm text-zinc-600">
-                                        <span className="font-semibold text-indigo-600">DECISION</span> {fi.decision}
+                                        <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>DECISION</span> {fi.decision}
                                       </p>
                                     )}
                                   </div>
@@ -3414,11 +3448,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   </thead>
                   <tbody>
                     {marketYtdCompetitorSnapshot.map((r, i) => (
-                      <tr key={r.channel_name} className={`border-t border-zinc-100 ${r.is_self ? "bg-indigo-50/40" : ""}`}>
+                      <tr
+                        key={r.channel_name}
+                        className="border-t border-zinc-100"
+                        style={r.is_self ? { backgroundColor: `${accentColor}14` } : undefined}
+                      >
                         <td className="py-1.5 pr-2 text-zinc-500">{i + 1}</td>
                         <td
                           className="py-1.5 pr-2 font-medium"
-                          style={r.is_self ? { color: accentColor, fontWeight: 700 } : undefined}
+                          style={r.is_self ? { color: accentForegroundColor(accentColor), fontWeight: 700 } : undefined}
                         >
                           {r.channel_name}
                         </td>
@@ -3486,7 +3524,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       </thead>
                       <tbody>
                         {merged.map((c, i) => (
-                          <tr key={c.competitor_name} className={`border-t border-zinc-100 ${c.isOurs ? "bg-indigo-50/40" : ""}`}>
+                          <tr
+                            key={c.competitor_name}
+                            className="border-t border-zinc-100"
+                            style={c.isOurs ? { backgroundColor: `${accentColor}14` } : undefined}
+                          >
                             <td className="py-1.5 pr-2 text-zinc-500">{i + 1}</td>
                             <td
                               className="py-1.5 pr-2 font-medium"

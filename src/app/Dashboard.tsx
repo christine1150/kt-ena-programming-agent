@@ -384,7 +384,17 @@ function ChangeBadge({ pct }: { pct: number | null }) {
 }
 
 // 카드 공통 스타일 — 참고 이미지의 글래스모피즘(반투명 화이트 + 은은한 그림자) 톤.
-const CARD = "rounded-3xl bg-white/80 backdrop-blur-xl p-6 shadow-[0_8px_30px_-12px_rgba(99,102,241,0.25)] ring-1 ring-white/60";
+// 사용자 지시(2026-08-21): 카드 그림자·제목 강조색을 범용 Tailwind indigo(AI 기본색으로 흔히
+// 지적되는 계열)에서 ENA 로고 실제 브랜드 색(#3a30df)으로 교체 — impeccable(design-taste-frontend
+// 스킬 병행 설치분)이 "AI가 흔히 쓰는 보라/인디고 계열"로 지적한 8곳(주요 컨텐츠 리뷰/채널별
+// 인사이트/채널별 킬러 콘텐츠/오늘의 상위 프로그램/주요 뉴스 제목·배지, 새로고침 버튼 그라디언트)을
+// 브랜드 자산 기반 색으로 바꿔 "임의로 고른 기본색"이 아니라 "의도적으로 고른 ENA 색"이 되게 했다.
+const CARD = "rounded-3xl bg-white/80 backdrop-blur-xl p-6 shadow-[0_8px_30px_-12px_rgba(58,48,223,0.25)] ring-1 ring-white/60";
+// ENA 브랜드 색(#3a30df) 기반 팔레트 — 카드 제목/배지/새로고침 버튼에 일관되게 사용(색상 일관성 유지).
+const ACCENT_HEADING = "text-[#281fc7]"; // 원래 text-indigo-600 자리
+const ACCENT_HOVER = "hover:text-[#281fc7]"; // 원래 hover:text-indigo-600 자리
+const ACCENT_BADGE_BG = "bg-[#f1f0f9]"; // 원래 bg-indigo-50 자리
+const ACCENT_BADGE_TEXT = "text-[#2017bb]"; // 원래 text-indigo-500/600(배지) 자리
 
 // 올해 1/1~오늘 누적 평균 시청률·순위 + 목표 순위(6위 등) 대비 몇 위 차이인지(사용자 지시).
 // target_rank는 target_goals에 자유 텍스트로 저장돼 있어(예: skyUHD "경쟁채널 중 2위") 숫자로
@@ -456,7 +466,7 @@ function CompactChannelRow({ channel, logoReference }: { channel: ChannelSummary
   return (
     <Link
       href={`/channel/${channel.code}`}
-      className="flex flex-nowrap items-center gap-2 rounded-2xl bg-indigo-50/50 px-3 py-2 transition hover:bg-indigo-50"
+      className="flex flex-nowrap items-center gap-2 rounded-2xl bg-[#f1f0f9]/50 px-3 py-2 transition hover:bg-[#f1f0f9]"
     >
       {/* 사용자 지시(2026-08-20): 로고 폭이 채널마다 달라도 이 칸의 폭은 고정해, 그 다음에 오는
           시청률 숫자의 "0."이 모든 행에서 같은 위치에서 시작하도록 한다. */}
@@ -729,7 +739,7 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
   return (
     <div className={CARD}>
       {/* 사용자 지시(2026-08-21): 카드 제목을 "주요 컨텐츠 리뷰"로. */}
-      <h2 className="mb-4 text-sm font-semibold text-indigo-600">주요 컨텐츠 리뷰</h2>
+      <h2 className={`mb-4 text-sm font-semibold ${ACCENT_HEADING}`}>주요 컨텐츠 리뷰</h2>
 
       {report.mode === "daily" ? (
         report.daily.length === 0 ? (
@@ -752,9 +762,9 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                       들어가도록 글씨 크기를 줄이고(text-[13px]→[11px]) 넘치면 말줄임(truncate). */}
                   {(headline || h.featured_category) && (
                     <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-indigo-700">{headline ? headline.text : h.matched_program_name}</span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-[#281fc7]">{headline ? headline.text : h.matched_program_name}</span>
                       {h.featured_category && (
-                        <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[12px] font-medium text-indigo-600">
+                        <span className={`shrink-0 rounded-full ${ACCENT_BADGE_BG} px-2 py-0.5 text-[12px] font-medium ${ACCENT_HEADING}`}>
                           {h.featured_category}
                         </span>
                       )}
@@ -771,7 +781,7 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                         </tr>
                       </thead>
                       <tbody>
-                        <tr className="border-t border-indigo-50 align-top">
+                        <tr className="border-t border-[#f1f0f9] align-top">
                           <td className="py-2 pr-2">
                             <div className="font-medium text-zinc-800">{h.matched_program_name}</div>
                             {h.pre_rerun_rating !== null && (
@@ -889,7 +899,7 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
               </thead>
               <tbody>
                 {report.weekly.map((w) => (
-                  <tr key={`${w.broadcast_channel_code}-${w.program_name}`} className="border-t border-indigo-50">
+                  <tr key={`${w.broadcast_channel_code}-${w.program_name}`} className="border-t border-[#f1f0f9]">
                     <td className="py-2 pr-2 font-medium text-zinc-800">{w.program_name}</td>
                     <td className="py-2 pr-2 text-zinc-600">{CHANNEL_NAME_BY_CODE[w.broadcast_channel_code] ?? w.broadcast_channel_code}</td>
                     <td className="py-2 pr-2 text-zinc-600">{formatRating(w.avg_rating)}</td>
@@ -939,7 +949,7 @@ function ChannelNarrativeCard({
 
   return (
     <div className={CARD}>
-      <h2 className="mb-1 text-sm font-semibold text-indigo-600">채널별 인사이트</h2>
+      <h2 className={`mb-1 text-sm font-semibold ${ACCENT_HEADING}`}>채널별 인사이트</h2>
       <p className="mb-4 text-sm text-zinc-400">
         오늘 데이터를 최근 4주 평균과 비교해 눈에 띄는 변화만 짚었습니다(4주 넘게 반복되는 평소
         패턴은 가급적 언급을 피합니다).
@@ -1040,7 +1050,7 @@ function KillerContentCard({
 
   return (
     <div className={`${CARD} lg:col-span-2`}>
-      <h2 className="mb-1 text-sm font-semibold text-indigo-600">채널별 킬러 콘텐츠</h2>
+      <h2 className={`mb-1 text-sm font-semibold ${ACCENT_HEADING}`}>채널별 킬러 콘텐츠</h2>
       <p className="mb-4 text-sm text-zinc-400">최근 4주 평균 시청률 상위 프로그램 — 강세·약세 시간대가 있으면 함께 표시합니다.</p>
       {rows.length === 0 ? (
         <p className="text-sm text-zinc-400">데이터가 아직 부족합니다.</p>
@@ -1079,7 +1089,7 @@ function TodayTopProgramsCard({
 
   return (
     <div className={CARD}>
-      <h2 className="mb-1 text-sm font-semibold text-indigo-600">오늘의 상위 프로그램</h2>
+      <h2 className={`mb-1 text-sm font-semibold ${ACCENT_HEADING}`}>오늘의 상위 프로그램</h2>
       <p className="mb-4 text-sm text-zinc-400">오늘 하루 채널별 시청률 상위 3개 프로그램입니다.</p>
       <div className="flex flex-col gap-3 text-sm">
         {INSIGHT_CHANNEL_ORDER.map((code) => {
@@ -1180,8 +1190,8 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
   return (
     <div className={`${CARD} lg:col-span-2`}>
       <div className="mb-1 flex items-center gap-2">
-        <h2 className="text-sm font-semibold text-indigo-600">주요 뉴스</h2>
-        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[12px] font-medium text-indigo-500">베타</span>
+        <h2 className={`text-sm font-semibold ${ACCENT_HEADING}`}>주요 뉴스</h2>
+        <span className={`rounded-full ${ACCENT_BADGE_BG} px-2 py-0.5 text-[12px] font-medium ${ACCENT_BADGE_TEXT}`}>베타</span>
       </div>
       <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
         {[...byCategory.entries()].map(([category, list]) => (
@@ -1198,7 +1208,7 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-base leading-relaxed text-zinc-700 hover:text-indigo-600 hover:underline"
+                    className={`text-base leading-relaxed text-zinc-700 ${ACCENT_HOVER} hover:underline`}
                   >
                     {item.title}
                   </a>
@@ -1310,14 +1320,15 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 ⚙
               </a>
             )}
-            {/* 사용자 지시(2026-08-20): 새로고침도 관리자 아이콘처럼 작게. 참고 이미지의 주요
-                버튼(그라디언트) 톤을 반영해 단색 대신 인디고→바이올렛 그라디언트로. */}
+            {/* 사용자 지시(2026-08-20): 새로고침도 관리자 아이콘처럼 작게, 그라디언트 버튼으로.
+                사용자 지시(2026-08-21): 그라디언트 색을 범용 indigo→violet에서 ENA 브랜드 색
+                (#3a30df) 기반 그라디언트로 교체. */}
             <button
               onClick={load}
               disabled={loading}
               title="새로고침"
               aria-label="새로고침"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-base text-white shadow-sm hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#4239e0] to-[#7c88ef] text-base text-white shadow-sm hover:from-[#645ce6] hover:to-[#a0a9f3] disabled:opacity-50"
             >
               {loading ? "…" : "🔄"}
             </button>
