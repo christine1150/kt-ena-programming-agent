@@ -557,7 +557,8 @@ function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null
     parts.push(`동시간대 타깃 ${rank}위`);
   }
   const suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
-  return { text: `<${item.matched_program_name}> ${item.episode_number}회${suffix}`, rank, beatenBy };
+  // 사용자 지시(2026-08-21): 제목 앞뒤 <> 제거 — 프로그램명만 그대로 쓰고 뒤에 회차/부가 정보를 잇는다.
+  return { text: `${item.matched_program_name} ${item.episode_number}회${suffix}`, rank, beatenBy };
 }
 
 // 사용자 지시(2026-08-20): 문단 서술 대신 "핵심 요약 불릿 + [편성 인사이트]" 형태로 재구성.
@@ -648,16 +649,19 @@ function buildOriginalInsight(
     bullets.push(`도달율(Reach) ${item.matched_reach.toFixed(2)}%로 1% 미만 — 시청은 유지되고 있으나 시청 가구의 폭 자체는 좁음`);
   }
 
-  // ⑥ 연령대별 세분화 강세 — 같은 PD 리뷰 보고서를 학습해 추가. KPI 타깃(예: 수도권 2049) 하나만
-  // 보면 안 보이는 실제 핵심 시청층을 10살 단위 연령대 실측 데이터(ratings 테이블, 새 계산 없음)로
-  // 보여준다. KPI 타깃 시청률보다 실제로 높은 연령대만 골라 "강세"로 표현(과장 방지).
+  // ⑥ 연령대별 세분화 — 같은 PD 리뷰 보고서를 학습해 추가. 10살 단위 연령대 실측 데이터(ratings
+  // 테이블, 새 계산 없음)를 보여준다.
+  // 사용자 지시(2026-08-21, 정정): "타깃 시청률보다 50대·60대·40대가 원래 더 높다 — 수도권
+  // 2049는 광고주가 선호하는 구매력 있는 연령대라 그 시청률을 보는 것일 뿐" — 즉 중장년층
+  // 시청률이 타깃 시청률보다 높은 건 예외적 발견이 아니라 일반적인 패턴이므로, "발견"처럼
+  // 과장하지 않고 담백하게 수치만 보여준다("KPI 타깃"이라는 표현도 빼고 그냥 "타깃"으로).
   const strongerAgeSegments =
     item.matched_rating !== null && item.age_breakdown
       ? item.age_breakdown.filter((a) => a.rating > item.matched_rating!).slice(0, 3)
       : [];
   if (strongerAgeSegments.length > 0) {
     bullets.push(
-      `연령대별로는 ${strongerAgeSegments.map((a) => `${shortDemoLabel(a.label)}(${formatRating(a.rating)}%)`).join(", ")} 순으로 KPI 타깃 시청률(${formatRating(item.matched_rating)}%)보다 높음`
+      `연령대별로는 ${strongerAgeSegments.map((a) => `${shortDemoLabel(a.label)}(${formatRating(a.rating)}%)`).join(", ")} 순으로 타깃 시청률(${formatRating(item.matched_rating)}%)보다 높음(광고주가 선호하는 구매력 있는 연령대를 타깃으로 보는 것으로, 중장년층 시청률이 더 높은 것은 일반적인 패턴)`
     );
   }
 
@@ -673,20 +677,13 @@ function buildOriginalInsight(
     );
   }
 
-  // 사용자 지시(2026-08-21): 첨부 PD 리뷰 보고서를 학습해 새로 도출한 편성 인사이트 — KPI
-  // 타깃(수도권 2049 등)의 등락만 보면 이 콘텐츠의 진짜 핵심 시청층을 놓친다. 최상위 연령대
-  // 시청률이 KPI 타깃 대비 뚜렷하게(50% 이상) 높으면, 광고 세일즈·브랜디드 콘텐츠 기획에서
-  // KPI 타깃 바깥의 이 연령대도 함께 고려할 만하다는 신호로 짚는다(모든 화이트리스트 프로그램에
-  // 공통 적용되는 일반 로직 — 특정 프로그램명을 하드코딩하지 않음).
-  if (strongerAgeSegments.length > 0 && item.matched_rating !== null && item.matched_rating > 0) {
-    const top = strongerAgeSegments[0];
-    const upliftPct = ((top.rating - item.matched_rating) / item.matched_rating) * 100;
-    if (upliftPct >= 50) {
-      schedulingNote.push(
-        `KPI 타깃 외 핵심 시청층 존재 — KPI 타깃 시청률(${formatRating(item.matched_rating)}%)보다 ${shortDemoLabel(top.label)} 시청률(${formatRating(top.rating)}%)이 ${upliftPct.toFixed(0)}% 더 높습니다(동시에 관찰된 참고 정보 — 인과관계로 단정하지 않음). 광고 세일즈나 관련 브랜디드 콘텐츠 기획 시 KPI 타깃 하나만이 아니라 이 연령대까지 함께 고려할 만합니다.`
-      );
-    }
-  }
+  // 사용자 지시(2026-08-21, 정정): 이전 버전은 "타깃 시청률보다 중장년층이 높다"를 [편성
+  // 인사이트]로 매번 강조했는데, 이는 예외적 발견이 아니라 지상파·유료방송 전반에서 흔한
+  // 일반적 패턴이다(젊은 구매력 타깃은 원래 전체 시청률보다 낮게 나오고, 그래서 오히려
+  // 광고주가 그 타깃을 특정해 본다) — 위 ⑥ bullet로 수치는 이미 보여주므로, 여기서 또 "핵심
+  // 시청층 존재"처럼 새로운 발견인 양 반복하지 않는다(과장 금지 원칙). 연령대 구성 자체가
+  // 편성 판단에 실제로 의미 있는 경우(예: 타깃 확장 검토가 필요할 만큼 편차가 극단적인 경우)는
+  // 사용자가 별도로 요청하면 그때 근거를 갖춰 추가한다.
 
   return { bullets, schedulingNote };
 }
@@ -751,9 +748,11 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                   {/* 사용자 지시(2026-08-20): 헤드라인 "<프로그램> N회 본방송 시청률 (전회 대비
                       상승/하락, 동시간대 타깃 #위)" + 태그(오리지널 예능/드라마/브랜디드 등)를
                       #위 다음 한 줄에 오른쪽 끝으로 배치. */}
+                  {/* 사용자 지시(2026-08-21): 제목의 <> 제거, 볼드 없이, 회차~#위까지 한 줄 안에
+                      들어가도록 글씨 크기를 줄이고(text-[13px]→[11px]) 넘치면 말줄임(truncate). */}
                   {(headline || h.featured_category) && (
                     <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-semibold text-indigo-700">{headline ? headline.text : h.matched_program_name}</span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-indigo-700">{headline ? headline.text : h.matched_program_name}</span>
                       {h.featured_category && (
                         <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600">
                           {h.featured_category}
@@ -1089,9 +1088,19 @@ function TodayTopProgramsCard({
           const ytdAvg = ytdAvgByCode.get(code) ?? null;
           return (
             <div key={code}>
-              <span className="text-xs font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
-                {CHANNEL_NAME_BY_CODE[code]}
-              </span>
+              {/* 사용자 지시(2026-08-21): 채널명 옆에 각 열이 무엇을 뜻하는지(시간대/시청률/비교
+                  시청률) 알아볼 수 있게 표시 — 아래 데이터 열과 같은 폭으로 우측 정렬해 바로
+                  위에서 라벨 역할을 하도록 배치. */}
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
+                  {CHANNEL_NAME_BY_CODE[code]}
+                </span>
+                <span className="flex gap-2 text-[10px] text-zinc-400">
+                  <span className="w-12 text-right">시간대</span>
+                  <span className="w-14 text-right">시청률</span>
+                  <span className="w-14 text-right">비교</span>
+                </span>
+              </div>
               <table className="mt-1 w-full text-left text-xs">
                 <tbody>
                   {list.map((p, i) => {
@@ -1140,17 +1149,18 @@ function TodayTopProgramsCard({
 // 사용자 지시(2026-08-21): "주요뉴스의 카테고리별로 색상을 표시" — category는 관리자가 자유
 // 텍스트로 입력해(고정 목록이 없음) 특정 카테고리에 색을 미리 지정해둘 수 없다. 대신 카테고리
 // 이름을 해시해 고정 팔레트에서 하나를 결정적으로 골라, 같은 카테고리는 항상 같은 색을 쓰되
-// 새 카테고리가 추가돼도 코드를 고칠 필요가 없게 했다. 진하고(font-semibold) 서로 구분되는
-// 색만 골랐다(사용자 지시: "진한 검정이나 추천하는 색").
+// 새 카테고리가 추가돼도 코드를 고칠 필요가 없게 했다.
+// 사용자 재지시(2026-08-21): "색이 너무 알록달록하다 — 푸른 계열로 통일" — 무지개색 팔레트
+// 대신 남색~하늘색 범위의 톤(진하기만 다름)으로만 구성해 통일감을 준다.
 const NEWS_CATEGORY_COLORS = [
-  "text-zinc-800", // 진한 검정(사용자가 예시로 든 색 — 팔레트 첫 번째로 포함)
-  "text-indigo-600",
-  "text-rose-600",
-  "text-amber-600",
-  "text-emerald-600",
-  "text-sky-600",
-  "text-fuchsia-600",
-  "text-orange-600",
+  "text-blue-900",
+  "text-blue-700",
+  "text-indigo-700",
+  "text-indigo-500",
+  "text-sky-700",
+  "text-sky-500",
+  "text-cyan-700",
+  "text-slate-700",
 ];
 function categoryColorClass(category: string): string {
   let hash = 0;

@@ -120,7 +120,7 @@ export default function TargetGoalsManager() {
             <thead>
               <tr className="text-zinc-400">
                 <th className="pb-1 font-medium">채널</th>
-                <th className="pb-1 font-medium">KPI 타깃</th>
+                <th className="pb-1 font-medium">타깃</th>
                 <th className="pb-1 font-medium">목표 등위</th>
                 <th className="pb-1 font-medium">목표 시청률</th>
                 <th className="pb-1 font-medium"></th>
