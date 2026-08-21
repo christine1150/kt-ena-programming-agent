@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
-import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
+import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL } from "@/lib/targetResolution";
 
 // 로컬 날짜 구성요소로 "YYYY-MM-DD" 문자열을 만든다 — toISOString()은 UTC로 바꾸면서 자정 근처
 // 날짜가 하루 밀리는 문제가 실제로 있었다(ChannelDeepDive.tsx에서 이미 겪고 고친 것과 동일한
@@ -158,20 +158,8 @@ export async function GET(request: Request) {
   // 만들지 않음) — OLIFE/ONCE/ENA Story의 "개인2049"와 ENA Story의 "여자3049"는 그 시트 자체에
   // 해당 컬럼이 없어(전국 스코프 채널이라 "수도권 2049"/"수도권 여3049" 데이터가 없음) 제외했다.
   // ENA Drama는 지시하신 "여자3049"가 정확히 "수도권 여3049"로 실제 존재해 그대로 반영.
-  // 사용자 지시(2026-08-21, 재확인): ENA Story는 OLIFE·ONCE와 별도로 [개인2049, 여자3049]를
-  // 지정하셨다(예전엔 OLIFE·ONCE와 같은 그룹으로 취급해 "전국 5064"를 대신 넣었었는데, 이번엔
-  // 채널마다 다른 2개를 명시하셔서 재확인함) — DB 직접 조회 결과 ENA Story의 §1.3 데이터는
-  // OLIFE·ONCE와 동일하게 5세 단위 연령대(남/여 10대~60대+)와 "5064"·"유료가구"만 있고
-  // "2049"/"여3049" 컬럼 자체가 없어(전국 스코프 공통 한계), 요청하신 두 타깃 모두 표시할 수
-  // 없다 — 없는 데이터를 임의로 대체하지 않고(CLAUDE.md 원칙) 빈 목록으로 둔다.
-  const EXTRA_TARGET_LABELS_BY_CHANNEL: Record<string, string[]> = {
-    ENA: ["수도권 2039", "전국 유료가구"],
-    ENA_PLAY: ["수도권 2039", "전국 유료가구"],
-    ENA_DRAMA: ["전국 유료가구", "수도권 여3049"],
-    OLIFE: ["전국 5064"], // "개인2049" 요청하셨으나 §1.3 시트에 없어 제외
-    ONCE: ["전국 5064"], // 위와 동일
-    ENA_STORY: [], // "개인2049"·"여자3049" 둘 다 §1.3 시트에 없어 제외(위 설명 참고)
-  };
+  // 사용자 지시(2026-08-21): 채널별 "비교 시청률" 목록은 Page 1과 공유하므로 targetResolution.ts로
+  // 옮겼다(EXTRA_TARGET_LABELS_BY_CHANNEL, 설명도 그쪽에 있음).
   const extraTargetLabels = EXTRA_TARGET_LABELS_BY_CHANNEL[channel.code] ?? [];
 
   // OPPORTUNITY?/WHAT TO SCHEDULE? 재설계(사용자 지시) — daypart별 우리 vs 경쟁채널 격차가

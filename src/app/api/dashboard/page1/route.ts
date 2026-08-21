@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
-import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
+import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL } from "@/lib/targetResolution";
 import { mapWithConcurrency } from "@/lib/concurrency";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
@@ -171,6 +171,12 @@ interface TodayTopProgramRow {
   canonical_name: string;
   rating: number;
   start_time: string;
+  // 사용자 지시(2026-08-21): <본> 표시, 회차/부제(있으면), 비교 시청률(있으면) 추가.
+  isFirstRun: boolean | null;
+  episodeNumber: number | null;
+  episodeSubtitle: string | null;
+  comparisonRating: number | null;
+  comparisonTargetLabel: string | null;
 }
 
 export async function GET() {
@@ -577,7 +583,7 @@ export async function GET() {
     if (!targetRow) return [] as TodayTopProgramRow[];
     const { data } = await supabase
       .from("ratings")
-      .select("rating, start_time, programs(canonical_name)")
+      .select("rating, start_time, is_first_run, episode_number, episode_subtitle, programs(canonical_name)")
       .eq("channel_id", ch.id)
       .eq("target_id", targetRow.id)
       .in("source_type", ["nielsen_daily", "skyuhd"])
@@ -586,46 +592,54 @@ export async function GET() {
       .not("rating", "is", null)
       .order("rating", { ascending: false })
       .limit(3);
-    return (data ?? []).map(
-      (row: { rating: number; start_time: string; programs: { canonical_name: string } | { canonical_name: string }[] | null }): TodayTopProgramRow => ({
+    const rows = (data ?? []) as {
+      rating: number;
+      start_time: string;
+      is_first_run: boolean | null;
+      episode_number: number | null;
+      episode_subtitle: string | null;
+      programs: { canonical_name: string } | { canonical_name: string }[] | null;
+    }[];
+
+    // 사용자 지시(2026-08-21): "비교 시청률"(채널별 지정된 참고 타깃) 열도 함께 — 같은
+    // 프로그램·시작시간의 비교 타깃 시청률을 한 번 더 조회해 매칭한다(새 SQL 없이 단순 조회).
+    const comparisonLabel = EXTRA_TARGET_LABELS_BY_CHANNEL[code]?.[0] ?? null;
+    const comparisonByKey = new Map<string, number>();
+    if (comparisonLabel && rows.length > 0) {
+      const { data: comparisonTargetRow } = await supabase.from("targets").select("id").eq("label", comparisonLabel).maybeSingle();
+      if (comparisonTargetRow) {
+        const { data: comparisonRows } = await supabase
+          .from("ratings")
+          .select("rating, start_time, programs(canonical_name)")
+          .eq("channel_id", ch.id)
+          .eq("target_id", comparisonTargetRow.id)
+          .in("source_type", ["nielsen_daily", "skyuhd"])
+          .eq("broadcast_date", asOfDate)
+          .not("program_id", "is", null);
+        for (const cr of (comparisonRows ?? []) as { rating: number; start_time: string; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
+          const name = Array.isArray(cr.programs) ? cr.programs[0]?.canonical_name : cr.programs?.canonical_name;
+          comparisonByKey.set(`${cr.start_time}__${name}`, cr.rating);
+        }
+      }
+    }
+
+    return rows.map((row): TodayTopProgramRow => {
+      const canonicalName = Array.isArray(row.programs) ? (row.programs[0]?.canonical_name ?? "") : (row.programs?.canonical_name ?? "");
+      return {
         channelCode: code,
-        canonical_name: Array.isArray(row.programs) ? (row.programs[0]?.canonical_name ?? "") : (row.programs?.canonical_name ?? ""),
+        canonical_name: canonicalName,
         rating: row.rating,
         start_time: row.start_time,
-      })
-    );
+        isFirstRun: row.is_first_run,
+        episodeNumber: row.episode_number,
+        episodeSubtitle: row.episode_subtitle,
+        comparisonRating: comparisonByKey.get(`${row.start_time}__${canonicalName}`) ?? null,
+        comparisonTargetLabel: comparisonLabel,
+      };
+    });
   });
   const todayTopPrograms: TodayTopProgramRow[] = todayTopProgramsResults.flat();
 
-  // 9) 주요 콘텐츠 편성 리포트(개발 단위 #1, 사용자 지시 2026-08-21) — 관리자가 "주요 콘텐츠
-  //    관리"에 등록한 항목의 방송 채널·매주 반복 편성(요일·시간)·첫 방송일자~끝 방송일자(직접
-  //    입력 또는 예상 회차 기반 자동계산)를 그대로 모아서 보여준다. 새 계산 없이 featured_content
-  //    저장값을 조회만 한다(끝 방송일자 자동계산은 저장 시점에 API 라우트에서 이미 끝남).
-  const { data: featuredScheduleRows } = await supabase
-    .from("featured_content")
-    .select(
-      "category, broadcast_day_of_week, broadcast_time, broadcast_start_date, broadcast_end_date, expected_episode_count, programs(canonical_name, channels(code, name, theme_color))"
-    )
-    .not("broadcast_day_of_week", "is", null)
-    .order("broadcast_start_date", { ascending: false });
-  const featuredContentSchedule = (featuredScheduleRows ?? []).map((row) => {
-    const program = Array.isArray(row.programs) ? row.programs[0] : row.programs;
-    const channel = program?.channels ? (Array.isArray(program.channels) ? program.channels[0] : program.channels) : null;
-    const isEnded = !!row.broadcast_end_date && row.broadcast_end_date < asOfDate;
-    return {
-      title: program?.canonical_name ?? "—",
-      category: row.category,
-      channelCode: channel?.code ?? null,
-      channelName: channel?.name ?? "—",
-      themeColor: channel?.theme_color ?? null,
-      dayOfWeek: row.broadcast_day_of_week as string[] | null,
-      time: row.broadcast_time,
-      startDate: row.broadcast_start_date,
-      endDate: row.broadcast_end_date,
-      expectedEpisodeCount: row.expected_episode_count,
-      isEnded,
-    };
-  });
 
   // 10) 주요 뉴스(베타, 사용자 지시 2026-08-21) — 관리자가 텍스트로 업로드한 목록을 그대로.
   const { data: dailyNewsRows } = await supabase
@@ -642,7 +656,6 @@ export async function GET() {
     narrativeSignals,
     killerContentDaypart,
     todayTopPrograms,
-    featuredContentSchedule,
     dailyNews: dailyNewsRows ?? [],
   });
 }

@@ -163,6 +163,12 @@ interface TodayTopProgramRow {
   canonical_name: string;
   rating: number;
   start_time: string;
+  // 사용자 지시(2026-08-21): <본> 표시, 회차/부제(있으면), 비교 시청률(있으면).
+  isFirstRun: boolean | null;
+  episodeNumber: number | null;
+  episodeSubtitle: string | null;
+  comparisonRating: number | null;
+  comparisonTargetLabel: string | null;
 }
 
 // 사용자 지시(2026-08-21): "오늘의 빠른 요약" 위에 "주요 뉴스"(베타) 섹션. 관리자가 매일
@@ -182,25 +188,7 @@ interface DashboardData {
   narrativeSignals: ChannelNarrativeSignal[];
   killerContentDaypart: KillerContentDaypartRow[];
   todayTopPrograms: TodayTopProgramRow[];
-  featuredContentSchedule: FeaturedContentScheduleRow[];
   dailyNews: DailyNewsItem[];
-}
-
-// 개발 단위 #1(사용자 지시 2026-08-21): "주요 콘텐츠 관리"에 등록된 편성 정보(방송 채널·매주
-// 반복 요일·시간·첫 방송일자~끝 방송일자)를 그대로 리포트하는 카드용 타입. 끝 방송일자는
-// 관리자가 직접 입력했거나(예상 회차 기반 자동계산 우선) 저장 시점에 이미 계산돼 있다.
-interface FeaturedContentScheduleRow {
-  title: string;
-  category: string;
-  channelCode: string | null;
-  channelName: string;
-  themeColor: string | null;
-  dayOfWeek: string[] | null;
-  time: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  expectedEpisodeCount: number | null;
-  isEnded: boolean;
 }
 
 // 사용자 지시: 인사이트·킬러콘텐츠는 이 순서로 언급 (ENA → ENA Play → ENA Drama → OLIFE → ONCE → ENA Story)
@@ -214,13 +202,6 @@ const CHANNEL_NAME_BY_CODE: Record<string, string> = {
   OLIFE: "OLIFE",
   ONCE: "ONCE",
   SKYUHD: "skyUHD",
-};
-
-const DAYPART_LABEL: Record<string, string> = {
-  새벽: "새벽(02~08시)",
-  오전: "오전(09~13시)",
-  오후: "오후(14~18시)",
-  저녁_심야: "저녁·심야(19~25시)",
 };
 
 function fmtTime(t: string): string {
@@ -411,7 +392,8 @@ function buildYtdLine(channel: ChannelSummary): string | null {
       gapText = ` · 목표 순위(${targetRankNum}위) 대비 ${Math.abs(diff).toFixed(1)}위 ${diff > 0 ? "낮음" : "높음"}`;
     }
   }
-  return `누적(1/1~오늘) 평균 ${formatRating(channel.ytdAvgRating, channel.code)}(${channel.ytdAvgRank.toFixed(1)}위)${gapText}`;
+  // 사용자 지시(2026-08-21): 등위(순위)는 소수점 없이 정수로만 표시.
+  return `누적(1/1~오늘) 평균 ${formatRating(channel.ytdAvgRating, channel.code)}(${Math.round(channel.ytdAvgRank)}위)${gapText}`;
 }
 
 // ENA 히어로 — 사용자 지시(2026-08-20): 로고·시청률 가운데 정렬, 시청률(순위) + 전일 대비
@@ -429,13 +411,12 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
         }}
         heightPx={56}
       />
-      {/* 사용자 지시(2026-08-20): ENA 시청률·순위·전일 대비 증감을 한 줄로. */}
-      <div className="mt-3 flex flex-wrap items-baseline justify-center gap-2">
-        <span className="text-4xl font-semibold text-zinc-900">
+      {/* 사용자 지시(2026-08-21): 시청률부터 등위까지 가운데 정렬 + 동일한 글씨 크기 유지,
+          전일 대비 증감은 등위 바로 오른쪽에(줄바꿈 없이) 배치. */}
+      <div className="mt-3 flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
+        <span className="whitespace-nowrap text-3xl font-semibold text-zinc-900">
           {formatRating(channel.currentRating)}
-          {channel.currentRank !== null && (
-            <span className="ml-1.5 text-lg font-normal text-zinc-400">({channel.currentRank}위)</span>
-          )}
+          {channel.currentRank !== null && <span className="ml-1.5 text-3xl font-semibold text-zinc-400">({channel.currentRank}위)</span>}
         </span>
         <ChangeBadge pct={channel.dodChangePct} />
       </div>
@@ -538,11 +519,13 @@ interface OriginalHeadline {
   rank: number | null;
   beatenBy: OriginalCompetitorHighlight[]; // 우리보다 시청률 높은 경쟁 프로그램(시청률 내림차순)
 }
+// 사용자 지시(2026-08-21): 제목 표준 포맷 — "<프로그램명> N회 (전회 대비 증가/감소, 동시간대
+// 타깃 #위)". 예시: "<나는 SOLO, 그 후 사랑은 계속된다> 168회 (전회 대비 감소, 동시간대 타깃 3위)".
 function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null {
   if (item.episode_number === null) return null;
   const parts: string[] = [];
   if (item.prior_rating_change_pct !== null) {
-    parts.push(item.prior_rating_change_pct >= 0 ? "전회 대비 상승" : "전회 대비 하락");
+    parts.push(item.prior_rating_change_pct >= 0 ? "전회 대비 증가" : "전회 대비 감소");
   }
   let rank: number | null = null;
   let beatenBy: OriginalCompetitorHighlight[] = [];
@@ -554,7 +537,7 @@ function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null
     parts.push(`동시간대 타깃 ${rank}위`);
   }
   const suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
-  return { text: `<${item.matched_program_name}> ${item.episode_number}회 본방송 시청률${suffix}`, rank, beatenBy };
+  return { text: `<${item.matched_program_name}> ${item.episode_number}회${suffix}`, rank, beatenBy };
 }
 
 // 사용자 지시(2026-08-20): 문단 서술 대신 "핵심 요약 불릿 + [편성 인사이트]" 형태로 재구성.
@@ -687,7 +670,7 @@ function buildOriginalDailyBriefing(daily: OriginalDailyItem[]): string | null {
   return parts.join(" ");
 }
 
-function OriginalContentReportCard({ report }: { report: OriginalContentSummary }) {
+function OriginalContentReportCard({ report, enaAccentColor }: { report: OriginalContentSummary; enaAccentColor: string }) {
   return (
     <div className={CARD}>
       {/* 사용자 지시(2026-08-21): 카드 제목을 "주요 컨텐츠 리뷰"로. */}
@@ -748,7 +731,22 @@ function OriginalContentReportCard({ report }: { report: OriginalContentSummary 
                           <td className="py-2 pr-2 text-zinc-600">
                             {CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
                             <br />
-                            {fmtTime(h.matched_start_time)} · {formatRating(h.matched_rating)}
+                            {fmtTime(h.matched_start_time)} ·{" "}
+                            {/* 사용자 지시(2026-08-21): 본방송 시청률 볼드, 전회 대비 증가=푸른색(ENA
+                                로고색)/감소=붉은색. */}
+                            <span
+                              className="font-bold"
+                              style={{
+                                color:
+                                  h.prior_rating_change_pct === null
+                                    ? undefined
+                                    : h.prior_rating_change_pct >= 0
+                                      ? enaAccentColor
+                                      : "#e11d48",
+                              }}
+                            >
+                              {formatRating(h.matched_rating)}
+                            </span>
                             {h.prior_rating_change_pct !== null && (
                               <div className="mt-0.5 text-[10px]">
                                 <span className={h.prior_rating_change_pct >= 0 ? "text-emerald-600" : "text-rose-600"}>
@@ -906,79 +904,91 @@ function ChannelNarrativeCard({
 // ④ 채널별 킬러 콘텐츠(강세/약세 시간대) — R2C2
 // 사용자 지시(2026-08-21): 시청률이 그 채널의 올해 1/1~오늘 누적 평균보다 높으면 초록, 낮으면
 // 붉은색으로 표시(ytdAvgByCode = 채널 단위 누적 평균, ChannelSummary.ytdAvgRating 그대로 재사용).
-function KillerContentCard({ rows, ytdAvgByCode }: { rows: KillerContentDaypartRow[]; ytdAvgByCode: Map<string, number | null> }) {
+// 사용자 지시(2026-08-21): 강세/약세 시간대 라벨은 한 줄 안에 넣을 것이므로 시간 범위 괄호 없이
+// 짧게(DAYPART_LABEL은 "저녁·심야(19~25시)"처럼 길어서 한 줄 요약에는 이 짧은 버전을 쓴다).
+const SHORT_DAYPART_LABEL: Record<string, string> = { 새벽: "새벽", 오전: "오전", 오후: "오후", 저녁_심야: "저녁심야" };
+
+// 사용자 지시(2026-08-21): 콘텐츠당 설명을 1줄로 압축(핵심 정보는 유지) — 방영횟수·총합·강세/
+// 약세 시간대·점유율/유료가구 보너스 코멘트를 " · "로 이어붙인 문장 하나로 조립.
+function buildKillerContentOneLiner(k: KillerContentDaypartRow): string {
+  const totalRating = k.avg_rating * k.airing_count;
+  const parts: string[] = [`${k.airing_count}회·총합${formatRating(totalRating)}`];
+  if (k.best_daypart) parts.push(`강세${SHORT_DAYPART_LABEL[k.best_daypart] ?? k.best_daypart}(${formatRating(k.best_daypart_avg)})`);
+  if (k.worst_daypart) parts.push(`약세${SHORT_DAYPART_LABEL[k.worst_daypart] ?? k.worst_daypart}(${formatRating(k.worst_daypart_avg)})`);
+  // 사용자 지시(2026-08-20): 시청률은 약해도 점유율/유료가구 시청률이 채널 평균보다 좋으면(±15%
+  // 이상) 짧게 코멘트.
+  if (k.avg_share !== null && k.channel_avg_share_baseline !== null && k.channel_avg_share_baseline > 0 && k.avg_share / k.channel_avg_share_baseline - 1 >= 0.15) {
+    parts.push(`점유율↑${k.avg_share.toFixed(2)}%`);
+  }
+  if (
+    k.household_avg_rating !== null &&
+    k.household_baseline_avg_rating !== null &&
+    k.household_baseline_avg_rating > 0 &&
+    k.household_avg_rating / k.household_baseline_avg_rating - 1 >= 0.15
+  ) {
+    parts.push(`유료가구↑${formatRating(k.household_avg_rating)}`);
+  }
+  return parts.join(" · ");
+}
+
+// 사용자 지시(2026-08-21): "좌/우로 분리되어 있던 섹션을 하나로 통합, 좌우 높이 균형" — 좌측
+// ENA/ENA Play/ENA Drama, 우측 OLIFE/ONCE/ENA Story로 한 카드 안에서 2컬럼 구성. 채널명은
+// 로고 색·Bold(사용자 지시).
+const KILLER_CONTENT_LEFT_CODES = ["ENA", "ENA_PLAY", "ENA_DRAMA"];
+const KILLER_CONTENT_RIGHT_CODES = ["OLIFE", "ONCE", "ENA_STORY"];
+
+function KillerContentCard({
+  rows,
+  themeColorByCode,
+  ytdAvgByCode,
+}: {
+  rows: KillerContentDaypartRow[];
+  themeColorByCode: Map<string, string | null>;
+  ytdAvgByCode: Map<string, number | null>;
+}) {
   const byChannel = new Map<string, KillerContentDaypartRow[]>();
   for (const r of rows) {
     if (!byChannel.has(r.channelCode)) byChannel.set(r.channelCode, []);
     byChannel.get(r.channelCode)!.push(r);
   }
 
+  function renderChannelGroup(code: string) {
+    const list = byChannel.get(code) ?? [];
+    if (list.length === 0) return null;
+    const ytdAvg = ytdAvgByCode.get(code) ?? null;
+    return (
+      <div key={code}>
+        <p className="mb-1 text-xs font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
+          {CHANNEL_NAME_BY_CODE[code]}
+        </p>
+        <div className="flex flex-col gap-1">
+          {list.map((k) => {
+            const ytdColorClass = ytdAvg === null ? "text-zinc-500" : k.avg_rating >= ytdAvg ? "text-emerald-600" : "text-rose-500";
+            return (
+              <p key={k.canonical_name} className="truncate text-xs text-zinc-600" title={buildKillerContentOneLiner(k)}>
+                <span className="font-medium text-zinc-800">{k.canonical_name}</span>{" "}
+                <span className={`font-semibold ${ytdColorClass}`}>{formatRating(k.avg_rating)}</span>{" "}
+                <span className="text-zinc-400">· {buildKillerContentOneLiner(k)}</span>
+              </p>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={CARD}>
+    <div className={`${CARD} lg:col-span-2`}>
       <h2 className="mb-1 text-sm font-semibold text-indigo-600">채널별 킬러 콘텐츠</h2>
       <p className="mb-4 text-xs text-zinc-400">최근 4주 평균 시청률 상위 프로그램 — 강세·약세 시간대가 있으면 함께 표시합니다.</p>
-      <div className="flex flex-col gap-4 text-sm">
-        {INSIGHT_CHANNEL_ORDER.map((code) => {
-          const list = byChannel.get(code) ?? [];
-          if (list.length === 0) return null;
-          const ytdAvg = ytdAvgByCode.get(code) ?? null;
-          return (
-            <div key={code}>
-              <p className="mb-1.5 text-xs font-semibold text-zinc-500">{CHANNEL_NAME_BY_CODE[code]}</p>
-              <div className="flex flex-col gap-1.5">
-                {list.map((k) => {
-                  // 사용자 지시(2026-08-21): 시청률이 채널의 올해 누적 평균보다 높으면 초록, 낮으면 붉은색.
-                  const ytdColorClass =
-                    ytdAvg === null ? "text-zinc-500" : k.avg_rating >= ytdAvg ? "text-emerald-600" : "text-rose-500";
-                  // 사용자 지시(2026-08-21): "총 몇 회 방영했는지, 시청률 총합"도 간단히 명기.
-                  const totalRating = k.avg_rating * k.airing_count;
-                  // 사용자 지시(2026-08-20): 시청률은 약해도 점유율이 채널 평균보다 상대적으로 좋거나
-                  // (±15% 이상), 타깃(수도권 2049 등) 시청률은 약해도 유료가구 시청률이 채널의 유료가구
-                  // 평균보다 좋으면(±15% 이상) 별도 코멘트. 후자는 KPI가 이미 유료가구인 채널은
-                  // household_avg_rating이 SQL에서 NULL로 내려온다.
-                  const shareNote =
-                    k.avg_share !== null && k.channel_avg_share_baseline !== null && k.channel_avg_share_baseline > 0 && k.avg_share / k.channel_avg_share_baseline - 1 >= 0.15
-                      ? `점유율이 채널 평균(${k.channel_avg_share_baseline.toFixed(2)}%)보다 좋습니다(${k.avg_share.toFixed(2)}%).`
-                      : null;
-                  const householdNote =
-                    k.household_avg_rating !== null && k.household_baseline_avg_rating !== null && k.household_baseline_avg_rating > 0 && k.household_avg_rating / k.household_baseline_avg_rating - 1 >= 0.15
-                      ? `타깃 시청률은 약해도 유료가구 시청률은 채널 유료가구 평균(${formatRating(k.household_baseline_avg_rating)})보다 좋습니다(${formatRating(k.household_avg_rating)}).`
-                      : null;
-                  return (
-                    <div key={k.canonical_name} className="rounded-xl bg-indigo-50/50 p-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-zinc-800">{k.canonical_name}</span>
-                        <span className={`font-semibold ${ytdColorClass}`}>{formatRating(k.avg_rating)}</span>
-                      </div>
-                      <p className="mt-0.5 text-[10px] text-zinc-400">
-                        최근 4주 {k.airing_count}회 방영 · 시청률 총합 {formatRating(totalRating)}
-                      </p>
-                      {(k.best_daypart || k.worst_daypart) && (
-                        <p className="mt-0.5 text-xs text-zinc-500">
-                          {k.best_daypart && (
-                            <span className="text-emerald-600">
-                              강세 {DAYPART_LABEL[k.best_daypart] ?? k.best_daypart}({formatRating(k.best_daypart_avg)})
-                            </span>
-                          )}
-                          {k.best_daypart && k.worst_daypart && "  ·  "}
-                          {k.worst_daypart && (
-                            <span className="text-rose-500">
-                              약세 {DAYPART_LABEL[k.worst_daypart] ?? k.worst_daypart}({formatRating(k.worst_daypart_avg)})
-                            </span>
-                          )}
-                        </p>
-                      )}
-                      {shareNote && <p className="mt-1 text-xs text-sky-600">{shareNote}</p>}
-                      {householdNote && <p className="mt-1 text-xs text-sky-600">{householdNote}</p>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-        {rows.length === 0 && <p className="text-zinc-400">데이터가 아직 부족합니다.</p>}
-      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-zinc-400">데이터가 아직 부족합니다.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+          <div className="flex flex-col gap-4">{KILLER_CONTENT_LEFT_CODES.map(renderChannelGroup)}</div>
+          <div className="flex flex-col gap-4">{KILLER_CONTENT_RIGHT_CODES.map(renderChannelGroup)}</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -986,12 +996,19 @@ function KillerContentCard({ rows, ytdAvgByCode }: { rows: KillerContentDaypartR
 // 사용자 지시(2026-08-21): 채널별 인사이트 옆자리(기존 채널별 킬러 콘텐츠 자리)에 새로 배치 —
 // 최근 4주 평균이 아니라 "오늘 하루"의 채널별 시청률 상위 3개 프로그램만 간단한 표로. 채널명은
 // 채널별 인사이트와 동일하게 로고 색을 반영한 볼드로 표시(사용자 지시).
+// 사용자 지시(2026-08-21): 원문 <본> 표시는 생략 없이, 추가 파악된 회차/부제가 있으면 함께 표시.
+// 필수 열: 방영시간·타깃 시청률·비교 시청률. 타깃 시청률 색상은 1/1~분석일 채널 누적 평균 대비
+// (상회=푸른색/ENA 로고색, 동일=검정, 하회=붉은색).
 function TodayTopProgramsCard({
   rows,
   themeColorByCode,
+  ytdAvgByCode,
+  enaAccentColor,
 }: {
   rows: TodayTopProgramRow[];
   themeColorByCode: Map<string, string | null>;
+  ytdAvgByCode: Map<string, number | null>;
+  enaAccentColor: string;
 }) {
   const byChannel = new Map<string, TodayTopProgramRow[]>();
   for (const r of rows) {
@@ -1007,6 +1024,7 @@ function TodayTopProgramsCard({
         {INSIGHT_CHANNEL_ORDER.map((code) => {
           const list = byChannel.get(code) ?? [];
           if (list.length === 0) return null;
+          const ytdAvg = ytdAvgByCode.get(code) ?? null;
           return (
             <div key={code}>
               <span className="text-xs font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
@@ -1014,14 +1032,38 @@ function TodayTopProgramsCard({
               </span>
               <table className="mt-1 w-full text-left text-xs">
                 <tbody>
-                  {list.map((p, i) => (
-                    <tr key={i} className="border-t border-zinc-50">
-                      <td className="w-4 py-1 text-zinc-400">{i + 1}</td>
-                      <td className="py-1 text-zinc-700">{p.canonical_name}</td>
-                      <td className="w-12 py-1 text-right text-zinc-400">{fmtTime(p.start_time)}</td>
-                      <td className="w-14 py-1 text-right font-semibold text-zinc-800">{formatRating(p.rating)}</td>
-                    </tr>
-                  ))}
+                  {list.map((p, i) => {
+                    // 사용자 지시(2026-08-21): 채널 누적 평균 대비 상회/동일/하회 색상.
+                    const ratingColor =
+                      ytdAvg === null || p.rating === ytdAvg
+                        ? undefined
+                        : p.rating > ytdAvg
+                          ? enaAccentColor
+                          : "#e11d48"; // rose-600
+                    const episodeText =
+                      p.episodeNumber !== null ? `${p.episodeNumber}회${p.episodeSubtitle ? ` ${p.episodeSubtitle}` : ""}` : null;
+                    return (
+                      <tr key={i} className="border-t border-zinc-50 align-top">
+                        <td className="w-4 py-1 text-zinc-400">{i + 1}</td>
+                        <td className="py-1 text-zinc-700">
+                          <div>
+                            {p.canonical_name}
+                            {p.isFirstRun !== null && (
+                              <span className="ml-1 text-[10px] text-zinc-400">{p.isFirstRun ? "<본>" : "<재>"}</span>
+                            )}
+                          </div>
+                          {episodeText && <div className="text-[10px] text-zinc-400">{episodeText}</div>}
+                        </td>
+                        <td className="w-12 py-1 text-right text-zinc-400">{fmtTime(p.start_time)}</td>
+                        <td className="w-14 py-1 text-right font-semibold" style={{ color: ratingColor }}>
+                          {formatRating(p.rating)}
+                        </td>
+                        <td className="w-14 py-1 text-right text-zinc-400">
+                          {p.comparisonRating !== null ? formatRating(p.comparisonRating) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1071,110 +1113,6 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
       </div>
     </div>
   );
-}
-
-// 개발 단위 #1(사용자 지시 2026-08-21): "첫 방송회차부터 마지막 방송회차까지의 방송 채널 및
-// 본 방송 시간을 기억하여 리포트" — 관리자 화면에서 계산·저장해둔 값을 그대로 나열만 한다(이
-// 카드는 새 계산을 하지 않음). 방영 종료된 항목은 흐리게, 방영 중인 항목이 위로 오도록 정렬.
-function FeaturedContentScheduleCard({ rows }: { rows: FeaturedContentScheduleRow[] }) {
-  const sorted = [...rows].sort((a, b) => Number(a.isEnded) - Number(b.isEnded));
-  return (
-    <div className={`${CARD} lg:col-span-2`}>
-      <h2 className="mb-1 text-sm font-semibold text-indigo-600">주요 콘텐츠 편성 리포트</h2>
-      <p className="mb-4 text-xs text-zinc-400">
-        관리자 화면 &quot;주요 콘텐츠 관리&quot;에 등록된 첫 방송일자·매주 반복 편성을 기준으로 정리했습니다.
-      </p>
-      {sorted.length === 0 ? (
-        <p className="text-sm text-zinc-400">등록된 주요 콘텐츠 편성 정보가 없습니다.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="text-zinc-400">
-                <th className="pb-1 font-medium">채널</th>
-                <th className="pb-1 font-medium">타이틀</th>
-                <th className="pb-1 font-medium">분류</th>
-                <th className="pb-1 font-medium">매주 반복 편성</th>
-                <th className="pb-1 font-medium">방영 기간</th>
-                <th className="pb-1 font-medium">상태</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((row, i) => (
-                <tr key={i} className={`border-t border-zinc-50 ${row.isEnded ? "opacity-50" : ""}`}>
-                  <td className="whitespace-nowrap py-1.5 font-bold" style={{ color: row.themeColor ?? undefined }}>
-                    {row.channelName}
-                  </td>
-                  <td className="py-1.5 text-zinc-700">{row.title}</td>
-                  <td className="whitespace-nowrap py-1.5 text-zinc-500">{row.category}</td>
-                  <td className="whitespace-nowrap py-1.5 text-zinc-600">
-                    {row.dayOfWeek && row.dayOfWeek.length > 0 ? `매주 ${row.dayOfWeek.join("·")} ${row.time ? fmtTime(row.time) : ""}` : "—"}
-                  </td>
-                  <td className="whitespace-nowrap py-1.5 text-zinc-600">
-                    {row.startDate ?? "—"} ~ {row.endDate ?? "방영중"}
-                    {row.expectedEpisodeCount ? ` (총 ${row.expectedEpisodeCount}회)` : ""}
-                  </td>
-                  <td className="whitespace-nowrap py-1.5">
-                    {row.isEnded ? (
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500">종영</span>
-                    ) : (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">방영중</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// 사용자 지시(2026-08-20): 채널명을 앞에, 🔴🟢🟡 상태 라벨은 채널명 뒤에 — 라벨은 영어
-// (STRENGTHEN/WATCH/RISK) 대신 한국어로. 채널명 폰트 색은 그 채널 로고 색(bold)로 표시.
-// 사용자 지시(2026-08-20, 참고 이미지 반영): 한 줄 나열 대신 참고 이미지의 AI Insights 카드
-// 처럼 상태 배지(pill) → 채널명(굵게) → 설명 순으로 세로 배치 — 데이터·톤 로직은 그대로 두고
-// 시각 스타일만 바꿨다(사용자 확인: "비주얼 스타일만 차용").
-function InsightCard({
-  channelName,
-  themeColor,
-  tone,
-  text,
-}: {
-  channelName: string;
-  themeColor: string | null;
-  tone: "positive" | "watch" | "risk";
-  text: string;
-}) {
-  const styles = {
-    positive: { pillBg: "bg-emerald-100", pillText: "text-emerald-700", dot: "bg-emerald-500", label: "강세" },
-    watch: { pillBg: "bg-amber-100", pillText: "text-amber-700", dot: "bg-amber-500", label: "주의" },
-    risk: { pillBg: "bg-rose-100", pillText: "text-rose-700", dot: "bg-rose-500", label: "위험" },
-  }[tone];
-  return (
-    <div className="flex flex-col gap-1.5 rounded-2xl bg-white/70 p-3 ring-1 ring-zinc-100">
-      <span className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${styles.pillBg} ${styles.pillText}`}>
-        <span className={`h-1.5 w-1.5 rounded-full ${styles.dot}`} />
-        {styles.label}
-      </span>
-      <span className="text-sm font-bold" style={{ color: themeColor ?? undefined }}>
-        {channelName}
-      </span>
-      <span className="text-xs leading-relaxed text-zinc-500">{text}</span>
-    </div>
-  );
-}
-
-function buildQuickTags(channels: ChannelSummary[]) {
-  return channels
-    .filter((c) => c.achievementPct !== null)
-    .map((c) => {
-      const pct = c.achievementPct!;
-      if (pct >= 100) return { channelName: c.name, themeColor: c.themeColor, tone: "positive" as const, text: `목표 대비 ${pct.toFixed(1)}% 달성` };
-      if (pct >= 70) return { channelName: c.name, themeColor: c.themeColor, tone: "watch" as const, text: `목표 대비 ${pct.toFixed(1)}%` };
-      return { channelName: c.name, themeColor: c.themeColor, tone: "risk" as const, text: `목표 대비 ${pct.toFixed(1)}%` };
-    });
 }
 
 export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
@@ -1291,12 +1229,11 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
         {loading && !data && <p className="text-sm text-zinc-500">불러오는 중...</p>}
 
         {data && (
-          // 2열 × 3행 그리드(사용자 지시, 2026-08-21 재배치): R2 우측은 채널별 킬러 콘텐츠(4주
-          // 평균) 대신 당일 상위 프로그램 3개로, 킬러 콘텐츠는 R3에서 오늘의 빠른 요약 옆으로
-          // 옮겼다(둘 다 반쪽 폭).
+          // 그리드 재배치(사용자 지시, 2026-08-21): "오늘의 빠른 요약"·"주요 콘텐츠 편성 리포트"는
+          // 삭제. 채널별 킬러 콘텐츠는 좌/우 2컬럼 하나의 통합 섹션(전체 폭)으로 마지막에 배치.
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <ChannelStatusCard channels={byCode} />
-            <OriginalContentReportCard report={data.originalContentReport} />
+            <OriginalContentReportCard report={data.originalContentReport} enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"} />
 
             <ChannelNarrativeCard
               signals={data.narrativeSignals}
@@ -1305,24 +1242,17 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
             <TodayTopProgramsCard
               rows={data.todayTopPrograms}
               themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
+              ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
+              enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
             />
 
             <DailyNewsCard items={data.dailyNews} />
 
-            <div className={CARD}>
-              <h2 className="mb-3 text-sm font-semibold text-indigo-600">오늘의 빠른 요약</h2>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {buildQuickTags(data.channels).map((tag, i) => (
-                  <InsightCard key={i} channelName={tag.channelName} themeColor={tag.themeColor} tone={tag.tone} text={tag.text} />
-                ))}
-              </div>
-            </div>
             <KillerContentCard
               rows={data.killerContentDaypart}
+              themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
               ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
             />
-
-            <FeaturedContentScheduleCard rows={data.featuredContentSchedule} />
           </div>
         )}
       </div>
