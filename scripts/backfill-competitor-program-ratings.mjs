@@ -50,9 +50,15 @@ function findCompetitorBlocks(rows) {
   }
   return blocks;
 }
-function parseCompetitorProgramSheet(rows, ourChannelCode, selfNames) {
+// 버그 수정(2026-08-21, src/lib/nielsenDaily.ts와 동일하게 재검증): 시트 하나를 그 시트의
+// "자사 채널"에만 고정 귀속시켰더니, Competitor Master를 직접 조회한 결과 ENA_STORY/ENA_PLAY의
+// 등록 경쟁채널 일부가 다른 시트(자기 시트가 아닌)에 흩어져 있는 게 실제로 확인됐다 — 4개 시트의
+// 모든 경쟁채널 블록을 하나의 풀로 모아 분석 대상 6개 채널 전부에 내보내고, 실제 귀속은 아래
+// registeredByChannel(그 채널의 실제 Competitor Master 등록 여부)로 걸러지도록 바꿨다.
+const ALL_SELF_DISPLAY_NAMES = ["ENA", "ENA DRAMA", "ENA STORY", "ENA PLAY", "ONCE", "OLIFE"];
+function parseCompetitorProgramSheet(rows) {
   const results = [];
-  const selfSet = new Set(selfNames);
+  const selfSet = new Set(ALL_SELF_DISPLAY_NAMES);
   for (const block of findCompetitorBlocks(rows)) {
     if (selfSet.has(block.name)) continue;
     const targetLabelRow = rows[block.headerRowIdx + 1];
@@ -65,7 +71,6 @@ function parseCompetitorProgramSheet(rows, ourChannelCode, selfNames) {
       const programName = String(row?.[block.col + 2] ?? "").trim();
       if (!programName) continue;
       results.push({
-        ourChannelCode,
         competitorName: block.name,
         startTime: normalizeTime(row[block.col]),
         endTime: normalizeTime(row?.[block.col + 1]),
@@ -79,12 +84,8 @@ function parseCompetitorProgramSheet(rows, ourChannelCode, selfNames) {
   return results;
 }
 
-const COMPETITOR_SHEETS = [
-  { sheetName: "ENA경쟁채널시청률", ourChannelCode: "ENA", selfNames: ["ENA"] },
-  { sheetName: "ENA DRAMA경쟁채널시청률", ourChannelCode: "ENA_DRAMA", selfNames: ["ENA DRAMA", "ENA STORY"] },
-  { sheetName: "ENA PLAY경쟁채널시청률", ourChannelCode: "ENA_PLAY", selfNames: ["ENA PLAY"] },
-  { sheetName: "ONCE,OLIFE경쟁채널시청률", ourChannelCode: "ONCE", selfNames: ["ONCE", "OLIFE"] },
-];
+const COMPETITOR_SHEET_NAMES = ["ENA경쟁채널시청률", "ENA DRAMA경쟁채널시청률", "ENA PLAY경쟁채널시청률", "ONCE,OLIFE경쟁채널시청률"];
+const COMPETITOR_TARGET_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_STORY", "ENA_PLAY", "ONCE", "OLIFE"];
 
 // ── 채널/경쟁채널 마스터 로드 ──
 const { data: channels } = await supabase.from("channels").select("id, code");
@@ -129,16 +130,23 @@ for (const month of monthDirs) {
       continue;
     }
 
-    const rowsToInsert = [];
-    let skippedUnregistered = 0;
-    for (const { sheetName, ourChannelCode, selfNames } of COMPETITOR_SHEETS) {
+    // 4개 시트의 경쟁채널 블록을 전부 하나의 풀로 모은다.
+    const pooledRows = [];
+    for (const sheetName of COMPETITOR_SHEET_NAMES) {
       const sheet = wb.Sheets[sheetName];
       if (!sheet) continue;
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: true });
+      pooledRows.push(...parseCompetitorProgramSheet(rows));
+    }
+
+    const rowsToInsert = [];
+    let skippedUnregistered = 0;
+    // 분석 대상 6개 채널 전부에 대해, 그 채널의 Competitor Master 등록 여부로 걸러 귀속시킨다.
+    for (const ourChannelCode of COMPETITOR_TARGET_CHANNEL_CODES) {
       const ourChannelId = channelIdByCode.get(ourChannelCode);
       if (!ourChannelId) continue;
       const registered = registeredByChannel.get(ourChannelId) ?? new Set();
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: true });
-      for (const row of parseCompetitorProgramSheet(rows, ourChannelCode, selfNames)) {
+      for (const row of pooledRows) {
         if (!row.startTime) continue;
         if (!registered.has(row.competitorName)) {
           skippedUnregistered += 1;

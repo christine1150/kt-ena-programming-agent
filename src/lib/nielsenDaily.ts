@@ -231,8 +231,17 @@ function parseTargetDetailSheet(rows: Row[], wantedChannelNames: Set<string>): P
 //     Mnet / E채널 / 코미디TV / theLIFE
 //   ONCE,OLIFE경쟁채널시청률: ONCE(자사,skip) / OLIFE(자사,skip) / EDGETV / CNTV / D-ONE / MBC ON /
 //     K STAR / CH view
-// (Competitor Master에 등록된 채널명과 정확히 일치함을 실데이터로 확인 — 등록 안 된 채널은
-// 업로드 라우트에서 걸러진다)
+// (이 블록 이름들은 Competitor Master에 등록된 채널명과 정확히 일치함을 실데이터로 확인 — 등록
+// 안 된 채널은 아래 필터링 단계에서 걸러진다)
+//
+// **설계 변경(2026-08-21, 사용자 지시로 재검증)**: 처음엔 시트 하나를 그 시트의 "자사 채널"에만
+// 고정 귀속시켰는데(예: ONCE,OLIFE 시트 → ONCE만), Competitor Master를 직접 조회해보니 그렇지
+// 않은 경우가 실제로 있었다 — ENA_STORY의 등록 경쟁채널 중 CH view/D-ONE/K STAR는
+// "ONCE,OLIFE경쟁채널시청률" 시트에, 코미디TV/theLIFE는 "ENA PLAY경쟁채널시청률" 시트에 있고,
+// ENA_PLAY도 SBS Plus/MBC드라마넷/tvN STORY/DRAMAcube/Dramax가 "ENA DRAMA경쟁채널시청률"
+// 시트에 있다. 그래서 시트→채널을 고정하지 않고 4개 시트의 모든 경쟁채널 블록을 하나의 풀로
+// 모아 분석 대상 6개 채널 전부에 내보내고, 실제 귀속은 각 채널의 Competitor Master 등록 여부로
+// 걸러지도록 바꿨다(아래 COMPETITOR_SHEET_NAMES/COMPETITOR_TARGET_CHANNEL_NAMES).
 export interface CompetitorProgramRow {
   ourChannelCode: string;
   competitorName: string;
@@ -244,12 +253,24 @@ export interface CompetitorProgramRow {
   share: number | null;
 }
 
-const COMPETITOR_SHEET_TO_OUR_CHANNEL: { sheetName: string; ourChannelName: string; selfNames: string[] }[] = [
-  { sheetName: "ENA경쟁채널시청률", ourChannelName: "ENA", selfNames: ["ENA"] },
-  { sheetName: "ENA DRAMA경쟁채널시청률", ourChannelName: "ENA DRAMA", selfNames: ["ENA DRAMA", "ENA STORY"] },
-  { sheetName: "ENA PLAY경쟁채널시청률", ourChannelName: "ENA PLAY", selfNames: ["ENA PLAY"] },
-  { sheetName: "ONCE,OLIFE경쟁채널시청률", ourChannelName: "ONCE", selfNames: ["ONCE", "OLIFE"] },
-];
+// 버그 수정(2026-08-21, 사용자 지시로 4개 시트 전체 실파일 재검증): 예전엔 시트 하나를 딱 1~2개
+// 자사 채널에만 고정 귀속시켰다(예: "ONCE,OLIFE경쟁채널시청률" → ONCE만). 그런데 실제
+// Competitor Master(관리자가 등록한 `competitors` 테이블) 조회 결과, 한 채널의 등록 경쟁채널이
+// 그 채널 "자기 시트"가 아닌 다른 시트에 걸쳐 나뉘어 있는 경우가 실제로 있었다 — 예:
+// ENA_STORY는 CH view/D-ONE/K STAR가 "ONCE,OLIFE경쟁채널시청률" 시트에, 코미디TV/theLIFE가
+// "ENA PLAY경쟁채널시청률" 시트에 있고, ENA_PLAY도 SBS Plus/MBC드라마넷/tvN STORY/DRAMAcube/
+// Dramax가 "ENA DRAMA경쟁채널시청률" 시트에 있다(반대로 OLIFE의 등록 경쟁채널 CMCTV/ONT는 이
+// 4개 시트 어디에도 없어 프로그램 단위 데이터가 없다 — 임의로 만들지 않음). 그래서 시트-채널을
+// 1:1(또는 1:2)로 고정하지 않고, 4개 시트의 모든 경쟁채널 블록(자사 채널 블록 제외)을 하나의
+// 풀로 모은 뒤, 분석 대상 6개 채널 전부에 대해 일단 전부 내보낸다 — 실제로 어느 채널에 붙는지는
+// nielsenIngest.ts가 이미 하던 대로 그 채널의 `competitors` 등록 여부로 걸러진다(등록 안 된
+// 조합은 자동으로 제외되므로, 여기서 안 맞는 채널명을 함께 내보내도 안전하다).
+const COMPETITOR_SHEET_NAMES = ["ENA경쟁채널시청률", "ENA DRAMA경쟁채널시청률", "ENA PLAY경쟁채널시청률", "ONCE,OLIFE경쟁채널시청률"];
+// 4개 시트 어디에 나오든 "자사 채널 자신의 블록"은 항상 건너뛴다(§1.3에서 이미 확보한 데이터라
+// 경쟁채널로 취급하면 안 됨) — 특정 시트의 self-name이 아니라 우리 6개 채널 전체 표기를 기준으로.
+const ALL_SELF_DISPLAY_NAMES = ["ENA", "ENA DRAMA", "ENA STORY", "ENA PLAY", "ONCE", "OLIFE"];
+// 풀링된 경쟁채널 데이터를 내보낼 분석 대상 채널(경쟁채널 등록 여부는 다운스트림에서 걸러짐).
+const COMPETITOR_TARGET_CHANNEL_NAMES = ["ENA", "ENA DRAMA", "ENA STORY", "ENA PLAY", "ONCE", "OLIFE"];
 
 /** 시트 전체에서 "시작시간" 헤더 셀을 모두 찾아 블록 목록을 만든다 (채널 블록마다 하나씩). */
 function findCompetitorBlocks(rows: Row[]): { headerRowIdx: number; col: number; name: string }[] {
@@ -266,9 +287,12 @@ function findCompetitorBlocks(rows: Row[]): { headerRowIdx: number; col: number;
   return blocks;
 }
 
-function parseCompetitorProgramSheet(rows: Row[], ourChannelCode: string, selfNames: string[]): CompetitorProgramRow[] {
-  const results: CompetitorProgramRow[] = [];
-  const selfNameSet = new Set(selfNames);
+// ourChannelCode는 빈 문자열로 두고 반환 — 이 풀링된 데이터는 호출부(parseNielsenDailyWorkbook)가
+// 분석 대상 채널 전체로 복제해서 내보내고, 실제 귀속은 다운스트림(nielsenIngest.ts)의 등록
+// 경쟁채널 필터가 정한다(위 설명 참고).
+function parseCompetitorProgramSheet(rows: Row[]): Omit<CompetitorProgramRow, "ourChannelCode">[] {
+  const results: Omit<CompetitorProgramRow, "ourChannelCode">[] = [];
+  const selfNameSet = new Set(ALL_SELF_DISPLAY_NAMES);
 
   for (const block of findCompetitorBlocks(rows)) {
     if (selfNameSet.has(block.name)) continue; // 우리 채널 자신의 블록은 §1.3에서 이미 확보 — skip
@@ -286,7 +310,6 @@ function parseCompetitorProgramSheet(rows: Row[], ourChannelCode: string, selfNa
       if (!programName) continue;
 
       results.push({
-        ourChannelCode,
         competitorName: block.name,
         startTime: normalizeTime(row[block.col]),
         endTime: normalizeTime(row?.[block.col + 1]),
@@ -411,12 +434,20 @@ export function parseNielsenDailyWorkbook(
     programRows.push(...parseTargetDetailSheet(rows, new Set(COMBINED_SHEET_WANTED_CHANNELS)));
   }
 
-  const competitorProgramRows: CompetitorProgramRow[] = [];
-  for (const { sheetName, ourChannelName, selfNames } of COMPETITOR_SHEET_TO_OUR_CHANNEL) {
+  // 4개 시트의 경쟁채널 블록을 전부 하나의 풀로 모은다(위 설명 참고).
+  const pooledCompetitorRows: Omit<CompetitorProgramRow, "ourChannelCode">[] = [];
+  for (const sheetName of COMPETITOR_SHEET_NAMES) {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) continue; // 필수 시트가 아니므로(경고만) 없으면 조용히 건너뜀
     const rows = XLSX.utils.sheet_to_json<Row>(sheet, { header: 1, blankrows: true });
-    competitorProgramRows.push(...parseCompetitorProgramSheet(rows, toChannelCode(ourChannelName), selfNames));
+    pooledCompetitorRows.push(...parseCompetitorProgramSheet(rows));
+  }
+  // 분석 대상 6개 채널 전부에 복제해서 내보낸다 — 실제로 어느 채널에 붙을지는 nielsenIngest.ts의
+  // 등록 경쟁채널 필터(registeredCompetitorByChannel)가 정한다.
+  const competitorProgramRows: CompetitorProgramRow[] = [];
+  for (const ourChannelName of COMPETITOR_TARGET_CHANNEL_NAMES) {
+    const ourChannelCode = toChannelCode(ourChannelName);
+    competitorProgramRows.push(...pooledCompetitorRows.map((row) => ({ ...row, ourChannelCode })));
   }
 
   return { ok: true, reportDate, rankRows, competitorRankRows, competitorProgramRows, programRows, missingSheets };

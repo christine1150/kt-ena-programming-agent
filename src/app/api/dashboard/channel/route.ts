@@ -158,13 +158,19 @@ export async function GET(request: Request) {
   // 만들지 않음) — OLIFE/ONCE/ENA Story의 "개인2049"와 ENA Story의 "여자3049"는 그 시트 자체에
   // 해당 컬럼이 없어(전국 스코프 채널이라 "수도권 2049"/"수도권 여3049" 데이터가 없음) 제외했다.
   // ENA Drama는 지시하신 "여자3049"가 정확히 "수도권 여3049"로 실제 존재해 그대로 반영.
+  // 사용자 지시(2026-08-21, 재확인): ENA Story는 OLIFE·ONCE와 별도로 [개인2049, 여자3049]를
+  // 지정하셨다(예전엔 OLIFE·ONCE와 같은 그룹으로 취급해 "전국 5064"를 대신 넣었었는데, 이번엔
+  // 채널마다 다른 2개를 명시하셔서 재확인함) — DB 직접 조회 결과 ENA Story의 §1.3 데이터는
+  // OLIFE·ONCE와 동일하게 5세 단위 연령대(남/여 10대~60대+)와 "5064"·"유료가구"만 있고
+  // "2049"/"여3049" 컬럼 자체가 없어(전국 스코프 공통 한계), 요청하신 두 타깃 모두 표시할 수
+  // 없다 — 없는 데이터를 임의로 대체하지 않고(CLAUDE.md 원칙) 빈 목록으로 둔다.
   const EXTRA_TARGET_LABELS_BY_CHANNEL: Record<string, string[]> = {
     ENA: ["수도권 2039", "전국 유료가구"],
     ENA_PLAY: ["수도권 2039", "전국 유료가구"],
     ENA_DRAMA: ["전국 유료가구", "수도권 여3049"],
     OLIFE: ["전국 5064"], // "개인2049" 요청하셨으나 §1.3 시트에 없어 제외
     ONCE: ["전국 5064"], // 위와 동일
-    ENA_STORY: ["전국 5064"], // "개인2049"·"여자3049" 요청하셨으나 §1.3 시트에 없어 제외
+    ENA_STORY: [], // "개인2049"·"여자3049" 둘 다 §1.3 시트에 없어 제외(위 설명 참고)
   };
   const extraTargetLabels = EXTRA_TARGET_LABELS_BY_CHANNEL[channel.code] ?? [];
 
@@ -262,6 +268,7 @@ export async function GET(request: Request) {
     competitorPeriodTopProgramsRes,
     dowHourBlockPatternPriorRes,
     topProgramsPriorRes,
+    whoIsWatchingDemographicsRes,
   ] = await Promise.all([
     // WHAT HAPPENED? — 채널 단위 랭킹 데이터로 DoD/WoW/MoM/QoQ/YoY/YTD
     supabase.rpc("get_rating_trend_summary", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: asOfDate }),
@@ -368,6 +375,20 @@ export async function GET(request: Request) {
     hasPriorRange
       ? supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: periodWindowDays, p_limit: 20 })
       : Promise.resolve({ data: [] as unknown[] }),
+    // 사용자 지시(2026-08-21): WHO IS WATCHING?은 오늘/어제(단일 일자)일 때 다른 브리핑 문구와
+    // 달리 최근 12주(84일)가 아니라 최근 한 달(28일) 자료를 기준으로 봐야 한다 — 같은 RPC를
+    // 28일 baseline으로 한 번 더 호출해 demographics 필드만 별도로 쓴다(오늘의 브리핑 문구가
+    // 쓰는 narrativeRes의 84일 demographics는 그대로 둔다, 기간 모드는 애초에 안 씀).
+    !isRangeMode
+      ? supabase.rpc("get_channel_daily_narrative", {
+          p_channel_code: channel.code,
+          p_target_label: matchedTargetLabel,
+          p_program_target_label: programTargetLabel,
+          p_demographic_labels: demographicTargets,
+          p_as_of_date: dateTo,
+          p_baseline_days: 28,
+        })
+      : Promise.resolve({ data: [] as { demographics: unknown }[] }),
   ]);
 
   if (trendRes.error) {
@@ -378,6 +399,41 @@ export async function GET(request: Request) {
   let hourlyProgramTitles = hourlyProgramTitlesRes.data;
   const hourlyBaselinePattern = hourlyBaselinePatternRes.data;
   const periodReport = periodReportRes.data?.[0] ?? null;
+  // 사용자 지시(2026-08-21): "오늘의 브리핑"에서 "선택한 기간(...)" 워딩은 제목에 이미 드러나므로
+  // 삭제하고, 데이터가 실제로 빠진 날이 있을 때만 맨 마지막에 "데이터 없는날 N일(YYYY-MM-DD~)"
+  // 형식으로 안내한다. days_with_data(있는 날 수)만으로는 "몇 번째 날부터 비는지" 알 수 없어,
+  // 결측이 있을 때만(days_with_data < 전체 일수) 실제 존재하는 날짜를 조회해 첫 결측일을 찾는다.
+  let missingDatesInfo: { count: number; firstMissingDate: string } | null = null;
+  if (periodReport && dateFrom !== dateTo) {
+    const totalDays = Math.round((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000) + 1;
+    if (periodReport.days_with_data < totalDays) {
+      const { data: presentRows } = await supabase
+        .from("ratings")
+        .select("broadcast_date")
+        .eq("channel_id", channel.id)
+        .eq("target_id", (await supabase.from("targets").select("id").eq("label", matchedTargetLabel).maybeSingle()).data?.id ?? "")
+        .eq("source_type", "nielsen_daily")
+        .is("program_id", null)
+        .gte("broadcast_date", dateFrom)
+        .lte("broadcast_date", dateTo);
+      const presentSet = new Set((presentRows ?? []).map((r) => r.broadcast_date as string));
+      let cursor = new Date(`${dateFrom}T00:00:00`);
+      const endDate = new Date(`${dateTo}T00:00:00`);
+      let missingCount = 0;
+      let firstMissingDate: string | null = null;
+      while (cursor <= endDate) {
+        const dateStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+        if (!presentSet.has(dateStr)) {
+          missingCount++;
+          if (!firstMissingDate) firstMissingDate = dateStr;
+        }
+        cursor = new Date(cursor.getTime() + 86400000);
+      }
+      if (missingCount > 0 && firstMissingDate) {
+        missingDatesInfo = { count: missingCount, firstMissingDate };
+      }
+    }
+  }
   const competitorInsightReport = competitorInsightRes.data;
   const overlapData = overlapRes.data;
   const topProgramsData = topProgramsCompetitorRes.data;
@@ -389,6 +445,9 @@ export async function GET(request: Request) {
   const periodDemographics = periodDemographicsRes.data;
   const periodProgramMovers = periodProgramMoversRes.data;
   const narrativeSignal = narrativeRes.data?.[0] ?? null;
+  // WHO IS WATCHING?(단일 일자 모드) 전용 — 최근 한 달(28일) baseline demographics(사용자
+  // 지시 2026-08-21). narrativeSignal.demographics(84일)는 오늘의 브리핑 문구가 그대로 쓴다.
+  const whoIsWatchingDemographics = whoIsWatchingDemographicsRes.data?.[0]?.demographics ?? null;
   const demographicHighlights = (demographicHighlightsRes.data ?? []) as {
     program_name: string;
     program_start_time: string;
@@ -472,6 +531,8 @@ export async function GET(request: Request) {
     isRangeMode,
     latestAvailableDate,
     periodReport,
+    missingDatesInfo,
+    whoIsWatchingDemographics,
     periodDemographics: periodDemographics ?? [],
     periodProgramMovers: periodProgramMovers ?? [],
     dowHourBlockPattern: dowHourBlockPattern ?? [],

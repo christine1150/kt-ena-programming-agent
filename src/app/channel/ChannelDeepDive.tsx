@@ -5,7 +5,7 @@
 // FITS?/OPPORTUNITY?/WHAT TO SCHEDULE?/COMPARED WITH?는 2026-08-20 사용자 지시로 보고서
 // 줄글 형태로 재구성했다. WHY?/OPPORTUNITY?의 원인 추적·기회 탐지는 상관관계만 참고 정보로
 // 제공하고 인과관계로 단정하지 않는다(CLAUDE.md 원칙).
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDow } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun, josaEulReul } from "@/lib/josa";
@@ -306,6 +306,12 @@ interface ChannelData {
   isRangeMode: boolean;
   latestAvailableDate: string | null;
   periodReport: PeriodReport | null;
+  // 사용자 지시(2026-08-21): 브리핑에 "선택한 기간(...)" 워딩 대신, 실제로 데이터가 빈 날이
+  // 있을 때만 맨 마지막에 안내 — 서버가 실제 존재하는 날짜를 조회해 결측 여부/일수/첫 결측일을 계산.
+  missingDatesInfo: { count: number; firstMissingDate: string } | null;
+  // 사용자 지시(2026-08-21): WHO IS WATCHING?은 단일 일자(오늘/어제) 모드에서 다른 브리핑
+  // 문구(84일 baseline)와 달리 최근 한 달(28일) 자료를 기준으로 본다.
+  whoIsWatchingDemographics: NarrativeDemographic[] | null;
   periodDemographics: PeriodDemographicRow[];
   periodProgramMovers: PeriodProgramMoverRow[];
   dowHourBlockPattern: DowHourBlockRow[];
@@ -400,12 +406,14 @@ const TAG_STYLE: Record<string, string> = {
   REPLACE: "bg-rose-100 text-rose-700",
   TEST: "bg-zinc-200 text-zinc-600",
 };
-const TAG_DESC: Record<string, string> = {
-  STRENGTHEN: "강화 — 자원 추가 투입 검토",
-  KEEP: "유지 — 현재 편성 유지",
-  MOVE: "이동 검토 — 다른 시간대 재배치 검토",
+// 사용자 지시(2026-08-21): WHAT TO SCHEDULE? 배지의 영문 태그(STRENGTHEN/KEEP/MOVE/REPLACE/
+// TEST)를 한글로 — "유지, 테스트, 이동 검토, 교체 검토 등으로".
+const TAG_LABEL_KO: Record<string, string> = {
+  STRENGTHEN: "강화",
+  KEEP: "유지",
+  MOVE: "이동 검토",
   REPLACE: "교체 검토",
-  TEST: "탐색적 추천 — 표본 부족(Confidence 낮음)",
+  TEST: "테스트",
 };
 
 // ── 기간 설정(우측 상단) ─────────────────────────────────────────────────
@@ -466,6 +474,13 @@ const COMPARISON_LABELS: Partial<Record<PeriodPreset, string>> = {
   qoq: "전분기",
   yoy: "전년 동기",
 };
+// 사용자 지시(2026-08-21): "오늘의 브리핑"이라는 제목은 "오늘"을 선택했을 때만 쓰고, 그 외
+// 기간/메뉴를 골랐으면 그 기간을 설명하는 제목으로 바뀐다(PERIOD_PRESET_LABELS 재사용, 새 라벨
+// 목록을 따로 만들지 않음).
+function buildBriefingTitle(periodPreset: PeriodPreset): string {
+  if (periodPreset === "today") return "오늘의 브리핑";
+  return `${PERIOD_PRESET_LABELS[periodPreset]} 브리핑`;
+}
 
 // 로컬 날짜 구성요소로 문자열을 만든다 — toISOString()은 UTC로 변환하기 때문에, 브라우저의
 // 로컬 타임존이 UTC+인 경우 자정 기준 날짜가 하루 당겨지는 버그가 실제로 있었다.
@@ -571,10 +586,12 @@ function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string 
   const fmtR = (v: number | null) => fmt(v, data.channel.code === "SKYUHD" ? 5 : 3);
   const sentences: string[] = [];
   const isSingleDay = data.dateFrom === data.dateTo;
+  // 사용자 지시(2026-08-21): "선택한 기간(...)" 워딩은 제목에 이미 기간이 드러나므로 삭제 —
+  // 데이터가 빈 날이 있으면 이 문단 맨 마지막에만 안내한다(아래 참고).
   sentences.push(
     isSingleDay
       ? `오늘(${data.dateTo}) ${data.channel.name} 평균 시청률은 ${fmtR(p.avg_rating)}입니다.`
-      : `선택한 기간(${data.dateFrom}~${data.dateTo}, 데이터 있는 날 ${p.days_with_data}일) ${data.channel.name} 평균 시청률은 ${fmtR(p.avg_rating)}입니다.`
+      : `${data.channel.name} 평균 시청률은 ${fmtR(p.avg_rating)}입니다.`
   );
   if (p.prior_period_change_pct !== null) {
     sentences.push(
@@ -642,7 +659,48 @@ function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string 
     }
   }
 
+  // 사용자 지시(2026-08-21): 데이터가 빈 날이 있을 때만 맨 마지막에 "데이터 없는날 N일
+  // (YYYY-MM-DD~)" 형식으로 안내(서버가 실제 존재하는 날짜를 대조해 계산한 값 그대로).
+  if (data.missingDatesInfo) {
+    sentences.push(`데이터 없는날 ${data.missingDatesInfo.count}일(${data.missingDatesInfo.firstMissingDate}~)`);
+  }
+
   return sentences.join(" ");
+}
+
+// 사용자 지시(2026-08-21): "WHAT HAPPENED? 기간별 비교도... 어떤것이 여전히 시청률/점유율/
+// 시청시간 상위이며, 어떤것이 달라졌는지 리포트" — periodProgramMovers(이미 조회된 값)로
+// "이 기간에도 여전히 상위인 프로그램"과 "가장 크게 오르내린 프로그램"을 짧게 짚는다.
+function buildWhatHappenedInsight(movers: PeriodProgramMoverRow[], fmtR: (v: number | null) => string): string | null {
+  const withRating = movers.filter((m) => m.period_avg_rating !== null);
+  if (withRating.length === 0) return null;
+  const sentences: string[] = [];
+
+  const topStill = [...withRating].sort((a, b) => (b.period_avg_rating ?? 0) - (a.period_avg_rating ?? 0)).slice(0, 3);
+  if (topStill.length > 0) {
+    sentences.push(
+      `이 기간 시청률 상위는 ${topStill.map((m) => `'${m.canonical_name}'(${fmtR(m.period_avg_rating)})`).join(", ")}입니다.`
+    );
+  }
+
+  const withDelta = withRating.filter((m) => m.rating_delta !== null);
+  const biggestRiser = [...withDelta].filter((m) => m.rating_delta! > 0).sort((a, b) => b.rating_delta! - a.rating_delta!)[0];
+  const biggestFaller = [...withDelta].filter((m) => m.rating_delta! < 0).sort((a, b) => a.rating_delta! - b.rating_delta!)[0];
+  if (biggestRiser) {
+    sentences.push(
+      `'${biggestRiser.canonical_name}'${josaIga(biggestRiser.canonical_name)} 직전 기간(${fmtR(biggestRiser.prior_avg_rating)}) 대비 가장 크게 상승해 ${fmtR(biggestRiser.period_avg_rating)}을 기록했습니다.`
+    );
+  }
+  if (biggestFaller) {
+    sentences.push(
+      `'${biggestFaller.canonical_name}'${josaEunNeun(biggestFaller.canonical_name)} 직전 기간(${fmtR(biggestFaller.prior_avg_rating)}) 대비 가장 크게 하락해 ${fmtR(biggestFaller.period_avg_rating)}로 내려왔습니다.`
+    );
+  }
+  const newEntries = withRating.filter((m) => m.prior_avg_rating === null);
+  if (newEntries.length > 0) {
+    sentences.push(`이전 기간엔 없던 신규 편성 ${newEntries.length}건이 이 기간에 새로 포착됐습니다.`);
+  }
+  return sentences.length > 0 ? sentences.join(" ") : null;
 }
 
 // ── 오늘의 브리핑 — 사용자 지시: What/Why/So What 라벨 없이, 하나의 보고서 줄글로. 목표
@@ -851,7 +909,9 @@ function buildHowDeeplyExplanation(
 // (이번 기간 vs 전 기간, get_channel_period_demographics)를 그대로 재사용한다(새 계산 없음).
 function buildInternalDemographicNarrative(
   showComparisonView: boolean,
-  narrativeSignal: NarrativeSignal | null,
+  // 사용자 지시(2026-08-21): 단일 일자(오늘/어제) 모드는 최근 12주가 아니라 최근 한 달(28일)
+  // baseline demographics를 쓴다 — narrativeSignal 전체가 아니라 그 필드만 받는다.
+  whoIsWatchingDemographics: NarrativeDemographic[] | null,
   periodDemographics: PeriodDemographicRow[],
   fmtR: (v: number | null) => string,
   refLabel: string
@@ -870,17 +930,16 @@ function buildInternalDemographicNarrative(
     }
     return text;
   }
-  const demographics = narrativeSignal?.demographics ?? null;
-  const withValues = (demographics ?? []).filter((d) => d.today !== null);
+  const withValues = (whoIsWatchingDemographics ?? []).filter((d) => d.today !== null);
   if (withValues.length === 0) return `${refLabel} 연령대별 데이터가 아직 부족합니다.`;
   const strongestNow = [...withValues].sort((a, b) => (b.today ?? 0) - (a.today ?? 0))[0];
   const withDelta = withValues.filter((d) => d.delta_pct !== null);
   const mostMoved = [...withDelta].sort((a, b) => Math.abs(b.delta_pct!) - Math.abs(a.delta_pct!))[0];
   let text = `${refLabel} 시청률이 가장 높은 연령대는 ${shortDemoLabel(strongestNow.label)}(${fmtR(strongestNow.today)})입니다. `;
   if (mostMoved && Math.abs(mostMoved.delta_pct!) >= 25) {
-    text += `최근 12주 평균 대비로는 ${shortDemoLabel(mostMoved.label)}${josaIga(shortDemoLabel(mostMoved.label))} ${mostMoved.delta_pct! >= 0 ? "▲" : "▼"} ${Math.abs(mostMoved.delta_pct!).toFixed(0)}%로 가장 뚜렷하게 움직여, ${refLabel} 이 연령대의 시청 비중이 평소와 달랐습니다.`;
+    text += `최근 한 달 평균 대비로는 ${shortDemoLabel(mostMoved.label)}${josaIga(shortDemoLabel(mostMoved.label))} ${mostMoved.delta_pct! >= 0 ? "▲" : "▼"} ${Math.abs(mostMoved.delta_pct!).toFixed(0)}%로 가장 뚜렷하게 움직여, ${refLabel} 이 연령대의 시청 비중이 평소와 달랐습니다.`;
   } else {
-    text += "최근 12주 평균과 비교해 연령대별 구성에 뚜렷한 변화는 없었습니다.";
+    text += "최근 한 달 평균과 비교해 연령대별 구성에 뚜렷한 변화는 없었습니다.";
   }
   return text;
 }
@@ -1200,6 +1259,35 @@ function findRecommendedDaypart(currentDaypart: string | null, daypartOpportunit
   if (best.gap_change === null || best.gap_change <= 0) return null;
   if (best.daypart === currentDaypart) return null;
   return best.daypart;
+}
+
+// 사용자 지시(2026-08-21): WHAT TO SCHEDULE?를 "간단하고 직관적이되 많은 정보를 얻을 수 있는"
+// 표 형태로 재구성 — 가운데 열에 그 타이틀에 대한 제안 사항을 한 줄로 정리한다. TEST 태그는
+// PRD 정의상 "표본 부족(Confidence 낮음)이면 Fit Score와 무관하게 TEST"이므로 표본 부족 안내를
+// 최우선으로, 그다음 daypart 재배치 추천(OPPORTUNITY?와 동일한 근거 재사용), 그다음 태그별
+// 기본 제안 순으로 하나만 고른다(중복 방지).
+function buildScheduleRecommendationNote(
+  item: FitScoreItem,
+  recommendedDaypart: string | null
+): string {
+  if (item.tag === "TEST") {
+    return `표본 부족(표본 ${item.sample_days}건) — 데이터를 더 쌓은 뒤 재평가 필요`;
+  }
+  if (recommendedDaypart) {
+    return `${DAYPART_LABEL[recommendedDaypart] ?? recommendedDaypart}로 이동 검토(경쟁채널과의 격차가 더 좁혀지는 중)`;
+  }
+  switch (item.tag) {
+    case "STRENGTHEN":
+      return "성과가 우수한 편성 — 자원 추가 투입 검토";
+    case "KEEP":
+      return "현재 편성 유지 권장";
+    case "REPLACE":
+      return "성과가 낮은 편성 — 교체 검토";
+    case "MOVE":
+      return "다른 시간대 재배치 검토(구체적 추천 시간대는 데이터 부족)";
+    default:
+      return "—";
+  }
 }
 
 export default function ChannelDeepDive({ code }: { code: string }) {
@@ -1529,7 +1617,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
 
         {/* 오늘의 브리핑 — 보고서 줄글 형태(사용자 지시: What/Why 라벨 없이, 목표 달성률 제외) */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className="mb-3 text-sm font-semibold text-zinc-500">오늘의 브리핑</h2>
+          <h2 className="mb-3 text-sm font-semibold text-zinc-500">{buildBriefingTitle(periodPreset)}</h2>
           <div className="flex flex-col gap-3">
             {buildBriefingReport(data, referenceLabel, showComparisonView, comparisonLabel).map((para, i) => (
               <p key={i} className="text-sm leading-relaxed text-zinc-700">
@@ -1931,6 +2019,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
             </div>
           )}
+          {showComparisonView && data.periodProgramMovers.length > 0 && (
+            <p className="mb-3 text-sm leading-relaxed text-zinc-700">
+              {buildWhatHappenedInsight(data.periodProgramMovers, fmtR)}
+            </p>
+          )}
           {showComparisonView && (
             <p className="mb-2 text-xs text-zinc-400">
               아래 표는 (참고) 선택 기간 마지막 날짜({data.dateTo}) 시점 기준 DoD/WoW/MoM/QoQ/YoY/YTD 비교입니다.
@@ -2014,20 +2107,45 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           ) : (
             <p className="text-sm text-zinc-400">현재 이상 하락 패턴이 감지되지 않았습니다.</p>
           )}
+
+          {/* 사용자 지시(2026-08-21): "WHY?는 이상 하락 외에도 상승 등 채널에서 알아야 할 인사이트도
+              함께" — 이미 OPPORTUNITY?에서 쓰던 opportunityAlert(자사 최근 7일 평균이 이전 7일
+              대비 +10%p 이상 강세 + 등록 경쟁채널 약세)를 여기서도 함께 보여준다(같은 데이터,
+              새 계산 없음). OPPORTUNITY?/WHAT TO SCHEDULE?와 달리 이 블록은 기간 선택과 무관하게
+              항상(rootCauseAlert와 동일한 방식) 표시된다. */}
+          {data.opportunityAlert?.triggered && (
+            <div className="mt-3 rounded-2xl bg-emerald-50 p-4">
+              <p className="text-sm font-semibold text-emerald-700">
+                🟢 최근 7일 상승 감지 — 자사 ▲ {data.opportunityAlert.our_change_pct?.toFixed(1)}% (최근 7일{" "}
+                {fmtR(data.opportunityAlert.our_recent_avg)} vs 이전 7일 {fmtR(data.opportunityAlert.our_prior_avg)})
+              </p>
+              {data.opportunityAlert.weak_competitors.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-600">
+                  <span className="text-emerald-600">같은 기간 약세를 보인 경쟁채널(참고 정보):</span>
+                  {data.opportunityAlert.weak_competitors.map((c) => (
+                    <span key={c.competitor_name} className="rounded-full bg-white px-2 py-1 ring-1 ring-emerald-200">
+                      {c.competitor_name} ▼ {Math.abs(c.change_pct).toFixed(1)}%
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="mt-2 text-[11px] text-zinc-400">동시에 관찰된 참고 정보 — 인과관계로 단정하지 않습니다.</p>
+            </div>
+          )}
         </div>
 
         {/* WHO IS WATCHING? — 재설계(사용자 지시 2026-08-21, 기능 #15-7): 경쟁채널 Affinity 비교
             대신 이 채널 내부의 연령대 흐름(주로 보는 연령대·이동 여부)을 본다. 오늘/어제는 최근
-            12주 baseline, 그 외 기간은 이번 기간 vs 전 기간 비교. */}
+            한 달(28일) baseline(사용자 지시 재확인), 그 외 기간은 이번 기간 vs 전 기간 비교. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">WHO IS WATCHING?</h2>
           <p className="mb-3 text-xs text-zinc-400">
-            대표 연령대 4개의 시청률입니다. 등락률은 {showComparisonView ? `${comparisonLabel ?? "전"} 기간` : "최근 12주 평균"} 대비입니다.
+            대표 연령대 4개의 시청률입니다. 등락률은 {showComparisonView ? `${comparisonLabel ?? "전"} 기간` : "최근 한 달 평균"} 대비입니다.
           </p>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {(showComparisonView
               ? data.periodDemographics.map((d) => ({ label: d.target_label, value: d.period_avg_rating, deltaPct: d.delta_pct }))
-              : (narrativeSignal?.demographics ?? []).map((d) => ({ label: d.label, value: d.today, deltaPct: d.delta_pct }))
+              : (data.whoIsWatchingDemographics ?? []).map((d) => ({ label: d.label, value: d.today, deltaPct: d.delta_pct }))
             ).map((item) => (
               <div key={item.label} className="rounded-2xl bg-zinc-50 p-4">
                 <p className="text-xs text-zinc-500">{shortDemoLabel(item.label)}</p>
@@ -2041,7 +2159,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             ))}
           </div>
           <p className="mt-3 text-sm leading-relaxed text-zinc-700">
-            {buildInternalDemographicNarrative(showComparisonView, narrativeSignal, data.periodDemographics, fmtR, referenceLabel)}
+            {buildInternalDemographicNarrative(showComparisonView, data.whoIsWatchingDemographics, data.periodDemographics, fmtR, referenceLabel)}
           </p>
           {!showComparisonView &&
             buildDemographicHighlightsParagraph(data.demographicHighlights) && (
@@ -2216,60 +2334,73 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           ) : !fitScoreItems || fitScoreItems.length === 0 ? (
             <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
           ) : (
-            <div className="space-y-2">
-              {fitScoreItems.map((item) => {
-                const isOpen = expandedProgram === item.program_id;
-                const recommendedDaypart =
-                  item.tag && (item.tag === "STRENGTHEN" || item.tag === "TEST" || item.tag === "MOVE")
-                    ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity)
-                    : null;
-                return (
-                  <div key={item.program_id} className="rounded-2xl bg-zinc-50 p-4">
-                    <button
-                      className="flex w-full items-center justify-between gap-3 text-left"
-                      onClick={() => setExpandedProgram(isOpen ? null : item.program_id)}
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span
-                          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            item.tag ? TAG_STYLE[item.tag] : "bg-zinc-100 text-zinc-500"
-                          }`}
+            // 사용자 지시(2026-08-21): 표 형태로 재구성 — 태그는 한글, 제목은 한 줄(truncate),
+            // 가운데 열에 제안 사항 한 줄, Fit Score/Confidence는 오른쪽. 클릭하면 아래에 근거 펼침.
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-xs">
+                <thead>
+                  <tr className="text-zinc-400">
+                    <th className="pb-1.5 pr-2 font-medium">태그</th>
+                    <th className="pb-1.5 pr-2 font-medium">프로그램</th>
+                    <th className="pb-1.5 pr-2 font-medium">제안 사항</th>
+                    <th className="pb-1.5 font-medium">Fit Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fitScoreItems.map((item) => {
+                    const isOpen = expandedProgram === item.program_id;
+                    const recommendedDaypart =
+                      item.tag && (item.tag === "STRENGTHEN" || item.tag === "TEST" || item.tag === "MOVE")
+                        ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity)
+                        : null;
+                    const note = buildScheduleRecommendationNote(item, recommendedDaypart);
+                    return (
+                      <Fragment key={item.program_id}>
+                        <tr
+                          className="cursor-pointer border-t border-zinc-100 align-top hover:bg-zinc-50"
+                          onClick={() => setExpandedProgram(isOpen ? null : item.program_id)}
                         >
-                          {item.tag ?? "—"}
-                        </span>
-                        <span className="truncate text-sm font-medium text-zinc-800">
-                          {item.programs?.canonical_name ?? "이름 없음"}
-                        </span>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-3 text-xs text-zinc-500">
-                        <span>Fit Score {item.fit_score?.toFixed(1) ?? "—"}</span>
-                        <span>Confidence {item.confidence_pct?.toFixed(0) ?? "—"}%(표본 {item.sample_days}건)</span>
-                      </div>
-                    </button>
-                    {item.tag && <p className="mt-1 text-xs text-zinc-400">{TAG_DESC[item.tag]}</p>}
-                    {recommendedDaypart && (
-                      <p className="mt-1 text-xs text-sky-600">
-                        현재 주 편성 시간대(
-                        {DAYPART_LABEL[item.evidence.current_daypart ?? ""] ?? item.evidence.current_daypart})보다{" "}
-                        <strong>{DAYPART_LABEL[recommendedDaypart] ?? recommendedDaypart}</strong>에서 최근 경쟁채널과의 격차가 더
-                        뚜렷하게 좁혀지고 있어(최근 12주 편성·경쟁채널 분석 기준), 그쪽으로 재배치 검토를 고려해볼 만합니다.
-                      </p>
-                    )}
-                    {isOpen && (
-                      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-zinc-200 pt-3 text-xs text-zinc-600 sm:grid-cols-3">
-                        <p>평균 시청률: {fmtR(item.evidence.avg_rating)}</p>
-                        <p>Reach: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
-                        <p>
-                          시청시간비율: {item.evidence.avg_time_spent_share !== null ? `${item.evidence.avg_time_spent_share.toFixed(2)}%` : "—"}
-                        </p>
-                        <p>연령대 Affinity 평균: {item.evidence.affinity_avg_index?.toFixed(1) ?? "—"}</p>
-                        <p>Competitive Pressure: {item.evidence.competitive_pressure?.toFixed(1) ?? "—"}</p>
-                        <p>Lead-in Retention: {item.evidence.avg_lead_in_retention?.toFixed(2) ?? "— (직전 프로그램 없음)"}</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                          <td className="py-2 pr-2">
+                            <span
+                              className={`inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                                item.tag ? TAG_STYLE[item.tag] : "bg-zinc-100 text-zinc-500"
+                              }`}
+                            >
+                              {item.tag ? TAG_LABEL_KO[item.tag] : "—"}
+                            </span>
+                          </td>
+                          <td className="max-w-[180px] truncate py-2 pr-2 font-medium text-zinc-800">
+                            {item.programs?.canonical_name ?? "이름 없음"}
+                          </td>
+                          <td className="py-2 pr-2 text-zinc-600">{note}</td>
+                          <td className="whitespace-nowrap py-2 text-zinc-500">
+                            {item.fit_score?.toFixed(1) ?? "—"}
+                            <span className="ml-1 text-[10px] text-zinc-400">
+                              (Confidence {item.confidence_pct?.toFixed(0) ?? "—"}%)
+                            </span>
+                          </td>
+                        </tr>
+                        {isOpen && (
+                          <tr className="border-t border-zinc-100 bg-zinc-50/60">
+                            <td colSpan={4} className="p-3">
+                              <div className="grid grid-cols-2 gap-2 text-xs text-zinc-600 sm:grid-cols-3">
+                                <p>평균 시청률: {fmtR(item.evidence.avg_rating)}</p>
+                                <p>Reach: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
+                                <p>
+                                  시청시간비율: {item.evidence.avg_time_spent_share !== null ? `${item.evidence.avg_time_spent_share.toFixed(2)}%` : "—"}
+                                </p>
+                                <p>연령대 Affinity 평균: {item.evidence.affinity_avg_index?.toFixed(1) ?? "—"}</p>
+                                <p>Competitive Pressure: {item.evidence.competitive_pressure?.toFixed(1) ?? "—"}</p>
+                                <p>Lead-in Retention: {item.evidence.avg_lead_in_retention?.toFixed(2) ?? "— (직전 프로그램 없음)"}</p>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -2290,46 +2421,75 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <p className="mb-4 text-sm text-zinc-400">등록 경쟁채널 데이터가 없습니다.</p>
           ) : (
             <>
-              <div className="mb-3 overflow-x-auto">
-                <table className="w-full min-w-[560px] text-left text-xs">
-                  <thead>
-                    <tr className="text-zinc-400">
-                      <th className="pb-1.5 pr-2 font-medium">순위</th>
-                      <th className="pb-1.5 pr-2 font-medium">경쟁채널</th>
-                      <th className="pb-1.5 pr-2 font-medium">{isRangeMode ? "기간 평균 시청률" : `${referenceLabel} 시청률`}</th>
-                      <th className="pb-1.5 pr-2 font-medium">12주 평균 대비</th>
-                      <th className="pb-1.5 font-medium">{isRangeMode ? "기간 중 최고 성적 프로그램" : `${referenceLabel} 최고 성적 프로그램`}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {competitorInsightReport.map((c) => (
-                      <tr key={c.competitor_name} className="border-t border-zinc-100">
-                        <td className="py-1.5 pr-2 text-zinc-500">{c.today_rank ?? "—"}</td>
-                        <td className="py-1.5 pr-2 font-medium text-zinc-800">{c.competitor_name}</td>
-                        <td className="py-1.5 pr-2 text-zinc-600">{fmtR(c.today_rating)}</td>
-                        <td className="py-1.5 pr-2">
-                          {c.delta_pct === null ? (
-                            <span className="text-zinc-400">—</span>
-                          ) : (
-                            <span className={c.delta_pct >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                              {c.delta_pct >= 0 ? "▲" : "▼"} {Math.abs(c.delta_pct).toFixed(1)}%
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-1.5 text-zinc-600">
-                          {c.top_program_name ? (
-                            <>
-                              {c.top_program_name} {c.top_program_start_time ? `(${fmtTime(c.top_program_start_time)}, ${fmtR(c.top_program_rating)})` : ""}
-                            </>
-                          ) : (
-                            <span className="text-zinc-300">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {(() => {
+                // 사용자 지시(2026-08-21): "순위 내에 해당 채널도 같이 표기, 로고 색깔 반영 및
+                // 볼드 처리하여 당사 채널이 경쟁 채널 중 몇 위에 해당하는지" — 이 표가 이미 쓰는
+                // 시청률 기준(기간 평균/단일 일자)과 동일한 우리 채널 값을 끼워 넣고, 시청률
+                // 순으로 다시 정렬해 순위를 매긴다(새 계산 없이 이미 있는 값 재사용).
+                const ourRating = isRangeMode ? (data.periodReport?.avg_rating ?? null) : (narrativeSignal?.today_rating ?? null);
+                type MergedRow = { competitor_name: string; today_rating: number | null; delta_pct: number | null; top_program_name: string | null; top_program_start_time: string | null; top_program_rating: number | null; isOurs: boolean };
+                const merged: MergedRow[] = competitorInsightReport.map((c) => ({ ...c, isOurs: false }));
+                if (ourRating !== null) {
+                  merged.push({
+                    competitor_name: data.channel.name,
+                    today_rating: ourRating,
+                    delta_pct: null,
+                    top_program_name: null,
+                    top_program_start_time: null,
+                    top_program_rating: null,
+                    isOurs: true,
+                  });
+                }
+                merged.sort((a, b) => (b.today_rating ?? -Infinity) - (a.today_rating ?? -Infinity));
+                return (
+                  <div className="mb-3 overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-left text-xs">
+                      <thead>
+                        <tr className="text-zinc-400">
+                          <th className="pb-1.5 pr-2 font-medium">순위</th>
+                          <th className="pb-1.5 pr-2 font-medium">채널</th>
+                          <th className="pb-1.5 pr-2 font-medium">{isRangeMode ? "기간 평균 시청률" : `${referenceLabel} 시청률`}</th>
+                          <th className="pb-1.5 pr-2 font-medium">12주 평균 대비</th>
+                          <th className="pb-1.5 font-medium">{isRangeMode ? "기간 중 최고 성적 프로그램" : `${referenceLabel} 최고 성적 프로그램`}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {merged.map((c, i) => (
+                          <tr key={c.competitor_name} className={`border-t border-zinc-100 ${c.isOurs ? "bg-indigo-50/40" : ""}`}>
+                            <td className="py-1.5 pr-2 text-zinc-500">{i + 1}</td>
+                            <td
+                              className="py-1.5 pr-2 font-medium"
+                              style={c.isOurs ? { color: data.channel.themeColor ?? undefined, fontWeight: 700 } : { color: undefined }}
+                            >
+                              {c.competitor_name}
+                              {c.isOurs && <span className="ml-1 text-[10px] font-normal text-indigo-400">(당사)</span>}
+                            </td>
+                            <td className="py-1.5 pr-2 text-zinc-600">{fmtR(c.today_rating)}</td>
+                            <td className="py-1.5 pr-2">
+                              {c.delta_pct === null ? (
+                                <span className="text-zinc-400">—</span>
+                              ) : (
+                                <span className={c.delta_pct >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                  {c.delta_pct >= 0 ? "▲" : "▼"} {Math.abs(c.delta_pct).toFixed(1)}%
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-1.5 text-zinc-600">
+                              {c.top_program_name ? (
+                                <>
+                                  {c.top_program_name} {c.top_program_start_time ? `(${fmtTime(c.top_program_start_time)}, ${fmtR(c.top_program_rating)})` : ""}
+                                </>
+                              ) : (
+                                <span className="text-zinc-300">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
               <p className="mb-4 text-sm leading-relaxed text-zinc-700">{buildCompetitorNarrative(competitorInsightReport)}</p>
             </>
           )}

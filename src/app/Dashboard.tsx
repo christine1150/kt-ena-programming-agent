@@ -115,6 +115,8 @@ interface ChannelNarrativeSignal {
   baseline_avg_share: number | null;
   today_peak_hour: number | null;
   today_peak_rating: number | null;
+  today_peak_program_name: string | null;
+  today_peak_program_rating: number | null;
   baseline_peak_hour: number | null;
   baseline_peak_rating: number | null;
   top_program_name: string | null;
@@ -163,6 +165,15 @@ interface TodayTopProgramRow {
   start_time: string;
 }
 
+// 사용자 지시(2026-08-21): "오늘의 빠른 요약" 위에 "주요 뉴스"(베타) 섹션. 관리자가 매일
+// 텍스트로 업로드한 목록을 카테고리별로 묶어, 링크 주소는 숨기고 제목만 하이퍼링크로 보여준다.
+interface DailyNewsItem {
+  category: string;
+  title: string;
+  url: string;
+  display_order: number;
+}
+
 interface DashboardData {
   asOfDate: string;
   channels: ChannelSummary[];
@@ -172,6 +183,7 @@ interface DashboardData {
   killerContentDaypart: KillerContentDaypartRow[];
   todayTopPrograms: TodayTopProgramRow[];
   featuredContentSchedule: FeaturedContentScheduleRow[];
+  dailyNews: DailyNewsItem[];
 }
 
 // 개발 단위 #1(사용자 지시 2026-08-21): "주요 콘텐츠 관리"에 등록된 편성 정보(방송 채널·매주
@@ -289,9 +301,15 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
   }
 
   if (s.today_peak_hour !== null && s.baseline_peak_hour !== null && s.today_peak_hour !== s.baseline_peak_hour) {
+    // 사용자 지시(2026-08-21): "17시대에 가장 높은 시청률" 대신 그 시간대 실제 최고 시청률
+    // 프로그램명(회차/부제 포함)과 시청률을 괄호로 함께 표기 — 프로그램이 없으면 기존처럼
+    // 시간대 평균 시청률만 표기.
+    const peakDetail = s.today_peak_program_name
+      ? `${s.today_peak_program_name} ${formatRating(s.today_peak_program_rating)}`
+      : formatRating(s.today_peak_rating);
     sentences.push({
       priority: 20,
-      text: `평소 강세 시간대(${s.baseline_peak_hour}시대)와 달리 오늘은 ${s.today_peak_hour}시대에 가장 높은 시청률(${formatRating(s.today_peak_rating)})을 보였습니다.`,
+      text: `평소 강세 시간대(${s.baseline_peak_hour}시대)와 달리 오늘은 ${s.today_peak_hour}시대에 가장 높은 시청률(${peakDetail})을 보였습니다.`,
     });
   }
 
@@ -886,7 +904,9 @@ function ChannelNarrativeCard({
 }
 
 // ④ 채널별 킬러 콘텐츠(강세/약세 시간대) — R2C2
-function KillerContentCard({ rows }: { rows: KillerContentDaypartRow[] }) {
+// 사용자 지시(2026-08-21): 시청률이 그 채널의 올해 1/1~오늘 누적 평균보다 높으면 초록, 낮으면
+// 붉은색으로 표시(ytdAvgByCode = 채널 단위 누적 평균, ChannelSummary.ytdAvgRating 그대로 재사용).
+function KillerContentCard({ rows, ytdAvgByCode }: { rows: KillerContentDaypartRow[]; ytdAvgByCode: Map<string, number | null> }) {
   const byChannel = new Map<string, KillerContentDaypartRow[]>();
   for (const r of rows) {
     if (!byChannel.has(r.channelCode)) byChannel.set(r.channelCode, []);
@@ -901,11 +921,17 @@ function KillerContentCard({ rows }: { rows: KillerContentDaypartRow[] }) {
         {INSIGHT_CHANNEL_ORDER.map((code) => {
           const list = byChannel.get(code) ?? [];
           if (list.length === 0) return null;
+          const ytdAvg = ytdAvgByCode.get(code) ?? null;
           return (
             <div key={code}>
               <p className="mb-1.5 text-xs font-semibold text-zinc-500">{CHANNEL_NAME_BY_CODE[code]}</p>
               <div className="flex flex-col gap-1.5">
                 {list.map((k) => {
+                  // 사용자 지시(2026-08-21): 시청률이 채널의 올해 누적 평균보다 높으면 초록, 낮으면 붉은색.
+                  const ytdColorClass =
+                    ytdAvg === null ? "text-zinc-500" : k.avg_rating >= ytdAvg ? "text-emerald-600" : "text-rose-500";
+                  // 사용자 지시(2026-08-21): "총 몇 회 방영했는지, 시청률 총합"도 간단히 명기.
+                  const totalRating = k.avg_rating * k.airing_count;
                   // 사용자 지시(2026-08-20): 시청률은 약해도 점유율이 채널 평균보다 상대적으로 좋거나
                   // (±15% 이상), 타깃(수도권 2049 등) 시청률은 약해도 유료가구 시청률이 채널의 유료가구
                   // 평균보다 좋으면(±15% 이상) 별도 코멘트. 후자는 KPI가 이미 유료가구인 채널은
@@ -922,8 +948,11 @@ function KillerContentCard({ rows }: { rows: KillerContentDaypartRow[] }) {
                     <div key={k.canonical_name} className="rounded-xl bg-indigo-50/50 p-2.5">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-zinc-800">{k.canonical_name}</span>
-                        <span className="text-zinc-500">{formatRating(k.avg_rating)}</span>
+                        <span className={`font-semibold ${ytdColorClass}`}>{formatRating(k.avg_rating)}</span>
                       </div>
+                      <p className="mt-0.5 text-[10px] text-zinc-400">
+                        최근 4주 {k.airing_count}회 방영 · 시청률 총합 {formatRating(totalRating)}
+                      </p>
                       {(k.best_daypart || k.worst_daypart) && (
                         <p className="mt-0.5 text-xs text-zinc-500">
                           {k.best_daypart && (
@@ -999,6 +1028,46 @@ function TodayTopProgramsCard({
           );
         })}
         {rows.length === 0 && <p className="text-zinc-400">데이터가 아직 부족합니다.</p>}
+      </div>
+    </div>
+  );
+}
+
+// 주요 뉴스(베타) 카드 — R2.5(사용자 지시: "오늘의 빠른 요약 위에"). 링크 주소는 화면에 노출하지
+// 않고 제목만 하이퍼링크로 연결한다.
+function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
+  const byCategory = new Map<string, DailyNewsItem[]>();
+  for (const item of items) {
+    if (!byCategory.has(item.category)) byCategory.set(item.category, []);
+    byCategory.get(item.category)!.push(item);
+  }
+  if (items.length === 0) return null;
+  return (
+    <div className={`${CARD} lg:col-span-2`}>
+      <div className="mb-1 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-indigo-600">주요 뉴스</h2>
+        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-500">베타</span>
+      </div>
+      <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+        {[...byCategory.entries()].map(([category, list]) => (
+          <div key={category}>
+            <p className="mb-1 text-xs font-semibold text-zinc-500">{category}</p>
+            <ul className="flex flex-col gap-0.5">
+              {list.map((item, i) => (
+                <li key={i}>
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs leading-relaxed text-zinc-700 hover:text-indigo-600 hover:underline"
+                  >
+                    {item.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1238,6 +1307,8 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
             />
 
+            <DailyNewsCard items={data.dailyNews} />
+
             <div className={CARD}>
               <h2 className="mb-3 text-sm font-semibold text-indigo-600">오늘의 빠른 요약</h2>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1246,7 +1317,10 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 ))}
               </div>
             </div>
-            <KillerContentCard rows={data.killerContentDaypart} />
+            <KillerContentCard
+              rows={data.killerContentDaypart}
+              ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
+            />
 
             <FeaturedContentScheduleCard rows={data.featuredContentSchedule} />
           </div>

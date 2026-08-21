@@ -9,6 +9,7 @@ import NielsenDailyUploader from "./NielsenDailyUploader";
 import MailIngestionManager from "./MailIngestionManager";
 import SkyUhdUploader from "./SkyUhdUploader";
 import TargetGoalsManager from "./TargetGoalsManager";
+import DailyNewsManager from "./DailyNewsManager";
 import LogoutButton from "./LogoutButton";
 
 export default async function AdminPage() {
@@ -41,6 +42,8 @@ export default async function AdminPage() {
         <SkyUhdUploader />
 
         <TargetGoalsManager />
+
+        <DailyNewsManager />
       </div>
     </div>
   );

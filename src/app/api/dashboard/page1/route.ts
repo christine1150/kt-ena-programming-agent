@@ -119,6 +119,8 @@ interface ChannelNarrativeSignal {
   baseline_avg_share: number | null;
   today_peak_hour: number | null;
   today_peak_rating: number | null;
+  today_peak_program_name: string | null;
+  today_peak_program_rating: number | null;
   baseline_peak_hour: number | null;
   baseline_peak_rating: number | null;
   top_program_name: string | null;
@@ -498,16 +500,32 @@ export async function GET() {
         ? supabase.rpc("get_channel_household_top_program", { p_channel_code: code, p_as_of_date: asOfDate }).then((r) => r.data)
         : Promise.resolve(null),
     ]);
-    // 사용자 피드백(2026-08-21): "0820자 채널별 인사이트에 ENA·OLIFE가 안 보인다" — 조회 자체는
-    // 정상인데(재현 확인 안 됨), 이 함수가 RPC 오류(타임아웃 등)를 조용히 삼켜 채널이 통째로
-    // 목록에서 사라지는 경로가 있었다. 데이터가 진짜 없는 경우(data가 빈 배열)와 오류로 못 가져온
-    // 경우를 구분해 후자는 서버 로그에 남긴다 — 재발해도 원인을 바로 알 수 있게.
-    if (error) {
-      console.error(`[page1] get_channel_daily_narrative(${code}) 실패: ${error.message}`);
+    // 사용자 피드백(2026-08-21, 재확인): "0820자 채널별 인사이트에 ENA·OLIFE가 안 보인다" — 개별
+    // RPC는 정상(약 2초)이지만, mapWithConcurrency.ts에 문서화된 대로 6개 채널분(+household까지
+    // 겹치면 최대 16개) 무거운 SQL을 동시에 쏘면 Supabase Postgres 인스턴스가 경합해 일부 호출이
+    // 타임아웃/오류로 실패할 수 있다 — 이전엔 오류가 나면 그 채널을 통째로 빼고 넘어갔는데, 이게
+    // "특정 채널만 이유 없이 사라지는" 원인이었다(진짜 데이터 문제가 아니라 일시적 부하 문제).
+    // 오류 시 한 번 더 재시도하고, 그래도 실패하면 로그를 남기고 제외한다.
+    let narrativeData = data;
+    let narrativeError = error;
+    if (narrativeError) {
+      console.error(`[page1] get_channel_daily_narrative(${code}) 1차 실패, 재시도: ${narrativeError.message}`);
+      const retry = await supabase.rpc("get_channel_daily_narrative", {
+        p_channel_code: code,
+        p_target_label: targetLabel,
+        p_program_target_label: programTargetLabel,
+        p_demographic_labels: demographicLabels,
+        p_as_of_date: asOfDate,
+      });
+      narrativeData = retry.data;
+      narrativeError = retry.error;
+    }
+    if (narrativeError) {
+      console.error(`[page1] get_channel_daily_narrative(${code}) 재시도도 실패: ${narrativeError.message}`);
       return null;
     }
-    if (!data?.[0]) return null;
-    const signal: ChannelNarrativeSignal = { channelCode: code, ...data[0] };
+    if (!narrativeData?.[0]) return null;
+    const signal: ChannelNarrativeSignal = { channelCode: code, ...narrativeData[0] };
     if (needsHousehold) signal.household = householdData?.[0] ?? null;
     return signal;
   }
@@ -609,6 +627,12 @@ export async function GET() {
     };
   });
 
+  // 10) 주요 뉴스(베타, 사용자 지시 2026-08-21) — 관리자가 텍스트로 업로드한 목록을 그대로.
+  const { data: dailyNewsRows } = await supabase
+    .from("daily_news_items")
+    .select("category, title, url, display_order")
+    .order("display_order");
+
   return NextResponse.json({
     ok: true,
     asOfDate,
@@ -619,5 +643,6 @@ export async function GET() {
     killerContentDaypart,
     todayTopPrograms,
     featuredContentSchedule,
+    dailyNews: dailyNewsRows ?? [],
   });
 }
