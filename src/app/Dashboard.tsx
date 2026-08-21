@@ -369,32 +369,37 @@ function buildSkyUhdNarrative(s: ChannelNarrativeSignal | undefined): { channelN
   };
 }
 
+// 사용자 지시(2026-08-21, Page 1 전면 개편): "기존의 단순한 붉은색/초록색 강조 방식은 제외하고
+// 로고 색상이나 모던 테마에 어울리는 세련된 색상으로 데이터를 강조" — 상승은 ENA 브랜드 색,
+// 하락은 채도를 낮춘 짙은 버건디로 교체(Tailwind rose-600의 "신호등" 느낌 대신 절제된 톤).
+// 방향성 자체(상승/하락 구분)는 시청률 데이터의 핵심 정보라 유지하되, 색만 더 차분하게 다듬었다.
+const ACCENT_UP = "#281fc7"; // ENA 브랜드 색 계열(카드 제목과 동일 톤)
+const ACCENT_DOWN = "#9f1239"; // 짙은 버건디(rose-800) — 경고성 원색 대신 절제된 톤
+
+// 사용자 지시: pill 배지 대신 절제된 텍스트+화살표(레퍼런스 tvn.cjenm.com 실측: 숫자 위주
+// 데이터에 배경 배지를 쓰지 않고 굵은 글씨+색상만으로 강조하는 방식을 참고).
 function ChangeBadge({ pct }: { pct: number | null }) {
   if (pct === null) return <span className="text-sm text-zinc-400">전일 비교 자료 없음</span>;
   const up = pct >= 0;
   return (
-    <span
-      className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-sm font-medium ${
-        up ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
-      }`}
-    >
+    <span className="inline-flex items-center gap-0.5 text-sm font-bold tabular-nums tracking-tight" style={{ color: up ? ACCENT_UP : ACCENT_DOWN }}>
       {up ? "▲" : "▼"} {Math.abs(pct).toFixed(1)}%
     </span>
   );
 }
 
-// 카드 공통 스타일 — 참고 이미지의 글래스모피즘(반투명 화이트 + 은은한 그림자) 톤.
-// 사용자 지시(2026-08-21): 카드 그림자·제목 강조색을 범용 Tailwind indigo(AI 기본색으로 흔히
-// 지적되는 계열)에서 ENA 로고 실제 브랜드 색(#3a30df)으로 교체 — impeccable(design-taste-frontend
-// 스킬 병행 설치분)이 "AI가 흔히 쓰는 보라/인디고 계열"로 지적한 8곳(주요 컨텐츠 리뷰/채널별
-// 인사이트/채널별 킬러 콘텐츠/오늘의 상위 프로그램/주요 뉴스 제목·배지, 새로고침 버튼 그라디언트)을
-// 브랜드 자산 기반 색으로 바꿔 "임의로 고른 기본색"이 아니라 "의도적으로 고른 ENA 색"이 되게 했다.
-const CARD = "rounded-3xl bg-white/80 backdrop-blur-xl p-6 shadow-[0_8px_30px_-12px_rgba(58,48,223,0.25)] ring-1 ring-white/60";
+// 카드 공통 스타일 — 사용자 지시(2026-08-21, Page 1 전면 개편): 기존 파스텔 그라디언트+블러
+// 블롭+글래스모피즘(반투명+backdrop-blur) 배경을 버리고, 회색·검정·흰색 기반의 모던하고 깔끔한
+// 톤으로 교체 — tvn.cjenm.com 레퍼런스처럼 흰 카드 + 옅은 회색 배경 + 그림자로만 위계를 준다.
+const CARD = "rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_8px_20px_-12px_rgba(0,0,0,0.08)] ring-1 ring-zinc-200/70";
 // ENA 브랜드 색(#3a30df) 기반 팔레트 — 카드 제목/배지/새로고침 버튼에 일관되게 사용(색상 일관성 유지).
 const ACCENT_HEADING = "text-[#281fc7]"; // 원래 text-indigo-600 자리
 const ACCENT_HOVER = "hover:text-[#281fc7]"; // 원래 hover:text-indigo-600 자리
 const ACCENT_BADGE_BG = "bg-[#f1f0f9]"; // 원래 bg-indigo-50 자리
 const ACCENT_BADGE_TEXT = "text-[#2017bb]"; // 원래 text-indigo-500/600(배지) 자리
+// 사용자 지시(2026-08-21): tvn.cjenm.com 레퍼런스의 자간(대부분 -1.5~-3%)을 참고해 카드 제목·
+// 큰 숫자류에 일관되게 자간을 좁힌다(Tailwind tracking-tight = -2.5%).
+const SECTION_TITLE = `mb-1 text-sm font-semibold tracking-tight ${ACCENT_HEADING}`;
 
 // 올해 1/1~오늘 누적 평균 시청률·순위 + 목표 순위(6위 등) 대비 몇 위 차이인지(사용자 지시).
 // target_rank는 target_goals에 자유 텍스트로 저장돼 있어(예: skyUHD "경쟁채널 중 2위") 숫자로
@@ -427,6 +432,8 @@ function buildYtdLine(channel: ChannelSummary): string | null {
 
 // ENA 히어로 — 사용자 지시(2026-08-20): 로고·시청률 가운데 정렬, 시청률(순위) + 전일 대비
 // 증감률, 그 아래 작은 글씨로 올해 누적 평균 시청률(순위)과 목표 순위 대비 격차.
+// 사용자 재지시(2026-08-21, Page 1 전면 개편): 대각선 그라디언트 패널 대신 옅은 단색 톤 +
+// 하단 강조선(무채색 베이스 + 로고색 포인트)으로, 큰 숫자는 자간을 좁혀 더 또렷하게.
 function ChannelHero({ channel }: { channel: ChannelSummary }) {
   const ytdLine = buildYtdLine(channel);
   return (
@@ -442,35 +449,38 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
       />
       {/* 사용자 지시(2026-08-21): 시청률부터 등위까지 가운데 정렬 + 동일한 글씨 크기 유지,
           전일 대비 증감은 등위 바로 오른쪽에(줄바꿈 없이) 배치. */}
-      <div className="mt-3 flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
-        <span className="whitespace-nowrap text-3xl font-semibold text-zinc-900">
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+        <span className="whitespace-nowrap text-4xl font-bold tabular-nums tracking-tight text-zinc-900">
           {formatRating(channel.currentRating)}
           {/* 사용자 지시(2026-08-21): 등위는 시청률 숫자보다 약간만 더 작은 글씨로. */}
-          {channel.currentRank !== null && <span className="ml-1.5 text-2xl font-semibold text-zinc-400">({channel.currentRank}위)</span>}
+          {channel.currentRank !== null && (
+            <span className="ml-1.5 text-2xl font-semibold tracking-tight text-zinc-400">({channel.currentRank}위)</span>
+          )}
         </span>
         <ChangeBadge pct={channel.dodChangePct} />
       </div>
-      {ytdLine && <p className="mt-3 text-sm text-zinc-400">{ytdLine}</p>}
+      {ytdLine && <p className="mt-3 text-sm text-zinc-500">{ytdLine}</p>}
     </Link>
   );
 }
 
 // 사용자 지시(2026-08-20): ONCE·skyUHD 로고는 원본 워드마크 자체가 가로로 넓어(실측 가로세로비
-// ONCE 4.03, skyUHD 3.70 vs OLIFE 2.26) 높이만 맞추면 이 좁은 줄에서 오른쪽이 잘린다 — 두 채널만
-// OLIFE의 실제 렌더 폭(heightPx=20 기준 약 45px)에 맞춰 폭 상한을 준다.
+// ONCE 4.03, skyUHD 3.70 vs OLIFE 2.26) 높이만 맞추면 이 좁은 칸에서 오른쪽이 잘린다 — 두 채널만
+// 폭 상한을 준다.
 const WIDTH_CAPPED_LOGO_CODES = new Set(["ONCE", "SKYUHD"]);
-const COMPACT_ROW_LOGO_MAX_WIDTH_PX = 45;
+const TILE_LOGO_MAX_WIDTH_PX = 52;
 
-function CompactChannelRow({ channel, logoReference }: { channel: ChannelSummary; logoReference?: ChannelSummary }) {
+// 사용자 지시(2026-08-21, Page 1 전면 개편): 가로로 긴 압축 리스트 행 대신, 위젯형 미니 카드
+// 그리드로 재배열(4번 요구사항: "데이터는 유지, 배열 방식은 자유") — 로고·채널명·시청률·순위·
+// 증감을 세로로 쌓아 한 칸씩 또렷하게 구분되는 카드로. 채널명은 로고 메인 색 유지 규칙 그대로.
+function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logoReference?: ChannelSummary }) {
   const isSkyUhd = channel.code === "SKYUHD";
   return (
     <Link
       href={`/channel/${channel.code}`}
-      className="flex flex-nowrap items-center gap-2 rounded-2xl bg-[#f1f0f9]/50 px-3 py-2 transition hover:bg-[#f1f0f9]"
+      className="flex flex-col gap-2 rounded-xl bg-zinc-50 p-3.5 ring-1 ring-zinc-100 transition hover:bg-zinc-100/70 hover:ring-zinc-200"
     >
-      {/* 사용자 지시(2026-08-20): 로고 폭이 채널마다 달라도 이 칸의 폭은 고정해, 그 다음에 오는
-          시청률 숫자의 "0."이 모든 행에서 같은 위치에서 시작하도록 한다. */}
-      <div className="flex w-14 shrink-0 items-center justify-center">
+      <div className="flex items-center gap-1.5">
         <ChannelLogo
           channel={{
             logoPath: channel.logoPath,
@@ -488,50 +498,46 @@ function CompactChannelRow({ channel, logoReference }: { channel: ChannelSummary
                 }
               : undefined
           }
-          heightPx={20}
-          maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? COMPACT_ROW_LOGO_MAX_WIDTH_PX : undefined}
+          heightPx={18}
+          maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
         />
+        <span className="truncate text-[13px] font-bold tracking-tight" style={{ color: channel.themeColor ?? undefined }}>
+          {channel.name}
+        </span>
       </div>
-      {/* 사용자 지시: 시청률 표현의 "0."이 왼쪽으로 동일하게 정렬되도록 고정폭+왼쪽정렬+숫자
-          전용 자간(tabular-nums). skyUHD는 소수점 넷째 자리까지 표기해 자릿수가 하나 더
-          많으므로, 폰트를 줄여 전체 숫자 폭을 다른 채널과 비슷하게 맞춘다. */}
-      <span className={`w-12 shrink-0 text-left font-semibold tabular-nums text-zinc-800 ${isSkyUhd ? "text-sm" : "text-sm"}`}>
-        {formatRating(channel.currentRating, channel.code)}
-      </span>
-      <span className="shrink-0 whitespace-nowrap text-sm font-normal text-zinc-400">
-        {channel.currentRank !== null ? `(${channel.currentRank}위)` : ""}
-      </span>
-      {/* 사용자 지시(2026-08-20): 전주 대비 줄은 삭제 — 채널당 데이터가 한 줄에 깔끔하게 보이도록. */}
-      <div className="ml-auto shrink-0 whitespace-nowrap">
-        <ChangeBadge pct={channel.dodChangePct} />
+      <div className="flex items-baseline gap-1.5">
+        <span className={`font-bold tabular-nums tracking-tight text-zinc-900 ${isSkyUhd ? "text-base" : "text-lg"}`}>
+          {formatRating(channel.currentRating, channel.code)}
+        </span>
+        <span className="text-xs text-zinc-400">{channel.currentRank !== null ? `${channel.currentRank}위` : ""}</span>
       </div>
+      <ChangeBadge pct={channel.dodChangePct} />
     </Link>
   );
 }
 
-// ① 채널 현황 카드 — R1C1
+// ① 채널 현황 카드 — R1C1("오늘의 시청률")
 function ChannelStatusCard({ channels }: { channels: Map<string, ChannelSummary> }) {
   const ena = channels.get("ENA");
   const rest = ["ENA_PLAY", "ENA_DRAMA", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"]
     .map((c) => channels.get(c))
     .filter((c): c is ChannelSummary => !!c);
 
-  // 사용자 지시(2026-08-20, 참고 이미지 반영): ENA 히어로를 참고 이미지의 큰 컬러 패널처럼
-  // 채널 테마색을 옅게 은은하게 깐 패널로 감싸, 나머지 압축 채널 목록과 시각적으로 구분되게 했다.
-  const enaAccent = ena?.themeColor ?? "#6366f1";
+  const enaAccent = ena?.themeColor ?? "#3a30df";
   return (
     <div className={CARD}>
+      <h2 className={SECTION_TITLE}>오늘의 시청률</h2>
+      {/* impeccable 지적(border-accent-on-rounded) 반영: 아래쪽 모서리까지 둥근 카드에 굵은
+          border-b를 그으면 모서리에서 테두리가 어긋나 보인다 — 위쪽만 둥글게(rounded-t-2xl)
+          해 아래쪽 강조선이 사각으로 깔끔하게 떨어지도록 고쳤다. */}
       {ena && (
-        <div
-          className="rounded-2xl p-5"
-          style={{ background: `linear-gradient(135deg, ${enaAccent}1f, ${enaAccent}08)` }}
-        >
+        <div className="mt-3 rounded-t-2xl border-b-4 p-5" style={{ backgroundColor: `${enaAccent}0a`, borderColor: enaAccent }}>
           <ChannelHero channel={ena} />
         </div>
       )}
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {rest.map((c) => (
-          <CompactChannelRow key={c.code} channel={c} logoReference={ena} />
+          <ChannelTile key={c.code} channel={c} logoReference={ena} />
         ))}
       </div>
     </div>
@@ -739,7 +745,7 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
   return (
     <div className={CARD}>
       {/* 사용자 지시(2026-08-21): 카드 제목을 "주요 컨텐츠 리뷰"로. */}
-      <h2 className={`mb-4 text-sm font-semibold ${ACCENT_HEADING}`}>주요 컨텐츠 리뷰</h2>
+      <h2 className={`mb-4 text-sm font-semibold tracking-tight ${ACCENT_HEADING}`}>주요 컨텐츠 리뷰</h2>
 
       {report.mode === "daily" ? (
         report.daily.length === 0 ? (
@@ -770,86 +776,83 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
                       )}
                     </div>
                   )}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr className="text-zinc-400">
-                          <th className="pb-1.5 pr-2 font-medium">프로그램</th>
-                          <th className="pb-1.5 pr-2 font-medium">본방</th>
-                          <th className="pb-1.5 pr-2 font-medium">직후재방</th>
-                          <th className="pb-1.5 font-medium">동시간대 경쟁</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-t border-[#f1f0f9] align-top">
-                          <td className="py-2 pr-2">
-                            <div className="font-medium text-zinc-800">{h.matched_program_name}</div>
-                            {h.pre_rerun_rating !== null && (
-                              <div className="mt-1 text-[12px] text-zinc-400">
-                                전회 직전 재방 {h.pre_rerun_start_time ? fmtTime(h.pre_rerun_start_time) : ""} · {formatRating(h.pre_rerun_rating)}
-                              </div>
-                            )}
-                            {h.self_rerun_rating !== null && (
-                              <div className="text-[12px] text-zinc-400">
-                                당일 자체재방 {h.self_rerun_start_time ? fmtTime(h.self_rerun_start_time) : ""} · {formatRating(h.self_rerun_rating)}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-2 pr-2 text-zinc-600">
-                            {CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
-                            <br />
-                            {fmtTime(h.matched_start_time)} ·{" "}
-                            {/* 사용자 지시(2026-08-21): 본방송 시청률 볼드, 전회 대비 증가=푸른색(ENA
-                                로고색)/감소=붉은색. */}
-                            <span
-                              className="font-bold"
-                              style={{
-                                color:
-                                  h.prior_rating_change_pct === null
-                                    ? undefined
-                                    : h.prior_rating_change_pct >= 0
-                                      ? enaAccentColor
-                                      : "#e11d48",
-                              }}
-                            >
-                              {formatRating(h.matched_rating)}
-                            </span>
-                            {h.prior_rating_change_pct !== null && (
-                              <div className="mt-0.5 text-[12px]">
-                                <span className={h.prior_rating_change_pct >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                                  전회 대비 {h.prior_rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(h.prior_rating_change_pct).toFixed(1)}%
-                                </span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-2 pr-2 text-zinc-600">
-                            {h.rerun_program_name && h.rerun_start_time ? (
-                              <>
-                                {CHANNEL_NAME_BY_CODE[h.rerun_channel_code ?? ""] ?? h.rerun_channel_code}
-                                <br />
-                                {fmtTime(h.rerun_start_time)} · {formatRating(h.rerun_rating)}
-                                {h.retention_pct !== null && <span className="text-zinc-400"> ({h.retention_pct.toFixed(1)}%)</span>}
-                              </>
-                            ) : (
-                              <span className="text-zinc-300">—</span>
-                            )}
-                          </td>
-                          <td className="py-2">
-                            {h.competitorHighlights.length === 0 ? (
-                              <span className="text-zinc-300">—</span>
-                            ) : (
-                              <div className="flex flex-col gap-0.5">
-                                {h.competitorHighlights.slice(0, 3).map((c, i) => (
-                                  <span key={i} className="text-zinc-500">
-                                    <span className="font-medium text-zinc-700">{c.competitor_name}</span> {fmtTime(c.competitor_start_time)} {formatRating(c.competitor_rating)}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
+                  {/* 사용자 지시(2026-08-21, Page 1 전면 개편): "불필요한 내부 스크롤바는 최대한
+                      배제" — 4열 표(overflow-x-auto)를 없애고, 프로그램 정보 블록 + 3칸 통계
+                      그리드(본방/직후재방/동시간대 경쟁)로 재구성. 좁은 화면에서는 자연스럽게
+                      1열로 줄바꿈되어(그리드 reflow) 가로 스크롤이 생기지 않는다. 데이터·계산은
+                      전부 그대로, 표시 방식만 바꿨다. */}
+                  <div className="mb-3 rounded-xl bg-zinc-50 p-3">
+                    <p className="font-semibold text-zinc-800">{h.matched_program_name}</p>
+                    {h.pre_rerun_rating !== null && (
+                      <p className="mt-1 text-[12px] text-zinc-500">
+                        전회 직전 재방 {h.pre_rerun_start_time ? fmtTime(h.pre_rerun_start_time) : ""} · {formatRating(h.pre_rerun_rating)}
+                      </p>
+                    )}
+                    {h.self_rerun_rating !== null && (
+                      <p className="text-[12px] text-zinc-500">
+                        당일 자체재방 {h.self_rerun_start_time ? fmtTime(h.self_rerun_start_time) : ""} · {formatRating(h.self_rerun_rating)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                    <div className="rounded-xl bg-zinc-50 p-3 text-sm">
+                      <p className="mb-1.5 text-[11px] font-medium text-zinc-400">본방</p>
+                      <p className="text-zinc-600">
+                        {CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code} · {fmtTime(h.matched_start_time)}
+                      </p>
+                      {/* 사용자 지시(2026-08-21): 본방송 시청률 볼드, 전회 대비 증가=푸른색(ENA
+                          로고색)/감소=붉은색. 사용자 재지시(2026-08-21, Page 1 개편): 원색
+                          red/green 대신 ACCENT_UP/ACCENT_DOWN(절제된 톤)으로. */}
+                      <p
+                        className="mt-0.5 text-lg font-bold tabular-nums tracking-tight"
+                        style={{
+                          color:
+                            h.prior_rating_change_pct === null
+                              ? undefined
+                              : h.prior_rating_change_pct >= 0
+                                ? enaAccentColor
+                                : ACCENT_DOWN,
+                        }}
+                      >
+                        {formatRating(h.matched_rating)}
+                      </p>
+                      {h.prior_rating_change_pct !== null && (
+                        <p className="mt-0.5 text-[12px] font-semibold tabular-nums" style={{ color: h.prior_rating_change_pct >= 0 ? ACCENT_UP : ACCENT_DOWN }}>
+                          전회 대비 {h.prior_rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(h.prior_rating_change_pct).toFixed(1)}%
+                        </p>
+                      )}
+                    </div>
+                    <div className="rounded-xl bg-zinc-50 p-3 text-sm">
+                      <p className="mb-1.5 text-[11px] font-medium text-zinc-400">직후재방</p>
+                      {h.rerun_program_name && h.rerun_start_time ? (
+                        <>
+                          <p className="text-zinc-600">
+                            {CHANNEL_NAME_BY_CODE[h.rerun_channel_code ?? ""] ?? h.rerun_channel_code} · {fmtTime(h.rerun_start_time)}
+                          </p>
+                          <p className="mt-0.5 text-lg font-bold tabular-nums tracking-tight text-zinc-800">
+                            {formatRating(h.rerun_rating)}
+                            {h.retention_pct !== null && <span className="ml-1 text-[12px] font-normal text-zinc-400">({h.retention_pct.toFixed(1)}%)</span>}
+                          </p>
+                        </>
+                      ) : (
+                        <span className="text-zinc-300">—</span>
+                      )}
+                    </div>
+                    <div className="rounded-xl bg-zinc-50 p-3 text-sm">
+                      <p className="mb-1.5 text-[11px] font-medium text-zinc-400">동시간대 경쟁</p>
+                      {h.competitorHighlights.length === 0 ? (
+                        <span className="text-zinc-300">—</span>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          {h.competitorHighlights.slice(0, 3).map((c, i) => (
+                            <p key={i} className="text-zinc-600">
+                              <span className="font-medium text-zinc-700">{c.competitor_name}</span> {fmtTime(c.competitor_start_time)}{" "}
+                              <span className="font-semibold tabular-nums">{formatRating(c.competitor_rating)}</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {insight.bullets.length > 0 && (
                     <ul className="mt-1.5 space-y-1 pb-1">
@@ -886,35 +889,33 @@ function OriginalContentReportCard({ report, enaAccentColor }: { report: Origina
           <p className="mb-2 text-sm text-zinc-400">
             오늘은 지정된 오리지널 프로그램이 없는 요일입니다 — 최근 7일 종합 리뷰를 대신 보여드립니다.
           </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="text-zinc-400">
-                  <th className="pb-1.5 pr-2 font-medium">프로그램</th>
-                  <th className="pb-1.5 pr-2 font-medium">채널</th>
-                  <th className="pb-1.5 pr-2 font-medium">평균</th>
-                  <th className="pb-1.5 pr-2 font-medium">최고</th>
-                  <th className="pb-1.5 font-medium">최근</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.weekly.map((w) => (
-                  <tr key={`${w.broadcast_channel_code}-${w.program_name}`} className="border-t border-[#f1f0f9]">
-                    <td className="py-2 pr-2 font-medium text-zinc-800">{w.program_name}</td>
-                    <td className="py-2 pr-2 text-zinc-600">{CHANNEL_NAME_BY_CODE[w.broadcast_channel_code] ?? w.broadcast_channel_code}</td>
-                    <td className="py-2 pr-2 text-zinc-600">{formatRating(w.avg_rating)}</td>
-                    <td className="py-2 pr-2 text-zinc-600">
-                      {formatRating(w.best_rating)}
-                      <span className="text-zinc-400"> ({w.best_date})</span>
-                    </td>
-                    <td className="py-2 text-zinc-600">
-                      {formatRating(w.latest_rating)}
-                      <span className="text-zinc-400"> ({w.latest_date})</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* 사용자 지시(2026-08-21, Page 1 전면 개편): 가로 스크롤 표 대신 프로그램별 카드
+              리스트로(데이터·필드는 동일). */}
+          <div className="flex flex-col gap-2.5">
+            {report.weekly.map((w) => (
+              <div key={`${w.broadcast_channel_code}-${w.program_name}`} className="rounded-xl bg-zinc-50 p-3 text-sm">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                  <p className="font-semibold text-zinc-800">{w.program_name}</p>
+                  <p className="text-[12px] text-zinc-400">{CHANNEL_NAME_BY_CODE[w.broadcast_channel_code] ?? w.broadcast_channel_code}</p>
+                </div>
+                <div className="mt-1.5 grid grid-cols-3 gap-2 text-[13px] text-zinc-600">
+                  <p>
+                    <span className="text-zinc-400">평균 </span>
+                    <span className="font-semibold tabular-nums">{formatRating(w.avg_rating)}</span>
+                  </p>
+                  <p>
+                    <span className="text-zinc-400">최고 </span>
+                    <span className="font-semibold tabular-nums">{formatRating(w.best_rating)}</span>
+                    <span className="text-zinc-400"> ({w.best_date})</span>
+                  </p>
+                  <p>
+                    <span className="text-zinc-400">최근 </span>
+                    <span className="font-semibold tabular-nums">{formatRating(w.latest_rating)}</span>
+                    <span className="text-zinc-400"> ({w.latest_date})</span>
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -949,7 +950,7 @@ function ChannelNarrativeCard({
 
   return (
     <div className={CARD}>
-      <h2 className={`mb-1 text-sm font-semibold ${ACCENT_HEADING}`}>채널별 인사이트</h2>
+      <h2 className={SECTION_TITLE}>채널별 인사이트</h2>
       <p className="mb-4 text-sm text-zinc-400">
         오늘 데이터를 최근 4주 평균과 비교해 눈에 띄는 변화만 짚었습니다(4주 넘게 반복되는 평소
         패턴은 가급적 언급을 피합니다).
@@ -1029,16 +1030,17 @@ function KillerContentCard({
     const ytdAvg = ytdAvgByCode.get(code) ?? null;
     return (
       <div key={code}>
-        <p className="mb-1 text-sm font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
+        <p className="mb-1 text-sm font-bold tracking-tight" style={{ color: themeColorByCode.get(code) ?? undefined }}>
           {CHANNEL_NAME_BY_CODE[code]}
         </p>
         <div className="flex flex-col gap-1">
           {list.map((k) => {
-            const ytdColorClass = ytdAvg === null ? "text-zinc-500" : k.avg_rating >= ytdAvg ? "text-emerald-600" : "text-rose-500";
+            // 사용자 지시(2026-08-21, Page 1 개편): emerald/rose 원색 대신 ACCENT_UP/DOWN.
+            const ytdColor = ytdAvg === null ? "#71717a" : k.avg_rating >= ytdAvg ? ACCENT_UP : ACCENT_DOWN;
             return (
               <p key={k.canonical_name} className="truncate text-sm text-zinc-600" title={buildKillerContentOneLiner(k)}>
                 <span className="font-medium text-zinc-800">{k.canonical_name}</span>{" "}
-                <span className={`font-semibold ${ytdColorClass}`}>{formatRating(k.avg_rating)}</span>{" "}
+                <span className="font-semibold tabular-nums" style={{ color: ytdColor }}>{formatRating(k.avg_rating)}</span>{" "}
                 <span className="text-zinc-400">· {buildKillerContentOneLiner(k)}</span>
               </p>
             );
@@ -1050,7 +1052,7 @@ function KillerContentCard({
 
   return (
     <div className={`${CARD} lg:col-span-2`}>
-      <h2 className={`mb-1 text-sm font-semibold ${ACCENT_HEADING}`}>채널별 킬러 콘텐츠</h2>
+      <h2 className={SECTION_TITLE}>채널별 킬러 콘텐츠</h2>
       <p className="mb-4 text-sm text-zinc-400">최근 4주 평균 시청률 상위 프로그램 — 강세·약세 시간대가 있으면 함께 표시합니다.</p>
       {rows.length === 0 ? (
         <p className="text-sm text-zinc-400">데이터가 아직 부족합니다.</p>
@@ -1089,7 +1091,7 @@ function TodayTopProgramsCard({
 
   return (
     <div className={CARD}>
-      <h2 className={`mb-1 text-sm font-semibold ${ACCENT_HEADING}`}>오늘의 상위 프로그램</h2>
+      <h2 className={SECTION_TITLE}>오늘의 상위 프로그램</h2>
       <p className="mb-4 text-sm text-zinc-400">오늘 하루 채널별 시청률 상위 3개 프로그램입니다.</p>
       <div className="flex flex-col gap-3 text-sm">
         {INSIGHT_CHANNEL_ORDER.map((code) => {
@@ -1115,12 +1117,13 @@ function TodayTopProgramsCard({
                 <tbody>
                   {list.map((p, i) => {
                     // 사용자 지시(2026-08-21): 채널 누적 평균 대비 상회/동일/하회 색상.
+                    // 사용자 재지시(2026-08-21, Page 1 개편): 원색 red 대신 ACCENT_DOWN(절제된 톤).
                     const ratingColor =
                       ytdAvg === null || p.rating === ytdAvg
                         ? undefined
                         : p.rating > ytdAvg
                           ? enaAccentColor
-                          : "#e11d48"; // rose-600
+                          : ACCENT_DOWN;
                     const episodeText =
                       p.episodeNumber !== null ? `${p.episodeNumber}회${p.episodeSubtitle ? ` ${p.episodeSubtitle}` : ""}` : null;
                     return (
@@ -1190,7 +1193,7 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
   return (
     <div className={`${CARD} lg:col-span-2`}>
       <div className="mb-1 flex items-center gap-2">
-        <h2 className={`text-sm font-semibold ${ACCENT_HEADING}`}>주요 뉴스</h2>
+        <h2 className={`text-sm font-semibold tracking-tight ${ACCENT_HEADING}`}>주요 뉴스</h2>
         <span className={`rounded-full ${ACCENT_BADGE_BG} px-2 py-0.5 text-[12px] font-medium ${ACCENT_BADGE_TEXT}`}>베타</span>
       </div>
       <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
@@ -1263,74 +1266,91 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   const byCode = new Map(data?.channels.map((c) => [c.code, c]) ?? []);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-gradient-to-br from-indigo-50 via-sky-50 to-violet-50 px-6 py-8">
-      {/* 참고 이미지 톤앤매너: 흐릿한 파스텔 블롭 장식(고정 배경, 콘텐츠와 상호작용 없음).
-          사용자 지시(2026-08-20): 참고로 준 건강앱 이미지의 블루·퍼플에 핑크 계열 블롭을
-          하나 더해 색감을 좀 더 가깝게 맞췄다(비주얼 스타일만 차용, 레이아웃은 유지). */}
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-indigo-200 opacity-40 blur-3xl" />
-        <div className="absolute -right-24 top-1/4 h-80 w-80 rounded-full bg-violet-200 opacity-40 blur-3xl" />
-        <div className="absolute bottom-0 left-1/4 h-72 w-72 rounded-full bg-sky-200 opacity-30 blur-3xl" />
-        <div className="absolute right-1/4 bottom-1/4 h-64 w-64 rounded-full bg-pink-200 opacity-25 blur-3xl" />
-      </div>
+    <div className="relative min-h-screen overflow-x-hidden bg-zinc-50 px-6 py-8">
+      {/* 사용자 지시(2026-08-21, Page 1 전면 개편): "기존 배경은 버리고 모던하고 깔끔한 배경을
+          제안" — 파스텔 그라디언트 + 블러 블롭 장식(흐릿한 원형 광원 효과, 대표적인 "AI가 만든
+          느낌")을 전부 제거하고, 옅은 회색 단색 배경(zinc-50) + 흰 카드 + 그림자로만 위계를
+          준다(tvn.cjenm.com 레퍼런스: 장식 없는 흰/회색 배경에 콘텐츠 자체로 승부). */}
 
       {/* 사용자 지시(2026-08-21): "PC 화면에서 레이아웃이 너무 중앙에 쏠려있다" — 좁은 max-w-6xl
           (1152px)이 넓은 모니터에서 양옆 여백만 크게 남기던 문제. max-w-screen-2xl(1536px)로
           넓혀 화면을 더 넓게 쓰도록 한다(작은 화면은 mx-auto+반응형 그리드가 그대로 처리). */}
       <div className="mx-auto max-w-screen-2xl">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             {/* 사용자 지시(2026-08-20): 좌측 최상단은 채널별 로고가 아니라 고정 KT ENA CI 마크. */}
             {/* eslint-disable-next-line @next/next/no-img-element -- 고정 정적 브랜드 마크(픽셀 크롭 불필요) */}
             <img src="/kt-ena-ci-black.png" alt="KT ENA" style={{ height: 36, width: "auto" }} />
-            <h1 className="text-xl font-bold text-zinc-900">
+            <h1 className="text-xl font-bold tracking-tight text-zinc-900">
               {formatDateWithDow(data?.asOfDate)} 채널 종합 리포트
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            {/* 사용자 지시(2026-08-20): 7개 채널 서브 페이지로 바로 이동할 수 있는 작은 아이콘을
-                관리자·새로고침 아이콘 왼쪽에 나열. */}
+            {/* 사용자 지시(2026-08-21): "우측 상단 채널별 로고가 너무 작아 시인성이 떨어진다" —
+                h-8 w-8(로고 14px)에서 h-11 w-11(로고 22px)로 확대, 배경도 불투명 흰색+옅은
+                테두리로 새 무채색 배경 위에서 또렷하게 보이도록. */}
             {data && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 {data.channels.map((c) => (
                   <Link
                     key={c.code}
                     href={`/channel/${c.code}`}
                     title={c.name}
                     aria-label={c.name}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 shadow-sm ring-1 ring-white/60 backdrop-blur hover:bg-white"
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:ring-zinc-300"
                   >
                     <ChannelLogo
                       channel={{ logoPath: c.logoPath, name: c.name, logoVisibleRatio: c.logoVisibleRatio, logoVisibleTopRatio: c.logoVisibleTopRatio }}
-                      heightPx={14}
-                      maxWidthPx={20}
+                      heightPx={22}
+                      maxWidthPx={32}
                     />
                   </Link>
                 ))}
               </div>
             )}
-            {/* 사용자 지시: 관리자 화면 이동은 작은 아이콘으로만. */}
+            {/* 사용자 지시: 관리자 화면 이동은 작은 아이콘으로만.
+                사용자 재지시(2026-08-21): "새로고침 버튼이 촌스럽다" — 그라디언트+이모지 버튼을
+                버리고, 관리자 아이콘도 이모지(⚙) 대신 얇은 선 아이콘으로 통일해 미니멀하게. */}
             {isAdmin && (
               <a
                 href="/admin"
                 title="관리자 화면"
                 aria-label="관리자 화면"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-base shadow-sm ring-1 ring-white/60 backdrop-blur hover:bg-white"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-700"
               >
-                ⚙
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="18" x2="20" y2="18" />
+                  <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" />
+                  <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" />
+                  <circle cx="9" cy="18" r="2" fill="currentColor" stroke="none" />
+                </svg>
               </a>
             )}
-            {/* 사용자 지시(2026-08-20): 새로고침도 관리자 아이콘처럼 작게, 그라디언트 버튼으로.
-                사용자 지시(2026-08-21): 그라디언트 색을 범용 indigo→violet에서 ENA 브랜드 색
-                (#3a30df) 기반 그라디언트로 교체. */}
             <button
               onClick={load}
               disabled={loading}
               title="새로고침"
               aria-label="새로고침"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#4239e0] to-[#7c88ef] text-base text-white shadow-sm hover:from-[#645ce6] hover:to-[#a0a9f3] disabled:opacity-50"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:bg-zinc-50 disabled:opacity-50"
+              style={{ color: ACCENT_UP }}
             >
-              {loading ? "…" : "🔄"}
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className={loading ? "animate-spin" : undefined}
+              >
+                <path d="M21 12a9 9 0 1 1-3.51-7.11" />
+                <polyline points="21 3 21 9 15 9" />
+              </svg>
             </button>
           </div>
         </div>
