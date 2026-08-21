@@ -89,6 +89,27 @@ interface CompetitorOverlapRow {
   competitor_rating: number | null;
   rating_gap: number | null;
 }
+// 사용자 지시(2026-08-22): 본방송 시청률 추이 꺾은선 그래프용 — get_program_rating_history 원시
+// 행과, 그걸 채널·타깃별로 나눈 결과.
+interface ProgramRatingHistoryRow {
+  channel_code: string;
+  broadcast_date: string;
+  episode_number: number | null;
+  target_label: string;
+  rating: number;
+}
+interface RatingHistoryPoint {
+  broadcast_date: string;
+  episode_number?: number | null;
+  rating: number;
+}
+interface RatingHistoryResult {
+  own2049: RatingHistoryPoint[];
+  ownHousehold: RatingHistoryPoint[];
+  otherChannels: { seriesName: string; points: RatingHistoryPoint[] }[];
+  competitors: { seriesName: string; points: RatingHistoryPoint[] }[];
+}
+
 interface OriginalWeeklyRow {
   program_name: string;
   broadcast_channel_code: string;
@@ -212,6 +233,8 @@ interface TodayTopProgramRow {
   episodeSubtitle: string | null;
   comparisonRating: number | null;
   comparisonTargetLabel: string | null;
+  // 사용자 지시(2026-08-22): "시청률" 열이 정확히 어떤 타깃인지(수2049/가구 등) 표시하기 위해.
+  targetLabel: string;
 }
 
 export async function GET() {
@@ -457,7 +480,7 @@ export async function GET() {
 
   let originalContentReport: {
     mode: "daily" | "weekly_review";
-    daily: (OriginalDailyRow & { competitorHighlights: CompetitorOverlapRow[]; householdRank: number | null })[];
+    daily: (OriginalDailyRow & { competitorHighlights: CompetitorOverlapRow[]; householdRank: number | null; ratingHistory: RatingHistoryResult | null })[];
     weekly: OriginalWeeklyRow[];
   };
 
@@ -591,7 +614,67 @@ export async function GET() {
       };
     });
 
-    originalContentReport = { mode: "daily", daily: dailyWithOverlap, weekly: [] };
+    // 사용자 지시(2026-08-22): "주요 콘텐츠 리뷰"의 연령대별 미니바 대신, 최근 12주간 본방송
+    // 시청률 추이(수도권 2049 진하게 + 전국 유료가구 연하게, 회차 표시)를 꺾은선 그래프로 —
+    // "동시간대 같은 컨텐츠를 다른 채널이 방송할 경우(예: SBS Plus, ENA Play) 비교할 수 있게
+    // 같이 수도권 2049 시청률만" 함께 보여준다. get_program_rating_history가 채널 구분 없이
+    // 프로그램명+본방 시간(±10분)으로 매칭해주므로, 우리 네트워크 다른 채널의 동시간대 방영은
+    // 자연히 함께 잡힌다. 등록 경쟁채널(SBS Plus 등)은 별도 소스(competitor_program_ratings)라
+    // CROSS_CHANNEL_COMPETITOR_LOOKUPS로 등록된 조합만 추가로 조회한다.
+    const ratingHistoryByKey = new Map<string, RatingHistoryResult>();
+    await Promise.all(
+      daily
+        .filter((row) => row.matched_program_name && row.matched_start_time)
+        .map(async (row) => {
+          const key = `${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`;
+          if (ratingHistoryByKey.has(key)) return;
+          const competitorLookup = CROSS_CHANNEL_COMPETITOR_LOOKUPS.find((l) => l.whitelistChannelCode === row.broadcast_channel_code);
+          const [{ data: historyRows }, competitorHistoryResult] = await Promise.all([
+            supabase.rpc("get_program_rating_history", {
+              p_canonical_name: row.matched_program_name,
+              p_expected_start_time: row.matched_start_time,
+              p_as_of_date: asOfDate,
+            }),
+            competitorLookup
+              ? supabase.rpc("get_competitor_program_rating_history", {
+                  p_our_channel_code: competitorLookup.lookupChannelCode,
+                  p_competitor_name: competitorLookup.competitorName,
+                  p_program_name: row.matched_program_name,
+                  p_as_of_date: asOfDate,
+                })
+              : Promise.resolve({ data: null }),
+          ]);
+          const rows = (historyRows ?? []) as ProgramRatingHistoryRow[];
+          const own2049 = rows
+            .filter((r) => r.channel_code === row.broadcast_channel_code && r.target_label === "수도권 2049")
+            .map((r) => ({ broadcast_date: r.broadcast_date, episode_number: r.episode_number, rating: r.rating }));
+          const ownHousehold = rows
+            .filter((r) => r.channel_code === row.broadcast_channel_code && r.target_label === "전국 유료가구")
+            .map((r) => ({ broadcast_date: r.broadcast_date, episode_number: r.episode_number, rating: r.rating }));
+          const otherChannelCodes = [...new Set(rows.filter((r) => r.channel_code !== row.broadcast_channel_code).map((r) => r.channel_code))];
+          const otherChannels = otherChannelCodes
+            .map((code) => ({
+              seriesName: code,
+              points: rows
+                .filter((r) => r.channel_code === code && r.target_label === "수도권 2049")
+                .map((r) => ({ broadcast_date: r.broadcast_date, rating: r.rating })),
+            }))
+            .filter((s) => s.points.length > 0);
+          const competitorPoints = (competitorHistoryResult?.data ?? null) as { broadcast_date: string; rating: number }[] | null;
+          const competitors =
+            competitorLookup && competitorPoints && competitorPoints.length > 0
+              ? [{ seriesName: competitorLookup.competitorName, points: competitorPoints }]
+              : [];
+          ratingHistoryByKey.set(key, { own2049, ownHousehold, otherChannels, competitors });
+        })
+    );
+
+    const dailyWithHistory = dailyWithOverlap.map((row) => ({
+      ...row,
+      ratingHistory: ratingHistoryByKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
+    }));
+
+    originalContentReport = { mode: "daily", daily: dailyWithHistory, weekly: [] };
   } else {
     const { data: weeklyRows } = await supabase.rpc("get_original_content_weekly_review", {
       p_as_of_date: asOfDate,
@@ -791,6 +874,7 @@ export async function GET() {
         episodeSubtitle: row.episode_subtitle,
         comparisonRating: comparisonByKey.get(`${row.start_time}__${canonicalName}`) ?? null,
         comparisonTargetLabel: comparisonLabel,
+        targetLabel: programTargetLabel,
       };
     });
   });

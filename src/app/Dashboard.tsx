@@ -88,6 +88,19 @@ interface OriginalDailyItem {
   prev_drama_avg_rating: number | null;
   prev_drama_episode_count: number | null;
   prev_drama_change_pct: number | null;
+  // 사용자 지시(2026-08-22): 연령대별 미니바 대신 최근 12주 본방송 시청률 추이 꺾은선 그래프용.
+  ratingHistory: RatingHistoryResult | null;
+}
+interface RatingHistoryPoint {
+  broadcast_date: string;
+  episode_number?: number | null;
+  rating: number;
+}
+interface RatingHistoryResult {
+  own2049: RatingHistoryPoint[];
+  ownHousehold: RatingHistoryPoint[];
+  otherChannels: { seriesName: string; points: RatingHistoryPoint[] }[];
+  competitors: { seriesName: string; points: RatingHistoryPoint[] }[];
 }
 interface OriginalWeeklyItem {
   program_name: string;
@@ -194,6 +207,14 @@ interface TodayTopProgramRow {
   episodeSubtitle: string | null;
   comparisonRating: number | null;
   comparisonTargetLabel: string | null;
+  // 사용자 지시(2026-08-22): "시청률" 열이 정확히 어떤 타깃인지(수2049/가구 등) 표시하기 위해.
+  targetLabel: string;
+}
+
+// 사용자 지시(2026-08-22): "수2049, 가구라고만 적어주시면 됩니다" — 타깃 라벨을 짧은 형태로.
+function shortTargetLabel(label: string): string {
+  if (label.includes("유료가구")) return "가구";
+  return label.replace("수도권", "수").replace("전국", "").replace(/\s+/g, "").trim();
 }
 
 // 사용자 지시(2026-08-21): "오늘의 빠른 요약" 위에 "주요 뉴스"(베타) 섹션. 관리자가 매일
@@ -444,18 +465,6 @@ const ACCENT_UP = "#281fc7"; // ENA 브랜드 색 계열(카드 제목과 동일
 // 단계만 올렸다(더 밝은 rose-600/500은 다시 "신호등" 원색에 가까워져 제외).
 const ACCENT_DOWN = "#be123c"; // 짙은 버건디(rose-700) — 절제된 톤 유지하면서 시인성 보강
 
-// 사용자 지시: pill 배지 대신 절제된 텍스트+화살표(레퍼런스 tvn.cjenm.com 실측: 숫자 위주
-// 데이터에 배경 배지를 쓰지 않고 굵은 글씨+색상만으로 강조하는 방식을 참고).
-function ChangeBadge({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-sm text-zinc-400">전일 비교 자료 없음</span>;
-  const up = pct >= 0;
-  return (
-    <span className="inline-flex items-center gap-0.5 text-sm font-bold tabular-nums tracking-tight" style={{ color: up ? ACCENT_UP : ACCENT_DOWN }}>
-      {up ? "▲" : "▼"} {Math.abs(pct).toFixed(1)}%
-    </span>
-  );
-}
-
 // 카드 공통 스타일 — 사용자 지시(2026-08-21, Page 1 전면 개편): 기존 파스텔 그라디언트+블러
 // 블롭+글래스모피즘(반투명+backdrop-blur) 배경을 버리고, 회색·검정·흰색 기반의 모던하고 깔끔한
 // 톤으로 교체 — tvn.cjenm.com 레퍼런스처럼 흰 카드 + 옅은 회색 배경 + 그림자로만 위계를 준다.
@@ -530,51 +539,17 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
             <span className="ml-1.5 text-2xl font-semibold tracking-tight text-zinc-400">({channel.currentRank}위)</span>
           )}
         </span>
+        {/* 사용자 재지시(2026-08-22): ENA도 다른 6개 채널과 동일하게 "전일 대비 % 증감" 대신
+            "전일 대비 순위 증감"(RankChangeIndicator, +N/-N/-)으로 통일. */}
         <div className="absolute right-0 top-1/2 -translate-y-1/2">
-          <ChangeBadge pct={channel.dodChangePct} />
+          <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
         </div>
       </div>
       {ytdLine && <p className="mt-3 text-sm text-zinc-500">{ytdLine}</p>}
-      {/* 인포그래픽 제안 반영(사용자 지시 2026-08-22, "목표 대비 달성률을 도넛 게이지로") —
-          achievementPct는 get_target_achievement가 이미 계산한 "오늘 목표 시청률 대비 달성률"
-          (새 계산 없음) 그대로. 100%를 꽉 찬 원으로 클램프해서 보여준다(100% 초과분은 게이지
-          자체로는 표현하지 않되, 아래 숫자는 실제 값을 그대로 표시). */}
-      {channel.achievementPct !== null && <AchievementGauge pct={channel.achievementPct} accentColor={channel.themeColor ?? "#281fc7"} />}
+      {/* 사용자 재지시(2026-08-22): "목표 대비 오늘 달성률" 도넛 게이지 대신, 다른 6개 채널
+          타일과 동일한 최근 7일 스파크라인으로 통일(같은 컴포넌트 재사용). */}
+      <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} />
     </Link>
-  );
-}
-
-// 인포그래픽 제안 #3(사용자 지시 2026-08-22): 목표 대비 오늘 달성률 도넛 게이지. SVG 하나로
-// 구현(외부 차트 라이브러리 없음 — 이 프로젝트에 이미 차트 라이브러리가 없어 최소 구성 원칙 유지).
-function AchievementGauge({ pct, accentColor }: { pct: number; accentColor: string }) {
-  const size = 60;
-  const strokeWidth = 6;
-  const r = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * r;
-  const clamped = Math.max(0, Math.min(100, pct));
-  const dash = (clamped / 100) * circumference;
-  return (
-    <div className="mt-4 flex flex-col items-center gap-1.5">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#efeff4" strokeWidth={strokeWidth} />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={r}
-            fill="none"
-            stroke={accentColor}
-            strokeWidth={strokeWidth}
-            strokeDasharray={`${dash} ${circumference}`}
-            strokeLinecap="round"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-[13px] font-bold tabular-nums text-zinc-800">{pct.toFixed(0)}%</span>
-        </div>
-      </div>
-      <span className="text-[11px] text-zinc-400">목표 대비 오늘 달성률</span>
-    </div>
   );
 }
 
@@ -720,6 +695,9 @@ function ChannelStatusCard({ channels }: { channels: Map<string, ChannelSummary>
 // 프로그램 수). 회차 번호가 없는 프로그램(회차제로 관리하지 않는 것들)은 생략.
 interface OriginalHeadline {
   text: string;
+  // 사용자 지시(2026-08-22): 프로그램명(볼드+한 포인트 더 큰 글씨)과 회차~순위 정보(일반 글자)를
+  // 시각적으로 구분하기 위해 두 부분으로 나눠 반환 — text는 하위 호환용으로 그대로 둔다.
+  suffixText: string; // "179회 (전회 대비 감소, 동시간대 타깃 6위)"
   rank: number | null;
   beatenBy: OriginalCompetitorHighlight[]; // 우리보다 시청률 높은 경쟁 프로그램(시청률 내림차순)
 }
@@ -741,8 +719,9 @@ function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null
     parts.push(`동시간대 타깃 ${rank}위`);
   }
   const suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+  const suffixText = `${item.episode_number}회${suffix}`;
   // 사용자 지시(2026-08-21): 제목 앞뒤 <> 제거 — 프로그램명만 그대로 쓰고 뒤에 회차/부가 정보를 잇는다.
-  return { text: `${item.matched_program_name} ${item.episode_number}회${suffix}`, rank, beatenBy };
+  return { text: `${item.matched_program_name} ${suffixText}`, suffixText, rank, beatenBy };
 }
 
 // 사용자 지시(2026-08-20): 문단 서술 대신 "핵심 요약 불릿 + [편성 인사이트]" 형태로 재구성.
@@ -753,9 +732,6 @@ function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null
 interface OriginalInsightBlock {
   bullets: string[];
   schedulingNote: string[];
-  // 인포그래픽 제안 #5(사용자 지시 2026-08-22): 연령대별 시청률 나열을 텍스트 대신 미니 막대
-  // 차트로 — bullets 문자열에서 분리해 렌더링 전용 구조로 반환한다(값 자체는 동일, 표시만 변경).
-  ageChart: { label: string; rating: number }[];
 }
 function buildOriginalInsight(
   item: OriginalDailyItem,
@@ -865,13 +841,8 @@ function buildOriginalInsight(
     bullets.push(`도달율(Reach) ${item.matched_reach.toFixed(2)}%로 1% 미만 — 시청은 유지되고 있으나 시청 가구의 폭 자체는 좁음`);
   }
 
-  // ⑥ 연령대별 세분화 — 참고 리포트를 재학습해 기준 조정(2026-08-21): "타깃 시청률보다 높은
-  // 연령대"(상대 기준) 대신 참고 리포트와 동일하게 "시청률 1% 이상"(절대 기준)으로 나열한다.
-  // [Strict Warning] 사용자 재지시(2026-08-21): "중장년층이 높은 건 일반적 패턴"이라는 상식적
-  // 배경 설명은 보고서 본문에서 완전히 제거 — 수치만 담백하게 보여준다("KPI 타깃" 대신 "타깃").
-  // 사용자 재지시(2026-08-22): 숫자 나열보다 상대적 크기가 직관적으로 보이도록 텍스트 bullet
-  // 대신 미니 막대 차트로 — 값은 동일, ageChart로 반환해 렌더링 쪽에서 막대로 그린다.
-  const strongAgeSegments = item.age_breakdown ? item.age_breakdown.filter((a) => a.rating >= 1).slice(0, 4) : [];
+  // ⑥ 연령대별 세분화 텍스트/미니바 — 사용자 재지시(2026-08-22): 삭제하고 그 자리에 최근 12주
+  // 본방송 시청률 추이 꺾은선 그래프(ProgramRatingHistoryChart)로 대체(렌더링부에서 처리).
 
   // [편성 인사이트] — 여러 근거를 모두 짚을 수 있어 배열로 관리한다(사용자 지시: 첨부 보고서를
   // 학습해 새로운 편성 인사이트를 추가할 것). 각 항목은 패턴이 실제로 있을 때만 추가된다.
@@ -893,26 +864,104 @@ function buildOriginalInsight(
   // 편성 판단에 실제로 의미 있는 경우(예: 타깃 확장 검토가 필요할 만큼 편차가 극단적인 경우)는
   // 사용자가 별도로 요청하면 그때 근거를 갖춰 추가한다.
 
-  return { bullets, schedulingNote, ageChart: strongAgeSegments };
+  return { bullets, schedulingNote };
 }
 
-// 인포그래픽 제안 #5(사용자 지시 2026-08-22): 연령대별 시청률 미니 막대 차트 — 각 막대는 이
-// 카드 안에서의 최댓값 기준으로 정규화(채널마다 스케일이 다르므로 카드 단위로 상대 비교).
-function AgeMiniBarChart({ items, accentColor }: { items: { label: string; rating: number }[]; accentColor: string }) {
-  if (items.length === 0) return null;
-  const max = Math.max(...items.map((a) => a.rating), 0.01);
+// 사용자 재지시(2026-08-22): 연령대별 미니바 삭제, 그 자리에 최근 12주간 본방송 시청률 추이
+// 꺾은선 그래프 — 수도권2049(진하게)·전국 유료가구(연한 다른 색), 회차를 아주 작은 글씨로 표시.
+// "동시간 같은 컨텐츠를 다른 채널이 방송할 경우(예: SBS Plus, ENA Play) 비교할 수 있게 같이
+// 수2049 시청률만" — otherChannels/competitors는 전부 수도권2049 성격의 값이라 본채널 수2049와
+// 같은 y축 스케일을 공유해 직접 비교 가능하게 하고, 가구는 스케일이 완전히 달라(1점대 vs
+// 0.1~0.5점대) 별도 y축으로 정규화한다(02~26시 그래프의 "지표마다 자기 최댓값 기준 정규화"
+// 원칙과 동일). 외부 차트 라이브러리 없이 SVG 폴리라인으로 직접 그린다.
+const OTHER_CHANNEL_LINE_COLORS = ["#f59e0b", "#0891b2", "#a21caf"];
+const COMPETITOR_LINE_COLORS = ["#71717a", "#84cc16"];
+function buildLinearScale(values: number[], size: number, pad: number): (v: number) => number {
+  if (values.length === 0) return () => size / 2;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  return (v: number) => size - pad - ((v - min) / range) * (size - pad * 2);
+}
+function ProgramRatingHistoryChart({ history, accentColor }: { history: RatingHistoryResult; accentColor: string }) {
+  const own2049 = [...history.own2049].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date));
+  const ownHousehold = [...history.ownHousehold].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date));
+  const otherSeries = history.otherChannels.map((s) => ({ ...s, points: [...s.points].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date)) }));
+  const competitorSeries = history.competitors.map((s) => ({ ...s, points: [...s.points].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date)) }));
+
+  const allDates = [
+    ...own2049.map((p) => p.broadcast_date),
+    ...ownHousehold.map((p) => p.broadcast_date),
+    ...otherSeries.flatMap((s) => s.points.map((p) => p.broadcast_date)),
+    ...competitorSeries.flatMap((s) => s.points.map((p) => p.broadcast_date)),
+  ];
+  if (own2049.length < 2 && allDates.length < 2) return null; // 표본 부족(그릴 수 없음)
+
+  const W = 380;
+  const H = 72;
+  const PAD_X = 6;
+  const PAD_Y = 6;
+  const times = allDates.map((d) => new Date(`${d}T00:00:00`).getTime());
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+  const timeRange = maxTime - minTime || 1;
+  const xOf = (d: string) => PAD_X + ((new Date(`${d}T00:00:00`).getTime() - minTime) / timeRange) * (W - PAD_X * 2);
+
+  const y2049 = buildLinearScale([...own2049.map((p) => p.rating), ...otherSeries.flatMap((s) => s.points.map((p) => p.rating)), ...competitorSeries.flatMap((s) => s.points.map((p) => p.rating))], H, PAD_Y);
+  const yHousehold = buildLinearScale(ownHousehold.map((p) => p.rating), H, PAD_Y);
+
+  const pathOf = (points: RatingHistoryPoint[], yFn: (v: number) => number) =>
+    points.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.broadcast_date).toFixed(1)},${yFn(p.rating).toFixed(1)}`).join(" ");
+
   return (
     <div className="mt-2 rounded-xl bg-zinc-50 p-3">
-      <p className="mb-2 text-[11px] font-medium text-zinc-400">연령대별 시청률 1% 이상</p>
-      <div className="flex flex-col gap-1.5">
-        {items.map((a) => (
-          <div key={a.label} className="flex items-center gap-2">
-            <span className="w-14 shrink-0 text-[12px] text-zinc-500">{shortDemoLabel(a.label)}</span>
-            <span className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-100">
-              <span className="block h-full rounded-full" style={{ width: `${(a.rating / max) * 100}%`, backgroundColor: accentColor }} />
-            </span>
-            <span className="w-12 shrink-0 text-right text-[12px] font-semibold tabular-nums text-zinc-700">{formatRating(a.rating)}%</span>
-          </div>
+      <p className="mb-1.5 text-[11px] font-medium text-zinc-400">최근 12주 본방송 시청률 추이</p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
+        {ownHousehold.length >= 2 && <path d={pathOf(ownHousehold, yHousehold)} fill="none" stroke={accentColor} strokeOpacity={0.3} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />}
+        {competitorSeries.map((s, i) => (
+          <path key={s.seriesName} d={pathOf(s.points, y2049)} fill="none" stroke={COMPETITOR_LINE_COLORS[i % COMPETITOR_LINE_COLORS.length]} strokeWidth={1.3} strokeDasharray="3 2" strokeLinecap="round" strokeLinejoin="round" />
+        ))}
+        {otherSeries.map((s, i) => (
+          <path key={s.seriesName} d={pathOf(s.points, y2049)} fill="none" stroke={OTHER_CHANNEL_LINE_COLORS[i % OTHER_CHANNEL_LINE_COLORS.length]} strokeWidth={1.3} strokeDasharray="3 2" strokeLinecap="round" strokeLinejoin="round" />
+        ))}
+        {own2049.length >= 2 && <path d={pathOf(own2049, y2049)} fill="none" stroke={accentColor} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />}
+        {own2049.map((p, i) => (
+          <circle key={i} cx={xOf(p.broadcast_date)} cy={y2049(p.rating)} r={1.8} fill={accentColor}>
+            <title>{p.broadcast_date}{p.episode_number ? ` ${p.episode_number}회` : ""} · 수도권2049 {formatRating(p.rating)}</title>
+          </circle>
+        ))}
+        {own2049.map(
+          (p, i) =>
+            p.episode_number !== null &&
+            p.episode_number !== undefined && (
+              <text key={`ep-${i}`} x={xOf(p.broadcast_date)} y={H - 1} fontSize={5} textAnchor="middle" fill="#a1a1aa">
+                {p.episode_number}
+              </text>
+            )
+        )}
+      </svg>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-400">
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: accentColor }} />
+          수도권2049
+        </span>
+        {ownHousehold.length >= 2 && (
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: accentColor, opacity: 0.3 }} />
+            가구(전국유료가구)
+          </span>
+        )}
+        {otherSeries.map((s, i) => (
+          <span key={s.seriesName} className="inline-flex items-center gap-1">
+            <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: OTHER_CHANNEL_LINE_COLORS[i % OTHER_CHANNEL_LINE_COLORS.length] }} />
+            {CHANNEL_NAME_BY_CODE[s.seriesName] ?? s.seriesName}(수2049)
+          </span>
+        ))}
+        {competitorSeries.map((s, i) => (
+          <span key={s.seriesName} className="inline-flex items-center gap-1">
+            <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: COMPETITOR_LINE_COLORS[i % COMPETITOR_LINE_COLORS.length] }} />
+            {s.seriesName}(수2049)
+          </span>
         ))}
       </div>
     </div>
@@ -993,12 +1042,15 @@ function OriginalContentReportCard({
                   {/* 사용자 지시(2026-08-20): 헤드라인 "<프로그램> N회 본방송 시청률 (전회 대비
                       상승/하락, 동시간대 타깃 #위)" + 태그(오리지널 예능/드라마/브랜디드 등)를
                       #위 다음 한 줄에 오른쪽 끝으로 배치. */}
-                  {/* 사용자 지시(2026-08-21): 제목의 <> 제거, 볼드 없이, 회차~#위까지 한 줄 안에
-                      들어가도록 글씨 크기를 줄이고(text-[13px]→[11px]) 넘치면 말줄임(truncate). */}
+                  {/* 사용자 재지시(2026-08-22): 1줄로 표현 가능한 수준에서 글자를 키우되, 제목
+                      (프로그램명)은 볼드+한 포인트 더 큰 글씨, 회차~순위 정보는 일반 글자로 구분해
+                      가독성 위계를 준다(넘치면 여전히 말줄임). */}
                   {(headline || h.featured_category) && (
                     <div className="mb-1.5 flex items-center justify-between gap-2">
-                      {/* 사용자 지시(2026-08-21, Page 1 매거진 개편): 콘텐츠 제목 두꺼운 폰트(Bold). */}
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#281fc7]">{headline ? headline.text : h.matched_program_name}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="text-[14px] font-bold text-[#281fc7]">{h.matched_program_name}</span>
+                        {headline && <span className="ml-1.5 text-[13px] font-normal text-zinc-500">{headline.suffixText}</span>}
+                      </span>
                       {h.featured_category && (
                         <span className={`shrink-0 rounded-full ${ACCENT_BADGE_BG} px-2 py-0.5 text-[12px] font-medium ${ACCENT_HEADING}`}>
                           {h.featured_category}
@@ -1076,14 +1128,17 @@ function OriginalContentReportCard({
                         <span className="text-zinc-300">—</span>
                       ) : (
                         <div className="flex flex-col gap-1">
-                          {/* 사용자 지시(2026-08-22, UI 정렬 요청): [채널명] [시간] [제목] [시청률]이
-                              행마다 들쭉날쭉하지 않도록 고정 폭 그리드로 — 시청률은 우측 세로선에
-                              맞춰 정렬. */}
+                          {/* 사용자 재지시(2026-08-22): 채널명·방송시간 열은 더 줄이고(제목이 5글자
+                              밖에 안 보이던 문제) 제목 열에 폭을 더 배분 — 채널명·시간 글씨도 함께
+                              줄여 시각적 위계(제목이 주인공)를 분명히 했다. */}
                           {h.competitorHighlights.slice(0, 3).map((c, i) => (
-                            <div key={i} className="grid grid-cols-[44px_34px_1fr_38px] items-baseline gap-x-1.5">
-                              <span className="truncate text-[11px] font-medium text-zinc-400">{c.competitor_name}</span>
-                              <span className="text-zinc-400">{fmtTime(c.competitor_start_time)}</span>
-                              <span className="truncate font-medium text-zinc-700">{c.competitor_program_name}</span>
+                            <div key={i} className="grid grid-cols-[26px_24px_1fr_36px] items-start gap-x-1">
+                              <span className="truncate text-[9px] font-medium text-zinc-400">{c.competitor_name}</span>
+                              <span className="text-[9px] text-zinc-400">{fmtTime(c.competitor_start_time)}</span>
+                              {/* 사용자 재지시(2026-08-22): 좁은 열에서도 제목이 잘리지 않도록
+                                  truncate(말줄임) 대신 2줄까지 줄바꿈 허용 — 잘린 제목보다 전체가
+                                  보이는 편이 낫다는 판단. */}
+                              <span className="line-clamp-2 font-medium text-zinc-700">{c.competitor_program_name}</span>
                               <span className="text-right font-semibold tabular-nums text-zinc-600">
                                 {c.competitor_rating !== null ? c.competitor_rating.toFixed(2) : "—"}
                               </span>
@@ -1103,7 +1158,7 @@ function OriginalContentReportCard({
                       ))}
                     </ul>
                   )}
-                  <AgeMiniBarChart items={insight.ageChart} accentColor={enaAccentColor} />
+                  {h.ratingHistory && <ProgramRatingHistoryChart history={h.ratingHistory} accentColor={enaAccentColor} />}
                   {insight.schedulingNote.length > 0 && (
                     <div className="mt-1 rounded-xl bg-amber-50 p-2.5">
                       <p className="mb-1 text-[12px] font-semibold text-amber-700">[편성 인사이트]</p>
@@ -1214,21 +1269,26 @@ function ChannelNarrativeCard({
           "일일 시청률에 큰 영향을 주는 핵심 패턴이면 예외적으로 언급"으로. */}
       <p className="mb-4 text-xs text-zinc-400">
         오늘 데이터를 최근 4주 평균·전주·전전주(동일 요일)와 비교해 눈에 띄는 변화를 짚었습니다
-        (반복되는 패턴이라도 오늘 수치에 큰 영향을 주면 예외적으로 언급합니다).
+        (반복되는 패턴이라도 오늘 수치에 큰 영향을 주면 예외적으로 언급합니다). 채널명 아래 막대는
+        최근 4주 평균 대비 오늘 시청률 등락폭을 나타냅니다 — 파란색은 상승, 붉은색은 하락이며,
+        막대가 길수록 등락폭이 큽니다(±50% 이상은 막대 길이가 꽉 찬 채로 고정, 정확한 수치는 막대에
+        마우스를 올리면 확인할 수 있습니다).
       </p>
       <div className="flex flex-col gap-3 text-base leading-relaxed text-zinc-700">
         {lines.length === 0 ? (
           <p className="text-zinc-400">아직 인사이트를 계산할 데이터가 부족합니다.</p>
         ) : (
           lines.map((line, i) => (
-            <div key={i} className="flex flex-wrap items-start gap-x-2 gap-y-1">
-              <span className="inline-flex shrink-0 items-center gap-1.5">
+            // 사용자 재지시(2026-08-22): 막대를 채널명 다음 줄로 내리고, 설명 텍스트는 모든
+            // 채널이 채널명 길이와 무관하게 같은 x 위치에서 시작하도록 고정 폭 그리드로.
+            <div key={i} className="grid grid-cols-[84px_1fr] items-start gap-x-3">
+              <div className="flex flex-col gap-1">
                 <span className="font-bold" style={{ color: line.color ?? undefined }}>
                   {line.channelName}
                 </span>
                 {line.deltaPct !== null && <MiniDeltaBar pct={line.deltaPct} />}
-              </span>
-              <span className="min-w-0 flex-1">: {line.text}</span>
+              </div>
+              <span className="min-w-0">{line.text}</span>
             </div>
           ))
         )}
@@ -1408,6 +1468,10 @@ function TodayTopProgramsCard({
           const list = byChannel.get(code) ?? [];
           if (list.length === 0) return null;
           const ytdAvg = ytdAvgByCode.get(code) ?? null;
+          // 사용자 지시(2026-08-22): "시청률"/"비교" 열 헤더에 정확히 어떤 타깃인지(수2049/가구 등)
+          // 표기 — 채널마다 다를 수 있어 그 채널의 실제 값(targetLabel/comparisonTargetLabel)을 그대로 쓴다.
+          const targetLabel = list[0]?.targetLabel ? shortTargetLabel(list[0].targetLabel) : "";
+          const comparisonLabel = list[0]?.comparisonTargetLabel ? shortTargetLabel(list[0].comparisonTargetLabel) : "";
           return (
             <div key={code}>
               {/* 사용자 지시(2026-08-22, UI 정렬 요청 #3): 헤더 라벨(시간대/시청률/비교)과 데이터
@@ -1429,9 +1493,12 @@ function TodayTopProgramsCard({
                         {CHANNEL_NAME_BY_CODE[code]}
                       </span>
                     </th>
-                    <th className="pb-1 text-right text-[12px] font-normal text-zinc-400">시간대</th>
-                    <th className="pb-1 text-right text-[12px] font-normal text-zinc-400">시청률</th>
-                    <th className="pb-1 text-right text-[12px] font-normal text-zinc-400">비교</th>
+                    {/* 사용자 재지시(2026-08-22): 시간대/시청률/비교 세 열은 값의 ":"/"."이 세로로
+                        맞춰지도록 가운데 정렬(fmtTime·formatRating이 항상 같은 자릿수 포맷을 내려줘
+                        text-center만으로 정렬됨). 시청률/비교 헤더에는 실제 타깃(수2049/가구 등) 병기. */}
+                    <th className="pb-1 text-center text-[12px] font-normal text-zinc-400">시간대</th>
+                    <th className="pb-1 text-center text-[12px] font-normal text-zinc-400">시청률{targetLabel && `(${targetLabel})`}</th>
+                    <th className="pb-1 text-center text-[12px] font-normal text-zinc-400">비교{comparisonLabel && `(${comparisonLabel})`}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1458,11 +1525,11 @@ function TodayTopProgramsCard({
                           </div>
                           {episodeText && <div className="text-[12px] text-zinc-400">{episodeText}</div>}
                         </td>
-                        <td className="py-1 text-right text-zinc-400">{fmtTime(p.start_time)}</td>
-                        <td className="py-1 text-right font-semibold" style={{ color: ratingColor }}>
+                        <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(p.start_time)}</td>
+                        <td className="py-1 text-center tabular-nums font-semibold" style={{ color: ratingColor }}>
                           {formatRating(p.rating)}
                         </td>
-                        <td className="py-1 text-right text-zinc-400">
+                        <td className="py-1 text-center tabular-nums text-zinc-400">
                           {p.comparisonRating !== null ? formatRating(p.comparisonRating) : "—"}
                         </td>
                       </tr>

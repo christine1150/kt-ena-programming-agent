@@ -510,6 +510,10 @@ function formatChannelTargetLine(primaryTarget: string): string {
 // 사용자 지시(2026-08-21, Page 1 → Page 2 확장): Page 1에서 확립한 섹션 헤더 폰트 위계(Pretendard
 // 헤딩 폰트, 크고 굵게)를 Page 2에도 그대로 반영 — 8대 질문 섹션 헤더 전부 이 스타일로 통일.
 const SECTION_TITLE_P2 = "font-heading mb-1 text-xl font-bold tracking-tight text-zinc-800";
+// 사용자 지시(2026-08-22): 한글화하면서 어색해진 부분을 재검토할 수 있도록, 8대 질문 섹션 제목
+// 옆에 이전에 쓰던 영문 원제를 얇은 폰트로 괄호 병기한다(추후 필요시 사용자가 직접 수정 예정 —
+// 기능·데이터는 그대로, 표기만 추가).
+const ENG_TITLE_ANNOTATION = "ml-2 align-middle text-sm font-normal text-zinc-400";
 
 // 2026-08-21 리파인: "태그들도 디자인적으로 예쁘게 색감도 잘 조율" 지시 — 색상마다 bg-100/
 // text-700로 진하기가 제각각이던 것을 bg-50 + text-700 + ring-1(같은 색 200단계) 한 패턴으로
@@ -1739,6 +1743,74 @@ function accentForegroundColor(accentColor: string): string {
   const factor = Math.min(0.7, 0.35 + (luminance - 130) / 250);
   return accentShade(accentColor, factor);
 }
+// 인포그래픽 제안(사용자 지시 2026-08-22, 우선순위 1번): CONTENT FITS? 표의 percentile 숫자를
+// 미니 가로 막대로 — 여러 프로그램의 하위지표를 훑을 때 숫자만 나열된 것보다 상대적 크기가 한눈에
+// 들어온다(0~100 percentile 그대로 막대 길이로 사용, 새 계산 없음).
+// 인포그래픽 제안(사용자 지시 2026-08-22, 우선순위 2번): WHO IS WATCHING? 연령대 등락률을 0%
+// 기준선을 둔 발산형(diverging) 막대로 — 숫자만 볼 때보다 "기준 대비 강한지 약한지"가 즉시
+// 보인다(값 자체는 기존과 동일한 deltaPct 그대로 사용, 새 계산 없음).
+function DivergingDeltaBar({ pct }: { pct: number }) {
+  const CAP = 60; // ±60%를 막대 최대 길이로 클램프(그 이상은 막대가 꽉 찬 채로 고정, 숫자는 별도 표시)
+  const halfWidthPct = (Math.min(CAP, Math.abs(pct)) / CAP) * 50;
+  const isUp = pct >= 0;
+  const color = isUp ? "#059669" : "#e11d48"; // emerald-600 / rose-600(기존 ▲▼ 텍스트 색과 동일 톤)
+  return (
+    <div className="relative mt-1.5 h-1.5 w-full rounded-full bg-zinc-100">
+      <div className="absolute inset-y-0 left-1/2 w-px bg-zinc-300" />
+      <div
+        className="absolute inset-y-0 rounded-full"
+        style={{ left: isUp ? "50%" : `${50 - halfWidthPct}%`, width: `${halfWidthPct}%`, backgroundColor: color }}
+      />
+    </div>
+  );
+}
+
+// 인포그래픽 제안(사용자 지시 2026-08-22, 우선순위 3번): OPPORTUNITY? daypart별 격차 변화를
+// 4칸 미니 타일로 — 어느 시간대가 기회인지 표 전체를 읽지 않아도 한눈에 스캔 가능(Page 1
+// 채널별 킬러 콘텐츠의 daypart 타일과 같은 톤·크기, 값은 기존 daypartOpportunity 그대로).
+const OPPORTUNITY_DAYPART_ORDER: { key: string; label: string }[] = [
+  { key: "새벽", label: "새벽" },
+  { key: "오전", label: "오전" },
+  { key: "오후", label: "오후" },
+  { key: "저녁_심야", label: "저녁심야" },
+];
+function OpportunityDaypartTiles({ rows, fmtR }: { rows: DaypartOpportunityRow[]; fmtR: (v: number | null) => string }) {
+  const byDaypart = new Map(rows.map((r) => [r.daypart, r]));
+  return (
+    <div className="mb-4 flex gap-1.5">
+      {OPPORTUNITY_DAYPART_ORDER.map((dp) => {
+        const row = byDaypart.get(dp.key);
+        const gapChange = row?.gap_change ?? null;
+        const isOpportunity = gapChange !== null && gapChange >= 0;
+        const bg = gapChange === null ? "#f0f0f3" : isOpportunity ? "#059669" : "#e11d48";
+        const opacity = gapChange === null ? 1 : Math.min(1, 0.35 + Math.min(1, Math.abs(gapChange) / 0.05) * 0.65);
+        const title = row
+          ? `${dp.label}: 격차 ${fmtR(row.gap_full)} → ${fmtR(row.gap_recent)}(${gapChange !== null ? (gapChange >= 0 ? "기회 ▲" : "약세 ▼") + " " + Math.abs(gapChange).toFixed(4) : "—"})`
+          : `${dp.label}: 데이터 없음`;
+        return (
+          <div key={dp.key} className="flex-1" title={title}>
+            <div className="h-6 rounded-lg" style={{ backgroundColor: bg, opacity }} />
+            <p className="mt-1 text-center text-[11px] text-zinc-400">{dp.label}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MiniPctlBar({ value, accentColor }: { value: number | null; accentColor: string }) {
+  if (value === null) return <span className="text-zinc-600">—</span>;
+  const clamped = Math.max(0, Math.min(100, value));
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-zinc-100">
+        <span className="block h-full rounded-full" style={{ width: `${clamped}%`, backgroundColor: accentColor }} />
+      </span>
+      <span className="tabular-nums text-zinc-600">{value.toFixed(0)}</span>
+    </span>
+  );
+}
+
 function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlockRow[]; accentColor: string; fmtR: (v: number | null) => string }) {
   const byCell = new Map(pattern.map((r) => [`${r.dow}__${r.hour_block}`, r]));
   const maxRating = Math.max(1e-9, ...pattern.map((r) => r.avg_rating ?? 0));
@@ -1803,8 +1875,21 @@ function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlo
 // 방영횟수 표본이 작은 프로그램은 평균 시청률이 우연히 튀기 쉬워 순위표에 그대로 섞이면
 // 오해를 줄 수 있다 — 목록 자체를 다시 정렬하는 하위지표별 인사이트(TopProgramsList 자체)는
 // 그대로 두고, 순서를 나타내는 li 목록만 뽑아 재사용한다.
-function TopProgramListItems({ rows, fmtR, indexOffset = 0 }: { rows: TopProgramRow[]; fmtR: (v: number | null) => string; indexOffset?: number }) {
+// 인포그래픽 제안(사용자 지시 2026-08-22, Page 2 전체 구현): TOP 20 표에 미니 막대 — 목록 안
+// 최댓값 기준으로 상대 크기를 시각화(값이 없는(prior) 기간 데이터 요구 없이 이미 있는 avg_rating만
+// 재사용, Page 1의 MiniPctlBar와 같은 패턴).
+function TopProgramMiniBar({ value, max, accentColor }: { value: number | null; max: number; accentColor: string }) {
+  if (value === null || max <= 0) return null;
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  return (
+    <span className="inline-block h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-zinc-100" title={`목록 내 최고 대비 ${pct.toFixed(0)}%`}>
+      <span className="block h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: accentColor }} />
+    </span>
+  );
+}
+function TopProgramListItems({ rows, fmtR, indexOffset = 0, accentColor = "#71717a" }: { rows: TopProgramRow[]; fmtR: (v: number | null) => string; indexOffset?: number; accentColor?: string }) {
   const shareOutliers = findShareOutliers(rows);
+  const maxRating = Math.max(0.0001, ...rows.map((r) => r.avg_rating ?? 0));
   return (
     <>
       {rows.map((p, i) => {
@@ -1819,6 +1904,7 @@ function TopProgramListItems({ rows, fmtR, indexOffset = 0 }: { rows: TopProgram
                 {p.most_common_start_hour !== null ? ` · 주로 ${p.most_common_start_hour}시` : ""}
               </span>
               <span className="shrink-0 text-sm text-zinc-400">{p.air_count}회 방영</span>
+              <TopProgramMiniBar value={p.avg_rating} max={maxRating} accentColor={accentColor} />
               <span className="w-16 shrink-0 text-right font-semibold text-zinc-900">{fmtR(p.avg_rating)}</span>
             </div>
             {shareRank !== undefined && (
@@ -1892,11 +1978,13 @@ function TopProgramsList({
   fmtR,
   isSkyUhd,
   shareTop,
+  accentColor,
 }: {
   rows: TopProgramRow[];
   fmtR: (v: number | null) => string;
   isSkyUhd?: boolean;
   shareTop?: TopShareProgramRow[];
+  accentColor?: string;
 }) {
   if (rows.length === 0) {
     return <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>;
@@ -1904,7 +1992,7 @@ function TopProgramsList({
   if (!isSkyUhd) {
     return (
       <div>
-        <ol className="space-y-1 text-sm">{<TopProgramListItems rows={rows} fmtR={fmtR} />}</ol>
+        <ol className="space-y-1 text-sm">{<TopProgramListItems rows={rows} fmtR={fmtR} accentColor={accentColor} />}</ol>
         {shareTop && <TopShareOutsideList shareTop={shareTop} topRows={rows} fmtR={fmtR} />}
       </div>
     );
@@ -1913,11 +2001,11 @@ function TopProgramsList({
   const lowSampleRows = rows.filter((p) => p.air_count < 5);
   return (
     <div>
-      <ol className="space-y-1 text-sm">{<TopProgramListItems rows={mainRows} fmtR={fmtR} />}</ol>
+      <ol className="space-y-1 text-sm">{<TopProgramListItems rows={mainRows} fmtR={fmtR} accentColor={accentColor} />}</ol>
       {lowSampleRows.length > 0 && (
         <div className="mt-3 border-t border-dashed border-zinc-200 pt-3">
           <p className="mb-1 text-sm text-zinc-400">표본 부족(편성 5회 미만) — 참고용으로만 활용하세요.</p>
-          <ol className="space-y-1 text-sm">{<TopProgramListItems rows={lowSampleRows} fmtR={fmtR} indexOffset={mainRows.length} />}</ol>
+          <ol className="space-y-1 text-sm">{<TopProgramListItems rows={lowSampleRows} fmtR={fmtR} indexOffset={mainRows.length} accentColor={accentColor} />}</ol>
         </div>
       )}
       {shareTop && <TopShareOutsideList shareTop={shareTop} topRows={rows} fmtR={fmtR} />}
@@ -2456,6 +2544,37 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         {/* 오늘의 브리핑 — 보고서 줄글 형태(사용자 지시: What/Why 라벨 없이, 목표 달성률 제외) */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={`${SECTION_TITLE_P2} mb-3`}>{buildBriefingTitle(periodPreset)}</h2>
+          {/* 인포그래픽 제안(사용자 지시 2026-08-22, Page 2 전체 구현): 긴 줄글을 읽기 전에 핵심
+              지표를 먼저 스캔할 수 있도록 상단 배지 스트립 — 아래 프로세 문장이 이미 다루는 값을
+              그대로 배지로 옮긴 것(새 계산 없음), 헤더의 오늘 시청률/등위와 겹치지 않는 항목만
+              골랐다(등락폭/피크 시간대/1위 프로그램). 단일 일자 조회일 때만 표시(기간 모드는
+              baseline 개념이 달라 아래 WHAT HAPPENED?/표를 참고). */}
+          {!showComparisonView && narrativeSignal && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {narrativeSignal.rating_delta_pct !== null && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ring-1 ring-inset ${
+                    narrativeSignal.rating_delta_pct >= 0 ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-rose-200"
+                  }`}
+                >
+                  {narrativeSignal.rating_delta_pct >= 0 ? "▲" : "▼"} 최근 12주 평균 대비 {Math.abs(narrativeSignal.rating_delta_pct).toFixed(1)}%
+                </span>
+              )}
+              {narrativeSignal.today_peak_hour !== null && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-[12px] font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200">
+                  피크 {narrativeSignal.today_peak_hour}시대 {fmtR(narrativeSignal.today_peak_rating)}
+                </span>
+              )}
+              {narrativeSignal.top_program_name && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold"
+                  style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}
+                >
+                  오늘 1위 {narrativeSignal.top_program_name} {fmtR(narrativeSignal.top_program_rating)}
+                </span>
+              )}
+            </div>
+          )}
           <div className="flex flex-col gap-3">
             {buildBriefingReport(data, referenceLabel, showComparisonView, comparisonLabel).map((para, i) => (
               <p key={i} className="text-base leading-relaxed text-zinc-700">
@@ -2794,11 +2913,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
-                  <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} />
+                  <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} />
                 </div>
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
-                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={priorTopSharePrograms} />
+                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={priorTopSharePrograms} accentColor={accentColor} />
                 </div>
               </div>
               {buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior) && (
@@ -2809,7 +2928,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>
           ) : (
             <>
-              <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} />
+              <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
                 <p className="mt-3 text-base leading-relaxed text-zinc-700">
                   위 상위 콘텐츠들과 같은 기간 기준으로 볼 때,
@@ -2826,7 +2945,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
 
         {/* WHAT HAPPENED? */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={`${SECTION_TITLE_P2} mb-3`}>무슨 일이 있었나요? — 기간별 비교</h2>
+          <h2 className={`${SECTION_TITLE_P2} mb-3`}>
+            무슨 일이 있었나요? — 기간별 비교<span className={ENG_TITLE_ANNOTATION}>(WHAT HAPPENED?)</span>
+          </h2>
           {showComparisonView && data.periodReport && (
             <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-2xl bg-zinc-50 p-3">
@@ -2919,7 +3040,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
 
         {/* WHY? — 원인 추적(Root-Cause 참고 분석) */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={SECTION_TITLE_P2}>왜 그럴까요?</h2>
+          <h2 className={SECTION_TITLE_P2}>
+            왜 그럴까요?<span className={ENG_TITLE_ANNOTATION}>(WHY?)</span>
+          </h2>
           <p className="mb-3 text-sm text-zinc-400">
             원인 추적(1차 단순 기준): 채널 평균(최근 28일) 대비 -10%p 이상 하락이 3일 연속되면 트리거합니다.
             하루짜리 변동은 노이즈로 보고 표시하지 않습니다. 경쟁채널의 &ldquo;편성 변화&rdquo; 자체(신규
@@ -3069,7 +3192,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             대신 이 채널 내부의 연령대 흐름(주로 보는 연령대·이동 여부)을 본다. 오늘/어제는 최근
             한 달(28일) baseline(사용자 지시 재확인), 그 외 기간은 이번 기간 vs 전 기간 비교. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={SECTION_TITLE_P2}>누가 보고 있나요?</h2>
+          <h2 className={SECTION_TITLE_P2}>
+            누가 보고 있나요?<span className={ENG_TITLE_ANNOTATION}>(WHO IS WATCHING?)</span>
+          </h2>
           <p className="mb-3 text-sm text-zinc-400">
             왼쪽 2개는 가장 많이 본 연령대, 오른쪽 2개는 등락폭이 가장 커서 주목해야 할 연령대입니다(전체 12개
             연령대 중 선정). 등락률은 {showComparisonView ? `${comparisonLabel ?? "전"} 기간` : "최근 한 달 평균"} 대비입니다.
@@ -3101,9 +3226,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     </div>
                     <p className="mt-1 text-lg font-semibold text-zinc-900">{fmtR(item.value)}</p>
                     {item.deltaPct !== null && (
-                      <p className={`mt-0.5 text-sm font-medium ${item.deltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                        {item.deltaPct >= 0 ? "▲" : "▼"} {Math.abs(item.deltaPct).toFixed(1)}%
-                      </p>
+                      <>
+                        <p className={`mt-0.5 text-sm font-medium ${item.deltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                          {item.deltaPct >= 0 ? "▲" : "▼"} {Math.abs(item.deltaPct).toFixed(1)}%
+                        </p>
+                        <DivergingDeltaBar pct={item.deltaPct} />
+                      </>
                     )}
                   </div>
                 ))}
@@ -3124,7 +3252,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         {/* HOW DEEPLY? — 숫자 + 설명(사용자 지시). 기간 범위 선택 시 기간 평균으로 표시. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={`${SECTION_TITLE_P2} mb-3`}>
-            얼마나 깊이 보고 있나요?{showComparisonView ? (isComparisonPreset ? " (이번 기간 평균)" : " (선택 기간 평균)") : ""}
+            얼마나 깊이 보고 있나요?<span className={ENG_TITLE_ANNOTATION}>(HOW DEEPLY?)</span>
+            {showComparisonView ? (isComparisonPreset ? " (이번 기간 평균)" : " (선택 기간 평균)") : ""}
           </h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {/* 사용자 지시(2026-08-21): 소제목을 한국어로("Rating"→"시청률" 등). */}
@@ -3147,7 +3276,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             없는 원본 자료 한계로 PRD Fit Score(타깃 기반)를 계산할 수 없어(사용자 확인,
             2026-08-21) 별도 채널 단위 대체 지표(skyuhdScorecard)를 대신 보여준다. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={SECTION_TITLE_P2}>이 콘텐츠, 적합한가요?</h2>
+          <h2 className={SECTION_TITLE_P2}>
+            이 콘텐츠, 적합한가요?<span className={ENG_TITLE_ANNOTATION}>(CONTENT FITS?)</span>
+          </h2>
           {code === "SKYUHD" ? (
             <>
               <p className="mb-3 text-sm text-zinc-400">
@@ -3183,7 +3314,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                               {item.most_common_start_hour !== null ? ` · 주로 ${item.most_common_start_hour}시` : ""}
                             </td>
                             <td className="py-1.5 font-semibold text-zinc-900">
-                              {item.rating_pctl !== null ? `상위 ${(100 - item.rating_pctl).toFixed(0)}%` : "—"}
+                              <span className="inline-flex items-center gap-1.5">
+                                <MiniPctlBar value={item.rating_pctl} accentColor={accentColor} />
+                                {item.rating_pctl !== null && <span className="text-[12px] font-normal text-zinc-400">(상위 {(100 - item.rating_pctl).toFixed(0)}%)</span>}
+                              </span>
                             </td>
                           </tr>
                         ))}
@@ -3230,9 +3364,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         {contentFitsRows.map((item) => (
                           <tr key={item.program_id} className="border-t border-zinc-100">
                             <td className="py-1.5 font-medium text-zinc-800">{item.programs?.canonical_name ?? "이름 없음"}</td>
-                            <td className="py-1.5 text-zinc-600">{item.target_performance_score?.toFixed(0) ?? "—"}</td>
-                            <td className="py-1.5 text-zinc-600">{item.target_affinity_score?.toFixed(0) ?? "—"}</td>
-                            <td className="py-1.5 text-zinc-600">{item.audience_engagement_score?.toFixed(0) ?? "—"}</td>
+                            <td className="py-1.5"><MiniPctlBar value={item.target_performance_score ?? null} accentColor={accentColor} /></td>
+                            <td className="py-1.5"><MiniPctlBar value={item.target_affinity_score ?? null} accentColor={accentColor} /></td>
+                            <td className="py-1.5"><MiniPctlBar value={item.audience_engagement_score ?? null} accentColor={accentColor} /></td>
                             <td className="py-1.5 font-semibold text-zinc-900">{contentFitsHelpScore(item).toFixed(0)}</td>
                           </tr>
                         ))}
@@ -3261,13 +3395,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         {!showComparisonView && (
         <>
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={SECTION_TITLE_P2}>기회가 있나요?</h2>
+          <h2 className={SECTION_TITLE_P2}>
+            기회가 있나요?<span className={ENG_TITLE_ANNOTATION}>(OPPORTUNITY?)</span>
+          </h2>
           <p className="mb-3 text-sm text-zinc-400">
             시간대(daypart)별로, 우리 채널과 등록 경쟁채널의 시청률 격차가 그 이전(보유 기간) 평균 대비
             {isRangeMode ? " 선택 기간 " : " 최근 1주 "}사이 어떻게 바뀌었는지 계산합니다. 격차가 좁혀진(경쟁채널이
             상대적으로 약해진) 시간대가 편성 기회입니다.
             {isRangeMode && " 기간을 선택하면 \"최근 구간\"이 그 선택한 기간 길이로 바뀝니다."}
           </p>
+          {daypartOpportunity.length > 0 && <OpportunityDaypartTiles rows={daypartOpportunity} fmtR={fmtR} />}
           {daypartOpportunity.length > 0 && (
             <div className="mb-3 overflow-x-auto">
               <table className="w-full min-w-[520px] text-left text-sm">
@@ -3354,7 +3491,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         {/* WHAT TO SCHEDULE? — skyUHD는 타깃 구분이 없는 원본 자료 한계로 PRD Fit Score를 계산할
             수 없어(사용자 확인, 2026-08-21) 채널 단위 대체 지표(skyuhdScorecard) 표로 대체한다. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={SECTION_TITLE_P2}>무엇을 편성할까요?</h2>
+          <h2 className={SECTION_TITLE_P2}>
+            무엇을 편성할까요?<span className={ENG_TITLE_ANNOTATION}>(WHAT TO SCHEDULE?)</span>
+          </h2>
           {code === "SKYUHD" ? (
             <>
               <p className="mb-3 text-sm text-zinc-400">
@@ -3516,7 +3655,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             12주 평균 대비 등락 + 최고 성적 프로그램(시간대) 보고서. 기간 범위 선택 시 순위/시청률이
             그 기간 평균으로 집계된다(사용자 지시 2026-08-20). */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={SECTION_TITLE_P2}>경쟁채널과 비교하면?</h2>
+          <h2 className={SECTION_TITLE_P2}>
+            경쟁채널과 비교하면?<span className={ENG_TITLE_ANNOTATION}>(COMPARED WITH?)</span>
+          </h2>
           {/* 사용자 지시(2026-08-21): skyUHD는 일별 비교가 아니라 연간 누적 순위를 쓰므로, 이
               안내 문구도 그 경우엔 아래 skyUHD 전용 문단으로 대체한다(중복 안내 방지). */}
           {!(code === "SKYUHD" && marketYtdCompetitorSnapshot.length > 0) && (
@@ -3640,10 +3781,17 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             </td>
                             <td className="py-1.5 pr-2 text-zinc-600">{fmtR(c.today_rating)}</td>
                             <td className="py-1.5 pr-2">
+                              {/* 인포그래픽 제안(사용자 지시 2026-08-22, Page 2 전체 구현): 맨텍스트
+                                  화살표를 Page 1과 같은 톤(bg-50+ring)의 방향 배지로 — 여러 경쟁채널을
+                                  세로로 훑을 때 더 빠르게 스캔 가능. */}
                               {c.delta_pct === null ? (
                                 <span className="text-zinc-400">—</span>
                               ) : (
-                                <span className={c.delta_pct >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                <span
+                                  className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[12px] font-semibold ring-1 ring-inset ${
+                                    c.delta_pct >= 0 ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-rose-200"
+                                  }`}
+                                >
                                   {c.delta_pct >= 0 ? "▲" : "▼"} {Math.abs(c.delta_pct).toFixed(1)}%
                                 </span>
                               )}
