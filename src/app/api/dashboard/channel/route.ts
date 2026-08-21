@@ -111,6 +111,7 @@ export async function GET(request: Request) {
       demographicHighlights: [],
       hourlyPatternPrior: [],
       hourlyProgramTitlesPrior: [],
+      hourlyBaselinePatternPrior: [],
       hasPriorRange: false,
       competitorPeriodTopPrograms: [],
       periodWindowDays: 84,
@@ -257,6 +258,7 @@ export async function GET(request: Request) {
     dowHourBlockPatternPriorRes,
     topProgramsPriorRes,
     whoIsWatchingDemographicsRes,
+    hourlyBaselinePatternPriorRes,
   ] = await Promise.all([
     // WHAT HAPPENED? — 채널 단위 랭킹 데이터로 DoD/WoW/MoM/QoQ/YoY/YTD
     supabase.rpc("get_rating_trend_summary", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: asOfDate }),
@@ -308,9 +310,12 @@ export async function GET(request: Request) {
     // 이 두 섹션은 기간 선택과 무관하게 항상 dateTo 기준 최근 12주(84일) 고정 윈도우다.
     supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays }),
     supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 20 }),
+    // 사용자 지시(2026-08-21): "WHO IS WATCHING?은 연령대를 좀 더 깊이 파고들어서" — 대표 4개
+    // 대신 전체 연령대(fullDemographicTargets, 12개)를 조회해 "가장 많이 본 연령대"·"주목해야
+    // 할 연령대"를 데이터 기반으로 고른다.
     supabase.rpc("get_channel_period_demographics", {
       p_channel_code: channel.code,
-      p_demographic_labels: demographicTargets,
+      p_demographic_labels: fullDemographicTargets,
       p_date_from: dateFrom,
       p_date_to: dateTo,
       p_prior_date_from: effectivePriorDateFrom,
@@ -372,11 +377,18 @@ export async function GET(request: Request) {
           p_channel_code: channel.code,
           p_target_label: matchedTargetLabel,
           p_program_target_label: programTargetLabel,
-          p_demographic_labels: demographicTargets,
+          p_demographic_labels: fullDemographicTargets,
           p_as_of_date: dateTo,
           p_baseline_days: 28,
         })
       : Promise.resolve({ data: [] as { demographics: unknown }[] }),
+    // 사용자 지시(2026-08-21): "대비" 분석(듀얼 패널)에서도 '오늘' 때와 동일하게 각 패널(이번
+    // 기간/전 기간)에 그 기준 시점의 최근 12주 시간대별 평균을 연한 꺾은선으로 표시 — 전 기간
+    // 패널은 priorDateTo 기준 직전 84일 고정 윈도우(이번 기간 패널의 hourlyBaselinePattern과
+    // 동일한 방식, 기준일만 다름).
+    hasPriorRange
+      ? supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: addDaysStr(priorDateTo, -83), p_date_to: priorDateTo })
+      : Promise.resolve({ data: [] as unknown[] }),
   ]);
 
   if (trendRes.error) {
@@ -545,6 +557,7 @@ export async function GET(request: Request) {
     // 기능 #15-2: "대비" 분석 전 기간의 시간대별 그래프(이번 기간 패널 옆에 나란히).
     hourlyPatternPrior: hourlyPatternPriorRes.data ?? [],
     hourlyProgramTitlesPrior: hourlyProgramTitlesPriorRes.data ?? [],
+    hourlyBaselinePatternPrior: hourlyBaselinePatternPriorRes.data ?? [],
     hasPriorRange,
     // 기능 #15-11: 기간 모드 COMPARED WITH?용 — 상위 5개 채널 안의 상위 7개 프로그램.
     competitorPeriodTopPrograms: competitorPeriodTopProgramsRes.data ?? [],
