@@ -6,7 +6,12 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
-import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL } from "@/lib/targetResolution";
+import {
+  resolveProgramLevelTargetLabel,
+  EXTRA_TARGET_LABELS_BY_CHANNEL,
+  MARKET_YTD_CHANNEL_NAME_BY_CODE,
+  resolveMarketYtdTargetLabel,
+} from "@/lib/targetResolution";
 import { mapWithConcurrency } from "@/lib/concurrency";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
@@ -100,6 +105,10 @@ interface ChannelSummary {
   // ENA 히어로 카드용(사용자 지시 2026-08-20) — 올해 1월 1일~오늘 누적 평균 시청률·순위.
   ytdAvgRating: number | null;
   ytdAvgRank: number | null;
+  // 사용자 지시(2026-08-21): 관리자가 업로드한 "누적 채널 순위" 파일(시장 전체 ~217개 채널 기준)이
+  // 있으면 그 순위를 우선 쓴다 — 등록 경쟁채널만으로는 계산 불가능한 시장 전체 기준 순위라서.
+  ytdRankSource: "market_snapshot" | "computed" | null;
+  ytdRankDateRange: { from: string; to: string } | null;
 }
 
 // 채널별 인사이트(줄글) — 사용자 지시: "최근 4주 평균 동향과 오늘의 데이터를 보았을 때
@@ -316,6 +325,27 @@ export async function GET() {
         }
       }
 
+      // 사용자 지시(2026-08-21): 관리자가 "누적 채널 순위" 파일(시장 전체 ~217개 채널 기준,
+      // market_ytd_rank_snapshot)을 업로드해뒀으면 그 순위를 우선 쓴다 — 우리가 가진 데이터는
+      // 등록 경쟁채널(최대 40개)뿐이라 시장 전체 기준 순위를 스스로 계산할 수 없기 때문이다.
+      let ytdRankSource: "market_snapshot" | "computed" | null = ytdAvgRank !== null ? "computed" : null;
+      let ytdRankDateRange: { from: string; to: string } | null = null;
+      const marketChannelName = MARKET_YTD_CHANNEL_NAME_BY_CODE[channel.code];
+      if (marketChannelName && channel.primary_target) {
+        const marketTargetLabel = resolveMarketYtdTargetLabel(channel.primary_target);
+        const { data: marketRow } = await supabase.rpc("get_market_ytd_rank", {
+          p_channel_name: marketChannelName,
+          p_target_label: marketTargetLabel,
+        });
+        const snapshot = marketRow?.[0];
+        if (snapshot) {
+          ytdAvgRank = snapshot.rank;
+          ytdAvgRating = snapshot.rating;
+          ytdRankSource = "market_snapshot";
+          ytdRankDateRange = { from: snapshot.date_from, to: snapshot.date_to };
+        }
+      }
+
       return {
         matchedTargetLabel,
         summary: {
@@ -336,6 +366,8 @@ export async function GET() {
           gap,
           ytdAvgRating,
           ytdAvgRank,
+          ytdRankSource,
+          ytdRankDateRange,
         } as ChannelSummary,
       };
   });

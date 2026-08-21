@@ -11,6 +11,7 @@ import SkyUhdUploader from "./SkyUhdUploader";
 import TargetGoalsManager from "./TargetGoalsManager";
 import OlifeEpgUploader from "./OlifeEpgUploader";
 import DailyNewsManager from "./DailyNewsManager";
+import MarketYtdRankUploader from "./MarketYtdRankUploader";
 import LogoutButton from "./LogoutButton";
 
 export default async function AdminPage() {
@@ -47,6 +48,8 @@ export default async function AdminPage() {
         <TargetGoalsManager />
 
         <DailyNewsManager />
+
+        <MarketYtdRankUploader />
       </div>
     </div>
   );

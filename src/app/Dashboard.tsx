@@ -28,6 +28,10 @@ interface ChannelSummary {
   // ENA 히어로 카드용(사용자 지시 2026-08-20) — 올해 1월 1일~오늘 누적 평균 시청률·순위.
   ytdAvgRating: number | null;
   ytdAvgRank: number | null;
+  // 사용자 지시(2026-08-21): 관리자가 업로드한 "누적 채널 순위" 파일(시장 전체 기준)이 있으면
+  // 그 값을 우선 쓴다 — 어느 쪽인지 표시해 출처를 분명히 한다.
+  ytdRankSource: "market_snapshot" | "computed" | null;
+  ytdRankDateRange: { from: string; to: string } | null;
 }
 
 // Original 리포트: 관리자가 지정한 요일별 화이트리스트 프로그램만 분석한다(사용자 지시).
@@ -392,8 +396,14 @@ function buildYtdLine(channel: ChannelSummary): string | null {
       gapText = ` · 목표 순위(${targetRankNum}위) 대비 ${Math.abs(diff).toFixed(1)}위 ${diff > 0 ? "낮음" : "높음"}`;
     }
   }
-  // 사용자 지시(2026-08-21): 등위(순위)는 소수점 없이 정수로만 표시.
-  return `누적(1/1~오늘) 평균 ${formatRating(channel.ytdAvgRating, channel.code)}(${Math.round(channel.ytdAvgRank)}위)${gapText}`;
+  // 사용자 지시(2026-08-21): 등위(순위)는 소수점 없이 정수로만 표시. 관리자가 업로드한 "누적
+  // 채널 순위" 파일(시장 전체 ~217개 채널 기준)이 있으면 그 값을 쓰고 출처를 밝힌다 — 우리
+  // 데이터만으로는 등록 경쟁채널(최대 40개) 범위를 넘는 시장 전체 순위를 계산할 수 없다.
+  const sourceText =
+    channel.ytdRankSource === "market_snapshot"
+      ? ` · 시장 전체 기준(${channel.ytdRankDateRange?.to ?? "업로드 파일"})`
+      : "";
+  return `누적(1/1~오늘) 평균 ${formatRating(channel.ytdAvgRating, channel.code)}(${Math.round(channel.ytdAvgRank)}위)${gapText}${sourceText}`;
 }
 
 // ENA 히어로 — 사용자 지시(2026-08-20): 로고·시청률 가운데 정렬, 시청률(순위) + 전일 대비

@@ -32,3 +32,25 @@ export const EXTRA_TARGET_LABELS_BY_CHANNEL: Record<string, string[]> = {
   ONCE: ["전국 5064"],
   ENA_STORY: ["전국 5064"],
 };
+
+// 사용자 지시(2026-08-21): "26년 채널 누적 시청률.xlsx"(시장 전체 ~217개 채널 기준 누적 순위,
+// market_ytd_rank_snapshot 테이블) 업로드분을 Page 1 히어로 카드의 "누적 순위"에서 우선 사용한다.
+// 이 파일의 채널명 표기(예: "ENA Drama"→"ENA DRAMA", "skyUHD"→"SkyUHD")는 channels.name과
+// 대소문자·띄어쓰기가 달라 직접 매칭이 안 돼 별도 매핑이 필요하다(원본 그대로 저장했으므로 —
+// CLAUDE.md 원칙: 원본 데이터를 임의로 고치지 않고, 매칭 계층에서만 흡수).
+export const MARKET_YTD_CHANNEL_NAME_BY_CODE: Record<string, string> = {
+  ENA: "ENA",
+  ENA_PLAY: "ENA PLAY",
+  ENA_DRAMA: "ENA DRAMA",
+  ENA_STORY: "ENA STORY",
+  OLIFE: "OLIFE",
+  ONCE: "ONCE",
+  SKYUHD: "SkyUHD",
+};
+
+// 이 파일이 지금 제공하는 타깃은 "유료방송가구"(시장 전체, 스코프 구분 없음)와 "수도권2049" 둘뿐이다
+// — channels.primary_target 문구에 "2049"가 있으면 2049 타깃을, 아니면(유료방송가입가구 KPI)
+// 유료방송가구 타깃을 그 채널의 진짜 KPI와 같은 성격으로 매칭한다.
+export function resolveMarketYtdTargetLabel(primaryTarget: string): string {
+  return primaryTarget.includes("2049") ? "수도권2049" : "유료방송가구";
+}

@@ -143,6 +143,16 @@ interface FitScoreItem {
   evidence: FitScoreEvidence;
   program_id: string;
   programs: { canonical_name: string; raw_name: string; first_run: boolean | null } | null;
+  // 사용자 지시(2026-08-21): 재방이 많아 여러 시간대에 걸쳐 방영되는 프로그램은 프로그램 전체가
+  // 아니라 그중 효율이 낮은 특정 시간대만 짚어야 한다 — /api/scheduling/fit-score가
+  // get_program_slot_efficiency로 미리 계산해 붙여준다(MOVE/REPLACE 태그만 해당, 그 외엔 null).
+  slotEfficiency: {
+    isMultiSlot: boolean;
+    weeks: number;
+    weakHour: number | null;
+    weakShareVsMedianPct: number | null;
+    weakAirCount: number | null;
+  } | null;
 }
 
 interface RootCauseAlert {
@@ -1526,6 +1536,17 @@ function buildScheduleRecommendationNote(
   if (item.tag === "TEST") {
     return `표본 부족(표본 ${item.sample_days}건) — 데이터를 더 쌓은 뒤 재평가 필요`;
   }
+  // 사용자 지시(2026-08-21): "재방이 많은 컨텐츠를 통째로 이동 검토하라는 건 부적절 — 그 중 효율이
+  // 안 좋은 특정 시간대만 짚어서 의견을 달라." 여러 시간대에 반복 편성된 프로그램이면(isMultiSlot)
+  // 아래 daypart 재배치 추천보다 이 판단을 우선한다.
+  if (item.slotEfficiency?.isMultiSlot) {
+    const programName = item.programs?.canonical_name ?? "이 프로그램";
+    const { weeks, weakHour, weakShareVsMedianPct, weakAirCount } = item.slotEfficiency;
+    if (weakHour !== null) {
+      return `최근 ${weeks}주 분석을 통해 ${weakHour}시대의 '${programName}'${josaEunNeun(programName)} 효율이 좋지 않습니다(이 프로그램의 시간대별 점유율 중앙값 대비 ${weakShareVsMedianPct?.toFixed(0)}% 수준, ${weakAirCount}회 관측) — 그 시간대만 이동 또는 교체 검토를 권장합니다(다른 시간대는 상대적으로 양호).`;
+    }
+    return `여러 시간대에 반복 편성돼 있어(최근 ${weeks}주 기준) 프로그램 전체보다는 시간대별로 판단이 필요합니다 — 다만 뚜렷하게 효율이 낮은 특정 시간대는 아직 발견되지 않았습니다.`;
+  }
   if (recommendedDaypart) {
     // 사용자 지시(2026-08-21): "격차가 더 좁혀지는 중"이 무슨 뜻인지 알기 쉽게 — 그 시간대에서
     // 우리와 경쟁채널의 시청률 차이가 최근 들어 줄어들고 있다(=경쟁채널이 상대적으로 약해지고
@@ -2736,7 +2757,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     <table className="w-full min-w-[560px] text-left text-xs">
                       <thead>
                         <tr className="text-zinc-400">
-                          <th className="pb-1.5 pr-2 font-medium">순위</th>
+                          {/* 사용자 지시(2026-08-21): 이 번호는 등수(순위)가 아니라 단순 나열 번호 —
+                              제목을 "No."로 바꿔 오해를 줄인다. */}
+                          <th className="pb-1.5 pr-2 font-medium">No.</th>
                           <th className="pb-1.5 pr-2 font-medium">채널</th>
                           <th className="pb-1.5 pr-2 font-medium">{isRangeMode ? "기간 평균 시청률" : `${referenceLabel} 시청률`}</th>
                           <th className="pb-1.5 pr-2 font-medium">12주 평균 대비</th>

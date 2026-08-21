@@ -4,6 +4,26 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
+import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
+
+// 사용자 지시(2026-08-21): "재방이 많은 컨텐츠(예: 나는SOLO)를 통째로 이동 검토하라는 건 부적절
+// 하다 — 그 중 효율이 안 좋은 특정 시간대만 짚어서 의견을 달라." 하루에도 여러 시간대에 걸쳐
+// 방영되는(재방 많은) 프로그램인지 먼저 판별하고(distinctHours 임계값), 맞다면 그 프로그램의
+// 시간대별 최근 8주 점유율 중앙값 대비 유독 낮은 슬롯이 있는지 get_program_slot_efficiency로
+// 확인한다. 있으면 그 시간대만 짚어 이동/교체 의견을 내고, 없으면(또는 슬롯 수가 적어 애초에
+// 재방 패턴이 아니면) 기존처럼 프로그램 단위 판단을 유지한다.
+const MULTI_SLOT_HOUR_THRESHOLD = 6; // 이 개수 이상 서로 다른 시간에 방영되면 "재방 많은 콘텐츠"로 본다.
+const WEAK_SLOT_SHARE_PCT_MAX = 50; // 프로그램 자신의 시간대별 점유율 중앙값의 이 비율 이하면 "효율 낮음".
+const WEAK_SLOT_MIN_AIR_COUNT = 3; // 최소 이만큼은 반복 관측돼야 우연이 아니라 패턴으로 본다.
+const SLOT_EFFICIENCY_WEEKS = 8;
+
+interface SlotEfficiencyRow {
+  hour_bucket: number;
+  avg_rating: number | null;
+  avg_share: number | null;
+  air_count: number;
+  share_vs_median_pct: number | null;
+}
 
 export async function GET(request: Request) {
   const session = await getCurrentSession();
@@ -19,7 +39,7 @@ export async function GET(request: Request) {
 
   const { data: channel, error: channelError } = await supabase
     .from("channels")
-    .select("id, code, name")
+    .select("id, code, name, primary_target")
     .eq("code", code)
     .maybeSingle();
   if (channelError || !channel) {
@@ -102,5 +122,53 @@ export async function GET(request: Request) {
 
   const items = (rows ?? []).filter((r) => recentProgramIds.has(r.program_id));
 
-  return NextResponse.json({ ok: true, asOfDate, items });
+  // 사용자 지시(2026-08-21): MOVE/REPLACE로 태깅된 프로그램 중 여러 시간대에 반복 편성된
+  // ("재방 많은") 것은 프로그램 전체가 아니라 특정 시간대만 짚어 의견을 낸다.
+  const programTargetLabel = channel.primary_target ? resolveProgramLevelTargetLabel(channel.primary_target) : null;
+  type ItemRow = (typeof items)[number];
+  type ItemWithSlot = ItemRow & {
+    slotEfficiency: {
+      isMultiSlot: boolean;
+      weeks: number;
+      weakHour: number | null;
+      weakShareVsMedianPct: number | null;
+      weakAirCount: number | null;
+    } | null;
+  };
+  const itemsWithSlotEfficiency: ItemWithSlot[] = await Promise.all(
+    items.map(async (item) => {
+      const canonicalName = (item.programs as { canonical_name?: string } | null)?.canonical_name;
+      if (!programTargetLabel || !canonicalName || (item.tag !== "MOVE" && item.tag !== "REPLACE")) {
+        return { ...item, slotEfficiency: null };
+      }
+      const { data: slotRows } = await supabase.rpc("get_program_slot_efficiency", {
+        p_channel_code: channel.code,
+        p_canonical_name: canonicalName,
+        p_program_target_label: programTargetLabel,
+        p_as_of_date: asOfDate,
+        p_weeks: SLOT_EFFICIENCY_WEEKS,
+      });
+      const rows2 = (slotRows ?? []) as SlotEfficiencyRow[];
+      const isMultiSlot = rows2.length >= MULTI_SLOT_HOUR_THRESHOLD;
+      if (!isMultiSlot) {
+        return { ...item, slotEfficiency: null };
+      }
+      const weakCandidates = rows2
+        .filter((r) => r.air_count >= WEAK_SLOT_MIN_AIR_COUNT && r.share_vs_median_pct !== null && r.share_vs_median_pct <= WEAK_SLOT_SHARE_PCT_MAX)
+        .sort((a, b) => (a.share_vs_median_pct ?? 0) - (b.share_vs_median_pct ?? 0));
+      const weak = weakCandidates[0] ?? null;
+      return {
+        ...item,
+        slotEfficiency: {
+          isMultiSlot: true,
+          weeks: SLOT_EFFICIENCY_WEEKS,
+          weakHour: weak?.hour_bucket ?? null,
+          weakShareVsMedianPct: weak?.share_vs_median_pct ?? null,
+          weakAirCount: weak?.air_count ?? null,
+        },
+      };
+    })
+  );
+
+  return NextResponse.json({ ok: true, asOfDate, items: itemsWithSlotEfficiency });
 }
