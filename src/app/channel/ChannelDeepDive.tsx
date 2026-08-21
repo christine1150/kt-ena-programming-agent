@@ -382,6 +382,10 @@ interface ChannelData {
   hourlyExtraPatterns: { targetLabel: string; rows: HourlyRow[] }[];
   hourlyProgramTitles: HourlyProgramTitleRow[];
   competitorInsightReport: CompetitorInsightRow[];
+  // 사용자 지시(2026-08-21): skyUHD는 일별 competitor_ratings가 없어 COMPARED WITH?가 비어
+  // 보였다 — 관리자가 업로드한 연간 누적(1/1~오늘) "누적 채널 순위" 파일로 skyUHD와 등록
+  // UHD 경쟁채널 5개(총 6개) 사이 위치를 대신 보여준다(skyUHD 채널에서만 값이 채워짐).
+  marketYtdCompetitorSnapshot: { channel_name: string; rank: number; rating: number; is_self: boolean; date_from: string; date_to: string }[];
   competitorProgramOverlap: CompetitorOverlapRow[];
   competitorTopPrograms: CompetitorTopProgramRow[];
   daypartOpportunity: DaypartOpportunityRow[];
@@ -2106,6 +2110,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     hourlyExtraPatterns,
     hourlyProgramTitles,
     competitorInsightReport,
+    marketYtdCompetitorSnapshot,
     competitorProgramOverlap,
     competitorTopPrograms,
     daypartOpportunity,
@@ -3192,12 +3197,65 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             그 기간 평균으로 집계된다(사용자 지시 2026-08-20). */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">COMPARED WITH?</h2>
-          <p className="mb-3 text-sm text-zinc-400">
-            시간대별(전일/전주/전월/전분기/전년) 비교는 위 WHAT HAPPENED?를 참고하세요. 아래는 등록 경쟁채널을
-            {isRangeMode ? " 선택 기간 평균 순위가 높은 순으로 나열하고, 그 이전 12주 평균 대비 등락과 기간 중 가장 잘 된 프로그램(시간대)을" : ` ${referenceLabel} 순위가 높은 순으로 나열하고, 최근 12주 평균 대비 ${referenceLabel} 등락과 ${referenceLabel} 가장 잘 된 프로그램(시간대)을`}
-            함께 보여줍니다.
-          </p>
-          {competitorInsightReport.length === 0 ? (
+          {/* 사용자 지시(2026-08-21): skyUHD는 일별 비교가 아니라 연간 누적 순위를 쓰므로, 이
+              안내 문구도 그 경우엔 아래 skyUHD 전용 문단으로 대체한다(중복 안내 방지). */}
+          {!(code === "SKYUHD" && marketYtdCompetitorSnapshot.length > 0) && (
+            <p className="mb-3 text-sm text-zinc-400">
+              시간대별(전일/전주/전월/전분기/전년) 비교는 위 WHAT HAPPENED?를 참고하세요. 아래는 등록 경쟁채널을
+              {isRangeMode ? " 선택 기간 평균 순위가 높은 순으로 나열하고, 그 이전 12주 평균 대비 등락과 기간 중 가장 잘 된 프로그램(시간대)을" : ` ${referenceLabel} 순위가 높은 순으로 나열하고, 최근 12주 평균 대비 ${referenceLabel} 등락과 ${referenceLabel} 가장 잘 된 프로그램(시간대)을`}
+              함께 보여줍니다.
+            </p>
+          )}
+          {code === "SKYUHD" && marketYtdCompetitorSnapshot.length > 0 ? (
+            // 사용자 지시(2026-08-21): skyUHD는 §1.2 경쟁채널 시트 자체가 없는 수기 업로드
+            // 채널이라, 일별 경쟁채널 비교(get_competitor_insight_report)는 등록 경쟁채널 5개 중
+            // 일부만(그것도 최고 성적 프로그램 없이) 불완전하게 나온다 — 대신 관리자가 업로드한
+            // 연간 누적(1/1~오늘) 시장 전체 순위 파일로 skyUHD와 등록 UHD 경쟁채널 5개(총 6개)
+            // 모두의 위치를 보여준다(일별 비교표를 대체).
+            <div className="mb-4">
+              <p className="mb-2 text-sm text-zinc-400">
+                skyUHD는 일별 등록 경쟁채널 데이터가 없어, 연간 누적({marketYtdCompetitorSnapshot[0]?.date_from}~
+                {marketYtdCompetitorSnapshot[0]?.date_to}) 유료가구 기준 시장 전체 순위로 UHD 경쟁채널 6개 사이의
+                위치를 대신 보여줍니다.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[420px] text-left text-sm">
+                  <thead>
+                    <tr className="text-zinc-400">
+                      <th className="pb-1.5 pr-2 font-medium">No.</th>
+                      <th className="pb-1.5 pr-2 font-medium">채널</th>
+                      <th className="pb-1.5 pr-2 font-medium">시장 전체 순위</th>
+                      <th className="pb-1.5 font-medium">연간 누적 시청률</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {marketYtdCompetitorSnapshot.map((r, i) => (
+                      <tr key={r.channel_name} className={`border-t border-zinc-100 ${r.is_self ? "bg-indigo-50/40" : ""}`}>
+                        <td className="py-1.5 pr-2 text-zinc-500">{i + 1}</td>
+                        <td
+                          className="py-1.5 pr-2 font-medium"
+                          style={r.is_self ? { color: accentColor, fontWeight: 700 } : undefined}
+                        >
+                          {r.channel_name}
+                        </td>
+                        <td className="py-1.5 pr-2 text-zinc-600">{r.rank}위 (전체 217개 채널 중)</td>
+                        <td className="py-1.5 text-zinc-600">{fmt(r.rating, 5)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {(() => {
+                const selfIdx = marketYtdCompetitorSnapshot.findIndex((r) => r.is_self);
+                if (selfIdx < 0) return null;
+                return (
+                  <p className="mt-2 text-sm text-zinc-600">
+                    skyUHD는 이 6개 UHD 채널 중 {selfIdx + 1}위입니다(시장 전체 순위 기준으로는 {marketYtdCompetitorSnapshot[selfIdx].rank}위).
+                  </p>
+                );
+              })()}
+            </div>
+          ) : competitorInsightReport.length === 0 ? (
             <p className="mb-4 text-sm text-zinc-400">등록 경쟁채널 데이터가 없습니다.</p>
           ) : (
             <>

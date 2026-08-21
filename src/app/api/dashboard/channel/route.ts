@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
-import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL } from "@/lib/targetResolution";
+import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL, resolveMarketYtdTargetLabel } from "@/lib/targetResolution";
 
 // 로컬 날짜 구성요소로 "YYYY-MM-DD" 문자열을 만든다 — toISOString()은 UTC로 바꾸면서 자정 근처
 // 날짜가 하루 밀리는 문제가 실제로 있었다(ChannelDeepDive.tsx에서 이미 겪고 고친 것과 동일한
@@ -452,6 +452,26 @@ export async function GET(request: Request) {
     }
   }
   const competitorInsightReport = competitorInsightRes.data;
+  // 사용자 지시(2026-08-21): skyUHD는 일별 Nielsen 시트가 없는 수기 업로드 채널이라
+  // competitor_ratings(등록 경쟁채널의 일별 데이터)가 원천적으로 비어 COMPARED WITH?가 항상
+  // "데이터가 없습니다"로만 나왔다 — 대신 관리자가 업로드한 "누적 채널 순위" 파일(연간 누적,
+  // market_ytd_rank_snapshot)로 skyUHD와 등록 경쟁채널 5개(총 6개) 사이의 위치를 보여준다.
+  // 날짜 범위와 무관한 고정 스냅샷이라 별도로(위 Promise.all 밖에서) 조회한다.
+  let marketYtdCompetitorSnapshot: {
+    channel_name: string;
+    rank: number;
+    rating: number;
+    is_self: boolean;
+    date_from: string;
+    date_to: string;
+  }[] = [];
+  if (channel.code === "SKYUHD") {
+    const { data: snapshotData } = await supabase.rpc("get_channel_market_ytd_competitor_snapshot", {
+      p_channel_code: channel.code,
+      p_target_label: resolveMarketYtdTargetLabel(channel.primary_target),
+    });
+    marketYtdCompetitorSnapshot = snapshotData ?? [];
+  }
   const overlapData = overlapRes.data;
   const topProgramsData = topProgramsCompetitorRes.data;
   const rootCauseAlert = rootCauseRes.data?.[0] ?? null;
@@ -565,6 +585,7 @@ export async function GET(request: Request) {
     demographicHighlights,
     compareChannelCode,
     competitorInsightReport: competitorInsightReport ?? [],
+    marketYtdCompetitorSnapshot,
     competitorProgramOverlap: overlapData ?? [],
     competitorTopPrograms: topProgramsData ?? [],
     daypartOpportunity: daypartOpportunity ?? [],
