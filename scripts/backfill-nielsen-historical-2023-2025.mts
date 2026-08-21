@@ -68,9 +68,11 @@ async function main() {
   console.log(`이미 DB에 있는 날짜(file_uploads 처리 이력 기준): ${existingDates.size}개`);
 
   let todo = [...byDate.entries()].filter(([date]) => !existingDates.has(date)).sort((a, b) => a[0].localeCompare(b[0]));
-  // 테스트용 필터(선택) — BACKFILL_START_DATE로 시작점을 당기고, BACKFILL_LIMIT으로 소규모
-  // 검증 후 전체 실행.
+  // 범위 필터(선택) — BACKFILL_START_DATE/BACKFILL_END_DATE로 특정 구간만, BACKFILL_LIMIT으로
+  // 소규모 검증. 사용자 지시(2026-08-21): 500MB 용량 제한 때문에 2023·2024년은 지운 채로 두고
+  // 2025년만 다시 채워 넣을 때 이 두 파라미터로 범위를 좁혀 쓴다.
   if (process.env.BACKFILL_START_DATE) todo = todo.filter(([date]) => date >= process.env.BACKFILL_START_DATE!);
+  if (process.env.BACKFILL_END_DATE) todo = todo.filter(([date]) => date <= process.env.BACKFILL_END_DATE!);
   const limit = process.env.BACKFILL_LIMIT ? parseInt(process.env.BACKFILL_LIMIT, 10) : null;
   if (limit) todo = todo.slice(0, limit);
   console.log(`이번에 처리할 날짜: ${todo.length}개 (${todo[0]?.[0]} ~ ${todo[todo.length - 1]?.[0]})`);

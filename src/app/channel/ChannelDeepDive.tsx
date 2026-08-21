@@ -277,6 +277,18 @@ interface TopProgramRow {
   most_common_start_hour: number | null;
 }
 
+// 기능 #15-11(2026-08-21): COMPARED WITH? 기간 모드 — 상위 5개 채널 안의 상위 7개 프로그램.
+interface CompetitorPeriodTopProgramRow {
+  competitor_name: string;
+  channel_period_avg_rating: number | null;
+  channel_rank: number;
+  program_name: string;
+  start_time: string;
+  end_time: string | null;
+  rating: number | null;
+  broadcast_date: string;
+}
+
 interface ChannelData {
   channel: {
     code: string;
@@ -320,6 +332,16 @@ interface ChannelData {
   targetAchievement: { achievement_pct: number | null; gap: number | null; target_rating: number | null } | null;
   narrativeSignal: NarrativeSignal | null;
   demographicHighlights: DemographicHighlightRow[];
+  // 기능 #15-2(2026-08-21): "대비" 분석(priorDateFrom/To가 있는 프리셋)의 전 기간 시간대별 그래프.
+  hourlyPatternPrior: HourlyRow[];
+  hourlyProgramTitlesPrior: HourlyProgramTitleRow[];
+  hasPriorRange: boolean;
+  // 기능 #15-11(2026-08-21): 기간 모드 COMPARED WITH?.
+  competitorPeriodTopPrograms: CompetitorPeriodTopProgramRow[];
+  periodWindowDays: number;
+  // 기능 #15-3/#15-4(2026-08-21): "대비" 분석의 전 기간 히트맵·TOP20.
+  dowHourBlockPatternPrior: DowHourBlockRow[];
+  topProgramsPrior: TopProgramRow[];
 }
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -358,6 +380,17 @@ function shortDemoLabel(label: string): string {
 // 유지해 "전국 5064"와 "수도권 2049"를 혼동하지 않게 한다).
 function shortTargetLabel(label: string): string {
   return label.replace(/\s+/g, "");
+}
+// 헤더의 "시장 · KPI 타깃" 표시용(사용자 지시 2026-08-21) — channels.primary_target(Channel
+// Master 원문)이 수도권 채널은 이미 "수도권 개인2049"처럼 시장 구분을 포함하고 있어
+// `${market} · ${primaryTarget}`로 이어붙이면 "수도권 · 수도권 개인2049"로 중복 표시되던
+// 문제. 전국 채널은 원문이 "National 유료방송가입가구"라 "전국 · National 유료방송가입가구"
+// 처럼 영단어가 그대로 노출되는 문제도 함께 — "전국 유료방송 가입 가구"로 다듬는다.
+function formatChannelTargetLine(primaryTarget: string): string {
+  if (primaryTarget.startsWith("National")) {
+    return primaryTarget.replace("National 유료방송가입가구", "전국 유료방송 가입 가구");
+  }
+  return primaryTarget; // 수도권 채널: 원문에 이미 "수도권"이 포함돼 있어 그대로 표시.
 }
 
 const TAG_STYLE: Record<string, string> = {
@@ -782,7 +815,9 @@ function buildBriefingReport(
     let text = `최근 ${data.rootCauseAlert.streak_days}일 연속 채널 평균 대비 뚜렷한 하락세가 이어지고 있어 확인이 필요합니다.`;
     if (moves.length > 0) {
       const top = [...moves].sort((a, b) => Math.abs(b.change_pct) - Math.abs(a.change_pct))[0];
-      text += ` 같은 기간 ${top.competitor_name}${josaIga(top.competitor_name)} 전주 대비 ${top.change_pct >= 0 ? "▲" : "▼"} ${Math.abs(top.change_pct).toFixed(1)}% 변동해 동시에 관찰됐습니다(인과관계로 단정하지 않음).`;
+      // 사용자 지시(2026-08-21): "변동해 동시에 관찰됐습니다"는 어색한 표현 — 실제 등락 방향과
+      // 시청률 값을 그대로 문장에 넣어 자연스럽게(상관관계 참고라는 취지는 그대로 유지).
+      text += ` 같은 기간 ${top.competitor_name}${josaIga(top.competitor_name)} 전주 대비 ${top.change_pct >= 0 ? "▲" : "▼"} ${Math.abs(top.change_pct).toFixed(1)}%(실제시청률 ${fmtR(top.today_rating)}) ${top.change_pct >= 0 ? "상승" : "하락"}했습니다(동시에 관찰된 참고 정보 — 인과관계로 단정하지 않음).`;
     }
     paragraphs.push(text);
   } else if (data.opportunityAlert?.triggered) {
@@ -809,22 +844,43 @@ function buildHowDeeplyExplanation(
   return parts.join(" ");
 }
 
-// ── WHO IS WATCHING? 설명 ─────────────────────────────────────────────
-function buildWhoIsWatchingExplanation(
-  compareChannelCode: string,
-  items: { targetLabel: string; result: AffinityResult | null }[]
+// ── WHO IS WATCHING? 재설계(사용자 지시 2026-08-21, 기능 #15-7) ──────────────
+// "경쟁채널 Affinity 방식 폐기, 대신 각 채널 내부 연령대 흐름 분석(주로 보는 연령대, 이동
+// 여부, 특이 움직임)" — 오늘/어제(!showComparisonView)는 narrativeSignal.demographics(최근
+// 12주 baseline, get_channel_daily_narrative가 이미 계산), 그 외 기간은 periodDemographics
+// (이번 기간 vs 전 기간, get_channel_period_demographics)를 그대로 재사용한다(새 계산 없음).
+function buildInternalDemographicNarrative(
+  showComparisonView: boolean,
+  narrativeSignal: NarrativeSignal | null,
+  periodDemographics: PeriodDemographicRow[],
+  fmtR: (v: number | null) => string,
+  refLabel: string
 ): string {
-  const valid = items.filter((i) => i.result && !i.result.insufficient_sample && i.result.affinity_index !== null);
-  if (valid.length === 0) return `${compareChannelCode} 대비 비교할 만한 표본이 아직 부족합니다.`;
-  const sorted = [...valid].sort((a, b) => (b.result!.affinity_index ?? 0) - (a.result!.affinity_index ?? 0));
-  const strongest = sorted[0];
-  const weakest = sorted[sorted.length - 1];
-  let text = `Affinity는 ${compareChannelCode} 대비 이 채널에서 그 연령대가 상대적으로 얼마나 더/덜 보는지를 나타내는 지수입니다(100=동일 비중, 100 초과면 이 채널에서 더 강함). `;
-  if (strongest.result!.affinity_index! > 100) {
-    text += `${shortDemoLabel(strongest.targetLabel)}에서 Affinity ${strongest.result!.affinity_index!.toFixed(1)}로 가장 강하게 나타나, ${compareChannelCode} 대비 이 연령대의 비중이 두드러집니다. `;
+  if (showComparisonView) {
+    const withValues = periodDemographics.filter((d) => d.period_avg_rating !== null);
+    if (withValues.length === 0) return "이 기간의 연령대별 데이터가 아직 부족합니다.";
+    const strongestNow = [...withValues].sort((a, b) => (b.period_avg_rating ?? 0) - (a.period_avg_rating ?? 0))[0];
+    const withDelta = withValues.filter((d) => d.delta_pct !== null);
+    const mostMoved = [...withDelta].sort((a, b) => Math.abs(b.delta_pct!) - Math.abs(a.delta_pct!))[0];
+    let text = `이 기간 시청률이 가장 높은 연령대는 ${shortDemoLabel(strongestNow.target_label)}(${fmtR(strongestNow.period_avg_rating)})입니다. `;
+    if (mostMoved && Math.abs(mostMoved.delta_pct!) >= 10) {
+      text += `전 기간 대비로는 ${shortDemoLabel(mostMoved.target_label)}${josaIga(shortDemoLabel(mostMoved.target_label))} ${mostMoved.delta_pct! >= 0 ? "▲" : "▼"} ${Math.abs(mostMoved.delta_pct!).toFixed(1)}%로 가장 크게 움직여, 이 채널의 시청 연령대 구성이 그쪽으로 이동하는 흐름을 보였습니다.`;
+    } else {
+      text += "전 기간 대비 연령대별 구성에 뚜렷한 이동은 없었습니다.";
+    }
+    return text;
   }
-  if (weakest.result!.affinity_index! < 100) {
-    text += `반대로 ${shortDemoLabel(weakest.targetLabel)}${josaEunNeun(shortDemoLabel(weakest.targetLabel))} Affinity ${weakest.result!.affinity_index!.toFixed(1)}로 상대적으로 비중이 낮습니다.`;
+  const demographics = narrativeSignal?.demographics ?? null;
+  const withValues = (demographics ?? []).filter((d) => d.today !== null);
+  if (withValues.length === 0) return `${refLabel} 연령대별 데이터가 아직 부족합니다.`;
+  const strongestNow = [...withValues].sort((a, b) => (b.today ?? 0) - (a.today ?? 0))[0];
+  const withDelta = withValues.filter((d) => d.delta_pct !== null);
+  const mostMoved = [...withDelta].sort((a, b) => Math.abs(b.delta_pct!) - Math.abs(a.delta_pct!))[0];
+  let text = `${refLabel} 시청률이 가장 높은 연령대는 ${shortDemoLabel(strongestNow.label)}(${fmtR(strongestNow.today)})입니다. `;
+  if (mostMoved && Math.abs(mostMoved.delta_pct!) >= 25) {
+    text += `최근 12주 평균 대비로는 ${shortDemoLabel(mostMoved.label)}${josaIga(shortDemoLabel(mostMoved.label))} ${mostMoved.delta_pct! >= 0 ? "▲" : "▼"} ${Math.abs(mostMoved.delta_pct!).toFixed(0)}%로 가장 뚜렷하게 움직여, ${refLabel} 이 연령대의 시청 비중이 평소와 달랐습니다.`;
+  } else {
+    text += "최근 12주 평균과 비교해 연령대별 구성에 뚜렷한 변화는 없었습니다.";
   }
   return text;
 }
@@ -933,6 +989,200 @@ function findShareOutliers(rows: TopProgramRow[]): Map<string, number> {
   return result;
 }
 
+// 기능 #15-2(2026-08-21): "대비" 분석(DoD~YoY)의 시간대별 그래프 — "이번 기간"/"전 기간" 두
+// 패널로 나란히, 패널마다 독립된 체크박스 행. 단일 일자/기간(비교 아닌) 조회의 기존 그래프(기준선
+// 오버레이·추가 타깃 체크박스 포함)는 그대로 두고, 이 컴포넌트는 "대비" 모드 전용으로 표준 4개
+// 지표만 다룬다(추가 타깃까지 두 패널에 다 넣으면 화면이 지나치게 복잡해져 핵심 지표로 범위를
+// 좁혔다 — 사용자가 명시하지 않은 부분의 설계 판단).
+function HourlyGraphPanel({
+  pattern,
+  programTitles,
+  metrics,
+  onToggleMetric,
+  code,
+  primaryTargetLabel,
+}: {
+  pattern: HourlyRow[];
+  programTitles: HourlyProgramTitleRow[];
+  metrics: Set<HourlyMetricKey>;
+  onToggleMetric: (key: HourlyMetricKey) => void;
+  code: string;
+  primaryTargetLabel: string;
+}) {
+  const programTitleByHour = new Map(programTitles.map((h) => [h.broadcast_hour, h.program_names]));
+  const maxByMetric: Record<HourlyMetricKey, number> = {
+    avg_rating: Math.max(1e-9, ...pattern.map((h) => Number(h.avg_rating) || 0)),
+    avg_share: Math.max(1e-9, ...pattern.map((h) => Number(h.avg_share) || 0)),
+    avg_reach: Math.max(1e-9, ...pattern.map((h) => Number(h.avg_reach) || 0)),
+    avg_time_spent_seconds: Math.max(1e-9, ...pattern.map((h) => Number(h.avg_time_spent_seconds) || 0)),
+  };
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap gap-3 text-xs">
+        {HOURLY_METRICS.map((m) => (
+          <label key={m.key} className="flex cursor-pointer items-center gap-1.5 text-zinc-600">
+            <input
+              type="checkbox"
+              checked={metrics.has(m.key)}
+              onChange={() => onToggleMetric(m.key)}
+              className="h-3.5 w-3.5 rounded border-zinc-300"
+              style={{ accentColor: m.color }}
+            />
+            <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: m.color }} />
+            {m.key === "avg_rating" && code !== "SKYUHD" ? `시청률(${shortTargetLabel(primaryTargetLabel)})` : m.label}
+          </label>
+        ))}
+      </div>
+      {pattern.length === 0 ? (
+        <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>
+      ) : metrics.size === 0 ? (
+        <p className="text-sm text-zinc-400">위 체크박스에서 볼 지표를 하나 이상 선택하세요.</p>
+      ) : (
+        <>
+          <div className="h-40">
+            <div className="flex h-full items-stretch gap-1">
+              {pattern.map((h) => {
+                const title = programTitleByHour.get(h.broadcast_hour) ?? "";
+                return (
+                  <div key={h.broadcast_hour} className="flex h-full flex-1 flex-col items-center">
+                    <div className="flex w-full flex-1 items-end justify-center gap-0.5">
+                      {HOURLY_METRICS.filter((m) => metrics.has(m.key)).map((m) => {
+                        const value = Number(h[m.key]) || 0;
+                        const heightPct = Math.max(2, (value / maxByMetric[m.key]) * 100);
+                        return (
+                          <div
+                            key={m.key}
+                            title={`${h.broadcast_hour}시 ${title ? title + " · " : ""}${m.label}: ${value.toFixed(3)}`}
+                            className="w-full max-w-2 rounded-t"
+                            style={{ height: `${heightPct}%`, backgroundColor: m.color }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="mt-1 flex gap-1">
+            {pattern.map((h) => (
+              <span key={h.broadcast_hour} className="flex-1 shrink-0 text-center text-[9px] text-zinc-400">
+                {h.broadcast_hour}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// 기능 #15-3(2026-08-21): "대비" 분석(DoD~YoY)에서 히트맵을 "이번 기간"/"전 기간" 두 패널로
+// 나란히 비교할 수 있도록 표 렌더링을 재사용 가능한 컴포넌트로 뽑았다(색·수치 로직은 기존과 동일,
+// 각 패널은 자기 기간 안에서만 정규화한다 — 기간마다 표본 절대량이 달라 공유 스케일은 오히려
+// 오해를 줄 수 있음).
+function DowHourBlockTable({ pattern, accentColor, fmtR }: { pattern: DowHourBlockRow[]; accentColor: string; fmtR: (v: number | null) => string }) {
+  const byCell = new Map(pattern.map((r) => [`${r.dow}__${r.hour_block}`, r]));
+  const maxRating = Math.max(1e-9, ...pattern.map((r) => r.avg_rating ?? 0));
+  if (pattern.length === 0) {
+    return <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] text-center text-xs">
+        <thead>
+          <tr>
+            <th className="pb-1.5 text-left font-medium text-zinc-400">시간대 \ 요일</th>
+            {["월", "화", "수", "목", "금", "토", "일"].map((label) => (
+              <th key={label} className={`pb-1.5 font-medium ${label === "토" ? "text-blue-500" : label === "일" ? "text-rose-500" : "text-zinc-400"}`}>
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {HOUR_BLOCK_ORDER.map((hb) => (
+            <tr key={hb} className="border-t border-zinc-100">
+              <td className="py-1.5 text-left font-medium text-zinc-700">{hourBlockLabel(hb)}</td>
+              {["월", "화", "수", "목", "금", "토", "일"].map((label, i) => {
+                const dow = i + 1;
+                const cell = byCell.get(`${dow}__${hb}`);
+                const rating = cell?.avg_rating ?? null;
+                const intensity = rating !== null ? Math.min(1, rating / maxRating) : 0;
+                return (
+                  <td key={dow} className="py-1.5">
+                    <div
+                      className="mx-auto flex h-9 w-full items-center justify-center rounded-lg text-[11px] font-medium"
+                      style={{
+                        backgroundColor: rating !== null ? `${accentColor}${Math.round(intensity * 200 + 20).toString(16).padStart(2, "0")}` : "#f4f4f5",
+                        color: rating !== null && intensity > 0.5 ? "#fff" : "#52525b",
+                      }}
+                      title={cell ? `${label} ${hourBlockLabel(hb)}: ${fmtR(rating)} (표본 ${cell.sample_count}건)` : "표본 없음"}
+                    >
+                      {rating !== null ? rating.toFixed(3) : "—"}
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// 기능 #15-4(2026-08-21): TOP20도 "대비" 분석에서 두 패널로 비교하기 위해 목록 렌더링을 뽑았다.
+function TopProgramsList({ rows, fmtR }: { rows: TopProgramRow[]; fmtR: (v: number | null) => string }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>;
+  }
+  const shareOutliers = findShareOutliers(rows);
+  return (
+    <ol className="space-y-1 text-sm">
+      {rows.map((p, i) => {
+        const shareRank = shareOutliers.get(p.program_name);
+        return (
+          <li key={p.program_name} className="border-t border-zinc-100 py-1.5 first:border-t-0">
+            <div className="flex items-center gap-2">
+              <span className="w-5 shrink-0 text-right font-medium text-zinc-400">{i + 1}</span>
+              <span className="min-w-0 flex-1 truncate font-medium text-zinc-800">{p.program_name}</span>
+              <span className="shrink-0 text-xs text-zinc-500">
+                {p.top_daypart ? DAYPART_LABEL[p.top_daypart]?.split("(")[0] ?? p.top_daypart : "—"}
+                {p.most_common_start_hour !== null ? ` · 주로 ${p.most_common_start_hour}시` : ""}
+              </span>
+              <span className="shrink-0 text-xs text-zinc-400">{p.air_count}회 방영</span>
+              <span className="w-16 shrink-0 text-right font-semibold text-zinc-900">{fmtR(p.avg_rating)}</span>
+            </div>
+            {shareRank !== undefined && (
+              <p className="ml-7 mt-0.5 text-xs text-sky-600">
+                시청률 순위는 {i + 1}위이지만, 점유율은 이 목록 중 {shareRank}위로 상대적으로 높습니다
+                {p.avg_share !== null ? ` (점유율 ${p.avg_share.toFixed(2)}%)` : ""}.
+              </p>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+// "대비" 분석에서 TOP20 상위 5위가 이전 기간과 얼마나 겹치는지/새로 진입·이탈했는지(사용자 지시:
+// "상위 유지/변동 항목" 인사이트).
+function buildTopProgramsComparisonInsight(current: TopProgramRow[], prior: TopProgramRow[]): string | null {
+  if (current.length === 0 || prior.length === 0) return null;
+  const currentTop5 = current.slice(0, 5).map((p) => p.program_name);
+  const priorTop5 = prior.slice(0, 5).map((p) => p.program_name);
+  const kept = currentTop5.filter((n) => priorTop5.includes(n));
+  const newEntries = currentTop5.filter((n) => !priorTop5.includes(n));
+  const dropped = priorTop5.filter((n) => !currentTop5.includes(n));
+  const parts: string[] = [];
+  if (kept.length > 0) parts.push(`상위 5위 안에서 '${kept.join("', '")}'는 이번 기간과 이전 기간 모두 유지됐습니다.`);
+  if (newEntries.length > 0) parts.push(`새로 상위권에 진입한 프로그램은 '${newEntries.join("', '")}'입니다.`);
+  if (dropped.length > 0) parts.push(`이전 기간 상위권이었다가 이번 기간엔 밀려난 프로그램은 '${dropped.join("', '")}'입니다.`);
+  if (parts.length === 0) return "상위권 구성에 뚜렷한 변화는 없습니다.";
+  return parts.join(" ");
+}
+
 // WHAT TO SCHEDULE?의 STRENGTHEN/TEST/MOVE 프로그램에 "다른 daypart로 재배치"를 추천할 근거가
 // 있는지 판단한다(사용자 지시 2026-08-20). 새 계산을 만들지 않고, OPPORTUNITY?에서 이미 계산해
 // 화면에 보여주는 daypartOpportunity(우리 vs 등록 경쟁채널 격차가 daypart별로 최근 어떻게
@@ -957,6 +1207,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hourlyMetrics, setHourlyMetrics] = useState<Set<HourlyMetricKey>>(new Set(["avg_rating"]));
+  // 기능 #15-2(2026-08-21): "대비" 분석(DoD~YoY)의 시간대별 그래프는 "이번 기간"/"전 기간" 두
+  // 패널로 나란히 보여주고, 각 패널이 독립된 체크박스 행을 갖는다(사용자 지시 "두 줄 체크박스").
+  const [hourlyMetricsPrior, setHourlyMetricsPrior] = useState<Set<HourlyMetricKey>>(new Set(["avg_rating"]));
   // 사용자 지시(2026-08-20): 02~26시 그래프에서 채널의 반대쪽 타깃 시청률(수도권2049↔전국유료가구)을
   // 체크박스 하나로 켜서 볼 수 있게(skyUHD 제외). 기본은 꺼짐 — 채널 고유 타깃 시청률이 디폴트로
   // 먼저 보이고, 이건 opt-in으로 추가되는 참고 지표.
@@ -1093,11 +1346,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     competitorProgramOverlap,
     competitorTopPrograms,
     daypartOpportunity,
-    affinity,
     rootCauseAlert,
     isRangeMode,
     dowHourBlockPattern,
     topPrograms,
+    narrativeSignal,
+    hourlyPatternPrior,
+    hourlyProgramTitlesPrior,
+    hasPriorRange,
+    competitorPeriodTopPrograms,
+    periodWindowDays,
+    dowHourBlockPatternPrior,
+    topProgramsPrior,
   } = data;
   const current = trend.find((t) => t.period === "current");
   const dod = trend.find((t) => t.period === "DoD");
@@ -1154,9 +1414,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 문구도 맞춰서 "최근 1주" 대신 "선택 기간"으로.
   const opportunityRecentLabel = isRangeMode ? "선택 기간" : "최근 1주";
   const hourBlockStrength = summarizeHourBlockStrength(dowHourBlockPattern);
-  const dowHourBlockByCell = new Map(dowHourBlockPattern.map((r) => [`${r.dow}__${r.hour_block}`, r]));
-  const dowHourBlockMaxRating = Math.max(1e-9, ...dowHourBlockPattern.map((r) => r.avg_rating ?? 0));
-  const shareOutliers = findShareOutliers(topPrograms);
 
   return (
     <div className="px-6 py-8" style={{ ["--accent" as string]: accentColor }}>
@@ -1181,9 +1438,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </div>
               )}
               <div>
-                <p className="text-sm text-white/80">{channel.market} · {channel.primaryTarget}</p>
+                <p className="text-sm text-white/80">{formatChannelTargetLine(channel.primaryTarget)}</p>
                 <p className="text-3xl font-semibold">
                   {showComparisonView ? fmtR(data.periodReport?.avg_rating ?? null) : fmtR(current?.rating ?? null)}
+                  {/* 사용자 지시(2026-08-21): 당일 시청률 옆에 그날 등위도 괄호로 — 단일 일자
+                      조회일 때만(기간 평균에는 등위 개념이 없음). */}
+                  {!showComparisonView && narrativeSignal?.today_rank != null && (
+                    <span className="ml-1.5 text-lg font-normal text-white/70">({narrativeSignal.today_rank}위)</span>
+                  )}
                 </p>
                 {showComparisonView && <p className="text-xs text-white/70">{isComparisonPreset ? "이번 기간 평균" : "선택 기간 평균"}</p>}
               </div>
@@ -1195,10 +1457,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 브리핑" 등이 과거를 마치 오늘인 것처럼 서술하는 문제가 있었다(사용자 지시로 수정). */}
             <div className="flex flex-col items-end gap-1.5">
               <div className="flex flex-wrap items-center justify-end gap-2">
+                {/* 사용자 지시(2026-08-21): 드랍박스를 열면 옵션 글씨가 안 보이던 버그 — optgroup으로
+                    묶으면서 option이 select의 "직계 자식"이 아니게 돼([&>option] 선택자가 더는
+                    안 먹힘) 흰 배경에 흰 글씨(투명)로 남아있었다. 자손 선택자([&_option])로 바꾸고
+                    optgroup 라벨 색도 함께 지정. */}
                 <select
                   value={periodPreset}
                   onChange={(e) => setPeriodPreset(e.target.value as PeriodPreset)}
-                  className="rounded-full bg-white/20 px-3 py-1.5 text-xs font-medium text-white outline-none [&>option]:text-zinc-900"
+                  className="rounded-full bg-white/20 px-3 py-1.5 text-xs font-medium text-white outline-none [&_option]:text-zinc-900 [&_optgroup]:text-zinc-500"
                 >
                   {PERIOD_PRESET_GROUPS.map((g) => (
                     <optgroup key={g.group} label={g.group}>
@@ -1279,7 +1545,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             (llmClassifier.ts). 사용자 지시(2026-08-20): 화면 문구를 "OpenAI를 활용한 자연어
             검색 및 응답"으로 안내 — 실제로 낯선 표현은 OpenAI를 거치므로 틀린 설명이 아니다. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className="mb-1 text-sm font-semibold text-zinc-500">질문하기 · OpenAI 자연어 질의응답</h2>
+          {/* 사용자 지시(2026-08-21): 제목을 "질문하기 · AI 편성 비서"로. */}
+          <h2 className="mb-1 text-sm font-semibold text-zinc-500">질문하기 · AI 편성 비서</h2>
           <p className="mb-3 text-xs text-zinc-400">
             OpenAI를 활용해 자연어 질문을 이해하고, DB의 검증된 데이터로 답합니다. 채널 성과·프로그램 TOP·시간대·Target
             Affinity·경쟁채널 비교·포트폴리오 랭킹/KPI/알림 질문을 지원합니다. 어느 채널 페이지에서 물어도 질문 속 채널명을
@@ -1325,13 +1592,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-zinc-500">
-              02시~26시 시간대별 그래프{isRangeMode ? " (선택 기간 평균)" : ""}
+              시간대별 그래프{isRangeMode ? " (선택 기간 평균)" : ""}
               {hourlyEffectiveDate && (
                 <span className="ml-2 text-xs font-normal text-amber-600">
                   (선택한 날짜에 프로그램 데이터가 아직 없어 최근 데이터 기준 {formatDateWithDow(hourlyEffectiveDate)}로 대신 표시)
                 </span>
               )}
             </h2>
+            {!hasPriorRange && (
             <div className="flex flex-wrap gap-3 text-xs">
               {HOURLY_METRICS.map((m) => (
                 <label key={m.key} className="flex cursor-pointer items-center gap-1.5 text-zinc-600">
@@ -1382,8 +1650,52 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </label>
               ))}
             </div>
+            )}
           </div>
-          {hourlyPattern.length === 0 ? (
+          {/* 기능 #15-2(2026-08-21): "대비" 분석(priorDateFrom/To가 있는 DoD~YoY)은 "이번 기간"/
+              "전 기간" 두 패널로 나란히, 패널마다 독립된 체크박스 행("두 줄 체크박스", 사용자 지시).
+              기존의 기준선 오버레이·추가 타깃 체크박스가 있는 단일 그래프는 "대비"가 아닌 조회에서
+              그대로 유지한다. */}
+          {hasPriorRange ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-semibold text-zinc-600">이번 기간</p>
+                <HourlyGraphPanel
+                  pattern={hourlyPattern}
+                  programTitles={hourlyProgramTitles}
+                  metrics={hourlyMetrics}
+                  onToggleMetric={(key) => {
+                    setHourlyMetrics((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    });
+                  }}
+                  code={code}
+                  primaryTargetLabel={resolveProgramLevelTargetLabel(channel.primaryTarget)}
+                />
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
+                <HourlyGraphPanel
+                  pattern={hourlyPatternPrior}
+                  programTitles={hourlyProgramTitlesPrior}
+                  metrics={hourlyMetricsPrior}
+                  onToggleMetric={(key) => {
+                    setHourlyMetricsPrior((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    });
+                  }}
+                  code={code}
+                  primaryTargetLabel={resolveProgramLevelTargetLabel(channel.primaryTarget)}
+                />
+              </div>
+            </div>
+          ) : hourlyPattern.length === 0 ? (
             <p className="text-sm text-zinc-400">선택한 기간의 프로그램 단위 데이터가 없습니다.</p>
           ) : hourlyMetrics.size === 0 && selectedExtraTargetsWithMeta.length === 0 ? (
             <p className="text-sm text-zinc-400">위 체크박스에서 볼 지표를 하나 이상 선택하세요.</p>
@@ -1495,60 +1807,32 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
-        {/* 최근 12주 요일×시간대 강세 히트맵 — 신규 섹션(사용자 지시 2026-08-20): skyUHD처럼 매일
-            갱신되지 않는 채널도 12주 누적으로 보면 패턴이 보인다. 기간 선택과 무관하게 항상 dateTo
-            기준 최근 12주 고정 윈도우. */}
+        {/* 요일×시간대 강세 히트맵 — 사용자 지시(2026-08-21, 기능 #15-3): 오늘/어제/DoD(7일 이하
+            분석)는 표본이 부족해 기존처럼 최근 12주(84일) 고정 윈도우를 유지하고, 그보다 긴 기간을
+            선택하면 그 선택 기간 전체를 윈도우로 쓴다(periodWindowDays, route.ts에서 계산). "대비"
+            분석(priorDateFrom/To가 있는 DoD~YoY)은 "이번 기간"/"전 기간" 두 패널로 나란히 비교. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className="mb-1 text-sm font-semibold text-zinc-500">최근 12주 요일 × 시간대 강세 시간대</h2>
+          <h2 className="mb-1 text-sm font-semibold text-zinc-500">
+            {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일) 요일 × 시간대 강세 시간대` : "최근 12주 요일 × 시간대 강세 시간대"}
+          </h2>
           <p className="mb-3 text-xs text-zinc-400">
-            최근 12주(84일) 누적 기준, 월~일 요일과 3시간 단위 시간대(02~04시부터 23~25시까지 8구간)
-            조합별 평균 시청률입니다. 색이 진할수록 그 요일·시간대 조합이 강세입니다.
+            {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 누적 기준, 월~일 요일과 3시간 단위
+            시간대(02~04시부터 23~25시까지 8구간) 조합별 평균 시청률입니다. 색이 진할수록 그 요일·시간대 조합이 강세입니다.
           </p>
-          {dowHourBlockPattern.length === 0 ? (
-            <p className="text-sm text-zinc-400">최근 12주 프로그램 단위 데이터가 없습니다.</p>
+          {hasPriorRange ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-semibold text-zinc-600">이번 기간</p>
+                <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} />
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
+                <DowHourBlockTable pattern={dowHourBlockPatternPrior} accentColor={accentColor} fmtR={fmtR} />
+              </div>
+            </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-center text-xs">
-                  <thead>
-                    <tr>
-                      <th className="pb-1.5 text-left font-medium text-zinc-400">시간대 \ 요일</th>
-                      {["월", "화", "수", "목", "금", "토", "일"].map((label) => (
-                        <th key={label} className="pb-1.5 font-medium text-zinc-400">
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {HOUR_BLOCK_ORDER.map((hb) => (
-                      <tr key={hb} className="border-t border-zinc-100">
-                        <td className="py-1.5 text-left font-medium text-zinc-700">{hourBlockLabel(hb)}</td>
-                        {["월", "화", "수", "목", "금", "토", "일"].map((label, i) => {
-                          const dow = i + 1;
-                          const cell = dowHourBlockByCell.get(`${dow}__${hb}`);
-                          const rating = cell?.avg_rating ?? null;
-                          const intensity = rating !== null ? Math.min(1, rating / dowHourBlockMaxRating) : 0;
-                          return (
-                            <td key={dow} className="py-1.5">
-                              <div
-                                className="mx-auto flex h-9 w-full items-center justify-center rounded-lg text-[11px] font-medium"
-                                style={{
-                                  backgroundColor: rating !== null ? `${accentColor}${Math.round(intensity * 200 + 20).toString(16).padStart(2, "0")}` : "#f4f4f5",
-                                  color: rating !== null && intensity > 0.5 ? "#fff" : "#52525b",
-                                }}
-                                title={cell ? `${label} ${hourBlockLabel(hb)}: ${fmtR(rating)} (표본 ${cell.sample_count}건)` : "표본 없음"}
-                              >
-                                {rating !== null ? rating.toFixed(3) : "—"}
-                              </div>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
                 <p className="mt-3 text-sm leading-relaxed text-zinc-700">
                   {hourBlockStrength.strongest !== null && `전체적으로 ${hourBlockLabel(hourBlockStrength.strongest)}가 가장 강세이고`}
@@ -1564,39 +1848,33 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         {/* 시청률 상위 콘텐츠 TOP 20 — 신규 섹션(사용자 지시 2026-08-20). 최근 12주 고정 윈도우. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">시청률 상위 콘텐츠 TOP 20</h2>
-          <p className="mb-3 text-xs text-zinc-400">최근 12주(84일) 평균 시청률이 높은 순으로 정렬했습니다.</p>
-          {topPrograms.length === 0 ? (
-            <p className="text-sm text-zinc-400">최근 12주 프로그램 단위 데이터가 없습니다.</p>
+          <p className="mb-3 text-xs text-zinc-400">
+            {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 평균 시청률이 높은 순으로 정렬했습니다.
+          </p>
+          {hasPriorRange ? (
+            <>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-zinc-600">이번 기간</p>
+                  <TopProgramsList rows={topPrograms} fmtR={fmtR} />
+                </div>
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
+                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} />
+                </div>
+              </div>
+              {buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior) && (
+                <p className="mt-3 text-sm leading-relaxed text-zinc-700">{buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior)}</p>
+              )}
+            </>
+          ) : topPrograms.length === 0 ? (
+            <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>
           ) : (
             <>
-              <ol className="space-y-1 text-sm">
-                {topPrograms.map((p, i) => {
-                  const shareRank = shareOutliers.get(p.program_name);
-                  return (
-                    <li key={p.program_name} className="border-t border-zinc-100 py-1.5 first:border-t-0">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 shrink-0 text-right font-medium text-zinc-400">{i + 1}</span>
-                        <span className="min-w-0 flex-1 truncate font-medium text-zinc-800">{p.program_name}</span>
-                        <span className="shrink-0 text-xs text-zinc-500">
-                          {p.top_daypart ? DAYPART_LABEL[p.top_daypart]?.split("(")[0] ?? p.top_daypart : "—"}
-                          {p.most_common_start_hour !== null ? ` · 주로 ${p.most_common_start_hour}시` : ""}
-                        </span>
-                        <span className="shrink-0 text-xs text-zinc-400">{p.air_count}회 방영</span>
-                        <span className="w-16 shrink-0 text-right font-semibold text-zinc-900">{fmtR(p.avg_rating)}</span>
-                      </div>
-                      {shareRank !== undefined && (
-                        <p className="ml-7 mt-0.5 text-xs text-sky-600">
-                          시청률 순위는 {i + 1}위이지만, 점유율은 이 목록 중 {shareRank}위로 상대적으로 높습니다
-                          {p.avg_share !== null ? ` (점유율 ${p.avg_share.toFixed(2)}%)` : ""}.
-                        </p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
+              <TopProgramsList rows={topPrograms} fmtR={fmtR} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
                 <p className="mt-3 text-sm leading-relaxed text-zinc-700">
-                  위 상위 콘텐츠들과 같은 최근 12주 기준으로 볼 때,
+                  위 상위 콘텐츠들과 같은 기간 기준으로 볼 때,
                   {hourBlockStrength.strongest !== null && ` 강세 시간대는 ${hourBlockLabel(hourBlockStrength.strongest)}`}
                   {hourBlockStrength.strongest !== null && hourBlockStrength.weakest !== null && ", "}
                   {hourBlockStrength.weakest !== null && ` 약세 시간대는 ${hourBlockLabel(hourBlockStrength.weakest)}입니다`}
@@ -1738,28 +2016,39 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
-        {/* WHO IS WATCHING? — 숫자 + 설명(사용자 지시) */}
+        {/* WHO IS WATCHING? — 재설계(사용자 지시 2026-08-21, 기능 #15-7): 경쟁채널 Affinity 비교
+            대신 이 채널 내부의 연령대 흐름(주로 보는 연령대·이동 여부)을 본다. 오늘/어제는 최근
+            12주 baseline, 그 외 기간은 이번 기간 vs 전 기간 비교. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">WHO IS WATCHING?</h2>
           <p className="mb-3 text-xs text-zinc-400">
-            최근 28일, {affinity.compareChannelCode} 대비 Affinity(100=동일, 100 초과면 이 연령대가 더 강함).
-            표본이 5일 미만이면 신뢰하지 않고 표시하지 않습니다.
+            대표 연령대 4개의 시청률입니다. 등락률은 {showComparisonView ? `${comparisonLabel ?? "전"} 기간` : "최근 12주 평균"} 대비입니다.
           </p>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {affinity.items.map((item) => (
-              <div key={item.targetLabel} className="rounded-2xl bg-zinc-50 p-4">
-                <p className="text-xs text-zinc-500">{item.targetLabel}</p>
-                <p className="mt-1 text-lg font-semibold text-zinc-900">
-                  {item.result?.insufficient_sample || item.result?.affinity_index === null || item.result === null
-                    ? "INSUFFICIENT SAMPLE"
-                    : item.result.affinity_index!.toFixed(1)}
-                </p>
+            {(showComparisonView
+              ? data.periodDemographics.map((d) => ({ label: d.target_label, value: d.period_avg_rating, deltaPct: d.delta_pct }))
+              : (narrativeSignal?.demographics ?? []).map((d) => ({ label: d.label, value: d.today, deltaPct: d.delta_pct }))
+            ).map((item) => (
+              <div key={item.label} className="rounded-2xl bg-zinc-50 p-4">
+                <p className="text-xs text-zinc-500">{shortDemoLabel(item.label)}</p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900">{fmtR(item.value)}</p>
+                {item.deltaPct !== null && (
+                  <p className={`mt-0.5 text-xs font-medium ${item.deltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {item.deltaPct >= 0 ? "▲" : "▼"} {Math.abs(item.deltaPct).toFixed(1)}%
+                  </p>
+                )}
               </div>
             ))}
           </div>
           <p className="mt-3 text-sm leading-relaxed text-zinc-700">
-            {buildWhoIsWatchingExplanation(affinity.compareChannelCode, affinity.items)}
+            {buildInternalDemographicNarrative(showComparisonView, narrativeSignal, data.periodDemographics, fmtR, referenceLabel)}
           </p>
+          {!showComparisonView &&
+            buildDemographicHighlightsParagraph(data.demographicHighlights) && (
+              <p className="mt-2 text-sm leading-relaxed text-zinc-700">
+                {buildDemographicHighlightsParagraph(data.demographicHighlights)}
+              </p>
+            )}
         </div>
 
         {/* HOW DEEPLY? — 숫자 + 설명(사용자 지시). 기간 범위 선택 시 기간 평균으로 표시. */}
@@ -1834,7 +2123,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
-        {/* OPPORTUNITY? — daypart 기회 분석(사용자 지시) */}
+        {/* OPPORTUNITY?/WHAT TO SCHEDULE? — 사용자 지시(2026-08-21, 기능 #15-10): 오늘/어제/
+            당일 직접 지정(=showComparisonView가 false인 단일 일자 조회)에서만 표시한다. 기간
+            누적(WTD~YTD/지난 N일)이나 비교 분석 프리셋(DoD~YoY)에서는 "최근 1주/직전 동일 기간"
+            식의 트레일링 편성 기회 판단이 선택 기간과 의미가 어긋나므로 아예 숨긴다. */}
+        {!showComparisonView && (
+        <>
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className="mb-1 text-sm font-semibold text-zinc-500">OPPORTUNITY?</h2>
           <p className="mb-3 text-xs text-zinc-400">
@@ -1979,6 +2273,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </div>
           )}
         </div>
+        </>
+        )}
 
         {/* COMPARED WITH? — 재설계(사용자 지시): Competitive Pressure 제거, 순위 높은 순 +
             12주 평균 대비 등락 + 최고 성적 프로그램(시간대) 보고서. 기간 범위 선택 시 순위/시청률이
@@ -2038,22 +2334,19 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </>
           )}
 
-          {/* 동시간대 경쟁 프로그램 인사이트 — 여러 날을 합치면 같은 시간대에 서로 다른 날의
-              프로그램이 뒤섞여 표시돼 의미가 흐려지므로, 기간을 선택해도 의도적으로 선택 기간의
-              마지막 날짜(dateTo) 하루만 보여준다(사용자 지시 반영 설계 판단, 화면에 명시). */}
+          {/* 사용자 지시(2026-08-21, 기능 #15-11): 오늘/어제/당일 직접 지정에서만 "시간대별
+              경쟁 프로그램"(동시간대 겹치는 프로그램 비교, 하루 단위 개념이라 기간에는 의미가
+              없음)을 보여주고, 그 외 기간은 "동기간 경쟁사 주요 프로그램 리뷰"로 대체한다 —
+              상위 5개 채널로 좁힌 뒤 그 안에서 상위 7개 프로그램. */}
+          {!showComparisonView && (
           <div className="mt-6 border-t border-zinc-100 pt-5">
-            <h3 className="mb-1 text-xs font-semibold text-zinc-500">
-              {isRangeMode ? `${data.dateTo} 시간대별 경쟁 프로그램` : `${referenceLabel} 시간대별 경쟁 프로그램`}
-            </h3>
+            <h3 className="mb-1 text-xs font-semibold text-zinc-500">{referenceLabel} 시간대별 경쟁 프로그램</h3>
             <p className="mb-3 text-xs text-zinc-400">
               방영 시간이 겹치는 등록 경쟁채널 프로그램(시청률 상위 3개)을 나란히
               보여줍니다 — &ldquo;그 시간대에 경쟁채널이 무엇으로 잘했는가&rdquo;를 직접 비교할 수 있습니다.
-              {isRangeMode && " 여러 날을 합치면 시간대가 뒤섞여 항상 선택 기간의 마지막 날짜 하루만 보여줍니다."}
             </p>
             {competitorProgramOverlap.length === 0 ? (
-              <p className="text-sm text-zinc-400">
-                {isRangeMode ? `${data.dateTo}에 ` : `${referenceLabel} `}시간대가 겹치는 등록 경쟁채널 프로그램 데이터가 없습니다.
-              </p>
+              <p className="text-sm text-zinc-400">{referenceLabel} 시간대가 겹치는 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
             ) : (
               <div className="space-y-2">
                 {Object.entries(
@@ -2093,19 +2386,17 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
             )}
           </div>
+          )}
 
+          {!showComparisonView ? (
           <div className="mt-5 border-t border-zinc-100 pt-5">
-            <h3 className="mb-1 text-xs font-semibold text-zinc-500">
-              {isRangeMode ? "선택 기간 경쟁채널 TOP 5 프로그램" : `${referenceLabel} 경쟁채널 TOP 5 프로그램`}
-            </h3>
+            <h3 className="mb-1 text-xs font-semibold text-zinc-500">{referenceLabel} 경쟁채널 TOP 5 프로그램</h3>
             <p className="mb-3 text-xs text-zinc-400">
-              이 채널의 프로그램과 무관하게, 등록된 경쟁채널 중 {isRangeMode ? "선택 기간 중" : referenceLabel} 시청률이 가장
+              이 채널의 프로그램과 무관하게, 등록된 경쟁채널 중 {referenceLabel} 시청률이 가장
               높았던 방영 순위입니다(시장 전체 동향 참고용).
             </p>
             {competitorTopPrograms.length === 0 ? (
-              <p className="text-sm text-zinc-400">
-                {isRangeMode ? "선택 기간에 " : `${referenceLabel} `}등록 경쟁채널 프로그램 데이터가 없습니다.
-              </p>
+              <p className="text-sm text-zinc-400">{referenceLabel} 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
             ) : (
               <ol className="space-y-1.5 text-xs">
                 {competitorTopPrograms.map((p, i) => (
@@ -2113,7 +2404,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     <span className="w-4 shrink-0 text-right font-medium text-zinc-400">{i + 1}</span>
                     <span className="font-medium text-zinc-700">{p.competitor_name}</span>
                     <span className="text-zinc-500">
-                      {isRangeMode && `${p.broadcast_date} `}
                       {p.start_time.slice(0, 5)} {p.program_name}
                     </span>
                     <span className="ml-auto font-semibold text-zinc-800">{fmtR(p.rating)}</span>
@@ -2122,6 +2412,34 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </ol>
             )}
           </div>
+          ) : (
+          <div className="mt-5 border-t border-zinc-100 pt-5">
+            <h3 className="mb-1 text-xs font-semibold text-zinc-500">
+              {comparisonLabel ? `${comparisonLabel} 대비 이번 기간` : "선택 기간"} 동기간 경쟁사 주요 프로그램 리뷰
+            </h3>
+            <p className="mb-3 text-xs text-zinc-400">
+              이 기간 평균 시청률이 가장 높았던 등록 경쟁채널 상위 5개({periodWindowDays === 84 ? "" : `${data.dateFrom}~${data.dateTo}, `}
+              동기간) 안에서, 프로그램 단위 시청률 상위 7개를 뽑았습니다(시장 전체 동향 참고용).
+            </p>
+            {competitorPeriodTopPrograms.length === 0 ? (
+              <p className="text-sm text-zinc-400">이 기간 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
+            ) : (
+              <ol className="space-y-1.5 text-xs">
+                {competitorPeriodTopPrograms.map((p, i) => (
+                  <li key={i} className="flex items-center gap-2">
+                    <span className="w-4 shrink-0 text-right font-medium text-zinc-400">{i + 1}</span>
+                    <span className="font-medium text-zinc-700">{p.competitor_name}</span>
+                    <span className="text-[10px] text-zinc-400">(채널 {p.channel_rank}위, 기간 평균 {fmtR(p.channel_period_avg_rating)})</span>
+                    <span className="text-zinc-500">
+                      {p.broadcast_date} {p.start_time.slice(0, 5)} {p.program_name}
+                    </span>
+                    <span className="ml-auto font-semibold text-zinc-800">{fmtR(p.rating)}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+          )}
         </div>
       </div>
     </div>

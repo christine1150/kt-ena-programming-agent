@@ -13,6 +13,7 @@ type FeaturedItem = {
   broadcast_time: string | null;
   broadcast_start_date: string | null;
   broadcast_end_date: string | null;
+  expected_episode_count: number | null;
   programs: {
     id: string;
     canonical_name: string;
@@ -34,6 +35,7 @@ const emptyForm = {
   time: "",
   startDate: "",
   endDate: "",
+  expectedEpisodeCount: "",
 };
 
 export default function FeaturedContentManager() {
@@ -89,6 +91,7 @@ export default function FeaturedContentManager() {
       time: item.broadcast_time ?? "",
       startDate: item.broadcast_start_date ?? "",
       endDate: item.broadcast_end_date ?? "",
+      expectedEpisodeCount: item.expected_episode_count != null ? String(item.expected_episode_count) : "",
     });
   }
 
@@ -113,6 +116,7 @@ export default function FeaturedContentManager() {
       time: form.time || null,
       startDate: form.startDate || null,
       endDate: form.endDate || null,
+      expectedEpisodeCount: form.expectedEpisodeCount ? Number(form.expectedEpisodeCount) : null,
     };
 
     const res = editingId
@@ -223,7 +227,7 @@ export default function FeaturedContentManager() {
               그대로 보존하는 자리이고, 실제 화면 로직은 구조화된 필드(day/time/date)를 쓴다. */}
           <div>
             <p className="mb-1 text-xs font-medium text-zinc-500">① 첫 방송일자 (프로그램이 처음 편성된 날)</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <input
                 value={form.startDate}
                 onChange={(e) => setForm({ ...form, startDate: e.target.value })}
@@ -232,12 +236,22 @@ export default function FeaturedContentManager() {
               />
               <div>
                 <input
+                  value={form.expectedEpisodeCount}
+                  onChange={(e) => setForm({ ...form, expectedEpisodeCount: e.target.value })}
+                  type="number"
+                  placeholder="예상 총 회차"
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                />
+                <p className="mt-0.5 text-[11px] text-zinc-400">첫 방송일자·②요일과 함께 있으면 종영일 자동계산</p>
+              </div>
+              <div>
+                <input
                   value={form.endDate}
                   onChange={(e) => setForm({ ...form, endDate: e.target.value })}
                   type="date"
                   className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
                 />
-                <p className="mt-0.5 text-[11px] text-zinc-400">종영일(있는 경우만, 선택)</p>
+                <p className="mt-0.5 text-[11px] text-zinc-400">종영일(직접 입력 — 자동계산 있으면 자동계산 우선)</p>
               </div>
             </div>
           </div>
@@ -302,6 +316,7 @@ export default function FeaturedContentManager() {
                 <th className="pb-1 font-medium">분류</th>
                 <th className="pb-1 font-medium">첫 방송일자</th>
                 <th className="pb-1 font-medium">매주 반복 편성</th>
+                <th className="pb-1 font-medium">예상 회차 / 종영일</th>
                 <th className="pb-1 font-medium" />
               </tr>
             </thead>
@@ -316,6 +331,11 @@ export default function FeaturedContentManager() {
                     {item.broadcast_day_of_week && item.broadcast_day_of_week.length > 0
                       ? `매주 ${item.broadcast_day_of_week.join("·")} ${item.broadcast_time ? item.broadcast_time.slice(0, 5) : ""}`
                       : item.broadcast_schedule_text || "—"}
+                  </td>
+                  <td className="whitespace-nowrap py-1.5 text-zinc-600">
+                    {item.expected_episode_count ? `${item.expected_episode_count}회` : "—"}
+                    {" / "}
+                    {item.broadcast_end_date || "—"}
                   </td>
                   <td className="whitespace-nowrap py-1.5 text-right">
                     <button onClick={() => startEdit(item)} className="mr-2 text-zinc-500 hover:text-zinc-900">

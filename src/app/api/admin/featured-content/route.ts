@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
+import { computeExpectedEndDate } from "@/lib/featuredContentSchedule";
 
 export async function GET() {
   const admin = await getAdminSession();
@@ -12,7 +13,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("featured_content")
     .select(
-      "id, category, broadcast_schedule_text, broadcast_day_of_week, broadcast_time, broadcast_start_date, broadcast_end_date, programs(id, canonical_name, channel_id, channels(code, name))"
+      "id, category, broadcast_schedule_text, broadcast_day_of_week, broadcast_time, broadcast_start_date, broadcast_end_date, expected_episode_count, programs(id, canonical_name, channel_id, channels(code, name))"
     )
     .order("created_at", { ascending: false });
 
@@ -62,15 +63,24 @@ export async function POST(request: Request) {
     );
   }
 
+  // 사용자 지시(2026-08-21): 첫 방송일자 + 매주 반복 요일 + 예상 회차가 모두 있으면 끝
+  // 방송일자를 자동 계산해 넣는다(직접 입력한 endDate가 있어도 자동 계산이 우선 — "자동으로
+  // 정리"가 목적). 셋 중 하나라도 없으면 직접 입력한 endDate(있다면)를 그대로 쓴다.
+  const dayOfWeek = Array.isArray(body?.dayOfWeek) && body.dayOfWeek.length > 0 ? body.dayOfWeek : null;
+  const expectedEpisodeCount = body?.expectedEpisodeCount ? Number(body.expectedEpisodeCount) : null;
+  const startDate = body?.startDate || null;
+  const autoEndDate = computeExpectedEndDate(startDate, dayOfWeek, expectedEpisodeCount);
+
   const { error: featuredError } = await supabase.from("featured_content").upsert(
     {
       program_id: program.id,
       category,
       broadcast_schedule_text: body?.scheduleText || null,
-      broadcast_day_of_week: Array.isArray(body?.dayOfWeek) && body.dayOfWeek.length > 0 ? body.dayOfWeek : null,
+      broadcast_day_of_week: dayOfWeek,
       broadcast_time: body?.time || null,
-      broadcast_start_date: body?.startDate || null,
-      broadcast_end_date: body?.endDate || null,
+      broadcast_start_date: startDate,
+      broadcast_end_date: autoEndDate ?? (body?.endDate || null),
+      expected_episode_count: expectedEpisodeCount,
     },
     { onConflict: "program_id" }
   );

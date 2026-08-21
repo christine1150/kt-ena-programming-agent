@@ -109,6 +109,13 @@ export async function GET(request: Request) {
       periodDemographics: [],
       periodProgramMovers: [],
       demographicHighlights: [],
+      hourlyPatternPrior: [],
+      hourlyProgramTitlesPrior: [],
+      hasPriorRange: false,
+      competitorPeriodTopPrograms: [],
+      periodWindowDays: 84,
+      dowHourBlockPatternPrior: [],
+      topProgramsPrior: [],
     });
   }
   // 기존 코드/변수명과의 호환을 위해 asOfDate = dateTo로 둔다(모든 trailing-window 계산의 기준일).
@@ -143,23 +150,23 @@ export async function GET(request: Request) {
   // (1) hourlyPattern이 비어있을 때만 도는 skyUHD류 폴백 재조회, (2) compareChannelRow를
   // 먼저 알아야 하는 affinity 조회.
   const programTargetLabel = resolveProgramLevelTargetLabel(channel.primary_target);
-  const EXTRA_TARGET_LABELS_BY_KPI: Record<string, string[]> = {
-    "수도권 2049": ["전국 유료가구", "수도권 2039"],
-    "전국 유료가구": ["전국 5064"],
+  // 사용자 지시(2026-08-21): 채널별로 정확히 2개의 "비교 시청률"을 지정해주셨다(타깃 시청률이
+  // 맨 앞, 비교 시청률 2개가 뒤에 오는 배치) — ENA/ENA Play(개인2049/개인2039/유료방송가구),
+  // ENA Drama(개인2049/유료방송가구/여자3049), OLIFE·ONCE·ENA Story(유료방송가구/개인5064/
+  // 개인2049), skyUHD(유료방송가구만). 다만 DB를 직접 조회해 §1.3 타깃상세 시트에 실제로
+  // 프로그램 단위(시간대별) 데이터가 있는 조합만 반영했다(CLAUDE.md 원칙: 없는 데이터를 임의로
+  // 만들지 않음) — OLIFE/ONCE/ENA Story의 "개인2049"와 ENA Story의 "여자3049"는 그 시트 자체에
+  // 해당 컬럼이 없어(전국 스코프 채널이라 "수도권 2049"/"수도권 여3049" 데이터가 없음) 제외했다.
+  // ENA Drama는 지시하신 "여자3049"가 정확히 "수도권 여3049"로 실제 존재해 그대로 반영.
+  const EXTRA_TARGET_LABELS_BY_CHANNEL: Record<string, string[]> = {
+    ENA: ["수도권 2039", "전국 유료가구"],
+    ENA_PLAY: ["수도권 2039", "전국 유료가구"],
+    ENA_DRAMA: ["전국 유료가구", "수도권 여3049"],
+    OLIFE: ["전국 5064"], // "개인2049" 요청하셨으나 §1.3 시트에 없어 제외
+    ONCE: ["전국 5064"], // 위와 동일
+    ENA_STORY: ["전국 5064"], // "개인2049"·"여자3049" 요청하셨으나 §1.3 시트에 없어 제외
   };
-  // 사용자 지시(2026-08-20): 02~26시 그래프에서 "각 채널의 타깃 시청률"(위 programTargetLabel,
-  // 디폴트로 보임)에 더해 여러 개의 추가 타깃을 체크박스로 켜서 볼 수 있게 한다(skyUHD는 타깃
-  // 구분이 없는 채널이라 제외). 채널군마다 실제로 §1.3 타깃상세 시트에 그 타깃 컬럼이 있는지
-  // DB로 직접 확인한 뒤 목록을 정했다(존재하지 않는 조합을 임의로 만들지 않는다 — CLAUDE.md
-  // 원칙):
-  //  - ENA/ENA Play/ENA Drama(수도권 2049 KPI): 전국 유료가구 + 수도권 2039 (둘 다 그 채널들의
-  //    타깃상세 시트에 실제로 있는 컬럼 — 단, ENA Drama는 실측 결과 "수도권 2039" 컬럼 자체가
-  //    없어 체크박스를 눌러도 데이터가 없을 수 있다, 아래에서 자연히 빈 값으로 처리됨).
-  //  - OLIFE/ONCE/ENA Story(전국 유료가구 KPI): 전국 5064 — 사용자가 "수도권 2049, 수도권 5064"를
-  //    요청했지만, 실제 §1.3 타깃상세 시트(이 세 채널 공용)에는 "수도권" 스코프 타깃 자체가
-  //    없고("전국"만 있음) "전국 2049"/"전국 2039" 컬럼도 없다(DB 직접 조회로 확인, 2026-08-20) —
-  //    있는 것(전국 5064)만 추가하고, 없는 조합은 만들지 않는다(원인은 아래 CLAUDE.md 기록 참고).
-  const extraTargetLabels = channel.code === "SKYUHD" ? [] : (EXTRA_TARGET_LABELS_BY_KPI[programTargetLabel] ?? []);
+  const extraTargetLabels = EXTRA_TARGET_LABELS_BY_CHANNEL[channel.code] ?? [];
 
   // OPPORTUNITY?/WHAT TO SCHEDULE? 재설계(사용자 지시) — daypart별 우리 vs 경쟁채널 격차가
   // 보유 기간 전체(최대 1년) 대비 "최근 구간" 사이 어떻게 바뀌었는지. 기간을 선택했으면
@@ -169,6 +176,10 @@ export async function GET(request: Request) {
   const rangeDays = Math.round((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000) + 1;
   const recentDays = rangeDays > 1 ? rangeDays : 7;
   const fullWindowDays = Math.max(365, recentDays + 84);
+  // 사용자 지시(2026-08-21, 기능 #15-3/#15-4): "최근 12주 요일×시간대 히트맵"과 "TOP 20"은
+  // 오늘/어제/어제대비오늘(DoD, 7일 이하 분석)까지는 표본이 부족해 기존처럼 84일 고정 윈도우를
+  // 유지하고, 그보다 긴 기간을 선택하면 84일 고정 대신 그 선택 기간 전체를 윈도우로 쓴다.
+  const periodWindowDays = rangeDays > 7 ? rangeDays : 84;
 
   const isNationalScope = channel.market === "전국";
   const demographicTargets = isNationalScope
@@ -216,6 +227,16 @@ export async function GET(request: Request) {
   const twentyEightDaysAgoStr = twentyEightDaysAgo.toISOString().slice(0, 10);
   const affinityDateFrom = isRangeMode ? dateFrom : twentyEightDaysAgoStr;
 
+  // 사용자 지시(2026-08-21, 기능 #15-2): "대비" 분석(DoD/WoW/MoM/QoQ/YoY처럼 priorDateFrom/To가
+  // 있는 경우)은 시간대별 그래프를 "이번 기간"과 "전 기간" 두 패널로 나란히 비교할 수 있어야
+  // 한다 — priorDateFrom/priorDateTo가 있을 때만 전 기간 시간대별 데이터를 추가로 조회한다.
+  const hasPriorRange = !!(priorDateFrom && priorDateTo);
+  // 기능 #15-11: 오늘/어제/당일 직접 지정을 제외한 기간의 COMPARED WITH?는 "동기간 경쟁사 주요
+  // 프로그램 리뷰"로 — 상위 5개 채널 안에서 상위 7개 프로그램. DoD(어제 대비 오늘)처럼 "이번
+  // 기간"은 하루뿐이라도 비교 분석 프리셋(hasPriorRange)이면 기간 모드로 취급한다 — isRangeMode
+  // (dateFrom!==dateTo)만으로는 DoD를 놓친다.
+  const needsCompetitorPeriodTop = isRangeMode || hasPriorRange;
+
   const [
     trendRes,
     hourlyPatternRes,
@@ -236,6 +257,11 @@ export async function GET(request: Request) {
     narrativeRes,
     demographicHighlightsRes,
     compareChannelRowRes,
+    hourlyPatternPriorRes,
+    hourlyProgramTitlesPriorRes,
+    competitorPeriodTopProgramsRes,
+    dowHourBlockPatternPriorRes,
+    topProgramsPriorRes,
   ] = await Promise.all([
     // WHAT HAPPENED? — 채널 단위 랭킹 데이터로 DoD/WoW/MoM/QoQ/YoY/YTD
     supabase.rpc("get_rating_trend_summary", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: asOfDate }),
@@ -285,8 +311,8 @@ export async function GET(request: Request) {
     // 신규 섹션 — 최근 12주 월~일 × 3시간 단위 강세/약세 히트맵, 시청률 상위 콘텐츠 TOP 20.
     // skyUHD처럼 매일 갱신되지 않는 채널도 12주 누적으로 보면 패턴이 보인다(사용자 지시) —
     // 이 두 섹션은 기간 선택과 무관하게 항상 dateTo 기준 최근 12주(84일) 고정 윈도우다.
-    supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: 84 }),
-    supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: 84, p_limit: 20 }),
+    supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays }),
+    supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 20 }),
     supabase.rpc("get_channel_period_demographics", {
       p_channel_code: channel.code,
       p_demographic_labels: demographicTargets,
@@ -325,6 +351,23 @@ export async function GET(request: Request) {
         })
       : Promise.resolve({ data: [] as unknown[] }),
     supabase.from("channels").select("primary_target").eq("code", compareChannelCode).maybeSingle(),
+    hasPriorRange
+      ? supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: priorDateFrom, p_date_to: priorDateTo })
+      : Promise.resolve({ data: [] as unknown[] }),
+    hasPriorRange
+      ? supabase.rpc("get_hourly_program_titles", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: priorDateFrom, p_date_to: priorDateTo })
+      : Promise.resolve({ data: [] as unknown[] }),
+    needsCompetitorPeriodTop
+      ? supabase.rpc("get_competitor_period_top_programs", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_date_from: dateFrom, p_date_to: dateTo, p_channel_limit: 5, p_program_limit: 7 })
+      : Promise.resolve({ data: [] as unknown[] }),
+    // 기능 #15-3/#15-4: "대비" 분석(priorDateFrom/To)의 히트맵·TOP20도 전 기간 패널로 나란히
+    // 비교할 수 있도록 — 전 기간도 같은 길이이므로 periodWindowDays를 그대로 재사용한다.
+    hasPriorRange
+      ? supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: periodWindowDays })
+      : Promise.resolve({ data: [] as unknown[] }),
+    hasPriorRange
+      ? supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: periodWindowDays, p_limit: 20 })
+      : Promise.resolve({ data: [] as unknown[] }),
   ]);
 
   if (trendRes.error) {
@@ -450,5 +493,14 @@ export async function GET(request: Request) {
     affinity: { compareChannelCode, items: affinity },
     rootCauseAlert,
     opportunityAlert,
+    // 기능 #15-2: "대비" 분석 전 기간의 시간대별 그래프(이번 기간 패널 옆에 나란히).
+    hourlyPatternPrior: hourlyPatternPriorRes.data ?? [],
+    hourlyProgramTitlesPrior: hourlyProgramTitlesPriorRes.data ?? [],
+    hasPriorRange,
+    // 기능 #15-11: 기간 모드 COMPARED WITH?용 — 상위 5개 채널 안의 상위 7개 프로그램.
+    competitorPeriodTopPrograms: competitorPeriodTopProgramsRes.data ?? [],
+    periodWindowDays,
+    dowHourBlockPatternPrior: dowHourBlockPatternPriorRes.data ?? [],
+    topProgramsPrior: topProgramsPriorRes.data ?? [],
   });
 }

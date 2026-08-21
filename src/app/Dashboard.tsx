@@ -64,6 +64,12 @@ interface OriginalDailyItem {
   prior_occurrence_rating: number | null;
   prior_rating_change_pct: number | null;
   episode_number: number | null;
+  // 사용자 지시(2026-08-21, 기능 #2): 오리지널 드라마 1~2회 방송 시 직전에 끝난 오리지널
+  // 드라마의 전체 방영 기간 평균과 비교.
+  prev_drama_name: string | null;
+  prev_drama_avg_rating: number | null;
+  prev_drama_episode_count: number | null;
+  prev_drama_change_pct: number | null;
 }
 interface OriginalWeeklyItem {
   program_name: string;
@@ -149,6 +155,13 @@ interface KillerContentDaypartRow {
   household_avg_rating: number | null;
   household_baseline_avg_rating: number | null;
 }
+// 사용자 지시(2026-08-21): 채널별 인사이트 옆자리(당일 시청률 상위 3개 프로그램 간단 표)용.
+interface TodayTopProgramRow {
+  channelCode: string;
+  canonical_name: string;
+  rating: number;
+  start_time: string;
+}
 
 interface DashboardData {
   asOfDate: string;
@@ -157,6 +170,25 @@ interface DashboardData {
   killerContent: KillerContentRow[];
   narrativeSignals: ChannelNarrativeSignal[];
   killerContentDaypart: KillerContentDaypartRow[];
+  todayTopPrograms: TodayTopProgramRow[];
+  featuredContentSchedule: FeaturedContentScheduleRow[];
+}
+
+// 개발 단위 #1(사용자 지시 2026-08-21): "주요 콘텐츠 관리"에 등록된 편성 정보(방송 채널·매주
+// 반복 요일·시간·첫 방송일자~끝 방송일자)를 그대로 리포트하는 카드용 타입. 끝 방송일자는
+// 관리자가 직접 입력했거나(예상 회차 기반 자동계산 우선) 저장 시점에 이미 계산돼 있다.
+interface FeaturedContentScheduleRow {
+  title: string;
+  category: string;
+  channelCode: string | null;
+  channelName: string;
+  themeColor: string | null;
+  dayOfWeek: string[] | null;
+  time: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  expectedEpisodeCount: number | null;
+  isEnded: boolean;
 }
 
 // 사용자 지시: 인사이트·킬러콘텐츠는 이 순서로 언급 (ENA → ENA Play → ENA Drama → OLIFE → ONCE → ENA Story)
@@ -528,7 +560,7 @@ function buildOriginalInsight(
   if (item.pre_rerun_rating !== null && item.matched_rating !== null && item.pre_rerun_rating > 0) {
     const upliftPct = ((item.matched_rating - item.pre_rerun_rating) / item.pre_rerun_rating) * 100;
     bullets.push(
-      `리드인 효과: ${item.pre_rerun_start_time ? fmtTime(item.pre_rerun_start_time) : ""} 전주 회차 선행 재방(${formatRating(item.pre_rerun_rating)}%) 방영, 본방은 리드인 대비 ${Math.abs(upliftPct).toFixed(0)}% ${upliftPct >= 0 ? "높았음" : "낮았음"}`
+      `리드인 효과: ${item.pre_rerun_start_time ? fmtTime(item.pre_rerun_start_time) : ""} 전회 직전 재방(${formatRating(item.pre_rerun_rating)}%) 방영, 본방은 리드인 대비 ${Math.abs(upliftPct).toFixed(0)}% ${upliftPct >= 0 ? "높았음" : "낮았음"}`
     );
   }
 
@@ -553,6 +585,19 @@ function buildOriginalInsight(
     } else {
       bullets.push(`본방송 시청률 ${formatRating(item.matched_rating)}%${changeText ? `(${changeText})` : ""} 기록`);
     }
+  }
+
+  // ②-1 신규 오리지널 드라마(1~2회) — 직전에 끝난 오리지널 드라마 평균과 비교(사용자 지시,
+  // 2026-08-21, 기능 #2). 자기 자신의 과거 회차 평균(latest_n)이 부족하거나 없는 시기라
+  // 대신 채널 슬롯의 직전 작품과 비교한다.
+  if (item.episode_number !== null && item.episode_number <= 2 && item.prev_drama_name && item.prev_drama_avg_rating !== null) {
+    const changeText =
+      item.prev_drama_change_pct !== null
+        ? `${item.prev_drama_change_pct >= 0 ? "▲" : "▼"} ${Math.abs(item.prev_drama_change_pct).toFixed(1)}%`
+        : null;
+    bullets.push(
+      `신규 오리지널 드라마 초반 비교: 직전 작품 '${item.prev_drama_name}'의 방영 기간 평균(${formatRating(item.prev_drama_avg_rating)}%${item.prev_drama_episode_count ? `, ${item.prev_drama_episode_count}회분` : ""}) 대비 오늘 ${item.episode_number}회는 ${formatRating(item.matched_rating)}%${changeText ? `로 ${changeText} 변동` : ""}`
+    );
   }
 
   // ③ 본채널 당일 자체 재방 효과
@@ -627,7 +672,8 @@ function buildOriginalDailyBriefing(daily: OriginalDailyItem[]): string | null {
 function OriginalContentReportCard({ report }: { report: OriginalContentSummary }) {
   return (
     <div className={CARD}>
-      <h2 className="mb-4 text-sm font-semibold text-indigo-600">Original 성과</h2>
+      {/* 사용자 지시(2026-08-21): 카드 제목을 "주요 컨텐츠 리뷰"로. */}
+      <h2 className="mb-4 text-sm font-semibold text-indigo-600">주요 컨텐츠 리뷰</h2>
 
       {report.mode === "daily" ? (
         report.daily.length === 0 ? (
@@ -672,7 +718,7 @@ function OriginalContentReportCard({ report }: { report: OriginalContentSummary 
                             <div className="font-medium text-zinc-800">{h.matched_program_name}</div>
                             {h.pre_rerun_rating !== null && (
                               <div className="mt-1 text-[10px] text-zinc-400">
-                                선행재방 {h.pre_rerun_start_time ? fmtTime(h.pre_rerun_start_time) : ""} · {formatRating(h.pre_rerun_rating)}
+                                전회 직전 재방 {h.pre_rerun_start_time ? fmtTime(h.pre_rerun_start_time) : ""} · {formatRating(h.pre_rerun_rating)}
                               </div>
                             )}
                             {h.self_rerun_rating !== null && (
@@ -908,6 +954,114 @@ function KillerContentCard({ rows }: { rows: KillerContentDaypartRow[] }) {
   );
 }
 
+// 사용자 지시(2026-08-21): 채널별 인사이트 옆자리(기존 채널별 킬러 콘텐츠 자리)에 새로 배치 —
+// 최근 4주 평균이 아니라 "오늘 하루"의 채널별 시청률 상위 3개 프로그램만 간단한 표로. 채널명은
+// 채널별 인사이트와 동일하게 로고 색을 반영한 볼드로 표시(사용자 지시).
+function TodayTopProgramsCard({
+  rows,
+  themeColorByCode,
+}: {
+  rows: TodayTopProgramRow[];
+  themeColorByCode: Map<string, string | null>;
+}) {
+  const byChannel = new Map<string, TodayTopProgramRow[]>();
+  for (const r of rows) {
+    if (!byChannel.has(r.channelCode)) byChannel.set(r.channelCode, []);
+    byChannel.get(r.channelCode)!.push(r);
+  }
+
+  return (
+    <div className={CARD}>
+      <h2 className="mb-1 text-sm font-semibold text-indigo-600">오늘의 상위 프로그램</h2>
+      <p className="mb-4 text-xs text-zinc-400">오늘 하루 채널별 시청률 상위 3개 프로그램입니다.</p>
+      <div className="flex flex-col gap-3 text-sm">
+        {INSIGHT_CHANNEL_ORDER.map((code) => {
+          const list = byChannel.get(code) ?? [];
+          if (list.length === 0) return null;
+          return (
+            <div key={code}>
+              <span className="text-xs font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
+                {CHANNEL_NAME_BY_CODE[code]}
+              </span>
+              <table className="mt-1 w-full text-left text-xs">
+                <tbody>
+                  {list.map((p, i) => (
+                    <tr key={i} className="border-t border-zinc-50">
+                      <td className="w-4 py-1 text-zinc-400">{i + 1}</td>
+                      <td className="py-1 text-zinc-700">{p.canonical_name}</td>
+                      <td className="w-12 py-1 text-right text-zinc-400">{fmtTime(p.start_time)}</td>
+                      <td className="w-14 py-1 text-right font-semibold text-zinc-800">{formatRating(p.rating)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+        {rows.length === 0 && <p className="text-zinc-400">데이터가 아직 부족합니다.</p>}
+      </div>
+    </div>
+  );
+}
+
+// 개발 단위 #1(사용자 지시 2026-08-21): "첫 방송회차부터 마지막 방송회차까지의 방송 채널 및
+// 본 방송 시간을 기억하여 리포트" — 관리자 화면에서 계산·저장해둔 값을 그대로 나열만 한다(이
+// 카드는 새 계산을 하지 않음). 방영 종료된 항목은 흐리게, 방영 중인 항목이 위로 오도록 정렬.
+function FeaturedContentScheduleCard({ rows }: { rows: FeaturedContentScheduleRow[] }) {
+  const sorted = [...rows].sort((a, b) => Number(a.isEnded) - Number(b.isEnded));
+  return (
+    <div className={`${CARD} lg:col-span-2`}>
+      <h2 className="mb-1 text-sm font-semibold text-indigo-600">주요 콘텐츠 편성 리포트</h2>
+      <p className="mb-4 text-xs text-zinc-400">
+        관리자 화면 &quot;주요 콘텐츠 관리&quot;에 등록된 첫 방송일자·매주 반복 편성을 기준으로 정리했습니다.
+      </p>
+      {sorted.length === 0 ? (
+        <p className="text-sm text-zinc-400">등록된 주요 콘텐츠 편성 정보가 없습니다.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-zinc-400">
+                <th className="pb-1 font-medium">채널</th>
+                <th className="pb-1 font-medium">타이틀</th>
+                <th className="pb-1 font-medium">분류</th>
+                <th className="pb-1 font-medium">매주 반복 편성</th>
+                <th className="pb-1 font-medium">방영 기간</th>
+                <th className="pb-1 font-medium">상태</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((row, i) => (
+                <tr key={i} className={`border-t border-zinc-50 ${row.isEnded ? "opacity-50" : ""}`}>
+                  <td className="whitespace-nowrap py-1.5 font-bold" style={{ color: row.themeColor ?? undefined }}>
+                    {row.channelName}
+                  </td>
+                  <td className="py-1.5 text-zinc-700">{row.title}</td>
+                  <td className="whitespace-nowrap py-1.5 text-zinc-500">{row.category}</td>
+                  <td className="whitespace-nowrap py-1.5 text-zinc-600">
+                    {row.dayOfWeek && row.dayOfWeek.length > 0 ? `매주 ${row.dayOfWeek.join("·")} ${row.time ? fmtTime(row.time) : ""}` : "—"}
+                  </td>
+                  <td className="whitespace-nowrap py-1.5 text-zinc-600">
+                    {row.startDate ?? "—"} ~ {row.endDate ?? "방영중"}
+                    {row.expectedEpisodeCount ? ` (총 ${row.expectedEpisodeCount}회)` : ""}
+                  </td>
+                  <td className="whitespace-nowrap py-1.5">
+                    {row.isEnded ? (
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500">종영</span>
+                    ) : (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">방영중</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 사용자 지시(2026-08-20): 채널명을 앞에, 🔴🟢🟡 상태 라벨은 채널명 뒤에 — 라벨은 영어
 // (STRENGTHEN/WATCH/RISK) 대신 한국어로. 채널명 폰트 색은 그 채널 로고 색(bold)로 표시.
 // 사용자 지시(2026-08-20, 참고 이미지 반영): 한 줄 나열 대신 참고 이미지의 AI Insights 카드
@@ -1068,7 +1222,9 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
         {loading && !data && <p className="text-sm text-zinc-500">불러오는 중...</p>}
 
         {data && (
-          // 2열 × 3행 그리드(사용자 지시). 3행은 두 칸을 합쳐 빠른 요약 태그를 전체 폭으로 보여준다.
+          // 2열 × 3행 그리드(사용자 지시, 2026-08-21 재배치): R2 우측은 채널별 킬러 콘텐츠(4주
+          // 평균) 대신 당일 상위 프로그램 3개로, 킬러 콘텐츠는 R3에서 오늘의 빠른 요약 옆으로
+          // 옮겼다(둘 다 반쪽 폭).
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <ChannelStatusCard channels={byCode} />
             <OriginalContentReportCard report={data.originalContentReport} />
@@ -1077,16 +1233,22 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               signals={data.narrativeSignals}
               themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
             />
-            <KillerContentCard rows={data.killerContentDaypart} />
+            <TodayTopProgramsCard
+              rows={data.todayTopPrograms}
+              themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
+            />
 
-            <div className={`${CARD} lg:col-span-2`}>
+            <div className={CARD}>
               <h2 className="mb-3 text-sm font-semibold text-indigo-600">오늘의 빠른 요약</h2>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {buildQuickTags(data.channels).map((tag, i) => (
                   <InsightCard key={i} channelName={tag.channelName} themeColor={tag.themeColor} tone={tag.tone} text={tag.text} />
                 ))}
               </div>
             </div>
+            <KillerContentCard rows={data.killerContentDaypart} />
+
+            <FeaturedContentScheduleCard rows={data.featuredContentSchedule} />
           </div>
         )}
       </div>

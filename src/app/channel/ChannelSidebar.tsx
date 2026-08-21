@@ -41,13 +41,17 @@ export default function ChannelSidebar({ channels }: { channels: ChannelOption[]
           </Link>
         );
       })}
-      {/* 사용자 지시(2026-08-20): 좌측 하단에 1페이지(종합 대시보드)로 돌아가는 홈 아이콘 —
-          위 채널 아이콘들과 같은 모양·간격으로 통일감 있게, mt-auto로 사이드바 맨 아래 고정. */}
+      {/* 사용자 지시(2026-08-20, 2026-08-21 재조정): 1페이지(종합 대시보드)로 돌아가는 홈
+          아이콘 — 위 채널 아이콘들과 같은 모양·간격. 처음엔 mt-auto로 사이드바 맨 아래(뷰포트
+          하단)에 뒀는데, 채널 아이콘 7개 다음 화면 끝까지 큰 빈틈이 생겨 페이지마다 skyUHD와
+          거리가 달라 보이는 문제가 있었다(사용자 피드백) — mt-auto를 빼고 skyUHD 바로 아래에
+          자연스럽게 이어지도록 해, 모든 채널 페이지에서 항상 같은 위치가 되게 했다. sticky
+          사이드바라 스크롤해도 항상 보이는 것은 그대로 유지. */}
       <Link
         href="/"
         title="메인 화면으로"
         aria-label="메인 화면으로"
-        className="mt-auto flex w-16 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center transition hover:bg-white/70"
+        className="flex w-16 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center transition hover:bg-white/70"
       >
         <svg
           viewBox="0 0 24 24"

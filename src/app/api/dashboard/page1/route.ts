@@ -41,6 +41,12 @@ interface OriginalDailyRow {
   prior_occurrence_rating: number | null;
   prior_rating_change_pct: number | null;
   episode_number: number | null;
+  // 사용자 지시(2026-08-21, 기능 #2): 오리지널 드라마가 1~2회일 때 직전에 끝난 오리지널 드라마의
+  // 전체 방영 기간 평균과 비교(자기 자신은 과거 회차가 없거나 부족해 latest_n_*을 못 쓸 때 보완).
+  prev_drama_name: string | null;
+  prev_drama_avg_rating: number | null;
+  prev_drama_episode_count: number | null;
+  prev_drama_change_pct: number | null;
 }
 // 사용자 지시: SBS Plus는 ENA의 등록 경쟁채널이 아니라 ENA Drama의 등록 경쟁채널이라(§1.2 고정
 // 페어링), ENA 프로그램과 SBS Plus 동시방송을 비교하려면 ENA Drama 쪽 경쟁채널 데이터를 봐야
@@ -154,6 +160,15 @@ interface KillerContentDaypartRow {
   channel_avg_share_baseline: number | null;
   household_avg_rating: number | null;
   household_baseline_avg_rating: number | null;
+}
+// 사용자 지시(2026-08-21): 채널별 인사이트 옆자리(기존 채널별 킬러 콘텐츠 자리)에 "당일 시청률
+// 상위 프로그램 3개" 간단 표를 새로 배치 — 최근 4주 평균(killerContentDaypart)과 달리 오늘
+// 하루만 본다.
+interface TodayTopProgramRow {
+  channelCode: string;
+  canonical_name: string;
+  rating: number;
+  start_time: string;
 }
 
 export async function GET() {
@@ -471,7 +486,7 @@ export async function GET() {
     // ENA/ENA Play/ENA Drama만 — 유료가구 기여 프로그램 신호(최근 12주 대비). 필요 없는
     // 채널은 즉시 resolve되는 null Promise로 채워 Promise.all 배열 형태를 통일한다.
     const needsHousehold = code === "ENA" || code === "ENA_PLAY" || code === "ENA_DRAMA";
-    const [{ data }, householdData] = await Promise.all([
+    const [{ data, error }, householdData] = await Promise.all([
       supabase.rpc("get_channel_daily_narrative", {
         p_channel_code: code,
         p_target_label: targetLabel,
@@ -483,6 +498,14 @@ export async function GET() {
         ? supabase.rpc("get_channel_household_top_program", { p_channel_code: code, p_as_of_date: asOfDate }).then((r) => r.data)
         : Promise.resolve(null),
     ]);
+    // 사용자 피드백(2026-08-21): "0820자 채널별 인사이트에 ENA·OLIFE가 안 보인다" — 조회 자체는
+    // 정상인데(재현 확인 안 됨), 이 함수가 RPC 오류(타임아웃 등)를 조용히 삼켜 채널이 통째로
+    // 목록에서 사라지는 경로가 있었다. 데이터가 진짜 없는 경우(data가 빈 배열)와 오류로 못 가져온
+    // 경우를 구분해 후자는 서버 로그에 남긴다 — 재발해도 원인을 바로 알 수 있게.
+    if (error) {
+      console.error(`[page1] get_channel_daily_narrative(${code}) 실패: ${error.message}`);
+      return null;
+    }
     if (!data?.[0]) return null;
     const signal: ChannelNarrativeSignal = { channelCode: code, ...data[0] };
     if (needsHousehold) signal.household = householdData?.[0] ?? null;
@@ -524,6 +547,68 @@ export async function GET() {
   if (skyuhdSignalResult) narrativeSignals.push(skyuhdSignalResult);
   const killerContentDaypart: KillerContentDaypartRow[] = killerContentDaypartResults.flat();
 
+  // 8) 당일 시청률 상위 프로그램 3개(사용자 지시 2026-08-21) — 최근 4주 평균이 아니라 "오늘
+  // 하루"만 보는 간단 표. 새 SQL 함수 없이 채널별 타깃 시청률로 필터+정렬+상위 3개만 뽑는
+  // 단순 조회라 supabase-js 쿼리로 직접 처리(CLAUDE.md 원칙: 집계·계산이 없는 단순 조회는
+  // 기존 killer_content_v 조회처럼 SQL 함수 없이 바로 써도 무방).
+  const todayTopProgramsResults = await mapWithConcurrency(INSIGHT_CHANNEL_ORDER, 3, async (code) => {
+    const ch = channelByCode.get(code);
+    if (!ch?.primary_target) return [] as TodayTopProgramRow[];
+    const programTargetLabel = resolveProgramLevelTargetLabel(ch.primary_target);
+    const { data: targetRow } = await supabase.from("targets").select("id").eq("label", programTargetLabel).maybeSingle();
+    if (!targetRow) return [] as TodayTopProgramRow[];
+    const { data } = await supabase
+      .from("ratings")
+      .select("rating, start_time, programs(canonical_name)")
+      .eq("channel_id", ch.id)
+      .eq("target_id", targetRow.id)
+      .in("source_type", ["nielsen_daily", "skyuhd"])
+      .eq("broadcast_date", asOfDate)
+      .not("program_id", "is", null)
+      .not("rating", "is", null)
+      .order("rating", { ascending: false })
+      .limit(3);
+    return (data ?? []).map(
+      (row: { rating: number; start_time: string; programs: { canonical_name: string } | { canonical_name: string }[] | null }): TodayTopProgramRow => ({
+        channelCode: code,
+        canonical_name: Array.isArray(row.programs) ? (row.programs[0]?.canonical_name ?? "") : (row.programs?.canonical_name ?? ""),
+        rating: row.rating,
+        start_time: row.start_time,
+      })
+    );
+  });
+  const todayTopPrograms: TodayTopProgramRow[] = todayTopProgramsResults.flat();
+
+  // 9) 주요 콘텐츠 편성 리포트(개발 단위 #1, 사용자 지시 2026-08-21) — 관리자가 "주요 콘텐츠
+  //    관리"에 등록한 항목의 방송 채널·매주 반복 편성(요일·시간)·첫 방송일자~끝 방송일자(직접
+  //    입력 또는 예상 회차 기반 자동계산)를 그대로 모아서 보여준다. 새 계산 없이 featured_content
+  //    저장값을 조회만 한다(끝 방송일자 자동계산은 저장 시점에 API 라우트에서 이미 끝남).
+  const { data: featuredScheduleRows } = await supabase
+    .from("featured_content")
+    .select(
+      "category, broadcast_day_of_week, broadcast_time, broadcast_start_date, broadcast_end_date, expected_episode_count, programs(canonical_name, channels(code, name, theme_color))"
+    )
+    .not("broadcast_day_of_week", "is", null)
+    .order("broadcast_start_date", { ascending: false });
+  const featuredContentSchedule = (featuredScheduleRows ?? []).map((row) => {
+    const program = Array.isArray(row.programs) ? row.programs[0] : row.programs;
+    const channel = program?.channels ? (Array.isArray(program.channels) ? program.channels[0] : program.channels) : null;
+    const isEnded = !!row.broadcast_end_date && row.broadcast_end_date < asOfDate;
+    return {
+      title: program?.canonical_name ?? "—",
+      category: row.category,
+      channelCode: channel?.code ?? null,
+      channelName: channel?.name ?? "—",
+      themeColor: channel?.theme_color ?? null,
+      dayOfWeek: row.broadcast_day_of_week as string[] | null,
+      time: row.broadcast_time,
+      startDate: row.broadcast_start_date,
+      endDate: row.broadcast_end_date,
+      expectedEpisodeCount: row.expected_episode_count,
+      isEnded,
+    };
+  });
+
   return NextResponse.json({
     ok: true,
     asOfDate,
@@ -532,5 +617,7 @@ export async function GET() {
     killerContent: killerContent ?? [],
     narrativeSignals,
     killerContentDaypart,
+    todayTopPrograms,
+    featuredContentSchedule,
   });
 }
