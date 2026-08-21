@@ -2,6 +2,7 @@
 .env*
 node_modules
 Nielsen Data/
+OLIFE 편성 자료/
 채널기본정보.xlsx
 ~$*.xlsx
 
