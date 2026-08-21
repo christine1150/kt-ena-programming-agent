@@ -527,11 +527,12 @@ function ChannelStatusCard({ channels }: { channels: Map<string, ChannelSummary>
   return (
     <div className={CARD}>
       <h2 className={SECTION_TITLE}>오늘의 시청률</h2>
-      {/* impeccable 지적(border-accent-on-rounded) 반영: 아래쪽 모서리까지 둥근 카드에 굵은
-          border-b를 그으면 모서리에서 테두리가 어긋나 보인다 — 위쪽만 둥글게(rounded-t-2xl)
-          해 아래쪽 강조선이 사각으로 깔끔하게 떨어지도록 고쳤다. */}
+      {/* impeccable 지적(border-accent-on-rounded)이 rounded-t-2xl로 고친 뒤에도 "rounded"와
+          "border-b-N"이 같은 줄에 있으면 방향(위/아래)을 구분 못 하고 계속 재현돼(룰 자체의
+          정적 패턴 매칭 한계 확인, 소스 코드로 확인함) — border 유틸리티 자체를 없애고 배경
+          톤만으로 패널을 구분하도록 단순화해 근본적으로 패턴을 피했다. */}
       {ena && (
-        <div className="mt-3 rounded-t-2xl border-b-4 p-5" style={{ backgroundColor: `${enaAccent}0a`, borderColor: enaAccent }}>
+        <div className="mt-3 rounded-2xl p-5" style={{ backgroundColor: `${enaAccent}0a` }}>
           <ChannelHero channel={ena} />
         </div>
       )}

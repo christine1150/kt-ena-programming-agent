@@ -14,12 +14,6 @@
         "value": "from-indigo-50 gradient",
         "createdAt": "2026-08-21T12:34:50.138Z",
         "reason": "사용자 확인: Page 1 배경 파스텔 그라디언트(indigo-50/sky-50/violet-50)는 참고 이미지 기반으로 이전 세션에서 의도적으로 선택, 2026-08-21 대화에서 배경 유지로 재확인"
-      },
-      {
-        "rule": "border-accent-on-rounded",
-        "value": "border-b-4",
-        "createdAt": "2026-08-21T13:03:44.486Z",
-        "reason": "확인: rounded-t-2xl(위쪽만 둥글게)로 이미 고쳐서 아래쪽 border-b-4가 사각 모서리와 맞물려 실제로는 문제 없음 — 룰이 rounded-t-*까지는 구분 못해 오탐"
       }
     ]
   }
