@@ -1872,11 +1872,15 @@ function buildScheduleRecommendationNote(
     // (confidence가 strong/mild) 항상 가장 약한 시간대를 짚어 판단을 준다. strong(중앙값 대비
     // 뚜렷하게 낮음)은 이동/교체를 권장하고, mild(상대적으로 가장 약함 정도)는 참고 수준으로
     // 톤을 낮춘다. 문장은 짧게(사용자 지시: "말이 너무 기므로 줄여줘").
+    // 사용자 지시(2026-08-21, 정정): "중앙값 대비"라는 표현이 무슨 뜻인지 이해하기 어렵다 —
+    // 여러 시간대에 걸쳐 방영되는 프로그램의 "평소(다른 시간대들의 중간값) 점유율"을 뜻하는데,
+    // 통계 용어 없이 "이 프로그램의 다른 시간대 대비"로 풀어 쓴다(계산 방식 자체는 그대로,
+    // 극단값에 흔들리지 않는 중앙값 기준 유지 — 표현만 쉽게).
     if (confidence === "strong" && weakHour !== null) {
-      return `최근 ${weeks}주 분석 결과 ${weakHour}시대 '${programName}'${josaEunNeun(programName)} 효율이 낮음(중앙값 대비 ${weakShareVsMedianPct?.toFixed(0)}%, ${weakAirCount}회) — 그 시간대만 이동/교체 검토`;
+      return `최근 ${weeks}주 분석 결과 ${weakHour}시대 '${programName}'${josaEunNeun(programName)} 이 프로그램의 다른 시간대들보다 점유율이 뚜렷이 낮음(평소의 ${weakShareVsMedianPct?.toFixed(0)}% 수준, ${weakAirCount}회) — 그 시간대만 이동/교체 검토`;
     }
     if (confidence === "mild" && weakHour !== null) {
-      return `최근 ${weeks}주 기준 ${weakHour}시대가 '${programName}'의 시간대 중 상대적으로 가장 약함(중앙값 대비 ${weakShareVsMedianPct?.toFixed(0)}%) — 우선 점검 대상으로 참고`;
+      return `최근 ${weeks}주 기준 ${weakHour}시대가 '${programName}'의 여러 방영 시간대 중 상대적으로 가장 약함(평소의 ${weakShareVsMedianPct?.toFixed(0)}% 수준) — 우선 점검 대상으로 참고`;
     }
     return "여러 시간대 반복 편성 프로그램으로, 전체보다 시간대별 판단이 필요하나 뚜렷한 저효율 시간대는 없음";
   }
