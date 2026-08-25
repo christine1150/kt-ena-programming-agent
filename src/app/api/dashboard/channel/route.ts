@@ -106,6 +106,8 @@ export async function GET(request: Request) {
       daypartOpportunity: [],
       hourBlockOpportunity: [],
       ytdAvgRating: null,
+      top3Programs: [],
+      enaOriginalDaily: [],
       dowHourBlockPattern: [],
       topPrograms: [],
       periodDemographics: [],
@@ -586,6 +588,56 @@ export async function GET(request: Request) {
     );
   }
 
+  // 사용자 지시(2026-08-25): "ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널에서
+  // 매우 중요하므로 오늘의 브리핑 첫 문장으로" — Page 1과 같은 get_original_content_daily를
+  // ENA 채널·단일 일자 조회일 때만 호출해 필요한 필드만 뽑는다(기간 범위 조회는 "오늘"이라는
+  // 개념이 없어 제외 — 화이트리스트 자체가 요일 단위라 기간 평균과는 맞지 않음).
+  // 사용자 지시(2026-08-25): "오늘의 브리핑" 상단 키워드에 1위만 있던 걸 1~3위를 순위 언급
+  // 없이 순서대로 나열 — Page 1의 todayTopPrograms와 같은 방식(단순 rating desc, limit 3).
+  let top3Programs: { canonical_name: string; rating: number }[] = [];
+  if (!isRangeMode) {
+    const { data: targetRow } = await supabase.from("targets").select("id").eq("label", programTargetLabel).maybeSingle();
+    if (targetRow) {
+      const { data: top3Rows } = await supabase
+        .from("ratings")
+        .select("rating, programs(canonical_name)")
+        .eq("channel_id", channel.id)
+        .eq("target_id", targetRow.id)
+        .in("source_type", ["nielsen_daily", "skyuhd"])
+        .eq("broadcast_date", dateTo)
+        .not("program_id", "is", null)
+        .not("rating", "is", null)
+        .order("rating", { ascending: false })
+        .limit(3);
+      top3Programs = (top3Rows ?? []).map((r: { rating: number; programs: { canonical_name: string } | { canonical_name: string }[] | null }) => ({
+        canonical_name: Array.isArray(r.programs) ? (r.programs[0]?.canonical_name ?? "") : (r.programs?.canonical_name ?? ""),
+        rating: r.rating,
+      }));
+    }
+  }
+
+  let enaOriginalDaily: {
+    matched_program_name: string;
+    matched_rating: number | null;
+    matched_household_rating: number | null;
+    retention_pct: number | null;
+    rerun_channel_code: string | null;
+    self_rerun_rating: number | null;
+  }[] = [];
+  if (channel.code === "ENA" && !isRangeMode) {
+    const { data: originalDaily } = await supabase.rpc("get_original_content_daily", { p_as_of_date: dateTo });
+    enaOriginalDaily = (originalDaily ?? [])
+      .filter((r: { broadcast_channel_code: string }) => r.broadcast_channel_code === "ENA")
+      .map((r: { matched_program_name: string; matched_rating: number | null; matched_household_rating: number | null; retention_pct: number | null; rerun_channel_code: string | null; self_rerun_rating: number | null }) => ({
+        matched_program_name: r.matched_program_name,
+        matched_rating: r.matched_rating,
+        matched_household_rating: r.matched_household_rating,
+        retention_pct: r.retention_pct,
+        rerun_channel_code: r.rerun_channel_code,
+        self_rerun_rating: r.self_rerun_rating,
+      }));
+  }
+
   return NextResponse.json({
     ok: true,
     channel: {
@@ -618,6 +670,8 @@ export async function GET(request: Request) {
     hourlyProgramTitles: hourlyProgramTitles ?? [],
     targetAchievement,
     narrativeSignal,
+    top3Programs,
+    enaOriginalDaily,
     demographicHighlights,
     compareChannelCode,
     competitorInsightReport: competitorInsightReport ?? [],

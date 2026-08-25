@@ -11,6 +11,7 @@ import { formatDateWithDow } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun, josaEulReul } from "@/lib/josa";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import type { EvidenceAnswer as AskAnswer } from "@/lib/intent/types";
+import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from "@/lib/enaOriginalHighlight";
 
 interface TrendRow {
   period: string;
@@ -468,6 +469,10 @@ interface ChannelData {
   hourBlockOpportunity: HourBlockOpportunityRow[];
   // 사용자 지시(2026-08-25): TOP 20 막대 색(로고색/검정) 기준 — 올해 1/1~분석일 채널 평균.
   ytdAvgRating: number | null;
+  // 사용자 지시(2026-08-25): 오늘의 브리핑 첫 문장(ENA 채널 페이지·단일 일자 조회일 때만 채워짐).
+  enaOriginalDaily: EnaOriginalHighlightItem[];
+  // 사용자 지시(2026-08-25): 오늘의 브리핑 상단 키워드 1~3위 나열용(단일 일자 조회일 때만 채워짐).
+  top3Programs: { canonical_name: string; rating: number }[];
   affinity: { compareChannelCode: string; items: { targetLabel: string; result: AffinityResult | null }[] };
   rootCauseAlert: RootCauseAlert | null;
   opportunityAlert: OpportunityAlert | null;
@@ -1060,6 +1065,10 @@ function buildBriefingReport(
     }
 
     const sentences: string[] = [];
+    // 사용자 지시(2026-08-25): ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널에서
+    // 매우 중요하므로 그 성과를 오늘의 브리핑 첫 문장으로.
+    const enaLeadSentence = buildEnaOriginalHighlightSentence(data.enaOriginalDaily, fmtR);
+    if (enaLeadSentence) sentences.push(enaLeadSentence);
     sentences.push(`${refLabel} ${data.channel.name} 시청률은 ${fmtR(current.rating)}입니다.`);
 
     if (s.rating_delta_pct !== null) {
@@ -2763,14 +2772,26 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   피크 {narrativeSignal.today_peak_hour}시대 {fmtR(narrativeSignal.today_peak_rating)}
                 </span>
               )}
-              {narrativeSignal.top_program_name && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold"
-                  style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}
-                >
-                  오늘 1위 {narrativeSignal.top_program_name} {fmtR(narrativeSignal.top_program_rating)}
-                </span>
-              )}
+              {/* 사용자 지시(2026-08-25): "오늘 1위 OOO" 배지 하나 대신, 1~3위를 순위 언급 없이
+                  프로그램명·시청률 순으로 나열(순서 자체가 순위를 나타냄). */}
+              {data.top3Programs.length > 0
+                ? data.top3Programs.map((p, i) => (
+                    <span
+                      key={`${p.canonical_name}-${i}`}
+                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold"
+                      style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}
+                    >
+                      {p.canonical_name} {fmtR(p.rating)}
+                    </span>
+                  ))
+                : narrativeSignal.top_program_name && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold"
+                      style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}
+                    >
+                      {narrativeSignal.top_program_name} {fmtR(narrativeSignal.top_program_rating)}
+                    </span>
+                  )}
             </div>
           )}
           <div className="flex flex-col gap-3">

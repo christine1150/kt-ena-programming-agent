@@ -8,6 +8,7 @@ import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDowDots } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun } from "@/lib/josa";
+import { buildEnaOriginalHighlightSentence as buildEnaOriginalHighlightSentenceShared } from "@/lib/enaOriginalHighlight";
 
 interface ChannelSummary {
   code: string;
@@ -1351,27 +1352,10 @@ function MiniDeltaBar({ pct }: { pct: number }) {
 }
 
 // 사용자 지시(2026-08-25): "ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널에서 매우
-// 중요하므로 그것이 ENA 채널 인사이트의 첫 문장으로" — Page 1 채널별 인사이트·Page 2 오늘의
-// 브리핑이 공유하는 문장 조립 함수. 이미 계산된 값(matched_rating/matched_household_rating/
-// retention_pct/self_rerun_rating)만 그대로 인용한다(새 계산 없음). 오리지널 콘텐츠가 없는 날은
-// null(억지로 만들지 않음).
-function buildEnaOriginalHighlightSentence(enaDaily: { matched_program_name: string; matched_rating: number | null; matched_household_rating: number | null; retention_pct: number | null; rerun_channel_code: string | null; self_rerun_rating: number | null }[]): string | null {
-  const withRating = enaDaily.filter((d) => d.matched_rating !== null);
-  if (withRating.length === 0) return null;
-  const parts = withRating.map((d) => {
-    const hh = d.matched_household_rating !== null ? `(가구 ${formatRating(d.matched_household_rating)})` : "";
-    // 사용자 지시(2026-08-25): "ENA Play/ENA Drama의 동시방영·직재방·24~36시간 내 재방송 효율"도
-    // 항상 짚는다 — 타 채널 직후재방(retention_pct)이 있으면 그것을, 없으면 본채널 당일 자체
-    // 재방 유지율을 대신 보여준다(둘 다 없으면 재방 관련 절 생략).
-    const rerunNote =
-      d.retention_pct !== null && d.rerun_channel_code
-        ? ` — ${CHANNEL_NAME_BY_CODE[d.rerun_channel_code] ?? d.rerun_channel_code} 재방 유지율 ${d.retention_pct.toFixed(1)}%`
-        : d.self_rerun_rating !== null && d.matched_rating !== null && d.matched_rating > 0
-          ? ` — 자체 재방 유지율 ${((d.self_rerun_rating / d.matched_rating) * 100).toFixed(1)}%`
-          : "";
-    return `'${d.matched_program_name}' 수2049 ${formatRating(d.matched_rating)}${hh}${rerunNote}`;
-  });
-  return `오늘 오리지널·독점 콘텐츠 성과: ${parts.join(", ")}.`;
+// 중요하므로 그것이 ENA 채널 인사이트의 첫 문장으로" — src/lib/enaOriginalHighlight.ts로
+// 옮겨 Page 1·Page 2가 같은 함수를 공유(문구가 두 곳에서 갈라지지 않도록).
+function buildEnaOriginalHighlightSentence(enaDaily: Parameters<typeof buildEnaOriginalHighlightSentenceShared>[0]): string | null {
+  return buildEnaOriginalHighlightSentenceShared(enaDaily, formatRating);
 }
 
 // ③ 채널별 인사이트(줄글) — R2C1. 사용자 지시(2026-08-20): 채널명은 그 채널 로고의 메인
