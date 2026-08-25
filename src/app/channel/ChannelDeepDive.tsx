@@ -466,12 +466,18 @@ interface ChannelData {
   competitorTopPrograms: CompetitorTopProgramRow[];
   daypartOpportunity: DaypartOpportunityRow[];
   hourBlockOpportunity: HourBlockOpportunityRow[];
+  // 사용자 지시(2026-08-25): TOP 20 막대 색(로고색/검정) 기준 — 올해 1/1~분석일 채널 평균.
+  ytdAvgRating: number | null;
   affinity: { compareChannelCode: string; items: { targetLabel: string; result: AffinityResult | null }[] };
   rootCauseAlert: RootCauseAlert | null;
   opportunityAlert: OpportunityAlert | null;
   trendHighlight: TrendHighlight | null;
   competitorScheduleChanges: CompetitorScheduleChange[];
-  targetAchievement: { achievement_pct: number | null; gap: number | null; target_rating: number | null } | null;
+  // 사용자 지시(2026-08-25): 헤더에 (해당일자순위/목표순위)를 표시하려면 목표순위가 필요 —
+  // get_target_achievement가 이미 내려주는 target_rank(Page 1도 같은 RPC에서 이 필드를 씀,
+  // src/app/api/dashboard/page1/route.ts)를 타입에만 추가로 노출(새 쿼리 없음, 자유 텍스트라
+  // 숫자로 못 읽으면 null 처리는 parseTargetRankNum과 동일한 방식으로 렌더링부에서 처리).
+  targetAchievement: { achievement_pct: number | null; gap: number | null; target_rating: number | null; target_rank: string | null } | null;
   narrativeSignal: NarrativeSignal | null;
   demographicHighlights: DemographicHighlightRow[];
   // 기능 #15-2(2026-08-21): "대비" 분석(priorDateFrom/To가 있는 프리셋)의 전 기간 시간대별 그래프.
@@ -1986,12 +1992,35 @@ function DowHourBlockTable({
 // 인포그래픽 제안(사용자 지시 2026-08-22, Page 2 전체 구현): TOP 20 표에 미니 막대 — 목록 안
 // 최댓값 기준으로 상대 크기를 시각화(값이 없는(prior) 기간 데이터 요구 없이 이미 있는 avg_rating만
 // 재사용, Page 1의 MiniPctlBar와 같은 패턴).
-function TopProgramMiniBar({ value, max, accentColor, isEnaStory }: { value: number | null; max: number; accentColor: string; isEnaStory?: boolean }) {
+function TopProgramMiniBar({
+  value,
+  max,
+  accentColor,
+  isEnaStory,
+  ytdAvgRating,
+}: {
+  value: number | null;
+  max: number;
+  accentColor: string;
+  isEnaStory?: boolean;
+  // 사용자 지시(2026-08-25): 프로그램 시청률이 올해 1/1~분석일 채널 평균보다 높으면 채널
+  // 로고 색, 낮으면 검정색으로 막대 색을 구분(값이 없으면 기존처럼 항상 로고 색).
+  ytdAvgRating?: number | null;
+}) {
   if (value === null || max <= 0) return null;
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
-  const barColor = isEnaStory ? enaStoryGradientColor(pct / 100) : accentColor;
+  const barColor = isEnaStory
+    ? enaStoryGradientColor(pct / 100)
+    : ytdAvgRating !== null && ytdAvgRating !== undefined
+      ? value >= ytdAvgRating
+        ? accentColor
+        : "#18181b"
+      : accentColor;
   return (
-    <span className="inline-block h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-zinc-100" title={`목록 내 최고 대비 ${pct.toFixed(0)}%`}>
+    <span
+      className="inline-block h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-zinc-100"
+      title={`목록 내 최고 대비 ${pct.toFixed(0)}%${ytdAvgRating !== null && ytdAvgRating !== undefined ? ` · 올해 평균(${fmt(ytdAvgRating)}) ${value >= ytdAvgRating ? "이상" : "미만"}` : ""}`}
+    >
       <span className="block h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: barColor }} />
     </span>
   );
@@ -2002,12 +2031,14 @@ function TopProgramListItems({
   indexOffset = 0,
   accentColor = "#71717a",
   isEnaStory,
+  ytdAvgRating,
 }: {
   rows: TopProgramRow[];
   fmtR: (v: number | null) => string;
   indexOffset?: number;
   accentColor?: string;
   isEnaStory?: boolean;
+  ytdAvgRating?: number | null;
 }) {
   const shareOutliers = findShareOutliers(rows);
   const maxRating = Math.max(0.0001, ...rows.map((r) => r.avg_rating ?? 0));
@@ -2025,7 +2056,7 @@ function TopProgramListItems({
                 {p.most_common_start_hour !== null ? ` · 주로 ${p.most_common_start_hour}시` : ""}
               </span>
               <span className="shrink-0 text-sm text-zinc-400">{p.air_count}회 방영</span>
-              <TopProgramMiniBar value={p.avg_rating} max={maxRating} accentColor={accentColor} isEnaStory={isEnaStory} />
+              <TopProgramMiniBar value={p.avg_rating} max={maxRating} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={ytdAvgRating} />
               <span className="w-16 shrink-0 text-right font-semibold text-zinc-900">{fmtR(p.avg_rating)}</span>
             </div>
             {shareRank !== undefined && (
@@ -2101,6 +2132,7 @@ function TopProgramsList({
   shareTop,
   accentColor,
   isEnaStory,
+  ytdAvgRating,
 }: {
   rows: TopProgramRow[];
   fmtR: (v: number | null) => string;
@@ -2108,6 +2140,7 @@ function TopProgramsList({
   shareTop?: TopShareProgramRow[];
   accentColor?: string;
   isEnaStory?: boolean;
+  ytdAvgRating?: number | null;
 }) {
   if (rows.length === 0) {
     return <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>;
@@ -2115,7 +2148,7 @@ function TopProgramsList({
   if (!isSkyUhd) {
     return (
       <div>
-        <ol className="space-y-1 text-sm">{<TopProgramListItems rows={rows} fmtR={fmtR} accentColor={accentColor} isEnaStory={isEnaStory} />}</ol>
+        <ol className="space-y-1 text-sm">{<TopProgramListItems rows={rows} fmtR={fmtR} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={ytdAvgRating} />}</ol>
         {shareTop && <TopShareOutsideList shareTop={shareTop} topRows={rows} fmtR={fmtR} />}
       </div>
     );
@@ -2124,11 +2157,11 @@ function TopProgramsList({
   const lowSampleRows = rows.filter((p) => p.air_count < 5);
   return (
     <div>
-      <ol className="space-y-1 text-sm">{<TopProgramListItems rows={mainRows} fmtR={fmtR} accentColor={accentColor} isEnaStory={isEnaStory} />}</ol>
+      <ol className="space-y-1 text-sm">{<TopProgramListItems rows={mainRows} fmtR={fmtR} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={ytdAvgRating} />}</ol>
       {lowSampleRows.length > 0 && (
         <div className="mt-3 border-t border-dashed border-zinc-200 pt-3">
           <p className="mb-1 text-sm text-zinc-400">표본 부족(편성 5회 미만) — 참고용으로만 활용하세요.</p>
-          <ol className="space-y-1 text-sm">{<TopProgramListItems rows={lowSampleRows} fmtR={fmtR} indexOffset={mainRows.length} accentColor={accentColor} isEnaStory={isEnaStory} />}</ol>
+          <ol className="space-y-1 text-sm">{<TopProgramListItems rows={lowSampleRows} fmtR={fmtR} indexOffset={mainRows.length} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={ytdAvgRating} />}</ol>
         </div>
       )}
       {shareTop && <TopShareOutsideList shareTop={shareTop} topRows={rows} fmtR={fmtR} />}
@@ -2618,9 +2651,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <p className="text-3xl font-semibold">
                   {showComparisonView ? fmtR(data.periodReport?.avg_rating ?? null) : fmtR(current?.rating ?? null)}
                   {/* 사용자 지시(2026-08-21): 당일 시청률 옆에 그날 등위도 괄호로 — 단일 일자
-                      조회일 때만(기간 평균에는 등위 개념이 없음). */}
+                      조회일 때만(기간 평균에는 등위 개념이 없음). 사용자 재지시(2026-08-25):
+                      Page 1 채널 타일과 같은 "(해당일자순위/목표순위)" 형식으로, 볼드 없이. */}
                   {!showComparisonView && narrativeSignal?.today_rank != null && (
-                    <span className="ml-1.5 text-lg font-normal text-white/70">({narrativeSignal.today_rank}위)</span>
+                    <span className="ml-1.5 text-lg font-normal text-white/70">
+                      ({narrativeSignal.today_rank}/{data.targetAchievement?.target_rank ? parseInt(data.targetAchievement.target_rank, 10) || "-" : "-"})
+                    </span>
                   )}
                 </p>
                 {showComparisonView && <p className="text-sm text-white/70">{isComparisonPreset ? "이번 기간 평균" : "선택 기간 평균"}</p>}
@@ -3120,11 +3156,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
-                  <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} />
+                  <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
                 </div>
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
-                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={priorTopSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} />
+                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={priorTopSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
                 </div>
               </div>
               {buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior) && (
@@ -3135,7 +3171,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>
           ) : (
             <>
-              <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} />
+              <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
                 <p className="mt-3 text-base leading-relaxed text-zinc-700">
                   위 상위 콘텐츠들과 같은 기간 기준으로 볼 때,
@@ -3660,9 +3696,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <p className="mb-3 text-base leading-relaxed text-zinc-700">{buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD")}</p>
           {/* 사용자 지시(2026-08-25, 원 명세 감사 후속: 9번 Slot Intelligence 8 Blocks) — 위 4구간
               판정/서술(daypartOpportunity, buildOpportunityNarrative 등)은 그대로 두고, 3시간
-              단위 8구간 상세를 추가 정보로만 덧붙인다(기본 접힘 — 기존 레이아웃에 부담 없이). */}
+              단위 8구간 상세를 추가 정보로 덧붙인다. 사용자 재지시(2026-08-25): 기본 접힘(details
+              닫힘)이라 "8구간 상세"라는 제목만 보이고 실제 8행 표는 클릭 전까진 안 보여서 "라벨은
+              8구간인데 표는 4구간"처럼 보였다 — 기본 펼침(open)으로 바꿔 항상 바로 보이게 한다. */}
           {hourBlockOpportunity.length > 0 && (
-            <details className="mb-3 rounded-2xl bg-zinc-50 p-4">
+            <details className="mb-3 rounded-2xl bg-zinc-50 p-4" open>
               <summary className="cursor-pointer text-sm font-medium text-zinc-600">
                 8구간 상세(3시간 단위, 원 명세 &quot;Slot Intelligence&quot; 보강)
               </summary>
@@ -3959,20 +3997,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               함께 보여줍니다.
             </p>
           )}
-          {/* 사용자 지시(2026-08-25, 감사 후속): 등록 경쟁채널에 우리 채널 KPI 타깃 데이터가 없으면
-              SQL이 조용히 다른 타깃으로 대체해왔다(버그 수정, 2026-08-25) — 그 대체가 지금도
-              발생 중이면(대부분의 날엔 정상 타깃으로 잡히지만, 표본이 부족한 날엔 여전히 발동될
-              수 있음) 화면에 명시해 오해를 막는다. */}
-          {!(code === "SKYUHD" && marketYtdCompetitorSnapshot.length > 0) &&
-            competitorInsightReport.length > 0 &&
-            competitorInsightReport[0].resolved_target_label !== null &&
-            competitorInsightReport[0].resolved_target_label !== resolveProgramLevelTargetLabel(channel.primaryTarget) && (
-              <p className="mb-3 rounded-xl bg-amber-50 p-2.5 text-sm text-amber-700">
-                ⚠ 등록 경쟁채널에 이 채널의 KPI 타깃({resolveProgramLevelTargetLabel(channel.primaryTarget)}) 데이터가 없어,
-                오늘은 대신 &apos;{competitorInsightReport[0].resolved_target_label}&apos; 타깃 기준으로 비교합니다(위 표의 채널
-                시청률만 해당 — 아래 &apos;{channel.name}&apos; 행은 KPI 타깃 그대로).
-              </p>
-            )}
+          {/* 사용자 지시(2026-08-25): "개인2049와 수도권2049가 같으므로" 이 안내 문구를 빼달라는
+              요청 — 검증된 동의어(랭킹 시트 '개인2049' = 타깃상세 시트 '수도권 2049')로 정상
+              대체되는 흔한 경우까지 매번 경고로 보일 필요는 없다는 판단. resolved_target_label
+              자체는 계속 반환되니(SQL) 필요해지면 다시 조건부로 노출할 수 있다. */}
           {code === "SKYUHD" && marketYtdCompetitorSnapshot.length > 0 ? (
             // 사용자 지시(2026-08-21): skyUHD는 §1.2 경쟁채널 시트 자체가 없는 수기 업로드
             // 채널이라, 일별 경쟁채널 비교(get_competitor_insight_report)는 등록 경쟁채널 5개 중
@@ -4054,7 +4082,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     today_rating: ourRating,
                     // 기간 모드는 기간 평균이라 단일 순위 개념이 없어 비운다(단일 일자만 표기).
                     today_rank: isRangeMode ? null : (narrativeSignal?.today_rank ?? null),
-                    delta_pct: null,
+                    // 사용자 지시(2026-08-25): 경쟁채널과 마찬가지로 우리 채널도 "12주 평균 대비"
+                    // 등락을 표시 — data.periodReport.baseline_change_pct가 이미 같은 개념(최근
+                    // 12주/84일 평균 대비, 단일 일자든 기간 평균이든 periodReport 자체가 그때그때
+                    // 맞춰 계산)이라 새 계산 없이 그대로 쓴다.
+                    delta_pct: data.periodReport?.baseline_change_pct ?? null,
                     top_program_name: isRangeMode ? (ourTopProgram?.canonical_name ?? null) : (narrativeSignal?.top_program_name ?? null),
                     top_program_start_time: isRangeMode ? null : (narrativeSignal?.top_program_start_time ?? null),
                     top_program_rating: isRangeMode ? (ourTopProgram?.period_avg_rating ?? null) : (narrativeSignal?.top_program_rating ?? null),

@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
-import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL, resolveMarketYtdTargetLabel } from "@/lib/targetResolution";
+import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL, resolveMarketYtdTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
 
 // 로컬 날짜 구성요소로 "YYYY-MM-DD" 문자열을 만든다 — toISOString()은 UTC로 바꾸면서 자정 근처
 // 날짜가 하루 밀리는 문제가 실제로 있었다(ChannelDeepDive.tsx에서 이미 겪고 고친 것과 동일한
@@ -105,6 +105,7 @@ export async function GET(request: Request) {
       competitorTopPrograms: [],
       daypartOpportunity: [],
       hourBlockOpportunity: [],
+      ytdAvgRating: null,
       dowHourBlockPattern: [],
       topPrograms: [],
       periodDemographics: [],
@@ -155,6 +156,12 @@ export async function GET(request: Request) {
   // (1) hourlyPattern이 비어있을 때만 도는 skyUHD류 폴백 재조회, (2) compareChannelRow를
   // 먼저 알아야 하는 affinity 조회.
   const programTargetLabel = resolveProgramLevelTargetLabel(channel.primary_target);
+  // 사용자 지시(2026-08-25): TOP 20 인포그래픽에 "올해 1/1~분석일 채널 평균 대비 높낮이"가
+  // 필요 — Page 1 히어로 카드가 쓰는 것과 같은 방식(랭킹 시트 target_id로 ratings.rank/rating
+  // 기간 평균, get_channel_period_rank_and_rating)을 재사용한다. 랭킹 시트 표기(resolveRankSheetTargetLabel)로
+  // target_id를 먼저 찾아둔다(찾으면 아래 병렬 블록에서 실제 평균을 조회, 없으면 null 유지).
+  const { data: rankTargetRow } = await supabase.from("targets").select("id").eq("label", resolveRankSheetTargetLabel(channel.primary_target)).maybeSingle();
+  const rankTargetId: string | null = rankTargetRow?.id ?? null;
   // 사용자 지시(2026-08-21): 채널별로 정확히 2개의 "비교 시청률"을 지정해주셨다(타깃 시청률이
   // 맨 앞, 비교 시청률 2개가 뒤에 오는 배치) — ENA/ENA Play(개인2049/개인2039/유료방송가구),
   // ENA Drama(개인2049/유료방송가구/여자3049), OLIFE·ONCE·ENA Story(유료방송가구/개인5064/
@@ -269,6 +276,7 @@ export async function GET(request: Request) {
     topSharePatternsRes,
     topSharePatternsPriorRes,
     competitorPeriodTopProgramsPriorRes,
+    ytdAvgRes,
   ] = await Promise.all([
     // WHAT HAPPENED? — 채널 단위 랭킹 데이터로 DoD/WoW/MoM/QoQ/YoY/YTD
     supabase.rpc("get_rating_trend_summary", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: asOfDate }),
@@ -425,6 +433,11 @@ export async function GET(request: Request) {
     hasPriorRange
       ? supabase.rpc("get_competitor_period_top_programs", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_date_from: priorDateFrom, p_date_to: priorDateTo, p_channel_limit: 5, p_program_limit: 7 })
       : Promise.resolve({ data: [] as unknown[] }),
+    // 사용자 지시(2026-08-25): TOP 20 인포그래픽 막대 색(로고색/검정) 기준 — 올해 1/1~분석일
+    // 채널 평균(Page 1 히어로 카드와 동일한 계산, get_channel_period_rank_and_rating 재사용).
+    rankTargetId
+      ? supabase.rpc("get_channel_period_rank_and_rating", { p_channel_id: channel.id, p_target_id: rankTargetId, p_date_from: `${dateTo.slice(0, 4)}-01-01`, p_date_to: dateTo })
+      : Promise.resolve({ data: [] as unknown[] }),
   ]);
 
   if (trendRes.error) {
@@ -499,6 +512,7 @@ export async function GET(request: Request) {
   const competitorScheduleChanges = competitorScheduleChangesRes.data ?? [];
   const daypartOpportunity = daypartOpportunityRes.data;
   const hourBlockOpportunity = hourBlockOpportunityRes.data;
+  const ytdAvgRating: number | null = (ytdAvgRes.data as { avg_rating: number | null }[] | null)?.[0]?.avg_rating ?? null;
   const dowHourBlockPattern = dowHourBlockPatternRes.data;
   const topPrograms = topProgramsRes.data;
   const periodDemographics = periodDemographicsRes.data;
@@ -612,6 +626,7 @@ export async function GET(request: Request) {
     competitorTopPrograms: topProgramsData ?? [],
     daypartOpportunity: daypartOpportunity ?? [],
     hourBlockOpportunity: hourBlockOpportunity ?? [],
+    ytdAvgRating,
     affinity: { compareChannelCode, items: affinity },
     rootCauseAlert,
     opportunityAlert,

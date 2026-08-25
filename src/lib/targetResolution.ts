@@ -9,6 +9,20 @@ export function resolveProgramLevelTargetLabel(primaryTarget: string): string {
   return primaryTarget.replace("개인", "").trim();
 }
 
+// 사용자 지시(2026-08-25, get_competitor_insight_report 버그 수정 때 검증) — **채널 단위 랭킹
+// 시트** 데이터(ratings.rank가 채워진 행, competitor_ratings 전부)에 실제로 쓰인 타깃 라벨은
+// 타깃상세 시트 표기와 또 다르다: "수도권 2049"(타깃상세) → "개인2049"(랭킹 시트, "수도권"
+// 접두어가 빠짐 — ENA Drama 자사 데이터로 일별 시청률이 완전히 동일함을 실측 검증함,
+// 2026-08-25). "전국 유료가구"는 랭킹 시트도 같은 표기를 그대로 쓴다(검증됨, 변환 불필요).
+export function resolveRankSheetTargetLabel(primaryTarget: string): string {
+  // 가구 KPI 채널은 랭킹 시트도 Channel Master 표기("National 유료방송가입가구")를 그대로 쓴다
+  // (2026-08-25 실측 확인: OLIFE/ONCE/ENA Story 전부 이 라벨로 competitor_ratings/ratings.rank가
+  // 존재 — resolveProgramLevelTargetLabel처럼 "전국 유료가구"로 바꾸면 안 됨, 그건 타깃상세 시트용).
+  if (primaryTarget.includes("유료방송가입가구")) return primaryTarget;
+  // 개인 타깃 채널은 "수도권 " 접두어만 뗀 형태("수도권 개인2049"→"개인2049")가 랭킹 시트 표기다.
+  return primaryTarget.replace(/^수도권\s*/, "").trim();
+}
+
 // 사용자 지시(2026-08-21, 네 번째 재확인 — 이번엔 실제 시트 스크린샷 제시로 진짜 버그 확인):
 // 채널별로 정확히 지정된 "비교 시청률" 타깃 — 채널 고유(KPI) 타깃 외에 참고로 함께 보여줄
 // 타깃(들). Page 2(02~26시 그래프 체크박스)와 Page 1(오늘의 상위 프로그램 "비교 시청률" 열)이
