@@ -27,9 +27,12 @@ export function resolveProgramLevelTargetLabel(primaryTarget: string): string {
 // 좁히라는 지시(이전엔 3개였음 — 명세 그대로 반영, 데이터 자체는 계속 존재하므로 필요해지면
 // 다시 추가 가능). skyUHD는 비교 지표 없음(None/None, 이 맵에 키 자체가 없으면 자동으로 그렇게
 // 처리됨 — 별도 항목 불필요).
+// 사용자 지시(2026-08-25): Page 1 "채널별 상위 프로그램"의 비교 시청률 열(각 채널 배열의
+// [0]번째를 씀, page1/route.ts)이 ENA/ENA Play만 "수도권 2039"였는데 ENA Drama처럼 "전국
+// 유료가구"(가구)로 통일 — 순서만 바꿨을 뿐 목록 자체(Page 2 체크박스 선택지)는 그대로.
 export const EXTRA_TARGET_LABELS_BY_CHANNEL: Record<string, string[]> = {
-  ENA: ["수도권 2039", "전국 유료가구"],
-  ENA_PLAY: ["수도권 2039", "전국 유료가구"],
+  ENA: ["전국 유료가구", "수도권 2039"],
+  ENA_PLAY: ["전국 유료가구", "수도권 2039"],
   ENA_DRAMA: ["전국 유료가구", "수도권 여3049"],
   OLIFE: ["전국 5064", "수도권 2049"],
   ONCE: ["전국 5064", "수도권 2049"],

@@ -262,6 +262,19 @@ function fmtTime(t: string): string {
   return t.slice(0, 5);
 }
 
+// 사용자 지시(2026-08-25): "주요 컨텐츠 리뷰"의 시각 표기를 "22:00" 대신 "밤 10시"/"밤 11시
+// 10분" 같은 자연스러운 한국어 시간대+시각으로. 00~01시는 이 앱의 "02~26시" 편성일 관행대로
+// 전날 심야 방송의 연장으로 보고 "밤"에 포함시킨다(자정 넘었다고 "새벽"으로 바뀌지 않음).
+function fmtTimeKorean(t: string): string {
+  const [hStr, mStr] = t.split(":");
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const period = h < 2 ? "밤" : h < 6 ? "새벽" : h < 9 ? "아침" : h < 12 ? "오전" : h < 18 ? "오후" : h < 21 ? "저녁" : "밤";
+  let hour12 = h % 12;
+  if (hour12 === 0) hour12 = 12;
+  return `${period} ${hour12}시${m > 0 ? ` ${m}분` : ""}`;
+}
+
 // 사용자 지시(2026-08-20): 화면 표시는 소수점 3자리까지만 반올림한다 — DB에는 원본 정밀도
 // 그대로 저장돼 있고 다른 모든 계산(SQL)도 원본 값을 그대로 쓰므로, 이건 순수 표시 자릿수다.
 // 사용자 지시(2026-08-20): skyUHD만 예외적으로 1페이지에서 소숫점 아래 네 자리까지 표기(원본
@@ -289,7 +302,13 @@ function shortDemoLabel(label: string): string {
 //    나눠 정렬한다.
 // 4) [Strict Warning] 상식적 배경 설명(예: "중장년층이 높은 건 일반적 패턴")은 본문에서 제외 —
 //    이 함수엔 애초에 그런 문장이 없었으므로 유지.
-function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): { channelName: string; text: string } {
+function buildChannelNarrative(
+  channelName: string,
+  s: ChannelNarrativeSignal,
+  // 사용자 지시(2026-08-25): ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널 인사이트의
+  // 핵심이므로 이 문장이 있으면 항상 맨 앞에 붙인다(다른 채널은 null).
+  leadSentence?: string | null
+): { channelName: string; text: string } {
   const sentences: { tier: 1 | 2; priority: number; text: string }[] = [];
 
   if (s.rating_delta_pct !== null && Math.abs(s.rating_delta_pct) >= 15 && s.today_rating !== null) {
@@ -438,8 +457,9 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
 
   // 사용자 지시(2026-08-20): 채널명은 로고 메인 색상으로 굵게 표시 — 문자열에 채널명을 섞지
   // 않고 별도 필드로 돌려줘서 렌더링 쪽에서 색을 입힐 수 있게 한다.
+  const leadPrefix = leadSentence ? `${leadSentence} ` : "";
   if (sentences.length === 0) {
-    return { channelName, text: "특별한 변화 없이 평소 수준을 유지했습니다." };
+    return { channelName, text: `${leadPrefix}특별한 변화 없이 평소 수준을 유지했습니다.` };
   }
   // 사용자 지시(2026-08-21): 배치 위계 — tier 1(총평, PD·임원진이 바로 이해)을 앞에, tier 2(전문
   // 데이터: 연령대·시간대·유료가구)를 뒤에. 각 tier 안에서는 편차 크기(priority) 순.
@@ -448,7 +468,7 @@ function buildChannelNarrative(channelName: string, s: ChannelNarrativeSignal): 
   const ordered = [...tier1.slice(0, 3), ...tier2.slice(0, 2)];
   return {
     channelName,
-    text: ordered.map((s2) => s2.text).join(" "),
+    text: `${leadPrefix}${ordered.map((s2) => s2.text).join(" ")}`,
   };
 }
 
@@ -795,7 +815,7 @@ function buildOriginalInsight(
   if (item.pre_rerun_rating !== null && item.matched_rating !== null && item.pre_rerun_rating > 0) {
     const upliftPct = ((item.matched_rating - item.pre_rerun_rating) / item.pre_rerun_rating) * 100;
     bullets.push(
-      `리드인 효과: ${item.pre_rerun_start_time ? fmtTime(item.pre_rerun_start_time) : ""} 전회 직전 재방(${formatRating(item.pre_rerun_rating)}%) 방영, 본방은 리드인 대비 ${Math.abs(upliftPct).toFixed(0)}% ${upliftPct >= 0 ? "높았음" : "낮았음"}`
+      `리드인 효과: ${item.pre_rerun_start_time ? fmtTimeKorean(item.pre_rerun_start_time) : ""} 전회 직전 재방(${formatRating(item.pre_rerun_rating)}%) 방영, 본방은 리드인 대비 ${Math.abs(upliftPct).toFixed(0)}% ${upliftPct >= 0 ? "높았음" : "낮았음"}`
     );
   }
 
@@ -813,7 +833,7 @@ function buildOriginalInsight(
     crossRetentionPct = item.retention_pct;
     rerunChannelName = CHANNEL_NAME_BY_CODE[item.rerun_channel_code] ?? item.rerun_channel_code;
     bullets.push(
-      `${rerunChannelName} 직후재방 효과: ${rerunChannelName} 직후 재방(${item.rerun_start_time ? fmtTime(item.rerun_start_time) : ""}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 유입을 견인함`
+      `${rerunChannelName} 직후재방 효과: ${rerunChannelName} 직후 재방(${item.rerun_start_time ? fmtTimeKorean(item.rerun_start_time) : ""}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 유입을 견인함`
     );
     if (crossRetentionPct < 10) {
       secondaryBullets.push(`${rerunChannelName} 직후재방 유지율이 ${crossRetentionPct.toFixed(1)}%로 낮아, 실질적인 유입 효과는 제한적으로 보임`);
@@ -856,7 +876,7 @@ function buildOriginalInsight(
   if (item.self_rerun_rating !== null && item.matched_rating !== null && item.matched_rating > 0) {
     selfRetentionPct = (item.self_rerun_rating / item.matched_rating) * 100;
     secondaryBullets.push(
-      `${broadcastChannelName} 본채널 직재방 효과: 본방 종료 직후 자체 재방(${item.self_rerun_start_time ? fmtTime(item.self_rerun_start_time) : ""}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
+      `${broadcastChannelName} 본채널 직재방 효과: 본방 종료 직후 자체 재방(${item.self_rerun_start_time ? fmtTimeKorean(item.self_rerun_start_time) : ""}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
     );
   }
 
@@ -896,7 +916,17 @@ function buildLinearScale(values: number[], size: number, pad: number): (v: numb
   const range = max - min || 1;
   return (v: number) => size - pad - ((v - min) / range) * (size - pad * 2);
 }
-function ProgramRatingHistoryChart({ history, accentColor }: { history: RatingHistoryResult; accentColor: string }) {
+function ProgramRatingHistoryChart({
+  history,
+  accentColor,
+  ownChannelName,
+}: {
+  history: RatingHistoryResult;
+  accentColor: string;
+  // 사용자 지시(2026-08-25): 범례를 "수도권2049/가구(전국유료가구)/ENA Play(수2049)" 같은 타깃
+  // 표기 대신 "ENA, ENA Play, SBS Plus, ENA (가구)"처럼 채널명 중심으로.
+  ownChannelName: string;
+}) {
   const own2049 = [...history.own2049].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date));
   const ownHousehold = [...history.ownHousehold].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date));
   const otherSeries = history.otherChannels.map((s) => ({ ...s, points: [...s.points].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date)) }));
@@ -969,24 +999,24 @@ function ProgramRatingHistoryChart({ history, accentColor }: { history: RatingHi
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-400">
         <span className="inline-flex items-center gap-1">
           <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: accentColor }} />
-          수도권2049
+          {ownChannelName}
         </span>
         {ownHousehold.length >= 2 && (
           <span className="inline-flex items-center gap-1">
             <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: accentColor, opacity: 0.3 }} />
-            가구(전국유료가구)
+            {ownChannelName} (가구)
           </span>
         )}
         {otherSeries.map((s, i) => (
           <span key={s.seriesName} className="inline-flex items-center gap-1">
             <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: OTHER_CHANNEL_LINE_COLORS[i % OTHER_CHANNEL_LINE_COLORS.length] }} />
-            {CHANNEL_NAME_BY_CODE[s.seriesName] ?? s.seriesName}(수2049)
+            {CHANNEL_NAME_BY_CODE[s.seriesName] ?? s.seriesName}
           </span>
         ))}
         {competitorSeries.map((s, i) => (
           <span key={s.seriesName} className="inline-flex items-center gap-1">
             <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: COMPETITOR_LINE_COLORS[i % COMPETITOR_LINE_COLORS.length] }} />
-            {s.seriesName}(수2049)
+            {s.seriesName}
           </span>
         ))}
       </div>
@@ -1100,29 +1130,34 @@ function OriginalContentReportCard({
                     <div className="mb-3 flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-zinc-500">
                       {h.pre_rerun_rating !== null && (
                         <span>
-                          전회 직전 재방 {h.pre_rerun_start_time ? fmtTime(h.pre_rerun_start_time) : ""} · {formatRating(h.pre_rerun_rating)}
+                          전회 직전 재방 {h.pre_rerun_start_time ? fmtTimeKorean(h.pre_rerun_start_time) : ""} · {formatRating(h.pre_rerun_rating)}
                         </span>
                       )}
                       {h.self_rerun_rating !== null && (
                         <span>
-                          당일 자체재방 {h.self_rerun_start_time ? fmtTime(h.self_rerun_start_time) : ""} · {formatRating(h.self_rerun_rating)}
+                          당일 자체재방 {h.self_rerun_start_time ? fmtTimeKorean(h.self_rerun_start_time) : ""} · {formatRating(h.self_rerun_rating)}
                         </span>
                       )}
                     </div>
                   )}
-                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                    <div className="rounded-xl bg-zinc-50 p-3 text-sm">
-                      <p className="mb-1.5 text-[11px] font-medium text-zinc-400">본방</p>
+                  {/* 사용자 지시(2026-08-25, 레이아웃 재점검): 본방/직후재방 칸을 좀 더 좁히고
+                      (grid-cols-3 균등분할 대신 동시간대 경쟁 프로그램 칸에 더 폭을 배분) 그
+                      칸에서 프로그램당 1줄(채널·프로그램명·시청률)로 압축 — 넘치면 말줄임(전체
+                      텍스트는 title 툴팁으로). */}
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[1fr_1fr_1.3fr]">
+                    <div className="rounded-xl bg-zinc-50 p-2.5 text-sm">
+                      <p className="mb-1 text-[11px] font-medium text-zinc-400">본방</p>
                       {/* 사용자 지시(2026-08-22): 채널명을 그 채널 로고 색+볼드로. */}
                       <p className="text-zinc-600">
                         <span className="font-bold" style={{ color: themeColorByCode.get(h.broadcast_channel_code) ?? undefined }}>
                           {CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
                         </span>{" "}
-                        · {fmtTime(h.matched_start_time)}
+                        · {fmtTimeKorean(h.matched_start_time)}
                       </p>
                       {/* 사용자 지시(2026-08-21): 본방송 시청률 볼드, 전회 대비 증가=푸른색(ENA
                           로고색)/감소=붉은색. 사용자 재지시(2026-08-21, Page 1 개편): 원색
-                          red/green 대신 ACCENT_UP/ACCENT_DOWN(절제된 톤)으로. */}
+                          red/green 대신 ACCENT_UP/ACCENT_DOWN(절제된 톤)으로. 사용자 지시
+                          (2026-08-25): 수도권 2049(볼드) 옆에 가구 시청률을 괄호로(볼드 없이). */}
                       <p
                         className="mt-0.5 text-lg font-bold tabular-nums tracking-tight"
                         style={{
@@ -1135,6 +1170,9 @@ function OriginalContentReportCard({
                         }}
                       >
                         {formatRating(h.matched_rating)}
+                        {h.matched_household_rating !== null && (
+                          <span className="ml-1 text-[13px] font-normal text-zinc-400">({formatRating(h.matched_household_rating)})</span>
+                        )}
                       </p>
                       {h.prior_rating_change_pct !== null && (
                         <p className="mt-0.5 text-[12px] font-semibold tabular-nums" style={{ color: h.prior_rating_change_pct >= 0 ? ACCENT_UP : ACCENT_DOWN }}>
@@ -1142,15 +1180,15 @@ function OriginalContentReportCard({
                         </p>
                       )}
                     </div>
-                    <div className="rounded-xl bg-zinc-50 p-3 text-sm">
-                      <p className="mb-1.5 text-[11px] font-medium text-zinc-400">직후재방</p>
+                    <div className="rounded-xl bg-zinc-50 p-2.5 text-sm">
+                      <p className="mb-1 text-[11px] font-medium text-zinc-400">직후재방</p>
                       {h.rerun_program_name && h.rerun_start_time ? (
                         <>
                           <p className="text-zinc-600">
                             <span className="font-bold" style={{ color: themeColorByCode.get(h.rerun_channel_code ?? "") ?? undefined }}>
                               {CHANNEL_NAME_BY_CODE[h.rerun_channel_code ?? ""] ?? h.rerun_channel_code}
                             </span>{" "}
-                            · {fmtTime(h.rerun_start_time)}
+                            · {fmtTimeKorean(h.rerun_start_time)}
                           </p>
                           <p className="mt-0.5 text-lg font-bold tabular-nums tracking-tight text-zinc-800">
                             {formatRating(h.rerun_rating)}
@@ -1161,27 +1199,26 @@ function OriginalContentReportCard({
                         <span className="text-zinc-300">—</span>
                       )}
                     </div>
-                    <div className="rounded-xl bg-zinc-50 p-3 text-sm">
+                    <div className="rounded-xl bg-zinc-50 p-2.5 text-sm">
                       {/* 사용자 지시(2026-08-21, Page 1 매거진 개편): "동시간대 경쟁"→"동시간대
                           경쟁 프로그램"으로 명칭 변경. */}
-                      <p className="mb-1.5 text-[11px] font-medium text-zinc-400">동시간대 경쟁 프로그램</p>
+                      <p className="mb-1 text-[11px] font-medium text-zinc-400">동시간대 경쟁 프로그램</p>
                       {h.competitorHighlights.length === 0 ? (
                         <span className="text-zinc-300">—</span>
                       ) : (
-                        // 사용자 지시(2026-08-25, 레이아웃 재점검): 고정 픽셀(26px/24px) 4열 그리드가
-                        // 한글 글자 폭에 비해 너무 좁아 채널명·시간이 잘리거나 겹쳐 보이던 문제
-                        // ("글자가 깨짐" 제보) — 픽셀 고정 그리드를 버리고, 채널·시간을 위 줄(작게),
-                        // 프로그램명·시청률을 아래 줄(2줄까지 줄바꿈 허용)로 쌓는 안전한 구조로 교체.
-                        <div className="flex flex-col gap-1.5">
+                        // 사용자 재지시(2026-08-25): "3줄씩이라 너무 길다 — 1줄로" — 채널·프로그램명·
+                        // 시청률을 한 줄에 압축하고, 넘치면 말줄임(잘린 부분은 title 툴팁으로 확인 가능).
+                        <div className="flex flex-col gap-1">
                           {h.competitorHighlights.slice(0, 3).map((c, i) => (
-                            <div key={i} className={i > 0 ? "border-t border-zinc-100 pt-1.5" : ""}>
-                              <p className="text-[9.5px] text-zinc-400">
-                                {c.competitor_name} · {fmtTime(c.competitor_start_time)}
-                              </p>
-                              <p className="text-[12px] leading-snug text-zinc-700">
-                                <span className="line-clamp-2">{c.competitor_program_name}</span>{" "}
-                                <span className="font-semibold tabular-nums text-zinc-800">{formatRating(c.competitor_rating)}</span>
-                              </p>
+                            <div
+                              key={i}
+                              className={`flex items-baseline gap-1 ${i > 0 ? "border-t border-zinc-100 pt-1" : ""}`}
+                              title={`${c.competitor_name} · ${fmtTimeKorean(c.competitor_start_time)} · ${c.competitor_program_name}`}
+                            >
+                              <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-600">
+                                <span className="text-zinc-400">{c.competitor_name}</span> {c.competitor_program_name}
+                              </span>
+                              <span className="shrink-0 text-[11px] font-semibold tabular-nums text-zinc-800">{formatRating(c.competitor_rating)}</span>
                             </div>
                           ))}
                         </div>
@@ -1200,7 +1237,15 @@ function OriginalContentReportCard({
                       ))}
                     </ul>
                   )}
-                  {h.ratingHistory && <ProgramRatingHistoryChart history={h.ratingHistory} accentColor={enaAccentColor} />}
+                  {/* 사용자 지시(2026-08-25): 꺾은선의 "2049 시청률" 색이 항상 ENA 색으로 고정돼
+                      있었다 — 실제 방영 채널(예: ENA Play)의 로고 색을 반영하도록 수정. */}
+                  {h.ratingHistory && (
+                    <ProgramRatingHistoryChart
+                      history={h.ratingHistory}
+                      accentColor={themeColorByCode.get(h.broadcast_channel_code) ?? enaAccentColor}
+                      ownChannelName={CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
+                    />
+                  )}
                   {/* 명세엔 없지만 기존에 있던 추가 신호(동시간대 정성 비교/신규드라마 비교/자체재방/
                       도달율) — 삭제하지 않고, 필수 4-불렛과는 시각적으로 구분되는 더 옅은 톤으로. */}
                   {insight.secondaryBullets.length > 0 && (
@@ -1305,20 +1350,49 @@ function MiniDeltaBar({ pct }: { pct: number }) {
   );
 }
 
+// 사용자 지시(2026-08-25): "ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널에서 매우
+// 중요하므로 그것이 ENA 채널 인사이트의 첫 문장으로" — Page 1 채널별 인사이트·Page 2 오늘의
+// 브리핑이 공유하는 문장 조립 함수. 이미 계산된 값(matched_rating/matched_household_rating/
+// retention_pct/self_rerun_rating)만 그대로 인용한다(새 계산 없음). 오리지널 콘텐츠가 없는 날은
+// null(억지로 만들지 않음).
+function buildEnaOriginalHighlightSentence(enaDaily: { matched_program_name: string; matched_rating: number | null; matched_household_rating: number | null; retention_pct: number | null; rerun_channel_code: string | null; self_rerun_rating: number | null }[]): string | null {
+  const withRating = enaDaily.filter((d) => d.matched_rating !== null);
+  if (withRating.length === 0) return null;
+  const parts = withRating.map((d) => {
+    const hh = d.matched_household_rating !== null ? `(가구 ${formatRating(d.matched_household_rating)})` : "";
+    // 사용자 지시(2026-08-25): "ENA Play/ENA Drama의 동시방영·직재방·24~36시간 내 재방송 효율"도
+    // 항상 짚는다 — 타 채널 직후재방(retention_pct)이 있으면 그것을, 없으면 본채널 당일 자체
+    // 재방 유지율을 대신 보여준다(둘 다 없으면 재방 관련 절 생략).
+    const rerunNote =
+      d.retention_pct !== null && d.rerun_channel_code
+        ? ` — ${CHANNEL_NAME_BY_CODE[d.rerun_channel_code] ?? d.rerun_channel_code} 재방 유지율 ${d.retention_pct.toFixed(1)}%`
+        : d.self_rerun_rating !== null && d.matched_rating !== null && d.matched_rating > 0
+          ? ` — 자체 재방 유지율 ${((d.self_rerun_rating / d.matched_rating) * 100).toFixed(1)}%`
+          : "";
+    return `'${d.matched_program_name}' 수2049 ${formatRating(d.matched_rating)}${hh}${rerunNote}`;
+  });
+  return `오늘 오리지널·독점 콘텐츠 성과: ${parts.join(", ")}.`;
+}
+
 // ③ 채널별 인사이트(줄글) — R2C1. 사용자 지시(2026-08-20): 채널명은 그 채널 로고의 메인
 // 색상(channels.theme_color)으로 굵게 표시.
 function ChannelNarrativeCard({
   signals,
   themeColorByCode,
+  enaOriginalDaily,
 }: {
   signals: ChannelNarrativeSignal[];
   themeColorByCode: Map<string, string | null>;
+  // 사용자 지시(2026-08-25): ENA 채널 인사이트 첫 문장용 — 오늘 ENA 채널(broadcast_channel_code
+  // ="ENA")에서 방영된 오리지널·독점 콘텐츠만 필터링해 전달받는다.
+  enaOriginalDaily: OriginalDailyItem[];
 }) {
   const byCode = new Map(signals.map((s) => [s.channelCode, s]));
   const lines: { channelName: string; text: string; color: string | null; deltaPct: number | null }[] = [];
+  const enaLeadSentence = buildEnaOriginalHighlightSentence(enaOriginalDaily.filter((d) => d.broadcast_channel_code === "ENA"));
   for (const code of INSIGHT_CHANNEL_ORDER) {
     const s = byCode.get(code);
-    if (s) lines.push({ ...buildChannelNarrative(CHANNEL_NAME_BY_CODE[code], s), color: themeColorByCode.get(code) ?? null, deltaPct: s.rating_delta_pct });
+    if (s) lines.push({ ...buildChannelNarrative(CHANNEL_NAME_BY_CODE[code], s, code === "ENA" ? enaLeadSentence : null), color: themeColorByCode.get(code) ?? null, deltaPct: s.rating_delta_pct });
   }
   const skyuhdSignal = byCode.get("SKYUHD");
   const skyuhdLine = buildSkyUhdNarrative(skyuhdSignal);
@@ -1817,6 +1891,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
             <ChannelNarrativeCard
               signals={data.narrativeSignals}
               themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
+              enaOriginalDaily={data.originalContentReport.daily}
             />
             <TodayTopProgramsCard
               rows={data.todayTopPrograms}
