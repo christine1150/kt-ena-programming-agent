@@ -2278,15 +2278,19 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const [askLoading, setAskLoading] = useState(false);
   const [askAnswer, setAskAnswer] = useState<AskAnswer | null>(null);
   const [askError, setAskError] = useState<string | null>(null);
-  async function submitAskQuestion() {
-    if (!askQuestion.trim() || askLoading) return;
+  // 후속 질문 칩(원 명세 31번) 클릭 시 setAskQuestion 직후 바로 이어서 호출하면 아직 리렌더
+  // 전이라 클로저 안 askQuestion이 이전 값이라 잘못된 질문으로 재질의될 수 있어, 강제로 쓸
+  // 질문을 인자로 받게 한다(없으면 기존처럼 입력창 값 사용).
+  async function submitAskQuestion(overrideQuestion?: string) {
+    const q = (overrideQuestion ?? askQuestion).trim();
+    if (!q || askLoading) return;
     setAskLoading(true);
     setAskError(null);
     try {
       const res = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: askQuestion }),
+        body: JSON.stringify({ question: q }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
@@ -2699,7 +2703,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 OLIFE(라임 계열)처럼 밝은 로고 색은 흰 글씨가 안 보여, 배경색 밝기에 따라
                 흰/진한 글씨를 자동 선택(cellTextColor 재사용, alpha=255=배경색 그대로). */}
             <button
-              onClick={submitAskQuestion}
+              onClick={() => submitAskQuestion()}
               disabled={askLoading || !askQuestion.trim()}
               className="rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-40"
               style={{ backgroundColor: accentColor, color: cellTextColor(accentColor, 255) }}
@@ -2719,6 +2723,51 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <p style={{ color: accentForegroundColor(accentColor) }}>편성 조치: {askAnswer.programmingAction}</p>
               )}
               <p className="text-sm text-zinc-400">신뢰도: {askAnswer.confidenceNote}</p>
+              {/* 사용자 지시(2026-08-25, 감사 후속: 원 명세 30번) — SQL이 이미 계산한 값을 그대로
+                  옮긴 구조화 시각화(EvidenceAnswer.visualization). 새 라이브러리 없이 가벼운
+                  가로 막대로 표시(값이 없으면 빈 칸 그대로). */}
+              {askAnswer.visualization && askAnswer.visualization.series.length > 0 && (
+                <div className="mt-1 rounded-xl bg-white p-3 ring-1 ring-zinc-100">
+                  <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
+                  <div className="space-y-1.5">
+                    {(() => {
+                      const max = Math.max(...askAnswer.visualization.series.map((s) => s.value ?? 0), 0.0001);
+                      return askAnswer.visualization.series.map((s, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs">
+                          <span className="w-28 shrink-0 truncate text-zinc-600" title={s.label}>{s.label}</span>
+                          <div className="h-2.5 flex-1 rounded-full bg-zinc-100">
+                            {s.value !== null && (
+                              <div
+                                className="h-2.5 rounded-full"
+                                style={{ width: `${Math.max(3, (Math.abs(s.value) / max) * 100)}%`, backgroundColor: accentColor }}
+                              />
+                            )}
+                          </div>
+                          <span className="w-14 shrink-0 text-right text-zinc-500">{s.value === null ? "데이터 없음" : s.value.toFixed(2)}</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+              {/* 원 명세 31번 — 후속 질문 칩. 클릭하면 바로 그 질문으로 재질의한다. */}
+              {askAnswer.followups && askAnswer.followups.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {askAnswer.followups.map((f, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setAskQuestion(f);
+                        submitAskQuestion(f);
+                      }}
+                      className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600 hover:border-[var(--accent)] hover:text-zinc-900"
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

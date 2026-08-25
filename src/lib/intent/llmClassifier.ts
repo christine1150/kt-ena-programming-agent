@@ -23,10 +23,16 @@ interface LlmClassification {
   time_phrase: string | null;
 }
 
-function buildSystemPrompt(channelCodes: string[], competitorNames: string[], targetLabels: string[]): string {
+function buildSystemPrompt(channelCodes: string[], competitorNames: string[], targetLabels: string[], referenceDate: string): string {
   return [
     "너는 KT ENA 편성 AI Agent의 자연어 질문 분류기다.",
     "사용자 질문을 아래 Intent 중 하나로 분류하고, 필요한 파라미터를 추출해라. 절대 숫자나 결론을 스스로 계산하지 마라 — 분류/추출만 한다.",
+    // 사용자 지시(2026-08-25, 감사 후속): 원 명세 27번 "CURRENT_DATE/TIMEZONE(KST)을 System
+    // Message에 항상 동적 주입" — 날짜 산수 자체는 여전히 아래 rule 대로 별도 로직(resolveTimePeriod,
+    // timeResolver.ts)이 전담하지만(LLM이 날짜 계산 안 함 원칙 유지), "최근 자료가 있는 날짜 = 오늘"
+    // 이라는 기준점을 LLM도 알아야 time_phrase 해석이 아닌 다른 판단(예: 미래형 질문 감지)에서
+    // 헷갈리지 않는다.
+    `오늘 날짜는 ${referenceDate}(KST, 데이터 존재 최신일 기준)입니다. 날짜 계산은 네가 하지 말고, time_phrase만 원문 그대로 추출해라.`,
     "",
     "## Intent 목록",
     ...INTENT_REGISTRY.map(
@@ -63,7 +69,7 @@ export async function classifyQuestionWithLlm(question: string, referenceDate: s
         model: OPENAI_MODEL,
         temperature: 0,
         messages: [
-          { role: "system", content: buildSystemPrompt(channelCodes, competitorNames, targetLabels) },
+          { role: "system", content: buildSystemPrompt(channelCodes, competitorNames, targetLabels, referenceDate) },
           { role: "user", content: question },
         ],
         response_format: {

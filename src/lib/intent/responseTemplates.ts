@@ -1,7 +1,7 @@
 // RESPONSE TEMPLATE — 스펙 26번(Evidence-First Rule): 결론→핵심 수치→비교 기준→Evidence→해석→
 // Programming Action→Confidence 순서를 모든 답변에 강제한다. 존재하지 않는 숫자를 만들지 않고,
 // NULL은 "데이터 없음"으로 표시한다(0과 구분 — 스펙 28번).
-import type { ConfidenceLevel, EvidenceAnswer, MacroIntentId, TimeContext } from "./types";
+import type { ConfidenceLevel, EvidenceAnswer, MacroIntentId, TimeContext, VisualizationSpec } from "./types";
 import { josaEulReul } from "@/lib/josa";
 
 function fmt(v: number | null | undefined, digits = 3): string {
@@ -9,6 +9,11 @@ function fmt(v: number | null | undefined, digits = 3): string {
 }
 function pct(v: number | null | undefined): string {
   return v === null || v === undefined ? "데이터 없음" : `${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(1)}%`;
+}
+// 사용자 지시(2026-08-25, 감사 후속: 원 명세 30번) — SQL이 이미 계산한 목록을 막대그래프용
+// series로 그대로 옮긴다(새 수치 계산 없음). 항목이 2개 미만이면 그래프 의미가 없어 만들지 않는다.
+function bar(title: string, series: { label: string; value: number | null }[]): VisualizationSpec | undefined {
+  return series.length >= 2 ? { type: "bar", title, series } : undefined;
 }
 
 // 스펙 20번 Confidence 기준(표본 일수). 이 엔진에서 다루는 대부분의 SQL 함수는 이미 최근
@@ -97,6 +102,11 @@ export function buildPortfolioRankingAnswer(
     programmingAction: asc ? "부진 원인(편성/경쟁채널)을 Page 2 WHY?에서 추가로 확인해 보세요." : "강세 요인을 STRENGTHEN 후보로 검토해 보세요.",
     confidence,
     confidenceNote: isSingleDay ? "실측 데이터 1일 기준(사실 조회, 추세 추정 아님)." : CONFIDENCE_NOTE[confidence],
+    visualization: bar(
+      rankByChange ? "채널별 등락률(%)" : "채널별 시청률",
+      sorted.slice(0, 7).map((r) => ({ label: r.channel.name, value: rankByChange ? r.report!.prior_period_change_pct : r.report!.avg_rating }))
+    ),
+    followups: [`${winner.channel.name} 최근 12주 시간대별로는 어때?`, `${winner.channel.name}의 경쟁채널 대비 위치는?`],
   };
 }
 
@@ -132,6 +142,8 @@ export function buildPortfolioKpiGapAnswer(rows: AchievementRow[], timeContext: 
     programmingAction: "이 채널의 Page 2 CONTENT FITS?/OPPORTUNITY?를 확인해 편성 조정을 검토하세요.",
     confidence: "HIGH",
     confidenceNote: "목표 달성률은 SQL 함수로 직접 계산되어 항상 확정값입니다.",
+    visualization: bar("채널별 목표 달성률(%)", sorted.map((r) => ({ label: r.channel.name, value: r.achievement!.achievement_pct }))),
+    followups: [`${worst.channel.name}의 최근 시간대별 성과는?`],
   };
 }
 
@@ -159,6 +171,7 @@ export function buildPortfolioAlertAnswer(rows: AlertRow[], timeContext: TimeCon
     programmingAction: risky.length > 0 ? "해당 채널의 Page 2 WHY?에서 상세 원인 후보를 확인하세요." : "특별한 조치가 필요하지 않습니다.",
     confidence: "HIGH",
     confidenceNote: "3일 연속/전주 대비 등 확정 규칙으로 판단됩니다.",
+    followups: risky.length > 0 ? [`${risky[0].channel.name}은 왜 하락했어?`] : opportunities.length > 0 ? [`${opportunities[0].channel.name}의 기회 시간대는 어디야?`] : undefined,
   };
 }
 
@@ -204,6 +217,12 @@ export function buildChannelPerformanceAnswer(
     programmingAction: "자세한 원인/시간대/경쟁채널 비교는 Page 2에서 확인하세요.",
     confidence,
     confidenceNote: isSingleDay ? "실측 데이터 1일 기준(사실 조회, 추세 추정 아님)." : CONFIDENCE_NOTE[confidence],
+    visualization: bar(`${data.channel.name} 시청률 비교`, [
+      { label: isSingleDay ? "오늘" : timeContext.label, value: r.avg_rating },
+      { label: "직전 기간", value: r.prior_period_avg_rating },
+      { label: "최근 12주 평균", value: r.baseline_avg_rating },
+    ]),
+    followups: [`${data.channel.name} 시간대별 성과는?`, `${data.channel.name}의 경쟁채널 대비 위치는?`],
   };
 }
 
@@ -249,6 +268,8 @@ export function buildChannelDaypartAnswer(
     programmingAction: wantBottom ? "이 시간대 편성을 재검토하거나 OPPORTUNITY? 분석을 참고하세요." : "이 시간대에 STRENGTHEN 후보 콘텐츠 배치를 검토하세요.",
     confidence: confidenceFromSampleDays(totalSample >= 84 ? 84 : totalSample),
     confidenceNote: CONFIDENCE_NOTE[confidenceFromSampleDays(totalSample >= 84 ? 84 : totalSample)],
+    visualization: bar(`${data.channel.name} 시간대별 평균 시청률`, sorted.map((a) => ({ label: DAYPART_LABEL[a.daypart] ?? a.daypart, value: a.avg }))),
+    followups: [`${data.channel.name}의 최근 12주 프로그램 TOP은?`],
   };
 }
 
@@ -287,6 +308,8 @@ export function buildProgramTopAnswer(
     programmingAction: "상위 프로그램은 STRENGTHEN, 하위 프로그램은 WHAT TO SCHEDULE?에서 REPLACE/TEST 여부를 확인하세요.",
     confidence: "HIGH",
     confidenceNote: "최근 12주 누적 집계 기준입니다.",
+    visualization: bar(`${data.channel.name} 프로그램 TOP ${top.length}`, top.map((p) => ({ label: p.program_name, value: p.avg_rating }))),
+    followups: [`${data.channel.name}의 시간대별 성과는?`],
   };
 }
 
@@ -338,6 +361,13 @@ export function buildTargetAffinityAnswer(data: AffinityData | null, timeContext
     programmingAction: idx >= 120 ? "이 연령대를 겨냥한 콘텐츠 편성을 강화해볼 만합니다." : "—",
     confidence: confidenceFromSampleDays(minSampleDays),
     confidenceNote: CONFIDENCE_NOTE[confidenceFromSampleDays(minSampleDays)],
+    visualization: data.isSingleTarget
+      ? bar(`${data.channel.name} vs ${data.compareChannel.name} 구성비(%)`, [
+          { label: data.channel.name, value: best.result!.channel_composition },
+          { label: data.compareChannel.name, value: best.result!.compare_composition },
+        ])
+      : bar(`${data.channel.name} 연령대별 Affinity`, sorted.map((i) => ({ label: i.targetLabel, value: i.result!.affinity_index }))),
+    followups: [`${data.channel.name}의 프로그램 TOP은?`],
   };
 }
 
@@ -373,6 +403,8 @@ export function buildCompetitivePositionAnswer(data: { channel: { code: string; 
     programmingAction: "12주 평균 대비 뚜렷하게 강세인 경쟁채널이 있으면 Page 2 COMPARED WITH?에서 상세 내용을 확인하세요.",
     confidence: "HIGH",
     confidenceNote: "등록된 경쟁채널(Competitor Master) 기준 확정 조회입니다.",
+    visualization: bar("등록 경쟁채널 시청률", sorted.slice(0, 8).map((r) => ({ label: r.competitor_name, value: r.today_rating }))),
+    followups: [`${data.channel.name}과 ${sorted[0].competitor_name}의 동시간대 프로그램 비교는?`],
   };
 }
 
@@ -417,6 +449,7 @@ export function buildCompetitiveHeadToHeadAnswer(data: { channel: { code: string
     programmingAction: "격차가 큰 시간대는 Page 2 COMPARED WITH?에서 상세히 확인하세요.",
     confidence: "HIGH",
     confidenceNote: "당일 실측 데이터 기준입니다.",
+    followups: [`${data.channel.name}의 등록 경쟁채널 전체 순위는?`],
   };
 }
 

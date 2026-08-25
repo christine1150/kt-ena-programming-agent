@@ -103,7 +103,12 @@ export async function POST(request: Request) {
 
   let routed = await routeQuestion(question, referenceDate);
   let usedLlmFallback = false;
-  if (!routed.ok) {
+  // 사용자 지시(2026-08-25, 감사 후속): CLAUDE.md가 "Rule-based Engine Fallback 구조...
+  // USE_ADVANCED_LLM_AGENT 환경변수로 제어"라고 문서화했지만 실제로 이 변수를 읽는 코드가
+  // 없었다(문서-코드 불일치, 감사에서 확인됨) — 실제 동작하는 토글로 만든다. 기본값은 true
+  // (기존 동작 그대로 유지, 명시적으로 "false"를 줘야만 OpenAI 폴백을 끈다).
+  const advancedLlmAgentEnabled = process.env.USE_ADVANCED_LLM_AGENT !== "false";
+  if (!routed.ok && advancedLlmAgentEnabled) {
     // 규칙 기반이 못 잡으면(오타·낯선 어순·규칙에 없는 동의어 등) OpenAI로 한 번 더 시도한다.
     // API 키가 없거나 호출이 실패하면 null이 돌아와 원래 미지원 결과를 그대로 쓴다.
     const llmRouted = await classifyQuestionWithLlm(question, referenceDate);

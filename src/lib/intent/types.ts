@@ -58,6 +58,15 @@ export interface IntentDefinition {
 
 export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW" | "INSUFFICIENT_SAMPLE";
 
+// 사용자 지시(2026-08-25, 감사 후속: 원 명세 30/31번) — SQL이 이미 계산해 둔 값을 그대로
+// 막대그래프로 보여줄 수 있는 최소 구조. LLM은 이 구조를 채우지 않는다(responseTemplates.ts가
+// SQL 결과에서 그대로 뽑아 채운다) — 새 수치를 만들지 않는다는 원칙 그대로.
+export interface VisualizationSpec {
+  type: "bar";
+  title: string;
+  series: { label: string; value: number | null }[];
+}
+
 export interface RouteResult {
   ok: true;
   intent_id: string;
@@ -87,4 +96,8 @@ export interface EvidenceAnswer {
   confidence: ConfidenceLevel; // 7. Confidence
   confidenceNote: string;
   raw: unknown; // 원본 SQL 결과(디버깅/추가 표시용)
+  // 사용자 지시(2026-08-25, 감사 후속: 원 명세 30/31번). 둘 다 선택 필드 — 의미 있는 값이
+  // 없으면(예: 목록이 1개뿐이거나 애초에 미지원 답변) 그냥 비워둔다(억지로 채우지 않음).
+  visualization?: VisualizationSpec; // 30번: SQL 결과를 그대로 옮긴 구조화 시각화
+  followups?: string[]; // 31번: 같은 화면에서 바로 이어 물을 수 있는 후속 질문 후보
 }
