@@ -90,6 +90,14 @@ interface OriginalDailyItem {
   prev_drama_change_pct: number | null;
   // 사용자 지시(2026-08-22): 연령대별 미니바 대신 최근 12주 본방송 시청률 추이 꺾은선 그래프용.
   ratingHistory: RatingHistoryResult | null;
+  // 사용자 지시(2026-08-25): 제목에 "타깃 및 가구 하락/상승"을 함께 보여주기 위한 가구(전국
+  // 유료가구) 타깃 시청률·전회 대비 등락률(그 타깃 데이터가 없는 채널은 둘 다 null).
+  matched_household_rating: number | null;
+  household_rating_change_pct: number | null;
+  // 사용자 지시(2026-08-25): [편성 인사이트]를 카니발라이제이션 단일 규칙 대신, 이미 검증된
+  // 값들로 OpenAI가 종합한 문장으로 — API 키가 없거나 실패하면 null(route.ts에서 계산, 실패 시
+  // Dashboard가 기존 규칙 기반 카니발라이제이션 문구로 대체).
+  schedulingInsight: string | null;
 }
 interface RatingHistoryPoint {
   broadcast_date: string;
@@ -704,13 +712,30 @@ interface OriginalHeadline {
   rank: number | null;
   beatenBy: OriginalCompetitorHighlight[]; // 우리보다 시청률 높은 경쟁 프로그램(시청률 내림차순)
 }
-// 사용자 지시(2026-08-21): 제목 표준 포맷 — "<프로그램명> N회 (전회 대비 증가/감소, 동시간대
-// 타깃 #위)". 예시: "<나는 SOLO, 그 후 사랑은 계속된다> 168회 (전회 대비 감소, 동시간대 타깃 3위)".
+// 사용자 지시(2026-08-25): 제목 포맷 재정의 — "<프로그램명> N회 본방 시청률 (타깃 및 가구
+// 하락/상승, 동시간대 타깃 #위, 가구 #위)" 처럼 타깃·가구를 항상 함께 명시. 예시(사용자 제시):
+// "<그대에게 드림> 7회 시청률 (타깃 및 가구 하락, 동시간대 타깃 5위, 가구 3위)" /
+// "<쯔양몇끼> 9회 본방 시청률 (전회 대비 상승, 동시간대 타깃 5위)"(가구 데이터 없는 채널은
+// 가구 절 생략). 방향이 타깃·가구 둘 다 있고 같은 방향이면 "타깃 및 가구 X"로 합치고, 서로
+// 다르면 "타깃 X, 가구 Y"로 나눠 쓴다 — 가구 데이터가 아예 없으면 기존처럼 "전회 대비 X"만.
 function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null {
-  if (item.episode_number === null) return null;
+  // 사용자 지시(2026-08-25, 레이아웃 재점검): 회차 번호가 관리자에게 seed되지 않은 프로그램(예:
+  // program_episode_counters 미등록)은 episode_number가 null인데, 예전엔 이때 헤드라인 전체를
+  // null로 돌려 프로그램명 줄 자체가 화면에서 통째로 사라졌다 — 회차 정보는 있으면 붙이고
+  // 없으면 생략만 할 뿐, 프로그램명은 항상 보여야 한다.
   const parts: string[] = [];
-  if (item.prior_rating_change_pct !== null) {
-    parts.push(item.prior_rating_change_pct >= 0 ? "전회 대비 증가" : "전회 대비 감소");
+  const targetChange = item.prior_rating_change_pct;
+  const householdChange = item.household_rating_change_pct;
+  if (targetChange !== null && householdChange !== null) {
+    const targetUp = targetChange >= 0;
+    const householdUp = householdChange >= 0;
+    parts.push(
+      targetUp === householdUp
+        ? `타깃 및 가구 ${targetUp ? "상승" : "하락"}`
+        : `타깃 ${targetUp ? "상승" : "하락"}, 가구 ${householdUp ? "상승" : "하락"}`
+    );
+  } else if (targetChange !== null) {
+    parts.push(`전회 대비 ${targetChange >= 0 ? "상승" : "하락"}`);
   }
   let rank: number | null = null;
   let beatenBy: OriginalCompetitorHighlight[] = [];
@@ -719,10 +744,13 @@ function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null
       .filter((c) => c.competitor_rating !== null && c.competitor_rating > item.matched_rating!)
       .sort((a, b) => (b.competitor_rating ?? 0) - (a.competitor_rating ?? 0));
     rank = 1 + beatenBy.length;
-    parts.push(`동시간대 타깃 ${rank}위`);
+    const rankParts = [`동시간대 타깃 ${rank}위`];
+    if (item.householdRank !== null) rankParts.push(`가구 ${item.householdRank}위`);
+    parts.push(rankParts.join(", "));
   }
   const suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
-  const suffixText = `${item.episode_number}회${suffix}`;
+  const episodePrefix = item.episode_number !== null ? `${item.episode_number}회 ` : "";
+  const suffixText = `${episodePrefix}본방 시청률${suffix}`;
   // 사용자 지시(2026-08-21): 제목 앞뒤 <> 제거 — 프로그램명만 그대로 쓰고 뒤에 회차/부가 정보를 잇는다.
   return { text: `${item.matched_program_name} ${suffixText}`, suffixText, rank, beatenBy };
 }
@@ -897,6 +925,11 @@ function ProgramRatingHistoryChart({ history, accentColor }: { history: RatingHi
   const pathOf = (points: RatingHistoryPoint[], yFn: (v: number) => number) =>
     points.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.broadcast_date).toFixed(1)},${yFn(p.rating).toFixed(1)}`).join(" ");
 
+  // 사용자 지시(2026-08-25, 레이아웃 재점검): viewBox(380×72) + preserveAspectRatio="none"인
+  // SVG 안에 <text>로 회차 숫자를 넣으면, 실제 렌더 너비가 380보다 훨씬 넓어질 때 가로로만
+  // 늘어나(세로는 72px 고정) 숫자 글자가 옆으로 눌린 것처럼 찌그러져 보인다 — SVG <text> 대신
+  // 같은 x 위치(%)를 계산해 일반 HTML로 겹쳐 그리면 글자가 항상 정상 비율로 보인다.
+  const hasEpisodeLabels = own2049.some((p) => p.episode_number !== null && p.episode_number !== undefined);
   return (
     <div className="mt-2 rounded-xl bg-zinc-50 p-3">
       <p className="mb-1.5 text-[11px] font-medium text-zinc-400">최근 12주 본방송 시청률 추이</p>
@@ -914,16 +947,24 @@ function ProgramRatingHistoryChart({ history, accentColor }: { history: RatingHi
             <title>{p.broadcast_date}{p.episode_number ? ` ${p.episode_number}회` : ""} · 수도권2049 {formatRating(p.rating)}</title>
           </circle>
         ))}
-        {own2049.map(
-          (p, i) =>
-            p.episode_number !== null &&
-            p.episode_number !== undefined && (
-              <text key={`ep-${i}`} x={xOf(p.broadcast_date)} y={H - 1} fontSize={5} textAnchor="middle" fill="#a1a1aa">
-                {p.episode_number}
-              </text>
-            )
-        )}
       </svg>
+      {hasEpisodeLabels && (
+        <div className="relative h-[11px]">
+          {own2049.map(
+            (p, i) =>
+              p.episode_number !== null &&
+              p.episode_number !== undefined && (
+                <span
+                  key={`ep-${i}`}
+                  className="absolute -translate-x-1/2 text-[8px] tabular-nums text-zinc-400"
+                  style={{ left: `${(xOf(p.broadcast_date) / W) * 100}%` }}
+                >
+                  {p.episode_number}
+                </span>
+              )
+          )}
+        </div>
+      )}
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-400">
         <span className="inline-flex items-center gap-1">
           <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: accentColor }} />
@@ -1032,12 +1073,16 @@ function OriginalContentReportCard({
                   {/* 사용자 재지시(2026-08-22): 1줄로 표현 가능한 수준에서 글자를 키우되, 제목
                       (프로그램명)은 볼드+한 포인트 더 큰 글씨, 회차~순위 정보는 일반 글자로 구분해
                       가독성 위계를 준다(넘치면 여전히 말줄임). */}
+                  {/* 사용자 지시(2026-08-25, 레이아웃 재점검): 프로그램명이 헤더와 그 아래
+                      정보 박스에 두 번 중복 표시되던 것을 정리 — 헤더 한 곳에만 표시하고,
+                      제목이 길어져도(가구 절 추가로) 잘리지 않게 truncate 대신 2줄 표시로 바꿨다.
+                      리드인/자체재방은 별도 박스 없이 헤더 바로 아래 한 줄로 붙여 수직 공간을 줄였다. */}
                   {(headline || h.featured_category) && (
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="min-w-0 flex-1 truncate">
-                        <span className="text-[14px] font-bold text-[#281fc7]">{h.matched_program_name}</span>
-                        {headline && <span className="ml-1.5 text-[13px] font-normal text-zinc-500">{headline.suffixText}</span>}
-                      </span>
+                    <div className="mb-1 flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[15px] font-bold leading-snug text-[#281fc7]">{h.matched_program_name}</p>
+                        {headline && <p className="mt-0.5 text-[12.5px] font-normal leading-snug text-zinc-500">{headline.suffixText}</p>}
+                      </div>
                       {h.featured_category && (
                         <span className={`shrink-0 rounded-full ${ACCENT_BADGE_BG} px-2 py-0.5 text-[12px] font-medium ${ACCENT_HEADING}`}>
                           {h.featured_category}
@@ -1045,24 +1090,20 @@ function OriginalContentReportCard({
                       )}
                     </div>
                   )}
-                  {/* 사용자 지시(2026-08-21, Page 1 전면 개편): "불필요한 내부 스크롤바는 최대한
-                      배제" — 4열 표(overflow-x-auto)를 없애고, 프로그램 정보 블록 + 3칸 통계
-                      그리드(본방/직후재방/동시간대 경쟁)로 재구성. 좁은 화면에서는 자연스럽게
-                      1열로 줄바꿈되어(그리드 reflow) 가로 스크롤이 생기지 않는다. 데이터·계산은
-                      전부 그대로, 표시 방식만 바꿨다. */}
-                  <div className="mb-3 rounded-xl bg-zinc-50 p-3">
-                    <p className="font-bold text-zinc-800">{h.matched_program_name}</p>
-                    {h.pre_rerun_rating !== null && (
-                      <p className="mt-1 text-[12px] text-zinc-500">
-                        전회 직전 재방 {h.pre_rerun_start_time ? fmtTime(h.pre_rerun_start_time) : ""} · {formatRating(h.pre_rerun_rating)}
-                      </p>
-                    )}
-                    {h.self_rerun_rating !== null && (
-                      <p className="text-[12px] text-zinc-500">
-                        당일 자체재방 {h.self_rerun_start_time ? fmtTime(h.self_rerun_start_time) : ""} · {formatRating(h.self_rerun_rating)}
-                      </p>
-                    )}
-                  </div>
+                  {(h.pre_rerun_rating !== null || h.self_rerun_rating !== null) && (
+                    <div className="mb-3 flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-zinc-500">
+                      {h.pre_rerun_rating !== null && (
+                        <span>
+                          전회 직전 재방 {h.pre_rerun_start_time ? fmtTime(h.pre_rerun_start_time) : ""} · {formatRating(h.pre_rerun_rating)}
+                        </span>
+                      )}
+                      {h.self_rerun_rating !== null && (
+                        <span>
+                          당일 자체재방 {h.self_rerun_start_time ? fmtTime(h.self_rerun_start_time) : ""} · {formatRating(h.self_rerun_rating)}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                     <div className="rounded-xl bg-zinc-50 p-3 text-sm">
                       <p className="mb-1.5 text-[11px] font-medium text-zinc-400">본방</p>
@@ -1121,23 +1162,20 @@ function OriginalContentReportCard({
                       {h.competitorHighlights.length === 0 ? (
                         <span className="text-zinc-300">—</span>
                       ) : (
-                        <div className="flex flex-col gap-1">
-                          {/* 사용자 재지시(2026-08-22): 채널명·방송시간 열은 더 줄이고(제목이 5글자
-                              밖에 안 보이던 문제) 제목 열에 폭을 더 배분 — 채널명·시간 글씨도 함께
-                              줄여 시각적 위계(제목이 주인공)를 분명히 했다. */}
+                        // 사용자 지시(2026-08-25, 레이아웃 재점검): 고정 픽셀(26px/24px) 4열 그리드가
+                        // 한글 글자 폭에 비해 너무 좁아 채널명·시간이 잘리거나 겹쳐 보이던 문제
+                        // ("글자가 깨짐" 제보) — 픽셀 고정 그리드를 버리고, 채널·시간을 위 줄(작게),
+                        // 프로그램명·시청률을 아래 줄(2줄까지 줄바꿈 허용)로 쌓는 안전한 구조로 교체.
+                        <div className="flex flex-col gap-1.5">
                           {h.competitorHighlights.slice(0, 3).map((c, i) => (
-                            <div key={i} className="grid grid-cols-[26px_24px_1fr_36px] items-start gap-x-1">
-                              <span className="truncate text-[9px] font-medium text-zinc-400">{c.competitor_name}</span>
-                              <span className="text-[9px] text-zinc-400">{fmtTime(c.competitor_start_time)}</span>
-                              {/* 사용자 재지시(2026-08-22): 좁은 열에서도 제목이 잘리지 않도록
-                                  truncate(말줄임) 대신 2줄까지 줄바꿈 허용 — 잘린 제목보다 전체가
-                                  보이는 편이 낫다는 판단. */}
-                              <span className="line-clamp-2 font-medium text-zinc-700">{c.competitor_program_name}</span>
-                              {/* 사용자 지시(2026-08-25): 개인2049 원본 시트와 매칭이 정확해진 걸
-                                  확인했으니 경쟁 프로그램 시청률도 소수점 3자리로 통일(기존 2자리). */}
-                              <span className="text-right font-semibold tabular-nums text-zinc-600">
-                                {formatRating(c.competitor_rating)}
-                              </span>
+                            <div key={i} className={i > 0 ? "border-t border-zinc-100 pt-1.5" : ""}>
+                              <p className="text-[9.5px] text-zinc-400">
+                                {c.competitor_name} · {fmtTime(c.competitor_start_time)}
+                              </p>
+                              <p className="text-[12px] leading-snug text-zinc-700">
+                                <span className="line-clamp-2">{c.competitor_program_name}</span>{" "}
+                                <span className="font-semibold tabular-nums text-zinc-800">{formatRating(c.competitor_rating)}</span>
+                              </p>
                             </div>
                           ))}
                         </div>
@@ -1169,17 +1207,25 @@ function OriginalContentReportCard({
                       ))}
                     </ul>
                   )}
-                  {insight.schedulingNote.length > 0 && (
+                  {/* 사용자 지시(2026-08-25): [편성 인사이트]는 이제 우선 OpenAI가 이미 검증된
+                      값만으로 종합한 문장(h.schedulingInsight, route.ts에서 계산)을 보여주고,
+                      API 키가 없거나 호출이 실패했을 때만(null) 기존 규칙 기반 카니발라이제이션
+                      문구(insight.schedulingNote)로 조용히 대체한다. */}
+                  {(h.schedulingInsight || insight.schedulingNote.length > 0) && (
                     <div className="mt-1 rounded-xl bg-amber-50 p-2.5">
                       <p className="mb-1 text-[12px] font-semibold text-amber-700">[편성 인사이트]</p>
-                      <div className="flex flex-col gap-1">
-                        {insight.schedulingNote.map((note, i) => (
-                          <p key={i} className="flex gap-1.5 text-[13px] leading-relaxed text-amber-800">
-                            <span className="shrink-0 text-amber-300">•</span>
-                            <span>{note}</span>
-                          </p>
-                        ))}
-                      </div>
+                      {h.schedulingInsight ? (
+                        <p className="text-[13px] leading-relaxed text-amber-800">{h.schedulingInsight}</p>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          {insight.schedulingNote.map((note, i) => (
+                            <p key={i} className="flex gap-1.5 text-[13px] leading-relaxed text-amber-800">
+                              <span className="shrink-0 text-amber-300">•</span>
+                              <span>{note}</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

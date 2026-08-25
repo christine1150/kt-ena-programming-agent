@@ -13,6 +13,7 @@ import {
   resolveMarketYtdTargetLabel,
 } from "@/lib/targetResolution";
 import { mapWithConcurrency } from "@/lib/concurrency";
+import { buildOriginalProgrammingInsightViaLlm, type OriginalInsightInput } from "@/lib/originalContentInsight";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -66,6 +67,11 @@ interface OriginalDailyRow {
   prev_drama_avg_rating: number | null;
   prev_drama_episode_count: number | null;
   prev_drama_change_pct: number | null;
+  // 사용자 지시(2026-08-25): 제목에 "타깃 및 가구 하락/상승"을 함께 보여주려면 가구(전국
+  // 유료가구) 타깃 쪽도 타깃과 동일한 방식(같은 슬롯 ±10분, 직전 방영 대비)의 시청률·등락률이
+  // 필요 — get_original_content_daily가 함께 계산해 반환(그 타깃 데이터가 없는 채널은 null).
+  matched_household_rating: number | null;
+  household_rating_change_pct: number | null;
 }
 // 사용자 지시: SBS Plus는 ENA의 등록 경쟁채널이 아니라 ENA Drama의 등록 경쟁채널이라(§1.2 고정
 // 페어링), ENA 프로그램과 SBS Plus 동시방송을 비교하려면 ENA Drama 쪽 경쟁채널 데이터를 봐야
@@ -480,7 +486,7 @@ export async function GET() {
 
   let originalContentReport: {
     mode: "daily" | "weekly_review";
-    daily: (OriginalDailyRow & { competitorHighlights: CompetitorOverlapRow[]; householdRank: number | null; ratingHistory: RatingHistoryResult | null })[];
+    daily: (OriginalDailyRow & { competitorHighlights: CompetitorOverlapRow[]; householdRank: number | null; ratingHistory: RatingHistoryResult | null; schedulingInsight: string | null })[];
     weekly: OriginalWeeklyRow[];
   };
 
@@ -614,6 +620,61 @@ export async function GET() {
       };
     });
 
+    // 사용자 지시(2026-08-25): [편성 인사이트]가 "카니발라이제이션" 단일 규칙만 판정하던 것을
+    // — 카니발라이제이션은 "가급적 적게"만 언급하고, 첨부받은 PD 리포트 톤을 배운 OpenAI가
+    // 이미 검증된 값(아래 input)만으로 더 폭넓은 패턴 해석을 생성하도록 확장(필요시 Open AI
+    // 사용 허가받음, 2026-08-25). API 키가 없거나 실패하면 null → 프론트가 기존 규칙 기반
+    // 카니발라이제이션 문구로 조용히 대체(LLM 장애가 서비스를 막지 않는다는 기존 원칙 유지).
+    const channelNameByCode = new Map(summaries.map((s) => [s.code, s.name]));
+    const achievementPctByCode2 = new Map(summaries.map((s) => [s.code, s.achievementPct]));
+    const dailyWithInsight = await Promise.all(
+      dailyWithOverlap.map(async (row) => {
+        // buildOriginalHeadline(Dashboard.tsx)와 완전히 동일한 방식으로 순위 산출(새 계산 방식 도입 없음).
+        const beatenBy = row.matched_rating !== null
+          ? row.competitorHighlights
+              .filter((c) => c.competitor_rating !== null && c.competitor_rating > row.matched_rating!)
+              .sort((a, b) => (b.competitor_rating ?? 0) - (a.competitor_rating ?? 0))
+          : [];
+        const targetRank = row.matched_rating !== null ? 1 + beatenBy.length : null;
+        // 기존 클라이언트 로직(Dashboard.tsx buildOriginalInsight)과 동일한 카니발라이제이션
+        // 판정 기준(자체재방 유입률 - 타채널재방 유입률 >= 10%p)을 서버에서도 그대로 재현 —
+        // LLM에게는 "의심되는지 여부"만 힌트로 주고, 최종 언급 여부/문구는 LLM이 정한다.
+        const selfRerunUpliftPct =
+          row.self_rerun_rating !== null && row.matched_rating !== null && row.matched_rating > 0
+            ? (row.self_rerun_rating / row.matched_rating) * 100
+            : null;
+        const cannibalizationSuspected =
+          selfRerunUpliftPct !== null && row.retention_pct !== null && row.rerun_channel_code !== null && selfRerunUpliftPct - row.retention_pct >= 10;
+
+        const input: OriginalInsightInput = {
+          programName: row.matched_program_name,
+          episodeNumber: row.episode_number,
+          broadcastChannelName: channelNameByCode.get(row.broadcast_channel_code) ?? row.broadcast_channel_code,
+          matchedRating: row.matched_rating,
+          priorRatingChangePct: row.prior_rating_change_pct,
+          matchedHouseholdRating: row.matched_household_rating,
+          householdRatingChangePct: row.household_rating_change_pct,
+          achievementPct: achievementPctByCode2.get(row.broadcast_channel_code) ?? null,
+          matchedReach: row.matched_reach,
+          targetRank,
+          householdRank: row.householdRank,
+          beatenBy: beatenBy.slice(0, 3).map((c) => ({ competitor_name: c.competitor_name, competitor_program_name: c.competitor_program_name, competitor_rating: c.competitor_rating })),
+          preRerunRating: row.pre_rerun_rating,
+          selfRerunRating: row.self_rerun_rating,
+          selfRerunUpliftPct,
+          rerunChannelName: row.rerun_channel_code ? (channelNameByCode.get(row.rerun_channel_code) ?? row.rerun_channel_code) : null,
+          rerunRating: row.rerun_rating,
+          retentionPct: row.retention_pct,
+          ageBreakdownTop3: row.age_breakdown ? row.age_breakdown.slice(0, 3) : null,
+          prevDramaName: row.prev_drama_name,
+          prevDramaChangePct: row.prev_drama_change_pct,
+          cannibalizationSuspected,
+        };
+        const schedulingInsight = row.matched_rating !== null ? await buildOriginalProgrammingInsightViaLlm(input) : null;
+        return { ...row, schedulingInsight };
+      })
+    );
+
     // 사용자 지시(2026-08-22): "주요 콘텐츠 리뷰"의 연령대별 미니바 대신, 최근 12주간 본방송
     // 시청률 추이(수도권 2049 진하게 + 전국 유료가구 연하게, 회차 표시)를 꺾은선 그래프로 —
     // "동시간대 같은 컨텐츠를 다른 채널이 방송할 경우(예: SBS Plus, ENA Play) 비교할 수 있게
@@ -669,7 +730,7 @@ export async function GET() {
         })
     );
 
-    const dailyWithHistory = dailyWithOverlap.map((row) => ({
+    const dailyWithHistory = dailyWithInsight.map((row) => ({
       ...row,
       ratingHistory: ratingHistoryByKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
     }));
