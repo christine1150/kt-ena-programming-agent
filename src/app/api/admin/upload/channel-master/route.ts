@@ -264,11 +264,17 @@ export async function POST(request: Request) {
     // 첫 방송일자가 있는 프로그램만, 아직 seed가 없는 경우에만 "1회=첫방송일자"로 자동 채운다
     // (이미 사람이 확인해 seed해둔 프로그램은 덮어쓰지 않는다 — program_episode_counters는
     // 대화 중 사용자가 알려준 실제 회차로 seed되는 경우가 있어 그게 이 추정보다 정확함).
+    // 버그 수정(2026-08-26, 사용자 제보 "회차가 안 나온다"): 엑셀 타이틀 원문("신병4 : 사보타주")을
+    // 그대로 canonical_name에 넣었는데, get_episode_number/get_program_rating_history는 이 값을
+    // Nielsen의 문장부호까지 전부 지운 canonical_name("신병4사보타주")과 비교한다 — 콜론·공백이
+    // 남아있으면 절대 매칭되지 않아 회차가 항상 null이었다(migration 20260825150000과 같은
+    // 원인의 재발). 시드에 넣기 전에 문장부호를 지워 Nielsen 표기와 맞춘다.
     for (const [programName, firstDate] of firstBroadcastByProgram) {
+      const canonicalMatchKey = programName.replace(/[^가-힣a-zA-Z0-9]/g, "");
       const { error: seedError } = await supabase
         .from("program_episode_counters")
         .upsert(
-          { canonical_name: programName, seed_episode_number: 1, seed_broadcast_date: firstDate },
+          { canonical_name: canonicalMatchKey, seed_episode_number: 1, seed_broadcast_date: firstDate },
           { onConflict: "canonical_name", ignoreDuplicates: true }
         );
       if (!seedError) episodeCountersSeeded += 1;

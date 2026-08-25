@@ -626,6 +626,7 @@ export async function GET(request: Request) {
 
   let enaOriginalDaily: {
     matched_program_name: string;
+    featured_display_name: string | null;
     matched_rating: number | null;
     matched_household_rating: number | null;
     retention_pct: number | null;
@@ -636,14 +637,25 @@ export async function GET(request: Request) {
     const { data: originalDaily } = await supabase.rpc("get_original_content_daily", { p_as_of_date: dateTo });
     enaOriginalDaily = (originalDaily ?? [])
       .filter((r: { broadcast_channel_code: string }) => r.broadcast_channel_code === "ENA")
-      .map((r: { matched_program_name: string; matched_rating: number | null; matched_household_rating: number | null; retention_pct: number | null; rerun_channel_code: string | null; self_rerun_rating: number | null }) => ({
-        matched_program_name: r.matched_program_name,
-        matched_rating: r.matched_rating,
-        matched_household_rating: r.matched_household_rating,
-        retention_pct: r.retention_pct,
-        rerun_channel_code: r.rerun_channel_code,
-        self_rerun_rating: r.self_rerun_rating,
-      }));
+      .map(
+        (r: {
+          matched_program_name: string;
+          featured_display_name: string | null;
+          matched_rating: number | null;
+          matched_household_rating: number | null;
+          retention_pct: number | null;
+          rerun_channel_code: string | null;
+          self_rerun_rating: number | null;
+        }) => ({
+          matched_program_name: r.matched_program_name,
+          featured_display_name: r.featured_display_name,
+          matched_rating: r.matched_rating,
+          matched_household_rating: r.matched_household_rating,
+          retention_pct: r.retention_pct,
+          rerun_channel_code: r.rerun_channel_code,
+          self_rerun_rating: r.self_rerun_rating,
+        })
+      );
   }
 
   return NextResponse.json({

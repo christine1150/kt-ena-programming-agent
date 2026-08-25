@@ -66,6 +66,9 @@ interface OriginalDailyItem {
   matched_reach: number | null;
   age_breakdown: { label: string; rating: number }[] | null;
   featured_category: string | null;
+  // 사용자 지시(2026-08-26): "신병4사보타주는 '신병4: 사보타주'로 표현되게 통일" — 있으면
+  // matched_program_name(Nielsen 공백·문장부호 제거 표기) 대신 이 값을 화면에 쓴다.
+  featured_display_name: string | null;
   rerun_channel_code: string | null;
   rerun_program_name: string | null;
   rerun_start_time: string | null;
@@ -583,14 +586,12 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
         </span>
         {/* 사용자 재지시(2026-08-22): ENA도 다른 6개 채널과 동일하게 "전일 대비 % 증감" 대신
             "전일 대비 순위 증감"(RankChangeIndicator, +N/-N/-)으로 통일.
-            사용자 재지시(2026-08-25, 두 차례): 처음엔 그 아래에 시청률 등락률(%)을 추가했다가,
-            "등락률 말고 전날 대비 순위로 변경"으로 재지시 — %를 빼고 전일 실제 순위 숫자
-            (priorDayRank)를 보여준다. 둘 다 absolute라 가운데 KPI(시청률·순위) 정렬은 그대로 유지됨. */}
-        <div className="absolute right-0 top-1/2 flex -translate-y-1/2 flex-col items-end gap-0.5">
+            사용자 재지시(2026-08-25, 세 차례): %→전일 순위 텍스트로 바꿨다가, "그 아래 6개
+            채널이 표현한것과 같은 방식으로 세모와 색상, +- 자연수로"로 최종 재지시 — 6개 타일은
+            RankChangeIndicator 하나만 단독으로 쓰므로, ENA 히어로도 그 부가 텍스트 줄을 빼고
+            완전히 동일하게 RankChangeIndicator 하나만 남긴다. */}
+        <div className="absolute right-0 top-1/2 -translate-y-1/2">
           <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
-          {channel.priorDayRank !== null && (
-            <span className="text-[11px] font-semibold tabular-nums text-zinc-400">전일 {channel.priorDayRank}위</span>
-          )}
         </div>
       </div>
       {ytdLine && <p className="mt-3 text-sm text-zinc-500">{ytdLine}</p>}
@@ -787,7 +788,10 @@ function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null
   const normalSuffix = rankParts.length > 0 ? ` (${rankParts.join(", ")})` : "";
   const suffixText = `${boldSuffix}${normalSuffix}`;
   // 사용자 지시(2026-08-21): 제목 앞뒤 <> 제거 — 프로그램명만 그대로 쓰고 뒤에 회차/부가 정보를 잇는다.
-  return { text: `${item.matched_program_name} ${suffixText}`, suffixText, boldSuffix, normalSuffix, rank, beatenBy };
+  // 사용자 재지시(2026-08-26): "신병4사보타주는 '신병4: 사보타주'로 표현되게" — featured_content에
+  // 등록된 사람이 읽기 좋은 원문 제목이 있으면 그걸 쓰고, 없으면 기존처럼 Nielsen 표기 그대로.
+  const displayName = item.featured_display_name ?? item.matched_program_name;
+  return { text: `${displayName} ${suffixText}`, suffixText, boldSuffix, normalSuffix, rank, beatenBy };
 }
 
 // 사용자 지시(2026-08-20): 문단 서술 대신 "핵심 요약 불릿 + [편성 인사이트]" 형태로 재구성.
@@ -934,12 +938,18 @@ function ProgramRatingHistoryChart({
   history,
   accentColor,
   ownChannelName,
+  themeColorByCode,
 }: {
   history: RatingHistoryResult;
   accentColor: string;
   // 사용자 지시(2026-08-25): 범례를 "수도권2049/가구(전국유료가구)/ENA Play(수2049)" 같은 타깃
   // 표기 대신 "ENA, ENA Play, SBS Plus, ENA (가구)"처럼 채널명 중심으로.
   ownChannelName: string;
+  // 사용자 재지시(2026-08-25): "ENA Play의 채널 로고 색상을 활용한 라인도 적용되지 않았어" —
+  // otherChannels 시리즈(예: 직후재방 채널)가 고정 팔레트(OTHER_CHANNEL_LINE_COLORS) 색만
+  // 썼는데, seriesName이 실제 채널 코드라 themeColorByCode로 그 채널의 진짜 로고색을 먼저
+  // 찾고, 없을 때만 고정 팔레트로 폴백한다.
+  themeColorByCode: Map<string, string | null>;
 }) {
   const own2049 = [...history.own2049].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date));
   const ownHousehold = [...history.ownHousehold].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date));
@@ -984,7 +994,16 @@ function ProgramRatingHistoryChart({
           <path key={s.seriesName} d={pathOf(s.points, y2049)} fill="none" stroke={COMPETITOR_LINE_COLORS[i % COMPETITOR_LINE_COLORS.length]} strokeWidth={1.3} strokeDasharray="3 2" strokeLinecap="round" strokeLinejoin="round" />
         ))}
         {otherSeries.map((s, i) => (
-          <path key={s.seriesName} d={pathOf(s.points, y2049)} fill="none" stroke={OTHER_CHANNEL_LINE_COLORS[i % OTHER_CHANNEL_LINE_COLORS.length]} strokeWidth={1.3} strokeDasharray="3 2" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            key={s.seriesName}
+            d={pathOf(s.points, y2049)}
+            fill="none"
+            stroke={themeColorByCode.get(s.seriesName) ?? OTHER_CHANNEL_LINE_COLORS[i % OTHER_CHANNEL_LINE_COLORS.length]}
+            strokeWidth={1.3}
+            strokeDasharray="3 2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         ))}
         {own2049.length >= 2 && <path d={pathOf(own2049, y2049)} fill="none" stroke={accentColor} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />}
         {own2049.map((p, i) => (
@@ -1023,7 +1042,10 @@ function ProgramRatingHistoryChart({
         )}
         {otherSeries.map((s, i) => (
           <span key={s.seriesName} className="inline-flex items-center gap-1">
-            <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: OTHER_CHANNEL_LINE_COLORS[i % OTHER_CHANNEL_LINE_COLORS.length] }} />
+            <span
+              className="inline-block h-0.5 w-3 rounded-full"
+              style={{ backgroundColor: themeColorByCode.get(s.seriesName) ?? OTHER_CHANNEL_LINE_COLORS[i % OTHER_CHANNEL_LINE_COLORS.length] }}
+            />
             {CHANNEL_NAME_BY_CODE[s.seriesName] ?? s.seriesName}
           </span>
         ))}
@@ -1125,7 +1147,7 @@ function OriginalContentReportCard({
                   {(headline || h.featured_category) && (
                     <div className="mb-1 flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="text-[15px] font-bold leading-snug text-[#281fc7]">{h.matched_program_name}</p>
+                        <p className="text-[15px] font-bold leading-snug text-[#281fc7]">{h.featured_display_name ?? h.matched_program_name}</p>
                         {headline && (
                           <p className="mt-0.5 text-[12.5px] leading-snug text-zinc-500">
                             {headline.boldSuffix && <span className="font-bold text-zinc-700">{headline.boldSuffix}</span>}
@@ -1161,8 +1183,12 @@ function OriginalContentReportCard({
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[1fr_1fr_1.3fr]">
                     <div className="rounded-xl bg-zinc-50 p-2.5 text-sm">
                       <p className="mb-1 text-[11px] font-medium text-zinc-400">본방</p>
-                      {/* 사용자 지시(2026-08-22): 채널명을 그 채널 로고 색+볼드로. */}
-                      <p className="text-zinc-600">
+                      {/* 사용자 지시(2026-08-22): 채널명을 그 채널 로고 색+볼드로.
+                          사용자 재지시(2026-08-25): "채널 옆에 있는 방송 시간은 폰트를 본방...
+                          만큼 작게 써서 아랫줄로 글씨가 내려가지 않게" — "채널 드라마 · 밤 11시
+                          10분"처럼 긴 조합이 text-sm(14px)에서 줄바꿈되던 것을, 위 "본방"
+                          라벨과 같은 text-[11px]로 줄여 한 줄에 들어오게 한다. */}
+                      <p className="whitespace-nowrap text-[11px] text-zinc-600">
                         <span className="font-bold" style={{ color: themeColorByCode.get(h.broadcast_channel_code) ?? undefined }}>
                           {CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
                         </span>{" "}
@@ -1198,7 +1224,7 @@ function OriginalContentReportCard({
                       <p className="mb-1 text-[11px] font-medium text-zinc-400">직후재방</p>
                       {h.rerun_program_name && h.rerun_start_time ? (
                         <>
-                          <p className="text-zinc-600">
+                          <p className="whitespace-nowrap text-[11px] text-zinc-600">
                             <span className="font-bold" style={{ color: themeColorByCode.get(h.rerun_channel_code ?? "") ?? undefined }}>
                               {CHANNEL_NAME_BY_CODE[h.rerun_channel_code ?? ""] ?? h.rerun_channel_code}
                             </span>{" "}
@@ -1258,6 +1284,7 @@ function OriginalContentReportCard({
                       history={h.ratingHistory}
                       accentColor={themeColorByCode.get(h.broadcast_channel_code) ?? enaAccentColor}
                       ownChannelName={CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
+                      themeColorByCode={themeColorByCode}
                     />
                   )}
                   {/* 명세엔 없지만 기존에 있던 추가 신호(동시간대 정성 비교/신규드라마 비교/자체재방/

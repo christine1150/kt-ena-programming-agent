@@ -47,6 +47,10 @@ interface OriginalDailyRow {
   matched_reach: number | null;
   age_breakdown: { label: string; rating: number }[] | null;
   featured_category: string | null;
+  // 사용자 지시(2026-08-26): "신병4사보타주는 '신병4: 사보타주'로 표현되게" — featured_content
+  // 관리 화면에 등록된 사람이 읽기 좋은 원문 제목(있을 때만, 없으면 프론트에서 matched_program_name
+  // 그대로 폴백).
+  featured_display_name: string | null;
   rerun_channel_code: string | null;
   rerun_program_name: string | null;
   rerun_start_time: string | null;

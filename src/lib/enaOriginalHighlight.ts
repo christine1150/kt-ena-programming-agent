@@ -15,6 +15,9 @@ const CHANNEL_NAME_BY_CODE: Record<string, string> = {
 
 export interface EnaOriginalHighlightItem {
   matched_program_name: string;
+  // 사용자 지시(2026-08-26): "신병4사보타주는 '신병4: 사보타주'로 표현되게" — 있으면 이 값을
+  // 우선 인용(featured_content에 등록된 사람이 읽기 좋은 원문 제목).
+  featured_display_name?: string | null;
   matched_rating: number | null;
   matched_household_rating: number | null;
   retention_pct: number | null;
@@ -39,7 +42,7 @@ export function buildEnaOriginalHighlightSentence(
         : d.self_rerun_rating !== null && d.matched_rating !== null && d.matched_rating > 0
           ? ` — 자체 재방 유지율 ${((d.self_rerun_rating / d.matched_rating) * 100).toFixed(1)}%`
           : "";
-    return `'${d.matched_program_name}' 수2049 ${formatRating(d.matched_rating)}${hh}${rerunNote}`;
+    return `'${d.featured_display_name ?? d.matched_program_name}' 수2049 ${formatRating(d.matched_rating)}${hh}${rerunNote}`;
   });
   return `오늘 오리지널·독점 콘텐츠 성과: ${parts.join(", ")}.`;
 }
