@@ -298,6 +298,11 @@ interface NarrativeSignal {
   baseline_avg_share: number | null;
   today_peak_hour: number | null;
   today_peak_rating: number | null;
+  // 사용자 지시(2026-08-25): "가장 잘 나온 시간대와 잘 나온 프로그램을 종합해서 함께 이야기" —
+  // get_channel_daily_narrative가 2026-08-21부터 이미 반환하던 컬럼(그 피크 시간대 안에서
+  // 실제로 가장 높았던 "프로그램 단위" 값)인데 지금까지 이 타입에 빠져 있어 문장에서 못 썼다.
+  today_peak_program_name: string | null;
+  today_peak_program_rating: number | null;
   baseline_peak_hour: number | null;
   baseline_peak_rating: number | null;
   top_program_name: string | null;
@@ -1088,21 +1093,19 @@ function buildBriefingReport(
       }
     }
 
-    // 시간대: 해당 날짜의 피크 시간대가 평소와 다른지
-    if (s.today_peak_hour !== null && s.baseline_peak_hour !== null) {
-      if (s.today_peak_hour !== s.baseline_peak_hour) {
-        sentences.push(
-          `평소 강세 시간대는 ${s.baseline_peak_hour}시대(평균 ${fmtR(s.baseline_peak_rating)})인데, ${refLabel}은 ${s.today_peak_hour}시대(${fmtR(s.today_peak_rating)})에서 가장 높은 시청률을 기록해 시간대 흐름이 평소와 달랐습니다.`
-        );
-      } else {
-        sentences.push(`${refLabel}도 평소와 같이 ${s.today_peak_hour}시대가 가장 강세였습니다(${fmtR(s.today_peak_rating)}).`);
-      }
-    }
-
-    // 기여 프로그램: 해당 날짜 1위 프로그램이 자기 자신의 같은 요일·시간대(본방 슬롯) 기준 최근
+    // 시간대 + 그 시간대를 이끈 프로그램을 하나의 문장으로 종합(사용자 지시 2026-08-25: "가장
+    // 잘 나온 시간대와 잘 나온 프로그램을 종합해서 함께 이야기해 줄 수 있도록"). today_peak_program_name은
+    // 그 피크 시간대 안에서 실제로 가장 높았던 "프로그램 단위" 값이라 대부분 top_program_name과
+    // 같은 프로그램이다 — 같을 때만 기여율까지 한 문장에 엮고, 다르면(피크 시간대와 오늘 최고
+    // 기여 프로그램이 서로 다른 시간대일 때) 억지로 합치지 않고 각자 문장으로 남긴다(사실과
+    // 다른 조합 금지, CLAUDE.md "No Hallucination" 원칙).
+    //
+    // 기여율 계산: 해당 날짜 1위 프로그램이 자기 자신의 같은 요일·시간대(본방 슬롯) 기준 최근
     // 8주 평균 대비 얼마나 기여/비기여했는지. 사용자 피드백(2026-08-20): 요일·시간대 구분 없이
     // 같은 이름의 모든 방영분(재방송 포함)을 평균 내면 주 1회 편성되는 오리지널의 등락률이
     // 비정상적으로 부풀려졌다(예: 712%) — get_channel_daily_narrative가 이제 본방 슬롯만 비교한다.
+    let contribProgramName: string | null = null;
+    let contribClause: string | null = null; // 주어 없는 종속절("...보다 N% 높게 기여했습니다" 형태)
     if (
       s.top_program_name &&
       s.top_program_baseline_days !== null &&
@@ -1113,10 +1116,44 @@ function buildBriefingReport(
     ) {
       const pct = ((s.top_program_rating - s.top_program_baseline_avg) / s.top_program_baseline_avg) * 100;
       if (Math.abs(pct) >= 20) {
-        sentences.push(
-          `${refLabel} 가장 시청률이 높았던 프로그램은 '${s.top_program_name}'(${fmtR(s.top_program_rating)}, ${s.top_program_start_time ? fmtTime(s.top_program_start_time) : ""})으로, 이 프로그램의 같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균(${fmtR(s.top_program_baseline_avg)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높게 기여했습니다" : "낮아 비기여했습니다"}.`
-        );
+        contribProgramName = s.top_program_name;
+        contribClause = `같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균(${fmtR(s.top_program_baseline_avg)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높게 기여했습니다" : "낮아 비기여했습니다"}`;
       }
+    }
+    const peakMatchesContrib =
+      s.today_peak_program_name !== null && contribProgramName !== null && s.today_peak_program_name === contribProgramName;
+
+    if (s.today_peak_hour !== null && s.baseline_peak_hour !== null) {
+      const peakProgramParen = s.today_peak_program_name
+        ? `'${s.today_peak_program_name}' ${fmtR(s.today_peak_program_rating)}`
+        : fmtR(s.today_peak_rating);
+      if (s.today_peak_hour !== s.baseline_peak_hour) {
+        if (peakMatchesContrib && contribClause) {
+          sentences.push(
+            `평소 강세 시간대는 ${s.baseline_peak_hour}시대(평균 ${fmtR(s.baseline_peak_rating)})인데, ${refLabel}은 ${s.today_peak_hour}시대(${peakProgramParen})에서 가장 높은 시청률을 기록해 시간대 흐름이 평소와 달랐으며, 이 프로그램은 ${contribClause}.`
+          );
+        } else {
+          sentences.push(
+            `평소 강세 시간대는 ${s.baseline_peak_hour}시대(평균 ${fmtR(s.baseline_peak_rating)})인데, ${refLabel}은 ${s.today_peak_hour}시대(${peakProgramParen})에서 가장 높은 시청률을 기록해 시간대 흐름이 평소와 달랐습니다.`
+          );
+        }
+      } else {
+        if (peakMatchesContrib && contribClause) {
+          sentences.push(
+            `${refLabel}도 평소와 같이 ${s.today_peak_hour}시대(${peakProgramParen})가 가장 강세였으며, 이 프로그램은 ${contribClause}.`
+          );
+        } else {
+          sentences.push(`${refLabel}도 평소와 같이 ${s.today_peak_hour}시대가 가장 강세였습니다(${peakProgramParen}).`);
+        }
+      }
+    }
+
+    // 피크 시간대 프로그램과 오늘 최고 기여 프로그램이 다를 때만(또는 피크 시간대 정보 자체가
+    // 없을 때만) 별도 문장으로 — 같으면 위에서 이미 한 문장으로 합쳐졌다.
+    if (contribClause && contribProgramName && !peakMatchesContrib) {
+      sentences.push(
+        `${refLabel} 가장 시청률이 높았던 프로그램은 '${contribProgramName}'(${fmtR(s.top_program_rating)}, ${s.top_program_start_time ? fmtTime(s.top_program_start_time) : ""})으로, ${contribClause}.`
+      );
     }
 
     // 연령대: 가장 크게 움직인 연령대
