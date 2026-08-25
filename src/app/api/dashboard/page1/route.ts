@@ -138,6 +138,8 @@ interface ChannelSummary {
   primaryTarget: string;
   currentRating: number | null;
   currentRank: number | null;
+  // 사용자 재지시(2026-08-25): ENA 히어로 우측 하단 배지 — 전일 실제 순위 숫자.
+  priorDayRank: number | null;
   dodChangePct: number | null;
   // 사용자 지시(2026-08-21): "오늘의 시청률" 채널 타일 증감 표시를 시청률(%) 대신 순위 증감으로.
   // 양수=순위 개선(+1위), 음수=순위 하락(-3위), null=전일 데이터 없어 비교 불가.
@@ -477,6 +479,10 @@ export async function GET(request: Request) {
           primaryTarget: channel.primary_target,
           currentRating,
           currentRank,
+          // 사용자 재지시(2026-08-25): ENA 히어로 우측 하단 배지를 시청률 등락률(%)이 아니라
+          // "전일 대비 순위"(어제 실제 순위 숫자)로 바꾼다 — 이미 계산해두던 priorDayRank를
+          // 그대로 노출.
+          priorDayRank,
           dodChangePct,
           rankChangeDod,
           wowChangePct,

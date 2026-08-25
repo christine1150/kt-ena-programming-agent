@@ -20,6 +20,8 @@ interface ChannelSummary {
   primaryTarget: string;
   currentRating: number | null;
   currentRank: number | null;
+  // 사용자 재지시(2026-08-25): ENA 히어로 우측 하단 배지 — 전일 실제 순위 숫자.
+  priorDayRank: number | null;
   dodChangePct: number | null;
   // 사용자 지시(2026-08-21, Page 1 매거진 개편): "오늘의 시청률" 채널 타일 증감을 시청률(%) 대신
   // 전일 대비 순위 증감으로. 양수=순위 개선.
@@ -581,19 +583,13 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
         </span>
         {/* 사용자 재지시(2026-08-22): ENA도 다른 6개 채널과 동일하게 "전일 대비 % 증감" 대신
             "전일 대비 순위 증감"(RankChangeIndicator, +N/-N/-)으로 통일.
-            사용자 재지시(2026-08-25): "전일 대비 순위 증감: +1/-3/-" + "하락/상승 비율은
-            우측에 배치" — 순위 증감(정수)만으로는 시청률 자체가 얼마나 변했는지 안 보여서,
-            시청률 등락률(dodChangePct, Page 2 WHAT HAPPENED?와 같은 지표)도 그 아래 함께
-            표시한다. 둘 다 absolute라 가운데 KPI(시청률·순위) 정렬은 그대로 유지됨. */}
+            사용자 재지시(2026-08-25, 두 차례): 처음엔 그 아래에 시청률 등락률(%)을 추가했다가,
+            "등락률 말고 전날 대비 순위로 변경"으로 재지시 — %를 빼고 전일 실제 순위 숫자
+            (priorDayRank)를 보여준다. 둘 다 absolute라 가운데 KPI(시청률·순위) 정렬은 그대로 유지됨. */}
         <div className="absolute right-0 top-1/2 flex -translate-y-1/2 flex-col items-end gap-0.5">
           <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
-          {channel.dodChangePct !== null && (
-            <span
-              className="text-[11px] font-semibold tabular-nums"
-              style={{ color: channel.dodChangePct >= 0 ? ACCENT_UP : ACCENT_DOWN }}
-            >
-              {channel.dodChangePct >= 0 ? "▲" : "▼"} {Math.abs(channel.dodChangePct).toFixed(1)}%
-            </span>
+          {channel.priorDayRank !== null && (
+            <span className="text-[11px] font-semibold tabular-nums text-zinc-400">전일 {channel.priorDayRank}위</span>
           )}
         </div>
       </div>
