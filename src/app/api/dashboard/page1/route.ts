@@ -243,7 +243,7 @@ interface TodayTopProgramRow {
   targetLabel: string;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getCurrentSession();
   if (!session) {
     return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
@@ -265,7 +265,32 @@ export async function GET() {
       { status: 404 }
     );
   }
-  const asOfDate: string = latestRow.broadcast_date;
+  const latestAvailableDate: string = latestRow.broadcast_date;
+
+  // 사용자 지시(2026-08-25): "1페이지 채널 종합리포트 우측에 날짜를 선택할 수 있는 검색 기능을
+  // 추가"— ?date=YYYY-MM-DD로 특정 일자를 요청하면 그 날짜 기준 리포트를 보여준다. 이 함수 안의
+  // 모든 다운스트림 로직이 이미 단일 asOfDate 변수만 참조하도록 짜여 있어(위→아래 전부 asOfDate로
+  // 계산), 이 변수의 출처만 바꾸면 나머지는 그대로 재사용된다(Delta-Only). 요청한 날짜에 실제
+  // Nielsen 데이터가 없으면 조용히 최신 날짜로 대체하지 않고 requestedDateNoData 플래그로
+  // 프론트에 알려 사용자가 원인을 알 수 있게 한다.
+  const { searchParams } = new URL(request.url);
+  const requestedDateRaw = searchParams.get("date");
+  let asOfDate: string = latestAvailableDate;
+  let requestedDateNoData = false;
+  if (requestedDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(requestedDateRaw) && requestedDateRaw <= latestAvailableDate) {
+    const { data: requestedRow } = await supabase
+      .from("ratings")
+      .select("broadcast_date")
+      .eq("source_type", "nielsen_daily")
+      .eq("broadcast_date", requestedDateRaw)
+      .limit(1)
+      .maybeSingle();
+    if (requestedRow) {
+      asOfDate = requestedDateRaw;
+    } else {
+      requestedDateNoData = true;
+    }
+  }
   const year = parseInt(asOfDate.slice(0, 4), 10);
 
   const { data: channels, error: channelsError } = await supabase
@@ -951,6 +976,8 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     asOfDate,
+    latestAvailableDate,
+    requestedDateNoData,
     channels: summaries,
     originalContentReport,
     killerContent: killerContent ?? [],

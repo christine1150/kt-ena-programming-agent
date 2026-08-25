@@ -237,6 +237,11 @@ interface DailyNewsItem {
 
 interface DashboardData {
   asOfDate: string;
+  // 사용자 지시(2026-08-25): "채널 종합리포트 우측에 날짜를 선택할 수 있는 검색 기능" — API가
+  // 실제 데이터 존재 최신일(latestAvailableDate)과, 요청한 날짜에 데이터가 없었는지 여부를
+  // 함께 내려줘서 date picker의 상한과 "해당 날짜엔 데이터가 없습니다" 안내에 쓴다.
+  latestAvailableDate: string;
+  requestedDateNoData: boolean;
   channels: ChannelSummary[];
   originalContentReport: OriginalContentSummary;
   killerContent: KillerContentRow[];
@@ -1726,10 +1731,14 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // 사용자 지시(2026-08-25): "채널 종합리포트 우측에 날짜를 선택할 수 있는 검색 기능을 추가...
+  // 선택한 당일의 해당 채널 종합 리포트도 볼 수 있도록". 빈 문자열 = 최신 날짜(기본값).
+  const [selectedDate, setSelectedDate] = useState<string>("");
 
-  async function load() {
+  async function load(dateStr?: string) {
     setLoading(true);
-    const res = await fetch("/api/dashboard/page1");
+    const url = dateStr ? `/api/dashboard/page1?date=${dateStr}` : "/api/dashboard/page1";
+    const res = await fetch(url);
     const body = await res.json().catch(() => ({ ok: false }));
     if (!res.ok || !body.ok) {
       setErrorMessage(body.message ?? "불러오지 못했습니다.");
@@ -1785,6 +1794,35 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
             <h1 className="font-heading text-2xl font-bold tracking-tight text-zinc-900">
               {formatDateWithDowDots(data?.asOfDate)} 채널 종합리포트
             </h1>
+            {/* 사용자 지시(2026-08-25): "채널 종합리포트 우측에 날짜를 선택할 수 있는 검색 기능을
+                추가하자. 선택한 당일의 해당 채널 종합 리포트도 볼 수 있도록". 최신 데이터 날짜를
+                넘는 미래는 max로 막고, 데이터 없는 과거 날짜를 고르면 아래 배너로 안내한다
+                (API가 조용히 최신일로 대체하지 않고 requestedDateNoData 플래그를 내려줌). */}
+            <input
+              type="date"
+              value={selectedDate || data?.asOfDate || ""}
+              max={data?.latestAvailableDate}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSelectedDate(v);
+                if (v) load(v);
+              }}
+              disabled={loading || !data}
+              title="리포트 날짜 선택"
+              aria-label="리포트 날짜 선택"
+              className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-sm text-zinc-600 shadow-sm disabled:opacity-50"
+            />
+            {selectedDate && data?.latestAvailableDate && selectedDate !== data.latestAvailableDate && (
+              <button
+                onClick={() => {
+                  setSelectedDate("");
+                  load();
+                }}
+                className="rounded-lg px-2 py-1 text-xs font-medium text-zinc-400 underline decoration-dotted hover:text-zinc-600"
+              >
+                최신으로
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {/* 사용자 지시(2026-08-21): "우측 상단 채널별 로고가 너무 작아 시인성이 떨어진다" —
@@ -1830,7 +1868,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               </a>
             )}
             <button
-              onClick={load}
+              onClick={() => load(selectedDate || undefined)}
               disabled={loading}
               title="새로고침"
               aria-label="새로고침"
@@ -1857,6 +1895,13 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
         </div>
 
         {errorMessage && <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">{errorMessage}</div>}
+
+        {data?.requestedDateNoData && (
+          <div className="mb-4 rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-700 ring-1 ring-amber-100">
+            선택하신 {selectedDate} 날짜에는 반영된 Nielsen 데이터가 없어, 가장 최근 데이터인{" "}
+            {formatDateWithDowDots(data.asOfDate)} 리포트를 대신 표시합니다.
+          </div>
+        )}
 
         {loading && !data && <p className="text-sm text-zinc-500">불러오는 중...</p>}
 

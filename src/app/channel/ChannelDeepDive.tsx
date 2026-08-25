@@ -3899,9 +3899,22 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           <td className="whitespace-nowrap py-2 pr-2">
                             {item.tag ? <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} /> : <span className="text-zinc-400">—</span>}
                           </td>
-                          {/* 사용자 지시(2026-08-21): 프로그램 타이틀은 가독성이 좋게 볼드로. */}
+                          {/* 사용자 지시(2026-08-21): 프로그램 타이틀은 가독성이 좋게 볼드로.
+                              사용자 재지시(2026-08-25): "ENA의 본방송, ENA Play와 ENA Drama의
+                              동시/직재방 방송은 별도의 프로그램으로 따로 떼어서... <본>이라고
+                              표시하면 돼" — mart_scheduling_fit_score가 channel_id+program_id
+                              단위라 채널마다 이미 별도 행으로 관리되고 있었고(이 표는 그 채널
+                              페이지의 프로그램만 나열), 다만 그 행이 본방인지 동시방영/직후재방인지
+                              구분이 안 보여 헷갈릴 수 있었다 — Page 1 "채널별 상위 프로그램"과
+                              동일하게 programs.first_run으로 <본>/<재> 태그를 붙인다(값이 없는
+                              프로그램은 태그 없이 이름만, 억지 분류 금지). */}
                           <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">
                             {item.programs?.canonical_name ?? "이름 없음"}
+                            {item.programs?.first_run !== null && item.programs?.first_run !== undefined && (
+                              <span className="ml-1 text-[12px] font-normal text-zinc-400">
+                                {item.programs.first_run ? "<본>" : "<재>"}
+                              </span>
+                            )}
                           </td>
                           <td className="py-2 pr-2 text-zinc-600">{note}</td>
                           <td className="whitespace-nowrap py-2 text-zinc-500">
