@@ -629,6 +629,10 @@ export async function GET(request: Request) {
     featured_display_name: string | null;
     matched_rating: number | null;
     matched_household_rating: number | null;
+    // 사용자 지시(2026-08-26): "동시방송을 할 경우에는 동시 방송 성적을 가장 먼저... 브리핑이나
+    // 보고서도 마찬가지" — Page 2 오늘의 브리핑도 Page 1과 같은 공유 문장 함수를 쓰므로 동일 필드.
+    simulcast_channel_code: string | null;
+    simulcast_rating: number | null;
     retention_pct: number | null;
     rerun_channel_code: string | null;
     self_rerun_rating: number | null;
@@ -643,6 +647,8 @@ export async function GET(request: Request) {
           featured_display_name: string | null;
           matched_rating: number | null;
           matched_household_rating: number | null;
+          simulcast_channel_code: string | null;
+          simulcast_rating: number | null;
           retention_pct: number | null;
           rerun_channel_code: string | null;
           self_rerun_rating: number | null;
@@ -651,6 +657,8 @@ export async function GET(request: Request) {
           featured_display_name: r.featured_display_name,
           matched_rating: r.matched_rating,
           matched_household_rating: r.matched_household_rating,
+          simulcast_channel_code: r.simulcast_channel_code,
+          simulcast_rating: r.simulcast_rating,
           retention_pct: r.retention_pct,
           rerun_channel_code: r.rerun_channel_code,
           self_rerun_rating: r.self_rerun_rating,

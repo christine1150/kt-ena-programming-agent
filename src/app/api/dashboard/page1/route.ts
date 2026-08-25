@@ -51,6 +51,13 @@ interface OriginalDailyRow {
   // 관리 화면에 등록된 사람이 읽기 좋은 원문 제목(있을 때만, 없으면 프론트에서 matched_program_name
   // 그대로 폴백).
   featured_display_name: string | null;
+  // 사용자 지시(2026-08-26): "왕자와 거지는 ENA Play가 동시 방송... 동시방송을 할 경우에는 동시
+  // 방송 성적을 가장 먼저 올려주시고, 이후 직후재방이 있을 경우에만 직후재방을 언급" — 직후재방과
+  // 별개 개념으로 SQL이 분리 계산해 내려준다.
+  simulcast_channel_code: string | null;
+  simulcast_program_name: string | null;
+  simulcast_start_time: string | null;
+  simulcast_rating: number | null;
   rerun_channel_code: string | null;
   rerun_program_name: string | null;
   rerun_start_time: string | null;

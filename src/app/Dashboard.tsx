@@ -69,6 +69,12 @@ interface OriginalDailyItem {
   // 사용자 지시(2026-08-26): "신병4사보타주는 '신병4: 사보타주'로 표현되게 통일" — 있으면
   // matched_program_name(Nielsen 공백·문장부호 제거 표기) 대신 이 값을 화면에 쓴다.
   featured_display_name: string | null;
+  // 사용자 지시(2026-08-26): "동시방송을 할 경우에는 동시 방송 성적을 가장 먼저 올려주시고,
+  // 이후 직후재방이 있을 경우에만 직후재방을 언급해주세요." — 직후재방과 별개 개념.
+  simulcast_channel_code: string | null;
+  simulcast_program_name: string | null;
+  simulcast_start_time: string | null;
+  simulcast_rating: number | null;
   rerun_channel_code: string | null;
   rerun_program_name: string | null;
   rerun_start_time: string | null;
@@ -843,6 +849,14 @@ function buildOriginalInsight(
     bullets.push(`본방송 시청률 ${formatRating(item.matched_rating)}% 기록`);
   }
 
+  // 3.5) 동시방송 성적 — 사용자 지시(2026-08-26): "동시방송을 할 경우에는 동시 방송 성적을
+  // 가장 먼저 올려주시고, 이후 직후재방이 있을 경우에만 직후재방을 언급해주세요." 직후재방
+  // (본방 종료 후)과 달리 본방과 거의 같은 시각에 함께 트는 경우라 시간 표기 없이 시청률만 병기.
+  if (item.simulcast_rating !== null && item.simulcast_channel_code) {
+    const simulcastChannelName = CHANNEL_NAME_BY_CODE[item.simulcast_channel_code] ?? item.simulcast_channel_code;
+    bullets.push(`${simulcastChannelName} 동시방송 성적: ${simulcastChannelName} 동시방송 시청률은 ${formatRating(item.simulcast_rating)}%`);
+  }
+
   // 4) 직후 재방송 유입 효과 — 명세 문구 그대로. 유지율이 낮아 사실상 효과가 제한적인 경우의
   // 캐비엇은 이 필수 4번째 불렛의 고정 문구를 바꾸지 않고 secondaryBullets에 별도로 짚는다.
   let crossRetentionPct: number | null = null;
@@ -985,33 +999,63 @@ function ProgramRatingHistoryChart({
   // 늘어나(세로는 72px 고정) 숫자 글자가 옆으로 눌린 것처럼 찌그러져 보인다 — SVG <text> 대신
   // 같은 x 위치(%)를 계산해 일반 HTML로 겹쳐 그리면 글자가 항상 정상 비율로 보인다.
   const hasEpisodeLabels = own2049.some((p) => p.episode_number !== null && p.episode_number !== undefined);
+  // 사용자 지시(2026-08-26): "1페이지 막대그래프에서 '최근 12주 본방송 시청률 추이'라는 워딩은
+  // 삭제. ENA 시청률 주요 지표는 그래프 내 숫자로 표기. 당일 시청률도 표기. 나머지 지표는
+  // 마우스 오버 하면 그래프 내에서 보일 수 있게" — 라벨 문구를 없애고, 항상 값을 보여줄 지표는
+  // (1) 최고 시청률 지점 (2) 당일(가장 최근) 시청률 지점 두 개만 골라 SVG 위에 겹쳐 숫자로
+  // 표기(episode 라벨과 같은 이유로 HTML 오버레이 사용). 나머지 지점은 기존 <title> 툴팁으로만.
+  const peakPoint = own2049.length > 0 ? own2049.reduce((a, b) => (b.rating > a.rating ? b : a)) : null;
+  const todayPoint = own2049.length > 0 ? own2049[own2049.length - 1] : null;
+  const peakIsToday = peakPoint !== null && todayPoint !== null && peakPoint.broadcast_date === todayPoint.broadcast_date;
   return (
     <div className="mt-2 rounded-xl bg-zinc-50 p-3">
-      <p className="mb-1.5 text-[11px] font-medium text-zinc-400">최근 12주 본방송 시청률 추이</p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
-        {ownHousehold.length >= 2 && <path d={pathOf(ownHousehold, yHousehold)} fill="none" stroke={accentColor} strokeOpacity={0.3} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />}
-        {competitorSeries.map((s, i) => (
-          <path key={s.seriesName} d={pathOf(s.points, y2049)} fill="none" stroke={COMPETITOR_LINE_COLORS[i % COMPETITOR_LINE_COLORS.length]} strokeWidth={1.3} strokeDasharray="3 2" strokeLinecap="round" strokeLinejoin="round" />
-        ))}
-        {otherSeries.map((s, i) => (
-          <path
-            key={s.seriesName}
-            d={pathOf(s.points, y2049)}
-            fill="none"
-            stroke={themeColorByCode.get(s.seriesName) ?? OTHER_CHANNEL_LINE_COLORS[i % OTHER_CHANNEL_LINE_COLORS.length]}
-            strokeWidth={1.3}
-            strokeDasharray="3 2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ))}
-        {own2049.length >= 2 && <path d={pathOf(own2049, y2049)} fill="none" stroke={accentColor} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />}
-        {own2049.map((p, i) => (
-          <circle key={i} cx={xOf(p.broadcast_date)} cy={y2049(p.rating)} r={1.8} fill={accentColor}>
-            <title>{p.broadcast_date}{p.episode_number ? ` ${p.episode_number}회` : ""} · 수도권2049 {formatRating(p.rating)}</title>
-          </circle>
-        ))}
-      </svg>
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
+          {ownHousehold.length >= 2 && <path d={pathOf(ownHousehold, yHousehold)} fill="none" stroke={accentColor} strokeOpacity={0.3} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />}
+          {competitorSeries.map((s, i) => (
+            <path key={s.seriesName} d={pathOf(s.points, y2049)} fill="none" stroke={COMPETITOR_LINE_COLORS[i % COMPETITOR_LINE_COLORS.length]} strokeWidth={1.3} strokeDasharray="3 2" strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+          {otherSeries.map((s, i) => (
+            <path
+              key={s.seriesName}
+              d={pathOf(s.points, y2049)}
+              fill="none"
+              stroke={themeColorByCode.get(s.seriesName) ?? OTHER_CHANNEL_LINE_COLORS[i % OTHER_CHANNEL_LINE_COLORS.length]}
+              strokeWidth={1.3}
+              strokeDasharray="3 2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
+          {own2049.length >= 2 && <path d={pathOf(own2049, y2049)} fill="none" stroke={accentColor} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />}
+          {own2049.map((p, i) => (
+            <circle key={i} cx={xOf(p.broadcast_date)} cy={y2049(p.rating)} r={1.8} fill={accentColor}>
+              <title>{p.broadcast_date}{p.episode_number ? ` ${p.episode_number}회` : ""} · 수도권2049 {formatRating(p.rating)}</title>
+            </circle>
+          ))}
+        </svg>
+        {/* 최고 시청률·당일 시청률만 그래프 위에 숫자로 상시 표기(나머지 지점은 <title> 툴팁으로만) —
+            SVG 위에 겹치는 절대 위치 오버레이라 위 원 안의 <title> 툴팁 동작에는 영향 없음. */}
+        <div className="pointer-events-none absolute inset-0">
+          {peakPoint && !peakIsToday && (
+            <span
+              className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[9px] font-bold tabular-nums"
+              style={{ left: `${(xOf(peakPoint.broadcast_date) / W) * 100}%`, top: y2049(peakPoint.rating) - 3, color: accentColor }}
+            >
+              {formatRating(peakPoint.rating)}
+            </span>
+          )}
+          {todayPoint && (
+            <span
+              className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[9px] font-bold tabular-nums text-zinc-800"
+              style={{ left: `${(xOf(todayPoint.broadcast_date) / W) * 100}%`, top: y2049(todayPoint.rating) - 3 }}
+            >
+              {formatRating(todayPoint.rating)}
+              {peakIsToday && <span style={{ color: accentColor }}> ★</span>}
+            </span>
+          )}
+        </div>
+      </div>
       {hasEpisodeLabels && (
         <div className="relative h-[11px]">
           {own2049.map(
@@ -1221,8 +1265,24 @@ function OriginalContentReportCard({
                       )}
                     </div>
                     <div className="rounded-xl bg-zinc-50 p-2.5 text-sm">
-                      <p className="mb-1 text-[11px] font-medium text-zinc-400">직후재방</p>
-                      {h.rerun_program_name && h.rerun_start_time ? (
+                      {/* 사용자 지시(2026-08-26): "동시방송을 할 경우에는 동시 방송 성적을 가장
+                          먼저 올려주시고, 이후 직후재방이 있을 경우에만 직후재방을 언급" — 이
+                          칸은 둘 중 하나만 있으므로(데이터상 상호배타) 동시방송이 있으면 그것을,
+                          없으면 기존처럼 직후재방을 보여준다. */}
+                      <p className="mb-1 text-[11px] font-medium text-zinc-400">
+                        {h.simulcast_rating !== null ? "동시방송" : "직후재방"}
+                      </p>
+                      {h.simulcast_rating !== null && h.simulcast_channel_code ? (
+                        <>
+                          <p className="whitespace-nowrap text-[11px] text-zinc-600">
+                            <span className="font-bold" style={{ color: themeColorByCode.get(h.simulcast_channel_code) ?? undefined }}>
+                              {CHANNEL_NAME_BY_CODE[h.simulcast_channel_code] ?? h.simulcast_channel_code}
+                            </span>
+                            {h.simulcast_start_time && <> · {fmtTimeKorean(h.simulcast_start_time)}</>}
+                          </p>
+                          <p className="mt-0.5 text-lg font-bold tabular-nums tracking-tight text-zinc-800">{formatRating(h.simulcast_rating)}</p>
+                        </>
+                      ) : h.rerun_program_name && h.rerun_start_time ? (
                         <>
                           <p className="whitespace-nowrap text-[11px] text-zinc-600">
                             <span className="font-bold" style={{ color: themeColorByCode.get(h.rerun_channel_code ?? "") ?? undefined }}>
