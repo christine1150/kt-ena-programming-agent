@@ -2154,6 +2154,75 @@ const OPPORTUNITY_DAYPART_ORDER: { key: string; label: string }[] = [
   { key: "오후", label: "오후" },
   { key: "저녁_심야", label: "저녁심야" },
 ];
+// 사용자 지시(2026-08-26): "Before/After 슬로프 차트 — OPPORTUNITY?의 '이전 평균→최근 1주'
+// 격차 변화를 표 대신 두 점을 잇는 기울기선으로... 격차가 좁혀지는/벌어지는 daypart를 시각적으로
+// 즉시 구분." 새 계산 없이 이미 표가 쓰는 gap_full/gap_recent를 그대로 두 점으로 그린다.
+// 기울기 방향은 4분류(PROTECT/DEFEND/IMPROVE/OPPORTUNITY) 색으로 — 아래쪽으로 기울면(격차
+// 축소) 좋은 신호, 위쪽으로 기울면(격차 확대) 경쟁압력 증가 신호.
+const OPPORTUNITY_CLASS_COLOR: Record<OpportunityClass, string> = {
+  PROTECT: "#0284c7",
+  DEFEND: "#d97706",
+  IMPROVE: "#e11d48",
+  OPPORTUNITY: "#059669",
+};
+function OpportunityGapSlopeChart({ rows }: { rows: DaypartOpportunityRow[] }) {
+  const plottable = rows.filter(
+    (r): r is DaypartOpportunityRow & { gap_full: number; gap_recent: number } => r.gap_full !== null && r.gap_recent !== null
+  );
+  if (plottable.length === 0) return null;
+  const W = 420;
+  const H = 200;
+  const PAD_L = 12;
+  const PAD_R = 108;
+  const PAD_T = 14;
+  const PAD_B = 20;
+  const allVals = plottable.flatMap((r) => [r.gap_full, r.gap_recent]);
+  const minV = Math.min(0, ...allVals);
+  const maxV = Math.max(...allVals) * 1.05 || 1;
+  const yOf = (v: number) => PAD_T + (1 - (v - minV) / (maxV - minV || 1)) * (H - PAD_T - PAD_B);
+  const xLeft = PAD_L + 30;
+  const xRight = W - PAD_R;
+  return (
+    <div className="mb-4 rounded-2xl bg-zinc-50 p-4">
+      <p className="mb-2 text-[12px] text-zinc-500">
+        시간대별 &ldquo;이전 평균 → {`최근`}&rdquo; 경쟁채널 대비 격차 변화 — 아래로 내려가면 격차가 좁혀진(기회) 시간대,
+        위로 올라가면 격차가 벌어진(방어 필요) 시간대입니다.
+      </p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+        <line x1={xLeft} y1={PAD_T} x2={xLeft} y2={H - PAD_B} stroke="#d4d4d8" strokeWidth={1} />
+        <line x1={xRight} y1={PAD_T} x2={xRight} y2={H - PAD_B} stroke="#d4d4d8" strokeWidth={1} />
+        <text x={xLeft} y={H - 4} textAnchor="middle" fontSize={9} fill="#a1a1aa">
+          이전 평균
+        </text>
+        <text x={xRight} y={H - 4} textAnchor="middle" fontSize={9} fill="#a1a1aa">
+          최근
+        </text>
+        {plottable.map((r) => {
+          const cls = classifyDaypartOpportunity(r);
+          const color = cls ? OPPORTUNITY_CLASS_COLOR[cls] : "#a1a1aa";
+          const y1 = yOf(r.gap_full);
+          const y2 = yOf(r.gap_recent);
+          return (
+            <g key={r.daypart}>
+              <line x1={xLeft} y1={y1} x2={xRight} y2={y2} stroke={color} strokeWidth={2}>
+                <title>
+                  {DAYPART_LABEL[r.daypart] ?? r.daypart} — 격차 {r.gap_full.toFixed(4)} → {r.gap_recent.toFixed(4)}
+                  {cls ? ` (${OPPORTUNITY_CLASS_LABEL[cls]})` : ""}
+                </title>
+              </line>
+              <circle cx={xLeft} cy={y1} r={3} fill={color} />
+              <circle cx={xRight} cy={y2} r={3} fill={color} />
+              <text x={xRight + 8} y={y2 + 3} fontSize={10} fontWeight={600} fill={color}>
+                {DAYPART_LABEL[r.daypart]?.replace(/\(.*\)/, "") ?? r.daypart}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function OpportunityDaypartTiles({ rows, fmtR, isEnaStory }: { rows: DaypartOpportunityRow[]; fmtR: (v: number | null) => string; isEnaStory?: boolean }) {
   const byDaypart = new Map(rows.map((r) => [r.daypart, r]));
   return (
@@ -3970,6 +4039,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             상대적으로 약해진) 시간대가 편성 기회입니다.
             {isRangeMode && " 기간을 선택하면 \"최근 구간\"이 그 선택한 기간 길이로 바뀝니다."}
           </p>
+          {daypartOpportunity.length > 0 && <OpportunityGapSlopeChart rows={daypartOpportunity} />}
           {daypartOpportunity.length > 0 && <OpportunityDaypartTiles rows={daypartOpportunity} fmtR={fmtR} isEnaStory={isEnaStory} />}
           {daypartOpportunity.length > 0 && (
             <div className="mb-3 overflow-x-auto">
