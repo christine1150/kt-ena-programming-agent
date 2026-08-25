@@ -3,6 +3,7 @@
 // NULL은 "데이터 없음"으로 표시한다(0과 구분 — 스펙 28번).
 import type { ConfidenceLevel, EvidenceAnswer, MacroIntentId, TimeContext, VisualizationSpec } from "./types";
 import { josaEulReul } from "@/lib/josa";
+import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 
 function fmt(v: number | null | undefined, digits = 3): string {
   return v === null || v === undefined ? "데이터 없음" : v.toFixed(digits);
@@ -376,8 +377,14 @@ interface CompetitorInsightRow {
   today_rank: number | null;
   today_rating: number | null;
   delta_pct: number | null;
+  // 사용자 지시(2026-08-25, 감사 후속): 등록 경쟁채널에 KPI 타깃 데이터가 없으면 SQL이 조용히
+  // 다른 타깃으로 대체해왔다(버그 수정) — 실제 비교 타깃을 항상 함께 받는다.
+  resolved_target_label: string | null;
 }
-export function buildCompetitivePositionAnswer(data: { channel: { code: string; name: string }; rows: CompetitorInsightRow[] } | null, timeContext: TimeContext): EvidenceAnswer {
+export function buildCompetitivePositionAnswer(
+  data: { channel: { code: string; name: string; primaryTarget: string }; rows: CompetitorInsightRow[] } | null,
+  timeContext: TimeContext
+): EvidenceAnswer {
   if (!data || data.rows.length === 0) {
     return {
       ...base("COMPETITIVE_POSITION", "COMPETITIVE_INTELLIGENCE", data),
@@ -393,11 +400,16 @@ export function buildCompetitivePositionAnswer(data: { channel: { code: string; 
   }
   const sorted = [...data.rows].sort((a, b) => (a.today_rank ?? 999) - (b.today_rank ?? 999));
   const list = sorted.map((r) => `${r.competitor_name}(${r.today_rank ?? "—"}위, ${fmt(r.today_rating)}, 12주 평균 대비 ${pct(r.delta_pct)})`).join(" / ");
+  // 등록 경쟁채널에 이 채널 KPI 타깃 데이터가 없어 SQL이 다른 타깃으로 대체했으면(버그 수정,
+  // 2026-08-25) 이 목록이 무슨 타깃 기준인지 명시한다 — 조용히 다른 타깃으로 비교되던 걸 숨기지 않는다.
+  const kpiLabel = resolveProgramLevelTargetLabel(data.channel.primaryTarget);
+  const resolvedLabel = sorted[0].resolved_target_label;
+  const targetMismatch = resolvedLabel !== null && resolvedLabel !== kpiLabel;
   return {
     ...base("COMPETITIVE_POSITION", "COMPETITIVE_INTELLIGENCE", data),
     conclusion: `'${data.channel.name}'의 등록 경쟁채널 ${sorted.length}개를 ${timeContext.label} 순위 순으로 비교했습니다.`,
     keyNumbers: `가장 순위 높은 경쟁채널: ${sorted[0].competitor_name}(${sorted[0].today_rank ?? "—"}위)`,
-    comparisonBasis: `${timeContext.label} · 최근 12주(84일) 평균 대비 등락`,
+    comparisonBasis: `${timeContext.label} · 최근 12주(84일) 평균 대비 등락${targetMismatch ? ` · ⚠ 등록 경쟁채널에 KPI 타깃(${kpiLabel}) 데이터가 없어 '${resolvedLabel}' 타깃 기준으로 대체 비교` : ""}`,
     evidence: list,
     interpretation: "이 목록은 채널 단위 순위이며, 프로그램 단위 동시간대 비교는 별도 질문(동시간대 경쟁 프로그램)으로 확인하세요.",
     programmingAction: "12주 평균 대비 뚜렷하게 강세인 경쟁채널이 있으면 Page 2 COMPARED WITH?에서 상세 내용을 확인하세요.",

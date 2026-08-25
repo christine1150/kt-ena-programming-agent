@@ -63,6 +63,10 @@ interface CompetitorInsightRow {
   // 사용자 지시(2026-08-21): 기간(멀티데이) 조회에서는 프로그램명 단위 평균 시청률로 최고 성적
   // 프로그램을 고른다 — 몇 회 방영분을 평균 냈는지 근거로 함께 보여준다(단일 일자 조회는 null).
   top_program_air_count: number | null;
+  // 사용자 지시(2026-08-25, 감사 후속): 등록 경쟁채널에 우리 채널 KPI 타깃(예: 수도권 2049)
+  // 데이터가 없으면 SQL이 조용히 다른 타깃으로 대체해왔다(버그 수정) — 실제 비교에 쓰인 타깃을
+  // 항상 함께 받아, 대체가 발생했을 때만 화면에 안내한다.
+  resolved_target_label: string | null;
 }
 interface CompetitorOverlapRow {
   our_program_name: string;
@@ -3918,6 +3922,20 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               함께 보여줍니다.
             </p>
           )}
+          {/* 사용자 지시(2026-08-25, 감사 후속): 등록 경쟁채널에 우리 채널 KPI 타깃 데이터가 없으면
+              SQL이 조용히 다른 타깃으로 대체해왔다(버그 수정, 2026-08-25) — 그 대체가 지금도
+              발생 중이면(대부분의 날엔 정상 타깃으로 잡히지만, 표본이 부족한 날엔 여전히 발동될
+              수 있음) 화면에 명시해 오해를 막는다. */}
+          {!(code === "SKYUHD" && marketYtdCompetitorSnapshot.length > 0) &&
+            competitorInsightReport.length > 0 &&
+            competitorInsightReport[0].resolved_target_label !== null &&
+            competitorInsightReport[0].resolved_target_label !== resolveProgramLevelTargetLabel(channel.primaryTarget) && (
+              <p className="mb-3 rounded-xl bg-amber-50 p-2.5 text-sm text-amber-700">
+                ⚠ 등록 경쟁채널에 이 채널의 KPI 타깃({resolveProgramLevelTargetLabel(channel.primaryTarget)}) 데이터가 없어,
+                오늘은 대신 &apos;{competitorInsightReport[0].resolved_target_label}&apos; 타깃 기준으로 비교합니다(위 표의 채널
+                시청률만 해당 — 아래 &apos;{channel.name}&apos; 행은 KPI 타깃 그대로).
+              </p>
+            )}
           {code === "SKYUHD" && marketYtdCompetitorSnapshot.length > 0 ? (
             // 사용자 지시(2026-08-21): skyUHD는 §1.2 경쟁채널 시트 자체가 없는 수기 업로드
             // 채널이라, 일별 경쟁채널 비교(get_competitor_insight_report)는 등록 경쟁채널 5개 중
