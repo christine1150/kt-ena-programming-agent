@@ -2949,6 +2949,25 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
+        {/* 사용자 지시(2026-08-26): "Executive Summary 한 문단을 페이지 최상단에... PD가 스크롤
+            없이 '오늘 이 채널의 결론'부터 보게" — 원래 WHAT TO SCHEDULE? 카드 안 깊숙이 있던
+            종합 편성 인사이트(WHY?/OPPORTUNITY?/WHAT TO SCHEDULE? 세 결과가 같은 daypart를
+            가리킬 때만 생성, 조건이 안 맞으면 표시 안 함 — 추정으로 억지 연결 금지)를 헤더
+            바로 아래로 승격. 맥킨지식 피라미드 원칙("결론 먼저, 근거는 아래")을 그대로 적용. */}
+        {(() => {
+          const why = buildWhyDiagnosis(data, fitScoreItems);
+          const insight = buildExecutiveProgrammingInsight(why, daypartOpportunity, fitScoreItems);
+          if (!insight) return null;
+          return (
+            <div className="rounded-3xl p-5 shadow-sm ring-1 ring-zinc-100" style={{ backgroundColor: `${accentColor}14` }}>
+              <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide" style={{ color: accentForegroundColor(accentColor) }}>
+                Executive Summary
+              </p>
+              <p className="text-base leading-relaxed text-zinc-700">{insight}</p>
+            </div>
+          );
+        })()}
+
         {/* 오늘의 브리핑 — 보고서 줄글 형태(사용자 지시: What/Why 라벨 없이, 목표 달성률 제외) */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={`${SECTION_TITLE_P2} mb-3`}>{buildBriefingTitle(periodPreset)}</h2>
@@ -3968,25 +3987,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
             </details>
           )}
-          {/* 사용자 지시(2026-08-21): WHY?/OPPORTUNITY?/WHAT TO SCHEDULE? 세 결과가 같은 daypart를
-              가리킬 때만 종합 판단 문장(Executive Programming Insight)을 보여준다 — 조건이 안
-              맞으면 표시하지 않는다(추정으로 억지 연결 금지). 기존 카드 안에 콜아웃으로만 추가. */}
-          {(() => {
-            const why = buildWhyDiagnosis(data, fitScoreItems);
-            const insight = buildExecutiveProgrammingInsight(why, daypartOpportunity, fitScoreItems);
-            if (!insight) return null;
-            // 사용자 지시(2026-08-21): 채널 상세 페이지 메인 컬러를 채널 로고 색으로.
-            return (
-              <div className="mb-3 rounded-2xl p-4" style={{ backgroundColor: `${accentColor}14` }}>
-                <p className="mb-1 text-sm font-semibold" style={{ color: accentForegroundColor(accentColor) }}>
-                  종합 편성 인사이트
-                </p>
-                {/* 본문은 다른 카드의 줄글과 통일감 있게 중립색 유지(제목만 브랜드색으로 강조). */}
-                <p className="text-base leading-relaxed text-zinc-700">{insight}</p>
-              </div>
-            );
-          })()}
-
           <p className="mb-2 text-sm text-zinc-400">
             기회 탐지(Opportunity Alert, 참고): 자사 최근 7일 평균이 이전 7일 대비 +10%p 이상 강세이면서,
             등록 경쟁채널 중 같은 기간 -10%p 이상 약세인 채널이 있으면 표시합니다.
