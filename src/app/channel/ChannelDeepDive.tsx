@@ -2201,11 +2201,45 @@ const FIT_SUBSCORE_LABELS: { key: keyof FitScoreItem; label: string }[] = [
   { key: "competitive_opportunity_score", label: "Competitive Opportunity" },
   { key: "audience_flow_score", label: "Audience Flow" },
 ];
+// 사용자 지시(2026-08-25, 감사 후속: 원 명세 13번 "Reach + Time Spent / Audience Role") —
+// 도달율(Reach)과 시청시간 비율(Time Spent Share)을 함께 봐서 "이 프로그램이 시청자를 얼마나
+// 넓게 끌어오고, 얼마나 오래 붙잡아두는지" 4분류한다. 둘 다 이미 계산돼 있는 최근 12주 percentile
+// (0~100, 채널 내 상대 순위)을 그대로 쓴다(새 수치 계산 없음). 중간대(40~60)는 어느 쪽도 뚜렷하지
+// 않아 classifyDaypartOpportunity와 같은 태도로 억지 분류하지 않는다(null = 판단 근거 부족).
+type AudienceRole = "MASS" | "CORE" | "ACQUISITION" | "ZAPPING_RISK";
+const AUDIENCE_ROLE_LABEL: Record<AudienceRole, string> = {
+  MASS: "대중형(MASS)",
+  CORE: "코어형(CORE)",
+  ACQUISITION: "신규유입형(ACQUISITION)",
+  ZAPPING_RISK: "이탈위험(ZAPPING RISK)",
+};
+const AUDIENCE_ROLE_NOTE: Record<AudienceRole, string> = {
+  MASS: "도달율·시청시간 비율 모두 채널 내 상위권입니다 — 널리 보고 오래 봅니다.",
+  CORE: "도달율은 낮지만 시청시간 비율은 상위권입니다 — 적게 유입돼도 오래 봅니다(코어 팬덤형).",
+  ACQUISITION: "도달율은 상위권이지만 시청시간 비율은 하위권입니다 — 많이 유입되지만 짧게 봅니다.",
+  ZAPPING_RISK: "도달율·시청시간 비율 모두 채널 내 하위권입니다 — 유입도 적고 오래 붙잡지 못합니다.",
+};
+function classifyAudienceRole(evidence: FitScoreEvidence): AudienceRole | null {
+  const r = evidence.reach_pctl;
+  const t = evidence.time_spent_share_pctl;
+  if (r === null || t === null) return null;
+  const highR = r >= 60;
+  const lowR = r < 40;
+  const highT = t >= 60;
+  const lowT = t < 40;
+  if (highR && highT) return "MASS";
+  if (lowR && highT) return "CORE";
+  if (highR && lowT) return "ACQUISITION";
+  if (lowR && lowT) return "ZAPPING_RISK";
+  return null;
+}
+
 interface FitScoreInterpretation {
   subScores: { label: string; value: number | null }[];
   interpretation: string | null;
   sampleNote: string | null;
   decision: string | null;
+  audienceRole: AudienceRole | null;
 }
 function buildFitScoreInterpretation(item: FitScoreItem): FitScoreInterpretation {
   const subScores = FIT_SUBSCORE_LABELS.map(({ key, label }) => ({ label, value: item[key] as number | null }));
@@ -2247,7 +2281,7 @@ function buildFitScoreInterpretation(item: FitScoreItem): FitScoreInterpretation
         return null;
     }
   })();
-  return { subScores, interpretation, sampleNote, decision };
+  return { subScores, interpretation, sampleNote, decision, audienceRole: classifyAudienceRole(item.evidence) };
 }
 
 export default function ChannelDeepDive({ code }: { code: string }) {
@@ -3759,6 +3793,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                       ))}
                                     </div>
                                     {fi.interpretation && <p className="mt-2 text-sm text-zinc-600">{fi.interpretation}</p>}
+                                    {/* 원 명세 13번(Audience Role) — Reach/Time Spent Share 둘 다 뚜렷할 때만 표시. */}
+                                    {fi.audienceRole && (
+                                      <p className="mt-2 text-sm text-zinc-600">
+                                        <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>
+                                          시청자 유형
+                                        </span>{" "}
+                                        {AUDIENCE_ROLE_LABEL[fi.audienceRole]} — {AUDIENCE_ROLE_NOTE[fi.audienceRole]}
+                                      </p>
+                                    )}
                                     {fi.sampleNote && <p className="mt-1 text-sm text-amber-600">{fi.sampleNote}</p>}
                                     {fi.decision && (
                                       <p className="mt-2 text-sm text-zinc-600">
