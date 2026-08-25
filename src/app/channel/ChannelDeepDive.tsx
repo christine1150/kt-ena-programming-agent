@@ -2271,14 +2271,22 @@ function DowHourBlockTable({
   accentColor,
   fmtR,
   isEnaStory,
+  hourBlockOpportunity,
 }: {
   pattern: DowHourBlockRow[];
   accentColor: string;
   fmtR: (v: number | null) => string;
   isEnaStory?: boolean;
+  // 사용자 지시(2026-08-26): "8구간 슬롯 히트맵에 경쟁 강도 오버레이 — 칸 안에 작은 삼각형/
+  // 화살표로 경쟁압력 방향을 겹쳐 PROTECT/DEFEND/IMPROVE/OPPORTUNITY 4분류를 한 화면에서."
+  // 경쟁 비교 데이터(hourBlockOpportunity)는 요일 단위가 아니라 3시간 구간 단위로만 있어(day×
+  // hour 세분 데이터 없음, 새 SQL 만들지 않음) 그 구간의 7일 전체에 같은 표시를 적용한다 —
+  // 시간대 행 라벨 옆 작은 점으로, 억지로 셀 안에 넣지 않아 기존 시청률 숫자를 가리지 않는다.
+  hourBlockOpportunity?: HourBlockOpportunityRow[];
 }) {
   const byCell = new Map(pattern.map((r) => [`${r.dow}__${r.hour_block}`, r]));
   const maxRating = Math.max(1e-9, ...pattern.map((r) => r.avg_rating ?? 0));
+  const oppByHourBlock = new Map((hourBlockOpportunity ?? []).map((r) => [r.hour_block, r]));
   if (pattern.length === 0) {
     return <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>;
   }
@@ -2304,9 +2312,21 @@ function DowHourBlockTable({
           </tr>
         </thead>
         <tbody>
-          {HOUR_BLOCK_ORDER.map((hb) => (
+          {HOUR_BLOCK_ORDER.map((hb) => {
+            const oppRow = oppByHourBlock.get(hb);
+            const oppCls = oppRow ? classifyHourBlockOpportunity(oppRow) : null;
+            return (
             <tr key={hb} className="border-t border-zinc-100">
-              <td className="whitespace-nowrap py-0.5 pr-0.5 text-left font-medium text-zinc-700">{hourBlockLabel(hb)}</td>
+              <td className="whitespace-nowrap py-0.5 pr-0.5 text-left font-medium text-zinc-700">
+                {hourBlockLabel(hb)}
+                {oppCls && (
+                  <span
+                    className="ml-1 inline-block h-1.5 w-1.5 rounded-full align-middle"
+                    style={{ backgroundColor: OPPORTUNITY_CLASS_COLOR[oppCls] }}
+                    title={`경쟁 강도: ${OPPORTUNITY_CLASS_LABEL[oppCls]}`}
+                  />
+                )}
+              </td>
               {["월", "화", "수", "목", "금", "토", "일"].map((label, i) => {
                 const dow = i + 1;
                 const cell = byCell.get(`${dow}__${hb}`);
@@ -2333,7 +2353,8 @@ function DowHourBlockTable({
                 );
               })}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -3518,7 +3539,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </div>
           ) : (
             <>
-              <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
+              <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} hourBlockOpportunity={hourBlockOpportunity} />
+              {hourBlockOpportunity.length > 0 && (
+                <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[10.5px] text-zinc-400">
+                  <span>시간대 라벨 옆 점 = 그 구간의 경쟁 강도:</span>
+                  {(Object.keys(OPPORTUNITY_CLASS_LABEL) as OpportunityClass[]).map((cls) => (
+                    <span key={cls} className="inline-flex items-center gap-1">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: OPPORTUNITY_CLASS_COLOR[cls] }} />
+                      {OPPORTUNITY_CLASS_LABEL[cls]}
+                    </span>
+                  ))}
+                </p>
+              )}
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
                 <p className="mt-3 text-base leading-relaxed text-zinc-700">
                   {hourBlockStrength.strongest !== null && `전체적으로 ${hourBlockLabel(hourBlockStrength.strongest)}가 가장 강세이고`}
