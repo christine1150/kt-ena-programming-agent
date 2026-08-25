@@ -1510,10 +1510,12 @@ function TodayTopProgramsCard({
                     </th>
                     {/* 사용자 재지시(2026-08-22): 시간대/시청률/비교 세 열은 값의 ":"/"."이 세로로
                         맞춰지도록 가운데 정렬(fmtTime·formatRating이 항상 같은 자릿수 포맷을 내려줘
-                        text-center만으로 정렬됨). 시청률/비교 헤더에는 실제 타깃(수2049/가구 등) 병기. */}
+                        text-center만으로 정렬됨). 헤더는 "시청률(수2049)"/"비교(수2039)"처럼 단어를
+                        곁들이지 않고, 실제 타깃 표기(수2049/가구 등)만 짧게 — 타깃을 못 찾은 예외
+                        상황에서만 "시청률"/"비교"로 대체 표시. */}
                     <th className="pb-1 text-center text-[12px] font-normal text-zinc-400">시간대</th>
-                    <th className="pb-1 text-center text-[12px] font-normal text-zinc-400">시청률{targetLabel && `(${targetLabel})`}</th>
-                    <th className="pb-1 text-center text-[12px] font-normal text-zinc-400">비교{comparisonLabel && `(${comparisonLabel})`}</th>
+                    <th className="pb-1 text-center text-[12px] font-normal text-zinc-400">{targetLabel || "시청률"}</th>
+                    <th className="pb-1 text-center text-[12px] font-normal text-zinc-400">{comparisonLabel || "비교"}</th>
                   </tr>
                 </thead>
                 <tbody>

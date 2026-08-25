@@ -3,6 +3,7 @@
 // OLIFE EPG(일일운행표) 업로드 위젯 — 사용자 지시(2026-08-21): 닐슨 자료에 없는 회차·부제를
 // 이 파일로 보완한다(반드시 해당 날짜 Nielsen 파일이 먼저 업로드돼 있어야 매칭됨).
 import { useRef, useState } from "react";
+import { FileInputTrigger } from "./FileInputTrigger";
 
 type FileSummary = {
   fileName: string;
@@ -56,7 +57,7 @@ export default function OlifeEpgUploader() {
       </p>
 
       <div className="mb-4 flex items-center gap-3">
-        <input ref={fileInputRef} type="file" accept=".xlsx" multiple className="text-sm" />
+        <FileInputTrigger inputRef={fileInputRef} accept=".xlsx" multiple />
         <button
           onClick={handleUpload}
           disabled={uploading}

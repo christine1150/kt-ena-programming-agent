@@ -2,6 +2,7 @@
 
 // Nielsen 일별 채널시청률 파일 업로드 위젯. 여러 날짜를 한 번에 올릴 수 있다 (백필용).
 import { useRef, useState } from "react";
+import { FileInputTrigger } from "./FileInputTrigger";
 
 type FileSummary = {
   fileName: string;
@@ -63,7 +64,7 @@ export default function NielsenDailyUploader() {
       </p>
 
       <div className="mb-4 flex items-center gap-3">
-        <input ref={fileInputRef} type="file" accept=".xls,.xlsx" multiple className="text-sm" />
+        <FileInputTrigger inputRef={fileInputRef} accept=".xls,.xlsx" multiple />
         <button
           onClick={handleUpload}
           disabled={uploading}

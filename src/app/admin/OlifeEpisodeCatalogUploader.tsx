@@ -4,6 +4,7 @@
 // 극한직업/한국기행의 국가·부제 상세 메타데이터를 보완한다(EPG 업로드와 별개 — EPG는 방영
 // 시간·회차·부제만, 이 파일은 국가/테마까지 채운다).
 import { useRef, useState } from "react";
+import { FileInputTrigger } from "./FileInputTrigger";
 
 type FileSummary =
   | { fileName: string; ok: true; seriesCounts: Record<string, number>; totalRows: number; upserted: number }
@@ -53,7 +54,7 @@ export default function OlifeEpisodeCatalogUploader() {
       </p>
 
       <div className="mb-4 flex items-center gap-3">
-        <input ref={fileInputRef} type="file" accept=".xls,.xlsx" multiple className="text-sm" />
+        <FileInputTrigger inputRef={fileInputRef} accept=".xls,.xlsx" multiple />
         <button
           onClick={handleUpload}
           disabled={uploading}

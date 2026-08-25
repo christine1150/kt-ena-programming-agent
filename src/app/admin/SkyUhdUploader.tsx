@@ -2,6 +2,7 @@
 
 // skyUHD 시청률 업로드 위젯 — 수기로 누적 정리한 파일 하나를 올리면 매번 전체를 새로 반영한다.
 import { useRef, useState } from "react";
+import { FileInputTrigger } from "./FileInputTrigger";
 
 type UploadResult = {
   ok: boolean;
@@ -49,7 +50,7 @@ export default function SkyUhdUploader() {
       </p>
 
       <div className="mb-4 flex items-center gap-3">
-        <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="text-sm" />
+        <FileInputTrigger inputRef={fileInputRef} accept=".xlsx,.xls" />
         <button
           onClick={handleUpload}
           disabled={uploading}

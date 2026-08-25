@@ -4,6 +4,7 @@
 // 사용자 지시(2026-08-21): 등록된 경쟁채널뿐 아니라 시장 전체(200개 이상) 채널의 기간 누적
 // 순위·시청률을 담은 파일 — 같은 (타깃, 채널, 기간)으로 재업로드하면 덮어쓴다.
 import { useRef, useState } from "react";
+import { FileInputTrigger } from "./FileInputTrigger";
 
 type UploadResult = {
   ok: boolean;
@@ -54,7 +55,7 @@ export default function MarketYtdRankUploader() {
       </p>
 
       <div className="mb-4 flex items-center gap-3">
-        <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="text-sm" />
+        <FileInputTrigger inputRef={fileInputRef} accept=".xlsx,.xls" />
         <button
           onClick={handleUpload}
           disabled={uploading}
