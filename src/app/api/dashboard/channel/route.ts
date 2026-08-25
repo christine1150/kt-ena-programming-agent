@@ -104,6 +104,7 @@ export async function GET(request: Request) {
       competitorProgramOverlap: [],
       competitorTopPrograms: [],
       daypartOpportunity: [],
+      hourBlockOpportunity: [],
       dowHourBlockPattern: [],
       topPrograms: [],
       periodDemographics: [],
@@ -250,6 +251,7 @@ export async function GET(request: Request) {
     trendHighlightRes,
     competitorScheduleChangesRes,
     daypartOpportunityRes,
+    hourBlockOpportunityRes,
     dowHourBlockPatternRes,
     topProgramsRes,
     periodDemographicsRes,
@@ -312,6 +314,16 @@ export async function GET(request: Request) {
     // 등록 경쟁채널의 실제 편성 변화 참고 정보(§1.2 프로그램 단위 데이터 기반).
     supabase.rpc("get_competitor_schedule_changes", { p_channel_code: channel.code, p_as_of_date: dateTo }),
     supabase.rpc("get_channel_daypart_opportunity", {
+      p_channel_code: channel.code,
+      p_program_target_label: programTargetLabel,
+      p_as_of_date: dateTo,
+      p_full_window_days: fullWindowDays,
+      p_recent_days: recentDays,
+    }),
+    // 사용자 지시(2026-08-25, 원 명세 감사 후속: 9번 Slot Intelligence 8 Blocks) — 기존
+    // 4구간(daypartOpportunity)은 그대로 두고, Page 2 OPPORTUNITY?에 "8구간 상세"로만 추가
+    // 표시할 병렬 데이터. 같은 파라미터, 같은 계산 방식(경쟁채널 격차 변화)을 8구간으로.
+    supabase.rpc("get_channel_hourblock_opportunity", {
       p_channel_code: channel.code,
       p_program_target_label: programTargetLabel,
       p_as_of_date: dateTo,
@@ -486,6 +498,7 @@ export async function GET(request: Request) {
   const trendHighlight = trendHighlightRes.data?.[0] ?? null;
   const competitorScheduleChanges = competitorScheduleChangesRes.data ?? [];
   const daypartOpportunity = daypartOpportunityRes.data;
+  const hourBlockOpportunity = hourBlockOpportunityRes.data;
   const dowHourBlockPattern = dowHourBlockPatternRes.data;
   const topPrograms = topProgramsRes.data;
   const periodDemographics = periodDemographicsRes.data;
@@ -598,6 +611,7 @@ export async function GET(request: Request) {
     competitorProgramOverlap: overlapData ?? [],
     competitorTopPrograms: topProgramsData ?? [],
     daypartOpportunity: daypartOpportunity ?? [],
+    hourBlockOpportunity: hourBlockOpportunity ?? [],
     affinity: { compareChannelCode, items: affinity },
     rootCauseAlert,
     opportunityAlert,

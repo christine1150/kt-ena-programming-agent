@@ -134,6 +134,30 @@ function classifyDaypartOpportunity(d: DaypartOpportunityRow): OpportunityClass 
   return "OPPORTUNITY";
 }
 
+// 사용자 지시(2026-08-25, 원 명세 감사 후속: 9번 "Slot Intelligence — 8 Blocks") — 위 4구간
+// PROTECT/DEFEND/IMPROVE/OPPORTUNITY 판정을 그대로 3시간 단위 8구간에도 적용한다(같은 로직,
+// 다른 데이터). 기존 daypart 핵심 서술(WHY?/Executive Insight 등)은 절대 건드리지 않고, "8구간
+// 상세" 추가 표시에서만 쓴다 — 새 함수로 분리해 기존 classifyDaypartOpportunity는 그대로 둔다.
+interface HourBlockOpportunityRow {
+  hour_block: number;
+  our_full_avg: number | null;
+  our_recent_avg: number | null;
+  competitor_full_avg: number | null;
+  competitor_recent_avg: number | null;
+  gap_full: number | null;
+  gap_recent: number | null;
+  gap_change: number | null;
+}
+function classifyHourBlockOpportunity(d: HourBlockOpportunityRow): OpportunityClass | null {
+  if (d.our_full_avg === null || d.our_recent_avg === null || d.gap_change === null) return null;
+  const strong = d.our_recent_avg >= d.our_full_avg;
+  const pressureEasing = d.gap_change >= 0;
+  if (strong && pressureEasing) return "PROTECT";
+  if (strong && !pressureEasing) return "DEFEND";
+  if (!strong && !pressureEasing) return "IMPROVE";
+  return "OPPORTUNITY";
+}
+
 interface AffinityResult {
   channel_composition: number | null;
   compare_composition: number | null;
@@ -430,6 +454,7 @@ interface ChannelData {
   competitorProgramOverlap: CompetitorOverlapRow[];
   competitorTopPrograms: CompetitorTopProgramRow[];
   daypartOpportunity: DaypartOpportunityRow[];
+  hourBlockOpportunity: HourBlockOpportunityRow[];
   affinity: { compareChannelCode: string; items: { targetLabel: string; result: AffinityResult | null }[] };
   rootCauseAlert: RootCauseAlert | null;
   opportunityAlert: OpportunityAlert | null;
@@ -2458,6 +2483,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     competitorProgramOverlap,
     competitorTopPrograms,
     daypartOpportunity,
+    hourBlockOpportunity,
     rootCauseAlert,
     isRangeMode,
     dowHourBlockPattern,
@@ -3621,6 +3647,55 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </div>
           )}
           <p className="mb-3 text-base leading-relaxed text-zinc-700">{buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD")}</p>
+          {/* 사용자 지시(2026-08-25, 원 명세 감사 후속: 9번 Slot Intelligence 8 Blocks) — 위 4구간
+              판정/서술(daypartOpportunity, buildOpportunityNarrative 등)은 그대로 두고, 3시간
+              단위 8구간 상세를 추가 정보로만 덧붙인다(기본 접힘 — 기존 레이아웃에 부담 없이). */}
+          {hourBlockOpportunity.length > 0 && (
+            <details className="mb-3 rounded-2xl bg-zinc-50 p-4">
+              <summary className="cursor-pointer text-sm font-medium text-zinc-600">
+                8구간 상세(3시간 단위, 원 명세 &quot;Slot Intelligence&quot; 보강)
+              </summary>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[560px] text-left text-sm">
+                  <thead>
+                    <tr className="text-zinc-400">
+                      <th className="pb-1.5 pr-2 font-medium">시간대</th>
+                      <th className="pb-1.5 pr-2 font-medium">우리(이전/{opportunityRecentLabel})</th>
+                      <th className="pb-1.5 pr-2 font-medium">경쟁채널(이전/{opportunityRecentLabel})</th>
+                      <th className="pb-1.5 pr-2 font-medium">변화</th>
+                      <th className="pb-1.5 font-medium">분류</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hourBlockOpportunity.map((d) => {
+                      const cls = classifyHourBlockOpportunity(d);
+                      return (
+                        <tr key={d.hour_block} className="border-t border-zinc-100">
+                          <td className="py-1.5 pr-2 font-medium text-zinc-800">{hourBlockLabel(d.hour_block)}</td>
+                          <td className="py-1.5 pr-2 text-zinc-600">
+                            {fmtR(d.our_full_avg)} / {fmtR(d.our_recent_avg)}
+                          </td>
+                          <td className="py-1.5 pr-2 text-zinc-600">
+                            {fmtR(d.competitor_full_avg)} / {fmtR(d.competitor_recent_avg)}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {d.gap_change === null ? (
+                              <span className="text-zinc-400">—</span>
+                            ) : (
+                              <span className={d.gap_change >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                {d.gap_change >= 0 ? "▲ 기회" : "▼ 약세"} {Math.abs(d.gap_change).toFixed(4)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-1.5 text-zinc-600">{cls ? OPPORTUNITY_CLASS_LABEL[cls] : "판단 근거 부족"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
           {/* 사용자 지시(2026-08-21): WHY?/OPPORTUNITY?/WHAT TO SCHEDULE? 세 결과가 같은 daypart를
               가리킬 때만 종합 판단 문장(Executive Programming Insight)을 보여준다 — 조건이 안
               맞으면 표시하지 않는다(추정으로 억지 연결 금지). 기존 카드 안에 콜아웃으로만 추가. */}
