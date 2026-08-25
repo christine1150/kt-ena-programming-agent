@@ -607,6 +607,115 @@ function DotTag({ label, color }: { label: string; color: string }) {
     </span>
   );
 }
+
+// 사용자 지시(2026-08-26): "Fit Score 2×2 매트릭스(포트폴리오 뷰) — Target Performance(x) ×
+// Competitive Opportunity(y)에... 사분면 라벨을 PROTECT/DEFEND/IMPROVE/OPPORTUNITY로." 다만
+// PD가 실제로 판단해야 하는 축은 "이 프로그램을 얼마나 믿고 강화/이동/교체할 것인가"이므로,
+// 새 기준을 만들지 않고 이미 SQL(refresh_fit_score_mart)이 태그를 매기는 실제 컷오프
+// (fit_score 50/65/80, confidence_pct 50)를 그대로 배경 밴드로 시각화한다 — 표의 태그가
+// "왜" 그렇게 매겨졌는지 한눈에 보이는 산점도(맥킨지 포트폴리오 매트릭스 원리를 그대로 옮김,
+// 표 태그 값 자체는 재계산하지 않음). x=적합도(Fit Score), y=신뢰도(표본 충분성).
+const FIT_QUADRANT_CONFIDENCE_CUTOFF = 50; // fit_score_config.min_confidence_pct_for_tag 기본값과 동일
+const FIT_QUADRANT_BANDS: { from: number; to: number; tag: keyof typeof TAG_DOT_COLOR }[] = [
+  { from: 0, to: 50, tag: "REPLACE" },
+  { from: 50, to: 65, tag: "MOVE" },
+  { from: 65, to: 80, tag: "KEEP" },
+  { from: 80, to: 100, tag: "STRENGTHEN" },
+];
+function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
+  const plottable = items.filter(
+    (i): i is FitScoreItem & { fit_score: number; confidence_pct: number } => i.fit_score !== null && i.confidence_pct !== null
+  );
+  if (plottable.length === 0) return null;
+  const W = 640;
+  const H = 260;
+  const PAD_L = 30;
+  const PAD_R = 12;
+  const PAD_T = 10;
+  const PAD_B = 22;
+  const plotH = H - PAD_T - PAD_B;
+  const xOf = (score: number) => PAD_L + (Math.max(0, Math.min(100, score)) / 100) * (W - PAD_L - PAD_R);
+  const yOf = (conf: number) => PAD_T + (1 - Math.max(0, Math.min(100, conf)) / 100) * plotH;
+  return (
+    <div className="mb-4 rounded-2xl bg-zinc-50 p-4">
+      <p className="mb-2 text-[12px] text-zinc-500">
+        가로축 = 적합도(Fit Score), 세로축 = 신뢰도(표본 충분성) — 아래 표의 태그가 어떤 기준으로 나뉘었는지 그대로
+        보여줍니다(신뢰도 {FIT_QUADRANT_CONFIDENCE_CUTOFF}% 미만은 점수와 무관하게 테스트).
+      </p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+        {FIT_QUADRANT_BANDS.map((b) => (
+          <rect key={b.tag} x={xOf(b.from)} y={PAD_T} width={xOf(b.to) - xOf(b.from)} height={plotH} fill={TAG_DOT_COLOR[b.tag]} fillOpacity={0.07} />
+        ))}
+        <line
+          x1={PAD_L}
+          y1={yOf(FIT_QUADRANT_CONFIDENCE_CUTOFF)}
+          x2={W - PAD_R}
+          y2={yOf(FIT_QUADRANT_CONFIDENCE_CUTOFF)}
+          stroke="#a1a1aa"
+          strokeWidth={1}
+          strokeDasharray="4 3"
+        />
+        {[50, 65, 80].map((cut) => (
+          <line key={cut} x1={xOf(cut)} y1={PAD_T} x2={xOf(cut)} y2={H - PAD_B} stroke="#e4e4e7" strokeWidth={1} />
+        ))}
+        <line x1={PAD_L} y1={H - PAD_B} x2={W - PAD_R} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
+        <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
+        {[0, 50, 65, 80, 100].map((v) => (
+          <text key={v} x={xOf(v)} y={H - PAD_B + 12} textAnchor="middle" fontSize={9} fill="#a1a1aa">
+            {v}
+          </text>
+        ))}
+        <text x={PAD_L - 4} y={yOf(FIT_QUADRANT_CONFIDENCE_CUTOFF) - 3} textAnchor="end" fontSize={9} fill="#a1a1aa">
+          {FIT_QUADRANT_CONFIDENCE_CUTOFF}%
+        </text>
+        {(() => {
+          // 사용자 지시(2026-08-26) 반영 중 실측 확인: 표본 신뢰도 100%인 프로그램이 많아 대부분
+          // 점이 y=100% 선 위에 몰리고, x(적합도)도 서로 가까워 라벨을 전부 켜면 겹쳐 읽기 어려움
+          // — 최고/최저 적합도 점과 "교체 검토(REPLACE)" 태그가 붙은(가장 의사결정이 급한) 점만
+          // 항상 라벨을 켜고, 나머지는 점만(호버 시 <title> 툴팁으로 확인).
+          const byFitAsc = [...plottable].sort((a, b) => a.fit_score - b.fit_score);
+          const alwaysLabelIds = new Set<string>([
+            byFitAsc[0]?.program_id,
+            byFitAsc[byFitAsc.length - 1]?.program_id,
+            ...plottable.filter((i) => i.tag === "REPLACE").map((i) => i.program_id),
+          ]);
+          return plottable.map((item) => {
+            const color = item.tag ? TAG_DOT_COLOR[item.tag] : "#a1a1aa";
+            const r = 3 + Math.min(4, item.sample_days / 4);
+            const name = item.programs?.canonical_name ?? "";
+            const shortName = name.length > 7 ? `${name.slice(0, 7)}…` : name;
+            const px = xOf(item.fit_score);
+            const py = yOf(item.confidence_pct);
+            const showLabel = alwaysLabelIds.has(item.program_id);
+            return (
+              <g key={item.program_id}>
+                <circle cx={px} cy={py} r={r} fill={color} fillOpacity={0.85}>
+                  <title>
+                    {name} — 적합도 {item.fit_score.toFixed(1)} · 신뢰도 {item.confidence_pct.toFixed(0)}% · {item.tag ? TAG_LABEL_KO[item.tag] : "—"}
+                  </title>
+                </circle>
+                {showLabel && (
+                  <text x={px} y={py - r - 3} textAnchor="middle" fontSize={8} fill="#52525b">
+                    {shortName}
+                  </text>
+                )}
+              </g>
+            );
+          });
+        })()}
+      </svg>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-400">
+        {(Object.keys(TAG_LABEL_KO) as (keyof typeof TAG_LABEL_KO)[]).map((tag) => (
+          <span key={tag} className="inline-flex items-center gap-1">
+            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TAG_DOT_COLOR[tag] }} />
+            {TAG_LABEL_KO[tag]}
+          </span>
+        ))}
+        <span>· 점 크기 = 표본일수(sample_days)</span>
+      </div>
+    </div>
+  );
+}
 const SKYUHD_MIN_AIR_COUNT_FOR_TIER = 5; // 이 미만이면 percentile을 믿지 않고 "표본부족"으로 표시.
 
 function skyuhdScorecardTier(item: SkyuhdScorecardItem): "강세" | "보통" | "약세" | "표본부족" {
@@ -1371,6 +1480,59 @@ interface WhyDiagnosisResult {
   decision: string;
   action: WhyAction;
   daypart: string | null;
+  // 사용자 지시(2026-08-26): "Rating Bridge(폭포수) 차트 — 왜 떨어졌나를... 각 요인의 강도를
+  // 이어지는 막대 폭포수로." 후보 요인들의 편차 크기(strengthPct)를 시각화용으로 그대로 노출
+  // (서로 다른 기준의 %라 실제 시청률 포인트로 더해지는 값이 아니므로, 차트에서도 "정확한 분해"
+  // 대신 "관찰된 편차 크기 순위"로만 표현한다 — 인과 분해를 단정하지 않음).
+  candidates: WhyCandidate[];
+}
+
+// 사용자 지시(2026-08-26): "Rating Bridge(폭포수) 차트 — '왜 떨어졌나'를 숫자 나열 대신 baseline
+// → daypart 효과 → program 효과 → 경쟁 효과 → 실제 결과로 이어지는 막대 폭포수로." 다만 각
+// 후보 요인의 strengthPct는 서로 다른 기준의 편차율(연령대 자체 등락률/시간대 자체 등락률/
+// 프로그램 자체 등락률/경쟁채널 자체 등락률)이라 실제 시청률 포인트로 더해서 총 하락폭과
+// 맞아떨어지는 참값이 아니다 — 그런데도 막대들을 이어붙여 총합처럼 보이는 진짜 폭포수(waterfall)
+// 로 그리면 "정확히 분해된 원인"이라고 단정하는 것으로 오해를 살 수 있다(CLAUDE.md No Hallucination/
+// No Unsupported Causality 원칙 위반). 대신 막대들을 서로 떨어뜨린 "편차 크기 순위" 바 차트로
+// 그려 같은 시각적 효과(어떤 요인이 가장 크게 움직였는지 한눈에)는 내면서도 "합산=총 하락폭"이라고
+// 암시하지 않는다. 1번(가장 큰 요인=주도 요인)은 진한 색, 나머지는 옅은 색으로 구분한다.
+const WHY_VARIABLE_LABEL_KO: Record<string, string> = {
+  "Target Profile": "타깃 프로필(연령대)",
+  "Day/Time Slot": "시간대",
+  "Program 자체 성과": "프로그램 자체 성과",
+  "Competitive Environment": "경쟁 환경",
+  "Lead-in": "Lead-in",
+};
+function WhyCandidateRankingChart({ candidates }: { candidates: WhyCandidate[] }) {
+  if (candidates.length === 0) return null;
+  const maxStrength = Math.max(...candidates.map((c) => c.strengthPct));
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      {candidates.map((c, i) => {
+        const widthPct = maxStrength > 0 ? (c.strengthPct / maxStrength) * 100 : 0;
+        const isPrimary = i === 0;
+        return (
+          <div key={c.variable} className="flex items-center gap-2">
+            <span className={`w-[132px] shrink-0 truncate text-[11px] ${isPrimary ? "font-semibold text-rose-700" : "text-zinc-500"}`}>
+              {WHY_VARIABLE_LABEL_KO[c.variable] ?? c.variable}
+            </span>
+            <div className="h-4 flex-1 overflow-hidden rounded bg-rose-50">
+              <div
+                className="h-full rounded"
+                style={{ width: `${Math.max(widthPct, 4)}%`, backgroundColor: isPrimary ? "#e11d48" : "#fda4af" }}
+              />
+            </div>
+            <span className={`w-12 shrink-0 text-right text-[11px] tabular-nums ${isPrimary ? "font-semibold text-rose-700" : "text-zinc-500"}`}>
+              {c.strengthPct.toFixed(1)}%
+            </span>
+          </div>
+        );
+      })}
+      <p className="mt-0.5 text-[10.5px] text-zinc-400">
+        각 막대는 그 요인 자신의 평소 대비 편차 크기입니다(서로 기준이 달라 합산해도 전체 하락폭이 되지 않음 — 상대적 크기 비교용).
+      </p>
+    </div>
+  );
 }
 function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | null): WhyDiagnosisResult | null {
   const alert = data.rootCauseAlert;
@@ -1494,6 +1656,7 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
       decision: "추가 데이터가 쌓인 뒤 재검토가 필요합니다.",
       action: "WATCH",
       daypart: null,
+      candidates: [],
     };
   }
 
@@ -1517,6 +1680,7 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
     decision: `${slotLabel}의 현재 편성을 유지할지, 이동/교체를 검토할지 우선 확인이 필요합니다.`,
     action,
     daypart,
+    candidates,
   };
 }
 
@@ -3413,6 +3577,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <div className="mt-3 border-t border-rose-200 pt-3">
                     <p className="text-sm font-semibold text-rose-700">주도 요인(편차가 가장 큰 변수)</p>
                     <p className="mt-1 text-sm text-zinc-600">{why.leadSentence}</p>
+                    <WhyCandidateRankingChart candidates={why.candidates} />
                     {why.supportingBullets.length > 0 && (
                       <>
                         <p className="mt-2 text-sm font-semibold text-rose-700">함께 관찰된 요인</p>
@@ -3900,6 +4065,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             무관하게 TEST로 표시한다. 위 OPPORTUNITY?에서 찾은 기회 시간대에 STRENGTHEN/TEST 태그 프로그램을
             배치하는 것을 우선 검토하세요.
           </p>
+          {fitScoreItems && fitScoreItems.length > 0 && <FitScoreQuadrantChart items={fitScoreItems} />}
           {fitScoreLoading ? (
             <p className="text-sm text-zinc-400">불러오는 중...</p>
           ) : !fitScoreItems || fitScoreItems.length === 0 ? (
