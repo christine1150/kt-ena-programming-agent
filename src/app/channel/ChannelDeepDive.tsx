@@ -2937,14 +2937,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // daypartOpportunity/competitorInsightReport)만 그대로 /api/llm-synthesize에 보내 종합
   // 문단을 받는다(새 계산 없음). data/fitScoreItems가 모두 준비된 뒤 한 번만 호출하고, 채널·
   // 날짜가 바뀌면 이전 화면의 문단이 남아있지 않도록 즉시 비운다.
-  const [sectionLlm, setSectionLlm] = useState<{ why: string | null; opportunity: string | null; competitor: string | null }>({
+  // 리셋용 effect/ref 없이 state 자체에 채널·날짜 key를 함께 저장해 두고, 읽는 곳(렌더)에서
+  // key가 현재와 다르면 그냥 무시(null 취급 → 규칙기반 문구로 폴백)한다 — 화면 전환 시 이전
+  // 채널의 문단이 잠깐이라도 노출되는 것을 막되, effect 안에서 동기 setState를 호출하거나
+  // 렌더 중 ref를 건드리는 방식(둘 다 react-hooks lint 오류) 없이 처리.
+  const [sectionLlm, setSectionLlm] = useState<{ key: string; why: string | null; opportunity: string | null; competitor: string | null }>({
+    key: "",
     why: null,
     opportunity: null,
     competitor: null,
   });
-  useEffect(() => {
-    setSectionLlm({ why: null, opportunity: null, competitor: null });
-  }, [code, dateQuery]);
+  const sectionLlmResetKey = `${code}__${dateQuery ?? ""}`;
+  const sectionLlmCurrent = sectionLlm.key === sectionLlmResetKey ? sectionLlm : { key: sectionLlmResetKey, why: null, opportunity: null, competitor: null };
   useEffect(() => {
     if (!data || fitScoreLoading || code === "SKYUHD") return;
     let cancelled = false;
@@ -3023,7 +3027,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
       const body = await res.json().catch(() => ({ ok: false }));
       if (cancelled || !res.ok || !body.ok) return;
       const results: (string | null)[] = body.results ?? [];
-      const next: { why: string | null; opportunity: string | null; competitor: string | null } = { why: null, opportunity: null, competitor: null };
+      const next: { key: string; why: string | null; opportunity: string | null; competitor: string | null } = {
+        key: sectionLlmResetKey,
+        why: null,
+        opportunity: null,
+        competitor: null,
+      };
       jobKeys.forEach((key, i) => {
         next[key] = results[i] ?? null;
       });
@@ -3032,7 +3041,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     return () => {
       cancelled = true;
     };
-  }, [data, fitScoreItems, fitScoreLoading, code]);
+  }, [data, fitScoreItems, fitScoreLoading, code, sectionLlmResetKey]);
 
   useEffect(() => {
     if (!expandedProgram || code === "SKYUHD") return;
@@ -3987,7 +3996,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     <p className="text-sm font-semibold text-rose-700">주도 요인(편차가 가장 큰 변수)</p>
                     {/* Tier 1 확장(2026-08-26): OpenAI가 후보들을 종합한 문장(sectionLlm.why)이
                         있으면 그걸, 없으면 기존 규칙 기반 leadSentence로. */}
-                    <p className="mt-1 text-sm text-zinc-600">{sectionLlm.why ?? why.leadSentence}</p>
+                    <p className="mt-1 text-sm text-zinc-600">{sectionLlmCurrent.why ?? why.leadSentence}</p>
                     <WhyCandidateRankingChart candidates={why.candidates} />
                     {why.supportingBullets.length > 0 && (
                       <>
@@ -4331,7 +4340,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 문단(sectionLlm.opportunity)이 있으면
               그걸, 없으면 기존 규칙 기반 buildOpportunityNarrative로. */}
           <p className="mb-3 text-base leading-relaxed text-zinc-700">
-            {sectionLlm.opportunity ?? buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD")}
+            {sectionLlmCurrent.opportunity ?? buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD")}
           </p>
           {/* 사용자 지시(2026-08-25, 원 명세 감사 후속: 9번 Slot Intelligence 8 Blocks) — 위 4구간
               판정/서술(daypartOpportunity, buildOpportunityNarrative 등)은 그대로 두고, 3시간
@@ -4814,7 +4823,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               })()}
               {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 문단(sectionLlm.competitor)이 있으면
                   그걸, 없으면 기존 규칙 기반 buildCompetitorNarrative로. */}
-              <p className="mb-4 text-base leading-relaxed text-zinc-700">{sectionLlm.competitor ?? buildCompetitorNarrative(competitorInsightReport)}</p>
+              <p className="mb-4 text-base leading-relaxed text-zinc-700">{sectionLlmCurrent.competitor ?? buildCompetitorNarrative(competitorInsightReport)}</p>
             </>
           )}
 
