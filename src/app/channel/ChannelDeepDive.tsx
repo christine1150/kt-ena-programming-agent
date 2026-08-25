@@ -1776,6 +1776,82 @@ function buildExecutiveProgrammingInsight(
   return sentences.join(" ");
 }
 
+// 사용자 지시(2026-08-26): "경쟁사 대비 포지셔닝 스캐터 — COMPARED WITH?의 채널별 12주 평균
+// 대비 오늘 등락을 x축(시청률), y축(등락%)의 산점도로... 강한데 더 강해지는 채널 vs 약한데
+// 더 약해지는 채널을 사분면으로." 새 계산 없이 이미 표에 쓰는 today_rating/delta_pct만 재사용.
+interface CompetitorPositioningPoint {
+  competitor_name: string;
+  today_rating: number | null;
+  delta_pct: number | null;
+  isOurs: boolean;
+}
+function CompetitorPositioningScatter({ points, accentColor }: { points: CompetitorPositioningPoint[]; accentColor: string }) {
+  const plottable = points.filter(
+    (p): p is CompetitorPositioningPoint & { today_rating: number; delta_pct: number } => p.today_rating !== null && p.delta_pct !== null
+  );
+  if (plottable.length < 2) return null;
+  const W = 640;
+  const H = 260;
+  const PAD_L = 34;
+  const PAD_R = 14;
+  const PAD_T = 12;
+  const PAD_B = 24;
+  const ratings = plottable.map((p) => p.today_rating);
+  const minRating = Math.min(...ratings);
+  const maxRating = Math.max(...ratings);
+  const ratingSpan = maxRating - minRating || 1;
+  const xMin = Math.max(0, minRating - ratingSpan * 0.1);
+  const xMax = maxRating + ratingSpan * 0.1;
+  const maxAbsDelta = Math.max(10, ...plottable.map((p) => Math.abs(p.delta_pct)));
+  const yMax = maxAbsDelta * 1.1;
+  const xOf = (v: number) => PAD_L + ((v - xMin) / (xMax - xMin || 1)) * (W - PAD_L - PAD_R);
+  const yOf = (v: number) => PAD_T + (1 - (v + yMax) / (yMax * 2)) * (H - PAD_T - PAD_B);
+  const medianRating = [...ratings].sort((a, b) => a - b)[Math.floor(ratings.length / 2)];
+  return (
+    <div className="mb-4 rounded-2xl bg-zinc-50 p-4">
+      <p className="mb-2 text-[12px] text-zinc-500">
+        가로축 = 오늘 시청률, 세로축 = 12주 평균 대비 등락률 — 오른쪽 위일수록 &ldquo;강한데 더 강해지는&rdquo; 채널, 왼쪽
+        아래일수록 &ldquo;약한데 더 약해지는&rdquo; 채널입니다.
+      </p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+        <line x1={PAD_L} y1={yOf(0)} x2={W - PAD_R} y2={yOf(0)} stroke="#a1a1aa" strokeWidth={1} />
+        <line x1={xOf(medianRating)} y1={PAD_T} x2={xOf(medianRating)} y2={H - PAD_B} stroke="#e4e4e7" strokeWidth={1} strokeDasharray="3 3" />
+        <text x={W - PAD_R} y={yOf(0) - 4} textAnchor="end" fontSize={9} fill="#a1a1aa">
+          등락 0%
+        </text>
+        <line x1={PAD_L} y1={H - PAD_B} x2={W - PAD_R} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
+        <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
+        <text x={PAD_L} y={H - PAD_B + 12} textAnchor="start" fontSize={9} fill="#a1a1aa">
+          {fmt(xMin)}
+        </text>
+        <text x={W - PAD_R} y={H - PAD_B + 12} textAnchor="end" fontSize={9} fill="#a1a1aa">
+          {fmt(xMax)}
+        </text>
+        {plottable.map((p) => {
+          const px = xOf(p.today_rating);
+          const py = yOf(p.delta_pct);
+          const color = p.isOurs ? accentColor : p.delta_pct >= 0 ? "#059669" : "#e11d48";
+          const r = p.isOurs ? 6 : 4;
+          return (
+            <g key={p.competitor_name}>
+              <circle cx={px} cy={py} r={r} fill={color} fillOpacity={p.isOurs ? 1 : 0.75}>
+                <title>
+                  {p.competitor_name} — 시청률 {fmt(p.today_rating)} · 12주 평균 대비 {p.delta_pct >= 0 ? "▲" : "▼"} {Math.abs(p.delta_pct).toFixed(1)}%
+                </title>
+              </circle>
+              {p.isOurs && (
+                <text x={px} y={py - r - 4} textAnchor="middle" fontSize={9} fontWeight={700} fill={accentColor}>
+                  {p.competitor_name}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 // ── COMPARED WITH? 줄글 ──────────────────────────────────────────────
 function buildCompetitorNarrative(rows: CompetitorInsightRow[]): string {
   const valid = rows.filter((r) => r.delta_pct !== null);
@@ -4333,7 +4409,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 }
                 merged.sort((a, b) => (b.today_rating ?? -Infinity) - (a.today_rating ?? -Infinity));
                 return (
-                  <div className="mb-3 overflow-x-auto">
+                  <>
+                    <CompetitorPositioningScatter points={merged} accentColor={accentColor} />
+                    <div className="mb-3 overflow-x-auto">
                     <table className="w-full min-w-[560px] text-left text-sm">
                       <thead>
                         <tr className="text-zinc-400">
@@ -4404,7 +4482,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                    </div>
+                  </>
                 );
               })()}
               <p className="mb-4 text-base leading-relaxed text-zinc-700">{buildCompetitorNarrative(competitorInsightReport)}</p>
