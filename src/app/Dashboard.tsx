@@ -733,7 +733,13 @@ function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null
 // 사용). 채널명을 하드코딩하지 않고 CHANNEL_NAME_BY_CODE로 그때그때 방송 채널을 반영해
 // 어떤 오리지널 프로그램·채널 조합에도 같은 틀이 적용되도록 일반화했다.
 interface OriginalInsightBlock {
+  // 사용자 지시(2026-08-25): 첨부한 "Role & Purpose" 명세(주요 컨텐츠 리뷰 UI 규격)의 "3. 핵심
+  // 요약 분석" — 반드시 4가지 지표를 이 순서·문구 그대로 불렛으로 낸다(데이터가 없는 항목만
+  // 생략, 순서·문구는 안 바꿈). 기존에 여기 있던 추가 신호(동시간대 순위 서술·도달율 경고·
+  // 신규드라마 비교·유지율이 낮을 때의 캐비엇)는 삭제하지 않고 secondaryBullets로 옮겼다
+  // (Delta-Only — 정보량은 유지하되 명세가 요구한 4-불렛 형식은 엄격히 지킨다).
   bullets: string[];
+  secondaryBullets: string[];
   schedulingNote: string[];
 }
 function buildOriginalInsight(
@@ -747,33 +753,16 @@ function buildOriginalInsight(
   channelAchievementPct: number | null
 ): OriginalInsightBlock {
   const bullets: string[] = [];
+  const secondaryBullets: string[] = [];
   const broadcastChannelName = CHANNEL_NAME_BY_CODE[item.broadcast_channel_code] ?? item.broadcast_channel_code;
 
-  // ⓪ 핵심 요약(참고 리포트의 "[회차_이슈] 전회 대비 ... / 목표 대비 누적 ..." 형식을 학습해
-  // 추가) — 여러 지표를 한 문장으로 종합해 가장 먼저 보여준다. 전회 대비 등락, 도달율 경고,
-  // 동시간대 타깃·가구 순위, 목표 대비 누적 달성률을 한 번에 짚는다(전부 이미 계산된 값).
-  if (item.matched_rating !== null) {
-    const summaryParts: string[] = [];
-    if (item.prior_rating_change_pct !== null) {
-      summaryParts.push(`전회 대비 ${item.prior_rating_change_pct >= 0 ? "상승" : "하락"}`);
-    }
-    if (item.matched_reach !== null && item.matched_reach < 1) {
-      summaryParts.push("도달율 1% 미만");
-    }
-    if (rank !== null) {
-      const rankText =
-        item.householdRank !== null ? `동시간대 타깃 ${rank}위 및 가구 ${item.householdRank}위` : `동시간대 타깃 ${rank}위`;
-      summaryParts.push(rankText);
-    }
-    if (channelAchievementPct !== null) {
-      summaryParts.push(`목표 대비 누적 ${channelAchievementPct.toFixed(1)}% 달성`);
-    }
-    if (summaryParts.length > 0) {
-      bullets.push(`핵심 요약: ${summaryParts.join(", ")}`);
-    }
+  // 1) 목표 달성도 — 명세 문구 그대로 "핵심 요약: 목표 대비 누적 XX.X% 달성"(라벨이 "핵심 요약:"
+  // 인 것도 명세 원문 그대로 — 절 앞머리 라벨이지 다른 지표를 더 붙이지 않는다).
+  if (channelAchievementPct !== null) {
+    bullets.push(`핵심 요약: 목표 대비 누적 ${channelAchievementPct.toFixed(1)}% 달성`);
   }
 
-  // ① 리드인(선행 재방) — 있을 때만
+  // 2) 리드인 견인 효과
   if (item.pre_rerun_rating !== null && item.matched_rating !== null && item.pre_rerun_rating > 0) {
     const upliftPct = ((item.matched_rating - item.pre_rerun_rating) / item.pre_rerun_rating) * 100;
     bullets.push(
@@ -781,74 +770,74 @@ function buildOriginalInsight(
     );
   }
 
-  // ② 동시간대 순위(1위면 사수, 아니면 몇 위인지 + 앞선 경쟁 프로그램)
+  // 3) 본방송 수치 — 순위·전회 대비 등 다른 맥락 없이 명세 그대로 이 문장 하나만(그 정보들은
+  // 헤드라인/카드에 이미 따로 나와 있음).
   if (item.matched_rating !== null) {
-    const changeText =
-      item.prior_rating_change_pct !== null
-        ? `전회 대비 ${item.prior_rating_change_pct >= 0 ? "+" : "-"}${Math.abs(item.prior_rating_change_pct).toFixed(1)}% ${item.prior_rating_change_pct >= 0 ? "상승" : "하락"}`
-        : null;
-    if (rank === 1 && item.competitorHighlights.length > 0 && item.competitorHighlights[0].competitor_rating !== null && item.competitorHighlights[0].competitor_rating > 0) {
-      const top = item.competitorHighlights[0]; // 이미 시청률 내림차순 정렬됨
-      const ratio = item.matched_rating / top.competitor_rating!;
-      bullets.push(
-        `동시간대 1위 달성: 본방송 시청률 ${formatRating(item.matched_rating)}%${changeText ? `(${changeText})` : ""}로 경쟁사인 ${top.competitor_name}(${formatRating(top.competitor_rating)}%) 대비 ${ratio.toFixed(1)}배 높은 시청률을 기록하며 동시간대 타깃 1위 사수`
-      );
-    } else if (rank !== null && rank > 1 && beatenBy.length > 0) {
-      const named = beatenBy.slice(0, 3).map((c) => `${c.competitor_name}(${formatRating(c.competitor_rating)}%)`).join(", ");
-      const extra = beatenBy.length > 3 ? ` 외 ${beatenBy.length - 3}개` : "";
-      bullets.push(
-        `동시간대 ${rank}위 기록: 본방송 시청률 ${formatRating(item.matched_rating)}%${changeText ? `(${changeText})` : ""}로, ${named}${extra}보다 낮았음[참고] 인과관계 미확정`
-      );
-    } else {
-      bullets.push(`본방송 시청률 ${formatRating(item.matched_rating)}%${changeText ? `(${changeText})` : ""} 기록`);
-    }
+    bullets.push(`본방송 시청률 ${formatRating(item.matched_rating)}% 기록`);
   }
 
-  // ②-1 신규 오리지널 드라마(1~2회) — 직전에 끝난 오리지널 드라마 평균과 비교(사용자 지시,
-  // 2026-08-21, 기능 #2). 자기 자신의 과거 회차 평균(latest_n)이 부족하거나 없는 시기라
-  // 대신 채널 슬롯의 직전 작품과 비교한다.
-  if (item.episode_number !== null && item.episode_number <= 2 && item.prev_drama_name && item.prev_drama_avg_rating !== null) {
-    const changeText =
-      item.prev_drama_change_pct !== null
-        ? `${item.prev_drama_change_pct >= 0 ? "▲" : "▼"} ${Math.abs(item.prev_drama_change_pct).toFixed(1)}%`
-        : null;
-    bullets.push(
-      `신규 오리지널 드라마 초반 비교: 직전 작품 '${item.prev_drama_name}'의 방영 기간 평균(${formatRating(item.prev_drama_avg_rating)}%${item.prev_drama_episode_count ? `, ${item.prev_drama_episode_count}회분` : ""}) 대비 오늘 ${item.episode_number}회는 ${formatRating(item.matched_rating)}%${changeText ? `로 ${changeText} 변동` : ""}`
-    );
-  }
-
-  // ③ 본채널 당일 자체 재방 효과
-  let selfRetentionPct: number | null = null;
-  if (item.self_rerun_rating !== null && item.matched_rating !== null && item.matched_rating > 0) {
-    selfRetentionPct = (item.self_rerun_rating / item.matched_rating) * 100;
-    bullets.push(
-      `${broadcastChannelName} 본채널 직재방 효과: 본방 종료 직후 ${broadcastChannelName} 본채널 자체 재방(${item.self_rerun_start_time ? fmtTime(item.self_rerun_start_time) : ""}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
-    );
-  }
-
-  // ④ 타 채널(예: ENA Play) 직후재방 효과/한계 — 유지율 10% 미만이면 "한계"로 표현
+  // 4) 직후 재방송 유입 효과 — 명세 문구 그대로. 유지율이 낮아 사실상 효과가 제한적인 경우의
+  // 캐비엇은 이 필수 4번째 불렛의 고정 문구를 바꾸지 않고 secondaryBullets에 별도로 짚는다.
   let crossRetentionPct: number | null = null;
   let rerunChannelName: string | null = null;
   if (item.rerun_rating !== null && item.retention_pct !== null && item.rerun_channel_code) {
     crossRetentionPct = item.retention_pct;
     rerunChannelName = CHANNEL_NAME_BY_CODE[item.rerun_channel_code] ?? item.rerun_channel_code;
-    const isWeak = crossRetentionPct < 10;
     bullets.push(
-      `${rerunChannelName} 직재방 ${isWeak ? "한계" : "효과"}: ${rerunChannelName} 직후 재방(${item.rerun_start_time ? fmtTime(item.rerun_start_time) : ""}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)${isWeak ? "에 머무름" : "로 유입을 견인함"}`
+      `${rerunChannelName} 직후재방 효과: ${rerunChannelName} 직후 재방(${item.rerun_start_time ? fmtTime(item.rerun_start_time) : ""}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 유입을 견인함`
+    );
+    if (crossRetentionPct < 10) {
+      secondaryBullets.push(`${rerunChannelName} 직후재방 유지율이 ${crossRetentionPct.toFixed(1)}%로 낮아, 실질적인 유입 효과는 제한적으로 보임`);
+    }
+  }
+
+  // ── 여기부터는 명세 4-불렛에는 없지만 기존에 유용하게 쓰이던 추가 신호 — 삭제하지 않고 보존.
+
+  // 동시간대 순위(1위면 사수, 아니면 몇 위인지 + 앞선 경쟁 프로그램) — 순위 숫자 자체는 이미
+  // 헤드라인(buildOriginalHeadline)에 나오므로, 여기서는 "몇 배 높았다/누구에게 밀렸다" 같은
+  // 정성적 비교만 보탠다.
+  if (item.matched_rating !== null) {
+    if (rank === 1 && item.competitorHighlights.length > 0 && item.competitorHighlights[0].competitor_rating !== null && item.competitorHighlights[0].competitor_rating > 0) {
+      const top = item.competitorHighlights[0]; // 이미 시청률 내림차순 정렬됨
+      const ratio = item.matched_rating / top.competitor_rating!;
+      secondaryBullets.push(
+        `동시간대 1위 달성: 경쟁사인 ${top.competitor_name}(${formatRating(top.competitor_rating)}%) 대비 ${ratio.toFixed(1)}배 높은 시청률로 동시간대 타깃 1위 사수`
+      );
+    } else if (rank !== null && rank > 1 && beatenBy.length > 0) {
+      const named = beatenBy.slice(0, 3).map((c) => `${c.competitor_name}(${formatRating(c.competitor_rating)}%)`).join(", ");
+      const extra = beatenBy.length > 3 ? ` 외 ${beatenBy.length - 3}개` : "";
+      secondaryBullets.push(`동시간대 ${rank}위 기록: ${named}${extra}보다 낮았음(참고 — 인과관계 미확정)`);
+    }
+  }
+
+  // 신규 오리지널 드라마(1~2회) — 직전에 끝난 오리지널 드라마 평균과 비교(사용자 지시,
+  // 2026-08-21, 기능 #2).
+  if (item.episode_number !== null && item.episode_number <= 2 && item.prev_drama_name && item.prev_drama_avg_rating !== null) {
+    const changeText =
+      item.prev_drama_change_pct !== null
+        ? `${item.prev_drama_change_pct >= 0 ? "▲" : "▼"} ${Math.abs(item.prev_drama_change_pct).toFixed(1)}%`
+        : null;
+    secondaryBullets.push(
+      `신규 오리지널 드라마 초반 비교: 직전 작품 '${item.prev_drama_name}'의 방영 기간 평균(${formatRating(item.prev_drama_avg_rating)}%${item.prev_drama_episode_count ? `, ${item.prev_drama_episode_count}회분` : ""}) 대비 오늘 ${item.episode_number}회는 ${formatRating(item.matched_rating)}%${changeText ? `로 ${changeText} 변동` : ""}`
     );
   }
 
-  // ⑤ 도달율 — 사용자가 첨부한 PD 리뷰 보고서("도달율 1% 이하")를 학습해 추가. 도달율(Reach)이
-  // 1% 미만이면 시청률/점유율이 양호해도 "본 사람의 폭 자체가 좁다"는 별도 신호라 함께 보여준다.
-  if (item.matched_reach !== null && item.matched_reach < 1) {
-    bullets.push(`도달율(Reach) ${item.matched_reach.toFixed(2)}%로 1% 미만 — 시청은 유지되고 있으나 시청 가구의 폭 자체는 좁음`);
+  // 본채널 당일 자체 재방 효과(숫자는 헤더에 이미 노출되나, %견인 서술은 여기서만).
+  let selfRetentionPct: number | null = null;
+  if (item.self_rerun_rating !== null && item.matched_rating !== null && item.matched_rating > 0) {
+    selfRetentionPct = (item.self_rerun_rating / item.matched_rating) * 100;
+    secondaryBullets.push(
+      `${broadcastChannelName} 본채널 직재방 효과: 본방 종료 직후 자체 재방(${item.self_rerun_start_time ? fmtTime(item.self_rerun_start_time) : ""}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
+    );
   }
 
-  // ⑥ 연령대별 세분화 텍스트/미니바 — 사용자 재지시(2026-08-22): 삭제하고 그 자리에 최근 12주
-  // 본방송 시청률 추이 꺾은선 그래프(ProgramRatingHistoryChart)로 대체(렌더링부에서 처리).
+  // 도달율 — 1% 미만이면 시청률/점유율이 양호해도 "본 사람의 폭 자체가 좁다"는 별도 신호.
+  if (item.matched_reach !== null && item.matched_reach < 1) {
+    secondaryBullets.push(`도달율(Reach) ${item.matched_reach.toFixed(2)}%로 1% 미만 — 시청은 유지되고 있으나 시청 가구의 폭 자체는 좁음`);
+  }
 
-  // [편성 인사이트] — 여러 근거를 모두 짚을 수 있어 배열로 관리한다(사용자 지시: 첨부 보고서를
-  // 학습해 새로운 편성 인사이트를 추가할 것). 각 항목은 패턴이 실제로 있을 때만 추가된다.
+  // [편성 인사이트] — 여러 근거를 모두 짚을 수 있어 배열로 관리한다. 각 항목은 패턴이 실제로
+  // 있을 때만 추가된다.
   const schedulingNote: string[] = [];
 
   // 본채널 재방 유입이 타 채널 재방 유입보다 뚜렷하게(10%p 이상) 높을 때만 카니발라이제이션
@@ -859,15 +848,7 @@ function buildOriginalInsight(
     );
   }
 
-  // 사용자 지시(2026-08-21, 정정): 이전 버전은 "타깃 시청률보다 중장년층이 높다"를 [편성
-  // 인사이트]로 매번 강조했는데, 이는 예외적 발견이 아니라 지상파·유료방송 전반에서 흔한
-  // 일반적 패턴이다(젊은 구매력 타깃은 원래 전체 시청률보다 낮게 나오고, 그래서 오히려
-  // 광고주가 그 타깃을 특정해 본다) — 위 ⑥ bullet로 수치는 이미 보여주므로, 여기서 또 "핵심
-  // 시청층 존재"처럼 새로운 발견인 양 반복하지 않는다(과장 금지 원칙). 연령대 구성 자체가
-  // 편성 판단에 실제로 의미 있는 경우(예: 타깃 확장 검토가 필요할 만큼 편차가 극단적인 경우)는
-  // 사용자가 별도로 요청하면 그때 근거를 갖춰 추가한다.
-
-  return { bullets, schedulingNote };
+  return { bullets, secondaryBullets, schedulingNote };
 }
 
 // 사용자 재지시(2026-08-22): 연령대별 미니바 삭제, 그 자리에 최근 12주간 본방송 시청률 추이
@@ -1161,6 +1142,8 @@ function OriginalContentReportCard({
                       )}
                     </div>
                   </div>
+                  {/* 사용자 지시(2026-08-25): "핵심 요약 분석" 4개 지표(목표 달성도/리드인 견인
+                      효과/본방송 수치/직후 재방송 유입 효과)를 명세 문구·순서 그대로. */}
                   {insight.bullets.length > 0 && (
                     <ul className="mt-1.5 space-y-1 pb-1">
                       {insight.bullets.map((b, i) => (
@@ -1172,6 +1155,18 @@ function OriginalContentReportCard({
                     </ul>
                   )}
                   {h.ratingHistory && <ProgramRatingHistoryChart history={h.ratingHistory} accentColor={enaAccentColor} />}
+                  {/* 명세엔 없지만 기존에 있던 추가 신호(동시간대 정성 비교/신규드라마 비교/자체재방/
+                      도달율) — 삭제하지 않고, 필수 4-불렛과는 시각적으로 구분되는 더 옅은 톤으로. */}
+                  {insight.secondaryBullets.length > 0 && (
+                    <ul className="mt-1.5 space-y-1 border-t border-zinc-100 pt-1.5">
+                      {insight.secondaryBullets.map((b, i) => (
+                        <li key={i} className="flex gap-1.5 text-[12px] leading-relaxed text-zinc-400">
+                          <span className="shrink-0 text-zinc-300">·</span>
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   {insight.schedulingNote.length > 0 && (
                     <div className="mt-1 rounded-xl bg-amber-50 p-2.5">
                       <p className="mb-1 text-[12px] font-semibold text-amber-700">[편성 인사이트]</p>
