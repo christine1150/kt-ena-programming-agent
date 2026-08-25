@@ -2361,6 +2361,68 @@ function DowHourBlockTable({
   );
 }
 
+// 사용자 지시(2026-08-26, 맥킨지 스타일 강화 아이디어 5번): "Small multiples로 요일별 트렌드
+// 나열 — 12주 요일×시간대 표를 미니 스파크라인 7개(월~일) 나열로 바꾸면 '어느 요일이 무너지고
+// 있는가'가 표보다 훨씬 빨리 읽힘." 표를 대체하지 않고(기존 표 보존, Delta-Only) 그 위에 요약
+// 프리뷰로 추가 — 같은 dowHourBlockPattern 데이터를 재사용해 요일별로 8구간 시청률 프로파일을
+// 작은 선 그래프로. 한 요일의 "모양"이 다른 요일보다 전반적으로 낮으면 한눈에 드러난다.
+function WeekdayProfileSparklines({ pattern, accentColor }: { pattern: DowHourBlockRow[]; accentColor: string }) {
+  const byDow = new Map<number, DowHourBlockRow[]>();
+  for (const r of pattern) {
+    if (!byDow.has(r.dow)) byDow.set(r.dow, []);
+    byDow.get(r.dow)!.push(r);
+  }
+  const maxRating = Math.max(1e-9, ...pattern.map((r) => r.avg_rating ?? 0));
+  const dowLabels = ["월", "화", "수", "목", "금", "토", "일"];
+  const W = 96;
+  const H = 32;
+  if (pattern.length === 0) return null;
+  return (
+    <div className="mb-3 grid grid-cols-4 gap-2 sm:grid-cols-7">
+      {dowLabels.map((label, i) => {
+        const dow = i + 1;
+        const rows = byDow.get(dow) ?? [];
+        const points = HOUR_BLOCK_ORDER.map((hb) => rows.find((r) => r.hour_block === hb)?.avg_rating ?? null).filter(
+          (v): v is number => v !== null
+        );
+        const dowColor = label === "토" ? "#3b82f6" : label === "일" ? "#f43f5e" : "#71717a";
+        if (points.length < 2) {
+          return (
+            <div key={label} className="rounded-lg bg-zinc-50 p-1.5 text-center">
+              <p className={`text-[11px] font-semibold`} style={{ color: dowColor }}>
+                {label}
+              </p>
+              <p className="mt-1 text-[10px] text-zinc-300">표본 부족</p>
+            </div>
+          );
+        }
+        const step = W / (HOUR_BLOCK_ORDER.length - 1);
+        const path = HOUR_BLOCK_ORDER.map((hb, idx) => {
+          const v = rows.find((r) => r.hour_block === hb)?.avg_rating;
+          const y = v !== null && v !== undefined ? H - (v / maxRating) * H : H;
+          return `${idx === 0 ? "M" : "L"}${(idx * step).toFixed(1)},${y.toFixed(1)}`;
+        }).join(" ");
+        const peakHour = HOUR_BLOCK_ORDER.reduce((best, hb) => {
+          const v = rows.find((r) => r.hour_block === hb)?.avg_rating ?? -1;
+          const bestV = rows.find((r) => r.hour_block === best)?.avg_rating ?? -1;
+          return v > bestV ? hb : best;
+        }, HOUR_BLOCK_ORDER[0]);
+        return (
+          <div key={label} className="rounded-lg bg-zinc-50 p-1.5 text-center">
+            <p className="text-[11px] font-semibold" style={{ color: dowColor }}>
+              {label}
+            </p>
+            <svg viewBox={`0 0 ${W} ${H}`} className="mt-0.5 w-full" style={{ height: H }}>
+              <path d={path} fill="none" stroke={accentColor} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" opacity={0.85} />
+            </svg>
+            <p className="mt-0.5 text-[9.5px] text-zinc-400">피크 {hourBlockLabel(peakHour)}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // 기능 #15-4(2026-08-21): TOP20도 "대비" 분석에서 두 패널로 비교하기 위해 목록 렌더링을 뽑았다.
 // 방영횟수 표본이 작은 프로그램은 평균 시청률이 우연히 튀기 쉬워 순위표에 그대로 섞이면
 // 오해를 줄 수 있다 — 목록 자체를 다시 정렬하는 하위지표별 인사이트(TopProgramsList 자체)는
@@ -3539,6 +3601,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </div>
           ) : (
             <>
+              <WeekdayProfileSparklines pattern={dowHourBlockPattern} accentColor={accentColor} />
               <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} hourBlockOpportunity={hourBlockOpportunity} />
               {hourBlockOpportunity.length > 0 && (
                 <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[10.5px] text-zinc-400">
