@@ -528,6 +528,10 @@ function buildYtdLine(channel: ChannelSummary): string | null {
 // 시청률(순위) 행은 그 자체로만 justify-center되므로 배지 유무와 무관하게 항상 정중앙에 온다.
 function ChannelHero({ channel }: { channel: ChannelSummary }) {
   const ytdLine = buildYtdLine(channel);
+  // 사용자 지시(2026-08-25): ENA 히어로만 "(순위)"만 보여줘 다른 6개 채널 타일의 "(순위/목표순위)"
+  // 형식과 어긋나 있었다 — ChannelTile과 동일한 형식으로 통일(전일 대비 순위 증감은 원래도
+  // RankChangeIndicator로 이미 표시 중이었음, 값이 0/null일 때 "-"로 보여 "없어진" 것처럼 보였을 뿐).
+  const heroTargetRankNum = parseTargetRankNum(channel.targetRank);
   return (
     <Link href={`/channel/${channel.code}`} className="flex flex-col items-center text-center">
       <ChannelLogo
@@ -544,7 +548,9 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
           {formatRating(channel.currentRating)}
           {/* 사용자 지시(2026-08-21): 등위는 시청률 숫자보다 약간만 더 작은 글씨로. */}
           {channel.currentRank !== null && (
-            <span className="ml-1.5 text-2xl font-semibold tracking-tight text-zinc-400">({channel.currentRank}위)</span>
+            <span className="ml-1.5 text-2xl font-semibold tracking-tight text-zinc-400">
+              ({channel.currentRank}/{heroTargetRankNum ?? "-"})
+            </span>
           )}
         </span>
         {/* 사용자 재지시(2026-08-22): ENA도 다른 6개 채널과 동일하게 "전일 대비 % 증감" 대신
@@ -705,54 +711,49 @@ function ChannelStatusCard({ channels }: { channels: Map<string, ChannelSummary>
 // 3개로 자르지 않은 전체 목록)을 시청률로 비교해 정확히 매긴다 — 1 + (우리보다 높은 경쟁
 // 프로그램 수). 회차 번호가 없는 프로그램(회차제로 관리하지 않는 것들)은 생략.
 interface OriginalHeadline {
-  text: string;
-  // 사용자 지시(2026-08-22): 프로그램명(볼드+한 포인트 더 큰 글씨)과 회차~순위 정보(일반 글자)를
-  // 시각적으로 구분하기 위해 두 부분으로 나눠 반환 — text는 하위 호환용으로 그대로 둔다.
-  suffixText: string; // "179회 (전회 대비 감소, 동시간대 타깃 6위)"
+  text: string; // 하위 호환용 전체 문자열(프로그램명+볼드부+일반부)
+  suffixText: string; // 하위 호환용(볼드부+일반부, 스타일 구분 없이)
+  // 사용자 지시(2026-08-25, 재수정): "컨텐츠명 N회 시청률(가구시청률)까지 볼드, 동시간대 타깃
+  // #위·가구 #위는 볼드 빼고" — 두 부분을 따로 반환해 JSX에서 다른 굵기로 렌더링한다.
+  boldSuffix: string; // "7회 0.554(2.809)"
+  normalSuffix: string; // " (동시간대 타깃 5위, 가구 3위)" (없으면 빈 문자열)
   rank: number | null;
   beatenBy: OriginalCompetitorHighlight[]; // 우리보다 시청률 높은 경쟁 프로그램(시청률 내림차순)
 }
-// 사용자 지시(2026-08-25): 제목 포맷 재정의 — "<프로그램명> N회 본방 시청률 (타깃 및 가구
-// 하락/상승, 동시간대 타깃 #위, 가구 #위)" 처럼 타깃·가구를 항상 함께 명시. 예시(사용자 제시):
-// "<그대에게 드림> 7회 시청률 (타깃 및 가구 하락, 동시간대 타깃 5위, 가구 3위)" /
-// "<쯔양몇끼> 9회 본방 시청률 (전회 대비 상승, 동시간대 타깃 5위)"(가구 데이터 없는 채널은
-// 가구 절 생략). 방향이 타깃·가구 둘 다 있고 같은 방향이면 "타깃 및 가구 X"로 합치고, 서로
-// 다르면 "타깃 X, 가구 Y"로 나눠 쓴다 — 가구 데이터가 아예 없으면 기존처럼 "전회 대비 X"만.
+// 사용자 지시(2026-08-25, 재수정): 제목 포맷 = "<프로그램명> N회 시청률(가구시청률)"(볼드) +
+// " (동시간대 타깃 #위, 가구 #위)"(볼드 아님). 이전 버전(방향 단어 "타깃 및 가구 하락" 서술)을
+// 실제 수치로 교체 — 방향은 아래 핵심 요약 4-불렛의 리드인/재방 문구 쪽에서 이미 다뤄지므로
+// 제목에서는 숫자 자체를 바로 보여주는 쪽이 더 직관적이라는 사용자 판단. 가구 데이터가 없는
+// 채널은 "(가구시청률)"·", 가구 #위" 둘 다 자연히 생략된다.
 function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null {
   // 사용자 지시(2026-08-25, 레이아웃 재점검): 회차 번호가 관리자에게 seed되지 않은 프로그램(예:
   // program_episode_counters 미등록)은 episode_number가 null인데, 예전엔 이때 헤드라인 전체를
   // null로 돌려 프로그램명 줄 자체가 화면에서 통째로 사라졌다 — 회차 정보는 있으면 붙이고
   // 없으면 생략만 할 뿐, 프로그램명은 항상 보여야 한다.
-  const parts: string[] = [];
-  const targetChange = item.prior_rating_change_pct;
-  const householdChange = item.household_rating_change_pct;
-  if (targetChange !== null && householdChange !== null) {
-    const targetUp = targetChange >= 0;
-    const householdUp = householdChange >= 0;
-    parts.push(
-      targetUp === householdUp
-        ? `타깃 및 가구 ${targetUp ? "상승" : "하락"}`
-        : `타깃 ${targetUp ? "상승" : "하락"}, 가구 ${householdUp ? "상승" : "하락"}`
-    );
-  } else if (targetChange !== null) {
-    parts.push(`전회 대비 ${targetChange >= 0 ? "상승" : "하락"}`);
-  }
+  const episodePrefix = item.episode_number !== null ? `${item.episode_number}회 ` : "";
+  const ratingText =
+    item.matched_rating !== null
+      ? `${formatRating(item.matched_rating, item.broadcast_channel_code)}${
+          item.matched_household_rating !== null ? `(${formatRating(item.matched_household_rating, item.broadcast_channel_code)})` : ""
+        }`
+      : "";
+  const boldSuffix = `${episodePrefix}${ratingText}`.trim();
+
   let rank: number | null = null;
   let beatenBy: OriginalCompetitorHighlight[] = [];
+  const rankParts: string[] = [];
   if (item.matched_rating !== null) {
     beatenBy = item.competitorHighlights
       .filter((c) => c.competitor_rating !== null && c.competitor_rating > item.matched_rating!)
       .sort((a, b) => (b.competitor_rating ?? 0) - (a.competitor_rating ?? 0));
     rank = 1 + beatenBy.length;
-    const rankParts = [`동시간대 타깃 ${rank}위`];
+    rankParts.push(`동시간대 타깃 ${rank}위`);
     if (item.householdRank !== null) rankParts.push(`가구 ${item.householdRank}위`);
-    parts.push(rankParts.join(", "));
   }
-  const suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
-  const episodePrefix = item.episode_number !== null ? `${item.episode_number}회 ` : "";
-  const suffixText = `${episodePrefix}본방 시청률${suffix}`;
+  const normalSuffix = rankParts.length > 0 ? ` (${rankParts.join(", ")})` : "";
+  const suffixText = `${boldSuffix}${normalSuffix}`;
   // 사용자 지시(2026-08-21): 제목 앞뒤 <> 제거 — 프로그램명만 그대로 쓰고 뒤에 회차/부가 정보를 잇는다.
-  return { text: `${item.matched_program_name} ${suffixText}`, suffixText, rank, beatenBy };
+  return { text: `${item.matched_program_name} ${suffixText}`, suffixText, boldSuffix, normalSuffix, rank, beatenBy };
 }
 
 // 사용자 지시(2026-08-20): 문단 서술 대신 "핵심 요약 불릿 + [편성 인사이트]" 형태로 재구성.
@@ -1081,7 +1082,12 @@ function OriginalContentReportCard({
                     <div className="mb-1 flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="text-[15px] font-bold leading-snug text-[#281fc7]">{h.matched_program_name}</p>
-                        {headline && <p className="mt-0.5 text-[12.5px] font-normal leading-snug text-zinc-500">{headline.suffixText}</p>}
+                        {headline && (
+                          <p className="mt-0.5 text-[12.5px] leading-snug text-zinc-500">
+                            {headline.boldSuffix && <span className="font-bold text-zinc-700">{headline.boldSuffix}</span>}
+                            {headline.normalSuffix && <span className="font-normal">{headline.normalSuffix}</span>}
+                          </p>
+                        )}
                       </div>
                       {h.featured_category && (
                         <span className={`shrink-0 rounded-full ${ACCENT_BADGE_BG} px-2 py-0.5 text-[12px] font-medium ${ACCENT_HEADING}`}>
