@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL, resolveMarketYtdTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
+import { buildEnaOriginalHighlightSentence } from "@/lib/enaOriginalHighlight";
+import { buildBriefingReportViaLlm } from "@/lib/briefingReportLlm";
 
 // 로컬 날짜 구성요소로 "YYYY-MM-DD" 문자열을 만든다 — toISOString()은 UTC로 바꾸면서 자정 근처
 // 날짜가 하루 밀리는 문제가 실제로 있었다(ChannelDeepDive.tsx에서 이미 겪고 고친 것과 동일한
@@ -108,6 +110,7 @@ export async function GET(request: Request) {
       ytdAvgRating: null,
       top3Programs: [],
       enaOriginalDaily: [],
+      briefingLlm: null,
       dowHourBlockPattern: [],
       topPrograms: [],
       periodDemographics: [],
@@ -666,6 +669,39 @@ export async function GET(request: Request) {
       );
   }
 
+  // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — Page 2
+  // "오늘의 브리핑"(단일 일자 모드만, 기간 모드는 baseline 개념이 달라 대상 아님)도 이미
+  // 계산·검증된 값만 OpenAI에 줘서 한 문단으로 종합한다. 실패/키 없음이면 null → 프론트가
+  // 기존 규칙 기반 buildBriefingReport로 조용히 대체.
+  let briefingLlm: string | null = null;
+  if (!isRangeMode && narrativeSignal) {
+    const currentTrendRow = (trend ?? []).find((t: { period: string }) => t.period === "current");
+    const currentRating = (currentTrendRow as { rating: number | null } | undefined)?.rating ?? null;
+    const refLabel = dateTo === latestAvailableDate ? "오늘" : dateTo === addDaysStr(latestAvailableDate ?? dateTo, -1) ? "어제" : dateTo;
+    const enaLeadSentence = buildEnaOriginalHighlightSentence(enaOriginalDaily, (v) => (v === null ? "—" : v.toFixed(channel.code === "SKYUHD" ? 5 : 3)));
+    briefingLlm = await buildBriefingReportViaLlm({
+      channelName: channel.name,
+      refLabel,
+      currentRating,
+      enaLeadSentence,
+      rating_delta_pct: narrativeSignal.rating_delta_pct,
+      baseline_avg_rating: narrativeSignal.baseline_avg_rating,
+      dow_baseline_avg_rating: narrativeSignal.dow_baseline_avg_rating,
+      today_peak_hour: narrativeSignal.today_peak_hour,
+      today_peak_rating: narrativeSignal.today_peak_rating,
+      today_peak_program_name: narrativeSignal.today_peak_program_name,
+      today_peak_program_rating: narrativeSignal.today_peak_program_rating,
+      baseline_peak_hour: narrativeSignal.baseline_peak_hour,
+      baseline_peak_rating: narrativeSignal.baseline_peak_rating,
+      top_program_name: narrativeSignal.top_program_name,
+      top_program_rating: narrativeSignal.top_program_rating,
+      top_program_start_time: narrativeSignal.top_program_start_time,
+      top_program_baseline_avg: narrativeSignal.top_program_baseline_avg,
+      top_program_baseline_days: narrativeSignal.top_program_baseline_days,
+      demographics: narrativeSignal.demographics,
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     channel: {
@@ -678,6 +714,7 @@ export async function GET(request: Request) {
       primaryTarget: channel.primary_target,
       market: channel.market,
     },
+    briefingLlm,
     asOfDate,
     dateFrom,
     dateTo,

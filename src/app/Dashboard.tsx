@@ -200,6 +200,10 @@ interface ChannelNarrativeSignal {
     baseline_avg_share: number | null;
     baseline_days: number | null;
   } | null;
+  // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — route.ts가
+  // 이미 계산·검증된 값만으로 OpenAI가 종합한 문단. 없으면(키 없음/실패) 기존 규칙 기반
+  // buildChannelNarrative로 조용히 대체.
+  llmNarrative: string | null;
 }
 interface KillerContentDaypartRow {
   channelCode: string;
@@ -1476,7 +1480,13 @@ function ChannelNarrativeCard({
   const enaLeadSentence = buildEnaOriginalHighlightSentence(enaOriginalDaily.filter((d) => d.broadcast_channel_code === "ENA"));
   for (const code of INSIGHT_CHANNEL_ORDER) {
     const s = byCode.get(code);
-    if (s) lines.push({ ...buildChannelNarrative(CHANNEL_NAME_BY_CODE[code], s, code === "ENA" ? enaLeadSentence : null), color: themeColorByCode.get(code) ?? null, deltaPct: s.rating_delta_pct });
+    if (!s) continue;
+    // Tier 1 확장(2026-08-26): route.ts가 이미 검증된 값만으로 OpenAI가 종합한 문단
+    // (s.llmNarrative)이 있으면 그걸 쓰고, 없으면(키 없음/실패) 기존 규칙 기반으로 대체.
+    const narrative = s.llmNarrative
+      ? { channelName: CHANNEL_NAME_BY_CODE[code], text: s.llmNarrative }
+      : buildChannelNarrative(CHANNEL_NAME_BY_CODE[code], s, code === "ENA" ? enaLeadSentence : null);
+    lines.push({ ...narrative, color: themeColorByCode.get(code) ?? null, deltaPct: s.rating_delta_pct });
   }
   const skyuhdSignal = byCode.get("SKYUHD");
   const skyuhdLine = buildSkyUhdNarrative(skyuhdSignal);

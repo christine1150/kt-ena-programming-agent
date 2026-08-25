@@ -478,6 +478,10 @@ interface ChannelData {
   enaOriginalDaily: EnaOriginalHighlightItem[];
   // 사용자 지시(2026-08-25): 오늘의 브리핑 상단 키워드 1~3위 나열용(단일 일자 조회일 때만 채워짐).
   top3Programs: { canonical_name: string; rating: number }[];
+  // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — route.ts가
+  // 이미 검증된 값만으로 OpenAI가 종합한 오늘의 브리핑 핵심 문단(단일 일자 모드만). 없으면
+  // 기존 규칙 기반 문장으로 조용히 대체.
+  briefingLlm: string | null;
   affinity: { compareChannelCode: string; items: { targetLabel: string; result: AffinityResult | null }[] };
   rootCauseAlert: RootCauseAlert | null;
   opportunityAlert: OpportunityAlert | null;
@@ -1277,7 +1281,9 @@ function buildBriefingReport(
       }
     }
 
-    paragraphs.push(sentences.join(" "));
+    // Tier 1 확장(2026-08-26): route.ts가 이미 검증된 값만으로 OpenAI가 종합한 문단
+    // (data.briefingLlm)이 있으면 그걸 쓰고, 없으면(키 없음/실패) 기존 규칙 기반 문장으로 대체.
+    paragraphs.push(data.briefingLlm ?? sentences.join(" "));
   }
 
   if (paragraphs.length === 0) {
@@ -2812,6 +2818,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const [skyuhdScorecard, setSkyuhdScorecard] = useState<SkyuhdScorecardItem[] | null>(null);
   const [skyuhdScorecardLoading, setSkyuhdScorecardLoading] = useState(true);
   const [expandedProgram, setExpandedProgram] = useState<string | null>(null);
+  // Tier 1 확장(2026-08-26): WHAT TO SCHEDULE? 펼침 패널의 Fit Score 해석도 OpenAI로 종합 —
+  // 프로그램마다 항상 계산하면 비용이 커지므로, 실제로 펼친 프로그램에 대해서만 그때 호출한다
+  // (program_id별로 결과를 캐시해 같은 프로그램을 다시 펼쳐도 재호출하지 않음).
+  const [fitScoreInterpretationLlm, setFitScoreInterpretationLlm] = useState<Record<string, string | null>>({});
   // 자연어 질문(18번, 규칙 기반 Intent Router) — PRD.md "자연어 질문은 Page 2의 한 섹션으로
   // 배치" 원칙대로 여기 둔다. 채널을 안 짚어도(예: "가장 잘한 채널은?") 질문 자체에서 채널을
   // 다시 추출하므로, 어느 채널 페이지에서 물어도 동일하게 동작한다.
@@ -2921,6 +2931,146 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     };
 
   }, [code, fitScoreDateQuery]);
+
+  // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — WHY?/
+  // OPPORTUNITY?/COMPARED WITH?는 이미 client state에 있는 검증된 값(candidates/
+  // daypartOpportunity/competitorInsightReport)만 그대로 /api/llm-synthesize에 보내 종합
+  // 문단을 받는다(새 계산 없음). data/fitScoreItems가 모두 준비된 뒤 한 번만 호출하고, 채널·
+  // 날짜가 바뀌면 이전 화면의 문단이 남아있지 않도록 즉시 비운다.
+  const [sectionLlm, setSectionLlm] = useState<{ why: string | null; opportunity: string | null; competitor: string | null }>({
+    why: null,
+    opportunity: null,
+    competitor: null,
+  });
+  useEffect(() => {
+    setSectionLlm({ why: null, opportunity: null, competitor: null });
+  }, [code, dateQuery]);
+  useEffect(() => {
+    if (!data || fitScoreLoading || code === "SKYUHD") return;
+    let cancelled = false;
+    (async () => {
+      const jobKeys: ("why" | "opportunity" | "competitor")[] = [];
+      const jobs: Record<string, unknown>[] = [];
+
+      const why = buildWhyDiagnosis(data, fitScoreItems);
+      if (why && why.candidates.length > 0) {
+        jobKeys.push("why");
+        jobs.push({
+          section: "why",
+          input: {
+            channelName: data.channel.name,
+            candidates: why.candidates.map((c) => ({ variable: c.variable, strengthPct: c.strengthPct, sentence: c.sentence })),
+          },
+        });
+      }
+
+      const validOpp = data.daypartOpportunity.filter((d) => d.gap_change !== null);
+      if (validOpp.length > 0) {
+        jobKeys.push("opportunity");
+        const candidatePrograms = (fitScoreItems ?? [])
+          .filter((i) => i.tag === "STRENGTHEN" || i.tag === "TEST")
+          .slice(0, 3)
+          .map((i) => ({
+            name: i.programs?.canonical_name ?? "",
+            tag: i.tag as "STRENGTHEN" | "TEST",
+            targetAffinityScore: i.target_affinity_score,
+            audienceFlowScore: i.audience_flow_score,
+          }));
+        jobs.push({
+          section: "opportunity",
+          input: {
+            channelName: data.channel.name,
+            recentLabel: data.isRangeMode ? "선택 기간" : "최근 1주",
+            dayparts: data.daypartOpportunity.map((d) => ({
+              daypart: d.daypart,
+              our_full_avg: d.our_full_avg,
+              our_recent_avg: d.our_recent_avg,
+              gap_full: d.gap_full,
+              gap_recent: d.gap_recent,
+              gap_change: d.gap_change,
+              classification: classifyDaypartOpportunity(d),
+            })),
+            candidatePrograms,
+          },
+        });
+      }
+
+      const validCompetitors = data.competitorInsightReport.filter((r) => r.delta_pct !== null);
+      if (validCompetitors.length > 0) {
+        jobKeys.push("competitor");
+        jobs.push({
+          section: "competitor",
+          input: {
+            channelName: data.channel.name,
+            competitors: data.competitorInsightReport.map((r) => ({
+              competitor_name: r.competitor_name,
+              today_rating: r.today_rating,
+              delta_pct: r.delta_pct,
+              top_program_name: r.top_program_name,
+              top_program_start_time: r.top_program_start_time,
+            })),
+          },
+        });
+      }
+
+      if (jobs.length === 0) return;
+      const res = await fetch("/api/llm-synthesize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobs }),
+      }).catch(() => null);
+      if (cancelled || !res) return;
+      const body = await res.json().catch(() => ({ ok: false }));
+      if (cancelled || !res.ok || !body.ok) return;
+      const results: (string | null)[] = body.results ?? [];
+      const next: { why: string | null; opportunity: string | null; competitor: string | null } = { why: null, opportunity: null, competitor: null };
+      jobKeys.forEach((key, i) => {
+        next[key] = results[i] ?? null;
+      });
+      setSectionLlm(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data, fitScoreItems, fitScoreLoading, code]);
+
+  useEffect(() => {
+    if (!expandedProgram || code === "SKYUHD") return;
+    if (Object.prototype.hasOwnProperty.call(fitScoreInterpretationLlm, expandedProgram)) return; // 이미 조회함(성공/실패 무관 캐시)
+    const item = fitScoreItems?.find((i) => i.program_id === expandedProgram);
+    if (!item) return;
+    let cancelled = false;
+    (async () => {
+      const fi = buildFitScoreInterpretation(item);
+      const res = await fetch("/api/llm-synthesize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobs: [
+            {
+              section: "fit_score",
+              input: {
+                programName: item.programs?.canonical_name ?? "",
+                tag: item.tag,
+                fitScore: item.fit_score,
+                confidencePct: item.confidence_pct,
+                subScores: fi.subScores,
+                audienceRoleLabel: fi.audienceRole ? AUDIENCE_ROLE_LABEL[fi.audienceRole] : null,
+              },
+            },
+          ],
+        }),
+      }).catch(() => null);
+      if (cancelled || !res) return;
+      const body = await res.json().catch(() => ({ ok: false }));
+      const text = body?.ok ? (body.results?.[0] ?? null) : null;
+      if (cancelled) return;
+      setFitScoreInterpretationLlm((prev) => ({ ...prev, [expandedProgram]: text }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [expandedProgram, code, fitScoreItems, fitScoreInterpretationLlm]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3835,7 +3985,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 return (
                   <div className="mt-3 border-t border-rose-200 pt-3">
                     <p className="text-sm font-semibold text-rose-700">주도 요인(편차가 가장 큰 변수)</p>
-                    <p className="mt-1 text-sm text-zinc-600">{why.leadSentence}</p>
+                    {/* Tier 1 확장(2026-08-26): OpenAI가 후보들을 종합한 문장(sectionLlm.why)이
+                        있으면 그걸, 없으면 기존 규칙 기반 leadSentence로. */}
+                    <p className="mt-1 text-sm text-zinc-600">{sectionLlm.why ?? why.leadSentence}</p>
                     <WhyCandidateRankingChart candidates={why.candidates} />
                     {why.supportingBullets.length > 0 && (
                       <>
@@ -4176,7 +4328,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </table>
             </div>
           )}
-          <p className="mb-3 text-base leading-relaxed text-zinc-700">{buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD")}</p>
+          {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 문단(sectionLlm.opportunity)이 있으면
+              그걸, 없으면 기존 규칙 기반 buildOpportunityNarrative로. */}
+          <p className="mb-3 text-base leading-relaxed text-zinc-700">
+            {sectionLlm.opportunity ?? buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD")}
+          </p>
           {/* 사용자 지시(2026-08-25, 원 명세 감사 후속: 9번 Slot Intelligence 8 Blocks) — 위 4구간
               판정/서술(daypartOpportunity, buildOpportunityNarrative 등)은 그대로 두고, 3시간
               단위 8구간 상세를 추가 정보로 덧붙인다. 사용자 재지시(2026-08-25): 기본 접힘(details
@@ -4394,7 +4550,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                         </span>
                                       ))}
                                     </div>
-                                    {fi.interpretation && <p className="mt-2 text-sm text-zinc-600">{fi.interpretation}</p>}
+                                    {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 해석(펼칠 때만
+                                        조회)이 있으면 그걸, 없으면(아직 조회 중이거나 실패)
+                                        기존 규칙 기반 fi.interpretation으로. */}
+                                    {(fitScoreInterpretationLlm[item.program_id] ?? fi.interpretation) && (
+                                      <p className="mt-2 text-sm text-zinc-600">{fitScoreInterpretationLlm[item.program_id] ?? fi.interpretation}</p>
+                                    )}
                                     {/* 원 명세 13번(Audience Role) — Reach/Time Spent Share 둘 다 뚜렷할 때만 표시. */}
                                     {fi.audienceRole && (
                                       <p className="mt-2 text-sm text-zinc-600">
@@ -4651,7 +4812,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   </>
                 );
               })()}
-              <p className="mb-4 text-base leading-relaxed text-zinc-700">{buildCompetitorNarrative(competitorInsightReport)}</p>
+              {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 문단(sectionLlm.competitor)이 있으면
+                  그걸, 없으면 기존 규칙 기반 buildCompetitorNarrative로. */}
+              <p className="mb-4 text-base leading-relaxed text-zinc-700">{sectionLlm.competitor ?? buildCompetitorNarrative(competitorInsightReport)}</p>
             </>
           )}
 

@@ -15,6 +15,8 @@ import {
 } from "@/lib/targetResolution";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { buildOriginalProgrammingInsightViaLlm, type OriginalInsightInput } from "@/lib/originalContentInsight";
+import { buildEnaOriginalHighlightSentence } from "@/lib/enaOriginalHighlight";
+import { buildChannelNarrativeViaLlm } from "@/lib/channelNarrativeLlm";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -224,6 +226,9 @@ interface ChannelNarrativeSignal {
     baseline_avg_share: number | null;
     baseline_days: number | null;
   } | null;
+  // Tier 1 확장(2026-08-26): 위 필드들을 그대로 OpenAI에 줘서 종합한 문단. 실패/키 없음이면
+  // null — 프론트가 기존 규칙 기반 buildChannelNarrative로 조용히 대체(fallback).
+  llmNarrative: string | null;
 }
 interface KillerContentDaypartRow {
   channelCode: string;
@@ -532,6 +537,10 @@ export async function GET(request: Request) {
     daily: (OriginalDailyRow & { competitorHighlights: CompetitorOverlapRow[]; householdRank: number | null; ratingHistory: RatingHistoryResult | null; schedulingInsight: string | null })[];
     weekly: OriginalWeeklyRow[];
   };
+  // Tier 1 확장(2026-08-26): buildChannelNarrativeViaLlm(ENA)이 참고할 ENA 리드 문장 —
+  // Dashboard.tsx가 클라이언트에서 계산하던 것과 동일한 공유 함수로 서버에서도 미리 계산해둔다
+  // (whitelist가 없는 날은 daily가 비어 null로 남는다).
+  let enaLeadSentenceForLlm: string | null = null;
 
   if ((whitelistCount ?? 0) > 0) {
     const { data: dailyRows } = await supabase.rpc("get_original_content_daily", { p_as_of_date: asOfDate });
@@ -718,6 +727,14 @@ export async function GET(request: Request) {
       })
     );
 
+    // Tier 1 확장(2026-08-26): Dashboard.tsx가 클라이언트에서 계산하던 ENA 리드 문장을
+    // 서버에서도 동일하게 계산해둔다 — 아래 buildChannelNarrativeViaLlm(ENA만 해당)이 이
+    // 문장을 그대로 맨 앞에 붙이도록 넘겨주기 위함(공유 함수 재사용, 새 계산 없음).
+    enaLeadSentenceForLlm = buildEnaOriginalHighlightSentence(
+      dailyWithInsight.filter((d) => d.broadcast_channel_code === "ENA"),
+      (v: number | null) => (v === null ? "—" : v.toFixed(3))
+    );
+
     // 사용자 지시(2026-08-22): "주요 콘텐츠 리뷰"의 연령대별 미니바 대신, 최근 12주간 본방송
     // 시청률 추이(수도권 2049 진하게 + 전국 유료가구 연하게, 회차 표시)를 꺾은선 그래프로 —
     // "동시간대 같은 컨텐츠를 다른 채널이 방송할 경우(예: SBS Plus, ENA Play) 비교할 수 있게
@@ -881,8 +898,47 @@ export async function GET(request: Request) {
       return null;
     }
     if (!narrativeData?.[0]) return null;
-    const signal: ChannelNarrativeSignal = { channelCode: code, ...narrativeData[0], priorWeekRating, priorWeek2Rating };
+    const signal: ChannelNarrativeSignal = { channelCode: code, ...narrativeData[0], priorWeekRating, priorWeek2Rating, llmNarrative: null };
     if (needsHousehold) signal.household = householdData?.[0] ?? null;
+    // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — 위에서
+    // 이미 계산·검증된 값만 그대로 OpenAI에 줘서 하나의 문단으로 종합한다(새 계산 없음). 실패
+    // 시 null이 남아 Dashboard.tsx가 기존 규칙 기반 buildChannelNarrative로 조용히 대체한다.
+    signal.llmNarrative = await buildChannelNarrativeViaLlm({
+      channelName: ch.name,
+      leadSentence: code === "ENA" ? enaLeadSentenceForLlm : null,
+      today_rating: signal.today_rating,
+      baseline_avg_rating: signal.baseline_avg_rating,
+      rating_delta_pct: signal.rating_delta_pct,
+      priorWeekRating,
+      priorWeek2Rating,
+      today_rank: signal.today_rank,
+      baseline_avg_rank: signal.baseline_avg_rank,
+      dow_baseline_avg_rating: signal.dow_baseline_avg_rating,
+      today_peak_hour: signal.today_peak_hour,
+      today_peak_rating: signal.today_peak_rating,
+      today_peak_program_name: signal.today_peak_program_name,
+      baseline_peak_hour: signal.baseline_peak_hour,
+      top_program_name: signal.top_program_name,
+      top_program_rating: signal.top_program_rating,
+      top_program_start_time: signal.top_program_start_time,
+      top_program_baseline_avg: signal.top_program_baseline_avg,
+      top_program_baseline_days: signal.top_program_baseline_days,
+      decline_program_name: signal.decline_program_name,
+      decline_program_rating: signal.decline_program_rating,
+      decline_program_start_time: signal.decline_program_start_time,
+      decline_program_baseline_avg: signal.decline_program_baseline_avg,
+      decline_program_delta_pct: signal.decline_program_delta_pct,
+      demographics: signal.demographics,
+      household: signal.household
+        ? {
+            today_top_program: signal.household.today_top_program,
+            today_top_rating: signal.household.today_top_rating,
+            today_top_share: signal.household.today_top_share,
+            baseline_avg_rating: signal.household.baseline_avg_rating,
+            baseline_days: signal.household.baseline_days,
+          }
+        : null,
+    });
     return signal;
   }
 

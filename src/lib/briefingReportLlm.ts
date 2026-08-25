@@ -1,0 +1,52 @@
+// Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — Page 2
+// "오늘의 브리핑"(ChannelDeepDive.tsx buildBriefingReport, 단일 일자 모드)도 채널별 인사이트와
+// 같은 문제 — 개별 계산된 문장을 그냥 이어붙인다. 같은 입력값을 그대로 LLM에 주고 한 문단으로
+// 종합한다(새 숫자 계산 없음). 기간(범위) 조회 모드는 대상에서 뺐다 — 그쪽은 baseline 개념이
+// 완전히 달라 별도 설계가 필요해 이번 Tier 1 범위에서는 규칙 기반을 그대로 둔다.
+import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "./llmSynthesis";
+
+export interface BriefingLlmInput {
+  channelName: string;
+  refLabel: string; // "오늘"/"어제" 등
+  currentRating: number | null;
+  enaLeadSentence: string | null; // ENA만 — 그대로 맨 앞에 유지
+  rating_delta_pct: number | null;
+  baseline_avg_rating: number | null; // 최근 12주 평균
+  dow_baseline_avg_rating: number | null;
+  today_peak_hour: number | null;
+  today_peak_rating: number | null;
+  today_peak_program_name: string | null;
+  today_peak_program_rating: number | null;
+  baseline_peak_hour: number | null;
+  baseline_peak_rating: number | null;
+  top_program_name: string | null;
+  top_program_rating: number | null;
+  top_program_start_time: string | null;
+  top_program_baseline_avg: number | null;
+  top_program_baseline_days: number | null;
+  demographics: { label: string; today: number | null; delta_pct: number | null }[] | null;
+}
+
+function buildSystemPrompt(): string {
+  return [
+    "너는 KT ENA 편성 PD를 위한 Page 2 '오늘의 브리핑' 작성기다.",
+    "아래 JSON에 담긴 신호(채널 시청률, 최근 12주 평균 대비 등락, 요일 패턴, 피크 시간대와 그 시간대를 이끈 프로그램, 연령대 변화)를 하나의 자연스러운 한국어 문단(3~6문장)으로 종합해라.",
+    "enaLeadSentence 필드가 있으면 그 문장은 절대 다시 쓰지 말고 그대로 맨 앞에 두고 이어서 작성해라(null이면 채널 시청률 언급부터 시작).",
+    "피크 시간대 프로그램명(today_peak_program_name)이 top_program_name과 같으면, top_program_baseline_avg 대비 등락률(같은 요일·시간대 본방 슬롯 기준 최근 8주 평균 대비, top_program_baseline_days>=3일 때만 유효)까지 그 시간대 문장에 자연스럽게 엮어라. 둘이 다르면 억지로 합치지 말고 각자 따로 언급해라.",
+    "값이 null이거나 변화폭이 미미한 지표는 굳이 언급하지 마라 — 대략 10~25% 안팎 이상 변화 정도를 뚜렷한 신호로 본다.",
+    LLM_SYNTHESIS_GUARDRAIL,
+  ].join("\n");
+}
+
+const SCHEMA = {
+  type: "object",
+  properties: { briefing: { type: "string" } },
+  required: ["briefing"],
+  additionalProperties: false,
+};
+
+export async function buildBriefingReportViaLlm(input: BriefingLlmInput): Promise<string | null> {
+  const result = await callOpenAiJsonSynthesis<{ briefing: string }>(buildSystemPrompt(), input, "briefing_report", SCHEMA);
+  const briefing = result?.briefing?.trim();
+  return briefing && briefing.length > 0 ? briefing : null;
+}

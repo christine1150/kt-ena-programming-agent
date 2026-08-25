@@ -10,6 +10,7 @@ import { getCurrentSession } from "@/lib/adminAuth";
 import { routeQuestion } from "@/lib/intent/intentRouter";
 import { classifyQuestionWithLlm } from "@/lib/intent/llmClassifier";
 import { getLatestAvailableDate } from "@/lib/intent/referenceData";
+import { enhanceAskAnswerViaLlm } from "@/lib/askAnswerLlm";
 import {
   execPortfolioRanking,
   execPortfolioKpiGap,
@@ -125,6 +126,25 @@ export async function POST(request: Request) {
 
   const answer = await dispatchIntent(routed, question);
 
+  // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — conclusion/
+  // keyNumbers/comparisonBasis/evidence(전부 SQL이 계산한 값)는 그대로 두고, interpretation·
+  // programmingAction 2개만 사용자의 실제 질문 맥락에 맞게 OpenAI가 다시 쓴다. 실패하면 기존
+  // 템플릿 문구 그대로(answer 원본 유지) — USE_ADVANCED_LLM_AGENT=false면 아예 시도하지 않는다.
+  let finalAnswer = answer;
+  if (advancedLlmAgentEnabled) {
+    const enhanced = await enhanceAskAnswerViaLlm({
+      question,
+      conclusion: answer.conclusion,
+      keyNumbers: answer.keyNumbers,
+      comparisonBasis: answer.comparisonBasis,
+      evidence: answer.evidence,
+      confidenceNote: answer.confidenceNote,
+    });
+    if (enhanced) {
+      finalAnswer = { ...answer, interpretation: enhanced.interpretation, programmingAction: enhanced.programmingAction };
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     intent_id: routed.intent_id,
@@ -132,6 +152,6 @@ export async function POST(request: Request) {
     parameters: routed.parameters,
     timeContext: routed.timeContext,
     usedLlmFallback,
-    answer,
+    answer: finalAnswer,
   });
 }
