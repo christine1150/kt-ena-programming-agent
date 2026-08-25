@@ -11,6 +11,7 @@ import {
   EXTRA_TARGET_LABELS_BY_CHANNEL,
   MARKET_YTD_CHANNEL_NAME_BY_CODE,
   resolveMarketYtdTargetLabel,
+  resolveRankSheetTargetLabel,
 } from "@/lib/targetResolution";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { buildOriginalProgrammingInsightViaLlm, type OriginalInsightInput } from "@/lib/originalContentInsight";
@@ -788,6 +789,13 @@ export async function GET(request: Request) {
     const targetLabel = matchedTargetLabelByCode.get(code);
     if (!ch?.primary_target || !targetLabel) return null;
     const programTargetLabel = resolveProgramLevelTargetLabel(ch.primary_target);
+    // 사용자 지시(2026-08-25, 재확인): "채널별 인사이트에 순위 변화 문장이 ENA만 안 보인다"류의
+    // 원인 — targetLabel(matchedTargetLabel, "수도권 2049" 타깃상세 표기)로
+    // get_channel_daily_narrative를 조회하면 today_rank/baseline_avg_rank가 항상 null이 된다
+    // (그 표기의 채널 단위 ratings 행엔 rank가 안 채워져 있음 — 실측 확인, ChannelDeepDive.tsx의
+    // 동일 버그와 같은 원인). rank가 필요한 이 RPC 호출에만 랭킹 시트 표기("개인2049")로 바꿔서
+    // 넘긴다(주간 비교 rating 조회는 rank가 필요 없어 기존 targetLabel 그대로 둔다).
+    const rankTargetLabel = resolveRankSheetTargetLabel(ch.primary_target);
     const isNationalScope = ch.market === "전국";
     const demographicLabels = isNationalScope
       ? ["전국 여20대", "전국 남20대", "전국 여40대", "전국 남40대"]
@@ -802,7 +810,7 @@ export async function GET(request: Request) {
     const [{ data, error }, householdData, weekAgoResult, twoWeeksAgoResult] = await Promise.all([
       supabase.rpc("get_channel_daily_narrative", {
         p_channel_code: code,
-        p_target_label: targetLabel,
+        p_target_label: rankTargetLabel,
         p_program_target_label: programTargetLabel,
         p_demographic_labels: demographicLabels,
         p_as_of_date: asOfDate,
@@ -843,7 +851,7 @@ export async function GET(request: Request) {
       console.error(`[page1] get_channel_daily_narrative(${code}) 1차 실패, 재시도: ${narrativeError.message}`);
       const retry = await supabase.rpc("get_channel_daily_narrative", {
         p_channel_code: code,
-        p_target_label: targetLabel,
+        p_target_label: rankTargetLabel,
         p_program_target_label: programTargetLabel,
         p_demographic_labels: demographicLabels,
         p_as_of_date: asOfDate,

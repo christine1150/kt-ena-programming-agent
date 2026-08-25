@@ -367,9 +367,17 @@ export async function GET(request: Request) {
     }),
     // 오늘의 브리핑(줄글 보고서) — 최근 12주 평균 대비 요일별·시간대별 강세/약세와 오늘 두드러진
     // 지표를 종합. Page 1과 같은 함수를 12주 baseline으로 재사용. dateTo 기준.
+    // 사용자 지시(2026-08-25, 재확인): "2페이지 최상단 당일 시청률 옆에 해당일자 순위가 안 보여" —
+    // p_target_label에 matchedTargetLabel("수도권 2049", 타깃상세 시트 표기)을 넘기고 있었는데,
+    // 이 함수의 today_rank/baseline_avg_rank는 채널 단위 랭킹 시트 표기("개인2049")로 저장된
+    // ratings.rank 행만 읽는다 — 실측 확인(2026-08-25): "수도권 2049"로 조회하면 rating은 나오지만
+    // rank는 항상 null(같은 값을 두 타깃 라벨로 중복 적재한 소스 데이터 특성), "개인2049"로
+    // 조회해야 rank가 채워짐. resolveRankSheetTargetLabel(channel.primary_target)로 랭킹 시트
+    // 표기를 직접 계산해 이 호출에만 적용(가구 KPI 채널은 이미 두 표기가 같아 영향 없음,
+    // p_program_target_label은 프로그램 단위 조인이라 기존 그대로 타깃상세 표기 유지).
     supabase.rpc("get_channel_daily_narrative", {
       p_channel_code: channel.code,
-      p_target_label: matchedTargetLabel,
+      p_target_label: resolveRankSheetTargetLabel(channel.primary_target),
       p_program_target_label: programTargetLabel,
       p_demographic_labels: demographicTargets,
       p_as_of_date: dateTo,
