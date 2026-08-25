@@ -217,6 +217,13 @@ interface FitScoreItem {
     weakShareVsMedianPct: number | null;
     weakAirCount: number | null;
     confidence: "strong" | "mild" | null;
+    // 사용자 지시(2026-08-25, 원 명세 11·12번): GOLDEN/WEAK SLOT과 Slot Transferability.
+    // 전부 이미 있던 share_vs_median_pct(그 프로그램 자신의 시간대별 점유율 중앙값 대비 비율)로만
+    // 판정하며, 표본이 부족하면 null(= 판단 근거 부족, 억지 분류 금지).
+    goldenSlot: { hour: number; shareVsMedianPct: number | null; airCount: number } | null;
+    weakSlot: { hour: number; shareVsMedianPct: number | null; airCount: number } | null;
+    transferability: "SLOT_SPECIFIC" | "FLEXIBLE" | "PRIME_DEPENDENT" | null;
+    slotSampleCount: number;
   } | null;
 }
 
@@ -3881,6 +3888,36 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                         {AUDIENCE_ROLE_LABEL[fi.audienceRole]} — {AUDIENCE_ROLE_NOTE[fi.audienceRole]}
                                       </p>
                                     )}
+                                    {/* 원 명세 11번(GOLDEN/WEAK SLOT)·12번(SLOT TRANSFERABILITY) —
+                                        표본이 충분할 때만 표시(부족하면 아예 렌더링 안 함). */}
+                                    {item.slotEfficiency && (item.slotEfficiency.goldenSlot || item.slotEfficiency.weakSlot || item.slotEfficiency.transferability) && (
+                                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-600">
+                                        {item.slotEfficiency.goldenSlot && (
+                                          <span>
+                                            <span className="font-semibold text-emerald-700">황금 슬롯</span> {item.slotEfficiency.goldenSlot.hour}시대
+                                            (자기 중앙값의 {item.slotEfficiency.goldenSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.goldenSlot.airCount}회)
+                                          </span>
+                                        )}
+                                        {item.slotEfficiency.weakSlot && (
+                                          <span>
+                                            <span className="font-semibold text-rose-700">약세 슬롯</span> {item.slotEfficiency.weakSlot.hour}시대
+                                            (자기 중앙값의 {item.slotEfficiency.weakSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.weakSlot.airCount}회)
+                                          </span>
+                                        )}
+                                        {item.slotEfficiency.transferability && (
+                                          <span>
+                                            <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>
+                                              슬롯 이동성
+                                            </span>{" "}
+                                            {item.slotEfficiency.transferability === "FLEXIBLE"
+                                              ? `유연형(FLEXIBLE) — 최근 ${item.slotEfficiency.weeks}주 ${item.slotEfficiency.slotSampleCount}개 슬롯에서 성과 편차가 작아, 다른 시간대로 옮겨도 유지될 가능성이 관찰됩니다`
+                                              : item.slotEfficiency.transferability === "PRIME_DEPENDENT"
+                                                ? "프라임 의존형(PRIME-DEPENDENT) — 강세가 프라임(17~23시) 구간에만 몰려 있어, 그 밖 시간대로 옮기면 성과 유지가 불확실합니다"
+                                                : "슬롯 특화형(SLOT-SPECIFIC) — 슬롯별 성과 편차가 커서, 이동 시 현재 성과가 유지될지 추가 검증이 필요합니다"}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
                                     {fi.sampleNote && <p className="mt-1 text-sm text-amber-600">{fi.sampleNote}</p>}
                                     {fi.decision && (
                                       <p className="mt-2 text-sm text-zinc-600">
@@ -4005,12 +4042,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 const ourTopProgram = isRangeMode
                   ? [...data.periodProgramMovers].filter((m) => m.period_avg_rating !== null).sort((a, b) => (b.period_avg_rating ?? 0) - (a.period_avg_rating ?? 0))[0] ?? null
                   : null;
-                type MergedRow = { competitor_name: string; today_rating: number | null; delta_pct: number | null; top_program_name: string | null; top_program_start_time: string | null; top_program_rating: number | null; top_program_air_count: number | null; isOurs: boolean };
+                // 사용자 지시(2026-08-25): 개인2049 원본 시트와 매칭이 정확해진 걸 확인했으니,
+                // 시트처럼 시청률 옆에 시장 전체 순위(몇 위)도 함께 표기한다. 순위는 SQL이 이미
+                // 내려주는 값(경쟁채널=today_rank, 우리 채널=narrativeSignal.today_rank)을 그대로
+                // 쓴다 — 이 표의 "No." 열(단순 나열 번호)과는 다른 개념이라 시청률 옆에 붙인다.
+                type MergedRow = { competitor_name: string; today_rating: number | null; today_rank: number | null; delta_pct: number | null; top_program_name: string | null; top_program_start_time: string | null; top_program_rating: number | null; top_program_air_count: number | null; isOurs: boolean };
                 const merged: MergedRow[] = competitorInsightReport.map((c) => ({ ...c, isOurs: false }));
                 if (ourRating !== null) {
                   merged.push({
                     competitor_name: data.channel.name,
                     today_rating: ourRating,
+                    // 기간 모드는 기간 평균이라 단일 순위 개념이 없어 비운다(단일 일자만 표기).
+                    today_rank: isRangeMode ? null : (narrativeSignal?.today_rank ?? null),
                     delta_pct: null,
                     top_program_name: isRangeMode ? (ourTopProgram?.canonical_name ?? null) : (narrativeSignal?.top_program_name ?? null),
                     top_program_start_time: isRangeMode ? null : (narrativeSignal?.top_program_start_time ?? null),
@@ -4048,7 +4091,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             >
                               {c.competitor_name}
                             </td>
-                            <td className="py-1.5 pr-2 text-zinc-600">{fmtR(c.today_rating)}</td>
+                            {/* 사용자 지시(2026-08-25): 원본 개인2049 시트처럼 시청률 옆에 시장
+                                전체 순위를 함께 — 순위가 없는 경우(기간 평균 등)만 생략. */}
+                            <td className="py-1.5 pr-2 text-zinc-600">
+                              {fmtR(c.today_rating)}
+                              {c.today_rank !== null && <span className="ml-1 text-zinc-400">({c.today_rank}위)</span>}
+                            </td>
                             <td className="py-1.5 pr-2">
                               {/* 인포그래픽 제안(사용자 지시 2026-08-22, Page 2 전체 구현): 맨텍스트
                                   화살표를 Page 1과 같은 톤(bg-50+ring)의 방향 배지로 — 여러 경쟁채널을

@@ -21,6 +21,23 @@ const WEAK_SLOT_STRONG_PCT_MAX = 50; // 중앙값의 이 비율 이하 — "효�
 const WEAK_SLOT_MILD_PCT_MAX = 85; // 중앙값의 이 비율 이하 — "상대적으로 가장 약함"(약한 톤).
 const SLOT_EFFICIENCY_WEEKS = 8;
 
+// 사용자 지시(2026-08-25, 원 명세 11번 "GOLDEN SLOT / WEAK SLOT"): 명세가 "+20% 같은 숫자를
+// 일괄 강제하지 말고 threshold를 config로 분리하라"고 명시해, 기존 WEAK_SLOT_* 상수와 같은 자리에
+// 임계값으로 둔다. 기준은 이미 있는 share_vs_median_pct(그 프로그램 자신의 시간대별 점유율
+// 중앙값=100 대비 비율)로, 새 지표를 만들지 않는다. 최소 방영 횟수도 명세 요구대로 확인한다.
+const SLOT_FIT_THRESHOLD = {
+  goldenPctMin: 130, // 자기 중앙값의 130% 이상 — GOLDEN SLOT
+  weakPctMax: WEAK_SLOT_MILD_PCT_MAX, // 85% 이하 — WEAK SLOT(기존 약세 판정과 같은 선 재사용)
+  minAirCount: WEAK_SLOT_MIN_AIR_COUNT,
+};
+// 원 명세 12번 "SLOT TRANSFERABILITY" — 이 프로그램이 다른 시간대로 옮겨도 성과를 유지하는가.
+// 표본이 있는 슬롯들의 share_vs_median_pct 분포만으로 판정한다(새 데이터 없음).
+const TRANSFERABILITY = {
+  minSlots: 3, // 이보다 슬롯이 적으면 "판단 근거 부족"(명세: 데이터 부족 시 분류하지 않음)
+  flexibleSpreadMax: 45, // 최고-최저 편차(%p)가 이 이하면 어느 슬롯에서도 고른 성과 = FLEXIBLE
+  primeHours: [17, 18, 19, 20, 21, 22], // 프라임 구간(17~23시) — 여기에만 강세면 PRIME-DEPENDENT
+};
+
 interface SlotEfficiencyRow {
   hour_bucket: number;
   avg_rating: number | null;
@@ -169,6 +186,40 @@ export async function GET(request: Request) {
       const pct = weak?.share_vs_median_pct ?? null;
       const confidence: "strong" | "mild" | null =
         pct === null ? null : pct <= WEAK_SLOT_STRONG_PCT_MAX ? "strong" : pct <= WEAK_SLOT_MILD_PCT_MAX ? "mild" : null;
+
+      // ── 원 명세 11번(GOLDEN/WEAK SLOT) ─────────────────────────────────
+      // candidates는 이미 "표본 최소 방영 횟수 이상 + share_vs_median_pct 있음"으로 걸러져
+      // 오름차순 정렬돼 있다. 가장 높은 슬롯이 임계값을 넘으면 GOLDEN, 가장 낮은 슬롯이
+      // 임계값 아래면 WEAK로 각각 표기한다(둘 다 없을 수도 있고, 억지로 만들지 않는다).
+      const best = candidates.length > 0 ? candidates[candidates.length - 1] : null;
+      const goldenSlot =
+        best !== null && (best.share_vs_median_pct ?? 0) >= SLOT_FIT_THRESHOLD.goldenPctMin
+          ? { hour: best.hour_bucket, shareVsMedianPct: best.share_vs_median_pct, airCount: best.air_count }
+          : null;
+      const weakSlot =
+        weak !== null && (weak.share_vs_median_pct ?? 999) <= SLOT_FIT_THRESHOLD.weakPctMax
+          ? { hour: weak.hour_bucket, shareVsMedianPct: weak.share_vs_median_pct, airCount: weak.air_count }
+          : null;
+
+      // ── 원 명세 12번(SLOT TRANSFERABILITY) ────────────────────────────
+      // 슬롯이 충분히 많을 때만 분류한다(명세: 데이터 부족 시 분류하지 않음).
+      let transferability: "SLOT_SPECIFIC" | "FLEXIBLE" | "PRIME_DEPENDENT" | null = null;
+      if (candidates.length >= TRANSFERABILITY.minSlots) {
+        const pcts = candidates.map((r) => r.share_vs_median_pct ?? 0);
+        const spread = Math.max(...pcts) - Math.min(...pcts);
+        // 임계값 이상으로 강한 슬롯들이 전부 프라임 구간이면 PRIME-DEPENDENT.
+        const strongSlots = candidates.filter((r) => (r.share_vs_median_pct ?? 0) >= SLOT_FIT_THRESHOLD.goldenPctMin);
+        const allStrongArePrime =
+          strongSlots.length > 0 && strongSlots.every((r) => TRANSFERABILITY.primeHours.includes(r.hour_bucket));
+        if (spread <= TRANSFERABILITY.flexibleSpreadMax) {
+          transferability = "FLEXIBLE"; // 어느 슬롯이든 자기 중앙값 근처 — 이동해도 유지될 가능성
+        } else if (allStrongArePrime) {
+          transferability = "PRIME_DEPENDENT"; // 강세가 프라임 구간에만 몰림
+        } else {
+          transferability = "SLOT_SPECIFIC"; // 편차가 크고, 강세 슬롯이 프라임에 한정되지도 않음
+        }
+      }
+
       return {
         ...item,
         slotEfficiency: {
@@ -178,6 +229,10 @@ export async function GET(request: Request) {
           weakShareVsMedianPct: confidence ? pct : null,
           weakAirCount: confidence ? (weak?.air_count ?? null) : null,
           confidence,
+          goldenSlot,
+          weakSlot,
+          transferability,
+          slotSampleCount: candidates.length,
         },
       };
     })

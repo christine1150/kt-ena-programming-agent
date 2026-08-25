@@ -1133,8 +1133,10 @@ function OriginalContentReportCard({
                                   truncate(말줄임) 대신 2줄까지 줄바꿈 허용 — 잘린 제목보다 전체가
                                   보이는 편이 낫다는 판단. */}
                               <span className="line-clamp-2 font-medium text-zinc-700">{c.competitor_program_name}</span>
+                              {/* 사용자 지시(2026-08-25): 개인2049 원본 시트와 매칭이 정확해진 걸
+                                  확인했으니 경쟁 프로그램 시청률도 소수점 3자리로 통일(기존 2자리). */}
                               <span className="text-right font-semibold tabular-nums text-zinc-600">
-                                {c.competitor_rating !== null ? c.competitor_rating.toFixed(2) : "—"}
+                                {formatRating(c.competitor_rating)}
                               </span>
                             </div>
                           ))}
