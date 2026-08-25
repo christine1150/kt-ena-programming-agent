@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/adminAuth";
 import ShareLinkManager from "./ShareLinkManager";
 import ChannelMasterUploader from "./ChannelMasterUploader";
+import OriginalReviewProgramsManager from "./OriginalReviewProgramsManager";
 import FeaturedContentManager from "./FeaturedContentManager";
 import NielsenDailyUploader from "./NielsenDailyUploader";
 import MailIngestionManager from "./MailIngestionManager";
@@ -35,6 +36,8 @@ export default async function AdminPage() {
         <ShareLinkManager />
 
         <ChannelMasterUploader />
+
+        <OriginalReviewProgramsManager />
 
         <FeaturedContentManager />
 
