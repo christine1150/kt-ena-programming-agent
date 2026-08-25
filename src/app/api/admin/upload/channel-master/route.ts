@@ -212,53 +212,109 @@ export async function POST(request: Request) {
     }
   }
 
-  // 6) "요일 별 리뷰 프로그램" 시트 — Page 1 Original 리포트 화이트리스트 (매번 전체 교체)
-  // 사용자 지시(2026-08-25): 시트 폼이 분류/타이틀/본방채널/동시방송/직후재방/첫방송일자/
-  // 매주반복편성/예상회차/종영일로 새로 작성됨 — 새 필드까지 저장하고, 첫방송일자가 있으면
-  // program_episode_counters를 자동 seed(1회=그 날짜)해 회차 번호가 "반드시 계산"되게 한다.
+  // 6) "요일 별 리뷰 프로그램" 시트 — Page 1 주요 콘텐츠 리뷰 화이트리스트.
+  // 사용자 지시(2026-08-26): "요일 별 리뷰 프로그램을 주요 콘텐츠 관리 프로그램으로 합쳐서 운영...
+  // 앞으로는 이 형태의 엑셀로 진행할 수 있도록 파싱 규칙을 수정" — 예전엔 별도 테이블
+  // (original_review_programs)에 넣었지만 이제 featured_content 하나로 통합한다(관리자 화면도
+  // "주요 콘텐츠 관리" 하나로 합침). featured_content는 요일 배열(broadcast_day_of_week)을 갖고
+  // 있으므로, 요일별로 쪼개진 파서 결과를 타이틀 단위로 다시 묶어 한 행으로 저장한다.
+  // 첫방송일자가 있으면 program_episode_counters도 자동 seed(1회=그 날짜)해 회차가 계산되게 한다.
+  const DAY_LABEL_BY_ISO = ["", "월", "화", "수", "목", "금", "토", "일"];
   let originalReviewSaved = 0;
   let episodeCountersSeeded = 0;
   const reviewParsed = parseOriginalReviewScheduleWorkbook(buffer);
   if (!reviewParsed.ok) {
     warnings.push(`요일 별 리뷰 프로그램 반영 실패 — ${reviewParsed.message}`);
   } else {
-    await supabase.from("original_review_programs").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    const reviewRows: Record<string, unknown>[] = [];
-    // 프로그램명당 한 번만 seed 시도하면 되므로(요일별로 여러 행이 나와도 같은 프로그램) 중복 제거.
-    const firstBroadcastByProgram = new Map<string, string>();
+    // 파서는 "월·화 22:00"을 요일마다 한 행씩 내놓는다 — featured_content는 요일 배열 한 행이므로
+    // (타이틀 + 본방채널 + 시각) 기준으로 다시 합친다.
+    type MergedReviewEntry = {
+      programName: string;
+      category: string | null;
+      broadcastChannelCode: string;
+      simulcastChannelCode: string | null;
+      rerunChannelCode: string | null;
+      broadcastTime: string | null;
+      note: string | null;
+      firstBroadcastDate: string | null;
+      expectedEpisodeCount: string | null;
+      seriesEndDate: string | null;
+      days: string[];
+    };
+    const mergedByKey = new Map<string, MergedReviewEntry>();
     for (const row of reviewParsed.rows) {
-      const broadcastChannelId = channelIdByCode.get(row.broadcastChannelCode);
-      if (!broadcastChannelId) {
-        warnings.push(`${row.programName}: 본방 채널(${row.broadcastChannelCode}) 정보를 찾지 못해 건너뛰었습니다.`);
+      const key = `${row.programName}__${row.broadcastChannelCode}__${row.broadcastTime ?? ""}`;
+      const existing = mergedByKey.get(key);
+      const dayLabel = DAY_LABEL_BY_ISO[row.dayOfWeekIso];
+      if (existing) {
+        if (dayLabel && !existing.days.includes(dayLabel)) existing.days.push(dayLabel);
         continue;
       }
-      reviewRows.push({
-        day_of_week_iso: row.dayOfWeekIso,
-        program_name: row.programName,
+      mergedByKey.set(key, {
+        programName: row.programName,
         category: row.category,
-        broadcast_channel_id: broadcastChannelId,
-        simulcast_channel_id: row.simulcastChannelCode ? (channelIdByCode.get(row.simulcastChannelCode) ?? null) : null,
-        broadcast_time: row.broadcastTime,
+        broadcastChannelCode: row.broadcastChannelCode,
+        simulcastChannelCode: row.simulcastChannelCode,
+        rerunChannelCode: row.rerunChannelCode,
+        broadcastTime: row.broadcastTime,
         note: row.note,
-        rerun_channel_id: row.rerunChannelCode ? (channelIdByCode.get(row.rerunChannelCode) ?? null) : null,
-        first_broadcast_date: row.firstBroadcastDate,
-        expected_episode_count: row.expectedEpisodeCount,
-        series_end_date: row.seriesEndDate,
-        sort_order: row.sortOrder,
+        firstBroadcastDate: row.firstBroadcastDate,
+        expectedEpisodeCount: row.expectedEpisodeCount,
+        seriesEndDate: row.seriesEndDate,
+        days: dayLabel ? [dayLabel] : [],
       });
-      if (!row.broadcastTime) {
-        warnings.push(`${row.programName}: 본방 시간 텍스트를 인식하지 못했습니다(원문 확인 필요).`);
-      }
-      if (row.firstBroadcastDate && !firstBroadcastByProgram.has(row.programName)) {
-        firstBroadcastByProgram.set(row.programName, row.firstBroadcastDate);
-      }
     }
-    if (reviewRows.length > 0) {
-      const { error: reviewError } = await supabase.from("original_review_programs").insert(reviewRows);
-      if (reviewError) {
-        warnings.push(`요일 별 리뷰 프로그램 저장 실패 — ${reviewError.message}`);
-      } else {
-        originalReviewSaved = reviewRows.length;
+
+    // 프로그램명당 한 번만 seed 시도하면 되므로(요일별로 여러 행이 나와도 같은 프로그램) 중복 제거.
+    const firstBroadcastByProgram = new Map<string, string>();
+    for (const entry of mergedByKey.values()) {
+      const broadcastChannelId = channelIdByCode.get(entry.broadcastChannelCode);
+      if (!broadcastChannelId) {
+        warnings.push(`${entry.programName}: 본방 채널(${entry.broadcastChannelCode}) 정보를 찾지 못해 건너뛰었습니다.`);
+        continue;
+      }
+      if (!entry.broadcastTime) {
+        warnings.push(`${entry.programName}: 본방 시간 텍스트를 인식하지 못했습니다(원문 확인 필요).`);
+      }
+
+      const { data: reviewProgram, error: reviewProgramError } = await supabase
+        .from("programs")
+        .upsert(
+          { channel_id: broadcastChannelId, canonical_name: entry.programName, raw_name: entry.programName },
+          { onConflict: "channel_id,canonical_name" }
+        )
+        .select("id")
+        .single();
+      if (reviewProgramError || !reviewProgram) {
+        warnings.push(`${entry.programName}: 프로그램 저장 실패 — ${reviewProgramError?.message}`);
+        continue;
+      }
+
+      // 예상 회차는 시트에 "계속"/"정기"처럼 숫자가 아닌 값도 들어와 그대로는 숫자 컬럼에 못 넣는다.
+      const expectedEpisodeNum = entry.expectedEpisodeCount ? Number(entry.expectedEpisodeCount) : null;
+      const { error: featuredUpsertError } = await supabase.from("featured_content").upsert(
+        {
+          program_id: reviewProgram.id,
+          category: entry.category ?? "오리지널",
+          broadcast_schedule_text: entry.note,
+          broadcast_day_of_week: entry.days.length > 0 ? entry.days : null,
+          broadcast_time: entry.broadcastTime,
+          broadcast_start_date: entry.firstBroadcastDate,
+          broadcast_end_date: entry.seriesEndDate,
+          expected_episode_count: Number.isFinite(expectedEpisodeNum) ? expectedEpisodeNum : null,
+          simulcast_channel_id: entry.simulcastChannelCode ? (channelIdByCode.get(entry.simulcastChannelCode) ?? null) : null,
+          rerun_channel_id: entry.rerunChannelCode ? (channelIdByCode.get(entry.rerunChannelCode) ?? null) : null,
+        },
+        { onConflict: "program_id" }
+      );
+      if (featuredUpsertError) {
+        warnings.push(`${entry.programName}: 주요 콘텐츠 저장 실패 — ${featuredUpsertError.message}`);
+        continue;
+      }
+      originalReviewSaved += 1;
+
+      if (entry.firstBroadcastDate && !firstBroadcastByProgram.has(entry.programName)) {
+        firstBroadcastByProgram.set(entry.programName, entry.firstBroadcastDate);
       }
     }
     // 첫 방송일자가 있는 프로그램만, 아직 seed가 없는 경우에만 "1회=첫방송일자"로 자동 채운다

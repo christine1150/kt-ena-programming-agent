@@ -22,6 +22,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if ("endDate" in (body ?? {})) update.broadcast_end_date = body.endDate || null;
   if ("expectedEpisodeCount" in (body ?? {}))
     update.expected_episode_count = body.expectedEpisodeCount ? Number(body.expectedEpisodeCount) : null;
+  // 사용자 지시(2026-08-26): "요일 별 리뷰 프로그램"(동시방송·직후 재방) 통합.
+  if ("simulcastChannelId" in (body ?? {})) update.simulcast_channel_id = body.simulcastChannelId || null;
+  if ("rerunChannelId" in (body ?? {})) update.rerun_channel_id = body.rerunChannelId || null;
 
   // 사용자 지시(2026-08-21): 이번 수정으로 첫 방송일자·매주 반복 요일·예상 회차가 전부(이번
   // 요청 값 또는 기존 저장값) 갖춰지면 끝 방송일자를 자동 재계산한다 — 부분 수정(PATCH)이라

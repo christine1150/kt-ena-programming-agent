@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/adminAuth";
 import ShareLinkManager from "./ShareLinkManager";
 import ChannelMasterUploader from "./ChannelMasterUploader";
-import OriginalReviewProgramsManager from "./OriginalReviewProgramsManager";
+// 사용자 지시(2026-08-26): "요일 별 리뷰 프로그램" 조회 위젯을 없애고 "주요 콘텐츠 관리"
+// (FeaturedContentManager) 하나로 합쳤다 — 두 화면이 같은 정보를 나눠 보여주고 있었다.
+// 옛 컴포넌트/API는 trash-can/으로 이동(사용자 최종 확인 후 삭제, CLAUDE.md 파일 관리 규칙).
 import FeaturedContentManager from "./FeaturedContentManager";
 import NielsenDailyUploader from "./NielsenDailyUploader";
 import MailIngestionManager from "./MailIngestionManager";
@@ -36,8 +38,6 @@ export default async function AdminPage() {
         <ShareLinkManager />
 
         <ChannelMasterUploader />
-
-        <OriginalReviewProgramsManager />
 
         <FeaturedContentManager />
 
