@@ -5,23 +5,26 @@
 파일명 그대로 이 폴더에 이미지 파일(PNG 권장, 정사각형에 가까울수록 잘 보임)만 추가하면
 다음 배포부터 바로 반영됩니다.
 
-| 채널명 | 파일명 |
-|---|---|
-| SBS | `SBS.png` |
-| MBC | `MBC.png` |
-| KBS1 | `KBS1.png` |
-| KBS2 | `KBS2.png` |
-| JTBC | `JTBC.png` |
-| tvN | `tvN.png` |
-| Mnet | `Mnet.png` |
-| KBSN스포츠 | `KBSN_SPORTS.png` |
-| MBC SPORTS+ | `MBC_SPORTS_PLUS.png` |
-| 채널S | `CHANNEL_S.png` |
-| SPOTV2 | `SPOTV2.png` |
-| 채널나우 | `CHANNEL_NOW.png` |
-| TV CHOSUN | `TV_CHOSUN.png` |
-| MBN | `MBN.png` |
-| 채널A | `CHANNEL_A.png` |
+| 채널명 | 파일명 | 상태 |
+|---|---|---|
+| SBS | `SBS.png` | ✅ 확보 |
+| MBC | `MBC.png` | ✅ 확보 |
+| KBS1 | `KBS1.webp` | ✅ 확보 |
+| KBS2 | `KBS2.png` | 미확보 |
+| JTBC | `JTBC.png` | ✅ 확보 |
+| tvN | `tvN.png` | ✅ 확보 |
+| Mnet | `Mnet.png` | 미확보 |
+| KBSN스포츠 | `KBSN_SPORTS.jpg` | ✅ 확보 |
+| SBS Plus | `SBS_Plus.png` | ✅ 확보 |
+| MBC SPORTS+ | `MBC_SPORTS_PLUS.png` | 미확보 |
+| 채널S | `CHANNEL_S.png` | 미확보 |
+| SPOTV2 | `SPOTV2.png` | 미확보 |
+| 채널나우 | `CHANNEL_NOW.png` | 미확보 |
+| TV CHOSUN | `TV_CHOSUN.png` | 미확보 |
+| MBN | `MBN.png` | 미확보 |
+| 채널A | `CHANNEL_A.png` | 미확보 |
+
+"미확보" 채널은 파일이 도착하기 전까지 이니셜 배지로 자동 대체됩니다.
 
 목록에 없는 새 방송사가 나오면 `src/app/Dashboard.tsx`의 `COMPETITOR_LOGO_FILE`에 한 줄만
 추가하거나, 채널명에서 특수문자를 `_`로 바꾼 파일명(예: "OO+" → `OO_.png`)을 그대로 올려도

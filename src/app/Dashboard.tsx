@@ -1172,12 +1172,14 @@ const MANUAL_COMPETITOR_BAND_COLORS = ["#f59e0b", "#0891b2", "#a21caf", "#65a30d
 const COMPETITOR_LOGO_FILE: Record<string, string> = {
   SBS: "SBS.png",
   MBC: "MBC.png",
-  KBS1: "KBS1.png",
+  // 사용자 제공(2026-08-26): KBS1은 webp, KBSN스포츠는 jpg로 받아 확장자를 그대로 반영.
+  KBS1: "KBS1.webp",
   KBS2: "KBS2.png",
   JTBC: "JTBC.png",
   tvN: "tvN.png",
   Mnet: "Mnet.png",
-  KBSN스포츠: "KBSN_SPORTS.png",
+  KBSN스포츠: "KBSN_SPORTS.jpg",
+  "SBS Plus": "SBS_Plus.png",
   "MBC SPORTS+": "MBC_SPORTS_PLUS.png",
   채널S: "CHANNEL_S.png",
   SPOTV2: "SPOTV2.png",
