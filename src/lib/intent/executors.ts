@@ -357,14 +357,40 @@ export async function execProgramCrossChannelReach(params: ExtractedParameters, 
 
 // ── SLOT_IMPROVEMENT_RECOMMENDATION ─────────────────────────────────────
 // 사용자 지시(2026-08-26): "ENA Play가 이번주 개선할 시간대는 어디이고 어떤 프로그램을
-// 편성하면 좋을지" 같은 질문에 새 SQL을 만들지 않고 이미 있는 두 함수만 재사용해 답한다.
+// 편성하면 좋을지" 같은 질문에 새 SQL을 만들지 않고 이미 있는 함수들만 재사용해 답한다.
 // 진단은 Page 2 "5대 Action Framework"와 완전히 같은 계산(mart_scheduling_fit_score,
 // REPLACE/MOVE 태그 = WEAK SLOT), 추천 후보는 get_channel_top_programs를 우리 채널 나머지
 // 6개에 돌려 "같은 daypart에서 실제로 검증된 우리 포트폴리오 프로그램"만 제시한다(LLM이
 // 외부 포맷을 지어내지 않음 — CLAUDE.md "No Hallucination" 원칙).
-interface FitScoreEvidence {
-  current_daypart?: string;
+//
+// 사용자 지시(2026-08-26, 후속) — "새벽(01~06시)은 원래 모수 자체가 적어 시청률이 낮은
+// 구간이라 절대 수치만으로 1순위 개선 대상에 선정되면 안 된다": WEAK SLOT 1순위 후보는
+// 반드시 MAIN_HOURS(06:00~25:00=익일 01:00) 안에서만 뽑고, DAWN_HOURS(01:00~06:00)는
+// "최근 1년 동시간대 누적 평균" 대비 최근 성과가 실제로 하락한 경우에만 하단에 예외로
+// 별도 언급한다(get_program_slot_efficiency를 p_weeks만 다르게(12주 vs 52주) 두 번 불러
+// 비교 — 새 SQL 없음). 시간 판정은 get_channel_top_programs/get_program_slot_efficiency가
+// 이미 쓰는 "hour<2면 +24" 관행(broadcast hour, 2~25)을 그대로 따른다:
+//   MAIN_HOURS  06:00~25:00(익일01:00) → bh 6~24
+//   DAWN_HOURS  01:00~06:00            → bh 25(=익일01시대) 또는 bh 2~5
+function isMainBroadcastHour(bh: number): boolean {
+  return bh >= 6 && bh <= 24;
 }
+function isDawnBroadcastHour(bh: number): boolean {
+  return bh === 25 || (bh >= 2 && bh <= 5);
+}
+// daypart_of()(SQL) 4구간 판정을 JS에서 그대로 미러링 — 추천 후보 매칭(daypart 단위, 기존과
+// 동일 폭)에만 쓰고, MAIN/DAWN 1순위 판정에는 쓰지 않는다(그건 위 bh 함수가 전담).
+function daypartOfBroadcastHour(bh: number): string {
+  if (bh >= 2 && bh <= 8) return "새벽";
+  if (bh >= 9 && bh <= 13) return "오전";
+  if (bh >= 14 && bh <= 18) return "오후";
+  return "저녁_심야";
+}
+const DAWN_ANOMALY_RECENT_WEEKS = 12; // Fit Score와 동일한 최근 12주(84일)
+const DAWN_ANOMALY_YEAR_WEEKS = 52; // "최근 1년 동시간대 누적 평균"
+const DAWN_ANOMALY_MIN_AIR_COUNT = 2; // fit-score/route.ts WEAK_SLOT_MIN_AIR_COUNT와 동일 기준(표본 최소 2회)
+const DAWN_ANOMALY_DROP_PCT_MAX = 85; // 1년 평균 점유율의 이 비율 이하로 떨어졌을 때만 "하락"(기존 WEAK_SLOT_MILD_PCT_MAX와 동일 톤)
+
 export interface SlotFitRow {
   program_id: string;
   canonical_name: string | null;
@@ -378,7 +404,7 @@ export interface SlotFitRow {
   slot_performance_score: number | null;
   competitive_opportunity_score: number | null;
   audience_flow_score: number | null;
-  evidence: FitScoreEvidence | null;
+  startHour: number | null; // broadcast hour(2~25) — most_common_start_hour
 }
 export interface SlotRecommendationCandidate {
   channelCode: string;
@@ -387,11 +413,19 @@ export interface SlotRecommendationCandidate {
   avgRating: number | null;
   airCount: number;
 }
+export interface DawnAnomalyCandidate {
+  canonicalName: string;
+  startHour: number; // broadcast hour(2~25)
+  recentAvgShare: number;
+  yearAvgShare: number;
+  dropPct: number; // recentAvgShare / yearAvgShare * 100 — 100 미만이면 하락
+}
 export interface SlotImprovementData {
   channel: { code: string; name: string };
   asOfDate: string;
-  weakSlots: SlotFitRow[]; // REPLACE/MOVE 태그 중 Fit Score 낮은 순 상위 2개
+  weakSlots: SlotFitRow[]; // MAIN_HOURS(06~25시) 안에서만, REPLACE/MOVE 태그 중 Fit Score 낮은 순 상위 2개
   recommendations: Record<string, SlotRecommendationCandidate[]>; // key: daypart(새벽/오전/오후/저녁_심야)
+  dawnAnomalies: DawnAnomalyCandidate[]; // DAWN_HOURS(01~06시) 중 1년 평균 대비 하락이 확인된 것만
 }
 
 export async function execSlotImprovementRecommendation(params: ExtractedParameters, timeContext: TimeContext): Promise<SlotImprovementData | null> {
@@ -405,6 +439,7 @@ export async function execSlotImprovementRecommendation(params: ExtractedParamet
   const channelId = channelRow.id as string;
 
   const asOfDate = timeContext.dateTo; // Fit Score(fit-score/route.ts)와 같은 개념 — 데이터 존재 최신일 기준
+  const programTargetLabel = resolveProgramLevelTargetLabel(channel.primaryTarget);
 
   // Fit Score와 동일한 지연 캐싱 패턴: 이 채널·기준일 조합이 마트에 아직 없으면 그때 한 번만 계산한다.
   const { count } = await supabase
@@ -432,7 +467,7 @@ export async function execSlotImprovementRecommendation(params: ExtractedParamet
   const { data: fitRows } = await supabase
     .from("mart_scheduling_fit_score")
     .select(
-      "program_id, fit_score, tag, sample_days, confidence_pct, target_performance_score, target_affinity_score, audience_engagement_score, slot_performance_score, competitive_opportunity_score, audience_flow_score, evidence, programs(canonical_name)"
+      "program_id, fit_score, tag, sample_days, confidence_pct, target_performance_score, target_affinity_score, audience_engagement_score, slot_performance_score, competitive_opportunity_score, audience_flow_score, programs(canonical_name)"
     )
     .eq("as_of_date", asOfDate)
     .eq("channel_id", channelId);
@@ -450,29 +485,106 @@ export async function execSlotImprovementRecommendation(params: ExtractedParamet
     .gte("broadcast_date", fourteenDaysAgo.toISOString().slice(0, 10));
   const recentProgramIds = new Set((recentPrograms ?? []).map((r) => r.program_id));
 
-  type FitRow = Omit<SlotFitRow, "canonical_name"> & { programs: { canonical_name: string } | null };
+  type FitRow = Omit<SlotFitRow, "canonical_name" | "startHour"> & { programs: { canonical_name: string } | null };
   const recentFitRows = ((fitRows ?? []) as unknown as FitRow[]).filter((r) => recentProgramIds.has(r.program_id));
 
-  const weakSlots: SlotFitRow[] = recentFitRows
-    .filter((r) => r.tag === "REPLACE" || r.tag === "MOVE")
-    .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
-    .slice(0, 2)
-    .map((r) => ({ ...r, canonical_name: r.programs?.canonical_name ?? null }));
-
-  if (weakSlots.length === 0) {
-    return { channel, asOfDate, weakSlots: [], recommendations: {} };
+  // 이 채널의 프로그램별 실제 방영 시간(most_common_start_hour, bh 2~25)을 구한다 — Fit Score
+  // evidence의 4구간(daypart)만으로는 MAIN(06시)/DAWN(01시) 경계를 정확히 가를 수 없다.
+  const { data: selfTopPrograms } = await supabase.rpc("get_channel_top_programs", {
+    p_channel_code: channel.code,
+    p_program_target_label: programTargetLabel,
+    p_as_of_date: asOfDate,
+    p_window_days: 84,
+    p_limit: 50,
+  });
+  const startHourByName = new Map<string, number>();
+  for (const p of (selfTopPrograms ?? []) as { program_name: string; most_common_start_hour: number | null }[]) {
+    if (p.most_common_start_hour !== null) startHourByName.set(p.program_name, p.most_common_start_hour);
   }
 
-  // 약세 슬롯의 daypart별로, 우리 포트폴리오 나머지 채널에서 "같은 daypart에서 실제로 검증된"
-  // 프로그램을 찾는다(get_channel_top_programs 재사용 — 새 SQL 없음, PROGRAM_TOP 실행부와 동일 호출).
-  const weakDayparts = [...new Set(weakSlots.map((s) => s.evidence?.current_daypart).filter((d): d is string => !!d))];
+  const replaceOrMove = recentFitRows
+    .filter((r) => r.tag === "REPLACE" || r.tag === "MOVE")
+    .map((r) => {
+      const canonicalName = r.programs?.canonical_name ?? null;
+      const startHour = canonicalName ? (startHourByName.get(canonicalName) ?? null) : null;
+      const row: SlotFitRow = { ...r, canonical_name: canonicalName, startHour };
+      return row;
+    });
+
+  // ① 1순위 WEAK SLOT — 반드시 MAIN_HOURS(06~25시) 안에서만 Fit Score 낮은 순 상위 2개.
+  const weakSlots = replaceOrMove
+    .filter((r) => r.startHour !== null && isMainBroadcastHour(r.startHour))
+    .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
+    .slice(0, 2);
+
+  // ② 새벽(01~06시) 예외 — 절대 시청률로 뽑지 않고, "최근 1년 동시간대 평균" 대비 최근
+  // 성과가 실제로 떨어진 경우만 별도 언급한다(get_program_slot_efficiency 2회 호출로 비교,
+  // 새 SQL 없음).
+  const dawnFlagged = replaceOrMove.filter((r) => r.startHour !== null && isDawnBroadcastHour(r.startHour) && r.canonical_name !== null);
+  const dawnAnomalyResults = await Promise.all(
+    dawnFlagged.map(async (r): Promise<DawnAnomalyCandidate | null> => {
+      const canonicalName = r.canonical_name as string;
+      const startHour = r.startHour as number;
+      const [{ data: recentRows }, { data: yearRows }] = await Promise.all([
+        supabase.rpc("get_program_slot_efficiency", {
+          p_channel_code: channel.code,
+          p_canonical_name: canonicalName,
+          p_program_target_label: programTargetLabel,
+          p_as_of_date: asOfDate,
+          p_weeks: DAWN_ANOMALY_RECENT_WEEKS,
+        }),
+        supabase.rpc("get_program_slot_efficiency", {
+          p_channel_code: channel.code,
+          p_canonical_name: canonicalName,
+          p_program_target_label: programTargetLabel,
+          p_as_of_date: asOfDate,
+          p_weeks: DAWN_ANOMALY_YEAR_WEEKS,
+        }),
+      ]);
+      type EffRow = { hour_bucket: number; avg_share: number | null; air_count: number };
+      const recent = ((recentRows ?? []) as EffRow[]).find((row) => row.hour_bucket === startHour);
+      const year = ((yearRows ?? []) as EffRow[]).find((row) => row.hour_bucket === startHour);
+      if (!recent || !year || recent.avg_share === null || year.avg_share === null) return null; // 비교 근거 부족 — 억지로 판정하지 않음
+      if (recent.air_count < DAWN_ANOMALY_MIN_AIR_COUNT || year.air_count < DAWN_ANOMALY_MIN_AIR_COUNT || year.avg_share === 0) return null;
+      const dropPct = (recent.avg_share / year.avg_share) * 100;
+      if (dropPct > DAWN_ANOMALY_DROP_PCT_MAX) return null; // 하락이 확인된 경우만 — 그대로거나 오히려 좋아졌으면 언급하지 않음
+      return { canonicalName, startHour, recentAvgShare: recent.avg_share, yearAvgShare: year.avg_share, dropPct };
+    })
+  );
+  const dawnAnomalies = dawnAnomalyResults.filter((d): d is DawnAnomalyCandidate => d !== null).sort((a, b) => a.dropPct - b.dropPct);
+
+  if (weakSlots.length === 0) {
+    return { channel, asOfDate, weakSlots: [], recommendations: {}, dawnAnomalies };
+  }
+
+  // 사용자 지시(2026-08-26, 후속) — "자사 타 채널에서 시청률이 아무리 높아도 편성 권한/브랜드
+  // 정체성에 안 맞으면 추천하면 안 된다": 후보는 반드시 [조건 A] 대상 채널(예: ENA Play) 전체
+  // 기간(window 제한 없음) 편성 이력이 있거나, [조건 B] 주요 콘텐츠 관리 리스트(featured_content,
+  // "관리자가 직접 지정한 주요 콘텐츠")에 포함된 타이틀만 허용한다. 이 필터를 통과하지 못하면
+  // Fit Score/시청률이 아무리 높아도 후보에서 원천적으로 제외한다 — LLM에는 이미 걸러진 목록만
+  // 넘어가므로 "자사 타 채널 성공작이라는 이유만으로 임의 언급"이 구조적으로 불가능하다.
+  const [{ data: everAiredRows }, { data: featuredRows }] = await Promise.all([
+    supabase.from("programs").select("canonical_name").eq("channel_id", channelId), // 조건 A
+    supabase.from("featured_content").select("programs(canonical_name)"), // 조건 B
+  ]);
+  const validCandidateNames = new Set<string>([
+    ...((everAiredRows ?? []) as { canonical_name: string }[]).map((r) => r.canonical_name),
+    ...((featuredRows ?? []) as unknown as { programs: { canonical_name: string } | null }[])
+      .map((r) => r.programs?.canonical_name)
+      .filter((n): n is string => !!n),
+  ]);
+
+  // 약세 슬롯의 daypart별로, 우리 포트폴리오 나머지 채널에서 "같은 daypart에서 실제로 검증되고
+  // + 위 후보군 조건(A 또는 B)을 통과한" 프로그램을 찾는다(get_channel_top_programs 재사용 —
+  // 새 SQL 없음, PROGRAM_TOP 실행부와 동일 호출).
+  const weakDayparts = [...new Set(weakSlots.map((s) => (s.startHour !== null ? daypartOfBroadcastHour(s.startHour) : null)).filter((d): d is string => !!d))];
   const otherChannels = channels.filter((c) => c.code !== channel.code);
   const otherChannelTop = await Promise.all(
     otherChannels.map(async (c) => {
-      const programTargetLabel = resolveProgramLevelTargetLabel(c.primaryTarget);
+      const otherProgramTargetLabel = resolveProgramLevelTargetLabel(c.primaryTarget);
       const { data } = await supabase.rpc("get_channel_top_programs", {
         p_channel_code: c.code,
-        p_program_target_label: programTargetLabel,
+        p_program_target_label: otherProgramTargetLabel,
         p_as_of_date: asOfDate,
         p_window_days: 84,
         p_limit: 20,
@@ -488,11 +600,13 @@ export async function execSlotImprovementRecommendation(params: ExtractedParamet
   for (const daypart of weakDayparts) {
     const candidates: SlotRecommendationCandidate[] = [];
     for (const { channel: c, rows } of otherChannelTop) {
-      const best = rows.filter((r) => r.top_daypart === daypart).sort((a, b) => (b.avg_rating ?? 0) - (a.avg_rating ?? 0))[0];
+      const best = rows
+        .filter((r) => r.top_daypart === daypart && validCandidateNames.has(r.program_name))
+        .sort((a, b) => (b.avg_rating ?? 0) - (a.avg_rating ?? 0))[0];
       if (best) candidates.push({ channelCode: c.code, channelName: c.name, programName: best.program_name, avgRating: best.avg_rating, airCount: best.air_count });
     }
     recommendations[daypart] = candidates.sort((a, b) => (b.avgRating ?? 0) - (a.avgRating ?? 0)).slice(0, 3);
   }
 
-  return { channel, asOfDate, weakSlots, recommendations };
+  return { channel, asOfDate, weakSlots, recommendations, dawnAnomalies };
 }

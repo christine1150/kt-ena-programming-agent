@@ -637,13 +637,24 @@ export function buildProgramCrossChannelReachAnswer(
 }
 
 // ── SLOT_IMPROVEMENT_RECOMMENDATION ─────────────────────────────────────
-// 사용자 지시(2026-08-26): "[1.진단] [2.현황분석] [3.추천프로그램] [4.기대효과]" 4단 구조로
-// 답하되, 이 4단 구조를 conclusion/keyNumbers/programmingAction/interpretation 필드에
-// 나눠 흩뿌리면 뒤 2개(interpretation/programmingAction)는 askAnswerLlm.ts가 질문 맥락에
-// 맞게 다시 쓰면서 라벨이 사라질 수 있다 — LLM이 절대 건드리지 않는 evidence 필드 하나에
-// 4단 전체를 SQL이 계산한 값만으로 조립해, 구조가 항상 보존되게 한다.
+// 사용자 지시(2026-08-26): "[1.주간 주요 개선 구간(06~25시)] [2.성과 저하 원인] [3.추천 프로그램]
+// [4.(선택) 새벽 특이사항(01~06시)]" 4단 구조로 답하되, LLM이 절대 건드리지 않는 evidence
+// 필드 하나에 SQL이 계산한 값만으로 조립해 구조가 항상 보존되게 한다(interpretation/
+// programmingAction은 askAnswerLlm.ts가 질문 맥락에 맞게 다시 쓰므로 라벨이 사라질 수 있음).
 const SLOT_DAYPART_LABEL: Record<string, string> = { 새벽: "새벽(02~08시)", 오전: "오전(09~13시)", 오후: "오후(14~18시)", 저녁_심야: "저녁·심야(19~25시)" };
 const TAG_LABEL: Record<string, string> = { REPLACE: "REPLACE(교체 검토)", MOVE: "MOVE(시간대 이동 검토)" };
+// executors.ts formatBroadcastHourLabel()과 동일 규칙 — bh(2~25) → "07시대"/"01시대"(익일).
+function formatHourLabel(bh: number): string {
+  const clockHour = bh >= 24 ? bh - 24 : bh;
+  return `${String(clockHour).padStart(2, "0")}시대`;
+}
+// executors.ts daypartOfBroadcastHour()와 동일 규칙 — 추천 후보(daypart 단위) 매칭 키 재도출용.
+function daypartKeyOfHour(bh: number): string {
+  if (bh >= 2 && bh <= 8) return "새벽";
+  if (bh >= 9 && bh <= 13) return "오전";
+  if (bh >= 14 && bh <= 18) return "오후";
+  return "저녁_심야";
+}
 
 interface SlotFitRowLike {
   canonical_name: string | null;
@@ -657,7 +668,7 @@ interface SlotFitRowLike {
   slot_performance_score: number | null;
   competitive_opportunity_score: number | null;
   audience_flow_score: number | null;
-  evidence: { current_daypart?: string } | null;
+  startHour: number | null;
 }
 interface SlotRecommendationCandidateLike {
   channelCode: string;
@@ -666,12 +677,36 @@ interface SlotRecommendationCandidateLike {
   avgRating: number | null;
   airCount: number;
 }
+interface DawnAnomalyCandidateLike {
+  canonicalName: string;
+  startHour: number;
+  recentAvgShare: number;
+  yearAvgShare: number;
+  dropPct: number;
+}
 interface SlotImprovementDataLike {
   channel: { code: string; name: string };
   asOfDate: string;
   weakSlots: SlotFitRowLike[];
   recommendations: Record<string, SlotRecommendationCandidateLike[]>;
+  dawnAnomalies: DawnAnomalyCandidateLike[];
 }
+
+// 사용자 지시(2026-08-26, 후속 2건) 공용 — [4.새벽 특이사항]은 있을 때만 붙이고 없으면 생략,
+// 추천 후보 검증 조건(대상 채널 편성 이력 OR 주요 콘텐츠 관리 리스트)은 매번 명시한다.
+const DAWN_ANOMALY_NOTE = "[4. 새벽 시간대 특이사항(01~06시)]";
+function buildDawnAnomalyLine(dawnAnomalies: DawnAnomalyCandidateLike[]): string | null {
+  if (dawnAnomalies.length === 0) return null;
+  const lines = dawnAnomalies
+    .slice(0, 2)
+    .map(
+      (d) =>
+        `'${d.canonicalName}'(${formatHourLabel(d.startHour)}) 최근 12주 평균 점유율이 최근 1년 동시간대 평균 대비 ${d.dropPct.toFixed(0)}% 수준으로 하락(최근 ${fmt(d.recentAvgShare, 4)} vs 1년 평균 ${fmt(d.yearAvgShare, 4)})`
+    );
+  return `${DAWN_ANOMALY_NOTE} 새벽 시간대는 원래 모수가 적어 절대 수치만으로 개선 대상에 넣지 않지만, ${lines.join(", ")} — 참고용으로만 확인하세요.`;
+}
+const CANDIDATE_VALIDATION_NOTE =
+  "추천 후보는 (A) 이 채널에서 전체 기간 중 1회 이상 실제 편성된 이력이 있거나 (B) 주요 콘텐츠 관리 리스트에 등록된 타이틀만 검증해 제시합니다 — 자사 타 채널 성공작이라도 이 두 조건을 모두 충족하지 못하면 시청률이 아무리 높아도 후보에서 제외합니다.";
 
 export function buildSlotImprovementRecommendationAnswer(data: SlotImprovementDataLike | null, timeContext: TimeContext): EvidenceAnswer {
   if (!data) {
@@ -689,12 +724,18 @@ export function buildSlotImprovementRecommendationAnswer(data: SlotImprovementDa
   }
 
   if (data.weakSlots.length === 0) {
+    const dawnLine = buildDawnAnomalyLine(data.dawnAnomalies);
     return {
       ...base("SLOT_IMPROVEMENT_RECOMMENDATION", "CHANNEL_PERFORMANCE", data),
-      conclusion: `'${data.channel.name}'은 현재 Fit Score 기준 REPLACE/MOVE로 태그된 뚜렷한 약세 시간대가 없습니다.`,
+      conclusion: `'${data.channel.name}'은 메인 시간대(06~25시) 기준으로 Fit Score REPLACE/MOVE 태그된 뚜렷한 약세 구간이 없습니다.`,
       keyNumbers: "—",
       comparisonBasis: `최근 12주(84일) Fit Score, ${data.asOfDate} 기준`,
-      evidence: "[1. 진단] 현재 편성 중(최근 14일 방영)인 프로그램 중 REPLACE/MOVE 태그가 붙은 시간대가 없습니다.",
+      evidence: [
+        "[1. 주간 주요 개선 구간(06시~25시)] 현재 편성 중(최근 14일 방영)인 메인 시간대 프로그램 중 REPLACE/MOVE 태그가 붙은 구간이 없습니다.",
+        dawnLine,
+      ]
+        .filter((l): l is string => !!l)
+        .join("\n"),
       interpretation: "지금 편성을 유지하면서, Page 2 편성 추천에서 STRENGTHEN/TEST 태그 프로그램도 함께 확인해보세요.",
       programmingAction: "STRENGTHEN 후보 프로그램에 자원(홍보·연계 편성 등)을 더 투입하는 방안을 검토하세요.",
       confidence: "HIGH",
@@ -703,66 +744,65 @@ export function buildSlotImprovementRecommendationAnswer(data: SlotImprovementDa
   }
 
   const top = data.weakSlots[0];
-  const topDaypart = top.evidence?.current_daypart ?? null;
-  const topDaypartLabel = topDaypart ? (SLOT_DAYPART_LABEL[topDaypart] ?? topDaypart) : "시간대 미상(표본 부족)";
-  const topCandidates = topDaypart ? (data.recommendations[topDaypart] ?? []) : [];
+  const topDaypartKey = top.startHour !== null ? daypartKeyOfHour(top.startHour) : null;
+  const topHourLabel = top.startHour !== null ? formatHourLabel(top.startHour) : "시간대 미상(표본 부족)";
+  const topCandidates = topDaypartKey ? (data.recommendations[topDaypartKey] ?? []) : [];
 
   const diagnosisLines = data.weakSlots.map((w) => {
-    const daypart = w.evidence?.current_daypart ?? null;
-    const daypartLabel = daypart ? (SLOT_DAYPART_LABEL[daypart] ?? daypart) : "시간대 미상";
-    return `'${w.canonical_name ?? "(제목 미상)"}' — ${daypartLabel}, ${TAG_LABEL[w.tag ?? ""] ?? w.tag} 태그, Fit Score ${fmt(w.fit_score, 1)}/100(신뢰도 ${w.confidence_pct !== null ? `${w.confidence_pct.toFixed(0)}%` : "데이터 없음"})`;
+    const hourLabel = w.startHour !== null ? formatHourLabel(w.startHour) : "시간대 미상";
+    return `'${w.canonical_name ?? "(제목 미상)"}' — ${hourLabel}, ${TAG_LABEL[w.tag ?? ""] ?? w.tag} 태그, Fit Score ${fmt(w.fit_score, 1)}/100(신뢰도 ${w.confidence_pct !== null ? `${w.confidence_pct.toFixed(0)}%` : "데이터 없음"})`;
   });
 
   const statusLines = data.weakSlots.map((w) => {
-    const daypart = w.evidence?.current_daypart ?? null;
-    const daypartLabel = daypart ? (SLOT_DAYPART_LABEL[daypart] ?? daypart) : "시간대 미상";
-    return `'${w.canonical_name ?? "(제목 미상)"}'(${daypartLabel}) 세부 지표 — Target Performance ${fmt(w.target_performance_score, 1)} / Target Affinity ${fmt(w.target_affinity_score, 1)} / Audience Engagement ${fmt(w.audience_engagement_score, 1)} / Slot Performance ${fmt(w.slot_performance_score, 1)} / Competitive Opportunity ${fmt(w.competitive_opportunity_score, 1)} / Audience Flow ${fmt(w.audience_flow_score, 1)} (각 0~100, 최근 12주 채널간 percentile)`;
+    const hourLabel = w.startHour !== null ? formatHourLabel(w.startHour) : "시간대 미상";
+    return `'${w.canonical_name ?? "(제목 미상)"}'(${hourLabel}) 세부 지표 — Target Performance ${fmt(w.target_performance_score, 1)} / Target Affinity ${fmt(w.target_affinity_score, 1)} / Audience Engagement ${fmt(w.audience_engagement_score, 1)} / Slot Performance ${fmt(w.slot_performance_score, 1)} / Competitive Opportunity ${fmt(w.competitive_opportunity_score, 1)} / Audience Flow ${fmt(w.audience_flow_score, 1)} (각 0~100, 최근 12주 채널간 percentile)`;
   });
 
   const recommendationLines = Object.entries(data.recommendations).flatMap(([daypart, candidates]) => {
     const daypartLabel = SLOT_DAYPART_LABEL[daypart] ?? daypart;
-    if (candidates.length === 0) return [`${daypartLabel}: 같은 daypart에서 검증된 포트폴리오 프로그램을 찾지 못했습니다.`];
-    return [
-      `${daypartLabel}: ${candidates.map((c) => `'${c.programName}'(${c.channelName}, 평균 ${fmt(c.avgRating, 4)}, ${c.airCount}회)`).join(", ")}`,
-    ];
+    if (candidates.length === 0) return [`${daypartLabel}: 검증 조건(A/B)을 통과한 포트폴리오 대체 후보를 찾지 못했습니다.`];
+    return [`${daypartLabel}: ${candidates.map((c) => `'${c.programName}'(${c.channelName}, 평균 ${fmt(c.avgRating, 4)}, ${c.airCount}회)`).join(", ")}`];
   });
 
   const hasRecommendation = topCandidates.length > 0;
   const expectedEffectLine = hasRecommendation
-    ? `추천 후보 '${topCandidates[0].programName}'(${topCandidates[0].channelName})는 같은 ${topDaypartLabel} 구간에서 최근 12주 평균 시청률 ${fmt(topCandidates[0].avgRating, 4)}을 실제로 기록했습니다. 반면 현재 이 시간대 프로그램의 Slot Performance는 채널간 percentile 기준 ${fmt(top.slot_performance_score, 1)}/100, Target Performance ${fmt(top.target_performance_score, 1)}/100으로 상대적으로 낮습니다 — 이 후보로 교체·이관 시 해당 daypart 시청률 개선 여지가 있다는 근거이며, 실제 이관 후 성과는 편성 후 추적 확인이 필요합니다.`
-    : `이 daypart에서 검증된 포트폴리오 내 대체 후보를 찾지 못해 기대 효과를 수치로 제시할 수 없습니다 — 우선 Page 2 편성 추천에서 이 프로그램의 세부 근거를 직접 검토해보세요.`;
+    ? `추천 후보 '${topCandidates[0].programName}'(${topCandidates[0].channelName})는 같은 daypart 구간에서 최근 12주 평균 시청률 ${fmt(topCandidates[0].avgRating, 4)}을 실제로 기록했습니다. 반면 현재 이 시간대 프로그램의 Slot Performance는 채널간 percentile 기준 ${fmt(top.slot_performance_score, 1)}/100, Target Performance ${fmt(top.target_performance_score, 1)}/100으로 상대적으로 낮습니다 — 이 후보로 교체·이관 시 해당 구간 시청률 개선 여지가 있다는 근거이며, 실제 이관 후 성과는 편성 후 추적 확인이 필요합니다.`
+    : `검증 조건(A/B)을 통과한 포트폴리오 내 대체 후보를 찾지 못해 기대 효과를 수치로 제시할 수 없습니다 — 우선 Page 2 편성 추천에서 이 프로그램의 세부 근거를 직접 검토해보세요.`;
+
+  const dawnLine = buildDawnAnomalyLine(data.dawnAnomalies);
 
   const evidence = [
-    `[1. 진단] 시급히 개선이 필요한 시간대는 ${topDaypartLabel}입니다(${diagnosisLines.join(" / ")}).`,
-    `[2. 현황 분석] ${statusLines.join(" / ")}`,
-    `[3. 추천 프로그램] ${recommendationLines.join(" / ")}`,
-    `[4. 기대 효과] ${expectedEffectLine}`,
-  ].join("\n");
+    `[1. 주간 주요 개선 구간(06시~25시)] 가장 시급한 시간대는 ${topHourLabel}입니다(${diagnosisLines.join(" / ")}).`,
+    `[2. 성과 저하 원인] ${statusLines.join(" / ")}`,
+    `[3. 추천 프로그램] ${CANDIDATE_VALIDATION_NOTE} ${recommendationLines.join(" / ")} ${expectedEffectLine}`,
+    dawnLine,
+  ]
+    .filter((l): l is string => !!l)
+    .join("\n");
 
   return {
     ...base("SLOT_IMPROVEMENT_RECOMMENDATION", "CHANNEL_PERFORMANCE", data),
-    conclusion: `'${data.channel.name}'에서 시급히 개선이 필요한 시간대는 ${topDaypartLabel}입니다('${top.canonical_name ?? "(제목 미상)"}', ${TAG_LABEL[top.tag ?? ""] ?? top.tag} 태그, Fit Score ${fmt(top.fit_score, 1)}/100).`,
-    keyNumbers: `Fit Score ${fmt(top.fit_score, 1)}/100 · 태그 ${top.tag} · 추천 후보 ${topCandidates.length}건`,
-    comparisonBasis: `최근 12주(84일) Fit Score(6개 지표 percentile 조합), ${data.asOfDate} 기준`,
+    conclusion: `'${data.channel.name}'에서 시급히 개선이 필요한(메인 시간대 06~25시 한정) 구간은 ${topHourLabel}입니다('${top.canonical_name ?? "(제목 미상)"}', ${TAG_LABEL[top.tag ?? ""] ?? top.tag} 태그, Fit Score ${fmt(top.fit_score, 1)}/100).`,
+    keyNumbers: `Fit Score ${fmt(top.fit_score, 1)}/100 · 태그 ${top.tag} · 검증된 추천 후보 ${topCandidates.length}건`,
+    comparisonBasis: `최근 12주(84일) Fit Score(6개 지표 percentile 조합), ${data.asOfDate} 기준 · 메인 시간대(06~25시)만 1순위 대상`,
     evidence,
-    interpretation:
-      "추천 후보는 같은 시간대(daypart)에서 우리 포트폴리오 다른 채널이 실제로 검증한 프로그램만 제시합니다 — 외부 신규 포맷은 포함하지 않습니다.",
+    interpretation: `추천 후보는 같은 시간대(daypart)에서 우리 포트폴리오 다른 채널이 실제로 검증한 프로그램 중, ${CANDIDATE_VALIDATION_NOTE}`,
     programmingAction: hasRecommendation
-      ? `${topDaypartLabel} 시간대에 '${topCandidates[0].programName}'(${topCandidates[0].channelName}) 같은 포맷 도입을 검토하거나, Page 2 편성 추천에서 상세 근거(6개 지표)를 확인하세요.`
+      ? `${topHourLabel} 시간대에 '${topCandidates[0].programName}'(${topCandidates[0].channelName}) 같은 검증된 포맷 도입을 검토하거나, Page 2 편성 추천에서 상세 근거(6개 지표)를 확인하세요.`
       : "Page 2 '편성 추천'에서 이 프로그램의 상세 Fit Score 근거(6개 지표)를 직접 확인하세요.",
     confidence: confidenceFromSampleDays(top.sample_days),
     confidenceNote: CONFIDENCE_NOTE[confidenceFromSampleDays(top.sample_days)],
     visualization: table(
-      "개선 필요 시간대 및 추천 후보",
+      "개선 필요 시간대 및 추천 후보(검증 조건 A/B 통과분만)",
       ["진단 프로그램", "태그", "시간대", "Fit Score", "추천 후보", "후보 채널", "후보 평균 시청률"],
       data.weakSlots.flatMap((w) => {
-        const daypart = w.evidence?.current_daypart ?? null;
-        const daypartLabel = daypart ? (SLOT_DAYPART_LABEL[daypart] ?? daypart) : "—";
-        const candidates = daypart ? (data.recommendations[daypart] ?? []) : [];
+        const hourLabel = w.startHour !== null ? formatHourLabel(w.startHour) : "—";
+        const daypartKey = w.startHour !== null ? daypartKeyOfHour(w.startHour) : null;
+        const candidates = daypartKey ? (data.recommendations[daypartKey] ?? []) : [];
         if (candidates.length === 0) {
-          return [[w.canonical_name ?? "(제목 미상)", w.tag ?? "—", daypartLabel, fmt(w.fit_score, 1), "—", "—", "—"]];
+          return [[w.canonical_name ?? "(제목 미상)", w.tag ?? "—", hourLabel, fmt(w.fit_score, 1), "—", "—", "—"]];
         }
-        return candidates.map((c) => [w.canonical_name ?? "(제목 미상)", w.tag ?? "—", daypartLabel, fmt(w.fit_score, 1), c.programName, c.channelName, fmt(c.avgRating, 4)]);
+        return candidates.map((c) => [w.canonical_name ?? "(제목 미상)", w.tag ?? "—", hourLabel, fmt(w.fit_score, 1), c.programName, c.channelName, fmt(c.avgRating, 4)]);
       })
     ),
     followups: [`${data.channel.name}의 시간대별 성과는?`, `${data.channel.name} 프로그램 TOP은?`],

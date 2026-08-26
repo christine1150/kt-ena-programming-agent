@@ -128,7 +128,7 @@ export const INTENT_REGISTRY: IntentDefinition[] = [
     intent_id: "SLOT_IMPROVEMENT_RECOMMENDATION",
     macro_intent: "CHANNEL_PERFORMANCE",
     description:
-      "특정 채널에서 Fit Score 기준 REPLACE/MOVE로 태그된(=WEAK SLOT, 시급히 개선이 필요한) 요일·시간대·프로그램을 진단하고, 같은 시간대(daypart)에서 실제로 검증된 우리 포트폴리오 다른 채널의 프로그램을 대체 편성 후보로 추천한다.",
+      "특정 채널에서 Fit Score 기준 REPLACE/MOVE로 태그된(=WEAK SLOT) 요일·시간대·프로그램을 메인 시간대(06~25시)에서만 1순위로 진단하고(새벽 01~06시는 최근 1년 동시간대 평균 대비 하락이 확인될 때만 하단 참고 언급), 같은 시간대(daypart)에서 실제로 검증되었고 (A) 대상 채널 전체 기간 편성 이력 또는 (B) 주요 콘텐츠 관리 리스트(featured_content) 등록 조건을 하나 이상 충족하는 우리 포트폴리오 프로그램만 대체 편성 후보로 추천한다.",
     examples: [
       "ENA Play가 이번주 개선할 시간대는 어디야? 추천 프로그램은?",
       "OLIFE 편성 중에 교체하면 좋을 시간대는?",
@@ -150,7 +150,8 @@ export const INTENT_REGISTRY: IntentDefinition[] = [
       "weak slot",
     ],
     required_parameters: ["channelCode"],
-    data_mart: "mart_scheduling_fit_score(REPLACE/MOVE 태그) + get_channel_top_programs(포트폴리오 6채널)",
+    data_mart:
+      "mart_scheduling_fit_score(REPLACE/MOVE 태그, 06~25시 한정) + get_program_slot_efficiency(새벽 1년 대비 하락 검증) + get_channel_top_programs(포트폴리오 6채널) + programs/featured_content(추천 후보 A/B 조건 필터)",
     specificity: 5,
   },
 ];
