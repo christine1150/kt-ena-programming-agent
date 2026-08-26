@@ -27,8 +27,10 @@ export async function POST(request: Request) {
       opportunityChangePct: typeof body.opportunityChangePct === "number" ? body.opportunityChangePct : null,
       weakCompetitors: Array.isArray(body.weakCompetitors) ? body.weakCompetitors : [],
       daypartOpportunities: Array.isArray(body.daypartOpportunities) ? body.daypartOpportunities : [],
+      hourBlockOpportunities: Array.isArray(body.hourBlockOpportunities) ? body.hourBlockOpportunities : [],
       topPrograms: Array.isArray(body.topPrograms) ? body.topPrograms : [],
       periodProgramMovers: Array.isArray(body.periodProgramMovers) ? body.periodProgramMovers : [],
+      fitScoreCandidates: Array.isArray(body.fitScoreCandidates) ? body.fitScoreCandidates : [],
     };
   } catch {
     return NextResponse.json({ ok: false, message: "요청 형식이 올바르지 않습니다." }, { status: 400 });

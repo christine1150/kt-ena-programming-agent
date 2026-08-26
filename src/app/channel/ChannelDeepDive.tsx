@@ -2912,8 +2912,22 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           opportunityChangePct: data.opportunityAlert?.our_change_pct ?? null,
           weakCompetitors: data.opportunityAlert?.weak_competitors ?? [],
           daypartOpportunities: data.daypartOpportunity ?? [],
-          topPrograms: (data.topPrograms ?? []).slice(0, 5).map((p) => ({ program_name: p.program_name, avg_rating: p.avg_rating })),
+          // 사용자 지시(2026-08-26, 재지시): "정확한 시간대를 짚어서 — 저녁 22시대라던가
+          // 23시대, <프로그램>을 <***>으로 바꾸자 같은" — daypart 4단계로는 몇 시대인지 못
+          // 짚으니, 이미 화면에 있는 3시간 단위 격차(hourBlockOpportunity)와 프로그램별 실제
+          // 방영 시각(most_common_start_hour), WHAT TO SCHEDULE?의 STRENGTHEN/TEST 교체
+          // 후보(fitScoreItems)까지 함께 준다(새 계산 없음, 전부 이미 화면에 있는 값).
+          hourBlockOpportunities: (data.hourBlockOpportunity ?? []).map((h) => ({
+            hourBlockLabel: hourBlockLabel(h.hour_block),
+            our_recent_avg: h.our_recent_avg,
+            gap_recent: h.gap_recent,
+            gap_change: h.gap_change,
+          })),
+          topPrograms: (data.topPrograms ?? []).slice(0, 5).map((p) => ({ program_name: p.program_name, avg_rating: p.avg_rating, most_common_start_hour: p.most_common_start_hour })),
           periodProgramMovers: (data.periodProgramMovers ?? []).slice(0, 5).map((p) => ({ canonical_name: p.canonical_name, rating_delta: p.rating_delta })),
+          fitScoreCandidates: (fitScoreItems ?? [])
+            .filter((f) => f.tag === "STRENGTHEN" || f.tag === "TEST" || f.tag === "MOVE" || f.tag === "REPLACE")
+            .map((f) => ({ program_name: f.programs?.canonical_name ?? "이름 없음", tag: f.tag, fit_score: f.fit_score, current_daypart: f.evidence.current_daypart })),
         }),
       });
       const json = await res.json();

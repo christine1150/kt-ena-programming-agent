@@ -16,8 +16,18 @@ export interface SmartTipsInput {
   opportunityChangePct: number | null;
   weakCompetitors: { competitor_name: string; change_pct: number }[];
   daypartOpportunities: { daypart: string; gap_full: number | null; gap_recent: number | null; gap_change: number | null }[];
-  topPrograms: { program_name: string; avg_rating: number | null }[];
+  // 사용자 지시(2026-08-26, 재지시): "정확한 시간대를 짚어서 — 저녁 22시대라던가 23시대,
+  // <특정프로그램>을 <***>으로 바꾸자 같은" — 4단계 daypart(새벽/오전/오후/저녁_심야)만으론
+  // "몇 시대"를 못 짚는다. 3시간 단위 8구간(hourBlockLabel, 예: "20~23시") 격차와, 프로그램별
+  // 실제 주 방영 시각(most_common_start_hour)을 함께 줘서 "몇 시대 · 어떤 프로그램" 형태로
+  // 구체화할 수 있게 한다(둘 다 이미 화면에 표시 중인 값, 새 계산 없음).
+  hourBlockOpportunities: { hourBlockLabel: string; our_recent_avg: number | null; gap_recent: number | null; gap_change: number | null }[];
+  topPrograms: { program_name: string; avg_rating: number | null; most_common_start_hour: number | null }[];
   periodProgramMovers: { canonical_name: string; rating_delta: number | null }[];
+  // WHAT TO SCHEDULE?가 이미 SQL로 판정해 둔 태그(STRENGTHEN/TEST/MOVE/REPLACE만, KEEP은
+  // 노이즈라 제외) — "A를 B로 교체" 같은 구체적 제안은 반드시 이 목록 안의 프로그램명만
+  // 인용해야 한다(새 후보를 지어내지 않도록).
+  fitScoreCandidates: { program_name: string; tag: string; fit_score: number | null; current_daypart: string | null }[];
 }
 
 export interface SmartTip {
@@ -30,7 +40,9 @@ function buildSystemPrompt(): string {
     "너는 KT ENA 편성 PD를 돕는 'AI 편성 비서 - 스마트 편성 팁' 코너를 작성하는 AI다.",
     "이 코너는 다른 섹션(WHY?/OPPORTUNITY? 등 Evidence 섹션)과 분리된 '검증 안 된 AI 추정' 전용 공간이다 — 화면에 이미 'AI 추정 · 검증 안 됨' 라벨이 붙어 있으므로, 여기서는 평소보다 조금 더 과감하게 가설을 제시해도 된다(예: '~때문일 가능성이 높습니다', '~로 추정됩니다').",
     "단, 아래 JSON으로 주어진 숫자·사실 밖의 새로운 숫자나 사건을 지어내지는 마라 — 주어진 값을 근거로 한 '해석/가설'까지만 대담해도 된다는 뜻이다.",
-    "결과는 2~4개의 짧은 편성 팁으로, 각각 headline(한 줄 가설)과 rationale(그렇게 보는 근거 1~2문장)로 구성해라.",
+    "가장 중요한 규칙 — 반드시 구체적으로 짚어라: '새벽 시간대가 약하다' 식의 두루뭉술한 문장 금지. daypartOpportunities의 '새벽/오전/오후/저녁_심야' 같은 큰 구분 명칭은 headline에 쓰지 마라 — 반드시 hourBlockOpportunities에 있는 정확한 시간대 라벨(예: '20~23시')과, topPrograms의 most_common_start_hour(그 프로그램이 실제 주로 방영되는 시각)를 근거로 시간을 짚고, program_name(실제 프로그램명)을 함께 명시해라(예: '20~23시대 OO 강화' — '저녁 시간대 강화' 아님).",
+    "'A 프로그램을 B로 교체/투입하자' 같은 구체적 편성 제안을 할 때는, 교체 대상(A)은 topPrograms/periodProgramMovers에서, 대체 후보(B)는 fitScoreCandidates(STRENGTHEN/TEST 태그)에서만 골라라 — 목록에 없는 프로그램명을 새로 지어내지 마라. fitScoreCandidates가 비어있으면 교체 후보를 특정하지 말고 시간대·현상 진단까지만 말해라.",
+    "결과는 2~4개의 짧은 편성 팁으로, 각각 headline(시간대·프로그램명이 들어간 한 줄 가설)과 rationale(그렇게 보는 근거 1~2문장)로 구성해라.",
     "의미 있게 종합할 신호가 아예 없으면(모든 입력이 비어있거나 트리거가 하나도 없으면) tips를 빈 배열로 반환해라 — 억지로 만들지 마라.",
     "한국어, 방송 편성 전문가 톤으로 작성해라.",
   ].join("\n");
