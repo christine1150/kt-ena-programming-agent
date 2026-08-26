@@ -15,7 +15,7 @@ import {
 } from "@/lib/targetResolution";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { buildOriginalProgrammingInsightViaLlm, type OriginalInsightInput } from "@/lib/originalContentInsight";
-import { buildEnaOriginalHighlightSentence } from "@/lib/enaOriginalHighlight";
+import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
 import { buildChannelNarrativeViaLlm } from "@/lib/channelNarrativeLlm";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
@@ -541,6 +541,10 @@ export async function GET(request: Request) {
   // Dashboard.tsx가 클라이언트에서 계산하던 것과 동일한 공유 함수로 서버에서도 미리 계산해둔다
   // (whitelist가 없는 날은 daily가 비어 null로 남는다).
   let enaLeadSentenceForLlm: string | null = null;
+  // 사용자 지시(2026-08-26): "ENA 채널 설명에 ENA Drama 재방 부분은 넣지 말고, ENA Drama
+  // 채널 섹션에서 다룰 것" — 재방을 트는 채널 코드별 리드 문장(Dashboard.tsx 클라이언트
+  // buildRerunHighlightSentence와 동일 함수·동일 값 공유).
+  const rerunLeadSentenceForLlmByChannel = new Map<string, string>();
 
   if ((whitelistCount ?? 0) > 0) {
     const { data: dailyRows } = await supabase.rpc("get_original_content_daily", { p_as_of_date: asOfDate });
@@ -730,10 +734,17 @@ export async function GET(request: Request) {
     // Tier 1 확장(2026-08-26): Dashboard.tsx가 클라이언트에서 계산하던 ENA 리드 문장을
     // 서버에서도 동일하게 계산해둔다 — 아래 buildChannelNarrativeViaLlm(ENA만 해당)이 이
     // 문장을 그대로 맨 앞에 붙이도록 넘겨주기 위함(공유 함수 재사용, 새 계산 없음).
+    const llmRatingFmt = (v: number | null) => (v === null ? "—" : v.toFixed(3));
     enaLeadSentenceForLlm = buildEnaOriginalHighlightSentence(
       dailyWithInsight.filter((d) => d.broadcast_channel_code === "ENA"),
-      (v: number | null) => (v === null ? "—" : v.toFixed(3))
+      llmRatingFmt
     );
+    // 재방을 트는 채널 각각(신병4사보타주→ENA Drama 등)의 리드 문장 — dailyWithInsight는
+    // 채널 필터링 전 전체 배열이라 어떤 채널 코드든 자기 몫의 재방을 찾을 수 있다.
+    for (const code of [...new Set(dailyWithInsight.map((d) => d.rerun_channel_code).filter((c): c is string => c !== null))]) {
+      const sentence = buildRerunHighlightSentence(dailyWithInsight, code, llmRatingFmt);
+      if (sentence) rerunLeadSentenceForLlmByChannel.set(code, sentence);
+    }
 
     // 사용자 지시(2026-08-22): "주요 콘텐츠 리뷰"의 연령대별 미니바 대신, 최근 12주간 본방송
     // 시청률 추이(수도권 2049 진하게 + 전국 유료가구 연하게, 회차 표시)를 꺾은선 그래프로 —
@@ -927,7 +938,7 @@ export async function GET(request: Request) {
     // 시 null이 남아 Dashboard.tsx가 기존 규칙 기반 buildChannelNarrative로 조용히 대체한다.
     signal.llmNarrative = await buildChannelNarrativeViaLlm({
       channelName: ch.name,
-      leadSentence: code === "ENA" ? enaLeadSentenceForLlm : null,
+      leadSentence: code === "ENA" ? enaLeadSentenceForLlm : (rerunLeadSentenceForLlmByChannel.get(code) ?? null),
       today_rating: signal.today_rating,
       baseline_avg_rating: signal.baseline_avg_rating,
       rating_delta_pct: signal.rating_delta_pct,

@@ -476,6 +476,9 @@ interface ChannelData {
   ytdAvgRating: number | null;
   // 사용자 지시(2026-08-25): 오늘의 브리핑 첫 문장(ENA 채널 페이지·단일 일자 조회일 때만 채워짐).
   enaOriginalDaily: EnaOriginalHighlightItem[];
+  // 사용자 지시(2026-08-26): ENA가 아닌 채널(재방을 트는 채널)의 오늘의 브리핑 첫 문장 —
+  // 규칙기반 폴백용(LLM 성공 시엔 briefingLlm이 이미 이 값을 반영해 우선 사용됨).
+  rerunLeadSentence: string | null;
   // 사용자 지시(2026-08-25): 오늘의 브리핑 상단 키워드 1~3위 나열용(단일 일자 조회일 때만 채워짐).
   top3Programs: { canonical_name: string; rating: number }[];
   // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — route.ts가
@@ -1185,7 +1188,7 @@ function buildBriefingReport(
     const sentences: string[] = [];
     // 사용자 지시(2026-08-25): ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널에서
     // 매우 중요하므로 그 성과를 오늘의 브리핑 첫 문장으로.
-    const enaLeadSentence = buildEnaOriginalHighlightSentence(data.enaOriginalDaily, fmtR);
+    const enaLeadSentence = data.enaOriginalDaily.length > 0 ? buildEnaOriginalHighlightSentence(data.enaOriginalDaily, fmtR) : data.rerunLeadSentence;
     if (enaLeadSentence) sentences.push(enaLeadSentence);
     sentences.push(`${refLabel} ${data.channel.name} 시청률은 ${fmtR(current.rating)}입니다.`);
 

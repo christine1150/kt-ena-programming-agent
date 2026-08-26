@@ -8,7 +8,10 @@ import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDowDots } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun } from "@/lib/josa";
-import { buildEnaOriginalHighlightSentence as buildEnaOriginalHighlightSentenceShared } from "@/lib/enaOriginalHighlight";
+import {
+  buildEnaOriginalHighlightSentence as buildEnaOriginalHighlightSentenceShared,
+  buildRerunHighlightSentence as buildRerunHighlightSentenceShared,
+} from "@/lib/enaOriginalHighlight";
 
 interface ChannelSummary {
   code: string;
@@ -327,7 +330,8 @@ function buildChannelNarrative(
   channelName: string,
   s: ChannelNarrativeSignal,
   // 사용자 지시(2026-08-25): ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널 인사이트의
-  // 핵심이므로 이 문장이 있으면 항상 맨 앞에 붙인다(다른 채널은 null).
+  // 핵심이므로 이 문장이 있으면 항상 맨 앞에 붙인다. 사용자 재지시(2026-08-26): ENA가 아닌
+  // 채널도, 그 채널이 다른 채널 오리지널의 직후재방을 트는 경우 그 성적을 여기로 받는다.
   leadSentence?: string | null
 ): { channelName: string; text: string } {
   const sentences: { tier: 1 | 2; priority: number; text: string }[] = [];
@@ -1465,6 +1469,14 @@ function MiniDeltaBar({ pct }: { pct: number }) {
 function buildEnaOriginalHighlightSentence(enaDaily: Parameters<typeof buildEnaOriginalHighlightSentenceShared>[0]): string | null {
   return buildEnaOriginalHighlightSentenceShared(enaDaily, formatRating);
 }
+// 사용자 지시(2026-08-26): "ENA Drama 채널 섹션에서 신병4사보타주 직재방에 대한 성적 및
+// 내용을 다룰 것" — 재방을 트는 채널(ENA Drama 등) 자신의 채널별 인사이트용.
+function buildRerunHighlightSentence(
+  enaDaily: Parameters<typeof buildEnaOriginalHighlightSentenceShared>[0],
+  rerunChannelCode: string
+): string | null {
+  return buildRerunHighlightSentenceShared(enaDaily, rerunChannelCode, formatRating);
+}
 
 // ③ 채널별 인사이트(줄글) — R2C1. 사용자 지시(2026-08-20): 채널명은 그 채널 로고의 메인
 // 색상(channels.theme_color)으로 굵게 표시.
@@ -1485,11 +1497,15 @@ function ChannelNarrativeCard({
   for (const code of INSIGHT_CHANNEL_ORDER) {
     const s = byCode.get(code);
     if (!s) continue;
+    // 사용자 지시(2026-08-26): ENA의 첫 문장에서는 다른 채널로의 직후재방을 빼고(위 enaLeadSentence),
+    // 그 재방을 실제로 트는 채널 자신의 첫 문장으로 옮긴다 — enaOriginalDaily는 채널 필터링 전
+    // 전체 배열이라 어떤 채널이든 rerun_channel_code로 자기 몫을 찾을 수 있다.
+    const extraLeadSentence = code === "ENA" ? enaLeadSentence : buildRerunHighlightSentence(enaOriginalDaily, code);
     // Tier 1 확장(2026-08-26): route.ts가 이미 검증된 값만으로 OpenAI가 종합한 문단
     // (s.llmNarrative)이 있으면 그걸 쓰고, 없으면(키 없음/실패) 기존 규칙 기반으로 대체.
     const narrative = s.llmNarrative
       ? { channelName: CHANNEL_NAME_BY_CODE[code], text: s.llmNarrative }
-      : buildChannelNarrative(CHANNEL_NAME_BY_CODE[code], s, code === "ENA" ? enaLeadSentence : null);
+      : buildChannelNarrative(CHANNEL_NAME_BY_CODE[code], s, extraLeadSentence);
     lines.push({ ...narrative, color: themeColorByCode.get(code) ?? null, deltaPct: s.rating_delta_pct });
   }
   const skyuhdSignal = byCode.get("SKYUHD");

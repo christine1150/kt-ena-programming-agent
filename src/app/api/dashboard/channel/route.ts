@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL, resolveMarketYtdTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
-import { buildEnaOriginalHighlightSentence } from "@/lib/enaOriginalHighlight";
+import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
 import { buildBriefingReportViaLlm } from "@/lib/briefingReportLlm";
 
 // 로컬 날짜 구성요소로 "YYYY-MM-DD" 문자열을 만든다 — toISOString()은 UTC로 바꾸면서 자정 근처
@@ -110,6 +110,7 @@ export async function GET(request: Request) {
       ytdAvgRating: null,
       top3Programs: [],
       enaOriginalDaily: [],
+      rerunLeadSentence: null,
       briefingLlm: null,
       dowHourBlockPattern: [],
       topPrograms: [],
@@ -640,22 +641,33 @@ export async function GET(request: Request) {
     rerun_channel_code: string | null;
     self_rerun_rating: number | null;
   }[] = [];
-  if (channel.code === "ENA" && !isRangeMode) {
+  // 사용자 지시(2026-08-26): "ENA 채널 설명에 ENA Drama 재방 부분은 넣지 말고, ENA Drama
+  // 채널 섹션에서 다룰 것" — 이전에는 channel.code==="ENA"일 때만 조회해 다른 채널(재방을
+  // 트는 채널)의 브리핑에는 애초에 재방 성적이 뜰 수조차 없었다. 어떤 채널을 보든 조회하고,
+  // ENA 자신이면 enaOriginalDaily(기존 그대로), 재방 목적지 채널이면 아래 rerunLeadSentence로
+  // 나눠 쓴다.
+  let rerunLeadSentence: string | null = null;
+  if (!isRangeMode) {
     const { data: originalDaily } = await supabase.rpc("get_original_content_daily", { p_as_of_date: dateTo });
-    enaOriginalDaily = (originalDaily ?? [])
-      .filter((r: { broadcast_channel_code: string }) => r.broadcast_channel_code === "ENA")
-      .map(
-        (r: {
-          matched_program_name: string;
-          featured_display_name: string | null;
-          matched_rating: number | null;
-          matched_household_rating: number | null;
-          simulcast_channel_code: string | null;
-          simulcast_rating: number | null;
-          retention_pct: number | null;
-          rerun_channel_code: string | null;
-          self_rerun_rating: number | null;
-        }) => ({
+    type OriginalDailyRawRow = {
+      broadcast_channel_code: string;
+      matched_program_name: string;
+      featured_display_name: string | null;
+      matched_rating: number | null;
+      matched_household_rating: number | null;
+      simulcast_channel_code: string | null;
+      simulcast_rating: number | null;
+      retention_pct: number | null;
+      rerun_channel_code: string | null;
+      rerun_program_name: string | null;
+      rerun_rating: number | null;
+      self_rerun_rating: number | null;
+    };
+    const rows = (originalDaily ?? []) as OriginalDailyRawRow[];
+    if (channel.code === "ENA") {
+      enaOriginalDaily = rows
+        .filter((r) => r.broadcast_channel_code === "ENA")
+        .map((r) => ({
           matched_program_name: r.matched_program_name,
           featured_display_name: r.featured_display_name,
           matched_rating: r.matched_rating,
@@ -665,8 +677,10 @@ export async function GET(request: Request) {
           retention_pct: r.retention_pct,
           rerun_channel_code: r.rerun_channel_code,
           self_rerun_rating: r.self_rerun_rating,
-        })
-      );
+        }));
+    } else {
+      rerunLeadSentence = buildRerunHighlightSentence(rows, channel.code, (v) => (v === null ? "—" : v.toFixed(channel.code === "SKYUHD" ? 5 : 3)));
+    }
   }
 
   // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — Page 2
@@ -678,7 +692,10 @@ export async function GET(request: Request) {
     const currentTrendRow = (trend ?? []).find((t: { period: string }) => t.period === "current");
     const currentRating = (currentTrendRow as { rating: number | null } | undefined)?.rating ?? null;
     const refLabel = dateTo === latestAvailableDate ? "오늘" : dateTo === addDaysStr(latestAvailableDate ?? dateTo, -1) ? "어제" : dateTo;
-    const enaLeadSentence = buildEnaOriginalHighlightSentence(enaOriginalDaily, (v) => (v === null ? "—" : v.toFixed(channel.code === "SKYUHD" ? 5 : 3)));
+    const enaLeadSentence =
+      channel.code === "ENA"
+        ? buildEnaOriginalHighlightSentence(enaOriginalDaily, (v) => (v === null ? "—" : v.toFixed(3)))
+        : rerunLeadSentence;
     briefingLlm = await buildBriefingReportViaLlm({
       channelName: channel.name,
       refLabel,
@@ -737,6 +754,9 @@ export async function GET(request: Request) {
     narrativeSignal,
     top3Programs,
     enaOriginalDaily,
+    // 사용자 지시(2026-08-26): ENA가 아닌 채널(재방을 트는 채널)의 오늘의 브리핑 규칙기반
+    // 폴백용 — LLM 실패 시 클라이언트가 이 값으로 직접 문장을 만든다.
+    rerunLeadSentence,
     demographicHighlights,
     compareChannelCode,
     competitorInsightReport: competitorInsightReport ?? [],
