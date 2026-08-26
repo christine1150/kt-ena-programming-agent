@@ -1848,11 +1848,19 @@ function CompetitorPositioningScatter({ points, accentColor }: { points: Competi
                   {p.competitor_name} — 시청률 {fmt(p.today_rating)} · 12주 평균 대비 {p.delta_pct >= 0 ? "▲" : "▼"} {Math.abs(p.delta_pct).toFixed(1)}%
                 </title>
               </circle>
-              {p.isOurs && (
-                <text x={px} y={py - r - 4} textAnchor="middle" fontSize={9} fontWeight={700} fill={accentColor}>
-                  {p.competitor_name}
-                </text>
-              )}
+              {/* 사용자 지시(2026-08-26): "채널명이 모두 나오게 조치" — 우리 채널만 상시 라벨을
+                  달고 나머지는 hover 툴팁으로만 숨기던 것을, 경쟁채널도 전부 이름을 표시하도록
+                  변경(점 개수가 많지 않아 겹침 위험이 낮음). 우리 채널은 굵게/강조색 유지. */}
+              <text
+                x={px}
+                y={py - r - 4}
+                textAnchor="middle"
+                fontSize={9}
+                fontWeight={p.isOurs ? 700 : 500}
+                fill={p.isOurs ? accentColor : "#71717a"}
+              >
+                {p.competitor_name}
+              </text>
             </g>
           );
         })}
@@ -2096,13 +2104,29 @@ function enaStoryGradientColor(t: number): string {
   const [r, g, b] = enaStoryGradientRgb(t);
   return `rgb(${r}, ${g}, ${b})`;
 }
-// 히트맵처럼 흰 배경 위에서 강도(0~1)만큼 그라데이션 색을 옅게/짙게 섞어야 할 때(기존
-// accentColor+16진 alpha 채널 방식과 같은 시각 효과, rgb() 튜플이라 hex alpha를 못 써서
-// 직접 흰색과 블렌딩).
-function enaStoryGradientBlendWithWhite(t: number, alpha01: number): string {
-  const [r, g, b] = enaStoryGradientRgb(t);
-  const mix = (c: number) => Math.round(255 * (1 - alpha01) + c * alpha01);
-  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+// 사용자 지시(2026-08-26): "ENA STORY의 시간대별 강세 시간대 표시는 진한 보라색이 가장 센
+// 시간, 연한 노란색이 아주 약한 시간으로 그라데이션 변경" — 다른 강도 시각 요소(미니 막대 등)에
+// 쓰는 3단(보라→핑크→주황) 그라데이션과 별개로, 요일×시간대 히트맵 전용 2단(진보라→연노랑)
+// 그라데이션. 약한 시간대가 흰색에 가깝게 washed-out 되던 기존 방식과 달리, 가장 약해도
+// "연한 노란색"이 뚜렷이 보이도록 끝점 자체를 옅은 노랑으로 잡는다(추가 흰색 블렌딩 불필요).
+function enaStoryHeatmapGradientRgb(t: number): [number, number, number] {
+  const clamped = Math.max(0, Math.min(1, t));
+  const weak: [number, number, number] = [254, 249, 195]; // #fef9c3 연노랑
+  const strong: [number, number, number] = [76, 29, 149]; // #4c1d95 진보라
+  return [
+    Math.round(weak[0] + (strong[0] - weak[0]) * clamped),
+    Math.round(weak[1] + (strong[1] - weak[1]) * clamped),
+    Math.round(weak[2] + (strong[2] - weak[2]) * clamped),
+  ];
+}
+function enaStoryHeatmapGradientColor(t: number): string {
+  const [r, g, b] = enaStoryHeatmapGradientRgb(t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+function enaStoryHeatmapTextColor(t: number): string {
+  const [r, g, b] = enaStoryHeatmapGradientRgb(t);
+  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  return luminance < 150 ? "#ffffff" : "#27272a";
 }
 function cellTextColor(accentColor: string, alpha: number): string {
   const ratio = alpha / 255;
@@ -2174,7 +2198,7 @@ const OPPORTUNITY_CLASS_COLOR: Record<OpportunityClass, string> = {
   IMPROVE: "#e11d48",
   OPPORTUNITY: "#059669",
 };
-function OpportunityGapSlopeChart({ rows }: { rows: DaypartOpportunityRow[] }) {
+function OpportunityGapSlopeChart({ rows, fmtR }: { rows: DaypartOpportunityRow[]; fmtR: (v: number | null) => string }) {
   const plottable = rows.filter(
     (r): r is DaypartOpportunityRow & { gap_full: number; gap_recent: number } => r.gap_full !== null && r.gap_recent !== null
   );
@@ -2182,7 +2206,7 @@ function OpportunityGapSlopeChart({ rows }: { rows: DaypartOpportunityRow[] }) {
   const W = 420;
   const H = 200;
   const PAD_L = 12;
-  const PAD_R = 108;
+  const PAD_R = 128; // 사용자 지시(2026-08-26): 라벨 옆에 격차 수치까지 표기하도록 여백 확대.
   const PAD_T = 14;
   const PAD_B = 20;
   const allVals = plottable.flatMap((r) => [r.gap_full, r.gap_recent]);
@@ -2221,8 +2245,14 @@ function OpportunityGapSlopeChart({ rows }: { rows: DaypartOpportunityRow[] }) {
               </line>
               <circle cx={xLeft} cy={y1} r={3} fill={color} />
               <circle cx={xRight} cy={y2} r={3} fill={color} />
+              {/* 사용자 지시(2026-08-26): "그래픽이 기준 수치를 알아볼 수 있도록 그래프 옆에
+                  수치 적어줄것" — 지금까지 격차 숫자는 hover 툴팁(<title>)에만 있어 한눈에
+                  안 보였다. 양쪽 점 옆에 실제 격차 값을 직접 표기한다. */}
+              <text x={xLeft} y={y1 - 6} textAnchor="middle" fontSize={9} fill={color}>
+                {fmtR(r.gap_full)}
+              </text>
               <text x={xRight + 8} y={y2 + 3} fontSize={10} fontWeight={600} fill={color}>
-                {DAYPART_LABEL[r.daypart]?.replace(/\(.*\)/, "") ?? r.daypart}
+                {DAYPART_LABEL[r.daypart]?.replace(/\(.*\)/, "") ?? r.daypart} {fmtR(r.gap_recent)}
               </text>
             </g>
           );
@@ -2328,10 +2358,13 @@ function DowHourBlockTable({
             <tr key={hb} className="border-t border-zinc-100">
               <td className="whitespace-nowrap py-0.5 pr-0.5 text-left font-medium text-zinc-700">
                 {hourBlockLabel(hb)}
+                {/* 사용자 지시(2026-08-26): "라벨 옆 점 좀 더 잘 보이게" — 6px 단색 점이 시간대
+                    라벨 글자색과 배경 위에서 잘 안 띄었다. 크기를 키우고(8px) 흰 테두리(ring)를
+                    둘러 어떤 배경 위에서도 경계가 분명히 보이게 한다. */}
                 {oppCls && (
                   <span
-                    className="ml-1 inline-block h-1.5 w-1.5 rounded-full align-middle"
-                    style={{ backgroundColor: OPPORTUNITY_CLASS_COLOR[oppCls] }}
+                    className="ml-1.5 inline-block h-2 w-2 rounded-full align-middle ring-2 ring-white"
+                    style={{ backgroundColor: OPPORTUNITY_CLASS_COLOR[oppCls], boxShadow: "0 0 0 1px rgba(0,0,0,0.12)" }}
                     title={`경쟁 강도: ${OPPORTUNITY_CLASS_LABEL[oppCls]}`}
                   />
                 )}
@@ -2342,10 +2375,11 @@ function DowHourBlockTable({
                 const rating = cell?.avg_rating ?? null;
                 const intensity = rating !== null ? Math.min(1, rating / maxRating) : 0;
                 const alpha = Math.round(intensity * 200 + 20);
-                // 사용자 지시(2026-08-22, ENA STORY 특화 디자인 확장): 히트맵도 보라→핑크→주황
-                // 그라데이션으로 — 강도(alpha)는 그대로 흰 배경과의 블렌딩 비율로 재사용한다.
-                const bgColor = rating === null ? "#f4f4f5" : isEnaStory ? enaStoryGradientBlendWithWhite(intensity, alpha / 255) : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
-                const textColor = rating === null ? "#a1a1aa" : isEnaStory ? cellTextColor(enaStoryGradientColor(intensity), alpha) : cellTextColor(accentColor, alpha);
+                // 사용자 지시(2026-08-26): "진한 보라색이 가장 센 시간, 연한 노란색이 아주
+                // 약한 시간" — 전용 2단 그라데이션(enaStoryHeatmapGradientRgb)을 강도(intensity,
+                // 0~1)에 직접 적용한다(흰 배경 블렌딩 불필요 — 약한 끝점 자체가 이미 연노랑).
+                const bgColor = rating === null ? "#f4f4f5" : isEnaStory ? enaStoryHeatmapGradientColor(intensity) : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
+                const textColor = rating === null ? "#a1a1aa" : isEnaStory ? enaStoryHeatmapTextColor(intensity) : cellTextColor(accentColor, alpha);
                 return (
                   <td key={dow} className="py-0.5 px-0.5">
                     <div
@@ -2386,49 +2420,66 @@ function WeekdayProfileSparklines({ pattern, accentColor }: { pattern: DowHourBl
   const W = 96;
   const H = 32;
   if (pattern.length === 0) return null;
+  // 사용자 지시(2026-08-26): "위의 그래프와 아래의 표의 월~일의 위치와 폭이 동일했으면" —
+  // 이전엔 CSS grid(gap-2, 반응형 4/7열)로 그려 아래 DowHourBlockTable(<table table-fixed>,
+  // 첫 열 w-14 + 나머지 7열 균등분배)과 열 경계가 어긋났다. 같은 colgroup(첫 열 w-14 + 나머지
+  // 균등분배)의 별도 <table>로 다시 그려 브라우저 테이블 레이아웃 계산이 완전히 동일하게
+  // 맞도록 한다(두 표가 같은 부모 폭 안에 있으면 열 경계가 픽셀 단위로 일치).
   return (
-    <div className="mb-3 grid grid-cols-4 gap-2 sm:grid-cols-7">
-      {dowLabels.map((label, i) => {
-        const dow = i + 1;
-        const rows = byDow.get(dow) ?? [];
-        const points = HOUR_BLOCK_ORDER.map((hb) => rows.find((r) => r.hour_block === hb)?.avg_rating ?? null).filter(
-          (v): v is number => v !== null
-        );
-        const dowColor = label === "토" ? "#3b82f6" : label === "일" ? "#f43f5e" : "#71717a";
-        if (points.length < 2) {
-          return (
-            <div key={label} className="rounded-lg bg-zinc-50 p-1.5 text-center">
-              <p className={`text-[11px] font-semibold`} style={{ color: dowColor }}>
-                {label}
-              </p>
-              <p className="mt-1 text-[10px] text-zinc-300">표본 부족</p>
-            </div>
-          );
-        }
-        const step = W / (HOUR_BLOCK_ORDER.length - 1);
-        const path = HOUR_BLOCK_ORDER.map((hb, idx) => {
-          const v = rows.find((r) => r.hour_block === hb)?.avg_rating;
-          const y = v !== null && v !== undefined ? H - (v / maxRating) * H : H;
-          return `${idx === 0 ? "M" : "L"}${(idx * step).toFixed(1)},${y.toFixed(1)}`;
-        }).join(" ");
-        const peakHour = HOUR_BLOCK_ORDER.reduce((best, hb) => {
-          const v = rows.find((r) => r.hour_block === hb)?.avg_rating ?? -1;
-          const bestV = rows.find((r) => r.hour_block === best)?.avg_rating ?? -1;
-          return v > bestV ? hb : best;
-        }, HOUR_BLOCK_ORDER[0]);
-        return (
-          <div key={label} className="rounded-lg bg-zinc-50 p-1.5 text-center">
-            <p className="text-[11px] font-semibold" style={{ color: dowColor }}>
-              {label}
-            </p>
-            <svg viewBox={`0 0 ${W} ${H}`} className="mt-0.5 w-full" style={{ height: H }}>
-              <path d={path} fill="none" stroke={accentColor} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" opacity={0.85} />
-            </svg>
-            <p className="mt-0.5 text-[9.5px] text-zinc-400">피크 {hourBlockLabel(peakHour)}</p>
-          </div>
-        );
-      })}
-    </div>
+    <table className="mb-1 w-full table-fixed text-center text-[13px]">
+      <colgroup>
+        <col className="w-14" />
+      </colgroup>
+      <tbody>
+        <tr>
+          <td className="py-0.5 pr-0.5" />
+          {dowLabels.map((label, i) => {
+            const dow = i + 1;
+            const rows = byDow.get(dow) ?? [];
+            const points = HOUR_BLOCK_ORDER.map((hb) => rows.find((r) => r.hour_block === hb)?.avg_rating ?? null).filter(
+              (v): v is number => v !== null
+            );
+            const dowColor = label === "토" ? "#3b82f6" : label === "일" ? "#f43f5e" : "#71717a";
+            if (points.length < 2) {
+              return (
+                <td key={label} className="py-0.5 px-0.5">
+                  <div className="rounded-lg bg-zinc-50 p-1.5 text-center">
+                    <p className="text-[11px] font-semibold" style={{ color: dowColor }}>
+                      {label}
+                    </p>
+                    <p className="mt-1 text-[10px] text-zinc-300">표본 부족</p>
+                  </div>
+                </td>
+              );
+            }
+            const step = W / (HOUR_BLOCK_ORDER.length - 1);
+            const path = HOUR_BLOCK_ORDER.map((hb, idx) => {
+              const v = rows.find((r) => r.hour_block === hb)?.avg_rating;
+              const y = v !== null && v !== undefined ? H - (v / maxRating) * H : H;
+              return `${idx === 0 ? "M" : "L"}${(idx * step).toFixed(1)},${y.toFixed(1)}`;
+            }).join(" ");
+            const peakHour = HOUR_BLOCK_ORDER.reduce((best, hb) => {
+              const v = rows.find((r) => r.hour_block === hb)?.avg_rating ?? -1;
+              const bestV = rows.find((r) => r.hour_block === best)?.avg_rating ?? -1;
+              return v > bestV ? hb : best;
+            }, HOUR_BLOCK_ORDER[0]);
+            return (
+              <td key={label} className="py-0.5 px-0.5">
+                <div className="rounded-lg bg-zinc-50 p-1.5 text-center">
+                  <p className="text-[11px] font-semibold" style={{ color: dowColor }}>
+                    {label}
+                  </p>
+                  <svg viewBox={`0 0 ${W} ${H}`} className="mt-0.5 w-full" style={{ height: H }}>
+                    <path d={path} fill="none" stroke={accentColor} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" opacity={0.85} />
+                  </svg>
+                  <p className="mt-0.5 text-[9.5px] text-zinc-400">피크 {hourBlockLabel(peakHour)}</p>
+                </div>
+              </td>
+            );
+          })}
+        </tr>
+      </tbody>
+    </table>
   );
 }
 
@@ -4325,7 +4376,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             상대적으로 약해진) 시간대가 편성 기회입니다.
             {isRangeMode && " 기간을 선택하면 \"최근 구간\"이 그 선택한 기간 길이로 바뀝니다."}
           </p>
-          {daypartOpportunity.length > 0 && <OpportunityGapSlopeChart rows={daypartOpportunity} />}
+          {daypartOpportunity.length > 0 && <OpportunityGapSlopeChart rows={daypartOpportunity} fmtR={fmtR} />}
           {daypartOpportunity.length > 0 && <OpportunityDaypartTiles rows={daypartOpportunity} fmtR={fmtR} isEnaStory={isEnaStory} />}
           {daypartOpportunity.length > 0 && (
             <div className="mb-3 overflow-x-auto">
@@ -4464,33 +4515,59 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               ) : !skyuhdScorecard || skyuhdScorecard.length === 0 ? (
                 <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[560px] text-left text-sm">
-                    <thead>
-                      <tr className="text-zinc-400">
-                        <th className="pb-1.5 pr-2 font-medium">분류</th>
-                        <th className="pb-1.5 pr-2 font-medium">프로그램</th>
-                        <th className="pb-1.5 pr-2 font-medium">제안 사항</th>
-                        <th className="pb-1.5 font-medium">방영횟수</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {skyuhdScorecard.map((item) => {
-                        const tier = skyuhdScorecardTier(item);
-                        return (
-                          <tr key={item.program_id} className="border-t border-zinc-100 align-top">
-                            <td className="whitespace-nowrap py-2 pr-2">
-                              <DotTag label={tier} color={SKYUHD_TIER_DOT_COLOR[tier]} />
-                            </td>
-                            <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">{item.program_name}</td>
-                            <td className="py-2 pr-2 text-zinc-600">{buildSkyuhdScorecardNote(item)}</td>
-                            <td className="whitespace-nowrap py-2 text-zinc-500">{item.air_count}회</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                (() => {
+                  // 사용자 지시(2026-08-26): "skyUHD의 이 콘텐츠, 적합한가요 부분은 방영횟수가
+                  // 5회 이하이면 별도 지표로 아래에 내려서 관리" — TOP20(2026-08-21)과 같은
+                  // 이유(수기 누적 파일 특성상 표본이 적은 프로그램이 우연히 상위권에 섞이기
+                  // 쉬움)로 이 표에도 같은 원칙을 적용한다.
+                  const mainItems = skyuhdScorecard.filter((item) => item.air_count > 5);
+                  const lowSampleItems = skyuhdScorecard.filter((item) => item.air_count <= 5);
+                  const renderRows = (items: SkyuhdScorecardItem[]) =>
+                    items.map((item) => {
+                      const tier = skyuhdScorecardTier(item);
+                      return (
+                        <tr key={item.program_id} className="border-t border-zinc-100 align-top">
+                          <td className="whitespace-nowrap py-2 pr-2">
+                            <DotTag label={tier} color={SKYUHD_TIER_DOT_COLOR[tier]} />
+                          </td>
+                          <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">{item.program_name}</td>
+                          <td className="py-2 pr-2 text-zinc-600">{buildSkyuhdScorecardNote(item)}</td>
+                          <td className="whitespace-nowrap py-2 text-zinc-500">{item.air_count}회</td>
+                        </tr>
+                      );
+                    });
+                  return (
+                    <>
+                      {mainItems.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[560px] text-left text-sm">
+                            <thead>
+                              <tr className="text-zinc-400">
+                                <th className="pb-1.5 pr-2 font-medium">분류</th>
+                                <th className="pb-1.5 pr-2 font-medium">프로그램</th>
+                                <th className="pb-1.5 pr-2 font-medium">제안 사항</th>
+                                <th className="pb-1.5 font-medium">방영횟수</th>
+                              </tr>
+                            </thead>
+                            <tbody>{renderRows(mainItems)}</tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-zinc-400">방영 5회 초과 프로그램이 아직 없습니다.</p>
+                      )}
+                      {lowSampleItems.length > 0 && (
+                        <div className="mt-3 border-t border-dashed border-zinc-200 pt-3">
+                          <p className="mb-1 text-sm text-zinc-400">표본 부족(방영 5회 이하) — 참고용</p>
+                          <div className="overflow-x-auto">
+                            <table className="w-full min-w-[560px] text-left text-sm">
+                              <tbody>{renderRows(lowSampleItems)}</tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()
               )}
             </>
           ) : (

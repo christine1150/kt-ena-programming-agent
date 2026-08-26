@@ -86,17 +86,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, asOfDate: null, items: [] });
   }
 
-  // 이 기준일로 이미 계산된 MART 데이터가 있는지 확인 — 없으면 그때 한 번 새로 계산한다
-  // (하루 한 번만 계산되면 되므로, 요청마다 다시 계산하지 않는다).
+  // 이 기준일에 "이 채널"이 이미 계산됐는지 확인 — 없으면 그때 한 번 새로 계산한다(하루
+  // 한 번만 계산되면 되므로, 요청마다 다시 계산하지 않는다). 버그 수정(2026-08-26, 사용자
+  // 제보 "ENA Story에 14일 안에 방영된 데이터가 없다고 나옴"): channel_id 없이 "이 날짜에
+  // 아무 채널이나 행이 있는지"만 봤었다 — 채널 A가 먼저 계산돼 있으면 채널 B(예: ENA Story)는
+  // 아직 계산 안 됐는데도 "이미 있음"으로 오판해 refresh를 건너뛰어 빈 결과만 보였다.
   const { count } = await supabase
     .from("mart_scheduling_fit_score")
     .select("id", { count: "exact", head: true })
-    .eq("as_of_date", asOfDate);
+    .eq("as_of_date", asOfDate)
+    .eq("channel_id", channel.id);
 
   if (!count || count === 0) {
+    // 버그 수정(2026-08-26): 6채널을 한 번에 재계산하면 anon/authenticated
+    // statement_timeout(20초)을 넘겨(실측 확인) 매번 500으로 실패했다 — p_channel_code로
+    // 이 채널 하나만 계산한다(refresh_fit_score_mart 20260826130000, 다른 채널의 기존
+    // 계산은 그대로 보존).
     const { error: refreshError } = await supabase.rpc("refresh_fit_score_mart", {
       p_as_of_date: asOfDate,
       p_window_days: 84,
+      p_channel_code: channel.code,
     });
     if (refreshError) {
       // refresh_fit_score_mart()는 delete 후 재삽입하는 구조라, 같은 as_of_date를 처음 조회하는
@@ -106,7 +115,8 @@ export async function GET(request: Request) {
       const { count: recheckCount } = await supabase
         .from("mart_scheduling_fit_score")
         .select("id", { count: "exact", head: true })
-        .eq("as_of_date", asOfDate);
+        .eq("as_of_date", asOfDate)
+        .eq("channel_id", channel.id);
       if (!recheckCount || recheckCount === 0) {
         return NextResponse.json({ ok: false, message: `Fit Score 계산 실패: ${refreshError.message}` }, { status: 500 });
       }
