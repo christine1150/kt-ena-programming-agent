@@ -1241,7 +1241,7 @@ function ManualMinuteRatingChart({
   // 시작/종료"라고 잘못 표기하지 않도록 실제 방송 시각을 별도로 받아 그 위치에 표시한다.
   broadcastStartTime?: string | null;
   broadcastEndTime?: string | null;
-  // 사용자 지시(2026-08-26): "종CM1/종CM2 시간이 그래프 내에 보이도록" — PD 엑셀의 네이티브
+  // 사용자 지시(2026-08-26): "중CM1/중CM2 시간이 그래프 내에 보이도록" — PD 엑셀의 네이티브
   // 차트를 관리자가 육안으로 보고 입력한 값(자동 파싱 불가, 관리자 화면에서 채워짐).
   cmBreaks?: { time: string; label: string }[] | null;
 }) {
@@ -1307,7 +1307,7 @@ function ManualMinuteRatingChart({
               포함된 시트 처음/끝이 아니라)을 세로선으로 짚어준다. */}
           <line x1={xOfMin(startMarkerMin)} y1={PAD_Y} x2={xOfMin(startMarkerMin)} y2={H - PAD_Y} stroke="#a1a1aa" strokeWidth={1} strokeDasharray="2 2" />
           <line x1={xOfMin(endMarkerMin)} y1={PAD_Y} x2={xOfMin(endMarkerMin)} y2={H - PAD_Y} stroke="#a1a1aa" strokeWidth={1} strokeDasharray="2 2" />
-          {/* 사용자 지시(2026-08-26): "종CM1/종CM2 시간이 그래프 내에 보이도록" — 관리자가
+          {/* 사용자 지시(2026-08-26): "중CM1/중CM2 시간이 그래프 내에 보이도록" — 관리자가
               수동 입력한 값이 있을 때만(자동 계산 없음) 세로 점선으로 표시(방송 시작/종료와
               구분되게 다른 색). */}
           {(cmBreaks ?? []).map((cm, i) => {

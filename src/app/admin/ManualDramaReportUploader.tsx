@@ -17,7 +17,7 @@ export default function ManualDramaReportUploader() {
   const [uploading, setUploading] = useState(false);
   const [saved, setSaved] = useState<SavedEpisode[] | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // 사용자 지시(2026-08-26): "종CM1/종CM2" 등 광고 브레이크 시각 — PD 엑셀의 네이티브 차트
+  // 사용자 지시(2026-08-26): "중CM1/중CM2" 등 광고 브레이크 시각 — PD 엑셀의 네이티브 차트
   // 텍스트 상자로만 있어 자동 파싱이 불가능하다(supabase/migrations/20260826190000 참고).
   // 업로드 직후 관리자가 그 차트를 육안으로 보고 한 줄씩 입력하면 별도 PATCH로 저장한다.
   const [cmBreaksText, setCmBreaksText] = useState<Record<string, string>>({});
@@ -61,7 +61,7 @@ export default function ManualDramaReportUploader() {
     setUploading(false);
   }
 
-  // "HH:MM 라벨" 한 줄씩(예: "22:38 종CM1") → [{time,label}]. 형식이 안 맞는 줄은 조용히
+  // "HH:MM 라벨" 한 줄씩(예: "22:38 중CM1") → [{time,label}]. 형식이 안 맞는 줄은 조용히
   // 건너뛴다(억지로 추정하지 않음 — 관리자가 다시 고쳐 쓰면 됨).
   function parseCmBreaksText(text: string): { time: string; label: string }[] {
     return text
@@ -130,7 +130,7 @@ export default function ManualDramaReportUploader() {
           <p className="text-sm text-zinc-600">
             저장 완료: {saved.map((s) => `${s.broadcastDate} ${s.episodeNumber}회`).join(", ")}
           </p>
-          {/* 사용자 지시(2026-08-26): "종CM1/종CM2" 등은 PD 엑셀의 네이티브 차트를 관리자가
+          {/* 사용자 지시(2026-08-26): "중CM1/중CM2" 등은 PD 엑셀의 네이티브 차트를 관리자가
               직접 눈으로 보고 입력해야 한다(자동 파싱 불가) — 업로드 직후 바로 입력할 수 있게. */}
           {saved.map((s) => {
             const key = `${s.broadcastDate}-${s.episodeNumber}`;
@@ -142,7 +142,7 @@ export default function ManualDramaReportUploader() {
                 <textarea
                   value={cmBreaksText[key] ?? ""}
                   onChange={(e) => setCmBreaksText((prev) => ({ ...prev, [key]: e.target.value }))}
-                  placeholder={"한 줄에 하나씩, \"HH:MM 라벨\" 형식 — 예:\n22:38 종CM1\n22:54 종CM2"}
+                  placeholder={"한 줄에 하나씩, \"HH:MM 라벨\" 형식 — 예:\n22:38 중CM1\n22:54 중CM2"}
                   rows={3}
                   className="mb-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
                 />
