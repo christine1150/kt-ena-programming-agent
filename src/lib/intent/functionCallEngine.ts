@@ -14,6 +14,7 @@
 import { INTENT_REGISTRY } from "./intentRegistry";
 import { getChannelRefs, getCompetitorRefs, getTargetLabels } from "./referenceData";
 import { resolveTimePeriod } from "./timeResolver";
+import { extractParameters } from "./parameterExtractor";
 import { dispatchIntent } from "./dispatch";
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "@/lib/llmSynthesis";
 import type { AskHistoryTurn, EvidenceAnswer, ExtractedParameters, MacroIntentId, RouteResult } from "./types";
@@ -63,6 +64,9 @@ function buildSystemPrompt(referenceDate: string): string {
     "channel_code/target_label/competitor_name은 함수 스키마에 나열된 값만 쓰고, 확실하지 않으면 null로 해라 — 질문에 채널명이 없고 대화 이력에도 없으면 채널을 임의로 짐작해서 채우지 마라.",
     "time_phrase는 질문의 시간 표현을 원문 그대로 넣어라(날짜 계산은 네가 하지 마라).",
     "이 질문에 맞는 함수가 하나도 없으면 아무 함수도 호출하지 마라(억지로 끼워맞추지 않는다).",
+    // 사용자 지시(2026-08-26, 오답 신고 후속) — llmClassifier.ts와 동일한 사고 방지 문구.
+    "특정 채널을 짚어 '어느 요일/시간대를 개선해야 하는지', '추천 프로그램은?'처럼 슬롯 단위 편성 추천을 묻는 질문에 맞는 함수는 아래 목록에 없다 — 억지로 CHANNEL_DAYPART 등을 부르지 마라.",
+    "질문에 특정 채널명이 명시돼 있는데 그 채널과 무관하게 7개 채널 전체를 스캔하는 함수(PORTFOLIO_RANKING/PORTFOLIO_KPI_GAP/PORTFOLIO_ALERT)를 부르는 것은 거의 항상 오답이다.",
   ].join("\n");
 }
 
@@ -146,10 +150,17 @@ export async function answerViaFunctionCalling(question: string, referenceDate: 
   const competitorNames = new Set(competitors.map((c) => c.competitorName));
   const targetLabelSet = new Set(targetLabels);
 
+  // 방어적 검증(2026-08-26, 오답 신고 후속) — llmClassifier.ts와 동일한 대조. 질문 하나에
+  // 여러 함수를 부를 수 있는 구조라 매 호출마다 확인해야 한다.
+  const ruleParams = await extractParameters(question);
+
   const results: { intentId: string; answer: EvidenceAnswer; parameters: ExtractedParameters }[] = [];
   for (const call of toolCalls) {
     const intent = INTENT_REGISTRY.find((i) => i.intent_id === call.name);
     if (!intent) continue;
+    if (ruleParams.channelCode && intent.macro_intent === "PORTFOLIO_HEALTH" && !intent.required_parameters.includes("channelCode")) {
+      continue; // 채널명이 명시된 질문에 전사 스캔형 함수를 고른 오분류 — 건너뛴다
+    }
     let args: ToolCallArgs;
     try {
       args = JSON.parse(call.arguments);

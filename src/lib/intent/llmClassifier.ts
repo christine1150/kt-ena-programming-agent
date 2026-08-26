@@ -8,6 +8,7 @@
 import { INTENT_REGISTRY } from "./intentRegistry";
 import { getChannelRefs, getCompetitorRefs, getTargetLabels } from "./referenceData";
 import { resolveTimePeriod } from "./timeResolver";
+import { extractParameters } from "./parameterExtractor";
 import type { AskHistoryTurn, ExtractedParameters, RouteResult } from "./types";
 
 // 사용자 지시(2026-08-20): 모델을 gpt-4o-mini로 고정 — 환경변수로 바뀌지 않도록 상수로 박아둔다.
@@ -48,6 +49,12 @@ function buildSystemPrompt(channelCodes: string[], competitorNames: string[], ta
     "- channel_code/target_label/competitor_name은 반드시 위 목록에 있는 값만 쓰고, 확실하지 않으면 null로 해라. 질문에 채널명이 없고 직전 대화 이력에서도 채널을 알 수 없으면(아래 대화 이력이 아예 없거나, 있어도 그 답에 channel_code가 없었다면) channel_code는 반드시 null로 해라 — ENA 등 아무 채널이나 기본값으로 짐작해서 채우지 마라.",
     "- time_phrase는 질문에서 시간 표현을 원문 그대로 뽑아라(예: '어제', '최근 7일', '지난달', '전주 대비'). 날짜 계산은 별도 로직이 하니 절대 직접 계산하지 마라 — 표현만 그대로 추출한다.",
     "- ranking_limit/ranking_direction은 'TOP 5', '가장 잘한/부진한' 같은 표현이 있을 때만 채우고, 없으면 null.",
+    // 사용자 지시(2026-08-26, 오답 신고 후속) — "ENA Play 주간 편성에서 개선해야 할 요일과
+    // 시간대는? 추천 프로그램은?" 같은 질문이 PORTFOLIO_ALERT(전사 위험/기회 스캔)로 잘못
+    // 분류돼 완전히 엉뚱한 채널 얘기를 답한 사고가 있었다 — 위 9개 Intent 중 "요일·시간대별
+    // 슬롯 개선/추천"을 다루는 것은 아직 없는데도 억지로 끼워맞춘 사례라 구체적으로 못 박는다.
+    "- 특정 채널을 짚어 '어느 요일/시간대를 개선해야 하는지', '그 시간대에 추천하는 프로그램은?'처럼 슬롯 단위 편성 추천을 묻는 질문은 지금 9개 Intent 중 어디에도 해당하지 않는다 — CHANNEL_DAYPART(단순 최강/최약 시간대 조회)로도 억지로 끼워맞추지 말고 intent_id를 null로 해라.",
+    "- 질문에 특정 채널명이 명시돼 있는데, 그 채널과 무관하게 7개 채널 전체를 스캔하는 PORTFOLIO_RANKING/PORTFOLIO_KPI_GAP/PORTFOLIO_ALERT를 고르는 것은 거의 항상 오답이다 — 질문이 정말 '전체 채널 중에서'를 묻는 게 아니라면 이 셋을 고르지 마라.",
     // Tier 2 확장(2026-08-26, 원 제안 7번 "멀티턴 대화 맥락"): 대화 이력이 있으면(아래 user/
     // assistant 메시지로 이어짐) "그럼 지난주는?"처럼 채널·타깃을 생략한 후속 질문을 직전 턴의
     // 값으로 채워 해석하되, 이번 질문이 새 주제면 이전 값을 억지로 끌어오지 않는다.
@@ -137,6 +144,15 @@ export async function classifyQuestionWithLlm(question: string, referenceDate: s
 
   const intent = INTENT_REGISTRY.find((i) => i.intent_id === parsed.intent_id);
   if (!intent) return null;
+
+  // 방어적 검증(2026-08-26, 오답 신고 후속) — 시스템 프롬프트로 못 박아도 gpt-4o-mini가
+  // 가끔 지시를 무시하고 끼워맞출 수 있어, 규칙 기반 채널 추출(신뢰도 높음)로 한 번 더 대조한다.
+  // 질문에 채널명이 명시돼 있는데 고른 Intent가 채널 특정 없이 7개 채널을 통째로 스캔하는
+  // PORTFOLIO_HEALTH 계열이면 오분류로 보고 버린다(위 PORTFOLIO_ALERT 오답 사고와 동일 패턴).
+  const ruleParams = await extractParameters(question);
+  if (ruleParams.channelCode && intent.macro_intent === "PORTFOLIO_HEALTH" && !intent.required_parameters.includes("channelCode")) {
+    return null;
+  }
 
   const timeContext = resolveTimePeriod(parsed.time_phrase ?? "", referenceDate);
   const parameters: ExtractedParameters = {
