@@ -11,77 +11,10 @@ import { routeQuestion } from "@/lib/intent/intentRouter";
 import { classifyQuestionWithLlm } from "@/lib/intent/llmClassifier";
 import { getLatestAvailableDate } from "@/lib/intent/referenceData";
 import { enhanceAskAnswerViaLlm } from "@/lib/askAnswerLlm";
-import {
-  execPortfolioRanking,
-  execPortfolioKpiGap,
-  execPortfolioAlert,
-  execChannelPerformance,
-  execChannelDaypart,
-  execProgramTop,
-  execTargetAffinity,
-  execCompetitivePosition,
-  execCompetitiveHeadToHead,
-} from "@/lib/intent/executors";
-import {
-  buildPortfolioRankingAnswer,
-  buildPortfolioKpiGapAnswer,
-  buildPortfolioAlertAnswer,
-  buildChannelPerformanceAnswer,
-  buildChannelDaypartAnswer,
-  buildProgramTopAnswer,
-  buildTargetAffinityAnswer,
-  buildCompetitivePositionAnswer,
-  buildCompetitiveHeadToHeadAnswer,
-  buildUnsupportedAnswer,
-} from "@/lib/intent/responseTemplates";
-import type { AskHistoryTurn, EvidenceAnswer, RouteResult } from "@/lib/intent/types";
-
-// Intent가 정해진 뒤(규칙 기반이든 LLM이든 무관) SQL 실행 → Evidence 조립까지는 완전히 같은
-// 경로를 탄다 — 이 함수 하나로 두 경로가 공유한다(로직 중복/드리프트 방지).
-async function dispatchIntent(routed: RouteResult, question: string): Promise<EvidenceAnswer> {
-  const { intent_id, parameters, timeContext } = routed;
-  switch (intent_id) {
-    case "PORTFOLIO_RANKING": {
-      const rows = await execPortfolioRanking(parameters, timeContext);
-      const rankByChange = /상승|하락/.test(question);
-      return buildPortfolioRankingAnswer(rows, timeContext, parameters.rankingDirection, rankByChange);
-    }
-    case "PORTFOLIO_KPI_GAP": {
-      const rows = await execPortfolioKpiGap(parameters, timeContext);
-      return buildPortfolioKpiGapAnswer(rows, timeContext);
-    }
-    case "PORTFOLIO_ALERT": {
-      const rows = await execPortfolioAlert(parameters, timeContext);
-      return buildPortfolioAlertAnswer(rows, timeContext);
-    }
-    case "CHANNEL_PERFORMANCE": {
-      const data = await execChannelPerformance(parameters, timeContext);
-      return buildChannelPerformanceAnswer(data, timeContext, parameters.channelName);
-    }
-    case "CHANNEL_DAYPART": {
-      const data = await execChannelDaypart(parameters, timeContext);
-      return buildChannelDaypartAnswer(data, timeContext, parameters.rankingDirection);
-    }
-    case "PROGRAM_TOP": {
-      const data = await execProgramTop(parameters, timeContext);
-      return buildProgramTopAnswer(data, timeContext, parameters.rankingLimit ?? 10);
-    }
-    case "TARGET_AFFINITY": {
-      const data = await execTargetAffinity(parameters, timeContext);
-      return buildTargetAffinityAnswer(data, timeContext);
-    }
-    case "COMPETITIVE_POSITION": {
-      const data = await execCompetitivePosition(parameters, timeContext);
-      return buildCompetitivePositionAnswer(data, timeContext);
-    }
-    case "COMPETITIVE_HEAD_TO_HEAD": {
-      const data = await execCompetitiveHeadToHead(parameters, timeContext);
-      return buildCompetitiveHeadToHeadAnswer(data, timeContext);
-    }
-    default:
-      return buildUnsupportedAnswer();
-  }
-}
+import { dispatchIntent } from "@/lib/intent/dispatch";
+import { buildUnsupportedAnswer } from "@/lib/intent/responseTemplates";
+import { answerViaFunctionCalling } from "@/lib/intent/functionCallEngine";
+import type { AskHistoryTurn } from "@/lib/intent/types";
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
@@ -131,6 +64,28 @@ export async function POST(request: Request) {
     if (llmRouted) {
       routed = llmRouted;
       usedLlmFallback = true;
+    }
+  }
+
+  // Tier 2 확장(2026-08-26, 사용자 지시: "티어 2 진행" — 원 제안 6번 "자유형 질문 엔진") —
+  // 고정 9개 Intent(규칙 기반+분류기 둘 다) 어디에도 안 맞으면, 마지막으로 OpenAI Function
+  // Calling에게 같은 9개 승인된 함수 중 필요한 걸(복수 가능) 직접 고르게 한다. LLM은 여전히
+  // SQL을 짜지 않고 "어떤 승인된 분석을 부를지"만 고르며, 각 함수의 실행·Evidence 조립은
+  // dispatchIntent(위 두 경로와 완전히 동일한 코드)를 그대로 탄다 — 무엇을 물어도 숫자는
+  // 항상 SQL이 계산한 값이다.
+  if (!routed.ok && advancedLlmAgentEnabled) {
+    const freeform = await answerViaFunctionCalling(question, referenceDate, history);
+    if (freeform) {
+      return NextResponse.json({
+        ok: true,
+        intent_id: freeform.answer.intent_id,
+        macro_intent: freeform.answer.macro_intent,
+        parameters: { channelCode: freeform.channelCode, targetLabel: freeform.targetLabel, competitorName: freeform.competitorName },
+        timeContext: null,
+        usedLlmFallback: true,
+        usedFunctionCalling: true,
+        answer: freeform.answer,
+      });
     }
   }
 

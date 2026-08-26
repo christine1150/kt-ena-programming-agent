@@ -2887,6 +2887,45 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 생략한 후속 질문을 풀려면 직전 턴에서 뭘 물었고 뭘로 해석됐는지가 필요하다. 답변 본문(결론·
   // 수치 등)은 필요 없어 용량이 큰 EvidenceAnswer 전체가 아니라 질문+intent/파라미터만 쌓는다.
   const [askHistory, setAskHistory] = useState<{ question: string; intentId: string | null; channelCode: string | null; targetLabel: string | null; competitorName: string | null }[]>([]);
+  // Tier 3(2026-08-26, 원 제안 11번 "AI 가설" 별도 섹션 — "AI 편성 비서 - 스마트 편성 팁") —
+  // 이미 화면에 표시 중인 WHY?/OPPORTUNITY? 근거를 다시 보내 OpenAI가 더 과감하게 가설을
+  // 세우게 한다. 자동 로드가 아니라 버튼을 눌렀을 때만 호출(불필요한 OpenAI 비용 방지).
+  const [smartTips, setSmartTips] = useState<{ headline: string; rationale: string }[] | null>(null);
+  const [smartTipsLoading, setSmartTipsLoading] = useState(false);
+  const [smartTipsError, setSmartTipsError] = useState<string | null>(null);
+  async function loadSmartTips() {
+    if (!data || smartTipsLoading) return;
+    setSmartTipsLoading(true);
+    setSmartTipsError(null);
+    try {
+      const res = await fetch("/api/channel/smart-tips", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelName: data.channel.name,
+          rootCauseTriggered: data.rootCauseAlert?.triggered ?? false,
+          rootCauseStreakDays: data.rootCauseAlert?.streak_days ?? null,
+          rootCauseCompetitorMoves: data.rootCauseAlert?.competitor_moves ?? [],
+          opportunityTriggered: data.opportunityAlert?.triggered ?? false,
+          opportunityChangePct: data.opportunityAlert?.our_change_pct ?? null,
+          weakCompetitors: data.opportunityAlert?.weak_competitors ?? [],
+          daypartOpportunities: data.daypartOpportunity ?? [],
+          topPrograms: (data.topPrograms ?? []).slice(0, 5).map((p) => ({ program_name: p.program_name, avg_rating: p.avg_rating })),
+          periodProgramMovers: (data.periodProgramMovers ?? []).slice(0, 5).map((p) => ({ canonical_name: p.canonical_name, rating_delta: p.rating_delta })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setSmartTipsError(json.message ?? "AI 팁 생성에 실패했습니다.");
+        return;
+      }
+      setSmartTips(json.tips);
+    } catch {
+      setSmartTipsError("네트워크 오류로 AI 팁을 불러오지 못했습니다.");
+    } finally {
+      setSmartTipsLoading(false);
+    }
+  }
   // 후속 질문 칩(원 명세 31번) 클릭 시 setAskQuestion 직후 바로 이어서 호출하면 아직 리렌더
   // 전이라 클로저 안 askQuestion이 이전 값이라 잘못된 질문으로 재질의될 수 있어, 강제로 쓸
   // 질문을 인자로 받게 한다(없으면 기존처럼 입력창 값 사용).
@@ -3580,6 +3619,95 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+              {/* Tier 2 확장(2026-08-26, 원 제안 8번 "시각화 타입 확장" 나머지) — line(기간 추이).
+                  기존 SVG 수작업 차트와 같은 방식(viewBox+좌표 함수), 새 라이브러리 없음. */}
+              {askAnswer.visualization?.type === "line" && (askAnswer.visualization.points?.length ?? 0) > 0 && (
+                <div className="mt-1 rounded-xl bg-white p-3 ring-1 ring-zinc-100">
+                  <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
+                  {(() => {
+                    const points = askAnswer.visualization!.points!;
+                    const W = Math.max(320, points.length * 48);
+                    const H = 120;
+                    const padL = 36;
+                    const padB = 18;
+                    const values = points.map((p) => p.value).filter((v): v is number => v !== null);
+                    const max = Math.max(...values, 0.0001);
+                    const min = Math.min(...values, 0);
+                    const range = max - min || 1;
+                    const xOf = (i: number) => padL + (i / Math.max(1, points.length - 1)) * (W - padL - 12);
+                    const yOf = (v: number) => H - padB - ((v - min) / range) * (H - padB - 12);
+                    const pathD = points
+                      .map((p, i) => (p.value === null ? null : `${i === 0 || points[i - 1]?.value === null ? "M" : "L"} ${xOf(i)} ${yOf(p.value)}`))
+                      .filter((s): s is string => s !== null)
+                      .join(" ");
+                    return (
+                      <div className="overflow-x-auto">
+                        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H }}>
+                          <text x={2} y={12} fontSize={9} fill="#a1a1aa">{max.toFixed(2)}</text>
+                          <text x={2} y={H - padB} fontSize={9} fill="#a1a1aa">{min.toFixed(2)}</text>
+                          {pathD && <path d={pathD} fill="none" stroke={accentColor} strokeWidth={2} />}
+                          {points.map((p, i) =>
+                            p.value === null ? null : <circle key={i} cx={xOf(i)} cy={yOf(p.value)} r={2.5} fill={accentColor} />
+                          )}
+                          {points.map((p, i) => (
+                            <text key={i} x={xOf(i)} y={H - 4} fontSize={9} textAnchor="middle" fill="#a1a1aa">{p.label}</text>
+                          ))}
+                        </svg>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+              {/* Tier 2 확장(2026-08-26, 원 제안 8번) — heatmap(요일×시간대). accentColor 알파
+                  블렌딩 방식은 이 페이지의 기존 요일×시간대 히트맵(cellTextColor)과 동일한 톤. */}
+              {askAnswer.visualization?.type === "heatmap" && (askAnswer.visualization.heatmapRowLabels?.length ?? 0) > 0 && (
+                <div className="mt-1 overflow-x-auto rounded-xl bg-white p-3 ring-1 ring-zinc-100">
+                  <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
+                  {(() => {
+                    const viz = askAnswer.visualization!;
+                    const rowLabels = viz.heatmapRowLabels!;
+                    const colLabels = viz.heatmapColLabels!;
+                    const cells = viz.heatmapCells!;
+                    const flat = cells.flat().filter((v): v is number => v !== null);
+                    const max = Math.max(...flat, 0.0001);
+                    const min = Math.min(...flat, 0);
+                    const range = max - min || 1;
+                    return (
+                      <table className="w-full text-center text-[11px]">
+                        <thead>
+                          <tr>
+                            <th className="w-10" />
+                            {colLabels.map((c, j) => (
+                              <th key={j} className="whitespace-nowrap px-1 pb-1 font-medium text-zinc-400">{c}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rowLabels.map((r, i) => (
+                            <tr key={i}>
+                              <td className="pr-1 text-right font-medium text-zinc-400">{r}</td>
+                              {colLabels.map((_, j) => {
+                                const v = cells[i]?.[j] ?? null;
+                                const intensity = v === null ? 0 : (v - min) / range;
+                                const alpha = v === null ? 0 : Math.round(40 + intensity * 200);
+                                const bg = v === null ? "#f4f4f5" : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
+                                const fg = v === null ? "#a1a1aa" : cellTextColor(accentColor, alpha);
+                                return (
+                                  <td key={j} className="p-0.5">
+                                    <div className="rounded-md py-1.5" style={{ backgroundColor: bg, color: fg }}>
+                                      {v === null ? "—" : v.toFixed(2)}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    );
+                  })()}
                 </div>
               )}
               {/* 원 명세 31번 — 후속 질문 칩. 클릭하면 바로 그 질문으로 재질의한다. */}
@@ -4751,6 +4879,47 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         </div>
         </>
         )}
+
+        {/* Tier 3(2026-08-26, 사용자 지시: "티어3에서 11번까지는 우선 진행" — 원 제안 11번
+            "AI 가설" 별도 섹션, 화면 제목은 사용자 지시대로 "AI 편성 비서 - 스마트 편성 팁").
+            위 WHY?/OPPORTUNITY?/WHAT TO SCHEDULE?는 여전히 인과 단정 금지 원칙을 그대로
+            지키고, 이 섹션만 명확히 "AI 추정 · 검증 안 됨" 라벨을 달고 분리해 더 과감한
+            가설을 보여준다 — 클릭해야만 호출(자동 로드 아님, 불필요한 OpenAI 비용 방지). */}
+        <div className="rounded-3xl bg-gradient-to-br from-violet-50 to-white p-6 shadow-sm ring-1 ring-violet-100">
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <h2 className={SECTION_TITLE_P2}>
+              AI 편성 비서 - 스마트 편성 팁
+              <span className="ml-2 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">AI 추정 · 검증 안 됨</span>
+            </h2>
+            <button
+              type="button"
+              onClick={loadSmartTips}
+              disabled={smartTipsLoading}
+              className="rounded-xl px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+              style={{ backgroundColor: accentColor }}
+            >
+              {smartTipsLoading ? "생성 중..." : smartTips ? "다시 생성" : "AI 팁 보기"}
+            </button>
+          </div>
+          <p className="mb-3 text-sm text-zinc-400">
+            위 WHY?/OPPORTUNITY?는 원인을 단정하지 않는 확정 근거 위주입니다. 이 코너는 같은 데이터를 바탕으로
+            AI가 조금 더 과감하게 세운 가설이며, 실제 편성 결정 전 반드시 별도 검증이 필요합니다.
+          </p>
+          {smartTipsError && <p className="text-sm text-rose-600">{smartTipsError}</p>}
+          {smartTips && smartTips.length === 0 && !smartTipsError && (
+            <p className="text-sm text-zinc-400">현재 종합할 만한 뚜렷한 신호가 없습니다.</p>
+          )}
+          {smartTips && smartTips.length > 0 && (
+            <ul className="space-y-2">
+              {smartTips.map((tip, i) => (
+                <li key={i} className="rounded-xl bg-white/70 p-3 text-sm ring-1 ring-violet-100">
+                  <p className="font-semibold text-zinc-800">💡 {tip.headline}</p>
+                  <p className="mt-1 text-zinc-600">{tip.rationale}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         {/* COMPARED WITH? — 재설계(사용자 지시): Competitive Pressure 제거, 순위 높은 순 +
             12주 평균 대비 등락 + 최고 성적 프로그램(시간대) 보고서. 기간 범위 선택 시 순위/시청률이

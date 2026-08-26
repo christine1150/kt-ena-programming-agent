@@ -65,12 +65,22 @@ export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW" | "INSUFFICIENT_SAMPLE";
 // bar 하나뿐") — 표(table) 타입 추가. 단일 값 series로는 순위·회차·등락률 같은 다열(多列)
 // 정보를 다 못 담아 evidence 문자열로만 나열되던 목록(TOP N, 경쟁채널 순위 등)을 표로 그대로
 // 보여준다. bar와 마찬가지로 SQL이 이미 계산한 값만 나열(새 계산 없음).
+// Tier 2 확장(2026-08-26, 사용자 지시: "티어 2 진행" — 원 제안 8번 "시각화 타입 확장"의 남은
+// 부분) — line(기간 중 일별 추이)·heatmap(요일×시간대 강세) 2종 추가. 둘 다 SQL이 이미 계산해
+// 돌려주는 값을 그대로 옮길 뿐 새 수치를 만들지 않는다(bar/table과 동일 원칙).
 export interface VisualizationSpec {
-  type: "bar" | "table";
+  type: "bar" | "table" | "line" | "heatmap";
   title: string;
   series: { label: string; value: number | null }[]; // type="bar"일 때만 사용
   columns?: string[]; // type="table"일 때만 사용 — 헤더
   rows?: (string | number | null)[][]; // type="table"일 때만 사용 — columns와 같은 길이
+  points?: { label: string; value: number | null }[]; // type="line"일 때만 사용 — x축 순서 그대로
+  // type="heatmap"일 때만 사용 — rowLabels(예: 요일) × colLabels(예: daypart) 격자.
+  // cells[i][j]는 rowLabels[i] × colLabels[j] 칸의 값(표본 없으면 null), sampleCounts는 같은 위치의 표본수.
+  heatmapRowLabels?: string[];
+  heatmapColLabels?: string[];
+  heatmapCells?: (number | null)[][];
+  heatmapSampleCounts?: number[][];
 }
 
 export interface RouteResult {

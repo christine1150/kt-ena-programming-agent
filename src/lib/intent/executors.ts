@@ -76,12 +76,21 @@ export async function execPortfolioAlert(_params: ExtractedParameters, timeConte
   const rows = await Promise.all(
     channels.map(async (c) => {
       const matchedTargetLabel = await getMatchedTargetLabel(c.code, timeContext.dateFrom, timeContext.dateTo);
-      if (!matchedTargetLabel) return { channel: c, rootCause: null, opportunity: null };
-      const [{ data: rc }, { data: opp }] = await Promise.all([
+      if (!matchedTargetLabel) return { channel: c, rootCause: null, opportunity: null, ratingDeltaPct: null };
+      const [{ data: rc }, { data: opp }, { data: narrative }] = await Promise.all([
         supabase.rpc("get_root_cause_alert", { p_channel_code: c.code, p_target_label: matchedTargetLabel, p_as_of_date: timeContext.dateTo }),
         supabase.rpc("get_opportunity_alert", { p_channel_code: c.code, p_target_label: matchedTargetLabel, p_as_of_date: timeContext.dateTo }),
+        // Tier 2 확장(2026-08-26, 원 제안 10번 "이상치/외부요인 플래그") — 동시다발 변동 판단에
+        // 필요한 당일 등락률(이미 SQL이 계산한 값, 새 계산 없음)만 추가로 받는다.
+        supabase.rpc("get_channel_daily_narrative", {
+          p_channel_code: c.code,
+          p_target_label: matchedTargetLabel,
+          p_program_target_label: resolveProgramLevelTargetLabel(c.primaryTarget),
+          p_demographic_labels: [],
+          p_as_of_date: timeContext.dateTo,
+        }),
       ]);
-      return { channel: c, rootCause: rc?.[0] ?? null, opportunity: opp?.[0] ?? null };
+      return { channel: c, rootCause: rc?.[0] ?? null, opportunity: opp?.[0] ?? null, ratingDeltaPct: narrative?.[0]?.rating_delta_pct ?? null };
     })
   );
   return rows;
@@ -93,6 +102,20 @@ export async function execChannelPerformance(params: ExtractedParameters, timeCo
   const channel = channels.find((c) => c.code === params.channelCode);
   if (!channel) return null;
   const result = await getPeriodReportForChannel(channel, timeContext);
+
+  // Tier 2 확장(2026-08-26, 원 제안 8번 "시각화 타입 확장") — 기간(2일 이상) 질문이면 일별
+  // 추이(line 차트용) 원자료도 함께 받아둔다. 단일 일자 질문은 "추이"라는 개념 자체가 성립하지
+  // 않아 요청하지 않는다(빈 API 호출 방지).
+  let dailyTrend: { broadcast_date: string; avg_rating: number | null }[] = [];
+  if (timeContext.dateFrom !== timeContext.dateTo && result.matchedTargetLabel) {
+    const { data } = await supabase.rpc("get_channel_daily_rating_trend", {
+      p_channel_code: channel.code,
+      p_target_label: result.matchedTargetLabel,
+      p_date_from: timeContext.dateFrom,
+      p_date_to: timeContext.dateTo,
+    });
+    dailyTrend = data ?? [];
+  }
 
   // 단일 일자 질문(예: "어제 ENA는 어땠어?")이면 오늘의 브리핑과 같은 줄글 원료(narrative)도 함께 준다.
   let narrative = null;
@@ -112,7 +135,7 @@ export async function execChannelPerformance(params: ExtractedParameters, timeCo
     });
     narrative = data?.[0] ?? null;
   }
-  return { ...result, narrative };
+  return { ...result, narrative, dailyTrend };
 }
 
 // ── CHANNEL_DAYPART ─────────────────────────────────────────────────────
@@ -127,7 +150,13 @@ export async function execChannelDaypart(params: ExtractedParameters, timeContex
     p_as_of_date: timeContext.dateTo,
     p_window_days: 84,
   });
-  return { channel, rows: (data ?? []) as { daypart: string; avg_rating: number | null; sample_count: number }[] };
+  // Tier 2 확장(2026-08-26, 원 제안 8번) — 이 RPC는 이미 요일(dow/dow_label) × daypart 전체
+  // 격자를 돌려준다. 지금까지는 daypart별 합계로만 뭉쳐 썼지만(아래 buildChannelDaypartAnswer),
+  // 격자 그대로도 넘겨 heatmap 시각화에 재사용한다(새 쿼리 없음).
+  return {
+    channel,
+    rows: (data ?? []) as { dow: number; dow_label: string; daypart: string; avg_rating: number | null; sample_count: number }[],
+  };
 }
 
 // ── PROGRAM_TOP ──────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import { buildOriginalProgrammingInsightViaLlm, type OriginalInsightInput } from
 import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
 import { buildChannelNarrativeViaLlm } from "@/lib/channelNarrativeLlm";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
+import { detectPortfolioAnomaly } from "@/lib/portfolioAnomaly";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -1127,6 +1128,17 @@ export async function GET(request: Request) {
     .select("category, title, url, display_order")
     .order("display_order");
 
+  // 11) Tier 2 확장(2026-08-26, 원 제안 10번 "이상치/외부요인 플래그") — 위에서 이미 계산된
+  // narrativeSignals의 rating_delta_pct(채널별 오늘 vs 최근 평균 등락률)만 재사용해 동시
+  // 다발적 변동을 규칙 기반으로 판단한다(새 쿼리 없음, LLM 미사용).
+  const portfolioAnomaly = detectPortfolioAnomaly(
+    narrativeSignals.map((s) => ({
+      channelCode: s.channelCode,
+      channelName: channelByCode.get(s.channelCode)?.name ?? s.channelCode,
+      ratingDeltaPct: s.rating_delta_pct,
+    }))
+  );
+
   return NextResponse.json({
     ok: true,
     asOfDate,
@@ -1139,5 +1151,6 @@ export async function GET(request: Request) {
     killerContentDaypart,
     todayTopPrograms,
     dailyNews: dailyNewsRows ?? [],
+    portfolioAnomaly,
   });
 }

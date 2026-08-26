@@ -283,6 +283,15 @@ interface DailyNewsItem {
   display_order: number;
 }
 
+// Tier 2 확장(2026-08-26, 사용자 지시: "티어 2 진행" — 원 제안 10번 "이상치/외부요인 플래그") —
+// 여러 채널이 동시에 큰 폭으로 변동했을 때만 채워지는 규칙 기반 신호(src/lib/portfolioAnomaly.ts).
+interface PortfolioAnomaly {
+  triggered: boolean;
+  thresholdPct: number;
+  minChannelCount: number;
+  movedChannels: { channelCode: string; channelName: string; ratingDeltaPct: number }[];
+}
+
 interface DashboardData {
   asOfDate: string;
   // 사용자 지시(2026-08-25): "채널 종합리포트 우측에 날짜를 선택할 수 있는 검색 기능" — API가
@@ -297,6 +306,7 @@ interface DashboardData {
   killerContentDaypart: KillerContentDaypartRow[];
   todayTopPrograms: TodayTopProgramRow[];
   dailyNews: DailyNewsItem[];
+  portfolioAnomaly?: PortfolioAnomaly;
 }
 
 // 사용자 지시: 인사이트·킬러콘텐츠는 이 순서로 언급 (ENA → ENA Play → ENA Drama → OLIFE → ONCE → ENA Story)
@@ -2158,6 +2168,22 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           <div className="mb-4 rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-700 ring-1 ring-amber-100">
             선택하신 {selectedDate} 날짜에는 반영된 Nielsen 데이터가 없어, 가장 최근 데이터인{" "}
             {formatDateWithDowDots(data.asOfDate)} 리포트를 대신 표시합니다.
+          </div>
+        )}
+
+        {/* Tier 2 확장(2026-08-26, 원 제안 10번 "이상치/외부요인 플래그") — 여러 채널이 동시에
+            큰 폭으로 움직였을 때만 표시. 원인은 절대 단정하지 않고 검토 필요만 안내한다. */}
+        {data?.portfolioAnomaly?.triggered && (
+          <div className="mb-4 rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-800 ring-1 ring-violet-100">
+            <p className="font-medium">
+              ⚠ {data.portfolioAnomaly.movedChannels.length}개 채널이 동시에 큰 폭({data.portfolioAnomaly.thresholdPct}%p 이상)으로
+              움직였습니다 — 특정 원인을 단정할 수 없으나, 공휴일·사회적 이슈 등 외부 요인 검토가 필요합니다.
+            </p>
+            <p className="mt-1 text-violet-600">
+              {data.portfolioAnomaly.movedChannels
+                .map((c) => `${c.channelName} ${c.ratingDeltaPct >= 0 ? "▲" : "▼"} ${Math.abs(c.ratingDeltaPct).toFixed(1)}%`)
+                .join(" · ")}
+            </p>
           </div>
         )}
 

@@ -4,6 +4,7 @@
 import type { ConfidenceLevel, EvidenceAnswer, MacroIntentId, TimeContext, VisualizationSpec } from "./types";
 import { josaEulReul } from "@/lib/josa";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
+import { detectPortfolioAnomaly } from "@/lib/portfolioAnomaly";
 
 function fmt(v: number | null | undefined, digits = 3): string {
   return v === null || v === undefined ? "데이터 없음" : v.toFixed(digits);
@@ -20,6 +21,26 @@ function bar(title: string, series: { label: string; value: number | null }[]): 
 // 막대 하나로는 다 못 담는 목록용 — SQL이 이미 계산한 값을 표 행으로 그대로 옮긴다(새 계산 없음).
 function table(title: string, columns: string[], rows: (string | number | null)[][]): VisualizationSpec | undefined {
   return rows.length >= 2 ? { type: "table", title, series: [], columns, rows } : undefined;
+}
+// Tier 2 확장(2026-08-26, 원 제안 8번 "시각화 타입 확장" 나머지) — 기간 질문("최근 7일 추이는?")의
+// 일별 시청률을 그대로 line 포인트로 옮긴다(새 계산 없음). 표본 없는 날(결측)은 값을 null로 채워
+// x축 간격이 어긋나지 않게 한다.
+function line(title: string, points: { label: string; value: number | null }[]): VisualizationSpec | undefined {
+  return points.length >= 2 ? { type: "line", title, series: [], points } : undefined;
+}
+// Tier 2 확장(2026-08-26, 원 제안 8번) — 요일×daypart 격자를 그대로 heatmap 칸으로 옮긴다(이미
+// SQL이 계산한 avg_rating/sample_count, 새 계산 없음). rowLabels/colLabels 순서를 고정해 항상
+// 같은 모양의 격자를 돌려준다.
+function heatmap(
+  title: string,
+  rowLabels: string[],
+  colLabels: string[],
+  cellLookup: (row: string, col: string) => { avg_rating: number | null; sample_count: number } | undefined
+): VisualizationSpec | undefined {
+  if (rowLabels.length === 0 || colLabels.length === 0) return undefined;
+  const cells = rowLabels.map((r) => colLabels.map((c) => cellLookup(r, c)?.avg_rating ?? null));
+  const sampleCounts = rowLabels.map((r) => colLabels.map((c) => cellLookup(r, c)?.sample_count ?? 0));
+  return { type: "heatmap", title, series: [], heatmapRowLabels: rowLabels, heatmapColLabels: colLabels, heatmapCells: cells, heatmapSampleCounts: sampleCounts };
 }
 
 // 스펙 20번 Confidence 기준(표본 일수). 이 엔진에서 다루는 대부분의 SQL 함수는 이미 최근
@@ -158,19 +179,26 @@ interface AlertRow {
   channel: { code: string; name: string };
   rootCause: { triggered: boolean; streak_days: number } | null;
   opportunity: { triggered: boolean; our_change_pct: number | null } | null;
+  // Tier 2 확장(2026-08-26, 원 제안 10번 "이상치/외부요인 플래그") — 이미 SQL이 계산한 당일
+  // 등락률(최근 평균 대비). 새 계산 없이 detectPortfolioAnomaly의 판단 입력으로만 쓴다.
+  ratingDeltaPct: number | null;
 }
 export function buildPortfolioAlertAnswer(rows: AlertRow[], timeContext: TimeContext): EvidenceAnswer {
   const risky = rows.filter((r) => r.rootCause?.triggered);
   const opportunities = rows.filter((r) => r.opportunity?.triggered);
+  const anomaly = detectPortfolioAnomaly(rows.map((r) => ({ channelCode: r.channel.code, channelName: r.channel.name, ratingDeltaPct: r.ratingDeltaPct })));
   const conclusion =
     risky.length > 0
       ? `현재 즉시 편성 검토가 필요한 채널: ${risky.map((r) => r.channel.name).join(", ")}`
       : opportunities.length > 0
         ? `현재 즉시 위험 신호는 없고, 기회 신호가 있는 채널: ${opportunities.map((r) => r.channel.name).join(", ")}`
         : "현재 위험(3일 연속 하락)·기회 신호가 감지된 채널이 없습니다.";
+  const anomalyNote = anomaly.triggered
+    ? ` ※ 오늘 ${anomaly.movedChannels.length}개 채널이 동시에 큰 폭(±${anomaly.thresholdPct}%p 이상)으로 움직였습니다(${anomaly.movedChannels.map((c) => `${c.channelName} ${pct(c.ratingDeltaPct)}`).join(", ")}) — 특정 원인을 단정할 수 없으나 공휴일·사회적 이슈 등 외부 요인 검토가 필요합니다.`
+    : "";
   return {
     ...base("PORTFOLIO_ALERT", "PORTFOLIO_HEALTH", rows),
-    conclusion,
+    conclusion: conclusion + anomalyNote,
     keyNumbers: risky.length > 0 ? risky.map((r) => `${r.channel.name} ${r.rootCause!.streak_days}일 연속 하락`).join(", ") : "—",
     comparisonBasis: `${timeContext.label} 기준 · 채널 평균(최근 28일) 대비 -10%p 이상 하락 3일 연속`,
     evidence: `위험: ${risky.map((r) => r.channel.name).join(", ") || "없음"} / 기회: ${opportunities.map((r) => r.channel.name).join(", ") || "없음"}`,
@@ -189,7 +217,13 @@ interface NarrativeLike {
   today_rank: number | null;
 }
 export function buildChannelPerformanceAnswer(
-  data: { channel: { code: string; name: string }; matchedTargetLabel: string | null; report: PeriodReportLike | null; narrative: NarrativeLike | null } | null,
+  data: {
+    channel: { code: string; name: string };
+    matchedTargetLabel: string | null;
+    report: PeriodReportLike | null;
+    narrative: NarrativeLike | null;
+    dailyTrend?: { broadcast_date: string; avg_rating: number | null }[];
+  } | null,
   timeContext: TimeContext,
   channelName: string | null
 ): EvidenceAnswer {
@@ -224,17 +258,31 @@ export function buildChannelPerformanceAnswer(
     programmingAction: "자세한 원인/시간대/경쟁채널 비교는 Page 2에서 확인하세요.",
     confidence,
     confidenceNote: isSingleDay ? "실측 데이터 1일 기준(사실 조회, 추세 추정 아님)." : CONFIDENCE_NOTE[confidence],
-    visualization: bar(`${data.channel.name} 시청률 비교`, [
-      { label: isSingleDay ? "오늘" : timeContext.label, value: r.avg_rating },
-      { label: "직전 기간", value: r.prior_period_avg_rating },
-      { label: "최근 12주 평균", value: r.baseline_avg_rating },
-    ]),
+    // Tier 2 확장(2026-08-26, 원 제안 8번) — 기간 질문("최근 7일 추이는?")이면 하루하루의 흐름이
+    // 궁금한 것이므로, 3개 값 막대 비교보다 일별 line 차트가 더 알맞다(비교 기준 3개 값은
+    // keyNumbers/evidence 문장에 이미 그대로 남아있어 정보 손실 없음). 단일 일자 질문은 "추이"
+    // 개념이 없어 기존 3-막대 비교를 그대로 유지한다.
+    visualization: isSingleDay
+      ? bar(`${data.channel.name} 시청률 비교`, [
+          { label: "오늘", value: r.avg_rating },
+          { label: "직전 기간", value: r.prior_period_avg_rating },
+          { label: "최근 12주 평균", value: r.baseline_avg_rating },
+        ])
+      : (line(
+          `${data.channel.name} 일별 시청률 추이(${timeContext.label})`,
+          (data.dailyTrend ?? []).map((d) => ({ label: d.broadcast_date.slice(5), value: d.avg_rating }))
+        ) ??
+        bar(`${data.channel.name} 시청률 비교`, [
+          { label: timeContext.label, value: r.avg_rating },
+          { label: "직전 기간", value: r.prior_period_avg_rating },
+          { label: "최근 12주 평균", value: r.baseline_avg_rating },
+        ])),
     followups: [`${data.channel.name} 시간대별 성과는?`, `${data.channel.name}의 경쟁채널 대비 위치는?`],
   };
 }
 
 export function buildChannelDaypartAnswer(
-  data: { channel: { code: string; name: string }; rows: { daypart: string; avg_rating: number | null; sample_count: number }[] } | null,
+  data: { channel: { code: string; name: string }; rows: { dow: number; dow_label: string; daypart: string; avg_rating: number | null; sample_count: number }[] } | null,
   timeContext: TimeContext,
   direction: "top" | "bottom" | null
 ): EvidenceAnswer {
@@ -275,7 +323,18 @@ export function buildChannelDaypartAnswer(
     programmingAction: wantBottom ? "이 시간대 편성을 재검토하거나 OPPORTUNITY? 분석을 참고하세요." : "이 시간대에 STRENGTHEN 후보 콘텐츠 배치를 검토하세요.",
     confidence: confidenceFromSampleDays(totalSample >= 84 ? 84 : totalSample),
     confidenceNote: CONFIDENCE_NOTE[confidenceFromSampleDays(totalSample >= 84 ? 84 : totalSample)],
-    visualization: bar(`${data.channel.name} 시간대별 평균 시청률`, sorted.map((a) => ({ label: DAYPART_LABEL[a.daypart] ?? a.daypart, value: a.avg }))),
+    // Tier 2 확장(2026-08-26, 원 제안 8번) — daypart 4개 합계 막대보다, RPC가 이미 돌려주는
+    // 요일×daypart 전체 격자를 heatmap으로 보여주면 "무슨 요일에 강한지"까지 한 번에 보인다.
+    visualization:
+      heatmap(
+        `${data.channel.name} 요일×시간대 평균 시청률`,
+        ["월", "화", "수", "목", "금", "토", "일"],
+        Object.values(DAYPART_LABEL),
+        (rowDowLabel, colFriendlyLabel) => {
+          const rawDaypart = (Object.keys(DAYPART_LABEL) as (keyof typeof DAYPART_LABEL)[]).find((k) => DAYPART_LABEL[k] === colFriendlyLabel);
+          return data.rows.find((r) => r.dow_label === rowDowLabel && r.daypart === rawDaypart);
+        }
+      ) ?? bar(`${data.channel.name} 시간대별 평균 시청률`, sorted.map((a) => ({ label: DAYPART_LABEL[a.daypart] ?? a.daypart, value: a.avg }))),
     followups: [`${data.channel.name}의 최근 12주 프로그램 TOP은?`],
   };
 }
