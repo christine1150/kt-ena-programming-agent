@@ -315,6 +315,10 @@ interface DashboardData {
   todayTopPrograms: TodayTopProgramRow[];
   dailyNews: DailyNewsItem[];
   portfolioAnomaly?: PortfolioAnomaly;
+  // 사용자 지시(2026-08-26): "매주 월요일엔 '오늘의 시청률' 밑에 '주말 리포트'를 신설" — asOfDate가
+  // 월요일일 때만(route.ts) 채워진다. 채널별 인사이트와 같은 원시 신호(ChannelNarrativeSignal)를
+  // 토·일 각각에 대해 한 번 더 담아, 화면에서 buildChannelNarrative를 그대로 재사용해 요약한다.
+  weekendReport: { saturday: { date: string; signals: ChannelNarrativeSignal[] }; sunday: { date: string; signals: ChannelNarrativeSignal[] } } | null;
 }
 
 // 사용자 지시: 인사이트·킬러콘텐츠는 이 순서로 언급 (ENA → ENA Play → ENA Drama → OLIFE → ONCE → ENA Story)
@@ -381,7 +385,10 @@ function buildChannelNarrative(
   // 핵심이므로 이 문장이 있으면 항상 맨 앞에 붙인다. 사용자 재지시(2026-08-26): ENA가 아닌
   // 채널도, 그 채널이 다른 채널 오리지널의 직후재방을 트는 경우 그 성적을 여기로 받는다.
   leadSentence?: string | null
-): { channelName: string; text: string } {
+  // 사용자 지시(2026-08-26): "주말 리포트"용 — 이 함수와 완전히 같은 판단 규칙(아래 sentences
+  // 배열)을 재사용하되, 줄글로 이어붙이지 않고 항목별 짧은 문장 배열 그대로 필요해서 추가.
+  // 반환 필드만 늘렸을 뿐(text는 그대로) 기존 호출부는 전혀 영향받지 않는다.
+): { channelName: string; text: string; sentences: string[] } {
   const sentences: { tier: 1 | 2; priority: number; text: string }[] = [];
 
   if (s.rating_delta_pct !== null && Math.abs(s.rating_delta_pct) >= 15 && s.today_rating !== null) {
@@ -532,7 +539,8 @@ function buildChannelNarrative(
   // 않고 별도 필드로 돌려줘서 렌더링 쪽에서 색을 입힐 수 있게 한다.
   const leadPrefix = leadSentence ? `${leadSentence} ` : "";
   if (sentences.length === 0) {
-    return { channelName, text: `${leadPrefix}특별한 변화 없이 평소 수준을 유지했습니다.` };
+    const fallback = `${leadPrefix}특별한 변화 없이 평소 수준을 유지했습니다.`;
+    return { channelName, text: fallback, sentences: [fallback] };
   }
   // 사용자 지시(2026-08-21): 배치 위계 — tier 1(총평, PD·임원진이 바로 이해)을 앞에, tier 2(전문
   // 데이터: 연령대·시간대·유료가구)를 뒤에. 각 tier 안에서는 편차 크기(priority) 순.
@@ -542,6 +550,7 @@ function buildChannelNarrative(
   return {
     channelName,
     text: `${leadPrefix}${ordered.map((s2) => s2.text).join(" ")}`,
+    sentences: [...(leadSentence ? [leadSentence] : []), ...ordered.map((s2) => s2.text)],
   };
 }
 
@@ -796,6 +805,85 @@ function ChannelStatusCard({ channels }: { channels: Map<string, ChannelSummary>
         {rest.map((c) => (
           <ChannelTile key={c.code} channel={c} logoReference={ena} />
         ))}
+      </div>
+    </div>
+  );
+}
+
+// 사용자 지시(2026-08-26): "1페이지에서 매주 월요일에는 '오늘의 시청률' 섹션 밑에 '주말
+// 리포트' 섹션을 신설해서, 금요일 퇴근 후 확인하기 힘들었던 각 채널의 토·일 주요 인사이트를
+// 브리핑해달라 — 룰은 채널별 인사이트와 같으나, 줄글이 아니라 최대한 간략한 보고형 단문으로".
+// route.ts가 월요일에만 채워주는 weekendReport(토·일 각각의 ChannelNarrativeSignal, 채널별
+// 인사이트와 완전히 같은 RPC·같은 타깃 매칭)를 그대로 buildChannelNarrative에 넣어 "같은 룰"을
+// 재사용하고, 문단으로 합치지 않고 sentences 배열(위 함수에 이번에 추가한 필드)을 그대로 항목별
+// 짧은 불릿으로 보여준다 — 상위 2개까지만(더 간략하게, 줄글 버전의 최대 5개보다 훨씬 압축).
+const WEEKEND_REPORT_CHANNEL_ORDER = [...INSIGHT_CHANNEL_ORDER, "SKYUHD"];
+function weekendReportBullets(code: string, signals: ChannelNarrativeSignal[]): string[] {
+  const signal = signals.find((s) => s.channelCode === code);
+  if (code === "SKYUHD") {
+    const built = buildSkyUhdNarrative(signal);
+    return built ? [built.text] : ["특별한 변화 없음"];
+  }
+  if (!signal) return ["데이터 없음"];
+  const channelName = CHANNEL_NAME_BY_CODE[code] ?? code;
+  return buildChannelNarrative(channelName, signal, null).sentences.slice(0, 2);
+}
+function WeekendReportDayColumn({
+  label,
+  day,
+  byCode,
+}: {
+  label: string;
+  day: { date: string; signals: ChannelNarrativeSignal[] };
+  byCode: Map<string, ChannelSummary>;
+}) {
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="mb-2 text-xs font-semibold text-zinc-400">
+        {label} · {formatDateWithDowDots(day.date)}
+      </p>
+      <div className="space-y-2">
+        {WEEKEND_REPORT_CHANNEL_ORDER.map((code) => {
+          const ch = byCode.get(code);
+          if (!ch) return null;
+          const lines = weekendReportBullets(code, day.signals);
+          return (
+            <div key={code} className="rounded-lg bg-zinc-50 px-2.5 py-2">
+              <ChannelLogo
+                channel={{ logoPath: ch.logoPath, name: ch.name, logoVisibleRatio: ch.logoVisibleRatio, logoVisibleTopRatio: ch.logoVisibleTopRatio }}
+                heightPx={14}
+                className="mb-1"
+              />
+              <ul className="space-y-0.5">
+                {lines.map((line, i) => (
+                  <li key={i} className="text-[11px] leading-snug text-zinc-600">
+                    · {line}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+function WeekendReportCard({
+  weekendReport,
+  byCode,
+}: {
+  weekendReport: { saturday: { date: string; signals: ChannelNarrativeSignal[] }; sunday: { date: string; signals: ChannelNarrativeSignal[] } };
+  byCode: Map<string, ChannelSummary>;
+}) {
+  return (
+    <div className={CARD}>
+      <h2 className={`font-heading mb-1 text-xl font-bold tracking-tight ${ACCENT_HEADING}`}>주말 리포트</h2>
+      <p className="mb-4 text-sm text-zinc-400">
+        금요일 퇴근 후 확인하기 어려웠던 토·일 각 채널의 주요 변화를 간단히 정리했습니다(채널별 인사이트와 같은 기준: 최근 4주 평균·순위·1위 프로그램 대비 비교).
+      </p>
+      <div className="flex flex-col gap-5 sm:flex-row">
+        <WeekendReportDayColumn label="토요일" day={weekendReport.saturday} byCode={byCode} />
+        <WeekendReportDayColumn label="일요일" day={weekendReport.sunday} byCode={byCode} />
       </div>
     </div>
   );
@@ -2407,6 +2495,13 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           // 삭제. 채널별 킬러 콘텐츠는 좌/우 2컬럼 하나의 통합 섹션(전체 폭)으로 마지막에 배치.
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <ChannelStatusCard channels={byCode} />
+            {/* 사용자 지시(2026-08-26): "오늘의 시청률 섹션 밑에 주말 리포트 섹션 신설" — 월요일
+                (route.ts가 weekendReport를 채워주는 조건)에만 표시, 2컬럼 전체 폭으로 그 아래 줄에 */}
+            {data.weekendReport && (
+              <div className="lg:col-span-2">
+                <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />
+              </div>
+            )}
             <OriginalContentReportCard
               report={data.originalContentReport}
               enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}

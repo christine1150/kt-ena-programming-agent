@@ -1139,6 +1139,50 @@ export async function GET(request: Request) {
     }))
   );
 
+  // 12) 사용자 지시(2026-08-26): "매주 월요일에는 '오늘의 시청률' 밑에 '주말 리포트' 섹션을
+  // 신설해서 금요일 퇴근 후 확인하기 힘들었던 토·일 주요 인사이트를 간략한 보고 형태로" — asOfDate
+  // (날짜 선택기로 과거 월요일을 조회해도 그대로 동작하도록 "진짜 오늘"이 아니라 이 값 기준)의
+  // 요일이 월요일일 때만 계산한다(다른 요일엔 비용 없음). "채널별 인사이트와 같은 룰"이라는
+  // 요청대로 위 narrativeSignals와 완전히 같은 RPC(get_channel_daily_narrative)·같은 타깃 매칭
+  // 규칙을 토요일·일요일 각각에 다시 불러 재사용하되, household·전주 비교 같은 부가 조회는
+  // 생략해 가볍게 유지한다(요청한 "최대한 간략한 보고 형태"엔 그 정보까진 필요 없음).
+  let weekendReport: { saturday: { date: string; signals: ChannelNarrativeSignal[] }; sunday: { date: string; signals: ChannelNarrativeSignal[] } } | null = null;
+  if (asOfDateIsoDow === 1) {
+    const saturdayDate = offsetDateStr(asOfDate, -2);
+    const sundayDate = offsetDateStr(asOfDate, -1);
+    const fetchWeekendDaySignals = async (dateStr: string): Promise<ChannelNarrativeSignal[]> => {
+      const results = await mapWithConcurrency(ALL_CHANNEL_CODES, 3, async (code): Promise<ChannelNarrativeSignal | null> => {
+        const ch = channelByCode.get(code);
+        const isSkyuhd = code === "SKYUHD";
+        // skyUHD는 위 skyuhdSignalResult와 동일하게 matchedTargetLabelByCode 값을 그대로 쓰고
+        // (타깃상세 표기 vs 랭킹 시트 표기 구분이 skyUHD엔 없음), 나머지 6개 채널은 위
+        // fetchNarrativeSignal과 동일하게 랭킹 시트 표기(rankTargetLabel)를 써야 today_rank/
+        // baseline_avg_rank가 채워진다(20260825 재확인 버그와 동일 원인, 동일 처방).
+        const targetLabel = isSkyuhd ? matchedTargetLabelByCode.get("SKYUHD") : ch?.primary_target ? resolveRankSheetTargetLabel(ch.primary_target) : null;
+        if (!ch?.primary_target || !targetLabel) return null;
+        const programTargetLabel = isSkyuhd ? "__없음__" : resolveProgramLevelTargetLabel(ch.primary_target);
+        const isNationalScope = ch.market === "전국";
+        const demographicLabels = isSkyuhd
+          ? []
+          : isNationalScope
+            ? ["전국 여20대", "전국 남20대", "전국 여40대", "전국 남40대"]
+            : ["수도권 여20대", "수도권 남20대", "수도권 여40대", "수도권 남40대"];
+        const { data } = await supabase.rpc("get_channel_daily_narrative", {
+          p_channel_code: code,
+          p_target_label: targetLabel,
+          p_program_target_label: programTargetLabel,
+          p_demographic_labels: demographicLabels,
+          p_as_of_date: dateStr,
+        });
+        if (!data?.[0]) return null;
+        return { channelCode: code, ...data[0], priorWeekRating: null, priorWeek2Rating: null, llmNarrative: null } as ChannelNarrativeSignal;
+      });
+      return results.filter((s): s is ChannelNarrativeSignal => s !== null);
+    };
+    const [saturdaySignals, sundaySignals] = await Promise.all([fetchWeekendDaySignals(saturdayDate), fetchWeekendDaySignals(sundayDate)]);
+    weekendReport = { saturday: { date: saturdayDate, signals: saturdaySignals }, sunday: { date: sundayDate, signals: sundaySignals } };
+  }
+
   return NextResponse.json({
     ok: true,
     asOfDate,
@@ -1152,5 +1196,6 @@ export async function GET(request: Request) {
     todayTopPrograms,
     dailyNews: dailyNewsRows ?? [],
     portfolioAnomaly,
+    weekendReport,
   });
 }
