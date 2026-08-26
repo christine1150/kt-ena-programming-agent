@@ -553,9 +553,18 @@ export function buildProgramCrossChannelReachAnswer(
   data: { channel: { code: string; name: string }; dateFrom: string; dateTo: string; rows: CrossChannelReachRow[] } | null,
   timeContext: TimeContext
 ): EvidenceAnswer {
+  // 사용자 지시(2026-08-26): 기간 지정이 없으면 기본 1년이지만, "지금 ~하고 있는"류
+  // 질문이면 executor가 최근 한달로 좁힌다 — 라벨도 실제 계산된 기간(dateFrom~dateTo)의
+  // 일수를 그대로 보여줘야 "1년"으로 고정 표기하는 거짓 라벨이 안 된다.
   const periodLabel =
     timeContext.raw === null && data
-      ? `최근 1년(${data.dateFrom}~${data.dateTo}, 기간 지정이 없어 기본값 적용)`
+      ? (() => {
+          const days = Math.round(
+            (new Date(data.dateTo).getTime() - new Date(data.dateFrom).getTime()) / 86400000
+          );
+          const roughLabel = days <= 31 ? "최근 한달" : "최근 1년";
+          return `${roughLabel}(${data.dateFrom}~${data.dateTo}, 기간 지정이 없어 기본값 적용)`;
+        })()
       : timeContext.label;
 
   if (!data || data.rows.length === 0) {

@@ -73,7 +73,7 @@ export async function dispatchIntent(routed: RouteResult, question: string): Pro
       return buildCompetitiveHeadToHeadAnswer(data, timeContext);
     }
     case "PROGRAM_CROSS_CHANNEL_REACH": {
-      const data = await execProgramCrossChannelReach(parameters, timeContext);
+      const data = await execProgramCrossChannelReach(parameters, timeContext, question);
       return buildProgramCrossChannelReachAnswer(data, timeContext);
     }
     default:

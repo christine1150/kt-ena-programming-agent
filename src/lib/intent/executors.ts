@@ -263,26 +263,38 @@ export interface CrossChannelReachRow {
   avg_rating: number | null;
 }
 const CROSS_CHANNEL_REACH_DEFAULT_LOOKBACK_DAYS = 365;
+// 사용자 지시(2026-08-26): "지금 OO 채널에서 편성하고 있는... 이라고 물어보면 최근 한달을
+// 기준으로 하자" — "지금/현재 ~하고 있는"류(현재진행형)로 물으면 1년이 아니라 최근 한달로
+// 좁힌다("지금 방영 중"을 묻는데 1년치를 다 훑는 건 질문 취지와 안 맞는다).
+const CROSS_CHANNEL_REACH_CURRENTLY_AIRING_LOOKBACK_DAYS = 30;
+const CURRENTLY_AIRING_PHRASING = /(지금|현재).*(하고\s*있|방영\s*중|편성\s*중)/;
 
-export async function execProgramCrossChannelReach(params: ExtractedParameters, timeContext: TimeContext) {
+export async function execProgramCrossChannelReach(params: ExtractedParameters, timeContext: TimeContext, question: string) {
   const channels = await getChannelRefs();
   const channel = channels.find((c) => c.code === params.channelCode);
   if (!channel) return null;
 
   // 사용자 지시(2026-08-26): "특별한 기간 요청이 없을 경우 지난 1년의 데이터로 계산해줘"
   // — 시간 표현이 아예 없으면(raw === null, timeResolver 기본값은 "오늘" 하루) 1년으로 넓힌다.
+  // 단, "지금 ~하고 있는"류 현재진행형 질문이면 위 사용자 지시대로 최근 한달로 좁힌다.
   let dateFrom = timeContext.dateFrom;
   const dateTo = timeContext.dateTo;
   if (timeContext.raw === null) {
+    const lookbackDays = CURRENTLY_AIRING_PHRASING.test(question)
+      ? CROSS_CHANNEL_REACH_CURRENTLY_AIRING_LOOKBACK_DAYS
+      : CROSS_CHANNEL_REACH_DEFAULT_LOOKBACK_DAYS;
     const d = new Date(dateTo);
-    d.setDate(d.getDate() - CROSS_CHANNEL_REACH_DEFAULT_LOOKBACK_DAYS);
+    d.setDate(d.getDate() - lookbackDays);
     dateFrom = d.toISOString().slice(0, 10);
   }
 
+  // 방어적 상한(2026-08-26, 사용자 제보 버그 수정 후속) — 20260826250000에서 근본 원인(own
+  // channel 쪽 타깃 뻥튀기)은 고쳤지만, PostgREST 기본 응답 상한(1000행)에 다시 조용히 걸리는
+  // 것을 막기 위해 명시적으로 여유 있는 상한을 둔다. 실측 정상 케이스는 수백 행 수준.
   const { data } = await supabase.rpc("get_program_cross_channel_reach", {
     p_channel_code: channel.code,
     p_date_from: dateFrom,
     p_date_to: dateTo,
-  });
+  }).limit(2000);
   return { channel, dateFrom, dateTo, rows: (data ?? []) as CrossChannelReachRow[] };
 }
