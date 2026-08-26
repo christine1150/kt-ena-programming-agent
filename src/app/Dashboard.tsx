@@ -1169,7 +1169,9 @@ function ProgramRatingHistoryChart({
 // 동시간대 경쟁 프로그램(manualReport.competitor_programs, 프로그램 단위 평균만 있어 분당
 // 값은 없음 — 그 프로그램의 실제 방영 구간에 평균값 높이로 가로 구간을 그어 참고용으로 겹쳐
 // 보여준다)을 함께 그린다. 새 계산 없이 PD가 이미 낸 값만 그대로 옮긴다.
-const MANUAL_COMPETITOR_BAND_COLORS = ["#f59e0b", "#0891b2", "#a21caf", "#65a30d", "#db2777"];
+// 사용자 지시(2026-08-26, 재수정): "방송 시간 내에 tvN 자료도 있으면 tvN도 보이게 해서 총
+// 6개 채널이 보이게" — 상위 5개→6개로 확장(색상도 하나 추가).
+const MANUAL_COMPETITOR_BAND_COLORS = ["#f59e0b", "#0891b2", "#a21caf", "#65a30d", "#db2777", "#0d9488"];
 // 사용자 지시(2026-08-26, 분당 시청률 재수정): "그래프 위에 겹쳐 쓰던 채널명·프로그램명이
 // 서로 겹쳐 안 읽힘 — 가운데 표(PD 원본 엑셀 참고 이미지)처럼 그래프 아래 정리된 목록으로,
 // 채널 로고를 작게 넣어 표시". 등록 경쟁채널(SBS/MBC/KBS1 등)은 이 채널들(ENA 계열)과 달리
@@ -1200,26 +1202,26 @@ function competitorLogoSrc(channelName: string): string {
   return `/competitor-logos/${file}`;
 }
 // 채널 로고가 아직 없을 때 대신 보여줄 작은 이니셜 배지(해당 방송사 dashed line과 같은 색).
+// 사용자 지시(2026-08-26, 재수정): "채널 로고를 동그라미 안에 가두지 말고, 로고만 보이게" —
+// 실제 로고 파일이 있으면 원형 배경·클리핑 없이 로고 원본 비율 그대로 보여준다(SBS/MBC처럼
+// 가로로 긴 로고가 원 안에서 눌려 보이던 문제). 파일이 없을 때만(onError) 이니셜 원형 배지로
+// 대체 — 이 경우에만 상태가 필요해 컴포넌트를 stateful로 바꿨다.
 function CompetitorLogoBadge({ channelName, color }: { channelName: string; color: string }) {
-  return (
-    <span
-      className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full text-[7px] font-bold text-white"
-      style={{ backgroundColor: color }}
-    >
-      <span className="pointer-events-none">{channelName.slice(0, 2)}</span>
-      {/* eslint-disable-next-line @next/next/no-img-element -- 파일 존재 여부를 onError로 즉시
-          감지해 이니셜 배지로 자동 대체해야 해서, 빌드 타임에 존재를 가정하는 next/image 대신
-          일반 img를 쓴다. */}
-      <img
-        src={competitorLogoSrc(channelName)}
-        alt=""
-        className="absolute inset-0 h-full w-full rounded-full bg-white object-contain p-[1px]"
-        onError={(e) => {
-          e.currentTarget.style.display = "none";
-        }}
-      />
-    </span>
-  );
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <span
+        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[7px] font-bold text-white"
+        style={{ backgroundColor: color }}
+      >
+        {channelName.slice(0, 2)}
+      </span>
+    );
+  }
+  // 파일 존재 여부를 onError로 즉시 감지해 이니셜 배지로 자동 대체해야 해서, 빌드 타임에
+  // 존재를 가정하는 next/image 대신 일반 img를 쓴다.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={competitorLogoSrc(channelName)} alt={channelName} className="h-4 w-auto max-w-[44px] shrink-0 object-contain" onError={() => setFailed(true)} />;
 }
 function ManualMinuteRatingChart({
   minuteRatings,
@@ -1270,7 +1272,8 @@ function ManualMinuteRatingChart({
   const xOfMin = (m: number) => PAD_X + ((m - startMin) / span) * (W - PAD_X * 2);
   const fmtHHMM = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   // PD가 뽑은 "동시간대 경쟁 프로그램" 목록 — 자사 본방(rank=null) 행은 제외, 실제 방영구간이
-  // 이 그래프 시간창과 겹치는 것만, 시청률 순 상위 5개까지만(너무 많으면 알아보기 어려움).
+  // 이 그래프 시간창과 겹치는 것만, 시청률 순 상위 6개까지만(사용자 지시 2026-08-26 재수정:
+  // "tvN도 보이게 해서 총 6개 채널이 보이게" — 5개→6개로 확장, 너무 많으면 알아보기 어려움).
   // "#"(자사 본방 기준행, rank=null)뿐 아니라, PD 목록 안에 같은 채널명으로 자기 자신이
   // 순위권에도 또 한 번 나오는 경우(신병4사보타주 실측 확인)가 있어 같은 채널명은 전부 제외
   // — 안 그러면 자사 선(굵은 실선)과 겹치는 중복 구간이 또 그려진다.
@@ -1278,7 +1281,7 @@ function ManualMinuteRatingChart({
     .filter((c) => c.rank !== null && c.channel_name !== ownChannelName && c.start_time && c.end_time && c.target_rating !== null)
     .filter((c) => toMinutes(c.start_time!.slice(0, 5)) < endMin && toMinutes(c.end_time!.slice(0, 5)) > startMin)
     .sort((a, b) => (b.target_rating ?? 0) - (a.target_rating ?? 0))
-    .slice(0, 5);
+    .slice(0, 6);
   return (
     <div className="mt-2 rounded-xl bg-zinc-50 p-3">
       <p className="mb-1 text-[11px] text-zinc-400">
