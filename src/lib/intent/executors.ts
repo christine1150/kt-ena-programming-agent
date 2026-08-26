@@ -372,11 +372,72 @@ export async function execProgramCrossChannelReach(params: ExtractedParameters, 
 // 이미 쓰는 "hour<2면 +24" 관행(broadcast hour, 2~25)을 그대로 따른다:
 //   MAIN_HOURS  06:00~25:00(익일01:00) → bh 6~24
 //   DAWN_HOURS  01:00~06:00            → bh 25(=익일01시대) 또는 bh 2~5
-function isMainBroadcastHour(bh: number): boolean {
-  return bh >= 6 && bh <= 24;
-}
 function isDawnBroadcastHour(bh: number): boolean {
   return bh === 25 || (bh >= 2 && bh <= 5);
+}
+const DEFAULT_SCOPE_START_BH = 6; // MAIN_HOURS 기본 시작(06:00)
+const DEFAULT_SCOPE_END_BH = 25; // MAIN_HOURS 기본 끝(익일 01:00, exclusive)
+
+// 사용자 지시(2026-08-26, 후속) — "질문에 특정 시간대·요일 범위가 명시되면 전체가 아니라 그
+// 범위 안에서만 WEAK SLOT/추천을 도출하라(Dynamic Scope Constraint)". 원 스펙은 OpenAI Tool
+// Parameter(time_range_start/end, target_days)로 LLM이 값을 뽑아오는 방식을 제안했지만, 이
+// 코드베이스는 시간 관련 파싱을 항상 결정론적 코드가 전담한다(CLAUDE.md 원칙 + time_phrase가
+// timeResolver.ts를 거치는 것과 동일한 이유 — LLM이 날짜/시간 계산을 하면 재현 불가능하고,
+// Tier 1(규칙 기반)만으로도 이 질문에 답할 수 있어야 LLM 장애 시에도 서비스가 끊기지 않는다).
+// 그래서 질문 원문(question, dispatchIntent가 이미 모든 Intent에 넘겨주는 값)을 정규식으로
+// 직접 파싱한다 — 3개 라우팅 경로(규칙 기반/9-Intent 분류기/함수 호출) 전부 이 실행부를
+// 공유하므로 어느 경로로 들어와도 동일하게 동작한다.
+export interface HourDayScope {
+  hourRangeSpecified: boolean; // 시간 범위가 질문에 명시됐는지
+  startBh: number; // broadcast hour(2~25) — 명시 안 됐으면 DEFAULT_SCOPE_START_BH
+  endBh: number; // exclusive
+  targetDays: string[] | null; // MON~SUN, 명시 안 됐으면 null(전체 요일)
+}
+const DOW_LABEL_TO_CODE: Record<string, string> = { 월: "MON", 화: "TUE", 수: "WED", 목: "THU", 금: "FRI", 토: "SAT", 일: "SUN" };
+// "오전/새벽/아침"=AM, "오후/저녁/밤"=PM, "낮"은 모호해 숫자를 그대로 둔다(예: "낮 12시"=정오는
+// 이미 12로 맞음, "낮 3시"류는 드문 표현이라 24시간제로 그대로 해석 — 과설계 방지).
+function resolveClockHour(qualifier: string | undefined, h: number): number {
+  if (h < 1 || h > 12) return h; // 이미 13~23이면 24시간제로 간주, 그대로 사용
+  const isPm = qualifier === "오후" || qualifier === "저녁" || qualifier === "밤";
+  const isAm = qualifier === "오전" || qualifier === "새벽" || qualifier === "아침";
+  if (isPm) return h === 12 ? 12 : h + 12;
+  if (isAm) return h === 12 ? 0 : h;
+  return h; // 구분자 없음("낮" 포함) — 모호하므로 숫자 그대로
+}
+function clockHourToBh(hour: number): number {
+  return hour < 2 ? hour + 24 : hour; // get_channel_top_programs 등과 동일한 관행
+}
+const HOUR_RANGE_RE =
+  /(새벽|오전|아침|낮|오후|저녁|밤)?\s*(\d{1,2})\s*시(?:\s*\d{1,2}\s*분)?\s*(?:부터|~|-|∼)\s*(새벽|오전|아침|낮|오후|저녁|밤)?\s*(\d{1,2})\s*시/;
+export function parseHourDayScope(question: string): HourDayScope {
+  let targetDays: string[] | null = null;
+  if (/평일|주중/.test(question)) {
+    targetDays = ["MON", "TUE", "WED", "THU", "FRI"];
+  } else if (/주말/.test(question)) {
+    targetDays = ["SAT", "SUN"];
+  } else {
+    const dowMatches = [...question.matchAll(/(월|화|수|목|금|토|일)요일/g)].map((m) => DOW_LABEL_TO_CODE[m[1]]);
+    if (dowMatches.length > 0) targetDays = [...new Set(dowMatches)];
+  }
+
+  const m = question.match(HOUR_RANGE_RE);
+  if (!m) return { hourRangeSpecified: false, startBh: DEFAULT_SCOPE_START_BH, endBh: DEFAULT_SCOPE_END_BH, targetDays };
+  const qualifier1 = m[1];
+  const hour1 = parseInt(m[2], 10);
+  // 두 번째 시각에 구분자가 없으면 한국어 자연스러운 생략 규칙대로 첫 구분자를 그대로 물려받는다
+  // (예: "오후 1시~10시" → 둘 다 오후 = 13시~22시).
+  const qualifier2 = m[3] ?? qualifier1;
+  const hour2 = parseInt(m[4], 10);
+  const startBh = clockHourToBh(resolveClockHour(qualifier1, hour1));
+  const endBh = clockHourToBh(resolveClockHour(qualifier2, hour2));
+  // 끝이 시작보다 앞이면(자정을 넘나드는 표현 등, 드물고 이 도메인의 bh 2~25 범위로는 정확히
+  // 표현 불가) 잘못 해석해 엉뚱한 범위로 좁히느니 차라리 "시간 범위 없음"으로 안전하게 처리한다.
+  if (endBh <= startBh) return { hourRangeSpecified: false, startBh: DEFAULT_SCOPE_START_BH, endBh: DEFAULT_SCOPE_END_BH, targetDays };
+  return { hourRangeSpecified: true, startBh, endBh, targetDays };
+}
+function dowCodeOfDate(dateStr: string): string {
+  const DOW = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]; // getUTCDay(): 0=SUN
+  return DOW[new Date(`${dateStr}T00:00:00Z`).getUTCDay()];
 }
 // daypart_of()(SQL) 4구간 판정을 JS에서 그대로 미러링 — 추천 후보 매칭(daypart 단위, 기존과
 // 동일 폭)에만 쓰고, MAIN/DAWN 1순위 판정에는 쓰지 않는다(그건 위 bh 함수가 전담).
@@ -423,12 +484,19 @@ export interface DawnAnomalyCandidate {
 export interface SlotImprovementData {
   channel: { code: string; name: string };
   asOfDate: string;
-  weakSlots: SlotFitRow[]; // MAIN_HOURS(06~25시) 안에서만, REPLACE/MOVE 태그 중 Fit Score 낮은 순 상위 2개
+  weakSlots: SlotFitRow[]; // scope 안에서만(기본은 MAIN_HOURS 06~25시), REPLACE/MOVE 태그 중 Fit Score 낮은 순 상위 2개
   recommendations: Record<string, SlotRecommendationCandidate[]>; // key: daypart(새벽/오전/오후/저녁_심야)
-  dawnAnomalies: DawnAnomalyCandidate[]; // DAWN_HOURS(01~06시) 중 1년 평균 대비 하락이 확인된 것만
+  dawnAnomalies: DawnAnomalyCandidate[]; // 사용자가 시간/요일 범위를 지정하지 않았을 때만 계산 — DAWN_HOURS(01~06시) 중 1년 평균 대비 하락이 확인된 것만
+  // 질문에 시간 범위 또는 요일이 명시됐을 때만 채워진다(둘 다 없으면 null) — 응답 템플릿이
+  // "(지정한 OO 범위 기준)"을 서두에 밝히는 데 쓴다.
+  customScope: { startBh: number; endBh: number; targetDays: string[] | null } | null;
 }
 
-export async function execSlotImprovementRecommendation(params: ExtractedParameters, timeContext: TimeContext): Promise<SlotImprovementData | null> {
+export async function execSlotImprovementRecommendation(
+  params: ExtractedParameters,
+  timeContext: TimeContext,
+  question: string
+): Promise<SlotImprovementData | null> {
   const channels = await getChannelRefs();
   const channel = channels.find((c) => c.code === params.channelCode);
   if (!channel) return null;
@@ -473,17 +541,35 @@ export async function execSlotImprovementRecommendation(params: ExtractedParamet
     .eq("channel_id", channelId);
 
   // fit-score/route.ts와 동일: 최근 14일 안에 실제로 방영된 프로그램만 "현재 편성 중"으로 본다
-  // (12주 표본에는 있지만 이미 종영한 프로그램까지 진단 대상에 섞이지 않도록).
+  // (12주 표본에는 있지만 이미 종영한 프로그램까지 진단 대상에 섞이지 않도록). broadcast_date도
+  // 함께 받아 요일(target_days) 조건 판정에 쓴다 — Fit Score 자체는 요일별로 쪼개 계산하지
+  // 않으므로(12주 통합 지표), "지정한 요일에 실제로 방영된 적 있는 프로그램만" 후보로 좁히는
+  // 방식으로 요일 범위를 반영한다(새 계산·새 지표 없이 실제 ratings 방영일만 근거로 삼음).
   const fourteenDaysAgo = new Date(asOfDate);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
-  const { data: recentPrograms } = await supabase
+  const { data: recentRatingsRows } = await supabase
     .from("ratings")
-    .select("program_id")
+    .select("program_id, broadcast_date")
     .eq("channel_id", channelId)
     .eq("source_type", "nielsen_daily")
     .not("program_id", "is", null)
     .gte("broadcast_date", fourteenDaysAgo.toISOString().slice(0, 10));
-  const recentProgramIds = new Set((recentPrograms ?? []).map((r) => r.program_id));
+  const recentProgramIds = new Set((recentRatingsRows ?? []).map((r) => r.program_id));
+  const dowByProgramId = new Map<string, Set<string>>();
+  for (const r of (recentRatingsRows ?? []) as { program_id: string; broadcast_date: string }[]) {
+    const set = dowByProgramId.get(r.program_id) ?? new Set<string>();
+    set.add(dowCodeOfDate(r.broadcast_date));
+    dowByProgramId.set(r.program_id, set);
+  }
+
+  const scope = parseHourDayScope(question);
+  const hasCustomScope = scope.hourRangeSpecified || scope.targetDays !== null;
+  const customScope = hasCustomScope ? { startBh: scope.startBh, endBh: scope.endBh, targetDays: scope.targetDays } : null;
+  const passesDayFilter = (programId: string): boolean => {
+    if (scope.targetDays === null) return true;
+    const observed = dowByProgramId.get(programId);
+    return observed !== undefined && scope.targetDays.some((d) => observed.has(d));
+  };
 
   type FitRow = Omit<SlotFitRow, "canonical_name" | "startHour"> & { programs: { canonical_name: string } | null };
   const recentFitRows = ((fitRows ?? []) as unknown as FitRow[]).filter((r) => recentProgramIds.has(r.program_id));
@@ -511,16 +597,21 @@ export async function execSlotImprovementRecommendation(params: ExtractedParamet
       return row;
     });
 
-  // ① 1순위 WEAK SLOT — 반드시 MAIN_HOURS(06~25시) 안에서만 Fit Score 낮은 순 상위 2개.
+  // ① 1순위 WEAK SLOT — 시간/요일 범위가 지정됐으면 그 범위 안에서만(요구사항 3번 "지정 시"),
+  // 아니면 기본 MAIN_HOURS(06~25시) 안에서만(요구사항 3번 "미지정 시") Fit Score 낮은 순 상위 2개.
   const weakSlots = replaceOrMove
-    .filter((r) => r.startHour !== null && isMainBroadcastHour(r.startHour))
+    .filter((r) => r.startHour !== null && r.startHour >= scope.startBh && r.startHour < scope.endBh && passesDayFilter(r.program_id))
     .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
     .slice(0, 2);
 
-  // ② 새벽(01~06시) 예외 — 절대 시청률로 뽑지 않고, "최근 1년 동시간대 평균" 대비 최근
-  // 성과가 실제로 떨어진 경우만 별도 언급한다(get_program_slot_efficiency 2회 호출로 비교,
-  // 새 SQL 없음).
-  const dawnFlagged = replaceOrMove.filter((r) => r.startHour !== null && isDawnBroadcastHour(r.startHour) && r.canonical_name !== null);
+  // ② 새벽(01~06시) 예외 — 사용자가 시간/요일 범위를 직접 지정했으면(hasCustomScope) 이미
+  // 원하는 범위로 완전히 좁혀 답하는 것이므로, 범위를 지정하지 않은 "질문에 없던" 새벽 참고
+  // 항목을 덧붙이지 않는다(요구사항 3번 "지정 시"는 그 범위 안에서만 진단·추천하라는 뜻).
+  // 지정하지 않았을 때만 절대 시청률로 뽑지 않고 "최근 1년 동시간대 평균" 대비 최근 성과가
+  // 실제로 떨어진 경우만 별도 언급한다(get_program_slot_efficiency 2회 호출로 비교, 새 SQL 없음).
+  const dawnFlagged = hasCustomScope
+    ? []
+    : replaceOrMove.filter((r) => r.startHour !== null && isDawnBroadcastHour(r.startHour) && r.canonical_name !== null);
   const dawnAnomalyResults = await Promise.all(
     dawnFlagged.map(async (r): Promise<DawnAnomalyCandidate | null> => {
       const canonicalName = r.canonical_name as string;
@@ -554,7 +645,7 @@ export async function execSlotImprovementRecommendation(params: ExtractedParamet
   const dawnAnomalies = dawnAnomalyResults.filter((d): d is DawnAnomalyCandidate => d !== null).sort((a, b) => a.dropPct - b.dropPct);
 
   if (weakSlots.length === 0) {
-    return { channel, asOfDate, weakSlots: [], recommendations: {}, dawnAnomalies };
+    return { channel, asOfDate, weakSlots: [], recommendations: {}, dawnAnomalies, customScope };
   }
 
   // 사용자 지시(2026-08-26, 후속) — "자사 타 채널에서 시청률이 아무리 높아도 편성 권한/브랜드
@@ -608,5 +699,5 @@ export async function execSlotImprovementRecommendation(params: ExtractedParamet
     recommendations[daypart] = candidates.sort((a, b) => (b.avgRating ?? 0) - (a.avgRating ?? 0)).slice(0, 3);
   }
 
-  return { channel, asOfDate, weakSlots, recommendations, dawnAnomalies };
+  return { channel, asOfDate, weakSlots, recommendations, dawnAnomalies, customScope };
 }

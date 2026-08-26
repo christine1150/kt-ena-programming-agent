@@ -63,6 +63,11 @@ const CASES: TestCase[] = [
   { question: "ENA PLAY가 이번주 개선할 시간대는 어디야? 추천 프로그램은?", expectedIntentId: "SLOT_IMPROVEMENT_RECOMMENDATION", expectedParams: { channelCode: "ENA_PLAY" } },
   { question: "OLIFE 편성 중에 교체하면 좋을 시간대는?", expectedIntentId: "SLOT_IMPROVEMENT_RECOMMENDATION", expectedParams: { channelCode: "OLIFE" } },
   { question: "ENA DRAMA 약세 구간에 어떤 프로그램을 편성하면 좋을까?", expectedIntentId: "SLOT_IMPROVEMENT_RECOMMENDATION", expectedParams: { channelCode: "ENA_DRAMA" } },
+  // Dynamic Scope Constraint(2026-08-26 후속) — 시간/요일 범위가 붙어도 Intent 판정 자체는
+  // 그대로 SLOT_IMPROVEMENT_RECOMMENDATION이어야 한다(범위 파싱은 실행부 parseHourDayScope가
+  // question 원문을 직접 재파싱 — 라우팅 단계 파라미터에는 안 실림, 그대로 유지 확인용).
+  { question: "ENA PLAY 오후 1시~10시 사이에서만 개선할 곳 찾아줘", expectedIntentId: "SLOT_IMPROVEMENT_RECOMMENDATION", expectedParams: { channelCode: "ENA_PLAY" } },
+  { question: "OLIFE 평일 저녁 시간대 중 교체하면 좋을 시간대는?", expectedIntentId: "SLOT_IMPROVEMENT_RECOMMENDATION", expectedParams: { channelCode: "OLIFE" } },
   // UNSUPPORTED — 현재 등록 안 된 Macro(예: Audience Flow, Fatigue/Rerun, ROI 등)
   { question: "이 프로그램 뒤에 편성했을 때 성과가 좋은 프로그램은?", expectedIntentId: "UNSUPPORTED" },
   { question: "이 프로그램의 광고 ROI는 얼마야?", expectedIntentId: "UNSUPPORTED" },

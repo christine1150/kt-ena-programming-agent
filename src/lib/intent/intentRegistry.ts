@@ -128,14 +128,17 @@ export const INTENT_REGISTRY: IntentDefinition[] = [
     intent_id: "SLOT_IMPROVEMENT_RECOMMENDATION",
     macro_intent: "CHANNEL_PERFORMANCE",
     description:
-      "특정 채널에서 Fit Score 기준 REPLACE/MOVE로 태그된(=WEAK SLOT) 요일·시간대·프로그램을 메인 시간대(06~25시)에서만 1순위로 진단하고(새벽 01~06시는 최근 1년 동시간대 평균 대비 하락이 확인될 때만 하단 참고 언급), 같은 시간대(daypart)에서 실제로 검증되었고 (A) 대상 채널 전체 기간 편성 이력 또는 (B) 주요 콘텐츠 관리 리스트(featured_content) 등록 조건을 하나 이상 충족하는 우리 포트폴리오 프로그램만 대체 편성 후보로 추천한다.",
+      "특정 채널에서 Fit Score 기준 REPLACE/MOVE로 태그된(=WEAK SLOT) 요일·시간대·프로그램을 메인 시간대(06~25시)에서만 1순위로 진단하고(새벽 01~06시는 최근 1년 동시간대 평균 대비 하락이 확인될 때만 하단 참고 언급), 같은 시간대(daypart)에서 실제로 검증되었고 (A) 대상 채널 전체 기간 편성 이력 또는 (B) 주요 콘텐츠 관리 리스트(featured_content) 등록 조건을 하나 이상 충족하는 우리 포트폴리오 프로그램만 대체 편성 후보로 추천한다. 질문에 특정 시간대(예: '오후 1시~10시') 또는 요일(예: '평일', '월요일')이 명시되면 전체가 아니라 그 범위 안에서만 진단·추천한다(질문 원문을 직접 파싱 — 채널·시간 파라미터 외 추가 입력 불필요).",
     examples: [
       "ENA Play가 이번주 개선할 시간대는 어디야? 추천 프로그램은?",
       "OLIFE 편성 중에 교체하면 좋을 시간대는?",
       "ENA Drama 약세 구간에 어떤 프로그램을 편성하면 좋을까?",
+      "ENA Play 오후 1시~10시 사이에서만 개선할 곳 찾아줘",
+      "OLIFE 평일 저녁 시간대 중 교체할 프로그램 있어?",
     ],
     keywords: [
       "개선할 시간대",
+      "개선할 곳",
       "개선이 필요한",
       "시급히 개선",
       "편성하면 좋을",
@@ -151,7 +154,7 @@ export const INTENT_REGISTRY: IntentDefinition[] = [
     ],
     required_parameters: ["channelCode"],
     data_mart:
-      "mart_scheduling_fit_score(REPLACE/MOVE 태그, 06~25시 한정) + get_program_slot_efficiency(새벽 1년 대비 하락 검증) + get_channel_top_programs(포트폴리오 6채널) + programs/featured_content(추천 후보 A/B 조건 필터)",
+      "mart_scheduling_fit_score(REPLACE/MOVE 태그, 기본 06~25시 한정 — 질문에 시간/요일 범위가 명시되면 그 범위로 대체) + get_program_slot_efficiency(새벽 1년 대비 하락 검증) + get_channel_top_programs(포트폴리오 6채널) + programs/featured_content(추천 후보 A/B 조건 필터) + ratings(요일 필터용 실제 방영일)",
     specificity: 5,
   },
 ];

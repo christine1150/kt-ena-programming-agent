@@ -79,7 +79,7 @@ export async function dispatchIntent(routed: RouteResult, question: string): Pro
       return buildProgramCrossChannelReachAnswer(data, timeContext);
     }
     case "SLOT_IMPROVEMENT_RECOMMENDATION": {
-      const data = await execSlotImprovementRecommendation(parameters, timeContext);
+      const data = await execSlotImprovementRecommendation(parameters, timeContext, question);
       return buildSlotImprovementRecommendationAnswer(data, timeContext);
     }
     default:

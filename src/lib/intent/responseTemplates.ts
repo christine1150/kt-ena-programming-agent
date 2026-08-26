@@ -690,6 +690,22 @@ interface SlotImprovementDataLike {
   weakSlots: SlotFitRowLike[];
   recommendations: Record<string, SlotRecommendationCandidateLike[]>;
   dawnAnomalies: DawnAnomalyCandidateLike[];
+  customScope: { startBh: number; endBh: number; targetDays: string[] | null } | null;
+}
+
+// 사용자 지시(2026-08-26, 후속 3건) — "질문에 시간/요일 범위가 명시되면 그 범위 안에서만
+// 진단·추천하고, 서두에 '(지정한 OO 범위 기준)'을 명확히 밝혀라". customScope는 executors.ts가
+// 이미 파싱해 둔 값(요일 코드/시간 bh) — 여기서는 사람이 읽는 문구로 바꾸기만 한다.
+const DOW_KOREAN_LABEL: Record<string, string> = { MON: "월", TUE: "화", WED: "수", THU: "목", FRI: "금", SAT: "토", SUN: "일" };
+function formatScopeLabel(scope: { startBh: number; endBh: number; targetDays: string[] | null }): string {
+  const parts: string[] = [];
+  // bh(2~25)를 실제 24시간제로 환산하지 않고 그대로 "HH:00"으로 보여준다 — 이 Intent 전체가
+  // 이미 "06시~25시(익일 01시)" 표기를 기본값 문구부터 일관되게 쓰고 있어(요청 원문의 기본값
+  // 자체가 '25:00:00'), bh를 24로 되돌리면 오히려 "06:00~01:00"처럼 시작이 끝보다 늦어 보여
+  // 헷갈린다.
+  parts.push(`${String(scope.startBh).padStart(2, "0")}:00~${String(scope.endBh).padStart(2, "0")}:00`);
+  if (scope.targetDays) parts.push(`${scope.targetDays.map((d) => DOW_KOREAN_LABEL[d] ?? d).join("·")}요일`);
+  return parts.join(", ");
 }
 
 // 사용자 지시(2026-08-26, 후속 2건) 공용 — [4.새벽 특이사항]은 있을 때만 붙이고 없으면 생략,
@@ -723,15 +739,21 @@ export function buildSlotImprovementRecommendationAnswer(data: SlotImprovementDa
     };
   }
 
+  const scopeLabel = data.customScope ? formatScopeLabel(data.customScope) : null;
+  const section1Title = scopeLabel ? "[1. 지정 범위 내 시급한 개선 구간]" : "[1. 주간 주요 개선 구간(06시~25시)]";
+  const scopePrefix = scopeLabel ? `(지정한 ${scopeLabel} 범위 기준) ` : "";
+
   if (data.weakSlots.length === 0) {
     const dawnLine = buildDawnAnomalyLine(data.dawnAnomalies);
     return {
       ...base("SLOT_IMPROVEMENT_RECOMMENDATION", "CHANNEL_PERFORMANCE", data),
-      conclusion: `'${data.channel.name}'은 메인 시간대(06~25시) 기준으로 Fit Score REPLACE/MOVE 태그된 뚜렷한 약세 구간이 없습니다.`,
+      conclusion: scopeLabel
+        ? `'${data.channel.name}'은 지정하신 ${scopeLabel} 범위 안에서 Fit Score REPLACE/MOVE 태그된 뚜렷한 약세 구간이 없습니다.`
+        : `'${data.channel.name}'은 메인 시간대(06~25시) 기준으로 Fit Score REPLACE/MOVE 태그된 뚜렷한 약세 구간이 없습니다.`,
       keyNumbers: "—",
       comparisonBasis: `최근 12주(84일) Fit Score, ${data.asOfDate} 기준`,
       evidence: [
-        "[1. 주간 주요 개선 구간(06시~25시)] 현재 편성 중(최근 14일 방영)인 메인 시간대 프로그램 중 REPLACE/MOVE 태그가 붙은 구간이 없습니다.",
+        `${section1Title} ${scopePrefix}현재 편성 중(최근 14일 방영)인 프로그램 중 REPLACE/MOVE 태그가 붙은 구간이 없습니다.`,
         dawnLine,
       ]
         .filter((l): l is string => !!l)
@@ -772,7 +794,7 @@ export function buildSlotImprovementRecommendationAnswer(data: SlotImprovementDa
   const dawnLine = buildDawnAnomalyLine(data.dawnAnomalies);
 
   const evidence = [
-    `[1. 주간 주요 개선 구간(06시~25시)] 가장 시급한 시간대는 ${topHourLabel}입니다(${diagnosisLines.join(" / ")}).`,
+    `${section1Title} ${scopePrefix}가장 시급한 시간대는 ${topHourLabel}입니다(${diagnosisLines.join(" / ")}).`,
     `[2. 성과 저하 원인] ${statusLines.join(" / ")}`,
     `[3. 추천 프로그램] ${CANDIDATE_VALIDATION_NOTE} ${recommendationLines.join(" / ")} ${expectedEffectLine}`,
     dawnLine,
@@ -782,9 +804,9 @@ export function buildSlotImprovementRecommendationAnswer(data: SlotImprovementDa
 
   return {
     ...base("SLOT_IMPROVEMENT_RECOMMENDATION", "CHANNEL_PERFORMANCE", data),
-    conclusion: `'${data.channel.name}'에서 시급히 개선이 필요한(메인 시간대 06~25시 한정) 구간은 ${topHourLabel}입니다('${top.canonical_name ?? "(제목 미상)"}', ${TAG_LABEL[top.tag ?? ""] ?? top.tag} 태그, Fit Score ${fmt(top.fit_score, 1)}/100).`,
+    conclusion: `'${data.channel.name}'에서 ${scopeLabel ? `지정하신 ${scopeLabel} 범위 안` : "시급히 개선이 필요한(메인 시간대 06~25시 한정)"} 구간은 ${topHourLabel}입니다('${top.canonical_name ?? "(제목 미상)"}', ${TAG_LABEL[top.tag ?? ""] ?? top.tag} 태그, Fit Score ${fmt(top.fit_score, 1)}/100).`,
     keyNumbers: `Fit Score ${fmt(top.fit_score, 1)}/100 · 태그 ${top.tag} · 검증된 추천 후보 ${topCandidates.length}건`,
-    comparisonBasis: `최근 12주(84일) Fit Score(6개 지표 percentile 조합), ${data.asOfDate} 기준 · 메인 시간대(06~25시)만 1순위 대상`,
+    comparisonBasis: `최근 12주(84일) Fit Score(6개 지표 percentile 조합), ${data.asOfDate} 기준 · ${scopeLabel ? `지정 범위(${scopeLabel})만 1순위 대상` : "메인 시간대(06~25시)만 1순위 대상"}`,
     evidence,
     interpretation: `추천 후보는 같은 시간대(daypart)에서 우리 포트폴리오 다른 채널이 실제로 검증한 프로그램 중, ${CANDIDATE_VALIDATION_NOTE}`,
     programmingAction: hasRecommendation
