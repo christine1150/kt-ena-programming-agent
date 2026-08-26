@@ -4,7 +4,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
-import { parseEpgWorkbook, matchEpgToRatings, type EpgRow } from "@/lib/epgMatch";
+import { parseEpgWorkbook, type EpgRow } from "@/lib/epgMatch";
+import { storeOlifeEpgStaging, applyOlifeEpgForDate } from "@/lib/olifeEpgStaging";
 
 interface FileSummary {
   fileName: string;
@@ -52,45 +53,22 @@ export async function POST(request: Request) {
     let totalUnmatched = 0;
 
     for (const [date, epgRows] of byDate) {
-      // 이 날짜의 OLIFE 프로그램 단위 ratings 행(채널 단위 순위 행은 program_id가 null이라 제외).
-      const { data: ratingRows } = await supabase
-        .from("ratings")
-        .select("id, start_time, programs(canonical_name)")
-        .eq("channel_id", channel.id)
-        .eq("broadcast_date", date)
-        .eq("source_type", "nielsen_daily")
-        .not("program_id", "is", null);
+      // 사용자 지시(2026-08-26): "닐슨 데이터가 없어도 미리 등록해둘 수 있게" — Nielsen 매칭
+      // 성공 여부와 무관하게 원본을 항상 먼저 저장한다(재업로드 시 최신값으로 덮어씀).
+      await storeOlifeEpgStaging(epgRows);
 
-      if (!ratingRows || ratingRows.length === 0) {
-        results.push({ fileName: file.name, ok: true, message: `${date}: 매칭할 Nielsen 데이터가 아직 없습니다(Nielsen 파일을 먼저 업로드해주세요).`, datesProcessed: [date] });
+      const result = await applyOlifeEpgForDate(channel.id, date);
+      if (!result.hasRatings) {
+        results.push({
+          fileName: file.name,
+          ok: true,
+          message: `${date}: 닐슨 데이터가 아직 없어 회차 정보를 미리 등록해두었습니다 — 이후 닐슨 파일이 업로드되면 자동으로 반영됩니다.`,
+          datesProcessed: [date],
+        });
         continue;
       }
-
-      type Row = { id: string; startTime: string; canonicalName: string; rowIds: string[] };
-      // 같은 프로그램·시작시간의 행이 타깃별로 여러 개 있을 수 있어(동일 program_id, 여러 target_id),
-      // 하나의 "방영분"으로 묶어서 매칭한 뒤 그 방영분에 속한 모든 행(id)에 같은 값을 채운다.
-      const grouped = new Map<string, Row>();
-      for (const r of ratingRows) {
-        const name = Array.isArray(r.programs) ? r.programs[0]?.canonical_name : (r.programs as { canonical_name: string } | null)?.canonical_name;
-        if (!name) continue;
-        const key = `${r.start_time}__${name}`;
-        if (!grouped.has(key)) grouped.set(key, { id: r.id, startTime: r.start_time, canonicalName: name, rowIds: [] });
-        grouped.get(key)!.rowIds.push(r.id);
-      }
-      const groupList = [...grouped.values()];
-      const matches = matchEpgToRatings(groupList, epgRows);
-
-      let matched = 0;
-      for (const [group, m] of matches) {
-        const { error } = await supabase
-          .from("ratings")
-          .update({ episode_number: m.episodeNumber, episode_subtitle: m.subtitle })
-          .in("id", group.rowIds);
-        if (!error) matched += group.rowIds.length;
-      }
-      const unmatched = groupList.length - matches.size;
-      totalMatched += matched;
-      totalUnmatched += unmatched;
+      totalMatched += result.matched;
+      totalUnmatched += result.unmatched;
     }
 
     results.push({

@@ -10,6 +10,7 @@ import {
   type RankRow,
 } from "@/lib/nielsenDaily";
 import { extractFullYearFromFileName, parseNielsenAnnualWorkbook } from "@/lib/nielsenAnnual";
+import { applyOlifeEpgForDate } from "@/lib/olifeEpgStaging";
 import { toChannelCode } from "@/lib/channelMaster";
 import {
   checkChannelCoverage,
@@ -402,6 +403,17 @@ export async function ingestNielsenDailyFile(
       break;
     }
     ratingsInserted += chunk.length;
+  }
+
+  // 사용자 지시(2026-08-26): "OLIFE EPG를 닐슨 데이터 없이도 미리 등록" — 미리 등록해둔
+  // olife_epg_staging이 있으면, 방금 들어온 이 날짜의 OLIFE ratings에 자동으로 회차·부제를
+  // 채운다(admin이 EPG를 다시 올릴 필요 없음). OLIFE가 이 파일에 없거나 staging이 비어 있으면
+  // 아무 일도 하지 않는다(다른 채널 흐름에 영향 없음, 실패해도 본 파일 처리 결과는 그대로 성공).
+  if (!insertError && foundChannelCodesDaily.has("OLIFE")) {
+    const olifeChannelId = ctx.channelIdByCode.get("OLIFE");
+    if (olifeChannelId) {
+      await applyOlifeEpgForDate(olifeChannelId, parsed.reportDate).catch(() => null);
+    }
   }
 
   await supabase.from("file_uploads").insert({
