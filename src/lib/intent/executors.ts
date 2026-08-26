@@ -354,3 +354,145 @@ export async function execProgramCrossChannelReach(params: ExtractedParameters, 
 
   return { channel, dateFrom, dateTo: asOfDate, rows: (data ?? []) as CrossChannelReachRow[] };
 }
+
+// ── SLOT_IMPROVEMENT_RECOMMENDATION ─────────────────────────────────────
+// 사용자 지시(2026-08-26): "ENA Play가 이번주 개선할 시간대는 어디이고 어떤 프로그램을
+// 편성하면 좋을지" 같은 질문에 새 SQL을 만들지 않고 이미 있는 두 함수만 재사용해 답한다.
+// 진단은 Page 2 "5대 Action Framework"와 완전히 같은 계산(mart_scheduling_fit_score,
+// REPLACE/MOVE 태그 = WEAK SLOT), 추천 후보는 get_channel_top_programs를 우리 채널 나머지
+// 6개에 돌려 "같은 daypart에서 실제로 검증된 우리 포트폴리오 프로그램"만 제시한다(LLM이
+// 외부 포맷을 지어내지 않음 — CLAUDE.md "No Hallucination" 원칙).
+interface FitScoreEvidence {
+  current_daypart?: string;
+}
+export interface SlotFitRow {
+  program_id: string;
+  canonical_name: string | null;
+  fit_score: number | null;
+  tag: string | null;
+  sample_days: number;
+  confidence_pct: number | null;
+  target_performance_score: number | null;
+  target_affinity_score: number | null;
+  audience_engagement_score: number | null;
+  slot_performance_score: number | null;
+  competitive_opportunity_score: number | null;
+  audience_flow_score: number | null;
+  evidence: FitScoreEvidence | null;
+}
+export interface SlotRecommendationCandidate {
+  channelCode: string;
+  channelName: string;
+  programName: string;
+  avgRating: number | null;
+  airCount: number;
+}
+export interface SlotImprovementData {
+  channel: { code: string; name: string };
+  asOfDate: string;
+  weakSlots: SlotFitRow[]; // REPLACE/MOVE 태그 중 Fit Score 낮은 순 상위 2개
+  recommendations: Record<string, SlotRecommendationCandidate[]>; // key: daypart(새벽/오전/오후/저녁_심야)
+}
+
+export async function execSlotImprovementRecommendation(params: ExtractedParameters, timeContext: TimeContext): Promise<SlotImprovementData | null> {
+  const channels = await getChannelRefs();
+  const channel = channels.find((c) => c.code === params.channelCode);
+  if (!channel) return null;
+
+  // ChannelRef에는 uuid가 없어(referenceData.ts) 마트 조회용으로 따로 구한다(PROGRAM_CROSS_CHANNEL_REACH와 동일 이유).
+  const { data: channelRow } = await supabase.from("channels").select("id").eq("code", channel.code).maybeSingle();
+  if (!channelRow) return null;
+  const channelId = channelRow.id as string;
+
+  const asOfDate = timeContext.dateTo; // Fit Score(fit-score/route.ts)와 같은 개념 — 데이터 존재 최신일 기준
+
+  // Fit Score와 동일한 지연 캐싱 패턴: 이 채널·기준일 조합이 마트에 아직 없으면 그때 한 번만 계산한다.
+  const { count } = await supabase
+    .from("mart_scheduling_fit_score")
+    .select("id", { count: "exact", head: true })
+    .eq("as_of_date", asOfDate)
+    .eq("channel_id", channelId);
+  if (!count || count === 0) {
+    const { error: refreshError } = await supabase.rpc("refresh_fit_score_mart", {
+      p_as_of_date: asOfDate,
+      p_window_days: 84,
+      p_channel_code: channel.code,
+    });
+    if (refreshError) {
+      // Fit Score route.ts와 동일한 경합 조건 대비: 다른 요청이 그 사이 이미 채웠는지 재확인.
+      const { count: recheckCount } = await supabase
+        .from("mart_scheduling_fit_score")
+        .select("id", { count: "exact", head: true })
+        .eq("as_of_date", asOfDate)
+        .eq("channel_id", channelId);
+      if (!recheckCount || recheckCount === 0) return null; // 계산 자체가 실패 — 상위(응답 템플릿)가 "데이터 없음"으로 처리
+    }
+  }
+
+  const { data: fitRows } = await supabase
+    .from("mart_scheduling_fit_score")
+    .select(
+      "program_id, fit_score, tag, sample_days, confidence_pct, target_performance_score, target_affinity_score, audience_engagement_score, slot_performance_score, competitive_opportunity_score, audience_flow_score, evidence, programs(canonical_name)"
+    )
+    .eq("as_of_date", asOfDate)
+    .eq("channel_id", channelId);
+
+  // fit-score/route.ts와 동일: 최근 14일 안에 실제로 방영된 프로그램만 "현재 편성 중"으로 본다
+  // (12주 표본에는 있지만 이미 종영한 프로그램까지 진단 대상에 섞이지 않도록).
+  const fourteenDaysAgo = new Date(asOfDate);
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
+  const { data: recentPrograms } = await supabase
+    .from("ratings")
+    .select("program_id")
+    .eq("channel_id", channelId)
+    .eq("source_type", "nielsen_daily")
+    .not("program_id", "is", null)
+    .gte("broadcast_date", fourteenDaysAgo.toISOString().slice(0, 10));
+  const recentProgramIds = new Set((recentPrograms ?? []).map((r) => r.program_id));
+
+  type FitRow = Omit<SlotFitRow, "canonical_name"> & { programs: { canonical_name: string } | null };
+  const recentFitRows = ((fitRows ?? []) as unknown as FitRow[]).filter((r) => recentProgramIds.has(r.program_id));
+
+  const weakSlots: SlotFitRow[] = recentFitRows
+    .filter((r) => r.tag === "REPLACE" || r.tag === "MOVE")
+    .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
+    .slice(0, 2)
+    .map((r) => ({ ...r, canonical_name: r.programs?.canonical_name ?? null }));
+
+  if (weakSlots.length === 0) {
+    return { channel, asOfDate, weakSlots: [], recommendations: {} };
+  }
+
+  // 약세 슬롯의 daypart별로, 우리 포트폴리오 나머지 채널에서 "같은 daypart에서 실제로 검증된"
+  // 프로그램을 찾는다(get_channel_top_programs 재사용 — 새 SQL 없음, PROGRAM_TOP 실행부와 동일 호출).
+  const weakDayparts = [...new Set(weakSlots.map((s) => s.evidence?.current_daypart).filter((d): d is string => !!d))];
+  const otherChannels = channels.filter((c) => c.code !== channel.code);
+  const otherChannelTop = await Promise.all(
+    otherChannels.map(async (c) => {
+      const programTargetLabel = resolveProgramLevelTargetLabel(c.primaryTarget);
+      const { data } = await supabase.rpc("get_channel_top_programs", {
+        p_channel_code: c.code,
+        p_program_target_label: programTargetLabel,
+        p_as_of_date: asOfDate,
+        p_window_days: 84,
+        p_limit: 20,
+      });
+      return {
+        channel: c,
+        rows: (data ?? []) as { program_name: string; avg_rating: number | null; air_count: number; top_daypart: string | null }[],
+      };
+    })
+  );
+
+  const recommendations: Record<string, SlotRecommendationCandidate[]> = {};
+  for (const daypart of weakDayparts) {
+    const candidates: SlotRecommendationCandidate[] = [];
+    for (const { channel: c, rows } of otherChannelTop) {
+      const best = rows.filter((r) => r.top_daypart === daypart).sort((a, b) => (b.avg_rating ?? 0) - (a.avg_rating ?? 0))[0];
+      if (best) candidates.push({ channelCode: c.code, channelName: c.name, programName: best.program_name, avgRating: best.avg_rating, airCount: best.air_count });
+    }
+    recommendations[daypart] = candidates.sort((a, b) => (b.avgRating ?? 0) - (a.avgRating ?? 0)).slice(0, 3);
+  }
+
+  return { channel, asOfDate, weakSlots, recommendations };
+}

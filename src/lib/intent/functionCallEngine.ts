@@ -64,8 +64,9 @@ function buildSystemPrompt(referenceDate: string): string {
     "channel_code/target_label/competitor_name은 함수 스키마에 나열된 값만 쓰고, 확실하지 않으면 null로 해라 — 질문에 채널명이 없고 대화 이력에도 없으면 채널을 임의로 짐작해서 채우지 마라.",
     "time_phrase는 질문의 시간 표현을 원문 그대로 넣어라(날짜 계산은 네가 하지 마라).",
     "이 질문에 맞는 함수가 하나도 없으면 아무 함수도 호출하지 마라(억지로 끼워맞추지 않는다).",
-    // 사용자 지시(2026-08-26, 오답 신고 후속) — llmClassifier.ts와 동일한 사고 방지 문구.
-    "특정 채널을 짚어 '어느 요일/시간대를 개선해야 하는지', '추천 프로그램은?'처럼 슬롯 단위 편성 추천을 묻는 질문에 맞는 함수는 아래 목록에 없다 — 억지로 CHANNEL_DAYPART 등을 부르지 마라.",
+    // 사용자 지시(2026-08-26, 오답 신고 후속 → SLOT_IMPROVEMENT_RECOMMENDATION 추가로 해결) —
+    // llmClassifier.ts와 동일한 사고 방지 문구, 이제는 전용 함수가 있다는 점만 명시한다.
+    "특정 채널을 짚어 '어느 요일/시간대를 개선해야 하는지', '추천 프로그램은?'처럼 슬롯 단위 편성 추천(대체 프로그램 추천 포함)을 묻는 질문은 SLOT_IMPROVEMENT_RECOMMENDATION을 불러라 — 단순 최강/최약 시간대 조회(추천 없음)만 묻는 질문에는 CHANNEL_DAYPART를 써라.",
     "질문에 특정 채널명이 명시돼 있는데 그 채널과 무관하게 7개 채널 전체를 스캔하는 함수(PORTFOLIO_RANKING/PORTFOLIO_KPI_GAP/PORTFOLIO_ALERT)를 부르는 것은 거의 항상 오답이다.",
   ].join("\n");
 }

@@ -51,9 +51,10 @@ function buildSystemPrompt(channelCodes: string[], competitorNames: string[], ta
     "- ranking_limit/ranking_direction은 'TOP 5', '가장 잘한/부진한' 같은 표현이 있을 때만 채우고, 없으면 null.",
     // 사용자 지시(2026-08-26, 오답 신고 후속) — "ENA Play 주간 편성에서 개선해야 할 요일과
     // 시간대는? 추천 프로그램은?" 같은 질문이 PORTFOLIO_ALERT(전사 위험/기회 스캔)로 잘못
-    // 분류돼 완전히 엉뚱한 채널 얘기를 답한 사고가 있었다 — 위 9개 Intent 중 "요일·시간대별
-    // 슬롯 개선/추천"을 다루는 것은 아직 없는데도 억지로 끼워맞춘 사례라 구체적으로 못 박는다.
-    "- 특정 채널을 짚어 '어느 요일/시간대를 개선해야 하는지', '그 시간대에 추천하는 프로그램은?'처럼 슬롯 단위 편성 추천을 묻는 질문은 지금 9개 Intent 중 어디에도 해당하지 않는다 — CHANNEL_DAYPART(단순 최강/최약 시간대 조회)로도 억지로 끼워맞추지 말고 intent_id를 null로 해라.",
+    // 분류돼 완전히 엉뚱한 채널 얘기를 답한 사고가 있었다. 이후 SLOT_IMPROVEMENT_RECOMMENDATION
+    // Intent를 추가해 이 질문 유형을 정식으로 지원한다 — 이제는 CHANNEL_DAYPART(단순 최강/
+    // 최약 시간대 조회, 추천 없음)와 혼동하지만 않으면 된다.
+    "- 특정 채널을 짚어 '어느 요일/시간대를 개선해야 하는지', '그 시간대에 추천하는 프로그램은?'처럼 슬롯 단위 편성 추천(대체 프로그램 추천 포함)을 묻는 질문은 SLOT_IMPROVEMENT_RECOMMENDATION이다 — 단순히 '가장 강한/약한 시간대'만 묻고 추천은 요구하지 않으면 CHANNEL_DAYPART를 써라.",
     "- 질문에 특정 채널명이 명시돼 있는데, 그 채널과 무관하게 7개 채널 전체를 스캔하는 PORTFOLIO_RANKING/PORTFOLIO_KPI_GAP/PORTFOLIO_ALERT를 고르는 것은 거의 항상 오답이다 — 질문이 정말 '전체 채널 중에서'를 묻는 게 아니라면 이 셋을 고르지 마라.",
     // Tier 2 확장(2026-08-26, 원 제안 7번 "멀티턴 대화 맥락"): 대화 이력이 있으면(아래 user/
     // assistant 메시지로 이어짐) "그럼 지난주는?"처럼 채널·타깃을 생략한 후속 질문을 직전 턴의

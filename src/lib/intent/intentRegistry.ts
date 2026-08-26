@@ -124,6 +124,35 @@ export const INTENT_REGISTRY: IntentDefinition[] = [
     data_mart: "get_program_cross_channel_reach",
     specificity: 5,
   },
+  {
+    intent_id: "SLOT_IMPROVEMENT_RECOMMENDATION",
+    macro_intent: "CHANNEL_PERFORMANCE",
+    description:
+      "특정 채널에서 Fit Score 기준 REPLACE/MOVE로 태그된(=WEAK SLOT, 시급히 개선이 필요한) 요일·시간대·프로그램을 진단하고, 같은 시간대(daypart)에서 실제로 검증된 우리 포트폴리오 다른 채널의 프로그램을 대체 편성 후보로 추천한다.",
+    examples: [
+      "ENA Play가 이번주 개선할 시간대는 어디야? 추천 프로그램은?",
+      "OLIFE 편성 중에 교체하면 좋을 시간대는?",
+      "ENA Drama 약세 구간에 어떤 프로그램을 편성하면 좋을까?",
+    ],
+    keywords: [
+      "개선할 시간대",
+      "개선이 필요한",
+      "시급히 개선",
+      "편성하면 좋을",
+      "편성 추천",
+      "대체 프로그램",
+      "대체 편성",
+      "교체하면 좋을",
+      "교체 추천",
+      "무엇을 편성",
+      "뭘 편성",
+      "약세 구간",
+      "weak slot",
+    ],
+    required_parameters: ["channelCode"],
+    data_mart: "mart_scheduling_fit_score(REPLACE/MOVE 태그) + get_channel_top_programs(포트폴리오 6채널)",
+    specificity: 5,
+  },
 ];
 
 export function findIntentById(id: string): IntentDefinition | undefined {

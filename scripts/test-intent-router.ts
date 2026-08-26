@@ -58,6 +58,11 @@ const CASES: TestCase[] = [
   // COMPETITIVE_HEAD_TO_HEAD
   { question: "ENA DRAMA 동시간대 경쟁 프로그램은?", expectedIntentId: "COMPETITIVE_HEAD_TO_HEAD", expectedParams: { channelCode: "ENA_DRAMA" } },
   { question: "ONCE와 겹치는 경쟁 프로그램은?", expectedIntentId: "COMPETITIVE_HEAD_TO_HEAD", expectedParams: { channelCode: "ONCE" } },
+  // SLOT_IMPROVEMENT_RECOMMENDATION(2026-08-26 추가) — CHANNEL_DAYPART(단순 조회)와 혼동하지
+  // 않는지가 핵심이라, "개선/추천"이 들어간 문장이 CHANNEL_DAYPART로 새지 않는지도 함께 확인한다.
+  { question: "ENA PLAY가 이번주 개선할 시간대는 어디야? 추천 프로그램은?", expectedIntentId: "SLOT_IMPROVEMENT_RECOMMENDATION", expectedParams: { channelCode: "ENA_PLAY" } },
+  { question: "OLIFE 편성 중에 교체하면 좋을 시간대는?", expectedIntentId: "SLOT_IMPROVEMENT_RECOMMENDATION", expectedParams: { channelCode: "OLIFE" } },
+  { question: "ENA DRAMA 약세 구간에 어떤 프로그램을 편성하면 좋을까?", expectedIntentId: "SLOT_IMPROVEMENT_RECOMMENDATION", expectedParams: { channelCode: "ENA_DRAMA" } },
   // UNSUPPORTED — 현재 등록 안 된 Macro(예: Audience Flow, Fatigue/Rerun, ROI 등)
   { question: "이 프로그램 뒤에 편성했을 때 성과가 좋은 프로그램은?", expectedIntentId: "UNSUPPORTED" },
   { question: "이 프로그램의 광고 ROI는 얼마야?", expectedIntentId: "UNSUPPORTED" },
