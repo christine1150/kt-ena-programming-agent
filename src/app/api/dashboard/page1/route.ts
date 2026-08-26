@@ -855,7 +855,7 @@ export async function GET(request: Request) {
       manualReportChannelIds.length > 0
         ? await supabase
             .from("program_manual_reports")
-            .select("channel_id, canonical_name_normalized, broadcast_date, episode_number, headline_bullets, minute_ratings, competitor_rank_snapshot, competitor_programs")
+            .select("channel_id, canonical_name_normalized, broadcast_date, episode_number, headline_bullets, minute_ratings, competitor_rank_snapshot, competitor_programs, cm_breaks")
             .in("channel_id", manualReportChannelIds)
         : { data: [] };
     const manualReportByKey = new Map((manualReportRows ?? []).map((r) => [`${r.channel_id}__${r.canonical_name_normalized}__${r.broadcast_date}`, r]));

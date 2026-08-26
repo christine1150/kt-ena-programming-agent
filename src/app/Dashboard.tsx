@@ -147,6 +147,9 @@ interface ManualDramaReportData {
   minute_ratings: ManualMinuteRating[] | null;
   competitor_rank_snapshot: { target: ManualChannelRankRow[]; household: ManualChannelRankRow[] } | null;
   competitor_programs: ManualCompetitorProgramRow[] | null;
+  // 사용자 지시(2026-08-26): 광고 브레이크 등 주요 이벤트 시각 — PD 엑셀의 네이티브 차트를
+  // 관리자가 육안으로 보고 수동 입력한 값(자동 파싱 불가, 없으면 null).
+  cm_breaks: { time: string; label: string }[] | null;
 }
 interface RatingHistoryPoint {
   broadcast_date: string;
@@ -1225,6 +1228,7 @@ function ManualMinuteRatingChart({
   ownChannelName,
   broadcastStartTime,
   broadcastEndTime,
+  cmBreaks,
 }: {
   minuteRatings: ManualMinuteRating[];
   competitorPrograms: ManualCompetitorProgramRow[] | null;
@@ -1237,6 +1241,9 @@ function ManualMinuteRatingChart({
   // 시작/종료"라고 잘못 표기하지 않도록 실제 방송 시각을 별도로 받아 그 위치에 표시한다.
   broadcastStartTime?: string | null;
   broadcastEndTime?: string | null;
+  // 사용자 지시(2026-08-26): "종CM1/종CM2 시간이 그래프 내에 보이도록" — PD 엑셀의 네이티브
+  // 차트를 관리자가 육안으로 보고 입력한 값(자동 파싱 불가, 관리자 화면에서 채워짐).
+  cmBreaks?: { time: string; label: string }[] | null;
 }) {
   if (minuteRatings.length < 2) return null;
   const W = 640;
@@ -1300,6 +1307,13 @@ function ManualMinuteRatingChart({
               포함된 시트 처음/끝이 아니라)을 세로선으로 짚어준다. */}
           <line x1={xOfMin(startMarkerMin)} y1={PAD_Y} x2={xOfMin(startMarkerMin)} y2={H - PAD_Y} stroke="#a1a1aa" strokeWidth={1} strokeDasharray="2 2" />
           <line x1={xOfMin(endMarkerMin)} y1={PAD_Y} x2={xOfMin(endMarkerMin)} y2={H - PAD_Y} stroke="#a1a1aa" strokeWidth={1} strokeDasharray="2 2" />
+          {/* 사용자 지시(2026-08-26): "종CM1/종CM2 시간이 그래프 내에 보이도록" — 관리자가
+              수동 입력한 값이 있을 때만(자동 계산 없음) 세로 점선으로 표시(방송 시작/종료와
+              구분되게 다른 색). */}
+          {(cmBreaks ?? []).map((cm, i) => {
+            const m = clampMin(toMinutes(cm.time));
+            return <line key={`cm-${i}`} x1={xOfMin(m)} y1={PAD_Y} x2={xOfMin(m)} y2={H - PAD_Y} stroke="#fb923c" strokeWidth={1} strokeDasharray="2 2" />;
+          })}
           <path d={path} fill="none" stroke={accentColor} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         <div className="pointer-events-none absolute inset-0">
@@ -1309,6 +1323,15 @@ function ManualMinuteRatingChart({
           >
             {peak.time} {peak.rating.toFixed(3)}%
           </span>
+          {(cmBreaks ?? []).map((cm, i) => (
+            <span
+              key={`cm-label-${i}`}
+              className="absolute -translate-x-1/2 whitespace-nowrap text-[8px] font-semibold text-orange-500"
+              style={{ left: `${(xOfMin(clampMin(toMinutes(cm.time))) / W) * 100}%`, top: PAD_Y }}
+            >
+              {cm.label}
+            </span>
+          ))}
           {/* 사용자 지시(2026-08-26, 재재수정): "각 점선 좌측 위에 채널 로고 뜨도록 배치" —
               이전엔 겹쳐 안 읽히던 게 "텍스트"였을 뿐, 작은 로고 아이콘은 겹칠 일이 적어
               점선 시작점 바로 위(좌측 정렬)에 다시 올린다. */}
@@ -1628,6 +1651,7 @@ function OriginalContentReportCard({
                       ownChannelName={CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
                       broadcastStartTime={h.matched_start_time}
                       broadcastEndTime={h.matched_end_time}
+                      cmBreaks={h.manualReport.cm_breaks}
                     />
                   )}
                   {/* 명세엔 없지만 기존에 있던 추가 신호(동시간대 정성 비교/신규드라마 비교/자체재방/
