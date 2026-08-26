@@ -27,8 +27,11 @@ export default async function AdminPage() {
   }
 
   return (
+    // 사용자 지시(2026-08-26): "관리자 화면 자체를 옆으로 넓힙시다 — 주요 콘텐츠 관리(요일별
+    // 리뷰 프로그램) 내용이 좌우로 잘 보이게". 기존 max-w-2xl(672px)이 FeaturedContentManager의
+    // grid-cols-2/3·표를 좁게 눌러 담고 있었다 — max-w-6xl(1152px)로 넓힘.
     <div className="min-h-screen bg-zinc-50 px-6 py-10">
-      <div className="mx-auto flex max-w-2xl flex-col gap-6">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold text-zinc-900">관리자 화면</h1>
@@ -41,33 +44,43 @@ export default async function AdminPage() {
             >
               로그인 이력
             </Link>
+            <Link
+              href="/admin/ask-gaps"
+              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              질문하기 사각지대
+            </Link>
             <LogoutButton />
           </div>
         </div>
 
+        {/* 사용자 지시(2026-08-26): 아래 순서(1~7)로 고정, 나머지는 중요도 순(PD 실사용
+            빈도·영향 범위 기준) — PD 수동 회차 리포트(1페이지 헤드라인에 직접 반영, 주간 단위)
+            → 목표 시청률(KPI 달성률 전반에 영향, 연 단위) → 연간 누적 채널 순위(skyUHD 국한) →
+            OLIFE 회차 카탈로그(보조 메타데이터) → 메일 자동 수집 상태 확인(cron 디버그용). */}
         <ShareLinkManager />
 
-        <ChannelMasterUploader />
-
-        <FeaturedContentManager />
-
         <NielsenDailyUploader />
-
-        <MailIngestionManager />
 
         <SkyUhdUploader />
 
         <OlifeEpgUploader />
 
-        <ManualDramaReportUploader />
+        <DailyNewsManager />
 
-        <OlifeEpisodeCatalogUploader />
+        <ChannelMasterUploader />
+
+        <FeaturedContentManager />
+
+        <ManualDramaReportUploader />
 
         <TargetGoalsManager />
 
-        <DailyNewsManager />
-
         <MarketYtdRankUploader />
+
+        <OlifeEpisodeCatalogUploader />
+
+        <MailIngestionManager />
       </div>
     </div>
   );
