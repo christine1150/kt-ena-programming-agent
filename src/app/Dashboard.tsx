@@ -1468,17 +1468,9 @@ function OriginalContentReportCard({
                       ))}
                     </ul>
                   )}
-                  {/* 사용자 지시(2026-08-26): "1페이지 주요 컨텐츠 리뷰에 분단위 그래프 반영" —
-                      PD가 업로드한 수동 리포트(manual-drama-report)에 분당 시청률이 있으면
-                      12주 추이 그래프 위에 먼저 보여준다(자동 계산과 별개, 있을 때만 노출). */}
-                  {h.manualReport?.minute_ratings && h.manualReport.minute_ratings.length >= 2 && (
-                    <ManualMinuteRatingChart
-                      minuteRatings={h.manualReport.minute_ratings}
-                      competitorPrograms={h.manualReport.competitor_programs}
-                      accentColor={themeColorByCode.get(h.broadcast_channel_code) ?? enaAccentColor}
-                      ownChannelName={CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
-                    />
-                  )}
+                  {/* 사용자 지시(2026-08-26 재지시): "1페이지의 2개 시청률 그래프는 위 아래
+                      위치를 바꿔줘" — 12주 추이 그래프를 먼저, 분당 시청률(PD 수동 리포트)을
+                      그 아래로. */}
                   {/* 사용자 지시(2026-08-25): 꺾은선의 "2049 시청률" 색이 항상 ENA 색으로 고정돼
                       있었다 — 실제 방영 채널(예: ENA Play)의 로고 색을 반영하도록 수정. */}
                   {h.ratingHistory && (
@@ -1487,6 +1479,17 @@ function OriginalContentReportCard({
                       accentColor={themeColorByCode.get(h.broadcast_channel_code) ?? enaAccentColor}
                       ownChannelName={CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
                       themeColorByCode={themeColorByCode}
+                    />
+                  )}
+                  {/* 사용자 지시(2026-08-26): "1페이지 주요 컨텐츠 리뷰에 분단위 그래프 반영" —
+                      PD가 업로드한 수동 리포트(manual-drama-report)에 분당 시청률이 있으면
+                      함께 보여준다(자동 계산과 별개, 있을 때만 노출). */}
+                  {h.manualReport?.minute_ratings && h.manualReport.minute_ratings.length >= 2 && (
+                    <ManualMinuteRatingChart
+                      minuteRatings={h.manualReport.minute_ratings}
+                      competitorPrograms={h.manualReport.competitor_programs}
+                      accentColor={themeColorByCode.get(h.broadcast_channel_code) ?? enaAccentColor}
+                      ownChannelName={CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
                     />
                   )}
                   {/* 명세엔 없지만 기존에 있던 추가 신호(동시간대 정성 비교/신규드라마 비교/자체재방/

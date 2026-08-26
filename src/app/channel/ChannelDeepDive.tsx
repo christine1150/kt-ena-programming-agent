@@ -690,7 +690,6 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
             const color = item.tag ? TAG_DOT_COLOR[item.tag] : "#a1a1aa";
             const r = 3 + Math.min(4, item.sample_days / 4);
             const name = item.programs?.canonical_name ?? "";
-            const shortName = name.length > 7 ? `${name.slice(0, 7)}…` : name;
             const px = xOf(item.fit_score);
             const py = yOf(item.confidence_pct);
             const showLabel = alwaysLabelIds.has(item.program_id);
@@ -701,9 +700,18 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
                     {name} — 적합도 {item.fit_score.toFixed(1)} · 신뢰도 {item.confidence_pct.toFixed(0)}% · {item.tag ? TAG_LABEL_KO[item.tag] : "—"}
                   </title>
                 </circle>
+                {/* 사용자 지시(2026-08-26): "프로그램 제목 명 잘리는 부분 수정 — 제목 잘리지
+                    않게" — 7자 말줄임을 없애고 전체 제목을 그대로 표시. 점이 그래프 좌우 끝에
+                    가까우면 가운데 정렬 대신 안쪽으로 붙여 카드 밖으로 삐져나가지 않게 한다. */}
                 {showLabel && (
-                  <text x={px} y={py - r - 3} textAnchor="middle" fontSize={8} fill="#52525b">
-                    {shortName}
+                  <text
+                    x={px}
+                    y={py - r - 3}
+                    textAnchor={px < W * 0.15 ? "start" : px > W * 0.85 ? "end" : "middle"}
+                    fontSize={8}
+                    fill="#52525b"
+                  >
+                    {name}
                   </text>
                 )}
               </g>
@@ -1799,7 +1807,11 @@ function CompetitorPositioningScatter({ points, accentColor }: { points: Competi
     (p): p is CompetitorPositioningPoint & { today_rating: number; delta_pct: number } => p.today_rating !== null && p.delta_pct !== null
   );
   if (plottable.length < 2) return null;
-  const W = 640;
+  // 사용자 지시(2026-08-26): "채널명이 너무 겹치면 좌우로 인포그래픽을 넓혀서 글자가 겹치지
+  // 않게" — 고정 640px 대신 점 개수에 비례해 넓히고(점 하나당 85px 예산), 컨테이너 폭을
+  // 넘으면 가로 스크롤(overflow-x-auto)로 본다. viewBox와 실제 렌더 width를 1:1로 맞춰
+  // (className="w-full" 제거) 글자 크기가 눌리거나 늘어나지 않게 한다.
+  const W = Math.max(640, plottable.length * 85);
   const H = 260;
   const PAD_L = 34;
   const PAD_R = 14;
@@ -1822,7 +1834,8 @@ function CompetitorPositioningScatter({ points, accentColor }: { points: Competi
         가로축 = 오늘 시청률, 세로축 = 12주 평균 대비 등락률 — 오른쪽 위일수록 &ldquo;강한데 더 강해지는&rdquo; 채널, 왼쪽
         아래일수록 &ldquo;약한데 더 약해지는&rdquo; 채널입니다.
       </p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+      <div className="overflow-x-auto">
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ height: H, width: W }}>
         <line x1={PAD_L} y1={yOf(0)} x2={W - PAD_R} y2={yOf(0)} stroke="#a1a1aa" strokeWidth={1} />
         <line x1={xOf(medianRating)} y1={PAD_T} x2={xOf(medianRating)} y2={H - PAD_B} stroke="#e4e4e7" strokeWidth={1} strokeDasharray="3 3" />
         <text x={W - PAD_R} y={yOf(0) - 4} textAnchor="end" fontSize={9} fill="#a1a1aa">
@@ -1850,11 +1863,12 @@ function CompetitorPositioningScatter({ points, accentColor }: { points: Competi
               </circle>
               {/* 사용자 지시(2026-08-26): "채널명이 모두 나오게 조치" — 우리 채널만 상시 라벨을
                   달고 나머지는 hover 툴팁으로만 숨기던 것을, 경쟁채널도 전부 이름을 표시하도록
-                  변경(점 개수가 많지 않아 겹침 위험이 낮음). 우리 채널은 굵게/강조색 유지. */}
+                  변경. 겹침은 위쪽 W(점 개수 비례 확대 + 가로 스크롤)로 대응. 우리 채널은
+                  굵게/강조색 유지. */}
               <text
                 x={px}
                 y={py - r - 4}
-                textAnchor="middle"
+                textAnchor={px < W * 0.1 ? "start" : px > W * 0.9 ? "end" : "middle"}
                 fontSize={9}
                 fontWeight={p.isOurs ? 700 : 500}
                 fill={p.isOurs ? accentColor : "#71717a"}
@@ -1865,6 +1879,7 @@ function CompetitorPositioningScatter({ points, accentColor }: { points: Competi
           );
         })}
       </svg>
+      </div>
     </div>
   );
 }
@@ -2072,16 +2087,20 @@ function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(full, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
-// 사용자 지시(2026-08-22, ENA STORY 특화 디자인 확장): "도표·차트·인포그래픽의 분위기도 같은
-// 톤(분홍·보라·하양·주황 그라데이션)으로" — 크기/강도를 나타내는 시각 요소(히트맵·미니 막대 등)
-// 전용 3단 그라데이션(보라→핑크→주황, 헤더와 동일한 색상 앵커)을 t(0~1)로 보간한다. 상승/하락
-// 같은 의미(sentiment) 색(초록/빨강)은 가독성을 위해 그대로 유지 — 크기만 나타내는 요소에만 적용.
+// 사용자 지시(2026-08-22, ENA STORY 특화 디자인 확장, 2026-08-26 재지시로 방향 수정): "도표·
+// 차트·인포그래픽의 분위기도 같은 톤(보라·핑크·주황 그라데이션)으로 — 가장 높은 시청률은 ENA
+// Story 로고 색만큼 진하게, 이 그라데이션 논리가 2페이지 전체에 적용되게" — 크기/강도를
+// 나타내는 시각 요소(히트맵·미니 막대 등) 전용 3단 그라데이션을 t(0~1)로 보간한다. t=1(가장
+// 강함)이 정확히 ENA Story 로고색(channels.theme_color, #7828e0)이 되도록 고정하고, t=0(가장
+// 약함)을 주황(#ffb020)으로 — 처음엔 반대 방향(로고색=약함)으로 잘못 잡았던 것을 뒤집었다.
+// 상승/하락 같은 의미(sentiment) 색(초록/빨강)은 가독성을 위해 그대로 유지 — 크기만 나타내는
+// 요소에만 적용. 요일×시간대 히트맵도 이 함수 하나로 통일(전에 따로 두던 2단 그라데이션 제거).
 function enaStoryGradientRgb(t: number): [number, number, number] {
   const clamped = Math.max(0, Math.min(1, t));
   const stops: [number, [number, number, number]][] = [
-    [0, [120, 40, 224]], // #7828e0
+    [0, [255, 176, 32]], // #ffb020 — 가장 약함
     [0.5, [244, 63, 196]], // #f43fc4
-    [1, [255, 176, 32]], // #ffb020
+    [1, [120, 40, 224]], // #7828e0 — 가장 강함(ENA Story 로고색)
   ];
   let lo = stops[0];
   let hi = stops[stops.length - 1];
@@ -2104,27 +2123,8 @@ function enaStoryGradientColor(t: number): string {
   const [r, g, b] = enaStoryGradientRgb(t);
   return `rgb(${r}, ${g}, ${b})`;
 }
-// 사용자 지시(2026-08-26): "ENA STORY의 시간대별 강세 시간대 표시는 진한 보라색이 가장 센
-// 시간, 연한 노란색이 아주 약한 시간으로 그라데이션 변경" — 다른 강도 시각 요소(미니 막대 등)에
-// 쓰는 3단(보라→핑크→주황) 그라데이션과 별개로, 요일×시간대 히트맵 전용 2단(진보라→연노랑)
-// 그라데이션. 약한 시간대가 흰색에 가깝게 washed-out 되던 기존 방식과 달리, 가장 약해도
-// "연한 노란색"이 뚜렷이 보이도록 끝점 자체를 옅은 노랑으로 잡는다(추가 흰색 블렌딩 불필요).
-function enaStoryHeatmapGradientRgb(t: number): [number, number, number] {
-  const clamped = Math.max(0, Math.min(1, t));
-  const weak: [number, number, number] = [254, 249, 195]; // #fef9c3 연노랑
-  const strong: [number, number, number] = [76, 29, 149]; // #4c1d95 진보라
-  return [
-    Math.round(weak[0] + (strong[0] - weak[0]) * clamped),
-    Math.round(weak[1] + (strong[1] - weak[1]) * clamped),
-    Math.round(weak[2] + (strong[2] - weak[2]) * clamped),
-  ];
-}
-function enaStoryHeatmapGradientColor(t: number): string {
-  const [r, g, b] = enaStoryHeatmapGradientRgb(t);
-  return `rgb(${r}, ${g}, ${b})`;
-}
-function enaStoryHeatmapTextColor(t: number): string {
-  const [r, g, b] = enaStoryHeatmapGradientRgb(t);
+function enaStoryGradientTextColor(t: number): string {
+  const [r, g, b] = enaStoryGradientRgb(t);
   const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
   return luminance < 150 ? "#ffffff" : "#27272a";
 }
@@ -2375,11 +2375,11 @@ function DowHourBlockTable({
                 const rating = cell?.avg_rating ?? null;
                 const intensity = rating !== null ? Math.min(1, rating / maxRating) : 0;
                 const alpha = Math.round(intensity * 200 + 20);
-                // 사용자 지시(2026-08-26): "진한 보라색이 가장 센 시간, 연한 노란색이 아주
-                // 약한 시간" — 전용 2단 그라데이션(enaStoryHeatmapGradientRgb)을 강도(intensity,
-                // 0~1)에 직접 적용한다(흰 배경 블렌딩 불필요 — 약한 끝점 자체가 이미 연노랑).
-                const bgColor = rating === null ? "#f4f4f5" : isEnaStory ? enaStoryHeatmapGradientColor(intensity) : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
-                const textColor = rating === null ? "#a1a1aa" : isEnaStory ? enaStoryHeatmapTextColor(intensity) : cellTextColor(accentColor, alpha);
+                // 사용자 지시(2026-08-26 재지시): 다른 강도 요소와 통일된 3단 그라데이션
+                // (enaStoryGradientRgb, t=1이 정확히 ENA Story 로고색)을 강도(intensity, 0~1)에
+                // 직접 적용한다(흰 배경 블렌딩 없음 — 가장 강함이 로고색만큼 진해야 하므로).
+                const bgColor = rating === null ? "#f4f4f5" : isEnaStory ? enaStoryGradientColor(intensity) : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
+                const textColor = rating === null ? "#a1a1aa" : isEnaStory ? enaStoryGradientTextColor(intensity) : cellTextColor(accentColor, alpha);
                 return (
                   <td key={dow} className="py-0.5 px-0.5">
                     <div
