@@ -7,6 +7,7 @@
 // 관리자/PD 둘 다 사용 가능(고정 공유 링크 세션 포함, CLAUDE.md 접근 제어 원칙).
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/adminAuth";
+import { supabase } from "@/lib/supabase";
 import { routeQuestion } from "@/lib/intent/intentRouter";
 import { classifyQuestionWithLlm } from "@/lib/intent/llmClassifier";
 import { getLatestAvailableDate } from "@/lib/intent/referenceData";
@@ -90,6 +91,20 @@ export async function POST(request: Request) {
   }
 
   if (!routed.ok) {
+    // 사각지대 로그(2026-08-26, /api/ask Intent 확장 프로젝트) — 규칙 기반·9-Intent
+    // 분류기·Function Calling 세 경로 전부 답을 못 찾은 질문만 여기 걸린다. 로그 저장
+    // 실패는 응답을 막지 않는다(부가 기능이 핵심 기능을 막으면 안 된다는 loginLog.ts와
+    // 동일 원칙).
+    const { error: logError } = await supabase.from("ask_unsupported_log").insert({
+      question,
+      reason: routed.reason,
+      asker_role: session.role,
+      asker_name: session.role === "admin" ? session.email : (session.name ?? null),
+    });
+    if (logError) {
+      console.error("사각지대 로그 저장 실패:", logError.message);
+    }
+
     const answer = buildUnsupportedAnswer(routed.missing);
     return NextResponse.json({ ok: true, intent_id: null, answer });
   }
