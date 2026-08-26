@@ -6,9 +6,13 @@
 // 쿠키 값 구조 = base64url(JSON 데이터) + "." + base64url(HMAC-SHA256 서명)
 // 서명에 쓰는 비밀키(.env의 ADMIN_SESSION_SECRET)를 모르면 값을 위조할 수 없다.
 
+// "pd" 세션은 두 가지 방식으로 만들어진다:
+// 1) 공유 링크(/s/[token]) — 개인 구분 없음, pdId/name이 없다 (기존 방식, 그대로 유지).
+// 2) 개별 로그인(/api/pd/login) — pdId/name이 채워져 누가 로그인했는지 구분된다.
+// 두 방식 모두 role은 "pd"로 같아서 proxy.ts의 접근 제어 로직은 손댈 필요가 없다.
 export type SessionPayload =
   | { role: "admin"; adminId: string; email: string; exp: number }
-  | { role: "pd"; exp: number };
+  | { role: "pd"; exp: number; pdId?: string; name?: string };
 
 function getSecret(): string {
   const secret = process.env.ADMIN_SESSION_SECRET;

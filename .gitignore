@@ -18,6 +18,7 @@ supabase/.temp/
 
 # 기타
 trash-can/
+scripts/pd-users-seed.local.json
 .DS_Store
 *.pem
 npm-debug.log*

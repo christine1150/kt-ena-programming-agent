@@ -31,9 +31,9 @@ export async function proxy(request: NextRequest) {
 
 // 아래 경로들은 로그인/공유 링크 확인 없이도 열려야 하므로 대상에서 제외한다:
 // _next 정적 파일, favicon, 모든 /api/* (각 API가 자체적으로 인증 확인),
-// /s/* (공유 링크 진입점 + 무효 링크 안내), /admin/login, /access-denied, 확장자 있는 정적 파일.
+// /s/* (공유 링크 진입점 + 무효 링크 안내), /admin/login, /pd/login, /access-denied, 확장자 있는 정적 파일.
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/|s/|admin/login|access-denied|.*\\..*).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/|s/|admin/login|pd/login|access-denied|.*\\..*).*)",
   ],
 };
