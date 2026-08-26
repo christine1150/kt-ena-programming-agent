@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { normalizeSubtitle } from "../src/lib/olifeEpisodeParsing";
 import { resolveProgramLevelTargetLabel } from "../src/lib/targetResolution";
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
 const { data: channel } = await supabase.from("channels").select("id, primary_target").eq("code", "OLIFE").maybeSingle();
 if (!channel) throw new Error("OLIFE 채널을 찾을 수 없습니다.");

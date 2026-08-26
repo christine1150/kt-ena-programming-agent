@@ -17,17 +17,20 @@ if (!email) {
   process.exit(1);
 }
 
+// 보안 수정(2026-08-26): admins 테이블에 RLS를 켜면서(20260826160000) anon 키로는 더 이상
+// 쓰기가 안 된다 — 이 스크립트는 관리자만 로컬에서 직접 돌리는 운영 도구라 service_role
+// 키로 바꾼다(RLS를 무시하고 항상 전체 접근).
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(".env에 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY가 없습니다.");
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  console.error(".env에 NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY가 없습니다.");
   process.exit(1);
 }
 
 const password = passwordArg ?? randomBytes(9).toString("base64url"); // 12자 안팎의 임시 비밀번호
 const passwordHash = await bcrypt.hash(password, 12);
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 const { error } = await supabase
   .from("admins")
   .upsert({ email: email.trim().toLowerCase(), password_hash: passwordHash }, { onConflict: "email" });

@@ -18,7 +18,7 @@ import { join } from "path";
 import { createClient } from "@supabase/supabase-js";
 import XLSX from "xlsx";
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const RANK_SHEETS = ["유료방송가입가구", "개인"];
 const OUR_CHANNEL_DISPLAY_NAMES = new Set(["ENA", "ENA DRAMA", "ENA PLAY", "ENA STORY", "OLIFE", "ONCE", "SkyUHD"]);

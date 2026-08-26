@@ -11,12 +11,12 @@ import { createClient } from "@supabase/supabase-js";
 import XLSX from "xlsx";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(".env에 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY가 없습니다.");
+  console.error(".env에 NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY가 없습니다.");
   process.exit(1);
 }
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 // ── src/lib/nielsenDaily.ts와 동일한 파싱 로직(경쟁채널 프로그램 블록 부분만 발췌) ──
 function normalizeTime(raw) {

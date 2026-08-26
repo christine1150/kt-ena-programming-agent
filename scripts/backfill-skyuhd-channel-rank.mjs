@@ -10,7 +10,7 @@ import { join } from "path";
 import { createClient } from "@supabase/supabase-js";
 import XLSX from "xlsx";
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 function parseNumberCell(raw) {
   if (raw === undefined || raw === null || raw === "") return null;

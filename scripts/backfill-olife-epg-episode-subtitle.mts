@@ -9,7 +9,7 @@ import { join, resolve } from "path";
 import { createClient } from "@supabase/supabase-js";
 import { parseEpgWorkbook, matchEpgToRatings, type EpgRow } from "../src/lib/epgMatch";
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
 const epgDir = resolve("OLIFE 편성 자료", "EPG");
 const files = readdirSync(epgDir).filter((f) => f.endsWith(".xlsx"));
