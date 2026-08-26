@@ -2359,17 +2359,20 @@ function DowHourBlockTable({
             return (
             <tr key={hb} className="border-t border-zinc-100">
               <td className="whitespace-nowrap py-0.5 pr-0.5 text-left font-medium text-zinc-700">
-                {hourBlockLabel(hb)}
-                {/* 사용자 지시(2026-08-26): "라벨 옆 점 좀 더 잘 보이게" — 6px 단색 점이 시간대
-                    라벨 글자색과 배경 위에서 잘 안 띄었다. 크기를 키우고(8px) 흰 테두리(ring)를
-                    둘러 어떤 배경 위에서도 경계가 분명히 보이게 한다. */}
-                {oppCls && (
-                  <span
-                    className="ml-1.5 inline-block h-2 w-2 rounded-full align-middle ring-2 ring-white"
-                    style={{ backgroundColor: OPPORTUNITY_CLASS_COLOR[oppCls], boxShadow: "0 0 0 1px rgba(0,0,0,0.12)" }}
-                    title={`경쟁 강도: ${OPPORTUNITY_CLASS_LABEL[oppCls]}`}
-                  />
-                )}
+                {/* 사용자 지시(2026-08-26, 재수정): "점이 더 잘보이게, 정렬이 일정하게" —
+                    이전엔 inline-block+align-middle이라 폰트 메트릭에 따라 점이 줄마다
+                    미묘하게 다른 높이로 보였다. flex로 바꿔 라벨·점을 항상 같은 기준선에
+                    고정하고, 크기도 8px→10px로 키우고 테두리를 진하게 해 더 또렷하게 한다. */}
+                <span className="inline-flex items-center gap-1.5">
+                  <span>{hourBlockLabel(hb)}</span>
+                  {oppCls && (
+                    <span
+                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
+                      style={{ backgroundColor: OPPORTUNITY_CLASS_COLOR[oppCls], boxShadow: "0 0 0 1.5px rgba(0,0,0,0.35)" }}
+                      title={`경쟁 강도: ${OPPORTUNITY_CLASS_LABEL[oppCls]}`}
+                    />
+                  )}
+                </span>
               </td>
               {["월", "화", "수", "목", "금", "토", "일"].map((label, i) => {
                 const dow = i + 1;

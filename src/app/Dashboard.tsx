@@ -1181,13 +1181,15 @@ const MANUAL_COMPETITOR_BAND_COLORS = ["#f59e0b", "#0891b2", "#a21caf", "#65a30d
 const COMPETITOR_LOGO_FILE: Record<string, string> = {
   SBS: "SBS.png",
   MBC: "MBC.png",
-  // 사용자 제공(2026-08-26): KBS1은 webp, KBSN스포츠는 jpg로 받아 확장자를 그대로 반영.
-  KBS1: "KBS1.webp",
+  // 사용자 지시(2026-08-26, 재수정): "로고 높이를 통일" — 원본 파일마다 여백(투명/흰
+  // 배경) 크기가 달라 같은 CSS 높이로 맞춰도 실제 로고 크기가 들쭉날쭉했다. sharp의
+  // trim()으로 여백을 제거해 전부 .png로 재저장(webp/jpg였던 KBS1·KBSN스포츠 포함).
+  KBS1: "KBS1.png",
   KBS2: "KBS2.png",
   JTBC: "JTBC.png",
   tvN: "tvN.png",
   Mnet: "Mnet.png",
-  KBSN스포츠: "KBSN_SPORTS.jpg",
+  KBSN스포츠: "KBSN_SPORTS.png",
   "SBS Plus": "SBS_Plus.png",
   "MBC SPORTS+": "MBC_SPORTS_PLUS.png",
   채널S: "CHANNEL_S.png",
@@ -1220,8 +1222,11 @@ function CompetitorLogoBadge({ channelName, color }: { channelName: string; colo
   }
   // 파일 존재 여부를 onError로 즉시 감지해 이니셜 배지로 자동 대체해야 해서, 빌드 타임에
   // 존재를 가정하는 next/image 대신 일반 img를 쓴다.
+  // 사용자 지시(2026-08-26, 재수정): "채널 로고를 KBSN Sports 높이로 통일" — 높이를
+  // 고정 기준으로 삼고(원본 여백은 위에서 이미 trim으로 제거했으므로 이제 높이만 맞추면
+  // 실제 로고 크기도 맞아떨어진다), 너비는 제한하지 않아 로고가 짧아지는 일이 없게 한다.
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={competitorLogoSrc(channelName)} alt={channelName} className="h-4 w-auto max-w-[44px] shrink-0 object-contain" onError={() => setFailed(true)} />;
+  return <img src={competitorLogoSrc(channelName)} alt={channelName} className="h-4 w-auto shrink-0 object-contain" onError={() => setFailed(true)} />;
 }
 function ManualMinuteRatingChart({
   minuteRatings,
@@ -1326,21 +1331,15 @@ function ManualMinuteRatingChart({
           >
             {peak.time} {peak.rating.toFixed(3)}%
           </span>
-          {(cmBreaks ?? []).map((cm, i) => (
-            <span
-              key={`cm-label-${i}`}
-              className="absolute -translate-x-1/2 whitespace-nowrap text-[8px] font-semibold text-orange-500"
-              style={{ left: `${(xOfMin(clampMin(toMinutes(cm.time))) / W) * 100}%`, top: PAD_Y }}
-            >
-              {cm.label}
-            </span>
-          ))}
           {/* 사용자 지시(2026-08-26, 재재수정): "각 점선 좌측 위에 채널 로고 뜨도록 배치" —
               이전엔 겹쳐 안 읽히던 게 "텍스트"였을 뿐, 작은 로고 아이콘은 겹칠 일이 적어
-              점선 시작점 바로 위(좌측 정렬)에 다시 올린다. */}
+              점선 시작점 바로 위(좌측 정렬)에 다시 올린다. 사용자 지시(2026-08-26, 재재재
+              재수정): "글자 간에 겹침 없도록" — 시청률이 아주 높은 프로그램(예: SBS 1.605)의
+              배지가 최고 시청률 라벨과 같은 최상단 영역까지 밀려 올라가 겹치던 문제 — 배지가
+              차트 맨 위(캡션 쪽)로 넘어가지 않도록 최소 top을 확보한다. */}
           {bands.map((c, i) => {
             const x1 = Math.max(PAD_X, xOf(c.start_time!.slice(0, 5)));
-            const y = yOf(c.target_rating!);
+            const y = Math.max(yOf(c.target_rating!), PAD_Y + 14);
             const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
             return (
               <div
@@ -1354,6 +1353,18 @@ function ManualMinuteRatingChart({
           })}
         </div>
       </div>
+      {/* 사용자 지시(2026-08-26, 재재재재수정): "글자 간에 겹침 없도록" — 중CM 라벨이 최고
+          시청률 라벨과 같은 최상단 영역에 겹쳐 있던 문제. 그래프 맨 위 대신 아래(방송 시작/
+          종료 표기와 같은 자리)로 옮겨 서로 겹칠 일이 없게 한다. */}
+      {cmBreaks && cmBreaks.length > 0 && (
+        <div className="relative mt-0.5 h-[11px] text-[9px] font-semibold text-orange-500">
+          {cmBreaks.map((cm, i) => (
+            <span key={`cm-bottom-${i}`} className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${(xOfMin(clampMin(toMinutes(cm.time))) / W) * 100}%` }}>
+              {cm.time} {cm.label}
+            </span>
+          ))}
+        </div>
+      )}
       {/* 사용자 지시(2026-08-26, 재재재수정): "첨부 파일의 붉은색 표시 정보 — 시작시간,
           종료시간, 최고 시청률 등"이 그래프 내에서 다 보이도록. 최고 시청률은 이미 그래프 위
           라벨로 있고, 여기서는 실제 방송 시작/종료 시각을 세로선 위치에 맞춰 명시한다(이미
@@ -2314,6 +2325,22 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 <polyline points="21 3 21 9 15 9" />
               </svg>
             </button>
+            {/* 사용자 지시(2026-08-26): "새로고침 우측에 관리자 화면으로 갈 수 있는 설정
+                아이콘을 하나 더 추가" — 왼쪽의 기존 관리자 아이콘(슬라이더 모양)과 별개로,
+                새로고침 오른쪽에 톱니바퀴(설정) 아이콘을 추가한다. 둘 다 /admin으로 연결. */}
+            {isAdmin && (
+              <a
+                href="/admin"
+                title="관리자 화면"
+                aria-label="관리자 화면"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-700"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </a>
+            )}
           </div>
         </div>
 

@@ -5,16 +5,21 @@
 파일명 그대로 이 폴더에 이미지 파일(PNG 권장, 정사각형에 가까울수록 잘 보임)만 추가하면
 다음 배포부터 바로 반영됩니다.
 
+로고 높이를 다른 채널과 통일해서 보여주므로(사용자 지시 2026-08-26), 원본 파일에 로고
+주변 여백(투명/흰 배경)이 많으면 실제 로고가 작게 보입니다 — 새 로고를 추가할 때는 여백을
+최대한 잘라내고(sharp의 `.trim()` 등으로) 올려주세요. 이미 확보한 파일은 전부 이 방식으로
+한 번 정리해 `.png`로 통일했습니다(webp/jpg로 받았던 KBS1·KBSN스포츠 포함).
+
 | 채널명 | 파일명 | 상태 |
 |---|---|---|
 | SBS | `SBS.png` | ✅ 확보 |
 | MBC | `MBC.png` | ✅ 확보 |
-| KBS1 | `KBS1.webp` | ✅ 확보 |
+| KBS1 | `KBS1.png` | ✅ 확보 |
 | KBS2 | `KBS2.png` | 미확보 |
 | JTBC | `JTBC.png` | ✅ 확보 |
 | tvN | `tvN.png` | ✅ 확보 |
 | Mnet | `Mnet.png` | 미확보 |
-| KBSN스포츠 | `KBSN_SPORTS.jpg` | ✅ 확보 |
+| KBSN스포츠 | `KBSN_SPORTS.png` | ✅ 확보 |
 | SBS Plus | `SBS_Plus.png` | ✅ 확보 |
 | MBC SPORTS+ | `MBC_SPORTS_PLUS.png` | 미확보 |
 | 채널S | `CHANNEL_S.png` | 미확보 |
