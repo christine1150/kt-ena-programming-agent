@@ -17,6 +17,7 @@ import { mapWithConcurrency } from "@/lib/concurrency";
 import { buildOriginalProgrammingInsightViaLlm, type OriginalInsightInput } from "@/lib/originalContentInsight";
 import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
 import { buildChannelNarrativeViaLlm } from "@/lib/channelNarrativeLlm";
+import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -682,6 +683,7 @@ export async function GET(request: Request) {
     // 사용 허가받음, 2026-08-25). API 키가 없거나 실패하면 null → 프론트가 기존 규칙 기반
     // 카니발라이제이션 문구로 조용히 대체(LLM 장애가 서비스를 막지 않는다는 기존 원칙 유지).
     const channelNameByCode = new Map(summaries.map((s) => [s.code, s.name]));
+    const channelIdByCode2 = new Map(channels.map((c) => [c.code, c.id]));
     const achievementPctByCode2 = new Map(summaries.map((s) => [s.code, s.achievementPct]));
     const dailyWithInsight = await Promise.all(
       dailyWithOverlap.map(async (row) => {
@@ -828,7 +830,45 @@ export async function GET(request: Request) {
       ratingHistory: ratingHistoryByKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
     }));
 
-    originalContentReport = { mode: "daily", daily: dailyWithHistory, weekly: [] };
+    // 사용자 지시(2026-08-26): "1페이지 <주요 컨텐츠 리뷰>는 PD가 직접 작성한 보고서 내용으로
+    // 덮어써서 반영" — program_manual_reports(관리자 업로드, manual-drama-report)에 이
+    // 채널·프로그램·날짜의 PD 수동 리포트가 있으면 함께 내려준다(자동 계산은 그대로 두고,
+    // 클라이언트가 있으면 그걸 우선 쓰게 함 — Delta-Only).
+    const manualReportLookupKeys = dailyWithHistory
+      .filter((row) => row.matched_program_name && channelIdByCode2.has(row.broadcast_channel_code))
+      .map((row) => {
+        const effectiveDate =
+          row.expected_time && row.expected_time < "02:00:00"
+            ? new Date(new Date(`${asOfDate}T00:00:00`).getTime() - 86400000)
+            : new Date(`${asOfDate}T00:00:00`);
+        const effectiveDateStr = `${effectiveDate.getFullYear()}-${String(effectiveDate.getMonth() + 1).padStart(2, "0")}-${String(effectiveDate.getDate()).padStart(2, "0")}`;
+        return {
+          rowKey: `${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`,
+          channelId: channelIdByCode2.get(row.broadcast_channel_code)!,
+          canonicalNameNormalized: normalizeProgramCanonicalName(row.matched_program_name!),
+          effectiveDateStr,
+        };
+      });
+    const manualReportChannelIds = [...new Set(manualReportLookupKeys.map((k) => k.channelId))];
+    const { data: manualReportRows } =
+      manualReportChannelIds.length > 0
+        ? await supabase
+            .from("program_manual_reports")
+            .select("channel_id, canonical_name_normalized, broadcast_date, episode_number, headline_bullets, minute_ratings, competitor_rank_snapshot, competitor_programs")
+            .in("channel_id", manualReportChannelIds)
+        : { data: [] };
+    const manualReportByKey = new Map((manualReportRows ?? []).map((r) => [`${r.channel_id}__${r.canonical_name_normalized}__${r.broadcast_date}`, r]));
+    const manualReportByRowKey = new Map(
+      manualReportLookupKeys
+        .map((k) => [k.rowKey, manualReportByKey.get(`${k.channelId}__${k.canonicalNameNormalized}__${k.effectiveDateStr}`) ?? null] as const)
+        .filter((entry): entry is [string, NonNullable<(typeof entry)[1]>] => entry[1] !== null)
+    );
+    const dailyWithManualReport = dailyWithHistory.map((row) => ({
+      ...row,
+      manualReport: manualReportByRowKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
+    }));
+
+    originalContentReport = { mode: "daily", daily: dailyWithManualReport, weekly: [] };
   } else {
     const { data: weeklyRows } = await supabase.rpc("get_original_content_weekly_review", {
       p_as_of_date: asOfDate,

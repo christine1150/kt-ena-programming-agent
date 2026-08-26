@@ -13,6 +13,7 @@ import MailIngestionManager from "./MailIngestionManager";
 import SkyUhdUploader from "./SkyUhdUploader";
 import TargetGoalsManager from "./TargetGoalsManager";
 import OlifeEpgUploader from "./OlifeEpgUploader";
+import ManualDramaReportUploader from "./ManualDramaReportUploader";
 import OlifeEpisodeCatalogUploader from "./OlifeEpisodeCatalogUploader";
 import DailyNewsManager from "./DailyNewsManager";
 import MarketYtdRankUploader from "./MarketYtdRankUploader";
@@ -48,6 +49,8 @@ export default async function AdminPage() {
         <SkyUhdUploader />
 
         <OlifeEpgUploader />
+
+        <ManualDramaReportUploader />
 
         <OlifeEpisodeCatalogUploader />
 

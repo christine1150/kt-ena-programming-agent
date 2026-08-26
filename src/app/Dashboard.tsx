@@ -113,6 +113,36 @@ interface OriginalDailyItem {
   // 값들로 OpenAI가 종합한 문장으로 — API 키가 없거나 실패하면 null(route.ts에서 계산, 실패 시
   // Dashboard가 기존 규칙 기반 카니발라이제이션 문구로 대체).
   schedulingInsight: string | null;
+  // 사용자 지시(2026-08-26): "1페이지 <주요 컨텐츠 리뷰>는 PD가 직접 작성한 보고서 내용으로
+  // 덮어써서 반영" — 관리자가 올린 회차별 수동 리포트(manual-drama-report 업로드)가 있으면
+  // 함께 내려온다. 없으면 null(기존 자동 계산 그대로 표시).
+  manualReport: ManualDramaReportData | null;
+}
+interface ManualMinuteRating {
+  time: string; // "HH:MM"
+  rating: number;
+}
+interface ManualChannelRankRow {
+  rank: number;
+  channel_name: string;
+  rating: number;
+}
+interface ManualCompetitorProgramRow {
+  rank: number | null;
+  program_name: string;
+  channel_name: string;
+  start_time: string | null;
+  end_time: string | null;
+  target_rating: number | null;
+  target_share: number | null;
+  household_rating: number | null;
+}
+interface ManualDramaReportData {
+  episode_number: number | null;
+  headline_bullets: string[];
+  minute_ratings: ManualMinuteRating[] | null;
+  competitor_rank_snapshot: { target: ManualChannelRankRow[]; household: ManualChannelRankRow[] } | null;
+  competitor_programs: ManualCompetitorProgramRow[] | null;
 }
 interface RatingHistoryPoint {
   broadcast_date: string;
@@ -1116,6 +1146,95 @@ function ProgramRatingHistoryChart({
   );
 }
 
+// 사용자 지시(2026-08-26): "1페이지 주요 컨텐츠 리뷰에 신병 분단위 그래프 미반영 — 기 전달했던
+// 엑셀 파일을 참고하여 분단위 그래프 1페이지에 반영할 것". PD가 직접 뽑은 분당 시청률
+// (manualReport.minute_ratings, 자기 채널 실측값만)을 꺾은선으로, PD가 별도로 확인한
+// 동시간대 경쟁 프로그램(manualReport.competitor_programs, 프로그램 단위 평균만 있어 분당
+// 값은 없음 — 그 프로그램의 실제 방영 구간에 평균값 높이로 가로 구간을 그어 참고용으로 겹쳐
+// 보여준다)을 함께 그린다. 새 계산 없이 PD가 이미 낸 값만 그대로 옮긴다.
+const MANUAL_COMPETITOR_BAND_COLORS = ["#f59e0b", "#0891b2", "#a21caf", "#65a30d", "#db2777"];
+function ManualMinuteRatingChart({
+  minuteRatings,
+  competitorPrograms,
+  accentColor,
+  ownChannelName,
+}: {
+  minuteRatings: ManualMinuteRating[];
+  competitorPrograms: ManualCompetitorProgramRow[] | null;
+  accentColor: string;
+  ownChannelName: string;
+}) {
+  if (minuteRatings.length < 2) return null;
+  const W = 640;
+  const H = 160;
+  const PAD_X = 8;
+  const PAD_Y = 10;
+  const toMinutes = (hhmm: string) => {
+    const [h, m] = hhmm.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const startMin = toMinutes(minuteRatings[0].time);
+  const endMin = toMinutes(minuteRatings[minuteRatings.length - 1].time);
+  const span = endMin - startMin || 1;
+  const xOf = (hhmm: string) => PAD_X + ((toMinutes(hhmm) - startMin) / span) * (W - PAD_X * 2);
+  const maxRating = Math.max(...minuteRatings.map((p) => p.rating), ...(competitorPrograms ?? []).map((c) => c.target_rating ?? 0), 0.0001);
+  const yOf = (v: number) => PAD_Y + (1 - v / maxRating) * (H - PAD_Y * 2);
+  const path = minuteRatings.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.time).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(" ");
+  const peak = minuteRatings.reduce((a, b) => (b.rating > a.rating ? b : a));
+  // PD가 뽑은 "동시간대 경쟁 프로그램" 목록 — 자사 본방(rank=null) 행은 제외, 실제 방영구간이
+  // 이 그래프 시간창과 겹치는 것만, 시청률 순 상위 5개까지만(너무 많으면 알아보기 어려움).
+  // "#"(자사 본방 기준행, rank=null)뿐 아니라, PD 목록 안에 같은 채널명으로 자기 자신이
+  // 순위권에도 또 한 번 나오는 경우(신병4사보타주 실측 확인)가 있어 같은 채널명은 전부 제외
+  // — 안 그러면 자사 선(굵은 실선)과 겹치는 중복 구간이 또 그려진다.
+  const bands = (competitorPrograms ?? [])
+    .filter((c) => c.rank !== null && c.channel_name !== ownChannelName && c.start_time && c.end_time && c.target_rating !== null)
+    .filter((c) => toMinutes(c.start_time!.slice(0, 5)) < endMin && toMinutes(c.end_time!.slice(0, 5)) > startMin)
+    .sort((a, b) => (b.target_rating ?? 0) - (a.target_rating ?? 0))
+    .slice(0, 5);
+  return (
+    <div className="mt-2 rounded-xl bg-zinc-50 p-3">
+      <p className="mb-1 text-[11px] text-zinc-400">
+        분당 시청률(PD 실측) — 굵은 선이 {ownChannelName}, 가는 점선은 동시간대 경쟁 프로그램의 방영 구간 평균입니다.
+      </p>
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
+          {bands.map((c, i) => {
+            const x1 = Math.max(PAD_X, xOf(c.start_time!.slice(0, 5)));
+            const x2 = Math.min(W - PAD_X, xOf(c.end_time!.slice(0, 5)));
+            const y = yOf(c.target_rating!);
+            const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
+            return (
+              <g key={`${c.channel_name}-${c.program_name}`}>
+                <line x1={x1} y1={y} x2={x2} y2={y} stroke={color} strokeWidth={1.4} strokeDasharray="4 3">
+                  <title>
+                    {c.channel_name} &apos;{c.program_name}&apos; — {c.target_rating!.toFixed(3)}%
+                  </title>
+                </line>
+                <text x={x1} y={y - 3} fontSize={8} fill={color}>
+                  {c.channel_name} {c.program_name}
+                </text>
+              </g>
+            );
+          })}
+          <path d={path} fill="none" stroke={accentColor} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <div className="pointer-events-none absolute inset-0">
+          <span
+            className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[9px] font-bold tabular-nums"
+            style={{ left: `${(xOf(peak.time) / W) * 100}%`, top: yOf(peak.rating) - 3, color: accentColor }}
+          >
+            {peak.time} {peak.rating.toFixed(3)}%
+          </span>
+        </div>
+      </div>
+      <div className="mt-1 flex justify-between text-[9px] text-zinc-400">
+        <span>{minuteRatings[0].time}</span>
+        <span>{minuteRatings[minuteRatings.length - 1].time}</span>
+      </div>
+    </div>
+  );
+}
+
 // 사용자 지시(2026-08-20): 안내 문구("동시간대 경쟁 프로그램은 Competitor Master에 등록되고...")
 // 대신 오늘 분석된 오리지널 라인업 전체를 종합하는 인사이트 브리핑을 넣는다. 새 계산 없이
 // 이미 각 항목이 갖고 있는 값(동시간대 순위는 buildOriginalHeadline과 같은 방식으로 재계산,
@@ -1348,6 +1467,17 @@ function OriginalContentReportCard({
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {/* 사용자 지시(2026-08-26): "1페이지 주요 컨텐츠 리뷰에 분단위 그래프 반영" —
+                      PD가 업로드한 수동 리포트(manual-drama-report)에 분당 시청률이 있으면
+                      12주 추이 그래프 위에 먼저 보여준다(자동 계산과 별개, 있을 때만 노출). */}
+                  {h.manualReport?.minute_ratings && h.manualReport.minute_ratings.length >= 2 && (
+                    <ManualMinuteRatingChart
+                      minuteRatings={h.manualReport.minute_ratings}
+                      competitorPrograms={h.manualReport.competitor_programs}
+                      accentColor={themeColorByCode.get(h.broadcast_channel_code) ?? enaAccentColor}
+                      ownChannelName={CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
+                    />
                   )}
                   {/* 사용자 지시(2026-08-25): 꺾은선의 "2049 시청률" 색이 항상 ENA 색으로 고정돼
                       있었다 — 실제 방영 채널(예: ENA Play)의 로고 색을 반영하도록 수정. */}
