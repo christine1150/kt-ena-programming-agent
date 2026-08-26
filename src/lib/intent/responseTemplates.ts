@@ -16,6 +16,11 @@ function pct(v: number | null | undefined): string {
 function bar(title: string, series: { label: string; value: number | null }[]): VisualizationSpec | undefined {
   return series.length >= 2 ? { type: "bar", title, series } : undefined;
 }
+// Tier 2 확장(2026-08-26): 순위·TOP N처럼 항목당 값이 여러 개(순위/이름/시청률/등락 등)라
+// 막대 하나로는 다 못 담는 목록용 — SQL이 이미 계산한 값을 표 행으로 그대로 옮긴다(새 계산 없음).
+function table(title: string, columns: string[], rows: (string | number | null)[][]): VisualizationSpec | undefined {
+  return rows.length >= 2 ? { type: "table", title, series: [], columns, rows } : undefined;
+}
 
 // 스펙 20번 Confidence 기준(표본 일수). 이 엔진에서 다루는 대부분의 SQL 함수는 이미 최근
 // 12주(84일) 윈도우로 계산되므로, 실제로 관측된 표본 일수(days_with_data 등)를 기준으로 삼는다.
@@ -103,9 +108,10 @@ export function buildPortfolioRankingAnswer(
     programmingAction: asc ? "부진 원인(편성/경쟁채널)을 Page 2 WHY?에서 추가로 확인해 보세요." : "강세 요인을 STRENGTHEN 후보로 검토해 보세요.",
     confidence,
     confidenceNote: isSingleDay ? "실측 데이터 1일 기준(사실 조회, 추세 추정 아님)." : CONFIDENCE_NOTE[confidence],
-    visualization: bar(
+    visualization: table(
       rankByChange ? "채널별 등락률(%)" : "채널별 시청률",
-      sorted.slice(0, 7).map((r) => ({ label: r.channel.name, value: rankByChange ? r.report!.prior_period_change_pct : r.report!.avg_rating }))
+      ["순위", "채널", "시청률", "직전 기간 대비"],
+      sorted.slice(0, 7).map((r, i) => [i + 1, r.channel.name, fmt(r.report!.avg_rating), r.report!.prior_period_change_pct !== null ? pct(r.report!.prior_period_change_pct) : "데이터 없음"])
     ),
     followups: [`${winner.channel.name} 최근 12주 시간대별로는 어때?`, `${winner.channel.name}의 경쟁채널 대비 위치는?`],
   };
@@ -309,7 +315,11 @@ export function buildProgramTopAnswer(
     programmingAction: "상위 프로그램은 STRENGTHEN, 하위 프로그램은 WHAT TO SCHEDULE?에서 REPLACE/TEST 여부를 확인하세요.",
     confidence: "HIGH",
     confidenceNote: "최근 12주 누적 집계 기준입니다.",
-    visualization: bar(`${data.channel.name} 프로그램 TOP ${top.length}`, top.map((p) => ({ label: p.program_name, value: p.avg_rating }))),
+    visualization: table(
+      `${data.channel.name} 프로그램 TOP ${top.length}`,
+      ["순위", "프로그램", "평균 시청률", "방영 횟수"],
+      top.map((p, i) => [i + 1, p.program_name, fmt(p.avg_rating), p.air_count])
+    ),
     followups: [`${data.channel.name}의 시간대별 성과는?`],
   };
 }
@@ -415,7 +425,11 @@ export function buildCompetitivePositionAnswer(
     programmingAction: "12주 평균 대비 뚜렷하게 강세인 경쟁채널이 있으면 Page 2 COMPARED WITH?에서 상세 내용을 확인하세요.",
     confidence: "HIGH",
     confidenceNote: "등록된 경쟁채널(Competitor Master) 기준 확정 조회입니다.",
-    visualization: bar("등록 경쟁채널 시청률", sorted.slice(0, 8).map((r) => ({ label: r.competitor_name, value: r.today_rating }))),
+    visualization: table(
+      "등록 경쟁채널 시청률",
+      ["순위", "경쟁채널", "시청률", "12주 평균 대비"],
+      sorted.slice(0, 8).map((r) => [r.today_rank ?? "—", r.competitor_name, fmt(r.today_rating), r.delta_pct !== null ? pct(r.delta_pct) : "데이터 없음"])
+    ),
     followups: [`${data.channel.name}과 ${sorted[0].competitor_name}의 동시간대 프로그램 비교는?`],
   };
 }

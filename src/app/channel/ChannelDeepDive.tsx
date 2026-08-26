@@ -3464,13 +3464,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               {/* 사용자 지시(2026-08-25, 감사 후속: 원 명세 30번) — SQL이 이미 계산한 값을 그대로
                   옮긴 구조화 시각화(EvidenceAnswer.visualization). 새 라이브러리 없이 가벼운
                   가로 막대로 표시(값이 없으면 빈 칸 그대로). */}
-              {askAnswer.visualization && askAnswer.visualization.series.length > 0 && (
+              {askAnswer.visualization?.type === "bar" && askAnswer.visualization.series.length > 0 && (
                 <div className="mt-1 rounded-xl bg-white p-3 ring-1 ring-zinc-100">
                   <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
                   <div className="space-y-1.5">
                     {(() => {
-                      const max = Math.max(...askAnswer.visualization.series.map((s) => s.value ?? 0), 0.0001);
-                      return askAnswer.visualization.series.map((s, i) => (
+                      const viz = askAnswer.visualization;
+                      const max = Math.max(...viz.series.map((s) => s.value ?? 0), 0.0001);
+                      return viz.series.map((s, i) => (
                         <div key={i} className="flex items-center gap-2 text-xs">
                           <span className="w-28 shrink-0 truncate text-zinc-600" title={s.label}>{s.label}</span>
                           <div className="h-2.5 flex-1 rounded-full bg-zinc-100">
@@ -3486,6 +3487,32 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       ));
                     })()}
                   </div>
+                </div>
+              )}
+              {/* Tier 2 확장(2026-08-26, 사용자 지시: "티어 2 진행" — 원 제안 8번 "시각화 타입
+                  확장") — 순위·TOP N처럼 항목당 값이 여러 개라 막대 하나로 못 담는 목록은 표로.
+                  SQL이 이미 계산한 값을 그대로 옮긴 것(새 계산 없음). */}
+              {askAnswer.visualization?.type === "table" && (askAnswer.visualization.rows?.length ?? 0) > 0 && (
+                <div className="mt-1 overflow-x-auto rounded-xl bg-white p-3 ring-1 ring-zinc-100">
+                  <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-100 text-zinc-400">
+                        {askAnswer.visualization.columns!.map((c, i) => (
+                          <th key={i} className="whitespace-nowrap py-1 pr-3 font-medium">{c}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {askAnswer.visualization.rows!.map((row, i) => (
+                        <tr key={i} className="border-b border-zinc-50 last:border-0">
+                          {row.map((cell, j) => (
+                            <td key={j} className="whitespace-nowrap py-1 pr-3 text-zinc-700">{cell ?? "데이터 없음"}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
               {/* 원 명세 31번 — 후속 질문 칩. 클릭하면 바로 그 질문으로 재질의한다. */}

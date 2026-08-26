@@ -61,10 +61,16 @@ export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW" | "INSUFFICIENT_SAMPLE";
 // 사용자 지시(2026-08-25, 감사 후속: 원 명세 30/31번) — SQL이 이미 계산해 둔 값을 그대로
 // 막대그래프로 보여줄 수 있는 최소 구조. LLM은 이 구조를 채우지 않는다(responseTemplates.ts가
 // SQL 결과에서 그대로 뽑아 채운다) — 새 수치를 만들지 않는다는 원칙 그대로.
+// Tier 2 확장(2026-08-26, 사용자 지시: "티어 2 진행" — 원 제안 8번 "시각화 타입 확장, 지금
+// bar 하나뿐") — 표(table) 타입 추가. 단일 값 series로는 순위·회차·등락률 같은 다열(多列)
+// 정보를 다 못 담아 evidence 문자열로만 나열되던 목록(TOP N, 경쟁채널 순위 등)을 표로 그대로
+// 보여준다. bar와 마찬가지로 SQL이 이미 계산한 값만 나열(새 계산 없음).
 export interface VisualizationSpec {
-  type: "bar";
+  type: "bar" | "table";
   title: string;
-  series: { label: string; value: number | null }[];
+  series: { label: string; value: number | null }[]; // type="bar"일 때만 사용
+  columns?: string[]; // type="table"일 때만 사용 — 헤더
+  rows?: (string | number | null)[][]; // type="table"일 때만 사용 — columns와 같은 길이
 }
 
 export interface RouteResult {
