@@ -1284,29 +1284,48 @@ function ManualMinuteRatingChart({
           >
             {peak.time} {peak.rating.toFixed(3)}%
           </span>
+          {/* 사용자 지시(2026-08-26, 재재수정): "각 점선 좌측 위에 채널 로고 뜨도록 배치" —
+              이전엔 겹쳐 안 읽히던 게 "텍스트"였을 뿐, 작은 로고 아이콘은 겹칠 일이 적어
+              점선 시작점 바로 위(좌측 정렬)에 다시 올린다. */}
+          {bands.map((c, i) => {
+            const x1 = Math.max(PAD_X, xOf(c.start_time!.slice(0, 5)));
+            const y = yOf(c.target_rating!);
+            const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
+            return (
+              <div
+                key={`${c.channel_name}-${c.program_name}-logo`}
+                className="absolute -translate-y-full"
+                style={{ left: `${(x1 / W) * 100}%`, top: y - 2 }}
+              >
+                <CompetitorLogoBadge channelName={c.channel_name} color={color} />
+              </div>
+            );
+          })}
         </div>
       </div>
       <div className="mt-1 flex justify-between text-[9px] text-zinc-400">
         <span>{minuteRatings[0].time}</span>
         <span>{minuteRatings[minuteRatings.length - 1].time}</span>
       </div>
-      {/* 사용자 지시(2026-08-26, 재수정): "채널명(로고 작게) 프로그램명, 시작시간, 수2049
-          시청률 순으로" — PD 원본 엑셀 참고 이미지(가운데 표)와 같은 형태의 정리된 목록. */}
+      {/* 사용자 지시(2026-08-26, 재재수정): "로고가 있으면 로고가 채널명을 대체 — 채널명과
+          로고 둘 다 하지 말고 로고로만" + "한 줄에 3개 채널까지 보이도록 같은 너비로 정렬,
+          글자는 작아져도 됨" — 채널명 텍스트를 없애고(로고/이니셜 배지가 그 역할을 대신),
+          3열 grid로 폭을 고정한다. */}
       {bands.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2 grid grid-cols-3 gap-1.5">
           {bands.map((c, i) => {
             const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
             return (
-              <div key={`${c.channel_name}-${c.program_name}`} className="flex items-center gap-1.5 rounded-lg bg-white px-2 py-1 text-[10px] ring-1 ring-zinc-100">
-                <span className="inline-block h-0.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+              <div
+                key={`${c.channel_name}-${c.program_name}`}
+                className="flex min-w-0 items-center gap-1 rounded-lg bg-white px-1.5 py-1 text-[9px] ring-1 ring-zinc-100"
+              >
+                <span className="inline-block h-0.5 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
                 <CompetitorLogoBadge channelName={c.channel_name} color={color} />
-                <span className="font-semibold text-zinc-700">{c.channel_name}</span>
-                <span className="max-w-[160px] truncate text-zinc-600" title={c.program_name}>
+                <span className="min-w-0 flex-1 truncate text-zinc-600" title={`${c.channel_name} ${c.program_name}`}>
                   {c.program_name}
                 </span>
-                <span className="text-zinc-300">·</span>
-                <span className="shrink-0 tabular-nums text-zinc-500">{c.start_time!.slice(0, 5)}</span>
-                <span className="text-zinc-300">·</span>
+                <span className="shrink-0 tabular-nums text-zinc-400">{c.start_time!.slice(0, 5)}</span>
                 <span className="shrink-0 font-semibold tabular-nums" style={{ color }}>
                   {c.target_rating!.toFixed(2)}%
                 </span>
