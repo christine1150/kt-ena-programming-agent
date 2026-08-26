@@ -1163,6 +1163,55 @@ function ProgramRatingHistoryChart({
 // 값은 없음 — 그 프로그램의 실제 방영 구간에 평균값 높이로 가로 구간을 그어 참고용으로 겹쳐
 // 보여준다)을 함께 그린다. 새 계산 없이 PD가 이미 낸 값만 그대로 옮긴다.
 const MANUAL_COMPETITOR_BAND_COLORS = ["#f59e0b", "#0891b2", "#a21caf", "#65a30d", "#db2777"];
+// 사용자 지시(2026-08-26, 분당 시청률 재수정): "그래프 위에 겹쳐 쓰던 채널명·프로그램명이
+// 서로 겹쳐 안 읽힘 — 가운데 표(PD 원본 엑셀 참고 이미지)처럼 그래프 아래 정리된 목록으로,
+// 채널 로고를 작게 넣어 표시". 등록 경쟁채널(SBS/MBC/KBS1 등)은 이 채널들(ENA 계열)과 달리
+// 로고 파일이 아직 없다 — 파일명 매핑만 미리 만들어 두고, 나중에 관리자가
+// public/competitor-logos/에 파일만 추가하면 코드 수정 없이 바로 반영되게 한다(파일이
+// 없으면 <img onError>로 자동으로 이니셜 배지로 대체, 깨진 이미지 아이콘 노출 방지).
+const COMPETITOR_LOGO_FILE: Record<string, string> = {
+  SBS: "SBS.png",
+  MBC: "MBC.png",
+  KBS1: "KBS1.png",
+  KBS2: "KBS2.png",
+  JTBC: "JTBC.png",
+  tvN: "tvN.png",
+  Mnet: "Mnet.png",
+  KBSN스포츠: "KBSN_SPORTS.png",
+  "MBC SPORTS+": "MBC_SPORTS_PLUS.png",
+  채널S: "CHANNEL_S.png",
+  SPOTV2: "SPOTV2.png",
+  채널나우: "CHANNEL_NOW.png",
+  "TV CHOSUN": "TV_CHOSUN.png",
+  MBN: "MBN.png",
+  채널A: "CHANNEL_A.png",
+};
+function competitorLogoSrc(channelName: string): string {
+  const file = COMPETITOR_LOGO_FILE[channelName] ?? `${channelName.replace(/[^A-Za-z0-9가-힣]/g, "_")}.png`;
+  return `/competitor-logos/${file}`;
+}
+// 채널 로고가 아직 없을 때 대신 보여줄 작은 이니셜 배지(해당 방송사 dashed line과 같은 색).
+function CompetitorLogoBadge({ channelName, color }: { channelName: string; color: string }) {
+  return (
+    <span
+      className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full text-[7px] font-bold text-white"
+      style={{ backgroundColor: color }}
+    >
+      <span className="pointer-events-none">{channelName.slice(0, 2)}</span>
+      {/* eslint-disable-next-line @next/next/no-img-element -- 파일 존재 여부를 onError로 즉시
+          감지해 이니셜 배지로 자동 대체해야 해서, 빌드 타임에 존재를 가정하는 next/image 대신
+          일반 img를 쓴다. */}
+      <img
+        src={competitorLogoSrc(channelName)}
+        alt=""
+        className="absolute inset-0 h-full w-full rounded-full bg-white object-contain p-[1px]"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
+    </span>
+  );
+}
 function ManualMinuteRatingChart({
   minuteRatings,
   competitorPrograms,
@@ -1208,22 +1257,20 @@ function ManualMinuteRatingChart({
       </p>
       <div className="relative">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
+          {/* 사용자 지시(2026-08-26, 재수정): 그래프 위에 채널명·프로그램명을 직접 겹쳐 쓰면
+              선끼리 가까울 때 글자가 서로 겹쳐 안 읽힌다 — 점선만 남기고, 이름·시간·시청률은
+              전부 아래 목록(범례)으로 옮긴다. */}
           {bands.map((c, i) => {
             const x1 = Math.max(PAD_X, xOf(c.start_time!.slice(0, 5)));
             const x2 = Math.min(W - PAD_X, xOf(c.end_time!.slice(0, 5)));
             const y = yOf(c.target_rating!);
             const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
             return (
-              <g key={`${c.channel_name}-${c.program_name}`}>
-                <line x1={x1} y1={y} x2={x2} y2={y} stroke={color} strokeWidth={1.4} strokeDasharray="4 3">
-                  <title>
-                    {c.channel_name} &apos;{c.program_name}&apos; — {c.target_rating!.toFixed(3)}%
-                  </title>
-                </line>
-                <text x={x1} y={y - 3} fontSize={8} fill={color}>
-                  {c.channel_name} {c.program_name}
-                </text>
-              </g>
+              <line key={`${c.channel_name}-${c.program_name}`} x1={x1} y1={y} x2={x2} y2={y} stroke={color} strokeWidth={1.4} strokeDasharray="4 3">
+                <title>
+                  {c.channel_name} &apos;{c.program_name}&apos; — {c.target_rating!.toFixed(3)}%
+                </title>
+              </line>
             );
           })}
           <path d={path} fill="none" stroke={accentColor} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
@@ -1241,6 +1288,31 @@ function ManualMinuteRatingChart({
         <span>{minuteRatings[0].time}</span>
         <span>{minuteRatings[minuteRatings.length - 1].time}</span>
       </div>
+      {/* 사용자 지시(2026-08-26, 재수정): "채널명(로고 작게) 프로그램명, 시작시간, 수2049
+          시청률 순으로" — PD 원본 엑셀 참고 이미지(가운데 표)와 같은 형태의 정리된 목록. */}
+      {bands.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {bands.map((c, i) => {
+            const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
+            return (
+              <div key={`${c.channel_name}-${c.program_name}`} className="flex items-center gap-1.5 rounded-lg bg-white px-2 py-1 text-[10px] ring-1 ring-zinc-100">
+                <span className="inline-block h-0.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                <CompetitorLogoBadge channelName={c.channel_name} color={color} />
+                <span className="font-semibold text-zinc-700">{c.channel_name}</span>
+                <span className="max-w-[160px] truncate text-zinc-600" title={c.program_name}>
+                  {c.program_name}
+                </span>
+                <span className="text-zinc-300">·</span>
+                <span className="shrink-0 tabular-nums text-zinc-500">{c.start_time!.slice(0, 5)}</span>
+                <span className="text-zinc-300">·</span>
+                <span className="shrink-0 font-semibold tabular-nums" style={{ color }}>
+                  {c.target_rating!.toFixed(2)}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
