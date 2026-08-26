@@ -62,6 +62,10 @@ interface OriginalDailyItem {
   note: string | null;
   matched_program_name: string;
   matched_start_time: string;
+  // 사용자 지시(2026-08-26): 분당 시청률 그래프에 "실제 방송 시작/종료 시각" 마커를 넣기
+  // 위해 추가 노출 — SQL(get_original_content_daily)은 이미 내려주고 있었지만 이 화면
+  // 타입에는 빠져 있었다(다른 화면 어디서도 안 써서 그동안 드러나지 않았던 누락).
+  matched_end_time: string;
   matched_rating: number | null;
   // 사용자 지시(2026-08-21): 첨부된 PD 리뷰 보고서("179회 본방 시청률 리뷰")를 학습해 추가 —
   // 도달율과 본방 슬롯 연령대별(10살 단위) 시청률 상위 5개. 둘 다 우리 ratings 테이블에 이미
@@ -1219,11 +1223,20 @@ function ManualMinuteRatingChart({
   competitorPrograms,
   accentColor,
   ownChannelName,
+  broadcastStartTime,
+  broadcastEndTime,
 }: {
   minuteRatings: ManualMinuteRating[];
   competitorPrograms: ManualCompetitorProgramRow[] | null;
   accentColor: string;
   ownChannelName: string;
+  // 사용자 지시(2026-08-26, 재재재수정): "첨부 파일 붉은색 표시 정보(시작시간·종료시간 등)가
+  // 다 보이게" — Nielsen 실측 본방 시작/종료 시각(get_original_content_daily가 이미 계산해
+  // 둔 matched_start_time/matched_end_time). PD가 뽑은 분당 시청률 시트는 리드인·리드아웃을
+  // 포함해 이보다 앞뒤로 더 넓게 잘려 있어(예: 21:42~23:15), 시트의 처음/끝 시각을 "방송
+  // 시작/종료"라고 잘못 표기하지 않도록 실제 방송 시각을 별도로 받아 그 위치에 표시한다.
+  broadcastStartTime?: string | null;
+  broadcastEndTime?: string | null;
 }) {
   if (minuteRatings.length < 2) return null;
   const W = 640;
@@ -1242,6 +1255,13 @@ function ManualMinuteRatingChart({
   const yOf = (v: number) => PAD_Y + (1 - v / maxRating) * (H - PAD_Y * 2);
   const path = minuteRatings.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.time).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(" ");
   const peak = minuteRatings.reduce((a, b) => (b.rating > a.rating ? b : a));
+  // 실제 방송 시작/종료 시각이 있으면 그 시각을(리드인·리드아웃까지 포함해 더 넓게 잘린 시트
+  // 처음/끝이 아니라) 마커 위치로 쓴다. 없으면 시트 처음/끝으로 대체(기존 동작 그대로 유지).
+  const clampMin = (m: number) => Math.min(Math.max(m, startMin), endMin);
+  const startMarkerMin = broadcastStartTime ? clampMin(toMinutes(broadcastStartTime.slice(0, 5))) : startMin;
+  const endMarkerMin = broadcastEndTime ? clampMin(toMinutes(broadcastEndTime.slice(0, 5))) : endMin;
+  const xOfMin = (m: number) => PAD_X + ((m - startMin) / span) * (W - PAD_X * 2);
+  const fmtHHMM = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   // PD가 뽑은 "동시간대 경쟁 프로그램" 목록 — 자사 본방(rank=null) 행은 제외, 실제 방영구간이
   // 이 그래프 시간창과 겹치는 것만, 시청률 순 상위 5개까지만(너무 많으면 알아보기 어려움).
   // "#"(자사 본방 기준행, rank=null)뿐 아니라, PD 목록 안에 같은 채널명으로 자기 자신이
@@ -1275,6 +1295,11 @@ function ManualMinuteRatingChart({
               </line>
             );
           })}
+          {/* 사용자 지시(2026-08-26, 재재재수정): 참고 이미지(PD 원본 엑셀)의 "22:00 방송시작/
+              23:10 방송종료" 세로 점선 마커 — 실제 방송 시작·종료 시각(리드인·리드아웃이
+              포함된 시트 처음/끝이 아니라)을 세로선으로 짚어준다. */}
+          <line x1={xOfMin(startMarkerMin)} y1={PAD_Y} x2={xOfMin(startMarkerMin)} y2={H - PAD_Y} stroke="#a1a1aa" strokeWidth={1} strokeDasharray="2 2" />
+          <line x1={xOfMin(endMarkerMin)} y1={PAD_Y} x2={xOfMin(endMarkerMin)} y2={H - PAD_Y} stroke="#a1a1aa" strokeWidth={1} strokeDasharray="2 2" />
           <path d={path} fill="none" stroke={accentColor} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         <div className="pointer-events-none absolute inset-0">
@@ -1303,9 +1328,17 @@ function ManualMinuteRatingChart({
           })}
         </div>
       </div>
-      <div className="mt-1 flex justify-between text-[9px] text-zinc-400">
-        <span>{minuteRatings[0].time}</span>
-        <span>{minuteRatings[minuteRatings.length - 1].time}</span>
+      {/* 사용자 지시(2026-08-26, 재재재수정): "첨부 파일의 붉은색 표시 정보 — 시작시간,
+          종료시간, 최고 시청률 등"이 그래프 내에서 다 보이도록. 최고 시청률은 이미 그래프 위
+          라벨로 있고, 여기서는 실제 방송 시작/종료 시각을 세로선 위치에 맞춰 명시한다(이미
+          있는 데이터 그대로, 새 계산 없음) — 시트 처음/끝이 아니라 실측 방송 시각 기준. */}
+      <div className="relative h-[11px] text-[9px] text-zinc-400">
+        <span className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${(xOfMin(startMarkerMin) / W) * 100}%` }}>
+          {fmtHHMM(startMarkerMin)} 방송 시작
+        </span>
+        <span className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${(xOfMin(endMarkerMin) / W) * 100}%` }}>
+          {fmtHHMM(endMarkerMin)} 방송 종료
+        </span>
       </div>
       {/* 사용자 지시(2026-08-26, 재재수정): "로고가 있으면 로고가 채널명을 대체 — 채널명과
           로고 둘 다 하지 말고 로고로만" + "한 줄에 3개 채널까지 보이도록 같은 너비로 정렬,
@@ -1593,6 +1626,8 @@ function OriginalContentReportCard({
                       competitorPrograms={h.manualReport.competitor_programs}
                       accentColor={themeColorByCode.get(h.broadcast_channel_code) ?? enaAccentColor}
                       ownChannelName={CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
+                      broadcastStartTime={h.matched_start_time}
+                      broadcastEndTime={h.matched_end_time}
                     />
                   )}
                   {/* 명세엔 없지만 기존에 있던 추가 신호(동시간대 정성 비교/신규드라마 비교/자체재방/

@@ -6,6 +6,16 @@
 // llmSynthesis.ts의 공용 가드레일 재사용).
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "./llmSynthesis";
 
+// 사용자 지시(2026-08-26): "채널별 인사이트 안에서 어떤건 %까지 표시하고 어떤건 숫자만
+// 표시 — skyUHD 제외 모든 채널은 소수점 아래 3자리까지만". 원인은 이 함수가 시청률 원본
+// 값(소수점 5자리, DB round(...,5) 그대로)을 그대로 OpenAI에 넘겨 LLM이 몇 자리를 쓸지,
+// %를 붙일지 매번 제멋대로 정했기 때문 — 화면 표시 전용 자리수 규칙(Dashboard.tsx의
+// formatRating과 동일하게 3자리)을 프롬프트에 맡기지 않고 여기서 미리 반올림해 원천적으로
+// LLM이 볼 수 있는 자릿수 자체를 제한한다(skyUHD는 이 LLM 경로를 안 타므로 예외 처리 불필요).
+function round3(v: number | null): number | null {
+  return v === null ? null : Math.round(v * 1000) / 1000;
+}
+
 export interface ChannelNarrativeLlmInput {
   channelName: string;
   // 사용자 지시(2026-08-25): ENA는 이 문장이 있으면 항상 맨 앞에, 원문 그대로 — LLM이 다시
@@ -51,6 +61,7 @@ function buildSystemPrompt(): string {
     "leadSentence 필드가 있으면 그 문장은 절대 다시 쓰지 말고 그대로 맨 앞에 두고, 그 뒤에 자연스럽게 이어지도록 작성해라(leadSentence가 null이면 그냥 총평부터 시작).",
     "값이 null이거나 변화폭이 미미한 지표는 굳이 언급하지 마라 — 뚜렷한 신호만 골라 서술해라(대략 15% 안팎 이상 변화, 3위 이상 순위 변동 정도를 뚜렷한 신호로 본다).",
     "여러 신호가 동시에 나타났다면(예: 연령대 하락과 시간대 약세가 겹침) 그 동시성을 짚어도 되지만, 인과관계로 단정하지 마라.",
+    "숫자 표기 규칙(중요) — 시청률(rating) 값(today_rating/baseline_avg_rating/dow_baseline_avg_rating/today_peak_rating/top_program_rating/top_program_baseline_avg/decline_program_rating/decline_program_baseline_avg/priorWeekRating/priorWeek2Rating/household의 rating류/demographics[].today)은 이미 소수점 3자리로 반올림되어 있다 — 그 자리수 그대로만 쓰고(예: 0.147), 뒤에 '%'를 붙이지 마라. 반면 등락률(rating_delta_pct/decline_program_delta_pct/demographics[].delta_pct)은 원래 퍼센트 값이므로 그대로 '%'를 붙여 써라(예: ▲ 12.3%). 이 둘을 섞어 쓰지 마라.",
     LLM_SYNTHESIS_GUARDRAIL,
   ].join("\n");
 }
@@ -63,7 +74,24 @@ const SCHEMA = {
 };
 
 export async function buildChannelNarrativeViaLlm(input: ChannelNarrativeLlmInput): Promise<string | null> {
-  const result = await callOpenAiJsonSynthesis<{ narrative: string }>(buildSystemPrompt(), input, "channel_narrative", SCHEMA);
+  const rounded: ChannelNarrativeLlmInput = {
+    ...input,
+    today_rating: round3(input.today_rating),
+    baseline_avg_rating: round3(input.baseline_avg_rating),
+    priorWeekRating: round3(input.priorWeekRating),
+    priorWeek2Rating: round3(input.priorWeek2Rating),
+    dow_baseline_avg_rating: round3(input.dow_baseline_avg_rating),
+    today_peak_rating: round3(input.today_peak_rating),
+    top_program_rating: round3(input.top_program_rating),
+    top_program_baseline_avg: round3(input.top_program_baseline_avg),
+    decline_program_rating: round3(input.decline_program_rating),
+    decline_program_baseline_avg: round3(input.decline_program_baseline_avg),
+    demographics: input.demographics?.map((d) => ({ ...d, today: round3(d.today) })) ?? null,
+    household: input.household
+      ? { ...input.household, today_top_rating: round3(input.household.today_top_rating), baseline_avg_rating: round3(input.household.baseline_avg_rating) }
+      : null,
+  };
+  const result = await callOpenAiJsonSynthesis<{ narrative: string }>(buildSystemPrompt(), rounded, "channel_narrative", SCHEMA);
   const narrative = result?.narrative?.trim();
   return narrative && narrative.length > 0 ? narrative : null;
 }
