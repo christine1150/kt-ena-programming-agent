@@ -269,32 +269,88 @@ const CROSS_CHANNEL_REACH_DEFAULT_LOOKBACK_DAYS = 365;
 const CROSS_CHANNEL_REACH_CURRENTLY_AIRING_LOOKBACK_DAYS = 30;
 const CURRENTLY_AIRING_PHRASING = /(지금|현재).*(하고\s*있|방영\s*중|편성\s*중)/;
 
+// 방어적 상한(2026-08-26, 사용자 제보 버그 수정 후속) — 20260826250000에서 근본 원인(own
+// channel 쪽 타깃 뻥튀기)은 고쳤지만, PostgREST 기본 응답 상한(1000행)에 다시 조용히 걸리는
+// 것을 막기 위해 명시적으로 여유 있는 상한을 둔다. 실측 정상 케이스는 수백 행 수준.
+const CROSS_CHANNEL_REACH_ROW_LIMIT = 2000;
+
 export async function execProgramCrossChannelReach(params: ExtractedParameters, timeContext: TimeContext, question: string) {
   const channels = await getChannelRefs();
   const channel = channels.find((c) => c.code === params.channelCode);
   if (!channel) return null;
 
-  // 사용자 지시(2026-08-26): "특별한 기간 요청이 없을 경우 지난 1년의 데이터로 계산해줘"
-  // — 시간 표현이 아예 없으면(raw === null, timeResolver 기본값은 "오늘" 하루) 1년으로 넓힌다.
-  // 단, "지금 ~하고 있는"류 현재진행형 질문이면 위 사용자 지시대로 최근 한달로 좁힌다.
-  let dateFrom = timeContext.dateFrom;
-  const dateTo = timeContext.dateTo;
-  if (timeContext.raw === null) {
-    const lookbackDays = CURRENTLY_AIRING_PHRASING.test(question)
-      ? CROSS_CHANNEL_REACH_CURRENTLY_AIRING_LOOKBACK_DAYS
-      : CROSS_CHANNEL_REACH_DEFAULT_LOOKBACK_DAYS;
-    const d = new Date(dateTo);
-    d.setDate(d.getDate() - lookbackDays);
-    dateFrom = d.toISOString().slice(0, 10);
+  // 사용자 지시(2026-08-26): "특별한 기간 요청이 없을 경우 지난 1년의 데이터로 계산해줘",
+  // "지금 ~하고 있는"류 현재진행형 질문이면 최근 한달로. 이 두 기본 기간만 마트로 캐시한다
+  // (사용자 지시: "Fit Score처럼 사전 계산해두는 마트 테이블 방식으로 바꿔서 속도를 줄여줘").
+  // 사용자가 명시적으로 기간을 지정한 질문("최근 31일" 등, timeContext.raw !== null)은
+  // 조합이 무한해 마트로 감당이 안 되므로 지금처럼 그때그때 직접 계산한다.
+  if (timeContext.raw !== null) {
+    const { data } = await supabase
+      .rpc("get_program_cross_channel_reach", {
+        p_channel_code: channel.code,
+        p_date_from: timeContext.dateFrom,
+        p_date_to: timeContext.dateTo,
+      })
+      .limit(CROSS_CHANNEL_REACH_ROW_LIMIT);
+    return { channel, dateFrom: timeContext.dateFrom, dateTo: timeContext.dateTo, rows: (data ?? []) as CrossChannelReachRow[] };
   }
 
-  // 방어적 상한(2026-08-26, 사용자 제보 버그 수정 후속) — 20260826250000에서 근본 원인(own
-  // channel 쪽 타깃 뻥튀기)은 고쳤지만, PostgREST 기본 응답 상한(1000행)에 다시 조용히 걸리는
-  // 것을 막기 위해 명시적으로 여유 있는 상한을 둔다. 실측 정상 케이스는 수백 행 수준.
-  const { data } = await supabase.rpc("get_program_cross_channel_reach", {
-    p_channel_code: channel.code,
-    p_date_from: dateFrom,
-    p_date_to: dateTo,
-  }).limit(2000);
-  return { channel, dateFrom, dateTo, rows: (data ?? []) as CrossChannelReachRow[] };
+  // ChannelRef에는 uuid가 없어(referenceData.ts, code/name 등만 보관) 마트 조회용으로 따로 구한다.
+  const { data: channelRow } = await supabase.from("channels").select("id").eq("code", channel.code).maybeSingle();
+  if (!channelRow) return null;
+  const channelId = channelRow.id as string;
+
+  const lookbackDays = CURRENTLY_AIRING_PHRASING.test(question)
+    ? CROSS_CHANNEL_REACH_CURRENTLY_AIRING_LOOKBACK_DAYS
+    : CROSS_CHANNEL_REACH_DEFAULT_LOOKBACK_DAYS;
+  const asOfDate = timeContext.dateTo; // getLatestAvailableDate() 기준 — Fit Score의 asOfDate와 같은 개념
+  const d = new Date(asOfDate);
+  d.setDate(d.getDate() - lookbackDays);
+  const dateFrom = d.toISOString().slice(0, 10);
+
+  // Fit Score(fit-score/route.ts)와 동일한 지연 캐싱 패턴: 이 (채널, lookback, 기준일)
+  // 조합이 마트에 아직 없으면 그때 한 번만 계산해 채운다.
+  const { count } = await supabase
+    .from("mart_program_cross_channel_reach")
+    .select("id", { count: "exact", head: true })
+    .eq("channel_id", channelId)
+    .eq("lookback_days", lookbackDays)
+    .eq("as_of_date", asOfDate);
+
+  if (!count || count === 0) {
+    const { error: refreshError } = await supabase.rpc("refresh_program_cross_channel_reach_mart", {
+      p_channel_code: channel.code,
+      p_as_of_date: asOfDate,
+      p_lookback_days: lookbackDays,
+    });
+    if (refreshError) {
+      // 동시에 여러 요청이 같은 캐시 미스를 만나 delete/insert가 겹칠 수 있다(fit-score
+      // route.ts와 동일 경합 조건) — 실패로 바로 포기하지 말고 다른 요청이 먼저 채웠는지 재확인.
+      const { count: recheckCount } = await supabase
+        .from("mart_program_cross_channel_reach")
+        .select("id", { count: "exact", head: true })
+        .eq("channel_id", channelId)
+        .eq("lookback_days", lookbackDays)
+        .eq("as_of_date", asOfDate);
+      if (!recheckCount || recheckCount === 0) {
+        // 마트 계산 자체가 실패하면 라이브 계산으로 폴백한다(느리지만 답은 준다 — 사용자가
+        // "느려도 맞는 답"과 "빠르지만 아예 없는 답" 중 전자를 택할 것이므로).
+        const { data } = await supabase
+          .rpc("get_program_cross_channel_reach", { p_channel_code: channel.code, p_date_from: dateFrom, p_date_to: asOfDate })
+          .limit(CROSS_CHANNEL_REACH_ROW_LIMIT);
+        return { channel, dateFrom, dateTo: asOfDate, rows: (data ?? []) as CrossChannelReachRow[] };
+      }
+    }
+  }
+
+  const { data } = await supabase
+    .from("mart_program_cross_channel_reach")
+    .select("canonical_title, found_channel_label, is_own_channel, target_label, broadcast_count, first_broadcast_date, last_broadcast_date, typical_hours, avg_rating")
+    .eq("channel_id", channelId)
+    .eq("lookback_days", lookbackDays)
+    .eq("as_of_date", asOfDate)
+    .order("broadcast_count", { ascending: false })
+    .limit(CROSS_CHANNEL_REACH_ROW_LIMIT);
+
+  return { channel, dateFrom, dateTo: asOfDate, rows: (data ?? []) as CrossChannelReachRow[] };
 }
