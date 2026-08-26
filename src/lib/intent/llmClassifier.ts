@@ -8,7 +8,7 @@
 import { INTENT_REGISTRY } from "./intentRegistry";
 import { getChannelRefs, getCompetitorRefs, getTargetLabels } from "./referenceData";
 import { resolveTimePeriod } from "./timeResolver";
-import type { ExtractedParameters, RouteResult } from "./types";
+import type { AskHistoryTurn, ExtractedParameters, RouteResult } from "./types";
 
 // 사용자 지시(2026-08-20): 모델을 gpt-4o-mini로 고정 — 환경변수로 바뀌지 않도록 상수로 박아둔다.
 const OPENAI_MODEL = "gpt-4o-mini";
@@ -45,13 +45,36 @@ function buildSystemPrompt(channelCodes: string[], competitorNames: string[], ta
     "",
     "규칙:",
     "- 질문이 위 Intent 중 어디에도 명확히 해당하지 않으면 intent_id를 null로 해라(억지로 끼워맞추지 않는다).",
-    "- channel_code/target_label/competitor_name은 반드시 위 목록에 있는 값만 쓰고, 확실하지 않으면 null로 해라.",
+    "- channel_code/target_label/competitor_name은 반드시 위 목록에 있는 값만 쓰고, 확실하지 않으면 null로 해라. 질문에 채널명이 없고 직전 대화 이력에서도 채널을 알 수 없으면(아래 대화 이력이 아예 없거나, 있어도 그 답에 channel_code가 없었다면) channel_code는 반드시 null로 해라 — ENA 등 아무 채널이나 기본값으로 짐작해서 채우지 마라.",
     "- time_phrase는 질문에서 시간 표현을 원문 그대로 뽑아라(예: '어제', '최근 7일', '지난달', '전주 대비'). 날짜 계산은 별도 로직이 하니 절대 직접 계산하지 마라 — 표현만 그대로 추출한다.",
     "- ranking_limit/ranking_direction은 'TOP 5', '가장 잘한/부진한' 같은 표현이 있을 때만 채우고, 없으면 null.",
+    // Tier 2 확장(2026-08-26, 원 제안 7번 "멀티턴 대화 맥락"): 대화 이력이 있으면(아래 user/
+    // assistant 메시지로 이어짐) "그럼 지난주는?"처럼 채널·타깃을 생략한 후속 질문을 직전 턴의
+    // 값으로 채워 해석하되, 이번 질문이 새 주제면 이전 값을 억지로 끌어오지 않는다.
+    "- 바로 위에 이전 질문·답변(assistant 메시지는 그 질문이 어떤 intent_id/channel_code/target_label/competitor_name으로 풀렸는지를 담은 JSON)이 있다면, 이번 질문이 그 맥락을 이어받는 후속 질문인지 먼저 판단해라(예: '그럼 지난주는?', '경쟁채널은 어때?'). 후속 질문이면 이번 질문에 없는 값을 직전 턴에서 채워 넣어라. 이번 질문이 완전히 새로운 주제라면 이전 값을 가져오지 마라.",
   ].join("\n");
 }
 
-export async function classifyQuestionWithLlm(question: string, referenceDate: string): Promise<RouteResult | null> {
+// 사용자 지시(2026-08-26): "그럼 지난주는?" 같은 후속 질문 해석용 — 결론·수치 등 답변 본문은
+// 필요 없고, 직전 턴이 어떤 intent_id/파라미터로 풀렸는지만 assistant 메시지로 다시 넣어준다.
+function historyToMessages(history: AskHistoryTurn[]): { role: "user" | "assistant"; content: string }[] {
+  const messages: { role: "user" | "assistant"; content: string }[] = [];
+  for (const turn of history.slice(-3)) {
+    messages.push({ role: "user", content: turn.question });
+    messages.push({
+      role: "assistant",
+      content: JSON.stringify({
+        intent_id: turn.intentId,
+        channel_code: turn.channelCode,
+        target_label: turn.targetLabel,
+        competitor_name: turn.competitorName,
+      }),
+    });
+  }
+  return messages;
+}
+
+export async function classifyQuestionWithLlm(question: string, referenceDate: string, history: AskHistoryTurn[] = []): Promise<RouteResult | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
@@ -70,6 +93,7 @@ export async function classifyQuestionWithLlm(question: string, referenceDate: s
         temperature: 0,
         messages: [
           { role: "system", content: buildSystemPrompt(channelCodes, competitorNames, targetLabels, referenceDate) },
+          ...historyToMessages(history),
           { role: "user", content: question },
         ],
         response_format: {

@@ -34,7 +34,7 @@ import {
   buildCompetitiveHeadToHeadAnswer,
   buildUnsupportedAnswer,
 } from "@/lib/intent/responseTemplates";
-import type { EvidenceAnswer, RouteResult } from "@/lib/intent/types";
+import type { AskHistoryTurn, EvidenceAnswer, RouteResult } from "@/lib/intent/types";
 
 // Intent가 정해진 뒤(규칙 기반이든 LLM이든 무관) SQL 실행 → Evidence 조립까지는 완전히 같은
 // 경로를 탄다 — 이 함수 하나로 두 경로가 공유한다(로직 중복/드리프트 방지).
@@ -90,9 +90,24 @@ export async function POST(request: Request) {
   }
 
   let question: string;
+  let history: AskHistoryTurn[] = [];
   try {
     const body = await request.json();
     question = typeof body?.question === "string" ? body.question.trim() : "";
+    // Tier 2 확장(2026-08-26, 원 제안 7번 "멀티턴 대화 맥락") — 프론트가 보내는 직전 대화
+    // 이력(최대 몇 턴, 질문+그때 풀린 intent/파라미터만). 형식이 이상하면 조용히 빈 배열로
+    // 처리한다(임의 추정 없이 그냥 컨텍스트 없이 이번 질문만 단독으로 판단).
+    if (Array.isArray(body?.history)) {
+      history = body.history
+        .filter((t: unknown): t is Record<string, unknown> => typeof t === "object" && t !== null && typeof (t as Record<string, unknown>).question === "string")
+        .map((t: Record<string, unknown>) => ({
+          question: t.question as string,
+          intentId: typeof t.intentId === "string" ? t.intentId : null,
+          channelCode: typeof t.channelCode === "string" ? t.channelCode : null,
+          targetLabel: typeof t.targetLabel === "string" ? t.targetLabel : null,
+          competitorName: typeof t.competitorName === "string" ? t.competitorName : null,
+        }));
+    }
   } catch {
     return NextResponse.json({ ok: false, message: "요청 형식이 올바르지 않습니다." }, { status: 400 });
   }
@@ -112,7 +127,7 @@ export async function POST(request: Request) {
   if (!routed.ok && advancedLlmAgentEnabled) {
     // 규칙 기반이 못 잡으면(오타·낯선 어순·규칙에 없는 동의어 등) OpenAI로 한 번 더 시도한다.
     // API 키가 없거나 호출이 실패하면 null이 돌아와 원래 미지원 결과를 그대로 쓴다.
-    const llmRouted = await classifyQuestionWithLlm(question, referenceDate);
+    const llmRouted = await classifyQuestionWithLlm(question, referenceDate, history);
     if (llmRouted) {
       routed = llmRouted;
       usedLlmFallback = true;

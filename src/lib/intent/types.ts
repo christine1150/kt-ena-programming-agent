@@ -107,3 +107,16 @@ export interface EvidenceAnswer {
   visualization?: VisualizationSpec; // 30번: SQL 결과를 그대로 옮긴 구조화 시각화
   followups?: string[]; // 31번: 같은 화면에서 바로 이어 물을 수 있는 후속 질문 후보
 }
+
+// Tier 2 확장(2026-08-26, 사용자 지시: "티어 2 진행" — 원 제안 7번 "멀티턴 대화 맥락, 지금은
+// 매 질문이 완전히 독립적") — "그럼 지난주는?" 같은 후속 질문을 풀려면 직전 턴에서 뭘 물었고
+// 뭘로 해석됐는지가 필요하다. 프론트가 보내는 대화 이력 한 항목 — 결론/수치 같은 답변 본문은
+// 필요 없고(용량만 커짐), "이전에 어떤 Intent·파라미터로 풀렸는지"만 있으면 LLM 분류기가
+// 이어지는 맥락을 채울 수 있다.
+export interface AskHistoryTurn {
+  question: string;
+  intentId: string | null;
+  channelCode: string | null;
+  targetLabel: string | null;
+  competitorName: string | null;
+}

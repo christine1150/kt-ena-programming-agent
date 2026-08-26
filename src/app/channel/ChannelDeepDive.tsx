@@ -2883,6 +2883,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const [askLoading, setAskLoading] = useState(false);
   const [askAnswer, setAskAnswer] = useState<AskAnswer | null>(null);
   const [askError, setAskError] = useState<string | null>(null);
+  // Tier 2 확장(2026-08-26, 원 제안 7번 "멀티턴 대화 맥락") — "그럼 지난주는?"처럼 채널·타깃을
+  // 생략한 후속 질문을 풀려면 직전 턴에서 뭘 물었고 뭘로 해석됐는지가 필요하다. 답변 본문(결론·
+  // 수치 등)은 필요 없어 용량이 큰 EvidenceAnswer 전체가 아니라 질문+intent/파라미터만 쌓는다.
+  const [askHistory, setAskHistory] = useState<{ question: string; intentId: string | null; channelCode: string | null; targetLabel: string | null; competitorName: string | null }[]>([]);
   // 후속 질문 칩(원 명세 31번) 클릭 시 setAskQuestion 직후 바로 이어서 호출하면 아직 리렌더
   // 전이라 클로저 안 askQuestion이 이전 값이라 잘못된 질문으로 재질의될 수 있어, 강제로 쓸
   // 질문을 인자로 받게 한다(없으면 기존처럼 입력창 값 사용).
@@ -2895,7 +2899,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
       const res = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question: q, history: askHistory }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
@@ -2903,6 +2907,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         setAskAnswer(null);
       } else {
         setAskAnswer(json.answer);
+        // 최근 3턴만 유지(system prompt 크기 절제) — 이번 턴이 실제로 무엇으로 풀렸는지를
+        // 다음 질문의 맥락으로 남긴다.
+        setAskHistory((prev) => [
+          ...prev.slice(-2),
+          {
+            question: q,
+            intentId: json.intent_id ?? null,
+            channelCode: json.parameters?.channelCode ?? null,
+            targetLabel: json.parameters?.targetLabel ?? null,
+            competitorName: json.parameters?.competitorName ?? null,
+          },
+        ]);
       }
     } catch {
       setAskError("질문을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
