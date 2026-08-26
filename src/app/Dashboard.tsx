@@ -3,7 +3,7 @@
 // Page 1 종합 대시보드 (DESIGN.md 1.2 참고 — 참고 이미지의 파스텔 블루·라벤더 그라디언트 +
 // 글래스모피즘 화이트 카드 톤을 따른다). 숫자는 전부 /api/dashboard/page1이 SQL로 계산해
 // 내려준 값을 그대로 표시하고, 여기서는 문장 조립(줄글 인사이트)만 한다.
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDowDots } from "@/lib/dateFormat";
@@ -1225,8 +1225,11 @@ function CompetitorLogoBadge({ channelName, color }: { channelName: string; colo
   // 사용자 지시(2026-08-26, 재수정): "채널 로고를 KBSN Sports 높이로 통일" — 높이를
   // 고정 기준으로 삼고(원본 여백은 위에서 이미 trim으로 제거했으므로 이제 높이만 맞추면
   // 실제 로고 크기도 맞아떨어진다), 너비는 제한하지 않아 로고가 짧아지는 일이 없게 한다.
+  // 사용자 지시(2026-08-26, 재수정): "그래프가 정신없어 보인다" — 로고 원본 비율은 그대로 두되
+  // (object-contain, 자르지 않음), 유독 가로로 긴 로고(예: PD수첩)가 좁은 범례 3열 grid 한 칸을
+  // 통째로 밀어내던 문제만 max-w로 막는다(세로 16px는 그대로, 필요하면 폭만 더 줄어듦).
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={competitorLogoSrc(channelName)} alt={channelName} className="h-4 w-auto shrink-0 object-contain" onError={() => setFailed(true)} />;
+  return <img src={competitorLogoSrc(channelName)} alt={channelName} className="h-4 w-auto max-w-14 shrink-0 object-contain" onError={() => setFailed(true)} />;
 }
 function ManualMinuteRatingChart({
   minuteRatings,
@@ -1252,11 +1255,20 @@ function ManualMinuteRatingChart({
   // 차트를 관리자가 육안으로 보고 입력한 값(자동 파싱 불가, 관리자 화면에서 채워짐).
   cmBreaks?: { time: string; label: string }[] | null;
 }) {
+  // 사용자 지시(2026-08-26, 전면 재정리): "채널 로고 및 그래프를 예쁘게 — 지금 너무 정신없이
+  // 보기에 안 좋다". 그동안(재수정~재재재재수정) 겹침을 하나씩 땜질하다 보니, 실측 확인 결과
+  // 640×160 차트 한 장 안에 경쟁 점선 6개 + 로고 배지 6개(y=6~90 사이에 몰려 있었음) + 최고
+  // 시청률 라벨 + 세로 마커 4개(방송 시작/종료 2 + 중CM 2)까지 한꺼번에 떠 있었다 — 이게
+  // "정신없다"는 지적의 실체다. 아래 범례(차트 밑 3열 grid)가 이미 채널·프로그램명·시간·
+  // 시청률을 전부 깔끔한 카드로 보여주고 있으므로, 차트 위 로고 배지는 순수 정보 중복이라
+  // 완전히 뺀다. 대신 차트 자체는 격자선 + 그라데이션 영역 채우기로 다듬어 "선 하나"에
+  // 시선이 모이게 하고, 세로 마커는 옅은 색으로 낮춰 존재감만 남긴다.
+  const gradId = useId();
   if (minuteRatings.length < 2) return null;
   const W = 640;
-  const H = 160;
-  const PAD_X = 8;
-  const PAD_Y = 10;
+  const H = 190;
+  const PAD_X = 10;
+  const PAD_Y = 22; // 최고 시청률 칩이 앉을 여유 + 격자선과 상하 여백
   const toMinutes = (hhmm: string) => {
     const [h, m] = hhmm.split(":").map(Number);
     return h * 60 + m;
@@ -1268,6 +1280,8 @@ function ManualMinuteRatingChart({
   const maxRating = Math.max(...minuteRatings.map((p) => p.rating), ...(competitorPrograms ?? []).map((c) => c.target_rating ?? 0), 0.0001);
   const yOf = (v: number) => PAD_Y + (1 - v / maxRating) * (H - PAD_Y * 2);
   const path = minuteRatings.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.time).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(" ");
+  const baselineY = H - PAD_Y;
+  const areaPath = `${path} L${xOf(minuteRatings[minuteRatings.length - 1].time).toFixed(1)},${baselineY} L${xOf(minuteRatings[0].time).toFixed(1)},${baselineY} Z`;
   const peak = minuteRatings.reduce((a, b) => (b.rating > a.rating ? b : a));
   // 실제 방송 시작/종료 시각이 있으면 그 시각을(리드인·리드아웃까지 포함해 더 넓게 잘린 시트
   // 처음/끝이 아니라) 마커 위치로 쓴다. 없으면 시트 처음/끝으로 대체(기존 동작 그대로 유지).
@@ -1276,6 +1290,9 @@ function ManualMinuteRatingChart({
   const endMarkerMin = broadcastEndTime ? clampMin(toMinutes(broadcastEndTime.slice(0, 5))) : endMin;
   const xOfMin = (m: number) => PAD_X + ((m - startMin) / span) * (W - PAD_X * 2);
   const fmtHHMM = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  // 격자선 3개(25/50/75% 높이) — 값 그대로 배경에 옅게 깔아 "선 하나"의 흐름을 눈으로
+  // 따라가기 쉽게 만든다(새 계산 없음, 순수 시각 보조선).
+  const gridLines = [0.25, 0.5, 0.75].map((f) => PAD_Y + f * (H - PAD_Y * 2));
   // PD가 뽑은 "동시간대 경쟁 프로그램" 목록 — 자사 본방(rank=null) 행은 제외, 실제 방영구간이
   // 이 그래프 시간창과 겹치는 것만, 시청률 순 상위 6개까지만(사용자 지시 2026-08-26 재수정:
   // "tvN도 보이게 해서 총 6개 채널이 보이게" — 5개→6개로 확장, 너무 많으면 알아보기 어려움).
@@ -1294,16 +1311,26 @@ function ManualMinuteRatingChart({
       </p>
       <div className="relative">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={accentColor} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={accentColor} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          {gridLines.map((y) => (
+            <line key={y} x1={PAD_X} y1={y} x2={W - PAD_X} y2={y} stroke="#e4e4e7" strokeWidth={1} />
+          ))}
           {/* 사용자 지시(2026-08-26, 재수정): 그래프 위에 채널명·프로그램명을 직접 겹쳐 쓰면
               선끼리 가까울 때 글자가 서로 겹쳐 안 읽힌다 — 점선만 남기고, 이름·시간·시청률은
-              전부 아래 목록(범례)으로 옮긴다. */}
+              전부 아래 목록(범례)으로 옮긴다. 재정리(2026-08-26): 점선도 자사 선보다 한 톤
+              옅게(opacity) 낮춰 "참고선"으로만 읽히게 한다. */}
           {bands.map((c, i) => {
             const x1 = Math.max(PAD_X, xOf(c.start_time!.slice(0, 5)));
             const x2 = Math.min(W - PAD_X, xOf(c.end_time!.slice(0, 5)));
             const y = yOf(c.target_rating!);
             const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
             return (
-              <line key={`${c.channel_name}-${c.program_name}`} x1={x1} y1={y} x2={x2} y2={y} stroke={color} strokeWidth={1.4} strokeDasharray="4 3">
+              <line key={`${c.channel_name}-${c.program_name}`} x1={x1} y1={y} x2={x2} y2={y} stroke={color} strokeWidth={1.3} strokeOpacity={0.6} strokeDasharray="3 3">
                 <title>
                   {c.channel_name} &apos;{c.program_name}&apos; — {c.target_rating!.toFixed(3)}%
                 </title>
@@ -1312,54 +1339,43 @@ function ManualMinuteRatingChart({
           })}
           {/* 사용자 지시(2026-08-26, 재재재수정): 참고 이미지(PD 원본 엑셀)의 "22:00 방송시작/
               23:10 방송종료" 세로 점선 마커 — 실제 방송 시작·종료 시각(리드인·리드아웃이
-              포함된 시트 처음/끝이 아니라)을 세로선으로 짚어준다. */}
-          <line x1={xOfMin(startMarkerMin)} y1={PAD_Y} x2={xOfMin(startMarkerMin)} y2={H - PAD_Y} stroke="#a1a1aa" strokeWidth={1} strokeDasharray="2 2" />
-          <line x1={xOfMin(endMarkerMin)} y1={PAD_Y} x2={xOfMin(endMarkerMin)} y2={H - PAD_Y} stroke="#a1a1aa" strokeWidth={1} strokeDasharray="2 2" />
+              포함된 시트 처음/끝이 아니라)을 세로선으로 짚어준다. 재정리: 더 옅게(opacity)
+              낮춰 위 격자선·경쟁 점선과 톤을 맞춘다. */}
+          <line x1={xOfMin(startMarkerMin)} y1={PAD_Y} x2={xOfMin(startMarkerMin)} y2={baselineY} stroke="#a1a1aa" strokeOpacity={0.5} strokeWidth={1} strokeDasharray="2 2" />
+          <line x1={xOfMin(endMarkerMin)} y1={PAD_Y} x2={xOfMin(endMarkerMin)} y2={baselineY} stroke="#a1a1aa" strokeOpacity={0.5} strokeWidth={1} strokeDasharray="2 2" />
           {/* 사용자 지시(2026-08-26): "중CM1/중CM2 시간이 그래프 내에 보이도록" — 관리자가
               수동 입력한 값이 있을 때만(자동 계산 없음) 세로 점선으로 표시(방송 시작/종료와
               구분되게 다른 색). */}
           {(cmBreaks ?? []).map((cm, i) => {
             const m = clampMin(toMinutes(cm.time));
-            return <line key={`cm-${i}`} x1={xOfMin(m)} y1={PAD_Y} x2={xOfMin(m)} y2={H - PAD_Y} stroke="#fb923c" strokeWidth={1} strokeDasharray="2 2" />;
+            return <line key={`cm-${i}`} x1={xOfMin(m)} y1={PAD_Y} x2={xOfMin(m)} y2={baselineY} stroke="#fb923c" strokeOpacity={0.55} strokeWidth={1} strokeDasharray="2 2" />;
           })}
-          <path d={path} fill="none" stroke={accentColor} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+          <path d={areaPath} fill={`url(#${gradId})`} stroke="none" />
+          <path d={path} fill="none" stroke={accentColor} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         <div className="pointer-events-none absolute inset-0">
+          {/* 사용자 지시(2026-08-26, 전면 재정리): 최고 시청률 라벨을 배경 없는 텍스트에서
+              흰 배경 칩으로 — 격자선/영역 채우기 위에서도 항상 또렷이 읽히게 한다. 로고
+              배지(6개)는 아래 범례 카드와 중복 정보라 이번에 전부 제거(가장 큰 "정신없음"
+              원인이었음). */}
           <span
-            className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[9px] font-bold tabular-nums"
-            style={{ left: `${(xOf(peak.time) / W) * 100}%`, top: yOf(peak.rating) - 3, color: accentColor }}
+            className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold tabular-nums shadow-sm ring-1 ring-black/5"
+            style={{ left: `${(xOf(peak.time) / W) * 100}%`, top: yOf(peak.rating) - 5, color: accentColor }}
           >
             {peak.time} {peak.rating.toFixed(3)}%
           </span>
-          {/* 사용자 지시(2026-08-26, 재재수정): "각 점선 좌측 위에 채널 로고 뜨도록 배치" —
-              이전엔 겹쳐 안 읽히던 게 "텍스트"였을 뿐, 작은 로고 아이콘은 겹칠 일이 적어
-              점선 시작점 바로 위(좌측 정렬)에 다시 올린다. 사용자 지시(2026-08-26, 재재재
-              재수정): "글자 간에 겹침 없도록" — 시청률이 아주 높은 프로그램(예: SBS 1.605)의
-              배지가 최고 시청률 라벨과 같은 최상단 영역까지 밀려 올라가 겹치던 문제 — 배지가
-              차트 맨 위(캡션 쪽)로 넘어가지 않도록 최소 top을 확보한다. */}
-          {bands.map((c, i) => {
-            const x1 = Math.max(PAD_X, xOf(c.start_time!.slice(0, 5)));
-            const y = Math.max(yOf(c.target_rating!), PAD_Y + 14);
-            const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
-            return (
-              <div
-                key={`${c.channel_name}-${c.program_name}-logo`}
-                className="absolute -translate-y-full"
-                style={{ left: `${(x1 / W) * 100}%`, top: y - 2 }}
-              >
-                <CompetitorLogoBadge channelName={c.channel_name} color={color} />
-              </div>
-            );
-          })}
         </div>
       </div>
-      {/* 사용자 지시(2026-08-26, 재재재재수정): "글자 간에 겹침 없도록" — 중CM 라벨이 최고
-          시청률 라벨과 같은 최상단 영역에 겹쳐 있던 문제. 그래프 맨 위 대신 아래(방송 시작/
-          종료 표기와 같은 자리)로 옮겨 서로 겹칠 일이 없게 한다. */}
+      {/* 사용자 지시(2026-08-26, 전면 재정리): 중CM 라벨 + 방송 시작/종료 라벨을 같은 옅은
+          "칩" 스타일로 통일하고, 서로 다른 두 행에 배치해(겹칠 일 없음) 톤을 맞춘다. */}
       {cmBreaks && cmBreaks.length > 0 && (
-        <div className="relative mt-0.5 h-[11px] text-[9px] font-semibold text-orange-500">
+        <div className="relative mt-1 h-[14px] text-[9px] font-semibold text-orange-500">
           {cmBreaks.map((cm, i) => (
-            <span key={`cm-bottom-${i}`} className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${(xOfMin(clampMin(toMinutes(cm.time))) / W) * 100}%` }}>
+            <span
+              key={`cm-bottom-${i}`}
+              className="absolute -translate-x-1/2 whitespace-nowrap rounded-full bg-orange-50 px-1.5 py-0.5"
+              style={{ left: `${(xOfMin(clampMin(toMinutes(cm.time))) / W) * 100}%` }}
+            >
               {cm.time} {cm.label}
             </span>
           ))}
@@ -1369,18 +1385,19 @@ function ManualMinuteRatingChart({
           종료시간, 최고 시청률 등"이 그래프 내에서 다 보이도록. 최고 시청률은 이미 그래프 위
           라벨로 있고, 여기서는 실제 방송 시작/종료 시각을 세로선 위치에 맞춰 명시한다(이미
           있는 데이터 그대로, 새 계산 없음) — 시트 처음/끝이 아니라 실측 방송 시각 기준. */}
-      <div className="relative h-[11px] text-[9px] text-zinc-400">
-        <span className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${(xOfMin(startMarkerMin) / W) * 100}%` }}>
+      <div className="relative mt-0.5 h-[14px] text-[9px] text-zinc-400">
+        <span className="absolute -translate-x-1/2 whitespace-nowrap rounded-full bg-zinc-100 px-1.5 py-0.5" style={{ left: `${(xOfMin(startMarkerMin) / W) * 100}%` }}>
           {fmtHHMM(startMarkerMin)} 방송 시작
         </span>
-        <span className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${(xOfMin(endMarkerMin) / W) * 100}%` }}>
+        <span className="absolute -translate-x-1/2 whitespace-nowrap rounded-full bg-zinc-100 px-1.5 py-0.5" style={{ left: `${(xOfMin(endMarkerMin) / W) * 100}%` }}>
           {fmtHHMM(endMarkerMin)} 방송 종료
         </span>
       </div>
       {/* 사용자 지시(2026-08-26, 재재수정): "로고가 있으면 로고가 채널명을 대체 — 채널명과
           로고 둘 다 하지 말고 로고로만" + "한 줄에 3개 채널까지 보이도록 같은 너비로 정렬,
           글자는 작아져도 됨" — 채널명 텍스트를 없애고(로고/이니셜 배지가 그 역할을 대신),
-          3열 grid로 폭을 고정한다. */}
+          3열 grid로 폭을 고정한다. 이제 이 카드가 경쟁 프로그램 정보의 유일한 출처다(차트
+          위 로고 배지는 제거) — 카드 톤도 살짝 다듬어 각 항목이 더 뚜렷이 구분되게 한다. */}
       {bands.length > 0 && (
         <div className="mt-2 grid grid-cols-3 gap-1.5">
           {bands.map((c, i) => {
@@ -1388,9 +1405,9 @@ function ManualMinuteRatingChart({
             return (
               <div
                 key={`${c.channel_name}-${c.program_name}`}
-                className="flex min-w-0 items-center gap-1 rounded-lg bg-white px-1.5 py-1 text-[9px] ring-1 ring-zinc-100"
+                className="flex min-w-0 items-center gap-1 rounded-lg border border-zinc-100 bg-white px-1.5 py-1 text-[9px] shadow-sm"
               >
-                <span className="inline-block h-0.5 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
                 <CompetitorLogoBadge channelName={c.channel_name} color={color} />
                 <span className="min-w-0 flex-1 truncate text-zinc-600" title={`${c.channel_name} ${c.program_name}`}>
                   {c.program_name}
