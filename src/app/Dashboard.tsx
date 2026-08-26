@@ -7,6 +7,7 @@ import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { AskAssistantWidget } from "@/components/AskAssistantWidget";
+import { highlightNarrativeText } from "@/lib/highlightNarrative";
 import { formatDateWithDowDots } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun } from "@/lib/josa";
 import {
@@ -1793,14 +1794,16 @@ function OriginalContentReportCard({
                   {(h.schedulingInsight || insight.schedulingNote.length > 0) && (
                     <div className="mt-1 rounded-xl bg-amber-50 p-2.5">
                       <p className="mb-1 text-[12px] font-semibold text-amber-700">[편성 인사이트]</p>
+                      {/* 사용자 지시(2026-08-26, 가독성 개선 5번): 줄 폭 제한 + 등락 수치 강조 —
+                          문장 자체(schedulingInsight/schedulingNote)는 그대로. */}
                       {h.schedulingInsight ? (
-                        <p className="text-[13px] leading-relaxed text-amber-800">{h.schedulingInsight}</p>
+                        <p className="max-w-xl text-[13px] leading-relaxed text-amber-800">{highlightNarrativeText(h.schedulingInsight, ACCENT_UP, ACCENT_DOWN)}</p>
                       ) : (
                         <div className="flex flex-col gap-1">
                           {insight.schedulingNote.map((note, i) => (
-                            <p key={i} className="flex gap-1.5 text-[13px] leading-relaxed text-amber-800">
+                            <p key={i} className="flex max-w-xl gap-1.5 text-[13px] leading-relaxed text-amber-800">
                               <span className="shrink-0 text-amber-300">•</span>
-                              <span>{note}</span>
+                              <span>{highlightNarrativeText(note, ACCENT_UP, ACCENT_DOWN)}</span>
                             </p>
                           ))}
                         </div>
@@ -1955,7 +1958,10 @@ function ChannelNarrativeCard({
                 </span>
                 {line.deltaPct !== null && <MiniDeltaBar pct={line.deltaPct} />}
               </div>
-              <span className="min-w-0">{line.text}</span>
+              {/* 사용자 지시(2026-08-26, 가독성 개선 5번 "타이포그래피 기본기"): 줄 폭을 제한하고
+                  (한 줄이 너무 길면 다음 줄 시작점을 눈이 놓침) 등락 수치·방향 단어만 굵게+색으로
+                  강조한다 — 문장 생성 로직(buildChannelNarrative/LLM)은 그대로, 표시만 바꾼다. */}
+              <span className="min-w-0 max-w-xl">{highlightNarrativeText(line.text, ACCENT_UP, ACCENT_DOWN)}</span>
             </div>
           ))
         )}

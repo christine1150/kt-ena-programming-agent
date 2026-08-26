@@ -12,6 +12,7 @@ import { josaIga, josaEunNeun, josaEulReul } from "@/lib/josa";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import type { EvidenceAnswer as AskAnswer } from "@/lib/intent/types";
 import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from "@/lib/enaOriginalHighlight";
+import { highlightNarrativeText } from "@/lib/highlightNarrative";
 
 interface TrendRow {
   period: string;
@@ -3478,7 +3479,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide" style={{ color: accentForegroundColor(accentColor) }}>
                 Executive Summary
               </p>
-              <p className="text-base leading-relaxed text-zinc-700">{insight}</p>
+              <p className="max-w-2xl text-base leading-relaxed text-zinc-700">{highlightNarrativeText(insight, "#059669", "#e11d48")}</p>
             </div>
           );
         })()}
@@ -3529,10 +3530,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   )}
             </div>
           )}
+          {/* 사용자 지시(2026-08-26, 가독성 개선 5번 "타이포그래피 기본기"): 줄 폭 제한 + 등락
+              수치 강조 — buildBriefingReport의 문장 조립 로직은 그대로, 표시만 바꾼다. 이
+              페이지는 이미 emerald/rose를 상승/하락 색으로 쓰고 있어(위 배지·DivergingDeltaBar)
+              같은 톤을 그대로 쓴다. */}
           <div className="flex flex-col gap-3">
             {buildBriefingReport(data, referenceLabel, showComparisonView, comparisonLabel).map((para, i) => (
-              <p key={i} className="text-base leading-relaxed text-zinc-700">
-                {para}
+              <p key={i} className="max-w-2xl text-base leading-relaxed text-zinc-700">
+                {highlightNarrativeText(para, "#059669", "#e11d48")}
               </p>
             ))}
           </div>
@@ -4240,16 +4245,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     <p className="text-sm font-semibold text-rose-700">주도 요인(편차가 가장 큰 변수)</p>
                     {/* Tier 1 확장(2026-08-26): OpenAI가 후보들을 종합한 문장(sectionLlm.why)이
                         있으면 그걸, 없으면 기존 규칙 기반 leadSentence로. */}
-                    <p className="mt-1 text-sm text-zinc-600">{sectionLlmCurrent.why ?? why.leadSentence}</p>
+                    <p className="mt-1 max-w-2xl text-sm text-zinc-600">{highlightNarrativeText(sectionLlmCurrent.why ?? why.leadSentence, "#059669", "#e11d48")}</p>
                     <WhyCandidateRankingChart candidates={why.candidates} />
                     {why.supportingBullets.length > 0 && (
                       <>
                         <p className="mt-2 text-sm font-semibold text-rose-700">함께 관찰된 요인</p>
                         <ul className="mt-1 space-y-1">
                           {why.supportingBullets.map((b, i) => (
-                            <li key={i} className="flex gap-1.5 text-sm text-zinc-600">
+                            <li key={i} className="flex max-w-2xl gap-1.5 text-sm text-zinc-600">
                               <span className="shrink-0 text-rose-300">•</span>
-                              <span>{b}</span>
+                              <span>{highlightNarrativeText(b, "#059669", "#e11d48")}</span>
                             </li>
                           ))}
                         </ul>
@@ -4282,10 +4287,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <p className={`text-sm font-semibold ${isRise ? "text-emerald-700" : "text-zinc-600"}`}>
                     {isRise ? "📈" : "📉"} 최근 7일 중 가장 뚜렷했던 변화 — {h.highlight_date}
                   </p>
-                  <p className="mt-1 text-sm text-zinc-600">
-                    {h.highlight_date}에 {fmtR(h.rating)}을 기록해 최근 28일 평균({fmtR(h.baseline_avg)}) 대비{" "}
-                    {isRise ? "▲" : "▼"} {Math.abs(h.change_pct).toFixed(1)}% {isRise ? "상승" : "하락"}했습니다. 3일 연속
-                    조건(하락 -10%p 이상)에는 못 미쳐 경보로는 표시하지 않지만, 최근 흐름에서 가장 눈에 띈 변화입니다.
+                  <p className="mt-1 max-w-2xl text-sm text-zinc-600">
+                    {highlightNarrativeText(
+                      `${h.highlight_date}에 ${fmtR(h.rating)}을 기록해 최근 28일 평균(${fmtR(h.baseline_avg)}) 대비 ${isRise ? "▲" : "▼"} ${Math.abs(h.change_pct).toFixed(1)}% ${isRise ? "상승" : "하락"}했습니다. 3일 연속 조건(하락 -10%p 이상)에는 못 미쳐 경보로는 표시하지 않지만, 최근 흐름에서 가장 눈에 띈 변화입니다.`,
+                      "#059669",
+                      "#e11d48"
+                    )}
                   </p>
                 </div>
               );
@@ -4404,7 +4411,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
             ))}
           </div>
-          <p className="mt-3 text-base leading-relaxed text-zinc-700">{buildHowDeeplyExplanation(howDeeplyStats, howDeeplyPeriodLabel, code === "SKYUHD")}</p>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-zinc-700">
+            {highlightNarrativeText(buildHowDeeplyExplanation(howDeeplyStats, howDeeplyPeriodLabel, code === "SKYUHD"), "#059669", "#e11d48")}
+          </p>
         </div>
 
         {/* CONTENT FITS? — 표 + 줄글, 채널 기여도 높은 순(사용자 지시). skyUHD는 타깃 구분이
@@ -4459,13 +4468,17 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       </tbody>
                     </table>
                   </div>
-                  <p className="mt-3 text-base leading-relaxed text-zinc-700">
+                  <p className="mt-3 max-w-2xl text-base leading-relaxed text-zinc-700">
                     {skyuhdScorecard.length >= 2
-                      ? (() => {
-                          const bestName = skyuhdScorecard[0].program_name;
-                          const worstName = skyuhdScorecard[skyuhdScorecard.length - 1].program_name;
-                          return `'${bestName}'${josaIga(bestName)} 채널 내 시청률 상위권(${skyuhdScorecard[0].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[0].rating_pctl).toFixed(0)}%` : "—"})으로 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 가장 낮아(${skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl!).toFixed(0)}%` : "—"}) 편성 조정을 검토해볼 만합니다.`;
-                        })()
+                      ? highlightNarrativeText(
+                          (() => {
+                            const bestName = skyuhdScorecard[0].program_name;
+                            const worstName = skyuhdScorecard[skyuhdScorecard.length - 1].program_name;
+                            return `'${bestName}'${josaIga(bestName)} 채널 내 시청률 상위권(${skyuhdScorecard[0].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[0].rating_pctl).toFixed(0)}%` : "—"})으로 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 가장 낮아(${skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl!).toFixed(0)}%` : "—"}) 편성 조정을 검토해볼 만합니다.`;
+                          })(),
+                          "#059669",
+                          "#e11d48"
+                        )
                       : ""}
                   </p>
                 </>
@@ -4508,13 +4521,17 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       </tbody>
                     </table>
                   </div>
-                  <p className="mt-3 text-base leading-relaxed text-zinc-700">
+                  <p className="mt-3 max-w-2xl text-base leading-relaxed text-zinc-700">
                     {contentFitsRows.length >= 2
-                      ? (() => {
-                          const bestName = contentFitsRows[0].programs?.canonical_name ?? "";
-                          const worstName = contentFitsRows[contentFitsRows.length - 1].programs?.canonical_name ?? "";
-                          return `'${bestName}'${josaIga(bestName)} 종합 ${contentFitsHelpScore(contentFitsRows[0]).toFixed(0)}점으로 채널에 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 종합 ${contentFitsHelpScore(contentFitsRows[contentFitsRows.length - 1]).toFixed(0)}점으로 가장 낮아 편성 조정을 검토해볼 만합니다.`;
-                        })()
+                      ? highlightNarrativeText(
+                          (() => {
+                            const bestName = contentFitsRows[0].programs?.canonical_name ?? "";
+                            const worstName = contentFitsRows[contentFitsRows.length - 1].programs?.canonical_name ?? "";
+                            return `'${bestName}'${josaIga(bestName)} 종합 ${contentFitsHelpScore(contentFitsRows[0]).toFixed(0)}점으로 채널에 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 종합 ${contentFitsHelpScore(contentFitsRows[contentFitsRows.length - 1]).toFixed(0)}점으로 가장 낮아 편성 조정을 검토해볼 만합니다.`;
+                          })(),
+                          "#059669",
+                          "#e11d48"
+                        )
                       : ""}
                   </p>
                 </>
@@ -4582,9 +4599,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </div>
           )}
           {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 문단(sectionLlm.opportunity)이 있으면
-              그걸, 없으면 기존 규칙 기반 buildOpportunityNarrative로. */}
-          <p className="mb-3 text-base leading-relaxed text-zinc-700">
-            {sectionLlmCurrent.opportunity ?? buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD")}
+              그걸, 없으면 기존 규칙 기반 buildOpportunityNarrative로. 가독성 개선 5번(2026-08-26):
+              줄 폭 제한 + 등락 수치 강조(표시만, 문장 로직은 그대로). */}
+          <p className="mb-3 max-w-2xl text-base leading-relaxed text-zinc-700">
+            {highlightNarrativeText(
+              sectionLlmCurrent.opportunity ?? buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD"),
+              "#059669",
+              "#e11d48"
+            )}
           </p>
           {/* 사용자 지시(2026-08-25, 원 명세 감사 후속: 9번 Slot Intelligence 8 Blocks) — 위 4구간
               판정/서술(daypartOpportunity, buildOpportunityNarrative 등)은 그대로 두고, 3시간
@@ -5133,8 +5155,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 );
               })()}
               {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 문단(sectionLlm.competitor)이 있으면
-                  그걸, 없으면 기존 규칙 기반 buildCompetitorNarrative로. */}
-              <p className="mb-4 text-base leading-relaxed text-zinc-700">{sectionLlmCurrent.competitor ?? buildCompetitorNarrative(competitorInsightReport)}</p>
+                  그걸, 없으면 기존 규칙 기반 buildCompetitorNarrative로. 가독성 개선 5번
+                  (2026-08-26): 줄 폭 제한 + 등락 수치 강조(표시만, 문장 로직은 그대로). */}
+              <p className="mb-4 max-w-2xl text-base leading-relaxed text-zinc-700">
+                {highlightNarrativeText(sectionLlmCurrent.competitor ?? buildCompetitorNarrative(competitorInsightReport), "#059669", "#e11d48")}
+              </p>
             </>
           )}
 
