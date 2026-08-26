@@ -6,6 +6,7 @@
 import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
+import { AskAssistantWidget } from "@/components/AskAssistantWidget";
 import { formatDateWithDowDots } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun } from "@/lib/josa";
 import {
@@ -2370,8 +2371,21 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           </div>
         )}
 
+        {/* 사용자 지시(2026-08-26): "1페이지의 [4개 채널이 동시에 큰 폭으로 움직였습니다] 알림
+            자리를 'AI 편성 비서 - 자연어 검색' 항목으로 교체하자" — 원래 이 자리에 있던 동시다발
+            이상 변동 알림(Tier 2, 원 제안 10번)은 기능 자체를 없애지 않고 아래로 옮겼다(조건부로만
+            뜨는 알림이라 이 상단 자리는 늘 쓸 수 있는 AI 편성 비서 검색창이 더 유용하다는 취지로
+            해석 — 알림 자체를 완전히 지우길 원하시면 알려주세요). Page 2(ChannelDeepDive.tsx)와
+            같은 공용 컴포넌트(AskAssistantWidget)를 재사용 — /api/ask는 페이지가 채널을 미리
+            지정하지 않고 질문 문장에서 채널명을 인식하므로 Page 1(특정 채널에 종속되지 않음)에도
+            그대로 쓸 수 있다. */}
+        <div className="mb-4">
+          <AskAssistantWidget accentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"} />
+        </div>
+
         {/* Tier 2 확장(2026-08-26, 원 제안 10번 "이상치/외부요인 플래그") — 여러 채널이 동시에
-            큰 폭으로 움직였을 때만 표시. 원인은 절대 단정하지 않고 검토 필요만 안내한다. */}
+            큰 폭으로 움직였을 때만 표시. 원인은 절대 단정하지 않고 검토 필요만 안내한다. 위
+            AI 편성 비서 자리를 내주면서 이 아래로 옮김(기능은 그대로 유지). */}
         {data?.portfolioAnomaly?.triggered && (
           <div className="mb-4 rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-800 ring-1 ring-violet-100">
             <p className="font-medium">
