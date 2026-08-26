@@ -750,7 +750,14 @@ export async function GET(request: Request) {
           const key = `${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`;
           if (ratingHistoryByKey.has(key)) return;
           const competitorLookup = CROSS_CHANNEL_COMPETITOR_LOOKUPS.find((l) => l.whitelistChannelCode === row.broadcast_channel_code);
-          const [{ data: historyRows }, competitorHistoryResult] = await Promise.all([
+          // 사용자 지시(2026-08-26): "그래프에 동시방영, 직후재방 등이 있다면 그 부분도 함께
+          // 표시할 것 — 예: 신병4사보타주는 ENA Drama의 직후재방을 표시해야함". 아래 메인
+          // get_program_rating_history 호출은 본방 시각(matched_start_time) ±10분 창만 보므로
+          // 동시방영(같은 시각대 타 채널)은 자연히 잡히지만, 직후재방은 시각이 몇 시간 차이나
+          // 이 창에 안 걸린다 — 재방 채널이 있으면 "재방 시작 시각" 기준으로 같은 함수를 한 번
+          // 더 호출해 그 채널의 시계열만 뽑아 별도 계열로 합친다(새 SQL 없이 기존 함수 재사용).
+          const needsRerunHistory = Boolean(row.rerun_channel_code && row.rerun_start_time);
+          const [{ data: historyRows }, competitorHistoryResult, rerunHistoryResult] = await Promise.all([
             supabase.rpc("get_program_rating_history", {
               p_canonical_name: row.matched_program_name,
               p_expected_start_time: row.matched_start_time,
@@ -761,6 +768,13 @@ export async function GET(request: Request) {
                   p_our_channel_code: competitorLookup.lookupChannelCode,
                   p_competitor_name: competitorLookup.competitorName,
                   p_program_name: row.matched_program_name,
+                  p_as_of_date: asOfDate,
+                })
+              : Promise.resolve({ data: null }),
+            needsRerunHistory
+              ? supabase.rpc("get_program_rating_history", {
+                  p_canonical_name: row.matched_program_name,
+                  p_expected_start_time: row.rerun_start_time,
                   p_as_of_date: asOfDate,
                 })
               : Promise.resolve({ data: null }),
@@ -781,6 +795,14 @@ export async function GET(request: Request) {
                 .map((r) => ({ broadcast_date: r.broadcast_date, rating: r.rating })),
             }))
             .filter((s) => s.points.length > 0);
+          // 직후재방 채널 시계열 — 이미 위 메인 조회에서(동시방영으로) 잡혔으면 중복 추가하지 않는다.
+          if (needsRerunHistory && row.rerun_channel_code && !otherChannelCodes.includes(row.rerun_channel_code)) {
+            const rerunRows = (rerunHistoryResult?.data ?? null) as ProgramRatingHistoryRow[] | null;
+            const rerunPoints = (rerunRows ?? [])
+              .filter((r) => r.channel_code === row.rerun_channel_code && r.target_label === "수도권 2049")
+              .map((r) => ({ broadcast_date: r.broadcast_date, rating: r.rating }));
+            if (rerunPoints.length > 0) otherChannels.push({ seriesName: row.rerun_channel_code, points: rerunPoints });
+          }
           const competitorPoints = (competitorHistoryResult?.data ?? null) as { broadcast_date: string; rating: number }[] | null;
           const competitors =
             competitorLookup && competitorPoints && competitorPoints.length > 0

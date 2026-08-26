@@ -16,6 +16,7 @@ import { extractDominantColor, extractVisibleHeightRatio } from "@/lib/logoColor
 import { parseFeaturedContentWorkbook } from "@/lib/featuredContent";
 import { parseOriginalReviewScheduleWorkbook } from "@/lib/originalReviewSchedule";
 import { checkChannelCoverage, checkPercentValue } from "@/lib/dataQuality";
+import { findOrCreateProgramByNormalizedName, normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -172,22 +173,17 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const { data: program, error: programError } = await supabase
-        .from("programs")
-        .upsert(
-          {
-            channel_id: channelId,
-            canonical_name: entry.title,
-            raw_name: entry.title,
-            episode_number: entry.episodeCount,
-          },
-          { onConflict: "channel_id,canonical_name" }
-        )
-        .select("id")
-        .single();
+      // 버그 수정(2026-08-26, "신병4사보타주 직전 라인업 비교 안 나옴" 제보): 정확 문자열
+      // (channel_id,canonical_name) upsert 대신 정규화 매칭으로 기존 Nielsen programs 행을
+      // 먼저 찾는다 — 엑셀 원문("신병4 : 사보타주")이 공백·콜론 때문에 Nielsen canonical_name
+      // ("신병4사보타주")과 안 맞아 ratings 0건짜리 새 programs 행이 생기던 버그의 재발 방지
+      // (programNameMatch.ts, 20260826090000 데이터 수정과 짝).
+      const program = await findOrCreateProgramByNormalizedName(supabase, channelId, entry.title, {
+        episodeNumber: entry.episodeCount,
+      });
 
-      if (programError || !program) {
-        warnings.push(`${entry.title}(${entry.channelCode}): 프로그램 저장 실패 — ${programError?.message}`);
+      if (!program) {
+        warnings.push(`${entry.title}(${entry.channelCode}): 프로그램 저장 실패`);
         continue;
       }
 
@@ -277,16 +273,11 @@ export async function POST(request: Request) {
         warnings.push(`${entry.programName}: 본방 시간 텍스트를 인식하지 못했습니다(원문 확인 필요).`);
       }
 
-      const { data: reviewProgram, error: reviewProgramError } = await supabase
-        .from("programs")
-        .upsert(
-          { channel_id: broadcastChannelId, canonical_name: entry.programName, raw_name: entry.programName },
-          { onConflict: "channel_id,canonical_name" }
-        )
-        .select("id")
-        .single();
-      if (reviewProgramError || !reviewProgram) {
-        warnings.push(`${entry.programName}: 프로그램 저장 실패 — ${reviewProgramError?.message}`);
+      // 버그 수정(2026-08-26): 같은 이유로 여기도 정규화 매칭 헬퍼로 교체(위 "KT ENA 오리지널"
+      // 시트 처리와 동일 버그·동일 수정).
+      const reviewProgram = await findOrCreateProgramByNormalizedName(supabase, broadcastChannelId, entry.programName);
+      if (!reviewProgram) {
+        warnings.push(`${entry.programName}: 프로그램 저장 실패`);
         continue;
       }
 
@@ -326,7 +317,7 @@ export async function POST(request: Request) {
     // 남아있으면 절대 매칭되지 않아 회차가 항상 null이었다(migration 20260825150000과 같은
     // 원인의 재발). 시드에 넣기 전에 문장부호를 지워 Nielsen 표기와 맞춘다.
     for (const [programName, firstDate] of firstBroadcastByProgram) {
-      const canonicalMatchKey = programName.replace(/[^가-힣a-zA-Z0-9]/g, "");
+      const canonicalMatchKey = normalizeProgramCanonicalName(programName);
       const { error: seedError } = await supabase
         .from("program_episode_counters")
         .upsert(

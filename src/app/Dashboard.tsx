@@ -943,8 +943,12 @@ function buildOriginalInsight(
 // 같은 y축 스케일을 공유해 직접 비교 가능하게 하고, 가구는 스케일이 완전히 달라(1점대 vs
 // 0.1~0.5점대) 별도 y축으로 정규화한다(02~26시 그래프의 "지표마다 자기 최댓값 기준 정규화"
 // 원칙과 동일). 외부 차트 라이브러리 없이 SVG 폴리라인으로 직접 그린다.
-const OTHER_CHANNEL_LINE_COLORS = ["#f59e0b", "#0891b2", "#a21caf"];
-const COMPETITOR_LINE_COLORS = ["#71717a", "#84cc16"];
+// 사용자 지시(2026-08-26): "채널 로고 색이 없는 SBS Plus 등의 채널은 검정이나 진한 회색 등으로
+// 표시하면 됨" — SBS Plus는 channels 테이블에 theme_color가 없어(경쟁사라 브랜드색 미보유)
+// 항상 이 배열의 0번(기존 zinc-500 "#71717a", 다소 흐릿함)을 썼다. 진한 회색(zinc-700)으로
+// 교체해 브랜드색 없는 채널임이 분명히 드러나게 한다.
+const UNBRANDED_CHANNEL_COLOR = "#3f3f46";
+const COMPETITOR_LINE_COLORS = [UNBRANDED_CHANNEL_COLOR, "#84cc16"];
 function buildLinearScale(values: number[], size: number, pad: number): (v: number) => number {
   if (values.length === 0) return () => size / 2;
   const min = Math.min(...values);
@@ -964,9 +968,9 @@ function ProgramRatingHistoryChart({
   // 표기 대신 "ENA, ENA Play, SBS Plus, ENA (가구)"처럼 채널명 중심으로.
   ownChannelName: string;
   // 사용자 재지시(2026-08-25): "ENA Play의 채널 로고 색상을 활용한 라인도 적용되지 않았어" —
-  // otherChannels 시리즈(예: 직후재방 채널)가 고정 팔레트(OTHER_CHANNEL_LINE_COLORS) 색만
-  // 썼는데, seriesName이 실제 채널 코드라 themeColorByCode로 그 채널의 진짜 로고색을 먼저
-  // 찾고, 없을 때만 고정 팔레트로 폴백한다.
+  // otherChannels 시리즈(예: 직후재방 채널)가 고정 팔레트 색만 썼는데, seriesName이 실제
+  // 채널 코드라 themeColorByCode로 그 채널의 진짜 로고색을 먼저 찾고, 없을 때만(예: SBS Plus처럼
+  // 브랜드색 미보유 채널, 사용자 지시 2026-08-26) UNBRANDED_CHANNEL_COLOR(진한 회색)로 폴백한다.
   themeColorByCode: Map<string, string | null>;
 }) {
   const own2049 = [...history.own2049].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date));
@@ -1024,7 +1028,7 @@ function ProgramRatingHistoryChart({
               key={s.seriesName}
               d={pathOf(s.points, y2049)}
               fill="none"
-              stroke={themeColorByCode.get(s.seriesName) ?? OTHER_CHANNEL_LINE_COLORS[i % OTHER_CHANNEL_LINE_COLORS.length]}
+              stroke={themeColorByCode.get(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR}
               strokeWidth={1.3}
               strokeDasharray="3 2"
               strokeLinecap="round"
@@ -1092,7 +1096,7 @@ function ProgramRatingHistoryChart({
           <span key={s.seriesName} className="inline-flex items-center gap-1">
             <span
               className="inline-block h-0.5 w-3 rounded-full"
-              style={{ backgroundColor: themeColorByCode.get(s.seriesName) ?? OTHER_CHANNEL_LINE_COLORS[i % OTHER_CHANNEL_LINE_COLORS.length] }}
+              style={{ backgroundColor: themeColorByCode.get(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR }}
             />
             {CHANNEL_NAME_BY_CODE[s.seriesName] ?? s.seriesName}
           </span>
@@ -1237,7 +1241,7 @@ function OriginalContentReportCard({
                           10분"처럼 긴 조합이 text-sm(14px)에서 줄바꿈되던 것을, 위 "본방"
                           라벨과 같은 text-[11px]로 줄여 한 줄에 들어오게 한다. */}
                       <p className="whitespace-nowrap text-[11px] text-zinc-600">
-                        <span className="font-bold" style={{ color: themeColorByCode.get(h.broadcast_channel_code) ?? undefined }}>
+                        <span className="font-bold" style={{ color: themeColorByCode.get(h.broadcast_channel_code) ?? UNBRANDED_CHANNEL_COLOR }}>
                           {CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code}
                         </span>{" "}
                         · {fmtTimeKorean(h.matched_start_time)}
@@ -1279,7 +1283,7 @@ function OriginalContentReportCard({
                       {h.simulcast_rating !== null && h.simulcast_channel_code ? (
                         <>
                           <p className="whitespace-nowrap text-[11px] text-zinc-600">
-                            <span className="font-bold" style={{ color: themeColorByCode.get(h.simulcast_channel_code) ?? undefined }}>
+                            <span className="font-bold" style={{ color: themeColorByCode.get(h.simulcast_channel_code) ?? UNBRANDED_CHANNEL_COLOR }}>
                               {CHANNEL_NAME_BY_CODE[h.simulcast_channel_code] ?? h.simulcast_channel_code}
                             </span>
                             {h.simulcast_start_time && <> · {fmtTimeKorean(h.simulcast_start_time)}</>}
@@ -1289,7 +1293,7 @@ function OriginalContentReportCard({
                       ) : h.rerun_program_name && h.rerun_start_time ? (
                         <>
                           <p className="whitespace-nowrap text-[11px] text-zinc-600">
-                            <span className="font-bold" style={{ color: themeColorByCode.get(h.rerun_channel_code ?? "") ?? undefined }}>
+                            <span className="font-bold" style={{ color: themeColorByCode.get(h.rerun_channel_code ?? "") ?? UNBRANDED_CHANNEL_COLOR }}>
                               {CHANNEL_NAME_BY_CODE[h.rerun_channel_code ?? ""] ?? h.rerun_channel_code}
                             </span>{" "}
                             · {fmtTimeKorean(h.rerun_start_time)}
@@ -1616,14 +1620,14 @@ function KillerContentCard({
     const ytdAvg = ytdAvgByCode.get(code) ?? null;
     return (
       <div key={code}>
-        <p className="mb-1 text-sm font-bold tracking-tight" style={{ color: themeColorByCode.get(code) ?? undefined }}>
+        <p className="mb-1 text-sm font-bold tracking-tight" style={{ color: themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR }}>
           {CHANNEL_NAME_BY_CODE[code]}
         </p>
         <div className="flex flex-col gap-2.5">
           {list.map((k) => {
             // 사용자 지시(2026-08-21, Page 1 개편): emerald/rose 원색 대신 ACCENT_UP/DOWN.
             const ytdColor = ytdAvg === null ? "#71717a" : k.avg_rating >= ytdAvg ? ACCENT_UP : ACCENT_DOWN;
-            const accent = themeColorByCode.get(code) ?? "#71717a";
+            const accent = themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR;
             return (
               <div key={k.canonical_name} className="rounded-lg px-0.5 py-0.5">
                 {/* 사용자 지시(2026-08-22, UI 정렬 요청 #4): 프로그램명·시청률(1줄)과 세부
@@ -1721,7 +1725,7 @@ function TodayTopProgramsCard({
                 <thead>
                   <tr>
                     <th colSpan={2} className="pb-1 text-left">
-                      <span className="text-sm font-bold" style={{ color: themeColorByCode.get(code) ?? undefined }}>
+                      <span className="text-sm font-bold" style={{ color: themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR }}>
                         {CHANNEL_NAME_BY_CODE[code]}
                       </span>
                     </th>

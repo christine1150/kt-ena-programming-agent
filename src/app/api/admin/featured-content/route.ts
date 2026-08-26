@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
 import { computeExpectedEndDate } from "@/lib/featuredContentSchedule";
+import { findOrCreateProgramByNormalizedName } from "@/lib/programNameMatch";
 
 export async function GET() {
   const admin = await getAdminSession();
@@ -50,23 +51,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: program, error: programError } = await supabase
-    .from("programs")
-    .upsert(
-      {
-        channel_id: channelId,
-        canonical_name: title,
-        raw_name: title,
-        episode_number: body?.episodeCount ?? null,
-      },
-      { onConflict: "channel_id,canonical_name" }
-    )
-    .select("id")
-    .single();
+  // 버그 수정(2026-08-26): 정확 문자열(channel_id,canonical_name) upsert 대신 정규화 매칭으로
+  // 기존 Nielsen programs 행을 먼저 찾는다 — "그대에게 드림"/"신병4: 사보타주"처럼 공백·문장
+  // 부호만 다른 입력이 별도 programs 행(ratings 0건)을 만들어 직전 작품 평균 비교가 항상
+  // null이 되던 버그의 재발 방지(programNameMatch.ts 참고, 20260826090000 데이터 수정과 짝).
+  const program = await findOrCreateProgramByNormalizedName(supabase, channelId, title, {
+    episodeNumber: body?.episodeCount ?? null,
+  });
 
-  if (programError || !program) {
+  if (!program) {
     return NextResponse.json(
-      { ok: false, message: `프로그램 저장 실패 — ${programError?.message}` },
+      { ok: false, message: "프로그램 저장 실패" },
       { status: 500 }
     );
   }

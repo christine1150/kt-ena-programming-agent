@@ -2353,7 +2353,7 @@ function DowHourBlockTable({
                       }}
                       title={cell ? `${label} ${hourBlockLabel(hb)}: ${fmtR(rating)} (표본 ${cell.sample_count}건)` : "표본 없음"}
                     >
-                      {rating !== null ? rating.toFixed(2) : "—"}
+                      {rating !== null ? fmtR(rating) : "—"}
                     </div>
                   </td>
                 );
