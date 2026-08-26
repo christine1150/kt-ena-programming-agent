@@ -109,6 +109,21 @@ export const INTENT_REGISTRY: IntentDefinition[] = [
     data_mart: "get_competitor_program_overlap",
     specificity: 4,
   },
+  {
+    intent_id: "PROGRAM_CROSS_CHANNEL_REACH",
+    macro_intent: "COMPETITIVE_INTELLIGENCE",
+    description:
+      "특정 채널이 방영했거나 방영 중인 프로그램과 같은 타이틀이 다른 채널(대상 채널 자신이 등록한 경쟁채널로 한정하지 않고, 우리 소유 다른 채널 + 등록된 모든 경쟁채널 전체)에도 편성됐는지 찾아 방영 횟수·기간·시간대·평균 시청률을 알려준다. 기간 지정이 없으면 최근 1년.",
+    examples: [
+      "OLIFE의 프로그램과 같은 타이틀이 다른 채널에도 있어?",
+      "ENA Play가 방영한 프로그램들, 다른 채널에서도 하고 있어?",
+      "ONCE 프로그램과 동일한 타이틀을 편성한 채널 찾아줘",
+    ],
+    keywords: ["같은 타이틀", "같은 프로그램", "동일한 타이틀", "동일한 프로그램", "다른 채널에도", "다른 채널에서도", "어느 채널이 편성"],
+    required_parameters: ["channelCode"],
+    data_mart: "get_program_cross_channel_reach",
+    specificity: 5,
+  },
 ];
 
 export function findIntentById(id: string): IntentDefinition | undefined {

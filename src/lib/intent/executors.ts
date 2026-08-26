@@ -245,3 +245,44 @@ export async function execCompetitiveHeadToHead(params: ExtractedParameters, tim
   const rows = (data ?? []).filter((r: { competitor_name: string }) => !isNlCompetitorExcluded(channel.code, r.competitor_name));
   return { channel, rows };
 }
+
+// ── PROGRAM_CROSS_CHANNEL_REACH ─────────────────────────────────────────
+// 사용자 제보(2026-08-26, ENA Play 다음 오답 사고) — "OLIFE의 프로그램과 같은 타이틀이
+// 다른 채널(등록된 경쟁채널이 아니어도)에도 있는지" 질문이 COMPETITIVE_HEAD_TO_HEAD(동시간대
+// 겹침만 봄)로 잘못 답해졌다. get_program_cross_channel_reach는 "동시간대 겹침"이 아니라
+// "같은 canonical title"로 찾고, 대상 채널 자신이 등록한 경쟁채널로 한정하지 않는다.
+export interface CrossChannelReachRow {
+  canonical_title: string;
+  found_channel_label: string;
+  is_own_channel: boolean;
+  target_label: string;
+  broadcast_count: number;
+  first_broadcast_date: string;
+  last_broadcast_date: string;
+  typical_hours: string;
+  avg_rating: number | null;
+}
+const CROSS_CHANNEL_REACH_DEFAULT_LOOKBACK_DAYS = 365;
+
+export async function execProgramCrossChannelReach(params: ExtractedParameters, timeContext: TimeContext) {
+  const channels = await getChannelRefs();
+  const channel = channels.find((c) => c.code === params.channelCode);
+  if (!channel) return null;
+
+  // 사용자 지시(2026-08-26): "특별한 기간 요청이 없을 경우 지난 1년의 데이터로 계산해줘"
+  // — 시간 표현이 아예 없으면(raw === null, timeResolver 기본값은 "오늘" 하루) 1년으로 넓힌다.
+  let dateFrom = timeContext.dateFrom;
+  const dateTo = timeContext.dateTo;
+  if (timeContext.raw === null) {
+    const d = new Date(dateTo);
+    d.setDate(d.getDate() - CROSS_CHANNEL_REACH_DEFAULT_LOOKBACK_DAYS);
+    dateFrom = d.toISOString().slice(0, 10);
+  }
+
+  const { data } = await supabase.rpc("get_program_cross_channel_reach", {
+    p_channel_code: channel.code,
+    p_date_from: dateFrom,
+    p_date_to: dateTo,
+  });
+  return { channel, dateFrom, dateTo, rows: (data ?? []) as CrossChannelReachRow[] };
+}

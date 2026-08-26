@@ -13,6 +13,7 @@ import {
   execTargetAffinity,
   execCompetitivePosition,
   execCompetitiveHeadToHead,
+  execProgramCrossChannelReach,
 } from "./executors";
 import {
   buildPortfolioRankingAnswer,
@@ -24,6 +25,7 @@ import {
   buildTargetAffinityAnswer,
   buildCompetitivePositionAnswer,
   buildCompetitiveHeadToHeadAnswer,
+  buildProgramCrossChannelReachAnswer,
   buildUnsupportedAnswer,
 } from "./responseTemplates";
 import type { EvidenceAnswer, RouteResult } from "./types";
@@ -69,6 +71,10 @@ export async function dispatchIntent(routed: RouteResult, question: string): Pro
     case "COMPETITIVE_HEAD_TO_HEAD": {
       const data = await execCompetitiveHeadToHead(parameters, timeContext);
       return buildCompetitiveHeadToHeadAnswer(data, timeContext);
+    }
+    case "PROGRAM_CROSS_CHANNEL_REACH": {
+      const data = await execProgramCrossChannelReach(parameters, timeContext);
+      return buildProgramCrossChannelReachAnswer(data, timeContext);
     }
     default:
       return buildUnsupportedAnswer();

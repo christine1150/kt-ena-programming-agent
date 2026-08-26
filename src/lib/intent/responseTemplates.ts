@@ -538,6 +538,95 @@ export function buildCompetitiveHeadToHeadAnswer(data: { channel: { code: string
   };
 }
 
+interface CrossChannelReachRow {
+  canonical_title: string;
+  found_channel_label: string;
+  is_own_channel: boolean;
+  target_label: string;
+  broadcast_count: number;
+  first_broadcast_date: string;
+  last_broadcast_date: string;
+  typical_hours: string;
+  avg_rating: number | null;
+}
+export function buildProgramCrossChannelReachAnswer(
+  data: { channel: { code: string; name: string }; dateFrom: string; dateTo: string; rows: CrossChannelReachRow[] } | null,
+  timeContext: TimeContext
+): EvidenceAnswer {
+  const periodLabel =
+    timeContext.raw === null && data
+      ? `최근 1년(${data.dateFrom}~${data.dateTo}, 기간 지정이 없어 기본값 적용)`
+      : timeContext.label;
+
+  if (!data || data.rows.length === 0) {
+    return {
+      ...base("PROGRAM_CROSS_CHANNEL_REACH", "COMPETITIVE_INTELLIGENCE", data),
+      conclusion: `'${data?.channel.name ?? ""}'과 같은 타이틀의 프로그램을 다른 채널에서 찾지 못했습니다.`,
+      keyNumbers: "—",
+      comparisonBasis: periodLabel,
+      evidence: "—",
+      interpretation: "—",
+      programmingAction: "—",
+      confidence: "INSUFFICIENT_SAMPLE",
+      confidenceNote: CONFIDENCE_NOTE.INSUFFICIENT_SAMPLE,
+    };
+  }
+
+  // (canonical_title, found_channel_label) 단위로 묶는다 — target_label이 여러 개면(SQL이
+  // 이미 뒤섞어 평균내지 않고 분리해 돌려줌) 방영 횟수가 가장 많은 것을 대표값으로 쓴다.
+  const byMatch = new Map<string, CrossChannelReachRow>();
+  for (const r of data.rows) {
+    const key = `${r.canonical_title}__${r.found_channel_label}`;
+    const existing = byMatch.get(key);
+    if (!existing || r.broadcast_count > existing.broadcast_count) byMatch.set(key, r);
+  }
+  const matches = [...byMatch.values()].sort((a, b) => b.broadcast_count - a.broadcast_count);
+
+  const byTitle = new Map<string, CrossChannelReachRow[]>();
+  for (const m of matches) byTitle.set(m.canonical_title, [...(byTitle.get(m.canonical_title) ?? []), m]);
+
+  const evidence = [...byTitle.entries()]
+    .slice(0, 8)
+    .map(
+      ([title, rows]) =>
+        `${title}: ${rows
+          .map(
+            (r) =>
+              `${r.found_channel_label}${r.is_own_channel ? "(자사)" : ""} ${r.broadcast_count}회(${r.first_broadcast_date}~${r.last_broadcast_date}, 주로 ${r.typical_hours}, 평균 ${fmt(r.avg_rating, 4)}, ${r.target_label} 기준)`
+          )
+          .join(", ")}`
+    )
+    .join(" / ");
+
+  return {
+    ...base("PROGRAM_CROSS_CHANNEL_REACH", "COMPETITIVE_INTELLIGENCE", data),
+    conclusion: `'${data.channel.name}'이 편성한 프로그램과 같은 타이틀이 ${byTitle.size}개 다른 채널에서도 확인됐습니다(${periodLabel} 기준).`,
+    keyNumbers: `가장 많이 겹친 타이틀: '${matches[0].canonical_title}' — ${matches[0].found_channel_label} ${matches[0].broadcast_count}회`,
+    comparisonBasis: periodLabel,
+    evidence,
+    interpretation:
+      "동일 타이틀이 여러 채널에 걸쳐 있다는 사실만 보여줄 뿐, 판권·재방영 관계까지 단정하지 않습니다.",
+    programmingAction: "겹치는 채널·시간대·시청률을 참고해 편성 전략(시간대 조정, 판권 검토 등)을 세워보세요.",
+    confidence: matches.length >= 3 ? "HIGH" : "MEDIUM",
+    confidenceNote: `'${data.channel.name}'의 ${periodLabel} 편성 기록과, 우리 소유 다른 채널 + 등록된 모든 경쟁채널(대상 채널 자신이 등록한 목록으로 한정하지 않음) 데이터를 대조한 결과입니다.`,
+    visualization: table(
+      "동일 타이틀 편성 채널",
+      ["프로그램", "채널", "편성 횟수", "기간", "주요 시간대", "평균 시청률", "타깃"],
+      matches
+        .slice(0, 10)
+        .map((r) => [
+          r.canonical_title,
+          r.found_channel_label,
+          r.broadcast_count,
+          `${r.first_broadcast_date}~${r.last_broadcast_date}`,
+          r.typical_hours,
+          fmt(r.avg_rating, 4),
+          r.target_label,
+        ])
+    ),
+  };
+}
+
 export function buildUnsupportedAnswer(missing?: string[]): EvidenceAnswer {
   const paramLabel: Record<string, string> = { channelCode: "채널", targetLabel: "타깃(연령대 등)", competitorName: "경쟁채널" };
   const missingNames = missing && missing.length > 0 ? missing.map((m) => paramLabel[m] ?? m).join(", ") : "";
