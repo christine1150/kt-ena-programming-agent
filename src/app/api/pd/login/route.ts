@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { supabase } from "@/lib/supabase";
 import { PD_COOKIE_NAME, PD_SESSION_TTL_MS, createSessionToken } from "@/lib/session";
+import { recordLogin } from "@/lib/loginLog";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -51,6 +52,8 @@ export async function POST(request: Request) {
     .from("pd_users")
     .update({ last_login_at: new Date().toISOString() })
     .eq("id", pdUser.id);
+
+  await recordLogin({ role: "pd", actorId: pdUser.id, actorName: pdUser.name, request });
 
   const response = NextResponse.json({ ok: true });
   response.cookies.set(PD_COOKIE_NAME, token, {

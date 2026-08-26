@@ -7,6 +7,7 @@ import {
   ADMIN_SESSION_TTL_MS,
   createSessionToken,
 } from "@/lib/session";
+import { recordLogin } from "@/lib/loginLog";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -54,6 +55,8 @@ export async function POST(request: Request) {
     .from("admins")
     .update({ last_login_at: new Date().toISOString() })
     .eq("id", admin.id);
+
+  await recordLogin({ role: "admin", actorId: admin.id, actorName: admin.email, request });
 
   const response = NextResponse.json({ ok: true });
   response.cookies.set(ADMIN_COOKIE_NAME, token, {

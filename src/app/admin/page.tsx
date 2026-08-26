@@ -1,6 +1,7 @@
 // 관리자 전용 화면 — 로그인하지 않았으면 로그인 화면으로 돌려보낸다.
 // (실제로는 middleware.ts가 먼저 막지만, 직접 접근 시나리오 대비 이중 확인)
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getAdminSession } from "@/lib/adminAuth";
 import ShareLinkManager from "./ShareLinkManager";
 import ChannelMasterUploader from "./ChannelMasterUploader";
@@ -33,7 +34,15 @@ export default async function AdminPage() {
             <h1 className="text-xl font-semibold text-zinc-900">관리자 화면</h1>
             <p className="text-sm text-zinc-500">{session.email}로 로그인됨</p>
           </div>
-          <LogoutButton />
+          <div className="flex items-center gap-3">
+            <Link
+              href="/admin/login-history"
+              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              로그인 이력
+            </Link>
+            <LogoutButton />
+          </div>
         </div>
 
         <ShareLinkManager />
