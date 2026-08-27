@@ -14,6 +14,7 @@ import type { EvidenceAnswer as AskAnswer } from "@/lib/intent/types";
 import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from "@/lib/enaOriginalHighlight";
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
 import { computeChannelHealthScore, HEALTH_LABEL_KO, type ChannelHealthScore, type HealthVerdict } from "@/lib/channelHealthScore";
+import type { ProgramMomentumItem } from "@/app/api/scheduling/program-momentum/route";
 
 interface TrendRow {
   period: string;
@@ -3063,6 +3064,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const [selectedExtraTargets, setSelectedExtraTargets] = useState<Set<string>>(new Set());
   const [fitScoreItems, setFitScoreItems] = useState<FitScoreItem[] | null>(null);
   const [fitScoreLoading, setFitScoreLoading] = useState(true);
+  // Program Momentum Index(2026-08-27, Phase 2 — 사용자 지시로 새 조회 추가 진행) — 이미 화면에
+  // 있는 fitScoreItems의 program_id들만 넘겨 계산한다(불필요한 계산 방지). sectionLlm과 동일한
+  // key 비교 패턴(위 3253번 줄 주석 참고) — effect 안에서 "이전 채널 값 지우기"를 동기
+  // setState로 하지 않고, 읽는 쪽에서 key가 다르면 그냥 무시한다(react-hooks lint 규칙).
+  const [momentumState, setMomentumState] = useState<{ key: string; items: ProgramMomentumItem[] }>({ key: "", items: [] });
   // skyUHD 전용 대체 지표(사용자 지시, 2026-08-21) — code==="SKYUHD"일 때만 채워진다.
   const [skyuhdScorecard, setSkyuhdScorecard] = useState<SkyuhdScorecardItem[] | null>(null);
   const [skyuhdScorecardLoading, setSkyuhdScorecardLoading] = useState(true);
@@ -3249,6 +3255,26 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     };
 
   }, [code, fitScoreDateQuery]);
+
+  // Program Momentum Index(2026-08-27, Phase 2) — fitScoreItems가 준비된 뒤에만(program_id
+  // 목록이 필요) 호출. skyUHD는 target 기반이 아니라 대상 밖(program-momentum route가 그
+  // 경우 빈 배열을 돌려줌 — 명시적으로 건너뛰어 불필요한 호출을 줄인다).
+  const momentumResetKey = `${code}__${fitScoreDateQuery}`;
+  useEffect(() => {
+    if (fitScoreLoading || !fitScoreItems || fitScoreItems.length === 0 || code === "SKYUHD") return;
+    let cancelled = false;
+    (async () => {
+      const programIds = fitScoreItems.map((f) => f.program_id).join(",");
+      const res = await fetch(`/api/scheduling/program-momentum?code=${code}&program_ids=${programIds}${fitScoreDateQuery}`);
+      const body = await res.json().catch(() => ({ ok: false }));
+      if (cancelled) return;
+      if (res.ok && body.ok) setMomentumState({ key: momentumResetKey, items: body.items ?? [] });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [code, fitScoreDateQuery, fitScoreLoading, fitScoreItems, momentumResetKey]);
+  const momentumItems = momentumState.key === momentumResetKey ? momentumState.items : null;
 
   // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — WHY?/
   // OPPORTUNITY?/COMPARED WITH?는 이미 client state에 있는 검증된 값(candidates/
@@ -4953,6 +4979,34 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <p className="mt-3 text-xs text-zinc-400">
               도달율×시청률 산점도의 사분면 기준은 이 채널의 현재 프로그램들 사이의 중앙값(median)입니다 — 절대 기준이 아니라 상대 비교용입니다.
             </p>
+            {/* Program Momentum Index(2026-08-27, Phase 2 — 사용자 지시로 새 조회 추가) —
+                /api/scheduling/program-momentum. 최근 방영일 실측 vs 최근 4주(28일) 평균 비율. */}
+            {momentumItems && momentumItems.some((m) => m.momentum !== null) && (
+              <div className="mt-5 border-t border-zinc-100 pt-4">
+                <p className="mb-2 text-xs font-medium text-zinc-500">Program Momentum(최근 7일 평균 vs 최근 4주 평균)</p>
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {[...momentumItems]
+                    .filter((m) => m.momentum !== null)
+                    .sort((a, b) => (b.momentum ?? 0) - (a.momentum ?? 0))
+                    .map((m) => {
+                      const program = contentFitsRows.find((r) => r.program_id === m.program_id);
+                      const name = program?.programs?.canonical_name ?? "이름 없음";
+                      const color = m.label === "RISING" ? "#059669" : m.label === "DECLINING" ? "#e11d48" : "#71717a";
+                      const labelKo = m.label === "RISING" ? "상승세" : m.label === "DECLINING" ? "하락세" : "안정";
+                      return (
+                        <div key={m.program_id} className="flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-3 py-1.5 text-sm">
+                          <span className="min-w-0 truncate text-zinc-700" title={`최근 7일 평균 ${fmtR(m.recent_avg_rating)}(표본 ${m.recent_sample_count}일) / 4주 평균 ${fmtR(m.four_week_avg_rating)}`}>
+                            {name}
+                          </span>
+                          <span className="shrink-0 font-semibold tabular-nums" style={{ color }}>
+                            {m.momentum!.toFixed(2)} · {labelKo}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
