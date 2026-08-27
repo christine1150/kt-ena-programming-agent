@@ -579,6 +579,20 @@ function formatChannelTargetLine(primaryTarget: string): string {
   return primaryTarget; // 수도권 채널: 원문에 이미 "수도권"이 포함돼 있어 그대로 표시.
 }
 
+// Phase 7(2026-08-28, Audience Intelligence Report 계획서 J절 §11-8) — 새 리포트(/audience-report)
+// 링크 조립. 이 페이지의 기간 프리셋 드롭다운은 MODE C(임의 기간 A vs 기간 B)를 표현할 방법이
+// 없다(custom=비교 없는 단일 구간, dod~yoy=자동 계산된 대비 — 둘 다 설계서 §06 정의상 MODE B/D
+// 소속) — 그래서 이 함수도 MODE A/B/D 세 갈래만 만든다. 새 계산 없음, 이미 있는 클라이언트 상태
+// (dateFrom/dateTo)만 재사용.
+function buildAudienceReportHref(code: string, periodPreset: PeriodPreset, dateFrom: string, dateTo: string): string | null {
+  if (!dateTo) return null;
+  if (periodPreset === "today" || periodPreset === "yesterday") return `/audience-report/${code}?date=${dateTo}`;
+  if (periodPreset === "custom") return dateFrom ? `/audience-report/${code}?dateFrom=${dateFrom}&dateTo=${dateTo}` : null;
+  // wtd/mtd/qtd/ytd/last7/last30/dod/wow/mom/qoq/yoy — dateTo를 latest로 함께 넘겨 화면이 쓰는
+  // 기준일과 API의 "오늘" 계산을 일치시킨다.
+  return `/audience-report/${code}?preset=${periodPreset}&dateTo=${dateTo}`;
+}
+
 // 사용자 지시(2026-08-21, Page 1 → Page 2 확장): Page 1에서 확립한 섹션 헤더 폰트 위계(Pretendard
 // 헤딩 폰트, 크고 굵게)를 Page 2에도 그대로 반영 — 8대 질문 섹션 헤더 전부 이 스타일로 통일.
 const SECTION_TITLE_P2 = "font-heading mb-1 text-xl font-bold tracking-tight text-zinc-800";
@@ -3756,6 +3770,25 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     📄 리포트 보기
                   </Link>
                 )}
+                {/* Phase 7(2026-08-28, Audience Intelligence Report §11-8) — 새 시스템(/audience-report)
+                    "각 채널 보고서 만들기" 버튼. 위 구 시스템 버튼은 그대로 두고 옆에 추가한다(사용자
+                    지시: 구 리포트가 Word/PPT·Quarterly/Annual을 지원하는 과도기라 지금 대체하지
+                    않음). "종합 보고서 만들기" 버튼은 종합(포트폴리오) 리포트가 실제로 만들어질 때
+                    함께 추가(지금은 갈 곳 없는 버튼을 만들지 않는다). */}
+                {(() => {
+                  const audienceHref = buildAudienceReportHref(code, periodPreset, selectedDateFrom ?? "", selectedDateTo ?? "");
+                  return (
+                    audienceHref && (
+                      <Link
+                        href={audienceHref}
+                        target="_blank"
+                        className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none hover:bg-white/30"
+                      >
+                        📊 각 채널 보고서
+                      </Link>
+                    )
+                  );
+                })()}
                 {/* 사용자 지시(2026-08-21): 드랍박스를 열면 옵션 글씨가 안 보이던 버그 — optgroup으로
                     묶으면서 option이 select의 "직계 자식"이 아니게 돼([&>option] 선택자가 더는
                     안 먹힘) 흰 배경에 흰 글씨(투명)로 남아있었다. 자손 선택자([&_option])로 바꾸고
