@@ -8,6 +8,14 @@ import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { AskAssistantWidget } from "@/components/AskAssistantWidget";
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
+// 사용자 지시(2026-08-27): "Channel Intelligence Report" Health Score를 1페이지에도 적용 —
+// 단, 1페이지 "채널별 인사이트"는 Fit Score 태그·daypart 격차처럼 2페이지 전용 무거운 조회
+// 결과를 갖고 있지 않다(성능 이유로 이미 최적화된 페이지, 새 RPC를 얹지 않는다는 원칙 — 2026-08-21
+// 성능 개선 이력 참고). 그래서 이 파일이 이미 들고 있는 2개 축(시청률 등락률·순위)만 넘기고
+// 나머지 3개 축(편성 상태/경쟁 신호/시간대 흐름)은 계산 함수 자체의 "데이터 없으면 중립" 처리에
+// 맡긴다 — 같은 계산 규칙을 재사용할 뿐 새 판정 로직을 만들지 않는다(CLAUDE.md: 로직 중복 금지).
+import { computeChannelHealthScore } from "@/lib/channelHealthScore";
+import { HealthScoreBadge } from "@/components/HealthScoreBadge";
 import { formatDateWithDowDots } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun } from "@/lib/josa";
 import {
@@ -1910,7 +1918,7 @@ function ChannelNarrativeCard({
   enaOriginalDaily: OriginalDailyItem[];
 }) {
   const byCode = new Map(signals.map((s) => [s.channelCode, s]));
-  const lines: { channelName: string; text: string; color: string | null; deltaPct: number | null }[] = [];
+  const lines: { channelName: string; text: string; color: string | null; deltaPct: number | null; todayRank: number | null; baselineAvgRank: number | null }[] = [];
   const enaLeadSentence = buildEnaOriginalHighlightSentence(enaOriginalDaily.filter((d) => d.broadcast_channel_code === "ENA"));
   for (const code of INSIGHT_CHANNEL_ORDER) {
     const s = byCode.get(code);
@@ -1924,11 +1932,18 @@ function ChannelNarrativeCard({
     const narrative = s.llmNarrative
       ? { channelName: CHANNEL_NAME_BY_CODE[code], text: s.llmNarrative }
       : buildChannelNarrative(CHANNEL_NAME_BY_CODE[code], s, extraLeadSentence);
-    lines.push({ ...narrative, color: themeColorByCode.get(code) ?? null, deltaPct: s.rating_delta_pct });
+    lines.push({ ...narrative, color: themeColorByCode.get(code) ?? null, deltaPct: s.rating_delta_pct, todayRank: s.today_rank, baselineAvgRank: s.baseline_avg_rank });
   }
   const skyuhdSignal = byCode.get("SKYUHD");
   const skyuhdLine = buildSkyUhdNarrative(skyuhdSignal);
-  if (skyuhdLine) lines.push({ ...skyuhdLine, color: themeColorByCode.get("SKYUHD") ?? null, deltaPct: skyuhdSignal?.rating_delta_pct ?? null });
+  if (skyuhdLine)
+    lines.push({
+      ...skyuhdLine,
+      color: themeColorByCode.get("SKYUHD") ?? null,
+      deltaPct: skyuhdSignal?.rating_delta_pct ?? null,
+      todayRank: skyuhdSignal?.today_rank ?? null,
+      baselineAvgRank: skyuhdSignal?.baseline_avg_rank ?? null,
+    });
 
   return (
     <div className={CARD}>
@@ -1956,6 +1971,21 @@ function ChannelNarrativeCard({
                 <span className="whitespace-nowrap font-bold" style={{ color: line.color ?? undefined }}>
                   {line.channelName}
                 </span>
+                {/* 사용자 지시(2026-08-27): Health Score를 1페이지 "채널별 인사이트"에도 —
+                    시청률 등락률·순위 2개 축만으로 계산(나머지 축은 데이터 없어 중립 처리되므로
+                    2페이지 정식 Health Score보다 등급 폭이 좁게 나온다, 정상 동작). */}
+                <HealthScoreBadge
+                  variant="light"
+                  health={computeChannelHealthScore({
+                    ratingDeltaPct: line.deltaPct,
+                    todayRank: line.todayRank,
+                    baselineAvgRank: line.baselineAvgRank,
+                    fitScoreTagCounts: { STRENGTHEN: 0, KEEP: 0, MOVE: 0, REPLACE: 0, TEST: 0 },
+                    rootCauseTriggered: false,
+                    opportunityTriggered: false,
+                    daypartGapChanges: [],
+                  })}
+                />
                 {line.deltaPct !== null && <MiniDeltaBar pct={line.deltaPct} />}
               </div>
               {/* 사용자 지시(2026-08-26, 가독성 개선 5번 "타이포그래피 기본기"): 줄 폭을 제한하고

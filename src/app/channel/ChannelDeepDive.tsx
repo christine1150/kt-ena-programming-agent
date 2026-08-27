@@ -6,6 +6,7 @@
 // 줄글 형태로 재구성했다. WHY?/OPPORTUNITY?의 원인 추적·기회 탐지는 상관관계만 참고 정보로
 // 제공하고 인과관계로 단정하지 않는다(CLAUDE.md 원칙).
 import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDow } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun, josaEulReul } from "@/lib/josa";
@@ -13,7 +14,8 @@ import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import type { EvidenceAnswer as AskAnswer } from "@/lib/intent/types";
 import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from "@/lib/enaOriginalHighlight";
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
-import { computeChannelHealthScore, HEALTH_LABEL_KO, type ChannelHealthScore, type HealthVerdict } from "@/lib/channelHealthScore";
+import { computeChannelHealthScore } from "@/lib/channelHealthScore";
+import { HealthScoreBadge, verdictColor } from "@/components/HealthScoreBadge";
 import type { ProgramMomentumItem } from "@/app/api/scheduling/program-momentum/route";
 
 interface TrendRow {
@@ -2865,29 +2867,8 @@ function buildFitScoreInterpretation(item: FitScoreItem): FitScoreInterpretation
 // trend/fitScoreItems/rootCauseAlert/opportunityAlert/daypartOpportunity/topPrograms)만 다시
 // 조합해서 "30초 요약" 상단부를 만든다. 계산 로직은 전부 이미 있는 값의 재배열/최댓값 찾기 수준
 // (Health Score만 신규 규칙 — src/lib/channelHealthScore.ts 참고).
-const HEALTH_BADGE_STYLE: Record<ChannelHealthScore["label"], { bg: string; text: string }> = {
-  EXCELLENT: { bg: "rgba(255,255,255,0.25)", text: "#ffffff" },
-  GOOD: { bg: "rgba(255,255,255,0.25)", text: "#ffffff" },
-  STABLE: { bg: "rgba(255,255,255,0.18)", text: "#ffffff" },
-  WATCH: { bg: "rgba(250,204,21,0.35)", text: "#ffffff" },
-  WEAK: { bg: "rgba(244,63,94,0.35)", text: "#ffffff" },
-};
-function HealthScoreBadge({ health }: { health: ChannelHealthScore }) {
-  const style = HEALTH_BADGE_STYLE[health.label];
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold"
-      style={{ backgroundColor: style.bg, color: style.text }}
-      title={health.axes.map((a) => `${a.label}: ${a.reason}`).join(" / ")}
-    >
-      {health.label === "EXCELLENT" || health.label === "GOOD" ? "●" : health.label === "STABLE" ? "◐" : "○"} {HEALTH_LABEL_KO[health.label]} · {health.score}
-    </span>
-  );
-}
-
-function verdictColor(v: HealthVerdict): string {
-  return v === "positive" ? "#059669" : v === "negative" ? "#e11d48" : "#71717a";
-}
+// HealthScoreBadge/verdictColor는 src/components/HealthScoreBadge.tsx로 이동(2026-08-27, 사용자
+// 지시 — 1페이지 "채널별 인사이트"에도 같은 배지를 적용하기 위해 공용 컴포넌트로 분리).
 
 interface KpiCardSpec {
   label: string;
@@ -3718,6 +3699,17 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 브리핑" 등이 과거를 마치 오늘인 것처럼 서술하는 문제가 있었다(사용자 지시로 수정). */}
             <div className="flex flex-col items-end gap-1.5">
               <div className="flex flex-wrap items-center justify-end gap-2">
+                {/* Channel Intelligence Report 다운로드 진입점(Phase 3, 2026-08-27, 사용자 지시) —
+                    단일 일자 조회일 때만 의미가 있다(리포트는 "그날" 기준, 기간 평균 모드는 대상 아님). */}
+                {!showComparisonView && data.dateTo && (
+                  <Link
+                    href={`/report/${data.dateTo}?channel=${code}`}
+                    target="_blank"
+                    className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none hover:bg-white/30"
+                  >
+                    📄 리포트 보기
+                  </Link>
+                )}
                 {/* 사용자 지시(2026-08-21): 드랍박스를 열면 옵션 글씨가 안 보이던 버그 — optgroup으로
                     묶으면서 option이 select의 "직계 자식"이 아니게 돼([&>option] 선택자가 더는
                     안 먹힘) 흰 배경에 흰 글씨(투명)로 남아있었다. 자손 선택자([&_option])로 바꾸고
