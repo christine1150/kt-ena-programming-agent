@@ -31,6 +31,32 @@ export interface SkyUhdProgramLogRow {
   rating: number | null;
 }
 
+// Phase 2(2026-08-28, 계획서 J절 2a) — 시간대 축(AXIS 2)·시간대×프로그램 교차용.
+export interface HourlyPatternRow {
+  broadcastHour: number; // 2~25시(방송시간 기준, get_hourly_rating_pattern 원본 그대로)
+  avgRating: number | null;
+  avgShare: number | null;
+  avgReach: number | null;
+  avgTimeSpentSeconds: number | null;
+  programCount: number | null;
+}
+export interface HourlyProgramTitleRow {
+  broadcastHour: number;
+  programNames: string; // "프로그램A / 프로그램B" 형태(원본 그대로, 여러 날짜에 걸친 방영분을 "/" 조인)
+}
+// get_channel_demographic_program_highlights 원본(실측 확인, 2026-08-28) — 단일 일자 전용(기존
+// 시스템 제약 그대로 승계, 새로 기간 확장하지 않음).
+export interface DemographicProgramHighlight {
+  program_name: string;
+  program_start_time: string;
+  demographic_label: string;
+  metric: "share" | "rating" | "reach";
+  today_value: number | null;
+  baseline_avg: number | null;
+  baseline_days: number | null;
+  delta_pct: number | null;
+}
+
 export interface AudienceReportRawData {
   channelCode: string;
   group: AudienceGroup;
@@ -69,6 +95,13 @@ export interface AudienceReportRawData {
 
   demographics: { target_label: string; period_avg_rating: number | null; prior_avg_rating: number | null; delta_pct: number | null }[];
 
+  // Phase 2 추가(AXIS 2 시간대별 + 교차용). skyUHD는 daypart류와 같은 이유로 항상 빈 배열.
+  hourlyPattern: HourlyPatternRow[];
+  hourlyProgramTitles: HourlyProgramTitleRow[];
+  // 단일 일자(MODE A)이고 skyUHD가 아닐 때만 채워진다 — 그 외에는 항상 빈 배열(기존 시스템도
+  // 기간 확장판이 없어 같은 제약을 승계, 지어내지 않음).
+  demographicProgramHighlights: DemographicProgramHighlight[];
+
   competitorInsight: unknown[]; // get_competitor_insight_report 원본
   competitorTopPrograms: { competitor_name: string; program_name: string; program_avg_rating: number | null }[];
 
@@ -100,6 +133,15 @@ function pickTrendGranularity(rangeDays: number): TrendGranularity {
   return "monthly";
 }
 
+// dashboard/channel/route.ts의 fullDemographicTargets와 동일한 12구간(연령대×성별) 라벨 세트 —
+// Phase 1이 실수로 4개(대표 연령대)만 썼던 것을 이번에 이 파일을 다시 만지는 김에 기존 시스템의
+// 실제 관례(12구간 전체)로 맞춘다. 그룹 A는 "수도권", 그룹 B는 "전국" 접두어.
+function fullDemographicLabels(groupCode: "A" | "B"): string[] {
+  const prefix = groupCode === "A" ? "수도권" : "전국";
+  const ages = ["10대", "20대", "30대", "40대", "50대", "60대+"];
+  return ages.flatMap((age) => [`${prefix} 남${age}`, `${prefix} 여${age}`]);
+}
+
 export async function collectAudienceReportData(channelCode: string, period: ResolvedAudiencePeriod): Promise<AudienceReportRawData> {
   const group = groupForChannel(channelCode);
 
@@ -124,8 +166,28 @@ export async function collectAudienceReportData(channelCode: string, period: Res
   const trendTargetLabel = skyUhd ? rankTargetLabel : programTargetLabel;
   const EMPTY: Promise<{ data: never[] }> = Promise.resolve({ data: [] });
 
-  const [periodReportRes, trendRes, moversRes, daypartRes, hourBlockRes, dowHourBlockRes, topProgramsRes, demographicsRes, competitorInsightRes, competitorTopRes, masterInfo, skyUhdLogRes] =
-    await Promise.all([
+  // Phase 2(2026-08-28): AXIS 2(시간대별)용 — daypart류와 같은 이유로 skyUHD는 건너뛴다.
+  // demographicProgramHighlights는 기존 시스템도 단일 일자 전용이라(기간 확장판 없음), MODE A가
+  // 아니거나 skyUHD면 호출하지 않는다.
+  const wantsDemographicHighlights = period.mode === "single_day" && !skyUhd;
+
+  const [
+    periodReportRes,
+    trendRes,
+    moversRes,
+    daypartRes,
+    hourBlockRes,
+    dowHourBlockRes,
+    topProgramsRes,
+    demographicsRes,
+    competitorInsightRes,
+    competitorTopRes,
+    masterInfo,
+    skyUhdLogRes,
+    hourlyPatternRes,
+    hourlyProgramTitlesRes,
+    demographicHighlightsRes,
+  ] = await Promise.all([
       supabase.rpc("get_rating_period_report", {
         p_channel_code: channelCode,
         p_target_label: rankTargetLabel,
@@ -169,7 +231,10 @@ export async function collectAudienceReportData(channelCode: string, period: Res
       skyUhd ? EMPTY : supabase.rpc("get_channel_top_programs", { p_channel_code: channelCode, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 20 }),
       supabase.rpc("get_channel_period_demographics", {
         p_channel_code: channelCode,
-        p_demographic_labels: group.code === "A" ? ["수도권 여20대", "수도권 남20대", "수도권 여40대", "수도권 남40대"] : ["전국 여20대", "전국 남20대", "전국 여40대", "전국 남40대"],
+        // Phase 1은 대표 4개 연령대만 썼는데, 기존 시스템(dashboard/channel/route.ts)의 실제 관례는
+        // 12구간 전체(fullDemographicTargets)다 — 실측 확인(2026-08-28, ENA "오늘의 브리핑" 실측
+        // 결과가 여50대/남50대 등 대표 4개 밖 연령대를 하이라이트로 뽑고 있었음) 후 이번에 맞춘다.
+        p_demographic_labels: fullDemographicLabels(group.code),
         p_date_from: dateFrom,
         p_date_to: dateTo,
         p_prior_date_from: priorDateFrom,
@@ -178,7 +243,19 @@ export async function collectAudienceReportData(channelCode: string, period: Res
       supabase.rpc("get_competitor_insight_report", { p_channel_code: channelCode, p_target_label: rankTargetLabel, p_as_of_date: dateTo, p_date_from: dateFrom }),
       supabase.rpc("get_competitor_period_top_programs", { p_channel_code: channelCode, p_target_label: rankTargetLabel, p_date_from: dateFrom, p_date_to: dateTo, p_channel_limit: 5, p_program_limit: 7 }),
       getChannelMasterInfo(channelCode),
-      isSkyUhd(channelCode) ? supabase.rpc("get_skyuhd_program_log", { p_date_from: dateFrom, p_date_to: dateTo }) : Promise.resolve({ data: null }),
+      skyUhd ? supabase.rpc("get_skyuhd_program_log", { p_date_from: dateFrom, p_date_to: dateTo }) : Promise.resolve({ data: null }),
+      skyUhd ? EMPTY : supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channelCode, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
+      skyUhd ? EMPTY : supabase.rpc("get_hourly_program_titles", { p_channel_code: channelCode, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
+      wantsDemographicHighlights
+        ? supabase.rpc("get_channel_demographic_program_highlights", {
+            p_channel_code: channelCode,
+            p_kpi_target_label: programTargetLabel,
+            p_demographic_labels: fullDemographicLabels(group.code),
+            p_as_of_date: dateTo,
+            p_top_n_programs: 3,
+            p_program_baseline_weeks: 8,
+          })
+        : EMPTY,
     ]);
 
   const rawTrend = (trendRes.data ?? []) as { broadcast_date?: string; week_start?: string; month_start?: string; avg_rating: number | null }[];
@@ -234,6 +311,27 @@ export async function collectAudienceReportData(channelCode: string, period: Res
     ratingDelta: m.ratingDelta,
   }));
 
+  const hourlyPattern: HourlyPatternRow[] = ((hourlyPatternRes.data ?? []) as {
+    broadcast_hour: number;
+    avg_rating: number | null;
+    avg_share: number | null;
+    avg_reach: number | null;
+    avg_time_spent_seconds: number | null;
+    program_count: number | null;
+  }[]).map((r) => ({
+    broadcastHour: r.broadcast_hour,
+    avgRating: r.avg_rating,
+    avgShare: r.avg_share,
+    avgReach: r.avg_reach,
+    avgTimeSpentSeconds: r.avg_time_spent_seconds,
+    programCount: r.program_count,
+  }));
+  const hourlyProgramTitles: HourlyProgramTitleRow[] = ((hourlyProgramTitlesRes.data ?? []) as { broadcast_hour: number; program_names: string }[]).map((r) => ({
+    broadcastHour: r.broadcast_hour,
+    programNames: r.program_names,
+  }));
+  const demographicProgramHighlights: DemographicProgramHighlight[] = (demographicHighlightsRes.data ?? []) as DemographicProgramHighlight[];
+
   const skyUhdProgramLog: SkyUhdProgramLogRow[] | null = isSkyUhd(channelCode)
     ? ((skyUhdLogRes.data ?? []) as { broadcast_date: string; start_time: string; canonical_name: string; rating: number | null }[]).map((r) => ({
         broadcastDate: r.broadcast_date,
@@ -254,6 +352,9 @@ export async function collectAudienceReportData(channelCode: string, period: Res
     trendGranularity,
     programMovers,
     daypartOpportunity: daypartRes.data ?? [],
+    hourlyPattern,
+    hourlyProgramTitles,
+    demographicProgramHighlights,
     hourBlockOpportunity: hourBlockRes.data ?? [],
     dowHourBlockPattern: dowHourBlockRes.data ?? [],
     topPrograms: topProgramsRes.data ?? [],
