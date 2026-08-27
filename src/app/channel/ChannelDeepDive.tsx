@@ -13,6 +13,7 @@ import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import type { EvidenceAnswer as AskAnswer } from "@/lib/intent/types";
 import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from "@/lib/enaOriginalHighlight";
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
+import { computeChannelHealthScore, HEALTH_LABEL_KO, type ChannelHealthScore, type HealthVerdict } from "@/lib/channelHealthScore";
 
 interface TrendRow {
   period: string;
@@ -2857,6 +2858,99 @@ function buildFitScoreInterpretation(item: FitScoreItem): FitScoreInterpretation
   return { subScores, interpretation, sampleNote, decision, audienceRole: classifyAudienceRole(item.evidence) };
 }
 
+// ── Channel Intelligence Briefing(2026-08-27, "Channel Intelligence Report" 마스터 프롬프트
+// §7~15 반영, Phase 1) ──────────────────────────────────────────────────────
+// 이 블록 전체는 새 조회를 하나도 안 한다 — ChannelDeepDive가 이미 fetch해 둔 값(narrativeSignal/
+// trend/fitScoreItems/rootCauseAlert/opportunityAlert/daypartOpportunity/topPrograms)만 다시
+// 조합해서 "30초 요약" 상단부를 만든다. 계산 로직은 전부 이미 있는 값의 재배열/최댓값 찾기 수준
+// (Health Score만 신규 규칙 — src/lib/channelHealthScore.ts 참고).
+const HEALTH_BADGE_STYLE: Record<ChannelHealthScore["label"], { bg: string; text: string }> = {
+  EXCELLENT: { bg: "rgba(255,255,255,0.25)", text: "#ffffff" },
+  GOOD: { bg: "rgba(255,255,255,0.25)", text: "#ffffff" },
+  STABLE: { bg: "rgba(255,255,255,0.18)", text: "#ffffff" },
+  WATCH: { bg: "rgba(250,204,21,0.35)", text: "#ffffff" },
+  WEAK: { bg: "rgba(244,63,94,0.35)", text: "#ffffff" },
+};
+function HealthScoreBadge({ health }: { health: ChannelHealthScore }) {
+  const style = HEALTH_BADGE_STYLE[health.label];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold"
+      style={{ backgroundColor: style.bg, color: style.text }}
+      title={health.axes.map((a) => `${a.label}: ${a.reason}`).join(" / ")}
+    >
+      {health.label === "EXCELLENT" || health.label === "GOOD" ? "●" : health.label === "STABLE" ? "◐" : "○"} {HEALTH_LABEL_KO[health.label]} · {health.score}
+    </span>
+  );
+}
+
+function verdictColor(v: HealthVerdict): string {
+  return v === "positive" ? "#059669" : v === "negative" ? "#e11d48" : "#71717a";
+}
+
+interface KpiCardSpec {
+  label: string;
+  value: string;
+  deltaLabel: string | null;
+  deltaDirection: "up" | "down" | null;
+}
+function KpiCard({ spec }: { spec: KpiCardSpec }) {
+  return (
+    <div className="rounded-2xl bg-zinc-50 p-4">
+      <p className="text-xs font-medium text-zinc-400">{spec.label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-zinc-900">{spec.value}</p>
+      {spec.deltaLabel && (
+        <p className="mt-1 text-xs font-medium" style={{ color: spec.deltaDirection === "up" ? "#059669" : spec.deltaDirection === "down" ? "#e11d48" : "#a1a1aa" }}>
+          {spec.deltaDirection === "up" ? "▲" : spec.deltaDirection === "down" ? "▼" : ""} {spec.deltaLabel}
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface WinWeaknessCardSpec {
+  kind: "win" | "weakness";
+  daypartLabel: string;
+  gapChange: number;
+}
+function WinWeaknessCard({ spec }: { spec: WinWeaknessCardSpec }) {
+  const isWin = spec.kind === "win";
+  return (
+    <div className={`rounded-2xl p-4 ${isWin ? "bg-emerald-50" : "bg-rose-50"}`}>
+      <p className={`text-xs font-semibold ${isWin ? "text-emerald-700" : "text-rose-700"}`}>{isWin ? "▲ BIGGEST WIN" : "▼ BIGGEST WEAKNESS"}</p>
+      <p className="mt-1 text-lg font-bold text-zinc-900">{spec.daypartLabel}</p>
+      <p className={`mt-0.5 text-sm ${isWin ? "text-emerald-600" : "text-rose-600"}`}>
+        경쟁채널 대비 격차 {spec.gapChange >= 0 ? "▲" : "▼"} {Math.abs(spec.gapChange).toFixed(4)}
+        {isWin ? "(좁혀짐)" : "(벌어짐)"}
+      </p>
+    </div>
+  );
+}
+
+interface BriefingProgramRow {
+  name: string;
+  rating: number | null;
+  detail: string;
+}
+function BriefingProgramList({ title, tone, rows }: { title: string; tone: "up" | "down"; rows: BriefingProgramRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="rounded-2xl bg-zinc-50 p-4">
+      <p className={`mb-2 text-xs font-semibold ${tone === "up" ? "text-emerald-700" : "text-rose-700"}`}>{title}</p>
+      <ol className="space-y-1.5">
+        {rows.map((r, i) => (
+          <li key={i} className="flex items-baseline justify-between gap-2 text-sm">
+            <span className="min-w-0 truncate text-zinc-700">
+              {i + 1}. {r.name}
+            </span>
+            <span className="shrink-0 text-zinc-400">{r.detail}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 export default function ChannelDeepDive({ code }: { code: string }) {
   const [data, setData] = useState<ChannelData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -3327,6 +3421,108 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 문구도 맞춰서 "최근 1주" 대신 "선택 기간"으로.
   const opportunityRecentLabel = isRangeMode ? "선택 기간" : "최근 1주";
   const hourBlockStrength = summarizeHourBlockStrength(dowHourBlockPattern);
+
+  // ── Channel Intelligence Briefing 계산(2026-08-27, Phase 1) — 전부 이미 fetch된 값의 재사용.
+  // 단일 일자(오늘) 조회일 때만 의미가 있어(기간 모드는 "오늘 컨디션"이라는 개념 자체가 안 맞음)
+  // !showComparisonView일 때만 계산한다.
+  const fitScoreTagCounts = { STRENGTHEN: 0, KEEP: 0, MOVE: 0, REPLACE: 0, TEST: 0 };
+  for (const item of fitScoreItems ?? []) {
+    if (item.tag) fitScoreTagCounts[item.tag] += 1;
+  }
+  const channelHealth = !showComparisonView
+    ? computeChannelHealthScore({
+        ratingDeltaPct: narrativeSignal?.rating_delta_pct ?? null,
+        todayRank: narrativeSignal?.today_rank ?? null,
+        baselineAvgRank: narrativeSignal?.baseline_avg_rank ?? null,
+        fitScoreTagCounts,
+        rootCauseTriggered: data.rootCauseAlert?.triggered ?? false,
+        opportunityTriggered: data.opportunityAlert?.triggered ?? false,
+        daypartGapChanges: daypartOpportunity.map((d) => d.gap_change),
+      })
+    : null;
+
+  // KPI 5카드 — Rating/Share/Reach/시청시간은 current vs dod(전일) 실측 비교, 순위는 4주 평균
+  // 대비(narrativeSignal이 이미 계산해 주는 값). share/reach/시청시간의 "전일 대비 %"는
+  // rating_change_pct와 동일한 산식(그냥 나눗셈)을 여기서 한 번 더 적용할 뿐 새 조회는 없다.
+  function pctDelta(curr: number | null | undefined, prev: number | null | undefined): number | null {
+    if (curr === null || curr === undefined || prev === null || prev === undefined || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  }
+  const kpiCards: KpiCardSpec[] = !showComparisonView && current
+    ? [
+        {
+          label: "시청률",
+          value: fmtR(current.rating),
+          deltaLabel: dod?.rating_change_pct != null ? `${Math.abs(dod.rating_change_pct).toFixed(1)}% (전일 대비)` : null,
+          deltaDirection: dod?.rating_change_pct != null ? (dod.rating_change_pct >= 0 ? "up" : "down") : null,
+        },
+        {
+          label: "점유율",
+          value: current.share !== null ? `${current.share.toFixed(2)}%` : "—",
+          deltaLabel: (() => {
+            const d = pctDelta(current.share, dod?.share);
+            return d !== null ? `${Math.abs(d).toFixed(1)}% (전일 대비)` : null;
+          })(),
+          deltaDirection: (() => {
+            const d = pctDelta(current.share, dod?.share);
+            return d === null ? null : d >= 0 ? "up" : "down";
+          })(),
+        },
+        {
+          label: "도달율",
+          value: current.reach !== null ? `${current.reach.toFixed(2)}%` : "—",
+          deltaLabel: (() => {
+            const d = pctDelta(current.reach, dod?.reach);
+            return d !== null ? `${Math.abs(d).toFixed(1)}% (전일 대비)` : null;
+          })(),
+          deltaDirection: (() => {
+            const d = pctDelta(current.reach, dod?.reach);
+            return d === null ? null : d >= 0 ? "up" : "down";
+          })(),
+        },
+        {
+          label: "시청시간",
+          value: fmtSeconds(current.time_spent_seconds),
+          deltaLabel: (() => {
+            const d = pctDelta(current.time_spent_seconds, dod?.time_spent_seconds);
+            return d !== null ? `${Math.abs(d).toFixed(1)}% (전일 대비)` : null;
+          })(),
+          deltaDirection: (() => {
+            const d = pctDelta(current.time_spent_seconds, dod?.time_spent_seconds);
+            return d === null ? null : d >= 0 ? "up" : "down";
+          })(),
+        },
+        {
+          label: "순위",
+          value: narrativeSignal?.today_rank != null ? `${narrativeSignal.today_rank}위` : "—",
+          deltaLabel: narrativeSignal?.baseline_avg_rank != null ? `평소 ${narrativeSignal.baseline_avg_rank.toFixed(1)}위 (4주 평균)` : null,
+          deltaDirection:
+            narrativeSignal?.today_rank != null && narrativeSignal?.baseline_avg_rank != null
+              ? narrativeSignal.baseline_avg_rank - narrativeSignal.today_rank >= 0
+                ? "up"
+                : "down"
+              : null,
+        },
+      ]
+    : [];
+
+  // Biggest Win / Biggest Weakness — daypartOpportunity(경쟁채널 대비 격차 변화) 중 최댓값/최솟값.
+  const validDayparts = daypartOpportunity.filter((d) => d.gap_change !== null);
+  const winDaypart = validDayparts.length > 0 ? validDayparts.reduce((a, b) => ((b.gap_change ?? -Infinity) > (a.gap_change ?? -Infinity) ? b : a)) : null;
+  const weaknessDaypart = validDayparts.length > 0 ? validDayparts.reduce((a, b) => ((b.gap_change ?? Infinity) < (a.gap_change ?? Infinity) ? b : a)) : null;
+
+  // Top Programs / Weak Programs — 이미 있는 topPrograms(시청률 상위)·fitScoreItems(REPLACE 태그) 재사용.
+  const briefingTopPrograms: BriefingProgramRow[] = topPrograms.slice(0, 3).map((p) => ({
+    name: p.program_name,
+    rating: p.avg_rating,
+    detail: `${fmtR(p.avg_rating)}${p.avg_rating !== null && p.avg_rating >= 0 ? "" : ""}`,
+  }));
+  const briefingWeakPrograms: BriefingProgramRow[] = (fitScoreItems ?? [])
+    .filter((f) => f.tag === "REPLACE" && f.programs?.canonical_name)
+    .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
+    .slice(0, 3)
+    .map((f) => ({ name: f.programs!.canonical_name, rating: null, detail: `Fit ${fmt(f.fit_score, 0)}` }));
+
   // 사용자 지시(2026-08-21, [특화 디자인] ENA STORY): "stripe.com을 참고해 분홍·보라·하양·
   // 주황(최소한) 조합의 정교한 그라데이션으로 독자적이고 감각적인 페이지를 구성" — stripe.com을
   // 직접 열어 실제 그라디언트 색상을 실측(rgb(127,125,252)/rgb(244,75,204)/rgb(255,207,94) 등
@@ -3386,6 +3582,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   )}
                 </p>
                 {showComparisonView && <p className="text-sm text-white/70">{isComparisonPreset ? "이번 기간 평균" : "선택 기간 평균"}</p>}
+                {/* Channel Health Score(2026-08-27, Phase 1) — 단일 일자 조회일 때만. */}
+                {channelHealth && (
+                  <div className="mt-2">
+                    <HealthScoreBadge health={channelHealth} />
+                  </div>
+                )}
               </div>
             </div>
             {/* 기간 설정(사용자 지시 2026-08-20, 두 차례 반영): 오늘/어제/지난 7일/지난 1달/연간
@@ -3464,6 +3666,50 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </p>
           )}
         </div>
+
+        {/* Channel Intelligence Briefing(2026-08-27, "Channel Intelligence Report" 마스터 프롬프트
+            §9~15 반영, Phase 1) — KPI 5카드 + Biggest Win/Weakness + Top/Weak Programs. 전부 이미
+            fetch된 값 재사용(계산부는 위 kpiCards/winDaypart/weaknessDaypart/briefingTopPrograms/
+            briefingWeakPrograms). 단일 일자 조회일 때만 표시 — 기간 모드는 아래 WHAT HAPPENED?
+            표가 이미 그 역할을 한다. */}
+        {!showComparisonView && kpiCards.length > 0 && (
+          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+            <h2 className={`${SECTION_TITLE_P2} mb-3`}>KPI 스코어카드</h2>
+            {/* Health Score 근거(5축) — 사용자가 헤더 배지에 마우스를 올리지 않아도 바로 보이도록
+                항상 펼쳐 표시(AI Insight마다 근거를 함께 보여준다는 원칙). */}
+            {channelHealth && (
+              <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1">
+                {channelHealth.axes.map((a) => (
+                  <span key={a.key} className="flex items-center gap-1.5 text-xs text-zinc-500" title={a.reason}>
+                    <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: verdictColor(a.verdict) }} />
+                    {a.label}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {kpiCards.map((spec) => (
+                <KpiCard key={spec.label} spec={spec} />
+              ))}
+            </div>
+            {(winDaypart || weaknessDaypart) && (
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {winDaypart && winDaypart.gap_change !== null && (
+                  <WinWeaknessCard spec={{ kind: "win", daypartLabel: DAYPART_LABEL[winDaypart.daypart] ?? winDaypart.daypart, gapChange: winDaypart.gap_change }} />
+                )}
+                {weaknessDaypart && weaknessDaypart.gap_change !== null && (
+                  <WinWeaknessCard spec={{ kind: "weakness", daypartLabel: DAYPART_LABEL[weaknessDaypart.daypart] ?? weaknessDaypart.daypart, gapChange: weaknessDaypart.gap_change }} />
+                )}
+              </div>
+            )}
+            {(briefingTopPrograms.length > 0 || briefingWeakPrograms.length > 0) && (
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <BriefingProgramList title="TOP PROGRAMS" tone="up" rows={briefingTopPrograms} />
+                <BriefingProgramList title="WEAK PROGRAMS(REPLACE 태그)" tone="down" rows={briefingWeakPrograms} />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 사용자 지시(2026-08-26): "Executive Summary 한 문단을 페이지 최상단에... PD가 스크롤
             없이 '오늘 이 채널의 결론'부터 보게" — 원래 WHAT TO SCHEDULE? 카드 안 깊숙이 있던
