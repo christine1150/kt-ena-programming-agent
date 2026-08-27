@@ -527,6 +527,10 @@ export async function GET(request: Request) {
   const daypartOpportunity = daypartOpportunityRes.data;
   const hourBlockOpportunity = hourBlockOpportunityRes.data;
   const ytdAvgRating: number | null = (ytdAvgRes.data as { avg_rating: number | null }[] | null)?.[0]?.avg_rating ?? null;
+  // Phase B(2026-08-27, Annual Rank Snapshot 섹션용) — 같은 응답의 avg_rating만 쓰던 것에서
+  // avg_rank도 함께 꺼낸다. rankTargetId(랭킹 시트 표기로 이미 올바르게 해석된 target_id)로 부른
+  // 같은 RPC라 avg_rank도 유효한 값 — 새 조회 없음.
+  const ytdAvgRank: number | null = (ytdAvgRes.data as { avg_rank: number | null }[] | null)?.[0]?.avg_rank ?? null;
   const dowHourBlockPattern = dowHourBlockPatternRes.data;
   const topPrograms = topProgramsRes.data;
   const periodDemographics = periodDemographicsRes.data;
@@ -766,6 +770,11 @@ export async function GET(request: Request) {
     daypartOpportunity: daypartOpportunity ?? [],
     hourBlockOpportunity: hourBlockOpportunity ?? [],
     ytdAvgRating,
+    ytdAvgRank,
+    // Phase B(2026-08-27) — /api/report/channel이 Quarterly/Annual Report의 주별/월별 추이·
+    // 분기별 스냅샷 SQL을 직접 부를 때 타깃 동의어 해석을 다시 하지 않도록, 이미 위에서 계산된
+    // 최종 타깃 라벨을 그대로 노출한다(새 계산 없음).
+    matchedTargetLabel,
     affinity: { compareChannelCode, items: affinity },
     rootCauseAlert,
     opportunityAlert,

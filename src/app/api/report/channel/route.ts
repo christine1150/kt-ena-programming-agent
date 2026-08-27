@@ -14,8 +14,9 @@
 //   get_channel_period_program_movers 등 이미 기간에 맞춰 계산된 값을 재조립.
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/adminAuth";
-import { buildChannelReportData, buildChannelPeriodReportData } from "@/lib/channelReport";
-import { buildPeriodReportSummaryViaLlm } from "@/lib/periodReportLlm";
+import { supabase } from "@/lib/supabase";
+import { buildChannelReportData, buildChannelPeriodReportData, type ReportTier, type FitScoreItem } from "@/lib/channelReport";
+import { buildPeriodReportSummaryViaLlm, buildStrategicImplicationsViaLlm } from "@/lib/periodReportLlm";
 
 export async function GET(request: Request) {
   const session = await getCurrentSession();
@@ -32,6 +33,12 @@ export async function GET(request: Request) {
   const priorDateTo = searchParams.get("priorDateTo");
   const periodLabel = searchParams.get("periodLabel") ?? "선택 기간";
   const comparisonLabel = searchParams.get("comparisonLabel");
+  // Phase B(2026-08-27, 사용자 지시: "Quarterly Report·Annual Report... 진행", 대상 기간은
+  // "QTD/YTD 그대로" 쓰기로 확정) — ChannelDeepDive.tsx가 periodPreset을 그대로 실어 보낸다.
+  // preset이 "qtd"/"ytd"일 때만 Quarterly/Annual 전용 섹션을 채우고, 나머지 프리셋은 Phase A와
+  // 완전히 동일하게 동작(reportTier "standard").
+  const preset = searchParams.get("preset");
+  const reportTier: ReportTier = preset === "qtd" ? "quarterly" : preset === "ytd" ? "annual" : "standard";
   if (!code || (!date && !(dateFrom && dateTo))) {
     return NextResponse.json({ ok: false, message: "code와, date 또는 dateFrom/dateTo 파라미터가 필요합니다." }, { status: 400 });
   }
@@ -59,6 +66,40 @@ export async function GET(request: Request) {
   };
 
   if (isPeriodMode) {
+    // Phase B: Quarterly(preset=qtd)/Annual(preset=ytd) tier만 추가로 필요한 데이터를 모은다 —
+    // WTD/MTD/last7/last30/DoD~YoY/직접 선택은 이 블록을 건너뛰어 Phase A와 완전히 동일하게 동작.
+    let fitScoreItems: FitScoreItem[] = [];
+    let trendSeries: { period_start: string; avg_rating: number | null }[] = [];
+    let trendGranularity: "week" | "month" | null = null;
+    let quarterlyBreakdown: { quarter_num: number; quarter_date_from: string; quarter_date_to: string; avg_rating: number | null; days_with_data: number }[] = [];
+    let annualRank: { avg_rank: number | null; avg_rating: number | null } | null = null;
+
+    if (reportTier !== "standard" && dashboardJson.matchedTargetLabel) {
+      const targetLabel = dashboardJson.matchedTargetLabel as string;
+      const [fitScoreRes, trendRes] = await Promise.all([
+        // Program Portfolio Review — 일간 모드와 같은 API 재사용(Fit Score는 항상 "최근 12주"
+        // 기준이라 기간 프리셋과 무관, dateTo를 기준일로 넘기면 됨).
+        fetch(`${origin}/api/scheduling/fit-score?code=${code}&date=${dateTo}`, forward).then((r) => r.json()),
+        reportTier === "quarterly"
+          ? supabase.rpc("get_channel_weekly_rating_trend", { p_channel_code: code, p_target_label: targetLabel, p_date_from: dateFrom, p_date_to: dateTo })
+          : supabase.rpc("get_channel_monthly_rating_trend", { p_channel_code: code, p_target_label: targetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
+      ]);
+      fitScoreItems = fitScoreRes.ok ? (fitScoreRes.items ?? []) : [];
+      trendSeries = (trendRes.data ?? []).map((row: Record<string, unknown>) => ({
+        period_start: (row.week_start ?? row.month_start) as string,
+        avg_rating: row.avg_rating as number | null,
+      }));
+      trendGranularity = reportTier === "quarterly" ? "week" : "month";
+
+      if (reportTier === "annual") {
+        const [breakdownRes] = await Promise.all([supabase.rpc("get_channel_quarterly_breakdown", { p_channel_code: code, p_target_label: targetLabel, p_date_from: dateFrom, p_date_to: dateTo })]);
+        quarterlyBreakdown = breakdownRes.data ?? [];
+        // Annual Rank Snapshot — Page 1 히어로 카드와 정확히 같은 값(dashboardJson.ytdAvgRating/
+        // ytdAvgRank, 이미 1/1~오늘로 계산됨) 재사용. 새 조회 없음.
+        annualRank = { avg_rank: dashboardJson.ytdAvgRank ?? null, avg_rating: dashboardJson.ytdAvgRating ?? null };
+      }
+    }
+
     const report = buildChannelPeriodReportData(channel, dashboardJson.dateFrom, dashboardJson.dateTo, periodLabel, comparisonLabel, {
       periodReport: dashboardJson.periodReport ?? null,
       periodProgramMovers: dashboardJson.periodProgramMovers ?? [],
@@ -66,7 +107,16 @@ export async function GET(request: Request) {
       topPrograms: dashboardJson.topPrograms ?? [],
       competitorPeriodTopPrograms: dashboardJson.competitorPeriodTopPrograms ?? [],
       aiSummary: null,
+      reportTier,
+      fitScoreItems,
+      trendSeries,
+      trendGranularity,
+      quarterlyBreakdown,
+      annualRank,
+      periodDemographics: dashboardJson.periodDemographics ?? [],
+      strategicImplications: null,
     });
+
     // AI Executive Summary(기간 모드 전용, 새 계산 없음 — 위에서 이미 조립한 값만 근거로 준다).
     const aiSummary = await buildPeriodReportSummaryViaLlm({
       channelName: channel.name,
@@ -80,12 +130,32 @@ export async function GET(request: Request) {
       bestRating: report.bestDay?.rating ?? null,
       worstDate: report.worstDay?.date ?? null,
       worstRating: report.worstDay?.rating ?? null,
-      growthDrivers: report.growthDrivers.map((d) => ({ name: d.name, ratingDelta: d.ratingDelta })),
-      weaknessDrivers: report.weaknessDrivers.map((d) => ({ name: d.name, ratingDelta: d.ratingDelta })),
+      growthDrivers: report.growthDrivers.map((d) => ({ name: d.name, ratingDelta: d.ratingDelta, isNewlyScheduled: d.priorAvgRating === null })),
+      weaknessDrivers: report.weaknessDrivers.map((d) => ({ name: d.name, ratingDelta: d.ratingDelta, isNewlyScheduled: d.priorAvgRating === null })),
       winDaypart: report.win?.daypartLabel ?? null,
       weaknessDaypart: report.weakness?.daypartLabel ?? null,
     });
-    return NextResponse.json({ ok: true, mode: "period", report: { ...report, aiSummary } });
+
+    // Strategic Implications(Quarterly/Annual tier 전용) — Turning Points까지 근거로 준 확장 종합.
+    let strategicImplications: string | null = null;
+    if (reportTier !== "standard") {
+      strategicImplications = await buildStrategicImplicationsViaLlm({
+        channelName: channel.name,
+        periodLabel,
+        reportTier,
+        avgRating: dashboardJson.periodReport?.avg_rating ?? null,
+        priorPeriodChangePct: dashboardJson.periodReport?.prior_period_change_pct ?? null,
+        baselineChangePct: dashboardJson.periodReport?.baseline_change_pct ?? null,
+        turningPoints: report.turningPoints.map((t) => ({ periodStart: t.periodStart, direction: t.direction, changePct: t.changePct })),
+        growthDrivers: report.growthDrivers.map((d) => ({ name: d.name, ratingDelta: d.ratingDelta })),
+        weaknessDrivers: report.weaknessDrivers.map((d) => ({ name: d.name, ratingDelta: d.ratingDelta })),
+        winDaypart: report.win?.daypartLabel ?? null,
+        weaknessDaypart: report.weakness?.daypartLabel ?? null,
+        topCompetitor: report.competitorTopPrograms[0] ? { name: report.competitorTopPrograms[0].competitorName, rating: report.competitorTopPrograms[0].rating } : null,
+      });
+    }
+
+    return NextResponse.json({ ok: true, mode: "period", report: { ...report, aiSummary, strategicImplications } });
   }
 
   const fitScoreRes = await fetch(`${origin}/api/scheduling/fit-score?code=${code}&date=${date}`, forward);

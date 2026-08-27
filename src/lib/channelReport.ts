@@ -49,6 +49,31 @@ export interface ReportMomentumRow {
   momentum: number;
   label: "RISING" | "STABLE" | "DECLINING";
 }
+export type FitScoreItem = {
+  program_id: string;
+  fit_score: number | null;
+  tag: "STRENGTHEN" | "KEEP" | "MOVE" | "REPLACE" | "TEST" | null;
+  programs: { canonical_name: string } | null;
+};
+// buildChannelReportData(일간)/buildChannelPeriodReportData(Quarterly·Annual tier) 공용 —
+// Fit Score REPLACE 태그 중 점수가 가장 낮은 프로그램들. 새 판정 규칙 없음(이미 있는 fit_score/
+// tag를 그대로 재사용, WHAT TO SCHEDULE? 섹션과 동일 기준).
+function computeWeakPrograms(fitScoreItems: FitScoreItem[], limit: number): ReportProgramRow[] {
+  return fitScoreItems
+    .filter((f) => f.tag === "REPLACE" && f.programs?.canonical_name)
+    .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
+    .slice(0, limit)
+    .map((f) => ({ name: f.programs!.canonical_name, detail: `Fit ${f.fit_score !== null ? f.fit_score.toFixed(0) : "—"}` }));
+}
+// Fit Score 상위(STRENGTHEN/KEEP) — Program Portfolio Review 섹션의 "Top" 쪽. 역시 이미 있는
+// fit_score/tag 재사용, 새 판정 규칙 없음.
+function computeStrongPrograms(fitScoreItems: FitScoreItem[], limit: number): ReportProgramRow[] {
+  return fitScoreItems
+    .filter((f) => (f.tag === "STRENGTHEN" || f.tag === "KEEP") && f.programs?.canonical_name)
+    .sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0))
+    .slice(0, limit)
+    .map((f) => ({ name: f.programs!.canonical_name, detail: `Fit ${f.fit_score !== null ? f.fit_score.toFixed(0) : "—"}` }));
+}
 export interface ChannelReportData {
   channel: { code: string; name: string; primaryTarget: string | null; market: string | null };
   asOfDate: string;
@@ -163,11 +188,7 @@ export function buildChannelReportData(
   const weaknessRow = validDayparts.length > 0 ? validDayparts.reduce((a, b) => ((b.gap_change ?? Infinity) < (a.gap_change ?? Infinity) ? b : a)) : null;
 
   const topPrograms: ReportProgramRow[] = dashboard.topPrograms.slice(0, 3).map((p) => ({ name: p.program_name, detail: fmtR(p.avg_rating) }));
-  const weakPrograms: ReportProgramRow[] = fitScoreItems
-    .filter((f) => f.tag === "REPLACE" && f.programs?.canonical_name)
-    .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
-    .slice(0, 3)
-    .map((f) => ({ name: f.programs!.canonical_name, detail: `Fit ${f.fit_score !== null ? f.fit_score.toFixed(0) : "—"}` }));
+  const weakPrograms: ReportProgramRow[] = computeWeakPrograms(fitScoreItems, 3);
 
   const momentum: ReportMomentumRow[] = momentumItems
     .filter((m): m is typeof m & { momentum: number; label: "RISING" | "STABLE" | "DECLINING" } => m.momentum !== null && m.label !== null)
@@ -224,6 +245,51 @@ export interface PeriodMoverCard {
   priorAvgRating: number | null;
   ratingDelta: number | null;
 }
+
+// Phase B(2026-08-27, 사용자 지시: "Quarterly Report(12섹션)·Annual Report(15섹션) 전용 CJ ENM
+// IR 문서와 Turning Point 자동 탐지 진행") — QTD/YTD 프리셋에서만 아래 확장 필드가 채워진다
+// (사용자 답변: 새 기간 선택 UI 없이 "지금 진행 중인 분기/연도 누적(QTD/YTD 그대로)"을 Quarterly/
+// Annual Report의 트리거로 삼음). WTD/MTD/last7/last30/DoD~YoY/직접 선택은 reportTier가 항상
+// "standard"이고 이 필드들은 빈 배열/null로 남아 Phase A 동작을 그대로 보존한다.
+export type ReportTier = "standard" | "quarterly" | "annual";
+
+export interface TurningPoint {
+  periodStart: string;
+  direction: "up" | "down";
+  changePct: number;
+  fromRating: number;
+  toRating: number;
+}
+// v1 휴리스틱(Health Score와 같은 설계 원칙 — "합리적으로 설계, 추후 조정 가능하게 열어둠"):
+// 이미 DB가 집계한 주/월별 평균 시청률 배열에서, 직전 포인트 대비 등락률이 임계값 이상인 지점을
+// "급변점"으로 라벨링만 한다(computeWinWeakness()와 같은 성격 — 시청률 자체는 재계산하지 않음).
+export function computeTurningPoints(series: { periodStart: string; rating: number | null }[], thresholdPct = 15): TurningPoint[] {
+  const points: TurningPoint[] = [];
+  for (let i = 1; i < series.length; i++) {
+    const prev = series[i - 1].rating;
+    const curr = series[i].rating;
+    if (prev === null || curr === null || prev === 0) continue;
+    const changePct = ((curr - prev) / prev) * 100;
+    if (Math.abs(changePct) >= thresholdPct) {
+      points.push({ periodStart: series[i].periodStart, direction: changePct >= 0 ? "up" : "down", changePct, fromRating: prev, toRating: curr });
+    }
+  }
+  return points.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct)).slice(0, 5);
+}
+
+export interface QuarterlyBreakdownRow {
+  quarterNum: number;
+  dateFrom: string;
+  dateTo: string;
+  avgRating: number | null;
+  daysWithData: number;
+}
+export interface AudienceHighlight {
+  label: string;
+  periodAvgRating: number | null;
+  deltaPct: number | null;
+}
+
 export interface ChannelPeriodReportData {
   channel: { code: string; name: string; primaryTarget: string | null; market: string | null };
   dateFrom: string;
@@ -231,6 +297,7 @@ export interface ChannelPeriodReportData {
   daysWithData: number;
   periodLabel: string; // "이번 분기 누적(QTD)" 등 — 프리셋 라벨을 호출부가 그대로 넘겨줌
   comparisonLabel: string | null; // "전분기" 등, 없으면 "직전 동일 길이 기간"
+  reportTier: ReportTier;
   kpis: PeriodKpiCard[];
   bestDay: { date: string; rating: number | null } | null;
   worstDay: { date: string; rating: number | null } | null;
@@ -241,6 +308,17 @@ export interface ChannelPeriodReportData {
   topPrograms: ReportProgramRow[];
   competitorTopPrograms: { competitorName: string; programName: string; rating: number | null }[];
   aiSummary: string | null;
+  // Quarterly/Annual tier 전용(standard tier에서는 빈 배열/null)
+  trendGranularity: "week" | "month" | null;
+  trendSeries: { periodStart: string; rating: number | null }[];
+  turningPoints: TurningPoint[];
+  quarterlyBreakdown: QuarterlyBreakdownRow[]; // annual tier만
+  annualRank: { avgRank: number | null; avgRating: number | null } | null; // annual tier만
+  newlyScheduledPrograms: PeriodMoverCard[];
+  audienceHighlights: AudienceHighlight[];
+  portfolioTopPrograms: ReportProgramRow[];
+  portfolioWeakPrograms: ReportProgramRow[];
+  strategicImplications: string | null;
 }
 
 export function buildChannelPeriodReportData(
@@ -270,9 +348,20 @@ export function buildChannelPeriodReportData(
     // 실 서버 확인(2026-08-27) 중 "경쟁채널 Top Programs" 값이 전부 "—"로 비는 버그로 발견.
     competitorPeriodTopPrograms: { competitor_name: string; program_name: string; program_avg_rating: number | null }[];
     aiSummary: string | null;
+    // Phase B(Quarterly/Annual tier 전용, 전부 optional — standard tier는 호출부가 넘기지 않음)
+    reportTier?: ReportTier;
+    fitScoreItems?: FitScoreItem[];
+    trendSeries?: { period_start: string; avg_rating: number | null }[]; // weekly/monthly trend RPC 그대로
+    trendGranularity?: "week" | "month" | null;
+    quarterlyBreakdown?: { quarter_num: number; quarter_date_from: string; quarter_date_to: string; avg_rating: number | null; days_with_data: number }[];
+    annualRank?: { avg_rank: number | null; avg_rating: number | null } | null;
+    // get_channel_period_demographics 그대로 — 이미 기간 인식형(dateFrom~dateTo 평균 + 전 기간 대비 등락).
+    periodDemographics?: { target_label: string; period_avg_rating: number | null; prior_avg_rating: number | null; delta_pct: number | null }[];
+    strategicImplications?: string | null;
   }
 ): ChannelPeriodReportData {
   const pr = dashboard.periodReport;
+  const reportTier: ReportTier = dashboard.reportTier ?? "standard";
   // get_rating_period_report는 시청률에만 두 비교값(직전 동일 기간 대비/최근 12주 평균 대비)을
   // 계산해 돌려준다 — 점유율/도달율/시청시간은 현재 값만 준다(그 두 축 비교는 이 RPC가 하지
   // 않아 억지로 만들지 않는다, CLAUDE.md 원칙).
@@ -287,16 +376,49 @@ export function buildChannelPeriodReportData(
 
   const { win, weakness } = computeWinWeakness(dashboard.daypartOpportunity);
   const movers = dashboard.periodProgramMovers.filter((m) => m.rating_delta !== null);
+  // Quarterly/Annual tier는 Growth/Weakness Driver를 3개까지 보여준다(계획서 H절) — standard
+  // tier(Phase A)는 기존 그대로 2개 유지, 회귀 없음.
+  const driverLimit = reportTier === "standard" ? 2 : 3;
   const growthDrivers: PeriodMoverCard[] = movers
     .filter((m) => (m.rating_delta ?? 0) > 0)
     .sort((a, b) => (b.rating_delta ?? 0) - (a.rating_delta ?? 0))
-    .slice(0, 2)
+    .slice(0, driverLimit)
     .map((m) => ({ name: m.canonical_name, periodAvgRating: m.period_avg_rating, priorAvgRating: m.prior_avg_rating, ratingDelta: m.rating_delta }));
   const weaknessDrivers: PeriodMoverCard[] = movers
     .filter((m) => (m.rating_delta ?? 0) < 0)
     .sort((a, b) => (a.rating_delta ?? 0) - (b.rating_delta ?? 0))
-    .slice(0, 2)
+    .slice(0, driverLimit)
     .map((m) => ({ name: m.canonical_name, periodAvgRating: m.period_avg_rating, priorAvgRating: m.prior_avg_rating, ratingDelta: m.rating_delta }));
+
+  // Annual "Year in Review" — 이번 기간엔 있고 직전 기간엔 없던(prior_avg_rating null, full outer
+  // join 미매칭) 프로그램. get_channel_period_program_movers가 이미 계산해 돌려주는 값 그대로,
+  // 새 판정 규칙 없음.
+  const newlyScheduledPrograms: PeriodMoverCard[] = dashboard.periodProgramMovers
+    .filter((m) => m.prior_avg_rating === null && m.period_avg_rating !== null)
+    .sort((a, b) => (b.period_avg_rating ?? 0) - (a.period_avg_rating ?? 0))
+    .slice(0, 5)
+    .map((m) => ({ name: m.canonical_name, periodAvgRating: m.period_avg_rating, priorAvgRating: null, ratingDelta: m.rating_delta }));
+
+  const trendSeries = (dashboard.trendSeries ?? []).map((t) => ({ periodStart: t.period_start, rating: t.avg_rating }));
+  const turningPoints = trendSeries.length > 0 ? computeTurningPoints(trendSeries) : [];
+
+  // Audience Composition(Quarterly/Annual) — periodDemographics는 이미 기간 인식형(WHO IS
+  // WATCHING?이 클라이언트에서 쓰는 것과 같은 원본 데이터). "가장 많이 본" 상위 2개 + "등락폭이
+  // 가장 큰" 상위 2개를 뽑는다 — ChannelDeepDive.tsx의 WHO IS WATCHING? 타일 선정과 같은 원칙,
+  // 새 계산 없음(이미 있는 period_avg_rating/delta_pct 정렬만).
+  const demo = dashboard.periodDemographics ?? [];
+  const mostWatched = [...demo].sort((a, b) => (b.period_avg_rating ?? -Infinity) - (a.period_avg_rating ?? -Infinity)).slice(0, 2);
+  const mostMoved = [...demo]
+    .filter((d) => !mostWatched.some((m) => m.target_label === d.target_label))
+    .sort((a, b) => Math.abs(b.delta_pct ?? 0) - Math.abs(a.delta_pct ?? 0))
+    .slice(0, 2);
+  const audienceHighlights: AudienceHighlight[] = [...mostWatched, ...mostMoved].map((d) => ({
+    label: d.target_label,
+    periodAvgRating: d.period_avg_rating,
+    deltaPct: d.delta_pct,
+  }));
+
+  const fitScoreItems = dashboard.fitScoreItems ?? [];
 
   return {
     channel,
@@ -305,6 +427,7 @@ export function buildChannelPeriodReportData(
     daysWithData: pr?.days_with_data ?? 0,
     periodLabel,
     comparisonLabel,
+    reportTier,
     kpis,
     bestDay: pr?.best_date ? { date: pr.best_date, rating: pr.best_rating } : null,
     worstDay: pr?.worst_date ? { date: pr.worst_date, rating: pr.worst_rating } : null,
@@ -315,5 +438,21 @@ export function buildChannelPeriodReportData(
     topPrograms: dashboard.topPrograms.slice(0, 5).map((p) => ({ name: p.program_name, detail: fmtR(p.avg_rating) })),
     competitorTopPrograms: dashboard.competitorPeriodTopPrograms.slice(0, 5).map((p) => ({ competitorName: p.competitor_name, programName: p.program_name, rating: p.program_avg_rating })),
     aiSummary: dashboard.aiSummary,
+    trendGranularity: dashboard.trendGranularity ?? null,
+    trendSeries,
+    turningPoints,
+    quarterlyBreakdown: (dashboard.quarterlyBreakdown ?? []).map((q) => ({
+      quarterNum: q.quarter_num,
+      dateFrom: q.quarter_date_from,
+      dateTo: q.quarter_date_to,
+      avgRating: q.avg_rating,
+      daysWithData: q.days_with_data,
+    })),
+    annualRank: dashboard.annualRank ? { avgRank: dashboard.annualRank.avg_rank, avgRating: dashboard.annualRank.avg_rating } : null,
+    newlyScheduledPrograms,
+    audienceHighlights,
+    portfolioTopPrograms: computeStrongPrograms(fitScoreItems, 3),
+    portfolioWeakPrograms: computeWeakPrograms(fitScoreItems, 3),
+    strategicImplications: dashboard.strategicImplications ?? null,
   };
 }

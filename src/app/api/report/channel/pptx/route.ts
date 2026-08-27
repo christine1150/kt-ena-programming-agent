@@ -84,7 +84,8 @@ function buildPeriodSlides(pres: PptxGenJS, report: ChannelPeriodReportData) {
   const cover = pres.addSlide();
   cover.background = { color: NAVY };
   cover.addText(report.channel.name, { x: 0.6, y: 1.4, w: 8.8, h: 0.9, fontSize: 36, bold: true, color: "FFFFFF" });
-  cover.addText(`${report.periodLabel} · ${report.dateFrom} ~ ${report.dateTo}`, { x: 0.6, y: 2.2, w: 8.8, h: 0.5, fontSize: 16, color: "CBD5E1" });
+  const tierSuffix = report.reportTier === "quarterly" ? " — Quarterly Report" : report.reportTier === "annual" ? " — Annual Report" : "";
+  cover.addText(`${report.periodLabel}${tierSuffix} · ${report.dateFrom} ~ ${report.dateTo}`, { x: 0.6, y: 2.2, w: 8.8, h: 0.5, fontSize: 16, color: "CBD5E1" });
   cover.addText("KT ENA 편성 AI Agent", { x: 0.6, y: 4.9, w: 8.8, h: 0.4, fontSize: 12, italic: true, color: "94A3B8" });
 
   if (report.aiSummary) {
@@ -152,6 +153,103 @@ function buildPeriodSlides(pres: PptxGenJS, report: ChannelPeriodReportData) {
         { x: 5.1, y: y + 0.4, w: 4.3, h: 3, fontSize: 12, color: "27272A", valign: "top" }
       );
     }
+  }
+
+  // Phase B(2026-08-27) — Quarterly(12섹션)/Annual(15섹션) 확장 슬라이드. report/[date]/page.tsx의
+  // PeriodExtendedSections와 같은 순서·같은 데이터, PPT 표 형태로만 다시 그린다.
+  if (report.reportTier !== "standard") {
+    if (report.trendSeries.length > 0) {
+      const s = pres.addSlide();
+      s.addText(report.trendGranularity === "week" ? "주별 추이(Weekly Trend)" : "월별 추이(Monthly Trend)", { x: 0.5, y: 0.35, w: 9, h: 0.6, fontSize: 24, bold: true, color: ACCENT });
+      const rows = report.trendSeries.map((t) => [
+        { text: t.periodStart, options: { fontSize: 12 } },
+        { text: t.rating !== null ? t.rating.toFixed(3) : "—", options: { fontSize: 12, align: "right" as const } },
+      ]);
+      s.addTable(rows, { x: 0.5, y: 1.1, w: 6, colW: [3, 3], fontSize: 12, border: { type: "solid", color: "E4E4E7", pt: 1 } });
+    }
+
+    const s = pres.addSlide();
+    s.addText("Turning Points", { x: 0.5, y: 0.35, w: 9, h: 0.6, fontSize: 24, bold: true, color: ACCENT });
+    if (report.turningPoints.length > 0) {
+      const rows = report.turningPoints.map((tp) => [
+        { text: tp.periodStart, options: { fontSize: 12 } },
+        { text: `${tp.fromRating.toFixed(3)} → ${tp.toRating.toFixed(3)}`, options: { fontSize: 12 } },
+        { text: `${tp.changePct >= 0 ? "+" : ""}${tp.changePct.toFixed(1)}%`, options: { fontSize: 12, align: "right" as const, color: tp.direction === "up" ? "059669" : "E11D48" } },
+      ]);
+      s.addTable(rows, { x: 0.5, y: 1.1, w: 9, colW: [2, 4.5, 2.5], fontSize: 12, border: { type: "solid", color: "E4E4E7", pt: 1 } });
+    } else {
+      s.addText("이 기간엔 직전 구간 대비 15% 이상 등락한 급변점이 감지되지 않았습니다.", { x: 0.5, y: 1.1, w: 9, h: 0.6, fontSize: 14, color: "71717A" });
+    }
+
+    if (report.portfolioTopPrograms.length > 0 || report.portfolioWeakPrograms.length > 0) {
+      const ps = pres.addSlide();
+      ps.addText("Program Portfolio Review", { x: 0.5, y: 0.35, w: 9, h: 0.6, fontSize: 24, bold: true, color: ACCENT });
+      const py = 1.15;
+      ps.addText("Top(STRENGTHEN/KEEP)", { x: 0.5, y: py, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: "059669" });
+      ps.addText(report.portfolioTopPrograms.map((p) => `${p.name} — ${p.detail}`).join("\n"), { x: 0.5, y: py + 0.4, w: 4.3, h: 3, fontSize: 12, color: "27272A", valign: "top" });
+      ps.addText("Weak(REPLACE)", { x: 5.1, y: py, w: 4.3, h: 0.4, fontSize: 14, bold: true, color: "E11D48" });
+      ps.addText(report.portfolioWeakPrograms.map((p) => `${p.name} — ${p.detail}`).join("\n"), { x: 5.1, y: py + 0.4, w: 4.3, h: 3, fontSize: 12, color: "27272A", valign: "top" });
+    }
+
+    if (report.audienceHighlights.length > 0) {
+      const as_ = pres.addSlide();
+      as_.addText("Audience Composition", { x: 0.5, y: 0.35, w: 9, h: 0.6, fontSize: 24, bold: true, color: ACCENT });
+      const rows = report.audienceHighlights.map((a) => [
+        { text: a.label, options: { fontSize: 12 } },
+        { text: a.periodAvgRating !== null ? a.periodAvgRating.toFixed(3) : "—", options: { fontSize: 12, align: "right" as const } },
+        { text: a.deltaPct !== null ? `${a.deltaPct >= 0 ? "▲" : "▼"} ${Math.abs(a.deltaPct).toFixed(1)}%` : "—", options: { fontSize: 12, align: "right" as const, color: a.deltaPct !== null && a.deltaPct >= 0 ? "059669" : "E11D48" } },
+      ]);
+      as_.addTable(rows, { x: 0.5, y: 1.1, w: 6, colW: [3, 1.5, 1.5], fontSize: 12, border: { type: "solid", color: "E4E4E7", pt: 1 } });
+    }
+
+    if (report.reportTier === "annual" && report.quarterlyBreakdown.length > 0) {
+      const qs = pres.addSlide();
+      qs.addText("Quarterly Breakdown", { x: 0.5, y: 0.35, w: 9, h: 0.6, fontSize: 24, bold: true, color: ACCENT });
+      const rows = report.quarterlyBreakdown.map((q) => [
+        { text: `Q${q.quarterNum}`, options: { fontSize: 12, bold: true } },
+        { text: `${q.dateFrom} ~ ${q.dateTo}`, options: { fontSize: 12 } },
+        { text: q.avgRating !== null ? q.avgRating.toFixed(3) : "—", options: { fontSize: 12, align: "right" as const } },
+      ]);
+      qs.addTable(rows, { x: 0.5, y: 1.1, w: 9, colW: [1.5, 5, 2.5], fontSize: 12, border: { type: "solid", color: "E4E4E7", pt: 1 } });
+    }
+
+    if (report.reportTier === "annual" && (report.annualRank || report.newlyScheduledPrograms.length > 0)) {
+      const rs = pres.addSlide();
+      rs.addText("Annual Rank Snapshot · Year in Review", { x: 0.5, y: 0.35, w: 9, h: 0.6, fontSize: 24, bold: true, color: ACCENT });
+      let ry = 1.15;
+      if (report.annualRank) {
+        rs.addText(
+          `연초 누적 평균 시청률 ${report.annualRank.avgRating !== null ? report.annualRank.avgRating.toFixed(3) : "—"}${report.annualRank.avgRank !== null ? ` · 평균 순위 ${report.annualRank.avgRank.toFixed(1)}위` : ""}`,
+          { x: 0.5, y: ry, w: 9, h: 0.5, fontSize: 15, color: "27272A" }
+        );
+        ry += 0.7;
+      }
+      if (report.newlyScheduledPrograms.length > 0) {
+        rs.addText("신규 편성", { x: 0.5, y: ry, w: 9, h: 0.4, fontSize: 14, bold: true, color: "3A30DF" });
+        rs.addText(report.newlyScheduledPrograms.map((p) => `${p.name} — ${p.periodAvgRating !== null ? p.periodAvgRating.toFixed(3) : "—"}`).join("\n"), {
+          x: 0.5,
+          y: ry + 0.4,
+          w: 9,
+          h: 2,
+          fontSize: 12,
+          color: "27272A",
+          valign: "top",
+        });
+      }
+    }
+
+    if (report.strategicImplications) {
+      const ss = pres.addSlide();
+      ss.addText("Strategic Implications", { x: 0.5, y: 0.35, w: 9, h: 0.6, fontSize: 24, bold: true, color: ACCENT });
+      ss.addText(report.strategicImplications, { x: 0.5, y: 1.1, w: 9, h: 4, fontSize: 15, color: "27272A", valign: "top" });
+    }
+
+    const ds = pres.addSlide();
+    ds.addText("Data Notes & Exclusions", { x: 0.5, y: 0.35, w: 9, h: 0.6, fontSize: 24, bold: true, color: ACCENT });
+    ds.addText(
+      `표본 ${report.daysWithData}일 기준(Nielsen 시청률 데이터). FUNdex/Content Buzz(접근 경로 없음)와 개인 시청자 단위 이동(패널) 추적은 포함되지 않습니다. Turning Points는 직전 구간 대비 등락률 임계값(±15%) 기반 v1 휴리스틱입니다.`,
+      { x: 0.5, y: 1.1, w: 9, h: 2, fontSize: 12, color: "71717A", valign: "top" }
+    );
   }
 }
 

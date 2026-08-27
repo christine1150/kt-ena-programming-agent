@@ -76,8 +76,9 @@ function buildDailyDoc(report: ChannelReportData): (Paragraph | Table)[] {
 // (report/[date]/page.tsx)와 같은 섹션 순서(Executive Summary → 스코어 카드 → Growth/Weakness
 // Driver → Daypart Win/Weakness → Top Programs/경쟁 비교).
 function buildPeriodDoc(report: ChannelPeriodReportData): (Paragraph | Table)[] {
+  const tierSuffix = report.reportTier === "quarterly" ? " — Quarterly Report" : report.reportTier === "annual" ? " — Annual Report" : "";
   const children: (Paragraph | Table)[] = [
-    new Paragraph({ text: `${report.channel.name} — ${report.periodLabel}`, heading: HeadingLevel.TITLE }),
+    new Paragraph({ text: `${report.channel.name} — ${report.periodLabel}${tierSuffix}`, heading: HeadingLevel.TITLE }),
     new Paragraph({ text: `${report.dateFrom} ~ ${report.dateTo}(표본 ${report.daysWithData}일) · 타깃 ${report.channel.primaryTarget ?? "—"}`, spacing: { after: 300 } }),
   ];
   if (report.aiSummary) {
@@ -123,6 +124,61 @@ function buildPeriodDoc(report: ChannelPeriodReportData): (Paragraph | Table)[] 
     children.push(new Paragraph({ text: "경쟁채널 Top Programs", heading: HeadingLevel.HEADING_1, spacing: { before: 300 } }));
     for (const p of report.competitorTopPrograms) children.push(new Paragraph({ text: `· ${p.competitorName} — ${p.programName}(${p.rating?.toFixed(3) ?? "—"})` }));
   }
+
+  // Phase B(2026-08-27) — Quarterly(12섹션)/Annual(15섹션) 확장. report/[date]/page.tsx의
+  // PeriodExtendedSections·pptx/route.ts의 확장 슬라이드와 같은 순서·데이터.
+  if (report.reportTier !== "standard") {
+    if (report.trendSeries.length > 0) {
+      children.push(new Paragraph({ text: report.trendGranularity === "week" ? "주별 추이(Weekly Trend)" : "월별 추이(Monthly Trend)", heading: HeadingLevel.HEADING_1, spacing: { before: 300 } }));
+      for (const t of report.trendSeries) children.push(new Paragraph({ text: `${t.periodStart}: ${t.rating !== null ? t.rating.toFixed(3) : "—"}` }));
+    }
+    children.push(new Paragraph({ text: "Turning Points", heading: HeadingLevel.HEADING_1, spacing: { before: 300 } }));
+    if (report.turningPoints.length > 0) {
+      for (const tp of report.turningPoints)
+        children.push(
+          new Paragraph({ text: `${tp.direction === "up" ? "▲" : "▼"} ${tp.periodStart}: ${tp.fromRating.toFixed(3)} → ${tp.toRating.toFixed(3)} (${tp.changePct >= 0 ? "+" : ""}${tp.changePct.toFixed(1)}%)` })
+        );
+    } else {
+      children.push(new Paragraph({ children: [new TextRun({ text: "이 기간엔 직전 구간 대비 15% 이상 등락한 급변점이 감지되지 않았습니다.", italics: true })] }));
+    }
+    if (report.portfolioTopPrograms.length > 0 || report.portfolioWeakPrograms.length > 0) {
+      children.push(new Paragraph({ text: "Program Portfolio Review", heading: HeadingLevel.HEADING_1, spacing: { before: 300 } }));
+      for (const p of report.portfolioTopPrograms) children.push(new Paragraph({ text: `· (Top) ${p.name} — ${p.detail}` }));
+      for (const p of report.portfolioWeakPrograms) children.push(new Paragraph({ text: `· (Weak) ${p.name} — ${p.detail}` }));
+    }
+    if (report.audienceHighlights.length > 0) {
+      children.push(new Paragraph({ text: "Audience Composition", heading: HeadingLevel.HEADING_1, spacing: { before: 300 } }));
+      for (const a of report.audienceHighlights)
+        children.push(new Paragraph({ text: `· ${a.label} — ${a.periodAvgRating !== null ? a.periodAvgRating.toFixed(3) : "—"}${a.deltaPct !== null ? ` (${a.deltaPct >= 0 ? "▲" : "▼"} ${Math.abs(a.deltaPct).toFixed(1)}%)` : ""}` }));
+    }
+    if (report.reportTier === "annual" && report.quarterlyBreakdown.length > 0) {
+      children.push(new Paragraph({ text: "Quarterly Breakdown", heading: HeadingLevel.HEADING_1, spacing: { before: 300 } }));
+      for (const q of report.quarterlyBreakdown) children.push(new Paragraph({ text: `Q${q.quarterNum}(${q.dateFrom}~${q.dateTo}): ${q.avgRating !== null ? q.avgRating.toFixed(3) : "—"}` }));
+    }
+    if (report.reportTier === "annual" && report.annualRank) {
+      children.push(new Paragraph({ text: "Annual Rank Snapshot", heading: HeadingLevel.HEADING_1, spacing: { before: 300 } }));
+      children.push(
+        new Paragraph({
+          text: `연초 누적 평균 시청률 ${report.annualRank.avgRating !== null ? report.annualRank.avgRating.toFixed(3) : "—"}${report.annualRank.avgRank !== null ? ` · 평균 순위 ${report.annualRank.avgRank.toFixed(1)}위` : ""}`,
+        })
+      );
+    }
+    if (report.reportTier === "annual" && report.newlyScheduledPrograms.length > 0) {
+      children.push(new Paragraph({ text: "Year in Review — 신규 편성", heading: HeadingLevel.HEADING_1, spacing: { before: 300 } }));
+      for (const p of report.newlyScheduledPrograms) children.push(new Paragraph({ text: `· ${p.name} — ${p.periodAvgRating !== null ? p.periodAvgRating.toFixed(3) : "—"}` }));
+    }
+    if (report.strategicImplications) {
+      children.push(new Paragraph({ text: "Strategic Implications", heading: HeadingLevel.HEADING_1, spacing: { before: 300 } }));
+      children.push(new Paragraph({ text: report.strategicImplications, spacing: { after: 200 } }));
+    }
+    children.push(new Paragraph({ text: "Data Notes & Exclusions", heading: HeadingLevel.HEADING_1, spacing: { before: 300 } }));
+    children.push(
+      new Paragraph({
+        text: `표본 ${report.daysWithData}일 기준(Nielsen 시청률 데이터). FUNdex/Content Buzz(접근 경로 없음)와 개인 시청자 단위 이동(패널) 추적은 포함되지 않습니다. Turning Points는 직전 구간 대비 등락률 임계값(±15%) 기반 v1 휴리스틱입니다.`,
+      })
+    );
+  }
+
   children.push(FOOTER);
   return children;
 }

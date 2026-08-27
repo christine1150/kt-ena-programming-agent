@@ -39,12 +39,15 @@ export default function ReportPage() {
   const priorDateTo = searchParams.get("priorDateTo");
   const periodLabelParam = searchParams.get("periodLabel");
   const comparisonLabelParam = searchParams.get("comparisonLabel");
+  // Phase B(2026-08-27) — preset(qtd/ytd)이 있어야 /api/report/channel이 Quarterly/Annual Report
+  // 확장 섹션을 채운다. ChannelDeepDive.tsx가 그대로 실어 보낸 값.
+  const presetParam = searchParams.get("preset");
   const isPeriodMode = !!dateFrom;
   // 다운로드/API 호출에 그대로 재사용할 쿼리스트링(일간/기간 공통 조립).
   const extraQuery = isPeriodMode
     ? `&dateFrom=${dateFrom}&dateTo=${date}${priorDateFrom && priorDateTo ? `&priorDateFrom=${priorDateFrom}&priorDateTo=${priorDateTo}` : ""}${
         periodLabelParam ? `&periodLabel=${encodeURIComponent(periodLabelParam)}` : ""
-      }${comparisonLabelParam ? `&comparisonLabel=${encodeURIComponent(comparisonLabelParam)}` : ""}`
+      }${comparisonLabelParam ? `&comparisonLabel=${encodeURIComponent(comparisonLabelParam)}` : ""}${presetParam ? `&preset=${presetParam}` : ""}`
     : `&date=${date}`;
 
   const [template, setTemplate] = useState<"doc" | "slide">("doc");
@@ -367,15 +370,204 @@ function DriverCard({ kind, driver }: { kind: "growth" | "weakness"; driver: { n
     </div>
   );
 }
+// Phase B(2026-08-27) — reportTier가 "quarterly"/"annual"일 때만 제목에 CJ ENM IR식 문서명을
+// 붙인다("Quarterly Report"/"Annual Report") — 그 외 프리셋(WTD/MTD/...)은 기존 periodLabel
+// 그대로(Phase A와 동일, 회귀 없음).
+function reportTierTitle(report: ChannelPeriodReportData): string {
+  if (report.reportTier === "quarterly") return `${report.periodLabel} — Quarterly Report`;
+  if (report.reportTier === "annual") return `${report.periodLabel} — Annual Report`;
+  return report.periodLabel;
+}
 function PeriodReportHeader({ report }: { report: ChannelPeriodReportData }) {
   return (
     <>
       <h1 className="text-3xl font-bold text-zinc-900">
-        {report.channel.name} — {report.periodLabel}
+        {report.channel.name} — {reportTierTitle(report)}
       </h1>
       <p className="mt-1 text-sm text-zinc-400">
         {report.dateFrom} ~ {report.dateTo}(표본 {report.daysWithData}일) · 타깃 {report.channel.primaryTarget ?? "—"}
       </p>
+    </>
+  );
+}
+
+// ── Phase B 확장 섹션(Quarterly 12개/Annual 15개 섹션 구성, reportTier !== "standard"일 때만) ──
+function TrendMiniChart({ report }: { report: ChannelPeriodReportData }) {
+  const max = Math.max(0.0001, ...report.trendSeries.map((t) => t.rating ?? 0));
+  return (
+    <div className="space-y-1.5">
+      {report.trendSeries.map((t) => (
+        <div key={t.periodStart} className="flex items-center gap-2 text-xs">
+          <span className="w-20 shrink-0 text-zinc-400">{t.periodStart}</span>
+          <div className="h-3 flex-1 rounded bg-zinc-100">
+            <div className="h-3 rounded bg-indigo-500" style={{ width: `${((t.rating ?? 0) / max) * 100}%` }} />
+          </div>
+          <span className="w-14 shrink-0 text-right font-medium text-zinc-700">{t.rating !== null ? t.rating.toFixed(3) : "—"}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+function TurningPointsList({ report }: { report: ChannelPeriodReportData }) {
+  return (
+    <ul className="space-y-1.5 text-sm">
+      {report.turningPoints.map((tp) => (
+        <li key={tp.periodStart} className="flex items-center gap-2">
+          <span className={tp.direction === "up" ? "text-emerald-600" : "text-rose-600"}>{tp.direction === "up" ? "▲" : "▼"}</span>
+          <span className="font-medium text-zinc-800">{tp.periodStart}</span>
+          <span className="text-zinc-400">
+            {tp.fromRating.toFixed(3)} → {tp.toRating.toFixed(3)}
+          </span>
+          <span className={tp.direction === "up" ? "text-emerald-600" : "text-rose-600"}>
+            ({tp.changePct >= 0 ? "+" : ""}
+            {tp.changePct.toFixed(1)}%)
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+function PortfolioLists({ report }: { report: ChannelPeriodReportData }) {
+  return (
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      <div>
+        <h3 className="text-sm font-semibold text-zinc-700">Top(STRENGTHEN/KEEP)</h3>
+        <ul className="mt-2 space-y-1 text-sm text-zinc-700">
+          {report.portfolioTopPrograms.map((p) => (
+            <li key={p.name}>· {p.name} — {p.detail}</li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <h3 className="text-sm font-semibold text-zinc-700">Weak(REPLACE)</h3>
+        <ul className="mt-2 space-y-1 text-sm text-zinc-700">
+          {report.portfolioWeakPrograms.map((p) => (
+            <li key={p.name}>· {p.name} — {p.detail}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+function AudienceCompositionGrid({ report }: { report: ChannelPeriodReportData }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {report.audienceHighlights.map((a) => (
+        <div key={a.label} className="rounded-xl bg-zinc-50 p-3">
+          <p className="text-xs text-zinc-400">{a.label}</p>
+          <p className="mt-1 text-base font-bold text-zinc-900">{a.periodAvgRating !== null ? a.periodAvgRating.toFixed(3) : "—"}</p>
+          {a.deltaPct !== null && (
+            <p className="mt-0.5 text-xs font-medium" style={{ color: a.deltaPct >= 0 ? "#059669" : "#e11d48" }}>
+              {a.deltaPct >= 0 ? "▲" : "▼"} {Math.abs(a.deltaPct).toFixed(1)}%
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+function QuarterlyBreakdownTable({ report }: { report: ChannelPeriodReportData }) {
+  return (
+    <table className="mt-2 w-full text-sm">
+      <thead>
+        <tr className="text-left text-xs text-zinc-400">
+          <th className="pb-1 font-medium">분기</th>
+          <th className="pb-1 font-medium">기간</th>
+          <th className="pb-1 font-medium text-right">평균 시청률</th>
+        </tr>
+      </thead>
+      <tbody>
+        {report.quarterlyBreakdown.map((q) => (
+          <tr key={q.quarterNum} className="border-t border-zinc-100">
+            <td className="py-1.5 font-medium text-zinc-800">Q{q.quarterNum}</td>
+            <td className="py-1.5 text-zinc-500">
+              {q.dateFrom} ~ {q.dateTo}
+            </td>
+            <td className="py-1.5 text-right font-medium text-zinc-800">{q.avgRating !== null ? q.avgRating.toFixed(3) : "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+// Phase B 확장 섹션 전체(Quarterly Trend/Turning Points/Portfolio/Audience + Annual 전용 3개 +
+// Strategic Implications + Data Notes) — Doc/Slide 템플릿 둘 다 이 순서 그대로 재사용.
+function PeriodExtendedSections({ report }: { report: ChannelPeriodReportData }) {
+  if (report.reportTier === "standard") return null;
+  return (
+    <>
+      {report.trendSeries.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-lg font-bold text-zinc-900">{report.trendGranularity === "week" ? "주별 추이(Weekly Trend)" : "월별 추이(Monthly Trend)"}</h2>
+          <div className="mt-3">
+            <TrendMiniChart report={report} />
+          </div>
+        </section>
+      )}
+      <section className="mt-8">
+        <h2 className="text-lg font-bold text-zinc-900">Turning Points</h2>
+        {report.turningPoints.length > 0 ? (
+          <div className="mt-3">
+            <TurningPointsList report={report} />
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-zinc-400">이 기간엔 직전 구간 대비 15% 이상 등락한 급변점이 감지되지 않았습니다(변동성이 낮았다는 뜻).</p>
+        )}
+      </section>
+      {(report.portfolioTopPrograms.length > 0 || report.portfolioWeakPrograms.length > 0) && (
+        <section className="mt-8">
+          <h2 className="text-lg font-bold text-zinc-900">Program Portfolio Review</h2>
+          <div className="mt-3">
+            <PortfolioLists report={report} />
+          </div>
+        </section>
+      )}
+      {report.audienceHighlights.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-lg font-bold text-zinc-900">Audience Composition</h2>
+          <div className="mt-3">
+            <AudienceCompositionGrid report={report} />
+          </div>
+        </section>
+      )}
+      {report.reportTier === "annual" && report.quarterlyBreakdown.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-lg font-bold text-zinc-900">Quarterly Breakdown</h2>
+          <QuarterlyBreakdownTable report={report} />
+        </section>
+      )}
+      {report.reportTier === "annual" && report.annualRank && (
+        <section className="mt-8">
+          <h2 className="text-lg font-bold text-zinc-900">Annual Rank Snapshot</h2>
+          <p className="mt-2 text-sm text-zinc-700">
+            연초 누적 평균 시청률 {report.annualRank.avgRating !== null ? report.annualRank.avgRating.toFixed(3) : "—"}
+            {report.annualRank.avgRank !== null && ` · 평균 순위 ${report.annualRank.avgRank.toFixed(1)}위`}
+          </p>
+        </section>
+      )}
+      {report.reportTier === "annual" && report.newlyScheduledPrograms.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-lg font-bold text-zinc-900">Year in Review — 신규 편성</h2>
+          <ul className="mt-2 space-y-1 text-sm text-zinc-700">
+            {report.newlyScheduledPrograms.map((p) => (
+              <li key={p.name}>· {p.name} — {p.periodAvgRating !== null ? p.periodAvgRating.toFixed(3) : "—"}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {report.strategicImplications && (
+        <section className="mt-8">
+          <h2 className="text-lg font-bold text-zinc-900">Strategic Implications</h2>
+          <p className="mt-2 text-[15px] leading-relaxed text-zinc-700">{report.strategicImplications}</p>
+        </section>
+      )}
+      <section className="mt-8 rounded-xl bg-zinc-50 p-4">
+        <p className="text-xs font-semibold text-zinc-500">Data Notes & Exclusions</p>
+        <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+          표본 {report.daysWithData}일 기준(Nielsen 시청률 데이터). 이 리포트에는 FUNdex/Content Buzz(외부 콘텐츠 화제성 지수, 접근 경로 없음)와 개인 시청자 단위 이동(패널) 추적이
+          포함되지 않습니다(CLAUDE.md 범위 제한). Turning Points는 직전 구간 대비 등락률 임계값(±15%) 기반 v1 휴리스틱으로, 추후 조정될 수 있습니다.
+        </p>
+      </section>
     </>
   );
 }
@@ -454,6 +646,7 @@ function PeriodDocTemplate({ report }: { report: ChannelPeriodReportData }) {
           )}
         </section>
       )}
+      <PeriodExtendedSections report={report} />
       <p className="mt-10 text-right text-xs text-zinc-300">KT ENA 편성 AI Agent</p>
     </div>
   );
@@ -526,6 +719,11 @@ function PeriodSlideTemplate({ report }: { report: ChannelPeriodReportData }) {
               ))}
             </ul>
           </div>
+        </div>
+      )}
+      {report.reportTier !== "standard" && (
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <PeriodExtendedSections report={report} />
         </div>
       )}
     </div>

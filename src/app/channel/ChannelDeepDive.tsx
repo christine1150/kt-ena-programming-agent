@@ -3866,7 +3866,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <Link
                     href={
                       showComparisonView
-                        ? `/report/${data.dateTo}?channel=${code}${dateQuery}${priorQuery}&periodLabel=${encodeURIComponent(PERIOD_PRESET_LABELS[periodPreset])}${comparisonLabel ? `&comparisonLabel=${encodeURIComponent(comparisonLabel)}` : ""}`
+                        ? // Phase B(2026-08-27): preset을 그대로 실어 보내 QTD/YTD일 때만 리포트가
+                          // Quarterly/Annual Report(CJ ENM IR 스타일 확장 섹션)로 렌더링되게 한다.
+                          `/report/${data.dateTo}?channel=${code}${dateQuery}${priorQuery}&periodLabel=${encodeURIComponent(PERIOD_PRESET_LABELS[periodPreset])}${comparisonLabel ? `&comparisonLabel=${encodeURIComponent(comparisonLabel)}` : ""}&preset=${periodPreset}`
                         : `/report/${data.dateTo}?channel=${code}`
                     }
                     target="_blank"
