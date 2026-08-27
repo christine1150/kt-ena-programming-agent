@@ -3776,7 +3776,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     않음). "종합 보고서 만들기" 버튼은 종합(포트폴리오) 리포트가 실제로 만들어질 때
                     함께 추가(지금은 갈 곳 없는 버튼을 만들지 않는다). */}
                 {(() => {
-                  const audienceHref = buildAudienceReportHref(code, periodPreset, selectedDateFrom ?? "", selectedDateTo ?? "");
+                  // periodPreset==="today"일 때는 selectedDateTo가 의도적으로 null이라(서버가 최신
+                  // 날짜를 자동으로 고르게 하는 기존 동작, :3220-3226) 위 구 버튼과 동일하게
+                  // data.dateTo(서버가 실제로 확정한 최신일)로 폴백한다.
+                  const audienceHref = buildAudienceReportHref(code, periodPreset, selectedDateFrom ?? "", selectedDateTo ?? data.dateTo ?? "");
                   return (
                     audienceHref && (
                       <Link
