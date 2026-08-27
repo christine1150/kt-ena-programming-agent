@@ -17,6 +17,14 @@ import { highlightNarrativeText } from "@/lib/highlightNarrative";
 import { computeChannelHealthScore } from "@/lib/channelHealthScore";
 import { HealthScoreBadge, verdictColor } from "@/components/HealthScoreBadge";
 import type { ProgramMomentumItem } from "@/app/api/scheduling/program-momentum/route";
+import {
+  type PeriodPreset,
+  PERIOD_PRESET_LABELS,
+  PERIOD_PRESET_GROUPS,
+  COMPARISON_PRESETS,
+  COMPARISON_LABELS,
+  computePeriodPreset,
+} from "@/lib/audienceReport/periodPresets";
 
 interface TrendRow {
   period: string;
@@ -778,151 +786,16 @@ function buildSkyuhdScorecardNote(item: SkyuhdScorecardItem): string {
 // 사용자 지시(2026-08-20): WTD/MTD/QTD(주초·월초·분기초~오늘 누적)를 YTD 옆에 추가하고, 전체
 // 목록을 "종류별로"(빠른 선택 / 기간 누적 / 트레일링 기간 / 비교 분석) 다시 묶었다 — <optgroup>으로
 // 시각적으로도 구분(아래 PERIOD_PRESET_GROUPS).
-type PeriodPreset =
-  | "today"
-  | "custom"
-  | "yesterday"
-  | "wtd"
-  | "mtd"
-  | "qtd"
-  | "ytd"
-  | "last7"
-  | "last30"
-  | "dod"
-  | "wow"
-  | "mom"
-  | "qoq"
-  | "yoy";
-const PERIOD_PRESET_LABELS: Record<PeriodPreset, string> = {
-  today: "오늘(최신)",
-  custom: "직접 선택",
-  yesterday: "어제",
-  wtd: "이번 주 누적(WTD)",
-  mtd: "이번 달 누적(MTD)",
-  qtd: "이번 분기 누적(QTD)",
-  ytd: "연간 누적(YTD, 1월 1일~오늘)",
-  last7: "지난 7일",
-  last30: "지난 1달",
-  dod: "어제 대비 오늘 분석(DoD)",
-  wow: "전주 대비 이번주 분석(WoW)",
-  mom: "전월 대비 이번달 분석(MoM)",
-  qoq: "전분기 대비 이번분기 분석(QoQ)",
-  yoy: "전년 동기 대비 이번년도 누적 분석(YoY)",
-};
-const PERIOD_PRESET_GROUPS: { group: string; values: PeriodPreset[] }[] = [
-  { group: "빠른 선택", values: ["today", "custom", "yesterday"] },
-  { group: "기간 누적(-to-Date)", values: ["wtd", "mtd", "qtd", "ytd"] },
-  { group: "트레일링 기간", values: ["last7", "last30"] },
-  { group: "비교 분석", values: ["dod", "wow", "mom", "qoq", "yoy"] },
-];
-const COMPARISON_PRESETS = new Set<PeriodPreset>(["dod", "wow", "mom", "qoq", "yoy"]);
-// 비교 분석 프리셋에서 "직전 동일 길이 기간" 대신 쓸 구체적인 라벨.
-const COMPARISON_LABELS: Partial<Record<PeriodPreset, string>> = {
-  dod: "전일",
-  wow: "전주",
-  mom: "전월",
-  qoq: "전분기",
-  yoy: "전년 동기",
-};
+// Phase 1(2026-08-28, Audience Intelligence Report 신규 시스템 계획서 J절) — 아래 있던 PeriodPreset
+// 타입·라벨·날짜 헬퍼·computePeriodPreset()을 전부 src/lib/audienceReport/periodPresets.ts로 옮기고
+// 여기서는 import해서 쓴다(순수 리팩터, 동작 변경 없음) — 새 리포트 시스템도 같은 검증된 날짜
+// 수학을 재사용하기 위함.
 // 사용자 지시(2026-08-21): "오늘의 브리핑"이라는 제목은 "오늘"을 선택했을 때만 쓰고, 그 외
 // 기간/메뉴를 골랐으면 그 기간을 설명하는 제목으로 바뀐다(PERIOD_PRESET_LABELS 재사용, 새 라벨
 // 목록을 따로 만들지 않음).
 function buildBriefingTitle(periodPreset: PeriodPreset): string {
   if (periodPreset === "today") return "오늘의 브리핑";
   return `${PERIOD_PRESET_LABELS[periodPreset]} 브리핑`;
-}
-
-// 로컬 날짜 구성요소로 문자열을 만든다 — toISOString()은 UTC로 변환하기 때문에, 브라우저의
-// 로컬 타임존이 UTC+인 경우 자정 기준 날짜가 하루 당겨지는 버그가 실제로 있었다.
-function toDateStr(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-function addDaysStr(dateStr: string, delta: number): string {
-  const d = new Date(`${dateStr}T00:00:00`);
-  d.setDate(d.getDate() + delta);
-  return toDateStr(d);
-}
-// Date.setMonth()는 월말 날짜에서 다음 달로 자동 롤오버된다(예: 5/31에서 -3개월 시 "2월 31일"이
-// 없어 3/3로 밀림) — 대상 월의 마지막 날짜로 클램프해 피한다. MoM/QoQ/YoY 계산에 재사용.
-function addMonthsClampedStr(dateStr: string, delta: number): string {
-  const d = new Date(`${dateStr}T00:00:00`);
-  const originalDay = d.getDate();
-  const firstOfTarget = new Date(d.getFullYear(), d.getMonth() + delta, 1);
-  const daysInTarget = new Date(firstOfTarget.getFullYear(), firstOfTarget.getMonth() + 1, 0).getDate();
-  firstOfTarget.setDate(Math.min(originalDay, daysInTarget));
-  return toDateStr(firstOfTarget);
-}
-function startOfQuarterStr(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00`);
-  const qStartMonth = Math.floor(d.getMonth() / 3) * 3;
-  return toDateStr(new Date(d.getFullYear(), qStartMonth, 1));
-}
-// WTD(이번 주 누적)용 — ISO 주(월요일 시작) 기준 이번 주의 첫날.
-function startOfWeekStr(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00`);
-  const isoDow = ((d.getDay() + 6) % 7) + 1; // 1=월 ... 7=일
-  return addDaysStr(dateStr, -(isoDow - 1));
-}
-// 비교 분석 프리셋(DoD/WoW/MoM/QoQ/YoY): "이번 기간"과 달력 기준으로 정확히 맞춘 "전 기간"을
-// 함께 계산한다. 전 기간의 길이는 항상 이번 기간과 같은 상대적 위치를 갖도록 시작일·종료일을
-// 각각 같은 폭(7일/1개월/3개월/1년)만큼 뒤로 옮겨서 구한다.
-function computeComparisonRange(
-  latest: string,
-  preset: "dod" | "wow" | "mom" | "qoq" | "yoy"
-): { from: string; to: string; priorFrom: string; priorTo: string } {
-  switch (preset) {
-    case "dod":
-      return { from: latest, to: latest, priorFrom: addDaysStr(latest, -1), priorTo: addDaysStr(latest, -1) };
-    case "wow": {
-      // 사용자 지시(2026-08-20, 최종): 달력 주(월요일 시작)가 아니라 "오늘을 포함한 지난 7일"을
-      // "지난 8~14일차"와 비교하는 트레일링 방식으로 재정의.
-      const from = addDaysStr(latest, -6);
-      return { from, to: latest, priorFrom: addDaysStr(latest, -13), priorTo: addDaysStr(latest, -7) };
-    }
-    case "mom": {
-      const from = `${latest.slice(0, 7)}-01`;
-      return { from, to: latest, priorFrom: addMonthsClampedStr(from, -1), priorTo: addMonthsClampedStr(latest, -1) };
-    }
-    case "qoq": {
-      const from = startOfQuarterStr(latest);
-      return { from, to: latest, priorFrom: addMonthsClampedStr(from, -3), priorTo: addMonthsClampedStr(latest, -3) };
-    }
-    case "yoy": {
-      const from = `${latest.slice(0, 4)}-01-01`;
-      return { from, to: latest, priorFrom: addMonthsClampedStr(from, -12), priorTo: addMonthsClampedStr(latest, -12) };
-    }
-  }
-}
-// 프리셋 → 실제 dateFrom/dateTo(+비교 분석이면 priorFrom/priorTo) 계산. "오늘"/"어제"는 하루
-// (from=to), "지난 N일"류는 오늘까지의 트레일링 기간(to=latest 고정, from만 뒤로), "직접 선택"은
-// 두 날짜 중 어느 쪽을 먼저 골라도 순서를 정렬하고 같은 날짜 두 개를 고르면 "그 하루"가 된다.
-function computePeriodPreset(
-  latest: string,
-  preset: PeriodPreset,
-  customFrom: string,
-  customTo: string
-): { from: string; to: string; priorFrom?: string; priorTo?: string } | null {
-  if (preset === "custom") {
-    if (!customFrom || !customTo) return null;
-    return customFrom <= customTo ? { from: customFrom, to: customTo } : { from: customTo, to: customFrom };
-  }
-  if (preset === "today") return { from: latest, to: latest };
-  if (preset === "yesterday") {
-    const yesterday = addDaysStr(latest, -1);
-    return { from: yesterday, to: yesterday };
-  }
-  if (preset === "ytd") return { from: `${latest.slice(0, 4)}-01-01`, to: latest };
-  if (preset === "wtd") return { from: startOfWeekStr(latest), to: latest };
-  if (preset === "mtd") return { from: `${latest.slice(0, 7)}-01`, to: latest };
-  if (preset === "qtd") return { from: startOfQuarterStr(latest), to: latest };
-  if (preset === "last7" || preset === "last30") {
-    const daysBack: Record<"last7" | "last30", number> = { last7: 6, last30: 29 };
-    return { from: addDaysStr(latest, -daysBack[preset]), to: latest };
-  }
-  return computeComparisonRange(latest, preset);
 }
 
 // 사용자 지시(2026-08-21): "10회 미만으로 편성한 프로그램의 상승/하락은 총 하락 또는 상승에 큰
