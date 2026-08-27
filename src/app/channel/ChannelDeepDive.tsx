@@ -643,7 +643,11 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
   const H = 260;
   const PAD_L = 30;
   const PAD_R = 12;
-  const PAD_T = 10;
+  // 실측 버그 수정(2026-08-27, 사용자 지시: "무엇을 편성할까요 인포그래픽 상단이 잘림"): 표본
+  // 신뢰도 100%인 점이 많아 대부분 y=PAD_T 바로 그 자리(그래프 맨 위)에 몰리는데, 라벨은 점
+  // 위쪽(y = py - r - 3)에 그려진다 — 예전 PAD_T=10은 큰 버블(r 최대 7)의 라벨이 SVG viewBox
+  // 위쪽 경계(y=0) 밖으로 나가 잘리기에 부족했다. 라벨 한 줄이 온전히 들어갈 여유를 준다.
+  const PAD_T = 20;
   const PAD_B = 22;
   const plotH = H - PAD_T - PAD_B;
   const xOf = (score: number) => PAD_L + (Math.max(0, Math.min(100, score)) / 100) * (W - PAD_L - PAD_R);
@@ -2343,9 +2347,16 @@ function DowHourBlockTable({
       {/* 사용자 지시(2026-08-22): "시간대(예: 23~25시) 라벨이 두 줄로 내려가지 않고 1줄에
           보이도록" — 첫 열 폭(w-11=44px)이 라벨 폭(6자 내외)보다 좁아 줄바꿈되던 문제. 열 폭을
           넓히고 whitespace-nowrap을 명시해 항상 한 줄로 고정한다. */}
+      {/* 사용자 재지시(2026-08-27): "점은 정렬이 좋아졌으나 월요일 표 안에 들어가서 혼동을
+          줄 수 있으니, 월~일 전체 표를 살짝 줄이면서 우측으로 밀 것" — 첫 열이 라벨 고정폭
+          (w-14=56px)만큼만 있어 그 바로 옆에 붙는 점(●+ring)이 "월" 열 쪽으로 삐져나왔다.
+          첫 열 폭을 w-20(80px)으로 넓혀 점이 들어갈 여유를 주고, table-fixed라 나머지 7열은
+          자동으로 그만큼씩 줄어들며 오른쪽으로 밀린다(점의 상대 위치·크기는 그대로). 아래
+          WeekdayProfileSparklines의 첫 열도 정확히 같은 값으로 맞춰야 두 표의 요일 열 경계가
+          어긋나지 않는다(2026-08-26 주석 참고, 같이 바꿈). */}
       <table className="w-full table-fixed text-center text-[13px]">
         <colgroup>
-          <col className="w-14" />
+          <col className="w-20" />
         </colgroup>
         <thead>
           <tr>
@@ -2441,8 +2452,11 @@ function WeekdayProfileSparklines({ pattern, accentColor }: { pattern: DowHourBl
   // 맞도록 한다(두 표가 같은 부모 폭 안에 있으면 열 경계가 픽셀 단위로 일치).
   return (
     <table className="mb-1 w-full table-fixed text-center text-[13px]">
+      {/* 사용자 재지시(2026-08-27): 아래 DowHourBlockTable 첫 열을 w-20으로 넓혔다 — 두 표의
+          요일 열 경계가 맞으려면 이 colgroup도 정확히 같은 값이어야 한다(위 2026-08-26 주석
+          참고). */}
       <colgroup>
-        <col className="w-14" />
+        <col className="w-20" />
       </colgroup>
       <tbody>
         <tr>
@@ -3017,16 +3031,37 @@ function ScatterQuadrantChart({
         <text x={xOf(xSplit) + 6} y={H - PAD - 6} textAnchor="start" fontSize={10} fontWeight={600} fill="#a1a1aa">
           {quadrantLabels.highXLowY}
         </text>
-        {points.map((p, i) => (
-          <g key={i}>
-            <circle cx={xOf(p.x)} cy={yOf(p.y)} r={rOf(p.bubble)} fill={accentColor} fillOpacity={0.55} stroke={accentColor} strokeWidth={1}>
-              <title>
-                {p.name} — {xLabel} {fmtX(p.x)}, {yLabel} {fmtY(p.y)}
-                {p.bubble !== null ? `, 도달율 ${p.bubble.toFixed(2)}%` : ""}
-              </title>
-            </circle>
-          </g>
-        ))}
+        {points.map((p, i) => {
+          const cx = xOf(p.x);
+          const cy = yOf(p.y);
+          const r = rOf(p.bubble);
+          // 사용자 지시(2026-08-27): "점들이 무엇을 의미하는지 알 수 없음 — 프로그램명을 적어
+          // 달라" — 이전엔 호버해야만 보이는 <title> 툴팁뿐이었다. 점 아래에 이름을 항상
+          // 표시한다(WHAT TO SCHEDULE?의 FitScoreQuadrantChart와 같은 축 밖 이탈 방지 규칙 —
+          // 좌우 끝 근처 점은 가운데 정렬 대신 안쪽으로 붙여 카드 밖으로 삐져나가지 않게).
+          // 너무 긴 프로그램명은 좁은 버블 사이 겹침을 줄이기 위해 8자에서 줄인다(전체 이름은
+          // 그대로 <title> 호버 툴팁에 남아 있음).
+          const shortName = p.name.length > 8 ? `${p.name.slice(0, 8)}…` : p.name;
+          return (
+            <g key={i}>
+              <circle cx={cx} cy={cy} r={r} fill={accentColor} fillOpacity={0.55} stroke={accentColor} strokeWidth={1}>
+                <title>
+                  {p.name} — {xLabel} {fmtX(p.x)}, {yLabel} {fmtY(p.y)}
+                  {p.bubble !== null ? `, 도달율 ${p.bubble.toFixed(2)}%` : ""}
+                </title>
+              </circle>
+              <text
+                x={cx}
+                y={cy + r + 9}
+                textAnchor={cx < W * 0.15 ? "start" : cx > W * 0.85 ? "end" : "middle"}
+                fontSize={8}
+                fill="#52525b"
+              >
+                {shortName}
+              </text>
+            </g>
+          );
+        })}
       </svg>
     </div>
   );
@@ -3069,7 +3104,9 @@ function TimeSlotCompetitionChart({ rows, accentColor, fmtR }: { rows: Competito
         const ours = group[0];
         const competitors = [...group].sort((a, b) => (b.competitor_rating ?? 0) - (a.competitor_rating ?? 0)).slice(0, 2);
         const bars = [
-          { label: `${ours.our_program_name}(당사)`, rating: ours.our_rating, isOurs: true },
+          // 사용자 지시(2026-08-27): "(당사)"는 필요 없음 — 첫 줄·굵은 글씨·강조색 막대로 이미
+          // 당사 프로그램임이 구분되므로 텍스트 라벨은 이름만.
+          { label: ours.our_program_name, rating: ours.our_rating, isOurs: true },
           ...competitors.map((c) => ({ label: `${c.competitor_program_name}(${c.competitor_name})`, rating: c.competitor_rating, isOurs: false })),
         ];
         return (
@@ -3907,7 +3944,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             표가 이미 그 역할을 한다. */}
         {!showComparisonView && kpiCards.length > 0 && (
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-            <h2 className={`${SECTION_TITLE_P2} mb-3`}>KPI 스코어카드</h2>
+            {/* 사용자 지시(2026-08-27): 제목을 "스코어 카드"로. */}
+            <h2 className={`${SECTION_TITLE_P2} mb-3`}>스코어 카드</h2>
             {/* Health Score 근거(5축) — 사용자가 헤더 배지에 마우스를 올리지 않아도 바로 보이도록
                 항상 펼쳐 표시(AI Insight마다 근거를 함께 보여준다는 원칙). */}
             {channelHealth && (
@@ -4013,9 +4051,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               수치 강조 — buildBriefingReport의 문장 조립 로직은 그대로, 표시만 바꾼다. 이
               페이지는 이미 emerald/rose를 상승/하락 색으로 쓰고 있어(위 배지·DivergingDeltaBar)
               같은 톤을 그대로 쓴다. */}
+          {/* 사용자 재지시(2026-08-27): "오늘의 브리핑 우측이 비어 보이는 현상 해결" — 위
+              max-w-2xl(가독성을 위한 줄 폭 제한)이 이 카드처럼 넓은 화면에서는 텍스트 오른쪽에
+              큰 빈 공간을 남겨 마치 콘텐츠가 잘리거나 잘못 배치된 것처럼 보였다. 이 섹션만
+              줄 폭 제한을 없애 카드 폭을 그대로 채운다(leading-relaxed로 가독성은 유지).
+              다른 섹션(Executive Summary/WHY?/OPPORTUNITY? 등)의 max-w-2xl은 그대로 둔다 —
+              이번에 지적된 곳만 정확히 고친다. */}
           <div className="flex flex-col gap-3">
             {buildBriefingReport(data, referenceLabel, showComparisonView, comparisonLabel).map((para, i) => (
-              <p key={i} className="max-w-2xl text-base leading-relaxed text-zinc-700">
+              <p key={i} className="text-base leading-relaxed text-zinc-700">
                 {highlightNarrativeText(para, "#059669", "#e11d48")}
               </p>
             ))}
