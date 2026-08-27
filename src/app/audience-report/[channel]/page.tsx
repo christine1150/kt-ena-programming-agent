@@ -266,7 +266,7 @@ function ModeCBody({ sections: s, channelCode }: { sections: import("@/lib/audie
       </Section>
       <Section title="02 KPI 대조표">
         <SlopeChart rows={s.kpiCompareTable.rows} caption={s.kpiCompareTable.caption} />
-        <KpiCompareTable rows={s.kpiCompareTable.rows} />
+        <KpiCompareTable rows={s.kpiCompareTable.rows} channelCode={channelCode} />
       </Section>
       <Section title="03 변화 분해(신규 · 종영 · 유지)">
         <ChangeBreakdownTable rows={s.changeBreakdown} channelCode={channelCode} />
@@ -506,7 +506,18 @@ function MoverTable({ rows, channelCode }: { rows: import("@/lib/audienceReport/
   );
 }
 
-function KpiCompareTable({ rows }: { rows: import("@/lib/audienceReport/reportModel").KpiCompareRow[] }) {
+// 지표별로 절대 변화량의 소수점 자릿수가 다르다(Rating은 채널별 3~5자리, Share/Reach는 %p 2자리,
+// 시청시간은 초 단위 정수, 순위는 1자리) — formattedA/formattedB(format.ts 기준)와 같은 정밀도로
+// 맞춰 "455.500초" 같은 어색한 표기를 피한다.
+function formatAbsoluteChange(label: string, v: number | null, channelCode: string): string {
+  if (v === null) return "—";
+  if (label === "Rating") return v.toFixed(channelCode === "SKYUHD" ? 5 : 3);
+  if (label === "시청시간(초)") return Math.round(v).toString();
+  if (label === "순위") return v.toFixed(1);
+  return v.toFixed(2); // Share/Reach(%p)
+}
+
+function KpiCompareTable({ rows, channelCode }: { rows: import("@/lib/audienceReport/reportModel").KpiCompareRow[]; channelCode: string }) {
   return (
     <table className="mt-3 w-full text-sm">
       <thead>
@@ -524,7 +535,7 @@ function KpiCompareTable({ rows }: { rows: import("@/lib/audienceReport/reportMo
             <td className="py-1">{r.label}</td>
             <td className="py-1 text-right tabular-nums">{r.formattedA}</td>
             <td className="py-1 text-right tabular-nums">{r.formattedB}</td>
-            <td className="py-1 text-right tabular-nums">{r.absoluteChange !== null ? r.absoluteChange.toFixed(3) : "—"}</td>
+            <td className="py-1 text-right tabular-nums">{formatAbsoluteChange(r.label, r.absoluteChange, channelCode)}</td>
             <td className="py-1 text-right"><DeltaText pct={r.pctChange} /></td>
           </tr>
         ))}
