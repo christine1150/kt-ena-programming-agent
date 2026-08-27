@@ -190,3 +190,128 @@ export function buildChannelReportData(
     aiSummary: dashboard.briefingLlm,
   };
 }
+
+// ── Phase 4(2026-08-27, 사용자 지시: "어떤 기간을 선택하더라도 그 기간에 맞는 별도의 보고서를
+// 작성할 수 있도록") — 위 buildChannelReportData()는 "오늘" 단일 일자 전용이다. 기간(WTD/MTD/
+// QTD/YTD/지난 7일·1달/DoD~YoY 비교 분석/직접 선택) 리포트는 이 함수가 담당한다. 새 SQL 없음
+// — /api/dashboard/channel이 기간 모드(dateFrom≠dateTo 또는 비교 분석 프리셋)일 때 이미
+// 돌려주는 periodReport(get_rating_period_report)/periodProgramMovers
+// (get_channel_period_program_movers)/daypartOpportunity/topPrograms/
+// competitorPeriodTopPrograms를 재조립할 뿐이다. Health Score/Program Momentum은 "오늘 하루"
+// 개념(오늘 순위·최근 7일 대 4주 모멘텀)이라 기간 리포트에는 포함하지 않는다(계획서 G절).
+function computeWinWeakness(daypartOpportunity: { daypart: string; gap_change: number | null }[]) {
+  const valid = daypartOpportunity.filter((d) => d.gap_change !== null);
+  const winRow = valid.length > 0 ? valid.reduce((a, b) => ((b.gap_change ?? -Infinity) > (a.gap_change ?? -Infinity) ? b : a)) : null;
+  const weaknessRow = valid.length > 0 ? valid.reduce((a, b) => ((b.gap_change ?? Infinity) < (a.gap_change ?? Infinity) ? b : a)) : null;
+  return {
+    win: winRow && winRow.gap_change !== null ? { daypartLabel: DAYPART_LABEL[winRow.daypart] ?? winRow.daypart, gapChange: winRow.gap_change } : null,
+    weakness: weaknessRow && weaknessRow.gap_change !== null ? { daypartLabel: DAYPART_LABEL[weaknessRow.daypart] ?? weaknessRow.daypart, gapChange: weaknessRow.gap_change } : null,
+  };
+}
+
+export interface PeriodKpiCard {
+  label: string;
+  value: string;
+  // "직전 동일 기간"(비교 분석 프리셋이면 전일/전주/전월/전분기/전년 동기, 아니면 직전 동일 길이
+  // 기간) 대비와, "최근 12주 평균" 대비 — get_rating_period_report가 이미 계산해 돌려주는 두 축
+  // 그대로(마스터 프롬프트가 요구한 "Current vs Previous vs Baseline" 3중 비교를 충족).
+  priorDeltaPct: number | null;
+  baselineDeltaPct: number | null;
+}
+export interface PeriodMoverCard {
+  name: string;
+  periodAvgRating: number | null;
+  priorAvgRating: number | null;
+  ratingDelta: number | null;
+}
+export interface ChannelPeriodReportData {
+  channel: { code: string; name: string; primaryTarget: string | null; market: string | null };
+  dateFrom: string;
+  dateTo: string;
+  daysWithData: number;
+  periodLabel: string; // "이번 분기 누적(QTD)" 등 — 프리셋 라벨을 호출부가 그대로 넘겨줌
+  comparisonLabel: string | null; // "전분기" 등, 없으면 "직전 동일 길이 기간"
+  kpis: PeriodKpiCard[];
+  bestDay: { date: string; rating: number | null } | null;
+  worstDay: { date: string; rating: number | null } | null;
+  win: { daypartLabel: string; gapChange: number } | null;
+  weakness: { daypartLabel: string; gapChange: number } | null;
+  growthDrivers: PeriodMoverCard[]; // rating_delta > 0, 상위 2개
+  weaknessDrivers: PeriodMoverCard[]; // rating_delta < 0, 하위 2개
+  topPrograms: ReportProgramRow[];
+  competitorTopPrograms: { competitorName: string; programName: string; rating: number | null }[];
+  aiSummary: string | null;
+}
+
+export function buildChannelPeriodReportData(
+  channel: { code: string; name: string; primaryTarget: string | null; market: string | null },
+  dateFrom: string,
+  dateTo: string,
+  periodLabel: string,
+  comparisonLabel: string | null,
+  dashboard: {
+    periodReport: {
+      avg_rating: number | null;
+      avg_share: number | null;
+      avg_reach: number | null;
+      avg_time_spent_seconds: number | null;
+      prior_period_change_pct: number | null;
+      baseline_change_pct: number | null;
+      best_date: string | null;
+      best_rating: number | null;
+      worst_date: string | null;
+      worst_rating: number | null;
+      days_with_data: number;
+    } | null;
+    periodProgramMovers: { canonical_name: string; period_avg_rating: number | null; prior_avg_rating: number | null; rating_delta: number | null }[];
+    daypartOpportunity: { daypart: string; gap_change: number | null }[];
+    topPrograms: { program_name: string; avg_rating: number | null }[];
+    competitorPeriodTopPrograms: { competitor_name: string; program_name: string; rating: number | null }[];
+    aiSummary: string | null;
+  }
+): ChannelPeriodReportData {
+  const pr = dashboard.periodReport;
+  // get_rating_period_report는 시청률에만 두 비교값(직전 동일 기간 대비/최근 12주 평균 대비)을
+  // 계산해 돌려준다 — 점유율/도달율/시청시간은 현재 값만 준다(그 두 축 비교는 이 RPC가 하지
+  // 않아 억지로 만들지 않는다, CLAUDE.md 원칙).
+  const kpis: PeriodKpiCard[] = pr
+    ? [
+        { label: "시청률", value: fmtR(pr.avg_rating), priorDeltaPct: pr.prior_period_change_pct, baselineDeltaPct: pr.baseline_change_pct },
+        { label: "점유율", value: pr.avg_share !== null ? `${pr.avg_share.toFixed(2)}%` : "—", priorDeltaPct: null, baselineDeltaPct: null },
+        { label: "도달율", value: pr.avg_reach !== null ? `${pr.avg_reach.toFixed(2)}%` : "—", priorDeltaPct: null, baselineDeltaPct: null },
+        { label: "시청시간", value: fmtSeconds(pr.avg_time_spent_seconds), priorDeltaPct: null, baselineDeltaPct: null },
+      ]
+    : [];
+
+  const { win, weakness } = computeWinWeakness(dashboard.daypartOpportunity);
+  const movers = dashboard.periodProgramMovers.filter((m) => m.rating_delta !== null);
+  const growthDrivers: PeriodMoverCard[] = movers
+    .filter((m) => (m.rating_delta ?? 0) > 0)
+    .sort((a, b) => (b.rating_delta ?? 0) - (a.rating_delta ?? 0))
+    .slice(0, 2)
+    .map((m) => ({ name: m.canonical_name, periodAvgRating: m.period_avg_rating, priorAvgRating: m.prior_avg_rating, ratingDelta: m.rating_delta }));
+  const weaknessDrivers: PeriodMoverCard[] = movers
+    .filter((m) => (m.rating_delta ?? 0) < 0)
+    .sort((a, b) => (a.rating_delta ?? 0) - (b.rating_delta ?? 0))
+    .slice(0, 2)
+    .map((m) => ({ name: m.canonical_name, periodAvgRating: m.period_avg_rating, priorAvgRating: m.prior_avg_rating, ratingDelta: m.rating_delta }));
+
+  return {
+    channel,
+    dateFrom,
+    dateTo,
+    daysWithData: pr?.days_with_data ?? 0,
+    periodLabel,
+    comparisonLabel,
+    kpis,
+    bestDay: pr?.best_date ? { date: pr.best_date, rating: pr.best_rating } : null,
+    worstDay: pr?.worst_date ? { date: pr.worst_date, rating: pr.worst_rating } : null,
+    win,
+    weakness,
+    growthDrivers,
+    weaknessDrivers,
+    topPrograms: dashboard.topPrograms.slice(0, 5).map((p) => ({ name: p.program_name, detail: fmtR(p.avg_rating) })),
+    competitorTopPrograms: dashboard.competitorPeriodTopPrograms.slice(0, 5).map((p) => ({ competitorName: p.competitor_name, programName: p.program_name, rating: p.rating })),
+    aiSummary: dashboard.aiSummary,
+  };
+}

@@ -3856,11 +3856,19 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 브리핑" 등이 과거를 마치 오늘인 것처럼 서술하는 문제가 있었다(사용자 지시로 수정). */}
             <div className="flex flex-col items-end gap-1.5">
               <div className="flex flex-wrap items-center justify-end gap-2">
-                {/* Channel Intelligence Report 다운로드 진입점(Phase 3, 2026-08-27, 사용자 지시) —
-                    단일 일자 조회일 때만 의미가 있다(리포트는 "그날" 기준, 기간 평균 모드는 대상 아님). */}
-                {!showComparisonView && data.dateTo && (
+                {/* Channel Intelligence Report 다운로드 진입점(Phase 3, 2026-08-27 / Phase 4,
+                    2026-08-27: "어떤 기간을 선택하더라도 버튼이 보이도록" 사용자 지시) — 이제
+                    모든 기간 프리셋에서 보인다. 단일 일자 모드(오늘/어제)는 기존 그대로 date만,
+                    기간 모드(WTD~YTD/DoD~YoY/직접 선택)는 이미 계산돼 있는 dateFrom/dateTo(+비교
+                    분석이면 priorDateFrom/To)를 그대로 실어 보낸다 — 기간 계산을 서버에서
+                    다시 하지 않고 클라이언트가 이미 한 계산(computePeriodPreset)을 재사용. */}
+                {data.dateTo && (
                   <Link
-                    href={`/report/${data.dateTo}?channel=${code}`}
+                    href={
+                      showComparisonView
+                        ? `/report/${data.dateTo}?channel=${code}${dateQuery}${priorQuery}&periodLabel=${encodeURIComponent(PERIOD_PRESET_LABELS[periodPreset])}${comparisonLabel ? `&comparisonLabel=${encodeURIComponent(comparisonLabel)}` : ""}`
+                        : `/report/${data.dateTo}?channel=${code}`
+                    }
                     target="_blank"
                     className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none hover:bg-white/30"
                   >
