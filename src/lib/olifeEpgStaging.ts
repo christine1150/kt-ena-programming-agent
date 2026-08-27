@@ -7,7 +7,11 @@
 import { supabase } from "./supabase";
 import { matchEpgToRatings, type EpgRow } from "./epgMatch";
 
-/** 파싱된 EPG 행을 Nielsen 데이터 유무와 무관하게 그대로 저장(재업로드 시 최신값으로 덮어씀). */
+/** 파싱된 EPG 행을 Nielsen 데이터 유무와 무관하게 그대로 저장(재업로드 시 최신값으로 덮어씀).
+ *  실측 버그 수정(2026-08-27): 이전에는 upsert 결과의 에러를 확인하지 않아 배치 전체가 실패해도
+ *  (예: 시간 값이 DB 컬럼 범위를 벗어남) 호출부는 "성공"으로 알고 넘어갔다 — staging 테이블이
+ *  계속 비어 있는데도 업로드 응답은 매칭 0건이라는 결과만 보여줄 뿐 원인을 알 수 없었다. 이제
+ *  에러가 있으면 던져서 API 라우트가 실제 실패 사유를 관리자에게 보여줄 수 있게 한다. */
 export async function storeOlifeEpgStaging(rows: EpgRow[]): Promise<void> {
   if (rows.length === 0) return;
   const payload = rows.map((r) => ({
@@ -19,7 +23,10 @@ export async function storeOlifeEpgStaging(rows: EpgRow[]): Promise<void> {
     subtitle: r.subtitle,
     run_type: r.runType,
   }));
-  await supabase.from("olife_epg_staging").upsert(payload, { onConflict: "broadcast_date,start_time,program_name_raw" });
+  const { error } = await supabase.from("olife_epg_staging").upsert(payload, { onConflict: "broadcast_date,start_time,program_name_raw" });
+  if (error) {
+    throw new Error(`EPG 원본 저장 실패: ${error.message}`);
+  }
 }
 
 /**

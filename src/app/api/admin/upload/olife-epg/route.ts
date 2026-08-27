@@ -51,11 +51,19 @@ export async function POST(request: Request) {
 
     let totalMatched = 0;
     let totalUnmatched = 0;
+    let uploadError: string | null = null;
 
     for (const [date, epgRows] of byDate) {
-      // 사용자 지시(2026-08-26): "닐슨 데이터가 없어도 미리 등록해둘 수 있게" — Nielsen 매칭
-      // 성공 여부와 무관하게 원본을 항상 먼저 저장한다(재업로드 시 최신값으로 덮어씀).
-      await storeOlifeEpgStaging(epgRows);
+      try {
+        // 사용자 지시(2026-08-26): "닐슨 데이터가 없어도 미리 등록해둘 수 있게" — Nielsen 매칭
+        // 성공 여부와 무관하게 원본을 항상 먼저 저장한다(재업로드 시 최신값으로 덮어씀).
+        await storeOlifeEpgStaging(epgRows);
+      } catch (err) {
+        // 실측 버그 수정(2026-08-27): 이 저장이 실패하면(예: 시간 값 범위 오류) 예전에는 조용히
+        // 넘어가 "매칭 0건"으로만 보였다 — 이제 실패 사유를 그대로 관리자에게 보여준다.
+        uploadError = err instanceof Error ? err.message : String(err);
+        break;
+      }
 
       const result = await applyOlifeEpgForDate(channel.id, date);
       if (!result.hasRatings) {
@@ -69,6 +77,11 @@ export async function POST(request: Request) {
       }
       totalMatched += result.matched;
       totalUnmatched += result.unmatched;
+    }
+
+    if (uploadError) {
+      results.push({ fileName: file.name, ok: false, message: uploadError });
+      continue;
     }
 
     results.push({

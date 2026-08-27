@@ -53,7 +53,18 @@ export async function POST(request: Request) {
     .update({ last_login_at: new Date().toISOString() })
     .eq("id", pdUser.id);
 
-  await recordLogin({ role: "pd", actorId: pdUser.id, actorName: pdUser.name, request });
+  // 사용자 지시(2026-08-27): "'김해리' 계정으로 접속하는 건 전부 실제로는 관리자 접속이니,
+  // 로그인 이력에는 PD 이름이 아니라 '관리자'로 남겨달라"(지난 이력도 포함해 정정 요청 — DB는
+  // 별도로 UPDATE 처리, 이 코드는 그 시점 이후 신규 로그인에 적용). 로그인 세션 자체(권한)는
+  // 원래대로 PD 세션을 그대로 발급한다 — 바뀌는 건 로그인 이력 페이지(/admin/login-history)에
+  // 남는 표시 방식뿐이다.
+  const isAdminAliasAccount = pdUser.name === "김해리";
+  await recordLogin({
+    role: isAdminAliasAccount ? "admin" : "pd",
+    actorId: pdUser.id,
+    actorName: isAdminAliasAccount ? "관리자" : pdUser.name,
+    request,
+  });
 
   const response = NextResponse.json({ ok: true });
   response.cookies.set(PD_COOKIE_NAME, token, {

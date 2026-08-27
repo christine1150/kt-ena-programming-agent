@@ -80,8 +80,8 @@ export function parseEpgWorkbook(buffer: Buffer, fileName: string): EpgParseResu
     const subtitleRaw = String(row[col("부제")] ?? "").trim();
     result.push({
       broadcastDate: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
-      startTime: startRaw.slice(0, 5),
-      endTime: endRaw.slice(0, 5),
+      startTime: toClockHHMM(startRaw.slice(0, 5)),
+      endTime: endRaw ? toClockHHMM(endRaw.slice(0, 5)) : "",
       programNameRaw,
       episodeNumber,
       subtitle: subtitleRaw || null,
@@ -89,6 +89,20 @@ export function parseEpgWorkbook(buffer: Buffer, fileName: string): EpgParseResu
     });
   }
   return { ok: true, rows: result };
+}
+
+// 실측 버그(2026-08-27): 일일운행표의 "시작시간/종료시간"은 이 프로젝트가 다른 곳(nielsenDaily.ts의
+// normalizeTime 등)에서 이미 다루고 있는 것과 같은 "방송일 기준 24시 초과 표기"다(예: 다음날
+// 새벽 1시 1분을 "25:01"로 적음) — 그런데 이 값을 그대로 DB의 time 컬럼(0~23시만 허용)에
+// 넣으려다 "date/time field value out of range" 오류로 upsert 배치 전체가 조용히 실패해(호출부가
+// 에러를 확인하지 않았음) EPG 업로드가 매번 매칭 0건으로 나오는 버그가 있었다(olife_epg_staging
+// 테이블이 도입된 이후 모든 업로드가 이 경로로 깨져 있었다 — 표가 계속 비어 있었음). 시(hour)만
+// 24로 나눈 나머지로 줄인다(broadcast_date는 파일의 편성일자를 그대로 쓰므로 손댈 필요 없음 —
+// nielsenDaily.ts normalizeTime과 동일한 방식).
+function toClockHHMM(hhmm: string): string {
+  const [h, m] = hhmm.split(":");
+  const hour = ((parseInt(h, 10) || 0) % 24 + 24) % 24;
+  return `${String(hour).padStart(2, "0")}:${m ?? "00"}`;
 }
 
 function toComparableMinutes(hhmm: string): number {
