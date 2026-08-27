@@ -266,7 +266,9 @@ export function buildChannelPeriodReportData(
     periodProgramMovers: { canonical_name: string; period_avg_rating: number | null; prior_avg_rating: number | null; rating_delta: number | null }[];
     daypartOpportunity: { daypart: string; gap_change: number | null }[];
     topPrograms: { program_name: string; avg_rating: number | null }[];
-    competitorPeriodTopPrograms: { competitor_name: string; program_name: string; rating: number | null }[];
+    // get_competitor_period_top_programs 실제 반환 컬럼명은 program_avg_rating(rating 아님) —
+    // 실 서버 확인(2026-08-27) 중 "경쟁채널 Top Programs" 값이 전부 "—"로 비는 버그로 발견.
+    competitorPeriodTopPrograms: { competitor_name: string; program_name: string; program_avg_rating: number | null }[];
     aiSummary: string | null;
   }
 ): ChannelPeriodReportData {
@@ -311,7 +313,7 @@ export function buildChannelPeriodReportData(
     growthDrivers,
     weaknessDrivers,
     topPrograms: dashboard.topPrograms.slice(0, 5).map((p) => ({ name: p.program_name, detail: fmtR(p.avg_rating) })),
-    competitorTopPrograms: dashboard.competitorPeriodTopPrograms.slice(0, 5).map((p) => ({ competitorName: p.competitor_name, programName: p.program_name, rating: p.rating })),
+    competitorTopPrograms: dashboard.competitorPeriodTopPrograms.slice(0, 5).map((p) => ({ competitorName: p.competitor_name, programName: p.program_name, rating: p.program_avg_rating })),
     aiSummary: dashboard.aiSummary,
   };
 }
