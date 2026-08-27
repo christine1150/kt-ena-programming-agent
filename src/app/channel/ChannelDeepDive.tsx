@@ -2367,9 +2367,13 @@ function DowHourBlockTable({
                 {/* 사용자 지시(2026-08-26, 재수정): "점이 더 잘보이게, 정렬이 일정하게" —
                     이전엔 inline-block+align-middle이라 폰트 메트릭에 따라 점이 줄마다
                     미묘하게 다른 높이로 보였다. flex로 바꿔 라벨·점을 항상 같은 기준선에
-                    고정하고, 크기도 8px→10px로 키우고 테두리를 진하게 해 더 또렷하게 한다. */}
+                    고정하고, 크기도 8px→10px로 키우고 테두리를 진하게 해 더 또렷하게 한다.
+                    사용자 재지시(2026-08-27): 그 다음에도 점이 줄마다 다른 "가로" 위치에
+                    보였다 — 원인은 라벨 텍스트 자체의 폭이 줄마다 달라서였다("2~4시" 4글자
+                    vs "23~25시" 6글자). 라벨에 고정 폭을 줘서 점이 항상 같은 x 위치(라벨
+                    칸이 끝나는 지점)에서 시작하도록 고정한다. */}
                 <span className="inline-flex items-center gap-1.5">
-                  <span>{hourBlockLabel(hb)}</span>
+                  <span className="inline-block w-14">{hourBlockLabel(hb)}</span>
                   {oppCls && (
                     <span
                       className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
@@ -3024,6 +3028,122 @@ function ScatterQuadrantChart({
           </g>
         ))}
       </svg>
+    </div>
+  );
+}
+
+// ── 심층 분석(Detailed Analytical Report, 2026-08-27, 사용자 지시) ──────────────────────
+// "단순 결과 나열을 넘어 콘텐츠 구매·패키징 협상 근거로 쓸 심층 분석"으로 3개 항목이 제안됐다:
+// ①동시간대 경쟁 상황 ②시청자 프로파일링 ③시청자 전이·이탈(리드인/리드아웃, Sankey). 이 중
+// ①②는 이미 fetch돼 있는 값(competitorProgramOverlap/whoIsWatchingDemographics)만으로
+// 시각화 가능해 새로 만들고, ③은 만들지 않는다 — Sankey로 그리려는 "시청자가 어디서 왔다가
+// 어디로 갔는지"는 개인 시청자 단위 채널 이동을 추적해야만 알 수 있는데, 이 프로젝트는 그런
+// 개인 패널 이동 추적을 다루지 않는다(CLAUDE.md 범위 제한: "개인 패널 이동 추적... 임의로
+// 추가하지 않는다") — 있지도 않은 흐름을 추정해서 그리면 CLAUDE.md의 No Hallucination
+// 원칙에도 어긋난다. 페이지 안내 문구로 이유를 명시한다(사용자 지시: "시각화 제외 내용들을
+// 다시 잘 정리하여").
+
+// ①동시간대 경쟁 상황 — 이미 COMPARED WITH?의 "시간대별 경쟁 프로그램" 표가 쓰는 것과 같은
+// competitorProgramOverlap을 재사용하되, 전체 표 대신 당사 시청률이 가장 높은 상위 4개
+// 시간대만 골라 막대 비교로 압축한다(전체 표는 아래 COMPARED WITH?에 그대로 남아 있어 중복
+// 아님 — 여기는 "한눈에 보는 요약", 거기는 "전체 상세").
+function TimeSlotCompetitionChart({ rows, accentColor, fmtR }: { rows: CompetitorOverlapRow[]; accentColor: string; fmtR: (v: number | null) => string }) {
+  const grouped = Object.values(
+    rows.reduce<Record<string, CompetitorOverlapRow[]>>((acc, row) => {
+      const key = `${row.our_start_time}__${row.our_program_name}`;
+      (acc[key] ??= []).push(row);
+      return acc;
+    }, {})
+  )
+    .sort((a, b) => (b[0].our_rating ?? 0) - (a[0].our_rating ?? 0))
+    .slice(0, 4);
+
+  if (grouped.length === 0) {
+    return <p className="text-sm text-zinc-400">방영 시간이 겹치는 등록 경쟁채널 프로그램 데이터가 없습니다.</p>;
+  }
+  const maxRating = Math.max(1e-9, ...grouped.flatMap((g) => [g[0].our_rating ?? 0, ...g.map((r) => r.competitor_rating ?? 0)]));
+
+  return (
+    <div className="flex flex-col gap-4">
+      {grouped.map((group) => {
+        const ours = group[0];
+        const competitors = [...group].sort((a, b) => (b.competitor_rating ?? 0) - (a.competitor_rating ?? 0)).slice(0, 2);
+        const bars = [
+          { label: `${ours.our_program_name}(당사)`, rating: ours.our_rating, isOurs: true },
+          ...competitors.map((c) => ({ label: `${c.competitor_program_name}(${c.competitor_name})`, rating: c.competitor_rating, isOurs: false })),
+        ];
+        return (
+          <div key={`${ours.our_start_time}__${ours.our_program_name}`}>
+            <p className="mb-1.5 text-xs font-medium text-zinc-500">
+              {ours.our_start_time.slice(0, 5)} · {ours.our_program_name}
+            </p>
+            <div className="flex flex-col gap-1">
+              {bars.map((b, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className={`w-32 shrink-0 truncate text-[11px] ${b.isOurs ? "font-semibold text-zinc-800" : "text-zinc-500"}`} title={b.label}>
+                    {b.label}
+                  </span>
+                  <div className="h-4 flex-1 rounded bg-zinc-50">
+                    <div
+                      className="h-4 rounded"
+                      style={{
+                        width: `${Math.max(2, ((b.rating ?? 0) / maxRating) * 100)}%`,
+                        backgroundColor: b.isOurs ? accentColor : "#d4d4d8",
+                      }}
+                    />
+                  </div>
+                  <span className="w-14 shrink-0 text-right text-[11px] tabular-nums text-zinc-600">{fmtR(b.rating)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ②시청자 프로파일링 — WHO IS WATCHING?이 이미 계산해 둔 12개 연령·성별 구간(whoIsWatchingDemographics)
+// 그대로, "최다 시청 2개+주목 2개"만 뽑아 보여주던 것과 달리 여기서는 12개 전부를 히트맵 격자로
+// 한 번에 보여준다(WHO IS WATCHING?의 4개 타일 요약과는 다른 각도라 중복이 아니라 보완).
+function DemographicHeatStrip({ demographics, accentColor, fmtR }: { demographics: NarrativeDemographic[] | null; accentColor: string; fmtR: (v: number | null) => string }) {
+  const list = demographics ?? [];
+  if (list.length === 0) {
+    return <p className="text-sm text-zinc-400">연령대별 데이터가 아직 부족합니다.</p>;
+  }
+  const AGE_ORDER = ["10대", "20대", "30대", "40대", "50대", "60대+"];
+  const cellByKey = new Map<string, NarrativeDemographic>();
+  for (const d of list) {
+    const short = shortDemoLabel(d.label); // "남10대" 형태
+    const m = short.match(/^(남|여)(.+)$/);
+    if (m) cellByKey.set(`${m[1]}__${m[2]}`, d);
+  }
+  const maxRating = Math.max(1e-9, ...list.map((d) => d.today ?? 0));
+  return (
+    <div className="grid grid-cols-6 gap-1">
+      {(["남", "여"] as const).flatMap((gender) =>
+        AGE_ORDER.map((age) => {
+          const cell = cellByKey.get(`${gender}__${age}`);
+          const rating = cell?.today ?? null;
+          const intensity = rating !== null ? Math.min(1, rating / maxRating) : 0;
+          const alpha = Math.round(intensity * 200 + 20);
+          const bgColor = rating === null ? "#f4f4f5" : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
+          const textColor = rating === null ? "#a1a1aa" : cellTextColor(accentColor, alpha);
+          return (
+            <div
+              key={`${gender}__${age}`}
+              className="flex flex-col items-center justify-center gap-0.5 rounded py-2"
+              style={{ backgroundColor: bgColor, color: textColor }}
+              title={`${gender}${age}: ${fmtR(rating)}`}
+            >
+              <span className="text-[10px] opacity-80">
+                {gender}·{age}
+              </span>
+              <span className="text-[11px] font-bold tabular-nums">{rating !== null ? fmtR(rating) : "—"}</span>
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }
@@ -3805,18 +3925,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <KpiCard key={spec.label} spec={spec} />
               ))}
             </div>
-            {(winDaypart || weaknessDaypart) && (
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {/* 사용자 지시(2026-08-27): "스코어 카드에 줄이 너무 많으니, 위 아래 두 줄 안에 모두
+                들어갈 수 있도록" — Win/Weakness 2장 + Top/Weak Programs 2장을 따로 두 줄로 두지
+                않고 한 줄(4칸)로 합쳐, KPI 5카드 줄과 합해 총 2줄(위: KPI 5카드, 아래: Win/
+                Weakness/Top/Weak 4장)로 끝나게 한다. 내용·계산은 그대로, 배치만 바꾼다. */}
+            {(winDaypart || weaknessDaypart || briefingTopPrograms.length > 0 || briefingWeakPrograms.length > 0) && (
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {winDaypart && winDaypart.gap_change !== null && (
                   <WinWeaknessCard spec={{ kind: "win", daypartLabel: DAYPART_LABEL[winDaypart.daypart] ?? winDaypart.daypart, gapChange: winDaypart.gap_change }} />
                 )}
                 {weaknessDaypart && weaknessDaypart.gap_change !== null && (
                   <WinWeaknessCard spec={{ kind: "weakness", daypartLabel: DAYPART_LABEL[weaknessDaypart.daypart] ?? weaknessDaypart.daypart, gapChange: weaknessDaypart.gap_change }} />
                 )}
-              </div>
-            )}
-            {(briefingTopPrograms.length > 0 || briefingWeakPrograms.length > 0) && (
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <BriefingProgramList title="TOP PROGRAMS" tone="up" rows={briefingTopPrograms} />
                 <BriefingProgramList title="WEAK PROGRAMS(REPLACE 태그)" tone="down" rows={briefingWeakPrograms} />
               </div>
@@ -3901,6 +4021,36 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             ))}
           </div>
         </div>
+
+        {/* 심층 분석(Detailed Analytical Report, 2026-08-27, 사용자 지시) — 오늘의 브리핑이
+            "무슨 일이 있었는지"를 말한다면, 이 섹션은 향후 콘텐츠 구매·패키징 협상 근거로 쓸
+            수 있는 패턴을 짚는다. 단일 일자 조회일 때만(경쟁 오버랩·연령대 데이터 모두 "오늘"
+            개념 — 기간 모드는 아래 기간 리포트 표들이 그 역할을 함). */}
+        {!showComparisonView && (
+          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+            <h2 className={`${SECTION_TITLE_P2} mb-1`}>심층 분석</h2>
+            <p className="mb-4 text-sm text-zinc-400">
+              단순 결과 나열을 넘어, 향후 콘텐츠 시청률 분석과 구매·패키징 협상 시 근거 자료로 활용할 수 있도록 오늘의 신호를 더 깊이 살펴봅니다.
+            </p>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div>
+                <h3 className="mb-1 text-sm font-semibold text-zinc-600">동시간대 경쟁 상황</h3>
+                <p className="mb-3 text-xs text-zinc-400">
+                  당사 시청률 상위 시간대에 경쟁채널이 어떤 프로그램으로 얼마의 시청률을 기록했는지 비교합니다(전체 목록은 아래 &ldquo;COMPARED WITH?&rdquo;에).
+                </p>
+                <TimeSlotCompetitionChart rows={competitorProgramOverlap} accentColor={accentColor} fmtR={fmtR} />
+              </div>
+              <div>
+                <h3 className="mb-1 text-sm font-semibold text-zinc-600">시청자 프로파일링</h3>
+                <p className="mb-3 text-xs text-zinc-400">연령·성별 12개 구간의 {referenceLabel} 시청률입니다 — 색이 진할수록 그 구간의 시청 집중도가 높습니다.</p>
+                <DemographicHeatStrip demographics={data.whoIsWatchingDemographics} accentColor={accentColor} fmtR={fmtR} />
+              </div>
+            </div>
+            <p className="mt-4 border-t border-zinc-100 pt-3 text-xs text-zinc-400">
+              참고: &ldquo;시청자 전이·이탈(리드인/리드아웃) 분석&rdquo;은 개인 시청자가 채널·프로그램 사이를 실제로 어떻게 옮겨 다녔는지 추적하는 패널 데이터가 있어야 그릴 수 있는데, 이 프로젝트는 그런 개인 단위 이동 추적을 다루지 않아(CLAUDE.md 범위 제한) 이 섹션에는 포함하지 않았습니다 — 있지도 않은 흐름을 추정해서 그리지 않기 위함입니다.
+            </p>
+          </div>
+        )}
 
         {/* 자연어 질문(18번) — 규칙 기반 Intent Router(TIME RESOLVER → PARAMETER EXTRACTOR →
             INTENT REGISTRY → 기존 SQL 함수 → EVIDENCE-FIRST 응답)가 먼저 시도하고, 못 잡아내는
