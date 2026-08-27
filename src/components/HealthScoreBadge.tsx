@@ -4,7 +4,7 @@
 // 그대로 두고 이 파일은 표시(배지 UI)만 담당 — AskAssistantWidget을 Dashboard.tsx에서 뽑아낸
 // 것과 같은 패턴(큰 파일을 건드리지 않고 필요한 조각만 공유 컴포넌트로 추출).
 import type { ChannelHealthScore, HealthVerdict } from "@/lib/channelHealthScore";
-import { HEALTH_LABEL_KO } from "@/lib/channelHealthScore";
+import { HEALTH_LABEL_KO, healthPrimaryReason } from "@/lib/channelHealthScore";
 
 // "hero" = ChannelDeepDive.tsx 히어로 카드(진한 배경 위 반투명 글래스 배지, 흰 글씨).
 // "light" = 밝은 배경(1페이지 "채널별 인사이트" 등) 위에 놓이는 버전 — 배경색 자체로 등급을 표현.
@@ -23,11 +23,27 @@ const LIGHT_BADGE_STYLE: Record<ChannelHealthScore["label"], { bg: string; text:
   WEAK: { bg: "#ffe4e6", text: "#be123c" },
 };
 
-export function HealthScoreBadge({ health, variant = "hero" }: { health: ChannelHealthScore; variant?: "hero" | "light" }) {
+export function HealthScoreBadge({
+  health,
+  variant = "hero",
+  compact = false,
+  showReason = false,
+}: {
+  health: ChannelHealthScore;
+  variant?: "hero" | "light";
+  // 사용자 지시(2026-08-27): "전주 대비 % 우측으로 사이즈를 줄여서 이동" — 히어로 카드의
+  // "전일/전주 대비" 문구와 한 줄에 나란히 놓일 때는 hero 기본 크기(text-sm)도 커서, variant와
+  // 무관하게 더 작은 칩 크기를 강제하는 옵션.
+  compact?: boolean;
+  // 사용자 지시(2026-08-27): "왜 주의인지도 아주 짧게 같이 써줄 것" — 부정 등급(WATCH/WEAK)은
+  // 가장 먼저 걸린 부정 축을, 긍정 등급(GOOD/EXCELLENT)은 가장 먼저 걸린 긍정 축을 짧게 덧붙인다.
+  showReason?: boolean;
+}) {
   const style = variant === "hero" ? HERO_BADGE_STYLE[health.label] : LIGHT_BADGE_STYLE[health.label];
   // hero(2페이지 히어로 카드)는 기존 크기(text-sm px-3 py-1) 그대로, light(1페이지처럼 좁은 인라인
   // 자리에 채널명과 나란히 놓이는 경우)는 더 작은 칩 크기 — 기존 히어로 배지 크기를 건드리지 않는다.
-  const sizeClass = variant === "hero" ? "gap-1.5 rounded-full px-3 py-1 text-sm" : "gap-1 rounded-full px-2 py-0.5 text-[11px]";
+  const sizeClass = compact ? "gap-1 rounded-full px-2 py-0.5 text-[11px]" : variant === "hero" ? "gap-1.5 rounded-full px-3 py-1 text-sm" : "gap-1 rounded-full px-2 py-0.5 text-[11px]";
+  const reason = showReason ? healthPrimaryReason(health) : null;
   return (
     <span
       className={`inline-flex items-center font-semibold ${sizeClass}`}
@@ -35,6 +51,7 @@ export function HealthScoreBadge({ health, variant = "hero" }: { health: Channel
       title={health.axes.map((a) => `${a.label}: ${a.reason}`).join(" / ")}
     >
       {health.label === "EXCELLENT" || health.label === "GOOD" ? "●" : health.label === "STABLE" ? "◐" : "○"} {HEALTH_LABEL_KO[health.label]} · {health.score}
+      {reason && <span className="opacity-80">({reason})</span>}
     </span>
   );
 }

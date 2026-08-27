@@ -114,3 +114,26 @@ export const HEALTH_LABEL_KO: Record<HealthLabel, string> = {
   WATCH: "주의",
   WEAK: "약세",
 };
+
+// 사용자 지시(2026-08-27): "주의 태그가 왜 주의인지 아주 짧게 같이 써줄 것" — axes[].reason은
+// 문장 전체("MOVE/REPLACE 3건 > STRENGTHEN/KEEP 1건")라 배지 옆에 바로 쓰기엔 길다. 축(key)별로
+// 미리 정해둔 2~4글자 짧은 표현만 뽑아 쓴다(새 판정 로직 없음 — 이미 계산된 axes[].verdict을
+// 그대로 읽어 라벨만 붙인다).
+const AXIS_SHORT_REASON: Record<string, { positive: string; negative: string }> = {
+  rating: { positive: "시청률 상승", negative: "시청률 하락" },
+  rank: { positive: "순위 상승", negative: "순위 하락" },
+  programSlate: { positive: "편성 양호", negative: "편성 부진" },
+  competitive: { positive: "상승 기회", negative: "하락 경보" },
+  daypart: { positive: "격차 좁혀짐", negative: "격차 벌어짐" },
+};
+
+// WATCH/WEAK(부정적 등급)는 부정 축 중 첫 번째를, GOOD/EXCELLENT(긍정적 등급)는 긍정 축 중
+// 첫 번째를 이유로 보여준다 — STABLE(균형 상태)은 특정 축을 "원인"으로 짚을 게 딱히 없어 생략.
+export function healthPrimaryReason(health: ChannelHealthScore): string | null {
+  const direction: HealthVerdict | null =
+    health.label === "WATCH" || health.label === "WEAK" ? "negative" : health.label === "GOOD" || health.label === "EXCELLENT" ? "positive" : null;
+  if (!direction) return null;
+  const axis = health.axes.find((a) => a.verdict === direction);
+  if (!axis) return null;
+  return AXIS_SHORT_REASON[axis.key]?.[direction] ?? null;
+}

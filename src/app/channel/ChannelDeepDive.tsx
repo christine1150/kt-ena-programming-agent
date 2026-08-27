@@ -3699,6 +3699,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         daypartGapChanges: daypartOpportunity.map((d) => d.gap_change),
       })
     : null;
+  // 사용자 지시(2026-08-27): Health Score 배지를 "전일/전주 대비" 문구 줄로 옮기기 위해, 그 줄이
+  // 실제로 뜨는지 여부를 미리 계산해둔다(아래 헤더 JSX와 그 줄 JSX 둘 다에서 재사용).
+  const hasDodOrWowDelta = !showComparisonView && ((dod?.rating_change_pct !== null && dod?.rating_change_pct !== undefined) || (wow?.rating_change_pct !== null && wow?.rating_change_pct !== undefined));
 
   // KPI 5카드 — Rating/Share/Reach/시청시간은 current vs dod(전일) 실측 비교, 순위는 4주 평균
   // 대비(narrativeSignal이 이미 계산해 주는 값). share/reach/시청시간의 "전일 대비 %"는
@@ -3841,10 +3844,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   )}
                 </p>
                 {showComparisonView && <p className="text-sm text-white/70">{isComparisonPreset ? "이번 기간 평균" : "선택 기간 평균"}</p>}
-                {/* Channel Health Score(2026-08-27, Phase 1) — 단일 일자 조회일 때만. */}
-                {channelHealth && (
+                {/* Channel Health Score(2026-08-27, Phase 1) — 단일 일자 조회일 때만. 사용자
+                    지시(2026-08-27): "전주 대비 % 우측으로 이동" — 아래 전일/전주 대비 문구 줄에
+                    같이 놓는 게 기본이고, 그 줄 자체가 안 뜨는 경우(dod/wow 데이터 없음)에만 여기
+                    원래 자리에 폴백으로 남긴다(배지가 사라지지 않게). */}
+                {channelHealth && !hasDodOrWowDelta && (
                   <div className="mt-2">
-                    <HealthScoreBadge health={channelHealth} />
+                    <HealthScoreBadge health={channelHealth} compact showReason />
                   </div>
                 )}
               </div>
@@ -3926,7 +3932,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {/* 사용자 지시(2026-08-20): "전일(실제 시청률) 대비 상승/하락률", "전주(실제 시청률) 대비
               상승/하락률" 형식으로 나란히 — 두 비교 모두 get_rating_trend_summary가 이미 계산해준
               값(dod.rating/wow.rating이 그 비교일 실제 시청률)을 그대로 쓴다. */}
-          {!showComparisonView && ((dod?.rating_change_pct !== null && dod?.rating_change_pct !== undefined) || (wow?.rating_change_pct !== null && wow?.rating_change_pct !== undefined)) && (
+          {hasDodOrWowDelta && (
             <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/90">
               {dod?.rating_change_pct !== null && dod?.rating_change_pct !== undefined && (
                 <span>
@@ -3937,6 +3943,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <span>
                   전주({fmtR(wow.rating)}) 대비 {wow.rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(wow.rating_change_pct).toFixed(1)}%
                 </span>
+              )}
+              {/* 사용자 지시(2026-08-27): "주의 태그는 전주대비 % 우측으로 사이즈를 줄여서 이동시키고,
+                  왜 주의인지도 아주 짧게 같이 써줄 것" — 배지를 여기로 옮기고 compact 크기 +
+                  가장 강한 부정(또는 긍정) 축 이유를 괄호로 덧붙인다. */}
+              {channelHealth && (
+                <HealthScoreBadge health={channelHealth} compact showReason />
               )}
             </p>
           )}
