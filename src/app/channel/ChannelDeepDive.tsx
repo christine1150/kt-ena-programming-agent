@@ -2951,6 +2951,101 @@ function BriefingProgramList({ title, tone, rows }: { title: string; tone: "up" 
   );
 }
 
+// ── Phase 2 신규 시각화(2026-08-27, "Channel Intelligence Report" 마스터 프롬프트 §24/§31 반영) ──
+// 둘 다 fitScoreItems(이미 fetch됨, CONTENT FITS?가 쓰는 값 그대로)만 재사용한다 — 새 조회 없음.
+// 기존 SVG 수작업 차트(ManualMinuteRatingChart 등)와 같은 방식(viewBox+좌표 함수), 새 차트
+// 라이브러리 없음.
+interface ScatterPoint {
+  name: string;
+  x: number;
+  y: number;
+  bubble: number | null; // 없으면 기본 크기로 표시(값을 지어내지 않음)
+}
+function ScatterQuadrantChart({
+  points,
+  xDomain,
+  xSplit,
+  yDomain,
+  ySplit,
+  xLabel,
+  yLabel,
+  quadrantLabels,
+  accentColor,
+  xFormat,
+  yFormat,
+}: {
+  points: ScatterPoint[];
+  xDomain: [number, number];
+  xSplit: number;
+  yDomain: [number, number];
+  ySplit: number;
+  xLabel: string;
+  yLabel: string;
+  // [상x/상y, 하x/상y, 상x/하y, 하x/하y] — x는 왼쪽(낮음)→오른쪽(높음), y는 아래(낮음)→위(높음).
+  quadrantLabels: { lowXHighY: string; highXHighY: string; lowXLowY: string; highXLowY: string };
+  accentColor: string;
+  // 실측 버그 수정(2026-08-27): percentile(0~100)과 도달율(%, 0~1대) 값 범위가 완전히 달라
+  // 툴팁을 하나의 소수 자릿수로 고정하면 도달율처럼 작은 값이 전부 "0"으로 뭉개져 보였다
+  // (예: 0.19% → toFixed(0)="0"). 호출부가 값 범위에 맞는 자릿수를 넘기게 한다.
+  xFormat?: (v: number) => string;
+  yFormat?: (v: number) => string;
+}) {
+  if (points.length === 0) return null;
+  const fmtX = xFormat ?? ((v: number) => v.toFixed(1));
+  const fmtY = yFormat ?? ((v: number) => v.toFixed(1));
+  const W = 560;
+  const H = 340;
+  const PAD = 44;
+  const bubbleValues = points.map((p) => p.bubble).filter((v): v is number => v !== null);
+  const maxBubble = Math.max(1e-9, ...bubbleValues);
+  const xOf = (v: number) => PAD + ((v - xDomain[0]) / (xDomain[1] - xDomain[0] || 1)) * (W - PAD * 2);
+  const yOf = (v: number) => H - PAD - ((v - yDomain[0]) / (yDomain[1] - yDomain[0] || 1)) * (H - PAD * 2);
+  const rOf = (v: number | null) => (v === null ? 5 : 4 + (v / maxBubble) * 10);
+  return (
+    <div className="overflow-x-auto">
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H }}>
+        {/* 사분면 배경 — 아주 옅게, 텍스트 가독성을 해치지 않는 선에서 */}
+        <rect x={PAD} y={PAD} width={xOf(xSplit) - PAD} height={yOf(ySplit) - PAD} fill={accentColor} opacity={0.05} />
+        <rect x={xOf(xSplit)} y={yOf(yDomain[1])} width={W - PAD - xOf(xSplit)} height={yOf(ySplit) - yOf(yDomain[1])} fill={accentColor} opacity={0.1} />
+        <line x1={PAD} y1={yOf(ySplit)} x2={W - PAD} y2={yOf(ySplit)} stroke="#d4d4d8" strokeDasharray="3 3" />
+        <line x1={xOf(xSplit)} y1={PAD} x2={xOf(xSplit)} y2={H - PAD} stroke="#d4d4d8" strokeDasharray="3 3" />
+        {/* 축 */}
+        <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#a1a1aa" />
+        <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="#a1a1aa" />
+        <text x={W / 2} y={H - 8} textAnchor="middle" fontSize={11} fill="#71717a">
+          {xLabel}
+        </text>
+        <text x={12} y={H / 2} textAnchor="middle" fontSize={11} fill="#71717a" transform={`rotate(-90 12 ${H / 2})`}>
+          {yLabel}
+        </text>
+        {/* 사분면 라벨 */}
+        <text x={xOf(xSplit) - 6} y={PAD + 14} textAnchor="end" fontSize={10} fontWeight={600} fill="#71717a">
+          {quadrantLabels.lowXHighY}
+        </text>
+        <text x={xOf(xSplit) + 6} y={PAD + 14} textAnchor="start" fontSize={10} fontWeight={600} fill={accentColor}>
+          {quadrantLabels.highXHighY}
+        </text>
+        <text x={xOf(xSplit) - 6} y={H - PAD - 6} textAnchor="end" fontSize={10} fontWeight={600} fill="#a1a1aa">
+          {quadrantLabels.lowXLowY}
+        </text>
+        <text x={xOf(xSplit) + 6} y={H - PAD - 6} textAnchor="start" fontSize={10} fontWeight={600} fill="#a1a1aa">
+          {quadrantLabels.highXLowY}
+        </text>
+        {points.map((p, i) => (
+          <g key={i}>
+            <circle cx={xOf(p.x)} cy={yOf(p.y)} r={rOf(p.bubble)} fill={accentColor} fillOpacity={0.55} stroke={accentColor} strokeWidth={1}>
+              <title>
+                {p.name} — {xLabel} {fmtX(p.x)}, {yLabel} {fmtY(p.y)}
+                {p.bubble !== null ? `, 도달율 ${p.bubble.toFixed(2)}%` : ""}
+              </title>
+            </circle>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 export default function ChannelDeepDive({ code }: { code: string }) {
   const [data, setData] = useState<ChannelData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -4785,6 +4880,81 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </>
           )}
         </div>
+
+        {/* PROGRAM PORTFOLIO / REACH×RATING(2026-08-27, Phase 2, "Channel Intelligence Report"
+            마스터 프롬프트 §24/§31) — 위 CONTENT FITS? 표와 완전히 같은 데이터(fitScoreItems)를
+            산점도로 재배열한 것뿐, 새 조회 없음. skyUHD는 target 기반 Fit Score가 없어(§1) 대상 밖. */}
+        {code !== "SKYUHD" && contentFitsRows.length >= 2 && (
+          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+            <h2 className={`${SECTION_TITLE_P2} mb-1`}>Program Portfolio</h2>
+            <p className="mb-4 text-sm text-zinc-400">
+              위 CONTENT FITS? 표와 같은 값을 그래프로 — 오른쪽 위(HERO)일수록 타깃 실적·시청 몰입도 둘 다 채널 내 상위권입니다. 원 크기는 도달율(Reach).
+            </p>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-medium text-zinc-500">타깃 실적 × 시청 몰입도</p>
+                {/* 실측 버그 수정(2026-08-27): 처음엔 Y축을 Target Affinity로 넣었는데, Fit Score
+                    설계상 Target Affinity/Competitive Opportunity는 "채널 단위로 계산해 그 채널의
+                    모든 프로그램에 동일 적용"(fit_score_mart.sql 설계 주석)되는 값이라 한 채널
+                    페이지 안에서는 항상 똑같은 값(실측: ENA Drama 12개 프로그램 전부 0.00)이 찍혀
+                    산점도가 가로 일직선이 되고 사분면이 무의미해졌다. 프로그램마다 실제로 차이 나는
+                    Audience Engagement(Reach·시청시간비율 기반, 실측 0~91 스프레드 확인)로 교체. */}
+                <ScatterQuadrantChart
+                  accentColor={accentColor}
+                  xLabel="Target Performance(percentile)"
+                  yLabel="Audience Engagement(percentile)"
+                  xDomain={[0, 100]}
+                  xSplit={50}
+                  yDomain={[0, 100]}
+                  ySplit={50}
+                  quadrantLabels={{ lowXHighY: "GROWTH", highXHighY: "HERO", lowXLowY: "WEAK", highXLowY: "SUPPORT" }}
+                  points={contentFitsRows
+                    .filter((r) => r.target_performance_score !== null && r.audience_engagement_score !== null)
+                    .map((r) => ({
+                      name: r.programs?.canonical_name ?? "이름 없음",
+                      x: r.target_performance_score!,
+                      y: r.audience_engagement_score!,
+                      bubble: r.evidence.avg_reach,
+                    }))}
+                />
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium text-zinc-500">도달율(Reach) × 시청률(Rating)</p>
+                {(() => {
+                  const reachRatingPoints = contentFitsRows
+                    .filter((r) => r.evidence.avg_reach !== null && r.evidence.avg_rating !== null)
+                    .map((r) => ({ name: r.programs?.canonical_name ?? "이름 없음", x: r.evidence.avg_reach!, y: r.evidence.avg_rating!, bubble: null as number | null }));
+                  if (reachRatingPoints.length < 2) return <p className="text-sm text-zinc-400">도달율 데이터가 충분하지 않습니다.</p>;
+                  const reachValues = reachRatingPoints.map((p) => p.x);
+                  const ratingValues = reachRatingPoints.map((p) => p.y);
+                  const median = (arr: number[]) => {
+                    const sorted = [...arr].sort((a, b) => a - b);
+                    const mid = Math.floor(sorted.length / 2);
+                    return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+                  };
+                  return (
+                    <ScatterQuadrantChart
+                      accentColor={accentColor}
+                      xLabel="도달율(%)"
+                      yLabel="시청률(%)"
+                      xFormat={(v) => v.toFixed(2)}
+                      yFormat={(v) => v.toFixed(3)}
+                      xDomain={[Math.min(...reachValues) * 0.9, Math.max(...reachValues) * 1.1]}
+                      xSplit={median(reachValues)}
+                      yDomain={[Math.min(...ratingValues) * 0.9, Math.max(...ratingValues) * 1.1]}
+                      ySplit={median(ratingValues)}
+                      quadrantLabels={{ lowXHighY: "저도달·고시청률", highXHighY: "고도달·고시청률", lowXLowY: "저도달·저시청률", highXLowY: "고도달·저시청률" }}
+                      points={reachRatingPoints}
+                    />
+                  );
+                })()}
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-zinc-400">
+              도달율×시청률 산점도의 사분면 기준은 이 채널의 현재 프로그램들 사이의 중앙값(median)입니다 — 절대 기준이 아니라 상대 비교용입니다.
+            </p>
+          </div>
+        )}
 
         {/* OPPORTUNITY?/WHAT TO SCHEDULE? — 사용자 지시(2026-08-21, 기능 #15-10): 오늘/어제/
             당일 직접 지정(=showComparisonView가 false인 단일 일자 조회)에서만 표시한다. 기간
