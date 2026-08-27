@@ -158,3 +158,28 @@ export function reshapeProgramHourCrossing(hourlyProgramTitles: HourlyProgramTit
       .filter((s) => s.length > 0),
   }));
 }
+
+export interface TurningPoint {
+  periodStart: string;
+  direction: "up" | "down";
+  changePct: number;
+  fromRating: number;
+  toRating: number;
+}
+// Phase 6(2026-08-28, 계획서 J절 §06 MODE D "변곡점") — channelReport.ts(구 시스템)의 동명 함수와
+// 정확히 같은 v1 임계값 로직(연속 포인트 등락률 ±15% 이상만, 상위 5개)을 이 시스템 안에 작게
+// 다시 작성했다(Phase 1의 "완전히 별개로 유지" 결정 그대로 — computeDaypartWinWeakness 등과 같은
+// 패턴). 새 기준 발명 아님, OUTLIER_THRESHOLD_PCT(15)와 같은 값.
+export function computeTurningPoints(trend: DailyTrendPoint[], thresholdPct = OUTLIER_THRESHOLD_PCT): TurningPoint[] {
+  const points: TurningPoint[] = [];
+  for (let i = 1; i < trend.length; i++) {
+    const prev = trend[i - 1].avgRating;
+    const curr = trend[i].avgRating;
+    if (prev === null || curr === null || prev === 0) continue;
+    const changePct = ((curr - prev) / prev) * 100;
+    if (Math.abs(changePct) >= thresholdPct) {
+      points.push({ periodStart: trend[i].date, direction: changePct >= 0 ? "up" : "down", changePct, fromRating: prev, toRating: curr });
+    }
+  }
+  return points.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct)).slice(0, 5);
+}
