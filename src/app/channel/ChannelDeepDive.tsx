@@ -593,6 +593,16 @@ function buildAudienceReportHref(code: string, periodPreset: PeriodPreset, dateF
   return `/audience-report/${code}?preset=${periodPreset}&dateTo=${dateTo}`;
 }
 
+// Phase 8(2026-08-28, §11-8 나머지) — "종합 보고서 만들기" 버튼. 채널과 무관하게 항상 같은
+// 포트폴리오 링크를 만든다(원 설계 문구 "2페이지 보고서 만들기 버튼을 2개로"를 그대로 따라 이
+// 채널 헤더 버튼 행에 둔다). 위 buildAudienceReportHref와 같은 3갈래 규칙, 채널 코드만 없다.
+function buildPortfolioReportHref(periodPreset: PeriodPreset, dateFrom: string, dateTo: string): string | null {
+  if (!dateTo) return null;
+  if (periodPreset === "today" || periodPreset === "yesterday") return `/audience-report/portfolio?date=${dateTo}`;
+  if (periodPreset === "custom") return dateFrom ? `/audience-report/portfolio?dateFrom=${dateFrom}&dateTo=${dateTo}` : null;
+  return `/audience-report/portfolio?preset=${periodPreset}&dateTo=${dateTo}`;
+}
+
 // 사용자 지시(2026-08-21, Page 1 → Page 2 확장): Page 1에서 확립한 섹션 헤더 폰트 위계(Pretendard
 // 헤딩 폰트, 크고 굵게)를 Page 2에도 그대로 반영 — 8대 질문 섹션 헤더 전부 이 스타일로 통일.
 const SECTION_TITLE_P2 = "font-heading mb-1 text-xl font-bold tracking-tight text-zinc-800";
@@ -3773,23 +3783,36 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 {/* Phase 7(2026-08-28, Audience Intelligence Report §11-8) — 새 시스템(/audience-report)
                     "각 채널 보고서 만들기" 버튼. 위 구 시스템 버튼은 그대로 두고 옆에 추가한다(사용자
                     지시: 구 리포트가 Word/PPT·Quarterly/Annual을 지원하는 과도기라 지금 대체하지
-                    않음). "종합 보고서 만들기" 버튼은 종합(포트폴리오) 리포트가 실제로 만들어질 때
-                    함께 추가(지금은 갈 곳 없는 버튼을 만들지 않는다). */}
+                    않음). Phase 8에서 "종합 보고서 만들기" 버튼도 종합(포트폴리오) 리포트가 실제로
+                    만들어져 바로 옆에 추가됨. */}
                 {(() => {
                   // periodPreset==="today"일 때는 selectedDateTo가 의도적으로 null이라(서버가 최신
                   // 날짜를 자동으로 고르게 하는 기존 동작, :3220-3226) 위 구 버튼과 동일하게
                   // data.dateTo(서버가 실제로 확정한 최신일)로 폴백한다.
-                  const audienceHref = buildAudienceReportHref(code, periodPreset, selectedDateFrom ?? "", selectedDateTo ?? data.dateTo ?? "");
+                  const resolvedDateTo = selectedDateTo ?? data.dateTo ?? "";
+                  const audienceHref = buildAudienceReportHref(code, periodPreset, selectedDateFrom ?? "", resolvedDateTo);
+                  const portfolioHref = buildPortfolioReportHref(periodPreset, selectedDateFrom ?? "", resolvedDateTo);
                   return (
-                    audienceHref && (
-                      <Link
-                        href={audienceHref}
-                        target="_blank"
-                        className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none hover:bg-white/30"
-                      >
-                        📊 각 채널 보고서
-                      </Link>
-                    )
+                    <>
+                      {audienceHref && (
+                        <Link
+                          href={audienceHref}
+                          target="_blank"
+                          className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none hover:bg-white/30"
+                        >
+                          📊 각 채널 보고서
+                        </Link>
+                      )}
+                      {portfolioHref && (
+                        <Link
+                          href={portfolioHref}
+                          target="_blank"
+                          className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none hover:bg-white/30"
+                        >
+                          🏢 종합 보고서
+                        </Link>
+                      )}
+                    </>
                   );
                 })()}
                 {/* 사용자 지시(2026-08-21): 드랍박스를 열면 옵션 글씨가 안 보이던 버그 — optgroup으로

@@ -22,7 +22,8 @@ export type AudienceReportRequest =
   | { mode: "compare"; dateFrom: string; dateTo: string; priorDateFrom: string; priorDateTo: string }
   | { mode: "cumulative"; latest: string; preset: PeriodPreset; customFrom?: string; customTo?: string };
 
-function resolvePeriod(request: AudienceReportRequest): ResolvedAudiencePeriod | null {
+// Phase 8이 포트폴리오 리포트에서도 같은 기간 해석을 쓸 수 있도록 export로 승격 — 로직 변경 없음.
+export function resolvePeriod(request: AudienceReportRequest): ResolvedAudiencePeriod | null {
   switch (request.mode) {
     case "single_day":
       return resolveSingleDay(request.date);
@@ -78,7 +79,9 @@ function buildEnaLiveAiring(isSingleDay: boolean, dailyReview: DailyOriginalRevi
   return { matchedRating: avgRating, matchedShare: null, matchedHouseholdRating: avgHousehold, ageBreakdown: null, programName: null };
 }
 
-async function collectSkyUhdSubstitute(dateFrom: string, dateTo: string, programLog: SkyUhdRow[] | null): Promise<SkyUhdSubstituteSection> {
+// Phase 8(2026-08-28, 계획서 J절 §07 "08 skyUHD 섹션")이 포트폴리오 리포트에서도 그대로 재사용
+// 할 수 있도록 export로 승격 — 로직 변경 없음.
+export async function collectSkyUhdSubstitute(dateFrom: string, dateTo: string, programLog: SkyUhdRow[] | null): Promise<SkyUhdSubstituteSection> {
   const log = programLog ?? [];
   const [genrePerformance, genreHourCrossing, dailyChannelTrend, coverage] = await Promise.all([
     Promise.resolve(computeGenrePerformance(log)),

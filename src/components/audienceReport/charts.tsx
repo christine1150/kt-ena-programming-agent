@@ -29,18 +29,19 @@ export function ChartCaption({ caption }: { caption: ChartCaptionInfo }) {
   );
 }
 
-const W = 640;
-const H = 200;
-const PAD = { top: 12, right: 16, bottom: 24, left: 40 };
+export const W = 640;
+export const H = 200;
+export const PAD = { top: 12, right: 16, bottom: 24, left: 40 };
 
-function scaleLinear(domain: [number, number], range: [number, number]) {
+// Phase 8(포트폴리오 리포트)도 같은 스케일 헬퍼를 쓸 수 있도록 export로 승격 — 로직 변경 없음.
+export function scaleLinear(domain: [number, number], range: [number, number]) {
   const [d0, d1] = domain;
   const [r0, r1] = range;
   const span = d1 - d0 || 1;
   return (v: number) => r0 + ((v - d0) / span) * (r1 - r0);
 }
 
-function yDomainFrom(values: (number | null)[], padRatio = 0.15): [number, number] {
+export function yDomainFrom(values: (number | null)[], padRatio = 0.15): [number, number] {
   const valid = values.filter((v): v is number => v !== null);
   if (valid.length === 0) return [0, 1];
   const min = Math.min(...valid);
