@@ -220,7 +220,12 @@ export async function buildPortfolioReport(request: AudienceReportRequest): Prom
   const groupB: PortfolioReportDocument["groupB"] = { code: "B", label: AUDIENCE_GROUPS.B.label, oneLiner: oneLinerB, peers: peersB, commonPattern: commonPatternB, opportunities: opportunitiesB, skyUhd };
 
   const slotOverlap = computeSlotOverlap(rawByCode);
-  const actions = allCodes.flatMap((code) => buildChannelActions(code, nameByCode.get(code) ?? code, rawByCode[code]));
+  // flatMap이면 신호가 0개인 채널이 통째로 배열에서 사라진다(실 서버 검증 중 발견) — 채널마다
+  // 항상 나타나도록 {channelCode, channelName, items} 형태로 감싼다.
+  const actionsByChannel = allCodes.map((code) => {
+    const name = nameByCode.get(code) ?? code;
+    return { channelCode: code, channelName: name, items: buildChannelActions(code, name, rawByCode[code]) };
+  });
 
-  return { period, groupA, groupB, slotOverlap, actions, isolationOk };
+  return { period, groupA, groupB, slotOverlap, actionsByChannel, isolationOk };
 }

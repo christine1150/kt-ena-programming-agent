@@ -67,11 +67,19 @@ export interface GroupPeerSection {
   opportunities: ChannelOpportunity[];
 }
 
+export interface ChannelActions {
+  channelCode: string;
+  channelName: string;
+  items: ChannelActionItem[]; // 최대 3개(신호가 부족하면 그보다 적게 — 지어내지 않음). 채널 자체는
+  // 신호가 0개여도 항상 이 배열에 나타난다(flatMap으로 만들면 신호 0개 채널이 통째로 누락되는
+  // 버그가 있었음 — 실 서버 검증 중 발견·수정).
+}
+
 export interface PortfolioReportDocument {
   period: ResolvedAudiencePeriod;
   groupA: GroupPeerSection & { pipeline: PipelineEdge[] };
   groupB: GroupPeerSection & { skyUhd: SkyUhdSubstituteSection | null };
   slotOverlap: SlotOverlapRow[];
-  actions: ChannelActionItem[]; // 7개 채널 × 최대 3개(신호가 부족하면 그보다 적게 — 지어내지 않음)
+  actionsByChannel: ChannelActions[]; // 7개 채널 전부, 신호 없어도 빈 items로 포함
   isolationOk: boolean; // checkGroupIsolation 결과(항상 true여야 정상 — 방어적 확인용)
 }

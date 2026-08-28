@@ -18,7 +18,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function GroupPeerSection({ group, groupLabel }: { group: PortfolioReportDocument["groupA"] | PortfolioReportDocument["groupB"]; groupLabel: string }) {
+function GroupPeerSection({ group, groupLabel, periodLabel }: { group: PortfolioReportDocument["groupA"] | PortfolioReportDocument["groupB"]; groupLabel: string; periodLabel: string }) {
   return (
     <div className="space-y-4">
       <p className="text-base">{group.oneLiner}</p>
@@ -44,8 +44,8 @@ function GroupPeerSection({ group, groupLabel }: { group: PortfolioReportDocumen
           ))}
         </tbody>
       </table>
-      <PeerScatterChart peers={group.peers} caption={{ periodLabel: "", targetUniverse: groupLabel, measure: "수준(x) × 추세(y), 원 크기 = Reach" }} />
-      <ChannelHourHeatmap channels={group.peers.map((p) => ({ code: p.channelCode, name: p.channelName, hourlyPattern: p.hourlyPattern }))} caption={{ periodLabel: "", targetUniverse: groupLabel, measure: "시간대별 평균 시청률" }} />
+      <PeerScatterChart peers={group.peers} caption={{ periodLabel, targetUniverse: groupLabel, measure: "수준(x) × 추세(y), 원 크기 = Reach" }} />
+      <ChannelHourHeatmap channels={group.peers.map((p) => ({ code: p.channelCode, name: p.channelName, hourlyPattern: p.hourlyPattern }))} caption={{ periodLabel, targetUniverse: groupLabel, measure: "시간대별 평균 시청률" }} />
       <TrendSparkline channels={group.peers.map((p) => ({ code: p.channelCode, name: p.channelName, trend: p.trendSeries }))} />
     </div>
   );
@@ -117,7 +117,7 @@ function PortfolioReportPageInner() {
       </Section>
 
       <Section title="02 Group A 내부 비교(수도권 2049)">
-        <GroupPeerSection group={report.groupA} groupLabel={report.groupA.label} />
+        <GroupPeerSection group={report.groupA} groupLabel={report.groupA.label} periodLabel={report.period.label} />
       </Section>
 
       <Section title="03 오리지널 파이프라인">
@@ -125,7 +125,7 @@ function PortfolioReportPageInner() {
       </Section>
 
       <Section title="04 Group B 내부 비교(전국 유료가구)">
-        <GroupPeerSection group={report.groupB} groupLabel={report.groupB.label} />
+        <GroupPeerSection group={report.groupB} groupLabel={report.groupB.label} periodLabel={report.period.label} />
         <p className="mt-2 text-xs text-neutral-500">skyUHD는 프로그램 단위 자료가 제한적입니다(§05) — 시간대·추이 차트에서 값이 비어 보일 수 있습니다.</p>
       </Section>
 
@@ -179,13 +179,8 @@ function PortfolioReportPageInner() {
 
       <Section title="09 채널별 TOP 3 ACTIONS">
         <div className="space-y-4">
-          {Object.entries(
-            report.actions.reduce<Record<string, typeof report.actions>>((acc, a) => {
-              (acc[a.channelName] ??= []).push(a);
-              return acc;
-            }, {})
-          ).map(([channelName, items]) => (
-            <div key={channelName}>
+          {report.actionsByChannel.map(({ channelCode, channelName, items }) => (
+            <div key={channelCode}>
               <div className="mb-1 text-sm font-semibold">{channelName}</div>
               {items.length > 0 ? (
                 <ol className="list-decimal space-y-1 pl-5 text-sm">
