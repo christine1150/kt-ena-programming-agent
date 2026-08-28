@@ -164,7 +164,9 @@ export async function buildPortfolioReport(request: AudienceReportRequest): Prom
   const { data: channelRows } = await supabase.from("channels").select("code, name").in("code", allCodes);
   const nameByCode = new Map((channelRows ?? []).map((c) => [c.code, c.name as string]));
 
-  const rawList = await Promise.all(allCodes.map((code) => collectAudienceReportData(code, period)));
+  // light: true — 포트폴리오는 연령대/경쟁채널/TOP프로그램/8구간·요일별 세부 히트맵을 쓰지 않으므로
+  // 건너뛴다(7채널 동시 조회 시 최대 105개 동시 RPC 요청이 30초를 넘기던 실측 성능 문제 해결).
+  const rawList = await Promise.all(allCodes.map((code) => collectAudienceReportData(code, period, { light: true })));
   const rawByCode: Record<string, AudienceReportRawData> = Object.fromEntries(allCodes.map((code, i) => [code, rawList[i]]));
 
   const isolationIssues = [...checkGroupIsolation(AUDIENCE_GROUPS.A.channelCodes), ...checkGroupIsolation(AUDIENCE_GROUPS.B.channelCodes)];

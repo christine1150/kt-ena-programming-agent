@@ -142,7 +142,13 @@ function fullDemographicLabels(groupCode: "A" | "B"): string[] {
   return ages.flatMap((age) => [`${prefix} 남${age}`, `${prefix} 여${age}`]);
 }
 
-export async function collectAudienceReportData(channelCode: string, period: ResolvedAudiencePeriod): Promise<AudienceReportRawData> {
+// Phase 8(2026-08-28, 계획서 J절 §07) — 포트폴리오 리포트가 7개 채널을 동시에 모을 때 실 서버에서
+// 응답이 30초를 넘기는 성능 문제를 실측으로 발견했다(원인: 채널당 15개 RPC × 7채널 = 최대 105개
+// 동시 요청이 Supabase 커넥션 풀을 압박). opts.light=true면 포트폴리오가 실제로 안 쓰는 7개
+// RPC(연령대·경쟁채널·TOP프로그램·8구간/요일별 세부 히트맵)를 건너뛰어 채널당 8개로 줄인다 —
+// 기존 호출부(Phase 1~7, opts 생략)는 동작 변경 없음(기본값 false).
+export async function collectAudienceReportData(channelCode: string, period: ResolvedAudiencePeriod, opts: { light?: boolean } = {}): Promise<AudienceReportRawData> {
+  const { light = false } = opts;
   const group = groupForChannel(channelCode);
 
   const { data: channelRow, error: channelError } = await supabase.from("channels").select("primary_target").eq("code", channelCode).maybeSingle();
@@ -218,7 +224,7 @@ export async function collectAudienceReportData(channelCode: string, period: Res
             p_full_window_days: fullWindowDays,
             p_recent_days: recentDays,
           }),
-      skyUhd
+      light || skyUhd
         ? EMPTY
         : supabase.rpc("get_channel_hourblock_opportunity", {
             p_channel_code: channelCode,
@@ -227,26 +233,28 @@ export async function collectAudienceReportData(channelCode: string, period: Res
             p_full_window_days: fullWindowDays,
             p_recent_days: recentDays,
           }),
-      skyUhd ? EMPTY : supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channelCode, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays }),
-      skyUhd ? EMPTY : supabase.rpc("get_channel_top_programs", { p_channel_code: channelCode, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 20 }),
-      supabase.rpc("get_channel_period_demographics", {
-        p_channel_code: channelCode,
-        // Phase 1은 대표 4개 연령대만 썼는데, 기존 시스템(dashboard/channel/route.ts)의 실제 관례는
-        // 12구간 전체(fullDemographicTargets)다 — 실측 확인(2026-08-28, ENA "오늘의 브리핑" 실측
-        // 결과가 여50대/남50대 등 대표 4개 밖 연령대를 하이라이트로 뽑고 있었음) 후 이번에 맞춘다.
-        p_demographic_labels: fullDemographicLabels(group.code),
-        p_date_from: dateFrom,
-        p_date_to: dateTo,
-        p_prior_date_from: priorDateFrom,
-        p_prior_date_to: priorDateTo,
-      }),
-      supabase.rpc("get_competitor_insight_report", { p_channel_code: channelCode, p_target_label: rankTargetLabel, p_as_of_date: dateTo, p_date_from: dateFrom }),
-      supabase.rpc("get_competitor_period_top_programs", { p_channel_code: channelCode, p_target_label: rankTargetLabel, p_date_from: dateFrom, p_date_to: dateTo, p_channel_limit: 5, p_program_limit: 7 }),
+      light || skyUhd ? EMPTY : supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channelCode, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays }),
+      light || skyUhd ? EMPTY : supabase.rpc("get_channel_top_programs", { p_channel_code: channelCode, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 20 }),
+      light
+        ? EMPTY
+        : supabase.rpc("get_channel_period_demographics", {
+            p_channel_code: channelCode,
+            // Phase 1은 대표 4개 연령대만 썼는데, 기존 시스템(dashboard/channel/route.ts)의 실제 관례는
+            // 12구간 전체(fullDemographicTargets)다 — 실측 확인(2026-08-28, ENA "오늘의 브리핑" 실측
+            // 결과가 여50대/남50대 등 대표 4개 밖 연령대를 하이라이트로 뽑고 있었음) 후 이번에 맞춘다.
+            p_demographic_labels: fullDemographicLabels(group.code),
+            p_date_from: dateFrom,
+            p_date_to: dateTo,
+            p_prior_date_from: priorDateFrom,
+            p_prior_date_to: priorDateTo,
+          }),
+      light ? EMPTY : supabase.rpc("get_competitor_insight_report", { p_channel_code: channelCode, p_target_label: rankTargetLabel, p_as_of_date: dateTo, p_date_from: dateFrom }),
+      light ? EMPTY : supabase.rpc("get_competitor_period_top_programs", { p_channel_code: channelCode, p_target_label: rankTargetLabel, p_date_from: dateFrom, p_date_to: dateTo, p_channel_limit: 5, p_program_limit: 7 }),
       getChannelMasterInfo(channelCode),
       skyUhd ? supabase.rpc("get_skyuhd_program_log", { p_date_from: dateFrom, p_date_to: dateTo }) : Promise.resolve({ data: null }),
       skyUhd ? EMPTY : supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channelCode, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
       skyUhd ? EMPTY : supabase.rpc("get_hourly_program_titles", { p_channel_code: channelCode, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
-      wantsDemographicHighlights
+      !light && wantsDemographicHighlights
         ? supabase.rpc("get_channel_demographic_program_highlights", {
             p_channel_code: channelCode,
             p_kpi_target_label: programTargetLabel,
