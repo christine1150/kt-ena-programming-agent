@@ -236,4 +236,8 @@ export interface AudienceReportDocument {
   qualityIssues: QualityIssue[];
   body: AudienceReportBody;
   recommendation: RecommendationSection;
+  // Phase 10(§12) — AI가 이미 검증된 사실(facts)만 인용해 종합한 문단, 수치 대조를 통과하지
+  // 못하면 null(지어내는 것보다 안 보여주는 게 낫다는 원칙 — 화면은 이 필드가 null이면 그
+  // 자리 자체를 렌더링하지 않는다).
+  aiSummary: string | null;
 }

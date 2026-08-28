@@ -14,6 +14,7 @@ import type { SkyUhdProgramLogRow as SkyUhdRow } from "./dataCollector";
 import { computeTurningPoints } from "./analyzer";
 import { addDaysStr } from "./periodPresets";
 import { buildRecommendationSection } from "./recommendationSection";
+import { buildChannelExecutiveSummary } from "./narrativeLlm";
 import type { OriginalReviewSection, EnaLiveAiringSection, SkyUhdSubstituteSection, CompetitorInsightRow, ComparisonMatrixRow, AudienceReportDocument, BestWorstDayDetail } from "./reportModel";
 import { buildModeASection, buildModeBSection, buildModeCSection, buildModeDSection } from "./reportSections";
 
@@ -157,7 +158,9 @@ export async function buildAudienceReport(channelCode: string, request: Audience
       skyUhd,
       competitorInsight,
     });
-    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "single_day", sections }, recommendation };
+    const bodyA = { mode: "single_day" as const, sections };
+    const aiSummaryA = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyA, channelCode);
+    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyA, recommendation, aiSummary: aiSummaryA };
   }
 
   if (period.mode === "range") {
@@ -171,7 +174,9 @@ export async function buildAudienceReport(channelCode: string, request: Audience
     const enaLiveAiring = channelCode === "ENA" && originalReview ? buildEnaLiveAiring(false, [], originalReview.episodeTrends) : null;
 
     const sections = buildModeBSection(raw, { originalReview, enaLiveAiring, skyUhd, bestDayDetail, worstDayDetail });
-    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "range", sections }, recommendation };
+    const bodyB = { mode: "range" as const, sections };
+    const aiSummaryB = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyB, channelCode);
+    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyB, recommendation, aiSummary: aiSummaryB };
   }
 
   if (period.mode === "compare") {
@@ -200,7 +205,9 @@ export async function buildAudienceReport(channelCode: string, request: Audience
       skyUhdA,
       skyUhdB,
     });
-    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "compare", sections }, recommendation };
+    const bodyC = { mode: "compare" as const, sections };
+    const aiSummaryC = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyC, channelCode);
+    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyC, recommendation, aiSummary: aiSummaryC };
   }
 
   // MODE D(cumulative)
@@ -230,7 +237,9 @@ export async function buildAudienceReport(channelCode: string, request: Audience
     skyUhd,
     rankAvg: rankAvg ? { current: rankAvg.avgRank, prior: null } : null,
   });
-  return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "cumulative", sections }, recommendation };
+  const bodyD = { mode: "cumulative" as const, sections };
+  const aiSummaryD = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyD, channelCode);
+  return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyD, recommendation, aiSummary: aiSummaryD };
 }
 
 async function fetchDayDetail(channelCode: string, programTargetLabel: string, date: string, rating: number | null): Promise<BestWorstDayDetail> {

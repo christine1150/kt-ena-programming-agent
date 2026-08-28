@@ -82,4 +82,5 @@ export interface PortfolioReportDocument {
   slotOverlap: SlotOverlapRow[];
   actionsByChannel: ChannelActions[]; // 7개 채널 전부, 신호 없어도 빈 items로 포함
   isolationOk: boolean; // checkGroupIsolation 결과(항상 true여야 정상 — 방어적 확인용)
+  aiSummary: string | null; // Phase 10(§12) — reportModel.ts의 AudienceReportDocument.aiSummary와 같은 원칙
 }

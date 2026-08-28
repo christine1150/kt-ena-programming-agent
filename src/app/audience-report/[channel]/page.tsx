@@ -119,6 +119,16 @@ export default function AudienceReportPage() {
         <p className="mt-2 text-[11px] text-neutral-400">시청률은 소수점 {digits}자리까지 표시합니다.</p>
       </header>
 
+      {/* Phase 10(§12) — 이미 검증된 사실만 인용해 수치 대조를 통과한 문단만 보여준다(구
+          periodReportLlm.ts 관례대로 배지 없이 "AI Executive Summary" 제목만). 검증 실패·생성
+          실패 시 aiSummary가 null이라 이 섹션 자체가 안 보인다(지어내지 않는다는 원칙). */}
+      {report.aiSummary && (
+        <section className="mb-6 rounded-lg bg-indigo-50 p-4 text-sm leading-relaxed dark:bg-indigo-950/40">
+          <div className="mb-1 text-xs font-semibold text-indigo-600 dark:text-indigo-300">AI Executive Summary</div>
+          <p>{report.aiSummary}</p>
+        </section>
+      )}
+
       {report.body.mode === "single_day" && <ModeABody sections={report.body.sections} channelCode={report.channelCode} />}
       {report.body.mode === "range" && <ModeBBody sections={report.body.sections} channelCode={report.channelCode} />}
       {report.body.mode === "compare" && <ModeCBody sections={report.body.sections} channelCode={report.channelCode} />}

@@ -9,6 +9,7 @@ import { getInSeasonFeaturedContent } from "./originalContent";
 import { computeDaypartWinWeakness, computeGrowthWeaknessMovers, computeStructuralVsTemporary } from "./analyzer";
 import { checkGroupIsolation } from "./validate";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
+import { buildPortfolioExecutiveSummary } from "./narrativeLlm";
 import type {
   PortfolioReportDocument,
   PeerRow,
@@ -229,5 +230,8 @@ export async function buildPortfolioReport(request: AudienceReportRequest): Prom
     return { channelCode: code, channelName: name, items: buildChannelActions(code, name, rawByCode[code]) };
   });
 
-  return { period, groupA, groupB, slotOverlap, actionsByChannel, isolationOk };
+  const draft = { period, groupA, groupB, slotOverlap, actionsByChannel, isolationOk, aiSummary: null };
+  // Phase 10(§12) — 그룹별 한 줄 + 공통 패턴 + 채널 수준·추세를 사실로 준 AI Executive Summary.
+  const aiSummary = await buildPortfolioExecutiveSummary(period.label, draft);
+  return { ...draft, aiSummary };
 }

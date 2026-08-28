@@ -109,6 +109,14 @@ function PortfolioReportPageInner() {
         )}
       </header>
 
+      {/* Phase 10(§12) — 채널별 리포트와 같은 원칙(narrativeLlm.ts), 배지 없이 제목만. */}
+      {report.aiSummary && (
+        <section className="mb-6 rounded-lg bg-indigo-50 p-4 text-sm leading-relaxed dark:bg-indigo-950/40">
+          <div className="mb-1 text-xs font-semibold text-indigo-600 dark:text-indigo-300">AI Executive Summary</div>
+          <p>{report.aiSummary}</p>
+        </section>
+      )}
+
       <Section title="01 포트폴리오 한 줄">
         <div className="space-y-1 text-base">
           <p>{report.groupA.oneLiner}</p>
