@@ -44,7 +44,11 @@ export interface ChannelOpportunity {
   label: string;
 }
 
+// Phase 12(2026-08-28, 계획서 J절 Phase 12) — dow 추가: 화·목요일에 같은 시간대·같은 프로그램이면
+// 요일이 달라도 "중복"으로 잡히던 허점을 사용자가 지적해, 요일까지 일치할 때만 중복으로 판정한다.
 export interface SlotOverlapRow {
+  dow: number; // ISO 요일(1=월~7=일)
+  dowLabel: string;
   hour: number;
   canonicalName: string;
   channelCodes: string[];

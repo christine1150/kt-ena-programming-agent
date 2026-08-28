@@ -6,7 +6,7 @@ import type { QualityIssue } from "./validate";
 import type { ChannelMasterInfo } from "./masterData";
 import type { ResolvedAudiencePeriod } from "./periodResolver";
 import type { CoverageInfo, GenreHourRow, GenrePerformanceRow, ProgramContributionRow } from "./skyUhdCross";
-import type { DailyOutlierVerdict, StructuralVerdict, TurningPoint } from "./analyzer";
+import type { DailyOutlierVerdict, StructuralVerdict, TurningPoint, DemographicPeakHour, CompetitorScheduleChangeGroup } from "./analyzer";
 
 /** 값이 원래 없는(구조적으로 해당 없음) 경우와 "0건"을 구분한다 — §10 "빈 상태를 설계한다" 원칙.
  *  reason은 화면에 그대로 노출되는 사유 문장이다("skyUHD는 프로그램 단위 자료가 제한적입니다" 등). */
@@ -60,6 +60,24 @@ export interface CompetitorInsightRow {
   topProgramRating: number | null;
 }
 
+// Phase 12(2026-08-28, 계획서 J절 Phase 12) — 타깟×시간대(연령대별 시간대 프로파일).
+export interface TargetHourlyCell {
+  demographicLabel: string;
+  hour: number;
+  avgRating: number | null;
+}
+// Phase 12 — 프로그램×타깟 교차. MODE A는 기존 demographicProgramHighlights(같은 요일 트레일링
+// baseline)를, MODE B/C/D는 신규 기간 RPC(직전 동일 길이 기간 baseline)를 이 하나의 필드 모양으로
+// 통일해 렌더러가 모드별로 다른 필드를 안 써도 되게 한다.
+export interface ProgramAudienceCrossRow {
+  programName: string;
+  demographicLabel: string;
+  metric: string; // "rating" | "share" | "reach" | "time_spent_seconds" | "time_spent_share"
+  value: number | null;
+  baselineValue: number | null; // MODE A: 같은 요일 8주 평균 / MODE B/C/D: 직전 동일 길이 기간 평균
+  deltaPct: number | null;
+}
+
 // 오리지널/독점 리뷰 — originalContent.ts의 원본 행을 그대로 실어 렌더러가 §03 삽입 규칙대로 쓴다.
 export interface OriginalReviewSection {
   works: import("./originalContent").FeaturedContentWork[];
@@ -95,6 +113,10 @@ export interface ModeASection {
   competitorSameSlot: Maybe<CompetitorInsightRow[]>; // 08 동시간대 경쟁
   thingsToVerify: string[]; // 09 확인해야 할 것(단정 없는 관찰 목록)
   skyUhd: Maybe<SkyUhdSubstituteSection>; // skyUHD 대체 블록(해당 채널만)
+  // Phase 12 — §06 번호 순서 밖 추가 섹션(편성 제언과 같은 위치 원칙).
+  targetHourlyPattern: Maybe<{ cells: TargetHourlyCell[]; peaks: DemographicPeakHour[]; caption: ChartCaptionInfo }>;
+  programAudienceCross: Maybe<ProgramAudienceCrossRow[]>;
+  competitorScheduleChanges: Maybe<CompetitorScheduleChangeGroup[]>;
 }
 
 // ---------------- MODE B(시작~끝) — §06 01~10 순서 그대로 ----------------
@@ -128,6 +150,9 @@ export interface ModeBSection {
   bestWorstDay: Maybe<{ best: BestWorstDayDetail | null; worst: BestWorstDayDetail | null }>; // 09 최고일·최저일 해부
   structuralVerdict: StructuralVerdict; // 10 일시적 vs 구조적
   skyUhd: Maybe<SkyUhdSubstituteSection>;
+  targetHourlyPattern: Maybe<{ cells: TargetHourlyCell[]; peaks: DemographicPeakHour[]; caption: ChartCaptionInfo }>;
+  programAudienceCross: Maybe<ProgramAudienceCrossRow[]>;
+  competitorScheduleChanges: Maybe<CompetitorScheduleChangeGroup[]>;
 }
 
 // ---------------- MODE C(기간 A vs 기간 B) — §06 01~08 순서 그대로 ----------------
@@ -163,6 +188,9 @@ export interface ModeCSection {
   schedulingDifference: { newPrograms: string[]; endedPrograms: string[] }; // 07 편성 자체의 차이
   ratingShareSplit: { ratingDirection: "up" | "down" | "flat"; shareDirection: "up" | "down" | "flat"; note: string | null }; // 08
   skyUhd: Maybe<{ periodA: SkyUhdSubstituteSection; periodB: SkyUhdSubstituteSection }>;
+  targetHourlyPattern: Maybe<{ cells: TargetHourlyCell[]; peaks: DemographicPeakHour[]; caption: ChartCaptionInfo }>;
+  programAudienceCross: Maybe<ProgramAudienceCrossRow[]>;
+  competitorScheduleChanges: Maybe<CompetitorScheduleChangeGroup[]>;
 }
 
 // ---------------- MODE D(누적·트레일링·주기비교) — §06 01~08 순서 그대로 ----------------
@@ -193,6 +221,9 @@ export interface ModeDSection {
   turningPoints: TurningPoint[]; // 07
   topContributors: import("./dataCollector").ProgramMoverRow[]; // 08 누적 기여 상위
   skyUhd: Maybe<SkyUhdSubstituteSection>;
+  targetHourlyPattern: Maybe<{ cells: TargetHourlyCell[]; peaks: DemographicPeakHour[]; caption: ChartCaptionInfo }>;
+  programAudienceCross: Maybe<ProgramAudienceCrossRow[]>;
+  competitorScheduleChanges: Maybe<CompetitorScheduleChangeGroup[]>;
 }
 
 export type AudienceReportBody =

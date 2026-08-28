@@ -44,6 +44,43 @@ export interface HourlyProgramTitleRow {
   broadcastHour: number;
   programNames: string; // "프로그램A / 프로그램B" 형태(원본 그대로, 여러 날짜에 걸친 방영분을 "/" 조인)
 }
+// Phase 12(2026-08-28, 계획서 J절 Phase 12) — 슬롯 중복 점검에 요일을 반영하기 위한 dow 포함 버전.
+// 기존 hourlyProgramTitles(시간대만)와 별개 필드 — Delta-Only 원칙(get_hourly_program_titles 자체는
+// 안 건드림, Page 2 그래프 등 요일 구분이 필요 없는 기존 용도에 영향 없게).
+export interface HourlyProgramTitleByDowRow {
+  dow: number; // ISO 요일(1=월~7=일)
+  broadcastHour: number;
+  programNames: string;
+}
+// Phase 12 — 연령대×시간대 평균 시청률("어느 연령대가 어느 시간대에 몰리는지").
+export interface TargetHourlyPatternRow {
+  demographicLabel: string;
+  broadcastHour: number;
+  avgRating: number | null;
+  sampleCount: number | null;
+}
+// Phase 12 — 기간 프로그램×타깟(MODE B/C/D 전용). 기존 DemographicProgramHighlight(단일 일자,
+// today_value/baseline_avg)와 필드명을 다르게 둬(period_value/prior_value) 두 개념을 혼동하지 않게.
+export interface PeriodDemographicProgramHighlight {
+  program_name: string;
+  demographic_label: string;
+  metric: "rating" | "share" | "reach" | "time_spent_seconds" | "time_spent_share";
+  period_value: number | null;
+  prior_value: number | null;
+  period_days: number | null;
+  delta_pct: number | null;
+}
+// Phase 12 — 경쟁채널 편성 변화 이력(기간 누적). get_competitor_schedule_change_log 원본을 그대로
+// camelCase로만 옮긴다(집계는 analyzer.ts의 몫).
+export interface CompetitorScheduleChangeRow {
+  competitorName: string;
+  hourBlock: number;
+  changedDate: string;
+  changedProgram: string;
+  changedRating: number | null;
+  usualProgram: string | null;
+  usualWeeksSeen: number;
+}
 // get_channel_demographic_program_highlights 원본(실측 확인, 2026-08-28) — 단일 일자 전용(기존
 // 시스템 제약 그대로 승계, 새로 기간 확장하지 않음).
 export interface DemographicProgramHighlight {
@@ -101,6 +138,12 @@ export interface AudienceReportRawData {
   // 단일 일자(MODE A)이고 skyUHD가 아닐 때만 채워진다 — 그 외에는 항상 빈 배열(기존 시스템도
   // 기간 확장판이 없어 같은 제약을 승계, 지어내지 않음).
   demographicProgramHighlights: DemographicProgramHighlight[];
+
+  // Phase 12(2026-08-28) — 4개 신규 분석 축. 전부 additive(기존 필드는 그대로).
+  targetHourlyPattern: TargetHourlyPatternRow[]; // skyUHD·light 모드는 항상 빈 배열
+  periodDemographicProgramHighlights: PeriodDemographicProgramHighlight[]; // MODE A·skyUHD·light 모드는 항상 빈 배열(MODE A는 demographicProgramHighlights를 그대로 씀)
+  competitorScheduleChangeLog: CompetitorScheduleChangeRow[]; // light 모드·페어링 없는 채널은 빈 배열
+  hourlyProgramTitlesByDow: HourlyProgramTitleByDowRow[]; // skyUHD만 빈 배열 — light 모드에서도 유지(포트폴리오 슬롯 중복 점검이 필요로 함)
 
   competitorInsight: unknown[]; // get_competitor_insight_report 원본
   competitorTopPrograms: { competitor_name: string; program_name: string; program_avg_rating: number | null }[];
@@ -193,6 +236,10 @@ export async function collectAudienceReportData(channelCode: string, period: Res
     hourlyPatternRes,
     hourlyProgramTitlesRes,
     demographicHighlightsRes,
+    targetHourlyPatternRes,
+    periodDemographicHighlightsRes,
+    competitorScheduleChangeLogRes,
+    hourlyProgramTitlesByDowRes,
   ] = await Promise.all([
       supabase.rpc("get_rating_period_report", {
         p_channel_code: channelCode,
@@ -264,6 +311,45 @@ export async function collectAudienceReportData(channelCode: string, period: Res
             p_program_baseline_weeks: 8,
           })
         : EMPTY,
+      // Phase 12 — 타깟×시간대(연령대별 시간대 프로파일). skyUHD는 program_id not null 행이 없어
+      // 항상 빈 결과(daypart류와 같은 이유), light 모드(포트폴리오)는 채널별 리포트 전용 축이라 건너뜀.
+      light || skyUhd
+        ? EMPTY
+        : supabase.rpc("get_channel_demographic_hourblock_pattern", {
+            p_channel_code: channelCode,
+            p_demographic_labels: fullDemographicLabels(group.code),
+            p_date_from: dateFrom,
+            p_date_to: dateTo,
+          }),
+      // Phase 12 — 기간 프로그램×타깟. MODE A는 demographicProgramHighlights(같은 요일 트레일링
+      // baseline)를 그대로 쓰므로 여기서는 MODE B/C/D(period.mode !== "single_day")에서만 호출.
+      light || skyUhd || period.mode === "single_day"
+        ? EMPTY
+        : supabase.rpc("get_channel_period_demographic_program_highlights", {
+            p_channel_code: channelCode,
+            p_kpi_target_label: programTargetLabel,
+            p_demographic_labels: fullDemographicLabels(group.code),
+            p_date_from: dateFrom,
+            p_date_to: dateTo,
+            p_prior_date_from: priorDateFrom,
+            p_prior_date_to: priorDateTo,
+            p_top_n_programs: 5,
+          }),
+      // Phase 12 — 경쟁채널 편성 변화 이력(기간 누적). 페어링 없는 채널은 RPC가 자연히 빈 배열을
+      // 반환한다(competitor_program_ratings 자체가 채널당 경쟁채널 1개뿐이라는 기존 한계 그대로).
+      light
+        ? EMPTY
+        : supabase.rpc("get_competitor_schedule_change_log", {
+            p_channel_code: channelCode,
+            p_date_from: dateFrom,
+            p_date_to: dateTo,
+            p_lookback_weeks: 4,
+          }),
+      // Phase 12 — 슬롯 중복 점검용 요일 인식 시간대별 프로그램명. light 모드에서도 유지(포트폴리오가
+      // 반드시 필요로 함, 기존 hourlyProgramTitles와 동일한 취급).
+      skyUhd
+        ? EMPTY
+        : supabase.rpc("get_hourly_program_titles_by_dow", { p_channel_code: channelCode, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
     ]);
 
   const rawTrend = (trendRes.data ?? []) as { broadcast_date?: string; week_start?: string; month_start?: string; avg_rating: number | null }[];
@@ -340,6 +426,36 @@ export async function collectAudienceReportData(channelCode: string, period: Res
   }));
   const demographicProgramHighlights: DemographicProgramHighlight[] = (demographicHighlightsRes.data ?? []) as DemographicProgramHighlight[];
 
+  const targetHourlyPattern: TargetHourlyPatternRow[] = ((targetHourlyPatternRes.data ?? []) as {
+    demographic_label: string;
+    broadcast_hour: number;
+    avg_rating: number | null;
+    sample_count: number | null;
+  }[]).map((r) => ({ demographicLabel: r.demographic_label, broadcastHour: r.broadcast_hour, avgRating: r.avg_rating, sampleCount: r.sample_count }));
+  const periodDemographicProgramHighlights: PeriodDemographicProgramHighlight[] = (periodDemographicHighlightsRes.data ?? []) as PeriodDemographicProgramHighlight[];
+  const competitorScheduleChangeLog: CompetitorScheduleChangeRow[] = ((competitorScheduleChangeLogRes.data ?? []) as {
+    competitor_name: string;
+    hour_block: number;
+    changed_date: string;
+    changed_program: string;
+    changed_rating: number | null;
+    usual_program: string | null;
+    usual_weeks_seen: number;
+  }[]).map((r) => ({
+    competitorName: r.competitor_name,
+    hourBlock: r.hour_block,
+    changedDate: r.changed_date,
+    changedProgram: r.changed_program,
+    changedRating: r.changed_rating,
+    usualProgram: r.usual_program,
+    usualWeeksSeen: r.usual_weeks_seen,
+  }));
+  const hourlyProgramTitlesByDow: HourlyProgramTitleByDowRow[] = ((hourlyProgramTitlesByDowRes.data ?? []) as { dow: number; broadcast_hour: number; program_names: string }[]).map((r) => ({
+    dow: r.dow,
+    broadcastHour: r.broadcast_hour,
+    programNames: r.program_names,
+  }));
+
   const skyUhdProgramLog: SkyUhdProgramLogRow[] | null = isSkyUhd(channelCode)
     ? ((skyUhdLogRes.data ?? []) as { broadcast_date: string; start_time: string; canonical_name: string; rating: number | null }[]).map((r) => ({
         broadcastDate: r.broadcast_date,
@@ -371,5 +487,9 @@ export async function collectAudienceReportData(channelCode: string, period: Res
     competitorTopPrograms: competitorTopRes.data ?? [],
     masterInfo,
     skyUhdProgramLog,
+    targetHourlyPattern,
+    periodDemographicProgramHighlights,
+    competitorScheduleChangeLog,
+    hourlyProgramTitlesByDow,
   };
 }

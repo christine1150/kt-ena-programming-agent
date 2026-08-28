@@ -13,6 +13,7 @@ import type {
   HourBlockDeltaRow,
   CumulativeConvergencePoint,
   ComparisonMatrixRow,
+  TargetHourlyCell,
 } from "@/lib/audienceReport/reportModel";
 
 // §10 공통 원칙 "모든 차트에 3종 표기" — caption을 필수 prop으로 받아야만 차트를 렌더링할 수 있게
@@ -134,6 +135,50 @@ export function WeekdayHourHeatmap({ cells, caption }: { cells: WeekdayHourCell[
                 <td className="p-1 font-medium">{cellByKey.get(`${dow}_${hourBlocks[0]}`)?.dowLabel ?? dow}</td>
                 {hourBlocks.map((h) => {
                   const c = cellByKey.get(`${dow}_${h}`);
+                  const v = c?.avgRating ?? null;
+                  const alpha = v !== null && max > 0 ? Math.min(1, v / max) : 0;
+                  return (
+                    <td key={h} className="p-1 text-center tabular-nums" style={{ backgroundColor: `rgba(58,48,223,${alpha * 0.75})`, color: alpha > 0.5 ? "#fff" : undefined }}>
+                      {v !== null ? v.toFixed(3) : "—"}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ChartCaption caption={caption} />
+    </div>
+  );
+}
+
+// Phase 12(2026-08-28, 계획서 J절 Phase 12) — 타깟×시간대. WeekdayHourHeatmap과 완전히 같은 HTML
+// table 색상농도 패턴(요일 대신 연령대를 행으로) — 새 렌더링 방식 없음.
+export function TargetHourlyHeatmap({ cells, caption }: { cells: TargetHourlyCell[]; caption: ChartCaptionInfo }) {
+  const labels = Array.from(new Set(cells.map((c) => c.demographicLabel)));
+  const hours = Array.from(new Set(cells.map((c) => c.hour))).sort((a, b) => a - b);
+  const values = cells.map((c) => c.avgRating).filter((v): v is number => v !== null);
+  const max = values.length > 0 ? Math.max(...values) : 1;
+  const cellByKey = new Map(cells.map((c) => [`${c.demographicLabel}_${c.hour}`, c]));
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="border-collapse text-[11px]">
+          <thead>
+            <tr>
+              <th className="p-1 text-left text-neutral-500">연령대\시간</th>
+              {hours.map((h) => (
+                <th key={h} className="p-1 text-center text-neutral-500">{h}시</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {labels.map((label) => (
+              <tr key={label}>
+                <td className="p-1 font-medium">{label}</td>
+                {hours.map((h) => {
+                  const c = cellByKey.get(`${label}_${h}`);
                   const v = c?.avgRating ?? null;
                   const alpha = v !== null && max > 0 ? Math.min(1, v / max) : 0;
                   return (

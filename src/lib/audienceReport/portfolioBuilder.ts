@@ -137,15 +137,19 @@ function buildChannelActions(code: string, name: string, raw: AudienceReportRawD
   return candidates.filter((c): c is ChannelActionItem => c !== null).slice(0, 3);
 }
 
+// Phase 12(2026-08-28, 계획서 J절 Phase 12) — 요일까지 일치할 때만 "슬롯 중복"으로 판정한다(기존은
+// 시간대만 봐서 화·목요일에 같은 시간대·같은 프로그램이면 요일이 달라도 중복으로 잡히던 허점이
+// 있었음 — 사용자 지적으로 수정). hourlyProgramTitles(시간대만) 대신 hourlyProgramTitlesByDow를 쓴다.
+const DOW_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
 function computeSlotOverlap(rawByCode: Record<string, AudienceReportRawData>): SlotOverlapRow[] {
-  const byKey = new Map<string, { hour: number; canonicalName: string; channelCodes: Set<string> }>();
+  const byKey = new Map<string, { dow: number; hour: number; canonicalName: string; channelCodes: Set<string> }>();
   for (const [code, raw] of Object.entries(rawByCode)) {
-    for (const t of raw.hourlyProgramTitles) {
+    for (const t of raw.hourlyProgramTitlesByDow) {
       const names = t.programNames.split("/").map((s) => s.trim()).filter(Boolean);
       for (const name of names) {
         const norm = normalizeProgramCanonicalName(name);
-        const key = `${t.broadcastHour}_${norm}`;
-        const entry = byKey.get(key) ?? { hour: t.broadcastHour, canonicalName: name, channelCodes: new Set<string>() };
+        const key = `${t.dow}_${t.broadcastHour}_${norm}`;
+        const entry = byKey.get(key) ?? { dow: t.dow, hour: t.broadcastHour, canonicalName: name, channelCodes: new Set<string>() };
         entry.channelCodes.add(code);
         byKey.set(key, entry);
       }
@@ -153,8 +157,8 @@ function computeSlotOverlap(rawByCode: Record<string, AudienceReportRawData>): S
   }
   return Array.from(byKey.values())
     .filter((e) => e.channelCodes.size >= 2)
-    .map((e) => ({ hour: e.hour, canonicalName: e.canonicalName, channelCodes: Array.from(e.channelCodes) }))
-    .sort((a, b) => a.hour - b.hour);
+    .map((e) => ({ dow: e.dow, dowLabel: DOW_LABELS[e.dow - 1] ?? `${e.dow}`, hour: e.hour, canonicalName: e.canonicalName, channelCodes: Array.from(e.channelCodes) }))
+    .sort((a, b) => a.dow - b.dow || a.hour - b.hour);
 }
 
 export async function buildPortfolioReport(request: AudienceReportRequest): Promise<PortfolioReportDocument> {

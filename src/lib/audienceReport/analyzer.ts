@@ -5,7 +5,7 @@
 // 이름·모양이 비슷한 이유가 그것이다 — 다만 Phase 1의 결정대로 channelReport.ts는 건드리지 않고
 // 이 새 시스템 안에 독립적으로(작은 순수 함수라 중복 비용보다 시스템 분리 이득이 크다는 판단)
 // 다시 작성했다.
-import type { DailyTrendPoint, HourlyPatternRow, HourlyProgramTitleRow, ProgramMoverRow } from "./dataCollector";
+import type { DailyTrendPoint, HourlyPatternRow, HourlyProgramTitleRow, ProgramMoverRow, TargetHourlyPatternRow, CompetitorScheduleChangeRow } from "./dataCollector";
 
 // channelReport.ts의 DAYPART_LABEL과 같은 고정 구간(get_channel_daypart_opportunity가 쓰는 것과
 // 동일) — 새 구간 정의 없이 그대로 재사용(문자열만 이 파일 안에 다시 적음, 로직 재사용 아님).
@@ -208,4 +208,64 @@ export function classifyHourBlockDiagnosis(d: HourBlockOpportunityRow): HourBloc
   if (strong && !pressureEasing) return "강화";
   if (!strong && !pressureEasing) return "점검";
   return "기회";
+}
+
+// Phase 12(2026-08-28, 계획서 J절 Phase 12) — 타깟×시간대: 연령대별 최고 시간대(피크)만 순수하게
+// 골라낸다(새 계산 없음, group-by된 값 중 max만).
+export interface DemographicPeakHour {
+  demographicLabel: string;
+  broadcastHour: number;
+  avgRating: number | null;
+}
+export function computePeakHourByDemographic(rows: TargetHourlyPatternRow[]): DemographicPeakHour[] {
+  const byLabel = new Map<string, TargetHourlyPatternRow[]>();
+  for (const r of rows) {
+    const list = byLabel.get(r.demographicLabel) ?? [];
+    list.push(r);
+    byLabel.set(r.demographicLabel, list);
+  }
+  const result: DemographicPeakHour[] = [];
+  for (const [label, list] of byLabel) {
+    const valid = list.filter((r) => r.avgRating !== null);
+    if (valid.length === 0) continue;
+    const peak = valid.reduce((a, b) => ((b.avgRating ?? 0) > (a.avgRating ?? 0) ? b : a));
+    result.push({ demographicLabel: label, broadcastHour: peak.broadcastHour, avgRating: peak.avgRating });
+  }
+  return result.sort((a, b) => (b.avgRating ?? 0) - (a.avgRating ?? 0));
+}
+
+// Phase 12 — 경쟁채널 편성 변화 이력(기간 누적) 집계: get_competitor_schedule_change_log가 반환한
+// "평소와 다르게 편성된" 개별 날짜 행들을 (경쟁채널, 시간대, 평소 프로그램)별로 묶어 변경 횟수·
+// 최근 변경일·목격된 새 프로그램 목록으로 요약한다 — 순수 group-by, 새 판정 없음.
+export interface CompetitorScheduleChangeGroup {
+  competitorName: string;
+  hourBlock: number;
+  usualProgram: string | null;
+  usualWeeksSeen: number;
+  changeCount: number;
+  changedDates: string[];
+  observedPrograms: string[]; // 중복 제거된 변경 후 프로그램명 목록
+}
+export function summarizeCompetitorScheduleChanges(rows: CompetitorScheduleChangeRow[]): CompetitorScheduleChangeGroup[] {
+  const byKey = new Map<string, CompetitorScheduleChangeGroup>();
+  for (const r of rows) {
+    const key = `${r.competitorName}_${r.hourBlock}_${r.usualProgram ?? ""}`;
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.changeCount += 1;
+      existing.changedDates.push(r.changedDate);
+      if (!existing.observedPrograms.includes(r.changedProgram)) existing.observedPrograms.push(r.changedProgram);
+      continue;
+    }
+    byKey.set(key, {
+      competitorName: r.competitorName,
+      hourBlock: r.hourBlock,
+      usualProgram: r.usualProgram,
+      usualWeeksSeen: r.usualWeeksSeen,
+      changeCount: 1,
+      changedDates: [r.changedDate],
+      observedPrograms: [r.changedProgram],
+    });
+  }
+  return Array.from(byKey.values()).sort((a, b) => b.changeCount - a.changeCount || a.hourBlock - b.hourBlock);
 }

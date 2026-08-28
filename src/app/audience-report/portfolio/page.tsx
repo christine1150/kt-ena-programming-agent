@@ -154,7 +154,7 @@ function PortfolioReportPageInner() {
         </ul>
       </Section>
 
-      <Section title="07 슬롯 중복 점검">
+      <Section title="07 슬롯 중복 점검(요일·시간대)">
         <SlotOverlapTable rows={report.slotOverlap} />
       </Section>
 

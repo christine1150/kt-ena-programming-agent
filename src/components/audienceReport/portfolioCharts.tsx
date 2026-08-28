@@ -163,12 +163,15 @@ export function TrendSparkline({ channels }: { channels: { code: string; name: s
 
 /** 5. 슬롯 중복 점검 — 7채널×24시간 매트릭스는 대부분 빈 칸이라 정보 밀도가 낮아, 관찰된 겹침만
  *  나열하는 목록형 표로 단순화(계획서 "정직하게 밝히는 한계" 참고). */
+// Phase 12(2026-08-28) — 요일 열 추가: 같은 시간대라도 요일이 다르면 더 이상 중복으로 안 잡히므로,
+// 표에 요일을 함께 보여줘 "언제" 겹치는지 명확히 한다.
 export function SlotOverlapTable({ rows }: { rows: SlotOverlapRow[] }) {
-  if (rows.length === 0) return <p className="text-sm text-neutral-500">같은 시간대에 겹치는 자사 채널 콘텐츠가 관찰되지 않았습니다.</p>;
+  if (rows.length === 0) return <p className="text-sm text-neutral-500">같은 요일·시간대에 겹치는 자사 채널 콘텐츠가 관찰되지 않았습니다.</p>;
   return (
     <table className="w-full text-sm">
       <thead>
         <tr className="text-left text-xs text-neutral-500">
+          <th className="py-1">요일</th>
           <th className="py-1">시간대</th>
           <th className="py-1">프로그램</th>
           <th className="py-1">겹치는 채널</th>
@@ -176,7 +179,8 @@ export function SlotOverlapTable({ rows }: { rows: SlotOverlapRow[] }) {
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={`${r.hour}_${r.canonicalName}`} className="border-t border-neutral-200/60 dark:border-neutral-800/60">
+          <tr key={`${r.dow}_${r.hour}_${r.canonicalName}`} className="border-t border-neutral-200/60 dark:border-neutral-800/60">
+            <td className="py-1">{r.dowLabel}</td>
             <td className="py-1">{r.hour}시</td>
             <td className="py-1">{r.canonicalName}</td>
             <td className="py-1">{r.channelCodes.join(", ")}</td>

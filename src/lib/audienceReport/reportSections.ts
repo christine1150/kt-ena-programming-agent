@@ -4,7 +4,7 @@
 // 산출물만 입력으로 받아 §06 순서 그대로 섹션 객체를 조립한다. 새 계산 없음 — 이미 검증된 값 중에서
 // 고르고 라벨을 붙일 뿐(analyzer.ts와 같은 설계 원칙).
 import type { AudienceReportRawData, HourlyPatternRow } from "./dataCollector";
-import { computeDailyOutlierVerdict, computeStructuralVsTemporary, computeGrowthWeaknessMovers } from "./analyzer";
+import { computeDailyOutlierVerdict, computeStructuralVsTemporary, computeGrowthWeaknessMovers, computePeakHourByDemographic, summarizeCompetitorScheduleChanges } from "./analyzer";
 import { formatRating, formatPercent } from "./format";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import type {
@@ -29,6 +29,8 @@ import type {
   ComparisonMatrixRow,
   CumulativeConvergencePoint,
   BreakdownRow,
+  TargetHourlyCell,
+  ProgramAudienceCrossRow,
 } from "./reportModel";
 
 function pctChange(curr: number | null, base: number | null): number | null {
@@ -38,6 +40,59 @@ function pctChange(curr: number | null, base: number | null): number | null {
 
 function baseCaption(raw: AudienceReportRawData, measure: string): ChartCaptionInfo {
   return { periodLabel: raw.period.label, targetUniverse: raw.group.label, measure };
+}
+
+// Phase 12(2026-08-28, 계획서 J절 Phase 12) — §06 번호 순서 밖 추가 섹션 3종. 4개 모드가 전부
+// 같은 모양(Maybe<T>)으로 쓰므로 공용 헬퍼로 묶는다(모드별 buildModeXSection에서 그대로 호출).
+function buildTargetHourlyPatternSection(raw: AudienceReportRawData): { available: true; data: { cells: TargetHourlyCell[]; peaks: import("./analyzer").DemographicPeakHour[]; caption: ChartCaptionInfo } } | { available: false; reason: string } {
+  const isSkyUhd = raw.channelCode === "SKYUHD";
+  if (isSkyUhd || raw.targetHourlyPattern.length === 0) {
+    return { available: false, reason: isSkyUhd ? "skyUHD는 연령대별 시간대 자료가 제한적입니다(§05)" : "타깟×시간대 자료가 없습니다" };
+  }
+  const cells: TargetHourlyCell[] = raw.targetHourlyPattern.map((r) => ({ demographicLabel: r.demographicLabel, hour: r.broadcastHour, avgRating: r.avgRating }));
+  return { available: true, data: { cells, peaks: computePeakHourByDemographic(raw.targetHourlyPattern), caption: baseCaption(raw, "연령대×시간대 평균 시청률") } };
+}
+
+/** MODE A 전용 — 기존에 수집만 되고 화면에 안 쓰이던 raw.demographicProgramHighlights를 처음
+ *  연결한다(같은 요일 8주 트레일링 baseline, 새 SQL 없음). */
+function buildProgramAudienceCrossFromDaily(raw: AudienceReportRawData): { available: true; data: ProgramAudienceCrossRow[] } | { available: false; reason: string } {
+  const isSkyUhd = raw.channelCode === "SKYUHD";
+  if (isSkyUhd || raw.demographicProgramHighlights.length === 0) {
+    return { available: false, reason: isSkyUhd ? "skyUHD는 프로그램×타깟 자료가 제한적입니다(§05)" : "프로그램×타깟 자료가 없습니다" };
+  }
+  const data: ProgramAudienceCrossRow[] = raw.demographicProgramHighlights.map((h) => ({
+    programName: h.program_name,
+    demographicLabel: h.demographic_label,
+    metric: h.metric,
+    value: h.today_value,
+    baselineValue: h.baseline_avg,
+    deltaPct: h.delta_pct,
+  }));
+  return { available: true, data };
+}
+
+/** MODE B/C/D 전용 — 신규 기간 RPC(직전 동일 길이 기간 baseline). */
+function buildProgramAudienceCrossFromPeriod(raw: AudienceReportRawData): { available: true; data: ProgramAudienceCrossRow[] } | { available: false; reason: string } {
+  const isSkyUhd = raw.channelCode === "SKYUHD";
+  if (isSkyUhd || raw.periodDemographicProgramHighlights.length === 0) {
+    return { available: false, reason: isSkyUhd ? "skyUHD는 프로그램×타깟 자료가 제한적입니다(§05)" : "이 기간 동안 프로그램×타깟 자료가 없습니다" };
+  }
+  const data: ProgramAudienceCrossRow[] = raw.periodDemographicProgramHighlights.map((h) => ({
+    programName: h.program_name,
+    demographicLabel: h.demographic_label,
+    metric: h.metric,
+    value: h.period_value,
+    baselineValue: h.prior_value,
+    deltaPct: h.delta_pct,
+  }));
+  return { available: true, data };
+}
+
+function buildCompetitorScheduleChangesSection(raw: AudienceReportRawData): { available: true; data: import("./analyzer").CompetitorScheduleChangeGroup[] } | { available: false; reason: string } {
+  if (raw.competitorScheduleChangeLog.length === 0) {
+    return { available: false, reason: "이 기간 동안 편성 변화가 관찰되지 않았거나, 페어링된 경쟁채널 자료가 없습니다" };
+  }
+  return { available: true, data: summarizeCompetitorScheduleChanges(raw.competitorScheduleChangeLog) };
 }
 
 /** Rating·Share·Reach·시청시간·순위 5종 KPI 카드 — periodReport(+선택적 rank)만 골라 씀. */
@@ -144,7 +199,21 @@ export function buildModeASection(raw: AudienceReportRawData, extra: ModeAExtra)
 
   const skyUhd: ModeASection["skyUhd"] = isSkyUhd && extra.skyUhd ? { available: true, data: extra.skyUhd } : { available: false, reason: "skyUHD 전용 섹션입니다" };
 
-  return { verdict, kpiCards, hourlyProfile, programsBySlotDeviation, originalReview, enaLiveAiring, audienceReaction, competitorSameSlot, thingsToVerify, skyUhd };
+  return {
+    verdict,
+    kpiCards,
+    hourlyProfile,
+    programsBySlotDeviation,
+    originalReview,
+    enaLiveAiring,
+    audienceReaction,
+    competitorSameSlot,
+    thingsToVerify,
+    skyUhd,
+    targetHourlyPattern: buildTargetHourlyPatternSection(raw),
+    programAudienceCross: buildProgramAudienceCrossFromDaily(raw),
+    competitorScheduleChanges: buildCompetitorScheduleChangesSection(raw),
+  };
 }
 
 // ---------------- MODE B ----------------
@@ -234,6 +303,9 @@ export function buildModeBSection(raw: AudienceReportRawData, extra: ModeBExtra)
     bestWorstDay,
     structuralVerdict,
     skyUhd,
+    targetHourlyPattern: buildTargetHourlyPatternSection(raw),
+    programAudienceCross: buildProgramAudienceCrossFromPeriod(raw),
+    competitorScheduleChanges: buildCompetitorScheduleChangesSection(raw),
   };
 }
 
@@ -343,6 +415,9 @@ export function buildModeCSection(raw: AudienceReportRawData, extra: ModeCExtra)
     schedulingDifference: { newPrograms, endedPrograms },
     ratingShareSplit,
     skyUhd: raw.channelCode === "SKYUHD" && extra.skyUhdA && extra.skyUhdB ? { available: true, data: { periodA: extra.skyUhdA, periodB: extra.skyUhdB } } : { available: false, reason: "skyUHD 전용 섹션입니다" },
+    targetHourlyPattern: buildTargetHourlyPatternSection(raw),
+    programAudienceCross: buildProgramAudienceCrossFromPeriod(raw),
+    competitorScheduleChanges: buildCompetitorScheduleChangesSection(raw),
   };
 }
 
@@ -408,5 +483,8 @@ export function buildModeDSection(raw: AudienceReportRawData, extra: ModeDExtra)
     turningPoints: extra.turningPoints,
     topContributors,
     skyUhd,
+    targetHourlyPattern: buildTargetHourlyPatternSection(raw),
+    programAudienceCross: buildProgramAudienceCrossFromPeriod(raw),
+    competitorScheduleChanges: buildCompetitorScheduleChangesSection(raw),
   };
 }
