@@ -4,7 +4,7 @@
 -- 문제 자체가 생기지 않는다). 전부 순수 group-by/avg(루프 없음), 기존 함수의 WHERE절·hour
 -- 정규화 CASE문을 그대로 재사용 — 새 시청률 계산이 아니라 이미 저장된 값을 다른 축으로 묶을 뿐.
 
--- 1) 타깟×시간대 — "어느 연령대가 어느 시간대에 몰리는지". get_hourly_rating_pattern과 정확히
+-- 1) 타깃×시간대 — "어느 연령대가 어느 시간대에 몰리는지". get_hourly_rating_pattern과 정확히
 --    같은 WHERE절(program_id is not null, start_time is not null, hour 정규화)에 타깃 라벨
 --    필터만 더한다. skyUHD는 program_id not null 행 자체가 없어 항상 빈 결과(기존 관례와 동일).
 create or replace function get_channel_demographic_hourblock_pattern(
@@ -39,8 +39,8 @@ as $$
 $$;
 comment on function get_channel_demographic_hourblock_pattern is 'Audience Report Phase 12: 연령대×시간대 평균 시청률(get_hourly_rating_pattern과 동일 WHERE절에 타깃 필터만 추가). 어느 연령대가 어느 시간대에 몰리는지 분석용.';
 
--- 2) 기간 프로그램×타깟 — 기존 get_channel_demographic_program_highlights(단일 일자, 같은 요일
---    트레일링 baseline)를 기간 모드로 재설계: "기간 내 상위 N개 프로그램(KPI 타깟 기준) × 지정
+-- 2) 기간 프로그램×타깃 — 기존 get_channel_demographic_program_highlights(단일 일자, 같은 요일
+--    트레일링 baseline)를 기간 모드로 재설계: "기간 내 상위 N개 프로그램(KPI 타깃 기준) × 지정
 --    연령대 × 5대 지표"를 이번 기간 평균 vs 직전 동일 길이 기간 평균으로 비교한다 — 이 프로젝트
 --    전체가 이미 쓰는 "직전 동일 기간 비교" 관용구(periodReport의 prior_period_change_pct 등)
 --    그대로. 노이즈 바닥 가드(demographic_program_highlights_noise_floor.sql)를 그대로 재사용.
@@ -153,7 +153,7 @@ as $$
     and (prior_value is null or prior_value = 0 or abs((period_value - prior_value) / prior_value) <= 3)
   order by abs(case when prior_value is not null and prior_value <> 0 then (period_value - prior_value) / prior_value else 0 end) desc;
 $$;
-comment on function get_channel_period_demographic_program_highlights is 'Audience Report Phase 12: 기간 내 상위 N개 프로그램(KPI 타깟 기준) × 지정 연령대 × 5대 지표를 이번 기간 평균 vs 직전 동일 길이 기간 평균으로 비교. MODE B/C/D 전용(MODE A는 기존 get_channel_demographic_program_highlights의 같은 요일 트레일링 baseline을 그대로 씀).';
+comment on function get_channel_period_demographic_program_highlights is 'Audience Report Phase 12: 기간 내 상위 N개 프로그램(KPI 타깃 기준) × 지정 연령대 × 5대 지표를 이번 기간 평균 vs 직전 동일 길이 기간 평균으로 비교. MODE B/C/D 전용(MODE A는 기존 get_channel_demographic_program_highlights의 같은 요일 트레일링 baseline을 그대로 씀).';
 
 -- 3) 경쟁채널 편성 변화 이력 기간 누적 — 기존 get_competitor_schedule_changes(단일 as_of_date)와
 --    동일한 CTE 패턴을 그대로 확장: baseline은 선택 기간 시작일 이전(p_date_from - N주 ~

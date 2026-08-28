@@ -59,7 +59,7 @@ export interface TargetHourlyPatternRow {
   avgRating: number | null;
   sampleCount: number | null;
 }
-// Phase 12 — 기간 프로그램×타깟(MODE B/C/D 전용). 기존 DemographicProgramHighlight(단일 일자,
+// Phase 12 — 기간 프로그램×타깃(MODE B/C/D 전용). 기존 DemographicProgramHighlight(단일 일자,
 // today_value/baseline_avg)와 필드명을 다르게 둬(period_value/prior_value) 두 개념을 혼동하지 않게.
 export interface PeriodDemographicProgramHighlight {
   program_name: string;
@@ -311,7 +311,7 @@ export async function collectAudienceReportData(channelCode: string, period: Res
             p_program_baseline_weeks: 8,
           })
         : EMPTY,
-      // Phase 12 — 타깟×시간대(연령대별 시간대 프로파일). skyUHD는 program_id not null 행이 없어
+      // Phase 12 — 타깃×시간대(연령대별 시간대 프로파일). skyUHD는 program_id not null 행이 없어
       // 항상 빈 결과(daypart류와 같은 이유), light 모드(포트폴리오)는 채널별 리포트 전용 축이라 건너뜀.
       light || skyUhd
         ? EMPTY
@@ -321,7 +321,7 @@ export async function collectAudienceReportData(channelCode: string, period: Res
             p_date_from: dateFrom,
             p_date_to: dateTo,
           }),
-      // Phase 12 — 기간 프로그램×타깟. MODE A는 demographicProgramHighlights(같은 요일 트레일링
+      // Phase 12 — 기간 프로그램×타깃. MODE A는 demographicProgramHighlights(같은 요일 트레일링
       // baseline)를 그대로 쓰므로 여기서는 MODE B/C/D(period.mode !== "single_day")에서만 호출.
       light || skyUhd || period.mode === "single_day"
         ? EMPTY

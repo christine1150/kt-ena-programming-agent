@@ -162,10 +162,10 @@ function fmtMetricValue(metric: string, v: number | null, channelCode: string): 
 function CrossAxisView({ data, channelCode }: { data: CrossAxisSections; channelCode: string }) {
   return (
     <>
-      <Section title="타깟×시간대">
+      <Section title="타깃×시간대">
         <WithMaybe maybe={data.targetHourlyPattern} render={(d) => <TargetHourlyHeatmap cells={d.cells} caption={d.caption} />} />
       </Section>
-      <Section title="프로그램×타깟">
+      <Section title="프로그램×타깃">
         <WithMaybe maybe={data.programAudienceCross} render={(rows) => <ProgramAudienceCrossTable rows={rows} channelCode={channelCode} />} />
       </Section>
       <Section title="경쟁채널 편성 변화 이력">
@@ -176,7 +176,7 @@ function CrossAxisView({ data, channelCode }: { data: CrossAxisSections; channel
 }
 
 function ProgramAudienceCrossTable({ rows, channelCode }: { rows: import("@/lib/audienceReport/reportModel").ProgramAudienceCrossRow[]; channelCode: string }) {
-  if (rows.length === 0) return <Unavailable reason="편차가 큰 프로그램×타깟 조합이 없습니다" />;
+  if (rows.length === 0) return <Unavailable reason="편차가 큰 프로그램×타깃 조합이 없습니다" />;
   return (
     <table className="w-full text-sm">
       <thead>

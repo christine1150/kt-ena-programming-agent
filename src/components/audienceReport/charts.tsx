@@ -153,7 +153,7 @@ export function WeekdayHourHeatmap({ cells, caption }: { cells: WeekdayHourCell[
   );
 }
 
-// Phase 12(2026-08-28, 계획서 J절 Phase 12) — 타깟×시간대. WeekdayHourHeatmap과 완전히 같은 HTML
+// Phase 12(2026-08-28, 계획서 J절 Phase 12) — 타깃×시간대. WeekdayHourHeatmap과 완전히 같은 HTML
 // table 색상농도 패턴(요일 대신 연령대를 행으로) — 새 렌더링 방식 없음.
 export function TargetHourlyHeatmap({ cells, caption }: { cells: TargetHourlyCell[]; caption: ChartCaptionInfo }) {
   const labels = Array.from(new Set(cells.map((c) => c.demographicLabel)));

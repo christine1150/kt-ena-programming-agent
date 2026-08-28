@@ -60,13 +60,13 @@ export interface CompetitorInsightRow {
   topProgramRating: number | null;
 }
 
-// Phase 12(2026-08-28, 계획서 J절 Phase 12) — 타깟×시간대(연령대별 시간대 프로파일).
+// Phase 12(2026-08-28, 계획서 J절 Phase 12) — 타깃×시간대(연령대별 시간대 프로파일).
 export interface TargetHourlyCell {
   demographicLabel: string;
   hour: number;
   avgRating: number | null;
 }
-// Phase 12 — 프로그램×타깟 교차. MODE A는 기존 demographicProgramHighlights(같은 요일 트레일링
+// Phase 12 — 프로그램×타깃 교차. MODE A는 기존 demographicProgramHighlights(같은 요일 트레일링
 // baseline)를, MODE B/C/D는 신규 기간 RPC(직전 동일 길이 기간 baseline)를 이 하나의 필드 모양으로
 // 통일해 렌더러가 모드별로 다른 필드를 안 써도 되게 한다.
 export interface ProgramAudienceCrossRow {

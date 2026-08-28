@@ -210,7 +210,7 @@ export function classifyHourBlockDiagnosis(d: HourBlockOpportunityRow): HourBloc
   return "기회";
 }
 
-// Phase 12(2026-08-28, 계획서 J절 Phase 12) — 타깟×시간대: 연령대별 최고 시간대(피크)만 순수하게
+// Phase 12(2026-08-28, 계획서 J절 Phase 12) — 타깃×시간대: 연령대별 최고 시간대(피크)만 순수하게
 // 골라낸다(새 계산 없음, group-by된 값 중 max만).
 export interface DemographicPeakHour {
   demographicLabel: string;

@@ -47,7 +47,7 @@ function baseCaption(raw: AudienceReportRawData, measure: string): ChartCaptionI
 function buildTargetHourlyPatternSection(raw: AudienceReportRawData): { available: true; data: { cells: TargetHourlyCell[]; peaks: import("./analyzer").DemographicPeakHour[]; caption: ChartCaptionInfo } } | { available: false; reason: string } {
   const isSkyUhd = raw.channelCode === "SKYUHD";
   if (isSkyUhd || raw.targetHourlyPattern.length === 0) {
-    return { available: false, reason: isSkyUhd ? "skyUHD는 연령대별 시간대 자료가 제한적입니다(§05)" : "타깟×시간대 자료가 없습니다" };
+    return { available: false, reason: isSkyUhd ? "skyUHD는 연령대별 시간대 자료가 제한적입니다(§05)" : "타깃×시간대 자료가 없습니다" };
   }
   const cells: TargetHourlyCell[] = raw.targetHourlyPattern.map((r) => ({ demographicLabel: r.demographicLabel, hour: r.broadcastHour, avgRating: r.avgRating }));
   return { available: true, data: { cells, peaks: computePeakHourByDemographic(raw.targetHourlyPattern), caption: baseCaption(raw, "연령대×시간대 평균 시청률") } };
@@ -58,7 +58,7 @@ function buildTargetHourlyPatternSection(raw: AudienceReportRawData): { availabl
 function buildProgramAudienceCrossFromDaily(raw: AudienceReportRawData): { available: true; data: ProgramAudienceCrossRow[] } | { available: false; reason: string } {
   const isSkyUhd = raw.channelCode === "SKYUHD";
   if (isSkyUhd || raw.demographicProgramHighlights.length === 0) {
-    return { available: false, reason: isSkyUhd ? "skyUHD는 프로그램×타깟 자료가 제한적입니다(§05)" : "프로그램×타깟 자료가 없습니다" };
+    return { available: false, reason: isSkyUhd ? "skyUHD는 프로그램×타깃 자료가 제한적입니다(§05)" : "프로그램×타깃 자료가 없습니다" };
   }
   const data: ProgramAudienceCrossRow[] = raw.demographicProgramHighlights.map((h) => ({
     programName: h.program_name,
@@ -75,7 +75,7 @@ function buildProgramAudienceCrossFromDaily(raw: AudienceReportRawData): { avail
 function buildProgramAudienceCrossFromPeriod(raw: AudienceReportRawData): { available: true; data: ProgramAudienceCrossRow[] } | { available: false; reason: string } {
   const isSkyUhd = raw.channelCode === "SKYUHD";
   if (isSkyUhd || raw.periodDemographicProgramHighlights.length === 0) {
-    return { available: false, reason: isSkyUhd ? "skyUHD는 프로그램×타깟 자료가 제한적입니다(§05)" : "이 기간 동안 프로그램×타깟 자료가 없습니다" };
+    return { available: false, reason: isSkyUhd ? "skyUHD는 프로그램×타깃 자료가 제한적입니다(§05)" : "이 기간 동안 프로그램×타깃 자료가 없습니다" };
   }
   const data: ProgramAudienceCrossRow[] = raw.periodDemographicProgramHighlights.map((h) => ({
     programName: h.program_name,
