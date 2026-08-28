@@ -4,6 +4,7 @@
 // Group B에는 이 개념(오리지널 드라마/오리지널 예능/독점 예능)이 설계서상 적용되지 않는다.
 import { supabase } from "@/lib/supabase";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
+import { addDaysStr } from "./periodPresets";
 
 export type FeaturedContentCategory = "오리지널 드라마" | "오리지널 예능" | "독점 예능" | "사업형" | string;
 
@@ -82,6 +83,53 @@ export async function getInSeasonFeaturedContent(channelCode: string, dateFrom: 
     if (!byNormalized.has(key)) byNormalized.set(key, w);
   }
   return Array.from(byNormalized.values());
+}
+
+export type LineupTransitionKind = "ending_soon" | "starting_soon";
+export interface LineupTransition {
+  canonicalName: string;
+  category: FeaturedContentCategory;
+  kind: LineupTransitionKind;
+  date: string; // ending_soon이면 broadcast_end_date, starting_soon이면 broadcast_start_date
+}
+
+// Phase 9(2026-08-28, 계획서 J절 §08 "03 오리지널 라인업 전환점") — getInSeasonFeaturedContent와
+// 같은 패턴(새 RPC 없이 featured_content 직접 조회)으로, "이 기간에 방영 중인 것"이 아니라
+// "다가오는 asOfDate+lookaheadDays 안에 종영/신규 시작하는 것"을 찾는다. Group A 전용 제약은
+// getInSeasonFeaturedContent와 동일(호출부가 Group A 채널에만 부른다).
+export async function getUpcomingLineupTransitions(channelCode: string, asOfDate: string, lookaheadDays = 14): Promise<LineupTransition[]> {
+  const horizon = addDaysStr(asOfDate, lookaheadDays);
+  const { data: channelRow } = await supabase.from("channels").select("id").eq("code", channelCode).maybeSingle();
+  if (!channelRow) throw new Error(`채널을 찾을 수 없습니다: ${channelCode}`);
+
+  const { data: rows, error } = await supabase
+    .from("featured_content")
+    .select("category, broadcast_start_date, broadcast_end_date, programs!inner(canonical_name, channel_id)")
+    .or(`and(broadcast_end_date.gte.${asOfDate},broadcast_end_date.lte.${horizon}),and(broadcast_start_date.gte.${asOfDate},broadcast_start_date.lte.${horizon})`);
+  if (error) throw new Error(`featured_content 전환점 조회 실패: ${error.message}`);
+
+  const ownRows = (rows ?? []).filter((r: { programs: { channel_id: string } | { channel_id: string }[] }) => {
+    const p = Array.isArray(r.programs) ? r.programs[0] : r.programs;
+    return p?.channel_id === channelRow.id;
+  });
+
+  const transitions: LineupTransition[] = [];
+  for (const r of ownRows as { category: string; broadcast_start_date: string | null; broadcast_end_date: string | null; programs: { canonical_name: string } | { canonical_name: string }[] }[]) {
+    const p = Array.isArray(r.programs) ? r.programs[0] : r.programs;
+    if (r.broadcast_end_date && r.broadcast_end_date >= asOfDate && r.broadcast_end_date <= horizon) {
+      transitions.push({ canonicalName: p.canonical_name, category: r.category, kind: "ending_soon", date: r.broadcast_end_date });
+    }
+    if (r.broadcast_start_date && r.broadcast_start_date >= asOfDate && r.broadcast_start_date <= horizon) {
+      transitions.push({ canonicalName: p.canonical_name, category: r.category, kind: "starting_soon", date: r.broadcast_start_date });
+    }
+  }
+  // 중복 등록 정규화(기존 관례 재사용).
+  const byKey = new Map<string, LineupTransition>();
+  for (const t of transitions) {
+    const key = `${t.kind}_${normalizeProgramCanonicalName(t.canonicalName)}`;
+    if (!byKey.has(key)) byKey.set(key, t);
+  }
+  return Array.from(byKey.values());
 }
 
 export interface EpisodePoint {

@@ -123,6 +123,7 @@ export default function AudienceReportPage() {
       {report.body.mode === "range" && <ModeBBody sections={report.body.sections} channelCode={report.channelCode} />}
       {report.body.mode === "compare" && <ModeCBody sections={report.body.sections} channelCode={report.channelCode} />}
       {report.body.mode === "cumulative" && <ModeDBody sections={report.body.sections} channelCode={report.channelCode} />}
+      <RecommendationView data={report.recommendation} channelCode={report.channelCode} />
     </main>
   );
 }
@@ -664,5 +665,104 @@ function SkyUhdSubstituteView({ data }: { data: import("@/lib/audienceReport/rep
         )}
       </div>
     </div>
+  );
+}
+
+// Phase 9(2026-08-28, 계획서 J절 §08) — 편성 제언. 모든 모드에 항상 붙는 마무리 섹션이라 §06의
+// 번호 목록과 분리해(번호 없이 "📌 제목") 렌더링한다.
+function RecommendationView({ data, channelCode }: { data: import("@/lib/audienceReport/reportModel").RecommendationSection; channelCode: string }) {
+  return (
+    <section className="mt-8 rounded-lg border border-neutral-300 bg-neutral-50 p-5 dark:border-neutral-700 dark:bg-neutral-900">
+      <h2 className="mb-1 text-lg font-semibold">📌 {data.title}</h2>
+      <p className="mb-4 text-xs text-neutral-500">참조 구간: {data.referenceWindow.dateFrom} ~ {data.referenceWindow.dateTo}</p>
+
+      <div className="mb-4">
+        <div className="mb-1 text-sm font-medium">참조 구간 채널 흐름</div>
+        <DailyTrendChart
+          points={data.channelFlow.trend.map((t) => ({ date: t.date, rating: t.avgRating, movingAvg: null }))}
+          caption={{ periodLabel: `${data.referenceWindow.dateFrom} ~ ${data.referenceWindow.dateTo}`, targetUniverse: channelCode, measure: "일별 평균 시청률" }}
+        />
+        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+          {data.channelFlow.weekdayFlow.map((w) => (
+            <span key={w.dowLabel} className="rounded bg-neutral-200 px-2 py-0.5 dark:bg-neutral-800">
+              {w.dowLabel} {w.avgRating !== null ? formatRating(w.avgRating, channelCode) : "—"}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <div className="mb-1 text-sm font-medium">참조 구간 프로그램 흐름</div>
+        <WithMaybe
+          maybe={data.programFlow}
+          render={(d) => (
+            <div className="grid gap-4 sm:grid-cols-2 text-sm">
+              <div>
+                <div className="mb-1 text-xs text-neutral-500">상승</div>
+                {d.growth.length > 0 ? d.growth.map((m) => <div key={m.canonicalName}>{m.canonicalName} ({m.ratingDelta !== null ? m.ratingDelta.toFixed(channelCode === "SKYUHD" ? 5 : 3) : "—"})</div>) : <span className="text-neutral-400">해당 없음</span>}
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-neutral-500">하락</div>
+                {d.weakness.length > 0 ? d.weakness.map((m) => <div key={m.canonicalName}>{m.canonicalName} ({m.ratingDelta !== null ? m.ratingDelta.toFixed(channelCode === "SKYUHD" ? 5 : 3) : "—"})</div>) : <span className="text-neutral-400">해당 없음</span>}
+              </div>
+            </div>
+          )}
+        />
+      </div>
+
+      <div className="mb-4">
+        <div className="mb-1 text-sm font-medium">오리지널 라인업 전환점</div>
+        <WithMaybe
+          maybe={data.lineupTransitions}
+          render={(rows) =>
+            rows.length > 0 ? (
+              <ul className="text-sm">
+                {rows.map((t) => (
+                  <li key={`${t.kind}_${t.canonicalName}`}>
+                    {t.canonicalName} — {t.kind === "ending_soon" ? "종영 예정" : "신규 시작 예정"}({t.date})
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Unavailable reason="다가오는 종영·신규 시작 작품이 관찰되지 않았습니다" />
+            )
+          }
+        />
+      </div>
+
+      <div className="mb-4">
+        <div className="mb-1 text-sm font-medium">슬롯 진단</div>
+        {data.slotDiagnosis.length > 0 ? (
+          <table className="w-full text-sm">
+            <tbody>
+              {data.slotDiagnosis.map((s) => (
+                <tr key={s.hourBlock} className="border-t border-neutral-200/60 dark:border-neutral-800/60">
+                  <td className="py-1">{s.hourBlock}시</td>
+                  <td className="py-1">{s.diagnosis ?? "—"}</td>
+                  <td className="py-1 text-right tabular-nums">{s.gapChange !== null ? s.gapChange.toFixed(4) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <Unavailable reason="슬롯 진단 자료가 없습니다" />
+        )}
+      </div>
+
+      <div>
+        <div className="mb-1 text-sm font-medium">제언</div>
+        {data.recommendations.length > 0 ? (
+          <ol className="list-decimal space-y-1 pl-5 text-sm">
+            {data.recommendations.map((r, i) => (
+              <li key={i}>
+                <span className="text-neutral-500">[근거]</span> {r.basis} <span className="text-neutral-500">[제안]</span> {r.suggestion} <span className="text-neutral-500">[확인]</span> {r.verification}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <Unavailable reason="이번 참조 구간에 뚜렷한 신호가 확인되지 않아 제언을 생성하지 않았습니다" />
+        )}
+      </div>
+    </section>
   );
 }

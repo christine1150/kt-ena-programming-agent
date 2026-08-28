@@ -13,6 +13,7 @@ import { computeGenrePerformance, computeGenreHourCrossing, getSkyUhdDailyChanne
 import type { SkyUhdProgramLogRow as SkyUhdRow } from "./dataCollector";
 import { computeTurningPoints } from "./analyzer";
 import { addDaysStr } from "./periodPresets";
+import { buildRecommendationSection } from "./recommendationSection";
 import type { OriginalReviewSection, EnaLiveAiringSection, SkyUhdSubstituteSection, CompetitorInsightRow, ComparisonMatrixRow, AudienceReportDocument, BestWorstDayDetail } from "./reportModel";
 import { buildModeASection, buildModeBSection, buildModeCSection, buildModeDSection } from "./reportSections";
 
@@ -128,6 +129,10 @@ export async function buildAudienceReport(channelCode: string, request: Audience
   const { data: channelRow } = await supabase.from("channels").select("id, name").eq("code", channelCode).maybeSingle();
   if (!channelRow) throw new Error(`채널을 찾을 수 없습니다: ${channelCode}`);
 
+  // Phase 9(§08) — 편성 제언은 메인 기간·모드와 무관하게 항상 붙는 마무리 섹션이라, 여기서 한 번만
+  // 계산해 아래 4개 모드 분기 전부에 그대로 붙인다.
+  const recommendation = await buildRecommendationSection(channelCode, raw.programTargetLabel, raw.rankTargetLabel, period.dateFrom, period.dateTo);
+
   const isGroupA = raw.group.code === "A";
   const isSkyUhd = channelCode === "SKYUHD";
 
@@ -152,7 +157,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
       skyUhd,
       competitorInsight,
     });
-    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "single_day", sections } };
+    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "single_day", sections }, recommendation };
   }
 
   if (period.mode === "range") {
@@ -166,7 +171,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
     const enaLiveAiring = channelCode === "ENA" && originalReview ? buildEnaLiveAiring(false, [], originalReview.episodeTrends) : null;
 
     const sections = buildModeBSection(raw, { originalReview, enaLiveAiring, skyUhd, bestDayDetail, worstDayDetail });
-    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "range", sections } };
+    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "range", sections }, recommendation };
   }
 
   if (period.mode === "compare") {
@@ -195,7 +200,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
       skyUhdA,
       skyUhdB,
     });
-    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "compare", sections } };
+    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "compare", sections }, recommendation };
   }
 
   // MODE D(cumulative)
@@ -225,7 +230,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
     skyUhd,
     rankAvg: rankAvg ? { current: rankAvg.avgRank, prior: null } : null,
   });
-  return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "cumulative", sections } };
+  return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: { mode: "cumulative", sections }, recommendation };
 }
 
 async function fetchDayDetail(channelCode: string, programTargetLabel: string, date: string, rating: number | null): Promise<BestWorstDayDetail> {

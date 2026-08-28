@@ -201,6 +201,31 @@ export type AudienceReportBody =
   | { mode: "compare"; sections: ModeCSection }
   | { mode: "cumulative"; sections: ModeDSection };
 
+// ---------------- 편성 제언(§08) — 모든 모드에 항상 붙는 마무리 섹션, §06 번호 목록과는 별개 ----------------
+export interface WeekdayFlowPoint {
+  dowLabel: string; // "월"~"일"
+  avgRating: number | null;
+}
+export interface SlotDiagnosisRow {
+  hourBlock: number;
+  diagnosis: import("./analyzer").HourBlockDiagnosis | null;
+  gapChange: number | null;
+}
+export interface RecommendationItem {
+  basis: string;
+  suggestion: string;
+  verification: string;
+}
+export interface RecommendationSection {
+  title: string; // "지난주 → 이번주 편성 제언" | "지난달 → 이번달 편성 제언"
+  referenceWindow: { dateFrom: string; dateTo: string };
+  channelFlow: { trend: import("./dataCollector").DailyTrendPoint[]; weekdayFlow: WeekdayFlowPoint[] };
+  programFlow: Maybe<{ growth: import("./dataCollector").ProgramMoverRow[]; weakness: import("./dataCollector").ProgramMoverRow[] }>;
+  lineupTransitions: Maybe<import("./originalContent").LineupTransition[]>;
+  slotDiagnosis: SlotDiagnosisRow[];
+  recommendations: RecommendationItem[];
+}
+
 export interface AudienceReportDocument {
   channelCode: string;
   channelName: string;
@@ -210,4 +235,5 @@ export interface AudienceReportDocument {
   masterInfo: ChannelMasterInfo;
   qualityIssues: QualityIssue[];
   body: AudienceReportBody;
+  recommendation: RecommendationSection;
 }

@@ -183,3 +183,29 @@ export function computeTurningPoints(trend: DailyTrendPoint[], thresholdPct = OU
   }
   return points.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct)).slice(0, 5);
 }
+
+export type HourBlockDiagnosis = "유지" | "강화" | "점검" | "기회";
+export interface HourBlockOpportunityRow {
+  hour_block: number;
+  our_full_avg: number | null;
+  our_recent_avg: number | null;
+  competitor_full_avg: number | null;
+  competitor_recent_avg: number | null;
+  gap_full: number | null;
+  gap_recent: number | null;
+  gap_change: number | null;
+}
+// Phase 9(2026-08-28, 계획서 J절 §08 "04 슬롯 진단") — ChannelDeepDive.tsx:169-177의
+// classifyHourBlockOpportunity(이미 실전 검증된 PROTECT/DEFEND/IMPROVE/OPPORTUNITY 4분류)를
+// 그대로 이식했다(로직 변경 없음, 이름만 설계서 용어로 맞춤: PROTECT=유지, DEFEND=강화,
+// IMPROVE=점검, OPPORTUNITY=기회). Phase 1의 "완전히 별개로 유지" 결정에 따라 이 시스템 안에
+// 작게 다시 작성.
+export function classifyHourBlockDiagnosis(d: HourBlockOpportunityRow): HourBlockDiagnosis | null {
+  if (d.our_full_avg === null || d.our_recent_avg === null || d.gap_change === null) return null;
+  const strong = d.our_recent_avg >= d.our_full_avg;
+  const pressureEasing = d.gap_change >= 0;
+  if (strong && pressureEasing) return "유지";
+  if (strong && !pressureEasing) return "강화";
+  if (!strong && !pressureEasing) return "점검";
+  return "기회";
+}
