@@ -3251,6 +3251,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const dateQuery = selectedDateFrom && selectedDateTo ? `&dateFrom=${selectedDateFrom}&dateTo=${selectedDateTo}` : "";
   const priorQuery = selectedPriorFrom && selectedPriorTo ? `&priorDateFrom=${selectedPriorFrom}&priorDateTo=${selectedPriorTo}` : "";
   const fitScoreDateQuery = selectedDateTo ? `&date=${selectedDateTo}` : "";
+  // 사용자 지시(2026-08-28): "전주 대비 이번주, 전월 대비 이번달 등 분석기간이 달라질 때는 그
+  // 기간이 언제인지 실제 날짜가 나올 수 있게" — 이미 있는 formatDateWithDow(히어로 헤더 L3857과
+  // 같은 포맷)를 그대로 재사용해 "이번 기간"/"{comparisonLabel} 기간" 패널 라벨에 실제 날짜를
+  // 덧붙인다. 새 날짜 계산 없음 — selectedDateFrom/To·selectedPriorFrom/To(위에서 이미 계산됨)만 씀.
+  const periodRangeLabel = (from: string | null, to: string | null) => (from && to ? `${formatDateWithDow(from)} ~ ${formatDateWithDow(to)}` : "");
 
   useEffect(() => {
     let cancelled = false;
@@ -4335,7 +4340,31 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {hasPriorRange ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
-                <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
+                <p className="mb-2 text-sm font-semibold text-zinc-600">
+                  {comparisonLabel ?? "이전"} 기간 {periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}
+                </p>
+                <HourlyGraphPanel
+                  pattern={hourlyPatternPrior}
+                  programTitles={hourlyProgramTitlesPrior}
+                  metrics={hourlyMetricsPrior}
+                  onToggleMetric={(key) => {
+                    setHourlyMetricsPrior((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    });
+                  }}
+                  code={code}
+                  primaryTargetLabel={resolveProgramLevelTargetLabel(channel.primaryTarget)}
+                  baselinePattern={data.hourlyBaselinePatternPrior}
+                  accentColor={accentColor}
+                />
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-semibold text-zinc-600">
+                  이번 기간 {periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}
+                </p>
                 <HourlyGraphPanel
                   pattern={hourlyPattern}
                   programTitles={hourlyProgramTitles}
@@ -4356,26 +4385,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   baselinePattern={hourlyPatternPrior}
                   accentColor={accentColor}
                   baselineLabel={`연한 선 = ${comparisonLabel ?? "이전"} 기간의 같은 시간대 평균 시청률`}
-                />
-              </div>
-              <div>
-                <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
-                <HourlyGraphPanel
-                  pattern={hourlyPatternPrior}
-                  programTitles={hourlyProgramTitlesPrior}
-                  metrics={hourlyMetricsPrior}
-                  onToggleMetric={(key) => {
-                    setHourlyMetricsPrior((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(key)) next.delete(key);
-                      else next.add(key);
-                      return next;
-                    });
-                  }}
-                  code={code}
-                  primaryTargetLabel={resolveProgramLevelTargetLabel(channel.primaryTarget)}
-                  baselinePattern={data.hourlyBaselinePatternPrior}
-                  accentColor={accentColor}
                 />
               </div>
             </div>
@@ -4508,12 +4517,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {hasPriorRange ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
-                <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
-                <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
+                <p className="mb-2 text-sm font-semibold text-zinc-600">
+                  {comparisonLabel ?? "이전"} 기간 {periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}
+                </p>
+                <DowHourBlockTable pattern={dowHourBlockPatternPrior} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
               </div>
               <div>
-                <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
-                <DowHourBlockTable pattern={dowHourBlockPatternPrior} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
+                <p className="mb-2 text-sm font-semibold text-zinc-600">
+                  이번 기간 {periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}
+                </p>
+                <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
               </div>
             </div>
           ) : (
@@ -4555,12 +4568,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <>
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
-                  <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
-                  <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
+                  <p className="mb-2 text-sm font-semibold text-zinc-600">
+                    {comparisonLabel ?? "이전"} 기간 {periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}
+                  </p>
+                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={priorTopSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
                 </div>
                 <div>
-                  <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
-                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={priorTopSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
+                  <p className="mb-2 text-sm font-semibold text-zinc-600">
+                    이번 기간 {periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}
+                  </p>
+                  <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
                 </div>
               </div>
               {buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior) && (
@@ -5903,12 +5920,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {hasPriorRange ? (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
-                  <p className="mb-2 text-sm font-semibold text-zinc-600">이번 기간</p>
-                  <CompetitorPeriodTopProgramsList rows={competitorPeriodTopPrograms} fmtR={fmtR} />
+                  <p className="mb-2 text-sm font-semibold text-zinc-600">
+                    {comparisonLabel ?? "이전"} 기간 {periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}
+                  </p>
+                  <CompetitorPeriodTopProgramsList rows={competitorPeriodTopProgramsPrior} fmtR={fmtR} />
                 </div>
                 <div>
-                  <p className="mb-2 text-sm font-semibold text-zinc-600">{comparisonLabel ?? "이전"} 기간</p>
-                  <CompetitorPeriodTopProgramsList rows={competitorPeriodTopProgramsPrior} fmtR={fmtR} />
+                  <p className="mb-2 text-sm font-semibold text-zinc-600">
+                    이번 기간 {periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}
+                  </p>
+                  <CompetitorPeriodTopProgramsList rows={competitorPeriodTopPrograms} fmtR={fmtR} />
                 </div>
               </div>
             ) : (
