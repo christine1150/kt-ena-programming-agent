@@ -124,6 +124,7 @@ export async function GET(request: Request) {
       competitorPeriodTopPrograms: [],
       competitorPeriodTopProgramsPrior: [],
       periodWindowDays: 84,
+      topProgramsWindowDays: 84,
       dowHourBlockPatternPrior: [],
       topProgramsPrior: [],
       topSharePrograms: [],
@@ -188,10 +189,21 @@ export async function GET(request: Request) {
   const rangeDays = Math.round((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000) + 1;
   const recentDays = rangeDays > 1 ? rangeDays : 7;
   const fullWindowDays = Math.max(365, recentDays + 84);
-  // 사용자 지시(2026-08-21, 기능 #15-3/#15-4): "최근 12주 요일×시간대 히트맵"과 "TOP 20"은
-  // 오늘/어제/어제대비오늘(DoD, 7일 이하 분석)까지는 표본이 부족해 기존처럼 84일 고정 윈도우를
+  // 사용자 지시(2026-08-21, 기능 #15-3/#15-4): "최근 12주 요일×시간대 히트맵"은 오늘/어제/어제대비
+  // 오늘(DoD, 7일 이하 분석)까지는 7×8칸 히트맵을 채울 표본이 부족해 기존처럼 84일 고정 윈도우를
   // 유지하고, 그보다 긴 기간을 선택하면 84일 고정 대신 그 선택 기간 전체를 윈도우로 쓴다.
-  const periodWindowDays = rangeDays > 7 ? rangeDays : 84;
+  const heatmapWindowDays = rangeDays > 7 ? rangeDays : 84;
+  // 버그 수정(2026-08-28, 사용자 신고): TOP 20/TOP5 점유율은 히트맵과 달리 여러 날짜가 있어야
+  // 칸이 채워지는 제약이 없는 단순 트레일링 평균(get_channel_top_programs/get_channel_top_share_
+  // programs — broadcast_date between (as_of_date - window_days + 1) and as_of_date)이라, 위
+  // 히트맵 전용 84일 폴백을 그대로 공유하면 DoD(1일)·WoW(7일)에서 "이번 기간" 라벨과 다르게
+  // 최근 12주 평균이 나오는 버그가 생긴다(실측: ONCE를 WoW로 선택했는데 그 주에 편성되지도 않은
+  // 프로그램이 TOP20에 나옴, "이번 기간"/"전주 기간" 두 패널이 84일 롤링이라 사실상 동일). 단,
+  // 아무 기간도 선택하지 않은 순수 기본값("오늘", isRangeMode=false·비교 프리셋도 아님)까지
+  // 1일 윈도우로 좁히면 이 섹션의 원래 설계 의도(최근 12주 안정적 랭킹)가 깨지므로, 실제로
+  // 기간이나 비교 프리셋을 선택한 경우(isRangeMode 또는 전 기간 지정)에만 선택 기간 그대로 쓰고,
+  // 그 외(순수 기본값)는 기존처럼 84일을 유지한다.
+  const topProgramsWindowDays = isRangeMode || (priorDateFrom && priorDateTo) ? rangeDays : 84;
 
   const isNationalScope = channel.market === "전국";
   const demographicTargets = isNationalScope
@@ -345,10 +357,11 @@ export async function GET(request: Request) {
       p_recent_days: recentDays,
     }),
     // 신규 섹션 — 최근 12주 월~일 × 3시간 단위 강세/약세 히트맵, 시청률 상위 콘텐츠 TOP 20.
-    // skyUHD처럼 매일 갱신되지 않는 채널도 12주 누적으로 보면 패턴이 보인다(사용자 지시) —
-    // 이 두 섹션은 기간 선택과 무관하게 항상 dateTo 기준 최근 12주(84일) 고정 윈도우다.
-    supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays }),
-    supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 20 }),
+    // skyUHD처럼 매일 갱신되지 않는 채널도 12주 누적으로 보면 패턴이 보인다(사용자 지시) — 단,
+    // 7일보다 긴 기간을 선택하면 히트맵은 그 기간 전체로, TOP 20은 항상 선택 기간 그대로 계산된다
+    // (2026-08-28 수정 — 위 heatmapWindowDays/topProgramsWindowDays 주석 참고).
+    supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: heatmapWindowDays }),
+    supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: topProgramsWindowDays, p_limit: 20 }),
     // 사용자 지시(2026-08-21): "WHO IS WATCHING?은 연령대를 좀 더 깊이 파고들어서" — 대표 4개
     // 대신 전체 연령대(fullDemographicTargets, 12개)를 조회해 "가장 많이 본 연령대"·"주목해야
     // 할 연령대"를 데이터 기반으로 고른다.
@@ -408,12 +421,12 @@ export async function GET(request: Request) {
       ? supabase.rpc("get_competitor_period_top_programs", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_date_from: dateFrom, p_date_to: dateTo, p_channel_limit: 5, p_program_limit: 7 })
       : Promise.resolve({ data: [] as unknown[] }),
     // 기능 #15-3/#15-4: "대비" 분석(priorDateFrom/To)의 히트맵·TOP20도 전 기간 패널로 나란히
-    // 비교할 수 있도록 — 전 기간도 같은 길이이므로 periodWindowDays를 그대로 재사용한다.
+    // 비교할 수 있도록 — 전 기간도 같은 길이이므로 각각의 window를 그대로 재사용한다.
     hasPriorRange
-      ? supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: periodWindowDays })
+      ? supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: heatmapWindowDays })
       : Promise.resolve({ data: [] as unknown[] }),
     hasPriorRange
-      ? supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: periodWindowDays, p_limit: 20 })
+      ? supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: topProgramsWindowDays, p_limit: 20 })
       : Promise.resolve({ data: [] as unknown[] }),
     // 사용자 지시(2026-08-21): WHO IS WATCHING?은 오늘/어제(단일 일자)일 때 다른 브리핑 문구와
     // 달리 최근 12주(84일)가 아니라 최근 한 달(28일) 자료를 기준으로 봐야 한다 — 같은 RPC를
@@ -438,9 +451,9 @@ export async function GET(request: Request) {
       : Promise.resolve({ data: [] as unknown[] }),
     // 사용자 지시(2026-08-21): "TOP20에는 없지만 전체 점유율 1~5위인 콘텐츠가 있으면 별도 명기" —
     // TOP20(시청률 기준)과 별개로 점유율 기준 상위 5개를 직접 조회한다(get_channel_top_share_programs).
-    supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 5 }),
+    supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: topProgramsWindowDays, p_limit: 5 }),
     hasPriorRange
-      ? supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: periodWindowDays, p_limit: 5 })
+      ? supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: topProgramsWindowDays, p_limit: 5 })
       : Promise.resolve({ data: [] as unknown[] }),
     // 사용자 지시(2026-08-21): "비교 분석 시에는 두 기간의 각각 Top7이 나와야 한다" — 전 기간도
     // 같은 함수(프로그램별 기간 평균 재설계 버전)로 한 번 더 조회.
@@ -787,7 +800,8 @@ export async function GET(request: Request) {
     hasPriorRange,
     // 기능 #15-11: 기간 모드 COMPARED WITH?용 — 상위 5개 채널 안의 상위 7개 프로그램.
     competitorPeriodTopPrograms: competitorPeriodTopProgramsRes.data ?? [],
-    periodWindowDays,
+    periodWindowDays: heatmapWindowDays,
+    topProgramsWindowDays,
     dowHourBlockPatternPrior: dowHourBlockPatternPriorRes.data ?? [],
     topProgramsPrior: topProgramsPriorRes.data ?? [],
     // 사용자 지시(2026-08-21): TOP20 밖 점유율 상위 5개 + 비교 분석 두 기간 각각의 경쟁사 Top7.

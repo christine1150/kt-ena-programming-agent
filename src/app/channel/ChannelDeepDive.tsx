@@ -520,6 +520,9 @@ interface ChannelData {
   // 기능 #15-11(2026-08-21): 기간 모드 COMPARED WITH?.
   competitorPeriodTopPrograms: CompetitorPeriodTopProgramRow[];
   periodWindowDays: number;
+  // 버그 수정(2026-08-28): TOP 20/TOP5 점유율은 히트맵과 window 계산이 분리됐다(route.ts 참고) —
+  // 히트맵은 periodWindowDays, TOP 20/TOP5는 이 필드를 쓴다.
+  topProgramsWindowDays: number;
   // 기능 #15-3/#15-4(2026-08-21): "대비" 분석의 전 기간 히트맵·TOP20.
   dowHourBlockPatternPrior: DowHourBlockRow[];
   topProgramsPrior: TopProgramRow[];
@@ -3514,6 +3517,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     hasPriorRange,
     competitorPeriodTopPrograms,
     periodWindowDays,
+    topProgramsWindowDays,
     dowHourBlockPatternPrior,
     topProgramsPrior,
     topSharePrograms,
@@ -4541,11 +4545,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
-        {/* 시청률 상위 콘텐츠 TOP 20 — 신규 섹션(사용자 지시 2026-08-20). 최근 12주 고정 윈도우. */}
+        {/* 시청률 상위 콘텐츠 TOP 20 — 신규 섹션(사용자 지시 2026-08-20). "오늘"(폴백 기본값)만
+            최근 12주 고정, 그 외 선택 기간은 전부 선택한 기간 그대로 계산한다(2026-08-28 버그
+            수정 — topProgramsWindowDays, 히트맵용 periodWindowDays와 분리됨). */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={SECTION_TITLE_P2}>시청률 상위 콘텐츠 TOP 20</h2>
           <p className="mb-3 text-sm text-zinc-400">
-            {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 평균 시청률이 높은 순으로 정렬했습니다.
+            {topProgramsWindowDays !== 84 ? `선택 기간(${topProgramsWindowDays}일)` : "최근 12주(84일)"} 평균 시청률이 높은 순으로 정렬했습니다.
           </p>
           {hasPriorRange ? (
             <>
