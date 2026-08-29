@@ -520,9 +520,6 @@ interface ChannelData {
   // 기능 #15-11(2026-08-21): 기간 모드 COMPARED WITH?.
   competitorPeriodTopPrograms: CompetitorPeriodTopProgramRow[];
   periodWindowDays: number;
-  // 버그 수정(2026-08-28): TOP 20/TOP5 점유율은 히트맵과 window 계산이 분리됐다(route.ts 참고) —
-  // 히트맵은 periodWindowDays, TOP 20/TOP5는 이 필드를 쓴다.
-  topProgramsWindowDays: number;
   // 기능 #15-3/#15-4(2026-08-21): "대비" 분석의 전 기간 히트맵·TOP20.
   dowHourBlockPatternPrior: DowHourBlockRow[];
   topProgramsPrior: TopProgramRow[];
@@ -3517,7 +3514,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     hasPriorRange,
     competitorPeriodTopPrograms,
     periodWindowDays,
-    topProgramsWindowDays,
     dowHourBlockPatternPrior,
     topProgramsPrior,
     topSharePrograms,
@@ -4495,10 +4491,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
-        {/* 요일×시간대 강세 히트맵 — 사용자 지시(2026-08-21, 기능 #15-3): 오늘/어제/DoD(7일 이하
-            분석)는 표본이 부족해 기존처럼 최근 12주(84일) 고정 윈도우를 유지하고, 그보다 긴 기간을
-            선택하면 그 선택 기간 전체를 윈도우로 쓴다(periodWindowDays, route.ts에서 계산). "대비"
-            분석(priorDateFrom/To가 있는 DoD~YoY)은 "이번 기간"/"전 기간" 두 패널로 나란히 비교. */}
+        {/* 요일×시간대 강세 히트맵 — 사용자 지시(2026-08-21, 기능 #15-3; 2026-08-28 재지시로 규칙
+            수정): "오늘"(기본값, 아무 기간도 선택하지 않은 최초 진입)만 표본이 부족해 기존처럼
+            최근 12주(84일) 고정 윈도우를 유지하고, 어제·직접 선택·WTD~YTD·지난N일·DoD~YoY 등
+            기간을 명시적으로 선택하면 전부 그 선택 기간 그대로를 윈도우로 쓴다(periodWindowDays,
+            route.ts의 hasExplicitDateRange 기준). "대비" 분석(priorDateFrom/To가 있는 DoD~YoY)은
+            "이번 기간"/"전 기간" 두 패널로 나란히 비교. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={`${SECTION_TITLE_P2} mb-1`}>
             {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일) 요일 × 시간대 강세 시간대` : "최근 12주 요일 × 시간대 강세 시간대"}
@@ -4545,13 +4543,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
-        {/* 시청률 상위 콘텐츠 TOP 20 — 신규 섹션(사용자 지시 2026-08-20). "오늘"(폴백 기본값)만
-            최근 12주 고정, 그 외 선택 기간은 전부 선택한 기간 그대로 계산한다(2026-08-28 버그
-            수정 — topProgramsWindowDays, 히트맵용 periodWindowDays와 분리됨). */}
+        {/* 시청률 상위 콘텐츠 TOP 20 — 신규 섹션(사용자 지시 2026-08-20). "오늘"(기본값)만 최근
+            12주 고정, 그 외 선택 기간은 전부 선택한 기간 그대로 계산한다(2026-08-28 버그 수정 —
+            히트맵과 같은 periodWindowDays 규칙을 공유). */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={SECTION_TITLE_P2}>시청률 상위 콘텐츠 TOP 20</h2>
           <p className="mb-3 text-sm text-zinc-400">
-            {topProgramsWindowDays !== 84 ? `선택 기간(${topProgramsWindowDays}일)` : "최근 12주(84일)"} 평균 시청률이 높은 순으로 정렬했습니다.
+            {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 평균 시청률이 높은 순으로 정렬했습니다.
           </p>
           {hasPriorRange ? (
             <>
