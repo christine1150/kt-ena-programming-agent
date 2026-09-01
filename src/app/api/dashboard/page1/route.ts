@@ -204,6 +204,13 @@ interface MonthlyDriver {
   // 편성이 0회(종영)여도 전월 프라임 표본으로 신뢰도를 판단할 수 있다.
   primeRatingDelta: number | null;
   priorPrimeAirCount: number;
+  // 사용자 지시(2026-09-01, "대체 콘텐츠" 분석) — 이 프로그램의 일반 주력 슬롯(프라임 한정
+  // 아님, 종영 시 전월 슬롯으로 폴백)과, 하락 요인일 때 그 슬롯에 이번 달 대신 들어온 프로그램.
+  mainSlotDow: number | null;
+  mainSlotHourBlock: number | null;
+  replacedByName?: string;
+  replacedByRating?: number | null;
+  replacedByAirCount?: number;
 }
 // 프라임(20~24시) 주요 등락 — 채널 전체 기여도 순위와 별개로, 프라임 시간대에서 크게 움직인
 // 오리지널·주요 프로그램을 요일과 함께 따로 짚어주기 위한 항목(사용자 지시 2026-09-01).
@@ -1276,6 +1283,21 @@ export async function GET(request: Request) {
   // 프라임 주요 등락 후보 조건 — 이번 달 또는 전월 중 한쪽이라도 프라임에 2회 이상 편성된 것만
   // (프라임 1회짜리 특집이 "특별한 등락"으로 잡히는 것을 막는다).
   const MIN_PRIME_AIRINGS = 2;
+  // 사용자 지시(2026-09-01, "상승 견인" 재검토): "동시간대 전월 평균보다 상승 또는 하락했을 때
+  // 의미가 있다" — 채널 기여도(contribution_delta) 1위라는 이유만으로 뽑던 것에, 그 프로그램의
+  // 슬롯 자체가 전월 동시간대 대비 실질적으로 달라졌는지(slot_lift)를 "상승 견인" 후보에만
+  // 추가 게이트로 건다(하락 요인은 아래 대체 콘텐츠 분석으로 별도 보강 — 두 요청이 서로 다름).
+  // 절대 기준선(RATING_FLOOR)은 이 프로젝트의 다른 노이즈 바닥(예: demographic_program_
+  // highlights_noise_floor의 rating=0.05)과 같은 눈금, 상대 임계값(15%)은 이 프로젝트 전역의
+  // "뚜렷한 변화" 기준(OUTLIER_THRESHOLD_PCT 등)과 동일하게 맞췄다 — 새 기준 발명이 아니다.
+  const SLOT_LIFT_RATING_FLOOR = 0.05;
+  const SLOT_LIFT_RELATIVE_THRESHOLD = 0.15;
+  function isSlotLiftMeaningful(m: { period_avg_rating: number | null; slot_lift: number | null }): boolean {
+    if (m.slot_lift === null || m.period_avg_rating === null) return false;
+    const baseline = m.period_avg_rating - m.slot_lift;
+    if (Math.abs(baseline) < SLOT_LIFT_RATING_FLOOR) return Math.abs(m.slot_lift) >= SLOT_LIFT_RATING_FLOOR;
+    return Math.abs(m.slot_lift / baseline) >= SLOT_LIFT_RELATIVE_THRESHOLD;
+  }
   const isMonthEndDate = offsetDateStr(asOfDate, 1).slice(0, 7) !== asOfDate.slice(0, 7);
   let monthlyReview: {
     year: number;
@@ -1371,6 +1393,8 @@ export async function GET(request: Request) {
           prime_rating_delta: number | null;
           main_prime_dow: number | null;
           slot_lift: number | null;
+          main_slot_dow: number | null;
+          main_slot_hour_block: number | null;
         }[];
 
         const toDriver = (m: (typeof rows)[number]): MonthlyDriver => ({
@@ -1387,6 +1411,8 @@ export async function GET(request: Request) {
           primeDow: m.main_prime_dow,
           primeRatingDelta: m.prime_rating_delta,
           priorPrimeAirCount: m.prior_prime_airings ?? 0,
+          mainSlotDow: m.main_slot_dow,
+          mainSlotHourBlock: m.main_slot_hour_block,
         });
 
         // 상승 견인 / 하락 요인 = 채널 월간 평균 기여도 변화 1위(양/음 각각).
@@ -1395,10 +1421,41 @@ export async function GET(request: Request) {
         const eligible = rows.filter(
           (m) => m.contribution_delta !== null && Math.max(m.period_airings ?? 0, m.prior_airings ?? 0) >= MIN_MONTHLY_AIR_COUNT
         );
-        const up = eligible.filter((m) => m.contribution_delta! > 0).sort((a, b) => b.contribution_delta! - a.contribution_delta!)[0];
+        // 사용자 지시(2026-09-01): "상승 견인"은 채널 기여도 1위라는 이유만으로는 부족하다 —
+        // 그 프로그램의 슬롯 자체가 전월 동시간대 평균 대비 실질적으로 달라졌어야(slot_lift가
+        // 유의미해야) 한다. isSlotLiftMeaningful로 추가 게이트(하락 요인엔 적용 안 함 — 그쪽은
+        // 아래에서 "대체 콘텐츠" 분석으로 별도 보강, 요구사항이 다름).
+        const up = eligible
+          .filter((m) => m.contribution_delta! > 0 && isSlotLiftMeaningful(m))
+          .sort((a, b) => b.contribution_delta! - a.contribution_delta!)[0];
         const down = eligible.filter((m) => m.contribution_delta! < 0).sort((a, b) => a.contribution_delta! - b.contribution_delta!)[0];
         if (up) growthDriver = toDriver(up);
         if (down) weaknessDriver = toDriver(down);
+
+        // 사용자 지시(2026-09-01): "쯔양몇끼가 빠져서 하락 요인이라고 적었는데... 어떤것을
+        // 넣었길래 시청률이 빠졌는지를 적어줘야함" / "하나뿐인내편도 빠지고 나서 뭐가 들어갔는데,
+        // 컨텐츠 교체 이후로 하락을 가져왔는지 분석해서 작성해주어야 함" — 하락 요인의 옛 주력
+        // 슬롯(main_slot_dow/main_slot_hour_block)에 이번 달 실제로 무엇이 편성됐는지 조회해,
+        // 하락 요인 자신이 아닌 다른 프로그램이 그 자리를 차지했으면 "대체 콘텐츠"로 명시한다
+        // (자기 자신이 그대로 최다 점유자면 — 단순 편성 축소일 뿐 콘텐츠 교체가 아니므로 비워둠,
+        // 지어내지 않는다).
+        if (down && down.main_slot_dow !== null && down.main_slot_hour_block !== null) {
+          const { data: occupantRows } = await supabase.rpc("get_channel_slot_current_occupant", {
+            p_channel_code: code,
+            p_program_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
+            p_date_from: monthStart,
+            p_date_to: asOfDate,
+            p_dow: down.main_slot_dow,
+            p_hour_block: down.main_slot_hour_block,
+          });
+          const occupants = (occupantRows ?? []) as { canonical_name: string; air_count: number; avg_rating: number | null }[];
+          const replacement = occupants.find((o) => o.canonical_name !== down!.canonical_name);
+          if (replacement && weaknessDriver) {
+            weaknessDriver.replacedByName = replacement.canonical_name;
+            weaknessDriver.replacedByRating = replacement.avg_rating;
+            weaknessDriver.replacedByAirCount = replacement.air_count;
+          }
+        }
 
         // 프라임(20~24시) 주요 등락 — 위 기여도 순위와 별개 축이다. 프라임에서 크게 움직였지만
         // 채널 전체 기여도로는 순위 밖인 작품(예: 편성량은 그대로인데 성과만 크게 오른 오리지널)을

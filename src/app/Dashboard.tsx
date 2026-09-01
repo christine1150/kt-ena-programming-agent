@@ -349,6 +349,11 @@ interface MonthlyDriver {
   // "본방 화제성"과 "재방 물량 확대"를 구분하는 데 쓴다.
   primeRatingDelta: number | null;
   priorPrimeAirCount: number;
+  mainSlotDow: number | null;
+  mainSlotHourBlock: number | null;
+  replacedByName?: string;
+  replacedByRating?: number | null;
+  replacedByAirCount?: number;
 }
 interface MonthlyPrimeMover {
   programName: string;
@@ -1093,8 +1098,10 @@ function MonthlyDriverCell({ driver, channelCode }: { driver: MonthlyDriver | nu
           </span>
         )}
         <span className="tabular-nums font-semibold" style={{ color: up ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
+          {/* 사용자 지시(2026-09-01): "상승 견인 및 하락 요인 시청률도 소숫점 이하 3자리까지만
+              표시" — 4자리(toFixed(4))로 남아있던 것을 다른 모든 시청률류 표기와 같은 3자리로. */}
           {up ? "▲" : "▼"}
-          {Math.abs(driver.contributionDelta).toFixed(4)}%p
+          {Math.abs(driver.contributionDelta).toFixed(3)}%p
         </span>
       </span>
       <span className="text-[10px] text-zinc-400">
@@ -1111,6 +1118,17 @@ function MonthlyDriverCell({ driver, channelCode }: { driver: MonthlyDriver | nu
           </span>
         )}
       </span>
+      {/* 사용자 지시(2026-09-01): "쯔양몇끼가 빠져서 하락 요인이라고 적었는데... 어떤것을
+          넣었길래 시청률이 빠졌는지를 적어줘야함" — 하락 요인의 옛 주력 슬롯에 이번 달 대신
+          들어온 프로그램(자기 자신이 그대로면 비어 있음 — 단순 편성 축소일 뿐 콘텐츠 교체가
+          아니므로 지어내지 않는다). */}
+      {!up && driver.replacedByName && (
+        <span className="text-[10px] text-zinc-400">
+          해당 슬롯 대체: <b className="text-zinc-600">{driver.replacedByName}</b>
+          {driver.replacedByRating !== null && driver.replacedByRating !== undefined && ` ${formatRating(driver.replacedByRating, channelCode)}`}
+          {driver.replacedByAirCount !== undefined && `(${driver.replacedByAirCount}회)`}
+        </span>
+      )}
     </span>
   );
 }
