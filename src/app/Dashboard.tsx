@@ -1028,6 +1028,13 @@ function MonthlyRankTrendChart({
           const pts = c.months.filter((m) => m.rank !== null);
           const path = pts.map((m, i) => `${i === 0 ? "M" : "L"}${xOf(m.month).toFixed(1)},${yOf(m.rank!).toFixed(1)}`).join(" ");
           const last = pts[pts.length - 1];
+          // 사용자 지시(2026-09-01): "그래프에서 숫자를 보여줄 수 있는 부분은 순위 숫자를 보여주고,
+          // 글자가 겹칠 경우에는 최근, 가장 낮을 때, 가장 높을 때만 숫자를 보여주고 나머지는
+          // 마우스오버할 때 보이게" — 채널별로 최근(last)·최고 순위(rank 최솟값)·최저 순위(rank
+          // 최댓값) 3개 지점에만 상시 숫자를 표기하고, 나머지는 기존 <title> 호버로만 남긴다.
+          const bestPt = pts.reduce((a, b) => (b.rank! < a.rank! ? b : a), pts[0]);
+          const worstPt = pts.reduce((a, b) => (b.rank! > a.rank! ? b : a), pts[0]);
+          const notable = [last, bestPt, worstPt].filter((p, i, arr) => p && arr.findIndex((q) => q?.month === p.month) === i);
           return (
             <g key={c.channelCode}>
               <path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
@@ -1039,8 +1046,16 @@ function MonthlyRankTrendChart({
                   </title>
                 </circle>
               ))}
+              {/* 최근 지점은 링(테두리 원)으로 한 번 더 강조 — 사용자가 첨부한 참고 이미지의
+                  "가장 최근 점만 둥근 테두리로 표시" 스타일. */}
+              {last && <circle cx={xOf(last.month)} cy={yOf(last.rank!)} r={4.5} fill="none" stroke={color} strokeWidth={1.5} />}
+              {notable.map((m) => (
+                <text key={m!.month} x={xOf(m!.month)} y={yOf(m!.rank!) - 6} textAnchor="middle" fontSize={9} fontWeight={700} fill={color}>
+                  #{m!.rank}
+                </text>
+              ))}
               {last && (
-                <text x={xOf(last.month) + 6} y={yOf(last.rank!) + 3} fontSize={9} fontWeight={700} fill={color}>
+                <text x={xOf(last.month) + 7} y={yOf(last.rank!) + 3} fontSize={9} fontWeight={700} fill={color}>
                   {CHANNEL_NAME_BY_CODE[c.channelCode] ?? c.channelCode}
                 </text>
               )}
@@ -1603,11 +1618,19 @@ function ProgramRatingHistoryChart({
   const H = 72;
   const PAD_X = 6;
   const PAD_Y = 6;
-  const times = allDates.map((d) => new Date(`${d}T00:00:00`).getTime());
-  const minTime = Math.min(...times);
-  const maxTime = Math.max(...times);
-  const timeRange = maxTime - minTime || 1;
-  const xOf = (d: string) => PAD_X + ((new Date(`${d}T00:00:00`).getTime() - minTime) / timeRange) * (W - PAD_X * 2);
+  // 사용자 지시(2026-09-01): "3, 4회 등 회차가 많지 않을 경우에 우측까지 끌지 말고 좌측쯤에서
+  // 마무리... 1, 2회 간격에 비해서 3회 간격이 너무 벌어져있음" — 기존엔 실제 방영 날짜 간격에
+  // 비례해 x좌표를 잡아서(반주 편성처럼 회차 사이 실제 날짜 간격이 들쭉날쭉하면) 회차 간
+  // 시각적 간격이 고르지 않고, 회차 수가 적을 땐 몇 안 되는 점이 전체 폭에 억지로 늘어났다.
+  // 날짜 비례 대신 "고유 날짜의 순번"으로 x좌표를 잡아 회차 간 간격을 항상 균일하게 하고,
+  // 폭 기준은 "표준 회차 수"(8)로 고정해 회차가 적으면 오른쪽이 자연히 비어 있게 한다(회차가
+  // 8개를 넘으면 그만큼 더 촘촘히 채워 넘치지 않게).
+  const STANDARD_POINT_COUNT = 8;
+  const uniqueDates = Array.from(new Set(allDates)).sort();
+  const stepDenom = Math.max(STANDARD_POINT_COUNT - 1, uniqueDates.length - 1, 1);
+  const STEP = (W - PAD_X * 2) / stepDenom;
+  const dateIndex = new Map(uniqueDates.map((d, i) => [d, i]));
+  const xOf = (d: string) => PAD_X + (dateIndex.get(d) ?? 0) * STEP;
 
   // 사용자 지시(2026-09-01): "가구 시청률이 2049보다 높은데(신병의 경우 2049 1.42, 가구 3.37)
   // 똑같이 나오는 것이 이상함 — 가구 기준의 y축 높이로 2049도 맞춰줄 것". 그동안 2049 선과 가구
@@ -1642,6 +1665,11 @@ function ProgramRatingHistoryChart({
   const peakPoint = own2049.length > 0 ? own2049.reduce((a, b) => (b.rating > a.rating ? b : a)) : null;
   const todayPoint = own2049.length > 0 ? own2049[own2049.length - 1] : null;
   const peakIsToday = peakPoint !== null && todayPoint !== null && peakPoint.broadcast_date === todayPoint.broadcast_date;
+  // 사용자 지시(2026-09-01): "최근, 가장 낮을 때, 가장 높을 때만 숫자를 보여주고"(순위 그래프와
+  // 같은 원칙을 여기도 적용) — 기존엔 최고·당일만 상시 표기했는데, 가장 낮은 지점도 추가한다.
+  // 이미 최고/당일로 표기된 지점과 겹치면 다시 그리지 않는다.
+  const troughPoint = own2049.length > 0 ? own2049.reduce((a, b) => (b.rating < a.rating ? b : a)) : null;
+  const troughIsShown = troughPoint !== null && (troughPoint.broadcast_date === peakPoint?.broadcast_date || troughPoint.broadcast_date === todayPoint?.broadcast_date);
   // 사용자 지시(2026-09-01): "가구 시청률은 숫자가 안 나오는 부분 수정" — 가구(전국 유료가구)
   // 선은 그래프에 옅게 그려지기만 하고 숫자 라벨이 전혀 없었다(2049만 최고/당일 값을 표기).
   // 2049와 같은 방식으로 가구의 당일 값을 표기한다(최고값은 대개 당일과 겹치는 경우가 많고
@@ -1669,6 +1697,30 @@ function ProgramRatingHistoryChart({
             />
           ))}
           {own2049.length >= 2 && <path d={pathOf(own2049, y2049)} fill="none" stroke={accentColor} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />}
+          {/* 사용자 지시(2026-09-01): "마우스 오버 기능 살리기" — 지금까지 own2049 선에만 점+
+              호버가 있고 가구·직후재방 등 다른 채널·경쟁채널 선에는 아예 없었다. 모든 선에
+              점(호버 가능한 <title> 포함)을 되살린다. */}
+          {ownHousehold.map((p, i) => (
+            <circle key={`hh-${i}`} cx={xOf(p.broadcast_date)} cy={yHousehold(p.rating)} r={1.6} fill={accentColor} opacity={0.4}>
+              <title>{p.broadcast_date} · {ownChannelName}(가구) {formatRating(p.rating)}</title>
+            </circle>
+          ))}
+          {otherSeries.map((s) => {
+            const color = themeColorByCode.get(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR;
+            return s.points.map((p, i) => (
+              <circle key={`${s.seriesName}-${i}`} cx={xOf(p.broadcast_date)} cy={y2049(p.rating)} r={1.6} fill={color}>
+                <title>{p.broadcast_date} · {CHANNEL_NAME_BY_CODE[s.seriesName] ?? s.seriesName} {formatRating(p.rating)}</title>
+              </circle>
+            ));
+          })}
+          {competitorSeries.map((s, si) => {
+            const color = COMPETITOR_LINE_COLORS[si % COMPETITOR_LINE_COLORS.length];
+            return s.points.map((p, i) => (
+              <circle key={`${s.seriesName}-${i}`} cx={xOf(p.broadcast_date)} cy={y2049(p.rating)} r={1.6} fill={color}>
+                <title>{p.broadcast_date} · {s.seriesName} {formatRating(p.rating)}</title>
+              </circle>
+            ));
+          })}
           {own2049.map((p, i) => (
             <circle key={i} cx={xOf(p.broadcast_date)} cy={y2049(p.rating)} r={1.8} fill={accentColor}>
               <title>{p.broadcast_date}{p.episode_number ? ` ${p.episode_number}회` : ""} · 수도권2049 {formatRating(p.rating)}</title>
@@ -1693,6 +1745,14 @@ function ProgramRatingHistoryChart({
             >
               {formatRating(todayPoint.rating)}
               {peakIsToday && <span style={{ color: accentColor }}> ★</span>}
+            </span>
+          )}
+          {troughPoint && !troughIsShown && (
+            <span
+              className="absolute -translate-x-1/2 translate-y-1 whitespace-nowrap text-[9px] font-bold tabular-nums text-zinc-400"
+              style={{ left: `${(xOf(troughPoint.broadcast_date) / W) * 100}%`, top: y2049(troughPoint.rating) + 3 }}
+            >
+              {formatRating(troughPoint.rating)}
             </span>
           )}
           {todayHouseholdPoint && (
