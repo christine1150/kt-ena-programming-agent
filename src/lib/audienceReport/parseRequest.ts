@@ -35,8 +35,20 @@ export function parseAudienceReportRequest(searchParams: URLSearchParams): Audie
 
 export const AUDIENCE_REPORT_PARAM_ERROR = "date, 또는 dateFrom/dateTo, 또는 preset 파라미터가 필요합니다.";
 
-/** 다운로드 파일명 — 채널코드·기간을 담되 OS에서 문제되는 문자는 제거한다. */
-export function reportFileName(channelCode: string, periodLabel: string, ext: "docx" | "pptx"): string {
-  const safe = periodLabel.replace(/[^0-9A-Za-z가-힣~_-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
-  return `${channelCode}_${safe || "report"}.${ext}`;
+/**
+ * 다운로드용 Content-Disposition 헤더 값.
+ *
+ * 버그 수정(2026-09-01, 배포 직후 실측): 파일명에 기간 라벨을 그대로 넣었더니 MODE D에서만
+ * 500이 났다 — MODE A/B/C의 라벨은 날짜(ASCII)지만 MODE D는 프리셋 이름("이번 분기 누적(QTD)")
+ * 이라 한글이 들어가고, HTTP 헤더는 ByteString(Latin-1)만 허용해 인코딩 에러가 난다.
+ * RFC 5987대로 ASCII 폴백(filename)과 UTF-8 원본(filename*)을 함께 보낸다 — 한글 파일명을
+ * 포기하지 않으면서 모든 브라우저에서 안전하다.
+ */
+export function reportContentDisposition(channelCode: string, periodLabel: string, ext: "docx" | "pptx"): string {
+  const cleaned = periodLabel.replace(/[^0-9A-Za-z가-힣~_-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  const utf8Name = `${channelCode}_${cleaned || "report"}.${ext}`;
+  // ASCII 폴백: 한글 등 비ASCII를 지우고 남은 것이 없으면 채널코드만 쓴다.
+  const asciiBase = `${channelCode}_${cleaned}`.replace(/[^\x20-\x7E]/g, "").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  const asciiName = `${asciiBase || channelCode}.${ext}`;
+  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(utf8Name)}`;
 }

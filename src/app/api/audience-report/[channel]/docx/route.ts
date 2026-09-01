@@ -5,7 +5,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { buildAudienceReport } from "@/lib/audienceReport/reportBuilder";
-import { parseAudienceReportRequest, AUDIENCE_REPORT_PARAM_ERROR, reportFileName } from "@/lib/audienceReport/parseRequest";
+import { parseAudienceReportRequest, AUDIENCE_REPORT_PARAM_ERROR, reportContentDisposition } from "@/lib/audienceReport/parseRequest";
 import { flattenAudienceReport } from "@/lib/audienceReport/reportFlatten";
 import { renderReportDocx } from "@/lib/audienceReport/exportRenderers";
 
@@ -23,7 +23,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ chan
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${reportFileName(report.channelCode, report.period.label, "docx")}"`,
+        "Content-Disposition": reportContentDisposition(report.channelCode, report.period.label, "docx"),
       },
     });
   } catch (err) {
