@@ -3786,32 +3786,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 브리핑" 등이 과거를 마치 오늘인 것처럼 서술하는 문제가 있었다(사용자 지시로 수정). */}
             <div className="flex flex-col items-end gap-1.5">
               <div className="flex flex-wrap items-center justify-end gap-2">
-                {/* Channel Intelligence Report 다운로드 진입점(Phase 3, 2026-08-27 / Phase 4,
-                    2026-08-27: "어떤 기간을 선택하더라도 버튼이 보이도록" 사용자 지시) — 이제
-                    모든 기간 프리셋에서 보인다. 단일 일자 모드(오늘/어제)는 기존 그대로 date만,
-                    기간 모드(WTD~YTD/DoD~YoY/직접 선택)는 이미 계산돼 있는 dateFrom/dateTo(+비교
-                    분석이면 priorDateFrom/To)를 그대로 실어 보낸다 — 기간 계산을 서버에서
-                    다시 하지 않고 클라이언트가 이미 한 계산(computePeriodPreset)을 재사용. */}
-                {data.dateTo && (
-                  <Link
-                    href={
-                      showComparisonView
-                        ? // Phase B(2026-08-27): preset을 그대로 실어 보내 QTD/YTD일 때만 리포트가
-                          // Quarterly/Annual Report(CJ ENM IR 스타일 확장 섹션)로 렌더링되게 한다.
-                          `/report/${data.dateTo}?channel=${code}${dateQuery}${priorQuery}&periodLabel=${encodeURIComponent(PERIOD_PRESET_LABELS[periodPreset])}${comparisonLabel ? `&comparisonLabel=${encodeURIComponent(comparisonLabel)}` : ""}&preset=${periodPreset}`
-                        : `/report/${data.dateTo}?channel=${code}`
-                    }
-                    target="_blank"
-                    className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none hover:bg-white/30"
-                  >
-                    📄 리포트 보기
-                  </Link>
-                )}
+                {/* N절 Phase 3(2026-09-01, 시스템 일원화) — 구 시스템("📄 리포트 보기",
+                    /report/[date] + /api/report/channel/**)을 제거하고 신 시스템 버튼으로
+                    일원화했다. Phase 2b(Quarterly/Annual tier에 있던 Daypart Win/Weakness·
+                    Program Portfolio)·2c(Strategic Implications)를 신 시스템 MODE D로 이식해
+                    구 시스템만의 고유 기능이 더는 없었고, Word/PPT는 이미 Phase 2a에서 이식
+                    완료된 상태였다 — 옛 파일들은 CLAUDE.md 규칙대로 trash-can/으로 이동(삭제
+                    아님, 사용자 최종 확인 후 삭제). */}
                 {/* Phase 7(2026-08-28, Audience Intelligence Report §11-8) — 새 시스템(/audience-report)
-                    "각 채널 보고서 만들기" 버튼. 위 구 시스템 버튼은 그대로 두고 옆에 추가한다(사용자
-                    지시: 구 리포트가 Word/PPT·Quarterly/Annual을 지원하는 과도기라 지금 대체하지
-                    않음). Phase 8에서 "종합 보고서 만들기" 버튼도 종합(포트폴리오) 리포트가 실제로
-                    만들어져 바로 옆에 추가됨. */}
+                    "각 채널 보고서 만들기" 버튼. */}
                 {(() => {
                   // periodPreset==="today"일 때는 selectedDateTo가 의도적으로 null이라(서버가 최신
                   // 날짜를 자동으로 고르게 하는 기존 동작, :3220-3226) 위 구 버튼과 동일하게
