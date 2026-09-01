@@ -490,6 +490,19 @@ interface ChannelData {
   // 이미 검증된 값만으로 OpenAI가 종합한 오늘의 브리핑 핵심 문단(단일 일자 모드만). 없으면
   // 기존 규칙 기반 문장으로 조용히 대체.
   briefingLlm: string | null;
+  // O절(2026-09-01) — 닐슨 주간 파일의 기간 단위 시장 순위(get_channel_period_rank_movement).
+  // 해당 기간 파일이 아직 업로드되지 않았으면 null.
+  periodRankMovement: {
+    current_from: string;
+    current_to: string;
+    current_rank: number | null;
+    current_rating: number | null;
+    prior_from: string | null;
+    prior_to: string | null;
+    prior_rank: number | null;
+    prior_rating: number | null;
+    rank_change: number | null;
+  } | null;
   rootCauseAlert: RootCauseAlert | null;
   opportunityAlert: OpportunityAlert | null;
   trendHighlight: TrendHighlight | null;
@@ -3737,6 +3750,24 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   )}
                 </p>
                 {showComparisonView && <p className="text-sm text-white/70">{isComparisonPreset ? "이번 기간 평균" : "선택 기간 평균"}</p>}
+                {/* O절(2026-09-01) — 닐슨 주간 파일의 "기간 단위 시장 순위" 변화. 일별 순위 평균과
+                    다른 값이라 daily로는 만들 수 없어 별도 테이블에서 온다. 해당 주 파일이 아직
+                    업로드되지 않았으면 이 줄 자체가 안 보인다(없는 값을 지어내지 않음). */}
+                {data.periodRankMovement?.current_rank != null && (
+                  <p className="mt-1 text-sm text-white/80">
+                    주간 시장 순위 {data.periodRankMovement.prior_rank != null && <>#{data.periodRankMovement.prior_rank} → </>}
+                    <b className="font-semibold">#{data.periodRankMovement.current_rank}</b>
+                    {data.periodRankMovement.rank_change != null && data.periodRankMovement.rank_change !== 0 && (
+                      <span className={data.periodRankMovement.rank_change > 0 ? "ml-1 text-emerald-300" : "ml-1 text-rose-300"}>
+                        {data.periodRankMovement.rank_change > 0 ? "▲" : "▼"}
+                        {Math.abs(data.periodRankMovement.rank_change)}
+                      </span>
+                    )}
+                    <span className="ml-1.5 text-xs text-white/60">
+                      ({data.periodRankMovement.current_from}~{data.periodRankMovement.current_to})
+                    </span>
+                  </p>
+                )}
                 {/* Channel Health Score(2026-08-27, Phase 1) — 단일 일자 조회일 때만. 사용자
                     지시(2026-08-27): "전주 대비 % 우측으로 이동" — 아래 전일/전주 대비 문구 줄에
                     같이 놓는 게 기본이고, 그 줄 자체가 안 뜨는 경우(dod/wow 데이터 없음)에만 여기

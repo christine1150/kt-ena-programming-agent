@@ -130,6 +130,7 @@ export async function GET(request: Request) {
       competitorPeriodTopPrograms: [],
       competitorPeriodTopProgramsPrior: [],
       periodWindowDays: 84,
+      periodRankMovement: null,
       dowHourBlockPatternPrior: [],
       topProgramsPrior: [],
       topSharePrograms: [],
@@ -584,6 +585,18 @@ export async function GET(request: Request) {
     }
   }
 
+  // O절(2026-09-01) — 닐슨 주간/월간 파일의 "기간 단위 시장 순위" 변화. 일별 순위를 평균 내는
+  // 것과 기간 순위는 다른 값이라 daily로는 만들 수 없어, 별도 테이블(nielsen_period_rank)에서
+  // 최근 두 기간을 가져온다. 해당 기간 파일이 아직 업로드되지 않았으면 그냥 null이고 화면은
+  // 그 자리를 렌더링하지 않는다(없는 값을 0이나 "-"로 채우지 않는다).
+  const { data: rankMovementRows } = await supabase.rpc("get_channel_period_rank_movement", {
+    p_channel_code: channel.code,
+    p_target_label: matchedTargetLabel,
+    p_period_type: "weekly",
+    p_as_of_date: dateTo,
+  });
+  const periodRankMovement = rankMovementRows?.[0] ?? null;
+
 
   // 사용자 지시(2026-08-25): "ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널에서
   // 매우 중요하므로 오늘의 브리핑 첫 문장으로" — Page 1과 같은 get_original_content_daily를
@@ -755,6 +768,7 @@ export async function GET(request: Request) {
     // 분기별 스냅샷 SQL을 직접 부를 때 타깃 동의어 해석을 다시 하지 않도록, 이미 위에서 계산된
     // 최종 타깃 라벨을 그대로 노출한다(새 계산 없음).
     matchedTargetLabel,
+    periodRankMovement,
     rootCauseAlert,
     opportunityAlert,
     trendHighlight,

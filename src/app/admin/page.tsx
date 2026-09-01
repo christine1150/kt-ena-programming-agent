@@ -10,6 +10,7 @@ import ChannelMasterUploader from "./ChannelMasterUploader";
 // 옛 컴포넌트/API는 trash-can/으로 이동(사용자 최종 확인 후 삭제, CLAUDE.md 파일 관리 규칙).
 import FeaturedContentManager from "./FeaturedContentManager";
 import NielsenDailyUploader from "./NielsenDailyUploader";
+import NielsenPeriodUploader from "./NielsenPeriodUploader";
 import MailIngestionManager from "./MailIngestionManager";
 import SkyUhdUploader from "./SkyUhdUploader";
 import TargetGoalsManager from "./TargetGoalsManager";
@@ -62,6 +63,7 @@ export default async function AdminPage() {
         <ShareLinkManager />
 
         <NielsenDailyUploader />
+        <NielsenPeriodUploader />
 
         <SkyUhdUploader />
 
