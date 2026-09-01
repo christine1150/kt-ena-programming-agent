@@ -1276,13 +1276,12 @@ export async function GET(request: Request) {
           p_prior_date_to: priorMonthEnd,
           p_limit: 20,
         });
-        const withDelta = ((movers ?? []) as { program_name: string; rating_delta: number | null }[]).filter(
-          (m) => m.rating_delta !== null
-        );
+        // 반환 컬럼은 canonical_name / rating_delta다(마이그레이션 20260820120000).
+        const withDelta = ((movers ?? []) as { canonical_name: string; rating_delta: number | null }[]).filter((m) => m.rating_delta !== null);
         const up = withDelta.filter((m) => m.rating_delta! > 0).sort((a, b) => b.rating_delta! - a.rating_delta!)[0];
         const down = withDelta.filter((m) => m.rating_delta! < 0).sort((a, b) => a.rating_delta! - b.rating_delta!)[0];
-        if (up) growthDriver = { programName: up.program_name, ratingDelta: up.rating_delta! };
-        if (down) weaknessDriver = { programName: down.program_name, ratingDelta: down.rating_delta! };
+        if (up) growthDriver = { programName: up.canonical_name, ratingDelta: up.rating_delta! };
+        if (down) weaknessDriver = { programName: down.canonical_name, ratingDelta: down.rating_delta! };
       }
       return { channelCode: code, targetLabel, months, rankChange, ratingChangePct, growthDriver, weaknessDriver };
     });
