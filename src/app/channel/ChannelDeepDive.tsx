@@ -99,6 +99,9 @@ interface CompetitorOverlapRow {
 }
 // 사용자 지시(2026-09-02): "3주 이상 같은 요일 또는 같은 시간대에 동일한 패턴이 보인다면
 // 프로그램명과 함께 분석" — 자사 채널만(get_channel_stable_slot_patterns).
+// 사용자 재지시(2026-09-02): "패턴을 찾으라는 게 아니라, 그 프로그램/시간대가 채널에 미친
+// 영향(시청률·연령대·시간대)을 분석해달라" — 추세(first→latest)·채널 평균 대비 기여
+// (streak_avg_rating vs channel_avg_rating)·주 시청 연령대(dominant_demo_*)까지 확장.
 interface StableSlotPatternRow {
   dow: number;
   dow_label: string;
@@ -107,6 +110,11 @@ interface StableSlotPatternRow {
   consecutive_weeks: number;
   latest_date: string;
   latest_rating: number | null;
+  first_rating: number | null;
+  streak_avg_rating: number | null;
+  channel_avg_rating: number | null;
+  dominant_demo_label: string | null;
+  dominant_demo_rating: number | null;
 }
 interface CompetitorTopProgramRow {
   competitor_name: string;
@@ -3265,7 +3273,11 @@ function DemographicHeatStrip({ demographics, accentColor, fmtR }: { demographic
 // 편성된 패턴(사용자 지시 2026-09-02, 자사 채널만). 거의 매일 방송되는 스트립 프로그램은
 // 요일마다 걸려 같은 이름이 여러 슬롯에 반복 등장할 수 있어(예: 평일 매일 방송) 프로그램당
 // 가장 긴 스트릭 1건만 남기고, 그 안에서 상위 4건만 보여준다(정보 과다 방지).
-function StableSlotPatternList({ rows, accentColor }: { rows: StableSlotPatternRow[]; accentColor: string }) {
+// 사용자 재지시(2026-09-02): "패턴을 찾으라는 게 아니라, 그 프로그램/시간대가 채널에 미친
+// 영향을 분석해달라" — 카드마다 (1) 시청률 추세(스트릭 시작→최근), (2) 채널 평균 대비 이
+// 슬롯의 기여(높은지 낮은지), (3) 주 시청 연령대까지 세 줄로 보여준다. 전부 SQL이 이미 계산해
+// 내려준 값이라 여기서는 라벨링만 한다(새 계산 없음).
+function StableSlotPatternList({ rows, accentColor, fmtR }: { rows: StableSlotPatternRow[]; accentColor: string; fmtR: (v: number | null) => string }) {
   const byProgram = new Map<string, StableSlotPatternRow>();
   for (const r of rows) {
     const existing = byProgram.get(r.canonical_name);
@@ -3276,17 +3288,47 @@ function StableSlotPatternList({ rows, accentColor }: { rows: StableSlotPatternR
     return <p className="text-sm text-zinc-400">최근 8주 안에 3주 이상 연속으로 같은 요일·시간대에 편성된 프로그램이 없습니다.</p>;
   }
   return (
-    <ul className="space-y-1.5">
-      {top.map((r) => (
-        <li key={r.canonical_name} className="flex flex-wrap items-baseline gap-1.5 text-[13px]">
-          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}>
-            {r.dow_label}요일 {r.hour_of_day}시
-          </span>
-          <b className="font-semibold text-zinc-700">{r.canonical_name}</b>
-          <span className="text-zinc-500">{r.consecutive_weeks}주 연속 편성</span>
-          <span className="text-[11px] text-zinc-400">(최근 {r.latest_date}, {r.latest_rating !== null ? r.latest_rating.toFixed(3) : "—"})</span>
-        </li>
-      ))}
+    <ul className="space-y-2.5">
+      {top.map((r) => {
+        const trendDelta = r.first_rating !== null && r.latest_rating !== null ? r.latest_rating - r.first_rating : null;
+        const contribDelta = r.streak_avg_rating !== null && r.channel_avg_rating !== null ? r.streak_avg_rating - r.channel_avg_rating : null;
+        return (
+          <li key={r.canonical_name} className="rounded-xl bg-zinc-50 p-2.5">
+            <div className="flex flex-wrap items-baseline gap-1.5 text-[13px]">
+              <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}>
+                {r.dow_label}요일 {r.hour_of_day}시
+              </span>
+              <b className="font-semibold text-zinc-700">{r.canonical_name}</b>
+              <span className="text-zinc-500">{r.consecutive_weeks}주 연속 편성</span>
+            </div>
+            <div className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-zinc-500">
+              <span>
+                시청률 추세 {fmtR(r.first_rating)} → {fmtR(r.latest_rating)}
+                {trendDelta !== null && (
+                  <span className={`ml-1 font-medium ${trendDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    ({trendDelta >= 0 ? "▲" : "▼"}{fmtR(Math.abs(trendDelta))})
+                  </span>
+                )}
+              </span>
+              {contribDelta !== null && (
+                <span>
+                  채널 평균 대비{" "}
+                  <span className={`font-medium ${contribDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {contribDelta >= 0 ? "▲" : "▼"}{fmtR(Math.abs(contribDelta))}
+                  </span>{" "}
+                  ({fmtR(r.streak_avg_rating)} vs 채널 평균 {fmtR(r.channel_avg_rating)})
+                </span>
+              )}
+              {r.dominant_demo_label && (
+                <span>
+                  주 시청 연령대 <b className="font-medium text-zinc-600">{shortDemoLabel(r.dominant_demo_label)}</b>
+                  {r.dominant_demo_rating !== null && ` (${fmtR(r.dominant_demo_rating)})`}
+                </span>
+              )}
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -3987,11 +4029,30 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       Page 1 채널 타일과 같은 "(해당일자순위/목표순위)" 형식으로, 볼드 없이. */}
                   {!showComparisonView && narrativeSignal?.today_rank != null && (
                     <span className="ml-1.5 text-lg font-normal text-white/70">
-                      ({narrativeSignal.today_rank}/{data.targetAchievement?.target_rank ? parseInt(data.targetAchievement.target_rank, 10) || "-" : "-"})
+                      {/* 버그 수정(2026-09-02, 사용자 신고): parseInt()가 "경쟁채널 중 2위"처럼
+                          숫자가 문장 중간에 있는 skyUHD의 target_rank를 못 읽어(문자열 시작이
+                          숫자여야만 파싱됨) 목표 등위가 항상 "-"로 보였다 — 문자열 어디에 있든
+                          첫 숫자를 정규식으로 뽑도록 교체. */}
+                      ({narrativeSignal.today_rank}/{data.targetAchievement?.target_rank?.match(/\d+/)?.[0] ?? "-"})
                     </span>
                   )}
                 </p>
                 {showComparisonView && <p className="text-sm text-white/70">{isComparisonPreset ? "이번 기간 평균" : "선택 기간 평균"}</p>}
+                {/* 사용자 신고(2026-09-02): "목표 시청률(target_rating)이 잘 반영이 안 되는 것
+                    같다" — 확인 결과 DB·RPC 계산은 정상(get_target_achievement)이지만 이 값을
+                    보여주는 자리가 화면 어디에도 없었다(2049였다면 오히려 눈에 띄었겠지만, skyUHD는
+                    0.0019처럼 값이 작아 "반영 안 됨"으로 느끼기 쉬움). 단일 일자 조회일 때만,
+                    이미 계산된 값을 그대로 한 줄로 노출한다(새 계산 없음). */}
+                {!showComparisonView && data.targetAchievement?.target_rating != null && (
+                  <p className="mt-0.5 text-sm text-white/70">
+                    목표 시청률 {fmtR(data.targetAchievement.target_rating)}
+                    {data.targetAchievement.achievement_pct != null && (
+                      <span className={data.targetAchievement.achievement_pct >= 100 ? "ml-1 text-emerald-300" : "ml-1 text-rose-200"}>
+                        (달성률 {data.targetAchievement.achievement_pct.toFixed(1)}%)
+                      </span>
+                    )}
+                  </p>
+                )}
                 {/* O절(2026-09-01) — 닐슨 주간 파일의 "기간 단위 시장 순위" 변화. 일별 순위 평균과
                     다른 값이라 daily로는 만들 수 없어 별도 테이블에서 온다. 해당 주 파일이 아직
                     업로드되지 않았으면 이 줄 자체가 안 보인다(없는 값을 지어내지 않음). */}
@@ -4309,12 +4370,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <DemographicHeatStrip demographics={data.whoIsWatchingDemographics} accentColor={accentColor} fmtR={fmtR} />
               </div>
             </div>
-            {/* ③편성 안정성(사용자 지시 2026-09-02) — 최근 8주 동안 같은 요일·시간대에 3주 이상
-                연속 편성된 프로그램. 자사 채널만(경쟁채널은 프로그램 단위 이력 자료가 없어 제외). */}
+            {/* ③편성 안정성(사용자 지시 2026-09-02, 재지시 반영) — "패턴 발견"에서 멈추지 않고,
+                3주 이상 연속 편성된 슬롯이 채널에 미친 영향(시청률 추세·채널 평균 대비 기여·주
+                시청 연령대)까지 분석. 자사 채널만(경쟁채널은 프로그램 단위 이력 자료가 없어 제외). */}
             <div className="mt-6">
-              <h3 className="mb-1 text-sm font-semibold text-zinc-600">편성 안정성</h3>
-              <p className="mb-3 text-xs text-zinc-400">최근 8주 동안 같은 요일·같은 시각에 3주 이상 연속으로 편성된 프로그램입니다(본방 기준).</p>
-              <StableSlotPatternList rows={data.stableSlotPatterns} accentColor={accentColor} />
+              <h3 className="mb-1 text-sm font-semibold text-zinc-600">편성 안정성 — 고정 슬롯의 영향</h3>
+              <p className="mb-3 text-xs text-zinc-400">
+                최근 8주 동안 같은 요일·같은 시각에 3주 이상 연속 편성된 프로그램(본방 기준)이 시청률·채널 기여·연령대에 미친 영향입니다.
+              </p>
+              <StableSlotPatternList rows={data.stableSlotPatterns} accentColor={accentColor} fmtR={fmtR} />
             </div>
           </div>
         )}

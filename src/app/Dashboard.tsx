@@ -758,10 +758,15 @@ const TILE_LOGO_MAX_WIDTH_PX = 52;
 
 // 사용자 지시(2026-08-21, Page 1 매거진 개편): 전일 대비 "순위 증감"만 정수로 표시(#위 단어 없이,
 // +1/-3/변동없음="-"). target_goals.target_rank는 자유 텍스트라(예: skyUHD "경쟁채널 중 2위")
-// 숫자로 못 읽으면 null — 그 경우 "순위/목표순위" 표기에서 목표순위 자리는 "-"로 대체한다(단정 금지).
+// — 버그 수정(2026-09-02, 사용자 신고): parseInt()는 문자열이 숫자로 "시작"해야만 읽어서
+// "경쟁채널 중 2위"처럼 숫자가 중간·끝에 있으면 그냥 NaN이 됐다(skyUHD만 이 형식이라 목표
+// 등위가 항상 "-"로 보였음, 나머지 6채널은 "6"/"35"처럼 순수 숫자라 문제 없었음). 문자열 안
+// 아무 데나 있는 첫 숫자를 정규식으로 뽑는 방식으로 교체 — "6"도 "경쟁채널 중 2위"도 둘 다 읽는다.
 function parseTargetRankNum(targetRank: string | null): number | null {
   if (!targetRank) return null;
-  const n = parseInt(targetRank, 10);
+  const m = targetRank.match(/\d+/);
+  if (!m) return null;
+  const n = parseInt(m[0], 10);
   return Number.isFinite(n) ? n : null;
 }
 // 인포그래픽 제안 #4(사용자 지시 2026-08-22): 채널 타일에 최근 7일 추이를 초소형 스파크라인으로 —
