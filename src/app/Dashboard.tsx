@@ -333,18 +333,42 @@ interface DashboardData {
   // nielsen_period_rank, 닐슨이 기간 전체로 매긴 값)과 그 달 등락을 이끈 프로그램.
   monthlyReview: MonthlyReview | null;
 }
+interface MonthlyDriver {
+  programName: string;
+  contributionDelta: number; // 채널 월간 평균 시청률을 몇 %p 올렸/내렸는가
+  volumeEffect: number; // 그중 편성량이 바뀌어서 생긴 몫
+  performanceEffect: number; // 그중 작품 성과가 바뀌어서 생긴 몫
+  airCount: number;
+  priorAirCount: number;
+  avgRating: number | null;
+  priorAvgRating: number | null;
+  slotLift: number | null; // 전월 동시간대 평균 대비
+  primeAirCount: number;
+  primeDow: number | null;
+}
+interface MonthlyPrimeMover {
+  programName: string;
+  dow: number | null;
+  primeDelta: number;
+  primeAvgRating: number | null;
+  priorPrimeAvgRating: number | null;
+  primeAirCount: number;
+  priorPrimeAirCount: number;
+}
 interface MonthlyReviewChannel {
   channelCode: string;
   targetLabel: string;
   months: { month: number; rank: number | null; rating: number | null }[];
   rankChange: number | null;
   ratingChangePct: number | null;
-  // 사용자 지시(2026-09-01): "한두번 편성해서 잘나온 것은 말이 안 됨 — 한달 총 시청률 합산에
-  // 기여했거나 하락시킨 원인이 된 종합적인 컨텐츠"만 골라야 함 — route.ts가 편성 횟수(3회
-  // 미만 제외)와 합산 기여도로 다시 골라 airCount를 함께 내려준다(화면에서 "N회 편성"으로
-  // 표기해 근거가 되는지 바로 보이게).
-  growthDriver: { programName: string; ratingDelta: number; airCount: number; priorAirCount: number } | null;
-  weaknessDriver: { programName: string; ratingDelta: number; airCount: number; priorAirCount: number } | null;
+  // 사용자 지시(2026-09-01, 로직 재설계): 상승 견인/하락 요인은 "채널 월간 평균 시청률을 몇 %p
+  // 올렸/내렸는가"(contributionDelta)로 판정한다 — 전 프로그램 합이 채널 평균의 실제 변화량과
+  // 일치하는 항등 분해라 검증 가능한 수치다. 그 변화를 편성량 효과와 성과 효과로 다시 쪼개
+  // "편성을 늘려서" 오른 것인지 "작품이 잘돼서" 오른 것인지 화면에 명시한다.
+  growthDriver: MonthlyDriver | null;
+  weaknessDriver: MonthlyDriver | null;
+  // 프라임(20~24시) 주요 등락 — 채널 전체 기여도 순위와 별개 축(상승·하락 각 최대 1건).
+  primeMovers: MonthlyPrimeMover[];
 }
 interface MonthlyReview {
   year: number;
@@ -1019,12 +1043,65 @@ function MonthlyRankTrendChart({
   );
 }
 
+const DOW_LABELS = ["", "월", "화", "수", "목", "금", "토", "일"];
+
 // 사용자 지시(2026-09-01): 성장/약세 동력이 "종합적인 컨텐츠"인지 바로 판단할 수 있게 이번 달
 // 편성 횟수를 보여준다. 전월과 횟수 차이가 크면(예: 신규 편성돼 전월엔 0회였거나, 반대로
 // 편성이 크게 줄어 하락 원인이 된 경우) 전월 횟수도 괄호로 덧붙여 "왜 이 프로그램이 뽑혔는지"
 // 숫자로 바로 보이게 한다.
 function monthlyAirCountLabel(airCount: number, priorAirCount: number): string {
   return Math.abs(airCount - priorAirCount) >= 3 ? `${airCount}회(전월 ${priorAirCount}회)` : `${airCount}회`;
+}
+
+// 사용자 지시(2026-09-01, 로직 재설계): "실질적인 상승/하락 요인을 찾아내어 명시" — 기여도
+// 변화를 편성량 효과와 성과 효과로 항등 분해해 두었으므로, 둘 중 절대값이 큰 쪽을 그 프로그램이
+// 채널 수치를 움직인 "실제 이유"로 한 단어로 못 박아 준다(임의 판단이 아니라 두 수치 비교).
+// 상승 견인 / 하락 요인 한 칸 — 프로그램명 + 채널 평균 기여도(%p)를 윗줄에, 실제 이유(편성량/
+// 성과)와 편성 횟수·전월 동시간대 대비를 아랫줄에 둔다. 기여도 부호는 칸 성격(견인/요인)과
+// 항상 일치하므로(양수만 상승 견인, 음수만 하락 요인으로 뽑힘) 색을 부호에 그대로 맞춘다.
+function MonthlyDriverCell({ driver, channelCode }: { driver: MonthlyDriver | null; channelCode: string }) {
+  if (!driver) return <span className="text-zinc-300">—</span>;
+  const up = driver.contributionDelta >= 0;
+  const cause = monthlyDriverCauseLabel(driver);
+  const isPrime = driver.primeAirCount >= 2;
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="flex items-baseline gap-1">
+        <b className="font-semibold text-zinc-700">{driver.programName}</b>
+        {isPrime && (
+          <span className="rounded bg-zinc-100 px-1 text-[9px] text-zinc-500">
+            프라임{driver.primeDow ? ` ${DOW_LABELS[driver.primeDow]}` : ""}
+          </span>
+        )}
+        <span className="tabular-nums font-semibold" style={{ color: up ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
+          {up ? "▲" : "▼"}
+          {Math.abs(driver.contributionDelta).toFixed(4)}%p
+        </span>
+      </span>
+      <span className="text-[10px] text-zinc-400">
+        {cause && <span className="mr-1 text-zinc-500">{cause}</span>}
+        {monthlyAirCountLabel(driver.airCount, driver.priorAirCount)}
+        {driver.slotLift !== null && (
+          <span className="ml-1">
+            · 동시간대 대비 {driver.slotLift >= 0 ? "+" : "−"}
+            {formatRating(Math.abs(driver.slotLift), channelCode)}
+          </span>
+        )}
+      </span>
+    </span>
+  );
+}
+
+function monthlyDriverCauseLabel(d: MonthlyDriver): string {
+  const volume = Math.abs(d.volumeEffect);
+  const performance = Math.abs(d.performanceEffect);
+  if (volume === 0 && performance === 0) return "";
+  if (volume >= performance) {
+    if (d.priorAirCount === 0) return "신규 편성";
+    if (d.airCount === 0) return "편성 종료";
+    return d.airCount > d.priorAirCount ? "편성 확대" : "편성 축소";
+  }
+  return d.performanceEffect >= 0 ? "성과 개선" : "성과 부진";
 }
 
 // 인사이트 문장 — 새 수치를 만들지 않고 위 표에 이미 있는 값(전월 대비 순위·시청률 등락)만
@@ -1071,6 +1148,12 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
   const insights = buildMonthlyReviewInsights(review);
   const nameOf = (code: string) => CHANNEL_NAME_BY_CODE[code] ?? code;
   const orderedChannels = [...MONTHLY_GROUP_A, ...MONTHLY_GROUP_B].map((c) => byCode.get(c)).filter((c): c is MonthlyReviewChannel => !!c);
+  // 프라임 등락 목록 — 채널 순서를 표와 똑같이 유지하고, 등락폭이 큰 것부터 최대 6건만 보여준다
+  // (7채널 × 최대 2건이면 14줄까지 나올 수 있어 화면이 길어짐 — 정말 "특별한" 것만 남긴다).
+  const primeMoverRows = orderedChannels
+    .flatMap((c) => (c.primeMovers ?? []).map((mover) => ({ channelCode: c.channelCode, mover })))
+    .sort((a, b) => Math.abs(b.mover.primeDelta) - Math.abs(a.mover.primeDelta))
+    .slice(0, 6);
   return (
     <div className={CARD}>
       <h2 className={`font-heading mb-1 text-xl font-bold tracking-tight ${ACCENT_HEADING}`}>
@@ -1108,8 +1191,8 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
         />
       </div>
 
-      {/* 이번 달의 눈에 띄는 변화 + 원인 — 원인은 추정하지 않고, 그 달 등락을 실제로 이끈
-          프로그램(get_channel_period_program_movers의 전월 대비 실측 등락)만 근거로 든다.
+      {/* 이번 달의 눈에 띄는 변화 + 원인 — 원인은 추정하지 않고, 채널 월간 평균 시청률의 실제
+          변화를 프로그램별로 분해한 값(get_channel_monthly_program_drivers)만 근거로 든다.
           사용자 지시(2026-09-01) 재정렬:
           - 순위는 채널 로고 색으로 볼드, 값(우정렬·1의 자리 정렬)과 전월 대비 등락(좌정렬)을
             같은 값이 한 <td>에 섞여 오른쪽 정렬 기준이 등락 배지 쪽으로 밀리던 문제를 없애기
@@ -1158,43 +1241,16 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
                         ? "유지"
                         : `${c.ratingChangePct > 0 ? "▲" : "▼"}${Math.abs(c.ratingChangePct).toFixed(1)}%`}
                   </td>
-                  {/* 사용자 지시(2026-09-01): 순위는 "합산 기여도"(회당 평균 등락×편성 횟수)로
-                      뽑히므로, 편성 횟수가 크게 늘어난 프로그램은 회당 평균 등락 자체는 음수인데도
-                      총 기여는 양수(성장 동력)로 뽑힐 수 있다 — 반대로도 마찬가지. 그래서 부호를
-                      "+"로 강제 고정하지 않고, 표시되는 회당 평균 등락의 실제 부호 그대로
-                      ▲(초록)/▼(빨강)로 보여준다(다른 등락 셀들과 같은 표기 규칙). "성장 동력"·
-                      "하락 요인"이라는 칸 제목은 합산 기여도 기준이고, 그 안의 개별 수치는 실제
-                      값을 있는 그대로 보여준다는 뜻 — 지어내지 않는다는 원칙 그대로. */}
+                  {/* 사용자 지시(2026-09-01, 로직 재설계): 표시 수치를 "회당 평균 등락"에서
+                      "채널 월간 평균 기여도 변화(%p)"로 바꿨다 — 전 프로그램 합이 채널 평균의
+                      실제 변화량과 일치하는 값이라, 이 숫자만으로 "이 프로그램이 채널 수치를
+                      얼마나 움직였는가"가 검증 가능하게 읽힌다. 그 아래 줄에 실제 이유(편성량
+                      변화인지 성과 변화인지)와 전월 동시간대 대비 성적을 함께 붙인다. */}
                   <td className="py-1.5 text-zinc-500">
-                    {c.growthDriver ? (
-                      <span className="flex items-baseline gap-1">
-                        <b className="font-semibold text-zinc-700">{c.growthDriver.programName}</b>
-                        {/* "종합적인 컨텐츠"임을 바로 확인할 수 있게 이번 달 편성 횟수를 함께
-                            표기(route.ts가 이미 3회 미만은 제외하고 넘겨줌). 전월과 편성 횟수
-                            차이가 크면(예: 신규 편성·증편) 전월 횟수도 괄호로 덧붙인다. */}
-                        <span className="text-[10px] text-zinc-400">{monthlyAirCountLabel(c.growthDriver.airCount, c.growthDriver.priorAirCount)}</span>
-                        <span className="tabular-nums" style={{ color: c.growthDriver.ratingDelta >= 0 ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
-                          {c.growthDriver.ratingDelta >= 0 ? "▲" : "▼"}
-                          {formatRating(Math.abs(c.growthDriver.ratingDelta), c.channelCode)}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-zinc-300">—</span>
-                    )}
+                    <MonthlyDriverCell driver={c.growthDriver} channelCode={c.channelCode} />
                   </td>
                   <td className="py-1.5 text-zinc-500">
-                    {c.weaknessDriver ? (
-                      <span className="flex items-baseline gap-1">
-                        <b className="font-semibold text-zinc-700">{c.weaknessDriver.programName}</b>
-                        <span className="text-[10px] text-zinc-400">{monthlyAirCountLabel(c.weaknessDriver.airCount, c.weaknessDriver.priorAirCount)}</span>
-                        <span className="tabular-nums" style={{ color: c.weaknessDriver.ratingDelta >= 0 ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
-                          {c.weaknessDriver.ratingDelta >= 0 ? "▲" : "▼"}
-                          {formatRating(Math.abs(c.weaknessDriver.ratingDelta), c.channelCode)}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-zinc-300">—</span>
-                    )}
+                    <MonthlyDriverCell driver={c.weaknessDriver} channelCode={c.channelCode} />
                   </td>
                 </tr>
               );
@@ -1202,6 +1258,43 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
           </tbody>
         </table>
       </div>
+
+      {/* 사용자 지시(2026-09-01): "특히 요일별 20시~24시 사이의 오리지널이나 주요 프로그램에서
+          특별한 등락이나 하락이 있다던가 하는 부분도 모두 반영" — 위 표는 채널 월간 평균에 대한
+          기여도 순위라 편성량이 큰 프로그램이 상위를 차지하기 쉽다. 편성량은 그대로인데 프라임
+          성과만 크게 움직인 작품(채널 전체로는 순위 밖)을 놓치지 않도록 별도 축으로 따로 짚는다.
+          위 표에 이미 이름이 오른 프로그램은 중복이라 route.ts가 제외하고 내려준다. */}
+      {primeMoverRows.length > 0 && (
+        <div className="mt-4 rounded-xl bg-zinc-50 p-3">
+          <p className="mb-2 text-[12px] font-semibold text-zinc-600">
+            프라임 시간대(20~24시) 주요 등락 <span className="font-normal text-zinc-400">— 채널 전체 기여도와는 별개로, 프라임 성과가 크게 움직인 편성</span>
+          </p>
+          <ul className="space-y-1">
+            {primeMoverRows.map(({ channelCode, mover }, i) => {
+              const color = themeColorByCode.get(channelCode) ?? "#3f3f46";
+              const up = mover.primeDelta >= 0;
+              return (
+                <li key={`${channelCode}-${mover.programName}-${i}`} className="flex flex-wrap items-baseline gap-1.5 text-[12px]">
+                  <span className="w-[72px] shrink-0 font-semibold" style={{ color }}>
+                    {nameOf(channelCode)}
+                  </span>
+                  <b className="font-semibold text-zinc-700">{mover.programName}</b>
+                  {mover.dow && <span className="rounded bg-white px-1 text-[10px] text-zinc-500 ring-1 ring-zinc-200">{DOW_LABELS[mover.dow]}요일</span>}
+                  <span className="tabular-nums" style={{ color: up ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
+                    {up ? "▲" : "▼"}
+                    {formatRating(Math.abs(mover.primeDelta), channelCode)}
+                  </span>
+                  <span className="text-[10px] text-zinc-400">
+                    {/* 신규 편성/종영이면 한쪽이 null이라 "—"로 정직하게 비운다(0으로 채우지 않음). */}
+                    프라임 {mover.priorPrimeAvgRating !== null ? formatRating(mover.priorPrimeAvgRating, channelCode) : "—"} →{" "}
+                    {mover.primeAvgRating !== null ? formatRating(mover.primeAvgRating, channelCode) : "—"} · {mover.primeAirCount}회(전월 {mover.priorPrimeAirCount}회)
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
