@@ -809,13 +809,26 @@ export async function GET(request: Request) {
                 .map((r) => ({ broadcast_date: r.broadcast_date, rating: r.rating })),
             }))
             .filter((s) => s.points.length > 0);
-          // 직후재방 채널 시계열 — 이미 위 메인 조회에서(동시방영으로) 잡혔으면 중복 추가하지 않는다.
-          if (needsRerunHistory && row.rerun_channel_code && !otherChannelCodes.includes(row.rerun_channel_code)) {
+          // 사용자 지시(2026-09-01): "ENA Drama 직후재방 그래프와 시청률도 나오게 해결" — 실측
+          // 확인 결과 버그였다. 메인 조회(본방 시각 ±10분 창)가 재방 채널의 "우연히 근접한
+          // 다른 시각대" 단발성 행을 하나 주울 수 있는데(Nielsen이 하루에도 여러 시간대에
+          // 같은 프로그램명으로 행을 남기기 때문 — 재방 채널이 실제로는 훨씬 늦은 시각에
+          // 방영하는데도), 기존 코드는 그 채널이 메인 조회에 "한 번이라도" 등장하면
+          // `otherChannelCodes.includes(...)`가 true가 되어 진짜 재방 시각(rerun_start_time)
+          // 기준의 전용 조회 자체를 건너뛰었다 — 그 결과 우연히 잡힌 1개 지점(점 하나, 선이 안
+          // 그려짐)만 남고 실제 재방 시계열(매 회차)은 사라졌다. 이제 재방 등록이 있으면
+          // 항상 전용 조회를 실행하고, 메인 조회가 잘못 주웠을 수 있는 값을 무조건 정확한
+          // 재방 시각 기준 결과로 덮어쓴다(추가가 아니라 교체).
+          if (needsRerunHistory && row.rerun_channel_code) {
             const rerunRows = (rerunHistoryResult?.data ?? null) as ProgramRatingHistoryRow[] | null;
             const rerunPoints = (rerunRows ?? [])
               .filter((r) => r.channel_code === row.rerun_channel_code && r.target_label === "수도권 2049")
               .map((r) => ({ broadcast_date: r.broadcast_date, rating: r.rating }));
-            if (rerunPoints.length > 0) otherChannels.push({ seriesName: row.rerun_channel_code, points: rerunPoints });
+            if (rerunPoints.length > 0) {
+              const existingIdx = otherChannels.findIndex((s) => s.seriesName === row.rerun_channel_code);
+              if (existingIdx >= 0) otherChannels[existingIdx] = { seriesName: row.rerun_channel_code, points: rerunPoints };
+              else otherChannels.push({ seriesName: row.rerun_channel_code, points: rerunPoints });
+            }
           }
           const competitorPoints = (competitorHistoryResult?.data ?? null) as { broadcast_date: string; rating: number }[] | null;
           const competitors =

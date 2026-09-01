@@ -605,6 +605,13 @@ const ACCENT_UP = "#281fc7"; // ENA 브랜드 색 계열(카드 제목과 동일
 // 단계만 올렸다(더 밝은 rose-600/500은 다시 "신호등" 원색에 가까워져 제외).
 const ACCENT_DOWN = "#be123c"; // 짙은 버건디(rose-700) — 절제된 톤 유지하면서 시인성 보강
 
+// 사용자 지시(2026-09-01, 월간 리뷰 표 한정): "전월대비 상승은 초록색, 하락은 빨간색, 유지는
+// 검정으로" — 위 ACCENT_UP/DOWN(브랜드색/버건디)은 앱 전역 관례라 그대로 두고, 이 표에서만
+// 명시적으로 요청받은 신호등 색을 쓴다(다른 곳까지 바꾸지 않음, 범위 한정).
+const MONTHLY_UP_COLOR = "#16a34a"; // green-600
+const MONTHLY_DOWN_COLOR = "#dc2626"; // red-600
+const MONTHLY_FLAT_COLOR = "#18181b"; // zinc-900(검정)
+
 // 카드 공통 스타일 — 사용자 지시(2026-08-21, Page 1 전면 개편): 기존 파스텔 그라디언트+블러
 // 블롭+글래스모피즘(반투명+backdrop-blur) 배경을 버리고, 회색·검정·흰색 기반의 모던하고 깔끔한
 // 톤으로 교체 — tvn.cjenm.com 레퍼런스처럼 흰 카드 + 옅은 회색 배경 + 그림자로만 위계를 준다.
@@ -1090,65 +1097,77 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
       </div>
 
       {/* 이번 달의 눈에 띄는 변화 + 원인 — 원인은 추정하지 않고, 그 달 등락을 실제로 이끈
-          프로그램(get_channel_period_program_movers의 전월 대비 실측 등락)만 근거로 든다. */}
+          프로그램(get_channel_period_program_movers의 전월 대비 실측 등락)만 근거로 든다.
+          사용자 지시(2026-09-01) 재정렬:
+          - 순위는 채널 로고 색으로 볼드, 값(우정렬·1의 자리 정렬)과 전월 대비 등락(좌정렬)을
+            같은 값이 한 <td>에 섞여 오른쪽 정렬 기준이 등락 배지 쪽으로 밀리던 문제를 없애기
+            위해 아예 별도 열로 분리했다(표 열은 브라우저가 자동으로 세로 정렬해줌 — 텍스트를
+            직접 맞추는 것보다 안전).
+          - 상승=초록/하락=빨강/유지=검정 — 이 표에서만 앱 전역의 ACCENT_UP(파랑)/DOWN(버건디)
+            대신 사용자가 명시한 색을 쓴다(전역 관례를 바꾸는 게 아니라 이 표 한정 요청).
+          - "상승 견인/하락 요인"도 같은 원칙으로 두 열로 분리해 프로그램명·등락폭 위치가
+            채널마다 흔들리지 않게 한다. */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-[12px]">
           <thead>
             <tr className="text-zinc-400">
               <th className="pb-1 font-medium">채널</th>
-              <th className="pb-1 text-right font-medium">순위(전월 대비)</th>
-              <th className="pb-1 text-right font-medium">시청률(전월 대비)</th>
-              <th className="pb-1 font-medium">이번 달 주요 변화와 원인</th>
+              <th className="pb-1 text-right font-medium">순위</th>
+              <th className="pb-1 text-left font-medium">전월 대비</th>
+              <th className="pb-1 text-right font-medium">시청률</th>
+              <th className="pb-1 text-left font-medium">전월 대비</th>
+              <th className="pb-1 text-left font-medium">상승 견인</th>
+              <th className="pb-1 text-left font-medium">하락 요인</th>
             </tr>
           </thead>
           <tbody>
             {orderedChannels.map((c) => {
               const cur = c.months[c.months.length - 1];
               const color = themeColorByCode.get(c.channelCode) ?? "#3f3f46";
+              const rankDeltaColor = c.rankChange === null || c.rankChange === 0 ? MONTHLY_FLAT_COLOR : c.rankChange > 0 ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR;
+              const ratingDeltaColor =
+                c.ratingChangePct === null || c.ratingChangePct === 0 ? MONTHLY_FLAT_COLOR : c.ratingChangePct > 0 ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR;
               return (
                 <tr key={c.channelCode} className="border-t border-zinc-100 align-top">
                   <td className="py-1.5 font-semibold" style={{ color }}>
                     {nameOf(c.channelCode)}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums text-zinc-700">
+                  <td className="py-1.5 text-right font-bold tabular-nums" style={{ color }}>
                     {cur.rank !== null ? `#${cur.rank}` : "—"}
-                    {c.rankChange !== null && c.rankChange !== 0 && (
-                      <span className={c.rankChange > 0 ? ACCENT_UP : ACCENT_DOWN}>
-                        {" "}
-                        {c.rankChange > 0 ? "▲" : "▼"}
-                        {Math.abs(c.rankChange)}
-                      </span>
-                    )}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums text-zinc-700">
-                    {cur.rating !== null ? formatRating(cur.rating, c.channelCode) : "—"}
-                    {c.ratingChangePct !== null && (
-                      <span className={c.ratingChangePct >= 0 ? ACCENT_UP : ACCENT_DOWN}>
-                        {" "}
-                        {c.ratingChangePct >= 0 ? "▲" : "▼"}
-                        {Math.abs(c.ratingChangePct).toFixed(1)}%
+                  <td className="py-1.5 text-left tabular-nums" style={{ color: rankDeltaColor }}>
+                    {c.rankChange === null ? "" : c.rankChange === 0 ? "유지" : `${c.rankChange > 0 ? "▲" : "▼"}${Math.abs(c.rankChange)}`}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums text-zinc-700">{cur.rating !== null ? formatRating(cur.rating, c.channelCode) : "—"}</td>
+                  <td className="py-1.5 text-left tabular-nums" style={{ color: ratingDeltaColor }}>
+                    {c.ratingChangePct === null
+                      ? ""
+                      : c.ratingChangePct === 0
+                        ? "유지"
+                        : `${c.ratingChangePct > 0 ? "▲" : "▼"}${Math.abs(c.ratingChangePct).toFixed(1)}%`}
+                  </td>
+                  <td className="py-1.5 text-zinc-500">
+                    {c.growthDriver ? (
+                      <span className="flex items-baseline gap-1">
+                        <b className="font-semibold text-zinc-700">{c.growthDriver.programName}</b>
+                        <span className="tabular-nums" style={{ color: MONTHLY_UP_COLOR }}>
+                          +{formatRating(c.growthDriver.ratingDelta, c.channelCode)}
+                        </span>
                       </span>
+                    ) : (
+                      <span className="text-zinc-300">—</span>
                     )}
                   </td>
                   <td className="py-1.5 text-zinc-500">
-                    {c.growthDriver || c.weaknessDriver ? (
-                      <>
-                        {c.growthDriver && (
-                          <span>
-                            상승 견인 <b className="font-semibold text-zinc-700">{c.growthDriver.programName}</b>{" "}
-                            <span className={ACCENT_UP}>+{formatRating(c.growthDriver.ratingDelta, c.channelCode)}</span>
-                          </span>
-                        )}
-                        {c.growthDriver && c.weaknessDriver && <span className="text-zinc-300"> · </span>}
-                        {c.weaknessDriver && (
-                          <span>
-                            하락 요인 <b className="font-semibold text-zinc-700">{c.weaknessDriver.programName}</b>{" "}
-                            <span className={ACCENT_DOWN}>{formatRating(c.weaknessDriver.ratingDelta, c.channelCode)}</span>
-                          </span>
-                        )}
-                      </>
+                    {c.weaknessDriver ? (
+                      <span className="flex items-baseline gap-1">
+                        <b className="font-semibold text-zinc-700">{c.weaknessDriver.programName}</b>
+                        <span className="tabular-nums" style={{ color: MONTHLY_DOWN_COLOR }}>
+                          {formatRating(c.weaknessDriver.ratingDelta, c.channelCode)}
+                        </span>
+                      </span>
                     ) : (
-                      <span className="text-zinc-300">프로그램 단위 비교 자료 없음</span>
+                      <span className="text-zinc-300">—</span>
                     )}
                   </td>
                 </tr>
@@ -1441,6 +1460,12 @@ function ProgramRatingHistoryChart({
   const peakPoint = own2049.length > 0 ? own2049.reduce((a, b) => (b.rating > a.rating ? b : a)) : null;
   const todayPoint = own2049.length > 0 ? own2049[own2049.length - 1] : null;
   const peakIsToday = peakPoint !== null && todayPoint !== null && peakPoint.broadcast_date === todayPoint.broadcast_date;
+  // 사용자 지시(2026-09-01): "가구 시청률은 숫자가 안 나오는 부분 수정" — 가구(전국 유료가구)
+  // 선은 그래프에 옅게 그려지기만 하고 숫자 라벨이 전혀 없었다(2049만 최고/당일 값을 표기).
+  // 2049와 같은 방식으로 가구의 당일 값을 표기한다(최고값은 대개 당일과 겹치는 경우가 많고
+  // 2049 쪽 라벨과 함께 두 줄이 되면 복잡해지므로, 당일 값 하나만 — 헤드라인 볼드부의
+  // "N회 시청률(가구시청률)" 표기와 짝이 맞는 정보량).
+  const todayHouseholdPoint = ownHousehold.length > 0 ? ownHousehold[ownHousehold.length - 1] : null;
   return (
     <div className="mt-2 rounded-xl bg-zinc-50 p-3">
       <div className="relative">
@@ -1486,6 +1511,14 @@ function ProgramRatingHistoryChart({
             >
               {formatRating(todayPoint.rating)}
               {peakIsToday && <span style={{ color: accentColor }}> ★</span>}
+            </span>
+          )}
+          {todayHouseholdPoint && (
+            <span
+              className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[8px] font-semibold tabular-nums"
+              style={{ left: `${(xOf(todayHouseholdPoint.broadcast_date) / W) * 100}%`, top: yHousehold(todayHouseholdPoint.rating) - 3, color: accentColor, opacity: 0.55 }}
+            >
+              가구 {formatRating(todayHouseholdPoint.rating)}
             </span>
           )}
         </div>
@@ -1583,30 +1616,39 @@ function competitorLogoSrc(channelName: string): string {
 // 실제 로고 파일이 있으면 원형 배경·클리핑 없이 로고 원본 비율 그대로 보여준다(SBS/MBC처럼
 // 가로로 긴 로고가 원 안에서 눌려 보이던 문제). 파일이 없을 때만(onError) 이니셜 원형 배지로
 // 대체 — 이 경우에만 상태가 필요해 컴포넌트를 stateful로 바꿨다.
-function CompetitorLogoBadge({ channelName, color }: { channelName: string; color: string }) {
+// 사용자 지시(2026-09-01): "각 채널의 로고를 지금의 2/3 높이 크기로 수정하고, 지금의 1/2 높이
+// 크기로 점선 좌측 상단에 각 채널의 로고 넣어줄것" — 범례 카드용(2/3)과 차트 내부 오버레이용
+// (1/2) 두 크기를 같은 컴포넌트가 만들도록 heightPx를 파라미터화했다. 기준("지금")은 이번
+// 세션 초반에 16px→11px로 줄인 값 — 2/3=7px(범례), 1/2=6px(차트 오버레이, 새로 추가). 폭
+// 상한도 기존 비율(11px:40px ≈ 1:3.6)을 유지해 세로로 긴 로고가 원형 배지 자리를 밀어내지
+// 않게 한다.
+function CompetitorLogoBadge({ channelName, color, heightPx = 7 }: { channelName: string; color: string; heightPx?: number }) {
   const [failed, setFailed] = useState(false);
+  const maxWidthPx = Math.round(heightPx * 3.6);
   if (failed) {
+    const badgePx = Math.max(8, Math.round(heightPx * 1.1));
     return (
       <span
-        className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full text-[6px] font-bold text-white"
-        style={{ backgroundColor: color }}
+        className="inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white"
+        style={{ backgroundColor: color, height: badgePx, width: badgePx, fontSize: Math.max(5, Math.round(heightPx * 0.55)) }}
       >
         {channelName.slice(0, 2)}
       </span>
     );
   }
   // 파일 존재 여부를 onError로 즉시 감지해 이니셜 배지로 자동 대체해야 해서, 빌드 타임에
-  // 존재를 가정하는 next/image 대신 일반 img를 쓴다.
-  // 사용자 지시(2026-08-26, 재수정): "채널 로고를 KBSN Sports 높이로 통일" — 높이를
-  // 고정 기준으로 삼고(원본 여백은 위에서 이미 trim으로 제거했으므로 이제 높이만 맞추면
-  // 실제 로고 크기도 맞아떨어진다), 너비는 제한하지 않아 로고가 짧아지는 일이 없게 한다.
-  // 사용자 지시(2026-08-26, 재수정): "그래프가 정신없어 보인다" — 로고 원본 비율은 그대로 두되
-  // (object-contain, 자르지 않음), 유독 가로로 긴 로고(예: PD수첩)가 좁은 범례 3열 grid 한 칸을
-  // 통째로 밀어내던 문제만 max-w로 막는다(세로 16px는 그대로, 필요하면 폭만 더 줄어듦).
-  // 사용자 지시(2026-09-01): "경쟁채널 로고들은 다 작게 만들어서 알아볼 수 있을 정도로만" —
-  // 높이 16px→11px, 최대 폭도 함께 줄여 범례 카드에서 로고가 프로그램명을 밀어내지 않게 한다.
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={competitorLogoSrc(channelName)} alt={channelName} className="h-[11px] w-auto max-w-10 shrink-0 object-contain" onError={() => setFailed(true)} />;
+  // 존재를 가정하는 next/image 대신 일반 img를 쓴다. 로고 원본 비율은 그대로 두되(object-contain,
+  // 자르지 않음), 세로로 긴 로고(예: PD수첩)가 좁은 자리를 밀어내지 않도록 maxWidth만 제한한다.
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={competitorLogoSrc(channelName)}
+      alt={channelName}
+      className="w-auto shrink-0 object-contain"
+      style={{ height: heightPx, maxWidth: maxWidthPx }}
+      onError={() => setFailed(true)}
+    />
+  );
 }
 function ManualMinuteRatingChart({
   minuteRatings,
@@ -1746,6 +1788,21 @@ function ManualMinuteRatingChart({
           >
             {peak.time} {peak.rating.toFixed(3)}%
           </span>
+          {/* 사용자 지시(2026-09-01): "지금의 1/2 높이 크기로 점선 좌측 상단에 각 채널의 로고
+              넣어줄것" — 2026-08-26에 "정신없다"는 이유로 뺐던 차트 내 로고를, 이번엔 범례
+              크기(7px)의 절반(6px)으로 훨씬 작게 각 점선의 시작점 바로 위에 하나씩만 되살린다.
+              점선 시작점(x1,y)의 왼쪽 위에 로고 왼쪽 아래 모서리가 오도록(-translate-y-full로
+              위로, x축은 그대로 두어 점선 시작에서 오른쪽으로 로고가 펼쳐짐 — "좌측 상단" 배치). */}
+          {bands.map((c, i) => {
+            const x1 = Math.max(PAD_L, xOf(c.start_time!.slice(0, 5)));
+            const y = yOf(c.target_rating!);
+            const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
+            return (
+              <div key={`logo-${c.channel_name}-${c.program_name}`} className="absolute -translate-y-full opacity-80" style={{ left: `${(x1 / W) * 100}%`, top: y - 2 }}>
+                <CompetitorLogoBadge channelName={c.channel_name} color={color} heightPx={6} />
+              </div>
+            );
+          })}
         </div>
       </div>
       {/* 사용자 지시(2026-08-26, 전면 재정리): 중CM 라벨 + 방송 시작/종료 라벨을 같은 옅은
