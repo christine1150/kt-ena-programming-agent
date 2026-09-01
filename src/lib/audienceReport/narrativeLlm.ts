@@ -10,8 +10,9 @@
 // formatted 문자열들에서 같은 방식으로 추출한 숫자 집합에 있는지 대조한다.
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "@/lib/llmSynthesis";
 import { formatRating } from "./format";
-import type { KpiCard, AudienceReportBody } from "./reportModel";
+import type { KpiCard, AudienceReportBody, ModeDSection } from "./reportModel";
 import type { PortfolioReportDocument } from "./portfolioModel";
+import type { AudienceReportRawData } from "./dataCollector";
 
 export interface NarrativeFact {
   label: string;
@@ -136,6 +137,68 @@ export async function buildChannelExecutiveSummary(channelName: string, periodLa
 export async function buildPortfolioExecutiveSummary(periodLabel: string, doc: PortfolioReportDocument): Promise<string | null> {
   const { facts, contextLabel } = buildFactsForPortfolio(doc);
   return verifyAndBuildSummary("portfolio", "KT ENA 7채널 포트폴리오", periodLabel, contextLabel, facts);
+}
+
+// N절 Phase 2c(2026-09-01, 구 시스템 periodReportLlm.ts의 buildStrategicImplicationsViaLlm 이식) —
+// MODE D(누적, QTD/YTD 등) 전용 별도 종합 문단. "AI Executive Summary"(위, 3~5문장)와는 별개로
+// 더 긴(6~10문장) 문단을 만든다 — 변곡점·성장/약세 동력·daypart 강약·경쟁 구도까지 근거로 준다.
+// 구 시스템엔 수치 대조(fact-check)가 없었다 — 이식하면서 Phase 10의 factCheckNarrative를
+// 그대로 적용해 오히려 더 안전해졌다(같은 재시도 정책: 실패 시 1회만 재생성, 그래도 실패하면 null).
+function pctFact(pct: number | null | undefined): string | null {
+  if (pct === null || pct === undefined) return null;
+  return `${pct >= 0 ? "▲" : "▼"}${Math.abs(pct).toFixed(1)}%`;
+}
+
+export function buildFactsForStrategicImplications(raw: AudienceReportRawData, sections: ModeDSection): { facts: NarrativeFact[]; contextLabel: string } {
+  const facts = kpiFacts(sections.kpiCards);
+
+  for (const t of sections.turningPoints.slice(0, 3)) {
+    const p = pctFact(t.changePct);
+    if (p) facts.push({ label: `변곡점 ${t.periodStart}`, formatted: p });
+  }
+
+  const moversWithDelta = raw.programMovers.filter((m) => m.ratingDelta !== null);
+  const growth = [...moversWithDelta].filter((m) => m.ratingDelta! > 0).sort((a, b) => b.ratingDelta! - a.ratingDelta!).slice(0, 2);
+  const weakness = [...moversWithDelta].filter((m) => m.ratingDelta! < 0).sort((a, b) => a.ratingDelta! - b.ratingDelta!).slice(0, 2);
+  for (const m of growth) facts.push({ label: `성장 동력 ${m.canonicalName}`, formatted: formatRating(m.ratingDelta, raw.channelCode) });
+  for (const m of weakness) facts.push({ label: `약세 동력 ${m.canonicalName}`, formatted: formatRating(m.ratingDelta, raw.channelCode) });
+
+  if (sections.daypartWinWeakness.win) facts.push({ label: `강세 시간대 ${sections.daypartWinWeakness.win.daypartLabel}`, formatted: pctFact(sections.daypartWinWeakness.win.gapChange) ?? "" });
+  if (sections.daypartWinWeakness.weakness) facts.push({ label: `약세 시간대 ${sections.daypartWinWeakness.weakness.daypartLabel}`, formatted: pctFact(sections.daypartWinWeakness.weakness.gapChange) ?? "" });
+
+  const topCompetitor = raw.competitorTopPrograms[0];
+  if (topCompetitor) facts.push({ label: `최상위 경쟁 ${topCompetitor.competitor_name} ${topCompetitor.program_name}`, formatted: formatRating(topCompetitor.program_avg_rating, raw.channelCode) });
+
+  const turningPointCount = sections.turningPoints.length;
+  return { facts: facts.filter((f) => f.formatted.length > 0), contextLabel: turningPointCount > 0 ? `변곡점 ${turningPointCount}건` : "변곡점 없음(변동성 낮음)" };
+}
+
+function buildStrategicImplicationsSystemPrompt(): string {
+  return [
+    "너는 KT ENA 편성 PD를 위한 Quarterly/Annual 리포트의 'Strategic Implications' 섹션 작성기다.",
+    "아래 JSON의 facts 배열(label과 이미 반올림·포맷된 formatted 문자열 쌍)과 contextLabel(참고 문맥)을 근거로 6~10문장의 한국어 종합 문단을 써라.",
+    "숫자를 언급할 때는 반드시 facts에 있는 formatted 문자열을 그대로 인용해라(자릿수를 바꾸거나 재계산하지 마라).",
+    "단순 수치 재나열이 아니라 '이 기간의 패턴이 다음 편성 의사결정에 어떤 함의를 갖는지'를 짚어라 — 단, 이는 참고 의견이며 확정된 예측이 아니라는 점을 문단 안에서 자연스럽게 드러내라(예: '~검토해볼 만하다', '~참고할 수 있다' 같은 헤지 표현).",
+    "contextLabel이 '변곡점 없음'이면 급변점이 없었다는 사실 자체를 변동성이 낮았다는 뜻으로 짧게 언급해라.",
+    "facts에 없는 항목은 언급하지 마라.",
+    LLM_SYNTHESIS_GUARDRAIL,
+  ].join("\n");
+}
+
+export async function buildStrategicImplications(channelName: string, periodLabel: string, raw: AudienceReportRawData, sections: ModeDSection): Promise<string | null> {
+  const { facts, contextLabel } = buildFactsForStrategicImplications(raw, sections);
+  if (facts.length === 0) return null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = await callOpenAiJsonSynthesis<{ summary: string }>(
+      buildStrategicImplicationsSystemPrompt(),
+      { channelName, periodLabel, contextLabel, facts },
+      "strategic_implications",
+      SCHEMA
+    );
+    const text = result?.summary?.trim();
+    if (text && text.length > 0 && factCheckNarrative(text, facts)) return text;
+  }
+  return null;
 }
 
 export { extractDecimalNumbers, factCheckNarrative };

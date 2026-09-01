@@ -242,6 +242,9 @@ export interface ModeDSection {
   // 2d)와 같은 Fit Score 조회를 재사용한다.
   daypartWinWeakness: { win: import("./analyzer").DaypartVerdict | null; weakness: import("./analyzer").DaypartVerdict | null };
   programPortfolio: Maybe<{ strong: import("./dataCollector").DailyFitScoreItem[]; weak: import("./dataCollector").DailyFitScoreItem[] }>;
+  // N절 Phase 2c(2026-09-01) — Quarterly/Annual tier가 쓰던 "Strategic Implications"(6~10문장,
+  // 수치 대조 통과분만). AI Executive Summary(document.aiSummary, 3~5문장)와 별개.
+  strategicImplications: string | null;
 }
 
 export type AudienceReportBody =

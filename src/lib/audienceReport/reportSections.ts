@@ -533,5 +533,8 @@ export function buildModeDSection(raw: AudienceReportRawData, extra: ModeDExtra)
     competitorScheduleChanges: buildCompetitorScheduleChangesSection(raw),
     daypartWinWeakness,
     programPortfolio,
+    // reportSections.ts는 I/O 없는 순수 함수 계층이라(파일 상단 주석) LLM 호출은 여기서 하지
+    // 않는다 — reportBuilder.ts가 buildModeDSection() 호출 후 별도로 채운다(Phase 2c).
+    strategicImplications: null,
   };
 }

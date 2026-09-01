@@ -250,6 +250,9 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
         { kind: "bullets", items: d.weak.map((f) => `${f.canonicalName ?? "이름 없음"} — Fit ${f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}`) },
       ]),
     });
+    if (s.strategicImplications) {
+      sections.push({ title: "Strategic Implications", blocks: [{ kind: "text", text: s.strategicImplications }] });
+    }
   }
 
   // Phase 12 공통 섹션(4개 모드 전부 같은 모양) — §06 번호 밖.

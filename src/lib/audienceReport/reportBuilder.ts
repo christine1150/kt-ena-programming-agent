@@ -14,7 +14,7 @@ import type { SkyUhdProgramLogRow as SkyUhdRow } from "./dataCollector";
 import { computeTurningPoints } from "./analyzer";
 import { addDaysStr } from "./periodPresets";
 import { buildRecommendationSection } from "./recommendationSection";
-import { buildChannelExecutiveSummary } from "./narrativeLlm";
+import { buildChannelExecutiveSummary, buildStrategicImplications } from "./narrativeLlm";
 import type { OriginalReviewSection, EnaLiveAiringSection, SkyUhdSubstituteSection, CompetitorInsightRow, ComparisonMatrixRow, AudienceReportDocument, BestWorstDayDetail } from "./reportModel";
 import { buildModeASection, buildModeBSection, buildModeCSection, buildModeDSection } from "./reportSections";
 
@@ -237,6 +237,9 @@ export async function buildAudienceReport(channelCode: string, request: Audience
     skyUhd,
     rankAvg: rankAvg ? { current: rankAvg.avgRank, prior: null } : null,
   });
+  // N절 Phase 2c(2026-09-01) — Strategic Implications(구 시스템 Quarterly/Annual tier 이식,
+  // MODE D 전용). AI Executive Summary(아래)와 별개의 더 긴 종합 문단.
+  sections.strategicImplications = await buildStrategicImplications(channelRow.name, period.label, raw, sections);
   const bodyD = { mode: "cumulative" as const, sections };
   const aiSummaryD = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyD, channelCode);
   return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyD, recommendation, aiSummary: aiSummaryD };

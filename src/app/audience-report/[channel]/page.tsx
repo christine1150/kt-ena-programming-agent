@@ -648,6 +648,11 @@ function ModeDBody({ sections: s, channelCode }: { sections: import("@/lib/audie
           )}
         />
       </Section>
+      {s.strategicImplications && (
+        <Section title="Strategic Implications">
+          <p className="text-sm leading-relaxed">{s.strategicImplications}</p>
+        </Section>
+      )}
       {s.skyUhd.available && (
         <Section title="skyUHD 전용 분석">
           <SkyUhdSubstituteView data={s.skyUhd.data} />
