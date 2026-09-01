@@ -10,10 +10,15 @@ export interface DeckTitleSlide {
   author: string;
 }
 
+// 사용자 지시(2026-09-01): "슬라이드의 본문 글자 수는 제한하되 필요한 설명의 경우 작게
+// 들어갈 수 있습니다" — 개조식 본문(bullets 등)은 계속 짧게 유지하되, 꼭 필요한 부연 설명은
+// note 필드에 별도로 담아 화면·PPT 양쪽에서 작은 글씨로 보조 표기한다(빈 문자열이면 표시 안 함
+// — 억지로 채우지 않는다).
 export interface DeckExecutiveSummarySlide {
   actionTitle: string;
   kpiHighlights: string[]; // 상위 3개 KPI 하이라이트(개조식)
   verdict: string[]; // 3줄 총평
+  note: string; // 부연 설명(작은 글씨), 없으면 빈 문자열
 }
 
 export interface DeckInsightSlide {
@@ -21,6 +26,7 @@ export interface DeckInsightSlide {
   chartNote: string; // "[차트 삽입: ...]"
   bullets: string[];
   soWhat: string;
+  note: string;
 }
 
 export interface DeckContentSlide {
@@ -29,6 +35,7 @@ export interface DeckContentSlide {
   topBullets: string[]; // TOP 3 성과 요인
   bottomBullets: string[]; // BOTTOM 3 성과 요인
   soWhat: string;
+  note: string;
 }
 
 export interface DeckStrategySlide {
@@ -36,6 +43,7 @@ export interface DeckStrategySlide {
   stop: string[];
   keep: string[];
   start: string[];
+  note: string;
 }
 
 export interface ExecutiveDeckDocument {

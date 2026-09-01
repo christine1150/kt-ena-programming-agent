@@ -49,6 +49,13 @@ function SoWhat({ text }: { text: string }) {
   );
 }
 
+// 사용자 지시(2026-09-01): "슬라이드의 본문 글자 수는 제한하되 필요한 설명의 경우 작게 들어갈
+// 수 있습니다" — 개조식 본문은 짧게 유지하고, 꼭 필요한 부연 설명만 이 작은 글씨 note로 별도 표시.
+function SlideNote({ text }: { text: string }) {
+  if (!text) return null;
+  return <p className="mt-2 text-[11px] leading-snug text-neutral-400 dark:text-neutral-500">{text}</p>;
+}
+
 function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; wordHref: string; pptxHref: string }) {
   const d = deck.slides;
   return (
@@ -94,6 +101,7 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
           ))}
         </div>
         <Bullets items={d.executiveSummary.verdict} />
+        <SlideNote text={d.executiveSummary.note} />
       </SlideShell>
 
       {/* 3. Trend */}
@@ -102,6 +110,7 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
         <ChartNote text={d.trend.chartNote} />
         <Bullets items={d.trend.bullets} />
         <SoWhat text={d.trend.soWhat} />
+        <SlideNote text={d.trend.note} />
       </SlideShell>
 
       {/* 4. Demographic / Positioning */}
@@ -110,6 +119,7 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
         <ChartNote text={d.demographic.chartNote} />
         <Bullets items={d.demographic.bullets} />
         <SoWhat text={d.demographic.soWhat} />
+        <SlideNote text={d.demographic.note} />
       </SlideShell>
 
       {/* 5. Killer Content & Timeslot */}
@@ -127,6 +137,7 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
           </div>
         </div>
         <SoWhat text={d.content.soWhat} />
+        <SlideNote text={d.content.note} />
       </SlideShell>
 
       {/* 6. Strategy — Stop / Keep / Start */}
@@ -146,6 +157,7 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
             <Bullets items={d.strategy.start} />
           </div>
         </div>
+        <SlideNote text={d.strategy.note} />
       </SlideShell>
     </main>
   );

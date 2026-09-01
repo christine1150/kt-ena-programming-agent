@@ -208,12 +208,14 @@ export async function buildStrategicImplications(channelName: string, periodLabe
 import type { DeckSignalBundle } from "./deckContent";
 
 export interface DeckNarrative {
-  slide2: { actionTitle: string; kpiHighlights: string[]; verdict: string[] };
-  slide3: { actionTitle: string; chartNote: string; bullets: string[]; soWhat: string };
-  slide4: { actionTitle: string; chartNote: string; bullets: string[]; soWhat: string };
-  slide5: { actionTitle: string; chartNote: string; topBullets: string[]; bottomBullets: string[]; soWhat: string };
-  slide6: { actionTitle: string; stop: string[]; keep: string[]; start: string[] };
+  slide2: { actionTitle: string; kpiHighlights: string[]; verdict: string[]; note: string };
+  slide3: { actionTitle: string; chartNote: string; bullets: string[]; soWhat: string; note: string };
+  slide4: { actionTitle: string; chartNote: string; bullets: string[]; soWhat: string; note: string };
+  slide5: { actionTitle: string; chartNote: string; topBullets: string[]; bottomBullets: string[]; soWhat: string; note: string };
+  slide6: { actionTitle: string; stop: string[]; keep: string[]; start: string[]; note: string };
 }
+
+const NOTE_PROP = { note: { type: "string" } } as const;
 
 const DECK_SCHEMA = {
   type: "object",
@@ -224,20 +226,21 @@ const DECK_SCHEMA = {
         actionTitle: { type: "string" },
         kpiHighlights: { type: "array", items: { type: "string" } },
         verdict: { type: "array", items: { type: "string" } },
+        ...NOTE_PROP,
       },
-      required: ["actionTitle", "kpiHighlights", "verdict"],
+      required: ["actionTitle", "kpiHighlights", "verdict", "note"],
       additionalProperties: false,
     },
     slide3: {
       type: "object",
-      properties: { actionTitle: { type: "string" }, chartNote: { type: "string" }, bullets: { type: "array", items: { type: "string" } }, soWhat: { type: "string" } },
-      required: ["actionTitle", "chartNote", "bullets", "soWhat"],
+      properties: { actionTitle: { type: "string" }, chartNote: { type: "string" }, bullets: { type: "array", items: { type: "string" } }, soWhat: { type: "string" }, ...NOTE_PROP },
+      required: ["actionTitle", "chartNote", "bullets", "soWhat", "note"],
       additionalProperties: false,
     },
     slide4: {
       type: "object",
-      properties: { actionTitle: { type: "string" }, chartNote: { type: "string" }, bullets: { type: "array", items: { type: "string" } }, soWhat: { type: "string" } },
-      required: ["actionTitle", "chartNote", "bullets", "soWhat"],
+      properties: { actionTitle: { type: "string" }, chartNote: { type: "string" }, bullets: { type: "array", items: { type: "string" } }, soWhat: { type: "string" }, ...NOTE_PROP },
+      required: ["actionTitle", "chartNote", "bullets", "soWhat", "note"],
       additionalProperties: false,
     },
     slide5: {
@@ -248,8 +251,9 @@ const DECK_SCHEMA = {
         topBullets: { type: "array", items: { type: "string" } },
         bottomBullets: { type: "array", items: { type: "string" } },
         soWhat: { type: "string" },
+        ...NOTE_PROP,
       },
-      required: ["actionTitle", "chartNote", "topBullets", "bottomBullets", "soWhat"],
+      required: ["actionTitle", "chartNote", "topBullets", "bottomBullets", "soWhat", "note"],
       additionalProperties: false,
     },
     slide6: {
@@ -259,8 +263,9 @@ const DECK_SCHEMA = {
         stop: { type: "array", items: { type: "string" } },
         keep: { type: "array", items: { type: "string" } },
         start: { type: "array", items: { type: "string" } },
+        ...NOTE_PROP,
       },
-      required: ["actionTitle", "stop", "keep", "start"],
+      required: ["actionTitle", "stop", "keep", "start", "note"],
       additionalProperties: false,
     },
   },
@@ -281,18 +286,19 @@ function deckSystemPrompt(scope: "channel" | "portfolio"): string {
     "4) chartNote 필드는 반드시 '[차트 삽입: 구체적인 차트 종류와 내용]' 형식으로 써라(예: '[차트 삽입: 일자별 시청률 꺾은선 그래프]').",
     "5) So What — soWhat 필드는 반드시 데이터 설명이 아니라 향후 편성/전략 시사점을 담아라.",
     "slide6은 STOP(중단·재검토 대상)/KEEP(유지)/START(신규·확대) 3분류로 나눠라 — strategySignals의 근거만 사용해 분류하고, 근거가 부족한 칸은 빈 배열로 둬라(억지로 채우지 마라).",
-    "각 슬라이드의 텍스트를 모두 합쳐 50단어 내외로 짧게 써라.",
+    "각 슬라이드의 actionTitle/kpiHighlights/verdict/bullets/soWhat/stop/keep/start는 모두 합쳐 50단어 내외로 짧고 개조식으로 써라 — 이 본문 글자 수는 반드시 지켜라.",
+    "단, 본문만으로는 오해의 소지가 있거나 꼭 필요한 부연 설명이 있으면(예: 수치의 전제 조건, 용어 설명) note 필드에 한 문장으로만 짧게 담아라 — note는 화면·PPT에서 본문보다 작은 글씨로 별도 표시되므로 본문 글자 수 제한과 별개다. 필요 없으면 note는 빈 문자열로 둬라(억지로 채우지 마라).",
     LLM_SYNTHESIS_GUARDRAIL,
   ].join("\n");
 }
 
 function flattenDeckText(n: DeckNarrative): string {
   return [
-    n.slide2.actionTitle, ...n.slide2.kpiHighlights, ...n.slide2.verdict,
-    n.slide3.actionTitle, n.slide3.chartNote, ...n.slide3.bullets, n.slide3.soWhat,
-    n.slide4.actionTitle, n.slide4.chartNote, ...n.slide4.bullets, n.slide4.soWhat,
-    n.slide5.actionTitle, n.slide5.chartNote, ...n.slide5.topBullets, ...n.slide5.bottomBullets, n.slide5.soWhat,
-    n.slide6.actionTitle, ...n.slide6.stop, ...n.slide6.keep, ...n.slide6.start,
+    n.slide2.actionTitle, ...n.slide2.kpiHighlights, ...n.slide2.verdict, n.slide2.note,
+    n.slide3.actionTitle, n.slide3.chartNote, ...n.slide3.bullets, n.slide3.soWhat, n.slide3.note,
+    n.slide4.actionTitle, n.slide4.chartNote, ...n.slide4.bullets, n.slide4.soWhat, n.slide4.note,
+    n.slide5.actionTitle, n.slide5.chartNote, ...n.slide5.topBullets, ...n.slide5.bottomBullets, n.slide5.soWhat, n.slide5.note,
+    n.slide6.actionTitle, ...n.slide6.stop, ...n.slide6.keep, ...n.slide6.start, n.slide6.note,
   ].join(" ");
 }
 

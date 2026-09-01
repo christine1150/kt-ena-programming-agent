@@ -140,12 +140,20 @@ function addDeckSoWhat(s: PptSlide, text: string, y: number) {
   s.addShape("rect", { x: 0.5, y, w: 9, h: 0.7, fill: { color: DECK_SOWHAT_BG } });
   s.addText([{ text: "So What?  ", options: { bold: true, color: DECK_ACCENT } }, { text, options: { color: "27272A" } }], { x: 0.65, y: y + 0.08, w: 8.7, h: 0.54, fontSize: 13, valign: "middle" });
 }
-function addDeckBullets(s: PptSlide, items: string[], y: number, h: number) {
-  if (items.length === 0) {
+// 사용자 지시(2026-09-01): "본문 글자 수는 제한하되 필요한 설명의 경우 작게 들어갈 수 있음" —
+// note가 있으면 개조식 bullet 목록 끝에 글머리표 없는 작은 글씨 줄로 덧붙인다(별도 박스를 새로
+// 만들면 16:9 슬라이드의 좁은 세로 여백을 넘기기 쉬워, 같은 텍스트 상자 안에 스타일만 다르게).
+function addDeckBullets(s: PptSlide, items: string[], y: number, h: number, note?: string) {
+  if (items.length === 0 && !note) {
     s.addText("표시할 신호가 없습니다.", { x: 0.5, y, w: 9, h, fontSize: 13, italic: true, color: "A1A1AA" });
     return;
   }
-  s.addText(items.map((t) => ({ text: t, options: { bullet: true, fontSize: 14, color: "27272A", breakLine: true } })), { x: 0.5, y, w: 9, h, valign: "top" });
+  const runs: { text: string; options: { bullet: boolean; fontSize: number; color: string; breakLine: boolean; italic?: boolean } }[] = items.map((t) => ({
+    text: t,
+    options: { bullet: true, fontSize: 14, color: "27272A", breakLine: true },
+  }));
+  if (note) runs.push({ text: note, options: { bullet: false, fontSize: 10, color: "A1A1AA", breakLine: true, italic: true } });
+  s.addText(runs, { x: 0.5, y, w: 9, h, valign: "top" });
 }
 
 export async function renderDeckPptx(deck: ExecutiveDeckDocument): Promise<Buffer> {
@@ -167,7 +175,7 @@ export async function renderDeckPptx(deck: ExecutiveDeckDocument): Promise<Buffe
     addDeckActionTitle(s, d.executiveSummary.actionTitle);
     const header = d.executiveSummary.kpiHighlights.map((h) => ({ text: h, options: { fontSize: 13, bold: true, fill: { color: "F4F4F5" }, color: DECK_ACCENT } }));
     if (header.length > 0) s.addTable([header], { x: 0.5, y: 1.5, w: 9, h: 0.9, border: { type: "solid", color: "E4E4E7", pt: 1 }, valign: "middle" });
-    addDeckBullets(s, d.executiveSummary.verdict, 2.7, 2.0);
+    addDeckBullets(s, d.executiveSummary.verdict, 2.7, 2.0, d.executiveSummary.note);
   }
 
   // 3. Trend
@@ -175,7 +183,7 @@ export async function renderDeckPptx(deck: ExecutiveDeckDocument): Promise<Buffe
     const s = pres.addSlide();
     addDeckActionTitle(s, d.trend.actionTitle);
     addDeckChartNote(s, d.trend.chartNote, 1.5);
-    addDeckBullets(s, d.trend.bullets, 2.6, 2.1);
+    addDeckBullets(s, d.trend.bullets, 2.6, 2.1, d.trend.note);
     addDeckSoWhat(s, d.trend.soWhat, 4.9);
   }
 
@@ -184,7 +192,7 @@ export async function renderDeckPptx(deck: ExecutiveDeckDocument): Promise<Buffe
     const s = pres.addSlide();
     addDeckActionTitle(s, d.demographic.actionTitle);
     addDeckChartNote(s, d.demographic.chartNote, 1.5);
-    addDeckBullets(s, d.demographic.bullets, 2.6, 2.1);
+    addDeckBullets(s, d.demographic.bullets, 2.6, 2.1, d.demographic.note);
     addDeckSoWhat(s, d.demographic.soWhat, 4.9);
   }
 
@@ -196,7 +204,7 @@ export async function renderDeckPptx(deck: ExecutiveDeckDocument): Promise<Buffe
     s.addText("TOP 3", { x: 0.5, y: 2.55, w: 4.3, h: 0.35, fontSize: 13, bold: true, color: "059669" });
     addDeckBullets(s, d.content.topBullets, 2.9, 1.7);
     s.addText("BOTTOM 3", { x: 5.2, y: 2.55, w: 4.3, h: 0.35, fontSize: 13, bold: true, color: "E11D48" });
-    addDeckBullets(s, d.content.bottomBullets, 2.9, 1.7);
+    addDeckBullets(s, d.content.bottomBullets, 2.9, 1.7, d.content.note);
     addDeckSoWhat(s, d.content.soWhat, 4.75);
   }
 
@@ -212,6 +220,7 @@ export async function renderDeckPptx(deck: ExecutiveDeckDocument): Promise<Buffe
     col("STOP", "E11D48", d.strategy.stop, 0.5);
     col("KEEP", "334155", d.strategy.keep, 3.55);
     col("START", "059669", d.strategy.start, 6.6);
+    if (d.strategy.note) s.addText(d.strategy.note, { x: 0.5, y: 5.0, w: 9, h: 0.4, fontSize: 9, italic: true, color: "A1A1AA" });
   }
 
   if (!deck.generatedByAi) {
