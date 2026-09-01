@@ -260,21 +260,47 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   sections.push({
     title: "타깃 × 시간대",
     blocks: fromMaybe(cross.targetHourlyPattern, (d) => [
-      { kind: "bullets", items: d.peaks.slice(0, 6).map((p) => `${p.demographicLabel} — 최고 ${p.broadcastHour}시 (${formatRating(p.avgRating, code)})`) },
+      // 사용자 지시(2026-09-01, "연령대별... 종합적인 분석을 모두"): 상위 6개만 요약하던 것을
+      // 전체 연령대(최대 12개)로 넓혀 어느 연령대가 어느 시간대에 몰리는지 빠짐없이 보여준다.
+      { kind: "bullets", items: d.peaks.slice(0, 12).map((p) => `${p.demographicLabel} — 최고 ${p.broadcastHour}시 (${formatRating(p.avgRating, code)})`) },
     ]),
   });
   sections.push({
     title: "프로그램 × 타깃",
     blocks: fromMaybe(cross.programAudienceCross, (rows) => [
-      { kind: "table", headers: ["프로그램", "연령대", "지표", "값", "기준선", "등락"], rows: rows.slice(0, 15).map((r) => [r.programName, r.demographicLabel, r.metric, num(r.value, 3), num(r.baselineValue, 3), pct(r.deltaPct)]) },
+      // 사용자 지시(2026-09-01, "프로그램별... 시청시간... 종합적인 분석을 모두"): 지표에
+      // rating뿐 아니라 share/reach/time_spent_seconds/time_spent_share(시청시간)도 이미
+      // unpivot돼 있다 — 15행 캡을 30행으로 늘려 더 많은 프로그램×연령대×지표 조합을 담는다.
+      { kind: "table", headers: ["프로그램", "연령대", "지표", "값", "기준선", "등락"], rows: rows.slice(0, 30).map((r) => [r.programName, r.demographicLabel, r.metric, num(r.value, 3), num(r.baselineValue, 3), pct(r.deltaPct)]) },
     ]),
   });
   sections.push({
     title: "경쟁채널 편성 변화 이력",
     blocks: fromMaybe(cross.competitorScheduleChanges, (groups) => [
-      { kind: "table", headers: ["경쟁채널", "시간대", "평소 편성", "변경 횟수", "새로 관찰된 편성"], rows: groups.slice(0, 15).map((g) => [g.competitorName, `${g.hourBlock}시`, g.usualProgram ?? "확인 불가", `${g.changeCount}회`, g.observedPrograms.join(", ")]) },
+      { kind: "table", headers: ["경쟁채널", "시간대", "평소 편성", "변경 횟수", "새로 관찰된 편성"], rows: groups.slice(0, 25).map((g) => [g.competitorName, `${g.hourBlock}시`, g.usualProgram ?? "확인 불가", `${g.changeCount}회`, g.observedPrograms.join(", ")]) },
     ]),
   });
+
+  // 사용자 지시(2026-09-01, "주중, 주말 등 종합적인 분석을 모두") — recommendation.channelFlow.
+  // weekdayFlow(4모드 공통 필드, 이미 계산돼 있음)로 요일별 평균과 주중(월~금)/주말(토·일) 평균을
+  // 함께 낸다. 새 계산 없음 — 참조 구간(§08과 동일 창) 기준.
+  {
+    const flow = doc.recommendation.channelFlow.weekdayFlow.filter((w) => w.avgRating !== null);
+    if (flow.length > 0) {
+      const weekdayVals = flow.filter((w) => ["월", "화", "수", "목", "금"].includes(w.dowLabel)).map((w) => w.avgRating!);
+      const weekendVals = flow.filter((w) => ["토", "일"].includes(w.dowLabel)).map((w) => w.avgRating!);
+      const avg = (arr: number[]) => (arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+      const weekdayAvg = avg(weekdayVals);
+      const weekendAvg = avg(weekendVals);
+      sections.push({
+        title: "요일별 · 주중 vs 주말",
+        blocks: [
+          { kind: "table", headers: ["요일", "평균 시청률"], rows: flow.map((w) => [w.dowLabel, formatRating(w.avgRating, code)]) },
+          { kind: "text", text: `주중(월~금) 평균 ${formatRating(weekdayAvg, code)}, 주말(토·일) 평균 ${formatRating(weekendAvg, code)}` },
+        ],
+      });
+    }
+  }
 
   // 편성 제언(§08) — 항상 마지막.
   const rec = doc.recommendation;

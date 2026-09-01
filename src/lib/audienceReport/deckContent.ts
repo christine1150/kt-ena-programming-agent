@@ -10,6 +10,7 @@
 // 적용할 수 있도록 숫자는 항상 formatRating 자릿수 규칙을 거친 문자열로만 들어간다).
 import type { AudienceReportDocument } from "./reportModel";
 import type { PortfolioReportDocument } from "./portfolioModel";
+import type { DeckChartData, DeckBarPoint } from "./deckModel";
 import { formatRating } from "./format";
 
 function pctText(pct: number | null | undefined): string | null {
@@ -86,6 +87,116 @@ export function buildChannelDeckSignals(doc: AudienceReportDocument): DeckSignal
   const strategySignals = doc.recommendation.recommendations.map((r) => `${r.basis} → ${r.suggestion}(확인 방법: ${r.verification})`);
 
   return { kpiSignals, trendSignals, demographicSignals, contentSignals, strategySignals };
+}
+
+// Phase 14(2026-09-01, 사용자 재지시 — "그래프나 인포그래픽도 다 빠져있음", "프로그램별·
+// 시간대별·연령대별·시청시간·주중·주말 등 종합적인 분석을 모두") — 슬라이드에 실을 실제 차트
+// 원본 데이터. signals(문장)와 별개로, 화면(SVG)·PPT(pptxgenjs 네이티브 차트) 둘 다 이 값
+// 하나로 그린다. 전부 이미 계산된 필드에서만 뽑는다(새 계산 없음):
+//   · kpiDeltaBars = kpiCards의 등락률(%, 5대 지표라 시청시간도 포함)
+//   · trendPoints = recommendation.channelFlow.trend(참조 구간 일별 추이, 4모드 공통 필드)
+//   · weekdayBars = recommendation.channelFlow.weekdayFlow(요일별 평균, 4모드 공통 필드) —
+//     주중(월~금)/주말(토·일) 평균도 이 값으로 그대로 계산(추가 조회 없음)
+//   · hourlyBars = targetHourlyPattern(Phase 12, 4모드 공통)의 연령대별 시간대 셀을 시간대별로
+//     평균 낸 것(순수 group-by, 새 계산 아님)
+//   · demographicBars = programAudienceCross(Phase 12, 4모드 공통)를 연령대별로 평균
+//   · programBars = recommendation.programFlow(성장/약세, 4모드 공통)의 ratingDelta
+export function buildChannelDeckChartData(doc: AudienceReportDocument): DeckChartData {
+  const kpiDeltaBars: DeckBarPoint[] = [];
+  if (doc.body.mode === "compare") {
+    for (const r of doc.body.sections.kpiCompareTable.rows) {
+      if (r.pctChange !== null) kpiDeltaBars.push({ label: r.label, value: r.pctChange });
+    }
+  } else {
+    for (const c of doc.body.sections.kpiCards) {
+      const v = c.priorDeltaPct ?? c.baselineDeltaPct;
+      if (v !== null) kpiDeltaBars.push({ label: c.label, value: v });
+    }
+  }
+
+  const trendPoints: DeckBarPoint[] = doc.recommendation.channelFlow.trend
+    .filter((t) => t.avgRating !== null)
+    .map((t) => ({ label: t.date.slice(5), value: t.avgRating }));
+
+  const weekdayRows = doc.recommendation.channelFlow.weekdayFlow;
+  const weekdayBars: DeckBarPoint[] = weekdayRows.map((w) => ({ label: `${w.dowLabel}`, value: w.avgRating }));
+  const weekdayVals = weekdayRows.filter((w) => ["월", "화", "수", "목", "금"].includes(w.dowLabel) && w.avgRating !== null).map((w) => w.avgRating!);
+  const weekendVals = weekdayRows.filter((w) => ["토", "일"].includes(w.dowLabel) && w.avgRating !== null).map((w) => w.avgRating!);
+  const weekdayAvg = weekdayVals.length > 0 ? weekdayVals.reduce((a, b) => a + b, 0) / weekdayVals.length : null;
+  const weekendAvg = weekendVals.length > 0 ? weekendVals.reduce((a, b) => a + b, 0) / weekendVals.length : null;
+
+  const hourlyBars: DeckBarPoint[] = [];
+  const hourly = doc.body.sections.targetHourlyPattern;
+  if (hourly.available) {
+    const byHour = new Map<number, { sum: number; n: number }>();
+    for (const cell of hourly.data.cells) {
+      if (cell.avgRating === null) continue;
+      const bucket = byHour.get(cell.hour) ?? { sum: 0, n: 0 };
+      bucket.sum += cell.avgRating;
+      bucket.n += 1;
+      byHour.set(cell.hour, bucket);
+    }
+    for (const [hour, b] of [...byHour.entries()].sort((a, b) => a[0] - b[0])) {
+      hourlyBars.push({ label: `${hour}시`, value: b.sum / b.n });
+    }
+  }
+
+  const demographicBars: DeckBarPoint[] = [];
+  const cross = doc.body.sections.programAudienceCross;
+  if (cross.available) {
+    const byLabel = new Map<string, { sum: number; n: number }>();
+    for (const row of cross.data) {
+      if (row.metric !== "rating" || row.value === null) continue;
+      const bucket = byLabel.get(row.demographicLabel) ?? { sum: 0, n: 0 };
+      bucket.sum += row.value;
+      bucket.n += 1;
+      byLabel.set(row.demographicLabel, bucket);
+    }
+    for (const [label, b] of byLabel) demographicBars.push({ label: shortDemoLabelForChart(label), value: b.sum / b.n });
+    demographicBars.sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+  }
+
+  const programBars: DeckBarPoint[] = [];
+  if (doc.recommendation.programFlow.available) {
+    const { growth, weakness } = doc.recommendation.programFlow.data;
+    for (const g of growth.slice(0, 4)) if (g.ratingDelta !== null) programBars.push({ label: g.canonicalName, value: g.ratingDelta });
+    for (const w of weakness.slice(0, 4)) if (w.ratingDelta !== null) programBars.push({ label: w.canonicalName, value: w.ratingDelta });
+  }
+
+  return {
+    kpiDeltaBars,
+    trendPoints,
+    weekdayBars,
+    weekdayAvg,
+    weekendAvg,
+    hourlyBars,
+    primeHourFrom: 20,
+    primeHourTo: 24,
+    demographicBars,
+    programBars,
+  };
+}
+
+function shortDemoLabelForChart(label: string): string {
+  return label.replace(/^(수도권|전국)\s*/, "");
+}
+
+export function buildPortfolioDeckChartData(doc: PortfolioReportDocument): DeckChartData {
+  const allPeers = [...doc.groupA.peers, ...doc.groupB.peers];
+  const kpiDeltaBars: DeckBarPoint[] = allPeers.filter((p) => p.trend !== null).map((p) => ({ label: p.channelName, value: p.trend }));
+  const programBars: DeckBarPoint[] = allPeers.filter((p) => p.level !== null).map((p) => ({ label: p.channelName, value: p.level }));
+  return {
+    kpiDeltaBars,
+    trendPoints: [],
+    weekdayBars: [],
+    weekdayAvg: null,
+    weekendAvg: null,
+    hourlyBars: [],
+    primeHourFrom: 20,
+    primeHourTo: 24,
+    demographicBars: [],
+    programBars,
+  };
 }
 
 export function buildPortfolioDeckSignals(doc: PortfolioReportDocument): DeckSignalBundle {

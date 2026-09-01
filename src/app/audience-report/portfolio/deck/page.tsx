@@ -1,28 +1,31 @@
 "use client";
 
-// Phase 13(2026-09-01, 사용자 지시) — 종합(포트폴리오) 6-슬라이드 임원 보고용 PPT 보기.
-// 채널별 deck 페이지와 동일한 레이아웃, 데이터 소스만 포트폴리오 API.
+// Phase 13(2026-09-01, 사용자 지시) — 종합(포트폴리오) 임원 보고용 PPT 보기. 채널별 deck
+// 페이지와 동일한 레이아웃, 데이터 소스만 포트폴리오 API.
+// Phase 14(2026-09-01) — 실제 SVG 차트 추가(채널별 페이지와 동일한 컴포넌트, 이 프로젝트
+// 관례대로 작은 헬퍼는 페이지마다 로컬로 둔다). 포트폴리오 스코프는 요일별·시간대별·연령대별
+// 원본 데이터가 없어(portfolioModel.ts 자체가 채널 간 관계만 다룸) 그 2개 슬라이드는 생략되고,
+// KPI/Trend/Content 슬라이드에 Peer 비교 차트가 대신 들어간다.
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { ExecutiveDeckDocument } from "@/lib/audienceReport/deckModel";
+import type { ExecutiveDeckDocument, DeckBarPoint } from "@/lib/audienceReport/deckModel";
 
-function SlideShell({ index, accent, children }: { index: number; accent?: boolean; children: React.ReactNode }) {
+function SlideShell({ index, total, accent, children }: { index: number; total: number; accent?: boolean; children: React.ReactNode }) {
   return (
     <section
-      className={`relative mx-auto mb-6 flex aspect-video w-full flex-col justify-center overflow-hidden rounded-xl border p-8 shadow-sm sm:p-12 ${
+      className={`relative mx-auto mb-6 flex min-h-[26rem] w-full flex-col justify-center overflow-hidden rounded-xl border p-8 shadow-sm sm:p-12 ${
         accent ? "border-transparent bg-[#1E293B] text-white" : "border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950"
       }`}
     >
-      <span className={`absolute right-4 top-4 text-xs ${accent ? "text-slate-400" : "text-neutral-400"}`}>{index} / 6</span>
+      <span className={`absolute right-4 top-4 text-xs ${accent ? "text-slate-400" : "text-neutral-400"}`}>
+        {index} / {total}
+      </span>
       {children}
     </section>
   );
 }
 function ActionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-4 text-balance text-2xl font-bold leading-snug text-[#3A30DF] dark:text-indigo-400 sm:text-3xl">{children}</h2>;
-}
-function ChartNote({ text }: { text: string }) {
-  return <div className="mb-4 rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-3 text-xs italic text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400">{text}</div>;
 }
 function Bullets({ items }: { items: string[] }) {
   if (items.length === 0) return <p className="text-sm italic text-neutral-400">표시할 신호가 없습니다.</p>;
@@ -43,14 +46,58 @@ function SoWhat({ text }: { text: string }) {
     </div>
   );
 }
-// 사용자 지시(2026-09-01): 본문은 짧게, 꼭 필요한 부연 설명만 작은 글씨로 별도 표시.
 function SlideNote({ text }: { text: string }) {
   if (!text) return null;
   return <p className="mt-2 text-[11px] leading-snug text-neutral-400 dark:text-neutral-500">{text}</p>;
 }
 
+const CHART_UP = "#059669";
+const CHART_DOWN = "#e11d48";
+const CHART_ACCENT = "#3A30DF";
+
+function BarChart({ points, diverging, height = 180 }: { points: DeckBarPoint[]; diverging?: boolean; height?: number }) {
+  const withValues = points.filter((p) => p.value !== null) as { label: string; value: number }[];
+  if (withValues.length === 0) return <p className="rounded bg-neutral-50 p-4 text-center text-xs text-neutral-400 dark:bg-neutral-900">이 구간은 표시할 데이터가 부족합니다.</p>;
+  const barW = 44;
+  const gap = 14;
+  const w = withValues.length * (barW + gap) + gap;
+  const maxAbs = Math.max(...withValues.map((p) => Math.abs(p.value)), 1e-9);
+  const zeroY = diverging ? height / 2 : height - 24;
+  const usableHalf = diverging ? height / 2 - 20 : height - 44;
+  return (
+    <div className="overflow-x-auto">
+      <svg width={w} height={height} className="block">
+        <line x1={0} y1={zeroY} x2={w} y2={zeroY} stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" strokeWidth={1} />
+        {withValues.map((p, i) => {
+          const barH = Math.max(2, (Math.abs(p.value) / maxAbs) * usableHalf);
+          const up = p.value >= 0;
+          const x = gap + i * (barW + gap);
+          const y = up ? zeroY - barH : zeroY;
+          const color = diverging ? (up ? CHART_UP : CHART_DOWN) : CHART_ACCENT;
+          return (
+            <g key={i}>
+              <rect x={x} y={y} width={barW} height={barH} rx={2} fill={color} />
+              <text x={x + barW / 2} y={up ? y - 4 : y + barH + 12} textAnchor="middle" fontSize={9} fill="currentColor" className="text-neutral-500 dark:text-neutral-400">
+                {p.value.toFixed(p.value !== 0 && Math.abs(p.value) < 1 ? 3 : 1)}
+              </text>
+              <text x={x + barW / 2} y={height - 6} textAnchor="middle" fontSize={9} fill="currentColor" className="text-neutral-500 dark:text-neutral-400">
+                {p.label.length > 6 ? `${p.label.slice(0, 6)}…` : p.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; wordHref: string; pptxHref: string }) {
   const d = deck.slides;
+  const c = deck.charts;
+  const total = 6;
+  let idx = 0;
+  const next = () => ++idx;
+
   return (
     <main className="mx-auto max-w-4xl px-4 pb-24 pt-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -70,11 +117,11 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
 
       {!deck.generatedByAi && (
         <div className="mb-4 rounded bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-          AI 문장 생성이 수치 검증을 통과하지 못해, 근거 신호를 그대로 나열한 폴백 문구로 표시됩니다.
+          AI 문장 생성이 수치 검증을 통과하지 못해, 텍스트는 근거 신호를 그대로 나열한 폴백 문구로 표시됩니다(차트는 실제 데이터 그대로).
         </div>
       )}
 
-      <SlideShell index={1} accent>
+      <SlideShell index={next()} total={total} accent>
         <div className="text-balance text-2xl font-bold leading-snug sm:text-4xl">{d.title.title}</div>
         <div className="mt-3 text-sm text-slate-300 sm:text-base">{d.title.subtitle}</div>
         <div className="mt-8 text-xs text-slate-400">
@@ -82,7 +129,7 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
         </div>
       </SlideShell>
 
-      <SlideShell index={2}>
+      <SlideShell index={next()} total={total}>
         <ActionTitle>{d.executiveSummary.actionTitle}</ActionTitle>
         <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {d.executiveSummary.kpiHighlights.map((h, i) => (
@@ -91,36 +138,37 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
             </div>
           ))}
         </div>
+        <div className="mb-2 text-xs text-neutral-500">7채널 추세(12주 평균 대비, %)</div>
+        <BarChart points={c.kpiDeltaBars} diverging height={150} />
         <Bullets items={d.executiveSummary.verdict} />
         <SlideNote text={d.executiveSummary.note} />
       </SlideShell>
 
-      <SlideShell index={3}>
+      <SlideShell index={next()} total={total}>
         <ActionTitle>{d.trend.actionTitle}</ActionTitle>
-        <ChartNote text={d.trend.chartNote} />
+        <div className="mb-2 text-xs text-neutral-500">7채널 시청률 수준</div>
+        <BarChart points={c.programBars} height={170} />
         <Bullets items={d.trend.bullets} />
         <SoWhat text={d.trend.soWhat} />
         <SlideNote text={d.trend.note} />
       </SlideShell>
 
-      <SlideShell index={4}>
+      <SlideShell index={next()} total={total}>
         <ActionTitle>{d.demographic.actionTitle}</ActionTitle>
-        <ChartNote text={d.demographic.chartNote} />
         <Bullets items={d.demographic.bullets} />
         <SoWhat text={d.demographic.soWhat} />
         <SlideNote text={d.demographic.note} />
       </SlideShell>
 
-      <SlideShell index={5}>
+      <SlideShell index={next()} total={total}>
         <ActionTitle>{d.content.actionTitle}</ActionTitle>
-        <ChartNote text={d.content.chartNote} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <div className="mb-1 text-xs font-semibold text-emerald-600">TOP 3</div>
+            <div className="mb-1 text-xs font-semibold text-emerald-600">TOP</div>
             <Bullets items={d.content.topBullets} />
           </div>
           <div>
-            <div className="mb-1 text-xs font-semibold text-rose-600">BOTTOM 3</div>
+            <div className="mb-1 text-xs font-semibold text-rose-600">BOTTOM</div>
             <Bullets items={d.content.bottomBullets} />
           </div>
         </div>
@@ -128,7 +176,7 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
         <SlideNote text={d.content.note} />
       </SlideShell>
 
-      <SlideShell index={6}>
+      <SlideShell index={next()} total={total}>
         <ActionTitle>{d.strategy.actionTitle}</ActionTitle>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>

@@ -1,20 +1,28 @@
 "use client";
 
-// Phase 13(2026-09-01, 사용자 지시) — 6-슬라이드 임원 보고용 PPT 보기. "Word 보기"
-// (/audience-report/[channel])와 완전히 다른 레이아웃 — 슬라이드 카드 6장을 세로로 나열해
-// PPT 인상을 주면서도 스크롤만으로 전부 읽을 수 있게 한다(별도 캐러셀 상태 없이 안정적으로 동작).
+// Phase 13(2026-09-01, 사용자 지시) — 임원 보고용 PPT 보기. "Word 보기"
+// (/audience-report/[channel])와 완전히 다른 레이아웃 — 슬라이드 카드를 세로로 나열해 PPT
+// 인상을 주면서도 스크롤만으로 전부 읽을 수 있게 한다(별도 캐러셀 상태 없이 안정적으로 동작).
+//
+// Phase 14(2026-09-01, 사용자 재지시 — "그래프나 인포그래픽도 다 빠져있음") — chartNote
+// 플레이스홀더 대신 실제 SVG 차트를 그린다. 이 프로젝트 전반의 관례(라이브러리 없이 직접
+// SVG로 차트를 그림, WhyCandidateRankingChart 등)를 그대로 따르고, PPT 다운로드(pptxgenjs
+// 네이티브 차트)와 같은 deckModel.ts DeckChartData 값 하나만 쓴다(두 렌더러가 다른 숫자를
+// 보여줄 위험 차단).
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import type { ExecutiveDeckDocument } from "@/lib/audienceReport/deckModel";
+import type { ExecutiveDeckDocument, DeckBarPoint } from "@/lib/audienceReport/deckModel";
 
-function SlideShell({ index, accent, children }: { index: number; accent?: boolean; children: React.ReactNode }) {
+function SlideShell({ index, total, accent, children }: { index: number; total: number; accent?: boolean; children: React.ReactNode }) {
   return (
     <section
-      className={`relative mx-auto mb-6 flex aspect-video w-full flex-col justify-center overflow-hidden rounded-xl border p-8 shadow-sm sm:p-12 ${
+      className={`relative mx-auto mb-6 flex min-h-[26rem] w-full flex-col justify-center overflow-hidden rounded-xl border p-8 shadow-sm sm:p-12 ${
         accent ? "border-transparent bg-[#1E293B] text-white" : "border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950"
       }`}
     >
-      <span className={`absolute right-4 top-4 text-xs ${accent ? "text-slate-400" : "text-neutral-400"}`}>{index} / 6</span>
+      <span className={`absolute right-4 top-4 text-xs ${accent ? "text-slate-400" : "text-neutral-400"}`}>
+        {index} / {total}
+      </span>
       {children}
     </section>
   );
@@ -22,10 +30,6 @@ function SlideShell({ index, accent, children }: { index: number; accent?: boole
 
 function ActionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-4 text-balance text-2xl font-bold leading-snug text-[#3A30DF] dark:text-indigo-400 sm:text-3xl">{children}</h2>;
-}
-
-function ChartNote({ text }: { text: string }) {
-  return <div className="mb-4 rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-4 py-3 text-xs italic text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400">{text}</div>;
 }
 
 function Bullets({ items }: { items: string[] }) {
@@ -56,8 +60,86 @@ function SlideNote({ text }: { text: string }) {
   return <p className="mt-2 text-[11px] leading-snug text-neutral-400 dark:text-neutral-500">{text}</p>;
 }
 
+const CHART_UP = "#059669";
+const CHART_DOWN = "#e11d48";
+const CHART_ACCENT = "#3A30DF";
+
+/** 값이 있는 막대만 그린다 — 데이터가 아예 없으면 "데이터 부족" 안내로 대체(빈 차트 그리지 않음). */
+function BarChart({ points, diverging, height = 180 }: { points: DeckBarPoint[]; diverging?: boolean; height?: number }) {
+  const withValues = points.filter((p) => p.value !== null) as { label: string; value: number }[];
+  if (withValues.length === 0) return <p className="rounded bg-neutral-50 p-4 text-center text-xs text-neutral-400 dark:bg-neutral-900">이 구간은 표시할 데이터가 부족합니다.</p>;
+  const barW = 44;
+  const gap = 14;
+  const w = withValues.length * (barW + gap) + gap;
+  const maxAbs = Math.max(...withValues.map((p) => Math.abs(p.value)), 1e-9);
+  const zeroY = diverging ? height / 2 : height - 24;
+  const usableHalf = diverging ? height / 2 - 20 : height - 44;
+  return (
+    <div className="overflow-x-auto">
+      <svg width={w} height={height} className="block">
+        <line x1={0} y1={zeroY} x2={w} y2={zeroY} stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" strokeWidth={1} />
+        {withValues.map((p, i) => {
+          const barH = Math.max(2, (Math.abs(p.value) / maxAbs) * usableHalf);
+          const up = p.value >= 0;
+          const x = gap + i * (barW + gap);
+          const y = up ? zeroY - barH : zeroY;
+          const color = diverging ? (up ? CHART_UP : CHART_DOWN) : CHART_ACCENT;
+          return (
+            <g key={i}>
+              <rect x={x} y={y} width={barW} height={barH} rx={2} fill={color} />
+              <text x={x + barW / 2} y={up ? y - 4 : y + barH + 12} textAnchor="middle" fontSize={9} fill="currentColor" className="text-neutral-500 dark:text-neutral-400">
+                {p.value.toFixed(p.value !== 0 && Math.abs(p.value) < 1 ? 3 : 1)}
+              </text>
+              <text x={x + barW / 2} y={height - 6} textAnchor="middle" fontSize={9} fill="currentColor" className="text-neutral-500 dark:text-neutral-400">
+                {p.label.length > 6 ? `${p.label.slice(0, 6)}…` : p.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function LineChart({ points, height = 180 }: { points: DeckBarPoint[]; height?: number }) {
+  const withValues = points.filter((p) => p.value !== null) as { label: string; value: number }[];
+  if (withValues.length === 0) return <p className="rounded bg-neutral-50 p-4 text-center text-xs text-neutral-400 dark:bg-neutral-900">이 구간은 표시할 데이터가 부족합니다.</p>;
+  const stepW = 46;
+  const w = Math.max(withValues.length * stepW, 200);
+  const padY = 20;
+  const max = Math.max(...withValues.map((p) => p.value));
+  const min = Math.min(...withValues.map((p) => p.value), 0);
+  const range = max - min || 1;
+  const usableH = height - padY * 2;
+  const xOf = (i: number) => 10 + i * stepW;
+  const yOf = (v: number) => padY + usableH - ((v - min) / range) * usableH;
+  const path = withValues.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(i)},${yOf(p.value)}`).join(" ");
+  return (
+    <div className="overflow-x-auto">
+      <svg width={w + 20} height={height} className="block">
+        <path d={path} fill="none" stroke={CHART_ACCENT} strokeWidth={2} />
+        {withValues.map((p, i) => (
+          <g key={i}>
+            <circle cx={xOf(i)} cy={yOf(p.value)} r={2.5} fill={CHART_ACCENT} />
+            {i % Math.max(1, Math.floor(withValues.length / 10)) === 0 && (
+              <text x={xOf(i)} y={height - 4} textAnchor="middle" fontSize={9} fill="currentColor" className="text-neutral-500 dark:text-neutral-400">
+                {p.label}
+              </text>
+            )}
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; wordHref: string; pptxHref: string }) {
   const d = deck.slides;
+  const c = deck.charts;
+  const total = 6 + (d.weekday.available ? 1 : 0) + (d.hourly.available ? 1 : 0);
+  let idx = 0;
+  const next = () => ++idx;
+
   return (
     <main className="mx-auto max-w-4xl px-4 pb-24 pt-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -77,12 +159,12 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
 
       {!deck.generatedByAi && (
         <div className="mb-4 rounded bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-          AI 문장 생성이 수치 검증을 통과하지 못해, 근거 신호를 그대로 나열한 폴백 문구로 표시됩니다.
+          AI 문장 생성이 수치 검증을 통과하지 못해, 텍스트는 근거 신호를 그대로 나열한 폴백 문구로 표시됩니다(차트는 실제 데이터 그대로).
         </div>
       )}
 
       {/* 1. Title */}
-      <SlideShell index={1} accent>
+      <SlideShell index={next()} total={total} accent>
         <div className="text-balance text-2xl font-bold leading-snug sm:text-4xl">{d.title.title}</div>
         <div className="mt-3 text-sm text-slate-300 sm:text-base">{d.title.subtitle}</div>
         <div className="mt-8 text-xs text-slate-400">
@@ -91,7 +173,7 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
       </SlideShell>
 
       {/* 2. Executive Summary */}
-      <SlideShell index={2}>
+      <SlideShell index={next()} total={total}>
         <ActionTitle>{d.executiveSummary.actionTitle}</ActionTitle>
         <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {d.executiveSummary.kpiHighlights.map((h, i) => (
@@ -100,39 +182,60 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
             </div>
           ))}
         </div>
+        <div className="mb-2 text-xs text-neutral-500">5대 지표 등락률(전기간 대비, %)</div>
+        <BarChart points={c.kpiDeltaBars} diverging height={150} />
         <Bullets items={d.executiveSummary.verdict} />
         <SlideNote text={d.executiveSummary.note} />
       </SlideShell>
 
       {/* 3. Trend */}
-      <SlideShell index={3}>
+      <SlideShell index={next()} total={total}>
         <ActionTitle>{d.trend.actionTitle}</ActionTitle>
-        <ChartNote text={d.trend.chartNote} />
+        <LineChart points={c.trendPoints} height={170} />
         <Bullets items={d.trend.bullets} />
         <SoWhat text={d.trend.soWhat} />
         <SlideNote text={d.trend.note} />
       </SlideShell>
 
-      {/* 4. Demographic / Positioning */}
-      <SlideShell index={4}>
+      {/* 4(신규). 주중 vs 주말 · 요일별 */}
+      {d.weekday.available && (
+        <SlideShell index={next()} total={total}>
+          <ActionTitle>{d.weekday.actionTitle}</ActionTitle>
+          <BarChart points={c.weekdayBars} height={200} />
+          <p className="mt-3 text-center text-sm text-neutral-600 dark:text-neutral-300">{d.weekday.caption}</p>
+        </SlideShell>
+      )}
+
+      {/* 5(신규). 시간대별 분석 */}
+      {d.hourly.available && (
+        <SlideShell index={next()} total={total}>
+          <ActionTitle>{d.hourly.actionTitle}</ActionTitle>
+          <BarChart points={c.hourlyBars} height={200} />
+          <p className="mt-3 text-center text-sm text-neutral-600 dark:text-neutral-300">{d.hourly.caption}</p>
+        </SlideShell>
+      )}
+
+      {/* 6. Demographic / Positioning */}
+      <SlideShell index={next()} total={total}>
         <ActionTitle>{d.demographic.actionTitle}</ActionTitle>
-        <ChartNote text={d.demographic.chartNote} />
+        <BarChart points={c.demographicBars} height={170} />
         <Bullets items={d.demographic.bullets} />
         <SoWhat text={d.demographic.soWhat} />
         <SlideNote text={d.demographic.note} />
       </SlideShell>
 
-      {/* 5. Killer Content & Timeslot */}
-      <SlideShell index={5}>
+      {/* 7. Killer Content & Timeslot */}
+      <SlideShell index={next()} total={total}>
         <ActionTitle>{d.content.actionTitle}</ActionTitle>
-        <ChartNote text={d.content.chartNote} />
+        <div className="mb-2 text-xs text-neutral-500">프로그램별 등락(성장/약세)</div>
+        <BarChart points={c.programBars} diverging height={170} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <div className="mb-1 text-xs font-semibold text-emerald-600">TOP 3</div>
+            <div className="mb-1 text-xs font-semibold text-emerald-600">TOP</div>
             <Bullets items={d.content.topBullets} />
           </div>
           <div>
-            <div className="mb-1 text-xs font-semibold text-rose-600">BOTTOM 3</div>
+            <div className="mb-1 text-xs font-semibold text-rose-600">BOTTOM</div>
             <Bullets items={d.content.bottomBullets} />
           </div>
         </div>
@@ -140,8 +243,8 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
         <SlideNote text={d.content.note} />
       </SlideShell>
 
-      {/* 6. Strategy — Stop / Keep / Start */}
-      <SlideShell index={6}>
+      {/* 8. Strategy — Stop / Keep / Start */}
+      <SlideShell index={next()} total={total}>
         <ActionTitle>{d.strategy.actionTitle}</ActionTitle>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>

@@ -121,45 +121,116 @@ function addPptTable(s: PptSlide, headers: string[], rows: string[][]) {
   s.addTable([header, ...body], { x: 0.5, y: 1.1, w: 9, fontSize: 11, border: { type: "solid", color: "E4E4E7", pt: 1 }, autoPage: false });
 }
 
-// Phase 13(2026-09-01) — "6-슬라이드 임원 보고용 PPT"(deckModel.ts) 전용 렌더러. FlatReport
-// 기반 renderReportPptx와는 목적이 다르다(그건 상세 리포트 전체를 표로 옮기는 것, 이건 6장
-// 고정 구조의 요약 슬라이드) — 그래서 별도 함수로 둔다. 5대 작성 원칙(Action Title 큰 제목,
-// 개조식 bullet, 차트 삽입 위치 박스, So What 강조 바)을 슬라이드 레이아웃 자체로 강제한다.
+// Phase 13(2026-09-01) — "임원 보고용 PPT"(deckModel.ts) 전용 렌더러. FlatReport 기반
+// renderReportPptx와는 목적이 다르다(그건 상세 리포트 전체를 표로 옮기는 것, 이건 요약
+// 슬라이드) — 그래서 별도 함수로 둔다. 5대 작성 원칙(Action Title 큰 제목, 개조식 bullet,
+// So What 강조 바)을 슬라이드 레이아웃 자체로 강제한다.
+//
+// Phase 14(2026-09-01, 사용자 재지시 — "그래프나 인포그래픽도 다 빠져있음") — chartNote
+// 텍스트 박스(플레이스홀더) 대신 pptxgenjs 네이티브 차트(addChart, bar/line)를 실제로 그린다.
+// 화면(deck/page.tsx의 SVG)과 여기(PPT 네이티브 차트) 둘 다 deckModel.ts의 DeckChartData
+// 하나에서만 값을 가져온다(reportFlatten.ts와 같은 "내용 결정은 한 곳" 원칙).
 const DECK_ACCENT = "3A30DF";
 const DECK_SOWHAT_BG = "EEF2FF";
+const DECK_UP = "059669";
+const DECK_DOWN = "E11D48";
 
 function addDeckActionTitle(s: PptSlide, title: string) {
-  s.addText(title, { x: 0.5, y: 0.35, w: 9, h: 1.0, fontSize: 24, bold: true, color: DECK_ACCENT, valign: "top" });
-}
-function addDeckChartNote(s: PptSlide, note: string, y: number) {
-  s.addShape("rect", { x: 0.5, y, w: 9, h: 0.9, fill: { color: "F4F4F5" }, line: { color: "D4D4D8", dashType: "dash", width: 1 } });
-  s.addText(note, { x: 0.6, y: y + 0.1, w: 8.8, h: 0.7, fontSize: 12, italic: true, color: "71717A", valign: "middle" });
+  s.addText(title, { x: 0.5, y: 0.3, w: 9, h: 0.85, fontSize: 22, bold: true, color: DECK_ACCENT, valign: "top" });
 }
 function addDeckSoWhat(s: PptSlide, text: string, y: number) {
   if (!text) return;
-  s.addShape("rect", { x: 0.5, y, w: 9, h: 0.7, fill: { color: DECK_SOWHAT_BG } });
-  s.addText([{ text: "So What?  ", options: { bold: true, color: DECK_ACCENT } }, { text, options: { color: "27272A" } }], { x: 0.65, y: y + 0.08, w: 8.7, h: 0.54, fontSize: 13, valign: "middle" });
+  s.addShape("rect", { x: 0.5, y, w: 9, h: 0.55, fill: { color: DECK_SOWHAT_BG } });
+  s.addText([{ text: "So What?  ", options: { bold: true, color: DECK_ACCENT } }, { text, options: { color: "27272A" } }], { x: 0.65, y: y + 0.06, w: 8.7, h: 0.43, fontSize: 12, valign: "middle" });
 }
 // 사용자 지시(2026-09-01): "본문 글자 수는 제한하되 필요한 설명의 경우 작게 들어갈 수 있음" —
-// note가 있으면 개조식 bullet 목록 끝에 글머리표 없는 작은 글씨 줄로 덧붙인다(별도 박스를 새로
-// 만들면 16:9 슬라이드의 좁은 세로 여백을 넘기기 쉬워, 같은 텍스트 상자 안에 스타일만 다르게).
-function addDeckBullets(s: PptSlide, items: string[], y: number, h: number, note?: string) {
+// note가 있으면 개조식 bullet 목록 끝에 글머리표 없는 작은 글씨 줄로 덧붙인다.
+function addDeckBullets(s: PptSlide, items: string[], x: number, y: number, w: number, h: number, note?: string) {
   if (items.length === 0 && !note) {
-    s.addText("표시할 신호가 없습니다.", { x: 0.5, y, w: 9, h, fontSize: 13, italic: true, color: "A1A1AA" });
+    s.addText("표시할 신호가 없습니다.", { x, y, w, h, fontSize: 12, italic: true, color: "A1A1AA" });
     return;
   }
   const runs: { text: string; options: { bullet: boolean; fontSize: number; color: string; breakLine: boolean; italic?: boolean } }[] = items.map((t) => ({
     text: t,
-    options: { bullet: true, fontSize: 14, color: "27272A", breakLine: true },
+    options: { bullet: true, fontSize: 12, color: "27272A", breakLine: true },
   }));
-  if (note) runs.push({ text: note, options: { bullet: false, fontSize: 10, color: "A1A1AA", breakLine: true, italic: true } });
-  s.addText(runs, { x: 0.5, y, w: 9, h, valign: "top" });
+  if (note) runs.push({ text: note, options: { bullet: false, fontSize: 9, color: "A1A1AA", breakLine: true, italic: true } });
+  s.addText(runs, { x, y, w, h, valign: "top" });
+}
+
+type DeckPoint = { label: string; value: number | null };
+
+/** 값이 있는 포인트가 없으면 "데이터 부족" 안내만 — 억지로 빈 차트를 그리지 않는다. */
+function addDeckBarChart(pres: PptxGenJS, s: PptSlide, points: DeckPoint[], opts: { x: number; y: number; w: number; h: number; diverging?: boolean; rotateLabels?: boolean }) {
+  const withValues = points.filter((p) => p.value !== null);
+  if (withValues.length === 0) {
+    s.addText("이 구간은 표시할 데이터가 부족합니다.", { x: opts.x, y: opts.y, w: opts.w, h: opts.h, fontSize: 12, italic: true, color: "A1A1AA", align: "center", valign: "middle" });
+    return;
+  }
+  // pptxgenjs는 시리즈 전체에 하나의 색만 쉽게 못 주므로(막대별 색은 chartColorsOpacity 등으로
+  // 세분화 어려움), 등락 방향이 중요한 차트(프로그램 델타 등)는 양/음 두 시리즈로 나눠 각각
+  // 다른 색을 준다 — pptxgenjs가 지원하는 표준 방식.
+  if (opts.diverging) {
+    const posValues = withValues.map((p) => (p.value! >= 0 ? p.value! : null));
+    const negValues = withValues.map((p) => (p.value! < 0 ? p.value! : null));
+    s.addChart(
+      pres.ChartType.bar,
+      [
+        { name: "상승", labels: withValues.map((p) => p.label), values: posValues.map((v) => v ?? 0) },
+        { name: "하락", labels: withValues.map((p) => p.label), values: negValues.map((v) => v ?? 0) },
+      ],
+      {
+        x: opts.x, y: opts.y, w: opts.w, h: opts.h,
+        barDir: "col", barGrouping: "standard",
+        chartColors: [DECK_UP, DECK_DOWN],
+        showLegend: false, showTitle: false,
+        catAxisLabelFontSize: 8, valAxisLabelFontSize: 8,
+        catAxisLabelColor: "52525B", valAxisLabelColor: "52525B",
+        catAxisLineColor: "E4E4E7", valAxisLineColor: "E4E4E7",
+        catAxisLabelRotate: opts.rotateLabels ? 30 : 0,
+        showValAxisTitle: false, showCatAxisTitle: false,
+        dataLabelFontSize: 0,
+      }
+    );
+    return;
+  }
+  s.addChart(pres.ChartType.bar, [{ name: "값", labels: withValues.map((p) => p.label), values: withValues.map((p) => p.value as number) }], {
+    x: opts.x, y: opts.y, w: opts.w, h: opts.h,
+    barDir: "col",
+    chartColors: [DECK_ACCENT],
+    showLegend: false, showTitle: false,
+    catAxisLabelFontSize: 8, valAxisLabelFontSize: 8,
+    catAxisLabelColor: "52525B", valAxisLabelColor: "52525B",
+    catAxisLineColor: "E4E4E7", valAxisLineColor: "E4E4E7",
+    catAxisLabelRotate: opts.rotateLabels ? 30 : 0,
+    showValAxisTitle: false, showCatAxisTitle: false,
+  });
+}
+
+function addDeckLineChart(pres: PptxGenJS, s: PptSlide, points: DeckPoint[], opts: { x: number; y: number; w: number; h: number }) {
+  const withValues = points.filter((p) => p.value !== null);
+  if (withValues.length === 0) {
+    s.addText("이 구간은 표시할 데이터가 부족합니다.", { x: opts.x, y: opts.y, w: opts.w, h: opts.h, fontSize: 12, italic: true, color: "A1A1AA", align: "center", valign: "middle" });
+    return;
+  }
+  s.addChart(pres.ChartType.line, [{ name: "시청률", labels: withValues.map((p) => p.label), values: withValues.map((p) => p.value as number) }], {
+    x: opts.x, y: opts.y, w: opts.w, h: opts.h,
+    chartColors: [DECK_ACCENT],
+    lineSize: 2, lineDataSymbol: "circle", lineDataSymbolSize: 4,
+    showLegend: false, showTitle: false,
+    catAxisLabelFontSize: 8, valAxisLabelFontSize: 8,
+    catAxisLabelColor: "52525B", valAxisLabelColor: "52525B",
+    catAxisLineColor: "E4E4E7", valAxisLineColor: "E4E4E7",
+    catAxisLabelRotate: withValues.length > 10 ? 45 : 0,
+    showValAxisTitle: false, showCatAxisTitle: false,
+  });
 }
 
 export async function renderDeckPptx(deck: ExecutiveDeckDocument): Promise<Buffer> {
   const pres = new PptxGenJS();
   pres.layout = "LAYOUT_16x9";
   const d = deck.slides;
+  const c = deck.charts;
 
   // 1. Title
   const cover = pres.addSlide();
@@ -169,63 +240,81 @@ export async function renderDeckPptx(deck: ExecutiveDeckDocument): Promise<Buffe
   cover.addText(d.title.dateLabel, { x: 0.6, y: 4.6, w: 8.8, h: 0.4, fontSize: 12, color: "94A3B8" });
   cover.addText(d.title.author, { x: 0.6, y: 4.95, w: 8.8, h: 0.4, fontSize: 12, italic: true, color: "94A3B8" });
 
-  // 2. Executive Summary
+  // 2. Executive Summary — KPI 5종 등락률 바 차트 + 총평
   {
     const s = pres.addSlide();
     addDeckActionTitle(s, d.executiveSummary.actionTitle);
-    const header = d.executiveSummary.kpiHighlights.map((h) => ({ text: h, options: { fontSize: 13, bold: true, fill: { color: "F4F4F5" }, color: DECK_ACCENT } }));
-    if (header.length > 0) s.addTable([header], { x: 0.5, y: 1.5, w: 9, h: 0.9, border: { type: "solid", color: "E4E4E7", pt: 1 }, valign: "middle" });
-    addDeckBullets(s, d.executiveSummary.verdict, 2.7, 2.0, d.executiveSummary.note);
+    const header = d.executiveSummary.kpiHighlights.map((h) => ({ text: h, options: { fontSize: 11, bold: true, fill: { color: "F4F4F5" }, color: DECK_ACCENT } }));
+    if (header.length > 0) s.addTable([header], { x: 0.5, y: 1.2, w: 9, h: 0.6, border: { type: "solid", color: "E4E4E7", pt: 1 }, valign: "middle" });
+    s.addText("5대 지표 등락률(전기간 대비, %)", { x: 0.5, y: 1.95, w: 9, h: 0.3, fontSize: 10, color: "71717A" });
+    addDeckBarChart(pres, s, c.kpiDeltaBars, { x: 0.5, y: 2.25, w: 9, h: 1.7 });
+    addDeckBullets(s, d.executiveSummary.verdict, 0.5, 4.05, 9, 1.3, d.executiveSummary.note);
   }
 
-  // 3. Trend
+  // 3. Trend — 일자별 시청률 라인 차트
   {
     const s = pres.addSlide();
     addDeckActionTitle(s, d.trend.actionTitle);
-    addDeckChartNote(s, d.trend.chartNote, 1.5);
-    addDeckBullets(s, d.trend.bullets, 2.6, 2.1, d.trend.note);
-    addDeckSoWhat(s, d.trend.soWhat, 4.9);
+    addDeckLineChart(pres, s, c.trendPoints, { x: 0.5, y: 1.25, w: 9, h: 2.3 });
+    addDeckBullets(s, d.trend.bullets, 0.5, 3.65, 9, 1.1, d.trend.note);
+    addDeckSoWhat(s, d.trend.soWhat, 4.85);
   }
 
-  // 4. Demographic
+  // 4(신규). 주중 vs 주말 · 요일별 — 요일별 바 차트(월~일), 결정론적 캡션(LLM 없음)
+  if (d.weekday.available) {
+    const s = pres.addSlide();
+    addDeckActionTitle(s, d.weekday.actionTitle);
+    addDeckBarChart(pres, s, c.weekdayBars, { x: 0.5, y: 1.25, w: 9, h: 3.0 });
+    s.addText(d.weekday.caption, { x: 0.5, y: 4.45, w: 9, h: 0.5, fontSize: 12, color: "52525B", align: "center" });
+  }
+
+  // 5(신규). 시간대별 분석 — 02~25시 바 차트(프라임 강조), 결정론적 캡션
+  if (d.hourly.available) {
+    const s = pres.addSlide();
+    addDeckActionTitle(s, d.hourly.actionTitle);
+    addDeckBarChart(pres, s, c.hourlyBars, { x: 0.5, y: 1.25, w: 9, h: 3.0, rotateLabels: true });
+    s.addText(d.hourly.caption, { x: 0.5, y: 4.45, w: 9, h: 0.5, fontSize: 12, color: "52525B", align: "center" });
+  }
+
+  // 6. Demographic — 연령대별 시청률 바 차트
   {
     const s = pres.addSlide();
     addDeckActionTitle(s, d.demographic.actionTitle);
-    addDeckChartNote(s, d.demographic.chartNote, 1.5);
-    addDeckBullets(s, d.demographic.bullets, 2.6, 2.1, d.demographic.note);
-    addDeckSoWhat(s, d.demographic.soWhat, 4.9);
+    addDeckBarChart(pres, s, c.demographicBars, { x: 0.5, y: 1.25, w: 9, h: 2.3, rotateLabels: true });
+    addDeckBullets(s, d.demographic.bullets, 0.5, 3.65, 9, 1.1, d.demographic.note);
+    addDeckSoWhat(s, d.demographic.soWhat, 4.85);
   }
 
-  // 5. Killer Content & Timeslot
+  // 7. Killer Content & Timeslot — 프로그램 등락(성장/약세) 바 차트
   {
     const s = pres.addSlide();
     addDeckActionTitle(s, d.content.actionTitle);
-    addDeckChartNote(s, d.content.chartNote, 1.5);
-    s.addText("TOP 3", { x: 0.5, y: 2.55, w: 4.3, h: 0.35, fontSize: 13, bold: true, color: "059669" });
-    addDeckBullets(s, d.content.topBullets, 2.9, 1.7);
-    s.addText("BOTTOM 3", { x: 5.2, y: 2.55, w: 4.3, h: 0.35, fontSize: 13, bold: true, color: "E11D48" });
-    addDeckBullets(s, d.content.bottomBullets, 2.9, 1.7, d.content.note);
-    addDeckSoWhat(s, d.content.soWhat, 4.75);
+    addDeckBarChart(pres, s, c.programBars, { x: 0.5, y: 1.25, w: 9, h: 2.0, diverging: true, rotateLabels: true });
+    s.addText("TOP", { x: 0.5, y: 3.3, w: 4.3, h: 0.3, fontSize: 11, bold: true, color: DECK_UP });
+    addDeckBullets(s, d.content.topBullets, 0.5, 3.6, 4.3, 1.1);
+    s.addText("BOTTOM", { x: 5.2, y: 3.3, w: 4.3, h: 0.3, fontSize: 11, bold: true, color: DECK_DOWN });
+    addDeckBullets(s, d.content.bottomBullets, 5.2, 3.6, 4.3, 1.1, d.content.note);
+    addDeckSoWhat(s, d.content.soWhat, 4.85);
   }
 
-  // 6. Strategy — Stop / Keep / Start
+  // 8. Strategy — Stop / Keep / Start
   {
     const s = pres.addSlide();
     addDeckActionTitle(s, d.strategy.actionTitle);
     const col = (label: string, color: string, items: string[], x: number) => {
-      s.addShape("rect", { x, y: 1.5, w: 2.9, h: 0.5, fill: { color } });
-      s.addText(label, { x, y: 1.5, w: 2.9, h: 0.5, fontSize: 15, bold: true, color: "FFFFFF", align: "center", valign: "middle" });
-      addDeckBullets(s, items, 2.15, 2.7);
+      s.addShape("rect", { x, y: 1.3, w: 2.9, h: 0.45, fill: { color } });
+      s.addText(label, { x, y: 1.3, w: 2.9, h: 0.45, fontSize: 14, bold: true, color: "FFFFFF", align: "center", valign: "middle" });
+      addDeckBullets(s, items, x, 1.9, 2.9, 3.0);
     };
-    col("STOP", "E11D48", d.strategy.stop, 0.5);
+    col("STOP", DECK_DOWN, d.strategy.stop, 0.5);
     col("KEEP", "334155", d.strategy.keep, 3.55);
-    col("START", "059669", d.strategy.start, 6.6);
+    col("START", DECK_UP, d.strategy.start, 6.6);
     if (d.strategy.note) s.addText(d.strategy.note, { x: 0.5, y: 5.0, w: 9, h: 0.4, fontSize: 9, italic: true, color: "A1A1AA" });
   }
 
   if (!deck.generatedByAi) {
     const s = pres.addSlide();
-    s.addText("AI 문장 생성이 검증을 통과하지 못해, 위 슬라이드 내용은 근거 신호를 그대로 나열한 폴백입니다.", { x: 0.6, y: 2.3, w: 8.8, h: 1, fontSize: 14, color: "71717A", align: "center" });
+    s.addText("AI 문장 생성이 검증을 통과하지 못해, 텍스트는 근거 신호를 그대로 나열한 폴백입니다(차트는 실제 데이터 그대로).", { x: 0.6, y: 2.3, w: 8.8, h: 1, fontSize: 14, color: "71717A", align: "center" });
   }
 
   return (await pres.write({ outputType: "nodebuffer" })) as Buffer;

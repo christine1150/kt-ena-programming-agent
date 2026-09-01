@@ -3936,7 +3936,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     <>
                       {audienceHref && (
                         <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white">
-                          각 채널 보고서
+                          {/* 사용자 지시(2026-09-01): "각 채널 보고서"→"채널 리포트"로 이름 변경 */}
+                          채널 리포트
                           <Link href={audienceHref} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="Word로 보기">
                             <WordIconBadge />
                           </Link>
