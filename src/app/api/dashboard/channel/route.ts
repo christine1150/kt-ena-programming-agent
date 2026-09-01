@@ -589,9 +589,13 @@ export async function GET(request: Request) {
   // 것과 기간 순위는 다른 값이라 daily로는 만들 수 없어, 별도 테이블(nielsen_period_rank)에서
   // 최근 두 기간을 가져온다. 해당 기간 파일이 아직 업로드되지 않았으면 그냥 null이고 화면은
   // 그 자리를 렌더링하지 않는다(없는 값을 0이나 "-"로 채우지 않는다).
+  // 타깃 라벨은 **랭킹 시트 표기**를 써야 한다(resolveRankSheetTargetLabel) — nielsen_period_rank는
+  // 랭킹 시트에서 그대로 읽어온 라벨("개인2049")로 저장돼 있는데, matchedTargetLabel은 Channel
+  // Master 표기("수도권 개인2049")라 서로 안 맞는다(CLAUDE.md에 문서화된 표기 차이 함정 — 실제로
+  // 이 화면이 처음엔 비어서 나왔다).
   const { data: rankMovementRows } = await supabase.rpc("get_channel_period_rank_movement", {
     p_channel_code: channel.code,
-    p_target_label: matchedTargetLabel,
+    p_target_label: resolveRankSheetTargetLabel(channel.primary_target),
     p_period_type: "weekly",
     p_as_of_date: dateTo,
   });
