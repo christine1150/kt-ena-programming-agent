@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
+import { fetchRecentProgramIds } from "@/lib/recentProgramAirings";
 
 // 사용자 지시(2026-08-21): "재방이 많은 컨텐츠(예: 나는SOLO)를 통째로 이동 검토하라는 건 부적절
 // 하다 — 그 중 효율이 안 좋은 특정 시간대만 짚어서 의견을 달라." 하루에도 여러 시간대에 걸쳐
@@ -142,14 +143,11 @@ export async function GET(request: Request) {
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
   const fourteenDaysAgoStr = fourteenDaysAgo.toISOString().slice(0, 10);
 
-  const { data: recentPrograms } = await supabase
-    .from("ratings")
-    .select("program_id")
-    .eq("channel_id", channel.id)
-    .eq("source_type", "nielsen_daily")
-    .not("program_id", "is", null)
-    .gte("broadcast_date", fourteenDaysAgoStr);
-  const recentProgramIds = new Set((recentPrograms ?? []).map((r) => r.program_id));
+  // 버그 수정(2026-09-02): 기존엔 .range() 없이 조회해 Supabase 기본 1000행 캡에 걸려, 채널의
+  // 14일 윈도우 방영 행이 1000건을 넘으면(타깃 12개×여러 프로그램이라 흔함) 뒤쪽에 걸린 프로그램이
+  // 정렬 기준도 없이 통째로 잘려나갔다 — ENA Drama "신병4사보타주"(당일 방영)가 CONTENT FITS?에서
+  // 누락된 근본 원인. 페이지네이션으로 전량을 모으는 공용 헬퍼로 교체.
+  const recentProgramIds = await fetchRecentProgramIds(channel.id, fourteenDaysAgoStr);
 
   const items = (rows ?? []).filter((r) => recentProgramIds.has(r.program_id));
 

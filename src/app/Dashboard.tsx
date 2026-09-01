@@ -3115,23 +3115,6 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           <AskAssistantWidget accentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"} />
         </div>
 
-        {/* Tier 2 확장(2026-08-26, 원 제안 10번 "이상치/외부요인 플래그") — 여러 채널이 동시에
-            큰 폭으로 움직였을 때만 표시. 원인은 절대 단정하지 않고 검토 필요만 안내한다. 위
-            AI 편성 비서 자리를 내주면서 이 아래로 옮김(기능은 그대로 유지). */}
-        {data?.portfolioAnomaly?.triggered && (
-          <div className="mb-4 rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-800 ring-1 ring-violet-100">
-            <p className="font-medium">
-              ⚠ {data.portfolioAnomaly.movedChannels.length}개 채널이 동시에 큰 폭({data.portfolioAnomaly.thresholdPct}%p 이상)으로
-              움직였습니다 — 특정 원인을 단정할 수 없으나, 공휴일·사회적 이슈 등 외부 요인 검토가 필요합니다.
-            </p>
-            <p className="mt-1 text-violet-600">
-              {data.portfolioAnomaly.movedChannels
-                .map((c) => `${c.channelName} ${c.ratingDeltaPct >= 0 ? "▲" : "▼"} ${Math.abs(c.ratingDeltaPct).toFixed(1)}%`)
-                .join(" · ")}
-            </p>
-          </div>
-        )}
-
         {loading && !data && <p className="text-sm text-zinc-500">불러오는 중...</p>}
 
         {data && (

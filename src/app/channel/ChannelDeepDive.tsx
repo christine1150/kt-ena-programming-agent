@@ -1032,41 +1032,35 @@ function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string 
 // 같은 비교 표현 대신 '신규 편성' 상황을 정확히 설명할 것." prior_avg_rating이 null인 프로그램은
 // "가장 크게 상승" 후보에서 아예 제외하고(비교 대상이 없어 등락률 자체가 성립하지 않음), 채널
 // 평균 이상으로 성과가 좋을 때만 별도 문장으로 "신규 편성 + 좋은 성과"를 설명한다.
-function buildWhatHappenedInsight(
-  movers: PeriodProgramMoverRow[],
-  fmtR: (v: number | null) => string,
-  channelAvgRating: number | null
-): string | null {
+// 좌우 배열 재설계(사용자 지시 2026-09-02): "왜 그럴까요/누가 보고있나요/이 콘텐츠 적합한가요
+// 등 기간 비교 내용을 '선택 기간(7일) — 요일×시간대 강세 시간대'처럼 좌우로 알아보기 쉽게" —
+// 기존엔 상위3·최대상승·최대하락·신규편성을 전부 한 문단 줄글로 이어붙여, 어떤 프로그램이 어떤
+// 역할인지 한눈에 구분하기 어려웠다. 계산 로직은 그대로 두고, 결과를 문장 대신 구조화된 사실
+// 목록으로 반환해 라벨:값 카드로 렌더링한다(새 계산 없음, buildWhatHappenedInsight를 대체).
+interface WhatHappenedFacts {
+  topStill: { name: string; rating: number | null }[];
+  riser: { name: string; priorRating: number | null; periodRating: number | null } | null;
+  faller: { name: string; priorRating: number | null; periodRating: number | null } | null;
+  goodNewEntry: { name: string; periodRating: number | null; channelAvgRating: number | null } | null;
+  newEntryCount: number;
+}
+function getWhatHappenedFacts(movers: PeriodProgramMoverRow[], channelAvgRating: number | null): WhatHappenedFacts | null {
   const withRating = movers.filter((m) => m.period_avg_rating !== null);
   if (withRating.length === 0) return null;
-  const sentences: string[] = [];
 
-  const topStill = [...withRating].sort((a, b) => (b.period_avg_rating ?? 0) - (a.period_avg_rating ?? 0)).slice(0, 3);
-  if (topStill.length > 0) {
-    sentences.push(
-      `이 기간 시청률 상위는 ${topStill.map((m) => `'${m.canonical_name}'(${fmtR(m.period_avg_rating)})`).join(", ")}입니다.`
-    );
-  }
+  const topStill = [...withRating]
+    .sort((a, b) => (b.period_avg_rating ?? 0) - (a.period_avg_rating ?? 0))
+    .slice(0, 3)
+    .map((m) => ({ name: m.canonical_name, rating: m.period_avg_rating }));
 
   // 사용자 지시(2026-08-21): 10회 미만 편성 프로그램의 등락은 총 등락에 영향이 적으므로, 단순
   // 평균 등락률이 아니라 합산 시청률(기여도) 기준으로 고르고, 가능하면 10회 이상 표본만 본다.
-  // "가장 크게 상승/하락"은 직전 기간 실적이 실제로 있는(prior_avg_rating not null) 프로그램만
-  // 후보로 삼는다 — 신규 편성은 비교 자체가 성립하지 않는다.
   const withDelta = movers.filter((m) => m.rating_delta !== null && m.period_avg_rating !== null && m.prior_avg_rating !== null);
   const withDeltaEnoughSample = withDelta.filter(hasEnoughSample);
   const deltaPool = withDeltaEnoughSample.length > 0 ? withDeltaEnoughSample : withDelta;
   const biggestRiser = [...deltaPool].filter((m) => m.rating_delta! > 0).sort((a, b) => contributionScore(b) - contributionScore(a))[0];
   const biggestFaller = [...deltaPool].filter((m) => m.rating_delta! < 0).sort((a, b) => contributionScore(a) - contributionScore(b))[0];
-  if (biggestRiser) {
-    sentences.push(
-      `'${biggestRiser.canonical_name}'${josaIga(biggestRiser.canonical_name)} 직전 기간(${fmtR(biggestRiser.prior_avg_rating)}) 대비 가장 크게 상승해 ${fmtR(biggestRiser.period_avg_rating)}을 기록했습니다.`
-    );
-  }
-  if (biggestFaller) {
-    sentences.push(
-      `'${biggestFaller.canonical_name}'${josaEunNeun(biggestFaller.canonical_name)} 직전 기간(${fmtR(biggestFaller.prior_avg_rating)}) 대비 가장 크게 하락해 ${fmtR(biggestFaller.period_avg_rating)}로 내려왔습니다.`
-    );
-  }
+
   // 신규 편성 — "상승"이 아니라 "신규 편성"으로 정확히 서술하고, 채널 평균 이상(성과가 좋을 때)만
   // 코멘트한다. 성과가 평균 이하인 신규 편성은 언급하지 않는다(사용자 지시).
   const newEntries = withRating.filter((m) => m.prior_avg_rating === null);
@@ -1074,15 +1068,14 @@ function buildWhatHappenedInsight(
     channelAvgRating !== null
       ? [...newEntries].filter((m) => (m.period_avg_rating ?? 0) >= channelAvgRating).sort((a, b) => contributionScore(b) - contributionScore(a))[0]
       : undefined;
-  if (goodNewEntry) {
-    sentences.push(
-      `'${goodNewEntry.canonical_name}'${josaEunNeun(goodNewEntry.canonical_name)} 이 기간 새로 편성되어 ${fmtR(goodNewEntry.period_avg_rating)}로 채널 평균(${fmtR(channelAvgRating)}) 이상의 성과를 냈습니다.`
-    );
-  }
-  if (newEntries.length > 0) {
-    sentences.push(`이전 기간엔 없던 신규 편성 ${newEntries.length}건이 이 기간에 새로 포착됐습니다.`);
-  }
-  return sentences.length > 0 ? sentences.join(" ") : null;
+
+  return {
+    topStill,
+    riser: biggestRiser ? { name: biggestRiser.canonical_name, priorRating: biggestRiser.prior_avg_rating, periodRating: biggestRiser.period_avg_rating } : null,
+    faller: biggestFaller ? { name: biggestFaller.canonical_name, priorRating: biggestFaller.prior_avg_rating, periodRating: biggestFaller.period_avg_rating } : null,
+    goodNewEntry: goodNewEntry ? { name: goodNewEntry.canonical_name, periodRating: goodNewEntry.period_avg_rating, channelAvgRating } : null,
+    newEntryCount: newEntries.length,
+  };
 }
 
 // ── 오늘의 브리핑 — 사용자 지시: What/Why/So What 라벨 없이, 하나의 보고서 줄글로. 목표
@@ -1355,19 +1348,14 @@ const YOUNG_AGE_BANDS = new Set(["0409", "10대", "20대", "30대"]);
 // 움직인 연령대까지 종합한다. 오늘/어제(!showComparisonView)는 whoIsWatchingDemographics(최근
 // 한 달 baseline), 그 외 기간은 periodDemographics(이번 기간 vs 전 기간)를 그대로 재사용한다
 // (새 계산 없음 — SQL이 이미 계산해준 값만 조합).
+// 좌우 배열 재설계(2026-09-02) 이후 이 함수는 ①~④ 요약 문장만 반환한다 — "어느 요일·시간대·
+// 어떤 콘텐츠 때문에 이동했는지"(구 ⑤번)는 getDemographicShiftFacts()가 카드로 별도 렌더링한다.
 function buildInternalDemographicNarrative(
   showComparisonView: boolean,
   whoIsWatchingDemographics: NarrativeDemographic[] | null,
   periodDemographics: PeriodDemographicRow[],
   fmtR: (v: number | null) => string,
-  refLabel: string,
-  // 사용자 지시(2026-09-01): "기간대별 분석이면 WoW DoD MoM YoY 등이면 분석 기간 동안 연령대가
-  // 어떻게 이동했는지... 어떤 요일 어떤 시간대, 어떤 컨텐츠 때문에 그런 이동이 생겼는지까지
-  // 분석" — ④에서 가장 크게 움직인 연령대를 찾은 뒤, 그 연령대만 놓고 요일×시간대(어디서)와
-  // 프로그램(무엇 때문에)을 교차 조회해 원인까지 짚는다. showComparisonView(기간 모드)일 때만
-  // 채워지는 두 신규 데이터셋(둘 다 새 계산 없이 SQL이 이미 낸 값만 고름).
-  demographicShiftBlocks: DemographicShiftBlockRow[] = [],
-  periodDemographicProgramHighlights: PeriodDemographicProgramHighlightRow[] = []
+  refLabel: string
 ): string {
   const items: WhoIsWatchingItem[] = showComparisonView
     ? periodDemographics.map((d) => ({ label: d.target_label, value: d.period_avg_rating, deltaPct: d.delta_pct }))
@@ -1430,29 +1418,52 @@ function buildInternalDemographicNarrative(
     sentences.push(`${baselineWord}와 비교해 연령대별 구성에 뚜렷한 변화는 없었습니다.`);
   }
 
-  // ⑤ 가장 크게 움직인 연령대(최대 2개)만 놓고, "어느 요일·시간대에서" + "어떤 콘텐츠 때문에"
-  // 이동했는지 교차 확인 — 기간 모드(showComparisonView)에서만, 데이터가 있을 때만 짚는다.
-  if (showComparisonView && movedNotable.length > 0) {
-    for (const n of movedNotable.slice(0, 2)) {
-      const shortLabel = shortDemoLabel(n.label);
-      const blocks = demographicShiftBlocks.filter((b) => b.demographic_label === n.label && b.delta !== null);
-      const topBlock = blocks.length > 0 ? [...blocks].sort((a, b) => Math.abs(b.delta!) - Math.abs(a.delta!))[0] : null;
-      const highlights = periodDemographicProgramHighlights.filter((h) => h.demographic_label === n.label && h.metric === "rating" && h.delta_pct !== null);
-      const topProgram = highlights.length > 0 ? [...highlights].sort((a, b) => Math.abs(b.delta_pct!) - Math.abs(a.delta_pct!))[0] : null;
-
-      if (!topBlock && !topProgram) continue;
-      const parts: string[] = [];
-      if (topBlock) {
-        parts.push(`주로 ${topBlock.dow_label}요일 ${topBlock.hour_block}시대에서 가장 뚜렷했고(${topBlock.delta! >= 0 ? "▲" : "▼"}${fmtR(Math.abs(topBlock.delta!))})`);
-      }
-      if (topProgram) {
-        parts.push(`'${topProgram.program_name}'의 영향이 컸던 것으로 보입니다(${topProgram.delta_pct! >= 0 ? "▲" : "▼"}${Math.abs(topProgram.delta_pct!).toFixed(0)}%)`);
-      }
-      sentences.push(`${shortLabel}${josaEunNeun(shortLabel)} ${parts.join(", ")}.`);
-    }
-  }
-
+  // ⑤(구 버전)는 "요일×시간대"와 "영향 프로그램"을 문장 안에 섞어 한눈에 구분하기 어려웠다 —
+  // 좌우 배열 재설계(사용자 지시 2026-09-02)로 카드형 별도 함수(getDemographicShiftFacts)로
+  // 분리했다. 이 함수는 ①~④ 요약 문장까지만 반환한다.
   return sentences.join(" ");
+}
+
+// WHO IS WATCHING? 기간 모드 — "가장 크게 움직인 연령대(최대 2개)"의 "요일×시간대 강세"와
+// "영향 프로그램"을 좌우 라벨:값 카드로 보여주기 위한 구조화된 사실 목록(새 계산 없음, 위
+// buildInternalDemographicNarrative의 옛 ⑤번 문장과 동일한 선정 로직을 그대로 재사용).
+interface DemographicShiftFact {
+  demoLabel: string;
+  deltaPct: number;
+  dowHourText: string | null;
+  dowHourDelta: number | null;
+  programText: string | null;
+  programDeltaPct: number | null;
+}
+function getDemographicShiftFacts(
+  showComparisonView: boolean,
+  whoIsWatchingDemographics: NarrativeDemographic[] | null,
+  periodDemographics: PeriodDemographicRow[],
+  demographicShiftBlocks: DemographicShiftBlockRow[],
+  periodDemographicProgramHighlights: PeriodDemographicProgramHighlightRow[]
+): DemographicShiftFact[] {
+  if (!showComparisonView) return [];
+  const items: WhoIsWatchingItem[] = periodDemographics.map((d) => ({ label: d.target_label, value: d.period_avg_rating, deltaPct: d.delta_pct }));
+  const { notable } = selectWhoIsWatchingTiles(items);
+  const movedNotable = notable.filter((n) => Math.abs(n.deltaPct!) >= 10);
+
+  const facts: DemographicShiftFact[] = [];
+  for (const n of movedNotable.slice(0, 2)) {
+    const blocks = demographicShiftBlocks.filter((b) => b.demographic_label === n.label && b.delta !== null);
+    const topBlock = blocks.length > 0 ? [...blocks].sort((a, b) => Math.abs(b.delta!) - Math.abs(a.delta!))[0] : null;
+    const highlights = periodDemographicProgramHighlights.filter((h) => h.demographic_label === n.label && h.metric === "rating" && h.delta_pct !== null);
+    const topProgram = highlights.length > 0 ? [...highlights].sort((a, b) => Math.abs(b.delta_pct!) - Math.abs(a.delta_pct!))[0] : null;
+    if (!topBlock && !topProgram) continue;
+    facts.push({
+      demoLabel: shortDemoLabel(n.label),
+      deltaPct: n.deltaPct!,
+      dowHourText: topBlock ? `${topBlock.dow_label}요일 ${topBlock.hour_block}시대` : null,
+      dowHourDelta: topBlock ? topBlock.delta! : null,
+      programText: topProgram ? topProgram.program_name : null,
+      programDeltaPct: topProgram ? topProgram.delta_pct! : null,
+    });
+  }
+  return facts;
 }
 
 // ── CONTENT FITS? 표+줄글, 채널 기여도 높은 순 정렬(사용자 지시) ──────────────
@@ -4792,11 +4803,62 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
             </div>
           )}
-          {showComparisonView && data.periodProgramMovers.length > 0 && data.periodReport && (
-            <p className="mb-3 text-base leading-relaxed text-zinc-700">
-              {buildWhatHappenedInsight(data.periodProgramMovers, fmtR, data.periodReport.avg_rating)}
-            </p>
-          )}
+          {showComparisonView &&
+            data.periodProgramMovers.length > 0 &&
+            data.periodReport &&
+            (() => {
+              const facts = getWhatHappenedFacts(data.periodProgramMovers, data.periodReport.avg_rating);
+              if (!facts) return null;
+              return (
+                <div className="mb-4 space-y-3">
+                  {facts.topStill.length > 0 && (
+                    <div className="rounded-2xl bg-zinc-50 p-3">
+                      <p className="text-sm text-zinc-500">이 기간 시청률 상위</p>
+                      <div className="mt-1.5 flex flex-wrap gap-2">
+                        {facts.topStill.map((m) => (
+                          <span key={m.name} className="rounded-full bg-white px-2.5 py-1 text-sm text-zinc-700 ring-1 ring-zinc-200">
+                            {m.name} <span className="font-semibold text-zinc-900">{fmtR(m.rating)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(facts.riser || facts.faller) && (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {facts.riser && (
+                        <div className="rounded-2xl bg-emerald-50 p-3">
+                          <p className="text-sm text-emerald-700">가장 크게 상승</p>
+                          <p className="mt-1 text-sm font-medium text-zinc-900">{facts.riser.name}</p>
+                          <p className="mt-0.5 text-sm text-emerald-700">
+                            {fmtR(facts.riser.priorRating)} → <span className="font-semibold">{fmtR(facts.riser.periodRating)}</span>
+                          </p>
+                        </div>
+                      )}
+                      {facts.faller && (
+                        <div className="rounded-2xl bg-rose-50 p-3">
+                          <p className="text-sm text-rose-700">가장 크게 하락</p>
+                          <p className="mt-1 text-sm font-medium text-zinc-900">{facts.faller.name}</p>
+                          <p className="mt-0.5 text-sm text-rose-700">
+                            {fmtR(facts.faller.priorRating)} → <span className="font-semibold">{fmtR(facts.faller.periodRating)}</span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {(facts.goodNewEntry || facts.newEntryCount > 0) && (
+                    <p className="text-sm text-zinc-500">
+                      {facts.goodNewEntry && (
+                        <>
+                          <span className="font-medium text-zinc-700">{facts.goodNewEntry.name}</span>이 이 기간 새로 편성되어{" "}
+                          {fmtR(facts.goodNewEntry.periodRating)}로 채널 평균({fmtR(facts.goodNewEntry.channelAvgRating)}) 이상의 성과를 냈습니다.{" "}
+                        </>
+                      )}
+                      {facts.newEntryCount > 0 && <>이전 기간엔 없던 신규 편성 {facts.newEntryCount}건이 이 기간에 새로 포착됐습니다.</>}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           {showComparisonView && (
             <p className="mb-2 text-sm text-zinc-400">
               아래 표는 (참고) 선택 기간 마지막 날짜({data.dateTo}) 시점 기준 DoD/WoW/MoM/QoQ/YoY/YTD 비교입니다.
@@ -5051,16 +5113,63 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             );
           })()}
           <p className="mt-3 text-base leading-relaxed text-zinc-700">
-            {buildInternalDemographicNarrative(
-              showComparisonView,
-              data.whoIsWatchingDemographics,
-              data.periodDemographics,
-              fmtR,
-              referenceLabel,
-              data.demographicShiftBlocks,
-              data.periodDemographicProgramHighlights
-            )}
+            {buildInternalDemographicNarrative(showComparisonView, data.whoIsWatchingDemographics, data.periodDemographics, fmtR, referenceLabel)}
           </p>
+          {/* 좌우 배열 재설계(사용자 지시 2026-09-02): "선택 기간(N일) — 요일×시간대 강세"처럼
+              라벨:값을 나란히 — 옛 문장형 대신 카드로. 연령대별로 최대 2장. */}
+          {showComparisonView &&
+            (() => {
+              const facts = getDemographicShiftFacts(
+                showComparisonView,
+                data.whoIsWatchingDemographics,
+                data.periodDemographics,
+                data.demographicShiftBlocks,
+                data.periodDemographicProgramHighlights
+              );
+              if (facts.length === 0) return null;
+              return (
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {facts.map((f) => (
+                    <div key={f.demoLabel} className="rounded-2xl bg-zinc-50 p-3">
+                      <p className="text-sm font-medium text-zinc-800">
+                        {f.demoLabel}{" "}
+                        <span className={f.deltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                          {f.deltaPct >= 0 ? "▲" : "▼"} {Math.abs(f.deltaPct).toFixed(0)}%
+                        </span>
+                      </p>
+                      <div className="mt-2 space-y-1.5">
+                        {f.dowHourText && (
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="text-zinc-500">요일 × 시간대 강세</span>
+                            <span className="font-medium text-zinc-800">
+                              {f.dowHourText}
+                              {f.dowHourDelta !== null && (
+                                <span className={`ml-1 ${f.dowHourDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                  ({f.dowHourDelta >= 0 ? "▲" : "▼"}{fmtR(Math.abs(f.dowHourDelta))})
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {f.programText && (
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="text-zinc-500">영향 프로그램</span>
+                            <span className="font-medium text-zinc-800">
+                              {f.programText}
+                              {f.programDeltaPct !== null && (
+                                <span className={`ml-1 ${f.programDeltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                  ({f.programDeltaPct >= 0 ? "▲" : "▼"}{Math.abs(f.programDeltaPct).toFixed(0)}%)
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           {!showComparisonView &&
             buildDemographicHighlightsParagraph(data.demographicHighlights) && (
               <p className="mt-2 text-base leading-relaxed text-zinc-700">

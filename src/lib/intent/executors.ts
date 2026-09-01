@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import type { ExtractedParameters, TimeContext } from "./types";
 import { getChannelRefs, isNlCompetitorExcluded, type ChannelRef } from "./referenceData";
+import { fetchRecentAiringRows } from "@/lib/recentProgramAirings";
 
 async function getMatchedTargetLabel(channelCode: string, dateFrom: string, dateTo: string): Promise<string | null> {
   const year = parseInt(dateTo.slice(0, 4), 10);
@@ -547,16 +548,13 @@ export async function execSlotImprovementRecommendation(
   // 방식으로 요일 범위를 반영한다(새 계산·새 지표 없이 실제 ratings 방영일만 근거로 삼음).
   const fourteenDaysAgo = new Date(asOfDate);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
-  const { data: recentRatingsRows } = await supabase
-    .from("ratings")
-    .select("program_id, broadcast_date")
-    .eq("channel_id", channelId)
-    .eq("source_type", "nielsen_daily")
-    .not("program_id", "is", null)
-    .gte("broadcast_date", fourteenDaysAgo.toISOString().slice(0, 10));
-  const recentProgramIds = new Set((recentRatingsRows ?? []).map((r) => r.program_id));
+  // 버그 수정(2026-09-02): .range() 없는 조회가 Supabase 기본 1000행 캡에 걸려 채널의 14일
+  // 윈도우 방영 행이 1000건을 넘으면(타깃 12개×여러 프로그램이라 흔함) 일부 프로그램이 정렬
+  // 기준 없이 통째로 누락되던 문제 — 공용 페이지네이션 헬퍼로 교체(fit-score/route.ts와 동일).
+  const recentRatingsRows = await fetchRecentAiringRows(channelId, fourteenDaysAgo.toISOString().slice(0, 10));
+  const recentProgramIds = new Set(recentRatingsRows.map((r) => r.program_id));
   const dowByProgramId = new Map<string, Set<string>>();
-  for (const r of (recentRatingsRows ?? []) as { program_id: string; broadcast_date: string }[]) {
+  for (const r of recentRatingsRows) {
     const set = dowByProgramId.get(r.program_id) ?? new Set<string>();
     set.add(dowCodeOfDate(r.broadcast_date));
     dowByProgramId.set(r.program_id, set);

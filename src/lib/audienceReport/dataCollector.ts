@@ -8,6 +8,7 @@ import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { groupForChannel, isSkyUhd, type AudienceGroup } from "./targetGroups";
 import type { ResolvedAudiencePeriod } from "./periodResolver";
 import { getChannelMasterInfo, type ChannelMasterInfo } from "./masterData";
+import { fetchRecentProgramIds } from "@/lib/recentProgramAirings";
 
 export interface DailyTrendPoint {
   date: string; // "주별"이면 week_start, "월별"이면 month_start를 그대로 date 필드에 담는다(호출부가 granularity로 구분)
@@ -149,8 +150,9 @@ async function collectFitScoreItems(channelId: string, channelCode: string, date
   const fourteenDaysAgo = new Date(`${dateTo}T00:00:00`);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
   const fourteenDaysAgoStr = `${fourteenDaysAgo.getFullYear()}-${String(fourteenDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(fourteenDaysAgo.getDate()).padStart(2, "0")}`;
-  const { data: recentProgramRows } = await supabase.from("ratings").select("program_id").eq("channel_id", channelId).eq("source_type", "nielsen_daily").not("program_id", "is", null).gte("broadcast_date", fourteenDaysAgoStr);
-  const recentProgramIds = new Set((recentProgramRows ?? []).map((r) => r.program_id as string));
+  // 버그 수정(2026-09-02): .range() 없는 조회가 Supabase 기본 1000행 캡에 걸려 일부 프로그램이
+  // 통째로 누락되던 문제 — 공용 페이지네이션 헬퍼로 교체(fit-score/route.ts와 동일한 수정).
+  const recentProgramIds = await fetchRecentProgramIds(channelId, fourteenDaysAgoStr);
 
   return ((fitRows ?? []) as { program_id: string; fit_score: number | null; tag: DailyFitScoreItem["tag"]; programs: { canonical_name: string } | { canonical_name: string }[] | null }[])
     .filter((r) => recentProgramIds.has(r.program_id))
