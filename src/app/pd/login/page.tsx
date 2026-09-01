@@ -2,6 +2,7 @@
 
 // PD 개별 로그인 화면 — 이름/비밀번호를 입력받아 /api/pd/login 을 호출한다.
 // admin/login과 동일한 구조, 라벨만 이메일→이름으로 바꿨다.
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -72,6 +73,16 @@ export default function PdLoginPage() {
         >
           {submitting ? "로그인 중..." : "로그인"}
         </button>
+
+        {/* 사용자 지시(2026-09-02): 로그인 안 한 방문자는 이제 /access-denied가 아니라 이 화면으로
+            바로 오므로, 그 페이지가 하던 "관리자이신가요?" 안내를 여기로 옮겨 관리자 접근 경로가
+            없어지지 않게 한다. */}
+        <p className="mt-4 text-center text-xs text-zinc-400">
+          관리자이신가요?{" "}
+          <Link href="/admin/login" className="font-medium text-zinc-600 hover:underline">
+            관리자 로그인
+          </Link>
+        </p>
       </form>
     </div>
   );

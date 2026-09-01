@@ -33,11 +33,13 @@ export default function ChannelSidebar({ channels }: { channels: ChannelOption[]
             }`}
           >
             {c.logoPath ? (
+              // 사용자 지시(2026-09-02): "좌측 메뉴에서 채널 로고 밑 채널 이름은 삭제" — 로고가
+              // 있으면 로고만, 이름 텍스트는 없앤다. 로고가 없는 채널(폴백)은 이름 자체가 유일한
+              // 식별 수단이라 그대로 둔다.
               <Image src={c.logoPath} alt={c.name} width={40} height={24} className="h-6 w-auto object-contain" />
             ) : (
               <div className="h-6 text-[10px] font-medium text-zinc-500">{c.name}</div>
             )}
-            <span className="text-[10px] text-zinc-500">{c.name}</span>
           </Link>
         );
       })}

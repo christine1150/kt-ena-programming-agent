@@ -3162,9 +3162,17 @@ function ScatterQuadrantChart({
 // 레이아웃 재설계(사용자 지시 2026-09-02): "채널명, 시간, 프로그램명 사이를 안보이는 표처럼
 // 동일한 구간으로 나누어서 여유있게 배치, 프로그램명이 아랫줄로 내려가지 않게" — 기존엔
 // "프로그램명(채널명)"을 한 문자열로 합쳐 w-32 truncate에 욱여넣어 경쟁채널명이 잘렸다. 채널명/
-// 시간/프로그램명/시청률을 4개의 고정 폭 grid 열로 분리해 각자 공간을 준다. 2049 목표 채널은
-// 자사 값에 유료가구 시청률을 괄호로 병기(사용자 지시).
-const OVERLAP_GRID_COLS = "6.5rem 3.2rem 1fr 6.5rem";
+// 시간/프로그램명/시청률을 고정 폭 grid 열로 분리해 각자 공간을 준다. 2049 목표 채널은 자사
+// 값에 유료가구 시청률을 괄호로 병기(사용자 지시).
+// 레이아웃 재수정(사용자 지시 2026-09-02): "그래프 시작점이 같아야 함 — 프로그램 제목이 잘리지
+// 않는 장소를 잡아 좌정렬로 그래프 시작점을 동일하게 맞출 것". 기존엔 시간대 그룹마다 독립된
+// grid(각자 다른 좌표계)를 썼고, 그 안에서도 프로그램명은 flex(내용 길이만큼만 차지)라 이름이
+// 짧으면 막대가 일찍 시작하고 길면 늦게 시작했다 — 그룹 사이·행 사이 막대 시작점이 전부 달랐다.
+// 모든 시간대 그룹·모든 행을 하나의 공유 grid(같은 gridTemplateColumns)로 합쳐, "프로그램명" 열
+// 폭을 max-content(이 표에 실제로 나온 이름 중 가장 긴 것에 자동으로 맞춤)로 지정한다 — CSS
+// Grid는 같은 grid 안의 모든 행이 열 폭을 공유하므로, 이름이 짧은 행도 긴 행과 같은 폭을 쓰게
+// 되어 막대 시작점(x좌표)이 모든 행에서 자동으로 정확히 일치한다(JS로 폭을 추정할 필요 없음).
+const OVERLAP_SHARED_GRID_COLS = "6.5rem 3.2rem max-content 1fr 6.5rem";
 function TimeSlotCompetitionChart({ rows, accentColor, fmtR, channelName }: { rows: CompetitorOverlapRow[]; accentColor: string; fmtR: (v: number | null) => string; channelName: string }) {
   const grouped = Object.values(
     rows.reduce<Record<string, CompetitorOverlapRow[]>>((acc, row) => {
@@ -3181,45 +3189,39 @@ function TimeSlotCompetitionChart({ rows, accentColor, fmtR, channelName }: { ro
   }
   const maxRating = Math.max(1e-9, ...grouped.flatMap((g) => [g[0].our_rating ?? 0, ...g.map((r) => r.competitor_rating ?? 0)]));
 
+  type FlatRow = { channelName: string; time: string; program: string; rating: number | null; householdRating: number | null; isOurs: boolean; groupStart: boolean };
+  const flatRows: FlatRow[] = grouped.flatMap((group, gi) => {
+    const ours = group[0];
+    const competitors = [...group].sort((a, b) => (b.competitor_rating ?? 0) - (a.competitor_rating ?? 0)).slice(0, 2);
+    return [
+      { channelName, time: ours.our_start_time.slice(0, 5), program: ours.our_program_name, rating: ours.our_rating, householdRating: ours.our_household_rating, isOurs: true, groupStart: gi > 0 },
+      ...competitors.map((c) => ({ channelName: c.competitor_name, time: c.competitor_start_time.slice(0, 5), program: c.competitor_program_name, rating: c.competitor_rating, householdRating: null as number | null, isOurs: false, groupStart: false })),
+    ];
+  });
+
   return (
-    <div className="flex flex-col gap-4">
-      {grouped.map((group) => {
-        const ours = group[0];
-        const competitors = [...group].sort((a, b) => (b.competitor_rating ?? 0) - (a.competitor_rating ?? 0)).slice(0, 2);
-        const rows2 = [
-          { channelName, time: ours.our_start_time.slice(0, 5), program: ours.our_program_name, rating: ours.our_rating, householdRating: ours.our_household_rating, isOurs: true },
-          ...competitors.map((c) => ({ channelName: c.competitor_name, time: c.competitor_start_time.slice(0, 5), program: c.competitor_program_name, rating: c.competitor_rating, householdRating: null as number | null, isOurs: false })),
-        ];
-        return (
-          <div key={`${ours.our_start_time}__${ours.our_program_name}`} className="rounded-xl bg-zinc-50/60 p-2.5">
-            <div className="flex flex-col gap-1.5">
-              {rows2.map((r, i) => (
-                <div key={i} className="grid items-center gap-2" style={{ gridTemplateColumns: OVERLAP_GRID_COLS }}>
-                  <span className={`truncate text-[11px] ${r.isOurs ? "font-semibold" : "text-zinc-500"}`} style={r.isOurs ? { color: accentColor } : undefined} title={r.channelName}>
-                    {r.channelName}
-                  </span>
-                  <span className="text-[11px] tabular-nums text-zinc-400">{r.time}</span>
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <span className={`whitespace-nowrap text-[11px] ${r.isOurs ? "font-semibold text-zinc-800" : "text-zinc-600"}`} title={r.program}>
-                      {r.program}
-                    </span>
-                    <div className="h-3.5 min-w-[24px] flex-1 rounded bg-white ring-1 ring-zinc-100">
-                      <div
-                        className="h-3.5 rounded"
-                        style={{ width: `${Math.max(2, ((r.rating ?? 0) / maxRating) * 100)}%`, backgroundColor: r.isOurs ? accentColor : "#d4d4d8" }}
-                      />
-                    </div>
-                  </div>
-                  <span className="text-right text-[11px] tabular-nums text-zinc-600">
-                    {fmtR(r.rating)}
-                    {r.householdRating !== null && <span className="text-zinc-400"> ({fmtR(r.householdRating)})</span>}
-                  </span>
-                </div>
-              ))}
-            </div>
+    <div className="grid items-center gap-x-2 gap-y-1.5" style={{ gridTemplateColumns: OVERLAP_SHARED_GRID_COLS }}>
+      {flatRows.map((r, i) => (
+        <div key={i} className="contents">
+          {/* 시간대 그룹 사이 구분선 — 모든 열을 가로지르는 한 줄(막대 시작점 정렬에는 영향 없음). */}
+          {r.groupStart && <div className="col-span-5 mt-1.5 border-t border-zinc-100 pt-1.5" />}
+          <span className={`truncate text-[11px] ${r.isOurs ? "font-semibold" : "text-zinc-500"}`} style={r.isOurs ? { color: accentColor } : undefined} title={r.channelName}>
+            {r.channelName}
+          </span>
+          <span className="text-[11px] tabular-nums text-zinc-400">{r.time}</span>
+          <span className={`whitespace-nowrap text-[11px] ${r.isOurs ? "font-semibold text-zinc-800" : "text-zinc-600"}`}>{r.program}</span>
+          <div className="h-3.5 min-w-[24px] rounded bg-zinc-50 ring-1 ring-zinc-100">
+            <div
+              className="h-3.5 rounded"
+              style={{ width: `${Math.max(2, ((r.rating ?? 0) / maxRating) * 100)}%`, backgroundColor: r.isOurs ? accentColor : "#d4d4d8" }}
+            />
           </div>
-        );
-      })}
+          <span className="text-right text-[11px] tabular-nums text-zinc-600">
+            {fmtR(r.rating)}
+            {r.householdRating !== null && <span className="text-zinc-400"> ({fmtR(r.householdRating)})</span>}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

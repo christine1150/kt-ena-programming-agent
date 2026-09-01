@@ -22,8 +22,15 @@ export async function proxy(request: NextRequest) {
   const pdSession = await verifySessionToken(request.cookies.get(PD_COOKIE_NAME)?.value);
   const isPd = pdSession?.role === "pd";
 
+  // 사용자 지시(2026-09-02, 보안 점검): "관리자 외에는 그냥 들어올 수 없고 반드시 /pd/login을
+  // 통해서 들어와서 이력이 남게" — 확인 결과 로그인 안 한 방문자가 대시보드를 그대로 볼 수는
+  // 없었지만(이 분기 자체가 이미 그걸 막고 있었음), 도착지가 /access-denied(안내 화면, 버튼을
+  // 한 번 더 눌러야 로그인 폼)였다. 곧바로 /pd/login으로 보내 로그인까지 한 번에 이어지게
+  // 하고(그 로그인은 /api/pd/login이 이미 recordLogin()으로 이력을 남김), 관리자 로그인 경로는
+  // /pd/login 화면 하단 링크로 유지한다(/access-denied 페이지 자체는 남겨두되 더 이상 기본
+  // 도착지로 쓰지 않음).
   if (!isAdmin && !isPd) {
-    return NextResponse.redirect(new URL("/access-denied", request.url));
+    return NextResponse.redirect(new URL("/pd/login", request.url));
   }
 
   return NextResponse.next();
