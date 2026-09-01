@@ -74,6 +74,7 @@ function buildHourlyAutoSlide(charts: DeckChartData, channelCode: string): DeckA
 async function assembleDeck(
   scope: "channel" | "portfolio",
   channelCode: string | null,
+  themeColor: string | null,
   entityLabel: string,
   periodLabel: string,
   signals: DeckSignalBundle,
@@ -86,6 +87,7 @@ async function assembleDeck(
   return {
     scope,
     channelCode,
+    themeColor,
     periodLabel,
     generatedByAi,
     charts,
@@ -117,11 +119,11 @@ async function assembleDeck(
 export async function buildChannelExecutiveDeck(doc: AudienceReportDocument): Promise<ExecutiveDeckDocument> {
   const signals = buildChannelDeckSignals(doc);
   const charts = buildChannelDeckChartData(doc);
-  return assembleDeck("channel", doc.channelCode, doc.channelName, doc.period.label, signals, charts);
+  return assembleDeck("channel", doc.channelCode, doc.themeColor, doc.channelName, doc.period.label, signals, charts);
 }
 
 export async function buildPortfolioExecutiveDeck(doc: PortfolioReportDocument): Promise<ExecutiveDeckDocument> {
   const signals = buildPortfolioDeckSignals(doc);
   const charts = buildPortfolioDeckChartData(doc);
-  return assembleDeck("portfolio", null, "KT ENA 7채널 포트폴리오", doc.period.label, signals, charts);
+  return assembleDeck("portfolio", null, null, "KT ENA 7채널 포트폴리오", doc.period.label, signals, charts);
 }

@@ -83,6 +83,10 @@ export interface DeckStrategySlide {
 export interface ExecutiveDeckDocument {
   scope: "channel" | "portfolio";
   channelCode: string | null;
+  // PPT 채널 브랜딩(2026-09-02) — 채널 로고 색(channels.theme_color)을 포인트 컬러로 쓰기 위해
+  // 실어 나른다. 포트폴리오(다채널) 스코프는 특정 채널로 좁힐 수 없어 항상 null(렌더러가 기본
+  // 색으로 폴백).
+  themeColor: string | null;
   periodLabel: string;
   generatedByAi: boolean; // false면 AI 생성 실패로 결정론적 템플릿 문구로 대체된 상태(정직하게 밝힘)
   charts: DeckChartData;

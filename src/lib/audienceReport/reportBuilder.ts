@@ -127,7 +127,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
   const raw: AudienceReportRawData = await collectAudienceReportData(channelCode, period);
   const qualityIssues = validateAudienceReportData(raw);
 
-  const { data: channelRow } = await supabase.from("channels").select("id, name").eq("code", channelCode).maybeSingle();
+  const { data: channelRow } = await supabase.from("channels").select("id, name, theme_color").eq("code", channelCode).maybeSingle();
   if (!channelRow) throw new Error(`채널을 찾을 수 없습니다: ${channelCode}`);
 
   // Phase 9(§08) — 편성 제언은 메인 기간·모드와 무관하게 항상 붙는 마무리 섹션이라, 여기서 한 번만
@@ -160,7 +160,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
     });
     const bodyA = { mode: "single_day" as const, sections };
     const aiSummaryA = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyA, channelCode);
-    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyA, recommendation, aiSummary: aiSummaryA };
+    return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyA, recommendation, aiSummary: aiSummaryA };
   }
 
   if (period.mode === "range") {
@@ -176,7 +176,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
     const sections = buildModeBSection(raw, { originalReview, enaLiveAiring, skyUhd, bestDayDetail, worstDayDetail });
     const bodyB = { mode: "range" as const, sections };
     const aiSummaryB = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyB, channelCode);
-    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyB, recommendation, aiSummary: aiSummaryB };
+    return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyB, recommendation, aiSummary: aiSummaryB };
   }
 
   if (period.mode === "compare") {
@@ -207,7 +207,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
     });
     const bodyC = { mode: "compare" as const, sections };
     const aiSummaryC = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyC, channelCode);
-    return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyC, recommendation, aiSummary: aiSummaryC };
+    return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyC, recommendation, aiSummary: aiSummaryC };
   }
 
   // MODE D(cumulative)
@@ -242,7 +242,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
   sections.strategicImplications = await buildStrategicImplications(channelRow.name, period.label, raw, sections);
   const bodyD = { mode: "cumulative" as const, sections };
   const aiSummaryD = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyD, channelCode);
-  return { channelCode, channelName: channelRow.name, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyD, recommendation, aiSummary: aiSummaryD };
+  return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyD, recommendation, aiSummary: aiSummaryD };
 }
 
 async function fetchDayDetail(channelCode: string, programTargetLabel: string, date: string, rating: number | null): Promise<BestWorstDayDetail> {

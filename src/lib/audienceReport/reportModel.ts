@@ -292,6 +292,10 @@ export interface RecommendationSection {
 export interface AudienceReportDocument {
   channelCode: string;
   channelName: string;
+  // PPT 채널 브랜딩(2026-09-02, 사용자 지시: "각 채널의 PPT는 각 채널의 로고 색을 포인트
+  // 컬러로") — channels.theme_color를 그대로 실어 deckBuilder/exportRenderers가 새 조회 없이
+  // 쓸 수 있게 한다. 미등록 채널이면 null(렌더러가 기본 색으로 폴백).
+  themeColor: string | null;
   groupCode: "A" | "B";
   groupLabel: string;
   period: ResolvedAudiencePeriod;
