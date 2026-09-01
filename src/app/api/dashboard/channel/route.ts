@@ -285,6 +285,7 @@ export async function GET(request: Request) {
     topSharePatternsPriorRes,
     competitorPeriodTopProgramsPriorRes,
     ytdAvgRes,
+    ourBestRankRes,
   ] = await Promise.all([
     // WHAT HAPPENED? — 채널 단위 랭킹 데이터로 DoD/WoW/MoM/QoQ/YoY/YTD
     supabase.rpc("get_rating_trend_summary", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: asOfDate }),
@@ -453,6 +454,13 @@ export async function GET(request: Request) {
     // 채널 평균(Page 1 히어로 카드와 동일한 계산, get_channel_period_rank_and_rating 재사용).
     rankTargetId
       ? supabase.rpc("get_channel_period_rank_and_rating", { p_channel_id: channel.id, p_target_id: rankTargetId, p_date_from: `${dateTo.slice(0, 4)}-01-01`, p_date_to: dateTo })
+      : Promise.resolve({ data: [] as unknown[] }),
+    // 사용자 지시(2026-09-01): "경쟁채널과 비교할 때 기준 채널 등위가 빠진 버그" — 기간 모드에서
+    // COMPARED WITH? 표가 우리 채널 자신을 경쟁채널과 함께 보여줄 때, 경쟁채널은 min(rank)(선택
+    // 기간 중 최고 순위)로 계산해 주면서 우리 채널만 항상 null이었다(같은 계산이 없어서). 단일
+    // 일자 모드는 이미 narrativeSignal.today_rank가 있으므로 기간 모드일 때만 조회.
+    isRangeMode
+      ? supabase.rpc("get_channel_period_best_rank", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_date_from: dateFrom, p_date_to: dateTo })
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
 
@@ -768,6 +776,10 @@ export async function GET(request: Request) {
     hourBlockOpportunity: hourBlockOpportunity ?? [],
     ytdAvgRating,
     ytdAvgRank,
+    // 2026-09-01 — COMPARED WITH? 기간 모드에서 우리 채널의 순위(경쟁채널과 같은 min(rank)
+    // 방식). 단일 일자 모드는 위 rootCauseAlert 등과 같이 이미 narrativeSignal.today_rank가 있어
+    // 이 조회를 하지 않으므로(isRangeMode 가드) 그때는 항상 null.
+    ourPeriodBestRank: (ourBestRankRes.data as { best_rank: number | null }[] | null)?.[0]?.best_rank ?? null,
     // Phase B(2026-08-27) — /api/report/channel이 Quarterly/Annual Report의 주별/월별 추이·
     // 분기별 스냅샷 SQL을 직접 부를 때 타깃 동의어 해석을 다시 하지 않도록, 이미 위에서 계산된
     // 최종 타깃 라벨을 그대로 노출한다(새 계산 없음).

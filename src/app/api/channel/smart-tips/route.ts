@@ -20,6 +20,7 @@ export async function POST(request: Request) {
     }
     input = {
       channelName: body.channelName,
+      periodLabel: typeof body.periodLabel === "string" && body.periodLabel.trim() ? body.periodLabel : "오늘",
       rootCauseTriggered: Boolean(body.rootCauseTriggered),
       rootCauseStreakDays: typeof body.rootCauseStreakDays === "number" ? body.rootCauseStreakDays : null,
       rootCauseCompetitorMoves: Array.isArray(body.rootCauseCompetitorMoves) ? body.rootCauseCompetitorMoves : [],

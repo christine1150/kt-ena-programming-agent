@@ -479,6 +479,9 @@ interface ChannelData {
   hourBlockOpportunity: HourBlockOpportunityRow[];
   // 사용자 지시(2026-08-25): TOP 20 막대 색(로고색/검정) 기준 — 올해 1/1~분석일 채널 평균.
   ytdAvgRating: number | null;
+  // 2026-09-01 — COMPARED WITH? 기간 모드에서 우리 채널의 순위(경쟁채널과 같은 min(rank) 방식).
+  // 단일 일자 모드는 조회하지 않아 항상 null(narrativeSignal.today_rank를 대신 씀).
+  ourPeriodBestRank: number | null;
   // 사용자 지시(2026-08-25): 오늘의 브리핑 첫 문장(ENA 채널 페이지·단일 일자 조회일 때만 채워짐).
   enaOriginalDaily: EnaOriginalHighlightItem[];
   // 사용자 지시(2026-08-26): ENA가 아닌 채널(재방을 트는 채널)의 오늘의 브리핑 첫 문장 —
@@ -2551,11 +2554,17 @@ function TopShareOutsideList({ shareTop, topRows, fmtR }: { shareTop: TopSharePr
 
 // 사용자 지시(2026-08-21): "skyUHD의 시청률 상위 콘텐츠 TOP 20은 편성횟수 5회 미만은 별도
 // 케이스로 따로 표기" — 수기 누적 파일 특성상 skyUHD는 표본이 적은 프로그램이 우연히 상위권에
-// 섞이기 쉬워, 이 채널에서만 5회 미만을 별도 구획으로 분리한다(다른 채널은 기존 그대로).
+// 섞이기 쉬워, 애초엔 이 채널에서만 5회 미만을 별도 구획으로 분리했었다.
+// 사용자 재지시(2026-09-01): "7일 이상의 범위를 다루는 시청률 상위 콘텐츠 TOP 20에서 편성
+// 횟수가 5회 미만인 것은 별도로 하단에 표시해달라는 요청이 받아들여지지 않은 것 같습니다" —
+// 확인해보니 정말 skyUHD로만 좁혀져 있었다. 표본이 적은 프로그램이 우연히 상위권에 섞이는
+// 문제는 skyUHD만의 특성이 아니라(예: 84일 윈도우에서 1~2번 튄 프로그램은 어느 채널이든
+// TOP20에 낄 수 있다) "윈도우가 길수록"(즉 7일 이상) 커지는 구조적 문제라, 채널 조건 대신
+// 윈도우 길이 조건(showLowSampleSplit, 호출부에서 periodWindowDays로 판정)으로 바꾼다.
 function TopProgramsList({
   rows,
   fmtR,
-  isSkyUhd,
+  showLowSampleSplit,
   shareTop,
   accentColor,
   isEnaStory,
@@ -2563,7 +2572,7 @@ function TopProgramsList({
 }: {
   rows: TopProgramRow[];
   fmtR: (v: number | null) => string;
-  isSkyUhd?: boolean;
+  showLowSampleSplit?: boolean;
   shareTop?: TopShareProgramRow[];
   accentColor?: string;
   isEnaStory?: boolean;
@@ -2572,7 +2581,7 @@ function TopProgramsList({
   if (rows.length === 0) {
     return <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>;
   }
-  if (!isSkyUhd) {
+  if (!showLowSampleSplit) {
     return (
       <div>
         <ol className="space-y-1 text-sm">{<TopProgramListItems rows={rows} fmtR={fmtR} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={ytdAvgRating} />}</ol>
@@ -3138,18 +3147,43 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     setSmartTipsLoading(true);
     setSmartTipsError(null);
     try {
+      // 사용자 지시(2026-09-01): "AI 편성 비서 - 스마트 편성 팁은 선택한 기간에 대한 분석을
+      // 바탕으로 해야 하는데, 선택한 기간이 연동되지 않는다면 의미가 없어" — 아래로 보내는
+      // daypartOpportunities/topPrograms/periodProgramMovers 등 재료 자체는 이미 선택 기간에
+      // 맞춰 조회된 값이지만(dateQuery/priorQuery가 /api/dashboard/channel에 실려 있음), AI에게
+      // "이게 무슨 기간의 분석인지" 자체를 알려준 적이 없어 문장이 기간과 무관하게(마치 항상
+      // "오늘"인 것처럼) 써지고 있었다. 명시적으로 라벨을 만들어 같이 보낸다.
+      const smartTipsPeriodLabel =
+        selectedDateFrom && selectedDateTo
+          ? `${PERIOD_PRESET_LABELS[periodPreset]} (${selectedDateFrom} ~ ${selectedDateTo})`
+          : data.dateTo
+            ? `오늘(${data.dateTo})`
+            : "오늘";
+      // 사용자 지시(2026-09-01): "skyUHD를 제외하고 시청률은 소수점 아래 세 자리까지만" 규칙이
+      // LLM에 보내는 raw 값(SQL 5자리 정밀도)에는 적용되지 않고 있었다 — 여기서도 같은 방식으로
+      // 반올림해 보낸다(위 opportunity/competitor job과 같은 방식). 이 함수는 SKYUHD에서도
+      // 호출될 수 있어(위 두 job과 달리 SKYUHD 제외 가드가 없음) code로 자릿수를 분기한다.
+      const smartTipsDigits = code === "SKYUHD" ? 5 : 3;
+      const smartTipsRatingFmt = (v: number | null) => (v === null ? null : Number(v.toFixed(smartTipsDigits)));
+      const smartTipsGapFmt = (v: number | null) => (v === null ? null : Number(v.toFixed(smartTipsDigits === 5 ? 5 : 4)));
       const res = await fetch("/api/channel/smart-tips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           channelName: data.channel.name,
+          periodLabel: smartTipsPeriodLabel,
           rootCauseTriggered: data.rootCauseAlert?.triggered ?? false,
           rootCauseStreakDays: data.rootCauseAlert?.streak_days ?? null,
           rootCauseCompetitorMoves: data.rootCauseAlert?.competitor_moves ?? [],
           opportunityTriggered: data.opportunityAlert?.triggered ?? false,
           opportunityChangePct: data.opportunityAlert?.our_change_pct ?? null,
           weakCompetitors: data.opportunityAlert?.weak_competitors ?? [],
-          daypartOpportunities: data.daypartOpportunity ?? [],
+          daypartOpportunities: (data.daypartOpportunity ?? []).map((d) => ({
+            daypart: d.daypart,
+            gap_full: smartTipsGapFmt(d.gap_full),
+            gap_recent: smartTipsGapFmt(d.gap_recent),
+            gap_change: smartTipsGapFmt(d.gap_change),
+          })),
           // 사용자 지시(2026-08-26, 재지시): "정확한 시간대를 짚어서 — 저녁 22시대라던가
           // 23시대, <프로그램>을 <***>으로 바꾸자 같은" — daypart 4단계로는 몇 시대인지 못
           // 짚으니, 이미 화면에 있는 3시간 단위 격차(hourBlockOpportunity)와 프로그램별 실제
@@ -3157,12 +3191,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           // 후보(fitScoreItems)까지 함께 준다(새 계산 없음, 전부 이미 화면에 있는 값).
           hourBlockOpportunities: (data.hourBlockOpportunity ?? []).map((h) => ({
             hourBlockLabel: hourBlockLabel(h.hour_block),
-            our_recent_avg: h.our_recent_avg,
-            gap_recent: h.gap_recent,
-            gap_change: h.gap_change,
+            our_recent_avg: smartTipsRatingFmt(h.our_recent_avg),
+            gap_recent: smartTipsGapFmt(h.gap_recent),
+            gap_change: smartTipsGapFmt(h.gap_change),
           })),
-          topPrograms: (data.topPrograms ?? []).slice(0, 5).map((p) => ({ program_name: p.program_name, avg_rating: p.avg_rating, most_common_start_hour: p.most_common_start_hour })),
-          periodProgramMovers: (data.periodProgramMovers ?? []).slice(0, 5).map((p) => ({ canonical_name: p.canonical_name, rating_delta: p.rating_delta })),
+          topPrograms: (data.topPrograms ?? []).slice(0, 5).map((p) => ({ program_name: p.program_name, avg_rating: smartTipsRatingFmt(p.avg_rating), most_common_start_hour: p.most_common_start_hour })),
+          periodProgramMovers: (data.periodProgramMovers ?? []).slice(0, 5).map((p) => ({ canonical_name: p.canonical_name, rating_delta: smartTipsGapFmt(p.rating_delta) })),
           fitScoreCandidates: (fitScoreItems ?? [])
             .filter((f) => f.tag === "STRENGTHEN" || f.tag === "TEST" || f.tag === "MOVE" || f.tag === "REPLACE")
             .map((f) => ({ program_name: f.programs?.canonical_name ?? "이름 없음", tag: f.tag, fit_score: f.fit_score, current_daypart: f.evidence.current_daypart })),
@@ -3356,6 +3390,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         });
       }
 
+      // 사용자 지시(2026-09-01): "skyUHD를 제외하고 시청률은 소수점 아래 세 자리까지만 표기하기로
+      // 했는데 이 규칙이 자꾸 풀리는 오류" — 원인은 이 LLM 입력들이 SQL이 돌려주는 원본 정밀도
+      // (5자리)를 그대로 실어 보내고 있었다는 것. 화면(fmtR)은 항상 반올림해 보여주지만, 여기서는
+      // 그 반올림을 거치지 않은 raw 값이 OpenAI 프롬프트에 그대로 들어가 생성 문장에 "0.10639"
+      // 같은 미반올림 숫자가 그대로 인용됐다(LLM은 준 숫자를 있는 그대로 옮겨 적을 뿐이므로).
+      // 이 effect는 위에서 이미 code === "SKYUHD"일 때 반환하므로(3341행) 여기서는 항상 3자리다.
+      const ratingFmt = (v: number | null) => (v === null ? null : Number(v.toFixed(3)));
+      // 격차(gap_*)는 시청률 자체가 아니라 두 시청률의 차이라 이 "3자리 시청률" 규칙과는 다른
+      // 값이지만, 그렇다고 SQL 원본 5자리를 그대로 흘려보내면 안 된다 — 기존에 이 화면이 격차를
+      // 보여줄 때 쓰던 자릿수(:2154행 `gap_full.toFixed(4)`)에 맞춰 4자리로 통일한다.
+      const gapFmt = (v: number | null) => (v === null ? null : Number(v.toFixed(4)));
+
       const validOpp = data.daypartOpportunity.filter((d) => d.gap_change !== null);
       if (validOpp.length > 0) {
         jobKeys.push("opportunity");
@@ -3375,11 +3421,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             recentLabel: data.isRangeMode ? "선택 기간" : "최근 1주",
             dayparts: data.daypartOpportunity.map((d) => ({
               daypart: d.daypart,
-              our_full_avg: d.our_full_avg,
-              our_recent_avg: d.our_recent_avg,
-              gap_full: d.gap_full,
-              gap_recent: d.gap_recent,
-              gap_change: d.gap_change,
+              our_full_avg: ratingFmt(d.our_full_avg),
+              our_recent_avg: ratingFmt(d.our_recent_avg),
+              gap_full: gapFmt(d.gap_full),
+              gap_recent: gapFmt(d.gap_recent),
+              gap_change: gapFmt(d.gap_change),
               classification: classifyDaypartOpportunity(d),
             })),
             candidatePrograms,
@@ -3396,7 +3442,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             channelName: data.channel.name,
             competitors: data.competitorInsightReport.map((r) => ({
               competitor_name: r.competitor_name,
-              today_rating: r.today_rating,
+              today_rating: ratingFmt(r.today_rating),
               delta_pct: r.delta_pct,
               top_program_name: r.top_program_name,
               top_program_start_time: r.top_program_start_time,
@@ -3960,7 +4006,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide" style={{ color: accentForegroundColor(accentColor) }}>
                 Executive Summary
               </p>
-              <p className="max-w-2xl text-base leading-relaxed text-zinc-700">{highlightNarrativeText(insight, "#059669", "#e11d48")}</p>
+              <p className="text-base leading-relaxed text-zinc-700">{highlightNarrativeText(insight, "#059669", "#e11d48")}</p>
             </div>
           );
         })()}
@@ -4019,8 +4065,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               max-w-2xl(가독성을 위한 줄 폭 제한)이 이 카드처럼 넓은 화면에서는 텍스트 오른쪽에
               큰 빈 공간을 남겨 마치 콘텐츠가 잘리거나 잘못 배치된 것처럼 보였다. 이 섹션만
               줄 폭 제한을 없애 카드 폭을 그대로 채운다(leading-relaxed로 가독성은 유지).
-              다른 섹션(Executive Summary/WHY?/OPPORTUNITY? 등)의 max-w-2xl은 그대로 둔다 —
-              이번에 지적된 곳만 정확히 고친다. */}
+              사용자 재지시(2026-09-01): "중간중간 줄글이... 좌우 내용이 꽉 차게" — 당시엔
+              "이번에 지적된 곳만"으로 범위를 좁혔지만, 이번엔 WHY?/OPPORTUNITY?/CONTENT FITS?/
+              COMPARED WITH? 등 나머지 서술 문단(sectionLlm으로 받는 문단 포함) 전부에서 같은
+              현상이 재발해 지적받았다 — 파일 전체의 서술형 <p>에서 max-w-2xl을 제거했다(스코어
+              카드 하나만 예외였던 것도 포함). 표에 붙는 캡션류(예: 위 페이지 안내문) 등 원래
+              줄 폭 제한이 의미 있는 짧은 문구는 max-w-2xl이 없었으므로 영향 없음. */}
           <div className="flex flex-col gap-3">
             {buildBriefingReport(data, referenceLabel, showComparisonView, comparisonLabel).map((para, i) => (
               <p key={i} className="text-base leading-relaxed text-zinc-700">
@@ -4576,13 +4626,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <p className="mb-2 text-sm font-semibold text-zinc-600">
                     {comparisonLabel ?? "이전"} 기간 {periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}
                   </p>
-                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={priorTopSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
+                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7} shareTop={priorTopSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
                 </div>
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">
                     이번 기간 {periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}
                   </p>
-                  <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
+                  <TopProgramsList rows={topPrograms} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
                 </div>
               </div>
               {buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior) && (
@@ -4593,7 +4643,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>
           ) : (
             <>
-              <TopProgramsList rows={topPrograms} fmtR={fmtR} isSkyUhd={code === "SKYUHD"} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
+              <TopProgramsList rows={topPrograms} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
                 <p className="mt-3 text-base leading-relaxed text-zinc-700">
                   위 상위 콘텐츠들과 같은 기간 기준으로 볼 때,
@@ -4778,14 +4828,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     <p className="text-sm font-semibold text-rose-700">주도 요인(편차가 가장 큰 변수)</p>
                     {/* Tier 1 확장(2026-08-26): OpenAI가 후보들을 종합한 문장(sectionLlm.why)이
                         있으면 그걸, 없으면 기존 규칙 기반 leadSentence로. */}
-                    <p className="mt-1 max-w-2xl text-sm text-zinc-600">{highlightNarrativeText(sectionLlmCurrent.why ?? why.leadSentence, "#059669", "#e11d48")}</p>
+                    <p className="mt-1 text-sm text-zinc-600">{highlightNarrativeText(sectionLlmCurrent.why ?? why.leadSentence, "#059669", "#e11d48")}</p>
                     <WhyCandidateRankingChart candidates={why.candidates} />
                     {why.supportingBullets.length > 0 && (
                       <>
                         <p className="mt-2 text-sm font-semibold text-rose-700">함께 관찰된 요인</p>
                         <ul className="mt-1 space-y-1">
                           {why.supportingBullets.map((b, i) => (
-                            <li key={i} className="flex max-w-2xl gap-1.5 text-sm text-zinc-600">
+                            <li key={i} className="flex gap-1.5 text-sm text-zinc-600">
                               <span className="shrink-0 text-rose-300">•</span>
                               <span>{highlightNarrativeText(b, "#059669", "#e11d48")}</span>
                             </li>
@@ -4820,7 +4870,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <p className={`text-sm font-semibold ${isRise ? "text-emerald-700" : "text-zinc-600"}`}>
                     {isRise ? "📈" : "📉"} 최근 7일 중 가장 뚜렷했던 변화 — {h.highlight_date}
                   </p>
-                  <p className="mt-1 max-w-2xl text-sm text-zinc-600">
+                  <p className="mt-1 text-sm text-zinc-600">
                     {highlightNarrativeText(
                       `${h.highlight_date}에 ${fmtR(h.rating)}을 기록해 최근 28일 평균(${fmtR(h.baseline_avg)}) 대비 ${isRise ? "▲" : "▼"} ${Math.abs(h.change_pct).toFixed(1)}% ${isRise ? "상승" : "하락"}했습니다. 3일 연속 조건(하락 -10%p 이상)에는 못 미쳐 경보로는 표시하지 않지만, 최근 흐름에서 가장 눈에 띈 변화입니다.`,
                       "#059669",
@@ -4944,7 +4994,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
             ))}
           </div>
-          <p className="mt-3 max-w-2xl text-base leading-relaxed text-zinc-700">
+          <p className="mt-3 text-base leading-relaxed text-zinc-700">
             {highlightNarrativeText(buildHowDeeplyExplanation(howDeeplyStats, howDeeplyPeriodLabel, code === "SKYUHD"), "#059669", "#e11d48")}
           </p>
         </div>
@@ -5001,7 +5051,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       </tbody>
                     </table>
                   </div>
-                  <p className="mt-3 max-w-2xl text-base leading-relaxed text-zinc-700">
+                  <p className="mt-3 text-base leading-relaxed text-zinc-700">
                     {skyuhdScorecard.length >= 2
                       ? highlightNarrativeText(
                           (() => {
@@ -5054,7 +5104,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       </tbody>
                     </table>
                   </div>
-                  <p className="mt-3 max-w-2xl text-base leading-relaxed text-zinc-700">
+                  <p className="mt-3 text-base leading-relaxed text-zinc-700">
                     {contentFitsRows.length >= 2
                       ? highlightNarrativeText(
                           (() => {
@@ -5237,7 +5287,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 문단(sectionLlm.opportunity)이 있으면
               그걸, 없으면 기존 규칙 기반 buildOpportunityNarrative로. 가독성 개선 5번(2026-08-26):
               줄 폭 제한 + 등락 수치 강조(표시만, 문장 로직은 그대로). */}
-          <p className="mb-3 max-w-2xl text-base leading-relaxed text-zinc-700">
+          <p className="mb-3 text-base leading-relaxed text-zinc-700">
             {highlightNarrativeText(
               sectionLlmCurrent.opportunity ?? buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD"),
               "#059669",
@@ -5697,8 +5747,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   merged.push({
                     competitor_name: data.channel.name,
                     today_rating: ourRating,
-                    // 기간 모드는 기간 평균이라 단일 순위 개념이 없어 비운다(단일 일자만 표기).
-                    today_rank: isRangeMode ? null : (narrativeSignal?.today_rank ?? null),
+                    // 사용자 지시(2026-09-01, 버그 수정): "기준 채널 등위가 빠진 버그" — 기간
+                    // 모드에서 경쟁채널의 today_rank는 이미 선택 기간 중 최고 순위(min(rank))로
+                    // 채워지는데(get_competitor_insight_report), 우리 채널만 null로 비워 순위
+                    // 표기가 빠지는 비대칭이 있었다. 같은 개념으로 계산한
+                    // data.ourPeriodBestRank(get_channel_period_best_rank)를 기간 모드에서 쓴다.
+                    today_rank: isRangeMode ? (data.ourPeriodBestRank ?? null) : (narrativeSignal?.today_rank ?? null),
                     // 사용자 지시(2026-08-25): 경쟁채널과 마찬가지로 우리 채널도 "12주 평균 대비"
                     // 등락을 표시 — data.periodReport.baseline_change_pct가 이미 같은 개념(최근
                     // 12주/84일 평균 대비, 단일 일자든 기간 평균이든 periodReport 자체가 그때그때
@@ -5793,7 +5847,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 문단(sectionLlm.competitor)이 있으면
                   그걸, 없으면 기존 규칙 기반 buildCompetitorNarrative로. 가독성 개선 5번
                   (2026-08-26): 줄 폭 제한 + 등락 수치 강조(표시만, 문장 로직은 그대로). */}
-              <p className="mb-4 max-w-2xl text-base leading-relaxed text-zinc-700">
+              <p className="mb-4 text-base leading-relaxed text-zinc-700">
                 {highlightNarrativeText(sectionLlmCurrent.competitor ?? buildCompetitorNarrative(competitorInsightReport), "#059669", "#e11d48")}
               </p>
             </>
