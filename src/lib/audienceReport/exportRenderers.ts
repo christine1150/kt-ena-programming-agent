@@ -6,6 +6,7 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } from "docx";
 import PptxGenJS from "pptxgenjs";
 import type { FlatReport, DocBlock } from "./reportFlatten";
+import type { ExecutiveDeckDocument } from "./deckModel";
 
 const NAVY = "1E293B";
 const ACCENT = "3A30DF";
@@ -118,6 +119,107 @@ function addPptTable(s: PptSlide, headers: string[], rows: string[][]) {
   const header = headers.map((h) => ({ text: h, options: { bold: true, fill: { color: "F4F4F5" }, color: "27272A" } }));
   const body = rows.map((r) => r.map((c) => ({ text: c, options: { color: "27272A" } })));
   s.addTable([header, ...body], { x: 0.5, y: 1.1, w: 9, fontSize: 11, border: { type: "solid", color: "E4E4E7", pt: 1 }, autoPage: false });
+}
+
+// Phase 13(2026-09-01) — "6-슬라이드 임원 보고용 PPT"(deckModel.ts) 전용 렌더러. FlatReport
+// 기반 renderReportPptx와는 목적이 다르다(그건 상세 리포트 전체를 표로 옮기는 것, 이건 6장
+// 고정 구조의 요약 슬라이드) — 그래서 별도 함수로 둔다. 5대 작성 원칙(Action Title 큰 제목,
+// 개조식 bullet, 차트 삽입 위치 박스, So What 강조 바)을 슬라이드 레이아웃 자체로 강제한다.
+const DECK_ACCENT = "3A30DF";
+const DECK_SOWHAT_BG = "EEF2FF";
+
+function addDeckActionTitle(s: PptSlide, title: string) {
+  s.addText(title, { x: 0.5, y: 0.35, w: 9, h: 1.0, fontSize: 24, bold: true, color: DECK_ACCENT, valign: "top" });
+}
+function addDeckChartNote(s: PptSlide, note: string, y: number) {
+  s.addShape("rect", { x: 0.5, y, w: 9, h: 0.9, fill: { color: "F4F4F5" }, line: { color: "D4D4D8", dashType: "dash", width: 1 } });
+  s.addText(note, { x: 0.6, y: y + 0.1, w: 8.8, h: 0.7, fontSize: 12, italic: true, color: "71717A", valign: "middle" });
+}
+function addDeckSoWhat(s: PptSlide, text: string, y: number) {
+  if (!text) return;
+  s.addShape("rect", { x: 0.5, y, w: 9, h: 0.7, fill: { color: DECK_SOWHAT_BG } });
+  s.addText([{ text: "So What?  ", options: { bold: true, color: DECK_ACCENT } }, { text, options: { color: "27272A" } }], { x: 0.65, y: y + 0.08, w: 8.7, h: 0.54, fontSize: 13, valign: "middle" });
+}
+function addDeckBullets(s: PptSlide, items: string[], y: number, h: number) {
+  if (items.length === 0) {
+    s.addText("표시할 신호가 없습니다.", { x: 0.5, y, w: 9, h, fontSize: 13, italic: true, color: "A1A1AA" });
+    return;
+  }
+  s.addText(items.map((t) => ({ text: t, options: { bullet: true, fontSize: 14, color: "27272A", breakLine: true } })), { x: 0.5, y, w: 9, h, valign: "top" });
+}
+
+export async function renderDeckPptx(deck: ExecutiveDeckDocument): Promise<Buffer> {
+  const pres = new PptxGenJS();
+  pres.layout = "LAYOUT_16x9";
+  const d = deck.slides;
+
+  // 1. Title
+  const cover = pres.addSlide();
+  cover.background = { color: NAVY };
+  cover.addText(d.title.title, { x: 0.6, y: 1.6, w: 8.8, h: 1.4, fontSize: 30, bold: true, color: "FFFFFF" });
+  cover.addText(d.title.subtitle, { x: 0.6, y: 3.0, w: 8.8, h: 0.5, fontSize: 15, color: "CBD5E1" });
+  cover.addText(d.title.dateLabel, { x: 0.6, y: 4.6, w: 8.8, h: 0.4, fontSize: 12, color: "94A3B8" });
+  cover.addText(d.title.author, { x: 0.6, y: 4.95, w: 8.8, h: 0.4, fontSize: 12, italic: true, color: "94A3B8" });
+
+  // 2. Executive Summary
+  {
+    const s = pres.addSlide();
+    addDeckActionTitle(s, d.executiveSummary.actionTitle);
+    const header = d.executiveSummary.kpiHighlights.map((h) => ({ text: h, options: { fontSize: 13, bold: true, fill: { color: "F4F4F5" }, color: DECK_ACCENT } }));
+    if (header.length > 0) s.addTable([header], { x: 0.5, y: 1.5, w: 9, h: 0.9, border: { type: "solid", color: "E4E4E7", pt: 1 }, valign: "middle" });
+    addDeckBullets(s, d.executiveSummary.verdict, 2.7, 2.0);
+  }
+
+  // 3. Trend
+  {
+    const s = pres.addSlide();
+    addDeckActionTitle(s, d.trend.actionTitle);
+    addDeckChartNote(s, d.trend.chartNote, 1.5);
+    addDeckBullets(s, d.trend.bullets, 2.6, 2.1);
+    addDeckSoWhat(s, d.trend.soWhat, 4.9);
+  }
+
+  // 4. Demographic
+  {
+    const s = pres.addSlide();
+    addDeckActionTitle(s, d.demographic.actionTitle);
+    addDeckChartNote(s, d.demographic.chartNote, 1.5);
+    addDeckBullets(s, d.demographic.bullets, 2.6, 2.1);
+    addDeckSoWhat(s, d.demographic.soWhat, 4.9);
+  }
+
+  // 5. Killer Content & Timeslot
+  {
+    const s = pres.addSlide();
+    addDeckActionTitle(s, d.content.actionTitle);
+    addDeckChartNote(s, d.content.chartNote, 1.5);
+    s.addText("TOP 3", { x: 0.5, y: 2.55, w: 4.3, h: 0.35, fontSize: 13, bold: true, color: "059669" });
+    addDeckBullets(s, d.content.topBullets, 2.9, 1.7);
+    s.addText("BOTTOM 3", { x: 5.2, y: 2.55, w: 4.3, h: 0.35, fontSize: 13, bold: true, color: "E11D48" });
+    addDeckBullets(s, d.content.bottomBullets, 2.9, 1.7);
+    addDeckSoWhat(s, d.content.soWhat, 4.75);
+  }
+
+  // 6. Strategy — Stop / Keep / Start
+  {
+    const s = pres.addSlide();
+    addDeckActionTitle(s, d.strategy.actionTitle);
+    const col = (label: string, color: string, items: string[], x: number) => {
+      s.addShape("rect", { x, y: 1.5, w: 2.9, h: 0.5, fill: { color } });
+      s.addText(label, { x, y: 1.5, w: 2.9, h: 0.5, fontSize: 15, bold: true, color: "FFFFFF", align: "center", valign: "middle" });
+      addDeckBullets(s, items, 2.15, 2.7);
+    };
+    col("STOP", "E11D48", d.strategy.stop, 0.5);
+    col("KEEP", "334155", d.strategy.keep, 3.55);
+    col("START", "059669", d.strategy.start, 6.6);
+  }
+
+  if (!deck.generatedByAi) {
+    const s = pres.addSlide();
+    s.addText("AI 문장 생성이 검증을 통과하지 못해, 위 슬라이드 내용은 근거 신호를 그대로 나열한 폴백입니다.", { x: 0.6, y: 2.3, w: 8.8, h: 1, fontSize: 14, color: "71717A", align: "center" });
+  }
+
+  return (await pres.write({ outputType: "nodebuffer" })) as Buffer;
 }
 
 function renderPptBlock(s: PptSlide, b: DocBlock) {

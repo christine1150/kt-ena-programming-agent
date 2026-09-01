@@ -610,6 +610,32 @@ function buildPortfolioReportHref(periodPreset: PeriodPreset, dateFrom: string, 
   return `/audience-report/portfolio?preset=${periodPreset}&dateTo=${dateTo}`;
 }
 
+// Phase 13(2026-09-01, 사용자 지시 — "각 채널 보고서"/"종합 보고서" 버튼의 이모지를 지우고
+// 옆에 MS Word/MS PPT 아이콘을 두 개 붙여 각각 클릭 가능하게") — audienceHref/portfolioHref는
+// 이미 "줄글 리포트"(Word 보기) 링크다. deck 하위 경로(/deck)만 붙이면 같은 기간 파라미터
+// 그대로 PPT 보기로 연결된다(별도 계산 없음). 아이콘은 실제 MS 아이콘 이미지 파일이 없어
+// 브랜드 색을 그대로 쓴 작은 사각 배지 SVG로 대신한다.
+function toDeckHref(href: string): string {
+  const qIdx = href.indexOf("?");
+  return qIdx === -1 ? `${href}/deck` : `${href.slice(0, qIdx)}/deck${href.slice(qIdx)}`;
+}
+function WordIconBadge() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 20 20" aria-label="Word로 보기">
+      <rect width="20" height="20" rx="3" fill="#2B579A" />
+      <text x="10" y="14.5" textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff" fontFamily="Pretendard, sans-serif">W</text>
+    </svg>
+  );
+}
+function PptIconBadge() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 20 20" aria-label="PPT로 보기">
+      <rect width="20" height="20" rx="3" fill="#D24726" />
+      <text x="10" y="14.5" textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff" fontFamily="Pretendard, sans-serif">P</text>
+    </svg>
+  );
+}
+
 // 사용자 지시(2026-08-21, Page 1 → Page 2 확장): Page 1에서 확립한 섹션 헤더 폰트 위계(Pretendard
 // 헤딩 폰트, 크고 굵게)를 Page 2에도 그대로 반영 — 8대 질문 섹션 헤더 전부 이 스타일로 통일.
 const SECTION_TITLE_P2 = "font-heading mb-1 text-xl font-bold tracking-tight text-zinc-800";
@@ -3848,25 +3874,33 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   const resolvedDateTo = selectedDateTo ?? data.dateTo ?? "";
                   const audienceHref = buildAudienceReportHref(code, periodPreset, selectedDateFrom ?? "", resolvedDateTo);
                   const portfolioHref = buildPortfolioReportHref(periodPreset, selectedDateFrom ?? "", resolvedDateTo);
+                  // Phase 13(2026-09-01, 사용자 지시) — 이모지 제거, 제목 옆에 Word/PPT 아이콘
+                  // 두 개를 각각 클릭 가능하게. 제목 자체는 더 이상 링크가 아니다(두 아이콘이
+                  // 각자의 목적지를 갖는다) — Word 아이콘은 기존 줄글 리포트, PPT 아이콘은 새
+                  // 6-슬라이드 임원 보고용 PPT 보기(/deck)로 연결.
                   return (
                     <>
                       {audienceHref && (
-                        <Link
-                          href={audienceHref}
-                          target="_blank"
-                          className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none hover:bg-white/30"
-                        >
-                          📊 각 채널 보고서
-                        </Link>
+                        <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white">
+                          각 채널 보고서
+                          <Link href={audienceHref} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="Word로 보기">
+                            <WordIconBadge />
+                          </Link>
+                          <Link href={toDeckHref(audienceHref)} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="PPT로 보기">
+                            <PptIconBadge />
+                          </Link>
+                        </span>
                       )}
                       {portfolioHref && (
-                        <Link
-                          href={portfolioHref}
-                          target="_blank"
-                          className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none hover:bg-white/30"
-                        >
-                          🏢 종합 보고서
-                        </Link>
+                        <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white">
+                          종합 보고서
+                          <Link href={portfolioHref} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="Word로 보기">
+                            <WordIconBadge />
+                          </Link>
+                          <Link href={toDeckHref(portfolioHref)} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="PPT로 보기">
+                            <PptIconBadge />
+                          </Link>
+                        </span>
                       )}
                     </>
                   );

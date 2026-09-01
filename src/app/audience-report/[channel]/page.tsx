@@ -142,6 +142,15 @@ export default function AudienceReportPage() {
           >
             🖨 PDF로 저장
           </button>
+          {/* Phase 13(2026-09-01, 사용자 지시) — 이 화면(줄글 리포트)이 "Word 보기"다. 6-슬라이드
+              임원 보고용 PPT 보기(별도 페이지)로 넘어가는 교차 이동 버튼. */}
+          <a
+            href={`/audience-report/${report.channelCode}/deck?${searchParams.toString()}`}
+            target="_blank"
+            className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300"
+          >
+            6-슬라이드 임원 보고용 PPT 보기 →
+          </a>
         </div>
       </header>
 
