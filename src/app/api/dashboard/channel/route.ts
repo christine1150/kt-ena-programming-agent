@@ -459,8 +459,14 @@ export async function GET(request: Request) {
     // COMPARED WITH? 표가 우리 채널 자신을 경쟁채널과 함께 보여줄 때, 경쟁채널은 min(rank)(선택
     // 기간 중 최고 순위)로 계산해 주면서 우리 채널만 항상 null이었다(같은 계산이 없어서). 단일
     // 일자 모드는 이미 narrativeSignal.today_rank가 있으므로 기간 모드일 때만 조회.
+    // ratings.rank는 랭킹 시트 표기(예: "개인2049")로 저장돼 matchedTargetLabel(타깃상세 시트
+    // 표기, 예: "수도권 2049")로는 매칭이 안 된다 — get_competitor_insight_report는 내부에
+    // 동의어 폴백이 있어 matchedTargetLabel을 그대로 써도 되지만, 이 새 함수는 그런 폴백이
+    // 없으므로 resolveRankSheetTargetLabel로 변환한 랭킹 시트 표기를 써야 한다(CLAUDE.md에
+    // 문서화된 "타깃 표기 차이 함정" — 배포 전 실측에서 처음엔 null만 나와 이 자리에서 직접
+    // 걸렸다가 수정).
     isRangeMode
-      ? supabase.rpc("get_channel_period_best_rank", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_date_from: dateFrom, p_date_to: dateTo })
+      ? supabase.rpc("get_channel_period_best_rank", { p_channel_code: channel.code, p_target_label: resolveRankSheetTargetLabel(channel.primary_target), p_date_from: dateFrom, p_date_to: dateTo })
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
 
