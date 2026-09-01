@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:intent": "tsx --env-file=.env scripts/test-intent-router.ts"
+    "test:intent": "tsx --env-file=.env scripts/test-intent-router.ts",
+    "smoke": "tsx --env-file=.env scripts/smoke-rpc.mts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
