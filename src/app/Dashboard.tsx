@@ -1046,9 +1046,9 @@ function MonthlyRankTrendChart({
                   </title>
                 </circle>
               ))}
-              {/* 최근 지점은 링(테두리 원)으로 한 번 더 강조 — 사용자가 첨부한 참고 이미지의
-                  "가장 최근 점만 둥근 테두리로 표시" 스타일. */}
-              {last && <circle cx={xOf(last.month)} cy={yOf(last.rank!)} r={4.5} fill="none" stroke={color} strokeWidth={1.5} />}
+              {/* 사용자 지시(2026-09-02): "동그라미가 하나 더 쳐져있는 그래프는 보기가 좋지
+                  않다 — 다른 월과 동일하게 점으로 표시" — 최근 지점만 테두리 원으로 이중 강조하던
+                  것을 제거, 위 pts.map의 일반 점(r=2.2)과 동일하게 통일. */}
               {notable.map((m) => (
                 <text key={m!.month} x={xOf(m!.month)} y={yOf(m!.rank!) - 6} textAnchor="middle" fontSize={9} fontWeight={700} fill={color}>
                   #{m!.rank}
@@ -1096,29 +1096,27 @@ const CAUSE_TAG_COLOR: Record<string, string> = {
 // 왼쪽에 자리를 마련해서 같은 줄 안에" — 채널 전체 기여도(상승견인/하락요인)와는 별개 축이라는
 // 성격은 그대로 유지하면서, 표시 위치만 채널별 행 안의 한 열로 옮긴다. 채널당 최대 2건(상승·
 // 하락 각 1건, route.ts가 이미 그렇게 필터링해서 내려줌).
-function PrimeMoverCell({ movers, channelCode }: { movers: MonthlyPrimeMover[]; channelCode: string }) {
-  if (movers.length === 0) return <span className="text-zinc-300">—</span>;
+// 사용자 지시(2026-09-02): "프라임성과(주요등락)은 제목은 '프라임 성과'로, 등과 락을 가로로
+// 펼쳐서 두 개의 셀로 나눠 한 줄로 볼 수 있도록" — 세로로 쌓던 상승/하락 1건씩을 별도 <td> 2개로
+// 분리한다(표 헤더도 "프라임 성과" 아래 "상승"/"하락" 2단으로). primeMovers 배열 순서에 기대지
+// 않고 delta 부호로 직접 골라 안전하게 매칭한다.
+function PrimeMoverSingleCell({ mover, channelCode }: { mover: MonthlyPrimeMover | undefined; channelCode: string }) {
+  if (!mover) return <span className="text-zinc-300">—</span>;
+  const up = mover.primeDelta >= 0;
   return (
-    <span className="flex flex-col gap-1">
-      {movers.map((m, i) => {
-        const up = m.primeDelta >= 0;
-        return (
-          <span key={i} className="flex flex-col gap-0.5">
-            <span className="flex items-baseline gap-1">
-              <b className="font-semibold text-zinc-700">{m.programName}</b>
-              {m.dow && <span className="rounded bg-zinc-100 px-1 text-[9px] text-zinc-500">{DOW_LABELS[m.dow]}요일</span>}
-              <span className="tabular-nums font-semibold" style={{ color: up ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
-                {up ? "▲" : "▼"}
-                {formatRating(Math.abs(m.primeDelta), channelCode)}
-              </span>
-            </span>
-            <span className="text-[10px] text-zinc-400">
-              프라임 {m.priorPrimeAvgRating !== null ? formatRating(m.priorPrimeAvgRating, channelCode) : "—"} →{" "}
-              {m.primeAvgRating !== null ? formatRating(m.primeAvgRating, channelCode) : "—"} · {m.primeAirCount}회(전월{m.priorPrimeAirCount}회)
-            </span>
-          </span>
-        );
-      })}
+    <span className="flex flex-col gap-0.5">
+      <span className="flex flex-wrap items-baseline gap-1">
+        <b className="font-semibold text-zinc-700">{mover.programName}</b>
+        {mover.dow && <span className="rounded bg-zinc-100 px-1 text-[9px] text-zinc-500">{DOW_LABELS[mover.dow]}요일</span>}
+        <span className="tabular-nums font-semibold" style={{ color: up ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
+          {up ? "▲" : "▼"}
+          {formatRating(Math.abs(mover.primeDelta), channelCode)}
+        </span>
+      </span>
+      <span className="text-[10px] text-zinc-400">
+        프라임 {mover.priorPrimeAvgRating !== null ? formatRating(mover.priorPrimeAvgRating, channelCode) : "—"} →{" "}
+        {mover.primeAvgRating !== null ? formatRating(mover.primeAvgRating, channelCode) : "—"} · {mover.primeAirCount}회(전월{mover.priorPrimeAirCount}회)
+      </span>
     </span>
   );
 }
@@ -1303,21 +1301,27 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
       <div className="overflow-x-auto">
         <table className="w-full text-left text-[12px]">
           <thead>
+            {/* 사용자 지시(2026-09-02): "프라임성과(주요등락)은 제목은 '프라임 성과'로, 등과 락을
+                가로로 펼쳐서 두 개의 셀로 나눠 한 줄로" — 2단 헤더로 "프라임 성과"가 상승/하락
+                두 열을 그룹핑하게 하고, 나머지 열은 rowSpan=2로 위아래 병합해 표 구조를 유지한다. */}
             <tr className="text-zinc-400">
-              <th className="pb-1 pr-3 font-medium">채널</th>
-              <th className="pb-1 pr-1 text-right font-medium">순위</th>
+              <th className="pb-1 pr-3 font-medium" rowSpan={2}>채널</th>
+              <th className="pb-1 pr-1 text-right font-medium" rowSpan={2}>순위</th>
               {/* 사용자 지시(2026-09-01): "순위와 전월 대비, 시청률과 전월 대비 사이를 띄워서
                   가독률을 높여달라" — 값 열과 등락 열이 바로 붙어 있어 좁아 보였다. 등락 열
                   앞쪽에 여백(pl-3)을 줘 두 열이 시각적으로 구분되게 한다. */}
-              <th className="pb-1 pl-3 text-left font-medium">전월 대비</th>
-              <th className="pb-1 pr-1 text-right font-medium">시청률</th>
-              <th className="pb-1 pl-3 text-left font-medium">전월 대비</th>
-              {/* 사용자 지시(2026-09-02): 하단에 별도 목록으로 빼지 않고, 상승 견인 왼쪽 한 열로. */}
-              <th className="pb-1 pl-3 text-left font-medium">
-                프라임성과(주요등락)<span className="ml-1 font-normal text-zinc-300">— 채널 전체 기여도와 별개</span>
+              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>전월 대비</th>
+              <th className="pb-1 pr-1 text-right font-medium" rowSpan={2}>시청률</th>
+              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>전월 대비</th>
+              <th className="border-b border-zinc-100 pb-1 pl-3 text-left font-medium" colSpan={2}>
+                프라임 성과<span className="ml-1 font-normal text-zinc-300">— 채널 전체 기여도와 별개</span>
               </th>
-              <th className="pb-1 pl-3 text-left font-medium">상승 견인</th>
-              <th className="pb-1 pl-3 text-left font-medium">하락 요인</th>
+              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>상승 견인</th>
+              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>하락 요인</th>
+            </tr>
+            <tr className="text-zinc-400">
+              <th className="pb-1 pl-3 pt-1 text-left font-medium">상승</th>
+              <th className="pb-1 pl-3 pt-1 text-left font-medium">하락</th>
             </tr>
           </thead>
           <tbody>
@@ -1354,7 +1358,10 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
                       얼마나 움직였는가"가 검증 가능하게 읽힌다. 그 아래 줄에 실제 이유(편성량
                       변화인지 성과 변화인지)와 전월 동시간대 대비 성적을 함께 붙인다. */}
                   <td className="py-1.5 pl-3 text-zinc-500">
-                    <PrimeMoverCell movers={c.primeMovers ?? []} channelCode={c.channelCode} />
+                    <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta >= 0)} channelCode={c.channelCode} />
+                  </td>
+                  <td className="py-1.5 pl-3 text-zinc-500">
+                    <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta < 0)} channelCode={c.channelCode} />
                   </td>
                   <td className="py-1.5 pl-3 text-zinc-500">
                     <MonthlyDriverCell driver={c.growthDriver} channelCode={c.channelCode} />
@@ -1718,39 +1725,55 @@ function ProgramRatingHistoryChart({
             />
           ))}
           {own2049.length >= 2 && <path d={pathOf(own2049, y2049)} fill="none" stroke={accentColor} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />}
-          {/* 사용자 지시(2026-09-01): "마우스 오버 기능 살리기" — 지금까지 own2049 선에만 점+
-              호버가 있고 가구·직후재방 등 다른 채널·경쟁채널 선에는 아예 없었다. 모든 선에
-              점(호버 가능한 <title> 포함)을 되살린다. */}
+        </svg>
+        {/* 사용자 지시(2026-09-02): "그래프 내 점들이 찌그러져있는 것들도 온전한 점 모양으로" —
+            위 SVG는 preserveAspectRatio="none"으로 가로만 컨테이너 폭에 맞춰 늘어나(세로는 72px
+            고정) 그 안의 <circle>은 rx/ry가 함께 늘어나며 타원으로 찌그러졌다. 이미 회차 숫자
+            라벨에 쓰던 것과 같은 해법(SVG 밖 HTML 오버레이 — 늘어나지 않는 좌표계)을 점에도
+            적용해 항상 정원으로 보이게 한다. 호버 툴팁을 살리기 위해 각 점만 pointer-events-auto. */}
+        <div className="pointer-events-none absolute inset-0">
+          {/* 사용자 지시(2026-09-01, 유지): "마우스 오버 기능 살리기" — 모든 선에 점(호버 가능한
+              title 포함)을 되살린다. */}
           {ownHousehold.map((p, i) => (
-            <circle key={`hh-${i}`} cx={xOf(p.broadcast_date)} cy={yHousehold(p.rating)} r={1.6} fill={accentColor} opacity={0.4}>
-              <title>{p.broadcast_date} · {ownChannelName}(가구) {formatRating(p.rating)}</title>
-            </circle>
+            <span
+              key={`hh-${i}`}
+              className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{ left: `${(xOf(p.broadcast_date) / W) * 100}%`, top: yHousehold(p.rating), width: 3.2, height: 3.2, backgroundColor: accentColor, opacity: 0.4 }}
+              title={`${p.broadcast_date} · ${ownChannelName}(가구) ${formatRating(p.rating)}`}
+            />
           ))}
           {otherSeries.map((s) => {
             const color = themeColorByCode.get(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR;
             return s.points.map((p, i) => (
-              <circle key={`${s.seriesName}-${i}`} cx={xOf(p.broadcast_date)} cy={y2049(p.rating)} r={1.6} fill={color}>
-                <title>{p.broadcast_date} · {CHANNEL_NAME_BY_CODE[s.seriesName] ?? s.seriesName} {formatRating(p.rating)}</title>
-              </circle>
+              <span
+                key={`${s.seriesName}-${i}`}
+                className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{ left: `${(xOf(p.broadcast_date) / W) * 100}%`, top: y2049(p.rating), width: 3.2, height: 3.2, backgroundColor: color }}
+                title={`${p.broadcast_date} · ${CHANNEL_NAME_BY_CODE[s.seriesName] ?? s.seriesName} ${formatRating(p.rating)}`}
+              />
             ));
           })}
           {competitorSeries.map((s, si) => {
             const color = COMPETITOR_LINE_COLORS[si % COMPETITOR_LINE_COLORS.length];
             return s.points.map((p, i) => (
-              <circle key={`${s.seriesName}-${i}`} cx={xOf(p.broadcast_date)} cy={y2049(p.rating)} r={1.6} fill={color}>
-                <title>{p.broadcast_date} · {s.seriesName} {formatRating(p.rating)}</title>
-              </circle>
+              <span
+                key={`${s.seriesName}-${i}`}
+                className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{ left: `${(xOf(p.broadcast_date) / W) * 100}%`, top: y2049(p.rating), width: 3.2, height: 3.2, backgroundColor: color }}
+                title={`${p.broadcast_date} · ${s.seriesName} ${formatRating(p.rating)}`}
+              />
             ));
           })}
           {own2049.map((p, i) => (
-            <circle key={i} cx={xOf(p.broadcast_date)} cy={y2049(p.rating)} r={1.8} fill={accentColor}>
-              <title>{p.broadcast_date}{p.episode_number ? ` ${p.episode_number}회` : ""} · 수도권2049 {formatRating(p.rating)}</title>
-            </circle>
+            <span
+              key={i}
+              className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{ left: `${(xOf(p.broadcast_date) / W) * 100}%`, top: y2049(p.rating), width: 3.6, height: 3.6, backgroundColor: accentColor }}
+              title={`${p.broadcast_date}${p.episode_number ? ` ${p.episode_number}회` : ""} · 수도권2049 ${formatRating(p.rating)}`}
+            />
           ))}
-        </svg>
-        {/* 최고 시청률·당일 시청률만 그래프 위에 숫자로 상시 표기(나머지 지점은 <title> 툴팁으로만) —
-            SVG 위에 겹치는 절대 위치 오버레이라 위 원 안의 <title> 툴팁 동작에는 영향 없음. */}
-        <div className="pointer-events-none absolute inset-0">
+          {/* 최고 시청률·당일 시청률만 그래프 위에 숫자로 상시 표기(나머지 지점은 위 점의 title
+              툴팁으로만). */}
           {peakPoint && !peakIsToday && (
             <span
               className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[9px] font-bold tabular-nums"

@@ -13,13 +13,32 @@ import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import type { ExecutiveDeckDocument, DeckBarPoint } from "@/lib/audienceReport/deckModel";
 
-function SlideShell({ index, total, accent, children }: { index: number; total: number; accent?: boolean; children: React.ReactNode }) {
+// 사용자 지시(2026-09-02): "PPT 채널 브랜딩이 안 됐다"는 신고 — 재확인 결과 실제 .pptx 파일
+// (exportRenderers.ts)에는 채널색이 정확히 반영돼 있었지만, 사용자가 보는 이 웹 미리보기
+// 페이지(다운로드 전 확인 화면, 참고 스크린샷의 실제 출처)는 고정 인디고(#3A30DF)를 그대로
+// 쓰고 있어 반영되지 않은 것처럼 보였다 — 여기도 deck.themeColor를 accent로 threading한다.
+function isValidHex(v: string | null | undefined): v is string {
+  return !!v && /^#[0-9A-Fa-f]{6}$/.test(v);
+}
+/** accent와 흰색을 섞어 옅은 배경 톤을 만든다(So What? 박스 배경 등). amount 0~1, 1에 가까울수록 흼. */
+function tintWithWhite(hex: string, amount: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const mix = (c: number) => Math.round(c + (255 - c) * amount);
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
+
+function SlideShell({ index, total, accent, brandColor, children }: { index: number; total: number; accent?: boolean; brandColor?: string; children: React.ReactNode }) {
   return (
     <section
       className={`relative mx-auto mb-6 flex min-h-[26rem] w-full flex-col justify-center overflow-hidden rounded-xl border p-8 shadow-sm sm:p-12 ${
         accent ? "border-transparent bg-[#1E293B] text-white" : "border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950"
       }`}
     >
+      {/* 콘텐츠 슬라이드마다 얇은 채널색 브랜드 바(.pptx 파일과 동일한 디자인, 사용자 지시 —
+          "세련되게 디자인"이 웹 미리보기에도 그대로 보이도록). */}
+      {!accent && brandColor && <div className="absolute inset-x-0 top-0 h-1.5" style={{ backgroundColor: brandColor }} />}
       <span className={`absolute right-4 top-4 text-xs ${accent ? "text-slate-400" : "text-neutral-400"}`}>
         {index} / {total}
       </span>
@@ -28,8 +47,12 @@ function SlideShell({ index, total, accent, children }: { index: number; total: 
   );
 }
 
-function ActionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-4 text-balance text-2xl font-bold leading-snug text-[#3A30DF] dark:text-indigo-400 sm:text-3xl">{children}</h2>;
+function ActionTitle({ accent, children }: { accent: string; children: React.ReactNode }) {
+  return (
+    <h2 className="mb-4 text-balance text-2xl font-bold leading-snug sm:text-3xl" style={{ color: accent }}>
+      {children}
+    </h2>
+  );
 }
 
 function Bullets({ items }: { items: string[] }) {
@@ -43,11 +66,13 @@ function Bullets({ items }: { items: string[] }) {
   );
 }
 
-function SoWhat({ text }: { text: string }) {
+function SoWhat({ text, accent }: { text: string; accent: string }) {
   if (!text) return null;
   return (
-    <div className="mt-4 rounded-md bg-indigo-50 px-4 py-2.5 text-sm dark:bg-indigo-950/40">
-      <span className="mr-1.5 font-semibold text-[#3A30DF] dark:text-indigo-300">So What?</span>
+    <div className="mt-4 rounded-md px-4 py-2.5 text-sm" style={{ backgroundColor: tintWithWhite(accent, 0.92) }}>
+      <span className="mr-1.5 font-semibold" style={{ color: accent }}>
+        So What?
+      </span>
       <span className="text-neutral-800 dark:text-neutral-200">{text}</span>
     </div>
   );
@@ -62,10 +87,10 @@ function SlideNote({ text }: { text: string }) {
 
 const CHART_UP = "#059669";
 const CHART_DOWN = "#e11d48";
-const CHART_ACCENT = "#3A30DF";
+const CHART_ACCENT_FALLBACK = "#3A30DF";
 
 /** 값이 있는 막대만 그린다 — 데이터가 아예 없으면 "데이터 부족" 안내로 대체(빈 차트 그리지 않음). */
-function BarChart({ points, diverging, height = 180 }: { points: DeckBarPoint[]; diverging?: boolean; height?: number }) {
+function BarChart({ points, diverging, height = 180, accent = CHART_ACCENT_FALLBACK }: { points: DeckBarPoint[]; diverging?: boolean; height?: number; accent?: string }) {
   const withValues = points.filter((p) => p.value !== null) as { label: string; value: number }[];
   if (withValues.length === 0) return <p className="rounded bg-neutral-50 p-4 text-center text-xs text-neutral-400 dark:bg-neutral-900">이 구간은 표시할 데이터가 부족합니다.</p>;
   const barW = 44;
@@ -83,7 +108,7 @@ function BarChart({ points, diverging, height = 180 }: { points: DeckBarPoint[];
           const up = p.value >= 0;
           const x = gap + i * (barW + gap);
           const y = up ? zeroY - barH : zeroY;
-          const color = diverging ? (up ? CHART_UP : CHART_DOWN) : CHART_ACCENT;
+          const color = diverging ? (up ? CHART_UP : CHART_DOWN) : accent;
           return (
             <g key={i}>
               <rect x={x} y={y} width={barW} height={barH} rx={2} fill={color} />
@@ -101,7 +126,7 @@ function BarChart({ points, diverging, height = 180 }: { points: DeckBarPoint[];
   );
 }
 
-function LineChart({ points, height = 180 }: { points: DeckBarPoint[]; height?: number }) {
+function LineChart({ points, height = 180, accent = CHART_ACCENT_FALLBACK }: { points: DeckBarPoint[]; height?: number; accent?: string }) {
   const withValues = points.filter((p) => p.value !== null) as { label: string; value: number }[];
   if (withValues.length === 0) return <p className="rounded bg-neutral-50 p-4 text-center text-xs text-neutral-400 dark:bg-neutral-900">이 구간은 표시할 데이터가 부족합니다.</p>;
   const stepW = 46;
@@ -117,10 +142,10 @@ function LineChart({ points, height = 180 }: { points: DeckBarPoint[]; height?: 
   return (
     <div className="overflow-x-auto">
       <svg width={w + 20} height={height} className="block">
-        <path d={path} fill="none" stroke={CHART_ACCENT} strokeWidth={2} />
+        <path d={path} fill="none" stroke={accent} strokeWidth={2} />
         {withValues.map((p, i) => (
           <g key={i}>
-            <circle cx={xOf(i)} cy={yOf(p.value)} r={2.5} fill={CHART_ACCENT} />
+            <circle cx={xOf(i)} cy={yOf(p.value)} r={2.5} fill={accent} />
             {i % Math.max(1, Math.floor(withValues.length / 10)) === 0 && (
               <text x={xOf(i)} y={height - 4} textAnchor="middle" fontSize={9} fill="currentColor" className="text-neutral-500 dark:text-neutral-400">
                 {p.label}
@@ -139,6 +164,11 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
   const total = 6 + (d.weekday.available ? 1 : 0) + (d.hourly.available ? 1 : 0);
   let idx = 0;
   const next = () => ++idx;
+  // 사용자 지시(2026-09-02): 채널 로고 색을 포인트 컬러로 — .pptx 파일과 동일한 소스(deck.themeColor).
+  const accent = isValidHex(deck.themeColor) ? deck.themeColor : CHART_ACCENT_FALLBACK;
+  // .pptx 렌더러(exportRenderers.ts)와 동일한 판단: 등락률 막대가 2개 미만이면 거의 빈 차트를
+  // 억지로 그리지 않고 핵심 지표 카드로 그 공간을 채운다(레이아웃 재정비, 사용자 지시).
+  const kpiBarCount = c.kpiDeltaBars.filter((b) => b.value !== null).length;
 
   return (
     <main className="mx-auto max-w-4xl px-4 pb-24 pt-8">
@@ -151,7 +181,12 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
           <a href={pptxHref} className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800">
             PPT 다운로드
           </a>
-          <a href={wordHref} target="_blank" className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300">
+          <a
+            href={wordHref}
+            target="_blank"
+            className="rounded-md border px-3 py-1.5 text-xs font-medium hover:opacity-80"
+            style={{ borderColor: accent, backgroundColor: tintWithWhite(accent, 0.92), color: accent }}
+          >
             ← Word 보기
           </a>
         </div>
@@ -163,9 +198,16 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
         </div>
       )}
 
-      {/* 1. Title */}
+      {/* 1. Title — 채널 색 액센트 바로 브랜딩(.pptx 커버와 동일한 디자인). */}
       <SlideShell index={next()} total={total} accent>
+        <div className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: accent }} />
+        {deck.channelCode && (
+          <div className="mb-3 inline-block w-fit rounded px-2 py-1 text-xs font-bold text-white" style={{ backgroundColor: accent }}>
+            {deck.channelCode}
+          </div>
+        )}
         <div className="text-balance text-2xl font-bold leading-snug sm:text-4xl">{d.title.title}</div>
+        <div className="mt-3 h-0.5 w-16" style={{ backgroundColor: accent }} />
         <div className="mt-3 text-sm text-slate-300 sm:text-base">{d.title.subtitle}</div>
         <div className="mt-8 text-xs text-slate-400">
           {d.title.dateLabel} · {d.title.author}
@@ -173,60 +215,74 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
       </SlideShell>
 
       {/* 2. Executive Summary */}
-      <SlideShell index={next()} total={total}>
-        <ActionTitle>{d.executiveSummary.actionTitle}</ActionTitle>
-        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {d.executiveSummary.kpiHighlights.map((h, i) => (
-            <div key={i} className="rounded-md bg-neutral-50 px-3 py-2 text-xs font-medium text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
-              {h}
+      <SlideShell index={next()} total={total} brandColor={accent}>
+        <ActionTitle accent={accent}>{d.executiveSummary.actionTitle}</ActionTitle>
+        {kpiBarCount >= 2 ? (
+          <>
+            <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {d.executiveSummary.kpiHighlights.map((h, i) => (
+                <div key={i} className="rounded-md bg-neutral-50 px-3 py-2 text-xs font-medium text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+                  {h}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <div className="mb-2 text-xs text-neutral-500">5대 지표 등락률(전기간 대비, %)</div>
-        <BarChart points={c.kpiDeltaBars} diverging height={150} />
+            <div className="mb-2 text-xs text-neutral-500">5대 지표 등락률(전기간 대비, %)</div>
+            <BarChart points={c.kpiDeltaBars} diverging height={150} />
+          </>
+        ) : (
+          // 지표 등락 막대가 1개뿐이라 거의 빈 차트가 되던 문제(사용자 지시) — 핵심 지표를 채널색
+          // 강조 바가 붙은 카드로 세로 나열해 그 공간을 대신 채운다(.pptx 렌더러와 동일한 판단).
+          <div className="mb-4 space-y-2">
+            {d.executiveSummary.kpiHighlights.map((h, i) => (
+              <div key={i} className="rounded-md border-l-4 bg-neutral-50 px-3 py-2.5 text-sm font-medium text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300" style={{ borderLeftColor: accent }}>
+                {h}
+              </div>
+            ))}
+          </div>
+        )}
         <Bullets items={d.executiveSummary.verdict} />
         <SlideNote text={d.executiveSummary.note} />
       </SlideShell>
 
       {/* 3. Trend */}
-      <SlideShell index={next()} total={total}>
-        <ActionTitle>{d.trend.actionTitle}</ActionTitle>
-        <LineChart points={c.trendPoints} height={170} />
+      <SlideShell index={next()} total={total} brandColor={accent}>
+        <ActionTitle accent={accent}>{d.trend.actionTitle}</ActionTitle>
+        <LineChart points={c.trendPoints} height={170} accent={accent} />
         <Bullets items={d.trend.bullets} />
-        <SoWhat text={d.trend.soWhat} />
+        <SoWhat text={d.trend.soWhat} accent={accent} />
         <SlideNote text={d.trend.note} />
       </SlideShell>
 
       {/* 4(신규). 주중 vs 주말 · 요일별 */}
       {d.weekday.available && (
-        <SlideShell index={next()} total={total}>
-          <ActionTitle>{d.weekday.actionTitle}</ActionTitle>
-          <BarChart points={c.weekdayBars} height={200} />
+        <SlideShell index={next()} total={total} brandColor={accent}>
+          <ActionTitle accent={accent}>{d.weekday.actionTitle}</ActionTitle>
+          <BarChart points={c.weekdayBars} height={200} accent={accent} />
           <p className="mt-3 text-center text-sm text-neutral-600 dark:text-neutral-300">{d.weekday.caption}</p>
         </SlideShell>
       )}
 
       {/* 5(신규). 시간대별 분석 */}
       {d.hourly.available && (
-        <SlideShell index={next()} total={total}>
-          <ActionTitle>{d.hourly.actionTitle}</ActionTitle>
-          <BarChart points={c.hourlyBars} height={200} />
+        <SlideShell index={next()} total={total} brandColor={accent}>
+          <ActionTitle accent={accent}>{d.hourly.actionTitle}</ActionTitle>
+          <BarChart points={c.hourlyBars} height={200} accent={accent} />
           <p className="mt-3 text-center text-sm text-neutral-600 dark:text-neutral-300">{d.hourly.caption}</p>
         </SlideShell>
       )}
 
       {/* 6. Demographic / Positioning */}
-      <SlideShell index={next()} total={total}>
-        <ActionTitle>{d.demographic.actionTitle}</ActionTitle>
-        <BarChart points={c.demographicBars} height={170} />
+      <SlideShell index={next()} total={total} brandColor={accent}>
+        <ActionTitle accent={accent}>{d.demographic.actionTitle}</ActionTitle>
+        <BarChart points={c.demographicBars} height={170} accent={accent} />
         <Bullets items={d.demographic.bullets} />
-        <SoWhat text={d.demographic.soWhat} />
+        <SoWhat text={d.demographic.soWhat} accent={accent} />
         <SlideNote text={d.demographic.note} />
       </SlideShell>
 
-      {/* 7. Killer Content & Timeslot */}
-      <SlideShell index={next()} total={total}>
-        <ActionTitle>{d.content.actionTitle}</ActionTitle>
+      {/* 7. Killer Content & Timeslot — 상승/하락은 채널색이 아니라 의미 색(초록/빨강) 유지. */}
+      <SlideShell index={next()} total={total} brandColor={accent}>
+        <ActionTitle accent={accent}>{d.content.actionTitle}</ActionTitle>
         <div className="mb-2 text-xs text-neutral-500">프로그램별 등락(성장/약세)</div>
         <BarChart points={c.programBars} diverging height={170} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -239,20 +295,22 @@ function DeckBody({ deck, wordHref, pptxHref }: { deck: ExecutiveDeckDocument; w
             <Bullets items={d.content.bottomBullets} />
           </div>
         </div>
-        <SoWhat text={d.content.soWhat} />
+        <SoWhat text={d.content.soWhat} accent={accent} />
         <SlideNote text={d.content.note} />
       </SlideShell>
 
-      {/* 8. Strategy — Stop / Keep / Start */}
-      <SlideShell index={next()} total={total}>
-        <ActionTitle>{d.strategy.actionTitle}</ActionTitle>
+      {/* 8. Strategy — Stop / Keep / Start(KEEP만 채널색, 나머지는 의미 색 유지). */}
+      <SlideShell index={next()} total={total} brandColor={accent}>
+        <ActionTitle accent={accent}>{d.strategy.actionTitle}</ActionTitle>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <div className="mb-1.5 rounded bg-rose-600 px-2 py-1 text-center text-xs font-bold text-white">STOP</div>
             <Bullets items={d.strategy.stop} />
           </div>
           <div>
-            <div className="mb-1.5 rounded bg-slate-600 px-2 py-1 text-center text-xs font-bold text-white">KEEP</div>
+            <div className="mb-1.5 rounded px-2 py-1 text-center text-xs font-bold text-white" style={{ backgroundColor: accent }}>
+              KEEP
+            </div>
             <Bullets items={d.strategy.keep} />
           </div>
           <div>
