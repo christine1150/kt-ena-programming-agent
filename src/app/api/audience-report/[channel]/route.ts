@@ -2,15 +2,12 @@
 // (/api/report/channel)과 완전히 분리(1·2페이지 형식을 따르지 않는다는 사용자 지시 그대로) —
 // 이 라우트는 audienceReport/reportBuilder.ts만 호출한다.
 //
-// 쿼리 파라미터(설계서 §06 4개 모드에 그대로 대응):
-// - date                                          → MODE A(하루)
-// - dateFrom + dateTo                             → MODE B(시작~끝)
-// - dateFrom + dateTo + compareFrom + compareTo   → MODE C(기간A vs 기간B)
-// - preset(+customFrom/customTo)                  → MODE D(누적·트레일링·주기비교)
+// 쿼리 파라미터 해석은 parseRequest.ts에 단일화돼 있다(2026-09-01, N절 Phase 2a) — JSON·Word·
+// PPT 세 라우트가 같은 규칙을 각자 복사해 갖다가 한쪽만 고쳐져 갈라지는 것을 막기 위함.
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/adminAuth";
-import { buildAudienceReport, type AudienceReportRequest } from "@/lib/audienceReport/reportBuilder";
-import type { PeriodPreset } from "@/lib/audienceReport/periodPresets";
+import { buildAudienceReport } from "@/lib/audienceReport/reportBuilder";
+import { parseAudienceReportRequest, AUDIENCE_REPORT_PARAM_ERROR } from "@/lib/audienceReport/parseRequest";
 
 export async function GET(request: Request, { params }: { params: Promise<{ channel: string }> }) {
   const session = await getCurrentSession();
@@ -19,29 +16,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ chan
   }
 
   const { channel } = await params;
-  const { searchParams } = new URL(request.url);
-  const date = searchParams.get("date");
-  const dateFrom = searchParams.get("dateFrom");
-  const dateTo = searchParams.get("dateTo");
-  const compareFrom = searchParams.get("compareFrom");
-  const compareTo = searchParams.get("compareTo");
-  const preset = searchParams.get("preset");
-  const customFrom = searchParams.get("customFrom") ?? undefined;
-  const customTo = searchParams.get("customTo") ?? undefined;
-
-  let reportRequest: AudienceReportRequest | null = null;
-  if (preset) {
-    reportRequest = { mode: "cumulative", latest: dateTo ?? date ?? new Date().toISOString().slice(0, 10), preset: preset as PeriodPreset, customFrom, customTo };
-  } else if (dateFrom && dateTo && compareFrom && compareTo) {
-    reportRequest = { mode: "compare", dateFrom, dateTo, priorDateFrom: compareFrom, priorDateTo: compareTo };
-  } else if (dateFrom && dateTo) {
-    reportRequest = { mode: "range", dateFrom, dateTo };
-  } else if (date) {
-    reportRequest = { mode: "single_day", date };
-  }
-
+  const reportRequest = parseAudienceReportRequest(new URL(request.url).searchParams);
   if (!reportRequest) {
-    return NextResponse.json({ ok: false, message: "date, 또는 dateFrom/dateTo, 또는 preset 파라미터가 필요합니다." }, { status: 400 });
+    return NextResponse.json({ ok: false, message: AUDIENCE_REPORT_PARAM_ERROR }, { status: 400 });
   }
 
   try {

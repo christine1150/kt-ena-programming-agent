@@ -118,6 +118,30 @@ export default function AudienceReportPage() {
           </div>
         )}
         <p className="mt-2 text-[11px] text-neutral-400">시청률은 소수점 {digits}자리까지 표시합니다.</p>
+        {/* N절 Phase 2a(2026-09-01) — 구 시스템에만 있던 Word/PPT 내보내기를 이 시스템으로 이식.
+            현재 화면과 정확히 같은 기간 파라미터를 그대로 붙여, 화면과 문서가 다른 기간을
+            보여주는 사고를 원천 차단한다(파라미터 해석도 parseRequest.ts로 단일화됨). */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a
+            href={`/api/audience-report/${report.channelCode}/docx?${searchParams.toString()}`}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+          >
+            📄 Word 다운로드
+          </a>
+          <a
+            href={`/api/audience-report/${report.channelCode}/pptx?${searchParams.toString()}`}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+          >
+            📊 PPT 다운로드
+          </a>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+          >
+            🖨 PDF로 저장
+          </button>
+        </div>
       </header>
 
       {/* Phase 10(§12) — 이미 검증된 사실만 인용해 수치 대조를 통과한 문단만 보여준다(구
