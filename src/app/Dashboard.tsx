@@ -345,6 +345,10 @@ interface MonthlyDriver {
   slotLift: number | null; // 전월 동시간대 평균 대비
   primeAirCount: number;
   primeDow: number | null;
+  // 사용자 지시(2026-09-01, 4대 복합 원인 태깅): 프라임 성과 자체의 등락(편성 횟수와 무관) —
+  // "본방 화제성"과 "재방 물량 확대"를 구분하는 데 쓴다.
+  primeRatingDelta: number | null;
+  priorPrimeAirCount: number;
 }
 interface MonthlyPrimeMover {
   programName: string;
@@ -1059,10 +1063,20 @@ function monthlyAirCountLabel(airCount: number, priorAirCount: number): string {
 // 상승 견인 / 하락 요인 한 칸 — 프로그램명 + 채널 평균 기여도(%p)를 윗줄에, 실제 이유(편성량/
 // 성과)와 편성 횟수·전월 동시간대 대비를 아랫줄에 둔다. 기여도 부호는 칸 성격(견인/요인)과
 // 항상 일치하므로(양수만 상승 견인, 음수만 하락 요인으로 뽑힘) 색을 부호에 그대로 맞춘다.
+// 4개 복합 원인 태그의 색 구분 — "편성 의존형 방어"는 숫자는 양수(상승 견인 칸)여도 콘텐츠
+// 자체의 경쟁력 신호는 아니라는 걸 색으로도 드러낸다(초록이 아니라 주의를 주는 호박색).
+const CAUSE_TAG_COLOR: Record<string, string> = {
+  "콘텐츠 경쟁력 견인": "#16a34a",
+  "편성 시너지": "#2563eb",
+  "편성 의존형 방어": "#b45309",
+  "핵심 콘텐츠 이탈/부진": "#dc2626",
+};
+
 function MonthlyDriverCell({ driver, channelCode }: { driver: MonthlyDriver | null; channelCode: string }) {
   if (!driver) return <span className="text-zinc-300">—</span>;
   const up = driver.contributionDelta >= 0;
   const cause = monthlyDriverCauseLabel(driver);
+  const causeColor = CAUSE_TAG_COLOR[cause];
   // "프라임 프로그램"이라고 표기하려면 그 프로그램 편성의 상당 부분이 실제로 프라임에 있어야
   // 한다 — 하루 종일 재방되는 프로그램이 프라임에 두어 번 걸쳤다고 프라임 편성으로 부르면
   // 오해를 준다(실측: "유부녀킬러"는 108회 중 프라임 3회, 2.8%). 편성의 20% 이상이 프라임일
@@ -1084,7 +1098,11 @@ function MonthlyDriverCell({ driver, channelCode }: { driver: MonthlyDriver | nu
         </span>
       </span>
       <span className="text-[10px] text-zinc-400">
-        {cause && <span className="mr-1 text-zinc-500">{cause}</span>}
+        {cause && (
+          <span className="mr-1 rounded px-1 py-px font-medium" style={{ color: causeColor, backgroundColor: `${causeColor}14` }}>
+            {cause}
+          </span>
+        )}
         {monthlyAirCountLabel(driver.airCount, driver.priorAirCount)}
         {driver.slotLift !== null && (
           <span className="ml-1">
@@ -1097,16 +1115,33 @@ function MonthlyDriverCell({ driver, channelCode }: { driver: MonthlyDriver | nu
   );
 }
 
+// 사용자 지시(2026-09-01, "Root Cause Tagging" 재설계): 단순 "편성 확대/축소" 단일 태그를
+// 금지하고, 편성량 효과(volumeEffect)와 성과 효과(performanceEffect)의 항등 분해에 프라임(20~24시)
+// 자체의 등락(primeRatingDelta — 편성 횟수와 무관하게 "본방 화제성"만 따로 뗀 값)을 결합해
+// 4개 복합 원인으로 판정한다. 새 수치를 계산하지 않고 이미 SQL이 항등 분해해 준 값들의 조합만
+// 본다 — Health Score/Turning Point 때와 같은 "합리적 v1 휴리스틱, 추후 조정 가능" 원칙.
+//   · 콘텐츠 경쟁력 견인: 상승이고, 편성량보다 성과(프라임 포함) 효과가 더 크게 기여 — 편성
+//     횟수와 무관하게 작품 자체가 좋아져서 오른 경우.
+//   · 편성 시너지: 상승이고, 편성량 효과가 더 크게 기여하면서 프라임 성과도 함께 올랐다 —
+//     본방 화제성이 재방 물량 확대로 이어져 총 기여도가 동반 상승.
+//   · 편성 의존형 방어: 상승이지만 프라임은 정체·하락인데 편성량(주로 재방) 확대만으로 총합을
+//     방어한 경우 — 숫자는 양수여도 콘텐츠 자체의 경쟁력 신호는 아니다.
+//   · 핵심 콘텐츠 이탈/부진: 하락 — 종영으로 대체 콘텐츠가 없거나(편성 0회), 신규/기존 편성이
+//     전월 성과에 못 미쳐 하락을 주도.
 function monthlyDriverCauseLabel(d: MonthlyDriver): string {
   const volume = Math.abs(d.volumeEffect);
   const performance = Math.abs(d.performanceEffect);
   if (volume === 0 && performance === 0) return "";
-  if (volume >= performance) {
-    if (d.priorAirCount === 0) return "신규 편성";
-    if (d.airCount === 0) return "편성 종료";
-    return d.airCount > d.priorAirCount ? "편성 확대" : "편성 축소";
-  }
-  return d.performanceEffect >= 0 ? "성과 개선" : "성과 부진";
+
+  if (d.contributionDelta < 0) return "핵심 콘텐츠 이탈/부진";
+
+  // 프라임 표본이 충분할 때만(이번 달·전월 중 많이 방영된 쪽 기준 2회 이상) 프라임 신호를 신뢰한다.
+  const primeSampleOk = Math.max(d.primeAirCount, d.priorPrimeAirCount) >= 2;
+  const primeRising = primeSampleOk && d.primeRatingDelta !== null && d.primeRatingDelta > 0;
+  const volumeDominant = volume >= performance;
+
+  if (!volumeDominant) return "콘텐츠 경쟁력 견인";
+  return primeRising ? "편성 시너지" : "편성 의존형 방어";
 }
 
 // 인사이트 문장 — 새 수치를 만들지 않고 위 표에 이미 있는 값(전월 대비 순위·시청률 등락)만

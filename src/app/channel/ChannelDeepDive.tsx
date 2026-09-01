@@ -375,6 +375,28 @@ interface PeriodDemographicRow {
   prior_avg_rating: number | null;
   delta_pct: number | null;
 }
+// 2026-09-01 — WHO IS WATCHING? 기간 모드: 연령대×요일×시간대(8구간) 이번 기간 vs 전 기간.
+interface DemographicShiftBlockRow {
+  demographic_label: string;
+  dow: number;
+  dow_label: string;
+  hour_block: number;
+  period_avg_rating: number | null;
+  prior_avg_rating: number | null;
+  period_sample_count: number;
+  delta: number | null;
+}
+// 2026-09-01 — WHO IS WATCHING? 기간 모드: 어떤 콘텐츠가 그 연령대 이동을 이끌었는지
+// (get_channel_period_demographic_program_highlights, Phase 12에서 이미 만든 함수 재사용).
+interface PeriodDemographicProgramHighlightRow {
+  program_name: string;
+  demographic_label: string;
+  metric: string;
+  period_value: number | null;
+  prior_value: number | null;
+  period_days: number;
+  delta_pct: number | null;
+}
 interface PeriodProgramMoverRow {
   canonical_name: string;
   period_avg_rating: number | null;
@@ -482,6 +504,9 @@ interface ChannelData {
   // 2026-09-01 — COMPARED WITH? 기간 모드에서 우리 채널의 순위(경쟁채널과 같은 min(rank) 방식).
   // 단일 일자 모드는 조회하지 않아 항상 null(narrativeSignal.today_rank를 대신 씀).
   ourPeriodBestRank: number | null;
+  // 2026-09-01 — WHO IS WATCHING? 기간 모드(WoW/DoD/MoM/YoY 등)의 "왜 이동했는지" 근거.
+  demographicShiftBlocks: DemographicShiftBlockRow[];
+  periodDemographicProgramHighlights: PeriodDemographicProgramHighlightRow[];
   // 사용자 지시(2026-08-25): 오늘의 브리핑 첫 문장(ENA 채널 페이지·단일 일자 조회일 때만 채워짐).
   enaOriginalDaily: EnaOriginalHighlightItem[];
   // 사용자 지시(2026-08-26): ENA가 아닌 채널(재방을 트는 채널)의 오늘의 브리핑 첫 문장 —
@@ -1335,7 +1360,14 @@ function buildInternalDemographicNarrative(
   whoIsWatchingDemographics: NarrativeDemographic[] | null,
   periodDemographics: PeriodDemographicRow[],
   fmtR: (v: number | null) => string,
-  refLabel: string
+  refLabel: string,
+  // 사용자 지시(2026-09-01): "기간대별 분석이면 WoW DoD MoM YoY 등이면 분석 기간 동안 연령대가
+  // 어떻게 이동했는지... 어떤 요일 어떤 시간대, 어떤 컨텐츠 때문에 그런 이동이 생겼는지까지
+  // 분석" — ④에서 가장 크게 움직인 연령대를 찾은 뒤, 그 연령대만 놓고 요일×시간대(어디서)와
+  // 프로그램(무엇 때문에)을 교차 조회해 원인까지 짚는다. showComparisonView(기간 모드)일 때만
+  // 채워지는 두 신규 데이터셋(둘 다 새 계산 없이 SQL이 이미 낸 값만 고름).
+  demographicShiftBlocks: DemographicShiftBlockRow[] = [],
+  periodDemographicProgramHighlights: PeriodDemographicProgramHighlightRow[] = []
 ): string {
   const items: WhoIsWatchingItem[] = showComparisonView
     ? periodDemographics.map((d) => ({ label: d.target_label, value: d.period_avg_rating, deltaPct: d.delta_pct }))
@@ -1396,6 +1428,28 @@ function buildInternalDemographicNarrative(
     sentences.push(`${baselineWord} 대비로는 ${text}로 가장 뚜렷하게 움직여, 이 연령대의 시청 비중이 평소와 달랐습니다.`);
   } else {
     sentences.push(`${baselineWord}와 비교해 연령대별 구성에 뚜렷한 변화는 없었습니다.`);
+  }
+
+  // ⑤ 가장 크게 움직인 연령대(최대 2개)만 놓고, "어느 요일·시간대에서" + "어떤 콘텐츠 때문에"
+  // 이동했는지 교차 확인 — 기간 모드(showComparisonView)에서만, 데이터가 있을 때만 짚는다.
+  if (showComparisonView && movedNotable.length > 0) {
+    for (const n of movedNotable.slice(0, 2)) {
+      const shortLabel = shortDemoLabel(n.label);
+      const blocks = demographicShiftBlocks.filter((b) => b.demographic_label === n.label && b.delta !== null);
+      const topBlock = blocks.length > 0 ? [...blocks].sort((a, b) => Math.abs(b.delta!) - Math.abs(a.delta!))[0] : null;
+      const highlights = periodDemographicProgramHighlights.filter((h) => h.demographic_label === n.label && h.metric === "rating" && h.delta_pct !== null);
+      const topProgram = highlights.length > 0 ? [...highlights].sort((a, b) => Math.abs(b.delta_pct!) - Math.abs(a.delta_pct!))[0] : null;
+
+      if (!topBlock && !topProgram) continue;
+      const parts: string[] = [];
+      if (topBlock) {
+        parts.push(`주로 ${topBlock.dow_label}요일 ${topBlock.hour_block}시대에서 가장 뚜렷했고(${topBlock.delta! >= 0 ? "▲" : "▼"}${fmtR(Math.abs(topBlock.delta!))})`);
+      }
+      if (topProgram) {
+        parts.push(`'${topProgram.program_name}'의 영향이 컸던 것으로 보입니다(${topProgram.delta_pct! >= 0 ? "▲" : "▼"}${Math.abs(topProgram.delta_pct!).toFixed(0)}%)`);
+      }
+      sentences.push(`${shortLabel}${josaEunNeun(shortLabel)} ${parts.join(", ")}.`);
+    }
   }
 
   return sentences.join(" ");
@@ -4998,7 +5052,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             );
           })()}
           <p className="mt-3 text-base leading-relaxed text-zinc-700">
-            {buildInternalDemographicNarrative(showComparisonView, data.whoIsWatchingDemographics, data.periodDemographics, fmtR, referenceLabel)}
+            {buildInternalDemographicNarrative(
+              showComparisonView,
+              data.whoIsWatchingDemographics,
+              data.periodDemographics,
+              fmtR,
+              referenceLabel,
+              data.demographicShiftBlocks,
+              data.periodDemographicProgramHighlights
+            )}
           </p>
           {!showComparisonView &&
             buildDemographicHighlightsParagraph(data.demographicHighlights) && (

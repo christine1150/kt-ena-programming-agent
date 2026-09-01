@@ -198,6 +198,12 @@ interface MonthlyDriver {
   slotLift: number | null;
   primeAirCount: number;
   primeDow: number | null;
+  // 사용자 지시(2026-09-01, 4대 복합 원인 태깅 — "콘텐츠 경쟁력 견인/편성 시너지/편성 의존형
+  // 방어/핵심 콘텐츠 이탈·부진"): 프라임(20~24시) 성과 자체의 등락(편성 횟수와 무관)이 있어야
+  // "본방 화제성"과 "재방 물량"을 구분할 수 있다 — priorPrimeAirCount도 함께 둬야 이번 달 프라임
+  // 편성이 0회(종영)여도 전월 프라임 표본으로 신뢰도를 판단할 수 있다.
+  primeRatingDelta: number | null;
+  priorPrimeAirCount: number;
 }
 // 프라임(20~24시) 주요 등락 — 채널 전체 기여도 순위와 별개로, 프라임 시간대에서 크게 움직인
 // 오리지널·주요 프로그램을 요일과 함께 따로 짚어주기 위한 항목(사용자 지시 2026-09-01).
@@ -1379,6 +1385,8 @@ export async function GET(request: Request) {
           slotLift: m.slot_lift,
           primeAirCount: m.period_prime_airings ?? 0,
           primeDow: m.main_prime_dow,
+          primeRatingDelta: m.prime_rating_delta,
+          priorPrimeAirCount: m.prior_prime_airings ?? 0,
         });
 
         // 상승 견인 / 하락 요인 = 채널 월간 평균 기여도 변화 1위(양/음 각각).

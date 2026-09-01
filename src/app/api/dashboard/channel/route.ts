@@ -286,6 +286,8 @@ export async function GET(request: Request) {
     competitorPeriodTopProgramsPriorRes,
     ytdAvgRes,
     ourBestRankRes,
+    demographicShiftBlocksRes,
+    periodDemographicProgramHighlightsRes,
   ] = await Promise.all([
     // WHAT HAPPENED? — 채널 단위 랭킹 데이터로 DoD/WoW/MoM/QoQ/YoY/YTD
     supabase.rpc("get_rating_trend_summary", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: asOfDate }),
@@ -467,6 +469,37 @@ export async function GET(request: Request) {
     // 걸렸다가 수정).
     isRangeMode
       ? supabase.rpc("get_channel_period_best_rank", { p_channel_code: channel.code, p_target_label: resolveRankSheetTargetLabel(channel.primary_target), p_date_from: dateFrom, p_date_to: dateTo })
+      : Promise.resolve({ data: [] as unknown[] }),
+    // 사용자 지시(2026-09-01): "WHO IS WATCHING?... 기간대별 분석이면... 분석 기간 동안 연령대가
+    // 어떻게 이동했는지... 어떤 요일 어떤 시간대, 어떤 컨텐츠 때문에 그런 이동이 생겼는지까지
+    // 분석" — 화면의 showComparisonView(isComparisonPreset || isRangeMode)와 정확히 같은 조건으로
+    // 계산해야 DoD처럼 "이번 기간"이 하루뿐이라도(dateFrom===dateTo, isRangeMode는 false지만
+    // hasPriorRange는 true) 빠지지 않는다. 새 함수(연령대×요일×시간대, 20260901070000)로 "어느
+    // 요일·시간대에서" 이동했는지를 더한다.
+    isRangeMode || hasPriorRange
+      ? supabase.rpc("get_channel_demographic_dow_hourblock_shift", {
+          p_channel_code: channel.code,
+          p_demographic_labels: fullDemographicTargets,
+          p_date_from: dateFrom,
+          p_date_to: dateTo,
+          p_prior_date_from: effectivePriorDateFrom,
+          p_prior_date_to: effectivePriorDateTo,
+        })
+      : Promise.resolve({ data: [] as unknown[] }),
+    // "어떤 컨텐츠 때문에" — 이미 있는 함수(Phase 12, 2026-08-28)를 기간 모드에서도 그대로
+    // 재사용한다(단일 일자 전용 게이트(!isRangeMode)가 걸려 있던 아래 demographicHighlightsRes와
+    // 별개 — 새 계산 없이 같은 RPC를 기간 모드 파라미터로 한 번 더 부른다).
+    (isRangeMode || hasPriorRange) && channel.code !== "SKYUHD"
+      ? supabase.rpc("get_channel_period_demographic_program_highlights", {
+          p_channel_code: channel.code,
+          p_kpi_target_label: programTargetLabel,
+          p_demographic_labels: fullDemographicTargets,
+          p_date_from: dateFrom,
+          p_date_to: dateTo,
+          p_prior_date_from: effectivePriorDateFrom,
+          p_prior_date_to: effectivePriorDateTo,
+          p_top_n_programs: 8,
+        })
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
 
@@ -786,6 +819,9 @@ export async function GET(request: Request) {
     // 방식). 단일 일자 모드는 위 rootCauseAlert 등과 같이 이미 narrativeSignal.today_rank가 있어
     // 이 조회를 하지 않으므로(isRangeMode 가드) 그때는 항상 null.
     ourPeriodBestRank: (ourBestRankRes.data as { best_rank: number | null }[] | null)?.[0]?.best_rank ?? null,
+    // 2026-09-01 — WHO IS WATCHING? 기간 모드의 "왜(요일·시간대·콘텐츠) 이동했는지" 근거.
+    demographicShiftBlocks: demographicShiftBlocksRes.data ?? [],
+    periodDemographicProgramHighlights: periodDemographicProgramHighlightsRes.data ?? [],
     // Phase B(2026-08-27) — /api/report/channel이 Quarterly/Annual Report의 주별/월별 추이·
     // 분기별 스냅샷 SQL을 직접 부를 때 타깃 동의어 해석을 다시 하지 않도록, 이미 위에서 계산된
     // 최종 타깃 라벨을 그대로 노출한다(새 계산 없음).
