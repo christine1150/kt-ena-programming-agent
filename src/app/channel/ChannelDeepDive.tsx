@@ -5381,9 +5381,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           ) : (
             <>
               <p className="mb-3 text-sm text-zinc-400">
-                Fit Score 하위지표 — Target Performance(시청률·슬롯·데이파트) / Target Affinity(연령대 적합도, 채널
-                단위) / Audience Engagement(Reach·시청시간비율). 전부 최근 12주 자사 채널 내 percentile(0~100),
-                채널에 도움이 되는 순으로 정렬했습니다.
+                Fit Score 하위지표 — Target Performance(시청률·슬롯·데이파트) / Target Affinity(핵심 연령대
+                구성비, 프로그램 단위) / Audience Engagement(Reach·시청시간비율). 전부 최근 12주 자사 채널 내
+                percentile(0~100), 채널에 도움이 되는 순으로 정렬했습니다.
               </p>
               {fitScoreLoading ? (
                 <p className="text-sm text-zinc-400">불러오는 중...</p>
@@ -5446,12 +5446,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div>
                 <p className="mb-2 text-xs font-medium text-zinc-500">타깃 실적 × 시청 몰입도</p>
-                {/* 실측 버그 수정(2026-08-27): 처음엔 Y축을 Target Affinity로 넣었는데, Fit Score
-                    설계상 Target Affinity/Competitive Opportunity는 "채널 단위로 계산해 그 채널의
-                    모든 프로그램에 동일 적용"(fit_score_mart.sql 설계 주석)되는 값이라 한 채널
-                    페이지 안에서는 항상 똑같은 값(실측: ENA Drama 12개 프로그램 전부 0.00)이 찍혀
-                    산점도가 가로 일직선이 되고 사분면이 무의미해졌다. 프로그램마다 실제로 차이 나는
-                    Audience Engagement(Reach·시청시간비율 기반, 실측 0~91 스프레드 확인)로 교체. */}
+                {/* 실측 버그 수정(2026-08-27): 처음엔 Y축을 Target Affinity로 넣었는데, 당시
+                    refresh_fit_score_mart()가 Target Affinity를 채널 하루 전체 집계 기준으로 채널당
+                    1번만 계산해 그 채널의 모든 프로그램에 동일 적용하고 있어(실측: ENA Drama 12개
+                    프로그램 전부 0.00) 산점도가 가로 일직선이 되고 사분면이 무의미해졌다 — 프로그램
+                    마다 실제로 차이 나는 Audience Engagement(Reach·시청시간비율 기반)로 교체했다.
+                    2026-09-02: Target Affinity 계산 자체를 프로그램 단위로 재설계해 이제는 프로그램
+                    마다 값이 다르지만(위 CONTENT FITS? 표 확인), Y축 재검토는 사용자 지시가 없어
+                    Audience Engagement를 그대로 유지한다. */}
                 <ScatterQuadrantChart
                   accentColor={accentColor}
                   xLabel="Target Performance(percentile)"
