@@ -110,6 +110,7 @@ export async function GET(request: Request) {
       hourlyProgramTitles: [],
       competitorInsightReport: [],
       competitorProgramOverlap: [],
+      stableSlotPatterns: [],
       competitorTopPrograms: [],
       daypartOpportunity: [],
       hourBlockOpportunity: [],
@@ -584,6 +585,19 @@ export async function GET(request: Request) {
     ...row,
     our_household_rating: householdOverlapTargetLabel ? (householdRatingByOurSlot.get(`${row.our_start_time}__${row.our_program_name}`) ?? null) : null,
   }));
+
+  // 사용자 지시(2026-09-02): "3주 이상 같은 요일 또는 같은 시간대에 동일한 패턴이 보인다면
+  // 프로그램명과 함께 분석해 2페이지 내에서 언급" — 대상은 자사 채널만(사용자 확인). 단일 일자
+  // 조회일 때만(심층 분석 섹션이 단일 일자 전용이라 같이 묶음).
+  const { data: stableSlotPatternsRaw } = !isRangeMode
+    ? await supabase.rpc("get_channel_stable_slot_patterns", {
+        p_channel_code: channel.code,
+        p_program_target_label: programTargetLabel,
+        p_as_of_date: dateTo,
+        p_lookback_weeks: 8,
+        p_min_consecutive_weeks: 3,
+      })
+    : { data: [] };
   const topProgramsData = topProgramsCompetitorRes.data;
   const rootCauseAlert = rootCauseRes.data?.[0] ?? null;
   const opportunityAlert = opportunityAlertRes.data?.[0] ?? null;
@@ -826,6 +840,7 @@ export async function GET(request: Request) {
     competitorInsightReport: competitorInsightReport ?? [],
     marketYtdCompetitorSnapshot,
     competitorProgramOverlap: overlapData ?? [],
+    stableSlotPatterns: stableSlotPatternsRaw ?? [],
     competitorTopPrograms: topProgramsData ?? [],
     daypartOpportunity: daypartOpportunity ?? [],
     hourBlockOpportunity: hourBlockOpportunity ?? [],

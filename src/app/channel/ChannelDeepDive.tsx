@@ -97,6 +97,17 @@ interface CompetitorOverlapRow {
   // 시청률도 괄호로 병기 — 그 외 채널은 항상 null(route.ts가 2049 목표 채널에서만 채움).
   our_household_rating: number | null;
 }
+// 사용자 지시(2026-09-02): "3주 이상 같은 요일 또는 같은 시간대에 동일한 패턴이 보인다면
+// 프로그램명과 함께 분석" — 자사 채널만(get_channel_stable_slot_patterns).
+interface StableSlotPatternRow {
+  dow: number;
+  dow_label: string;
+  hour_of_day: number;
+  canonical_name: string;
+  consecutive_weeks: number;
+  latest_date: string;
+  latest_rating: number | null;
+}
 interface CompetitorTopProgramRow {
   competitor_name: string;
   program_name: string;
@@ -499,6 +510,7 @@ interface ChannelData {
   // UHD 경쟁채널 5개(총 6개) 사이 위치를 대신 보여준다(skyUHD 채널에서만 값이 채워짐).
   marketYtdCompetitorSnapshot: { channel_name: string; rank: number; rating: number; is_self: boolean; date_from: string; date_to: string }[];
   competitorProgramOverlap: CompetitorOverlapRow[];
+  stableSlotPatterns: StableSlotPatternRow[];
   competitorTopPrograms: CompetitorTopProgramRow[];
   daypartOpportunity: DaypartOpportunityRow[];
   hourBlockOpportunity: HourBlockOpportunityRow[];
@@ -3249,6 +3261,36 @@ function DemographicHeatStrip({ demographics, accentColor, fmtR }: { demographic
   );
 }
 
+// ③편성 안정성 — 최근 8주 동안 같은 요일·같은 시각에 같은 프로그램(본방)이 3주 이상 연속
+// 편성된 패턴(사용자 지시 2026-09-02, 자사 채널만). 거의 매일 방송되는 스트립 프로그램은
+// 요일마다 걸려 같은 이름이 여러 슬롯에 반복 등장할 수 있어(예: 평일 매일 방송) 프로그램당
+// 가장 긴 스트릭 1건만 남기고, 그 안에서 상위 4건만 보여준다(정보 과다 방지).
+function StableSlotPatternList({ rows, accentColor }: { rows: StableSlotPatternRow[]; accentColor: string }) {
+  const byProgram = new Map<string, StableSlotPatternRow>();
+  for (const r of rows) {
+    const existing = byProgram.get(r.canonical_name);
+    if (!existing || r.consecutive_weeks > existing.consecutive_weeks) byProgram.set(r.canonical_name, r);
+  }
+  const top = [...byProgram.values()].sort((a, b) => b.consecutive_weeks - a.consecutive_weeks).slice(0, 4);
+  if (top.length === 0) {
+    return <p className="text-sm text-zinc-400">최근 8주 안에 3주 이상 연속으로 같은 요일·시간대에 편성된 프로그램이 없습니다.</p>;
+  }
+  return (
+    <ul className="space-y-1.5">
+      {top.map((r) => (
+        <li key={r.canonical_name} className="flex flex-wrap items-baseline gap-1.5 text-[13px]">
+          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}>
+            {r.dow_label}요일 {r.hour_of_day}시
+          </span>
+          <b className="font-semibold text-zinc-700">{r.canonical_name}</b>
+          <span className="text-zinc-500">{r.consecutive_weeks}주 연속 편성</span>
+          <span className="text-[11px] text-zinc-400">(최근 {r.latest_date}, {r.latest_rating !== null ? r.latest_rating.toFixed(3) : "—"})</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function ChannelDeepDive({ code }: { code: string }) {
   const [data, setData] = useState<ChannelData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -4266,6 +4308,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <p className="mb-3 text-xs text-zinc-400">연령·성별 12개 구간의 {referenceLabel} 시청률입니다 — 색이 진할수록 그 구간의 시청 집중도가 높습니다.</p>
                 <DemographicHeatStrip demographics={data.whoIsWatchingDemographics} accentColor={accentColor} fmtR={fmtR} />
               </div>
+            </div>
+            {/* ③편성 안정성(사용자 지시 2026-09-02) — 최근 8주 동안 같은 요일·시간대에 3주 이상
+                연속 편성된 프로그램. 자사 채널만(경쟁채널은 프로그램 단위 이력 자료가 없어 제외). */}
+            <div className="mt-6">
+              <h3 className="mb-1 text-sm font-semibold text-zinc-600">편성 안정성</h3>
+              <p className="mb-3 text-xs text-zinc-400">최근 8주 동안 같은 요일·같은 시각에 3주 이상 연속으로 편성된 프로그램입니다(본방 기준).</p>
+              <StableSlotPatternList rows={data.stableSlotPatterns} accentColor={accentColor} />
             </div>
           </div>
         )}
