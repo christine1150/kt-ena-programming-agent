@@ -339,8 +339,12 @@ interface MonthlyReviewChannel {
   months: { month: number; rank: number | null; rating: number | null }[];
   rankChange: number | null;
   ratingChangePct: number | null;
-  growthDriver: { programName: string; ratingDelta: number } | null;
-  weaknessDriver: { programName: string; ratingDelta: number } | null;
+  // 사용자 지시(2026-09-01): "한두번 편성해서 잘나온 것은 말이 안 됨 — 한달 총 시청률 합산에
+  // 기여했거나 하락시킨 원인이 된 종합적인 컨텐츠"만 골라야 함 — route.ts가 편성 횟수(3회
+  // 미만 제외)와 합산 기여도로 다시 골라 airCount를 함께 내려준다(화면에서 "N회 편성"으로
+  // 표기해 근거가 되는지 바로 보이게).
+  growthDriver: { programName: string; ratingDelta: number; airCount: number; priorAirCount: number } | null;
+  weaknessDriver: { programName: string; ratingDelta: number; airCount: number; priorAirCount: number } | null;
 }
 interface MonthlyReview {
   year: number;
@@ -1015,6 +1019,14 @@ function MonthlyRankTrendChart({
   );
 }
 
+// 사용자 지시(2026-09-01): 성장/약세 동력이 "종합적인 컨텐츠"인지 바로 판단할 수 있게 이번 달
+// 편성 횟수를 보여준다. 전월과 횟수 차이가 크면(예: 신규 편성돼 전월엔 0회였거나, 반대로
+// 편성이 크게 줄어 하락 원인이 된 경우) 전월 횟수도 괄호로 덧붙여 "왜 이 프로그램이 뽑혔는지"
+// 숫자로 바로 보이게 한다.
+function monthlyAirCountLabel(airCount: number, priorAirCount: number): string {
+  return Math.abs(airCount - priorAirCount) >= 3 ? `${airCount}회(전월 ${priorAirCount}회)` : `${airCount}회`;
+}
+
 // 인사이트 문장 — 새 수치를 만들지 않고 위 표에 이미 있는 값(전월 대비 순위·시청률 등락)만
 // 골라 문장으로 옮긴다(채널별 인사이트·주말 리포트와 같은 "DB 값 라벨링만" 원칙).
 function buildMonthlyReviewInsights(review: MonthlyReview): string[] {
@@ -1146,12 +1158,24 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
                         ? "유지"
                         : `${c.ratingChangePct > 0 ? "▲" : "▼"}${Math.abs(c.ratingChangePct).toFixed(1)}%`}
                   </td>
+                  {/* 사용자 지시(2026-09-01): 순위는 "합산 기여도"(회당 평균 등락×편성 횟수)로
+                      뽑히므로, 편성 횟수가 크게 늘어난 프로그램은 회당 평균 등락 자체는 음수인데도
+                      총 기여는 양수(성장 동력)로 뽑힐 수 있다 — 반대로도 마찬가지. 그래서 부호를
+                      "+"로 강제 고정하지 않고, 표시되는 회당 평균 등락의 실제 부호 그대로
+                      ▲(초록)/▼(빨강)로 보여준다(다른 등락 셀들과 같은 표기 규칙). "성장 동력"·
+                      "하락 요인"이라는 칸 제목은 합산 기여도 기준이고, 그 안의 개별 수치는 실제
+                      값을 있는 그대로 보여준다는 뜻 — 지어내지 않는다는 원칙 그대로. */}
                   <td className="py-1.5 text-zinc-500">
                     {c.growthDriver ? (
                       <span className="flex items-baseline gap-1">
                         <b className="font-semibold text-zinc-700">{c.growthDriver.programName}</b>
-                        <span className="tabular-nums" style={{ color: MONTHLY_UP_COLOR }}>
-                          +{formatRating(c.growthDriver.ratingDelta, c.channelCode)}
+                        {/* "종합적인 컨텐츠"임을 바로 확인할 수 있게 이번 달 편성 횟수를 함께
+                            표기(route.ts가 이미 3회 미만은 제외하고 넘겨줌). 전월과 편성 횟수
+                            차이가 크면(예: 신규 편성·증편) 전월 횟수도 괄호로 덧붙인다. */}
+                        <span className="text-[10px] text-zinc-400">{monthlyAirCountLabel(c.growthDriver.airCount, c.growthDriver.priorAirCount)}</span>
+                        <span className="tabular-nums" style={{ color: c.growthDriver.ratingDelta >= 0 ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
+                          {c.growthDriver.ratingDelta >= 0 ? "▲" : "▼"}
+                          {formatRating(Math.abs(c.growthDriver.ratingDelta), c.channelCode)}
                         </span>
                       </span>
                     ) : (
@@ -1162,8 +1186,10 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
                     {c.weaknessDriver ? (
                       <span className="flex items-baseline gap-1">
                         <b className="font-semibold text-zinc-700">{c.weaknessDriver.programName}</b>
-                        <span className="tabular-nums" style={{ color: MONTHLY_DOWN_COLOR }}>
-                          {formatRating(c.weaknessDriver.ratingDelta, c.channelCode)}
+                        <span className="text-[10px] text-zinc-400">{monthlyAirCountLabel(c.weaknessDriver.airCount, c.weaknessDriver.priorAirCount)}</span>
+                        <span className="tabular-nums" style={{ color: c.weaknessDriver.ratingDelta >= 0 ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
+                          {c.weaknessDriver.ratingDelta >= 0 ? "▲" : "▼"}
+                          {formatRating(Math.abs(c.weaknessDriver.ratingDelta), c.channelCode)}
                         </span>
                       </span>
                     ) : (
