@@ -10,6 +10,7 @@ import { getUpcomingLineupTransitions } from "./originalContent";
 import { isSkyUhd, isGroupA } from "./targetGroups";
 import type { DailyTrendPoint, ProgramMoverRow } from "./dataCollector";
 import type { RecommendationSection, WeekdayFlowPoint, SlotDiagnosisRow } from "./reportModel";
+import { formatRating } from "./format";
 
 const DOW_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
 function dowLabelOf(dateStr: string): string {
@@ -89,7 +90,20 @@ export async function buildRecommendationSection(
   const programFlow: RecommendationSection["programFlow"] = skyUhd ? { available: false, reason: "skyUHD는 프로그램 단위 자료가 제한적입니다" } : { available: true, data: { growth, weakness } };
 
   const hourBlockRows = (hourBlockRes.data ?? []) as HourBlockOpportunityRow[];
-  const slotDiagnosis: SlotDiagnosisRow[] = hourBlockRows.map((r) => ({ hourBlock: r.hour_block, diagnosis: classifyHourBlockDiagnosis(r), gapChange: r.gap_change }));
+  // 사용자 지시(2026-09-01): "슬롯 진단 근거 내용도 애매함" — gapChange 하나만 남기지 않고,
+  // 판정에 실제로 쓰인 자사·경쟁 전체/최근 평균과 격차를 그대로 들고 다녀 화면에서 "왜 이
+  // 진단이 나왔는지" 숫자로 확인할 수 있게 한다.
+  const slotDiagnosis: SlotDiagnosisRow[] = hourBlockRows.map((r) => ({
+    hourBlock: r.hour_block,
+    diagnosis: classifyHourBlockDiagnosis(r),
+    gapChange: r.gap_change,
+    ourFullAvg: r.our_full_avg,
+    ourRecentAvg: r.our_recent_avg,
+    competitorFullAvg: r.competitor_full_avg,
+    competitorRecentAvg: r.competitor_recent_avg,
+    gapFull: r.gap_full,
+    gapRecent: r.gap_recent,
+  }));
 
   const lineupSection: RecommendationSection["lineupTransitions"] = groupA
     ? { available: true, data: lineupTransitions ?? [] }
@@ -120,10 +134,16 @@ export async function buildRecommendationSection(
       verification: "시작 후 첫 방영분의 시청률로 리드인 효과를 확인하세요",
     });
   }
+  // 사용자 지시(2026-09-01): "슬롯 진단 근거 내용도 애매함. 구체적이고 최대한 정확한 정보로
+  // 수정" — "격차가 좁혀지는/벌어지는"이라는 말만으로는 실제 수치를 알 수 없었다. gap_change의
+  // 원본 부호를 그대로 노출하면(자사−경쟁 격차라 채널마다 부호 기준이 달라) 오독 위험이 있어,
+  // 이 프로젝트가 이미 쓰는 안전한 표기 관례(ChannelDeepDive.tsx의 WinWeaknessCard —
+  // "격차 ▲/▼ 절댓값(좁혀짐/벌어짐)")를 그대로 재사용한다. 자사 평균의 실제 등락(전체→최근)도
+  // 함께 인용해 "왜 이 슬롯이 이 진단을 받았는지" 두 축(자사 성과/경쟁 격차)을 모두 보여준다.
   const opportunitySlot = slotDiagnosis.find((s) => s.diagnosis === "기회");
   if (opportunitySlot) {
     recommendations.push({
-      basis: `${opportunitySlot.hourBlock}시대 슬롯이 경쟁채널 대비 격차가 좁혀지는 "기회" 슬롯으로 진단됐습니다`,
+      basis: `${opportunitySlot.hourBlock}시대는 자사 평균이 ${formatRating(opportunitySlot.ourFullAvg, channelCode)}→${formatRating(opportunitySlot.ourRecentAvg, channelCode)}로 하락했지만, 경쟁채널 대비 격차는 ▲${formatRating(opportunitySlot.gapChange !== null ? Math.abs(opportunitySlot.gapChange) : null, channelCode)}(좁혀짐)로 진단돼 "기회" 슬롯입니다(경쟁채널도 함께 약해진 구간으로 추정)`,
       suggestion: "이 슬롯에 강화 편성(신규 콘텐츠 또는 상승세 프로그램 배치)을 검토해볼 만합니다",
       verification: "다음 구간 같은 슬롯의 격차 변화로 확인하세요",
     });
@@ -131,7 +151,7 @@ export async function buildRecommendationSection(
   const checkSlot = slotDiagnosis.find((s) => s.diagnosis === "점검");
   if (checkSlot) {
     recommendations.push({
-      basis: `${checkSlot.hourBlock}시대 슬롯이 경쟁채널 대비 성과가 약하고 격차도 벌어지는 "점검" 슬롯으로 진단됐습니다`,
+      basis: `${checkSlot.hourBlock}시대는 자사 평균이 ${formatRating(checkSlot.ourFullAvg, channelCode)}→${formatRating(checkSlot.ourRecentAvg, channelCode)}로 하락했고, 경쟁채널 대비 격차도 ▼${formatRating(checkSlot.gapChange !== null ? Math.abs(checkSlot.gapChange) : null, channelCode)}(벌어짐)로 진단돼 "점검" 슬롯입니다`,
       suggestion: "이 슬롯의 편성 점검을 검토해볼 만합니다",
       verification: "다음 구간 같은 슬롯의 성과로 개선 여부를 확인하세요",
     });

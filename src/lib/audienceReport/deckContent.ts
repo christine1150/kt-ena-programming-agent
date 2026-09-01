@@ -79,10 +79,21 @@ export function buildChannelDeckSignals(doc: AudienceReportDocument): DeckSignal
     if (g) contentSignals.push(`성장 프로그램 "${g.canonicalName}" 등락 ${formatRating(g.ratingDelta, code)}(편성 ${g.periodAirCount ?? 0}회)`);
     if (w) contentSignals.push(`약세 프로그램 "${w.canonicalName}" 등락 ${formatRating(w.ratingDelta, code)}(편성 ${w.periodAirCount ?? 0}회)`);
   }
+  // 사용자 지시(2026-09-01): "슬롯 진단 근거 내용도 애매함. 구체적이고 최대한 정확한 정보로
+  // 수정" — "격차 축소/확대 중"이라는 말만으로는 실제 수치가 없었다. 자사 평균의 전체→최근
+  // 변화와 격차 변화량(이 프로젝트의 기존 표기 관례 그대로)을 함께 인용한다.
   const opp = doc.recommendation.slotDiagnosis.find((s) => s.diagnosis === "기회");
   const chk = doc.recommendation.slotDiagnosis.find((s) => s.diagnosis === "점검");
-  if (opp) contentSignals.push(`${opp.hourBlock}시대 슬롯은 "기회"로 진단됨(경쟁 대비 격차 축소 중)`);
-  if (chk) contentSignals.push(`${chk.hourBlock}시대 슬롯은 "점검"으로 진단됨(경쟁 대비 약세, 격차 확대 중)`);
+  if (opp) {
+    contentSignals.push(
+      `${opp.hourBlock}시대 슬롯은 자사 평균 ${formatRating(opp.ourFullAvg, code)}→${formatRating(opp.ourRecentAvg, code)}로 하락했지만 경쟁 대비 격차는 ▲${formatRating(opp.gapChange !== null ? Math.abs(opp.gapChange) : null, code)}(좁혀짐)로 "기회" 진단`
+    );
+  }
+  if (chk) {
+    contentSignals.push(
+      `${chk.hourBlock}시대 슬롯은 자사 평균 ${formatRating(chk.ourFullAvg, code)}→${formatRating(chk.ourRecentAvg, code)}로 하락, 경쟁 대비 격차도 ▼${formatRating(chk.gapChange !== null ? Math.abs(chk.gapChange) : null, code)}(벌어짐)로 "점검" 진단`
+    );
+  }
 
   const strategySignals = doc.recommendation.recommendations.map((r) => `${r.basis} → ${r.suggestion}(확인 방법: ${r.verification})`);
 

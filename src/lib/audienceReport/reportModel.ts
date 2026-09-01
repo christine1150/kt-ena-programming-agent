@@ -258,10 +258,21 @@ export interface WeekdayFlowPoint {
   dowLabel: string; // "월"~"일"
   avgRating: number | null;
 }
+// 사용자 지시(2026-09-01): "슬롯 진단 근거 내용도 애매함. 구체적이고 최대한 정확한 정보로
+// 수정" — 기존엔 hourBlock/diagnosis/gapChange(격차의 변화량 하나)만 남겨서, 4분류(유지/강화/
+// 점검/기회)가 실제로 어떤 두 비교(자사 최근 대비 전체, 경쟁 격차 최근 대비 전체)에서 나온
+// 판정인지 화면에서 확인할 길이 없었다. classifyHourBlockDiagnosis가 이미 참조하는
+// HourBlockOpportunityRow의 원본 4개 값을 그대로 함께 들고 다닌다(새 계산 없음).
 export interface SlotDiagnosisRow {
   hourBlock: number;
   diagnosis: import("./analyzer").HourBlockDiagnosis | null;
   gapChange: number | null;
+  ourFullAvg: number | null; // 자사 전체 기간 평균 시청률
+  ourRecentAvg: number | null; // 자사 최근 구간 평균 시청률
+  competitorFullAvg: number | null; // 경쟁채널 전체 기간 평균 시청률
+  competitorRecentAvg: number | null; // 경쟁채널 최근 구간 평균 시청률
+  gapFull: number | null; // 전체 기간 격차(자사−경쟁)
+  gapRecent: number | null; // 최근 구간 격차(자사−경쟁)
 }
 export interface RecommendationItem {
   basis: string;

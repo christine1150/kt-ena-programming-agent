@@ -239,32 +239,41 @@ function ProgramAudienceCrossTable({ rows, channelCode }: { rows: import("@/lib/
   );
 }
 
+// 사용자 지시(2026-09-01, 스크린샷 첨부): "글자 레이아웃 재정렬" — "평소 편성"/"새로 관찰된
+// 편성" 열이 프로그램명이 길면 좁은 열 폭 안에서 "(2\n9회 관찰)"처럼 괄호 안 숫자가 줄바꿈에
+// 걸려 잘려 보였다. (N주 관찰) 부분을 줄바꿈되지 않는 별도 span으로 분리하고, 긴 열은
+// 폭을 넉넉히 주며 표 전체를 가로 스크롤 컨테이너로 감싼다(넓은 표는 이 프로젝트 전반의 관례).
 function CompetitorScheduleChangeTable({ groups }: { groups: import("@/lib/audienceReport/analyzer").CompetitorScheduleChangeGroup[] }) {
   if (groups.length === 0) return <Unavailable reason="이 기간 동안 편성 변화가 관찰되지 않았거나, 페어링된 경쟁채널 자료가 없습니다" />;
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-xs text-neutral-500">
-          <th className="py-1">경쟁채널</th>
-          <th className="py-1">시간대</th>
-          <th className="py-1">평소 편성</th>
-          <th className="py-1">변경 횟수</th>
-          <th className="py-1">새로 관찰된 편성</th>
-        </tr>
-      </thead>
-      <tbody>
-        {groups.slice(0, 15).map((g, i) => (
-          <tr key={`${g.competitorName}_${g.hourBlock}_${i}`} className="border-t border-neutral-200/60 dark:border-neutral-800/60">
-            <td className="py-1">{g.competitorName}</td>
-            <td className="py-1">{g.hourBlock}시</td>
-            <td className="py-1">{g.usualProgram ?? "확인 불가"}{g.usualWeeksSeen > 0 ? ` (${g.usualWeeksSeen}주 관찰)` : ""}</td>
-            <td className="py-1 tabular-nums">{g.changeCount}회</td>
-            <td className="py-1">{g.observedPrograms.join(", ")}</td>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] table-fixed text-sm">
+        <thead>
+          <tr className="text-left text-xs text-neutral-500">
+            <th className="w-[12%] py-1">경쟁채널</th>
+            <th className="w-[8%] py-1">시간대</th>
+            <th className="w-[30%] py-1">평소 편성</th>
+            <th className="w-[10%] py-1">변경 횟수</th>
+            <th className="w-[40%] py-1">새로 관찰된 편성</th>
           </tr>
-        ))}
-      </tbody>
-      <caption className="mt-2 text-left text-[11px] text-neutral-500">재방송은 제외했습니다 — 편성 변화 자체가 전략적 의도인지는 단정하지 않습니다.</caption>
-    </table>
+        </thead>
+        <tbody>
+          {groups.slice(0, 15).map((g, i) => (
+            <tr key={`${g.competitorName}_${g.hourBlock}_${i}`} className="border-t border-neutral-200/60 align-top dark:border-neutral-800/60">
+              <td className="break-words py-1">{g.competitorName}</td>
+              <td className="py-1">{g.hourBlock}시</td>
+              <td className="break-words py-1">
+                {g.usualProgram ?? "확인 불가"}
+                {g.usualWeeksSeen > 0 && <span className="ml-1 whitespace-nowrap text-neutral-400">({g.usualWeeksSeen}주 관찰)</span>}
+              </td>
+              <td className="py-1 tabular-nums">{g.changeCount}회</td>
+              <td className="break-words py-1">{g.observedPrograms.join(", ")}</td>
+            </tr>
+          ))}
+        </tbody>
+        <caption className="mt-2 text-left text-[11px] text-neutral-500">재방송은 제외했습니다 — 편성 변화 자체가 전략적 의도인지는 단정하지 않습니다.</caption>
+      </table>
+    </div>
   );
 }
 
@@ -736,16 +745,29 @@ function CompetitorTable({ rows }: { rows: import("@/lib/audienceReport/reportMo
   );
 }
 
+// 사용자 지시(2026-09-01, 스크린샷 첨부): "누적 기여 상위에서 각각의 숫자가 무엇을 뜻하는지
+// 적혀있지 않음" — 헤더 없이 프로그램명 + 숫자 2개만 나열돼 있어 어느 열이 시청률이고 어느 열이
+// 등락인지 알 수 없었다. 헤더 행을 추가하고(다른 표들과 같은 스타일), 편성 횟수도 함께 보여
+// "기간 평균"이 몇 회 편성 기준인지 바로 확인할 수 있게 한다.
 function MoverTable({ rows, channelCode }: { rows: import("@/lib/audienceReport/dataCollector").ProgramMoverRow[]; channelCode: string }) {
   if (rows.length === 0) return <Unavailable reason="해당 프로그램이 없습니다" />;
   return (
     <table className="w-full text-sm">
+      <thead>
+        <tr className="text-left text-xs text-neutral-500">
+          <th className="py-1">프로그램</th>
+          <th className="py-1 text-right">편성 횟수</th>
+          <th className="py-1 text-right">기간 평균 시청률</th>
+          <th className="py-1 text-right">직전 기간 대비 등락</th>
+        </tr>
+      </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.canonicalName} className="border-t border-neutral-200/60 dark:border-neutral-800/60">
             <td className="py-1">{r.canonicalName}{r.priorAirCount === 0 && <span className="ml-1 rounded bg-cyan-50 px-1 text-[10px] text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300">신규</span>}</td>
+            <td className="py-1 text-right tabular-nums">{r.periodAirCount ?? "—"}회</td>
             <td className="py-1 text-right tabular-nums">{formatRating(r.periodAvgRating, channelCode)}</td>
-            <td className="py-1 text-right tabular-nums">{r.ratingDelta !== null ? r.ratingDelta.toFixed(3) : "—"}</td>
+            <td className="py-1 text-right tabular-nums">{r.ratingDelta !== null ? `${r.ratingDelta >= 0 ? "▲" : "▼"}${Math.abs(r.ratingDelta).toFixed(3)}` : "—"}</td>
           </tr>
         ))}
       </tbody>
@@ -978,14 +1000,42 @@ function RecommendationView({ data, channelCode }: { data: import("@/lib/audienc
 
       <div className="mb-4">
         <div className="mb-1 text-sm font-medium">슬롯 진단</div>
+        {/* 사용자 지시(2026-09-01): "슬롯 진단 근거 내용도 애매함. 구체적이고 최대한 정확한
+            정보로 수정" — 헤더 없이 시간대/진단명/격차 숫자 하나만 있어 판정 근거를 알 수
+            없었다. 자사 평균의 전체·최근 구간 값과 경쟁 대비 격차 변화(이 프로젝트의 기존
+            WinWeaknessCard와 같은 "▲/▼ 절댓값(좁혀짐/벌어짐)" 표기)를 함께 보여준다. */}
+        <p className="mb-2 text-xs text-neutral-500">
+          자사 시청률이 전체 기간 대비 최근에 유지·개선됐는지, 경쟁채널과의 격차가 최근에 좁혀졌는지·벌어졌는지 두 축으로 4분류합니다 — 유지(둘 다 양호) / 강화(자사는 양호, 격차는 벌어짐) / 점검(자사 하락, 격차도 벌어짐) / 기회(자사는 하락했지만 격차는 좁혀짐, 경쟁채널도 약해진 구간).
+        </p>
         {data.slotDiagnosis.length > 0 ? (
           <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-neutral-500">
+                <th className="py-1">시간대</th>
+                <th className="py-1">진단</th>
+                <th className="py-1 text-right">자사 평균(전체→최근)</th>
+                <th className="py-1 text-right">경쟁 대비 격차 변화</th>
+              </tr>
+            </thead>
             <tbody>
               {data.slotDiagnosis.map((s) => (
                 <tr key={s.hourBlock} className="border-t border-neutral-200/60 dark:border-neutral-800/60">
                   <td className="py-1">{s.hourBlock}시</td>
                   <td className="py-1">{s.diagnosis ?? "—"}</td>
-                  <td className="py-1 text-right tabular-nums">{s.gapChange !== null ? s.gapChange.toFixed(4) : "—"}</td>
+                  <td className="py-1 text-right tabular-nums">
+                    {formatRating(s.ourFullAvg, channelCode)} → {formatRating(s.ourRecentAvg, channelCode)}
+                  </td>
+                  <td className="py-1 text-right tabular-nums">
+                    {s.gapChange !== null ? (
+                      <span className={s.gapChange >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                        {s.gapChange >= 0 ? "▲" : "▼"}
+                        {formatRating(Math.abs(s.gapChange), channelCode)}
+                        {s.gapChange >= 0 ? "(좁혀짐)" : "(벌어짐)"}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
