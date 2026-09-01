@@ -567,7 +567,23 @@ export async function GET(request: Request) {
     });
     marketYtdCompetitorSnapshot = snapshotData ?? [];
   }
-  const overlapData = overlapRes.data;
+  // 사용자 지시(2026-09-02): "동시간대 경쟁 상황"에서 2049가 목표인 채널(ENA/ENA Play/ENA Drama)은
+  // 자사 값 옆 괄호에 유료가구 시청률도 함께 표기 — 같은 RPC를 유료가구 타깃으로 한 번 더 불러
+  // (our_start_time, our_program_name) 키로 매칭한다(경쟁채널 값은 이미 우리 타깃 기준이라 그대로 둠 —
+  // 이 요청은 "자사" 값에만 해당).
+  const GROUP_A_HOUSEHOLD_TARGET_LABEL: Record<string, string> = { ENA: "전국 유료가구", ENA_PLAY: "전국 유료가구", ENA_DRAMA: "전국 유료가구" };
+  const householdOverlapTargetLabel = GROUP_A_HOUSEHOLD_TARGET_LABEL[channel.code] ?? null;
+  const householdOverlapRes = householdOverlapTargetLabel
+    ? await supabase.rpc("get_competitor_program_overlap", { p_channel_code: channel.code, p_target_label: householdOverlapTargetLabel, p_as_of_date: dateTo })
+    : null;
+  const householdRatingByOurSlot = new Map<string, number | null>();
+  for (const row of (householdOverlapRes?.data ?? []) as { our_start_time: string; our_program_name: string; our_rating: number | null }[]) {
+    householdRatingByOurSlot.set(`${row.our_start_time}__${row.our_program_name}`, row.our_rating);
+  }
+  const overlapData = (overlapRes.data as { our_start_time: string; our_program_name: string }[] | null)?.map((row) => ({
+    ...row,
+    our_household_rating: householdOverlapTargetLabel ? (householdRatingByOurSlot.get(`${row.our_start_time}__${row.our_program_name}`) ?? null) : null,
+  }));
   const topProgramsData = topProgramsCompetitorRes.data;
   const rootCauseAlert = rootCauseRes.data?.[0] ?? null;
   const opportunityAlert = opportunityAlertRes.data?.[0] ?? null;

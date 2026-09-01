@@ -93,6 +93,9 @@ interface CompetitorOverlapRow {
   competitor_end_time: string | null;
   competitor_rating: number | null;
   rating_gap: number | null;
+  // 사용자 지시(2026-09-02): 2049 목표 채널(ENA/ENA Play/ENA Drama)의 자사 값 옆에 유료가구
+  // 시청률도 괄호로 병기 — 그 외 채널은 항상 null(route.ts가 2049 목표 채널에서만 채움).
+  our_household_rating: number | null;
 }
 interface CompetitorTopProgramRow {
   competitor_name: string;
@@ -1464,6 +1467,58 @@ function getDemographicShiftFacts(
     });
   }
   return facts;
+}
+
+// WHO IS WATCHING? 단일 일자 모드 — "연령대가 주요하게 움직였거나, 특별하게 시청 시간이
+// 길었던 컨텐츠가 눈에 보인다면 반드시 함께 언급"(사용자 지시 2026-09-02). 기존
+// buildDemographicHighlightsParagraph는 전체 조합 중 |delta_pct|≥30인 것만 문장으로 짚어,
+// 화면에 이미 "주목" 타일로 뜬 연령대(selectWhoIsWatchingTiles와 동일 선정 로직)라도 그 원인
+// 프로그램이 임계값 미만이면 빠질 수 있었다 — "주목" 타일로 뽑힌 연령대는 근거 데이터가
+// 있는 한 임계값 없이 항상 원인 프로그램을 매칭한다("반드시"라는 지시를 그대로 반영). 시청
+// 시간이 특별히 길었던 콘텐츠는 별도로, 오늘 상위 프로그램 중 metric이 시청시간류이고 최근
+// 8주 평균 대비 뚜렷하게(20%+) 높은 것 1건만 표시(과장 방지).
+interface SingleDayDemographicFact {
+  demoLabel: string;
+  deltaPct: number;
+  programName: string;
+  metricLabel: string;
+  metricValue: string;
+}
+function getSingleDayDemographicMoverFacts(
+  whoIsWatchingDemographics: NarrativeDemographic[] | null,
+  demographicHighlights: DemographicHighlightRow[]
+): SingleDayDemographicFact[] {
+  const items: WhoIsWatchingItem[] = (whoIsWatchingDemographics ?? []).map((d) => ({ label: d.label, value: d.today, deltaPct: d.delta_pct }));
+  const { notable } = selectWhoIsWatchingTiles(items);
+  const facts: SingleDayDemographicFact[] = [];
+  for (const n of notable) {
+    if (n.deltaPct === null) continue;
+    const rows = demographicHighlights.filter((h) => h.demographic_label === n.label && h.delta_pct !== null);
+    if (rows.length === 0) continue;
+    const top = [...rows].sort((a, b) => Math.abs(b.delta_pct!) - Math.abs(a.delta_pct!))[0];
+    facts.push({
+      demoLabel: shortDemoLabel(n.label),
+      deltaPct: n.deltaPct,
+      programName: top.program_name,
+      metricLabel: METRIC_LABEL[top.metric],
+      metricValue: fmtMetricValue(top.metric, top.today_value),
+    });
+  }
+  return facts;
+}
+function getSingleDayLongWatchFact(demographicHighlights: DemographicHighlightRow[]): SingleDayDemographicFact | null {
+  const timeRows = demographicHighlights.filter(
+    (h) => (h.metric === "time_spent_seconds" || h.metric === "time_spent_share") && h.delta_pct !== null && h.delta_pct >= 20
+  );
+  if (timeRows.length === 0) return null;
+  const top = [...timeRows].sort((a, b) => b.delta_pct! - a.delta_pct!)[0];
+  return {
+    demoLabel: shortDemoLabel(top.demographic_label),
+    deltaPct: top.delta_pct!,
+    programName: top.program_name,
+    metricLabel: METRIC_LABEL[top.metric],
+    metricValue: fmtMetricValue(top.metric, top.today_value),
+  };
 }
 
 // ── CONTENT FITS? 표+줄글, 채널 기여도 높은 순 정렬(사용자 지시) ──────────────
@@ -3084,7 +3139,13 @@ function ScatterQuadrantChart({
 // competitorProgramOverlap을 재사용하되, 전체 표 대신 당사 시청률이 가장 높은 상위 4개
 // 시간대만 골라 막대 비교로 압축한다(전체 표는 아래 COMPARED WITH?에 그대로 남아 있어 중복
 // 아님 — 여기는 "한눈에 보는 요약", 거기는 "전체 상세").
-function TimeSlotCompetitionChart({ rows, accentColor, fmtR }: { rows: CompetitorOverlapRow[]; accentColor: string; fmtR: (v: number | null) => string }) {
+// 레이아웃 재설계(사용자 지시 2026-09-02): "채널명, 시간, 프로그램명 사이를 안보이는 표처럼
+// 동일한 구간으로 나누어서 여유있게 배치, 프로그램명이 아랫줄로 내려가지 않게" — 기존엔
+// "프로그램명(채널명)"을 한 문자열로 합쳐 w-32 truncate에 욱여넣어 경쟁채널명이 잘렸다. 채널명/
+// 시간/프로그램명/시청률을 4개의 고정 폭 grid 열로 분리해 각자 공간을 준다. 2049 목표 채널은
+// 자사 값에 유료가구 시청률을 괄호로 병기(사용자 지시).
+const OVERLAP_GRID_COLS = "6.5rem 3.2rem 1fr 6.5rem";
+function TimeSlotCompetitionChart({ rows, accentColor, fmtR, channelName }: { rows: CompetitorOverlapRow[]; accentColor: string; fmtR: (v: number | null) => string; channelName: string }) {
   const grouped = Object.values(
     rows.reduce<Record<string, CompetitorOverlapRow[]>>((acc, row) => {
       const key = `${row.our_start_time}__${row.our_program_name}`;
@@ -3105,33 +3166,34 @@ function TimeSlotCompetitionChart({ rows, accentColor, fmtR }: { rows: Competito
       {grouped.map((group) => {
         const ours = group[0];
         const competitors = [...group].sort((a, b) => (b.competitor_rating ?? 0) - (a.competitor_rating ?? 0)).slice(0, 2);
-        const bars = [
-          // 사용자 지시(2026-08-27): "(당사)"는 필요 없음 — 첫 줄·굵은 글씨·강조색 막대로 이미
-          // 당사 프로그램임이 구분되므로 텍스트 라벨은 이름만.
-          { label: ours.our_program_name, rating: ours.our_rating, isOurs: true },
-          ...competitors.map((c) => ({ label: `${c.competitor_program_name}(${c.competitor_name})`, rating: c.competitor_rating, isOurs: false })),
+        const rows2 = [
+          { channelName, time: ours.our_start_time.slice(0, 5), program: ours.our_program_name, rating: ours.our_rating, householdRating: ours.our_household_rating, isOurs: true },
+          ...competitors.map((c) => ({ channelName: c.competitor_name, time: c.competitor_start_time.slice(0, 5), program: c.competitor_program_name, rating: c.competitor_rating, householdRating: null as number | null, isOurs: false })),
         ];
         return (
-          <div key={`${ours.our_start_time}__${ours.our_program_name}`}>
-            <p className="mb-1.5 text-xs font-medium text-zinc-500">
-              {ours.our_start_time.slice(0, 5)} · {ours.our_program_name}
-            </p>
-            <div className="flex flex-col gap-1">
-              {bars.map((b, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className={`w-32 shrink-0 truncate text-[11px] ${b.isOurs ? "font-semibold text-zinc-800" : "text-zinc-500"}`} title={b.label}>
-                    {b.label}
+          <div key={`${ours.our_start_time}__${ours.our_program_name}`} className="rounded-xl bg-zinc-50/60 p-2.5">
+            <div className="flex flex-col gap-1.5">
+              {rows2.map((r, i) => (
+                <div key={i} className="grid items-center gap-2" style={{ gridTemplateColumns: OVERLAP_GRID_COLS }}>
+                  <span className={`truncate text-[11px] ${r.isOurs ? "font-semibold" : "text-zinc-500"}`} style={r.isOurs ? { color: accentColor } : undefined} title={r.channelName}>
+                    {r.channelName}
                   </span>
-                  <div className="h-4 flex-1 rounded bg-zinc-50">
-                    <div
-                      className="h-4 rounded"
-                      style={{
-                        width: `${Math.max(2, ((b.rating ?? 0) / maxRating) * 100)}%`,
-                        backgroundColor: b.isOurs ? accentColor : "#d4d4d8",
-                      }}
-                    />
+                  <span className="text-[11px] tabular-nums text-zinc-400">{r.time}</span>
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className={`whitespace-nowrap text-[11px] ${r.isOurs ? "font-semibold text-zinc-800" : "text-zinc-600"}`} title={r.program}>
+                      {r.program}
+                    </span>
+                    <div className="h-3.5 min-w-[24px] flex-1 rounded bg-white ring-1 ring-zinc-100">
+                      <div
+                        className="h-3.5 rounded"
+                        style={{ width: `${Math.max(2, ((r.rating ?? 0) / maxRating) * 100)}%`, backgroundColor: r.isOurs ? accentColor : "#d4d4d8" }}
+                      />
+                    </div>
                   </div>
-                  <span className="w-14 shrink-0 text-right text-[11px] tabular-nums text-zinc-600">{fmtR(b.rating)}</span>
+                  <span className="text-right text-[11px] tabular-nums text-zinc-600">
+                    {fmtR(r.rating)}
+                    {r.householdRating !== null && <span className="text-zinc-400"> ({fmtR(r.householdRating)})</span>}
+                  </span>
                 </div>
               ))}
             </div>
@@ -4197,7 +4259,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <p className="mb-3 text-xs text-zinc-400">
                   당사 시청률 상위 시간대에 경쟁채널이 어떤 프로그램으로 얼마의 시청률을 기록했는지 비교합니다(전체 목록은 아래 &ldquo;COMPARED WITH?&rdquo;에).
                 </p>
-                <TimeSlotCompetitionChart rows={competitorProgramOverlap} accentColor={accentColor} fmtR={fmtR} />
+                <TimeSlotCompetitionChart rows={competitorProgramOverlap} accentColor={accentColor} fmtR={fmtR} channelName={data.channel.name} />
               </div>
               <div>
                 <h3 className="mb-1 text-sm font-semibold text-zinc-600">시청자 프로파일링</h3>
@@ -5176,6 +5238,51 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 {buildDemographicHighlightsParagraph(data.demographicHighlights)}
               </p>
             )}
+          {/* 사용자 지시(2026-09-02): "연령대가 주요하게 움직였거나, 특별하게 시청 시간이 길었던
+              컨텐츠가 눈에 보인다면 반드시 함께 언급" — 위 문단은 임계값(±30%)을 넘을 때만 나오지만,
+              여기는 화면에 이미 "주목" 타일로 뜬 연령대는 근거가 있는 한 임계값 없이 항상 짚는다. */}
+          {!showComparisonView &&
+            (() => {
+              const moverFacts = getSingleDayDemographicMoverFacts(data.whoIsWatchingDemographics, data.demographicHighlights);
+              const longWatch = getSingleDayLongWatchFact(data.demographicHighlights);
+              if (moverFacts.length === 0 && !longWatch) return null;
+              return (
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {moverFacts.map((f) => (
+                    <div key={f.demoLabel} className="rounded-2xl bg-zinc-50 p-3">
+                      <p className="text-sm font-medium text-zinc-800">
+                        {f.demoLabel}{" "}
+                        <span className={f.deltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                          {f.deltaPct >= 0 ? "▲" : "▼"} {Math.abs(f.deltaPct).toFixed(0)}%
+                        </span>
+                      </p>
+                      <div className="mt-1.5 flex items-center justify-between gap-2 text-sm">
+                        <span className="text-zinc-500">영향 프로그램</span>
+                        <span className="font-medium text-zinc-800">
+                          {f.programName} <span className="text-zinc-400">({f.metricLabel} {f.metricValue})</span>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {longWatch && (
+                    <div className="rounded-2xl bg-zinc-50 p-3">
+                      <p className="text-sm font-medium text-zinc-800">
+                        시청시간 특이 콘텐츠{" "}
+                        <span className="text-emerald-600">
+                          ▲ {longWatch.deltaPct.toFixed(0)}%
+                        </span>
+                      </p>
+                      <div className="mt-1.5 flex items-center justify-between gap-2 text-sm">
+                        <span className="text-zinc-500">{longWatch.demoLabel}</span>
+                        <span className="font-medium text-zinc-800">
+                          {longWatch.programName} <span className="text-zinc-400">({longWatch.metricLabel} {longWatch.metricValue})</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
         </div>
 
         {/* HOW DEEPLY? — 숫자 + 설명(사용자 지시). 기간 범위 선택 시 기간 평균으로 표시. */}

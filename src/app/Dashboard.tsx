@@ -1092,6 +1092,37 @@ const CAUSE_TAG_COLOR: Record<string, string> = {
   "핵심 콘텐츠 이탈/부진": "#dc2626",
 };
 
+// 사용자 지시(2026-09-02): "프라임 시간대 주요 등락을 하단에 별도로 빼지 말고, 상승 견인
+// 왼쪽에 자리를 마련해서 같은 줄 안에" — 채널 전체 기여도(상승견인/하락요인)와는 별개 축이라는
+// 성격은 그대로 유지하면서, 표시 위치만 채널별 행 안의 한 열로 옮긴다. 채널당 최대 2건(상승·
+// 하락 각 1건, route.ts가 이미 그렇게 필터링해서 내려줌).
+function PrimeMoverCell({ movers, channelCode }: { movers: MonthlyPrimeMover[]; channelCode: string }) {
+  if (movers.length === 0) return <span className="text-zinc-300">—</span>;
+  return (
+    <span className="flex flex-col gap-1">
+      {movers.map((m, i) => {
+        const up = m.primeDelta >= 0;
+        return (
+          <span key={i} className="flex flex-col gap-0.5">
+            <span className="flex items-baseline gap-1">
+              <b className="font-semibold text-zinc-700">{m.programName}</b>
+              {m.dow && <span className="rounded bg-zinc-100 px-1 text-[9px] text-zinc-500">{DOW_LABELS[m.dow]}요일</span>}
+              <span className="tabular-nums font-semibold" style={{ color: up ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
+                {up ? "▲" : "▼"}
+                {formatRating(Math.abs(m.primeDelta), channelCode)}
+              </span>
+            </span>
+            <span className="text-[10px] text-zinc-400">
+              프라임 {m.priorPrimeAvgRating !== null ? formatRating(m.priorPrimeAvgRating, channelCode) : "—"} →{" "}
+              {m.primeAvgRating !== null ? formatRating(m.primeAvgRating, channelCode) : "—"} · {m.primeAirCount}회(전월{m.priorPrimeAirCount}회)
+            </span>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function MonthlyDriverCell({ driver, channelCode }: { driver: MonthlyDriver | null; channelCode: string }) {
   if (!driver) return <span className="text-zinc-300">—</span>;
   const up = driver.contributionDelta >= 0;
@@ -1221,12 +1252,6 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
   const insights = buildMonthlyReviewInsights(review);
   const nameOf = (code: string) => CHANNEL_NAME_BY_CODE[code] ?? code;
   const orderedChannels = [...MONTHLY_GROUP_A, ...MONTHLY_GROUP_B].map((c) => byCode.get(c)).filter((c): c is MonthlyReviewChannel => !!c);
-  // 프라임 등락 목록 — 채널 순서를 표와 똑같이 유지하고, 등락폭이 큰 것부터 최대 6건만 보여준다
-  // (7채널 × 최대 2건이면 14줄까지 나올 수 있어 화면이 길어짐 — 정말 "특별한" 것만 남긴다).
-  const primeMoverRows = orderedChannels
-    .flatMap((c) => (c.primeMovers ?? []).map((mover) => ({ channelCode: c.channelCode, mover })))
-    .sort((a, b) => Math.abs(b.mover.primeDelta) - Math.abs(a.mover.primeDelta))
-    .slice(0, 6);
   return (
     <div className={CARD}>
       <h2 className={`font-heading mb-1 text-xl font-bold tracking-tight ${ACCENT_HEADING}`}>
@@ -1287,8 +1312,12 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
               <th className="pb-1 pl-3 text-left font-medium">전월 대비</th>
               <th className="pb-1 pr-1 text-right font-medium">시청률</th>
               <th className="pb-1 pl-3 text-left font-medium">전월 대비</th>
-              <th className="pb-1 text-left font-medium">상승 견인</th>
-              <th className="pb-1 text-left font-medium">하락 요인</th>
+              {/* 사용자 지시(2026-09-02): 하단에 별도 목록으로 빼지 않고, 상승 견인 왼쪽 한 열로. */}
+              <th className="pb-1 pl-3 text-left font-medium">
+                프라임성과(주요등락)<span className="ml-1 font-normal text-zinc-300">— 채널 전체 기여도와 별개</span>
+              </th>
+              <th className="pb-1 pl-3 text-left font-medium">상승 견인</th>
+              <th className="pb-1 pl-3 text-left font-medium">하락 요인</th>
             </tr>
           </thead>
           <tbody>
@@ -1324,10 +1353,13 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
                       실제 변화량과 일치하는 값이라, 이 숫자만으로 "이 프로그램이 채널 수치를
                       얼마나 움직였는가"가 검증 가능하게 읽힌다. 그 아래 줄에 실제 이유(편성량
                       변화인지 성과 변화인지)와 전월 동시간대 대비 성적을 함께 붙인다. */}
-                  <td className="py-1.5 text-zinc-500">
+                  <td className="py-1.5 pl-3 text-zinc-500">
+                    <PrimeMoverCell movers={c.primeMovers ?? []} channelCode={c.channelCode} />
+                  </td>
+                  <td className="py-1.5 pl-3 text-zinc-500">
                     <MonthlyDriverCell driver={c.growthDriver} channelCode={c.channelCode} />
                   </td>
-                  <td className="py-1.5 text-zinc-500">
+                  <td className="py-1.5 pl-3 text-zinc-500">
                     <MonthlyDriverCell driver={c.weaknessDriver} channelCode={c.channelCode} />
                   </td>
                 </tr>
@@ -1337,42 +1369,6 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
         </table>
       </div>
 
-      {/* 사용자 지시(2026-09-01): "특히 요일별 20시~24시 사이의 오리지널이나 주요 프로그램에서
-          특별한 등락이나 하락이 있다던가 하는 부분도 모두 반영" — 위 표는 채널 월간 평균에 대한
-          기여도 순위라 편성량이 큰 프로그램이 상위를 차지하기 쉽다. 편성량은 그대로인데 프라임
-          성과만 크게 움직인 작품(채널 전체로는 순위 밖)을 놓치지 않도록 별도 축으로 따로 짚는다.
-          위 표에 이미 이름이 오른 프로그램은 중복이라 route.ts가 제외하고 내려준다. */}
-      {primeMoverRows.length > 0 && (
-        <div className="mt-4 rounded-xl bg-zinc-50 p-3">
-          <p className="mb-2 text-[12px] font-semibold text-zinc-600">
-            프라임 시간대(20~24시) 주요 등락 <span className="font-normal text-zinc-400">— 채널 전체 기여도와는 별개로, 프라임 성과가 크게 움직인 편성</span>
-          </p>
-          <ul className="space-y-1">
-            {primeMoverRows.map(({ channelCode, mover }, i) => {
-              const color = themeColorByCode.get(channelCode) ?? "#3f3f46";
-              const up = mover.primeDelta >= 0;
-              return (
-                <li key={`${channelCode}-${mover.programName}-${i}`} className="flex flex-wrap items-baseline gap-1.5 text-[12px]">
-                  <span className="w-[72px] shrink-0 font-semibold" style={{ color }}>
-                    {nameOf(channelCode)}
-                  </span>
-                  <b className="font-semibold text-zinc-700">{mover.programName}</b>
-                  {mover.dow && <span className="rounded bg-white px-1 text-[10px] text-zinc-500 ring-1 ring-zinc-200">{DOW_LABELS[mover.dow]}요일</span>}
-                  <span className="tabular-nums" style={{ color: up ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
-                    {up ? "▲" : "▼"}
-                    {formatRating(Math.abs(mover.primeDelta), channelCode)}
-                  </span>
-                  <span className="text-[10px] text-zinc-400">
-                    {/* 신규 편성/종영이면 한쪽이 null이라 "—"로 정직하게 비운다(0으로 채우지 않음). */}
-                    프라임 {mover.priorPrimeAvgRating !== null ? formatRating(mover.priorPrimeAvgRating, channelCode) : "—"} →{" "}
-                    {mover.primeAvgRating !== null ? formatRating(mover.primeAvgRating, channelCode) : "—"} · {mover.primeAirCount}회(전월 {mover.priorPrimeAirCount}회)
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
