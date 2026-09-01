@@ -164,9 +164,9 @@ export async function GET(request: Request) {
   // ~18개의 RPC/쿼리 호출은 전부 matchedTargetLabel/programTargetLabel/dateFrom/dateTo 등
   // 이미 알고 있는 값만 필요할 뿐 서로의 결과를 참조하지 않는 완전히 독립적인 조회다(순수
   // 계산값들만 먼저 구해두고 Promise.all로 한 번에 병렬 실행) — 순차로 ~18번 왕복하던 것을
-  // 1번의 병렬 왕복으로 줄인다. 예외적으로 순서가 필요한 두 곳만 병렬 배치 뒤에 따로 둔다:
-  // (1) hourlyPattern이 비어있을 때만 도는 skyUHD류 폴백 재조회, (2) compareChannelRow를
-  // 먼저 알아야 하는 affinity 조회.
+  // 1번의 병렬 왕복으로 줄인다. 예외적으로 순서가 필요한 곳은 hourlyPattern이 비어있을 때만
+  // 도는 skyUHD류 폴백 재조회 하나뿐이다(2026-09-01: 순서가 필요했던 나머지 하나였던 affinity
+  // 조회는 화면에서 쓰이지 않는 죽은 코드라 제거됨 — 위 N절 Phase 1).
   const programTargetLabel = resolveProgramLevelTargetLabel(channel.primary_target);
   // 사용자 지시(2026-08-25): TOP 20 인포그래픽에 "올해 1/1~분석일 채널 평균 대비 높낮이"가
   // 필요 — Page 1 히어로 카드가 쓰는 것과 같은 방식(랭킹 시트 target_id로 ratings.rank/rating
@@ -233,24 +233,13 @@ export async function GET(request: Request) {
     ? ["전국 남10대", "전국 여10대", "전국 남20대", "전국 여20대", "전국 남30대", "전국 여30대", "전국 남40대", "전국 여40대", "전국 남50대", "전국 여50대", "전국 남60대+", "전국 여60대+"]
     : ["수도권 남10대", "수도권 여10대", "수도권 남20대", "수도권 여20대", "수도권 남30대", "수도권 여30대", "수도권 남40대", "수도권 여40대", "수도권 남50대", "수도권 여50대", "수도권 남60대+", "수도권 여60대+"];
 
-  // WHO IS WATCHING? — 대표 연령대 4개의 Affinity. 자사 6개 채널끼리만 비교 가능하다(경쟁채널엔
-  // 세부 타깃 데이터가 없음). 연령대별 데이터가 채널의 시장 스코프(수도권/전국)에 따라 다른
-  // 표기로만 존재해서(예: OLIFE/ONCE/ENA Story는 "전국 여20대"만 있고 "수도권 여20대"는 없음,
-  // 실데이터로 확인) 비교 대상과 타깃 라벨을 모두 같은 스코프 안에서 골라야 실제 값이 나온다:
-  // 수도권 채널(ENA·ENA Drama·ENA Play)은 서로 비교, 전국 채널(OLIFE·ONCE·ENA Story)도 서로 비교.
-  // 기간 선택(사용자 지시): 범위를 선택했으면 그 범위를 그대로 쓰고, 단일 일자면 기존처럼
-  // dateTo 기준 최근 28일 trailing window를 쓴다(하루만으로는 표본이 거의 항상 부족해서).
-  const compareChannelCode = isNationalScope
-    ? channel.code === "OLIFE"
-      ? "ONCE"
-      : "OLIFE"
-    : channel.code === "ENA"
-      ? "ENA_PLAY"
-      : "ENA";
-  const twentyEightDaysAgo = new Date(dateTo);
-  twentyEightDaysAgo.setDate(twentyEightDaysAgo.getDate() - 27);
-  const twentyEightDaysAgoStr = twentyEightDaysAgo.toISOString().slice(0, 10);
-  const affinityDateFrom = isRangeMode ? dateFrom : twentyEightDaysAgoStr;
+  // 죽은 코드 제거(2026-09-01, N절 Phase 1): 여기 있던 "WHO IS WATCHING? 경쟁채널 Affinity 비교"
+  // (compareChannelCode / affinityDateFrom / get_target_affinity 4회 호출 / 응답의 affinity·
+  // compareChannelCode 필드)는 2026-08-21에 "경쟁채널 Affinity 방식 폐기, 각 채널 내부 연령대
+  // 흐름 분석으로 대체"(ChannelDeepDive.tsx의 buildInternalDemographicNarrative)가 결정되면서
+  // 화면에서 완전히 쓰이지 않게 됐는데도 API에는 그대로 남아, 2페이지를 열 때마다 쓰이지 않는
+  // RPC 4회를 실행하고 있었다(실측 확인: 프로젝트 전체에서 이 응답 필드를 읽는 곳 0건). 제거.
+  // get_target_affinity RPC 자체는 /api/ratings/affinity·자연어 에이전트가 계속 쓰므로 유지한다.
 
   // 사용자 지시(2026-08-21, 기능 #15-2): "대비" 분석(DoD/WoW/MoM/QoQ/YoY처럼 priorDateFrom/To가
   // 있는 경우)은 시간대별 그래프를 "이번 기간"과 "전 기간" 두 패널로 나란히 비교할 수 있어야
@@ -284,7 +273,6 @@ export async function GET(request: Request) {
     periodProgramMoversRes,
     narrativeRes,
     demographicHighlightsRes,
-    compareChannelRowRes,
     hourlyPatternPriorRes,
     hourlyProgramTitlesPriorRes,
     competitorPeriodTopProgramsRes,
@@ -411,7 +399,6 @@ export async function GET(request: Request) {
           p_program_baseline_weeks: 8,
         })
       : Promise.resolve({ data: [] as unknown[] }),
-    supabase.from("channels").select("primary_target").eq("code", compareChannelCode).maybeSingle(),
     hasPriorRange
       ? supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: priorDateFrom, p_date_to: priorDateTo })
       : Promise.resolve({ data: [] as unknown[] }),
@@ -563,7 +550,6 @@ export async function GET(request: Request) {
     baseline_days: number;
     delta_pct: number | null;
   }[];
-  const compareChannelRow = compareChannelRowRes.data;
 
   // 사용자 지시(2026-08-20): "skyUHD의 시간대별 그래프가 나오지 않습니다" — 원인은 latestAvailableDate가
   // 채널 단위 랭킹(매일 갱신되는 nielsen_daily)의 최신일인데, skyUHD 같은 수기 업로드 채널은
@@ -598,25 +584,6 @@ export async function GET(request: Request) {
     }
   }
 
-  let affinity: { targetLabel: string; result: Record<string, unknown> | null }[] = [];
-  if (compareChannelRow?.primary_target) {
-    const channelBaseline = resolveProgramLevelTargetLabel(channel.primary_target);
-    const compareBaseline = resolveProgramLevelTargetLabel(compareChannelRow.primary_target);
-    affinity = await Promise.all(
-      demographicTargets.map(async (targetLabel) => {
-        const { data } = await supabase.rpc("get_target_affinity", {
-          p_channel_code: channel.code,
-          p_channel_baseline_label: channelBaseline,
-          p_compare_channel_code: compareChannelCode,
-          p_compare_baseline_label: compareBaseline,
-          p_target_label: targetLabel,
-          p_date_from: affinityDateFrom,
-          p_date_to: dateTo,
-        });
-        return { targetLabel, result: data?.[0] ?? null };
-      })
-    );
-  }
 
   // 사용자 지시(2026-08-25): "ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널에서
   // 매우 중요하므로 오늘의 브리핑 첫 문장으로" — Page 1과 같은 get_original_content_daily를
@@ -776,7 +743,6 @@ export async function GET(request: Request) {
     // 폴백용 — LLM 실패 시 클라이언트가 이 값으로 직접 문장을 만든다.
     rerunLeadSentence,
     demographicHighlights,
-    compareChannelCode,
     competitorInsightReport: competitorInsightReport ?? [],
     marketYtdCompetitorSnapshot,
     competitorProgramOverlap: overlapData ?? [],
@@ -789,7 +755,6 @@ export async function GET(request: Request) {
     // 분기별 스냅샷 SQL을 직접 부를 때 타깃 동의어 해석을 다시 하지 않도록, 이미 위에서 계산된
     // 최종 타깃 라벨을 그대로 노출한다(새 계산 없음).
     matchedTargetLabel,
-    affinity: { compareChannelCode, items: affinity },
     rootCauseAlert,
     opportunityAlert,
     trendHighlight,

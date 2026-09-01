@@ -176,14 +176,6 @@ function classifyHourBlockOpportunity(d: HourBlockOpportunityRow): OpportunityCl
   return "OPPORTUNITY";
 }
 
-interface AffinityResult {
-  channel_composition: number | null;
-  compare_composition: number | null;
-  affinity_index: number | null;
-  sample_days_channel: number;
-  sample_days_compare: number;
-  insufficient_sample: boolean;
-}
 
 interface FitScoreEvidence {
   avg_rating: number | null;
@@ -498,7 +490,6 @@ interface ChannelData {
   // 이미 검증된 값만으로 OpenAI가 종합한 오늘의 브리핑 핵심 문단(단일 일자 모드만). 없으면
   // 기존 규칙 기반 문장으로 조용히 대체.
   briefingLlm: string | null;
-  affinity: { compareChannelCode: string; items: { targetLabel: string; result: AffinityResult | null }[] };
   rootCauseAlert: RootCauseAlert | null;
   opportunityAlert: OpportunityAlert | null;
   trendHighlight: TrendHighlight | null;
