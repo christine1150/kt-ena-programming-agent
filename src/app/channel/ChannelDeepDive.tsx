@@ -3065,8 +3065,9 @@ function ScatterQuadrantChart({
 // 어디로 갔는지"는 개인 시청자 단위 채널 이동을 추적해야만 알 수 있는데, 이 프로젝트는 그런
 // 개인 패널 이동 추적을 다루지 않는다(CLAUDE.md 범위 제한: "개인 패널 이동 추적... 임의로
 // 추가하지 않는다") — 있지도 않은 흐름을 추정해서 그리면 CLAUDE.md의 No Hallucination
-// 원칙에도 어긋난다. 페이지 안내 문구로 이유를 명시한다(사용자 지시: "시각화 제외 내용들을
-// 다시 잘 정리하여").
+// 원칙에도 어긋난다. Sankey를 만들지 않는다는 설계 결정 자체는 그대로 유지한다.
+// 사용자 지시(2026-09-01): 화면에 남아있던 안내 문구("참고: 시청자 전이·이탈... 분석은...")를
+// 삭제 — 이유 설명 문구 없이, 애초에 ①②만 있는 레이아웃으로 조용히 정리.
 
 // ①동시간대 경쟁 상황 — 이미 COMPARED WITH?의 "시간대별 경쟁 프로그램" 표가 쓰는 것과 같은
 // competitorProgramOverlap을 재사용하되, 전체 표 대신 당사 시청률이 가장 높은 상위 4개
@@ -4193,9 +4194,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <DemographicHeatStrip demographics={data.whoIsWatchingDemographics} accentColor={accentColor} fmtR={fmtR} />
               </div>
             </div>
-            <p className="mt-4 border-t border-zinc-100 pt-3 text-xs text-zinc-400">
-              참고: &ldquo;시청자 전이·이탈(리드인/리드아웃) 분석&rdquo;은 개인 시청자가 채널·프로그램 사이를 실제로 어떻게 옮겨 다녔는지 추적하는 패널 데이터가 있어야 그릴 수 있는데, 이 프로젝트는 그런 개인 단위 이동 추적을 다루지 않아(CLAUDE.md 범위 제한) 이 섹션에는 포함하지 않았습니다 — 있지도 않은 흐름을 추정해서 그리지 않기 위함입니다.
-            </p>
           </div>
         )}
 
