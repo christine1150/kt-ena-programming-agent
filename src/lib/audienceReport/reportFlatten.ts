@@ -72,6 +72,30 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
 
   if (body.mode === "single_day") {
     const s = body.sections;
+    // N절 Phase 2d(2026-09-01) — Health Score/Program Momentum(구 시스템 이식). §06 번호 순서
+    // 밖, 화면(page.tsx)과 같은 위치(맨 위)로 문서에도 반영.
+    if (s.healthScore.available) {
+      const h = s.healthScore.data;
+      sections.push({
+        title: "Health Score",
+        blocks: [
+          { kind: "text", text: `${h.label} · ${h.score}점` },
+          { kind: "bullets", items: h.axes.map((a) => `${a.label}: ${a.reason}`) },
+        ],
+      });
+    }
+    if (s.programMomentum.available) {
+      sections.push({
+        title: "Program Momentum",
+        blocks: [
+          {
+            kind: "table",
+            headers: ["프로그램", "최근 7일/4주 평균", "판정"],
+            rows: s.programMomentum.data.slice(0, 10).map((m) => [m.canonicalName ?? "이름 없음", m.momentum !== null ? m.momentum.toFixed(2) : "—", m.label ?? "—"]),
+          },
+        ],
+      });
+    }
     sections.push({ title: "01 한 줄 판정", blocks: [{ kind: "text", text: s.verdict.label }] });
     sections.push({ title: "02 그날의 숫자", blocks: [kpiBlock(s.kpiCards)] });
     sections.push({

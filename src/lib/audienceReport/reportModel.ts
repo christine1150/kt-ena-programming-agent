@@ -101,6 +101,15 @@ export interface SkyUhdSubstituteSection {
   coverage: CoverageInfo;
 }
 
+// N절 Phase 2d(2026-09-01) — Health Score/Program Momentum(구 시스템 이식, MODE A 전용).
+// ChannelHealthScore는 src/lib/channelHealthScore.ts의 순수 함수 결과를 그대로 담는다(재정의 없음).
+export interface ProgramMomentumRow {
+  programId: string;
+  canonicalName: string | null;
+  momentum: number | null;
+  label: "RISING" | "STABLE" | "DECLINING" | null;
+}
+
 // ---------------- MODE A(하루) — §06 01~09 순서 그대로 ----------------
 export interface ModeASection {
   verdict: DailyOutlierVerdict; // 01 한 줄 판정
@@ -117,6 +126,9 @@ export interface ModeASection {
   targetHourlyPattern: Maybe<{ cells: TargetHourlyCell[]; peaks: DemographicPeakHour[]; caption: ChartCaptionInfo }>;
   programAudienceCross: Maybe<ProgramAudienceCrossRow[]>;
   competitorScheduleChanges: Maybe<CompetitorScheduleChangeGroup[]>;
+  // N절 Phase 2d — §06 번호 순서 밖(Phase 12와 같은 위치 원칙). skyUHD는 항상 available:false.
+  healthScore: Maybe<import("../channelHealthScore").ChannelHealthScore>;
+  programMomentum: Maybe<ProgramMomentumRow[]>;
 }
 
 // ---------------- MODE B(시작~끝) — §06 01~10 순서 그대로 ----------------

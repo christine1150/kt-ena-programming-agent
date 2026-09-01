@@ -94,6 +94,139 @@ export interface DemographicProgramHighlight {
   delta_pct: number | null;
 }
 
+// N절 Phase 2d(2026-09-01) — Health Score/Program Momentum을 신 시스템 MODE A로 이식. 구 시스템
+// (channelHealthScore.ts의 computeChannelHealthScore, fit-score/route.ts, program-momentum/route.ts)
+// 이 이미 검증한 계산 그대로 재사용한다 — computeChannelHealthScore는 순수 함수라 그대로 import해
+// 쓰고(중복 없음), Fit Score/Momentum의 "값을 모으는" 조회 로직만 이 파일(lib) 안에 다시 둔다
+// (구 로직은 API 라우트 안에 있어 그대로 import할 수 없다 — Phase 1이 정한 "완전히 별개로 유지"
+// 원칙과 같은 이유의 의도적 소규모 재작성, computeWinWeakness가 두 시스템에 각각 있는 것과 동일한
+// 성격). 두 지표 모두 "오늘 하루" 개념이라(Fit Score는 최근 12주 percentile, Momentum은 최근 7일
+// vs 4주 평균) MODE A(단일 일자)에서만 계산한다 — 기간 리포트에 억지로 늘리지 않는다(구 시스템도
+// 같은 제약이었다, 계획서 G절).
+export interface DailyFitScoreItem {
+  programId: string;
+  canonicalName: string | null;
+  fitScore: number | null;
+  tag: "STRENGTHEN" | "KEEP" | "MOVE" | "REPLACE" | "TEST" | null;
+}
+export interface DailyMomentumItem {
+  programId: string;
+  canonicalName: string | null;
+  momentum: number | null;
+  label: "RISING" | "STABLE" | "DECLINING" | null;
+}
+export interface DailyHealthInputs {
+  narrativeSignal: { todayRank: number | null; baselineAvgRank: number | null; ratingDeltaPct: number | null } | null;
+  rootCauseTriggered: boolean;
+  opportunityTriggered: boolean;
+  fitScoreItems: DailyFitScoreItem[];
+  momentumItems: DailyMomentumItem[];
+}
+
+// program-momentum/route.ts(2026-08-27)와 동일한 임계값 — "다른 조정 없이 그대로 승계"가
+// 이식 원칙이므로 값을 바꾸지 않는다.
+const MOMENTUM_FOUR_WEEK_WINDOW_DAYS = 28;
+const MOMENTUM_RECENT_WINDOW_DAYS = 7;
+const MOMENTUM_RISING_THRESHOLD = 1.15;
+const MOMENTUM_DECLINING_THRESHOLD = 0.85;
+const MOMENTUM_MIN_SAMPLE_COUNT = 2;
+
+async function collectDailyHealthInputs(channelCode: string, dateTo: string, rankTargetLabel: string, programTargetLabel: string): Promise<DailyHealthInputs> {
+  const { data: channelRow } = await supabase.from("channels").select("id").eq("code", channelCode).maybeSingle();
+  const channelId = channelRow?.id as string | undefined;
+
+  const [narrativeRes, rootCauseRes, opportunityRes] = await Promise.all([
+    supabase.rpc("get_channel_daily_narrative", {
+      p_channel_code: channelCode,
+      p_target_label: rankTargetLabel,
+      p_program_target_label: programTargetLabel,
+      p_demographic_labels: [],
+      p_as_of_date: dateTo,
+    }),
+    supabase.rpc("get_root_cause_alert", { p_channel_code: channelCode, p_target_label: rankTargetLabel, p_as_of_date: dateTo }),
+    supabase.rpc("get_opportunity_alert", { p_channel_code: channelCode, p_target_label: rankTargetLabel, p_as_of_date: dateTo }),
+  ]);
+  const narrativeRow = narrativeRes.data?.[0] as { today_rank: number | null; baseline_avg_rank: number | null; rating_delta_pct: number | null } | undefined;
+  const narrativeSignal = narrativeRow
+    ? { todayRank: narrativeRow.today_rank, baselineAvgRank: narrativeRow.baseline_avg_rank, ratingDeltaPct: narrativeRow.rating_delta_pct }
+    : null;
+  const rootCauseTriggered = Boolean(rootCauseRes.data?.[0]?.triggered);
+  const opportunityTriggered = Boolean(opportunityRes.data?.[0]?.triggered);
+
+  if (!channelId) return { narrativeSignal, rootCauseTriggered, opportunityTriggered, fitScoreItems: [], momentumItems: [] };
+
+  // Fit Score — fit-score/route.ts와 동일한 "없으면 그때 한 번 계산" 패턴(하루 한 번만 계산되면
+  // 됨). 채널 하나만 넘겨 20초 statement_timeout을 피하는 것도 그대로 승계(2026-08-26 버그 수정).
+  const { count } = await supabase.from("mart_scheduling_fit_score").select("id", { count: "exact", head: true }).eq("as_of_date", dateTo).eq("channel_id", channelId);
+  if (!count || count === 0) {
+    await supabase.rpc("refresh_fit_score_mart", { p_as_of_date: dateTo, p_window_days: 84, p_channel_code: channelCode });
+  }
+  const { data: fitRows } = await supabase
+    .from("mart_scheduling_fit_score")
+    .select("program_id, fit_score, tag, programs(canonical_name)")
+    .eq("as_of_date", dateTo)
+    .eq("channel_id", channelId);
+
+  // 최근 14일 안에 실제로 방영된 프로그램만 "현재 편성 중"으로 본다(fit-score/route.ts와 동일).
+  const fourteenDaysAgo = new Date(`${dateTo}T00:00:00`);
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
+  const fourteenDaysAgoStr = `${fourteenDaysAgo.getFullYear()}-${String(fourteenDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(fourteenDaysAgo.getDate()).padStart(2, "0")}`;
+  const { data: recentProgramRows } = await supabase.from("ratings").select("program_id").eq("channel_id", channelId).eq("source_type", "nielsen_daily").not("program_id", "is", null).gte("broadcast_date", fourteenDaysAgoStr);
+  const recentProgramIds = new Set((recentProgramRows ?? []).map((r) => r.program_id as string));
+
+  const fitScoreItems: DailyFitScoreItem[] = ((fitRows ?? []) as { program_id: string; fit_score: number | null; tag: DailyFitScoreItem["tag"]; programs: { canonical_name: string } | { canonical_name: string }[] | null }[])
+    .filter((r) => recentProgramIds.has(r.program_id))
+    .map((r) => ({
+      programId: r.program_id,
+      canonicalName: Array.isArray(r.programs) ? (r.programs[0]?.canonical_name ?? null) : (r.programs?.canonical_name ?? null),
+      fitScore: r.fit_score,
+      tag: r.tag,
+    }));
+
+  // Program Momentum — program-momentum/route.ts와 동일 계산(최근 7일 평균 vs 최근 4주 평균).
+  let momentumItems: DailyMomentumItem[] = [];
+  const programIds = fitScoreItems.map((f) => f.programId);
+  const { data: targetRow } = programIds.length > 0 ? await supabase.from("targets").select("id").eq("label", programTargetLabel).maybeSingle() : { data: null };
+  if (targetRow && programIds.length > 0) {
+    const offsetDateStr = (days: number) => {
+      const d = new Date(`${dateTo}T00:00:00`);
+      d.setDate(d.getDate() - days);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    const fourWeekStart = offsetDateStr(MOMENTUM_FOUR_WEEK_WINDOW_DAYS - 1);
+    const recentStart = offsetDateStr(MOMENTUM_RECENT_WINDOW_DAYS - 1);
+    const { data: momentumRows } = await supabase
+      .from("ratings")
+      .select("program_id, broadcast_date, rating")
+      .eq("channel_id", channelId)
+      .eq("target_id", targetRow.id)
+      .in("source_type", ["nielsen_daily", "skyuhd"])
+      .in("program_id", programIds)
+      .not("rating", "is", null)
+      .gte("broadcast_date", fourWeekStart)
+      .lte("broadcast_date", dateTo);
+    const byProgram = new Map<string, { broadcast_date: string; rating: number }[]>();
+    for (const r of (momentumRows ?? []) as { program_id: string; broadcast_date: string; rating: number }[]) {
+      const list = byProgram.get(r.program_id) ?? [];
+      list.push({ broadcast_date: r.broadcast_date, rating: r.rating });
+      byProgram.set(r.program_id, list);
+    }
+    momentumItems = fitScoreItems.map((f) => {
+      const list = byProgram.get(f.programId) ?? [];
+      if (list.length === 0) return { programId: f.programId, canonicalName: f.canonicalName, momentum: null, label: null };
+      const fourWeekAvg = list.reduce((s, r) => s + r.rating, 0) / list.length;
+      const recentRows = list.filter((r) => r.broadcast_date >= recentStart);
+      if (recentRows.length < MOMENTUM_MIN_SAMPLE_COUNT) return { programId: f.programId, canonicalName: f.canonicalName, momentum: null, label: null };
+      const recentAvg = recentRows.reduce((s, r) => s + r.rating, 0) / recentRows.length;
+      const momentum = fourWeekAvg > 0 ? recentAvg / fourWeekAvg : null;
+      const label: DailyMomentumItem["label"] = momentum === null ? null : momentum >= MOMENTUM_RISING_THRESHOLD ? "RISING" : momentum <= MOMENTUM_DECLINING_THRESHOLD ? "DECLINING" : "STABLE";
+      return { programId: f.programId, canonicalName: f.canonicalName, momentum, label };
+    });
+  }
+
+  return { narrativeSignal, rootCauseTriggered, opportunityTriggered, fitScoreItems, momentumItems };
+}
+
 export interface AudienceReportRawData {
   channelCode: string;
   group: AudienceGroup;
@@ -153,6 +286,10 @@ export interface AudienceReportRawData {
   // skyUHD 전용(그 외 채널은 항상 null) — 수기 업로드 프로그램 로그. 두 소스 교차 계산은 다음
   // Phase(skyUHD 교차 엔진)의 몫, 여기서는 원본만 가져온다.
   skyUhdProgramLog: SkyUhdProgramLogRow[] | null;
+
+  // N절 Phase 2d(2026-09-01) — MODE A(단일 일자)·skyUHD 아님일 때만 채워진다. 그 외에는 null
+  // (기간 리포트에 억지로 확장하지 않음, 구 시스템과 같은 제약).
+  dailyHealthInputs: DailyHealthInputs | null;
 }
 
 // dashboard/channel/route.ts(2026-08-21, 기능 #15-3/#15-4)와 동일한 규칙 — 새로 만들지 않고
@@ -465,6 +602,11 @@ export async function collectAudienceReportData(channelCode: string, period: Res
       }))
     : null;
 
+  // N절 Phase 2d — Health Score/Momentum은 "오늘 하루" 개념이라 MODE A·skyUHD 아님일 때만.
+  // 위 Promise.all과 병렬로 두지 않고 순차 실행하는 이유: Fit Score가 "없으면 계산" 패턴이라
+  // (읽기→없으면 refresh→다시 읽기) 병렬 배치 안에 넣기보다 별도 단계로 두는 편이 명확하다.
+  const dailyHealthInputs = period.mode === "single_day" && !skyUhd ? await collectDailyHealthInputs(channelCode, dateTo, rankTargetLabel, programTargetLabel) : null;
+
   return {
     channelCode,
     group,
@@ -491,5 +633,6 @@ export async function collectAudienceReportData(channelCode: string, period: Res
     periodDemographicProgramHighlights,
     competitorScheduleChangeLog,
     hourlyProgramTitlesByDow,
+    dailyHealthInputs,
   };
 }

@@ -5,6 +5,7 @@
 // 고르고 라벨을 붙일 뿐(analyzer.ts와 같은 설계 원칙).
 import type { AudienceReportRawData, HourlyPatternRow } from "./dataCollector";
 import { computeDailyOutlierVerdict, computeStructuralVsTemporary, computeGrowthWeaknessMovers, computePeakHourByDemographic, summarizeCompetitorScheduleChanges } from "./analyzer";
+import { computeChannelHealthScore } from "@/lib/channelHealthScore";
 import { formatRating, formatPercent } from "./format";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import type {
@@ -31,6 +32,7 @@ import type {
   BreakdownRow,
   TargetHourlyCell,
   ProgramAudienceCrossRow,
+  ProgramMomentumRow,
 } from "./reportModel";
 
 function pctChange(curr: number | null, base: number | null): number | null {
@@ -199,6 +201,35 @@ export function buildModeASection(raw: AudienceReportRawData, extra: ModeAExtra)
 
   const skyUhd: ModeASection["skyUhd"] = isSkyUhd && extra.skyUhd ? { available: true, data: extra.skyUhd } : { available: false, reason: "skyUHD 전용 섹션입니다" };
 
+  // N절 Phase 2d(2026-09-01) — Health Score/Program Momentum. computeChannelHealthScore는
+  // 순수 함수(src/lib/channelHealthScore.ts) 그대로 재사용, 여기서는 입력만 raw에서 골라 넣는다.
+  const health = raw.dailyHealthInputs;
+  let healthScore: ModeASection["healthScore"] = { available: false, reason: isSkyUhd ? "skyUHD는 Health Score를 제공하지 않습니다" : "Health Score 계산에 필요한 자료가 없습니다" };
+  let programMomentum: ModeASection["programMomentum"] = { available: false, reason: isSkyUhd ? "skyUHD는 Program Momentum을 제공하지 않습니다" : "Program Momentum 계산에 필요한 자료가 없습니다" };
+  if (health) {
+    const fitScoreTagCounts = { STRENGTHEN: 0, KEEP: 0, MOVE: 0, REPLACE: 0, TEST: 0 };
+    for (const item of health.fitScoreItems) {
+      if (item.tag) fitScoreTagCounts[item.tag] += 1;
+    }
+    healthScore = {
+      available: true,
+      data: computeChannelHealthScore({
+        ratingDeltaPct: health.narrativeSignal?.ratingDeltaPct ?? null,
+        todayRank: health.narrativeSignal?.todayRank ?? null,
+        baselineAvgRank: health.narrativeSignal?.baselineAvgRank ?? null,
+        fitScoreTagCounts,
+        rootCauseTriggered: health.rootCauseTriggered,
+        opportunityTriggered: health.opportunityTriggered,
+        daypartGapChanges: raw.daypartOpportunity.map((d) => d.gap_change),
+      }),
+    };
+    const momentumRows: ProgramMomentumRow[] = health.momentumItems
+      .filter((m) => m.momentum !== null)
+      .sort((a, b) => (b.momentum ?? 0) - (a.momentum ?? 0))
+      .map((m) => ({ programId: m.programId, canonicalName: m.canonicalName, momentum: m.momentum, label: m.label }));
+    programMomentum = momentumRows.length > 0 ? { available: true, data: momentumRows } : { available: false, reason: "모멘텀을 계산할 수 있는 프로그램이 없습니다(최근 편성·표본 부족)" };
+  }
+
   return {
     verdict,
     kpiCards,
@@ -213,6 +244,8 @@ export function buildModeASection(raw: AudienceReportRawData, extra: ModeAExtra)
     targetHourlyPattern: buildTargetHourlyPatternSection(raw),
     programAudienceCross: buildProgramAudienceCrossFromDaily(raw),
     competitorScheduleChanges: buildCompetitorScheduleChangesSection(raw),
+    healthScore,
+    programMomentum,
   };
 }
 

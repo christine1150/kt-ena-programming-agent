@@ -20,6 +20,7 @@ import {
   PeriodComparisonMatrix,
   TargetHourlyHeatmap,
 } from "@/components/audienceReport/charts";
+import { HealthScoreBadge } from "@/components/HealthScoreBadge";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -262,6 +263,49 @@ function CompetitorScheduleChangeTable({ groups }: { groups: import("@/lib/audie
 function ModeABody({ sections: s, channelCode }: { sections: import("@/lib/audienceReport/reportModel").ModeASection; channelCode: string }) {
   return (
     <>
+      {/* N절 Phase 2d(2026-09-01) — Health Score/Program Momentum(구 시스템 이식). §06 번호
+          순서 밖(맨 위, "30초 요약" 성격) — 구 시스템에서도 항상 리포트 최상단에 있었다. */}
+      {s.healthScore.available && (
+        <Section title="Health Score">
+          <div className="flex flex-wrap items-center gap-3">
+            <HealthScoreBadge health={s.healthScore.data} variant="light" showReason />
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+              {s.healthScore.data.axes.map((a) => (
+                <li key={a.key}>
+                  {a.label}: {a.reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Section>
+      )}
+      {s.programMomentum.available && (
+        <Section title="Program Momentum">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-neutral-500">
+                <th className="py-1">프로그램</th>
+                <th className="py-1 text-right">최근 7일 대비 4주 평균</th>
+                <th className="py-1">판정</th>
+              </tr>
+            </thead>
+            <tbody>
+              {s.programMomentum.data.slice(0, 10).map((m) => (
+                <tr key={m.programId} className="border-t border-neutral-200/60 dark:border-neutral-800/60">
+                  <td className="py-1">{m.canonicalName ?? "이름 없음"}</td>
+                  <td className="py-1 text-right tabular-nums">{m.momentum !== null ? m.momentum.toFixed(2) : "—"}</td>
+                  <td className="py-1">
+                    {m.label === "RISING" && <span className="text-emerald-600">▲ 상승세</span>}
+                    {m.label === "DECLINING" && <span className="text-rose-600">▼ 하락세</span>}
+                    {m.label === "STABLE" && <span className="text-neutral-500">유지</span>}
+                    {m.label === null && "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )}
       <Section title="01 한 줄 판정">
         <p className="text-base">{s.verdict.label}</p>
       </Section>
