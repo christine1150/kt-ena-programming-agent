@@ -1625,12 +1625,37 @@ function ProgramRatingHistoryChart({
   // 날짜 비례 대신 "고유 날짜의 순번"으로 x좌표를 잡아 회차 간 간격을 항상 균일하게 하고,
   // 폭 기준은 "표준 회차 수"(8)로 고정해 회차가 적으면 오른쪽이 자연히 비어 있게 한다(회차가
   // 8개를 넘으면 그만큼 더 촘촘히 채워 넘치지 않게).
+  // 회차 축은 own2049(본방 회차)의 날짜만 기준으로 삼는다 — allDates(경쟁채널 등 다른 시리즈의
+  // 날짜까지 섞은 것)를 기준으로 하면, 경쟁채널이 회차 사이사이 날짜에도 값을 갖고 있을 때
+  // 그 "끼어든" 날짜들이 인덱스를 밀어내 회차 간 간격이 다시 들쭉날쭉해진다(실측으로 확인된
+  // 버그 — 2회→3회 사이에 경쟁채널만의 날짜가 껴 있어 간격이 3배로 벌어졌었다).
   const STANDARD_POINT_COUNT = 8;
-  const uniqueDates = Array.from(new Set(allDates)).sort();
+  const episodeAxisDates = own2049.length >= 2 ? own2049.map((p) => p.broadcast_date) : allDates;
+  const uniqueDates = Array.from(new Set(episodeAxisDates)).sort();
   const stepDenom = Math.max(STANDARD_POINT_COUNT - 1, uniqueDates.length - 1, 1);
   const STEP = (W - PAD_X * 2) / stepDenom;
   const dateIndex = new Map(uniqueDates.map((d, i) => [d, i]));
-  const xOf = (d: string) => PAD_X + (dateIndex.get(d) ?? 0) * STEP;
+  // 다른 시리즈(가구·직후재방 등 타 채널·경쟁채널)의 날짜가 회차 날짜와 정확히 일치하지 않으면
+  // (예: 경쟁채널이 회차 사이 날짜에도 값을 낸 경우) 가장 가까운 회차 날짜의 인덱스로 근사한다 —
+  // 그래야 그 시리즈도 "회차 축" 위에서 의미 있게 겹쳐 보인다(같은 그래프 안에서 서로 다른
+  // 좌표계를 쓰면 비교가 불가능해짐).
+  const sortedAxisTimes = uniqueDates.map((d) => new Date(`${d}T00:00:00`).getTime());
+  function nearestIndex(dateStr: string): number {
+    const exact = dateIndex.get(dateStr);
+    if (exact !== undefined) return exact;
+    const t = new Date(`${dateStr}T00:00:00`).getTime();
+    let best = 0;
+    let bestDiff = Infinity;
+    for (let i = 0; i < sortedAxisTimes.length; i++) {
+      const diff = Math.abs(sortedAxisTimes[i] - t);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = i;
+      }
+    }
+    return best;
+  }
+  const xOf = (d: string) => PAD_X + nearestIndex(d) * STEP;
 
   // 사용자 지시(2026-09-01): "가구 시청률이 2049보다 높은데(신병의 경우 2049 1.42, 가구 3.37)
   // 똑같이 나오는 것이 이상함 — 가구 기준의 y축 높이로 2049도 맞춰줄 것". 그동안 2049 선과 가구
