@@ -1063,7 +1063,12 @@ function MonthlyDriverCell({ driver, channelCode }: { driver: MonthlyDriver | nu
   if (!driver) return <span className="text-zinc-300">—</span>;
   const up = driver.contributionDelta >= 0;
   const cause = monthlyDriverCauseLabel(driver);
-  const isPrime = driver.primeAirCount >= 2;
+  // "프라임 프로그램"이라고 표기하려면 그 프로그램 편성의 상당 부분이 실제로 프라임에 있어야
+  // 한다 — 하루 종일 재방되는 프로그램이 프라임에 두어 번 걸쳤다고 프라임 편성으로 부르면
+  // 오해를 준다(실측: "유부녀킬러"는 108회 중 프라임 3회, 2.8%). 편성의 20% 이상이 프라임일
+  // 때만 배지를 단다. 이번 달 편성이 끊긴 프로그램(airCount=0)은 전월 기준으로 판단한다.
+  const primeBase = driver.airCount > 0 ? driver.airCount : driver.priorAirCount;
+  const isPrime = driver.primeAirCount >= 2 && primeBase > 0 && driver.primeAirCount / primeBase >= 0.2;
   return (
     <span className="flex flex-col gap-0.5">
       <span className="flex items-baseline gap-1">
