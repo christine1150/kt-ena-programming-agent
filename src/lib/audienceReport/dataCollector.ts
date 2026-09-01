@@ -131,10 +131,48 @@ const MOMENTUM_RISING_THRESHOLD = 1.15;
 const MOMENTUM_DECLINING_THRESHOLD = 0.85;
 const MOMENTUM_MIN_SAMPLE_COUNT = 2;
 
-async function collectDailyHealthInputs(channelCode: string, dateTo: string, rankTargetLabel: string, programTargetLabel: string): Promise<DailyHealthInputs> {
-  const { data: channelRow } = await supabase.from("channels").select("id").eq("code", channelCode).maybeSingle();
-  const channelId = channelRow?.id as string | undefined;
+// N절 Phase 2b(2026-09-01)에서 분리 — Fit Score 조회만 따로 떼어 MODE A(Health Score 입력)와
+// MODE D(Program Portfolio, 아래 참고)가 공유한다. Fit Score 자체가 "as-of-date 기준 최근 12주"
+// 개념이라 기간 모드와 무관하게 항상 dateTo만 있으면 계산 가능 — 계산 로직은 바꾸지 않았다.
+async function collectFitScoreItems(channelId: string, channelCode: string, dateTo: string): Promise<DailyFitScoreItem[]> {
+  const { count } = await supabase.from("mart_scheduling_fit_score").select("id", { count: "exact", head: true }).eq("as_of_date", dateTo).eq("channel_id", channelId);
+  if (!count || count === 0) {
+    await supabase.rpc("refresh_fit_score_mart", { p_as_of_date: dateTo, p_window_days: 84, p_channel_code: channelCode });
+  }
+  const { data: fitRows } = await supabase
+    .from("mart_scheduling_fit_score")
+    .select("program_id, fit_score, tag, programs(canonical_name)")
+    .eq("as_of_date", dateTo)
+    .eq("channel_id", channelId);
 
+  // 최근 14일 안에 실제로 방영된 프로그램만 "현재 편성 중"으로 본다(fit-score/route.ts와 동일).
+  const fourteenDaysAgo = new Date(`${dateTo}T00:00:00`);
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
+  const fourteenDaysAgoStr = `${fourteenDaysAgo.getFullYear()}-${String(fourteenDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(fourteenDaysAgo.getDate()).padStart(2, "0")}`;
+  const { data: recentProgramRows } = await supabase.from("ratings").select("program_id").eq("channel_id", channelId).eq("source_type", "nielsen_daily").not("program_id", "is", null).gte("broadcast_date", fourteenDaysAgoStr);
+  const recentProgramIds = new Set((recentProgramRows ?? []).map((r) => r.program_id as string));
+
+  return ((fitRows ?? []) as { program_id: string; fit_score: number | null; tag: DailyFitScoreItem["tag"]; programs: { canonical_name: string } | { canonical_name: string }[] | null }[])
+    .filter((r) => recentProgramIds.has(r.program_id))
+    .map((r) => ({
+      programId: r.program_id,
+      canonicalName: Array.isArray(r.programs) ? (r.programs[0]?.canonical_name ?? null) : (r.programs?.canonical_name ?? null),
+      fitScore: r.fit_score,
+      tag: r.tag,
+    }));
+}
+
+// channelId/fitScoreItems를 파라미터로 받는다 — 둘 다 호출부(collectAudienceReportData)가 MODE D의
+// Program Portfolio(Phase 2b)와 공유하려고 이미 한 번 조회해둔 것을 그대로 넘겨받아, 같은 조회를
+// 두 번 하지 않는다.
+async function collectDailyHealthInputs(
+  channelCode: string,
+  channelId: string | undefined,
+  dateTo: string,
+  rankTargetLabel: string,
+  programTargetLabel: string,
+  fitScoreItems: DailyFitScoreItem[]
+): Promise<DailyHealthInputs> {
   const [narrativeRes, rootCauseRes, opportunityRes] = await Promise.all([
     supabase.rpc("get_channel_daily_narrative", {
       p_channel_code: channelCode,
@@ -154,34 +192,6 @@ async function collectDailyHealthInputs(channelCode: string, dateTo: string, ran
   const opportunityTriggered = Boolean(opportunityRes.data?.[0]?.triggered);
 
   if (!channelId) return { narrativeSignal, rootCauseTriggered, opportunityTriggered, fitScoreItems: [], momentumItems: [] };
-
-  // Fit Score — fit-score/route.ts와 동일한 "없으면 그때 한 번 계산" 패턴(하루 한 번만 계산되면
-  // 됨). 채널 하나만 넘겨 20초 statement_timeout을 피하는 것도 그대로 승계(2026-08-26 버그 수정).
-  const { count } = await supabase.from("mart_scheduling_fit_score").select("id", { count: "exact", head: true }).eq("as_of_date", dateTo).eq("channel_id", channelId);
-  if (!count || count === 0) {
-    await supabase.rpc("refresh_fit_score_mart", { p_as_of_date: dateTo, p_window_days: 84, p_channel_code: channelCode });
-  }
-  const { data: fitRows } = await supabase
-    .from("mart_scheduling_fit_score")
-    .select("program_id, fit_score, tag, programs(canonical_name)")
-    .eq("as_of_date", dateTo)
-    .eq("channel_id", channelId);
-
-  // 최근 14일 안에 실제로 방영된 프로그램만 "현재 편성 중"으로 본다(fit-score/route.ts와 동일).
-  const fourteenDaysAgo = new Date(`${dateTo}T00:00:00`);
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
-  const fourteenDaysAgoStr = `${fourteenDaysAgo.getFullYear()}-${String(fourteenDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(fourteenDaysAgo.getDate()).padStart(2, "0")}`;
-  const { data: recentProgramRows } = await supabase.from("ratings").select("program_id").eq("channel_id", channelId).eq("source_type", "nielsen_daily").not("program_id", "is", null).gte("broadcast_date", fourteenDaysAgoStr);
-  const recentProgramIds = new Set((recentProgramRows ?? []).map((r) => r.program_id as string));
-
-  const fitScoreItems: DailyFitScoreItem[] = ((fitRows ?? []) as { program_id: string; fit_score: number | null; tag: DailyFitScoreItem["tag"]; programs: { canonical_name: string } | { canonical_name: string }[] | null }[])
-    .filter((r) => recentProgramIds.has(r.program_id))
-    .map((r) => ({
-      programId: r.program_id,
-      canonicalName: Array.isArray(r.programs) ? (r.programs[0]?.canonical_name ?? null) : (r.programs?.canonical_name ?? null),
-      fitScore: r.fit_score,
-      tag: r.tag,
-    }));
 
   // Program Momentum — program-momentum/route.ts와 동일 계산(최근 7일 평균 vs 최근 4주 평균).
   let momentumItems: DailyMomentumItem[] = [];
@@ -290,6 +300,9 @@ export interface AudienceReportRawData {
   // N절 Phase 2d(2026-09-01) — MODE A(단일 일자)·skyUHD 아님일 때만 채워진다. 그 외에는 null
   // (기간 리포트에 억지로 확장하지 않음, 구 시스템과 같은 제약).
   dailyHealthInputs: DailyHealthInputs | null;
+  // N절 Phase 2b(2026-09-01) — MODE A·MODE D(누적/QTD/YTD)·skyUHD 아닐 때만. MODE A는
+  // dailyHealthInputs.fitScoreItems와 같은 값(중복 조회 없이 공유), MODE D는 이 필드로만 제공된다.
+  fitScoreItems: DailyFitScoreItem[];
 }
 
 // dashboard/channel/route.ts(2026-08-21, 기능 #15-3/#15-4)와 동일한 규칙 — 새로 만들지 않고
@@ -602,10 +615,21 @@ export async function collectAudienceReportData(channelCode: string, period: Res
       }))
     : null;
 
-  // N절 Phase 2d — Health Score/Momentum은 "오늘 하루" 개념이라 MODE A·skyUHD 아님일 때만.
-  // 위 Promise.all과 병렬로 두지 않고 순차 실행하는 이유: Fit Score가 "없으면 계산" 패턴이라
-  // (읽기→없으면 refresh→다시 읽기) 병렬 배치 안에 넣기보다 별도 단계로 두는 편이 명확하다.
-  const dailyHealthInputs = period.mode === "single_day" && !skyUhd ? await collectDailyHealthInputs(channelCode, dateTo, rankTargetLabel, programTargetLabel) : null;
+  // N절 Phase 2d/2b(2026-09-01) — Fit Score(Program Portfolio)는 "as-of-date 기준 최근 12주"
+  // 개념이라 기간 모드와 무관하게 계산 가능하다 — MODE A(Health Score 입력)와 MODE D(Program
+  // Portfolio 섹션, Quarterly/Annual tier가 쓰던 것과 같은 값)가 공유한다. skyUHD·light(포트폴리오
+  // 종합 리포트)는 건너뛴다. 위 Promise.all과 병렬로 두지 않는 이유: "없으면 계산" 패턴이라(읽기→
+  // 없으면 refresh→다시 읽기) 별도 단계로 두는 편이 명확하다.
+  const wantsFitScore = !skyUhd && !light && (period.mode === "single_day" || period.mode === "cumulative");
+  let fitScoreItems: DailyFitScoreItem[] = [];
+  let channelIdForFit: string | undefined;
+  if (wantsFitScore) {
+    const { data: channelRow } = await supabase.from("channels").select("id").eq("code", channelCode).maybeSingle();
+    channelIdForFit = channelRow?.id as string | undefined;
+    if (channelIdForFit) fitScoreItems = await collectFitScoreItems(channelIdForFit, channelCode, dateTo);
+  }
+  const dailyHealthInputs =
+    period.mode === "single_day" && !skyUhd ? await collectDailyHealthInputs(channelCode, channelIdForFit, dateTo, rankTargetLabel, programTargetLabel, fitScoreItems) : null;
 
   return {
     channelCode,
@@ -634,5 +658,6 @@ export async function collectAudienceReportData(channelCode: string, period: Res
     competitorScheduleChangeLog,
     hourlyProgramTitlesByDow,
     dailyHealthInputs,
+    fitScoreItems,
   };
 }

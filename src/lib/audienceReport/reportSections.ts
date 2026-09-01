@@ -4,7 +4,7 @@
 // 산출물만 입력으로 받아 §06 순서 그대로 섹션 객체를 조립한다. 새 계산 없음 — 이미 검증된 값 중에서
 // 고르고 라벨을 붙일 뿐(analyzer.ts와 같은 설계 원칙).
 import type { AudienceReportRawData, HourlyPatternRow } from "./dataCollector";
-import { computeDailyOutlierVerdict, computeStructuralVsTemporary, computeGrowthWeaknessMovers, computePeakHourByDemographic, summarizeCompetitorScheduleChanges } from "./analyzer";
+import { computeDailyOutlierVerdict, computeStructuralVsTemporary, computeGrowthWeaknessMovers, computePeakHourByDemographic, summarizeCompetitorScheduleChanges, computeDaypartWinWeakness } from "./analyzer";
 import { computeChannelHealthScore } from "@/lib/channelHealthScore";
 import { formatRating, formatPercent } from "./format";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
@@ -501,6 +501,18 @@ export function buildModeDSection(raw: AudienceReportRawData, extra: ModeDExtra)
 
   const skyUhd: ModeDSection["skyUhd"] = isSkyUhd && extra.skyUhd ? { available: true, data: extra.skyUhd } : { available: false, reason: "skyUHD 전용 섹션입니다" };
 
+  // N절 Phase 2b(2026-09-01) — daypart Win/Weakness(이미 계산되던 값을 처음 연결), Program
+  // Portfolio(Fit Score Top/Weak, MODE A와 같은 조회를 raw.fitScoreItems로 공유).
+  const daypartWinWeakness = computeDaypartWinWeakness(raw.daypartOpportunity);
+  const strongPrograms = raw.fitScoreItems.filter((f) => f.tag === "STRENGTHEN" || f.tag === "KEEP").sort((a, b) => (b.fitScore ?? 0) - (a.fitScore ?? 0)).slice(0, 5);
+  const weakPrograms = raw.fitScoreItems.filter((f) => f.tag === "REPLACE").sort((a, b) => (a.fitScore ?? 0) - (b.fitScore ?? 0)).slice(0, 5);
+  const programPortfolio: ModeDSection["programPortfolio"] =
+    isSkyUhd
+      ? { available: false, reason: "skyUHD는 Program Portfolio(Fit Score)를 제공하지 않습니다" }
+      : strongPrograms.length > 0 || weakPrograms.length > 0
+        ? { available: true, data: { strong: strongPrograms, weak: weakPrograms } }
+        : { available: false, reason: "Fit Score 계산 대상 프로그램이 없습니다" };
+
   return {
     currentPosition: {
       cumulativeAvg: p?.avg_rating ?? null,
@@ -519,5 +531,7 @@ export function buildModeDSection(raw: AudienceReportRawData, extra: ModeDExtra)
     targetHourlyPattern: buildTargetHourlyPatternSection(raw),
     programAudienceCross: buildProgramAudienceCrossFromPeriod(raw),
     competitorScheduleChanges: buildCompetitorScheduleChangesSection(raw),
+    daypartWinWeakness,
+    programPortfolio,
   };
 }

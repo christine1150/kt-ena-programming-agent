@@ -236,6 +236,12 @@ export interface ModeDSection {
   targetHourlyPattern: Maybe<{ cells: TargetHourlyCell[]; peaks: DemographicPeakHour[]; caption: ChartCaptionInfo }>;
   programAudienceCross: Maybe<ProgramAudienceCrossRow[]>;
   competitorScheduleChanges: Maybe<CompetitorScheduleChangeGroup[]>;
+  // N절 Phase 2b(2026-09-01, 구 시스템 Quarterly/Annual tier 이식) — §06 번호 순서 밖(Phase 12와
+  // 같은 위치 원칙). daypartWinWeakness는 analyzer.ts의 computeDaypartWinWeakness가 이미 계산해
+  // 두고도 어디에도 안 쓰이던 값을 처음 연결한 것(새 계산 아님). programPortfolio는 MODE A(Phase
+  // 2d)와 같은 Fit Score 조회를 재사용한다.
+  daypartWinWeakness: { win: import("./analyzer").DaypartVerdict | null; weakness: import("./analyzer").DaypartVerdict | null };
+  programPortfolio: Maybe<{ strong: import("./dataCollector").DailyFitScoreItem[]; weak: import("./dataCollector").DailyFitScoreItem[] }>;
 }
 
 export type AudienceReportBody =

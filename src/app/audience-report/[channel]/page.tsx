@@ -590,6 +590,64 @@ function ModeDBody({ sections: s, channelCode }: { sections: import("@/lib/audie
       <Section title="08 누적 기여 상위">
         <MoverTable rows={s.topContributors} channelCode={channelCode} />
       </Section>
+      {/* N절 Phase 2b(2026-09-01, 구 시스템 Quarterly/Annual tier 이식) — §06 번호 순서 밖. */}
+      {(s.daypartWinWeakness.win || s.daypartWinWeakness.weakness) && (
+        <Section title="시간대(daypart) Win/Weakness">
+          <div className="grid gap-4 sm:grid-cols-2 text-sm">
+            <div>
+              <div className="mb-1 text-xs font-medium text-neutral-500">가장 격차가 좁혀진 시간대(Win)</div>
+              {s.daypartWinWeakness.win ? (
+                <p>
+                  {s.daypartWinWeakness.win.daypartLabel} — {s.daypartWinWeakness.win.gapChange >= 0 ? "▲" : "▼"}
+                  {Math.abs(s.daypartWinWeakness.win.gapChange).toFixed(2)}%p
+                </p>
+              ) : (
+                <Unavailable reason="비교 가능한 daypart 자료가 없습니다" />
+              )}
+            </div>
+            <div>
+              <div className="mb-1 text-xs font-medium text-neutral-500">가장 격차가 벌어진 시간대(Weakness)</div>
+              {s.daypartWinWeakness.weakness ? (
+                <p>
+                  {s.daypartWinWeakness.weakness.daypartLabel} — {s.daypartWinWeakness.weakness.gapChange >= 0 ? "▲" : "▼"}
+                  {Math.abs(s.daypartWinWeakness.weakness.gapChange).toFixed(2)}%p
+                </p>
+              ) : (
+                <Unavailable reason="비교 가능한 daypart 자료가 없습니다" />
+              )}
+            </div>
+          </div>
+        </Section>
+      )}
+      <Section title="Program Portfolio(Fit Score)">
+        <WithMaybe
+          maybe={s.programPortfolio}
+          render={(d) => (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <div className="mb-1 text-xs font-medium text-neutral-500">STRENGTHEN/KEEP</div>
+                <ul className="text-sm">
+                  {d.strong.map((f) => (
+                    <li key={f.programId} className="border-t border-neutral-200/60 py-1 dark:border-neutral-800/60">
+                      {f.canonicalName ?? "이름 없음"} — Fit {f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <div className="mb-1 text-xs font-medium text-neutral-500">REPLACE</div>
+                <ul className="text-sm">
+                  {d.weak.map((f) => (
+                    <li key={f.programId} className="border-t border-neutral-200/60 py-1 dark:border-neutral-800/60">
+                      {f.canonicalName ?? "이름 없음"} — Fit {f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        />
+      </Section>
       {s.skyUhd.available && (
         <Section title="skyUHD 전용 분석">
           <SkyUhdSubstituteView data={s.skyUhd.data} />

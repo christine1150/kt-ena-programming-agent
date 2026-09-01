@@ -231,6 +231,25 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
           ? [{ kind: "table", headers: ["프로그램", "기간 평균", "방영 횟수"], rows: s.topContributors.map((m) => [m.canonicalName, formatRating(m.periodAvgRating, code), String(m.periodAirCount ?? "—")]) }]
           : [{ kind: "note", text: "누적 기여 자료가 없습니다" }],
     });
+    // N절 Phase 2b(2026-09-01) — §06 번호 순서 밖.
+    if (s.daypartWinWeakness.win || s.daypartWinWeakness.weakness) {
+      sections.push({
+        title: "시간대(daypart) Win/Weakness",
+        blocks: [
+          { kind: "text", text: s.daypartWinWeakness.win ? `Win: ${s.daypartWinWeakness.win.daypartLabel} (${pct(s.daypartWinWeakness.win.gapChange)})` : "Win: 자료 없음" },
+          { kind: "text", text: s.daypartWinWeakness.weakness ? `Weakness: ${s.daypartWinWeakness.weakness.daypartLabel} (${pct(s.daypartWinWeakness.weakness.gapChange)})` : "Weakness: 자료 없음" },
+        ],
+      });
+    }
+    sections.push({
+      title: "Program Portfolio(Fit Score)",
+      blocks: fromMaybe(s.programPortfolio, (d) => [
+        { kind: "text", text: "STRENGTHEN/KEEP" },
+        { kind: "bullets", items: d.strong.map((f) => `${f.canonicalName ?? "이름 없음"} — Fit ${f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}`) },
+        { kind: "text", text: "REPLACE" },
+        { kind: "bullets", items: d.weak.map((f) => `${f.canonicalName ?? "이름 없음"} — Fit ${f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}`) },
+      ]),
+    });
   }
 
   // Phase 12 공통 섹션(4개 모드 전부 같은 모양) — §06 번호 밖.
