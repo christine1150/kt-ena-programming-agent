@@ -1211,11 +1211,14 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
         <table className="w-full text-left text-[12px]">
           <thead>
             <tr className="text-zinc-400">
-              <th className="pb-1 font-medium">채널</th>
-              <th className="pb-1 text-right font-medium">순위</th>
-              <th className="pb-1 text-left font-medium">전월 대비</th>
-              <th className="pb-1 text-right font-medium">시청률</th>
-              <th className="pb-1 text-left font-medium">전월 대비</th>
+              <th className="pb-1 pr-3 font-medium">채널</th>
+              <th className="pb-1 pr-1 text-right font-medium">순위</th>
+              {/* 사용자 지시(2026-09-01): "순위와 전월 대비, 시청률과 전월 대비 사이를 띄워서
+                  가독률을 높여달라" — 값 열과 등락 열이 바로 붙어 있어 좁아 보였다. 등락 열
+                  앞쪽에 여백(pl-3)을 줘 두 열이 시각적으로 구분되게 한다. */}
+              <th className="pb-1 pl-3 text-left font-medium">전월 대비</th>
+              <th className="pb-1 pr-1 text-right font-medium">시청률</th>
+              <th className="pb-1 pl-3 text-left font-medium">전월 대비</th>
               <th className="pb-1 text-left font-medium">상승 견인</th>
               <th className="pb-1 text-left font-medium">하락 요인</th>
             </tr>
@@ -1229,17 +1232,19 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
                 c.ratingChangePct === null || c.ratingChangePct === 0 ? MONTHLY_FLAT_COLOR : c.ratingChangePct > 0 ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR;
               return (
                 <tr key={c.channelCode} className="border-t border-zinc-100 align-top">
-                  <td className="py-1.5 font-semibold" style={{ color }}>
+                  <td className="py-1.5 pr-3 font-semibold" style={{ color }}>
                     {nameOf(c.channelCode)}
                   </td>
-                  <td className="py-1.5 text-right font-bold tabular-nums" style={{ color }}>
+                  {/* 사용자 지시(2026-09-01): "순위 폰트는 검정색으로 다시 변경" — 채널 로고색은
+                      채널명 칸에만 남기고, 순위 숫자는 다시 검정(zinc-900)으로. */}
+                  <td className="py-1.5 pr-1 text-right font-bold tabular-nums text-zinc-900">
                     {cur.rank !== null ? `#${cur.rank}` : "—"}
                   </td>
-                  <td className="py-1.5 text-left tabular-nums" style={{ color: rankDeltaColor }}>
+                  <td className="py-1.5 pl-3 text-left tabular-nums" style={{ color: rankDeltaColor }}>
                     {c.rankChange === null ? "" : c.rankChange === 0 ? "유지" : `${c.rankChange > 0 ? "▲" : "▼"}${Math.abs(c.rankChange)}`}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums text-zinc-700">{cur.rating !== null ? formatRating(cur.rating, c.channelCode) : "—"}</td>
-                  <td className="py-1.5 text-left tabular-nums" style={{ color: ratingDeltaColor }}>
+                  <td className="py-1.5 pr-1 text-right tabular-nums text-zinc-700">{cur.rating !== null ? formatRating(cur.rating, c.channelCode) : "—"}</td>
+                  <td className="py-1.5 pl-3 text-left tabular-nums" style={{ color: ratingDeltaColor }}>
                     {c.ratingChangePct === null
                       ? ""
                       : c.ratingChangePct === 0
