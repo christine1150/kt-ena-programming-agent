@@ -15,12 +15,26 @@ import MailIngestionManager from "./MailIngestionManager";
 import SkyUhdUploader from "./SkyUhdUploader";
 import TargetGoalsManager from "./TargetGoalsManager";
 import OlifeEpgUploader from "./OlifeEpgUploader";
-import ManualDramaReportUploader from "./ManualDramaReportUploader";
-import ManualOriginalReportUploader from "./ManualOriginalReportUploader";
+// 사용자 지시(2026-09-01, 관리자 화면 중복 점검): "PD 수동 회차 리포트"(드라마 양식)와
+// "PD 수동 오리지널예능 리포트"(예능 양식) 두 카드를 ManualReportUploader 하나로 합쳤다 —
+// 화면·채널 선택·결과 표시가 사실상 같은 코드였고, 같은 테이블(program_manual_reports)에
+// 같은 키로 저장해 Page 1의 같은 섹션을 채우고 있었다. 이제 양식을 자동 판별한다.
+// 옛 컴포넌트 2개는 trash-can/으로 이동(사용자 최종 확인 후 삭제, CLAUDE.md 파일 관리 규칙).
+import ManualReportUploader from "./ManualReportUploader";
 import OlifeEpisodeCatalogUploader from "./OlifeEpisodeCatalogUploader";
 import DailyNewsManager from "./DailyNewsManager";
 import MarketYtdRankUploader from "./MarketYtdRankUploader";
 import LogoutButton from "./LogoutButton";
+
+// 묶음 소제목 — 카드가 아니라 구분선 역할만 한다(첫 묶음은 위 여백을 주지 않아도 되게 mt로만 조정).
+function AdminSectionHeading({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="mt-2 border-t border-zinc-200 pt-4">
+      <h2 className="text-sm font-semibold tracking-wide text-zinc-700">{title}</h2>
+      <p className="text-xs text-zinc-400">{description}</p>
+    </div>
+  );
+}
 
 export default async function AdminPage() {
   const session = await getAdminSession();
@@ -56,35 +70,32 @@ export default async function AdminPage() {
           </div>
         </div>
 
-        {/* 사용자 지시(2026-08-26): 아래 순서(1~7)로 고정, 나머지는 중요도 순(PD 실사용
-            빈도·영향 범위 기준) — PD 수동 회차 리포트(1페이지 헤드라인에 직접 반영, 주간 단위)
-            → 목표 시청률(KPI 달성률 전반에 영향, 연 단위) → 연간 누적 채널 순위(skyUHD 국한) →
-            OLIFE 회차 카탈로그(보조 메타데이터) → 메일 자동 수집 상태 확인(cron 디버그용). */}
+        {/* 사용자 지시(2026-08-26): 아래 순서로 고정, 나머지는 중요도 순(PD 실사용 빈도·영향
+            범위 기준).
+            사용자 지시(2026-09-01, 배치 점검): 카드 14개가 아무 구분 없이 한 줄로 이어져 있어
+            "지금 뭘 해야 하는 화면인지"가 보이지 않았다 — 실제 사용 주기(매일 / 수시 / 가끔
+            바뀌는 기준 정보 / 점검용)로 4개 묶음으로 나누고 소제목을 붙였다. 카드 자체와 그
+            안의 동작은 하나도 바꾸지 않았고 순서도 기존 중요도 순을 유지한다(위치만 묶음 안으로). */}
         <ShareLinkManager />
 
+        <AdminSectionHeading title="매일 올리는 자료" description="닐슨이 보내주는 파일을 그대로 올리는 곳입니다." />
         <NielsenDailyUploader />
         <NielsenPeriodUploader />
-
         <SkyUhdUploader />
-
         <OlifeEpgUploader />
 
+        <AdminSectionHeading title="1페이지에 바로 반영되는 내용" description="PD가 수시로 올리거나 고치는 항목 — 올리는 즉시 대시보드 화면이 바뀝니다." />
         <DailyNewsManager />
-
-        <ChannelMasterUploader />
-
         <FeaturedContentManager />
+        <ManualReportUploader />
 
-        <ManualDramaReportUploader />
-
-        <ManualOriginalReportUploader />
-
+        <AdminSectionHeading title="기준 정보(가끔 바뀜)" description="채널·목표·경쟁채널처럼 한 번 정하면 오래 쓰는 값입니다." />
+        <ChannelMasterUploader />
         <TargetGoalsManager />
-
         <MarketYtdRankUploader />
-
         <OlifeEpisodeCatalogUploader />
 
+        <AdminSectionHeading title="점검" description="자동 수집이 제대로 돌고 있는지 확인합니다." />
         <MailIngestionManager />
       </div>
     </div>

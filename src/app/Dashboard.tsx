@@ -3,7 +3,7 @@
 // Page 1 종합 대시보드 (DESIGN.md 1.2 참고 — 참고 이미지의 파스텔 블루·라벤더 그라디언트 +
 // 글래스모피즘 화이트 카드 톤을 따른다). 숫자는 전부 /api/dashboard/page1이 SQL로 계산해
 // 내려준 값을 그대로 표시하고, 여기서는 문장 조립(줄글 인사이트)만 한다.
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { AskAssistantWidget } from "@/components/AskAssistantWidget";
@@ -328,6 +328,27 @@ interface DashboardData {
   // 월요일일 때만(route.ts) 채워진다. 채널별 인사이트와 같은 원시 신호(ChannelNarrativeSignal)를
   // 토·일 각각에 대해 한 번 더 담아, 화면에서 buildChannelNarrative를 그대로 재사용해 요약한다.
   weekendReport: { saturday: { date: string; signals: ChannelNarrativeSignal[] }; sunday: { date: string; signals: ChannelNarrativeSignal[] } } | null;
+  // 사용자 지시(2026-09-01): "월간 DB가 업데이트 되는 날"(asOfDate가 그 달의 마지막 날)에만
+  // route.ts가 채워준다 — 그 해 1월부터 해당 월까지의 채널별 월간 시장 순위·시청률(§O의
+  // nielsen_period_rank, 닐슨이 기간 전체로 매긴 값)과 그 달 등락을 이끈 프로그램.
+  monthlyReview: MonthlyReview | null;
+}
+interface MonthlyReviewChannel {
+  channelCode: string;
+  targetLabel: string;
+  months: { month: number; rank: number | null; rating: number | null }[];
+  rankChange: number | null;
+  ratingChangePct: number | null;
+  growthDriver: { programName: string; ratingDelta: number } | null;
+  weaknessDriver: { programName: string; ratingDelta: number } | null;
+}
+interface MonthlyReview {
+  year: number;
+  month: number;
+  monthStart: string;
+  monthEnd: string;
+  priorMonthStart: string | null;
+  channels: MonthlyReviewChannel[];
 }
 
 // 사용자 지시: 인사이트·킬러콘텐츠는 이 순서로 언급 (ENA → ENA Play → ENA Drama → OLIFE → ONCE → ENA Story)
@@ -898,6 +919,248 @@ function WeekendReportCard({
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 월간 리뷰(사용자 지시 2026-09-01) — 월간 시청률 DB가 올라오는 날(그 달의 마지막 날 데이터가
+// 반영된 날)에만 보이는 섹션. 주말 리포트와 같은 날 겹칠 수 있으므로 서로 완전히 독립된
+// 섹션으로 둔다(사용자 지시: "둘 다 각각의 섹션으로 반영").
+//
+// 순위는 낮을수록 좋으므로 그래프 y축을 뒤집어(1위가 위) 그린다. Group A(수도권 2049 KPI)와
+// Group B(전국 유료가구 KPI)는 측정 유니버스가 서로 달라 한 그래프에 겹쳐 그리면 안 된다 —
+// 이 프로젝트가 이미 갖고 있는 규칙(audienceReport/validate.ts의 checkGroupIsolation)을 그대로
+// 따라 두 장으로 나눈다. 순위 폭도 크게 달라(예: ENA #7 vs skyUHD #196) 나누는 편이 읽기도 쉽다.
+const MONTHLY_GROUP_A = ["ENA", "ENA_PLAY", "ENA_DRAMA"];
+const MONTHLY_GROUP_B = ["OLIFE", "ONCE", "ENA_STORY", "SKYUHD"];
+const MONTH_LABELS = ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"];
+
+function MonthlyRankTrendChart({
+  groupLabel,
+  targetLabel,
+  channels,
+  monthCount,
+  themeColorByCode,
+}: {
+  groupLabel: string;
+  targetLabel: string;
+  channels: MonthlyReviewChannel[];
+  monthCount: number;
+  themeColorByCode: Map<string, string | null>;
+}) {
+  const ranked = channels.filter((c) => c.months.some((m) => m.rank !== null));
+  if (ranked.length === 0 || monthCount < 2) return null;
+  const allRanks = ranked.flatMap((c) => c.months.map((m) => m.rank).filter((r): r is number => r !== null));
+  const minRank = Math.min(...allRanks);
+  const maxRank = Math.max(...allRanks);
+  const range = maxRank - minRank || 1;
+  const W = 560;
+  const H = 190;
+  const PAD_L = 34; // y축 순위 눈금 자리
+  const PAD_R = 74; // 오른쪽 끝 채널명 라벨 자리
+  const PAD_Y = 18;
+  const xOf = (month: number) => PAD_L + ((month - 1) / (monthCount - 1)) * (W - PAD_L - PAD_R);
+  // 순위는 낮을수록 좋다 — 최상위(minRank)를 위로 올린다.
+  const yOf = (rank: number) => PAD_Y + ((rank - minRank) / range) * (H - PAD_Y * 2);
+  const tickRanks = [minRank, Math.round((minRank + maxRank) / 2), maxRank].filter((v, i, a) => a.indexOf(v) === i);
+  return (
+    <div className="rounded-xl bg-zinc-50 p-3">
+      <p className="mb-1 text-[11px] font-semibold text-zinc-500">
+        {groupLabel} <span className="font-normal text-zinc-400">· {targetLabel} 기준 시장 순위(위쪽일수록 상위)</span>
+      </p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+        {tickRanks.map((r) => (
+          <g key={r}>
+            <line x1={PAD_L} y1={yOf(r)} x2={W - PAD_R} y2={yOf(r)} stroke="#e4e4e7" strokeWidth={1} />
+            <text x={PAD_L - 6} y={yOf(r) + 3} textAnchor="end" fontSize={9} fill="#a1a1aa">
+              #{r}
+            </text>
+          </g>
+        ))}
+        {Array.from({ length: monthCount }, (_, i) => (
+          <text key={i} x={xOf(i + 1)} y={H - 3} textAnchor="middle" fontSize={9} fill="#a1a1aa">
+            {i + 1}
+          </text>
+        ))}
+        {ranked.map((c) => {
+          const color = themeColorByCode.get(c.channelCode) ?? "#71717a";
+          const pts = c.months.filter((m) => m.rank !== null);
+          const path = pts.map((m, i) => `${i === 0 ? "M" : "L"}${xOf(m.month).toFixed(1)},${yOf(m.rank!).toFixed(1)}`).join(" ");
+          const last = pts[pts.length - 1];
+          return (
+            <g key={c.channelCode}>
+              <path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              {pts.map((m) => (
+                <circle key={m.month} cx={xOf(m.month)} cy={yOf(m.rank!)} r={2.2} fill={color}>
+                  <title>
+                    {MONTH_LABELS[m.month - 1]} · {CHANNEL_NAME_BY_CODE[c.channelCode] ?? c.channelCode} #{m.rank}
+                    {m.rating !== null ? ` · ${formatRating(m.rating, c.channelCode)}` : ""}
+                  </title>
+                </circle>
+              ))}
+              {last && (
+                <text x={xOf(last.month) + 6} y={yOf(last.rank!) + 3} fontSize={9} fontWeight={700} fill={color}>
+                  {CHANNEL_NAME_BY_CODE[c.channelCode] ?? c.channelCode}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// 인사이트 문장 — 새 수치를 만들지 않고 위 표에 이미 있는 값(전월 대비 순위·시청률 등락)만
+// 골라 문장으로 옮긴다(채널별 인사이트·주말 리포트와 같은 "DB 값 라벨링만" 원칙).
+function buildMonthlyReviewInsights(review: MonthlyReview): string[] {
+  const withRankChange = review.channels.filter((c) => c.rankChange !== null && c.rankChange !== 0);
+  const lines: string[] = [];
+  const risers = withRankChange.filter((c) => c.rankChange! > 0).sort((a, b) => b.rankChange! - a.rankChange!);
+  const fallers = withRankChange.filter((c) => c.rankChange! < 0).sort((a, b) => a.rankChange! - b.rankChange!);
+  const nameOf = (code: string) => CHANNEL_NAME_BY_CODE[code] ?? code;
+  if (risers[0]) {
+    const c = risers[0];
+    const cur = c.months[c.months.length - 1];
+    lines.push(`순위가 가장 많이 오른 채널은 ${nameOf(c.channelCode)}입니다 — 전월 #${cur.rank! + c.rankChange!} → #${cur.rank} (▲${c.rankChange}).`);
+  }
+  if (fallers[0]) {
+    const c = fallers[0];
+    const cur = c.months[c.months.length - 1];
+    lines.push(`가장 많이 내려간 채널은 ${nameOf(c.channelCode)}입니다 — 전월 #${cur.rank! + c.rankChange!} → #${cur.rank} (▼${Math.abs(c.rankChange!)}).`);
+  }
+  // 연초 대비 흐름 — 1월과 이번 달 순위가 둘 다 있는 채널만.
+  const ytd = review.channels
+    .map((c) => {
+      const first = c.months.find((m) => m.rank !== null);
+      const last = [...c.months].reverse().find((m) => m.rank !== null);
+      return first && last && first.month !== last.month ? { code: c.channelCode, from: first, to: last, gain: first.rank! - last.rank! } : null;
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort((a, b) => b.gain - a.gain);
+  if (ytd[0] && ytd[0].gain > 0) {
+    const t = ytd[0];
+    lines.push(
+      `올해 흐름으로는 ${nameOf(t.code)}가 ${MONTH_LABELS[t.from.month - 1]} #${t.from.rank}에서 ${MONTH_LABELS[t.to.month - 1]} #${t.to.rank}까지 ${t.gain}계단 올라 가장 꾸준히 개선됐습니다.`
+    );
+  }
+  if (lines.length === 0) lines.push("이번 달은 전월 대비 순위가 바뀐 채널이 없습니다.");
+  return lines;
+}
+
+function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview; themeColorByCode: Map<string, string | null> }) {
+  const byCode = new Map(review.channels.map((c) => [c.channelCode, c]));
+  const groupA = MONTHLY_GROUP_A.map((code) => byCode.get(code)).filter((c): c is MonthlyReviewChannel => !!c);
+  const groupB = MONTHLY_GROUP_B.map((code) => byCode.get(code)).filter((c): c is MonthlyReviewChannel => !!c);
+  const insights = buildMonthlyReviewInsights(review);
+  const nameOf = (code: string) => CHANNEL_NAME_BY_CODE[code] ?? code;
+  const orderedChannels = [...MONTHLY_GROUP_A, ...MONTHLY_GROUP_B].map((c) => byCode.get(c)).filter((c): c is MonthlyReviewChannel => !!c);
+  return (
+    <div className={CARD}>
+      <h2 className={`font-heading mb-1 text-xl font-bold tracking-tight ${ACCENT_HEADING}`}>
+        {review.year}년 {review.month}월 월간 리뷰
+      </h2>
+      <p className="mb-4 text-sm text-zinc-400">
+        {review.monthStart} ~ {review.monthEnd} 전체를 닐슨이 기간 단위로 매긴 시장 순위입니다(일별 순위의 평균이 아닙니다). 아래 그래프는 올해 1월부터 이번 달까지의 흐름입니다.
+      </p>
+
+      <div className="mb-4 rounded-xl bg-amber-50 p-3">
+        <p className="mb-1 text-[12px] font-semibold text-amber-700">[이번 달 인사이트]</p>
+        <ul className="space-y-1">
+          {insights.map((line, i) => (
+            <li key={i} className="text-[13px] leading-relaxed text-amber-800">
+              · {highlightNarrativeText(line, ACCENT_UP, ACCENT_DOWN)}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <MonthlyRankTrendChart
+          groupLabel="ENA · ENA Play · ENA Drama"
+          targetLabel={groupA[0]?.targetLabel ?? "개인2049"}
+          channels={groupA}
+          monthCount={review.month}
+          themeColorByCode={themeColorByCode}
+        />
+        <MonthlyRankTrendChart
+          groupLabel="OLIFE · ONCE · ENA Story · skyUHD"
+          targetLabel={groupB[0]?.targetLabel ?? "National 유료방송가입가구"}
+          channels={groupB}
+          monthCount={review.month}
+          themeColorByCode={themeColorByCode}
+        />
+      </div>
+
+      {/* 이번 달의 눈에 띄는 변화 + 원인 — 원인은 추정하지 않고, 그 달 등락을 실제로 이끈
+          프로그램(get_channel_period_program_movers의 전월 대비 실측 등락)만 근거로 든다. */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-[12px]">
+          <thead>
+            <tr className="text-zinc-400">
+              <th className="pb-1 font-medium">채널</th>
+              <th className="pb-1 text-right font-medium">순위(전월 대비)</th>
+              <th className="pb-1 text-right font-medium">시청률(전월 대비)</th>
+              <th className="pb-1 font-medium">이번 달 주요 변화와 원인</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orderedChannels.map((c) => {
+              const cur = c.months[c.months.length - 1];
+              const color = themeColorByCode.get(c.channelCode) ?? "#3f3f46";
+              return (
+                <tr key={c.channelCode} className="border-t border-zinc-100 align-top">
+                  <td className="py-1.5 font-semibold" style={{ color }}>
+                    {nameOf(c.channelCode)}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums text-zinc-700">
+                    {cur.rank !== null ? `#${cur.rank}` : "—"}
+                    {c.rankChange !== null && c.rankChange !== 0 && (
+                      <span className={c.rankChange > 0 ? ACCENT_UP : ACCENT_DOWN}>
+                        {" "}
+                        {c.rankChange > 0 ? "▲" : "▼"}
+                        {Math.abs(c.rankChange)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums text-zinc-700">
+                    {cur.rating !== null ? formatRating(cur.rating, c.channelCode) : "—"}
+                    {c.ratingChangePct !== null && (
+                      <span className={c.ratingChangePct >= 0 ? ACCENT_UP : ACCENT_DOWN}>
+                        {" "}
+                        {c.ratingChangePct >= 0 ? "▲" : "▼"}
+                        {Math.abs(c.ratingChangePct).toFixed(1)}%
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1.5 text-zinc-500">
+                    {c.growthDriver || c.weaknessDriver ? (
+                      <>
+                        {c.growthDriver && (
+                          <span>
+                            상승 견인 <b className="font-semibold text-zinc-700">{c.growthDriver.programName}</b>{" "}
+                            <span className={ACCENT_UP}>+{formatRating(c.growthDriver.ratingDelta, c.channelCode)}</span>
+                          </span>
+                        )}
+                        {c.growthDriver && c.weaknessDriver && <span className="text-zinc-300"> · </span>}
+                        {c.weaknessDriver && (
+                          <span>
+                            하락 요인 <b className="font-semibold text-zinc-700">{c.weaknessDriver.programName}</b>{" "}
+                            <span className={ACCENT_DOWN}>{formatRating(c.weaknessDriver.ratingDelta, c.channelCode)}</span>
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-zinc-300">프로그램 단위 비교 자료 없음</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ② Original 성과 리포트(표 형태) — R1C2
 // 사용자 지시(2026-08-20): 헤드라인은 "<프로그램> N회 본방송 시청률 (전회 대비 상승/하락,
 // 동시간대 타깃 #위)" 형태로. #위는 "우리가 확보 가능한 모든" 동시간대 등록 경쟁 프로그램(같은
@@ -1145,8 +1408,22 @@ function ProgramRatingHistoryChart({
   const timeRange = maxTime - minTime || 1;
   const xOf = (d: string) => PAD_X + ((new Date(`${d}T00:00:00`).getTime() - minTime) / timeRange) * (W - PAD_X * 2);
 
-  const y2049 = buildLinearScale([...own2049.map((p) => p.rating), ...otherSeries.flatMap((s) => s.points.map((p) => p.rating)), ...competitorSeries.flatMap((s) => s.points.map((p) => p.rating))], H, PAD_Y);
-  const yHousehold = buildLinearScale(ownHousehold.map((p) => p.rating), H, PAD_Y);
+  // 사용자 지시(2026-09-01): "가구 시청률이 2049보다 높은데(신병의 경우 2049 1.42, 가구 3.37)
+  // 똑같이 나오는 것이 이상함 — 가구 기준의 y축 높이로 2049도 맞춰줄 것". 그동안 2049 선과 가구
+  // 선이 **각자 자기 최댓값 기준으로 따로 정규화**돼(y2049 / yHousehold 두 스케일) 값이 2배 넘게
+  // 차이 나는데도 화면에서는 같은 높이로 겹쳐 그려지고 있었다 — 두 선의 높이를 눈으로 비교할 수
+  // 없게 만드는 잘못된 표현이었다. 모든 시리즈(자사 2049·가구·타 채널·경쟁채널)를 **하나의
+  // 공통 y축**으로 통일해, 가장 높은 가구 시청률이 위쪽 기준이 되고 2049는 그 아래에 실제 비율
+  // 그대로 놓이게 한다. 0을 바닥으로 고정해야 "몇 배 차이"가 높이로 바르게 읽힌다.
+  const allRatingValues = [
+    ...own2049.map((p) => p.rating),
+    ...ownHousehold.map((p) => p.rating),
+    ...otherSeries.flatMap((s) => s.points.map((p) => p.rating)),
+    ...competitorSeries.flatMap((s) => s.points.map((p) => p.rating)),
+  ];
+  const sharedScale = buildLinearScale(allRatingValues.length > 0 ? [0, ...allRatingValues] : [], H, PAD_Y);
+  const y2049 = sharedScale;
+  const yHousehold = sharedScale;
 
   const pathOf = (points: RatingHistoryPoint[], yFn: (v: number) => number) =>
     points.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.broadcast_date).toFixed(1)},${yFn(p.rating).toFixed(1)}`).join(" ");
@@ -1311,7 +1588,7 @@ function CompetitorLogoBadge({ channelName, color }: { channelName: string; colo
   if (failed) {
     return (
       <span
-        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[7px] font-bold text-white"
+        className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full text-[6px] font-bold text-white"
         style={{ backgroundColor: color }}
       >
         {channelName.slice(0, 2)}
@@ -1326,8 +1603,10 @@ function CompetitorLogoBadge({ channelName, color }: { channelName: string; colo
   // 사용자 지시(2026-08-26, 재수정): "그래프가 정신없어 보인다" — 로고 원본 비율은 그대로 두되
   // (object-contain, 자르지 않음), 유독 가로로 긴 로고(예: PD수첩)가 좁은 범례 3열 grid 한 칸을
   // 통째로 밀어내던 문제만 max-w로 막는다(세로 16px는 그대로, 필요하면 폭만 더 줄어듦).
+  // 사용자 지시(2026-09-01): "경쟁채널 로고들은 다 작게 만들어서 알아볼 수 있을 정도로만" —
+  // 높이 16px→11px, 최대 폭도 함께 줄여 범례 카드에서 로고가 프로그램명을 밀어내지 않게 한다.
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={competitorLogoSrc(channelName)} alt={channelName} className="h-4 w-auto max-w-14 shrink-0 object-contain" onError={() => setFailed(true)} />;
+  return <img src={competitorLogoSrc(channelName)} alt={channelName} className="h-[11px] w-auto max-w-10 shrink-0 object-contain" onError={() => setFailed(true)} />;
 }
 function ManualMinuteRatingChart({
   minuteRatings,
@@ -1361,12 +1640,16 @@ function ManualMinuteRatingChart({
   // 시청률을 전부 깔끔한 카드로 보여주고 있으므로, 차트 위 로고 배지는 순수 정보 중복이라
   // 완전히 뺀다. 대신 차트 자체는 격자선 + 그라데이션 영역 채우기로 다듬어 "선 하나"에
   // 시선이 모이게 하고, 세로 마커는 옅은 색으로 낮춰 존재감만 남긴다.
-  const gradId = useId();
+  // 사용자 지시(2026-09-01): "분당 시청률은 보기 좋게 레이아웃 다시 생각해서 반영" +
+  // "그래프에 그라데이션도 없앨 것" — (1) 영역 그라데이션 채우기를 걷어내 선 하나만 남기고,
+  // (2) 왼쪽에 y축 시청률 눈금(0/중간/최고)을 넣어 격자선이 무엇을 뜻하는지 읽히게 하고,
+  // (3) 세로 여백을 넓혀 최고 시청률 칩·마커 라벨이 선과 겹치지 않게 한다.
   if (minuteRatings.length < 2) return null;
   const W = 640;
-  const H = 190;
-  const PAD_X = 10;
-  const PAD_Y = 22; // 최고 시청률 칩이 앉을 여유 + 격자선과 상하 여백
+  const H = 200;
+  const PAD_L = 40; // y축 눈금 자리
+  const PAD_R = 12;
+  const PAD_Y = 24; // 최고 시청률 칩이 앉을 여유 + 격자선과 상하 여백
   const toMinutes = (hhmm: string) => {
     const [h, m] = hhmm.split(":").map(Number);
     return h * 60 + m;
@@ -1374,23 +1657,22 @@ function ManualMinuteRatingChart({
   const startMin = toMinutes(minuteRatings[0].time);
   const endMin = toMinutes(minuteRatings[minuteRatings.length - 1].time);
   const span = endMin - startMin || 1;
-  const xOf = (hhmm: string) => PAD_X + ((toMinutes(hhmm) - startMin) / span) * (W - PAD_X * 2);
+  const xOf = (hhmm: string) => PAD_L + ((toMinutes(hhmm) - startMin) / span) * (W - PAD_L - PAD_R);
   const maxRating = Math.max(...minuteRatings.map((p) => p.rating), ...(competitorPrograms ?? []).map((c) => c.target_rating ?? 0), 0.0001);
   const yOf = (v: number) => PAD_Y + (1 - v / maxRating) * (H - PAD_Y * 2);
   const path = minuteRatings.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.time).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(" ");
   const baselineY = H - PAD_Y;
-  const areaPath = `${path} L${xOf(minuteRatings[minuteRatings.length - 1].time).toFixed(1)},${baselineY} L${xOf(minuteRatings[0].time).toFixed(1)},${baselineY} Z`;
   const peak = minuteRatings.reduce((a, b) => (b.rating > a.rating ? b : a));
   // 실제 방송 시작/종료 시각이 있으면 그 시각을(리드인·리드아웃까지 포함해 더 넓게 잘린 시트
   // 처음/끝이 아니라) 마커 위치로 쓴다. 없으면 시트 처음/끝으로 대체(기존 동작 그대로 유지).
   const clampMin = (m: number) => Math.min(Math.max(m, startMin), endMin);
   const startMarkerMin = broadcastStartTime ? clampMin(toMinutes(broadcastStartTime.slice(0, 5))) : startMin;
   const endMarkerMin = broadcastEndTime ? clampMin(toMinutes(broadcastEndTime.slice(0, 5))) : endMin;
-  const xOfMin = (m: number) => PAD_X + ((m - startMin) / span) * (W - PAD_X * 2);
+  const xOfMin = (m: number) => PAD_L + ((m - startMin) / span) * (W - PAD_L - PAD_R);
   const fmtHHMM = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-  // 격자선 3개(25/50/75% 높이) — 값 그대로 배경에 옅게 깔아 "선 하나"의 흐름을 눈으로
-  // 따라가기 쉽게 만든다(새 계산 없음, 순수 시각 보조선).
-  const gridLines = [0.25, 0.5, 0.75].map((f) => PAD_Y + f * (H - PAD_Y * 2));
+  // 격자선 — 이제 눈금값(시청률)을 함께 표기해 선의 높이를 실제 수치로 읽을 수 있게 한다.
+  // 0을 바닥으로 두고(yOf가 이미 0 기준) 최고값까지 균등 3구간.
+  const gridTicks = [0, maxRating / 2, maxRating];
   // PD가 뽑은 "동시간대 경쟁 프로그램" 목록 — 자사 본방(rank=null) 행은 제외, 실제 방영구간이
   // 이 그래프 시간창과 겹치는 것만, 시청률 순 상위 6개까지만(사용자 지시 2026-08-26 재수정:
   // "tvN도 보이게 해서 총 6개 채널이 보이게" — 5개→6개로 확장, 너무 많으면 알아보기 어려움).
@@ -1404,27 +1686,29 @@ function ManualMinuteRatingChart({
     .slice(0, 6);
   return (
     <div className="mt-2 rounded-xl bg-zinc-50 p-3">
+      {/* 사용자 지시(2026-09-01): 캡션에서 "(PD 실측)" 문구 제거. */}
       <p className="mb-1 text-[11px] text-zinc-400">
-        분당 시청률(PD 실측) — 굵은 선이 {ownChannelName}, 가는 점선은 동시간대 경쟁 프로그램의 방영 구간 평균입니다.
+        분당 시청률 — 굵은 선이 {ownChannelName}, 가는 점선은 동시간대 경쟁 프로그램의 방영 구간 평균입니다.
       </p>
       <div className="relative">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
-          <defs>
-            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={accentColor} stopOpacity={0.22} />
-              <stop offset="100%" stopColor={accentColor} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          {gridLines.map((y) => (
-            <line key={y} x1={PAD_X} y1={y} x2={W - PAD_X} y2={y} stroke="#e4e4e7" strokeWidth={1} />
+        {/* preserveAspectRatio="none"이면 <text> 눈금이 가로로 늘어나 찌그러지므로, y축 눈금을
+            넣으면서 기본값(비율 유지)으로 바꾼다 — 세로 높이는 style로 고정. */}
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+          {gridTicks.map((v) => (
+            <g key={v}>
+              <line x1={PAD_L} y1={yOf(v)} x2={W - PAD_R} y2={yOf(v)} stroke="#e4e4e7" strokeWidth={1} />
+              <text x={PAD_L - 6} y={yOf(v) + 3} textAnchor="end" fontSize={9} fill="#a1a1aa">
+                {v.toFixed(2)}
+              </text>
+            </g>
           ))}
           {/* 사용자 지시(2026-08-26, 재수정): 그래프 위에 채널명·프로그램명을 직접 겹쳐 쓰면
               선끼리 가까울 때 글자가 서로 겹쳐 안 읽힌다 — 점선만 남기고, 이름·시간·시청률은
               전부 아래 목록(범례)으로 옮긴다. 재정리(2026-08-26): 점선도 자사 선보다 한 톤
               옅게(opacity) 낮춰 "참고선"으로만 읽히게 한다. */}
           {bands.map((c, i) => {
-            const x1 = Math.max(PAD_X, xOf(c.start_time!.slice(0, 5)));
-            const x2 = Math.min(W - PAD_X, xOf(c.end_time!.slice(0, 5)));
+            const x1 = Math.max(PAD_L, xOf(c.start_time!.slice(0, 5)));
+            const x2 = Math.min(W - PAD_R, xOf(c.end_time!.slice(0, 5)));
             const y = yOf(c.target_rating!);
             const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
             return (
@@ -1448,7 +1732,7 @@ function ManualMinuteRatingChart({
             const m = clampMin(toMinutes(cm.time));
             return <line key={`cm-${i}`} x1={xOfMin(m)} y1={PAD_Y} x2={xOfMin(m)} y2={baselineY} stroke="#fb923c" strokeOpacity={0.55} strokeWidth={1} strokeDasharray="2 2" />;
           })}
-          <path d={areaPath} fill={`url(#${gradId})`} stroke="none" />
+          {/* 사용자 지시(2026-09-01): 영역 그라데이션 채우기 제거 — 선 하나만 남긴다. */}
           <path d={path} fill="none" stroke={accentColor} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         <div className="pointer-events-none absolute inset-0">
@@ -2530,20 +2814,33 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           // 그리드 재배치(사용자 지시, 2026-08-21): "오늘의 빠른 요약"·"주요 콘텐츠 편성 리포트"는
           // 삭제. 채널별 킬러 콘텐츠는 좌/우 2컬럼 하나의 통합 섹션(전체 폭)으로 마지막에 배치.
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* 사용자 지시(2026-09-01): "오늘의 시청률 우측에는 항상 주요 컨텐츠 리뷰가 나와야
+                함" — 두 카드를 그리드 첫 줄에 붙여 놓는다. 이전에는 주말 리포트(전체 폭)가
+                이 둘 사이에 끼어 있어, 월요일에는 '오늘의 시청률' 오른쪽 칸이 비고 '주요 컨텐츠
+                리뷰'가 아래 줄로 밀려났다(CSS 그리드 자동 배치 특성). 주말 리포트·월간 리뷰처럼
+                전체 폭을 쓰는 섹션은 전부 이 두 카드 아래로 내린다. */}
             <ChannelStatusCard channels={byCode} />
-            {/* 사용자 지시(2026-08-26): "오늘의 시청률 섹션 밑에 주말 리포트 섹션 신설" — 월요일
-                (route.ts가 weekendReport를 채워주는 조건)에만 표시, 2컬럼 전체 폭으로 그 아래 줄에 */}
-            {data.weekendReport && (
-              <div className="lg:col-span-2">
-                <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />
-              </div>
-            )}
             <OriginalContentReportCard
               report={data.originalContentReport}
               enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
               achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
               themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
             />
+
+            {/* 사용자 지시(2026-08-26): "오늘의 시청률 섹션 밑에 주말 리포트 섹션 신설" — 실제
+                월요일(route.ts가 asOfDate=일요일일 때 채워줌)에만 표시.
+                사용자 지시(2026-09-01): 주말 리포트와 월간 리뷰가 같은 날 겹칠 수 있으므로 둘을
+                합치지 않고 각각 독립된 섹션으로 나란히 둔다. */}
+            {data.weekendReport && (
+              <div className="lg:col-span-2">
+                <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />
+              </div>
+            )}
+            {data.monthlyReview && (
+              <div className="lg:col-span-2">
+                <MonthlyReviewCard review={data.monthlyReview} themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))} />
+              </div>
+            )}
 
             <ChannelNarrativeCard
               signals={data.narrativeSignals}

@@ -1146,10 +1146,16 @@ export async function GET(request: Request) {
   // 요청대로 위 narrativeSignals와 완전히 같은 RPC(get_channel_daily_narrative)·같은 타깃 매칭
   // 규칙을 토요일·일요일 각각에 다시 불러 재사용하되, household·전주 비교 같은 부가 조회는
   // 생략해 가볍게 유지한다(요청한 "최대한 간략한 보고 형태"엔 그 정보까진 필요 없음).
+  //
+  // 사용자 지시(2026-09-01, 트리거 교정): "주말 리포트는 매 주 실제 월요일에(일요일 시청률 DB가
+  // 올라오는 날에) 반영" — 기존 조건(asOfDateIsoDow === 1, 즉 asOfDate가 월요일)은 시청률이
+  // 하루 늦게 올라오는 이 서비스의 특성상 실제로는 "화요일에 보이는" 조건이었다. 일요일
+  // 데이터가 올라오는 날(=실제 월요일)에 보이도록 asOfDate가 일요일(ISO 7)일 때로 바꾸고,
+  // 토·일 날짜도 그에 맞춰 asOfDate-1(토)·asOfDate(일)로 당긴다.
   let weekendReport: { saturday: { date: string; signals: ChannelNarrativeSignal[] }; sunday: { date: string; signals: ChannelNarrativeSignal[] } } | null = null;
-  if (asOfDateIsoDow === 1) {
-    const saturdayDate = offsetDateStr(asOfDate, -2);
-    const sundayDate = offsetDateStr(asOfDate, -1);
+  if (asOfDateIsoDow === 7) {
+    const saturdayDate = offsetDateStr(asOfDate, -1);
+    const sundayDate = asOfDate;
     const fetchWeekendDaySignals = async (dateStr: string): Promise<ChannelNarrativeSignal[]> => {
       const results = await mapWithConcurrency(ALL_CHANNEL_CODES, 3, async (code): Promise<ChannelNarrativeSignal | null> => {
         const ch = channelByCode.get(code);
@@ -1183,6 +1189,117 @@ export async function GET(request: Request) {
     weekendReport = { saturday: { date: saturdayDate, signals: saturdaySignals }, sunday: { date: sundayDate, signals: sundaySignals } };
   }
 
+  // 13) 사용자 지시(2026-09-01): "월간 DB가 업데이트 되는 날에는 각 월의 채널 순위(시청률)가
+  // 해당 연도 월별 그래프로 종합적으로 나오고, 인사이트와 그 달의 주요 변화·원인도 함께" —
+  // asOfDate가 그 달의 마지막 날(=전월이 완결되어 월간 파일이 올라오는 날)일 때만 계산한다.
+  //
+  // 순위·시청률의 출처는 §O(2026-09-01)에서 적재한 nielsen_period_rank의 월간 행이다. 이건
+  // 닐슨이 "그 달 전체"로 매긴 시장 순위라 일별 순위를 평균 내서는 만들 수 없는 값이므로,
+  // 여기서 새로 계산하지 않고 저장된 값을 그대로 읽어 올린다(집계 없는 단순 조회라 SQL 함수
+  // 없이 supabase-js로 바로 처리 — 위 recentRatings 조회와 같은 패턴).
+  //
+  // "주요 변화의 원인"은 get_channel_period_program_movers(기존 RPC)를 이번 달 vs 전월로 한 번
+  // 부르는 것으로 충분하다 — 어떤 프로그램이 그 달의 등락을 이끌었는지 이미 계산해 준다.
+  // 원인을 지어내지 않고 프로그램 단위 실측 등락만 근거로 제시한다(CLAUDE.md No Hallucination).
+  const isMonthEndDate = offsetDateStr(asOfDate, 1).slice(0, 7) !== asOfDate.slice(0, 7);
+  let monthlyReview: {
+    year: number;
+    month: number;
+    monthStart: string;
+    monthEnd: string;
+    priorMonthStart: string | null;
+    channels: {
+      channelCode: string;
+      targetLabel: string;
+      months: { month: number; rank: number | null; rating: number | null }[];
+      rankChange: number | null;
+      ratingChangePct: number | null;
+      growthDriver: { programName: string; ratingDelta: number } | null;
+      weaknessDriver: { programName: string; ratingDelta: number } | null;
+    }[];
+  } | null = null;
+  if (isMonthEndDate) {
+    const year = Number(asOfDate.slice(0, 4));
+    const month = Number(asOfDate.slice(5, 7));
+    const monthStart = `${asOfDate.slice(0, 7)}-01`;
+    const priorMonthEnd = offsetDateStr(monthStart, -1);
+    const priorMonthStart = `${priorMonthEnd.slice(0, 7)}-01`;
+    // 전월이 같은 해가 아니면(1월 리뷰) 전월 비교 자체를 하지 않는다 — 연도별 그래프라는
+    // 요청 범위를 넘어 전년도 데이터를 끌어오지 않는다(있는 값만 정직하게 보여줌).
+    const hasPriorMonth = priorMonthStart.slice(0, 4) === String(year);
+
+    const rankLabelByCode = new Map<string, string>();
+    for (const code of ALL_CHANNEL_CODES) {
+      const ch = channelByCode.get(code);
+      if (ch?.primary_target) rankLabelByCode.set(code, resolveRankSheetTargetLabel(ch.primary_target));
+    }
+    const { data: rankTargetRows } = await supabase.from("targets").select("id, label").in("label", [...new Set(rankLabelByCode.values())]);
+    const rankTargetIdByLabel = new Map((rankTargetRows ?? []).map((t) => [t.label as string, t.id as string]));
+
+    const { data: periodRankRows } = await supabase
+      .from("nielsen_period_rank")
+      .select("channel_id, target_id, date_from, rank, rating")
+      .eq("period_type", "monthly")
+      .gte("date_from", `${year}-01-01`)
+      .lte("date_from", monthStart);
+
+    const monthlyChannels = await mapWithConcurrency(ALL_CHANNEL_CODES, 3, async (code) => {
+      const ch = channelByCode.get(code);
+      const targetLabel = rankLabelByCode.get(code);
+      if (!ch || !targetLabel) return null;
+      const targetId = rankTargetIdByLabel.get(targetLabel);
+      const mine = (periodRankRows ?? []).filter((r) => r.channel_id === ch.id && r.target_id === targetId);
+      if (mine.length === 0) return null;
+      const byMonth = new Map(mine.map((r) => [Number(r.date_from.slice(5, 7)), r]));
+      const months = Array.from({ length: month }, (_, i) => {
+        const row = byMonth.get(i + 1);
+        return { month: i + 1, rank: row?.rank ?? null, rating: row?.rating ?? null };
+      });
+      const cur = byMonth.get(month);
+      const prior = hasPriorMonth ? byMonth.get(month - 1) : undefined;
+      // 순위는 낮을수록 좋으므로 "전월 순위 - 이번 달 순위"가 양수면 상승(§O의 rank_change와 동일 규칙).
+      const rankChange = cur?.rank != null && prior?.rank != null ? prior.rank - cur.rank : null;
+      const ratingChangePct =
+        cur?.rating != null && prior?.rating != null && prior.rating > 0 ? ((cur.rating - prior.rating) / prior.rating) * 100 : null;
+
+      // skyUHD는 프로그램 단위 nielsen_daily 행이 없어(J절 Phase 1에서 실측 확인) 이 RPC가 항상
+      // 빈 결과다 — 왕복하지 않고 건너뛴다.
+      let growthDriver: { programName: string; ratingDelta: number } | null = null;
+      let weaknessDriver: { programName: string; ratingDelta: number } | null = null;
+      if (code !== "SKYUHD" && hasPriorMonth && ch.primary_target) {
+        const { data: movers } = await supabase.rpc("get_channel_period_program_movers", {
+          p_channel_code: code,
+          p_program_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
+          p_date_from: monthStart,
+          p_date_to: asOfDate,
+          p_prior_date_from: priorMonthStart,
+          p_prior_date_to: priorMonthEnd,
+          p_limit: 20,
+        });
+        const withDelta = ((movers ?? []) as { program_name: string; rating_delta: number | null }[]).filter(
+          (m) => m.rating_delta !== null
+        );
+        const up = withDelta.filter((m) => m.rating_delta! > 0).sort((a, b) => b.rating_delta! - a.rating_delta!)[0];
+        const down = withDelta.filter((m) => m.rating_delta! < 0).sort((a, b) => a.rating_delta! - b.rating_delta!)[0];
+        if (up) growthDriver = { programName: up.program_name, ratingDelta: up.rating_delta! };
+        if (down) weaknessDriver = { programName: down.program_name, ratingDelta: down.rating_delta! };
+      }
+      return { channelCode: code, targetLabel, months, rankChange, ratingChangePct, growthDriver, weaknessDriver };
+    });
+
+    const resolvedMonthlyChannels = monthlyChannels.filter((c): c is NonNullable<typeof c> => c !== null);
+    if (resolvedMonthlyChannels.length > 0) {
+      monthlyReview = {
+        year,
+        month,
+        monthStart,
+        monthEnd: asOfDate,
+        priorMonthStart: hasPriorMonth ? priorMonthStart : null,
+        channels: resolvedMonthlyChannels,
+      };
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     asOfDate,
@@ -1197,5 +1314,6 @@ export async function GET(request: Request) {
     dailyNews: dailyNewsRows ?? [],
     portfolioAnomaly,
     weekendReport,
+    monthlyReview,
   });
 }

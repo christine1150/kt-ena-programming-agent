@@ -109,6 +109,13 @@ export default function TargetGoalsManager() {
       <p className="mb-4 text-sm text-zinc-500">
         채널별 목표 시청률·목표 등위를 연도별로 직접 입력/수정합니다. 2026년 값은 Channel Master
         업로드로 이미 채워져 있습니다.
+        {/* 사용자 지시(2026-09-01, 관리자 화면 중복 점검): 이 화면과 Channel Master 업로드가
+            같은 테이블(target_goals)에 쓴다 — 중복 기능은 아니지만(엑셀 일괄 반영 vs 개별 수정),
+            여기서 고친 값이 다음 Channel Master 업로드로 덮여 쓰인다는 점이 어디에도 안 적혀
+            있어 실수하기 쉬웠다. 그 관계를 한 줄로 명시한다. */}{" "}
+        <span className="text-amber-600">
+          여기서 고친 값은 다음 번 Channel Master 업로드 때 그 파일의 값으로 덮어써집니다(같은 target_goals를 씁니다).
+        </span>
       </p>
 
       {loading ? (
