@@ -823,6 +823,11 @@ export async function GET(request: Request) {
       channel.code === "ENA"
         ? buildEnaOriginalHighlightSentence(enaOriginalDaily, (v) => (v === null ? "—" : v.toFixed(3)))
         : rerunLeadSentence;
+    // 사용자 지시(2026-09-02, SDoW): AI 브리핑 프롬프트에도 baseline_avg_rating/
+    // top_program_baseline_avg의 실제 기준(선택 요일의 최근 N주 평균)을 정확히 알려준다 —
+    // ChannelDeepDive.tsx의 DOW_CHIP_LABELS와 동일한 매핑.
+    const DOW_LABELS_KO = ["일", "월", "화", "수", "목", "금", "토"];
+    const sdowBaselineLabelForLlm = isSdowActive ? `최근 ${sdowWeeks}주 ${DOW_LABELS_KO[sdowDow!]}요일 평균` : undefined;
     briefingLlm = await buildBriefingReportViaLlm({
       channelName: channel.name,
       refLabel,
@@ -843,6 +848,7 @@ export async function GET(request: Request) {
       top_program_baseline_avg: narrativeSignal.top_program_baseline_avg,
       top_program_baseline_days: narrativeSignal.top_program_baseline_days,
       demographics: narrativeSignal.demographics,
+      baselineLabel: sdowBaselineLabelForLlm,
     });
   }
 
