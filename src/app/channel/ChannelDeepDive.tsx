@@ -27,6 +27,8 @@ import {
   SDOW_PRESETS,
   SDOW_WEEKS_BACK,
   SDOW_WEEKS_LABEL,
+  addDaysStr,
+  toDateStr,
 } from "@/lib/audienceReport/periodPresets";
 
 interface TrendRow {
@@ -551,6 +553,9 @@ interface ChannelData {
   rerunLeadSentence: string | null;
   // 사용자 지시(2026-08-25): 오늘의 브리핑 상단 키워드 1~3위 나열용(단일 일자 조회일 때만 채워짐).
   top3Programs: { canonical_name: string; rating: number }[];
+  // 사용자 지시(2026-09-02): 스코어 카드의 WEAK PROGRAMS가 당일 내용을 반영하도록 — top3Programs와
+  // 같은 방식(당일 program_id 단위 시청률), 정렬만 반대(하위 3개). 단일 일자 조회일 때만 채워짐.
+  weakProgramsToday: { canonical_name: string; rating: number }[];
   // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — route.ts가
   // 이미 검증된 값만으로 OpenAI가 종합한 오늘의 브리핑 핵심 문단(단일 일자 모드만). 없으면
   // 기존 규칙 기반 문장으로 조용히 대체.
@@ -3450,18 +3455,35 @@ function DemographicHeatStrip({ demographics, accentColor, fmtR }: { demographic
 // 영향을 분석해달라" — 카드마다 (1) 시청률 추세(스트릭 시작→최근), (2) 채널 평균 대비 이
 // 슬롯의 기여(높은지 낮은지), (3) 주 시청 연령대까지 세 줄로 보여준다. 전부 SQL이 이미 계산해
 // 내려준 값이라 여기서는 라벨링만 한다(새 계산 없음).
-function StableSlotPatternList({ rows, accentColor, fmtR }: { rows: StableSlotPatternRow[]; accentColor: string; fmtR: (v: number | null) => string }) {
+// 사용자 지시(2026-09-02, 후속): "당일이나 최근 7일간 편성되지 않은 컨텐츠는 편성안정성
+// 보고에서 제외" — latest_date(그 슬롯의 가장 최근 방영일)가 기준일로부터 7일 이전이면
+// 종영/이동돼 더 이상 "지금" 영향을 주지 않는 슬롯이라 판단해 후보에서 뺀다. asOfDate 없이
+// (다른 호출부가 생기더라도) 안전하게 동작하도록 옵셔널로 둔다.
+function StableSlotPatternList({
+  rows,
+  accentColor,
+  fmtR,
+  asOfDate,
+}: {
+  rows: StableSlotPatternRow[];
+  accentColor: string;
+  fmtR: (v: number | null) => string;
+  asOfDate?: string | null;
+}) {
+  const cutoffDate = asOfDate ? addDaysStr(asOfDate, -6) : null;
+  const recentRows = cutoffDate ? rows.filter((r) => r.latest_date >= cutoffDate) : rows;
   const byProgram = new Map<string, StableSlotPatternRow>();
-  for (const r of rows) {
+  for (const r of recentRows) {
     const existing = byProgram.get(r.canonical_name);
     if (!existing || r.consecutive_weeks > existing.consecutive_weeks) byProgram.set(r.canonical_name, r);
   }
   const top = [...byProgram.values()].sort((a, b) => b.consecutive_weeks - a.consecutive_weeks).slice(0, 4);
   if (top.length === 0) {
-    return <p className="text-sm text-zinc-400">최근 8주 안에 3주 이상 연속으로 같은 요일·시간대에 편성된 프로그램이 없습니다.</p>;
+    return <p className="text-sm text-zinc-400">최근 7일 내 편성된, 3주 이상 연속으로 같은 요일·시간대에 편성된 프로그램이 없습니다.</p>;
   }
+  // 사용자 지시(2026-09-02, 후속): "1줄에 2개씩, 2줄에 4개" — sm 이상에서 2열 그리드.
   return (
-    <ul className="space-y-2.5">
+    <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
       {top.map((r) => {
         const trendDelta = r.first_rating !== null && r.latest_rating !== null ? r.latest_rating - r.first_rating : null;
         const contribDelta = r.streak_avg_rating !== null && r.channel_avg_rating !== null ? r.streak_avg_rating - r.channel_avg_rating : null;
@@ -3504,6 +3526,25 @@ function StableSlotPatternList({ rows, accentColor, fmtR }: { rows: StableSlotPa
       })}
     </ul>
   );
+}
+
+// 사용자 지시(2026-09-02, SDoW 후속): "어떤 날짜가 분석 대상인지 보이는 한 줄 정보" + "기준일
+// 대비 선택한 요일이 아직 도래하지 않았으면(예: 오늘 화요일에 금요일 선택) 전주 금요일부터"
+// — asOfDate(포함)에서 하루씩 거슬러 올라가며 dow가 일치하는 날짜를 weeks개 모은다. 항상
+// asOfDate 이전(또는 당일)만 훑으므로 "아직 오지 않은 미래 요일"은 애초에 나올 수 없다 —
+// get_channel_same_weekday_report/same_dow_dates(SQL)와 정확히 같은 규칙의 클라이언트 버전
+// (표시 전용, 실제 값 계산은 항상 SQL이 한다 — 여기서는 "어떤 날짜인지"만 재현).
+function getPastSameDayDates(asOfDate: string, dow: number, weeks: number): string[] {
+  const dates: string[] = [];
+  const d = new Date(`${asOfDate}T00:00:00`);
+  let guard = 0;
+  const maxIterations = weeks * 7 + 14; // 안전장치 — 무한루프 방지
+  while (dates.length < weeks && guard < maxIterations) {
+    if (d.getDay() === dow) dates.push(toDateStr(d));
+    d.setDate(d.getDate() - 1);
+    guard++;
+  }
+  return dates;
 }
 
 export default function ChannelDeepDive({ code }: { code: string }) {
@@ -3721,6 +3762,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const sdowCompareLabel =
     isSdowActive && effectiveDow !== null ? `${SDOW_WEEKS_LABEL[periodPreset] ?? ""} ${DOW_CHIP_LABELS[effectiveDow]}요일 평균 대비`.trim() : null;
   const sdowBaselineShortLabel = sdowCompareLabel ? sdowCompareLabel.replace(/\s*대비$/, "") : null;
+  // 사용자 지시(2026-09-02, 후속): "어떤 날짜가 분석 대상인지 보이는 한 줄 정보" — 기준일에서
+  // 거슬러 올라가며 실제로 잡힌 N개 날짜를 그대로 보여준다(getPastSameDayDates가 SQL과 동일한
+  // 규칙이라 "아직 도래하지 않은 요일" 문제도 자연히 해결됨 — 예: 화요일에 금요일을 고르면
+  // 항상 지난주 금요일부터 거슬러 올라간 날짜만 나온다).
+  const sdowAnalysisDates =
+    isSdowActive && effectiveDow !== null && sdowWeeksBack !== null && selectedDateTo
+      ? getPastSameDayDates(selectedDateTo, effectiveDow, sdowWeeksBack)
+      : [];
   // 사용자 지시(2026-08-28): "전주 대비 이번주, 전월 대비 이번달 등 분석기간이 달라질 때는 그
   // 기간이 언제인지 실제 날짜가 나올 수 있게" — 이미 있는 formatDateWithDow(히어로 헤더 L3857과
   // 같은 포맷)를 그대로 재사용해 "이번 기간"/"{comparisonLabel} 기간" 패널 라벨에 실제 날짜를
@@ -4185,17 +4234,21 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const winDaypart = validDayparts.length > 0 ? validDayparts.reduce((a, b) => ((b.gap_change ?? -Infinity) > (a.gap_change ?? -Infinity) ? b : a)) : null;
   const weaknessDaypart = validDayparts.length > 0 ? validDayparts.reduce((a, b) => ((b.gap_change ?? Infinity) < (a.gap_change ?? Infinity) ? b : a)) : null;
 
-  // Top Programs / Weak Programs — 이미 있는 topPrograms(시청률 상위)·fitScoreItems(REPLACE 태그) 재사용.
-  const briefingTopPrograms: BriefingProgramRow[] = topPrograms.slice(0, 3).map((p) => ({
-    name: p.program_name,
-    rating: p.avg_rating,
-    detail: `${fmtR(p.avg_rating)}${p.avg_rating !== null && p.avg_rating >= 0 ? "" : ""}`,
+  // 버그 수정(2026-09-02, 사용자 신고): "TOP/WEAK PROGRAMS가 선택한 기간·당일 내용이 아님" —
+  // 이 스코어 카드는 항상 당일(referenceLabel) 기준으로 표시되는데, TOP는 최근 12주 트레일링
+  // TOP20(topPrograms)을, WEAK는 기간과 무관하게 설계된 Fit Score REPLACE 태그(fitScoreItems)를
+  // 재사용해 서로 다른 기준이 섞여 있었다. data.top3Programs/weakProgramsToday(둘 다 당일
+  // program_id 단위 시청률만 보는 단순 조회, route.ts)로 교체해 카드 전체가 당일 기준으로 통일된다.
+  const briefingTopPrograms: BriefingProgramRow[] = data.top3Programs.map((p) => ({
+    name: p.canonical_name,
+    rating: p.rating,
+    detail: fmtR(p.rating),
   }));
-  const briefingWeakPrograms: BriefingProgramRow[] = (fitScoreItems ?? [])
-    .filter((f) => f.tag === "REPLACE" && f.programs?.canonical_name)
-    .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
-    .slice(0, 3)
-    .map((f) => ({ name: f.programs!.canonical_name, rating: null, detail: `Fit ${fmt(f.fit_score, 0)}` }));
+  const briefingWeakPrograms: BriefingProgramRow[] = data.weakProgramsToday.map((p) => ({
+    name: p.canonical_name,
+    rating: p.rating,
+    detail: fmtR(p.rating),
+  }));
 
   // 사용자 지시(2026-08-21, [특화 디자인] ENA STORY): "stripe.com을 참고해 분홍·보라·하양·
   // 주황(최소한) 조합의 정교한 그라데이션으로 독자적이고 감각적인 페이지를 구성" — stripe.com을
@@ -4428,6 +4481,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               ) : (
                 data.asOfDate && <p className="text-sm text-white/80">기준일: {formatDateWithDow(data.asOfDate)}</p>
               )}
+              {isSdowActive && sdowAnalysisDates.length > 0 && (
+                <p className="mt-0.5 text-xs text-white/70">
+                  분석 대상 날짜({sdowAnalysisDates.length}일): {sdowAnalysisDates.map((d) => formatDateWithDow(d)).join(", ")}
+                </p>
+              )}
             </div>
           </div>
           {/* 사용자 지시(2026-08-20): "전일(실제 시청률) 대비 상승/하락률", "전주(실제 시청률) 대비
@@ -4498,8 +4556,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 {weaknessDaypart && weaknessDaypart.gap_change !== null && (
                   <WinWeaknessCard spec={{ kind: "weakness", daypartLabel: DAYPART_LABEL[weaknessDaypart.daypart] ?? weaknessDaypart.daypart, gapChange: weaknessDaypart.gap_change }} />
                 )}
-                <BriefingProgramList title="TOP PROGRAMS" tone="up" rows={briefingTopPrograms} />
-                <BriefingProgramList title="WEAK PROGRAMS(REPLACE 태그)" tone="down" rows={briefingWeakPrograms} />
+                <BriefingProgramList title={`TOP PROGRAMS(${referenceLabel})`} tone="up" rows={briefingTopPrograms} />
+                <BriefingProgramList title={`WEAK PROGRAMS(${referenceLabel})`} tone="down" rows={briefingWeakPrograms} />
               </div>
             )}
           </div>
@@ -4629,9 +4687,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <div className="mt-6">
               <h3 className="mb-1 text-sm font-semibold text-zinc-600">편성 안정성 — 고정 슬롯의 영향</h3>
               <p className="mb-3 text-xs text-zinc-400">
-                최근 8주 동안 같은 요일·같은 시각에 3주 이상 연속 편성된 프로그램(본방 기준)이 시청률·채널 기여·연령대에 미친 영향입니다.
+                최근 8주 동안 같은 요일·같은 시각에 3주 이상 연속 편성된 프로그램(본방 기준, 최근 7일 내 편성된 것만)이 시청률·채널 기여·연령대에 미친 영향입니다.
               </p>
-              <StableSlotPatternList rows={data.stableSlotPatterns} accentColor={accentColor} fmtR={fmtR} />
+              <StableSlotPatternList rows={data.stableSlotPatterns} accentColor={accentColor} fmtR={fmtR} asOfDate={data.dateTo} />
             </div>
           </div>
         )}

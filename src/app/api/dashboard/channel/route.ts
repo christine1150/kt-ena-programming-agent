@@ -123,6 +123,7 @@ export async function GET(request: Request) {
       hourBlockOpportunity: [],
       ytdAvgRating: null,
       top3Programs: [],
+      weakProgramsToday: [],
       enaOriginalDaily: [],
       rerunLeadSentence: null,
       briefingLlm: null,
@@ -734,24 +735,45 @@ export async function GET(request: Request) {
   // 사용자 지시(2026-08-25): "오늘의 브리핑" 상단 키워드에 1위만 있던 걸 1~3위를 순위 언급
   // 없이 순서대로 나열 — Page 1의 todayTopPrograms와 같은 방식(단순 rating desc, limit 3).
   let top3Programs: { canonical_name: string; rating: number }[] = [];
+  // 사용자 지시(2026-09-02): "2페이지 스코어 카드의 TOP/WEAK PROGRAMS가 선택한 기간·당일에
+  // 대한 내용이 아님 — 오늘의 내용이면 오늘의 내용을 반영" — 스코어 카드는 항상 당일(dateTo)
+  // 기준으로 표시되는데, 그 안의 TOP/WEAK PROGRAMS만 각각 최근 12주 트레일링 TOP20/Fit
+  // Score(의도적으로 기간과 무관하게 설계됨, §U)를 재사용해 값이 어긋나 있었다. top3Programs와
+  // 완전히 같은 방식(하루치 program_id 단위 시청률, 정렬만 반대)으로 당일 하위 3개를 뽑는다.
+  let weakProgramsToday: { canonical_name: string; rating: number }[] = [];
   if (!isRangeMode) {
     const { data: targetRow } = await supabase.from("targets").select("id").eq("label", programTargetLabel).maybeSingle();
     if (targetRow) {
-      const { data: top3Rows } = await supabase
-        .from("ratings")
-        .select("rating, programs(canonical_name)")
-        .eq("channel_id", channel.id)
-        .eq("target_id", targetRow.id)
-        .in("source_type", ["nielsen_daily", "skyuhd"])
-        .eq("broadcast_date", dateTo)
-        .not("program_id", "is", null)
-        .not("rating", "is", null)
-        .order("rating", { ascending: false })
-        .limit(3);
-      top3Programs = (top3Rows ?? []).map((r: { rating: number; programs: { canonical_name: string } | { canonical_name: string }[] | null }) => ({
+      const [{ data: top3Rows }, { data: weak3Rows }] = await Promise.all([
+        supabase
+          .from("ratings")
+          .select("rating, programs(canonical_name)")
+          .eq("channel_id", channel.id)
+          .eq("target_id", targetRow.id)
+          .in("source_type", ["nielsen_daily", "skyuhd"])
+          .eq("broadcast_date", dateTo)
+          .not("program_id", "is", null)
+          .not("rating", "is", null)
+          .order("rating", { ascending: false })
+          .limit(3),
+        supabase
+          .from("ratings")
+          .select("rating, programs(canonical_name)")
+          .eq("channel_id", channel.id)
+          .eq("target_id", targetRow.id)
+          .in("source_type", ["nielsen_daily", "skyuhd"])
+          .eq("broadcast_date", dateTo)
+          .not("program_id", "is", null)
+          .not("rating", "is", null)
+          .order("rating", { ascending: true })
+          .limit(3),
+      ]);
+      const mapRow = (r: { rating: number; programs: { canonical_name: string } | { canonical_name: string }[] | null }) => ({
         canonical_name: Array.isArray(r.programs) ? (r.programs[0]?.canonical_name ?? "") : (r.programs?.canonical_name ?? ""),
         rating: r.rating,
-      }));
+      });
+      top3Programs = (top3Rows ?? []).map(mapRow);
+      weakProgramsToday = (weak3Rows ?? []).map(mapRow);
     }
   }
 
@@ -886,6 +908,7 @@ export async function GET(request: Request) {
     targetAchievement,
     narrativeSignal,
     top3Programs,
+    weakProgramsToday,
     enaOriginalDaily,
     // 사용자 지시(2026-08-26): ENA가 아닌 채널(재방을 트는 채널)의 오늘의 브리핑 규칙기반
     // 폴백용 — LLM 실패 시 클라이언트가 이 값으로 직접 문장을 만든다.
