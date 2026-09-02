@@ -1598,7 +1598,9 @@ const UNBRANDED_CHANNEL_COLOR = "#3f3f46";
 const COMPETITOR_LINE_COLORS = [UNBRANDED_CHANNEL_COLOR, "#84cc16"];
 // 사용자 지시(2026-09-02): OLIFE 브랜드색(#b8d800, 연두)은 흰 배경 위 강조 텍스트로 쓰기엔 대비가
 // 약함 — 일간 세부 내역 패널(ChannelDailyDetailPanel)에서만 더 진한 녹색으로 대체.
-const DAILY_DETAIL_READABLE_COLOR_OVERRIDE: Record<string, string> = { OLIFE: "#4a7300" };
+// 사용자 재지시(2026-09-02): "채도가 너무 낮아졌다 — 좀 더 밝은색 계열로 진한 초록" — 올리브빛
+// 도는 어두운 톤(#4a7300) 대신 채도 높은 순수 초록(#0e8a3e)으로.
+const DAILY_DETAIL_READABLE_COLOR_OVERRIDE: Record<string, string> = { OLIFE: "#0e8a3e" };
 function buildLinearScale(values: number[], size: number, pad: number): (v: number) => number {
   if (values.length === 0) return () => size / 2;
   const min = Math.min(...values);
