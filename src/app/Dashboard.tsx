@@ -716,10 +716,8 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
           name: channel.name,
           logoVisibleRatio: channel.logoVisibleRatio,
           logoVisibleTopRatio: channel.logoVisibleTopRatio,
-          code: channel.code,
         }}
         heightPx={56}
-        preferWideLogo
       />
       <div className="relative mt-3 flex w-full items-center justify-center">
         <span className="whitespace-nowrap text-4xl font-bold tabular-nums tracking-tight text-zinc-900">
@@ -839,7 +837,6 @@ function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logo
           name: channel.name,
           logoVisibleRatio: channel.logoVisibleRatio,
           logoVisibleTopRatio: channel.logoVisibleTopRatio,
-          code: channel.code,
         }}
         reference={
           logoReference
@@ -853,7 +850,6 @@ function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logo
         }
         heightPx={20}
         maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
-        preferWideLogo
       />
       {/* 사용자 지시: "시청률 (순위/목표 순위)" 한 줄 + 전일 대비 순위 증감. */}
       <div className="flex items-baseline justify-between gap-1.5">
@@ -939,10 +935,9 @@ function WeekendReportDayColumn({
           return (
             <div key={code} className="rounded-lg bg-zinc-50 px-2.5 py-2">
               <ChannelLogo
-                channel={{ logoPath: ch.logoPath, name: ch.name, logoVisibleRatio: ch.logoVisibleRatio, logoVisibleTopRatio: ch.logoVisibleTopRatio, code: ch.code }}
+                channel={{ logoPath: ch.logoPath, name: ch.name, logoVisibleRatio: ch.logoVisibleRatio, logoVisibleTopRatio: ch.logoVisibleTopRatio }}
                 heightPx={14}
                 className="mb-1"
-                preferWideLogo
               />
               <ul className="space-y-0.5">
                 {lines.map((line, i) => (
@@ -3082,10 +3077,9 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                     className="flex h-11 w-11 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:ring-zinc-300"
                   >
                     <ChannelLogo
-                      channel={{ logoPath: c.logoPath, name: c.name, logoVisibleRatio: c.logoVisibleRatio, logoVisibleTopRatio: c.logoVisibleTopRatio, code: c.code }}
+                      channel={{ logoPath: c.logoPath, name: c.name, logoVisibleRatio: c.logoVisibleRatio, logoVisibleTopRatio: c.logoVisibleTopRatio }}
                       heightPx={22}
                       maxWidthPx={32}
-                      preferWideLogo
                     />
                   </Link>
                 ))}
