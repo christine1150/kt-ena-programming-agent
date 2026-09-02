@@ -850,26 +850,36 @@ export async function GET(request: Request) {
     // ChannelDeepDive.tsx의 DOW_CHIP_LABELS와 동일한 매핑.
     const DOW_LABELS_KO = ["일", "월", "화", "수", "목", "금", "토"];
     const sdowBaselineLabelForLlm = isSdowActive ? `최근 ${sdowWeeks}주 ${DOW_LABELS_KO[sdowDow!]}요일 평균` : undefined;
+    // 버그 재발 수정(2026-09-02, 사용자 신고: "시청률이 또 소숫점 아래 3자리 규칙이 풀렸다") —
+    // narrativeSignal의 시청률류 필드는 SQL이 5자리로 round()해 내려주는데(get_channel_daily_narrative),
+    // 이 값을 그대로 OpenAI에 주면 LLM이 그 5자리를 그대로 인용해 문장에 "0.01817"처럼 찍힌다.
+    // 이 프로젝트 전역 규칙(CLAUDE.md, skyUHD만 5자리·그 외 3자리)대로 반올림한 뒤에만 LLM에 준다
+    // — competitor/opportunity job(§U)에서 이미 쓰던 ratingFmt와 동일한 패턴, 이 호출에는 빠져 있었다.
+    const ratingFmt = (v: number | null): number | null => (v === null || v === undefined ? null : Number(v.toFixed(channel.code === "SKYUHD" ? 5 : 3)));
     briefingLlm = await buildBriefingReportViaLlm({
       channelName: channel.name,
       refLabel,
-      currentRating,
+      currentRating: ratingFmt(currentRating),
       enaLeadSentence,
       rating_delta_pct: narrativeSignal.rating_delta_pct,
-      baseline_avg_rating: narrativeSignal.baseline_avg_rating,
-      dow_baseline_avg_rating: narrativeSignal.dow_baseline_avg_rating,
+      baseline_avg_rating: ratingFmt(narrativeSignal.baseline_avg_rating),
+      dow_baseline_avg_rating: ratingFmt(narrativeSignal.dow_baseline_avg_rating),
       today_peak_hour: narrativeSignal.today_peak_hour,
-      today_peak_rating: narrativeSignal.today_peak_rating,
+      today_peak_rating: ratingFmt(narrativeSignal.today_peak_rating),
       today_peak_program_name: narrativeSignal.today_peak_program_name,
-      today_peak_program_rating: narrativeSignal.today_peak_program_rating,
+      today_peak_program_rating: ratingFmt(narrativeSignal.today_peak_program_rating),
       baseline_peak_hour: narrativeSignal.baseline_peak_hour,
-      baseline_peak_rating: narrativeSignal.baseline_peak_rating,
+      baseline_peak_rating: ratingFmt(narrativeSignal.baseline_peak_rating),
       top_program_name: narrativeSignal.top_program_name,
-      top_program_rating: narrativeSignal.top_program_rating,
+      top_program_rating: ratingFmt(narrativeSignal.top_program_rating),
       top_program_start_time: narrativeSignal.top_program_start_time,
-      top_program_baseline_avg: narrativeSignal.top_program_baseline_avg,
+      top_program_baseline_avg: ratingFmt(narrativeSignal.top_program_baseline_avg),
       top_program_baseline_days: narrativeSignal.top_program_baseline_days,
-      demographics: narrativeSignal.demographics,
+      demographics: (narrativeSignal.demographics ?? []).map((d: { label: string; today: number | null; baseline_avg: number | null; delta_pct: number | null }) => ({
+        ...d,
+        today: ratingFmt(d.today),
+        baseline_avg: ratingFmt(d.baseline_avg),
+      })),
       baselineLabel: sdowBaselineLabelForLlm,
     });
   }

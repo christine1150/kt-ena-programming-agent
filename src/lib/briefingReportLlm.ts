@@ -24,7 +24,7 @@ export interface BriefingLlmInput {
   top_program_start_time: string | null;
   top_program_baseline_avg: number | null;
   top_program_baseline_days: number | null;
-  demographics: { label: string; today: number | null; delta_pct: number | null }[] | null;
+  demographics: { label: string; today: number | null; baseline_avg: number | null; delta_pct: number | null }[] | null;
   // 사용자 지시(2026-09-02, SDoW): baseline_avg_rating/top_program_baseline_avg가 실제로 무엇
   // 대비인지 프롬프트에 정확히 알려주기 위한 라벨 — SDoW 활성화 시 route.ts가 이미 두 값 모두
   // "선택 요일의 최근 N주 평균"으로 계산해 보내주므로(같은 N주), 문구도 이 라벨 하나로 통일한다.
