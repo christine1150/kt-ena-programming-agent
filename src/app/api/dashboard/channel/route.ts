@@ -66,6 +66,12 @@ export async function GET(request: Request) {
   // 값을 쓴다(둘 다 없으면 기존처럼 자동 계산).
   const priorDateFrom = searchParams.get("priorDateFrom");
   const priorDateTo = searchParams.get("priorDateTo");
+  // 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" — 오늘 단일 일자 화면은 그대로 두고, 비교
+  // 기준(baseline)만 "선택한 요일의 최근 N주 평균"으로 바꾼다. 두 값 다 있을 때만 조회한다.
+  const sdowDowParam = searchParams.get("sdowDow");
+  const sdowWeeksParam = searchParams.get("sdowWeeks");
+  const sdowDow = sdowDowParam !== null ? parseInt(sdowDowParam, 10) : null;
+  const sdowWeeks = sdowWeeksParam !== null ? parseInt(sdowWeeksParam, 10) : null;
 
   // 가장 최근 데이터 날짜(기본값 "오늘")도 함께 내려줘서, 화면에서 "오늘"이 정확히 언제인지 표시.
   const { data: latestDateRow } = await supabase
@@ -111,6 +117,7 @@ export async function GET(request: Request) {
       competitorInsightReport: [],
       competitorProgramOverlap: [],
       stableSlotPatterns: [],
+      sameWeekdayReport: null,
       competitorTopPrograms: [],
       daypartOpportunity: [],
       hourBlockOpportunity: [],
@@ -161,6 +168,33 @@ export async function GET(request: Request) {
       { status: 404 }
     );
   }
+
+  // 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" — dateTo(asOfDate) 기준으로 선택한 요일의
+  // 최근 N주 평균을 조회. sdowDow/sdowWeeks 둘 다 있을 때만(값이 하나라도 없으면 조회하지 않고
+  // null로 정직하게 비운다).
+  const sameWeekdayReportRow =
+    sdowDow !== null && sdowWeeks !== null && !Number.isNaN(sdowDow) && !Number.isNaN(sdowWeeks)
+      ? (
+          await supabase.rpc("get_channel_same_weekday_report", {
+            p_channel_code: channel.code,
+            p_target_label: matchedTargetLabel,
+            p_as_of_date: dateTo,
+            p_dow: sdowDow,
+            p_weeks_back: sdowWeeks,
+          })
+        ).data?.[0] ?? null
+      : null;
+  const sameWeekdayReport = sameWeekdayReportRow
+    ? {
+        avgRating: sameWeekdayReportRow.avg_rating,
+        avgShare: sameWeekdayReportRow.avg_share,
+        avgReach: sameWeekdayReportRow.avg_reach,
+        avgTimeSpentSeconds: sameWeekdayReportRow.avg_time_spent_seconds,
+        sampleDays: sameWeekdayReportRow.sample_days,
+        earliestDate: sameWeekdayReportRow.earliest_date,
+        latestDate: sameWeekdayReportRow.latest_date,
+      }
+    : null;
 
   // 성능 개선(2026-08-21, 사용자 지시 — "1페이지 접속·채널 이동 로딩 속도가 느림"): 아래
   // ~18개의 RPC/쿼리 호출은 전부 matchedTargetLabel/programTargetLabel/dateFrom/dateTo 등
@@ -844,6 +878,7 @@ export async function GET(request: Request) {
     marketYtdCompetitorSnapshot,
     competitorProgramOverlap: overlapData ?? [],
     stableSlotPatterns: stableSlotPatternsRaw ?? [],
+    sameWeekdayReport,
     competitorTopPrograms: topProgramsData ?? [],
     daypartOpportunity: daypartOpportunity ?? [],
     hourBlockOpportunity: hourBlockOpportunity ?? [],

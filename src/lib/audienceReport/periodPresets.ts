@@ -17,7 +17,12 @@ export type PeriodPreset =
   | "wow"
   | "mom"
   | "qoq"
-  | "yoy";
+  | "yoy"
+  | "sdow_1w"
+  | "sdow_4w"
+  | "sdow_8w"
+  | "sdow_12w"
+  | "sdow_24w";
 
 export const PERIOD_PRESET_LABELS: Record<PeriodPreset, string> = {
   today: "오늘(최신)",
@@ -34,6 +39,15 @@ export const PERIOD_PRESET_LABELS: Record<PeriodPreset, string> = {
   mom: "전월 대비 이번달 분석(MoM)",
   qoq: "전분기 대비 이번분기 분석(QoQ)",
   yoy: "전년 동기 대비 이번년도 누적 분석(YoY)",
+  // 사용자 지시(2026-09-02): "방송 편성 분석의 특성상 '동요일' 시청률 비교가 필수적" — 오늘과
+  // 같은 요일(기본) 또는 사용자가 고른 요일의 과거 N주 평균을 비교 기준으로 삼는 그룹. "오늘"의
+  // 단일 일자 범위는 그대로 두고 비교 기준(baseline)만 바꾸는 방식이라, DoD처럼 range는 today와
+  // 동일하게 계산된다(아래 computePeriodPreset 참고).
+  sdow_1w: "최근 1주 동요일 대비 (전주)",
+  sdow_4w: "최근 4주 동요일 평균 대비 (1개월)",
+  sdow_8w: "최근 8주 동요일 평균 대비 (2개월)",
+  sdow_12w: "최근 12주 동요일 평균 대비 (3개월)",
+  sdow_24w: "최근 24주 동요일 평균 대비 (6개월)",
 };
 
 export const PERIOD_PRESET_GROUPS: { group: string; values: PeriodPreset[] }[] = [
@@ -41,7 +55,31 @@ export const PERIOD_PRESET_GROUPS: { group: string; values: PeriodPreset[] }[] =
   { group: "기간 누적(-to-Date)", values: ["wtd", "mtd", "qtd", "ytd"] },
   { group: "트레일링 기간", values: ["last7", "last30"] },
   { group: "비교 분석", values: ["dod", "wow", "mom", "qoq", "yoy"] },
+  { group: "동요일 평균 분석(SDoW)", values: ["sdow_1w", "sdow_4w", "sdow_8w", "sdow_12w", "sdow_24w"] },
 ];
+
+// 사용자 지시(2026-09-02): 동요일 평균 분석 프리셋 판별 + 프리셋별 "몇 주치 평균"인지.
+export const SDOW_PRESETS = new Set<PeriodPreset>(["sdow_1w", "sdow_4w", "sdow_8w", "sdow_12w", "sdow_24w"]);
+type SdowPreset = "sdow_1w" | "sdow_4w" | "sdow_8w" | "sdow_12w" | "sdow_24w";
+// Set.has()는 TS 타입 좁히기(narrowing)에 쓰이지 않아, computePeriodPreset()의 나머지 분기에서
+// preset이 여전히 SDoW 리터럴을 포함한 넓은 타입으로 남는다 — 타입 가드 함수로 분리해 해결.
+export function isSdowPreset(p: PeriodPreset): p is SdowPreset {
+  return SDOW_PRESETS.has(p);
+}
+export const SDOW_WEEKS_BACK: Partial<Record<PeriodPreset, number>> = {
+  sdow_1w: 1,
+  sdow_4w: 4,
+  sdow_8w: 8,
+  sdow_12w: 12,
+  sdow_24w: 24,
+};
+export const SDOW_WEEKS_LABEL: Partial<Record<PeriodPreset, string>> = {
+  sdow_1w: "최근 1주",
+  sdow_4w: "최근 4주",
+  sdow_8w: "최근 8주",
+  sdow_12w: "최근 12주",
+  sdow_24w: "최근 24주",
+};
 
 export const COMPARISON_PRESETS = new Set<PeriodPreset>(["dod", "wow", "mom", "qoq", "yoy"]);
 
@@ -133,7 +171,9 @@ export function computePeriodPreset(
     if (!customFrom || !customTo) return null;
     return customFrom <= customTo ? { from: customFrom, to: customTo } : { from: customTo, to: customFrom };
   }
-  if (preset === "today") return { from: latest, to: latest };
+  // SDoW(동요일 평균 분석) 프리셋은 "오늘" 단일 일자 화면은 그대로 두고 비교 기준(baseline)만
+  // 동요일 평균으로 바꾸는 방식이다(DoD/WoW처럼 range를 바꾸지 않음) — range 계산은 today와 동일.
+  if (preset === "today" || isSdowPreset(preset)) return { from: latest, to: latest };
   if (preset === "yesterday") {
     const yesterday = addDaysStr(latest, -1);
     return { from: yesterday, to: yesterday };

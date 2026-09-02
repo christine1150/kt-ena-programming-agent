@@ -24,6 +24,9 @@ import {
   COMPARISON_PRESETS,
   COMPARISON_LABELS,
   computePeriodPreset,
+  SDOW_PRESETS,
+  SDOW_WEEKS_BACK,
+  SDOW_WEEKS_LABEL,
 } from "@/lib/audienceReport/periodPresets";
 
 interface TrendRow {
@@ -519,6 +522,17 @@ interface ChannelData {
   marketYtdCompetitorSnapshot: { channel_name: string; rank: number; rating: number; is_self: boolean; date_from: string; date_to: string }[];
   competitorProgramOverlap: CompetitorOverlapRow[];
   stableSlotPatterns: StableSlotPatternRow[];
+  // 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" — 선택한 요일의 최근 N주 평균(요청했을
+  // 때만 채워짐, 그 외엔 null).
+  sameWeekdayReport: {
+    avgRating: number | null;
+    avgShare: number | null;
+    avgReach: number | null;
+    avgTimeSpentSeconds: number | null;
+    sampleDays: number;
+    earliestDate: string | null;
+    latestDate: string | null;
+  } | null;
   competitorTopPrograms: CompetitorTopProgramRow[];
   daypartOpportunity: DaypartOpportunityRow[];
   hourBlockOpportunity: HourBlockOpportunityRow[];
@@ -1157,7 +1171,10 @@ function buildBriefingReport(
   data: ChannelData,
   refLabel: string,
   showComparisonView: boolean,
-  comparisonLabel: string | null
+  comparisonLabel: string | null,
+  // 사용자 지시(2026-09-02): "브리핑 텍스트 바인딩 — '최근 12주 평균 대비 9.6% 하락했습니다'의
+  // 기간·요일·수치가 드롭다운 상태와 바인딩되도록". SDoW 프리셋이 활성일 때만 채워진다.
+  sdowContext?: { weeksLabel: string; dowLabel: string } | null
 ): string[] {
   const s = data.narrativeSignal;
   const paragraphs: string[] = [];
@@ -1195,6 +1212,14 @@ function buildBriefingReport(
           `${refLabel}의 요일은 평소(최근 12주) 이 채널이 ${dowPct >= 0 ? "강세를 보이는" : "약세를 보이는"} 요일입니다(같은 요일 평균 ${fmtR(s.dow_baseline_avg_rating)}).`
         );
       }
+    }
+
+    // SDoW(동요일 평균 분석) — 선택된 요일의 최근 N주 평균 대비 등락을 브리핑 문장으로 바인딩.
+    if (sdowContext && data.sameWeekdayReport && data.sameWeekdayReport.avgRating !== null && data.sameWeekdayReport.avgRating > 0) {
+      const pct = ((current.rating! - data.sameWeekdayReport.avgRating) / data.sameWeekdayReport.avgRating) * 100;
+      sentences.push(
+        `${sdowContext.weeksLabel} ${sdowContext.dowLabel}요일 평균(${fmtR(data.sameWeekdayReport.avgRating)}, 표본 ${data.sameWeekdayReport.sampleDays}일) 대비 ${Math.abs(pct).toFixed(1)}% ${pct >= 0 ? "상승" : "하락"}했습니다.`
+      );
     }
 
     // 시간대 + 그 시간대를 이끈 프로그램을 하나의 문장으로 종합(사용자 지시 2026-08-25: "가장
@@ -3624,6 +3649,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("today");
   const [customFrom, setCustomFrom] = useState<string>("");
   const [customTo, setCustomTo] = useState<string>("");
+  // 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" 요일 선택 — null이면 "자동 매칭"(기준일의
+  // 요일을 그대로 씀), 사용자가 요일 칩을 클릭하면 그 값으로 고정된다. periodPreset이 SDoW
+  // 그룹을 벗어나면 다음에 다시 SDoW로 들어왔을 때 또 자동 매칭되도록 null로 되돌린다.
+  const [selectedDow, setSelectedDow] = useState<number | null>(null);
+  const isSdowActive = SDOW_PRESETS.has(periodPreset);
 
   // 기간 설정에 따라 실제 API에 넘길 dateFrom/dateTo(+비교 분석 프리셋이면 priorFrom/priorTo)
   // 계산. "오늘"이거나, 아직 최신 날짜(latestAvailableDate)를 몰라 계산할 수 없는 첫 로딩
@@ -3652,6 +3682,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const dateQuery = selectedDateFrom && selectedDateTo ? `&dateFrom=${selectedDateFrom}&dateTo=${selectedDateTo}` : "";
   const priorQuery = selectedPriorFrom && selectedPriorTo ? `&priorDateFrom=${selectedPriorFrom}&priorDateTo=${selectedPriorTo}` : "";
   const fitScoreDateQuery = selectedDateTo ? `&date=${selectedDateTo}` : "";
+  // 사용자 지시(2026-09-02): SDoW 초기 렌더링 로직 — "기준일이 수요일이면 요일 선택기의 '수'가
+  // 자동 활성화". selectedDow가 아직 null(수동 선택 전)이면 기준일(selectedDateTo, SDoW에서는
+  // latestAvailableDate와 같음)의 요일로 자동 매칭한다. JS Date.getDay()는 0=일~6=토로 Postgres
+  // extract(dow)와 동일해 별도 변환이 필요 없다.
+  const effectiveDow =
+    selectedDow ?? (selectedDateTo ? new Date(`${selectedDateTo}T00:00:00`).getDay() : data?.latestAvailableDate ? new Date(`${data.latestAvailableDate}T00:00:00`).getDay() : null);
+  const sdowWeeksBack = SDOW_WEEKS_BACK[periodPreset] ?? null;
+  const sdowQuery = isSdowActive && effectiveDow !== null && sdowWeeksBack !== null ? `&sdowDow=${effectiveDow}&sdowWeeks=${sdowWeeksBack}` : "";
+  const DOW_CHIP_LABELS = ["일", "월", "화", "수", "목", "금", "토"]; // JS getDay() 인덱스(0~6)와 그대로 매칭.
   // 사용자 지시(2026-08-28): "전주 대비 이번주, 전월 대비 이번달 등 분석기간이 달라질 때는 그
   // 기간이 언제인지 실제 날짜가 나올 수 있게" — 이미 있는 formatDateWithDow(히어로 헤더 L3857과
   // 같은 포맷)를 그대로 재사용해 "이번 기간"/"{comparisonLabel} 기간" 패널 라벨에 실제 날짜를
@@ -3662,7 +3701,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const res = await fetch(`/api/dashboard/channel?code=${code}${dateQuery}${priorQuery}`);
+      const res = await fetch(`/api/dashboard/channel?code=${code}${dateQuery}${priorQuery}${sdowQuery}`);
       const body = await res.json().catch(() => ({ ok: false }));
       if (cancelled) return;
       if (!res.ok || !body.ok) {
@@ -3677,7 +3716,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
       cancelled = true;
     };
 
-  }, [code, dateQuery, priorQuery]);
+  }, [code, dateQuery, priorQuery, sdowQuery]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4025,23 +4064,48 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     if (curr === null || curr === undefined || prev === null || prev === undefined || prev === 0) return null;
     return ((curr - prev) / prev) * 100;
   }
+  // 사용자 지시(2026-09-02): "스코어카드 연동 — 드롭다운에서 비교 기간을 선택하면 증감률 텍스트와
+  // 컬러가 선택된 기간 기준에 맞춰 즉각 리렌더링" — SDoW가 활성이면 비교 기준을 dod(전일)에서
+  // sameWeekdayReport(선택한 요일의 최근 N주 평균)로 바꾼다. 두 값 다 같은 {rating,share,reach,
+  // time_spent_seconds} 모양으로 맞춰, 아래 4장의 카드 계산 로직 자체는 손대지 않고 baseline만
+  // 갈아 끼운다.
+  const sdowCompareLabel =
+    isSdowActive && effectiveDow !== null ? `${SDOW_WEEKS_LABEL[periodPreset] ?? ""} ${DOW_CHIP_LABELS[effectiveDow]}요일 평균 대비`.trim() : null;
+  const compareBaseline: { rating: number | null | undefined; share: number | null | undefined; reach: number | null | undefined; time_spent_seconds: number | null | undefined } | null =
+    isSdowActive
+      ? data.sameWeekdayReport
+        ? {
+            rating: data.sameWeekdayReport.avgRating,
+            share: data.sameWeekdayReport.avgShare,
+            reach: data.sameWeekdayReport.avgReach,
+            time_spent_seconds: data.sameWeekdayReport.avgTimeSpentSeconds,
+          }
+        : null
+      : dod ?? null;
+  const compareLabel = sdowCompareLabel ?? "전일 대비";
   const kpiCards: KpiCardSpec[] = !showComparisonView && current
     ? [
         {
           label: "시청률",
           value: fmtR(current.rating),
-          deltaLabel: dod?.rating_change_pct != null ? `${Math.abs(dod.rating_change_pct).toFixed(1)}% (전일 대비)` : null,
-          deltaDirection: dod?.rating_change_pct != null ? (dod.rating_change_pct >= 0 ? "up" : "down") : null,
+          deltaLabel: (() => {
+            const d = pctDelta(current.rating, compareBaseline?.rating);
+            return d !== null ? `${Math.abs(d).toFixed(1)}% (${compareLabel})` : null;
+          })(),
+          deltaDirection: (() => {
+            const d = pctDelta(current.rating, compareBaseline?.rating);
+            return d === null ? null : d >= 0 ? "up" : "down";
+          })(),
         },
         {
           label: "점유율",
           value: current.share !== null ? `${current.share.toFixed(2)}%` : "—",
           deltaLabel: (() => {
-            const d = pctDelta(current.share, dod?.share);
-            return d !== null ? `${Math.abs(d).toFixed(1)}% (전일 대비)` : null;
+            const d = pctDelta(current.share, compareBaseline?.share);
+            return d !== null ? `${Math.abs(d).toFixed(1)}% (${compareLabel})` : null;
           })(),
           deltaDirection: (() => {
-            const d = pctDelta(current.share, dod?.share);
+            const d = pctDelta(current.share, compareBaseline?.share);
             return d === null ? null : d >= 0 ? "up" : "down";
           })(),
         },
@@ -4049,11 +4113,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           label: "도달율",
           value: current.reach !== null ? `${current.reach.toFixed(2)}%` : "—",
           deltaLabel: (() => {
-            const d = pctDelta(current.reach, dod?.reach);
-            return d !== null ? `${Math.abs(d).toFixed(1)}% (전일 대비)` : null;
+            const d = pctDelta(current.reach, compareBaseline?.reach);
+            return d !== null ? `${Math.abs(d).toFixed(1)}% (${compareLabel})` : null;
           })(),
           deltaDirection: (() => {
-            const d = pctDelta(current.reach, dod?.reach);
+            const d = pctDelta(current.reach, compareBaseline?.reach);
             return d === null ? null : d >= 0 ? "up" : "down";
           })(),
         },
@@ -4061,11 +4125,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           label: "시청시간",
           value: fmtSeconds(current.time_spent_seconds),
           deltaLabel: (() => {
-            const d = pctDelta(current.time_spent_seconds, dod?.time_spent_seconds);
-            return d !== null ? `${Math.abs(d).toFixed(1)}% (전일 대비)` : null;
+            const d = pctDelta(current.time_spent_seconds, compareBaseline?.time_spent_seconds);
+            return d !== null ? `${Math.abs(d).toFixed(1)}% (${compareLabel})` : null;
           })(),
           deltaDirection: (() => {
-            const d = pctDelta(current.time_spent_seconds, dod?.time_spent_seconds);
+            const d = pctDelta(current.time_spent_seconds, compareBaseline?.time_spent_seconds);
             return d === null ? null : d >= 0 ? "up" : "down";
           })(),
         },
@@ -4268,7 +4332,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     optgroup 라벨 색도 함께 지정. */}
                 <select
                   value={periodPreset}
-                  onChange={(e) => setPeriodPreset(e.target.value as PeriodPreset)}
+                  onChange={(e) => {
+                    const next = e.target.value as PeriodPreset;
+                    setPeriodPreset(next);
+                    // 사용자 지시(2026-09-02): SDoW 그룹을 벗어나면 요일 선택을 초기화해, 다음에
+                    // 다시 SDoW로 들어왔을 때 기준일 요일로 자동 매칭되게 한다(수동 선택 기억 안 함).
+                    if (!SDOW_PRESETS.has(next)) setSelectedDow(null);
+                  }}
                   className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none [&_option]:text-zinc-900 [&_optgroup]:text-zinc-500"
                 >
                   {PERIOD_PRESET_GROUPS.map((g) => (
@@ -4296,6 +4366,25 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       onChange={(e) => setCustomTo(e.target.value)}
                       className="rounded-full bg-white/20 px-2.5 py-1.5 text-sm font-medium text-white outline-none"
                     />
+                  </div>
+                )}
+                {/* 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" 그룹을 골랐을 때만 나타나는
+                    요일 선택기(월~일 칩) — 드롭다운이 닫히면 바로 옆에 노출. 초기값은 기준일의
+                    요일로 자동 매칭(effectiveDow), 클릭하면 selectedDow로 고정(수동 오버라이드). */}
+                {isSdowActive && (
+                  <div className="flex items-center gap-1 rounded-full bg-white/20 px-1.5 py-1">
+                    {[1, 2, 3, 4, 5, 6, 0].map((dow) => (
+                      <button
+                        key={dow}
+                        type="button"
+                        onClick={() => setSelectedDow(dow)}
+                        className={`h-6 w-6 rounded-full text-xs font-semibold transition ${
+                          effectiveDow === dow ? "bg-white text-indigo-700" : "text-white/70 hover:bg-white/20"
+                        }`}
+                      >
+                        {DOW_CHIP_LABELS[dow]}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -4463,7 +4552,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               카드 하나만 예외였던 것도 포함). 표에 붙는 캡션류(예: 위 페이지 안내문) 등 원래
               줄 폭 제한이 의미 있는 짧은 문구는 max-w-2xl이 없었으므로 영향 없음. */}
           <div className="flex flex-col gap-3">
-            {buildBriefingReport(data, referenceLabel, showComparisonView, comparisonLabel).map((para, i) => (
+            {buildBriefingReport(
+              data,
+              referenceLabel,
+              showComparisonView,
+              comparisonLabel,
+              isSdowActive && effectiveDow !== null ? { weeksLabel: SDOW_WEEKS_LABEL[periodPreset] ?? "", dowLabel: DOW_CHIP_LABELS[effectiveDow] } : null
+            ).map((para, i) => (
               <p key={i} className="text-base leading-relaxed text-zinc-700">
                 {highlightNarrativeText(para, "#059669", "#e11d48")}
               </p>
