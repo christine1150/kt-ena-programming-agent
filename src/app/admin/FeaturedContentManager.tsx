@@ -121,14 +121,9 @@ function FeaturedContentRow({
     <tr className="border-t border-zinc-100">
       <td className={`whitespace-nowrap py-1.5 ${textClass}`}>{item.category}</td>
       <td className={`py-1.5 font-medium ${titleClass}`}>
+        {/* 사용자 지시(2026-09-02): "N건 통합" 배지 삭제(불필요) — 병합 자체(mergeDuplicateFeaturedItems)는
+            그대로 유지, 화면에 그 사실을 알리는 표시만 없앤다. */}
         {item.programs?.canonical_name ?? "—"}
-        {/* 사용자 지시(2026-09-02): 중복 통합됐음을 투명하게 표시(DB는 그대로라 완전 정리는
-            별도 필요 — 몇 건이 하나로 묶였는지만 알려준다). */}
-        {item.mergedCount > 1 && (
-          <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-normal text-amber-600 ring-1 ring-amber-200">
-            {item.mergedCount}건 통합
-          </span>
-        )}
       </td>
       <td className={`whitespace-nowrap py-1.5 ${dim ? "text-zinc-300" : "text-zinc-800"}`}>{item.programs?.channels?.name ?? "—"}</td>
       <td className={`whitespace-nowrap py-1.5 ${textClass}`}>{item.simulcast_channel?.name ?? "—"}</td>
