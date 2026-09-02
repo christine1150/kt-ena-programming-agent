@@ -1180,6 +1180,11 @@ function buildBriefingReport(
   const paragraphs: string[] = [];
   // skyUHD만 예외적으로 소수점 5자리(사용자 지시 2026-08-20).
   const fmtR = (v: number | null) => fmt(v, data.channel.code === "SKYUHD" ? 5 : 3);
+  // 사용자 지시(2026-09-02, 후속): SDoW 활성화 시 route.ts가 narrativeSignal(s)의 baseline_avg_rating/
+  // top_program_baseline_avg 자체를 이미 "선택 요일의 최근 N주 평균"으로 계산해 보내주므로, 이
+  // 함수의 문장들도 "최근 12주 평균"/"최근 8주 평균"이라는 고정 문구 대신 실제 계산에 쓰인 창을
+  // 그대로 말해야 값과 설명이 어긋나지 않는다.
+  const sdowLabel = sdowContext ? `${sdowContext.weeksLabel} ${sdowContext.dowLabel}요일 평균` : null;
 
   if (showComparisonView) {
     const periodParagraph = buildPeriodSummaryParagraph(data, comparisonLabel);
@@ -1200,12 +1205,13 @@ function buildBriefingReport(
     if (s.rating_delta_pct !== null) {
       const dir = s.rating_delta_pct >= 0 ? "높은" : "낮은";
       sentences.push(
-        `최근 12주 평균(${fmtR(s.baseline_avg_rating)})보다 ${Math.abs(s.rating_delta_pct).toFixed(1)}% ${dir} 수준입니다.`
+        `${sdowLabel ?? "최근 12주 평균"}(${fmtR(s.baseline_avg_rating)})보다 ${Math.abs(s.rating_delta_pct).toFixed(1)}% ${dir} 수준입니다.`
       );
     }
 
-    // 요일별 패턴: 해당 요일의 12주 평균이 전체 평균보다 강한/약한 요일인지
-    if (s.dow_baseline_avg_rating !== null && s.baseline_avg_rating !== null && s.baseline_avg_rating > 0) {
+    // 요일별 패턴: 해당 요일의 12주 평균이 전체 평균보다 강한/약한 요일인지 — SDoW 활성화 시
+    // 위 첫 문장이 이미 "선택 요일 평균 대비"를 말하므로 이 보조 문장은 중복이라 생략한다.
+    if (!sdowLabel && s.dow_baseline_avg_rating !== null && s.baseline_avg_rating !== null && s.baseline_avg_rating > 0) {
       const dowPct = ((s.dow_baseline_avg_rating - s.baseline_avg_rating) / s.baseline_avg_rating) * 100;
       if (Math.abs(dowPct) >= 10) {
         sentences.push(
@@ -1238,7 +1244,7 @@ function buildBriefingReport(
       const pct = ((s.top_program_rating - s.top_program_baseline_avg) / s.top_program_baseline_avg) * 100;
       if (Math.abs(pct) >= 20) {
         contribProgramName = s.top_program_name;
-        contribClause = `같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균(${fmtR(s.top_program_baseline_avg)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높게 기여했습니다" : "낮아 비기여했습니다"}`;
+        contribClause = `같은 요일·시간대(본방 슬롯) 기준 ${sdowLabel ?? "최근 8주 평균"}(${fmtR(s.top_program_baseline_avg)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높게 기여했습니다" : "낮아 비기여했습니다"}`;
       }
     }
     const peakMatchesContrib =
@@ -1909,7 +1915,18 @@ interface CompetitorPositioningPoint {
   delta_pct: number | null;
   isOurs: boolean;
 }
-function CompetitorPositioningScatter({ points, accentColor }: { points: CompetitorPositioningPoint[]; accentColor: string }) {
+// 사용자 지시(2026-09-02): SDoW 활성화 시 baselineLabel로 "선택 요일 최근 N주 평균"을 넘겨받아
+// 아래 캡션·툴팁의 "12주 평균"을 대체한다(없으면 기존 문구 그대로, 하위호환).
+function CompetitorPositioningScatter({
+  points,
+  accentColor,
+  baselineLabel,
+}: {
+  points: CompetitorPositioningPoint[];
+  accentColor: string;
+  baselineLabel?: string;
+}) {
+  const baseline = baselineLabel ?? "12주 평균";
   const plottable = points.filter(
     (p): p is CompetitorPositioningPoint & { today_rating: number; delta_pct: number } => p.today_rating !== null && p.delta_pct !== null
   );
@@ -1938,7 +1955,7 @@ function CompetitorPositioningScatter({ points, accentColor }: { points: Competi
   return (
     <div className="mb-4 rounded-2xl bg-zinc-50 p-4">
       <p className="mb-2 text-[12px] text-zinc-500">
-        가로축 = 오늘 시청률, 세로축 = 12주 평균 대비 등락률 — 오른쪽 위일수록 &ldquo;강한데 더 강해지는&rdquo; 채널, 왼쪽
+        가로축 = 오늘 시청률, 세로축 = {baseline} 대비 등락률 — 오른쪽 위일수록 &ldquo;강한데 더 강해지는&rdquo; 채널, 왼쪽
         아래일수록 &ldquo;약한데 더 약해지는&rdquo; 채널입니다.
       </p>
       <div className="overflow-x-auto">
@@ -1965,7 +1982,7 @@ function CompetitorPositioningScatter({ points, accentColor }: { points: Competi
             <g key={p.competitor_name}>
               <circle cx={px} cy={py} r={r} fill={color} fillOpacity={p.isOurs ? 1 : 0.75}>
                 <title>
-                  {p.competitor_name} — 시청률 {fmt(p.today_rating)} · 12주 평균 대비 {p.delta_pct >= 0 ? "▲" : "▼"} {Math.abs(p.delta_pct).toFixed(1)}%
+                  {p.competitor_name} — 시청률 {fmt(p.today_rating)} · {baseline} 대비 {p.delta_pct >= 0 ? "▲" : "▼"} {Math.abs(p.delta_pct).toFixed(1)}%
                 </title>
               </circle>
               {/* 사용자 지시(2026-08-26): "채널명이 모두 나오게 조치" — 우리 채널만 상시 라벨을
@@ -1992,7 +2009,10 @@ function CompetitorPositioningScatter({ points, accentColor }: { points: Competi
 }
 
 // ── COMPARED WITH? 줄글 ──────────────────────────────────────────────
-function buildCompetitorNarrative(rows: CompetitorInsightRow[]): string {
+// 사용자 지시(2026-09-02): SDoW(동요일 평균 분석) 활성화 시 이 문장의 "최근 12주 평균"도 선택한
+// 요일의 최근 N주 평균으로 — baselineLabel(없으면 기존 문구 그대로, 하위호환)을 인자로 받는다.
+function buildCompetitorNarrative(rows: CompetitorInsightRow[], baselineLabel?: string): string {
+  const label = baselineLabel ?? "최근 12주 평균";
   const valid = rows.filter((r) => r.delta_pct !== null);
   if (valid.length === 0) return "";
   const risers = valid.filter((r) => r.delta_pct! >= 15);
@@ -2006,14 +2026,14 @@ function buildCompetitorNarrative(rows: CompetitorInsightRow[]): string {
           : `${r.competitor_name}(▲${r.delta_pct!.toFixed(1)}%)`
       )
       .join(", ");
-    parts.push(`${risersText}${josaEunNeun(risersText)} 최근 12주 평균 대비 오늘 뚜렷하게 강세였습니다.`);
+    parts.push(`${risersText}${josaEunNeun(risersText)} ${label} 대비 오늘 뚜렷하게 강세였습니다.`);
   }
   if (fallers.length > 0) {
     const fallersText = fallers.map((r) => `${r.competitor_name}(▼${Math.abs(r.delta_pct!).toFixed(1)}%)`).join(", ");
     parts.push(`${fallersText}${josaEunNeun(fallersText)} 반대로 평소보다 약세를 보였습니다.`);
   }
   if (parts.length === 0) {
-    parts.push("등록 경쟁채널 대부분이 최근 12주 평균과 비슷한 수준을 유지했습니다.");
+    parts.push(`등록 경쟁채널 대부분이 ${label}과 비슷한 수준을 유지했습니다.`);
   }
   return parts.join(" ");
 }
@@ -3694,6 +3714,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const sdowWeeksBack = SDOW_WEEKS_BACK[periodPreset] ?? null;
   const sdowQuery = isSdowActive && effectiveDow !== null && sdowWeeksBack !== null ? `&sdowDow=${effectiveDow}&sdowWeeks=${sdowWeeksBack}` : "";
   const DOW_CHIP_LABELS = ["일", "월", "화", "수", "목", "금", "토"]; // JS getDay() 인덱스(0~6)와 그대로 매칭.
+  // 사용자 지시(2026-09-02): "브리핑부터 경쟁채널 분석까지 모두 선택한 기간의 내용으로 반영" —
+  // 아래 여러 섹션(오늘의 브리핑/WHO IS WATCHING?/COMPARED WITH?/시간대 그래프/TOP20/AI 종합)이
+  // 전부 이 두 라벨을 공유해서 쓰므로, 그 섹션들보다 먼저(그리고 이 값을 쓰는 useEffect의 콜백
+  // 클로저보다도 먼저) 선언해 둔다.
+  const sdowCompareLabel =
+    isSdowActive && effectiveDow !== null ? `${SDOW_WEEKS_LABEL[periodPreset] ?? ""} ${DOW_CHIP_LABELS[effectiveDow]}요일 평균 대비`.trim() : null;
+  const sdowBaselineShortLabel = sdowCompareLabel ? sdowCompareLabel.replace(/\s*대비$/, "") : null;
   // 사용자 지시(2026-08-28): "전주 대비 이번주, 전월 대비 이번달 등 분석기간이 달라질 때는 그
   // 기간이 언제인지 실제 날짜가 나올 수 있게" — 이미 있는 formatDateWithDow(히어로 헤더 L3857과
   // 같은 포맷)를 그대로 재사용해 "이번 기간"/"{comparisonLabel} 기간" 패널 라벨에 실제 날짜를
@@ -3852,6 +3879,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               top_program_name: r.top_program_name,
               top_program_start_time: r.top_program_start_time,
             })),
+            // 사용자 지시(2026-09-02, SDoW): delta_pct가 실제로 무엇 대비인지 AI 프롬프트에도
+            // 정확히 알려준다(위 competitorInsightReport 자체는 이미 route.ts가 SDoW-aware하게
+            // 계산해 보내주므로, 여기선 문구만 맞춘다).
+            baselineLabel: sdowBaselineShortLabel ?? undefined,
           },
         });
       }
@@ -3880,7 +3911,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     return () => {
       cancelled = true;
     };
-  }, [data, fitScoreItems, fitScoreLoading, code, sectionLlmResetKey]);
+  }, [data, fitScoreItems, fitScoreLoading, code, sectionLlmResetKey, sdowBaselineShortLabel]);
 
   useEffect(() => {
     if (!expandedProgram || code === "SKYUHD") return;
@@ -4071,9 +4102,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 컬러가 선택된 기간 기준에 맞춰 즉각 리렌더링" — SDoW가 활성이면 비교 기준을 dod(전일)에서
   // sameWeekdayReport(선택한 요일의 최근 N주 평균)로 바꾼다. 두 값 다 같은 {rating,share,reach,
   // time_spent_seconds} 모양으로 맞춰, 아래 4장의 카드 계산 로직 자체는 손대지 않고 baseline만
-  // 갈아 끼운다.
-  const sdowCompareLabel =
-    isSdowActive && effectiveDow !== null ? `${SDOW_WEEKS_LABEL[periodPreset] ?? ""} ${DOW_CHIP_LABELS[effectiveDow]}요일 평균 대비`.trim() : null;
+  // 갈아 끼운다. (sdowCompareLabel/sdowBaselineShortLabel은 위(effectiveDow 근처)로 옮겨 선언 —
+  // 이 값을 쓰는 useEffect 콜백보다 텍스트상 먼저 나와야 해서.)
   const compareBaseline: { rating: number | null | undefined; share: number | null | undefined; reach: number | null | undefined; time_spent_seconds: number | null | undefined } | null =
     isSdowActive
       ? data.sameWeekdayReport
@@ -4510,7 +4540,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     narrativeSignal.rating_delta_pct >= 0 ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-rose-200"
                   }`}
                 >
-                  {narrativeSignal.rating_delta_pct >= 0 ? "▲" : "▼"} 최근 12주 평균 대비 {Math.abs(narrativeSignal.rating_delta_pct).toFixed(1)}%
+                  {narrativeSignal.rating_delta_pct >= 0 ? "▲" : "▼"} {sdowCompareLabel ?? "최근 12주 평균 대비"} {Math.abs(narrativeSignal.rating_delta_pct).toFixed(1)}%
                 </span>
               )}
               {narrativeSignal.today_peak_hour !== null && (
@@ -5033,7 +5063,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               {hourlyMetrics.has("avg_rating") && hourlyBaselinePattern.length > 0 && (
                 <p className="mt-1 text-[13px] text-zinc-400">
                   <span className="mr-1 inline-block h-0.5 w-3 align-middle" style={{ backgroundColor: accentColor, opacity: 0.35 }} />
-                  연한 선 = 최근 12주(84일) 같은 시간대 평균 시청률 기준선
+                  {isSdowActive && sdowBaselineShortLabel
+                    ? `연한 선 = ${sdowBaselineShortLabel} 같은 시간대 평균 시청률 기준선`
+                    : "연한 선 = 최근 12주(84일) 같은 시간대 평균 시청률 기준선"}
                 </p>
               )}
               {/* 사용자 지시: 시간대별로 어떤 타이틀이 편성됐는지 알 수 있도록 — 막대 위에는 다
@@ -5148,7 +5180,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={SECTION_TITLE_P2}>시청률 상위 콘텐츠 TOP 20</h2>
           <p className="mb-3 text-sm text-zinc-400">
-            {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 평균 시청률이 높은 순으로 정렬했습니다.
+            {isSdowActive && sdowBaselineShortLabel
+              ? `${sdowBaselineShortLabel} 시청률이 높은 순으로 정렬했습니다.`
+              : `${periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 평균 시청률이 높은 순으로 정렬했습니다.`}
           </p>
           {hasPriorRange ? (
             <>
@@ -5157,13 +5191,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <p className="mb-2 text-sm font-semibold text-zinc-600">
                     {comparisonLabel ?? "이전"} 기간 {periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}
                   </p>
-                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7} shareTop={priorTopSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
+                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7 || isSdowActive} shareTop={priorTopSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
                 </div>
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">
                     이번 기간 {periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}
                   </p>
-                  <TopProgramsList rows={topPrograms} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
+                  <TopProgramsList rows={topPrograms} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7 || isSdowActive} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
                 </div>
               </div>
               {buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior) && (
@@ -5174,7 +5208,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>
           ) : (
             <>
-              <TopProgramsList rows={topPrograms} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
+              <TopProgramsList rows={topPrograms} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7 || isSdowActive} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
                 <p className="mt-3 text-base leading-relaxed text-zinc-700">
                   위 상위 콘텐츠들과 같은 기간 기준으로 볼 때,
@@ -5499,7 +5533,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </h2>
           <p className="mb-3 text-sm text-zinc-400">
             왼쪽 2개는 가장 많이 본 연령대, 오른쪽 2개는 등락폭이 가장 커서 주목해야 할 연령대입니다(전체 12개
-            연령대 중 선정). 등락률은 {showComparisonView ? `${comparisonLabel ?? "전"} 기간` : "최근 한 달 평균"} 대비입니다.
+            연령대 중 선정). 등락률은 {showComparisonView ? `${comparisonLabel ?? "전"} 기간` : sdowCompareLabel ? sdowCompareLabel.replace(/ 대비$/, "") : "최근 한 달 평균"} 대비입니다.
             {/* 사용자 질문(2026-08-22): "하단 색깔 그래프가 뭘 표현하는지" — 각 타일 하단의 막대는
                 위 등락률(▲▼ %)을 가운데 기준선(0%) 기준 좌우로 그린 것입니다(오른쪽·초록=상승,
                 왼쪽·빨강=하락, 막대 길이=등락폭 크기·±50% 이상은 꽉 찬 채로 고정). */}
@@ -6344,7 +6378,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {!(code === "SKYUHD" && marketYtdCompetitorSnapshot.length > 0) && (
             <p className="mb-3 text-sm text-zinc-400">
               시간대별(전일/전주/전월/전분기/전년) 비교는 위 WHAT HAPPENED?를 참고하세요. 아래는 등록 경쟁채널을
-              {isRangeMode ? " 선택 기간 평균 순위가 높은 순으로 나열하고, 그 이전 12주 평균 대비 등락과 기간 중 가장 잘 된 프로그램(시간대)을" : ` ${referenceLabel} 순위가 높은 순으로 나열하고, 최근 12주 평균 대비 ${referenceLabel} 등락과 ${referenceLabel} 가장 잘 된 프로그램(시간대)을`}
+              {isRangeMode
+                ? " 선택 기간 평균 순위가 높은 순으로 나열하고, 그 이전 12주 평균 대비 등락과 기간 중 가장 잘 된 프로그램(시간대)을"
+                : ` ${referenceLabel} 순위가 높은 순으로 나열하고, ${sdowCompareLabel ?? "최근 12주 평균 대비"} ${referenceLabel} 등락과 ${referenceLabel} 가장 잘 된 프로그램(시간대)을`}
               함께 보여줍니다.
             </p>
           )}
@@ -6441,7 +6477,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     // 등락을 표시 — data.periodReport.baseline_change_pct가 이미 같은 개념(최근
                     // 12주/84일 평균 대비, 단일 일자든 기간 평균이든 periodReport 자체가 그때그때
                     // 맞춰 계산)이라 새 계산 없이 그대로 쓴다.
-                    delta_pct: data.periodReport?.baseline_change_pct ?? null,
+                    // 사용자 지시(2026-09-02, SDoW): 활성화 시엔 위 12주 baseline 대신
+                    // sameWeekdayReport(선택 요일 최근 N주 평균, KPI 카드와 동일 baseline)로
+                    // 교체 — 경쟁채널 쪽(get_competitor_insight_report)도 이미 같은 방식으로
+                    // SDoW-aware해졌으니 우리 채널 행만 다른 기준을 쓰면 산점도·표가 어긋난다.
+                    delta_pct: isSdowActive ? pctDelta(ourRating, data.sameWeekdayReport?.avgRating) : (data.periodReport?.baseline_change_pct ?? null),
                     top_program_name: isRangeMode ? (ourTopProgram?.canonical_name ?? null) : (narrativeSignal?.top_program_name ?? null),
                     top_program_start_time: isRangeMode ? null : (narrativeSignal?.top_program_start_time ?? null),
                     top_program_rating: isRangeMode ? (ourTopProgram?.period_avg_rating ?? null) : (narrativeSignal?.top_program_rating ?? null),
@@ -6452,7 +6492,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 merged.sort((a, b) => (b.today_rating ?? -Infinity) - (a.today_rating ?? -Infinity));
                 return (
                   <>
-                    <CompetitorPositioningScatter points={merged} accentColor={accentColor} />
+                    <CompetitorPositioningScatter points={merged} accentColor={accentColor} baselineLabel={sdowBaselineShortLabel ?? undefined} />
                     <div className="mb-3 overflow-x-auto">
                     <table className="w-full min-w-[560px] text-left text-sm">
                       <thead>
@@ -6462,7 +6502,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           <th className="pb-1.5 pr-2 font-medium">No.</th>
                           <th className="pb-1.5 pr-2 font-medium">채널</th>
                           <th className="pb-1.5 pr-2 font-medium">{isRangeMode ? "기간 평균 시청률" : `${referenceLabel} 시청률`}</th>
-                          <th className="pb-1.5 pr-2 font-medium">12주 평균 대비</th>
+                          <th className="pb-1.5 pr-2 font-medium">{sdowCompareLabel ?? "12주 평균 대비"}</th>
                           <th className="pb-1.5 font-medium">{isRangeMode ? "기간 중 최고 성적 프로그램" : `${referenceLabel} 최고 성적 프로그램`}</th>
                         </tr>
                       </thead>
@@ -6532,7 +6572,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   그걸, 없으면 기존 규칙 기반 buildCompetitorNarrative로. 가독성 개선 5번
                   (2026-08-26): 줄 폭 제한 + 등락 수치 강조(표시만, 문장 로직은 그대로). */}
               <p className="mb-4 text-base leading-relaxed text-zinc-700">
-                {highlightNarrativeText(sectionLlmCurrent.competitor ?? buildCompetitorNarrative(competitorInsightReport), "#059669", "#e11d48")}
+                {highlightNarrativeText(
+                  sectionLlmCurrent.competitor ?? buildCompetitorNarrative(competitorInsightReport, sdowBaselineShortLabel ?? undefined),
+                  "#059669",
+                  "#e11d48"
+                )}
               </p>
             </>
           )}

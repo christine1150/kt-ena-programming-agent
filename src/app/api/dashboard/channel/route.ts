@@ -195,6 +195,15 @@ export async function GET(request: Request) {
         latestDate: sameWeekdayReportRow.latest_date,
       }
     : null;
+  const isSdowActive = sdowDow !== null && sdowWeeks !== null && !Number.isNaN(sdowDow) && !Number.isNaN(sdowWeeks);
+  // 사용자 지시(2026-09-02, 후속): "브리핑부터 경쟁채널 분석까지 모두 선택한 기간의 내용으로
+  // 반영" — SDoW가 활성화되면 위 sameWeekdayReport(채널 KPI 5카드용) 외에, 오늘의 브리핑(narrative)
+  // ·시간대별 그래프 기준선(hourlyRatingPattern)·TOP20/TOP5(topPrograms)·COMPARED WITH?
+  // (competitorInsight)의 각자 다른 고정 트레일링 창(12주/8주/28일)도 "선택한 요일의 최근 N주"로
+  // 통일한다. 아래 두 스프레드용 객체를 해당 RPC 호출에 그대로 얹는다 — 비활성 시 빈 객체라
+  // 각 함수의 기존 기본값(하위호환)이 그대로 적용된다.
+  const sdowNarrativeParams = isSdowActive ? { p_program_baseline_weeks: sdowWeeks!, p_target_dow: sdowDow! } : {};
+  const sdowHourlyParams = isSdowActive ? { p_target_dow: sdowDow!, p_target_weeks: sdowWeeks! } : {};
 
   // 성능 개선(2026-08-21, 사용자 지시 — "1페이지 접속·채널 이동 로딩 속도가 느림"): 아래
   // ~18개의 RPC/쿼리 호출은 전부 matchedTargetLabel/programTargetLabel/dateFrom/dateTo 등
@@ -333,7 +342,7 @@ export async function GET(request: Request) {
     supabase.rpc("get_hourly_program_titles", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
     // 사용자 지시(2026-08-20): "각 채널의 최근 12주 시간대별 평균 시청률을 연한 색으로 꺾은선
     // 그래프로 그려서 기준점을 보여줄 것" — 선택 기간과 별개로 dateTo 기준 직전 84일 고정 윈도우.
-    supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: addDaysStr(dateTo, -83), p_date_to: dateTo }),
+    supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: addDaysStr(dateTo, -83), p_date_to: dateTo, ...sdowHourlyParams }),
     Promise.all(
       extraTargetLabels.map((targetLabel) =>
         supabase
@@ -354,7 +363,7 @@ export async function GET(request: Request) {
     }),
     // COMPARED WITH? 재설계(사용자 지시) — 등록 경쟁채널을 순위 높은 순으로, 최근 12주 평균
     // 대비 등락 + 최고 성적 프로그램(시간대). p_date_from을 넘기면 "오늘"이 기간 평균으로 집계됨.
-    supabase.rpc("get_competitor_insight_report", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: dateTo, p_date_from: dateFrom }),
+    supabase.rpc("get_competitor_insight_report", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: dateTo, p_date_from: dateFrom, ...sdowHourlyParams }),
     // 동시간대 겹치는 경쟁 프로그램 비교(overlap) — 여러 날을 합치면 의미가 흐려져 dateTo 하루만.
     supabase.rpc("get_competitor_program_overlap", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_as_of_date: dateTo }),
     supabase.rpc("get_competitor_top_programs", { p_channel_code: channel.code, p_as_of_date: dateTo, p_limit: 5, p_date_from: dateFrom }),
@@ -389,7 +398,7 @@ export async function GET(request: Request) {
     // 7일보다 긴 기간을 선택하면 히트맵은 그 기간 전체로, TOP 20은 항상 선택 기간 그대로 계산된다
     // (2026-08-28 수정 — 위 periodWindowDays 주석 참고, 히트맵·TOP20 공통 window로 재통합).
     supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays }),
-    supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 20 }),
+    supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 20, ...sdowHourlyParams }),
     // 사용자 지시(2026-08-21): "WHO IS WATCHING?은 연령대를 좀 더 깊이 파고들어서" — 대표 4개
     // 대신 전체 연령대(fullDemographicTargets, 12개)를 조회해 "가장 많이 본 연령대"·"주목해야
     // 할 연령대"를 데이터 기반으로 고른다.
@@ -427,6 +436,7 @@ export async function GET(request: Request) {
       p_demographic_labels: demographicTargets,
       p_as_of_date: dateTo,
       p_baseline_days: 84,
+      ...sdowNarrativeParams,
     }),
     channel.code !== "SKYUHD" && !isRangeMode
       ? supabase.rpc("get_channel_demographic_program_highlights", {
@@ -467,6 +477,7 @@ export async function GET(request: Request) {
           p_demographic_labels: fullDemographicTargets,
           p_as_of_date: dateTo,
           p_baseline_days: 28,
+          ...sdowNarrativeParams,
         })
       : Promise.resolve({ data: [] as { demographics: unknown }[] }),
     // 사용자 지시(2026-08-21): "대비" 분석(듀얼 패널)에서도 '오늘' 때와 동일하게 각 패널(이번
@@ -478,7 +489,7 @@ export async function GET(request: Request) {
       : Promise.resolve({ data: [] as unknown[] }),
     // 사용자 지시(2026-08-21): "TOP20에는 없지만 전체 점유율 1~5위인 콘텐츠가 있으면 별도 명기" —
     // TOP20(시청률 기준)과 별개로 점유율 기준 상위 5개를 직접 조회한다(get_channel_top_share_programs).
-    supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 5 }),
+    supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 5, ...sdowHourlyParams }),
     hasPriorRange
       ? supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: periodWindowDays, p_limit: 5 })
       : Promise.resolve({ data: [] as unknown[] }),
