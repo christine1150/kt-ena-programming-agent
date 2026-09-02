@@ -1611,14 +1611,14 @@ function ProgramRatingHistoryChart({
 }) {
   const own2049 = [...history.own2049].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date));
   const ownHousehold = [...history.ownHousehold].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date));
-  const otherSeries = history.otherChannels.map((s) => ({ ...s, points: [...s.points].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date)) }));
-  const competitorSeries = history.competitors.map((s) => ({ ...s, points: [...s.points].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date)) }));
+  const otherSeriesRaw = history.otherChannels.map((s) => ({ ...s, points: [...s.points].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date)) }));
+  const competitorSeriesRaw = history.competitors.map((s) => ({ ...s, points: [...s.points].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date)) }));
 
   const allDates = [
     ...own2049.map((p) => p.broadcast_date),
     ...ownHousehold.map((p) => p.broadcast_date),
-    ...otherSeries.flatMap((s) => s.points.map((p) => p.broadcast_date)),
-    ...competitorSeries.flatMap((s) => s.points.map((p) => p.broadcast_date)),
+    ...otherSeriesRaw.flatMap((s) => s.points.map((p) => p.broadcast_date)),
+    ...competitorSeriesRaw.flatMap((s) => s.points.map((p) => p.broadcast_date)),
   ];
   if (own2049.length < 2 && allDates.length < 2) return null; // 표본 부족(그릴 수 없음)
 
@@ -1664,6 +1664,26 @@ function ProgramRatingHistoryChart({
     return best;
   }
   const xOf = (d: string) => PAD_X + nearestIndex(d) * STEP;
+
+  // 버그 수정(2026-09-02, 사용자 신고 "선이 어긋나거나"): 타 채널·경쟁채널이 하루에 여러 번
+  // 편성돼(재방 등) 서로 다른 실제 날짜를 갖는 점 2개 이상이 같은 회차 축 인덱스로 근사되면,
+  // 그 x좌표에서 선이 위아래로 지그재그로 튀었다(실측: ENA Drama 재방 선이 회차2·회차3 지점에서
+  // 순간적으로 y가 두 번 바뀜). 같은 인덱스로 근사되는 점들은 평균 시청률 하나로 합쳐 x당
+  // 점이 하나만 남게 한다 — 경로(path)와 점(dot) 양쪽에 공통으로 쓰이므로 여기 한 번만 처리.
+  function dedupeByAxisIndex(points: RatingHistoryPoint[]): RatingHistoryPoint[] {
+    const groups = new Map<number, RatingHistoryPoint[]>();
+    for (const p of points) {
+      const idx = nearestIndex(p.broadcast_date);
+      const bucket = groups.get(idx);
+      if (bucket) bucket.push(p);
+      else groups.set(idx, [p]);
+    }
+    return [...groups.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, pts]) => (pts.length === 1 ? pts[0] : { broadcast_date: pts[0].broadcast_date, rating: pts.reduce((s, p) => s + p.rating, 0) / pts.length }));
+  }
+  const otherSeries = otherSeriesRaw.map((s) => ({ ...s, points: dedupeByAxisIndex(s.points) }));
+  const competitorSeries = competitorSeriesRaw.map((s) => ({ ...s, points: dedupeByAxisIndex(s.points) }));
 
   // 사용자 지시(2026-09-01): "가구 시청률이 2049보다 높은데(신병의 경우 2049 1.42, 가구 3.37)
   // 똑같이 나오는 것이 이상함 — 가구 기준의 y축 높이로 2049도 맞춰줄 것". 그동안 2049 선과 가구
@@ -1793,7 +1813,6 @@ function ProgramRatingHistoryChart({
               style={{ left: `${(xOf(todayPoint.broadcast_date) / W) * 100}%`, top: y2049(todayPoint.rating) - 3 }}
             >
               {formatRating(todayPoint.rating)}
-              {peakIsToday && <span style={{ color: accentColor }}> ★</span>}
             </span>
           )}
           {troughPoint && !troughIsShown && (
@@ -2021,7 +2040,7 @@ function ManualMinuteRatingChart({
     <div className="mt-2 rounded-xl bg-zinc-50 p-3">
       {/* 사용자 지시(2026-09-01): 캡션에서 "(PD 실측)" 문구 제거. */}
       <p className="mb-1 text-[11px] text-zinc-400">
-        분당 시청률 — 굵은 선이 {ownChannelName}, 가는 점선은 동시간대 경쟁 프로그램의 방영 구간 평균입니다.
+        분당 시청률 — 굵은 선이 {ownChannelName}, 흐린 실선은 동시간대 경쟁 프로그램의 방영 구간 평균입니다(마우스를 올리면 프로그램명·시청률 표시).
       </p>
       <div className="relative">
         {/* preserveAspectRatio="none"이면 <text> 눈금이 가로로 늘어나 찌그러지므로, y축 눈금을
@@ -2044,12 +2063,17 @@ function ManualMinuteRatingChart({
             const x2 = Math.min(W - PAD_R, xOf(c.end_time!.slice(0, 5)));
             const y = yOf(c.target_rating!);
             const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
+            const title = `${c.channel_name} '${c.program_name}' — ${c.target_rating!.toFixed(3)}%`;
             return (
-              <line key={`${c.channel_name}-${c.program_name}`} x1={x1} y1={y} x2={x2} y2={y} stroke={color} strokeWidth={1.3} strokeOpacity={0.6} strokeDasharray="3 3">
-                <title>
-                  {c.channel_name} &apos;{c.program_name}&apos; — {c.target_rating!.toFixed(3)}%
-                </title>
-              </line>
+              <g key={`${c.channel_name}-${c.program_name}`}>
+                {/* 사용자 지시(2026-09-02): "경쟁 채널의 시청률은 점선 말고 흐린 실선으로" — dasharray 제거. */}
+                <line x1={x1} y1={y} x2={x2} y2={y} stroke={color} strokeWidth={1.6} strokeOpacity={0.45} strokeLinecap="round" />
+                {/* 가는 선은 마우스로 정확히 맞추기 어려워, 보이지 않는 두꺼운 선을 겹쳐 히트 영역만
+                    넓힌다(사용자 지시: "마우스 오버를 하면 프로그램명이랑 시청률이 보이도록"). */}
+                <line x1={x1} y1={y} x2={x2} y2={y} stroke="transparent" strokeWidth={10}>
+                  <title>{title}</title>
+                </line>
+              </g>
             );
           })}
           {/* 사용자 지시(2026-08-26, 재재재수정): 참고 이미지(PD 원본 엑셀)의 "22:00 방송시작/
