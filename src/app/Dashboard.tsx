@@ -1598,9 +1598,9 @@ const UNBRANDED_CHANNEL_COLOR = "#3f3f46";
 const COMPETITOR_LINE_COLORS = [UNBRANDED_CHANNEL_COLOR, "#84cc16"];
 // 사용자 지시(2026-09-02): OLIFE 브랜드색(#b8d800, 연두)은 흰 배경 위 강조 텍스트로 쓰기엔 대비가
 // 약함 — 일간 세부 내역 패널(ChannelDailyDetailPanel)에서만 더 진한 녹색으로 대체.
-// 사용자 재지시(2026-09-02): "채도가 너무 낮아졌다 — 좀 더 밝은색 계열로 진한 초록" — 올리브빛
-// 도는 어두운 톤(#4a7300) 대신 채도 높은 순수 초록(#0e8a3e)으로.
-const DAILY_DETAIL_READABLE_COLOR_OVERRIDE: Record<string, string> = { OLIFE: "#0e8a3e" };
+// 사용자 재지시(2026-09-02, 2차): 첨부한 밝은 초록 원형 아이콘 참조 — 올리브빛 도는 어두운 톤
+// (#4a7300 → #0e8a3e도 여전히 어둡다는 지적) 대신 그 아이콘처럼 밝고 채도 높은 초록으로.
+const DAILY_DETAIL_READABLE_COLOR_OVERRIDE: Record<string, string> = { OLIFE: "#22c55e" };
 function buildLinearScale(values: number[], size: number, pad: number): (v: number) => number {
   if (values.length === 0) return () => size / 2;
   const min = Math.min(...values);
@@ -3030,6 +3030,10 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
   // 사용자 지시(2026-09-02): "OLIFE는 채널 로고가 연한 연두색이라 시청률·점유율이 잘 안 보이므로
   // 더 진한 녹색으로 강조" — 이 패널(일간 세부 내역)의 그라데이션·볼드 강조색에서만 OLIFE 브랜드
   // 색(#b8d800)을 더 진한 녹색으로 대체한다(헤더 배경 등 다른 자리의 OLIFE 브랜드색은 그대로).
+  // 사용자 재지시(2026-09-02): "채널명은 로고색을 그대로 두고, 강조색과 음영만 바꿔줘" — 제목
+  // (channelName)은 원래 브랜드색(titleColor)을 그대로 쓰고, 그라데이션·볼드 강조에만 override를
+  // 적용하는 emphasisColor(변수명 color, 기존 호출부가 이미 이 이름을 쓰고 있어 유지)로 분리.
+  const titleColor = themeColor ?? UNBRANDED_CHANNEL_COLOR;
   const color = DAILY_DETAIL_READABLE_COLOR_OVERRIDE[channelCode] ?? themeColor ?? UNBRANDED_CHANNEL_COLOR;
   const rangeOf = (vals: (number | null)[]) => {
     const nums = vals.filter((v): v is number => v !== null);
@@ -3071,7 +3075,7 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
     <div className={CARD}>
       <div className="mb-1 flex items-center justify-between gap-2">
         <h2 className={SECTION_TITLE}>
-          <span style={{ color }}>{channelName}</span> · 일간 세부 내역
+          <span style={{ color: titleColor }}>{channelName}</span> · 일간 세부 내역
         </h2>
         <button
           type="button"
