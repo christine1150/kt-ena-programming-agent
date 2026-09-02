@@ -5170,23 +5170,40 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             "이번 기간"/"전 기간" 두 패널로 나란히 비교. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={`${SECTION_TITLE_P2} mb-1`}>
-            {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일) 요일 × 시간대 강세 시간대` : "최근 12주 요일 × 시간대 강세 시간대"}
+            {showSdowDualView
+              ? "요일 × 시간대 강세 시간대"
+              : periodWindowDays !== 84
+                ? `선택 기간(${periodWindowDays}일) 요일 × 시간대 강세 시간대`
+                : "최근 12주 요일 × 시간대 강세 시간대"}
           </h2>
           <p className="mb-3 text-sm text-zinc-400">
-            {periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 누적 기준, 월~일 요일과 3시간 단위
-            시간대(02~04시부터 23~25시까지 8구간) 조합별 평균 시청률입니다. 색이 진할수록 그 요일·시간대 조합이 강세입니다.
+            {showSdowDualView
+              ? `왼쪽은 ${sdowBaselineShortLabel ?? "선택한 주간"} 전체(월~일 7개 요일), 오른쪽은 선택한 요일(기준일로부터 가장 가까운 그 요일 하루) 기준입니다.`
+              : `${periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 누적 기준, 월~일 요일과 3시간 단위
+            시간대(02~04시부터 23~25시까지 8구간) 조합별 평균 시청률입니다. 색이 진할수록 그 요일·시간대 조합이 강세입니다.`}
           </p>
-          {hasPriorRange ? (
+          {/* 사용자 지시(2026-09-02, 버그 신고: "화요일로 나옴"): SDoW는 periodWindowDays가
+              1일(오늘)이라 히트맵이 항상 "오늘의 요일" 칸 하나만 채우고 있었다 — 선택한 요일과
+              무관했다. 재지시: "왼쪽은 선택한 주간(1주~6개월) / 오른쪽은 선택한 요일(기준일로부터
+              가장 가까운 요일) 하나씩" 두 개의 히트맵으로. dowHourBlockPatternPrior/dowHourBlockPattern은
+              route.ts에서 SDoW일 때 각각 "선택한 주간 전체 창"/"선택한 요일의 최근 발생일 하루"로
+              재계산해 보내주므로 그대로 왼쪽/오른쪽에 매핑한다(hasPriorRange의 전 기간/이번 기간
+              자리를 그대로 재사용 — 새 필드 없음). */}
+          {hasPriorRange || showSdowDualView ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
                 <p className="mb-2 text-sm font-semibold text-zinc-600">
-                  {comparisonLabel ?? "이전"} 기간 {periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}
+                  {showSdowDualView
+                    ? `${sdowBaselineShortLabel ?? "선택한 주간"}`
+                    : `${comparisonLabel ?? "이전"} 기간 ${periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}`}
                 </p>
                 <DowHourBlockTable pattern={dowHourBlockPatternPrior} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
               </div>
               <div>
                 <p className="mb-2 text-sm font-semibold text-zinc-600">
-                  이번 기간 {periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}
+                  {showSdowDualView
+                    ? `선택한 요일 (${sdowAnalysisDates[0] ? formatDateWithDow(sdowAnalysisDates[0]) : "가장 가까운 날짜"})`
+                    : `이번 기간 ${periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}`}
                 </p>
                 <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
               </div>
@@ -5226,7 +5243,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </div>
               );
             })()}
-          {!hasPriorRange && (
+          {!hasPriorRange && !showSdowDualView && (
             <>
               <WeekdayProfileSparklines pattern={dowHourBlockPattern} accentColor={accentColor} />
               <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} hourBlockOpportunity={hourBlockOpportunity} />

@@ -200,6 +200,13 @@ export async function GET(request: Request) {
       }
     : null;
   const isSdowActive = sdowDow !== null && sdowWeeks !== null && !Number.isNaN(sdowDow) && !Number.isNaN(sdowWeeks);
+  // 사용자 지시(2026-09-02, 요일×시간대 히트맵 버그 신고): "화요일로 나옴" — 히트맵이
+  // periodWindowDays(SDoW에선 1일)로 dateTo(오늘, 화요일이면 화요일) 기준 단 하루만 집계해,
+  // 선택한 요일(예: 금)과 무관하게 항상 "오늘의 요일" 칸 하나만 채워지고 있었다. 사용자 재지시:
+  // "왼쪽은 선택한 주간(1주~6개월) / 오른쪽은 선택한 요일(기준일로부터 가장 가까운 요일) 하나씩의
+  // 히트맵을 두 개로" — sameWeekdayReport.latestDate(이미 조회됨, 선택 요일의 가장 최근 발생일)를
+  // 그대로 재사용해 그 날짜 하루만의 히트맵을 만들면 자연히 "그 요일" 칸만 채워진다(새 조회 없음).
+  const sdowMostRecentDayDate = isSdowActive ? sameWeekdayReport?.latestDate ?? null : null;
   // 사용자 지시(2026-09-02, 후속): "브리핑부터 경쟁채널 분석까지 모두 선택한 기간의 내용으로
   // 반영" — SDoW가 활성화되면 위 sameWeekdayReport(채널 KPI 5카드용) 외에, 오늘의 브리핑(narrative)
   // ·시간대별 그래프 기준선(hourlyRatingPattern)·TOP20/TOP5(topPrograms)·COMPARED WITH?
@@ -404,7 +411,14 @@ export async function GET(request: Request) {
     // skyUHD처럼 매일 갱신되지 않는 채널도 12주 누적으로 보면 패턴이 보인다(사용자 지시) — 단,
     // 7일보다 긴 기간을 선택하면 히트맵은 그 기간 전체로, TOP 20은 항상 선택 기간 그대로 계산된다
     // (2026-08-28 수정 — 위 periodWindowDays 주석 참고, 히트맵·TOP20 공통 window로 재통합).
-    supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays }),
+    // 사용자 지시(2026-09-02): SDoW 활성 시 이 자리는 "선택한 요일" 히트맵(오른쪽 패널) —
+    // sdowMostRecentDayDate 하루만 집계해 그 요일 칸만 정확히 채운다.
+    supabase.rpc("get_channel_dow_hourblock_pattern", {
+      p_channel_code: channel.code,
+      p_program_target_label: programTargetLabel,
+      p_as_of_date: isSdowActive && sdowMostRecentDayDate ? sdowMostRecentDayDate : dateTo,
+      p_window_days: isSdowActive && sdowMostRecentDayDate ? 1 : periodWindowDays,
+    }),
     supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 20, ...sdowHourlyParams }),
     // 사용자 지시(2026-08-21): "WHO IS WATCHING?은 연령대를 좀 더 깊이 파고들어서" — 대표 4개
     // 대신 전체 연령대(fullDemographicTargets, 12개)를 조회해 "가장 많이 본 연령대"·"주목해야
@@ -466,8 +480,16 @@ export async function GET(request: Request) {
       : Promise.resolve({ data: [] as unknown[] }),
     // 기능 #15-3/#15-4: "대비" 분석(priorDateFrom/To)의 히트맵·TOP20도 전 기간 패널로 나란히
     // 비교할 수 있도록 — 전 기간도 같은 길이이므로 각각의 window를 그대로 재사용한다.
-    hasPriorRange
-      ? supabase.rpc("get_channel_dow_hourblock_pattern", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: periodWindowDays })
+    // 사용자 지시(2026-09-02): SDoW 활성 시 이 "전 기간" 자리를 "선택한 주간"(왼쪽 패널)으로
+    // 재사용한다 — dateTo(오늘) 기준으로 선택한 주수(sdowWeeks) × 7일 전체 창을 집계해 요일
+    // 7개가 모두 나오는 진짜 히트맵을 보여준다(하나의 요일로 좁히지 않음).
+    hasPriorRange || isSdowActive
+      ? supabase.rpc("get_channel_dow_hourblock_pattern", {
+          p_channel_code: channel.code,
+          p_program_target_label: programTargetLabel,
+          p_as_of_date: isSdowActive ? dateTo : priorDateTo,
+          p_window_days: isSdowActive ? (sdowWeeks ?? 1) * 7 : periodWindowDays,
+        })
       : Promise.resolve({ data: [] as unknown[] }),
     hasPriorRange
       ? supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: periodWindowDays, p_limit: 20 })
