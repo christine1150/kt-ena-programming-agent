@@ -11,8 +11,11 @@ import { matchEpgToRatings, type EpgRow } from "./epgMatch";
  *  실측 버그 수정(2026-08-27): 이전에는 upsert 결과의 에러를 확인하지 않아 배치 전체가 실패해도
  *  (예: 시간 값이 DB 컬럼 범위를 벗어남) 호출부는 "성공"으로 알고 넘어갔다 — staging 테이블이
  *  계속 비어 있는데도 업로드 응답은 매칭 0건이라는 결과만 보여줄 뿐 원인을 알 수 없었다. 이제
- *  에러가 있으면 던져서 API 라우트가 실제 실패 사유를 관리자에게 보여줄 수 있게 한다. */
-export async function storeOlifeEpgStaging(rows: EpgRow[]): Promise<void> {
+ *  에러가 있으면 던져서 API 라우트가 실제 실패 사유를 관리자에게 보여줄 수 있게 한다.
+ *  사용자 지시(2026-09-02): "일일운행표"(daily_epg) 외에 "주간 편성표"(weekly_schedule)도 같은
+ *  표에 담되 출처를 구분한다(EPG가 편성표보다 우선) — source 인자 추가, 기존 호출부는 인자를
+ *  안 넘겨도 기본값 daily_epg로 그대로 동작(Delta-Only). */
+export async function storeOlifeEpgStaging(rows: EpgRow[], source: "daily_epg" | "weekly_schedule" = "daily_epg"): Promise<void> {
   if (rows.length === 0) return;
   const payload = rows.map((r) => ({
     broadcast_date: r.broadcastDate,
@@ -22,8 +25,9 @@ export async function storeOlifeEpgStaging(rows: EpgRow[]): Promise<void> {
     episode_number: r.episodeNumber,
     subtitle: r.subtitle,
     run_type: r.runType,
+    source,
   }));
-  const { error } = await supabase.from("olife_epg_staging").upsert(payload, { onConflict: "broadcast_date,start_time,program_name_raw" });
+  const { error } = await supabase.from("olife_epg_staging").upsert(payload, { onConflict: "broadcast_date,start_time,program_name_raw,source" });
   if (error) {
     throw new Error(`EPG 원본 저장 실패: ${error.message}`);
   }
@@ -50,8 +54,16 @@ export async function applyOlifeEpgForDate(
     return { matched: 0, unmatched: 0, hasRatings: false };
   }
 
-  const { data: stagingRows } = await supabase.from("olife_epg_staging").select("*").eq("broadcast_date", date);
-  if (!stagingRows || stagingRows.length === 0) {
+  const { data: stagingRowsAll } = await supabase.from("olife_epg_staging").select("*").eq("broadcast_date", date);
+  if (!stagingRowsAll || stagingRowsAll.length === 0) {
+    return { matched: 0, unmatched: 0, hasRatings: true };
+  }
+  // 사용자 지시(2026-09-02): "EPG가 있으면 EPG를 1순위로, 없으면 편성표에 있는 부제를 활용" —
+  // 이 날짜에 daily_epg(일일운행표, 실제 방영 확정) 행이 하나라도 있으면 그 날짜는 daily_epg만
+  // 쓰고, 없을 때만 weekly_schedule(주간 편성표, 사전 계획)로 폴백한다.
+  const dailyEpgRows = stagingRowsAll.filter((r) => (r.source ?? "daily_epg") === "daily_epg");
+  const stagingRows = dailyEpgRows.length > 0 ? dailyEpgRows : stagingRowsAll.filter((r) => r.source === "weekly_schedule");
+  if (stagingRows.length === 0) {
     return { matched: 0, unmatched: 0, hasRatings: true };
   }
 

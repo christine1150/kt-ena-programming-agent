@@ -6,6 +6,9 @@
 // 그 날짜 Nielsen 파일이 나중에 올라올 때(nielsenIngest.ts) 자동으로 다시 매칭을 시도한다. 이
 // 화면의 설명 문구만 "Nielsen이 먼저"라는 옛 순서를 여전히 안내하고 있던 것을 사용자 지적
 // (2026-09-02)으로 실제 동작에 맞게 정정했다 — 화면 텍스트만 바뀌었을 뿐 동작은 그대로.
+// 사용자 재지시(2026-09-02): "EPG가 없는 날은 주간 편성표를 대신 올릴 수 있게" — 서버
+// (api/admin/upload/olife-epg/route.ts)가 일일운행표 형식으로 먼저 시도하고 실패하면 주간
+// 편성표(2D 달력 그리드) 형식으로 재시도한다(자동 판별, 화면에서 형식을 고를 필요 없음).
 import { useRef, useState } from "react";
 import { FileInputTrigger } from "./FileInputTrigger";
 
@@ -16,7 +19,10 @@ type FileSummary = {
   datesProcessed?: string[];
   matchedCount?: number;
   unmatchedCount?: number;
+  sourceFormat?: "daily_epg" | "weekly_schedule";
 };
+
+const SOURCE_FORMAT_LABEL: Record<string, string> = { daily_epg: "일일운행표", weekly_schedule: "주간 편성표" };
 
 export default function OlifeEpgUploader() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -61,6 +67,11 @@ export default function OlifeEpgUploader() {
         즉시 매칭되고, EPG를 먼저 올려두면 일단 저장만 해뒀다가 그 날짜의 Nielsen 파일이 나중에
         올라올 때 자동으로 매칭됩니다(다시 올릴 필요 없음). 시작시간이 ±60분 이내이고 프로그램명이
         일치하는 EPG 항목을 자동으로 찾으며, 못 찾은 방영분은 비워둡니다.
+        <br />
+        <b>일일운행표가 없는 날은 &ldquo;주간 편성표&rdquo;(요일×시간 달력 형식) 파일을 대신 올릴
+        수 있습니다</b> — 자동으로 형식을 구분해 처리하며, 같은 날짜에 일일운행표가 나중에
+        올라오면 그쪽이 항상 우선 적용됩니다(주간 편성표는 사전 계획, 일일운행표는 실제 확정
+        정보이므로).
       </p>
 
       <div className="mb-4 flex items-center gap-3">
@@ -80,7 +91,8 @@ export default function OlifeEpgUploader() {
         <div className="flex flex-col gap-1.5 text-sm">
           {results.map((r, i) => (
             <div key={i} className={r.ok ? "text-zinc-600" : "text-red-600"}>
-              <span className="font-medium">{r.fileName}</span>:{" "}
+              <span className="font-medium">{r.fileName}</span>
+              {r.sourceFormat && <span className="ml-1 text-xs text-zinc-400">[{SOURCE_FORMAT_LABEL[r.sourceFormat]}]</span>}:{" "}
               {r.ok
                 ? r.message ?? `${r.datesProcessed?.join(", ")} — 매칭 ${r.matchedCount}건, 미매칭 ${r.unmatchedCount}건`
                 : r.message}
