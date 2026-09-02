@@ -1596,6 +1596,9 @@ function buildOriginalInsight(
 // 교체해 브랜드색 없는 채널임이 분명히 드러나게 한다.
 const UNBRANDED_CHANNEL_COLOR = "#3f3f46";
 const COMPETITOR_LINE_COLORS = [UNBRANDED_CHANNEL_COLOR, "#84cc16"];
+// 사용자 지시(2026-09-02): OLIFE 브랜드색(#b8d800, 연두)은 흰 배경 위 강조 텍스트로 쓰기엔 대비가
+// 약함 — 일간 세부 내역 패널(ChannelDailyDetailPanel)에서만 더 진한 녹색으로 대체.
+const DAILY_DETAIL_READABLE_COLOR_OVERRIDE: Record<string, string> = { OLIFE: "#4a7300" };
 function buildLinearScale(values: number[], size: number, pad: number): (v: number) => number {
   if (values.length === 0) return () => size / 2;
   const min = Math.min(...values);
@@ -2471,12 +2474,16 @@ function OriginalContentReportCard({
                       <p className="mb-1 text-[12px] font-semibold text-amber-700">[편성 인사이트]</p>
                       {/* 사용자 지시(2026-08-26, 가독성 개선 5번): 줄 폭 제한 + 등락 수치 강조 —
                           문장 자체(schedulingInsight/schedulingNote)는 그대로. */}
+                      {/* 사용자 지시(2026-09-02): "편성 인사이트 글자 정렬 확인" — 이 섹션도
+                          max-w-xl(가독성용 줄 폭 제한)이 이 카드 폭보다 훨씬 좁아 문장이 실제
+                          카드 너비를 못 쓰고 오른쪽에 빈 공간만 남기던, 이번 세션에서 여러 번
+                          고친 것과 같은 문제였다 — 제거. */}
                       {h.schedulingInsight ? (
-                        <p className="max-w-xl text-[13px] leading-relaxed text-amber-800">{highlightNarrativeText(h.schedulingInsight, ACCENT_UP, ACCENT_DOWN)}</p>
+                        <p className="text-[13px] leading-relaxed text-amber-800">{highlightNarrativeText(h.schedulingInsight, ACCENT_UP, ACCENT_DOWN)}</p>
                       ) : (
                         <div className="flex flex-col gap-1">
                           {insight.schedulingNote.map((note, i) => (
-                            <p key={i} className="flex max-w-xl gap-1.5 text-[13px] leading-relaxed text-amber-800">
+                            <p key={i} className="flex gap-1.5 text-[13px] leading-relaxed text-amber-800">
                               <span className="shrink-0 text-amber-300">•</span>
                               <span>{highlightNarrativeText(note, ACCENT_UP, ACCENT_DOWN)}</span>
                             </p>
@@ -3018,7 +3025,10 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
     };
   }, [channelCode, asOfDate]);
 
-  const color = themeColor ?? UNBRANDED_CHANNEL_COLOR;
+  // 사용자 지시(2026-09-02): "OLIFE는 채널 로고가 연한 연두색이라 시청률·점유율이 잘 안 보이므로
+  // 더 진한 녹색으로 강조" — 이 패널(일간 세부 내역)의 그라데이션·볼드 강조색에서만 OLIFE 브랜드
+  // 색(#b8d800)을 더 진한 녹색으로 대체한다(헤더 배경 등 다른 자리의 OLIFE 브랜드색은 그대로).
+  const color = DAILY_DETAIL_READABLE_COLOR_OVERRIDE[channelCode] ?? themeColor ?? UNBRANDED_CHANNEL_COLOR;
   const rangeOf = (vals: (number | null)[]) => {
     const nums = vals.filter((v): v is number => v !== null);
     const max = nums.length > 0 ? Math.max(...nums) : 0;

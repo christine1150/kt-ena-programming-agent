@@ -779,17 +779,56 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
   );
   if (plottable.length === 0) return null;
   const W = 640;
-  const H = 260;
   const PAD_L = 30;
   const PAD_R = 12;
+  const PAD_B = 22;
+  const xOf = (score: number) => PAD_L + (Math.max(0, Math.min(100, score)) / 100) * (W - PAD_L - PAD_R);
+
+  // 사용자 지시(2026-08-26) 반영 중 실측 확인: 표본 신뢰도 100%인 프로그램이 많아 대부분 점이
+  // y=100% 선 위에 몰리고, x(적합도)도 서로 가까워 라벨을 전부 켜면 겹쳐 읽기 어려움 — 최고/최저
+  // 적합도 점과 "교체 검토(REPLACE)" 태그가 붙은(가장 의사결정이 급한) 점만 항상 라벨을 켜고,
+  // 나머지는 점만(호버 시 <title> 툴팁으로 확인).
+  const byFitAsc = [...plottable].sort((a, b) => a.fit_score - b.fit_score);
+  const alwaysLabelIds = new Set<string>([
+    byFitAsc[0]?.program_id,
+    byFitAsc[byFitAsc.length - 1]?.program_id,
+    ...plottable.filter((i) => i.tag === "REPLACE").map((i) => i.program_id),
+  ]);
+
+  // 사용자 지시(2026-09-02): "타이틀명이 최대한 보이도록 동그라미에서 줄을 그어서 텍스트를
+  // 위아래로 연결하더라도 최대한 겹치지 않게" — 라벨을 켤 점들을 x좌표순으로 훑으며, 가로로
+  // 겹치는 라벨이 있으면 한 단(lane)씩 위로 쌓는 그리디 배치(간트차트 라벨 스태킹과 같은 방식).
+  // lane 0(기본 위치)에 못 들어간 라벨만 점까지 얇은 안내선을 그어 어느 점의 제목인지 잇는다.
+  const CHAR_WIDTH_PX = 6.2; // 8px 폰트, 한글·영문 혼용 어림 폭
+  const LABEL_GAP_PX = 4;
+  const LANE_STEP_PX = 11;
+  const MAX_LANES = 6;
+  const labelPoints = plottable
+    .filter((item) => alwaysLabelIds.has(item.program_id))
+    .map((item) => ({ item, px: xOf(item.fit_score), name: item.programs?.canonical_name ?? "" }))
+    .sort((a, b) => a.px - b.px);
+  const laneRightEdge: number[] = [];
+  const laneByProgramId = new Map<string, number>();
+  for (const p of labelPoints) {
+    const halfW = (p.name.length * CHAR_WIDTH_PX) / 2;
+    let lane = 0;
+    while (lane < MAX_LANES - 1 && laneRightEdge[lane] !== undefined && p.px - halfW < laneRightEdge[lane] + LABEL_GAP_PX) {
+      lane++;
+    }
+    laneRightEdge[lane] = p.px + halfW;
+    laneByProgramId.set(p.item.program_id, lane);
+  }
+  const maxLaneUsed = laneByProgramId.size > 0 ? Math.max(...laneByProgramId.values()) : 0;
+
   // 실측 버그 수정(2026-08-27, 사용자 지시: "무엇을 편성할까요 인포그래픽 상단이 잘림"): 표본
   // 신뢰도 100%인 점이 많아 대부분 y=PAD_T 바로 그 자리(그래프 맨 위)에 몰리는데, 라벨은 점
   // 위쪽(y = py - r - 3)에 그려진다 — 예전 PAD_T=10은 큰 버블(r 최대 7)의 라벨이 SVG viewBox
   // 위쪽 경계(y=0) 밖으로 나가 잘리기에 부족했다. 라벨 한 줄이 온전히 들어갈 여유를 준다.
-  const PAD_T = 20;
-  const PAD_B = 22;
+  // 사용자 재지시(2026-09-02): 라벨이 여러 단(lane)으로 쌓일 수 있으므로 그만큼 상단 여백도
+  // 늘려 맨 위 lane의 라벨까지 잘리지 않게 한다.
+  const PAD_T = 20 + maxLaneUsed * LANE_STEP_PX;
+  const H = PAD_T + 220 + PAD_B;
   const plotH = H - PAD_T - PAD_B;
-  const xOf = (score: number) => PAD_L + (Math.max(0, Math.min(100, score)) / 100) * (W - PAD_L - PAD_R);
   const yOf = (conf: number) => PAD_T + (1 - Math.max(0, Math.min(100, conf)) / 100) * plotH;
   return (
     <div className="mb-4 rounded-2xl bg-zinc-50 p-4">
@@ -824,16 +863,6 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
           {FIT_QUADRANT_CONFIDENCE_CUTOFF}%
         </text>
         {(() => {
-          // 사용자 지시(2026-08-26) 반영 중 실측 확인: 표본 신뢰도 100%인 프로그램이 많아 대부분
-          // 점이 y=100% 선 위에 몰리고, x(적합도)도 서로 가까워 라벨을 전부 켜면 겹쳐 읽기 어려움
-          // — 최고/최저 적합도 점과 "교체 검토(REPLACE)" 태그가 붙은(가장 의사결정이 급한) 점만
-          // 항상 라벨을 켜고, 나머지는 점만(호버 시 <title> 툴팁으로 확인).
-          const byFitAsc = [...plottable].sort((a, b) => a.fit_score - b.fit_score);
-          const alwaysLabelIds = new Set<string>([
-            byFitAsc[0]?.program_id,
-            byFitAsc[byFitAsc.length - 1]?.program_id,
-            ...plottable.filter((i) => i.tag === "REPLACE").map((i) => i.program_id),
-          ]);
           return plottable.map((item) => {
             const color = item.tag ? TAG_DOT_COLOR[item.tag] : "#a1a1aa";
             const r = 3 + Math.min(4, item.sample_days / 4);
@@ -841,6 +870,8 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
             const px = xOf(item.fit_score);
             const py = yOf(item.confidence_pct);
             const showLabel = alwaysLabelIds.has(item.program_id);
+            const lane = laneByProgramId.get(item.program_id) ?? 0;
+            const labelY = py - r - 3 - lane * LANE_STEP_PX;
             return (
               <g key={item.program_id}>
                 <circle cx={px} cy={py} r={r} fill={color} fillOpacity={0.85}>
@@ -850,11 +881,16 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
                 </circle>
                 {/* 사용자 지시(2026-08-26): "프로그램 제목 명 잘리는 부분 수정 — 제목 잘리지
                     않게" — 7자 말줄임을 없애고 전체 제목을 그대로 표시. 점이 그래프 좌우 끝에
-                    가까우면 가운데 정렬 대신 안쪽으로 붙여 카드 밖으로 삐져나가지 않게 한다. */}
+                    가까우면 가운데 정렬 대신 안쪽으로 붙여 카드 밖으로 삐져나가지 않게 한다.
+                    사용자 재지시(2026-09-02): 라벨이 다른 라벨과 겹쳐 위 lane으로 밀려났을 때만
+                    (lane > 0) 점까지 얇은 안내선을 그어 어느 점의 제목인지 잇는다. */}
+                {showLabel && lane > 0 && (
+                  <line x1={px} y1={py - r} x2={px} y2={labelY + 2} stroke="#d4d4d8" strokeWidth={1} />
+                )}
                 {showLabel && (
                   <text
                     x={px}
-                    y={py - r - 3}
+                    y={labelY}
                     textAnchor={px < W * 0.15 ? "start" : px > W * 0.85 ? "end" : "middle"}
                     fontSize={8}
                     fill="#52525b"
@@ -4292,21 +4328,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           따라 max-w-[1800px]로 한 번 더 넓힌다(초광폭 모니터에서도 표·그래프가 과하게 늘어지지
           않도록 완전 무제한 대신 넉넉한 상한을 둠). */}
       <div className="mx-auto flex max-w-[1800px] flex-col gap-6">
-        {/* 사용자 지시(2026-09-02): "폰트를 더 키워서 볼 수 있는 옵션을 왼쪽 상단에 추가" — skyUHD처럼
-            소수점 5자리 시청률이 특히 읽기 어려운 채널을 염두에 뒀지만, 모든 채널 페이지에서 동일하게
-            제공한다(굳이 채널별로 숨길 이유가 없음). 페이지 전체를 감싸는 zoom 배율만 바꾸므로 다른
-            레이아웃 로직은 전혀 건드리지 않는다. */}
-        <div className="flex justify-start">
-          <button
-            type="button"
-            onClick={() => setLargeFontMode((v) => !v)}
-            className="flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 shadow-sm hover:bg-zinc-50"
-          >
-            <span aria-hidden>🔍</span>
-            {largeFontMode ? "기본 글씨 크기로" : "큰 글씨로 보기"}
-            {code === "SKYUHD" && !largeFontMode && <span className="text-zinc-400">(skyUHD 추천)</span>}
-          </button>
-        </div>
         {/* 헤더 — ENA Story만 보라→핑크→주황(끝자락만) Stripe풍 그라디언트, 다른 채널은 기존
             로고색 단색 그라디언트 그대로. */}
         <div
@@ -4400,6 +4421,19 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 브리핑" 등이 과거를 마치 오늘인 것처럼 서술하는 문제가 있었다(사용자 지시로 수정). */}
             <div className="flex flex-col items-end gap-1.5">
               <div className="flex flex-wrap items-center justify-end gap-2">
+                {/* 사용자 지시(2026-09-02): "큰 글씨로 보기는 '큰 글씨'라고만 적고, 아이콘을 채널
+                    리포트 좌측으로 이동" — 헤더 위 별도 줄 대신 이 버튼 그룹 맨 앞(=채널 리포트
+                    왼쪽)에 같은 pill 스타일(bg-white/20)로 배치. skyUHD처럼 소수점 5자리 시청률이
+                    특히 읽기 어려운 채널을 염두에 뒀지만 모든 채널 페이지에서 동일하게 제공한다. */}
+                <button
+                  type="button"
+                  onClick={() => setLargeFontMode((v) => !v)}
+                  title={code === "SKYUHD" ? "큰 글씨로 보기 (skyUHD 추천)" : "큰 글씨로 보기"}
+                  className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/30"
+                >
+                  <span aria-hidden>🔍</span>
+                  {largeFontMode ? "기본 글씨" : "큰 글씨"}
+                </button>
                 {/* N절 Phase 3(2026-09-01, 시스템 일원화) — 구 시스템("📄 리포트 보기",
                     /report/[date] + /api/report/channel/**)을 제거하고 신 시스템 버튼으로
                     일원화했다. Phase 2b(Quarterly/Annual tier에 있던 Daypart Win/Weakness·
