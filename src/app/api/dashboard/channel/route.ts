@@ -144,6 +144,9 @@ export async function GET(request: Request) {
       topProgramsPrior: [],
       topSharePrograms: [],
       priorTopSharePrograms: [],
+      topProgramsToday: [],
+      topSharePatternsToday: [],
+      competitorPeriodTopProgramsSdow: [],
     });
   }
   // 기존 코드/변수명과의 호환을 위해 asOfDate = dateTo로 둔다(모든 trailing-window 계산의 기준일).
@@ -295,7 +298,9 @@ export async function GET(request: Request) {
   // 프로그램 리뷰"로 — 상위 5개 채널 안에서 상위 7개 프로그램. DoD(어제 대비 오늘)처럼 "이번
   // 기간"은 하루뿐이라도 비교 분석 프리셋(hasPriorRange)이면 기간 모드로 취급한다 — isRangeMode
   // (dateFrom!==dateTo)만으로는 DoD를 놓친다.
-  const needsCompetitorPeriodTop = isRangeMode || hasPriorRange;
+  // 사용자 지시(2026-09-02): SDoW도 "좌측 비교 대상(평균)/우측 오늘" 듀얼 패널을 쓴다 — SDoW는
+  // dateFrom===dateTo(오늘)이므로 이 호출(dateFrom~dateTo)이 그대로 "오늘" 쪽 데이터가 된다.
+  const needsCompetitorPeriodTop = isRangeMode || hasPriorRange || isSdowActive;
 
   const [
     trendRes,
@@ -329,6 +334,7 @@ export async function GET(request: Request) {
     topSharePatternsRes,
     topSharePatternsPriorRes,
     competitorPeriodTopProgramsPriorRes,
+    competitorPeriodTopProgramsSdowRes,
     ytdAvgRes,
     ourBestRankRes,
     demographicShiftBlocksRes,
@@ -499,6 +505,12 @@ export async function GET(request: Request) {
     hasPriorRange
       ? supabase.rpc("get_competitor_period_top_programs", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_date_from: priorDateFrom, p_date_to: priorDateTo, p_channel_limit: 5, p_program_limit: 7 })
       : Promise.resolve({ data: [] as unknown[] }),
+    // 사용자 지시(2026-09-02): SDoW 듀얼 패널의 "비교 대상(선택 요일 평균)" 쪽 — 같은 함수를
+    // dow 필터로 한 번 더(위 competitorPeriodTopProgramsRes는 dateFrom~dateTo=오늘이라 그대로
+    // "오늘" 쪽으로 쓴다).
+    isSdowActive
+      ? supabase.rpc("get_competitor_period_top_programs", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_date_from: dateFrom, p_date_to: dateTo, p_channel_limit: 5, p_program_limit: 7, ...sdowHourlyParams })
+      : Promise.resolve({ data: [] as unknown[] }),
     // 사용자 지시(2026-08-25): TOP 20 인포그래픽 막대 색(로고색/검정) 기준 — 올해 1/1~분석일
     // 채널 평균(Page 1 히어로 카드와 동일한 계산, get_channel_period_rank_and_rating 재사용).
     rankTargetId
@@ -627,6 +639,18 @@ export async function GET(request: Request) {
   for (const row of (householdOverlapRes?.data ?? []) as { our_start_time: string; our_program_name: string; our_rating: number | null }[]) {
     householdRatingByOurSlot.set(`${row.our_start_time}__${row.our_program_name}`, row.our_rating);
   }
+
+  // 사용자 지시(2026-09-02): "좌측에 비교 대상(비교대상기간의 평균) / 우측에 오늘을 MoM·WoW와
+  // 같은 두 개의 표 형식으로" — SDoW가 활성화되면 위 topProgramsRes/topSharePatternsRes는 이미
+  // sdowHourlyParams가 얹혀 "비교 대상(선택 요일 평균)" 쪽 데이터가 돼 있다(왼쪽 패널용). 오른쪽
+  // "오늘" 패널에 쓸 데이터가 없었으므로, 같은 RPC를 dow 필터 없이 p_window_days=1로 한 번 더
+  // 불러 "오늘 하루"만의 순위를 구한다. SDoW가 아닐 때는 필요 없어 건너뛴다(성능 보호).
+  const [topProgramsTodayRes, topSharePatternsTodayRes] = isSdowActive
+    ? await Promise.all([
+        supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: 1, p_limit: 20 }),
+        supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: 1, p_limit: 5 }),
+      ])
+    : [{ data: [] as unknown[] }, { data: [] as unknown[] }];
   const overlapData = (overlapRes.data as { our_start_time: string; our_program_name: string }[] | null)?.map((row) => ({
     ...row,
     our_household_rating: householdOverlapTargetLabel ? (householdRatingByOurSlot.get(`${row.our_start_time}__${row.our_program_name}`) ?? null) : null,
@@ -964,5 +988,10 @@ export async function GET(request: Request) {
     topSharePrograms: topSharePatternsRes.data ?? [],
     priorTopSharePrograms: topSharePatternsPriorRes.data ?? [],
     competitorPeriodTopProgramsPrior: competitorPeriodTopProgramsPriorRes.data ?? [],
+    // 사용자 지시(2026-09-02): SDoW 듀얼 패널의 "오늘" 쪽 — topPrograms/topSharePrograms는
+    // SDoW 활성 시 이미 "비교 대상(선택 요일 평균)"이 돼 있어, 오늘 하루만의 순위를 별도로 담는다.
+    topProgramsToday: topProgramsTodayRes.data ?? [],
+    topSharePatternsToday: topSharePatternsTodayRes.data ?? [],
+    competitorPeriodTopProgramsSdow: competitorPeriodTopProgramsSdowRes.data ?? [],
   });
 }

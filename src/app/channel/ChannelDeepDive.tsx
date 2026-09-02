@@ -602,6 +602,13 @@ interface ChannelData {
   topSharePrograms: TopShareProgramRow[];
   priorTopSharePrograms: TopShareProgramRow[];
   competitorPeriodTopProgramsPrior: CompetitorPeriodTopProgramRow[];
+  // 사용자 지시(2026-09-02): SDoW 듀얼 패널의 "오늘" 쪽 — SDoW 활성 시 topPrograms/topSharePrograms
+  // 자체가 "비교 대상(선택 요일 평균)"이 되므로, 오늘 하루만의 순위를 별도 필드로 받는다.
+  topProgramsToday: TopProgramRow[];
+  topSharePatternsToday: TopShareProgramRow[];
+  // 사용자 지시(2026-09-02): COMPARED WITH?의 "동기간 경쟁사 주요프로그램" SDoW 듀얼 패널
+  // 왼쪽(비교 대상/평균) 쪽 — competitorPeriodTopPrograms는 dateFrom~dateTo=오늘이라 오른쪽에 재사용.
+  competitorPeriodTopProgramsSdow: CompetitorPeriodTopProgramRow[];
 }
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -3762,6 +3769,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const sdowCompareLabel =
     isSdowActive && effectiveDow !== null ? `${SDOW_WEEKS_LABEL[periodPreset] ?? ""} ${DOW_CHIP_LABELS[effectiveDow]}요일 평균 대비`.trim() : null;
   const sdowBaselineShortLabel = sdowCompareLabel ? sdowCompareLabel.replace(/\s*대비$/, "") : null;
+  // 사용자 지시(2026-09-02, 추가): "좌측에 비교 대상(비교대상기간의 평균) / 우측에 오늘을
+  // MoM·WoW와 같은 두 개의 표 형식으로" — SDoW도 hasPriorRange(WoW/MoM 등)와 동일한 좌우
+  // 듀얼 패널을 쓴다. hasPriorRange와는 상호 배타적(SDoW 프리셋은 priorDateFrom/To를 안 씀)
+  // 이라 조건이 겹치지 않는다.
+  const showSdowDualView = isSdowActive && effectiveDow !== null;
   // 사용자 지시(2026-09-02, 후속): "어떤 날짜가 분석 대상인지 보이는 한 줄 정보" — 기준일에서
   // 거슬러 올라가며 실제로 잡힌 N개 날짜를 그대로 보여준다(getPastSameDayDates가 SQL과 동일한
   // 규칙이라 "아직 도래하지 않은 요일" 문제도 자연히 해결됨 — 예: 화요일에 금요일을 고르면
@@ -4919,7 +4931,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </span>
               )}
             </h2>
-            {!hasPriorRange && (
+            {!hasPriorRange && !showSdowDualView && (
             <div className="flex flex-wrap gap-3 text-sm">
               {HOURLY_METRICS.map((m) => (
                 <label key={m.key} className="flex cursor-pointer items-center gap-1.5 text-zinc-600">
@@ -4976,15 +4988,17 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               "전 기간" 두 패널로 나란히, 패널마다 독립된 체크박스 행("두 줄 체크박스", 사용자 지시).
               기존의 기준선 오버레이·추가 타깃 체크박스가 있는 단일 그래프는 "대비"가 아닌 조회에서
               그대로 유지한다. */}
-          {hasPriorRange ? (
+          {hasPriorRange || showSdowDualView ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
                 <p className="mb-2 text-sm font-semibold text-zinc-600">
-                  {comparisonLabel ?? "이전"} 기간 {periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}
+                  {showSdowDualView
+                    ? `${sdowBaselineShortLabel ?? "비교 대상"}`
+                    : `${comparisonLabel ?? "이전"} 기간 ${periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}`}
                 </p>
                 <HourlyGraphPanel
-                  pattern={hourlyPatternPrior}
-                  programTitles={hourlyProgramTitlesPrior}
+                  pattern={showSdowDualView ? hourlyBaselinePattern : hourlyPatternPrior}
+                  programTitles={showSdowDualView ? [] : hourlyProgramTitlesPrior}
                   metrics={hourlyMetricsPrior}
                   onToggleMetric={(key) => {
                     setHourlyMetricsPrior((prev) => {
@@ -4996,13 +5010,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   }}
                   code={code}
                   primaryTargetLabel={resolveProgramLevelTargetLabel(channel.primaryTarget)}
-                  baselinePattern={data.hourlyBaselinePatternPrior}
+                  baselinePattern={showSdowDualView ? undefined : data.hourlyBaselinePatternPrior}
                   accentColor={accentColor}
                 />
               </div>
               <div>
                 <p className="mb-2 text-sm font-semibold text-zinc-600">
-                  이번 기간 {periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}
+                  {showSdowDualView
+                    ? "오늘"
+                    : `이번 기간 ${periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}`}
                 </p>
                 <HourlyGraphPanel
                   pattern={hourlyPattern}
@@ -5020,10 +5036,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   primaryTargetLabel={resolveProgramLevelTargetLabel(channel.primaryTarget)}
                   // 사용자 지시(2026-08-21): 비교 분석 시 "이번 기간" 그래프엔 12주 자체 기준선
                   // 대신 실제 "{comparisonLabel} 기간"의 시간대별 평균(hourlyPatternPrior)을
-                  // 연한 선으로 겹쳐, 두 기간을 직접 시간대별로 비교할 수 있게 한다.
-                  baselinePattern={hourlyPatternPrior}
+                  // 연한 선으로 겹쳐, 두 기간을 직접 시간대별로 비교할 수 있게 한다. SDoW는
+                  // hourlyBaselinePattern이 이미 "비교 대상(선택 요일 평균)"이라 그대로 재사용.
+                  baselinePattern={showSdowDualView ? hourlyBaselinePattern : hourlyPatternPrior}
                   accentColor={accentColor}
-                  baselineLabel={`연한 선 = ${comparisonLabel ?? "이전"} 기간의 같은 시간대 평균 시청률`}
+                  baselineLabel={
+                    showSdowDualView
+                      ? `연한 선 = ${sdowBaselineShortLabel ?? "비교 대상"} 같은 시간대 평균 시청률`
+                      : `연한 선 = ${comparisonLabel ?? "이전"} 기간의 같은 시간대 평균 시청률`
+                  }
                 />
               </div>
             </div>
@@ -5242,23 +5263,43 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               ? `${sdowBaselineShortLabel} 시청률이 높은 순으로 정렬했습니다.`
               : `${periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 평균 시청률이 높은 순으로 정렬했습니다.`}
           </p>
-          {hasPriorRange ? (
+          {hasPriorRange || showSdowDualView ? (
             <>
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">
-                    {comparisonLabel ?? "이전"} 기간 {periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}
+                    {showSdowDualView
+                      ? `${sdowBaselineShortLabel ?? "비교 대상"}`
+                      : `${comparisonLabel ?? "이전"} 기간 ${periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}`}
                   </p>
-                  <TopProgramsList rows={topProgramsPrior} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7 || isSdowActive} shareTop={priorTopSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
+                  <TopProgramsList
+                    rows={showSdowDualView ? topPrograms : topProgramsPrior}
+                    fmtR={fmtR}
+                    showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7 || isSdowActive}
+                    shareTop={showSdowDualView ? topSharePrograms : priorTopSharePrograms}
+                    accentColor={accentColor}
+                    isEnaStory={isEnaStory}
+                    ytdAvgRating={data.ytdAvgRating}
+                  />
                 </div>
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">
-                    이번 기간 {periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}
+                    {showSdowDualView
+                      ? "오늘"
+                      : `이번 기간 ${periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}`}
                   </p>
-                  <TopProgramsList rows={topPrograms} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7 || isSdowActive} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
+                  <TopProgramsList
+                    rows={showSdowDualView ? data.topProgramsToday : topPrograms}
+                    fmtR={fmtR}
+                    showLowSampleSplit={!showSdowDualView && (code === "SKYUHD" || periodWindowDays >= 7)}
+                    shareTop={showSdowDualView ? data.topSharePatternsToday : topSharePrograms}
+                    accentColor={accentColor}
+                    isEnaStory={isEnaStory}
+                    ytdAvgRating={data.ytdAvgRating}
+                  />
                 </div>
               </div>
-              {buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior) && (
+              {!showSdowDualView && buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior) && (
                 <p className="mt-3 text-base leading-relaxed text-zinc-700">{buildTopProgramsComparisonInsight(topPrograms, topProgramsPrior)}</p>
               )}
             </>
@@ -6721,7 +6762,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </div>
           )}
 
-          {!showComparisonView ? (
+          {!showComparisonView && !showSdowDualView ? (
           <div className="mt-5 border-t border-zinc-100 pt-5">
             <h3 className="mb-1 text-sm font-semibold text-zinc-500">{referenceLabel} 경쟁채널 TOP 5 프로그램</h3>
             <p className="mb-3 text-sm text-zinc-400">
@@ -6754,25 +6795,26 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           ) : (
           <div className="mt-5 border-t border-zinc-100 pt-5">
             <h3 className="mb-1 text-sm font-semibold text-zinc-500">
-              {comparisonLabel ? `${comparisonLabel} 대비 이번 기간` : "선택 기간"} 동기간 경쟁사 주요 프로그램 리뷰
+              {showSdowDualView ? "동요일" : comparisonLabel ? `${comparisonLabel} 대비 이번 기간` : "선택 기간"} 동기간 경쟁사 주요 프로그램 리뷰
             </h3>
             <p className="mb-3 text-sm text-zinc-400">
-              이 기간 평균 시청률이 가장 높았던 등록 경쟁채널 상위 5개 안에서, 그 기간 동안의{" "}
-              <b>프로그램별 평균 시청률</b>이 높은 상위 7개를 뽑았습니다(일회성 반짝 편성이 아니라
-              그 기간 내내 꾸준히 강했던 프로그램 기준 — 같은 프로그램은 한 번만 표시, 시장 전체
-              동향 참고용).
+              {showSdowDualView ? sdowBaselineShortLabel ?? "비교 대상" : "이 기간"} 평균 시청률이 가장 높았던 등록 경쟁채널 상위 5개 안에서, 그{" "}
+              {showSdowDualView ? "요일" : "기간"} 동안의 <b>프로그램별 평균 시청률</b>이 높은 상위 7개를 뽑았습니다(일회성 반짝 편성이 아니라
+              꾸준히 강했던 프로그램 기준 — 같은 프로그램은 한 번만 표시, 시장 전체 동향 참고용).
             </p>
-            {hasPriorRange ? (
+            {hasPriorRange || showSdowDualView ? (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">
-                    {comparisonLabel ?? "이전"} 기간 {periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}
+                    {showSdowDualView
+                      ? `${sdowBaselineShortLabel ?? "비교 대상"}`
+                      : `${comparisonLabel ?? "이전"} 기간 ${periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}`}
                   </p>
-                  <CompetitorPeriodTopProgramsList rows={competitorPeriodTopProgramsPrior} fmtR={fmtR} />
+                  <CompetitorPeriodTopProgramsList rows={showSdowDualView ? data.competitorPeriodTopProgramsSdow : competitorPeriodTopProgramsPrior} fmtR={fmtR} />
                 </div>
                 <div>
                   <p className="mb-2 text-sm font-semibold text-zinc-600">
-                    이번 기간 {periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}
+                    {showSdowDualView ? "오늘" : `이번 기간 ${periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}`}
                   </p>
                   <CompetitorPeriodTopProgramsList rows={competitorPeriodTopPrograms} fmtR={fmtR} />
                 </div>

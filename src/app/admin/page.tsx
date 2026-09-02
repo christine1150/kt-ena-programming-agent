@@ -56,15 +56,21 @@ export default async function AdminPage() {
             {/* 사용자 지시(2026-09-02): "관리자 화면에서 바로 1페이지 또는 2페이지로 넘어갈 수
                 있는 링크 버튼" — 익명 PD 공유 링크를 없앤 뒤 관리자가 화면을 확인하려면 직접
                 URL을 치고 들어가야 했던 불편을 해소. 2페이지는 채널별 화면이라 기본값으로
-                ENA(다른 nav들도 첫 채널로 쓰는 코드)를 연다. */}
+                ENA(다른 nav들도 첫 채널로 쓰는 코드)를 연다.
+                사용자 재지시(2026-09-02): 새 창으로 열리게 — 관리자 화면 탭을 잃지 않도록
+                target="_blank"(+ noopener noreferrer로 새 탭이 원본 탭을 조작 못 하게 방지). */}
             <Link
               href="/"
+              target="_blank"
+              rel="noopener noreferrer"
               className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
             >
               1페이지 보기
             </Link>
             <Link
               href="/channel/ENA"
+              target="_blank"
+              rel="noopener noreferrer"
               className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
             >
               2페이지 보기
