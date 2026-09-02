@@ -58,14 +58,16 @@ export default async function AdminPage() {
                 URL을 치고 들어가야 했던 불편을 해소. 2페이지는 채널별 화면이라 기본값으로
                 ENA(다른 nav들도 첫 채널로 쓰는 코드)를 연다.
                 사용자 재지시(2026-09-02): 새 창으로 열리게 — 관리자 화면 탭을 잃지 않도록
-                target="_blank"(+ noopener noreferrer로 새 탭이 원본 탭을 조작 못 하게 방지). */}
+                target="_blank"(+ noopener noreferrer로 새 탭이 원본 탭을 조작 못 하게 방지).
+                사용자 재지시(2026-09-02, 재확인+이름 변경): 버튼 이름을 실제 화면 성격에 맞게
+                "일일 종합 리포트"(1페이지)/"채널별 분석"(2페이지)으로. */}
             <Link
               href="/"
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
             >
-              1페이지 보기
+              일일 종합 리포트
             </Link>
             <Link
               href="/channel/ENA"
@@ -73,7 +75,7 @@ export default async function AdminPage() {
               rel="noopener noreferrer"
               className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
             >
-              2페이지 보기
+              채널별 분석
             </Link>
             <Link
               href="/admin/login-history"
