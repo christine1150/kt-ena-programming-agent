@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/adminAuth";
-import ShareLinkManager from "./ShareLinkManager";
 import ChannelMasterUploader from "./ChannelMasterUploader";
 // 사용자 지시(2026-08-26): "요일 별 리뷰 프로그램" 조회 위젯을 없애고 "주요 콘텐츠 관리"
 // (FeaturedContentManager) 하나로 합쳤다 — 두 화면이 같은 정보를 나눠 보여주고 있었다.
@@ -75,8 +74,11 @@ export default async function AdminPage() {
             사용자 지시(2026-09-01, 배치 점검): 카드 14개가 아무 구분 없이 한 줄로 이어져 있어
             "지금 뭘 해야 하는 화면인지"가 보이지 않았다 — 실제 사용 주기(매일 / 수시 / 가끔
             바뀌는 기준 정보 / 점검용)로 4개 묶음으로 나누고 소제목을 붙였다. 카드 자체와 그
-            안의 동작은 하나도 바꾸지 않았고 순서도 기존 중요도 순을 유지한다(위치만 묶음 안으로). */}
-        <ShareLinkManager />
+            안의 동작은 하나도 바꾸지 않았고 순서도 기존 중요도 순을 유지한다(위치만 묶음 안으로).
+            사용자 지시(2026-09-02, 보안 점검): "PD 공유 링크" 위젯 제거 — 이름·비밀번호 없이
+            PD 권한을 주는 익명 접속 경로였고, 로그인 이력에도 남지 않는 문제가 있었다(개별 PD
+            로그인이 이미 있어 더 이상 필요하지 않음). trash-can/anonymous-pd-share-link-2026-09-02/
+            로 이동. */}
 
         <AdminSectionHeading title="매일 올리는 자료" description="닐슨이 보내주는 파일을 그대로 올리는 곳입니다." />
         <NielsenDailyUploader />

@@ -1,14 +1,13 @@
-// 관리자 로그인도, PD 로그인/공유 링크 접속도 하지 않은 상태로 화면에 접근했을 때 보여주는 안내.
+// 관리자 로그인도, PD 로그인도 하지 않은 상태로 화면에 접근했을 때 보여주는 안내.
+// 사용자 지시(2026-09-02, 보안 점검): 익명 "PD 공유 링크"는 로그인 이력 없이 접속 가능한
+// 구멍이라 폐지했다(trash-can/anonymous-pd-share-link-2026-09-02/) — 안내 문구에서도 제거.
 import Link from "next/link";
 
 export default function AccessDeniedPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-50 px-6 text-center">
       <h1 className="text-2xl font-semibold text-zinc-900">접근 권한이 없습니다</h1>
-      <p className="max-w-md text-zinc-600">
-        PD는 개별 로그인 또는 관리자가 전달한 공유 링크로 접속할 수 있고, 관리자는 로그인 후
-        이용할 수 있습니다.
-      </p>
+      <p className="max-w-md text-zinc-600">PD는 개별 로그인으로 접속할 수 있고, 관리자는 로그인 후 이용할 수 있습니다.</p>
       <div className="flex gap-3">
         <Link
           href="/pd/login"

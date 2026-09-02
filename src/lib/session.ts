@@ -6,13 +6,14 @@
 // 쿠키 값 구조 = base64url(JSON 데이터) + "." + base64url(HMAC-SHA256 서명)
 // 서명에 쓰는 비밀키(.env의 ADMIN_SESSION_SECRET)를 모르면 값을 위조할 수 없다.
 
-// "pd" 세션은 두 가지 방식으로 만들어진다:
-// 1) 공유 링크(/s/[token]) — 개인 구분 없음, pdId/name이 없다 (기존 방식, 그대로 유지).
-// 2) 개별 로그인(/api/pd/login) — pdId/name이 채워져 누가 로그인했는지 구분된다.
-// 두 방식 모두 role은 "pd"로 같아서 proxy.ts의 접근 제어 로직은 손댈 필요가 없다.
+// 사용자 지시(2026-09-02, 보안 점검): "pd" 세션은 예전엔 두 가지 방식이 있었다 — 1) 공유 링크
+// (/s/[token], 개인 구분 없음) 2) 개별 로그인(/api/pd/login, pdId/name으로 구분). 공유 링크가
+// 로그인 이력 없이 PD 권한을 주는 구멍이라(박중일 PD 사례로 발견) 폐지했고(trash-can/
+// anonymous-pd-share-link-2026-09-02/), 이제 "pd" 세션은 개별 로그인으로만 만들어지므로
+// pdId/name을 필수로 바꿔 이 불변식을 타입에도 반영한다.
 export type SessionPayload =
   | { role: "admin"; adminId: string; email: string; exp: number }
-  | { role: "pd"; exp: number; pdId?: string; name?: string };
+  | { role: "pd"; exp: number; pdId: string; name: string };
 
 function getSecret(): string {
   const secret = process.env.ADMIN_SESSION_SECRET;
@@ -86,4 +87,4 @@ export const ADMIN_COOKIE_NAME = "kt_ena_admin_session";
 export const PD_COOKIE_NAME = "kt_ena_pd_session";
 
 export const ADMIN_SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 관리자 세션 12시간
-export const PD_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // PD 세션 30일 (공유 링크 특성상 길게)
+export const PD_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // PD 세션 30일 (매번 재로그인하지 않도록 길게 — 값 자체는 이번 점검에서 변경 지시 없어 유지)

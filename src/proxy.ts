@@ -29,6 +29,11 @@ export async function proxy(request: NextRequest) {
   // 하고(그 로그인은 /api/pd/login이 이미 recordLogin()으로 이력을 남김), 관리자 로그인 경로는
   // /pd/login 화면 하단 링크로 유지한다(/access-denied 페이지 자체는 남겨두되 더 이상 기본
   // 도착지로 쓰지 않음).
+  //
+  // 사용자 지시(2026-09-02, 추가 점검): 익명 "PD 공유 링크"(/s/토큰)를 폐지하면서(로그인 이력
+  // 없이 PD 권한을 주던 구멍 — trash-can/anonymous-pd-share-link-2026-09-02/README.md 참고),
+  // 아래 matcher의 "s/" 제외도 함께 제거했다 — 이제 옛 공유 링크로 들어와도(경로 자체는
+  // 사라졌지만 북마크가 남아있을 수 있음) 이 분기를 그대로 타 /pd/login으로 안내된다.
   if (!isAdmin && !isPd) {
     return NextResponse.redirect(new URL("/pd/login", request.url));
   }
@@ -36,11 +41,11 @@ export async function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
-// 아래 경로들은 로그인/공유 링크 확인 없이도 열려야 하므로 대상에서 제외한다:
+// 아래 경로들은 로그인 확인 없이도 열려야 하므로 대상에서 제외한다:
 // _next 정적 파일, favicon, 모든 /api/* (각 API가 자체적으로 인증 확인),
-// /s/* (공유 링크 진입점 + 무효 링크 안내), /admin/login, /pd/login, /access-denied, 확장자 있는 정적 파일.
+// /admin/login, /pd/login, /access-denied, 확장자 있는 정적 파일.
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/|s/|admin/login|pd/login|access-denied|.*\\..*).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/|admin/login|pd/login|access-denied|.*\\..*).*)",
   ],
 };
