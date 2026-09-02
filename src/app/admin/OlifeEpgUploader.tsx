@@ -49,7 +49,8 @@ export default function OlifeEpgUploader() {
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-900">OLIFE 편성표(EPG) 업로드</h2>
+      {/* 사용자 지시(2026-09-02): 제목을 "OLIFE EPG 업로드"로. */}
+      <h2 className="mb-1 text-lg font-semibold text-zinc-900">OLIFE EPG 업로드</h2>
       <p className="mb-4 text-sm text-zinc-500">
         <code>일일운행표_YYYYMMDD.xlsx</code> 파일을 올리면 그 날짜의 Nielsen 프로그램 데이터에
         회차·부제를 매칭해 채웁니다(해당 날짜 Nielsen 파일이 먼저 업로드돼 있어야 합니다). 시작시간이

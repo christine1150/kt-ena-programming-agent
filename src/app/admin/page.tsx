@@ -8,8 +8,10 @@ import ChannelMasterUploader from "./ChannelMasterUploader";
 // (FeaturedContentManager) 하나로 합쳤다 — 두 화면이 같은 정보를 나눠 보여주고 있었다.
 // 옛 컴포넌트/API는 trash-can/으로 이동(사용자 최종 확인 후 삭제, CLAUDE.md 파일 관리 규칙).
 import FeaturedContentManager from "./FeaturedContentManager";
-import NielsenDailyUploader from "./NielsenDailyUploader";
-import NielsenPeriodUploader from "./NielsenPeriodUploader";
+// 사용자 지시(2026-09-02): "시청률/주간/월간/연간 순위 업로드 하는 칸을 하나로" — 옛
+// NielsenDailyUploader/NielsenPeriodUploader 두 카드를 NielsenUploader 하나로 합쳤다(서버가
+// 파일마다 분석기간을 보고 자동 분류). 옛 컴포넌트/API는 trash-can/으로 이동.
+import NielsenUploader from "./NielsenUploader";
 import MailIngestionManager from "./MailIngestionManager";
 import SkyUhdUploader from "./SkyUhdUploader";
 import TargetGoalsManager from "./TargetGoalsManager";
@@ -105,8 +107,7 @@ export default async function AdminPage() {
             로 이동. */}
 
         <AdminSectionHeading title="매일 올리는 자료" description="닐슨이 보내주는 파일을 그대로 올리는 곳입니다." />
-        <NielsenDailyUploader />
-        <NielsenPeriodUploader />
+        <NielsenUploader />
         <SkyUhdUploader />
         <OlifeEpgUploader />
 
