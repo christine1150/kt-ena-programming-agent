@@ -716,8 +716,10 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
           name: channel.name,
           logoVisibleRatio: channel.logoVisibleRatio,
           logoVisibleTopRatio: channel.logoVisibleTopRatio,
+          code: channel.code,
         }}
         heightPx={56}
+        preferWideLogo
       />
       <div className="relative mt-3 flex w-full items-center justify-center">
         <span className="whitespace-nowrap text-4xl font-bold tabular-nums tracking-tight text-zinc-900">
@@ -777,6 +779,12 @@ function MiniSparkline({ values, color }: { values: (number | null)[]; color: st
   if (nums.length < 2) return null;
   const w = 60;
   const h = 14;
+  // 버그 수정(2026-09-02, 사용자 신고: "ENA 하단 꺾은선 그래프 하단 잘림"): 최솟값 포인트는
+  // y=h(뷰박스 맨 아래 경계)에 정확히 찍혀, strokeWidth 1.4의 절반(0.7px)이 뷰박스 밖으로
+  // 나가 SVG 기본 클리핑에 잘렸다. 위아래에 stroke 폭보다 넉넉한 여백(PAD_Y)을 두고 그 안에서만
+  // 그리도록 스케일을 좁혀 해결 — 그래프 형태·비율은 그대로, 끝점만 경계 안쪽으로 들어온다.
+  const PAD_Y = 2;
+  const drawableH = h - PAD_Y * 2;
   const max = Math.max(...nums);
   const min = Math.min(...nums);
   const range = max - min || 1;
@@ -789,7 +797,7 @@ function MiniSparkline({ values, color }: { values: (number | null)[]; color: st
       return;
     }
     const x = i * step;
-    const y = h - ((v - min) / range) * h;
+    const y = PAD_Y + drawableH - ((v - min) / range) * drawableH;
     path += `${drawing ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)} `;
     drawing = true;
   });
@@ -831,6 +839,7 @@ function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logo
           name: channel.name,
           logoVisibleRatio: channel.logoVisibleRatio,
           logoVisibleTopRatio: channel.logoVisibleTopRatio,
+          code: channel.code,
         }}
         reference={
           logoReference
@@ -844,6 +853,7 @@ function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logo
         }
         heightPx={20}
         maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
+        preferWideLogo
       />
       {/* 사용자 지시: "시청률 (순위/목표 순위)" 한 줄 + 전일 대비 순위 증감. */}
       <div className="flex items-baseline justify-between gap-1.5">
@@ -929,9 +939,10 @@ function WeekendReportDayColumn({
           return (
             <div key={code} className="rounded-lg bg-zinc-50 px-2.5 py-2">
               <ChannelLogo
-                channel={{ logoPath: ch.logoPath, name: ch.name, logoVisibleRatio: ch.logoVisibleRatio, logoVisibleTopRatio: ch.logoVisibleTopRatio }}
+                channel={{ logoPath: ch.logoPath, name: ch.name, logoVisibleRatio: ch.logoVisibleRatio, logoVisibleTopRatio: ch.logoVisibleTopRatio, code: ch.code }}
                 heightPx={14}
                 className="mb-1"
+                preferWideLogo
               />
               <ul className="space-y-0.5">
                 {lines.map((line, i) => (
@@ -3071,9 +3082,10 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                     className="flex h-11 w-11 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:ring-zinc-300"
                   >
                     <ChannelLogo
-                      channel={{ logoPath: c.logoPath, name: c.name, logoVisibleRatio: c.logoVisibleRatio, logoVisibleTopRatio: c.logoVisibleTopRatio }}
+                      channel={{ logoPath: c.logoPath, name: c.name, logoVisibleRatio: c.logoVisibleRatio, logoVisibleTopRatio: c.logoVisibleTopRatio, code: c.code }}
                       heightPx={22}
                       maxWidthPx={32}
+                      preferWideLogo
                     />
                   </Link>
                 ))}
