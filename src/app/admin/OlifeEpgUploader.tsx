@@ -1,7 +1,11 @@
 "use client";
 
 // OLIFE EPG(일일운행표) 업로드 위젯 — 사용자 지시(2026-08-21): 닐슨 자료에 없는 회차·부제를
-// 이 파일로 보완한다(반드시 해당 날짜 Nielsen 파일이 먼저 업로드돼 있어야 매칭됨).
+// 이 파일로 보완한다. 사용자 지시(2026-08-26)로 백엔드(olifeEpgStaging.ts)는 이미 순서 무관하게
+// 동작하도록 바뀌었다 — EPG를 먼저 올리면 olife_epg_staging에 저장만 해두고(hasRatings=false),
+// 그 날짜 Nielsen 파일이 나중에 올라올 때(nielsenIngest.ts) 자동으로 다시 매칭을 시도한다. 이
+// 화면의 설명 문구만 "Nielsen이 먼저"라는 옛 순서를 여전히 안내하고 있던 것을 사용자 지적
+// (2026-09-02)으로 실제 동작에 맞게 정정했다 — 화면 텍스트만 바뀌었을 뿐 동작은 그대로.
 import { useRef, useState } from "react";
 import { FileInputTrigger } from "./FileInputTrigger";
 
@@ -53,8 +57,10 @@ export default function OlifeEpgUploader() {
       <h2 className="mb-1 text-lg font-semibold text-zinc-900">OLIFE EPG 업로드</h2>
       <p className="mb-4 text-sm text-zinc-500">
         <code>일일운행표_YYYYMMDD.xlsx</code> 파일을 올리면 그 날짜의 Nielsen 프로그램 데이터에
-        회차·부제를 매칭해 채웁니다(해당 날짜 Nielsen 파일이 먼저 업로드돼 있어야 합니다). 시작시간이
-        ±60분 이내이고 프로그램명이 일치하는 EPG 항목을 자동으로 찾으며, 못 찾은 방영분은 비워둡니다.
+        회차·부제를 매칭해 채웁니다. <b>순서는 상관없습니다</b> — Nielsen 일일 데이터가 먼저 있으면
+        즉시 매칭되고, EPG를 먼저 올려두면 일단 저장만 해뒀다가 그 날짜의 Nielsen 파일이 나중에
+        올라올 때 자동으로 매칭됩니다(다시 올릴 필요 없음). 시작시간이 ±60분 이내이고 프로그램명이
+        일치하는 EPG 항목을 자동으로 찾으며, 못 찾은 방영분은 비워둡니다.
       </p>
 
       <div className="mb-4 flex items-center gap-3">
