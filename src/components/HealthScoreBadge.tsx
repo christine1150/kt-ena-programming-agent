@@ -15,12 +15,18 @@ const HERO_BADGE_STYLE: Record<ChannelHealthScore["label"], { bg: string; text: 
   WATCH: { bg: "rgba(250,204,21,0.35)", text: "#ffffff" },
   WEAK: { bg: "rgba(244,63,94,0.35)", text: "#ffffff" },
 };
+// 사용자 지시(2026-09-02): "안정/주의/약세 배지 색이 하단 등락 막대(파랑=상승/빨강=하락)와
+// 달라서 혼선 — 긍정은 파랑, 부정은 레드 계열로 통일". 초록(GOOD/EXCELLENT)·노랑(WATCH)이던
+// 배색을 없애고, Dashboard.tsx의 ACCENT_UP(#281fc7, 파랑)/ACCENT_DOWN(#be123c, 레드)와 정확히
+// 같은 색으로 맞춘다 — 등급(EXCELLENT>GOOD, WATCH<WEAK)은 같은 색 안에서 배경 채도로만
+// 구분(더 진할수록 더 강한 긍정/부정), MiniDeltaBar가 강도를 막대 길이로 표현하는 것과 같은 원리.
+// STABLE은 방향성이 없는 등급이라 중립 회색을 그대로 유지.
 const LIGHT_BADGE_STYLE: Record<ChannelHealthScore["label"], { bg: string; text: string }> = {
-  EXCELLENT: { bg: "#d1fae5", text: "#047857" },
-  GOOD: { bg: "#d1fae5", text: "#047857" },
+  EXCELLENT: { bg: "#e0e7ff", text: "#281fc7" },
+  GOOD: { bg: "#eef2ff", text: "#281fc7" },
   STABLE: { bg: "#f4f4f5", text: "#52525b" },
-  WATCH: { bg: "#fef3c7", text: "#b45309" },
-  WEAK: { bg: "#ffe4e6", text: "#be123c" },
+  WATCH: { bg: "#fee2e2", text: "#be123c" },
+  WEAK: { bg: "#fecdd3", text: "#be123c" },
 };
 
 export function HealthScoreBadge({
