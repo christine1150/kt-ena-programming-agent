@@ -4637,28 +4637,38 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   {narrativeSignal.rating_delta_pct >= 0 ? "▲" : "▼"} {sdowCompareLabel ?? "최근 12주 평균 대비"} {Math.abs(narrativeSignal.rating_delta_pct).toFixed(1)}%
                 </span>
               )}
-              {narrativeSignal.today_peak_hour !== null && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-[12px] font-medium text-zinc-600 ring-1 ring-inset ring-zinc-200">
-                  피크 {narrativeSignal.today_peak_hour}시대 {fmtR(narrativeSignal.today_peak_rating)}
-                </span>
-              )}
-              {/* 사용자 지시(2026-08-25): "오늘 1위 OOO" 배지 하나 대신, 1~3위를 순위 언급 없이
-                  프로그램명·시청률 순으로 나열(순서 자체가 순위를 나타냄). */}
+              {/* 사용자 지시(2026-09-02): "당일의 최고 프로그램과 피크 시간대가 겹치므로, Top1은
+                  시간대와 프로그램명, 시청률이 나오게 하나로 통합하여 표시. Top1만 다른 색으로
+                  강조" — 기존엔 "피크 XX시대 rating" 배지와 "1위 프로그램명 rating" 배지가 같은
+                  순간을 가리키면서 따로 떠 있었다(사용자 스크린샷: 둘 다 0.142). 피크 시간대를
+                  Top1 배지 안으로 합치고, 그 배지만 진한 배경(흰 글씨)으로 나머지 2·3위와 구분한다. */}
               {data.top3Programs.length > 0
-                ? data.top3Programs.map((p, i) => (
-                    <span
-                      key={`${p.canonical_name}-${i}`}
-                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold"
-                      style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}
-                    >
-                      {p.canonical_name} {fmtR(p.rating)}
-                    </span>
-                  ))
+                ? data.top3Programs.map((p, i) =>
+                    i === 0 ? (
+                      <span
+                        key={`${p.canonical_name}-0`}
+                        className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold text-white"
+                        style={{ backgroundColor: accentColor }}
+                      >
+                        {narrativeSignal.today_peak_hour !== null && `피크 ${narrativeSignal.today_peak_hour}시대 · `}
+                        {p.canonical_name} {fmtR(p.rating)}
+                      </span>
+                    ) : (
+                      <span
+                        key={`${p.canonical_name}-${i}`}
+                        className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold"
+                        style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}
+                      >
+                        {p.canonical_name} {fmtR(p.rating)}
+                      </span>
+                    )
+                  )
                 : narrativeSignal.top_program_name && (
                     <span
-                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold"
-                      style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}
+                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold text-white"
+                      style={{ backgroundColor: accentColor }}
                     >
+                      {narrativeSignal.today_peak_hour !== null && `피크 ${narrativeSignal.today_peak_hour}시대 · `}
                       {narrativeSignal.top_program_name} {fmtR(narrativeSignal.top_program_rating)}
                     </span>
                   )}
