@@ -16,9 +16,11 @@ export async function GET() {
     // 사용자 지시(2026-08-26): "요일 별 리뷰 프로그램"을 주요 콘텐츠 관리로 통합 — 동시방송/
     // 직후재방 채널까지 한 화면에서 보이도록 함께 조회한다(같은 channels 테이블을 세 번 참조하므로
     // FK 제약 이름으로 명시해 모호성을 없앤다).
+    // 사용자 지시(2026-09-02): "SBS Plus처럼 우리 7개 채널이 아닌 외부 동시방송 채널도 명기"
+    // — simulcast_competitor_name(자유 텍스트) 함께 조회.
     .select(
       `id, category, broadcast_schedule_text, broadcast_day_of_week, broadcast_time, broadcast_start_date, broadcast_end_date, expected_episode_count,
-       simulcast_channel_id, rerun_channel_id,
+       simulcast_channel_id, rerun_channel_id, simulcast_competitor_name,
        programs(id, canonical_name, channel_id, channels(code, name)),
        simulcast_channel:channels!featured_content_simulcast_channel_id_fkey(code, name),
        rerun_channel:channels!featured_content_rerun_channel_id_fkey(code, name)`
@@ -87,6 +89,8 @@ export async function POST(request: Request) {
       // 사용자 지시(2026-08-26): "요일 별 리뷰 프로그램"(동시방송·직후 재방) 통합.
       simulcast_channel_id: body?.simulcastChannelId || null,
       rerun_channel_id: body?.rerunChannelId || null,
+      // 사용자 지시(2026-09-02): 동시방송 파트너가 우리 채널이 아닐 때(예: SBS Plus) 직접 입력.
+      simulcast_competitor_name: body?.simulcastCompetitorName || null,
     },
     { onConflict: "program_id" }
   );

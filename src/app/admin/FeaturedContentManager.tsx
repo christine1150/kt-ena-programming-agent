@@ -28,6 +28,9 @@ type FeaturedItem = {
   rerun_channel_id: string | null;
   simulcast_channel: ChannelRef;
   rerun_channel: ChannelRef;
+  // 사용자 지시(2026-09-02): 동시방송 파트너가 우리 7개 채널이 아닐 때(예: SBS Plus) 채널명을
+  // 직접 입력 — simulcast_channel_id(내부)와 별개, 보통 둘 중 하나만 값을 가진다.
+  simulcast_competitor_name: string | null;
   programs: {
     id: string;
     canonical_name: string;
@@ -54,6 +57,8 @@ const emptyForm = {
   // 사용자 지시(2026-08-26): 통합에 따라 동시방송·직후재방 채널도 여기서 직접 관리.
   simulcastChannelId: "",
   rerunChannelId: "",
+  // 사용자 지시(2026-09-02): 동시방송 파트너가 외부 채널일 때(예: SBS Plus) 직접 입력.
+  simulcastCompetitorName: "",
 };
 
 // 정규화 타이틀(같은 채널 기준)이 같은 행을 하나로 합친다 — 필드마다 "먼저 값이 있는 쪽"을
@@ -86,6 +91,7 @@ function mergeDuplicateFeaturedItems(items: FeaturedItem[]): (FeaturedItem & { m
       rerun_channel_id: primary.rerun_channel_id ?? item.rerun_channel_id,
       simulcast_channel: primary.simulcast_channel ?? item.simulcast_channel,
       rerun_channel: primary.rerun_channel ?? item.rerun_channel,
+      simulcast_competitor_name: primary.simulcast_competitor_name ?? item.simulcast_competitor_name,
       mergedCount: primary.mergedCount + 1,
     };
   }
@@ -126,7 +132,8 @@ function FeaturedContentRow({
         {item.programs?.canonical_name ?? "—"}
       </td>
       <td className={`whitespace-nowrap py-1.5 ${dim ? "text-zinc-300" : "text-zinc-800"}`}>{item.programs?.channels?.name ?? "—"}</td>
-      <td className={`whitespace-nowrap py-1.5 ${textClass}`}>{item.simulcast_channel?.name ?? "—"}</td>
+      {/* 사용자 지시(2026-09-02): 내부 채널이 없으면 외부(경쟁) 채널명(예: "SBS Plus")을 대신 표시. */}
+      <td className={`whitespace-nowrap py-1.5 ${textClass}`}>{item.simulcast_channel?.name ?? item.simulcast_competitor_name ?? "—"}</td>
       <td className={`whitespace-nowrap py-1.5 ${textClass}`}>{item.rerun_channel?.name ?? "—"}</td>
       <td className={`whitespace-nowrap py-1.5 ${textClass}`}>{item.broadcast_start_date || "—"}</td>
       <td className={`py-1.5 ${textClass}`}>
@@ -213,6 +220,7 @@ export default function FeaturedContentManager() {
       expectedEpisodeCount: item.expected_episode_count != null ? String(item.expected_episode_count) : "",
       simulcastChannelId: item.simulcast_channel_id ?? "",
       rerunChannelId: item.rerun_channel_id ?? "",
+      simulcastCompetitorName: item.simulcast_competitor_name ?? "",
     });
   }
 
@@ -240,6 +248,7 @@ export default function FeaturedContentManager() {
       expectedEpisodeCount: form.expectedEpisodeCount ? Number(form.expectedEpisodeCount) : null,
       simulcastChannelId: form.simulcastChannelId || null,
       rerunChannelId: form.rerunChannelId || null,
+      simulcastCompetitorName: form.simulcastCompetitorName.trim() || null,
     };
 
     const res = editingId
@@ -411,6 +420,16 @@ export default function FeaturedContentManager() {
                 ))}
               </select>
             </div>
+            {/* 사용자 지시(2026-09-02): "나는SOLO 등의 동시방송을 SBS Plus로 명기" — SBS Plus처럼
+                우리 7개 채널이 아닌 외부 채널은 위 드롭다운에 없어 직접 입력한다. 위 동시방송
+                드롭다운을 채우면(내부 채널) 이 입력은 비워두는 게 정상(보통 둘 중 하나만 값을 가짐). */}
+            <input
+              type="text"
+              value={form.simulcastCompetitorName}
+              onChange={(e) => setForm({ ...form, simulcastCompetitorName: e.target.value })}
+              placeholder="또는 외부 동시방송 채널명 직접 입력 (예: SBS Plus)"
+              className="mt-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+            />
           </div>
 
           <div>
