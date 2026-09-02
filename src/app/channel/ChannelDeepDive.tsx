@@ -2386,6 +2386,129 @@ function MiniPctlBar({ value, accentColor, isEnaStory }: { value: number | null;
   );
 }
 
+// 사용자 지시(2026-09-02): "선택 기간(N일) 요일×시간대 강세 시간대" 히트맵(전 기간/이번 기간
+// 두 패널) 아래에, 그 두 패널을 그대로 요약한 리포트 문단을 붙인다 — "시청률 흐름 총평
+// (Overview)"과 "주요 시청 지표 분석 (Key Insights)" 두 절, 사용자가 준 예시와 같은 톤(화살표
+// 없이 "상승/하락" 평문, 숫자는 괄호로 병기). 비교분석(DoD~YoY)·기간 누적(WTD~YTD)·트레일링
+// (지난 7일/1달) 등 hasPriorRange가 true인 모든 프리셋에서 재사용되므로, 특정 기간 길이나 요일
+// 조합을 가정하지 않고 매번 current/prior 두 히트맵에서 다시 계산한다(새 조회 없음 — 이미 있는
+// dowHourBlockPattern/dowHourBlockPatternPrior 그대로).
+const DOW_ORDER_MON_FIRST = ["월", "화", "수", "목", "금", "토", "일"];
+function isWeekendCell(r: DowHourBlockRow): boolean {
+  return r.dow_label === "토" || r.dow_label === "일";
+}
+function meanRating(rows: DowHourBlockRow[]): number | null {
+  const vals = rows.filter((r) => r.avg_rating !== null).map((r) => r.avg_rating!);
+  return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+}
+/** top N 셀이 인접한 3시간 버킷(최대 3버킷=9시간 폭)에 몰려 있으면 하나의 구간으로 합쳐 라벨링, 아니면 1위 셀 하나만. */
+function clusterHourRangeLabel(cells: DowHourBlockRow[]): string {
+  if (cells.length <= 1) return hourBlockLabel(cells[0].hour_block);
+  const idxs = [...new Set(cells.map((c) => HOUR_BLOCK_ORDER.indexOf(c.hour_block)))].sort((a, b) => a - b);
+  if (idxs[idxs.length - 1] - idxs[0] <= 2) {
+    return `${HOUR_BLOCK_ORDER[idxs[0]]}~${HOUR_BLOCK_ORDER[idxs[idxs.length - 1]] + 2}시`;
+  }
+  return hourBlockLabel(cells[0].hour_block);
+}
+function clusterDayLabel(cells: DowHourBlockRow[]): string {
+  const days = [...new Set(cells.map((c) => c.dow_label))].sort((a, b) => DOW_ORDER_MON_FIRST.indexOf(a) - DOW_ORDER_MON_FIRST.indexOf(b));
+  return `${days.join("·")}요일`;
+}
+interface DowHourFlowNarrative {
+  overview: string[];
+  keyInsights: string[];
+}
+function buildDowHourFlowNarrative(current: DowHourBlockRow[], prior: DowHourBlockRow[], fmtR: (v: number | null) => string): DowHourFlowNarrative | null {
+  const cur = current.filter((r) => r.avg_rating !== null);
+  const pri = prior.filter((r) => r.avg_rating !== null);
+  if (cur.length === 0 || pri.length === 0) return null;
+
+  const curOverall = meanRating(cur);
+  const priOverall = meanRating(pri);
+  const curWeekday = meanRating(cur.filter((r) => !isWeekendCell(r)));
+  const priWeekday = meanRating(pri.filter((r) => !isWeekendCell(r)));
+  const curWeekend = meanRating(cur.filter((r) => isWeekendCell(r)));
+  const priWeekend = meanRating(pri.filter((r) => isWeekendCell(r)));
+  if (curOverall === null || priOverall === null) return null;
+  const dir = (a: number, b: number) => (a >= b ? "상승" : "하락");
+
+  // ── 총평(Overview) ──
+  const overview: string[] = [];
+  let overviewLead = `전체 평균 시청률 ${dir(curOverall, priOverall)}(${fmtR(priOverall)}→${fmtR(curOverall)})`;
+  if (curWeekday !== null && priWeekday !== null && curWeekend !== null && priWeekend !== null) {
+    const weekdaySameDir = dir(curWeekday, priWeekday) === dir(curOverall, priOverall);
+    const weekendSameDir = dir(curWeekend, priWeekend) === dir(curOverall, priOverall);
+    overviewLead += `. 주중(${fmtR(priWeekday)}→${fmtR(curWeekday)}) · 주말(${fmtR(priWeekend)}→${fmtR(curWeekend)}) 평균 ${
+      weekdaySameDir && weekendSameDir ? `동반 ${dir(curOverall, priOverall)}` : "엇갈린 흐름"
+    }.`;
+    // 두 축 중 등락폭(%)이 더 큰 쪽만 짚는다 — 분모가 0에 가까우면(표본 부족) 비교하지 않는다.
+    const weekdayPct = priWeekday > 1e-6 ? Math.abs((curWeekday - priWeekday) / priWeekday) : null;
+    const weekendPct = priWeekend > 1e-6 ? Math.abs((curWeekend - priWeekend) / priWeekend) : null;
+    if (weekdayPct !== null && weekendPct !== null && Math.abs(weekdayPct - weekendPct) >= 0.1) {
+      const biggerSide = weekendPct > weekdayPct ? "주말" : "주중";
+      overviewLead += ` 특히 ${biggerSide} ${dir(biggerSide === "주말" ? curWeekend : curWeekday, biggerSide === "주말" ? priWeekend : priWeekday)}폭 큼.`;
+    }
+  }
+  overview.push(overviewLead);
+
+  const curTop3 = [...cur].sort((a, b) => b.avg_rating! - a.avg_rating!).slice(0, 3);
+  const priTop2 = [...pri].sort((a, b) => b.avg_rating! - a.avg_rating!).slice(0, 2);
+  const priTop1CurValue = cur.find((r) => r.dow_label === priTop2[0].dow_label && r.hour_block === priTop2[0].hour_block)?.avg_rating ?? null;
+  const priTopDeclined = priTop1CurValue !== null && priTop2[0].avg_rating! > 0 && priTop1CurValue < priTop2[0].avg_rating! * 0.85;
+  if (curTop3.length > 0) {
+    let clause = `금주 ${clusterHourRangeLabel(curTop3)} 구간 고시청률 조합이 증가`;
+    if (priTopDeclined) {
+      // priTop2 중 curTop3와 겹치지 않는(=현재도 강세인 셀은 "하락"이라 부를 수 없으므로 제외) 셀만 하락 후보로.
+      const declinedCells = priTop2.filter((p) => !curTop3.some((c) => c.dow_label === p.dow_label && c.hour_block === p.hour_block));
+      if (declinedCells.length > 0) {
+        clause += `한 반면, 전주 최고값이었던 ${clusterDayLabel(declinedCells)} ${clusterHourRangeLabel(declinedCells)}는 하락`;
+      }
+    }
+    overview.push(`${clause}.`);
+  }
+
+  // ── 주요 시청 지표 분석(Key Insights) ──
+  const keyInsights: string[] = [];
+  const curWeekdayCells = cur.filter((r) => !isWeekendCell(r));
+  const priWeekdayCells = pri.filter((r) => !isWeekendCell(r));
+  if (curWeekdayCells.length > 0) {
+    const curWeekdayTop = [...curWeekdayCells].sort((a, b) => b.avg_rating! - a.avg_rating!).slice(0, 3);
+    let s = `주중은 ${clusterDayLabel(curWeekdayTop)} ${clusterHourRangeLabel(curWeekdayTop)}의 고시청률 조합이 두드러`;
+    if (priWeekdayCells.length > 0) {
+      const priWeekdayTop = [...priWeekdayCells].sort((a, b) => b.avg_rating! - a.avg_rating!).slice(0, 2);
+      const priWeekdayTopCur = cur.find((r) => r.dow_label === priWeekdayTop[0].dow_label && r.hour_block === priWeekdayTop[0].hour_block)?.avg_rating ?? null;
+      const declined = priWeekdayTopCur !== null && priWeekdayTop[0].avg_rating! > 0 && priWeekdayTopCur < priWeekdayTop[0].avg_rating! * 0.85;
+      const notInCurTop = !curWeekdayTop.some((c) => c.dow_label === priWeekdayTop[0].dow_label && c.hour_block === priWeekdayTop[0].hour_block);
+      if (declined && notInCurTop) {
+        s += `진 반면, ${clusterDayLabel(priWeekdayTop.slice(0, 1))} ${clusterHourRangeLabel(priWeekdayTop.slice(0, 1))}는 전주 대비 하락.`;
+      } else {
+        s += "졌습니다.";
+      }
+    } else {
+      s += "졌습니다.";
+    }
+    keyInsights.push(s);
+  }
+
+  const curWeekendCells = cur.filter(isWeekendCell);
+  if (curWeekendCells.length > 0 && curWeekend !== null && priWeekend !== null) {
+    const weekendTop = [...curWeekendCells].sort((a, b) => b.avg_rating! - a.avg_rating!).slice(0, 3);
+    const spotsText = weekendTop.map((c) => `${c.dow_label}요일 ${hourBlockLabel(c.hour_block)}`).join("·");
+    let s = `주말 평균도 ${fmtR(priWeekend)}→${fmtR(curWeekend)}로 ${dir(curWeekend, priWeekend)}했으며, ${spotsText}가 상대적으로 높게 나타남.`;
+    // 분산도 — top셀들의 요일·시간대가 서로 겹치지 않고 흩어져 있으면 "편차가 큼"으로 짚는다
+    // (신규 v1 휴리스틱, 추후 조정 가능 — 다른 곳의 "합리적 v1" 원칙과 동일).
+    const distinctDays = new Set(weekendTop.map((c) => c.dow_label)).size;
+    const idxs = [...new Set(weekendTop.map((c) => HOUR_BLOCK_ORDER.indexOf(c.hour_block)))];
+    const hourSpread = Math.max(...idxs) - Math.min(...idxs);
+    if (weekendTop.length >= 2 && (distinctDays >= 2 || hourSpread >= 3)) {
+      s += " 다만 주말은 높은 값이 특정 시간대에 분산되어 있어 요일·시간대별 편차가 큰 형태.";
+    }
+    keyInsights.push(s);
+  }
+
+  return { overview, keyInsights };
+}
+
 function DowHourBlockTable({
   pattern,
   accentColor,
@@ -4859,7 +4982,42 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
               </div>
             </div>
-          ) : (
+          ) : null}
+          {/* 사용자 지시(2026-09-02): 위 전 기간/이번 기간 히트맵을 그대로 요약한 리포트 —
+              "비교분석"·"기간 누적"·"트레일링 기간" 등 hasPriorRange가 있는 모든 프리셋에서
+              공통으로 재사용(새 조회 없음, 이미 있는 두 히트맵 값만 다시 계산). */}
+          {hasPriorRange &&
+            (() => {
+              const narrative = buildDowHourFlowNarrative(dowHourBlockPattern, dowHourBlockPatternPrior, fmtR);
+              if (!narrative) return null;
+              return (
+                <div className="mt-5 space-y-4">
+                  <div>
+                    <p className="mb-1.5 text-sm font-semibold text-zinc-700">시청률 흐름 총평 <span className={ENG_TITLE_ANNOTATION}>(Overview)</span></p>
+                    <ul className="space-y-1">
+                      {narrative.overview.map((line, i) => (
+                        <li key={i} className="flex gap-1.5 text-sm leading-relaxed text-zinc-600">
+                          <span className="shrink-0 text-zinc-300">•</span>
+                          <span>{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-sm font-semibold text-zinc-700">주요 시청 지표 분석 <span className={ENG_TITLE_ANNOTATION}>(Key Insights)</span></p>
+                    <ul className="space-y-1">
+                      {narrative.keyInsights.map((line, i) => (
+                        <li key={i} className="flex gap-1.5 text-sm leading-relaxed text-zinc-600">
+                          <span className="shrink-0 text-zinc-300">•</span>
+                          <span>{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              );
+            })()}
+          {!hasPriorRange && (
             <>
               <WeekdayProfileSparklines pattern={dowHourBlockPattern} accentColor={accentColor} />
               <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} hourBlockOpportunity={hourBlockOpportunity} />
