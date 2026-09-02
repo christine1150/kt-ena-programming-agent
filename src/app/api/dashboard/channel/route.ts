@@ -780,20 +780,20 @@ export async function GET(request: Request) {
   // 개념이 없어 제외 — 화이트리스트 자체가 요일 단위라 기간 평균과는 맞지 않음).
   // 사용자 지시(2026-08-25): "오늘의 브리핑" 상단 키워드에 1위만 있던 걸 1~3위를 순위 언급
   // 없이 순서대로 나열 — Page 1의 todayTopPrograms와 같은 방식(단순 rating desc, limit 3).
-  let top3Programs: { canonical_name: string; rating: number }[] = [];
+  let top3Programs: { canonical_name: string; rating: number; start_time: string }[] = [];
   // 사용자 지시(2026-09-02): "2페이지 스코어 카드의 TOP/WEAK PROGRAMS가 선택한 기간·당일에
   // 대한 내용이 아님 — 오늘의 내용이면 오늘의 내용을 반영" — 스코어 카드는 항상 당일(dateTo)
   // 기준으로 표시되는데, 그 안의 TOP/WEAK PROGRAMS만 각각 최근 12주 트레일링 TOP20/Fit
   // Score(의도적으로 기간과 무관하게 설계됨, §U)를 재사용해 값이 어긋나 있었다. top3Programs와
   // 완전히 같은 방식(하루치 program_id 단위 시청률, 정렬만 반대)으로 당일 하위 3개를 뽑는다.
-  let weakProgramsToday: { canonical_name: string; rating: number }[] = [];
+  let weakProgramsToday: { canonical_name: string; rating: number; start_time: string }[] = [];
   if (!isRangeMode) {
     const { data: targetRow } = await supabase.from("targets").select("id").eq("label", programTargetLabel).maybeSingle();
     if (targetRow) {
       const [{ data: top3Rows }, { data: weak3Rows }] = await Promise.all([
         supabase
           .from("ratings")
-          .select("rating, programs(canonical_name)")
+          .select("rating, start_time, programs(canonical_name)")
           .eq("channel_id", channel.id)
           .eq("target_id", targetRow.id)
           .in("source_type", ["nielsen_daily", "skyuhd"])
@@ -804,7 +804,7 @@ export async function GET(request: Request) {
           .limit(3),
         supabase
           .from("ratings")
-          .select("rating, programs(canonical_name)")
+          .select("rating, start_time, programs(canonical_name)")
           .eq("channel_id", channel.id)
           .eq("target_id", targetRow.id)
           .in("source_type", ["nielsen_daily", "skyuhd"])
@@ -814,9 +814,13 @@ export async function GET(request: Request) {
           .order("rating", { ascending: true })
           .limit(3),
       ]);
-      const mapRow = (r: { rating: number; programs: { canonical_name: string } | { canonical_name: string }[] | null }) => ({
+      // 사용자 지시(2026-09-02): "TOP/WEAK 프로그램을 당일거 보여줄 경우 편성 시작 시간도 함께
+      // 표시" — 같은 프로그램명이 하루에 여러 번(재방 등) 방영되면 시간 없이는 어느 방영분인지
+      // 구분이 안 됐다(예: 나는SOLO가 본방·재방으로 두 번 상위권에 오르는 경우).
+      const mapRow = (r: { rating: number; start_time: string; programs: { canonical_name: string } | { canonical_name: string }[] | null }) => ({
         canonical_name: Array.isArray(r.programs) ? (r.programs[0]?.canonical_name ?? "") : (r.programs?.canonical_name ?? ""),
         rating: r.rating,
+        start_time: r.start_time,
       });
       top3Programs = (top3Rows ?? []).map(mapRow);
       weakProgramsToday = (weak3Rows ?? []).map(mapRow);

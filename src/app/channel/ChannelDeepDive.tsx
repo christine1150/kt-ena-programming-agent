@@ -552,10 +552,10 @@ interface ChannelData {
   // 규칙기반 폴백용(LLM 성공 시엔 briefingLlm이 이미 이 값을 반영해 우선 사용됨).
   rerunLeadSentence: string | null;
   // 사용자 지시(2026-08-25): 오늘의 브리핑 상단 키워드 1~3위 나열용(단일 일자 조회일 때만 채워짐).
-  top3Programs: { canonical_name: string; rating: number }[];
+  top3Programs: { canonical_name: string; rating: number; start_time: string }[];
   // 사용자 지시(2026-09-02): 스코어 카드의 WEAK PROGRAMS가 당일 내용을 반영하도록 — top3Programs와
   // 같은 방식(당일 program_id 단위 시청률), 정렬만 반대(하위 3개). 단일 일자 조회일 때만 채워짐.
-  weakProgramsToday: { canonical_name: string; rating: number }[];
+  weakProgramsToday: { canonical_name: string; rating: number; start_time: string }[];
   // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — route.ts가
   // 이미 검증된 값만으로 OpenAI가 종합한 오늘의 브리핑 핵심 문단(단일 일자 모드만). 없으면
   // 기존 규칙 기반 문장으로 조용히 대체.
@@ -4295,15 +4295,17 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // TOP20(topPrograms)을, WEAK는 기간과 무관하게 설계된 Fit Score REPLACE 태그(fitScoreItems)를
   // 재사용해 서로 다른 기준이 섞여 있었다. data.top3Programs/weakProgramsToday(둘 다 당일
   // program_id 단위 시청률만 보는 단순 조회, route.ts)로 교체해 카드 전체가 당일 기준으로 통일된다.
+  // 사용자 지시(2026-09-02): "TOP/WEAK 프로그램을 당일거 보여줄 경우 편성 시작 시간도 함께
+  // 표시" — 같은 프로그램이 하루에 여러 번 방영되면(본방/재방 등) 시간 없이는 구분이 안 됐다.
   const briefingTopPrograms: BriefingProgramRow[] = data.top3Programs.map((p) => ({
     name: p.canonical_name,
     rating: p.rating,
-    detail: fmtR(p.rating),
+    detail: `${fmtTime(p.start_time)} · ${fmtR(p.rating)}`,
   }));
   const briefingWeakPrograms: BriefingProgramRow[] = data.weakProgramsToday.map((p) => ({
     name: p.canonical_name,
     rating: p.rating,
-    detail: fmtR(p.rating),
+    detail: `${fmtTime(p.start_time)} · ${fmtR(p.rating)}`,
   }));
 
   // 사용자 지시(2026-08-21, [특화 디자인] ENA STORY): "stripe.com을 참고해 분홍·보라·하양·
