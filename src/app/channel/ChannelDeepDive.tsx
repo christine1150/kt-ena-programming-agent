@@ -1214,14 +1214,6 @@ function buildBriefingReport(
       }
     }
 
-    // SDoW(동요일 평균 분석) — 선택된 요일의 최근 N주 평균 대비 등락을 브리핑 문장으로 바인딩.
-    if (sdowContext && data.sameWeekdayReport && data.sameWeekdayReport.avgRating !== null && data.sameWeekdayReport.avgRating > 0) {
-      const pct = ((current.rating! - data.sameWeekdayReport.avgRating) / data.sameWeekdayReport.avgRating) * 100;
-      sentences.push(
-        `${sdowContext.weeksLabel} ${sdowContext.dowLabel}요일 평균(${fmtR(data.sameWeekdayReport.avgRating)}, 표본 ${data.sameWeekdayReport.sampleDays}일) 대비 ${Math.abs(pct).toFixed(1)}% ${pct >= 0 ? "상승" : "하락"}했습니다.`
-      );
-    }
-
     // 시간대 + 그 시간대를 이끈 프로그램을 하나의 문장으로 종합(사용자 지시 2026-08-25: "가장
     // 잘 나온 시간대와 잘 나온 프로그램을 종합해서 함께 이야기해 줄 수 있도록"). today_peak_program_name은
     // 그 피크 시간대 안에서 실제로 가장 높았던 "프로그램 단위" 값이라 대부분 top_program_name과
@@ -1300,6 +1292,17 @@ function buildBriefingReport(
     // Tier 1 확장(2026-08-26): route.ts가 이미 검증된 값만으로 OpenAI가 종합한 문단
     // (data.briefingLlm)이 있으면 그걸 쓰고, 없으면(키 없음/실패) 기존 규칙 기반 문장으로 대체.
     paragraphs.push(data.briefingLlm ?? sentences.join(" "));
+
+    // 버그 수정(2026-09-02): SDoW 문장을 위 sentences 배열 안에 넣었더니, briefingLlm이 있을 때
+    // (기본 경로) sentences 전체가 통째로 버려져 SDoW 비교 문장이 화면에 안 보였다 — LLM 요약과
+    // 무관하게 항상 보이도록 별도 문단으로 분리한다(사용자 지시: "브리핑 텍스트 바인딩... 완벽히
+    // 바인딩되도록 설계").
+    if (sdowContext && data.sameWeekdayReport && data.sameWeekdayReport.avgRating !== null && data.sameWeekdayReport.avgRating > 0 && current.rating !== null) {
+      const pct = ((current.rating - data.sameWeekdayReport.avgRating) / data.sameWeekdayReport.avgRating) * 100;
+      paragraphs.push(
+        `${sdowContext.weeksLabel} ${sdowContext.dowLabel}요일 평균(${fmtR(data.sameWeekdayReport.avgRating)}, 표본 ${data.sameWeekdayReport.sampleDays}일) 대비 ${Math.abs(pct).toFixed(1)}% ${pct >= 0 ? "상승" : "하락"}했습니다.`
+      );
+    }
   }
 
   if (paragraphs.length === 0) {
