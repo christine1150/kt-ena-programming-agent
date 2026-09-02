@@ -3558,6 +3558,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const [data, setData] = useState<ChannelData | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // 사용자 지시(2026-09-02): "2페이지 전반적으로 폰트 크기를 키워 가독률을 높일 것 — 특히
+  // skyUHD는 폰트를 더 키워서 볼 수 있는 옵션을 왼쪽 상단에 추가". 5900줄 전체의 text-* 클래스를
+  // 하나씩 키우면 레이아웃이 곳곳에서 깨질 위험이 커서, 페이지 전체를 감싸는 CSS zoom으로
+  // 일괄 확대한다(폰트만이 아니라 여백·표 칸 폭도 같은 비율로 커져 줄바꿈이 어긋나지 않음).
+  // 기본값 1.1이 "전반적으로 키움" 요구를, 토글 시 1.35가 "더 키워서 볼 수 있는 옵션"(skyUHD처럼
+  // 소수점 5자리 시청률이 읽기 어려운 채널에 특히 유용 — 다만 모든 채널에서 쓸 수 있게 공통 제공)을
+  // 충족한다.
+  const [largeFontMode, setLargeFontMode] = useState(false);
   const [hourlyMetrics, setHourlyMetrics] = useState<Set<HourlyMetricKey>>(new Set(["avg_rating"]));
   // 기능 #15-2(2026-08-21): "대비" 분석(DoD~YoY)의 시간대별 그래프는 "이번 기간"/"전 기간" 두
   // 패널로 나란히 보여주고, 각 패널이 독립된 체크박스 행을 갖는다(사용자 지시 "두 줄 체크박스").
@@ -4270,7 +4278,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const isEnaStory = code === "ENA_STORY";
 
   return (
-    <div className="relative px-6 py-8" style={{ ["--accent" as string]: accentColor }}>
+    <div className="relative px-6 py-8" style={{ ["--accent" as string]: accentColor, zoom: largeFontMode ? 1.35 : 1.1 }}>
       {isEnaStory && (
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-white">
           <div className="absolute -left-40 -top-40 h-[36rem] w-[36rem] rounded-full bg-[#7828e0] opacity-[0.16] blur-3xl" />
@@ -4280,9 +4288,25 @@ export default function ChannelDeepDive({ code }: { code: string }) {
       )}
       {/* 사용자 지시(2026-08-21): "PC 화면에서 레이아웃이 너무 중앙에 쏠려있다" — max-w-5xl
           (1024px)은 특히 표·그래프가 많은 이 페이지에서 넓은 모니터의 화면을 못 쓰던 문제.
-          max-w-7xl(1280px)로 넓혀 표·시간대 그래프가 더 여유 있게 보이도록 한다(줄글 문단은
-          카드 padding 안에서 여전히 읽기 좋은 길이 — 화면 전체를 다 채우진 않음). */}
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+          max-w-7xl(1280px)로 넓혔던 것을, 사용자 재지시(2026-09-02) "좌우 폭을 최대한 넓히고"에
+          따라 max-w-[1800px]로 한 번 더 넓힌다(초광폭 모니터에서도 표·그래프가 과하게 늘어지지
+          않도록 완전 무제한 대신 넉넉한 상한을 둠). */}
+      <div className="mx-auto flex max-w-[1800px] flex-col gap-6">
+        {/* 사용자 지시(2026-09-02): "폰트를 더 키워서 볼 수 있는 옵션을 왼쪽 상단에 추가" — skyUHD처럼
+            소수점 5자리 시청률이 특히 읽기 어려운 채널을 염두에 뒀지만, 모든 채널 페이지에서 동일하게
+            제공한다(굳이 채널별로 숨길 이유가 없음). 페이지 전체를 감싸는 zoom 배율만 바꾸므로 다른
+            레이아웃 로직은 전혀 건드리지 않는다. */}
+        <div className="flex justify-start">
+          <button
+            type="button"
+            onClick={() => setLargeFontMode((v) => !v)}
+            className="flex items-center gap-1.5 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 shadow-sm hover:bg-zinc-50"
+          >
+            <span aria-hidden>🔍</span>
+            {largeFontMode ? "기본 글씨 크기로" : "큰 글씨로 보기"}
+            {code === "SKYUHD" && !largeFontMode && <span className="text-zinc-400">(skyUHD 추천)</span>}
+          </button>
+        </div>
         {/* 헤더 — ENA Story만 보라→핑크→주황(끝자락만) Stripe풍 그라디언트, 다른 채널은 기존
             로고색 단색 그라디언트 그대로. */}
         <div

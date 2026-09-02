@@ -830,13 +830,17 @@ function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logo
       href={`/channel/${channel.code}`}
       className="flex flex-col gap-2 rounded-xl bg-zinc-50 p-3.5 ring-1 ring-zinc-100 transition hover:bg-zinc-100/70 hover:ring-zinc-200"
     >
-      {/* 사용자 지시: 채널명 텍스트 제거, 로고만 깔끔하게. */}
+      {/* 사용자 지시: 채널명 텍스트 제거, 로고만 깔끔하게.
+          사용자 재지시(2026-09-02): "채널별 시청률" 타일에서만 ENA Drama/Play/Story는 가로형
+          로고(preferWideLogo, channel.code로 매칭) — 다른 자리(헤더 아이콘·주말 리포트 등)는
+          이 prop을 안 켜서 기존 세로형 그대로 유지. */}
       <ChannelLogo
         channel={{
           logoPath: channel.logoPath,
           name: channel.name,
           logoVisibleRatio: channel.logoVisibleRatio,
           logoVisibleTopRatio: channel.logoVisibleTopRatio,
+          code: channel.code,
         }}
         reference={
           logoReference
@@ -850,6 +854,7 @@ function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logo
         }
         heightPx={20}
         maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
+        preferWideLogo
       />
       {/* 사용자 지시: "시청률 (순위/목표 순위)" 한 줄 + 전일 대비 순위 증감. */}
       <div className="flex items-baseline justify-between gap-1.5">
@@ -2572,15 +2577,21 @@ function ChannelNarrativeCard({
   signals,
   themeColorByCode,
   enaOriginalDaily,
+  onOpenCompetitorSheet,
+  selectedChannel,
 }: {
   signals: ChannelNarrativeSignal[];
   themeColorByCode: Map<string, string | null>;
   // 사용자 지시(2026-08-25): ENA 채널 인사이트 첫 문장용 — 오늘 ENA 채널(broadcast_channel_code
   // ="ENA")에서 방영된 오리지널·독점 콘텐츠만 필터링해 전달받는다.
   enaOriginalDaily: OriginalDailyItem[];
+  // 사용자 지시(2026-09-02): 채널명 옆 클릭 아이콘 — 우측 "채널별 상위 프로그램" 자리를
+  // 경쟁채널 시청률 패널로 전환한다(부모가 선택 상태를 들고 있음).
+  onOpenCompetitorSheet: (code: string) => void;
+  selectedChannel: string | null;
 }) {
   const byCode = new Map(signals.map((s) => [s.channelCode, s]));
-  const lines: { channelName: string; text: string; color: string | null; deltaPct: number | null; todayRank: number | null; baselineAvgRank: number | null }[] = [];
+  const lines: { code: string; channelName: string; text: string; color: string | null; deltaPct: number | null; todayRank: number | null; baselineAvgRank: number | null }[] = [];
   const enaLeadSentence = buildEnaOriginalHighlightSentence(enaOriginalDaily.filter((d) => d.broadcast_channel_code === "ENA"));
   for (const code of INSIGHT_CHANNEL_ORDER) {
     const s = byCode.get(code);
@@ -2594,12 +2605,13 @@ function ChannelNarrativeCard({
     const narrative = s.llmNarrative
       ? { channelName: CHANNEL_NAME_BY_CODE[code], text: s.llmNarrative }
       : buildChannelNarrative(CHANNEL_NAME_BY_CODE[code], s, extraLeadSentence);
-    lines.push({ ...narrative, color: themeColorByCode.get(code) ?? null, deltaPct: s.rating_delta_pct, todayRank: s.today_rank, baselineAvgRank: s.baseline_avg_rank });
+    lines.push({ code, ...narrative, color: themeColorByCode.get(code) ?? null, deltaPct: s.rating_delta_pct, todayRank: s.today_rank, baselineAvgRank: s.baseline_avg_rank });
   }
   const skyuhdSignal = byCode.get("SKYUHD");
   const skyuhdLine = buildSkyUhdNarrative(skyuhdSignal);
   if (skyuhdLine)
     lines.push({
+      code: "SKYUHD",
       ...skyuhdLine,
       color: themeColorByCode.get("SKYUHD") ?? null,
       deltaPct: skyuhdSignal?.rating_delta_pct ?? null,
@@ -2630,8 +2642,20 @@ function ChannelNarrativeCard({
             // 넓히고 whitespace-nowrap을 명시해 항상 한 줄로 고정.
             <div key={i} className="grid grid-cols-[104px_1fr] items-start gap-x-3">
               <div className="flex flex-col gap-1">
-                <span className="whitespace-nowrap font-bold" style={{ color: line.color ?? undefined }}>
+                <span className="flex items-center gap-1 whitespace-nowrap font-bold" style={{ color: line.color ?? undefined }}>
                   {line.channelName}
+                  {/* 사용자 지시(2026-09-02): "클릭 아이콘 신설. 세모 정도로" — 클릭 시 우측
+                      "채널별 상위 프로그램" 자리가 이 채널의 경쟁채널 시청률 패널로 전환된다. */}
+                  <button
+                    type="button"
+                    onClick={() => onOpenCompetitorSheet(line.code)}
+                    title="경쟁채널 시청률 보기"
+                    aria-label={`${line.channelName} 경쟁채널 시청률 보기`}
+                    className="text-[10px] leading-none opacity-50 hover:opacity-100"
+                    style={{ color: line.color ?? undefined }}
+                  >
+                    {selectedChannel === line.code ? "▼" : "▶"}
+                  </button>
                 </span>
                 {/* 사용자 지시(2026-08-27): Health Score를 1페이지 "채널별 인사이트"에도 —
                     시청률 등락률·순위 2개 축만으로 계산(나머지 축은 데이터 없어 중립 처리되므로
@@ -2800,7 +2824,8 @@ function KillerContentCard({
 }
 
 // 사용자 지시(2026-08-21): 채널별 인사이트 옆자리(기존 채널별 킬러 콘텐츠 자리)에 새로 배치 —
-// 최근 4주 평균이 아니라 "오늘 하루"의 채널별 시청률 상위 3개 프로그램만 간단한 표로. 채널명은
+// 최근 4주 평균이 아니라 "오늘 하루"의 채널별 시청률 상위 프로그램만 간단한 표로(사용자 지시
+// 2026-09-02: 3개→5개). 채널명은
 // 채널별 인사이트와 동일하게 로고 색을 반영한 볼드로 표시(사용자 지시).
 // 사용자 지시(2026-08-21): 원문 <본> 표시는 생략 없이, 추가 파악된 회차/부제가 있으면 함께 표시.
 // 필수 열: 방영시간·타깃 시청률·비교 시청률. 타깃 시청률 색상은 1/1~분석일 채널 누적 평균 대비
@@ -2827,7 +2852,7 @@ function TodayTopProgramsCard({
       {/* 사용자 지시(2026-08-21, Page 1 매거진 개편): 섹션 타이틀 "오늘의 상위 프로그램"→
           "채널별 상위 프로그램"으로 변경. */}
       <h2 className={SECTION_TITLE}>채널별 상위 프로그램</h2>
-      <p className="mb-4 text-xs text-zinc-400">오늘 하루 채널별 시청률 상위 3개 프로그램입니다.</p>
+      <p className="mb-4 text-xs text-zinc-400">오늘 하루 채널별 시청률 상위 5개 프로그램입니다.</p>
       <div className="flex flex-col gap-3 text-sm">
         {INSIGHT_CHANNEL_ORDER.map((code) => {
           const list = byChannel.get(code) ?? [];
@@ -2913,6 +2938,143 @@ function TodayTopProgramsCard({
   );
 }
 
+// #RRGGBB 문자열을 rgba(...)로 — 채널 로고 색상 그라데이션에 사용(사용자 지시 2026-09-02).
+function hexToRgba(hex: string, alpha: number): string {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim());
+  if (!m) return `rgba(63, 63, 70, ${alpha})`; // UNBRANDED_CHANNEL_COLOR 폴백
+  const [r, g, b] = [m[1], m[2], m[3]].map((h) => parseInt(h, 16));
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+interface CompetitorSheetApiRow {
+  competitor_name: string;
+  start_time: string;
+  end_time: string | null;
+  program_name: string;
+  rating: number | null;
+  share: number | null;
+}
+
+// 사용자 지시(2026-09-02): "채널별 인사이트 우측에 클릭하면 우측에 정보가 열리는 옵션... 클릭 시
+// 우측에 경쟁채널 시청률 시트에 있는 채널별 시간대별, 컨텐츠별 정보가 뜨도록 설계 — KPI 시청률은
+// 채널 로고 색상 그라데이션으로 시청률 높은 순, 점유율은 일간 평균보다 높으면 채널 로고 색상으로
+// 강조". "채널별 상위 프로그램"(TodayTopProgramsCard) 자리를 그대로 대체해서 보여준다(사용자가
+// 첨부한 스케치가 그 카드 자리 전체를 감싸 가리켰음) — 별도 모달/오버레이가 아니라 같은 그리드
+// 칸 안에서 전환되므로 레이아웃이 흔들리지 않는다.
+function CompetitorSheetPanel({ channelCode, channelName, themeColor, asOfDate, onClose }: {
+  channelCode: string;
+  channelName: string;
+  themeColor: string | null;
+  asOfDate: string;
+  onClose: () => void;
+}) {
+  const [state, setState] = useState<{ loading: boolean; rows: CompetitorSheetApiRow[]; avgShare: number | null; error: string | null }>({
+    loading: true,
+    rows: [],
+    avgShare: null,
+    error: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setState({ loading: true, rows: [], avgShare: null, error: null });
+      const res = await fetch(`/api/dashboard/competitor-sheet?code=${channelCode}&date=${asOfDate}`);
+      const body = await res.json().catch(() => ({ ok: false }));
+      if (cancelled) return;
+      if (!res.ok || !body.ok) {
+        setState({ loading: false, rows: [], avgShare: null, error: body.message ?? "불러오지 못했습니다." });
+      } else {
+        setState({ loading: false, rows: body.rows ?? [], avgShare: body.avgShare ?? null, error: null });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [channelCode, asOfDate]);
+
+  const color = themeColor ?? UNBRANDED_CHANNEL_COLOR;
+  const ratings = state.rows.map((r) => r.rating).filter((v): v is number => v !== null);
+  const maxRating = ratings.length > 0 ? Math.max(...ratings) : 0;
+  const minRating = ratings.length > 0 ? Math.min(...ratings) : 0;
+  const ratingSpan = maxRating - minRating;
+
+  return (
+    <div className={CARD}>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h2 className={SECTION_TITLE}>
+          <span style={{ color }}>{channelName}</span> · 경쟁채널 시청률
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+        >
+          ✕ 닫기
+        </button>
+      </div>
+      <p className="mb-4 text-xs text-zinc-400">
+        Nielsen 경쟁채널시청률 시트(페어링된 경쟁채널) 기준, 시청률이 높은 순으로 정렬했습니다. 시청률은
+        진한 색일수록 높고, 점유율은 이 목록의 일간 평균보다 높은 값만 채널 색으로 강조합니다.
+      </p>
+      {state.loading && <p className="text-sm text-zinc-400">불러오는 중...</p>}
+      {!state.loading && state.error && <p className="text-sm text-red-500">{state.error}</p>}
+      {!state.loading && !state.error && state.rows.length === 0 && (
+        <p className="text-sm text-zinc-400">이 채널은 경쟁채널 시청률 데이터가 없습니다.</p>
+      )}
+      {!state.loading && !state.error && state.rows.length > 0 && (
+        <div className="max-h-[28rem] overflow-y-auto">
+          <table className="w-full table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-14" />
+              <col />
+              <col className="w-16" />
+              <col className="w-14" />
+            </colgroup>
+            <thead className="sticky top-0 bg-white">
+              <tr className="text-[12px] font-normal text-zinc-400">
+                <th className="pb-1 text-center">시간대</th>
+                <th className="pb-1 text-left">경쟁채널 · 컨텐츠</th>
+                <th className="pb-1 text-center">시청률</th>
+                <th className="pb-1 text-center">점유율</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.rows.map((r, i) => {
+                const norm = ratingSpan > 0 && r.rating !== null ? (r.rating - minRating) / ratingSpan : r.rating !== null ? 1 : 0;
+                const shareIsAboveAvg = r.share !== null && state.avgShare !== null && r.share > state.avgShare;
+                return (
+                  <tr key={i} className="border-t border-zinc-50">
+                    <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(r.start_time)}</td>
+                    <td className="truncate py-1 text-zinc-700">
+                      <span className="font-bold" style={{ color }}>
+                        {r.competitor_name}
+                      </span>{" "}
+                      {r.program_name}
+                    </td>
+                    <td
+                      className="py-1 text-center tabular-nums font-semibold"
+                      style={{ backgroundColor: hexToRgba(color, 0.06 + norm * 0.3), color: norm > 0.5 ? color : undefined }}
+                    >
+                      {formatRating(r.rating)}
+                    </td>
+                    <td
+                      className="py-1 text-center tabular-nums"
+                      style={shareIsAboveAvg ? { color, fontWeight: 700 } : { color: "#a1a1aa" }}
+                    >
+                      {r.share !== null ? `${r.share.toFixed(2)}%` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 사용자 지시(2026-08-21): "주요뉴스의 카테고리별로 색상을 표시" — category는 관리자가 자유
 // 텍스트로 입력해(고정 목록이 없음) 특정 카테고리에 색을 미리 지정해둘 수 없었다. 처음엔 카테고리
 // 이름을 해시해 8가지 파란 계열 중 하나를 결정적으로 고르는 방식이었는데, 사용자 재지시
@@ -2972,6 +3134,9 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   // 사용자 지시(2026-08-25): "채널 종합리포트 우측에 날짜를 선택할 수 있는 검색 기능을 추가...
   // 선택한 당일의 해당 채널 종합 리포트도 볼 수 있도록". 빈 문자열 = 최신 날짜(기본값).
   const [selectedDate, setSelectedDate] = useState<string>("");
+  // 사용자 지시(2026-09-02): 채널별 인사이트의 클릭 아이콘 — 켜져 있으면 "채널별 상위 프로그램"
+  // 자리가 그 채널의 경쟁채널 시청률 패널로 바뀐다. 같은 채널을 다시 누르면 닫힘(토글).
+  const [selectedInsightChannel, setSelectedInsightChannel] = useState<string | null>(null);
 
   async function load(dateStr?: string) {
     setLoading(true);
@@ -3207,13 +3372,25 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               signals={data.narrativeSignals}
               themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
               enaOriginalDaily={data.originalContentReport.daily}
+              selectedChannel={selectedInsightChannel}
+              onOpenCompetitorSheet={(code) => setSelectedInsightChannel((cur) => (cur === code ? null : code))}
             />
-            <TodayTopProgramsCard
-              rows={data.todayTopPrograms}
-              themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
-              ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
-              enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
-            />
+            {selectedInsightChannel ? (
+              <CompetitorSheetPanel
+                channelCode={selectedInsightChannel}
+                channelName={CHANNEL_NAME_BY_CODE[selectedInsightChannel] ?? selectedInsightChannel}
+                themeColor={byCode.get(selectedInsightChannel)?.themeColor ?? null}
+                asOfDate={data.asOfDate}
+                onClose={() => setSelectedInsightChannel(null)}
+              />
+            ) : (
+              <TodayTopProgramsCard
+                rows={data.todayTopPrograms}
+                themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
+                ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
+                enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
+              />
+            )}
 
             <DailyNewsCard items={data.dailyNews} />
 

@@ -8,15 +8,28 @@
 // 기준 채널(ENA)과 동일하게 맞춘다. 픽셀 단위로 잘라내는 크롭이 필요해 next/image 대신
 // 일반 img 태그를 쓴다(로고 파일 자체가 작아 최적화 이득이 크지 않음).
 //
-// 사용자 재지시(2026-09-02): "ENA Drama/Play/Story 1페이지에서만 가로형 로고" 시도(preferWideLogo/
-// WIDE_LOGO_OVERRIDE)를 몇 시간 뒤 "기존 세로형 로고로 돌려주세요"로 철회 — 이 컴포넌트는 항상
-// 아래의 세로형(크롭) 렌더링 하나만 쓴다(1페이지·2페이지 구분 없음).
+// 사용자 재지시(2026-09-02, 1차): "ENA Drama/Play/Story 1페이지에서만 가로형 로고" 시도
+// (preferWideLogo/WIDE_LOGO_OVERRIDE)를 몇 시간 뒤 "기존 세로형 로고로 돌려주세요"로 철회했다가,
+// 같은 날 2차 지시로 "좌측 채널별 시청률(오늘의 시청률 타일)에서만 가로형 로고 사용"으로 범위를
+// 좁혀 재도입 — 이번엔 1페이지 전체(히어로·주말 리포트·헤더 아이콘)가 아니라 ChannelTile(오늘의
+// 시청률 그리드) 한 곳에서만 preferWideLogo를 켠다. 나머지 자리는 기존 세로형(크롭) 그대로.
 export interface ChannelLogoInfo {
   logoPath: string | null;
   name: string;
   logoVisibleRatio: number | null;
   logoVisibleTopRatio: number | null;
+  /** 가로형 로고 교체에 채널 코드로 매칭하기 위해서만 필요 — preferWideLogo를 안 켜면 무시된다. */
+  code?: string;
 }
+
+// "채널별 시청률" 타일에서만 쓰는 가로형(_H) 로고 — 세로/정방형 로고의 투명 여백 크롭 비율
+// (logoVisibleRatio 등)은 그 파일 기준으로 계산돼 있어 다른 파일로 바꿔치기하면 안 맞으므로,
+// 크롭 계산 없이 object-fit: contain으로 통째로 보여주는 별도 분기로 처리한다.
+const WIDE_LOGO_OVERRIDE: Record<string, string> = {
+  ENA_DRAMA: "/channel-logos/ENA_DRAMA_H.png",
+  ENA_PLAY: "/channel-logos/ENA_PLAY_H.png",
+  ENA_STORY: "/channel-logos/ENA_STORY_H.png",
+};
 
 export function ChannelLogo({
   channel,
@@ -24,6 +37,7 @@ export function ChannelLogo({
   heightPx = 32,
   maxWidthPx,
   className,
+  preferWideLogo,
 }: {
   channel: ChannelLogoInfo;
   /** "보이는 부분" 높이의 기준이 되는 채널(보통 ENA). 없으면 이 채널 자신을 기준으로 삼는다. */
@@ -35,11 +49,31 @@ export function ChannelLogo({
    * — 이 경우 "보이는 부분 높이 통일" 대신 "폭 통일"을 우선한다(잘림 방지가 목적). */
   maxWidthPx?: number;
   className?: string;
+  /** 사용자 지시(2026-09-02): "채널별 시청률" 타일에서만 켠다 — ENA Drama/Play/Story만 가로형
+   * 로고로 바뀌고, 그 외 채널(코드가 WIDE_LOGO_OVERRIDE에 없음)은 이 prop을 켜도 기존 그대로다. */
+  preferWideLogo?: boolean;
 }) {
   if (!channel.logoPath) {
     return (
       <div style={{ height: heightPx }} className={`flex items-center text-sm font-semibold text-zinc-700 ${className ?? ""}`}>
         {channel.name}
+      </div>
+    );
+  }
+
+  const wideOverrideSrc = preferWideLogo && channel.code ? WIDE_LOGO_OVERRIDE[channel.code] : undefined;
+  if (wideOverrideSrc) {
+    return (
+      <div
+        style={{ height: heightPx, ...(maxWidthPx ? { width: maxWidthPx } : {}) }}
+        className={`flex items-center ${maxWidthPx ? "justify-center" : ""} ${className ?? ""}`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- 가로형 로고는 크롭 없이 통째로 표시 */}
+        <img
+          src={wideOverrideSrc}
+          alt={channel.name}
+          style={{ height: "100%", width: "auto", maxWidth: maxWidthPx ? "100%" : "none", objectFit: "contain", display: "block" }}
+        />
       </div>
     );
   }

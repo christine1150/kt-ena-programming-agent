@@ -1105,10 +1105,10 @@ export async function GET(request: Request) {
   if (skyuhdSignalResult) narrativeSignals.push(skyuhdSignalResult);
   const killerContentDaypart: KillerContentDaypartRow[] = killerContentDaypartResults.flat();
 
-  // 8) 당일 시청률 상위 프로그램 3개(사용자 지시 2026-08-21) — 최근 4주 평균이 아니라 "오늘
-  // 하루"만 보는 간단 표. 새 SQL 함수 없이 채널별 타깃 시청률로 필터+정렬+상위 3개만 뽑는
-  // 단순 조회라 supabase-js 쿼리로 직접 처리(CLAUDE.md 원칙: 집계·계산이 없는 단순 조회는
-  // 기존 killer_content_v 조회처럼 SQL 함수 없이 바로 써도 무방).
+  // 8) 당일 시청률 상위 프로그램 5개(사용자 지시 2026-08-21, 상위 개수 2026-09-02: 3→5) — 최근
+  // 4주 평균이 아니라 "오늘 하루"만 보는 간단 표. 새 SQL 함수 없이 채널별 타깃 시청률로
+  // 필터+정렬+상위 5개만 뽑는 단순 조회라 supabase-js 쿼리로 직접 처리(CLAUDE.md 원칙: 집계·
+  // 계산이 없는 단순 조회는 기존 killer_content_v 조회처럼 SQL 함수 없이 바로 써도 무방).
   const todayTopProgramsResults = await mapWithConcurrency(INSIGHT_CHANNEL_ORDER, 3, async (code) => {
     const ch = channelByCode.get(code);
     if (!ch?.primary_target) return [] as TodayTopProgramRow[];
@@ -1125,7 +1125,7 @@ export async function GET(request: Request) {
       .not("program_id", "is", null)
       .not("rating", "is", null)
       .order("rating", { ascending: false })
-      .limit(3);
+      .limit(5);
     const rows = (data ?? []) as {
       rating: number;
       start_time: string;
