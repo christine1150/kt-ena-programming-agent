@@ -3036,15 +3036,15 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
   const hasSecondary = !!state.secondaryLabel;
 
   // 사용자 지시(2026-09-02): "가구 시청률도 그라데이션으로 표시. 단 2049도 가구도 채널 1개월
-  // 평균 시청률보다 높은 것은 볼드. 0.003 이하는 음영 없이 하얀색 바탕으로." — 주/부 두 열에
-  // 동일 규칙을 적용하는 공용 헬퍼(정규화 범위·월평균만 다르게 넘긴다).
+  // 평균 시청률보다 높은 것은 볼드." — 주/부 두 열에 동일 규칙을 적용하는 공용 헬퍼(정규화
+  // 범위·월평균만 다르게 넘긴다). 사용자 재지시(2026-09-02): 음영 제외 기준 0.003 → 0.010.
   function ratingCellStyle(
     rating: number | null,
     range: { min: number; span: number },
     monthAvg: number | null
   ): { backgroundColor?: string; color?: string; fontWeight?: number } {
     const style: { backgroundColor?: string; color?: string; fontWeight?: number } = {};
-    if (rating !== null && rating > 0.003) {
+    if (rating !== null && rating > 0.01) {
       const norm = range.span > 0 ? (rating - range.min) / range.span : 1;
       style.backgroundColor = hexToRgba(color, 0.06 + norm * 0.3);
       if (norm > 0.5) style.color = color;
@@ -3070,19 +3070,18 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
         </button>
       </div>
       {/* 사용자 지시(2026-09-02): "표의 맨 위에는 해당일자와 요일도 언급". */}
-      <p className="mb-1 text-sm font-semibold text-zinc-600">{formatDateWithDowDots(asOfDate)}</p>
-      <p className="mb-4 text-xs text-zinc-400">
-        오늘 방영된 프로그램별 시청률·점유율입니다(시작시간순). 시청률은 진한 색일수록 높고, 채널 1개월
-        평균보다 높으면 볼드로 표시합니다(0.003 이하는 음영 없음). 점유율은 이 목록의 일간 평균보다
-        높은 값만 채널 색으로 강조합니다.
-      </p>
+      <p className="mb-4 text-sm font-semibold text-zinc-600">{formatDateWithDowDots(asOfDate)}</p>
+      {/* 사용자 재지시(2026-09-02): 설명 문단 전체 삭제. */}
       {state.loading && <p className="text-sm text-zinc-400">불러오는 중...</p>}
       {!state.loading && state.error && <p className="text-sm text-red-500">{state.error}</p>}
       {!state.loading && !state.error && state.rows.length === 0 && (
         <p className="text-sm text-zinc-400">이 날짜엔 프로그램 단위 시청률 데이터가 없습니다.</p>
       )}
       {!state.loading && !state.error && state.rows.length > 0 && (
-        <div className="max-h-[28rem] overflow-y-auto">
+        // 사용자 재지시(2026-09-02): "스크롤 다운하지 않아도 하루 전체까지 한눈에 보이게" —
+        // 높이 제한·자체 스크롤(max-h/overflow-y-auto)을 없애 표 전체가 그대로 펼쳐지고,
+        // 페이지 자체 스크롤로 하루 전체(맨 아래 요약 행까지) 볼 수 있게 한다.
+        <div>
           <table className="w-full table-fixed text-left text-sm">
             <colgroup>
               <col className="w-12" />
@@ -3096,7 +3095,7 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                 </>
               )}
             </colgroup>
-            <thead className="sticky top-0 bg-white text-[12px] font-normal text-zinc-400">
+            <thead className="text-[12px] font-normal text-zinc-400">
               <tr>
                 <th rowSpan={2} className="pb-1 text-center align-bottom">
                   시작
