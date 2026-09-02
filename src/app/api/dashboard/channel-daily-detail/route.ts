@@ -6,10 +6,21 @@
 // 보여주고(사용자 지시: "2039 등 주/부 시청률로 잡지 않은 항목은 제외"), 채널 단위 하루 전체
 // 요약(program_id is null 행)도 함께 내려준다 — 전부 이미 있는 ratings 값을 그대로 모아 pivot만
 // 하는 단순 조회라 새 SQL 함수 없이 supabase-js로 처리(CLAUDE.md 원칙).
+// 사용자 재지시(2026-09-02): "2049도 가구도 채널 1개월 평균 시청률보다 높은 것은 볼드" — 직전
+// 30일 채널 단위 평균(primaryMonthAvg/secondaryMonthAvg)도 함께 반환해 화면에서 프로그램별
+// 시청률과 비교만 하도록 한다(볼드 여부 판정 자체는 화면 쪽에서, 여기선 값만 제공).
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL } from "@/lib/targetResolution";
+
+// page1/route.ts의 offsetDateStr와 동일한 패턴(로컬 타임존 안전 — toISOString 금지, 이 프로젝트가
+// 자정 근처 날짜 밀림 버그를 이미 겪은 함정).
+function offsetDateStr(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 export interface ChannelDailyDetailRow {
   start_time: string;
@@ -69,11 +80,30 @@ export async function GET(request: Request) {
     return (data ?? []) as RatingRow[];
   }
 
-  const [primaryProgramRows, secondaryProgramRows, primaryDayRows, secondaryDayRows] = await Promise.all([
+  // 사용자 지시(2026-09-02): "2049도 가구도 채널 1개월 평균 시청률보다 높은 것은 볼드" — 선택한
+  // 날짜를 뺀 직전 30일 채널 단위(program_id is null) 평균. 이미 있는 값을 그대로 평균만 내는
+  // 단순 집계라 새 SQL 없이 supabase-js로 처리(다른 조회들과 동일한 원칙).
+  async function fetchMonthAvg(targetId: string) {
+    const { data } = await supabase
+      .from("ratings")
+      .select("rating")
+      .eq("channel_id", channelRow!.id)
+      .eq("target_id", targetId)
+      .in("source_type", ["nielsen_daily", "skyuhd"])
+      .is("program_id", null)
+      .gte("broadcast_date", offsetDateStr(date!, -30))
+      .lte("broadcast_date", offsetDateStr(date!, -1));
+    const nums = (data ?? []).map((r) => r.rating as number | null).filter((v): v is number => v !== null);
+    return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+  }
+
+  const [primaryProgramRows, secondaryProgramRows, primaryDayRows, secondaryDayRows, primaryMonthAvg, secondaryMonthAvg] = await Promise.all([
     fetchRows(primaryTargetRow.id, true),
     secondaryTargetRow ? fetchRows(secondaryTargetRow.id, true) : Promise.resolve([]),
     fetchRows(primaryTargetRow.id, false),
     secondaryTargetRow ? fetchRows(secondaryTargetRow.id, false) : Promise.resolve([]),
+    fetchMonthAvg(primaryTargetRow.id),
+    secondaryTargetRow ? fetchMonthAvg(secondaryTargetRow.id) : Promise.resolve(null),
   ]);
 
   function nameOf(r: RatingRow): string {
@@ -113,5 +143,7 @@ export async function GET(request: Request) {
     secondaryLabel,
     rows,
     dayTotal,
+    primaryMonthAvg,
+    secondaryMonthAvg,
   });
 }

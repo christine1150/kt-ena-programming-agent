@@ -2977,18 +2977,29 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
     dayTotal: { primary_rating: number | null; primary_share: number | null; secondary_rating: number | null; secondary_share: number | null } | null;
     primaryLabel: string | null;
     secondaryLabel: string | null;
+    primaryMonthAvg: number | null;
+    secondaryMonthAvg: number | null;
     error: string | null;
-  }>({ loading: true, rows: [], dayTotal: null, primaryLabel: null, secondaryLabel: null, error: null });
+  }>({ loading: true, rows: [], dayTotal: null, primaryLabel: null, secondaryLabel: null, primaryMonthAvg: null, secondaryMonthAvg: null, error: null });
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      setState({ loading: true, rows: [], dayTotal: null, primaryLabel: null, secondaryLabel: null, error: null });
+      setState({ loading: true, rows: [], dayTotal: null, primaryLabel: null, secondaryLabel: null, primaryMonthAvg: null, secondaryMonthAvg: null, error: null });
       const res = await fetch(`/api/dashboard/channel-daily-detail?code=${channelCode}&date=${asOfDate}`);
       const body = await res.json().catch(() => ({ ok: false }));
       if (cancelled) return;
       if (!res.ok || !body.ok) {
-        setState({ loading: false, rows: [], dayTotal: null, primaryLabel: null, secondaryLabel: null, error: body.message ?? "불러오지 못했습니다." });
+        setState({
+          loading: false,
+          rows: [],
+          dayTotal: null,
+          primaryLabel: null,
+          secondaryLabel: null,
+          primaryMonthAvg: null,
+          secondaryMonthAvg: null,
+          error: body.message ?? "불러오지 못했습니다.",
+        });
       } else {
         setState({
           loading: false,
@@ -2996,6 +3007,8 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
           dayTotal: body.dayTotal ?? null,
           primaryLabel: body.primaryLabel ?? null,
           secondaryLabel: body.secondaryLabel ?? null,
+          primaryMonthAvg: body.primaryMonthAvg ?? null,
+          secondaryMonthAvg: body.secondaryMonthAvg ?? null,
           error: null,
         });
       }
@@ -3006,10 +3019,14 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
   }, [channelCode, asOfDate]);
 
   const color = themeColor ?? UNBRANDED_CHANNEL_COLOR;
-  const primaryRatings = state.rows.map((r) => r.primary_rating).filter((v): v is number => v !== null);
-  const maxRating = primaryRatings.length > 0 ? Math.max(...primaryRatings) : 0;
-  const minRating = primaryRatings.length > 0 ? Math.min(...primaryRatings) : 0;
-  const ratingSpan = maxRating - minRating;
+  const rangeOf = (vals: (number | null)[]) => {
+    const nums = vals.filter((v): v is number => v !== null);
+    const max = nums.length > 0 ? Math.max(...nums) : 0;
+    const min = nums.length > 0 ? Math.min(...nums) : 0;
+    return { min, span: max - min };
+  };
+  const primaryRange = rangeOf(state.rows.map((r) => r.primary_rating));
+  const secondaryRange = rangeOf(state.rows.map((r) => r.secondary_rating));
   const avg = (vals: (number | null)[]) => {
     const nums = vals.filter((v): v is number => v !== null);
     return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
@@ -3017,6 +3034,26 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
   const avgPrimaryShare = avg(state.rows.map((r) => r.primary_share));
   const avgSecondaryShare = avg(state.rows.map((r) => r.secondary_share));
   const hasSecondary = !!state.secondaryLabel;
+
+  // 사용자 지시(2026-09-02): "가구 시청률도 그라데이션으로 표시. 단 2049도 가구도 채널 1개월
+  // 평균 시청률보다 높은 것은 볼드. 0.003 이하는 음영 없이 하얀색 바탕으로." — 주/부 두 열에
+  // 동일 규칙을 적용하는 공용 헬퍼(정규화 범위·월평균만 다르게 넘긴다).
+  function ratingCellStyle(
+    rating: number | null,
+    range: { min: number; span: number },
+    monthAvg: number | null
+  ): { backgroundColor?: string; color?: string; fontWeight?: number } {
+    const style: { backgroundColor?: string; color?: string; fontWeight?: number } = {};
+    if (rating !== null && rating > 0.003) {
+      const norm = range.span > 0 ? (rating - range.min) / range.span : 1;
+      style.backgroundColor = hexToRgba(color, 0.06 + norm * 0.3);
+      if (norm > 0.5) style.color = color;
+    }
+    if (rating !== null && monthAvg !== null && rating > monthAvg) {
+      style.fontWeight = 800;
+    }
+    return style;
+  }
 
   return (
     <div className={CARD}>
@@ -3032,9 +3069,12 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
           ✕ 닫기
         </button>
       </div>
+      {/* 사용자 지시(2026-09-02): "표의 맨 위에는 해당일자와 요일도 언급". */}
+      <p className="mb-1 text-sm font-semibold text-zinc-600">{formatDateWithDowDots(asOfDate)}</p>
       <p className="mb-4 text-xs text-zinc-400">
-        오늘 방영된 프로그램별 시청률·점유율입니다(시작시간순). 시청률은 진한 색일수록 높고, 점유율은
-        이 목록의 일간 평균보다 높은 값만 채널 색으로 강조합니다.
+        오늘 방영된 프로그램별 시청률·점유율입니다(시작시간순). 시청률은 진한 색일수록 높고, 채널 1개월
+        평균보다 높으면 볼드로 표시합니다(0.003 이하는 음영 없음). 점유율은 이 목록의 일간 평균보다
+        높은 값만 채널 색으로 강조합니다.
       </p>
       {state.loading && <p className="text-sm text-zinc-400">불러오는 중...</p>}
       {!state.loading && state.error && <p className="text-sm text-red-500">{state.error}</p>}
@@ -3080,21 +3120,17 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
             </thead>
             <tbody>
               {state.rows.map((r, i) => {
-                const norm = ratingSpan > 0 && r.primary_rating !== null ? (r.primary_rating - minRating) / ratingSpan : r.primary_rating !== null ? 1 : 0;
                 const primaryShareAboveAvg = r.primary_share !== null && avgPrimaryShare !== null && r.primary_share > avgPrimaryShare;
                 const secondaryShareAboveAvg = r.secondary_share !== null && avgSecondaryShare !== null && r.secondary_share > avgSecondaryShare;
                 return (
                   <tr key={i} className="border-t border-zinc-50">
                     <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(r.start_time)}</td>
                     <td className="truncate py-1 text-zinc-700">{r.canonical_name}</td>
-                    <td
-                      className="py-1 text-center tabular-nums font-semibold"
-                      style={{ backgroundColor: hexToRgba(color, 0.06 + norm * 0.3), color: norm > 0.5 ? color : undefined }}
-                    >
+                    <td className="py-1 text-center tabular-nums" style={ratingCellStyle(r.primary_rating, primaryRange, state.primaryMonthAvg)}>
                       {formatRating(r.primary_rating, channelCode)}
                     </td>
                     {hasSecondary && (
-                      <td className="py-1 text-center tabular-nums text-zinc-500">
+                      <td className="py-1 text-center tabular-nums" style={ratingCellStyle(r.secondary_rating, secondaryRange, state.secondaryMonthAvg)}>
                         {r.secondary_rating !== null ? formatRating(r.secondary_rating, channelCode) : "—"}
                       </td>
                     )}
