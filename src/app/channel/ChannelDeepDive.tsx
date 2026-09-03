@@ -3599,50 +3599,54 @@ function StableSlotPatternList({
               <b className="font-semibold text-zinc-700">{r.canonical_name}</b>
               <span className="text-zinc-500">{r.consecutive_weeks}주 연속 편성</span>
             </div>
-            <div className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-zinc-500">
-              <span>
+            <div className="mt-1.5 text-[11px] text-zinc-500">
+              <p>
                 시청률 추세 {fmtR(r.first_rating)} → {fmtR(r.latest_rating)}
                 {trendDelta !== null && (
                   <span className={`ml-1 font-medium ${trendDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                     ({trendDelta >= 0 ? "▲" : "▼"}{fmtR(Math.abs(trendDelta))})
                   </span>
                 )}
-              </span>
-              {contribDelta !== null && (
-                <span>
-                  채널 평균 대비{" "}
-                  <span className={`font-medium ${contribDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {contribDelta >= 0 ? "▲" : "▼"}{fmtR(Math.abs(contribDelta))}
-                  </span>{" "}
-                  ({fmtR(r.streak_avg_rating)} vs 채널 평균 {fmtR(r.channel_avg_rating)})
-                </span>
-              )}
-              {shareDelta !== null && r.streak_avg_share !== null && r.channel_avg_share !== null && (
-                <span>
-                  점유율 평균 대비{" "}
-                  <span className={`font-medium ${shareDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {shareDelta >= 0 ? "▲" : "▼"}
-                    {Math.abs(shareDelta).toFixed(2)}%p
-                  </span>{" "}
-                  ({r.streak_avg_share.toFixed(2)}% vs 채널 평균 {r.channel_avg_share.toFixed(2)}%)
-                </span>
-              )}
-              {timeSpentDelta !== null && r.streak_avg_time_spent !== null && r.channel_avg_time_spent !== null && (
-                <span>
-                  시청시간 평균 대비{" "}
-                  <span className={`font-medium ${timeSpentDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {timeSpentDelta >= 0 ? "▲" : "▼"}
-                    {fmtSeconds(Math.abs(timeSpentDelta))}
-                  </span>{" "}
-                  ({fmtSeconds(r.streak_avg_time_spent)} vs 채널 평균 {fmtSeconds(r.channel_avg_time_spent)})
-                </span>
-              )}
-              {r.dominant_demo_label && (
-                <span>
-                  주 시청 연령대 <b className="font-medium text-zinc-600">{shortDemoLabel(r.dominant_demo_label)}</b>
-                  {r.dominant_demo_rating !== null && ` (${fmtR(r.dominant_demo_rating)})`}
-                </span>
-              )}
+              </p>
+              {/* 사용자 지시(2026-09-03): "좌우 2단으로 할 수 있는 것은 하여서 높이를 낮출 것" —
+                  채널 평균 대비 지표 3종(시청률/점유율/시청시간)+주 시청 연령대를 2열 grid로
+                  묶어 4줄을 2줄 높이로 압축. 표현도 "채널 평균 대비 ▲delta (value vs 채널 평균
+                  avg)"의 이중 괄호 표기를 없애고 "{`{지표}`} {`{값}`}, 평균 {`{평균}`} 대비
+                  {`{▲/▼delta}`}"로 간결화(예: "시청시간 26분 42초, 평균 20분 11초 대비 ▲6분 31초"). */}
+              <div className="mt-0.5 grid grid-cols-1 gap-x-3 gap-y-0.5 sm:grid-cols-2">
+                {contribDelta !== null && (
+                  <p>
+                    시청률 {fmtR(r.streak_avg_rating)}, 평균 {fmtR(r.channel_avg_rating)} 대비{" "}
+                    <span className={`font-medium ${contribDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {contribDelta >= 0 ? "▲" : "▼"}{fmtR(Math.abs(contribDelta))}
+                    </span>
+                  </p>
+                )}
+                {shareDelta !== null && r.streak_avg_share !== null && r.channel_avg_share !== null && (
+                  <p>
+                    점유율 {r.streak_avg_share.toFixed(2)}%, 평균 {r.channel_avg_share.toFixed(2)}% 대비{" "}
+                    <span className={`font-medium ${shareDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {shareDelta >= 0 ? "▲" : "▼"}
+                      {Math.abs(shareDelta).toFixed(2)}%p
+                    </span>
+                  </p>
+                )}
+                {timeSpentDelta !== null && r.streak_avg_time_spent !== null && r.channel_avg_time_spent !== null && (
+                  <p>
+                    시청시간 {fmtSeconds(r.streak_avg_time_spent)}, 평균 {fmtSeconds(r.channel_avg_time_spent)} 대비{" "}
+                    <span className={`font-medium ${timeSpentDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {timeSpentDelta >= 0 ? "▲" : "▼"}
+                      {fmtSeconds(Math.abs(timeSpentDelta))}
+                    </span>
+                  </p>
+                )}
+                {r.dominant_demo_label && (
+                  <p>
+                    주 시청 연령대 <b className="font-medium text-zinc-600">{shortDemoLabel(r.dominant_demo_label)}</b>
+                    {r.dominant_demo_rating !== null && ` (${fmtR(r.dominant_demo_rating)})`}
+                  </p>
+                )}
+              </div>
             </div>
           </li>
         );
