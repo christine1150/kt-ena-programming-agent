@@ -118,6 +118,11 @@ interface StableSlotPatternRow {
   first_rating: number | null;
   streak_avg_rating: number | null;
   channel_avg_rating: number | null;
+  // 사용자 지시(2026-09-02): "여기에 점유율이나 시청시간도 함께 언급. 평균과 비교".
+  streak_avg_share: number | null;
+  channel_avg_share: number | null;
+  streak_avg_time_spent: number | null;
+  channel_avg_time_spent: number | null;
   dominant_demo_label: string | null;
   dominant_demo_rating: number | null;
 }
@@ -3530,6 +3535,11 @@ function StableSlotPatternList({
       {top.map((r) => {
         const trendDelta = r.first_rating !== null && r.latest_rating !== null ? r.latest_rating - r.first_rating : null;
         const contribDelta = r.streak_avg_rating !== null && r.channel_avg_rating !== null ? r.streak_avg_rating - r.channel_avg_rating : null;
+        // 사용자 지시(2026-09-02): "여기에 점유율이나 시청시간도 함께 언급. 평균과 비교" —
+        // 시청률과 같은 "스트릭 평균 vs 채널 평균" 비교를 점유율·시청시간에도 그대로 적용.
+        const shareDelta = r.streak_avg_share !== null && r.channel_avg_share !== null ? r.streak_avg_share - r.channel_avg_share : null;
+        const timeSpentDelta =
+          r.streak_avg_time_spent !== null && r.channel_avg_time_spent !== null ? r.streak_avg_time_spent - r.channel_avg_time_spent : null;
         return (
           <li key={r.canonical_name} className="rounded-xl bg-zinc-50 p-2.5">
             <div className="flex flex-wrap items-baseline gap-1.5 text-[13px]">
@@ -3555,6 +3565,26 @@ function StableSlotPatternList({
                     {contribDelta >= 0 ? "▲" : "▼"}{fmtR(Math.abs(contribDelta))}
                   </span>{" "}
                   ({fmtR(r.streak_avg_rating)} vs 채널 평균 {fmtR(r.channel_avg_rating)})
+                </span>
+              )}
+              {shareDelta !== null && r.streak_avg_share !== null && r.channel_avg_share !== null && (
+                <span>
+                  점유율 평균 대비{" "}
+                  <span className={`font-medium ${shareDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {shareDelta >= 0 ? "▲" : "▼"}
+                    {Math.abs(shareDelta).toFixed(2)}%p
+                  </span>{" "}
+                  ({r.streak_avg_share.toFixed(2)}% vs 채널 평균 {r.channel_avg_share.toFixed(2)}%)
+                </span>
+              )}
+              {timeSpentDelta !== null && r.streak_avg_time_spent !== null && r.channel_avg_time_spent !== null && (
+                <span>
+                  시청시간 평균 대비{" "}
+                  <span className={`font-medium ${timeSpentDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {timeSpentDelta >= 0 ? "▲" : "▼"}
+                    {fmtSeconds(Math.abs(timeSpentDelta))}
+                  </span>{" "}
+                  ({fmtSeconds(r.streak_avg_time_spent)} vs 채널 평균 {fmtSeconds(r.channel_avg_time_spent)})
                 </span>
               )}
               {r.dominant_demo_label && (
@@ -4426,14 +4456,20 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 {/* 사용자 지시(2026-09-02): "큰 글씨로 보기는 '큰 글씨'라고만 적고, 아이콘을 채널
                     리포트 좌측으로 이동" — 헤더 위 별도 줄 대신 이 버튼 그룹 맨 앞(=채널 리포트
                     왼쪽)에 같은 pill 스타일(bg-white/20)로 배치. skyUHD처럼 소수점 5자리 시청률이
-                    특히 읽기 어려운 채널을 염두에 뒀지만 모든 채널 페이지에서 동일하게 제공한다. */}
+                    특히 읽기 어려운 채널을 염두에 뒀지만 모든 채널 페이지에서 동일하게 제공한다.
+                    사용자 재지시(2026-09-02): 🔍 이모지 대신 1페이지와 같은 단색 SVG 확대(+) 아이콘. */}
                 <button
                   type="button"
                   onClick={() => setLargeFontMode((v) => !v)}
                   title={code === "SKYUHD" ? "큰 글씨로 보기 (skyUHD 추천)" : "큰 글씨로 보기"}
                   className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/30"
                 >
-                  <span aria-hidden>🔍</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" />
+                    <line x1="11" y1="8" x2="11" y2="14" />
+                    <line x1="8" y1="11" x2="14" y2="11" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
                   {largeFontMode ? "기본 글씨" : "큰 글씨"}
                 </button>
                 {/* N절 Phase 3(2026-09-01, 시스템 일원화) — 구 시스템("📄 리포트 보기",
@@ -4739,6 +4775,251 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </div>
         </div>
 
+        {/* 02~26시 시간대별 그래프 — 사용자 지시: 막대 형태 유지, 프로그램명 표시. 오늘의 브리핑
+            바로 아래로 이동(사용자 지시 2026-08-20, 2026-09-02 재지시로 위치 복원 — 심층 분석 등
+            나중에 추가된 섹션들에 밀려 원래 자리에서 벗어나 있었다). 기간 범위를 선택하면 그
+            기간 전체 평균으로. */}
+        <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className={SECTION_TITLE_P2}>
+              시간대별 그래프{isRangeMode ? " (선택 기간 평균)" : ""}
+              {hourlyEffectiveDate && (
+                <span className="ml-2 text-sm font-normal text-amber-600">
+                  (선택한 날짜에 프로그램 데이터가 아직 없어 최근 데이터 기준 {formatDateWithDow(hourlyEffectiveDate)}로 대신 표시)
+                </span>
+              )}
+            </h2>
+            {!hasPriorRange && !showSdowDualView && (
+            <div className="flex flex-wrap gap-3 text-sm">
+              {HOURLY_METRICS.map((m) => (
+                <label key={m.key} className="flex cursor-pointer items-center gap-1.5 text-zinc-600">
+                  <input
+                    type="checkbox"
+                    checked={hourlyMetrics.has(m.key)}
+                    onChange={() => {
+                      setHourlyMetrics((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(m.key)) next.delete(m.key);
+                        else next.add(m.key);
+                        return next;
+                      });
+                    }}
+                    className="h-3.5 w-3.5 rounded border-zinc-300"
+                    style={{ accentColor: m.color }}
+                  />
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: m.color }} />
+                  {/* 사용자 지시(2026-08-20): 디폴트로 보이는 시청률이 "이 채널의 어떤 타깃" 시청률인지
+                      명확하게 — 예: 수도권2049 타깃 채널이면 "시청률(수도권2049)"로 표시(skyUHD는
+                      타깃 구분이 없어 그대로 "시청률"). */}
+                  {m.key === "avg_rating" && code !== "SKYUHD"
+                    ? `시청률(${shortTargetLabel(resolveProgramLevelTargetLabel(channel.primaryTarget))})`
+                    : m.label}
+                </label>
+              ))}
+              {/* 사용자 지시(2026-08-20, 두 차례 반영): 채널 KPI 타깃 외에 §1.3 타깃상세 시트에
+                  실제로 있는 추가 타깃(들)을 체크박스로 하나씩 켜서 볼 수 있게(skyUHD 제외, 채널군마다
+                  개수가 다름 — ENA류는 전국유료가구+수도권2039, 전국류는 전국5064). */}
+              {extraTargetsWithMeta.map((e) => (
+                <label key={e.targetLabel} className="flex cursor-pointer items-center gap-1.5 text-zinc-600">
+                  <input
+                    type="checkbox"
+                    checked={selectedExtraTargets.has(e.targetLabel)}
+                    onChange={() => {
+                      setSelectedExtraTargets((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(e.targetLabel)) next.delete(e.targetLabel);
+                        else next.add(e.targetLabel);
+                        return next;
+                      });
+                    }}
+                    className="h-3.5 w-3.5 rounded border-zinc-300"
+                    style={{ accentColor: e.color }}
+                  />
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: e.color }} />
+                  시청률({e.shortLabel})
+                </label>
+              ))}
+            </div>
+            )}
+          </div>
+          {/* 기능 #15-2(2026-08-21): "대비" 분석(priorDateFrom/To가 있는 DoD~YoY)은 "이번 기간"/
+              "전 기간" 두 패널로 나란히, 패널마다 독립된 체크박스 행("두 줄 체크박스", 사용자 지시).
+              기존의 기준선 오버레이·추가 타깃 체크박스가 있는 단일 그래프는 "대비"가 아닌 조회에서
+              그대로 유지한다. */}
+          {hasPriorRange || showSdowDualView ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-sm font-semibold text-zinc-600">
+                  {showSdowDualView
+                    ? `${sdowBaselineShortLabel ?? "비교 대상"}`
+                    : `${comparisonLabel ?? "이전"} 기간 ${periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}`}
+                </p>
+                <HourlyGraphPanel
+                  pattern={showSdowDualView ? hourlyBaselinePattern : hourlyPatternPrior}
+                  programTitles={showSdowDualView ? [] : hourlyProgramTitlesPrior}
+                  metrics={hourlyMetricsPrior}
+                  onToggleMetric={(key) => {
+                    setHourlyMetricsPrior((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    });
+                  }}
+                  code={code}
+                  primaryTargetLabel={resolveProgramLevelTargetLabel(channel.primaryTarget)}
+                  baselinePattern={showSdowDualView ? undefined : data.hourlyBaselinePatternPrior}
+                  accentColor={accentColor}
+                />
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-semibold text-zinc-600">
+                  {showSdowDualView
+                    ? "오늘"
+                    : `이번 기간 ${periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}`}
+                </p>
+                <HourlyGraphPanel
+                  pattern={hourlyPattern}
+                  programTitles={hourlyProgramTitles}
+                  metrics={hourlyMetrics}
+                  onToggleMetric={(key) => {
+                    setHourlyMetrics((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    });
+                  }}
+                  code={code}
+                  primaryTargetLabel={resolveProgramLevelTargetLabel(channel.primaryTarget)}
+                  // 사용자 지시(2026-08-21): 비교 분석 시 "이번 기간" 그래프엔 12주 자체 기준선
+                  // 대신 실제 "{comparisonLabel} 기간"의 시간대별 평균(hourlyPatternPrior)을
+                  // 연한 선으로 겹쳐, 두 기간을 직접 시간대별로 비교할 수 있게 한다. SDoW는
+                  // hourlyBaselinePattern이 이미 "비교 대상(선택 요일 평균)"이라 그대로 재사용.
+                  baselinePattern={showSdowDualView ? hourlyBaselinePattern : hourlyPatternPrior}
+                  accentColor={accentColor}
+                  baselineLabel={
+                    showSdowDualView
+                      ? `연한 선 = ${sdowBaselineShortLabel ?? "비교 대상"} 같은 시간대 평균 시청률`
+                      : `연한 선 = ${comparisonLabel ?? "이전"} 기간의 같은 시간대 평균 시청률`
+                  }
+                />
+              </div>
+            </div>
+          ) : hourlyPattern.length === 0 ? (
+            <p className="text-sm text-zinc-400">선택한 기간의 프로그램 단위 데이터가 없습니다.</p>
+          ) : hourlyMetrics.size === 0 && selectedExtraTargetsWithMeta.length === 0 ? (
+            <p className="text-sm text-zinc-400">위 체크박스에서 볼 지표를 하나 이상 선택하세요.</p>
+          ) : (
+            <>
+              {/* 사용자 지시(2026-08-20): "각 채널의 최근 12주 시간대별 평균 시청률을 연한 색으로
+                  꺾은선 그래프로 그려서 기준점을 보여줄 것" — 막대 높이 계산과 같은 avg_rating
+                  스케일(maxByMetric.avg_rating)을 그대로 써서 시각적으로 비교 가능하게 한다.
+                  bar-area를 라벨 행과 분리한 별도 컨테이너로 둬야 SVG viewBox가 막대 높이와
+                  정확히 겹친다(라벨 텍스트 높이가 섞이면 어긋난다). */}
+              {/* 사용자 지시(2026-08-20): 창 높이를 더 높여 가독성 개선(특히 두 타깃 시청률을
+                  공유 스케일로 같이 볼 때 막대 높이 차이가 잘 보이도록). */}
+              <div className="relative h-52">
+                {hourlyMetrics.has("avg_rating") && hourlyBaselinePattern.length > 0 && (() => {
+                  const baselineByHour = new Map(hourlyBaselinePattern.map((h) => [h.broadcast_hour, h.avg_rating]));
+                  const pts = hourlyPattern
+                    .map((h, i) => {
+                      const v = baselineByHour.get(h.broadcast_hour);
+                      if (v === null || v === undefined) return null;
+                      const x = i + 0.5;
+                      const y = 100 - Math.min(100, (v / ratingScaleMax) * 100);
+                      return `${x},${y}`;
+                    })
+                    .filter((p): p is string => p !== null);
+                  if (pts.length < 2) return null;
+                  return (
+                    <svg
+                      className="pointer-events-none absolute inset-0 h-full w-full"
+                      viewBox={`0 0 ${hourlyPattern.length} 100`}
+                      preserveAspectRatio="none"
+                    >
+                      <polyline
+                        fill="none"
+                        stroke={accentColor}
+                        strokeOpacity={0.35}
+                        strokeWidth={1.5}
+                        vectorEffect="non-scaling-stroke"
+                        points={pts.join(" ")}
+                      />
+                    </svg>
+                  );
+                })()}
+                <div className="flex h-full items-stretch gap-1">
+                  {hourlyPattern.map((h) => {
+                    const title = programTitleByHour.get(h.broadcast_hour) ?? "";
+                    return (
+                      <div key={h.broadcast_hour} className="flex h-full flex-1 flex-col items-center">
+                        {/* flex-1(고정 높이 부모 기준 남는 공간 차지)이라야 아래 막대의 height:%가
+                            정상적으로 계산된다 — height:auto인 부모 밑에서는 %가 0으로 계산되는
+                            CSS 특성 때문에 실제로 막대가 하나도 안 보이던 버그가 있었다. */}
+                        <div className="flex w-full flex-1 items-end justify-center gap-0.5">
+                          {HOURLY_METRICS.filter((m) => hourlyMetrics.has(m.key)).map((m) => {
+                            const value = Number(h[m.key]) || 0;
+                            const scaleMax = m.key === "avg_rating" ? ratingScaleMax : maxByMetric[m.key];
+                            const heightPct = Math.max(2, (value / scaleMax) * 100);
+                            return (
+                              <div
+                                key={m.key}
+                                title={`${h.broadcast_hour}시 ${title ? title + " · " : ""}${m.label}: ${value.toFixed(3)}`}
+                                className="w-full max-w-2 rounded-t"
+                                style={{ height: `${heightPct}%`, backgroundColor: m.color }}
+                              />
+                            );
+                          })}
+                          {selectedExtraTargetsWithMeta.map((e) => {
+                            const value = e.byHour.get(h.broadcast_hour);
+                            if (value === null || value === undefined) return null;
+                            const heightPct = Math.max(2, (value / ratingScaleMax) * 100);
+                            return (
+                              <div
+                                key={e.targetLabel}
+                                title={`${h.broadcast_hour}시 시청률(${e.targetLabel}): ${value.toFixed(3)}`}
+                                className="w-full max-w-2 rounded-t"
+                                style={{ height: `${heightPct}%`, backgroundColor: e.color }}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="mt-1 flex gap-1">
+                {hourlyPattern.map((h) => (
+                  <span key={h.broadcast_hour} className="flex-1 shrink-0 text-center text-[9px] text-zinc-400">
+                    {h.broadcast_hour}
+                  </span>
+                ))}
+              </div>
+              {hourlyMetrics.has("avg_rating") && hourlyBaselinePattern.length > 0 && (
+                <p className="mt-1 text-[13px] text-zinc-400">
+                  <span className="mr-1 inline-block h-0.5 w-3 align-middle" style={{ backgroundColor: accentColor, opacity: 0.35 }} />
+                  {isSdowActive && sdowBaselineShortLabel
+                    ? `연한 선 = ${sdowBaselineShortLabel} 같은 시간대 평균 시청률 기준선`
+                    : "연한 선 = 최근 12주(84일) 같은 시간대 평균 시청률 기준선"}
+                </p>
+              )}
+              {/* 사용자 지시: 시간대별로 어떤 타이틀이 편성됐는지 알 수 있도록 — 막대 위에는 다
+                  들어가지 않으므로 아래에 시간대: 프로그램명 목록을 함께 보여준다. */}
+              {hourlyProgramTitles.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-zinc-100 pt-3 text-[13px] text-zinc-500">
+                  {hourlyProgramTitles.map((h) => (
+                    <span key={h.broadcast_hour}>
+                      <span className="font-medium text-zinc-700">{h.broadcast_hour}시</span> {h.program_names}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
         {/* 심층 분석(Detailed Analytical Report, 2026-08-27, 사용자 지시) — 오늘의 브리핑이
             "무슨 일이 있었는지"를 말한다면, 이 섹션은 향후 콘텐츠 구매·패키징 협상 근거로 쓸
             수 있는 패턴을 짚는다. 단일 일자 조회일 때만(경쟁 오버랩·연령대 데이터 모두 "오늘"
@@ -4986,249 +5267,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </div>
               )}
             </div>
-          )}
-        </div>
-
-        {/* 02~26시 시간대별 그래프 — 사용자 지시: 막대 형태 유지, 프로그램명 표시. 오늘의 브리핑
-            바로 아래로 이동(사용자 지시 2026-08-20). 기간 범위를 선택하면 그 기간 전체 평균으로. */}
-        <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className={SECTION_TITLE_P2}>
-              시간대별 그래프{isRangeMode ? " (선택 기간 평균)" : ""}
-              {hourlyEffectiveDate && (
-                <span className="ml-2 text-sm font-normal text-amber-600">
-                  (선택한 날짜에 프로그램 데이터가 아직 없어 최근 데이터 기준 {formatDateWithDow(hourlyEffectiveDate)}로 대신 표시)
-                </span>
-              )}
-            </h2>
-            {!hasPriorRange && !showSdowDualView && (
-            <div className="flex flex-wrap gap-3 text-sm">
-              {HOURLY_METRICS.map((m) => (
-                <label key={m.key} className="flex cursor-pointer items-center gap-1.5 text-zinc-600">
-                  <input
-                    type="checkbox"
-                    checked={hourlyMetrics.has(m.key)}
-                    onChange={() => {
-                      setHourlyMetrics((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(m.key)) next.delete(m.key);
-                        else next.add(m.key);
-                        return next;
-                      });
-                    }}
-                    className="h-3.5 w-3.5 rounded border-zinc-300"
-                    style={{ accentColor: m.color }}
-                  />
-                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: m.color }} />
-                  {/* 사용자 지시(2026-08-20): 디폴트로 보이는 시청률이 "이 채널의 어떤 타깃" 시청률인지
-                      명확하게 — 예: 수도권2049 타깃 채널이면 "시청률(수도권2049)"로 표시(skyUHD는
-                      타깃 구분이 없어 그대로 "시청률"). */}
-                  {m.key === "avg_rating" && code !== "SKYUHD"
-                    ? `시청률(${shortTargetLabel(resolveProgramLevelTargetLabel(channel.primaryTarget))})`
-                    : m.label}
-                </label>
-              ))}
-              {/* 사용자 지시(2026-08-20, 두 차례 반영): 채널 KPI 타깃 외에 §1.3 타깃상세 시트에
-                  실제로 있는 추가 타깃(들)을 체크박스로 하나씩 켜서 볼 수 있게(skyUHD 제외, 채널군마다
-                  개수가 다름 — ENA류는 전국유료가구+수도권2039, 전국류는 전국5064). */}
-              {extraTargetsWithMeta.map((e) => (
-                <label key={e.targetLabel} className="flex cursor-pointer items-center gap-1.5 text-zinc-600">
-                  <input
-                    type="checkbox"
-                    checked={selectedExtraTargets.has(e.targetLabel)}
-                    onChange={() => {
-                      setSelectedExtraTargets((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(e.targetLabel)) next.delete(e.targetLabel);
-                        else next.add(e.targetLabel);
-                        return next;
-                      });
-                    }}
-                    className="h-3.5 w-3.5 rounded border-zinc-300"
-                    style={{ accentColor: e.color }}
-                  />
-                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: e.color }} />
-                  시청률({e.shortLabel})
-                </label>
-              ))}
-            </div>
-            )}
-          </div>
-          {/* 기능 #15-2(2026-08-21): "대비" 분석(priorDateFrom/To가 있는 DoD~YoY)은 "이번 기간"/
-              "전 기간" 두 패널로 나란히, 패널마다 독립된 체크박스 행("두 줄 체크박스", 사용자 지시).
-              기존의 기준선 오버레이·추가 타깃 체크박스가 있는 단일 그래프는 "대비"가 아닌 조회에서
-              그대로 유지한다. */}
-          {hasPriorRange || showSdowDualView ? (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <div>
-                <p className="mb-2 text-sm font-semibold text-zinc-600">
-                  {showSdowDualView
-                    ? `${sdowBaselineShortLabel ?? "비교 대상"}`
-                    : `${comparisonLabel ?? "이전"} 기간 ${periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}`}
-                </p>
-                <HourlyGraphPanel
-                  pattern={showSdowDualView ? hourlyBaselinePattern : hourlyPatternPrior}
-                  programTitles={showSdowDualView ? [] : hourlyProgramTitlesPrior}
-                  metrics={hourlyMetricsPrior}
-                  onToggleMetric={(key) => {
-                    setHourlyMetricsPrior((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(key)) next.delete(key);
-                      else next.add(key);
-                      return next;
-                    });
-                  }}
-                  code={code}
-                  primaryTargetLabel={resolveProgramLevelTargetLabel(channel.primaryTarget)}
-                  baselinePattern={showSdowDualView ? undefined : data.hourlyBaselinePatternPrior}
-                  accentColor={accentColor}
-                />
-              </div>
-              <div>
-                <p className="mb-2 text-sm font-semibold text-zinc-600">
-                  {showSdowDualView
-                    ? "오늘"
-                    : `이번 기간 ${periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}`}
-                </p>
-                <HourlyGraphPanel
-                  pattern={hourlyPattern}
-                  programTitles={hourlyProgramTitles}
-                  metrics={hourlyMetrics}
-                  onToggleMetric={(key) => {
-                    setHourlyMetrics((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(key)) next.delete(key);
-                      else next.add(key);
-                      return next;
-                    });
-                  }}
-                  code={code}
-                  primaryTargetLabel={resolveProgramLevelTargetLabel(channel.primaryTarget)}
-                  // 사용자 지시(2026-08-21): 비교 분석 시 "이번 기간" 그래프엔 12주 자체 기준선
-                  // 대신 실제 "{comparisonLabel} 기간"의 시간대별 평균(hourlyPatternPrior)을
-                  // 연한 선으로 겹쳐, 두 기간을 직접 시간대별로 비교할 수 있게 한다. SDoW는
-                  // hourlyBaselinePattern이 이미 "비교 대상(선택 요일 평균)"이라 그대로 재사용.
-                  baselinePattern={showSdowDualView ? hourlyBaselinePattern : hourlyPatternPrior}
-                  accentColor={accentColor}
-                  baselineLabel={
-                    showSdowDualView
-                      ? `연한 선 = ${sdowBaselineShortLabel ?? "비교 대상"} 같은 시간대 평균 시청률`
-                      : `연한 선 = ${comparisonLabel ?? "이전"} 기간의 같은 시간대 평균 시청률`
-                  }
-                />
-              </div>
-            </div>
-          ) : hourlyPattern.length === 0 ? (
-            <p className="text-sm text-zinc-400">선택한 기간의 프로그램 단위 데이터가 없습니다.</p>
-          ) : hourlyMetrics.size === 0 && selectedExtraTargetsWithMeta.length === 0 ? (
-            <p className="text-sm text-zinc-400">위 체크박스에서 볼 지표를 하나 이상 선택하세요.</p>
-          ) : (
-            <>
-              {/* 사용자 지시(2026-08-20): "각 채널의 최근 12주 시간대별 평균 시청률을 연한 색으로
-                  꺾은선 그래프로 그려서 기준점을 보여줄 것" — 막대 높이 계산과 같은 avg_rating
-                  스케일(maxByMetric.avg_rating)을 그대로 써서 시각적으로 비교 가능하게 한다.
-                  bar-area를 라벨 행과 분리한 별도 컨테이너로 둬야 SVG viewBox가 막대 높이와
-                  정확히 겹친다(라벨 텍스트 높이가 섞이면 어긋난다). */}
-              {/* 사용자 지시(2026-08-20): 창 높이를 더 높여 가독성 개선(특히 두 타깃 시청률을
-                  공유 스케일로 같이 볼 때 막대 높이 차이가 잘 보이도록). */}
-              <div className="relative h-52">
-                {hourlyMetrics.has("avg_rating") && hourlyBaselinePattern.length > 0 && (() => {
-                  const baselineByHour = new Map(hourlyBaselinePattern.map((h) => [h.broadcast_hour, h.avg_rating]));
-                  const pts = hourlyPattern
-                    .map((h, i) => {
-                      const v = baselineByHour.get(h.broadcast_hour);
-                      if (v === null || v === undefined) return null;
-                      const x = i + 0.5;
-                      const y = 100 - Math.min(100, (v / ratingScaleMax) * 100);
-                      return `${x},${y}`;
-                    })
-                    .filter((p): p is string => p !== null);
-                  if (pts.length < 2) return null;
-                  return (
-                    <svg
-                      className="pointer-events-none absolute inset-0 h-full w-full"
-                      viewBox={`0 0 ${hourlyPattern.length} 100`}
-                      preserveAspectRatio="none"
-                    >
-                      <polyline
-                        fill="none"
-                        stroke={accentColor}
-                        strokeOpacity={0.35}
-                        strokeWidth={1.5}
-                        vectorEffect="non-scaling-stroke"
-                        points={pts.join(" ")}
-                      />
-                    </svg>
-                  );
-                })()}
-                <div className="flex h-full items-stretch gap-1">
-                  {hourlyPattern.map((h) => {
-                    const title = programTitleByHour.get(h.broadcast_hour) ?? "";
-                    return (
-                      <div key={h.broadcast_hour} className="flex h-full flex-1 flex-col items-center">
-                        {/* flex-1(고정 높이 부모 기준 남는 공간 차지)이라야 아래 막대의 height:%가
-                            정상적으로 계산된다 — height:auto인 부모 밑에서는 %가 0으로 계산되는
-                            CSS 특성 때문에 실제로 막대가 하나도 안 보이던 버그가 있었다. */}
-                        <div className="flex w-full flex-1 items-end justify-center gap-0.5">
-                          {HOURLY_METRICS.filter((m) => hourlyMetrics.has(m.key)).map((m) => {
-                            const value = Number(h[m.key]) || 0;
-                            const scaleMax = m.key === "avg_rating" ? ratingScaleMax : maxByMetric[m.key];
-                            const heightPct = Math.max(2, (value / scaleMax) * 100);
-                            return (
-                              <div
-                                key={m.key}
-                                title={`${h.broadcast_hour}시 ${title ? title + " · " : ""}${m.label}: ${value.toFixed(3)}`}
-                                className="w-full max-w-2 rounded-t"
-                                style={{ height: `${heightPct}%`, backgroundColor: m.color }}
-                              />
-                            );
-                          })}
-                          {selectedExtraTargetsWithMeta.map((e) => {
-                            const value = e.byHour.get(h.broadcast_hour);
-                            if (value === null || value === undefined) return null;
-                            const heightPct = Math.max(2, (value / ratingScaleMax) * 100);
-                            return (
-                              <div
-                                key={e.targetLabel}
-                                title={`${h.broadcast_hour}시 시청률(${e.targetLabel}): ${value.toFixed(3)}`}
-                                className="w-full max-w-2 rounded-t"
-                                style={{ height: `${heightPct}%`, backgroundColor: e.color }}
-                              />
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="mt-1 flex gap-1">
-                {hourlyPattern.map((h) => (
-                  <span key={h.broadcast_hour} className="flex-1 shrink-0 text-center text-[9px] text-zinc-400">
-                    {h.broadcast_hour}
-                  </span>
-                ))}
-              </div>
-              {hourlyMetrics.has("avg_rating") && hourlyBaselinePattern.length > 0 && (
-                <p className="mt-1 text-[13px] text-zinc-400">
-                  <span className="mr-1 inline-block h-0.5 w-3 align-middle" style={{ backgroundColor: accentColor, opacity: 0.35 }} />
-                  {isSdowActive && sdowBaselineShortLabel
-                    ? `연한 선 = ${sdowBaselineShortLabel} 같은 시간대 평균 시청률 기준선`
-                    : "연한 선 = 최근 12주(84일) 같은 시간대 평균 시청률 기준선"}
-                </p>
-              )}
-              {/* 사용자 지시: 시간대별로 어떤 타이틀이 편성됐는지 알 수 있도록 — 막대 위에는 다
-                  들어가지 않으므로 아래에 시간대: 프로그램명 목록을 함께 보여준다. */}
-              {hourlyProgramTitles.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-zinc-100 pt-3 text-[13px] text-zinc-500">
-                  {hourlyProgramTitles.map((h) => (
-                    <span key={h.broadcast_hour}>
-                      <span className="font-medium text-zinc-700">{h.broadcast_hour}시</span> {h.program_names}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </>
           )}
         </div>
 

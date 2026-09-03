@@ -3242,6 +3242,10 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
 
 export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   const [data, setData] = useState<DashboardData | null>(null);
+  // 사용자 지시(2026-09-02): "skyUHD 오른쪽 관리자화면 버튼 아이콘을 '큰 글씨로 보기' 아이콘으로
+  // 교체... 누르면 전체적으로 큰 글씨로" — Page 2(ChannelDeepDive.tsx)에 이미 있는 zoom 토글과
+  // 같은 방식.
+  const [largeFontMode, setLargeFontMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // 사용자 지시(2026-08-25): "채널 종합리포트 우측에 날짜를 선택할 수 있는 검색 기능을 추가...
@@ -3288,7 +3292,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   const byCode = new Map(data?.channels.map((c) => [c.code, c]) ?? []);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-zinc-50 px-6 py-8">
+    <div className="relative min-h-screen overflow-x-hidden bg-zinc-50 px-6 py-8" style={{ zoom: largeFontMode ? 1.3 : 1 }}>
       {/* 사용자 지시(2026-08-21, Page 1 전면 개편): "기존 배경은 버리고 모던하고 깔끔한 배경을
           제안" — 파스텔 그라디언트 + 블러 블롭 장식(흐릿한 원형 광원 효과, 대표적인 "AI가 만든
           느낌")을 전부 제거하고, 옅은 회색 단색 배경(zinc-50) + 흰 카드 + 그림자로만 위계를
@@ -3363,26 +3367,27 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 ))}
               </div>
             )}
-            {/* 사용자 지시: 관리자 화면 이동은 작은 아이콘으로만.
-                사용자 재지시(2026-08-21): "새로고침 버튼이 촌스럽다" — 그라디언트+이모지 버튼을
-                버리고, 관리자 아이콘도 이모지(⚙) 대신 얇은 선 아이콘으로 통일해 미니멀하게. */}
-            {isAdmin && (
-              <a
-                href="/admin"
-                title="관리자 화면"
-                aria-label="관리자 화면"
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-700"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
-                  <line x1="4" y1="6" x2="20" y2="6" />
-                  <line x1="4" y1="12" x2="20" y2="12" />
-                  <line x1="4" y1="18" x2="20" y2="18" />
-                  <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" />
-                  <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" />
-                  <circle cx="9" cy="18" r="2" fill="currentColor" stroke="none" />
-                </svg>
-              </a>
-            )}
+            {/* 사용자 재지시(2026-09-02): "skyUHD 오른쪽에 있는 관리자화면 버튼 아이콘을 '큰
+                글씨로 보기' 아이콘으로 교체 — 글자 말고 직관적으로 깔끔하고 심플한 아이콘으로."
+                두 관리자 아이콘(이 자리 + 새로고침 오른쪽) 중 채널 로고 바로 옆(=skyUHD 오른쪽)
+                이 자리를 큰 글씨 토글로 바꾼다 — 관리자 화면 경로는 새로고침 오른쪽 아이콘으로
+                계속 열 수 있다. */}
+            <button
+              type="button"
+              onClick={() => setLargeFontMode((v) => !v)}
+              title={largeFontMode ? "기본 글씨 크기로" : "큰 글씨로 보기"}
+              aria-label={largeFontMode ? "기본 글씨 크기로" : "큰 글씨로 보기"}
+              className={`flex h-10 w-10 items-center justify-center rounded-full ring-1 transition ${
+                largeFontMode ? "bg-zinc-900 text-white ring-zinc-900" : "bg-white text-zinc-500 ring-zinc-200 hover:bg-zinc-50 hover:text-zinc-700"
+              }`}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <line x1="11" y1="8" x2="11" y2="14" />
+                <line x1="8" y1="11" x2="14" y2="11" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </button>
             <button
               onClick={() => load(selectedDate || undefined)}
               disabled={loading}
