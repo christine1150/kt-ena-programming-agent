@@ -1713,17 +1713,21 @@ function buildOriginalInsight(
   // 동시간대 순위(1위면 사수, 아니면 몇 위인지 + 앞선 경쟁 프로그램) — 순위 숫자 자체는 이미
   // 헤드라인(buildOriginalHeadline)에 나오므로, 여기서는 "몇 배 높았다/누구에게 밀렸다" 같은
   // 정성적 비교만 보탠다.
+  // 사용자 지시(2026-09-03, 3차): "동시간대 2위는 tvN의 어떤 컨텐츠였는지 적어줄것" — 경쟁
+  // 프로그램명(competitor_program_name)이 이미 competitorHighlights에 있는데도 여기선 채널명만
+  // 쓰고 있었다. 1위·N위 두 경우 다 프로그램명을 함께 밝힌다.
+  // 사용자 지시(2026-09-03, 3차): "'(참고-인과관계 미확정)' 멘트 뺄 것".
   if (item.matched_rating !== null) {
     if (rank === 1 && item.competitorHighlights.length > 0 && item.competitorHighlights[0].competitor_rating !== null && item.competitorHighlights[0].competitor_rating > 0) {
       const top = item.competitorHighlights[0]; // 이미 시청률 내림차순 정렬됨
       const ratio = item.matched_rating / top.competitor_rating!;
       secondaryBullets.push(
-        `동시간대 1위 달성: 경쟁사인 ${top.competitor_name}(${formatRating(top.competitor_rating)}%) 대비 ${ratio.toFixed(1)}배 높은 시청률로 동시간대 타깃 1위 사수`
+        `동시간대 1위 달성: 경쟁사인 ${top.competitor_name} ${top.competitor_program_name}(${formatRating(top.competitor_rating)}%) 대비 ${ratio.toFixed(1)}배 높은 시청률로 동시간대 타깃 1위 사수`
       );
     } else if (rank !== null && rank > 1 && beatenBy.length > 0) {
-      const named = beatenBy.slice(0, 3).map((c) => `${c.competitor_name}(${formatRating(c.competitor_rating)}%)`).join(", ");
+      const named = beatenBy.slice(0, 3).map((c) => `${c.competitor_name} ${c.competitor_program_name}(${formatRating(c.competitor_rating)}%)`).join(", ");
       const extra = beatenBy.length > 3 ? ` 외 ${beatenBy.length - 3}개` : "";
-      secondaryBullets.push(`동시간대 ${rank}위 기록: ${named}${extra}보다 낮았음(참고 — 인과관계 미확정)`);
+      secondaryBullets.push(`동시간대 ${rank}위 기록: ${named}${extra}보다 낮았음`);
     }
   }
 
@@ -2525,6 +2529,43 @@ function fmtSecondsCompactKorean(v: number): string {
   return s === 0 ? `${m}분` : `${m}분 ${s}초`;
 }
 
+// 사용자 지시(2026-09-03, 3차): "SBS Plus, ENA, ENA Play, ENA Drama 등의 글씨는 각 채널의
+// 로고 색과 동일하게" — 이 프로그램 리뷰가 실제로 언급하는 채널(본방·동시방영·직재방·경쟁
+// 프로그램 채널)만 모아 이름→색 맵을 만든다. 화면 전체에서 아무 문자열이나 스캔하지 않고
+// 이 항목이 실제로 갖고 있는 채널명만 대상으로 삼아, 프로그램명에 우연히 채널명이 섞여 있는
+// 경우의 오탐을 피한다.
+function buildReviewChannelColorMap(h: OriginalDailyItem, themeColorByCode: Map<string, string | null>): Map<string, string> {
+  const map = new Map<string, string>();
+  const add = (name: string | null | undefined, code: string) => {
+    if (name) map.set(name, themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR);
+  };
+  add(CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code, h.broadcast_channel_code);
+  if (h.simulcast_channel_code) add(CHANNEL_NAME_BY_CODE[h.simulcast_channel_code] ?? h.simulcast_channel_code, h.simulcast_channel_code);
+  if (h.rerun_channel_code) add(CHANNEL_NAME_BY_CODE[h.rerun_channel_code] ?? h.rerun_channel_code, h.rerun_channel_code);
+  // 경쟁 채널(tvN·SBS·MBC 등)은 channels 테이블에 브랜드색이 없어 항상 UNBRANDED_CHANNEL_COLOR.
+  for (const c of h.competitorHighlights) {
+    if (c.competitor_name && !map.has(c.competitor_name)) map.set(c.competitor_name, UNBRANDED_CHANNEL_COLOR);
+  }
+  return map;
+}
+
+// 문장 속 채널명을 그 채널 색으로 칠한다. "ENA"가 "ENA Drama" 안에서 먼저 매칭되지 않도록
+// 긴 이름부터 시도한다(정규식 대체 순서).
+function highlightChannelNames(text: string, colorMap: Map<string, string>) {
+  if (colorMap.size === 0) return text;
+  const names = Array.from(colorMap.keys()).sort((a, b) => b.length - a.length);
+  const pattern = new RegExp(`(${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "g");
+  return text.split(pattern).map((part, i) =>
+    colorMap.has(part) ? (
+      <span key={i} className="font-semibold" style={{ color: colorMap.get(part) }}>
+        {part}
+      </span>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
+}
+
 function OriginalContentReportCard({
   report,
   enaAccentColor,
@@ -2584,6 +2625,9 @@ function OriginalContentReportCard({
               // 있고 화면 어디에도 렌더되지 않고 있었다. 상위 4개만 막대로 보여준다.
               const ages = (h.age_breakdown ?? []).slice(0, 4);
               const ageMax = ages.length > 0 ? Math.max(...ages.map((a) => a.rating)) : 0;
+              // 사용자 지시(2026-09-03, 3차): 이 항목 안에서 언급되는 채널명을 전부 그 채널
+              // 색으로 칠하기 위한 맵 — 핵심 요약·편성 인사이트·보조 설명 어디서든 재사용.
+              const channelColors = buildReviewChannelColorMap(h, themeColorByCode);
               // 사용자 지시(2026-09-03, UI/UX REDESIGN): HERO KPI의 2순위 지표. 사용자 지시
               // (2026-08-26)의 기존 규칙("동시방송이 있으면 동시방송을 먼저, 없을 때만 직후재방")을
               // 그대로 승계한다 — 데이터상 상호배타라 둘 중 하나만 채워진다.
@@ -2633,7 +2677,15 @@ function OriginalContentReportCard({
                           {broadcastChannelName}
                         </span>{" "}
                         · {fmtTimeKorean(h.matched_start_time)}
-                        {headline?.rankText && <> · {headline.rankText}</>}
+                        {/* 사용자 지시(2026-09-03, 3차): "제목의 동시간대 타깃 2위, 가구 1위는
+                            잘보이는 굵은 글씨로" — 채널명·시각과 같은 옅은 톤이던 순위 문구만
+                            굵고 진하게 분리. */}
+                        {headline?.rankText && (
+                          <>
+                            {" "}
+                            · <span className="font-bold text-zinc-800">{headline.rankText}</span>
+                          </>
+                        )}
                       </p>
                     </div>
                     {h.featured_category && (
@@ -2646,110 +2698,130 @@ function OriginalContentReportCard({
 
                   {/* ② HERO KPI + 다각 분석 — 사용자 지시(2026-09-03): 시청률이 1순위, 동시방영
                       (없으면 직후재방)이 2순위로 가장 먼저 읽히도록. "TARGET"은 사용자 지시대로
-                      "시청률"로 표기. 오른쪽에는 "입체적·다각적" 분석 축(몰입도/성적 추이/연령대)을
-                      얇은 divider로 나눠 붙인다. */}
-                  <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:gap-12">
-                    <div className="flex flex-wrap items-end gap-x-10 gap-y-6">
-                      <div className="min-w-0">
-                        <p className={REPORT_EYEBROW}>시청률</p>
-                        <p className="mt-2 flex flex-wrap items-baseline gap-x-2">
-                          <span className="text-[56px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em]" style={{ color: accent }}>
-                            {formatRating(h.matched_rating, h.broadcast_channel_code)}
+                      "시청률"로 표기.
+                      사용자 재지시(2026-09-03, 3차): "시청률, 핵심지표, 몰입도, 최근 성적 대비,
+                      연령대는 전체 구간의 너비가 같도록" — 시청률 칸(고정 340px)+나머지 4칸
+                      균등분배이던 2열 그리드를 5칸 모두 균등한 lg:grid-cols-5 하나로 통합.
+                      "동시방영은 좀 더 올려주세요" — 시청률 옆에 나란히(items-end) 있던 동시방영을
+                      같은 칸 안에서 시청률 바로 아래로 붙여(간격을 줄여 위로 당김) 좁아진 칸 폭에도
+                      자연스럽게 쌓이도록 했다. */}
+                  <div className="mt-7 grid gap-6 sm:grid-cols-2 lg:grid-cols-5 lg:gap-8">
+                    <div className="min-w-0">
+                      <p className={REPORT_EYEBROW}>시청률</p>
+                      <p className="mt-2 flex flex-wrap items-baseline gap-x-2">
+                        <span className="text-[56px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em]" style={{ color: accent }}>
+                          {formatRating(h.matched_rating, h.broadcast_channel_code)}
+                        </span>
+                        {/* 사용자 지시(2026-08-25): 타깃 시청률 옆에 가구 시청률을 괄호로(볼드 없이).
+                            사용자 재지시(2026-09-03, 3차): "전회 대비 9.9% 하락은 가구 시청률
+                            우측으로" — 별도 줄이던 전회 대비를 가구 값 바로 옆으로 옮긴다. */}
+                        {h.matched_household_rating !== null && (
+                          <span className="text-[20px] font-medium tabular-nums text-zinc-400">
+                            가구 {formatRating(h.matched_household_rating, h.broadcast_channel_code)}
+                            {h.prior_rating_change_pct !== null && (
+                              <span className="ml-2 text-[14px] font-semibold" style={{ color: h.prior_rating_change_pct >= 0 ? ACCENT_UP : ACCENT_DOWN }}>
+                                {h.prior_rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(h.prior_rating_change_pct).toFixed(1)}%
+                              </span>
+                            )}
                           </span>
-                          {/* 사용자 지시(2026-08-25): 타깃 시청률 옆에 가구 시청률을 괄호로(볼드 없이). */}
-                          {h.matched_household_rating !== null && (
-                            <span className="text-[20px] font-medium tabular-nums text-zinc-400">
-                              가구 {formatRating(h.matched_household_rating, h.broadcast_channel_code)}
-                            </span>
-                          )}
-                        </p>
-                        {h.prior_rating_change_pct !== null && (
-                          <p className="mt-2.5 text-[14px] font-semibold tabular-nums" style={{ color: h.prior_rating_change_pct >= 0 ? ACCENT_UP : ACCENT_DOWN }}>
-                            {h.prior_rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(h.prior_rating_change_pct).toFixed(1)}%
-                            <span className="ml-1 font-normal text-zinc-400">전회 대비</span>
-                          </p>
                         )}
-                      </div>
+                      </p>
+                      {/* 가구 시청률이 없는 채널은 옮길 자리가 없으므로 기존처럼 별도 줄 유지. */}
+                      {h.matched_household_rating === null && h.prior_rating_change_pct !== null && (
+                        <p className="mt-2.5 text-[14px] font-semibold tabular-nums" style={{ color: h.prior_rating_change_pct >= 0 ? ACCENT_UP : ACCENT_DOWN }}>
+                          {h.prior_rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(h.prior_rating_change_pct).toFixed(1)}%
+                          <span className="ml-1 font-normal text-zinc-400">전회 대비</span>
+                        </p>
+                      )}
                       {secondKpi && (
-                        <div className="min-w-0">
+                        <div className="mt-4">
                           <p className={REPORT_EYEBROW}>
                             {secondKpi.labelPrefix}
                             {secondKpi.time && (
                               <span className="ml-1 font-normal normal-case tracking-normal text-zinc-400">
-                                | {CHANNEL_NAME_BY_CODE[secondKpi.channelCode] ?? secondKpi.channelCode} {fmtTimeKorean(secondKpi.time)}
+                                |{" "}
+                                <span className="font-semibold" style={{ color: themeColorByCode.get(secondKpi.channelCode) ?? UNBRANDED_CHANNEL_COLOR }}>
+                                  {CHANNEL_NAME_BY_CODE[secondKpi.channelCode] ?? secondKpi.channelCode}
+                                </span>{" "}
+                                {fmtTimeKorean(secondKpi.time)}
                               </span>
                             )}
                           </p>
-                          <p className="mt-2 text-[32px] font-semibold leading-[0.95] tabular-nums tracking-tight text-zinc-700">
+                          <p className="mt-1.5 text-[32px] font-semibold leading-[0.95] tabular-nums tracking-tight text-zinc-700">
                             {formatRating(secondKpi.rating, h.broadcast_channel_code)}
                           </p>
-                          {secondKpi.note && <p className="mt-2.5 text-[12.5px] text-zinc-400">{secondKpi.note}</p>}
+                          {secondKpi.note && <p className="mt-1.5 text-[12.5px] text-zinc-400">{secondKpi.note}</p>}
                         </div>
                       )}
                     </div>
                     {/* 사용자 지시(2026-09-03): "시청시간, 시청시간 비율, 연령대별 인사이트, 경쟁
                         채널, 전 주나 지난 4주간의 성적 대비 등 입체적인 내용" — 네 축(핵심 지표 /
                         몰입도 / 최근 성적 대비 / 연령대)을 나란히 둔다. 전부 이미 DB가 계산해
-                        내려준 값이고, 새 지표를 만들지 않는다. 값이 없는 축은 통째로 빠진다.
-                        사용자 재지시(2026-09-03, 2차): "노란색으로 표시한 부분(목표 달성률·리드인·
-                        당일 자체재방)은 몰입도와 시청률 사이에 배치하여 한 줄 안에 주요 내용이
-                        다 보이게" — 본문 아래 별도 줄로 내려뒀던 그 3개 지표를 다시 이 상단
-                        한 줄짜리 그리드로 끌어올려, 시청률(hero)과 몰입도 사이의 첫 칸으로 둔다. */}
-                    <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-4 lg:border-l lg:border-zinc-100 lg:pl-12">
-                      {(achievementPct !== null || h.pre_rerun_rating !== null || h.self_rerun_rating !== null) && (
-                        <div className="min-w-0">
-                          <p className={REPORT_EYEBROW}>핵심 지표</p>
-                          <div className="mt-2.5 space-y-2">
-                            {achievementPct !== null && (
-                              <p className="text-[14px] text-zinc-600">
-                                <span className="font-semibold tabular-nums text-zinc-800">{achievementPct.toFixed(1)}%</span>
-                                <span className="ml-1.5 text-[12px] text-zinc-400">목표 달성률(연간 누적)</span>
-                              </p>
-                            )}
-                            {h.pre_rerun_rating !== null && (
-                              <p className="text-[14px] text-zinc-600">
-                                <span className="font-semibold tabular-nums text-zinc-800">{formatRating(h.pre_rerun_rating, h.broadcast_channel_code)}</span>
-                                <span className="ml-1.5 text-[12px] text-zinc-400">
-                                  리드인(전회 재방){h.pre_rerun_start_time ? ` · ${fmtTimeKorean(h.pre_rerun_start_time)}` : ""}
-                                </span>
-                              </p>
-                            )}
-                            {h.self_rerun_rating !== null && (
-                              <p className="text-[14px] text-zinc-600">
-                                <span className="font-semibold tabular-nums text-zinc-800">{formatRating(h.self_rerun_rating, h.broadcast_channel_code)}</span>
-                                <span className="ml-1.5 text-[12px] text-zinc-400">
-                                  {broadcastChannelName} 직재방{h.self_rerun_start_time ? ` · ${fmtTimeKorean(h.self_rerun_start_time)}` : ""}
-                                </span>
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        {/* 사용자 재지시(2026-09-03, 2차): "몰입도는 시청시간 73분 28초, 시청비율
-                            67.3%, 도달율 2.04% 순으로" — 3줄로 쌓던 것을 한 줄짜리 쉼표 나열
-                            문장으로 바꾸고, 라벨을 값 앞에 둔다(값-라벨 순서였던 것을 뒤집음). */}
-                        <p className={REPORT_EYEBROW}>몰입도</p>
-                        <p className="mt-2.5 text-[14px] leading-relaxed text-zinc-600">
-                          {(() => {
-                            const parts = [
-                              h.matched_time_spent_seconds !== null ? { label: "시청시간", value: fmtSecondsCompactKorean(h.matched_time_spent_seconds) } : null,
-                              h.matched_time_spent_share !== null ? { label: "시청비율", value: `${h.matched_time_spent_share.toFixed(2)}%` } : null,
-                              h.matched_reach !== null ? { label: "도달율", value: `${h.matched_reach.toFixed(2)}%` } : null,
-                            ].filter((p): p is { label: string; value: string } => p !== null);
-                            if (parts.length === 0) return <span className="text-zinc-300">자료 없음</span>;
-                            return parts.map((part, i) => (
-                              <span key={part.label}>
-                                {i > 0 && <span className="text-zinc-300">, </span>}
-                                <span className="text-zinc-500">{part.label} </span>
-                                <span className="font-semibold tabular-nums text-zinc-800">{part.value}</span>
+                        내려준 값이고, 새 지표를 만들지 않는다. 값이 없는 축은 통째로 빠진다. */}
+                    {(achievementPct !== null || h.pre_rerun_rating !== null || h.self_rerun_rating !== null) && (
+                      <div className="min-w-0 lg:border-l lg:border-zinc-100 lg:pl-8">
+                        <p className={REPORT_EYEBROW}>핵심 지표</p>
+                        <div className="mt-2.5 space-y-2">
+                          {achievementPct !== null && (
+                            <p className="text-[14px] text-zinc-600">
+                              <span className="font-semibold tabular-nums text-zinc-800">{achievementPct.toFixed(1)}%</span>
+                              <span className="ml-1.5 text-[12px] text-zinc-400">목표 달성률(연간 누적)</span>
+                            </p>
+                          )}
+                          {h.pre_rerun_rating !== null && (
+                            <p className="text-[14px] text-zinc-600">
+                              <span className="font-semibold tabular-nums text-zinc-800">{formatRating(h.pre_rerun_rating, h.broadcast_channel_code)}</span>
+                              <span className="ml-1.5 text-[12px] text-zinc-400">
+                                리드인(전회 재방){h.pre_rerun_start_time ? ` · ${fmtTimeKorean(h.pre_rerun_start_time)}` : ""}
                               </span>
-                            ));
-                          })()}
-                        </p>
+                            </p>
+                          )}
+                          {h.self_rerun_rating !== null && (
+                            <p className="text-[14px] text-zinc-600">
+                              <span className="font-semibold tabular-nums text-zinc-800">{formatRating(h.self_rerun_rating, h.broadcast_channel_code)}</span>
+                              <span className="ml-1.5 text-[12px] text-zinc-400">
+                                {/* 사용자 지시(2026-09-03, 3차): 채널명은 그 채널 로고 색으로. */}
+                                <span className="font-semibold" style={{ color: accent }}>
+                                  {broadcastChannelName}
+                                </span>{" "}
+                                직재방{h.self_rerun_start_time ? ` · ${fmtTimeKorean(h.self_rerun_start_time)}` : ""}
+                              </span>
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className={REPORT_EYEBROW}>최근 성적 대비</p>
+                    )}
+                    <div className="min-w-0 lg:border-l lg:border-zinc-100 lg:pl-8">
+                      {/* 사용자 재지시(2026-09-03, 3차): "몰입도는 시청시간, 시청비율, 도달율
+                          다 다른 줄로 각각 보여주세요" — 직전(2차)의 한 줄 쉼표 나열 형태를
+                          되돌려 다시 3줄로 분리(라벨-값 순서는 그대로 유지). */}
+                      <p className={REPORT_EYEBROW}>몰입도</p>
+                      <div className="mt-2.5 space-y-2">
+                        {h.matched_time_spent_seconds !== null && (
+                          <p className="text-[14px] text-zinc-600">
+                            <span className="text-zinc-500">시청시간 </span>
+                            <span className="font-semibold tabular-nums text-zinc-800">{fmtSecondsCompactKorean(h.matched_time_spent_seconds)}</span>
+                          </p>
+                        )}
+                        {h.matched_time_spent_share !== null && (
+                          <p className="text-[14px] text-zinc-600">
+                            <span className="text-zinc-500">시청비율 </span>
+                            <span className="font-semibold tabular-nums text-zinc-800">{h.matched_time_spent_share.toFixed(2)}%</span>
+                          </p>
+                        )}
+                        {h.matched_reach !== null && (
+                          <p className="text-[14px] text-zinc-600">
+                            <span className="text-zinc-500">도달율 </span>
+                            <span className="font-semibold tabular-nums text-zinc-800">{h.matched_reach.toFixed(2)}%</span>
+                          </p>
+                        )}
+                        {h.matched_time_spent_seconds === null && h.matched_time_spent_share === null && h.matched_reach === null && (
+                          <p className="text-[12px] text-zinc-300">자료 없음</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-w-0 lg:border-l lg:border-zinc-100 lg:pl-8">
+                      <p className={REPORT_EYEBROW}>최근 성적 대비</p>
                         <div className="mt-2.5 space-y-2">
                           {recent.deltaPctVs4 !== null && recent.prevAvg4 !== null ? (
                             <>
@@ -2770,7 +2842,7 @@ function OriginalContentReportCard({
                           {trough && <p className="text-[12px] tabular-nums text-zinc-400">최저 {formatRating(trough.rating, h.broadcast_channel_code)} · {fmtPointWhen(trough)}</p>}
                         </div>
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 lg:border-l lg:border-zinc-100 lg:pl-8">
                         <p className={REPORT_EYEBROW}>연령대</p>
                         <div className="mt-2.5 space-y-1.5">
                           {ages.length > 0 ? (
@@ -2793,7 +2865,6 @@ function OriginalContentReportCard({
                           )}
                         </div>
                       </div>
-                    </div>
                   </div>
                   {/* 본문 2단 — 왼쪽은 읽는 정보(핵심 요약 → 편성 인사이트 → 참고 설명),
                       오른쪽은 참조 정보(동시간대 경쟁 프로그램 → 추이 그래프).
@@ -2816,7 +2887,9 @@ function OriginalContentReportCard({
                             {insight.bullets.map((b, i) => (
                               <li key={i} className="flex gap-2 text-[14.5px] font-medium leading-relaxed text-zinc-700">
                                 <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-zinc-300" />
-                                <span>{b}</span>
+                                {/* 사용자 지시(2026-09-03, 3차): "SBS Plus, ENA, ENA Play, ENA
+                                    Drama 등의 글씨는 각 채널의 로고 색과 동일하게". */}
+                                <span>{highlightChannelNames(b, channelColors)}</span>
                               </li>
                             ))}
                           </ul>
@@ -2849,23 +2922,28 @@ function OriginalContentReportCard({
                         </div>
                       )}
                       {/* 명세엔 없지만 기존에 있던 추가 신호(동시간대 정성 비교/신규드라마 비교/
-                          자체재방/도달율) — 삭제하지 않고, 사용자 지시(2026-09-03, 7항)대로 핵심
-                          KPI보다 눈에 띄지 않는 footnote 위계로만 낮춘다. */}
-                      {insight.secondaryBullets.length > 0 && (
-                        <ul className="mt-6 space-y-1 border-t border-zinc-100 pt-3">
+                          자체재방/도달율) — 삭제하지 않고, 2026-09-03 7항대로 핵심 KPI보다 눈에
+                          띄지 않는 footnote 위계로 낮춘다.
+                          사용자 재지시(2026-09-03, 3차): "이 글들은 모두 동일한 카테고리로 적어
+                          주고, 행 사이 띄움이나 정리도 같은 글씨로... 좀 더 진한 글씨" — 종합
+                          문장(dailyBriefing)을 별도 <p>로 밖에 두지 않고 같은 <ul> 안 마지막
+                          항목으로 합쳐 마커·행간이 완전히 동일하게 하고, 색도 zinc-400→zinc-600
+                          (font-medium)으로 한 단계 진하게 올렸다. */}
+                      {(insight.secondaryBullets.length > 0 || (isLastDaily && dailyBriefing)) && (
+                        <ul className="mt-6 space-y-1.5 border-t border-zinc-100 pt-3">
                           {insight.secondaryBullets.map((b, i) => (
-                            <li key={i} className="flex gap-1.5 text-[11.5px] leading-relaxed text-zinc-400">
+                            <li key={i} className="flex gap-1.5 text-[11.5px] font-medium leading-relaxed text-zinc-600">
                               <span className="shrink-0">·</span>
-                              <span>{b}</span>
+                              <span>{highlightChannelNames(b, channelColors)}</span>
                             </li>
                           ))}
+                          {isLastDaily && dailyBriefing && (
+                            <li className="flex gap-1.5 text-[11.5px] font-medium leading-relaxed text-zinc-600">
+                              <span className="shrink-0">·</span>
+                              <span>{dailyBriefing}</span>
+                            </li>
+                          )}
                         </ul>
-                      )}
-                      {/* 사용자 지시(2026-09-03, 2차): 종합 문장을 "본채널 직재방 효과" 불릿
-                          바로 아래에 붙여서 같이 설명 — 위계는 secondaryBullets와 같은 footnote
-                          톤을 유지한다(핵심 KPI보다 눈에 띄지 않게). */}
-                      {isLastDaily && dailyBriefing && (
-                        <p className="mt-3 text-[11.5px] leading-relaxed text-zinc-400">{dailyBriefing}</p>
                       )}
                     </div>
                     {/* 오른쪽 참조 열 — 읽는 정보가 아니라 대조용 정보(경쟁 프로그램·추이). */}
