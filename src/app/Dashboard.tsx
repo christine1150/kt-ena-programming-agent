@@ -1629,33 +1629,37 @@ function buildOriginalInsight(
 
   // 3) 본방송 수치 — 순위·전회 대비 등 다른 맥락 없이 명세 그대로 이 문장 하나만(그 정보들은
   // 헤드라인/카드에 이미 따로 나와 있음).
+  // 사용자 지시(2026-09-03): "ENA 본채널이라고 하지 말고 ENA 본방송, ENA 직재방, ENA Drama
+  // 직재방, ENA Play 직재방, SBS Plus 동시방송 등으로 표기" — 이 문장에 채널명이 아예 없었던
+  // 것도 채널명을 붙여 어느 채널의 본방인지 항상 드러나게 한다.
   if (item.matched_rating !== null) {
-    bullets.push(`본방송 시청률 ${formatRating(item.matched_rating)}% 기록`);
+    bullets.push(`${broadcastChannelName} 본방송 시청률 ${formatRating(item.matched_rating)}% 기록`);
   }
 
   // 3.5) 동시방송 성적 — 사용자 지시(2026-08-26): "동시방송을 할 경우에는 동시 방송 성적을
   // 가장 먼저 올려주시고, 이후 직후재방이 있을 경우에만 직후재방을 언급해주세요." 직후재방
   // (본방 종료 후)과 달리 본방과 거의 같은 시각에 함께 트는 경우라 시간 표기 없이 시청률만 병기.
-  // 사용자 지시(2026-09-03): "SBS Plus 동시방송 성적: SBS Plus 동시방송 시청률은 0.839% →
-  // 중복되는 내용은 줄여서 짧게" — 한 문장 안에 채널명·"동시방송"이 두 번씩 반복되던 것을
-  // 한 번씩만 쓰도록 줄인다(수치·의미는 그대로).
+  // 사용자 지시(2026-09-03, 2차): "SBS Plus 동시방송" 순서(채널명 먼저)로 표기 — 채널명이
+  // "동시방송" 앞에 오도록 순서를 바꿨다(중복 축약은 2026-09-03 1차 지시로 이미 반영됨).
   if (item.simulcast_rating !== null && item.simulcast_channel_code) {
     const simulcastChannelName = CHANNEL_NAME_BY_CODE[item.simulcast_channel_code] ?? item.simulcast_channel_code;
-    bullets.push(`동시방송 ${simulcastChannelName} ${formatRating(item.simulcast_rating)}%`);
+    bullets.push(`${simulcastChannelName} 동시방송 ${formatRating(item.simulcast_rating)}%`);
   }
 
   // 4) 직후 재방송 유입 효과 — 명세 문구 그대로. 유지율이 낮아 사실상 효과가 제한적인 경우의
   // 캐비엇은 이 필수 4번째 불렛의 고정 문구를 바꾸지 않고 secondaryBullets에 별도로 짚는다.
+  // 사용자 지시(2026-09-03): "ENA Drama 직재방, ENA Play 직재방 등으로 표기" — 타 채널이 트는
+  // 재방도 자체 재방과 같은 "직재방" 용어로 통일한다("직후재방"이라는 별도 용어를 쓰지 않는다).
   let crossRetentionPct: number | null = null;
   let rerunChannelName: string | null = null;
   if (item.rerun_rating !== null && item.retention_pct !== null && item.rerun_channel_code) {
     crossRetentionPct = item.retention_pct;
     rerunChannelName = CHANNEL_NAME_BY_CODE[item.rerun_channel_code] ?? item.rerun_channel_code;
     bullets.push(
-      `${rerunChannelName} 직후재방 효과: ${rerunChannelName} 직후 재방(${item.rerun_start_time ? fmtTimeKorean(item.rerun_start_time) : ""}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 유입을 견인함`
+      `${rerunChannelName} 직재방 효과: ${rerunChannelName} 직재방(${item.rerun_start_time ? fmtTimeKorean(item.rerun_start_time) : ""}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 유입을 견인함`
     );
     if (crossRetentionPct < 10) {
-      secondaryBullets.push(`${rerunChannelName} 직후재방 유지율이 ${crossRetentionPct.toFixed(1)}%로 낮아, 실질적인 유입 효과는 제한적으로 보임`);
+      secondaryBullets.push(`${rerunChannelName} 직재방 유지율이 ${crossRetentionPct.toFixed(1)}%로 낮아, 실질적인 유입 효과는 제한적으로 보임`);
     }
   }
 
@@ -1690,12 +1694,14 @@ function buildOriginalInsight(
     );
   }
 
-  // 본채널 당일 자체 재방 효과(숫자는 헤더에 이미 노출되나, %견인 서술은 여기서만).
+  // 당일 자체 재방 효과(숫자는 헤더에 이미 노출되나, %견인 서술은 여기서만).
+  // 사용자 지시(2026-09-03): "ENA 본채널이라고 하지 말고 ENA 직재방 등으로 표기" — "본채널"이라는
+  // 말을 빼고 채널명 바로 뒤에 "직재방"을 붙인다.
   let selfRetentionPct: number | null = null;
   if (item.self_rerun_rating !== null && item.matched_rating !== null && item.matched_rating > 0) {
     selfRetentionPct = (item.self_rerun_rating / item.matched_rating) * 100;
     secondaryBullets.push(
-      `${broadcastChannelName} 본채널 직재방 효과: 본방 종료 직후 자체 재방(${item.self_rerun_start_time ? fmtTimeKorean(item.self_rerun_start_time) : ""}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
+      `${broadcastChannelName} 직재방 효과: 본방 종료 직후 재방(${item.self_rerun_start_time ? fmtTimeKorean(item.self_rerun_start_time) : ""}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
     );
   }
 
@@ -1708,11 +1714,13 @@ function buildOriginalInsight(
   // 있을 때만 추가된다.
   const schedulingNote: string[] = [];
 
-  // 본채널 재방 유입이 타 채널 재방 유입보다 뚜렷하게(10%p 이상) 높을 때만 카니발라이제이션
+  // 자체 재방 유입이 타 채널 재방 유입보다 뚜렷하게(10%p 이상) 높을 때만 카니발라이제이션
   // 가능성을 짚는다. 패턴이 없으면 생성하지 않는다(단정 회피).
+  // 사용자 지시(2026-09-03): "본채널"이라는 말 대신 채널명을 그대로 쓴다. 조사(이/가)는 채널명
+  // 끝음절에 맞춰 josaIga()로 정확히 붙인다(이미 이 파일이 다른 서술문에서 쓰는 헬퍼 재사용).
   if (selfRetentionPct !== null && crossRetentionPct !== null && rerunChannelName && selfRetentionPct - crossRetentionPct >= 10) {
     schedulingNote.push(
-      `${broadcastChannelName} 직재방으로 인한 ${rerunChannelName} 카니발라이제이션 가능성 — ${broadcastChannelName} 본채널이 본방 종료 직후 자체 재방을 바로 배치함에 따라 재시청·유입 수요가 본채널로 집중되어, ${rerunChannelName}의 직후 재방 편성은 시청률 견인 효과를 거의 보지 못한 것으로 보입니다(동시에 관찰된 패턴 — 인과관계로 단정하지 않음). ${rerunChannelName}의 재방 시점 분산이나 타깃층 맞춤형 차별화 편성을 검토해볼 만합니다.`
+      `${broadcastChannelName} 직재방으로 인한 ${rerunChannelName} 카니발라이제이션 가능성 — ${broadcastChannelName}${josaIga(broadcastChannelName)} 본방 종료 직후 자체 재방을 바로 배치함에 따라 재시청·유입 수요가 ${broadcastChannelName}로 집중되어, ${rerunChannelName}의 직재방 편성은 시청률 견인 효과를 거의 보지 못한 것으로 보입니다(동시에 관찰된 패턴 — 인과관계로 단정하지 않음). ${rerunChannelName}의 재방 시점 분산이나 타깃층 맞춤형 차별화 편성을 검토해볼 만합니다.`
     );
   }
 
@@ -2440,6 +2448,13 @@ function fmtPointWhen(p: RatingHistoryPoint): string {
   return `${Number(m)}월 ${Number(d)}일`;
 }
 
+// 사용자 지시(2026-09-03, 2차): "연령대는 수도권 빼고 여20대, 남30대 이런식으로" — age_breakdown의
+// 원본 라벨("수도권 여30대")에서 지역 접두어를 떼고, 성별 글자와 숫자 사이에 공백을 넣는다.
+function shortAgeGenderLabel(label: string): string {
+  const stripped = label.replace(/^(수도권|전국)\s*/, "");
+  return stripped.replace(/^([남여])(\d)/, "$1 $2");
+}
+
 // 사용자 지시(2026-09-03): "전 주나 지난 4주간의 성적 대비 등 입체적인 내용" — ratingHistory에
 // 이미 받아 둔 본방 회차별 시계열에서 직전 회차·직전 4회 평균과의 비교만 뽑는다(DB가 계산해 준
 // 값들의 평균·차이일 뿐 새 지표를 만들지 않는다). 오늘 회차는 제외하고 그 이전만 평균 낸다.
@@ -2463,19 +2478,6 @@ function fmtSecondsCompactKorean(v: number): string {
   const m = Math.floor(v / 60);
   const s = Math.round(v % 60);
   return s === 0 ? `${m}분` : `${m}분 ${s}초`;
-}
-
-// SECONDARY DATA 한 칸 — 라벨(가장 작게)/값(중간)/보조설명(회차·시각 등, 작게)의 3단 위계를 모든
-// 항목이 똑같이 따르게 해서, 값이 비거나 문자열이 길어져도 칸끼리 정렬이 흐트러지지 않게 한다
-// (동적 데이터 대응 지시). 값이 없는 항목은 호출부에서 아예 렌더하지 않는다.
-function ReviewMetric({ label, value, sub }: { label: string; value: string; sub?: string | null }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10.5px] font-medium tracking-wider text-zinc-400">{label}</p>
-      <p className="mt-1 text-[17px] font-semibold tabular-nums tracking-tight text-zinc-800">{value}</p>
-      {sub && <p className="mt-0.5 truncate text-[11px] leading-snug text-zinc-400" title={sub}>{sub}</p>}
-    </div>
-  );
 }
 
 function OriginalContentReportCard({
@@ -2513,7 +2515,16 @@ function OriginalContentReportCard({
           </p>
         ) : (
           <div className="flex flex-col gap-10">
-            {report.daily.map((h) => {
+            {/* 사용자 지시(2026-09-03, 2차): "당일 자체 재방이 ... 이 부분은 ENA 본채널 직재방
+                효과랑 붙여서 같이 설명" — 전 일자 종합 문장(buildOriginalDailyBriefing)이 카드
+                맨 아래, 모든 프로그램·차트·인사이트 박스보다도 한참 아래 떨어져 있어 "본채널
+                직재방 효과" 불릿과 동떨어져 보였다. 여기서 한 번만 계산해 마지막 프로그램의
+                secondaryBullets 바로 아래에 붙인다(집계 데이터라 프로그램별로 반복 계산하지
+                않고, 렌더 위치만 마지막 항목으로 옮긴다). */}
+            {(() => {
+              const dailyBriefing = buildOriginalDailyBriefing(report.daily);
+              return report.daily.map((h, idx) => {
+              const isLastDaily = idx === report.daily.length - 1;
               const headline = buildOriginalHeadline(h);
               const achievementPct = achievementPctByCode.get(h.broadcast_channel_code) ?? null;
               const insight = buildOriginalInsight(h, headline?.rank ?? null, headline?.beatenBy ?? [], achievementPct);
@@ -2531,12 +2542,15 @@ function OriginalContentReportCard({
               // 사용자 지시(2026-09-03, UI/UX REDESIGN): HERO KPI의 2순위 지표. 사용자 지시
               // (2026-08-26)의 기존 규칙("동시방송이 있으면 동시방송을 먼저, 없을 때만 직후재방")을
               // 그대로 승계한다 — 데이터상 상호배타라 둘 중 하나만 채워진다.
+              // 사용자 재지시(2026-09-03, 2차): "'동시방영'이라고 되어 있는 자리에 '동시방영 |
+              // SBS Plus 밤 10시 29분' 내용으로" — 라벨 자리에 채널·시각까지 한 줄로 합친다.
+              // 직후재방도 같은 세션의 "직재방" 용어 통일 지시에 맞춰 라벨을 "직재방"으로 바꿨다.
               const secondKpi =
                 h.simulcast_rating !== null && h.simulcast_channel_code
-                  ? { label: "동시방영", channelCode: h.simulcast_channel_code, rating: h.simulcast_rating, time: h.simulcast_start_time, note: null as string | null }
+                  ? { labelPrefix: "동시방영", channelCode: h.simulcast_channel_code, rating: h.simulcast_rating, time: h.simulcast_start_time, note: null as string | null }
                   : h.rerun_rating !== null && h.rerun_channel_code
                     ? {
-                        label: "직후재방",
+                        labelPrefix: "직재방",
                         channelCode: h.rerun_channel_code,
                         rating: h.rerun_rating,
                         time: h.rerun_start_time,
@@ -2613,50 +2627,81 @@ function OriginalContentReportCard({
                       </div>
                       {secondKpi && (
                         <div className="min-w-0">
-                          <p className={REPORT_EYEBROW}>{secondKpi.label}</p>
+                          <p className={REPORT_EYEBROW}>
+                            {secondKpi.labelPrefix}
+                            {secondKpi.time && (
+                              <span className="ml-1 font-normal normal-case tracking-normal text-zinc-400">
+                                | {CHANNEL_NAME_BY_CODE[secondKpi.channelCode] ?? secondKpi.channelCode} {fmtTimeKorean(secondKpi.time)}
+                              </span>
+                            )}
+                          </p>
                           <p className="mt-2 text-[32px] font-semibold leading-[0.95] tabular-nums tracking-tight text-zinc-700">
                             {formatRating(secondKpi.rating, h.broadcast_channel_code)}
                           </p>
-                          <p className="mt-2.5 text-[12.5px] text-zinc-400">
-                            <span className="font-semibold" style={{ color: themeColorByCode.get(secondKpi.channelCode) ?? UNBRANDED_CHANNEL_COLOR }}>
-                              {CHANNEL_NAME_BY_CODE[secondKpi.channelCode] ?? secondKpi.channelCode}
-                            </span>
-                            {secondKpi.time && <> · {fmtTimeKorean(secondKpi.time)}</>}
-                            {secondKpi.note && <> · {secondKpi.note}</>}
-                          </p>
+                          {secondKpi.note && <p className="mt-2.5 text-[12.5px] text-zinc-400">{secondKpi.note}</p>}
                         </div>
                       )}
                     </div>
                     {/* 사용자 지시(2026-09-03): "시청시간, 시청시간 비율, 연령대별 인사이트, 경쟁
-                        채널, 전 주나 지난 4주간의 성적 대비 등 입체적인 내용" — 세 축(몰입도 /
-                        최근 성적 대비 / 연령대)을 나란히 둔다. 전부 이미 DB가 계산해 내려준
-                        값이고, 새 지표를 만들지 않는다. 값이 없는 축은 통째로 빠진다. */}
-                    <div className="grid gap-7 sm:grid-cols-3 lg:border-l lg:border-zinc-100 lg:pl-12">
-                      <div className="min-w-0">
-                        <p className={REPORT_EYEBROW}>몰입도</p>
-                        <div className="mt-2.5 space-y-2">
-                          {h.matched_time_spent_seconds !== null && (
-                            <p className="text-[14px] text-zinc-600">
-                              <span className="font-semibold tabular-nums text-zinc-800">{fmtSecondsCompactKorean(h.matched_time_spent_seconds)}</span>
-                              <span className="ml-1.5 text-[12px] text-zinc-400">시청시간</span>
-                            </p>
-                          )}
-                          {h.matched_time_spent_share !== null && (
-                            <p className="text-[14px] text-zinc-600">
-                              <span className="font-semibold tabular-nums text-zinc-800">{h.matched_time_spent_share.toFixed(2)}%</span>
-                              <span className="ml-1.5 text-[12px] text-zinc-400">시청 비율</span>
-                            </p>
-                          )}
-                          {h.matched_reach !== null && (
-                            <p className="text-[14px] text-zinc-600">
-                              <span className="font-semibold tabular-nums text-zinc-800">{h.matched_reach.toFixed(2)}%</span>
-                              <span className="ml-1.5 text-[12px] text-zinc-400">도달율</span>
-                            </p>
-                          )}
-                          {h.matched_time_spent_seconds === null && h.matched_time_spent_share === null && h.matched_reach === null && (
-                            <p className="text-[12px] text-zinc-300">자료 없음</p>
-                          )}
+                        채널, 전 주나 지난 4주간의 성적 대비 등 입체적인 내용" — 네 축(핵심 지표 /
+                        몰입도 / 최근 성적 대비 / 연령대)을 나란히 둔다. 전부 이미 DB가 계산해
+                        내려준 값이고, 새 지표를 만들지 않는다. 값이 없는 축은 통째로 빠진다.
+                        사용자 재지시(2026-09-03, 2차): "노란색으로 표시한 부분(목표 달성률·리드인·
+                        당일 자체재방)은 몰입도와 시청률 사이에 배치하여 한 줄 안에 주요 내용이
+                        다 보이게" — 본문 아래 별도 줄로 내려뒀던 그 3개 지표를 다시 이 상단
+                        한 줄짜리 그리드로 끌어올려, 시청률(hero)과 몰입도 사이의 첫 칸으로 둔다. */}
+                    <div className="grid gap-7 sm:grid-cols-2 lg:grid-cols-4 lg:border-l lg:border-zinc-100 lg:pl-12">
+                      {(achievementPct !== null || h.pre_rerun_rating !== null || h.self_rerun_rating !== null) && (
+                        <div className="min-w-0">
+                          <p className={REPORT_EYEBROW}>핵심 지표</p>
+                          <div className="mt-2.5 space-y-2">
+                            {achievementPct !== null && (
+                              <p className="text-[14px] text-zinc-600">
+                                <span className="font-semibold tabular-nums text-zinc-800">{achievementPct.toFixed(1)}%</span>
+                                <span className="ml-1.5 text-[12px] text-zinc-400">목표 달성률(연간 누적)</span>
+                              </p>
+                            )}
+                            {h.pre_rerun_rating !== null && (
+                              <p className="text-[14px] text-zinc-600">
+                                <span className="font-semibold tabular-nums text-zinc-800">{formatRating(h.pre_rerun_rating, h.broadcast_channel_code)}</span>
+                                <span className="ml-1.5 text-[12px] text-zinc-400">
+                                  리드인(전회 재방){h.pre_rerun_start_time ? ` · ${fmtTimeKorean(h.pre_rerun_start_time)}` : ""}
+                                </span>
+                              </p>
+                            )}
+                            {h.self_rerun_rating !== null && (
+                              <p className="text-[14px] text-zinc-600">
+                                <span className="font-semibold tabular-nums text-zinc-800">{formatRating(h.self_rerun_rating, h.broadcast_channel_code)}</span>
+                                <span className="ml-1.5 text-[12px] text-zinc-400">
+                                  {broadcastChannelName} 직재방{h.self_rerun_start_time ? ` · ${fmtTimeKorean(h.self_rerun_start_time)}` : ""}
+                                </span>
+                              </p>
+                            )}
+                          </div>
                         </div>
+                      )}
+                      <div className="min-w-0">
+                        {/* 사용자 재지시(2026-09-03, 2차): "몰입도는 시청시간 73분 28초, 시청비율
+                            67.3%, 도달율 2.04% 순으로" — 3줄로 쌓던 것을 한 줄짜리 쉼표 나열
+                            문장으로 바꾸고, 라벨을 값 앞에 둔다(값-라벨 순서였던 것을 뒤집음). */}
+                        <p className={REPORT_EYEBROW}>몰입도</p>
+                        <p className="mt-2.5 text-[14px] leading-relaxed text-zinc-600">
+                          {(() => {
+                            const parts = [
+                              h.matched_time_spent_seconds !== null ? { label: "시청시간", value: fmtSecondsCompactKorean(h.matched_time_spent_seconds) } : null,
+                              h.matched_time_spent_share !== null ? { label: "시청비율", value: `${h.matched_time_spent_share.toFixed(2)}%` } : null,
+                              h.matched_reach !== null ? { label: "도달율", value: `${h.matched_reach.toFixed(2)}%` } : null,
+                            ].filter((p): p is { label: string; value: string } => p !== null);
+                            if (parts.length === 0) return <span className="text-zinc-300">자료 없음</span>;
+                            return parts.map((part, i) => (
+                              <span key={part.label}>
+                                {i > 0 && <span className="text-zinc-300">, </span>}
+                                <span className="text-zinc-500">{part.label} </span>
+                                <span className="font-semibold tabular-nums text-zinc-800">{part.value}</span>
+                              </span>
+                            ));
+                          })()}
+                        </p>
                       </div>
                       <div className="min-w-0">
                         <p className={REPORT_EYEBROW}>최근 성적 대비</p>
@@ -2686,8 +2731,11 @@ function OriginalContentReportCard({
                           {ages.length > 0 ? (
                             ages.map((a) => (
                               <div key={a.label} className="flex items-center gap-2">
+                                {/* 사용자 지시(2026-09-03, 2차): "수도권 빼고 여20대, 남30대
+                                    이런식으로" — shortAgeGenderLabel()로 지역 접두어를 떼고
+                                    성별·연령 사이에 공백을 둔다. */}
                                 <span className="w-14 shrink-0 truncate text-[11.5px] text-zinc-500" title={a.label}>
-                                  {a.label}
+                                  {shortAgeGenderLabel(a.label)}
                                 </span>
                                 <span className="h-1.5 min-w-[2px] rounded-full" style={{ width: `${ageMax > 0 ? (a.rating / ageMax) * 52 : 0}%`, backgroundColor: accent, opacity: 0.55 }} />
                                 <span className="shrink-0 text-[11.5px] font-semibold tabular-nums text-zinc-600">
@@ -2713,14 +2761,16 @@ function OriginalContentReportCard({
                   <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:gap-12">
                     <div className="min-w-0">
                       {/* 사용자 지시(2026-08-25): "핵심 요약 분석" 4개 지표(목표 달성도/리드인 견인
-                          효과/본방송 수치/직후 재방송 유입 효과)를 명세 문구·순서 그대로. */}
+                          효과/본방송 수치/직후 재방송 유입 효과)를 명세 문구·순서 그대로.
+                          사용자 재지시(2026-09-03, 2차): "핵심요약과 인사이트 내용 폰트가 너무
+                          작아. 좀더 진하고 잘보이게" — 13px/zinc-600 → 14.5px/font-medium/zinc-700. */}
                       {insight.bullets.length > 0 && (
                         <>
                           <p className={REPORT_EYEBROW}>핵심 요약</p>
                           <ul className="mt-2.5 space-y-1.5">
                             {insight.bullets.map((b, i) => (
-                              <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-zinc-600">
-                                <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-zinc-300" />
+                              <li key={i} className="flex gap-2 text-[14.5px] font-medium leading-relaxed text-zinc-700">
+                                <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-zinc-300" />
                                 <span>{b}</span>
                               </li>
                             ))}
@@ -2741,11 +2791,11 @@ function OriginalContentReportCard({
                         <div className="mt-6 border-l-2 border-zinc-200 pl-4">
                           <p className={`${REPORT_EYEBROW} mb-1.5`}>편성 인사이트</p>
                           {h.schedulingInsight ? (
-                            <p className="text-[13px] leading-relaxed text-zinc-600">{highlightNarrativeText(h.schedulingInsight, ACCENT_UP, ACCENT_DOWN)}</p>
+                            <p className="text-[14.5px] font-medium leading-relaxed text-zinc-700">{highlightNarrativeText(h.schedulingInsight, ACCENT_UP, ACCENT_DOWN)}</p>
                           ) : (
                             <div className="flex flex-col gap-1.5">
                               {insight.schedulingNote.map((note, i) => (
-                                <p key={i} className="text-[13px] leading-relaxed text-zinc-600">
+                                <p key={i} className="text-[14.5px] font-medium leading-relaxed text-zinc-700">
                                   {highlightNarrativeText(note, ACCENT_UP, ACCENT_DOWN)}
                                 </p>
                               ))}
@@ -2765,6 +2815,12 @@ function OriginalContentReportCard({
                             </li>
                           ))}
                         </ul>
+                      )}
+                      {/* 사용자 지시(2026-09-03, 2차): 종합 문장을 "본채널 직재방 효과" 불릿
+                          바로 아래에 붙여서 같이 설명 — 위계는 secondaryBullets와 같은 footnote
+                          톤을 유지한다(핵심 KPI보다 눈에 띄지 않게). */}
+                      {isLastDaily && dailyBriefing && (
+                        <p className="mt-3 text-[11.5px] leading-relaxed text-zinc-400">{dailyBriefing}</p>
                       )}
                     </div>
                     {/* 오른쪽 참조 열 — 읽는 정보가 아니라 대조용 정보(경쟁 프로그램·추이). */}
@@ -2810,30 +2866,8 @@ function OriginalContentReportCard({
                       )}
                     </div>
                   </div>
-                  {/* 사용자 지시(2026-09-03): "목표달성률, 최고, 최저, 도달률, 리드인 등은 다른
-                      핵심 내용이나 인사이트보다 덜 중요하므로 한 줄에 나와도 되고, 배치도
-                      후순위로" — 위쪽 KPI 자리에서 빼서 본문 아래 한 줄(가로 나열)로 내렸다.
-                      최고/최저/도달율은 위 "최근 성적 대비"·"몰입도" 축에서 이미 다루므로 여기엔
-                      남은 세 가지(목표 달성률·리드인·당일 자체재방)만 둔다. */}
-                  {(achievementPct !== null || h.pre_rerun_rating !== null || h.self_rerun_rating !== null) && (
-                    <div className="mt-7 flex flex-wrap gap-x-12 gap-y-4 border-t border-zinc-100 pt-5">
-                      {achievementPct !== null && <ReviewMetric label="목표 달성률" value={`${achievementPct.toFixed(1)}%`} sub="연간 누적" />}
-                      {h.pre_rerun_rating !== null && (
-                        <ReviewMetric
-                          label="리드인(전회 재방)"
-                          value={formatRating(h.pre_rerun_rating, h.broadcast_channel_code)}
-                          sub={h.pre_rerun_start_time ? fmtTimeKorean(h.pre_rerun_start_time) : null}
-                        />
-                      )}
-                      {h.self_rerun_rating !== null && (
-                        <ReviewMetric
-                          label="당일 자체재방"
-                          value={formatRating(h.self_rerun_rating, h.broadcast_channel_code)}
-                          sub={h.self_rerun_start_time ? fmtTimeKorean(h.self_rerun_start_time) : null}
-                        />
-                      )}
-                    </div>
-                  )}
+                  {/* 사용자 지시(2026-09-03, 2차): 목표 달성률·리드인·당일 자체재방은 이제 위
+                      HERO KPI 줄의 "핵심 지표" 칸으로 옮겨졌다(더는 여기서 별도로 그리지 않음). */}
                   {/* 사용자 지시(2026-08-26): "1페이지 주요 컨텐츠 리뷰에 분단위 그래프 반영" —
                       PD가 업로드한 수동 리포트(manual-drama-report)에 분당 시청률이 있을 때만.
                       이 그래프만 아래 범례가 3열 grid라 좁은 열에서는 읽히지 않아, 2단 바깥
@@ -2851,7 +2885,8 @@ function OriginalContentReportCard({
                   )}
                 </article>
               );
-            })}
+              });
+            })()}
           </div>
         )
       ) : report.weekly.length === 0 ? (
@@ -2892,18 +2927,10 @@ function OriginalContentReportCard({
         </div>
       )}
 
-      {/* 사용자 지시(2026-09-03, UI/UX REDESIGN 7항): "당일 자체 재방이 있었던 1편은 평균 본방
-          대비 25%..." 같은 종합 문장은 핵심 KPI가 아니므로 강조 문구처럼 보이지 않게 한다 —
-          문장은 그대로 두고 위계만 본문(text-base/zinc-700)에서 footnote(11.5px/zinc-400 +
-          구분선)로 낮춘다. */}
-      {report.mode === "daily" &&
-        report.daily.length > 0 &&
-        (() => {
-          const briefing = buildOriginalDailyBriefing(report.daily);
-          return briefing ? (
-            <p className="mt-8 border-t border-zinc-100 pt-3 text-[11.5px] leading-relaxed text-zinc-400">{briefing}</p>
-          ) : null;
-        })()}
+      {/* 사용자 지시(2026-09-03, UI/UX REDESIGN 7항 → 2026-09-03 2차로 위치 재조정): 종합 문장은
+          더는 카드 맨 아래 별도 문단으로 그리지 않는다 — "본채널 직재방 효과랑 붙여서 같이 설명"
+          지시에 따라 마지막 프로그램 article의 secondaryBullets 바로 아래로 옮겼다(위 map 안,
+          isLastDaily && dailyBriefing 조건). */}
     </section>
   );
 }
