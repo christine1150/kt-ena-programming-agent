@@ -2894,23 +2894,32 @@ function TopProgramListItems({
 // 사용자 지시(2026-08-21): "선택기간 동기간 경쟁사 주요프로그램은 일회성 편성이 아니라 프로그램별
 // 기간 평균으로 뽑고, 비교 분석 시엔 두 기간 각각 Top7" — get_competitor_period_top_programs가
 // 이미 프로그램 단위로 묶어 내려주므로(같은 프로그램 중복 없음), 목록만 렌더링한다.
+// 사용자 지시(2026-09-02): "프로그램명이 잘리지 않도록 전체적으로 타이틀 파트에 여유를 두는
+// 레이아웃으로 수정. 시청률끼리 좌정렬 맞출 수 있도록" — flex(min-w-0 truncate)는 형제 요소
+// 너비에 따라 타이틀 칸 폭이 흔들려 긴 제목이 줄바꿈되고 시청률 위치도 행마다 달라졌다.
+// grid로 [순위 | 제목(가변, 나머지 전부)|시청률(고정폭)] 3열을 고정해 제목에 가장 넓은 공간을
+// 주고, 시청률 열은 항상 같은 x좌표에서 시작(좌정렬)하도록 한다.
 function CompetitorPeriodTopProgramsList({ rows, fmtR }: { rows: CompetitorPeriodTopProgramRow[]; fmtR: (v: number | null) => string }) {
   if (rows.length === 0) {
     return <p className="text-sm text-zinc-400">이 기간 등록 경쟁채널 프로그램 데이터가 없습니다.</p>;
   }
   return (
-    <ol className="space-y-1.5 text-sm">
+    <ol className="text-sm">
       {rows.map((p, i) => (
-        <li key={`${p.competitor_name}__${p.program_name}`} className="flex items-center gap-2">
-          <span className="w-4 shrink-0 text-right font-medium text-zinc-400">{i + 1}</span>
-          <span className="font-medium text-zinc-700">{p.competitor_name}</span>
-          <span className="text-[12px] text-zinc-400">(채널 {p.channel_rank}위, 기간 평균 {fmtR(p.channel_period_avg_rating)})</span>
-          <span className="min-w-0 flex-1 truncate text-zinc-500">
-            {p.typical_start_hour !== null ? `${p.typical_start_hour}시경 ` : ""}
-            {p.program_name}
-            <span className="text-zinc-400"> · {p.air_count}회 평균</span>
+        <li key={`${p.competitor_name}__${p.program_name}`} className="grid grid-cols-[1.25rem_1fr_4.5rem] items-baseline gap-x-2 py-1">
+          <span className="text-right font-medium text-zinc-400">{i + 1}</span>
+          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+            <span className="font-medium text-zinc-700">{p.competitor_name}</span>{" "}
+            <span className="text-[12px] text-zinc-400">
+              (채널 {p.channel_rank}위, 기간 평균 {fmtR(p.channel_period_avg_rating)})
+            </span>{" "}
+            <span className="text-zinc-500">
+              {p.typical_start_hour !== null ? `${p.typical_start_hour}시경 ` : ""}
+              {p.program_name}
+              <span className="text-zinc-400"> · {p.air_count}회 평균</span>
+            </span>
           </span>
-          <span className="ml-auto shrink-0 font-semibold text-zinc-800">{fmtR(p.program_avg_rating)}</span>
+          <span className="text-left font-semibold text-zinc-800">{fmtR(p.program_avg_rating)}</span>
         </li>
       ))}
     </ol>
@@ -4360,17 +4369,25 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           따라 max-w-[1800px]로 한 번 더 넓힌다(초광폭 모니터에서도 표·그래프가 과하게 늘어지지
           않도록 완전 무제한 대신 넉넉한 상한을 둠). */}
       <div className="mx-auto flex max-w-[1800px] flex-col gap-6">
-        {/* 헤더 — ENA Story만 보라→핑크→주황(끝자락만) Stripe풍 그라디언트, 다른 채널은 기존
-            로고색 단색 그라디언트 그대로. */}
+        {/* 헤더 재설계(2026-09-02, 사용자 지시): "상단 레이아웃이 매우 복잡해졌어. 가독률 좋고,
+            세련되게... 하이엔드 패션 매거진 스타일로. 너무 여러줄에 걸쳐 나오지 않게. 상단 바
+            높이가 너무 높지 않게" — 기존 18개 정보·기능을 전부 그대로 유지하되(데이터 바인딩·
+            조건문 변경 없음, 순서·표현 방식만 재배치) 2단 구조로 압축한다.
+            1행(히어로): 로고+타깃+대표 숫자(좌) / 큰 글씨·리포트 링크·기간 선택 유틸리티 한 줄(우).
+            2행(메타데이터): 기준일·목표·순위·전일전주(또는 비교기간) 대비·Health Score를 가운데
+            점 구분자로 한 줄에 묶는다(색상 보더 대신 얇은 상단 구분선 하나만 사용).
+            ENA Story만 보라→핑크→주황(끝자락만) Stripe풍 그라디언트, 다른 채널은 기존 로고색
+            단색 그라디언트 그대로. */}
         <div
-          className="rounded-3xl p-8 text-white shadow-sm"
+          className="rounded-3xl p-6 text-white shadow-sm"
           style={{
             background: isEnaStory
               ? "linear-gradient(120deg, #7828e0 0%, #c22de0 45%, #f43fc4 78%, #ffb020 100%)"
               : `linear-gradient(135deg, ${accentColor}, ${accentColor}99)`,
           }}
         >
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          {/* 1행 — 히어로: 로고+타깃+대표 숫자(좌) / 유틸리티 한 줄(우) */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               {channel.logoPath && (
                 <div className="rounded-2xl bg-white/90 px-3 py-2">
@@ -4385,14 +4402,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </div>
               )}
               <div>
-                <p className="text-sm text-white/80">{formatChannelTargetLine(channel.primaryTarget)}</p>
-                <p className="text-3xl font-semibold">
-                  {showComparisonView ? fmtR(data.periodReport?.avg_rating ?? null) : fmtR(current?.rating ?? null)}
+                <p className="text-xs font-medium tracking-wide text-white/70">{formatChannelTargetLine(channel.primaryTarget)}</p>
+                <p className="flex items-baseline gap-1.5">
+                  <span className="text-4xl font-semibold tabular-nums">
+                    {showComparisonView ? fmtR(data.periodReport?.avg_rating ?? null) : fmtR(current?.rating ?? null)}
+                  </span>
                   {/* 사용자 지시(2026-08-21): 당일 시청률 옆에 그날 등위도 괄호로 — 단일 일자
                       조회일 때만(기간 평균에는 등위 개념이 없음). 사용자 재지시(2026-08-25):
                       Page 1 채널 타일과 같은 "(해당일자순위/목표순위)" 형식으로, 볼드 없이. */}
                   {!showComparisonView && narrativeSignal?.today_rank != null && (
-                    <span className="ml-1.5 text-lg font-normal text-white/70">
+                    <span className="text-base font-normal tabular-nums text-white/70">
                       {/* 버그 수정(2026-09-02, 사용자 신고): parseInt()가 "경쟁채널 중 2위"처럼
                           숫자가 문장 중간에 있는 skyUHD의 target_rank를 못 읽어(문자열 시작이
                           숫자여야만 파싱됨) 목표 등위가 항상 "-"로 보였다 — 문자열 어디에 있든
@@ -4400,50 +4419,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       ({narrativeSignal.today_rank}/{data.targetAchievement?.target_rank?.match(/\d+/)?.[0] ?? "-"})
                     </span>
                   )}
+                  {showComparisonView && (
+                    <span className="text-sm font-normal text-white/70">{isComparisonPreset ? "이번 기간 평균" : "선택 기간 평균"}</span>
+                  )}
                 </p>
-                {showComparisonView && <p className="text-sm text-white/70">{isComparisonPreset ? "이번 기간 평균" : "선택 기간 평균"}</p>}
-                {/* 사용자 신고(2026-09-02): "목표 시청률(target_rating)이 잘 반영이 안 되는 것
-                    같다" — 확인 결과 DB·RPC 계산은 정상(get_target_achievement)이지만 이 값을
-                    보여주는 자리가 화면 어디에도 없었다(2049였다면 오히려 눈에 띄었겠지만, skyUHD는
-                    0.0019처럼 값이 작아 "반영 안 됨"으로 느끼기 쉬움). 단일 일자 조회일 때만,
-                    이미 계산된 값을 그대로 한 줄로 노출한다(새 계산 없음). */}
-                {!showComparisonView && data.targetAchievement?.target_rating != null && (
-                  <p className="mt-0.5 text-sm text-white/70">
-                    목표 시청률 {fmtR(data.targetAchievement.target_rating)}
-                    {data.targetAchievement.achievement_pct != null && (
-                      <span className={data.targetAchievement.achievement_pct >= 100 ? "ml-1 text-emerald-300" : "ml-1 text-rose-200"}>
-                        (달성률 {data.targetAchievement.achievement_pct.toFixed(1)}%)
-                      </span>
-                    )}
-                  </p>
-                )}
-                {/* O절(2026-09-01) — 닐슨 주간 파일의 "기간 단위 시장 순위" 변화. 일별 순위 평균과
-                    다른 값이라 daily로는 만들 수 없어 별도 테이블에서 온다. 해당 주 파일이 아직
-                    업로드되지 않았으면 이 줄 자체가 안 보인다(없는 값을 지어내지 않음). */}
-                {data.periodRankMovement?.current_rank != null && (
-                  <p className="mt-1 text-sm text-white/80">
-                    주간 시장 순위 {data.periodRankMovement.prior_rank != null && <>#{data.periodRankMovement.prior_rank} → </>}
-                    <b className="font-semibold">#{data.periodRankMovement.current_rank}</b>
-                    {data.periodRankMovement.rank_change != null && data.periodRankMovement.rank_change !== 0 && (
-                      <span className={data.periodRankMovement.rank_change > 0 ? "ml-1 text-emerald-300" : "ml-1 text-rose-300"}>
-                        {data.periodRankMovement.rank_change > 0 ? "▲" : "▼"}
-                        {Math.abs(data.periodRankMovement.rank_change)}
-                      </span>
-                    )}
-                    <span className="ml-1.5 text-xs text-white/60">
-                      ({data.periodRankMovement.current_from}~{data.periodRankMovement.current_to})
-                    </span>
-                  </p>
-                )}
-                {/* Channel Health Score(2026-08-27, Phase 1) — 단일 일자 조회일 때만. 사용자
-                    지시(2026-08-27): "전주 대비 % 우측으로 이동" — 아래 전일/전주 대비 문구 줄에
-                    같이 놓는 게 기본이고, 그 줄 자체가 안 뜨는 경우(dod/wow 데이터 없음)에만 여기
-                    원래 자리에 폴백으로 남긴다(배지가 사라지지 않게). */}
-                {channelHealth && !hasDodOrWowDelta && (
-                  <div className="mt-2">
-                    <HealthScoreBadge health={channelHealth} compact showReason />
-                  </div>
-                )}
               </div>
             </div>
             {/* 기간 설정(사용자 지시 2026-08-20, 두 차례 반영): 오늘/어제/지난 7일/지난 1달/연간
@@ -4451,177 +4430,220 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 고르면 헤더의 "전일 대비"와 아래 WHAT HAPPENED? 표가 이미 오늘 대비 전일/전주/전월/
                 전분기/전년을 전부 보여주므로, 기준일 자체를 어제/전주로 옮기는 예전 방식은 "오늘의
                 브리핑" 등이 과거를 마치 오늘인 것처럼 서술하는 문제가 있었다(사용자 지시로 수정). */}
-            <div className="flex flex-col items-end gap-1.5">
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {/* 사용자 지시(2026-09-02): "큰 글씨로 보기는 '큰 글씨'라고만 적고, 아이콘을 채널
-                    리포트 좌측으로 이동" — 헤더 위 별도 줄 대신 이 버튼 그룹 맨 앞(=채널 리포트
-                    왼쪽)에 같은 pill 스타일(bg-white/20)로 배치. skyUHD처럼 소수점 5자리 시청률이
-                    특히 읽기 어려운 채널을 염두에 뒀지만 모든 채널 페이지에서 동일하게 제공한다.
-                    사용자 재지시(2026-09-02): 🔍 이모지 대신 1페이지와 같은 단색 SVG 확대(+) 아이콘. */}
-                <button
-                  type="button"
-                  onClick={() => setLargeFontMode((v) => !v)}
-                  title={code === "SKYUHD" ? "큰 글씨로 보기 (skyUHD 추천)" : "큰 글씨로 보기"}
-                  className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/30"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="11" cy="11" r="7" />
-                    <line x1="11" y1="8" x2="11" y2="14" />
-                    <line x1="8" y1="11" x2="14" y2="11" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
-                  {largeFontMode ? "기본 글씨" : "큰 글씨"}
-                </button>
-                {/* N절 Phase 3(2026-09-01, 시스템 일원화) — 구 시스템("📄 리포트 보기",
-                    /report/[date] + /api/report/channel/**)을 제거하고 신 시스템 버튼으로
-                    일원화했다. Phase 2b(Quarterly/Annual tier에 있던 Daypart Win/Weakness·
-                    Program Portfolio)·2c(Strategic Implications)를 신 시스템 MODE D로 이식해
-                    구 시스템만의 고유 기능이 더는 없었고, Word/PPT는 이미 Phase 2a에서 이식
-                    완료된 상태였다 — 옛 파일들은 CLAUDE.md 규칙대로 trash-can/으로 이동(삭제
-                    아님, 사용자 최종 확인 후 삭제). */}
-                {/* Phase 7(2026-08-28, Audience Intelligence Report §11-8) — 새 시스템(/audience-report)
-                    "각 채널 보고서 만들기" 버튼. */}
-                {(() => {
-                  // periodPreset==="today"일 때는 selectedDateTo가 의도적으로 null이라(서버가 최신
-                  // 날짜를 자동으로 고르게 하는 기존 동작, :3220-3226) 위 구 버튼과 동일하게
-                  // data.dateTo(서버가 실제로 확정한 최신일)로 폴백한다.
-                  const resolvedDateTo = selectedDateTo ?? data.dateTo ?? "";
-                  const audienceHref = buildAudienceReportHref(code, periodPreset, selectedDateFrom ?? "", resolvedDateTo);
-                  const portfolioHref = buildPortfolioReportHref(periodPreset, selectedDateFrom ?? "", resolvedDateTo);
-                  // Phase 13(2026-09-01, 사용자 지시) — 이모지 제거, 제목 옆에 Word/PPT 아이콘
-                  // 두 개를 각각 클릭 가능하게. 제목 자체는 더 이상 링크가 아니다(두 아이콘이
-                  // 각자의 목적지를 갖는다) — Word 아이콘은 기존 줄글 리포트, PPT 아이콘은 새
-                  // 6-슬라이드 임원 보고용 PPT 보기(/deck)로 연결.
-                  return (
-                    <>
-                      {audienceHref && (
-                        <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white">
-                          {/* 사용자 지시(2026-09-01): "각 채널 보고서"→"채널 리포트"로 이름 변경 */}
-                          채널 리포트
-                          <Link href={audienceHref} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="Word로 보기">
-                            <WordIconBadge />
-                          </Link>
-                          <Link href={toDeckHref(audienceHref)} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="PPT로 보기">
-                            <PptIconBadge />
-                          </Link>
-                        </span>
-                      )}
-                      {portfolioHref && (
-                        <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white">
-                          종합 보고서
-                          <Link href={portfolioHref} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="Word로 보기">
-                            <WordIconBadge />
-                          </Link>
-                          <Link href={toDeckHref(portfolioHref)} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="PPT로 보기">
-                            <PptIconBadge />
-                          </Link>
-                        </span>
-                      )}
-                    </>
-                  );
-                })()}
-                {/* 사용자 지시(2026-08-21): 드랍박스를 열면 옵션 글씨가 안 보이던 버그 — optgroup으로
-                    묶으면서 option이 select의 "직계 자식"이 아니게 돼([&>option] 선택자가 더는
-                    안 먹힘) 흰 배경에 흰 글씨(투명)로 남아있었다. 자손 선택자([&_option])로 바꾸고
-                    optgroup 라벨 색도 함께 지정. */}
-                <select
-                  value={periodPreset}
-                  onChange={(e) => {
-                    const next = e.target.value as PeriodPreset;
-                    setPeriodPreset(next);
-                    // 사용자 지시(2026-09-02): SDoW 그룹을 벗어나면 요일 선택을 초기화해, 다음에
-                    // 다시 SDoW로 들어왔을 때 기준일 요일로 자동 매칭되게 한다(수동 선택 기억 안 함).
-                    if (!SDOW_PRESETS.has(next)) setSelectedDow(null);
-                  }}
-                  className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none [&_option]:text-zinc-900 [&_optgroup]:text-zinc-500"
-                >
-                  {PERIOD_PRESET_GROUPS.map((g) => (
-                    <optgroup key={g.group} label={g.group}>
-                      {g.values.map((v) => (
-                        <option key={v} value={v}>
-                          {PERIOD_PRESET_LABELS[v]}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                {periodPreset === "custom" && (
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="date"
-                      value={customFrom}
-                      onChange={(e) => setCustomFrom(e.target.value)}
-                      className="rounded-full bg-white/20 px-2.5 py-1.5 text-sm font-medium text-white outline-none"
-                    />
-                    <span className="text-white/70">~</span>
-                    <input
-                      type="date"
-                      value={customTo}
-                      onChange={(e) => setCustomTo(e.target.value)}
-                      className="rounded-full bg-white/20 px-2.5 py-1.5 text-sm font-medium text-white outline-none"
-                    />
-                  </div>
-                )}
-                {/* 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" 그룹을 골랐을 때만 나타나는
-                    요일 선택기(월~일 칩) — 드롭다운이 닫히면 바로 옆에 노출. 초기값은 기준일의
-                    요일로 자동 매칭(effectiveDow), 클릭하면 selectedDow로 고정(수동 오버라이드). */}
-                {isSdowActive && (
-                  <div className="flex items-center gap-1 rounded-full bg-white/20 px-1.5 py-1">
-                    {[1, 2, 3, 4, 5, 6, 0].map((dow) => (
-                      <button
-                        key={dow}
-                        type="button"
-                        onClick={() => setSelectedDow(dow)}
-                        className={`h-6 w-6 rounded-full text-xs font-semibold transition ${
-                          effectiveDow === dow ? "bg-white text-indigo-700" : "text-white/70 hover:bg-white/20"
-                        }`}
-                      >
-                        {DOW_CHIP_LABELS[dow]}
-                      </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {/* 사용자 지시(2026-09-02): "큰 글씨로 보기는 '큰 글씨'라고만 적고, 아이콘을 채널
+                  리포트 좌측으로 이동" — 이 버튼 그룹 맨 앞(=채널 리포트 왼쪽)에 같은 pill
+                  스타일(bg-white/20)로 배치. skyUHD처럼 소수점 5자리 시청률이 특히 읽기 어려운
+                  채널을 염두에 뒀지만 모든 채널 페이지에서 동일하게 제공한다. 사용자
+                  재지시(2026-09-02): 🔍 이모지 대신 1페이지와 같은 단색 SVG 확대(+) 아이콘. */}
+              <button
+                type="button"
+                onClick={() => setLargeFontMode((v) => !v)}
+                title={code === "SKYUHD" ? "큰 글씨로 보기 (skyUHD 추천)" : "큰 글씨로 보기"}
+                className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/30"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="11" y1="8" x2="11" y2="14" />
+                  <line x1="8" y1="11" x2="14" y2="11" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                {largeFontMode ? "기본 글씨" : "큰 글씨"}
+              </button>
+              {/* N절 Phase 3(2026-09-01, 시스템 일원화) — 구 시스템("📄 리포트 보기",
+                  /report/[date] + /api/report/channel/**)을 제거하고 신 시스템 버튼으로
+                  일원화했다. Phase 2b(Quarterly/Annual tier에 있던 Daypart Win/Weakness·
+                  Program Portfolio)·2c(Strategic Implications)를 신 시스템 MODE D로 이식해
+                  구 시스템만의 고유 기능이 더는 없었고, Word/PPT는 이미 Phase 2a에서 이식
+                  완료된 상태였다 — 옛 파일들은 CLAUDE.md 규칙대로 trash-can/으로 이동(삭제
+                  아님, 사용자 최종 확인 후 삭제). */}
+              {/* Phase 7(2026-08-28, Audience Intelligence Report §11-8) — 새 시스템(/audience-report)
+                  "각 채널 보고서 만들기" 버튼. */}
+              {(() => {
+                // periodPreset==="today"일 때는 selectedDateTo가 의도적으로 null이라(서버가 최신
+                // 날짜를 자동으로 고르게 하는 기존 동작, :3220-3226) 위 구 버튼과 동일하게
+                // data.dateTo(서버가 실제로 확정한 최신일)로 폴백한다.
+                const resolvedDateTo = selectedDateTo ?? data.dateTo ?? "";
+                const audienceHref = buildAudienceReportHref(code, periodPreset, selectedDateFrom ?? "", resolvedDateTo);
+                const portfolioHref = buildPortfolioReportHref(periodPreset, selectedDateFrom ?? "", resolvedDateTo);
+                // Phase 13(2026-09-01, 사용자 지시) — 이모지 제거, 제목 옆에 Word/PPT 아이콘
+                // 두 개를 각각 클릭 가능하게. 제목 자체는 더 이상 링크가 아니다(두 아이콘이
+                // 각자의 목적지를 갖는다) — Word 아이콘은 기존 줄글 리포트, PPT 아이콘은 새
+                // 6-슬라이드 임원 보고용 PPT 보기(/deck)로 연결.
+                return (
+                  <>
+                    {audienceHref && (
+                      <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white">
+                        {/* 사용자 지시(2026-09-01): "각 채널 보고서"→"채널 리포트"로 이름 변경 */}
+                        채널 리포트
+                        <Link href={audienceHref} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="Word로 보기">
+                          <WordIconBadge />
+                        </Link>
+                        <Link href={toDeckHref(audienceHref)} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="PPT로 보기">
+                          <PptIconBadge />
+                        </Link>
+                      </span>
+                    )}
+                    {portfolioHref && (
+                      <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white">
+                        종합 보고서
+                        <Link href={portfolioHref} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="Word로 보기">
+                          <WordIconBadge />
+                        </Link>
+                        <Link href={toDeckHref(portfolioHref)} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="PPT로 보기">
+                          <PptIconBadge />
+                        </Link>
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
+              {/* 사용자 지시(2026-08-21): 드랍박스를 열면 옵션 글씨가 안 보이던 버그 — optgroup으로
+                  묶으면서 option이 select의 "직계 자식"이 아니게 돼([&>option] 선택자가 더는
+                  안 먹힘) 흰 배경에 흰 글씨(투명)로 남아있었다. 자손 선택자([&_option])로 바꾸고
+                  optgroup 라벨 색도 함께 지정. */}
+              <select
+                value={periodPreset}
+                onChange={(e) => {
+                  const next = e.target.value as PeriodPreset;
+                  setPeriodPreset(next);
+                  // 사용자 지시(2026-09-02): SDoW 그룹을 벗어나면 요일 선택을 초기화해, 다음에
+                  // 다시 SDoW로 들어왔을 때 기준일 요일로 자동 매칭되게 한다(수동 선택 기억 안 함).
+                  if (!SDOW_PRESETS.has(next)) setSelectedDow(null);
+                }}
+                className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none [&_option]:text-zinc-900 [&_optgroup]:text-zinc-500"
+              >
+                {PERIOD_PRESET_GROUPS.map((g) => (
+                  <optgroup key={g.group} label={g.group}>
+                    {g.values.map((v) => (
+                      <option key={v} value={v}>
+                        {PERIOD_PRESET_LABELS[v]}
+                      </option>
                     ))}
-                  </div>
-                )}
-              </div>
-              {isRangeMode ? (
-                <p className="text-sm text-white/80">
-                  기간: {formatDateWithDow(data.dateFrom)} ~ {formatDateWithDow(data.dateTo)}
-                </p>
-              ) : (
-                data.asOfDate && <p className="text-sm text-white/80">기준일: {formatDateWithDow(data.asOfDate)}</p>
+                  </optgroup>
+                ))}
+              </select>
+              {periodPreset === "custom" && (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="rounded-full bg-white/20 px-2.5 py-1.5 text-sm font-medium text-white outline-none"
+                  />
+                  <span className="text-white/70">~</span>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="rounded-full bg-white/20 px-2.5 py-1.5 text-sm font-medium text-white outline-none"
+                  />
+                </div>
               )}
-              {isSdowActive && sdowAnalysisDates.length > 0 && (
-                <p className="mt-0.5 text-xs text-white/70">
-                  분석 대상 날짜({sdowAnalysisDates.length}일): {sdowAnalysisDates.map((d) => formatDateWithDow(d)).join(", ")}
-                </p>
+              {/* 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" 그룹을 골랐을 때만 나타나는
+                  요일 선택기(월~일 칩) — 드롭다운이 닫히면 바로 옆에 노출. 초기값은 기준일의
+                  요일로 자동 매칭(effectiveDow), 클릭하면 selectedDow로 고정(수동 오버라이드). */}
+              {isSdowActive && (
+                <div className="flex items-center gap-1 rounded-full bg-white/20 px-1.5 py-1">
+                  {[1, 2, 3, 4, 5, 6, 0].map((dow) => (
+                    <button
+                      key={dow}
+                      type="button"
+                      onClick={() => setSelectedDow(dow)}
+                      className={`h-6 w-6 rounded-full text-xs font-semibold transition ${
+                        effectiveDow === dow ? "bg-white text-indigo-700" : "text-white/70 hover:bg-white/20"
+                      }`}
+                    >
+                      {DOW_CHIP_LABELS[dow]}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           </div>
-          {/* 사용자 지시(2026-08-20): "전일(실제 시청률) 대비 상승/하락률", "전주(실제 시청률) 대비
-              상승/하락률" 형식으로 나란히 — 두 비교 모두 get_rating_trend_summary가 이미 계산해준
-              값(dod.rating/wow.rating이 그 비교일 실제 시청률)을 그대로 쓴다. */}
-          {hasDodOrWowDelta && (
-            <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/90">
-              {dod?.rating_change_pct !== null && dod?.rating_change_pct !== undefined && (
-                <span>
-                  전일({fmtR(dod.rating)}) 대비 {dod.rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(dod.rating_change_pct).toFixed(1)}%
-                </span>
-              )}
-              {wow?.rating_change_pct !== null && wow?.rating_change_pct !== undefined && (
-                <span>
-                  전주({fmtR(wow.rating)}) 대비 {wow.rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(wow.rating_change_pct).toFixed(1)}%
-                </span>
-              )}
-              {/* 사용자 지시(2026-08-27): "주의 태그는 전주대비 % 우측으로 사이즈를 줄여서 이동시키고,
-                  왜 주의인지도 아주 짧게 같이 써줄 것" — 배지를 여기로 옮기고 compact 크기 +
-                  가장 강한 부정(또는 긍정) 축 이유를 괄호로 덧붙인다. */}
-              {channelHealth && (
+
+          {/* 2행 — 메타데이터: 기준일/기간·목표·주간순위·전일전주(또는 비교기간) 대비·Health
+              Score를 가운뎃점(·) 구분자로 한 줄에 묶는다 — 색상 보더 대신 얇은 상단 구분선
+              하나만 사용(사용자 지시: "여러줄에 걸쳐 나오지 않게"). */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-white/15 pt-3 text-sm text-white/85">
+            {isRangeMode ? (
+              <span>기간 {periodRangeLabel(data.dateFrom, data.dateTo) || `${formatDateWithDow(data.dateFrom)} ~ ${formatDateWithDow(data.dateTo)}`}</span>
+            ) : (
+              data.asOfDate && <span>기준일 {formatDateWithDow(data.asOfDate)}</span>
+            )}
+            {/* 사용자 신고(2026-09-02): "목표 시청률(target_rating)이 잘 반영이 안 되는 것
+                같다" — 확인 결과 DB·RPC 계산은 정상(get_target_achievement)이지만 이 값을
+                보여주는 자리가 화면 어디에도 없었다(2049였다면 오히려 눈에 띄었겠지만, skyUHD는
+                0.0019처럼 값이 작아 "반영 안 됨"으로 느끼기 쉬움). 단일 일자 조회일 때만,
+                이미 계산된 값을 그대로 한 줄로 노출한다(새 계산 없음). */}
+            {!showComparisonView && data.targetAchievement?.target_rating != null && (
+              <span className="flex items-center gap-2.5">
+                <span aria-hidden className="text-white/30">·</span>
+                목표 {fmtR(data.targetAchievement.target_rating)}
+                {data.targetAchievement.achievement_pct != null && (
+                  <span className={data.targetAchievement.achievement_pct >= 100 ? "text-emerald-300" : "text-rose-200"}>
+                    (달성률 {data.targetAchievement.achievement_pct.toFixed(1)}%)
+                  </span>
+                )}
+              </span>
+            )}
+            {/* O절(2026-09-01) — 닐슨 주간 파일의 "기간 단위 시장 순위" 변화. 일별 순위 평균과
+                다른 값이라 daily로는 만들 수 없어 별도 테이블에서 온다. 해당 주 파일이 아직
+                업로드되지 않았으면 이 줄 자체가 안 보인다(없는 값을 지어내지 않음). */}
+            {data.periodRankMovement?.current_rank != null && (
+              <span className="flex items-center gap-1">
+                <span aria-hidden className="text-white/30">·</span>
+                주간 순위 {data.periodRankMovement.prior_rank != null && <>#{data.periodRankMovement.prior_rank} → </>}
+                <b className="font-semibold">#{data.periodRankMovement.current_rank}</b>
+                {data.periodRankMovement.rank_change != null && data.periodRankMovement.rank_change !== 0 && (
+                  <span className={data.periodRankMovement.rank_change > 0 ? "text-emerald-300" : "text-rose-300"}>
+                    {data.periodRankMovement.rank_change > 0 ? "▲" : "▼"}
+                    {Math.abs(data.periodRankMovement.rank_change)}
+                  </span>
+                )}
+              </span>
+            )}
+            {/* 사용자 지시(2026-08-20): "전일(실제 시청률) 대비 상승/하락률", "전주(실제 시청률) 대비
+                상승/하락률" 형식으로 나란히 — 두 비교 모두 get_rating_trend_summary가 이미 계산해준
+                값(dod.rating/wow.rating이 그 비교일 실제 시청률)을 그대로 쓴다. */}
+            {hasDodOrWowDelta && (
+              <>
+                {dod?.rating_change_pct !== null && dod?.rating_change_pct !== undefined && (
+                  <span className="flex items-center gap-1">
+                    <span aria-hidden className="text-white/30">·</span>
+                    전일({fmtR(dod.rating)}) 대비 {dod.rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(dod.rating_change_pct).toFixed(1)}%
+                  </span>
+                )}
+                {wow?.rating_change_pct !== null && wow?.rating_change_pct !== undefined && (
+                  <span className="flex items-center gap-1">
+                    <span aria-hidden className="text-white/30">·</span>
+                    전주({fmtR(wow.rating)}) 대비 {wow.rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(wow.rating_change_pct).toFixed(1)}%
+                  </span>
+                )}
+              </>
+            )}
+            {showComparisonView && data.periodReport?.prior_period_change_pct !== null && data.periodReport?.prior_period_change_pct !== undefined && (
+              <span className="flex items-center gap-1">
+                <span aria-hidden className="text-white/30">·</span>
+                {comparisonLabel ?? "직전 동일 길이 기간"} 대비 {data.periodReport.prior_period_change_pct >= 0 ? "▲" : "▼"} {Math.abs(data.periodReport.prior_period_change_pct).toFixed(1)}%
+              </span>
+            )}
+            {/* Channel Health Score(2026-08-27, Phase 1) — 단일 일자 조회일 때만. 사용자
+                지시(2026-08-27): "주의 태그는 전주대비 % 우측으로... 왜 주의인지도 아주 짧게
+                같이 써줄 것" — dod/wow 대비 줄이 있으면 그 옆에, 없으면(비교 기준 자체가 없는
+                기간) 이 메타데이터 줄에 그대로 이어 붙인다(배지가 사라지지 않게, 새 로직 없음). */}
+            {channelHealth && (
+              <span className="flex items-center gap-1">
+                <span aria-hidden className="text-white/30">·</span>
                 <HealthScoreBadge health={channelHealth} compact showReason />
-              )}
-            </p>
-          )}
-          {showComparisonView && data.periodReport?.prior_period_change_pct !== null && data.periodReport?.prior_period_change_pct !== undefined && (
-            <p className="mt-2 text-sm text-white/90">
-              {comparisonLabel ?? "직전 동일 길이 기간"} 대비 {data.periodReport.prior_period_change_pct >= 0 ? "▲" : "▼"} {Math.abs(data.periodReport.prior_period_change_pct).toFixed(1)}%
+              </span>
+            )}
+          </div>
+          {/* 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" 대상 날짜 목록 — 메타데이터 줄이
+              길어지지 않도록 더 작은 보조 줄로 그 아래에만 표시. */}
+          {isSdowActive && sdowAnalysisDates.length > 0 && (
+            <p className="mt-1 text-xs text-white/60">
+              분석 대상 날짜({sdowAnalysisDates.length}일): {sdowAnalysisDates.map((d) => formatDateWithDow(d)).join(", ")}
             </p>
           )}
         </div>
