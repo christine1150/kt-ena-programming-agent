@@ -54,6 +54,9 @@ interface ChannelSummary {
   // 인포그래픽 제안 #4(사용자 지시 2026-08-22): "오늘의 시청률" 6개 채널 타일 스파크라인용 —
   // 최근 7일(오늘 포함) 채널 단위 시청률, 오래된 날짜부터 순서대로. 데이터 없는 날은 null.
   recentRatings: (number | null)[];
+  // 사용자 지시(2026-09-03): "마우스 오버하면 몇월 며칠 몇등인지" — recentRatings와 같은 7일
+  // 구간의 날짜·순위를 나란히 담아 포인트별 호버 툴팁에 쓴다.
+  recentRatingsDetail: { date: string; rating: number | null; rank: number | null }[];
 }
 
 // Original 리포트: 관리자가 지정한 요일별 화이트리스트 프로그램만 분석한다(사용자 지시).
@@ -749,9 +752,12 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
       </div>
       {/* 사용자 재지시(2026-08-22): 도넛 게이지 대신 6개 타일과 동일한 최근 7일 스파크라인.
           사용자 재지시(2026-09-03): 서브 채널 타일의 "그래프 폭 : 시청률 숫자 폭" 비율(실측
-          약 0.58)을 히어로 숫자 폭(실측 503px)에 그대로 적용한 값(약 293px)으로 확대. */}
+          약 0.58)을 히어로 숫자 폭(실측 503px)에 그대로 적용한 값(약 293px)으로 확대.
+          사용자 재지시(2026-09-03, 2차): "너무 완만해서 등락을 알 수 없음" — 높이도 14→48로
+          키워 같은 등락이 더 뚜렷하게 보이도록 하고, 포인트에 마우스오버 시 "N월 N일 · 순위"
+          툴팁을 붙인다. */}
       <div className="mt-5">
-        <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} width={293} />
+        <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} width={293} height={48} points={channel.recentRatingsDetail} />
       </div>
     </Link>
   );
@@ -783,11 +789,31 @@ function parseTargetRankNum(targetRank: string | null): number | null {
 // (우측 6개 채널의 비율처럼)" — 폭을 파라미터화(기본 60px, 서브 채널 타일이 계속 쓰는 값)해
 // ENA 히어로만 더 넓게 부를 수 있게 한다. 실측: 서브 채널 타일은 시청률 숫자 폭(103px) 대비
 // 그래프 60px(비율 0.58) — ENA 히어로 숫자 폭(503px)에 같은 비율을 적용하면 약 293px.
-function MiniSparkline({ values, color, width = 60 }: { values: (number | null)[]; color: string; width?: number }) {
+// 사용자 재지시(2026-09-03, 2차): "너무 완만해서 등락을 알 수 없음 — 높이를 더 높여 고저를
+// 조절" — y좌표는 이미 min~max를 drawableH(=height-여백) 전체에 정규화해서 그리므로, height를
+// 키우기만 해도 같은 상대적 등락이 더 큰 픽셀 변위로(더 뚜렷하게) 그려진다. 이 값도 폭처럼
+// 파라미터화(기본 14 — 서브 채널 타일은 그대로)해 ENA 히어로에서만 키운다.
+// "꺾은선에 마우스 오버하면 몇월 몇등인지" — points(날짜·순위 포함)를 받으면 각 점 위에 투명
+// 히트서클 + <title> 툴팁을 얹는다(이 프로젝트가 분당 시청률 차트 등에서 이미 쓰는 "투명한
+// 넓은 히트 영역 + title" 패턴 재사용). 참고: 이 그래프는 "연간"이 아니라 최근 7일 추이다
+// (2026-08-22 원 설계 그대로) — 순위도 그 7일 각각의 실제 순위이지 월 단위 값이 아니다.
+function MiniSparkline({
+  values,
+  color,
+  width = 60,
+  height = 14,
+  points,
+}: {
+  values: (number | null)[];
+  color: string;
+  width?: number;
+  height?: number;
+  points?: { date: string; rating: number | null; rank: number | null }[];
+}) {
   const nums = values.filter((v): v is number => v !== null);
   if (nums.length < 2) return null;
   const w = width;
-  const h = 14;
+  const h = height;
   // 버그 수정(2026-09-02, 사용자 신고: "ENA 하단 꺾은선 그래프 하단 잘림"): 최솟값 포인트는
   // y=h(뷰박스 맨 아래 경계)에 정확히 찍혀, strokeWidth 1.4의 절반(0.7px)이 뷰박스 밖으로
   // 나가 SVG 기본 클리핑에 잘렸다. 위아래에 stroke 폭보다 넉넉한 여백(PAD_Y)을 두고 그 안에서만
@@ -798,6 +824,7 @@ function MiniSparkline({ values, color, width = 60 }: { values: (number | null)[
   const min = Math.min(...nums);
   const range = max - min || 1;
   const step = values.length > 1 ? w / (values.length - 1) : 0;
+  const yOf = (v: number) => PAD_Y + drawableH - ((v - min) / range) * drawableH;
   let path = "";
   let drawing = false;
   values.forEach((v, i) => {
@@ -806,13 +833,23 @@ function MiniSparkline({ values, color, width = 60 }: { values: (number | null)[
       return;
     }
     const x = i * step;
-    const y = PAD_Y + drawableH - ((v - min) / range) * drawableH;
+    const y = yOf(v);
     path += `${drawing ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)} `;
     drawing = true;
   });
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="block" aria-hidden="true">
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="block">
       <path d={path.trim()} fill="none" stroke={color} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" opacity={0.75} />
+      {points?.map((p, i) => {
+        if (p.rating === null) return null;
+        const [, mo, d] = p.date.split("-");
+        const label = `${Number(mo)}월 ${Number(d)}일 · ${formatRating(p.rating)}${p.rank !== null ? ` · ${p.rank}위` : ""}`;
+        return (
+          <circle key={p.date} cx={i * step} cy={yOf(p.rating)} r={5} fill="transparent">
+            <title>{label}</title>
+          </circle>
+        );
+      })}
     </svg>
   );
 }
@@ -883,7 +920,9 @@ function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logo
         </span>
         <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
-      <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#a1a1aa"} />
+      {/* 사용자 지시(2026-09-03, 2차)의 호버 툴팁을 서브 채널 타일에도 동일하게 적용(같은
+          recentRatingsDetail 데이터, 새 조회 없음) — 높이·폭은 타일 기존 값 그대로 유지. */}
+      <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#a1a1aa"} points={channel.recentRatingsDetail} />
     </Link>
   );
 }

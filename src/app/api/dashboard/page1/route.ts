@@ -175,6 +175,11 @@ interface ChannelSummary {
   // 인포그래픽 제안 #4(사용자 지시 2026-08-22) — 최근 7일(오늘 포함) 채널 단위 시청률, 오래된
   // 날짜부터 순서대로. 데이터 없는 날은 null.
   recentRatings: (number | null)[];
+  // 사용자 지시(2026-09-03): "꺾은선에 마우스 오버하면 몇월 몇등인지가 보일 수 있도록" —
+  // recentRatings와 같은 7일 구간의 날짜·순위를 나란히 담아 그래프 포인트별 툴팁에 쓴다.
+  // ratings.rank는 이미 이 쿼리가 조회하는 같은 테이블·같은 행에 있는 컬럼이라 select에 하나만
+  // 추가하면 된다(새 조회·새 계산 없음).
+  recentRatingsDetail: { date: string; rating: number | null; rank: number | null }[];
 }
 
 // 채널별 인사이트(줄글) — 사용자 지시: "최근 4주 평균 동향과 오늘의 데이터를 보았을 때
@@ -411,6 +416,7 @@ export async function GET(request: Request) {
       // 최근 7일(오늘 포함) 채널 단위 시청률. 새 계산 없이 단순 조회(집계 없음)라 SQL 함수 없이
       // 바로 supabase-js로 처리한다(CLAUDE.md 원칙 — 위 todayTopPrograms 조회와 동일한 패턴).
       let recentRatings: (number | null)[] = [];
+      let recentRatingsDetail: { date: string; rating: number | null; rank: number | null }[] = [];
       if (matchedTargetLabel && channel.primary_target) {
         const rankLabelCandidates = Array.from(
           new Set([
@@ -491,7 +497,7 @@ export async function GET(request: Request) {
             }),
             supabase
               .from("ratings")
-              .select("broadcast_date, rating")
+              .select("broadcast_date, rating, rank")
               .eq("channel_id", channel.id)
               .eq("target_id", resolvedRankTargetId)
               .in("source_type", ["nielsen_daily", "skyuhd"])
@@ -501,8 +507,17 @@ export async function GET(request: Request) {
           ]);
           ytdAvgRank = ytdData?.[0]?.avg_rank ?? null;
           ytdAvgRating = ytdData?.[0]?.avg_rating ?? null;
-          const ratingByDate = new Map((recentRows ?? []).map((r: { broadcast_date: string; rating: number | null }) => [r.broadcast_date, r.rating]));
-          recentRatings = Array.from({ length: 7 }, (_, i) => ratingByDate.get(offsetDateStr(sparklineDateFrom, i)) ?? null);
+          // 사용자 지시(2026-09-03): 스파크라인 호버 툴팁에 "몇월 며칠 · 몇 위"를 보여주기 위해
+          // 같은 조회에 이미 있는 rank 컬럼도 날짜별로 함께 담는다(새 조회 없음).
+          const rowByDate = new Map(
+            (recentRows ?? []).map((r: { broadcast_date: string; rating: number | null; rank: number | null }) => [r.broadcast_date, r])
+          );
+          recentRatings = Array.from({ length: 7 }, (_, i) => rowByDate.get(offsetDateStr(sparklineDateFrom, i))?.rating ?? null);
+          recentRatingsDetail = Array.from({ length: 7 }, (_, i) => {
+            const d = offsetDateStr(sparklineDateFrom, i);
+            const row = rowByDate.get(d);
+            return { date: d, rating: row?.rating ?? null, rank: row?.rank ?? null };
+          });
         }
       }
 
@@ -555,6 +570,7 @@ export async function GET(request: Request) {
           ytdRankSource,
           ytdRankDateRange,
           recentRatings,
+          recentRatingsDetail,
         } as ChannelSummary,
       };
   });
