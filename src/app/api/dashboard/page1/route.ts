@@ -1375,6 +1375,14 @@ export async function GET(request: Request) {
       weaknessDriver: MonthlyDriver | null;
       primeMovers: MonthlyPrimeMover[];
     }[];
+    // 사용자 지시(2026-09-03): 사내 월간 추이 자료(장르별·오리지널 프로그램별) — 참고 자료 전용.
+    referenceTrends: {
+      channelCode: string;
+      sourceNote: string | null;
+      months: number[];
+      genres: { key: string; label: string; ratingByMonth: (number | null)[] }[];
+      programs: { category: string; name: string; note: string | null; ratingByMonth: (number | null)[] }[];
+    }[];
   } | null = null;
   if (isMonthEndDate) {
     const year = Number(asOfDate.slice(0, 4));
@@ -1546,6 +1554,78 @@ export async function GET(request: Request) {
     });
 
     const resolvedMonthlyChannels = monthlyChannels.filter((c): c is NonNullable<typeof c> => c !== null);
+
+    // 사용자 지시(2026-09-02 최초, 2026-09-03 재지시): 사내 "전체 채널 월간 추이" 자료(장르별·
+    // 오리지널 프로그램별)를 월간 리뷰 하단에 함께 정리해 보여준다. 이 값들은 닐슨 원자료가
+    // 아니라 사내에서 이미 월 단위로 집계해 둔 2차 가공치라, 위 채널별 표(DB가 직접 계산)와
+    // 완전히 분리된 테이블에서 조회해 "참고 자료"로만 내려보낸다 — 이 서비스의 KPI 계산에는
+    // 섞지 않는다(마이그레이션 20260903010000 주석 참고).
+    const [{ data: refGenreRows }, { data: refProgramRows }] = await Promise.all([
+      supabase
+        .from("channel_monthly_genre_trend")
+        .select("channel_code, month, genre_key, genre_label, rating, sort_order, source_note")
+        .eq("year", year)
+        .lte("month", month)
+        .order("sort_order")
+        .order("month"),
+      supabase
+        .from("channel_monthly_program_trend")
+        .select("channel_code, month, category, program_name, rating, note, sort_order, source_note")
+        .eq("year", year)
+        .lte("month", month)
+        .order("category")
+        .order("sort_order")
+        .order("month"),
+    ]);
+
+    // 화면이 바로 표로 그릴 수 있게 (행 = 장르/프로그램, 열 = 월) 형태로 피벗해 내려준다.
+    // 자료가 있는 채널만 담기므로, 없는 채널은 화면에서 이 블록 자체가 나타나지 않는다.
+    const referenceByChannel = new Map<
+      string,
+      {
+        channelCode: string;
+        sourceNote: string | null;
+        months: number[];
+        genres: { key: string; label: string; ratingByMonth: (number | null)[] }[];
+        programs: { category: string; name: string; note: string | null; ratingByMonth: (number | null)[] }[];
+      }
+    >();
+    const ensureRef = (code: string, sourceNote: string | null) => {
+      const found = referenceByChannel.get(code);
+      if (found) return found;
+      const created = { channelCode: code, sourceNote, months: [] as number[], genres: [] as never[], programs: [] as never[] } as NonNullable<
+        ReturnType<typeof referenceByChannel.get>
+      >;
+      referenceByChannel.set(code, created);
+      return created;
+    };
+    for (const row of refGenreRows ?? []) {
+      const ref = ensureRef(row.channel_code as string, (row.source_note as string | null) ?? null);
+      if (!ref.months.includes(row.month as number)) ref.months.push(row.month as number);
+    }
+    for (const ref of referenceByChannel.values()) ref.months.sort((a, b) => a - b);
+    for (const row of refGenreRows ?? []) {
+      const ref = referenceByChannel.get(row.channel_code as string)!;
+      let genre = ref.genres.find((g) => g.key === row.genre_key);
+      if (!genre) {
+        genre = { key: row.genre_key as string, label: row.genre_label as string, ratingByMonth: ref.months.map(() => null) };
+        ref.genres.push(genre);
+      }
+      genre.ratingByMonth[ref.months.indexOf(row.month as number)] = (row.rating as number | null) ?? null;
+    }
+    for (const row of refProgramRows ?? []) {
+      const ref = referenceByChannel.get(row.channel_code as string);
+      if (!ref) continue; // 장르 자료가 없는 채널은 이번 범위에서 다루지 않는다.
+      let prog = ref.programs.find((p) => p.category === row.category && p.name === row.program_name);
+      if (!prog) {
+        prog = { category: row.category as string, name: row.program_name as string, note: null, ratingByMonth: ref.months.map(() => null) };
+        ref.programs.push(prog);
+      }
+      const idx = ref.months.indexOf(row.month as number);
+      if (idx >= 0) prog.ratingByMonth[idx] = (row.rating as number | null) ?? null;
+      if (row.note) prog.note = row.note as string;
+    }
+
     if (resolvedMonthlyChannels.length > 0) {
       monthlyReview = {
         year,
@@ -1554,6 +1634,7 @@ export async function GET(request: Request) {
         monthEnd: asOfDate,
         priorMonthStart: hasPriorMonth ? priorMonthStart : null,
         channels: resolvedMonthlyChannels,
+        referenceTrends: [...referenceByChannel.values()],
       };
     }
   }

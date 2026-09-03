@@ -383,6 +383,16 @@ interface MonthlyReviewChannel {
   // 프라임(20~24시) 주요 등락 — 채널 전체 기여도 순위와 별개 축(상승·하락 각 최대 1건).
   primeMovers: MonthlyPrimeMover[];
 }
+// 사용자 지시(2026-09-02 최초, 2026-09-03 재지시): 사내 "전체 채널 월간 추이" 자료를 월간 리뷰
+// 하단에 함께 정리. 닐슨 원자료가 아니라 사내에서 월 단위로 이미 집계해 둔 2차 가공치라, 위
+// 채널별 표(DB가 직접 계산한 값)와 섞지 않고 별도 블록에 "참고 자료"로 표시한다.
+interface MonthlyReferenceTrend {
+  channelCode: string;
+  sourceNote: string | null;
+  months: number[];
+  genres: { key: string; label: string; ratingByMonth: (number | null)[] }[];
+  programs: { category: string; name: string; note: string | null; ratingByMonth: (number | null)[] }[];
+}
 interface MonthlyReview {
   year: number;
   month: number;
@@ -390,6 +400,7 @@ interface MonthlyReview {
   monthEnd: string;
   priorMonthStart: string | null;
   channels: MonthlyReviewChannel[];
+  referenceTrends?: MonthlyReferenceTrend[];
 }
 
 // 사용자 지시: 인사이트·킬러콘텐츠는 이 순서로 언급 (ENA → ENA Play → ENA Drama → OLIFE → ONCE → ENA Story)
@@ -1401,6 +1412,114 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
         </table>
       </div>
 
+      {/* 사용자 지시(2026-09-02 최초, 2026-09-03 재지시): 사내 "전체 채널 월간 추이" 자료를 월간
+          리뷰 하단에 함께 정리. 위 표(닐슨 원자료를 DB가 직접 집계한 값)와 성격이 다른 2차
+          가공치라, 구분선 아래 별도 블록으로 두고 출처를 명시한다. */}
+      {(review.referenceTrends ?? []).map((ref) => (
+        <MonthlyReferenceTrendBlock key={ref.channelCode} ref_={ref} themeColorByCode={themeColorByCode} />
+      ))}
+    </div>
+  );
+}
+
+// 사내 월간 추이 자료 한 채널분 — 장르별 표 + 오리지널 프로그램별 표(카테고리별로 묶음).
+// 원본 자료가 "행=장르/프로그램, 열=월" 형태라 그 구조를 그대로 유지한다(사용자가 이미 익숙한
+// 표를 새로 재해석하지 않는다 — "기존의 폼을 유지 + 추가" 지시).
+function MonthlyReferenceTrendBlock({ ref_, themeColorByCode }: { ref_: MonthlyReferenceTrend; themeColorByCode: Map<string, string | null> }) {
+  if (ref_.genres.length === 0 && ref_.programs.length === 0) return null;
+  const color = themeColorByCode.get(ref_.channelCode) ?? UNBRANDED_CHANNEL_COLOR;
+  const channelName = CHANNEL_NAME_BY_CODE[ref_.channelCode] ?? ref_.channelCode;
+  // 프로그램 표는 원본대로 카테고리(오리지널 예능/드라마)별로 나눠 그린다.
+  const categories = [...new Set(ref_.programs.map((p) => p.category))];
+  // 채널평균 행은 표 맨 아래에 구분해 둔다(원본도 합계 성격의 행).
+  const genreRows = ref_.genres.filter((g) => g.key !== "channel_avg");
+  const avgRow = ref_.genres.find((g) => g.key === "channel_avg");
+
+  const monthHeader = (
+    <tr className="text-[11px] font-normal text-zinc-400">
+      <th className="w-40 pb-1 text-left">구분</th>
+      {ref_.months.map((m) => (
+        <th key={m} className="pb-1 text-center">
+          {m}월
+        </th>
+      ))}
+    </tr>
+  );
+  const valueCells = (ratings: (number | null)[], channelCode: string) =>
+    ratings.map((v, i) => (
+      <td key={i} className="py-1 text-center tabular-nums text-zinc-600">
+        {v === null ? <span className="text-zinc-300">—</span> : formatRating(v, channelCode)}
+      </td>
+    ));
+
+  return (
+    <div className="mt-6 border-t border-zinc-200 pt-5">
+      <div className="mb-1 flex flex-wrap items-baseline gap-x-2">
+        <h3 className="text-sm font-bold" style={{ color }}>
+          {channelName}
+        </h3>
+        <span className="text-sm font-semibold text-zinc-700">장르별 · 오리지널 프로그램별 월간 추이</span>
+        <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">참고 자료</span>
+      </div>
+      {/* 출처·신뢰 수준을 화면에 그대로 노출한다 — 현재 적재분은 원본 DRM 때문에 스크린샷을 옮겨
+          적은 값이라, PD가 그 사실을 알고 봐야 한다(원본 수령 후 재적재하면 이 문구가 바뀐다). */}
+      <p className="mb-3 text-[11px] text-zinc-400">
+        수도권 2049 · 재방 포함 기준. 이 서비스가 닐슨 원자료로 직접 계산한 위 표와 별개인 사내 집계치입니다
+        {ref_.sourceNote ? ` — ${ref_.sourceNote}` : ""}.
+      </p>
+
+      {genreRows.length > 0 && (
+        <div className="mb-4">
+          <p className="mb-1 text-[11px] font-semibold text-zinc-500">장르별</p>
+          <table className="w-full table-fixed text-left text-[12px]">
+            <thead>{monthHeader}</thead>
+            <tbody>
+              {genreRows.map((g) => (
+                <tr key={g.key} className="border-t border-zinc-50">
+                  <td className="py-1 text-zinc-500">{g.label}</td>
+                  {valueCells(g.ratingByMonth, ref_.channelCode)}
+                </tr>
+              ))}
+              {avgRow && (
+                <tr className="border-t-2 border-zinc-200 font-semibold text-zinc-800">
+                  <td className="py-1.5">{avgRow.label}</td>
+                  {avgRow.ratingByMonth.map((v, i) => (
+                    <td key={i} className="py-1.5 text-center tabular-nums">
+                      {v === null ? <span className="text-zinc-300">—</span> : formatRating(v, ref_.channelCode)}
+                    </td>
+                  ))}
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {categories.map((cat) => (
+        <div key={cat} className="mb-4 last:mb-0">
+          <p className="mb-1 text-[11px] font-semibold text-zinc-500">{cat}</p>
+          <table className="w-full table-fixed text-left text-[12px]">
+            <thead>{monthHeader}</thead>
+            <tbody>
+              {ref_.programs
+                .filter((p) => p.category === cat)
+                .map((p) => (
+                  <tr key={p.name} className="border-t border-zinc-50 align-top">
+                    <td className="py-1 text-zinc-600">
+                      <div className="truncate" title={p.name}>
+                        {p.name}
+                      </div>
+                      {/* 원본의 비고(목표 대비 달성률·종영 추정 등)는 지어낸 해석이 아니라 자료에
+                          적혀 있던 문구라 그대로 옮겨 작은 글씨로 붙인다. */}
+                      {p.note && <div className="text-[10px] leading-snug text-zinc-400">{p.note}</div>}
+                    </td>
+                    {valueCells(p.ratingByMonth, ref_.channelCode)}
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
     </div>
   );
 }
