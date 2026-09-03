@@ -452,6 +452,23 @@ const HOUR_BLOCK_ORDER = [2, 5, 8, 11, 14, 17, 20, 23];
 function hourBlockLabel(h: number): string {
   return `${h}~${h + 2}시`;
 }
+// 사용자 지시(2026-09-03): "기회가 있나요는 4구간/8구간 이원화된 것을 3시간 단위로 통일하고,
+// 이름을 붙여줘" — HOUR_BLOCK_ORDER의 8구간에 시간대 이름을 매핑한다. hourBlockLabel()은 요일×
+// 시간대 히트맵 등 폭이 좁은 다른 자리에서도 두루 쓰이므로 그 함수·표기는 그대로 두고, "기회가
+// 있나요?" 카드 전용 라벨만 새로 만든다.
+const HOUR_BLOCK_PERIOD_NAME: Record<number, string> = {
+  2: "심야",
+  5: "새벽",
+  8: "오전",
+  11: "점심",
+  14: "오후",
+  17: "저녁",
+  20: "밤",
+  23: "늦은 밤",
+};
+function opportunityHourBlockLabel(h: number): string {
+  return `${HOUR_BLOCK_PERIOD_NAME[h] ?? ""}(${hourBlockLabel(h)})`;
+}
 // 신규 섹션 — 최근 12주 시청률 상위 콘텐츠 TOP 20.
 interface TopProgramRow {
   program_name: string;
@@ -1870,13 +1887,17 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
 // ── OPPORTUNITY?/WHAT TO SCHEDULE? 줄글 ──────────────────────────────
 // recentLabel: 기간 범위를 선택하면(사용자 지시) "최근 구간"이 그 선택한 기간 길이로 바뀐다
 // (route.ts에서 p_recent_days를 선택 기간 일수로 넘김) — 문구도 그에 맞춰 바꾼다.
+// 사용자 지시(2026-09-03): "기회가 있나요는 4구간/8구간 이원화된 것을 3시간 단위로 통일" — 이
+// 서술도 위 차트·표와 같은 8구간(hourBlockOpportunity) 근거로 다시 쓴다. WHY?/WHAT TO
+// SCHEDULE?/Win-Weakness 등 이 카드 밖에서 daypartOpportunity(4구간)를 쓰는 다른 곳은 이번
+// 지시 범위 밖이라 그대로 둔다(classifyDaypartOpportunity/DAYPART_LABEL 등 원본 보존).
 function buildOpportunityNarrative(
-  daypartOpportunity: DaypartOpportunityRow[],
+  hourBlockOpportunity: HourBlockOpportunityRow[],
   fitScoreItems: FitScoreItem[] | null,
   recentLabel: string,
   isSkyUhd: boolean
 ): string {
-  const valid = daypartOpportunity.filter((d) => d.gap_change !== null);
+  const valid = hourBlockOpportunity.filter((d) => d.gap_change !== null);
   if (valid.length === 0) return "편성 기회를 계산할 데이터가 아직 부족합니다.";
   const best = [...valid].sort((a, b) => (b.gap_change ?? 0) - (a.gap_change ?? 0))[0];
   const worst = [...valid].sort((a, b) => (a.gap_change ?? 0) - (b.gap_change ?? 0))[0];
@@ -1884,34 +1905,34 @@ function buildOpportunityNarrative(
 
   let text = "";
   if (best.gap_change !== null && best.gap_change > 0) {
-    text += `${DAYPART_LABEL[best.daypart] ?? best.daypart}는 ${recentLabel} 우리 채널 대비 경쟁채널과의 격차가 그 이전 평균보다 좁혀져(경쟁채널이 상대적으로 약해짐), 편성을 강화하기에 가장 좋은 기회 구간입니다(격차 이전 평균 ${fmtR(best.gap_full)} → ${recentLabel} ${fmtR(best.gap_recent)}). `;
+    text += `${opportunityHourBlockLabel(best.hour_block)}는 ${recentLabel} 우리 채널 대비 경쟁채널과의 격차가 그 이전 평균보다 좁혀져(경쟁채널이 상대적으로 약해짐), 편성을 강화하기에 가장 좋은 기회 구간입니다(격차 이전 평균 ${fmtR(best.gap_full)} → ${recentLabel} ${fmtR(best.gap_recent)}). `;
   } else {
     text += `이전 평균과 ${recentLabel}을 비교했을 때, 경쟁채널 대비 뚜렷하게 격차가 좁혀진 시간대는 아직 없습니다. `;
   }
-  if (worst.gap_change !== null && worst.gap_change < 0 && worst.daypart !== best.daypart) {
-    text += `반대로 ${DAYPART_LABEL[worst.daypart] ?? worst.daypart}는 ${recentLabel} 들어 경쟁채널이 오히려 더 강해지고 있어(격차 이전 평균 ${fmtR(worst.gap_full)} → ${recentLabel} ${fmtR(worst.gap_recent)}) 신규 편성보다는 기존 콘텐츠를 지키는 전략이 필요합니다. `;
+  if (worst.gap_change !== null && worst.gap_change < 0 && worst.hour_block !== best.hour_block) {
+    text += `반대로 ${opportunityHourBlockLabel(worst.hour_block)}는 ${recentLabel} 들어 경쟁채널이 오히려 더 강해지고 있어(격차 이전 평균 ${fmtR(worst.gap_full)} → ${recentLabel} ${fmtR(worst.gap_recent)}) 신규 편성보다는 기존 콘텐츠를 지키는 전략이 필요합니다. `;
   }
 
   // 사용자 지시(2026-08-21, 8-Step Insight Flow): "성과 좋은 슬롯"이 아니라 4분류(PROTECT/DEFEND/
   // IMPROVE/OPPORTUNITY)로 — WEAK SLOT과 OPPORTUNITY SLOT을 구분해서 보여준다.
   const classified = valid
-    .map((d) => ({ d, cls: classifyDaypartOpportunity(d) }))
-    .filter((x): x is { d: DaypartOpportunityRow; cls: OpportunityClass } => x.cls !== null);
+    .map((d) => ({ d, cls: classifyHourBlockOpportunity(d) }))
+    .filter((x): x is { d: HourBlockOpportunityRow; cls: OpportunityClass } => x.cls !== null);
   const opportunitySlots = classified.filter((x) => x.cls === "OPPORTUNITY");
   const defendSlots = classified.filter((x) => x.cls === "DEFEND");
   if (opportunitySlots.length > 0) {
-    const names = opportunitySlots.map((x) => DAYPART_LABEL[x.d.daypart] ?? x.d.daypart).join(", ");
+    const names = opportunitySlots.map((x) => opportunityHourBlockLabel(x.d.hour_block)).join(", ");
     text += `${names}${josaEunNeun(names)} 현재 평균 성과 자체는 낮지만 경쟁채널과의 격차가 개선되고 있어, 단순 약세 슬롯이 아니라 성장 기회(OPPORTUNITY) 슬롯으로 분류됩니다. `;
   }
   if (defendSlots.length > 0) {
-    const names = defendSlots.map((x) => DAYPART_LABEL[x.d.daypart] ?? x.d.daypart).join(", ");
+    const names = defendSlots.map((x) => opportunityHourBlockLabel(x.d.hour_block)).join(", ");
     text += `${names}${josaEunNeun(names)} 성과는 강하지만 경쟁압력이 높아지고 있어 방어(DEFEND)가 필요한 슬롯입니다. `;
   }
 
   const candidates = (fitScoreItems ?? []).filter((i) => i.tag === "STRENGTHEN" || i.tag === "TEST").slice(0, 2);
   if (candidates.length > 0 && best.gap_change !== null && best.gap_change > 0) {
     const candidateText = candidates.map((c) => `'${c.programs?.canonical_name}'`).join(", ");
-    text += `아래 WHAT TO SCHEDULE?의 ${candidateText}${josaEulReul(candidateText)} ${DAYPART_LABEL[best.daypart] ?? best.daypart}에 배치하는 것을 검토해볼 만합니다. `;
+    text += `아래 WHAT TO SCHEDULE?의 ${candidateText}${josaEulReul(candidateText)} ${opportunityHourBlockLabel(best.hour_block)}에 배치하는 것을 검토해볼 만합니다. `;
     // 사용자 지시: STRENGTHEN/TEST 후보의 Target Affinity·Audience Flow가 높으면 그 근거를 덧붙인다.
     const strongCandidate = candidates.find((c) => (c.target_affinity_score ?? 0) >= 70 || (c.audience_flow_score ?? 0) >= 70);
     if (strongCandidate) {
@@ -1919,7 +1940,7 @@ function buildOpportunityNarrative(
       if ((strongCandidate.target_affinity_score ?? 0) >= 70) parts.push(`Target Affinity ${strongCandidate.target_affinity_score}`);
       if ((strongCandidate.audience_flow_score ?? 0) >= 70) parts.push(`Audience Flow ${strongCandidate.audience_flow_score}`);
       const partsText = parts.join(", ");
-      text += `'${strongCandidate.programs?.canonical_name}'${josaEunNeun(strongCandidate.programs?.canonical_name ?? "")} ${partsText}${josaIga(partsText)} 높아 해당 daypart로의 유입 가능성이 확인됩니다.`;
+      text += `'${strongCandidate.programs?.canonical_name}'${josaEunNeun(strongCandidate.programs?.canonical_name ?? "")} ${partsText}${josaIga(partsText)} 높아 해당 시간대로의 유입 가능성이 확인됩니다.`;
     }
   }
   return text;
@@ -2360,17 +2381,13 @@ function DivergingDeltaBar({ pct }: { pct: number }) {
   );
 }
 
-// 인포그래픽 제안(사용자 지시 2026-08-22, 우선순위 3번): OPPORTUNITY? daypart별 격차 변화를
-// 4칸 미니 타일로 — 어느 시간대가 기회인지 표 전체를 읽지 않아도 한눈에 스캔 가능(Page 1
-// 채널별 킬러 콘텐츠의 daypart 타일과 같은 톤·크기, 값은 기존 daypartOpportunity 그대로).
-const OPPORTUNITY_DAYPART_ORDER: { key: string; label: string }[] = [
-  { key: "새벽", label: "새벽" },
-  { key: "오전", label: "오전" },
-  { key: "오후", label: "오후" },
-  { key: "저녁_심야", label: "저녁심야" },
-];
+// 인포그래픽 제안(사용자 지시 2026-08-22, 우선순위 3번): OPPORTUNITY? 시간대별 격차 변화를
+// 미니 타일로 — 어느 시간대가 기회인지 표 전체를 읽지 않아도 한눈에 스캔 가능(Page 1 채널별
+// 킬러 콘텐츠의 daypart 타일과 같은 톤·크기).
+// 사용자 지시(2026-09-03): "기회가 있나요는 4구간/8구간 이원화된 것을 3시간 단위로 통일. 위의
+// 그래프와 일직선 바도 8단계로" — 4칸이던 이 타일 순서를 HOUR_BLOCK_ORDER(8칸)로 교체한다.
 // 사용자 지시(2026-08-26): "Before/After 슬로프 차트 — OPPORTUNITY?의 '이전 평균→최근 1주'
-// 격차 변화를 표 대신 두 점을 잇는 기울기선으로... 격차가 좁혀지는/벌어지는 daypart를 시각적으로
+// 격차 변화를 표 대신 두 점을 잇는 기울기선으로... 격차가 좁혀지는/벌어지는 시간대를 시각적으로
 // 즉시 구분." 새 계산 없이 이미 표가 쓰는 gap_full/gap_recent를 그대로 두 점으로 그린다.
 // 기울기 방향은 4분류(PROTECT/DEFEND/IMPROVE/OPPORTUNITY) 색으로 — 아래쪽으로 기울면(격차
 // 축소) 좋은 신호, 위쪽으로 기울면(격차 확대) 경쟁압력 증가 신호.
@@ -2380,13 +2397,16 @@ const OPPORTUNITY_CLASS_COLOR: Record<OpportunityClass, string> = {
   IMPROVE: "#e11d48",
   OPPORTUNITY: "#059669",
 };
-function OpportunityGapSlopeChart({ rows, fmtR }: { rows: DaypartOpportunityRow[]; fmtR: (v: number | null) => string }) {
+function OpportunityGapSlopeChart({ rows, fmtR }: { rows: HourBlockOpportunityRow[]; fmtR: (v: number | null) => string }) {
   const plottable = rows.filter(
-    (r): r is DaypartOpportunityRow & { gap_full: number; gap_recent: number } => r.gap_full !== null && r.gap_recent !== null
+    (r): r is HourBlockOpportunityRow & { gap_full: number; gap_recent: number } => r.gap_full !== null && r.gap_recent !== null
   );
   if (plottable.length === 0) return null;
-  const W = 420;
-  const H = 200;
+  const W = 460;
+  // 사용자 지시(2026-09-03) 반영으로 4개→8개 구간이 되어 오른쪽 라벨이 겹칠 여지가 커졌다 —
+  // 세로 여백을 늘리고(H 200→260), FitScoreQuadrantChart(2026-09-02)에 이미 쓴 것과 같은
+  // 원칙(y좌표순 정렬 뒤 최소 간격 미달분만 아래로 밀어내는 1패스 라벨 겹침 방지)을 적용한다.
+  const H = 260;
   const PAD_L = 12;
   const PAD_R = 128; // 사용자 지시(2026-08-26): 라벨 옆에 격차 수치까지 표기하도록 여백 확대.
   const PAD_T = 14;
@@ -2397,6 +2417,16 @@ function OpportunityGapSlopeChart({ rows, fmtR }: { rows: DaypartOpportunityRow[
   const yOf = (v: number) => PAD_T + (1 - (v - minV) / (maxV - minV || 1)) * (H - PAD_T - PAD_B);
   const xLeft = PAD_L + 30;
   const xRight = W - PAD_R;
+  const MIN_LABEL_GAP = 13;
+  const labelYByHourBlock = new Map<number, number>();
+  [...plottable]
+    .map((r) => ({ hour_block: r.hour_block, y: yOf(r.gap_recent) }))
+    .sort((a, b) => a.y - b.y)
+    .reduce((prevY, cur) => {
+      const y = prevY === null || cur.y - prevY >= MIN_LABEL_GAP ? cur.y : prevY + MIN_LABEL_GAP;
+      labelYByHourBlock.set(cur.hour_block, y);
+      return y;
+    }, null as number | null);
   return (
     <div className="mb-4 rounded-2xl bg-zinc-50 p-4">
       <p className="mb-2 text-[12px] text-zinc-500">
@@ -2413,15 +2443,16 @@ function OpportunityGapSlopeChart({ rows, fmtR }: { rows: DaypartOpportunityRow[
           최근
         </text>
         {plottable.map((r) => {
-          const cls = classifyDaypartOpportunity(r);
+          const cls = classifyHourBlockOpportunity(r);
           const color = cls ? OPPORTUNITY_CLASS_COLOR[cls] : "#a1a1aa";
           const y1 = yOf(r.gap_full);
           const y2 = yOf(r.gap_recent);
+          const labelY = labelYByHourBlock.get(r.hour_block) ?? y2;
           return (
-            <g key={r.daypart}>
+            <g key={r.hour_block}>
               <line x1={xLeft} y1={y1} x2={xRight} y2={y2} stroke={color} strokeWidth={2}>
                 <title>
-                  {DAYPART_LABEL[r.daypart] ?? r.daypart} — 격차 {r.gap_full.toFixed(4)} → {r.gap_recent.toFixed(4)}
+                  {opportunityHourBlockLabel(r.hour_block)} — 격차 {r.gap_full.toFixed(4)} → {r.gap_recent.toFixed(4)}
                   {cls ? ` (${OPPORTUNITY_CLASS_LABEL[cls]})` : ""}
                 </title>
               </line>
@@ -2429,12 +2460,14 @@ function OpportunityGapSlopeChart({ rows, fmtR }: { rows: DaypartOpportunityRow[
               <circle cx={xRight} cy={y2} r={3} fill={color} />
               {/* 사용자 지시(2026-08-26): "그래픽이 기준 수치를 알아볼 수 있도록 그래프 옆에
                   수치 적어줄것" — 지금까지 격차 숫자는 hover 툴팁(<title>)에만 있어 한눈에
-                  안 보였다. 양쪽 점 옆에 실제 격차 값을 직접 표기한다. */}
+                  안 보였다. 양쪽 점 옆에 실제 격차 값을 직접 표기한다. 점(y2)과 라벨(labelY)이
+                  겹침 방지로 어긋날 수 있어 얇은 연결선(leader line)으로 이어준다. */}
+              {Math.abs(labelY - y2) > 1 && <line x1={xRight + 2} y1={y2} x2={xRight + 6} y2={labelY} stroke={color} strokeWidth={0.75} opacity={0.5} />}
               <text x={xLeft} y={y1 - 6} textAnchor="middle" fontSize={9} fill={color}>
                 {fmtR(r.gap_full)}
               </text>
-              <text x={xRight + 8} y={y2 + 3} fontSize={10} fontWeight={600} fill={color}>
-                {DAYPART_LABEL[r.daypart]?.replace(/\(.*\)/, "") ?? r.daypart} {fmtR(r.gap_recent)}
+              <text x={xRight + 8} y={labelY + 3} fontSize={10} fontWeight={600} fill={color}>
+                {HOUR_BLOCK_PERIOD_NAME[r.hour_block] ?? r.hour_block} {fmtR(r.gap_recent)}
               </text>
             </g>
           );
@@ -2444,12 +2477,13 @@ function OpportunityGapSlopeChart({ rows, fmtR }: { rows: DaypartOpportunityRow[
   );
 }
 
-function OpportunityDaypartTiles({ rows, fmtR, isEnaStory }: { rows: DaypartOpportunityRow[]; fmtR: (v: number | null) => string; isEnaStory?: boolean }) {
-  const byDaypart = new Map(rows.map((r) => [r.daypart, r]));
+function OpportunityHourBlockTiles({ rows, fmtR, isEnaStory }: { rows: HourBlockOpportunityRow[]; fmtR: (v: number | null) => string; isEnaStory?: boolean }) {
+  const byHourBlock = new Map(rows.map((r) => [r.hour_block, r]));
   return (
-    <div className="mb-4 flex gap-1.5">
-      {OPPORTUNITY_DAYPART_ORDER.map((dp) => {
-        const row = byDaypart.get(dp.key);
+    <div className="mb-4 flex flex-wrap gap-1.5">
+      {HOUR_BLOCK_ORDER.map((hb) => {
+        const row = byHourBlock.get(hb);
+        const label = HOUR_BLOCK_PERIOD_NAME[hb] ?? hourBlockLabel(hb);
         const gapChange = row?.gap_change ?? null;
         const isOpportunity = gapChange !== null && gapChange >= 0;
         // 사용자 지시(2026-08-22, ENA STORY 특화 디자인 확장): 원색 초록/빨강이 분홍·보라·주황
@@ -2458,12 +2492,12 @@ function OpportunityDaypartTiles({ rows, fmtR, isEnaStory }: { rows: DaypartOppo
         const bg = gapChange === null ? "#f0f0f3" : isEnaStory ? (isOpportunity ? "#f43fc4" : "#7828e0") : isOpportunity ? "#059669" : "#e11d48";
         const opacity = gapChange === null ? 1 : Math.min(1, 0.35 + Math.min(1, Math.abs(gapChange) / 0.05) * 0.65);
         const title = row
-          ? `${dp.label}: 격차 ${fmtR(row.gap_full)} → ${fmtR(row.gap_recent)}(${gapChange !== null ? (gapChange >= 0 ? "기회 ▲" : "약세 ▼") + " " + Math.abs(gapChange).toFixed(4) : "—"})`
-          : `${dp.label}: 데이터 없음`;
+          ? `${opportunityHourBlockLabel(hb)}: 격차 ${fmtR(row.gap_full)} → ${fmtR(row.gap_recent)}(${gapChange !== null ? (gapChange >= 0 ? "기회 ▲" : "약세 ▼") + " " + Math.abs(gapChange).toFixed(4) : "—"})`
+          : `${opportunityHourBlockLabel(hb)}: 데이터 없음`;
         return (
-          <div key={dp.key} className="flex-1" title={title}>
+          <div key={hb} className="min-w-[64px] flex-1 basis-[64px]" title={title}>
             <div className="h-6 rounded-lg" style={{ backgroundColor: bg, opacity }} />
-            <p className="mt-1 text-center text-[11px] text-zinc-400">{dp.label}</p>
+            <p className="mt-1 text-center text-[11px] text-zinc-400">{label}</p>
           </div>
         );
       })}
@@ -3985,7 +4019,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
       // 보여줄 때 쓰던 자릿수(:2154행 `gap_full.toFixed(4)`)에 맞춰 4자리로 통일한다.
       const gapFmt = (v: number | null) => (v === null ? null : Number(v.toFixed(4)));
 
-      const validOpp = data.daypartOpportunity.filter((d) => d.gap_change !== null);
+      // 사용자 지시(2026-09-03): "기회가 있나요는 4구간·8구간을 3시간 단위로 통일" — 이 AI
+      // 서술의 근거도 화면 표·차트와 같은 8구간(hourBlockOpportunity)으로 맞춘다.
+      const validOpp = data.hourBlockOpportunity.filter((d) => d.gap_change !== null);
       if (validOpp.length > 0) {
         jobKeys.push("opportunity");
         const candidatePrograms = (fitScoreItems ?? [])
@@ -4002,14 +4038,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           input: {
             channelName: data.channel.name,
             recentLabel: data.isRangeMode ? "선택 기간" : "최근 1주",
-            dayparts: data.daypartOpportunity.map((d) => ({
-              daypart: d.daypart,
+            hourBlocks: data.hourBlockOpportunity.map((d) => ({
+              label: opportunityHourBlockLabel(d.hour_block),
               our_full_avg: ratingFmt(d.our_full_avg),
               our_recent_avg: ratingFmt(d.our_recent_avg),
               gap_full: gapFmt(d.gap_full),
               gap_recent: gapFmt(d.gap_recent),
               gap_change: gapFmt(d.gap_change),
-              classification: classifyDaypartOpportunity(d),
+              classification: classifyHourBlockOpportunity(d),
             })),
             candidatePrograms,
           },
@@ -4593,7 +4629,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <span aria-hidden className="text-white/30">·</span>
                 목표 {fmtR(data.targetAchievement.target_rating)}
                 {data.targetAchievement.achievement_pct != null && (
-                  <span className={data.targetAchievement.achievement_pct >= 100 ? "text-emerald-300" : "text-rose-200"}>
+                  // 사용자 신고(2026-09-03, OLIFE 스크린샷): 밝은 라임그린(#b9db01) 헤더 위에서
+                  // text-emerald-300(연초록)이 배경과 거의 같은 색상대라 글씨가 안 보였다 —
+                  // 채널마다 강조색이 다 달라(라임/빨강/보라 등) 특정 색만 다른 색으로 바꾸면
+                  // 다음 채널에서 같은 문제가 재발할 수 있다. 어떤 강조색 위에서도 대비가
+                  // 보장되도록 반투명 검정 스크림(대비비 실측 4.9~5.7:1) + 흰 글씨 pill로 교체.
+                  <span
+                    className={`rounded-full bg-black/50 px-1.5 py-0.5 font-semibold ${data.targetAchievement.achievement_pct >= 100 ? "text-emerald-100" : "text-rose-100"}`}
+                  >
                     (달성률 {data.targetAchievement.achievement_pct.toFixed(1)}%)
                   </span>
                 )}
@@ -4608,7 +4651,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 주간 순위 {data.periodRankMovement.prior_rank != null && <>#{data.periodRankMovement.prior_rank} → </>}
                 <b className="font-semibold">#{data.periodRankMovement.current_rank}</b>
                 {data.periodRankMovement.rank_change != null && data.periodRankMovement.rank_change !== 0 && (
-                  <span className={data.periodRankMovement.rank_change > 0 ? "text-emerald-300" : "text-rose-300"}>
+                  // 사용자 신고(2026-09-03): 위 달성률 배지와 같은 이유(밝은 강조색 배경 위
+                  // 저채도 텍스트 색은 채널마다 안 보일 수 있음) — 같은 검정 스크림 pill 적용.
+                  <span
+                    className={`rounded-full bg-black/50 px-1.5 py-0.5 font-semibold ${data.periodRankMovement.rank_change > 0 ? "text-emerald-100" : "text-rose-100"}`}
+                  >
                     {data.periodRankMovement.rank_change > 0 ? "▲" : "▼"}
                     {Math.abs(data.periodRankMovement.rank_change)}
                   </span>
@@ -6212,115 +6259,75 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <h2 className={SECTION_TITLE_P2}>
             기회가 있나요?<span className={ENG_TITLE_ANNOTATION}>(OPPORTUNITY?)</span>
           </h2>
+          {/* 사용자 지시(2026-09-03): "기회가 있나요는 4구간·8구간 이원화된 것을 3시간 단위로
+              통일. 위의 그래프와 일직선 바도 8단계로" — 예전엔 daypartOpportunity(4구간) 차트·
+              바·표에 이어 아래 별도 "8구간 상세" details를 덧붙이는 이원 구조였다. 이제 8구간
+              (hourBlockOpportunity) 하나로 합쳐, 표에도 8구간 상세가 갖고 있던 분류(PROTECT/
+              DEFEND/IMPROVE/OPPORTUNITY) 열을 함께 넣는다 — 정보 손실 없이 이원화만 제거. */}
           <p className="mb-3 text-sm text-zinc-400">
-            시간대(daypart)별로, 우리 채널과 등록 경쟁채널의 시청률 격차가 그 이전(보유 기간) 평균 대비
+            시간대별(3시간 단위, 심야~늦은 밤 8구간)로, 우리 채널과 등록 경쟁채널의 시청률 격차가 그 이전(보유 기간) 평균 대비
             {isRangeMode ? " 선택 기간 " : " 최근 1주 "}사이 어떻게 바뀌었는지 계산합니다. 격차가 좁혀진(경쟁채널이
             상대적으로 약해진) 시간대가 편성 기회입니다.
             {isRangeMode && " 기간을 선택하면 \"최근 구간\"이 그 선택한 기간 길이로 바뀝니다."}
           </p>
-          {daypartOpportunity.length > 0 && <OpportunityGapSlopeChart rows={daypartOpportunity} fmtR={fmtR} />}
-          {daypartOpportunity.length > 0 && <OpportunityDaypartTiles rows={daypartOpportunity} fmtR={fmtR} isEnaStory={isEnaStory} />}
-          {daypartOpportunity.length > 0 && (
+          {hourBlockOpportunity.length > 0 && <OpportunityGapSlopeChart rows={hourBlockOpportunity} fmtR={fmtR} />}
+          {hourBlockOpportunity.length > 0 && <OpportunityHourBlockTiles rows={hourBlockOpportunity} fmtR={fmtR} isEnaStory={isEnaStory} />}
+          {hourBlockOpportunity.length > 0 && (
             <div className="mb-3 overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-sm">
+              <table className="w-full min-w-[620px] text-left text-sm">
                 <thead>
                   <tr className="text-zinc-400">
                     <th className="pb-1.5 pr-2 font-medium">시간대</th>
                     <th className="pb-1.5 pr-2 font-medium">우리(이전/{opportunityRecentLabel})</th>
                     <th className="pb-1.5 pr-2 font-medium">경쟁채널(이전/{opportunityRecentLabel})</th>
                     <th className="pb-1.5 pr-2 font-medium">격차(이전→{opportunityRecentLabel})</th>
-                    <th className="pb-1.5 font-medium">변화</th>
+                    <th className="pb-1.5 pr-2 font-medium">변화</th>
+                    <th className="pb-1.5 font-medium">분류</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {daypartOpportunity.map((d) => (
-                    <tr key={d.daypart} className="border-t border-zinc-100">
-                      <td className="py-1.5 pr-2 font-medium text-zinc-800">{DAYPART_LABEL[d.daypart] ?? d.daypart}</td>
-                      <td className="py-1.5 pr-2 text-zinc-600">
-                        {fmtR(d.our_full_avg)} / {fmtR(d.our_recent_avg)}
-                      </td>
-                      <td className="py-1.5 pr-2 text-zinc-600">
-                        {fmtR(d.competitor_full_avg)} / {fmtR(d.competitor_recent_avg)}
-                      </td>
-                      <td className="py-1.5 pr-2 text-zinc-600">
-                        {fmtR(d.gap_full)} → {fmtR(d.gap_recent)}
-                      </td>
-                      <td className="py-1.5">
-                        {d.gap_change === null ? (
-                          <span className="text-zinc-400">—</span>
-                        ) : (
-                          <span className={d.gap_change >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                            {d.gap_change >= 0 ? "▲ 기회" : "▼ 약세"} {Math.abs(d.gap_change).toFixed(4)}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {hourBlockOpportunity.map((d) => {
+                    const cls = classifyHourBlockOpportunity(d);
+                    return (
+                      <tr key={d.hour_block} className="border-t border-zinc-100">
+                        <td className="py-1.5 pr-2 font-medium text-zinc-800">{opportunityHourBlockLabel(d.hour_block)}</td>
+                        <td className="py-1.5 pr-2 text-zinc-600">
+                          {fmtR(d.our_full_avg)} / {fmtR(d.our_recent_avg)}
+                        </td>
+                        <td className="py-1.5 pr-2 text-zinc-600">
+                          {fmtR(d.competitor_full_avg)} / {fmtR(d.competitor_recent_avg)}
+                        </td>
+                        <td className="py-1.5 pr-2 text-zinc-600">
+                          {fmtR(d.gap_full)} → {fmtR(d.gap_recent)}
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          {d.gap_change === null ? (
+                            <span className="text-zinc-400">—</span>
+                          ) : (
+                            <span className={d.gap_change >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                              {d.gap_change >= 0 ? "▲ 기회" : "▼ 약세"} {Math.abs(d.gap_change).toFixed(4)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1.5 text-zinc-600">{cls ? OPPORTUNITY_CLASS_LABEL[cls] : "판단 근거 부족"}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
           {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 문단(sectionLlm.opportunity)이 있으면
               그걸, 없으면 기존 규칙 기반 buildOpportunityNarrative로. 가독성 개선 5번(2026-08-26):
-              줄 폭 제한 + 등락 수치 강조(표시만, 문장 로직은 그대로). */}
+              줄 폭 제한 + 등락 수치 강조(표시만, 문장 로직은 그대로). 사용자 지시(2026-09-03)로
+              이 서술도 위 표와 같은 8구간 근거로 통일(buildOpportunityNarrative 시그니처 변경). */}
           <p className="mb-3 text-base leading-relaxed text-zinc-700">
             {highlightNarrativeText(
-              sectionLlmCurrent.opportunity ?? buildOpportunityNarrative(daypartOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD"),
+              sectionLlmCurrent.opportunity ?? buildOpportunityNarrative(hourBlockOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD"),
               "#059669",
               "#e11d48"
             )}
           </p>
-          {/* 사용자 지시(2026-08-25, 원 명세 감사 후속: 9번 Slot Intelligence 8 Blocks) — 위 4구간
-              판정/서술(daypartOpportunity, buildOpportunityNarrative 등)은 그대로 두고, 3시간
-              단위 8구간 상세를 추가 정보로 덧붙인다. 사용자 재지시(2026-08-25): 기본 접힘(details
-              닫힘)이라 "8구간 상세"라는 제목만 보이고 실제 8행 표는 클릭 전까진 안 보여서 "라벨은
-              8구간인데 표는 4구간"처럼 보였다 — 기본 펼침(open)으로 바꿔 항상 바로 보이게 한다. */}
-          {hourBlockOpportunity.length > 0 && (
-            <details className="mb-3 rounded-2xl bg-zinc-50 p-4" open>
-              <summary className="cursor-pointer text-sm font-medium text-zinc-600">
-                8구간 상세(3시간 단위, 원 명세 &quot;Slot Intelligence&quot; 보강)
-              </summary>
-              <div className="mt-3 overflow-x-auto">
-                <table className="w-full min-w-[560px] text-left text-sm">
-                  <thead>
-                    <tr className="text-zinc-400">
-                      <th className="pb-1.5 pr-2 font-medium">시간대</th>
-                      <th className="pb-1.5 pr-2 font-medium">우리(이전/{opportunityRecentLabel})</th>
-                      <th className="pb-1.5 pr-2 font-medium">경쟁채널(이전/{opportunityRecentLabel})</th>
-                      <th className="pb-1.5 pr-2 font-medium">변화</th>
-                      <th className="pb-1.5 font-medium">분류</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {hourBlockOpportunity.map((d) => {
-                      const cls = classifyHourBlockOpportunity(d);
-                      return (
-                        <tr key={d.hour_block} className="border-t border-zinc-100">
-                          <td className="py-1.5 pr-2 font-medium text-zinc-800">{hourBlockLabel(d.hour_block)}</td>
-                          <td className="py-1.5 pr-2 text-zinc-600">
-                            {fmtR(d.our_full_avg)} / {fmtR(d.our_recent_avg)}
-                          </td>
-                          <td className="py-1.5 pr-2 text-zinc-600">
-                            {fmtR(d.competitor_full_avg)} / {fmtR(d.competitor_recent_avg)}
-                          </td>
-                          <td className="py-1.5 pr-2">
-                            {d.gap_change === null ? (
-                              <span className="text-zinc-400">—</span>
-                            ) : (
-                              <span className={d.gap_change >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                                {d.gap_change >= 0 ? "▲ 기회" : "▼ 약세"} {Math.abs(d.gap_change).toFixed(4)}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-1.5 text-zinc-600">{cls ? OPPORTUNITY_CLASS_LABEL[cls] : "판단 근거 부족"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          )}
           <p className="mb-2 text-sm text-zinc-400">
             기회 탐지(Opportunity Alert, 참고): 자사 최근 7일 평균이 이전 7일 대비 +10%p 이상 강세이면서,
             등록 경쟁채널 중 같은 기간 -10%p 이상 약세인 채널이 있으면 표시합니다.

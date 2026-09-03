@@ -9,6 +9,11 @@
 // 사용자 재지시(2026-09-02): "2049도 가구도 채널 1개월 평균 시청률보다 높은 것은 볼드" — 직전
 // 30일 채널 단위 평균(primaryMonthAvg/secondaryMonthAvg)도 함께 반환해 화면에서 프로그램별
 // 시청률과 비교만 하도록 한다(볼드 여부 판정 자체는 화면 쪽에서, 여기선 값만 제공).
+// 사용자 지시(2026-09-03): "시청률, 점유율 오른쪽에 해당 타깃 시청시간과 시청시간 비율도 넣자.
+// 엑셀의 '타깃 상세' 탭을 활용하면 정보를 가져올 수 있을거야" — 실제로 nielsenDaily.ts의
+// parseTargetDetailSheet()가 "OOO타깃상세" 시트에서 timeSpentSeconds/timeSpentShare를 이미
+// 파싱해 nielsenIngest.ts가 ratings.time_spent_seconds/time_spent_share에 프로그램 단위로
+// 저장해두고 있었다(새 파싱 불필요) — select에 두 컬럼만 추가해 그대로 내려준다.
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
@@ -27,14 +32,20 @@ export interface ChannelDailyDetailRow {
   canonical_name: string;
   primary_rating: number | null;
   primary_share: number | null;
+  primary_time_spent_seconds: number | null;
+  primary_time_spent_share: number | null;
   secondary_rating: number | null;
   secondary_share: number | null;
+  secondary_time_spent_seconds: number | null;
+  secondary_time_spent_share: number | null;
 }
 
 interface RatingRow {
   start_time: string;
   rating: number | null;
   share: number | null;
+  time_spent_seconds: number | null;
+  time_spent_share: number | null;
   programs: { canonical_name: string } | { canonical_name: string }[] | null;
 }
 
@@ -70,7 +81,7 @@ export async function GET(request: Request) {
   async function fetchRows(targetId: string, programLevel: boolean) {
     let query = supabase
       .from("ratings")
-      .select("start_time, rating, share, programs(canonical_name)")
+      .select("start_time, rating, share, time_spent_seconds, time_spent_share, programs(canonical_name)")
       .eq("channel_id", channelRow!.id)
       .eq("target_id", targetId)
       .in("source_type", ["nielsen_daily", "skyuhd"])
@@ -121,8 +132,12 @@ export async function GET(request: Request) {
         canonical_name: name,
         primary_rating: r.rating,
         primary_share: r.share,
+        primary_time_spent_seconds: r.time_spent_seconds,
+        primary_time_spent_share: r.time_spent_share,
         secondary_rating: sec?.rating ?? null,
         secondary_share: sec?.share ?? null,
+        secondary_time_spent_seconds: sec?.time_spent_seconds ?? null,
+        secondary_time_spent_share: sec?.time_spent_share ?? null,
       };
     })
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
@@ -130,8 +145,12 @@ export async function GET(request: Request) {
   const dayTotal = {
     primary_rating: primaryDayRows[0]?.rating ?? null,
     primary_share: primaryDayRows[0]?.share ?? null,
+    primary_time_spent_seconds: primaryDayRows[0]?.time_spent_seconds ?? null,
+    primary_time_spent_share: primaryDayRows[0]?.time_spent_share ?? null,
     secondary_rating: secondaryDayRows[0]?.rating ?? null,
     secondary_share: secondaryDayRows[0]?.share ?? null,
+    secondary_time_spent_seconds: secondaryDayRows[0]?.time_spent_seconds ?? null,
+    secondary_time_spent_share: secondaryDayRows[0]?.time_spent_share ?? null,
   };
 
   return NextResponse.json({
