@@ -15,6 +15,7 @@ import {
 } from "@/lib/targetResolution";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { buildOriginalProgrammingInsightViaLlm, type OriginalInsightInput } from "@/lib/originalContentInsight";
+import { roundRatingForDisplay, roundPercentForDisplay } from "@/lib/ratingRounding";
 import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
 import { buildChannelNarrativeViaLlm } from "@/lib/channelNarrativeLlm";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
@@ -746,28 +747,36 @@ export async function GET(request: Request) {
         const cannibalizationSuspected =
           selfRerunUpliftPct !== null && row.retention_pct !== null && row.rerun_channel_code !== null && selfRerunUpliftPct - row.retention_pct >= 10;
 
+        // 사용자 지시(2026-09-02): "소숫점 아래 3자리 규칙 위반(강력한 규칙 적용)" — 이 LLM
+        // 호출은 지금까지 raw DB 정밀도(5자리)를 그대로 프롬프트에 넣고 있어(다른 브리핑 LLM
+        // 호출들은 이미 §U에서 고쳤지만 이 파일은 빠져 있었음), "2.17577" 같은 값이 생성 문장에
+        // 그대로 노출됐다. roundRatingForDisplay/roundPercentForDisplay(공용 유틸)로 채널마다
+        // 정확한 반올림 규칙(skyUHD만 5자리)을 적용해 넘긴다.
+        const ratingFmt = (v: number | null) => roundRatingForDisplay(v, row.broadcast_channel_code);
+        const pctFmt = (v: number | null) => roundPercentForDisplay(v);
         const input: OriginalInsightInput = {
           programName: row.matched_program_name,
           episodeNumber: row.episode_number,
           broadcastChannelName: channelNameByCode.get(row.broadcast_channel_code) ?? row.broadcast_channel_code,
-          matchedRating: row.matched_rating,
-          priorRatingChangePct: row.prior_rating_change_pct,
-          matchedHouseholdRating: row.matched_household_rating,
-          householdRatingChangePct: row.household_rating_change_pct,
-          achievementPct: achievementPctByCode2.get(row.broadcast_channel_code) ?? null,
-          matchedReach: row.matched_reach,
+          channelCode: row.broadcast_channel_code,
+          matchedRating: ratingFmt(row.matched_rating),
+          priorRatingChangePct: pctFmt(row.prior_rating_change_pct),
+          matchedHouseholdRating: ratingFmt(row.matched_household_rating),
+          householdRatingChangePct: pctFmt(row.household_rating_change_pct),
+          achievementPct: pctFmt(achievementPctByCode2.get(row.broadcast_channel_code) ?? null),
+          matchedReach: roundPercentForDisplay(row.matched_reach, 2),
           targetRank,
           householdRank: row.householdRank,
-          beatenBy: beatenBy.slice(0, 3).map((c) => ({ competitor_name: c.competitor_name, competitor_program_name: c.competitor_program_name, competitor_rating: c.competitor_rating })),
-          preRerunRating: row.pre_rerun_rating,
-          selfRerunRating: row.self_rerun_rating,
-          selfRerunUpliftPct,
+          beatenBy: beatenBy.slice(0, 3).map((c) => ({ competitor_name: c.competitor_name, competitor_program_name: c.competitor_program_name, competitor_rating: ratingFmt(c.competitor_rating) })),
+          preRerunRating: ratingFmt(row.pre_rerun_rating),
+          selfRerunRating: ratingFmt(row.self_rerun_rating),
+          selfRerunUpliftPct: pctFmt(selfRerunUpliftPct),
           rerunChannelName: row.rerun_channel_code ? (channelNameByCode.get(row.rerun_channel_code) ?? row.rerun_channel_code) : null,
-          rerunRating: row.rerun_rating,
-          retentionPct: row.retention_pct,
-          ageBreakdownTop3: row.age_breakdown ? row.age_breakdown.slice(0, 3) : null,
+          rerunRating: ratingFmt(row.rerun_rating),
+          retentionPct: pctFmt(row.retention_pct),
+          ageBreakdownTop3: row.age_breakdown ? row.age_breakdown.slice(0, 3).map((a) => ({ label: a.label, rating: ratingFmt(a.rating) ?? a.rating })) : null,
           prevDramaName: row.prev_drama_name,
-          prevDramaChangePct: row.prev_drama_change_pct,
+          prevDramaChangePct: pctFmt(row.prev_drama_change_pct),
           cannibalizationSuspected,
         };
         const schedulingInsight = row.matched_rating !== null ? await buildOriginalProgrammingInsightViaLlm(input) : null;

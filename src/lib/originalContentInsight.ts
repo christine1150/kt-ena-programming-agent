@@ -11,12 +11,18 @@
 // "절대 숫자를 새로 계산하지 마라, 아래 준 값만 인용해라" 명시). API 키가 없거나 호출이
 // 실패하면 null을 돌려주고, 호출부(page1/route.ts)가 기존 규칙 기반 카니발라이제이션 문구로
 // 조용히 대체한다(LLM 장애가 서비스를 막지 않는다는 llmClassifier.ts와 동일한 원칙).
+import { enforceDecimalPrecision } from "./ratingRounding";
+
 const OPENAI_MODEL = "gpt-4o-mini";
 
 export interface OriginalInsightInput {
   programName: string;
   episodeNumber: number | null;
   broadcastChannelName: string;
+  // 사용자 지시(2026-09-02): 출력 문장의 소숫점 자리수 안전망(enforceDecimalPrecision)이
+  // skyUHD인지 정확히 알아야 5자리를 3자리로 잘못 잘라내지 않는다 — 표시명 문자열 비교보다
+  // 명시적 코드가 안전하다.
+  channelCode: string;
   matchedRating: number | null;
   priorRatingChangePct: number | null;
   matchedHouseholdRating: number | null;
@@ -92,7 +98,10 @@ export async function buildOriginalProgrammingInsightViaLlm(input: OriginalInsig
   try {
     const parsed = JSON.parse(content) as { insight?: string };
     const insight = parsed.insight?.trim();
-    return insight && insight.length > 0 ? insight : null;
+    if (!insight || insight.length === 0) return null;
+    // 사용자 지시(2026-09-02): 입력값을 반올림해 넘겨도 LLM이 실수로 다른 정밀도를 쓸 가능성
+    // 자체를 막는 마지막 방어선(강력한 규칙 적용) — skyUHD만 5자리, 그 외는 3자리.
+    return enforceDecimalPrecision(insight, input.channelCode === "SKYUHD" ? 5 : 3);
   } catch {
     return null;
   }
