@@ -747,9 +747,11 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
         {/* 사용자 재지시(2026-08-22/25): ENA도 6개 타일과 동일하게 RankChangeIndicator 하나만. */}
         <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
-      {/* 사용자 재지시(2026-08-22): 도넛 게이지 대신 6개 타일과 동일한 최근 7일 스파크라인. */}
+      {/* 사용자 재지시(2026-08-22): 도넛 게이지 대신 6개 타일과 동일한 최근 7일 스파크라인.
+          사용자 재지시(2026-09-03): 서브 채널 타일의 "그래프 폭 : 시청률 숫자 폭" 비율(실측
+          약 0.58)을 히어로 숫자 폭(실측 503px)에 그대로 적용한 값(약 293px)으로 확대. */}
       <div className="mt-5">
-        <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} />
+        <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} width={293} />
       </div>
     </Link>
   );
@@ -777,10 +779,14 @@ function parseTargetRankNum(targetRank: string | null): number | null {
 // 인포그래픽 제안 #4(사용자 지시 2026-08-22): 채널 타일에 최근 7일 추이를 초소형 스파크라인으로 —
 // 순위 등락만으로는 안 보이던 "최근 며칠간 흐름"을 곁들여 보여준다. 외부 차트 라이브러리 없이
 // SVG 폴리라인 하나로 구현(최소 구성 원칙). 값이 2개 미만(표본 부족)이면 그리지 않는다.
-function MiniSparkline({ values, color }: { values: (number | null)[]; color: string }) {
+// 사용자 지시(2026-09-03): "ENA의 연간 시청률 그래프를 ENA의 시청률 숫자 너비 비율만큼 키워줄것
+// (우측 6개 채널의 비율처럼)" — 폭을 파라미터화(기본 60px, 서브 채널 타일이 계속 쓰는 값)해
+// ENA 히어로만 더 넓게 부를 수 있게 한다. 실측: 서브 채널 타일은 시청률 숫자 폭(103px) 대비
+// 그래프 60px(비율 0.58) — ENA 히어로 숫자 폭(503px)에 같은 비율을 적용하면 약 293px.
+function MiniSparkline({ values, color, width = 60 }: { values: (number | null)[]; color: string; width?: number }) {
   const nums = values.filter((v): v is number => v !== null);
   if (nums.length < 2) return null;
-  const w = 60;
+  const w = width;
   const h = 14;
   // 버그 수정(2026-09-02, 사용자 신고: "ENA 하단 꺾은선 그래프 하단 잘림"): 최솟값 포인트는
   // y=h(뷰박스 맨 아래 경계)에 정확히 찍혀, strokeWidth 1.4의 절반(0.7px)이 뷰박스 밖으로
