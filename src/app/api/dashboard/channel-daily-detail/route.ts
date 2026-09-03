@@ -30,6 +30,11 @@ function offsetDateStr(dateStr: string, days: number): string {
 export interface ChannelDailyDetailRow {
   start_time: string;
   canonical_name: string;
+  // 사용자 지시(2026-09-03): "OLIFE의 경우 EPG나 편성표를 통해서 부제가 파악 가능할 경우 부제를
+  // 아랫줄에 명기(1페이지 채널별 상위 프로그램에서 하듯이)" — ratings.episode_subtitle은 이미
+  // olifeEpgStaging.ts가 OLIFE EPG 카탈로그 매칭으로 채워두고 있는 컬럼(새 파싱 불필요), page1의
+  // "채널별 상위 프로그램"이 쓰는 것과 동일한 컬럼을 그대로 select만 추가해 내려준다.
+  episode_subtitle: string | null;
   primary_rating: number | null;
   primary_share: number | null;
   primary_time_spent_seconds: number | null;
@@ -46,6 +51,7 @@ interface RatingRow {
   share: number | null;
   time_spent_seconds: number | null;
   time_spent_share: number | null;
+  episode_subtitle: string | null;
   programs: { canonical_name: string } | { canonical_name: string }[] | null;
 }
 
@@ -81,7 +87,7 @@ export async function GET(request: Request) {
   async function fetchRows(targetId: string, programLevel: boolean) {
     let query = supabase
       .from("ratings")
-      .select("start_time, rating, share, time_spent_seconds, time_spent_share, programs(canonical_name)")
+      .select("start_time, rating, share, time_spent_seconds, time_spent_share, episode_subtitle, programs(canonical_name)")
       .eq("channel_id", channelRow!.id)
       .eq("target_id", targetId)
       .in("source_type", ["nielsen_daily", "skyuhd"])
@@ -130,6 +136,7 @@ export async function GET(request: Request) {
       return {
         start_time: r.start_time,
         canonical_name: name,
+        episode_subtitle: r.episode_subtitle,
         primary_rating: r.rating,
         primary_share: r.share,
         primary_time_spent_seconds: r.time_spent_seconds,

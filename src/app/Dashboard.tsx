@@ -2958,6 +2958,8 @@ function hexToRgba(hex: string, alpha: number): string {
 interface ChannelDailyDetailApiRow {
   start_time: string;
   canonical_name: string;
+  // 사용자 지시(2026-09-03): OLIFE처럼 EPG로 부제가 파악되는 경우 프로그램명 아랫줄에 표기.
+  episode_subtitle: string | null;
   primary_rating: number | null;
   primary_share: number | null;
   primary_time_spent_seconds: number | null;
@@ -3119,113 +3121,120 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
         // 사용자 재지시(2026-09-02): "스크롤 다운하지 않아도 하루 전체까지 한눈에 보이게" —
         // 높이 제한·자체 스크롤(max-h/overflow-y-auto)을 없애 표 전체가 그대로 펼쳐지고,
         // 페이지 자체 스크롤로 하루 전체(맨 아래 요약 행까지) 볼 수 있게 한다.
-        // 사용자 지시(2026-09-03): "시청률, 점유율 오른쪽에 시청시간과 시청시간 비율도" — 그룹
-        // 2개(시청률/점유율)에서 4개(+시청시간/시청시간 비율)로 늘어 표가 넓어지므로, 패널 폭보다
-        // 넘칠 경우를 대비해 가로 스크롤 컨테이너로 감싼다(세로 스크롤은 기존 지시대로 없음).
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] table-fixed text-left text-sm">
-            <colgroup>
-              <col className="w-11" />
-              <col />
-              <col className="w-14" />
-              {hasSecondary && <col className="w-14" />}
-              <col className="w-14" />
-              {hasSecondary && <col className="w-14" />}
-              <col className="w-14" />
-              <col className="w-14" />
-            </colgroup>
-            <thead className="text-[12px] font-normal text-zinc-400">
-              <tr>
-                <th rowSpan={2} className="pb-1 text-center align-bottom">
-                  시작
-                </th>
-                <th rowSpan={2} className="pb-1 text-left align-bottom">
-                  프로그램명
-                </th>
-                <th colSpan={hasSecondary ? 2 : 1} className="pb-0.5 text-center border-b border-zinc-100">
-                  시청률
-                </th>
-                <th colSpan={hasSecondary ? 2 : 1} className="pb-0.5 text-center border-b border-zinc-100">
-                  점유율
-                </th>
-                {/* 사용자 지시(2026-09-03): "시청시간과 시청시간 비율은 메인 타깃 1개(각 채널의
-                    최고 주요 KPI 타깃)만" — 시청률/점유율과 달리 부 타깃 열을 만들지 않는다. */}
-                <th rowSpan={2} className="pb-1 text-center align-bottom">
-                  시청시간
-                  <br />
-                  <span className="font-normal text-zinc-300">{shortTargetLabel(state.primaryLabel ?? "주")}</span>
-                </th>
-                <th rowSpan={2} className="pb-1 text-center align-bottom">
-                  시청시간 비율
-                  <br />
-                  <span className="font-normal text-zinc-300">{shortTargetLabel(state.primaryLabel ?? "주")}</span>
-                </th>
-              </tr>
-              <tr>
-                <th className="pb-1 text-center">{shortTargetLabel(state.primaryLabel ?? "주")}</th>
-                {hasSecondary && <th className="pb-1 text-center">{shortTargetLabel(state.secondaryLabel!)}</th>}
-                <th className="pb-1 text-center">{shortTargetLabel(state.primaryLabel ?? "주")}</th>
-                {hasSecondary && <th className="pb-1 text-center">{shortTargetLabel(state.secondaryLabel!)}</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {state.rows.map((r, i) => {
-                const primaryShareAboveAvg = r.primary_share !== null && avgPrimaryShare !== null && r.primary_share > avgPrimaryShare;
-                const secondaryShareAboveAvg = r.secondary_share !== null && avgSecondaryShare !== null && r.secondary_share > avgSecondaryShare;
-                return (
-                  <tr key={i} className="border-t border-zinc-50">
-                    <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(r.start_time)}</td>
-                    <td className="truncate py-1 text-zinc-700">{r.canonical_name}</td>
-                    <td className="py-1 text-center tabular-nums" style={ratingCellStyle(r.primary_rating, primaryRange, state.primaryMonthAvg)}>
-                      {formatRating(r.primary_rating, channelCode)}
-                    </td>
-                    {hasSecondary && (
-                      <td className="py-1 text-center tabular-nums" style={ratingCellStyle(r.secondary_rating, secondaryRange, state.secondaryMonthAvg)}>
-                        {r.secondary_rating !== null ? formatRating(r.secondary_rating, channelCode) : "—"}
-                      </td>
-                    )}
-                    <td className="py-1 text-center tabular-nums" style={primaryShareAboveAvg ? { color, fontWeight: 700 } : { color: "#a1a1aa" }}>
-                      {r.primary_share !== null ? `${r.primary_share.toFixed(2)}%` : "—"}
-                    </td>
-                    {hasSecondary && (
-                      <td className="py-1 text-center tabular-nums" style={secondaryShareAboveAvg ? { color, fontWeight: 700 } : { color: "#a1a1aa" }}>
-                        {r.secondary_share !== null ? `${r.secondary_share.toFixed(2)}%` : "—"}
-                      </td>
-                    )}
-                    <td className="py-1 text-center tabular-nums text-zinc-500">{fmtSecondsCompact(r.primary_time_spent_seconds)}</td>
-                    <td className="py-1 text-center tabular-nums text-zinc-500">
-                      {r.primary_time_spent_share !== null ? `${r.primary_time_spent_share.toFixed(2)}%` : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-              {state.dayTotal && (
-                <tr className="border-t-2 border-zinc-200 bg-zinc-50 font-bold text-zinc-800">
-                  <td className="py-1.5 text-center">—</td>
-                  <td className="py-1.5">하루 전체</td>
-                  <td className="py-1.5 text-center tabular-nums">{formatRating(state.dayTotal.primary_rating, channelCode)}</td>
-                  {hasSecondary && (
-                    <td className="py-1.5 text-center tabular-nums">
-                      {state.dayTotal.secondary_rating !== null ? formatRating(state.dayTotal.secondary_rating, channelCode) : "—"}
-                    </td>
-                  )}
-                  <td className="py-1.5 text-center tabular-nums">
-                    {state.dayTotal.primary_share !== null ? `${state.dayTotal.primary_share.toFixed(2)}%` : "—"}
+        // 사용자 재지시(2026-09-03): "좌우로 스크롤링하는 기능 없이 한 페이지에서 다 보일 수
+        // 있도록" — 2026-09-03 초반에 시청시간 2열이 늘며 넣었던 min-w-[720px]+가로 스크롤
+        // 컨테이너를 철회한다. 숫자 열은 전부 좁은 고정폭(최대 6열×56px+44px≈380px)이라 프로그램명
+        // 열만 남은 폭을 그대로 나눠 쓰면 패널 폭 안에 자연스럽게 다 들어간다.
+        <table className="w-full table-fixed text-left text-sm">
+          <colgroup>
+            <col className="w-11" />
+            <col />
+            <col className="w-14" />
+            {hasSecondary && <col className="w-14" />}
+            <col className="w-14" />
+            {hasSecondary && <col className="w-14" />}
+            <col className="w-14" />
+            <col className="w-14" />
+          </colgroup>
+          <thead className="text-[12px] font-normal text-zinc-400">
+            <tr>
+              <th rowSpan={2} className="pb-1 text-center align-bottom">
+                시작
+              </th>
+              <th rowSpan={2} className="pb-1 text-left align-bottom">
+                프로그램명
+              </th>
+              <th colSpan={hasSecondary ? 2 : 1} className="pb-0.5 text-center border-b border-zinc-100">
+                시청률
+              </th>
+              <th colSpan={hasSecondary ? 2 : 1} className="pb-0.5 text-center border-b border-zinc-100">
+                점유율
+              </th>
+              {/* 사용자 지시(2026-09-03): "시청시간과 시청시간 비율은 메인 타깃 1개(각 채널의
+                  최고 주요 KPI 타깃)만" — 시청률/점유율과 달리 부 타깃 열을 만들지 않는다. */}
+              <th rowSpan={2} className="pb-1 text-center align-bottom">
+                시청시간
+                <br />
+                <span className="font-normal text-zinc-300">{shortTargetLabel(state.primaryLabel ?? "주")}</span>
+              </th>
+              {/* 사용자 지시(2026-09-03): "시청시간 비율은 '시청비율'로 말을 줄일것". */}
+              <th rowSpan={2} className="pb-1 text-center align-bottom">
+                시청비율
+                <br />
+                <span className="font-normal text-zinc-300">{shortTargetLabel(state.primaryLabel ?? "주")}</span>
+              </th>
+            </tr>
+            <tr>
+              <th className="pb-1 text-center">{shortTargetLabel(state.primaryLabel ?? "주")}</th>
+              {hasSecondary && <th className="pb-1 text-center">{shortTargetLabel(state.secondaryLabel!)}</th>}
+              <th className="pb-1 text-center">{shortTargetLabel(state.primaryLabel ?? "주")}</th>
+              {hasSecondary && <th className="pb-1 text-center">{shortTargetLabel(state.secondaryLabel!)}</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {state.rows.map((r, i) => {
+              const primaryShareAboveAvg = r.primary_share !== null && avgPrimaryShare !== null && r.primary_share > avgPrimaryShare;
+              const secondaryShareAboveAvg = r.secondary_share !== null && avgSecondaryShare !== null && r.secondary_share > avgSecondaryShare;
+              return (
+                <tr key={i} className="border-t border-zinc-50">
+                  <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(r.start_time)}</td>
+                  <td className="py-1 text-zinc-700">
+                    <div className="truncate">{r.canonical_name}</div>
+                    {/* 사용자 지시(2026-09-03): "OLIFE의 경우 EPG나 편성표를 통해서 부제가
+                        파악 가능할 경우 부제를 아랫줄에 명기(1페이지 채널별 상위 프로그램에서
+                        하듯이)" — episode_subtitle은 OLIFE EPG 카탈로그 매칭이 채워둔 값이라
+                        채널을 하드코딩하지 않고 값이 있을 때만 자연스럽게 표시된다. */}
+                    {r.episode_subtitle && <div className="truncate text-[11px] text-zinc-400">{r.episode_subtitle}</div>}
+                  </td>
+                  <td className="py-1 text-center tabular-nums" style={ratingCellStyle(r.primary_rating, primaryRange, state.primaryMonthAvg)}>
+                    {formatRating(r.primary_rating, channelCode)}
                   </td>
                   {hasSecondary && (
-                    <td className="py-1.5 text-center tabular-nums">
-                      {state.dayTotal.secondary_share !== null ? `${state.dayTotal.secondary_share.toFixed(2)}%` : "—"}
+                    <td className="py-1 text-center tabular-nums" style={ratingCellStyle(r.secondary_rating, secondaryRange, state.secondaryMonthAvg)}>
+                      {r.secondary_rating !== null ? formatRating(r.secondary_rating, channelCode) : "—"}
                     </td>
                   )}
-                  <td className="py-1.5 text-center tabular-nums">{fmtSecondsCompact(state.dayTotal.primary_time_spent_seconds)}</td>
-                  <td className="py-1.5 text-center tabular-nums">
-                    {state.dayTotal.primary_time_spent_share !== null ? `${state.dayTotal.primary_time_spent_share.toFixed(2)}%` : "—"}
+                  <td className="py-1 text-center tabular-nums" style={primaryShareAboveAvg ? { color, fontWeight: 700 } : { color: "#a1a1aa" }}>
+                    {r.primary_share !== null ? `${r.primary_share.toFixed(2)}%` : "—"}
+                  </td>
+                  {hasSecondary && (
+                    <td className="py-1 text-center tabular-nums" style={secondaryShareAboveAvg ? { color, fontWeight: 700 } : { color: "#a1a1aa" }}>
+                      {r.secondary_share !== null ? `${r.secondary_share.toFixed(2)}%` : "—"}
+                    </td>
+                  )}
+                  <td className="py-1 text-center tabular-nums text-zinc-500">{fmtSecondsCompact(r.primary_time_spent_seconds)}</td>
+                  <td className="py-1 text-center tabular-nums text-zinc-500">
+                    {r.primary_time_spent_share !== null ? `${r.primary_time_spent_share.toFixed(2)}%` : "—"}
                   </td>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              );
+            })}
+            {state.dayTotal && (
+              <tr className="border-t-2 border-zinc-200 bg-zinc-50 font-bold text-zinc-800">
+                <td className="py-1.5 text-center">—</td>
+                <td className="py-1.5">하루 전체</td>
+                <td className="py-1.5 text-center tabular-nums">{formatRating(state.dayTotal.primary_rating, channelCode)}</td>
+                {hasSecondary && (
+                  <td className="py-1.5 text-center tabular-nums">
+                    {state.dayTotal.secondary_rating !== null ? formatRating(state.dayTotal.secondary_rating, channelCode) : "—"}
+                  </td>
+                )}
+                <td className="py-1.5 text-center tabular-nums">
+                  {state.dayTotal.primary_share !== null ? `${state.dayTotal.primary_share.toFixed(2)}%` : "—"}
+                </td>
+                {hasSecondary && (
+                  <td className="py-1.5 text-center tabular-nums">
+                    {state.dayTotal.secondary_share !== null ? `${state.dayTotal.secondary_share.toFixed(2)}%` : "—"}
+                  </td>
+                )}
+                <td className="py-1.5 text-center tabular-nums">{fmtSecondsCompact(state.dayTotal.primary_time_spent_seconds)}</td>
+                <td className="py-1.5 text-center tabular-nums">
+                  {state.dayTotal.primary_time_spent_share !== null ? `${state.dayTotal.primary_time_spent_share.toFixed(2)}%` : "—"}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       )}
     </div>
   );
