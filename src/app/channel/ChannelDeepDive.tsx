@@ -3239,8 +3239,14 @@ function WinWeaknessCard({ spec }: { spec: WinWeaknessCardSpec }) {
 interface BriefingProgramRow {
   name: string;
   rating: number | null;
-  detail: string;
+  time: string;
+  ratingText: string;
 }
+// 사용자 지시(2026-09-03): "탑/위크 프로그램 시작 시간 좌정렬, 시청률 좌정렬로 사이를 좀
+// 띄우고 정렬을 통일" — 기존엔 "시간 · 시청률"을 하나의 문자열로 합쳐 우측 정렬해, 시간
+// 자릿수가 달라지면 시청률 위치도 행마다 흔들렸다. 시간/시청률을 각각 고정폭 열로 분리해
+// 둘 다 좌정렬 + tabular-nums로 항상 같은 x좌표에서 시작하게 한다(경쟁채널 TOP5 grid 정렬
+// 수정과 같은 원칙).
 function BriefingProgramList({ title, tone, rows }: { title: string; tone: "up" | "down"; rows: BriefingProgramRow[] }) {
   if (rows.length === 0) return null;
   return (
@@ -3248,11 +3254,12 @@ function BriefingProgramList({ title, tone, rows }: { title: string; tone: "up" 
       <p className={`mb-2 text-xs font-semibold ${tone === "up" ? "text-emerald-700" : "text-rose-700"}`}>{title}</p>
       <ol className="space-y-1.5">
         {rows.map((r, i) => (
-          <li key={i} className="flex items-baseline justify-between gap-2 text-sm">
+          <li key={i} className="grid grid-cols-[1fr_3.25rem_3.75rem] items-baseline gap-x-3 text-sm">
             <span className="min-w-0 truncate text-zinc-700">
               {i + 1}. {r.name}
             </span>
-            <span className="shrink-0 text-zinc-400">{r.detail}</span>
+            <span className="text-left tabular-nums text-zinc-400">{r.time}</span>
+            <span className="text-left font-medium tabular-nums text-zinc-500">{r.ratingText}</span>
           </li>
         ))}
       </ol>
@@ -4339,12 +4346,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const briefingTopPrograms: BriefingProgramRow[] = data.top3Programs.map((p) => ({
     name: p.canonical_name,
     rating: p.rating,
-    detail: `${fmtTime(p.start_time)} · ${fmtR(p.rating)}`,
+    time: fmtTime(p.start_time),
+    ratingText: fmtR(p.rating),
   }));
   const briefingWeakPrograms: BriefingProgramRow[] = data.weakProgramsToday.map((p) => ({
     name: p.canonical_name,
     rating: p.rating,
-    detail: `${fmtTime(p.start_time)} · ${fmtR(p.rating)}`,
+    time: fmtTime(p.start_time),
+    ratingText: fmtR(p.rating),
   }));
 
   // 사용자 지시(2026-08-21, [특화 디자인] ENA STORY): "stripe.com을 참고해 분홍·보라·하양·
@@ -4378,8 +4387,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             점 구분자로 한 줄에 묶는다(색상 보더 대신 얇은 상단 구분선 하나만 사용).
             ENA Story만 보라→핑크→주황(끝자락만) Stripe풍 그라디언트, 다른 채널은 기존 로고색
             단색 그라디언트 그대로. */}
+        {/* 사용자 지시(2026-09-03): "헤더는 이 포맷으로 두되 높이를 약간만 높여서 너무 답답한
+            느낌이 들지 않게" — 2행 구조·정보 배치는 그대로 두고 안쪽 여백만 살짝 늘린다
+            (p-6→p-7, 1행-2행 사이 간격 mt-3→mt-4/pt-3→pt-4). */}
         <div
-          className="rounded-3xl p-6 text-white shadow-sm"
+          className="rounded-3xl p-7 text-white shadow-sm"
           style={{
             background: isEnaStory
               ? "linear-gradient(120deg, #7828e0 0%, #c22de0 45%, #f43fc4 78%, #ffb020 100%)"
@@ -4565,7 +4577,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {/* 2행 — 메타데이터: 기준일/기간·목표·주간순위·전일전주(또는 비교기간) 대비·Health
               Score를 가운뎃점(·) 구분자로 한 줄에 묶는다 — 색상 보더 대신 얇은 상단 구분선
               하나만 사용(사용자 지시: "여러줄에 걸쳐 나오지 않게"). */}
-          <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-white/15 pt-3 text-sm text-white/85">
+          <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-white/15 pt-4 text-sm text-white/85">
             {isRangeMode ? (
               <span>기간 {periodRangeLabel(data.dateFrom, data.dateTo) || `${formatDateWithDow(data.dateFrom)} ~ ${formatDateWithDow(data.dateTo)}`}</span>
             ) : (

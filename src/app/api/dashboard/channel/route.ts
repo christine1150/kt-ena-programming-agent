@@ -790,7 +790,13 @@ export async function GET(request: Request) {
   if (!isRangeMode) {
     const { data: targetRow } = await supabase.from("targets").select("id").eq("label", programTargetLabel).maybeSingle();
     if (targetRow) {
-      const [{ data: top3Rows }, { data: weak3Rows }] = await Promise.all([
+      // 사용자 지시(2026-09-03): "Weak 프로그램이 여러개가 0으로 나왔을 경우, 저녁심야(19-25)
+      // > 오후(14-18) > 오전(09-13) > 새벽(02-08) 순으로 우선 배치" — 0 등 동률이 흔해 기존
+      // .limit(3)은 DB의 임의 반환 순서에서 3개를 뽑아, 실제로는 매번 시청자가 거의 없는
+      // 새벽 시간대 프로그램만 반복 노출되는 경향이 있었다. 그날 전체 후보를 가져와 (시청률
+      // 오름차순 → 동률이면 daypart 우선순위) 순으로 정렬한 뒤 상위 3개만 취한다 — TOP은
+      // 최댓값 동률이 드물고 이 요청도 WEAK만 지목해 그대로 둔다.
+      const [{ data: top3Rows }, { data: weakAllRows }] = await Promise.all([
         supabase
           .from("ratings")
           .select("rating, start_time, programs(canonical_name)")
@@ -811,8 +817,7 @@ export async function GET(request: Request) {
           .eq("broadcast_date", dateTo)
           .not("program_id", "is", null)
           .not("rating", "is", null)
-          .order("rating", { ascending: true })
-          .limit(3),
+          .order("rating", { ascending: true }),
       ]);
       // 사용자 지시(2026-09-02): "TOP/WEAK 프로그램을 당일거 보여줄 경우 편성 시작 시간도 함께
       // 표시" — 같은 프로그램명이 하루에 여러 번(재방 등) 방영되면 시간 없이는 어느 방영분인지
@@ -823,7 +828,20 @@ export async function GET(request: Request) {
         start_time: r.start_time,
       });
       top3Programs = (top3Rows ?? []).map(mapRow);
-      weakProgramsToday = (weak3Rows ?? []).map(mapRow);
+      // ChannelDeepDive.tsx의 hourToDaypart()/DAYPART_LABEL과 동일한 고정 구간(새벽 02~08/
+      // 오전 09~13/오후 14~18/저녁·심야 19~25)을 그대로 재사용 — 새 구간 정의 없음.
+      const daypartTiePriority = (startTime: string): number => {
+        const hour = parseInt(startTime.split(":")[0] ?? "", 10);
+        if (Number.isNaN(hour)) return 5;
+        if (hour >= 2 && hour <= 8) return 4; // 새벽
+        if (hour >= 9 && hour <= 13) return 3; // 오전
+        if (hour >= 14 && hour <= 18) return 2; // 오후
+        return 1; // 저녁·심야(19~25, 0~1시 포함)
+      };
+      weakProgramsToday = (weakAllRows ?? [])
+        .map(mapRow)
+        .sort((a, b) => a.rating - b.rating || daypartTiePriority(a.start_time) - daypartTiePriority(b.start_time))
+        .slice(0, 3);
     }
   }
 
