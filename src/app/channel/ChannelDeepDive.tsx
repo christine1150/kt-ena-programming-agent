@@ -660,7 +660,8 @@ function fmtSeconds(v: number | null): string {
   if (v === null || v === undefined) return "—";
   const m = Math.floor(v / 60);
   const s = Math.round(v % 60);
-  return `${m}분 ${s}초`;
+  // 사용자 지시(2026-09-03): "34분 0초"처럼 초가 0이면 분 단위까지만 쓴다.
+  return s === 0 ? `${m}분` : `${m}분 ${s}초`;
 }
 function shortDemoLabel(label: string): string {
   return label.replace(/^(수도권|전국)\s*/, "");
@@ -3633,7 +3634,9 @@ function StableSlotPatternList({
                 )}
                 {timeSpentDelta !== null && r.streak_avg_time_spent !== null && r.channel_avg_time_spent !== null && (
                   <p>
-                    시청시간 {fmtSeconds(r.streak_avg_time_spent)}, 평균 {fmtSeconds(r.channel_avg_time_spent)} 대비{" "}
+                    {/* 사용자 지시(2026-09-03): "시청시간 34분, 평균(10분 34초) 대비 ▲23분 26초"
+                        — 평균값을 괄호로 감싸 시청률/점유율 줄과 구분. */}
+                    시청시간 {fmtSeconds(r.streak_avg_time_spent)}, 평균({fmtSeconds(r.channel_avg_time_spent)}) 대비{" "}
                     <span className={`font-medium ${timeSpentDelta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                       {timeSpentDelta >= 0 ? "▲" : "▼"}
                       {fmtSeconds(Math.abs(timeSpentDelta))}
@@ -4633,14 +4636,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <span aria-hidden className="text-white/30">·</span>
                 목표 {fmtR(data.targetAchievement.target_rating)}
                 {data.targetAchievement.achievement_pct != null && (
-                  // 사용자 신고(2026-09-03, OLIFE 스크린샷): 밝은 라임그린(#b9db01) 헤더 위에서
-                  // text-emerald-300(연초록)이 배경과 거의 같은 색상대라 글씨가 안 보였다 —
-                  // 채널마다 강조색이 다 달라(라임/빨강/보라 등) 특정 색만 다른 색으로 바꾸면
-                  // 다음 채널에서 같은 문제가 재발할 수 있다. 어떤 강조색 위에서도 대비가
-                  // 보장되도록 반투명 검정 스크림(대비비 실측 4.9~5.7:1) + 흰 글씨 pill로 교체.
-                  <span
-                    className={`rounded-full bg-black/50 px-1.5 py-0.5 font-semibold ${data.targetAchievement.achievement_pct >= 100 ? "text-emerald-100" : "text-rose-100"}`}
-                  >
+                  <span className={data.targetAchievement.achievement_pct >= 100 ? "text-emerald-300" : "text-rose-200"}>
                     (달성률 {data.targetAchievement.achievement_pct.toFixed(1)}%)
                   </span>
                 )}
@@ -4655,11 +4651,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 주간 순위 {data.periodRankMovement.prior_rank != null && <>#{data.periodRankMovement.prior_rank} → </>}
                 <b className="font-semibold">#{data.periodRankMovement.current_rank}</b>
                 {data.periodRankMovement.rank_change != null && data.periodRankMovement.rank_change !== 0 && (
-                  // 사용자 신고(2026-09-03): 위 달성률 배지와 같은 이유(밝은 강조색 배경 위
-                  // 저채도 텍스트 색은 채널마다 안 보일 수 있음) — 같은 검정 스크림 pill 적용.
-                  <span
-                    className={`rounded-full bg-black/50 px-1.5 py-0.5 font-semibold ${data.periodRankMovement.rank_change > 0 ? "text-emerald-100" : "text-rose-100"}`}
-                  >
+                  <span className={data.periodRankMovement.rank_change > 0 ? "text-emerald-300" : "text-rose-300"}>
                     {data.periodRankMovement.rank_change > 0 ? "▲" : "▼"}
                     {Math.abs(data.periodRankMovement.rank_change)}
                   </span>

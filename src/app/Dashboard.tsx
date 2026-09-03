@@ -3128,17 +3128,11 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
               <col className="w-11" />
               <col />
               <col className="w-14" />
+              {hasSecondary && <col className="w-14" />}
+              <col className="w-14" />
+              {hasSecondary && <col className="w-14" />}
               <col className="w-14" />
               <col className="w-14" />
-              <col className="w-14" />
-              {hasSecondary && (
-                <>
-                  <col className="w-14" />
-                  <col className="w-14" />
-                  <col className="w-14" />
-                  <col className="w-14" />
-                </>
-              )}
             </colgroup>
             <thead className="text-[12px] font-normal text-zinc-400">
               <tr>
@@ -3154,18 +3148,20 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                 <th colSpan={hasSecondary ? 2 : 1} className="pb-0.5 text-center border-b border-zinc-100">
                   점유율
                 </th>
-                <th colSpan={hasSecondary ? 2 : 1} className="pb-0.5 text-center border-b border-zinc-100">
+                {/* 사용자 지시(2026-09-03): "시청시간과 시청시간 비율은 메인 타깃 1개(각 채널의
+                    최고 주요 KPI 타깃)만" — 시청률/점유율과 달리 부 타깃 열을 만들지 않는다. */}
+                <th rowSpan={2} className="pb-1 text-center align-bottom">
                   시청시간
+                  <br />
+                  <span className="font-normal text-zinc-300">{shortTargetLabel(state.primaryLabel ?? "주")}</span>
                 </th>
-                <th colSpan={hasSecondary ? 2 : 1} className="pb-0.5 text-center border-b border-zinc-100">
+                <th rowSpan={2} className="pb-1 text-center align-bottom">
                   시청시간 비율
+                  <br />
+                  <span className="font-normal text-zinc-300">{shortTargetLabel(state.primaryLabel ?? "주")}</span>
                 </th>
               </tr>
               <tr>
-                <th className="pb-1 text-center">{shortTargetLabel(state.primaryLabel ?? "주")}</th>
-                {hasSecondary && <th className="pb-1 text-center">{shortTargetLabel(state.secondaryLabel!)}</th>}
-                <th className="pb-1 text-center">{shortTargetLabel(state.primaryLabel ?? "주")}</th>
-                {hasSecondary && <th className="pb-1 text-center">{shortTargetLabel(state.secondaryLabel!)}</th>}
                 <th className="pb-1 text-center">{shortTargetLabel(state.primaryLabel ?? "주")}</th>
                 {hasSecondary && <th className="pb-1 text-center">{shortTargetLabel(state.secondaryLabel!)}</th>}
                 <th className="pb-1 text-center">{shortTargetLabel(state.primaryLabel ?? "주")}</th>
@@ -3197,15 +3193,9 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                       </td>
                     )}
                     <td className="py-1 text-center tabular-nums text-zinc-500">{fmtSecondsCompact(r.primary_time_spent_seconds)}</td>
-                    {hasSecondary && <td className="py-1 text-center tabular-nums text-zinc-500">{fmtSecondsCompact(r.secondary_time_spent_seconds)}</td>}
                     <td className="py-1 text-center tabular-nums text-zinc-500">
                       {r.primary_time_spent_share !== null ? `${r.primary_time_spent_share.toFixed(2)}%` : "—"}
                     </td>
-                    {hasSecondary && (
-                      <td className="py-1 text-center tabular-nums text-zinc-500">
-                        {r.secondary_time_spent_share !== null ? `${r.secondary_time_spent_share.toFixed(2)}%` : "—"}
-                      </td>
-                    )}
                   </tr>
                 );
               })}
@@ -3228,15 +3218,9 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                     </td>
                   )}
                   <td className="py-1.5 text-center tabular-nums">{fmtSecondsCompact(state.dayTotal.primary_time_spent_seconds)}</td>
-                  {hasSecondary && <td className="py-1.5 text-center tabular-nums">{fmtSecondsCompact(state.dayTotal.secondary_time_spent_seconds)}</td>}
                   <td className="py-1.5 text-center tabular-nums">
                     {state.dayTotal.primary_time_spent_share !== null ? `${state.dayTotal.primary_time_spent_share.toFixed(2)}%` : "—"}
                   </td>
-                  {hasSecondary && (
-                    <td className="py-1.5 text-center tabular-nums">
-                      {state.dayTotal.secondary_time_spent_share !== null ? `${state.dayTotal.secondary_time_spent_share.toFixed(2)}%` : "—"}
-                    </td>
-                  )}
                 </tr>
               )}
             </tbody>
