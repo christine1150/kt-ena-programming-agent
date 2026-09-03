@@ -721,32 +721,31 @@ function RankPair({ todayRank, targetRankNum, sizeClass }: { todayRank: number |
   );
 }
 
-// 사용자 지시(2026-09-03): "각 시청률은 첨부 그림처럼 채널 로고 우측으로 옮겨" — 로고 아래에
-// 숫자를 쌓던 세로 배치에서, 로고와 숫자를 같은 줄에 나란히 두는 가로 배치로. "연간 누적 평균
-// 0.120(7위) · 목표(6위) 대비 1위 낮음" 설명 줄은 사용자 지시로 삭제(buildYtdLine 함수 자체는
-// 다른 곳에서 쓸 수 있어 남겨둔다).
+// 사용자 재지시(2026-09-03): "나머지 레이아웃은 직전에 했던 대로 되돌리기" — 로고 우측에 숫자를
+// 놓는 가로 배치를 철회하고, 로고 아래에 큰 숫자를 세우는 세로 배치로 되돌린다. 다만 "현재 순위
+// 진한 글씨체로 하고 있는 건 그대로 유지"라 RankPair(오늘 등위 볼드 + 확대된 등위 폰트)는 유지.
+// "연간 누적 평균 …" 설명 줄은 별도 지시로 삭제된 상태 그대로 둔다(레이아웃이 아니라 내용 결정).
 function ChannelHero({ channel }: { channel: ChannelSummary }) {
   const heroTargetRankNum = parseTargetRankNum(channel.targetRank);
   return (
     <Link href={`/channel/${channel.code}`} className="group block">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        <ChannelLogo
-          channel={{
-            logoPath: channel.logoPath,
-            name: channel.name,
-            logoVisibleRatio: channel.logoVisibleRatio,
-            logoVisibleTopRatio: channel.logoVisibleTopRatio,
-          }}
-          heightPx={44}
-        />
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="text-[64px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em] text-zinc-900">
-            {formatRating(channel.currentRating)}
-          </span>
-          <RankPair todayRank={channel.currentRank} targetRankNum={heroTargetRankNum} sizeClass="text-[28px]" />
-          {/* 사용자 재지시(2026-08-22/25): ENA도 6개 타일과 동일하게 RankChangeIndicator 하나만. */}
-          <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
-        </div>
+      <ChannelLogo
+        channel={{
+          logoPath: channel.logoPath,
+          name: channel.name,
+          logoVisibleRatio: channel.logoVisibleRatio,
+          logoVisibleTopRatio: channel.logoVisibleTopRatio,
+        }}
+        heightPx={44}
+      />
+      {/* 숫자·순위·등락을 하나의 baseline에 정렬 — 정교한 alignment 지시. */}
+      <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-[64px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em] text-zinc-900">
+          {formatRating(channel.currentRating)}
+        </span>
+        <RankPair todayRank={channel.currentRank} targetRankNum={heroTargetRankNum} sizeClass="text-[28px]" />
+        {/* 사용자 재지시(2026-08-22/25): ENA도 6개 타일과 동일하게 RankChangeIndicator 하나만. */}
+        <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
       {/* 사용자 재지시(2026-08-22): 도넛 게이지 대신 6개 타일과 동일한 최근 7일 스파크라인. */}
       <div className="mt-5">
@@ -839,45 +838,43 @@ function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logo
       href={`/channel/${channel.code}`}
       className="flex flex-col gap-2.5 bg-white px-4 py-4 transition hover:bg-zinc-50"
     >
-      {/* 사용자 지시(2026-09-03): "각 시청률은 채널 로고 우측으로" — 로고 아래에 숫자를 쌓던
-          세로 배치를 로고와 숫자가 같은 줄에 오는 가로 배치로. 전일 대비 순위 증감은 오른쪽 끝. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-          {/* 사용자 지시: 채널명 텍스트 제거, 로고만 깔끔하게.
-              사용자 재지시(2026-09-02): "채널별 시청률" 타일에서만 ENA Drama/Play/Story는 가로형
-              로고(preferWideLogo, channel.code로 매칭) — 다른 자리(헤더 아이콘·주말 리포트 등)는
-              이 prop을 안 켜서 기존 세로형 그대로 유지. */}
-          <ChannelLogo
-            channel={{
-              logoPath: channel.logoPath,
-              name: channel.name,
-              logoVisibleRatio: channel.logoVisibleRatio,
-              logoVisibleTopRatio: channel.logoVisibleTopRatio,
-              code: channel.code,
-            }}
-            reference={
-              logoReference
-                ? {
-                    logoPath: logoReference.logoPath,
-                    name: logoReference.name,
-                    logoVisibleRatio: logoReference.logoVisibleRatio,
-                    logoVisibleTopRatio: logoReference.logoVisibleTopRatio,
-                  }
-                : undefined
-            }
-            heightPx={20}
-            maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
-            preferWideLogo
-          />
-          <span className="flex items-baseline gap-1.5">
-            {/* 사용자 지시(2026-09-03): "전반적으로 폰트가 작으니 늘려줄것" — skyUHD는 5자리
-                (0.0017)라 다른 채널보다 한 단계 작게 두던 기존 규칙은 유지하되 둘 다 키운다. */}
-            <span className={`font-bold tabular-nums tracking-tight text-zinc-900 ${isSkyUhd ? "text-lg" : "text-xl"}`}>
-              {formatRating(channel.currentRating, channel.code)}
-            </span>
-            <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} sizeClass="text-[13px]" />
+      {/* 사용자 지시: 채널명 텍스트 제거, 로고만 깔끔하게.
+          사용자 재지시(2026-09-02): "채널별 시청률" 타일에서만 ENA Drama/Play/Story는 가로형
+          로고(preferWideLogo, channel.code로 매칭) — 다른 자리(헤더 아이콘·주말 리포트 등)는
+          이 prop을 안 켜서 기존 세로형 그대로 유지. */}
+      <ChannelLogo
+        channel={{
+          logoPath: channel.logoPath,
+          name: channel.name,
+          logoVisibleRatio: channel.logoVisibleRatio,
+          logoVisibleTopRatio: channel.logoVisibleTopRatio,
+          code: channel.code,
+        }}
+        reference={
+          logoReference
+            ? {
+                logoPath: logoReference.logoPath,
+                name: logoReference.name,
+                logoVisibleRatio: logoReference.logoVisibleRatio,
+                logoVisibleTopRatio: logoReference.logoVisibleTopRatio,
+              }
+            : undefined
+        }
+        heightPx={20}
+        maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
+        preferWideLogo
+      />
+      {/* 사용자 재지시(2026-09-03): 로고 우측 가로 배치를 철회하고 "시청률 (순위/목표순위)" 한 줄 +
+          전일 대비 순위 증감의 세로 배치로 되돌린다. 다만 "현재 순위 진한 글씨체"는 유지 지시라
+          RankPair(오늘 등위 볼드 + 확대된 등위 폰트)와 키운 시청률 폰트는 그대로 둔다. */}
+      <div className="flex items-baseline justify-between gap-1.5">
+        <span className="flex items-baseline gap-1.5">
+          {/* skyUHD는 5자리(0.0017)라 다른 채널보다 한 단계 작게 두던 기존 규칙 유지. */}
+          <span className={`font-bold tabular-nums tracking-tight text-zinc-900 ${isSkyUhd ? "text-lg" : "text-xl"}`}>
+            {formatRating(channel.currentRating, channel.code)}
           </span>
-        </div>
+          <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} sizeClass="text-[13px]" />
+        </span>
         <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
       <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#a1a1aa"} />
@@ -899,7 +896,9 @@ function ChannelStatusCard({ channels }: { channels: Map<string, ChannelSummary>
     <section className={REPORT_CARD}>
       {/* 사용자 지시(2026-09-03): "영어로 위에 장식되어 있는 내용은 제목 오른쪽으로 자리를
           옮겨줄것" — 제목 위 eyebrow에서 제목과 같은 줄 오른쪽 끝으로. */}
-      <div className="flex items-baseline justify-between gap-4">
+      {/* 사용자 재지시(2026-09-03): "Today's ratings는 한글 오른쪽 바로 옆으로 붙여주고" —
+          justify-between으로 카드 오른쪽 끝까지 밀어냈던 것을 제목 바로 옆으로 당긴다. */}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h2 className={REPORT_TITLE}>오늘의 시청률</h2>
         <p className={REPORT_EYEBROW}>TODAY&rsquo;S RATINGS</p>
       </div>
@@ -2499,7 +2498,9 @@ function OriginalContentReportCard({
     <section className={REPORT_CARD}>
       {/* 사용자 지시(2026-08-21): 카드 제목을 "주요 컨텐츠 리뷰"로.
           사용자 지시(2026-09-03): 영문 장식(eyebrow)은 제목 위가 아니라 제목 오른쪽으로. */}
-      <div className="mb-7 flex items-baseline justify-between gap-4">
+      {/* 사용자 재지시(2026-09-03): "content review는 한글 오른쪽 바로 옆으로" — 위 "오늘의
+          시청률"과 동일하게 카드 오른쪽 끝이 아니라 제목 바로 옆에 붙인다. */}
+      <div className="mb-7 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h2 className={REPORT_TITLE}>주요 컨텐츠 리뷰</h2>
         <p className={REPORT_EYEBROW}>CONTENT REVIEW</p>
       </div>
