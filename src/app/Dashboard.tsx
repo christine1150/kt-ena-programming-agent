@@ -81,6 +81,10 @@ interface OriginalDailyItem {
   // 도달율과 본방 슬롯 연령대별(10살 단위) 시청률 상위 5개. 둘 다 우리 ratings 테이블에 이미
   // 있는 실측 데이터로, get_original_content_daily가 SQL에서 정렬·집계까지 마쳐서 내려준다.
   matched_reach: number | null;
+  // 사용자 지시(2026-09-03): "시청시간, 시청시간 비율... 입체적인 내용" — route.ts가 ratings에
+  // 이미 적재된 값(닐슨 타깃 상세 시트 기반)을 이 방영분에 대해 그대로 조회해 내려준다.
+  matched_time_spent_seconds: number | null;
+  matched_time_spent_share: number | null;
   age_breakdown: { label: string; rating: number }[] | null;
   featured_category: string | null;
   // 사용자 지시(2026-08-26): "신병4사보타주는 '신병4: 사보타주'로 표현되게 통일" — 있으면
@@ -676,34 +680,10 @@ const REPORT_CARD = "rounded-xl bg-white px-6 py-7 ring-1 ring-zinc-200/80 sm:px
 const REPORT_EYEBROW = "text-[10.5px] font-semibold uppercase tracking-[0.2em] text-zinc-400";
 const REPORT_TITLE = "font-heading text-[22px] font-bold tracking-tight text-zinc-900";
 
-// 올해 1/1~오늘 누적 평균 시청률·순위 + 목표 순위(6위 등) 대비 몇 위 차이인지(사용자 지시).
-// target_rank는 target_goals에 자유 텍스트로 저장돼 있어(예: skyUHD "경쟁채널 중 2위") 숫자로
-// 못 읽으면 목표 비교 문구는 생략한다.
-// 사용자 지시(2026-08-21): "연간 누적 평균 0.120(7위)· 목표(6위) 대비 1위 낮음" 형식으로 더
-// 짧게. 순위·격차 둘 다 소수점 없이 자연수로만 표시(반올림한 순위끼리 빼므로 격차도 항상
-// 자연수) — 이 값(ENA 기준 0.120/7위, 목표 6위, 격차 1위)을 실측 데이터와 직접 대조해 정확함을
-// 확인했다(2026-08-21): ratings 테이블에서 channel_id=ENA, target=수도권 2049, 2026-01-01~
-// 08-20 채널단위(program_id is null) 평균을 직접 재계산한 값(0.12027)이 관리자가 업로드한
-// "누적 채널 순위" 파일의 값(0.12025)과 사실상 일치. "시장 전체 기준" 출처 안내는 화면에서는
-// 빼서 간결하게 하고(값 자체의 출처는 코드 주석·이 검증 기록으로 추적 가능), 시장 전체 순위
-// 파일이 없어 우리 데이터로 직접 계산한 경우(computed)는 등록 경쟁채널 범위로 한정된 값이라는
-// 점을 구분해야 하므로 그 경우만 "(참고용)"을 붙인다.
-function buildYtdLine(channel: ChannelSummary): string | null {
-  if (channel.ytdAvgRating === null || channel.ytdAvgRank === null) return null;
-  const rankNum = Math.round(channel.ytdAvgRank);
-  let gapText = "";
-  const targetRankNum = channel.targetRank ? parseInt(channel.targetRank, 10) : NaN;
-  if (!Number.isNaN(targetRankNum)) {
-    const diff = rankNum - targetRankNum; // 양수 = 목표보다 순위 숫자가 커서(=더 낮은 순위) 미달
-    if (diff === 0) {
-      gapText = ` · 목표(${targetRankNum}위)와 동일`;
-    } else {
-      gapText = ` · 목표(${targetRankNum}위) 대비 ${Math.abs(diff)}위 ${diff > 0 ? "낮음" : "높음"}`;
-    }
-  }
-  const scopeSuffix = channel.ytdRankSource === "market_snapshot" ? "" : "(참고용)";
-  return `연간 누적 평균 ${formatRating(channel.ytdAvgRating, channel.code)}(${rankNum}위)${scopeSuffix}${gapText}`;
-}
+// 사용자 지시(2026-09-03): ENA 히어로의 "연간 누적 평균 0.120(7위) · 목표(6위) 대비 1위 낮음"
+// 설명 줄을 빼기로 해, 그 문장을 만들던 buildYtdLine()을 함께 제거했다(유일한 호출부였음 —
+// 남겨두면 죽은 코드가 된다). 값 자체(ytdAvgRating/ytdAvgRank)는 API 응답과 채널 상세(2페이지)에
+// 그대로 남아 있어 언제든 되살릴 수 있다.
 
 // ENA 히어로 — 사용자 지시(2026-08-20): 로고·시청률 가운데 정렬, 시청률(순위) + 전일 대비
 // 증감률, 그 아래 작은 글씨로 올해 누적 평균 시청률(순위)과 목표 순위 대비 격차.
@@ -717,40 +697,48 @@ function buildYtdLine(channel: ChannelSummary): string | null {
 // 전체 채널 성과를 판단하는 기준점처럼" — 가운데 정렬 + 옅은 브랜드색 박스(카드 안의 카드)를
 // 걷어내고, 좌측 정렬 기준선에 숫자를 크게(4xl→6xl) 세우는 리포트형 배치로 바꾼다. 표시하는
 // 값·계산은 이전과 완전히 동일하다(로고/시청률/순위/목표순위/전일 순위 등락/연간 누적/스파크라인).
+// 사용자 지시(2026-09-03): "각 채널 시청률에서 등위 폰트는 지금보다 좀 더 각각 크게, 해당
+// 날짜의 등위는 시청률과 같은 폰트로 굵고 진하게" — (오늘 등위 / 목표 등위)를 한 덩어리로
+// 처리하되, 오늘 등위만 시청률 숫자와 같은 굵기·색으로 올리고 목표 등위는 회색으로 남겨 둘을
+// 구분한다. 히어로(큰 숫자)와 타일(작은 숫자)이 같은 규칙을 쓰도록 크기만 파라미터로 받는다.
+function RankPair({ todayRank, targetRankNum, sizeClass }: { todayRank: number | null; targetRankNum: number | null; sizeClass: string }) {
+  return (
+    <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`}>
+      (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>
+      <span className="font-medium">/{targetRankNum ?? "-"}</span>)
+    </span>
+  );
+}
+
+// 사용자 지시(2026-09-03): "각 시청률은 첨부 그림처럼 채널 로고 우측으로 옮겨" — 로고 아래에
+// 숫자를 쌓던 세로 배치에서, 로고와 숫자를 같은 줄에 나란히 두는 가로 배치로. "연간 누적 평균
+// 0.120(7위) · 목표(6위) 대비 1위 낮음" 설명 줄은 사용자 지시로 삭제(buildYtdLine 함수 자체는
+// 다른 곳에서 쓸 수 있어 남겨둔다).
 function ChannelHero({ channel }: { channel: ChannelSummary }) {
-  const ytdLine = buildYtdLine(channel);
-  // 사용자 지시(2026-08-25): ENA 히어로만 "(순위)"만 보여줘 다른 6개 채널 타일의 "(순위/목표순위)"
-  // 형식과 어긋나 있었다 — ChannelTile과 동일한 형식으로 통일(전일 대비 순위 증감은 원래도
-  // RankChangeIndicator로 이미 표시 중이었음, 값이 0/null일 때 "-"로 보여 "없어진" 것처럼 보였을 뿐).
   const heroTargetRankNum = parseTargetRankNum(channel.targetRank);
   return (
     <Link href={`/channel/${channel.code}`} className="group block">
-      <ChannelLogo
-        channel={{
-          logoPath: channel.logoPath,
-          name: channel.name,
-          logoVisibleRatio: channel.logoVisibleRatio,
-          logoVisibleTopRatio: channel.logoVisibleTopRatio,
-        }}
-        heightPx={44}
-      />
-      {/* 숫자·순위·등락을 하나의 baseline에 정렬 — 정교한 alignment 지시. */}
-      <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-[64px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em] text-zinc-900">
-          {formatRating(channel.currentRating)}
-        </span>
-        {/* 사용자 지시(2026-08-21): 등위는 시청률 숫자보다 약간만 더 작은 글씨로. */}
-        {channel.currentRank !== null && (
-          <span className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-400">
-            ({channel.currentRank}/{heroTargetRankNum ?? "-"})
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <ChannelLogo
+          channel={{
+            logoPath: channel.logoPath,
+            name: channel.name,
+            logoVisibleRatio: channel.logoVisibleRatio,
+            logoVisibleTopRatio: channel.logoVisibleTopRatio,
+          }}
+          heightPx={44}
+        />
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="text-[64px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em] text-zinc-900">
+            {formatRating(channel.currentRating)}
           </span>
-        )}
-        {/* 사용자 재지시(2026-08-22/25): ENA도 6개 타일과 동일하게 RankChangeIndicator 하나만. */}
-        <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
+          <RankPair todayRank={channel.currentRank} targetRankNum={heroTargetRankNum} sizeClass="text-[28px]" />
+          {/* 사용자 재지시(2026-08-22/25): ENA도 6개 타일과 동일하게 RankChangeIndicator 하나만. */}
+          <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
+        </div>
       </div>
-      {ytdLine && <p className="mt-4 text-[13px] leading-relaxed text-zinc-500">{ytdLine}</p>}
       {/* 사용자 재지시(2026-08-22): 도넛 게이지 대신 6개 타일과 동일한 최근 7일 스파크라인. */}
-      <div className="mt-4">
+      <div className="mt-5">
         <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} />
       </div>
     </Link>
@@ -838,42 +826,47 @@ function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logo
     // 없애고, 부모 그리드의 gap-px가 만드는 얇은 격자선만으로 칸을 구분한다(얇은 divider 지시).
     <Link
       href={`/channel/${channel.code}`}
-      className="flex flex-col gap-2 bg-white px-3.5 py-3.5 transition hover:bg-zinc-50"
+      className="flex flex-col gap-2.5 bg-white px-4 py-4 transition hover:bg-zinc-50"
     >
-      {/* 사용자 지시: 채널명 텍스트 제거, 로고만 깔끔하게.
-          사용자 재지시(2026-09-02): "채널별 시청률" 타일에서만 ENA Drama/Play/Story는 가로형
-          로고(preferWideLogo, channel.code로 매칭) — 다른 자리(헤더 아이콘·주말 리포트 등)는
-          이 prop을 안 켜서 기존 세로형 그대로 유지. */}
-      <ChannelLogo
-        channel={{
-          logoPath: channel.logoPath,
-          name: channel.name,
-          logoVisibleRatio: channel.logoVisibleRatio,
-          logoVisibleTopRatio: channel.logoVisibleTopRatio,
-          code: channel.code,
-        }}
-        reference={
-          logoReference
-            ? {
-                logoPath: logoReference.logoPath,
-                name: logoReference.name,
-                logoVisibleRatio: logoReference.logoVisibleRatio,
-                logoVisibleTopRatio: logoReference.logoVisibleTopRatio,
-              }
-            : undefined
-        }
-        heightPx={20}
-        maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
-        preferWideLogo
-      />
-      {/* 사용자 지시: "시청률 (순위/목표 순위)" 한 줄 + 전일 대비 순위 증감. */}
-      <div className="flex items-baseline justify-between gap-1.5">
-        <span className={`font-bold tabular-nums tracking-tight text-zinc-900 ${isSkyUhd ? "text-base" : "text-lg"}`}>
-          {formatRating(channel.currentRating, channel.code)}
-          <span className="ml-1 text-xs font-medium text-zinc-400">
-            ({channel.currentRank ?? "-"}/{targetRankNum ?? "-"})
+      {/* 사용자 지시(2026-09-03): "각 시청률은 채널 로고 우측으로" — 로고 아래에 숫자를 쌓던
+          세로 배치를 로고와 숫자가 같은 줄에 오는 가로 배치로. 전일 대비 순위 증감은 오른쪽 끝. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+          {/* 사용자 지시: 채널명 텍스트 제거, 로고만 깔끔하게.
+              사용자 재지시(2026-09-02): "채널별 시청률" 타일에서만 ENA Drama/Play/Story는 가로형
+              로고(preferWideLogo, channel.code로 매칭) — 다른 자리(헤더 아이콘·주말 리포트 등)는
+              이 prop을 안 켜서 기존 세로형 그대로 유지. */}
+          <ChannelLogo
+            channel={{
+              logoPath: channel.logoPath,
+              name: channel.name,
+              logoVisibleRatio: channel.logoVisibleRatio,
+              logoVisibleTopRatio: channel.logoVisibleTopRatio,
+              code: channel.code,
+            }}
+            reference={
+              logoReference
+                ? {
+                    logoPath: logoReference.logoPath,
+                    name: logoReference.name,
+                    logoVisibleRatio: logoReference.logoVisibleRatio,
+                    logoVisibleTopRatio: logoReference.logoVisibleTopRatio,
+                  }
+                : undefined
+            }
+            heightPx={20}
+            maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
+            preferWideLogo
+          />
+          <span className="flex items-baseline gap-1.5">
+            {/* 사용자 지시(2026-09-03): "전반적으로 폰트가 작으니 늘려줄것" — skyUHD는 5자리
+                (0.0017)라 다른 채널보다 한 단계 작게 두던 기존 규칙은 유지하되 둘 다 키운다. */}
+            <span className={`font-bold tabular-nums tracking-tight text-zinc-900 ${isSkyUhd ? "text-lg" : "text-xl"}`}>
+              {formatRating(channel.currentRating, channel.code)}
+            </span>
+            <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} sizeClass="text-[13px]" />
           </span>
-        </span>
+        </div>
         <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
       <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#a1a1aa"} />
@@ -893,8 +886,12 @@ function ChannelStatusCard({ channels }: { channels: Map<string, ChannelSummary>
     // 내부를 약 40:60으로(왼쪽 ENA 메인 KPI / 오른쪽 6개 서브 채널). 두 영역은 박스가 아니라
     // 얇은 세로 divider로만 나눈다(장식 대신 여백·정렬로 위계 표현 지시).
     <section className={REPORT_CARD}>
-      <p className={REPORT_EYEBROW}>TODAY&rsquo;S RATINGS</p>
-      <h2 className={`${REPORT_TITLE} mt-1.5`}>오늘의 시청률</h2>
+      {/* 사용자 지시(2026-09-03): "영어로 위에 장식되어 있는 내용은 제목 오른쪽으로 자리를
+          옮겨줄것" — 제목 위 eyebrow에서 제목과 같은 줄 오른쪽 끝으로. */}
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className={REPORT_TITLE}>오늘의 시청률</h2>
+        <p className={REPORT_EYEBROW}>TODAY&rsquo;S RATINGS</p>
+      </div>
       <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-12">
         {ena && <ChannelHero channel={ena} />}
         {/* 바깥 div는 세로 divider·좌측 여백만, 안쪽 grid는 gap-px + 배경색으로 칸 사이 1px
@@ -1521,9 +1518,12 @@ function buildOriginalInsight(
   // 3.5) 동시방송 성적 — 사용자 지시(2026-08-26): "동시방송을 할 경우에는 동시 방송 성적을
   // 가장 먼저 올려주시고, 이후 직후재방이 있을 경우에만 직후재방을 언급해주세요." 직후재방
   // (본방 종료 후)과 달리 본방과 거의 같은 시각에 함께 트는 경우라 시간 표기 없이 시청률만 병기.
+  // 사용자 지시(2026-09-03): "SBS Plus 동시방송 성적: SBS Plus 동시방송 시청률은 0.839% →
+  // 중복되는 내용은 줄여서 짧게" — 한 문장 안에 채널명·"동시방송"이 두 번씩 반복되던 것을
+  // 한 번씩만 쓰도록 줄인다(수치·의미는 그대로).
   if (item.simulcast_rating !== null && item.simulcast_channel_code) {
     const simulcastChannelName = CHANNEL_NAME_BY_CODE[item.simulcast_channel_code] ?? item.simulcast_channel_code;
-    bullets.push(`${simulcastChannelName} 동시방송 성적: ${simulcastChannelName} 동시방송 시청률은 ${formatRating(item.simulcast_rating)}%`);
+    bullets.push(`동시방송 ${simulcastChannelName} ${formatRating(item.simulcast_rating)}%`);
   }
 
   // 4) 직후 재방송 유입 효과 — 명세 문구 그대로. 유지율이 낮아 사실상 효과가 제한적인 경우의
@@ -1643,7 +1643,9 @@ function ProgramRatingHistoryChart({
   // 브랜드색 미보유 채널, 사용자 지시 2026-08-26) UNBRANDED_CHANNEL_COLOR(진한 회색)로 폴백한다.
   themeColorByCode: Map<string, string | null>;
 }) {
-  const own2049 = [...history.own2049].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date));
+  // 사용자 지시(2026-09-03): "그래프에 회차를 계산할 수 있으면 계산해서 적어주고" — seed된
+  // 회차를 기준점으로 나머지 회차를 역산해 x축 라벨이 비지 않게 한다(fillEpisodeNumbers 참고).
+  const own2049 = fillEpisodeNumbers([...history.own2049].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date)));
   const ownHousehold = [...history.ownHousehold].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date));
   const otherSeriesRaw = history.otherChannels.map((s) => ({ ...s, points: [...s.points].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date)) }));
   const competitorSeriesRaw = history.competitors.map((s) => ({ ...s, points: [...s.points].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date)) }));
@@ -2034,7 +2036,14 @@ function ManualMinuteRatingChart({
   const W = 640;
   const H = 200;
   const PAD_L = 40; // y축 눈금 자리
-  const PAD_R = 12;
+  // 사용자 지시(2026-09-03): "분당 시청률 그래프의 로고 위치도 깨지고, 가독률도 좋지 않아서
+  // 보기가 안좋아 — 다시 디자인하여 네가 제시하는 모양으로" — 원인은 경쟁 구간 선의 "시작점
+  // 위"에 로고를 띄운 것이었다. 그래프 시작 전부터 방영 중이던 프로그램은 시작점이 전부 왼쪽
+  // 끝(PAD_L)으로 잘려서, 로고 여러 개가 데이터가 없는 왼쪽 빈 공간에 겹쳐 쌓였다(첨부 화면).
+  // 데이터 영역 위에 라벨을 얹는 방식 자체를 버리고, 오른쪽에 라벨 전용 여백(gutter)을 만들어
+  // 각 구간선의 높이에 채널명을 적는다 — 이 프로젝트가 이미 쓰는 방식(슬로프 차트: y좌표순
+  // 정렬 후 최소 간격 미달분만 밀어내고, 어긋나면 leader line으로 잇기)을 그대로 따른다.
+  const PAD_R = 96; // 오른쪽 채널명 라벨 자리
   const PAD_Y = 24; // 최고 시청률 칩이 앉을 여유 + 격자선과 상하 여백
   const toMinutes = (hhmm: string) => {
     const [h, m] = hhmm.split(":").map(Number);
@@ -2070,6 +2079,18 @@ function ManualMinuteRatingChart({
     .filter((c) => toMinutes(c.start_time!.slice(0, 5)) < endMin && toMinutes(c.end_time!.slice(0, 5)) > startMin)
     .sort((a, b) => (b.target_rating ?? 0) - (a.target_rating ?? 0))
     .slice(0, 6);
+  // 오른쪽 gutter 라벨의 y좌표 — 시청률이 비슷한 구간끼리 글자가 겹치지 않게, y좌표 오름차순으로
+  // 훑으며 최소 간격(11px)에 못 미치는 것만 아래로 밀어낸다(1패스). 밀려서 선과 어긋난 라벨은
+  // 아래 렌더링에서 가는 leader line으로 이어 준다.
+  const LABEL_MIN_GAP = 11;
+  const bandLabels: { y: number; labelY: number; name: string; color: string }[] = [];
+  for (const entry of bands
+    .map((c, i) => ({ y: yOf(c.target_rating!), name: c.channel_name, color: MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length] }))
+    .sort((a, b) => a.y - b.y)) {
+    const prev = bandLabels[bandLabels.length - 1];
+    const labelY = prev && entry.y - prev.labelY < LABEL_MIN_GAP ? prev.labelY + LABEL_MIN_GAP : entry.y;
+    bandLabels.push({ ...entry, labelY });
+  }
   return (
     <div className="mt-2 rounded-xl bg-zinc-50 p-3">
       {/* 사용자 지시(2026-09-01): 캡션에서 "(PD 실측)" 문구 제거. */}
@@ -2125,6 +2146,22 @@ function ManualMinuteRatingChart({
           })}
           {/* 사용자 지시(2026-09-01): 영역 그라데이션 채우기 제거 — 선 하나만 남긴다. */}
           <path d={path} fill="none" stroke={accentColor} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+          {/* 오른쪽 gutter의 채널명 라벨 + (밀려난 경우) leader line. 데이터 영역 위에 아무것도
+              얹지 않으므로 선끼리도, 라벨끼리도 겹치지 않는다. */}
+          {bandLabels.map((b) => (
+            <g key={`label-${b.name}-${b.labelY}`}>
+              {Math.abs(b.labelY - b.y) > 1 && (
+                <line x1={W - PAD_R - 2} y1={b.y} x2={W - PAD_R + 4} y2={b.labelY} stroke={b.color} strokeWidth={0.8} strokeOpacity={0.5} />
+              )}
+              <text x={W - PAD_R + 7} y={b.labelY + 3} fontSize={9.5} fontWeight={600} fill={b.color} fillOpacity={0.9}>
+                {b.name}
+              </text>
+            </g>
+          ))}
+          {/* 자사 선은 가장 굵고 진하므로 라벨도 gutter 맨 위에 진하게(범례와 색 일치). */}
+          <text x={W - PAD_R + 7} y={PAD_Y - 10} fontSize={9.5} fontWeight={700} fill={accentColor}>
+            {ownChannelName}
+          </text>
         </svg>
         <div className="pointer-events-none absolute inset-0">
           {/* 사용자 지시(2026-08-26, 전면 재정리): 최고 시청률 라벨을 배경 없는 텍스트에서
@@ -2137,21 +2174,11 @@ function ManualMinuteRatingChart({
           >
             {peak.time} {peak.rating.toFixed(3)}%
           </span>
-          {/* 사용자 지시(2026-09-01): "지금의 1/2 높이 크기로 점선 좌측 상단에 각 채널의 로고
-              넣어줄것" — 2026-08-26에 "정신없다"는 이유로 뺐던 차트 내 로고를, 이번엔 범례
-              크기(7px)의 절반(6px)으로 훨씬 작게 각 점선의 시작점 바로 위에 하나씩만 되살린다.
-              점선 시작점(x1,y)의 왼쪽 위에 로고 왼쪽 아래 모서리가 오도록(-translate-y-full로
-              위로, x축은 그대로 두어 점선 시작에서 오른쪽으로 로고가 펼쳐짐 — "좌측 상단" 배치). */}
-          {bands.map((c, i) => {
-            const x1 = Math.max(PAD_L, xOf(c.start_time!.slice(0, 5)));
-            const y = yOf(c.target_rating!);
-            const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
-            return (
-              <div key={`logo-${c.channel_name}-${c.program_name}`} className="absolute -translate-y-full opacity-80" style={{ left: `${(x1 / W) * 100}%`, top: y - 2 }}>
-                <CompetitorLogoBadge channelName={c.channel_name} color={color} heightPx={6} />
-              </div>
-            );
-          })}
+          {/* 사용자 지시(2026-09-03): 2026-09-01에 "점선 좌측 상단"에 넣었던 차트 내 로고 배지는
+              제거했다 — 그래프 시작 전부터 방영 중이던 프로그램은 시작점이 전부 왼쪽 끝으로
+              잘려(clamp) 로고가 데이터 없는 빈 공간에 서로 겹쳐 쌓이는 문제가 있었다(사용자
+              첨부 화면으로 확인). 채널 식별은 위 SVG의 오른쪽 gutter 라벨(선 높이와 정확히
+              일치)과 아래 범례 카드(로고 포함)가 대신한다. */}
         </div>
       </div>
       {/* 사용자 지시(2026-08-26, 전면 재정리): 중CM 라벨 + 방송 시작/종료 라벨을 같은 옅은
@@ -2258,7 +2285,9 @@ function pickPeakTroughPoints(history: RatingHistoryResult | null): {
   peak: RatingHistoryPoint | null;
   trough: RatingHistoryPoint | null;
 } {
-  const pts = history?.own2049 ?? [];
+  // 사용자 지시(2026-09-03): "최저나 최고 회차는 가능하다면 계산해서라도" — 차트와 동일하게
+  // 역산으로 채운 회차를 쓴다(같은 함수를 공유해 그래프 x축과 이 라벨이 항상 일치하게 한다).
+  const pts = fillEpisodeNumbers([...(history?.own2049 ?? [])].sort((a, b) => a.broadcast_date.localeCompare(b.broadcast_date)));
   // 표본이 1개뿐이면 최고=최저=그 값이라 "최고/최저"로 나눠 보여줄 의미가 없다.
   if (pts.length < 2) return { peak: null, trough: null };
   return {
@@ -2267,14 +2296,55 @@ function pickPeakTroughPoints(history: RatingHistoryResult | null): {
   };
 }
 
-// 최고/최저 지점의 "언제"를 나타내는 보조 라벨. 회차 번호는 program_episode_counters에 seed된
-// 구간만 채워지므로(실측: 나는SOLO 13개 방영분 중 3개만 회차 보유), 회차가 없으면 회차를 역산해
-// 지어내지 않고 실제 방영일을 짧게 보여준다(CLAUDE.md No Hallucination — 주 1회 편성을 가정한
-// 역산은 결방·특집이 한 번만 끼어도 틀린 회차를 만든다).
+// 사용자 재지시(2026-09-03): "그래프에 회차를 계산할 수 있으면 계산해서 적어주고, 최저나 최고
+// 회차는 가능하다면 계산해서라도 x축에 회차 명기" — 회차 번호는 program_episode_counters에
+// seed된 구간만 채워져 있어(실측: 나는SOLO 13개 방영분 중 3개만 보유) 대부분 빈다. 이 배열은
+// 본방 슬롯(±10분) 기준으로 방영일 오름차순이므로, seed된 지점 하나를 기준점으로 잡고 배열
+// 인덱스 차이만큼 더하고 빼서 나머지 회차를 채운다.
+// ※ 정직하게 밝히는 전제: 이 역산은 "그 사이 방영분이 이 배열에 빠짐없이 들어 있다"를 가정한다
+//   — 결방으로 아예 방영이 없었던 주는 배열에도 없으므로 영향이 없지만, 방영은 했는데 닐슨
+//   매칭이 실패해 배열에서 빠진 회차가 있으면 그 앞쪽 회차가 밀린다. 그래서 seed된 실제 값은
+//   절대 덮어쓰지 않고(항상 실측 우선), 비어 있는 자리만 채운다.
+function fillEpisodeNumbers(points: RatingHistoryPoint[]): (RatingHistoryPoint & { episodeIsEstimated?: boolean })[] {
+  const anchorIdx = points.findIndex((p) => p.episode_number != null);
+  if (anchorIdx === -1) return points;
+  const anchorEp = points[anchorIdx].episode_number!;
+  return points.map((p, i) =>
+    p.episode_number != null ? p : { ...p, episode_number: anchorEp + (i - anchorIdx), episodeIsEstimated: true }
+  );
+}
+
+// 최고/최저 지점의 "언제" 라벨 — 회차(실측 또는 위 역산)를 우선하고, 기준점이 하나도 없어 회차를
+// 전혀 알 수 없을 때만 방영일로 대체한다.
 function fmtPointWhen(p: RatingHistoryPoint): string {
   if (p.episode_number != null) return `${p.episode_number}회`;
   const [, m, d] = p.broadcast_date.split("-");
   return `${Number(m)}월 ${Number(d)}일`;
+}
+
+// 사용자 지시(2026-09-03): "전 주나 지난 4주간의 성적 대비 등 입체적인 내용" — ratingHistory에
+// 이미 받아 둔 본방 회차별 시계열에서 직전 회차·직전 4회 평균과의 비교만 뽑는다(DB가 계산해 준
+// 값들의 평균·차이일 뿐 새 지표를 만들지 않는다). 오늘 회차는 제외하고 그 이전만 평균 낸다.
+function computeRecentComparison(history: RatingHistoryResult | null): { prevAvg4: number | null; deltaPctVs4: number | null; sampleCount: number } {
+  const pts = history?.own2049 ?? [];
+  if (pts.length < 2) return { prevAvg4: null, deltaPctVs4: null, sampleCount: 0 };
+  const today = pts[pts.length - 1];
+  const prior = pts.slice(Math.max(0, pts.length - 5), pts.length - 1);
+  if (prior.length === 0) return { prevAvg4: null, deltaPctVs4: null, sampleCount: 0 };
+  const avg = prior.reduce((s, p) => s + p.rating, 0) / prior.length;
+  return {
+    prevAvg4: avg,
+    deltaPctVs4: avg > 0 ? ((today.rating - avg) / avg) * 100 : null,
+    sampleCount: prior.length,
+  };
+}
+
+// 시청시간(초)을 "34분 12초"로 — 초가 0이면 분까지만(2026-09-03에 ChannelDeepDive.fmtSeconds에
+// 적용한 것과 같은 사용자 규칙을 이 카드에서도 동일하게 따른다).
+function fmtSecondsCompactKorean(v: number): string {
+  const m = Math.floor(v / 60);
+  const s = Math.round(v % 60);
+  return s === 0 ? `${m}분` : `${m}분 ${s}초`;
 }
 
 // SECONDARY DATA 한 칸 — 라벨(가장 작게)/값(중간)/보조설명(회차·시각 등, 작게)의 3단 위계를 모든
@@ -2308,9 +2378,12 @@ function OriginalContentReportCard({
     // 화면 전체 폭을 쓰는 하나의 긴 Editorial Report 섹션으로 바꾼다(프로그램마다 동일한 디자인
     // 언어를 쓰되 내용 길이에 따라 자연스럽게 확장).
     <section className={REPORT_CARD}>
-      {/* 사용자 지시(2026-08-21): 카드 제목을 "주요 컨텐츠 리뷰"로. */}
-      <p className={REPORT_EYEBROW}>CONTENT REVIEW</p>
-      <h2 className={`${REPORT_TITLE} mb-7 mt-1.5`}>주요 컨텐츠 리뷰</h2>
+      {/* 사용자 지시(2026-08-21): 카드 제목을 "주요 컨텐츠 리뷰"로.
+          사용자 지시(2026-09-03): 영문 장식(eyebrow)은 제목 위가 아니라 제목 오른쪽으로. */}
+      <div className="mb-7 flex items-baseline justify-between gap-4">
+        <h2 className={REPORT_TITLE}>주요 컨텐츠 리뷰</h2>
+        <p className={REPORT_EYEBROW}>CONTENT REVIEW</p>
+      </div>
 
       {report.mode === "daily" ? (
         report.daily.length === 0 ? (
@@ -2328,6 +2401,13 @@ function OriginalContentReportCard({
               const accent = themeColorByCode.get(h.broadcast_channel_code) ?? enaAccentColor;
               const broadcastChannelName = CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code;
               const { peak, trough } = pickPeakTroughPoints(h.ratingHistory);
+              // 사용자 지시(2026-09-03): "전 주나 지난 4주간의 성적 대비" — 직전 4회 평균 대비.
+              const recent = computeRecentComparison(h.ratingHistory);
+              // 사용자 지시(2026-09-03): "연령대별 인사이트" — get_original_content_daily가 이미
+              // 계산해 내려주던 age_breakdown(본방 슬롯 연령대별 시청률 상위)이 그동안 타입에만
+              // 있고 화면 어디에도 렌더되지 않고 있었다. 상위 4개만 막대로 보여준다.
+              const ages = (h.age_breakdown ?? []).slice(0, 4);
+              const ageMax = ages.length > 0 ? Math.max(...ages.map((a) => a.rating)) : 0;
               // 사용자 지시(2026-09-03, UI/UX REDESIGN): HERO KPI의 2순위 지표. 사용자 지시
               // (2026-08-26)의 기존 규칙("동시방송이 있으면 동시방송을 먼저, 없을 때만 직후재방")을
               // 그대로 승계한다 — 데이터상 상호배타라 둘 중 하나만 채워진다.
@@ -2385,27 +2465,27 @@ function OriginalContentReportCard({
                     )}
                   </header>
 
-                  {/* ② HERO KPI + ③ SECONDARY DATA — 사용자 지시(2026-09-03): TARGET 시청률이
-                      1순위, 동시방영(없으면 직후재방)이 2순위로 가장 먼저 읽히도록 숫자 크기·굵기·
-                      여백으로 위계를 준다. 보조 지표는 오른쪽에 얇은 divider로 분리해 시각적
-                      비중을 확실히 낮춘다. */}
-                  <div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:gap-12">
-                    <div className="flex flex-wrap items-end gap-x-10 gap-y-5">
+                  {/* ② HERO KPI + 다각 분석 — 사용자 지시(2026-09-03): 시청률이 1순위, 동시방영
+                      (없으면 직후재방)이 2순위로 가장 먼저 읽히도록. "TARGET"은 사용자 지시대로
+                      "시청률"로 표기. 오른쪽에는 "입체적·다각적" 분석 축(몰입도/성적 추이/연령대)을
+                      얇은 divider로 나눠 붙인다. */}
+                  <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:gap-12">
+                    <div className="flex flex-wrap items-end gap-x-10 gap-y-6">
                       <div className="min-w-0">
-                        <p className={REPORT_EYEBROW}>TARGET</p>
-                        <p className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5">
-                          <span className="text-[52px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em]" style={{ color: accent }}>
+                        <p className={REPORT_EYEBROW}>시청률</p>
+                        <p className="mt-2 flex flex-wrap items-baseline gap-x-2">
+                          <span className="text-[56px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em]" style={{ color: accent }}>
                             {formatRating(h.matched_rating, h.broadcast_channel_code)}
                           </span>
                           {/* 사용자 지시(2026-08-25): 타깃 시청률 옆에 가구 시청률을 괄호로(볼드 없이). */}
                           {h.matched_household_rating !== null && (
-                            <span className="text-[18px] font-medium tabular-nums text-zinc-400">
-                              ({formatRating(h.matched_household_rating, h.broadcast_channel_code)})
+                            <span className="text-[20px] font-medium tabular-nums text-zinc-400">
+                              가구 {formatRating(h.matched_household_rating, h.broadcast_channel_code)}
                             </span>
                           )}
                         </p>
                         {h.prior_rating_change_pct !== null && (
-                          <p className="mt-2 text-[13px] font-semibold tabular-nums" style={{ color: h.prior_rating_change_pct >= 0 ? ACCENT_UP : ACCENT_DOWN }}>
+                          <p className="mt-2.5 text-[14px] font-semibold tabular-nums" style={{ color: h.prior_rating_change_pct >= 0 ? ACCENT_UP : ACCENT_DOWN }}>
                             {h.prior_rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(h.prior_rating_change_pct).toFixed(1)}%
                             <span className="ml-1 font-normal text-zinc-400">전회 대비</span>
                           </p>
@@ -2414,10 +2494,10 @@ function OriginalContentReportCard({
                       {secondKpi && (
                         <div className="min-w-0">
                           <p className={REPORT_EYEBROW}>{secondKpi.label}</p>
-                          <p className="mt-1.5 text-[30px] font-semibold leading-[0.95] tabular-nums tracking-tight text-zinc-700">
+                          <p className="mt-2 text-[32px] font-semibold leading-[0.95] tabular-nums tracking-tight text-zinc-700">
                             {formatRating(secondKpi.rating, h.broadcast_channel_code)}
                           </p>
-                          <p className="mt-2 text-[12px] text-zinc-400">
+                          <p className="mt-2.5 text-[12.5px] text-zinc-400">
                             <span className="font-semibold" style={{ color: themeColorByCode.get(secondKpi.channelCode) ?? UNBRANDED_CHANNEL_COLOR }}>
                               {CHANNEL_NAME_BY_CODE[secondKpi.channelCode] ?? secondKpi.channelCode}
                             </span>
@@ -2427,28 +2507,79 @@ function OriginalContentReportCard({
                         </div>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:border-l lg:border-zinc-100 lg:pl-12">
-                      {achievementPct !== null && <ReviewMetric label="목표 달성률" value={`${achievementPct.toFixed(1)}%`} sub="연간 누적" />}
-                      {/* 사용자 지시(2026-09-03): "최고/최저는 반드시 수치 + 회차를 함께 표시" —
-                          회차 번호가 seed되지 않은 프로그램은 회차 대신 방영일로 대체(빈 칸 대신
-                          있는 정보를 그대로, 지어내지 않음). */}
-                      {peak && <ReviewMetric label="최고" value={formatRating(peak.rating, h.broadcast_channel_code)} sub={fmtPointWhen(peak)} />}
-                      {trough && <ReviewMetric label="최저" value={formatRating(trough.rating, h.broadcast_channel_code)} sub={fmtPointWhen(trough)} />}
-                      {h.matched_reach !== null && <ReviewMetric label="도달율" value={`${h.matched_reach.toFixed(2)}%`} />}
-                      {h.pre_rerun_rating !== null && (
-                        <ReviewMetric
-                          label="리드인(전회 재방)"
-                          value={formatRating(h.pre_rerun_rating, h.broadcast_channel_code)}
-                          sub={h.pre_rerun_start_time ? fmtTimeKorean(h.pre_rerun_start_time) : null}
-                        />
-                      )}
-                      {h.self_rerun_rating !== null && (
-                        <ReviewMetric
-                          label="당일 자체재방"
-                          value={formatRating(h.self_rerun_rating, h.broadcast_channel_code)}
-                          sub={h.self_rerun_start_time ? fmtTimeKorean(h.self_rerun_start_time) : null}
-                        />
-                      )}
+                    {/* 사용자 지시(2026-09-03): "시청시간, 시청시간 비율, 연령대별 인사이트, 경쟁
+                        채널, 전 주나 지난 4주간의 성적 대비 등 입체적인 내용" — 세 축(몰입도 /
+                        최근 성적 대비 / 연령대)을 나란히 둔다. 전부 이미 DB가 계산해 내려준
+                        값이고, 새 지표를 만들지 않는다. 값이 없는 축은 통째로 빠진다. */}
+                    <div className="grid gap-7 sm:grid-cols-3 lg:border-l lg:border-zinc-100 lg:pl-12">
+                      <div className="min-w-0">
+                        <p className={REPORT_EYEBROW}>몰입도</p>
+                        <div className="mt-2.5 space-y-2">
+                          {h.matched_time_spent_seconds !== null && (
+                            <p className="text-[14px] text-zinc-600">
+                              <span className="font-semibold tabular-nums text-zinc-800">{fmtSecondsCompactKorean(h.matched_time_spent_seconds)}</span>
+                              <span className="ml-1.5 text-[12px] text-zinc-400">시청시간</span>
+                            </p>
+                          )}
+                          {h.matched_time_spent_share !== null && (
+                            <p className="text-[14px] text-zinc-600">
+                              <span className="font-semibold tabular-nums text-zinc-800">{h.matched_time_spent_share.toFixed(2)}%</span>
+                              <span className="ml-1.5 text-[12px] text-zinc-400">시청 비율</span>
+                            </p>
+                          )}
+                          {h.matched_reach !== null && (
+                            <p className="text-[14px] text-zinc-600">
+                              <span className="font-semibold tabular-nums text-zinc-800">{h.matched_reach.toFixed(2)}%</span>
+                              <span className="ml-1.5 text-[12px] text-zinc-400">도달율</span>
+                            </p>
+                          )}
+                          {h.matched_time_spent_seconds === null && h.matched_time_spent_share === null && h.matched_reach === null && (
+                            <p className="text-[12px] text-zinc-300">자료 없음</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="min-w-0">
+                        <p className={REPORT_EYEBROW}>최근 성적 대비</p>
+                        <div className="mt-2.5 space-y-2">
+                          {recent.deltaPctVs4 !== null && recent.prevAvg4 !== null ? (
+                            <>
+                              <p className="text-[14px]">
+                                <span className="font-semibold tabular-nums" style={{ color: recent.deltaPctVs4 >= 0 ? ACCENT_UP : ACCENT_DOWN }}>
+                                  {recent.deltaPctVs4 >= 0 ? "▲" : "▼"} {Math.abs(recent.deltaPctVs4).toFixed(1)}%
+                                </span>
+                                <span className="ml-1.5 text-[12px] text-zinc-400">직전 {recent.sampleCount}회 평균 대비</span>
+                              </p>
+                              <p className="text-[12px] tabular-nums text-zinc-400">
+                                직전 {recent.sampleCount}회 평균 {formatRating(recent.prevAvg4, h.broadcast_channel_code)}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-[12px] text-zinc-300">비교할 이전 회차 없음</p>
+                          )}
+                          {peak && <p className="text-[12px] tabular-nums text-zinc-400">최고 {formatRating(peak.rating, h.broadcast_channel_code)} · {fmtPointWhen(peak)}</p>}
+                          {trough && <p className="text-[12px] tabular-nums text-zinc-400">최저 {formatRating(trough.rating, h.broadcast_channel_code)} · {fmtPointWhen(trough)}</p>}
+                        </div>
+                      </div>
+                      <div className="min-w-0">
+                        <p className={REPORT_EYEBROW}>연령대</p>
+                        <div className="mt-2.5 space-y-1.5">
+                          {ages.length > 0 ? (
+                            ages.map((a) => (
+                              <div key={a.label} className="flex items-center gap-2">
+                                <span className="w-14 shrink-0 truncate text-[11.5px] text-zinc-500" title={a.label}>
+                                  {a.label}
+                                </span>
+                                <span className="h-1.5 min-w-[2px] rounded-full" style={{ width: `${ageMax > 0 ? (a.rating / ageMax) * 52 : 0}%`, backgroundColor: accent, opacity: 0.55 }} />
+                                <span className="shrink-0 text-[11.5px] font-semibold tabular-nums text-zinc-600">
+                                  {formatRating(a.rating, h.broadcast_channel_code)}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-[12px] text-zinc-300">자료 없음</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                   {/* 본문 2단 — 왼쪽은 읽는 정보(핵심 요약 → 편성 인사이트 → 참고 설명),
@@ -2559,6 +2690,30 @@ function OriginalContentReportCard({
                       )}
                     </div>
                   </div>
+                  {/* 사용자 지시(2026-09-03): "목표달성률, 최고, 최저, 도달률, 리드인 등은 다른
+                      핵심 내용이나 인사이트보다 덜 중요하므로 한 줄에 나와도 되고, 배치도
+                      후순위로" — 위쪽 KPI 자리에서 빼서 본문 아래 한 줄(가로 나열)로 내렸다.
+                      최고/최저/도달율은 위 "최근 성적 대비"·"몰입도" 축에서 이미 다루므로 여기엔
+                      남은 세 가지(목표 달성률·리드인·당일 자체재방)만 둔다. */}
+                  {(achievementPct !== null || h.pre_rerun_rating !== null || h.self_rerun_rating !== null) && (
+                    <div className="mt-7 flex flex-wrap gap-x-12 gap-y-4 border-t border-zinc-100 pt-5">
+                      {achievementPct !== null && <ReviewMetric label="목표 달성률" value={`${achievementPct.toFixed(1)}%`} sub="연간 누적" />}
+                      {h.pre_rerun_rating !== null && (
+                        <ReviewMetric
+                          label="리드인(전회 재방)"
+                          value={formatRating(h.pre_rerun_rating, h.broadcast_channel_code)}
+                          sub={h.pre_rerun_start_time ? fmtTimeKorean(h.pre_rerun_start_time) : null}
+                        />
+                      )}
+                      {h.self_rerun_rating !== null && (
+                        <ReviewMetric
+                          label="당일 자체재방"
+                          value={formatRating(h.self_rerun_rating, h.broadcast_channel_code)}
+                          sub={h.self_rerun_start_time ? fmtTimeKorean(h.self_rerun_start_time) : null}
+                        />
+                      )}
+                    </div>
+                  )}
                   {/* 사용자 지시(2026-08-26): "1페이지 주요 컨텐츠 리뷰에 분단위 그래프 반영" —
                       PD가 업로드한 수동 리포트(manual-drama-report)에 분당 시청률이 있을 때만.
                       이 그래프만 아래 범례가 3열 grid라 좁은 열에서는 읽히지 않아, 2단 바깥

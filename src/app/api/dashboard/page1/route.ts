@@ -578,7 +578,15 @@ export async function GET(request: Request) {
 
   let originalContentReport: {
     mode: "daily" | "weekly_review";
-    daily: (OriginalDailyRow & { competitorHighlights: CompetitorOverlapRow[]; householdRank: number | null; ratingHistory: RatingHistoryResult | null; schedulingInsight: string | null })[];
+    daily: (OriginalDailyRow & {
+      competitorHighlights: CompetitorOverlapRow[];
+      householdRank: number | null;
+      ratingHistory: RatingHistoryResult | null;
+      schedulingInsight: string | null;
+      // 사용자 지시(2026-09-03): 리뷰에 시청시간·시청시간 비율 추가(ratings에 이미 있는 값 조회만).
+      matched_time_spent_seconds: number | null;
+      matched_time_spent_share: number | null;
+    })[];
     weekly: OriginalWeeklyRow[];
   };
   // Tier 1 확장(2026-08-26): buildChannelNarrativeViaLlm(ENA)이 참고할 ENA 리드 문장 —
@@ -894,11 +902,54 @@ export async function GET(request: Request) {
       ratingHistory: ratingHistoryByKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
     }));
 
+    // 사용자 지시(2026-09-03): "주요 컨텐츠 리뷰에 시청시간, 시청시간 비율... 입체적인 내용이
+    // 담기도록" — ratings.time_spent_seconds/time_spent_share는 닐슨 "타깃 상세" 시트에서 이미
+    // 프로그램 단위로 적재돼 있다(2026-09-03 일간 세부 내역에서 확인). get_original_content_daily가
+    // 이미 ±10분 매칭으로 확정해 둔 그 방영분(채널·날짜·타깃·시작시각)을 그대로 다시 짚어 두 값만
+    // 가져온다 — 새 매칭 로직도, 마이그레이션도 만들지 않는다(Delta-Only).
+    const timeSpentByRowKey = new Map<string, { seconds: number | null; share: number | null }>();
+    await Promise.all(
+      channels
+        .filter((ch) => dailyWithHistory.some((row) => row.broadcast_channel_code === ch.code && row.matched_start_time))
+        .map(async (ch) => {
+          const { data: targetRow } = await supabase
+            .from("targets")
+            .select("id")
+            .eq("label", resolveProgramLevelTargetLabel(ch.primary_target))
+            .maybeSingle();
+          if (!targetRow) return;
+          const startTimes = dailyWithHistory
+            .filter((row) => row.broadcast_channel_code === ch.code && row.matched_start_time)
+            .map((row) => row.matched_start_time as string);
+          const { data: rows } = await supabase
+            .from("ratings")
+            .select("start_time, time_spent_seconds, time_spent_share")
+            .eq("channel_id", ch.id)
+            .eq("target_id", targetRow.id)
+            .in("source_type", ["nielsen_daily", "skyuhd"])
+            .eq("broadcast_date", asOfDate)
+            .not("program_id", "is", null)
+            .in("start_time", startTimes);
+          for (const r of rows ?? []) {
+            const match = dailyWithHistory.find((row) => row.broadcast_channel_code === ch.code && row.matched_start_time === r.start_time);
+            if (!match) continue;
+            timeSpentByRowKey.set(`${match.broadcast_channel_code}__${match.matched_start_time}__${match.matched_program_name}`, {
+              seconds: r.time_spent_seconds as number | null,
+              share: r.time_spent_share as number | null,
+            });
+          }
+        })
+    );
+    const dailyWithTimeSpent = dailyWithHistory.map((row) => {
+      const ts = timeSpentByRowKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`);
+      return { ...row, matched_time_spent_seconds: ts?.seconds ?? null, matched_time_spent_share: ts?.share ?? null };
+    });
+
     // 사용자 지시(2026-08-26): "1페이지 <주요 컨텐츠 리뷰>는 PD가 직접 작성한 보고서 내용으로
     // 덮어써서 반영" — program_manual_reports(관리자 업로드, manual-drama-report)에 이
     // 채널·프로그램·날짜의 PD 수동 리포트가 있으면 함께 내려준다(자동 계산은 그대로 두고,
     // 클라이언트가 있으면 그걸 우선 쓰게 함 — Delta-Only).
-    const manualReportLookupKeys = dailyWithHistory
+    const manualReportLookupKeys = dailyWithTimeSpent
       .filter((row) => row.matched_program_name && channelIdByCode2.has(row.broadcast_channel_code))
       .map((row) => {
         const effectiveDate =
@@ -927,7 +978,7 @@ export async function GET(request: Request) {
         .map((k) => [k.rowKey, manualReportByKey.get(`${k.channelId}__${k.canonicalNameNormalized}__${k.effectiveDateStr}`) ?? null] as const)
         .filter((entry): entry is [string, NonNullable<(typeof entry)[1]>] => entry[1] !== null)
     );
-    const dailyWithManualReport = dailyWithHistory.map((row) => ({
+    const dailyWithManualReport = dailyWithTimeSpent.map((row) => ({
       ...row,
       manualReport: manualReportByRowKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
     }));
