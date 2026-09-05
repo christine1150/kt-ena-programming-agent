@@ -133,15 +133,18 @@ interface RatingHistoryResult {
   competitors: { seriesName: string; points: RatingHistoryPoint[] }[];
 }
 
+// 사용자 지시(2026-09-05): "평균/최고/최근" 3종 대신 "금주 실적"·"4주 평균" 2종으로 재설계
+// (get_original_content_weekly_review가 이제 p_date_from/p_date_to 명시 구간을 받는다 — 아래
+// weeklyReviewDateFrom/To 계산 참고).
 interface OriginalWeeklyRow {
   program_name: string;
   broadcast_channel_code: string;
-  instances_count: number;
-  avg_rating: number | null;
-  best_date: string | null;
-  best_rating: number | null;
-  latest_date: string | null;
-  latest_rating: number | null;
+  category: string | null;
+  day_of_week_iso: number;
+  this_week_date: string;
+  this_week_rating: number;
+  baseline_avg_rating: number | null;
+  baseline_instances: number;
 }
 
 interface ChannelSummary {
@@ -1001,8 +1004,18 @@ export async function GET(request: Request) {
 
     originalContentReport = { mode: "daily", daily: dailyWithManualReport, weekly: [] };
   } else {
+    // 사용자 지시(2026-09-05): 화이트리스트 없는 요일의 대체 뷰는 asOfDate 기준 "트레일링 7일"이
+    // 아니라 달력에 정렬된 한 주를 쓴다 — 이번 주 토·일이 아직 지나지 않았으면(월~금) 지난주
+    // 토·일 + 이번 주 월~금(토일월화수목금 순), 이미 토·일까지 지났으면 이번 주 월~일
+    // (월화수목금토일 순)을 넘긴다. get_original_content_weekly_review는 이 구간 안에서 실제로
+    // 방영된 것만 골라 target_date 오름차순으로 돌려주므로, 프론트는 받은 순서 그대로 렌더링하면
+    // 이 순서가 유지된다(별도 재정렬 없음).
+    const mondayOfThisWeek = offsetDateStr(asOfDate, -(asOfDateIsoDow - 1));
+    const weeklyReviewDateFrom = asOfDateIsoDow >= 6 ? mondayOfThisWeek : offsetDateStr(mondayOfThisWeek, -2);
+    const weeklyReviewDateTo = offsetDateStr(weeklyReviewDateFrom, 6);
     const { data: weeklyRows } = await supabase.rpc("get_original_content_weekly_review", {
-      p_as_of_date: asOfDate,
+      p_date_from: weeklyReviewDateFrom,
+      p_date_to: weeklyReviewDateTo,
     });
     originalContentReport = { mode: "weekly_review", daily: [], weekly: (weeklyRows ?? []) as OriginalWeeklyRow[] };
   }

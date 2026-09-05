@@ -179,15 +179,16 @@ interface RatingHistoryResult {
   otherChannels: { seriesName: string; points: RatingHistoryPoint[] }[];
   competitors: { seriesName: string; points: RatingHistoryPoint[] }[];
 }
+// 사용자 지시(2026-09-05): "평균/최고/최근" 3종 대신 "금주 실적"·"4주 평균" 2종으로 재설계.
 interface OriginalWeeklyItem {
   program_name: string;
   broadcast_channel_code: string;
-  instances_count: number;
-  avg_rating: number | null;
-  best_date: string | null;
-  best_rating: number | null;
-  latest_date: string | null;
-  latest_rating: number | null;
+  category: string | null;
+  day_of_week_iso: number;
+  this_week_date: string;
+  this_week_rating: number;
+  baseline_avg_rating: number | null;
+  baseline_instances: number;
 }
 interface OriginalContentSummary {
   mode: "daily" | "weekly_review";
@@ -1148,6 +1149,15 @@ function MonthlyRankTrendChart({
 }
 
 const DOW_LABELS = ["", "월", "화", "수", "목", "금", "토", "일"];
+
+// 사용자 지시(2026-09-05): 주요 컨텐츠 리뷰(주간 대체 뷰)의 "금주 시청률(M.D 요일)" 표기용 —
+// 별도 날짜 포맷 라이브러리 없이 이 프로젝트 관례(로컬 날짜를 직접 조립, toISOString 금지)대로
+// M.D (요일) 문자열을 만든다.
+function formatMonthDayDow(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const isoDow = ((d.getDay() + 6) % 7) + 1;
+  return `${d.getMonth() + 1}.${d.getDate()} (${DOW_LABELS[isoDow]})`;
+}
 
 // 사용자 지시(2026-09-01): 성장/약세 동력이 "종합적인 컨텐츠"인지 바로 판단할 수 있게 이번 달
 // 편성 횟수를 보여준다. 전월과 횟수 차이가 크면(예: 신규 편성돼 전월엔 0회였거나, 반대로
@@ -3013,39 +3023,53 @@ function OriginalContentReportCard({
           </div>
         )
       ) : report.weekly.length === 0 ? (
-        <p className="text-sm text-zinc-400">최근 7일간 오리지널 프로그램 방영 기록을 찾지 못했습니다.</p>
+        <p className="text-sm text-zinc-400">이번 주 오리지널 프로그램 방영 기록을 찾지 못했습니다.</p>
       ) : (
         <div>
-          <p className="mb-2 text-sm text-zinc-400">
-            오늘은 지정된 오리지널 프로그램이 없는 요일입니다 — 최근 7일 종합 리뷰를 대신 보여드립니다.
+          <p className="mb-3 text-sm text-zinc-400">
+            오늘은 지정된 오리지널 프로그램이 없는 요일입니다 — 이번 주 방영된 오리지널 라인업을 대신
+            보여드립니다.
           </p>
-          {/* 사용자 지시(2026-08-21, Page 1 전면 개편): 가로 스크롤 표 대신 프로그램별 카드
-              리스트로(데이터·필드는 동일). */}
-          <div className="flex flex-col gap-2.5">
-            {report.weekly.map((w) => (
-              <div key={`${w.broadcast_channel_code}-${w.program_name}`} className="rounded-xl bg-zinc-50 p-3 text-sm">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                  <p className="font-semibold text-zinc-800">{w.program_name}</p>
-                  <p className="text-[12px] text-zinc-400">{CHANNEL_NAME_BY_CODE[w.broadcast_channel_code] ?? w.broadcast_channel_code}</p>
+          {/* 사용자 지시(2026-09-05): "월화수목금토일 순, 단 이번 주 토·일이 아직 안 왔으면
+              토일월화수목금 순"은 route.ts가 계산한 날짜 구간을 RPC가 이미 그 순서(target_date
+              오름차순)로 돌려주므로, 여기서는 받은 순서 그대로 렌더링하기만 하면 된다(재정렬 없음).
+              폰트 확대 + 한 줄에 두 타이틀(2열 그리드) + 채널명 로고색 볼드로 재구성. */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {report.weekly.map((w) => {
+              const channelColor = themeColorByCode.get(w.broadcast_channel_code) ?? UNBRANDED_CHANNEL_COLOR;
+              const hasBaseline = w.baseline_avg_rating !== null;
+              const isAboveBaseline = hasBaseline && w.this_week_rating > w.baseline_avg_rating!;
+              const isBelowBaseline = hasBaseline && w.this_week_rating < w.baseline_avg_rating!;
+              const thisWeekColor = isAboveBaseline ? ACCENT_UP : isBelowBaseline ? ACCENT_DOWN : undefined;
+              return (
+                <div
+                  key={`${w.broadcast_channel_code}-${w.program_name}-${w.day_of_week_iso}`}
+                  className="rounded-xl bg-zinc-50 p-4"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <p className="text-[17px] font-bold text-zinc-800">{w.program_name}</p>
+                    <p className="text-[14px] font-bold" style={{ color: channelColor }}>
+                      {CHANNEL_NAME_BY_CODE[w.broadcast_channel_code] ?? w.broadcast_channel_code}
+                    </p>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-[15px] text-zinc-600">
+                    <p>
+                      <span className="text-zinc-400">금주 시청률 </span>
+                      <span className="font-bold tabular-nums" style={{ color: thisWeekColor }}>
+                        {formatRating(w.this_week_rating, w.broadcast_channel_code)}
+                      </span>
+                      <span className="text-zinc-400"> ({formatMonthDayDow(w.this_week_date)})</span>
+                    </p>
+                    <p>
+                      <span className="text-zinc-400">4주평균 </span>
+                      <span className="font-semibold tabular-nums text-zinc-700">
+                        {formatRating(w.baseline_avg_rating, w.broadcast_channel_code)}
+                      </span>
+                    </p>
+                  </div>
                 </div>
-                <div className="mt-1.5 grid grid-cols-3 gap-2 text-[13px] text-zinc-600">
-                  <p>
-                    <span className="text-zinc-400">평균 </span>
-                    <span className="font-semibold tabular-nums">{formatRating(w.avg_rating)}</span>
-                  </p>
-                  <p>
-                    <span className="text-zinc-400">최고 </span>
-                    <span className="font-semibold tabular-nums">{formatRating(w.best_rating)}</span>
-                    <span className="text-zinc-400"> ({w.best_date})</span>
-                  </p>
-                  <p>
-                    <span className="text-zinc-400">최근 </span>
-                    <span className="font-semibold tabular-nums">{formatRating(w.latest_rating)}</span>
-                    <span className="text-zinc-400"> ({w.latest_date})</span>
-                  </p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
