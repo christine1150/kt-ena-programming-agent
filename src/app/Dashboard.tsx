@@ -3033,21 +3033,33 @@ function OriginalContentReportCard({
           {/* 사용자 지시(2026-09-05): "월화수목금토일 순, 단 이번 주 토·일이 아직 안 왔으면
               토일월화수목금 순"은 route.ts가 계산한 날짜 구간을 RPC가 이미 그 순서(target_date
               오름차순)로 돌려주므로, 여기서는 받은 순서 그대로 렌더링하기만 하면 된다(재정렬 없음).
-              폰트 확대 + 한 줄에 두 타이틀(2열 그리드) + 채널명 로고색 볼드로 재구성. */}
+              폰트 확대 + 한 줄에 두 타이틀(2열 그리드) + 채널명 로고색 볼드로 재구성.
+              사용자 지시(2026-09-05, 2차): "신병4사보타주처럼 주 2회(월,화) 방영하는 컨텐츠는
+              월/화 내용을 각각 적어야 함" — RPC가 이제 그 작품의 요일별 회차를 각각 별도 행으로
+              주므로(이번 주 월요일 회차·화요일 회차), 같은 프로그램+채널이 이 목록에 2번 이상
+              나오면 나란히 놓인 두 카드가 오류처럼 보이지 않게 제목에 요일을 붙인다. */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {report.weekly.map((w) => {
+            {(() => {
+              const occurrenceCount = new Map<string, number>();
+              for (const w of report.weekly) {
+                const key = `${w.broadcast_channel_code}__${w.program_name}`;
+                occurrenceCount.set(key, (occurrenceCount.get(key) ?? 0) + 1);
+              }
+              return report.weekly.map((w) => {
               const channelColor = themeColorByCode.get(w.broadcast_channel_code) ?? UNBRANDED_CHANNEL_COLOR;
               const hasBaseline = w.baseline_avg_rating !== null;
               const isAboveBaseline = hasBaseline && w.this_week_rating > w.baseline_avg_rating!;
               const isBelowBaseline = hasBaseline && w.this_week_rating < w.baseline_avg_rating!;
               const thisWeekColor = isAboveBaseline ? ACCENT_UP : isBelowBaseline ? ACCENT_DOWN : undefined;
+              const isMultiDay = (occurrenceCount.get(`${w.broadcast_channel_code}__${w.program_name}`) ?? 1) > 1;
+              const displayTitle = isMultiDay ? `${w.program_name} (${DOW_LABELS[w.day_of_week_iso]})` : w.program_name;
               return (
                 <div
                   key={`${w.broadcast_channel_code}-${w.program_name}-${w.day_of_week_iso}`}
                   className="rounded-xl bg-zinc-50 p-4"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <p className="text-[17px] font-bold text-zinc-800">{w.program_name}</p>
+                    <p className="text-[17px] font-bold text-zinc-800">{displayTitle}</p>
                     <p className="text-[14px] font-bold" style={{ color: channelColor }}>
                       {CHANNEL_NAME_BY_CODE[w.broadcast_channel_code] ?? w.broadcast_channel_code}
                     </p>
@@ -3069,7 +3081,8 @@ function OriginalContentReportCard({
                   </div>
                 </div>
               );
-            })}
+              });
+            })()}
           </div>
         </div>
       )}
