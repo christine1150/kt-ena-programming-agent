@@ -585,15 +585,26 @@ export async function GET(request: Request) {
     if (r.matchedTargetLabel) matchedTargetLabelByCode.set(r.summary.code, r.matchedTargetLabel);
   }
 
-  // 4) Original 콘텐츠 리포트 — 화이트리스트(original_review_programs) 기반. 오늘 요일에 지정된
-  //    프로그램이 있으면 그 프로그램들만 실제 방영 데이터와 매칭해서 보여주고(본방/직후재방/
-  //    태그/동시간대 경쟁 프로그램), 없는 요일(예: 금요일)이면 최근 7일 종합 리뷰로 대체한다
-  //    (사용자 지시).
+  // 4) Original 콘텐츠 리포트. 오늘 요일에 지정된 프로그램이 있으면 그 프로그램들만 실제 방영
+  //    데이터와 매칭해서 보여주고(본방/직후재방/태그/동시간대 경쟁 프로그램), 없는 요일이면
+  //    이번 주 종합 리뷰로 대체한다(사용자 지시).
+  // 사용자 지시(2026-09-05) 실측 중 발견·수정: 이 모드 판정이 여전히 original_review_programs
+  // (채널기본정보.xlsx 수기 화이트리스트)만 보고 있었는데, get_original_content_daily 자체는
+  // 이미 2026-08-26에 featured_content(주요 콘텐츠 관리 화면) 기반으로 완전히 재작성돼 있었다
+  // — 그 결과 "신병4사보타주"·"짐쌀라비움"처럼 featured_content에만 등록된 프로그램이 있는
+  // 요일(예: 금요일의 "유로비전")도 판정 쿼리는 여전히 텅 빈 original_review_programs만 보고
+  // "없는 요일"로 오판해, 실제로는 daily 모드로 더 상세하게(직후재방·동시간대 경쟁 등) 보여줄
+  // 수 있는 날을 매번 얇은 주간 대체 뷰로 떨어뜨리고 있었다. 판정 쿼리를
+  // get_original_content_daily와 동일한 소스(featured_content)·동일한 조건으로 맞춘다.
   const asOfDateIsoDow = ((new Date(`${asOfDate}T00:00:00`).getDay() + 6) % 7) + 1; // 1=월 ... 7=일
+  const DOW_KR_LABELS = ["", "월", "화", "수", "목", "금", "토", "일"];
   const { count: whitelistCount } = await supabase
-    .from("original_review_programs")
+    .from("featured_content")
     .select("id", { count: "exact", head: true })
-    .eq("day_of_week_iso", asOfDateIsoDow);
+    .contains("broadcast_day_of_week", [DOW_KR_LABELS[asOfDateIsoDow]])
+    .not("broadcast_time", "is", null)
+    .lte("broadcast_start_date", asOfDate)
+    .or(`broadcast_end_date.is.null,broadcast_end_date.gte.${asOfDate}`);
 
   let originalContentReport: {
     mode: "daily" | "weekly_review";
