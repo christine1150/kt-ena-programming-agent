@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/fetch-nielsen-mail",
-      "schedule": "*/10 22-23,0 * * *"
+      "schedule": "0 23 * * *"
     }
   ]
 }

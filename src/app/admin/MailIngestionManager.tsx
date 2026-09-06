@@ -1,10 +1,10 @@
 "use client";
 
 // 개발 단위 20번(Nielsen 메일 자동 수집) 상태 확인 + 수동 실행 위젯.
-// 사용자 지시(2026-09-06): "일일 시청률이 7시 50분쯤 오는 경우도 있으니 7시 40분 이후엔
-// 즉시 반영" — 실제 자동 수집은 Vercel Cron이 매일 07:00~09:50(KST) 사이 10분 간격으로
-// /api/cron/fetch-nielsen-mail을 호출한다(vercel.json 참고, 이전엔 08:00 1회뿐이었음).
-// 여기 "지금 확인" 버튼으로 같은 로직을 즉시 실행해서 Gmail 연동 설정이 맞는지 바로 확인할 수 있다.
+// 실제 자동 수집은 Vercel Cron(매일 08:00 KST)이 /api/cron/fetch-nielsen-mail을 호출하지만,
+// 여기 "지금 확인" 버튼으로 같은 로직을 즉시 실행해서 연동 설정이 맞는지 바로 확인할 수 있다.
+// (참고: "7시 50분쯤 늦게 오는 날도 즉시 반영"을 위한 더 잦은 확인 주기는 이 프로젝트의
+// Vercel 요금제(Hobby, 하루 1회 크론만 지원)로는 불가해 보류 중 — 사용자 확인 대기.)
 import { useEffect, useState } from "react";
 
 // 2026-09-06: 일간(kind: "daily") 외에 주간·월간(기간, kind: "period") 파일, OLIFE
@@ -101,8 +101,7 @@ export default function MailIngestionManager() {
         제목에 <code>닐슨</code>과 <code>보고서</code>가 모두 들어간 메일(대부분{" "}
         <code>[닐슨] KTENA 일일 보고서</code>)에서 <code>닐슨_채널시청률(YYMMDD)</code>(일간)
         또는 <code>닐슨_채널시청률(YYMMDD-YYMMDD)</code>(주간·월간·연간) 형태의 엑셀
-        첨부파일을 매일 07:00~09:50(KST) 사이 10분 간격으로 자동으로 확인해 위 &ldquo;Nielsen
-        시청률 업로드&rdquo;와
+        첨부파일을 매일 08:00(KST)에 자동으로 확인해 위 &ldquo;Nielsen 시청률 업로드&rdquo;와
         같은 방식으로 반영합니다. 파일이 일간인지 기간(주간/월간)인지는 파일명이 아니라 시트
         안의 실제 분석기간으로 자동 판정되며, 기간 파일은 주간/월간/연간 자료(주간 시장 순위
         등)에 그대로 쓰입니다. 제목에 <code>EPG</code>가 들어간 메일에서{" "}
