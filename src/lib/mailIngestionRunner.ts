@@ -86,15 +86,36 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
 
   const processed: { messageId: string; subject: string; files: AnyIngestFileSummary[] }[] = [];
   for (const item of mailItems) {
+    // 동시성 버그 수정(2026-09-06, 자체 발견): 예전엔 "먼저 적재하고 나중에 처리 기록을
+    // 남기는" 순서라, 두 실행이 겹치면(수동 테스트와 스케줄 트리거가 겹치거나 두
+    // 스케줄러가 비슷한 시각에 겹치는 경우) 같은 메일을 동시에 두 번 적재할 수 있었다
+    // (실측: 겹친 두 호출이 이번엔 우연히 다른 날짜를 나눠 처리해 충돌은 없었지만,
+    // 같은 메일을 집었다면 시청률이 중복 적재됐을 것). 이제 실제 적재 전에 이 메일을
+    // status="processing"으로 먼저 선점(claim)한다 — message_id 유니크 제약 위반이면
+    // 다른 실행이 이미 선점한 것이므로 조용히 건너뛰고, 선점에 성공했을 때만 적재를
+    // 진행한 뒤 같은 행을 최종 상태로 갱신한다.
+    const { error: claimError } = await supabase.from("mail_ingestion_log").insert({
+      message_id: item.messageId,
+      subject: item.subject,
+      received_at: item.receivedAt,
+      source: item.source,
+      status: "processing",
+    });
+    if (claimError) {
+      // 23505 = unique_violation(다른 실행이 이미 선점) — 그 외 오류도 이번 실행에서는
+      // 이 메일을 건너뛴다(선점 자체가 안 됐으니 적재를 시작하지 않는 것이 안전).
+      continue;
+    }
+
     if (item.attachments.length === 0) {
-      await supabase.from("mail_ingestion_log").insert({
-        message_id: item.messageId,
-        subject: item.subject,
-        received_at: item.receivedAt,
-        source: item.source,
-        status: "skipped",
-        error_message: "조건에 맞는 닐슨 채널시청률·OLIFE 일일운행표 엑셀 첨부파일을 찾지 못했습니다.",
-      });
+      await supabase
+        .from("mail_ingestion_log")
+        .update({
+          status: "skipped",
+          error_message: "조건에 맞는 닐슨 채널시청률·OLIFE 일일운행표 엑셀 첨부파일을 찾지 못했습니다.",
+          processed_at: new Date().toISOString(),
+        })
+        .eq("message_id", item.messageId);
       continue;
     }
 
@@ -115,20 +136,20 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
     }
     const anyFailed = fileSummaries.some((f) => !f.ok);
 
-    await supabase.from("mail_ingestion_log").insert({
-      message_id: item.messageId,
-      subject: item.subject,
-      received_at: item.receivedAt,
-      source: item.source,
-      status: anyFailed ? "error" : "processed",
-      file_names: fileSummaries.map((f) => f.fileName),
-      error_message: anyFailed
-        ? fileSummaries
-            .filter((f) => !f.ok)
-            .map((f) => `${f.fileName}: ${f.message}`)
-            .join(" / ")
-        : null,
-    });
+    await supabase
+      .from("mail_ingestion_log")
+      .update({
+        status: anyFailed ? "error" : "processed",
+        file_names: fileSummaries.map((f) => f.fileName),
+        error_message: anyFailed
+          ? fileSummaries
+              .filter((f) => !f.ok)
+              .map((f) => `${f.fileName}: ${f.message}`)
+              .join(" / ")
+          : null,
+        processed_at: new Date().toISOString(),
+      })
+      .eq("message_id", item.messageId);
 
     processed.push({ messageId: item.messageId, subject: item.subject, files: fileSummaries });
   }

@@ -41,7 +41,10 @@ interface LogRow {
   subject: string | null;
   received_at: string | null;
   processed_at: string;
-  status: "processed" | "error" | "skipped";
+  // "processing"은 선점(claim) 직후~적재 완료 사이의 순간적인 중간 상태라 화면에서
+  // 볼 일은 거의 없지만(2026-09-06 동시성 수정), 실행이 중간에 죽으면 그 상태로 남을
+  // 수 있어 표시는 해준다.
+  status: "processing" | "processed" | "error" | "skipped";
   file_names: string[] | null;
   error_message: string | null;
   source: "gmail" | "naver" | null;
@@ -216,6 +219,7 @@ export default function MailIngestionManager() {
                       {log.status === "processed" && <span className="text-emerald-600">처리됨 ({log.file_names?.length ?? 0}개 파일)</span>}
                       {log.status === "skipped" && <span className="text-zinc-500">건너뜀 — {log.error_message}</span>}
                       {log.status === "error" && <span className="text-red-600">오류 — {log.error_message}</span>}
+                      {log.status === "processing" && <span className="text-amber-600">처리 중… (오래 남아있다면 이전 실행이 중단됐을 수 있음)</span>}
                     </td>
                   </tr>
                 ))}
