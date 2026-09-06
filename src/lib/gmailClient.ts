@@ -79,8 +79,16 @@ export interface NielsenMailItem {
   attachments: NielsenMailAttachment[];
 }
 
-// 지금까지 확인된 메일 제목 패턴: "[닐슨] KTENA 일일 보고서 (YYMMDD)" (CLAUDE.md 참고)
-const SUBJECT_QUERY = 'subject:"[닐슨] KTENA 일일 보고서" has:attachment';
+// 사용자 지시(2026-09-06): "제목에 '닐슨'과 '보고서'가 모두 들어간 메일"을 대상으로
+// 한다(대부분 "[닐슨] KTENA 일일 보고서"이지만 정확히 그 문구가 아닐 수도 있어 넓게
+// 잡는다) — Gmail 검색 문법 subject:(A B)는 제목에 A와 B가 모두(순서 무관) 있는
+// 메일을 찾아준다. 네이버 메일 쪽(naverMailClient.ts)도 같은 두 키워드 규칙을 쓴다.
+const SUBJECT_QUERY = "subject:(닐슨 보고서) has:attachment";
+
+// 정식 파일명 패턴(DATA_DICTIONARY.md §0): "닐슨_채널시청률(YYMMDD).xls". 같은 메일에
+// 다른 첨부(PDF 요약 등)가 섞여 있어도 이 패턴에 맞는 엑셀만 골라 적재한다 — 네이버
+// 메일 클라이언트(naverMailClient.ts)도 이 상수를 그대로 재사용한다.
+export const NIELSEN_DAILY_ATTACHMENT_PATTERN = /닐슨_?채널시청률\(\d{6}(?:-\d{6})?\).*\.xlsx?$/i;
 
 function findAttachmentParts(part: GmailMessagePart | undefined, acc: GmailMessagePart[]) {
   if (!part) return;
@@ -126,7 +134,7 @@ export async function fetchUnprocessedNielsenMail(
 
     const attachments: NielsenMailAttachment[] = [];
     for (const part of attachmentParts) {
-      if (!part.filename || !/\.xlsx?$/i.test(part.filename)) continue; // 엑셀 파일만
+      if (!part.filename || !NIELSEN_DAILY_ATTACHMENT_PATTERN.test(part.filename)) continue;
       const attachmentId = part.body!.attachmentId!;
       const attachmentData = (await gmailFetch(
         accessToken,

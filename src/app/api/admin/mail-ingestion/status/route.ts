@@ -15,12 +15,14 @@ export async function GET() {
       process.env.GMAIL_CLIENT_SECRET &&
       process.env.GMAIL_REFRESH_TOKEN
   );
+  // 2026-09-06: 네이버 메일(IMAP) 직접 연동 추가 — naverMailClient.ts 참고.
+  const naverConfigured = Boolean(process.env.NAVER_MAIL_USER && process.env.NAVER_MAIL_PASSWORD);
 
   const { data: logs } = await supabase
     .from("mail_ingestion_log")
-    .select("message_id, subject, received_at, processed_at, status, file_names, error_message")
+    .select("message_id, subject, received_at, processed_at, status, file_names, error_message, source")
     .order("processed_at", { ascending: false })
     .limit(10);
 
-  return NextResponse.json({ ok: true, gmailConfigured, logs: logs ?? [] });
+  return NextResponse.json({ ok: true, gmailConfigured, naverConfigured, logs: logs ?? [] });
 }
