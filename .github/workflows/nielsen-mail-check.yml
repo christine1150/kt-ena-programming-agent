@@ -1,0 +1,40 @@
+name: Nielsen 메일 자동 확인(아침 집중 구간)
+
+# 사용자 지시(2026-09-06): "일일 시청률이 7시 50분쯤 오는 경우도 있으니 7시 40분 이후
+# 메일이 오면 즉시 반영" — 이 프로젝트의 Vercel 요금제(Hobby)는 하루 1회를 초과하는
+# 크론을 지원하지 않아(배포 시 "Hobby accounts are limited to daily cron jobs"로
+# 거부됨), 대신 이 저장소의 GitHub Actions 무료 스케줄러로 07:30~09:30(KST) 사이
+# 5분마다 기존 /api/cron/fetch-nielsen-mail 엔드포인트를 호출한다(추가 비용 없음).
+# Vercel 자체 크론(매일 08:00 KST 1회, vercel.json)은 안전망으로 그대로 둔다 — 이
+# 워크플로가 어떤 이유로 실패해도 하루 한 번은 보장된다.
+#
+# 정직하게 밝히는 한계:
+# - GitHub Actions의 schedule 트리거는 "정확히 그 시각"을 보장하지 않는다 — GitHub
+#   서버 부하에 따라 실행이 몇 분 지연되거나(공식 문서에 명시된 동작) 드물게 건너뛸
+#   수 있다. "몇 분 안에 즉시"를 최대한 근접하게 흉내내는 것이지 완전한 실시간은 아니다.
+# - 이 저장소에 60일 이상 커밋이 없으면 GitHub가 예약 워크플로를 자동으로 비활성화한다
+#   (다시 커밋하거나 Actions 탭에서 수동으로 재활성화하면 복구됨).
+# - 엔드포인트 자체가 message_id 기준 중복 처리 방지를 이미 하고 있어(mail_ingestion_log),
+#   같은 메일을 여러 번 호출해도 두 번 적재되지 않는다 — 5분마다 호출해도 안전하다.
+
+on:
+  schedule:
+    - cron: "30-55/5 22 * * *" # KST 07:30~07:55
+    - cron: "*/5 23 * * *" # KST 08:00~08:55
+    - cron: "0-30/5 0 * * *" # KST 09:00~09:30
+  workflow_dispatch: {} # 수동 실행(디버깅/즉시 확인용)
+
+jobs:
+  check-mail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Nielsen 메일 자동 수집 엔드포인트 호출
+        run: |
+          http_code=$(curl -sS --max-time 180 -o response.json -w "%{http_code}" "https://kt-ena-programming-agent.vercel.app/api/cron/fetch-nielsen-mail")
+          echo "HTTP $http_code"
+          cat response.json
+          if [ "$http_code" != "200" ]; then
+            echo "::error::엔드포인트가 실패 응답을 반환했습니다 (HTTP $http_code) — 위 응답 본문 참고."
+            exit 1
+          fi
