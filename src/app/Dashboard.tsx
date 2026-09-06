@@ -80,6 +80,10 @@ interface OriginalDailyItem {
   // 타입에는 빠져 있었다(다른 화면 어디서도 안 써서 그동안 드러나지 않았던 누락).
   matched_end_time: string;
   matched_rating: number | null;
+  // 사용자 지시(2026-09-06): "분석 순서는 본방 타깃 시청률 → 부타깃(가구) → 점유율 →
+  // 시청시간 → 연령대" — SQL은 이미 내려주고 있었지만(get_original_content_daily) 화면
+  // 타입·렌더링 어디에도 없어 노출되지 않고 있었다(매칭 rating과 같은 자리의 값).
+  matched_share: number | null;
   // 사용자 지시(2026-08-21): 첨부된 PD 리뷰 보고서("179회 본방 시청률 리뷰")를 학습해 추가 —
   // 도달율과 본방 슬롯 연령대별(10살 단위) 시청률 상위 5개. 둘 다 우리 ratings 테이블에 이미
   // 있는 실측 데이터로, get_original_content_daily가 SQL에서 정렬·집계까지 마쳐서 내려준다.
@@ -409,6 +413,28 @@ interface MonthlyReview {
 
 // 사용자 지시: 인사이트·킬러콘텐츠는 이 순서로 언급 (ENA → ENA Play → ENA Drama → OLIFE → ONCE → ENA Story)
 const INSIGHT_CHANNEL_ORDER = ["ENA", "ENA_PLAY", "ENA_DRAMA", "OLIFE", "ONCE", "ENA_STORY"];
+
+// 사용자 지시(2026-09-06): "주요 컨텐츠 리뷰"에서 ENA/ENA Play/ENA Drama 컨텐츠가 함께 있으면
+// 항상 ENA가 본방송인 컨텐츠를 가장 위로, 카테고리는 사업형보다 오리지널 드라마/예능을
+// 우선 표기 — INSIGHT_CHANNEL_ORDER(기존에 있던 채널 우선순위)를 그대로 재사용하고
+// 카테고리 우선순위만 추가한다.
+const DAILY_CARD_CATEGORY_PRIORITY: Record<string, number> = {
+  "오리지널 드라마": 0,
+  "오리지널 예능": 0,
+  "독점 예능": 1,
+  "사업형": 2,
+};
+function sortOriginalDailyForDisplay(daily: OriginalDailyItem[]): OriginalDailyItem[] {
+  return [...daily].sort((a, b) => {
+    const chA = INSIGHT_CHANNEL_ORDER.indexOf(a.broadcast_channel_code);
+    const chB = INSIGHT_CHANNEL_ORDER.indexOf(b.broadcast_channel_code);
+    const chDiff = (chA === -1 ? INSIGHT_CHANNEL_ORDER.length : chA) - (chB === -1 ? INSIGHT_CHANNEL_ORDER.length : chB);
+    if (chDiff !== 0) return chDiff;
+    const catA = a.featured_category ? (DAILY_CARD_CATEGORY_PRIORITY[a.featured_category] ?? 1) : 1;
+    const catB = b.featured_category ? (DAILY_CARD_CATEGORY_PRIORITY[b.featured_category] ?? 1) : 1;
+    return catA - catB;
+  });
+}
 
 const CHANNEL_NAME_BY_CODE: Record<string, string> = {
   ENA: "ENA",
@@ -1710,8 +1736,13 @@ function buildOriginalInsight(
   if (item.rerun_rating !== null && item.retention_pct !== null && item.rerun_channel_code) {
     crossRetentionPct = item.retention_pct;
     rerunChannelName = CHANNEL_NAME_BY_CODE[item.rerun_channel_code] ?? item.rerun_channel_code;
+    const rerunTimeText = item.rerun_start_time ? fmtTimeKorean(item.rerun_start_time) : "";
+    // 사용자 지시(2026-09-06): 시청률이 0%면 "유입을 견인함"이라는 서술 자체가 사실과 반대다 —
+    // 0%일 때는 사실 그대로 "실질적인 유입 견인 효과를 거두지 못함"으로 바꾼다.
     bullets.push(
-      `${rerunChannelName} 직재방 효과: ${rerunChannelName} 직재방(${item.rerun_start_time ? fmtTimeKorean(item.rerun_start_time) : ""}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 유입을 견인함`
+      formatRating(item.rerun_rating) === "0"
+        ? `${rerunChannelName} 직재방 효과: ${rerunChannelName} 직재방(${rerunTimeText}) 시청률은 0%를 기록하여 실질적인 유입 견인 효과를 거두지 못함`
+        : `${rerunChannelName} 직재방 효과: ${rerunChannelName} 직재방(${rerunTimeText}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 유입을 견인함`
     );
     if (crossRetentionPct < 10) {
       secondaryBullets.push(`${rerunChannelName} 직재방 유지율이 ${crossRetentionPct.toFixed(1)}%로 낮아, 실질적인 유입 효과는 제한적으로 보임`);
@@ -1759,8 +1790,12 @@ function buildOriginalInsight(
   let selfRetentionPct: number | null = null;
   if (item.self_rerun_rating !== null && item.matched_rating !== null && item.matched_rating > 0) {
     selfRetentionPct = (item.self_rerun_rating / item.matched_rating) * 100;
+    const selfRerunTimeText = item.self_rerun_start_time ? fmtTimeKorean(item.self_rerun_start_time) : "";
+    // 사용자 지시(2026-09-06): 위 직재방 효과 문장과 동일하게, 0%일 땐 "견인함" 대신 사실 그대로.
     secondaryBullets.push(
-      `${broadcastChannelName} 직재방 효과: 본방 종료 직후 재방(${item.self_rerun_start_time ? fmtTimeKorean(item.self_rerun_start_time) : ""}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
+      formatRating(item.self_rerun_rating) === "0"
+        ? `${broadcastChannelName} 직재방 효과: 본방 종료 직후 재방(${selfRerunTimeText}) 시청률은 0%를 기록하여 실질적인 유입 견인 효과를 거두지 못함`
+        : `${broadcastChannelName} 직재방 효과: 본방 종료 직후 재방(${selfRerunTimeText}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
     );
   }
 
@@ -2429,9 +2464,18 @@ function ManualMinuteRatingChart({
 // 대신 오늘 분석된 오리지널 라인업 전체를 종합하는 인사이트 브리핑을 넣는다. 새 계산 없이
 // 이미 각 항목이 갖고 있는 값(동시간대 순위는 buildOriginalHeadline과 같은 방식으로 재계산,
 // 전회 대비·자체재방 유지율은 이미 있는 필드)만 집계한다.
-function buildOriginalDailyBriefing(daily: OriginalDailyItem[]): string | null {
+// 사용자 지시(2026-09-06): "'제비탐정장성규'가 전회 대비 ▼100%로 가장 뚜렷하게 움직였습니다"가
+// (아무 관계 없는) 짐쌀라비움 카드 맨 마지막에 붙어 있던 문제 — 이 문장은 특정 프로그램 하나를
+// 콕 집어 말하는 것이라, "마지막으로 렌더되는 카드"가 아니라 그 프로그램 자신의 카드에 귀속돼야
+// 한다. aggregate(전체 집계, 여러 프로그램에 걸친 사실이라 여전히 마지막 카드에 붙임)와
+// mostMoved(특정 프로그램 귀속, rowKey로 매칭)를 분리해서 반환한다.
+interface OriginalDailyBriefingResult {
+  aggregate: string | null;
+  mostMoved: { rowKey: string; sentence: string } | null;
+}
+function buildOriginalDailyBriefing(daily: OriginalDailyItem[]): OriginalDailyBriefingResult {
   const withRating = daily.filter((d) => d.matched_rating !== null && d.episode_number !== null);
-  if (withRating.length === 0) return null;
+  if (withRating.length === 0) return { aggregate: null, mostMoved: null };
 
   const withChange = withRating.filter((d) => d.prior_rating_change_pct !== null);
   const risingCount = withChange.filter((d) => d.prior_rating_change_pct! >= 0).length;
@@ -2440,26 +2484,32 @@ function buildOriginalDailyBriefing(daily: OriginalDailyItem[]): string | null {
   // 사용자 지시(2026-08-20): "오늘 분석된 오리지널 N편 중 M편이 동시간대 1위를 기록했습니다"는
   // 화이트리스트가 보통 1~2편이라 어색하게 읽혀 삭제 — 개별 프로그램의 정확한 순위는 위 헤드라인
   // ("<프로그램> N회 본방송 시청률 ... 동시간대 타깃 #위")에서 이미 프로그램명·회차로 정확히 보여준다.
-  const parts: string[] = [];
+  const aggregateParts: string[] = [];
   // 사용자 피드백(2026-08-20): 화이트리스트가 보통 1~2편이라 "1편 상승, 0편 하락"처럼 표본 1개를
   // 집계 문장으로 말하면 당연한 소리를 부자연스럽게 반복하는 것으로 읽힌다 — 비교할 프로그램이
   // 2편 이상일 때만 이 집계 문장을 쓰고, 1편뿐이면 아래 mostMoved 문장이 그 프로그램의 등락을
   // 이미 개별적으로 설명하므로 생략한다.
   if (withChange.length >= 2) {
-    parts.push(`전회 대비로는 ${risingCount}편 상승, ${fallingCount}편 하락했습니다.`);
+    aggregateParts.push(`전회 대비로는 ${risingCount}편 상승, ${fallingCount}편 하락했습니다.`);
   }
-  const mostMoved = [...withChange].sort((a, b) => Math.abs(b.prior_rating_change_pct!) - Math.abs(a.prior_rating_change_pct!))[0];
-  if (mostMoved && mostMoved.prior_rating_change_pct !== null && Math.abs(mostMoved.prior_rating_change_pct) >= 10) {
-    parts.push(
-      `'${mostMoved.matched_program_name}'${josaIga(mostMoved.matched_program_name)} 전회 대비 ${mostMoved.prior_rating_change_pct >= 0 ? "▲" : "▼"} ${Math.abs(mostMoved.prior_rating_change_pct).toFixed(1)}%로 가장 뚜렷하게 움직였습니다.`
-    );
+  let mostMoved: OriginalDailyBriefingResult["mostMoved"] = null;
+  const mostMovedItem = [...withChange].sort((a, b) => Math.abs(b.prior_rating_change_pct!) - Math.abs(a.prior_rating_change_pct!))[0];
+  if (mostMovedItem && mostMovedItem.prior_rating_change_pct !== null && Math.abs(mostMovedItem.prior_rating_change_pct) >= 10) {
+    const name = mostMovedItem.matched_program_name;
+    // 사용자 지시(2026-09-06): 시청률이 0%까지 떨어진 경우 "▼100%로 가장 뚜렷하게 움직였다"는
+    // 표현은 마치 유의미한 변화처럼 들려 오해를 줄 수 있다 — 객관적 사실 위주 문장으로 대체.
+    const sentence =
+      mostMovedItem.matched_rating === 0
+        ? `'${name}'${josaEunNeun(name)} 타깃 시청률 0%로 유의미한 시청 지표를 확보하지 못했습니다.`
+        : `'${name}'${josaIga(name)} 전회 대비 ${mostMovedItem.prior_rating_change_pct >= 0 ? "▲" : "▼"} ${Math.abs(mostMovedItem.prior_rating_change_pct).toFixed(1)}%로 가장 뚜렷하게 움직였습니다.`;
+    mostMoved = { rowKey: `${mostMovedItem.broadcast_channel_code}-${mostMovedItem.matched_start_time}`, sentence };
   }
   const withRerun = withRating.filter((d) => d.self_rerun_rating !== null && d.matched_rating! > 0);
   if (withRerun.length > 0) {
     const avgRetention = withRerun.reduce((sum, d) => sum + (d.self_rerun_rating! / d.matched_rating!) * 100, 0) / withRerun.length;
-    parts.push(`당일 자체 재방이 있었던 ${withRerun.length}편은 평균 본방 대비 ${avgRetention.toFixed(0)}% 시청률을 유지했습니다.`);
+    aggregateParts.push(`당일 자체 재방이 있었던 ${withRerun.length}편은 평균 본방 대비 ${avgRetention.toFixed(0)}% 시청률을 유지했습니다.`);
   }
-  return parts.join(" ");
+  return { aggregate: aggregateParts.length > 0 ? aggregateParts.join(" ") : null, mostMoved };
 }
 
 // 사용자 지시(2026-09-03, UI/UX REDESIGN): "최고/최저는 반드시 수치 + 회차를 함께 표시" —
@@ -2618,13 +2668,20 @@ function OriginalContentReportCard({
                 secondaryBullets 바로 아래에 붙인다(집계 데이터라 프로그램별로 반복 계산하지
                 않고, 렌더 위치만 마지막 항목으로 옮긴다). */}
             {(() => {
-              const dailyBriefing = buildOriginalDailyBriefing(report.daily);
-              return report.daily.map((h, idx) => {
-              const isLastDaily = idx === report.daily.length - 1;
+              // 사용자 지시(2026-09-06): "ENA와 ENA Play, ENA Drama 컨텐츠가 있으면 항상 ENA가
+              // 본방송인 컨텐츠를 가장 위로, 사업형보다 오리지널 드라마/예능을 우선 표기" —
+              // 렌더링 순서만 바꾸고 데이터 자체(각 항목의 값)는 그대로.
+              const sortedDaily = sortOriginalDailyForDisplay(report.daily);
+              const dailyBriefing = buildOriginalDailyBriefing(sortedDaily);
+              return sortedDaily.map((h, idx) => {
+              const isLastDaily = idx === sortedDaily.length - 1;
               const headline = buildOriginalHeadline(h);
               const achievementPct = achievementPctByCode.get(h.broadcast_channel_code) ?? null;
               const insight = buildOriginalInsight(h, headline?.rank ?? null, headline?.beatenBy ?? [], achievementPct);
               const rowKey = `${h.broadcast_channel_code}-${h.matched_start_time}`;
+              // 사용자 지시(2026-09-06): "'제비탐정장성규'가 전회 대비..." 같은 특정 프로그램
+              // 귀속 문장은 그 프로그램 자신의 카드에만 붙인다(마지막 카드가 아니라 rowKey 매칭).
+              const mostMovedSentenceForThis = dailyBriefing.mostMoved?.rowKey === rowKey ? dailyBriefing.mostMoved.sentence : null;
               const accent = themeColorByCode.get(h.broadcast_channel_code) ?? enaAccentColor;
               const broadcastChannelName = CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code;
               const { peak, trough } = pickPeakTroughPoints(h.ratingHistory);
@@ -2757,7 +2814,12 @@ function OriginalContentReportCard({
                               </span>
                             )}
                           </p>
-                          <p className="mt-1.5 text-[32px] font-semibold leading-[0.95] tabular-nums tracking-tight text-zinc-700">
+                          {/* 사용자 지시(2026-09-06): "직재방이나 동시방영의 시청률도 그 채널의
+                              로고색 활용" — 위 라벨의 채널명과 같은 색을 숫자에도 적용. */}
+                          <p
+                            className="mt-1.5 text-[32px] font-semibold leading-[0.95] tabular-nums tracking-tight"
+                            style={{ color: themeColorByCode.get(secondKpi.channelCode) ?? UNBRANDED_CHANNEL_COLOR }}
+                          >
                             {formatRating(secondKpi.rating, h.broadcast_channel_code)}
                           </p>
                           {secondKpi.note && <p className="mt-1.5 text-[12.5px] text-zinc-400">{secondKpi.note}</p>}
@@ -2788,7 +2850,11 @@ function OriginalContentReportCard({
                           )}
                           {h.self_rerun_rating !== null && (
                             <p className="text-[14px] text-zinc-600">
-                              <span className="font-semibold tabular-nums text-zinc-800">{formatRating(h.self_rerun_rating, h.broadcast_channel_code)}</span>
+                              {/* 사용자 지시(2026-09-06): "직재방 시청률도 그 채널 로고색 활용" —
+                                  숫자도 채널명과 같은 accent로. */}
+                              <span className="font-semibold tabular-nums" style={{ color: accent }}>
+                                {formatRating(h.self_rerun_rating, h.broadcast_channel_code)}
+                              </span>
                               <span className="ml-1.5 text-[12px] text-zinc-400">
                                 {/* 사용자 지시(2026-09-03, 3차): 채널명은 그 채널 로고 색으로. */}
                                 <span className="font-semibold" style={{ color: accent }}>
@@ -2807,6 +2873,17 @@ function OriginalContentReportCard({
                           되돌려 다시 3줄로 분리(라벨-값 순서는 그대로 유지). */}
                       <p className={REPORT_EYEBROW}>몰입도</p>
                       <div className="mt-2.5 space-y-2">
+                        {/* 사용자 지시(2026-09-06): "분석 순서는 본방 타깃 시청률 → 부타깃(가구) →
+                            점유율 → 시청시간 → 연령대" — 시청률·가구는 왼쪽 시청률 칸에 이미 그
+                            순서로 있으므로, 이 몰입도 칸 맨 위에 점유율을 추가해 시청시간보다
+                            먼저 오게 한다(새 계산 없음, get_original_content_daily가 이미 내려주는
+                            matched_share 그대로). */}
+                        {h.matched_share !== null && (
+                          <p className="text-[14px] text-zinc-600">
+                            <span className="text-zinc-500">점유율 </span>
+                            <span className="font-semibold tabular-nums text-zinc-800">{h.matched_share.toFixed(2)}%</span>
+                          </p>
+                        )}
                         {h.matched_time_spent_seconds !== null && (
                           <p className="text-[14px] text-zinc-600">
                             <span className="text-zinc-500">시청시간 </span>
@@ -2825,7 +2902,7 @@ function OriginalContentReportCard({
                             <span className="font-semibold tabular-nums text-zinc-800">{h.matched_reach.toFixed(2)}%</span>
                           </p>
                         )}
-                        {h.matched_time_spent_seconds === null && h.matched_time_spent_share === null && h.matched_reach === null && (
+                        {h.matched_share === null && h.matched_time_spent_seconds === null && h.matched_time_spent_share === null && h.matched_reach === null && (
                           <p className="text-[12px] text-zinc-300">자료 없음</p>
                         )}
                       </div>
@@ -2939,7 +3016,7 @@ function OriginalContentReportCard({
                           문장(dailyBriefing)을 별도 <p>로 밖에 두지 않고 같은 <ul> 안 마지막
                           항목으로 합쳐 마커·행간이 완전히 동일하게 하고, 색도 zinc-400→zinc-600
                           (font-medium)으로 한 단계 진하게 올렸다. */}
-                      {(insight.secondaryBullets.length > 0 || (isLastDaily && dailyBriefing)) && (
+                      {(insight.secondaryBullets.length > 0 || mostMovedSentenceForThis || (isLastDaily && dailyBriefing.aggregate)) && (
                         <ul className="mt-6 space-y-1.5 border-t border-zinc-100 pt-3">
                           {insight.secondaryBullets.map((b, i) => (
                             <li key={i} className="flex gap-1.5 text-[11.5px] font-medium leading-relaxed text-zinc-600">
@@ -2947,10 +3024,18 @@ function OriginalContentReportCard({
                               <span>{highlightChannelNames(b, channelColors)}</span>
                             </li>
                           ))}
-                          {isLastDaily && dailyBriefing && (
+                          {/* 사용자 지시(2026-09-06): "가장 뚜렷하게 움직였다" 문장은 그 프로그램
+                              자신의 카드에만(마지막 카드가 아니라 rowKey로 매칭된 카드에). */}
+                          {mostMovedSentenceForThis && (
                             <li className="flex gap-1.5 text-[11.5px] font-medium leading-relaxed text-zinc-600">
                               <span className="shrink-0">·</span>
-                              <span>{dailyBriefing}</span>
+                              <span>{highlightChannelNames(mostMovedSentenceForThis, channelColors)}</span>
+                            </li>
+                          )}
+                          {isLastDaily && dailyBriefing.aggregate && (
+                            <li className="flex gap-1.5 text-[11.5px] font-medium leading-relaxed text-zinc-600">
+                              <span className="shrink-0">·</span>
+                              <span>{dailyBriefing.aggregate}</span>
                             </li>
                           )}
                         </ul>
