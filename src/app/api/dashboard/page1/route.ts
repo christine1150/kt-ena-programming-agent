@@ -854,15 +854,26 @@ export async function GET(request: Request) {
           const competitorLookup = CROSS_CHANNEL_COMPETITOR_LOOKUPS.find((l) => l.whitelistChannelCode === row.broadcast_channel_code);
           // 사용자 지시(2026-08-26): "그래프에 동시방영, 직후재방 등이 있다면 그 부분도 함께
           // 표시할 것 — 예: 신병4사보타주는 ENA Drama의 직후재방을 표시해야함". 아래 메인
-          // get_program_rating_history 호출은 본방 시각(matched_start_time) ±10분 창만 보므로
-          // 동시방영(같은 시각대 타 채널)은 자연히 잡히지만, 직후재방은 시각이 몇 시간 차이나
-          // 이 창에 안 걸린다 — 재방 채널이 있으면 "재방 시작 시각" 기준으로 같은 함수를 한 번
-          // 더 호출해 그 채널의 시계열만 뽑아 별도 계열로 합친다(새 SQL 없이 기존 함수 재사용).
+          // get_program_rating_history 호출은 본방 시각 ±10분 창만 보므로 동시방영(같은
+          // 시각대 타 채널)은 자연히 잡히지만, 직후재방은 시각이 몇 시간 차이나 이 창에 안
+          // 걸린다 — 재방 채널이 있으면 "재방 시작 시각" 기준으로 같은 함수를 한 번 더
+          // 호출해 그 채널의 시계열만 뽑아 별도 계열로 합친다(새 SQL 없이 기존 함수 재사용).
+          //
+          // 버그 수정(2026-09-06, 사용자 신고 "제비탐정 장성규 회별 그래프 겹침"): 이 메인
+          // 호출의 기준 시각을 row.matched_start_time(오늘 하루의 실제 관측 시각, 예:
+          // 10:13:53)으로 썼었다 — 그러면 과거 주차의 실제 방영 시각이 자연스러운 편성
+          // 지연/변동으로 오늘과 10분 넘게 차이나는 순간(실측: 제비탐정 장성규 1·5회) 그
+          // 회차가 통째로 빠져버린다. 회차가 빠지면 남은 점들이 실제 회차 번호와 다른
+          // x좌표 간격으로 눌러앉으면서 다른 시리즈(가구·경쟁채널 등)의 값이 엉뚱한
+          // 회차 자리로 근사돼 겹쳐 보이는 현상까지 이어졌다. featured_content에 등록된
+          // 안정적인 본방 시각(row.expected_time)을 기준으로 바꾼다 — 오늘 실제 방영
+          // 시각과는 보통 몇 분 이내 차이라 오늘자 매칭에는 영향이 없고, 과거 주차들은
+          // 매주 같은 "등록된" 시각을 기준으로 일관되게 ±10분 창에 들어온다.
           const needsRerunHistory = Boolean(row.rerun_channel_code && row.rerun_start_time);
           const [{ data: historyRows }, competitorHistoryResult, rerunHistoryResult] = await Promise.all([
             supabase.rpc("get_program_rating_history", {
               p_canonical_name: row.matched_program_name,
-              p_expected_start_time: row.matched_start_time,
+              p_expected_start_time: row.expected_time,
               p_as_of_date: asOfDate,
             }),
             competitorLookup
