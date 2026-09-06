@@ -107,6 +107,11 @@ interface OriginalDailyItem {
   rerun_program_name: string | null;
   rerun_start_time: string | null;
   rerun_rating: number | null;
+  // 사용자 지시(2026-09-07) 용어 정의 — "직재방": 본방 종료 후 사이에 다른 프로그램 없이
+  // 곧바로 같은 회차를 다시 방송하는 것. "당일재방": 직재방이 아니고, 본방-다른 프로그램-
+  // 재방 순서로 그 사이에 다른 프로그램이 하나라도 끼어 있는 후속 재방송. 추정이 아니라
+  // 그 사이 시간대의 실제 방영 데이터 존재 여부로 SQL이 판정해 내려준다.
+  rerun_type: "직재방" | "당일재방" | null;
   retention_pct: number | null;
   competitorHighlights: OriginalCompetitorHighlight[];
   // 사용자 지시(2026-08-21, 179회 리뷰 재학습): "동시간대 타깃 #위"뿐 아니라 "동시간대 가구 #위"도
@@ -118,6 +123,7 @@ interface OriginalDailyItem {
   pre_rerun_rating: number | null;
   self_rerun_start_time: string | null;
   self_rerun_rating: number | null;
+  self_rerun_type: "직재방" | "당일재방" | null;
   prior_occurrence_date: string | null;
   prior_occurrence_rating: number | null;
   prior_rating_change_pct: number | null;
@@ -1680,6 +1686,27 @@ interface OriginalInsightBlock {
   secondaryBullets: string[];
   schedulingNote: string[];
 }
+// 사용자 지시(2026-09-07): "유입 효과나 직재방 성과가 평균보다 낮다면 편성 효과가 낮다고
+// 솔직하게 말할것" — 그 재방 채널의 과거 회차별 유지율(재방 시청률/본방 시청률) 평균을
+// 새로 조회하지 않고, 화면이 이미 쓰는 회차별 추이 데이터(ratingHistory)에서 직접 계산한다.
+// 오늘(비교 대상) 날짜는 평균에서 제외해 "과거 대비 오늘"이 되게 한다.
+function computeHistoricalRetentionAvgPct(history: RatingHistoryResult | null, seriesName: string | null): number | null {
+  if (!history || !seriesName) return null;
+  const rerunSeries = history.otherChannels.find((s) => s.seriesName === seriesName);
+  if (!rerunSeries || rerunSeries.points.length === 0) return null;
+  const ownByDate = new Map(history.own2049.map((p) => [p.broadcast_date, p.rating]));
+  const latestDate = rerunSeries.points.reduce((max, p) => (p.broadcast_date > max ? p.broadcast_date : max), rerunSeries.points[0].broadcast_date);
+  const retentions: number[] = [];
+  for (const point of rerunSeries.points) {
+    if (point.broadcast_date === latestDate) continue; // 오늘(평가 대상)은 평균에서 제외.
+    const ownRating = ownByDate.get(point.broadcast_date);
+    if (ownRating !== undefined && ownRating !== null && ownRating > 0 && point.rating !== null) {
+      retentions.push((point.rating / ownRating) * 100);
+    }
+  }
+  return retentions.length > 0 ? retentions.reduce((a, b) => a + b, 0) / retentions.length : null;
+}
+
 function buildOriginalInsight(
   item: OriginalDailyItem,
   rank: number | null,
@@ -1727,25 +1754,35 @@ function buildOriginalInsight(
     bullets.push(`${simulcastChannelName} 동시방송 ${formatRating(item.simulcast_rating)}%`);
   }
 
-  // 4) 직후 재방송 유입 효과 — 명세 문구 그대로. 유지율이 낮아 사실상 효과가 제한적인 경우의
+  // 4) 재방송 유입 효과 — 명세 문구 그대로. 유지율이 낮아 사실상 효과가 제한적인 경우의
   // 캐비엇은 이 필수 4번째 불렛의 고정 문구를 바꾸지 않고 secondaryBullets에 별도로 짚는다.
-  // 사용자 지시(2026-09-03): "ENA Drama 직재방, ENA Play 직재방 등으로 표기" — 타 채널이 트는
-  // 재방도 자체 재방과 같은 "직재방" 용어로 통일한다("직후재방"이라는 별도 용어를 쓰지 않는다).
+  // 사용자 지시(2026-09-07) 용어 정정: "직재방"(본방 종료 후 사이에 다른 프로그램 없이 곧바로
+  // 재방)과 "당일재방"(그 사이에 다른 프로그램이 끼어 있는 후속 재방)을 더는 뭉뚱그리지 않고
+  // rerun_type(SQL이 실제 방영 데이터로 판정)에 따라 정확한 용어를 쓴다.
   let crossRetentionPct: number | null = null;
   let rerunChannelName: string | null = null;
   if (item.rerun_rating !== null && item.retention_pct !== null && item.rerun_channel_code) {
     crossRetentionPct = item.retention_pct;
     rerunChannelName = CHANNEL_NAME_BY_CODE[item.rerun_channel_code] ?? item.rerun_channel_code;
     const rerunTimeText = item.rerun_start_time ? fmtTimeKorean(item.rerun_start_time) : "";
+    const rerunLabel = item.rerun_type ?? "직재방";
     // 사용자 지시(2026-09-06): 시청률이 0%면 "유입을 견인함"이라는 서술 자체가 사실과 반대다 —
     // 0%일 때는 사실 그대로 "실질적인 유입 견인 효과를 거두지 못함"으로 바꾼다.
     bullets.push(
       formatRating(item.rerun_rating) === "0"
-        ? `${rerunChannelName} 직재방 효과: ${rerunChannelName} 직재방(${rerunTimeText}) 시청률은 0%를 기록하여 실질적인 유입 견인 효과를 거두지 못함`
-        : `${rerunChannelName} 직재방 효과: ${rerunChannelName} 직재방(${rerunTimeText}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 유입을 견인함`
+        ? `${rerunChannelName} ${rerunLabel} 효과: ${rerunChannelName} ${rerunLabel}(${rerunTimeText}) 시청률은 0%를 기록하여 실질적인 유입 견인 효과를 거두지 못함`
+        : `${rerunChannelName} ${rerunLabel} 효과: ${rerunChannelName} ${rerunLabel}(${rerunTimeText}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 유입을 견인함`
     );
-    if (crossRetentionPct < 10) {
-      secondaryBullets.push(`${rerunChannelName} 직재방 유지율이 ${crossRetentionPct.toFixed(1)}%로 낮아, 실질적인 유입 효과는 제한적으로 보임`);
+    // 사용자 지시(2026-09-07): "유입 효과나 직재방 성과가 평균보다 낮다면 편성 효과가 낮다고
+    // 솔직하게 말할것" — 이 재방 채널의 과거 유지율 평균(이미 있는 회차별 추이 데이터로 계산,
+    // 새 조회 없음)과 비교해, 과거 평균이 있고 오늘이 그보다 낮으면 명시적으로 짚는다.
+    const historicalAvgRetention = computeHistoricalRetentionAvgPct(item.ratingHistory, item.rerun_channel_code);
+    if (historicalAvgRetention !== null && crossRetentionPct < historicalAvgRetention) {
+      secondaryBullets.push(
+        `${rerunChannelName} ${rerunLabel} 유지율이 ${crossRetentionPct.toFixed(1)}%로 이 프로그램의 과거 평균(${historicalAvgRetention.toFixed(1)}%)보다 낮음 — 이번 ${rerunLabel} 편성 효과가 평소보다 낮았던 것으로 보임`
+      );
+    } else if (crossRetentionPct < 10) {
+      secondaryBullets.push(`${rerunChannelName} ${rerunLabel} 유지율이 ${crossRetentionPct.toFixed(1)}%로 낮아, 실질적인 유입 효과는 제한적으로 보임`);
     }
   }
 
@@ -1784,18 +1821,19 @@ function buildOriginalInsight(
     );
   }
 
-  // 당일 자체 재방 효과(숫자는 헤더에 이미 노출되나, %견인 서술은 여기서만).
-  // 사용자 지시(2026-09-03): "ENA 본채널이라고 하지 말고 ENA 직재방 등으로 표기" — "본채널"이라는
-  // 말을 빼고 채널명 바로 뒤에 "직재방"을 붙인다.
+  // 같은 채널 재방 효과(숫자는 헤더에 이미 노출되나, %견인 서술은 여기서만).
+  // 사용자 지시(2026-09-07) 용어 정정: 본방 종료 직후 사이에 다른 프로그램 없이 곧바로면
+  // "직재방", 그 사이에 다른 프로그램이 있으면 "당일재방" — self_rerun_type(SQL 판정) 그대로.
   let selfRetentionPct: number | null = null;
   if (item.self_rerun_rating !== null && item.matched_rating !== null && item.matched_rating > 0) {
     selfRetentionPct = (item.self_rerun_rating / item.matched_rating) * 100;
     const selfRerunTimeText = item.self_rerun_start_time ? fmtTimeKorean(item.self_rerun_start_time) : "";
-    // 사용자 지시(2026-09-06): 위 직재방 효과 문장과 동일하게, 0%일 땐 "견인함" 대신 사실 그대로.
+    const selfRerunLabel = item.self_rerun_type ?? "직재방";
+    // 사용자 지시(2026-09-06): 위 재방 효과 문장과 동일하게, 0%일 땐 "견인함" 대신 사실 그대로.
     secondaryBullets.push(
       formatRating(item.self_rerun_rating) === "0"
-        ? `${broadcastChannelName} 직재방 효과: 본방 종료 직후 재방(${selfRerunTimeText}) 시청률은 0%를 기록하여 실질적인 유입 견인 효과를 거두지 못함`
-        : `${broadcastChannelName} 직재방 효과: 본방 종료 직후 재방(${selfRerunTimeText}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
+        ? `${broadcastChannelName} ${selfRerunLabel} 효과: 본방 종료 후 재방(${selfRerunTimeText}) 시청률은 0%를 기록하여 실질적인 유입 견인 효과를 거두지 못함`
+        : `${broadcastChannelName} ${selfRerunLabel} 효과: 본방 종료 후 재방(${selfRerunTimeText}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
     );
   }
 
@@ -1813,8 +1851,10 @@ function buildOriginalInsight(
   // 사용자 지시(2026-09-03): "본채널"이라는 말 대신 채널명을 그대로 쓴다. 조사(이/가)는 채널명
   // 끝음절에 맞춰 josaIga()로 정확히 붙인다(이미 이 파일이 다른 서술문에서 쓰는 헬퍼 재사용).
   if (selfRetentionPct !== null && crossRetentionPct !== null && rerunChannelName && selfRetentionPct - crossRetentionPct >= 10) {
+    const selfLabelForNote = item.self_rerun_type ?? "직재방";
+    const rerunLabelForNote = item.rerun_type ?? "직재방";
     schedulingNote.push(
-      `${broadcastChannelName} 직재방으로 인한 ${rerunChannelName} 카니발라이제이션 가능성 — ${broadcastChannelName}${josaIga(broadcastChannelName)} 본방 종료 직후 자체 재방을 바로 배치함에 따라 재시청·유입 수요가 ${broadcastChannelName}로 집중되어, ${rerunChannelName}의 직재방 편성은 시청률 견인 효과를 거의 보지 못한 것으로 보입니다(동시에 관찰된 패턴 — 인과관계로 단정하지 않음). ${rerunChannelName}의 재방 시점 분산이나 타깃층 맞춤형 차별화 편성을 검토해볼 만합니다.`
+      `${broadcastChannelName} ${selfLabelForNote}으로 인한 ${rerunChannelName} 카니발라이제이션 가능성 — ${broadcastChannelName}${josaIga(broadcastChannelName)} 본방 종료 후 자체 재방을 배치함에 따라 재시청·유입 수요가 ${broadcastChannelName}로 집중되어, ${rerunChannelName}의 ${rerunLabelForNote} 편성은 시청률 견인 효과를 거의 보지 못한 것으로 보입니다(동시에 관찰된 패턴 — 인과관계로 단정하지 않음). ${rerunChannelName}의 재방 시점 분산이나 타깃층 맞춤형 차별화 편성을 검토해볼 만합니다.`
     );
   }
 
@@ -2706,7 +2746,7 @@ function OriginalContentReportCard({
                   ? { labelPrefix: "동시방영", channelCode: h.simulcast_channel_code, rating: h.simulcast_rating, time: h.simulcast_start_time, note: null as string | null }
                   : h.rerun_rating !== null && h.rerun_channel_code
                     ? {
-                        labelPrefix: "직재방",
+                        labelPrefix: h.rerun_type ?? "직재방",
                         channelCode: h.rerun_channel_code,
                         rating: h.rerun_rating,
                         time: h.rerun_start_time,
@@ -2860,7 +2900,7 @@ function OriginalContentReportCard({
                                 <span className="font-semibold" style={{ color: accent }}>
                                   {broadcastChannelName}
                                 </span>{" "}
-                                직재방{h.self_rerun_start_time ? ` · ${fmtTimeKorean(h.self_rerun_start_time)}` : ""}
+                                {h.self_rerun_type ?? "직재방"}{h.self_rerun_start_time ? ` · ${fmtTimeKorean(h.self_rerun_start_time)}` : ""}
                               </span>
                             </p>
                           )}
@@ -3621,12 +3661,17 @@ function fmtSecondsCompact(v: number | null): string {
 // 보여준다 — 별도 모달/오버레이가 아니라 같은 그리드 칸 안에서 전환되므로 레이아웃이 흔들리지
 // 않는다. KPI 시청률은 채널 로고 색상 그라데이션(진할수록 높음), 점유율은 그 목록의 일간 평균
 // 보다 높으면 채널 로고 색상으로 강조(사용자 지시, 경쟁채널 패널 때와 동일한 강조 규칙 유지).
-function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDate, onClose }: {
+function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDate, onClose, annualAvgRating }: {
   channelCode: string;
   channelName: string;
   themeColor: string | null;
   asOfDate: string;
   onClose: () => void;
+  // 사용자 지시(2026-09-07): "타깃 주 시청률이 연간 채널 평균 이상일 때는 프로그램명도 채널
+  // 로고 색으로 볼드 처리" — 기존 ratingCellStyle의 "월평균"(최근 30일)과는 다른 기준선이라
+  // (연간=올해 1/1~오늘 누적, TodayTopProgramsCard의 ytdAvgByCode와 동일한 값) 새 prop으로
+  // 받는다. 기존 30일 평균 기반 강조(배경 그라데이션·시청률 칸 볼드)는 그대로 둔다.
+  annualAvgRating: number | null;
 }) {
   const [state, setState] = useState<{
     loading: boolean;
@@ -3812,7 +3857,18 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                 <tr key={i} className="border-t border-zinc-50">
                   <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(r.start_time)}</td>
                   <td className="py-1 text-zinc-700">
-                    <div className="truncate">{r.canonical_name}</div>
+                    {/* 사용자 지시(2026-09-07): 타깃 주 시청률(primary_rating)이 연간 채널
+                        평균 이상이면 프로그램명도 채널 로고 색+볼드로 강조. */}
+                    <div
+                      className="truncate"
+                      style={
+                        r.primary_rating !== null && annualAvgRating !== null && r.primary_rating >= annualAvgRating
+                          ? { color, fontWeight: 700 }
+                          : undefined
+                      }
+                    >
+                      {r.canonical_name}
+                    </div>
                     {/* 사용자 지시(2026-09-03): "OLIFE의 경우 EPG나 편성표를 통해서 부제가
                         파악 가능할 경우 부제를 아랫줄에 명기(1페이지 채널별 상위 프로그램에서
                         하듯이)" — episode_subtitle은 OLIFE EPG 카탈로그 매칭이 채워둔 값이라
@@ -4192,6 +4248,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 themeColor={byCode.get(selectedInsightChannel)?.themeColor ?? null}
                 asOfDate={data.asOfDate}
                 onClose={() => setSelectedInsightChannel(null)}
+                annualAvgRating={byCode.get(selectedInsightChannel)?.ytdAvgRating ?? null}
               />
             ) : (
               <TodayTopProgramsCard

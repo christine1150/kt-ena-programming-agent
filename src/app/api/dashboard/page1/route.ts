@@ -67,6 +67,11 @@ interface OriginalDailyRow {
   rerun_program_name: string | null;
   rerun_start_time: string | null;
   rerun_rating: number | null;
+  // 사용자 지시(2026-09-07): "직재방"(본방 종료~재방 사이 다른 프로그램 없이 곧바로) vs
+  // "당일재방"(그 사이에 다른 프로그램이 끼어 있음)을 구분 — 추정이 아니라 그 사이 시간대에
+  // 실제로 다른 프로그램이 방영됐는지를 DB에서 직접 확인해 SQL이 판정해 내려준다
+  // (get_original_content_daily, 마이그레이션 20260907010000).
+  rerun_type: "직재방" | "당일재방" | null;
   retention_pct: number | null;
   // 사용자 지시(2026-08-20): 본방 전 전주 회차 선행 재방, 본방 후 같은 채널 당일 자체 재방,
   // 직전 방영 대비, 회차 번호(관리자가 seed로 심어둔 프로그램만).
@@ -74,6 +79,7 @@ interface OriginalDailyRow {
   pre_rerun_rating: number | null;
   self_rerun_start_time: string | null;
   self_rerun_rating: number | null;
+  self_rerun_type: "직재방" | "당일재방" | null;
   prior_occurrence_date: string | null;
   prior_occurrence_rating: number | null;
   prior_rating_change_pct: number | null;

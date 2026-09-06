@@ -36,6 +36,10 @@ export interface EnaOriginalHighlightItem {
   // 재방 성적 자체 서술(buildRerunHighlightSentence)에 필요.
   rerun_program_name?: string | null;
   rerun_rating?: number | null;
+  // 사용자 지시(2026-09-07) 용어 정정: "직재방"(사이에 다른 프로그램 없이 곧바로) vs
+  // "당일재방"(사이에 다른 프로그램이 끼어 있음) — SQL(get_original_content_daily)이 실제
+  // 방영 데이터로 판정해 내려준다.
+  rerun_type?: "직재방" | "당일재방" | null;
   self_rerun_rating: number | null;
 }
 
@@ -74,7 +78,8 @@ export function buildRerunHighlightSentence(
   if (items.length === 0) return null;
   const parts = items.map((d) => {
     const pct = d.retention_pct !== null ? ` (본방 대비 유지율 ${d.retention_pct.toFixed(1)}%)` : "";
-    return `'${d.featured_display_name ?? d.rerun_program_name ?? d.matched_program_name}' 직후재방 수2049 ${formatRating(d.rerun_rating ?? null)}%${pct}`;
+    const label = d.rerun_type ?? "직재방";
+    return `'${d.featured_display_name ?? d.rerun_program_name ?? d.matched_program_name}' ${label} 수2049 ${formatRating(d.rerun_rating ?? null)}%${pct}`;
   });
   return `${parts.join(", ")}.`;
 }
