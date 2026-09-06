@@ -2,15 +2,23 @@
 // "지금 확인" 버튼 라우트가 이 함수 하나를 그대로 공유한다 — 같은 처리 과정을 태운다는
 // DESIGN.md 원칙을 여기서도 지킨다.
 import { supabase } from "@/lib/supabase";
-import { loadGmailEnvConfig, fetchUnprocessedNielsenMail, type NielsenMailItem } from "@/lib/gmailClient";
+import {
+  loadGmailEnvConfig,
+  fetchUnprocessedNielsenMail,
+  NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN,
+  type NielsenMailItem,
+} from "@/lib/gmailClient";
 import { loadNaverMailEnvConfig, fetchUnprocessedNielsenMailFromNaver } from "@/lib/naverMailClient";
-import { ingestNielsenFile, loadNielsenIngestContext, type FileSummary } from "@/lib/nielsenIngest";
+import { ingestAnyNielsenFile, loadNielsenFileDispatchContext, type NielsenFileSummary } from "@/lib/nielsenFileDispatch";
+import { ingestOlifeEpgFile, OLIFE_DAILY_EPG_ATTACHMENT_PATTERN, type OlifeEpgFileSummary } from "@/lib/olifeEpgDispatch";
+
+type AnyIngestFileSummary = NielsenFileSummary | OlifeEpgFileSummary;
 
 export interface MailIngestionRunResult {
   ok: boolean;
   message?: string;
   checkedCount: number;
-  processed: { messageId: string; subject: string; files: FileSummary[] }[];
+  processed: { messageId: string; subject: string; files: AnyIngestFileSummary[] }[];
 }
 
 type SourcedMailItem = NielsenMailItem & { source: "gmail" | "naver" };
@@ -64,12 +72,19 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
     return { ok: true, checkedCount: 0, processed: [] };
   }
 
-  const ctx = await loadNielsenIngestContext();
-  if ("error" in ctx) {
-    return { ok: false, message: ctx.error, checkedCount: mailItems.length, processed: [] };
+  // 2026-09-06: 일간뿐 아니라 주간·월간(기간) 엑셀, 그리고 OLIFE 일일운행표(EPG) 엑셀도
+  // 메일에 들어있으면 같이 적재한다 — 관리자 수동 업로드가 쓰는 것과 정확히 같은 판정·적재
+  // 함수를 공유해(nielsenFileDispatch.ts/olifeEpgDispatch.ts) 로직이 두 곳에서 갈라지지 않는다.
+  const [nielsenCtx, olifeChannelRes] = await Promise.all([
+    loadNielsenFileDispatchContext(),
+    supabase.from("channels").select("id").eq("code", "OLIFE").maybeSingle(),
+  ]);
+  if ("error" in nielsenCtx) {
+    return { ok: false, message: nielsenCtx.error, checkedCount: mailItems.length, processed: [] };
   }
+  const olifeChannelId = olifeChannelRes.data?.id as string | undefined;
 
-  const processed: { messageId: string; subject: string; files: FileSummary[] }[] = [];
+  const processed: { messageId: string; subject: string; files: AnyIngestFileSummary[] }[] = [];
   for (const item of mailItems) {
     if (item.attachments.length === 0) {
       await supabase.from("mail_ingestion_log").insert({
@@ -78,15 +93,25 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
         received_at: item.receivedAt,
         source: item.source,
         status: "skipped",
-        error_message: "조건에 맞는 닐슨 채널시청률 엑셀 첨부파일을 찾지 못했습니다.",
+        error_message: "조건에 맞는 닐슨 채널시청률·OLIFE 일일운행표 엑셀 첨부파일을 찾지 못했습니다.",
       });
       continue;
     }
 
-    // 같은 처리 과정(nielsenIngest.ts) — 관리자 수동 업로드와 동일한 파싱·검증·적재 로직.
-    const fileSummaries: FileSummary[] = [];
+    // 첨부파일마다 파일명 패턴으로 어느 처리 경로(닐슨 시청률/OLIFE EPG)로 보낼지 정한다.
+    const fileSummaries: AnyIngestFileSummary[] = [];
     for (const attachment of item.attachments) {
-      fileSummaries.push(await ingestNielsenFile(attachment.buffer, attachment.fileName, ctx));
+      if (OLIFE_DAILY_EPG_ATTACHMENT_PATTERN.test(attachment.fileName)) {
+        if (!olifeChannelId) {
+          fileSummaries.push({ kind: "olife_epg", fileName: attachment.fileName, ok: false, message: "OLIFE 채널 정보를 찾을 수 없습니다." });
+          continue;
+        }
+        fileSummaries.push(await ingestOlifeEpgFile(attachment.buffer, attachment.fileName, olifeChannelId));
+      } else if (NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(attachment.fileName)) {
+        fileSummaries.push(await ingestAnyNielsenFile(attachment.buffer, attachment.fileName, nielsenCtx));
+      }
+      // 둘 다 아니면(이론상 도달 불가 — 두 클라이언트가 이미 이 두 패턴으로만 첨부를
+      // 걸러서 넘긴다) 조용히 건너뛴다.
     }
     const anyFailed = fileSummaries.some((f) => !f.ok);
 

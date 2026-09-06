@@ -14,7 +14,8 @@
 //   NAVER_MAIL_PASSWORD  - 로그인 비밀번호 또는 2단계 인증 앱 비밀번호
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
-import { NIELSEN_DAILY_ATTACHMENT_PATTERN, type NielsenMailAttachment, type NielsenMailItem } from "@/lib/gmailClient";
+import { NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN, type NielsenMailAttachment, type NielsenMailItem } from "@/lib/gmailClient";
+import { OLIFE_DAILY_EPG_ATTACHMENT_PATTERN } from "@/lib/olifeEpgDispatch";
 
 export interface NaverMailEnvConfig {
   userEmail: string;
@@ -31,11 +32,12 @@ export function loadNaverMailEnvConfig(): NaverMailEnvConfig | { error: string }
 }
 
 // 사용자 지시(2026-09-06): 제목에 "닐슨"과 "보고서"가 모두 들어간 메일(대부분
-// "[닐슨] KTENA 일일 보고서")을 대상으로 한다. IMAP SEARCH는 "제목에 A와 B가 모두
-// 포함"을 한 번에 표현하기 까다로워(서버마다 부분일치 AND 처리가 다름), 서버에는
-// "닐슨"만 넓게 물어보고 두 키워드 포함 여부는 이쪽에서 정확히 다시 확인한다.
+// "[닐슨] KTENA 일일 보고서") 또는 제목에 "EPG"가 들어간 메일(OLIFE 일일운행표)을
+// 대상으로 한다. IMAP SEARCH는 "제목에 A와 B가 모두 포함"을 한 번에 표현하기
+// 까다로워(서버마다 부분일치 AND 처리가 다름), 서버에는 두 키워드를 OR로 넓게
+// 물어보고(아래 search 호출) 정확한 포함 여부는 이쪽에서 다시 확인한다.
 function subjectMatches(subject: string): boolean {
-  return subject.includes("닐슨") && subject.includes("보고서");
+  return (subject.includes("닐슨") && subject.includes("보고서")) || subject.toUpperCase().includes("EPG");
 }
 
 /** 아직 처리하지 않은(processedMessageIds에 없는) Nielsen 일일 보고서 메일을 네이버
@@ -61,7 +63,7 @@ export async function fetchUnprocessedNielsenMailFromNaver(
       // 네이버 서버 쪽 SEARCH 응답도 가벼워진다.
       const since = new Date();
       since.setDate(since.getDate() - 30);
-      const seqs = await client.search({ subject: "닐슨", since }, { uid: true });
+      const seqs = await client.search({ or: [{ subject: "닐슨" }, { subject: "EPG" }], since }, { uid: true });
       if (!seqs || seqs.length === 0) return items;
 
       for (const uid of seqs) {
@@ -83,7 +85,11 @@ export async function fetchUnprocessedNielsenMailFromNaver(
         const parsed = await simpleParser(message.source);
         const attachments: NielsenMailAttachment[] = [];
         for (const att of parsed.attachments) {
-          if (!att.filename || !NIELSEN_DAILY_ATTACHMENT_PATTERN.test(att.filename)) continue;
+          if (
+            !att.filename ||
+            !(NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(att.filename) || OLIFE_DAILY_EPG_ATTACHMENT_PATTERN.test(att.filename))
+          )
+            continue;
           attachments.push({ fileName: att.filename, buffer: att.content });
         }
 

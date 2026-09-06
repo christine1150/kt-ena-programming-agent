@@ -1,4 +1,6 @@
-// 개발 단위 20번: Vercel Cron이 매일 정해진 시각에 호출하는 엔드포인트(vercel.json 참고).
+// 개발 단위 20번: Vercel Cron이 호출하는 엔드포인트. 사용자 지시(2026-09-06)로 07:00~
+// 09:50(KST) 사이 10분 간격 호출로 변경됨(vercel.json 참고) — 일일 시청률 메일이 7시
+// 50분쯤 늦게 오는 날에도 몇 분 안에 바로 잡아 반영하기 위함.
 // `CRON_SECRET`이 .env에 설정돼 있으면 그 값과 일치하는 Authorization 헤더가 있어야만
 // 실행한다(외부에서 아무나 이 URL을 호출해 반복 실행시키는 것을 막기 위함).
 import { NextResponse } from "next/server";

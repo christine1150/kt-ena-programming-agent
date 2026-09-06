@@ -10,6 +10,8 @@
 //   GMAIL_CLIENT_ID       - Google Cloud Console에서 발급한 OAuth2 클라이언트 ID
 //   GMAIL_CLIENT_SECRET   - 위 클라이언트의 시크릿
 //   GMAIL_REFRESH_TOKEN   - 최초 1회 OAuth2 동의 후 발급받은 refresh token
+import { OLIFE_DAILY_EPG_ATTACHMENT_PATTERN } from "@/lib/olifeEpgDispatch";
+
 export interface GmailEnvConfig {
   userEmail: string;
   clientId: string;
@@ -79,16 +81,22 @@ export interface NielsenMailItem {
   attachments: NielsenMailAttachment[];
 }
 
-// 사용자 지시(2026-09-06): "제목에 '닐슨'과 '보고서'가 모두 들어간 메일"을 대상으로
-// 한다(대부분 "[닐슨] KTENA 일일 보고서"이지만 정확히 그 문구가 아닐 수도 있어 넓게
-// 잡는다) — Gmail 검색 문법 subject:(A B)는 제목에 A와 B가 모두(순서 무관) 있는
-// 메일을 찾아준다. 네이버 메일 쪽(naverMailClient.ts)도 같은 두 키워드 규칙을 쓴다.
-const SUBJECT_QUERY = "subject:(닐슨 보고서) has:attachment";
+// 사용자 지시(2026-09-06): "제목에 '닐슨'과 '보고서'가 모두 들어간 메일" + "제목에 EPG가
+// 있는 메일"(OLIFE 일일운행표) 두 종류를 대상으로 한다 — Gmail 검색 문법 subject:(A B)는
+// 제목에 A와 B가 모두(순서 무관) 있는 메일을, OR은 둘 중 하나를 찾아준다. 네이버 메일 쪽
+// (naverMailClient.ts)도 같은 규칙을 쓴다.
+const SUBJECT_QUERY = "(subject:(닐슨 보고서) OR subject:EPG) has:attachment";
 
-// 정식 파일명 패턴(DATA_DICTIONARY.md §0): "닐슨_채널시청률(YYMMDD).xls". 같은 메일에
-// 다른 첨부(PDF 요약 등)가 섞여 있어도 이 패턴에 맞는 엑셀만 골라 적재한다 — 네이버
-// 메일 클라이언트(naverMailClient.ts)도 이 상수를 그대로 재사용한다.
-export const NIELSEN_DAILY_ATTACHMENT_PATTERN = /닐슨_?채널시청률\(\d{6}(?:-\d{6})?\).*\.xlsx?$/i;
+// 정식 파일명 패턴(DATA_DICTIONARY.md §0): 일간 "닐슨_채널시청률(YYMMDD).xls" 또는
+// 주간·월간·연간 "닐슨_채널시청률(YYMMDD-YYMMDD).xls"(날짜 범위) — 괄호 안 두 번째
+// 그룹이 있으면 기간 파일, 없으면 일간 파일이고 어느 쪽이든 실제 종류 판정은
+// nielsenFileDispatch.ts가 시트 내용으로 다시 한번 정확히 한다(이 정규식은 "닐슨
+// 채널시청률 파일이 맞는지"만 1차로 거른다). 같은 메일에 다른 첨부(PDF 요약 등)가
+// 섞여 있어도 이 패턴에 맞는 엑셀만 골라 적재한다 — 네이버 메일 클라이언트
+// (naverMailClient.ts)도 이 상수를 그대로 재사용한다. OLIFE EPG 첨부파일 패턴
+// (OLIFE_DAILY_EPG_ATTACHMENT_PATTERN)은 olifeEpgDispatch.ts에 별도로 정의돼 있다 —
+// mailIngestionRunner.ts가 두 패턴을 각각 검사해 알맞은 처리 경로로 보낸다.
+export const NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN = /닐슨_?채널시청률\(\d{6}(?:-\d{6})?\).*\.xlsx?$/i;
 
 function findAttachmentParts(part: GmailMessagePart | undefined, acc: GmailMessagePart[]) {
   if (!part) return;
@@ -134,7 +142,11 @@ export async function fetchUnprocessedNielsenMail(
 
     const attachments: NielsenMailAttachment[] = [];
     for (const part of attachmentParts) {
-      if (!part.filename || !NIELSEN_DAILY_ATTACHMENT_PATTERN.test(part.filename)) continue;
+      if (
+        !part.filename ||
+        !(NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(part.filename) || OLIFE_DAILY_EPG_ATTACHMENT_PATTERN.test(part.filename))
+      )
+        continue;
       const attachmentId = part.body!.attachmentId!;
       const attachmentData = (await gmailFetch(
         accessToken,
