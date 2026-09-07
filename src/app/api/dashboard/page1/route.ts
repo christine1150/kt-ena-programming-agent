@@ -1738,7 +1738,18 @@ export async function GET(request: Request) {
   {
     // 채널×타깃 조합마다 여러 행이 있는 작은 테이블이라(현재 총 몇백 행 수준) 제한 없이 전부
     // 가져와 distinct 처리 — 페이지네이션 걱정할 규모가 아니다.
-    const { data: weeklyPeriodsRaw } = await supabase.from("nielsen_period_rank").select("date_from, date_to").eq("period_type", "weekly");
+    // 버그 수정(2026-09-07, 실측 발견): nielsen_period_rank의 weekly 행이 1,000건을 넘어서면서
+    // (실측 1,064건) 정렬·limit 없는 이 조회가 PostgREST의 기본 1000행 캡에 걸려 조용히
+    // 잘렸다 — 어떤 1000행이 남는지는 정해져 있지 않아 최신 주(8/31주)가 통째로 빠지는
+    // 사고가 실제로 났다(로컬 재현 확인). date_from 내림차순으로 명시 정렬 후 충분히 넉넉한
+    // 500행(12주×채널×타깃 조합이면 200행 안팎이라 여유 있음)만 가져오면 항상 최신 주부터
+    // 확보된다.
+    const { data: weeklyPeriodsRaw } = await supabase
+      .from("nielsen_period_rank")
+      .select("date_from, date_to")
+      .eq("period_type", "weekly")
+      .order("date_from", { ascending: false })
+      .limit(500);
     const distinctWeeksDesc = Array.from(new Map((weeklyPeriodsRaw ?? []).map((r) => [r.date_from as string, r.date_to as string])).entries())
       .map(([date_from, date_to]) => ({ date_from, date_to }))
       .sort((a, b) => (a.date_from < b.date_from ? 1 : -1)); // 최신 주 먼저
