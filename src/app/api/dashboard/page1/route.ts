@@ -1635,7 +1635,10 @@ export async function GET(request: Request) {
     // 아니라 사내에서 이미 월 단위로 집계해 둔 2차 가공치라, 위 채널별 표(DB가 직접 계산)와
     // 완전히 분리된 테이블에서 조회해 "참고 자료"로만 내려보낸다 — 이 서비스의 KPI 계산에는
     // 섞지 않는다(마이그레이션 20260903010000 주석 참고).
-    const [{ data: refGenreRows }, { data: refProgramRows }] = await Promise.all([
+    // 2026-09-07: 관리자 엑셀 업로드가 서술형 하이라이트도 함께 반영할 수 있도록
+    // channel_monthly_narrative(신설)를 같이 조회한다 — genre_trend/program_trend와 같은
+    // "참고 자료 전용, KPI 계산에 안 씀" 원칙의 세 번째 테이블.
+    const [{ data: refGenreRows }, { data: refProgramRows }, { data: refNarrativeRows }] = await Promise.all([
       supabase
         .from("channel_monthly_genre_trend")
         .select("channel_code, month, genre_key, genre_label, rating, sort_order, source_note")
@@ -1651,6 +1654,12 @@ export async function GET(request: Request) {
         .order("category")
         .order("sort_order")
         .order("month"),
+      supabase
+        .from("channel_monthly_narrative")
+        .select("channel_code, month, narrative_text")
+        .eq("year", year)
+        .lte("month", month)
+        .order("month"),
     ]);
 
     // 화면이 바로 표로 그릴 수 있게 (행 = 장르/프로그램, 열 = 월) 형태로 피벗해 내려준다.
@@ -1663,14 +1672,20 @@ export async function GET(request: Request) {
         months: number[];
         genres: { key: string; label: string; ratingByMonth: (number | null)[] }[];
         programs: { category: string; name: string; note: string | null; ratingByMonth: (number | null)[] }[];
+        narrativeText: string | null;
       }
     >();
     const ensureRef = (code: string, sourceNote: string | null) => {
       const found = referenceByChannel.get(code);
       if (found) return found;
-      const created = { channelCode: code, sourceNote, months: [] as number[], genres: [] as never[], programs: [] as never[] } as NonNullable<
-        ReturnType<typeof referenceByChannel.get>
-      >;
+      const created = {
+        channelCode: code,
+        sourceNote,
+        months: [] as number[],
+        genres: [] as never[],
+        programs: [] as never[],
+        narrativeText: null,
+      } as NonNullable<ReturnType<typeof referenceByChannel.get>>;
       referenceByChannel.set(code, created);
       return created;
     };
@@ -1699,6 +1714,13 @@ export async function GET(request: Request) {
       const idx = ref.months.indexOf(row.month as number);
       if (idx >= 0) prog.ratingByMonth[idx] = (row.rating as number | null) ?? null;
       if (row.note) prog.note = row.note as string;
+    }
+    // 서술형 하이라이트 — 여러 달 분이 있으면(과거 백필 등) 가장 최근 달 것만 보여준다(program
+    // note와 같은 "최신 달 우선" 원칙, 행이 month 오름차순으로 오므로 그냥 덮어쓰면 마지막이 최신).
+    for (const row of refNarrativeRows ?? []) {
+      const ref = referenceByChannel.get(row.channel_code as string);
+      if (!ref) continue; // 장르 자료가 없는 채널은 이번 범위에서 다루지 않는다(위 프로그램과 동일 원칙).
+      if (row.narrative_text) ref.narrativeText = row.narrative_text as string;
     }
 
     if (resolvedMonthlyChannels.length > 0) {

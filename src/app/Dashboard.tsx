@@ -409,6 +409,7 @@ interface MonthlyReferenceTrend {
   months: number[];
   genres: { key: string; label: string; ratingByMonth: (number | null)[] }[];
   programs: { category: string; name: string; note: string | null; ratingByMonth: (number | null)[] }[];
+  narrativeText: string | null;
 }
 interface MonthlyReview {
   year: number;
@@ -1834,6 +1835,16 @@ function MonthlyReferenceTrendBlock({ ref_, themeColorByCode }: { ref_: MonthlyR
         수도권 2049 · 재방 포함 기준. 이 서비스가 닐슨 원자료로 직접 계산한 위 표와 별개인 사내 집계치입니다
         {ref_.sourceNote ? ` — ${ref_.sourceNote}` : ""}.
       </p>
+
+      {/* 사용자 지시(2026-09-07): 옛 관리자 폼에서 PD가 쓰던 서술형 하이라이트(환경/등록/상승
+          여력 등)가 어디에도 표시되지 않고 있던 것을 여기서 처음 살린다 — 원문 그대로, 재작성
+          하지 않는다(program note와 같은 "PD 원문 그대로" 원칙). */}
+      {ref_.narrativeText && (
+        <div className="mb-4 rounded-lg bg-amber-50/60 p-3">
+          <p className="mb-1 text-[11px] font-semibold text-amber-700">하이라이트(원문)</p>
+          <p className="whitespace-pre-line text-[12px] leading-relaxed text-amber-900">{ref_.narrativeText}</p>
+        </div>
+      )}
 
       {genreRows.length > 0 && (
         <div className="mb-4">

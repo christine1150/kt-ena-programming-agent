@@ -22,10 +22,12 @@ import OlifeEpgUploader from "./OlifeEpgUploader";
 // 같은 키로 저장해 Page 1의 같은 섹션을 채우고 있었다. 이제 양식을 자동 판별한다.
 // 옛 컴포넌트 2개는 trash-can/으로 이동(사용자 최종 확인 후 삭제, CLAUDE.md 파일 관리 규칙).
 import ManualReportUploader from "./ManualReportUploader";
-// 사용자 지시(2026-09-02): "전체 채널 월간 추이" 자료를 "PD 수동 회차 리포트 업로드"에 맞게
-// 반영 — 원본 파일이 DRM 암호화돼 있어 당분간 별도 카드(월간 집계, channel_monthly_content_review)
-// 에서 직접 입력으로 채운다. 기존 회차 단위 카드(ManualReportUploader)는 그대로 유지.
-import MonthlyContentReviewManager from "./MonthlyContentReviewManager";
+// 사용자 지시(2026-09-07): "엑셀 파일을 올리면 우리가 약속한 논리대로 분석해서 자동으로
+// 리포트를 작성 및 보완하여 같이 배포" — 옛 MonthlyContentReviewManager(수동 폼, 저장 대상인
+// channel_monthly_content_review가 실제로는 Page 1 어디에도 렌더링되지 않는 죽은 테이블이었음을
+// 확인)를 엑셀 업로드 기반으로 교체. 옛 컴포넌트는 trash-can/monthly-content-review-2026-09-07/
+// 로 이동(사용자 최종 확인 후 삭제, CLAUDE.md 파일 관리 규칙).
+import MonthlyReferenceTrendUploader from "./MonthlyReferenceTrendUploader";
 import OlifeEpisodeCatalogUploader from "./OlifeEpisodeCatalogUploader";
 import DailyNewsManager from "./DailyNewsManager";
 import MarketYtdRankUploader from "./MarketYtdRankUploader";
@@ -119,7 +121,7 @@ export default async function AdminPage() {
         <DailyNewsManager />
         <FeaturedContentManager />
         <ManualReportUploader />
-        <MonthlyContentReviewManager />
+        <MonthlyReferenceTrendUploader />
 
         <AdminSectionHeading title="기준 정보(가끔 바뀜)" description="채널·목표·경쟁채널처럼 한 번 정하면 오래 쓰는 값입니다." />
         <ChannelMasterUploader />
