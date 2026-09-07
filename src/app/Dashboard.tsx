@@ -1115,6 +1115,18 @@ function WeekendReportCard({
 // 따라 두 장으로 나눈다. 순위 폭도 크게 달라(예: ENA #7 vs skyUHD #196) 나누는 편이 읽기도 쉽다.
 const MONTHLY_GROUP_A = ["ENA", "ENA_PLAY", "ENA_DRAMA"];
 const MONTHLY_GROUP_B = ["OLIFE", "ONCE", "ENA_STORY", "SKYUHD"];
+
+// 사용자 지시(2026-09-07): 순위 그래프 캡션을 "개인2049 기준 시장 순위(위쪽일수록 상위)"처럼
+// 풀어 쓰지 말고 "개인2049 기준 순위"/"유료가구 기준 순위"로 짧게 — 실제 타깃 표기(랭킹 시트
+// 값, 예: "National 유료방송가입가구")를 그대로 쓰지 않고 표시용으로만 줄인다(원본 값 자체를
+// 바꾸는 게 아니라 화면 표기만 축약 — 알려지지 않은 표기는 추정하지 않고 원문 그대로 둔다).
+// 이름을 shortRankTargetLabel로 둔다 — 같은 목적의 shortTargetLabel(L307, TOP20 표 전용,
+// "수2049"/"가구" 축약)이 이미 있어 이름이 겹치면 안 된다(다른 축약 규칙이라 통합하지 않음).
+function shortRankTargetLabel(targetLabel: string): string {
+  if (targetLabel.includes("2049")) return "개인2049";
+  if (targetLabel.includes("유료")) return "유료가구";
+  return targetLabel;
+}
 const MONTH_LABELS = ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"];
 
 function MonthlyRankTrendChart({
@@ -1148,7 +1160,7 @@ function MonthlyRankTrendChart({
   return (
     <div className="rounded-xl bg-zinc-50 p-3">
       <p className="mb-1 text-[11px] font-semibold text-zinc-500">
-        {groupLabel} <span className="font-normal text-zinc-400">· {targetLabel} 기준 시장 순위(위쪽일수록 상위)</span>
+        {groupLabel} <span className="font-normal text-zinc-400">{shortRankTargetLabel(targetLabel)} 기준 순위</span>
       </p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         {tickRanks.map((r) => (
@@ -1242,7 +1254,13 @@ const CAUSE_TAG_COLOR: Record<string, string> = {
   "콘텐츠 경쟁력 견인": "#16a34a",
   "편성 시너지": "#2563eb",
   "편성 의존형 방어": "#b45309",
-  "핵심 콘텐츠 이탈/부진": "#dc2626",
+  // 사용자 지시(2026-09-07): "핵심 콘텐츠의 이탈이 문제인지, 부진이 문제인지, 둘 다인지
+  // 정확히 짚을 것" — 하락 원인을 하나로 뭉뚱그리지 않고 세 갈래로 나눈다(아래
+  // monthlyDriverCauseLabel 참고). 색은 전부 "문제 신호"라는 공통 성격을 유지해 동일한
+  // 빨강으로 두고, 텍스트로만 구분한다(색 구분은 이번 지시 범위 밖).
+  "핵심 콘텐츠 이탈": "#dc2626",
+  "핵심 콘텐츠 부진": "#dc2626",
+  "핵심 콘텐츠 이탈+부진": "#dc2626",
 };
 
 // 사용자 지시(2026-09-02): "프라임 시간대 주요 등락을 하단에 별도로 빼지 말고, 상승 견인
@@ -1301,6 +1319,22 @@ function MonthlyDriverCell({
   // 때만 배지를 단다. 이번 달 편성이 끊긴 프로그램(airCount=0)은 전월 기준으로 판단한다.
   const primeBase = driver.airCount > 0 ? driver.airCount : driver.priorAirCount;
   const isPrime = driver.primeAirCount >= 2 && primeBase > 0 && driver.primeAirCount / primeBase >= 0.2;
+  // 사용자 지시(2026-09-07): "해당 슬롯이 대체된 것이 좋은 성과를 냈는지(초록), 나쁜 성과를
+  // 냈는지(붉은), 동일한 성과를 냈는지(검정/회색) 파악하여 정확히 작성" — 대체 프로그램의
+  // 시청률을 그 슬롯을 내준 프로그램 자신의 시청률(이번 기간 값이 있으면 그 값, 없으면
+  // 직전 기간 값 — 편성이 아예 끊긴 경우를 위한 폴백)과 비교한다. ±10%는 "체감상 비슷한
+  // 성과"를 가르는 v1 기준(다른 임계값들과 같은 원칙, 추후 조정 가능).
+  const replacedFromRating = driver.avgRating ?? driver.priorAvgRating;
+  const replacementVerdict: "up" | "down" | "flat" | null =
+    replacedFromRating !== null && replacedFromRating > 0 && driver.replacedByRating !== null && driver.replacedByRating !== undefined
+      ? driver.replacedByRating >= replacedFromRating * 1.1
+        ? "up"
+        : driver.replacedByRating <= replacedFromRating * 0.9
+          ? "down"
+          : "flat"
+      : null;
+  const replacementColor =
+    replacementVerdict === "up" ? MONTHLY_UP_COLOR : replacementVerdict === "down" ? MONTHLY_DOWN_COLOR : MONTHLY_FLAT_COLOR;
   return (
     <span className="flex flex-col gap-0.5">
       <span className="flex items-baseline gap-1">
@@ -1337,8 +1371,19 @@ function MonthlyDriverCell({
           아니므로 지어내지 않는다). */}
       {!up && driver.replacedByName && (
         <span className="text-[10px] text-zinc-400">
-          해당 슬롯 대체: <b className="text-zinc-600">{driver.replacedByName}</b>
-          {driver.replacedByRating !== null && driver.replacedByRating !== undefined && ` ${formatRating(driver.replacedByRating, channelCode)}`}
+          해당 슬롯 대체:{" "}
+          <b style={replacementVerdict ? { color: replacementColor } : undefined} className={replacementVerdict ? "" : "text-zinc-600"}>
+            {driver.replacedByName}
+          </b>
+          {driver.replacedByRating !== null && driver.replacedByRating !== undefined && (
+            <span style={replacementVerdict ? { color: replacementColor } : undefined} className={replacementVerdict ? "font-semibold" : undefined}>
+              {" "}
+              {formatRating(driver.replacedByRating, channelCode)}
+              {replacementVerdict === "up" && " ▲"}
+              {replacementVerdict === "down" && " ▼"}
+              {replacementVerdict === "flat" && " ≈"}
+            </span>
+          )}
           {driver.replacedByAirCount !== undefined && `(${driver.replacedByAirCount}회)`}
         </span>
       )}
@@ -1349,7 +1394,8 @@ function MonthlyDriverCell({
 // 사용자 지시(2026-09-01, "Root Cause Tagging" 재설계): 단순 "편성 확대/축소" 단일 태그를
 // 금지하고, 편성량 효과(volumeEffect)와 성과 효과(performanceEffect)의 항등 분해에 프라임(20~24시)
 // 자체의 등락(primeRatingDelta — 편성 횟수와 무관하게 "본방 화제성"만 따로 뗀 값)을 결합해
-// 4개 복합 원인으로 판정한다. 새 수치를 계산하지 않고 이미 SQL이 항등 분해해 준 값들의 조합만
+// 상승 3종 + 하락 3종(2026-09-07 세분화) 복합 원인으로 판정한다. 새 수치를 계산하지 않고
+// 이미 SQL이 항등 분해해 준 값들의 조합만
 // 본다 — Health Score/Turning Point 때와 같은 "합리적 v1 휴리스틱, 추후 조정 가능" 원칙.
 //   · 콘텐츠 경쟁력 견인: 상승이고, 편성량보다 성과(프라임 포함) 효과가 더 크게 기여 — 편성
 //     횟수와 무관하게 작품 자체가 좋아져서 오른 경우.
@@ -1357,14 +1403,27 @@ function MonthlyDriverCell({
 //     본방 화제성이 재방 물량 확대로 이어져 총 기여도가 동반 상승.
 //   · 편성 의존형 방어: 상승이지만 프라임은 정체·하락인데 편성량(주로 재방) 확대만으로 총합을
 //     방어한 경우 — 숫자는 양수여도 콘텐츠 자체의 경쟁력 신호는 아니다.
-//   · 핵심 콘텐츠 이탈/부진: 하락 — 종영으로 대체 콘텐츠가 없거나(편성 0회), 신규/기존 편성이
-//     전월 성과에 못 미쳐 하락을 주도.
+//   · 핵심 콘텐츠 이탈 / 부진 / 이탈+부진: 하락 — "편성에서 밀려난 것"(volumeEffect, 편성
+//     축소·종영)과 "방영은 하는데 성과 자체가 나쁜 것"(performanceEffect, 시청률 하락)을
+//     구분해 실제 원인을 짚는다(사용자 지시 2026-09-07: "이탈이 문제인지, 부진이 문제인지,
+//     둘 다 문제인지 정확히 짚을 것"). 편성 0회(완전 종영)면 performanceEffect가 항등적으로
+//     0이 되므로(이 기간 점유 시간이 0이라 성과 항이 사라짐) 자연히 "이탈"로 분류된다 —
+//     별도 특례 처리 없이 volume/performance 크기 비교 하나로 세 경우를 모두 판정한다.
+function classifyDeclineCause(volume: number, performance: number): string {
+  const total = volume + performance;
+  // 둘 다 무시 못할 크기로 섞여 있으면(작은 쪽이 전체의 35% 이상) "이탈+부진"으로 — 편성도
+  // 줄고 성과도 나빠진 복합 상황. 35%는 Health Score/Turning Point 때와 같은 "합리적 v1
+  // 임계값, 추후 조정 가능" 원칙.
+  if (total > 0 && Math.min(volume, performance) / total >= 0.35) return "핵심 콘텐츠 이탈+부진";
+  return volume >= performance ? "핵심 콘텐츠 이탈" : "핵심 콘텐츠 부진";
+}
+
 function monthlyDriverCauseLabel(d: MonthlyDriver): string {
   const volume = Math.abs(d.volumeEffect);
   const performance = Math.abs(d.performanceEffect);
   if (volume === 0 && performance === 0) return "";
 
-  if (d.contributionDelta < 0) return "핵심 콘텐츠 이탈/부진";
+  if (d.contributionDelta < 0) return classifyDeclineCause(volume, performance);
 
   // 프라임 표본이 충분할 때만(이번 달·전월 중 많이 방영된 쪽 기준 2회 이상) 프라임 신호를 신뢰한다.
   const primeSampleOk = Math.max(d.primeAirCount, d.priorPrimeAirCount) >= 2;
@@ -1470,27 +1529,24 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
       <div className="overflow-x-auto">
         <table className="w-full text-left text-[12px]">
           <thead>
-            {/* 사용자 지시(2026-09-02): "프라임성과(주요등락)은 제목은 '프라임 성과'로, 등과 락을
-                가로로 펼쳐서 두 개의 셀로 나눠 한 줄로" — 2단 헤더로 "프라임 성과"가 상승/하락
-                두 열을 그룹핑하게 하고, 나머지 열은 rowSpan=2로 위아래 병합해 표 구조를 유지한다. */}
+            {/* 사용자 지시(2026-09-07): "프라임성과는 상승 하락 위 아래 두 줄로 하지 말고 한
+                줄에 모두 다 보이게" — 2단 헤더(그룹 제목+상승/하락 하위행)를 단일 행으로
+                합치고, 제목 자체에 "프라임 시간대 상승"/"프라임 시간대 하락"으로 명시해 그룹
+                제목 없이도 의미가 온전히 전달되게 했다. "채널 전체 기여도와 별개" 문구는
+                사용자 지시로 삭제. */}
             <tr className="text-zinc-400">
-              <th className="pb-1 pr-3 font-medium" rowSpan={2}>채널</th>
-              <th className="pb-1 pr-1 text-right font-medium" rowSpan={2}>순위</th>
+              <th className="pb-1 pr-3 font-medium">채널</th>
+              <th className="pb-1 pr-1 text-right font-medium">순위</th>
               {/* 사용자 지시(2026-09-01): "순위와 전월 대비, 시청률과 전월 대비 사이를 띄워서
                   가독률을 높여달라" — 값 열과 등락 열이 바로 붙어 있어 좁아 보였다. 등락 열
                   앞쪽에 여백(pl-3)을 줘 두 열이 시각적으로 구분되게 한다. */}
-              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>전월 대비</th>
-              <th className="pb-1 pr-1 text-right font-medium" rowSpan={2}>시청률</th>
-              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>전월 대비</th>
-              <th className="border-b border-zinc-100 pb-1 pl-3 text-left font-medium" colSpan={2}>
-                프라임 성과<span className="ml-1 font-normal text-zinc-300">— 채널 전체 기여도와 별개</span>
-              </th>
-              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>상승 견인</th>
-              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>하락 요인</th>
-            </tr>
-            <tr className="text-zinc-400">
-              <th className="pb-1 pl-3 pt-1 text-left font-medium">상승</th>
-              <th className="pb-1 pl-3 pt-1 text-left font-medium">하락</th>
+              <th className="pb-1 pl-3 text-left font-medium">전월 대비</th>
+              <th className="pb-1 pr-1 text-right font-medium">시청률</th>
+              <th className="pb-1 pl-3 text-left font-medium">전월 대비</th>
+              <th className="pb-1 pl-3 text-left font-medium">프라임 시간대 상승</th>
+              <th className="pb-1 pl-3 text-left font-medium">프라임 시간대 하락</th>
+              <th className="pb-1 pl-3 text-left font-medium">상승 견인</th>
+              <th className="pb-1 pl-3 text-left font-medium">하락 요인</th>
             </tr>
           </thead>
           <tbody>
@@ -1589,7 +1645,7 @@ function WeeklyRankTrendChart({
   return (
     <div className="rounded-xl bg-zinc-50 p-3">
       <p className="mb-1 text-[11px] font-semibold text-zinc-500">
-        {groupLabel} <span className="font-normal text-zinc-400">· {targetLabel} 기준 시장 순위(위쪽일수록 상위)</span>
+        {groupLabel} <span className="font-normal text-zinc-400">{shortRankTargetLabel(targetLabel)} 기준 순위</span>
       </p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         {tickRanks.map((r) => (
@@ -1725,21 +1781,19 @@ function WeeklyReviewCard({ review, themeColorByCode }: { review: WeeklyReview; 
       <div className="overflow-x-auto">
         <table className="w-full text-left text-[12px]">
           <thead>
+            {/* 사용자 지시(2026-09-07): 월간 리뷰와 동일하게 프라임 성과 헤더를 단일 행으로
+                합치고 "프라임 시간대 상승"/"프라임 시간대 하락"으로 명시, "채널 전체 기여도와
+                별개" 문구 삭제. */}
             <tr className="text-zinc-400">
-              <th className="pb-1 pr-3 font-medium" rowSpan={2}>채널</th>
-              <th className="pb-1 pr-1 text-right font-medium" rowSpan={2}>순위</th>
-              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>전주 대비</th>
-              <th className="pb-1 pr-1 text-right font-medium" rowSpan={2}>시청률</th>
-              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>전주 대비</th>
-              <th className="border-b border-zinc-100 pb-1 pl-3 text-left font-medium" colSpan={2}>
-                프라임 성과<span className="ml-1 font-normal text-zinc-300">— 채널 전체 기여도와 별개</span>
-              </th>
-              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>상승 견인</th>
-              <th className="pb-1 pl-3 text-left font-medium" rowSpan={2}>하락 요인</th>
-            </tr>
-            <tr className="text-zinc-400">
-              <th className="pb-1 pl-3 pt-1 text-left font-medium">상승</th>
-              <th className="pb-1 pl-3 pt-1 text-left font-medium">하락</th>
+              <th className="pb-1 pr-3 font-medium">채널</th>
+              <th className="pb-1 pr-1 text-right font-medium">순위</th>
+              <th className="pb-1 pl-3 text-left font-medium">전주 대비</th>
+              <th className="pb-1 pr-1 text-right font-medium">시청률</th>
+              <th className="pb-1 pl-3 text-left font-medium">전주 대비</th>
+              <th className="pb-1 pl-3 text-left font-medium">프라임 시간대 상승</th>
+              <th className="pb-1 pl-3 text-left font-medium">프라임 시간대 하락</th>
+              <th className="pb-1 pl-3 text-left font-medium">상승 견인</th>
+              <th className="pb-1 pl-3 text-left font-medium">하락 요인</th>
             </tr>
           </thead>
           <tbody>
