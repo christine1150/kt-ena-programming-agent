@@ -15,7 +15,7 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN, type NielsenMailAttachment, type NielsenMailItem } from "@/lib/gmailClient";
-import { OLIFE_DAILY_EPG_ATTACHMENT_PATTERN } from "@/lib/olifeEpgDispatch";
+import { DAILY_EPG_ATTACHMENT_PATTERN } from "@/lib/olifeEpgDispatch";
 
 export interface NaverMailEnvConfig {
   userEmail: string;
@@ -87,7 +87,7 @@ export async function fetchUnprocessedNielsenMailFromNaver(
         for (const att of parsed.attachments) {
           if (
             !att.filename ||
-            !(NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(att.filename) || OLIFE_DAILY_EPG_ATTACHMENT_PATTERN.test(att.filename))
+            !(NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(att.filename) || DAILY_EPG_ATTACHMENT_PATTERN.test(att.filename))
           )
             continue;
           attachments.push({ fileName: att.filename, buffer: att.content });

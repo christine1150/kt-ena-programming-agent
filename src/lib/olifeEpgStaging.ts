@@ -14,11 +14,20 @@ import { matchEpgToRatings, type EpgRow } from "./epgMatch";
  *  에러가 있으면 던져서 API 라우트가 실제 실패 사유를 관리자에게 보여줄 수 있게 한다.
  *  사용자 지시(2026-09-02): "일일운행표"(daily_epg) 외에 "주간 편성표"(weekly_schedule)도 같은
  *  표에 담되 출처를 구분한다(EPG가 편성표보다 우선) — source 인자 추가, 기존 호출부는 인자를
- *  안 넘겨도 기본값 daily_epg로 그대로 동작(Delta-Only). */
-export async function storeOlifeEpgStaging(rows: EpgRow[], source: "daily_epg" | "weekly_schedule" = "daily_epg"): Promise<void> {
+ *  안 넘겨도 기본값 daily_epg로 그대로 동작(Delta-Only).
+ *  사용자 지시(2026-09-07): 네이버 메일 EPG 자동 인식을 OLIFE 전용에서 ENA/ENA Play/ENA Drama/
+ *  ENA Story/OLIFE/ONCE 전체로 확장하면서, 여러 채널의 EPG가 같은 날짜에 동시에 쌓일 수
+ *  있게 됐다 — channel_id가 없으면 채널이 다른 방영분이 이름·시각만으로 충돌/혼동될 수 있어
+ *  필수 인자로 추가했다(마이그레이션 20260907030000, 유니크 제약에도 포함). */
+export async function storeOlifeEpgStaging(
+  rows: EpgRow[],
+  channelId: string,
+  source: "daily_epg" | "weekly_schedule" = "daily_epg"
+): Promise<void> {
   if (rows.length === 0) return;
   const payload = rows.map((r) => ({
     broadcast_date: r.broadcastDate,
+    channel_id: channelId,
     start_time: r.startTime,
     end_time: r.endTime || null,
     program_name_raw: r.programNameRaw,
@@ -27,7 +36,9 @@ export async function storeOlifeEpgStaging(rows: EpgRow[], source: "daily_epg" |
     run_type: r.runType,
     source,
   }));
-  const { error } = await supabase.from("olife_epg_staging").upsert(payload, { onConflict: "broadcast_date,start_time,program_name_raw,source" });
+  const { error } = await supabase
+    .from("olife_epg_staging")
+    .upsert(payload, { onConflict: "broadcast_date,channel_id,start_time,program_name_raw,source" });
   if (error) {
     throw new Error(`EPG 원본 저장 실패: ${error.message}`);
   }
@@ -54,7 +65,13 @@ export async function applyOlifeEpgForDate(
     return { matched: 0, unmatched: 0, hasRatings: false };
   }
 
-  const { data: stagingRowsAll } = await supabase.from("olife_epg_staging").select("*").eq("broadcast_date", date);
+  // 사용자 지시(2026-09-07): 채널이 여러 개로 늘어나면서 날짜만으로 거르면 다른 채널의
+  // 방영분까지 섞여 들어온다 — channel_id로도 반드시 좁힌다.
+  const { data: stagingRowsAll } = await supabase
+    .from("olife_epg_staging")
+    .select("*")
+    .eq("broadcast_date", date)
+    .eq("channel_id", olifeChannelId);
   if (!stagingRowsAll || stagingRowsAll.length === 0) {
     return { matched: 0, unmatched: 0, hasRatings: true };
   }

@@ -10,7 +10,7 @@ import {
 } from "@/lib/gmailClient";
 import { loadNaverMailEnvConfig, fetchUnprocessedNielsenMailFromNaver } from "@/lib/naverMailClient";
 import { ingestAnyNielsenFile, loadNielsenFileDispatchContext, type NielsenFileSummary } from "@/lib/nielsenFileDispatch";
-import { ingestOlifeEpgFile, OLIFE_DAILY_EPG_ATTACHMENT_PATTERN, type OlifeEpgFileSummary } from "@/lib/olifeEpgDispatch";
+import { ingestOlifeEpgFile, detectEpgChannelCode, DAILY_EPG_ATTACHMENT_PATTERN, type OlifeEpgFileSummary } from "@/lib/olifeEpgDispatch";
 
 type AnyIngestFileSummary = NielsenFileSummary | OlifeEpgFileSummary;
 
@@ -72,17 +72,17 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
     return { ok: true, checkedCount: 0, processed: [] };
   }
 
-  // 2026-09-06: 일간뿐 아니라 주간·월간(기간) 엑셀, 그리고 OLIFE 일일운행표(EPG) 엑셀도
-  // 메일에 들어있으면 같이 적재한다 — 관리자 수동 업로드가 쓰는 것과 정확히 같은 판정·적재
-  // 함수를 공유해(nielsenFileDispatch.ts/olifeEpgDispatch.ts) 로직이 두 곳에서 갈라지지 않는다.
-  const [nielsenCtx, olifeChannelRes] = await Promise.all([
-    loadNielsenFileDispatchContext(),
-    supabase.from("channels").select("id").eq("code", "OLIFE").maybeSingle(),
-  ]);
+  // 2026-09-06: 일간뿐 아니라 주간·월간(기간) 엑셀, 그리고 일일운행표(EPG) 엑셀도 메일에
+  // 들어있으면 같이 적재한다 — 관리자 수동 업로드가 쓰는 것과 정확히 같은 판정·적재 함수를
+  // 공유해(nielsenFileDispatch.ts/olifeEpgDispatch.ts) 로직이 두 곳에서 갈라지지 않는다.
+  // 사용자 지시(2026-09-07): EPG 자동 인식을 OLIFE 전용에서 ENA/ENA Play/ENA Drama/ENA Story/
+  // OLIFE/ONCE 전체로 확장 — 메일 제목에서 detectEpgChannelCode로 채널을 찾으므로, OLIFE
+  // 하나만 미리 조회하지 않고 전체 채널의 code→id 맵을 만들어둔다.
+  const [nielsenCtx, channelRowsRes] = await Promise.all([loadNielsenFileDispatchContext(), supabase.from("channels").select("id, code")]);
   if ("error" in nielsenCtx) {
     return { ok: false, message: nielsenCtx.error, checkedCount: mailItems.length, processed: [] };
   }
-  const olifeChannelId = olifeChannelRes.data?.id as string | undefined;
+  const channelIdByCode = new Map((channelRowsRes.data ?? []).map((c) => [c.code as string, c.id as string]));
 
   const processed: { messageId: string; subject: string; files: AnyIngestFileSummary[] }[] = [];
   for (const item of mailItems) {
@@ -112,22 +112,35 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
         .from("mail_ingestion_log")
         .update({
           status: "skipped",
-          error_message: "조건에 맞는 닐슨 채널시청률·OLIFE 일일운행표 엑셀 첨부파일을 찾지 못했습니다.",
+          error_message: "조건에 맞는 닐슨 채널시청률·일일운행표(EPG) 엑셀 첨부파일을 찾지 못했습니다.",
           processed_at: new Date().toISOString(),
         })
         .eq("message_id", item.messageId);
       continue;
     }
 
-    // 첨부파일마다 파일명 패턴으로 어느 처리 경로(닐슨 시청률/OLIFE EPG)로 보낼지 정한다.
+    // 첨부파일마다 파일명 패턴으로 어느 처리 경로(닐슨 시청률/일일운행표 EPG)로 보낼지 정한다.
+    // EPG는 "어느 채널의 편성인지"를 메일 제목에서 한 번만 찾아 이 메일의 모든 EPG 첨부에
+    // 공통으로 쓴다(사용자 지시: 제목의 채널명+EPG 문구로 자동 매치, 대소문자·띄어쓰기 무관).
+    const epgChannelCode = detectEpgChannelCode(item.subject);
     const fileSummaries: AnyIngestFileSummary[] = [];
     for (const attachment of item.attachments) {
-      if (OLIFE_DAILY_EPG_ATTACHMENT_PATTERN.test(attachment.fileName)) {
-        if (!olifeChannelId) {
-          fileSummaries.push({ kind: "olife_epg", fileName: attachment.fileName, ok: false, message: "OLIFE 채널 정보를 찾을 수 없습니다." });
+      if (DAILY_EPG_ATTACHMENT_PATTERN.test(attachment.fileName)) {
+        if (!epgChannelCode) {
+          fileSummaries.push({
+            kind: "olife_epg",
+            fileName: attachment.fileName,
+            ok: false,
+            message: "메일 제목에서 채널명을 인식하지 못했습니다(ENA/ENA Play/ENA Drama/ENA Story/OLIFE/ONCE 중 하나가 제목에 있어야 합니다).",
+          });
           continue;
         }
-        fileSummaries.push(await ingestOlifeEpgFile(attachment.buffer, attachment.fileName, olifeChannelId));
+        const epgChannelId = channelIdByCode.get(epgChannelCode);
+        if (!epgChannelId) {
+          fileSummaries.push({ kind: "olife_epg", fileName: attachment.fileName, ok: false, message: `${epgChannelCode} 채널 정보를 찾을 수 없습니다.` });
+          continue;
+        }
+        fileSummaries.push(await ingestOlifeEpgFile(attachment.buffer, attachment.fileName, epgChannelId));
       } else if (NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(attachment.fileName)) {
         fileSummaries.push(await ingestAnyNielsenFile(attachment.buffer, attachment.fileName, nielsenCtx));
       }

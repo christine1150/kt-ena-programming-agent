@@ -72,7 +72,10 @@ export async function POST(request: Request) {
       try {
         // 사용자 지시(2026-08-26): "닐슨 데이터가 없어도 미리 등록해둘 수 있게" — Nielsen 매칭
         // 성공 여부와 무관하게 원본을 항상 먼저 저장한다(재업로드 시 최신값으로 덮어씀).
-        await storeOlifeEpgStaging(epgRows, source);
+        // 사용자 지시(2026-09-07): storeOlifeEpgStaging이 channel_id를 필수로 받게 되어(여러
+        // 채널 EPG 공용 처리를 위함) — 이 라우트는 OLIFE 전용이므로 위에서 이미 조회해둔
+        // channel.id를 그대로 넘긴다.
+        await storeOlifeEpgStaging(epgRows, channel.id, source);
       } catch (err) {
         // 실측 버그 수정(2026-08-27): 이 저장이 실패하면(예: 시간 값 범위 오류) 예전에는 조용히
         // 넘어가 "매칭 0건"으로만 보였다 — 이제 실패 사유를 그대로 관리자에게 보여준다.
