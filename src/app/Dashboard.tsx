@@ -1061,11 +1061,13 @@ function WeekendReportDayColumn({
           const lines = weekendReportBullets(code, day.signals);
           return (
             <div key={code} className="rounded-lg bg-zinc-50 px-2.5 py-2">
-              <ChannelLogo
-                channel={{ logoPath: ch.logoPath, name: ch.name, logoVisibleRatio: ch.logoVisibleRatio, logoVisibleTopRatio: ch.logoVisibleTopRatio }}
-                heightPx={14}
-                className="mb-1"
-              />
+              {/* 사용자 지시(2026-09-07): "주말리포트, 월간 리포트는 채널 로고 사용하지 말고,
+                  채널 로고 색상을 활용한 채널 폰트 색상 반영, 볼드 표시로" — 월간 리뷰는 이미
+                  이 방식(themeColorByCode + font-semibold/bold)으로 돼 있었고, 주말 리포트만
+                  <ChannelLogo> 이미지를 쓰고 있어 여기만 같은 방식으로 교체한다. */}
+              <p className="mb-1 text-[11px] font-bold" style={{ color: ch.themeColor ?? UNBRANDED_CHANNEL_COLOR }}>
+                {ch.name}
+              </p>
               <ul className="space-y-0.5">
                 {lines.map((line, i) => (
                   <li key={i} className="text-[11px] leading-snug text-zinc-600">
