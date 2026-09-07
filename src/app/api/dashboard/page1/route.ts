@@ -1415,6 +1415,140 @@ export async function GET(request: Request) {
     if (Math.abs(baseline) < SLOT_LIFT_RATING_FLOOR) return Math.abs(m.slot_lift) >= SLOT_LIFT_RATING_FLOOR;
     return Math.abs(m.slot_lift / baseline) >= SLOT_LIFT_RELATIVE_THRESHOLD;
   }
+
+  // 사용자 지시(2026-09-07): "매주 주간 닐슨_채널시청률 올라올 때마다 자동으로 작성 및 배포" —
+  // 월간 리뷰가 쓰던 "상승 견인/하락 요인/프라임 무버스" 계산(get_channel_monthly_program_drivers는
+  // 이름과 달리 임의 두 기간을 비교하는 범용 RPC — 월 전용 로직이 SQL에 없음, 마이그레이션 원문
+  // 확인됨)을 주간 리뷰와 공유하기 위해 함수로 뽑았다. 로직은 한 글자도 바꾸지 않은 순수 추출이라
+  // 월간 리뷰 동작 회귀가 없다 — minAirCount만 호출부가 기간 길이에 맞게 다르게 넘긴다(월=3회,
+  // 주=2회 — 한 주는 최대 7일이라 월과 같은 3회 문턱을 쓰면 문턱이 다소 높다).
+  async function computeChannelPeriodDrivers(
+    code: string,
+    ch: { primary_target: string | null },
+    dateFrom: string,
+    dateTo: string,
+    priorDateFrom: string,
+    priorDateTo: string,
+    minAirCount: number
+  ): Promise<{ growthDriver: MonthlyDriver | null; weaknessDriver: MonthlyDriver | null; primeMovers: MonthlyPrimeMover[] }> {
+    let growthDriver: MonthlyDriver | null = null;
+    let weaknessDriver: MonthlyDriver | null = null;
+    let primeMovers: MonthlyPrimeMover[] = [];
+    // skyUHD는 프로그램 단위 nielsen_daily 행이 없어(J절 Phase 1에서 실측 확인) 이 RPC가 항상
+    // 빈 결과다 — 왕복하지 않고 건너뛴다.
+    if (code === "SKYUHD" || !ch.primary_target) return { growthDriver, weaknessDriver, primeMovers };
+
+    const { data: driverRows } = await supabase.rpc("get_channel_monthly_program_drivers", {
+      p_channel_code: code,
+      p_program_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
+      p_date_from: dateFrom,
+      p_date_to: dateTo,
+      p_prior_date_from: priorDateFrom,
+      p_prior_date_to: priorDateTo,
+      p_prime_hour_from: 20,
+      p_prime_hour_to: 24,
+      p_limit: 40,
+    });
+    const rows = (driverRows ?? []) as {
+      canonical_name: string;
+      period_airings: number | null;
+      prior_airings: number | null;
+      period_avg_rating: number | null;
+      prior_avg_rating: number | null;
+      contribution_delta: number | null;
+      volume_effect: number | null;
+      performance_effect: number | null;
+      period_prime_airings: number | null;
+      prior_prime_airings: number | null;
+      period_prime_avg_rating: number | null;
+      prior_prime_avg_rating: number | null;
+      prime_rating_delta: number | null;
+      main_prime_dow: number | null;
+      slot_lift: number | null;
+      main_slot_dow: number | null;
+      main_slot_hour_block: number | null;
+    }[];
+
+    const toDriver = (m: (typeof rows)[number]): MonthlyDriver => ({
+      programName: m.canonical_name,
+      contributionDelta: m.contribution_delta ?? 0,
+      volumeEffect: m.volume_effect ?? 0,
+      performanceEffect: m.performance_effect ?? 0,
+      airCount: m.period_airings ?? 0,
+      priorAirCount: m.prior_airings ?? 0,
+      avgRating: m.period_avg_rating,
+      priorAvgRating: m.prior_avg_rating,
+      slotLift: m.slot_lift,
+      primeAirCount: m.period_prime_airings ?? 0,
+      primeDow: m.main_prime_dow,
+      primeRatingDelta: m.prime_rating_delta,
+      priorPrimeAirCount: m.prior_prime_airings ?? 0,
+      mainSlotDow: m.main_slot_dow,
+      mainSlotHourBlock: m.main_slot_hour_block,
+    });
+
+    // 상승 견인 / 하락 요인 = 채널 기간 평균 기여도 변화 1위(양/음 각각).
+    // 최소 편성 횟수 가드는 이번 기간·이전 기간 중 많이 편성된 쪽 기준(종영해서 이번 기간 0회인
+    // 프로그램도 이전에 충분히 편성됐다면 정당한 하락 요인으로 남는다).
+    const eligible = rows.filter(
+      (m) => m.contribution_delta !== null && Math.max(m.period_airings ?? 0, m.prior_airings ?? 0) >= minAirCount
+    );
+    // "상승 견인"은 채널 기여도 1위라는 이유만으로는 부족하다 — 그 프로그램의 슬롯 자체가
+    // 이전 기간 동시간대 평균 대비 실질적으로 달라졌어야(slot_lift가 유의미해야) 한다.
+    const up = eligible
+      .filter((m) => m.contribution_delta! > 0 && isSlotLiftMeaningful(m))
+      .sort((a, b) => b.contribution_delta! - a.contribution_delta!)[0];
+    const down = eligible.filter((m) => m.contribution_delta! < 0).sort((a, b) => a.contribution_delta! - b.contribution_delta!)[0];
+    if (up) growthDriver = toDriver(up);
+    if (down) weaknessDriver = toDriver(down);
+
+    // 하락 요인의 옛 주력 슬롯(main_slot_dow/main_slot_hour_block)에 이번 기간 실제로 무엇이
+    // 편성됐는지 조회해, 하락 요인 자신이 아닌 다른 프로그램이 그 자리를 차지했으면 "대체
+    // 콘텐츠"로 명시한다(자기 자신이 그대로 최다 점유자면 비워둠 — 지어내지 않는다).
+    if (down && down.main_slot_dow !== null && down.main_slot_hour_block !== null) {
+      const { data: occupantRows } = await supabase.rpc("get_channel_slot_current_occupant", {
+        p_channel_code: code,
+        p_program_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
+        p_date_from: dateFrom,
+        p_date_to: dateTo,
+        p_dow: down.main_slot_dow,
+        p_hour_block: down.main_slot_hour_block,
+      });
+      const occupants = (occupantRows ?? []) as { canonical_name: string; air_count: number; avg_rating: number | null }[];
+      const replacement = occupants.find((o) => o.canonical_name !== down!.canonical_name);
+      if (replacement && weaknessDriver) {
+        weaknessDriver.replacedByName = replacement.canonical_name;
+        weaknessDriver.replacedByRating = replacement.avg_rating;
+        weaknessDriver.replacedByAirCount = replacement.air_count;
+      }
+    }
+
+    // 프라임(20~24시) 주요 등락 — 위 기여도 순위와 별개 축. 이미 상승/하락 요인으로 뽑힌
+    // 프로그램은 같은 내용을 두 번 말하게 되므로 제외한다.
+    const alreadyNamed = new Set([growthDriver?.programName, weaknessDriver?.programName].filter(Boolean) as string[]);
+    const primeCandidates = rows.filter(
+      (m) =>
+        m.prime_rating_delta !== null &&
+        m.prime_rating_delta !== 0 &&
+        !alreadyNamed.has(m.canonical_name) &&
+        Math.max(m.period_prime_airings ?? 0, m.prior_prime_airings ?? 0) >= MIN_PRIME_AIRINGS
+    );
+    const toPrime = (m: (typeof rows)[number]): MonthlyPrimeMover => ({
+      programName: m.canonical_name,
+      dow: m.main_prime_dow,
+      primeDelta: m.prime_rating_delta ?? 0,
+      primeAvgRating: m.period_prime_avg_rating,
+      priorPrimeAvgRating: m.prior_prime_avg_rating,
+      primeAirCount: m.period_prime_airings ?? 0,
+      priorPrimeAirCount: m.prior_prime_airings ?? 0,
+    });
+    const primeUp = primeCandidates.filter((m) => m.prime_rating_delta! > 0).sort((a, b) => b.prime_rating_delta! - a.prime_rating_delta!)[0];
+    const primeDown = primeCandidates.filter((m) => m.prime_rating_delta! < 0).sort((a, b) => a.prime_rating_delta! - b.prime_rating_delta!)[0];
+    primeMovers = [primeUp, primeDown].filter(Boolean).map((m) => toPrime(m!));
+
+    return { growthDriver, weaknessDriver, primeMovers };
+  }
+
   const isMonthEndDate = offsetDateStr(asOfDate, 1).slice(0, 7) !== asOfDate.slice(0, 7);
   let monthlyReview: {
     year: number;
@@ -1485,128 +1619,12 @@ export async function GET(request: Request) {
       const ratingChangePct =
         cur?.rating != null && prior?.rating != null && prior.rating > 0 ? ((cur.rating - prior.rating) / prior.rating) * 100 : null;
 
-      // skyUHD는 프로그램 단위 nielsen_daily 행이 없어(J절 Phase 1에서 실측 확인) 이 RPC가 항상
-      // 빈 결과다 — 왕복하지 않고 건너뛴다.
-      let growthDriver: MonthlyDriver | null = null;
-      let weaknessDriver: MonthlyDriver | null = null;
-      let primeMovers: MonthlyPrimeMover[] = [];
-      if (code !== "SKYUHD" && hasPriorMonth && ch.primary_target) {
-        const { data: driverRows } = await supabase.rpc("get_channel_monthly_program_drivers", {
-          p_channel_code: code,
-          p_program_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
-          p_date_from: monthStart,
-          p_date_to: asOfDate,
-          p_prior_date_from: priorMonthStart,
-          p_prior_date_to: priorMonthEnd,
-          p_prime_hour_from: 20,
-          p_prime_hour_to: 24,
-          p_limit: 40,
-        });
-        const rows = (driverRows ?? []) as {
-          canonical_name: string;
-          period_airings: number | null;
-          prior_airings: number | null;
-          period_avg_rating: number | null;
-          prior_avg_rating: number | null;
-          contribution_delta: number | null;
-          volume_effect: number | null;
-          performance_effect: number | null;
-          period_prime_airings: number | null;
-          prior_prime_airings: number | null;
-          period_prime_avg_rating: number | null;
-          prior_prime_avg_rating: number | null;
-          prime_rating_delta: number | null;
-          main_prime_dow: number | null;
-          slot_lift: number | null;
-          main_slot_dow: number | null;
-          main_slot_hour_block: number | null;
-        }[];
-
-        const toDriver = (m: (typeof rows)[number]): MonthlyDriver => ({
-          programName: m.canonical_name,
-          contributionDelta: m.contribution_delta ?? 0,
-          volumeEffect: m.volume_effect ?? 0,
-          performanceEffect: m.performance_effect ?? 0,
-          airCount: m.period_airings ?? 0,
-          priorAirCount: m.prior_airings ?? 0,
-          avgRating: m.period_avg_rating,
-          priorAvgRating: m.prior_avg_rating,
-          slotLift: m.slot_lift,
-          primeAirCount: m.period_prime_airings ?? 0,
-          primeDow: m.main_prime_dow,
-          primeRatingDelta: m.prime_rating_delta,
-          priorPrimeAirCount: m.prior_prime_airings ?? 0,
-          mainSlotDow: m.main_slot_dow,
-          mainSlotHourBlock: m.main_slot_hour_block,
-        });
-
-        // 상승 견인 / 하락 요인 = 채널 월간 평균 기여도 변화 1위(양/음 각각).
-        // 최소 편성 횟수 가드는 이번 달·전월 중 많이 편성된 쪽 기준(종영해서 이번 달 0회인
-        // 프로그램도 전월에 충분히 편성됐다면 정당한 하락 요인으로 남는다).
-        const eligible = rows.filter(
-          (m) => m.contribution_delta !== null && Math.max(m.period_airings ?? 0, m.prior_airings ?? 0) >= MIN_MONTHLY_AIR_COUNT
-        );
-        // 사용자 지시(2026-09-01): "상승 견인"은 채널 기여도 1위라는 이유만으로는 부족하다 —
-        // 그 프로그램의 슬롯 자체가 전월 동시간대 평균 대비 실질적으로 달라졌어야(slot_lift가
-        // 유의미해야) 한다. isSlotLiftMeaningful로 추가 게이트(하락 요인엔 적용 안 함 — 그쪽은
-        // 아래에서 "대체 콘텐츠" 분석으로 별도 보강, 요구사항이 다름).
-        const up = eligible
-          .filter((m) => m.contribution_delta! > 0 && isSlotLiftMeaningful(m))
-          .sort((a, b) => b.contribution_delta! - a.contribution_delta!)[0];
-        const down = eligible.filter((m) => m.contribution_delta! < 0).sort((a, b) => a.contribution_delta! - b.contribution_delta!)[0];
-        if (up) growthDriver = toDriver(up);
-        if (down) weaknessDriver = toDriver(down);
-
-        // 사용자 지시(2026-09-01): "쯔양몇끼가 빠져서 하락 요인이라고 적었는데... 어떤것을
-        // 넣었길래 시청률이 빠졌는지를 적어줘야함" / "하나뿐인내편도 빠지고 나서 뭐가 들어갔는데,
-        // 컨텐츠 교체 이후로 하락을 가져왔는지 분석해서 작성해주어야 함" — 하락 요인의 옛 주력
-        // 슬롯(main_slot_dow/main_slot_hour_block)에 이번 달 실제로 무엇이 편성됐는지 조회해,
-        // 하락 요인 자신이 아닌 다른 프로그램이 그 자리를 차지했으면 "대체 콘텐츠"로 명시한다
-        // (자기 자신이 그대로 최다 점유자면 — 단순 편성 축소일 뿐 콘텐츠 교체가 아니므로 비워둠,
-        // 지어내지 않는다).
-        if (down && down.main_slot_dow !== null && down.main_slot_hour_block !== null) {
-          const { data: occupantRows } = await supabase.rpc("get_channel_slot_current_occupant", {
-            p_channel_code: code,
-            p_program_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
-            p_date_from: monthStart,
-            p_date_to: asOfDate,
-            p_dow: down.main_slot_dow,
-            p_hour_block: down.main_slot_hour_block,
-          });
-          const occupants = (occupantRows ?? []) as { canonical_name: string; air_count: number; avg_rating: number | null }[];
-          const replacement = occupants.find((o) => o.canonical_name !== down!.canonical_name);
-          if (replacement && weaknessDriver) {
-            weaknessDriver.replacedByName = replacement.canonical_name;
-            weaknessDriver.replacedByRating = replacement.avg_rating;
-            weaknessDriver.replacedByAirCount = replacement.air_count;
-          }
-        }
-
-        // 프라임(20~24시) 주요 등락 — 위 기여도 순위와 별개 축이다. 프라임에서 크게 움직였지만
-        // 채널 전체 기여도로는 순위 밖인 작품(예: 편성량은 그대로인데 성과만 크게 오른 오리지널)을
-        // 놓치지 않기 위해 상승·하락 각 1건씩 따로 뽑는다. 이미 위에서 상승/하락 요인으로 뽑힌
-        // 프로그램은 같은 내용을 두 번 말하게 되므로 제외한다.
-        const alreadyNamed = new Set([growthDriver?.programName, weaknessDriver?.programName].filter(Boolean) as string[]);
-        const primeCandidates = rows.filter(
-          (m) =>
-            m.prime_rating_delta !== null &&
-            m.prime_rating_delta !== 0 &&
-            !alreadyNamed.has(m.canonical_name) &&
-            Math.max(m.period_prime_airings ?? 0, m.prior_prime_airings ?? 0) >= MIN_PRIME_AIRINGS
-        );
-        const toPrime = (m: (typeof rows)[number]): MonthlyPrimeMover => ({
-          programName: m.canonical_name,
-          dow: m.main_prime_dow,
-          primeDelta: m.prime_rating_delta ?? 0,
-          primeAvgRating: m.period_prime_avg_rating,
-          priorPrimeAvgRating: m.prior_prime_avg_rating,
-          primeAirCount: m.period_prime_airings ?? 0,
-          priorPrimeAirCount: m.prior_prime_airings ?? 0,
-        });
-        const primeUp = primeCandidates.filter((m) => m.prime_rating_delta! > 0).sort((a, b) => b.prime_rating_delta! - a.prime_rating_delta!)[0];
-        const primeDown = primeCandidates.filter((m) => m.prime_rating_delta! < 0).sort((a, b) => a.prime_rating_delta! - b.prime_rating_delta!)[0];
-        primeMovers = [primeUp, primeDown].filter(Boolean).map((m) => toPrime(m!));
-      }
+      // 2026-09-07 리팩터: 상승견인/하락요인/프라임무버스 계산을 computeChannelPeriodDrivers로
+      // 뽑아 주간 리뷰와 공유(로직 변경 없는 순수 추출 — 회귀 없음).
+      const { growthDriver, weaknessDriver, primeMovers } =
+        hasPriorMonth && priorMonthStart
+          ? await computeChannelPeriodDrivers(code, ch, monthStart, asOfDate, priorMonthStart, priorMonthEnd, MIN_MONTHLY_AIR_COUNT)
+          : { growthDriver: null, weaknessDriver: null, primeMovers: [] };
       return { channelCode: code, targetLabel, months, rankChange, ratingChangePct, growthDriver, weaknessDriver, primeMovers };
     });
 
@@ -1696,6 +1714,100 @@ export async function GET(request: Request) {
     }
   }
 
+  // 사용자 지시(2026-09-07): "주요 컨텐츠리뷰 아래, 주말 리포트 위에 주간 보고서... 매 주 주간
+  // 닐슨_채널시청률 올라올 때마다 자동으로 작성 및 배포" — 월간 리뷰(isMonthEndDate로 특정
+  // 날짜에만 게이팅)와 달리, 요일을 따지지 않고 nielsen_period_rank에 실제로 쌓인 "가장 최근
+  // 완료된 주"를 매 요청마다 그대로 반영한다 — 주간 파일이 메일로 들어와 적재되는 순간부터
+  // 다음 페이지 새로고침에 자동으로 그 주가 보인다(별도 배치/트리거 불필요, 이 프로젝트 전역이
+  // 이미 따르는 "매 요청마다 최신 데이터로 다시 계산" 원칙 그대로).
+  let weeklyReview: {
+    weekStart: string;
+    weekEnd: string;
+    priorWeekStart: string | null;
+    channels: {
+      channelCode: string;
+      targetLabel: string;
+      weeks: { weekStart: string; rank: number | null; rating: number | null }[];
+      rankChange: number | null;
+      ratingChangePct: number | null;
+      growthDriver: MonthlyDriver | null;
+      weaknessDriver: MonthlyDriver | null;
+      primeMovers: MonthlyPrimeMover[];
+    }[];
+  } | null = null;
+  {
+    // 채널×타깃 조합마다 여러 행이 있는 작은 테이블이라(현재 총 몇백 행 수준) 제한 없이 전부
+    // 가져와 distinct 처리 — 페이지네이션 걱정할 규모가 아니다.
+    const { data: weeklyPeriodsRaw } = await supabase.from("nielsen_period_rank").select("date_from, date_to").eq("period_type", "weekly");
+    const distinctWeeksDesc = Array.from(new Map((weeklyPeriodsRaw ?? []).map((r) => [r.date_from as string, r.date_to as string])).entries())
+      .map(([date_from, date_to]) => ({ date_from, date_to }))
+      .sort((a, b) => (a.date_from < b.date_from ? 1 : -1)); // 최신 주 먼저
+    const WEEKLY_TREND_WINDOW = 12; // 이 프로젝트 전역의 "최근 12주" 관례(Fit Score 등)와 동일.
+    const trendWeeksDesc = distinctWeeksDesc.slice(0, WEEKLY_TREND_WINDOW);
+    const latestWeek = trendWeeksDesc[0] ?? null;
+    const priorWeek = trendWeeksDesc[1] ?? null;
+
+    if (latestWeek) {
+      const weekStart = latestWeek.date_from;
+      const weekEnd = latestWeek.date_to;
+      const priorWeekStart = priorWeek?.date_from ?? null;
+      const priorWeekEnd = priorWeek?.date_to ?? null;
+
+      const rankLabelByCodeW = new Map<string, string>();
+      for (const code of ALL_CHANNEL_CODES) {
+        const ch = channelByCode.get(code);
+        if (ch?.primary_target) rankLabelByCodeW.set(code, resolveRankSheetTargetLabel(ch.primary_target));
+      }
+      const { data: rankTargetRowsW } = await supabase.from("targets").select("id, label").in("label", [...new Set(rankLabelByCodeW.values())]);
+      const rankTargetIdByLabelW = new Map((rankTargetRowsW ?? []).map((t) => [t.label as string, t.id as string]));
+
+      const trendDateFroms = trendWeeksDesc.map((w) => w.date_from);
+      const { data: periodRankRowsW } = await supabase
+        .from("nielsen_period_rank")
+        .select("channel_id, target_id, date_from, rank, rating")
+        .eq("period_type", "weekly")
+        .in("date_from", trendDateFroms);
+
+      // 한 주는 최대 7일이라 월간과 같은 최소 3회 문턱을 그대로 쓰면 다소 높다 — 주 2회 편성
+      // 드라마도 정당한 상승/하락 요인으로 잡히도록 낮춘다.
+      const MIN_WEEKLY_AIR_COUNT = 2;
+
+      const weeklyChannels = await mapWithConcurrency(ALL_CHANNEL_CODES, 3, async (code) => {
+        const ch = channelByCode.get(code);
+        const targetLabel = rankLabelByCodeW.get(code);
+        if (!ch || !targetLabel) return null;
+        const targetId = rankTargetIdByLabelW.get(targetLabel);
+        const mine = (periodRankRowsW ?? []).filter((r) => r.channel_id === ch.id && r.target_id === targetId);
+        if (mine.length === 0) return null;
+        const byWeek = new Map(mine.map((r) => [r.date_from as string, r]));
+        const weeks = [...trendWeeksDesc]
+          .reverse() // 과거→최신 순으로(그래프가 왼쪽에서 오른쪽으로 흐르도록)
+          .map((w) => {
+            const row = byWeek.get(w.date_from);
+            return { weekStart: w.date_from, rank: row?.rank ?? null, rating: row?.rating ?? null };
+          });
+        const cur = byWeek.get(weekStart);
+        const prior = priorWeekStart ? byWeek.get(priorWeekStart) : undefined;
+        // 순위는 낮을수록 좋으므로 "전주 순위 - 이번 주 순위"가 양수면 상승(§O의 rank_change와 동일 규칙).
+        const rankChange = cur?.rank != null && prior?.rank != null ? prior.rank - cur.rank : null;
+        const ratingChangePct =
+          cur?.rating != null && prior?.rating != null && prior.rating > 0 ? ((cur.rating - prior.rating) / prior.rating) * 100 : null;
+
+        const { growthDriver, weaknessDriver, primeMovers } =
+          priorWeekStart && priorWeekEnd
+            ? await computeChannelPeriodDrivers(code, ch, weekStart, weekEnd, priorWeekStart, priorWeekEnd, MIN_WEEKLY_AIR_COUNT)
+            : { growthDriver: null, weaknessDriver: null, primeMovers: [] };
+
+        return { channelCode: code, targetLabel, weeks, rankChange, ratingChangePct, growthDriver, weaknessDriver, primeMovers };
+      });
+
+      const resolvedWeeklyChannels = weeklyChannels.filter((c): c is NonNullable<typeof c> => c !== null);
+      if (resolvedWeeklyChannels.length > 0) {
+        weeklyReview = { weekStart, weekEnd, priorWeekStart, channels: resolvedWeeklyChannels };
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     asOfDate,
@@ -1711,5 +1823,6 @@ export async function GET(request: Request) {
     portfolioAnomaly,
     weekendReport,
     monthlyReview,
+    weeklyReview,
   });
 }
