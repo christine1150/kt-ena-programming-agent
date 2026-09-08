@@ -4,7 +4,7 @@
 // 실행: npx tsx --env-file=.env scripts/ingest-olife-reference.mts <올ife종합정보.xlsx> <누적.xlsx>
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "fs";
-import { parseOlifeReferenceWorkbook, parseYtdCumulativeWorkbook } from "../src/lib/olifeReferenceParse.ts";
+import { parseOlifeReferenceWorkbook, parseYtdCumulativeWorkbook } from "../src/lib/olifeReferenceParse";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -29,7 +29,7 @@ async function upsertChunked<T extends Record<string, unknown>>(
   let done = 0;
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    const { error } = await sb.from(table).upsert(chunk, { onConflict });
+    const { error } = await sb.from(table).upsert(chunk as Record<string, unknown>[], { onConflict });
     if (error) throw new Error(`${table} upsert 실패(${i}~${i + chunk.length}): ${error.message}`);
     done += chunk.length;
   }
