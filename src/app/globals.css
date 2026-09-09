@@ -22,6 +22,40 @@
   }
 }
 
+/* UI 디자이너 개선안(2026-09-09) — 데이터 시각화 밀도 대응 규칙 1~3의 토큰화.
+   기존 컴포넌트는 대부분 Tailwind 임의값(text-[14px] 등)을 직접 쓰고 있어, 이 토큰들은
+   당장 전면 치환하지 않고 "이름 붙은 기준값" 문서 역할을 한다 — 새로 만드는 컴포넌트나
+   후속 리팩터링에서 여기 값을 그대로 쓰면 됨(기존 화면 동작은 그대로 유지, Delta-Only). */
+:root {
+  /* RULE 01 — 숫자 위계 3단 스케일: 라벨과 값은 최소 1.3배 벌린다 */
+  --text-label: 12px;
+  --text-eyebrow: 11px;
+  --text-value-sm: 16px;
+  --text-value-md: 20px;
+  --text-value-lg: 24px;
+  --text-value-xl: 36px;
+  --text-hero: 64px;
+
+  /* RULE 02 — 정보 군집화: 지표 내부 6px, 지표군 사이 20px 이상, 섹션 사이 32px */
+  --gap-metric-inline: 6px;
+  --gap-metric-cluster: 20px;
+  --gap-metric-section: 32px;
+
+  /* RULE 03 — 판정색 2-트랙: 점·배경 틴트(-600, 3:1 이상)와 좁은 텍스트 전용(-700, 4.5:1 이상)
+     을 분리한다. dot 값은 ChannelDeepDive.tsx의 TAG_DOT_COLOR와 동일(중복 정의, 단일 소스는
+     아직 JS 상수 쪽 — 여기 값이 문서 기준). */
+  --color-strengthen-dot: #059669;
+  --color-strengthen-text: #047857; /* 5.48:1 */
+  --color-keep-dot: #0284c7;
+  --color-keep-text: #0369a1; /* 5.9:1대 */
+  --color-move-dot: #d97706;
+  --color-move-text: #b45309; /* 5:1대 */
+  --color-replace-dot: #e11d48;
+  --color-replace-text: #be123c; /* 5.88:1 */
+  --color-test-dot: #71717a;
+  --color-test-text: #52525b; /* 7:1대 */
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

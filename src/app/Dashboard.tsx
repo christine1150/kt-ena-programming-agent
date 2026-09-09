@@ -3223,13 +3223,16 @@ function OriginalContentReportCard({
                         <div className="mt-2.5 space-y-2">
                           {achievementPct !== null && (
                             <p className="text-[14px] text-zinc-600">
-                              <span className="font-semibold tabular-nums text-zinc-800">{achievementPct.toFixed(1)}%</span>
+                              {/* UI 디자이너 개선안 RULE 01(2026-09-09): 라벨과 값의 폰트 크기를
+                                  최소 1.3배 벌려 같은 문장 안에서도 값이 먼저 눈에 들어오게 함 —
+                                  값 14px→16px(font-bold), 라벨은 기존 12px 그대로 유지. */}
+                              <span className="font-bold tabular-nums text-[16px] text-zinc-900">{achievementPct.toFixed(1)}%</span>
                               <span className="ml-1.5 text-[12px] text-zinc-400">목표 달성률(연간 누적)</span>
                             </p>
                           )}
                           {h.pre_rerun_rating !== null && (
                             <p className="text-[14px] text-zinc-600">
-                              <span className="font-semibold tabular-nums text-zinc-800">{formatRating(h.pre_rerun_rating, h.broadcast_channel_code)}</span>
+                              <span className="font-bold tabular-nums text-[16px] text-zinc-900">{formatRating(h.pre_rerun_rating, h.broadcast_channel_code)}</span>
                               <span className="ml-1.5 text-[12px] text-zinc-400">
                                 리드인(전회 재방){h.pre_rerun_start_time ? ` · ${fmtTimeKorean(h.pre_rerun_start_time)}` : ""}
                               </span>
@@ -3239,7 +3242,7 @@ function OriginalContentReportCard({
                             <p className="text-[14px] text-zinc-600">
                               {/* 사용자 지시(2026-09-06): "직재방 시청률도 그 채널 로고색 활용" —
                                   숫자도 채널명과 같은 accent로. */}
-                              <span className="font-semibold tabular-nums" style={{ color: accent }}>
+                              <span className="font-bold tabular-nums text-[16px]" style={{ color: accent }}>
                                 {formatRating(h.self_rerun_rating, h.broadcast_channel_code)}
                               </span>
                               <span className="ml-1.5 text-[12px] text-zinc-400">
@@ -3265,28 +3268,31 @@ function OriginalContentReportCard({
                             순서로 있으므로, 이 몰입도 칸 맨 위에 점유율을 추가해 시청시간보다
                             먼저 오게 한다(새 계산 없음, get_original_content_daily가 이미 내려주는
                             matched_share 그대로). */}
+                        {/* UI 디자이너 개선안 RULE 01(2026-09-09): 라벨 12px(text-zinc-500) /
+                            값 16px(font-bold)로 위계 분리 — 이전엔 라벨·값이 같은 14px라
+                            네 줄이 같은 리듬으로 나열돼 값만 골라 스캔하기 어려웠음. */}
                         {h.matched_share !== null && (
-                          <p className="text-[14px] text-zinc-600">
-                            <span className="text-zinc-500">점유율 </span>
-                            <span className="font-semibold tabular-nums text-zinc-800">{h.matched_share.toFixed(2)}%</span>
+                          <p className="text-[12px] text-zinc-500">
+                            <span>점유율 </span>
+                            <span className="font-bold tabular-nums text-[16px] text-zinc-900">{h.matched_share.toFixed(2)}%</span>
                           </p>
                         )}
                         {h.matched_time_spent_seconds !== null && (
-                          <p className="text-[14px] text-zinc-600">
-                            <span className="text-zinc-500">시청시간 </span>
-                            <span className="font-semibold tabular-nums text-zinc-800">{fmtSecondsCompactKorean(h.matched_time_spent_seconds)}</span>
+                          <p className="text-[12px] text-zinc-500">
+                            <span>시청시간 </span>
+                            <span className="font-bold tabular-nums text-[16px] text-zinc-900">{fmtSecondsCompactKorean(h.matched_time_spent_seconds)}</span>
                           </p>
                         )}
                         {h.matched_time_spent_share !== null && (
-                          <p className="text-[14px] text-zinc-600">
-                            <span className="text-zinc-500">시청비율 </span>
-                            <span className="font-semibold tabular-nums text-zinc-800">{h.matched_time_spent_share.toFixed(2)}%</span>
+                          <p className="text-[12px] text-zinc-500">
+                            <span>시청비율 </span>
+                            <span className="font-bold tabular-nums text-[16px] text-zinc-900">{h.matched_time_spent_share.toFixed(2)}%</span>
                           </p>
                         )}
                         {h.matched_reach !== null && (
-                          <p className="text-[14px] text-zinc-600">
-                            <span className="text-zinc-500">도달율 </span>
-                            <span className="font-semibold tabular-nums text-zinc-800">{h.matched_reach.toFixed(2)}%</span>
+                          <p className="text-[12px] text-zinc-500">
+                            <span>도달율 </span>
+                            <span className="font-bold tabular-nums text-[16px] text-zinc-900">{h.matched_reach.toFixed(2)}%</span>
                           </p>
                         )}
                         {h.matched_share === null && h.matched_time_spent_seconds === null && h.matched_time_spent_share === null && h.matched_reach === null && (

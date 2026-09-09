@@ -822,9 +822,11 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
   // 위아래로 연결하더라도 최대한 겹치지 않게" — 라벨을 켤 점들을 x좌표순으로 훑으며, 가로로
   // 겹치는 라벨이 있으면 한 단(lane)씩 위로 쌓는 그리디 배치(간트차트 라벨 스태킹과 같은 방식).
   // lane 0(기본 위치)에 못 들어간 라벨만 점까지 얇은 안내선을 그어 어느 점의 제목인지 잇는다.
-  const CHAR_WIDTH_PX = 6.2; // 8px 폰트, 한글·영문 혼용 어림 폭
+  // UI 디자이너 개선안 RULE 04(2026-09-09): 라벨 폰트를 8px→11px로 올리며 폭 계산도 같이
+  // 보정(6.2 * 11/8 ≈ 8.5) — 노출 로직(항상표시/조건부/호버)은 그대로, 가독 하한선만 맞춤.
+  const CHAR_WIDTH_PX = 8.5; // 11px 폰트, 한글·영문 혼용 어림 폭
   const LABEL_GAP_PX = 4;
-  const LANE_STEP_PX = 11;
+  const LANE_STEP_PX = 14;
   const MAX_LANES = 6;
   const labelPoints = plottable
     .filter((item) => alwaysLabelIds.has(item.program_id))
@@ -878,11 +880,11 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
         <line x1={PAD_L} y1={H - PAD_B} x2={W - PAD_R} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
         <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
         {[0, 50, 65, 80, 100].map((v) => (
-          <text key={v} x={xOf(v)} y={H - PAD_B + 12} textAnchor="middle" fontSize={9} fill="#a1a1aa">
+          <text key={v} x={xOf(v)} y={H - PAD_B + 12} textAnchor="middle" fontSize={11} fill="#71717a">
             {v}
           </text>
         ))}
-        <text x={PAD_L - 4} y={yOf(FIT_QUADRANT_CONFIDENCE_CUTOFF) - 3} textAnchor="end" fontSize={9} fill="#a1a1aa">
+        <text x={PAD_L - 4} y={yOf(FIT_QUADRANT_CONFIDENCE_CUTOFF) - 3} textAnchor="end" fontSize={11} fill="#71717a">
           {FIT_QUADRANT_CONFIDENCE_CUTOFF}%
         </text>
         {(() => {
@@ -915,7 +917,7 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
                     x={px}
                     y={labelY}
                     textAnchor={px < W * 0.15 ? "start" : px > W * 0.85 ? "end" : "middle"}
-                    fontSize={8}
+                    fontSize={11}
                     fill="#52525b"
                   >
                     {name}
@@ -926,7 +928,7 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
           });
         })()}
       </svg>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-400">
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-zinc-500">
         {(Object.keys(TAG_LABEL_KO) as (keyof typeof TAG_LABEL_KO)[]).map((tag) => (
           <span key={tag} className="inline-flex items-center gap-1">
             <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TAG_DOT_COLOR[tag] }} />
@@ -2037,15 +2039,15 @@ function CompetitorPositioningScatter({
       <svg viewBox={`0 0 ${W} ${H}`} style={{ height: H, width: W }}>
         <line x1={PAD_L} y1={yOf(0)} x2={W - PAD_R} y2={yOf(0)} stroke="#a1a1aa" strokeWidth={1} />
         <line x1={xOf(medianRating)} y1={PAD_T} x2={xOf(medianRating)} y2={H - PAD_B} stroke="#e4e4e7" strokeWidth={1} strokeDasharray="3 3" />
-        <text x={W - PAD_R} y={yOf(0) - 4} textAnchor="end" fontSize={9} fill="#a1a1aa">
+        <text x={W - PAD_R} y={yOf(0) - 4} textAnchor="end" fontSize={11} fill="#a1a1aa">
           등락 0%
         </text>
         <line x1={PAD_L} y1={H - PAD_B} x2={W - PAD_R} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
         <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
-        <text x={PAD_L} y={H - PAD_B + 12} textAnchor="start" fontSize={9} fill="#a1a1aa">
+        <text x={PAD_L} y={H - PAD_B + 12} textAnchor="start" fontSize={11} fill="#a1a1aa">
           {fmt(xMin)}
         </text>
-        <text x={W - PAD_R} y={H - PAD_B + 12} textAnchor="end" fontSize={9} fill="#a1a1aa">
+        <text x={W - PAD_R} y={H - PAD_B + 12} textAnchor="end" fontSize={11} fill="#a1a1aa">
           {fmt(xMax)}
         </text>
         {plottable.map((p) => {
@@ -2068,7 +2070,7 @@ function CompetitorPositioningScatter({
                 x={px}
                 y={py - r - 4}
                 textAnchor={px < W * 0.1 ? "start" : px > W * 0.9 ? "end" : "middle"}
-                fontSize={9}
+                fontSize={11}
                 fontWeight={p.isOurs ? 700 : 500}
                 fill={p.isOurs ? accentColor : "#71717a"}
               >
@@ -2437,10 +2439,10 @@ function OpportunityGapSlopeChart({ rows, fmtR }: { rows: HourBlockOpportunityRo
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         <line x1={xLeft} y1={PAD_T} x2={xLeft} y2={H - PAD_B} stroke="#d4d4d8" strokeWidth={1} />
         <line x1={xRight} y1={PAD_T} x2={xRight} y2={H - PAD_B} stroke="#d4d4d8" strokeWidth={1} />
-        <text x={xLeft} y={H - 4} textAnchor="middle" fontSize={9} fill="#a1a1aa">
+        <text x={xLeft} y={H - 4} textAnchor="middle" fontSize={11} fill="#a1a1aa">
           이전 평균
         </text>
-        <text x={xRight} y={H - 4} textAnchor="middle" fontSize={9} fill="#a1a1aa">
+        <text x={xRight} y={H - 4} textAnchor="middle" fontSize={11} fill="#a1a1aa">
           최근
         </text>
         {plottable.map((r) => {
@@ -2464,7 +2466,7 @@ function OpportunityGapSlopeChart({ rows, fmtR }: { rows: HourBlockOpportunityRo
                   안 보였다. 양쪽 점 옆에 실제 격차 값을 직접 표기한다. 점(y2)과 라벨(labelY)이
                   겹침 방지로 어긋날 수 있어 얇은 연결선(leader line)으로 이어준다. */}
               {Math.abs(labelY - y2) > 1 && <line x1={xRight + 2} y1={y2} x2={xRight + 6} y2={labelY} stroke={color} strokeWidth={0.75} opacity={0.5} />}
-              <text x={xLeft} y={y1 - 6} textAnchor="middle" fontSize={9} fill={color}>
+              <text x={xLeft} y={y1 - 6} textAnchor="middle" fontSize={11} fill={color}>
                 {fmtR(r.gap_full)}
               </text>
               <text x={xRight + 8} y={labelY + 3} fontSize={10} fontWeight={600} fill={color}>
@@ -3244,7 +3246,10 @@ function KpiCard({ spec }: { spec: KpiCardSpec }) {
       <p className="text-xs font-medium text-zinc-400">{spec.label}</p>
       <p className="mt-1 text-2xl font-bold tabular-nums text-zinc-900">{spec.value}</p>
       {spec.deltaLabel && (
-        <p className="mt-1 text-xs font-medium" style={{ color: spec.deltaDirection === "up" ? "#059669" : spec.deltaDirection === "down" ? "#e11d48" : "#a1a1aa" }}>
+        // UI 디자이너 개선안 RULE 03(2026-09-09): 12px 텍스트에 dot용 -600 원색을 그대로 쓰면
+        // emerald-600(3.77:1)·rose-600(4.69:1 근접치)이 WCAG AA 4.5:1 기준에 못 미침 — 바로
+        // 아래 WinWeaknessCard가 이미 쓰는 emerald-700/rose-700(각 5.48:1/5.88:1)으로 통일.
+        <p className="mt-1 text-xs font-medium" style={{ color: spec.deltaDirection === "up" ? "#047857" : spec.deltaDirection === "down" ? "#be123c" : "#a1a1aa" }}>
           {spec.deltaDirection === "up" ? "▲" : spec.deltaDirection === "down" ? "▼" : ""} {spec.deltaLabel}
         </p>
       )}
@@ -3405,7 +3410,7 @@ function ScatterQuadrantChart({
                 x={cx}
                 y={cy + r + 9}
                 textAnchor={cx < W * 0.15 ? "start" : cx > W * 0.85 ? "end" : "middle"}
-                fontSize={8}
+                fontSize={11}
                 fill="#52525b"
               >
                 {shortName}
@@ -4661,21 +4666,24 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {/* 사용자 지시(2026-08-20): "전일(실제 시청률) 대비 상승/하락률", "전주(실제 시청률) 대비
                 상승/하락률" 형식으로 나란히 — 두 비교 모두 get_rating_trend_summary가 이미 계산해준
                 값(dod.rating/wow.rating이 그 비교일 실제 시청률)을 그대로 쓴다. */}
+            {/* UI 디자이너 개선안 RULE 02(2026-09-09): 전일·전주 대비는 "서로 다른 두 비교
+                기준"이 아니라 "같은 종류의 비교를 하는 한 쌍"이므로, 별도 "·" 두 개로
+                떼어두지 않고 하나의 클러스터로 묶어 스캔 단위를 줄인다(구분자 1개만 사용,
+                클러스터 내부 간격은 gap-3로 촘촘히). */}
             {hasDodOrWowDelta && (
-              <>
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span aria-hidden className="text-white/30">·</span>
                 {dod?.rating_change_pct !== null && dod?.rating_change_pct !== undefined && (
-                  <span className="flex items-center gap-1">
-                    <span aria-hidden className="text-white/30">·</span>
+                  <span>
                     전일({fmtR(dod.rating)}) 대비 {dod.rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(dod.rating_change_pct).toFixed(1)}%
                   </span>
                 )}
                 {wow?.rating_change_pct !== null && wow?.rating_change_pct !== undefined && (
-                  <span className="flex items-center gap-1">
-                    <span aria-hidden className="text-white/30">·</span>
+                  <span>
                     전주({fmtR(wow.rating)}) 대비 {wow.rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(wow.rating_change_pct).toFixed(1)}%
                   </span>
                 )}
-              </>
+              </span>
             )}
             {showComparisonView && data.periodReport?.prior_period_change_pct !== null && data.periodReport?.prior_period_change_pct !== undefined && (
               <span className="flex items-center gap-1">
@@ -4693,6 +4701,27 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <HealthScoreBadge health={channelHealth} compact showReason />
               </span>
             )}
+            {/* UX 리서처 개선안(2026-09-09): "편성 상태(Action 건수)"가 가장 급한 신호인데
+                지금까지는 배지 hover 툴팁이나 페이지 최하단 WHAT TO SCHEDULE? 표(전체의 약
+                90% 지점)에만 있었음 — computeChannelHealthScore가 이미 계산해둔 programSlate
+                축 reason을 hover 밖으로 꺼내 상시 노출하고, 클릭하면 그 표로 바로 스크롤한다
+                (새 계산 없음, 표시 위치만 추가). neutral(긍정·부정 태그 비슷함/판정 대상 없음)
+                일 때는 조치가 급하지 않으므로 칩을 띄우지 않는다. */}
+            {channelHealth &&
+              (() => {
+                const slate = channelHealth.axes.find((a) => a.key === "programSlate");
+                if (!slate || slate.verdict === "neutral") return null;
+                return (
+                  <a
+                    href="#what-to-schedule"
+                    className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
+                    title="무엇을 편성할까요? 표로 이동"
+                  >
+                    <span aria-hidden className="text-white/30">·</span>
+                    <span style={{ color: slate.verdict === "negative" ? "#fda4af" : "#6ee7b7" }}>{slate.reason}</span>
+                  </a>
+                );
+              })()}
           </div>
           {/* 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" 대상 날짜 목록 — 메타데이터 줄이
               길어지지 않도록 더 작은 보조 줄로 그 아래에만 표시. */}
@@ -5260,14 +5289,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     return (
                       <div className="overflow-x-auto">
                         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H }}>
-                          <text x={2} y={12} fontSize={9} fill="#a1a1aa">{max.toFixed(2)}</text>
-                          <text x={2} y={H - padB} fontSize={9} fill="#a1a1aa">{min.toFixed(2)}</text>
+                          <text x={2} y={12} fontSize={11} fill="#a1a1aa">{max.toFixed(2)}</text>
+                          <text x={2} y={H - padB} fontSize={11} fill="#a1a1aa">{min.toFixed(2)}</text>
                           {pathD && <path d={pathD} fill="none" stroke={accentColor} strokeWidth={2} />}
                           {points.map((p, i) =>
                             p.value === null ? null : <circle key={i} cx={xOf(i)} cy={yOf(p.value)} r={2.5} fill={accentColor} />
                           )}
                           {points.map((p, i) => (
-                            <text key={i} x={xOf(i)} y={H - 4} fontSize={9} textAnchor="middle" fill="#a1a1aa">{p.label}</text>
+                            <text key={i} x={xOf(i)} y={H - 4} fontSize={11} textAnchor="middle" fill="#a1a1aa">{p.label}</text>
                           ))}
                         </svg>
                       </div>
@@ -6348,8 +6377,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         </div>
 
         {/* WHAT TO SCHEDULE? — skyUHD는 타깃 구분이 없는 원본 자료 한계로 PRD Fit Score를 계산할
-            수 없어(사용자 확인, 2026-08-21) 채널 단위 대체 지표(skyuhdScorecard) 표로 대체한다. */}
-        <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+            수 없어(사용자 확인, 2026-08-21) 채널 단위 대체 지표(skyuhdScorecard) 표로 대체한다.
+            id="what-to-schedule"는 UX 리서처 개선안(2026-09-09)의 헤더 "Action N건" 칩이
+            여기로 스크롤 이동하기 위한 앵커. */}
+        <div id="what-to-schedule" className="scroll-mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={SECTION_TITLE_P2}>
             무엇을 편성할까요?<span className={ENG_TITLE_ANNOTATION}>(WHAT TO SCHEDULE?)</span>
           </h2>
