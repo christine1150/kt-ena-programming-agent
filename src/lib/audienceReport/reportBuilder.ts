@@ -132,7 +132,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
 
   // Phase 9(§08) — 편성 제언은 메인 기간·모드와 무관하게 항상 붙는 마무리 섹션이라, 여기서 한 번만
   // 계산해 아래 4개 모드 분기 전부에 그대로 붙인다.
-  const recommendation = await buildRecommendationSection(channelCode, raw.programTargetLabel, raw.rankTargetLabel, period.dateFrom, period.dateTo);
+  const recommendation = await buildRecommendationSection(channelCode, raw.programTargetLabel, raw.rankTargetLabel, period.dateFrom, period.dateTo, raw);
 
   const isGroupA = raw.group.code === "A";
   const isSkyUhd = channelCode === "SKYUHD";
