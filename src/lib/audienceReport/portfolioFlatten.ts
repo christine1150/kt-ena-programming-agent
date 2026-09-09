@@ -97,5 +97,7 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
     title: "KT ENA 7채널 종합 포트폴리오 리포트",
     subtitle: `${doc.period.label}${doc.isolationOk ? "" : " · ⚠ 그룹 격리 확인 필요"}`,
     sections,
+    // 포트폴리오는 특정 채널 하나로 좁힐 수 없어 채널 로고·색 대신 ENA 기본 브랜딩을 쓴다.
+    brand: { channelCode: null, channelName: "KT ENA", themeColor: null },
   };
 }

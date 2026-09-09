@@ -31,6 +31,10 @@ export interface FlatReport {
   title: string;
   subtitle: string;
   sections: DocSection[];
+  /** 사용자 지시(2026-09-08): PPT를 ENA 디자인 시스템으로 그리기 위한 브랜딩 정보 —
+   *  포인트 컬러(채널 로고색)와 우상단 로고를 고르는 데만 쓴다. 포트폴리오(다채널)
+   *  리포트는 특정 채널로 좁힐 수 없어 channelCode=null(렌더러가 ENA Blue로 폴백). */
+  brand: { channelCode: string | null; channelName: string; themeColor: string | null };
 }
 
 function pct(v: number | null | undefined): string {
@@ -323,5 +327,6 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     title: `${doc.channelName} — Audience Intelligence Report`,
     subtitle: `${doc.period.label} · ${doc.groupLabel}${doc.masterInfo.targetRating !== null ? ` · 목표 시청률 ${formatRating(doc.masterInfo.targetRating, code)}` : ""}`,
     sections,
+    brand: { channelCode: doc.channelCode, channelName: doc.channelName, themeColor: doc.themeColor },
   };
 }

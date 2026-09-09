@@ -1,15 +1,16 @@
 // N절 Phase 2a(2026-09-01) — FlatReport(reportFlatten.ts) → Word(.docx) / PPT(.pptx) 렌더러.
 // 두 렌더러 모두 "블록을 그리는 법"만 안다 — 어떤 섹션에 어떤 값을 넣을지는 reportFlatten.ts
 // 한 곳에서만 정한다(구 시스템은 이 결정이 docx/pptx에 각각 하드코딩돼 있어 조용히 갈라졌다).
-// 색·여백은 구 시스템(/api/report/channel/docx|pptx)의 스타일을 그대로 승계해 문서 인상이
-// 바뀌지 않게 했다.
+// Word(.docx)의 색·여백은 구 시스템(/api/report/channel/docx)의 스타일을 그대로 승계한다.
+// PPT(.pptx)는 사용자 지시(2026-09-08)로 ENA 디자인 시스템(enaPptTheme.ts)으로 전면 교체됐다 —
+// 이 파일의 PPT 쪽은 색·여백·타이포를 직접 정하지 않고 그 테마 함수만 조합한다.
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } from "docx";
 import PptxGenJS from "pptxgenjs";
 import type { FlatReport, DocBlock } from "./reportFlatten";
 import type { ExecutiveDeckDocument } from "./deckModel";
+// ENA 디자인 시스템(ena-design 스킬) 규칙 모음 — PPT의 색·여백·타이포·로고·표지는 전부 여기서만 온다.
+import * as ena from "./enaPptTheme";
 
-const NAVY = "1E293B";
-const ACCENT = "3A30DF";
 const THIN_BORDER = { style: BorderStyle.SINGLE, size: 2, color: "E4E4E7" };
 
 function deltaColor(dir: "up" | "down" | "flat"): string | undefined {
@@ -78,18 +79,42 @@ export async function renderReportDocx(flat: FlatReport): Promise<Buffer> {
 }
 
 // ---------------- PPT ----------------
+// 사용자 지시(2026-09-08): "2페이지 각 채널에서 PPT를 만들면 ena-design 스킬과 제작 방식을
+// 활용해서 PPT를 만들도록" — 아래 두 렌더러(문서형·임원 보고용)는 모두 enaPptTheme.ts의
+// ENA 디자인 시스템 위에서만 그린다. 색·여백·타이포를 여기서 직접 정하지 않는다.
 /** 한 슬라이드에 넣을 수 있는 표 행 수 — 넘으면 같은 제목으로 슬라이드를 이어서 만든다. */
-const PPT_ROWS_PER_SLIDE = 12;
+const PPT_ROWS_PER_SLIDE = 11;
+
+type PptSlide = ReturnType<PptxGenJS["addSlide"]>;
+
+/** 오늘 날짜(KST) — 표지 발행일. 이 프로젝트 관례대로 toISOString을 쓰지 않고 로컬 값으로 조립. */
+function todayLabel(): string {
+  const d = new Date();
+  return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
+}
 
 export async function renderReportPptx(flat: FlatReport): Promise<Buffer> {
   const pres = new PptxGenJS();
   pres.layout = "LAYOUT_16x9";
+  const theme = ena.createEnaTheme({
+    channelCode: flat.brand.channelCode,
+    channelName: flat.brand.channelName,
+    themeColor: flat.brand.themeColor,
+  });
+  // 로고·그라데이션을 마스터에 한 번만 심는다(슬라이드마다 넣으면 같은 이미지가 슬라이드 수만큼
+  // 중복 저장돼 파일이 몇 배로 커진다 — 2026-09-08 실측).
+  ena.defineEnaMasters(pres, theme);
 
-  const cover = pres.addSlide();
-  cover.background = { color: NAVY };
-  cover.addText(flat.title, { x: 0.6, y: 1.4, w: 8.8, h: 1.2, fontSize: 32, bold: true, color: "FFFFFF" });
-  cover.addText(flat.subtitle, { x: 0.6, y: 2.6, w: 8.8, h: 0.6, fontSize: 15, color: "CBD5E1" });
-  cover.addText("KT ENA 편성 AI Agent", { x: 0.6, y: 4.9, w: 8.8, h: 0.4, fontSize: 12, italic: true, color: "94A3B8" });
+  ena.addCoverSlide(pres, theme, {
+    eyebrow: flat.brand.channelName.toUpperCase(),
+    title: flat.title.replace(/\s—\s.*$/, ""),
+    subtitle: flat.subtitle,
+    dateLabel: todayLabel(),
+    author: "KT ENA 편성 AI Agent",
+  });
+
+  const startContentSlide = (title: string): PptSlide =>
+    ena.addContentSlide(pres, theme, flat.brand.channelName.toUpperCase(), title, { titlePx: 38 });
 
   for (const section of flat.sections) {
     // 한 섹션이 여러 블록이면 블록마다 슬라이드를 나눠 글자가 겹치지 않게 한다.
@@ -97,29 +122,30 @@ export async function renderReportPptx(flat: FlatReport): Promise<Buffer> {
       if (block.kind === "table" && block.rows.length > PPT_ROWS_PER_SLIDE) {
         for (let i = 0; i < block.rows.length; i += PPT_ROWS_PER_SLIDE) {
           const chunk = block.rows.slice(i, i + PPT_ROWS_PER_SLIDE);
-          const s = pres.addSlide();
-          const suffix = block.rows.length > PPT_ROWS_PER_SLIDE ? ` (${Math.floor(i / PPT_ROWS_PER_SLIDE) + 1})` : "";
-          s.addText(section.title + suffix, { x: 0.5, y: 0.35, w: 9, h: 0.6, fontSize: 22, bold: true, color: ACCENT });
+          const part = Math.floor(i / PPT_ROWS_PER_SLIDE) + 1;
+          const total = Math.ceil(block.rows.length / PPT_ROWS_PER_SLIDE);
+          const s = startContentSlide(section.title);
+          ena.addCaption(s, `${part} / ${total}  ·  전체 ${block.rows.length}행`, ena.CONTENT_Y - ena.px(30));
           addPptTable(s, block.headers, chunk);
         }
         continue;
       }
-      const s = pres.addSlide();
-      s.addText(section.title, { x: 0.5, y: 0.35, w: 9, h: 0.6, fontSize: 22, bold: true, color: ACCENT });
-      renderPptBlock(s, block);
+      const s = startContentSlide(section.title);
+      renderPptBlock(s, block, theme);
     }
   }
+
+  ena.addEodSlide(pres, theme);
   // pptxgenjs의 write()는 환경에 따라 string|Buffer|Blob을 반환한다 — Node 런타임에서는 nodebuffer로 강제한다.
   return (await pres.write({ outputType: "nodebuffer" })) as Buffer;
 }
 
-type PptSlide = ReturnType<PptxGenJS["addSlide"]>;
-
 function addPptTable(s: PptSlide, headers: string[], rows: string[][]) {
-  const header = headers.map((h) => ({ text: h, options: { bold: true, fill: { color: "F4F4F5" }, color: "27272A" } }));
-  const body = rows.map((r) => r.map((c) => ({ text: c, options: { color: "27272A" } })));
-  s.addTable([header, ...body], { x: 0.5, y: 1.1, w: 9, fontSize: 11, border: { type: "solid", color: "E4E4E7", pt: 1 }, autoPage: false });
+  const header = headers.map((h) => ena.enaTableHeaderCell(h));
+  const body = rows.map((r) => r.map((c) => ({ text: c, options: { color: ena.GRAY_800, fontFace: ena.FONT_MEDIUM } })));
+  s.addTable([header, ...body], { x: ena.BODY_X, y: ena.CONTENT_Y, w: ena.BODY_W, ...ena.enaTableOptions() });
 }
+
 
 // Phase 13(2026-09-01) — "임원 보고용 PPT"(deckModel.ts) 전용 렌더러. FlatReport 기반
 // renderReportPptx와는 목적이 다르다(그건 상세 리포트 전체를 표로 옮기는 것, 이건 요약
@@ -130,124 +156,85 @@ function addPptTable(s: PptSlide, headers: string[], rows: string[][]) {
 // 텍스트 박스(플레이스홀더) 대신 pptxgenjs 네이티브 차트(addChart, bar/line)를 실제로 그린다.
 // 화면(deck/page.tsx의 SVG)과 여기(PPT 네이티브 차트) 둘 다 deckModel.ts의 DeckChartData
 // 하나에서만 값을 가져온다(reportFlatten.ts와 같은 "내용 결정은 한 곳" 원칙).
-const DECK_ACCENT = "3A30DF"; // 폴백 색(포트폴리오 스코프·미등록 채널). 채널 스코프는 toPptxHex(deck.themeColor, DECK_ACCENT)로 대체됨.
-const DECK_UP = "059669";
-const DECK_DOWN = "E11D48";
-
-// 채널 브랜딩(2026-09-02, 사용자 지시: "각 채널의 PPT는 각 채널의 로고 색을 포인트 컬러로 하여
-// 세련되게 디자인") — channels.theme_color(예: "#3830e0")를 pptxgenjs가 쓰는 "#" 없는 대문자
-// 6자리 hex로 변환한다. 형식이 어긋나면(미등록 채널 등) 기존 기본 색(DECK_ACCENT)으로 폴백 —
-// 포트폴리오(다채널) 스코프는 항상 이 폴백을 쓴다.
-function toPptxHex(themeColor: string | null | undefined, fallback: string): string {
-  if (!themeColor) return fallback;
-  const hex = themeColor.replace(/^#/, "").toUpperCase();
-  return /^[0-9A-F]{6}$/.test(hex) ? hex : fallback;
-}
-/** 채널색과 흰색을 섞어 옅은 배경 톤을 만든다(So What? 강조 바 등) — amount 0~1, 1에 가까울수록 흼. */
-function tintWithWhite(hex: string, amount: number): string {
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  const mix = (c: number) => Math.round(c + (255 - c) * amount);
-  return [mix(r), mix(g), mix(b)].map((v) => v.toString(16).padStart(2, "0").toUpperCase()).join("");
-}
-
-function addDeckActionTitle(s: PptSlide, title: string, accent: string) {
-  s.addText(title, { x: 0.5, y: 0.3, w: 9, h: 0.85, fontSize: 22, bold: true, color: accent, valign: "top" });
-}
-function addDeckSoWhat(s: PptSlide, text: string, y: number, accent: string) {
-  if (!text) return;
-  s.addShape("rect", { x: 0.5, y, w: 9, h: 0.55, fill: { color: tintWithWhite(accent, 0.9) } });
-  s.addShape("rect", { x: 0.5, y, w: 0.06, h: 0.55, fill: { color: accent } });
-  s.addText([{ text: "So What?  ", options: { bold: true, color: accent } }, { text, options: { color: "27272A" } }], { x: 0.65, y: y + 0.06, w: 8.7, h: 0.43, fontSize: 12, valign: "middle" });
-}
-// 사용자 지시(2026-09-01): "본문 글자 수는 제한하되 필요한 설명의 경우 작게 들어갈 수 있음" —
-// note가 있으면 개조식 bullet 목록 끝에 글머리표 없는 작은 글씨 줄로 덧붙인다.
-function addDeckBullets(s: PptSlide, items: string[], x: number, y: number, w: number, h: number, note?: string) {
-  if (items.length === 0 && !note) {
-    s.addText("표시할 신호가 없습니다.", { x, y, w, h, fontSize: 12, italic: true, color: "A1A1AA" });
-    return;
-  }
-  const runs: { text: string; options: { bullet: boolean; fontSize: number; color: string; breakLine: boolean; italic?: boolean } }[] = items.map((t) => ({
-    text: t,
-    options: { bullet: true, fontSize: 12, color: "27272A", breakLine: true },
-  }));
-  if (note) runs.push({ text: note, options: { bullet: false, fontSize: 9, color: "A1A1AA", breakLine: true, italic: true } });
-  s.addText(runs, { x, y, w, h, valign: "top" });
-}
+//
+// 사용자 지시(2026-09-08, ena-design 스킬 적용) — 색·여백·타이포·표지/마무리 슬라이드를
+// 전부 enaPptTheme.ts로 옮겼다. 여기 남은 것은 "어느 슬라이드에 무엇을 놓을지"뿐이다.
+// 상승/하락처럼 방향 자체가 정보인 색만 의미 색(SUCCESS/DANGER)을 그대로 쓴다.
+const DECK_UP = ena.SUCCESS;
+const DECK_DOWN = ena.DANGER;
 
 type DeckPoint = { label: string; value: number | null };
 
 /** 값이 있는 포인트가 없으면 "데이터 부족" 안내만 — 억지로 빈 차트를 그리지 않는다. */
-function addDeckBarChart(pres: PptxGenJS, s: PptSlide, points: DeckPoint[], opts: { x: number; y: number; w: number; h: number; diverging?: boolean; rotateLabels?: boolean; accent?: string }) {
+function addDeckBarChart(
+  pres: PptxGenJS,
+  s: PptSlide,
+  points: DeckPoint[],
+  opts: { x: number; y: number; w: number; h: number; diverging?: boolean; rotateLabels?: boolean; accent: string }
+) {
   const withValues = points.filter((p) => p.value !== null);
   if (withValues.length === 0) {
-    s.addText("이 구간은 표시할 데이터가 부족합니다.", { x: opts.x, y: opts.y, w: opts.w, h: opts.h, fontSize: 12, italic: true, color: "A1A1AA", align: "center", valign: "middle" });
+    ena.addEmptyState(s, "이 구간은 표시할 데이터가 부족합니다.", { x: opts.x, y: opts.y, w: opts.w, h: opts.h });
     return;
   }
+  const base = ena.enaChartBase();
   // pptxgenjs는 시리즈 전체에 하나의 색만 쉽게 못 주므로(막대별 색은 chartColorsOpacity 등으로
   // 세분화 어려움), 등락 방향이 중요한 차트(프로그램 델타 등)는 양/음 두 시리즈로 나눠 각각
   // 다른 색을 준다 — pptxgenjs가 지원하는 표준 방식.
   if (opts.diverging) {
-    const posValues = withValues.map((p) => (p.value! >= 0 ? p.value! : null));
-    const negValues = withValues.map((p) => (p.value! < 0 ? p.value! : null));
+    const posValues = withValues.map((p) => (p.value! >= 0 ? p.value! : 0));
+    const negValues = withValues.map((p) => (p.value! < 0 ? p.value! : 0));
     s.addChart(
       pres.ChartType.bar,
       [
-        { name: "상승", labels: withValues.map((p) => p.label), values: posValues.map((v) => v ?? 0) },
-        { name: "하락", labels: withValues.map((p) => p.label), values: negValues.map((v) => v ?? 0) },
+        { name: "상승", labels: withValues.map((p) => p.label), values: posValues },
+        { name: "하락", labels: withValues.map((p) => p.label), values: negValues },
       ],
       {
-        x: opts.x, y: opts.y, w: opts.w, h: opts.h,
-        barDir: "col", barGrouping: "standard",
+        ...base,
+        x: opts.x,
+        y: opts.y,
+        w: opts.w,
+        h: opts.h,
+        barDir: "col",
+        barGrouping: "standard",
         chartColors: [DECK_UP, DECK_DOWN],
-        showLegend: false, showTitle: false,
-        catAxisLabelFontSize: 8, valAxisLabelFontSize: 8,
-        catAxisLabelColor: "52525B", valAxisLabelColor: "52525B",
-        catAxisLineColor: "E4E4E7", valAxisLineColor: "E4E4E7",
         catAxisLabelRotate: opts.rotateLabels ? 30 : 0,
-        showValAxisTitle: false, showCatAxisTitle: false,
         dataLabelFontSize: 0,
       }
     );
     return;
   }
   s.addChart(pres.ChartType.bar, [{ name: "값", labels: withValues.map((p) => p.label), values: withValues.map((p) => p.value as number) }], {
-    x: opts.x, y: opts.y, w: opts.w, h: opts.h,
+    ...base,
+    x: opts.x,
+    y: opts.y,
+    w: opts.w,
+    h: opts.h,
     barDir: "col",
-    chartColors: [opts.accent ?? DECK_ACCENT],
-    showLegend: false, showTitle: false,
-    catAxisLabelFontSize: 8, valAxisLabelFontSize: 8,
-    catAxisLabelColor: "52525B", valAxisLabelColor: "52525B",
-    catAxisLineColor: "E4E4E7", valAxisLineColor: "E4E4E7",
+    chartColors: [opts.accent],
     catAxisLabelRotate: opts.rotateLabels ? 30 : 0,
-    showValAxisTitle: false, showCatAxisTitle: false,
   });
 }
 
-function addDeckLineChart(pres: PptxGenJS, s: PptSlide, points: DeckPoint[], opts: { x: number; y: number; w: number; h: number; accent?: string }) {
+function addDeckLineChart(pres: PptxGenJS, s: PptSlide, points: DeckPoint[], opts: { x: number; y: number; w: number; h: number; accent: string }) {
   const withValues = points.filter((p) => p.value !== null);
   if (withValues.length === 0) {
-    s.addText("이 구간은 표시할 데이터가 부족합니다.", { x: opts.x, y: opts.y, w: opts.w, h: opts.h, fontSize: 12, italic: true, color: "A1A1AA", align: "center", valign: "middle" });
+    ena.addEmptyState(s, "이 구간은 표시할 데이터가 부족합니다.", { x: opts.x, y: opts.y, w: opts.w, h: opts.h });
     return;
   }
   s.addChart(pres.ChartType.line, [{ name: "시청률", labels: withValues.map((p) => p.label), values: withValues.map((p) => p.value as number) }], {
-    x: opts.x, y: opts.y, w: opts.w, h: opts.h,
-    chartColors: [opts.accent ?? DECK_ACCENT],
-    lineSize: 2, lineDataSymbol: "circle", lineDataSymbolSize: 4,
-    showLegend: false, showTitle: false,
-    catAxisLabelFontSize: 8, valAxisLabelFontSize: 8,
-    catAxisLabelColor: "52525B", valAxisLabelColor: "52525B",
-    catAxisLineColor: "E4E4E7", valAxisLineColor: "E4E4E7",
+    ...ena.enaChartBase(),
+    x: opts.x,
+    y: opts.y,
+    w: opts.w,
+    h: opts.h,
+    chartColors: [opts.accent],
+    lineSize: 2.5,
+    lineDataSymbol: "circle",
+    lineDataSymbolSize: 5,
     catAxisLabelRotate: withValues.length > 10 ? 45 : 0,
-    showValAxisTitle: false, showCatAxisTitle: false,
   });
-}
-
-/** 콘텐츠 슬라이드 상단에 채널 색 얇은 브랜드 바를 그어 8장 전체가 한 세트로 보이게 한다(사용자
- * 지시: "세련되게 디자인"). 텍스트가 아니라 순수 장식 요소라 캡션 글자 수엔 영향 없음. */
-function addDeckBrandBar(s: PptSlide, accent: string) {
-  s.addShape("rect", { x: 0, y: 0, w: 10, h: 0.06, fill: { color: accent } });
 }
 
 export async function renderDeckPptx(deck: ExecutiveDeckDocument): Promise<Buffer> {
@@ -255,142 +242,165 @@ export async function renderDeckPptx(deck: ExecutiveDeckDocument): Promise<Buffe
   pres.layout = "LAYOUT_16x9";
   const d = deck.slides;
   const c = deck.charts;
-  // 채널 브랜딩(2026-09-02) — 이 리포트가 다루는 채널의 로고 색을 포인트 컬러로. 포트폴리오
-  // (다채널) 스코프나 미등록 채널은 기존 기본 색(DECK_ACCENT)으로 조용히 폴백한다.
-  const accent = toPptxHex(deck.themeColor, DECK_ACCENT);
+  // ENA 디자인 시스템 테마 — 포인트 컬러(ENA는 공식 ENA Blue, 나머지는 채널 로고색)·로고·
+  // 표지 그라데이션이 전부 여기서 결정된다.
+  const theme = ena.createEnaTheme({
+    channelCode: deck.channelCode,
+    channelName: deck.channelCode ?? "KT ENA",
+    themeColor: deck.themeColor,
+  });
+  const accent = theme.accent;
+  // 로고·그라데이션·리본을 마스터에 한 번만 심는다(파일 크기·일관성 모두 이 쪽이 맞다).
+  ena.defineEnaMasters(pres, theme);
 
-  // 1. Title — 채널 색 액센트 바 + 태그로 브랜딩(로고 이미지 대신 컬러로 "이 채널의 보고서"를 표시).
-  const cover = pres.addSlide();
-  cover.background = { color: NAVY };
-  cover.addShape("rect", { x: 0, y: 0, w: 0.18, h: 5.63, fill: { color: accent } });
-  cover.addShape("rect", { x: 0.6, y: 1.35, w: 0.7, h: 0.28, fill: { color: accent } });
-  cover.addText(deck.channelCode ?? "PORTFOLIO", { x: 0.6, y: 1.35, w: 0.7, h: 0.28, fontSize: 9, bold: true, color: "FFFFFF", align: "center", valign: "middle" });
-  cover.addText(d.title.title, { x: 0.6, y: 1.75, w: 8.8, h: 1.4, fontSize: 30, bold: true, color: "FFFFFF" });
-  cover.addShape("rect", { x: 0.6, y: 3.05, w: 1.4, h: 0.03, fill: { color: accent } });
-  cover.addText(d.title.subtitle, { x: 0.6, y: 3.2, w: 8.8, h: 0.5, fontSize: 15, color: "CBD5E1" });
-  cover.addText(d.title.dateLabel, { x: 0.6, y: 4.6, w: 8.8, h: 0.4, fontSize: 12, color: "94A3B8" });
-  cover.addText(d.title.author, { x: 0.6, y: 4.95, w: 8.8, h: 0.4, fontSize: 12, italic: true, color: "94A3B8" });
+  // 1. 표지 — 그라데이션 + "매일 새로운 ENA" 슬로건 락업(ena-design 01-cover 구성).
+  ena.addCoverSlide(pres, theme, {
+    eyebrow: `${deck.channelCode ?? "PORTFOLIO"}  ·  ${deck.periodLabel}`,
+    title: d.title.title,
+    subtitle: d.title.subtitle,
+    dateLabel: d.title.dateLabel,
+    author: d.title.author,
+  });
+
+  /** 본문 슬라이드 공통 시작 — 흰 배경·우상단 로고·쪽번호는 마스터가 이미 갖고 있다. */
+  const contentSlide = (eyebrow: string, actionTitle: string): PptSlide => ena.addContentSlide(pres, theme, eyebrow, actionTitle);
 
   // 2. Executive Summary — KPI 등락률 막대가 2개 미만(예: 단일 일자 모드는 Rating만 전일 대비를
-  // 갖는 경우가 많음)이면 텅 빈 차트를 억지로 그리지 않는다(사용자 지시: "레이아웃이 예쁘도록
-  // 재배열") — 대신 핵심 지표를 채널색 강조 바가 붙은 카드로 세로 나열해 그 공간을 준다.
+  // 갖는 경우가 많음)이면 텅 빈 차트를 억지로 그리지 않는다 — 대신 핵심 지표를 액센트 틱이 붙은
+  // 카드로 세로 나열해 그 공간을 준다.
   {
-    const s = pres.addSlide();
-    addDeckBrandBar(s, accent);
-    addDeckActionTitle(s, d.executiveSummary.actionTitle, accent);
+    const s = contentSlide("EXECUTIVE SUMMARY", d.executiveSummary.actionTitle);
     const bars = c.kpiDeltaBars.filter((b) => b.value !== null);
     if (bars.length >= 2) {
-      s.addText("5대 지표 등락률(전기간 대비, %)", { x: 0.5, y: 1.25, w: 9, h: 0.3, fontSize: 10, color: "71717A" });
-      addDeckBarChart(pres, s, c.kpiDeltaBars, { x: 0.5, y: 1.55, w: 9, h: 2.15, accent });
-      addDeckBullets(s, d.executiveSummary.verdict, 0.5, 3.85, 9, 1.3, d.executiveSummary.note);
+      ena.addCaption(s, "5대 지표 등락률 (전기간 대비, %)", ena.CONTENT_Y - ena.px(30));
+      addDeckBarChart(pres, s, c.kpiDeltaBars, { x: ena.BODY_X, y: ena.CONTENT_Y, w: ena.BODY_W, h: ena.px(220), accent });
+      ena.addBullets(s, d.executiveSummary.verdict, {
+        x: ena.BODY_X,
+        y: ena.CONTENT_Y + ena.px(238),
+        w: ena.BODY_W,
+        h: ena.px(150),
+        note: d.executiveSummary.note,
+      });
     } else {
-      let y = 1.3;
+      let y = ena.CONTENT_Y;
       for (const h of d.executiveSummary.kpiHighlights) {
-        s.addShape("rect", { x: 0.5, y, w: 0.05, h: 0.62, fill: { color: accent } });
-        s.addShape("rect", { x: 0.58, y, w: 8.92, h: 0.62, fill: { color: "F8FAFC" } });
-        s.addText(h, { x: 0.75, y, w: 8.6, h: 0.62, fontSize: 13, color: "27272A", valign: "middle" });
-        y += 0.74;
+        s.addShape("roundRect", { x: ena.BODY_X, y, w: ena.BODY_W, h: ena.px(62), fill: { color: ena.GRAY_50 }, line: { color: ena.GRAY_200, width: 0.75 }, rectRadius: ena.px(10) });
+        s.addShape("roundRect", { x: ena.BODY_X, y: y + ena.px(10), w: ena.px(4), h: ena.px(42), fill: { color: accent }, rectRadius: ena.px(2), line: { color: accent, width: 0 } });
+        s.addText(h, { x: ena.BODY_X + ena.px(22), y, w: ena.BODY_W - ena.px(40), h: ena.px(62), fontFace: ena.FONT_MEDIUM, fontSize: ena.ptSize(21), color: ena.GRAY_800, valign: "middle" });
+        y += ena.px(74);
       }
-      addDeckBullets(s, d.executiveSummary.verdict, 0.5, y + 0.15, 9, 1.5, d.executiveSummary.note);
+      ena.addBullets(s, d.executiveSummary.verdict, { x: ena.BODY_X, y: y + ena.px(16), w: ena.BODY_W, h: ena.px(140), note: d.executiveSummary.note });
     }
   }
 
-  // 3. Trend — 일자별 시청률 라인 차트(공간을 넓게 써서 여백을 줄임)
+  // 3. Trend — 일자별 시청률 라인 차트
   {
-    const s = pres.addSlide();
-    addDeckBrandBar(s, accent);
-    addDeckActionTitle(s, d.trend.actionTitle, accent);
-    addDeckLineChart(pres, s, c.trendPoints, { x: 0.5, y: 1.25, w: 9, h: 2.5, accent });
-    addDeckBullets(s, d.trend.bullets, 0.5, 3.85, 9, 0.9, d.trend.note);
-    addDeckSoWhat(s, d.trend.soWhat, 4.85, accent);
+    const s = contentSlide("TREND", d.trend.actionTitle);
+    addDeckLineChart(pres, s, c.trendPoints, { x: ena.BODY_X, y: ena.CONTENT_Y, w: ena.BODY_W, h: ena.px(250), accent });
+    ena.addBullets(s, d.trend.bullets, { x: ena.BODY_X, y: ena.CONTENT_Y + ena.px(266), w: ena.BODY_W, h: ena.px(92), note: d.trend.note });
+    ena.addSoWhat(s, d.trend.soWhat, ena.px(600), theme);
   }
 
-  // 4(신규). 주중 vs 주말 · 요일별 — 요일별 바 차트(월~일), 결정론적 캡션(LLM 없음)
+  // 4. 주중 vs 주말 · 요일별 — 요일별 바 차트(월~일), 결정론적 캡션(LLM 없음)
   if (d.weekday.available) {
-    const s = pres.addSlide();
-    addDeckBrandBar(s, accent);
-    addDeckActionTitle(s, d.weekday.actionTitle, accent);
-    addDeckBarChart(pres, s, c.weekdayBars, { x: 0.5, y: 1.25, w: 9, h: 3.25, accent });
-    s.addText(d.weekday.caption, { x: 0.5, y: 4.65, w: 9, h: 0.5, fontSize: 11, color: "52525B", align: "center" });
+    const s = contentSlide("WEEKDAY · WEEKEND", d.weekday.actionTitle);
+    addDeckBarChart(pres, s, c.weekdayBars, { x: ena.BODY_X, y: ena.CONTENT_Y, w: ena.BODY_W, h: ena.px(320), accent });
+    ena.addCaption(s, d.weekday.caption, ena.px(586), { align: "center" });
   }
 
-  // 5(신규). 시간대별 분석 — 02~25시 바 차트(프라임 강조), 결정론적 캡션
+  // 5. 시간대별 분석 — 02~25시 바 차트, 결정론적 캡션
   if (d.hourly.available) {
-    const s = pres.addSlide();
-    addDeckBrandBar(s, accent);
-    addDeckActionTitle(s, d.hourly.actionTitle, accent);
-    addDeckBarChart(pres, s, c.hourlyBars, { x: 0.5, y: 1.25, w: 9, h: 3.25, rotateLabels: true, accent });
-    s.addText(d.hourly.caption, { x: 0.5, y: 4.65, w: 9, h: 0.5, fontSize: 11, color: "52525B", align: "center" });
+    const s = contentSlide("HOURLY", d.hourly.actionTitle);
+    addDeckBarChart(pres, s, c.hourlyBars, { x: ena.BODY_X, y: ena.CONTENT_Y, w: ena.BODY_W, h: ena.px(320), rotateLabels: true, accent });
+    ena.addCaption(s, d.hourly.caption, ena.px(586), { align: "center" });
   }
 
   // 6. Demographic — 연령대별 시청률 바 차트
   {
-    const s = pres.addSlide();
-    addDeckBrandBar(s, accent);
-    addDeckActionTitle(s, d.demographic.actionTitle, accent);
-    addDeckBarChart(pres, s, c.demographicBars, { x: 0.5, y: 1.25, w: 9, h: 2.5, rotateLabels: true, accent });
-    addDeckBullets(s, d.demographic.bullets, 0.5, 3.85, 9, 0.9, d.demographic.note);
-    addDeckSoWhat(s, d.demographic.soWhat, 4.85, accent);
+    const s = contentSlide("AUDIENCE", d.demographic.actionTitle);
+    addDeckBarChart(pres, s, c.demographicBars, { x: ena.BODY_X, y: ena.CONTENT_Y, w: ena.BODY_W, h: ena.px(250), rotateLabels: true, accent });
+    ena.addBullets(s, d.demographic.bullets, { x: ena.BODY_X, y: ena.CONTENT_Y + ena.px(266), w: ena.BODY_W, h: ena.px(92), note: d.demographic.note });
+    ena.addSoWhat(s, d.demographic.soWhat, ena.px(600), theme);
   }
 
   // 7. Killer Content & Timeslot — 프로그램 등락(성장/약세) 바 차트(방향성 자체가 정보라 상승/
   // 하락 색은 채널색이 아니라 의미 색을 그대로 유지 — DECK_UP/DECK_DOWN).
   {
-    const s = pres.addSlide();
-    addDeckBrandBar(s, accent);
-    addDeckActionTitle(s, d.content.actionTitle, accent);
-    addDeckBarChart(pres, s, c.programBars, { x: 0.5, y: 1.25, w: 9, h: 2.2, diverging: true, rotateLabels: true });
-    s.addText("TOP", { x: 0.5, y: 3.55, w: 4.3, h: 0.3, fontSize: 11, bold: true, color: DECK_UP });
-    addDeckBullets(s, d.content.topBullets, 0.5, 3.85, 4.3, 0.9);
-    s.addText("BOTTOM", { x: 5.2, y: 3.55, w: 4.3, h: 0.3, fontSize: 11, bold: true, color: DECK_DOWN });
-    addDeckBullets(s, d.content.bottomBullets, 5.2, 3.85, 4.3, 0.9, d.content.note);
-    addDeckSoWhat(s, d.content.soWhat, 4.85, accent);
+    const s = contentSlide("CONTENT", d.content.actionTitle);
+    addDeckBarChart(pres, s, c.programBars, { x: ena.BODY_X, y: ena.CONTENT_Y, w: ena.BODY_W, h: ena.px(214), diverging: true, rotateLabels: true, accent });
+    const colW = (ena.BODY_W - ena.px(32)) / 2;
+    const listY = ena.CONTENT_Y + ena.px(232);
+    s.addText("TOP", { x: ena.BODY_X, y: listY, w: colW, h: ena.px(24), fontFace: ena.FONT_BOLD, fontSize: ena.ptSize(16), color: DECK_UP, charSpacing: 1 });
+    ena.addBullets(s, d.content.topBullets, { x: ena.BODY_X, y: listY + ena.px(28), w: colW, h: ena.px(96), sizePx: 19 });
+    s.addText("BOTTOM", { x: ena.BODY_X + colW + ena.px(32), y: listY, w: colW, h: ena.px(24), fontFace: ena.FONT_BOLD, fontSize: ena.ptSize(16), color: DECK_DOWN, charSpacing: 1 });
+    ena.addBullets(s, d.content.bottomBullets, { x: ena.BODY_X + colW + ena.px(32), y: listY + ena.px(28), w: colW, h: ena.px(96), note: d.content.note, sizePx: 19 });
+    ena.addSoWhat(s, d.content.soWhat, ena.px(600), theme);
   }
 
   // 8. Strategy — Stop / Keep / Start(KEEP만 채널색 — 나머지 둘은 의미 색 그대로 유지)
   {
-    const s = pres.addSlide();
-    addDeckBrandBar(s, accent);
-    addDeckActionTitle(s, d.strategy.actionTitle, accent);
-    const col = (label: string, color: string, items: string[], x: number) => {
-      s.addShape("rect", { x, y: 1.3, w: 2.9, h: 0.45, fill: { color } });
-      s.addText(label, { x, y: 1.3, w: 2.9, h: 0.45, fontSize: 14, bold: true, color: "FFFFFF", align: "center", valign: "middle" });
-      addDeckBullets(s, items, x, 1.9, 2.9, 3.0);
+    const s = contentSlide("STRATEGY", d.strategy.actionTitle);
+    const gap = ena.px(24);
+    const colW = (ena.BODY_W - gap * 2) / 3;
+    const col = (label: string, color: string, items: string[], i: number) => {
+      const x = ena.BODY_X + i * (colW + gap);
+      s.addShape("roundRect", { x, y: ena.CONTENT_Y, w: colW, h: ena.px(52), fill: { color }, rectRadius: ena.px(10), line: { color, width: 0 } });
+      s.addText(label, { x, y: ena.CONTENT_Y, w: colW, h: ena.px(52), fontFace: ena.FONT_BOLD, fontSize: ena.ptSize(20), color: ena.WHITE, charSpacing: 1.5, align: "center", valign: "middle" });
+      ena.addBullets(s, items, { x, y: ena.CONTENT_Y + ena.px(68), w: colW, h: ena.px(290), sizePx: 19 });
     };
-    col("STOP", DECK_DOWN, d.strategy.stop, 0.5);
-    col("KEEP", accent, d.strategy.keep, 3.55);
-    col("START", DECK_UP, d.strategy.start, 6.6);
-    if (d.strategy.note) s.addText(d.strategy.note, { x: 0.5, y: 5.0, w: 9, h: 0.4, fontSize: 9, italic: true, color: "A1A1AA" });
+    col("STOP", DECK_DOWN, d.strategy.stop, 0);
+    col("KEEP", accent, d.strategy.keep, 1);
+    col("START", DECK_UP, d.strategy.start, 2);
+    if (d.strategy.note) ena.addCaption(s, d.strategy.note, ena.px(600));
   }
 
   if (!deck.generatedByAi) {
-    const s = pres.addSlide();
-    s.addText("AI 문장 생성이 검증을 통과하지 못해, 텍스트는 근거 신호를 그대로 나열한 폴백입니다(차트는 실제 데이터 그대로).", { x: 0.6, y: 2.3, w: 8.8, h: 1, fontSize: 14, color: "71717A", align: "center" });
+    const s = contentSlide("DATA NOTE", "본 보고서 문장 생성 안내");
+    ena.addEmptyState(s, "AI 문장 생성이 검증을 통과하지 못해, 텍스트는 근거 신호를 그대로 나열한 폴백입니다(차트는 실제 데이터 그대로).", {
+      x: ena.BODY_X,
+      y: ena.CONTENT_Y,
+      w: ena.BODY_W,
+      h: ena.px(160),
+    });
   }
 
+  ena.addEodSlide(pres, theme);
   return (await pres.write({ outputType: "nodebuffer" })) as Buffer;
 }
 
-function renderPptBlock(s: PptSlide, b: DocBlock) {
+function renderPptBlock(s: PptSlide, b: DocBlock, theme: ena.EnaDeckTheme) {
   switch (b.kind) {
     case "text":
-      s.addText(b.text, { x: 0.5, y: 1.1, w: 9, h: 4, fontSize: 15, color: "27272A", valign: "top" });
+      s.addText(b.text, {
+        x: ena.BODY_X,
+        y: ena.CONTENT_Y,
+        w: ena.BODY_W,
+        h: ena.px(330),
+        fontFace: ena.FONT_MEDIUM,
+        fontSize: ena.ptSize(21),
+        color: ena.GRAY_800,
+        lineSpacingMultiple: 1.35,
+        valign: "top",
+      });
       return;
     case "note":
-      s.addText(`데이터 없음 — ${b.text}`, { x: 0.5, y: 1.1, w: 9, h: 1, fontSize: 14, italic: true, color: "A1A1AA", valign: "top" });
+      ena.addEmptyState(s, `데이터 없음 — ${b.text}`, { x: ena.BODY_X, y: ena.CONTENT_Y, w: ena.BODY_W, h: ena.px(140) });
       return;
     case "bullets":
-      s.addText(b.items.map((t) => ({ text: t, options: { bullet: true, fontSize: 14, color: "27272A" } })), { x: 0.5, y: 1.1, w: 9, h: 4, valign: "top" });
+      ena.addBullets(s, b.items, { x: ena.BODY_X, y: ena.CONTENT_Y, w: ena.BODY_W, h: ena.px(330) });
       return;
     case "kpi": {
-      const header = b.items.map((k) => ({ text: k.label, options: { bold: true, fill: { color: "F4F4F5" }, color: "27272A" } }));
-      const values = b.items.map((k) => ({ text: `${k.value}${k.delta ? `\n${k.delta}` : ""}`, options: { color: deltaColor(k.dir) ?? "27272A", fontSize: 12 } }));
-      s.addTable([header, values], { x: 0.5, y: 1.1, w: 9, fontSize: 14, border: { type: "solid", color: "E4E4E7", pt: 1 } });
+      // ena-design 04-kpi 슬라이드 그대로 — 첫 카드는 액센트로 채운 brand 카드.
+      const cards = b.items.map((k) => ({ label: k.label, value: k.value, delta: k.delta ?? undefined, dir: k.dir }));
+      const firstRow = cards.slice(0, 3);
+      const secondRow = cards.slice(3, 6);
+      const afterFirst = ena.addKpiCards(s, firstRow, theme, ena.CONTENT_Y);
+      if (secondRow.length > 0) ena.addKpiCards(s, secondRow, theme, afterFirst + ena.px(24), { maxPerRow: 3 });
       return;
     }
     case "table":
       if (b.rows.length === 0) {
-        s.addText("표시할 행이 없습니다.", { x: 0.5, y: 1.1, w: 9, h: 0.6, fontSize: 14, italic: true, color: "A1A1AA" });
+        ena.addEmptyState(s, "표시할 행이 없습니다.", { x: ena.BODY_X, y: ena.CONTENT_Y, w: ena.BODY_W, h: ena.px(120) });
         return;
       }
       addPptTable(s, b.headers, b.rows);
