@@ -5,7 +5,7 @@
 // 내려준 값을 그대로 표시하고, 여기서는 문장 조립(줄글 인사이트)만 한다.
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { AskAssistantWidget } from "@/components/AskAssistantWidget";
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
@@ -4411,6 +4411,16 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
   );
 }
 
+// UX 아키텍트 개선안(2026-09-09): 홈 화면 3탭 구성 — "오늘의 현황"(오늘의 시청률+채널별
+// 인사이트), "콘텐츠 리뷰"(주요 컨텐츠 리뷰), "주간·소식"(주간/주말/월간 리포트+주요 뉴스+
+// 채널별 킬러 콘텐츠). 질문하기 AI 검색창은 탭 밖 공통 영역에 그대로 고정.
+type DashboardTabKey = "today" | "content" | "weekly";
+const DASHBOARD_TABS: { key: DashboardTabKey; label: string }[] = [
+  { key: "today", label: "오늘의 현황" },
+  { key: "content", label: "콘텐츠 리뷰" },
+  { key: "weekly", label: "주간·소식" },
+];
+
 export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -4426,6 +4436,21 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   // 사용자 지시(2026-09-02): 채널별 인사이트의 클릭 아이콘 — 켜져 있으면 "채널별 상위 프로그램"
   // 자리가 그 채널의 일간 세부 내역 패널로 바뀐다. 같은 채널을 다시 누르면 닫힘(토글).
   const [selectedInsightChannel, setSelectedInsightChannel] = useState<string | null>(null);
+
+  // UX 아키텍트 개선안(2026-09-09, IA 재배치 방안 2 — URL 쿼리 파라미터 탭): 긴 스크롤을
+  // 목적별 3개 탭으로 분리. useState 대신 URL 쿼리(?tab=)로 관리해 새로고침·뒤로가기·탭
+  // 링크 공유가 모두 유지되게 한다(ChannelDeepDive.tsx의 buildAudienceReportHref 등이 이미
+  // 쓰는 쿼리 파라미터 패턴과 동일). 기존 데이터 fetch(load/useEffect)는 전혀 건드리지 않고,
+  // 이미 렌더링되는 섹션들을 탭별로 조건부 렌더링만 추가한다(Delta-Only).
+  const searchParams = useSearchParams();
+  const activeTab = (searchParams.get("tab") as DashboardTabKey | null) ?? "today";
+  function setActiveTab(tab: DashboardTabKey) {
+    const params = new URLSearchParams(Array.from(searchParams.entries()));
+    if (tab === "today") params.delete("tab");
+    else params.set("tab", tab);
+    const qs = params.toString();
+    router.replace(qs ? `/?${qs}` : "/", { scroll: false });
+  }
 
   async function load(dateStr?: string) {
     setLoading(true);
@@ -4645,90 +4670,116 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           <AskAssistantWidget accentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"} />
         </div>
 
+        {/* UX 아키텍트 개선안(2026-09-09, IA 재배치 방안 2) — 목적별 3탭. 자연어 검색창은
+            위에서 이미 탭 밖 공통 영역에 고정됨. */}
+        <div className="mb-4 flex gap-1 border-b border-zinc-200">
+          {DASHBOARD_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`-mb-px border-b-2 px-3.5 py-2 text-sm font-semibold transition-colors ${
+                activeTab === tab.key ? "border-indigo-600 text-indigo-700" : "border-transparent text-zinc-400 hover:text-zinc-600"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {loading && !data && <p className="text-sm text-zinc-500">불러오는 중...</p>}
 
         {data && (
-          // 그리드 재배치(사용자 지시, 2026-08-21): "오늘의 빠른 요약"·"주요 콘텐츠 편성 리포트"는
-          // 삭제. 채널별 킬러 콘텐츠는 좌/우 2컬럼 하나의 통합 섹션(전체 폭)으로 마지막에 배치.
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* 사용자 지시(2026-09-03, UI/UX REDESIGN 1항): "「오늘의 시청률」과 「주요 콘텐츠
-                리뷰」를 좌우 2열로 배치하지 않는다 — ① 오늘의 시청률 ↓ ② 주요 콘텐츠 리뷰의
-                세로 흐름으로, 두 섹션 모두 화면 전체 폭(100%)을 사용한다."
-                ※ 이 지시는 2026-09-01의 "오늘의 시청률 우측에는 항상 주요 컨텐츠 리뷰가 나와야
-                함"(좌우 배치)을 명시적으로 대체한다 — 그때는 좌우 2열 전제에서 오른쪽 칸이 비는
-                문제를 고친 것이고, 이번엔 좌우 2열 구조 자체를 없앤다. 두 섹션 아래(채널별
-                인사이트/일간 세부 내역·주요 뉴스·킬러 콘텐츠)는 이번 지시 범위 밖이라 기존
-                2열 배치를 그대로 둔다. */}
-            <div className="lg:col-span-2">
-              <ChannelStatusCard channels={byCode} />
-            </div>
-            <div className="lg:col-span-2">
-              <OriginalContentReportCard
-                report={data.originalContentReport}
-                enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
-                achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
-                themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
-              />
-            </div>
-
-            {/* 사용자 지시(2026-09-07): "주요 컨텐츠리뷰 아래, 주말 리포트 위에 주간 보고서" —
-                날짜를 따지지 않고 nielsen_period_rank에 새 주간 파일이 쌓이는 즉시 다음
-                새로고침부터 자동으로 그 주가 보인다(route.ts가 매 요청마다 최신 완료 주로
-                다시 계산). */}
-            {data.weeklyReview && (
-              <div className="lg:col-span-2">
-                <WeeklyReviewCard review={data.weeklyReview} themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))} />
+          <>
+            {/* "오늘의 현황" 탭 — 오늘의 시청률 + 채널별 인사이트(+연동 패널). UX 아키텍트
+                개선안(2026-09-09) IA 재배치 방안 2: 탭 조건부 렌더링만 추가, 각 카드
+                컴포넌트·데이터 흐름은 전혀 손대지 않음(Delta-Only). */}
+            {activeTab === "today" && (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {/* 사용자 지시(2026-09-03, UI/UX REDESIGN 1항): "「오늘의 시청률」... 화면
+                    전체 폭(100%)을 사용한다." */}
+                <div className="lg:col-span-2">
+                  <ChannelStatusCard channels={byCode} />
+                </div>
+                <ChannelNarrativeCard
+                  signals={data.narrativeSignals}
+                  themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
+                  enaOriginalDaily={data.originalContentReport.daily}
+                  selectedChannel={selectedInsightChannel}
+                  onOpenChannelDetail={(code) => setSelectedInsightChannel((cur) => (cur === code ? null : code))}
+                />
+                {selectedInsightChannel ? (
+                  <ChannelDailyDetailPanel
+                    channelCode={selectedInsightChannel}
+                    channelName={CHANNEL_NAME_BY_CODE[selectedInsightChannel] ?? selectedInsightChannel}
+                    themeColor={byCode.get(selectedInsightChannel)?.themeColor ?? null}
+                    asOfDate={data.asOfDate}
+                    onClose={() => setSelectedInsightChannel(null)}
+                    annualAvgRating={byCode.get(selectedInsightChannel)?.ytdAvgRating ?? null}
+                  />
+                ) : (
+                  <TodayTopProgramsCard
+                    rows={data.todayTopPrograms}
+                    themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
+                    ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
+                    enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
+                  />
+                )}
               </div>
             )}
 
-            {/* 사용자 지시(2026-08-26): "오늘의 시청률 섹션 밑에 주말 리포트 섹션 신설" — 실제
-                월요일(route.ts가 asOfDate=일요일일 때 채워줌)에만 표시.
-                사용자 지시(2026-09-01): 주말 리포트와 월간 리뷰가 같은 날 겹칠 수 있으므로 둘을
-                합치지 않고 각각 독립된 섹션으로 나란히 둔다. */}
-            {data.weekendReport && (
-              <div className="lg:col-span-2">
-                <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />
+            {/* "콘텐츠 리뷰" 탭 — 주요 컨텐츠 리뷰(매거진 카드) 전체. */}
+            {activeTab === "content" && (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div className="lg:col-span-2">
+                  <OriginalContentReportCard
+                    report={data.originalContentReport}
+                    enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
+                    achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
+                    themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
+                  />
+                </div>
               </div>
             )}
-            {data.monthlyReview && (
-              <div className="lg:col-span-2">
-                <MonthlyReviewCard review={data.monthlyReview} themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))} />
+
+            {/* "주간·소식" 탭 — 주간/주말/월간 리포트 + 주요 뉴스 + 채널별 킬러 콘텐츠. */}
+            {activeTab === "weekly" && (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {/* 사용자 지시(2026-09-07): "주요 컨텐츠리뷰 아래, 주말 리포트 위에 주간 보고서" —
+                    날짜를 따지지 않고 nielsen_period_rank에 새 주간 파일이 쌓이는 즉시 다음
+                    새로고침부터 자동으로 그 주가 보인다(route.ts가 매 요청마다 최신 완료 주로
+                    다시 계산). */}
+                {data.weeklyReview && (
+                  <div className="lg:col-span-2">
+                    <WeeklyReviewCard review={data.weeklyReview} themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))} />
+                  </div>
+                )}
+
+                {/* 사용자 지시(2026-08-26): "오늘의 시청률 섹션 밑에 주말 리포트 섹션 신설" — 실제
+                    월요일(route.ts가 asOfDate=일요일일 때 채워줌)에만 표시.
+                    사용자 지시(2026-09-01): 주말 리포트와 월간 리뷰가 같은 날 겹칠 수 있으므로 둘을
+                    합치지 않고 각각 독립된 섹션으로 나란히 둔다. */}
+                {data.weekendReport && (
+                  <div className="lg:col-span-2">
+                    <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />
+                  </div>
+                )}
+                {data.monthlyReview && (
+                  <div className="lg:col-span-2">
+                    <MonthlyReviewCard review={data.monthlyReview} themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))} />
+                  </div>
+                )}
+
+                <DailyNewsCard items={data.dailyNews} />
+
+                <KillerContentCard
+                  rows={data.killerContentDaypart}
+                  themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
+                  ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
+                />
               </div>
             )}
-
-            <ChannelNarrativeCard
-              signals={data.narrativeSignals}
-              themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
-              enaOriginalDaily={data.originalContentReport.daily}
-              selectedChannel={selectedInsightChannel}
-              onOpenChannelDetail={(code) => setSelectedInsightChannel((cur) => (cur === code ? null : code))}
-            />
-            {selectedInsightChannel ? (
-              <ChannelDailyDetailPanel
-                channelCode={selectedInsightChannel}
-                channelName={CHANNEL_NAME_BY_CODE[selectedInsightChannel] ?? selectedInsightChannel}
-                themeColor={byCode.get(selectedInsightChannel)?.themeColor ?? null}
-                asOfDate={data.asOfDate}
-                onClose={() => setSelectedInsightChannel(null)}
-                annualAvgRating={byCode.get(selectedInsightChannel)?.ytdAvgRating ?? null}
-              />
-            ) : (
-              <TodayTopProgramsCard
-                rows={data.todayTopPrograms}
-                themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
-                ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
-                enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
-              />
-            )}
-
-            <DailyNewsCard items={data.dailyNews} />
-
-            <KillerContentCard
-              rows={data.killerContentDaypart}
-              themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
-              ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
-            />
-          </div>
+          </>
         )}
       </div>
     </div>
