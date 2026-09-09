@@ -19,6 +19,29 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import type PptxGenJS from "pptxgenjs";
+import {
+  WHITE,
+  GRAY_50,
+  GRAY_100,
+  GRAY_200,
+  GRAY_400,
+  GRAY_500,
+  GRAY_600,
+  GRAY_800,
+  GRAY_900,
+  SUCCESS,
+  DANGER,
+  tint,
+  mix,
+  resolveAccent,
+  resolveGradient,
+  resolveSlogan,
+  resolveEodSlogan,
+} from "./enaColorTokens";
+// exportRenderers.ts가 `import * as ena from "./enaPptTheme"`로 ena.GRAY_800 등을 그대로
+// 참조하고 있어(값 이동 전과 동일하게 동작하도록), enaColorTokens.ts의 토큰을 이 파일에서도
+// 재노출한다 — exportRenderers.ts는 건드리지 않는다(Delta-Only).
+export * from "./enaColorTokens";
 
 type PptSlide = ReturnType<PptxGenJS["addSlide"]>;
 
@@ -33,21 +56,9 @@ export const px = (v: number): number => v / PX_PER_IN;
 /** ena-design px 값을 pt로 (글자 크기용, 1pt = 1/72in) */
 export const ptSize = (v: number): number => Math.round(v * (72 / PX_PER_IN) * 10) / 10;
 
-// ── 색 토큰(tokens/colors.css 그대로) ────────────────────────────────────
-export const ENA_BLUE = "2C24CE";
-export const GRAD_FROM = "00009C";
-export const GRAD_TO = "3C32E1";
-export const WHITE = "FFFFFF";
-export const GRAY_50 = "F7F7FA";
-export const GRAY_100 = "EEEEF3";
-export const GRAY_200 = "E2E2EA";
-export const GRAY_400 = "A6A6B6";
-export const GRAY_500 = "7C7C8C";
-export const GRAY_600 = "585866";
-export const GRAY_800 = "26262F";
-export const GRAY_900 = "14141A";
-export const SUCCESS = "1F9D6B";
-export const DANGER = "D63B3B";
+// 색 토큰(ENA_BLUE/GRAY_*/tint/shade/resolveAccent/resolveGradient 등)은 enaColorTokens.ts로
+// 옮겨 pptxgenjs 렌더러(이 파일)와 브라우저 HTML 미리보기(deck/page.tsx)가 공유한다(위 import).
+//
 // 폰트 수정(2026-09-09, 사용자 지시): "KT Flow"라는 단일 패밀리명은 시스템에 존재하지
 // 않는다 — 설치된 건 "KT Flow Medium/Bold/Black/Thin" 네 개의 개별 패밀리뿐이다. 없는
 // 이름을 fontFace로 넣으면 PowerPoint가 기본 폰트로 대체해 자간이 깨졌던 게 원인이었다.
@@ -71,45 +82,6 @@ export const EYEBROW_Y = px(96);
 export const TITLE_Y = px(138);
 /** 제목 아래 본문이 시작되는 기준선 — 모든 슬라이드가 같은 높이에서 시작해 세트로 보인다. */
 export const CONTENT_Y = px(232);
-
-// ── 색 유틸 ──────────────────────────────────────────────────────────────
-function clampHex(hex: string): string | null {
-  const h = hex.replace(/^#/, "").toUpperCase();
-  return /^[0-9A-F]{6}$/.test(h) ? h : null;
-}
-function mix(hex: string, target: [number, number, number], amount: number): string {
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  const m = (c: number, t: number) => Math.round(c + (t - c) * amount);
-  return [m(r, target[0]), m(g, target[1]), m(b, target[2])]
-    .map((v) => v.toString(16).padStart(2, "0").toUpperCase())
-    .join("");
-}
-/** 흰색과 섞어 옅은 배경 톤 (amount 1에 가까울수록 흼) */
-export const tint = (hex: string, amount: number): string => mix(hex, [255, 255, 255], amount);
-/** 검정과 섞어 깊은 톤 (표지 그라데이션 시작색 등) */
-export const shade = (hex: string, amount: number): string => mix(hex, [0, 0, 0], amount);
-
-/**
- * 이 리포트의 포인트 컬러. ENA 채널은 ena-design 공식 ENA Blue를 쓰고(사용자 결정
- * 2026-09-08), 나머지 채널은 channels.theme_color(로고색)를, 포트폴리오·미등록 채널은
- * ENA Blue로 폴백한다.
- */
-export function resolveAccent(channelCode: string | null, themeColor: string | null | undefined): string {
-  if (!channelCode || channelCode === "ENA") return ENA_BLUE;
-  return clampHex(themeColor ?? "") ?? ENA_BLUE;
-}
-
-/**
- * 표지·마무리 슬라이드의 그라데이션. ENA는 소스 덱에서 추출한 공식 값(#00009C→#3C32E1)을
- * 그대로 쓰고, 다른 채널은 그 채널 색을 같은 방식(짙은 쪽 → 채널색)으로 변형해 쓴다 —
- * ENA 전용 그라데이션을 다른 채널에 그대로 붙이지 않기 위함.
- */
-export function resolveGradient(accent: string): { from: string; to: string } {
-  if (accent === ENA_BLUE) return { from: GRAD_FROM, to: GRAD_TO };
-  return { from: shade(accent, 0.62), to: accent };
-}
 
 // ── 자산 로딩 ────────────────────────────────────────────────────────────
 // ChannelLogo.tsx와 같은 규칙 — 세로형 로고가 있는 채널은 가로형(_H) 변형을 쓴다
@@ -450,18 +422,20 @@ export function addCoverSlide(
 ): void {
   const s = pres.addSlide({ masterName: MASTER_COVER });
 
-  // 슬로건 락업: "매일 새로운" + 흰색 ENA 워드마크
+  // 슬로건 락업: 채널별 슬로건(resolveSlogan, enaColorTokens.ts) — ENA 계열은 "매일 새로운" +
+  // 흰색 ENA 워드마크, OLIFE는 "삶의 여유," + "OLIFE" 텍스트(memory: olife-channel-slogan).
+  const slogan = resolveSlogan(theme.channelCode);
   const sloganY = px(104);
-  s.addText("매일 새로운", {
+  s.addText(slogan.line1, {
     x: px(73), y: sloganY, w: px(200), h: px(34),
     fontFace: FONT_BLACK, fontSize: ptSize(24), color: WHITE, valign: "middle",
   });
-  if (theme.enaWhiteLogo) {
+  if (slogan.isEnaWordmark && theme.enaWhiteLogo) {
     const h = px(30);
     s.addImage({ data: theme.enaWhiteLogo.data, x: px(73 + 138), y: sloganY + px(2), w: h * theme.enaWhiteLogo.aspect, h });
   } else {
-    s.addText("ENA", {
-      x: px(73 + 138), y: sloganY, w: px(120), h: px(34),
+    s.addText(slogan.line2, {
+      x: px(73 + 138), y: sloganY, w: px(160), h: px(34),
       fontFace: FONT_BLACK, fontSize: ptSize(26), color: WHITE, valign: "middle",
     });
   }
@@ -496,7 +470,7 @@ export function addEodSlide(pres: PptxGenJS, theme: EnaDeckTheme): void {
     x: 0, y: px(292), w: SLIDE_W, h: px(70),
     fontFace: FONT_BLACK, fontSize: ptSize(46), color: WHITE, charSpacing: 4, align: "center", valign: "middle",
   });
-  s.addText("매일 새로운 ENA", {
+  s.addText(resolveEodSlogan(theme.channelCode), {
     x: 0, y: px(368), w: SLIDE_W, h: px(34),
     fontFace: FONT_BOLD, fontSize: ptSize(20), color: WHITE, transparency: 25, align: "center", valign: "middle",
   });
