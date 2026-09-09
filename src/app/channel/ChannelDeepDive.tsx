@@ -4732,6 +4732,26 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
+        {/* UX 리서처 개선안(2026-09-09): Executive Summary(결론)를 스코어 카드(근거)보다 먼저
+            배치 — 원래 2026-08-26 지시("결론 먼저, 근거는 아래", 맥킨지식 피라미드 원칙)의
+            취지대로라면 이 순서가 맞는데, 그동안은 스코어 카드가 먼저 나와 있었다. 실사용자
+            테스트 없이 코드만으로 판단한 재배치라는 점을 남겨둔다(사용자 확인, 2026-09-09) —
+            나중에 실제 PD 피드백이 오면 다시 검토. 두 블록 내용·계산은 전혀 바꾸지 않았고
+            순서만 바꿨다. */}
+        {(() => {
+          const why = buildWhyDiagnosis(data, fitScoreItems);
+          const insight = buildExecutiveProgrammingInsight(why, daypartOpportunity, fitScoreItems);
+          if (!insight) return null;
+          return (
+            <div className="rounded-3xl p-5 shadow-sm ring-1 ring-zinc-100" style={{ backgroundColor: `${accentColor}14` }}>
+              <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide" style={{ color: accentForegroundColor(accentColor) }}>
+                Executive Summary
+              </p>
+              <p className="text-base leading-relaxed text-zinc-700">{highlightNarrativeText(insight, "#059669", "#e11d48")}</p>
+            </div>
+          );
+        })()}
+
         {/* Channel Intelligence Briefing(2026-08-27, "Channel Intelligence Report" 마스터 프롬프트
             §9~15 반영, Phase 1) — KPI 5카드 + Biggest Win/Weakness + Top/Weak Programs. 전부 이미
             fetch된 값 재사용(계산부는 위 kpiCards/winDaypart/weaknessDaypart/briefingTopPrograms/
@@ -4776,25 +4796,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             )}
           </div>
         )}
-
-        {/* 사용자 지시(2026-08-26): "Executive Summary 한 문단을 페이지 최상단에... PD가 스크롤
-            없이 '오늘 이 채널의 결론'부터 보게" — 원래 WHAT TO SCHEDULE? 카드 안 깊숙이 있던
-            종합 편성 인사이트(WHY?/OPPORTUNITY?/WHAT TO SCHEDULE? 세 결과가 같은 daypart를
-            가리킬 때만 생성, 조건이 안 맞으면 표시 안 함 — 추정으로 억지 연결 금지)를 헤더
-            바로 아래로 승격. 맥킨지식 피라미드 원칙("결론 먼저, 근거는 아래")을 그대로 적용. */}
-        {(() => {
-          const why = buildWhyDiagnosis(data, fitScoreItems);
-          const insight = buildExecutiveProgrammingInsight(why, daypartOpportunity, fitScoreItems);
-          if (!insight) return null;
-          return (
-            <div className="rounded-3xl p-5 shadow-sm ring-1 ring-zinc-100" style={{ backgroundColor: `${accentColor}14` }}>
-              <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide" style={{ color: accentForegroundColor(accentColor) }}>
-                Executive Summary
-              </p>
-              <p className="text-base leading-relaxed text-zinc-700">{highlightNarrativeText(insight, "#059669", "#e11d48")}</p>
-            </div>
-          );
-        })()}
 
         {/* 오늘의 브리핑 — 보고서 줄글 형태(사용자 지시: What/Why 라벨 없이, 목표 달성률 제외) */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
