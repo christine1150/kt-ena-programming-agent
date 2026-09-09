@@ -699,6 +699,52 @@ function buildChannelNarrative(
   };
 }
 
+// 콘텐츠 크리에이터 개선안(2026-09-09) — 채널별 인사이트도 현황→원인→액션 3단으로 압축.
+// buildChannelNarrative의 긴 문단(llmNarrative 또는 규칙 기반)은 문구를 바꾸지 않고 그대로
+// "자세히 보기"에 남겨두고, 이 함수는 이미 fetch된 같은 ChannelNarrativeSignal 값만으로
+// 별도의 짧은 3줄 요약을 새로 만든다(새 계산·새 조회 없음). buildChannelNarrative의 원인
+// 우선순위(하락 프로그램 > 대표 프로그램 편차 > 순위 변동)를 그대로 따르되 문장을 짧게 줄였다.
+function buildChannelInsightSummary(s: ChannelNarrativeSignal): { situationLine: string | null; causeLine: string | null; actionLine: string | null } {
+  const situationLine =
+    s.today_rating !== null
+      ? `${formatRating(s.today_rating)}${s.today_rank !== null ? ` · ${s.today_rank}위` : ""}${
+          s.rating_delta_pct !== null && Math.abs(s.rating_delta_pct) >= 1
+            ? ` (${s.rating_delta_pct >= 0 ? "▲" : "▼"}${Math.abs(s.rating_delta_pct).toFixed(1)}%)`
+            : ""
+        }`
+      : null;
+
+  let causeLine: string | null = null;
+  let actionLine: string | null = null;
+
+  if (s.decline_program_name && s.decline_program_name !== s.top_program_name && s.decline_program_delta_pct !== null) {
+    causeLine = `'${s.decline_program_name}' 부진 — 같은 슬롯 평균 대비 ▼${Math.abs(s.decline_program_delta_pct).toFixed(0)}%`;
+    actionLine = "해당 프로그램·시간대 편성 점검 필요";
+  } else if (
+    s.top_program_name &&
+    s.top_program_rating !== null &&
+    s.top_program_baseline_avg !== null &&
+    s.top_program_baseline_avg > 0 &&
+    s.top_program_baseline_days !== null &&
+    s.top_program_baseline_days >= 3
+  ) {
+    const pct = ((s.top_program_rating - s.top_program_baseline_avg) / s.top_program_baseline_avg) * 100;
+    if (Math.abs(pct) >= 30) {
+      causeLine = `'${s.top_program_name}' 같은 슬롯 평균 대비 ${pct >= 0 ? "▲" : "▼"}${Math.abs(pct).toFixed(0)}%`;
+      actionLine = pct >= 0 ? "강세 프로그램·시간대 확대 검토" : "해당 프로그램 편성 재검토 필요";
+    }
+  }
+  if (!causeLine && s.today_rank !== null && s.baseline_avg_rank !== null) {
+    const diff = s.baseline_avg_rank - s.today_rank;
+    if (Math.abs(diff) >= 3) {
+      causeLine = `평소(평균 ${s.baseline_avg_rank.toFixed(1)}위) 대비 ${Math.abs(diff).toFixed(1)}위 ${diff >= 0 ? "상승" : "하락"}`;
+      actionLine = diff >= 0 ? null : "편성 경쟁력 점검 필요";
+    }
+  }
+
+  return { situationLine, causeLine, actionLine };
+}
+
 // skyUHD는 사용자 지시대로 등위가 10위 이상 바뀐 경우에만 문장을 만든다(아니면 아예 언급 안 함).
 function buildSkyUhdNarrative(s: ChannelNarrativeSignal | undefined): { channelName: string; text: string } | null {
   if (!s || s.today_rank === null || s.baseline_avg_rank === null) return null;
@@ -3703,7 +3749,18 @@ function ChannelNarrativeCard({
   selectedChannel: string | null;
 }) {
   const byCode = new Map(signals.map((s) => [s.channelCode, s]));
-  const lines: { code: string; channelName: string; text: string; color: string | null; deltaPct: number | null; todayRank: number | null; baselineAvgRank: number | null }[] = [];
+  const lines: {
+    code: string;
+    channelName: string;
+    text: string;
+    color: string | null;
+    deltaPct: number | null;
+    todayRank: number | null;
+    baselineAvgRank: number | null;
+    situationLine: string | null;
+    causeLine: string | null;
+    actionLine: string | null;
+  }[] = [];
   const enaLeadSentence = buildEnaOriginalHighlightSentence(enaOriginalDaily.filter((d) => d.broadcast_channel_code === "ENA"));
   for (const code of INSIGHT_CHANNEL_ORDER) {
     const s = byCode.get(code);
@@ -3717,7 +3774,15 @@ function ChannelNarrativeCard({
     const narrative = s.llmNarrative
       ? { channelName: CHANNEL_NAME_BY_CODE[code], text: s.llmNarrative }
       : buildChannelNarrative(CHANNEL_NAME_BY_CODE[code], s, extraLeadSentence);
-    lines.push({ code, ...narrative, color: themeColorByCode.get(code) ?? null, deltaPct: s.rating_delta_pct, todayRank: s.today_rank, baselineAvgRank: s.baseline_avg_rank });
+    lines.push({
+      code,
+      ...narrative,
+      color: themeColorByCode.get(code) ?? null,
+      deltaPct: s.rating_delta_pct,
+      todayRank: s.today_rank,
+      baselineAvgRank: s.baseline_avg_rank,
+      ...buildChannelInsightSummary(s),
+    });
   }
   const skyuhdSignal = byCode.get("SKYUHD");
   const skyuhdLine = buildSkyUhdNarrative(skyuhdSignal);
@@ -3729,6 +3794,7 @@ function ChannelNarrativeCard({
       deltaPct: skyuhdSignal?.rating_delta_pct ?? null,
       todayRank: skyuhdSignal?.today_rank ?? null,
       baselineAvgRank: skyuhdSignal?.baseline_avg_rank ?? null,
+      ...buildChannelInsightSummary(skyuhdSignal!),
     });
 
   return (
@@ -3757,7 +3823,9 @@ function ChannelNarrativeCard({
                 <span className="flex items-center gap-1 whitespace-nowrap font-bold" style={{ color: line.color ?? undefined }}>
                   {line.channelName}
                   {/* 사용자 지시(2026-09-02): "클릭 아이콘 신설. 세모 정도로" — 클릭 시 우측
-                      "채널별 상위 프로그램" 자리가 이 채널의 일간 세부 내역 패널로 전환된다. */}
+                      "채널별 상위 프로그램" 자리가 이 채널의 일간 세부 내역 패널로 전환된다.
+                      사용자 재지시(2026-09-09): 방향을 반대로 — 평소(닫힘)엔 아래 세모, 누르면
+                      (일간 세부내역으로 전환되면) 오른쪽 세모로 바뀌게. */}
                   <button
                     type="button"
                     onClick={() => onOpenChannelDetail(line.code)}
@@ -3766,7 +3834,7 @@ function ChannelNarrativeCard({
                     className="text-[10px] leading-none opacity-50 hover:opacity-100"
                     style={{ color: line.color ?? undefined }}
                   >
-                    {selectedChannel === line.code ? "▼" : "▶"}
+                    {selectedChannel === line.code ? "▶" : "▼"}
                   </button>
                 </span>
                 {/* 사용자 지시(2026-08-27): Health Score를 1페이지 "채널별 인사이트"에도 —
@@ -3788,8 +3856,40 @@ function ChannelNarrativeCard({
               </div>
               {/* 사용자 지시(2026-08-26, 가독성 개선 5번 "타이포그래피 기본기"): 줄 폭을 제한하고
                   (한 줄이 너무 길면 다음 줄 시작점을 눈이 놓침) 등락 수치·방향 단어만 굵게+색으로
-                  강조한다 — 문장 생성 로직(buildChannelNarrative/LLM)은 그대로, 표시만 바꾼다. */}
-              <span className="min-w-0 max-w-xl">{highlightNarrativeText(line.text, ACCENT_UP, ACCENT_DOWN)}</span>
+                  강조한다 — 문장 생성 로직(buildChannelNarrative/LLM)은 그대로, 표시만 바꾼다.
+                  콘텐츠 크리에이터 개선안(2026-09-09): 긴 문단 대신 현황→원인→액션 3줄을 먼저
+                  보여주고, 원문 문단(문구 변경 없음)은 "자세히 보기"로 접는다. */}
+              <div className="min-w-0 max-w-xl">
+                <div className="flex flex-col gap-1">
+                  {line.situationLine && (
+                    <p className="text-[13.5px] leading-snug">
+                      <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">현황</span>
+                      {highlightNarrativeText(line.situationLine, ACCENT_UP, ACCENT_DOWN)}
+                    </p>
+                  )}
+                  {line.causeLine && (
+                    <p className="text-[13.5px] leading-snug text-zinc-600">
+                      <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">원인</span>
+                      {highlightNarrativeText(line.causeLine, ACCENT_UP, ACCENT_DOWN)}
+                    </p>
+                  )}
+                  <p className="text-[13.5px] leading-snug font-medium" style={{ color: line.actionLine ? "#281fc7" : undefined }}>
+                    <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: line.actionLine ? "#8b87e0" : "#a1a1aa" }}>
+                      액션 아이템
+                    </span>
+                    {line.actionLine ?? <span className="text-zinc-500">특별한 조치 불필요 — 현재 편성 유지</span>}
+                  </p>
+                </div>
+                <details className="group mt-1.5">
+                  <summary className="cursor-pointer text-[11px] font-semibold text-zinc-400 marker:content-none hover:text-zinc-600">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="inline-block transition-transform group-open:rotate-90">▸</span>
+                      자세히 보기(원문)
+                    </span>
+                  </summary>
+                  <span className="mt-1.5 block">{highlightNarrativeText(line.text, ACCENT_UP, ACCENT_DOWN)}</span>
+                </details>
+              </div>
             </div>
           ))
         )}
