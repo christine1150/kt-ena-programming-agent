@@ -2966,23 +2966,29 @@ function CompetitorPeriodTopProgramsList({ rows, fmtR }: { rows: CompetitorPerio
   if (rows.length === 0) {
     return <p className="text-sm text-zinc-400">이 기간 등록 경쟁채널 프로그램 데이터가 없습니다.</p>;
   }
+  // UX 아키텍트 개선안(2026-09-09): 채널명·순위·기간평균·시간·프로그램명·회차수 6개 필드가
+  // 전부 한 whitespace-nowrap span 안에 이어붙어 있어, 폭이 좁아지면(기간 비교 모드에서
+  // lg:grid-cols-2로 카드가 절반씩 나뉠 때 특히) 정작 중요한 프로그램명부터 잘려나갔다 —
+  // "경쟁채널 TOP 5 프로그램"과 같은 원칙으로 필드별 grid 열을 분리하고, 부가정보(채널 순위·
+  // 기간평균·회차수)는 프로그램명의 truncate 스코프 밖으로 빼 보조 줄로 내렸다.
   return (
     <ol className="text-sm">
       {rows.map((p, i) => (
-        <li key={`${p.competitor_name}__${p.program_name}`} className="grid grid-cols-[1.25rem_1fr_4.5rem] items-baseline gap-x-2 py-1">
-          <span className="text-right font-medium text-zinc-400">{i + 1}</span>
-          <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-            <span className="font-medium text-zinc-700">{p.competitor_name}</span>{" "}
-            <span className="text-[12px] text-zinc-400">
-              (채널 {p.channel_rank}위, 기간 평균 {fmtR(p.channel_period_avg_rating)})
-            </span>{" "}
-            <span className="text-zinc-500">
-              {p.typical_start_hour !== null ? `${p.typical_start_hour}시경 ` : ""}
-              {p.program_name}
-              <span className="text-zinc-400"> · {p.air_count}회 평균</span>
+        <li key={`${p.competitor_name}__${p.program_name}`} className="py-1">
+          <div className="grid grid-cols-[1.5rem_5.25rem_3.5rem_minmax(0,1fr)_4.5rem] items-baseline gap-x-2">
+            <span className="text-right font-medium text-zinc-400">{i + 1}</span>
+            <span className="truncate font-medium text-zinc-700" title={p.competitor_name}>
+              {p.competitor_name}
             </span>
-          </span>
-          <span className="text-left font-semibold text-zinc-800">{fmtR(p.program_avg_rating)}</span>
+            <span className="tabular-nums text-zinc-500">{p.typical_start_hour !== null ? `${p.typical_start_hour}시경` : ""}</span>
+            <span className="truncate text-zinc-700" title={p.program_name}>
+              {p.program_name}
+            </span>
+            <span className="text-right font-semibold tabular-nums text-zinc-800">{fmtR(p.program_avg_rating)}</span>
+          </div>
+          <p className="ml-8 mt-0.5 text-[11px] text-zinc-400">
+            채널 {p.channel_rank}위 · 기간 평균 {fmtR(p.channel_period_avg_rating)} · {p.air_count}회 평균
+          </p>
         </li>
       ))}
     </ol>
