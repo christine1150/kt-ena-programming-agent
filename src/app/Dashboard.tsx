@@ -2082,6 +2082,22 @@ interface OriginalInsightBlock {
   causeLine: string | null; // 원인 — 가장 우선순위 높은 근거 한 줄
   actionLine: string | null; // 액션 아이템 — 구체적 문제 신호가 있을 때만(없으면 "조치 불필요"라는 뜻)
 }
+// 콘텐츠 크리에이터 개선안(2026-09-09, 사용자 지시 — 신병4사보타주 6회 PD 수동 리포트 원본
+// 첨부): PD가 엑셀로 올리는 회차 리포트(manualReport.headline_bullets)는 "1) 요약 : ..."
+// "[타깃시청률] ..." "[플랫폼시청률] ..." "[경쟁상황] ..." 형태로 이미 여러 신호를 종합한
+// 헤드라인급 분석인데, 지금까지 화면 어디에도 렌더링되지 않고 있었다(타입에만 존재).
+// 문구는 한 글자도 바꾸지 않고(PD 원문 그대로 유지하는 이 파일의 기존 원칙과 동일) "N) 요약"
+// 접두어와 "[라벨]" 대괄호만 표시 형식으로 걷어내 헤드라인/라벨-본문 구조로 나눈다 — 순수
+// 표시 형식 변경, 텍스트 재작성이나 재계산은 없음.
+function parseManualHeadlineBullets(bullets: string[]): { label: string | null; text: string }[] {
+  return bullets.map((raw) => {
+    const summaryPrefix = raw.match(/^\d+\)\s*요약\s*[:：]?\s*/);
+    if (summaryPrefix) return { label: null, text: raw.slice(summaryPrefix[0].length).trim() };
+    const bracketPrefix = raw.match(/^\[([^\]]+)\]\s*/);
+    if (bracketPrefix) return { label: bracketPrefix[1].trim(), text: raw.slice(bracketPrefix[0].length).trim() };
+    return { label: null, text: raw.trim() };
+  });
+}
 // 사용자 지시(2026-09-07): "유입 효과나 직재방 성과가 평균보다 낮다면 편성 효과가 낮다고
 // 솔직하게 말할것" — 그 재방 채널의 과거 회차별 유지율(재방 시청률/본방 시청률) 평균을
 // 새로 조회하지 않고, 화면이 이미 쓰는 회차별 추이 데이터(ratingHistory)에서 직접 계산한다.
@@ -3148,6 +3164,10 @@ function OriginalContentReportCard({
               const headline = buildOriginalHeadline(h);
               const achievementPct = achievementPctByCode.get(h.broadcast_channel_code) ?? null;
               const insight = buildOriginalInsight(h, headline?.rank ?? null, headline?.beatenBy ?? [], achievementPct);
+              // 콘텐츠 크리에이터 개선안(2026-09-09): PD 수동 리포트가 있으면 그 원문(요약·
+              // 타깃시청률·플랫폼시청률·경쟁상황)을 "편성 인사이트"의 1순위 콘텐츠로 쓴다 —
+              // AI 종합 문장(schedulingInsight)보다 PD 본인이 직접 분석한 내용이 더 근거가 두텁다.
+              const manualHeadline = h.manualReport?.headline_bullets?.length ? parseManualHeadlineBullets(h.manualReport.headline_bullets) : null;
               const rowKey = `${h.broadcast_channel_code}-${h.matched_start_time}`;
               // 사용자 지시(2026-09-06): "'제비탐정장성규'가 전회 대비..." 같은 특정 프로그램
               // 귀속 문장은 그 프로그램 자신의 카드에만 붙인다(마지막 카드가 아니라 rowKey 매칭).
@@ -3440,11 +3460,13 @@ function OriginalContentReportCard({
                   <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:gap-12">
                     <div className="min-w-0">
                       {/* 콘텐츠 크리에이터 개선안(2026-09-09): 현황→원인→액션 3단 압축 요약을
-                          맨 위에 얹는다 — 아래 "핵심 요약"·"편성 인사이트" 원문(과거 "그대로
-                          유지" 지시 대상)은 문구를 바꾸지 않고 그대로 두되, <details>로 접어
-                          기본은 이 압축 요약만 보이게 한다(UI 디자이너 Rule 04, 점진적 정보
-                          공개와 같은 원칙). 액션 아이템이 없으면(actionLine === null) "특별한
-                          조치 불필요"를 명시해 침묵이 아니라 확인된 결과임을 보여준다. */}
+                          맨 위에 얹는다. "핵심 요약" 원문(과거 "그대로 유지" 지시 대상, 문구를
+                          바꾸지 않음)은 <details>로 접어 이 압축 요약만 기본으로 보이게 한다(UI
+                          디자이너 Rule 04, 점진적 정보 공개와 같은 원칙). 다만 "편성 인사이트"는
+                          사용자 재지시(2026-09-09, 2차)로 접지 않고 바로 아래 항상 펼쳐서 보여준다
+                          — PD 수동 리포트가 있으면 그 원문이 최우선(아래 참고). 액션 아이템이
+                          없으면(actionLine === null) "특별한 조치 불필요"를 명시해 침묵이 아니라
+                          확인된 결과임을 보여준다. */}
                       {(insight.situationLine || insight.causeLine) && (
                         <div className="mb-5 overflow-hidden rounded-xl border border-zinc-100">
                           {insight.situationLine && (
@@ -3465,6 +3487,55 @@ function OriginalContentReportCard({
                           </div>
                         </div>
                       )}
+                      {/* 콘텐츠 크리에이터 개선안(2026-09-09, 사용자 지시): "편성 인사이트는
+                          접히지 않고 바로 나왔으면 좋겠다" — 이전엔 "핵심 요약"과 한 <details>에
+                          묶여 기본 접혀 있었다. 압축 요약(현황/원인/액션) 바로 아래, 항상 펼쳐진
+                          채로 옮긴다. PD 수동 리포트가 있으면(manualHeadline) 그 원문(요약·
+                          타깃시청률·플랫폼시청률·경쟁상황 — PD 본인이 직접 여러 지표를 종합해 쓴
+                          헤드라인급 분석)을 최우선으로 보여주고, 없을 때만 기존 AI 종합 문장
+                          (schedulingInsight)·규칙 기반 문구(schedulingNote)로 폴백한다(이 폴백
+                          경로 자체는 문구·로직 변경 없음). */}
+                      {manualHeadline ? (
+                        <div className="mt-6 rounded-xl border border-zinc-100 overflow-hidden">
+                          <div className="flex items-center justify-between bg-zinc-50/60 px-3.5 py-2 border-b border-zinc-100">
+                            <p className={REPORT_EYEBROW}>편성 인사이트</p>
+                            <p className="text-[10px] font-semibold text-zinc-400">PD 수동 리포트{h.manualReport?.episode_number !== null && h.manualReport?.episode_number !== undefined ? ` · ${h.manualReport.episode_number}회` : ""}</p>
+                          </div>
+                          <div className="px-3.5 py-3">
+                            {manualHeadline.map((block, i) =>
+                              block.label === null ? (
+                                // "1) 요약" 줄 — 여러 신호를 PD가 이미 한 문장으로 종합한 헤드라인이라
+                                // 이 카드 전체에서 가장 진한 글씨로 맨 위에 둔다.
+                                <p key={i} className="text-[15px] font-bold leading-relaxed text-zinc-900">
+                                  {highlightChannelNames(block.text, channelColors)}
+                                </p>
+                              ) : (
+                                <div key={i} className={i > 0 ? "mt-3 pt-3 border-t border-zinc-100" : "mt-3"}>
+                                  <p className="text-[10.5px] font-bold uppercase tracking-wide text-zinc-400">{block.label}</p>
+                                  <p className="mt-0.5 text-[13.5px] leading-relaxed text-zinc-700">{highlightChannelNames(block.text, channelColors)}</p>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        (h.schedulingInsight || insight.schedulingNote.length > 0) && (
+                          <div className="mt-6 border-l-2 border-zinc-200 pl-4">
+                            <p className={`${REPORT_EYEBROW} mb-1.5`}>편성 인사이트</p>
+                            {h.schedulingInsight ? (
+                              <p className="text-[14.5px] font-medium leading-relaxed text-zinc-700">{highlightNarrativeText(h.schedulingInsight, ACCENT_UP, ACCENT_DOWN)}</p>
+                            ) : (
+                              <div className="flex flex-col gap-1.5">
+                                {insight.schedulingNote.map((note, i) => (
+                                  <p key={i} className="text-[14.5px] font-medium leading-relaxed text-zinc-700">
+                                    {highlightNarrativeText(note, ACCENT_UP, ACCENT_DOWN)}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      )}
                       {/* 사용자 지시(2026-08-25): "핵심 요약 분석" 4개 지표(목표 달성도/리드인 견인
                           효과/본방송 수치/직후 재방송 유입 효과)를 명세 문구·순서 그대로.
                           사용자 재지시(2026-09-03, 2차): "핵심요약과 인사이트 내용 폰트가 너무
@@ -3477,7 +3548,7 @@ function OriginalContentReportCard({
                         <summary className="cursor-pointer text-[13px] font-bold text-zinc-800 marker:content-none hover:text-black">
                           <span className="inline-flex items-center gap-1">
                             <span className="inline-block transition-transform group-open:rotate-90">▸</span>
-                            자세히 보기(핵심 요약·편성 인사이트 원문)
+                            자세히 보기(핵심 요약 원문)
                           </span>
                         </summary>
                       {insight.bullets.length > 0 && (
@@ -3494,32 +3565,6 @@ function OriginalContentReportCard({
                             ))}
                           </ul>
                         </>
-                      )}
-                      {/* 사용자 지시(2026-08-25): [편성 인사이트]는 우선 OpenAI가 이미 검증된
-                          값만으로 종합한 문장(h.schedulingInsight, route.ts에서 계산)을 보여주고,
-                          API 키가 없거나 호출이 실패했을 때만(null) 기존 규칙 기반 카니발라이제이션
-                          문구(insight.schedulingNote)로 조용히 대체한다 — 문장 자체는 그대로.
-                          사용자 지시(2026-09-03, UI/UX REDESIGN): "KPI와 경쟁하지 않는 형태로" —
-                          노란 색 박스(앱 UI 장식)를 걷고 얇은 좌측 rule + 무채색 본문으로 낮춘다.
-                          숫자 강조(highlightNarrativeText)는 그대로 둔다(데이터 강조는 유지).
-                          사용자 지시(2026-09-02): 가독성용 줄 폭 제한(max-w-xl)은 문장이 카드
-                          너비를 못 쓰게 만들어 제거했었다 — 이제 이 2단 레이아웃의 왼쪽 열 자체가
-                          적정 가독 폭을 만들어주므로 별도 max-width를 다시 두지 않는다. */}
-                      {(h.schedulingInsight || insight.schedulingNote.length > 0) && (
-                        <div className="mt-6 border-l-2 border-zinc-200 pl-4">
-                          <p className={`${REPORT_EYEBROW} mb-1.5`}>편성 인사이트</p>
-                          {h.schedulingInsight ? (
-                            <p className="text-[14.5px] font-medium leading-relaxed text-zinc-700">{highlightNarrativeText(h.schedulingInsight, ACCENT_UP, ACCENT_DOWN)}</p>
-                          ) : (
-                            <div className="flex flex-col gap-1.5">
-                              {insight.schedulingNote.map((note, i) => (
-                                <p key={i} className="text-[14.5px] font-medium leading-relaxed text-zinc-700">
-                                  {highlightNarrativeText(note, ACCENT_UP, ACCENT_DOWN)}
-                                </p>
-                              ))}
-                            </div>
-                          )}
-                        </div>
                       )}
                       {/* 명세엔 없지만 기존에 있던 추가 신호(동시간대 정성 비교/신규드라마 비교/
                           자체재방/도달율) — 삭제하지 않고, 2026-09-03 7항대로 핵심 KPI보다 눈에
