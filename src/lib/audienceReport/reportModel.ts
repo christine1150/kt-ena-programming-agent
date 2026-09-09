@@ -126,7 +126,13 @@ export interface DeepDiveNotice {
 
 export interface DeepDiveSection {
   notice: DeepDiveNotice;
-  efficiencyRanking: Maybe<{ rows: import("./deepDiveAnalyzer").EfficiencyRow[]; caption: ChartCaptionInfo }>;
+  efficiencyRanking: Maybe<{
+    rows: import("./deepDiveAnalyzer").EfficiencyRow[];
+    channelAvgRating: number | null;
+    caption: ChartCaptionInfo;
+  }>;
+  /** 저시청 시간대(02~08시) 주목 콘텐츠 — 채널 평균이 아니라 그 시간대 평균과 비교한 결과. */
+  lowSlotStandouts: Maybe<{ rows: import("./deepDiveAnalyzer").SlotRelativeRow[]; caption: ChartCaptionInfo }>;
   primeGap: Maybe<{
     channelBaselineRatio: number | null;
     rows: import("./deepDiveAnalyzer").PrimeGapRow[];
@@ -161,6 +167,8 @@ export interface ModeASection {
   targetHourlyPattern: Maybe<{ cells: TargetHourlyCell[]; peaks: DemographicPeakHour[]; caption: ChartCaptionInfo }>;
   programAudienceCross: Maybe<ProgramAudienceCrossRow[]>;
   competitorScheduleChanges: Maybe<CompetitorScheduleChangeGroup[]>;
+  // W절(2026-09-10) — 채널별 기간 심층 분석. 네 모드 공통 필드(모드 분기 없이 한 뷰가 렌더).
+  deepDive: DeepDiveSection;
   // N절 Phase 2d — §06 번호 순서 밖(Phase 12와 같은 위치 원칙). skyUHD는 항상 available:false.
   healthScore: Maybe<import("../channelHealthScore").ChannelHealthScore>;
   programMomentum: Maybe<ProgramMomentumRow[]>;
@@ -200,6 +208,8 @@ export interface ModeBSection {
   targetHourlyPattern: Maybe<{ cells: TargetHourlyCell[]; peaks: DemographicPeakHour[]; caption: ChartCaptionInfo }>;
   programAudienceCross: Maybe<ProgramAudienceCrossRow[]>;
   competitorScheduleChanges: Maybe<CompetitorScheduleChangeGroup[]>;
+  // W절(2026-09-10) — 채널별 기간 심층 분석. 네 모드 공통 필드(모드 분기 없이 한 뷰가 렌더).
+  deepDive: DeepDiveSection;
 }
 
 // ---------------- MODE C(기간 A vs 기간 B) — §06 01~08 순서 그대로 ----------------
@@ -238,6 +248,8 @@ export interface ModeCSection {
   targetHourlyPattern: Maybe<{ cells: TargetHourlyCell[]; peaks: DemographicPeakHour[]; caption: ChartCaptionInfo }>;
   programAudienceCross: Maybe<ProgramAudienceCrossRow[]>;
   competitorScheduleChanges: Maybe<CompetitorScheduleChangeGroup[]>;
+  // W절(2026-09-10) — 채널별 기간 심층 분석. 네 모드 공통 필드(모드 분기 없이 한 뷰가 렌더).
+  deepDive: DeepDiveSection;
 }
 
 // ---------------- MODE D(누적·트레일링·주기비교) — §06 01~08 순서 그대로 ----------------
@@ -271,6 +283,8 @@ export interface ModeDSection {
   targetHourlyPattern: Maybe<{ cells: TargetHourlyCell[]; peaks: DemographicPeakHour[]; caption: ChartCaptionInfo }>;
   programAudienceCross: Maybe<ProgramAudienceCrossRow[]>;
   competitorScheduleChanges: Maybe<CompetitorScheduleChangeGroup[]>;
+  // W절(2026-09-10) — 채널별 기간 심층 분석. 네 모드 공통 필드(모드 분기 없이 한 뷰가 렌더).
+  deepDive: DeepDiveSection;
   // N절 Phase 2b(2026-09-01, 구 시스템 Quarterly/Annual tier 이식) — §06 번호 순서 밖(Phase 12와
   // 같은 위치 원칙). daypartWinWeakness는 analyzer.ts의 computeDaypartWinWeakness가 이미 계산해
   // 두고도 어디에도 안 쓰이던 값을 처음 연결한 것(새 계산 아님). programPortfolio는 MODE A(Phase

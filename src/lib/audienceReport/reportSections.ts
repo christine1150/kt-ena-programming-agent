@@ -7,6 +7,20 @@ import type { AudienceReportRawData, HourlyPatternRow } from "./dataCollector";
 import { computeDailyOutlierVerdict, computeStructuralVsTemporary, computeGrowthWeaknessMovers, computePeakHourByDemographic, summarizeCompetitorScheduleChanges, computeDaypartWinWeakness } from "./analyzer";
 import { computeChannelHealthScore } from "@/lib/channelHealthScore";
 import { formatRating, formatPercent } from "./format";
+import { PRIME_LABEL } from "./primeTime";
+import {
+  MIN_AIRINGS_FOR_RANKING,
+  computeEfficiencyRanking,
+  computeSlotRelativePerformance,
+  computeChannelPrimeBaseline,
+  computePrimeGap,
+  computeProgramProfiles,
+  computeQuadrants,
+  computeDowHourCells,
+  computeMoveCandidates,
+  computeOriginalRerunInsights,
+  computeFirstRunInsights,
+} from "./deepDiveAnalyzer";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import type {
   ModeASection,
@@ -33,6 +47,7 @@ import type {
   TargetHourlyCell,
   ProgramAudienceCrossRow,
   ProgramMomentumRow,
+  DeepDiveSection,
 } from "./reportModel";
 
 function pctChange(curr: number | null, base: number | null): number | null {
@@ -42,6 +57,123 @@ function pctChange(curr: number | null, base: number | null): number | null {
 
 function baseCaption(raw: AudienceReportRawData, measure: string): ChartCaptionInfo {
   return { periodLabel: raw.period.label, targetUniverse: raw.group.label, measure };
+}
+
+// W절(2026-09-10) — 채널별 기간 심층 분석. 4개 모드가 같은 모양으로 쓰는 공용 빌더.
+// 순수 함수 계층이라 여기서 새 조회를 하지 않는다 — dataCollector가 이미 모아 온 원자료만 쓴다.
+function buildDeepDiveSection(raw: AudienceReportRawData): DeepDiveSection {
+  const isSkyUhd = raw.channelCode === "SKYUHD";
+  const slot = raw.programSlotProfile;
+  const notice = {
+    primeLabel: PRIME_LABEL,
+    holidays: raw.holidaysInPeriod,
+    programCount: new Set(slot.map((r) => r.canonicalName)).size,
+    airings: slot.reduce((a, r) => a + r.airings, 0),
+    minAiringsForRanking: MIN_AIRINGS_FOR_RANKING,
+  };
+
+  // skyUHD는 프로그램 단위 행에 점유율·도달율·시청시간이 아예 없고 타깃 분해도 없다(실측).
+  const noProgramData = isSkyUhd
+    ? "skyUHD는 프로그램 단위 자료가 제한적이라 심층 분석을 제공하지 않습니다(§05)"
+    : "이 기간에 편성 3회 이상인 프로그램이 없어 회당 성과를 비교할 수 없습니다";
+
+  if (slot.length === 0) {
+    const empty = { available: false as const, reason: noProgramData };
+    return {
+      notice,
+      efficiencyRanking: empty,
+      lowSlotStandouts: empty,
+      primeGap: empty,
+      programProfiles: empty,
+      scheduleCanvas: empty,
+      originalRerun: { available: false, reason: isSkyUhd ? noProgramData : "이 채널·기간에는 주요 콘텐츠로 등록된 오리지널이 없습니다" },
+      firstRunEfficiency: { available: false, reason: "이 채널에는 본방(<본>) 태그가 없어 본방·재방을 구분할 수 없습니다" },
+    };
+  }
+
+  const ranking = computeEfficiencyRanking(slot);
+  const lowStandouts = computeSlotRelativePerformance(slot, { lowSlotOnly: true, limit: 6 });
+  const primeRows = computePrimeGap(slot);
+  const profiles = computeProgramProfiles(slot, raw.programTargetProfile);
+  const quadrants = computeQuadrants(raw.dowHourProfile);
+  const cells = computeDowHourCells(raw.dowHourProfile);
+  const moveCandidates = computeMoveCandidates(cells);
+  const originals = computeOriginalRerunInsights(raw.originalRerunProfile);
+  const firstRun = computeFirstRunInsights(raw.firstRunEfficiency);
+
+  // 하루 리포트에는 요일 축이 성립하지 않는다 — 억지로 7요일 격자를 그리지 않고 사유를 밝힌다.
+  const singleDay = raw.period.mode === "single_day";
+
+  return {
+    notice,
+    efficiencyRanking:
+      ranking.length > 0
+        ? {
+            available: true,
+            data: {
+              rows: ranking,
+              channelAvgRating: ranking[0]?.channelAvgRating ?? null,
+              caption: baseCaption(
+                raw,
+                `기간 내 백분위 합산(시청률·도달율·시청시간 비율), 편성 ${MIN_AIRINGS_FOR_RANKING}회 미만 제외 · 최근 12주 Fit Score와 목적이 다름`
+              ),
+            },
+          }
+        : { available: false, reason: noProgramData },
+    lowSlotStandouts:
+      lowStandouts.length > 0
+        ? {
+            available: true,
+            data: {
+              rows: lowStandouts,
+              caption: baseCaption(raw, "그 프로그램이 놓인 시간대의 채널 평균 = 100 기준(02~08시 편성 비중 50% 이상만)"),
+            },
+          }
+        : { available: false, reason: "02~08시에 주로 편성되면서 그 시간대 평균을 넘은 프로그램이 없습니다" },
+    primeGap:
+      primeRows.length > 0
+        ? {
+            available: true,
+            data: {
+              channelBaselineRatio: computeChannelPrimeBaseline(slot),
+              rows: primeRows,
+              caption: baseCaption(raw, `주요시간 평균 ÷ 그 외 시간 평균(${PRIME_LABEL})`),
+            },
+          }
+        : { available: false, reason: "주요시간과 그 외 시간에 모두 편성된 프로그램이 없어 비교할 수 없습니다" },
+    programProfiles:
+      profiles.length > 0
+        ? {
+            available: true,
+            data: { programs: profiles, caption: baseCaption(raw, "시간대별 회당 평균 시청률 / 타깃은 채널 동일 연령대 평균 = 100 지수") },
+          }
+        : { available: false, reason: noProgramData },
+    scheduleCanvas:
+      raw.dowHourProfile.length > 0
+        ? {
+            available: true,
+            data: {
+              quadrants,
+              cells: singleDay ? [] : cells,
+              moveCandidates: singleDay ? [] : moveCandidates,
+              caption: baseCaption(
+                raw,
+                singleDay
+                  ? "하루 리포트라 요일 축이 성립하지 않아 주요시간·그 외 2구간으로만 집계"
+                  : "요일 × 시간대 회당 평균 시청률(주요시간 구분 포함)"
+              ),
+            },
+          }
+        : { available: false, reason: noProgramData },
+    originalRerun:
+      originals.length > 0
+        ? { available: true, data: originals }
+        : { available: false, reason: "이 채널·기간에는 주요 콘텐츠로 등록된 오리지널이 없습니다" },
+    firstRunEfficiency:
+      firstRun.length > 0
+        ? { available: true, data: firstRun }
+        : { available: false, reason: "이 채널에는 본방(<본>) 태그가 없어 본방·재방을 구분할 수 없습니다" },
+  };
 }
 
 // Phase 12(2026-08-28, 계획서 J절 Phase 12) — §06 번호 순서 밖 추가 섹션 3종. 4개 모드가 전부
@@ -244,6 +376,7 @@ export function buildModeASection(raw: AudienceReportRawData, extra: ModeAExtra)
     targetHourlyPattern: buildTargetHourlyPatternSection(raw),
     programAudienceCross: buildProgramAudienceCrossFromDaily(raw),
     competitorScheduleChanges: buildCompetitorScheduleChangesSection(raw),
+    deepDive: buildDeepDiveSection(raw),
     healthScore,
     programMomentum,
   };
@@ -339,6 +472,7 @@ export function buildModeBSection(raw: AudienceReportRawData, extra: ModeBExtra)
     targetHourlyPattern: buildTargetHourlyPatternSection(raw),
     programAudienceCross: buildProgramAudienceCrossFromPeriod(raw),
     competitorScheduleChanges: buildCompetitorScheduleChangesSection(raw),
+    deepDive: buildDeepDiveSection(raw),
   };
 }
 
@@ -451,6 +585,7 @@ export function buildModeCSection(raw: AudienceReportRawData, extra: ModeCExtra)
     targetHourlyPattern: buildTargetHourlyPatternSection(raw),
     programAudienceCross: buildProgramAudienceCrossFromPeriod(raw),
     competitorScheduleChanges: buildCompetitorScheduleChangesSection(raw),
+    deepDive: buildDeepDiveSection(raw),
   };
 }
 
@@ -531,6 +666,7 @@ export function buildModeDSection(raw: AudienceReportRawData, extra: ModeDExtra)
     targetHourlyPattern: buildTargetHourlyPatternSection(raw),
     programAudienceCross: buildProgramAudienceCrossFromPeriod(raw),
     competitorScheduleChanges: buildCompetitorScheduleChangesSection(raw),
+    deepDive: buildDeepDiveSection(raw),
     daypartWinWeakness,
     programPortfolio,
     // reportSections.ts는 I/O 없는 순수 함수 계층이라(파일 상단 주석) LLM 호출은 여기서 하지

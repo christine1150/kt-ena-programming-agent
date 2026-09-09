@@ -259,6 +259,189 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     }
   }
 
+  // W절(2026-09-10) 심층 분석 — 4개 모드 공통. 문서에서는 표를 11행 이하로 자른다
+  // (exportRenderers의 PPT_ROWS_PER_SLIDE와 같은 값이라 표 하나가 슬라이드 2장으로 안 쪼개진다).
+  // 자를 때는 조용히 자르지 않고 note로 몇 건이 남았는지 밝힌다.
+  const deep = body.sections.deepDive;
+  const DOC_ROWS = 11;
+  const cut = <T>(rows: T[]): { rows: T[]; note: DocBlock[] } => ({
+    rows: rows.slice(0, DOC_ROWS),
+    note: rows.length > DOC_ROWS ? [{ kind: "note", text: `이하 ${rows.length - DOC_ROWS}건은 화면에서 확인` }] : [],
+  });
+
+  const noticeBlocks: DocBlock[] = [
+    {
+      kind: "text",
+      text:
+        `주요시간 기준은 ${deep.notice.primeLabel}임. 분석 대상은 프로그램 ${deep.notice.programCount}편·편성 ${deep.notice.airings}회이며, ` +
+        `회당 성과 비교에서는 편성 ${deep.notice.minAiringsForRanking}회 미만을 제외함.` +
+        (deep.notice.holidays.length > 0
+          ? ` 기간 내 공휴일 ${deep.notice.holidays.length}일 포함(${deep.notice.holidays.map((h) => `${h.date} ${h.name}`).join(", ")}) — 해당 일자는 주말 기준 주요시간이 적용됨.`
+          : " 기간 내 공휴일은 포함되지 않음."),
+    },
+  ];
+  sections.push({ title: "심층 분석 — 분석 기준", blocks: noticeBlocks });
+
+  sections.push({
+    title: "심층 01 회당 성과가 높은 프로그램",
+    blocks: fromMaybe(deep.efficiencyRanking, (d) => {
+      const c = cut(d.rows);
+      return [
+        { kind: "text", text: `채널 회당 평균 시청률은 ${formatRating(d.channelAvgRating, code)}임. 아래 "채널 대비"가 100%를 넘으면 채널 평균을 상회함.` },
+        {
+          kind: "table",
+          headers: ["프로그램", "편성", "회당 평균", "채널 대비", "합산 기여", "유형", "보완 지표"],
+          rows: c.rows.map((r) => [
+            r.canonicalName,
+            `${r.airings}회`,
+            formatRating(r.avgRating, code),
+            r.vsChannelAvgPct === null ? "—" : `${r.vsChannelAvgPct}%`,
+            num(r.sumRating, 2),
+            r.programType,
+            r.compensatingMetrics.length > 0 ? r.compensatingMetrics.join("·") : "—",
+          ]),
+        },
+        ...c.note,
+      ];
+    }),
+  });
+
+  sections.push({
+    title: "심층 01b 저시청 시간대(02~08시) 주목 콘텐츠",
+    blocks: fromMaybe(deep.lowSlotStandouts, (d) => [
+      { kind: "text", text: "채널 평균이 아니라 그 프로그램이 놓인 시간대의 채널 평균과 비교한 값임. 100%를 넘으면 같은 시간대 평균을 상회함." },
+      {
+        kind: "table",
+        headers: ["프로그램", "편성", "새벽 비중", "시청률", "점유율", "시청시간 비율", "주목 지표"],
+        rows: cut(d.rows).rows.map((r) => [
+          r.canonicalName,
+          `${r.airings}회`,
+          `${r.lowSlotAirtimePct}%`,
+          r.slotRatingPct === null ? "—" : `${r.slotRatingPct}%`,
+          r.slotSharePct === null ? "—" : `${r.slotSharePct}%`,
+          r.slotTimeSpentPct === null ? "—" : `${r.slotTimeSpentPct}%`,
+          r.standoutMetrics.join("·"),
+        ]),
+      },
+    ]),
+  });
+
+  sections.push({
+    title: "심층 02 주요시간이 만든 차이",
+    blocks: fromMaybe(deep.primeGap, (d) => [
+      {
+        kind: "text",
+        text: `채널 전체의 주요시간 배율은 ${d.channelBaselineRatio ?? "—"}배임. 프로그램 배율이 이보다 높으면 그 프로그램이 주요시간에 특히 강하다는 뜻이고, 낮으면 주요시간이라 함께 오른 수준임.`,
+      },
+      {
+        kind: "table",
+        headers: ["프로그램", "주요시간 편성", "주요시간 평균", "그 외 편성", "그 외 평균", "배율"],
+        rows: cut(d.rows).rows.map((r) => [
+          r.canonicalName + (r.sampleSkewed ? " (표본 쏠림)" : ""),
+          `${r.primeAirings}회`,
+          formatRating(r.primeAvgRating, code),
+          `${r.offPrimeAirings}회`,
+          formatRating(r.offPrimeAvgRating, code),
+          r.primeRatio === null ? "—" : `${r.primeRatio}배`,
+        ]),
+      },
+    ]),
+  });
+
+  sections.push({
+    title: "심층 03 프로그램별 시간대·타깃 프로파일",
+    blocks: fromMaybe(deep.programProfiles, (d) => {
+      const c = cut(d.programs);
+      return [
+        {
+          kind: "table",
+          headers: ["프로그램", "편성", "최고 시간대", "강세 타깃", "미진 타깃", "도달·체류"],
+          rows: c.rows.map((p) => [
+            p.canonicalName,
+            `${p.airings}회`,
+            p.peakHour === null ? "—" : `${p.peakHour}시 ${formatRating(p.peakRating, code)}`,
+            p.strongTargets.slice(0, 2).map((t) => `${t.demographicLabel} ${t.index}`).join(", ") || "—",
+            p.weakTargets.slice(0, 1).map((t) => `${t.demographicLabel} ${t.index}`).join(", ") || "—",
+            p.engagementType ?? "—",
+          ]),
+        },
+        ...c.note,
+      ];
+    }),
+  });
+
+  sections.push({
+    title: "심층 04 요일 × 시간대 편성 배분과 성과",
+    blocks: fromMaybe(deep.scheduleCanvas, (d) => {
+      const blocks: DocBlock[] = [
+        {
+          kind: "table",
+          headers: ["구분", "편성", "시청률", "점유율", "도달율", "시청시간 비율"],
+          rows: d.quadrants.map((q) => [
+            `${q.dayType} ${q.primeLabel}`,
+            `${q.airings}회`,
+            formatRating(q.avgRating, code),
+            q.avgShare === null ? "—" : formatPercent(q.avgShare),
+            formatRating(q.avgReach, code),
+            q.avgTimeSpentShare === null ? "—" : formatPercent(q.avgTimeSpentShare),
+          ]),
+        },
+      ];
+      if (d.moveCandidates.length > 0) {
+        blocks.push({
+          kind: "bullets",
+          items: d.moveCandidates.map(
+            (m) => `${m.dowLabel} ${m.hour}시 — ${m.airings}회 편성, 회당 ${formatRating(m.avgRating, code)} · ${m.kind}`
+          ),
+        });
+      }
+      // 요일×시간대 전체 격자는 최대 168셀이라 표로 펴면 슬라이드 16장이 된다 — 문서에는 싣지 않는다.
+      if (d.cells.length > 0) blocks.push({ kind: "note", text: "요일 × 시간대 전체 격자는 화면에서 확인" });
+      return blocks;
+    }),
+  });
+
+  sections.push({
+    title: "심층 05 오리지널 본방·재방 확산",
+    blocks: fromMaybe(deep.originalRerun, (rows) => [
+      { kind: "text", text: "확산 배수는 본방일부터 1주일 내 방영분(본방·동시방영·재방 채널)의 시청률 합산을 본방 합산으로 나눈 값임. 1.0이면 재방 기여가 없다는 뜻임." },
+      {
+        kind: "table",
+        headers: ["작품", "본방", "본방 평균", "직후재방", "당일재방", "자체재방", "유지율", "1주일 방영", "확산"],
+        rows: cut(rows).rows.map((o) => [
+          o.canonicalName,
+          `${o.liveEpisodes}회`,
+          formatRating(o.liveAvgRating, code),
+          `${o.immediateRerunEpisodes}회`,
+          `${o.sameDayRerunEpisodes}회`,
+          `${o.selfRerunEpisodes}회`,
+          o.retentionPct === null ? "—" : `${o.retentionPct}%`,
+          `${o.windowAirings}회 ${num(o.windowSumRating, 2)}`,
+          o.amplificationRatio === null ? "—" : `${o.amplificationRatio}배 ${o.amplificationLabel ?? ""}`.trim(),
+        ]),
+      },
+    ]),
+  });
+
+  sections.push({
+    title: "심층 06 본방(<본>) vs 본방 외 효율",
+    blocks: fromMaybe(deep.firstRunEfficiency, (rows) => [
+      { kind: "text", text: "`<본>` 태그가 붙은 방영분과 그 외를 갈라 본 값임. 태그가 없는 방영분은 재방으로 단정하지 않고 '본방 외'로 묶었음." },
+      {
+        kind: "table",
+        headers: ["프로그램", "본방 편성", "본방 평균", "본방 외 편성", "본방 외 평균", "유지율"],
+        rows: cut(rows).rows.map((r) => [
+          r.canonicalName,
+          `${r.firstRunAirings}회`,
+          formatRating(r.firstRunAvgRating, code),
+          `${r.otherAirings}회`,
+          formatRating(r.otherAvgRating, code),
+          r.retentionPct === null ? "—" : `${r.retentionPct}%`,
+        ]),
+      },
+    ]),
+  });
+
   // Phase 12 공통 섹션(4개 모드 전부 같은 모양) — §06 번호 밖.
   const cross = body.sections;
   sections.push({

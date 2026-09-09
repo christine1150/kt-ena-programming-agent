@@ -113,10 +113,39 @@ function extractDecimalNumbers(text: string): number[] {
   return Array.from(text.matchAll(/\d+\.\d+/g)).map((m) => parseFloat(m[0]));
 }
 
+/**
+ * 단위가 붙은 정수를 단위와 함께 뽑는다 — "319 지수", "108회", "5.9배", "35.3%".
+ *
+ * 왜 필요한가: 기존 검증은 소수만 대조해서, 심층 분석이 다루는 **타깃 지수(319)·편성 횟수
+ * (108회)** 같은 정수가 그대로 통과했다. 즉 LLM이 지수나 횟수를 지어내도 잡히지 않았다.
+ * 반대로 모든 정수를 대조하면 "3분기", "2026년" 같은 문맥 숫자에 걸려 멀쩡한 문장이 폐기된다.
+ * 그래서 **근거로 준 값에 실제로 쓰이는 단위**(지수·회·배·%·점·위)가 붙은 숫자만 검증 대상으로
+ * 삼는다. 단위 없는 맨 정수는 여전히 검증하지 않는다(정직하게 밝히는 한계).
+ */
+const UNIT_NUMBER_RE = /(\d+(?:\.\d+)?)\s*(지수|회|배|%|점|위)/g;
+
+function extractUnitNumbers(text: string): { value: number; unit: string }[] {
+  return Array.from(text.matchAll(UNIT_NUMBER_RE)).map((m) => ({ value: parseFloat(m[1]), unit: m[2] }));
+}
+
 function factCheckNarrative(text: string, facts: NarrativeFact[]): boolean {
-  const allowed = new Set(facts.flatMap((f) => extractDecimalNumbers(f.formatted)));
-  const found = extractDecimalNumbers(text);
-  return found.every((n) => Array.from(allowed).some((a) => Math.abs(a - n) < 1e-6));
+  const allowedDecimals = new Set(facts.flatMap((f) => extractDecimalNumbers(f.formatted)));
+  const foundDecimals = extractDecimalNumbers(text);
+  const decimalsOk = foundDecimals.every((n) => Array.from(allowedDecimals).some((a) => Math.abs(a - n) < 1e-6));
+  if (!decimalsOk) return false;
+
+  // 단위 붙은 숫자는 값과 단위가 함께 일치해야 한다 — "108회"를 "108배"로 바꿔 쓰는 것도 막는다.
+  //
+  // 단, **근거에 실제로 등장하는 단위만** 검증한다. 근거가 순위를 "10.4"로만 주는데 문장이
+  // 자연스럽게 "10.4위"라고 쓰는 경우처럼, 단위를 문장이 붙이는 것은 지어낸 것이 아니다.
+  // 근거에 없는 단위까지 강제하면 멀쩡한 요약이 폐기되므로(기존 동작 회귀) 범위를 좁힌다.
+  const factUnits = facts.flatMap((f) => extractUnitNumbers(f.formatted));
+  const unitsInFacts = new Set(factUnits.map((u) => u.unit));
+  if (unitsInFacts.size === 0) return true;
+  const allowedUnits = new Set(factUnits.map((u) => `${u.value}|${u.unit}`));
+  return extractUnitNumbers(text)
+    .filter((u) => unitsInFacts.has(u.unit))
+    .every((u) => allowedUnits.has(`${u.value}|${u.unit}`));
 }
 
 /** 생성 → 검증 → 실패하면 1회만 같은 입력으로 재시도 → 그래도 실패하면 null(지어내는 것보다
@@ -317,4 +346,4 @@ export async function buildExecutiveDeckNarrative(scope: "channel" | "portfolio"
   return null;
 }
 
-export { extractDecimalNumbers, factCheckNarrative };
+export { extractDecimalNumbers, extractUnitNumbers, factCheckNarrative };
