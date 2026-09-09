@@ -9,6 +9,7 @@ import { groupForChannel, isSkyUhd, type AudienceGroup } from "./targetGroups";
 import type { ResolvedAudiencePeriod } from "./periodResolver";
 import { getChannelMasterInfo, type ChannelMasterInfo } from "./masterData";
 import { fetchRecentProgramIds } from "@/lib/recentProgramAirings";
+import { PRIME_RPC_ARGS } from "./primeTime";
 
 export interface DailyTrendPoint {
   date: string; // "주별"이면 week_start, "월별"이면 month_start를 그대로 date 필드에 담는다(호출부가 granularity로 구분)
@@ -93,6 +94,99 @@ export interface DemographicProgramHighlight {
   baseline_avg: number | null;
   baseline_days: number | null;
   delta_pct: number | null;
+}
+
+// W절(2026-09-09) — 채널별 기간 심층 리포트용 3종. 전부 additive다.
+// get_channel_program_slot_profile 원본: 프로그램 × 방송시간대 × 주요시간여부.
+export interface ProgramSlotProfileRow {
+  canonicalName: string;
+  broadcastHour: number;
+  isPrime: boolean;
+  airings: number;
+  airtimeMin: number | null;
+  avgRating: number | null;
+  avgShare: number | null;
+  avgReach: number | null;
+  avgTimeSpentSeconds: number | null;
+  avgTimeSpentShare: number | null;
+}
+
+// get_channel_dow_hour_profile 원본: 요일 × 방송시간대(채널 단위).
+export interface DowHourProfileRow {
+  dow: number; // isodow 1=월 … 7=일
+  dowLabel: string;
+  broadcastHour: number;
+  dayType: string; // "평일" | "주말·공휴일"
+  isPrime: boolean;
+  airings: number;
+  airtimeMin: number | null;
+  avgRating: number | null;
+  avgShare: number | null;
+  avgReach: number | null;
+  avgTimeSpentSeconds: number | null;
+  avgTimeSpentShare: number | null;
+}
+
+// get_channel_program_target_profile 원본: 기여도 상위 프로그램 × 타깃 × 주요시간여부.
+export interface ProgramTargetProfileRow {
+  canonicalName: string;
+  demographicLabel: string;
+  isPrime: boolean;
+  airings: number;
+  airtimeMin: number | null;
+  avgRating: number | null;
+  avgReach: number | null;
+  avgTimeSpentShare: number | null;
+  priorAvgRating: number | null;
+}
+
+// 선택 기간에 포함된 공휴일 — 프라임 분류의 근거를 리포트가 정직하게 고지하기 위해 함께 가져온다.
+export interface HolidayRow {
+  date: string;
+  name: string;
+}
+
+// get_channel_original_rerun_profile 원본(2026-09-10, 사용자 지시) — featured_content 등록
+// 오리지널의 본방·동시방영·직후재방·당일재방·자체재방·1주일 창 합산.
+export interface OriginalRerunProfileRow {
+  canonicalName: string;
+  category: string | null;
+  homeChannelCode: string | null;
+  simulcastChannelCode: string | null;
+  rerunChannelCode: string | null;
+  liveEpisodes: number;
+  liveAvgRating: number | null;
+  liveAvgReach: number | null;
+  liveAvgTimeSpentShare: number | null;
+  simulcastEpisodes: number;
+  simulcastAvgRating: number | null;
+  rerunEpisodes: number;
+  rerunAvgRating: number | null;
+  rerunRetentionPct: number | null;
+  immediateRerunEpisodes: number; // 직재방(본방 종료 직후, 사이에 다른 프로그램 없음)
+  sameDayRerunEpisodes: number; // 당일재방(같은 날이지만 사이에 다른 프로그램이 있었음)
+  selfRerunEpisodes: number;
+  selfRerunAvgRating: number | null;
+  windowAirings: number; // 본방일~+6일 내 홈·동시방영·재방 채널의 전체 방영 횟수(중복 제거됨)
+  windowSumRating: number | null;
+  windowAvgRating: number | null;
+  amplificationRatio: number | null; // 1주일 창 합산 ÷ 본방 합산 — 재방 포함 확산 배수
+}
+
+// get_channel_first_run_efficiency 원본 — `<본>` 태그가 있는 방영분 vs 그 외의 효율 비교.
+// 실측상 태그는 ENA에만 있어 다른 채널은 빈 배열로 온다(구분 불가를 정직하게 표시할 근거).
+export interface FirstRunEfficiencyRow {
+  canonicalName: string;
+  firstRunAirings: number;
+  firstRunAvgRating: number | null;
+  firstRunAvgReach: number | null;
+  firstRunAvgTimeSpentShare: number | null;
+  otherAirings: number;
+  otherAvgRating: number | null;
+  otherAvgReach: number | null;
+  otherAvgTimeSpentShare: number | null;
+  rerunRetentionPct: number | null;
+  totalAirtimeMin: number | null;
 }
 
 // N절 Phase 2d(2026-09-01) — Health Score/Program Momentum을 신 시스템 MODE A로 이식. 구 시스템
@@ -290,6 +384,21 @@ export interface AudienceReportRawData {
   competitorScheduleChangeLog: CompetitorScheduleChangeRow[]; // light 모드·페어링 없는 채널은 빈 배열
   hourlyProgramTitlesByDow: HourlyProgramTitleByDowRow[]; // skyUHD만 빈 배열 — light 모드에서도 유지(포트폴리오 슬롯 중복 점검이 필요로 함)
 
+  // W절(2026-09-09) — 심층 분석 4축(일자·시간대·프로그램·타깃)의 원자료. skyUHD는 프로그램 단위
+  // 행에 share/reach/time_spent가 아예 없고 target_id도 없어(실측: 8월 프로그램 행 258건 중
+  // reach 0건) 전부 빈 배열로 둔다. light 모드(포트폴리오 7채널 동시 집계)도 건너뛴다 —
+  // 심층 블록은 채널별 리포트 전용이라 포트폴리오가 쓰지 않는다.
+  programSlotProfile: ProgramSlotProfileRow[];
+  dowHourProfile: DowHourProfileRow[];
+  programTargetProfile: ProgramTargetProfileRow[];
+  holidaysInPeriod: HolidayRow[];
+  // 사용자 지시(2026-09-10) — 오리지널은 본방만이 아니라 재방 창까지 합산해서 봐야 하고,
+  // ENA는 `<본>` 태그로 본방/본방 외 효율을 갈라 볼 수 있다.
+  // featured_content 등록이 없는 채널은 originalRerunProfile이 자연히 빈 배열,
+  // `<본>` 태그가 없는 채널은 firstRunEfficiency가 자연히 빈 배열로 온다(별도 gating 불필요).
+  originalRerunProfile: OriginalRerunProfileRow[];
+  firstRunEfficiency: FirstRunEfficiencyRow[];
+
   competitorInsight: unknown[]; // get_competitor_insight_report 원본
   competitorTopPrograms: { competitor_name: string; program_name: string; program_avg_rating: number | null }[];
 
@@ -392,6 +501,12 @@ export async function collectAudienceReportData(channelCode: string, period: Res
     periodDemographicHighlightsRes,
     competitorScheduleChangeLogRes,
     hourlyProgramTitlesByDowRes,
+    programSlotProfileRes,
+    dowHourProfileRes,
+    programTargetProfileRes,
+    holidaysRes,
+    originalRerunProfileRes,
+    firstRunEfficiencyRes,
   ] = await Promise.all([
       supabase.rpc("get_rating_period_report", {
         p_channel_code: channelCode,
@@ -502,6 +617,70 @@ export async function collectAudienceReportData(channelCode: string, period: Res
       skyUhd
         ? EMPTY
         : supabase.rpc("get_hourly_program_titles_by_dow", { p_channel_code: channelCode, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
+      // W절 — 심층 분석 3종. 프라임 파라미터는 primeTime.ts 한 곳에서만 온다.
+      // skyUHD는 프로그램 단위 지표가 아예 없어(실측) 왕복할 이유가 없고, light 모드(포트폴리오)는
+      // 심층 블록을 쓰지 않으므로 둘 다 건너뛴다.
+      light || skyUhd
+        ? EMPTY
+        : supabase.rpc("get_channel_program_slot_profile", {
+            p_channel_code: channelCode,
+            p_target_label: programTargetLabel,
+            p_date_from: dateFrom,
+            p_date_to: dateTo,
+            ...PRIME_RPC_ARGS,
+          }),
+      light || skyUhd
+        ? EMPTY
+        : supabase.rpc("get_channel_dow_hour_profile", {
+            p_channel_code: channelCode,
+            p_target_label: programTargetLabel,
+            p_date_from: dateFrom,
+            p_date_to: dateTo,
+            ...PRIME_RPC_ARGS,
+          }),
+      light || skyUhd
+        ? EMPTY
+        : supabase.rpc("get_channel_program_target_profile", {
+            p_channel_code: channelCode,
+            p_kpi_target_label: programTargetLabel,
+            p_demographic_labels: fullDemographicLabels(group.code),
+            p_date_from: dateFrom,
+            p_date_to: dateTo,
+            p_prior_date_from: priorDateFrom,
+            p_prior_date_to: priorDateTo,
+            p_top_n_programs: 12,
+            p_min_airings: 3,
+            ...PRIME_RPC_ARGS,
+          }),
+      // 공휴일은 RPC가 아니라 단순 테이블 조회 — 프라임 분류의 근거를 리포트가 고지하는 데 쓴다.
+      light
+        ? Promise.resolve({ data: [] as { holiday_date: string; name: string }[] })
+        : supabase
+            .from("public_holidays")
+            .select("holiday_date, name")
+            .gte("holiday_date", dateFrom)
+            .lte("holiday_date", dateTo)
+            .order("holiday_date"),
+      // 오리지널 재방 창 — 등록이 없는 채널은 RPC가 자연히 빈 배열을 반환한다.
+      light || skyUhd
+        ? EMPTY
+        : supabase.rpc("get_channel_original_rerun_profile", {
+            p_channel_code: channelCode,
+            p_program_target_label: programTargetLabel,
+            p_date_from: dateFrom,
+            p_date_to: dateTo,
+            p_window_days: 7,
+          }),
+      // 본방(`<본>`) vs 본방 외 효율 — 태그가 없는 채널은 자연히 빈 배열.
+      light || skyUhd
+        ? EMPTY
+        : supabase.rpc("get_channel_first_run_efficiency", {
+            p_channel_code: channelCode,
+            p_program_target_label: programTargetLabel,
+            p_date_from: dateFrom,
+            p_date_to: dateTo,
+            p_limit: 40,
+          }),
     ]);
 
   const rawTrend = (trendRes.data ?? []) as { broadcast_date?: string; week_start?: string; month_start?: string; avg_rating: number | null }[];
@@ -608,6 +787,125 @@ export async function collectAudienceReportData(channelCode: string, period: Res
     programNames: r.program_names,
   }));
 
+  // W절(2026-09-09) — 심층 분석 원자료 3종 + 기간 내 공휴일. snake_case → camelCase 변환만 한다.
+  const programSlotProfile: ProgramSlotProfileRow[] = ((programSlotProfileRes.data ?? []) as {
+    canonical_name: string;
+    broadcast_hour: number;
+    is_prime: boolean;
+    airings: number;
+    airtime_min: number | null;
+    avg_rating: number | null;
+    avg_share: number | null;
+    avg_reach: number | null;
+    avg_time_spent_seconds: number | null;
+    avg_time_spent_share: number | null;
+  }[]).map((r) => ({
+    canonicalName: r.canonical_name,
+    broadcastHour: r.broadcast_hour,
+    isPrime: r.is_prime,
+    airings: r.airings,
+    airtimeMin: r.airtime_min,
+    avgRating: r.avg_rating,
+    avgShare: r.avg_share,
+    avgReach: r.avg_reach,
+    avgTimeSpentSeconds: r.avg_time_spent_seconds,
+    avgTimeSpentShare: r.avg_time_spent_share,
+  }));
+
+  const dowHourProfile: DowHourProfileRow[] = ((dowHourProfileRes.data ?? []) as {
+    dow: number;
+    dow_label: string;
+    broadcast_hour: number;
+    day_type: string;
+    is_prime: boolean;
+    airings: number;
+    airtime_min: number | null;
+    avg_rating: number | null;
+    avg_share: number | null;
+    avg_reach: number | null;
+    avg_time_spent_seconds: number | null;
+    avg_time_spent_share: number | null;
+  }[]).map((r) => ({
+    dow: r.dow,
+    dowLabel: r.dow_label,
+    broadcastHour: r.broadcast_hour,
+    dayType: r.day_type,
+    isPrime: r.is_prime,
+    airings: r.airings,
+    airtimeMin: r.airtime_min,
+    avgRating: r.avg_rating,
+    avgShare: r.avg_share,
+    avgReach: r.avg_reach,
+    avgTimeSpentSeconds: r.avg_time_spent_seconds,
+    avgTimeSpentShare: r.avg_time_spent_share,
+  }));
+
+  const programTargetProfile: ProgramTargetProfileRow[] = ((programTargetProfileRes.data ?? []) as {
+    canonical_name: string;
+    demographic_label: string;
+    is_prime: boolean;
+    airings: number;
+    airtime_min: number | null;
+    avg_rating: number | null;
+    avg_reach: number | null;
+    avg_time_spent_share: number | null;
+    prior_avg_rating: number | null;
+  }[]).map((r) => ({
+    canonicalName: r.canonical_name,
+    demographicLabel: r.demographic_label,
+    isPrime: r.is_prime,
+    airings: r.airings,
+    airtimeMin: r.airtime_min,
+    avgRating: r.avg_rating,
+    avgReach: r.avg_reach,
+    avgTimeSpentShare: r.avg_time_spent_share,
+    priorAvgRating: r.prior_avg_rating,
+  }));
+
+  const holidaysInPeriod: HolidayRow[] = ((holidaysRes.data ?? []) as { holiday_date: string; name: string }[]).map((r) => ({
+    date: r.holiday_date,
+    name: r.name,
+  }));
+
+  const originalRerunProfile: OriginalRerunProfileRow[] = ((originalRerunProfileRes.data ?? []) as Record<string, unknown>[]).map((r) => ({
+    canonicalName: r.canonical_name as string,
+    category: (r.category as string | null) ?? null,
+    homeChannelCode: (r.home_channel_code as string | null) ?? null,
+    simulcastChannelCode: (r.simulcast_channel_code as string | null) ?? null,
+    rerunChannelCode: (r.rerun_channel_code as string | null) ?? null,
+    liveEpisodes: (r.live_episodes as number) ?? 0,
+    liveAvgRating: (r.live_avg_rating as number | null) ?? null,
+    liveAvgReach: (r.live_avg_reach as number | null) ?? null,
+    liveAvgTimeSpentShare: (r.live_avg_time_spent_share as number | null) ?? null,
+    simulcastEpisodes: (r.simulcast_episodes as number) ?? 0,
+    simulcastAvgRating: (r.simulcast_avg_rating as number | null) ?? null,
+    rerunEpisodes: (r.rerun_episodes as number) ?? 0,
+    rerunAvgRating: (r.rerun_avg_rating as number | null) ?? null,
+    rerunRetentionPct: (r.rerun_retention_pct as number | null) ?? null,
+    immediateRerunEpisodes: (r.immediate_rerun_episodes as number) ?? 0,
+    sameDayRerunEpisodes: (r.same_day_rerun_episodes as number) ?? 0,
+    selfRerunEpisodes: (r.self_rerun_episodes as number) ?? 0,
+    selfRerunAvgRating: (r.self_rerun_avg_rating as number | null) ?? null,
+    windowAirings: (r.window_airings as number) ?? 0,
+    windowSumRating: (r.window_sum_rating as number | null) ?? null,
+    windowAvgRating: (r.window_avg_rating as number | null) ?? null,
+    amplificationRatio: (r.amplification_ratio as number | null) ?? null,
+  }));
+
+  const firstRunEfficiency: FirstRunEfficiencyRow[] = ((firstRunEfficiencyRes.data ?? []) as Record<string, unknown>[]).map((r) => ({
+    canonicalName: r.canonical_name as string,
+    firstRunAirings: (r.first_run_airings as number) ?? 0,
+    firstRunAvgRating: (r.first_run_avg_rating as number | null) ?? null,
+    firstRunAvgReach: (r.first_run_avg_reach as number | null) ?? null,
+    firstRunAvgTimeSpentShare: (r.first_run_avg_time_spent_share as number | null) ?? null,
+    otherAirings: (r.other_airings as number) ?? 0,
+    otherAvgRating: (r.other_avg_rating as number | null) ?? null,
+    otherAvgReach: (r.other_avg_reach as number | null) ?? null,
+    otherAvgTimeSpentShare: (r.other_avg_time_spent_share as number | null) ?? null,
+    rerunRetentionPct: (r.rerun_retention_pct as number | null) ?? null,
+    totalAirtimeMin: (r.total_airtime_min as number | null) ?? null,
+  }));
+
   const skyUhdProgramLog: SkyUhdProgramLogRow[] | null = isSkyUhd(channelCode)
     ? ((skyUhdLogRes.data ?? []) as { broadcast_date: string; start_time: string; canonical_name: string; rating: number | null }[]).map((r) => ({
         broadcastDate: r.broadcast_date,
@@ -659,6 +957,12 @@ export async function collectAudienceReportData(channelCode: string, period: Res
     periodDemographicProgramHighlights,
     competitorScheduleChangeLog,
     hourlyProgramTitlesByDow,
+    programSlotProfile,
+    dowHourProfile,
+    programTargetProfile,
+    holidaysInPeriod,
+    originalRerunProfile,
+    firstRunEfficiency,
     dailyHealthInputs,
     fitScoreItems,
   };
