@@ -5,6 +5,7 @@
 // 내려준 값을 그대로 표시하고, 여기서는 문장 조립(줄글 인사이트)만 한다.
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { AskAssistantWidget } from "@/components/AskAssistantWidget";
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
@@ -4328,6 +4329,7 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
 }
 
 export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   // 사용자 지시(2026-09-02): "skyUHD 오른쪽 관리자화면 버튼 아이콘을 '큰 글씨로 보기' 아이콘으로
   // 교체... 누르면 전체적으로 큰 글씨로" — Page 2(ChannelDeepDive.tsx)에 이미 있는 zoom 토글과
@@ -4515,6 +4517,27 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 </svg>
               </a>
             )}
+            {/* 사용자 지시(2026-09-09): "로그인 안하면 못들어가게 막아줘" — 확인 결과 접근 자체는
+                이미 proxy.ts가 막고 있었지만(로그인 없이는 /pd/login으로 리다이렉트), PD 세션엔
+                로그아웃 기능이 아예 없어(관리자만 /admin에 로그아웃 버튼 존재) 한 번 로그인하면
+                30일간 재로그인 화면을 볼 일이 없었다 — 로그아웃 버튼을 신설해 누구나 직접 로그아웃
+                후 로그인 화면으로 돌아가는지 확인할 수 있게 한다. */}
+            <button
+              onClick={async () => {
+                await fetch("/api/logout", { method: "POST" });
+                router.push("/pd/login");
+                router.refresh();
+              }}
+              title="로그아웃"
+              aria-label="로그아웃"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-700"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
           </div>
         </div>
 

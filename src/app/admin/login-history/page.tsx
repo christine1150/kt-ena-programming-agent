@@ -14,7 +14,7 @@ export default async function LoginHistoryPage() {
 
   const { data: logs, error } = await supabase
     .from("login_log")
-    .select("id, role, actor_name, ip, user_agent, logged_in_at")
+    .select("id, role, actor_name, ip, user_agent, logged_in_at, event_type")
     .order("logged_in_at", { ascending: false })
     .limit(300);
 
@@ -47,6 +47,7 @@ export default async function LoginHistoryPage() {
                 <tr>
                   <th className="px-4 py-3 font-medium">시간</th>
                   <th className="px-4 py-3 font-medium">구분</th>
+                  <th className="px-4 py-3 font-medium">유형</th>
                   <th className="px-4 py-3 font-medium">이름</th>
                   <th className="px-4 py-3 font-medium">IP</th>
                   <th className="px-4 py-3 font-medium">기기/브라우저</th>
@@ -72,6 +73,20 @@ export default async function LoginHistoryPage() {
                         }`}
                       >
                         {log.role === "admin" ? "관리자" : "PD"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {/* 사용자 지시(2026-09-09): 세션만으로 들어온 접속(로그인 폼을 거치지 않은
+                          방문)과 실제 로그인을 구분해 보여준다 — 30일 세션 동안 로그인 없이도
+                          들어왔는지를 관리자가 확인할 수 있게. */}
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          log.event_type === "access"
+                            ? "bg-amber-50 text-amber-700"
+                            : "bg-emerald-50 text-emerald-700"
+                        }`}
+                      >
+                        {log.event_type === "access" ? "접속(세션)" : "로그인"}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-zinc-900">{log.actor_name}</td>
