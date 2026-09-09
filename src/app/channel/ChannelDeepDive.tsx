@@ -2420,9 +2420,26 @@ function OpportunityGapSlopeChart({ rows, fmtR }: { rows: HourBlockOpportunityRo
   const yOf = (v: number) => PAD_T + (1 - (v - minV) / (maxV - minV || 1)) * (H - PAD_T - PAD_B);
   const xLeft = PAD_L + 30;
   const xRight = W - PAD_R;
-  const MIN_LABEL_GAP = 13;
+  // UI 디자이너 개선안(2026-09-09): 10px bold 라벨의 실제 렌더 높이 대비 기존 13px 간격은
+  // 여백이 거의 없어("저녁 0.044 / 높은 밤 0.042 / 밤 0.042"처럼 값이 근접하면 거의 붙어
+  // 보임) — 16px로 상향.
+  const MIN_LABEL_GAP = 16;
+  // UX 리서처 개선안(2026-09-09): 8구간을 매번 같은 밀도로 다 보여줄 필요가 없음 — 이 차트
+  // 바로 아래 8구간 전체 상세 표(정보 손실 없이 이미 존재)가 있으므로, 차트에서는 격차
+  // 변화량(gap_change) 절대값이 큰 상위 4개 구간만 강조(라벨·실선)하고 나머지는 흐리게
+  // 처리해 시선을 자연스럽게 "지금 반응이 필요한" 구간으로 모은다(같은 파일의
+  // TimeSlotCompetitionChart가 이미 쓰는 "차트=요약/표=상세" 분업 원칙을 그대로 확장).
+  const EMPHASIZE_COUNT = 4;
+  const emphasized = new Set(
+    [...plottable]
+      .filter((r) => r.gap_change !== null)
+      .sort((a, b) => Math.abs(b.gap_change!) - Math.abs(a.gap_change!))
+      .slice(0, EMPHASIZE_COUNT)
+      .map((r) => r.hour_block)
+  );
   const labelYByHourBlock = new Map<number, number>();
   [...plottable]
+    .filter((r) => emphasized.has(r.hour_block))
     .map((r) => ({ hour_block: r.hour_block, y: yOf(r.gap_recent) }))
     .sort((a, b) => a.y - b.y)
     .reduce((prevY, cur) => {
@@ -2450,10 +2467,11 @@ function OpportunityGapSlopeChart({ rows, fmtR }: { rows: HourBlockOpportunityRo
           const color = cls ? OPPORTUNITY_CLASS_COLOR[cls] : "#a1a1aa";
           const y1 = yOf(r.gap_full);
           const y2 = yOf(r.gap_recent);
+          const isEmphasized = emphasized.has(r.hour_block);
           const labelY = labelYByHourBlock.get(r.hour_block) ?? y2;
           return (
-            <g key={r.hour_block}>
-              <line x1={xLeft} y1={y1} x2={xRight} y2={y2} stroke={color} strokeWidth={2}>
+            <g key={r.hour_block} opacity={isEmphasized ? 1 : 0.3}>
+              <line x1={xLeft} y1={y1} x2={xRight} y2={y2} stroke={color} strokeWidth={isEmphasized ? 2 : 1.5}>
                 <title>
                   {opportunityHourBlockLabel(r.hour_block)} — 격차 {r.gap_full.toFixed(4)} → {r.gap_recent.toFixed(4)}
                   {cls ? ` (${OPPORTUNITY_CLASS_LABEL[cls]})` : ""}
@@ -2464,14 +2482,22 @@ function OpportunityGapSlopeChart({ rows, fmtR }: { rows: HourBlockOpportunityRo
               {/* 사용자 지시(2026-08-26): "그래픽이 기준 수치를 알아볼 수 있도록 그래프 옆에
                   수치 적어줄것" — 지금까지 격차 숫자는 hover 툴팁(<title>)에만 있어 한눈에
                   안 보였다. 양쪽 점 옆에 실제 격차 값을 직접 표기한다. 점(y2)과 라벨(labelY)이
-                  겹침 방지로 어긋날 수 있어 얇은 연결선(leader line)으로 이어준다. */}
-              {Math.abs(labelY - y2) > 1 && <line x1={xRight + 2} y1={y2} x2={xRight + 6} y2={labelY} stroke={color} strokeWidth={0.75} opacity={0.5} />}
-              <text x={xLeft} y={y1 - 6} textAnchor="middle" fontSize={11} fill={color}>
-                {fmtR(r.gap_full)}
-              </text>
-              <text x={xRight + 8} y={labelY + 3} fontSize={10} fontWeight={600} fill={color}>
-                {HOUR_BLOCK_PERIOD_NAME[r.hour_block] ?? r.hour_block} {fmtR(r.gap_recent)}
-              </text>
+                  겹침 방지로 어긋날 수 있어 얇은 연결선(leader line)으로 이어준다.
+                  UX 리서처 개선안(2026-09-09): 격차 변화량 상위 4개(emphasized)만 숫자 라벨을
+                  달고, 나머지는 선만 흐리게 남겨 시간대 흐름의 연속성은 유지하되 라벨 밀도는
+                  낮춘다 — 전체 수치는 이 차트 바로 아래 8구간 표에 그대로 남아 있어 정보
+                  손실은 없음. */}
+              {isEmphasized && (
+                <>
+                  {Math.abs(labelY - y2) > 1 && <line x1={xRight + 2} y1={y2} x2={xRight + 6} y2={labelY} stroke={color} strokeWidth={0.75} opacity={0.5} />}
+                  <text x={xLeft} y={y1 - 6} textAnchor="middle" fontSize={11} fill={color}>
+                    {fmtR(r.gap_full)}
+                  </text>
+                  <text x={xRight + 8} y={labelY + 3} fontSize={10} fontWeight={600} fill={color}>
+                    {HOUR_BLOCK_PERIOD_NAME[r.hour_block] ?? r.hour_block} {fmtR(r.gap_recent)}
+                  </text>
+                </>
+              )}
             </g>
           );
         })}
@@ -3316,6 +3342,26 @@ interface ScatterPoint {
   x: number;
   y: number;
   bubble: number | null; // 없으면 기본 크기로 표시(값을 지어내지 않음)
+  // UX 리서처 개선안(2026-09-09): 상시 라벨 선정에 REPLACE 태그를 보정값으로 반영하기 위한
+  // 선택적 필드 — Program Portfolio 두 산점도가 CONTENT FITS?와 같은 fitScoreItems를 쓰므로
+  // 새 계산 없이 그대로 넘길 수 있음.
+  tag?: string | null;
+}
+// UI 디자이너·UX 리서처 개선안(2026-09-09): 점마다 무조건 라벨을 그리던 기존 방식(겹침의
+// 직접 원인)을 걷어내고, ① 사분면 중심에서 가장 먼(가장 극단적인) 상위 2개 + ② REPLACE
+// 태그 중 아직 안 뽑힌 것 1개까지, 차트당 최대 3개만 상시 라벨을 켠다(리서처 권고 "차트당
+// 3~6개" 하한 쪽 채택 — 이 차트는 점 개수가 적어 6개까지 갈 필요가 없음). 나머지는 점+호버
+// 툴팁(이미 있음)만 유지. 골라진 소수만 라벨을 켜므로 FitScoreQuadrantChart 수준의 정교한
+// 2차원 충돌검사까지는 필요 없고, x좌표 기준 1차원 lane 스태킹(FitScoreQuadrantChart와 같은
+// 원리, RULE 04 상수 재사용)만으로 충분히 안 겹치게 배치할 수 있다.
+function selectAlwaysLabelPoints(points: ScatterPoint[], xSplit: number, ySplit: number, xRange: number, yRange: number): Set<number> {
+  const byDistDesc = points
+    .map((p, i) => ({ i, dist: Math.hypot((p.x - xSplit) / (xRange || 1), (p.y - ySplit) / (yRange || 1)) }))
+    .sort((a, b) => b.dist - a.dist);
+  const picked = new Set<number>(byDistDesc.slice(0, 2).map((d) => d.i));
+  const replaceIdx = byDistDesc.map((d) => d.i).find((i) => points[i].tag === "REPLACE" && !picked.has(i));
+  if (replaceIdx !== undefined) picked.add(replaceIdx);
+  return picked;
 }
 function ScatterQuadrantChart({
   points,
@@ -3357,6 +3403,24 @@ function ScatterQuadrantChart({
   const xOf = (v: number) => PAD + ((v - xDomain[0]) / (xDomain[1] - xDomain[0] || 1)) * (W - PAD * 2);
   const yOf = (v: number) => H - PAD - ((v - yDomain[0]) / (yDomain[1] - yDomain[0] || 1)) * (H - PAD * 2);
   const rOf = (v: number | null) => (v === null ? 5 : 4 + (v / maxBubble) * 10);
+  const alwaysLabel = selectAlwaysLabelPoints(points, xSplit, ySplit, xDomain[1] - xDomain[0], yDomain[1] - yDomain[0]);
+  // x좌표순으로 훑으며 겹치면 한 단(lane)씩 아래로 미는 그리디 배치 — FitScoreQuadrantChart와
+  // 같은 원리(CHAR_WIDTH_PX/LANE_STEP_PX도 그 파일이 이미 검증한 값 재사용).
+  const CHAR_WIDTH_PX = 8.5;
+  const LABEL_GAP_PX = 4;
+  const LANE_STEP_PX = 14;
+  const laneByIndex = new Map<number, number>();
+  const laneRightEdge: number[] = [];
+  Array.from(alwaysLabel)
+    .map((i) => ({ i, px: xOf(points[i].x), width: points[i].name.length * CHAR_WIDTH_PX }))
+    .sort((a, b) => a.px - b.px)
+    .forEach(({ i, px, width }) => {
+      const left = px - width / 2;
+      let lane = 0;
+      while (laneRightEdge[lane] !== undefined && laneRightEdge[lane] > left) lane++;
+      laneRightEdge[lane] = left + width + LABEL_GAP_PX;
+      laneByIndex.set(i, lane);
+    });
   return (
     <div className="overflow-x-auto">
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H }}>
@@ -3391,13 +3455,8 @@ function ScatterQuadrantChart({
           const cx = xOf(p.x);
           const cy = yOf(p.y);
           const r = rOf(p.bubble);
-          // 사용자 지시(2026-08-27): "점들이 무엇을 의미하는지 알 수 없음 — 프로그램명을 적어
-          // 달라" — 이전엔 호버해야만 보이는 <title> 툴팁뿐이었다. 점 아래에 이름을 항상
-          // 표시한다(WHAT TO SCHEDULE?의 FitScoreQuadrantChart와 같은 축 밖 이탈 방지 규칙 —
-          // 좌우 끝 근처 점은 가운데 정렬 대신 안쪽으로 붙여 카드 밖으로 삐져나가지 않게).
-          // 너무 긴 프로그램명은 좁은 버블 사이 겹침을 줄이기 위해 8자에서 줄인다(전체 이름은
-          // 그대로 <title> 호버 툴팁에 남아 있음).
-          const shortName = p.name.length > 8 ? `${p.name.slice(0, 8)}…` : p.name;
+          const showLabel = alwaysLabel.has(i);
+          const lane = laneByIndex.get(i) ?? 0;
           return (
             <g key={i}>
               <circle cx={cx} cy={cy} r={r} fill={accentColor} fillOpacity={0.55} stroke={accentColor} strokeWidth={1}>
@@ -3406,15 +3465,23 @@ function ScatterQuadrantChart({
                   {p.bubble !== null ? `, 도달율 ${p.bubble.toFixed(2)}%` : ""}
                 </title>
               </circle>
-              <text
-                x={cx}
-                y={cy + r + 9}
-                textAnchor={cx < W * 0.15 ? "start" : cx > W * 0.85 ? "end" : "middle"}
-                fontSize={11}
-                fill="#52525b"
-              >
-                {shortName}
-              </text>
+              {/* UI 디자이너·UX 리서처 개선안(2026-09-09): "점들이 무엇을 의미하는지 알 수
+                  없음"이라는 2026-08-27 지시의 취지(라벨을 아예 없애지 않음)는 지키되, 이번엔
+                  점마다 무조건이 아니라 사분면 극단·REPLACE 태그로 선정된 소수(차트당 최대 3개)
+                  에만 라벨을 켠다 — 나머지는 <title> 호버로 여전히 이름을 확인할 수 있다. 선정된
+                  라벨은 이제 몇 개 안 되므로 8자 줄임 없이 전체 이름을 보여줘도 겹치지 않는다. */}
+              {showLabel && (
+                <text
+                  x={cx}
+                  y={cy + r + 9 + lane * LANE_STEP_PX}
+                  textAnchor={cx < W * 0.15 ? "start" : cx > W * 0.85 ? "end" : "middle"}
+                  fontSize={11}
+                  fontWeight={600}
+                  fill="#3f3f46"
+                >
+                  {p.name}
+                </text>
+              )}
             </g>
           );
         })}
@@ -6206,6 +6273,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       x: r.target_performance_score!,
                       y: r.audience_engagement_score!,
                       bubble: r.evidence.avg_reach,
+                      tag: r.tag,
                     }))}
                 />
               </div>
@@ -6966,21 +7034,25 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {competitorTopPrograms.length === 0 ? (
               <p className="text-sm text-zinc-400">{referenceLabel} 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
             ) : (
-              // 사용자 재지시(2026-08-22): "시청률이 제목과 우측 끝으로 멀리 떨어져 가독성이
-              // 떨어진다" — ml-auto(카드 전체 폭 끝까지 밀어냄) 대신, 제목 열에 고정 폭(줄바꿈
-              // 허용)을 줘 시청률이 그 바로 뒤에 오도록 했다. 모든 행이 같은 고정 폭을 쓰므로
-              // 시청률끼리는 여전히 세로로 정렬된다(요청한 두 조건 모두 충족).
+              // UX 아키텍트 개선안(2026-09-09): 채널명+시간+프로그램명을 한 span(w-56)에
+              // 공백으로 이어붙이던 구조 — truncate/nowrap이 없어 224px를 넘으면 자동
+              // 줄바꿈되어 프로그램명이 다음 줄로 밀렸다("동시간대 경쟁 상황"이 2026-08-22에
+              // 이미 겪고 고친 것과 같은 문제, 3438~3454행 패턴 참고). 필드마다 독립된 grid
+              // 열로 분리 — 값 종류를 통제할 수 없는 채널명·프로그램명은 truncate+title로
+              // 안전하게, 시간·시청률처럼 짧고 예측 가능한 값은 고정폭+tabular-nums로.
+              // 2026-08-22 지시(시청률을 제목 바로 옆에)는 grid 열 순서 자체로 충족.
               <ol className="space-y-1.5 text-sm">
                 {competitorTopPrograms.map((p, i) => (
-                  <li key={i} className="flex items-baseline gap-2">
-                    <span className="w-4 shrink-0 text-right font-medium text-zinc-400">{i + 1}</span>
-                    <span className="w-56 shrink-0">
-                      <span className="font-medium text-zinc-700">{p.competitor_name}</span>{" "}
-                      <span className="text-zinc-500">
-                        {p.start_time.slice(0, 5)} {p.program_name}
-                      </span>
+                  <li key={i} className="grid grid-cols-[1.5rem_5.25rem_3rem_minmax(0,1fr)_4.5rem] items-baseline gap-x-2">
+                    <span className="text-right font-medium text-zinc-400">{i + 1}</span>
+                    <span className="truncate font-medium text-zinc-700" title={p.competitor_name}>
+                      {p.competitor_name}
                     </span>
-                    <span className="font-semibold text-zinc-800">{fmtR(p.rating)}</span>
+                    <span className="tabular-nums text-zinc-500">{p.start_time.slice(0, 5)}</span>
+                    <span className="truncate text-zinc-500" title={p.program_name}>
+                      {p.program_name}
+                    </span>
+                    <span className="text-right font-semibold tabular-nums text-zinc-800">{fmtR(p.rating)}</span>
                   </li>
                 ))}
               </ol>
