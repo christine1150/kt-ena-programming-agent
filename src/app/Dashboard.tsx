@@ -9,14 +9,10 @@ import { useRouter } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { AskAssistantWidget } from "@/components/AskAssistantWidget";
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
-// 사용자 지시(2026-08-27): "Channel Intelligence Report" Health Score를 1페이지에도 적용 —
-// 단, 1페이지 "채널별 인사이트"는 Fit Score 태그·daypart 격차처럼 2페이지 전용 무거운 조회
-// 결과를 갖고 있지 않다(성능 이유로 이미 최적화된 페이지, 새 RPC를 얹지 않는다는 원칙 — 2026-08-21
-// 성능 개선 이력 참고). 그래서 이 파일이 이미 들고 있는 2개 축(시청률 등락률·순위)만 넘기고
-// 나머지 3개 축(편성 상태/경쟁 신호/시간대 흐름)은 계산 함수 자체의 "데이터 없으면 중립" 처리에
-// 맡긴다 — 같은 계산 규칙을 재사용할 뿐 새 판정 로직을 만들지 않는다(CLAUDE.md: 로직 중복 금지).
-import { computeChannelHealthScore } from "@/lib/channelHealthScore";
-import { HealthScoreBadge } from "@/components/HealthScoreBadge";
+// 사용자 지시(2026-09-09): 1페이지 "채널별 인사이트"의 안정/약세/주의 Health Score 배지를
+// 걷어내고 그 자리에 "오늘의 시청률" 카드와 같은 형식(시청률+등위)을 넣었다 — 그 배지를
+// 그리던 computeChannelHealthScore/HealthScoreBadge는 이 파일에서 더는 쓰지 않음(2페이지
+// ChannelDeepDive.tsx에는 그대로 남아있음, 여기서만 제거).
 import { formatDateWithDowDots } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun } from "@/lib/josa";
 import {
@@ -3476,7 +3472,9 @@ function OriginalContentReportCard({
                           콘텐츠 크리에이터 개선안(2026-09-09): 위 압축 요약이 새로 생겨 이 원문
                           블록은 기본 접힘 <details>로 낮췄다 — 문구 자체는 한 글자도 바뀌지 않음. */}
                       <details className="group">
-                        <summary className="cursor-pointer text-[12px] font-semibold text-zinc-400 marker:content-none hover:text-zinc-600">
+                        {/* 사용자 지시(2026-09-09): "자세히 보기"가 잘 안 보인다 — 진하게(검정),
+                            글씨도 키움(11px→13px, zinc-400→zinc-800). */}
+                        <summary className="cursor-pointer text-[13px] font-bold text-zinc-800 marker:content-none hover:text-black">
                           <span className="inline-flex items-center gap-1">
                             <span className="inline-block transition-transform group-open:rotate-90">▸</span>
                             자세히 보기(핵심 요약·편성 인사이트 원문)
@@ -3734,12 +3732,17 @@ function buildRerunHighlightSentence(
 function ChannelNarrativeCard({
   signals,
   themeColorByCode,
+  targetRankByCode,
   enaOriginalDaily,
   onOpenChannelDetail,
   selectedChannel,
 }: {
   signals: ChannelNarrativeSignal[];
   themeColorByCode: Map<string, string | null>;
+  // 사용자 지시(2026-09-09): 안정/약세/주의 Health Score 배지 대신 "시청률 (오늘 등위/목표
+  // 등위)"를 보여주기 위해 — ChannelTile이 이미 이 형식(RankPair)을 쓰고 있어 같은 목표
+  // 등위 소스(ChannelSummary.targetRank)를 그대로 재사용한다(새 계산 없음).
+  targetRankByCode: Map<string, string | null>;
   // 사용자 지시(2026-08-25): ENA 채널 인사이트 첫 문장용 — 오늘 ENA 채널(broadcast_channel_code
   // ="ENA")에서 방영된 오리지널·독점 콘텐츠만 필터링해 전달받는다.
   enaOriginalDaily: OriginalDailyItem[];
@@ -3755,6 +3758,7 @@ function ChannelNarrativeCard({
     text: string;
     color: string | null;
     deltaPct: number | null;
+    todayRating: number | null;
     todayRank: number | null;
     baselineAvgRank: number | null;
     situationLine: string | null;
@@ -3779,6 +3783,7 @@ function ChannelNarrativeCard({
       ...narrative,
       color: themeColorByCode.get(code) ?? null,
       deltaPct: s.rating_delta_pct,
+      todayRating: s.today_rating,
       todayRank: s.today_rank,
       baselineAvgRank: s.baseline_avg_rank,
       ...buildChannelInsightSummary(s),
@@ -3792,6 +3797,7 @@ function ChannelNarrativeCard({
       ...skyuhdLine,
       color: themeColorByCode.get("SKYUHD") ?? null,
       deltaPct: skyuhdSignal?.rating_delta_pct ?? null,
+      todayRating: skyuhdSignal?.today_rating ?? null,
       todayRank: skyuhdSignal?.today_rank ?? null,
       baselineAvgRank: skyuhdSignal?.baseline_avg_rank ?? null,
       ...buildChannelInsightSummary(skyuhdSignal!),
@@ -3837,21 +3843,16 @@ function ChannelNarrativeCard({
                     {selectedChannel === line.code ? "▶" : "▼"}
                   </button>
                 </span>
-                {/* 사용자 지시(2026-08-27): Health Score를 1페이지 "채널별 인사이트"에도 —
-                    시청률 등락률·순위 2개 축만으로 계산(나머지 축은 데이터 없어 중립 처리되므로
-                    2페이지 정식 Health Score보다 등급 폭이 좁게 나온다, 정상 동작). */}
-                <HealthScoreBadge
-                  variant="light"
-                  health={computeChannelHealthScore({
-                    ratingDeltaPct: line.deltaPct,
-                    todayRank: line.todayRank,
-                    baselineAvgRank: line.baselineAvgRank,
-                    fitScoreTagCounts: { STRENGTHEN: 0, KEEP: 0, MOVE: 0, REPLACE: 0, TEST: 0 },
-                    rootCauseTriggered: false,
-                    opportunityTriggered: false,
-                    daypartGapChanges: [],
-                  })}
-                />
+                {/* 사용자 지시(2026-09-09): 안정/약세/주의 Health Score 배지 대신 "오늘의
+                    시청률" 카드(ChannelTile)와 같은 형식 — 시청률(굵게) + (오늘 등위/목표
+                    등위)를 그 자리에. RankPair·parseTargetRankNum을 그대로 재사용해 표기
+                    형식이 화면 전체에서 어긋나지 않게 한다(새 계산 없음). */}
+                {line.todayRating !== null && (
+                  <span className="flex items-baseline gap-1">
+                    <span className="text-[15px] font-bold tabular-nums tracking-tight text-zinc-900">{formatRating(line.todayRating)}</span>
+                    <RankPair todayRank={line.todayRank} targetRankNum={parseTargetRankNum(targetRankByCode.get(line.code) ?? null)} sizeClass="text-[11px]" />
+                  </span>
+                )}
                 {line.deltaPct !== null && <MiniDeltaBar pct={line.deltaPct} />}
               </div>
               {/* 사용자 지시(2026-08-26, 가독성 개선 5번 "타이포그래피 기본기"): 줄 폭을 제한하고
@@ -3881,7 +3882,9 @@ function ChannelNarrativeCard({
                   </p>
                 </div>
                 <details className="group mt-1.5">
-                  <summary className="cursor-pointer text-[11px] font-semibold text-zinc-400 marker:content-none hover:text-zinc-600">
+                  {/* 사용자 지시(2026-09-09): "자세히 보기"가 잘 안 보인다 — 진하게(검정),
+                      글씨도 키움(11px→13px, zinc-400→zinc-800). */}
+                  <summary className="cursor-pointer text-[13px] font-bold text-zinc-800 marker:content-none hover:text-black">
                     <span className="inline-flex items-center gap-1">
                       <span className="inline-block transition-transform group-open:rotate-90">▸</span>
                       자세히 보기(원문)
@@ -4799,6 +4802,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
             <ChannelNarrativeCard
               signals={data.narrativeSignals}
               themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
+              targetRankByCode={new Map(data.channels.map((c) => [c.code, c.targetRank]))}
               enaOriginalDaily={data.originalContentReport.daily}
               selectedChannel={selectedInsightChannel}
               onOpenChannelDetail={(code) => setSelectedInsightChannel((cur) => (cur === code ? null : code))}
