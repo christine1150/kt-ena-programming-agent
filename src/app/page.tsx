@@ -1,6 +1,5 @@
 // 홈 화면 = Page 1 종합 대시보드 (개발 단위 14번).
 // (proxy.ts가 관리자/PD 세션이 없으면 이 화면에 오기 전에 /access-denied로 돌려보낸다)
-import { Suspense } from "react";
 import { headers } from "next/headers";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { recordAccessIfNotLoggedToday } from "@/lib/loginLog";
@@ -23,12 +22,5 @@ export default async function Home() {
     await recordAccessIfNotLoggedToday({ role: session.role, actorId, actorName, ip, userAgent });
   }
 
-  // UX 아키텍트 개선안(2026-09-09, IA 재배치 방안 2): Dashboard.tsx가 탭 상태를
-  // useSearchParams(?tab=)로 관리하게 되어 Suspense 경계가 필요해짐(App Router 요구사항) —
-  // fallback은 Dashboard 자체의 기존 "불러오는 중..." 문구와 톤을 맞춘 최소 표시.
-  return (
-    <Suspense fallback={<p className="p-6 text-sm text-zinc-500">불러오는 중...</p>}>
-      <Dashboard isAdmin={session?.role === "admin"} />
-    </Suspense>
-  );
+  return <Dashboard isAdmin={session?.role === "admin"} />;
 }

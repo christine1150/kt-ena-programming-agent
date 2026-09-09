@@ -7,7 +7,6 @@
 // 제공하고 인과관계로 단정하지 않는다(CLAUDE.md 원칙).
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDow } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun, josaEulReul } from "@/lib/josa";
@@ -3683,29 +3682,7 @@ function getPastSameDayDates(asOfDate: string, dow: number, weeks: number): stri
   return dates;
 }
 
-// UX 아키텍트 개선안(2026-09-09, IA 재배치 방안 2): 채널 상세 3탭 구성 — "시청률 추이"(스코어
-// 카드+Executive Summary+오늘의 브리핑+시간대별 그래프+심층분석+질문하기 AI+요일×시간대
-// 히트맵+TOP20+WHAT HAPPENED?+WHY?), "시간대 편성효율"(WHO IS WATCHING?+HOW DEEPLY?+
-// CONTENT FITS?+Program Portfolio+OPPORTUNITY?/WHAT TO SCHEDULE?+AI 스마트 팁), "콘텐츠
-// 리뷰"(COMPARED WITH?). 좌측 사이드바·헤더·기간선택은 탭 밖 공통 컨트롤로 그대로 둔다.
-type ChannelTabKey = "trend" | "slots" | "content";
-const CHANNEL_TABS: { key: ChannelTabKey; label: string }[] = [
-  { key: "trend", label: "시청률 추이" },
-  { key: "slots", label: "시간대 편성효율" },
-  { key: "content", label: "콘텐츠 리뷰" },
-];
-
 export default function ChannelDeepDive({ code }: { code: string }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const activeTab = (searchParams.get("tab") as ChannelTabKey | null) ?? "trend";
-  function setActiveTab(tab: ChannelTabKey) {
-    const params = new URLSearchParams(Array.from(searchParams.entries()));
-    if (tab === "trend") params.delete("tab");
-    else params.set("tab", tab);
-    const qs = params.toString();
-    router.replace(qs ? `?${qs}` : "?", { scroll: false });
-  }
   const [data, setData] = useState<ChannelData | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -4727,30 +4704,22 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {/* UX 리서처 개선안(2026-09-09): "편성 상태(Action 건수)"가 가장 급한 신호인데
                 지금까지는 배지 hover 툴팁이나 페이지 최하단 WHAT TO SCHEDULE? 표(전체의 약
                 90% 지점)에만 있었음 — computeChannelHealthScore가 이미 계산해둔 programSlate
-                축 reason을 hover 밖으로 꺼내 상시 노출하고, 클릭하면 그 표로 바로 이동한다
+                축 reason을 hover 밖으로 꺼내 상시 노출하고, 클릭하면 그 표로 바로 스크롤한다
                 (새 계산 없음, 표시 위치만 추가). neutral(긍정·부정 태그 비슷함/판정 대상 없음)
-                일 때는 조치가 급하지 않으므로 칩을 띄우지 않는다.
-                UX 아키텍트 개선안(2026-09-09, IA 재배치)으로 WHAT TO SCHEDULE?가 "시간대
-                편성효율" 탭 안으로 들어가, 단순 앵커 스크롤(#what-to-schedule)만으로는 다른
-                탭에 있을 때 아무 반응이 없어짐 — 탭을 먼저 전환한 뒤 그 탭 콘텐츠가 렌더링될
-                시간을 한 틱 주고 나서 스크롤한다. */}
+                일 때는 조치가 급하지 않으므로 칩을 띄우지 않는다. */}
             {channelHealth &&
               (() => {
                 const slate = channelHealth.axes.find((a) => a.key === "programSlate");
                 if (!slate || slate.verdict === "neutral") return null;
                 return (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab("slots");
-                      setTimeout(() => document.getElementById("what-to-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-                    }}
+                  <a
+                    href="#what-to-schedule"
                     className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
                     title="무엇을 편성할까요? 표로 이동"
                   >
                     <span aria-hidden className="text-white/30">·</span>
                     <span style={{ color: slate.verdict === "negative" ? "#fda4af" : "#6ee7b7" }}>{slate.reason}</span>
-                  </button>
+                  </a>
                 );
               })()}
           </div>
@@ -4763,25 +4732,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
-        {/* UX 아키텍트 개선안(2026-09-09, IA 재배치 방안 2) — 목적별 3탭. 탭 조건부 렌더링만
-            추가, 각 섹션 컴포넌트·데이터 흐름은 전혀 손대지 않음(Delta-Only). */}
-        <div className="mb-4 flex gap-1 border-b border-zinc-200">
-          {CHANNEL_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`-mb-px border-b-2 px-3.5 py-2 text-sm font-semibold transition-colors ${
-                activeTab === tab.key ? "border-indigo-600 text-indigo-700" : "border-transparent text-zinc-400 hover:text-zinc-600"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === "trend" && (
-        <>
         {/* Channel Intelligence Briefing(2026-08-27, "Channel Intelligence Report" 마스터 프롬프트
             §9~15 반영, Phase 1) — KPI 5카드 + Biggest Win/Weakness + Top/Weak Programs. 전부 이미
             fetch된 값 재사용(계산부는 위 kpiCards/winDaypart/weaknessDaypart/briefingTopPrograms/
@@ -5903,11 +5853,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </div>
           )}
         </div>
-        </>
-        )}
 
-        {activeTab === "slots" && (
-        <>
         {/* WHO IS WATCHING? — 재설계(사용자 지시 2026-08-21, 기능 #15-7): 경쟁채널 Affinity 비교
             대신 이 채널 내부의 연령대 흐름(주로 보는 연령대·이동 여부)을 본다. 오늘/어제는 최근
             한 달(28일) baseline(사용자 지시 재확인), 그 외 기간은 이번 기간 vs 전 기간 비교. */}
@@ -6711,11 +6657,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </ul>
           )}
         </div>
-        </>
-        )}
 
-        {activeTab === "content" && (
-        <>
         {/* COMPARED WITH? — 재설계(사용자 지시): Competitive Pressure 제거, 순위 높은 순 +
             12주 평균 대비 등락 + 최고 성적 프로그램(시간대) 보고서. 기간 범위 선택 시 순위/시청률이
             그 기간 평균으로 집계된다(사용자 지시 2026-08-20). */}
@@ -7076,8 +7018,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </div>
           )}
         </div>
-        </>
-        )}
       </div>
     </div>
   );
