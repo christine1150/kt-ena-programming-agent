@@ -20,7 +20,10 @@ export default async function LoginHistoryPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 px-6 py-10">
-      <div className="mx-auto flex max-w-4xl flex-col gap-6">
+      {/* 사용자 지시(2026-09-09): "관리자"/"로그인" 같은 배지 텍스트가 줄바꿈되지 않도록 좌우
+          폭을 넓히고 한 줄에 한 건씩 보이게 — max-w-4xl(896px)이 6개 컬럼을 담기엔 좁아
+          구분/유형 배지 칸이 줄바꿈될 만큼 눌리고 있었다. */}
+      <div className="mx-auto flex max-w-6xl flex-col gap-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold text-zinc-900">로그인 이력</h1>
@@ -42,15 +45,17 @@ export default async function LoginHistoryPage() {
           ) : !logs || logs.length === 0 ? (
             <p className="p-6 text-sm text-zinc-400">아직 로그인 이력이 없습니다.</p>
           ) : (
-            <table className="w-full text-left text-sm">
+            // min-w를 둬서 좁은 화면에서도 배지 칸이 눌려 줄바꿈되는 대신, 바깥 div의
+            // overflow-x-auto로 가로 스크롤되게 한다(위 사용자 지시와 동일 목적).
+            <table className="w-full min-w-[900px] text-left text-sm">
               <thead className="border-b border-zinc-100 text-xs text-zinc-500">
                 <tr>
-                  <th className="px-4 py-3 font-medium">시간</th>
-                  <th className="px-4 py-3 font-medium">구분</th>
-                  <th className="px-4 py-3 font-medium">유형</th>
-                  <th className="px-4 py-3 font-medium">이름</th>
-                  <th className="px-4 py-3 font-medium">IP</th>
-                  <th className="px-4 py-3 font-medium">기기/브라우저</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">시간</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">구분</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">유형</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">이름</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">IP</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">기기/브라우저</th>
                 </tr>
               </thead>
               <tbody>
@@ -64,9 +69,9 @@ export default async function LoginHistoryPage() {
                         timeZone: "Asia/Seoul",
                       })}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3">
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${
                           log.role === "admin"
                             ? "bg-zinc-900 text-white"
                             : "bg-zinc-100 text-zinc-700"
@@ -75,12 +80,12 @@ export default async function LoginHistoryPage() {
                         {log.role === "admin" ? "관리자" : "PD"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3">
                       {/* 사용자 지시(2026-09-09): 세션만으로 들어온 접속(로그인 폼을 거치지 않은
                           방문)과 실제 로그인을 구분해 보여준다 — 30일 세션 동안 로그인 없이도
                           들어왔는지를 관리자가 확인할 수 있게. */}
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${
                           log.event_type === "access"
                             ? "bg-amber-50 text-amber-700"
                             : "bg-emerald-50 text-emerald-700"
@@ -89,10 +94,10 @@ export default async function LoginHistoryPage() {
                         {log.event_type === "access" ? "접속(세션)" : "로그인"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-zinc-900">{log.actor_name}</td>
-                    <td className="px-4 py-3 text-zinc-500">{log.ip ?? "-"}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-900">{log.actor_name}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-500">{log.ip ?? "-"}</td>
                     <td
-                      className="max-w-xs truncate px-4 py-3 text-zinc-400"
+                      className="max-w-sm truncate px-4 py-3 text-zinc-400"
                       title={log.user_agent ?? undefined}
                     >
                       {log.user_agent ?? "-"}
