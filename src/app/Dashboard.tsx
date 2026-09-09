@@ -2032,6 +2032,13 @@ interface OriginalInsightBlock {
   bullets: string[];
   secondaryBullets: string[];
   schedulingNote: string[];
+  // 콘텐츠 크리에이터 개선안(2026-09-09): 현황→원인→액션 3단 압축 요약. 위 bullets/
+  // secondaryBullets는 과거 "반드시 이 순서·문구 그대로" 지시로 잠겨 있던 상세 근거라
+  // 문구를 바꾸지 않고 그대로 두고(아래 "자세히 보기"에서 원문 그대로 노출), 이미 계산된
+  // 값만 재사용해 카드 맨 위에 얹을 압축 요약 3줄을 새로 만든다(새 계산 없음).
+  situationLine: string | null; // 현황 — 오늘 결과 한 줄, 수치 포함
+  causeLine: string | null; // 원인 — 가장 우선순위 높은 근거 한 줄
+  actionLine: string | null; // 액션 아이템 — 구체적 문제 신호가 있을 때만(없으면 "조치 불필요"라는 뜻)
 }
 // 사용자 지시(2026-09-07): "유입 효과나 직재방 성과가 평균보다 낮다면 편성 효과가 낮다고
 // 솔직하게 말할것" — 그 재방 채널의 과거 회차별 유지율(재방 시청률/본방 시청률) 평균을
@@ -2108,6 +2115,10 @@ function buildOriginalInsight(
   // rerun_type(SQL이 실제 방영 데이터로 판정)에 따라 정확한 용어를 쓴다.
   let crossRetentionPct: number | null = null;
   let rerunChannelName: string | null = null;
+  // 콘텐츠 크리에이터 개선안(2026-09-09)의 원인/액션 요약이 이 값을 함수 하단에서도 써야 해서,
+  // 기존엔 아래 if 블록 안 const로 지역 스코프였던 것을 다른 두 변수와 같은 방식(let, 밖에서
+  // 선언 후 안에서 대입)으로 끌어올렸다 — 계산 로직 자체는 한 글자도 바뀌지 않음.
+  let historicalAvgRetention: number | null = null;
   if (item.rerun_rating !== null && item.retention_pct !== null && item.rerun_channel_code) {
     crossRetentionPct = item.retention_pct;
     rerunChannelName = CHANNEL_NAME_BY_CODE[item.rerun_channel_code] ?? item.rerun_channel_code;
@@ -2123,7 +2134,7 @@ function buildOriginalInsight(
     // 사용자 지시(2026-09-07): "유입 효과나 직재방 성과가 평균보다 낮다면 편성 효과가 낮다고
     // 솔직하게 말할것" — 이 재방 채널의 과거 유지율 평균(이미 있는 회차별 추이 데이터로 계산,
     // 새 조회 없음)과 비교해, 과거 평균이 있고 오늘이 그보다 낮으면 명시적으로 짚는다.
-    const historicalAvgRetention = computeHistoricalRetentionAvgPct(item.ratingHistory, item.rerun_channel_code);
+    historicalAvgRetention = computeHistoricalRetentionAvgPct(item.ratingHistory, item.rerun_channel_code);
     if (historicalAvgRetention !== null && crossRetentionPct < historicalAvgRetention) {
       secondaryBullets.push(
         `${rerunChannelName} ${rerunLabel} 유지율이 ${crossRetentionPct.toFixed(1)}%로 이 프로그램의 과거 평균(${historicalAvgRetention.toFixed(1)}%)보다 낮음 — 이번 ${rerunLabel} 편성 효과가 평소보다 낮았던 것으로 보임`
@@ -2205,7 +2216,37 @@ function buildOriginalInsight(
     );
   }
 
-  return { bullets, secondaryBullets, schedulingNote };
+  // ── 현황/원인/액션 3단 요약 (콘텐츠 크리에이터 개선안, 2026-09-09) ──────────────
+  // 위에서 이미 구한 값(rank/beatenBy/crossRetentionPct/historicalAvgRetention/
+  // rerunChannelName/item.matched_reach)만 재사용 — 새 계산·새 조회 없음.
+  const situationLine =
+    item.matched_rating !== null
+      ? `${broadcastChannelName} 오늘 ${formatRating(item.matched_rating)}%${rank !== null ? ` (동시간대 ${rank}위)` : ""}`
+      : null;
+
+  let causeLine: string | null = null;
+  if (historicalAvgRetention !== null && crossRetentionPct !== null && crossRetentionPct < historicalAvgRetention && rerunChannelName) {
+    causeLine = `${rerunChannelName} 재방 유지율 ${crossRetentionPct.toFixed(1)}%로 과거 평균(${historicalAvgRetention.toFixed(1)}%)보다 낮음`;
+  } else if (rank !== null && rank > 1 && beatenBy.length > 0) {
+    causeLine = `동시간대 ${rank}위 — ${beatenBy[0].competitor_name} '${beatenBy[0].competitor_program_name}'에 밀림`;
+  } else if (rank === 1) {
+    causeLine = "동시간대 타깃 1위 — 경쟁 프로그램 대비 우위 유지";
+  }
+
+  // 액션 아이템은 KEEP/MOVE/REPLACE/STRENGTHEN/TEST 배지를 쓰지 않는다 — 그 5태그는
+  // Fit Score(mart_scheduling_fit_score)로 계산되는데 이 카드가 다루는 개별 회차 리뷰
+  // 시점엔 그 계산값이 없어(CLAUDE.md "No Hallucination" 원칙), 같은 배지를 붙이면 검증된
+  // Page 2 판정처럼 보여 혼동을 줄 수 있다. 대신 실제로 계산된 신호가 있을 때만 평문으로 제안.
+  let actionLine: string | null = null;
+  if (historicalAvgRetention !== null && crossRetentionPct !== null && crossRetentionPct < historicalAvgRetention) {
+    actionLine = "직재방 편성 시간대 재점검 필요";
+  } else if (item.matched_reach !== null && item.matched_reach < 1) {
+    actionLine = "도달 확대 방안 검토 필요";
+  } else if (rank !== null && rank > 2) {
+    actionLine = "동시간대 편성 경쟁력 점검 필요";
+  }
+
+  return { bullets, secondaryBullets, schedulingNote, situationLine, causeLine, actionLine };
 }
 
 // 사용자 재지시(2026-08-22): 연령대별 미니바 삭제, 그 자리에 최근 12주간 본방송 시청률 추이
@@ -3356,13 +3397,48 @@ function OriginalContentReportCard({
                       비어 보이지 않는다. */}
                   <div className="mt-8 grid gap-8 lg:grid-cols-2 lg:gap-12">
                     <div className="min-w-0">
+                      {/* 콘텐츠 크리에이터 개선안(2026-09-09): 현황→원인→액션 3단 압축 요약을
+                          맨 위에 얹는다 — 아래 "핵심 요약"·"편성 인사이트" 원문(과거 "그대로
+                          유지" 지시 대상)은 문구를 바꾸지 않고 그대로 두되, <details>로 접어
+                          기본은 이 압축 요약만 보이게 한다(UI 디자이너 Rule 04, 점진적 정보
+                          공개와 같은 원칙). 액션 아이템이 없으면(actionLine === null) "특별한
+                          조치 불필요"를 명시해 침묵이 아니라 확인된 결과임을 보여준다. */}
+                      {(insight.situationLine || insight.causeLine) && (
+                        <div className="mb-5 overflow-hidden rounded-xl border border-zinc-100">
+                          {insight.situationLine && (
+                            <div className="border-b border-zinc-100 bg-zinc-50/60 px-3.5 py-2.5">
+                              <p className="text-[10.5px] font-bold uppercase tracking-wide text-zinc-400">현황</p>
+                              <p className="mt-0.5 text-[14.5px] font-semibold text-zinc-800">{highlightChannelNames(insight.situationLine, channelColors)}</p>
+                            </div>
+                          )}
+                          {insight.causeLine && (
+                            <div className="border-b border-zinc-100 px-3.5 py-2.5">
+                              <p className="text-[10.5px] font-bold uppercase tracking-wide text-zinc-400">원인</p>
+                              <p className="mt-0.5 text-[13.5px] text-zinc-600">{highlightChannelNames(insight.causeLine, channelColors)}</p>
+                            </div>
+                          )}
+                          <div className="bg-indigo-50/50 px-3.5 py-2.5">
+                            <p className="text-[10.5px] font-bold uppercase tracking-wide text-indigo-400">액션 아이템</p>
+                            <p className="mt-0.5 text-[13.5px] font-medium text-indigo-800">{insight.actionLine ?? "특별한 조치 불필요 — 현재 편성 유지"}</p>
+                          </div>
+                        </div>
+                      )}
                       {/* 사용자 지시(2026-08-25): "핵심 요약 분석" 4개 지표(목표 달성도/리드인 견인
                           효과/본방송 수치/직후 재방송 유입 효과)를 명세 문구·순서 그대로.
                           사용자 재지시(2026-09-03, 2차): "핵심요약과 인사이트 내용 폰트가 너무
-                          작아. 좀더 진하고 잘보이게" — 13px/zinc-600 → 14.5px/font-medium/zinc-700. */}
+                          작아. 좀더 진하고 잘보이게" — 13px/zinc-600 → 14.5px/font-medium/zinc-700.
+                          콘텐츠 크리에이터 개선안(2026-09-09): 위 압축 요약이 새로 생겨 이 원문
+                          블록은 기본 접힘 <details>로 낮췄다 — 문구 자체는 한 글자도 바뀌지 않음. */}
+                      <details className="group">
+                        <summary className="cursor-pointer text-[12px] font-semibold text-zinc-400 marker:content-none hover:text-zinc-600">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="inline-block transition-transform group-open:rotate-90">▸</span>
+                            자세히 보기(핵심 요약·편성 인사이트 원문)
+                          </span>
+                        </summary>
                       {insight.bullets.length > 0 && (
                         <>
-                          <p className={REPORT_EYEBROW}>핵심 요약</p>
+                          <p className={`${REPORT_EYEBROW} mt-3`}>핵심 요약</p>
                           <ul className="mt-2.5 space-y-1.5">
                             {insight.bullets.map((b, i) => (
                               <li key={i} className="flex gap-2 text-[14.5px] font-medium leading-relaxed text-zinc-700">
@@ -3433,6 +3509,7 @@ function OriginalContentReportCard({
                           )}
                         </ul>
                       )}
+                      </details>
                     </div>
                     {/* 오른쪽 참조 열 — 읽는 정보가 아니라 대조용 정보(경쟁 프로그램·추이). */}
                     <div className="min-w-0 space-y-6 lg:border-l lg:border-zinc-100 lg:pl-12">
