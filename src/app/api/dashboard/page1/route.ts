@@ -20,6 +20,7 @@ import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "
 import { buildChannelNarrativeViaLlm } from "@/lib/channelNarrativeLlm";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { detectPortfolioAnomaly } from "@/lib/portfolioAnomaly";
+import { PRIME_RPC_ARGS } from "@/lib/audienceReport/primeTime";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -214,7 +215,7 @@ interface MonthlyDriver {
   primeAirCount: number;
   primeDow: number | null;
   // 사용자 지시(2026-09-01, 4대 복합 원인 태깅 — "콘텐츠 경쟁력 견인/편성 시너지/편성 의존형
-  // 방어/핵심 콘텐츠 이탈·부진"): 프라임(20~24시) 성과 자체의 등락(편성 횟수와 무관)이 있어야
+  // 방어/핵심 콘텐츠 이탈·부진"): 프라임(평일 19~23시 · 토·일·공휴일 18~23시) 성과 자체의 등락(편성 횟수와 무관)이 있어야
   // "본방 화제성"과 "재방 물량"을 구분할 수 있다 — priorPrimeAirCount도 함께 둬야 이번 달 프라임
   // 편성이 0회(종영)여도 전월 프라임 표본으로 신뢰도를 판단할 수 있다.
   primeRatingDelta: number | null;
@@ -227,7 +228,7 @@ interface MonthlyDriver {
   replacedByRating?: number | null;
   replacedByAirCount?: number;
 }
-// 프라임(20~24시) 주요 등락 — 채널 전체 기여도 순위와 별개로, 프라임 시간대에서 크게 움직인
+// 프라임(평일 19~23시 · 토·일·공휴일 18~23시) 주요 등락 — 채널 전체 기여도 순위와 별개로, 프라임 시간대에서 크게 움직인
 // 오리지널·주요 프로그램을 요일과 함께 따로 짚어주기 위한 항목(사용자 지시 2026-09-01).
 interface MonthlyPrimeMover {
   programName: string;
@@ -1398,7 +1399,7 @@ export async function GET(request: Request) {
   //
   // 여기에 사용자가 지목한 두 축을 함께 받는다:
   //   - slot_lift: 전월 동시간대 평균 대비 이 프로그램의 성적(그 시간대 원래 수준 대비 실질 기여)
-  //   - prime_rating_delta / main_prime_dow: 프라임(20~24시) 성과 변화와 주력 요일 — 채널 전체
+  //   - prime_rating_delta / main_prime_dow: 프라임(평일 19~23시 · 토·일·공휴일 18~23시) 성과 변화와 주력 요일 — 채널 전체
   //     기여도는 작아도 프라임에서 크게 움직인 작품을 따로 짚어주기 위해 별도 목록으로 낸다.
   //
   // 최소 편성 횟수 가드는 유지한다. 방영시간 가중 기여도 계산 자체가 이미 1~2회 편성분을
@@ -1453,8 +1454,8 @@ export async function GET(request: Request) {
       p_date_to: dateTo,
       p_prior_date_from: priorDateFrom,
       p_prior_date_to: priorDateTo,
-      p_prime_hour_from: 20,
-      p_prime_hour_to: 24,
+      // 프라임 시간 범위는 primeTime.ts 한 곳에서만 정의한다(2026-09-09 전 시스템 통일).
+      ...PRIME_RPC_ARGS,
       p_limit: 40,
     });
     const rows = (driverRows ?? []) as {
@@ -1531,7 +1532,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // 프라임(20~24시) 주요 등락 — 위 기여도 순위와 별개 축. 이미 상승/하락 요인으로 뽑힌
+    // 프라임(평일 19~23시 · 토·일·공휴일 18~23시) 주요 등락 — 위 기여도 순위와 별개 축. 이미 상승/하락 요인으로 뽑힌
     // 프로그램은 같은 내용을 두 번 말하게 되므로 제외한다.
     const alreadyNamed = new Set([growthDriver?.programName, weaknessDriver?.programName].filter(Boolean) as string[]);
     const primeCandidates = rows.filter(

@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import { fetchRecentProgramIds } from "@/lib/recentProgramAirings";
+import { PRIME_HOURS_UNION } from "@/lib/audienceReport/primeTime";
 
 // 사용자 지시(2026-08-21): "재방이 많은 컨텐츠(예: 나는SOLO)를 통째로 이동 검토하라는 건 부적절
 // 하다 — 그 중 효율이 안 좋은 특정 시간대만 짚어서 의견을 달라." 하루에도 여러 시간대에 걸쳐
@@ -36,7 +37,11 @@ const SLOT_FIT_THRESHOLD = {
 const TRANSFERABILITY = {
   minSlots: 3, // 이보다 슬롯이 적으면 "판단 근거 부족"(명세: 데이터 부족 시 분류하지 않음)
   flexibleSpreadMax: 45, // 최고-최저 편차(%p)가 이 이하면 어느 슬롯에서도 고른 성과 = FLEXIBLE
-  primeHours: [17, 18, 19, 20, 21, 22], // 프라임 구간(17~23시) — 여기에만 강세면 PRIME-DEPENDENT
+  // 여기에만 강세면 PRIME-DEPENDENT. 프라임 시각은 더 이상 이 파일에서 정의하지 않고
+  // primeTime.ts 한 곳에서만 온다(2026-09-09 전 시스템 통일, 기존 17~23시 하드코딩 제거).
+  // get_program_slot_efficiency는 여러 날짜를 시각 하나로 집계해 요일이 남아 있지 않으므로
+  // 평일·주말 프라임의 합집합(18~23시)으로 판정한다 — 이 집계 단위의 구조적 한계.
+  primeHours: PRIME_HOURS_UNION,
 };
 
 interface SlotEfficiencyRow {

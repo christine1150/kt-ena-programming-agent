@@ -16,6 +16,7 @@ import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
 import { computeChannelHealthScore } from "@/lib/channelHealthScore";
 import { HealthScoreBadge, verdictColor } from "@/components/HealthScoreBadge";
+import { PRIME_UNION_LABEL } from "@/lib/audienceReport/primeTime";
 import type { ProgramMomentumItem } from "@/app/api/scheduling/program-momentum/route";
 import {
   type PeriodPreset,
@@ -6661,7 +6662,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                             {item.slotEfficiency.transferability === "FLEXIBLE"
                                               ? `유연형(FLEXIBLE) — 최근 ${item.slotEfficiency.weeks}주 ${item.slotEfficiency.slotSampleCount}개 슬롯에서 성과 편차가 작아, 다른 시간대로 옮겨도 유지될 가능성이 관찰됩니다`
                                               : item.slotEfficiency.transferability === "PRIME_DEPENDENT"
-                                                ? "프라임 의존형(PRIME-DEPENDENT) — 강세가 프라임(17~23시) 구간에만 몰려 있어, 그 밖 시간대로 옮기면 성과 유지가 불확실합니다"
+                                                ? `프라임 의존형(PRIME-DEPENDENT) — 강세가 주요시간(${PRIME_UNION_LABEL}) 구간에만 몰려 있어, 그 밖 시간대로 옮기면 성과 유지가 불확실합니다`
                                                 : "슬롯 특화형(SLOT-SPECIFIC) — 슬롯별 성과 편차가 커서, 이동 시 현재 성과가 유지될지 추가 검증이 필요합니다"}
                                           </span>
                                         )}

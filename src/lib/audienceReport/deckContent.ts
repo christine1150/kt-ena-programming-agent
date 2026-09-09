@@ -12,6 +12,7 @@ import type { AudienceReportDocument } from "./reportModel";
 import type { PortfolioReportDocument } from "./portfolioModel";
 import type { DeckChartData, DeckBarPoint } from "./deckModel";
 import { formatRating } from "./format";
+import { PRIME_UNION_FROM, PRIME_UNION_TO } from "./primeTime";
 
 function pctText(pct: number | null | undefined): string | null {
   if (pct === null || pct === undefined) return null;
@@ -181,8 +182,8 @@ export function buildChannelDeckChartData(doc: AudienceReportDocument): DeckChar
     weekdayAvg,
     weekendAvg,
     hourlyBars,
-    primeHourFrom: 20,
-    primeHourTo: 24,
+    primeHourFrom: PRIME_UNION_FROM,
+    primeHourTo: PRIME_UNION_TO,
     demographicBars,
     programBars,
   };
@@ -203,8 +204,8 @@ export function buildPortfolioDeckChartData(doc: PortfolioReportDocument): DeckC
     weekdayAvg: null,
     weekendAvg: null,
     hourlyBars: [],
-    primeHourFrom: 20,
-    primeHourTo: 24,
+    primeHourFrom: PRIME_UNION_FROM,
+    primeHourTo: PRIME_UNION_TO,
     demographicBars: [],
     programBars,
   };

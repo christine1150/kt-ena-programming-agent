@@ -53,7 +53,8 @@ function buildWeekdayAutoSlide(charts: DeckChartData, channelCode: string): Deck
   return { available: true, actionTitle, caption: captionParts.join(" · ") };
 }
 
-// 시간대별 슬라이드 캡션 — 프라임(기본 20~24시) 평균과 전체 최고 시간대를 함께 밝힌다.
+// 시간대별 슬라이드 캡션 — 주요시간 평균과 전체 최고 시간대를 함께 밝힌다.
+// 막대가 이미 요일 구분 없이 시각으로 집계돼 있어 평일·주말 프라임의 합집합(18~23시)을 쓴다.
 function buildHourlyAutoSlide(charts: DeckChartData, channelCode: string): DeckAutoInsightSlide {
   if (charts.hourlyBars.length === 0) return { available: false, actionTitle: "", caption: "" };
   const withValues = charts.hourlyBars.filter((b) => b.value !== null);
@@ -67,7 +68,7 @@ function buildHourlyAutoSlide(charts: DeckChartData, channelCode: string): DeckA
   const primeAvg = primeBars.length > 0 ? primeBars.reduce((a, b) => a + b.value!, 0) / primeBars.length : null;
   const actionTitle = peak ? `시청률 최고 시간대는 ${peak.label}(${formatRating(peak.value, channelCode)})` : "시간대별 시청률 분포";
   const captionParts: string[] = [];
-  if (primeAvg !== null) captionParts.push(`프라임(${charts.primeHourFrom}~${charts.primeHourTo}시) 평균 ${formatRating(primeAvg, channelCode)}`);
+  if (primeAvg !== null) captionParts.push(`주요시간(${charts.primeHourFrom}~${charts.primeHourTo}시) 평균 ${formatRating(primeAvg, channelCode)}`);
   return { available: true, actionTitle, caption: captionParts.join(" · ") };
 }
 

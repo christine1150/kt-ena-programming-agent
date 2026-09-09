@@ -29,8 +29,11 @@ export interface DeckChartData {
   weekdayAvg: number | null; // 주중(월~금) 평균
   weekendAvg: number | null; // 주말(토·일) 평균
   hourlyBars: DeckBarPoint[]; // 시간대(02~25시) 평균 시청률
-  primeHourFrom: number; // 프라임 시작 시각(강조 표시용, 기본 20)
-  primeHourTo: number; // 프라임 끝 시각(기본 24)
+  // 시간대별 막대는 여러 날짜를 시각 하나로 이미 집계해 요일 정보가 없다 — 그래서 요일 구분
+  // 프라임(평일 19~23시 / 주말·공휴일 18~23시)이 아니라 그 합집합(18~23시)으로 강조한다.
+  // 정의는 primeTime.ts의 PRIME_UNION_FROM/TO에서 온다(2026-09-09 전 시스템 통일).
+  primeHourFrom: number; // 프라임 강조 시작 시각
+  primeHourTo: number; // 프라임 강조 끝 시각(반열림)
   demographicBars: DeckBarPoint[]; // 연령대별 평균 시청률(최대 12개)
   programBars: DeckBarPoint[]; // 프로그램별 등락(성장 상위 + 약세 상위, 값=ratingDelta)
 }

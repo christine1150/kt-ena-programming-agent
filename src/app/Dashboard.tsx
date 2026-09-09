@@ -394,7 +394,7 @@ interface MonthlyReviewChannel {
   // "편성을 늘려서" 오른 것인지 "작품이 잘돼서" 오른 것인지 화면에 명시한다.
   growthDriver: MonthlyDriver | null;
   weaknessDriver: MonthlyDriver | null;
-  // 프라임(20~24시) 주요 등락 — 채널 전체 기여도 순위와 별개 축(상승·하락 각 최대 1건).
+  // 프라임(평일 19~23시 · 토·일·공휴일 18~23시) 주요 등락 — 채널 전체 기여도 순위와 별개 축(상승·하락 각 최대 1건).
   primeMovers: MonthlyPrimeMover[];
 }
 // 사용자 지시(2026-09-02 최초, 2026-09-03 재지시): 사내 "전체 채널 월간 추이" 자료를 월간 리뷰
@@ -1435,7 +1435,7 @@ function MonthlyDriverCell({
 }
 
 // 사용자 지시(2026-09-01, "Root Cause Tagging" 재설계): 단순 "편성 확대/축소" 단일 태그를
-// 금지하고, 편성량 효과(volumeEffect)와 성과 효과(performanceEffect)의 항등 분해에 프라임(20~24시)
+// 금지하고, 편성량 효과(volumeEffect)와 성과 효과(performanceEffect)의 항등 분해에 프라임(평일 19~23시 · 토·일·공휴일 18~23시)
 // 자체의 등락(primeRatingDelta — 편성 횟수와 무관하게 "본방 화제성"만 따로 뗀 값)을 결합해
 // 상승 3종 + 하락 3종(2026-09-07 세분화) 복합 원인으로 판정한다. 새 수치를 계산하지 않고
 // 이미 SQL이 항등 분해해 준 값들의 조합만
