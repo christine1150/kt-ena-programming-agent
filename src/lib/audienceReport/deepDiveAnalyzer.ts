@@ -52,10 +52,24 @@ export interface EfficiencyRow {
   airings: number;
   airtimeMin: number;
   avgRating: number | null;
+  avgShare: number | null;
   avgReach: number | null;
   avgTimeSpentShare: number | null;
   /** 방영시간 가중 총 기여(= 평균 시청률 × 총 방영시간). 순위 비교에만 쓰는 상대값. */
   contribution: number;
+  /** 총 시청률 합산 기여도 — 기간 내 모든 방영분의 시청률을 그대로 더한 값.
+   *  "이 프로그램이 기간 동안 벌어들인 시청률 총량"이며, 편성 횟수가 곱해져 있다. */
+  sumRating: number;
+  /** 채널의 회당 평균 시청률(전 프로그램 방영시간 가중) — 상회 여부 판단의 기준선. */
+  channelAvgRating: number | null;
+  /** 회당 평균 ÷ 채널 평균 × 100. 100을 넘으면 채널 평균을 상회한다는 뜻. */
+  vsChannelAvgPct: number | null;
+  /** 회당 평균이 채널 평균을 상회하는지 — 효율형 판정의 필수 조건. */
+  aboveChannelAvg: boolean;
+  /** 시청률은 채널 평균 이하인데 다른 지표는 채널 평균을 넘는 경우 그 지표 이름.
+   *  사용자 지시(2026-09-10): "시청률은 평균보다 낮아도 점유율이 높거나 시청시간이 길다거나
+   *  하면 그 지표도 반드시 체크." 시청률만 보면 놓치는 콘텐츠를 건져내는 자리다. */
+  compensatingMetrics: string[];
   /** 편성 물량(총 방영시간)의 채널 내 백분위 — 총량형/효율형 판정의 한 축. */
   airtimePctl: number;
   ratingEfficiencyPctl: number;
@@ -203,16 +217,21 @@ export function computeEfficiencyRanking(slotProfile: ProgramSlotProfileRow[], l
       const airtimeMin = rows.reduce((a, r) => a + (r.airtimeMin ?? 0), 0);
       const w = rows.map((r) => ({ w: r.airtimeMin ?? 0, v: r.avgRating }));
       const avgRating = weightedMean(w);
+      const avgShare = weightedMean(rows.map((r) => ({ w: r.airtimeMin ?? 0, v: r.avgShare })));
       const avgReach = weightedMean(rows.map((r) => ({ w: r.airtimeMin ?? 0, v: r.avgReach })));
       const avgTimeSpentShare = weightedMean(rows.map((r) => ({ w: r.airtimeMin ?? 0, v: r.avgTimeSpentShare })));
+      // 총 시청률 합산 — 방영분마다의 시청률을 그대로 더한 값(회당 평균 × 그 조합의 편성 횟수).
+      const sumRating = rows.reduce((a, r) => a + (r.avgRating ?? 0) * r.airings, 0);
       return {
         canonicalName: name,
         airings,
         airtimeMin,
         avgRating,
+        avgShare,
         avgReach,
         avgTimeSpentShare,
         contribution: (avgRating ?? 0) * airtimeMin,
+        sumRating,
       };
     })
     // 1~2회 편성분은 극단값을 만들어 순위를 지배하므로 후보에서 아예 뺀다.
@@ -226,23 +245,182 @@ export function computeEfficiencyRanking(slotProfile: ProgramSlotProfileRow[], l
 
   const airtimes = base.map((p) => p.airtimeMin);
 
+  // 채널의 회당 평균 시청률 — 순위 후보 전체를 방영시간 가중으로 묶은 값. "이 프로그램의 회당
+  // 평균이 채널 평균을 상회하는가"가 효율 판정의 핵심 기준이므로(사용자 지시 2026-09-10)
+  // 백분위와 별개로 이 절대 기준선을 함께 낸다.
+  const channelAvgRating = weightedMean(slotProfile.map((r) => ({ w: r.airtimeMin ?? 0, v: r.avgRating })));
+  const channelAvgShare = weightedMean(slotProfile.map((r) => ({ w: r.airtimeMin ?? 0, v: r.avgShare })));
+  const channelAvgReach = weightedMean(slotProfile.map((r) => ({ w: r.airtimeMin ?? 0, v: r.avgReach })));
+  const channelAvgTss = weightedMean(slotProfile.map((r) => ({ w: r.airtimeMin ?? 0, v: r.avgTimeSpentShare })));
+
   const rows: EfficiencyRow[] = base.map((p) => {
     const ratingEfficiencyPctl = percentile(ratings, p.avgRating ?? 0);
     const reachPctl = percentile(reaches, p.avgReach ?? 0);
     const timeSpentSharePctl = percentile(tsShares, p.avgTimeSpentShare ?? 0);
     const efficiencyIndex = Math.round(((ratingEfficiencyPctl + reachPctl + timeSpentSharePctl) / 3) * 10) / 10;
 
+    const vsChannelAvgPct =
+      p.avgRating !== null && channelAvgRating !== null && channelAvgRating > 0
+        ? Math.round((p.avgRating / channelAvgRating) * 1000) / 10
+        : null;
+    const aboveChannelAvg = vsChannelAvgPct !== null && vsChannelAvgPct > 100;
+
+    // 시청률이 채널 평균 이하인데 점유율·도달율·시청시간 비율 중 채널 평균을 넘는 것이 있으면
+    // 그 지표를 따로 붙여 둔다 — 시청률 하나로만 잘라내면 놓치는 콘텐츠를 건지기 위함.
+    const compensatingMetrics: string[] = [];
+    if (!aboveChannelAvg) {
+      if (p.avgShare !== null && channelAvgShare !== null && p.avgShare > channelAvgShare) compensatingMetrics.push("점유율");
+      if (p.avgReach !== null && channelAvgReach !== null && p.avgReach > channelAvgReach) compensatingMetrics.push("도달율");
+      if (p.avgTimeSpentShare !== null && channelAvgTss !== null && p.avgTimeSpentShare > channelAvgTss)
+        compensatingMetrics.push("시청시간 비율");
+    }
+
     // 총량형 = 편성 물량은 많은데 회당 성과는 그만큼 높지 않은 경우.
-    // 효율형 = 그 반대(편성 물량은 적은데 회당 성과가 높은 것).
+    // 효율형 = 편성 물량은 적은데 회당 성과가 높은 경우 —— 단, 회당 평균이 채널 평균을
+    //          실제로 상회해야 한다. 채널 내 상대 백분위만 보면 전 프로그램이 부진한 기간에도
+    //          누군가는 "효율형"이 되어 버리므로, 절대 기준선을 필수 조건으로 건다.
     const airtimePctl = percentile(airtimes, p.airtimeMin);
     let programType: ProgramType = "균형형";
     if (airtimePctl - ratingEfficiencyPctl >= TYPE_PCTL_GAP) programType = "총량형";
-    else if (ratingEfficiencyPctl - airtimePctl >= TYPE_PCTL_GAP) programType = "효율형";
+    else if (ratingEfficiencyPctl - airtimePctl >= TYPE_PCTL_GAP && aboveChannelAvg) programType = "효율형";
 
-    return { ...p, airtimePctl, ratingEfficiencyPctl, reachPctl, timeSpentSharePctl, efficiencyIndex, programType };
+    return {
+      ...p,
+      channelAvgRating,
+      vsChannelAvgPct,
+      aboveChannelAvg,
+      compensatingMetrics,
+      airtimePctl,
+      ratingEfficiencyPctl,
+      reachPctl,
+      timeSpentSharePctl,
+      efficiencyIndex,
+      programType,
+    };
   });
 
   return rows.sort((a, b) => b.efficiencyIndex - a.efficiencyIndex).slice(0, limit);
+}
+
+// ── 01b 저시청 시간대 주목 콘텐츠 ────────────────────────────────────────────
+//
+// 사용자 지시(2026-09-10): "02~08시는 원래 시청률이 낮기 때문에 그 시간대에 편성되는 콘텐츠들은
+// 그 요일/시간대 평균보다 시청률이 높거나, 점유율이 높거나, 시청시간이 길면 그 부분은 주목해야
+// 한다." 채널 전체 평균과 비교하면 새벽 편성물은 예외 없이 전부 '이하'로 나와 한 건도 건지지
+// 못한다. 그래서 채널 평균이 아니라 **그 프로그램이 실제로 놓인 시간대의 채널 평균**을 기준선으로
+// 삼는다.
+//
+// 정직하게 밝히는 한계: 기준선은 요일이 아니라 시간대(hour) 단위다. 프로그램 × 요일 × 시간대
+// 3원 교차는 6개월 구간에서 1,578행이 나와 PostgREST 1000행 캡을 넘기므로 수집하지 않았고,
+// 새벽 효과는 요일보다 시각이 지배하므로 시간대 기준선으로도 판정이 성립한다고 판단했다.
+
+/** 원래 시청률이 낮게 형성되는 시간대 — 방송일 기준 02~08시(닐슨 관행의 하루 시작 구간). */
+export const LOW_RATING_HOURS = { from: 2, to: 8 } as const;
+
+export interface SlotRelativeRow {
+  canonicalName: string;
+  airings: number;
+  /** 이 프로그램 방영시간의 몇 %가 저시청 시간대(02~08시)에 있는지. */
+  lowSlotAirtimePct: number;
+  avgRating: number | null;
+  avgShare: number | null;
+  avgTimeSpentShare: number | null;
+  /** 그 프로그램이 놓인 시간대들의 채널 평균(방영시간 가중) — 비교 기준선. */
+  slotBaselineRating: number | null;
+  slotBaselineShare: number | null;
+  slotBaselineTimeSpentShare: number | null;
+  /** 기준선 대비 비율(%). 100을 넘으면 같은 시간대 채널 평균을 상회한다는 뜻. */
+  slotRatingPct: number | null;
+  slotSharePct: number | null;
+  slotTimeSpentPct: number | null;
+  /** 기준선을 넘은 지표 이름 — 하나라도 있으면 주목 대상이다. */
+  standoutMetrics: string[];
+}
+
+/**
+ * 프로그램이 놓인 시간대의 채널 평균 대비 성과.
+ * lowSlotOnly=true면 방영시간의 절반 이상이 02~08시인 프로그램만 남긴다.
+ */
+export function computeSlotRelativePerformance(
+  slotProfile: ProgramSlotProfileRow[],
+  opts: { lowSlotOnly?: boolean; limit?: number } = {}
+): SlotRelativeRow[] {
+  const { lowSlotOnly = false, limit = 8 } = opts;
+
+  // 시간대별 채널 기준선 — 전 프로그램을 그 시각으로 묶은 방영시간 가중 평균.
+  const baselineByHour = new Map<number, { rating: number | null; share: number | null; tss: number | null }>();
+  const hours = new Set(slotProfile.map((r) => r.broadcastHour));
+  for (const h of hours) {
+    const rows = slotProfile.filter((r) => r.broadcastHour === h);
+    baselineByHour.set(h, {
+      rating: weightedMean(rows.map((r) => ({ w: r.airtimeMin ?? 0, v: r.avgRating }))),
+      share: weightedMean(rows.map((r) => ({ w: r.airtimeMin ?? 0, v: r.avgShare }))),
+      tss: weightedMean(rows.map((r) => ({ w: r.airtimeMin ?? 0, v: r.avgTimeSpentShare }))),
+    });
+  }
+
+  const byProgram = new Map<string, ProgramSlotProfileRow[]>();
+  for (const r of slotProfile) {
+    const list = byProgram.get(r.canonicalName);
+    if (list) list.push(r);
+    else byProgram.set(r.canonicalName, [r]);
+  }
+
+  const out: SlotRelativeRow[] = [];
+  for (const [name, rows] of byProgram) {
+    const airings = rows.reduce((a, r) => a + r.airings, 0);
+    if (airings < MIN_AIRINGS_FOR_RANKING) continue;
+
+    const totalAirtime = rows.reduce((a, r) => a + (r.airtimeMin ?? 0), 0);
+    const lowAirtime = rows
+      .filter((r) => r.broadcastHour >= LOW_RATING_HOURS.from && r.broadcastHour < LOW_RATING_HOURS.to)
+      .reduce((a, r) => a + (r.airtimeMin ?? 0), 0);
+    const lowSlotAirtimePct = totalAirtime > 0 ? Math.round((lowAirtime / totalAirtime) * 1000) / 10 : 0;
+    if (lowSlotOnly && lowSlotAirtimePct < 50) continue;
+
+    const w = (v: (r: ProgramSlotProfileRow) => number | null) => weightedMean(rows.map((r) => ({ w: r.airtimeMin ?? 0, v: v(r) })));
+    // 기준선도 그 프로그램의 방영시간 분포로 가중한다 — 같은 시간대 조합끼리 비교하기 위함.
+    const wb = (pick: (b: { rating: number | null; share: number | null; tss: number | null }) => number | null) =>
+      weightedMean(rows.map((r) => ({ w: r.airtimeMin ?? 0, v: pick(baselineByHour.get(r.broadcastHour) ?? { rating: null, share: null, tss: null }) })));
+
+    const avgRating = w((r) => r.avgRating);
+    const avgShare = w((r) => r.avgShare);
+    const avgTimeSpentShare = w((r) => r.avgTimeSpentShare);
+    const slotBaselineRating = wb((b) => b.rating);
+    const slotBaselineShare = wb((b) => b.share);
+    const slotBaselineTimeSpentShare = wb((b) => b.tss);
+
+    const pct = (v: number | null, b: number | null) => (v !== null && b !== null && b > 0 ? Math.round((v / b) * 1000) / 10 : null);
+    const slotRatingPct = pct(avgRating, slotBaselineRating);
+    const slotSharePct = pct(avgShare, slotBaselineShare);
+    const slotTimeSpentPct = pct(avgTimeSpentShare, slotBaselineTimeSpentShare);
+
+    const standoutMetrics: string[] = [];
+    if (slotRatingPct !== null && slotRatingPct > 100) standoutMetrics.push("시청률");
+    if (slotSharePct !== null && slotSharePct > 100) standoutMetrics.push("점유율");
+    if (slotTimeSpentPct !== null && slotTimeSpentPct > 100) standoutMetrics.push("시청시간 비율");
+
+    out.push({
+      canonicalName: name,
+      airings,
+      lowSlotAirtimePct,
+      avgRating,
+      avgShare,
+      avgTimeSpentShare,
+      slotBaselineRating,
+      slotBaselineShare,
+      slotBaselineTimeSpentShare,
+      slotRatingPct,
+      slotSharePct,
+      slotTimeSpentPct,
+      standoutMetrics,
+    });
+  }
+
+  return out
+    .filter((r) => !lowSlotOnly || r.standoutMetrics.length > 0)
+    .sort((a, b) => b.standoutMetrics.length - a.standoutMetrics.length || (b.slotRatingPct ?? 0) - (a.slotRatingPct ?? 0))
+    .slice(0, limit);
 }
 
 // ── 02 주요시간이 만든 차이 ──────────────────────────────────────────────────

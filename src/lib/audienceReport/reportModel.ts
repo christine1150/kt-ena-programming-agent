@@ -110,6 +110,41 @@ export interface ProgramMomentumRow {
   label: "RISING" | "STABLE" | "DECLINING" | null;
 }
 
+// W절(2026-09-10) — 채널별 기간 심층 분석. 네 모드 전부에 같은 이름·같은 모양으로 들어가
+// 화면·문서가 모드 분기 없이 하나의 뷰를 공유한다(Phase 12 크로스축 필드와 같은 원칙).
+//
+// notice만 Maybe가 아니다 — 공휴일 0건은 "자료 없음"이 아니라 정상 상태이므로 빈 배열이 맞다.
+// 주요시간이 요일에 따라 달라지므로(평일 19~23시 / 토·일·공휴일 18~23시) 이 고지가 없으면
+// 아래 모든 격차 수치가 오독된다. 그래서 심층 블록의 맨 앞에 둔다.
+export interface DeepDiveNotice {
+  primeLabel: string;
+  holidays: { date: string; name: string }[];
+  programCount: number;
+  airings: number;
+  minAiringsForRanking: number;
+}
+
+export interface DeepDiveSection {
+  notice: DeepDiveNotice;
+  efficiencyRanking: Maybe<{ rows: import("./deepDiveAnalyzer").EfficiencyRow[]; caption: ChartCaptionInfo }>;
+  primeGap: Maybe<{
+    channelBaselineRatio: number | null;
+    rows: import("./deepDiveAnalyzer").PrimeGapRow[];
+    caption: ChartCaptionInfo;
+  }>;
+  programProfiles: Maybe<{ programs: import("./deepDiveAnalyzer").ProgramProfile[]; caption: ChartCaptionInfo }>;
+  scheduleCanvas: Maybe<{
+    quadrants: import("./deepDiveAnalyzer").QuadrantRow[];
+    cells: import("./deepDiveAnalyzer").DowHourCell[];
+    moveCandidates: import("./deepDiveAnalyzer").MoveCandidate[];
+    caption: ChartCaptionInfo;
+  }>;
+  // 사용자 지시(2026-09-10) — 오리지널은 본방만이 아니라 재방 창까지 합산해서 봐야 한다.
+  originalRerun: Maybe<import("./deepDiveAnalyzer").OriginalRerunInsight[]>;
+  // ENA만 `<본>` 태그가 있어 본방/본방 외 구분이 가능하다. 그 외 채널은 사유와 함께 빈다.
+  firstRunEfficiency: Maybe<import("./deepDiveAnalyzer").FirstRunInsight[]>;
+}
+
 // ---------------- MODE A(하루) — §06 01~09 순서 그대로 ----------------
 export interface ModeASection {
   verdict: DailyOutlierVerdict; // 01 한 줄 판정
