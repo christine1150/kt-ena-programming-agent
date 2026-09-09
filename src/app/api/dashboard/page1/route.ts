@@ -905,7 +905,15 @@ export async function GET(request: Request) {
           const ownHousehold = rows
             .filter((r) => r.channel_code === row.broadcast_channel_code && r.target_label === "전국 유료가구")
             .map((r) => ({ broadcast_date: r.broadcast_date, episode_number: r.episode_number, rating: r.rating }));
-          const otherChannelCodes = [...new Set(rows.filter((r) => r.channel_code !== row.broadcast_channel_code).map((r) => r.channel_code))];
+          // 버그 수정(2026-09-09, 사용자 신고 "신병4 그래프에 ENA Play가 나옴"): get_program_rating_history는
+          // canonical_name+시각 ±10분 매칭만으로 채널을 모아, Nielsen 데이터에 같은 프로그램명이 우연히
+          // 다른 채널·비슷한 시각대에도 남아 있으면(재방 채널에서 이미 확인된 것과 같은 종류의 오탐)
+          // 무관한 채널이 섞여 들어갔다. 주요 콘텐츠 관리(featured_content)에 실제 등록된 관계
+          // (동시방영 simulcast_channel_code·직후재방 rerun_channel_code)로만 걸러낸다.
+          const registeredOtherCodes = new Set([row.simulcast_channel_code, row.rerun_channel_code].filter((c): c is string => c !== null));
+          const otherChannelCodes = [
+            ...new Set(rows.filter((r) => r.channel_code !== row.broadcast_channel_code && registeredOtherCodes.has(r.channel_code)).map((r) => r.channel_code)),
+          ];
           const otherChannels = otherChannelCodes
             .map((code) => ({
               seriesName: code,

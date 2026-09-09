@@ -2471,6 +2471,12 @@ function ProgramRatingHistoryChart({
   // 2049 쪽 라벨과 함께 두 줄이 되면 복잡해지므로, 당일 값 하나만 — 헤드라인 볼드부의
   // "N회 시청률(가구시청률)" 표기와 짝이 맞는 정보량).
   const todayHouseholdPoint = ownHousehold.length > 0 ? ownHousehold[ownHousehold.length - 1] : null;
+  // 버그 수정(2026-09-09, 사용자 신고 "숫자·글자가 겹침"): peak/today/trough·가구 라벨이 y좌표에
+  // 안전 여백 없이 배치돼, 값이 차트 상단(가구처럼 스케일이 큰 시리즈)이나 하단(trough)에 가까우면
+  // SVG 경계를 넘어 바로 위 카드 여백이나 바로 아래 회차 번호 줄과 겹쳤다. 라벨 텍스트 높이(약
+  // 9px)를 감안한 최소 여백을 두고 clamp한다.
+  const LABEL_Y_MARGIN = 9;
+  const clampLabelY = (y: number) => Math.min(Math.max(y, LABEL_Y_MARGIN), H - LABEL_Y_MARGIN);
   return (
     <div className="mt-2 rounded-xl bg-zinc-50 p-3">
       <div className="relative">
@@ -2544,7 +2550,7 @@ function ProgramRatingHistoryChart({
           {peakPoint && !peakIsToday && (
             <span
               className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[9px] font-bold tabular-nums"
-              style={{ left: `${(xOf(peakPoint.broadcast_date) / W) * 100}%`, top: y2049(peakPoint.rating) - 3, color: accentColor }}
+              style={{ left: `${(xOf(peakPoint.broadcast_date) / W) * 100}%`, top: clampLabelY(y2049(peakPoint.rating) - 3), color: accentColor }}
             >
               {formatRating(peakPoint.rating)}
             </span>
@@ -2552,7 +2558,7 @@ function ProgramRatingHistoryChart({
           {todayPoint && (
             <span
               className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[9px] font-bold tabular-nums text-zinc-800"
-              style={{ left: `${(xOf(todayPoint.broadcast_date) / W) * 100}%`, top: y2049(todayPoint.rating) - 3 }}
+              style={{ left: `${(xOf(todayPoint.broadcast_date) / W) * 100}%`, top: clampLabelY(y2049(todayPoint.rating) - 3) }}
             >
               {formatRating(todayPoint.rating)}
             </span>
@@ -2560,7 +2566,7 @@ function ProgramRatingHistoryChart({
           {troughPoint && !troughIsShown && (
             <span
               className="absolute -translate-x-1/2 translate-y-1 whitespace-nowrap text-[9px] font-bold tabular-nums text-zinc-400"
-              style={{ left: `${(xOf(troughPoint.broadcast_date) / W) * 100}%`, top: y2049(troughPoint.rating) + 3 }}
+              style={{ left: `${(xOf(troughPoint.broadcast_date) / W) * 100}%`, top: clampLabelY(y2049(troughPoint.rating) + 3) }}
             >
               {formatRating(troughPoint.rating)}
             </span>
@@ -2568,7 +2574,7 @@ function ProgramRatingHistoryChart({
           {todayHouseholdPoint && (
             <span
               className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[8px] font-semibold tabular-nums"
-              style={{ left: `${(xOf(todayHouseholdPoint.broadcast_date) / W) * 100}%`, top: yHousehold(todayHouseholdPoint.rating) - 3, color: accentColor, opacity: 0.55 }}
+              style={{ left: `${(xOf(todayHouseholdPoint.broadcast_date) / W) * 100}%`, top: clampLabelY(yHousehold(todayHouseholdPoint.rating) - 3), color: accentColor, opacity: 0.55 }}
             >
               가구 {formatRating(todayHouseholdPoint.rating)}
             </span>
@@ -2592,28 +2598,31 @@ function ProgramRatingHistoryChart({
           )}
         </div>
       )}
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-400">
-        <span className="inline-flex items-center gap-1">
+      {/* 사용자 지시(2026-09-09): "채널명은 채널 로고색과 동일하게, 볼드로" — 자사 채널(본방·
+          동시방영·직후재방)만 그 채널색+볼드로 표시하고, 경쟁채널은 기존처럼 회색·비볼드로 남겨
+          자사와 구분한다. */}
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
+        <span className="inline-flex items-center gap-1 font-bold" style={{ color: accentColor }}>
           <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: accentColor }} />
           {ownChannelName}
         </span>
         {ownHousehold.length >= 2 && (
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1 font-bold" style={{ color: accentColor, opacity: 0.55 }}>
             <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: accentColor, opacity: 0.3 }} />
             {ownChannelName} (가구)
           </span>
         )}
-        {otherSeries.map((s, i) => (
-          <span key={s.seriesName} className="inline-flex items-center gap-1">
-            <span
-              className="inline-block h-0.5 w-3 rounded-full"
-              style={{ backgroundColor: themeColorByCode.get(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR }}
-            />
-            {CHANNEL_NAME_BY_CODE[s.seriesName] ?? s.seriesName}
-          </span>
-        ))}
+        {otherSeries.map((s) => {
+          const color = themeColorByCode.get(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR;
+          return (
+            <span key={s.seriesName} className="inline-flex items-center gap-1 font-bold" style={{ color }}>
+              <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: color }} />
+              {CHANNEL_NAME_BY_CODE[s.seriesName] ?? s.seriesName}
+            </span>
+          );
+        })}
         {competitorSeries.map((s, i) => (
-          <span key={s.seriesName} className="inline-flex items-center gap-1">
+          <span key={s.seriesName} className="inline-flex items-center gap-1 text-zinc-400">
             <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: COMPETITOR_LINE_COLORS[i % COMPETITOR_LINE_COLORS.length] }} />
             {s.seriesName}
           </span>
