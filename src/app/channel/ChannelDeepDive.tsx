@@ -2061,9 +2061,11 @@ function CompetitorPositioningScatter({
         {plottable.map((p) => {
           const px = xOf(p.today_rating);
           const py = yOf(p.delta_pct);
-          const color = p.isOurs ? accentColor : p.delta_pct >= 0 ? "#059669" : "#e11d48";
-          const r = p.isOurs ? 6 : 4;
+          // 사용자 지시(2026-09-10): 자사 채널이 경쟁채널로 등록돼 나오면 점도 등락(초록/빨강)이
+          // 아니라 그 채널 로고색으로 — 이름표와 점이 같은 색으로 짝지어 바로 알아보게 한다.
           const selfLabelColor = p.isOurs ? null : selfChannelBrandColor(p.competitor_name, selfChannelBrands);
+          const color = p.isOurs ? accentColor : (selfLabelColor ?? (p.delta_pct >= 0 ? "#059669" : "#e11d48"));
+          const r = p.isOurs ? 6 : 4;
           return (
             <g key={p.competitor_name}>
               <circle cx={px} cy={py} r={r} fill={color} fillOpacity={p.isOurs ? 1 : 0.75}>
@@ -2372,13 +2374,12 @@ function accentForegroundColor(accentColor: string): string {
   return accentShade(accentColor, factor);
 }
 // 사용자 지시(2026-09-10): COMPARED WITH?에 자사 채널(ENA/ENA Play/ENA Drama/ENA Story/ONCE/
-// OLIFE/skyUHD)이 경쟁채널로 등록돼 나오면 볼드 + 그 채널 로고색으로 표시한다. OLIFE(#b8d800)처럼
-// 로고 원색이 밝은 채널은 accentForegroundColor로 어둡게 보정해야 흰 배경에서 읽힌다(위
-// accentForegroundColor 주석, 2026-08-21 실측 확인과 같은 원칙을 그대로 적용).
+// OLIFE/skyUHD)이 경쟁채널로 등록돼 나오면 볼드 + 그 채널 로고색 "그대로"로 표시한다(사용자
+// 재지시 — accentForegroundColor로 어둡게 보정했더니 실제 로고색과 달라 보인다는 피드백).
+// 기존 isOurs(당사 채널 자신) 표시도 같은 방식으로 원색을 그대로 쓰고 있어 일관됨.
 function selfChannelBrandColor(competitorName: string, brands: { name: string; themeColor: string | null }[]): string | null {
   const match = brands.find((b) => b.name === competitorName);
-  if (!match?.themeColor) return null;
-  return accentForegroundColor(match.themeColor);
+  return match?.themeColor ?? null;
 }
 // 인포그래픽 제안(사용자 지시 2026-08-22, 우선순위 1번): CONTENT FITS? 표의 percentile 숫자를
 // 미니 가로 막대로 — 여러 프로그램의 하위지표를 훑을 때 숫자만 나열된 것보다 상대적 크기가 한눈에
