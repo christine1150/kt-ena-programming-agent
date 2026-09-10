@@ -45,6 +45,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, message: "채널을 찾을 수 없습니다." }, { status: 404 });
   }
 
+  // 사용자 지시(2026-09-10): "경쟁 채널에 자사 채널(ENA/ENA Play/ENA Drama/ENA Story/ONCE/
+  // OLIFE/skyUHD)이 보이면 볼드 + 그 채널 로고색으로 표시" — COMPARED WITH? 표·산점도가
+  // competitor_name과 대조할 자사 7개 채널의 이름·로고색 목록. 이 화면은 채널 하나만
+  // 조회하므로(위 .eq("code", code)) 별도로 전체 채널을 가볍게(7행) 조회해 내려준다.
+  const { data: allChannelBrandsRaw } = await supabase.from("channels").select("code, name, theme_color");
+  const selfChannelBrands = (allChannelBrandsRaw ?? []).map((c) => ({ code: c.code, name: c.name, themeColor: c.theme_color }));
+
   // 기간 설정(우측 상단, 사용자 지시 2026-08-20): 단일 일자(?date=)뿐 아니라 범위(?dateFrom=&dateTo=)도
   // 받는다 — dateFrom=dateTo면 기존과 동일한 "단일 일자" 동작, dateFrom<dateTo면 그 기간 전체를
   // 집계해서 브리핑부터 COMPARED WITH?까지 반영한다. dateTo는 모든 trailing-window 계산(12주
@@ -103,6 +110,7 @@ export async function GET(request: Request) {
         primaryTarget: channel.primary_target,
         market: channel.market,
       },
+      selfChannelBrands: [],
       asOfDate: null,
       dateFrom: null,
       dateTo: null,
@@ -964,6 +972,7 @@ export async function GET(request: Request) {
       primaryTarget: channel.primary_target,
       market: channel.market,
     },
+    selfChannelBrands,
     briefingLlm,
     asOfDate,
     dateFrom,

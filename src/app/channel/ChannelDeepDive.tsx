@@ -512,6 +512,10 @@ interface ChannelData {
     primaryTarget: string;
     market: string;
   };
+  // 사용자 지시(2026-09-10): COMPARED WITH?에 자사 채널(ENA/ENA Play/ENA Drama/ENA Story/
+  // ONCE/OLIFE/skyUHD)이 경쟁채널로 등록돼 나타나면 볼드 + 그 채널 로고색으로 표시 — 대조할
+  // 자사 7개 채널의 이름·로고색 목록(route.ts가 채널 테이블에서 그대로 조회해 내려줌).
+  selfChannelBrands: { code: string; name: string; themeColor: string | null }[];
   asOfDate: string | null;
   dateFrom: string | null;
   dateTo: string | null;
@@ -1999,10 +2003,13 @@ function CompetitorPositioningScatter({
   points,
   accentColor,
   baselineLabel,
+  selfChannelBrands,
 }: {
   points: CompetitorPositioningPoint[];
   accentColor: string;
   baselineLabel?: string;
+  // 사용자 지시(2026-09-10): 라벨 텍스트만 — 점 색은 기존처럼 등락(상승/하락) 의미를 그대로 쓴다.
+  selfChannelBrands: { name: string; themeColor: string | null }[];
 }) {
   const baseline = baselineLabel ?? "12주 평균";
   const plottable = points.filter(
@@ -2056,6 +2063,7 @@ function CompetitorPositioningScatter({
           const py = yOf(p.delta_pct);
           const color = p.isOurs ? accentColor : p.delta_pct >= 0 ? "#059669" : "#e11d48";
           const r = p.isOurs ? 6 : 4;
+          const selfLabelColor = p.isOurs ? null : selfChannelBrandColor(p.competitor_name, selfChannelBrands);
           return (
             <g key={p.competitor_name}>
               <circle cx={px} cy={py} r={r} fill={color} fillOpacity={p.isOurs ? 1 : 0.75}>
@@ -2072,8 +2080,8 @@ function CompetitorPositioningScatter({
                 y={py - r - 4}
                 textAnchor={px < W * 0.1 ? "start" : px > W * 0.9 ? "end" : "middle"}
                 fontSize={11}
-                fontWeight={p.isOurs ? 700 : 500}
-                fill={p.isOurs ? accentColor : "#71717a"}
+                fontWeight={p.isOurs || selfLabelColor ? 700 : 500}
+                fill={p.isOurs ? accentColor : (selfLabelColor ?? "#71717a")}
               >
                 {p.competitor_name}
               </text>
@@ -2362,6 +2370,15 @@ function accentForegroundColor(accentColor: string): string {
   if (luminance < 130) return accentColor;
   const factor = Math.min(0.7, 0.35 + (luminance - 130) / 250);
   return accentShade(accentColor, factor);
+}
+// 사용자 지시(2026-09-10): COMPARED WITH?에 자사 채널(ENA/ENA Play/ENA Drama/ENA Story/ONCE/
+// OLIFE/skyUHD)이 경쟁채널로 등록돼 나오면 볼드 + 그 채널 로고색으로 표시한다. OLIFE(#b8d800)처럼
+// 로고 원색이 밝은 채널은 accentForegroundColor로 어둡게 보정해야 흰 배경에서 읽힌다(위
+// accentForegroundColor 주석, 2026-08-21 실측 확인과 같은 원칙을 그대로 적용).
+function selfChannelBrandColor(competitorName: string, brands: { name: string; themeColor: string | null }[]): string | null {
+  const match = brands.find((b) => b.name === competitorName);
+  if (!match?.themeColor) return null;
+  return accentForegroundColor(match.themeColor);
 }
 // 인포그래픽 제안(사용자 지시 2026-08-22, 우선순위 1번): CONTENT FITS? 표의 percentile 숫자를
 // 미니 가로 막대로 — 여러 프로그램의 하위지표를 훑을 때 숫자만 나열된 것보다 상대적 크기가 한눈에
@@ -6860,7 +6877,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 merged.sort((a, b) => (b.today_rating ?? -Infinity) - (a.today_rating ?? -Infinity));
                 return (
                   <>
-                    <CompetitorPositioningScatter points={merged} accentColor={accentColor} baselineLabel={sdowBaselineShortLabel ?? undefined} />
+                    <CompetitorPositioningScatter
+                      points={merged}
+                      accentColor={accentColor}
+                      baselineLabel={sdowBaselineShortLabel ?? undefined}
+                      selfChannelBrands={data.selfChannelBrands}
+                    />
                     <div className="mb-3 overflow-x-auto">
                     <table className="w-full min-w-[560px] text-left text-sm">
                       <thead>
@@ -6875,7 +6897,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {merged.map((c, i) => (
+                        {merged.map((c, i) => {
+                          const selfBrandColor = c.isOurs ? null : selfChannelBrandColor(c.competitor_name, data.selfChannelBrands);
+                          return (
                           <tr
                             key={c.competitor_name}
                             className="border-t border-zinc-100"
@@ -6884,7 +6908,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             <td className="py-1.5 pr-2 text-zinc-500">{i + 1}</td>
                             <td
                               className="py-1.5 pr-2 font-medium"
-                              style={c.isOurs ? { color: data.channel.themeColor ?? undefined, fontWeight: 700 } : { color: undefined }}
+                              style={
+                                c.isOurs
+                                  ? { color: data.channel.themeColor ?? undefined, fontWeight: 700 }
+                                  : selfBrandColor
+                                    ? { color: selfBrandColor, fontWeight: 700 }
+                                    : { color: undefined }
+                              }
                             >
                               {c.competitor_name}
                             </td>
@@ -6929,7 +6959,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                               )}
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                     </div>
