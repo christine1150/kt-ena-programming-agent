@@ -3,6 +3,86 @@
 // 하고, 여기서는 "채널 사이의 관계"만 계산한다(채널 내부 시청률 자체는 절대 재계산하지 않음).
 import { supabase } from "@/lib/supabase";
 import { collectAudienceReportData, type AudienceReportRawData, type ProgramMoverRow } from "./dataCollector";
+import { PRIME_LABEL } from "./primeTime";
+import { computeQuadrants } from "./deepDiveAnalyzer";
+import type { ChannelPrimeUsageRow, PortfolioDeepCompare } from "./portfolioModel";
+
+/**
+ * W절(2026-09-10) — 채널 간 주요시간 활용도·요일 균형 비교.
+ *
+ * 재료는 요일×시간대 프로파일 하나뿐이다(채널당 최대 221행). 채널별 리포트의
+ * computeQuadrants를 그대로 재사용해 평일/주말 × 주요시간 4분면을 만든 뒤, 채널 단위로
+ * 눌러 담는다 — 같은 함수를 쓰므로 두 리포트의 값이 어긋날 수 없다.
+ *
+ * 관찰 문장은 **그룹 안에서만** 만든다. Group A(수도권 2049)와 Group B(전국 유료가구)는
+ * 측정 유니버스가 달라 나란히 비교하면 안 되기 때문이다(checkGroupIsolation과 같은 원칙).
+ */
+function buildPortfolioDeepCompare(rawList: AudienceReportRawData[]): PortfolioDeepCompare {
+  const rows: ChannelPrimeUsageRow[] = [];
+  for (const raw of rawList) {
+    if (raw.dowHourProfile.length === 0) continue; // skyUHD 등 프로그램 단위 자료가 없는 채널
+    const q = computeQuadrants(raw.dowHourProfile);
+    const primeRows = q.filter((r) => r.primeLabel === "주요시간");
+    const offRows = q.filter((r) => r.primeLabel !== "주요시간");
+    const wsum = (arr: typeof q, pick: (r: (typeof q)[number]) => number | null) => {
+      let n = 0;
+      let d = 0;
+      for (const r of arr) {
+        const v = pick(r);
+        if (v === null || r.airtimeMin <= 0) continue;
+        n += v * r.airtimeMin;
+        d += r.airtimeMin;
+      }
+      return d > 0 ? n / d : null;
+    };
+    const totalAirtime = q.reduce((a, r) => a + r.airtimeMin, 0);
+    const primeAirtime = primeRows.reduce((a, r) => a + r.airtimeMin, 0);
+    const primeAvgRating = wsum(primeRows, (r) => r.avgRating);
+    const offPrimeAvgRating = wsum(offRows, (r) => r.avgRating);
+
+    rows.push({
+      channelCode: raw.channelCode,
+      channelName: raw.channelCode,
+      groupCode: raw.group.code,
+      primeAirtimePct: totalAirtime > 0 ? Math.round((primeAirtime / totalAirtime) * 1000) / 10 : null,
+      primeAvgRating,
+      offPrimeAvgRating,
+      primeRatio:
+        primeAvgRating !== null && offPrimeAvgRating !== null && offPrimeAvgRating > 0
+          ? Math.round((primeAvgRating / offPrimeAvgRating) * 100) / 100
+          : null,
+      weekdayAvgRating: wsum(q.filter((r) => r.dayType === "평일"), (r) => r.avgRating),
+      weekendAvgRating: wsum(q.filter((r) => r.dayType !== "평일"), (r) => r.avgRating),
+      avgReach: wsum(q, (r) => r.avgReach),
+      avgTimeSpentShare: wsum(q, (r) => r.avgTimeSpentShare),
+    });
+  }
+
+  const observations: string[] = [];
+  for (const g of ["A", "B"] as const) {
+    const inGroup = rows.filter((r) => r.groupCode === g && r.primeRatio !== null);
+    if (inGroup.length < 2) continue;
+    const best = inGroup.reduce((m, r) => ((r.primeRatio ?? 0) > (m.primeRatio ?? 0) ? r : m));
+    const worst = inGroup.reduce((m, r) => ((r.primeRatio ?? 0) < (m.primeRatio ?? 0) ? r : m));
+    observations.push(
+      `Group ${g}에서는 ${best.channelCode}가 주요시간 배율 ${best.primeRatio}배로 가장 높고, ${worst.channelCode}가 ${worst.primeRatio}배로 가장 낮습니다`
+    );
+    const heaviest = inGroup.reduce((m, r) => ((r.primeAirtimePct ?? 0) > (m.primeAirtimePct ?? 0) ? r : m));
+    // 주요시간을 가장 많이 쓰는 채널과 가장 잘 살리는 채널이 다르면 그 자체가 확인해볼 지점이다.
+    if (heaviest.channelCode !== best.channelCode) {
+      observations.push(
+        `Group ${g}에서 주요시간 편성 비중이 가장 높은 채널은 ${heaviest.channelCode}(${heaviest.primeAirtimePct}%)인데, 배율이 가장 높은 채널은 ${best.channelCode}입니다 — 주요시간을 많이 쓰는 것과 잘 살리는 것이 갈리는 구간입니다`
+      );
+    }
+  }
+
+  return {
+    primeLabel: PRIME_LABEL,
+    holidays: rawList[0]?.holidaysInPeriod ?? [],
+    rows,
+    observations,
+  };
+}
 import { resolvePeriod, collectSkyUhdSubstitute, type AudienceReportRequest } from "./reportBuilder";
 import { AUDIENCE_GROUPS } from "./targetGroups";
 import { getInSeasonFeaturedContent } from "./originalContent";
@@ -234,7 +314,8 @@ export async function buildPortfolioReport(request: AudienceReportRequest): Prom
     return { channelCode: code, channelName: name, items: buildChannelActions(code, name, rawByCode[code]) };
   });
 
-  const draft = { period, groupA, groupB, slotOverlap, actionsByChannel, isolationOk, aiSummary: null };
+  const deepCompare = buildPortfolioDeepCompare(rawList);
+  const draft = { period, deepCompare, groupA, groupB, slotOverlap, actionsByChannel, isolationOk, aiSummary: null };
   // Phase 10(§12) — 그룹별 한 줄 + 공통 패턴 + 채널 수준·추세를 사실로 준 AI Executive Summary.
   const aiSummary = await buildPortfolioExecutiveSummary(period.label, draft);
   return { ...draft, aiSummary };

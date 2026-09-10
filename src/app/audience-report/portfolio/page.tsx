@@ -5,9 +5,79 @@
 // Group A/B는 어느 표·차트에도 함께 담기지 않는다(portfolioModel.ts가 타입 레벨에서부터 분리).
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { PortfolioReportDocument } from "@/lib/audienceReport/portfolioModel";
+import type { PortfolioReportDocument, PortfolioDeepCompare } from "@/lib/audienceReport/portfolioModel";
 import { formatRating } from "@/lib/audienceReport/format";
 import { PeerScatterChart, PipelineStepChart, ChannelHourHeatmap, TrendSparkline, SlotOverlapTable } from "@/components/audienceReport/portfolioCharts";
+
+/**
+ * W절(2026-09-10) — 채널 간 주요시간 활용도 비교.
+ * Group A(수도권 2049)와 Group B(전국 유료가구)는 측정 유니버스가 달라 한 표에 섞지 않고
+ * 그룹별로 표를 나눈다(포트폴리오 리포트의 그룹 격리 원칙 그대로).
+ */
+function PrimeUsageCompare({ deep }: { deep: PortfolioDeepCompare }) {
+  if (deep.rows.length === 0) {
+    return <p className="rounded bg-neutral-100 px-3 py-2 text-sm text-neutral-600">요일×시간대 자료가 있는 채널이 없어 비교할 수 없습니다.</p>;
+  }
+  const fmt = (v: number | null, code: string) => (v === null ? "—" : v.toFixed(code === "SKYUHD" ? 5 : 3));
+  return (
+    <div className="space-y-4">
+      <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        주요시간 기준은 {deep.primeLabel}입니다.{" "}
+        {deep.holidays.length > 0
+          ? `기간 내 공휴일 ${deep.holidays.length}일(${deep.holidays.map((h) => `${h.date} ${h.name}`).join(", ")})은 주말 기준으로 적용했습니다.`
+          : "기간 내 공휴일은 포함되지 않았습니다."}
+      </p>
+      {(["A", "B"] as const).map((g) => {
+        const rows = deep.rows.filter((r) => r.groupCode === g);
+        if (rows.length === 0) return null;
+        return (
+          <div key={g}>
+            <p className="mb-1 text-xs font-medium text-neutral-500">Group {g}</p>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-neutral-200 text-xs text-neutral-500">
+                    <th className="py-1 text-left font-medium">채널</th>
+                    <th className="py-1 text-right font-medium">주요시간 편성 비중</th>
+                    <th className="py-1 text-right font-medium">주요시간 평균</th>
+                    <th className="py-1 text-right font-medium">그 외 평균</th>
+                    <th className="py-1 text-right font-medium">배율</th>
+                    <th className="py-1 text-right font-medium">평일</th>
+                    <th className="py-1 text-right font-medium">주말·공휴일</th>
+                    <th className="py-1 text-right font-medium">도달율</th>
+                    <th className="py-1 text-right font-medium">시청시간 비율</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.channelCode} className="border-b border-neutral-100">
+                      <td className="py-1 font-medium">{r.channelCode}</td>
+                      <td className="py-1 text-right tabular-nums">{r.primeAirtimePct === null ? "—" : `${r.primeAirtimePct}%`}</td>
+                      <td className="py-1 text-right tabular-nums">{fmt(r.primeAvgRating, r.channelCode)}</td>
+                      <td className="py-1 text-right tabular-nums text-neutral-500">{fmt(r.offPrimeAvgRating, r.channelCode)}</td>
+                      <td className="py-1 text-right font-medium tabular-nums">{r.primeRatio === null ? "—" : `${r.primeRatio}배`}</td>
+                      <td className="py-1 text-right tabular-nums">{fmt(r.weekdayAvgRating, r.channelCode)}</td>
+                      <td className="py-1 text-right tabular-nums">{fmt(r.weekendAvgRating, r.channelCode)}</td>
+                      <td className="py-1 text-right tabular-nums">{fmt(r.avgReach, r.channelCode)}</td>
+                      <td className="py-1 text-right tabular-nums">{r.avgTimeSpentShare === null ? "—" : `${r.avgTimeSpentShare.toFixed(1)}%`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+      {deep.observations.length > 0 && (
+        <ul className="list-disc space-y-1 pl-5 text-sm text-neutral-700">
+          {deep.observations.map((o, i) => (
+            <li key={i}>{o}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -153,6 +223,10 @@ function PortfolioReportPageInner() {
           <p>{report.groupA.oneLiner}</p>
           <p>{report.groupB.oneLiner}</p>
         </div>
+      </Section>
+
+      <Section title="01b 채널 간 주요시간 활용도 비교">
+        <PrimeUsageCompare deep={report.deepCompare} />
       </Section>
 
       <Section title="02 Group A 내부 비교(수도권 2049)">

@@ -629,7 +629,11 @@ export async function collectAudienceReportData(channelCode: string, period: Res
             p_date_to: dateTo,
             ...PRIME_RPC_ARGS,
           }),
-      light || skyUhd
+      // light 모드(포트폴리오 7채널 동시 집계)에서도 유지한다 — 조합 수가 최대 7요일×24시간×2라
+      // 결과가 항상 작고(실측 최대 221행) 단일 group-by라 가볍다. 종합 리포트의 채널 간
+      // 주요시간 활용도 비교가 이 하나로 전부 만들어지므로 무거운 프로그램 단위 조회를
+      // 켜지 않아도 된다.
+      skyUhd
         ? EMPTY
         : supabase.rpc("get_channel_dow_hour_profile", {
             p_channel_code: channelCode,
@@ -653,14 +657,14 @@ export async function collectAudienceReportData(channelCode: string, period: Res
             ...PRIME_RPC_ARGS,
           }),
       // 공휴일은 RPC가 아니라 단순 테이블 조회 — 프라임 분류의 근거를 리포트가 고지하는 데 쓴다.
-      light
-        ? Promise.resolve({ data: [] as { holiday_date: string; name: string }[] })
-        : supabase
-            .from("public_holidays")
-            .select("holiday_date, name")
-            .gte("holiday_date", dateFrom)
-            .lte("holiday_date", dateTo)
-            .order("holiday_date"),
+      // light 모드(포트폴리오)에서도 유지한다: select 한 번이라 가볍고, 종합 리포트도 주요시간
+      // 분류의 근거를 똑같이 밝혀야 한다.
+      supabase
+        .from("public_holidays")
+        .select("holiday_date, name")
+        .gte("holiday_date", dateFrom)
+        .lte("holiday_date", dateTo)
+        .order("holiday_date"),
       // 오리지널 재방 창 — 등록이 없는 채널은 RPC가 자연히 빈 배열을 반환한다.
       light || skyUhd
         ? EMPTY

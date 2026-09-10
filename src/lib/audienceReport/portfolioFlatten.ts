@@ -21,6 +21,44 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
     blocks: [{ kind: "bullets", items: [`Group A: ${doc.groupA.oneLiner}`, `Group B: ${doc.groupB.oneLiner}`] }],
   });
 
+  // W절(2026-09-10) — 채널 간 주요시간 활용도 비교. 그룹을 한 표에 섞지 않고 두 표로 나눈다:
+  // Group A(수도권 2049)와 Group B(전국 유료가구)는 측정 유니버스가 달라 나란히 놓으면 안 된다.
+  {
+    const dc = doc.deepCompare;
+    const blocks: DocBlock[] = [
+      {
+        kind: "text",
+        text:
+          `주요시간 기준은 ${dc.primeLabel}입니다.` +
+          (dc.holidays.length > 0
+            ? ` 기간 내 공휴일 ${dc.holidays.length}일(${dc.holidays.map((h) => `${h.date} ${h.name}`).join(", ")})은 주말 기준으로 적용했습니다.`
+            : " 기간 내 공휴일은 포함되지 않았습니다."),
+      },
+    ];
+    for (const g of ["A", "B"] as const) {
+      const rows = dc.rows.filter((r) => r.groupCode === g);
+      if (rows.length === 0) continue;
+      blocks.push({
+        kind: "table",
+        headers: [`Group ${g} 채널`, "주요시간 편성 비중", "주요시간 평균", "그 외 평균", "배율", "평일", "주말·공휴일", "도달율", "시청시간 비율"],
+        rows: rows.map((r) => [
+          r.channelCode,
+          r.primeAirtimePct === null ? "—" : `${r.primeAirtimePct}%`,
+          formatRating(r.primeAvgRating, r.channelCode),
+          formatRating(r.offPrimeAvgRating, r.channelCode),
+          r.primeRatio === null ? "—" : `${r.primeRatio}배`,
+          formatRating(r.weekdayAvgRating, r.channelCode),
+          formatRating(r.weekendAvgRating, r.channelCode),
+          formatRating(r.avgReach, r.channelCode),
+          r.avgTimeSpentShare === null ? "—" : `${r.avgTimeSpentShare.toFixed(1)}%`,
+        ]),
+      });
+    }
+    if (dc.observations.length > 0) blocks.push({ kind: "bullets", items: dc.observations });
+    if (dc.rows.length === 0) blocks.push({ kind: "note", text: "요일×시간대 자료가 있는 채널이 없어 비교할 수 없습니다" });
+    sections.push({ title: "01b 채널 간 주요시간 활용도 비교", blocks });
+  }
+
   const peerBlock = (label: string, peers: typeof doc.groupA.peers): DocBlock => ({
     kind: "table",
     headers: ["채널", "수준", "추세(12주 평균 대비)", "목표 시청률"],

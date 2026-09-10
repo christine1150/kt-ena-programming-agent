@@ -79,8 +79,42 @@ export interface ChannelActions {
   // 버그가 있었음 — 실 서버 검증 중 발견·수정).
 }
 
+/**
+ * W절(2026-09-10) — 종합 리포트의 채널 간 심층 비교.
+ *
+ * 채널별 리포트가 "이 채널 안에서 무엇이 잘됐나"를 본다면, 여기는 **같은 잣대로 7채널을
+ * 나란히 놓는다**. 재료는 요일×시간대 프로파일 하나뿐이라(채널당 최대 221행, 단일 group-by)
+ * 7채널 동시 집계에도 부담이 없다 — 무거운 프로그램 단위 조회를 켜지 않고도 만들 수 있는
+ * 비교만 담는다는 것이 이 섹션의 설계 전제다.
+ */
+export interface ChannelPrimeUsageRow {
+  channelCode: string;
+  channelName: string;
+  groupCode: "A" | "B";
+  /** 주요시간에 편성된 방영시간의 비중(%) — 주요시간을 얼마나 쓰고 있는가. */
+  primeAirtimePct: number | null;
+  primeAvgRating: number | null;
+  offPrimeAvgRating: number | null;
+  /** 주요시간 평균 ÷ 그 외 평균 — 주요시간을 얼마나 잘 살렸는가. */
+  primeRatio: number | null;
+  weekdayAvgRating: number | null;
+  weekendAvgRating: number | null;
+  avgReach: number | null;
+  avgTimeSpentShare: number | null;
+}
+
+export interface PortfolioDeepCompare {
+  primeLabel: string;
+  holidays: { date: string; name: string }[];
+  rows: ChannelPrimeUsageRow[];
+  /** 그룹 안에서만 비교한 관찰 — 그룹 간 비교는 측정 유니버스가 달라 하지 않는다. */
+  observations: string[];
+}
+
 export interface PortfolioReportDocument {
   period: ResolvedAudiencePeriod;
+  /** 채널 간 주요시간 활용도·요일 균형 비교(W절). */
+  deepCompare: PortfolioDeepCompare;
   groupA: GroupPeerSection & { pipeline: PipelineEdge[] };
   groupB: GroupPeerSection & { skyUhd: SkyUhdSubstituteSection | null };
   slotOverlap: SlotOverlapRow[];
