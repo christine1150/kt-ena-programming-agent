@@ -8,6 +8,7 @@ import { resolveSingleDay, resolveRange, resolveCompare, resolveCumulative, type
 import type { PeriodPreset } from "./periodPresets";
 import { computeComparisonRange } from "./periodPresets";
 import { validateAudienceReportData } from "./validate";
+import { validateDeepDive } from "./deepDiveValidate";
 import { getInSeasonFeaturedContent, getEpisodeRatingTrend, getDailyOriginalReview, type FeaturedContentWork, type EpisodePoint, type DailyOriginalReviewRow } from "./originalContent";
 import { computeGenrePerformance, computeGenreHourCrossing, getSkyUhdDailyChannelTrend, computeProgramChannelContribution, computeCoverage } from "./skyUhdCross";
 import type { SkyUhdProgramLogRow as SkyUhdRow } from "./dataCollector";
@@ -125,7 +126,10 @@ export async function buildAudienceReport(channelCode: string, request: Audience
   if (!period) throw new Error("기간을 해석할 수 없습니다(직접 선택 모드에 날짜가 없는 등).");
 
   const raw: AudienceReportRawData = await collectAudienceReportData(channelCode, period);
-  const qualityIssues = validateAudienceReportData(raw);
+  // 기존 검산 + W절 심층 분석 검산(축 교차 일치·방영시간 정합성·표본 가드·주요시간 분류).
+  // 사용자 요구 "오류가 없는지 자체적으로 다시 분석한 뒤"에 해당하는 계층 — 걸린 항목은
+  // 화면과 문서의 "데이터 확인 사항"에 그대로 노출된다(숨기지 않는다).
+  const qualityIssues = [...validateAudienceReportData(raw), ...validateDeepDive(raw)];
 
   const { data: channelRow } = await supabase.from("channels").select("id, name, theme_color").eq("code", channelCode).maybeSingle();
   if (!channelRow) throw new Error(`채널을 찾을 수 없습니다: ${channelCode}`);

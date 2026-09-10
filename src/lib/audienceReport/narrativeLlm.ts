@@ -10,7 +10,7 @@
 // formatted 문자열들에서 같은 방식으로 추출한 숫자 집합에 있는지 대조한다.
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "@/lib/llmSynthesis";
 import { formatRating } from "./format";
-import type { KpiCard, AudienceReportBody, ModeDSection } from "./reportModel";
+import type { KpiCard, AudienceReportBody, ModeDSection, DeepDiveSection } from "./reportModel";
 import type { PortfolioReportDocument } from "./portfolioModel";
 import type { AudienceReportRawData } from "./dataCollector";
 
@@ -36,8 +36,92 @@ function kpiFacts(cards: KpiCard[]): NarrativeFact[] {
   return facts;
 }
 
-// 모드별 kpiCards + 대표 시그널 1~2개만 뽑는다(이미 조립된 섹션 값만 고름, 새 계산 없음).
+/**
+ * W절(2026-09-10) — 심층 분석에서 뽑은 근거.
+ *
+ * KPI 카드만 근거로 주면 요약이 "시청률이 얼마고 몇 % 올랐다"에서 끝난다. 사용자가 요구한
+ * "통찰력 있는 문구"는 시간대·타깃·재방 축에서 나오므로, 이미 조립된 심층 섹션에서 대표
+ * 신호만 골라 근거에 더한다(새 계산 없음 — 값을 고르기만 함).
+ *
+ * 단위를 반드시 붙여 포맷한다(회·배·%·지수) — 강화된 수치 대조가 값과 단위를 함께 검증하므로,
+ * 단위 없이 주면 LLM이 지어낸 정수를 잡지 못한다.
+ */
+function deepDiveFacts(deep: DeepDiveSection, channelCode: string): NarrativeFact[] {
+  const facts: NarrativeFact[] = [];
+
+  if (deep.efficiencyRanking.available) {
+    const d = deep.efficiencyRanking.data;
+    facts.push({ label: "채널 회당 평균 시청률", formatted: formatRating(d.channelAvgRating, channelCode) });
+    for (const r of d.rows.slice(0, 2)) {
+      facts.push({ label: `${r.canonicalName} 편성`, formatted: `${r.airings}회` });
+      facts.push({ label: `${r.canonicalName} 회당 평균`, formatted: formatRating(r.avgRating, channelCode) });
+      if (r.vsChannelAvgPct !== null) facts.push({ label: `${r.canonicalName} 채널 평균 대비`, formatted: `${r.vsChannelAvgPct}%` });
+      facts.push({ label: `${r.canonicalName} 유형`, formatted: r.programType });
+      if (r.compensatingMetrics.length > 0) {
+        facts.push({ label: `${r.canonicalName} 시청률 외 채널 평균 상회 지표`, formatted: r.compensatingMetrics.join("·") });
+      }
+    }
+  }
+
+  if (deep.primeGap.available) {
+    const d = deep.primeGap.data;
+    if (d.channelBaselineRatio !== null) facts.push({ label: "채널 주요시간 배율", formatted: `${d.channelBaselineRatio}배` });
+    const top = d.rows.find((r) => !r.sampleSkewed && r.primeRatio !== null);
+    if (top) {
+      facts.push({ label: `${top.canonicalName} 주요시간 평균`, formatted: formatRating(top.primeAvgRating, channelCode) });
+      facts.push({ label: `${top.canonicalName} 그 외 시간 평균`, formatted: formatRating(top.offPrimeAvgRating, channelCode) });
+      facts.push({ label: `${top.canonicalName} 주요시간 배율`, formatted: `${top.primeRatio}배` });
+    }
+  }
+
+  if (deep.lowSlotStandouts.available) {
+    const r = deep.lowSlotStandouts.data.rows[0];
+    if (r) {
+      facts.push({ label: `${r.canonicalName} 저시청 시간대 주목 지표`, formatted: r.standoutMetrics.join("·") });
+      if (r.slotRatingPct !== null) facts.push({ label: `${r.canonicalName} 같은 시간대 평균 대비 시청률`, formatted: `${r.slotRatingPct}%` });
+      if (r.slotTimeSpentPct !== null) facts.push({ label: `${r.canonicalName} 같은 시간대 평균 대비 시청시간 비율`, formatted: `${r.slotTimeSpentPct}%` });
+    }
+  }
+
+  if (deep.programProfiles.available) {
+    for (const p of deep.programProfiles.data.programs.slice(0, 2)) {
+      for (const t of p.strongTargets.slice(0, 2)) {
+        if (t.index !== null) facts.push({ label: `${p.canonicalName} ${t.demographicLabel}`, formatted: `${t.index} 지수` });
+      }
+      const weak = p.weakTargets[0];
+      if (weak?.index !== null && weak) facts.push({ label: `${p.canonicalName} ${weak.demographicLabel}`, formatted: `${weak.index} 지수` });
+      if (p.peakHour !== null) facts.push({ label: `${p.canonicalName} 최고 시간대`, formatted: `${p.peakHour}시 ${formatRating(p.peakRating, channelCode)}` });
+    }
+  }
+
+  if (deep.originalRerun.available) {
+    const o = deep.originalRerun.data[0];
+    if (o) {
+      facts.push({ label: `${o.canonicalName} 본방 평균`, formatted: formatRating(o.liveAvgRating, channelCode) });
+      if (o.retentionPct !== null) facts.push({ label: `${o.canonicalName} 재방 유지율`, formatted: `${o.retentionPct}%` });
+      if (o.amplificationRatio !== null) facts.push({ label: `${o.canonicalName} 확산 배수`, formatted: `${o.amplificationRatio}배` });
+    }
+  }
+
+  if (deep.scheduleCanvas.available) {
+    const m = deep.scheduleCanvas.data.moveCandidates[0];
+    if (m) {
+      facts.push({ label: `${m.dowLabel} ${m.hour}시 편성`, formatted: `${m.airings}회` });
+      facts.push({ label: `${m.dowLabel} ${m.hour}시 회당 평균`, formatted: formatRating(m.avgRating, channelCode) });
+    }
+  }
+
+  return facts.filter((f) => f.formatted.length > 0 && f.formatted !== "—");
+}
+
+/** 모드별 근거 + 심층 분석 근거를 합쳐 돌려준다. */
 export function buildFactsForChannelReport(body: AudienceReportBody, channelCode: string): { facts: NarrativeFact[]; contextLabel: string } {
+  const base = buildBaseFactsForChannelReport(body, channelCode);
+  return { facts: [...base.facts, ...deepDiveFacts(body.sections.deepDive, channelCode)], contextLabel: base.contextLabel };
+}
+
+// 모드별 kpiCards + 대표 시그널 1~2개만 뽑는다(이미 조립된 섹션 값만 고름, 새 계산 없음).
+function buildBaseFactsForChannelReport(body: AudienceReportBody, channelCode: string): { facts: NarrativeFact[]; contextLabel: string } {
   if (body.mode === "single_day") {
     const s = body.sections;
     const facts = kpiFacts(s.kpiCards);
@@ -93,7 +177,9 @@ function buildSystemPrompt(scope: "channel" | "portfolio"): string {
       : "너는 KT ENA 편성 PD를 위한 7채널 포트폴리오 리포트의 'AI Executive Summary' 작성기다.";
   return [
     scopeLine,
-    "아래 JSON의 facts 배열(label과 이미 반올림·포맷된 formatted 문자열 쌍)과 contextLabel(참고 문맥)을 근거로 3~5문장의 한국어 문단을 써라.",
+    "아래 JSON의 facts 배열(label과 이미 반올림·포맷된 formatted 문자열 쌍)과 contextLabel(참고 문맥)을 근거로 4~6문장의 한국어 문단을 써라.",
+    "KPI 등락만 나열하지 마라 — 주요시간 격차, 연령대 지수, 재방 확산 배수, 편성 대비 성과가 어긋나는 시간대처럼 편성 판단에 쓸 수 있는 신호를 우선해라.",
+    "배수·합계·비율도 계산 대상이다. facts에 없는 배수나 지수를 스스로 만들지 마라.",
     "숫자를 언급할 때는 반드시 facts에 있는 formatted 문자열을 그대로 인용해라(자릿수를 바꾸거나 재계산하지 마라).",
     "facts에 없는 항목은 언급하지 마라.",
     LLM_SYNTHESIS_GUARDRAIL,
