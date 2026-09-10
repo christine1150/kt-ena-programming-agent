@@ -14,6 +14,7 @@
 // 차트 대신 같은 값을 표로 내보낸다. 값을 잃지 않으면서 문서에서 바로 읽을 수 있는 형태다.
 import type { AudienceReportDocument, Maybe, KpiCard } from "./reportModel";
 import { formatRating, formatPercent } from "./format";
+import { toGaejosik } from "./gaejosik";
 
 export type DocBlock =
   | { kind: "text"; text: string }
@@ -506,10 +507,40 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     sections.push({ title: "데이터 확인 사항", blocks: [{ kind: "bullets", items: doc.qualityIssues.map((i) => `[${i.severity}] ${i.message}`) }] });
   }
 
-  return {
+  return applyGaejosik({
     title: `${doc.channelName} — Audience Intelligence Report`,
     subtitle: `${doc.period.label} · ${doc.groupLabel}${doc.masterInfo.targetRating !== null ? ` · 목표 시청률 ${formatRating(doc.masterInfo.targetRating, code)}` : ""}`,
     sections,
     brand: { channelCode: doc.channelCode, channelName: doc.channelName, themeColor: doc.themeColor },
+  });
+}
+
+/**
+ * 문서(Word·PPT)로 나가는 모든 문자열을 개조식으로 바꾼다.
+ *
+ * 사용자 결정(2026-09-10): 화면은 경어체 그대로, 문서 출력만 개조식. 소스에 두 문체를 각각
+ * 쓰면 한쪽만 고쳐지는 사고가 반복되므로, 소스 문구는 경어체 하나로 유지하고 **문서로 나가는
+ * 이 길목 한 곳에서만** 기계적으로 변환한다. flattenAudienceReport와 flattenPortfolioReport가
+ * 같은 FlatReport를 만들고 docx/pptx 렌더러가 그것만 소비하므로, 여기가 유일한 적용 지점이다.
+ *
+ * 표 헤더와 brand(채널명)는 건드리지 않는다 — 문체 대상이 아니라 고유명사·라벨이다.
+ */
+export function applyGaejosik(flat: FlatReport): FlatReport {
+  const conv = (b: DocBlock): DocBlock => {
+    switch (b.kind) {
+      case "text":
+      case "note":
+        return { ...b, text: toGaejosik(b.text) };
+      case "bullets":
+        return { ...b, items: b.items.map(toGaejosik) };
+      case "table":
+        return { ...b, rows: b.rows.map((r) => r.map(toGaejosik)) };
+      case "kpi":
+        return b;
+    }
+  };
+  return {
+    ...flat,
+    sections: flat.sections.map((s) => ({ ...s, blocks: s.blocks.map(conv) })),
   };
 }

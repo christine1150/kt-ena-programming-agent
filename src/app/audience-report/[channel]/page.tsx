@@ -13,13 +13,13 @@ import { formatRating, formatPercent } from "@/lib/audienceReport/format";
 import {
   HourlyProfileChart,
   DailyTrendChart,
-  WeekdayHourHeatmap,
   SlopeChart,
   HourBlockDeltaChart,
   CumulativeConvergenceChart,
   PeriodComparisonMatrix,
   TargetHourlyHeatmap,
 } from "@/components/audienceReport/charts";
+import { DeepDiveView } from "@/components/audienceReport/deepDive";
 import { HealthScoreBadge } from "@/components/HealthScoreBadge";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -168,7 +168,12 @@ export default function AudienceReportPage() {
       {report.body.mode === "range" && <ModeBBody sections={report.body.sections} channelCode={report.channelCode} />}
       {report.body.mode === "compare" && <ModeCBody sections={report.body.sections} channelCode={report.channelCode} />}
       {report.body.mode === "cumulative" && <ModeDBody sections={report.body.sections} channelCode={report.channelCode} />}
-      <CrossAxisView data={report.body.sections} channelCode={report.channelCode} />
+      {/* W절(2026-09-10) — 채널별 기간 심층 분석. 4개 모드가 같은 모양(DeepDiveSection)으로
+          들고 있어 모드 분기 없이 하나의 뷰가 렌더한다(Phase 12 크로스축과 같은 위치 원칙).
+          크로스축보다 앞에 두는 이유: "무엇이 잘됐나 → 왜 → 무엇을 바꿔야 하나"를 먼저 읽고
+          그 다음에 타깃×시간대 같은 보조 교차축을 보는 순서가 자연스럽기 때문이다. */}
+      <DeepDiveView deep={report.body.sections.deepDive} channelCode={report.channelCode} />
+      <CrossAxisView data={report.body.sections} />
       <RecommendationView data={report.recommendation} channelCode={report.channelCode} />
     </main>
   );
@@ -177,65 +182,21 @@ export default function AudienceReportPage() {
 // ---------------- Phase 12(2026-08-28, 계획서 J절 Phase 12) — §06 번호 순서 밖 추가 섹션 3종 ----------------
 // 4개 모드 섹션 타입 전부 이 3개 필드를 같은 모양(Maybe<T>)으로 갖고 있어(reportModel.ts), 모드별
 // 분기 없이 하나의 뷰로 공유한다 — RecommendationView와 같은 위치 원칙(§06 번호 밖, 항상 맨 끝).
-type CrossAxisSections = Pick<import("@/lib/audienceReport/reportModel").ModeASection, "targetHourlyPattern" | "programAudienceCross" | "competitorScheduleChanges">;
+// W절(2026-09-10) — "프로그램×타깃" 섹션을 화면에서 제거했다. 심층 03(프로그램별 시간대·타깃
+// 프로파일)이 같은 정보를 프로그램 단위로 묶어 시간대 축까지 함께 보여주므로 중복이었다
+// (문서 출력에는 그대로 남아 있다 — reportFlatten.ts). 데이터 필드 자체는 모델에 유지한다.
+type CrossAxisSections = Pick<import("@/lib/audienceReport/reportModel").ModeASection, "targetHourlyPattern" | "competitorScheduleChanges">;
 
-const METRIC_LABEL: Record<string, string> = {
-  rating: "시청률",
-  share: "점유율",
-  reach: "도달율",
-  time_spent_seconds: "시청시간",
-  time_spent_share: "시청시간 비율",
-};
-function fmtMetricValue(metric: string, v: number | null, channelCode: string): string {
-  if (v === null) return "—";
-  if (metric === "rating") return formatRating(v, channelCode);
-  if (metric === "time_spent_seconds") return Math.round(v).toString();
-  return formatPercent(v);
-}
-
-function CrossAxisView({ data, channelCode }: { data: CrossAxisSections; channelCode: string }) {
+function CrossAxisView({ data }: { data: CrossAxisSections }) {
   return (
     <>
       <Section title="타깃×시간대">
         <WithMaybe maybe={data.targetHourlyPattern} render={(d) => <TargetHourlyHeatmap cells={d.cells} caption={d.caption} />} />
       </Section>
-      <Section title="프로그램×타깃">
-        <WithMaybe maybe={data.programAudienceCross} render={(rows) => <ProgramAudienceCrossTable rows={rows} channelCode={channelCode} />} />
-      </Section>
       <Section title="경쟁채널 편성 변화 이력">
         <WithMaybe maybe={data.competitorScheduleChanges} render={(groups) => <CompetitorScheduleChangeTable groups={groups} />} />
       </Section>
     </>
-  );
-}
-
-function ProgramAudienceCrossTable({ rows, channelCode }: { rows: import("@/lib/audienceReport/reportModel").ProgramAudienceCrossRow[]; channelCode: string }) {
-  if (rows.length === 0) return <Unavailable reason="편차가 큰 프로그램×타깃 조합이 없습니다" />;
-  return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-xs text-neutral-500">
-          <th className="py-1">프로그램</th>
-          <th className="py-1">연령대</th>
-          <th className="py-1">지표</th>
-          <th className="py-1 text-right">값</th>
-          <th className="py-1 text-right">기준선</th>
-          <th className="py-1 text-right">등락</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.slice(0, 15).map((r, i) => (
-          <tr key={`${r.programName}_${r.demographicLabel}_${r.metric}_${i}`} className="border-t border-neutral-200/60 dark:border-neutral-800/60">
-            <td className="py-1">{r.programName}</td>
-            <td className="py-1">{r.demographicLabel}</td>
-            <td className="py-1">{METRIC_LABEL[r.metric] ?? r.metric}</td>
-            <td className="py-1 text-right tabular-nums">{fmtMetricValue(r.metric, r.value, channelCode)}</td>
-            <td className="py-1 text-right tabular-nums">{fmtMetricValue(r.metric, r.baselineValue, channelCode)}</td>
-            <td className="py-1 text-right"><DeltaText pct={r.deltaPct} /></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }
 
@@ -393,9 +354,10 @@ function ModeBBody({ sections: s, channelCode }: { sections: import("@/lib/audie
       <Section title="03 일자별 추이">
         <DailyTrendChart points={s.dailyTrend.points} caption={s.dailyTrend.caption} />
       </Section>
-      <Section title="04 요일 × 시간대">
-        <WithMaybe maybe={s.weekdayHourHeatmap} render={(d) => <WeekdayHourHeatmap cells={d.cells} caption={d.caption} />} />
-      </Section>
+      {/* W절(2026-09-10) — 기존 "04 요일 × 시간대"(3시간 블록 히트맵)를 화면에서 제거했다.
+          심층 04가 24시간 해상도·5지표·주요시간 구분까지 담아 완전한 상위 호환이라 중복이었다.
+          번호는 04 결번으로 둔다(이 코드베이스는 이미 결번을 쓴다). 데이터 필드와 문서 출력은
+          그대로 유지한다 — 화면에서만 뺀 것이다. */}
       <Section title="05 오리지널·독점 리뷰">
         <WithMaybe maybe={s.originalReview} render={(d) => <OriginalReviewView data={d} channelCode={channelCode} />} />
       </Section>

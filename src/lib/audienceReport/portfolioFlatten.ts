@@ -4,6 +4,7 @@
 // exportRenderers.ts의 FlatReport 기반 함수를 그대로 재사용한다(새 렌더러 없음).
 import type { PortfolioReportDocument } from "./portfolioModel";
 import type { DocSection, DocBlock, FlatReport } from "./reportFlatten";
+import { applyGaejosik } from "./reportFlatten";
 import { formatRating } from "./format";
 
 function pct(v: number | null | undefined): string {
@@ -93,11 +94,12 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
     ),
   });
 
-  return {
+  // 채널별 리포트와 같은 규칙 — 문서 출력만 개조식으로 변환한다(화면은 경어체 유지).
+  return applyGaejosik({
     title: "KT ENA 7채널 종합 포트폴리오 리포트",
     subtitle: `${doc.period.label}${doc.isolationOk ? "" : " · ⚠ 그룹 격리 확인 필요"}`,
     sections,
     // 포트폴리오는 특정 채널 하나로 좁힐 수 없어 채널 로고·색 대신 ENA 기본 브랜딩을 쓴다.
     brand: { channelCode: null, channelName: "KT ENA", themeColor: null },
-  };
+  });
 }
