@@ -17,6 +17,7 @@ import { parseFeaturedContentWorkbook } from "@/lib/featuredContent";
 import { parseOriginalReviewScheduleWorkbook } from "@/lib/originalReviewSchedule";
 import { checkChannelCoverage, checkPercentValue } from "@/lib/dataQuality";
 import { findOrCreateProgramByNormalizedName, normalizeProgramCanonicalName } from "@/lib/programNameMatch";
+import { invalidateReferenceDataCache } from "@/lib/intent/referenceData";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -157,6 +158,12 @@ export async function POST(request: Request) {
   // 완전성 검사: 7개 채널 중 이번 파일에 아예 없던 채널이 있으면 경고 (임의로 지어내지 않고 그냥 알림)
   const coverageIssues = checkChannelCoverage(ALL_CHANNEL_CODES, foundChannelCodes, "채널기본정보.xlsx");
   for (const issue of coverageIssues) warnings.push(issue.message);
+
+  // 버그 수정(2026-09-10): channels/competitors/targets를 방금 갈아엎었으니, 자연어 질의
+  // (Intent Router)가 쓰는 참조 데이터 캐시(referenceData.ts)를 여기서 바로 비운다 — 안 비우면
+  // 같은 서버리스 인스턴스가 계속 살아있는 동안(콜드스타트 전까지) Ask 기능이 방금 올린 새
+  // 경쟁채널·채널 정보를 못 보고 이전 값을 계속 돌려준다.
+  invalidateReferenceDataCache();
 
   // 5) "KT ENA 오리지널" 시트 — 편성 정보가 기입된 콘텐츠만 programs/featured_content에 반영
   let featuredContentSaved = 0;

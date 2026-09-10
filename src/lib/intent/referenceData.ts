@@ -32,6 +32,18 @@ let cachedChannels: ChannelRef[] | null = null;
 let cachedCompetitors: CompetitorRef[] | null = null;
 let cachedTargetLabels: string[] | null = null;
 
+// 버그 수정(2026-09-10, "채널기본정보 엑셀 업로드해도 경쟁채널이 반영 안 됨" 제보): 위 세
+// 캐시는 서버리스 인스턴스가 살아있는 동안 한 번 채워지면 그 뒤로 절대 갱신되지 않는다 —
+// 관리자가 채널기본정보.xlsx를 다시 업로드해 channels/competitors/targets를 실제로
+// 바꿔도, 같은 웜(warm) 인스턴스가 자연어 질의를 계속 처리하는 한 이전 값을 그대로
+// 돌려준다(콜드스타트가 나야만 우연히 새로고침됨). channel-master 업로드 라우트가 성공한
+// 직후 이 함수를 호출해 캐시를 비워, 다음 호출부터 DB를 다시 읽게 한다.
+export function invalidateReferenceDataCache(): void {
+  cachedChannels = null;
+  cachedCompetitors = null;
+  cachedTargetLabels = null;
+}
+
 export async function getChannelRefs(): Promise<ChannelRef[]> {
   if (cachedChannels) return cachedChannels;
   const { data } = await supabase.from("channels").select("code, name, market, primary_target");
