@@ -112,7 +112,7 @@ function NoticeBanner({ notice }: { notice: DeepDiveNotice }) {
             "공휴일 없음"
           ) : (
             <>
-              {notice.holidays.length}일({notice.holidays.map((h) => `${h.date} ${h.name}`).join(", ")}) · 해당 일자는 주말 기준 주요시간이 적용됨
+              {notice.holidays.length}일({notice.holidays.map((h) => `${h.date} ${h.name}`).join(", ")}) · 해당 일자는 주말 기준 주요시간이 적용됩니다
             </>
           )}
         </li>
@@ -120,7 +120,7 @@ function NoticeBanner({ notice }: { notice: DeepDiveNotice }) {
           <span className="font-medium">분석 대상</span> — 프로그램 {notice.programCount}편 · 편성 {notice.airings}회
         </li>
         <li>
-          <span className="font-medium">제외 기준</span> — 회당 성과 비교에서 편성 {notice.minAiringsForRanking}회 미만은 제외함(1~2회 편성은 극단값을 만들어 순위를 지배함)
+          <span className="font-medium">제외 기준</span> — 회당 성과 비교에서 편성 {notice.minAiringsForRanking}회 미만은 제외합니다(1~2회 편성은 극단값을 만들어 순위를 지배합니다)
         </li>
       </ul>
     </div>
@@ -149,7 +149,7 @@ function EfficiencyView({
   return (
     <div>
       <p className="mb-3 text-xs text-neutral-600">
-        채널 회당 평균 {formatRating(data.channelAvgRating, channelCode)} — &lsquo;채널 대비&rsquo;가 100%를 넘으면 채널 평균을 상회함.
+        채널 회당 평균 {formatRating(data.channelAvgRating, channelCode)} — &lsquo;채널 대비&rsquo;가 100%를 넘으면 채널 평균을 상회합니다.
       </p>
 
       {/* 누적 가로 막대 — 세 백분위를 각각 1/3씩 실어 막대 총길이가 곧 복합 지수(efficiencyIndex)가 된다. */}
@@ -255,7 +255,7 @@ function RatioCell({ v }: { v: number | null }) {
 function LowSlotView({ rows, caption }: { rows: SlotRelativeRow[]; caption: ChartCaptionInfo }) {
   return (
     <div>
-      <p className="mb-2 text-xs text-neutral-600">채널 평균이 아니라 그 프로그램이 놓인 시간대의 채널 평균과 비교한 값임.</p>
+      <p className="mb-2 text-xs text-neutral-600">채널 평균이 아니라 그 프로그램이 놓인 시간대의 채널 평균과 비교한 값입니다.</p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[600px] text-sm">
           <thead>
@@ -321,8 +321,8 @@ function PrimeGapView({
   return (
     <div>
       <p className="mb-2 text-xs text-neutral-600">
-        채널 전체의 주요시간 배율은 {baseline === null ? "—" : `${baseline}배`}임. 프로그램 배율이 이보다 높으면 그 프로그램이 주요시간에 특히 강한 것이고, 낮으면
-        주요시간이라 함께 오른 수준임.
+        채널 전체의 주요시간 배율은 {baseline === null ? "—" : `${baseline}배`}입니다. 프로그램 배율이 이보다 높으면 그 프로그램이 주요시간에 특히 강한 것이고, 낮으면
+        주요시간이라 함께 오른 수준입니다.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[600px] text-sm">
@@ -708,7 +708,7 @@ function OriginalRerunView({ rows, channelCode }: { rows: OriginalRerunInsight[]
   return (
     <div>
       <p className="mb-2 text-xs text-neutral-600">
-        확산 배수는 본방일부터 1주일 내 방영분(본방·동시방영·재방 채널)의 시청률 합산을 본방 합산으로 나눈 값임. 1.0이면 재방 기여가 없다는 뜻임.
+        확산 배수는 본방일부터 1주일 내 방영분(본방·동시방영·재방 채널)의 시청률 합산을 본방 합산으로 나눈 값입니다. 1.0이면 재방 기여가 없다는 뜻입니다.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[860px] text-sm">
@@ -738,13 +738,14 @@ function OriginalRerunView({ rows, channelCode }: { rows: OriginalRerunInsight[]
                 <td className="py-1 text-right tabular-nums">{o.selfRerunEpisodes}회</td>
                 <td className="py-1 text-right tabular-nums">
                   {formatPercent(o.retentionPct)}
-                  {o.rerunChannelCode && <span className="ml-1 text-[11px] text-neutral-400">{o.rerunChannelCode}</span>}
+                  {/* 유지율 뒤에 재방 채널을 붙일 때 구분자가 없으면 "8.50%ENA_PLAY"로 붙어 읽힌다. */}
+                  {o.rerunChannelCode && <span className="ml-1 text-[11px] text-neutral-400">({o.rerunChannelCode})</span>}
                 </td>
                 <td className="py-1 text-right tabular-nums">
                   {o.windowAirings}회 <span className="text-[11px] text-neutral-400">합산 {formatRating(o.windowSumRating, channelCode)}</span>
                 </td>
                 <td className="py-1 whitespace-nowrap text-right tabular-nums">
-                  {o.amplificationRatio === null ? "—" : `${o.amplificationRatio}배`}
+                  {o.amplificationRatio === null ? "—" : `${o.amplificationRatio}배`}{" "}
                   <AmplificationBadge label={o.amplificationLabel} />
                 </td>
               </tr>
@@ -762,7 +763,7 @@ function FirstRunView({ rows, channelCode }: { rows: FirstRunInsight[]; channelC
   return (
     <div>
       <p className="mb-2 text-xs text-neutral-600">
-        &lsquo;&lt;본&gt;&rsquo; 태그가 붙은 방영분과 그 외를 갈라 본 값임. 태그가 없는 방영분은 재방으로 단정하지 않고 &lsquo;본방 외&rsquo;로 묶었음.
+        &lsquo;&lt;본&gt;&rsquo; 태그가 붙은 방영분과 그 외를 갈라 본 값입니다. 태그가 없는 방영분은 재방으로 단정하지 않고 &lsquo;본방 외&rsquo;로 묶었습니다.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">

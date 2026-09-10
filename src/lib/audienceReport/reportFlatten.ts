@@ -275,9 +275,9 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
       kind: "text",
       text:
         `주요시간 기준은 ${deep.notice.primeLabel}임. 분석 대상은 프로그램 ${deep.notice.programCount}편·편성 ${deep.notice.airings}회이며, ` +
-        `회당 성과 비교에서는 편성 ${deep.notice.minAiringsForRanking}회 미만을 제외함.` +
+        `회당 성과 비교에서는 편성 ${deep.notice.minAiringsForRanking}회 미만을 제외합니다.` +
         (deep.notice.holidays.length > 0
-          ? ` 기간 내 공휴일 ${deep.notice.holidays.length}일 포함(${deep.notice.holidays.map((h) => `${h.date} ${h.name}`).join(", ")}) — 해당 일자는 주말 기준 주요시간이 적용됨.`
+          ? ` 기간 내 공휴일 ${deep.notice.holidays.length}일 포함(${deep.notice.holidays.map((h) => `${h.date} ${h.name}`).join(", ")}) — 해당 일자는 주말 기준 주요시간이 적용됩니다.`
           : " 기간 내 공휴일은 포함되지 않음."),
     },
   ];
@@ -288,7 +288,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     blocks: fromMaybe(deep.efficiencyRanking, (d) => {
       const c = cut(d.rows);
       return [
-        { kind: "text", text: `채널 회당 평균 시청률은 ${formatRating(d.channelAvgRating, code)}임. 아래 "채널 대비"가 100%를 넘으면 채널 평균을 상회함.` },
+        { kind: "text", text: `채널 회당 평균 시청률은 ${formatRating(d.channelAvgRating, code)}임. 아래 "채널 대비"가 100%를 넘으면 채널 평균을 상회합니다.` },
         {
           kind: "table",
           headers: ["프로그램", "편성", "회당 평균", "채널 대비", "합산 기여", "유형", "보완 지표"],
@@ -310,7 +310,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   sections.push({
     title: "심층 01b 저시청 시간대(02~08시) 주목 콘텐츠",
     blocks: fromMaybe(deep.lowSlotStandouts, (d) => [
-      { kind: "text", text: "채널 평균이 아니라 그 프로그램이 놓인 시간대의 채널 평균과 비교한 값임. 100%를 넘으면 같은 시간대 평균을 상회함." },
+      { kind: "text", text: "채널 평균이 아니라 그 프로그램이 놓인 시간대의 채널 평균과 비교한 값입니다. 100%를 넘으면 같은 시간대 평균을 상회합니다." },
       {
         kind: "table",
         headers: ["프로그램", "편성", "새벽 비중", "시청률", "점유율", "시청시간 비율", "주목 지표"],
@@ -332,7 +332,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     blocks: fromMaybe(deep.primeGap, (d) => [
       {
         kind: "text",
-        text: `채널 전체의 주요시간 배율은 ${d.channelBaselineRatio ?? "—"}배임. 프로그램 배율이 이보다 높으면 그 프로그램이 주요시간에 특히 강하다는 뜻이고, 낮으면 주요시간이라 함께 오른 수준임.`,
+        text: `채널 전체의 주요시간 배율은 ${d.channelBaselineRatio ?? "—"}배임. 프로그램 배율이 이보다 높으면 그 프로그램이 주요시간에 특히 강하다는 뜻이고, 낮으면 주요시간이라 함께 오른 수준입니다.`,
       },
       {
         kind: "table",
@@ -405,7 +405,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   sections.push({
     title: "심층 05 오리지널 본방·재방 확산",
     blocks: fromMaybe(deep.originalRerun, (rows) => [
-      { kind: "text", text: "확산 배수는 본방일부터 1주일 내 방영분(본방·동시방영·재방 채널)의 시청률 합산을 본방 합산으로 나눈 값임. 1.0이면 재방 기여가 없다는 뜻임." },
+      { kind: "text", text: "확산 배수는 본방일부터 1주일 내 방영분(본방·동시방영·재방 채널)의 시청률 합산을 본방 합산으로 나눈 값입니다. 1.0이면 재방 기여가 없다는 뜻입니다." },
       {
         kind: "table",
         headers: ["작품", "본방", "본방 평균", "직후재방", "당일재방", "자체재방", "유지율", "1주일 방영", "확산"],
@@ -427,7 +427,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   sections.push({
     title: "심층 06 본방(<본>) vs 본방 외 효율",
     blocks: fromMaybe(deep.firstRunEfficiency, (rows) => [
-      { kind: "text", text: "`<본>` 태그가 붙은 방영분과 그 외를 갈라 본 값임. 태그가 없는 방영분은 재방으로 단정하지 않고 '본방 외'로 묶었음." },
+      { kind: "text", text: "`<본>` 태그가 붙은 방영분과 그 외를 갈라 본 값입니다. 태그가 없는 방영분은 재방으로 단정하지 않고 '본방 외'로 묶었습니다." },
       {
         kind: "table",
         headers: ["프로그램", "본방 편성", "본방 평균", "본방 외 편성", "본방 외 평균", "유지율"],
