@@ -17,7 +17,11 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
-import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL } from "@/lib/targetResolution";
+import {
+  resolveProgramLevelTargetLabel,
+  resolveRankSheetTargetLabel,
+  EXTRA_TARGET_LABELS_BY_CHANNEL,
+} from "@/lib/targetResolution";
 
 // page1/route.ts의 offsetDateStr와 동일한 패턴(로컬 타임존 안전 — toISOString 금지, 이 프로젝트가
 // 자정 근처 날짜 밀림 버그를 이미 겪은 함정).
@@ -76,8 +80,20 @@ export async function GET(request: Request) {
   const primaryLabel = resolveProgramLevelTargetLabel(channelRow.primary_target);
   const secondaryLabel = EXTRA_TARGET_LABELS_BY_CHANNEL[code]?.[0] ?? null;
 
+  // 사용자 지시(2026-09-17): "skyUHD도 일간 시청률을 수동으로 올리면 1페이지 일간 세부내역이
+  // 적용되어 나오게 해줘." — 지금까지 skyUHD만 이 표가 항상 비어 있던 원인은 두 가지다.
+  //  (1) 프로그램 단위 행: skyUHD 수기 엑셀은 타깃 구분이 없어 ratings.target_id를 비워 저장하는
+  //      기존 예외(CLAUDE.md §3)를 쓰는데, 아래 조회가 모든 채널에 .eq("target_id", ...)를 걸어
+  //      target_id IS NULL인 skyUHD 행이 전부 걸러졌다. → skyUHD만 "target_id IS NULL" 조건으로 조회.
+  //  (2) 하루 전체/월평균(채널 단위 행): skyUHD의 채널 단위 ratings는 랭킹 시트 표기
+  //      ("National 유료방송가입가구") 라벨로만 존재하고, 다른 채널에서 쓰는 타깃상세 표기
+  //      ("전국 유료가구") 행은 아예 없다(실측 확인). → skyUHD만 랭킹 시트 표기로 조회한다.
+  //      화면 머리글에 쓰는 primaryLabel은 표기가 짧은 기존 "전국 유료가구"를 그대로 둔다.
+  const isSkyUhd = code === "SKYUHD";
+  const channelLevelLabel = isSkyUhd ? resolveRankSheetTargetLabel(channelRow.primary_target) : primaryLabel;
+
   const [{ data: primaryTargetRow }, { data: secondaryTargetRow }] = await Promise.all([
-    supabase.from("targets").select("id").eq("label", primaryLabel).maybeSingle(),
+    supabase.from("targets").select("id").eq("label", channelLevelLabel).maybeSingle(),
     secondaryLabel ? supabase.from("targets").select("id").eq("label", secondaryLabel).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   if (!primaryTargetRow) {
@@ -89,9 +105,11 @@ export async function GET(request: Request) {
       .from("ratings")
       .select("start_time, rating, share, time_spent_seconds, time_spent_share, episode_subtitle, programs(canonical_name)")
       .eq("channel_id", channelRow!.id)
-      .eq("target_id", targetId)
       .in("source_type", ["nielsen_daily", "skyuhd"])
       .eq("broadcast_date", date);
+    // skyUHD의 프로그램 단위 행만 target_id가 비어 있다(위 (1)). 채널 단위 행은 skyUHD도 닐슨
+    // 랭킹 시트에서 온 정상 타깃 행이므로 다른 채널과 똑같이 target_id로 조회한다.
+    query = isSkyUhd && programLevel ? query.is("target_id", null) : query.eq("target_id", targetId);
     query = programLevel ? query.not("program_id", "is", null) : query.is("program_id", null);
     const { data } = await query;
     return (data ?? []) as RatingRow[];

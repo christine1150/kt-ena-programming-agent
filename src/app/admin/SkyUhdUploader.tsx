@@ -10,6 +10,8 @@ type UploadResult = {
   alert?: string;
   ratingsInserted?: number;
   dateRange?: { from?: string; to?: string };
+  sheetName?: string;
+  zeroRatingRows?: number;
   warnings?: string[];
 };
 
@@ -45,8 +47,12 @@ export default function SkyUhdUploader() {
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
       <h2 className="mb-1 text-lg font-semibold text-zinc-900">skyUHD 시청률 업로드</h2>
       <p className="mb-4 text-sm text-zinc-500">
-        <code>26 skyUHD 시청률 (MMDD).xlsx</code>의 &ldquo;26 UHD ALL&rdquo; 시트를 반영합니다. 수기로
-        누적 정리된 파일이라, 다시 올리면 skyUHD 데이터 전체가 이 파일 내용으로 교체됩니다.
+        {/* 변경(2026-09-17): 누적 파일뿐 아니라 월별 세부 내역 파일도 올릴 수 있게 되어(시트명
+            대신 헤더로 시트를 찾고, 파일에 담긴 날짜 구간만 교체) 안내 문구를 맞춘다. */}
+        <code>26 skyUHD 시청률 (MMDD).xlsx</code>의 &ldquo;26 UHD ALL&rdquo; 시트, 또는 같은 항목
+        (날짜·시작시간·프로그램명·시청률)을 가진 월별 세부 내역 시트를 반영합니다. 파일에 담긴 날짜
+        구간만 이 파일 내용으로 교체되므로, 한 달치만 올려도 다른 달 데이터는 그대로 남습니다.
+        시청률 칸이 비어 있는 행은 실제 시청률 0으로 반영됩니다(화면에는 빈 칸으로 표시).
       </p>
 
       <div className="mb-4 flex items-center gap-3">
@@ -71,6 +77,10 @@ export default function SkyUhdUploader() {
         <div className="space-y-2 text-sm">
           <p className="text-zinc-700">
             {result.ratingsInserted}건 저장됨 ({result.dateRange?.from} ~ {result.dateRange?.to})
+            {result.sheetName && <span className="text-zinc-400"> · 시트 &ldquo;{result.sheetName}&rdquo;</span>}
+            {typeof result.zeroRatingRows === "number" && result.zeroRatingRows > 0 && (
+              <span className="text-zinc-400"> · 시청률 빈 칸 {result.zeroRatingRows}건을 0으로 반영</span>
+            )}
           </p>
           {result.warnings && result.warnings.length > 0 && (
             <ul className="list-inside list-disc rounded-lg bg-amber-50 p-3 text-amber-800">

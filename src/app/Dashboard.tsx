@@ -3845,16 +3845,21 @@ function ChannelNarrativeCard({
   }
   const skyuhdSignal = byCode.get("SKYUHD");
   const skyuhdLine = buildSkyUhdNarrative(skyuhdSignal);
-  if (skyuhdLine)
+  // 사용자 지시(2026-09-17): "skyUHD도 ... 1페이지 일간 세부내역이 적용되어 나오게" — 일간 세부
+  // 내역 패널을 여는 유일한 입구가 이 목록의 ▼ 버튼인데, 그동안 skyUHD는 등위가 10위 이상 바뀐
+  // 날에만 줄 자체가 만들어져 평소에는 세부 내역을 열 수조차 없었다. 기존 규칙("10위 미만이면
+  // 내용을 작성하지 않는다")은 그대로 지키되(문장 text만 비움), 채널 줄 자체는 항상 남겨 둔다.
+  if (skyuhdSignal)
     lines.push({
       code: "SKYUHD",
-      ...skyuhdLine,
+      channelName: "skyUHD",
+      text: skyuhdLine?.text ?? "",
       color: themeColorByCode.get("SKYUHD") ?? null,
-      deltaPct: skyuhdSignal?.rating_delta_pct ?? null,
-      todayRating: skyuhdSignal?.today_rating ?? null,
-      todayRank: skyuhdSignal?.today_rank ?? null,
-      baselineAvgRank: skyuhdSignal?.baseline_avg_rank ?? null,
-      ...buildChannelInsightSummary(skyuhdSignal!),
+      deltaPct: skyuhdSignal.rating_delta_pct ?? null,
+      todayRating: skyuhdSignal.today_rating ?? null,
+      todayRank: skyuhdSignal.today_rank ?? null,
+      baselineAvgRank: skyuhdSignal.baseline_avg_rank ?? null,
+      ...buildChannelInsightSummary(skyuhdSignal),
     });
 
   return (
@@ -3889,8 +3894,8 @@ function ChannelNarrativeCard({
                   <button
                     type="button"
                     onClick={() => onOpenChannelDetail(line.code)}
-                    title="경쟁채널 시청률 보기"
-                    aria-label={`${line.channelName} 경쟁채널 시청률 보기`}
+                    title="일간 세부 내역 보기"
+                    aria-label={`${line.channelName} 일간 세부 내역 보기`}
                     className="text-[10px] leading-none opacity-50 hover:opacity-100"
                     style={{ color: line.color ?? undefined }}
                   >
@@ -3935,17 +3940,21 @@ function ChannelNarrativeCard({
                     {line.actionLine ?? <span className="text-zinc-500">특별한 조치 불필요 — 현재 편성 유지</span>}
                   </p>
                 </div>
-                <details className="group mt-1.5">
-                  {/* 사용자 지시(2026-09-09): "자세히 보기"가 잘 안 보인다 — 진하게(검정),
-                      글씨도 키움(11px→13px, zinc-400→zinc-800). */}
-                  <summary className="cursor-pointer text-[13px] font-bold text-zinc-800 marker:content-none hover:text-black">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="inline-block transition-transform group-open:rotate-90">▸</span>
-                      자세히 보기(원문)
-                    </span>
-                  </summary>
-                  <span className="mt-1.5 block">{highlightNarrativeText(line.text, ACCENT_UP, ACCENT_DOWN)}</span>
-                </details>
+                {/* 원문 문단이 없는 채널(2026-09-17 기준 skyUHD — 등위 변화가 10위 미만이면
+                    문장을 만들지 않는 기존 규칙)에서는 빈 "자세히 보기"를 띄우지 않는다. */}
+                {line.text && (
+                  <details className="group mt-1.5">
+                    {/* 사용자 지시(2026-09-09): "자세히 보기"가 잘 안 보인다 — 진하게(검정),
+                        글씨도 키움(11px→13px, zinc-400→zinc-800). */}
+                    <summary className="cursor-pointer text-[13px] font-bold text-zinc-800 marker:content-none hover:text-black">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="inline-block transition-transform group-open:rotate-90">▸</span>
+                        자세히 보기(원문)
+                      </span>
+                    </summary>
+                    <span className="mt-1.5 block">{highlightNarrativeText(line.text, ACCENT_UP, ACCENT_DOWN)}</span>
+                  </details>
+                )}
               </div>
             </div>
           ))
@@ -4340,16 +4349,28 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
   const avgSecondaryShare = avg(state.rows.map((r) => r.secondary_share));
   const hasSecondary = !!state.secondaryLabel;
 
+  // 사용자 지시(2026-09-17): skyUHD 월별 세부 엑셀의 빈 시청률 칸은 실제 0이라 DB에는 0으로
+  // 적재하고 평균 등 집계의 분모에도 포함하지만, 화면에는 "0.0000"으로 채우지 않고 원본처럼
+  // 빈 칸으로 보여준다(표시 자릿수 규칙 자체는 formatRating 그대로 — 계산·보정 없음).
+  function formatDetailRating(v: number | null): string {
+    if (channelCode === "SKYUHD" && v === 0) return "";
+    return formatRating(v, channelCode);
+  }
+
   // 사용자 지시(2026-09-02): "가구 시청률도 그라데이션으로 표시. 단 2049도 가구도 채널 1개월
   // 평균 시청률보다 높은 것은 볼드." — 주/부 두 열에 동일 규칙을 적용하는 공용 헬퍼(정규화
   // 범위·월평균만 다르게 넘긴다). 사용자 재지시(2026-09-02): 음영 제외 기준 0.003 → 0.010.
+  // 사용자 지시(2026-09-17, skyUHD 일간 세부 내역 반영): skyUHD는 채널 전체 시청률 자체가
+  // 0.00x 수준이라 위 0.010 기준선을 그대로 쓰면 모든 칸이 음영에서 빠져 표가 읽히지 않는다.
+  // 기준선의 취지("0에 가까운 값은 음영 제외")는 유지하되 skyUHD에서만 0 초과로 낮춘다.
+  const shadeFloor = channelCode === "SKYUHD" ? 0 : 0.01;
   function ratingCellStyle(
     rating: number | null,
     range: { min: number; span: number },
     monthAvg: number | null
   ): { backgroundColor?: string; color?: string; fontWeight?: number } {
     const style: { backgroundColor?: string; color?: string; fontWeight?: number } = {};
-    if (rating !== null && rating > 0.01) {
+    if (rating !== null && rating > shadeFloor) {
       const norm = range.span > 0 ? (rating - range.min) / range.span : 1;
       style.backgroundColor = hexToRgba(color, 0.06 + norm * 0.3);
       if (norm > 0.5) style.color = color;
@@ -4463,11 +4484,11 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                     {r.episode_subtitle && <div className="truncate text-[11px] text-zinc-400">{r.episode_subtitle}</div>}
                   </td>
                   <td className="py-1 text-center tabular-nums" style={ratingCellStyle(r.primary_rating, primaryRange, state.primaryMonthAvg)}>
-                    {formatRating(r.primary_rating, channelCode)}
+                    {formatDetailRating(r.primary_rating)}
                   </td>
                   {hasSecondary && (
                     <td className="py-1 text-center tabular-nums" style={ratingCellStyle(r.secondary_rating, secondaryRange, state.secondaryMonthAvg)}>
-                      {r.secondary_rating !== null ? formatRating(r.secondary_rating, channelCode) : "—"}
+                      {r.secondary_rating !== null ? formatDetailRating(r.secondary_rating) : "—"}
                     </td>
                   )}
                   <td className="py-1 text-center tabular-nums" style={primaryShareAboveAvg ? { color, fontWeight: 700 } : { color: "#a1a1aa" }}>

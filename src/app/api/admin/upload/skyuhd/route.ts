@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
 import { parseSkyUhdWorkbook } from "@/lib/skyUhd";
 import { checkPercentValue } from "@/lib/dataQuality";
+import { normalizeProgramCanonicalName, findOrCreateProgramByNormalizedName } from "@/lib/programNameMatch";
 
 export async function POST(request: Request) {
   const admin = await getAdminSession();
@@ -61,29 +62,24 @@ export async function POST(request: Request) {
   const rowsToInsert: Record<string, unknown>[] = [];
 
   for (const row of parsed.rows) {
-    const cacheKey = row.canonicalName;
+    // 변경(2026-09-17): 프로그램 식별을 "정확 문자열 upsert"에서 공용 정규화 매칭
+    // (findOrCreateProgramByNormalizedName)으로 바꿨다 — 수기 시트라 같은 프로그램인데도 공백·
+    // 문장부호 표기가 회차마다 달라지면(예: "걸어서 세계속으로" vs "걸어서 세계 속으로") 매번
+    // 새 programs 행이 생겨 1페이지 일간 세부 내역에서 같은 프로그램이 쪼개져 보인다.
+    // 이미 있는 행의 canonical_name은 덮어쓰지 않으므로 기존 ratings 조인도 그대로 유지된다.
+    const cacheKey = normalizeProgramCanonicalName(row.canonicalName);
     let programId = programIdCache.get(cacheKey);
     if (!programId) {
-      const { data: program, error: programError } = await supabase
-        .from("programs")
-        .upsert(
-          {
-            channel_id: channel.id,
-            canonical_name: row.canonicalName,
-            raw_name: row.rawProgramName,
-            episode_number: row.episodeNumber,
-          },
-          { onConflict: "channel_id,canonical_name" }
-        )
-        .select("id")
-        .single();
-      if (programError || !program) {
-        warnings.push(`${row.rawProgramName}: 프로그램 저장 실패 — ${programError?.message}`);
+      const program = await findOrCreateProgramByNormalizedName(supabase, channel.id, row.canonicalName, {
+        rawName: row.rawProgramName,
+        episodeNumber: row.episodeNumber,
+      });
+      if (!program) {
+        warnings.push(`${row.rawProgramName}: 프로그램 저장 실패`);
         continue;
       }
-      const newProgramId: string = program.id;
-      programId = newProgramId;
-      programIdCache.set(cacheKey, newProgramId);
+      programId = program.id;
+      programIdCache.set(cacheKey, program.id);
     }
 
     const ratingIssue = checkPercentValue(
@@ -101,16 +97,27 @@ export async function POST(request: Request) {
       broadcast_date: row.broadcastDate,
       start_time: row.startTime,
       end_time: row.endTime,
+      // 시청률 빈 칸은 parseSkyUhdRating()이 이미 0으로 해석해 넘겨준다(사용자 지시 2026-09-17:
+      // "시청률이 비어있는 것은 0으로 인식") — 0은 정상값이라 checkPercentValue도 통과한다.
       rating: ratingIssue ? null : row.rating,
     });
   }
 
-  // 이번 업로드가 다루는 skyUHD 데이터를 전부 교체한다 (수기 누적 파일 특성상 매번 전체 재적재).
+  // 이번 업로드가 "다루는 기간"만 교체한다 — 변경(2026-09-17): 기존에는 채널의 skyUHD 데이터를
+  // 통째로 지우고 파일 내용으로 덮어썼는데, 사용자가 말한 "각 월의 세부 엑셀 내역"처럼 한 달치
+  // 파일을 올리면 나머지 달이 전부 사라진다. 파일에 실제로 들어 있는 날짜 구간(min~max)만
+  // 지우고 다시 넣으면, 누적 파일(전 기간 포함)은 예전과 똑같이 전체 재적재가 되고 월별 파일은
+  // 그 달만 안전하게 갱신된다.
+  const uploadedDates = parsed.rows.map((r) => r.broadcastDate).sort();
+  const dateFrom = uploadedDates[0];
+  const dateTo = uploadedDates[uploadedDates.length - 1];
   const { error: deleteError } = await supabase
     .from("ratings")
     .delete()
     .eq("source_type", "skyuhd")
-    .eq("channel_id", channel.id);
+    .eq("channel_id", channel.id)
+    .gte("broadcast_date", dateFrom)
+    .lte("broadcast_date", dateTo);
   if (deleteError) {
     return NextResponse.json(
       { ok: false, message: `기존 skyUHD 데이터 삭제 실패 — ${deleteError.message}` },
@@ -145,10 +152,14 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     ratingsInserted: inserted,
-    dateRange: {
-      from: parsed.rows[0]?.broadcastDate,
-      to: parsed.rows[parsed.rows.length - 1]?.broadcastDate,
-    },
+    // 파일 안의 행 순서가 날짜순이 아닐 수도 있어 실제 최소/최대 날짜를 쓴다(위 삭제 구간과 동일).
+    dateRange: { from: dateFrom, to: dateTo },
+    // 어느 시트를 읽었는지 보여준다 — 월별 파일은 시트명이 "26 UHD ALL"이 아닐 수 있어, 관리자가
+    // 의도한 시트가 반영됐는지 업로드 직후 바로 확인할 수 있게 한다.
+    sheetName: parsed.sheetName,
+    // 시청률 빈 칸을 0(실측 0)으로 읽어 반영한 행 수 — 사용자 지시(2026-09-17) 규칙이 실제로
+    // 몇 건에 적용됐는지 눈으로 확인할 수 있게 함께 내려준다.
+    zeroRatingRows: parsed.rows.filter((r) => r.rating === 0).length,
     warnings,
   });
 }
