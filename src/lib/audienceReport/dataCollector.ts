@@ -173,10 +173,13 @@ export interface OriginalRerunProfileRow {
   amplificationRatio: number | null; // 1주일 창 합산 ÷ 본방 합산 — 재방 포함 확산 배수
 }
 
-// get_channel_first_run_efficiency 원본 — `<본>` 태그가 있는 방영분 vs 그 외의 효율 비교.
-// 실측상 태그는 ENA에만 있어 다른 채널은 빈 배열로 온다(구분 불가를 정직하게 표시할 근거).
+// get_channel_first_run_efficiency 원본 — 본방 방영분 vs 그 외의 효율 비교.
+// 본방 판정은 `<본>` 태그와 주요 콘텐츠 등록 슬롯(요일+시각 ±10분, 동시방영 채널 포함)의
+// 합집합이다(2026-09-10 사용자 지시). 둘 다 없는 채널만 빈 배열로 온다.
 export interface FirstRunEfficiencyRow {
   canonicalName: string;
+  /** 본방을 어느 경로로 찾았는지 — "<본> 태그" | "등록 슬롯" | "태그+등록 슬롯". */
+  firstRunSource: string;
   firstRunAirings: number;
   firstRunAvgRating: number | null;
   firstRunAvgReach: number | null;
@@ -898,6 +901,7 @@ export async function collectAudienceReportData(channelCode: string, period: Res
 
   const firstRunEfficiency: FirstRunEfficiencyRow[] = ((firstRunEfficiencyRes.data ?? []) as Record<string, unknown>[]).map((r) => ({
     canonicalName: r.canonical_name as string,
+    firstRunSource: (r.first_run_source as string | null) ?? "등록 슬롯",
     firstRunAirings: (r.first_run_airings as number) ?? 0,
     firstRunAvgRating: (r.first_run_avg_rating as number | null) ?? null,
     firstRunAvgReach: (r.first_run_avg_reach as number | null) ?? null,

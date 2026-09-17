@@ -759,11 +759,22 @@ function OriginalRerunView({ rows, channelCode }: { rows: OriginalRerunInsight[]
 }
 
 // ── 심층 06 본방 vs 본방 외 효율 ──────────────────────────────────────────────
+// 판정 근거별로 색을 달리해 "왜 본방으로 봤는지"를 표에서 바로 구분할 수 있게 함.
+function FirstRunSourceBadge({ source }: { source: string }) {
+  const cls =
+    source === "태그+등록 슬롯" ? "text-white" : source === "<본> 태그" ? "bg-indigo-50 text-indigo-600" : "bg-neutral-200 text-neutral-700";
+  return (
+    <span className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`} style={source === "태그+등록 슬롯" ? { backgroundColor: C_STRONG } : undefined}>
+      {source}
+    </span>
+  );
+}
+
 function FirstRunView({ rows, channelCode }: { rows: FirstRunInsight[]; channelCode: string }) {
   return (
     <div>
       <p className="mb-2 text-xs text-neutral-600">
-        &lsquo;&lt;본&gt;&rsquo; 태그가 붙은 방영분과 그 외를 갈라 본 값입니다. 태그가 없는 방영분은 재방으로 단정하지 않고 &lsquo;본방 외&rsquo;로 묶었습니다.
+        &lsquo;&lt;본&gt;&rsquo; 태그 또는 등록된 본방 슬롯(요일·시각 기준)을 근거로 본방 여부를 판정한 값입니다. 두 근거 중 하나만 맞아도 본방으로 보며, 프로그램명 옆 배지로 어느 근거로 판정했는지 표시합니다.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
@@ -780,7 +791,10 @@ function FirstRunView({ rows, channelCode }: { rows: FirstRunInsight[]; channelC
           <tbody>
             {rows.map((r) => (
               <tr key={r.canonicalName} className="border-t border-neutral-200/60 dark:border-neutral-800/60">
-                <td className="py-1">{r.canonicalName}</td>
+                <td className="py-1">
+                  {r.canonicalName}
+                  <FirstRunSourceBadge source={r.firstRunSource} />
+                </td>
                 <td className="py-1 text-right tabular-nums">{r.firstRunAirings}회</td>
                 <td className="py-1 text-right tabular-nums">{formatRating(r.firstRunAvgRating, channelCode)}</td>
                 <td className="py-1 text-right tabular-nums">{r.otherAirings}회</td>

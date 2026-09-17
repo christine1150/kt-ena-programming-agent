@@ -170,6 +170,7 @@ export interface OriginalRerunInsight {
 }
 
 export interface FirstRunInsight {
+  firstRunSource: string;
   canonicalName: string;
   firstRunAirings: number;
   firstRunAvgRating: number | null;
@@ -675,6 +676,7 @@ export function computeFirstRunInsights(rows: FirstRunEfficiencyRow[], limit = 8
     .slice(0, limit)
     .map((r) => ({
       canonicalName: r.canonicalName,
+      firstRunSource: r.firstRunSource,
       firstRunAirings: r.firstRunAirings,
       firstRunAvgRating: r.firstRunAvgRating,
       otherAirings: r.otherAirings,

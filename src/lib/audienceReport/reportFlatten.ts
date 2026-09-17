@@ -425,14 +425,18 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   });
 
   sections.push({
-    title: "심층 06 본방(<본>) vs 본방 외 효율",
+    title: "심층 06 본방(태그·등록 슬롯) vs 본방 외 효율",
     blocks: fromMaybe(deep.firstRunEfficiency, (rows) => [
-      { kind: "text", text: "`<본>` 태그가 붙은 방영분과 그 외를 갈라 본 값입니다. 태그가 없는 방영분은 재방으로 단정하지 않고 '본방 외'로 묶었습니다." },
+      {
+        kind: "text",
+        text: "`<본>` 태그 또는 등록된 본방 슬롯(요일·시각 기준) 중 하나라도 해당하면 본방으로 판정한 값입니다. 태그와 슬롯 모두 없는 방영분은 재방으로 단정하지 않고 '본방 외'로 묶었습니다.",
+      },
       {
         kind: "table",
-        headers: ["프로그램", "본방 편성", "본방 평균", "본방 외 편성", "본방 외 평균", "유지율"],
+        headers: ["프로그램", "판정 근거", "본방 편성", "본방 평균", "본방 외 편성", "본방 외 평균", "유지율"],
         rows: cut(rows).rows.map((r) => [
           r.canonicalName,
+          r.firstRunSource,
           `${r.firstRunAirings}회`,
           formatRating(r.firstRunAvgRating, code),
           `${r.otherAirings}회`,
