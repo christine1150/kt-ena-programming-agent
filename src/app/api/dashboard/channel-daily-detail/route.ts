@@ -41,6 +41,8 @@ function broadcastOrderKey(startTime: string): number {
 
 export interface ChannelDailyDetailRow {
   start_time: string;
+  // skyUHD 일간 세부 내역이 끝시간까지 보여주므로 함께 내려준다(2026-09-18 사용자 지시).
+  end_time: string | null;
   canonical_name: string;
   // 사용자 지시(2026-09-03): "OLIFE의 경우 EPG나 편성표를 통해서 부제가 파악 가능할 경우 부제를
   // 아랫줄에 명기(1페이지 채널별 상위 프로그램에서 하듯이)" — ratings.episode_subtitle은 이미
@@ -59,6 +61,7 @@ export interface ChannelDailyDetailRow {
 
 interface RatingRow {
   start_time: string;
+  end_time: string | null;
   rating: number | null;
   share: number | null;
   time_spent_seconds: number | null;
@@ -111,7 +114,7 @@ export async function GET(request: Request) {
   async function fetchRows(targetId: string, programLevel: boolean) {
     let query = supabase
       .from("ratings")
-      .select("start_time, rating, share, time_spent_seconds, time_spent_share, episode_subtitle, programs(canonical_name)")
+      .select("start_time, end_time, rating, share, time_spent_seconds, time_spent_share, episode_subtitle, programs(canonical_name)")
       .eq("channel_id", channelRow!.id)
       .in("source_type", ["nielsen_daily", "skyuhd"])
       .eq("broadcast_date", date);
@@ -161,6 +164,7 @@ export async function GET(request: Request) {
       const sec = secondaryByKey.get(`${r.start_time}__${name}`) ?? null;
       return {
         start_time: r.start_time,
+        end_time: r.end_time,
         canonical_name: name,
         episode_subtitle: r.episode_subtitle,
         primary_rating: r.rating,

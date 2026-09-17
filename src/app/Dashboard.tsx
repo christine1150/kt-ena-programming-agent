@@ -4227,6 +4227,7 @@ function hexToRgba(hex: string, alpha: number): string {
 
 interface ChannelDailyDetailApiRow {
   start_time: string;
+  end_time: string | null;
   canonical_name: string;
   // 사용자 지시(2026-09-03): OLIFE처럼 EPG로 부제가 파악되는 경우 프로그램명 아랫줄에 표기.
   episode_subtitle: string | null;
@@ -4349,6 +4350,9 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
   const avgPrimaryShare = avg(state.rows.map((r) => r.primary_share));
   const avgSecondaryShare = avg(state.rows.map((r) => r.secondary_share));
   const hasSecondary = !!state.secondaryLabel;
+  // skyUHD 수기 시트에는 점유율·시청시간·시청비율이 없어 그 열들이 항상 "—"였다. 사용자 지시
+  // (2026-09-18)대로 이 채널만 시작·끝·프로그램명(회차 포함)·시청률 4열로 줄인다.
+  const isSkyUhdPanel = channelCode === "SKYUHD";
 
   // 사용자 지시(2026-09-17): skyUHD 월별 세부 엑셀의 빈 시청률 칸은 실제 0이라 DB에는 0으로
   // 적재하고 평균 등 집계의 분모에도 포함하지만, 화면에는 "0.0000"으로 채우지 않고 원본처럼
@@ -4413,17 +4417,45 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
         // 컨테이너를 철회한다. 숫자 열은 전부 좁은 고정폭(최대 6열×56px+44px≈380px)이라 프로그램명
         // 열만 남은 폭을 그대로 나눠 쓰면 패널 폭 안에 자연스럽게 다 들어간다.
         <table className="w-full table-fixed text-left text-sm">
+          {/* 사용자 지시(2026-09-18): "skyUHD의 일간 세부내역은 시작시간, 끝시간, 프로그램명,
+              부제(또는 회차), 시청률만 나오면 돼. 그 외의 칸은 없애고" — skyUHD 수기 시트에는
+              점유율·시청시간·시청비율 자체가 없어 그 세 열이 항상 "—"로만 채워져 있었다.
+              대신 시트에 있는 끝시간을 살린다. 다른 6개 채널은 기존 열 구성을 그대로 쓴다. */}
           <colgroup>
-            <col className="w-11" />
-            <col />
-            <col className="w-14" />
-            {hasSecondary && <col className="w-14" />}
-            <col className="w-14" />
-            {hasSecondary && <col className="w-14" />}
-            <col className="w-14" />
-            <col className="w-14" />
+            {isSkyUhdPanel ? (
+              <>
+                <col className="w-11" />
+                <col className="w-11" />
+                <col />
+                <col className="w-16" />
+              </>
+            ) : (
+              <>
+                <col className="w-11" />
+                <col />
+                <col className="w-14" />
+                {hasSecondary && <col className="w-14" />}
+                <col className="w-14" />
+                {hasSecondary && <col className="w-14" />}
+                <col className="w-14" />
+                <col className="w-14" />
+              </>
+            )}
           </colgroup>
           <thead className="text-[12px] font-normal text-zinc-400">
+            {isSkyUhdPanel ? (
+              <tr>
+                <th className="pb-1 text-center">시작</th>
+                <th className="pb-1 text-center">끝</th>
+                <th className="pb-1 text-left">프로그램명</th>
+                <th className="pb-1 text-center">
+                  시청률
+                  <br />
+                  <span className="font-normal text-zinc-300">{shortTargetLabel(state.primaryLabel ?? "주")}</span>
+                </th>
+              </tr>
+            ) : (
+            <>
             <tr>
               <th rowSpan={2} className="pb-1 text-center align-bottom">
                 시작
@@ -4457,11 +4489,42 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
               <th className="pb-1 text-center">{shortTargetLabel(state.primaryLabel ?? "주")}</th>
               {hasSecondary && <th className="pb-1 text-center">{shortTargetLabel(state.secondaryLabel!)}</th>}
             </tr>
+            </>
+            )}
           </thead>
           <tbody>
             {state.rows.map((r, i) => {
               const primaryShareAboveAvg = r.primary_share !== null && avgPrimaryShare !== null && r.primary_share > avgPrimaryShare;
               const secondaryShareAboveAvg = r.secondary_share !== null && avgSecondaryShare !== null && r.secondary_share > avgSecondaryShare;
+              // skyUHD 전용 4열(시작·끝·프로그램명+회차·시청률). 사용자 지시(2026-09-18):
+              // "부제와 프로그램명을 두 줄 말고 한 줄로" — 회차를 아랫줄로 내리지 않고 프로그램명
+              // 뒤에 이어 붙인다. 이름이 길면 이름 쪽만 줄고 회차는 끝까지 남도록 shrink-0을 준다.
+              if (isSkyUhdPanel) {
+                const highlight =
+                  r.primary_rating !== null && annualAvgRating !== null && r.primary_rating >= annualAvgRating;
+                return (
+                  <tr key={i} className="border-t border-zinc-50">
+                    <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(r.start_time)}</td>
+                    <td className="py-1 text-center tabular-nums text-zinc-400">{r.end_time ? fmtTime(r.end_time) : "—"}</td>
+                    <td className="py-1 text-zinc-700">
+                      <div className="flex items-baseline gap-1">
+                        <span className="truncate" style={highlight ? { color, fontWeight: 700 } : undefined}>
+                          {r.canonical_name}
+                        </span>
+                        {r.episode_subtitle && (
+                          <span className="shrink-0 text-[11px] text-zinc-400">{r.episode_subtitle}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td
+                      className="py-1 text-center tabular-nums"
+                      style={ratingCellStyle(r.primary_rating, primaryRange, state.primaryMonthAvg)}
+                    >
+                      {formatDetailRating(r.primary_rating)}
+                    </td>
+                  </tr>
+                );
+              }
               return (
                 <tr key={i} className="border-t border-zinc-50">
                   <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(r.start_time)}</td>
@@ -4507,7 +4570,15 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                 </tr>
               );
             })}
-            {state.dayTotal && (
+            {state.dayTotal && isSkyUhdPanel && (
+              <tr className="border-t-2 border-zinc-200 bg-zinc-50 font-bold text-zinc-800">
+                <td className="py-1.5 text-center">—</td>
+                <td className="py-1.5 text-center">—</td>
+                <td className="py-1.5">하루 전체</td>
+                <td className="py-1.5 text-center tabular-nums">{formatRating(state.dayTotal.primary_rating, channelCode)}</td>
+              </tr>
+            )}
+            {state.dayTotal && !isSkyUhdPanel && (
               <tr className="border-t-2 border-zinc-200 bg-zinc-50 font-bold text-zinc-800">
                 <td className="py-1.5 text-center">—</td>
                 <td className="py-1.5">하루 전체</td>
