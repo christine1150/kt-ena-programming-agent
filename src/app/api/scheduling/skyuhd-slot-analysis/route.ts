@@ -57,6 +57,7 @@ export async function GET(request: Request) {
       .eq("channel_id", channel.id)
       .eq("source_type", "skyuhd")
       .not("program_id", "is", null)
+      .not("rating", "is", null) // 미측정(앞날 편성) 행은 최신 기준일 계산에서 제외
       .order("broadcast_date", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -86,6 +87,9 @@ export async function GET(request: Request) {
       .eq("source_type", "skyuhd")
       .not("program_id", "is", null)
       .not("start_time", "is", null)
+      // 미측정 행 제외(2026-09-17) — 월별 탭에는 파일 기준일 이후의 편성이 미리 들어 있고
+      // 그 rating은 null(측정 전)이다. 여기 섞이면 "편성했는데 시청률 0"으로 잘못 집계된다.
+      .not("rating", "is", null)
       .gte("broadcast_date", fetchFrom)
       .lte("broadcast_date", asOfDate)
       .order("broadcast_date", { ascending: true })
