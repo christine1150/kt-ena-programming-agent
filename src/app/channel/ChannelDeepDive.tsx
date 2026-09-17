@@ -18,6 +18,13 @@ import { computeChannelHealthScore } from "@/lib/channelHealthScore";
 import { HealthScoreBadge, verdictColor } from "@/components/HealthScoreBadge";
 import { PRIME_UNION_LABEL } from "@/lib/audienceReport/primeTime";
 import type { ProgramMomentumItem } from "@/app/api/scheduling/program-momentum/route";
+// skyUHD 재설계(2026-09-17, 사용자 지시) — 자료가 없어 빈 껍데기가 되는 섹션은 조건부로 감추고,
+// skyUHD가 유일하게 완전히 알 수 있는 "편성 시간대 × 프로그램"을 핵심 섹션으로 새로 넣는다.
+// 다른 6개 채널은 이 분기를 아예 거치지 않으므로 기존 동작이 그대로다(Delta-Only).
+import { evaluateSkyUhdSectionGate, type SkyUhdSectionGate } from "@/lib/skyUhdSectionGate";
+import type { SkyUhdSlotAnalysis, SkyUhdTrendSeries } from "@/lib/skyUhdSlotAnalysis";
+import { SkyUhdSlotProgramAnalysis } from "@/components/skyUhd/SkyUhdSlotProgramAnalysis";
+import { SkyUhdTrendSparklines } from "@/components/skyUhd/SkyUhdTrendSparklines";
 import {
   type PeriodPreset,
   PERIOD_PRESET_LABELS,
@@ -3807,6 +3814,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // skyUHD 전용 대체 지표(사용자 지시, 2026-08-21) — code==="SKYUHD"일 때만 채워진다.
   const [skyuhdScorecard, setSkyuhdScorecard] = useState<SkyuhdScorecardItem[] | null>(null);
   const [skyuhdScorecardLoading, setSkyuhdScorecardLoading] = useState(true);
+  // skyUHD 재설계(2026-09-17) — "편성 시간대 × 프로그램" 분석과 연간/월간/주간 미니 흐름.
+  // 계산은 전부 /api/scheduling/skyuhd-slot-analysis(서버)가 하고 여기서는 받아서 그리기만 한다.
+  const [skyuhdSlotAnalysis, setSkyuhdSlotAnalysis] = useState<SkyUhdSlotAnalysis | null>(null);
+  const [skyuhdTrend, setSkyuhdTrend] = useState<SkyUhdTrendSeries | null>(null);
+  const [skyuhdSlotLoading, setSkyuhdSlotLoading] = useState(true);
   const [expandedProgram, setExpandedProgram] = useState<string | null>(null);
   // Tier 1 확장(2026-08-26): WHAT TO SCHEDULE? 펼침 패널의 Fit Score 해석도 OpenAI로 종합 —
   // 프로그램마다 항상 계산하면 비용이 커지므로, 실제로 펼친 프로그램에 대해서만 그때 호출한다
@@ -4264,6 +4276,37 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     };
   }, [code, fitScoreDateQuery]);
 
+  // skyUHD 재설계(2026-09-17) — 편성 시간대 × 프로그램 분석 + 연간/월간/주간 미니 흐름 조회.
+  // 화면에서 여러 날짜 범위를 고르면 그 기간 그대로, 단일 일자면 서버가 최근 12주로 대신 계산한다
+  // (하루치만으로는 "총 편성 대비 적중률"이라는 개념 자체가 성립하지 않기 때문).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (code !== "SKYUHD") {
+        setSkyuhdSlotAnalysis(null);
+        setSkyuhdTrend(null);
+        setSkyuhdSlotLoading(false);
+        return;
+      }
+      setSkyuhdSlotLoading(true);
+      const params = new URLSearchParams();
+      if (selectedDateFrom) params.set("dateFrom", selectedDateFrom);
+      if (selectedDateTo) params.set("dateTo", selectedDateTo);
+      const qs = params.toString();
+      const res = await fetch(`/api/scheduling/skyuhd-slot-analysis${qs ? `?${qs}` : ""}`).catch(() => null);
+      const body = res ? await res.json().catch(() => ({ ok: false })) : { ok: false };
+      if (cancelled) return;
+      if (res?.ok && body.ok) {
+        setSkyuhdSlotAnalysis(body.analysis ?? null);
+        setSkyuhdTrend(body.trend ?? null);
+      }
+      setSkyuhdSlotLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [code, selectedDateFrom, selectedDateTo]);
+
   if (loading && !data) {
     return <p className="p-8 text-sm text-zinc-500">불러오는 중...</p>;
   }
@@ -4275,7 +4318,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const {
     channel,
     trend,
-    hourlyPattern,
     hourlyEffectiveDate,
     hourlyBaselinePattern,
     hourlyExtraPatterns,
@@ -4291,7 +4333,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     dowHourBlockPattern,
     topPrograms,
     narrativeSignal,
-    hourlyPatternPrior,
     hourlyProgramTitlesPrior,
     hasPriorRange,
     competitorPeriodTopPrograms,
@@ -4302,6 +4343,36 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     priorTopSharePrograms,
     competitorPeriodTopProgramsPrior,
   } = data;
+  // 사용자 지시(2026-09-17, skyUHD): "일일 시청률이 올라갔을 때는 2페이지 시간대별 그래프도 다른
+  // 채널과 동일하게 2시부터 25시까지 그래프내에서 시간대가 다 보이게 해줘. 0인 곳은 0으로 표시하면
+  // 돼. 13시부터 시청률이 나왔다고 13시만 나오게 하지 말고."
+  // 서버(get_hourly_rating_pattern)는 편성이 있었던 시간대만 행으로 내려주므로, skyUHD에서만 축을
+  // 02~25시로 고정해 빈 시간대를 0으로 채운다. 여기서 시청률을 계산하는 게 아니라 "없는 시간대=0"
+  // 이라는 사용자가 확인해준 사실(skyUHD 원본 파일의 빈 칸=0)을 축에 반영하는 표시용 보정이며,
+  // 다른 6개 채널은 이 분기를 거치지 않아 기존 그래프가 그대로다.
+  const fillHourAxisForSkyUhd = (rows: HourlyRow[]): HourlyRow[] => {
+    // 자료가 아예 없는 기간(0행)은 그대로 둔다 — 0으로 채우면 "데이터 없음" 안내 대신 0짜리 빈
+    // 그래프가 그려져 오히려 오해를 준다.
+    if (code !== "SKYUHD" || rows.length === 0) return rows;
+    const byHour = new Map(rows.map((h) => [h.broadcast_hour, h]));
+    const filled: HourlyRow[] = [];
+    for (let hour = 2; hour <= 25; hour += 1) {
+      filled.push(
+        byHour.get(hour) ?? {
+          broadcast_hour: hour,
+          avg_rating: 0,
+          avg_share: 0,
+          avg_reach: 0,
+          avg_time_spent_seconds: 0,
+          program_count: 0,
+        }
+      );
+    }
+    return filled;
+  };
+  const hourlyPattern = fillHourAxisForSkyUhd(data.hourlyPattern);
+  const hourlyPatternPrior = fillHourAxisForSkyUhd(data.hourlyPatternPrior);
+
   const current = trend.find((t) => t.period === "current");
   const dod = trend.find((t) => t.period === "DoD");
   // 사용자 지시(2026-08-20): 전일 대비 옆에 전주 대비(정확히 7일 전 같은 요일, get_rating_trend_summary가
@@ -4502,6 +4573,42 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 보라→핑크→주황 조합 확인)하고, ENA Story의 실제 브랜드 색(#7828e0)과 자연스럽게 이어지는
   // 톤으로 이 채널 페이지에만 적용한다(다른 채널은 기존 무채색+로고색 시스템 그대로).
   const isEnaStory = code === "ENA_STORY";
+
+  // 사용자 지시(2026-09-17, skyUHD): "데이터가 부족하거나 없는 부분은 일단 접어서 안보이게 하자.
+  // 추후 정보가 많이 쌓여서 보일 수 있는 정보가 생기면 (...) 열 수 있도록." — 섹션을 소스에서
+  // 지우지 않고 판정기(src/lib/skyUhdSectionGate.ts)로만 감춘다. 기준은 그 파일의 코드 상수
+  // (SKYUHD_SECTION_THRESHOLDS)에 있으며, 자료가 쌓여 기준을 넘으면 코드 수정 없이 자동으로 다시
+  // 열린다. skyUHD가 아니면 null이라 다른 6개 채널은 이 판정 자체를 거치지 않는다(Delta-Only).
+  const skyuhdGate: SkyUhdSectionGate | null =
+    code === "SKYUHD"
+      ? evaluateSkyUhdSectionGate({
+          demographicLabelCount: Math.max(
+            (data.whoIsWatchingDemographics ?? []).filter((d) => d.today !== null).length,
+            data.periodDemographics.filter((d) => d.period_avg_rating !== null).length
+          ),
+          competitorHourBlockCount: hourBlockOpportunity.filter((d) => d.competitor_full_avg !== null).length,
+          competitorOverlapRowCount: competitorProgramOverlap.length,
+          competitorTopProgramCount: competitorTopPrograms.length,
+        })
+      : null;
+  // 사용자 지시(2026-09-17): "이제 skyUHD도 일별 등록 경쟁 채널이 있어. 연간 누적 말고 선택 기간
+  // 내의 위치를 제대로 보여줘." — 지금까지는 skyUHD에 연간 누적(1/1~오늘) 시장 순위표를 무조건
+  // 먼저 보여주고 있었다(2026-08-21 당시엔 일별 경쟁 자료가 아예 없었기 때문). 이제
+  // get_competitor_insight_report가 자사 채널 폴백(마이그레이션 20260910100000)까지 포함해 선택
+  // 기간 기준 값을 내려주므로, 그 값이 있으면 다른 6개 채널과 똑같은 "선택 기간 기준" 표·산점도를
+  // 쓰고, 정말 아무것도 없을 때만 연간 누적 표로 물러난다.
+  const useSkyuhdYtdCompetitorFallback =
+    code === "SKYUHD" && competitorInsightReport.length === 0 && marketYtdCompetitorSnapshot.length > 0;
+
+  // 각 섹션의 최종 노출 여부 — skyUHD가 아니면 항상 true(기존 동작 그대로).
+  const showWhoIsWatchingSection = skyuhdGate ? skyuhdGate.whoIsWatching.visible : true;
+  const showOpportunitySection = skyuhdGate ? skyuhdGate.opportunity.visible : true;
+  const showCompetitorOverlapSection = skyuhdGate ? skyuhdGate.competitorOverlap.visible : true;
+  const showCompetitorTopProgramsSection = skyuhdGate ? skyuhdGate.competitorTopPrograms.visible : true;
+  // 심층 분석 안의 "편성 안정성"은 별도 판정기 대상이 아니라 단순히 행이 있는지로 판단한다(skyUHD만).
+  // 세 칸이 모두 비면 심층 분석 카드 자체를 감춘다 — "없습니다" 문구만 남은 빈 카드를 남기지 않기 위함.
+  const showStableSlotSection = skyuhdGate ? data.stableSlotPatterns.length > 0 : true;
+  const showDeepAnalysisSection = showCompetitorOverlapSection || showWhoIsWatchingSection || showStableSlotSection;
 
   return (
     <div className="relative px-6 py-8" style={{ ["--accent" as string]: accentColor, zoom: largeFontMode ? 1.35 : 1.1 }}>
@@ -5219,17 +5326,55 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
+        {/* skyUHD 전용 — 연간/월간/주간(월~금) 시청률 흐름 미니 시각화(사용자 지시 2026-09-17).
+            "작게 시각화해서 넣을 수 있는 방법을 하나 디자인해서 제안해줘" — 큰 차트를 하나 더
+            넣으면 아래 편성 분석이 밀리므로, 같은 정의(편성된 모든 방영분의 평균, 빈 칸=0 포함)를
+            쓰는 3단 스파크라인 카드 한 줄로 넣는다. 다른 채널은 렌더링되지 않는다. */}
+        {code === "SKYUHD" && skyuhdTrend && (
+          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+            <h2 className={`${SECTION_TITLE_P2} mb-1`}>
+              시청률 흐름 한눈에<span className={ENG_TITLE_ANNOTATION}>(YEAR · MONTH · WEEK)</span>
+            </h2>
+            <p className="mb-4 text-sm text-zinc-400">
+              연간(월별) · 월간(최근 30일) · 주간(최근 12주, 월~금) 세 축을 같은 기준으로 나란히 보여줍니다 —
+              모두 그 구간에 편성된 방영분의 평균 시청률이며, 원본 파일에서 비어 있는 방영분은 실제 0으로 넣어
+              계산했습니다.
+            </p>
+            <SkyUhdTrendSparklines trend={skyuhdTrend} accentColor={accentColor} fmtR={fmtR} />
+          </div>
+        )}
+
+        {/* skyUHD 전용 핵심 섹션 — 편성 시간대 × 프로그램 분석(사용자 지시 2026-09-17).
+            "편성 시간대와 프로그램은 함께 분석해서 뭘 늘리고, 뭘 시간대를 이동할지 등에 대한 분석을
+            해서 제언하는 것이 가장 중요해" — 그래서 심층 분석보다 위, 시간대별 그래프 바로 아래에
+            둔다. 수치·제언 후보는 전부 서버가 DB 편성 행에서 계산한 값이다. */}
+        {code === "SKYUHD" && (
+          <SkyUhdSlotProgramAnalysis
+            analysis={skyuhdSlotAnalysis}
+            accentColor={accentColor}
+            fmtR={fmtR}
+            loading={skyuhdSlotLoading}
+          />
+        )}
+
         {/* 심층 분석(Detailed Analytical Report, 2026-08-27, 사용자 지시) — 오늘의 브리핑이
             "무슨 일이 있었는지"를 말한다면, 이 섹션은 향후 콘텐츠 구매·패키징 협상 근거로 쓸
             수 있는 패턴을 짚는다. 단일 일자 조회일 때만(경쟁 오버랩·연령대 데이터 모두 "오늘"
             개념 — 기간 모드는 아래 기간 리포트 표들이 그 역할을 함). */}
-        {!showComparisonView && (
+        {!showComparisonView && showDeepAnalysisSection && (
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
             <h2 className={`${SECTION_TITLE_P2} mb-1`}>심층 분석</h2>
             <p className="mb-4 text-sm text-zinc-400">
               단순 결과 나열을 넘어, 향후 콘텐츠 시청률 분석과 구매·패키징 협상 시 근거 자료로 활용할 수 있도록 오늘의 신호를 더 깊이 살펴봅니다.
             </p>
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* 사용자 지시(2026-09-17): skyUHD는 경쟁 프로그램·연령대 자료가 없어 이 두 칸이 빈
+                껍데기가 된다 — 판정기 결과에 따라 각각 감춘다. 한 칸만 남으면 2단 그리드가 어색해
+                지므로 남은 칸이 하나일 때는 1단으로 떨어뜨린다(다른 채널은 항상 둘 다 보여 영향 없음). */}
+            {(showCompetitorOverlapSection || showWhoIsWatchingSection) && (
+            <div
+              className={`grid grid-cols-1 gap-6 ${showCompetitorOverlapSection && showWhoIsWatchingSection ? "lg:grid-cols-2" : ""}`}
+            >
+              {showCompetitorOverlapSection && (
               <div>
                 <h3 className="mb-1 text-sm font-semibold text-zinc-600">동시간대 경쟁 상황</h3>
                 <p className="mb-3 text-xs text-zinc-400">
@@ -5237,15 +5382,20 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </p>
                 <TimeSlotCompetitionChart rows={competitorProgramOverlap} accentColor={accentColor} fmtR={fmtR} channelName={data.channel.name} />
               </div>
+              )}
+              {showWhoIsWatchingSection && (
               <div>
                 <h3 className="mb-1 text-sm font-semibold text-zinc-600">시청자 프로파일링</h3>
                 <p className="mb-3 text-xs text-zinc-400">연령·성별 12개 구간의 {referenceLabel} 시청률입니다 — 색이 진할수록 그 구간의 시청 집중도가 높습니다.</p>
                 <DemographicHeatStrip demographics={data.whoIsWatchingDemographics} accentColor={accentColor} fmtR={fmtR} />
               </div>
+              )}
             </div>
+            )}
             {/* ③편성 안정성(사용자 지시 2026-09-02, 재지시 반영) — "패턴 발견"에서 멈추지 않고,
                 3주 이상 연속 편성된 슬롯이 채널에 미친 영향(시청률 추세·채널 평균 대비 기여·주
                 시청 연령대)까지 분석. 자사 채널만(경쟁채널은 프로그램 단위 이력 자료가 없어 제외). */}
+            {showStableSlotSection && (
             <div className="mt-6">
               <h3 className="mb-1 text-sm font-semibold text-zinc-600">편성 안정성 — 고정 슬롯의 영향</h3>
               <p className="mb-3 text-xs text-zinc-400">
@@ -5253,6 +5403,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </p>
               <StableSlotPatternList rows={data.stableSlotPatterns} accentColor={accentColor} fmtR={fmtR} asOfDate={data.dateTo} />
             </div>
+            )}
           </div>
         )}
 
@@ -5949,7 +6100,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
 
         {/* WHO IS WATCHING? — 재설계(사용자 지시 2026-08-21, 기능 #15-7): 경쟁채널 Affinity 비교
             대신 이 채널 내부의 연령대 흐름(주로 보는 연령대·이동 여부)을 본다. 오늘/어제는 최근
-            한 달(28일) baseline(사용자 지시 재확인), 그 외 기간은 이번 기간 vs 전 기간 비교. */}
+            한 달(28일) baseline(사용자 지시 재확인), 그 외 기간은 이번 기간 vs 전 기간 비교.
+            사용자 지시(2026-09-17): skyUHD는 원본 수기 파일에 타깃(연령·성별) 구분이 아예 없어
+            이 섹션이 항상 빈 껍데기가 된다 — showWhoIsWatchingSection(판정기)이 false면 통째로
+            감춘다(안내 문구도 남기지 않음). */}
+        {showWhoIsWatchingSection && (
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={SECTION_TITLE_P2}>
             누가 보고 있나요?<span className={ENG_TITLE_ANNOTATION}>(WHO IS WATCHING?)</span>
@@ -6112,6 +6267,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               );
             })()}
         </div>
+        )}
 
         {/* HOW DEEPLY? — 숫자 + 설명(사용자 지시). 기간 범위 선택 시 기간 평균으로 표시. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
@@ -6374,6 +6530,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             식의 트레일링 편성 기회 판단이 선택 기간과 의미가 어긋나므로 아예 숨긴다. */}
         {!showComparisonView && (
         <>
+        {/* 사용자 지시(2026-09-17): skyUHD는 시간대별 경쟁채널 시청률이 사실상 비어 있어 이 섹션의
+            격차 계산이 전부 "—"로만 나온다 — showOpportunitySection(판정기)이 false면 통째로 감춘다.
+            아래 WHAT TO SCHEDULE?는 skyUHD 전용 대체 지표가 이미 있어 그대로 유지한다. */}
+        {showOpportunitySection && (
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={SECTION_TITLE_P2}>
             기회가 있나요?<span className={ENG_TITLE_ANNOTATION}>(OPPORTUNITY?)</span>
@@ -6469,6 +6629,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <p className="text-sm text-zinc-400">현재 기회 슬롯 조건(자사 강세 + 경쟁채널 약세 동시 관찰)이 감지되지 않았습니다.</p>
           )}
         </div>
+        )}
 
         {/* WHAT TO SCHEDULE? — skyUHD는 타깃 구분이 없는 원본 자료 한계로 PRD Fit Score를 계산할
             수 없어(사용자 확인, 2026-08-21) 채널 단위 대체 지표(skyuhdScorecard) 표로 대체한다.
@@ -6761,7 +6922,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </h2>
           {/* 사용자 지시(2026-08-21): skyUHD는 일별 비교가 아니라 연간 누적 순위를 쓰므로, 이
               안내 문구도 그 경우엔 아래 skyUHD 전용 문단으로 대체한다(중복 안내 방지). */}
-          {!(code === "SKYUHD" && marketYtdCompetitorSnapshot.length > 0) && (
+          {!useSkyuhdYtdCompetitorFallback && (
             <p className="mb-3 text-sm text-zinc-400">
               시간대별(전일/전주/전월/전분기/전년) 비교는 위 WHAT HAPPENED?를 참고하세요. 아래는 등록 경쟁채널을
               {isRangeMode
@@ -6774,7 +6935,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               요청 — 검증된 동의어(랭킹 시트 '개인2049' = 타깃상세 시트 '수도권 2049')로 정상
               대체되는 흔한 경우까지 매번 경고로 보일 필요는 없다는 판단. resolved_target_label
               자체는 계속 반환되니(SQL) 필요해지면 다시 조건부로 노출할 수 있다. */}
-          {code === "SKYUHD" && marketYtdCompetitorSnapshot.length > 0 ? (
+          {useSkyuhdYtdCompetitorFallback ? (
             // 사용자 지시(2026-08-21): skyUHD는 §1.2 경쟁채널 시트 자체가 없는 수기 업로드
             // 채널이라, 일별 경쟁채널 비교(get_competitor_insight_report)는 등록 경쟁채널 5개 중
             // 일부만(그것도 최고 성적 프로그램 없이) 불완전하게 나온다 — 대신 관리자가 업로드한
@@ -6985,7 +7146,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               경쟁 프로그램"(동시간대 겹치는 프로그램 비교, 하루 단위 개념이라 기간에는 의미가
               없음)을 보여주고, 그 외 기간은 "동기간 경쟁사 주요 프로그램 리뷰"로 대체한다 —
               상위 5개 채널로 좁힌 뒤 그 안에서 상위 7개 프로그램. */}
-          {!showComparisonView && (
+          {/* 사용자 지시(2026-09-17): skyUHD는 겹치는 경쟁 프로그램 자료가 없어 이 표가 항상 비어
+              있다 — showCompetitorOverlapSection(판정기)이 false면 통째로 감춘다. */}
+          {!showComparisonView && showCompetitorOverlapSection && (
           <div className="mt-6 border-t border-zinc-100 pt-5">
             <h3 className="mb-1 text-sm font-semibold text-zinc-500">{referenceLabel} 시간대별 경쟁 프로그램</h3>
             <p className="mb-3 text-sm text-zinc-400">
@@ -7063,7 +7226,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </div>
           )}
 
+          {/* 사용자 지시(2026-09-17): skyUHD는 등록 경쟁채널의 프로그램 단위 자료가 없어 이 목록이
+              비어 있다 — 단일 일자 쪽은 showCompetitorTopProgramsSection(판정기)으로, 기간 쪽은
+              실제 행 수로 각각 판단해 비어 있으면 통째로 감춘다(안내 문구도 남기지 않음). */}
           {!showComparisonView && !showSdowDualView ? (
+          showCompetitorTopProgramsSection && (
           <div className="mt-5 border-t border-zinc-100 pt-5">
             <h3 className="mb-1 text-sm font-semibold text-zinc-500">{referenceLabel} 경쟁채널 TOP 5 프로그램</h3>
             <p className="mb-3 text-sm text-zinc-400">
@@ -7097,7 +7264,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </ol>
             )}
           </div>
+          )
           ) : (
+          (skyuhdGate === null || competitorPeriodTopPrograms.length > 0) && (
           <div className="mt-5 border-t border-zinc-100 pt-5">
             <h3 className="mb-1 text-sm font-semibold text-zinc-500">
               {showSdowDualView ? "동요일" : comparisonLabel ? `${comparisonLabel} 대비 이번 기간` : "선택 기간"} 동기간 경쟁사 주요 프로그램 리뷰
@@ -7128,6 +7297,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               <CompetitorPeriodTopProgramsList rows={competitorPeriodTopPrograms} fmtR={fmtR} />
             )}
           </div>
+          )
           )}
         </div>
       </div>
