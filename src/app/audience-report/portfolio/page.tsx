@@ -177,21 +177,14 @@ function PortfolioReportPageInner() {
             자체 검산에서 그룹 혼입 가능성이 감지됐습니다 — 아래 표를 다시 확인해주세요.
           </div>
         )}
-        {/* Phase 13(2026-09-01, 사용자 지시) — 이 화면(줄글 리포트)이 "Word 보기"다. 실제
-            다운로드(Word/PPT)와 6-슬라이드 임원 보고용 PPT 보기(별도 페이지)로 넘어가는
-            교차 이동 버튼을 함께 둔다. */}
+        {/* 2026-09-17(사용자 지시) — 이 화면이 종합 보고서의 "Word 미리보기"이고, 여기서 받는
+            파일은 Word 하나뿐이다. PPT는 아래 교차 이동 버튼으로 PPT 미리보기에 가서 받는다. */}
         <div className="mt-3 flex flex-wrap gap-2">
           <a
             href={`/api/audience-report/portfolio/docx?${searchParams.toString()}`}
             className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
           >
             Word 다운로드
-          </a>
-          <a
-            href={`/api/audience-report/portfolio/pptx?${searchParams.toString()}`}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-          >
-            PPT 다운로드(상세)
           </a>
           <button
             type="button"
@@ -202,10 +195,9 @@ function PortfolioReportPageInner() {
           </button>
           <a
             href={`/audience-report/portfolio/deck?${searchParams.toString()}`}
-            target="_blank"
             className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300"
           >
-            6-슬라이드 임원 보고용 PPT 보기 →
+            PPT 미리보기 →
           </a>
         </div>
       </header>

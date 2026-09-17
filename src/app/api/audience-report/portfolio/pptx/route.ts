@@ -1,5 +1,6 @@
-// Phase 13(2026-09-01) — 포트폴리오 리포트 상세 PPT(.pptx) 다운로드(표 위주 전체 리포트 —
-// 6-슬라이드 Executive Deck과는 다른 문서, /portfolio/deck/pptx 참고).
+// 종합(포트폴리오) 리포트 상세 PPT(.pptx) 다운로드 — 7채널 비교 분석 전체를 표 위주로 옮긴다.
+// 2026-09-17 — 미리보기(/audience-report/portfolio/deck)가 이 파일과 같은 FlatReport·같은
+// 슬라이드 계획(pptSlidePlan.ts)을 그리므로, 화면과 받은 파일의 내용이 같다.
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { buildPortfolioReport } from "@/lib/audienceReport/portfolioBuilder";

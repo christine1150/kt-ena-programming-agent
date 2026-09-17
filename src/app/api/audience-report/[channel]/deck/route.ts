@@ -1,11 +1,14 @@
-// Phase 13(2026-09-01, 사용자 지시 — "PPT 아이콘 클릭 시 6-슬라이드 임원 보고용 PPT") —
-// 채널별 Executive Deck 조립 API. 쿼리 파라미터 규약은 /api/audience-report/[channel]과 동일
-// (parseRequest.ts 재사용) — 화면과 문서가 다른 기간을 보여주는 사고를 원천 차단.
+// 2026-09-17(사용자 지시 — "P를 누르면 Powerpoint 상세버전 미리보기") — 채널별 상세 PPT
+// 미리보기 payload. 예전에는 6~9장짜리 임원 요약 덱(deckBuilder.ts)을 돌려줘서 미리보기와
+// 실제 다운로드(.pptx)가 서로 다른 문서였다 — 지금은 다운로드와 **같은 FlatReport·같은 슬라이드
+// 계획**을 그대로 돌려준다(/api/audience-report/[channel]/pptx와 동일한 입력).
+// 쿼리 파라미터 규약은 /api/audience-report/[channel]과 동일(parseRequest.ts 재사용).
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { buildAudienceReport } from "@/lib/audienceReport/reportBuilder";
-import { buildChannelExecutiveDeck } from "@/lib/audienceReport/deckBuilder";
 import { parseAudienceReportRequest, AUDIENCE_REPORT_PARAM_ERROR } from "@/lib/audienceReport/parseRequest";
+import { flattenAudienceReport } from "@/lib/audienceReport/reportFlatten";
+import { buildPptPreviewPayload } from "@/lib/audienceReport/pptSlidePlan";
 
 export async function GET(request: Request, { params }: { params: Promise<{ channel: string }> }) {
   const session = await getCurrentSession();
@@ -17,9 +20,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ chan
 
   try {
     const report = await buildAudienceReport(channel, reportRequest);
-    const deck = await buildChannelExecutiveDeck(report);
-    return NextResponse.json({ ok: true, deck });
+    return NextResponse.json({ ok: true, preview: buildPptPreviewPayload(flattenAudienceReport(report)) });
   } catch (err) {
-    return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : "PPT 보고서를 생성하지 못했습니다." }, { status: 500 });
+    return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : "PPT 미리보기를 생성하지 못했습니다." }, { status: 500 });
   }
 }

@@ -1,10 +1,12 @@
-// Phase 13(2026-09-01) — 종합(포트폴리오) Executive Deck 조립 API. 채널별 버전과 동일한 규약,
+// 2026-09-17 — 종합(포트폴리오) 상세 PPT 미리보기 payload. 채널별 버전과 동일한 규약,
 // 채널 파라미터만 없다(7개 채널을 한 번에 다룬다, portfolioBuilder.ts 재사용).
+// 다운로드(/api/audience-report/portfolio/pptx)와 같은 FlatReport·같은 슬라이드 계획을 돌려준다.
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { buildPortfolioReport } from "@/lib/audienceReport/portfolioBuilder";
-import { buildPortfolioExecutiveDeck } from "@/lib/audienceReport/deckBuilder";
 import { parseAudienceReportRequest, AUDIENCE_REPORT_PARAM_ERROR } from "@/lib/audienceReport/parseRequest";
+import { flattenPortfolioReport } from "@/lib/audienceReport/portfolioFlatten";
+import { buildPptPreviewPayload } from "@/lib/audienceReport/pptSlidePlan";
 
 export async function GET(request: Request) {
   const session = await getCurrentSession();
@@ -15,9 +17,8 @@ export async function GET(request: Request) {
 
   try {
     const report = await buildPortfolioReport(reportRequest);
-    const deck = await buildPortfolioExecutiveDeck(report);
-    return NextResponse.json({ ok: true, deck });
+    return NextResponse.json({ ok: true, preview: buildPptPreviewPayload(flattenPortfolioReport(report)) });
   } catch (err) {
-    return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : "PPT 보고서를 생성하지 못했습니다." }, { status: 500 });
+    return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : "PPT 미리보기를 생성하지 못했습니다." }, { status: 500 });
   }
 }
