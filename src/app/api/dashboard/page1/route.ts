@@ -21,6 +21,10 @@ import { buildChannelNarrativeViaLlm } from "@/lib/channelNarrativeLlm";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { detectPortfolioAnomaly } from "@/lib/portfolioAnomaly";
 import { PRIME_RPC_ARGS } from "@/lib/audienceReport/primeTime";
+// 성능 개선(2026-09-17): 닐슨 적재 시점에 SQL이 미리 계산해 둔 집계 결과를 읽어 쓴다
+// (mart_daily_dashboard_cache / mart_llm_text_cache — 마이그레이션 20260917010000).
+import { loadDailyMartCache, cachedOrRpc, martFingerprint, MART_SLOT, MART_GLOBAL_CODE } from "@/lib/dailyMartCache";
+import { cachedLlmText } from "@/lib/llmTextCache";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -289,6 +293,11 @@ interface ChannelNarrativeSignal {
   // null — 프론트가 기존 규칙 기반 buildChannelNarrative로 조용히 대체(fallback).
   llmNarrative: string | null;
 }
+// get_channel_daily_narrative가 돌려주는 행 그 자체(채널 코드·전주 비교·LLM 문장은 라우트가
+// 나중에 덧붙이는 값이라 제외) — 사전 계산(MART) 결과와 실시간 RPC 결과가 같은 모양임을
+// 타입으로 못 박아 두기 위한 별칭(2026-09-17).
+type ChannelNarrativeRpcRow = Omit<ChannelNarrativeSignal, "channelCode" | "priorWeekRating" | "priorWeek2Rating" | "llmNarrative" | "household">;
+
 interface KillerContentDaypartRow {
   channelCode: string;
   canonical_name: string;
@@ -319,6 +328,21 @@ interface TodayTopProgramRow {
   comparisonTargetLabel: string | null;
   // 사용자 지시(2026-08-22): "시청률" 열이 정확히 어떤 타깃인지(수2049/가구 등) 표시하기 위해.
   targetLabel: string;
+}
+
+// 성능 개선(2026-09-17): 사전 계산(MART) 결과를 그대로 쓰기 위한 행 타입 — supabase.rpc()가
+// any를 돌려주던 자리에 같은 모양의 타입만 명시한 것으로, 값의 출처·계산식은 전혀 바뀌지 않는다.
+interface TargetAchievementRow {
+  matched_target_label: string | null;
+  target_rank: string | null;
+  target_rating: number | null;
+  actual_avg_rating: number | null;
+  achievement_pct: number | null;
+  gap: number | null;
+}
+interface TrendSummaryRow {
+  period: string;
+  rating_change_pct: number | null;
 }
 
 export async function GET(request: Request) {
@@ -371,6 +395,26 @@ export async function GET(request: Request) {
   }
   const year = parseInt(asOfDate.slice(0, 4), 10);
 
+  // 성능 개선(2026-09-17, 사용자 지시 — "일간 채널 종합리포트 로딩시간이 오래 걸려서 불편"):
+  // 이 페이지가 채널마다 반복해서 부르던 무거운 집계 RPC(실측: get_channel_daily_narrative
+  // 6채널 합계 4.1초, get_rating_trend_summary 6채널 합계 3.2초)는 전부 "그날 하루"만 보면
+  // 결과가 고정되는 계산이라, 닐슨 파일이 적재될 때 SQL이 미리 계산해 mart에 넣어둔다. 여기서는
+  // 그 결과를 **한 번의 조회로 통째로** 가져와 각 호출 자리에서 꺼내 쓰고, 없으면(사전 계산 전
+  // 과거 일자 등) 기존 실시간 RPC로 그대로 폴백한다 — 숫자는 동일하고 왕복만 줄어든다.
+  // 주말 리포트(asOfDate가 일요일일 때)는 토요일(asOfDate-1)치도 같은 슬롯을 쓰므로 함께 담는다.
+  const martCache = await loadDailyMartCache({
+    dates: [asOfDate, offsetDateStr(asOfDate, -1)],
+    slots: [
+      MART_SLOT.originalContentDaily,
+      MART_SLOT.targetAchievementDay,
+      MART_SLOT.trendSummary,
+      MART_SLOT.narrative28,
+      MART_SLOT.killerDaypart,
+      MART_SLOT.overlapKpi30,
+      MART_SLOT.overlapHousehold30,
+    ],
+  });
+
   const { data: channels, error: channelsError } = await supabase
     .from("channels")
     .select("id, code, name, logo_path, theme_color, logo_visible_ratio, logo_visible_top_ratio, primary_target, market")
@@ -394,12 +438,21 @@ export async function GET(request: Request) {
       let gap: number | null = null;
       let currentRating: number | null = null;
       let matchedTargetLabel: string | null = null;
-      const { data: achievement } = await supabase.rpc("get_target_achievement", {
-        p_channel_code: channel.code,
-        p_date_from: asOfDate,
-        p_date_to: asOfDate,
-        p_year: year,
-      });
+      // 성능 개선(2026-09-17): 사전 계산(MART) 우선, 없으면 기존 RPC 그대로(폴백).
+      const { data: achievement } = await cachedOrRpc<TargetAchievementRow>(
+        martCache,
+        asOfDate,
+        MART_SLOT.targetAchievementDay,
+        channel.code,
+        martFingerprint([channel.code, asOfDate, asOfDate, year]),
+        () =>
+          supabase.rpc("get_target_achievement", {
+            p_channel_code: channel.code,
+            p_date_from: asOfDate,
+            p_date_to: asOfDate,
+            p_year: year,
+          })
+      );
       const achievementRow = achievement?.[0];
       if (achievementRow) {
         targetRating = achievementRow.target_rating;
@@ -478,18 +531,27 @@ export async function GET(request: Request) {
               }
             }
           })(),
-          supabase.rpc("get_rating_trend_summary", {
-            p_channel_code: channel.code,
-            p_target_label: matchedTargetLabel,
-            p_as_of_date: asOfDate,
-          }),
+          // 성능 개선(2026-09-17): 실측 6채널 합계 3.2초였던 조회 — 사전 계산 우선, 없으면 폴백.
+          cachedOrRpc<TrendSummaryRow>(
+            martCache,
+            asOfDate,
+            MART_SLOT.trendSummary,
+            channel.code,
+            martFingerprint([channel.code, matchedTargetLabel, asOfDate]),
+            () =>
+              supabase.rpc("get_rating_trend_summary", {
+                p_channel_code: channel.code,
+                p_target_label: matchedTargetLabel,
+                p_as_of_date: asOfDate,
+              })
+          ),
         ]);
         const trend = trendResult.data;
-        const dodRow = trend?.find((t: { period: string }) => t.period === "DoD");
+        const dodRow = trend?.find((t) => t.period === "DoD");
         dodChangePct = dodRow?.rating_change_pct ?? null;
         // 사용자 지시(2026-08-20): 전일 대비 옆에 전주 동요일(정확히 7일 전, WoW) 대비도 함께 —
         // get_rating_trend_summary가 이미 계산해주는 WoW 행을 그대로 재사용(새 계산 없음).
-        const wowRow = trend?.find((t: { period: string }) => t.period === "WoW");
+        const wowRow = trend?.find((t) => t.period === "WoW");
         wowChangePct = wowRow?.rating_change_pct ?? null;
 
         // ENA 히어로 카드용 — 올해 1월 1일~오늘 누적 평균 시청률·평균 순위(사용자 지시). "오늘
@@ -636,7 +698,16 @@ export async function GET(request: Request) {
   const rerunLeadSentenceForLlmByChannel = new Map<string, string>();
 
   if ((whitelistCount ?? 0) > 0) {
-    const { data: dailyRows } = await supabase.rpc("get_original_content_daily", { p_as_of_date: asOfDate });
+    // 성능 개선(2026-09-17): Page 1·Page 2가 같은 인자로 공유하는 조회라 채널 무관 슬롯 하나로
+    // 사전 계산해 둔다(없으면 기존 RPC 그대로).
+    const { data: dailyRows } = await cachedOrRpc<OriginalDailyRow>(
+      martCache,
+      asOfDate,
+      MART_SLOT.originalContentDaily,
+      MART_GLOBAL_CODE,
+      martFingerprint([asOfDate]),
+      () => supabase.rpc("get_original_content_daily", { p_as_of_date: asOfDate })
+    );
     const daily = (dailyRows ?? []) as OriginalDailyRow[];
 
     // 동시간대 경쟁 프로그램(§1.2) — "수요일 나는 SOLO는 SBS Plus와 동시방송을 비교" 같은
@@ -660,30 +731,44 @@ export async function GET(request: Request) {
       [...new Set(daily.map((r) => r.broadcast_channel_code))].map(async (code) => {
         const ch = channelByCode.get(code);
         if (!ch?.primary_target) return;
+        // 성능 개선(2026-09-17): 사전 계산(MART) 우선, 없으면 기존 RPC 그대로(폴백).
+        const programTargetLabelForOverlap = resolveProgramLevelTargetLabel(ch.primary_target);
         const tasks: PromiseLike<void>[] = [
-          supabase
-            .rpc("get_competitor_program_overlap", {
-              p_channel_code: code,
-              p_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
-              p_as_of_date: asOfDate,
-              p_limit: 30,
-            })
-            .then(({ data: overlap }) => {
-              overlapByChannel.set(code, (overlap ?? []) as CompetitorOverlapRow[]);
-            }),
-        ];
-        if (HOUSEHOLD_ELIGIBLE_CODES.has(code)) {
-          tasks.push(
-            supabase
-              .rpc("get_competitor_program_overlap", {
+          cachedOrRpc<CompetitorOverlapRow>(
+            martCache,
+            asOfDate,
+            MART_SLOT.overlapKpi30,
+            code,
+            martFingerprint([code, programTargetLabelForOverlap, asOfDate, 30]),
+            () =>
+              supabase.rpc("get_competitor_program_overlap", {
                 p_channel_code: code,
-                p_target_label: HOUSEHOLD_TARGET_LABEL,
+                p_target_label: programTargetLabelForOverlap,
                 p_as_of_date: asOfDate,
                 p_limit: 30,
               })
-              .then(({ data: overlap }) => {
-                householdOverlapByChannel.set(code, (overlap ?? []) as CompetitorOverlapRow[]);
-              })
+          ).then(({ data: overlap }) => {
+            overlapByChannel.set(code, overlap ?? []);
+          }),
+        ];
+        if (HOUSEHOLD_ELIGIBLE_CODES.has(code)) {
+          tasks.push(
+            cachedOrRpc<CompetitorOverlapRow>(
+              martCache,
+              asOfDate,
+              MART_SLOT.overlapHousehold30,
+              code,
+              martFingerprint([code, HOUSEHOLD_TARGET_LABEL, asOfDate, 30]),
+              () =>
+                supabase.rpc("get_competitor_program_overlap", {
+                  p_channel_code: code,
+                  p_target_label: HOUSEHOLD_TARGET_LABEL,
+                  p_as_of_date: asOfDate,
+                  p_limit: 30,
+                })
+            ).then(({ data: overlap }) => {
+              householdOverlapByChannel.set(code, overlap ?? []);
+            })
           );
         }
         await Promise.all(tasks);
@@ -824,7 +909,13 @@ export async function GET(request: Request) {
           prevDramaChangePct: pctFmt(row.prev_drama_change_pct),
           cannibalizationSuspected,
         };
-        const schedulingInsight = row.matched_rating !== null ? await buildOriginalProgrammingInsightViaLlm(input) : null;
+        // 성능 개선(2026-09-17): 같은 날짜·같은 입력이면 문장도 같으므로 결과를 캐시해 하루 첫
+        // 조회 이후의 OpenAI 왕복(호출당 최대 8초)을 없앤다 — 입력이 바뀌면 지문이 달라져 자동
+        // 재생성되고, 캐시가 없거나 실패하면 지금까지와 똑같이 그 자리에서 생성한다.
+        const schedulingInsight =
+          row.matched_rating !== null
+            ? await cachedLlmText("original_insight", asOfDate, input, () => buildOriginalProgrammingInsightViaLlm(input))
+            : null;
         return { ...row, schedulingInsight };
       })
     );
@@ -1096,13 +1187,24 @@ export async function GET(request: Request) {
     // 아니라 전주·전전주 동일 요일 흐름도 다각도로 비교하도록 — 새 SQL 없이(계산이 아니라 저장된
     // 값 조회) 정확히 7일 전/14일 전(같은 요일) 채널 단위 시청률을 함께 가져온다.
     const [{ data, error }, householdData, weekAgoResult, twoWeeksAgoResult] = await Promise.all([
-      supabase.rpc("get_channel_daily_narrative", {
-        p_channel_code: code,
-        p_target_label: rankTargetLabel,
-        p_program_target_label: programTargetLabel,
-        p_demographic_labels: demographicLabels,
-        p_as_of_date: asOfDate,
-      }),
+      // 성능 개선(2026-09-17): 실측 6채널 합계 4.1초(ENA 단독 1.5초)로 이 페이지 SQL 비용 1위였던
+      // 조회 — 사전 계산(MART) 우선, 없으면 기존 RPC 그대로(폴백). 인자가 하나라도 다르면 캐시를
+      // 쓰지 않으므로 값이 달라질 수 없다.
+      cachedOrRpc<ChannelNarrativeRpcRow>(
+        martCache,
+        asOfDate,
+        MART_SLOT.narrative28,
+        code,
+        martFingerprint([code, rankTargetLabel, programTargetLabel, demographicLabels, asOfDate, 28, 8, null]),
+        () =>
+          supabase.rpc("get_channel_daily_narrative", {
+            p_channel_code: code,
+            p_target_label: rankTargetLabel,
+            p_program_target_label: programTargetLabel,
+            p_demographic_labels: demographicLabels,
+            p_as_of_date: asOfDate,
+          })
+      ),
       needsHousehold
         ? supabase.rpc("get_channel_household_top_program", { p_channel_code: code, p_as_of_date: asOfDate }).then((r) => r.data)
         : Promise.resolve(null),
@@ -1157,7 +1259,9 @@ export async function GET(request: Request) {
     // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — 위에서
     // 이미 계산·검증된 값만 그대로 OpenAI에 줘서 하나의 문단으로 종합한다(새 계산 없음). 실패
     // 시 null이 남아 Dashboard.tsx가 기존 규칙 기반 buildChannelNarrative로 조용히 대체한다.
-    signal.llmNarrative = await buildChannelNarrativeViaLlm({
+    // 성능 개선(2026-09-17): 채널 6개 각각 OpenAI를 부르던 자리 — 같은 입력이면 문장도 같으므로
+    // 결과를 캐시한다(입력이 바뀌면 지문이 달라져 자동 재생성, 캐시 미스면 지금까지와 동일 동작).
+    const narrativeLlmInput = {
       channelName: ch.name,
       leadSentence: code === "ENA" ? enaLeadSentenceForLlm : (rerunLeadSentenceForLlmByChannel.get(code) ?? null),
       today_rating: signal.today_rating,
@@ -1192,7 +1296,10 @@ export async function GET(request: Request) {
             baseline_days: signal.household.baseline_days,
           }
         : null,
-    });
+    };
+    signal.llmNarrative = await cachedLlmText(`channel_narrative:${code}`, asOfDate, narrativeLlmInput, () =>
+      buildChannelNarrativeViaLlm(narrativeLlmInput)
+    );
     return signal;
   }
 
@@ -1207,24 +1314,43 @@ export async function GET(request: Request) {
   const skyuhdSignalResult = await (async () => {
     const skyuhdTargetLabel = matchedTargetLabelByCode.get("SKYUHD");
     if (!skyuhdTargetLabel) return null;
-    const { data } = await supabase.rpc("get_channel_daily_narrative", {
-      p_channel_code: "SKYUHD",
-      p_target_label: skyuhdTargetLabel,
-      p_program_target_label: "__없음__",
-      p_demographic_labels: [],
-      p_as_of_date: asOfDate,
-    });
+    // 성능 개선(2026-09-17): 사전 계산(MART) 우선, 없으면 기존 RPC 그대로(폴백).
+    const { data } = await cachedOrRpc<ChannelNarrativeRpcRow>(
+      martCache,
+      asOfDate,
+      MART_SLOT.narrative28,
+      "SKYUHD",
+      martFingerprint(["SKYUHD", skyuhdTargetLabel, "__없음__", [], asOfDate, 28, 8, null]),
+      () =>
+        supabase.rpc("get_channel_daily_narrative", {
+          p_channel_code: "SKYUHD",
+          p_target_label: skyuhdTargetLabel,
+          p_program_target_label: "__없음__",
+          p_demographic_labels: [],
+          p_as_of_date: asOfDate,
+        })
+    );
     return data?.[0] ? ({ channelCode: "SKYUHD", ...data[0] } as ChannelNarrativeSignal) : null;
   })();
   // 7) 채널별 킬러 콘텐츠의 강세/약세 시간대 — 같은 순서.
   const killerContentDaypartResults = await mapWithConcurrency(INSIGHT_CHANNEL_ORDER, 3, async (code) => {
     const ch = channelByCode.get(code);
     if (!ch?.primary_target) return [] as KillerContentDaypartRow[];
-    const { data } = await supabase.rpc("get_channel_killer_content_daypart", {
-      p_channel_code: code,
-      p_program_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
-      p_as_of_date: asOfDate,
-    });
+    // 성능 개선(2026-09-17): 사전 계산(MART) 우선, 없으면 기존 RPC 그대로(폴백).
+    const killerProgramTargetLabel = resolveProgramLevelTargetLabel(ch.primary_target);
+    const { data } = await cachedOrRpc<object>(
+      martCache,
+      asOfDate,
+      MART_SLOT.killerDaypart,
+      code,
+      martFingerprint([code, killerProgramTargetLabel, asOfDate, 28, 3]),
+      () =>
+        supabase.rpc("get_channel_killer_content_daypart", {
+          p_channel_code: code,
+          p_program_target_label: killerProgramTargetLabel,
+          p_as_of_date: asOfDate,
+        })
+    );
     return (data ?? []).map((row: object) => ({ channelCode: code, ...row }) as KillerContentDaypartRow);
   });
   const narrativeSignals: ChannelNarrativeSignal[] = narrativeSignalResults.filter((s): s is ChannelNarrativeSignal => s !== null);
@@ -1353,13 +1479,23 @@ export async function GET(request: Request) {
           : isNationalScope
             ? ["전국 여20대", "전국 남20대", "전국 여40대", "전국 남40대"]
             : ["수도권 여20대", "수도권 남20대", "수도권 여40대", "수도권 남40대"];
-        const { data } = await supabase.rpc("get_channel_daily_narrative", {
-          p_channel_code: code,
-          p_target_label: targetLabel,
-          p_program_target_label: programTargetLabel,
-          p_demographic_labels: demographicLabels,
-          p_as_of_date: dateStr,
-        });
+        // 성능 개선(2026-09-17): 토·일 각각의 날짜에 대해 이미 사전 계산해 둔 같은 슬롯을 그대로
+        // 재사용한다(인자 구성이 위 fetchNarrativeSignal/skyUHD 블록과 동일) — 없으면 기존 RPC로 폴백.
+        const { data } = await cachedOrRpc<ChannelNarrativeRpcRow>(
+          martCache,
+          dateStr,
+          MART_SLOT.narrative28,
+          code,
+          martFingerprint([code, targetLabel, programTargetLabel, demographicLabels, dateStr, 28, 8, null]),
+          () =>
+            supabase.rpc("get_channel_daily_narrative", {
+              p_channel_code: code,
+              p_target_label: targetLabel,
+              p_program_target_label: programTargetLabel,
+              p_demographic_labels: demographicLabels,
+              p_as_of_date: dateStr,
+            })
+        );
         if (!data?.[0]) return null;
         return { channelCode: code, ...data[0], priorWeekRating: null, priorWeek2Rating: null, llmNarrative: null } as ChannelNarrativeSignal;
       });

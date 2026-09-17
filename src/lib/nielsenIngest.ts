@@ -11,6 +11,8 @@ import {
 } from "@/lib/nielsenDaily";
 import { extractFullYearFromFileName, parseNielsenAnnualWorkbook } from "@/lib/nielsenAnnual";
 import { applyOlifeEpgForDate } from "@/lib/olifeEpgStaging";
+// 성능 개선(2026-09-17): 적재 직후 Page 1/Page 2 당일 화면용 집계를 미리 계산해 둔다.
+import { refreshDailyDashboardMart } from "@/lib/dailyMartCache";
 import { toChannelCode } from "@/lib/channelMaster";
 import {
   checkChannelCoverage,
@@ -414,6 +416,18 @@ export async function ingestNielsenDailyFile(
     if (olifeChannelId) {
       await applyOlifeEpgForDate(olifeChannelId, parsed.reportDate).catch(() => null);
     }
+  }
+
+  // 성능 개선(2026-09-17, 사용자 지시 — "닐슨 일일시청률 자료가 오면 미리 계산 해 두고 반영해서
+  // 1페이지와 2페이지의 당일 데이터는 최대한 빨리 불러오게"): 이 날짜의 ratings가 확정된 직후,
+  // Page 1/Page 2가 당일 화면에서 부르던 무거운 집계를 SQL이 미리 계산해 mart에 넣어둔다
+  // (mart_daily_dashboard_cache, 마이그레이션 20260917010000). 재업로드로 이 함수가 다시 돌면
+  // 같은 날짜의 mart도 함께 다시 계산되므로 "옛 숫자가 그대로 보이는" 사고가 나지 않는다.
+  // 수동 업로드 경로와 메일 자동 수집 경로가 모두 이 함수를 지나므로(ingestNielsenFile →
+  // ingestNielsenDailyFile) 훅을 여기 한 곳에만 둔다. 실패해도 파일 처리 결과는 그대로 성공
+  // 처리한다 — 사전 계산이 없으면 화면이 기존 실시간 계산 경로로 돌 뿐이다.
+  if (!insertError) {
+    await refreshDailyDashboardMart(parsed.reportDate).catch(() => null);
   }
 
   await supabase.from("file_uploads").insert({

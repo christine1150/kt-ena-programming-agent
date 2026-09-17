@@ -6,6 +6,10 @@ import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL, resolveMarketYtdTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
 import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
 import { buildBriefingReportViaLlm } from "@/lib/briefingReportLlm";
+// 성능 개선(2026-09-17): 닐슨 적재 시점에 SQL이 미리 계산해 둔 집계 결과를 읽어 쓴다
+// (mart_daily_dashboard_cache / mart_llm_text_cache — 마이그레이션 20260917010000).
+import { loadDailyMartCache, cachedOrRpc, martFingerprint, MART_SLOT, MART_GLOBAL_CODE } from "@/lib/dailyMartCache";
+import { cachedLlmText } from "@/lib/llmTextCache";
 
 // 로컬 날짜 구성요소로 "YYYY-MM-DD" 문자열을 만든다 — toISOString()은 UTC로 바꾸면서 자정 근처
 // 날짜가 하루 밀리는 문제가 실제로 있었다(ChannelDeepDive.tsx에서 이미 겪고 고친 것과 동일한
@@ -22,6 +26,38 @@ function addDaysStr(dateStr: string, days: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   const dt = new Date(y, m - 1, d + days);
   return toLocalDateStr(dt);
+}
+
+// 성능 개선(2026-09-17): 사전 계산(MART) 결과를 그대로 쓰기 위한 행 타입 — supabase.rpc()가
+// any를 돌려주던 자리에 get_channel_daily_narrative의 반환 컬럼을 그대로 옮겨 적은 것으로,
+// 값의 출처·계산식은 전혀 바뀌지 않는다(마이그레이션 20260902120000의 returns table과 동일).
+interface ChannelNarrativeRow {
+  today_rating: number | null;
+  baseline_avg_rating: number | null;
+  rating_delta_pct: number | null;
+  today_rank: number | null;
+  baseline_avg_rank: number | null;
+  today_share: number | null;
+  baseline_avg_share: number | null;
+  today_peak_hour: number | null;
+  today_peak_rating: number | null;
+  today_peak_program_name: string | null;
+  today_peak_program_rating: number | null;
+  baseline_peak_hour: number | null;
+  baseline_peak_rating: number | null;
+  top_program_name: string | null;
+  top_program_rating: number | null;
+  top_program_start_time: string | null;
+  top_program_baseline_avg: number | null;
+  top_program_baseline_days: number | null;
+  decline_program_name: string | null;
+  decline_program_rating: number | null;
+  decline_program_start_time: string | null;
+  decline_program_baseline_avg: number | null;
+  decline_program_baseline_days: number | null;
+  decline_program_delta_pct: number | null;
+  demographics: { label: string; today: number | null; baseline_avg: number | null; delta_pct: number | null }[] | null;
+  dow_baseline_avg_rating: number | null;
 }
 
 export async function GET(request: Request) {
@@ -165,12 +201,36 @@ export async function GET(request: Request) {
   // 결과(matched_target_label)를 먼저 구해서 트렌드 조회에도 그대로 재사용한다.
   // get_target_achievement는 원래도 date_from~date_to 범위를 받으므로 기간 선택을 그대로 넘긴다.
   const currentYear = parseInt(asOfDate.slice(0, 4), 10);
-  const { data: achievementForMatch } = await supabase.rpc("get_target_achievement", {
-    p_channel_code: channel.code,
-    p_date_from: dateFrom,
-    p_date_to: dateTo,
-    p_year: currentYear,
+
+  // 성능 개선(2026-09-17, 사용자 지시 — "2페이지의 당일 데이터도 최대한 빨리"): 닐슨 적재 시점에
+  // 미리 계산해 둔 이 채널·이 날짜의 집계 결과를 한 번의 조회로 가져온다(실측 병목: 오늘 기준
+  // get_channel_daypart_opportunity 3.8초, get_channel_stable_slot_patterns 2.1초). 기간을 직접
+  // 선택했거나 SDoW를 켠 경우에는 인자가 달라 자연히 캐시 미스가 되고 기존 실시간 경로가 그대로
+  // 돈다 — 아래 각 호출의 지문(martFingerprint)에 실제로 넘기는 인자를 모두 담아 두었기 때문이다.
+  const martCache = await loadDailyMartCache({
+    dates: [dateTo],
+    channelCodes: [channel.code],
   });
+  // SDoW가 꺼져 있으면 두 값 모두 null — 사전 계산도 null 기준이라 그대로 맞아떨어진다.
+  // (아래 isSdowActive와 같은 조건식이지만, 그 선언보다 이 지점이 앞서야 해서 여기서 먼저 계산한다.)
+  const sdowActiveForFp = sdowDow !== null && sdowWeeks !== null && !Number.isNaN(sdowDow) && !Number.isNaN(sdowWeeks);
+  const sdowDowFp: number | null = sdowActiveForFp ? sdowDow : null;
+  const sdowWeeksFp: number | null = sdowActiveForFp ? sdowWeeks : null;
+
+  const { data: achievementForMatch } = await cachedOrRpc<{ matched_target_label: string | null }>(
+    martCache,
+    dateTo,
+    MART_SLOT.targetAchievementDay,
+    channel.code,
+    martFingerprint([channel.code, dateFrom, dateTo, currentYear]),
+    () =>
+      supabase.rpc("get_target_achievement", {
+        p_channel_code: channel.code,
+        p_date_from: dateFrom,
+        p_date_to: dateTo,
+        p_year: currentYear,
+      })
+  );
   const matchedTargetLabel: string | null = achievementForMatch?.[0]?.matched_target_label ?? null;
   const targetAchievement = achievementForMatch?.[0] ?? null;
 
@@ -223,6 +283,10 @@ export async function GET(request: Request) {
   // 각 함수의 기존 기본값(하위호환)이 그대로 적용된다.
   const sdowNarrativeParams = isSdowActive ? { p_program_baseline_weeks: sdowWeeks!, p_target_dow: sdowDow! } : {};
   const sdowHourlyParams = isSdowActive ? { p_target_dow: sdowDow!, p_target_weeks: sdowWeeks! } : {};
+  // 성능 개선(2026-09-17) MART 지문용 — 위 스프레드가 실제로 넘기는 값(생략 시 함수 기본값 8)을
+  // 그대로 적어 둔다. SDoW가 켜지면 값이 달라져 사전 계산 결과와 지문이 어긋나고, 그때는 기존
+  // 실시간 RPC로 폴백된다(= 사전 계산은 "오늘 기본 진입"에만 적용된다).
+  const narrativeBaselineWeeksFp: number = sdowActiveForFp ? sdowWeeks! : 8;
 
   // 성능 개선(2026-08-21, 사용자 지시 — "1페이지 접속·채널 이동 로딩 속도가 느림"): 아래
   // ~18개의 RPC/쿼리 호출은 전부 matchedTargetLabel/programTargetLabel/dateFrom/dateTo 등
@@ -356,7 +420,14 @@ export async function GET(request: Request) {
     periodDemographicProgramHighlightsRes,
   ] = await Promise.all([
     // WHAT HAPPENED? — 채널 단위 랭킹 데이터로 DoD/WoW/MoM/QoQ/YoY/YTD
-    supabase.rpc("get_rating_trend_summary", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: asOfDate }),
+    cachedOrRpc<{ period: string }>(
+      martCache,
+      dateTo,
+      MART_SLOT.trendSummary,
+      channel.code,
+      martFingerprint([channel.code, matchedTargetLabel, asOfDate]),
+      () => supabase.rpc("get_rating_trend_summary", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: asOfDate })
+    ),
     // HOW DEEPLY? / 02~26시 시간대별 그래프 — 프로그램 단위 데이터가 필요해서, 타깃 라벨을
     // 타깃상세 시트 표기로 바꿔서 조회한다. 기간 설정(사용자 지시): dateFrom~dateTo 범위 전체 집계.
     supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
@@ -364,7 +435,14 @@ export async function GET(request: Request) {
     supabase.rpc("get_hourly_program_titles", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
     // 사용자 지시(2026-08-20): "각 채널의 최근 12주 시간대별 평균 시청률을 연한 색으로 꺾은선
     // 그래프로 그려서 기준점을 보여줄 것" — 선택 기간과 별개로 dateTo 기준 직전 84일 고정 윈도우.
-    supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: addDaysStr(dateTo, -83), p_date_to: dateTo, ...sdowHourlyParams }),
+    cachedOrRpc<object>(
+      martCache,
+      dateTo,
+      MART_SLOT.hourlyBaseline84,
+      channel.code,
+      martFingerprint([channel.code, programTargetLabel, addDaysStr(dateTo, -83), dateTo, sdowDowFp, sdowWeeksFp]),
+      () => supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: addDaysStr(dateTo, -83), p_date_to: dateTo, ...sdowHourlyParams })
+    ),
     Promise.all(
       extraTargetLabels.map((targetLabel) =>
         supabase
@@ -385,7 +463,15 @@ export async function GET(request: Request) {
     }),
     // COMPARED WITH? 재설계(사용자 지시) — 등록 경쟁채널을 순위 높은 순으로, 최근 12주 평균
     // 대비 등락 + 최고 성적 프로그램(시간대). p_date_from을 넘기면 "오늘"이 기간 평균으로 집계됨.
-    supabase.rpc("get_competitor_insight_report", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: dateTo, p_date_from: dateFrom, ...sdowHourlyParams }),
+    cachedOrRpc<object>(
+      martCache,
+      dateTo,
+      MART_SLOT.competitorInsight,
+      channel.code,
+      martFingerprint([channel.code, matchedTargetLabel, dateTo, 84, dateFrom, sdowDowFp, sdowWeeksFp]),
+      () =>
+        supabase.rpc("get_competitor_insight_report", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: dateTo, p_date_from: dateFrom, ...sdowHourlyParams })
+    ),
     // 동시간대 겹치는 경쟁 프로그램 비교(overlap) — 여러 날을 합치면 의미가 흐려져 dateTo 하루만.
     supabase.rpc("get_competitor_program_overlap", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_as_of_date: dateTo }),
     supabase.rpc("get_competitor_top_programs", { p_channel_code: channel.code, p_as_of_date: dateTo, p_limit: 5, p_date_from: dateFrom }),
@@ -398,36 +484,74 @@ export async function GET(request: Request) {
     supabase.rpc("get_daily_trend_highlight", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: dateTo }),
     // 등록 경쟁채널의 실제 편성 변화 참고 정보(§1.2 프로그램 단위 데이터 기반).
     supabase.rpc("get_competitor_schedule_changes", { p_channel_code: channel.code, p_as_of_date: dateTo }),
-    supabase.rpc("get_channel_daypart_opportunity", {
-      p_channel_code: channel.code,
-      p_program_target_label: programTargetLabel,
-      p_as_of_date: dateTo,
-      p_full_window_days: fullWindowDays,
-      p_recent_days: recentDays,
-    }),
+    // 성능 개선(2026-09-17): 실측 3.8초로 이 페이지 SQL 비용 1위였던 조회 — 사전 계산(MART)
+    // 우선, 인자가 다르거나(기간 선택) 아직 계산 전이면 기존 RPC 그대로 실행(폴백).
+    cachedOrRpc<object>(
+      martCache,
+      dateTo,
+      MART_SLOT.daypartOpportunity,
+      channel.code,
+      martFingerprint([channel.code, programTargetLabel, dateTo, fullWindowDays, recentDays]),
+      () =>
+        supabase.rpc("get_channel_daypart_opportunity", {
+          p_channel_code: channel.code,
+          p_program_target_label: programTargetLabel,
+          p_as_of_date: dateTo,
+          p_full_window_days: fullWindowDays,
+          p_recent_days: recentDays,
+        })
+    ),
     // 사용자 지시(2026-08-25, 원 명세 감사 후속: 9번 Slot Intelligence 8 Blocks) — 기존
     // 4구간(daypartOpportunity)은 그대로 두고, Page 2 OPPORTUNITY?에 "8구간 상세"로만 추가
     // 표시할 병렬 데이터. 같은 파라미터, 같은 계산 방식(경쟁채널 격차 변화)을 8구간으로.
-    supabase.rpc("get_channel_hourblock_opportunity", {
-      p_channel_code: channel.code,
-      p_program_target_label: programTargetLabel,
-      p_as_of_date: dateTo,
-      p_full_window_days: fullWindowDays,
-      p_recent_days: recentDays,
-    }),
+    cachedOrRpc<object>(
+      martCache,
+      dateTo,
+      MART_SLOT.hourBlockOpportunity,
+      channel.code,
+      martFingerprint([channel.code, programTargetLabel, dateTo, fullWindowDays, recentDays]),
+      () =>
+        supabase.rpc("get_channel_hourblock_opportunity", {
+          p_channel_code: channel.code,
+          p_program_target_label: programTargetLabel,
+          p_as_of_date: dateTo,
+          p_full_window_days: fullWindowDays,
+          p_recent_days: recentDays,
+        })
+    ),
     // 신규 섹션 — 최근 12주 월~일 × 3시간 단위 강세/약세 히트맵, 시청률 상위 콘텐츠 TOP 20.
     // skyUHD처럼 매일 갱신되지 않는 채널도 12주 누적으로 보면 패턴이 보인다(사용자 지시) — 단,
     // 7일보다 긴 기간을 선택하면 히트맵은 그 기간 전체로, TOP 20은 항상 선택 기간 그대로 계산된다
     // (2026-08-28 수정 — 위 periodWindowDays 주석 참고, 히트맵·TOP20 공통 window로 재통합).
     // 사용자 지시(2026-09-02): SDoW 활성 시 이 자리는 "선택한 요일" 히트맵(오른쪽 패널) —
     // sdowMostRecentDayDate 하루만 집계해 그 요일 칸만 정확히 채운다.
-    supabase.rpc("get_channel_dow_hourblock_pattern", {
-      p_channel_code: channel.code,
-      p_program_target_label: programTargetLabel,
-      p_as_of_date: isSdowActive && sdowMostRecentDayDate ? sdowMostRecentDayDate : dateTo,
-      p_window_days: isSdowActive && sdowMostRecentDayDate ? 1 : periodWindowDays,
-    }),
-    supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 20, ...sdowHourlyParams }),
+    cachedOrRpc<object>(
+      martCache,
+      dateTo,
+      MART_SLOT.dowHourBlock84,
+      channel.code,
+      martFingerprint([
+        channel.code,
+        programTargetLabel,
+        isSdowActive && sdowMostRecentDayDate ? sdowMostRecentDayDate : dateTo,
+        isSdowActive && sdowMostRecentDayDate ? 1 : periodWindowDays,
+      ]),
+      () =>
+        supabase.rpc("get_channel_dow_hourblock_pattern", {
+          p_channel_code: channel.code,
+          p_program_target_label: programTargetLabel,
+          p_as_of_date: isSdowActive && sdowMostRecentDayDate ? sdowMostRecentDayDate : dateTo,
+          p_window_days: isSdowActive && sdowMostRecentDayDate ? 1 : periodWindowDays,
+        })
+    ),
+    cachedOrRpc<object>(
+      martCache,
+      dateTo,
+      MART_SLOT.topPrograms84,
+      channel.code,
+      martFingerprint([channel.code, programTargetLabel, dateTo, periodWindowDays, 20, sdowDowFp, sdowWeeksFp]),
+      () => supabase.rpc("get_channel_top_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 20, ...sdowHourlyParams })
+    ),
     // 사용자 지시(2026-08-21): "WHO IS WATCHING?은 연령대를 좀 더 깊이 파고들어서" — 대표 4개
     // 대신 전체 연령대(fullDemographicTargets, 12개)를 조회해 "가장 많이 본 연령대"·"주목해야
     // 할 연령대"를 데이터 기반으로 고른다.
@@ -458,24 +582,49 @@ export async function GET(request: Request) {
     // 조회해야 rank가 채워짐. resolveRankSheetTargetLabel(channel.primary_target)로 랭킹 시트
     // 표기를 직접 계산해 이 호출에만 적용(가구 KPI 채널은 이미 두 표기가 같아 영향 없음,
     // p_program_target_label은 프로그램 단위 조인이라 기존 그대로 타깃상세 표기 유지).
-    supabase.rpc("get_channel_daily_narrative", {
-      p_channel_code: channel.code,
-      p_target_label: resolveRankSheetTargetLabel(channel.primary_target),
-      p_program_target_label: programTargetLabel,
-      p_demographic_labels: demographicTargets,
-      p_as_of_date: dateTo,
-      p_baseline_days: 84,
-      ...sdowNarrativeParams,
-    }),
-    channel.code !== "SKYUHD" && !isRangeMode
-      ? supabase.rpc("get_channel_demographic_program_highlights", {
+    cachedOrRpc<ChannelNarrativeRow>(
+      martCache,
+      dateTo,
+      MART_SLOT.narrative84,
+      channel.code,
+      martFingerprint([
+        channel.code,
+        resolveRankSheetTargetLabel(channel.primary_target),
+        programTargetLabel,
+        demographicTargets,
+        dateTo,
+        84,
+        narrativeBaselineWeeksFp,
+        sdowDowFp,
+      ]),
+      () =>
+        supabase.rpc("get_channel_daily_narrative", {
           p_channel_code: channel.code,
-          p_kpi_target_label: programTargetLabel,
-          p_demographic_labels: fullDemographicTargets,
+          p_target_label: resolveRankSheetTargetLabel(channel.primary_target),
+          p_program_target_label: programTargetLabel,
+          p_demographic_labels: demographicTargets,
           p_as_of_date: dateTo,
-          p_top_n_programs: 3,
-          p_program_baseline_weeks: 8,
+          p_baseline_days: 84,
+          ...sdowNarrativeParams,
         })
+    ),
+    channel.code !== "SKYUHD" && !isRangeMode
+      ? cachedOrRpc<object>(
+          martCache,
+          dateTo,
+          MART_SLOT.demographicProgramHighlights,
+          channel.code,
+          martFingerprint([channel.code, programTargetLabel, fullDemographicTargets, dateTo, 3, 8]),
+          () =>
+            supabase.rpc("get_channel_demographic_program_highlights", {
+              p_channel_code: channel.code,
+              p_kpi_target_label: programTargetLabel,
+              p_demographic_labels: fullDemographicTargets,
+              p_as_of_date: dateTo,
+              p_top_n_programs: 3,
+              p_program_baseline_weeks: 8,
+            })
+        )
       : Promise.resolve({ data: [] as unknown[] }),
     hasPriorRange
       ? supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: priorDateFrom, p_date_to: priorDateTo })
@@ -507,15 +656,32 @@ export async function GET(request: Request) {
     // 28일 baseline으로 한 번 더 호출해 demographics 필드만 별도로 쓴다(오늘의 브리핑 문구가
     // 쓰는 narrativeRes의 84일 demographics는 그대로 둔다, 기간 모드는 애초에 안 씀).
     !isRangeMode
-      ? supabase.rpc("get_channel_daily_narrative", {
-          p_channel_code: channel.code,
-          p_target_label: matchedTargetLabel,
-          p_program_target_label: programTargetLabel,
-          p_demographic_labels: fullDemographicTargets,
-          p_as_of_date: dateTo,
-          p_baseline_days: 28,
-          ...sdowNarrativeParams,
-        })
+      ? cachedOrRpc<ChannelNarrativeRow>(
+          martCache,
+          dateTo,
+          MART_SLOT.narrative28Full,
+          channel.code,
+          martFingerprint([
+            channel.code,
+            matchedTargetLabel,
+            programTargetLabel,
+            fullDemographicTargets,
+            dateTo,
+            28,
+            narrativeBaselineWeeksFp,
+            sdowDowFp,
+          ]),
+          () =>
+            supabase.rpc("get_channel_daily_narrative", {
+              p_channel_code: channel.code,
+              p_target_label: matchedTargetLabel,
+              p_program_target_label: programTargetLabel,
+              p_demographic_labels: fullDemographicTargets,
+              p_as_of_date: dateTo,
+              p_baseline_days: 28,
+              ...sdowNarrativeParams,
+            })
+        )
       : Promise.resolve({ data: [] as { demographics: unknown }[] }),
     // 사용자 지시(2026-08-21): "대비" 분석(듀얼 패널)에서도 '오늘' 때와 동일하게 각 패널(이번
     // 기간/전 기간)에 그 기준 시점의 최근 12주 시간대별 평균을 연한 꺾은선으로 표시 — 전 기간
@@ -526,7 +692,14 @@ export async function GET(request: Request) {
       : Promise.resolve({ data: [] as unknown[] }),
     // 사용자 지시(2026-08-21): "TOP20에는 없지만 전체 점유율 1~5위인 콘텐츠가 있으면 별도 명기" —
     // TOP20(시청률 기준)과 별개로 점유율 기준 상위 5개를 직접 조회한다(get_channel_top_share_programs).
-    supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 5, ...sdowHourlyParams }),
+    cachedOrRpc<object>(
+      martCache,
+      dateTo,
+      MART_SLOT.topShare84,
+      channel.code,
+      martFingerprint([channel.code, programTargetLabel, dateTo, periodWindowDays, 5, sdowDowFp, sdowWeeksFp]),
+      () => supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: periodWindowDays, p_limit: 5, ...sdowHourlyParams })
+    ),
     hasPriorRange
       ? supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: priorDateTo, p_window_days: periodWindowDays, p_limit: 5 })
       : Promise.resolve({ data: [] as unknown[] }),
@@ -691,16 +864,26 @@ export async function GET(request: Request) {
   // 조회일 때만(심층 분석 섹션이 단일 일자 전용이라 같이 묶음). fullDemographicTargets(위에서
   // 이미 계산된 12개 연령대, WHO IS WATCHING?과 동일)를 그대로 넘겨 이 슬롯의 주 시청 연령대까지
   // 함께 계산한다.
+  // 성능 개선(2026-09-17): 실측 2.1초이면서 위 병렬 묶음 **밖에서 순차로** 돌던 조회라 그대로
+  // 응답 지연에 더해지고 있었다 — 사전 계산(MART) 우선, 없으면 기존 RPC 그대로(폴백).
   const { data: stableSlotPatternsRaw } = !isRangeMode
-    ? await supabase.rpc("get_channel_stable_slot_patterns", {
-        p_channel_code: channel.code,
-        p_program_target_label: programTargetLabel,
-        p_as_of_date: dateTo,
-        p_demographic_labels: fullDemographicTargets,
-        p_lookback_weeks: 8,
-        p_min_consecutive_weeks: 3,
-      })
-    : { data: [] };
+    ? await cachedOrRpc<object>(
+        martCache,
+        dateTo,
+        MART_SLOT.stableSlotPatterns,
+        channel.code,
+        martFingerprint([channel.code, programTargetLabel, dateTo, fullDemographicTargets, 8, 3]),
+        () =>
+          supabase.rpc("get_channel_stable_slot_patterns", {
+            p_channel_code: channel.code,
+            p_program_target_label: programTargetLabel,
+            p_as_of_date: dateTo,
+            p_demographic_labels: fullDemographicTargets,
+            p_lookback_weeks: 8,
+            p_min_consecutive_weeks: 3,
+          })
+      )
+    : { data: [] as object[] };
   const topProgramsData = topProgramsCompetitorRes.data;
   const rootCauseAlert = rootCauseRes.data?.[0] ?? null;
   const opportunityAlert = opportunityAlertRes.data?.[0] ?? null;
@@ -873,7 +1056,6 @@ export async function GET(request: Request) {
   // 나눠 쓴다.
   let rerunLeadSentence: string | null = null;
   if (!isRangeMode) {
-    const { data: originalDaily } = await supabase.rpc("get_original_content_daily", { p_as_of_date: dateTo });
     type OriginalDailyRawRow = {
       broadcast_channel_code: string;
       matched_program_name: string;
@@ -888,6 +1070,16 @@ export async function GET(request: Request) {
       rerun_rating: number | null;
       self_rerun_rating: number | null;
     };
+    // 성능 개선(2026-09-17): Page 1과 완전히 같은 인자(p_as_of_date)로 부르는 조회라 채널 무관
+    // 슬롯 하나를 공유한다 — 사전 계산이 없으면 기존 RPC 그대로(폴백).
+    const { data: originalDaily } = await cachedOrRpc<OriginalDailyRawRow>(
+      martCache,
+      dateTo,
+      MART_SLOT.originalContentDaily,
+      MART_GLOBAL_CODE,
+      martFingerprint([dateTo]),
+      () => supabase.rpc("get_original_content_daily", { p_as_of_date: dateTo })
+    );
     const rows = (originalDaily ?? []) as OriginalDailyRawRow[];
     if (channel.code === "ENA") {
       enaOriginalDaily = rows
@@ -932,7 +1124,10 @@ export async function GET(request: Request) {
     // 이 프로젝트 전역 규칙(CLAUDE.md, skyUHD만 5자리·그 외 3자리)대로 반올림한 뒤에만 LLM에 준다
     // — competitor/opportunity job(§U)에서 이미 쓰던 ratingFmt와 동일한 패턴, 이 호출에는 빠져 있었다.
     const ratingFmt = (v: number | null): number | null => (v === null || v === undefined ? null : Number(v.toFixed(channel.code === "SKYUHD" ? 5 : 3)));
-    briefingLlm = await buildBriefingReportViaLlm({
+    // 성능 개선(2026-09-17): 같은 날짜·같은 입력이면 문장도 같으므로 결과를 캐시해 OpenAI
+    // 왕복(최대 8초)을 하루 첫 조회로 제한한다 — 입력이 바뀌면 지문이 달라져 자동 재생성되고,
+    // 캐시가 없거나 실패하면 지금까지와 똑같이 그 자리에서 생성한다.
+    const briefingLlmInput = {
       channelName: channel.name,
       refLabel,
       currentRating: ratingFmt(currentRating),
@@ -957,7 +1152,10 @@ export async function GET(request: Request) {
         baseline_avg: ratingFmt(d.baseline_avg),
       })),
       baselineLabel: sdowBaselineLabelForLlm,
-    });
+    };
+    briefingLlm = await cachedLlmText(`briefing_report:${channel.code}`, dateTo, briefingLlmInput, () =>
+      buildBriefingReportViaLlm(briefingLlmInput)
+    );
   }
 
   return NextResponse.json({
