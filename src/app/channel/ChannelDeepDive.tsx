@@ -324,6 +324,11 @@ interface CompetitorScheduleChange {
   today_rating: number | null;
   usual_program: string;
   usual_weeks_seen: number;
+  // 2026-09-17 추가 — 교체가 득이었는지 실이었는지 바로 읽히도록 DB가 계산해 내려주는 값들.
+  // (프론트엔드는 산술하지 않는다 — CLAUDE.md "DB = Source of Truth")
+  usual_avg_rating: number | null;
+  usual_sample_count: number;
+  delta_pct: number | null;
 }
 
 // 오늘의 브리핑(줄글 보고서)용 원시 신호 — get_channel_daily_narrative(12주 baseline).
@@ -5997,14 +6002,46 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     <p className="text-sm text-rose-600">
                       같은 시간대 등록 경쟁채널 편성 변화 가능성(최근 4주 내내 같던 프로그램과 오늘이 다름, 참고 정보):
                     </p>
+                    {/* 사용자 지시(2026-09-17): "과거의 평균 시청률과 교체한 후의 시청률을 비교해서
+                        좋은건지 안좋아진건지 같이 볼 수 있도록. 색상과 세모 정도로 보여주면 긴 설명
+                        없이 바로 결과를 알 수 있겠지." — 문장으로 풀어 쓰지 않고 오른쪽 끝에
+                        ▲/▼ + 색상만 둔다. 수치(평균·오늘·증감률)는 DB가 계산해 내려준 값 그대로다. */}
                     <div className="mt-1 flex flex-col gap-1">
-                      {relevant.map((c, i) => (
-                        <p key={i} className="text-sm text-zinc-600">
-                          <span className="font-medium text-zinc-700">{c.competitor_name}</span> {c.hour_block}시대 &ldquo;{c.usual_program}&rdquo;
-                          (최근 {c.usual_weeks_seen}주 고정) → 오늘 &ldquo;{c.today_program}&rdquo;로 교체
-                        </p>
-                      ))}
+                      {relevant.map((c, i) => {
+                        const up = c.delta_pct !== null && c.delta_pct > 0;
+                        const down = c.delta_pct !== null && c.delta_pct < 0;
+                        return (
+                          <div key={i} className="flex items-baseline gap-2 text-sm text-zinc-600">
+                            <p className="min-w-0 flex-1">
+                              <span className="font-medium text-zinc-700">{c.competitor_name}</span> {c.hour_block}시대 &ldquo;{c.usual_program}&rdquo;
+                              (최근 {c.usual_weeks_seen}주 고정) → 오늘 &ldquo;{c.today_program}&rdquo;로 교체
+                            </p>
+                            {c.delta_pct === null ? (
+                              // 평소 평균이 없거나 오늘 시청률이 없으면 방향을 지어내지 않는다.
+                              <span className="shrink-0 text-xs text-zinc-400">비교 불가</span>
+                            ) : (
+                              <span
+                                // 색은 앱 전체 관례를 따른다 — ▲ 상승 emerald / ▼ 하락 rose
+                                // (audience-report의 DeltaText와 동일). 여기서 오른 것은 "경쟁채널의"
+                                // 시청률이므로, 우리 입장의 좋고 나쁨이 아니라 교체 자체의 성패를 뜻한다.
+                                className={`shrink-0 tabular-nums text-xs font-semibold ${up ? "text-emerald-600" : down ? "text-rose-600" : "text-zinc-500"}`}
+                                title={`평소 ${c.usual_program} 평균 ${c.usual_avg_rating?.toFixed(4)}(${c.usual_sample_count}회) → 오늘 ${c.today_program} ${c.today_rating?.toFixed(4) ?? "—"}`}
+                              >
+                                {up ? "▲" : down ? "▼" : "＝"} {Math.abs(c.delta_pct).toFixed(1)}%
+                                <span className="ml-1 font-normal text-zinc-400">
+                                  {c.usual_avg_rating?.toFixed(4)}→{c.today_rating?.toFixed(4) ?? "—"}
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
+                    <p className="mt-1 text-[11px] text-zinc-400">
+                      ▲는 교체한 프로그램이 평소 프로그램보다 잘 나온 경우(경쟁채널 입장에서 성공한 교체),
+                      ▼는 그 반대입니다. 평소 값은 같은 요일·시간대 최근 {relevant[0]?.usual_weeks_seen ?? 4}주 평균이라
+                      오늘 하루와 표본 크기가 다릅니다 — 방향만 참고하세요.
+                    </p>
                   </div>
                 );
               })()}
