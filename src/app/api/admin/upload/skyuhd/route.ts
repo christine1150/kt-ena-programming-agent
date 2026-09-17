@@ -89,10 +89,19 @@ export async function POST(request: Request) {
     );
     if (ratingIssue) warnings.push(ratingIssue.message);
 
+    // 회차·부제 표시(2026-09-17 사용자 지시: "OLIFE 일간세부내역과 같이 부제나 회차가 명기되게").
+    // programs.canonical_name은 회차를 떼어낸 이름("금의야행")이라, 이 칸을 비워두면 화면에서
+    // 회차가 사라져 같은 프로그램의 여러 방영분을 구분할 수 없다. 원본 표기에서 프로그램명을
+    // 뺀 나머지("20회", "7회 A" 등)를 그대로 적어 둔다 — 값을 지어내지 않고 원문을 보존한다.
+    const episodeLabel = row.rawProgramName.startsWith(row.canonicalName)
+      ? row.rawProgramName.slice(row.canonicalName.length).trim()
+      : null;
+
     rowsToInsert.push({
       source_type: "skyuhd",
       channel_id: channel.id,
       program_id: programId,
+      episode_subtitle: episodeLabel || null,
       target_id: null, // 이 시트는 타깃 구분이 없어 임의로 지정하지 않는다 (CLAUDE.md: 존재하지 않는 값을 만들지 않음)
       broadcast_date: row.broadcastDate,
       start_time: row.startTime,

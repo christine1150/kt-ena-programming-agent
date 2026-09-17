@@ -31,6 +31,14 @@ function offsetDateStr(dateStr: string, days: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** "HH:MM:SS" → 방송일 기준 정렬 키(초). 방송일은 02:00~익일 01:59(=25:59)이므로 02시 이전은
+ *  그날의 끝(24·25시대)으로 본다 — 이 프로젝트의 8대 시간대 슬롯(02-05 ~ 23-02)과 같은 경계다. */
+function broadcastOrderKey(startTime: string): number {
+  const [h, m, s] = startTime.split(":").map(Number);
+  const seconds = (h || 0) * 3600 + (m || 0) * 60 + (s || 0);
+  return h < 2 ? seconds + 24 * 3600 : seconds;
+}
+
 export interface ChannelDailyDetailRow {
   start_time: string;
   canonical_name: string;
@@ -165,7 +173,11 @@ export async function GET(request: Request) {
         secondary_time_spent_share: sec?.time_spent_share ?? null,
       };
     })
-    .sort((a, b) => a.start_time.localeCompare(b.start_time));
+    // 방송일 기준 정렬(2026-09-17 사용자 지적) — 닐슨 방송일은 02:00에 시작해 익일 01:59
+    // (=25:59)에 끝난다. 시각 문자열을 그대로 정렬하면 자정을 넘긴 00·01시대 방영분이 그날
+    // 편성의 맨 앞으로 올라와, 실제로는 하루의 마지막인 심야 프로그램이 첫 편성처럼 보인다.
+    // 02시 이전 시각에 24시간을 더해 정렬 키로 쓰면 편성 순서대로 놓인다(표시는 00:37 그대로).
+    .sort((a, b) => broadcastOrderKey(a.start_time) - broadcastOrderKey(b.start_time));
 
   const dayTotal = {
     primary_rating: primaryDayRows[0]?.rating ?? null,
