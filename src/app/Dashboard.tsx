@@ -3936,7 +3936,7 @@ function ChannelNarrativeCard({
                   )}
                   <p className="text-[13.5px] leading-snug font-medium" style={{ color: line.actionLine ? "#281fc7" : undefined }}>
                     <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: line.actionLine ? "#8b87e0" : "#a1a1aa" }}>
-                      액션 -
+                      액션
                     </span>
                     {line.actionLine ?? <span className="text-zinc-500">현재 편성 유지</span>}
                   </p>
