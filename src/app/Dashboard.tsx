@@ -3473,9 +3473,10 @@ function OriginalContentReportCard({
                           바꾸지 않음)은 <details>로 접어 이 압축 요약만 기본으로 보이게 한다(UI
                           디자이너 Rule 04, 점진적 정보 공개와 같은 원칙). 다만 "편성 인사이트"는
                           사용자 재지시(2026-09-09, 2차)로 접지 않고 바로 아래 항상 펼쳐서 보여준다
-                          — PD 수동 리포트가 있으면 그 원문이 최우선(아래 참고). 액션 아이템이
-                          없으면(actionLine === null) "특별한 조치 불필요"를 명시해 침묵이 아니라
-                          확인된 결과임을 보여준다. */}
+                          — PD 수동 리포트가 있으면 그 원문이 최우선(아래 참고). 액션이 없으면
+                          (actionLine === null) "현재 편성 유지"를 명시해 침묵이 아니라 확인된
+                          결과임을 보여준다(사용자 지시 2026-09-17: "특별한 조치 불필요 — 현재
+                          편성 유지"가 길어 "현재 편성 유지"로 축약). */}
                       {(insight.situationLine || insight.causeLine) && (
                         <div className="mb-5 overflow-hidden rounded-xl border border-zinc-100">
                           {insight.situationLine && (
@@ -3491,8 +3492,8 @@ function OriginalContentReportCard({
                             </div>
                           )}
                           <div className="bg-indigo-50/50 px-3.5 py-2.5">
-                            <p className="text-[10.5px] font-bold uppercase tracking-wide text-indigo-400">액션 아이템</p>
-                            <p className="mt-0.5 text-[13.5px] font-medium text-indigo-800">{insight.actionLine ?? "특별한 조치 불필요 — 현재 편성 유지"}</p>
+                            <p className="text-[10.5px] font-bold uppercase tracking-wide text-indigo-400">액션</p>
+                            <p className="mt-0.5 text-[13.5px] font-medium text-indigo-800">{insight.actionLine ?? "현재 편성 유지"}</p>
                           </div>
                         </div>
                       )}
@@ -3935,9 +3936,9 @@ function ChannelNarrativeCard({
                   )}
                   <p className="text-[13.5px] leading-snug font-medium" style={{ color: line.actionLine ? "#281fc7" : undefined }}>
                     <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: line.actionLine ? "#8b87e0" : "#a1a1aa" }}>
-                      액션 아이템
+                      액션 -
                     </span>
-                    {line.actionLine ?? <span className="text-zinc-500">특별한 조치 불필요 — 현재 편성 유지</span>}
+                    {line.actionLine ?? <span className="text-zinc-500">현재 편성 유지</span>}
                   </p>
                 </div>
                 {/* 원문 문단이 없는 채널(2026-09-17 기준 skyUHD — 등위 변화가 10위 미만이면
