@@ -175,6 +175,7 @@ export async function GET(request: Request) {
       rerunLeadSentence: null,
       briefingLlm: null,
       dowHourBlockPattern: [],
+      dowHourPattern: [],
       topPrograms: [],
       periodDemographics: [],
       periodProgramMovers: [],
@@ -189,6 +190,7 @@ export async function GET(request: Request) {
       periodWindowDays: 84,
       periodRankMovement: null,
       dowHourBlockPatternPrior: [],
+      dowHourPatternPrior: [],
       topProgramsPrior: [],
       topSharePrograms: [],
       priorTopSharePrograms: [],
@@ -412,6 +414,7 @@ export async function GET(request: Request) {
     daypartOpportunityRes,
     hourBlockOpportunityRes,
     dowHourBlockPatternRes,
+    dowHourPatternRes,
     topProgramsRes,
     periodDemographicsRes,
     periodProgramMoversRes,
@@ -422,6 +425,7 @@ export async function GET(request: Request) {
     hourlyProgramTitlesPriorRes,
     competitorPeriodTopProgramsRes,
     dowHourBlockPatternPriorRes,
+    dowHourPatternPriorRes,
     topProgramsPriorRes,
     whoIsWatchingDemographicsRes,
     hourlyBaselinePatternPriorRes,
@@ -559,6 +563,16 @@ export async function GET(request: Request) {
           p_window_days: isSdowActive && sdowMostRecentDayDate ? 1 : periodWindowDays,
         })
     ),
+    // 사용자 지시(2026-09-19): 히트맵 1시간 단위 토글 — 위 3시간 단위와 동일한 조건(SDoW 시
+    // "선택한 요일" 하루만)으로 같은 창을 그대로 재사용, mart 캐시는 아직 이 신규 RPC를
+    // 모르므로(daily_dashboard_mart 갱신 루틴 미변경, Delta-Only) 캐시 없이 직접 호출한다 —
+    // 체크박스로 켤 때만 쓰는 보조 데이터라 캐시 없이도 부담이 작다.
+    supabase.rpc("get_channel_dow_hour_pattern", {
+      p_channel_code: channel.code,
+      p_program_target_label: programTargetLabel,
+      p_as_of_date: isSdowActive && sdowMostRecentDayDate ? sdowMostRecentDayDate : dateTo,
+      p_window_days: isSdowActive && sdowMostRecentDayDate ? 1 : periodWindowDays,
+    }),
     cachedOrRpc<object>(
       martCache,
       dateTo,
@@ -672,6 +686,15 @@ export async function GET(request: Request) {
     // 7개가 모두 나오는 진짜 히트맵을 보여준다(하나의 요일로 좁히지 않음).
     hasPriorRange || isSdowActive
       ? supabase.rpc("get_channel_dow_hourblock_pattern", {
+          p_channel_code: channel.code,
+          p_program_target_label: programTargetLabel,
+          p_as_of_date: isSdowActive ? dateTo : priorDateTo,
+          p_window_days: isSdowActive ? (sdowWeeks ?? 1) * 7 : periodWindowDays,
+        })
+      : Promise.resolve({ data: [] as unknown[] }),
+    // 위 dowHourPattern(1시간 단위)의 "전 기간/선택 주간" 짝 — 조건·파라미터 동일하게 재사용.
+    hasPriorRange || isSdowActive
+      ? supabase.rpc("get_channel_dow_hour_pattern", {
           p_channel_code: channel.code,
           p_program_target_label: programTargetLabel,
           p_as_of_date: isSdowActive ? dateTo : priorDateTo,
@@ -1223,6 +1246,7 @@ export async function GET(request: Request) {
     periodProgramMovers: periodProgramMovers ?? [],
     periodProgramDrivers,
     dowHourBlockPattern: dowHourBlockPattern ?? [],
+    dowHourPattern: dowHourPatternRes.data ?? [],
     topPrograms: topPrograms ?? [],
     trend: trend ?? [],
     hourlyPattern: hourlyPattern ?? [],
@@ -1274,6 +1298,7 @@ export async function GET(request: Request) {
     competitorPeriodTopPrograms: competitorPeriodTopProgramsRes.data ?? [],
     periodWindowDays,
     dowHourBlockPatternPrior: dowHourBlockPatternPriorRes.data ?? [],
+    dowHourPatternPrior: dowHourPatternPriorRes.data ?? [],
     topProgramsPrior: topProgramsPriorRes.data ?? [],
     // 사용자 지시(2026-08-21): TOP20 밖 점유율 상위 5개 + 비교 분석 두 기간 각각의 경쟁사 Top7.
     topSharePrograms: topSharePatternsRes.data ?? [],

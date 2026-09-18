@@ -489,11 +489,35 @@ interface DowHourBlockRow {
   hour_block: number; // 그 3시간 구간의 시작 시각(2,5,8,...,23)
   avg_rating: number | null;
   sample_count: number;
+  // 사용자 지시(2026-09-19): 히트맵 마우스오버 시 실제 편성 프로그램 표시용(선택적 — 신규
+  // 마이그레이션 이전 mart 캐시에는 없을 수 있어 optional로 둔다).
+  program_names?: string | null;
+}
+// 사용자 지시(2026-09-19): "히트맵을 2시부터 25시까지 1시간 단위로도 비교할 수 있게" — 위
+// DowHourBlockRow(3시간 단위)와 동일한 형태의 1시간 단위 행.
+interface DowHourRow {
+  dow: number;
+  dow_label: string;
+  hour: number; // 02~25시
+  avg_rating: number | null;
+  sample_count: number;
+  program_names?: string | null;
 }
 const HOUR_BLOCK_ORDER = [2, 5, 8, 11, 14, 17, 20, 23];
 // 이 앱의 "02~26시" 관행대로 24/25시도 그대로 표기(0/1시로 감지 않음 — 02~26시 그래프와 동일).
 function hourBlockLabel(h: number): string {
   return `${h}~${h + 2}시`;
+}
+// 사용자 지시(2026-09-19): 요일×시간대 히트맵 1시간 단위 토글용 — 02~25시 24개 행, 라벨은
+// "5시"처럼 단일 시각만(hourBlockLabel의 "~+3시" 범위 표기와 구분).
+const HOUR_ORDER_1H = Array.from({ length: 24 }, (_, i) => i + 2);
+function hour1hLabel(h: number): string {
+  return `${h}시`;
+}
+// DowHourRow(1시간 단위)를 DowHourBlockTable이 받는 DowHourBlockRow 모양으로 맞춘다(hour→hour_block
+// 이름만 다름, 새 렌더 로직 없이 기존 표를 그대로 재사용하기 위한 순수 reshape).
+function toHourBlockShape(rows: DowHourRow[]): DowHourBlockRow[] {
+  return rows.map((r) => ({ dow: r.dow, dow_label: r.dow_label, hour_block: r.hour, avg_rating: r.avg_rating, sample_count: r.sample_count, program_names: r.program_names }));
 }
 // 사용자 지시(2026-09-03): "기회가 있나요는 4구간/8구간 이원화된 것을 3시간 단위로 통일하고,
 // 이름을 붙여줘" — HOUR_BLOCK_ORDER의 8구간에 시간대 이름을 매핑한다. hourBlockLabel()은 요일×
@@ -574,6 +598,7 @@ interface ChannelData {
   periodProgramMovers: PeriodProgramMoverRow[];
   periodProgramDrivers: PeriodProgramDriverRow[];
   dowHourBlockPattern: DowHourBlockRow[];
+  dowHourPattern: DowHourRow[];
   topPrograms: TopProgramRow[];
   trend: TrendRow[];
   hourlyPattern: HourlyRow[];
@@ -666,6 +691,7 @@ interface ChannelData {
   periodWindowDays: number;
   // 기능 #15-3/#15-4(2026-08-21): "대비" 분석의 전 기간 히트맵·TOP20.
   dowHourBlockPatternPrior: DowHourBlockRow[];
+  dowHourPatternPrior: DowHourRow[];
   topProgramsPrior: TopProgramRow[];
   // 사용자 지시(2026-08-21): TOP20 밖 점유율 상위 5개(이번 기간/전 기간) + 비교 분석 두 기간
   // 각각의 경쟁사 Top7.
@@ -2888,6 +2914,8 @@ function DowHourBlockTable({
   fmtR,
   isEnaStory,
   hourBlockOpportunity,
+  hourOrder,
+  labelFor,
 }: {
   pattern: DowHourBlockRow[];
   accentColor: string;
@@ -2899,7 +2927,13 @@ function DowHourBlockTable({
   // hour 세분 데이터 없음, 새 SQL 만들지 않음) 그 구간의 7일 전체에 같은 표시를 적용한다 —
   // 시간대 행 라벨 옆 작은 점으로, 억지로 셀 안에 넣지 않아 기존 시청률 숫자를 가리지 않는다.
   hourBlockOpportunity?: HourBlockOpportunityRow[];
+  // 사용자 지시(2026-09-19): "1시간 단위로도 비교할 수 있게" — 기본은 기존 8구간(3시간 단위)
+  // 그대로, 1시간 모드일 때만 호출부에서 02~25시 24개 행과 그에 맞는 라벨 함수를 넘긴다.
+  hourOrder?: number[];
+  labelFor?: (h: number) => string;
 }) {
+  const rows = hourOrder ?? HOUR_BLOCK_ORDER;
+  const labelOf = labelFor ?? hourBlockLabel;
   const byCell = new Map(pattern.map((r) => [`${r.dow}__${r.hour_block}`, r]));
   const maxRating = Math.max(1e-9, ...pattern.map((r) => r.avg_rating ?? 0));
   const oppByHourBlock = new Map((hourBlockOpportunity ?? []).map((r) => [r.hour_block, r]));
@@ -2935,7 +2969,7 @@ function DowHourBlockTable({
           </tr>
         </thead>
         <tbody>
-          {HOUR_BLOCK_ORDER.map((hb) => {
+          {rows.map((hb) => {
             const oppRow = oppByHourBlock.get(hb);
             const oppCls = oppRow ? classifyHourBlockOpportunity(oppRow) : null;
             return (
@@ -2950,7 +2984,7 @@ function DowHourBlockTable({
                     vs "23~25시" 6글자). 라벨에 고정 폭을 줘서 점이 항상 같은 x 위치(라벨
                     칸이 끝나는 지점)에서 시작하도록 고정한다. */}
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-block w-14">{hourBlockLabel(hb)}</span>
+                  <span className="inline-block w-14">{labelOf(hb)}</span>
                   {oppCls && (
                     <span
                       className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
@@ -2979,7 +3013,11 @@ function DowHourBlockTable({
                         backgroundColor: bgColor,
                         color: textColor,
                       }}
-                      title={cell ? `${label} ${hourBlockLabel(hb)}: ${fmtR(rating)} (표본 ${cell.sample_count}건)` : "표본 없음"}
+                      title={
+                        cell
+                          ? `${label} ${labelOf(hb)}: ${fmtR(rating)} (표본 ${cell.sample_count}건)${cell.program_names ? ` · 편성: ${cell.program_names}` : ""}`
+                          : "표본 없음"
+                      }
                     >
                       {rating !== null ? fmtR(rating) : "—"}
                     </div>
@@ -3976,6 +4014,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 소수점 5자리 시청률이 읽기 어려운 채널에 특히 유용 — 다만 모든 채널에서 쓸 수 있게 공통 제공)을
   // 충족한다.
   const [largeFontMode, setLargeFontMode] = useState(false);
+  // 사용자 지시(2026-09-19): "요일×시간대" 히트맵을 기본 3시간 단위 대신 02~25시 1시간 단위로도
+  // 볼 수 있게 우측 체크박스로 전환. 기본은 기존 그대로(3시간 단위)라 Delta-Only.
+  const [dowHeatmapGranularity, setDowHeatmapGranularity] = useState<"3h" | "1h">("3h");
   const [hourlyMetrics, setHourlyMetrics] = useState<Set<HourlyMetricKey>>(new Set(["avg_rating"]));
   // 기능 #15-2(2026-08-21): "대비" 분석(DoD~YoY)의 시간대별 그래프는 "이번 기간"/"전 기간" 두
   // 패널로 나란히 보여주고, 각 패널이 독립된 체크박스 행을 갖는다(사용자 지시 "두 줄 체크박스").
@@ -4514,6 +4555,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     rootCauseAlert,
     isRangeMode,
     dowHourBlockPattern,
+    dowHourPattern,
     topPrograms,
     narrativeSignal,
     hourlyProgramTitlesPrior,
@@ -4521,6 +4563,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     competitorPeriodTopPrograms,
     periodWindowDays,
     dowHourBlockPatternPrior,
+    dowHourPatternPrior,
     topProgramsPrior,
     topSharePrograms,
     priorTopSharePrograms,
@@ -5904,18 +5947,31 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             route.ts의 hasExplicitDateRange 기준). "대비" 분석(priorDateFrom/To가 있는 DoD~YoY)은
             "이번 기간"/"전 기간" 두 패널로 나란히 비교. */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={`${SECTION_TITLE_P2} mb-1`}>
-            {showSdowDualView
-              ? "요일 × 시간대 강세 시간대"
-              : periodWindowDays !== 84
-                ? `선택 기간(${periodWindowDays}일) 요일 × 시간대 강세 시간대`
-                : "최근 12주 요일 × 시간대 강세 시간대"}
-          </h2>
+          <div className="mb-1 flex flex-wrap items-start justify-between gap-2">
+            <h2 className={SECTION_TITLE_P2}>
+              {showSdowDualView
+                ? "요일 × 시간대 강세 시간대"
+                : periodWindowDays !== 84
+                  ? `선택 기간(${periodWindowDays}일) 요일 × 시간대 강세 시간대`
+                  : "최근 12주 요일 × 시간대 강세 시간대"}
+            </h2>
+            {/* 사용자 지시(2026-09-19): "우측에 체크박스를 만들어서 2시부터 25시까지 1시간
+                단위로도 비교할 수 있게" — 3시간/1시간 단위 전환. 아래 세 렌더 지점(듀얼 패널
+                2곳 + 단일 패널 1곳) 모두 이 상태를 공유한다. */}
+            <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
+              <input
+                type="checkbox"
+                checked={dowHeatmapGranularity === "1h"}
+                onChange={(e) => setDowHeatmapGranularity(e.target.checked ? "1h" : "3h")}
+                className="h-3.5 w-3.5 rounded border-zinc-300"
+              />
+              1시간 단위로 보기
+            </label>
+          </div>
           <p className="mb-3 text-sm text-zinc-400">
             {showSdowDualView
               ? `왼쪽은 ${sdowBaselineShortLabel ?? "선택한 주간"} 전체(월~일 7개 요일), 오른쪽은 선택한 요일(기준일로부터 가장 가까운 그 요일 하루) 기준입니다.`
-              : `${periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 누적 기준, 월~일 요일과 3시간 단위
-            시간대(02~04시부터 23~25시까지 8구간) 조합별 평균 시청률입니다. 색이 진할수록 그 요일·시간대 조합이 강세입니다.`}
+              : `${periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 누적 기준, 월~일 요일과 ${dowHeatmapGranularity === "1h" ? "1시간 단위 시간대(02시부터 25시까지 24구간)" : "3시간 단위 시간대(02~04시부터 23~25시까지 8구간)"} 조합별 평균 시청률입니다. 색이 진할수록 그 요일·시간대 조합이 강세이며, 칸에 마우스를 올리면 그때 편성했던 프로그램이 함께 표시됩니다.`}
           </p>
           {/* 사용자 지시(2026-09-02, 버그 신고: "화요일로 나옴"): SDoW는 periodWindowDays가
               1일(오늘)이라 히트맵이 항상 "오늘의 요일" 칸 하나만 채우고 있었다 — 선택한 요일과
@@ -5932,7 +5988,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     ? `${sdowBaselineShortLabel ?? "선택한 주간"}`
                     : `${comparisonLabel ?? "이전"} 기간 ${periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}`}
                 </p>
-                <DowHourBlockTable pattern={dowHourBlockPatternPrior} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
+                <DowHourBlockTable
+                  pattern={dowHeatmapGranularity === "1h" ? toHourBlockShape(dowHourPatternPrior) : dowHourBlockPatternPrior}
+                  accentColor={accentColor}
+                  fmtR={fmtR}
+                  isEnaStory={isEnaStory}
+                  hourOrder={dowHeatmapGranularity === "1h" ? HOUR_ORDER_1H : undefined}
+                  labelFor={dowHeatmapGranularity === "1h" ? hour1hLabel : undefined}
+                />
               </div>
               <div>
                 <p className="mb-2 text-sm font-semibold text-zinc-600">
@@ -5940,7 +6003,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     ? `선택한 요일 (${sdowAnalysisDates[0] ? formatDateWithDow(sdowAnalysisDates[0]) : "가장 가까운 날짜"})`
                     : `이번 기간 ${periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}`}
                 </p>
-                <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} />
+                <DowHourBlockTable
+                  pattern={dowHeatmapGranularity === "1h" ? toHourBlockShape(dowHourPattern) : dowHourBlockPattern}
+                  accentColor={accentColor}
+                  fmtR={fmtR}
+                  isEnaStory={isEnaStory}
+                  hourOrder={dowHeatmapGranularity === "1h" ? HOUR_ORDER_1H : undefined}
+                  labelFor={dowHeatmapGranularity === "1h" ? hour1hLabel : undefined}
+                />
               </div>
             </div>
           ) : null}
@@ -5981,7 +6051,17 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {!hasPriorRange && !showSdowDualView && (
             <>
               <WeekdayProfileSparklines pattern={dowHourBlockPattern} accentColor={accentColor} />
-              <DowHourBlockTable pattern={dowHourBlockPattern} accentColor={accentColor} fmtR={fmtR} isEnaStory={isEnaStory} hourBlockOpportunity={hourBlockOpportunity} />
+              <DowHourBlockTable
+                pattern={dowHeatmapGranularity === "1h" ? toHourBlockShape(dowHourPattern) : dowHourBlockPattern}
+                accentColor={accentColor}
+                fmtR={fmtR}
+                isEnaStory={isEnaStory}
+                // 1시간 단위 모드에서는 경쟁 강도 오버레이(3시간 구간 단위 데이터)가 칸과 안 맞아
+                // 생략한다 — hourBlockOpportunity는 optional prop이라 undefined면 점 표시가 그냥 없음.
+                hourBlockOpportunity={dowHeatmapGranularity === "1h" ? undefined : hourBlockOpportunity}
+                hourOrder={dowHeatmapGranularity === "1h" ? HOUR_ORDER_1H : undefined}
+                labelFor={dowHeatmapGranularity === "1h" ? hour1hLabel : undefined}
+              />
               {hourBlockOpportunity.length > 0 && (
                 <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[10.5px] text-zinc-400">
                   <span>시간대 라벨 옆 점 = 그 구간의 경쟁 강도:</span>
