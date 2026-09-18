@@ -8,7 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { AskAssistantWidget } from "@/components/AskAssistantWidget";
-import { highlightNarrativeText } from "@/lib/highlightNarrative";
+import { highlightNarrativeText, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR } from "@/lib/highlightNarrative";
 // 사용자 지시(2026-09-09): 1페이지 "채널별 인사이트"의 안정/약세/주의 Health Score 배지를
 // 걷어내고 그 자리에 "오늘의 시청률" 카드와 같은 형식(시청률+등위)을 넣었다 — 그 배지를
 // 그리던 computeChannelHealthScore/HealthScoreBadge는 이 파일에서 더는 쓰지 않음(2페이지
@@ -19,6 +19,14 @@ import {
   buildEnaOriginalHighlightSentence as buildEnaOriginalHighlightSentenceShared,
   buildRerunHighlightSentence as buildRerunHighlightSentenceShared,
 } from "@/lib/enaOriginalHighlight";
+// 사용자 지시(2026-09-18): 등락 원인 분해(volumeEffect vs performanceEffect 항등 분해) 로직을
+// Page 2(ChannelDeepDive.tsx)의 WHY? 진단에도 재사용할 수 있도록 별도 모듈로 분리했다 — 로직은
+// 전혀 바꾸지 않고 그대로 옮긴 뒤 여기서는 import해서 기존과 동일하게 호출한다.
+import { monthlyDriverCauseLabel, type MonthlyDriver } from "@/lib/causeClassifier";
+// 사용자 지시(2026-09-18): 채널별 액션 문구 옆에 Page 2와 같은 5대 액션 태그 배지를 붙이기
+// 위해 어휘·색의 단일 출처(TAG_LABEL_KO/TAG_DOT_COLOR)를 그대로 import — Page 1·Page 2가
+// 같은 태그를 다른 말로 부르는 사고를 막는다.
+import { TAG_LABEL_KO, TAG_DOT_COLOR, type ActionTag } from "@/lib/actionTags";
 
 interface ChannelSummary {
   code: string;
@@ -269,6 +277,10 @@ interface ChannelNarrativeSignal {
   // 이미 계산·검증된 값만으로 OpenAI가 종합한 문단. 없으면(키 없음/실패) 기존 규칙 기반
   // buildChannelNarrative로 조용히 대체.
   llmNarrative: string | null;
+  // 사용자 지시(2026-09-18): 액션 배지용 — route.ts가 mart_scheduling_fit_score를 조회만 해서
+  // 채워주는 값. 오늘 아직 계산된 적 없으면(Page 2 미방문 등) undefined/null일 수 있다.
+  top_program_tag?: ActionTag | null;
+  decline_program_tag?: ActionTag | null;
 }
 interface KillerContentDaypartRow {
   channelCode: string;
@@ -351,28 +363,8 @@ interface DashboardData {
   // nielsen_period_rank의 최신 완료 주를 그대로 계산해 내려준다(날짜 게이팅 없음).
   weeklyReview: WeeklyReview | null;
 }
-interface MonthlyDriver {
-  programName: string;
-  contributionDelta: number; // 채널 월간 평균 시청률을 몇 %p 올렸/내렸는가
-  volumeEffect: number; // 그중 편성량이 바뀌어서 생긴 몫
-  performanceEffect: number; // 그중 작품 성과가 바뀌어서 생긴 몫
-  airCount: number;
-  priorAirCount: number;
-  avgRating: number | null;
-  priorAvgRating: number | null;
-  slotLift: number | null; // 전월 동시간대 평균 대비
-  primeAirCount: number;
-  primeDow: number | null;
-  // 사용자 지시(2026-09-01, 4대 복합 원인 태깅): 프라임 성과 자체의 등락(편성 횟수와 무관) —
-  // "본방 화제성"과 "재방 물량 확대"를 구분하는 데 쓴다.
-  primeRatingDelta: number | null;
-  priorPrimeAirCount: number;
-  mainSlotDow: number | null;
-  mainSlotHourBlock: number | null;
-  replacedByName?: string;
-  replacedByRating?: number | null;
-  replacedByAirCount?: number;
-}
+// MonthlyDriver 타입은 src/lib/causeClassifier.ts로 이동(원인분해 로직과 함께 재사용하기 위함,
+// 2026-09-18) — 위에서 import한 타입을 그대로 쓴다(필드 변경 없음).
 interface MonthlyPrimeMover {
   programName: string;
   dow: number | null;
@@ -700,7 +692,14 @@ function buildChannelNarrative(
 // "자세히 보기"에 남겨두고, 이 함수는 이미 fetch된 같은 ChannelNarrativeSignal 값만으로
 // 별도의 짧은 3줄 요약을 새로 만든다(새 계산·새 조회 없음). buildChannelNarrative의 원인
 // 우선순위(하락 프로그램 > 대표 프로그램 편차 > 순위 변동)를 그대로 따르되 문장을 짧게 줄였다.
-function buildChannelInsightSummary(s: ChannelNarrativeSignal): { situationLine: string | null; causeLine: string | null; actionLine: string | null } {
+// 사용자 지시(2026-09-18): 액션 문구가 특정 프로그램(decline_program_name/top_program_name)을
+// 근거로 나온 경우, Page 2와 같은 5대 액션 태그(actionTags.ts) 배지를 옆에 붙인다. 태그는
+// route.ts가 mart_scheduling_fit_score를 조회만 해서 이미 채워준 값(top_program_tag/
+// decline_program_tag)을 그대로 골라 쓸 뿐, 여기서 새로 판정하지 않는다 — 순위 변동만으로
+// 나온 actionLine(특정 프로그램 근거 없음)에는 태그를 달지 않는다.
+function buildChannelInsightSummary(
+  s: ChannelNarrativeSignal
+): { situationLine: string | null; causeLine: string | null; actionLine: string | null; actionTag: ActionTag | null } {
   const situationLine =
     s.today_rating !== null
       ? `${formatRating(s.today_rating)}${s.today_rank !== null ? ` · ${s.today_rank}위` : ""}${
@@ -712,10 +711,12 @@ function buildChannelInsightSummary(s: ChannelNarrativeSignal): { situationLine:
 
   let causeLine: string | null = null;
   let actionLine: string | null = null;
+  let actionTag: ActionTag | null = null;
 
   if (s.decline_program_name && s.decline_program_name !== s.top_program_name && s.decline_program_delta_pct !== null) {
     causeLine = `'${s.decline_program_name}' 부진 — 같은 슬롯 평균 대비 ▼${Math.abs(s.decline_program_delta_pct).toFixed(0)}%`;
     actionLine = "해당 프로그램·시간대 편성 점검 필요";
+    actionTag = s.decline_program_tag ?? null;
   } else if (
     s.top_program_name &&
     s.top_program_rating !== null &&
@@ -728,6 +729,7 @@ function buildChannelInsightSummary(s: ChannelNarrativeSignal): { situationLine:
     if (Math.abs(pct) >= 30) {
       causeLine = `'${s.top_program_name}' 같은 슬롯 평균 대비 ${pct >= 0 ? "▲" : "▼"}${Math.abs(pct).toFixed(0)}%`;
       actionLine = pct >= 0 ? "강세 프로그램·시간대 확대 검토" : "해당 프로그램 편성 재검토 필요";
+      actionTag = s.top_program_tag ?? null;
     }
   }
   if (!causeLine && s.today_rank !== null && s.baseline_avg_rank !== null) {
@@ -735,10 +737,24 @@ function buildChannelInsightSummary(s: ChannelNarrativeSignal): { situationLine:
     if (Math.abs(diff) >= 3) {
       causeLine = `평소(평균 ${s.baseline_avg_rank.toFixed(1)}위) 대비 ${Math.abs(diff).toFixed(1)}위 ${diff >= 0 ? "상승" : "하락"}`;
       actionLine = diff >= 0 ? null : "편성 경쟁력 점검 필요";
+      // 특정 프로그램 근거가 아니라 채널 순위 변동만으로 나온 액션이라 태그를 달지 않는다.
     }
   }
 
-  return { situationLine, causeLine, actionLine };
+  return { situationLine, causeLine, actionLine, actionTag };
+}
+
+// 사용자 지시(2026-09-18): 채널별 액션 문구 옆 5대 액션 태그 배지 — ChannelDeepDive.tsx의
+// DotTag와 같은 "흰 배경 + 얇은 테두리 + 작은 색 점 + 무채색 텍스트" 스타일을 따르되, Page 1은
+// 문장 옆 인라인 배지라 여백을 더 작게 줄였다. 색·라벨은 TAG_DOT_COLOR/TAG_LABEL_KO(단일
+// 출처)를 그대로 쓴다.
+function ActionTagDot({ tag }: { tag: ActionTag }) {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold tracking-tight text-zinc-700">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: TAG_DOT_COLOR[tag] }} />
+      {TAG_LABEL_KO[tag]}
+    </span>
+  );
 }
 
 // skyUHD는 사용자 지시대로 등위가 10위 이상 바뀐 경우에만 문장을 만든다(아니면 아예 언급 안 함).
@@ -752,19 +768,13 @@ function buildSkyUhdNarrative(s: ChannelNarrativeSignal | undefined): { channelN
   };
 }
 
-// 사용자 지시(2026-08-21, Page 1 전면 개편): "기존의 단순한 붉은색/초록색 강조 방식은 제외하고
-// 로고 색상이나 모던 테마에 어울리는 세련된 색상으로 데이터를 강조" — 상승은 ENA 브랜드 색,
-// 하락은 채도를 낮춘 짙은 버건디로 교체(Tailwind rose-600의 "신호등" 느낌 대신 절제된 톤).
-// 방향성 자체(상승/하락 구분)는 시청률 데이터의 핵심 정보라 유지하되, 색만 더 차분하게 다듬었다.
-const ACCENT_UP = "#281fc7"; // ENA 브랜드 색 계열(카드 제목과 동일 톤)
-// 사용자 재지시(2026-08-21, Page 1 매거진 개편): "하락 표시(레드)의 채도가 너무 낮다 — 고급스러움을
-// 유지하는 선에서 채도를 살짝 높여 시인성 확보." rose-800(#9f1239)에서 rose-700(#be123c)으로 한
-// 단계만 올렸다(더 밝은 rose-600/500은 다시 "신호등" 원색에 가까워져 제외).
-const ACCENT_DOWN = "#be123c"; // 짙은 버건디(rose-700) — 절제된 톤 유지하면서 시인성 보강
+// NARRATIVE_UP_COLOR/NARRATIVE_DOWN_COLOR(상승=ENA 브랜드 색, 하락=짙은 버건디)는
+// src/lib/highlightNarrative.tsx의 공용 상수로 옮겨 위에서 import한다 — Page 2에서도
+// 같은 상승/하락 기준색을 쓸 수 있도록 통일하는 준비 단계(값 자체는 기존과 동일, 화면 변화 없음).
 
 // 사용자 지시(2026-09-01, 월간 리뷰 표 한정): "전월대비 상승은 초록색, 하락은 빨간색, 유지는
-// 검정으로" — 위 ACCENT_UP/DOWN(브랜드색/버건디)은 앱 전역 관례라 그대로 두고, 이 표에서만
-// 명시적으로 요청받은 신호등 색을 쓴다(다른 곳까지 바꾸지 않음, 범위 한정).
+// 검정으로" — 위 NARRATIVE_UP_COLOR/DOWN_COLOR(브랜드색/버건디)은 앱 전역 관례라 그대로 두고,
+// 이 표에서만 명시적으로 요청받은 신호등 색을 쓴다(다른 곳까지 바꾸지 않음, 범위 한정).
 const MONTHLY_UP_COLOR = "#16a34a"; // green-600
 const MONTHLY_DOWN_COLOR = "#dc2626"; // red-600
 const MONTHLY_FLAT_COLOR = "#18181b"; // zinc-900(검정)
@@ -963,7 +973,7 @@ function RankChangeIndicator({ rankChangeDod }: { rankChangeDod: number | null }
   }
   const improved = rankChangeDod > 0; // 순위 숫자가 작아짐 = 개선
   return (
-    <span className="inline-flex items-center gap-0.5 text-xs font-bold tabular-nums" style={{ color: improved ? ACCENT_UP : ACCENT_DOWN }}>
+    <span className="inline-flex items-center gap-0.5 text-xs font-bold tabular-nums" style={{ color: improved ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR }}>
       {improved ? "▲" : "▼"} {improved ? `+${rankChangeDod}` : rankChangeDod}
     </span>
   );
@@ -1434,48 +1444,9 @@ function MonthlyDriverCell({
   );
 }
 
-// 사용자 지시(2026-09-01, "Root Cause Tagging" 재설계): 단순 "편성 확대/축소" 단일 태그를
-// 금지하고, 편성량 효과(volumeEffect)와 성과 효과(performanceEffect)의 항등 분해에 프라임(평일 19~23시 · 토·일·공휴일 18~23시)
-// 자체의 등락(primeRatingDelta — 편성 횟수와 무관하게 "본방 화제성"만 따로 뗀 값)을 결합해
-// 상승 3종 + 하락 3종(2026-09-07 세분화) 복합 원인으로 판정한다. 새 수치를 계산하지 않고
-// 이미 SQL이 항등 분해해 준 값들의 조합만
-// 본다 — Health Score/Turning Point 때와 같은 "합리적 v1 휴리스틱, 추후 조정 가능" 원칙.
-//   · 콘텐츠 경쟁력 견인: 상승이고, 편성량보다 성과(프라임 포함) 효과가 더 크게 기여 — 편성
-//     횟수와 무관하게 작품 자체가 좋아져서 오른 경우.
-//   · 편성 시너지: 상승이고, 편성량 효과가 더 크게 기여하면서 프라임 성과도 함께 올랐다 —
-//     본방 화제성이 재방 물량 확대로 이어져 총 기여도가 동반 상승.
-//   · 편성 의존형 방어: 상승이지만 프라임은 정체·하락인데 편성량(주로 재방) 확대만으로 총합을
-//     방어한 경우 — 숫자는 양수여도 콘텐츠 자체의 경쟁력 신호는 아니다.
-//   · 핵심 콘텐츠 이탈 / 부진 / 이탈+부진: 하락 — "편성에서 밀려난 것"(volumeEffect, 편성
-//     축소·종영)과 "방영은 하는데 성과 자체가 나쁜 것"(performanceEffect, 시청률 하락)을
-//     구분해 실제 원인을 짚는다(사용자 지시 2026-09-07: "이탈이 문제인지, 부진이 문제인지,
-//     둘 다 문제인지 정확히 짚을 것"). 편성 0회(완전 종영)면 performanceEffect가 항등적으로
-//     0이 되므로(이 기간 점유 시간이 0이라 성과 항이 사라짐) 자연히 "이탈"로 분류된다 —
-//     별도 특례 처리 없이 volume/performance 크기 비교 하나로 세 경우를 모두 판정한다.
-function classifyDeclineCause(volume: number, performance: number): string {
-  const total = volume + performance;
-  // 둘 다 무시 못할 크기로 섞여 있으면(작은 쪽이 전체의 35% 이상) "이탈+부진"으로 — 편성도
-  // 줄고 성과도 나빠진 복합 상황. 35%는 Health Score/Turning Point 때와 같은 "합리적 v1
-  // 임계값, 추후 조정 가능" 원칙.
-  if (total > 0 && Math.min(volume, performance) / total >= 0.35) return "핵심 콘텐츠 이탈+부진";
-  return volume >= performance ? "핵심 콘텐츠 이탈" : "핵심 콘텐츠 부진";
-}
-
-function monthlyDriverCauseLabel(d: MonthlyDriver): string {
-  const volume = Math.abs(d.volumeEffect);
-  const performance = Math.abs(d.performanceEffect);
-  if (volume === 0 && performance === 0) return "";
-
-  if (d.contributionDelta < 0) return classifyDeclineCause(volume, performance);
-
-  // 프라임 표본이 충분할 때만(이번 달·전월 중 많이 방영된 쪽 기준 2회 이상) 프라임 신호를 신뢰한다.
-  const primeSampleOk = Math.max(d.primeAirCount, d.priorPrimeAirCount) >= 2;
-  const primeRising = primeSampleOk && d.primeRatingDelta !== null && d.primeRatingDelta > 0;
-  const volumeDominant = volume >= performance;
-
-  if (!volumeDominant) return "콘텐츠 경쟁력 견인";
-  return primeRising ? "편성 시너지" : "편성 의존형 방어";
-}
+// classifyDeclineCause/monthlyDriverCauseLabel(등락 원인 항등 분해 판정)은 src/lib/causeClassifier.ts로
+// 이동(2026-09-18, 로직 무변경) — Page 2 WHY? 진단에서도 재사용하기 위함. 위에서 import한
+// 함수를 그대로 호출한다.
 
 // 인사이트 문장 — 새 수치를 만들지 않고 위 표에 이미 있는 값(전월 대비 순위·시청률 등락)만
 // 골라 문장으로 옮긴다(채널별 인사이트·주말 리포트와 같은 "DB 값 라벨링만" 원칙).
@@ -1535,7 +1506,7 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
         <ul className="space-y-1">
           {insights.map((line, i) => (
             <li key={i} className="text-[13px] leading-relaxed text-amber-800">
-              · {highlightNarrativeText(line, ACCENT_UP, ACCENT_DOWN)}
+              · {highlightNarrativeText(line, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
             </li>
           ))}
         </ul>
@@ -1565,7 +1536,7 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
             같은 값이 한 <td>에 섞여 오른쪽 정렬 기준이 등락 배지 쪽으로 밀리던 문제를 없애기
             위해 아예 별도 열로 분리했다(표 열은 브라우저가 자동으로 세로 정렬해줌 — 텍스트를
             직접 맞추는 것보다 안전).
-          - 상승=초록/하락=빨강/유지=검정 — 이 표에서만 앱 전역의 ACCENT_UP(파랑)/DOWN(버건디)
+          - 상승=초록/하락=빨강/유지=검정 — 이 표에서만 앱 전역의 NARRATIVE_UP_COLOR(파랑)/NARRATIVE_DOWN_COLOR(버건디)
             대신 사용자가 명시한 색을 쓴다(전역 관례를 바꾸는 게 아니라 이 표 한정 요청).
           - "상승 견인/하락 요인"도 같은 원칙으로 두 열로 분리해 프로그램명·등락폭 위치가
             채널마다 흔들리지 않게 한다. */}
@@ -1800,7 +1771,7 @@ function WeeklyReviewCard({ review, themeColorByCode }: { review: WeeklyReview; 
         <ul className="space-y-1">
           {insights.map((line, i) => (
             <li key={i} className="text-[13px] leading-relaxed text-amber-800">
-              · {highlightNarrativeText(line, ACCENT_UP, ACCENT_DOWN)}
+              · {highlightNarrativeText(line, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
             </li>
           ))}
         </ul>
@@ -3285,7 +3256,7 @@ function OriginalContentReportCard({
                           <span className="text-[20px] font-medium tabular-nums text-zinc-400">
                             가구 {formatRating(h.matched_household_rating, h.broadcast_channel_code)}
                             {h.prior_rating_change_pct !== null && (
-                              <span className="ml-2 text-[14px] font-semibold" style={{ color: h.prior_rating_change_pct >= 0 ? ACCENT_UP : ACCENT_DOWN }}>
+                              <span className="ml-2 text-[14px] font-semibold" style={{ color: h.prior_rating_change_pct >= 0 ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR }}>
                                 {h.prior_rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(h.prior_rating_change_pct).toFixed(1)}%
                               </span>
                             )}
@@ -3294,7 +3265,7 @@ function OriginalContentReportCard({
                       </p>
                       {/* 가구 시청률이 없는 채널은 옮길 자리가 없으므로 기존처럼 별도 줄 유지. */}
                       {h.matched_household_rating === null && h.prior_rating_change_pct !== null && (
-                        <p className="mt-2.5 text-[14px] font-semibold tabular-nums" style={{ color: h.prior_rating_change_pct >= 0 ? ACCENT_UP : ACCENT_DOWN }}>
+                        <p className="mt-2.5 text-[14px] font-semibold tabular-nums" style={{ color: h.prior_rating_change_pct >= 0 ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR }}>
                           {h.prior_rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(h.prior_rating_change_pct).toFixed(1)}%
                           <span className="ml-1 font-normal text-zinc-400">전회 대비</span>
                         </p>
@@ -3418,7 +3389,7 @@ function OriginalContentReportCard({
                           {recent.deltaPctVs4 !== null && recent.prevAvg4 !== null ? (
                             <>
                               <p className="text-[14px]">
-                                <span className="font-semibold tabular-nums" style={{ color: recent.deltaPctVs4 >= 0 ? ACCENT_UP : ACCENT_DOWN }}>
+                                <span className="font-semibold tabular-nums" style={{ color: recent.deltaPctVs4 >= 0 ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR }}>
                                   {recent.deltaPctVs4 >= 0 ? "▲" : "▼"} {Math.abs(recent.deltaPctVs4).toFixed(1)}%
                                 </span>
                                 <span className="ml-1.5 text-[12px] text-zinc-400">직전 {recent.sampleCount}회 평균 대비</span>
@@ -3533,12 +3504,12 @@ function OriginalContentReportCard({
                           <div className="mt-6 border-l-2 border-zinc-200 pl-4">
                             <p className={`${REPORT_EYEBROW} mb-1.5`}>편성 인사이트</p>
                             {h.schedulingInsight ? (
-                              <p className="text-[14.5px] font-medium leading-relaxed text-zinc-700">{highlightNarrativeText(h.schedulingInsight, ACCENT_UP, ACCENT_DOWN)}</p>
+                              <p className="text-[14.5px] font-medium leading-relaxed text-zinc-700">{highlightNarrativeText(h.schedulingInsight, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}</p>
                             ) : (
                               <div className="flex flex-col gap-1.5">
                                 {insight.schedulingNote.map((note, i) => (
                                   <p key={i} className="text-[14.5px] font-medium leading-relaxed text-zinc-700">
-                                    {highlightNarrativeText(note, ACCENT_UP, ACCENT_DOWN)}
+                                    {highlightNarrativeText(note, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
                                   </p>
                                 ))}
                               </div>
@@ -3704,7 +3675,7 @@ function OriginalContentReportCard({
               const hasBaseline = w.baseline_avg_rating !== null;
               const isAboveBaseline = hasBaseline && w.this_week_rating > w.baseline_avg_rating!;
               const isBelowBaseline = hasBaseline && w.this_week_rating < w.baseline_avg_rating!;
-              const thisWeekColor = isAboveBaseline ? ACCENT_UP : isBelowBaseline ? ACCENT_DOWN : undefined;
+              const thisWeekColor = isAboveBaseline ? NARRATIVE_UP_COLOR : isBelowBaseline ? NARRATIVE_DOWN_COLOR : undefined;
               const isMultiDay = (occurrenceCount.get(`${w.broadcast_channel_code}__${w.program_name}`) ?? 1) > 1;
               const displayTitle = isMultiDay ? `${w.program_name} (${DOW_LABELS[w.day_of_week_iso]})` : w.program_name;
               return (
@@ -3762,7 +3733,7 @@ function MiniDeltaBar({ pct }: { pct: number }) {
       className="inline-flex h-2 w-9 shrink-0 items-center overflow-hidden rounded-full bg-zinc-100"
       title={`최근 4주 평균 대비 ${Math.abs(pct).toFixed(1)}% ${up ? "상승" : "하락"}`}
     >
-      <span className="h-full rounded-full" style={{ width: `${widthPct}%`, backgroundColor: up ? ACCENT_UP : ACCENT_DOWN }} />
+      <span className="h-full rounded-full" style={{ width: `${widthPct}%`, backgroundColor: up ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR }} />
     </span>
   );
 }
@@ -3780,6 +3751,57 @@ function buildRerunHighlightSentence(
   rerunChannelCode: string
 ): string | null {
   return buildRerunHighlightSentenceShared(enaDaily, rerunChannelCode, formatRating);
+}
+
+// 사용자 지시(2026-09-18): "오늘 뭘 해야 하는가"가 raw 시청률 숫자(ChannelStatusCard)보다
+// 늦게 나온다 — AskAssistantWidget 바로 아래·ChannelStatusCard보다 위에 7개 채널 액션을
+// 한눈에 보여주는 요약을 신설한다. 아래 ChannelNarrativeCard가 이미 채널별로 호출하는
+// buildChannelInsightSummary(new API·new 계산 없이 그대로 재사용)의 actionLine·actionTag만
+// 뽑아 칩으로 나열 — 상세 현황/원인은 여전히 ChannelNarrativeCard(그대로 유지)에서 확인한다.
+// 채널 순서·표기는 WEEKEND_REPORT_CHANNEL_ORDER(=INSIGHT_CHANNEL_ORDER + skyUHD, 7개)와
+// CHANNEL_NAME_BY_CODE를 그대로 따라 ChannelNarrativeCard와 어긋나지 않게 한다.
+function TodayActionSummaryCard({ signals, themeColorByCode }: { signals: ChannelNarrativeSignal[]; themeColorByCode: Map<string, string | null> }) {
+  const byCode = new Map(signals.map((s) => [s.channelCode, s]));
+  const items = WEEKEND_REPORT_CHANNEL_ORDER.map((code) => {
+    const s = byCode.get(code);
+    if (!s) return null;
+    const { actionLine, actionTag } = buildChannelInsightSummary(s);
+    return { code, channelName: CHANNEL_NAME_BY_CODE[code] ?? code, actionLine, actionTag, color: themeColorByCode.get(code) ?? null };
+  }).filter(
+    (item): item is { code: string; channelName: string; actionLine: string | null; actionTag: ActionTag | null; color: string | null } =>
+      item !== null
+  );
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className={CARD}>
+      <h2 className={SECTION_TITLE}>오늘의 액션 요약</h2>
+      <p className="mb-4 text-xs text-zinc-400">7개 채널의 액션 판단만 먼저 모았습니다. 현황·원인 등 자세한 내용은 아래 "채널별 인사이트"에서 확인하세요.</p>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) =>
+          item.actionLine ? (
+            // 액션이 있는 채널 — 브랜드 색 배지로 눈에 띄게 강조.
+            <div key={item.code} className="flex items-center gap-1.5 rounded-full bg-[#f1f0f9] px-3 py-1.5 ring-1 ring-[#d8d5f5]">
+              <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: item.color ?? undefined }}>
+                {item.channelName}
+              </span>
+              <span className="text-[13px] font-medium text-[#281fc7]">{item.actionLine}</span>
+              {/* 사용자 지시(2026-09-18): 근거 프로그램의 Page 2 Fit Score 판정이 이미 있을
+                  때만 배지 표시 — 오늘 계산값이 없으면(Page 2 미방문 등) 조용히 생략한다. */}
+              {item.actionTag && <ActionTagDot tag={item.actionTag} />}
+            </div>
+          ) : (
+            // 액션 없는(현재 편성 유지) 채널 — 회색 톤으로 덜 눈에 띄게.
+            <div key={item.code} className="flex items-center gap-1.5 rounded-full bg-zinc-50 px-3 py-1.5 ring-1 ring-zinc-200/70">
+              <span className="text-[13px] font-semibold whitespace-nowrap text-zinc-500">{item.channelName}</span>
+              <span className="text-[13px] text-zinc-400">현재 편성 유지</span>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ③ 채널별 인사이트(줄글) — R2C1. 사용자 지시(2026-08-20): 채널명은 그 채널 로고의 메인
@@ -3819,6 +3841,7 @@ function ChannelNarrativeCard({
     situationLine: string | null;
     causeLine: string | null;
     actionLine: string | null;
+    actionTag: ActionTag | null;
   }[] = [];
   const enaLeadSentence = buildEnaOriginalHighlightSentence(enaOriginalDaily.filter((d) => d.broadcast_channel_code === "ENA"));
   for (const code of INSIGHT_CHANNEL_ORDER) {
@@ -3925,20 +3948,24 @@ function ChannelNarrativeCard({
                   {line.situationLine && (
                     <p className="text-[13.5px] leading-snug">
                       <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">현황</span>
-                      {highlightNarrativeText(line.situationLine, ACCENT_UP, ACCENT_DOWN)}
+                      {highlightNarrativeText(line.situationLine, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
                     </p>
                   )}
                   {line.causeLine && (
                     <p className="text-[13.5px] leading-snug text-zinc-600">
                       <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">원인</span>
-                      {highlightNarrativeText(line.causeLine, ACCENT_UP, ACCENT_DOWN)}
+                      {highlightNarrativeText(line.causeLine, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
                     </p>
                   )}
-                  <p className="text-[13.5px] leading-snug font-medium" style={{ color: line.actionLine ? "#281fc7" : undefined }}>
-                    <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: line.actionLine ? "#8b87e0" : "#a1a1aa" }}>
+                  <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] leading-snug font-medium" style={{ color: line.actionLine ? "#281fc7" : undefined }}>
+                    <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: line.actionLine ? "#8b87e0" : "#a1a1aa" }}>
                       액션
                     </span>
                     {line.actionLine ?? <span className="text-zinc-500">현재 편성 유지</span>}
+                    {/* 사용자 지시(2026-09-18): 이 액션의 근거 프로그램이 Page 2 Fit Score로
+                        이미 판정된 경우에만 배지를 붙인다(오늘 Page 2 미방문 등으로 계산값이
+                        없으면 조용히 생략 — 근거 없는 배지를 지어내지 않는다). */}
+                    {line.actionTag && <ActionTagDot tag={line.actionTag} />}
                   </p>
                 </div>
                 {/* 원문 문단이 없는 채널(2026-09-17 기준 skyUHD — 등위 변화가 10위 미만이면
@@ -3953,7 +3980,7 @@ function ChannelNarrativeCard({
                         자세히 보기(원문)
                       </span>
                     </summary>
-                    <span className="mt-1.5 block">{highlightNarrativeText(line.text, ACCENT_UP, ACCENT_DOWN)}</span>
+                    <span className="mt-1.5 block">{highlightNarrativeText(line.text, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}</span>
                   </details>
                 )}
               </div>
@@ -4057,8 +4084,8 @@ function KillerContentCard({
         </p>
         <div className="flex flex-col gap-2.5">
           {list.map((k) => {
-            // 사용자 지시(2026-08-21, Page 1 개편): emerald/rose 원색 대신 ACCENT_UP/DOWN.
-            const ytdColor = ytdAvg === null ? "#71717a" : k.avg_rating >= ytdAvg ? ACCENT_UP : ACCENT_DOWN;
+            // 사용자 지시(2026-08-21, Page 1 개편): emerald/rose 원색 대신 NARRATIVE_UP_COLOR/NARRATIVE_DOWN_COLOR.
+            const ytdColor = ytdAvg === null ? "#71717a" : k.avg_rating >= ytdAvg ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR;
             const accent = themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR;
             return (
               <div key={k.canonical_name} className="rounded-lg px-0.5 py-0.5">
@@ -4175,13 +4202,13 @@ function TodayTopProgramsCard({
                 <tbody>
                   {list.map((p, i) => {
                     // 사용자 지시(2026-08-21): 채널 누적 평균 대비 상회/동일/하회 색상.
-                    // 사용자 재지시(2026-08-21, Page 1 개편): 원색 red 대신 ACCENT_DOWN(절제된 톤).
+                    // 사용자 재지시(2026-08-21, Page 1 개편): 원색 red 대신 NARRATIVE_DOWN_COLOR(절제된 톤).
                     const ratingColor =
                       ytdAvg === null || p.rating === ytdAvg
                         ? undefined
                         : p.rating > ytdAvg
                           ? enaAccentColor
-                          : ACCENT_DOWN;
+                          : NARRATIVE_DOWN_COLOR;
                     const episodeText =
                       p.episodeNumber !== null ? `${p.episodeNumber}회${p.episodeSubtitle ? ` ${p.episodeSubtitle}` : ""}` : null;
                     return (
@@ -4816,7 +4843,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               title="새로고침"
               aria-label="새로고침"
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:bg-zinc-50 disabled:opacity-50"
-              style={{ color: ACCENT_UP }}
+              style={{ color: NARRATIVE_UP_COLOR }}
             >
               <svg
                 width="18"
@@ -4909,6 +4936,11 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 문제를 고친 것이고, 이번엔 좌우 2열 구조 자체를 없앤다. 두 섹션 아래(채널별
                 인사이트/일간 세부 내역·주요 뉴스·킬러 콘텐츠)는 이번 지시 범위 밖이라 기존
                 2열 배치를 그대로 둔다. */}
+            {/* 사용자 지시(2026-09-18): "오늘 뭘 해야 하는가"가 raw 시청률 숫자보다 늦게 나온다 —
+                AskAssistantWidget 바로 아래·ChannelStatusCard보다 위에 액션 요약을 먼저 배치. */}
+            <div className="lg:col-span-2">
+              <TodayActionSummaryCard signals={data.narrativeSignals} themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))} />
+            </div>
             <div className="lg:col-span-2">
               <ChannelStatusCard channels={byCode} />
             </div>

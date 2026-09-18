@@ -2,10 +2,17 @@
 // (규칙 기반 buildChannelNarrative/buildOriginalInsight 등, LLM 프롬프트 전부)은 그대로 두고,
 // 이미 만들어진 문자열 안에서 등락 수치·방향 단어만 찾아 굵게+색으로 강조하는 순수 표시 계층
 // 유틸리티. 페이지마다 이미 정해둔 상승/하락 색이 다르므로(Dashboard.tsx는 "단순 빨강/초록 대신
-// 세련된 톤"이라는 명시적 사용자 결정으로 ACCENT_UP/ACCENT_DOWN을 씀, ChannelDeepDive.tsx는
-// DivergingDeltaBar 등에서 이미 emerald/rose를 씀) 색은 호출부에서 넘기게 한다 — 이 파일이
-// 임의로 새 팔레트를 강제하지 않는다.
+// 세련된 톤"이라는 명시적 사용자 결정으로 아래 NARRATIVE_UP_COLOR/NARRATIVE_DOWN_COLOR를 씀,
+// ChannelDeepDive.tsx는 DivergingDeltaBar 등에서 이미 emerald/rose를 씀) 색은 호출부에서
+// 넘기게 한다 — 이 파일이 임의로 새 팔레트를 강제하지 않는다.
 import type { ReactNode } from "react";
+
+// Page 1(Dashboard.tsx)의 ACCENT_UP/ACCENT_DOWN 값을 그대로 옮긴 공용 상수 — 이 색이 이미
+// 이 프로젝트의 "상승/하락" 기준색(브랜드 블루/버건디)이라 새 값을 만들지 않고 재노출만 한다.
+// Dashboard.tsx는 이 상수를 import해서 쓰고, ChannelDeepDive.tsx(Page 2)는 다음 단계에서
+// 정리한다 — 지금은 이 파일에 상수만 추가하고 호출부 색 교체는 하지 않는다.
+export const NARRATIVE_UP_COLOR = "#281fc7"; // ENA 브랜드 색 계열(카드 제목과 동일 톤)
+export const NARRATIVE_DOWN_COLOR = "#be123c"; // 짙은 버건디(rose-700) — 절제된 톤 유지하면서 시인성 보강
 
 // ▲43% / ▼15.2% 같은 화살표+수치, "47.0% 상승" 같은 수치+방향 단어, "9.5위 하락" 같은
 // 순위+방향 단어를 찾는다 — 전부 이 코드베이스의 여러 narrative 조립 함수가 이미 일관되게

@@ -21,6 +21,9 @@ import { buildChannelNarrativeViaLlm } from "@/lib/channelNarrativeLlm";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { detectPortfolioAnomaly } from "@/lib/portfolioAnomaly";
 import { PRIME_RPC_ARGS } from "@/lib/audienceReport/primeTime";
+// 사용자 지시(2026-09-18): Page 1 액션 요약·채널별 인사이트에 Page 2와 같은 5대 액션 태그
+// 배지를 붙이기 위해 타입만 가져온다(값 계산은 기존 mart_scheduling_fit_score 조회만 함).
+import type { ActionTag } from "@/lib/actionTags";
 // 성능 개선(2026-09-17): 닐슨 적재 시점에 SQL이 미리 계산해 둔 집계 결과를 읽어 쓴다
 // (mart_daily_dashboard_cache / mart_llm_text_cache — 마이그레이션 20260917010000).
 import { loadDailyMartCache, cachedOrRpc, martFingerprint, MART_SLOT, MART_GLOBAL_CODE } from "@/lib/dailyMartCache";
@@ -292,11 +295,20 @@ interface ChannelNarrativeSignal {
   // Tier 1 확장(2026-08-26): 위 필드들을 그대로 OpenAI에 줘서 종합한 문단. 실패/키 없음이면
   // null — 프론트가 기존 규칙 기반 buildChannelNarrative로 조용히 대체(fallback).
   llmNarrative: string | null;
+  // 사용자 지시(2026-09-18): 액션 문구 옆 배지용 — top_program_name/decline_program_name이
+  // Page 2 Fit Score(mart_scheduling_fit_score)에서 어떤 5대 액션 태그로 판정됐는지. 새로
+  // 계산하지 않고 조회만 하므로, 오늘 아직 계산된 적 없으면(Page 2 미방문 등) null로 남는다
+  // (억지 근사치 금지 — optional로 둬서 값을 못 채운 기존 생성 지점들도 그대로 컴파일된다).
+  top_program_tag?: ActionTag | null;
+  decline_program_tag?: ActionTag | null;
 }
 // get_channel_daily_narrative가 돌려주는 행 그 자체(채널 코드·전주 비교·LLM 문장은 라우트가
 // 나중에 덧붙이는 값이라 제외) — 사전 계산(MART) 결과와 실시간 RPC 결과가 같은 모양임을
 // 타입으로 못 박아 두기 위한 별칭(2026-09-17).
-type ChannelNarrativeRpcRow = Omit<ChannelNarrativeSignal, "channelCode" | "priorWeekRating" | "priorWeek2Rating" | "llmNarrative" | "household">;
+type ChannelNarrativeRpcRow = Omit<
+  ChannelNarrativeSignal,
+  "channelCode" | "priorWeekRating" | "priorWeek2Rating" | "llmNarrative" | "household" | "top_program_tag" | "decline_program_tag"
+>;
 
 interface KillerContentDaypartRow {
   channelCode: string;
@@ -1355,6 +1367,62 @@ export async function GET(request: Request) {
   });
   const narrativeSignals: ChannelNarrativeSignal[] = narrativeSignalResults.filter((s): s is ChannelNarrativeSignal => s !== null);
   if (skyuhdSignalResult) narrativeSignals.push(skyuhdSignalResult);
+
+  // (6-1) 사용자 지시(2026-09-18): "오늘의 액션 요약"·채널별 인사이트의 액션 문구 옆에 Page 2와
+  // 같은 5대 편성 액션 태그(STRENGTHEN/KEEP/MOVE/REPLACE/TEST) 배지를 붙인다. refresh RPC는
+  // 부르지 않고 이미 계산돼 있는 mart_scheduling_fit_score를 조회만 한다 — 오늘 아직 Page 2를
+  // 열어보지 않아 이 채널의 Fit Score가 계산된 적 없으면 태그 없이(null) 조용히 넘어간다
+  // (CLAUDE.md 원칙: 억지 근사치를 만들지 않는다). top_program_name/decline_program_name은
+  // get_channel_daily_narrative가 programs.canonical_name을 그대로 돌려주는 값이라
+  // (20260819270000_channel_daily_narrative.sql), programs(channel_id, canonical_name) 유니크
+  // 제약(programNameMatch.ts findOrCreateProgramByNormalizedName 주석 참고)으로 program_id를
+  // 안전하게 되찾을 수 있다. skyUHD는 refresh_fit_score_mart 자체가 제외하는 채널이라 건너뛴다.
+  {
+    const namesByChannelId = new Map<string, Set<string>>();
+    for (const s of narrativeSignals) {
+      if (s.channelCode === "SKYUHD") continue;
+      const ch = channelByCode.get(s.channelCode);
+      if (!ch) continue;
+      const names = namesByChannelId.get(ch.id) ?? new Set<string>();
+      if (s.top_program_name) names.add(s.top_program_name);
+      if (s.decline_program_name) names.add(s.decline_program_name);
+      if (names.size > 0) namesByChannelId.set(ch.id, names);
+    }
+    const channelIds = [...namesByChannelId.keys()];
+    const allNames = [...new Set([...namesByChannelId.values()].flatMap((set) => [...set]))];
+    if (channelIds.length > 0 && allNames.length > 0) {
+      const { data: programRows } = await supabase
+        .from("programs")
+        .select("id, channel_id, canonical_name")
+        .in("channel_id", channelIds)
+        .in("canonical_name", allNames);
+      const programIds = [...new Set((programRows ?? []).map((p) => p.id))];
+      if (programIds.length > 0) {
+        const { data: fitRows } = await supabase
+          .from("mart_scheduling_fit_score")
+          .select("program_id, tag")
+          .eq("as_of_date", asOfDate)
+          .in("channel_id", channelIds)
+          .in("program_id", programIds);
+        const tagByProgramId = new Map<string, ActionTag>();
+        for (const f of fitRows ?? []) {
+          if (f.tag) tagByProgramId.set(f.program_id, f.tag as ActionTag);
+        }
+        const tagByChannelAndName = new Map<string, ActionTag>();
+        for (const p of programRows ?? []) {
+          const tag = tagByProgramId.get(p.id);
+          if (tag) tagByChannelAndName.set(`${p.channel_id}|${p.canonical_name}`, tag);
+        }
+        for (const s of narrativeSignals) {
+          const ch = channelByCode.get(s.channelCode);
+          if (!ch) continue;
+          if (s.top_program_name) s.top_program_tag = tagByChannelAndName.get(`${ch.id}|${s.top_program_name}`) ?? null;
+          if (s.decline_program_name) s.decline_program_tag = tagByChannelAndName.get(`${ch.id}|${s.decline_program_name}`) ?? null;
+        }
+      }
+    }
+  }
+
   const killerContentDaypart: KillerContentDaypartRow[] = killerContentDaypartResults.flat();
 
   // 8) 당일 시청률 상위 프로그램 5개(사용자 지시 2026-08-21, 상위 개수 2026-09-02: 3→5) — 최근
