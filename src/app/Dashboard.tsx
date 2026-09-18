@@ -3777,12 +3777,18 @@ function TodayActionSummaryCard({ signals, themeColorByCode }: { signals: Channe
   return (
     <div className={CARD}>
       <h2 className={SECTION_TITLE}>오늘의 액션 요약</h2>
-      <p className="mb-4 text-xs text-zinc-400">7개 채널의 액션 판단만 먼저 모았습니다. 현황·원인 등 자세한 내용은 아래 "채널별 인사이트"에서 확인하세요.</p>
+      <p className="mb-4 text-xs text-zinc-400">7개 채널의 액션 판단만 먼저 모았습니다. 클릭하면 근거가 되는 Page 2 &quot;무엇을 편성할까요?&quot;로 이동합니다.</p>
       <div className="flex flex-wrap gap-2">
         {items.map((item) =>
           item.actionLine ? (
             // 액션이 있는 채널 — 브랜드 색 배지로 눈에 띄게 강조.
-            <div key={item.code} className="flex items-center gap-1.5 rounded-full bg-[#f1f0f9] px-3 py-1.5 ring-1 ring-[#d8d5f5]">
+            // 사용자 피드백(2026-09-19): 이 칩이 <div>라 클릭해도 근거 화면으로 못 갔다 —
+            // Page 2의 WHAT TO SCHEDULE 앵커로 바로 연결한다.
+            <Link
+              key={item.code}
+              href={`/channel/${item.code}#what-to-schedule`}
+              className="flex items-center gap-1.5 rounded-full bg-[#f1f0f9] px-3 py-1.5 ring-1 ring-[#d8d5f5] transition hover:ring-[#281fc7]"
+            >
               <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: item.color ?? undefined }}>
                 {item.channelName}
               </span>
@@ -3790,7 +3796,7 @@ function TodayActionSummaryCard({ signals, themeColorByCode }: { signals: Channe
               {/* 사용자 지시(2026-09-18): 근거 프로그램의 Page 2 Fit Score 판정이 이미 있을
                   때만 배지 표시 — 오늘 계산값이 없으면(Page 2 미방문 등) 조용히 생략한다. */}
               {item.actionTag && <ActionTagDot tag={item.actionTag} />}
-            </div>
+            </Link>
           ) : (
             // 액션 없는(현재 편성 유지) 채널 — 회색 톤으로 덜 눈에 띄게.
             <div key={item.code} className="flex items-center gap-1.5 rounded-full bg-zinc-50 px-3 py-1.5 ring-1 ring-zinc-200/70">

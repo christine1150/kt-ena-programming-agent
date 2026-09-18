@@ -1399,7 +1399,15 @@ function buildBriefingReport(
 
     // Tier 1 확장(2026-08-26): route.ts가 이미 검증된 값만으로 OpenAI가 종합한 문단
     // (data.briefingLlm)이 있으면 그걸 쓰고, 없으면(키 없음/실패) 기존 규칙 기반 문장으로 대체.
-    paragraphs.push(data.briefingLlm ?? sentences.join(" "));
+    // 사용자 피드백(2026-09-19): "PD들은 줄글이 많으면 읽기 힘들다" — 짧은 문장 여러 개를
+    // join(" ")으로 한 문단에 합쳐 렌더링하던 것이 원인이었다. 문장 생성 로직은 그대로 두고,
+    // 문장 각각을 별개 paragraph로 push해 렌더링부(문단마다 <p> 하나, 5282행)에서 자연히
+    // 줄 단위로 분리되게 한다. LLM 종합 문단은 이미 짧게 요약된 것이라 그대로 한 문단 유지.
+    if (data.briefingLlm) {
+      paragraphs.push(data.briefingLlm);
+    } else {
+      paragraphs.push(...sentences);
+    }
 
     // 버그 수정(2026-09-02): SDoW 문장을 위 sentences 배열 안에 넣었더니, briefingLlm이 있을 때
     // (기본 경로) sentences 전체가 통째로 버려져 SDoW 비교 문장이 화면에 안 보였다 — LLM 요약과
@@ -1482,12 +1490,27 @@ interface WhoIsWatchingItem {
   label: string;
   value: number | null;
   deltaPct: number | null;
+  // Statistician 지적(2026-09-19): 연령대별 세분화는 패널 표본이 작아(특히 심야 재방 슬롯)
+  // baseline이 0에 가까우면 등락률이 우연히 수천%로 튄다(get_channel_demographic_program_
+  // highlights_noise_floor.sql에 실측 사례: delta_pct 3671%). 그 함수엔 있던 노이즈 바닥이
+  // 이 "주목" 선정 로직에는 빠져 있었다 — baselineAvg를 받아 같은 기준으로 걸러낸다.
+  baselineAvg: number | null;
 }
 function selectWhoIsWatchingTiles(items: WhoIsWatchingItem[]): { mostWatched: WhoIsWatchingItem[]; notable: WhoIsWatchingItem[] } {
   const withValue = items.filter((i) => i.value !== null);
   const mostWatched = [...withValue].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 2);
   const mostWatchedLabels = new Set(mostWatched.map((i) => i.label));
-  const candidates = withValue.filter((i) => i.deltaPct !== null && !mostWatchedLabels.has(i.label));
+  // 노이즈 바닥(get_channel_demographic_program_highlights_noise_floor.sql과 동일 기준):
+  // baseline이 시청률 0.05% 미만이거나, 그래도 남는 극단치(±300% 초과)는 통계적 잡음으로 보고
+  // "주목해야 할 연령대" 후보에서 제외한다(가장 많이 본 연령대 mostWatched는 delta를 안 쓰므로
+  // 영향 없음).
+  const candidates = withValue.filter(
+    (i) =>
+      i.deltaPct !== null &&
+      !mostWatchedLabels.has(i.label) &&
+      (i.baselineAvg === null || i.baselineAvg === 0 || i.baselineAvg >= 0.05) &&
+      Math.abs(i.deltaPct) <= 300
+  );
   const notable = [...candidates].sort((a, b) => Math.abs(b.deltaPct!) - Math.abs(a.deltaPct!)).slice(0, 2);
   return { mostWatched, notable };
 }
@@ -1517,8 +1540,8 @@ function buildInternalDemographicNarrative(
   refLabel: string
 ): string {
   const items: WhoIsWatchingItem[] = showComparisonView
-    ? periodDemographics.map((d) => ({ label: d.target_label, value: d.period_avg_rating, deltaPct: d.delta_pct }))
-    : (whoIsWatchingDemographics ?? []).map((d) => ({ label: d.label, value: d.today, deltaPct: d.delta_pct }));
+    ? periodDemographics.map((d) => ({ label: d.target_label, value: d.period_avg_rating, deltaPct: d.delta_pct, baselineAvg: d.prior_avg_rating }))
+    : (whoIsWatchingDemographics ?? []).map((d) => ({ label: d.label, value: d.today, deltaPct: d.delta_pct, baselineAvg: d.baseline_avg }));
   const withValues = items.filter((i) => i.value !== null);
   if (withValues.length === 0) return `${showComparisonView ? "이 기간" : refLabel}의 연령대별 데이터가 아직 부족합니다.`;
 
@@ -1602,7 +1625,7 @@ function getDemographicShiftFacts(
   periodDemographicProgramHighlights: PeriodDemographicProgramHighlightRow[]
 ): DemographicShiftFact[] {
   if (!showComparisonView) return [];
-  const items: WhoIsWatchingItem[] = periodDemographics.map((d) => ({ label: d.target_label, value: d.period_avg_rating, deltaPct: d.delta_pct }));
+  const items: WhoIsWatchingItem[] = periodDemographics.map((d) => ({ label: d.target_label, value: d.period_avg_rating, deltaPct: d.delta_pct, baselineAvg: d.prior_avg_rating }));
   const { notable } = selectWhoIsWatchingTiles(items);
   const movedNotable = notable.filter((n) => Math.abs(n.deltaPct!) >= 10);
 
@@ -1644,7 +1667,7 @@ function getSingleDayDemographicMoverFacts(
   whoIsWatchingDemographics: NarrativeDemographic[] | null,
   demographicHighlights: DemographicHighlightRow[]
 ): SingleDayDemographicFact[] {
-  const items: WhoIsWatchingItem[] = (whoIsWatchingDemographics ?? []).map((d) => ({ label: d.label, value: d.today, deltaPct: d.delta_pct }));
+  const items: WhoIsWatchingItem[] = (whoIsWatchingDemographics ?? []).map((d) => ({ label: d.label, value: d.today, deltaPct: d.delta_pct, baselineAvg: d.baseline_avg }));
   const { notable } = selectWhoIsWatchingTiles(items);
   const facts: SingleDayDemographicFact[] = [];
   for (const n of notable) {
@@ -5083,6 +5106,19 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   </a>
                 );
               })()}
+            {/* UI 디자이너 개선안(2026-09-19): "무엇을 편성할까요?"에만 있던 점프 칩을 "심층
+                분석"에도 대칭으로 추가 — 실제로 그 섹션이 렌더링될 때만(비어있는 곳으로 점프
+                시키지 않기 위함, 위 심층 분석 렌더 조건과 동일 계산). */}
+            {((!showComparisonView && (showCompetitorOverlapSection || showWhoIsWatchingSection)) || showStableSlotSection) && (
+              <a
+                href="#deep-analysis"
+                className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
+                title="심층 분석으로 이동"
+              >
+                <span aria-hidden className="text-white/30">·</span>
+                <span className="text-white/80">심층 분석</span>
+              </a>
+            )}
           </div>
           {/* 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" 대상 날짜 목록 — 메타데이터 줄이
               길어지지 않도록 더 작은 보조 줄로 그 아래에만 표시. */}
@@ -5118,41 +5154,72 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             12개 섹션을 지나야 했음 — Executive Summary 바로 아래에 REPLACE/MOVE 대상만 추린
             미니 카드를 얹어 조기 노출한다(새 계산 없음, fitScoreItems 재사용, 클릭하면 기존
             #what-to-schedule 표로 스크롤 이동). 전체 표는 최하단에 그대로 유지하며(삭제 금지),
-            이 카드는 그 표로 가는 요약 진입점일 뿐이다. REPLACE/MOVE 대상이 하나도 없으면(전부
-            KEEP/STRENGTHEN) 이 프로젝트의 "데이터 없으면 섹션 숨김" 원칙에 따라 섹션 자체를
-            숨긴다. */}
+            이 카드는 그 표로 가는 요약 진입점일 뿐이다.
+            사용자 피드백(2026-09-19): 위험 신호(REPLACE/MOVE)만 보여줘 "무엇을 늘려야 하는지"가
+            요약에서 빠져 있었다 — 상위 STRENGTHEN 후보도 같은 카드에 별도 톤(TAG_DOT_COLOR 재사용,
+            새 색 도입 없음)으로 병기한다. 둘 다 비면(REPLACE/MOVE/STRENGTHEN 대상이 전혀 없으면)
+            "데이터 없으면 섹션 숨김" 원칙에 따라 섹션 자체를 숨긴다. */}
         {(() => {
           const attentionItems = (fitScoreItems ?? [])
             .filter((item) => item.tag === "REPLACE" || item.tag === "MOVE")
             .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
             .slice(0, 3);
-          if (attentionItems.length === 0) return null;
+          const opportunityItems = (fitScoreItems ?? [])
+            .filter((item) => item.tag === "STRENGTHEN")
+            .sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0))
+            .slice(0, 2);
+          if (attentionItems.length === 0 && opportunityItems.length === 0) return null;
           return (
             <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
-              <p className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
-                지금 검토가 필요한 편성
-              </p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                {attentionItems.map((item) => {
-                  // 표(6761행 부근)와 같은 기준 — MOVE만 추천 daypart를 붙이고, REPLACE는 daypart
-                  // 추천 없이 "교체 검토" 문장으로 떨어진다(buildScheduleRecommendationNote 재사용).
-                  const recommendedDaypart =
-                    item.tag === "MOVE" ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity) : null;
-                  const note = buildScheduleRecommendationNote(item, recommendedDaypart);
-                  return (
+              {attentionItems.length > 0 && (
+              <>
+                <p className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
+                  지금 검토가 필요한 편성
+                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {attentionItems.map((item) => {
+                    // 표(6761행 부근)와 같은 기준 — MOVE만 추천 daypart를 붙이고, REPLACE는 daypart
+                    // 추천 없이 "교체 검토" 문장으로 떨어진다(buildScheduleRecommendationNote 재사용).
+                    const recommendedDaypart =
+                      item.tag === "MOVE" ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity) : null;
+                    const note = buildScheduleRecommendationNote(item, recommendedDaypart);
+                    return (
+                      <a
+                        key={item.program_id}
+                        href="#what-to-schedule"
+                        className="block rounded-2xl bg-zinc-50 p-3 transition-colors hover:bg-zinc-100"
+                        title="무엇을 편성할까요? 표에서 자세히 보기"
+                      >
+                        <DotTag label={TAG_LABEL_KO[item.tag!]} color={TAG_DOT_COLOR[item.tag!]} />
+                        <p className="mt-1.5 truncate text-sm font-bold text-zinc-800">{item.programs?.canonical_name ?? "이름 없음"}</p>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-zinc-500">{note}</p>
+                      </a>
+                    );
+                  })}
+                </div>
+              </>
+              )}
+              {opportunityItems.length > 0 && (
+              <div className={attentionItems.length > 0 ? "mt-4" : ""}>
+                <p className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
+                  더 밀어줄 만한 편성
+                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {opportunityItems.map((item) => (
                     <a
                       key={item.program_id}
                       href="#what-to-schedule"
-                      className="block rounded-2xl bg-zinc-50 p-3 transition-colors hover:bg-zinc-100"
+                      className="block rounded-2xl bg-emerald-50/60 p-3 transition-colors hover:bg-emerald-50"
                       title="무엇을 편성할까요? 표에서 자세히 보기"
                     >
-                      <DotTag label={TAG_LABEL_KO[item.tag!]} color={TAG_DOT_COLOR[item.tag!]} />
+                      <DotTag label={TAG_LABEL_KO.STRENGTHEN} color={TAG_DOT_COLOR.STRENGTHEN} />
                       <p className="mt-1.5 truncate text-sm font-bold text-zinc-800">{item.programs?.canonical_name ?? "이름 없음"}</p>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-zinc-500">{note}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-zinc-500">Fit Score {item.fit_score?.toFixed(0) ?? "—"}점 — 확장·유사 슬롯 추가 편성을 검토해볼 만합니다.</p>
                     </a>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
+              )}
             </div>
           );
         })()}
@@ -5565,18 +5632,22 @@ export default function ChannelDeepDive({ code }: { code: string }) {
 
         {/* 심층 분석(Detailed Analytical Report, 2026-08-27, 사용자 지시) — 오늘의 브리핑이
             "무슨 일이 있었는지"를 말한다면, 이 섹션은 향후 콘텐츠 구매·패키징 협상 근거로 쓸
-            수 있는 패턴을 짚는다. 단일 일자 조회일 때만(경쟁 오버랩·연령대 데이터 모두 "오늘"
-            개념 — 기간 모드는 아래 기간 리포트 표들이 그 역할을 함). */}
-        {!showComparisonView && showDeepAnalysisSection && (
-          <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+            수 있는 패턴을 짚는다. 경쟁 오버랩·연령대 프로파일링은 "오늘" 개념이라 단일 일자
+            조회일 때만(기간 모드는 아래 기간 리포트 표들이 그 역할을 함).
+            UI Finish-Gate Reviewer 지적(2026-09-19): "편성 안정성"(최근 8주 반복 패턴)은
+            "오늘"이 아니라 최근 8주 누적 개념이라 기간 비교 모드에서도 유효한데, 이 섹션
+            전체가 !showComparisonView로 묶여 있어 기간 비교 모드로 전환하면 대체 경로 없이
+            통째로 사라지는 문제가 있었다 — 편성 안정성만 그 게이트에서 분리한다. */}
+        {((!showComparisonView && (showCompetitorOverlapSection || showWhoIsWatchingSection)) || showStableSlotSection) && (
+          <div id="deep-analysis" className="scroll-mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
             <h2 className={`${SECTION_TITLE_P2} mb-1`}>심층 분석</h2>
             <p className="mb-4 text-sm text-zinc-400">
-              단순 결과 나열을 넘어, 향후 콘텐츠 시청률 분석과 구매·패키징 협상 시 근거 자료로 활용할 수 있도록 오늘의 신호를 더 깊이 살펴봅니다.
+              단순 결과 나열을 넘어, 향후 콘텐츠 시청률 분석과 구매·패키징 협상 시 근거 자료로 활용할 수 있도록 신호를 더 깊이 살펴봅니다.
             </p>
             {/* 사용자 지시(2026-09-17): skyUHD는 경쟁 프로그램·연령대 자료가 없어 이 두 칸이 빈
                 껍데기가 된다 — 판정기 결과에 따라 각각 감춘다. 한 칸만 남으면 2단 그리드가 어색해
                 지므로 남은 칸이 하나일 때는 1단으로 떨어뜨린다(다른 채널은 항상 둘 다 보여 영향 없음). */}
-            {(showCompetitorOverlapSection || showWhoIsWatchingSection) && (
+            {!showComparisonView && (showCompetitorOverlapSection || showWhoIsWatchingSection) && (
             <div
               className={`grid grid-cols-1 gap-6 ${showCompetitorOverlapSection && showWhoIsWatchingSection ? "lg:grid-cols-2" : ""}`}
             >
@@ -6358,8 +6429,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </p>
           {(() => {
             const items: WhoIsWatchingItem[] = showComparisonView
-              ? data.periodDemographics.map((d) => ({ label: d.target_label, value: d.period_avg_rating, deltaPct: d.delta_pct }))
-              : (data.whoIsWatchingDemographics ?? []).map((d) => ({ label: d.label, value: d.today, deltaPct: d.delta_pct }));
+              ? data.periodDemographics.map((d) => ({ label: d.target_label, value: d.period_avg_rating, deltaPct: d.delta_pct, baselineAvg: d.prior_avg_rating }))
+              : (data.whoIsWatchingDemographics ?? []).map((d) => ({ label: d.label, value: d.today, deltaPct: d.delta_pct, baselineAvg: d.baseline_avg }));
             const { mostWatched, notable } = selectWhoIsWatchingTiles(items);
             const tiles = [
               ...mostWatched.map((t) => ({ ...t, badge: "최다 시청" })),
