@@ -753,7 +753,11 @@ function buildChannelInsightSummary(
     const diff = s.baseline_avg_rank - s.today_rank;
     if (Math.abs(diff) >= 3) {
       causeLine = `평소(평균 ${s.baseline_avg_rank.toFixed(1)}위) 대비 ${Math.abs(diff).toFixed(1)}위 ${diff >= 0 ? "상승" : "하락"}`;
-      actionLine = diff >= 0 ? null : "편성 경쟁력 점검 필요";
+      // 사용자 지적(2026-09-20): "편성 경쟁력 점검 필요"만 보면 무슨 뜻인지 알 수 없음 — 이
+      // 문구는 "오늘의 액션 요약" 칩(원인 줄 없이 이 한 줄만 보임)에도 그대로 쓰이므로, 특정
+      // 프로그램을 하나로 지목할 근거는 없지만(그래서 아래처럼 태그도 달지 않음) 순위 자체는
+      // 알고 있으니 그 숫자를 문장에 그대로 넣어 그 자리에서 바로 뜻이 통하게 한다.
+      actionLine = diff >= 0 ? null : `오늘 ${s.today_rank}위 · 평소 평균 ${s.baseline_avg_rank.toFixed(1)}위 — 편성 경쟁력 점검 필요`;
       // 특정 프로그램 근거가 아니라 채널 순위 변동만으로 나온 액션이라 태그를 달지 않는다.
     }
   }
