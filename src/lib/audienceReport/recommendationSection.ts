@@ -15,6 +15,8 @@ import {
   computeDowHourCells,
   computeMoveCandidates,
   computeSlotRelativePerformance,
+  computeOriginalRerunInsights,
+  computeFirstRunInsights,
   MIN_AIRINGS_FOR_RANKING,
 } from "./deepDiveAnalyzer";
 import type { RecommendationSection, WeekdayFlowPoint, SlotDiagnosisRow } from "./reportModel";
@@ -43,6 +45,14 @@ function computeWeekdayFlow(trend: DailyTrendPoint[]): WeekdayFlowPoint[] {
 }
 
 const EMPTY: Promise<{ data: never[] }> = Promise.resolve({ data: [] });
+
+// 심층 05(재방 확산)·06(본방 효율) 제언 임계값(2026-09-18, v1 휴리스틱) — "재미있지만 액션
+// 없는 섹션"이라는 지적에 따라 추가. 확산 배수 1.1배 미만은 표에 이미 쓰는 "확산 낮음" 컷오프
+// (1.8배, computeOriginalRerunInsights)보다 더 보수적으로 잡아, 재방을 붙여도 본방과 거의
+// 같은 — 확산 효과가 사실상 없는 — 경우만 제언까지 끌어올린다. 유지율 50% 미만은 본방 외
+// 평균이 본방의 절반에도 못 미친다는 뜻으로 잡았다(별도 근거 자료 없는 절반 기준).
+const LOW_AMPLIFICATION_RATIO = 1.1;
+const LOW_RETENTION_PCT = 50;
 
 export async function buildRecommendationSection(
   channelCode: string,
@@ -222,6 +232,41 @@ export async function buildRecommendationSection(
         basis: `${lowStandout.canonicalName}은(는) 편성의 ${lowStandout.lowSlotAirtimePct}%가 02~08시에 있어 채널 평균으로는 낮게 보이지만, 같은 시간대 채널 평균 대비 ${lowStandout.standoutMetrics.join("·")}이(가) 상회합니다(시청률 ${lowStandout.slotRatingPct ?? "—"}% / 점유율 ${lowStandout.slotSharePct ?? "—"}% / 시청시간 비율 ${lowStandout.slotTimeSpentPct ?? "—"}%)`,
         suggestion: "이 콘텐츠를 더 좋은 시간대에 시험 편성해보는 안을 검토해볼 만합니다",
         verification: "시험 편성 구간에서 회당 평균이 새벽 편성 때와 어떻게 달라지는지 확인하세요",
+      });
+    }
+  }
+
+  // 심층 05·06 제언(2026-09-18) — 표만 있고 어떤 제언에도 연결되지 않는다는 지적에 대응.
+  // programSlotProfile과 별개 원자료(originalRerunProfile/firstRunEfficiency)라 가드를
+  // 따로 둔다 — 하나가 비어도 다른 하나는 있을 수 있다.
+  if (deepRaw && deepRaw.originalRerunProfile.length > 0) {
+    // (5) 확산 배수가 낮은 인기 작품 — 본방 편성 횟수가 충분하고(=꾸준히 방영된 작품) 그중
+    // 본방 평균이 가장 높은 것을 "인기 작품"으로 본다. 그 작품의 1주일 창 확산 배수가
+    // 낮으면(재방을 붙여도 본방과 거의 같으면) 재방 편성 자체를 다시 짜볼 근거가 된다.
+    const lowAmplification = computeOriginalRerunInsights(deepRaw.originalRerunProfile)
+      .filter((o) => o.liveEpisodes >= MIN_AIRINGS_FOR_RANKING && o.amplificationRatio !== null && o.amplificationRatio < LOW_AMPLIFICATION_RATIO)
+      .sort((a, b) => (b.liveAvgRating ?? 0) - (a.liveAvgRating ?? 0))[0];
+    if (lowAmplification) {
+      recommendations.push({
+        basis: `${lowAmplification.canonicalName}은(는) 본방 ${lowAmplification.liveEpisodes}회 평균 ${formatRating(lowAmplification.liveAvgRating, channelCode)}로 꾸준히 방영된 인기 작품이지만, 확산 배수는 ${lowAmplification.amplificationRatio}배로 재방 기여가 거의 없습니다(1주일 창 ${lowAmplification.windowAirings}회 방영${lowAmplification.rerunChannelCode ? `, 재방 채널 ${lowAmplification.rerunChannelCode}` : ""})`,
+        suggestion: "추가 재방 채널이나 다른 시간대 재방 편성을 검토해볼 만합니다",
+        verification: "다음 구간 같은 작품의 확산 배수 변화로 확인하세요",
+      });
+    }
+  }
+  if (deepRaw && deepRaw.firstRunEfficiency.length > 0) {
+    // (6) 본방 유지율이 낮은 프로그램 — 본방 외(재방 등) 평균이 본방 평균을 크게 밑돌면
+    // 지금 성과가 본방 슬롯 자체(리드인, 시간대 등)에 크게 기대고 있다는 뜻이라, 본방 시간대
+    // 자체를 재검토 대상으로 짚는다. 편성 3회 미만인 쪽은 제외해 1회성 왜곡을 막는다(위
+    // rankableMovers 필터와 동일한 이유).
+    const lowRetention = computeFirstRunInsights(deepRaw.firstRunEfficiency)
+      .filter((r) => r.firstRunAirings >= MIN_AIRINGS_FOR_RANKING && r.otherAirings >= MIN_AIRINGS_FOR_RANKING && r.retentionPct !== null && r.retentionPct < LOW_RETENTION_PCT)
+      .sort((a, b) => (a.retentionPct ?? 0) - (b.retentionPct ?? 0))[0];
+    if (lowRetention) {
+      recommendations.push({
+        basis: `${lowRetention.canonicalName}은(는) 본방 평균 ${formatRating(lowRetention.firstRunAvgRating, channelCode)} 대비 본방 외 평균이 ${formatRating(lowRetention.otherAvgRating, channelCode)}로, 유지율이 ${lowRetention.retentionPct}%에 그칩니다`,
+        suggestion: "본방 시간대 자체(리드인, 경쟁 편성 등)를 재검토해볼 만합니다",
+        verification: "다음 구간 같은 프로그램의 본방 대비 본방 외 유지율로 확인하세요",
       });
     }
   }

@@ -70,7 +70,44 @@ export function omitEmptyBlocks(flat: FlatReport): FlatReport {
 }
 
 /**
- * FlatReport → 슬라이드 계획. 표지 1장 + 본문(블록당 1장, 긴 표는 11행씩 이어서) + 마무리 1장.
+ * 섹션 하나를 콘텐츠 슬라이드 배열로 변환(표는 PPT_ROWS_PER_SLIDE행씩 이어서 분할) — 아래
+ * planReportPpt의 본문 루프와 규칙이 완전히 같다. 표지 다음 고정 요약 슬라이드를 만들 때만
+ * 재사용하는 헬퍼이고, 본문 루프 자체(이미 있던 인라인 코드)는 이번 변경에서 손대지 않았다.
+ */
+function sectionToContentSlides(eyebrow: string, section: FlatReport["sections"][number]): PptSlidePlan[] {
+  const out: PptSlidePlan[] = [];
+  for (const block of section.blocks) {
+    if (block.kind === "table" && block.rows.length > PPT_ROWS_PER_SLIDE) {
+      const total = Math.ceil(block.rows.length / PPT_ROWS_PER_SLIDE);
+      for (let i = 0; i < block.rows.length; i += PPT_ROWS_PER_SLIDE) {
+        const part = Math.floor(i / PPT_ROWS_PER_SLIDE) + 1;
+        out.push({
+          kind: "content",
+          eyebrow,
+          title: section.title,
+          caption: `${part} / ${total}  ·  전체 ${block.rows.length}행`,
+          block: { kind: "table", headers: block.headers, rows: block.rows.slice(i, i + PPT_ROWS_PER_SLIDE) },
+        });
+      }
+      continue;
+    }
+    out.push({ kind: "content", eyebrow, title: section.title, caption: null, block });
+  }
+  return out;
+}
+
+// 사용자 지시(2026-09-18) — R_FRONTLOAD가 reportFlatten.ts/portfolioFlatten.ts에서 FlatReport
+// 맨 앞에 이미 추가해 둔 두 섹션("AI Executive Summary", "OOO — 요약"(편성 제언 상위 3건))을
+// 표지 바로 뒤 고정 슬라이드로 한 번 더 배치한다. 임원이 표지 다음 1~2장만 보고도 핵심을 파악할
+// 수 있게 하려는 목적. 아래 본문 루프는 그대로 두므로 이 두 섹션은 본문 제자리에서도 다시
+// 슬라이드가 된다 — §08 전체 "편성 제언"과 앞머리 요약이 이미 의도적으로 중복인 것과 같은
+// 이유로 허용된 중복이며, 새 자료를 만드는 게 아니라 FlatReport의 실제 섹션을 그대로 한 번 더
+// 슬라이드화하는 것뿐이라 "미리보기=실제 파일" 원칙도 깨지 않는다.
+const FRONTLOAD_SECTION_TITLE_RE = /^AI Executive Summary$| — 요약$/;
+
+/**
+ * FlatReport → 슬라이드 계획. 표지 1장 + [AI Executive Summary/편성 제언 요약 고정 1~2장] +
+ * 본문(블록당 1장, 긴 표는 11행씩 이어서) + 마무리 1장.
  * 제목 뒤에 붙는 부제(" — Audience Intelligence Report")는 표지에서 제거한다(부제 줄이 따로 있음).
  */
 export function planReportPpt(flat: FlatReport, opts?: { dateLabel?: string }): PptSlidePlan[] {
@@ -86,6 +123,12 @@ export function planReportPpt(flat: FlatReport, opts?: { dateLabel?: string }): 
       author: PPT_AUTHOR,
     },
   ];
+
+  for (const section of trimmed.sections) {
+    if (FRONTLOAD_SECTION_TITLE_RE.test(section.title)) {
+      slides.push(...sectionToContentSlides(eyebrow, section));
+    }
+  }
 
   for (const section of trimmed.sections) {
     for (const block of section.blocks) {

@@ -77,6 +77,8 @@ export interface ChannelActions {
   items: ChannelActionItem[]; // 최대 3개(신호가 부족하면 그보다 적게 — 지어내지 않음). 채널 자체는
   // 신호가 0개여도 항상 이 배열에 나타난다(flatMap으로 만들면 신호 0개 채널이 통째로 누락되는
   // 버그가 있었음 — 실 서버 검증 중 발견·수정).
+  priorityScore: number; // items 중 REPLACE/MOVE(교체·이동) 성격이거나 "점검"이 필요한 진단 신호의
+  // 개수 — "이번 달 7채널 중 가장 먼저 봐야 할 곳" 정렬 키(§09). 값이 클수록 급함.
 }
 
 /**

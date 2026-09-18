@@ -64,8 +64,9 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
     headers: ["채널", "수준", "추세(12주 평균 대비)", "목표 시청률"],
     rows: peers.map((p) => [p.channelName, p.formattedLevel, pct(p.trend), p.targetRating !== null ? formatRating(p.targetRating, p.channelCode) : "—"]),
   });
-  sections.push({ title: "02 Peer 비교 — Group A", blocks: [peerBlock("A", doc.groupA.peers)] });
-  sections.push({ title: "02 Peer 비교 — Group B", blocks: [peerBlock("B", doc.groupB.peers)] });
+  // 2026-09-18(번호 중복 수정) — Group A/B 두 표가 똑같이 "02"였던 것을 "02a"/"02b"로 구분한다.
+  sections.push({ title: "02a Peer 비교 — Group A", blocks: [peerBlock("A", doc.groupA.peers)] });
+  sections.push({ title: "02b Peer 비교 — Group B", blocks: [peerBlock("B", doc.groupB.peers)] });
 
   sections.push({
     title: "03 오리지널 파이프라인(Group A)",
@@ -123,13 +124,20 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
     });
   }
 
+  // 2026-09-18(§09 정렬) — 고정된 채널 순서(ENA, ENA Drama, ...) 대신 priorityScore(교체/이동·점검
+  // 신호 개수) 내림차순으로 재배열해 "7채널 중 이번 달 가장 먼저 봐야 할 곳"이 위로 오게 한다.
+  // Array#sort는 안정 정렬이라 점수가 같으면 원래 채널 순서를 유지한다.
+  const sortedActions = [...doc.actionsByChannel].sort((a, b) => b.priorityScore - a.priorityScore);
   sections.push({
     title: "09 채널별 TOP 3 ACTIONS",
-    blocks: doc.actionsByChannel.flatMap((a): DocBlock[] =>
-      a.items.length > 0
-        ? [{ kind: "bullets", items: a.items.map((it) => `[${a.channelName}] ${it.basis} → ${it.suggestion} (확인: ${it.verification})`) }]
-        : [{ kind: "note", text: `${a.channelName}: 신호 없음` }]
-    ),
+    blocks: [
+      { kind: "text", text: "교체·이동이 필요하거나 점검 진단이 나온 신호가 많은 채널부터 순서대로 정리했습니다." },
+      ...sortedActions.flatMap((a): DocBlock[] =>
+        a.items.length > 0
+          ? [{ kind: "bullets", items: a.items.map((it) => `[${a.channelName}] ${it.basis} → ${it.suggestion} (확인: ${it.verification})`) }]
+          : [{ kind: "note", text: `${a.channelName}: 신호 없음` }]
+      ),
+    ],
   });
 
   // 채널별 리포트와 같은 규칙 — 문서 출력만 개조식으로 변환한다(화면은 경어체 유지).

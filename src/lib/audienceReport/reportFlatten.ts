@@ -12,7 +12,7 @@
 //
 // 차트는 문서에 이미지로 넣는 파이프라인이 이 프로젝트에 없다(구 시스템도 동일한 한계였다) —
 // 차트 대신 같은 값을 표로 내보낸다. 값을 잃지 않으면서 문서에서 바로 읽을 수 있는 형태다.
-import type { AudienceReportDocument, Maybe, KpiCard } from "./reportModel";
+import type { AudienceReportDocument, Maybe, KpiCard, RecommendationSection } from "./reportModel";
 import { formatRating, formatPercent } from "./format";
 import { toGaejosik } from "./gaejosik";
 
@@ -66,6 +66,22 @@ function fromMaybe<T>(m: Maybe<T>, render: (data: T) => DocBlock[]): DocBlock[] 
   return m.available ? render(m.data) : [{ kind: "note", text: m.reason }];
 }
 
+// 사용자 지시(2026-09-18) — "편성 제언"의 참조 구간(referenceWindow)은 본문 심층 분석 기간과
+// 완전히 독립적으로 계산된다(recommendationSection.ts 상단 주석 참고: 항상 최근 7일 또는 30일).
+// 임원이 두 기간을 같은 분석 구간으로 오해하지 않도록, 제언 텍스트 맨 앞에 고지 문장을 붙인다.
+function referenceWindowDays(rec: RecommendationSection): number {
+  const from = new Date(`${rec.referenceWindow.dateFrom}T00:00:00`).getTime();
+  const to = new Date(`${rec.referenceWindow.dateTo}T00:00:00`).getTime();
+  return Math.round((to - from) / 86400000) + 1;
+}
+function referenceWindowNotice(rec: RecommendationSection): string {
+  return `본 제언은 심층 분석 기간과 별도로 최근 ${referenceWindowDays(rec)}일(${rec.referenceWindow.dateFrom}~${rec.referenceWindow.dateTo}) 기준으로 계산됩니다.`;
+}
+/** [근거]→[제안]→[확인] 한 줄 서식 — 앞머리 요약본과 맨끝 전체본이 같은 문구를 쓴다. */
+function recommendationLine(r: RecommendationSection["recommendations"][number]): string {
+  return `[근거] ${r.basis} → [제안] ${r.suggestion} → [확인] ${r.verification}`;
+}
+
 export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   const code = doc.channelCode;
   const sections: DocSection[] = [];
@@ -73,6 +89,24 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
 
   if (doc.aiSummary) {
     sections.push({ title: "AI Executive Summary", blocks: [{ kind: "text", text: doc.aiSummary }] });
+  }
+
+  // 사용자 지시(2026-09-18) — 임원이 앞부분만 보고 넘어가도 실제 액션(편성 제언)이 보이도록,
+  // AI Executive Summary 바로 다음(모드별 본문 섹션보다 앞)에 상위 2~3건만 짧게 한 번 더
+  // 배치한다. 계산 로직은 §08(맨 끝 전체본)과 완전히 동일한 rec.recommendations를 재사용하며,
+  // 여기서는 순서·중복 배치만 다룬다 — 맨 끝의 전체 "편성 제언" 섹션은 그대로 유지(의도적 중복).
+  {
+    const rec = doc.recommendation;
+    const top = rec.recommendations.slice(0, 3);
+    if (top.length > 0) {
+      sections.push({
+        title: `${rec.title} — 요약`,
+        blocks: [
+          { kind: "note", text: referenceWindowNotice(rec) },
+          { kind: "bullets", items: top.map(recommendationLine) },
+        ],
+      });
+    }
   }
 
   if (body.mode === "single_day") {
@@ -494,14 +528,16 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     }
   }
 
-  // 편성 제언(§08) — 항상 마지막.
+  // 편성 제언(§08) — 항상 마지막(전체본). 앞머리 요약본(위)과 같은 recommendationLine 서식과
+  // referenceWindowNotice 고지 문장을 그대로 재사용한다.
   const rec = doc.recommendation;
   sections.push({
     title: rec.title,
     blocks: [
+      { kind: "note", text: referenceWindowNotice(rec) },
       { kind: "text", text: `참조 구간: ${rec.referenceWindow.dateFrom} ~ ${rec.referenceWindow.dateTo}` },
       ...(rec.recommendations.length > 0
-        ? ([{ kind: "bullets", items: rec.recommendations.map((r) => `[근거] ${r.basis} → [제안] ${r.suggestion} → [확인] ${r.verification}`) }] as DocBlock[])
+        ? ([{ kind: "bullets", items: rec.recommendations.map(recommendationLine) }] as DocBlock[])
         : ([{ kind: "note", text: "이번 참조 구간에 뚜렷한 신호가 확인되지 않아 제언을 생성하지 않았습니다" }] as DocBlock[])),
     ],
   });
@@ -514,9 +550,27 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   return applyGaejosik({
     title: `${doc.channelName} — Audience Intelligence Report`,
     subtitle: `${doc.period.label} · ${doc.groupLabel}${doc.masterInfo.targetRating !== null ? ` · 목표 시청률 ${formatRating(doc.masterInfo.targetRating, code)}` : ""}`,
-    sections,
+    sections: renumberSections(sections),
     brand: { channelCode: doc.channelCode, channelName: doc.channelName, themeColor: doc.themeColor },
   });
+}
+
+// 기존 섹션 제목에 붙어 있던 번호 접두어 — "01 ", "심층 01 ", "심층 01b " 세 형태를 모두 잡는다.
+// "심층 분석 — 분석 기준"처럼 "심층" 뒤에 숫자가 아니라 글자가 오는 제목은 매치되지 않는다.
+const SECTION_NUMBER_PREFIX_RE = /^(?:심층\s+)?\d{1,3}[a-z]?\s+/;
+
+/**
+ * 사용자 지시(2026-09-18) — 섹션 제목이 모드 전용(01~10) / 심층(심층 01~06) / 번호 없음(공통
+ * 섹션·편성 제언 등) 세 체계로 섞여 있어 "01"이 문서 한 편 안에서 세 번 나타나 목차 구실을
+ * 못 했다. sections 배열이 최종 확정된 뒤 이 함수 하나만 거쳐, 기존 번호 접두어를 지우고
+ * 배열에 실린 순서 그대로 하나의 연속 번호를 새로 붙인다. 문자열(title)만 바꾸고 blocks(실제
+ * 내용·계산)는 절대 건드리지 않는다.
+ */
+function renumberSections(sections: DocSection[]): DocSection[] {
+  return sections.map((s, i) => ({
+    ...s,
+    title: `${String(i + 1).padStart(2, "0")} ${s.title.replace(SECTION_NUMBER_PREFIX_RE, "")}`,
+  }));
 }
 
 /**

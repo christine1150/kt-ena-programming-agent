@@ -161,60 +161,81 @@ function buildOneLiner(groupLabel: string, peers: PeerRow[], commonPattern: Comm
 // 구조적/일시적 판정)만 템플릿 문장으로 엮는다. 새 추론 로직 없음. 신호가 3개 미만이면 있는
 // 만큼만(설계서는 "정확히 3개"를 요구하지만, 없는 신호를 지어내지 않는다는 이 프로젝트의 원칙이
 // 우선한다 — 정직하게 밝히는 한계).
-function buildChannelActions(code: string, name: string, raw: AudienceReportRawData): ChannelActionItem[] {
+//
+// 2026-09-18(§09 정렬) — candidates 각 항목에 urgent 플래그를 함께 붙인다. "편성 시간 이동이나
+// 교체"(=MOVE/REPLACE 액션)와 "이 시간대 편성 점검"(진단 필요) 두 신호만 급한 것으로 보고,
+// 확대·유지강화·관망 성격의 신호는 급하지 않다고 본다. slice(0,3) 이후 살아남은 urgent 개수가
+// 채널의 priorityScore가 되어 "이번 달 먼저 볼 채널" 정렬 키로 쓰인다(portfolioFlatten.ts §09).
+function buildChannelActions(code: string, name: string, raw: AudienceReportRawData): { items: ChannelActionItem[]; priorityScore: number } {
   const digits = code === "SKYUHD" ? 5 : 3;
   const { growth, weakness } = computeGrowthWeaknessMovers(raw.programMovers, 1);
   const { win, weakness: daypartWeakness } = computeDaypartWinWeakness(raw.daypartOpportunity);
   const structural = computeStructuralVsTemporary(raw.trend);
 
-  const candidates: (ChannelActionItem | null)[] = [
+  const candidateList: ({ item: ChannelActionItem; urgent: boolean } | null)[] = [
     growth[0]
       ? {
-          channelCode: code,
-          channelName: name,
-          basis: `${growth[0].canonicalName}이(가) 직전 대비 시청률 ${growth[0].ratingDelta?.toFixed(digits)} 상승했습니다`,
-          suggestion: "이 프로그램의 편성 확대나 유사 콘텐츠 편성을 검토해볼 만합니다",
-          verification: "다음 기간 같은 프로그램의 시청률 추이로 효과를 확인하세요",
+          item: {
+            channelCode: code,
+            channelName: name,
+            basis: `${growth[0].canonicalName}이(가) 직전 대비 시청률 ${growth[0].ratingDelta?.toFixed(digits)} 상승했습니다`,
+            suggestion: "이 프로그램의 편성 확대나 유사 콘텐츠 편성을 검토해볼 만합니다",
+            verification: "다음 기간 같은 프로그램의 시청률 추이로 효과를 확인하세요",
+          },
+          urgent: false,
         }
       : null,
     structural.verdict === "temporary"
       ? {
-          channelCode: code,
-          channelName: name,
-          basis: structural.label,
-          suggestion: "최근 흐름이 단일 이벤트 주도일 수 있어, 편성 변경 전 다음 구간까지 지켜볼 것을 검토해볼 만합니다",
-          verification: "다음 기간 추이가 같은 방향으로 이어지는지 확인하세요",
+          item: {
+            channelCode: code,
+            channelName: name,
+            basis: structural.label,
+            suggestion: "최근 흐름이 단일 이벤트 주도일 수 있어, 편성 변경 전 다음 구간까지 지켜볼 것을 검토해볼 만합니다",
+            verification: "다음 기간 추이가 같은 방향으로 이어지는지 확인하세요",
+          },
+          urgent: false,
         }
       : null,
     daypartWeakness
       ? {
-          channelCode: code,
-          channelName: name,
-          basis: `${daypartWeakness.daypartLabel} 시간대 경쟁채널 대비 격차가 ${daypartWeakness.gapChange.toFixed(4)} 벌어졌습니다`,
-          suggestion: "이 시간대 편성 점검을 검토해볼 만합니다",
-          verification: "다음 기간 같은 시간대 격차로 개선 여부를 확인하세요",
+          item: {
+            channelCode: code,
+            channelName: name,
+            basis: `${daypartWeakness.daypartLabel} 시간대 경쟁채널 대비 격차가 ${daypartWeakness.gapChange.toFixed(4)} 벌어졌습니다`,
+            suggestion: "이 시간대 편성 점검을 검토해볼 만합니다",
+            verification: "다음 기간 같은 시간대 격차로 개선 여부를 확인하세요",
+          },
+          urgent: true, // "점검" 진단 신호
         }
       : null,
     weakness[0]
       ? {
-          channelCode: code,
-          channelName: name,
-          basis: `${weakness[0].canonicalName}이(가) 직전 대비 시청률 ${weakness[0].ratingDelta?.toFixed(digits)} 하락했습니다`,
-          suggestion: "이 프로그램의 편성 시간 이동이나 교체를 검토해볼 만합니다",
-          verification: "다음 기간 같은 프로그램의 시청률 추이로 효과를 확인하세요",
+          item: {
+            channelCode: code,
+            channelName: name,
+            basis: `${weakness[0].canonicalName}이(가) 직전 대비 시청률 ${weakness[0].ratingDelta?.toFixed(digits)} 하락했습니다`,
+            suggestion: "이 프로그램의 편성 시간 이동이나 교체를 검토해볼 만합니다",
+            verification: "다음 기간 같은 프로그램의 시청률 추이로 효과를 확인하세요",
+          },
+          urgent: true, // MOVE/REPLACE 성격 신호
         }
       : null,
     win
       ? {
-          channelCode: code,
-          channelName: name,
-          basis: `${win.daypartLabel} 시간대 경쟁채널 대비 격차가 ${win.gapChange.toFixed(4)} 좁혀졌습니다`,
-          suggestion: "이 시간대의 강점을 유지·강화하는 편성을 검토해볼 만합니다",
-          verification: "다음 기간 같은 시간대 격차로 유지 여부를 확인하세요",
+          item: {
+            channelCode: code,
+            channelName: name,
+            basis: `${win.daypartLabel} 시간대 경쟁채널 대비 격차가 ${win.gapChange.toFixed(4)} 좁혀졌습니다`,
+            suggestion: "이 시간대의 강점을 유지·강화하는 편성을 검토해볼 만합니다",
+            verification: "다음 기간 같은 시간대 격차로 유지 여부를 확인하세요",
+          },
+          urgent: false,
         }
       : null,
   ];
-  return candidates.filter((c): c is ChannelActionItem => c !== null).slice(0, 3);
+  const kept = candidateList.filter((c): c is { item: ChannelActionItem; urgent: boolean } => c !== null).slice(0, 3);
+  return { items: kept.map((c) => c.item), priorityScore: kept.filter((c) => c.urgent).length };
 }
 
 // Phase 12(2026-08-28, 계획서 J절 Phase 12) — 요일까지 일치할 때만 "슬롯 중복"으로 판정한다(기존은
@@ -311,7 +332,8 @@ export async function buildPortfolioReport(request: AudienceReportRequest): Prom
   // 항상 나타나도록 {channelCode, channelName, items} 형태로 감싼다.
   const actionsByChannel = allCodes.map((code) => {
     const name = nameByCode.get(code) ?? code;
-    return { channelCode: code, channelName: name, items: buildChannelActions(code, name, rawByCode[code]) };
+    const { items, priorityScore } = buildChannelActions(code, name, rawByCode[code]);
+    return { channelCode: code, channelName: name, items, priorityScore };
   });
 
   const deepCompare = buildPortfolioDeepCompare(rawList);
