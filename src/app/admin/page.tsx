@@ -28,6 +28,7 @@ import ManualReportUploader from "./ManualReportUploader";
 // 확인)를 엑셀 업로드 기반으로 교체. 옛 컴포넌트는 trash-can/monthly-content-review-2026-09-07/
 // 로 이동(사용자 최종 확인 후 삭제, CLAUDE.md 파일 관리 규칙).
 import MonthlyReferenceTrendUploader from "./MonthlyReferenceTrendUploader";
+import ScheduleGridUploader from "./ScheduleGridUploader";
 import OlifeEpisodeCatalogUploader from "./OlifeEpisodeCatalogUploader";
 import DailyNewsManager from "./DailyNewsManager";
 import MarketYtdRankUploader from "./MarketYtdRankUploader";
@@ -122,6 +123,9 @@ export default async function AdminPage() {
         <FeaturedContentManager />
         <ManualReportUploader />
         <MonthlyReferenceTrendUploader />
+
+        <AdminSectionHeading title="편성표 검토" description="주간 편성표를 올리면 실제 시청률을 매칭해 히트맵·엑셀로 확인할 수 있습니다." />
+        <ScheduleGridUploader />
 
         <AdminSectionHeading title="기준 정보(가끔 바뀜)" description="채널·목표·경쟁채널처럼 한 번 정하면 오래 쓰는 값입니다." />
         <ChannelMasterUploader />

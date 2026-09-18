@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ ok: false, message: "관리자 로그인이 필요합니다." }, { status: 401 });
   }
 
-  const { data, error } = await supabase.from("channels").select("id, code, name").order("code");
+  const { data, error } = await supabase.from("channels").select("id, code, name, theme_color").order("code");
   if (error) {
     return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
   }
