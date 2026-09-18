@@ -1,24 +1,21 @@
-// 사용자 지시(2026-09-19): "엑셀로 다운받을 수도 있는 기능"
-// 사용자 재지시(2026-09-20): "편성표를 올려주지 않더라도 DB에 있는 내용으로... 정확한
-// 시작시간과 종료시간이 반영되어 빈틈이 없는 편성표 + 시청률을 반영한 편성표 히트맵 파일을
-// 만들 수 있는거지?" — 업로드가 없어도 ratings의 실제 방영 구간(start_time~end_time)으로
-// 재구성해 내려준다(getScheduleGridRows, data 라우트와 동일 로직 공유).
-// 실제 워크북 생성은 scheduleGridExcel.ts로 옮겨 Page 2(PD 세션)용 export 라우트
-// (/api/schedule-grid/export)와 공유한다(2026-09-20).
+// 사용자 지시(2026-09-20): "편성표 팝업에서 바로 엑셀 파일로 다운받기... 기능을 더해줘" —
+// 관리자 전용이던 엑셀 다운로드를 PD 세션(Page 2 "이번 주 실제 편성표 보기" 모달)에서도 쓸 수
+// 있게 연다. week 파라미터를 생략하면 "이번 주"를 기본값으로 쓴다(/api/schedule-grid/data와
+// 동일 원칙). 실제 워크북 생성은 scheduleGridExcel.ts를 그대로 공유한다.
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { getAdminSession } from "@/lib/adminAuth";
-import { getScheduleGridRows, type ScheduleGridSourceRow } from "@/lib/scheduleGridSource";
+import { getCurrentSession } from "@/lib/adminAuth";
+import { getScheduleGridRows, mondayOf, type ScheduleGridSourceRow } from "@/lib/scheduleGridSource";
 import { buildScheduleGridExcelBuffer } from "@/lib/scheduleGridExcel";
 
 export async function GET(request: Request) {
-  const admin = await getAdminSession();
-  if (!admin) return NextResponse.json({ ok: false, message: "관리자 로그인이 필요합니다." }, { status: 401 });
+  const session = await getCurrentSession();
+  if (!session) return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
 
   const params = new URL(request.url).searchParams;
   const channelCode = params.get("channel");
-  const week = params.get("week");
-  if (!channelCode || !week) return NextResponse.json({ ok: false, message: "channel, week 파라미터가 필요합니다." }, { status: 400 });
+  if (!channelCode) return NextResponse.json({ ok: false, message: "channel 파라미터가 필요합니다." }, { status: 400 });
+  const week = params.get("week") ?? mondayOf(new Date().toISOString().slice(0, 10));
 
   const { data: channel } = await supabase.from("channels").select("id, name, theme_color, primary_target").eq("code", channelCode).maybeSingle();
   if (!channel) return NextResponse.json({ ok: false, message: "채널을 찾지 못했습니다." }, { status: 400 });

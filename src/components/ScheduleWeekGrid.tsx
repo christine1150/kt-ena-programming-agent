@@ -5,7 +5,7 @@
 // 비교 및 다운로드는 관리자 페이지에서처럼 새 페이지로 넘어가서" — 이 컴포넌트 자체는 한 주만
 // 그리며, apiBase로 관리자 전용 API(/api/admin/schedule-grid)와 PD 세션 허용 API
 // (/api/schedule-grid)를 전환할 수 있고, showExport로 엑셀 다운로드 링크 노출 여부를 정한다.
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 export type ScheduleGridRow = {
   dow: number;
@@ -58,6 +58,21 @@ export function ScheduleWeekGrid({
   const [source, setSource] = useState<DataSource | null>(null);
   const [dateByDow, setDateByDow] = useState<Map<number, string>>(new Map());
   const [resolvedWeek, setResolvedWeek] = useState<{ week: string; weekEnd: string } | null>(week && weekEnd ? { week, weekEnd } : null);
+  // 사용자 지시(2026-09-20): "편성표 팝업에서 바로... 프린트하기" — 이 컴포넌트가 한 화면에
+  // 여러 번(관리자 화면의 두 주 비교) 렌더링될 수 있어, 인쇄 시 "이 인스턴스만" 보이도록
+  // 인스턴스별 고유 id로 범위를 좁힌다.
+  const printAreaId = `schedule-print-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  function handlePrint() {
+    const style = document.createElement("style");
+    style.textContent = `@media print { body * { visibility: hidden !important; } #${printAreaId}, #${printAreaId} * { visibility: visible !important; } #${printAreaId} { position: absolute; left: 0; top: 0; width: 100%; } }`;
+    document.head.appendChild(style);
+    const cleanup = () => {
+      style.remove();
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+  }
 
   useEffect(() => {
     setRows(null);
@@ -79,6 +94,11 @@ export function ScheduleWeekGrid({
 
   const ratings = rows.map((r) => r.matched_rating).filter((v): v is number => v !== null && v > 0);
   const maxRating = Math.max(1e-9, ...ratings);
+  // 사용자 지시(2026-09-20): "시청률이 평균 이상일 경우 볼드" — 이 주차에 실제로 매칭된 모든
+  // 시청률(0 포함, 0도 실측값)의 평균을 기준선으로 쓴다(새 지표를 만들지 않고 이미 보이는
+  // 값만으로 계산).
+  const allRatings = rows.map((r) => r.matched_rating).filter((v): v is number => v !== null);
+  const avgRating = allRatings.length > 0 ? allRatings.reduce((a, b) => a + b, 0) / allRatings.length : null;
   const byDow = new Map<number, ScheduleGridRow[]>();
   for (const r of rows) {
     if (!byDow.has(r.dow)) byDow.set(r.dow, []);
@@ -86,7 +106,7 @@ export function ScheduleWeekGrid({
   }
 
   return (
-    <div className="min-w-0 flex-1">
+    <div id={printAreaId} className="min-w-0 flex-1">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <p className="text-sm font-semibold text-zinc-700">
@@ -101,12 +121,31 @@ export function ScheduleWeekGrid({
           ) : null}
         </div>
         {showExport && rows.length > 0 && (
-          <a
-            href={`${apiBase}/export?channel=${channelCode}&week=${resolvedWeek.week}`}
-            className="rounded-lg border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
-          >
-            엑셀 다운로드
-          </a>
+          <div className="flex shrink-0 items-center gap-1 print:hidden">
+            <a
+              href={`${apiBase}/export?channel=${channelCode}&week=${resolvedWeek.week}`}
+              title="엑셀 다운로드"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-300 text-zinc-500 hover:bg-zinc-50"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3v12" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M4 19h16" />
+              </svg>
+            </a>
+            <button
+              type="button"
+              onClick={handlePrint}
+              title="인쇄하기"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-300 text-zinc-500 hover:bg-zinc-50"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9V3h12v6" />
+                <rect x="4" y="9" width="16" height="8" rx="1" />
+                <path d="M6 17v4h12v-4" />
+              </svg>
+            </button>
+          </div>
         )}
       </div>
       {rows.length === 0 ? (
@@ -164,9 +203,23 @@ export function ScheduleWeekGrid({
                           title={`${label} ${r.start_time.slice(0, 5)}~${r.end_time ? r.end_time.slice(0, 5) : "?"} ${r.program_name_raw}${r.tags ? ` ${r.tags}` : ""} — ${rating !== null ? rating.toFixed(3) : "매칭 안 됨"}`}
                         >
                           {height >= 12 && (
-                            <div className="flex h-full flex-col justify-center leading-tight">
-                              <span className="w-full truncate text-[9.5px] font-medium text-zinc-800">{r.program_name_raw}</span>
-                              {height >= 22 && <span className="text-[9px] text-zinc-500">{rating !== null ? rating.toFixed(3) : "매칭 안 됨"}</span>}
+                            <div className="flex h-full flex-col items-center justify-center leading-tight">
+                              <span className="w-full truncate text-center text-[9.5px] font-medium text-zinc-800">{r.program_name_raw}</span>
+                              {height >= 22 &&
+                                (rating !== null ? (
+                                  // 사용자 지시(2026-09-20): "시청률이 잘 보이게 아주 큰 글씨, 가운데
+                                  // 정렬. 평균 이상이면 볼드. 0이면 0.000 대신 0으로, 회색 글씨."
+                                  <span
+                                    className={`w-full text-center leading-none ${rating === 0 ? "text-zinc-400" : "text-zinc-900"} ${
+                                      avgRating !== null && rating >= avgRating ? "font-bold" : "font-normal"
+                                    }`}
+                                    style={{ fontSize: `${Math.min(16, Math.max(10, height / 3))}px` }}
+                                  >
+                                    {rating === 0 ? "0" : rating.toFixed(3)}
+                                  </span>
+                                ) : (
+                                  <span className="w-full truncate text-center text-[9px] text-zinc-500">매칭 안 됨</span>
+                                ))}
                             </div>
                           )}
                         </div>
