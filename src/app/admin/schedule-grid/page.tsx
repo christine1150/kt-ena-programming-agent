@@ -87,7 +87,7 @@ function WeekGrid({ channelCode, week, weekEnd, themeColor }: { channelCode: str
             </span>
           ) : null}
         </div>
-        {source === "upload" && (
+        {rows.length > 0 && (
           <a
             href={`/api/admin/schedule-grid/export?channel=${channelCode}&week=${week}`}
             className="rounded-lg border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
