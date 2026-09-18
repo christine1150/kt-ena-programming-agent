@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const channelCode = params.get("channel");
   const week = params.get("week");
+  const forceDb = params.get("source") === "db";
   if (!channelCode || !week) return NextResponse.json({ ok: false, message: "channel, week 파라미터가 필요합니다." }, { status: 400 });
 
   const { data: channel } = await supabase.from("channels").select("id, name, theme_color, primary_target").eq("code", channelCode).maybeSingle();
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
   let source: "upload" | "db";
   let rows: ScheduleGridSourceRow[];
   try {
-    ({ source, rows } = await getScheduleGridRows(channel.id, channelCode, channel.primary_target, week));
+    ({ source, rows } = await getScheduleGridRows(channel.id, channelCode, channel.primary_target, week, { forceDb }));
   } catch (e) {
     return NextResponse.json({ ok: false, message: e instanceof Error ? e.message : "조회 중 오류가 발생했습니다." }, { status: 500 });
   }

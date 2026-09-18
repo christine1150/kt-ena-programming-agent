@@ -5,7 +5,7 @@
 // end_time)만으로 재구성한다(get_channel_week_schedule). 두 라우트가 각자 이 로직을 중복
 // 구현하지 않도록 한 곳으로 모은다.
 import { supabase } from "@/lib/supabase";
-import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
+import { resolveProgramLevelTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
 import { parseScheduleGridWorkbook } from "@/lib/scheduleGridParse";
 
 // 사용자 지시(2026-09-20): "1페이지 또는 2페이지에... 이번 주 실제 편성표 보기" — 주차 선택
@@ -37,8 +37,14 @@ export async function getScheduleGridRows(
   channelId: string,
   channelCode: string,
   primaryTarget: string | null,
-  week: string
-): Promise<{ source: ScheduleGridSource; rows: ScheduleGridSourceRow[] }> {
+  week: string,
+  // 사용자 지시(2026-09-20): "실제 업로드된 편성표가 있는 주도, DB 기반 편성표로 바꿀 수 있는
+  // 옵션도 만들어줘" — 업로드가 있어도 강제로 DB 재구성을 보고 싶을 때 쓴다.
+  options?: { forceDb?: boolean }
+): Promise<{ source: ScheduleGridSource; rows: ScheduleGridSourceRow[]; hasUpload: boolean }> {
+  // 업로드 존재 여부는 forceDb와 무관하게 항상 확인한다 — 화면이 "업로드가 있지만 지금은 DB로
+  // 보는 중"인지 구분해 토글을 보여줄 수 있어야 하기 때문(사용자 지시 2026-09-20: "업로드된
+  // 편성표가 있는 주도 DB 기반으로 바꿀 수 있는 옵션").
   const { data: uploadedRows, error } = await supabase
     .from("program_schedule_grid")
     .select("dow, broadcast_date, start_time, end_time, program_name_raw, tags, matched_rating")
@@ -47,11 +53,12 @@ export async function getScheduleGridRows(
     .order("dow", { ascending: true })
     .order("start_time", { ascending: true });
   if (error) throw new Error(error.message);
-  if (uploadedRows && uploadedRows.length > 0) {
-    return { source: "upload", rows: uploadedRows };
+  const hasUpload = !!uploadedRows && uploadedRows.length > 0;
+  if (hasUpload && !options?.forceDb) {
+    return { source: "upload", rows: uploadedRows!, hasUpload };
   }
 
-  if (!primaryTarget) return { source: "db", rows: [] };
+  if (!primaryTarget) return { source: "db", rows: [], hasUpload };
   const { data: dbRows, error: dbError } = await supabase.rpc("get_channel_week_schedule", {
     p_channel_code: channelCode,
     p_program_target_label: resolveProgramLevelTargetLabel(primaryTarget),
@@ -70,7 +77,7 @@ export async function getScheduleGridRows(
     tags: null,
     matched_rating: r.rating,
   }));
-  return { source: "db", rows };
+  return { source: "db", rows, hasUpload };
 }
 
 export type ScheduleGridUploadResult = {
@@ -133,4 +140,24 @@ export async function ingestScheduleGridFile(file: File): Promise<ScheduleGridUp
     rowsMatched: matchError ? null : matchedCount,
     matchWarning: matchError ? matchError.message : null,
   };
+}
+
+// 사용자 지시(2026-09-20): "모든 채널 그라데이션이 더욱 잘 비교되게... 연간 채널 평균
+// 시청률보다 높은 시청률 칸은 잘 보이게 표시" — 채널마다 절대 시청률 수준이 달라서, 각 주차
+// 자체의 최댓값으로 색 강도를 정하면(기존 방식) 채널·주차 사이 비교가 왜곡된다(어느 채널이든
+// "그 주의 1등"은 항상 가장 진하게 보임). 대신 이 채널의 연초~오늘 누적 평균 시청률(Page 1
+// 히어로 카드·get_channel_period_rank_and_rating과 같은 계산, 새 지표 아님)을 고정 기준선으로
+// 써서, "이 채널의 평소 대비 얼마나 강한가"가 채널 간에도 같은 눈금으로 비교되게 한다.
+export async function getChannelAnnualAvgRating(channelId: string, primaryTarget: string | null): Promise<number | null> {
+  if (!primaryTarget) return null;
+  const { data: targetRow } = await supabase.from("targets").select("id").eq("label", resolveRankSheetTargetLabel(primaryTarget)).maybeSingle();
+  if (!targetRow) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase.rpc("get_channel_period_rank_and_rating", {
+    p_channel_id: channelId,
+    p_target_id: targetRow.id,
+    p_date_from: `${today.slice(0, 4)}-01-01`,
+    p_date_to: today,
+  });
+  return (data as { avg_rating: number | null }[] | null)?.[0]?.avg_rating ?? null;
 }
