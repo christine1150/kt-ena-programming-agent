@@ -6108,8 +6108,22 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       {relevant.map((c, i) => {
                         const up = c.delta_pct !== null && c.delta_pct > 0;
                         const down = c.delta_pct !== null && c.delta_pct < 0;
+                        // 사용자 지시(2026-09-19): "경쟁채널 편성변화 → 대응제안 연결" — 이 관찰을
+                        // 그 자체로 끝내지 않고, 같은 시간대(hour_block)에 대해 이미 계산돼 있는
+                        // OPPORTUNITY? 분류(hourBlockOpportunity, 새 계산 없음)와 이어준다. 두 신호를
+                        // "동시에 관찰됨"으로만 연결하고 인과관계로 단정하지 않는다(이 섹션의 기존
+                        // 원칙과 동일).
+                        const oppRow = hourBlockOpportunity.find((h) => h.hour_block === c.hour_block);
+                        const oppClass = oppRow ? classifyHourBlockOpportunity(oppRow) : null;
+                        const suggestion =
+                          oppClass === "OPPORTUNITY" || oppClass === "IMPROVE"
+                            ? "이 시간대는 아래 OPPORTUNITY?에서도 성장 기회로 분류돼 있습니다 — WHAT TO SCHEDULE?의 강화 후보를 이 시간대에 배치하는 것을 검토해볼 만합니다."
+                            : oppClass === "DEFEND"
+                              ? "이 시간대는 아래 OPPORTUNITY?에서 방어가 필요한 시간대로 분류돼 있습니다 — 현재 편성을 지키는 데 우선순위를 두세요."
+                              : null;
                         return (
-                          <div key={i} className="flex items-baseline gap-2 text-sm text-zinc-600">
+                          <div key={i} className="flex flex-col gap-0.5">
+                          <div className="flex items-baseline gap-2 text-sm text-zinc-600">
                             <p className="min-w-0 flex-1">
                               <span className="font-medium text-zinc-700">{c.competitor_name}</span> {c.hour_block}시대 &ldquo;{c.usual_program}&rdquo;
                               (최근 {c.usual_weeks_seen}주 고정) → 오늘 &ldquo;{c.today_program}&rdquo;로 교체
@@ -6131,6 +6145,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                 </span>
                               </span>
                             )}
+                          </div>
+                          {suggestion && (
+                            <a href="#what-to-schedule" className="text-xs text-[#281fc7] underline decoration-dotted underline-offset-2 hover:text-[#1c1690]">
+                              {suggestion}
+                            </a>
+                          )}
                           </div>
                         );
                       })}
