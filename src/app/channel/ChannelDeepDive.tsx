@@ -5166,61 +5166,95 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             새 색 도입 없음)으로 병기한다. 둘 다 비면(REPLACE/MOVE/STRENGTHEN 대상이 전혀 없으면)
             "데이터 없으면 섹션 숨김" 원칙에 따라 섹션 자체를 숨긴다. */}
         {(() => {
+          // 사용자 지시(2026-09-19): "너무 위아래로 두껍고 논리가 부족해. 한줄로 보이게 하되
+          // 몇 시에 있는 무엇을 바꿔야하는지 이야기할 것. 이 순위는 예전에 내가 말했던 시간대별
+          // 주요 순위 순으로." — 3줄 카드(배지/제목/설명)를 한 줄 문장(시간·프로그램명·조치)으로
+          // 압축하고, 정렬 기준을 fit_score 대신 route.ts의 daypartTiePriority와 동일한 시간대
+          // 중요도(저녁·심야 > 오후 > 오전 > 새벽)로 바꾼다. 어떤 후보를 뽑을지(worst/best
+          // fit_score N개)는 그대로 두고, 뽑힌 뒤 "보여주는 순서"만 바꾼다.
+          const daypartPriority = (d: string | null): number => (d === "저녁_심야" ? 1 : d === "오후" ? 2 : d === "오전" ? 3 : d === "새벽" ? 4 : 5);
+          const SHORT_DAYPART: Record<string, string> = { 새벽: "새벽", 오전: "오전", 오후: "오후", 저녁_심야: "저녁·심야" };
+          // 시간 해상 우선순위: ①MOVE/REPLACE의 약세 슬롯 시각(가장 구체적, get_program_slot_efficiency)
+          // → ②TOP20 등에서 이미 조회된 그 프로그램의 주 방영 시각(most_common_start_hour) →
+          // ③daypart 구간(정확한 시각을 못 찾을 때만, 새 조회 없음).
+          const resolveTiming = (item: FitScoreItem) => {
+            const hour = item.slotEfficiency?.weakSlot?.hour ?? topPrograms.find((p) => p.program_name === item.programs?.canonical_name)?.most_common_start_hour ?? null;
+            const daypart = hour !== null ? hourToDaypart(hour) : item.evidence.current_daypart;
+            const timeLabel = hour !== null ? `${hour}시` : daypart ? (SHORT_DAYPART[daypart] ?? daypart) : null;
+            return { daypart, timeLabel };
+          };
+          const buildLine = (item: FitScoreItem) => {
+            const { daypart, timeLabel } = resolveTiming(item);
+            const programName = item.programs?.canonical_name ?? "이름 없음";
+            let action: string;
+            if (item.tag === "STRENGTHEN") {
+              action = "강화 검토";
+            } else if (item.slotEfficiency?.isMultiSlot && item.slotEfficiency.weakSlot) {
+              action = "이 시간대만 이동 검토";
+            } else {
+              const recommendedDaypart = item.tag === "MOVE" ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity) : null;
+              action = recommendedDaypart ? `${SHORT_DAYPART[recommendedDaypart] ?? recommendedDaypart}로 이동 검토` : item.tag === "MOVE" ? "다른 시간대 재배치 검토" : "교체 검토";
+            }
+            return { item, programName, timeLabel, action, sortKey: daypartPriority(daypart) };
+          };
           const attentionItems = (fitScoreItems ?? [])
             .filter((item) => item.tag === "REPLACE" || item.tag === "MOVE")
             .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
-            .slice(0, 3);
+            .slice(0, 3)
+            .map(buildLine)
+            .sort((a, b) => a.sortKey - b.sortKey);
           const opportunityItems = (fitScoreItems ?? [])
             .filter((item) => item.tag === "STRENGTHEN")
             .sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0))
-            .slice(0, 2);
+            .slice(0, 2)
+            .map(buildLine)
+            .sort((a, b) => a.sortKey - b.sortKey);
           if (attentionItems.length === 0 && opportunityItems.length === 0) return null;
           return (
             <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
               {attentionItems.length > 0 && (
               <>
-                <p className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
+                <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
                   지금 검토가 필요한 편성
                 </p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  {attentionItems.map((item) => {
-                    // 표(6761행 부근)와 같은 기준 — MOVE만 추천 daypart를 붙이고, REPLACE는 daypart
-                    // 추천 없이 "교체 검토" 문장으로 떨어진다(buildScheduleRecommendationNote 재사용).
-                    const recommendedDaypart =
-                      item.tag === "MOVE" ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity) : null;
-                    const note = buildScheduleRecommendationNote(item, recommendedDaypart);
-                    return (
-                      <a
-                        key={item.program_id}
-                        href="#what-to-schedule"
-                        className="block rounded-2xl bg-zinc-50 p-3 transition-colors hover:bg-zinc-100"
-                        title="무엇을 편성할까요? 표에서 자세히 보기"
-                      >
-                        <DotTag label={TAG_LABEL_KO[item.tag!]} color={TAG_DOT_COLOR[item.tag!]} />
-                        <p className="mt-1.5 truncate text-sm font-bold text-zinc-800">{item.programs?.canonical_name ?? "이름 없음"}</p>
-                        <p className="mt-0.5 line-clamp-2 text-xs text-zinc-500">{note}</p>
-                      </a>
-                    );
-                  })}
+                <div className="flex flex-col gap-1">
+                  {attentionItems.map(({ item, programName, timeLabel, action }) => (
+                    <a
+                      key={item.program_id}
+                      href="#what-to-schedule"
+                      className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm transition-colors hover:bg-zinc-50"
+                      title="무엇을 편성할까요? 표에서 자세히 보기"
+                    >
+                      <DotTag label={TAG_LABEL_KO[item.tag!]} color={TAG_DOT_COLOR[item.tag!]} />
+                      <span className="min-w-0 flex-1 truncate">
+                        {timeLabel && <span className="font-semibold text-zinc-500">{timeLabel}</span>}{" "}
+                        <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>{" "}
+                        <span className="text-zinc-500">{action}</span>
+                      </span>
+                    </a>
+                  ))}
                 </div>
               </>
               )}
               {opportunityItems.length > 0 && (
-              <div className={attentionItems.length > 0 ? "mt-4" : ""}>
-                <p className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
+              <div className={attentionItems.length > 0 ? "mt-3" : ""}>
+                <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
                   더 밀어줄 만한 편성
                 </p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  {opportunityItems.map((item) => (
+                <div className="flex flex-col gap-1">
+                  {opportunityItems.map(({ item, programName, timeLabel, action }) => (
                     <a
                       key={item.program_id}
                       href="#what-to-schedule"
-                      className="block rounded-2xl bg-emerald-50/60 p-3 transition-colors hover:bg-emerald-50"
+                      className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm transition-colors hover:bg-emerald-50/60"
                       title="무엇을 편성할까요? 표에서 자세히 보기"
                     >
                       <DotTag label={TAG_LABEL_KO.STRENGTHEN} color={TAG_DOT_COLOR.STRENGTHEN} />
-                      <p className="mt-1.5 truncate text-sm font-bold text-zinc-800">{item.programs?.canonical_name ?? "이름 없음"}</p>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-zinc-500">Fit Score {item.fit_score?.toFixed(0) ?? "—"}점 — 확장·유사 슬롯 추가 편성을 검토해볼 만합니다.</p>
+                      <span className="min-w-0 flex-1 truncate">
+                        {timeLabel && <span className="font-semibold text-zinc-500">{timeLabel}</span>}{" "}
+                        <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>{" "}
+                        <span className="text-zinc-500">{action}</span>
+                      </span>
                     </a>
                   ))}
                 </div>
