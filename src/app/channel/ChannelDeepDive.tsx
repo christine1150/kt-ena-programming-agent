@@ -3009,13 +3009,16 @@ function DowHourBlockTable({
                 const rating = cell?.avg_rating ?? null;
                 const sampleCount = cell?.sample_count ?? 0;
                 const programNamesForCell = cell?.program_names ?? null;
+                const isZero = rating === 0;
                 const intensity = rating !== null ? Math.min(1, rating / maxRating) : 0;
                 const alpha = Math.round(intensity * 200 + 20);
                 // 사용자 지시(2026-08-26 재지시): 다른 강도 요소와 통일된 3단 그라데이션
                 // (enaStoryGradientRgb, t=1이 정확히 ENA Story 로고색)을 강도(intensity, 0~1)에
                 // 직접 적용한다(흰 배경 블렌딩 없음 — 가장 강함이 로고색만큼 진해야 하므로).
-                const bgColor = rating === null ? "#f4f4f5" : isEnaStory ? enaStoryGradientColor(intensity) : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
-                const textColor = rating === null ? "#a1a1aa" : isEnaStory ? enaStoryGradientTextColor(intensity) : cellTextColor(accentColor, alpha);
+                // 사용자 지시(2026-09-20): "여기도 0은 흰색으로" — 편성표 팝업과 같은 규칙,
+                // 시청률이 정확히 0인 칸은 흰색으로(데이터 없음의 옅은 회색과 구분).
+                const bgColor = rating === null ? "#f4f4f5" : isZero ? "#ffffff" : isEnaStory ? enaStoryGradientColor(intensity) : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
+                const textColor = rating === null ? "#a1a1aa" : isZero ? "#a1a1aa" : isEnaStory ? enaStoryGradientTextColor(intensity) : cellTextColor(accentColor, alpha);
                 // 사용자 지시(2026-09-20): "3시간 단위로 볼 때도... 가장 높은 시청률을 기록한
                 // 타이틀이 대표 프로그램명으로" — 병합 없이 단일 대표 이름만 보여준다.
                 const topProgramLabel = showTopProgramName ? (cell?.top_program_name ?? null) : null;
@@ -5868,7 +5871,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </div>
           {/* 사용자 지시(2026-09-20): "이번 주 실제 편성표 보기" 모달 — 관리자 화면(admin/
               schedule-grid)과 같은 렌더러(ScheduleWeekGrid)를 PD 세션 허용 API(/api/schedule-grid)로
-              연결한다. 2주 비교·엑셀 다운로드는 이 모달 범위 밖 — 관리자 화면 링크로 대체. */}
+              연결한다. 재지시: 2주 비교·다운로드 안내 문구를 상단으로 옮기고 "주간 비교"로
+              줄이며, 채널 로고색·볼드로 표시한다. 링크는 관리자 화면이 아니라 PD 세션으로도
+              열리는 /schedule-grid로 — PD가 관리자 화면에 접근할 필요가 없어야 한다. */}
           {showScheduleModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowScheduleModal(false)}>
               <div
@@ -5876,7 +5881,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-zinc-800">이번 주 실제 편성표</h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-sm font-semibold text-zinc-800">이번 주 실제 편성표</h3>
+                    <Link
+                      href={`/schedule-grid?channel=${code}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-bold hover:underline"
+                      style={{ color: accentColor }}
+                    >
+                      주간 비교
+                    </Link>
+                  </div>
                   <button type="button" onClick={() => setShowScheduleModal(false)} className="text-zinc-400 hover:text-zinc-600" aria-label="닫기">
                     ✕
                   </button>
@@ -5887,13 +5903,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   themeColor={accentColor}
                   reloadKey={scheduleReloadKey}
                 />
-                <p className="mt-3 text-xs text-zinc-400">
-                  2주 이상 비교와 엑셀 다운로드는{" "}
-                  <Link href={`/admin/schedule-grid?channel=${code}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-zinc-600">
-                    관리자 화면(편성표 검토)
-                  </Link>
-                  에서 할 수 있습니다.
-                </p>
               </div>
             </div>
           )}

@@ -8,7 +8,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
-import { getScheduleGridRows, type ScheduleGridSourceRow } from "@/lib/scheduleGridSource";
+import { getScheduleGridRows, type ScheduleGridSourceRow, type ScheduleGridSource } from "@/lib/scheduleGridSource";
 import { buildScheduleGridExcelBuffer } from "@/lib/scheduleGridExcel";
 
 export async function GET(request: Request) {
@@ -18,22 +18,22 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const channelCode = params.get("channel");
   const week = params.get("week");
-  const forceDb = params.get("source") === "db";
+  const forceUpload = params.get("view") === "upload";
   if (!channelCode || !week) return NextResponse.json({ ok: false, message: "channel, week 파라미터가 필요합니다." }, { status: 400 });
 
   const { data: channel } = await supabase.from("channels").select("id, name, theme_color, primary_target").eq("code", channelCode).maybeSingle();
   if (!channel) return NextResponse.json({ ok: false, message: "채널을 찾지 못했습니다." }, { status: 400 });
 
-  let source: "upload" | "db";
+  let source: ScheduleGridSource;
   let rows: ScheduleGridSourceRow[];
   try {
-    ({ source, rows } = await getScheduleGridRows(channel.id, channelCode, channel.primary_target, week, { forceDb }));
+    ({ source, rows } = await getScheduleGridRows(channel.id, channelCode, channel.primary_target, week, { forceUpload }));
   } catch (e) {
     return NextResponse.json({ ok: false, message: e instanceof Error ? e.message : "조회 중 오류가 발생했습니다." }, { status: 500 });
   }
 
   const arrayBuffer = await buildScheduleGridExcelBuffer(channel.name, channel.theme_color, source, rows, week);
-  const downloadName = encodeURIComponent(`${channel.name}_${week}_편성표${source === "db" ? "_DB재구성" : ""}.xlsx`);
+  const downloadName = encodeURIComponent(`${channel.name}_${week}_편성표${source !== "upload" ? "_DB재구성" : ""}.xlsx`);
   return new NextResponse(new Uint8Array(arrayBuffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

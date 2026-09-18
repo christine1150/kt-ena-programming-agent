@@ -88,11 +88,15 @@ export async function buildScheduleGridExcelBuffer(
 
   sheet.mergeCells(2, 1, 2, 8);
   const sourceCell = sheet.getCell(2, 1);
+  // 사용자 지시(2026-09-20 재지시): "기본적으로 DB 기반으로 구성하되, 업로드된 편성표가
+  // 매치되는 회차나 부제가 있으면 그것만 덧붙이는" — 세 상태를 그대로 밝힌다.
   sourceCell.value =
     source === "upload"
-      ? "실제 업로드된 편성표 파일 기준(부제·회차·본방/재방 태그 포함)"
-      : "업로드된 편성표가 없어 시청률 데이터(ratings)의 실제 방영 시작~종료 시각으로 자동 재구성함 — 부제·회차·본방/재방 정보는 없음(편성표 파일을 올리면 함께 표시됨)";
-  sourceCell.font = { italic: true, size: 9, color: { argb: source === "upload" ? "FF059669" : "FFB45309" } };
+      ? "실제 업로드된 편성표 파일 원본 그대로(부제·회차·본방/재방 태그 포함)"
+      : source === "db+upload"
+        ? "시청률 데이터(ratings)로 실제 방영 시작~종료 시각을 재구성하고, 업로드된 편성표에서 매칭되는 회차·부제·본방/재방 태그만 덧붙임"
+        : "업로드된 편성표가 없어 시청률 데이터(ratings)의 실제 방영 시작~종료 시각으로 자동 재구성함 — 부제·회차·본방/재방 정보는 없음(편성표 파일을 올리면 함께 표시됨)";
+  sourceCell.font = { italic: true, size: 9, color: { argb: source === "upload" ? "FF059669" : source === "db+upload" ? "FF2563EB" : "FFB45309" } };
   sheet.getRow(2).height = 16;
 
   const headerRow = sheet.getRow(HEADER_ROWS);
