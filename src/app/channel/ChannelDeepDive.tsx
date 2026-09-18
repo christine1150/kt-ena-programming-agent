@@ -2915,6 +2915,7 @@ function DowHourBlockTable({
   hourBlockOpportunity,
   hourOrder,
   labelFor,
+  showProgramNames,
 }: {
   pattern: DowHourBlockRow[];
   accentColor: string;
@@ -2930,6 +2931,8 @@ function DowHourBlockTable({
   // 그대로, 1시간 모드일 때만 호출부에서 02~25시 24개 행과 그에 맞는 라벨 함수를 넘긴다.
   hourOrder?: number[];
   labelFor?: (h: number) => string;
+  // 사용자 지시(2026-09-19): "편성표 형태로" — 칸 안에 그 시간대 방영 프로그램명을 함께 표시.
+  showProgramNames?: boolean;
 }) {
   const rows = hourOrder ?? HOUR_BLOCK_ORDER;
   const labelOf = labelFor ?? hourBlockLabel;
@@ -3004,10 +3007,15 @@ function DowHourBlockTable({
                 // 직접 적용한다(흰 배경 블렌딩 없음 — 가장 강함이 로고색만큼 진해야 하므로).
                 const bgColor = rating === null ? "#f4f4f5" : isEnaStory ? enaStoryGradientColor(intensity) : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
                 const textColor = rating === null ? "#a1a1aa" : isEnaStory ? enaStoryGradientTextColor(intensity) : cellTextColor(accentColor, alpha);
+                // 편성표 형태(2026-09-19): 여러 프로그램이 같은 칸에 걸쳐 있으면(3시간 단위 또는
+                // 12주 누적 등 넓은 창) 첫 번째 이름 + "외 N개"로 요약 — 칸 폭이 좁아 전체 나열은
+                // 어렵고, 전체 목록은 title 툴팁에 그대로 남긴다.
+                const names = cell?.program_names ? cell.program_names.split(" / ") : [];
+                const programLabel = names.length > 1 ? `${names[0]} 외 ${names.length - 1}` : (names[0] ?? null);
                 return (
                   <td key={dow} className="py-0.5 px-0.5">
                     <div
-                      className="mx-auto flex h-6 w-full items-center justify-center rounded font-bold"
+                      className={`mx-auto flex w-full flex-col items-center justify-center rounded font-bold ${showProgramNames ? "h-11 gap-0.5 px-1 py-1" : "h-6"}`}
                       style={{
                         backgroundColor: bgColor,
                         color: textColor,
@@ -3018,7 +3026,10 @@ function DowHourBlockTable({
                           : "표본 없음"
                       }
                     >
-                      {rating !== null ? fmtR(rating) : "—"}
+                      {showProgramNames && programLabel && (
+                        <span className="w-full truncate text-center text-[9.5px] font-medium leading-tight opacity-90">{programLabel}</span>
+                      )}
+                      <span>{rating !== null ? fmtR(rating) : "—"}</span>
                     </div>
                   </td>
                 );
@@ -4016,6 +4027,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 사용자 지시(2026-09-19): "요일×시간대" 히트맵을 기본 3시간 단위 대신 02~25시 1시간 단위로도
   // 볼 수 있게 우측 체크박스로 전환. 기본은 기존 그대로(3시간 단위)라 Delta-Only.
   const [dowHeatmapGranularity, setDowHeatmapGranularity] = useState<"3h" | "1h">("3h");
+  // 사용자 지시(2026-09-19): "1시간대로 보니까 헷갈려. 프로그램 편성표 형태로 그려서 히트맵을
+  // 보여주면 좋겠어" — 칸에 숫자만 있던 것을, 실제 편성됐던 프로그램명을 칸 안에 함께 보여주는
+  // "편성표 형태"로 전환하는 옵션. 기본은 기존 그대로(꺼짐, 숫자만) — Delta-Only.
+  const [dowHeatmapShowPrograms, setDowHeatmapShowPrograms] = useState(false);
   const [hourlyMetrics, setHourlyMetrics] = useState<Set<HourlyMetricKey>>(new Set(["avg_rating"]));
   // 기능 #15-2(2026-08-21): "대비" 분석(DoD~YoY)의 시간대별 그래프는 "이번 기간"/"전 기간" 두
   // 패널로 나란히 보여주고, 각 패널이 독립된 체크박스 행을 갖는다(사용자 지시 "두 줄 체크박스").
@@ -5704,15 +5719,29 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {/* 사용자 지시(2026-09-19): "우측에 체크박스를 만들어서 2시부터 25시까지 1시간
                 단위로도 비교할 수 있게" — 3시간/1시간 단위 전환. 아래 세 렌더 지점(듀얼 패널
                 2곳 + 단일 패널 1곳) 모두 이 상태를 공유한다. */}
-            <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
-              <input
-                type="checkbox"
-                checked={dowHeatmapGranularity === "1h"}
-                onChange={(e) => setDowHeatmapGranularity(e.target.checked ? "1h" : "3h")}
-                className="h-3.5 w-3.5 rounded border-zinc-300"
-              />
-              1시간 단위로 보기
-            </label>
+            <div className="flex shrink-0 flex-wrap items-center gap-3">
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
+                <input
+                  type="checkbox"
+                  checked={dowHeatmapGranularity === "1h"}
+                  onChange={(e) => setDowHeatmapGranularity(e.target.checked ? "1h" : "3h")}
+                  className="h-3.5 w-3.5 rounded border-zinc-300"
+                />
+                1시간 단위로 보기
+              </label>
+              {/* 사용자 지시(2026-09-19): "1시간대로 보니까 헷갈려. 프로그램 편성표 형태로
+                  그려서 히트맵을 보여주면 좋겠어" — 숫자만 있던 칸에 실제 편성 프로그램명을
+                  함께 표시하는 옵션. */}
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
+                <input
+                  type="checkbox"
+                  checked={dowHeatmapShowPrograms}
+                  onChange={(e) => setDowHeatmapShowPrograms(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-zinc-300"
+                />
+                편성표 형태로 보기
+              </label>
+            </div>
           </div>
           <p className="mb-3 text-sm text-zinc-400">
             {showSdowDualView
@@ -5741,6 +5770,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   isEnaStory={isEnaStory}
                   hourOrder={dowHeatmapGranularity === "1h" ? HOUR_ORDER_1H : undefined}
                   labelFor={dowHeatmapGranularity === "1h" ? hour1hLabel : undefined}
+                  showProgramNames={dowHeatmapShowPrograms}
                 />
               </div>
               <div>
@@ -5756,6 +5786,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   isEnaStory={isEnaStory}
                   hourOrder={dowHeatmapGranularity === "1h" ? HOUR_ORDER_1H : undefined}
                   labelFor={dowHeatmapGranularity === "1h" ? hour1hLabel : undefined}
+                  showProgramNames={dowHeatmapShowPrograms}
                 />
               </div>
             </div>
@@ -5807,6 +5838,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 hourBlockOpportunity={dowHeatmapGranularity === "1h" ? undefined : hourBlockOpportunity}
                 hourOrder={dowHeatmapGranularity === "1h" ? HOUR_ORDER_1H : undefined}
                 labelFor={dowHeatmapGranularity === "1h" ? hour1hLabel : undefined}
+                showProgramNames={dowHeatmapShowPrograms}
               />
               {hourBlockOpportunity.length > 0 && (
                 <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[10.5px] text-zinc-400">
