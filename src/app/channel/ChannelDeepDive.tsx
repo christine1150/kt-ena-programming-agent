@@ -3029,7 +3029,11 @@ function DowHourBlockTable({
             const oppRow = oppByHourBlock.get(hb);
             const oppCls = oppRow ? classifyHourBlockOpportunity(oppRow) : null;
             return (
-            <tr key={hb} className="border-t border-zinc-100">
+            // 사용자 지시(2026-09-19, 실제 편성표 이미지 첨부): "빈칸 없이, 최대한 실제로
+            // 방영되었던 시간대에 맞춰서" — 편성표 형태(showProgramNames)일 때는 셀 사이
+            // 여백(패딩·둥근 모서리)이 실제 방송사 편성표에 없는 "빈틈"처럼 보였다. 이 모드에서만
+            // 행 경계선을 없애고(칸 자체 border로 대체) 시간대 라벨 열의 회색 구분선도 뺀다.
+            <tr key={hb} className={showProgramNames ? "" : "border-t border-zinc-100"}>
               <td className="whitespace-nowrap py-0.5 pr-0.5 text-left font-medium text-zinc-700">
                 {/* 사용자 지시(2026-08-26, 재수정): "점이 더 잘보이게, 정렬이 일정하게" —
                     이전엔 inline-block+align-middle이라 폰트 메트릭에 따라 점이 줄마다
@@ -3075,10 +3079,14 @@ function DowHourBlockTable({
                 const names = programNamesForCell ? programNamesForCell.split(" / ") : [];
                 const programLabel = names.length > 1 ? `${names[0]} 외 ${names.length - 1}` : (names[0] ?? null);
                 return (
-                  <td key={dow} rowSpan={rowSpan} className="py-0.5 px-0.5 align-middle">
+                  <td
+                    key={dow}
+                    rowSpan={rowSpan}
+                    className={showProgramNames ? "border border-white p-0 align-middle" : "py-0.5 px-0.5 align-middle"}
+                  >
                     <div
-                      className={`mx-auto flex w-full flex-col items-center justify-center rounded font-bold ${
-                        showProgramNames ? `${rowSpan > 1 ? "h-full min-h-11" : "h-11"} gap-0.5 px-1 py-1` : "h-6"
+                      className={`mx-auto flex w-full flex-col items-center justify-center font-bold ${
+                        showProgramNames ? `${rowSpan > 1 ? "h-full min-h-11" : "h-11"} gap-0.5 px-1 py-1` : "h-6 rounded"
                       }`}
                       style={{
                         backgroundColor: bgColor,
