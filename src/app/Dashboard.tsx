@@ -697,6 +697,21 @@ function buildChannelNarrative(
 // route.ts가 mart_scheduling_fit_score를 조회만 해서 이미 채워준 값(top_program_tag/
 // decline_program_tag)을 그대로 골라 쓸 뿐, 여기서 새로 판정하지 않는다 — 순위 변동만으로
 // 나온 actionLine(특정 프로그램 근거 없음)에는 태그를 달지 않는다.
+// 사용자 지적(2026-09-20): "'해당 프로그램·시간대 편성 점검 필요'는 좋은 인사이트를 주지
+// 못한다 — '프로그램명(#시)' 편성 효율 평가... 실제 액션까지 짧아도 정확하게." /
+// "'강세 프로그램·시간대 확대 검토'도 정확히 어떤게 강세인데 어느 시간대로 확대하라는건지
+// 적어달라." 원인(causeLine)에는 이미 프로그램명이 있었지만 actionLine은 그걸 반복하지 않고
+// 뭉뚱그린 정형 문구였다. actionLine에도 같은 프로그램명 + 방영 시각(#시)을 그대로 넣고,
+// 동사도 뭉뚱그리지 않는다 — Fit Score(mart_scheduling_fit_score)가 이미 판정한 실제 태그
+// (decline_program_tag/top_program_tag)가 있으면 그 태그의 한글 라벨(이동 검토/교체 검토/
+// 강화 등, TAG_LABEL_KO)을 그대로 쓰고, 아직 판정 전(null)이면 방향만 맞는 최소한의 문구로
+// 대체한다. "확대 검토"처럼 근거 없는 목적지(어느 시간대로?)를 지어내지 않기 위해, 강세일
+// 때는 "그 시간대 자체를 강화"로 표현한다(다른 시간대로의 확장은 Page 2 WHAT TO SCHEDULE?의
+// 근거 있는 판정 없이는 단정하지 않음).
+function extBroadcastHour(startTime: string): number {
+  const h = parseInt(startTime.slice(0, 2), 10);
+  return h < 2 ? h + 24 : h;
+}
 function buildChannelInsightSummary(
   s: ChannelNarrativeSignal
 ): { situationLine: string | null; causeLine: string | null; actionLine: string | null; actionTag: ActionTag | null } {
@@ -715,7 +730,8 @@ function buildChannelInsightSummary(
 
   if (s.decline_program_name && s.decline_program_name !== s.top_program_name && s.decline_program_delta_pct !== null) {
     causeLine = `'${s.decline_program_name}' 부진 — 같은 슬롯 평균 대비 ▼${Math.abs(s.decline_program_delta_pct).toFixed(0)}%`;
-    actionLine = "해당 프로그램·시간대 편성 점검 필요";
+    const hourLabel = s.decline_program_start_time ? `(${extBroadcastHour(s.decline_program_start_time)}시)` : "";
+    actionLine = `'${s.decline_program_name}'${hourLabel} 편성 ${s.decline_program_tag ? TAG_LABEL_KO[s.decline_program_tag] : "재검토 필요"}`;
     actionTag = s.decline_program_tag ?? null;
   } else if (
     s.top_program_name &&
@@ -728,7 +744,8 @@ function buildChannelInsightSummary(
     const pct = ((s.top_program_rating - s.top_program_baseline_avg) / s.top_program_baseline_avg) * 100;
     if (Math.abs(pct) >= 30) {
       causeLine = `'${s.top_program_name}' 같은 슬롯 평균 대비 ${pct >= 0 ? "▲" : "▼"}${Math.abs(pct).toFixed(0)}%`;
-      actionLine = pct >= 0 ? "강세 프로그램·시간대 확대 검토" : "해당 프로그램 편성 재검토 필요";
+      const hourLabel = s.top_program_start_time ? `(${extBroadcastHour(s.top_program_start_time)}시)` : "";
+      actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${s.top_program_tag ? TAG_LABEL_KO[s.top_program_tag] : pct >= 0 ? "강화 검토" : "재검토 필요"}`;
       actionTag = s.top_program_tag ?? null;
     }
   }
