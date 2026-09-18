@@ -5,7 +5,7 @@
 // FITS?/OPPORTUNITY?/WHAT TO SCHEDULE?/COMPARED WITH?는 2026-08-20 사용자 지시로 보고서
 // 줄글 형태로 재구성했다. WHY?/OPPORTUNITY?의 원인 추적·기회 탐지는 상관관계만 참고 정보로
 // 제공하고 인과관계로 단정하지 않는다(CLAUDE.md 원칙).
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDow } from "@/lib/dateFormat";
@@ -16,6 +16,7 @@ import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 // 컴포넌트(AskAssistantWidget, 원래 이 파일에서 뽑아 나간 것)로 교체해 중복을 없앴다(기능·
 // 응답 형태 동일, 순수 치환).
 import { AskAssistantWidget } from "@/components/AskAssistantWidget";
+import { ScheduleWeekGrid } from "@/components/ScheduleWeekGrid";
 import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from "@/lib/enaOriginalHighlight";
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
 import { computeChannelHealthScore } from "@/lib/channelHealthScore";
@@ -4157,6 +4158,43 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 사용자 지시(2026-09-20): "편성표 형태로 보기는... 30분 단위로라도 실제 방영시간에 맞게" —
   // 편성표 형태 전용 30분 단위 데이터도 같은 방식으로 지연 조회한다.
   const [lazyHalfHourPattern, setLazyHalfHourPattern] = useState<{ dowHalfHourPattern: DowHalfHourRow[]; dowHalfHourPatternPrior: DowHalfHourRow[] } | null>(null);
+  // 사용자 지시(2026-09-20): "이번 주 실제 편성표 보기를 Page 2에도... 그 자리에서 바로 파일도
+  // 업로드할 수 있게" — 관리자 화면(admin/schedule-grid)의 정밀 편성표를 모달로, 업로드는
+  // 체크박스 줄 옆 텍스트 링크(숨겨진 file input)로. UX 아키텍트·UI 디자이너 페르소나 검토 결과
+  // 모달(스크롤 위치 보존, 탭 분할 없이 임시 상세보기) + 텍스트 링크 업로드로 결정.
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleUploadStatus, setScheduleUploadStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
+  const [scheduleUploadMessage, setScheduleUploadMessage] = useState<string | null>(null);
+  const [scheduleReloadKey, setScheduleReloadKey] = useState(0);
+  const scheduleFileInputRef = useRef<HTMLInputElement>(null);
+  // 업로드 로직은 관리자 화면과 완전히 같은 엔드포인트를 PD 세션으로 호출한다(/api/schedule-grid/upload,
+  // scheduleGridSource.ts의 ingestScheduleGridFile 공유 — 채널·주차는 파일 자체에서 자동 인식).
+  async function handleScheduleUpload(file: File) {
+    setScheduleUploadStatus("uploading");
+    setScheduleUploadMessage(null);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch("/api/schedule-grid/upload", { method: "POST", body: formData });
+      const body = await res.json();
+      if (res.ok && body.ok) {
+        setScheduleUploadStatus("done");
+        setScheduleUploadMessage(
+          body.channelCode === code
+            ? `${body.weekStart} ~ ${body.weekEnd} 저장 완료(${body.rowsSaved}건)`
+            : `다른 채널(${body.channelCode})의 편성표로 인식되어 그 채널로 저장되었습니다.`
+        );
+        setScheduleReloadKey((k) => k + 1);
+        if (body.channelCode === code) setShowScheduleModal(true);
+      } else {
+        setScheduleUploadStatus("error");
+        setScheduleUploadMessage(body.message ?? "업로드에 실패했습니다.");
+      }
+    } catch {
+      setScheduleUploadStatus("error");
+      setScheduleUploadMessage("업로드 중 오류가 발생했습니다.");
+    }
+  }
   const [hourlyMetrics, setHourlyMetrics] = useState<Set<HourlyMetricKey>>(new Set(["avg_rating"]));
   // 기능 #15-2(2026-08-21): "대비" 분석(DoD~YoY)의 시간대별 그래프는 "이번 기간"/"전 기간" 두
   // 패널로 나란히 보여주고, 각 패널이 독립된 체크박스 행을 갖는다(사용자 지시 "두 줄 체크박스").
@@ -5954,8 +5992,68 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </label>
               {effectiveGranularity === "1h" && !lazyHourPattern && <span className="text-xs text-zinc-400">불러오는 중...</span>}
               {effectiveGranularity === "30m" && !lazyHalfHourPattern && <span className="text-xs text-zinc-400">불러오는 중...</span>}
+              {/* 사용자 지시(2026-09-20): "이번 주 실제 편성표 보기"를 여기 체크박스 줄 옆에 —
+                  위 히트맵은 최근 12주(또는 선택 기간)를 뭉친 근사치라, 이번 주 하나만 분 단위로
+                  정확히 보여주는 정밀 버전을 같은 자리에서 열 수 있게 한다(모달, 스크롤 위치 보존). */}
+              <span className="h-3.5 w-px bg-zinc-200" aria-hidden />
+              <button
+                type="button"
+                onClick={() => setShowScheduleModal(true)}
+                className="text-xs font-medium text-zinc-500 underline decoration-zinc-300 underline-offset-2 hover:text-zinc-700"
+              >
+                이번 주 실제 편성표 보기
+              </button>
+              <label className="cursor-pointer text-xs font-medium text-zinc-500 underline decoration-zinc-300 underline-offset-2 hover:text-zinc-700">
+                {scheduleUploadStatus === "uploading" ? "업로드 중..." : "편성표 업로드"}
+                <input
+                  ref={scheduleFileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleScheduleUpload(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {scheduleUploadMessage && (
+                <span className={`text-xs ${scheduleUploadStatus === "error" ? "text-red-500" : "text-emerald-600"}`}>{scheduleUploadMessage}</span>
+              )}
             </div>
           </div>
+          {/* 사용자 지시(2026-09-20): "이번 주 실제 편성표 보기" 모달 — 관리자 화면(admin/
+              schedule-grid)과 같은 렌더러(ScheduleWeekGrid)를 PD 세션 허용 API(/api/schedule-grid)로
+              연결한다. 2주 비교·엑셀 다운로드는 이 모달 범위 밖 — 관리자 화면 링크로 대체. */}
+          {showScheduleModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowScheduleModal(false)}>
+              <div
+                className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-xl ring-1 ring-zinc-100"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-zinc-800">이번 주 실제 편성표</h3>
+                  <button type="button" onClick={() => setShowScheduleModal(false)} className="text-zinc-400 hover:text-zinc-600" aria-label="닫기">
+                    ✕
+                  </button>
+                </div>
+                <ScheduleWeekGrid
+                  apiBase="/api/schedule-grid"
+                  channelCode={code}
+                  themeColor={accentColor}
+                  showExport={false}
+                  reloadKey={scheduleReloadKey}
+                />
+                <p className="mt-3 text-xs text-zinc-400">
+                  2주 이상 비교와 엑셀 다운로드는{" "}
+                  <Link href={`/admin/schedule-grid?channel=${code}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-zinc-600">
+                    관리자 화면(편성표 검토)
+                  </Link>
+                  에서 할 수 있습니다.
+                </p>
+              </div>
+            </div>
+          )}
           <p className="mb-3 text-sm text-zinc-400">
             {showSdowDualView
               ? `왼쪽은 ${sdowBaselineShortLabel ?? "선택한 주간"} 전체(월~일 7개 요일), 오른쪽은 선택한 요일(기준일로부터 가장 가까운 그 요일 하루) 기준입니다.`

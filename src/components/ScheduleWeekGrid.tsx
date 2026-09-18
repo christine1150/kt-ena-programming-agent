@@ -1,0 +1,184 @@
+"use client";
+
+// 관리자 "편성표 검토" 화면(admin/schedule-grid/page.tsx)과 Page 2 "이번 주 실제 편성표 보기"
+// 모달(ChannelDeepDive.tsx)이 공유하는 주간 편성표 렌더러. 사용자 지시(2026-09-20): "2주 이상의
+// 비교 및 다운로드는 관리자 페이지에서처럼 새 페이지로 넘어가서" — 이 컴포넌트 자체는 한 주만
+// 그리며, apiBase로 관리자 전용 API(/api/admin/schedule-grid)와 PD 세션 허용 API
+// (/api/schedule-grid)를 전환할 수 있고, showExport로 엑셀 다운로드 링크 노출 여부를 정한다.
+import { useEffect, useState } from "react";
+
+export type ScheduleGridRow = {
+  dow: number;
+  broadcast_date: string;
+  start_time: string;
+  end_time: string | null;
+  program_name_raw: string;
+  tags: string | null;
+  matched_rating: number | null;
+};
+type DataSource = "upload" | "db";
+
+const DOW_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
+// 이 앱의 "02~26시" 관행(닐슨 방송일 경계) 그대로 — 02:00부터 다음날 02:00 직전까지 24시간.
+const GRID_START_MIN = 2 * 60;
+const GRID_END_MIN = 26 * 60;
+const PX_PER_MIN = 0.6; // 1440분 * 0.6 = 864px — 실제 길이 비례 표시
+const GRID_HEIGHT = (GRID_END_MIN - GRID_START_MIN) * PX_PER_MIN;
+const HOUR_PX = 60 * PX_PER_MIN;
+const HOUR_TICKS = Array.from({ length: 24 }, (_, i) => 2 + i);
+
+function toExtMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  const eh = h < 2 ? h + 24 : h;
+  return eh * 60 + m;
+}
+
+export function ScheduleWeekGrid({
+  channelCode,
+  week,
+  weekEnd,
+  themeColor,
+  apiBase,
+  showExport = true,
+  reloadKey,
+}: {
+  channelCode: string;
+  // 사용자 지시(2026-09-20): "이번 주"는 서버가 계산하는 게 맞다(클라이언트 시간대 계산을
+  // 중복하지 않기 위해) — week/weekEnd를 생략하면 API가 기본값(오늘이 속한 주)을 알아서 쓰고,
+  // 응답에 담아 내려준 week/weekEnd로 헤더를 채운다.
+  week?: string;
+  weekEnd?: string;
+  themeColor: string;
+  apiBase: string;
+  showExport?: boolean;
+  // 사용자 지시(2026-09-20): 업로드 직후 그 자리에서 바로 갱신되도록 — 값이 바뀌면 재조회한다.
+  reloadKey?: number;
+}) {
+  const [rows, setRows] = useState<ScheduleGridRow[] | null>(null);
+  const [source, setSource] = useState<DataSource | null>(null);
+  const [dateByDow, setDateByDow] = useState<Map<number, string>>(new Map());
+  const [resolvedWeek, setResolvedWeek] = useState<{ week: string; weekEnd: string } | null>(week && weekEnd ? { week, weekEnd } : null);
+
+  useEffect(() => {
+    setRows(null);
+    setSource(null);
+    const query = week ? `&week=${week}` : "";
+    fetch(`${apiBase}/data?channel=${channelCode}${query}`)
+      .then((r) => r.json())
+      .then((body) => {
+        const rs: ScheduleGridRow[] = body.ok ? body.rows : [];
+        setRows(rs);
+        setSource(body.source ?? null);
+        setDateByDow(new Map(rs.map((r) => [r.dow, r.broadcast_date])));
+        if (body.ok && body.week && body.weekEnd) setResolvedWeek({ week: body.week, weekEnd: body.weekEnd });
+      })
+      .catch(() => setRows([]));
+  }, [apiBase, channelCode, week, reloadKey]);
+
+  if (rows === null || !resolvedWeek) return <p className="text-sm text-zinc-400">불러오는 중...</p>;
+
+  const ratings = rows.map((r) => r.matched_rating).filter((v): v is number => v !== null && v > 0);
+  const maxRating = Math.max(1e-9, ...ratings);
+  const byDow = new Map<number, ScheduleGridRow[]>();
+  for (const r of rows) {
+    if (!byDow.has(r.dow)) byDow.set(r.dow, []);
+    byDow.get(r.dow)!.push(r);
+  }
+
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-zinc-700">
+            {resolvedWeek.week} ~ {resolvedWeek.weekEnd}
+          </p>
+          {source === "upload" ? (
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600">실제 업로드된 편성표</span>
+          ) : source === "db" ? (
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600" title="시청률 데이터로 자동 구성 — 부제·회차·본방/재방 정보는 편성표 파일을 올려야 표시됩니다.">
+              DB 시청률로 자동 구성(부제·회차 없음)
+            </span>
+          ) : null}
+        </div>
+        {showExport && rows.length > 0 && (
+          <a
+            href={`${apiBase}/export?channel=${channelCode}&week=${resolvedWeek.week}`}
+            className="rounded-lg border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+          >
+            엑셀 다운로드
+          </a>
+        )}
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-zinc-400">이 주차에는 시청률 데이터도 없습니다.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl ring-1 ring-zinc-100">
+          <div className="flex" style={{ minWidth: 560 }}>
+            <div className="relative w-10 shrink-0 bg-zinc-50 pt-5" style={{ height: GRID_HEIGHT + 20 }}>
+              {HOUR_TICKS.map((h) => (
+                <div
+                  key={h}
+                  className="absolute left-0 right-1 text-right text-[9px] text-zinc-400"
+                  style={{ top: (h * 60 - GRID_START_MIN) * PX_PER_MIN + 20 - 5 }}
+                >
+                  {h}시
+                </div>
+              ))}
+            </div>
+            {DOW_LABELS.map((label, i) => {
+              const dow = i + 1;
+              const dayRows = (byDow.get(dow) ?? []).slice().sort((a, b) => a.start_time.localeCompare(b.start_time));
+              return (
+                <div key={dow} className="min-w-0 flex-1 border-l border-zinc-100">
+                  <div className="bg-zinc-50 py-1 text-center">
+                    <div className={`text-[11px] font-medium ${label === "토" ? "text-blue-500" : label === "일" ? "text-rose-500" : "text-zinc-500"}`}>{label}</div>
+                    <div className="text-[9px] text-zinc-400">{dateByDow.get(dow)?.slice(5) ?? ""}</div>
+                  </div>
+                  <div
+                    className="relative"
+                    style={{
+                      height: GRID_HEIGHT,
+                      backgroundImage: `repeating-linear-gradient(to bottom, #f4f4f5 0, #f4f4f5 1px, transparent 1px, transparent ${HOUR_PX}px)`,
+                    }}
+                  >
+                    {dayRows.map((r, ri) => {
+                      const startMin = Math.max(GRID_START_MIN, toExtMinutes(r.start_time));
+                      let endMin = r.end_time ? toExtMinutes(r.end_time) : startMin + 60;
+                      if (endMin <= startMin) endMin = startMin + 30;
+                      endMin = Math.min(GRID_END_MIN, endMin);
+                      if (endMin <= startMin) return null;
+                      const top = (startMin - GRID_START_MIN) * PX_PER_MIN;
+                      const height = Math.max(4, (endMin - startMin) * PX_PER_MIN);
+                      const rating = r.matched_rating;
+                      const isZero = rating === 0;
+                      const intensity = rating !== null && rating > 0 ? Math.min(1, rating / maxRating) : 0;
+                      const alpha = Math.round(intensity * 200 + 40);
+                      // 사용자 지시(2026-09-20): 시청률이 정확히 0인 블록은 배경을 흰색(투명)으로 —
+                      // 데이터가 아예 없는 칸(회색 배경 없음)과 구분되도록 얇은 테두리만 남긴다.
+                      const bg = rating === null ? "#fafafa" : isZero ? "#ffffff" : `${themeColor}${alpha.toString(16).padStart(2, "0")}`;
+                      return (
+                        <div
+                          key={`${r.start_time}-${ri}`}
+                          className="absolute left-0 right-0 overflow-hidden border-b border-white px-1"
+                          style={{ top, height, backgroundColor: bg, outline: "1px solid rgba(0,0,0,0.05)" }}
+                          title={`${label} ${r.start_time.slice(0, 5)}~${r.end_time ? r.end_time.slice(0, 5) : "?"} ${r.program_name_raw}${r.tags ? ` ${r.tags}` : ""} — ${rating !== null ? rating.toFixed(3) : "매칭 안 됨"}`}
+                        >
+                          {height >= 12 && (
+                            <div className="flex h-full flex-col justify-center leading-tight">
+                              <span className="w-full truncate text-[9.5px] font-medium text-zinc-800">{r.program_name_raw}</span>
+                              {height >= 22 && <span className="text-[9px] text-zinc-500">{rating !== null ? rating.toFixed(3) : "매칭 안 됨"}</span>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

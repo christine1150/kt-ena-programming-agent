@@ -8,7 +8,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
-import { getScheduleGridRows } from "@/lib/scheduleGridSource";
+import { getScheduleGridRows, addDaysStr } from "@/lib/scheduleGridSource";
 
 export async function GET(request: Request) {
   const admin = await getAdminSession();
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
   try {
     const { source, rows } = await getScheduleGridRows(channel.id, channelCode, channel.primary_target, week);
-    return NextResponse.json({ ok: true, channelName: channel.name, themeColor: channel.theme_color, source, rows });
+    return NextResponse.json({ ok: true, channelName: channel.name, themeColor: channel.theme_color, source, week, weekEnd: addDaysStr(week, 6), rows });
   } catch (e) {
     return NextResponse.json({ ok: false, message: e instanceof Error ? e.message : "조회 중 오류가 발생했습니다." }, { status: 500 });
   }
