@@ -14,6 +14,7 @@ import { applyOlifeEpgForDate } from "@/lib/olifeEpgStaging";
 // 성능 개선(2026-09-17): 적재 직후 Page 1/Page 2 당일 화면용 집계를 미리 계산해 둔다.
 import { refreshDailyDashboardMart } from "@/lib/dailyMartCache";
 import { toChannelCode } from "@/lib/channelMaster";
+import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import {
   checkChannelCoverage,
   checkNewTargetLabels,
@@ -281,7 +282,29 @@ export async function ingestNielsenDailyFile(
   }
 
   // 2) 타깃상세 시트 → 프로그램 단위 (하루전체 행은 채널 단위 집계로)
-  const programIdCache = new Map<string, string>(); // `${channelId}:${canonicalName}` → program id
+  const programIdCache = new Map<string, string>(); // `${channelId}:${정규화된 이름}` → program id
+
+  // 프로그램 식별을 정규화 기준으로(2026-09-19 사용자 지적 — "강철부대 시즌2 16", "강철부대 시즌2",
+  // "[본편] 강철부대 시즌2"가 다 다른 프로그램으로 나온다). 여기서 파일에 적힌 이름 그대로
+  // upsert(onConflict: channel_id,canonical_name)해온 것이 파편화의 근본 원인이었다 — 같은
+  // 프로그램인데 회차·태그 표기가 방영분마다 달라지면 매번 새 programs 행이 생겼다.
+  // 이미 있는 행의 canonical_name은 덮어쓰지 않는다(기존 ratings 조인 유지).
+  // normalizeProgramCanonicalName은 시즌 번호와 스페셜·특별판은 보존하므로 "신병2"/"신병3",
+  // "기막힌이야기실제상황"/"기막힌이야기실제상황베스트"는 계속 별개로 남는다.
+  const normalizedIndexByChannel = new Map<string, Map<string, string>>();
+  async function findProgramByNormalizedName(channelId: string, canonical: string): Promise<string | null> {
+    let index = normalizedIndexByChannel.get(channelId);
+    if (!index) {
+      const { data } = await supabase.from("programs").select("id, canonical_name").eq("channel_id", channelId);
+      index = new Map<string, string>();
+      for (const p of data ?? []) {
+        const key = normalizeProgramCanonicalName(p.canonical_name as string);
+        if (key && !index.has(key)) index.set(key, p.id as string);
+      }
+      normalizedIndexByChannel.set(channelId, index);
+    }
+    return index.get(normalizeProgramCanonicalName(canonical)) ?? null;
+  }
   for (const row of parsed.programRows as ProgramTargetRow[]) {
     const channelId = ctx.channelIdByCode.get(row.channelCode);
     if (!channelId) continue;
@@ -299,8 +322,16 @@ export async function ingestNielsenDailyFile(
     if (!row.isDailyAggregate) {
       const { canonical, firstRun } = splitProgramName(row.rawProgramName);
       rowFirstRun = firstRun;
-      const cacheKey = `${channelId}:${canonical}`;
+      const cacheKey = `${channelId}:${normalizeProgramCanonicalName(canonical)}`;
       programId = programIdCache.get(cacheKey) ?? null;
+      if (!programId) {
+        // 표기만 다른 같은 프로그램이 이미 있으면 그 행을 재사용한다(새로 만들지 않음).
+        const existingId = await findProgramByNormalizedName(channelId, canonical);
+        if (existingId) {
+          programId = existingId;
+          programIdCache.set(cacheKey, existingId);
+        }
+      }
       if (!programId) {
         const { data: program, error: programError } = await supabase
           .from("programs")
