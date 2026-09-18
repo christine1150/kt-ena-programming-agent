@@ -1,8 +1,10 @@
 // 관리자 전용 화면 — 로그인하지 않았으면 로그인 화면으로 돌려보낸다.
 // (실제로는 middleware.ts가 먼저 막지만, 직접 접근 시나리오 대비 이중 확인)
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/adminAuth";
+import { supabase } from "@/lib/supabase";
 import ChannelMasterUploader from "./ChannelMasterUploader";
 // 사용자 지시(2026-08-26): "요일 별 리뷰 프로그램" 조회 위젯을 없애고 "주요 콘텐츠 관리"
 // (FeaturedContentManager) 하나로 합쳤다 — 두 화면이 같은 정보를 나눠 보여주고 있었다.
@@ -44,11 +46,18 @@ function AdminSectionHeading({ title, description }: { title: string; descriptio
   );
 }
 
+const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
+
 export default async function AdminPage() {
   const session = await getAdminSession();
   if (!session) {
     redirect("/admin/login");
   }
+  // 사용자 지시(2026-09-19): "채널별 분석 대신에 ENA~skyUHD로 채널별 로고 넣어주기(1페이지처럼)
+  // 사이즈는 더 작아도 됨" — 채널마다 개별 링크 버튼 하나였던 것을, Page 2 사이드바
+  // (ChannelSidebar.tsx)와 같은 방식(channels 테이블에서 code/name/logo_path 조회)으로 7개
+  // 채널 로고를 나란히 보여준다.
+  const { data: channels } = await supabase.from("channels").select("code, name, logo_path").in("code", ALL_CHANNEL_CODES).order("code");
 
   return (
     // 사용자 지시(2026-08-26): "관리자 화면 자체를 옆으로 넓힙시다 — 주요 콘텐츠 관리(요일별
@@ -78,14 +87,24 @@ export default async function AdminPage() {
             >
               일일 종합 리포트
             </Link>
-            <Link
-              href="/channel/ENA"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-            >
-              채널별 분석
-            </Link>
+            <div className="flex items-center gap-1.5 rounded-lg border border-zinc-300 px-2.5 py-1.5">
+              {(channels ?? []).map((c) => (
+                <Link
+                  key={c.code}
+                  href={`/channel/${c.code}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`${c.name} 채널별 분석`}
+                  className="flex h-6 w-9 items-center justify-center rounded transition hover:bg-zinc-100"
+                >
+                  {c.logo_path ? (
+                    <Image src={c.logo_path} alt={c.name} width={32} height={18} className="h-4 w-auto object-contain" />
+                  ) : (
+                    <span className="text-[9px] font-medium text-zinc-500">{c.name}</span>
+                  )}
+                </Link>
+              ))}
+            </div>
             <Link
               href="/admin/login-history"
               className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"

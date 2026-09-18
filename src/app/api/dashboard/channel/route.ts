@@ -74,6 +74,12 @@ export async function GET(request: Request) {
   if (!code) {
     return NextResponse.json({ ok: false, message: "code 파라미터가 필요합니다." }, { status: 400 });
   }
+  // 성능 조사(2026-09-19, 사용자 지시: "다시 각 페이지 로딩 속도가 느려졌는데 원인을 파악하고
+  // 해결하라") — 1시간 단위 히트맵(dowHourPattern/dowHourPatternPrior, 2026-09-19 추가)이
+  // "1시간 단위로 보기" 체크박스를 켜는 소수 사용자만 쓰는데도 모든 Page 2 조회마다 매번
+  // 캐시 없이 계산되고 있었다. 체크박스를 켰을 때만 클라이언트가 이 플래그를 붙여 다시
+  // 불러오도록 하고, 기본 조회에서는 완전히 건너뛴다(요청 하나당 RPC 1~2개 절감).
+  const include1h = searchParams.get("include1h") === "1";
 
   const { data: channel, error: channelError } = await supabase
     .from("channels")
@@ -565,14 +571,17 @@ export async function GET(request: Request) {
     ),
     // 사용자 지시(2026-09-19): 히트맵 1시간 단위 토글 — 위 3시간 단위와 동일한 조건(SDoW 시
     // "선택한 요일" 하루만)으로 같은 창을 그대로 재사용, mart 캐시는 아직 이 신규 RPC를
-    // 모르므로(daily_dashboard_mart 갱신 루틴 미변경, Delta-Only) 캐시 없이 직접 호출한다 —
-    // 체크박스로 켤 때만 쓰는 보조 데이터라 캐시 없이도 부담이 작다.
-    supabase.rpc("get_channel_dow_hour_pattern", {
-      p_channel_code: channel.code,
-      p_program_target_label: programTargetLabel,
-      p_as_of_date: isSdowActive && sdowMostRecentDayDate ? sdowMostRecentDayDate : dateTo,
-      p_window_days: isSdowActive && sdowMostRecentDayDate ? 1 : periodWindowDays,
-    }),
+    // 모르므로(daily_dashboard_mart 갱신 루틴 미변경, Delta-Only) 캐시 없이 직접 호출한다.
+    // 성능 조사(2026-09-19 재지시): 체크박스를 켠 요청(include1h=1)에서만 실행 — 그 전에는
+    // 모든 Page 2 조회마다 이 계산이 공짜로 얹혀 있었다(원인 확정, 아래 fix).
+    include1h
+      ? supabase.rpc("get_channel_dow_hour_pattern", {
+          p_channel_code: channel.code,
+          p_program_target_label: programTargetLabel,
+          p_as_of_date: isSdowActive && sdowMostRecentDayDate ? sdowMostRecentDayDate : dateTo,
+          p_window_days: isSdowActive && sdowMostRecentDayDate ? 1 : periodWindowDays,
+        })
+      : Promise.resolve({ data: [] as unknown[] }),
     cachedOrRpc<object>(
       martCache,
       dateTo,
@@ -693,7 +702,8 @@ export async function GET(request: Request) {
         })
       : Promise.resolve({ data: [] as unknown[] }),
     // 위 dowHourPattern(1시간 단위)의 "전 기간/선택 주간" 짝 — 조건·파라미터 동일하게 재사용.
-    hasPriorRange || isSdowActive
+    // 성능 조사(2026-09-19): 마찬가지로 include1h일 때만 실행.
+    include1h && (hasPriorRange || isSdowActive)
       ? supabase.rpc("get_channel_dow_hour_pattern", {
           p_channel_code: channel.code,
           p_program_target_label: programTargetLabel,

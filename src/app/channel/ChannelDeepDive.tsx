@@ -4031,6 +4031,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 보여주면 좋겠어" — 칸에 숫자만 있던 것을, 실제 편성됐던 프로그램명을 칸 안에 함께 보여주는
   // "편성표 형태"로 전환하는 옵션. 기본은 기존 그대로(꺼짐, 숫자만) — Delta-Only.
   const [dowHeatmapShowPrograms, setDowHeatmapShowPrograms] = useState(false);
+  // 1시간 단위 히트맵 데이터 — 체크박스를 켰을 때만 지연 조회한다(아래 useEffect, 성능 조사
+  // 2026-09-19 참고). null이면 아직 안 불러왔거나 채널/기간이 바뀌어 무효화된 상태.
+  const [lazyHourPattern, setLazyHourPattern] = useState<{ dowHourPattern: DowHourRow[]; dowHourPatternPrior: DowHourRow[] } | null>(null);
   const [hourlyMetrics, setHourlyMetrics] = useState<Set<HourlyMetricKey>>(new Set(["avg_rating"]));
   // 기능 #15-2(2026-08-21): "대비" 분석(DoD~YoY)의 시간대별 그래프는 "이번 기간"/"전 기간" 두
   // 패널로 나란히 보여주고, 각 패널이 독립된 체크박스 행을 갖는다(사용자 지시 "두 줄 체크박스").
@@ -4219,6 +4222,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setLazyHourPattern(null); // 채널·기간이 바뀌면 이전 1시간 단위 캐시는 더 이상 유효하지 않음
       const res = await fetch(`/api/dashboard/channel?code=${code}${dateQuery}${priorQuery}${sdowQuery}`);
       const body = await res.json().catch(() => ({ ok: false }));
       if (cancelled) return;
@@ -4235,6 +4239,25 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     };
 
   }, [code, dateQuery, priorQuery, sdowQuery]);
+
+  // 성능 조사(2026-09-19, 사용자 지시: "다시 각 페이지 로딩 속도가 느려졌는데 원인을 파악하고
+  // 해결하라") — 1시간 단위 히트맵(dowHourPattern/dowHourPatternPrior)이 "1시간 단위로 보기"
+  // 체크박스를 켠 소수만 쓰는데도 매 Page 2 조회마다 캐시 없이 계산되고 있었다(원인). 체크박스를
+  // 실제로 켰을 때만(include1h=1) 별도로 불러오고, 기본 조회에서는 완전히 빼서 절감한다(fix).
+  useEffect(() => {
+    if (dowHeatmapGranularity !== "1h" || lazyHourPattern || loading) return;
+    let cancelled = false;
+    fetch(`/api/dashboard/channel?code=${code}${dateQuery}${priorQuery}${sdowQuery}&include1h=1`)
+      .then((r) => r.json())
+      .then((body) => {
+        if (cancelled || !body.ok) return;
+        setLazyHourPattern({ dowHourPattern: body.dowHourPattern ?? [], dowHourPatternPrior: body.dowHourPatternPrior ?? [] });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [dowHeatmapGranularity, code, dateQuery, priorQuery, sdowQuery, lazyHourPattern, loading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4518,7 +4541,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     rootCauseAlert,
     isRangeMode,
     dowHourBlockPattern,
-    dowHourPattern,
     topPrograms,
     narrativeSignal,
     hourlyProgramTitlesPrior,
@@ -4526,7 +4548,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     competitorPeriodTopPrograms,
     periodWindowDays,
     dowHourBlockPatternPrior,
-    dowHourPatternPrior,
     topProgramsPrior,
     topSharePrograms,
     priorTopSharePrograms,
@@ -5181,10 +5202,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             const hour = item.slotEfficiency?.weakSlot?.hour ?? topPrograms.find((p) => p.program_name === item.programs?.canonical_name)?.most_common_start_hour ?? null;
             const daypart = hour !== null ? hourToDaypart(hour) : item.evidence.current_daypart;
             const timeLabel = hour !== null ? `${hour}시` : daypart ? (SHORT_DAYPART[daypart] ?? daypart) : null;
-            return { daypart, timeLabel };
+            return { hour, daypart, timeLabel };
           };
           const buildLine = (item: FitScoreItem) => {
-            const { daypart, timeLabel } = resolveTiming(item);
+            const { hour, daypart, timeLabel } = resolveTiming(item);
             const programName = item.programs?.canonical_name ?? "이름 없음";
             let action: string;
             if (item.tag === "STRENGTHEN") {
@@ -5195,21 +5216,46 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               const recommendedDaypart = item.tag === "MOVE" ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity) : null;
               action = recommendedDaypart ? `${SHORT_DAYPART[recommendedDaypart] ?? recommendedDaypart}로 이동 검토` : item.tag === "MOVE" ? "다른 시간대 재배치 검토" : "교체 검토";
             }
-            return { item, programName, timeLabel, action, sortKey: daypartPriority(daypart) };
+            return { item, programName, hour, timeLabel, action, sortKey: daypartPriority(daypart) };
+          };
+          // 사용자 지시(2026-09-19): "새벽 2시~6시는 제안하지 말라" — 정확한 방영 시각을 아는
+          // 경우에만 그 범위(2~5시)를 걸러낸다(daypart만 아는 경우는 02~08시 전체를 뭉뚱그린
+          // 값이라 2~6시인지 확신할 수 없어 그대로 둔다 — 없는 확신을 지어내지 않는다). 후보
+          // 선정(worst/best fit_score) 전에 걸러야 제외된 자리를 다음 후보가 채운다.
+          const inExcludedDawn = (item: FitScoreItem) => {
+            const { hour } = resolveTiming(item);
+            return hour !== null && hour >= 2 && hour < 6;
           };
           const attentionItems = (fitScoreItems ?? [])
-            .filter((item) => item.tag === "REPLACE" || item.tag === "MOVE")
+            .filter((item) => (item.tag === "REPLACE" || item.tag === "MOVE") && !inExcludedDawn(item))
             .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
             .slice(0, 3)
             .map(buildLine)
             .sort((a, b) => a.sortKey - b.sortKey);
           const opportunityItems = (fitScoreItems ?? [])
-            .filter((item) => item.tag === "STRENGTHEN")
+            .filter((item) => item.tag === "STRENGTHEN" && !inExcludedDawn(item))
             .sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0))
             .slice(0, 2)
             .map(buildLine)
             .sort((a, b) => a.sortKey - b.sortKey);
           if (attentionItems.length === 0 && opportunityItems.length === 0) return null;
+          // 사용자 지시(2026-09-19): "가로로 길게 한 줄로만 표시" — 항목마다 줄을 바꾸던 것을,
+          // 한 행 안에 가운뎃점으로 이어붙인다(좁은 화면에서만 줄바꿈).
+          const renderRow = (items: ReturnType<typeof buildLine>[], hoverBg: string) => (
+            <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-sm">
+              {items.map(({ item, programName, timeLabel, action }, i) => (
+                <span key={item.program_id} className="flex items-center gap-1.5">
+                  {i > 0 && <span className="mx-1 text-zinc-300">·</span>}
+                  <a href="#what-to-schedule" className={`flex items-center gap-1.5 rounded-lg px-1.5 py-0.5 transition-colors ${hoverBg}`} title="무엇을 편성할까요? 표에서 자세히 보기">
+                    <DotTag label={TAG_LABEL_KO[item.tag ?? "STRENGTHEN"]} color={TAG_DOT_COLOR[item.tag ?? "STRENGTHEN"]} />
+                    {timeLabel && <span className="font-semibold text-zinc-500">{timeLabel}</span>}
+                    <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>
+                    <span className="text-zinc-500">{action}</span>
+                  </a>
+                </span>
+              ))}
+            </div>
+          );
           return (
             <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
               {attentionItems.length > 0 && (
@@ -5217,23 +5263,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
                   지금 검토가 필요한 편성
                 </p>
-                <div className="flex flex-col gap-1">
-                  {attentionItems.map(({ item, programName, timeLabel, action }) => (
-                    <a
-                      key={item.program_id}
-                      href="#what-to-schedule"
-                      className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm transition-colors hover:bg-zinc-50"
-                      title="무엇을 편성할까요? 표에서 자세히 보기"
-                    >
-                      <DotTag label={TAG_LABEL_KO[item.tag!]} color={TAG_DOT_COLOR[item.tag!]} />
-                      <span className="min-w-0 flex-1 truncate">
-                        {timeLabel && <span className="font-semibold text-zinc-500">{timeLabel}</span>}{" "}
-                        <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>{" "}
-                        <span className="text-zinc-500">{action}</span>
-                      </span>
-                    </a>
-                  ))}
-                </div>
+                {renderRow(attentionItems, "hover:bg-zinc-50")}
               </>
               )}
               {opportunityItems.length > 0 && (
@@ -5241,23 +5271,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
                   더 밀어줄 만한 편성
                 </p>
-                <div className="flex flex-col gap-1">
-                  {opportunityItems.map(({ item, programName, timeLabel, action }) => (
-                    <a
-                      key={item.program_id}
-                      href="#what-to-schedule"
-                      className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm transition-colors hover:bg-emerald-50/60"
-                      title="무엇을 편성할까요? 표에서 자세히 보기"
-                    >
-                      <DotTag label={TAG_LABEL_KO.STRENGTHEN} color={TAG_DOT_COLOR.STRENGTHEN} />
-                      <span className="min-w-0 flex-1 truncate">
-                        {timeLabel && <span className="font-semibold text-zinc-500">{timeLabel}</span>}{" "}
-                        <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>{" "}
-                        <span className="text-zinc-500">{action}</span>
-                      </span>
-                    </a>
-                  ))}
-                </div>
+                {renderRow(opportunityItems, "hover:bg-emerald-50/60")}
               </div>
               )}
             </div>
@@ -5775,6 +5789,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 />
                 편성표 형태로 보기
               </label>
+              {dowHeatmapGranularity === "1h" && !lazyHourPattern && <span className="text-xs text-zinc-400">불러오는 중...</span>}
             </div>
           </div>
           <p className="mb-3 text-sm text-zinc-400">
@@ -5798,7 +5813,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     : `${comparisonLabel ?? "이전"} 기간 ${periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}`}
                 </p>
                 <DowHourBlockTable
-                  pattern={dowHeatmapGranularity === "1h" ? toHourBlockShape(dowHourPatternPrior) : dowHourBlockPatternPrior}
+                  pattern={dowHeatmapGranularity === "1h" ? toHourBlockShape(lazyHourPattern?.dowHourPatternPrior ?? []) : dowHourBlockPatternPrior}
                   accentColor={accentColor}
                   fmtR={fmtR}
                   isEnaStory={isEnaStory}
@@ -5814,7 +5829,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     : `이번 기간 ${periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}`}
                 </p>
                 <DowHourBlockTable
-                  pattern={dowHeatmapGranularity === "1h" ? toHourBlockShape(dowHourPattern) : dowHourBlockPattern}
+                  pattern={dowHeatmapGranularity === "1h" ? toHourBlockShape(lazyHourPattern?.dowHourPattern ?? []) : dowHourBlockPattern}
                   accentColor={accentColor}
                   fmtR={fmtR}
                   isEnaStory={isEnaStory}
@@ -5863,7 +5878,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <>
               <WeekdayProfileSparklines pattern={dowHourBlockPattern} accentColor={accentColor} />
               <DowHourBlockTable
-                pattern={dowHeatmapGranularity === "1h" ? toHourBlockShape(dowHourPattern) : dowHourBlockPattern}
+                pattern={dowHeatmapGranularity === "1h" ? toHourBlockShape(lazyHourPattern?.dowHourPattern ?? []) : dowHourBlockPattern}
                 accentColor={accentColor}
                 fmtR={fmtR}
                 isEnaStory={isEnaStory}
