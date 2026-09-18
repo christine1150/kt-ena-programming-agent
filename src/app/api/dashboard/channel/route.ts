@@ -80,6 +80,9 @@ export async function GET(request: Request) {
   // 캐시 없이 계산되고 있었다. 체크박스를 켰을 때만 클라이언트가 이 플래그를 붙여 다시
   // 불러오도록 하고, 기본 조회에서는 완전히 건너뛴다(요청 하나당 RPC 1~2개 절감).
   const include1h = searchParams.get("include1h") === "1";
+  // 사용자 지시(2026-09-20): "편성표 형태로 보기는 30분 단위로라도 실제 방영시간에 맞게" — 그
+  // 전용 30분 단위 RPC도 위 include1h와 같은 이유로(체크박스를 켠 요청에서만) 지연 조회한다.
+  const include30m = searchParams.get("include30m") === "1";
 
   const { data: channel, error: channelError } = await supabase
     .from("channels")
@@ -182,6 +185,7 @@ export async function GET(request: Request) {
       briefingLlm: null,
       dowHourBlockPattern: [],
       dowHourPattern: [],
+      dowHalfHourPattern: [],
       topPrograms: [],
       periodDemographics: [],
       periodProgramMovers: [],
@@ -197,6 +201,7 @@ export async function GET(request: Request) {
       periodRankMovement: null,
       dowHourBlockPatternPrior: [],
       dowHourPatternPrior: [],
+      dowHalfHourPatternPrior: [],
       topProgramsPrior: [],
       topSharePrograms: [],
       priorTopSharePrograms: [],
@@ -443,6 +448,8 @@ export async function GET(request: Request) {
     ourBestRankRes,
     demographicShiftBlocksRes,
     periodDemographicProgramHighlightsRes,
+    dowHalfHourPatternRes,
+    dowHalfHourPatternPriorRes,
   ] = await Promise.all([
     // WHAT HAPPENED? — 채널 단위 랭킹 데이터로 DoD/WoW/MoM/QoQ/YoY/YTD
     cachedOrRpc<{ period: string }>(
@@ -824,6 +831,26 @@ export async function GET(request: Request) {
           p_prior_date_from: effectivePriorDateFrom,
           p_prior_date_to: effectivePriorDateTo,
           p_top_n_programs: 8,
+        })
+      : Promise.resolve({ data: [] as unknown[] }),
+    // 사용자 지시(2026-09-20): "편성표 형태로 보기는 30분 단위로라도 실제 방영시간에 맞게" —
+    // 위 dowHourPattern(1시간 단위)과 같은 조건으로, 체크박스를 켠 요청(include30m=1)에서만
+    // 30분 단위 전용 RPC를 실행한다(기본 조회에서는 완전히 건너뜀 — 2026-09-19 성능 조사와
+    // 같은 원칙).
+    include30m
+      ? supabase.rpc("get_channel_dow_halfhour_pattern", {
+          p_channel_code: channel.code,
+          p_program_target_label: programTargetLabel,
+          p_as_of_date: isSdowActive && sdowMostRecentDayDate ? sdowMostRecentDayDate : dateTo,
+          p_window_days: isSdowActive && sdowMostRecentDayDate ? 1 : periodWindowDays,
+        })
+      : Promise.resolve({ data: [] as unknown[] }),
+    include30m && (hasPriorRange || isSdowActive)
+      ? supabase.rpc("get_channel_dow_halfhour_pattern", {
+          p_channel_code: channel.code,
+          p_program_target_label: programTargetLabel,
+          p_as_of_date: isSdowActive ? dateTo : priorDateTo,
+          p_window_days: isSdowActive ? (sdowWeeks ?? 1) * 7 : periodWindowDays,
         })
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
@@ -1257,6 +1284,7 @@ export async function GET(request: Request) {
     periodProgramDrivers,
     dowHourBlockPattern: dowHourBlockPattern ?? [],
     dowHourPattern: dowHourPatternRes.data ?? [],
+    dowHalfHourPattern: dowHalfHourPatternRes.data ?? [],
     topPrograms: topPrograms ?? [],
     trend: trend ?? [],
     hourlyPattern: hourlyPattern ?? [],
@@ -1309,6 +1337,7 @@ export async function GET(request: Request) {
     periodWindowDays,
     dowHourBlockPatternPrior: dowHourBlockPatternPriorRes.data ?? [],
     dowHourPatternPrior: dowHourPatternPriorRes.data ?? [],
+    dowHalfHourPatternPrior: dowHalfHourPatternPriorRes.data ?? [],
     topProgramsPrior: topProgramsPriorRes.data ?? [],
     // 사용자 지시(2026-08-21): TOP20 밖 점유율 상위 5개 + 비교 분석 두 기간 각각의 경쟁사 Top7.
     topSharePrograms: topSharePatternsRes.data ?? [],
