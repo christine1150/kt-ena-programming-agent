@@ -11,11 +11,10 @@ import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDow } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun, josaEulReul } from "@/lib/josa";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
-// 사용자 지시(2026-09-18): "질문하기" 섹션이 Page 1과 같은 로직(자연어 질의→conclusion/
+// 사용자 지시(2026-09-18/19): "질문하기" 섹션이 Page 1과 같은 로직(자연어 질의→conclusion/
 // keyNumbers/evidence/programmingAction)을 이 파일에 그대로 복제해 두고 있었다 — 공용
-// 컴포넌트(AskAssistantWidget, 원래 이 파일에서 뽑아 나간 것)를 재사용해 중복을 없앨 예정
-// (작업 중 세션 한도로 중단됨 — 기존 로컬 구현은 당장은 그대로 두고 타입만 복구함).
-import type { EvidenceAnswer as AskAnswer } from "@/lib/intent/types";
+// 컴포넌트(AskAssistantWidget, 원래 이 파일에서 뽑아 나간 것)로 교체해 중복을 없앴다(기능·
+// 응답 형태 동일, 순수 치환).
 import { AskAssistantWidget } from "@/components/AskAssistantWidget";
 import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from "@/lib/enaOriginalHighlight";
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
@@ -4048,17 +4047,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 프로그램마다 항상 계산하면 비용이 커지므로, 실제로 펼친 프로그램에 대해서만 그때 호출한다
   // (program_id별로 결과를 캐시해 같은 프로그램을 다시 펼쳐도 재호출하지 않음).
   const [fitScoreInterpretationLlm, setFitScoreInterpretationLlm] = useState<Record<string, string | null>>({});
-  // 자연어 질문(18번, 규칙 기반 Intent Router) — PRD.md "자연어 질문은 Page 2의 한 섹션으로
-  // 배치" 원칙대로 여기 둔다. 채널을 안 짚어도(예: "가장 잘한 채널은?") 질문 자체에서 채널을
-  // 다시 추출하므로, 어느 채널 페이지에서 물어도 동일하게 동작한다.
-  const [askQuestion, setAskQuestion] = useState("");
-  const [askLoading, setAskLoading] = useState(false);
-  const [askAnswer, setAskAnswer] = useState<AskAnswer | null>(null);
-  const [askError, setAskError] = useState<string | null>(null);
-  // Tier 2 확장(2026-08-26, 원 제안 7번 "멀티턴 대화 맥락") — "그럼 지난주는?"처럼 채널·타깃을
-  // 생략한 후속 질문을 풀려면 직전 턴에서 뭘 물었고 뭘로 해석됐는지가 필요하다. 답변 본문(결론·
-  // 수치 등)은 필요 없어 용량이 큰 EvidenceAnswer 전체가 아니라 질문+intent/파라미터만 쌓는다.
-  const [askHistory, setAskHistory] = useState<{ question: string; intentId: string | null; channelCode: string | null; targetLabel: string | null; competitorName: string | null }[]>([]);
   // Tier 3(2026-08-26, 원 제안 11번 "AI 가설" 별도 섹션 — "AI 편성 비서 - 스마트 편성 팁") —
   // 이미 화면에 표시 중인 WHY?/OPPORTUNITY? 근거를 다시 보내 OpenAI가 더 과감하게 가설을
   // 세우게 한다. 자동 로드가 아니라 버튼을 눌렀을 때만 호출(불필요한 OpenAI 비용 방지).
@@ -4135,46 +4123,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
       setSmartTipsError("네트워크 오류로 AI 팁을 불러오지 못했습니다.");
     } finally {
       setSmartTipsLoading(false);
-    }
-  }
-  // 후속 질문 칩(원 명세 31번) 클릭 시 setAskQuestion 직후 바로 이어서 호출하면 아직 리렌더
-  // 전이라 클로저 안 askQuestion이 이전 값이라 잘못된 질문으로 재질의될 수 있어, 강제로 쓸
-  // 질문을 인자로 받게 한다(없으면 기존처럼 입력창 값 사용).
-  async function submitAskQuestion(overrideQuestion?: string) {
-    const q = (overrideQuestion ?? askQuestion).trim();
-    if (!q || askLoading) return;
-    setAskLoading(true);
-    setAskError(null);
-    try {
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q, history: askHistory }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setAskError(json.message ?? "질문을 처리하지 못했습니다.");
-        setAskAnswer(null);
-      } else {
-        setAskAnswer(json.answer);
-        // 최근 3턴만 유지(system prompt 크기 절제) — 이번 턴이 실제로 무엇으로 풀렸는지를
-        // 다음 질문의 맥락으로 남긴다.
-        setAskHistory((prev) => [
-          ...prev.slice(-2),
-          {
-            question: q,
-            intentId: json.intent_id ?? null,
-            channelCode: json.parameters?.channelCode ?? null,
-            targetLabel: json.parameters?.targetLabel ?? null,
-            competitorName: json.parameters?.competitorName ?? null,
-          },
-        ]);
-      }
-    } catch {
-      setAskError("질문을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-      setAskAnswer(null);
-    } finally {
-      setAskLoading(false);
     }
   }
   // 기간 설정(사용자 지시 2026-08-20, 두 차례 반영): 예전엔 "단일 일자"/"기간 범위" 두 모드로
@@ -5727,218 +5675,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </div>
         )}
 
-        {/* 자연어 질문(18번) — 규칙 기반 Intent Router(TIME RESOLVER → PARAMETER EXTRACTOR →
-            INTENT REGISTRY → 기존 SQL 함수 → EVIDENCE-FIRST 응답)가 먼저 시도하고, 못 잡아내는
-            표현은 OpenAI(gpt-4o-mini)가 같은 구조(Registry/실행/Evidence)로 한 번 더 분류한다
-            (llmClassifier.ts). 사용자 지시(2026-08-20): 화면 문구를 "OpenAI를 활용한 자연어
-            검색 및 응답"으로 안내 — 실제로 낯선 표현은 OpenAI를 거치므로 틀린 설명이 아니다. */}
-        <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          {/* 사용자 지시(2026-08-21): 제목을 "질문하기 · AI 편성 비서"로. */}
-          <h2 className={SECTION_TITLE_P2}>질문하기 · AI 편성 비서</h2>
-          <p className="mb-3 text-sm text-zinc-400">
-            OpenAI를 활용해 자연어 질문을 이해하고, DB의 검증된 데이터로 답합니다. 채널 성과·프로그램 TOP·시간대·Target
-            Affinity·경쟁채널 비교·포트폴리오 랭킹/KPI/알림 질문을 지원합니다. 어느 채널 페이지에서 물어도 질문 속 채널명을
-            다시 인식합니다.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <input
-              type="text"
-              value={askQuestion}
-              onChange={(e) => setAskQuestion(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submitAskQuestion();
-              }}
-              placeholder="예: 어제 ENA DRAMA는 어땠어? / 전일 대비 가장 많이 상승한 채널은?"
-              className="min-w-0 flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-[var(--accent)] focus:outline-none"
-            />
-            {/* 사용자 지시(2026-08-21): 채널 상세 페이지 메인 컬러를 채널 로고 색(accentColor)으로.
-                OLIFE(라임 계열)처럼 밝은 로고 색은 흰 글씨가 안 보여, 배경색 밝기에 따라
-                흰/진한 글씨를 자동 선택(cellTextColor 재사용, alpha=255=배경색 그대로). */}
-            <button
-              onClick={() => submitAskQuestion()}
-              disabled={askLoading || !askQuestion.trim()}
-              className="rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-40"
-              style={{ backgroundColor: accentColor, color: cellTextColor(accentColor, 255) }}
-            >
-              {askLoading ? "확인 중..." : "질문하기"}
-            </button>
-          </div>
-          {askError && <p className="mt-3 text-sm text-rose-600">{askError}</p>}
-          {askAnswer && (
-            <div className="mt-4 space-y-2 rounded-2xl bg-zinc-50 p-4 text-sm">
-              <p className="font-semibold text-zinc-800">{askAnswer.conclusion}</p>
-              {askAnswer.keyNumbers !== "—" && <p className="text-zinc-700">핵심 수치: {askAnswer.keyNumbers}</p>}
-              {askAnswer.comparisonBasis !== "—" && <p className="text-zinc-500">비교 기준: {askAnswer.comparisonBasis}</p>}
-              {askAnswer.evidence !== "—" && <p className="text-zinc-600">근거: {askAnswer.evidence}</p>}
-              {askAnswer.interpretation && <p className="text-zinc-700">해석: {askAnswer.interpretation}</p>}
-              {askAnswer.programmingAction !== "—" && (
-                <p style={{ color: accentForegroundColor(accentColor) }}>편성 조치: {askAnswer.programmingAction}</p>
-              )}
-              <p className="text-sm text-zinc-400">신뢰도: {askAnswer.confidenceNote}</p>
-              {/* 사용자 지시(2026-08-25, 감사 후속: 원 명세 30번) — SQL이 이미 계산한 값을 그대로
-                  옮긴 구조화 시각화(EvidenceAnswer.visualization). 새 라이브러리 없이 가벼운
-                  가로 막대로 표시(값이 없으면 빈 칸 그대로). */}
-              {askAnswer.visualization?.type === "bar" && askAnswer.visualization.series.length > 0 && (
-                <div className="mt-1 rounded-xl bg-white p-3 ring-1 ring-zinc-100">
-                  <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
-                  <div className="space-y-1.5">
-                    {(() => {
-                      const viz = askAnswer.visualization;
-                      const max = Math.max(...viz.series.map((s) => s.value ?? 0), 0.0001);
-                      return viz.series.map((s, i) => (
-                        <div key={i} className="flex items-center gap-2 text-xs">
-                          <span className="w-28 shrink-0 truncate text-zinc-600" title={s.label}>{s.label}</span>
-                          <div className="h-2.5 flex-1 rounded-full bg-zinc-100">
-                            {s.value !== null && (
-                              <div
-                                className="h-2.5 rounded-full"
-                                style={{ width: `${Math.max(3, (Math.abs(s.value) / max) * 100)}%`, backgroundColor: accentColor }}
-                              />
-                            )}
-                          </div>
-                          <span className="w-14 shrink-0 text-right text-zinc-500">{s.value === null ? "데이터 없음" : s.value.toFixed(2)}</span>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                </div>
-              )}
-              {/* Tier 2 확장(2026-08-26, 사용자 지시: "티어 2 진행" — 원 제안 8번 "시각화 타입
-                  확장") — 순위·TOP N처럼 항목당 값이 여러 개라 막대 하나로 못 담는 목록은 표로.
-                  SQL이 이미 계산한 값을 그대로 옮긴 것(새 계산 없음). */}
-              {askAnswer.visualization?.type === "table" && (askAnswer.visualization.rows?.length ?? 0) > 0 && (
-                <div className="mt-1 overflow-x-auto rounded-xl bg-white p-3 ring-1 ring-zinc-100">
-                  <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-zinc-100 text-zinc-400">
-                        {askAnswer.visualization.columns!.map((c, i) => (
-                          <th key={i} className="whitespace-nowrap py-1 pr-3 font-medium">{c}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {askAnswer.visualization.rows!.map((row, i) => (
-                        <tr key={i} className="border-b border-zinc-50 last:border-0">
-                          {row.map((cell, j) => (
-                            <td key={j} className="whitespace-nowrap py-1 pr-3 text-zinc-700">{cell ?? "데이터 없음"}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {/* Tier 2 확장(2026-08-26, 원 제안 8번 "시각화 타입 확장" 나머지) — line(기간 추이).
-                  기존 SVG 수작업 차트와 같은 방식(viewBox+좌표 함수), 새 라이브러리 없음. */}
-              {askAnswer.visualization?.type === "line" && (askAnswer.visualization.points?.length ?? 0) > 0 && (
-                <div className="mt-1 rounded-xl bg-white p-3 ring-1 ring-zinc-100">
-                  <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
-                  {(() => {
-                    const points = askAnswer.visualization!.points!;
-                    const W = Math.max(320, points.length * 48);
-                    const H = 120;
-                    const padL = 36;
-                    const padB = 18;
-                    const values = points.map((p) => p.value).filter((v): v is number => v !== null);
-                    const max = Math.max(...values, 0.0001);
-                    const min = Math.min(...values, 0);
-                    const range = max - min || 1;
-                    const xOf = (i: number) => padL + (i / Math.max(1, points.length - 1)) * (W - padL - 12);
-                    const yOf = (v: number) => H - padB - ((v - min) / range) * (H - padB - 12);
-                    const pathD = points
-                      .map((p, i) => (p.value === null ? null : `${i === 0 || points[i - 1]?.value === null ? "M" : "L"} ${xOf(i)} ${yOf(p.value)}`))
-                      .filter((s): s is string => s !== null)
-                      .join(" ");
-                    return (
-                      <div className="overflow-x-auto">
-                        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H }}>
-                          <text x={2} y={12} fontSize={11} fill="#a1a1aa">{max.toFixed(2)}</text>
-                          <text x={2} y={H - padB} fontSize={11} fill="#a1a1aa">{min.toFixed(2)}</text>
-                          {pathD && <path d={pathD} fill="none" stroke={accentColor} strokeWidth={2} />}
-                          {points.map((p, i) =>
-                            p.value === null ? null : <circle key={i} cx={xOf(i)} cy={yOf(p.value)} r={2.5} fill={accentColor} />
-                          )}
-                          {points.map((p, i) => (
-                            <text key={i} x={xOf(i)} y={H - 4} fontSize={11} textAnchor="middle" fill="#a1a1aa">{p.label}</text>
-                          ))}
-                        </svg>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-              {/* Tier 2 확장(2026-08-26, 원 제안 8번) — heatmap(요일×시간대). accentColor 알파
-                  블렌딩 방식은 이 페이지의 기존 요일×시간대 히트맵(cellTextColor)과 동일한 톤. */}
-              {askAnswer.visualization?.type === "heatmap" && (askAnswer.visualization.heatmapRowLabels?.length ?? 0) > 0 && (
-                <div className="mt-1 overflow-x-auto rounded-xl bg-white p-3 ring-1 ring-zinc-100">
-                  <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
-                  {(() => {
-                    const viz = askAnswer.visualization!;
-                    const rowLabels = viz.heatmapRowLabels!;
-                    const colLabels = viz.heatmapColLabels!;
-                    const cells = viz.heatmapCells!;
-                    const flat = cells.flat().filter((v): v is number => v !== null);
-                    const max = Math.max(...flat, 0.0001);
-                    const min = Math.min(...flat, 0);
-                    const range = max - min || 1;
-                    return (
-                      <table className="w-full text-center text-[11px]">
-                        <thead>
-                          <tr>
-                            <th className="w-10" />
-                            {colLabels.map((c, j) => (
-                              <th key={j} className="whitespace-nowrap px-1 pb-1 font-medium text-zinc-400">{c}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rowLabels.map((r, i) => (
-                            <tr key={i}>
-                              <td className="pr-1 text-right font-medium text-zinc-400">{r}</td>
-                              {colLabels.map((_, j) => {
-                                const v = cells[i]?.[j] ?? null;
-                                const intensity = v === null ? 0 : (v - min) / range;
-                                const alpha = v === null ? 0 : Math.round(40 + intensity * 200);
-                                const bg = v === null ? "#f4f4f5" : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
-                                const fg = v === null ? "#a1a1aa" : cellTextColor(accentColor, alpha);
-                                return (
-                                  <td key={j} className="p-0.5">
-                                    <div className="rounded-md py-1.5" style={{ backgroundColor: bg, color: fg }}>
-                                      {v === null ? "—" : v.toFixed(2)}
-                                    </div>
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    );
-                  })()}
-                </div>
-              )}
-              {/* 원 명세 31번 — 후속 질문 칩. 클릭하면 바로 그 질문으로 재질의한다. */}
-              {askAnswer.followups && askAnswer.followups.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {askAnswer.followups.map((f, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => {
-                        setAskQuestion(f);
-                        submitAskQuestion(f);
-                      }}
-                      className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600 hover:border-[var(--accent)] hover:text-zinc-900"
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        {/* 자연어 질문(18번) — 공용 컴포넌트(AskAssistantWidget)로 통합(2026-09-19). Page 1과
+            완전히 같은 로직(자연어 질의→conclusion/keyNumbers/evidence/programmingAction,
+            /api/ask 호출)을 이 파일이 그대로 복제해 두고 있었는데, /api/ask는 채널을 페이지에서
+            미리 넘기지 않고 질문 문장 자체에서 재추출하므로(intent/parameterExtractor.ts)
+            채널 페이지든 Page 1이든 그대로 재사용할 수 있다 — accentColor(채널 로고 색)만
+            넘기고, 이 페이지 전용 안내 문구(마지막 문장)만 description으로 덧붙인다. */}
+        <AskAssistantWidget
+          accentColor={accentColor}
+          description="OpenAI를 활용해 자연어 질문을 이해하고, DB의 검증된 데이터로 답합니다. 채널 성과·프로그램 TOP·시간대·Target Affinity·경쟁채널 비교·포트폴리오 랭킹/KPI/알림 질문을 지원합니다. 어느 채널 페이지에서 물어도 질문 속 채널명을 다시 인식합니다."
+        />
 
         {/* 요일×시간대 강세 히트맵 — 사용자 지시(2026-08-21, 기능 #15-3; 2026-08-28 재지시로 규칙
             수정): "오늘"(기본값, 아무 기간도 선택하지 않은 최초 진입)만 표본이 부족해 기존처럼

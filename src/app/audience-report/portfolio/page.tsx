@@ -284,7 +284,11 @@ function PortfolioReportPageInner() {
 
       <Section title="09 채널별 TOP 3 ACTIONS">
         <div className="space-y-4">
-          {report.actionsByChannel.map(({ channelCode, channelName, items }) => (
+          {/* 사용자 지시(2026-09-18 §09 정렬)로 문서/PPT(portfolioFlatten.ts)는 이미 priorityScore
+              내림차순인데, 이 화면은 고정 채널 순서 그대로였다 — 같은 정렬을 그대로 재사용해
+              문서·PPT·화면이 항상 같은 순서를 보여주게 맞춘다(Array#sort는 안정 정렬이라 점수가
+              같으면 원래 채널 순서 유지, portfolioFlatten.ts와 동일). */}
+          {[...report.actionsByChannel].sort((a, b) => b.priorityScore - a.priorityScore).map(({ channelCode, channelName, items }) => (
             <div key={channelCode}>
               <div className="mb-1 text-sm font-semibold">{channelName}</div>
               {items.length > 0 ? (
