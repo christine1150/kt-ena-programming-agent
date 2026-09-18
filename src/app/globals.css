@@ -42,8 +42,9 @@
   --gap-metric-section: 32px;
 
   /* RULE 03 — 판정색 2-트랙: 점·배경 틴트(-600, 3:1 이상)와 좁은 텍스트 전용(-700, 4.5:1 이상)
-     을 분리한다. dot 값은 ChannelDeepDive.tsx의 TAG_DOT_COLOR와 동일(중복 정의, 단일 소스는
-     아직 JS 상수 쪽 — 여기 값이 문서 기준). */
+     을 분리한다. dot 값은 src/lib/actionTags.ts의 TAG_DOT_COLOR와 동일(중복 정의, 단일 소스는
+     아직 JS 상수 쪽 — 여기 값이 문서 기준. 2026-09-18: 상수가 ChannelDeepDive.tsx에서
+     actionTags.ts로 이동해 경로만 갱신). */
   --color-strengthen-dot: #059669;
   --color-strengthen-text: #047857; /* 5.48:1 */
   --color-keep-dot: #0284c7;

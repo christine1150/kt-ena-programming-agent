@@ -6,6 +6,9 @@ import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL, resolveMarketYtdTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
 import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
 import { buildBriefingReportViaLlm } from "@/lib/briefingReportLlm";
+// 사용자 지시(2026-09-18): WHY? 진단이 causeClassifier.ts의 편성량/성과 항등 분해를 쓰도록,
+// Page 1 월간 리뷰가 이미 쓰는 프라임 정의(하나의 정의만 쓴다는 원칙)를 그대로 재사용.
+import { PRIME_RPC_ARGS } from "@/lib/audienceReport/primeTime";
 // 성능 개선(2026-09-17): 닐슨 적재 시점에 SQL이 미리 계산해 둔 집계 결과를 읽어 쓴다
 // (mart_daily_dashboard_cache / mart_llm_text_cache — 마이그레이션 20260917010000).
 import { loadDailyMartCache, cachedOrRpc, martFingerprint, MART_SLOT, MART_GLOBAL_CODE } from "@/lib/dailyMartCache";
@@ -175,6 +178,7 @@ export async function GET(request: Request) {
       topPrograms: [],
       periodDemographics: [],
       periodProgramMovers: [],
+      periodProgramDrivers: [],
       demographicHighlights: [],
       hourlyPatternPrior: [],
       hourlyProgramTitlesPrior: [],
@@ -353,6 +357,16 @@ export async function GET(request: Request) {
       )
     );
 
+  // 사용자 지시(2026-09-18): WHY? 진단(ChannelDeepDive.tsx buildWhyDiagnosis)이 causeClassifier.ts의
+  // 편성량 효과(volumeEffect)/성과 효과(performanceEffect) 항등 분해를 쓰기 위한 비교 기준일.
+  // 범위 모드는 "Program 자체 성과" 후보가 이미 쓰는 periodProgramMovers와 정확히 같은 비교 기간
+  // (effectivePriorDateFrom/To = 직전 동일 길이 기간)을 그대로 맞춰 쓰고, 단일 일자 모드는 다른
+  // 후보들이 이미 쓰는 "최근 12주(84일) 평균" 관례(hourlyBaselinePattern과 동일 창)를 그대로
+  // 따르되 이번 기간(dateTo)과 겹치지 않도록 어제까지로 끊는다. 새 기준을 만들지 않고 기존 두
+  // 관례를 재사용한 것이라, 후보 문장 자체의 %와는 기준일이 다를 수 있음을 화면 문구에 명시한다.
+  const driverPriorDateFrom = isRangeMode ? effectivePriorDateFrom : addDaysStr(dateTo, -84);
+  const driverPriorDateTo = isRangeMode ? effectivePriorDateTo : addDaysStr(dateTo, -1);
+
   // 오늘의 브리핑 고도화(사용자 지시 2026-08-20): "타깃상세 탭의 5대 지표(시청률/점유율/도달율/
   // 시청시간/시청시간비율)까지 포함한 편성 Intelligence 브리핑" — 위 narrativeSignal의 대표
   // 4개 연령대(20/40대)보다 넓게, 전체 연령대(10~60대+ × 남/여 12개)를 대상으로 오늘 상위 3개
@@ -401,6 +415,7 @@ export async function GET(request: Request) {
     topProgramsRes,
     periodDemographicsRes,
     periodProgramMoversRes,
+    periodProgramDriversRes,
     narrativeRes,
     demographicHighlightsRes,
     hourlyPatternPriorRes,
@@ -571,6 +586,21 @@ export async function GET(request: Request) {
       p_prior_date_from: effectivePriorDateFrom,
       p_prior_date_to: effectivePriorDateTo,
       p_limit: 8,
+    }),
+    // 사용자 지시(2026-09-18): WHY? 진단의 "Program 자체 성과"/"Day/Time Slot" 후보에 causeClassifier.ts의
+    // 편성량/성과 항등 분해를 적용하기 위한 원재료. get_channel_monthly_program_drivers는 이름과
+    // 달리 임의 기간 비교에 쓰는 범용 RPC(Page 1 월간/주간 리뷰가 이미 그렇게 쓰고 있음, 새 함수
+    // 아님) — 여기서는 driverPriorDateFrom/To(위에서 계산)와 함께 호출해 일 단위/기간 모드 모두에
+    // 재사용한다.
+    supabase.rpc("get_channel_monthly_program_drivers", {
+      p_channel_code: channel.code,
+      p_program_target_label: programTargetLabel,
+      p_date_from: dateFrom,
+      p_date_to: dateTo,
+      p_prior_date_from: driverPriorDateFrom,
+      p_prior_date_to: driverPriorDateTo,
+      ...PRIME_RPC_ARGS,
+      p_limit: 40,
     }),
     // 오늘의 브리핑(줄글 보고서) — 최근 12주 평균 대비 요일별·시간대별 강세/약세와 오늘 두드러진
     // 지표를 종합. Page 1과 같은 함수를 12주 baseline으로 재사용. dateTo 기준.
@@ -900,6 +930,15 @@ export async function GET(request: Request) {
   const topPrograms = topProgramsRes.data;
   const periodDemographics = periodDemographicsRes.data;
   const periodProgramMovers = periodProgramMoversRes.data;
+  // WHY? 진단용 편성량/성과 항등 분해 원재료(계산 로직은 SQL이 전담, 여기서는 그대로 통과).
+  const periodProgramDrivers = (periodProgramDriversRes.data ?? []) as {
+    canonical_name: string;
+    period_airings: number | null;
+    prior_airings: number | null;
+    contribution_delta: number | null;
+    volume_effect: number | null;
+    performance_effect: number | null;
+  }[];
   const narrativeSignal = narrativeRes.data?.[0] ?? null;
   // WHO IS WATCHING?(단일 일자 모드) 전용 — 최근 한 달(28일) baseline demographics(사용자
   // 지시 2026-08-21). narrativeSignal.demographics(84일)는 오늘의 브리핑 문구가 그대로 쓴다.
@@ -1182,6 +1221,7 @@ export async function GET(request: Request) {
     whoIsWatchingDemographics,
     periodDemographics: periodDemographics ?? [],
     periodProgramMovers: periodProgramMovers ?? [],
+    periodProgramDrivers,
     dowHourBlockPattern: dowHourBlockPattern ?? [],
     topPrograms: topPrograms ?? [],
     trend: trend ?? [],

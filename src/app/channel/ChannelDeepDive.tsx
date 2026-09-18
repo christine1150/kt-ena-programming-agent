@@ -11,12 +11,23 @@ import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDow } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun, josaEulReul } from "@/lib/josa";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
+// 사용자 지시(2026-09-18): "질문하기" 섹션이 Page 1과 같은 로직(자연어 질의→conclusion/
+// keyNumbers/evidence/programmingAction)을 이 파일에 그대로 복제해 두고 있었다 — 공용
+// 컴포넌트(AskAssistantWidget, 원래 이 파일에서 뽑아 나간 것)를 재사용해 중복을 없앨 예정
+// (작업 중 세션 한도로 중단됨 — 기존 로컬 구현은 당장은 그대로 두고 타입만 복구함).
 import type { EvidenceAnswer as AskAnswer } from "@/lib/intent/types";
+import { AskAssistantWidget } from "@/components/AskAssistantWidget";
 import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from "@/lib/enaOriginalHighlight";
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
 import { computeChannelHealthScore } from "@/lib/channelHealthScore";
 import { HealthScoreBadge, verdictColor } from "@/components/HealthScoreBadge";
 import { PRIME_UNION_LABEL } from "@/lib/audienceReport/primeTime";
+// 5대 편성 액션 태그 색상·한글 라벨 — Page 1(Dashboard.tsx)도 재사용할 수 있도록 공용 lib로
+// 분리했다(2026-09-18, 순수 이동, 값 변경 없음).
+import { TAG_DOT_COLOR, TAG_LABEL_KO } from "@/lib/actionTags";
+// 사용자 지시(2026-09-18): WHY? 진단의 "Program 자체 성과"/"Day/Time Slot" 후보에 Page 1
+// 월간 리뷰가 쓰는 편성량(volumeEffect)/성과(performanceEffect) 항등 분해 판정을 그대로 재사용.
+import { classifyDeclineCause } from "@/lib/causeClassifier";
 import type { ProgramMomentumItem } from "@/app/api/scheduling/program-momentum/route";
 // skyUHD 재설계(2026-09-17, 사용자 지시) — 자료가 없어 빈 껍데기가 되는 섹션은 조건부로 감추고,
 // skyUHD가 유일하게 완전히 알 수 있는 "편성 시간대 × 프로그램"을 핵심 섹션으로 새로 넣는다.
@@ -38,6 +49,13 @@ import {
   addDaysStr,
   toDateStr,
 } from "@/lib/audienceReport/periodPresets";
+// 사용자 지시(2026-09-18): CONTENT FITS?(Program×Slot×Target Fit) 표에 "이 프로그램이 물량으로
+// 버티는지/적게 틀어도 잘 나오는지" 배지를 붙인다 — Word/PPT 리포트(recommendationSection.ts)가
+// 이미 쓰는 순수 판정 함수를 화면에도 그대로 재사용한다(함수 자체는 수정하지 않음). 타입만
+// 가져오는 dataCollector는 supabase 클라이언트를 갖고 있어 `import type`으로만 참조해 클라이언트
+// 번들에 서버 코드가 섞이지 않게 한다.
+import { computeEfficiencyRanking, type ProgramType } from "@/lib/audienceReport/deepDiveAnalyzer";
+import type { ProgramSlotProfileRow } from "@/lib/audienceReport/dataCollector";
 
 interface TrendRow {
   period: string;
@@ -451,6 +469,18 @@ interface PeriodProgramMoverRow {
   rating_delta: number | null;
 }
 
+// 사용자 지시(2026-09-18): WHY? 진단이 causeClassifier.ts의 편성량/성과 항등 분해를 쓰기 위해
+// route.ts가 get_channel_monthly_program_drivers(이미 존재하는 RPC, 이름과 달리 임의 기간
+// 비교 범용 함수)로 추가 조회해준 값을 그대로 받는다 — 새 계산 없음.
+interface PeriodProgramDriverRow {
+  canonical_name: string;
+  period_airings: number | null;
+  prior_airings: number | null;
+  contribution_delta: number | null;
+  volume_effect: number | null;
+  performance_effect: number | null;
+}
+
 // 신규 섹션 — 최근 12주 월~일 × 3시간 단위 강세 히트맵(사용자 지시 2026-08-20: 4구간 대신
 // 3시간 단위 8구간 — 02-04, 05-07, ..., 23-25).
 interface DowHourBlockRow {
@@ -542,6 +572,7 @@ interface ChannelData {
   whoIsWatchingDemographics: NarrativeDemographic[] | null;
   periodDemographics: PeriodDemographicRow[];
   periodProgramMovers: PeriodProgramMoverRow[];
+  periodProgramDrivers: PeriodProgramDriverRow[];
   dowHourBlockPattern: DowHourBlockRow[];
   topPrograms: TopProgramRow[];
   trend: TrendRow[];
@@ -758,26 +789,7 @@ const SECTION_TITLE_P2 = "font-heading mb-1 text-xl font-bold tracking-tight tex
 // 기능·데이터는 그대로, 표기만 추가).
 const ENG_TITLE_ANNOTATION = "ml-2 align-middle text-sm font-normal text-zinc-400";
 
-// 사용자 재지시(2026-08-22): "태그 디자인이 AI 느낌이 난다" — 채도 높은 파스텔 배경(bg-50)의
-// 둥근 필(rounded-full) 배지는 챗봇/생성형 UI에서 흔히 보이는 패턴이라, Linear/Stripe 류 프로덕트
-// UI에서 흔한 "점(dot) 표시자 + 화이트 배경 + 각진 모서리" 태그로 교체했다 — 색은 배경이 아니라
-// 작은 점 하나에만 쓰고 나머지는 무채색으로 절제해 더 차분하고 전문적인 느낌을 낸다.
-const TAG_DOT_COLOR: Record<string, string> = {
-  STRENGTHEN: "#059669", // emerald-600
-  KEEP: "#0284c7", // sky-600
-  MOVE: "#d97706", // amber-600
-  REPLACE: "#e11d48", // rose-600
-  TEST: "#71717a", // zinc-500
-};
-// 사용자 지시(2026-08-21): WHAT TO SCHEDULE? 배지의 영문 태그(STRENGTHEN/KEEP/MOVE/REPLACE/
-// TEST)를 한글로 — "유지, 테스트, 이동 검토, 교체 검토 등으로".
-const TAG_LABEL_KO: Record<string, string> = {
-  STRENGTHEN: "강화",
-  KEEP: "유지",
-  MOVE: "이동 검토",
-  REPLACE: "교체 검토",
-  TEST: "테스트",
-};
+// (TAG_DOT_COLOR / TAG_LABEL_KO는 src/lib/actionTags.ts로 이동 — 위 import 참고)
 
 // skyUHD 전용 대체 지표(SkyuhdScorecardItem)의 4단계 분류 — PRD Fit Score의 5태그(STRENGTHEN 등)
 // 와는 별개 개념이라 이름·스타일을 겹치지 않게 분리한다(사용자 지시, 2026-08-21). 색은 TAG_DOT_COLOR와
@@ -1673,6 +1685,58 @@ function contentFitsHelpScore(item: FitScoreItem): number {
   return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
 }
 
+// ── CONTENT FITS? 총량형/효율형/균형형 배지(2026-09-18, 사용자 지시) ──────────
+// deepDiveAnalyzer.computeEfficiencyRanking(리포트 recommendationSection.ts가 이미 검증해 쓰는
+// 순수 함수)을 화면에도 그대로 재사용한다. 이 함수는 원래 get_channel_program_slot_profile RPC가
+// 주는 ProgramSlotProfileRow[](프로그램×방송시간대, "총 방영시간(airtimeMin)" 포함)를 입력으로
+// 기대하는데, 이 화면은 그 RPC를 호출하지 않고 Fit Score Mart(fitScoreItems)만 들고 있다.
+// Fit Score Mart의 원천 테이블(mart_program_target_score)에는 총 방영시간 컬럼이 아예 없고
+// sample_days(= count(distinct 방송일))만 저장돼 있어, "편성 물량" 축을 정확히 복원할 수는
+// 없다 — 대신 표본 일수를 물량의 근사치로 쓴다. 같은 프로그램은 회차 길이가 대체로 일정하므로
+// 방영 일수와 총 방영시간은 대부분 함께 움직이지만, 회차 길이가 크게 다른 프로그램끼리 비교할
+// 때는 어긋날 수 있다는 한계가 있다(정확한 값을 쓰려면 다음 라운드에서 fit_score_mart에
+// airtime_min 컬럼을 추가해야 함). computeEfficiencyRanking 자체는 건드리지 않았다.
+function toEfficiencyRankingInput(items: FitScoreItem[]): ProgramSlotProfileRow[] {
+  return items
+    .filter((i): i is FitScoreItem & { programs: NonNullable<FitScoreItem["programs"]> } => !!i.programs?.canonical_name)
+    .map((i) => ({
+      canonicalName: i.programs.canonical_name,
+      broadcastHour: 0, // computeEfficiencyRanking은 이 필드를 판정에 쓰지 않는다(그룹핑만 canonicalName 기준)
+      isPrime: false,
+      airings: i.evidence.sample_days,
+      airtimeMin: i.evidence.sample_days, // 근사치 — 위 주석 참고(총 방영시간 데이터 없음)
+      avgRating: i.evidence.avg_rating,
+      avgShare: null, // Fit Score Mart에는 점유율이 없음(compensatingMetrics 판정에서만 쓰이며 배지 자체엔 영향 없음)
+      avgReach: i.evidence.avg_reach,
+      avgTimeSpentSeconds: null,
+      avgTimeSpentShare: i.evidence.avg_time_spent_share,
+    }));
+}
+
+/** CONTENT FITS? 표에 쓸 canonicalName → 총량형/효율형/균형형 매핑. skyUHD는 Fit Score 자체가 없어 대상 밖. */
+function buildEfficiencyTypeMap(contentFitsRows: FitScoreItem[]): Map<string, ProgramType> {
+  if (contentFitsRows.length === 0) return new Map();
+  const input = toEfficiencyRankingInput(contentFitsRows);
+  // limit을 프로그램 수만큼 열어 표에 나온 프로그램 전부에 배지가 붙게 한다(기본 limit=10은 상위만 자름).
+  const ranked = computeEfficiencyRanking(input, input.length);
+  return new Map(ranked.map((r) => [r.canonicalName, r.programType]));
+}
+
+const PROGRAM_TYPE_BADGE_STYLE: Record<ProgramType, string> = {
+  총량형: "bg-zinc-100 text-zinc-600",
+  효율형: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
+  균형형: "bg-zinc-50 text-zinc-500",
+};
+
+function ProgramTypeBadge({ type }: { type: ProgramType | undefined }) {
+  if (!type) return null;
+  return (
+    <span className={`ml-1.5 inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${PROGRAM_TYPE_BADGE_STYLE[type]}`}>
+      {type}
+    </span>
+  );
+}
+
 // ── WHY? 진단(8-Step Insight Flow, 사용자 지시 2026-08-21) ──────────────
 // rootCauseAlert가 triggered일 때, PRD가 정한 6개 후보 변수 중 Repetition/Fatigue를 뺀 5개
 // (Lead-in/Target Profile/Day-Time Slot/Program 자체 성과/Competitive Environment)를 각각
@@ -1693,6 +1757,13 @@ interface WhyCandidate {
   sentence: string;
   daypart: string | null;
   programName: string | null;
+  // 사용자 지시(2026-09-18): 이 후보가 표본 3일치 우연인지 8주 반복 패턴인지 구분이 안 되는 문제
+  // — 이번 라운드는 새 변동성 계산을 만들지 않고, 후보 계산 과정에 이미 쓰인 비교 기간·방영
+  // 횟수만 작게 병기한다(다음 라운드에서 신뢰도 자체를 재계산할 예정).
+  sampleNote: string | null;
+  // Fit Score MART가 이미 계산해둔 confidence_pct 재사용(중복 계산 금지) — 이름이 매칭되는
+  // 프로그램이 fitScoreItems에 없으면 null(억지로 만들지 않음).
+  confidencePct: number | null;
 }
 interface WhyDiagnosisResult {
   leadSentence: string;
@@ -1731,20 +1802,31 @@ function WhyCandidateRankingChart({ candidates }: { candidates: WhyCandidate[] }
       {candidates.map((c, i) => {
         const widthPct = maxStrength > 0 ? (c.strengthPct / maxStrength) * 100 : 0;
         const isPrimary = i === 0;
+        // 사용자 지시(2026-09-18): 이 막대가 표본 며칠치에서 나온 편차인지, Fit Score MART에
+        // 이미 있는 confidence_pct는 얼마인지를 작게 병기 — 둘 다 없으면 보조 줄 자체를 숨긴다
+        // (데이터 없음 문구로 채우지 않는다는 원칙).
+        const hasNote = c.sampleNote !== null || c.confidencePct !== null;
         return (
-          <div key={c.variable} className="flex items-center gap-2">
-            <span className={`w-[132px] shrink-0 truncate text-[11px] ${isPrimary ? "font-semibold text-rose-700" : "text-zinc-500"}`}>
-              {WHY_VARIABLE_LABEL_KO[c.variable] ?? c.variable}
-            </span>
-            <div className="h-4 flex-1 overflow-hidden rounded bg-rose-50">
-              <div
-                className="h-full rounded"
-                style={{ width: `${Math.max(widthPct, 4)}%`, backgroundColor: isPrimary ? "#e11d48" : "#fda4af" }}
-              />
+          <div key={c.variable} className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              <span className={`w-[132px] shrink-0 truncate text-[11px] ${isPrimary ? "font-semibold text-rose-700" : "text-zinc-500"}`}>
+                {WHY_VARIABLE_LABEL_KO[c.variable] ?? c.variable}
+              </span>
+              <div className="h-4 flex-1 overflow-hidden rounded bg-rose-50">
+                <div
+                  className="h-full rounded"
+                  style={{ width: `${Math.max(widthPct, 4)}%`, backgroundColor: isPrimary ? "#e11d48" : "#fda4af" }}
+                />
+              </div>
+              <span className={`w-12 shrink-0 text-right text-[11px] tabular-nums ${isPrimary ? "font-semibold text-rose-700" : "text-zinc-500"}`}>
+                {c.strengthPct.toFixed(1)}%
+              </span>
             </div>
-            <span className={`w-12 shrink-0 text-right text-[11px] tabular-nums ${isPrimary ? "font-semibold text-rose-700" : "text-zinc-500"}`}>
-              {c.strengthPct.toFixed(1)}%
-            </span>
+            {hasNote && (
+              <p className="pl-[132px] text-[10px] text-zinc-400">
+                {[c.sampleNote, c.confidencePct !== null ? `신뢰도 ${c.confidencePct.toFixed(0)}%` : null].filter(Boolean).join(" · ")}
+              </p>
+            )}
           </div>
         );
       })}
@@ -1754,6 +1836,30 @@ function WhyCandidateRankingChart({ candidates }: { candidates: WhyCandidate[] }
     </div>
   );
 }
+// 사용자 지시(2026-09-18): WHY? 후보가 프로그램을 지목했을 때, Fit Score MART가 이미 계산해둔
+// confidence_pct를 재사용하기 위한 이름 매칭 — 기존에 Lead-in/ACTION echo가 각자 따로 하던
+// 것과 동일한 규칙(programs.canonical_name이 후보 프로그램명에 포함되는지)을 한 곳으로 모음.
+function findFitScoreMatchByName(name: string | null, fitScoreItems: FitScoreItem[] | null): FitScoreItem | null {
+  if (!name || !fitScoreItems) return null;
+  return fitScoreItems.find((f) => f.programs?.canonical_name && name.includes(f.programs.canonical_name)) ?? null;
+}
+// 사용자 지시(2026-09-18): WHY? 후보가 프로그램을 지목했을 때, route.ts가 get_channel_monthly_
+// program_drivers(이름과 달리 임의 기간 비교 범용 RPC — Page 1 월간/주간 리뷰와 동일 함수)로
+// 이미 계산해둔 volume_effect/performance_effect를 재사용하기 위한 이름 매칭. Day/Time Slot
+// 후보의 programName은 그 시간대 방영작 여러 개가 콤마로 이어진 문자열일 수 있어(hourlyProgramTitles),
+// 위 findFitScoreMatchByName과 같은 "포함" 규칙을 그대로 따른다.
+function findProgramDriverByName(name: string | null, drivers: PeriodProgramDriverRow[]): PeriodProgramDriverRow | null {
+  if (!name) return null;
+  return drivers.find((d) => d.canonical_name && name.includes(d.canonical_name)) ?? null;
+}
+// 사용자 지시(2026-09-18): classifyDeclineCause가 돌려주는 판정어를 WHY? 문장에 자연스럽게
+// 잇기 위한 절 — 판정 자체(핵심 콘텐츠 이탈/부진/이탈+부진)의 의미는 causeClassifier.ts 주석
+// 그대로이고, 여기서는 서술만 다르게 입힌다.
+const DECLINE_CAUSE_CLAUSE: Record<string, string> = {
+  "핵심 콘텐츠 이탈": "편성 횟수 자체가 줄어든 영향이 커 보입니다",
+  "핵심 콘텐츠 부진": "편성 횟수는 비슷한데 프로그램 자체 성과가 떨어진 영향이 커 보입니다",
+  "핵심 콘텐츠 이탈+부진": "편성 횟수 감소와 프로그램 자체 성과 부진이 함께 작용한 것으로 보입니다",
+};
 function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | null): WhyDiagnosisResult | null {
   const alert = data.rootCauseAlert;
   if (!alert?.triggered) return null;
@@ -1774,6 +1880,9 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
         sentence: `${shortDemoLabel(worst.label)}${josaIga(shortDemoLabel(worst.label))} ${fmtR(worst.today)}로 평소 대비 ${Math.abs(worst.delta_pct!).toFixed(1)}% 감소해, 전체 하락 대비 성과 감소폭이 가장 컸습니다.`,
         daypart: null,
         programName: null,
+        // ns.demographics는 route.ts가 p_baseline_days=84(12주)로 호출한 값 그대로(새 계산 없음).
+        sampleNote: "(최근 12주 평균 대비)",
+        confidencePct: null, // 연령대 단위 후보라 프로그램 Fit Score와 매칭할 대상이 없음.
       });
     }
   }
@@ -1800,6 +1909,10 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
         sentence: `하락은 ${worstHour.hour}시대에 집중됐습니다(평소 대비 ${Math.abs(worstHour.deltaPct).toFixed(1)}% 낮음)${titleRow ? ` — 이 시간대 방영: ${titleRow.program_names}` : ""}.`,
         daypart: slotDaypart,
         programName: slotProgramName,
+        // hourlyBaselinePattern은 route.ts가 dateTo 기준 직전 84일(12주) 고정 윈도우로 조회한
+        // 값(MART_SLOT.hourlyBaseline84, 새 계산 없음).
+        sampleNote: "(최근 12주 평균 대비)",
+        confidencePct: findFitScoreMatchByName(slotProgramName, fitScoreItems)?.confidence_pct ?? null,
       });
     }
   }
@@ -1820,6 +1933,9 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
           sentence: `'${top.canonical_name}'${josaIga(top.canonical_name)} 이전 대비 ${Math.abs(pctChange).toFixed(1)}% 하락해, 전체 하락에 가장 크게 기여한 것으로 보입니다.`,
           daypart: null,
           programName: top.canonical_name,
+          // period_air_count는 periodProgramMovers가 이미 계산해 내려준 이번 기간 방영 횟수(새 계산 없음).
+          sampleNote: top.period_air_count !== null ? `(이번 기간 방영 ${top.period_air_count}회 기준)` : null,
+          confidencePct: findFitScoreMatchByName(top.canonical_name, fitScoreItems)?.confidence_pct ?? null,
         });
       }
     }
@@ -1833,6 +1949,10 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
         sentence: `'${ns.top_program_name}'${josaEunNeun(ns.top_program_name)} 같은 슬롯 최근 평균 대비 ${Math.abs(pctChange).toFixed(1)}% 낮아, 주요 변화 구간으로 관찰됩니다.`,
         daypart: null,
         programName: ns.top_program_name,
+        // top_program_baseline_days는 get_channel_daily_narrative가 이미 계산해 내려준, 같은
+        // 요일·시간대(본방 슬롯) 비교에 실제로 쓰인 표본 일수(새 계산 없음).
+        sampleNote: ns.top_program_baseline_days !== null ? `(같은 요일·시간대 최근 ${ns.top_program_baseline_days}일 기준)` : null,
+        confidencePct: findFitScoreMatchByName(ns.top_program_name, fitScoreItems)?.confidence_pct ?? null,
       });
     }
   }
@@ -1847,23 +1967,33 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
       sentence: `같은 기간 ${top.competitor_name}${josaIga(top.competitor_name)} ▲${top.change_pct.toFixed(1)}% 상승해, 경쟁채널로의 상대적 유출 가능성이 관찰됩니다.`,
       daypart: null,
       programName: null,
+      // get_root_cause_alert는 오늘 하루 vs 전주 동일 요일 하루를 그대로 비교한다(다른 후보의
+      // 12주/8주 평균 비교보다 표본이 훨씬 얇다는 점을 그대로 밝힘, 새 계산 없음).
+      sampleNote: "(오늘 대 전주 동일 요일 1일 비교)",
+      confidencePct: null, // 경쟁채널 지표라 자사 Fit Score와 매칭할 대상이 없음.
     });
   }
 
   // ⑤ Lead-in — Day/Time Slot에서 찾은 프로그램명으로 fitScoreItems를 매칭했을 때만(추정 금지).
   const leadInSourceName = slotProgramName ?? programCandidateName;
   if (leadInSourceName && fitScoreItems) {
-    const match = fitScoreItems.find((f) => f.programs?.canonical_name && leadInSourceName.includes(f.programs.canonical_name));
+    const match = findFitScoreMatchByName(leadInSourceName, fitScoreItems);
     const retention = match?.evidence.avg_lead_in_retention;
     if (retention !== null && retention !== undefined && retention < 1) {
       const deviationPct = Math.abs(retention - 1) * 100;
       if (deviationPct >= 15) {
+        // flow_sample_days는 Fit Score MART가 Lead-in Retention 계산에 실제로 쓴 표본 일수를
+        // 그대로 내려주는 값(새 계산 없음) — sample_days(전체 Fit Score 표본)와는 다른 값이라
+        // Lead-in 후보에는 이쪽을 쓴다.
+        const flowSampleDays = match?.evidence.flow_sample_days ?? null;
         candidates.push({
           variable: "Lead-in",
           strengthPct: deviationPct,
           sentence: `직전 프로그램 대비 유입 비율(Lead-in Retention)이 ${retention.toFixed(2)}로 낮아, Lead-in 영향 가능성이 관찰됩니다.`,
           daypart: slotDaypart,
           programName: leadInSourceName,
+          sampleNote: flowSampleDays !== null ? `(최근 ${flowSampleDays}일 기준)` : null,
+          confidencePct: match?.confidence_pct ?? null,
         });
       }
     }
@@ -1894,8 +2024,33 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
     if (match?.tag === "REPLACE" || match?.tag === "MOVE") action = match.tag;
   }
 
+  // 사용자 지시(2026-09-18): 1위 후보가 "Program 자체 성과" 또는 "Day/Time Slot"일 때만, 그
+  // 후보가 지목한 프로그램의 volume_effect/performance_effect를 causeClassifier.ts의
+  // classifyDeclineCause로 판정해 "편성이 줄어서인지 성과 자체가 나빠서인지"를 문장에 덧붙인다.
+  // Competitive Environment/Lead-in처럼 프로그램 하나로 환원되지 않는 후보에는 적용하지 않는다
+  // (억지 연결 금지). 매칭되는 프로그램이 없거나, 그 프로그램의 기여도 변화 자체가 음수가
+  // 아니면(=이 하락과 무관해 보이면) 조용히 건너뛴다 — 근거 없이 단정하지 않는다.
+  let leadSentence = primary.sentence;
+  if (primary.variable === "Program 자체 성과" || primary.variable === "Day/Time Slot") {
+    const driver = findProgramDriverByName(primary.programName, data.periodProgramDrivers);
+    if (driver && (driver.contribution_delta ?? 0) < 0) {
+      const volume = Math.abs(driver.volume_effect ?? 0);
+      const performance = Math.abs(driver.performance_effect ?? 0);
+      if (volume > 0 || performance > 0) {
+        const cause = classifyDeclineCause(volume, performance);
+        const clause = DECLINE_CAUSE_CLAUSE[cause];
+        // 비교 기준일이 이 후보 문장 자체의 %와 다를 수 있어(단일 일자 모드는 최근 12주 평균,
+        // 범위 모드는 직전 동일 기간) 그 사실을 괄호로 그대로 밝힌다 — 두 수치를 합산 가능한
+        // 것처럼 보이지 않게 하기 위함.
+        if (clause) {
+          leadSentence = `${leadSentence.replace(/\.$/, "")} — ${clause}(${cause}, 편성 ${driver.period_airings ?? 0}회 vs 비교 기간 ${driver.prior_airings ?? 0}회).`;
+        }
+      }
+    }
+  }
+
   return {
-    leadSentence: primary.sentence,
+    leadSentence,
     supportingBullets: candidates.slice(1).map((c) => c.sentence),
     decision: `${slotLabel}의 현재 편성을 유지할지, 이동/교체를 검토할지 우선 확인이 필요합니다.`,
     action,
@@ -4412,6 +4567,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 상한선(가장 큰 쪽 — 보통 유료가구)으로 맞춰야 막대 높이가 실제 크기 비교로 읽힌다.
   const ratingScaleMax = Math.max(maxByMetric.avg_rating, ...selectedExtraTargetsWithMeta.map((e) => e.max));
   const contentFitsRows = fitScoreItems ? [...fitScoreItems].sort((a, b) => contentFitsHelpScore(b) - contentFitsHelpScore(a)) : [];
+  // CONTENT FITS? 표의 총량형/효율형/균형형 배지(사용자 지시 2026-09-18) — buildEfficiencyTypeMap 주석 참고.
+  const efficiencyTypeByProgram = buildEfficiencyTypeMap(contentFitsRows);
   // HOW DEEPLY?: 기간/비교 분석 프리셋이면 기간 평균(periodReport), 단일 일자 서술 모드면
   // 기존처럼 그날 값(current). DoD(하루짜리 비교 분석)도 periodReport 쪽을 쓴다 — 값 자체는
   // current와 동일하지만(1일 평균=그날 값), "이번 기간" 프레이밍을 일관되게 유지하기 위함.
@@ -4952,6 +5109,50 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 Executive Summary
               </p>
               <p className="text-base leading-relaxed text-zinc-700">{highlightNarrativeText(insight, "#059669", "#e11d48")}</p>
+            </div>
+          );
+        })()}
+
+        {/* PD 의사결정 지원 개선안(2026-09-18): 5대 액션 태그·Fit Score 표(WHAT TO SCHEDULE?)가
+            전체 페이지의 약 91% 지점(최하단)에만 있어, 실제 조치가 필요한 프로그램을 보려면
+            12개 섹션을 지나야 했음 — Executive Summary 바로 아래에 REPLACE/MOVE 대상만 추린
+            미니 카드를 얹어 조기 노출한다(새 계산 없음, fitScoreItems 재사용, 클릭하면 기존
+            #what-to-schedule 표로 스크롤 이동). 전체 표는 최하단에 그대로 유지하며(삭제 금지),
+            이 카드는 그 표로 가는 요약 진입점일 뿐이다. REPLACE/MOVE 대상이 하나도 없으면(전부
+            KEEP/STRENGTHEN) 이 프로젝트의 "데이터 없으면 섹션 숨김" 원칙에 따라 섹션 자체를
+            숨긴다. */}
+        {(() => {
+          const attentionItems = (fitScoreItems ?? [])
+            .filter((item) => item.tag === "REPLACE" || item.tag === "MOVE")
+            .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
+            .slice(0, 3);
+          if (attentionItems.length === 0) return null;
+          return (
+            <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
+              <p className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
+                지금 검토가 필요한 편성
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {attentionItems.map((item) => {
+                  // 표(6761행 부근)와 같은 기준 — MOVE만 추천 daypart를 붙이고, REPLACE는 daypart
+                  // 추천 없이 "교체 검토" 문장으로 떨어진다(buildScheduleRecommendationNote 재사용).
+                  const recommendedDaypart =
+                    item.tag === "MOVE" ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity) : null;
+                  const note = buildScheduleRecommendationNote(item, recommendedDaypart);
+                  return (
+                    <a
+                      key={item.program_id}
+                      href="#what-to-schedule"
+                      className="block rounded-2xl bg-zinc-50 p-3 transition-colors hover:bg-zinc-100"
+                      title="무엇을 편성할까요? 표에서 자세히 보기"
+                    >
+                      <DotTag label={TAG_LABEL_KO[item.tag!]} color={TAG_DOT_COLOR[item.tag!]} />
+                      <p className="mt-1.5 truncate text-sm font-bold text-zinc-800">{item.programs?.canonical_name ?? "이름 없음"}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-zinc-500">{note}</p>
+                    </a>
+                  );
+                })}
+              </div>
             </div>
           );
         })()}
@@ -6404,7 +6605,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               <p className="mb-3 text-sm text-zinc-400">
                 Fit Score 하위지표 — Target Performance(시청률·슬롯·데이파트) / Target Affinity(핵심 연령대
                 구성비, 프로그램 단위) / Audience Engagement(Reach·시청시간비율). 전부 최근 12주 자사 채널 내
-                percentile(0~100), 채널에 도움이 되는 순으로 정렬했습니다.
+                percentile(0~100), 채널에 도움이 되는 순으로 정렬했습니다. 프로그램명 옆 배지는 편성 물량
+                대비 회당 성과 유형입니다 — 총량형(편성을 많이 써서 버티는 중) / 효율형(적게 틀어도 채널
+                평균보다 잘 나옴) / 균형형(뚜렷한 쏠림 없음). 정확한 총 방영시간 대신 방영 일수로 근사한
+                값이라 참고용으로 봐주세요.
               </p>
               {fitScoreLoading ? (
                 <p className="text-sm text-zinc-400">불러오는 중...</p>
@@ -6426,7 +6630,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       <tbody>
                         {contentFitsRows.map((item) => (
                           <tr key={item.program_id} className="border-t border-zinc-100">
-                            <td className="py-1.5 font-medium text-zinc-800">{item.programs?.canonical_name ?? "이름 없음"}</td>
+                            <td className="py-1.5 font-medium text-zinc-800">
+                              <span className="inline-flex items-center">
+                                {item.programs?.canonical_name ?? "이름 없음"}
+                                <ProgramTypeBadge type={item.programs?.canonical_name ? efficiencyTypeByProgram.get(item.programs.canonical_name) : undefined} />
+                              </span>
+                            </td>
                             <td className="py-1.5"><MiniPctlBar value={item.target_performance_score ?? null} accentColor={accentColor} isEnaStory={isEnaStory} /></td>
                             <td className="py-1.5"><MiniPctlBar value={item.target_affinity_score ?? null} accentColor={accentColor} isEnaStory={isEnaStory} /></td>
                             <td className="py-1.5"><MiniPctlBar value={item.audience_engagement_score ?? null} accentColor={accentColor} isEnaStory={isEnaStory} /></td>
