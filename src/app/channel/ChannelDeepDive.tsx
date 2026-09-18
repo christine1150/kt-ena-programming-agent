@@ -507,17 +507,6 @@ interface DowHourRow {
   program_names?: string | null;
   top_program_name?: string | null;
 }
-// 사용자 지시(2026-09-20): "편성표 형태로 보기는... 30분 단위로라도 실제 방영시간에 맞게" —
-// 1시간 단위로는 30분에 시작/종료하는 프로그램의 실제 길이를 표현할 수 없어(예: 19:40~21:00
-// 방영 프로그램이 19시·20시 칸을 꽉 채운 것처럼 보임) 편성표 형태 전용으로 30분 단위 행을 쓴다.
-interface DowHalfHourRow {
-  dow: number;
-  dow_label: string;
-  half_hour: number; // 방송일 자정 기준 분(예: 02:00=120, 02:30=150)
-  avg_rating: number | null;
-  sample_count: number;
-  program_names?: string | null;
-}
 const HOUR_BLOCK_ORDER = [2, 5, 8, 11, 14, 17, 20, 23];
 // 이 앱의 "02~26시" 관행대로 24/25시도 그대로 표기(0/1시로 감지 않음 — 02~26시 그래프와 동일).
 function hourBlockLabel(h: number): string {
@@ -529,22 +518,10 @@ const HOUR_ORDER_1H = Array.from({ length: 24 }, (_, i) => i + 2);
 function hour1hLabel(h: number): string {
   return `${h}시`;
 }
-// 사용자 지시(2026-09-20): 편성표 형태 전용 30분 단위 — 02:00(방송일 자정 기준 120분)부터
-// 25:30(1530분)까지 48개 행. 값은 get_channel_dow_halfhour_pattern의 half_hour(분)와 동일한 키.
-const HOUR_ORDER_HALF = Array.from({ length: 48 }, (_, i) => 120 + i * 30);
-function halfHourLabel(m: number): string {
-  const h = Math.floor(m / 60);
-  const mm = m % 60;
-  return `${h}:${mm === 0 ? "00" : "30"}`;
-}
 // DowHourRow(1시간 단위)를 DowHourBlockTable이 받는 DowHourBlockRow 모양으로 맞춘다(hour→hour_block
 // 이름만 다름, 새 렌더 로직 없이 기존 표를 그대로 재사용하기 위한 순수 reshape).
 function toHourBlockShape(rows: DowHourRow[]): DowHourBlockRow[] {
   return rows.map((r) => ({ dow: r.dow, dow_label: r.dow_label, hour_block: r.hour, avg_rating: r.avg_rating, sample_count: r.sample_count, program_names: r.program_names, top_program_name: r.top_program_name }));
-}
-// DowHalfHourRow(30분 단위)도 같은 방식으로 재사용 — half_hour→hour_block.
-function toHourBlockShapeHalf(rows: DowHalfHourRow[]): DowHourBlockRow[] {
-  return rows.map((r) => ({ dow: r.dow, dow_label: r.dow_label, hour_block: r.half_hour, avg_rating: r.avg_rating, sample_count: r.sample_count, program_names: r.program_names }));
 }
 // 사용자 지시(2026-09-03): "기회가 있나요는 4구간/8구간 이원화된 것을 3시간 단위로 통일하고,
 // 이름을 붙여줘" — HOUR_BLOCK_ORDER의 8구간에 시간대 이름을 매핑한다. hourBlockLabel()은 요일×
@@ -2935,55 +2912,6 @@ function buildDowHourFlowNarrative(current: DowHourBlockRow[], prior: DowHourBlo
   return { overview, keyInsights };
 }
 
-// 사용자 지시(2026-09-19): "편성표 형태로 보기는... 실제 편성표처럼 각 프로그램의 길이에 맞게
-// 각각의 프로그램의 높이로 맞춰달라" — 같은 요일 열에서 연속된 시간(hour_block/hour)의
-// program_names 문자열이 완전히 같을 때만(다른 프로그램이면 절대 합치지 않음, 확신 없는
-// 병합 안 함) 하나의 rowSpan 셀로 합친다.
-interface ScheduleMergeCell {
-  rowSpan: number;
-  avgRating: number | null;
-  sampleCount: number;
-  programNames: string | null;
-}
-function computeScheduleMergeMap(
-  byCell: Map<string, DowHourBlockRow>,
-  rows: number[]
-): { spanStart: Map<string, ScheduleMergeCell>; hidden: Set<string> } {
-  const spanStart = new Map<string, ScheduleMergeCell>();
-  const hidden = new Set<string>();
-  for (let dow = 1; dow <= 7; dow++) {
-    let i = 0;
-    while (i < rows.length) {
-      const groupKey = byCell.get(`${dow}__${rows[i]}`)?.program_names ?? null;
-      let j = i + 1;
-      while (j < rows.length && (byCell.get(`${dow}__${rows[j]}`)?.program_names ?? null) === groupKey) {
-        j++;
-      }
-      // 표본수 가중 평균(summarizeHourBlockStrength와 동일 원칙) — 합쳐진 구간 전체의 시청률.
-      let weightedSum = 0;
-      let weightTotal = 0;
-      let sampleTotal = 0;
-      for (let k = i; k < j; k++) {
-        const c = byCell.get(`${dow}__${rows[k]}`);
-        if (c?.avg_rating !== null && c?.avg_rating !== undefined && c.sample_count > 0) {
-          weightedSum += c.avg_rating * c.sample_count;
-          weightTotal += c.sample_count;
-        }
-        sampleTotal += c?.sample_count ?? 0;
-      }
-      spanStart.set(`${dow}__${rows[i]}`, {
-        rowSpan: j - i,
-        avgRating: weightTotal > 0 ? weightedSum / weightTotal : null,
-        sampleCount: sampleTotal,
-        programNames: groupKey,
-      });
-      for (let k = i + 1; k < j; k++) hidden.add(`${dow}__${rows[k]}`);
-      i = j;
-    }
-  }
-  return { spanStart, hidden };
-}
-
 function DowHourBlockTable({
   pattern,
   accentColor,
@@ -2992,7 +2920,6 @@ function DowHourBlockTable({
   hourBlockOpportunity,
   hourOrder,
   labelFor,
-  showProgramNames,
   showTopProgramName,
 }: {
   pattern: DowHourBlockRow[];
@@ -3009,11 +2936,8 @@ function DowHourBlockTable({
   // 그대로, 1시간 모드일 때만 호출부에서 02~25시 24개 행과 그에 맞는 라벨 함수를 넘긴다.
   hourOrder?: number[];
   labelFor?: (h: number) => string;
-  // 사용자 지시(2026-09-19): "편성표 형태로" — 칸 안에 그 시간대 방영 프로그램명을 함께 표시.
-  showProgramNames?: boolean;
   // 사용자 지시(2026-09-20): "3시간 단위로 볼 때도 체크박스로 대표 프로그램명(그 구간 최고
-  // 시청률 타이틀)을 보여달라" — 편성표 형태(showProgramNames)와 별개로, 일반 히트맵에서도
-  // 켤 수 있는 "프로그램명 보기" 옵션. 병합(rowSpan) 없이 그 칸의 top_program_name 하나만 표시.
+  // 시청률 타이틀)을 보여달라" — 그 칸의 top_program_name 하나만 표시(병합 없음).
   showTopProgramName?: boolean;
 }) {
   const rows = hourOrder ?? HOUR_BLOCK_ORDER;
@@ -3021,11 +2945,6 @@ function DowHourBlockTable({
   const byCell = new Map(pattern.map((r) => [`${r.dow}__${r.hour_block}`, r]));
   const maxRating = Math.max(1e-9, ...pattern.map((r) => r.avg_rating ?? 0));
   const oppByHourBlock = new Map((hourBlockOpportunity ?? []).map((r) => [r.hour_block, r]));
-  // 사용자 지시(2026-09-19): "편성표 형태로 보기는... 실제 편성표처럼 각 프로그램의 길이에
-  // 맞게 각각의 프로그램의 높이로 맞춰달라" — 같은 요일 열에서 연속된 시간(hour)의
-  // program_names가 완전히 같으면(다른 프로그램이면 절대 합치지 않음) 하나의 rowSpan 셀로
-  // 합친다. 합쳐진 구간의 시청률은 표본수 가중 평균(summarizeHourBlockStrength와 동일 원칙).
-  const scheduleMerge = showProgramNames ? computeScheduleMergeMap(byCell, rows) : null;
   if (pattern.length === 0) {
     return <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>;
   }
@@ -3062,11 +2981,7 @@ function DowHourBlockTable({
             const oppRow = oppByHourBlock.get(hb);
             const oppCls = oppRow ? classifyHourBlockOpportunity(oppRow) : null;
             return (
-            // 사용자 지시(2026-09-19, 실제 편성표 이미지 첨부): "빈칸 없이, 최대한 실제로
-            // 방영되었던 시간대에 맞춰서" — 편성표 형태(showProgramNames)일 때는 셀 사이
-            // 여백(패딩·둥근 모서리)이 실제 방송사 편성표에 없는 "빈틈"처럼 보였다. 이 모드에서만
-            // 행 경계선을 없애고(칸 자체 border로 대체) 시간대 라벨 열의 회색 구분선도 뺀다.
-            <tr key={hb} className={showProgramNames ? "" : "border-t border-zinc-100"}>
+            <tr key={hb} className="border-t border-zinc-100">
               <td className="whitespace-nowrap py-0.5 pr-0.5 text-left font-medium text-zinc-700">
                 {/* 사용자 지시(2026-08-26, 재수정): "점이 더 잘보이게, 정렬이 일정하게" —
                     이전엔 inline-block+align-middle이라 폰트 메트릭에 따라 점이 줄마다
@@ -3090,15 +3005,10 @@ function DowHourBlockTable({
               {["월", "화", "수", "목", "금", "토", "일"].map((label, i) => {
                 const dow = i + 1;
                 const key = `${dow}__${hb}`;
-                // rowSpan으로 합쳐진 구간 중 시작 행이 아닌 곳은 <td> 자체를 렌더링하지 않는다
-                // (표준 HTML 표 규칙 — 앞 행의 rowSpan이 이미 이 자리를 차지한다).
-                if (scheduleMerge?.hidden.has(key)) return null;
-                const merged = scheduleMerge?.spanStart.get(key);
                 const cell = byCell.get(key);
-                const rating = merged ? merged.avgRating : (cell?.avg_rating ?? null);
-                const sampleCount = merged ? merged.sampleCount : (cell?.sample_count ?? 0);
-                const programNamesForCell = merged ? merged.programNames : (cell?.program_names ?? null);
-                const rowSpan = merged?.rowSpan ?? 1;
+                const rating = cell?.avg_rating ?? null;
+                const sampleCount = cell?.sample_count ?? 0;
+                const programNamesForCell = cell?.program_names ?? null;
                 const intensity = rating !== null ? Math.min(1, rating / maxRating) : 0;
                 const alpha = Math.round(intensity * 200 + 20);
                 // 사용자 지시(2026-08-26 재지시): 다른 강도 요소와 통일된 3단 그라데이션
@@ -3106,29 +3016,13 @@ function DowHourBlockTable({
                 // 직접 적용한다(흰 배경 블렌딩 없음 — 가장 강함이 로고색만큼 진해야 하므로).
                 const bgColor = rating === null ? "#f4f4f5" : isEnaStory ? enaStoryGradientColor(intensity) : `${accentColor}${alpha.toString(16).padStart(2, "0")}`;
                 const textColor = rating === null ? "#a1a1aa" : isEnaStory ? enaStoryGradientTextColor(intensity) : cellTextColor(accentColor, alpha);
-                // 편성표 형태(2026-09-19): 여러 프로그램이 같은 칸에 걸쳐 있으면(3시간 단위 또는
-                // 12주 누적 등 넓은 창) 첫 번째 이름 + "외 N개"로 요약 — 칸 폭이 좁아 전체 나열은
-                // 어렵고, 전체 목록은 title 툴팁에 그대로 남긴다.
-                const names = programNamesForCell ? programNamesForCell.split(" / ") : [];
-                const programLabel = names.length > 1 ? `${names[0]} 외 ${names.length - 1}` : (names[0] ?? null);
                 // 사용자 지시(2026-09-20): "3시간 단위로 볼 때도... 가장 높은 시청률을 기록한
-                // 타이틀이 대표 프로그램명으로" — 편성표 형태(전체 목록+병합)와 달리 이 모드는
-                // 병합 없이 단일 대표 이름만 보여준다.
-                const topProgramLabel = !showProgramNames && showTopProgramName ? (cell?.top_program_name ?? null) : null;
+                // 타이틀이 대표 프로그램명으로" — 병합 없이 단일 대표 이름만 보여준다.
+                const topProgramLabel = showTopProgramName ? (cell?.top_program_name ?? null) : null;
                 return (
-                  <td
-                    key={dow}
-                    rowSpan={rowSpan}
-                    className={showProgramNames ? "border border-white p-0 align-middle" : "py-0.5 px-0.5 align-middle"}
-                  >
+                  <td key={dow} className="py-0.5 px-0.5 align-middle">
                     <div
-                      className={`mx-auto flex w-full flex-col items-center justify-center font-bold ${
-                        showProgramNames
-                          ? `${rowSpan > 1 ? "h-full min-h-11" : "h-11"} gap-0.5 px-1 py-1`
-                          : showTopProgramName
-                            ? "h-9 gap-0.5 px-1 py-0.5 rounded"
-                            : "h-6 rounded"
-                      }`}
+                      className={`mx-auto flex w-full flex-col items-center justify-center rounded font-bold ${showTopProgramName ? "h-9 gap-0.5 px-1 py-0.5" : "h-6"}`}
                       style={{
                         backgroundColor: bgColor,
                         color: textColor,
@@ -3139,11 +3033,6 @@ function DowHourBlockTable({
                           : "표본 없음"
                       }
                     >
-                      {showProgramNames && programLabel && (
-                        <span className={`w-full text-center text-[9.5px] font-medium leading-tight opacity-90 ${rowSpan > 1 ? "line-clamp-2 whitespace-normal" : "truncate"}`}>
-                          {programLabel}
-                        </span>
-                      )}
                       {topProgramLabel && (
                         <span className="w-full truncate text-center text-[9px] font-medium leading-tight opacity-90">{topProgramLabel}</span>
                       )}
@@ -4145,19 +4034,17 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 사용자 지시(2026-09-19): "요일×시간대" 히트맵을 기본 3시간 단위 대신 02~25시 1시간 단위로도
   // 볼 수 있게 우측 체크박스로 전환. 기본은 기존 그대로(3시간 단위)라 Delta-Only.
   const [dowHeatmapGranularity, setDowHeatmapGranularity] = useState<"3h" | "1h">("3h");
-  // 사용자 지시(2026-09-19): "1시간대로 보니까 헷갈려. 프로그램 편성표 형태로 그려서 히트맵을
-  // 보여주면 좋겠어" — 칸에 숫자만 있던 것을, 실제 편성됐던 프로그램명을 칸 안에 함께 보여주는
-  // "편성표 형태"로 전환하는 옵션. 기본은 기존 그대로(꺼짐, 숫자만) — Delta-Only.
-  const [dowHeatmapShowPrograms, setDowHeatmapShowPrograms] = useState(false);
   // 사용자 지시(2026-09-20): "3시간 단위로 볼 때도 체크박스로 대표 프로그램명(그 구간 최고
-  // 시청률 타이틀)을 보여달라" — 편성표 형태(showPrograms)와 별개의 옵션. 기본은 꺼짐.
+  // 시청률 타이틀)을 보여달라" — 기본은 꺼짐.
   const [dowHeatmapShowTopProgram, setDowHeatmapShowTopProgram] = useState(false);
   // 1시간 단위 히트맵 데이터 — 체크박스를 켰을 때만 지연 조회한다(아래 useEffect, 성능 조사
   // 2026-09-19 참고). null이면 아직 안 불러왔거나 채널/기간이 바뀌어 무효화된 상태.
   const [lazyHourPattern, setLazyHourPattern] = useState<{ dowHourPattern: DowHourRow[]; dowHourPatternPrior: DowHourRow[] } | null>(null);
-  // 사용자 지시(2026-09-20): "편성표 형태로 보기는... 30분 단위로라도 실제 방영시간에 맞게" —
-  // 편성표 형태 전용 30분 단위 데이터도 같은 방식으로 지연 조회한다.
-  const [lazyHalfHourPattern, setLazyHalfHourPattern] = useState<{ dowHalfHourPattern: DowHalfHourRow[]; dowHalfHourPatternPrior: DowHalfHourRow[] } | null>(null);
+  // 사용자 지시(2026-09-20 재지시): "편성표 형태로 보기"(30분 단위 근사 히트맵)는 여러 날짜를
+  // 뭉친 집계라 프로그램 전환 경계가 자주 어긋나 빈틈·조각남이 심했다 — 아래 "이번 주 실제
+  // 편성표 보기" 모달(실제 방영 인스턴스 그대로, 완전히 빈틈 없음)이 이 문제를 근본적으로
+  // 해결하므로, 이 근사 기능은 제거하고 모달로 대체한다.
+  //
   // 사용자 지시(2026-09-20): "이번 주 실제 편성표 보기를 Page 2에도... 그 자리에서 바로 파일도
   // 업로드할 수 있게" — 관리자 화면(admin/schedule-grid)의 정밀 편성표를 모달로, 업로드는
   // 체크박스 줄 옆 텍스트 링크(숨겨진 file input)로. UX 아키텍트·UI 디자이너 페르소나 검토 결과
@@ -4384,7 +4271,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     (async () => {
       setLoading(true);
       setLazyHourPattern(null); // 채널·기간이 바뀌면 이전 1시간 단위 캐시는 더 이상 유효하지 않음
-      setLazyHalfHourPattern(null); // 마찬가지로 이전 30분 단위(편성표 형태) 캐시도 무효화
       const res = await fetch(`/api/dashboard/channel?code=${code}${dateQuery}${priorQuery}${sdowQuery}`);
       const body = await res.json().catch(() => ({ ok: false }));
       if (cancelled) return;
@@ -4402,18 +4288,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
 
   }, [code, dateQuery, priorQuery, sdowQuery]);
 
-  // 사용자 지시(2026-09-20 재지시): "편성표 형태로 보기는... 30분 단위로라도 실제 방영시간에
-  // 맞게" — 편성표 형태는 이제 1시간이 아니라 30분 단위를 쓴다(1시간 단위로는 19:40~21:00처럼
-  // 30분에 걸친 프로그램의 실제 길이를 표현할 수 없었다). effective1h는 "1시간 단위로 보기"
-  // 체크박스 전용으로 좁히고, 편성표 형태는 별도의 effectiveGranularity==="30m"로 분기한다.
-  const effective1h = dowHeatmapGranularity === "1h" && !dowHeatmapShowPrograms;
-  const effectiveGranularity: "3h" | "1h" | "30m" = dowHeatmapShowPrograms ? "30m" : effective1h ? "1h" : "3h";
+  const effective1h = dowHeatmapGranularity === "1h";
   // 성능 조사(2026-09-19, 사용자 지시: "다시 각 페이지 로딩 속도가 느려졌는데 원인을 파악하고
   // 해결하라") — 1시간 단위 히트맵(dowHourPattern/dowHourPatternPrior)이 "1시간 단위로 보기"
   // 체크박스를 켠 소수만 쓰는데도 매 Page 2 조회마다 캐시 없이 계산되고 있었다(원인). 체크박스를
   // 실제로 켰을 때만(include1h=1) 별도로 불러오고, 기본 조회에서는 완전히 빼서 절감한다(fix).
   useEffect(() => {
-    if (effectiveGranularity !== "1h" || lazyHourPattern || loading) return;
+    if (!effective1h || lazyHourPattern || loading) return;
     let cancelled = false;
     fetch(`/api/dashboard/channel?code=${code}${dateQuery}${priorQuery}${sdowQuery}&include1h=1`)
       .then((r) => r.json())
@@ -4425,23 +4306,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     return () => {
       cancelled = true;
     };
-  }, [effectiveGranularity, code, dateQuery, priorQuery, sdowQuery, lazyHourPattern, loading]);
-  // 위 1시간 단위 지연 조회와 같은 원칙 — 편성표 형태(30분 단위)도 체크박스를 켰을 때만
-  // include30m=1로 별도 조회한다.
-  useEffect(() => {
-    if (effectiveGranularity !== "30m" || lazyHalfHourPattern || loading) return;
-    let cancelled = false;
-    fetch(`/api/dashboard/channel?code=${code}${dateQuery}${priorQuery}${sdowQuery}&include30m=1`)
-      .then((r) => r.json())
-      .then((body) => {
-        if (cancelled || !body.ok) return;
-        setLazyHalfHourPattern({ dowHalfHourPattern: body.dowHalfHourPattern ?? [], dowHalfHourPatternPrior: body.dowHalfHourPatternPrior ?? [] });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [effectiveGranularity, code, dateQuery, priorQuery, sdowQuery, lazyHalfHourPattern, loading]);
+  }, [effective1h, code, dateQuery, priorQuery, sdowQuery, lazyHourPattern, loading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -5956,42 +5821,21 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <input
                   type="checkbox"
                   checked={effective1h}
-                  disabled={dowHeatmapShowPrograms}
                   onChange={(e) => setDowHeatmapGranularity(e.target.checked ? "1h" : "3h")}
-                  className="h-3.5 w-3.5 rounded border-zinc-300 disabled:opacity-50"
-                  title={dowHeatmapShowPrograms ? "편성표 형태로 보기는 항상 30분 단위입니다" : undefined}
+                  className="h-3.5 w-3.5 rounded border-zinc-300"
                 />
                 1시간 단위로 보기
               </label>
-              {/* 사용자 지시(2026-09-19): "1시간대로 보니까 헷갈려. 프로그램 편성표 형태로
-                  그려서 히트맵을 보여주면 좋겠어" — 숫자만 있던 칸에 실제 편성 프로그램명을
-                  함께 표시하는 옵션. 재지시(2026-09-20): 30분 단위를 쓰므로 켜면 위 "1시간
-                  단위로 보기"는 의미가 없어져 비활성화한다. */}
-              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
-                <input
-                  type="checkbox"
-                  checked={dowHeatmapShowPrograms}
-                  onChange={(e) => setDowHeatmapShowPrograms(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-zinc-300"
-                />
-                편성표 형태로 보기
-              </label>
-              {/* 사용자 지시(2026-09-20): "3시간 단위로 볼 때도 체크박스로 대표 프로그램명을
-                  보여달라" — 편성표 형태와는 별개 옵션이라 그게 켜져 있으면 비활성화한다(이미
-                  전체 프로그램명이 다른 방식으로 표시되므로 중복). */}
               <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
                 <input
                   type="checkbox"
                   checked={dowHeatmapShowTopProgram}
-                  disabled={dowHeatmapShowPrograms}
                   onChange={(e) => setDowHeatmapShowTopProgram(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-zinc-300 disabled:opacity-50"
-                  title={dowHeatmapShowPrograms ? "편성표 형태로 보기에는 이미 프로그램명이 표시됩니다" : undefined}
+                  className="h-3.5 w-3.5 rounded border-zinc-300"
                 />
                 프로그램명 보기
               </label>
-              {effectiveGranularity === "1h" && !lazyHourPattern && <span className="text-xs text-zinc-400">불러오는 중...</span>}
-              {effectiveGranularity === "30m" && !lazyHalfHourPattern && <span className="text-xs text-zinc-400">불러오는 중...</span>}
+              {effective1h && !lazyHourPattern && <span className="text-xs text-zinc-400">불러오는 중...</span>}
               {/* 사용자 지시(2026-09-20): "이번 주 실제 편성표 보기"를 여기 체크박스 줄 옆에 —
                   위 히트맵은 최근 12주(또는 선택 기간)를 뭉친 근사치라, 이번 주 하나만 분 단위로
                   정확히 보여주는 정밀 버전을 같은 자리에서 열 수 있게 한다(모달, 스크롤 위치 보존). */}
@@ -6057,7 +5901,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <p className="mb-3 text-sm text-zinc-400">
             {showSdowDualView
               ? `왼쪽은 ${sdowBaselineShortLabel ?? "선택한 주간"} 전체(월~일 7개 요일), 오른쪽은 선택한 요일(기준일로부터 가장 가까운 그 요일 하루) 기준입니다.`
-              : `${periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 누적 기준, 월~일 요일과 ${effectiveGranularity === "30m" ? "30분 단위 시간대(02:00부터 25:30까지 48구간)" : effectiveGranularity === "1h" ? "1시간 단위 시간대(02시부터 25시까지 24구간)" : "3시간 단위 시간대(02~04시부터 23~25시까지 8구간)"} 조합별 평균 시청률입니다. 색이 진할수록 그 요일·시간대 조합이 강세이며, 칸에 마우스를 올리면 그때 편성했던 프로그램이 함께 표시됩니다.`}
+              : `${periodWindowDays !== 84 ? `선택 기간(${periodWindowDays}일)` : "최근 12주(84일)"} 누적 기준, 월~일 요일과 ${effective1h ? "1시간 단위 시간대(02시부터 25시까지 24구간)" : "3시간 단위 시간대(02~04시부터 23~25시까지 8구간)"} 조합별 평균 시청률입니다. 색이 진할수록 그 요일·시간대 조합이 강세이며, 칸에 마우스를 올리면 그때 편성했던 프로그램이 함께 표시됩니다.`}
           </p>
           {/* 사용자 지시(2026-09-02, 버그 신고: "화요일로 나옴"): SDoW는 periodWindowDays가
               1일(오늘)이라 히트맵이 항상 "오늘의 요일" 칸 하나만 채우고 있었다 — 선택한 요일과
@@ -6075,19 +5919,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     : `${comparisonLabel ?? "이전"} 기간 ${periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}`}
                 </p>
                 <DowHourBlockTable
-                  pattern={
-                    effectiveGranularity === "30m"
-                      ? toHourBlockShapeHalf(lazyHalfHourPattern?.dowHalfHourPatternPrior ?? [])
-                      : effectiveGranularity === "1h"
-                        ? toHourBlockShape(lazyHourPattern?.dowHourPatternPrior ?? [])
-                        : dowHourBlockPatternPrior
-                  }
+                  pattern={effective1h ? toHourBlockShape(lazyHourPattern?.dowHourPatternPrior ?? []) : dowHourBlockPatternPrior}
                   accentColor={accentColor}
                   fmtR={fmtR}
                   isEnaStory={isEnaStory}
-                  hourOrder={effectiveGranularity === "30m" ? HOUR_ORDER_HALF : effectiveGranularity === "1h" ? HOUR_ORDER_1H : undefined}
-                  labelFor={effectiveGranularity === "30m" ? halfHourLabel : effectiveGranularity === "1h" ? hour1hLabel : undefined}
-                  showProgramNames={dowHeatmapShowPrograms}
+                  hourOrder={effective1h ? HOUR_ORDER_1H : undefined}
+                  labelFor={effective1h ? hour1hLabel : undefined}
                   showTopProgramName={dowHeatmapShowTopProgram}
                 />
               </div>
@@ -6098,19 +5935,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     : `이번 기간 ${periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}`}
                 </p>
                 <DowHourBlockTable
-                  pattern={
-                    effectiveGranularity === "30m"
-                      ? toHourBlockShapeHalf(lazyHalfHourPattern?.dowHalfHourPattern ?? [])
-                      : effectiveGranularity === "1h"
-                        ? toHourBlockShape(lazyHourPattern?.dowHourPattern ?? [])
-                        : dowHourBlockPattern
-                  }
+                  pattern={effective1h ? toHourBlockShape(lazyHourPattern?.dowHourPattern ?? []) : dowHourBlockPattern}
                   accentColor={accentColor}
                   fmtR={fmtR}
                   isEnaStory={isEnaStory}
-                  hourOrder={effectiveGranularity === "30m" ? HOUR_ORDER_HALF : effectiveGranularity === "1h" ? HOUR_ORDER_1H : undefined}
-                  labelFor={effectiveGranularity === "30m" ? halfHourLabel : effectiveGranularity === "1h" ? hour1hLabel : undefined}
-                  showProgramNames={dowHeatmapShowPrograms}
+                  hourOrder={effective1h ? HOUR_ORDER_1H : undefined}
+                  labelFor={effective1h ? hour1hLabel : undefined}
                   showTopProgramName={dowHeatmapShowTopProgram}
                 />
               </div>
@@ -6154,22 +5984,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <>
               <WeekdayProfileSparklines pattern={dowHourBlockPattern} accentColor={accentColor} />
               <DowHourBlockTable
-                pattern={
-                  effectiveGranularity === "30m"
-                    ? toHourBlockShapeHalf(lazyHalfHourPattern?.dowHalfHourPattern ?? [])
-                    : effectiveGranularity === "1h"
-                      ? toHourBlockShape(lazyHourPattern?.dowHourPattern ?? [])
-                      : dowHourBlockPattern
-                }
+                pattern={effective1h ? toHourBlockShape(lazyHourPattern?.dowHourPattern ?? []) : dowHourBlockPattern}
                 accentColor={accentColor}
                 fmtR={fmtR}
                 isEnaStory={isEnaStory}
-                // 3시간 구간이 아닌 모드에서는 경쟁 강도 오버레이(3시간 구간 단위 데이터)가 칸과
-                // 안 맞아 생략한다 — hourBlockOpportunity는 optional prop이라 undefined면 점 표시가 없음.
-                hourBlockOpportunity={effectiveGranularity === "3h" ? hourBlockOpportunity : undefined}
-                hourOrder={effectiveGranularity === "30m" ? HOUR_ORDER_HALF : effectiveGranularity === "1h" ? HOUR_ORDER_1H : undefined}
-                labelFor={effectiveGranularity === "30m" ? halfHourLabel : effectiveGranularity === "1h" ? hour1hLabel : undefined}
-                showProgramNames={dowHeatmapShowPrograms}
+                // 1시간 단위 모드에서는 경쟁 강도 오버레이(3시간 구간 단위 데이터)가 칸과 안 맞아
+                // 생략한다 — hourBlockOpportunity는 optional prop이라 undefined면 점 표시가 없음.
+                hourBlockOpportunity={effective1h ? undefined : hourBlockOpportunity}
+                hourOrder={effective1h ? HOUR_ORDER_1H : undefined}
+                labelFor={effective1h ? hour1hLabel : undefined}
                 showTopProgramName={dowHeatmapShowTopProgram}
               />
               {hourBlockOpportunity.length > 0 && (
