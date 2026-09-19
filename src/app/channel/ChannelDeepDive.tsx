@@ -5867,6 +5867,19 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               {scheduleUploadMessage && (
                 <span className={`text-xs ${scheduleUploadStatus === "error" ? "text-red-500" : "text-emerald-600"}`}>{scheduleUploadMessage}</span>
               )}
+              {/* 사용자 지시(2026-09-20): "여기에도 우측에 주간 비교로 넘어갈 수 있는 링크 메뉴를
+                  하나 더" — 이 히트맵 카드 헤더 우측에도 모달을 거치지 않고 바로 주간 비교
+                  화면(/schedule-grid)으로 갈 수 있는 진입점을 추가. */}
+              <span className="h-3.5 w-px bg-zinc-200" aria-hidden />
+              <Link
+                href={`/schedule-grid?channel=${code}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full px-3 py-1 text-xs font-bold text-white shadow-sm transition hover:opacity-90"
+                style={{ backgroundColor: accentColor }}
+              >
+                주간 비교
+              </Link>
             </div>
           </div>
           {/* 사용자 지시(2026-09-20): "이번 주 실제 편성표 보기" 모달 — 관리자 화면(admin/
@@ -5887,8 +5900,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       href={`/schedule-grid?channel=${code}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs font-bold hover:underline"
-                      style={{ color: accentColor }}
+                      className="rounded-full px-3 py-1 text-xs font-bold text-white shadow-sm transition hover:opacity-90"
+                      style={{ backgroundColor: accentColor }}
                     >
                       주간 비교
                     </Link>
