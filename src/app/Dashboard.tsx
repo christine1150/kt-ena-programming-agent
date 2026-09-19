@@ -200,6 +200,7 @@ interface OriginalWeeklyItem {
   category: string | null;
   day_of_week_iso: number;
   this_week_date: string;
+  this_week_start_time: string | null;
   this_week_rating: number;
   baseline_avg_rating: number | null;
   baseline_instances: number;
@@ -556,7 +557,8 @@ function buildChannelNarrative(
       sentences.push({
         tier: 1,
         priority: Math.abs(diff) * 3,
-        text: `순위가 평소(평균 ${s.baseline_avg_rank.toFixed(1)}위)보다 ${Math.abs(diff).toFixed(1)}위 ${diff >= 0 ? "상승" : "하락"}한 ${s.today_rank}위입니다.`,
+        // 사용자 지시(2026-09-20): "평소 평균 N위 같은 정보는 무조건 반올림으로 정수로 표현".
+        text: `순위가 평소(평균 ${Math.round(s.baseline_avg_rank)}위)보다 ${Math.round(Math.abs(diff))}위 ${diff >= 0 ? "상승" : "하락"}한 ${s.today_rank}위입니다.`,
       });
     }
   }
@@ -713,7 +715,18 @@ function extBroadcastHour(startTime: string): number {
 }
 function buildChannelInsightSummary(
   s: ChannelNarrativeSignal
-): { situationLine: string | null; causeLine: string | null; actionLine: string | null; actionTag: ActionTag | null } {
+): {
+  situationLine: string | null;
+  causeLine: string | null;
+  actionLine: string | null;
+  actionTag: ActionTag | null;
+  // 사용자 지시(2026-09-20): 특정 프로그램을 지목한 액션(파란색, 클릭 유도)과 프로그램 근거
+  // 없이 채널 순위만으로 나온 진단(진한 회색, 액션이 아니라 사실 서술)을 화면에서 다르게
+  // 표시하기 위한 구분값 — actionTag만으로는 프로그램 액션이어도 태그가 null일 수 있어 구분이
+  // 안 됐다.
+  actionKind: "program" | "diagnosis" | null;
+  baselineAvgRank: number | null;
+} {
   const situationLine =
     s.today_rating !== null
       ? `${formatRating(s.today_rating)}${s.today_rank !== null ? ` · ${s.today_rank}위` : ""}${
@@ -726,12 +739,14 @@ function buildChannelInsightSummary(
   let causeLine: string | null = null;
   let actionLine: string | null = null;
   let actionTag: ActionTag | null = null;
+  let actionKind: "program" | "diagnosis" | null = null;
 
   if (s.decline_program_name && s.decline_program_name !== s.top_program_name && s.decline_program_delta_pct !== null) {
     causeLine = `'${s.decline_program_name}' 부진 — 같은 슬롯 평균 대비 ▼${Math.abs(s.decline_program_delta_pct).toFixed(0)}%`;
     const hourLabel = s.decline_program_start_time ? `(${extBroadcastHour(s.decline_program_start_time)}시)` : "";
     actionLine = `'${s.decline_program_name}'${hourLabel} 편성 ${s.decline_program_tag ? TAG_LABEL_KO[s.decline_program_tag] : "재검토 필요"}`;
     actionTag = s.decline_program_tag ?? null;
+    actionKind = "program";
   } else if (
     s.top_program_name &&
     s.top_program_rating !== null &&
@@ -746,22 +761,28 @@ function buildChannelInsightSummary(
       const hourLabel = s.top_program_start_time ? `(${extBroadcastHour(s.top_program_start_time)}시)` : "";
       actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${s.top_program_tag ? TAG_LABEL_KO[s.top_program_tag] : pct >= 0 ? "강화 검토" : "재검토 필요"}`;
       actionTag = s.top_program_tag ?? null;
+      actionKind = "program";
     }
   }
   if (!causeLine && s.today_rank !== null && s.baseline_avg_rank !== null) {
     const diff = s.baseline_avg_rank - s.today_rank;
     if (Math.abs(diff) >= 3) {
-      causeLine = `평소(평균 ${s.baseline_avg_rank.toFixed(1)}위) 대비 ${Math.abs(diff).toFixed(1)}위 ${diff >= 0 ? "상승" : "하락"}`;
-      // 사용자 지적(2026-09-20): "편성 경쟁력 점검 필요"만 보면 무슨 뜻인지 알 수 없음 — 이
-      // 문구는 "오늘의 액션 요약" 칩(원인 줄 없이 이 한 줄만 보임)에도 그대로 쓰이므로, 특정
-      // 프로그램을 하나로 지목할 근거는 없지만(그래서 아래처럼 태그도 달지 않음) 순위 자체는
-      // 알고 있으니 그 숫자를 문장에 그대로 넣어 그 자리에서 바로 뜻이 통하게 한다.
-      actionLine = diff >= 0 ? null : `오늘 ${s.today_rank}위 · 평소 평균 ${s.baseline_avg_rank.toFixed(1)}위 — 편성 경쟁력 점검 필요`;
-      // 특정 프로그램 근거가 아니라 채널 순위 변동만으로 나온 액션이라 태그를 달지 않는다.
+      // 사용자 지시(2026-09-20): "'평소 평균 65.8위' 같은 정보는 무조건 반올림으로 정수로
+      // 표현" — 순위는 원래 정수 개념이라 소수점 표기가 오히려 어색하다.
+      causeLine = `평소(평균 ${Math.round(s.baseline_avg_rank)}위) 대비 ${Math.round(Math.abs(diff))}위 ${diff >= 0 ? "상승" : "하락"}`;
+      // 사용자 재지적(2026-09-20): "오늘 몇위인지는 이미 로고 밑에 (오늘등위/목표등위)로
+      // 적혀있고, 평소 평균도 그 옆에 작게 붙여줄 것이므로 다시 적을 필요 없음" + "'편성
+      // 경쟁력 점검 필요'는 모호하니 더 직접적이고 구체적인 멘트로" — 순위 숫자 재진술을
+      // 없애고, 특정 프로그램을 지목할 근거가 없다는 사실 자체를 그대로 서술한다(새 진단을
+      // 지어내지 않음). 화면에서는 이 진단을 프로그램 액션(파란색)과 구분해 진한 회색으로
+      // 표시한다(actionKind="diagnosis").
+      actionLine = diff >= 0 ? null : "특정 프로그램 원인 없이 채널 전반 순위 하락";
+      // 특정 프로그램 근거가 아니라 채널 순위 변동만으로 나온 진단이라 태그를 달지 않는다.
+      if (actionLine) actionKind = "diagnosis";
     }
   }
 
-  return { situationLine, causeLine, actionLine, actionTag };
+  return { situationLine, causeLine, actionLine, actionTag, actionKind, baselineAvgRank: s.baseline_avg_rank };
 }
 
 // 사용자 지시(2026-09-18): 채널별 액션 문구 옆 5대 액션 태그 배지 — ChannelDeepDive.tsx의
@@ -850,11 +871,27 @@ const REPORT_TITLE = "font-heading text-[22px] font-bold tracking-tight text-zin
 // 날짜의 등위는 시청률과 같은 폰트로 굵고 진하게" — (오늘 등위 / 목표 등위)를 한 덩어리로
 // 처리하되, 오늘 등위만 시청률 숫자와 같은 굵기·색으로 올리고 목표 등위는 회색으로 남겨 둘을
 // 구분한다. 히어로(큰 숫자)와 타일(작은 숫자)이 같은 규칙을 쓰도록 크기만 파라미터로 받는다.
-function RankPair({ todayRank, targetRankNum, sizeClass }: { todayRank: number | null; targetRankNum: number | null; sizeClass: string }) {
+function RankPair({
+  todayRank,
+  targetRankNum,
+  baselineAvgRank,
+  sizeClass,
+}: {
+  todayRank: number | null;
+  targetRankNum: number | null;
+  // 사용자 지시(2026-09-20): "평소 평균 순위는 (70/60)처럼 평균 숫자 나온 것 옆에 작게
+  // 연한회색으로" — "오늘의 시청률" 타일(ChannelHero/ChannelTile)에서만 넘겨준다(값이 없으면
+  // 기존 그대로 (오늘등위/목표등위)만 표시).
+  baselineAvgRank?: number | null;
+  sizeClass: string;
+}) {
   return (
     <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`}>
       (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>
       <span className="font-medium">/{targetRankNum ?? "-"}</span>)
+      {baselineAvgRank !== null && baselineAvgRank !== undefined && (
+        <span className="ml-1 text-[0.7em] font-normal text-zinc-300">평소{Math.round(baselineAvgRank)}</span>
+      )}
     </span>
   );
 }
@@ -863,7 +900,17 @@ function RankPair({ todayRank, targetRankNum, sizeClass }: { todayRank: number |
 // 놓는 가로 배치를 철회하고, 로고 아래에 큰 숫자를 세우는 세로 배치로 되돌린다. 다만 "현재 순위
 // 진한 글씨체로 하고 있는 건 그대로 유지"라 RankPair(오늘 등위 볼드 + 확대된 등위 폰트)는 유지.
 // "연간 누적 평균 …" 설명 줄은 별도 지시로 삭제된 상태 그대로 둔다(레이아웃이 아니라 내용 결정).
-function ChannelHero({ channel, actionLine }: { channel: ChannelSummary; actionLine: string | null }) {
+function ChannelHero({
+  channel,
+  actionLine,
+  actionKind,
+  baselineAvgRank,
+}: {
+  channel: ChannelSummary;
+  actionLine: string | null;
+  actionKind: "program" | "diagnosis" | null;
+  baselineAvgRank: number | null;
+}) {
   const heroTargetRankNum = parseTargetRankNum(channel.targetRank);
   return (
     <Link href={`/channel/${channel.code}`} className="group block">
@@ -881,7 +928,7 @@ function ChannelHero({ channel, actionLine }: { channel: ChannelSummary; actionL
         <span className="text-[64px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em] text-zinc-900">
           {formatRating(channel.currentRating)}
         </span>
-        <RankPair todayRank={channel.currentRank} targetRankNum={heroTargetRankNum} sizeClass="text-[28px]" />
+        <RankPair todayRank={channel.currentRank} targetRankNum={heroTargetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[28px]" />
         {/* 사용자 재지시(2026-08-22/25): ENA도 6개 타일과 동일하게 RankChangeIndicator 하나만. */}
         <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
@@ -897,8 +944,13 @@ function ChannelHero({ channel, actionLine }: { channel: ChannelSummary; actionL
       {/* 사용자 지시(2026-09-20): "AI 편성 비서와 오늘의 액션 요약은 삭제. 대신 오늘의 시청률
           부분에 각 채널 그래프 밑에 오늘의 액션 요약에 들어가 있던 말을 한 줄로 넣어준다" —
           별도 카드로 모아 보여주던 채널별 액션 한 줄을, 그 채널 자신의 그래프 바로 아래로
-          옮긴다(계산 로직은 buildChannelInsightSummary 그대로, 새 계산 없음). */}
-      <p className="mt-2 truncate text-[13px] font-medium" style={{ color: actionLine ? "#281fc7" : "#a1a1aa" }}>
+          옮긴다(계산 로직은 buildChannelInsightSummary 그대로, 새 계산 없음).
+          재지시(2026-09-20): 프로그램을 지목한 액션(파란색)과, 프로그램 근거 없이 채널
+          순위만으로 나온 진단(진한 회색)을 구분해 표시한다. */}
+      <p
+        className="mt-2 truncate text-[13px] font-medium"
+        style={{ color: actionKind === "program" ? "#281fc7" : actionKind === "diagnosis" ? "#3f3f46" : "#a1a1aa" }}
+      >
         {actionLine ?? "현재 편성 유지"}
       </p>
     </Link>
@@ -1012,7 +1064,19 @@ function RankChangeIndicator({ rankChangeDod }: { rankChangeDod: number | null }
 // 사용자 지시(2026-08-21, Page 1 전면 개편/매거진 개편): 가로로 긴 압축 리스트 행 대신, 위젯형
 // 미니 카드 그리드로 재배열 — 로고만(채널명 텍스트 제거), "시청률 (순위/목표순위)" 한 줄, 증감은
 // 전일 대비 순위 증감(정수)으로.
-function ChannelTile({ channel, logoReference, actionLine }: { channel: ChannelSummary; logoReference?: ChannelSummary; actionLine: string | null }) {
+function ChannelTile({
+  channel,
+  logoReference,
+  actionLine,
+  actionKind,
+  baselineAvgRank,
+}: {
+  channel: ChannelSummary;
+  logoReference?: ChannelSummary;
+  actionLine: string | null;
+  actionKind: "program" | "diagnosis" | null;
+  baselineAvgRank: number | null;
+}) {
   const isSkyUhd = channel.code === "SKYUHD";
   const targetRankNum = parseTargetRankNum(channel.targetRank);
   return (
@@ -1058,7 +1122,7 @@ function ChannelTile({ channel, logoReference, actionLine }: { channel: ChannelS
           <span className={`font-bold tabular-nums tracking-tight text-zinc-900 ${isSkyUhd ? "text-lg" : "text-xl"}`}>
             {formatRating(channel.currentRating, channel.code)}
           </span>
-          <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} sizeClass="text-[13px]" />
+          <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[13px]" />
         </span>
         <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
@@ -1067,8 +1131,13 @@ function ChannelTile({ channel, logoReference, actionLine }: { channel: ChannelS
       <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#a1a1aa"} points={channel.recentRatingsDetail} />
       {/* 사용자 지시(2026-09-20): "AI 편성 비서와 오늘의 액션 요약은 삭제. 대신 오늘의 시청률
           부분에 각 채널 그래프 밑에 오늘의 액션 요약에 들어가 있던 말을 한 줄로 넣어준다" —
-          ChannelHero와 동일한 한 줄(계산은 buildChannelInsightSummary 재사용, 새 계산 없음). */}
-      <p className="truncate text-[11px] font-medium" style={{ color: actionLine ? "#281fc7" : "#a1a1aa" }}>
+          ChannelHero와 동일한 한 줄(계산은 buildChannelInsightSummary 재사용, 새 계산 없음).
+          재지시(2026-09-20): 프로그램 지목 액션(파란색)과 순위만으로 나온 진단(진한 회색)을
+          구분해 표시한다. */}
+      <p
+        className="truncate text-[11px] font-medium"
+        style={{ color: actionKind === "program" ? "#281fc7" : actionKind === "diagnosis" ? "#3f3f46" : "#a1a1aa" }}
+      >
         {actionLine ?? "현재 편성 유지"}
       </p>
     </Link>
@@ -1081,7 +1150,7 @@ function ChannelStatusCard({ channels, narrativeSignals }: { channels: Map<strin
   const rest = ["ENA_PLAY", "ENA_DRAMA", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"]
     .map((c) => channels.get(c))
     .filter((c): c is ChannelSummary => !!c);
-  const actionLineByCode = new Map(narrativeSignals.map((s) => [s.channelCode, buildChannelInsightSummary(s).actionLine]));
+  const insightByCode = new Map(narrativeSignals.map((s) => [s.channelCode, buildChannelInsightSummary(s)]));
 
   return (
     // 사용자 지시(2026-09-03, UI/UX REDESIGN): 화면 전체 폭을 쓰는 하나의 넓은 가로 영역 +
@@ -1097,14 +1166,28 @@ function ChannelStatusCard({ channels, narrativeSignals }: { channels: Map<strin
         <p className={REPORT_EYEBROW}>TODAY&rsquo;S RATINGS</p>
       </div>
       <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-12">
-        {ena && <ChannelHero channel={ena} actionLine={actionLineByCode.get("ENA") ?? null} />}
+        {ena && (
+          <ChannelHero
+            channel={ena}
+            actionLine={insightByCode.get("ENA")?.actionLine ?? null}
+            actionKind={insightByCode.get("ENA")?.actionKind ?? null}
+            baselineAvgRank={insightByCode.get("ENA")?.baselineAvgRank ?? null}
+          />
+        )}
         {/* 바깥 div는 세로 divider·좌측 여백만, 안쪽 grid는 gap-px + 배경색으로 칸 사이 1px
             격자선만 남기는 표형 배치(테두리 박스 없음) — 두 역할을 한 요소에 겹치면 여백까지
             격자 배경색으로 칠해지므로 분리한다. */}
         <div className="lg:self-start lg:border-l lg:border-zinc-100 lg:pl-12">
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-zinc-100 sm:grid-cols-3">
             {rest.map((c) => (
-              <ChannelTile key={c.code} channel={c} logoReference={ena} actionLine={actionLineByCode.get(c.code) ?? null} />
+              <ChannelTile
+                key={c.code}
+                channel={c}
+                logoReference={ena}
+                actionLine={insightByCode.get(c.code)?.actionLine ?? null}
+                actionKind={insightByCode.get(c.code)?.actionKind ?? null}
+                baselineAvgRank={insightByCode.get(c.code)?.baselineAvgRank ?? null}
+              />
             ))}
           </div>
         </div>
@@ -3726,15 +3809,21 @@ function OriginalContentReportCard({
                       {CHANNEL_NAME_BY_CODE[w.broadcast_channel_code] ?? w.broadcast_channel_code}
                     </p>
                   </div>
-                  <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-[15px] text-zinc-600">
-                    <p>
-                      <span className="text-zinc-400">금주 시청률 </span>
-                      <span className="font-bold tabular-nums" style={{ color: thisWeekColor }}>
-                        {formatRating(w.this_week_rating, w.broadcast_channel_code)}
-                      </span>
-                      <span className="text-zinc-400"> ({formatMonthDayDow(w.this_week_date)})</span>
+                  {/* 사용자 지시(2026-09-20): "'금주시청률' 부분에 몇월 몇일 몇시인지를 적어주는
+                      게 더 좋겠어 — 몇월몇일 몇시 | 시청률(더 큰 글씨) | 4주 평균 시청률을 세
+                      섹션으로 나눠서 좌정렬" — 기존에 "금주 시청률 [값] ([날짜])"로 한 문장에
+                      섞여 있던 것을, 방영 일시 / 시청률(강조) / 4주 평균 세 칸으로 분리한다.
+                      시간은 get_original_content_weekly_review가 매칭해 내려주는 실제 방영
+                      start_time을 이 앱의 방송일 관례(02시 이전은 +24시)로 표시한다. */}
+                  <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1">
+                    <p className="text-[13px] text-zinc-400">
+                      {formatMonthDayDow(w.this_week_date)}
+                      {w.this_week_start_time ? ` ${extBroadcastHour(w.this_week_start_time)}시` : ""}
                     </p>
-                    <p>
+                    <p className="text-[22px] font-bold tabular-nums leading-none" style={{ color: thisWeekColor }}>
+                      {formatRating(w.this_week_rating, w.broadcast_channel_code)}
+                    </p>
+                    <p className="text-[13px] text-zinc-500">
                       <span className="text-zinc-400">4주평균 </span>
                       <span className="font-semibold tabular-nums text-zinc-700">
                         {formatRating(w.baseline_avg_rating, w.broadcast_channel_code)}
@@ -3849,7 +3938,6 @@ function ChannelNarrativeCard({
       deltaPct: s.rating_delta_pct,
       todayRating: s.today_rating,
       todayRank: s.today_rank,
-      baselineAvgRank: s.baseline_avg_rank,
       ...buildChannelInsightSummary(s),
     });
   }
@@ -3868,7 +3956,6 @@ function ChannelNarrativeCard({
       deltaPct: skyuhdSignal.rating_delta_pct ?? null,
       todayRating: skyuhdSignal.today_rating ?? null,
       todayRank: skyuhdSignal.today_rank ?? null,
-      baselineAvgRank: skyuhdSignal.baseline_avg_rank ?? null,
       ...buildChannelInsightSummary(skyuhdSignal),
     });
 

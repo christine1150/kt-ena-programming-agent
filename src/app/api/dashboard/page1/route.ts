@@ -156,6 +156,9 @@ interface OriginalWeeklyRow {
   category: string | null;
   day_of_week_iso: number;
   this_week_date: string;
+  // 사용자 지시(2026-09-20): "금주 시청률" 카드에 몇 시에 방영했는지도 보여주기 위해
+  // get_original_content_weekly_review가 매칭한 ratings 행의 start_time을 그대로 추가.
+  this_week_start_time: string | null;
   this_week_rating: number;
   baseline_avg_rating: number | null;
   baseline_instances: number;
