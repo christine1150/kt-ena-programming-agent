@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
-import { AskAssistantWidget } from "@/components/AskAssistantWidget";
 import { highlightNarrativeText, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR } from "@/lib/highlightNarrative";
 // 사용자 지시(2026-09-09): 1페이지 "채널별 인사이트"의 안정/약세/주의 Health Score 배지를
 // 걷어내고 그 자리에 "오늘의 시청률" 카드와 같은 형식(시청률+등위)을 넣었다 — 그 배지를
@@ -783,9 +782,12 @@ function buildSkyUhdNarrative(s: ChannelNarrativeSignal | undefined): { channelN
   if (!s || s.today_rank === null || s.baseline_avg_rank === null) return null;
   const diff = s.baseline_avg_rank - s.today_rank;
   if (Math.abs(diff) < 10) return null;
+  // 사용자 지시(2026-09-20): "'시장 전체 순위가 평소(평균 200위)보다 11위 하락한 210위를
+  // 기록했습니다' 이런 멘트는 '채널 평균 순위(200위)보다 11위 하락한 210위 기록'으로 짧게
+  // 정리" — 값 계산은 그대로, 문장만 축약.
   return {
     channelName: "skyUHD",
-    text: `시장 전체 순위가 평소(평균 ${s.baseline_avg_rank.toFixed(0)}위)보다 ${Math.abs(diff).toFixed(0)}위 ${diff >= 0 ? "상승" : "하락"}한 ${s.today_rank}위를 기록했습니다.`,
+    text: `채널 평균 순위(${s.baseline_avg_rank.toFixed(0)}위)보다 ${Math.abs(diff).toFixed(0)}위 ${diff >= 0 ? "상승" : "하락"}한 ${s.today_rank}위 기록`,
   };
 }
 
@@ -861,7 +863,7 @@ function RankPair({ todayRank, targetRankNum, sizeClass }: { todayRank: number |
 // 놓는 가로 배치를 철회하고, 로고 아래에 큰 숫자를 세우는 세로 배치로 되돌린다. 다만 "현재 순위
 // 진한 글씨체로 하고 있는 건 그대로 유지"라 RankPair(오늘 등위 볼드 + 확대된 등위 폰트)는 유지.
 // "연간 누적 평균 …" 설명 줄은 별도 지시로 삭제된 상태 그대로 둔다(레이아웃이 아니라 내용 결정).
-function ChannelHero({ channel }: { channel: ChannelSummary }) {
+function ChannelHero({ channel, actionLine }: { channel: ChannelSummary; actionLine: string | null }) {
   const heroTargetRankNum = parseTargetRankNum(channel.targetRank);
   return (
     <Link href={`/channel/${channel.code}`} className="group block">
@@ -892,6 +894,13 @@ function ChannelHero({ channel }: { channel: ChannelSummary }) {
       <div className="mt-5">
         <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} width={293} height={48} points={channel.recentRatingsDetail} />
       </div>
+      {/* 사용자 지시(2026-09-20): "AI 편성 비서와 오늘의 액션 요약은 삭제. 대신 오늘의 시청률
+          부분에 각 채널 그래프 밑에 오늘의 액션 요약에 들어가 있던 말을 한 줄로 넣어준다" —
+          별도 카드로 모아 보여주던 채널별 액션 한 줄을, 그 채널 자신의 그래프 바로 아래로
+          옮긴다(계산 로직은 buildChannelInsightSummary 그대로, 새 계산 없음). */}
+      <p className="mt-2 truncate text-[13px] font-medium" style={{ color: actionLine ? "#281fc7" : "#a1a1aa" }}>
+        {actionLine ?? "현재 편성 유지"}
+      </p>
     </Link>
   );
 }
@@ -1003,7 +1012,7 @@ function RankChangeIndicator({ rankChangeDod }: { rankChangeDod: number | null }
 // 사용자 지시(2026-08-21, Page 1 전면 개편/매거진 개편): 가로로 긴 압축 리스트 행 대신, 위젯형
 // 미니 카드 그리드로 재배열 — 로고만(채널명 텍스트 제거), "시청률 (순위/목표순위)" 한 줄, 증감은
 // 전일 대비 순위 증감(정수)으로.
-function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logoReference?: ChannelSummary }) {
+function ChannelTile({ channel, logoReference, actionLine }: { channel: ChannelSummary; logoReference?: ChannelSummary; actionLine: string | null }) {
   const isSkyUhd = channel.code === "SKYUHD";
   const targetRankNum = parseTargetRankNum(channel.targetRank);
   return (
@@ -1056,16 +1065,23 @@ function ChannelTile({ channel, logoReference }: { channel: ChannelSummary; logo
       {/* 사용자 지시(2026-09-03, 2차)의 호버 툴팁을 서브 채널 타일에도 동일하게 적용(같은
           recentRatingsDetail 데이터, 새 조회 없음) — 높이·폭은 타일 기존 값 그대로 유지. */}
       <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#a1a1aa"} points={channel.recentRatingsDetail} />
+      {/* 사용자 지시(2026-09-20): "AI 편성 비서와 오늘의 액션 요약은 삭제. 대신 오늘의 시청률
+          부분에 각 채널 그래프 밑에 오늘의 액션 요약에 들어가 있던 말을 한 줄로 넣어준다" —
+          ChannelHero와 동일한 한 줄(계산은 buildChannelInsightSummary 재사용, 새 계산 없음). */}
+      <p className="truncate text-[11px] font-medium" style={{ color: actionLine ? "#281fc7" : "#a1a1aa" }}>
+        {actionLine ?? "현재 편성 유지"}
+      </p>
     </Link>
   );
 }
 
 // ① 채널 현황 카드 — R1C1("오늘의 시청률")
-function ChannelStatusCard({ channels }: { channels: Map<string, ChannelSummary> }) {
+function ChannelStatusCard({ channels, narrativeSignals }: { channels: Map<string, ChannelSummary>; narrativeSignals: ChannelNarrativeSignal[] }) {
   const ena = channels.get("ENA");
   const rest = ["ENA_PLAY", "ENA_DRAMA", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"]
     .map((c) => channels.get(c))
     .filter((c): c is ChannelSummary => !!c);
+  const actionLineByCode = new Map(narrativeSignals.map((s) => [s.channelCode, buildChannelInsightSummary(s).actionLine]));
 
   return (
     // 사용자 지시(2026-09-03, UI/UX REDESIGN): 화면 전체 폭을 쓰는 하나의 넓은 가로 영역 +
@@ -1081,14 +1097,14 @@ function ChannelStatusCard({ channels }: { channels: Map<string, ChannelSummary>
         <p className={REPORT_EYEBROW}>TODAY&rsquo;S RATINGS</p>
       </div>
       <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-12">
-        {ena && <ChannelHero channel={ena} />}
+        {ena && <ChannelHero channel={ena} actionLine={actionLineByCode.get("ENA") ?? null} />}
         {/* 바깥 div는 세로 divider·좌측 여백만, 안쪽 grid는 gap-px + 배경색으로 칸 사이 1px
             격자선만 남기는 표형 배치(테두리 박스 없음) — 두 역할을 한 요소에 겹치면 여백까지
             격자 배경색으로 칠해지므로 분리한다. */}
         <div className="lg:self-start lg:border-l lg:border-zinc-100 lg:pl-12">
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-zinc-100 sm:grid-cols-3">
             {rest.map((c) => (
-              <ChannelTile key={c.code} channel={c} logoReference={ena} />
+              <ChannelTile key={c.code} channel={c} logoReference={ena} actionLine={actionLineByCode.get(c.code) ?? null} />
             ))}
           </div>
         </div>
@@ -3774,63 +3790,6 @@ function buildRerunHighlightSentence(
   return buildRerunHighlightSentenceShared(enaDaily, rerunChannelCode, formatRating);
 }
 
-// 사용자 지시(2026-09-18): "오늘 뭘 해야 하는가"가 raw 시청률 숫자(ChannelStatusCard)보다
-// 늦게 나온다 — AskAssistantWidget 바로 아래·ChannelStatusCard보다 위에 7개 채널 액션을
-// 한눈에 보여주는 요약을 신설한다. 아래 ChannelNarrativeCard가 이미 채널별로 호출하는
-// buildChannelInsightSummary(new API·new 계산 없이 그대로 재사용)의 actionLine·actionTag만
-// 뽑아 칩으로 나열 — 상세 현황/원인은 여전히 ChannelNarrativeCard(그대로 유지)에서 확인한다.
-// 채널 순서·표기는 WEEKEND_REPORT_CHANNEL_ORDER(=INSIGHT_CHANNEL_ORDER + skyUHD, 7개)와
-// CHANNEL_NAME_BY_CODE를 그대로 따라 ChannelNarrativeCard와 어긋나지 않게 한다.
-function TodayActionSummaryCard({ signals, themeColorByCode }: { signals: ChannelNarrativeSignal[]; themeColorByCode: Map<string, string | null> }) {
-  const byCode = new Map(signals.map((s) => [s.channelCode, s]));
-  const items = WEEKEND_REPORT_CHANNEL_ORDER.map((code) => {
-    const s = byCode.get(code);
-    if (!s) return null;
-    const { actionLine, actionTag } = buildChannelInsightSummary(s);
-    return { code, channelName: CHANNEL_NAME_BY_CODE[code] ?? code, actionLine, actionTag, color: themeColorByCode.get(code) ?? null };
-  }).filter(
-    (item): item is { code: string; channelName: string; actionLine: string | null; actionTag: ActionTag | null; color: string | null } =>
-      item !== null
-  );
-
-  if (items.length === 0) return null;
-
-  return (
-    <div className={CARD}>
-      <h2 className={SECTION_TITLE}>오늘의 액션 요약</h2>
-      <p className="mb-4 text-xs text-zinc-400">7개 채널의 액션 판단만 먼저 모았습니다. 클릭하면 근거가 되는 Page 2 &quot;무엇을 편성할까요?&quot;로 이동합니다.</p>
-      <div className="flex flex-wrap gap-2">
-        {items.map((item) =>
-          item.actionLine ? (
-            // 액션이 있는 채널 — 브랜드 색 배지로 눈에 띄게 강조.
-            // 사용자 피드백(2026-09-19): 이 칩이 <div>라 클릭해도 근거 화면으로 못 갔다 —
-            // Page 2의 WHAT TO SCHEDULE 앵커로 바로 연결한다.
-            <Link
-              key={item.code}
-              href={`/channel/${item.code}#what-to-schedule`}
-              className="flex items-center gap-1.5 rounded-full bg-[#f1f0f9] px-3 py-1.5 ring-1 ring-[#d8d5f5] transition hover:ring-[#281fc7]"
-            >
-              <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: item.color ?? undefined }}>
-                {item.channelName}
-              </span>
-              <span className="text-[13px] font-medium text-[#281fc7]">{item.actionLine}</span>
-              {/* 사용자 지시(2026-09-18): 근거 프로그램의 Page 2 Fit Score 판정이 이미 있을
-                  때만 배지 표시 — 오늘 계산값이 없으면(Page 2 미방문 등) 조용히 생략한다. */}
-              {item.actionTag && <ActionTagDot tag={item.actionTag} />}
-            </Link>
-          ) : (
-            // 액션 없는(현재 편성 유지) 채널 — 회색 톤으로 덜 눈에 띄게.
-            <div key={item.code} className="flex items-center gap-1.5 rounded-full bg-zinc-50 px-3 py-1.5 ring-1 ring-zinc-200/70">
-              <span className="text-[13px] font-semibold whitespace-nowrap text-zinc-500">{item.channelName}</span>
-              <span className="text-[13px] text-zinc-400">현재 편성 유지</span>
-            </div>
-          )
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ③ 채널별 인사이트(줄글) — R2C1. 사용자 지시(2026-08-20): 채널명은 그 채널 로고의 메인
 // 색상(channels.theme_color)으로 굵게 표시.
 function ChannelNarrativeCard({
@@ -4937,18 +4896,6 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           </div>
         )}
 
-        {/* 사용자 지시(2026-08-26): "1페이지의 [4개 채널이 동시에 큰 폭으로 움직였습니다] 알림
-            자리를 'AI 편성 비서 - 자연어 검색' 항목으로 교체하자" — 원래 이 자리에 있던 동시다발
-            이상 변동 알림(Tier 2, 원 제안 10번)은 기능 자체를 없애지 않고 아래로 옮겼다(조건부로만
-            뜨는 알림이라 이 상단 자리는 늘 쓸 수 있는 AI 편성 비서 검색창이 더 유용하다는 취지로
-            해석 — 알림 자체를 완전히 지우길 원하시면 알려주세요). Page 2(ChannelDeepDive.tsx)와
-            같은 공용 컴포넌트(AskAssistantWidget)를 재사용 — /api/ask는 페이지가 채널을 미리
-            지정하지 않고 질문 문장에서 채널명을 인식하므로 Page 1(특정 채널에 종속되지 않음)에도
-            그대로 쓸 수 있다. */}
-        <div className="mb-4">
-          <AskAssistantWidget accentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"} />
-        </div>
-
         {loading && !data && <p className="text-sm text-zinc-500">불러오는 중...</p>}
 
         {data && (
@@ -4963,13 +4910,8 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 문제를 고친 것이고, 이번엔 좌우 2열 구조 자체를 없앤다. 두 섹션 아래(채널별
                 인사이트/일간 세부 내역·주요 뉴스·킬러 콘텐츠)는 이번 지시 범위 밖이라 기존
                 2열 배치를 그대로 둔다. */}
-            {/* 사용자 지시(2026-09-18): "오늘 뭘 해야 하는가"가 raw 시청률 숫자보다 늦게 나온다 —
-                AskAssistantWidget 바로 아래·ChannelStatusCard보다 위에 액션 요약을 먼저 배치. */}
             <div className="lg:col-span-2">
-              <TodayActionSummaryCard signals={data.narrativeSignals} themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))} />
-            </div>
-            <div className="lg:col-span-2">
-              <ChannelStatusCard channels={byCode} />
+              <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} />
             </div>
             <div className="lg:col-span-2">
               <OriginalContentReportCard

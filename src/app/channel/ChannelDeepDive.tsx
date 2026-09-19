@@ -6113,100 +6113,86 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <h2 className={`${SECTION_TITLE_P2} mb-3`}>
             무슨 일이 있었나요? — 기간별 비교<span className={ENG_TITLE_ANNOTATION}>(WHAT HAPPENED?)</span>
           </h2>
-          {showComparisonView && data.periodReport && (
-            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl bg-zinc-50 p-3">
-                <p className="text-sm text-zinc-500">
-                  {isComparisonPreset ? "이번 기간" : "선택 기간"} 평균({data.periodReport.days_with_data}일)
-                </p>
-                <p className="mt-1 text-base font-semibold text-zinc-900">{fmtR(data.periodReport.avg_rating)}</p>
-              </div>
-              <div className="rounded-2xl bg-zinc-50 p-3">
-                <p className="text-sm text-zinc-500">{comparisonLabel ?? "직전 동일 길이 기간"} 대비</p>
-                <p className="mt-1 text-base font-semibold text-zinc-900">
-                  {data.periodReport.prior_period_change_pct === null ? (
-                    "—"
-                  ) : (
-                    <span className={data.periodReport.prior_period_change_pct >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                      {data.periodReport.prior_period_change_pct >= 0 ? "▲" : "▼"} {Math.abs(data.periodReport.prior_period_change_pct).toFixed(1)}%
-                    </span>
-                  )}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-zinc-50 p-3">
-                <p className="text-sm text-zinc-500">최근 12주 평균 대비</p>
-                <p className="mt-1 text-base font-semibold text-zinc-900">
-                  {data.periodReport.baseline_change_pct === null ? (
-                    "—"
-                  ) : (
-                    <span className={data.periodReport.baseline_change_pct >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                      {data.periodReport.baseline_change_pct >= 0 ? "▲" : "▼"} {Math.abs(data.periodReport.baseline_change_pct).toFixed(1)}%
-                    </span>
-                  )}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-zinc-50 p-3">
-                <p className="text-sm text-zinc-500">기간 중 최고 / 최저</p>
-                <p className="mt-1 text-sm font-medium text-zinc-700">
-                  {data.periodReport.best_date ? `${data.periodReport.best_date} (${fmtR(data.periodReport.best_rating)})` : "—"}
-                  <br />
-                  {data.periodReport.worst_date ? `${data.periodReport.worst_date} (${fmtR(data.periodReport.worst_rating)})` : "—"}
-                </p>
-              </div>
-            </div>
-          )}
+          {/* 사용자 지시(2026-09-20): "이 표를 최대한 한 줄 정도에 최적화하여 줄일 수 있으면
+              미니멀라이즈 할 것 — UIUX 전문가와 디자이너가 상의해서 정해줘" — 4개 통계
+              타일 + 상위 프로그램 박스 + 상승/하락 박스 + 신규 편성 문장이 각각 카드로
+              쌓여 5~6줄을 차지하던 것을, 배경 박스 없이 구분선(·)만 쓰는 한 줄
+              flex-wrap 바로 압축한다(좁은 화면에서만 자연스럽게 2줄로 접힘). 표시 우선순위:
+              핵심 4개 통계 → 상위 프로그램 2개(3위는 title 툴팁) → 가장 크게 움직인 프로그램
+              1개(상승·하락 중 기여도가 더 큰 쪽) → 신규 편성은 문장 대신 짧은 태그로,
+              원래 문장은 title 툴팁에 보존. */}
           {showComparisonView &&
-            data.periodProgramMovers.length > 0 &&
             data.periodReport &&
             (() => {
-              const facts = getWhatHappenedFacts(data.periodProgramMovers, data.periodReport.avg_rating);
-              if (!facts) return null;
+              const pr = data.periodReport;
+              const facts = data.periodProgramMovers.length > 0 ? getWhatHappenedFacts(data.periodProgramMovers, pr.avg_rating) : null;
+              // 상승·하락이 둘 다 있으면 채널 기여도(시청률 변화폭)가 더 큰 쪽 하나만 보여준다 —
+              // 새 계산 없이 기존 priorRating/periodRating 차이의 절댓값으로 비교.
+              const moverCandidates = [
+                facts?.riser ? { ...facts.riser, up: true } : null,
+                facts?.faller ? { ...facts.faller, up: false } : null,
+              ].filter((m): m is { name: string; priorRating: number | null; periodRating: number | null; up: boolean } => m !== null);
+              const mover =
+                moverCandidates.length > 0
+                  ? moverCandidates.sort(
+                      (a, b) => Math.abs((b.periodRating ?? 0) - (b.priorRating ?? 0)) - Math.abs((a.periodRating ?? 0) - (a.priorRating ?? 0))
+                    )[0]
+                  : null;
               return (
-                <div className="mb-4 space-y-3">
-                  {facts.topStill.length > 0 && (
-                    <div className="rounded-2xl bg-zinc-50 p-3">
-                      <p className="text-sm text-zinc-500">이 기간 시청률 상위</p>
-                      <div className="mt-1.5 flex flex-wrap gap-2">
-                        {facts.topStill.map((m) => (
-                          <span key={m.name} className="rounded-full bg-white px-2.5 py-1 text-sm text-zinc-700 ring-1 ring-zinc-200">
-                            {m.name} <span className="font-semibold text-zinc-900">{fmtR(m.rating)}</span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-600">
+                  <span className="text-sm font-bold text-zinc-900">{fmtR(pr.avg_rating)}</span>
+                  <span className="text-zinc-400">
+                    {isComparisonPreset ? "이번 기간" : "선택 기간"} 평균({pr.days_with_data}일)
+                  </span>
+                  <span className="text-zinc-300">·</span>
+                  {pr.prior_period_change_pct === null ? (
+                    <span className="text-zinc-400">{comparisonLabel ?? "직전 기간"} —</span>
+                  ) : (
+                    <span className={`font-medium ${pr.prior_period_change_pct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {comparisonLabel ?? "직전 기간"} {pr.prior_period_change_pct >= 0 ? "▲" : "▼"}
+                      {Math.abs(pr.prior_period_change_pct).toFixed(1)}%
+                    </span>
                   )}
-                  {(facts.riser || facts.faller) && (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      {facts.riser && (
-                        <div className="rounded-2xl bg-emerald-50 p-3">
-                          <p className="text-sm text-emerald-700">가장 크게 상승</p>
-                          <p className="mt-1 text-sm font-medium text-zinc-900">{facts.riser.name}</p>
-                          <p className="mt-0.5 text-sm text-emerald-700">
-                            {fmtR(facts.riser.priorRating)} → <span className="font-semibold">{fmtR(facts.riser.periodRating)}</span>
-                          </p>
-                        </div>
-                      )}
-                      {facts.faller && (
-                        <div className="rounded-2xl bg-rose-50 p-3">
-                          <p className="text-sm text-rose-700">가장 크게 하락</p>
-                          <p className="mt-1 text-sm font-medium text-zinc-900">{facts.faller.name}</p>
-                          <p className="mt-0.5 text-sm text-rose-700">
-                            {fmtR(facts.faller.priorRating)} → <span className="font-semibold">{fmtR(facts.faller.periodRating)}</span>
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                  <span className="text-zinc-300">·</span>
+                  {pr.baseline_change_pct === null ? (
+                    <span className="text-zinc-400">12주 평균 —</span>
+                  ) : (
+                    <span className={`font-medium ${pr.baseline_change_pct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      12주 평균 {pr.baseline_change_pct >= 0 ? "▲" : "▼"}
+                      {Math.abs(pr.baseline_change_pct).toFixed(1)}%
+                    </span>
                   )}
-                  {(facts.goodNewEntry || facts.newEntryCount > 0) && (
-                    <p className="text-sm text-zinc-500">
-                      {facts.goodNewEntry && (
-                        <>
-                          <span className="font-medium text-zinc-700">{facts.goodNewEntry.name}</span>이 이 기간 새로 편성되어{" "}
-                          {fmtR(facts.goodNewEntry.periodRating)}로 채널 평균({fmtR(facts.goodNewEntry.channelAvgRating)}) 이상의 성과를 냈습니다.{" "}
-                        </>
-                      )}
-                      {facts.newEntryCount > 0 && <>이전 기간엔 없던 신규 편성 {facts.newEntryCount}건이 이 기간에 새로 포착됐습니다.</>}
-                    </p>
+                  <span className="text-zinc-300">·</span>
+                  <span className="text-zinc-500">
+                    최고 {pr.best_date ? `${pr.best_date.slice(5)} ${fmtR(pr.best_rating)}` : "—"} · 최저{" "}
+                    {pr.worst_date ? `${pr.worst_date.slice(5)} ${fmtR(pr.worst_rating)}` : "—"}
+                  </span>
+                  {facts && facts.topStill.length > 0 && (
+                    <span
+                      className="ml-1 border-l border-zinc-200 pl-2 text-zinc-500"
+                      title={facts.topStill.length > 2 ? facts.topStill.map((m) => `${m.name} ${fmtR(m.rating)}`).join(" · ") : undefined}
+                    >
+                      상위 {facts.topStill.slice(0, 2).map((m) => `${m.name} ${fmtR(m.rating)}`).join(" · ")}
+                      {facts.topStill.length > 2 ? " 외" : ""}
+                    </span>
+                  )}
+                  {mover && (
+                    <span className={`font-medium ${mover.up ? "text-emerald-600" : "text-rose-600"}`}>
+                      {mover.up ? "▲" : "▼"} {mover.name} {fmtR(mover.priorRating)}→{fmtR(mover.periodRating)}
+                    </span>
+                  )}
+                  {facts?.goodNewEntry && (
+                    <span
+                      className="text-zinc-500"
+                      title={`${facts.goodNewEntry.name}이 이 기간 새로 편성되어 ${fmtR(facts.goodNewEntry.periodRating)}로 채널 평균(${fmtR(facts.goodNewEntry.channelAvgRating)}) 이상의 성과를 냈습니다.`}
+                    >
+                      NEW {facts.goodNewEntry.name} {fmtR(facts.goodNewEntry.periodRating)}
+                    </span>
+                  )}
+                  {!facts?.goodNewEntry && facts && facts.newEntryCount > 0 && (
+                    <span className="text-zinc-400" title="이전 기간엔 없던 신규 편성입니다.">
+                      신규 편성 {facts.newEntryCount}건
+                    </span>
                   )}
                 </div>
               );

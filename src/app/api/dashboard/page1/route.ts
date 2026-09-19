@@ -709,6 +709,26 @@ export async function GET(request: Request) {
   // buildRerunHighlightSentence와 동일 함수·동일 값 공유).
   const rerunLeadSentenceForLlmByChannel = new Map<string, string>();
 
+  // 사용자 지시(2026-09-20): "종영되었거나, 프로그램이 없을 경우에는 해당일로부터 -7일간의
+  // 주요 컨텐츠들의 종합 리뷰를 표시하도록 설계하였는데, 오늘은 표시되지 않았다" — 원인 확인
+  // 결과, 화이트리스트(featured_content)에 그 요일 항목이 남아 있으면(broadcast_end_date가
+  // 아직 갱신 안 됐거나 조건부 편성이라 종료일 자체가 없는 경우 포함) whitelistCount만 보고
+  // mode를 "daily"로 고정했는데, 정작 get_original_content_daily가 그날 실제 방영 기록을
+  // 하나도 못 찾으면(예: 왕자와 거지처럼 이미 종영해 실질적으로 오늘 방영이 없는 경우) 화면은
+  // "찾지 못했습니다" 막다른 문구만 보여주고 원래 설계된 -7일 종합 리뷰(else 분기와 동일한
+  // get_original_content_weekly_review)로 넘어가지 못했다. 두 분기가 같은 로직을 쓰도록
+  // 함수로 뽑아, daily가 실제로 비어 있을 때도 이 폴백을 타게 한다.
+  const buildWeeklyReviewFallback = async (): Promise<{ mode: "weekly_review"; daily: never[]; weekly: OriginalWeeklyRow[] }> => {
+    const mondayOfThisWeek = offsetDateStr(asOfDate, -(asOfDateIsoDow - 1));
+    const weeklyReviewDateFrom = asOfDateIsoDow >= 6 ? mondayOfThisWeek : offsetDateStr(mondayOfThisWeek, -2);
+    const weeklyReviewDateTo = offsetDateStr(weeklyReviewDateFrom, 6);
+    const { data: weeklyRows } = await supabase.rpc("get_original_content_weekly_review", {
+      p_date_from: weeklyReviewDateFrom,
+      p_date_to: weeklyReviewDateTo,
+    });
+    return { mode: "weekly_review", daily: [], weekly: (weeklyRows ?? []) as OriginalWeeklyRow[] };
+  };
+
   if ((whitelistCount ?? 0) > 0) {
     // 성능 개선(2026-09-17): Page 1·Page 2가 같은 인자로 공유하는 조회라 채널 무관 슬롯 하나로
     // 사전 계산해 둔다(없으면 기존 RPC 그대로).
@@ -1142,7 +1162,9 @@ export async function GET(request: Request) {
       manualReport: manualReportByRowKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
     }));
 
-    originalContentReport = { mode: "daily", daily: dailyWithManualReport, weekly: [] };
+    // 사용자 지시(2026-09-20): whitelistCount>0(화이트리스트 항목이 아직 "활성"으로 잡혀 있음)
+    // 이라도 실제 방영 기록(dailyWithManualReport)이 하나도 없으면 -7일 종합 리뷰로 대체한다.
+    originalContentReport = dailyWithManualReport.length > 0 ? { mode: "daily", daily: dailyWithManualReport, weekly: [] } : await buildWeeklyReviewFallback();
   } else {
     // 사용자 지시(2026-09-05): 화이트리스트 없는 요일의 대체 뷰는 asOfDate 기준 "트레일링 7일"이
     // 아니라 달력에 정렬된 한 주를 쓴다 — 이번 주 토·일이 아직 지나지 않았으면(월~금) 지난주
@@ -1150,14 +1172,7 @@ export async function GET(request: Request) {
     // (월화수목금토일 순)을 넘긴다. get_original_content_weekly_review는 이 구간 안에서 실제로
     // 방영된 것만 골라 target_date 오름차순으로 돌려주므로, 프론트는 받은 순서 그대로 렌더링하면
     // 이 순서가 유지된다(별도 재정렬 없음).
-    const mondayOfThisWeek = offsetDateStr(asOfDate, -(asOfDateIsoDow - 1));
-    const weeklyReviewDateFrom = asOfDateIsoDow >= 6 ? mondayOfThisWeek : offsetDateStr(mondayOfThisWeek, -2);
-    const weeklyReviewDateTo = offsetDateStr(weeklyReviewDateFrom, 6);
-    const { data: weeklyRows } = await supabase.rpc("get_original_content_weekly_review", {
-      p_date_from: weeklyReviewDateFrom,
-      p_date_to: weeklyReviewDateTo,
-    });
-    originalContentReport = { mode: "weekly_review", daily: [], weekly: (weeklyRows ?? []) as OriginalWeeklyRow[] };
+    originalContentReport = await buildWeeklyReviewFallback();
   }
 
   // 5) 킬러 콘텐츠 (최근 4주 평균 상위, 채널별 3개까지)
