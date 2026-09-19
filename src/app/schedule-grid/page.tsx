@@ -9,12 +9,22 @@
 // Page 2에서 다시 들어오면 된다).
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ScheduleWeekGrid } from "@/components/ScheduleWeekGrid";
+import { ChannelLogo } from "@/components/ChannelLogo";
 
 type Week = { weekStart: string; weekEnd: string; hasUpload: boolean };
+type ChannelOption = {
+  code: string;
+  name: string;
+  logoPath: string | null;
+  logoVisibleRatio: number | null;
+  logoVisibleTopRatio: number | null;
+  themeColor: string | null;
+};
 
 function ScheduleComparisonInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const channelCode = searchParams.get("channel") ?? "";
   const [channelName, setChannelName] = useState("");
@@ -23,6 +33,10 @@ function ScheduleComparisonInner() {
   const [weekA, setWeekA] = useState("");
   const [weekB, setWeekB] = useState("");
   const [loaded, setLoaded] = useState(false);
+  // 사용자 지시(2026-09-20): "왼쪽 상단에는 다른 채널 편성표로 갈 수 있는 드랍다운 메뉴를,
+  // 우측에는... 각 채널의 2페이지로 갈 수 있는 동그라미 링크 버튼" — Page 1 상단과 같은
+  // 7개 채널 원형 로고 링크를 그리려면 전체 채널 목록이 필요해, weeks API에 함께 실어온다.
+  const [allChannels, setAllChannels] = useState<ChannelOption[]>([]);
 
   useEffect(() => {
     if (!channelCode) return;
@@ -36,6 +50,7 @@ function ScheduleComparisonInner() {
         setWeeks(ws);
         setWeekA(ws[0]?.weekStart ?? "");
         setWeekB(ws[1]?.weekStart ?? "");
+        setAllChannels(body.allChannels ?? []);
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -47,15 +62,51 @@ function ScheduleComparisonInner() {
 
   return (
     <div className="min-h-screen bg-zinc-50 px-6 py-10">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-zinc-900">{channelName || channelCode} 주간 비교</h1>
-            <p className="text-sm text-zinc-500">두 주의 편성표를 나란히 비교하고, 각각 엑셀로 받거나 인쇄할 수 있습니다.</p>
+      {/* 사용자 지시(2026-09-20): "양쪽의 화면을 충분히 활용하여, 편성표가 좌우 스크롤바 없이
+          보이도록" — 기존 max-w-6xl(1152px)은 두 주 편성표를 나란히 놓기엔 좁아 각 편성표
+          내부(overflow-x-auto, minWidth 560px)가 잘려 자체 스크롤바가 생겼다. 훨씬 넓은
+          상한으로 바꿔 두 편성표가 화면 안에서 각자 충분한 폭을 받게 한다. */}
+      <div className="mx-auto flex w-full max-w-[1920px] flex-col gap-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-zinc-500">
+              채널
+              <select
+                value={channelCode}
+                onChange={(e) => router.push(`/schedule-grid?channel=${e.target.value}`)}
+                className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm font-medium text-zinc-700"
+              >
+                {(allChannels.length > 0 ? allChannels : [{ code: channelCode, name: channelName || channelCode }]).map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div>
+              <h1 className="text-xl font-semibold text-zinc-900">{channelName || channelCode} 주간 비교</h1>
+              <p className="text-sm text-zinc-500">두 주의 편성표를 나란히 비교하고, 각각 엑셀로 받거나 인쇄할 수 있습니다.</p>
+            </div>
           </div>
-          <Link href={`/channel/${channelCode}`} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
-            채널 화면으로
-          </Link>
+          {/* Page 1 상단과 동일한 원형 로고 링크 — "채널 화면으로" 버튼 하나 대신, 7개 채널
+              모두의 Page 2로 바로 이동할 수 있게 한다(지금 보고 있는 채널도 그 안에 포함). */}
+          <div className="flex items-center gap-1.5">
+            {allChannels.map((c) => (
+              <Link
+                key={c.code}
+                href={`/channel/${c.code}`}
+                title={c.name}
+                aria-label={c.name}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:ring-zinc-300"
+              >
+                <ChannelLogo
+                  channel={{ logoPath: c.logoPath, name: c.name, logoVisibleRatio: c.logoVisibleRatio, logoVisibleTopRatio: c.logoVisibleTopRatio }}
+                  heightPx={22}
+                  maxWidthPx={32}
+                />
+              </Link>
+            ))}
+          </div>
         </div>
 
         {loaded && weeks.length === 0 && <p className="text-sm text-zinc-400">이 채널의 시청률 데이터가 없어 편성표를 그릴 수 없습니다.</p>}
