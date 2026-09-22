@@ -714,7 +714,16 @@ function extBroadcastHour(startTime: string): number {
   return h < 2 ? h + 24 : h;
 }
 function buildChannelInsightSummary(
-  s: ChannelNarrativeSignal
+  s: ChannelNarrativeSignal,
+  // 사용자 지시(2026-09-22): "ENA Play는 목표가 30위인데 오늘 40위, 전일 대비도 하락했는데
+  // 액션이 '현재 편성 유지'인 건 말이 안 된다 — 목표 대비 낮으면 높이기 위한 액션 플랜을
+  // 제안해달라." 실측 확인(2026-09-21 ENA_PLAY): today_rank=40, baseline_avg_rank=39.1(자기
+  // 평소와 거의 같음, 기존 로직은 "평소 대비 이상 여부"만 봐서 여기서 아무 것도 못 잡음) —
+  // 그런데 목표는 30위라 여전히 크게 못 미치고 있다. 기존 세 분기가 전부 "이 채널 자신의 최근
+  // 평균 대비"만 비교하고 "목표" 자체와는 한 번도 비교하지 않던 것이 근본 원인이라, 목표를
+  // 별도 인자로 받아 새 분기를 추가한다(계산은 이미 화면에 쓰이던 targetRank/achievementPct
+  // 그대로 재사용 — 새 수치 없음).
+  target?: { targetRankNum: number | null; achievementPct: number | null }
 ): {
   situationLine: string | null;
   causeLine: string | null;
@@ -762,6 +771,26 @@ function buildChannelInsightSummary(
       actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${s.top_program_tag ? TAG_LABEL_KO[s.top_program_tag] : pct >= 0 ? "강화 검토" : "재검토 필요"}`;
       actionTag = s.top_program_tag ?? null;
       actionKind = "program";
+    }
+  }
+  // 사용자 지시(2026-09-22, 위 target 인자 설명 참고): 위 두 분기가 못 잡는 "평소와 비슷하지만
+  // 목표에는 계속 못 미치는" 상황 — 오늘 등위가 목표 등위보다 5위 이상 낮거나(≥5), 목표 시청률
+  // 달성률이 80% 미만이면 목표 격차를 진단한다. 오늘 최고 성적 프로그램이 있으면(baseline 3일
+  // 이상 조건 없이, "오늘 뭐가 그나마 잘 됐는지"는 사실 그 자체이므로) 그 프로그램 확대를
+  // 구체적 액션으로 제안하고, 없으면 격차 사실만 진단으로 남긴다(지어낸 액션 없음).
+  if (!causeLine && target?.targetRankNum != null && s.today_rank !== null) {
+    const gap = s.today_rank - target.targetRankNum;
+    const achievementBelow80 = target.achievementPct !== null && target.achievementPct < 80;
+    if (gap >= 5 || (gap > 0 && achievementBelow80)) {
+      causeLine = `목표(${target.targetRankNum}위) 대비 ${gap}위 낮음`;
+      if (s.top_program_name && s.top_program_rating !== null) {
+        const hourLabel = s.top_program_start_time ? `(${extBroadcastHour(s.top_program_start_time)}시)` : "";
+        actionLine = `목표(${target.targetRankNum}위) 대비 ${gap}위 낮음 — 오늘 최고 성적 '${s.top_program_name}'${hourLabel} 편성 확대 검토`;
+        actionKind = "program";
+      } else {
+        actionLine = `목표(${target.targetRankNum}위) 대비 ${gap}위 낮음 — 편성 전략 재검토 필요`;
+        actionKind = "diagnosis";
+      }
     }
   }
   if (!causeLine && s.today_rank !== null && s.baseline_avg_rank !== null) {
@@ -1158,7 +1187,18 @@ function ChannelStatusCard({ channels, narrativeSignals }: { channels: Map<strin
   const rest = ["ENA_PLAY", "ENA_DRAMA", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"]
     .map((c) => channels.get(c))
     .filter((c): c is ChannelSummary => !!c);
-  const insightByCode = new Map(narrativeSignals.map((s) => [s.channelCode, buildChannelInsightSummary(s)]));
+  const insightByCode = new Map(
+    narrativeSignals.map((s) => [
+      s.channelCode,
+      // 사용자 지시(2026-09-22): skyUHD는 목표 등위가 "경쟁채널 중 2위" 같은 자유 텍스트라
+      // parseTargetRankNum이 엉뚱한 숫자를 뽑아낼 수 있어(그 채널 전체 순위 200위대와 비교하면
+      // 격차가 터무니없이 커짐) 목표 격차 분기를 적용하지 않는다.
+      buildChannelInsightSummary(
+        s,
+        s.channelCode === "SKYUHD" ? undefined : { targetRankNum: parseTargetRankNum(channels.get(s.channelCode)?.targetRank ?? null), achievementPct: channels.get(s.channelCode)?.achievementPct ?? null }
+      ),
+    ])
+  );
 
   return (
     // 사용자 지시(2026-09-03, UI/UX REDESIGN): 화면 전체 폭을 쓰는 하나의 넓은 가로 영역 +
@@ -3966,7 +4006,7 @@ function ChannelNarrativeCard({
       deltaPct: s.rating_delta_pct,
       todayRating: s.today_rating,
       todayRank: s.today_rank,
-      ...buildChannelInsightSummary(s),
+      ...buildChannelInsightSummary(s, { targetRankNum: parseTargetRankNum(targetRankByCode.get(code) ?? null), achievementPct: null }),
     });
   }
   const skyuhdSignal = byCode.get("SKYUHD");
