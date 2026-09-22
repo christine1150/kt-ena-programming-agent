@@ -3835,12 +3835,25 @@ function TimeSlotCompetitionChart({ rows, accentColor, fmtR, channelName }: { ro
 // ②시청자 프로파일링 — WHO IS WATCHING?이 이미 계산해 둔 12개 연령·성별 구간(whoIsWatchingDemographics)
 // 그대로, "최다 시청 2개+주목 2개"만 뽑아 보여주던 것과 달리 여기서는 12개 전부를 히트맵 격자로
 // 한 번에 보여준다(WHO IS WATCHING?의 4개 타일 요약과는 다른 각도라 중복이 아니라 보완).
-function DemographicHeatStrip({ demographics, accentColor, fmtR }: { demographics: NarrativeDemographic[] | null; accentColor: string; fmtR: (v: number | null) => string }) {
+function DemographicHeatStrip({
+  demographics,
+  accentColor,
+  fmtR,
+  ageOrder = ["10대", "20대", "30대", "40대", "50대", "60대+"],
+}: {
+  demographics: NarrativeDemographic[] | null;
+  accentColor: string;
+  fmtR: (v: number | null) => string;
+  // 사용자 지시(2026-09-22): "ENA Drama와 ENA Play는... 수도권 2049 타깃 안에 들어오는 내용만
+  // 분석해줘. 50대, 60대 등의 타깃 분석은 의미가 없어" — 백엔드(route.ts의 fullDemographicTargets)가
+  // 이 세 채널은 이미 20/30/40대만 내려주므로, 격자도 6칸(10~60대+)이 아니라 실제 받은 연령대
+  // 수만큼만 그려 빈 칸("—")이 남지 않게 한다.
+  ageOrder?: string[];
+}) {
   const list = demographics ?? [];
   if (list.length === 0) {
     return <p className="text-sm text-zinc-400">연령대별 데이터가 아직 부족합니다.</p>;
   }
-  const AGE_ORDER = ["10대", "20대", "30대", "40대", "50대", "60대+"];
   const cellByKey = new Map<string, NarrativeDemographic>();
   for (const d of list) {
     const short = shortDemoLabel(d.label); // "남10대" 형태
@@ -3849,9 +3862,9 @@ function DemographicHeatStrip({ demographics, accentColor, fmtR }: { demographic
   }
   const maxRating = Math.max(1e-9, ...list.map((d) => d.today ?? 0));
   return (
-    <div className="grid grid-cols-6 gap-1">
+    <div className={`grid gap-1 ${ageOrder.length <= 3 ? "grid-cols-3" : "grid-cols-6"}`}>
       {(["남", "여"] as const).flatMap((gender) =>
-        AGE_ORDER.map((age) => {
+        ageOrder.map((age) => {
           const cell = cellByKey.get(`${gender}__${age}`);
           const rating = cell?.today ?? null;
           const intensity = rating !== null ? Math.min(1, rating / maxRating) : 0;
@@ -4627,6 +4640,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 이미 계산)도 실제 시청률 값과 함께 표시.
   const wow = trend.find((t) => t.period === "WoW");
   const accentColor = channel.themeColor ?? "#3b82f6";
+  // 사용자 지시(2026-09-22): "ENA Drama와 ENA Play는 2페이지와 모든 분석 내용에서 수도권 2049
+  // 타깃 안에 들어오는 내용만 분석해줘" — route.ts의 fullDemographicTargets와 같은 채널 목록
+  // (Group A, 2049 Core). 프론트에서 연령대 격자·안내 문구를 6칸(20/30/40대)으로 좁히는 데 쓴다.
+  const isTwentyFortyNineCore = code === "ENA" || code === "ENA_PLAY" || code === "ENA_DRAMA";
   // 사용자 지시(2026-08-20): skyUHD만 예외적으로 2페이지에서 소수점 5자리까지 표기.
   const fmtR = (v: number | null) => fmt(v, code === "SKYUHD" ? 5 : 3);
   const programTitleByHour = new Map(hourlyProgramTitles.map((h) => [h.broadcast_hour, h.program_names]));
@@ -5781,8 +5798,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               {showWhoIsWatchingSection && (
               <div>
                 <h3 className="mb-1 text-sm font-semibold text-zinc-600">시청자 프로파일링</h3>
-                <p className="mb-3 text-xs text-zinc-400">연령·성별 12개 구간의 {referenceLabel} 시청률입니다 — 색이 진할수록 그 구간의 시청 집중도가 높습니다.</p>
-                <DemographicHeatStrip demographics={data.whoIsWatchingDemographics} accentColor={accentColor} fmtR={fmtR} />
+                <p className="mb-3 text-xs text-zinc-400">
+                  {isTwentyFortyNineCore ? "수도권 2049(20·30·40대) 6개 구간" : "연령·성별 12개 구간"}의 {referenceLabel} 시청률입니다 — 색이 진할수록 그 구간의 시청 집중도가 높습니다.
+                </p>
+                <DemographicHeatStrip
+                  demographics={data.whoIsWatchingDemographics}
+                  accentColor={accentColor}
+                  fmtR={fmtR}
+                  ageOrder={isTwentyFortyNineCore ? ["20대", "30대", "40대"] : undefined}
+                />
               </div>
               )}
             </div>

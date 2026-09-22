@@ -383,9 +383,20 @@ export async function GET(request: Request) {
   // 시청시간/시청시간비율)까지 포함한 편성 Intelligence 브리핑" — 위 narrativeSignal의 대표
   // 4개 연령대(20/40대)보다 넓게, 전체 연령대(10~60대+ × 남/여 12개)를 대상으로 오늘 상위 3개
   // 프로그램의 "본방 슬롯" 대비 이상치를 찾는다(get_channel_demographic_program_highlights).
-  const fullDemographicTargets = isNationalScope
-    ? ["전국 남10대", "전국 여10대", "전국 남20대", "전국 여20대", "전국 남30대", "전국 여30대", "전국 남40대", "전국 여40대", "전국 남50대", "전국 여50대", "전국 남60대+", "전국 여60대+"]
-    : ["수도권 남10대", "수도권 여10대", "수도권 남20대", "수도권 여20대", "수도권 남30대", "수도권 여30대", "수도권 남40대", "수도권 여40대", "수도권 남50대", "수도권 여50대", "수도권 남60대+", "수도권 여60대+"];
+  // 사용자 지시(2026-09-22): "ENA Drama와 ENA Play는 2페이지와 모든 분석 내용에서 수도권 2049
+  // 타깃 안에 들어오는 내용만 분석해줘. 50대, 60대 등의 타깃 분석은 의미가 없어." — ENA/ENA
+  // Play/ENA Drama(Group A, 2049 Core 채널)는 10~60대+ 전 연령대 대신 20~49세(20/30/40대)만
+  // 조회한다. WHO IS WATCHING?(get_channel_period_demographics), 오늘의 브리핑 연령대 하이라이트
+  // (get_channel_demographic_program_highlights), 심층 분석 연령대 프로파일 등 이 값을 공유하는
+  // 모든 섹션에 한 번에 적용된다. 나머지 4개 채널(가구 KPI, Group B)은 기존 전 연령대 그대로.
+  const isTwentyFortyNineCore = channel.code === "ENA" || channel.code === "ENA_PLAY" || channel.code === "ENA_DRAMA";
+  const fullDemographicTargets = isTwentyFortyNineCore
+    ? isNationalScope
+      ? ["전국 남20대", "전국 여20대", "전국 남30대", "전국 여30대", "전국 남40대", "전국 여40대"]
+      : ["수도권 남20대", "수도권 여20대", "수도권 남30대", "수도권 여30대", "수도권 남40대", "수도권 여40대"]
+    : isNationalScope
+      ? ["전국 남10대", "전국 여10대", "전국 남20대", "전국 여20대", "전국 남30대", "전국 여30대", "전국 남40대", "전국 여40대", "전국 남50대", "전국 여50대", "전국 남60대+", "전국 여60대+"]
+      : ["수도권 남10대", "수도권 여10대", "수도권 남20대", "수도권 여20대", "수도권 남30대", "수도권 여30대", "수도권 남40대", "수도권 여40대", "수도권 남50대", "수도권 여50대", "수도권 남60대+", "수도권 여60대+"];
 
   // 죽은 코드 제거(2026-09-01, N절 Phase 1): 여기 있던 "WHO IS WATCHING? 경쟁채널 Affinity 비교"
   // (compareChannelCode / affinityDateFrom / get_target_affinity 4회 호출 / 응답의 affinity·
