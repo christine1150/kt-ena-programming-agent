@@ -5021,6 +5021,27 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   </>
                 );
               })()}
+              {/* 사용자 지시(2026-09-22): "2페이지 각 채널... 체크한 부분에 '주간 비교'
+                  편성표로 갈 수 있는 버튼을 추가로 삽입해줘. 2페이지에서 눌렀을 때는 각 해당
+                  채널이 기본으로 나오면 돼" — 헤더 상단 pill 그룹(채널 리포트/종합 보고서와
+                  같은 자리)에 지금 보고 있는 채널(code)로 바로 연결되는 버튼을 추가한다. 기존에
+                  이미 있던 두 개의 "주간 비교" 링크(요일×시간대 히트맵 카드, 실제 편성표 모달)와
+                  href 규칙은 동일하게 두되, 그 둘은 화면 아래쪽 카드 안이라 상단 헤더에서 바로
+                  진입할 길이 없었다. */}
+              <Link
+                href={`/schedule-grid?channel=${code}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/30"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="4" width="8" height="16" rx="1.5" />
+                  <rect x="13" y="4" width="8" height="16" rx="1.5" />
+                  <line x1="6" y1="9" x2="8" y2="9" />
+                  <line x1="16" y1="9" x2="18" y2="9" />
+                </svg>
+                주간 비교
+              </Link>
               {/* 사용자 지시(2026-08-21): 드랍박스를 열면 옵션 글씨가 안 보이던 버그 — optgroup으로
                   묶으면서 option이 select의 "직계 자식"이 아니게 돼([&>option] 선택자가 더는
                   안 먹힘) 흰 배경에 흰 글씨(투명)로 남아있었다. 자손 선택자([&_option])로 바꾸고

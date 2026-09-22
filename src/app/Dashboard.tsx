@@ -4889,6 +4889,25 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 ))}
               </div>
             )}
+            {/* 사용자 지시(2026-09-22): "1페이지... 채널 내가 체크한 부분에 '주간 비교'
+                편성표로 갈 수 있는 버튼을 추가로 삽입해줘. 1페이지에서 눌렀을 때는 ENA가
+                기본으로 나오면 되고" — 1페이지는 특정 채널 컨텍스트가 없는 포트폴리오 화면이라
+                기본 채널을 ENA로 고정한다. 새 탭으로 열어 대시보드 조회 흐름을 끊지 않는다. */}
+            <Link
+              href="/schedule-grid?channel=ENA"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="주간 비교"
+              aria-label="주간 비교"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-700"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="8" height="16" rx="1.5" />
+                <rect x="13" y="4" width="8" height="16" rx="1.5" />
+                <line x1="6" y1="9" x2="8" y2="9" />
+                <line x1="16" y1="9" x2="18" y2="9" />
+              </svg>
+            </Link>
             {/* 사용자 재지시(2026-09-02): "skyUHD 오른쪽에 있는 관리자화면 버튼 아이콘을 '큰
                 글씨로 보기' 아이콘으로 교체 — 글자 말고 직관적으로 깔끔하고 심플한 아이콘으로."
                 두 관리자 아이콘(이 자리 + 새로고침 오른쪽) 중 채널 로고 바로 옆(=skyUHD 오른쪽)

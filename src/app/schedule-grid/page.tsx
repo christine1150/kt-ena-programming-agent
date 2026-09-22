@@ -82,13 +82,16 @@ function ScheduleComparisonInner() {
       .catch(() => setSide((prev) => ({ ...prev, loaded: true })));
   }
 
+  // 사용자 지시(2026-09-22): "기본 조건은 왼쪽에 지난주, 오른쪽이 이번주로 뜨게" — 기존엔
+  // 반대(왼쪽=최신 주, 오른쪽=그 이전 주)였다. loadSide의 preferSecondWeek 인자를 좌우
+  // 맞바꿔 왼쪽이 이전 주(ws[1]), 오른쪽이 최신 주(ws[0])를 기본으로 받게 한다.
   useEffect(() => {
     if (!left.channelCode || left.loaded) return;
-    loadSide(left.channelCode, setLeft, false);
+    loadSide(left.channelCode, setLeft, true);
   }, [left.channelCode, left.loaded]);
   useEffect(() => {
     if (!right.channelCode || right.loaded) return;
-    loadSide(right.channelCode, setRight, true);
+    loadSide(right.channelCode, setRight, false);
   }, [right.channelCode, right.loaded]);
 
   if (!urlChannelCode) {
