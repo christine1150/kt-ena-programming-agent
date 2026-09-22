@@ -379,6 +379,31 @@ export async function GET(request: Request) {
   const driverPriorDateFrom = isRangeMode ? effectivePriorDateFrom : addDaysStr(dateTo, -84);
   const driverPriorDateTo = isRangeMode ? effectivePriorDateTo : addDaysStr(dateTo, -1);
 
+  // 사용자 지시(2026-09-22, 후속): "가구 시청률 1% 초과 예외도 구현해줘" — 위 2049 한정
+  // 원칙의 예외 조건. Group A 채널(ENA/ENA Play/ENA Drama)의 오늘 채널 단위 가구 시청률
+  // (전국 유료가구 타깃)이 1%를 넘거나, 시청시간이 아주 길면(30분 이상) 그날은 2049 한정을
+  // 풀고 기존처럼 전 연령대를 본다 — "가구 단위로 의미 있게 터진 날"까지 20~40대로만 좁혀
+  // 보면 정작 봐야 할 신호를 놓치기 때문. GROUP_A_HOUSEHOLD_TARGET_LABEL은 아래 "동시간대
+  // 경쟁 상황"(933행 부근)에서도 같은 값을 쓰므로 여기서 한 번만 정의해 공유한다.
+  const GROUP_A_HOUSEHOLD_TARGET_LABEL: Record<string, string> = { ENA: "전국 유료가구", ENA_PLAY: "전국 유료가구", ENA_DRAMA: "전국 유료가구" };
+  const householdOverlapTargetLabel = GROUP_A_HOUSEHOLD_TARGET_LABEL[channel.code] ?? null;
+  let groupAHouseholdException = false;
+  let groupAHouseholdRatingToday: number | null = null;
+  if (householdOverlapTargetLabel && !isRangeMode) {
+    const { data: hhTodayRow } = await supabase
+      .from("ratings")
+      .select("rating, time_spent_seconds, channels!inner(code), targets!inner(label)")
+      .eq("channels.code", channel.code)
+      .eq("targets.label", householdOverlapTargetLabel)
+      .eq("source_type", "nielsen_daily")
+      .is("program_id", null)
+      .eq("broadcast_date", dateTo)
+      .maybeSingle();
+    groupAHouseholdRatingToday = (hhTodayRow as { rating: number | null } | null)?.rating ?? null;
+    const hhTimeSpent = (hhTodayRow as { time_spent_seconds: number | null } | null)?.time_spent_seconds ?? null;
+    groupAHouseholdException = (groupAHouseholdRatingToday !== null && groupAHouseholdRatingToday > 0.01) || (hhTimeSpent !== null && hhTimeSpent >= 1800);
+  }
+
   // 오늘의 브리핑 고도화(사용자 지시 2026-08-20): "타깃상세 탭의 5대 지표(시청률/점유율/도달율/
   // 시청시간/시청시간비율)까지 포함한 편성 Intelligence 브리핑" — 위 narrativeSignal의 대표
   // 4개 연령대(20/40대)보다 넓게, 전체 연령대(10~60대+ × 남/여 12개)를 대상으로 오늘 상위 3개
@@ -389,7 +414,7 @@ export async function GET(request: Request) {
   // 조회한다. WHO IS WATCHING?(get_channel_period_demographics), 오늘의 브리핑 연령대 하이라이트
   // (get_channel_demographic_program_highlights), 심층 분석 연령대 프로파일 등 이 값을 공유하는
   // 모든 섹션에 한 번에 적용된다. 나머지 4개 채널(가구 KPI, Group B)은 기존 전 연령대 그대로.
-  const isTwentyFortyNineCore = channel.code === "ENA" || channel.code === "ENA_PLAY" || channel.code === "ENA_DRAMA";
+  const isTwentyFortyNineCore = (channel.code === "ENA" || channel.code === "ENA_PLAY" || channel.code === "ENA_DRAMA") && !groupAHouseholdException;
   const fullDemographicTargets = isTwentyFortyNineCore
     ? isNationalScope
       ? ["전국 남20대", "전국 여20대", "전국 남30대", "전국 여30대", "전국 남40대", "전국 여40대"]
@@ -928,9 +953,8 @@ export async function GET(request: Request) {
   // 사용자 지시(2026-09-02): "동시간대 경쟁 상황"에서 2049가 목표인 채널(ENA/ENA Play/ENA Drama)은
   // 자사 값 옆 괄호에 유료가구 시청률도 함께 표기 — 같은 RPC를 유료가구 타깃으로 한 번 더 불러
   // (our_start_time, our_program_name) 키로 매칭한다(경쟁채널 값은 이미 우리 타깃 기준이라 그대로 둠 —
-  // 이 요청은 "자사" 값에만 해당).
-  const GROUP_A_HOUSEHOLD_TARGET_LABEL: Record<string, string> = { ENA: "전국 유료가구", ENA_PLAY: "전국 유료가구", ENA_DRAMA: "전국 유료가구" };
-  const householdOverlapTargetLabel = GROUP_A_HOUSEHOLD_TARGET_LABEL[channel.code] ?? null;
+  // 이 요청은 "자사" 값에만 해당). householdOverlapTargetLabel은 위(가구 시청률 예외 판정)에서
+  // 이미 계산해 둔 값을 그대로 재사용한다.
   const householdOverlapRes = householdOverlapTargetLabel
     ? await supabase.rpc("get_competitor_program_overlap", { p_channel_code: channel.code, p_target_label: householdOverlapTargetLabel, p_as_of_date: dateTo })
     : null;
@@ -1262,6 +1286,7 @@ export async function GET(request: Request) {
         baseline_avg: ratingFmt(d.baseline_avg),
       })),
       baselineLabel: sdowBaselineLabelForLlm,
+      groupAHouseholdException: groupAHouseholdException ? groupAHouseholdRatingToday : null,
     };
     // 사용자 지시(2026-09-22): 프롬프트가 "한 문단"에서 "짧은 사실 항목 배열"로 바뀌었는데
     // cachedLlmText는 입력값 지문(md5)만으로 캐시 키를 만든다 — 입력 필드 자체는 그대로라
@@ -1288,6 +1313,9 @@ export async function GET(request: Request) {
     },
     selfChannelBrands,
     briefingLlm,
+    // 사용자 지시(2026-09-22): "가구 시청률 1% 초과 예외" — 예외가 실제로 발동한 날에만
+    // 브리핑에 가구 시청률을 사실 항목으로 보여준다(발동 안 하면 null, 화면에서 조용히 생략).
+    groupAHouseholdException: groupAHouseholdException ? groupAHouseholdRatingToday : null,
     asOfDate,
     dateFrom,
     dateTo,

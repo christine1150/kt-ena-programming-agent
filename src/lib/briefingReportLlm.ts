@@ -30,6 +30,10 @@ export interface BriefingLlmInput {
   // "선택 요일의 최근 N주 평균"으로 계산해 보내주므로(같은 N주), 문구도 이 라벨 하나로 통일한다.
   // 없으면(기존 호출부) 기존 "최근 12주"/"최근 8주" 문구를 그대로 쓴다(하위호환).
   baselineLabel?: string;
+  // 사용자 지시(2026-09-22): "가구 시청률 1% 초과 예외" — ENA/ENA Play/ENA Drama는 평소
+  // 2049만 보지만, 오늘 채널 단위 가구 시청률(전국 유료가구)이 1%를 넘거나 시청시간이 길어
+  // route.ts가 예외를 발동시켰을 때만 값이 들어온다(그 외엔 null — 언급하지 마라).
+  groupAHouseholdException: number | null;
 }
 
 // 사용자 지시(2026-09-22): "오늘의 브리핑을 줄글 형태가 아닌 수치와 팩트 위주의 가독률 좋은
@@ -47,6 +51,7 @@ function buildSystemPrompt(baselineLabel: string): string {
     `피크 시간대 프로그램명(today_peak_program_name)이 top_program_name과 같으면 한 항목으로 합쳐라(예: "피크 15시 · '걸어서 세계속으로' 0.0141 (▲490.3%, ${baselineLabel} 대비)"). 둘이 다르면 각각 별도 항목으로 나눠라.`,
     "값이 null이거나 변화폭이 미미한 지표는 항목으로 만들지 마라 — 대략 10~25% 안팎 이상 변화 정도를 뚜렷한 신호로 본다.",
     "연령대(demographics) 변화가 여러 개면 한 항목에 가운뎃점(·)으로 묶어라(위 예시 참고), 항목 수를 늘리지 마라.",
+    'groupAHouseholdException 값이 null이 아니면 그 값을 백분율로 바꿔 마지막 항목으로 추가해라(예: "가구 시청률 3.6% (전국 유료가구)"). null이면 가구 시청률을 절대 언급하지 마라.',
     `다시 한번: baseline 관련 수치의 기준을 언급할 땐 반드시 "${baselineLabel}"라고만 표현해라(다른 기간을 지어내지 마라).`,
     LLM_SYNTHESIS_GUARDRAIL,
   ].join("\n");

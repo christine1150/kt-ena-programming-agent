@@ -660,6 +660,10 @@ interface ChannelData {
   // 없으면 기존 규칙 기반 항목으로 조용히 대체. 사용자 지시(2026-09-22): 문단 하나가 아니라
   // 숫자 위주 짧은 항목 배열로 바뀌었다(briefingReportLlm.ts 참고).
   briefingLlm: string[] | null;
+  // 사용자 지시(2026-09-22): "가구 시청률 1% 초과 예외도 구현해줘" — ENA/ENA Play/ENA Drama의
+  // 2049 한정 원칙 예외가 오늘 실제로 발동했을 때만(가구 시청률 1% 초과 또는 시청시간 30분
+  // 이상) 그 가구 시청률 값을 담는다. 발동 안 하면 null(화면에서 조용히 생략).
+  groupAHouseholdException: number | null;
   // O절(2026-09-01) — 닐슨 주간 파일의 기간 단위 시장 순위(get_channel_period_rank_movement).
   // 해당 기간 파일이 아직 업로드되지 않았으면 null.
   periodRankMovement: {
@@ -1411,6 +1415,13 @@ function buildBriefingReport(
       if (notable) {
         sentences.push(`${shortDemoLabel(notable.label)} ${fmtR(notable.today)} (${notable.delta_pct! >= 0 ? "▲" : "▼"}${Math.abs(notable.delta_pct!).toFixed(0)}%)`);
       }
+    }
+
+    // 사용자 지시(2026-09-22): "가구 시청률 1% 초과 예외도 구현해줘" — 평소엔 2049만 보는
+    // 채널이라도, 오늘 가구 시청률이 실제로 1%를 넘겨 route.ts가 예외를 발동시켰을 때만 그
+    // 사실을 짧게 덧붙인다(발동 안 하면 null이라 이 줄 자체가 생략됨).
+    if (data.groupAHouseholdException !== null) {
+      sentences.push(`가구 시청률 ${(data.groupAHouseholdException * 100).toFixed(1)}% (전국 유료가구) — 오늘은 전 연령대 분석 포함`);
     }
 
     // Tier 1 확장(2026-08-26): route.ts가 이미 검증된 값만으로 OpenAI가 종합한 문단
@@ -4643,7 +4654,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 사용자 지시(2026-09-22): "ENA Drama와 ENA Play는 2페이지와 모든 분석 내용에서 수도권 2049
   // 타깃 안에 들어오는 내용만 분석해줘" — route.ts의 fullDemographicTargets와 같은 채널 목록
   // (Group A, 2049 Core). 프론트에서 연령대 격자·안내 문구를 6칸(20/30/40대)으로 좁히는 데 쓴다.
-  const isTwentyFortyNineCore = code === "ENA" || code === "ENA_PLAY" || code === "ENA_DRAMA";
+  // 재지시(2026-09-22, 후속): "가구 시청률 1% 초과 예외" — route.ts가 예외를 발동시킨 날은
+  // whoIsWatchingDemographics 자체가 이미 12개 전부로 내려오므로, 프론트도 6칸으로 다시
+  // 좁히지 않고 그대로 12칸을 그린다(안 그러면 서버가 보낸 나머지 6개가 버려짐).
+  const isTwentyFortyNineCore = (code === "ENA" || code === "ENA_PLAY" || code === "ENA_DRAMA") && data.groupAHouseholdException === null;
   // 사용자 지시(2026-08-20): skyUHD만 예외적으로 2페이지에서 소수점 5자리까지 표기.
   const fmtR = (v: number | null) => fmt(v, code === "SKYUHD" ? 5 : 3);
   const programTitleByHour = new Map(hourlyProgramTitles.map((h) => [h.broadcast_hour, h.program_names]));
