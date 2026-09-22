@@ -149,15 +149,44 @@ export function ScheduleWeekGrid({
   // 여러 번(관리자 화면의 두 주 비교) 렌더링될 수 있어, 인쇄 시 "이 인스턴스만" 보이도록
   // 인스턴스별 고유 id로 범위를 좁힌다.
   const printAreaId = `schedule-print-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  // 사용자 지시(2026-09-22): "인쇄를 누르면 2페이지에는 아무것도 없이 꼬리말만 있는 게 1장이
+  // 추가된다 — 1장만 나오게 해줘." 원인: 기존엔 visibility:hidden으로 인쇄 영역 밖 요소를
+  // "안 보이게"만 했는데, visibility:hidden은 레이아웃 공간(높이)을 그대로 차지한다. 이 화면은
+  // 편성표가 좌우로 2개(또는 상단 드롭다운 등)까지 함께 렌더링돼 있어, 안 보이는 나머지 요소들의
+  // 높이 합이 인쇄 영역 자체보다 커지면 브라우저가 "그 높이만큼" 페이지를 나누면서, 실제
+  // 내용은 1페이지 안에 다 들어가 있는데도 뒤에 빈 2페이지가 따라붙었다. display:none은
+  // 레이아웃 공간 자체를 없애므로, 인쇄 영역의 형제 요소들을 실제로 화면에서 제거(display:none)
+  // 했다가 인쇄 후 복원하는 방식으로 바꾼다 — 총 문서 높이가 인쇄 영역 높이 그대로가 되어 페이지
+  // 수도 정확히 그만큼만 나온다.
+  function hideSiblingsForPrint(target: HTMLElement): () => void {
+    const restores: { el: HTMLElement; display: string }[] = [];
+    let node: HTMLElement | null = target;
+    while (node && node !== document.body && node.parentElement) {
+      const parentEl: HTMLElement = node.parentElement;
+      for (const sibling of Array.from(parentEl.children)) {
+        if (sibling !== node && sibling instanceof HTMLElement) {
+          restores.push({ el: sibling, display: sibling.style.display });
+          sibling.style.display = "none";
+        }
+      }
+      node = parentEl;
+    }
+    return () => {
+      for (const { el, display } of restores) el.style.display = display;
+    };
+  }
   function handlePrint() {
+    const printArea = document.getElementById(printAreaId);
+    const restoreSiblings = printArea ? hideSiblingsForPrint(printArea) : () => {};
     const style = document.createElement("style");
-    // 사용자 지시(2026-09-22): "편성표를 인쇄 누르면 색이 안나와 — 그라데이션 색도 바로 인쇄
-    // 가능하게" — 브라우저가 기본적으로 배경색을 인쇄에서 생략하는 동작(잉크 절약 기본값)을
+    // 사용자 지시(2026-09-22, 별도): "편성표를 인쇄 누르면 색이 안나와 — 그라데이션 색도 바로
+    // 인쇄 가능하게" — 브라우저가 기본적으로 배경색을 인쇄에서 생략하는 동작(잉크 절약 기본값)을
     // 켜서 무시하도록 print-color-adjust: exact를 인쇄 영역 전체에 강제한다.
-    style.textContent = `@media print { body * { visibility: hidden !important; } #${printAreaId}, #${printAreaId} * { visibility: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; } #${printAreaId} { position: absolute; left: 0; top: 0; width: 100%; } }`;
+    style.textContent = `@media print { #${printAreaId}, #${printAreaId} * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; } }`;
     document.head.appendChild(style);
     const cleanup = () => {
       style.remove();
+      restoreSiblings();
       window.removeEventListener("afterprint", cleanup);
     };
     window.addEventListener("afterprint", cleanup);
