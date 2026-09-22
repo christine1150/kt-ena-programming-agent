@@ -196,15 +196,23 @@ export async function getScheduleGridRows(
   // 업로드 시점에 계산해 둔 matched_program_id를 그대로 재사용한다(새 fuzzy 매칭을 만들지
   // 않음). 같은 (요일, 프로그램) 조합이 여러 번이면 처음 것만 쓴다(회차가 여러 번 겹칠 일은
   // 실무상 없음).
-  const uploadByDowAndProgram = new Map<string, { program_name_raw: string; tags: string | null }>();
+  // 사용자 지시(2026-09-23): "'회차·부제 반영'이라고 적혀있는데 회차나 부제가 안 나오는 것
+  // 같아. 정보가 있다면 회차/부제 정보도 볼 수 있도록" — 실측 확인(ENA Play 09-14주): 업로드
+  // 자체엔 회차/부제가 없는데(예전 파서로 올라간 파일이라, 지금 파서만 이 값을 캡처함) 업로드가
+  // "매칭"되기만 하면 무조건 그 업로드 이름·태그만 쓰고 EPG(ratings.episode_number/subtitle)
+  // 쪽에 있을 수 있는 값은 통째로 버려지고 있었다. 이제 제목은 업로드가 있으면 업로드 쪽을
+  // 우선하되(태그가 더 풍부), 회차·부제는 "업로드에 있으면 업로드, 없으면 EPG"로 합성한다.
+  const uploadByDowAndProgram = new Map<string, { program_name_raw: string; tags: string | null; episode_number: number | null; episode_subtitle: string | null }>();
   if (hasUpload) {
     for (const u of uploadedRows!) {
       if (!u.matched_program_id) continue;
       const key = `${u.dow}__${u.matched_program_id}`;
       if (!uploadByDowAndProgram.has(key)) {
         uploadByDowAndProgram.set(key, {
-          program_name_raw: formatUploadDisplayName(u.program_name_raw, u.episode_subtitle),
-          tags: formatUploadDisplayTags(u.tags, u.episode_number),
+          program_name_raw: u.program_name_raw,
+          tags: u.tags,
+          episode_number: u.episode_number,
+          episode_subtitle: u.episode_subtitle,
         });
       }
     }
@@ -226,25 +234,34 @@ export async function getScheduleGridRows(
     const upload = r.program_id ? uploadByDowAndProgram.get(`${r.dow}__${r.program_id}`) : undefined;
     // 사용자 지시(2026-09-20): "OLIFE는 네이버 메일함을 통해서나 직접 업로드를 통해서 회차와
     // 부제 정보를 획득... 그것들도 편성표에 반영해줘" — ratings.episode_number/episode_subtitle은
-    // 이미 OLIFE EPG(일일운행표) 매칭으로 채워져 있는 값이다(새 매칭 로직 아님). 업로드된
-    // 편성표에 매칭되는 값이 있으면 그게 우선(부제·본방/재방 태그가 더 풍부)이고, 없으면 이
-    // EPG 값으로 대신 보강한다.
-    const epgName = r.episode_subtitle ? `${r.canonical_name} - ${r.episode_subtitle}` : r.canonical_name;
-    const epgTags = r.episode_number ? `${r.episode_number}회` : null;
+    // 이미 OLIFE EPG(일일운행표) 매칭으로 채워져 있는 값이다(새 매칭 로직 아님).
+    // 사용자 재지시(2026-09-23): 제목 자체(program_name_raw)는 업로드가 있으면 업로드 쪽을
+    // 그대로 쓰되(부제·본방/재방 태그가 더 풍부한 경우가 많음), 회차·부제는 "업로드에 있으면
+    // 업로드, 없으면 EPG"로 합성한다 — 업로드가 매칭됐다는 이유만으로 EPG가 이미 알고 있는
+    // 회차·부제를 버리지 않는다.
+    const episodeNumber = upload?.episode_number ?? r.episode_number;
+    const episodeSubtitle = upload?.episode_subtitle ?? r.episode_subtitle;
+    const baseName = upload?.program_name_raw ?? r.canonical_name;
     return {
       dow: r.dow,
       broadcast_date: r.broadcast_date,
       start_time: r.start_time,
       end_time: r.end_time,
-      program_name_raw: upload?.program_name_raw ?? epgName,
-      tags: upload?.tags ?? epgTags,
+      program_name_raw: formatUploadDisplayName(baseName, episodeSubtitle),
+      tags: formatUploadDisplayTags(upload?.tags ?? null, episodeNumber),
       matched_rating: r.rating,
     };
   });
-  // 업로드가 없어도 EPG로 회차·부제가 채워진 행이 하나라도 있으면 화면에 그대로 알린다 —
-  // "부제·회차 없음" 배지가 OLIFE처럼 실제로는 있는 채널에도 잘못 뜨지 않도록.
-  const hasEpgData = (dbRows ?? []).some((r: { episode_number: number | null; episode_subtitle: string | null }) => r.episode_number !== null || r.episode_subtitle !== null);
-  return { source: hasUpload ? "db+upload" : "db", rows, hasUpload, hasEpgData };
+  // 사용자 재지시(2026-09-23): "'회차·부제 반영'이라 적혀있는데 안 나온다" — 업로드가
+  // 있다는 사실(hasUpload)만으로 배지를 정하면, 업로드에 회차·부제가 전혀 없는 주(예전 파서로
+  // 올라간 파일)에도 "회차·부제 반영" 배지가 잘못 뜬다. 위에서 합성한 최종 결과(episodeNumber/
+  // episodeSubtitle, 업로드+EPG 중 하나라도 있으면 값이 들어감) 기준으로 실제로 하나라도
+  // 있었는지를 별도로 판정해, 화면 배지 문구가 실제 데이터와 어긋나지 않게 한다.
+  const hasEpisodeInfo = (dbRows ?? []).some((r: { program_id: string | null; dow: number; episode_number: number | null; episode_subtitle: string | null }) => {
+    const upload = r.program_id ? uploadByDowAndProgram.get(`${r.dow}__${r.program_id}`) : undefined;
+    return (upload?.episode_number ?? r.episode_number) !== null || (upload?.episode_subtitle ?? r.episode_subtitle) !== null;
+  });
+  return { source: hasUpload ? "db+upload" : "db", rows, hasUpload, hasEpgData: hasEpisodeInfo };
 }
 
 export type ScheduleGridUploadResult = {

@@ -274,12 +274,21 @@ export function ScheduleWeekGrid({
           {/* 사용자 지시(2026-09-20 재지시): "기본적으로 DB 기반으로 구성하되, 업로드된
               편성표가 매치되는 회차나 부제가 있으면 그것만 덧붙이는" — source가 세 가지로
               늘었다: upload(원본 그대로, 사용자가 명시적으로 전환), db+upload(기본값,
-              업로드가 있어 회차·부제를 보강), db(업로드 자체가 없음). */}
+              업로드가 있어 회차·부제를 보강), db(업로드 자체가 없음).
+              사용자 재지시(2026-09-23): "'회차·부제 반영'이라 적혀있는데 안 나온다" — 업로드가
+              "있다"는 사실만으로 이 배지를 띄우면, 업로드 자체엔 회차·부제가 전혀 없는 주(예전
+              파서로 올라간 파일 등)에도 잘못된 배지가 떴다. hasEpgData(scheduleGridSource.ts가
+              업로드+EPG 합성 결과 기준으로 재계산)가 true일 때만 "회차·부제 반영"이라 말하고,
+              false면 실제로 반영된 것(태그·시각)만 정직하게 알린다. */}
           {source === "upload" ? (
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600">업로드 원본 그대로</span>
-          ) : source === "db+upload" ? (
-            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-600" title="정확한 방영 시작~종료 시각은 시청률 데이터로 재구성하고, 업로드된 편성표에서 매칭되는 회차·부제·본방/재방 태그만 덧붙였습니다.">
+          ) : source === "db+upload" && hasEpgData ? (
+            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-600" title="정확한 방영 시작~종료 시각은 시청률 데이터로 재구성하고, 업로드된 편성표·EPG 중 실제로 있는 회차·부제·본방/재방 태그를 덧붙였습니다.">
               DB 기반(업로드 회차·부제 반영)
+            </span>
+          ) : source === "db+upload" ? (
+            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-600" title="정확한 방영 시작~종료 시각은 시청률 데이터로 재구성하고, 업로드된 편성표에서 매칭되는 본방/재방 태그만 덧붙였습니다 — 이 주는 회차·부제 정보가 없습니다.">
+              DB 기반(업로드 태그만 반영 — 회차·부제 없음)
             </span>
           ) : source === "db" && hasEpgData ? (
             <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600" title="시청률 데이터로 실제 방영 구간을 재구성하고, EPG(일일운행표) 매칭으로 이미 채워져 있는 회차·부제를 반영했습니다.">
