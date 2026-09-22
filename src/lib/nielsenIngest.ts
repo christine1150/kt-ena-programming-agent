@@ -17,6 +17,7 @@ import { toChannelCode, canonicalChannelName } from "@/lib/channelMaster";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import {
   checkChannelCoverage,
+  checkRegisteredCompetitorCoverage,
   checkNewTargetLabels,
   checkPercentValue,
   formatIssuesForLog,
@@ -383,9 +384,11 @@ export async function ingestNielsenDailyFile(
 
   // 3) 등록된 경쟁채널의 채널 단위 랭킹 (개발 단위 16번: Competitive Pressure·Affinity 계산용)
   const competitorRowsToInsert: Record<string, unknown>[] = [];
+  const foundCompetitorNames = new Set<string>(); // 아래 누락 경고용
   for (const rank of parsed.competitorRankRows) {
     const competitorName = ctx.competitorNameByCode.get(rank.channelCode);
     if (!competitorName) continue;
+    foundCompetitorNames.add(competitorName);
     const targetId = await ensureTarget(rank.targetLabel, ctx.targetIdCache);
     competitorRowsToInsert.push({
       competitor_name: competitorName,
@@ -402,6 +405,16 @@ export async function ingestNielsenDailyFile(
   if (competitorRowsToInsert.length > 0) {
     await supabase.from("competitor_ratings").insert(competitorRowsToInsert);
   }
+
+  // 등록은 돼 있는데 이번 파일에서 한 행도 못 찾은 경쟁채널을 경고로 남긴다(2026-09-22 사용자
+  // 지시). 직전까지는 이름이 안 맞으면 위 루프가 조용히 넘어가 화면만 "—"로 비어 보였다.
+  dailyIssues.push(
+    ...checkRegisteredCompetitorCoverage(
+      ctx.competitorNames,
+      foundCompetitorNames,
+      `Nielsen 일별(${parsed.reportDate})`
+    )
+  );
 
   // 3-1) 경쟁채널의 프로그램 단위 하루 편성 데이터 (§1.2 채널 블록 그리드) — "동시간대
   //      경쟁채널이 무엇으로 좋은 성적을 냈는가" 인사이트용. 등록된 경쟁채널(Competitor

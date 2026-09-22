@@ -55,6 +55,36 @@ export function checkChannelCoverage(
   ];
 }
 
+/**
+ * 등록된 경쟁채널인데 이번 파일의 랭킹 시트에서 한 행도 찾지 못했으면 경고한다
+ * (2026-09-22 사용자 지시 — "등록된 경쟁채널인데 시트에서 매칭이 안 되면 경고를 남기게").
+ *
+ * 이 검사가 필요한 이유: 직전까지 "Asia UHD"(시트)와 "ASIA UHD"(등록)가 대소문자만 달라
+ * 매칭이 끊겼는데, 코드가 조용히 `continue`로 넘어가 **오류도 경고도 남지 않았다**. 화면에
+ * 그냥 "—"로 비어 보일 뿐이라 몇 달간 발견되지 않았다. 이름이 바뀌거나 표기가 흔들리면
+ * 다음부터는 업로드 시점에 바로 드러난다.
+ *
+ * 다만 경쟁채널이 그날 실제로 순위권 밖이라 시트에 없을 수도 있으므로 severity는 warning이고,
+ * 메시지에 두 가능성을 모두 적어 판단을 사람에게 남긴다(값을 지어내지 않는다).
+ */
+export function checkRegisteredCompetitorCoverage(
+  registeredNames: Set<string>,
+  foundNames: Set<string>,
+  contextLabel: string
+): QualityIssue[] {
+  const missing = [...registeredNames].filter((name) => !foundNames.has(name)).sort();
+  if (missing.length === 0) return [];
+  return [
+    {
+      severity: "warning",
+      category: "completeness",
+      message:
+        `${contextLabel}: 등록된 경쟁채널 ${missing.length}개를 랭킹 시트에서 찾지 못했습니다 — ${missing.join(", ")}. ` +
+        `그날 순위권 밖이었을 수도 있지만, 채널명이 바뀌었거나(예: SBS FIL UHD → SBS NEX) 표기가 달라진 것일 수 있으니 확인이 필요합니다.`,
+    },
+  ];
+}
+
 /** 지금까지 DB에 없던 새 타깃 라벨이 이번 파일에 등장하면 경고한다.
  *  Nielsen이 타깃 이름 표기를 바꾸거나(예: "수도권 2049"→"서울 2049") 새 타깃을 추가하면
  *  겉으로는 파싱이 "성공"하지만 실제로는 같은 타깃이 DB에 중복 생성될 수 있어, 이걸 감지한다.
