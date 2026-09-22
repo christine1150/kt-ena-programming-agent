@@ -32,6 +32,32 @@ function toExtMinutes(t: string): number {
   const eh = h < 2 ? h + 24 : h;
   return eh * 60 + m;
 }
+// 사용자 지시(2026-09-22): "그라데이션 색도 바로 인쇄 가능하게" + "높은 시청률은 채널 로고
+// 색보다 좀 더 진한색 + 흰글씨까지 나오게 단계를 더 나눠줘" — 기존엔 themeColor에 알파값만
+// 얹어(흰 배경 위에서만 옅어 보이는) 단조로운 한 방향 그라데이션이었다. 0~0.6 구간은
+// 흰색→로고색, 0.6~1 구간은 로고색→검정 쪽으로 섞어(최대 55%) 로고색 자체보다 진한 색까지
+// 나오게 하고, 배경 밝기(luminance)를 계산해 어두워지면 글자색을 자동으로 흰색으로 바꾼다.
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function mixRgb(a: [number, number, number], b: [number, number, number], t: number): [number, number, number] {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+function rgbToHex(rgb: [number, number, number]): string {
+  return `#${rgb.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("")}`;
+}
+function intensityColor(themeHex: string, intensity: number): { bg: string; isDark: boolean } {
+  const white: [number, number, number] = [255, 255, 255];
+  const black: [number, number, number] = [0, 0, 0];
+  const theme = hexToRgb(themeHex);
+  const rgb: [number, number, number] =
+    intensity <= 0.6 ? mixRgb(white, theme, intensity / 0.6) : mixRgb(theme, black, ((intensity - 0.6) / 0.4) * 0.55);
+  const luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+  return { bg: rgbToHex(rgb), isDark: luminance < 0.5 };
+}
 // 사용자 지시(2026-09-20): "다른 주로 이동할 수 있는 메뉴" — week prop 없이(Page 2 모달처럼
 // 서버가 "이번 주"를 알아서 고르는 자기관리 모드) 쓰일 때만 이전/다음 주 이동을 지원한다.
 // scheduleGridSource.ts의 addDaysStr과 같은 계산이지만, 이 파일은 클라이언트 컴포넌트라
@@ -95,7 +121,10 @@ export function ScheduleWeekGrid({
   const printAreaId = `schedule-print-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   function handlePrint() {
     const style = document.createElement("style");
-    style.textContent = `@media print { body * { visibility: hidden !important; } #${printAreaId}, #${printAreaId} * { visibility: visible !important; } #${printAreaId} { position: absolute; left: 0; top: 0; width: 100%; } }`;
+    // 사용자 지시(2026-09-22): "편성표를 인쇄 누르면 색이 안나와 — 그라데이션 색도 바로 인쇄
+    // 가능하게" — 브라우저가 기본적으로 배경색을 인쇄에서 생략하는 동작(잉크 절약 기본값)을
+    // 켜서 무시하도록 print-color-adjust: exact를 인쇄 영역 전체에 강제한다.
+    style.textContent = `@media print { body * { visibility: hidden !important; } #${printAreaId}, #${printAreaId} * { visibility: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; } #${printAreaId} { position: absolute; left: 0; top: 0; width: 100%; } }`;
     document.head.appendChild(style);
     const cleanup = () => {
       style.remove();
@@ -280,38 +309,54 @@ export function ScheduleWeekGrid({
                       const rating = r.matched_rating;
                       const isZero = rating === 0;
                       const intensity = rating !== null && rating > 0 ? Math.min(1, rating / intensityPivot) : 0;
-                      const alpha = Math.round(intensity * 200 + 40);
-                      // 사용자 지시(2026-09-20): 시청률이 정확히 0인 블록은 배경을 흰색(투명)으로 —
+                      // 사용자 지시(2026-09-20): 시청률이 정확히 0인 블록은 배경을 흰색으로 —
                       // 데이터가 아예 없는 칸(회색 배경 없음)과 구분되도록 얇은 테두리만 남긴다.
-                      const bg = rating === null ? "#fafafa" : isZero ? "#ffffff" : `${themeColor}${alpha.toString(16).padStart(2, "0")}`;
+                      const { bg, isDark } = rating === null ? { bg: "#fafafa", isDark: false } : isZero ? { bg: "#ffffff", isDark: false } : intensityColor(themeColor, intensity);
+                      const nameColor = isDark ? "#ffffff" : "#27272a"; // zinc-800
+                      const ratingColor = isZero ? (isDark ? "#e4e4e7" : "#a1a1aa") : isDark ? "#ffffff" : "#18181b";
+                      const decimals = channelCode === "SKYUHD" ? 4 : 3;
                       return (
                         <div
                           key={`${r.start_time}-${ri}`}
                           className="absolute left-0 right-0 overflow-hidden border-b border-white px-1"
                           style={{ top, height, backgroundColor: bg, outline: "1px solid rgba(0,0,0,0.05)" }}
-                          title={`${label} ${r.start_time.slice(0, 5)}~${r.end_time ? r.end_time.slice(0, 5) : "?"} ${r.program_name_raw}${r.tags ? ` ${r.tags}` : ""} — ${rating !== null ? rating.toFixed(3) : "매칭 안 됨"}`}
+                          title={`${label} ${r.start_time.slice(0, 5)}~${r.end_time ? r.end_time.slice(0, 5) : "?"} ${r.program_name_raw}${r.tags ? ` ${r.tags}` : ""} — ${rating !== null ? rating.toFixed(decimals) : "매칭 안 됨"}`}
                         >
-                          {height >= 12 && (
+                          {height >= 22 ? (
                             <div className="flex h-full flex-col items-center justify-center leading-tight">
-                              <span className="w-full truncate text-center text-[9.5px] font-medium text-zinc-800">{r.program_name_raw}</span>
-                              {height >= 22 &&
-                                (rating !== null ? (
-                                  // 사용자 지시(2026-09-20): "시청률이 잘 보이게 아주 큰 글씨, 가운데
-                                  // 정렬. 평균 이상이면 볼드. 0이면 0.000 대신 0으로, 회색 글씨."
-                                  // 재지시: "0은 좀 더 작게" — 실제 값과 시각적 비중이 같으면
-                                  // 오히려 눈에 띄어 방해가 되므로, 0은 칸 크기와 무관하게 항상
-                                  // 작은 고정 크기로 표시한다.
-                                  <span
-                                    className={`w-full text-center leading-none ${isZero ? "text-zinc-400 font-normal" : `text-zinc-900 ${boldThreshold !== null && rating >= boldThreshold ? "font-bold" : "font-normal"}`}`}
-                                    style={{ fontSize: isZero ? "10px" : `${Math.min(16, Math.max(10, height / 3))}px` }}
-                                  >
-                                    {isZero ? "0" : rating.toFixed(3)}
-                                  </span>
-                                ) : (
-                                  <span className="w-full truncate text-center text-[9px] text-zinc-500">매칭 안 됨</span>
-                                ))}
+                              <span className="w-full truncate text-center text-[9.5px] font-medium" style={{ color: nameColor }}>
+                                {r.program_name_raw}
+                              </span>
+                              {rating !== null ? (
+                                // 사용자 지시(2026-09-20): "시청률이 잘 보이게 아주 큰 글씨, 가운데
+                                // 정렬. 평균 이상이면 볼드. 0이면 0.000 대신 0으로, 회색 글씨."
+                                // 재지시: "0은 좀 더 작게" — 실제 값과 시각적 비중이 같으면
+                                // 오히려 눈에 띄어 방해가 되므로, 0은 칸 크기와 무관하게 항상
+                                // 작은 고정 크기로 표시한다. 재지시(2026-09-22): 배경이 진해지면
+                                // (isDark) 글자색을 흰색으로 바꿔 대비를 유지한다.
+                                <span
+                                  className={`w-full text-center leading-none ${isZero ? "font-normal" : boldThreshold !== null && rating >= boldThreshold ? "font-bold" : "font-normal"}`}
+                                  style={{ fontSize: isZero ? "10px" : `${Math.min(16, Math.max(10, height / 3))}px`, color: ratingColor }}
+                                >
+                                  {isZero ? "0" : rating.toFixed(decimals)}
+                                </span>
+                              ) : (
+                                <span className="w-full truncate text-center text-[9px]" style={{ color: isDark ? "#ffffff" : "#71717a" }}>
+                                  매칭 안 됨
+                                </span>
+                              )}
                             </div>
-                          )}
+                          ) : height >= 8 ? (
+                            // 사용자 지시(2026-09-22): "칸이 좁아서 시청률이 안 나오는 곳은 한줄로라도
+                            // 나오게" — 30분 이하 짧은 프로그램은 이름+시청률을 나눠 쌓을 세로 공간이
+                            // 없으므로, 한 줄에 "프로그램명 시청률"을 이어 붙이고 넘치면 말줄임한다.
+                            <div className="flex h-full items-center justify-center overflow-hidden">
+                              <span className="w-full truncate text-center text-[8.5px] leading-none" style={{ color: nameColor }}>
+                                {r.program_name_raw}
+                                {rating !== null && <span style={{ color: ratingColor }}> {isZero ? "0" : rating.toFixed(decimals)}</span>}
+                              </span>
+                            </div>
+                          ) : null}
                         </div>
                       );
                     })}
