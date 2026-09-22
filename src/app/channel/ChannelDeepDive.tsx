@@ -5811,17 +5811,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </div>
         )}
 
-        {/* 자연어 질문(18번) — 공용 컴포넌트(AskAssistantWidget)로 통합(2026-09-19). Page 1과
-            완전히 같은 로직(자연어 질의→conclusion/keyNumbers/evidence/programmingAction,
-            /api/ask 호출)을 이 파일이 그대로 복제해 두고 있었는데, /api/ask는 채널을 페이지에서
-            미리 넘기지 않고 질문 문장 자체에서 재추출하므로(intent/parameterExtractor.ts)
-            채널 페이지든 Page 1이든 그대로 재사용할 수 있다 — accentColor(채널 로고 색)만
-            넘기고, 이 페이지 전용 안내 문구(마지막 문장)만 description으로 덧붙인다. */}
-        <AskAssistantWidget
-          accentColor={accentColor}
-          description="OpenAI를 활용해 자연어 질문을 이해하고, DB의 검증된 데이터로 답합니다. 채널 성과·프로그램 TOP·시간대·Target Affinity·경쟁채널 비교·포트폴리오 랭킹/KPI/알림 질문을 지원합니다. 어느 채널 페이지에서 물어도 질문 속 채널명을 다시 인식합니다."
-        />
-
         {/* 요일×시간대 강세 히트맵 — 사용자 지시(2026-08-21, 기능 #15-3; 2026-08-28 재지시로 규칙
             수정): "오늘"(기본값, 아무 기간도 선택하지 않은 최초 진입)만 표본이 부족해 기존처럼
             최근 12주(84일) 고정 윈도우를 유지하고, 어제·직접 선택·WTD~YTD·지난N일·DoD~YoY 등
@@ -7685,6 +7674,19 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )
           )}
         </div>
+
+        {/* 사용자 지시(2026-09-22): "질문하기 · AI 편성 비서는 각 페이지 최하단으로 내리자" —
+            기존엔 히트맵·경쟁채널 TOP5 등 여러 섹션보다 위에 있었다. 자연어 질문(18번) — 공용
+            컴포넌트(AskAssistantWidget)로 통합(2026-09-19). Page 1과 완전히 같은 로직(자연어
+            질의→conclusion/keyNumbers/evidence/programmingAction, /api/ask 호출)을 이 파일이
+            그대로 복제해 두고 있었는데, /api/ask는 채널을 페이지에서 미리 넘기지 않고 질문
+            문장 자체에서 재추출하므로(intent/parameterExtractor.ts) 채널 페이지든 Page 1이든
+            그대로 재사용할 수 있다 — accentColor(채널 로고 색)만 넘기고, 이 페이지 전용 안내
+            문구(마지막 문장)만 description으로 덧붙인다. */}
+        <AskAssistantWidget
+          accentColor={accentColor}
+          description="OpenAI를 활용해 자연어 질문을 이해하고, DB의 검증된 데이터로 답합니다. 채널 성과·프로그램 TOP·시간대·Target Affinity·경쟁채널 비교·포트폴리오 랭킹/KPI/알림 질문을 지원합니다. 어느 채널 페이지에서 물어도 질문 속 채널명을 다시 인식합니다."
+        />
       </div>
     </div>
   );
