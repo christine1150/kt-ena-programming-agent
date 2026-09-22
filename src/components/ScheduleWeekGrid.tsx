@@ -58,6 +58,32 @@ function intensityColor(themeHex: string, intensity: number): { bg: string; isDa
   const luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
   return { bg: rgbToHex(rgb), isDark: luminance < 0.5 };
 }
+// 사용자 지시(2026-09-22): "경쟁 채널의 편성표를 골랐을 때는 0은 흰색 그대로 두고, 높은
+// 시청률은 긍정(진한 블루 계열에서 약하게), 낮은 시청률은 낮을수록 진한 부정(진한 붉은색)으로
+// 그라데이션" — UI 디자이너 페르소나 검토 결과, 자사 채널의 단일색(브랜드색) 그라데이션과
+// 시각적으로 확실히 구분되도록 경쟁채널은 빨강↔흰색↔파랑의 대비 배색을 쓴다. 파랑은 최고
+// 시청률에서도 blue-300의 70%까지만 섞어(cap) "약하게" 유지하고, 빨강은 캡 없이 0에 가까울수록
+// red-700까지 진해져 부정 신호가 시각적으로 확실히 우세하도록 한다(파랑이 튀지 않게).
+// 기준선(pivot)은 자사 채널의 "연간 평균" 같은 고정값이 경쟁채널엔 없어(연간 데이터를
+// 지어내지 않음), 이 주차 자체의 평균 시청률(기존 avgRating, 볼드 판정에 이미 쓰던 값)을
+// 그대로 재사용한다.
+function competitorIntensityColor(rating: number, pivot: number | null, maxRating: number): { bg: string; isDark: boolean } {
+  const white: [number, number, number] = [255, 255, 255];
+  const red700: [number, number, number] = [185, 28, 28];
+  const blue300: [number, number, number] = [147, 197, 253];
+  const p = pivot !== null && pivot > 0 ? pivot : maxRating / 2;
+  let rgb: [number, number, number];
+  if (rating < p) {
+    const t = p > 0 ? Math.min(1, 1 - rating / p) : 0;
+    rgb = mixRgb(white, red700, t);
+  } else {
+    const span = Math.max(1e-9, maxRating - p);
+    const t = Math.min(1, (rating - p) / span) * 0.7;
+    rgb = mixRgb(white, blue300, t);
+  }
+  const luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+  return { bg: rgbToHex(rgb), isDark: luminance < 0.5 };
+}
 // 사용자 지시(2026-09-20): "다른 주로 이동할 수 있는 메뉴" — week prop 없이(Page 2 모달처럼
 // 서버가 "이번 주"를 알아서 고르는 자기관리 모드) 쓰일 때만 이전/다음 주 이동을 지원한다.
 // scheduleGridSource.ts의 addDaysStr과 같은 계산이지만, 이 파일은 클라이언트 컴포넌트라
@@ -318,7 +344,16 @@ export function ScheduleWeekGrid({
                       const intensity = rating !== null && rating > 0 ? Math.min(1, rating / intensityPivot) : 0;
                       // 사용자 지시(2026-09-20): 시청률이 정확히 0인 블록은 배경을 흰색으로 —
                       // 데이터가 아예 없는 칸(회색 배경 없음)과 구분되도록 얇은 테두리만 남긴다.
-                      const { bg, isDark } = rating === null ? { bg: "#fafafa", isDark: false } : isZero ? { bg: "#ffffff", isDark: false } : intensityColor(themeColor, intensity);
+                      // 사용자 재지시(2026-09-22): 경쟁채널은 브랜드색 단색 그라데이션 대신
+                      // 빨강(부정)↔흰색(0)↔파랑(긍정, 약하게) 대비 배색을 쓴다.
+                      const { bg, isDark } =
+                        rating === null
+                          ? { bg: "#fafafa", isDark: false }
+                          : isZero
+                            ? { bg: "#ffffff", isDark: false }
+                            : isCompetitor
+                              ? competitorIntensityColor(rating, boldThreshold, maxRating)
+                              : intensityColor(themeColor, intensity);
                       const nameColor = isDark ? "#ffffff" : "#27272a"; // zinc-800
                       const ratingColor = isZero ? (isDark ? "#e4e4e7" : "#a1a1aa") : isDark ? "#ffffff" : "#18181b";
                       const decimals = channelCode === "SKYUHD" ? 4 : 3;
