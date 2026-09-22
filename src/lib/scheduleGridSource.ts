@@ -124,6 +124,20 @@ export type ScheduleGridSourceRow = {
   tags: string | null;
   matched_rating: number | null;
 };
+
+// 사용자 지시(2026-09-22): "(자)/(오픈)은 편성표에 드러나지 않아도 되고, 오히려 회차나
+// 부제를 적어줘." — 전체 업로드 데이터를 조사한 결과 프로그램명의 괄호 안에는 "자"(자막)와
+// "오픈"(오픈자막) 두 가지만 쓰이고 있어(다른 괄호 용법 없음), 이 두 표기만 안전하게 제거할
+// 수 있다. 회차/부제(episode_number/episode_subtitle)가 있으면 그 자리에 부제를 덧붙인다 —
+// 기존 EPG 폴백(epgName/epgTags, 아래 참고)과 같은 표기 방식으로 통일한다.
+function formatUploadDisplayName(programNameRaw: string, episodeSubtitle: string | null): string {
+  const cleaned = programNameRaw.replace(/\s*\((자|오픈)\)/g, "").trim();
+  return episodeSubtitle ? `${cleaned} - ${episodeSubtitle}` : cleaned;
+}
+function formatUploadDisplayTags(tags: string | null, episodeNumber: number | null): string | null {
+  if (episodeNumber === null) return tags;
+  return tags ? `${episodeNumber}회 ${tags}` : `${episodeNumber}회`;
+}
 // 사용자 지시(2026-09-20 재지시): "기본적으로 DB 기반으로 구성하되, 업로드된 편성표가
 // 매치되는 회차나 부제가 있으면 그것만 덧붙이는 형태로" — 세 가지 상태를 구분한다.
 // "db": 업로드 자체가 없어 순수 재구성. "db+upload": 재구성 결과에 업로드의 회차·부제·태그를
@@ -140,9 +154,17 @@ export async function getScheduleGridRows(
   // 보강)이고, 이걸 켰을 때만 업로드 파일 원본 그리드를 그대로 쓴다.
   options?: { forceUpload?: boolean }
 ): Promise<{ source: ScheduleGridSource; rows: ScheduleGridSourceRow[]; hasUpload: boolean; hasEpgData: boolean }> {
+  // 사용자 지시(2026-09-22): "편성표를 올린 것과 DB 기반이 많이 상이하고 매칭이 안 되는
+  // 문제" — 원인 중 하나는 match_schedule_grid_ratings가 "업로드 시점"에만 한 번 실행돼,
+  // 업로드 당시 아직 안 들어와 있던 닐슨 시청률(보통 다음 날 들어옴)은 나중에 채워져도 영영
+  // "매칭 안 됨"으로 남아 있었다는 것이다. 조회할 때마다 재매칭을 한 번 더 돌린다(멱등 — 이미
+  // 매칭된 행은 그대로, 새로 들어온 시청률이 있으면 그제서야 채워짐). 한 주(~110행) 단위라
+  // 비용은 무시할 만하다. 업로드 자체가 없는 채널·주차에도 안전하게 no-op으로 끝난다.
+  await supabase.rpc("match_schedule_grid_ratings", { p_channel_id: channelId, p_week_start: week });
+
   const { data: uploadedRows, error } = await supabase
     .from("program_schedule_grid")
-    .select("dow, broadcast_date, start_time, end_time, program_name_raw, tags, matched_rating, matched_program_id")
+    .select("dow, broadcast_date, start_time, end_time, program_name_raw, tags, matched_rating, matched_program_id, episode_number, episode_subtitle")
     .eq("channel_id", channelId)
     .eq("week_start", week)
     .order("dow", { ascending: true })
@@ -150,7 +172,16 @@ export async function getScheduleGridRows(
   if (error) throw new Error(error.message);
   const hasUpload = !!uploadedRows && uploadedRows.length > 0;
   if (hasUpload && options?.forceUpload) {
-    return { source: "upload", rows: uploadedRows!.map(({ matched_program_id: _mpid, ...r }) => r), hasUpload, hasEpgData: false };
+    return {
+      source: "upload",
+      rows: uploadedRows!.map(({ matched_program_id: _mpid, episode_number, episode_subtitle, program_name_raw, tags, ...r }) => ({
+        ...r,
+        program_name_raw: formatUploadDisplayName(program_name_raw, episode_subtitle),
+        tags: formatUploadDisplayTags(tags, episode_number),
+      })),
+      hasUpload,
+      hasEpgData: false,
+    };
   }
 
   if (!primaryTarget) return { source: "db", rows: [], hasUpload, hasEpgData: false };
@@ -170,7 +201,12 @@ export async function getScheduleGridRows(
     for (const u of uploadedRows!) {
       if (!u.matched_program_id) continue;
       const key = `${u.dow}__${u.matched_program_id}`;
-      if (!uploadByDowAndProgram.has(key)) uploadByDowAndProgram.set(key, { program_name_raw: u.program_name_raw, tags: u.tags });
+      if (!uploadByDowAndProgram.has(key)) {
+        uploadByDowAndProgram.set(key, {
+          program_name_raw: formatUploadDisplayName(u.program_name_raw, u.episode_subtitle),
+          tags: formatUploadDisplayTags(u.tags, u.episode_number),
+        });
+      }
     }
   }
 
@@ -247,6 +283,8 @@ export async function ingestScheduleGridFile(file: File): Promise<ScheduleGridUp
     end_time: r.endTime,
     program_name_raw: r.programNameRaw,
     tags: r.tags,
+    episode_number: r.episodeNumber,
+    episode_subtitle: r.episodeSubtitle,
     source_file_name: file.name,
   }));
 

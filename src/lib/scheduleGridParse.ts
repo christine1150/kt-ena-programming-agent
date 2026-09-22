@@ -12,6 +12,17 @@
 import * as XLSX from "xlsx";
 
 const DATE_HEADER_RE = /^(\d{2})\/(\d{2})\(.\)$/;
+// olifeWeeklySchedule.ts와 같은 형식(제목 다음 행에 오는 "6(자오족, 여인의 길)" / "12 (미얀마
+// 물장수, 엄마의 꿈)" / "5"(부제 없음) 패턴) — 사용자 지시(2026-09-22): "(자)/(오픈) 정보는
+// 편성표에 드러나지 않아도 되니, 오히려 회차나 부제를 적어달라"에 따라 이 값을 더 이상 버리지
+// 않고 캡처한다.
+const EPISODE_SUBTITLE_RE = /^(\d+)(?:-\d+)?\s*\n?\s*(?:\(([^)]*)\))?/;
+function parseEpisodeSubtitle(raw: string): { episodeNumber: number | null; subtitle: string | null } {
+  const text = raw.trim();
+  const m = text.match(EPISODE_SUBTITLE_RE);
+  if (!m) return { episodeNumber: null, subtitle: null };
+  return { episodeNumber: Number(m[1]), subtitle: m[2] ? m[2].trim() : null };
+}
 
 export interface ScheduleGridRow {
   dow: number; // 1=월 ... 7=일 (broadcastDate에서 계산)
@@ -20,6 +31,8 @@ export interface ScheduleGridRow {
   endTime: string | null; // 다음 세그먼트 시작 시각(근사) — 그 날 마지막 세그먼트는 null
   programNameRaw: string;
   tags: string | null; // 원문 그대로("[재][H][15]" 등), 의미 해석하지 않음
+  episodeNumber: number | null;
+  episodeSubtitle: string | null;
 }
 export interface ScheduleGridParseResult {
   ok: true;
@@ -139,14 +152,16 @@ export function parseScheduleGridWorkbook(buffer: Buffer, fileName: string): Sch
       const seg = segStarts[i];
       const nextRow = i + 1 < segStarts.length ? segStarts[i + 1].row : rows.length;
       let titleText: string | null = null;
+      let episodeText: string | null = null;
       for (let r = seg.row + 1; r < nextRow; r++) {
         const v = rows[r]?.[minCol];
         if (v === null || v === undefined || String(v).trim() === "") continue;
         if (titleText === null) titleText = String(v).trim();
-        // 그 다음 값(회차/부제류)은 이 기능에서는 쓰지 않는다 — program_name_raw는 제목만.
+        else episodeText = String(v).trim(); // 계속 갱신 — 마지막 값이 회차/부제(제목 다음 값들 중 최후, olifeWeeklySchedule.ts와 같은 규칙)
       }
       if (!titleText) continue; // 제목을 못 찾으면 신뢰할 수 없는 세그먼트라 건너뜀(추정하지 않음)
       const endTime = i + 1 < segStarts.length ? segStarts[i + 1].time : null;
+      const { episodeNumber, subtitle } = episodeText ? parseEpisodeSubtitle(episodeText) : { episodeNumber: null, subtitle: null };
       result.push({
         dow: isoDow(date),
         broadcastDate: date,
@@ -154,6 +169,8 @@ export function parseScheduleGridWorkbook(buffer: Buffer, fileName: string): Sch
         endTime,
         programNameRaw: titleText,
         tags: seg.tag || null,
+        episodeNumber,
+        episodeSubtitle: subtitle,
       });
     }
   }
