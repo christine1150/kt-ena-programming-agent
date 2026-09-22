@@ -108,6 +108,11 @@ export function ScheduleWeekGrid({
   const [weekOverride, setWeekOverride] = useState<string | null>(null);
   const showWeekNav = week === undefined;
   const effectiveWeek = weekOverride ?? week;
+  // 사용자 지시(2026-09-22): "우리가 분석 가능한 모든 경쟁채널을 선택할 수 있게" — 경쟁채널
+  // 코드(scheduleGridSource.ts의 encodeCompetitorScheduleCode와 같은 접두어 규칙)인지만
+  // 가볍게 판별한다. 이 컴포넌트는 클라이언트 전용이라 서버 전용 모듈(scheduleGridSource.ts,
+  // supabase 클라이언트를 끌어옴)을 import하지 않고 접두어 문자열만 직접 비교한다.
+  const isCompetitor = channelCode.startsWith("COMPETITOR::");
   // 사용자 지시(2026-09-20): "모든 채널 그라데이션이 더욱 잘 비교되게... 연간 채널 평균
   // 시청률보다 높은 시청률 칸은 잘 보이게" — 채널마다 절대 시청률 수준이 달라 각 주차 자체의
   // 최댓값으로 색을 정하면 채널 간 비교가 왜곡된다. 이 채널의 연초~오늘 누적 평균(고정 기준선)을
@@ -138,7 +143,7 @@ export function ScheduleWeekGrid({
     setRows(null);
     setSource(null);
     const query = `${effectiveWeek ? `&week=${effectiveWeek}` : ""}${forceUpload ? "&view=upload" : ""}`;
-    fetch(`${apiBase}/data?channel=${channelCode}${query}`)
+    fetch(`${apiBase}/data?channel=${encodeURIComponent(channelCode)}${query}`)
       .then((r) => r.json())
       .then((body) => {
         const rs: ScheduleGridRow[] = body.ok ? body.rows : [];
@@ -238,10 +243,12 @@ export function ScheduleWeekGrid({
             </label>
           )}
         </div>
-        {showExport && rows.length > 0 && (
+        {/* 사용자 지시(2026-09-22): 경쟁채널은 업로드·엑셀 내보내기 대상이 아니라(우리 채널
+            전용 export 라우트가 이 코드를 모름) 다운로드 아이콘을 숨긴다. */}
+        {showExport && !isCompetitor && rows.length > 0 && (
           <div className="flex shrink-0 items-center gap-1 print:hidden">
             <a
-              href={`${apiBase}/export?channel=${channelCode}&week=${resolvedWeek.week}${forceUpload ? "&view=upload" : ""}`}
+              href={`${apiBase}/export?channel=${encodeURIComponent(channelCode)}&week=${resolvedWeek.week}${forceUpload ? "&view=upload" : ""}`}
               title="엑셀 다운로드"
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-300 text-zinc-500 hover:bg-zinc-50"
             >

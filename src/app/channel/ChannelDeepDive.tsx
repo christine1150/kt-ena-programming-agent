@@ -7439,9 +7439,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             </td>
                             {/* 사용자 지시(2026-08-25): 원본 개인2049 시트처럼 시청률 옆에 시장
                                 전체 순위를 함께 — 순위가 없는 경우(기간 평균 등)만 생략. */}
+                            {/* 사용자 지시(2026-09-22): "시청률 옆에 등위가 등위끼리 좌정렬 맞게
+                                — 시청률은 시청률끼리, 등위는 등위끼리 좌정렬" — 시청률 문자열
+                                뒤에 바로 "(N위)"를 붙이면 시청률 자릿수가 채널마다 달라 등위
+                                시작 위치가 들쭉날쭉했다. 시청률 칸에 고정 폭을 줘 등위가 항상
+                                같은 x 위치에서 시작하게 한다(tabular-nums로 숫자 폭도 통일). */}
                             <td className="py-1.5 pr-2 text-zinc-600">
-                              {fmtR(c.today_rating)}
-                              {c.today_rank !== null && <span className="ml-1 text-zinc-400">({c.today_rank}위)</span>}
+                              <span className="inline-flex items-baseline gap-1">
+                                <span className="inline-block w-16 shrink-0 tabular-nums">{fmtR(c.today_rating)}</span>
+                                {c.today_rank !== null && <span className="tabular-nums text-zinc-400">({c.today_rank}위)</span>}
+                              </span>
                             </td>
                             <td className="py-1.5 pr-2">
                               {/* 인포그래픽 제안(사용자 지시 2026-08-22, Page 2 전체 구현): 맨텍스트

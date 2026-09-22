@@ -3,11 +3,14 @@
 // 사용자 지시(2026-09-20): "2주 이상의 비교 및 다운로드는... 이 링크들을 관리자 화면의
 // 링크가 아닌 2페이지에서의 링크로 변환해줘. 다시 각 PD들이 관리자 화면으로 접근할 수
 // 없도록." — admin/schedule-grid/page.tsx와 같은 두 주 비교 화면을 PD 세션으로도 열 수 있는
-// 자리에 새로 만든다. 채널 선택 드롭다운은 없다 — Page 2의 "주간 비교" 링크가 이미 그 채널을
-// 알고 있어(?channel=코드) 넘겨주므로, 여기서는 그 채널 하나의 주차 비교만 다룬다(2주 이상
-// 비교·다운로드라는 기능 범위는 그대로, 채널 전환만 뺐다 — 다른 채널을 보려면 그 채널의
-// Page 2에서 다시 들어오면 된다).
-import { Suspense, useEffect, useState } from "react";
+// 자리에 새로 만든다.
+// 사용자 재지시(2026-09-22): "왼쪽과 오른쪽을 같은 채널로 비교하는 것을 기본값으로 하되,
+// 오른쪽도 왼쪽도 각각 채널과 기간을 정할 수 있게 해줘. 당사 채널 외에도 우리가 분석 가능한
+// 모든 경쟁채널을 선택할 수 있게 해줘." — 좌/우 각각 독립된 채널·주차 상태로 바꾸고(초기값은
+// URL의 channel과 그 채널의 최근 두 주 — 기존과 동일한 "같은 채널 비교"), 채널 드롭다운
+// 옵션에 우리 7개 채널 + 등록된 모든 경쟁채널(scheduleGridSource.ts의 인코딩 규칙,
+// COMPETITOR::이름)을 함께 넣는다.
+import { Suspense, useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ScheduleWeekGrid } from "@/components/ScheduleWeekGrid";
@@ -22,42 +25,100 @@ type ChannelOption = {
   logoVisibleTopRatio: number | null;
   themeColor: string | null;
 };
+type CompetitorOption = { code: string; name: string };
+type SideState = {
+  channelCode: string;
+  channelName: string;
+  themeColor: string;
+  weeks: Week[];
+  week: string;
+  loaded: boolean;
+};
+
+const EMPTY_SIDE: SideState = { channelCode: "", channelName: "", themeColor: "#6366f1", weeks: [], week: "", loaded: false };
 
 function ScheduleComparisonInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const channelCode = searchParams.get("channel") ?? "";
-  const [channelName, setChannelName] = useState("");
-  const [themeColor, setThemeColor] = useState("#6366f1");
-  const [weeks, setWeeks] = useState<Week[]>([]);
-  const [weekA, setWeekA] = useState("");
-  const [weekB, setWeekB] = useState("");
-  const [loaded, setLoaded] = useState(false);
-  // 사용자 지시(2026-09-20): "왼쪽 상단에는 다른 채널 편성표로 갈 수 있는 드랍다운 메뉴를,
-  // 우측에는... 각 채널의 2페이지로 갈 수 있는 동그라미 링크 버튼" — Page 1 상단과 같은
-  // 7개 채널 원형 로고 링크를 그리려면 전체 채널 목록이 필요해, weeks API에 함께 실어온다.
+  const urlChannelCode = searchParams.get("channel") ?? "";
   const [allChannels, setAllChannels] = useState<ChannelOption[]>([]);
+  const [allCompetitors, setAllCompetitors] = useState<CompetitorOption[]>([]);
+  const [left, setLeft] = useState<SideState>(EMPTY_SIDE);
+  const [right, setRight] = useState<SideState>(EMPTY_SIDE);
 
+  // 사용자 지시(2026-09-22): "같은 채널로 비교하는 것을 기본값으로" — URL의 channel이 바뀌면
+  // (Page 2의 "주간 비교" 링크로 새로 들어오거나, 아래 최상단 드롭다운으로 전환했을 때) 좌/우
+  // 둘 다 그 채널로 초기화하고, 각 쪽의 최근 두 주를 기본 비교 대상으로 삼는다.
   useEffect(() => {
-    if (!channelCode) return;
-    fetch(`/api/schedule-grid/weeks?channel=${channelCode}`)
+    if (!urlChannelCode) return;
+    setLeft({ ...EMPTY_SIDE, channelCode: urlChannelCode });
+    setRight({ ...EMPTY_SIDE, channelCode: urlChannelCode });
+  }, [urlChannelCode]);
+
+  function loadSide(channelCode: string, setSide: Dispatch<SetStateAction<SideState>>, preferSecondWeek: boolean) {
+    fetch(`/api/schedule-grid/weeks?channel=${encodeURIComponent(channelCode)}`)
       .then((r) => r.json())
       .then((body) => {
-        if (!body.ok) return;
-        setChannelName(body.channelName ?? channelCode);
-        setThemeColor(body.themeColor || "#6366f1");
+        if (!body.ok) {
+          setSide((prev) => ({ ...prev, loaded: true }));
+          return;
+        }
+        setAllChannels((prev) => (body.allChannels?.length ? body.allChannels : prev));
+        setAllCompetitors((prev) => (body.allCompetitors?.length ? body.allCompetitors : prev));
         const ws: Week[] = body.weeks ?? [];
-        setWeeks(ws);
-        setWeekA(ws[0]?.weekStart ?? "");
-        setWeekB(ws[1]?.weekStart ?? "");
-        setAllChannels(body.allChannels ?? []);
-        setLoaded(true);
+        setSide({
+          channelCode,
+          channelName: body.channelName ?? channelCode,
+          themeColor: body.themeColor || "#6366f1",
+          weeks: ws,
+          week: (preferSecondWeek ? ws[1]?.weekStart : ws[0]?.weekStart) ?? "",
+          loaded: true,
+        });
       })
-      .catch(() => setLoaded(true));
-  }, [channelCode]);
+      .catch(() => setSide((prev) => ({ ...prev, loaded: true })));
+  }
 
-  if (!channelCode) {
-    return <div className="p-10 text-sm text-zinc-500">채널 정보가 없습니다 — 채널 화면의 "주간 비교" 링크로 들어와 주세요.</div>;
+  useEffect(() => {
+    if (!left.channelCode || left.loaded) return;
+    loadSide(left.channelCode, setLeft, false);
+  }, [left.channelCode, left.loaded]);
+  useEffect(() => {
+    if (!right.channelCode || right.loaded) return;
+    loadSide(right.channelCode, setRight, true);
+  }, [right.channelCode, right.loaded]);
+
+  if (!urlChannelCode) {
+    return <div className="p-10 text-sm text-zinc-500">채널 정보가 없습니다 — 채널 화면의 &quot;주간 비교&quot; 링크로 들어와 주세요.</div>;
+  }
+
+  // 채널 드롭다운 공용 옵션 — 우리 7개 채널 다음에 구분선 성격의 optgroup으로 등록 경쟁채널을 잇는다.
+  const channelOptions = allChannels.length > 0 ? allChannels : [{ code: urlChannelCode, name: left.channelName || urlChannelCode }];
+
+  function ChannelSelect({ side, onChange }: { side: SideState; onChange: (code: string) => void }) {
+    return (
+      <select
+        value={side.channelCode}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-700"
+      >
+        <optgroup label="당사 채널">
+          {channelOptions.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.name}
+            </option>
+          ))}
+        </optgroup>
+        {allCompetitors.length > 0 && (
+          <optgroup label="등록 경쟁채널">
+            {allCompetitors.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+    );
   }
 
   return (
@@ -72,11 +133,11 @@ function ScheduleComparisonInner() {
             <label className="flex items-center gap-2 text-sm text-zinc-500">
               채널
               <select
-                value={channelCode}
-                onChange={(e) => router.push(`/schedule-grid?channel=${e.target.value}`)}
+                value={urlChannelCode}
+                onChange={(e) => router.push(`/schedule-grid?channel=${encodeURIComponent(e.target.value)}`)}
                 className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm font-medium text-zinc-700"
               >
-                {(allChannels.length > 0 ? allChannels : [{ code: channelCode, name: channelName || channelCode }]).map((c) => (
+                {channelOptions.map((c) => (
                   <option key={c.code} value={c.code}>
                     {c.name}
                   </option>
@@ -84,12 +145,12 @@ function ScheduleComparisonInner() {
               </select>
             </label>
             <div>
-              <h1 className="text-xl font-semibold text-zinc-900">{channelName || channelCode} 주간 비교</h1>
-              <p className="text-sm text-zinc-500">두 주의 편성표를 나란히 비교하고, 각각 엑셀로 받거나 인쇄할 수 있습니다.</p>
+              <h1 className="text-xl font-semibold text-zinc-900">{left.channelName || urlChannelCode} 주간 비교</h1>
+              <p className="text-sm text-zinc-500">기본은 같은 채널의 두 주 비교이며, 좌우 각각 채널·기간을 따로 바꿀 수 있습니다.</p>
             </div>
           </div>
-          {/* Page 1 상단과 동일한 원형 로고 링크 — "채널 화면으로" 버튼 하나 대신, 7개 채널
-              모두의 Page 2로 바로 이동할 수 있게 한다(지금 보고 있는 채널도 그 안에 포함). */}
+          {/* Page 1 상단과 동일한 원형 로고 링크 — 지금 보고 있는 채널도 포함해 7개 모두의
+              Page 2로 바로 이동할 수 있게 한다. */}
           <div className="flex items-center gap-1.5">
             {allChannels.map((c) => (
               <Link
@@ -109,56 +170,47 @@ function ScheduleComparisonInner() {
           </div>
         </div>
 
-        {loaded && weeks.length === 0 && <p className="text-sm text-zinc-400">이 채널의 시청률 데이터가 없어 편성표를 그릴 수 없습니다.</p>}
-
-        {weeks.length > 0 && (
-          <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-100">
-            <label className="flex items-center gap-2 text-sm text-zinc-600">
-              왼쪽 주
-              <select value={weekA} onChange={(e) => setWeekA(e.target.value)} className="rounded-lg border border-zinc-300 px-2 py-1 text-sm">
-                {weeks.map((w) => (
-                  <option key={w.weekStart} value={w.weekStart}>
-                    {w.weekStart} ~ {w.weekEnd}
-                    {w.hasUpload ? " (업로드됨)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-center gap-2 text-sm text-zinc-600">
-              오른쪽 주(비교, 선택)
-              <select value={weekB} onChange={(e) => setWeekB(e.target.value)} className="rounded-lg border border-zinc-300 px-2 py-1 text-sm">
-                <option value="">없음</option>
-                {weeks.map((w) => (
-                  <option key={w.weekStart} value={w.weekStart}>
-                    {w.weekStart} ~ {w.weekEnd}
-                    {w.hasUpload ? " (업로드됨)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        )}
-
-        {weekA && (
-          <div className="flex flex-col gap-4 lg:flex-row">
-            <ScheduleWeekGrid
-              apiBase="/api/schedule-grid"
-              channelCode={channelCode}
-              week={weekA}
-              weekEnd={weeks.find((w) => w.weekStart === weekA)?.weekEnd ?? ""}
-              themeColor={themeColor}
-            />
-            {weekB && (
-              <ScheduleWeekGrid
-                apiBase="/api/schedule-grid"
-                channelCode={channelCode}
-                week={weekB}
-                weekEnd={weeks.find((w) => w.weekStart === weekB)?.weekEnd ?? ""}
-                themeColor={themeColor}
-              />
-            )}
-          </div>
-        )}
+        <div className="flex flex-col gap-4 lg:flex-row">
+          {[
+            { side: left, setSide: setLeft, label: "왼쪽" },
+            { side: right, setSide: setRight, label: "오른쪽" },
+          ].map(({ side, setSide, label }) => (
+            <div key={label} className="flex min-w-0 flex-1 flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-zinc-100">
+                <span className="text-sm text-zinc-500">{label}</span>
+                <ChannelSelect side={side} onChange={(code) => setSide({ ...EMPTY_SIDE, channelCode: code })} />
+                {side.loaded && side.weeks.length > 0 ? (
+                  <select
+                    value={side.week}
+                    onChange={(e) => setSide((prev) => ({ ...prev, week: e.target.value }))}
+                    className="rounded-lg border border-zinc-300 px-2 py-1 text-sm text-zinc-700"
+                  >
+                    {label === "오른쪽" && <option value="">없음</option>}
+                    {side.weeks.map((w) => (
+                      <option key={w.weekStart} value={w.weekStart}>
+                        {w.weekStart} ~ {w.weekEnd}
+                        {w.hasUpload ? " (업로드됨)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : side.loaded ? (
+                  <span className="text-sm text-zinc-400">이 채널은 편성표 데이터가 없습니다.</span>
+                ) : (
+                  <span className="text-sm text-zinc-400">불러오는 중...</span>
+                )}
+              </div>
+              {side.week && (
+                <ScheduleWeekGrid
+                  apiBase="/api/schedule-grid"
+                  channelCode={side.channelCode}
+                  week={side.week}
+                  weekEnd={side.weeks.find((w) => w.weekStart === side.week)?.weekEnd ?? ""}
+                  themeColor={side.themeColor}
+                />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

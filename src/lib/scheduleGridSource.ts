@@ -24,6 +24,61 @@ export function addDaysStr(dateStr: string, days: number): string {
 
 export type ScheduleGridWeek = { weekStart: string; weekEnd: string; hasUpload: boolean };
 
+// 사용자 지시(2026-09-22): "당사 채널 외에도 우리가 분석 가능한 모든 경쟁채널을 선택할 수
+// 있게" — /schedule-grid의 채널 드롭다운에 등록 경쟁채널(competitors 테이블)도 함께 넣기
+// 위해, URL의 channel 파라미터 한 자리에 "우리 채널 코드" 또는 "경쟁채널명"을 함께 표현할
+// 접두어 규칙. 경쟁채널명엔 공백·특수문자가 흔해(예: "SBS Plus") encodeURIComponent로 감싼다.
+const COMPETITOR_CODE_PREFIX = "COMPETITOR::";
+export function isCompetitorScheduleCode(code: string): boolean {
+  return code.startsWith(COMPETITOR_CODE_PREFIX);
+}
+export function encodeCompetitorScheduleCode(competitorName: string): string {
+  return `${COMPETITOR_CODE_PREFIX}${encodeURIComponent(competitorName)}`;
+}
+export function decodeCompetitorScheduleCode(code: string): string {
+  return decodeURIComponent(code.slice(COMPETITOR_CODE_PREFIX.length));
+}
+
+// 등록된 경쟁채널 전체(우리 7개 채널 중 어느 채널의 목록이든) 이름만 중복 없이 모은다 —
+// competitor_program_ratings에 실제로 편성표 데이터가 있는지는 화면에서 선택 후 확인하면
+// 되므로, 여기서는 "분석 가능할 수 있는 후보"로 등록 목록 전체를 그대로 노출한다.
+export async function getAllRegisteredCompetitorNames(): Promise<string[]> {
+  const { data } = await supabase.from("competitors").select("competitor_name");
+  return [...new Set((data ?? []).map((r) => r.competitor_name))].sort((a, b) => a.localeCompare(b, "ko"));
+}
+
+// 사용자 지시(2026-09-22): 경쟁채널의 주차 목록 — program_schedule_grid(업로드)는 우리 채널
+// 전용이라 없고, competitor_program_ratings에 실제로 데이터가 있는 주만 후보로 삼는다.
+export async function getCompetitorScheduleWeeks(competitorName: string): Promise<ScheduleGridWeek[]> {
+  const { data: dateRows } = await supabase
+    .from("competitor_program_ratings")
+    .select("broadcast_date")
+    .eq("competitor_name", competitorName)
+    .order("broadcast_date", { ascending: false })
+    .limit(500);
+  const mondays = new Set<string>();
+  for (const row of dateRows ?? []) {
+    mondays.add(mondayOf(row.broadcast_date));
+  }
+  return [...mondays]
+    .map((weekStart) => ({ weekStart, weekEnd: addDaysStr(weekStart, 6), hasUpload: false }))
+    .sort((a, b) => (a.weekStart < b.weekStart ? 1 : -1));
+}
+
+export async function getCompetitorWeekScheduleRows(competitorName: string, week: string): Promise<ScheduleGridSourceRow[]> {
+  const { data, error } = await supabase.rpc("get_competitor_week_schedule", { p_competitor_name: competitorName, p_week_start: week });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { dow: number; broadcast_date: string; start_time: string; end_time: string | null; program_name_raw: string; matched_rating: number | null }[]).map((r) => ({
+    dow: r.dow,
+    broadcast_date: r.broadcast_date,
+    start_time: r.start_time,
+    end_time: r.end_time,
+    program_name_raw: r.program_name_raw,
+    tags: null,
+    matched_rating: r.matched_rating,
+  }));
+}
+
 // 사용자 지시(2026-09-20): "관리자 화면의 링크가 아닌 2페이지에서의 링크로" — PD 세션용
 // 주간 비교 화면(/schedule-grid)도 관리자 화면과 같은 주차 목록이 필요해 공유한다.
 export async function getScheduleGridWeeks(channelId: string): Promise<ScheduleGridWeek[]> {

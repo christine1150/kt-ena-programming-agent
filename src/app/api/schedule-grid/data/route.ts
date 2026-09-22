@@ -9,7 +9,15 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
-import { getScheduleGridRows, getChannelAnnualAvgRating, mondayOf, addDaysStr } from "@/lib/scheduleGridSource";
+import {
+  getScheduleGridRows,
+  getChannelAnnualAvgRating,
+  mondayOf,
+  addDaysStr,
+  isCompetitorScheduleCode,
+  decodeCompetitorScheduleCode,
+  getCompetitorWeekScheduleRows,
+} from "@/lib/scheduleGridSource";
 
 export async function GET(request: Request) {
   const session = await getCurrentSession();
@@ -20,6 +28,30 @@ export async function GET(request: Request) {
   if (!channelCode) return NextResponse.json({ ok: false, message: "channel 파라미터가 필요합니다." }, { status: 400 });
   const week = params.get("week") ?? mondayOf(new Date().toISOString().slice(0, 10));
   const forceUpload = params.get("view") === "upload";
+
+  // 사용자 지시(2026-09-22): "우리가 분석 가능한 모든 경쟁채널을 선택할 수 있게" — 경쟁채널
+  // 코드(COMPETITOR::이름)면 우리 채널 조회 경로 대신 경쟁채널 전용 조회로 분기한다. 업로드
+  // 병합·연간 평균 등 우리 채널 전용 기능은 적용하지 않는다(경쟁채널엔 해당 데이터 자체가 없음).
+  if (isCompetitorScheduleCode(channelCode)) {
+    const competitorName = decodeCompetitorScheduleCode(channelCode);
+    try {
+      const rows = await getCompetitorWeekScheduleRows(competitorName, week);
+      return NextResponse.json({
+        ok: true,
+        channelName: competitorName,
+        themeColor: "#71717a",
+        source: "db" as const,
+        hasUpload: false,
+        hasEpgData: false,
+        week,
+        weekEnd: addDaysStr(week, 6),
+        channelAnnualAvgRating: null,
+        rows,
+      });
+    } catch (e) {
+      return NextResponse.json({ ok: false, message: e instanceof Error ? e.message : "조회 중 오류가 발생했습니다." }, { status: 500 });
+    }
+  }
 
   const { data: channel } = await supabase.from("channels").select("id, name, theme_color, primary_target").eq("code", channelCode).maybeSingle();
   if (!channel) return NextResponse.json({ ok: false, message: "채널을 찾지 못했습니다." }, { status: 400 });

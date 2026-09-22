@@ -11,7 +11,14 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
-import { getScheduleGridWeeks } from "@/lib/scheduleGridSource";
+import {
+  getScheduleGridWeeks,
+  isCompetitorScheduleCode,
+  decodeCompetitorScheduleCode,
+  getCompetitorScheduleWeeks,
+  getAllRegisteredCompetitorNames,
+  encodeCompetitorScheduleCode,
+} from "@/lib/scheduleGridSource";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -21,9 +28,6 @@ export async function GET(request: Request) {
 
   const channelCode = new URL(request.url).searchParams.get("channel");
   if (!channelCode) return NextResponse.json({ ok: false, message: "channel 파라미터가 필요합니다." }, { status: 400 });
-
-  const { data: channel } = await supabase.from("channels").select("id, name, theme_color").eq("code", channelCode).maybeSingle();
-  if (!channel) return NextResponse.json({ ok: false, message: "채널을 찾지 못했습니다." }, { status: 400 });
 
   const { data: allChannelsRaw } = await supabase
     .from("channels")
@@ -39,10 +43,28 @@ export async function GET(request: Request) {
       logoVisibleTopRatio: c.logo_visible_top_ratio,
       themeColor: c.theme_color,
     }));
+  // 사용자 지시(2026-09-22): "당사 채널 외에도 우리가 분석 가능한 모든 경쟁채널을 선택할 수
+  // 있게" — 등록된 경쟁채널명 전체(우리 7개 채널 중 어느 채널의 목록이든)를 드롭다운 후보로
+  // 함께 내려준다.
+  const competitorNames = await getAllRegisteredCompetitorNames();
+  const allCompetitors = competitorNames.map((name) => ({ code: encodeCompetitorScheduleCode(name), name }));
+
+  if (isCompetitorScheduleCode(channelCode)) {
+    const competitorName = decodeCompetitorScheduleCode(channelCode);
+    try {
+      const weeks = await getCompetitorScheduleWeeks(competitorName);
+      return NextResponse.json({ ok: true, channelName: competitorName, themeColor: "#71717a", weeks, allChannels, allCompetitors });
+    } catch (e) {
+      return NextResponse.json({ ok: false, message: e instanceof Error ? e.message : "조회 중 오류가 발생했습니다." }, { status: 500 });
+    }
+  }
+
+  const { data: channel } = await supabase.from("channels").select("id, name, theme_color").eq("code", channelCode).maybeSingle();
+  if (!channel) return NextResponse.json({ ok: false, message: "채널을 찾지 못했습니다." }, { status: 400 });
 
   try {
     const weeks = await getScheduleGridWeeks(channel.id);
-    return NextResponse.json({ ok: true, channelName: channel.name, themeColor: channel.theme_color, weeks, allChannels });
+    return NextResponse.json({ ok: true, channelName: channel.name, themeColor: channel.theme_color, weeks, allChannels, allCompetitors });
   } catch (e) {
     return NextResponse.json({ ok: false, message: e instanceof Error ? e.message : "조회 중 오류가 발생했습니다." }, { status: 500 });
   }
