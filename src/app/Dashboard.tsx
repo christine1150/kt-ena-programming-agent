@@ -773,24 +773,48 @@ function buildChannelInsightSummary(
       actionKind = "program";
     }
   }
-  // 사용자 지시(2026-09-22, 위 target 인자 설명 참고): 위 두 분기가 못 잡는 "평소와 비슷하지만
-  // 목표에는 계속 못 미치는" 상황 — 오늘 등위가 목표 등위보다 5위 이상 낮거나(≥5), 목표 시청률
-  // 달성률이 80% 미만이면 목표 격차를 진단한다. 오늘 최고 성적 프로그램이 있으면(baseline 3일
-  // 이상 조건 없이, "오늘 뭐가 그나마 잘 됐는지"는 사실 그 자체이므로) 그 프로그램 확대를
-  // 구체적 액션으로 제안하고, 없으면 격차 사실만 진단으로 남긴다(지어낸 액션 없음).
+  // 사용자 재지적(2026-09-23): "'목표(30위) 대비 10위 낮음'은 분석 정보가 될 수 없다 — 실제
+  // 원인을 찾았을 경우에만 원인·해결 방안을 인과관계 있게 제시하라. 최근 8주/12주 동시간대
+  // 평균보다 떨어진 구간이 있다던지, 효율이 좋던 프로그램의 효율이 떨어지고 있다던지 하는
+  // 분석을 하라." — 목표 격차 자체는 "결과"이지 "원인"이 아니므로 그대로 문장으로 쓰지 않는다.
+  // 이미 계산된 값 중 실제 인과관계를 설명할 수 있는 두 후보만 쓴다(순서=신뢰도):
+  //  1) 오늘 최고 성적 프로그램이 자기 슬롯 평균 대비 하락 중(-15% 이상, 표본 3일 이상) —
+  //     위 top_program 분기(30% 문턱)에는 못 미쳤지만 목표 미달 상황에서는 여전히 유의미한
+  //     하락 신호. "그 프로그램이 예전만 못하다"는 구체적 원인 + 그 프로그램 재검토라는 액션이
+  //     인과관계로 이어진다.
+  //  2) 채널 평균 자체가 최근 12주 평균 대비 뚜렷이 하락 중(-10% 이상) — 특정 프로그램을
+  //     지목할 근거는 없지만 "추세 자체가 하락 중이라 목표에 못 미친다"는 원인은 성립한다.
+  // 둘 다 없으면(정말 오늘이 평소와 다를 바 없는데 목표만 원래 못 미치던 상황) 이 분기를
+  // 아예 발동시키지 않는다 — 없는 원인을 "목표보다 낮다"는 재진술로 대체하지 않는다.
   if (!causeLine && target?.targetRankNum != null && s.today_rank !== null) {
     const gap = s.today_rank - target.targetRankNum;
     const achievementBelow80 = target.achievementPct !== null && target.achievementPct < 80;
     if (gap >= 5 || (gap > 0 && achievementBelow80)) {
-      causeLine = `목표(${target.targetRankNum}위) 대비 ${gap}위 낮음`;
-      if (s.top_program_name && s.top_program_rating !== null) {
+      const gapNote = `목표(${target.targetRankNum}위) 대비 ${gap}위 낮은 상태에서`;
+      let programDeclinePct: number | null = null;
+      if (
+        s.top_program_name &&
+        s.top_program_rating !== null &&
+        s.top_program_baseline_avg !== null &&
+        s.top_program_baseline_avg > 0 &&
+        s.top_program_baseline_days !== null &&
+        s.top_program_baseline_days >= 3
+      ) {
+        const pct = ((s.top_program_rating - s.top_program_baseline_avg) / s.top_program_baseline_avg) * 100;
+        if (pct <= -15) programDeclinePct = pct;
+      }
+      if (programDeclinePct !== null && s.top_program_name) {
         const hourLabel = s.top_program_start_time ? `(${extBroadcastHour(s.top_program_start_time)}시)` : "";
-        actionLine = `목표(${target.targetRankNum}위) 대비 ${gap}위 낮음 — 오늘 최고 성적 '${s.top_program_name}'${hourLabel} 편성 확대 검토`;
+        causeLine = `${gapNote} '${s.top_program_name}' 같은 슬롯 평균 대비 ▼${Math.abs(programDeclinePct).toFixed(0)}%`;
+        actionLine = `'${s.top_program_name}'${hourLabel} 편성 재검토 필요 — 목표(${target.targetRankNum}위) 미달의 주요 요인`;
         actionKind = "program";
-      } else {
-        actionLine = `목표(${target.targetRankNum}위) 대비 ${gap}위 낮음 — 편성 전략 재검토 필요`;
+      } else if (s.rating_delta_pct !== null && s.rating_delta_pct <= -10 && s.baseline_avg_rating !== null) {
+        causeLine = `${gapNote} 최근 12주 평균(${formatRating(s.baseline_avg_rating)}) 대비 ▼${Math.abs(s.rating_delta_pct).toFixed(0)}% 하락 지속`;
+        actionLine = `최근 12주 평균 대비 ${Math.abs(s.rating_delta_pct).toFixed(0)}% 하락 — 목표(${target.targetRankNum}위) 회복을 위해 편성 전략 재점검 필요`;
         actionKind = "diagnosis";
       }
+      // 위 두 조건 모두 해당 없으면 causeLine/actionLine을 세팅하지 않고 다음 분기(순위-평소
+      // 대비 진단)로 그대로 넘어간다.
     }
   }
   if (!causeLine && s.today_rank !== null && s.baseline_avg_rank !== null) {
