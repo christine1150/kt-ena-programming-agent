@@ -138,6 +138,18 @@ function formatUploadDisplayTags(tags: string | null, episodeNumber: number | nu
   if (episodeNumber === null) return tags;
   return tags ? `${episodeNumber}회 ${tags}` : `${episodeNumber}회`;
 }
+// 사용자 지시(2026-09-23): "skyUHD 편성표 일부 부분에서 부제/회차 안 나오는 모습 확인됨" —
+// 실측 확인 결과 skyUHD는 episode_number가 항상 null이고, 진짜 회차 번호("16회" 같은 텍스트)가
+// episode_subtitle 칸에 그대로 들어와 있었다(skyUHD 수기 파일 파싱 특성 — 원본 데이터는 건드리지
+// 않고 표시 시점에만 보정). 그 결과 회차가 "부제"로 오인돼 제목 배지 자리엔 아무 것도 안 뜨고,
+// 셀이 좁으면(부제 줄은 1시간 이상 블록에서만 보임) 회차 정보 자체가 통째로 사라졌다. episode_
+// subtitle이 "숫자+회" 패턴이면 회차로 재해석해 episode_number 쪽으로 돌려준다.
+const EPISODE_ONLY_SUBTITLE_RE = /^(\d+)회$/;
+function reinterpretEpisodeFields(episodeNumber: number | null, episodeSubtitle: string | null): { episodeNumber: number | null; episodeSubtitle: string | null } {
+  if (episodeNumber !== null || episodeSubtitle === null) return { episodeNumber, episodeSubtitle };
+  const m = episodeSubtitle.trim().match(EPISODE_ONLY_SUBTITLE_RE);
+  return m ? { episodeNumber: Number(m[1]), episodeSubtitle: null } : { episodeNumber, episodeSubtitle };
+}
 // 사용자 지시(2026-09-20 재지시): "기본적으로 DB 기반으로 구성하되, 업로드된 편성표가
 // 매치되는 회차나 부제가 있으면 그것만 덧붙이는 형태로" — 세 가지 상태를 구분한다.
 // "db": 업로드 자체가 없어 순수 재구성. "db+upload": 재구성 결과에 업로드의 회차·부제·태그를
@@ -162,7 +174,7 @@ export async function getScheduleGridRows(
   // 비용은 무시할 만하다. 업로드 자체가 없는 채널·주차에도 안전하게 no-op으로 끝난다.
   await supabase.rpc("match_schedule_grid_ratings", { p_channel_id: channelId, p_week_start: week });
 
-  const { data: uploadedRows, error } = await supabase
+  const { data: uploadedRowsRaw, error } = await supabase
     .from("program_schedule_grid")
     .select("dow, broadcast_date, start_time, end_time, program_name_raw, tags, matched_rating, matched_program_id, episode_number, episode_subtitle")
     .eq("channel_id", channelId)
@@ -170,6 +182,12 @@ export async function getScheduleGridRows(
     .order("dow", { ascending: true })
     .order("start_time", { ascending: true });
   if (error) throw new Error(error.message);
+  // 위 reinterpretEpisodeFields 설명 참고 — 업로드 쪽 episode_subtitle도 같은 오염 가능성이
+  // 있어(수기 입력 특성상) 조회 직후 한 번만 보정해두면 이후 어떤 경로로 쓰이든 안전하다.
+  const uploadedRows = uploadedRowsRaw?.map((u) => {
+    const fixed = reinterpretEpisodeFields(u.episode_number, u.episode_subtitle);
+    return { ...u, episode_number: fixed.episodeNumber, episode_subtitle: fixed.episodeSubtitle };
+  });
   const hasUpload = !!uploadedRows && uploadedRows.length > 0;
   if (hasUpload && options?.forceUpload) {
     return {
@@ -185,12 +203,29 @@ export async function getScheduleGridRows(
   }
 
   if (!primaryTarget) return { source: "db", rows: [], hasUpload, hasEpgData: false };
-  const { data: dbRows, error: dbError } = await supabase.rpc("get_channel_week_schedule", {
+  const { data: dbRowsRaw, error: dbError } = await supabase.rpc("get_channel_week_schedule", {
     p_channel_code: channelCode,
     p_program_target_label: resolveProgramLevelTargetLabel(primaryTarget),
     p_week_start: week,
   });
   if (dbError) throw new Error(dbError.message);
+  type DbScheduleRow = {
+    dow: number;
+    broadcast_date: string;
+    start_time: string;
+    end_time: string | null;
+    program_id: string | null;
+    canonical_name: string;
+    rating: number;
+    episode_number: number | null;
+    episode_subtitle: string | null;
+  };
+  // skyUHD 실측(2026-09-23): episode_number는 항상 null이고 진짜 회차 번호("16회")가
+  // episode_subtitle에 그대로 들어와 있었다 — 위 reinterpretEpisodeFields로 조회 직후 보정.
+  const dbRows: DbScheduleRow[] = ((dbRowsRaw ?? []) as DbScheduleRow[]).map((r) => {
+    const fixed = reinterpretEpisodeFields(r.episode_number, r.episode_subtitle);
+    return { ...r, episode_number: fixed.episodeNumber, episode_subtitle: fixed.episodeSubtitle };
+  });
 
   // 업로드 행을 (요일, 매칭된 프로그램 id)로 색인해둔다 — match_schedule_grid_ratings가 이미
   // 업로드 시점에 계산해 둔 matched_program_id를 그대로 재사용한다(새 fuzzy 매칭을 만들지
@@ -218,19 +253,7 @@ export async function getScheduleGridRows(
     }
   }
 
-  const rows: ScheduleGridSourceRow[] = (
-    (dbRows ?? []) as {
-      dow: number;
-      broadcast_date: string;
-      start_time: string;
-      end_time: string | null;
-      program_id: string | null;
-      canonical_name: string;
-      rating: number;
-      episode_number: number | null;
-      episode_subtitle: string | null;
-    }[]
-  ).map((r) => {
+  const rows: ScheduleGridSourceRow[] = dbRows.map((r) => {
     const upload = r.program_id ? uploadByDowAndProgram.get(`${r.dow}__${r.program_id}`) : undefined;
     // 사용자 지시(2026-09-20): "OLIFE는 네이버 메일함을 통해서나 직접 업로드를 통해서 회차와
     // 부제 정보를 획득... 그것들도 편성표에 반영해줘" — ratings.episode_number/episode_subtitle은
@@ -257,7 +280,7 @@ export async function getScheduleGridRows(
   // 올라간 파일)에도 "회차·부제 반영" 배지가 잘못 뜬다. 위에서 합성한 최종 결과(episodeNumber/
   // episodeSubtitle, 업로드+EPG 중 하나라도 있으면 값이 들어감) 기준으로 실제로 하나라도
   // 있었는지를 별도로 판정해, 화면 배지 문구가 실제 데이터와 어긋나지 않게 한다.
-  const hasEpisodeInfo = (dbRows ?? []).some((r: { program_id: string | null; dow: number; episode_number: number | null; episode_subtitle: string | null }) => {
+  const hasEpisodeInfo = dbRows.some((r) => {
     const upload = r.program_id ? uploadByDowAndProgram.get(`${r.dow}__${r.program_id}`) : undefined;
     return (upload?.episode_number ?? r.episode_number) !== null || (upload?.episode_subtitle ?? r.episode_subtitle) !== null;
   });
