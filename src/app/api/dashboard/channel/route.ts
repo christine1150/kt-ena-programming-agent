@@ -5,10 +5,10 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL, resolveMarketYtdTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
 import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
-import { buildBriefingReportViaLlm } from "@/lib/briefingReportLlm";
+import { buildBriefingReportViaLlm, type BriefingReport } from "@/lib/briefingReportLlm";
 // 사용자 지시(2026-09-18): WHY? 진단이 causeClassifier.ts의 편성량/성과 항등 분해를 쓰도록,
 // Page 1 월간 리뷰가 이미 쓰는 프라임 정의(하나의 정의만 쓴다는 원칙)를 그대로 재사용.
-import { PRIME_RPC_ARGS } from "@/lib/audienceReport/primeTime";
+import { PRIME_RPC_ARGS, dayTypeOf, primeRangeFor, DAY_TYPE_LABEL } from "@/lib/audienceReport/primeTime";
 // 성능 개선(2026-09-17): 닐슨 적재 시점에 SQL이 미리 계산해 둔 집계 결과를 읽어 쓴다
 // (mart_daily_dashboard_cache / mart_llm_text_cache — 마이그레이션 20260917010000).
 import { loadDailyMartCache, cachedOrRpc, martFingerprint, MART_SLOT, MART_GLOBAL_CODE } from "@/lib/dailyMartCache";
@@ -229,7 +229,16 @@ export async function GET(request: Request) {
   const sdowDowFp: number | null = sdowActiveForFp ? sdowDow : null;
   const sdowWeeksFp: number | null = sdowActiveForFp ? sdowWeeks : null;
 
-  const { data: achievementForMatch } = await cachedOrRpc<{ matched_target_label: string | null }>(
+  // 사용자 지시(2026-09-23): 브리핑 "시사점"에서 목표선을 쓰려면 달성률·목표 등위가 필요하다 —
+  // get_target_achievement가 원래 돌려주던 컬럼인데 이 제네릭에 matched_target_label만 적혀
+  // 있어 타입상 존재하지 않는 것으로 취급되고 있었다(응답 JSON에는 이미 그대로 실려 나간다).
+  const { data: achievementForMatch } = await cachedOrRpc<{
+    matched_target_label: string | null;
+    achievement_pct: number | null;
+    gap: number | null;
+    target_rating: number | null;
+    target_rank: string | null;
+  }>(
     martCache,
     dateTo,
     MART_SLOT.targetAchievementDay,
@@ -401,7 +410,16 @@ export async function GET(request: Request) {
       .maybeSingle();
     groupAHouseholdRatingToday = (hhTodayRow as { rating: number | null } | null)?.rating ?? null;
     const hhTimeSpent = (hhTodayRow as { time_spent_seconds: number | null } | null)?.time_spent_seconds ?? null;
-    groupAHouseholdException = (groupAHouseholdRatingToday !== null && groupAHouseholdRatingToday > 0.01) || (hhTimeSpent !== null && hhTimeSpent >= 1800);
+    // 버그 수정(2026-09-23, 브라우저 검증 중 "가구 시청률 55.4%"라는 불가능한 값이 화면에
+    // 뜨는 것을 발견): 닐슨 rating은 이미 퍼센트 단위 숫자다(0.554 = 0.554%). 그런데 임계값을
+    // 0.01로 잡아 "1%"가 아니라 "0.01%"를 넘기만 하면 예외가 발동하고 있었고, 화면에서는 그
+    // 값에 100을 또 곱해 55.4%로 표시했다. 사용자가 말한 기준은 "가구 시청률이 1%가 넘거나"
+    // 이므로 그대로 1을 쓴다.
+    // 시청시간 기준도 함께 올렸다(30분 → 1시간). ENA의 평상시 일간 시청시간이 이미 40분대라
+    // 30분 기준으로는 예외가 사실상 매일 발동해, 사용자가 요청한 "2049 한정" 원칙 자체가
+    // 무력화되고 있었다. "시청 시간이 아주 길거나"라는 표현에 맞게 평소보다 확연히 긴 수준으로
+    // 잡는다(1시간은 판단이 들어간 값이라 사용자 확인이 필요한 부분).
+    groupAHouseholdException = (groupAHouseholdRatingToday !== null && groupAHouseholdRatingToday > 1) || (hhTimeSpent !== null && hhTimeSpent >= 3600);
   }
 
   // 오늘의 브리핑 고도화(사용자 지시 2026-08-20): "타깃상세 탭의 5대 지표(시청률/점유율/도달율/
@@ -1238,7 +1256,7 @@ export async function GET(request: Request) {
   // 서술 job(Page 1 채널별 인사이트)과 공유하는 범용 문자열 캐시라 배열을 직접 못 받으므로,
   // 캐시 저장 시에만 줄바꿈으로 이어붙였다가 꺼낼 때 다시 배열로 나눈다(캐시 유틸 자체는
   // 그대로 유지 — 다른 호출부에 영향 없음).
-  let briefingLlm: string[] | null = null;
+  let briefingLlm: BriefingReport | null = null;
   if (!isRangeMode && narrativeSignal) {
     const currentTrendRow = (trend ?? []).find((t: { period: string }) => t.period === "current");
     const currentRating = (currentTrendRow as { rating: number | null } | undefined)?.rating ?? null;
@@ -1258,6 +1276,29 @@ export async function GET(request: Request) {
     // 이 프로젝트 전역 규칙(CLAUDE.md, skyUHD만 5자리·그 외 3자리)대로 반올림한 뒤에만 LLM에 준다
     // — competitor/opportunity job(§U)에서 이미 쓰던 ratingFmt와 동일한 패턴, 이 호출에는 빠져 있었다.
     const ratingFmt = (v: number | null): number | null => (v === null || v === undefined ? null : Number(v.toFixed(channel.code === "SKYUHD" ? 5 : 3)));
+    // 사용자 지시(2026-09-23): "브리핑을 편성 시간·12주 대비·동요일 대비·프라임타임 주요 편성·
+    // 주요 타깃 이동·시청시간/점유율 관점에서 심도 있게" — 아래 값들은 전부 이 route가 이미
+    // 조회해 응답에 싣고 있던 것인데 브리핑 입력에만 빠져 있던 것들이다(새 RPC 호출 없음).
+    // 특히 점유율은 업계 리포트(Nielsen·Barb)에서 시청률과 항상 쌍으로 읽는 값으로, "시장 전체가
+    // 빠진 날"인지 "우리만 빠진 날"인지를 가르기 때문에 브리핑의 인과 설명에 필수다.
+    //
+    // 프라임타임: 새 쿼리 없이 이미 있는 시간대별 배열(hourlyPattern=당일, hourlyBaselinePattern=
+    // 84일 평균)에서 프라임 구간만 잘라 평균낸다. 프라임 정의는 반드시 primeTime.ts 하나만
+    // 쓴다(prime-time-definition 규칙) — 평일 19~23시, 토·일·공휴일 18~23시.
+    const holidayRow = await supabase.from("public_holidays").select("holiday_date").eq("holiday_date", dateTo).maybeSingle();
+    const primeDayType = dayTypeOf(dateTo, new Set(holidayRow.data ? [dateTo] : []));
+    const { from: primeFrom, to: primeTo } = primeRangeFor(primeDayType);
+    const avgPrimeRating = (rows: { broadcast_hour: number; avg_rating: number | null }[] | null | undefined): number | null => {
+      const vals = (rows ?? []).filter((r) => r.broadcast_hour >= primeFrom && r.broadcast_hour < primeTo && r.avg_rating !== null).map((r) => r.avg_rating as number);
+      return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+    // 점유율·가구 시청률처럼 이미 퍼센트 단위인 값은 소수 2자리로 끊는다(시청률의 3자리
+    // 규칙과는 별개 — 퍼센트 값을 3~4자리로 주면 문장이 "3.1782%"처럼 지저분해진다).
+    const pctFmt = (v: number | null | undefined): number | null => (v === null || v === undefined ? null : Number(v.toFixed(2)));
+    const primeToday = avgPrimeRating(hourlyPattern as { broadcast_hour: number; avg_rating: number | null }[] | null);
+    const primeBaseline = avgPrimeRating(hourlyBaselinePattern as { broadcast_hour: number; avg_rating: number | null }[] | null);
+    const currentShare = (currentTrendRow as { share: number | null } | undefined)?.share ?? null;
+    const currentTimeSpentSeconds = (currentTrendRow as { time_spent_seconds: number | null } | undefined)?.time_spent_seconds ?? null;
     // 성능 개선(2026-09-17): 같은 날짜·같은 입력이면 문장도 같으므로 결과를 캐시해 OpenAI
     // 왕복(최대 8초)을 하루 첫 조회로 제한한다 — 입력이 바뀌면 지문이 달라져 자동 재생성되고,
     // 캐시가 없거나 실패하면 지금까지와 똑같이 그 자리에서 생성한다.
@@ -1286,17 +1327,63 @@ export async function GET(request: Request) {
         baseline_avg: ratingFmt(d.baseline_avg),
       })),
       baselineLabel: sdowBaselineLabelForLlm,
-      groupAHouseholdException: groupAHouseholdException ? groupAHouseholdRatingToday : null,
+      groupAHouseholdException: groupAHouseholdException ? pctFmt(groupAHouseholdRatingToday) : null,
+      // ── 이하 2026-09-23 추가분(전부 기존 조회 결과의 재사용) ──
+      // 순위: 시청률이 빠져도 순위가 유지되면 "시장 전체가 빠진 날"이라는 해석이 가능해진다.
+      today_rank: narrativeSignal.today_rank,
+      baseline_avg_rank: narrativeSignal.baseline_avg_rank,
+      // 점유율: 시청률과 쌍으로 읽는 값(업계 표준). 퍼센트 단위 숫자이므로 소수 2자리로
+      // 끊어서 넘긴다 — 안 그러면 LLM이 "3.1782%"처럼 원본 자릿수를 그대로 인용한다
+      // (브라우저 검증에서 실제로 발생).
+      today_share: pctFmt(narrativeSignal.today_share),
+      baseline_avg_share: pctFmt(narrativeSignal.baseline_avg_share),
+      // 하락 주범 프로그램 — get_channel_daily_narrative가 이미 뽑아 주는데 브리핑만 안 쓰고
+      // 있었다. "왜 빠졌나"에 직접 답하는 유일한 프로그램 단위 근거다.
+      decline_program_name: narrativeSignal.decline_program_name,
+      decline_program_rating: ratingFmt(narrativeSignal.decline_program_rating),
+      decline_program_start_time: narrativeSignal.decline_program_start_time,
+      decline_program_baseline_avg: ratingFmt(narrativeSignal.decline_program_baseline_avg),
+      decline_program_baseline_days: narrativeSignal.decline_program_baseline_days,
+      decline_program_delta_pct: narrativeSignal.decline_program_delta_pct,
+      // 목표 대비 — 그 자체는 "결과"라 원인으로 쓰면 안 되지만(2026-09-22 사용자 지시),
+      // 맨 아래 "시사점" 한 줄에서 오늘의 결과를 목표선에 얹는 용도로는 유효하다.
+      target_rank: targetAchievement?.target_rank ?? null,
+      target_achievement_pct: targetAchievement?.achievement_pct ?? null,
+      // 동일 요일 평균 — 편성은 날짜가 아니라 요일에 묶이므로 요일 통제된 기준선이 12주 전체
+      // 평균보다 정확하다. SDoW 프리셋이 켜졌을 때만 채워진다.
+      same_weekday_avg_rating: ratingFmt(sameWeekdayReport?.avgRating ?? null),
+      same_weekday_sample_days: sameWeekdayReport?.sampleDays ?? null,
+      // 프라임타임(주요시간) 성과 — 편성 PD의 핵심 관심 구간.
+      prime_label: `${DAY_TYPE_LABEL[primeDayType]} ${primeFrom}~${primeTo}시`,
+      prime_today_avg_rating: ratingFmt(primeToday),
+      prime_baseline_avg_rating: ratingFmt(primeBaseline),
+      // 시청시간·점유율(채널 단위 당일값).
+      today_time_spent_minutes: currentTimeSpentSeconds === null ? null : Number((currentTimeSpentSeconds / 60).toFixed(1)),
+      today_share_pct: pctFmt(currentShare),
     };
     // 사용자 지시(2026-09-22): 프롬프트가 "한 문단"에서 "짧은 사실 항목 배열"로 바뀌었는데
     // cachedLlmText는 입력값 지문(md5)만으로 캐시 키를 만든다 — 입력 필드 자체는 그대로라
     // kind를 바꾸지 않으면 예전 프롬프트로 만든 옛 문단이 계속 캐시에서 나온다. kind에 버전을
     // 붙여 강제로 새로 생성하게 한다.
-    const briefingLlmJoined = await cachedLlmText(`briefing_report_v2:${channel.code}`, dateTo, briefingLlmInput, async () => {
-      const facts = await buildBriefingReportViaLlm(briefingLlmInput);
-      return facts ? facts.join("\n") : null;
+    // 사용자 지시(2026-09-23): 브리핑이 "서로 연결되지 않는 숫자 나열"이라 결과물 자체가
+    // 평평한 문자열 배열에서 구조(헤드라인 + 근거 2단 + 시사점)로 바뀌었다. cachedLlmText는
+    // 범용 문자열 캐시라 객체를 못 담으므로 JSON 직렬화해서 넣고 꺼낼 때 되돌린다. kind는
+    // v2→v3 — 입력 필드가 늘어 지문은 어차피 바뀌지만, 형식 자체가 달라졌으므로 구버전 캐시가
+    // 섞이지 않도록 버전을 올려 둔다.
+    // v4(2026-09-23): 브라우저 검증에서 LLM이 연령대를 drivers(편성 근거)에 섞어 넣는 것과
+    // 가구 시청률에 100을 곱하는 것을 발견해 프롬프트를 고쳤다. 입력 필드는 그대로라 지문이
+    // 안 바뀌므로, 버전을 올리지 않으면 옛 프롬프트로 만든 캐시가 계속 나온다.
+    const briefingLlmJson = await cachedLlmText(`briefing_report_v4:${channel.code}`, dateTo, briefingLlmInput, async () => {
+      const report = await buildBriefingReportViaLlm(briefingLlmInput);
+      return report ? JSON.stringify(report) : null;
     });
-    briefingLlm = briefingLlmJoined ? briefingLlmJoined.split("\n").filter((f) => f.length > 0) : null;
+    if (briefingLlmJson) {
+      try {
+        briefingLlm = JSON.parse(briefingLlmJson) as BriefingReport;
+      } catch {
+        briefingLlm = null;
+      }
+    }
   }
 
   return NextResponse.json({

@@ -19,6 +19,7 @@ import { AskAssistantWidget } from "@/components/AskAssistantWidget";
 import { ScheduleWeekGrid } from "@/components/ScheduleWeekGrid";
 import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from "@/lib/enaOriginalHighlight";
 import { highlightNarrativeText } from "@/lib/highlightNarrative";
+import type { BriefingReport } from "@/lib/briefingReportLlm";
 import { computeChannelHealthScore } from "@/lib/channelHealthScore";
 import { HealthScoreBadge, verdictColor } from "@/components/HealthScoreBadge";
 import { PRIME_UNION_LABEL } from "@/lib/audienceReport/primeTime";
@@ -378,6 +379,14 @@ interface NarrativeSignal {
   top_program_start_time: string | null;
   top_program_baseline_avg: number | null;
   top_program_baseline_days: number | null;
+  // 사용자 지시(2026-09-23): 브리핑에 "왜 빠졌나"를 넣으려면 하락 주범 프로그램이 필요하다 —
+  // get_channel_daily_narrative가 이미 반환하던 컬럼인데 이 타입에 빠져 있어 못 쓰고 있었다.
+  decline_program_name: string | null;
+  decline_program_rating: number | null;
+  decline_program_start_time: string | null;
+  decline_program_baseline_avg: number | null;
+  decline_program_baseline_days: number | null;
+  decline_program_delta_pct: number | null;
   demographics: NarrativeDemographic[] | null;
   dow_baseline_avg_rating: number | null;
 }
@@ -657,9 +666,9 @@ interface ChannelData {
   weakProgramsToday: { canonical_name: string; rating: number; start_time: string }[];
   // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — route.ts가
   // 이미 검증된 값만으로 OpenAI가 종합한 오늘의 브리핑 핵심 사실 항목들(단일 일자 모드만).
-  // 없으면 기존 규칙 기반 항목으로 조용히 대체. 사용자 지시(2026-09-22): 문단 하나가 아니라
-  // 숫자 위주 짧은 항목 배열로 바뀌었다(briefingReportLlm.ts 참고).
-  briefingLlm: string[] | null;
+  // 없으면 기존 규칙 기반 항목으로 조용히 대체. 사용자 지시(2026-09-23): 평평한 문자열 배열이
+  // 아니라 "헤드라인 + 근거 2갈래 + 시사점" 구조로 바뀌었다(briefingReportLlm.ts 참고).
+  briefingLlm: BriefingReport | null;
   // 사용자 지시(2026-09-22): "가구 시청률 1% 초과 예외도 구현해줘" — ENA/ENA Play/ENA Drama의
   // 2049 한정 원칙 예외가 오늘 실제로 발동했을 때만(가구 시청률 1% 초과 또는 시청시간 30분
   // 이상) 그 가구 시청률 값을 담는다. 발동 안 하면 null(화면에서 조용히 생략).
@@ -1304,6 +1313,19 @@ function buildDemographicHighlightsParagraph(rows: DemographicHighlightRow[]): s
   return sentences.join(" ");
 }
 
+// 사용자 지시(2026-09-23): "짧아진 것은 좋지만 어떤 내용이 서로 연결되는지 모르겠음. 하루에
+// 대한 브리핑이 핵심 위주로 정리되어야 함." — 브리핑 결과물을 평평한 문자열 배열이 아니라
+// 위계가 있는 구조로 돌려준다. headline이 그날의 결론이고 drivers/audience는 그 근거이며,
+// extras는 헤드라인에 종속되지 않는 별개 참고 문단(연령대 특이사항·원인 추적 알림 등)이다.
+interface BriefingView {
+  headline: string | null;
+  verdict: "up" | "down" | "flat";
+  drivers: string[];
+  audience: string[];
+  implication: string | null;
+  extras: string[];
+}
+
 function buildBriefingReport(
   data: ChannelData,
   refLabel: string,
@@ -1312,9 +1334,10 @@ function buildBriefingReport(
   // 사용자 지시(2026-09-02): "브리핑 텍스트 바인딩 — '최근 12주 평균 대비 9.6% 하락했습니다'의
   // 기간·요일·수치가 드롭다운 상태와 바인딩되도록". SDoW 프리셋이 활성일 때만 채워진다.
   sdowContext?: { weeksLabel: string; dowLabel: string } | null
-): string[] {
+): BriefingView {
   const s = data.narrativeSignal;
-  const paragraphs: string[] = [];
+  const view: BriefingView = { headline: null, verdict: "flat", drivers: [], audience: [], implication: null, extras: [] };
+  const paragraphs: string[] = view.extras;
   // skyUHD만 예외적으로 소수점 5자리(사용자 지시 2026-08-20).
   const fmtR = (v: number | null) => fmt(v, data.channel.code === "SKYUHD" ? 5 : 3);
   // 사용자 지시(2026-09-02, 후속): SDoW 활성화 시 route.ts가 narrativeSignal(s)의 baseline_avg_rating/
@@ -1329,26 +1352,44 @@ function buildBriefingReport(
   } else {
     const current = data.trend.find((t) => t.period === "current");
     if (!s || current?.rating === null || current?.rating === undefined) {
-      return [`${refLabel} 브리핑을 작성할 데이터가 아직 부족합니다.`];
+      return { ...view, headline: `${refLabel} 브리핑을 작성할 데이터가 아직 부족합니다.` };
     }
 
     // 사용자 지시(2026-09-22): "오늘의 브리핑을 줄글 형태가 아닌 수치와 팩트 위주의 가독률
     // 좋은 내용 위주로... 지금은 말이 너무 길어서 읽기 힘들다" — 완결된 서술문(~습니다) 대신
     // 숫자가 맨 앞에 오는 짧은 사실 항목으로 바꾼다. 계산은 전부 그대로(새 수치 없음), 표현
     // 방식만 바뀐다. LLM 경로(위 briefingReportLlm.ts)도 같은 형식을 쓰도록 프롬프트를 맞췄다.
-    const sentences: string[] = [];
+    // 사용자 지시(2026-09-23): 규칙 기반 폴백도 LLM 경로와 같은 위계(헤드라인 + 근거 2갈래)로
+    // 만든다 — 한쪽만 고치면 OpenAI 키가 없거나 호출이 실패한 날에만 옛 평면 나열이 되살아난다.
+    const drivers: string[] = [];
+    const audience: string[] = [];
     // 사용자 지시(2026-08-25): ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널에서
     // 매우 중요하므로 그 성과를 오늘의 브리핑 첫 문장으로 — 이미 완성된 짧은 문장이라 그대로 둔다.
     const enaLeadSentence = data.enaOriginalDaily.length > 0 ? buildEnaOriginalHighlightSentence(data.enaOriginalDaily, fmtR) : data.rerunLeadSentence;
-    if (enaLeadSentence) sentences.push(enaLeadSentence);
+    if (enaLeadSentence) drivers.push(enaLeadSentence);
 
     const baselineLabelText = sdowLabel ?? "최근 12주 평균";
+    // 헤드라인 — 그날의 결론 한 줄. 등락 방향과 폭을 판정어로 바꿔 "무슨 날이었나"에 답한다.
+    // 판정 기준은 이 파일이 이미 다른 곳에서 쓰는 10%/25% 임계와 같은 감각으로 잡았다.
     if (s.rating_delta_pct !== null) {
-      sentences.push(
-        `${refLabel} ${fmtR(current.rating)} (${s.rating_delta_pct >= 0 ? "▲" : "▼"}${Math.abs(s.rating_delta_pct).toFixed(1)}%, ${baselineLabelText} 대비)`
-      );
+      const abs = Math.abs(s.rating_delta_pct);
+      view.verdict = abs < 10 ? "flat" : s.rating_delta_pct > 0 ? "up" : "down";
+      const verdictWord = abs < 10 ? "평소 수준" : s.rating_delta_pct > 0 ? (abs >= 25 ? "뚜렷한 강세" : "소폭 강세") : abs >= 25 ? "뚜렷한 부진" : "소폭 약세";
+      view.headline = `${refLabel} ${fmtR(current.rating)} — ${baselineLabelText} 대비 ${s.rating_delta_pct >= 0 ? "▲" : "▼"}${abs.toFixed(1)}%로 ${verdictWord}`;
     } else {
-      sentences.push(`${refLabel} ${fmtR(current.rating)}`);
+      view.headline = `${refLabel} ${fmtR(current.rating)}`;
+    }
+    // 순위·점유율은 시청률과 함께 읽어야 "시장 전체가 빠진 날"인지 "우리만 빠진 날"인지 갈린다
+    // (Nielsen·Barb 공통 관행). 값이 둘 다 있을 때만 쓴다.
+    if (s.today_share !== null && s.baseline_avg_share !== null && s.baseline_avg_share > 0) {
+      const sharePct = ((s.today_share - s.baseline_avg_share) / s.baseline_avg_share) * 100;
+      audience.push(`점유율 ${s.today_share.toFixed(2)}% (평소 ${s.baseline_avg_share.toFixed(2)}%, ${sharePct >= 0 ? "▲" : "▼"}${Math.abs(sharePct).toFixed(0)}%)`);
+    }
+    if (s.today_rank !== null && s.baseline_avg_rank !== null) {
+      const rankDiff = s.baseline_avg_rank - s.today_rank; // 양수면 순위 상승(숫자가 작아짐)
+      if (Math.abs(rankDiff) >= 1) {
+        audience.push(`${s.today_rank}위 (평소 ${s.baseline_avg_rank.toFixed(0)}위, ${rankDiff > 0 ? "▲" : "▼"}${Math.abs(rankDiff).toFixed(0)}단계)`);
+      }
     }
 
     // 요일별 패턴: 해당 요일의 12주 평균이 전체 평균보다 강한/약한 요일인지 — SDoW 활성화 시
@@ -1356,7 +1397,7 @@ function buildBriefingReport(
     if (!sdowLabel && s.dow_baseline_avg_rating !== null && s.baseline_avg_rating !== null && s.baseline_avg_rating > 0) {
       const dowPct = ((s.dow_baseline_avg_rating - s.baseline_avg_rating) / s.baseline_avg_rating) * 100;
       if (Math.abs(dowPct) >= 10) {
-        sentences.push(`동요일 평균 ${fmtR(s.dow_baseline_avg_rating)} — 평소 ${dowPct >= 0 ? "강세" : "약세"} 요일`);
+        drivers.push(`동요일 평균 ${fmtR(s.dow_baseline_avg_rating)} — 평소 ${dowPct >= 0 ? "강세" : "약세"} 요일`);
       }
     }
 
@@ -1393,17 +1434,32 @@ function buildBriefingReport(
     if (s.today_peak_hour !== null && s.today_peak_rating !== null) {
       const peakProgramText = s.today_peak_program_name ? `'${s.today_peak_program_name}' ${fmtR(s.today_peak_program_rating)}` : fmtR(s.today_peak_rating);
       const contribSuffix = peakMatchesContrib && contribPct !== null ? ` (${contribPct >= 0 ? "▲" : "▼"}${Math.abs(contribPct).toFixed(0)}%, 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비)` : "";
-      sentences.push(`피크 ${s.today_peak_hour}시 · ${peakProgramText}${contribSuffix}`);
+      drivers.push(`피크 ${s.today_peak_hour}시 · ${peakProgramText}${contribSuffix}`);
       if (s.today_peak_hour !== s.baseline_peak_hour && s.baseline_peak_hour !== null) {
-        sentences.push(`평소 피크는 ${s.baseline_peak_hour}시 (평균 ${fmtR(s.baseline_peak_rating)})`);
+        drivers.push(`평소 피크는 ${s.baseline_peak_hour}시 (평균 ${fmtR(s.baseline_peak_rating)})`);
       }
     }
 
     // 피크 시간대 프로그램과 오늘 최고 기여 프로그램이 다를 때만(또는 피크 시간대 정보 자체가
     // 없을 때만) 별도 항목으로 — 같으면 위에서 이미 한 줄로 합쳐졌다.
     if (contribPct !== null && contribProgramName && !peakMatchesContrib) {
-      sentences.push(
+      drivers.push(
         `'${contribProgramName}' ${fmtR(s.top_program_rating)}${s.top_program_start_time ? ` (${fmtTime(s.top_program_start_time)})` : ""} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ${contribPct >= 0 ? "▲" : "▼"}${Math.abs(contribPct).toFixed(0)}%`
+      );
+    }
+
+    // 사용자 지시(2026-09-23): "왜 그랬나"에 직접 답하는 근거 — 하락 주범 프로그램. RPC가 이미
+    // 뽑아 주던 값인데 브리핑에서만 안 쓰고 있었다(표본 3일 미만이면 비교가 불안정해 제외).
+    if (
+      s.decline_program_name &&
+      s.decline_program_delta_pct !== null &&
+      s.decline_program_delta_pct <= -15 &&
+      s.decline_program_baseline_days !== null &&
+      s.decline_program_baseline_days >= 3 &&
+      s.decline_program_name !== contribProgramName
+    ) {
+      drivers.push(
+        `'${s.decline_program_name}' ${fmtR(s.decline_program_rating)}${s.decline_program_start_time ? ` (${fmtTime(s.decline_program_start_time)})` : ""} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ▼${Math.abs(s.decline_program_delta_pct).toFixed(0)}%`
       );
     }
 
@@ -1413,7 +1469,7 @@ function buildBriefingReport(
         .filter((d) => d.delta_pct !== null && Math.abs(d.delta_pct) >= 25 && d.today !== null)
         .sort((a, b) => Math.abs(b.delta_pct!) - Math.abs(a.delta_pct!))[0];
       if (notable) {
-        sentences.push(`${shortDemoLabel(notable.label)} ${fmtR(notable.today)} (${notable.delta_pct! >= 0 ? "▲" : "▼"}${Math.abs(notable.delta_pct!).toFixed(0)}%)`);
+        audience.push(`${shortDemoLabel(notable.label)} ${fmtR(notable.today)} (${notable.delta_pct! >= 0 ? "▲" : "▼"}${Math.abs(notable.delta_pct!).toFixed(0)}%)`);
       }
     }
 
@@ -1421,7 +1477,19 @@ function buildBriefingReport(
     // 채널이라도, 오늘 가구 시청률이 실제로 1%를 넘겨 route.ts가 예외를 발동시켰을 때만 그
     // 사실을 짧게 덧붙인다(발동 안 하면 null이라 이 줄 자체가 생략됨).
     if (data.groupAHouseholdException !== null) {
-      sentences.push(`가구 시청률 ${(data.groupAHouseholdException * 100).toFixed(1)}% (전국 유료가구) — 오늘은 전 연령대 분석 포함`);
+      // 버그 수정(2026-09-23): rating은 이미 퍼센트 단위 숫자라 100을 곱하면 안 된다(그 결과
+      // 0.554%가 55.4%로 표시되고 있었다).
+      audience.push(`가구 시청률 ${data.groupAHouseholdException.toFixed(2)}% (전국 유료가구) — 오늘은 전 연령대 분석 포함`);
+    }
+
+    // 시청시간 — 점유율·연령대와 함께 "누가 얼마나 봤나"를 이루는 축(Barb 3대 지표 중 하나).
+    const todayTimeSpent = current.time_spent_seconds;
+    if (todayTimeSpent !== null && todayTimeSpent > 0) {
+      const sdowTimeSpent = data.sameWeekdayReport?.avgTimeSpentSeconds ?? null;
+      const tsPct = sdowTimeSpent !== null && sdowTimeSpent > 0 ? ((todayTimeSpent - sdowTimeSpent) / sdowTimeSpent) * 100 : null;
+      audience.push(
+        `1인당 시청시간 ${(todayTimeSpent / 60).toFixed(1)}분${tsPct !== null && Math.abs(tsPct) >= 10 ? ` (${tsPct >= 0 ? "▲" : "▼"}${Math.abs(tsPct).toFixed(0)}%)` : ""}`
+      );
     }
 
     // Tier 1 확장(2026-08-26): route.ts가 이미 검증된 값만으로 OpenAI가 종합한 문단
@@ -1430,10 +1498,17 @@ function buildBriefingReport(
     // join(" ")으로 한 문단에 합쳐 렌더링하던 것이 원인이었다. 문장 생성 로직은 그대로 두고,
     // 문장 각각을 별개 paragraph로 push해 렌더링부(문단마다 <p> 하나, 5282행)에서 자연히
     // 줄 단위로 분리되게 한다. LLM 종합 문단은 이미 짧게 요약된 것이라 그대로 한 문단 유지.
-    if (data.briefingLlm && data.briefingLlm.length > 0) {
-      paragraphs.push(...data.briefingLlm);
+    // 사용자 지시(2026-09-23): LLM이 만든 구조(헤드라인 + 근거 2갈래 + 시사점)가 있으면 그걸
+    // 쓰고, 없으면(키 없음/호출 실패) 바로 위에서 같은 위계로 조립한 규칙 기반 결과를 쓴다.
+    if (data.briefingLlm && data.briefingLlm.headline) {
+      view.headline = data.briefingLlm.headline;
+      view.verdict = data.briefingLlm.verdict;
+      view.drivers = data.briefingLlm.drivers;
+      view.audience = data.briefingLlm.audience;
+      view.implication = data.briefingLlm.implication;
     } else {
-      paragraphs.push(...sentences);
+      view.drivers = drivers;
+      view.audience = audience;
     }
 
     // 버그 수정(2026-09-02): SDoW 문장을 위 sentences 배열 안에 넣었더니, briefingLlm이 있을 때
@@ -1442,14 +1517,17 @@ function buildBriefingReport(
     // 바인딩되도록 설계").
     if (sdowContext && data.sameWeekdayReport && data.sameWeekdayReport.avgRating !== null && data.sameWeekdayReport.avgRating > 0 && current.rating !== null) {
       const pct = ((current.rating - data.sameWeekdayReport.avgRating) / data.sameWeekdayReport.avgRating) * 100;
-      paragraphs.push(
-        `${sdowContext.weeksLabel} ${sdowContext.dowLabel}요일 평균 ${fmtR(data.sameWeekdayReport.avgRating)} (표본 ${data.sameWeekdayReport.sampleDays}일) 대비 ${pct >= 0 ? "▲" : "▼"}${Math.abs(pct).toFixed(1)}%`
-      );
+      // 요일 통제된 비교라 채널 전체 평균 대비보다 정확하다 — 근거 맨 앞에 둔다. LLM 경로에서
+      // 돌려받은 배열을 직접 건드리지 않도록 새 배열로 만든다.
+      view.drivers = [
+        `${sdowContext.weeksLabel} ${sdowContext.dowLabel}요일 평균 ${fmtR(data.sameWeekdayReport.avgRating)} (표본 ${data.sameWeekdayReport.sampleDays}일) 대비 ${pct >= 0 ? "▲" : "▼"}${Math.abs(pct).toFixed(1)}%`,
+        ...view.drivers,
+      ];
     }
   }
 
-  if (paragraphs.length === 0) {
-    return ["브리핑을 작성할 데이터가 아직 부족합니다."];
+  if (view.headline === null && paragraphs.length === 0 && view.drivers.length === 0 && view.audience.length === 0) {
+    return { ...view, headline: "브리핑을 작성할 데이터가 아직 부족합니다." };
   }
 
   // 연령대·프로그램별 특이사항(DEMOGRAPHIC HIGHLIGHTS, 사용자 지시 2026-08-20) — 기간 범위
@@ -1491,7 +1569,70 @@ function buildBriefingReport(
     );
   }
 
-  return paragraphs;
+  return view;
+}
+
+// 사용자 지시(2026-09-23): "브리핑이 짧으므로 2페이지의 브리핑은 2단으로 구성하는 것도
+// 괜찮겠음" + "심미적으로도 좋게 설계 필요" — 헤드라인(전폭) → 근거 2단 → 시사점(전폭) 순의
+// BLUF 위계. 근거를 왼쪽('왜 그랬나' = 편성·프로그램)과 오른쪽('누가 봤나' = 타깃·점유율)으로
+// 나눈 이유는 편성 PD가 두 질문을 서로 다른 목적으로 읽기 때문이다(편성 조정 vs 타깃 점검).
+function BriefingBody({ view, accentColor }: { view: BriefingView; accentColor: string }) {
+  const verdictTone =
+    view.verdict === "up"
+      ? { border: "#059669", bg: "#ecfdf5", text: "#065f46" }
+      : view.verdict === "down"
+        ? { border: "#e11d48", bg: "#fff1f2", text: "#9f1239" }
+        : { border: "#a1a1aa", bg: "#fafafa", text: "#3f3f46" };
+  const hasColumns = view.drivers.length > 0 || view.audience.length > 0;
+  const column = (title: string, items: string[]) =>
+    items.length === 0 ? null : (
+      <section>
+        <h3 className="mb-2 text-[11px] font-bold tracking-wider text-zinc-400">{title}</h3>
+        <ul className="flex flex-col gap-1.5">
+          {items.map((item, i) => (
+            <li key={i} className="flex gap-2 text-sm leading-snug font-medium text-zinc-700">
+              <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full" style={{ backgroundColor: accentColor }} />
+              <span>{highlightNarrativeText(item, "#059669", "#e11d48")}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+
+  return (
+    <div className="flex flex-col gap-4">
+      {view.headline && (
+        <div className="rounded-2xl border-l-4 px-4 py-3" style={{ borderColor: verdictTone.border, backgroundColor: verdictTone.bg }}>
+          <p className="text-[15px] leading-snug font-bold" style={{ color: verdictTone.text }}>
+            {highlightNarrativeText(view.headline, "#059669", "#e11d48")}
+          </p>
+        </div>
+      )}
+      {hasColumns && (
+        <div className="grid gap-x-8 gap-y-4 md:grid-cols-2">
+          {column("왜 그랬나", view.drivers)}
+          {column("누가 봤나", view.audience)}
+        </div>
+      )}
+      {view.implication && (
+        <div className="rounded-xl bg-zinc-50 px-4 py-2.5 ring-1 ring-zinc-100">
+          <p className="text-sm leading-snug font-medium text-zinc-700">
+            <span className="mr-1.5 text-[11px] font-bold tracking-wider text-zinc-400">시사점</span>
+            {highlightNarrativeText(view.implication, "#059669", "#e11d48")}
+          </p>
+        </div>
+      )}
+      {view.extras.length > 0 && (
+        <div className="flex flex-col gap-2 border-t border-zinc-100 pt-3">
+          {view.extras.map((para, i) => (
+            <p key={i} className="text-sm leading-snug font-medium text-zinc-600">
+              {highlightNarrativeText(para, "#059669", "#e11d48")}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── HOW DEEPLY? 설명 — 기간 범위 선택 시(사용자 지시) "오늘" 하루 값 대신 기간 평균으로 설명한다.
@@ -5488,19 +5629,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               이제 완결된 문장 대신 숫자로 시작하는 짧은 사실 항목을 돌려준다(로직은 그대로,
               문장 조립 방식만 축약). 줄 간격이 넓은 prose 스타일(leading-relaxed) 대신 Page 1
               액션 라인과 같은 촘촘한 스타일로 바꿔 한눈에 훑어보기 쉽게 한다. */}
-          <div className="flex flex-col gap-2">
-            {buildBriefingReport(
+          <BriefingBody
+            accentColor={accentColor}
+            view={buildBriefingReport(
               data,
               referenceLabel,
               showComparisonView,
               comparisonLabel,
               isSdowActive && effectiveDow !== null ? { weeksLabel: SDOW_WEEKS_LABEL[periodPreset] ?? "", dowLabel: DOW_CHIP_LABELS[effectiveDow] } : null
-            ).map((para, i) => (
-              <p key={i} className="text-sm leading-snug font-medium text-zinc-700">
-                {highlightNarrativeText(para, "#059669", "#e11d48")}
-              </p>
-            ))}
-          </div>
+            )}
+          />
         </div>
 
         {/* 02~26시 시간대별 그래프 — 사용자 지시: 막대 형태 유지, 프로그램명 표시. 오늘의 브리핑

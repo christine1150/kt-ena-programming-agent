@@ -34,24 +34,82 @@ export interface BriefingLlmInput {
   // 2049만 보지만, 오늘 채널 단위 가구 시청률(전국 유료가구)이 1%를 넘거나 시청시간이 길어
   // route.ts가 예외를 발동시켰을 때만 값이 들어온다(그 외엔 null — 언급하지 마라).
   groupAHouseholdException: number | null;
+  // ── 2026-09-23 추가(route.ts가 이미 조회해 두고 브리핑에만 안 넘기던 값들) ──
+  today_rank: number | null;
+  baseline_avg_rank: number | null;
+  today_share: number | null;
+  baseline_avg_share: number | null;
+  decline_program_name: string | null;
+  decline_program_rating: number | null;
+  decline_program_start_time: string | null;
+  decline_program_baseline_avg: number | null;
+  decline_program_baseline_days: number | null;
+  decline_program_delta_pct: number | null;
+  target_rank: string | null;
+  target_achievement_pct: number | null;
+  same_weekday_avg_rating: number | null;
+  same_weekday_sample_days: number | null;
+  prime_label: string; // 예: "평일 19~23시"
+  prime_today_avg_rating: number | null;
+  prime_baseline_avg_rating: number | null;
+  today_time_spent_minutes: number | null;
+  today_share_pct: number | null;
 }
 
-// 사용자 지시(2026-09-22): "오늘의 브리핑을 줄글 형태가 아닌 수치와 팩트 위주의 가독률 좋은
-// 내용 위주로... 지금은 말이 너무 길어서 읽기 힘들다" — 3~6문장짜리 문단 하나 대신, 숫자가
-// 맨 앞에 오는 짧은 사실 나열(각 3~5개)로 바꾼다. 계산 자체는 그대로(새 수치 없음), 문장을
-// 짧게 끊어 PD가 훑어보기 쉽게 하는 표현 방식만 바뀐다.
+/**
+ * 사용자 지시(2026-09-23): "짧아진 것은 좋지만 어떤 내용이 서로 연결되는지 모르겠음. 하루에
+ * 대한 브리핑이 핵심 위주로 정리되어야 함."
+ *
+ * 평평한 문자열 배열(facts[])을 버리고 BLUF(Bottom Line Up Front) 구조로 바꾼다 — 업계
+ * 리포트(Nielsen 주간 랭킹, Barb Viewing Summary, 방송사 오버나이트 리포트)와 대시보드 설계
+ * 정설이 공통으로 쓰는 "헤드라인 1개 + 그것을 뒷받침하는 근거" 위계다. 동급 사실을 나열하면
+ * 읽는 사람이 무엇이 무엇의 근거인지 알 수 없다는 것이 사용자가 지적한 문제의 핵심이었다.
+ */
+export interface BriefingReport {
+  /** 오늘 하루를 한 문장으로 규정한 결론. 반드시 수치 근거 1개를 포함한다. */
+  headline: string;
+  /** 헤드라인의 방향 — 화면에서 색·아이콘을 고르는 데만 쓴다. */
+  verdict: "up" | "down" | "flat";
+  /** 왜 그랬나 — 프로그램·편성 시각·프라임타임·시간대 근거(좌단). */
+  drivers: string[];
+  /** 누가 봤나 — 연령대 이동·점유율·시청시간·가구(우단). */
+  audience: string[];
+  /** 그래서 무엇을 볼 것인가 — 없으면 null(화면에서 줄째로 생략). */
+  implication: string | null;
+}
+
+// 사용자 지시(2026-09-23): "짧아진 것은 좋지만 어떤 내용이 서로 연결되는지 모르겠음" —
+// 2026-09-22에 줄글을 짧은 사실 배열로 바꿨더니 이번엔 숫자가 평평하게 나열되기만 해서 그날의
+// 이야기가 안 보인다는 지적을 받았다. 그래서 출력 형식을 "헤드라인 1 + 근거 2갈래 + 시사점"
+// 위계로 바꾼다. 짧게 쓰는 규칙은 그대로 유지하되, 각 항목이 헤드라인에 종속되도록 만든다.
 function buildSystemPrompt(baselineLabel: string): string {
   return [
     "너는 KT ENA 편성 PD를 위한 Page 2 '오늘의 브리핑' 작성기다.",
-    "PD들은 줄글을 읽기 힘들어한다 — 문장이 아니라 숫자·사실 위주의 짧은 항목 3~5개 배열로 만들어라.",
-    "각 항목은 하나의 사실만 담고, 반드시 숫자나 프로그램명으로 시작하며, 15자 안팎으로 짧게 끊는다 — 서술어(~습니다, ~했습니다, ~보였습니다)를 쓰지 마라.",
-    '예시 형식: "0.126 (▼51.6%, {baseline} 대비)" / "피크 15시 · \'걸어서 세계속으로\' 0.0141" / "\'걸어서 세계속으로\' {baseline} 대비 ▲490.3%" / "여20대 ▼89.5% · 여40대 ▲24.3%"',
+    "가장 중요한 원칙: 사실을 평평하게 나열하지 마라. '오늘 이 채널은 무슨 날이었나'라는 결론(headline) 하나를 먼저 정하고, 나머지 항목은 전부 그 결론을 뒷받침하는 근거로만 써라.",
+    "",
+    "[headline] 오늘 하루를 규정하는 한 문장(공백 포함 45자 이내). 반드시 (1) 판정과 (2) 그 판정의 근거 수치 1개를 함께 담아라.",
+    `  예: "프라임 강세로 ${baselineLabel} 대비 ▲12% 반등" / "간판 예능 부진이 채널 전체를 끌어내린 날 (▼51.6%)" / "수치는 빠졌지만 점유율·순위는 방어한 날"`,
+    "  판정 근거가 여러 개면 가장 크게 움직인 것 하나만 헤드라인에 쓰고 나머지는 아래로 내려라.",
+    "[verdict] headline의 방향: 상승/호조면 up, 하락/부진이면 down, 평소 수준이면 flat.",
+    "[drivers] '왜 그랬나' — 프로그램·편성 시각·프라임타임·피크 시간대 근거만 2~4개.",
+    "[audience] '누가 봤나' — 연령대 이동·점유율·시청시간·가구 시청률만 1~3개.",
+    "[implication] '그래서 무엇을 볼 것인가' 한 줄(공백 포함 40자 이내). 근거가 약하면 null로 비워라 — 억지로 만들지 마라.",
+    "",
+    "drivers·audience의 각 항목은 숫자나 프로그램명으로 시작하고 20자 안팎으로 끊는다. 서술어(~습니다, ~했습니다, ~보였습니다)를 쓰지 마라. headline과 implication만 자연스러운 한 문장으로 쓴다.",
+    '항목 예시: "\'황금어장라디오스타\' 0.071 (14시, 슬롯 평균 ▲45%)" / "프라임 19~23시 0.012 (평소 0.031 대비 ▼61%)" / "여20대 ▼89.5% · 남40대 ▼80.2%" / "점유율 0.42% (평소 0.51%)"',
+    "",
     `가장 중요한 규칙: baseline(비교 기준) 수치를 언급할 땐 반드시 정확히 "${baselineLabel}"라는 표현만 써라. "최근 12주 평균"이나 "최근 8주 평균" 같은 다른 기간을 절대 쓰지 마라 — ${baselineLabel}가 실제로 이번 계산에 쓰인 기준이다.`,
-    "enaLeadSentence 필드가 있으면 그 문장(이미 완성된 문장이므로 줄이지 말고 그대로)을 배열의 첫 항목으로 넣어라(null이면 생략).",
+    "enaLeadSentence 필드가 있으면 그 문장을 줄이지 말고 그대로 drivers의 첫 항목으로 넣어라(null이면 생략).",
     `피크 시간대 프로그램명(today_peak_program_name)이 top_program_name과 같으면 한 항목으로 합쳐라(예: "피크 15시 · '걸어서 세계속으로' 0.0141 (▲490.3%, ${baselineLabel} 대비)"). 둘이 다르면 각각 별도 항목으로 나눠라.`,
-    "값이 null이거나 변화폭이 미미한 지표는 항목으로 만들지 마라 — 대략 10~25% 안팎 이상 변화 정도를 뚜렷한 신호로 본다.",
-    "연령대(demographics) 변화가 여러 개면 한 항목에 가운뎃점(·)으로 묶어라(위 예시 참고), 항목 수를 늘리지 마라.",
-    'groupAHouseholdException 값이 null이 아니면 그 값을 백분율로 바꿔 마지막 항목으로 추가해라(예: "가구 시청률 3.6% (전국 유료가구)"). null이면 가구 시청률을 절대 언급하지 마라.',
+    "decline_program_* 값이 있으면 그것이 '왜 빠졌나'에 대한 가장 직접적인 근거다 — drivers에 반드시 포함하고, 하락이 그날의 지배적 사건이면 headline에도 그 프로그램명을 써라.",
+    "prime_today_avg_rating과 prime_baseline_avg_rating이 둘 다 있고 차이가 15% 이상이면 prime_label을 붙여 drivers에 한 항목으로 넣어라(프라임타임은 편성 PD의 핵심 관심 구간이다).",
+    "today_share / baseline_avg_share가 둘 다 있으면 audience에 넣어라. 시청률은 빠졌는데 점유율이나 순위(today_rank vs baseline_avg_rank)가 유지·상승했다면 그것은 '시장 전체가 빠진 날'이라는 뜻이므로 headline에서 그 대비를 살려 써라 — 이 해석은 두 값이 실제로 그 방향일 때만 쓴다.",
+    "same_weekday_avg_rating이 있으면 그 요일 기준 비교를 우선한다(편성은 날짜가 아니라 요일에 묶이므로 요일 통제된 비교가 더 정확하다). same_weekday_sample_days가 3 미만이면 표본이 적으므로 쓰지 마라.",
+    "target_rank / target_achievement_pct는 원인이 아니라 결과다 — drivers에 절대 쓰지 말고, implication에서만 '목표 대비 어디에 있나'를 얹는 용도로 써라.",
+    "값이 null이거나 변화폭이 미미한 지표는 항목으로 만들지 마라 — 대략 10~25% 안팎 이상 변화 정도를 뚜렷한 신호로 본다. 채울 항목이 없으면 배열을 비워라(억지로 채우지 마라).",
+    "연령대(demographics) 변화가 여러 개면 한 항목에 가운뎃점(·)으로 묶어라, 항목 수를 늘리지 마라.",
+    'groupAHouseholdException 값이 null이 아니면 audience에 넣어라 — 이 값은 이미 퍼센트 단위이므로 100을 곱하지 말고 그대로 "%"만 붙여라(1.82 → "가구 시청률 1.82% (전국 유료가구)"). null이면 가구 시청률을 절대 언급하지 마라.',
+    "drivers와 audience의 역할을 절대 섞지 마라. 연령대(demographics)·점유율·시청시간·순위·가구 시청률은 무조건 audience다 — 그 값이 아무리 크게 움직였어도 drivers에 넣지 마라. drivers에는 프로그램명·편성 시각·프라임타임·피크 시간대만 들어간다.",
     `다시 한번: baseline 관련 수치의 기준을 언급할 땐 반드시 "${baselineLabel}"라고만 표현해라(다른 기간을 지어내지 마라).`,
     LLM_SYNTHESIS_GUARDRAIL,
   ].join("\n");
@@ -59,19 +117,35 @@ function buildSystemPrompt(baselineLabel: string): string {
 
 const SCHEMA = {
   type: "object",
-  properties: { facts: { type: "array", items: { type: "string" } } },
-  required: ["facts"],
+  properties: {
+    headline: { type: "string" },
+    verdict: { type: "string", enum: ["up", "down", "flat"] },
+    drivers: { type: "array", items: { type: "string" } },
+    audience: { type: "array", items: { type: "string" } },
+    implication: { type: ["string", "null"] },
+  },
+  required: ["headline", "verdict", "drivers", "audience", "implication"],
   additionalProperties: false,
 };
 
-export async function buildBriefingReportViaLlm(input: BriefingLlmInput): Promise<string[] | null> {
+export async function buildBriefingReportViaLlm(input: BriefingLlmInput): Promise<BriefingReport | null> {
   const baselineLabel = input.baselineLabel ?? "최근 12주 평균";
   // 사용자 지시(2026-09-02, SDoW): baselineLabel 문구 준수가 중요해(실측 중 기본 온도에서
   // gpt-4o-mini가 가끔 "최근 12주 평균" 관용구를 그대로 재현하는 것을 발견) 이 호출만 온도를
   // 낮춰 지시 준수를 높인다(다른 서술 job들의 기본값 0.3은 그대로 둠).
-  const result = await callOpenAiJsonSynthesis<{ facts: string[] }>(buildSystemPrompt(baselineLabel), input, "briefing_report", SCHEMA, {
+  const result = await callOpenAiJsonSynthesis<BriefingReport>(buildSystemPrompt(baselineLabel), input, "briefing_report", SCHEMA, {
     temperature: 0.1,
   });
-  const facts = (result?.facts ?? []).map((f) => f.trim()).filter((f) => f.length > 0);
-  return facts.length > 0 ? facts : null;
+  const headline = result?.headline?.trim() ?? "";
+  // 헤드라인이 없으면 구조 자체가 성립하지 않으므로 규칙 기반 폴백으로 넘긴다.
+  if (!headline) return null;
+  const clean = (arr: string[] | undefined) => (arr ?? []).map((f) => f.trim()).filter((f) => f.length > 0);
+  const implication = result?.implication?.trim() ?? "";
+  return {
+    headline,
+    verdict: result?.verdict === "up" || result?.verdict === "down" ? result.verdict : "flat",
+    drivers: clean(result?.drivers),
+    audience: clean(result?.audience),
+    implication: implication.length > 0 ? implication : null,
+  };
 }
