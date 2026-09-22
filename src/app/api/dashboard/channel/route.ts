@@ -402,6 +402,12 @@ export async function GET(request: Request) {
   // 사용자 지시(2026-09-02): SDoW도 "좌측 비교 대상(평균)/우측 오늘" 듀얼 패널을 쓴다 — SDoW는
   // dateFrom===dateTo(오늘)이므로 이 호출(dateFrom~dateTo)이 그대로 "오늘" 쪽 데이터가 된다.
   const needsCompetitorPeriodTop = isRangeMode || hasPriorRange || isSdowActive;
+  // 사용자 지시(2026-09-22): "ASIA UHD·SBS NEX가 COMPARED WITH?에서 '—'로 나온다" — 일별
+  // Nielsen 데이터가 전혀 없는 등록 경쟁채널은 get_competitor_insight_report가 관리자가 올린
+  // 누적 채널 순위 파일(market_ytd_rank_snapshot)로 보충할 수 있도록, 이 채널의 타깃에 맞는
+  // market_ytd 타깃 라벨을 미리 계산해 넘긴다(모든 채널에 계산은 하지만, 실제로 보충이
+  // 일어나는 건 등록 경쟁채널이 그 파일에도 없으면 자연히 아무 효과가 없다).
+  const marketYtdTargetLabel = resolveMarketYtdTargetLabel(channel.primary_target);
 
   const [
     trendRes,
@@ -493,9 +499,16 @@ export async function GET(request: Request) {
       dateTo,
       MART_SLOT.competitorInsight,
       channel.code,
-      martFingerprint([channel.code, matchedTargetLabel, dateTo, 84, dateFrom, sdowDowFp, sdowWeeksFp]),
+      martFingerprint([channel.code, matchedTargetLabel, dateTo, 84, dateFrom, sdowDowFp, sdowWeeksFp, marketYtdTargetLabel]),
       () =>
-        supabase.rpc("get_competitor_insight_report", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: dateTo, p_date_from: dateFrom, ...sdowHourlyParams })
+        supabase.rpc("get_competitor_insight_report", {
+          p_channel_code: channel.code,
+          p_target_label: matchedTargetLabel,
+          p_as_of_date: dateTo,
+          p_date_from: dateFrom,
+          ...sdowHourlyParams,
+          p_market_ytd_target_label: marketYtdTargetLabel,
+        })
     ),
     // 동시간대 겹치는 경쟁 프로그램 비교(overlap) — 여러 날을 합치면 의미가 흐려져 dateTo 하루만.
     supabase.rpc("get_competitor_program_overlap", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_as_of_date: dateTo }),
@@ -888,7 +901,7 @@ export async function GET(request: Request) {
   if (channel.code === "SKYUHD") {
     const { data: snapshotData } = await supabase.rpc("get_channel_market_ytd_competitor_snapshot", {
       p_channel_code: channel.code,
-      p_target_label: resolveMarketYtdTargetLabel(channel.primary_target),
+      p_target_label: marketYtdTargetLabel,
     });
     marketYtdCompetitorSnapshot = snapshotData ?? [];
   }
