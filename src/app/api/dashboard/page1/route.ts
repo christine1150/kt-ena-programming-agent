@@ -1213,6 +1213,13 @@ export async function GET(request: Request) {
     // ENA/ENA Play/ENA Drama만 — 유료가구 기여 프로그램 신호(최근 12주 대비). 필요 없는
     // 채널은 즉시 resolve되는 null Promise로 채워 Promise.all 배열 형태를 통일한다.
     const needsHousehold = code === "ENA" || code === "ENA_PLAY" || code === "ENA_DRAMA";
+    // 사용자 지시(2026-09-22): "'특정 프로그램 원인 없이 채널 전반 순위 하락'은 말이 안돼.
+    // 원인을 찾아서 표현해줘" — get_channel_daily_narrative의 decline_program 노이즈 필터
+    // (기본 0.05)는 일반 채널 시청률 대역 기준값이라, skyUHD(유료방송가구, 0.0001~0.02대)는
+    // 어떤 프로그램도 이 값을 넘을 수 없어 원인이 항상 숨겨졌다(실측 확인: 2026-09-21
+    // '쯔양몇끼'가 슬롯 평균 0.00103 대비 오늘 0을 기록한 명백한 하락 원인이었는데 걸러짐).
+    // skyUHD만 그 채널 규모에 맞는 낮은 값을 넘긴다 — 다른 6개 채널은 기본값 0.05 그대로.
+    const declineNoiseFloor = code === "SKYUHD" ? 0.0005 : 0.05;
     // 사용자 지시(2026-08-21, Page 1 매거진 개편): "채널별 인사이트"가 오늘 vs 최근 4주 평균뿐
     // 아니라 전주·전전주 동일 요일 흐름도 다각도로 비교하도록 — 새 SQL 없이(계산이 아니라 저장된
     // 값 조회) 정확히 7일 전/14일 전(같은 요일) 채널 단위 시청률을 함께 가져온다.
@@ -1225,7 +1232,7 @@ export async function GET(request: Request) {
         asOfDate,
         MART_SLOT.narrative28,
         code,
-        martFingerprint([code, rankTargetLabel, programTargetLabel, demographicLabels, asOfDate, 28, 8, null]),
+        martFingerprint([code, rankTargetLabel, programTargetLabel, demographicLabels, asOfDate, 28, 8, null, declineNoiseFloor]),
         () =>
           supabase.rpc("get_channel_daily_narrative", {
             p_channel_code: code,
@@ -1233,6 +1240,7 @@ export async function GET(request: Request) {
             p_program_target_label: programTargetLabel,
             p_demographic_labels: demographicLabels,
             p_as_of_date: asOfDate,
+            p_decline_noise_floor: declineNoiseFloor,
           })
       ),
       needsHousehold
@@ -1275,6 +1283,7 @@ export async function GET(request: Request) {
         p_program_target_label: programTargetLabel,
         p_demographic_labels: demographicLabels,
         p_as_of_date: asOfDate,
+        p_decline_noise_floor: declineNoiseFloor,
       });
       narrativeData = retry.data;
       narrativeError = retry.error;
@@ -1350,7 +1359,7 @@ export async function GET(request: Request) {
       asOfDate,
       MART_SLOT.narrative28,
       "SKYUHD",
-      martFingerprint(["SKYUHD", skyuhdTargetLabel, "__없음__", [], asOfDate, 28, 8, null]),
+      martFingerprint(["SKYUHD", skyuhdTargetLabel, "__없음__", [], asOfDate, 28, 8, null, 0.0005]),
       () =>
         supabase.rpc("get_channel_daily_narrative", {
           p_channel_code: "SKYUHD",
@@ -1358,6 +1367,10 @@ export async function GET(request: Request) {
           p_program_target_label: "__없음__",
           p_demographic_labels: [],
           p_as_of_date: asOfDate,
+          // 사용자 지시(2026-09-22): skyUHD는 시청률 대역이 일반 채널보다 50~100배 작아
+          // 기본 노이즈 필터(0.05)로는 decline_program이 영구히 안 잡혔다(위 declineNoiseFloor
+          // 주석 참고, fetchNarrativeSignal과 동일 값).
+          p_decline_noise_floor: 0.0005,
         })
     );
     return data?.[0] ? ({ channelCode: "SKYUHD", ...data[0] } as ChannelNarrativeSignal) : null;
@@ -1565,6 +1578,9 @@ export async function GET(request: Request) {
           : isNationalScope
             ? ["전국 여20대", "전국 남20대", "전국 여40대", "전국 남40대"]
             : ["수도권 여20대", "수도권 남20대", "수도권 여40대", "수도권 남40대"];
+        // 사용자 지시(2026-09-22): skyUHD는 위 declineNoiseFloor와 동일한 이유로 기본
+        // 노이즈 필터(0.05)를 낮춰야 decline_program이 잡힌다.
+        const declineNoiseFloor = isSkyuhd ? 0.0005 : 0.05;
         // 성능 개선(2026-09-17): 토·일 각각의 날짜에 대해 이미 사전 계산해 둔 같은 슬롯을 그대로
         // 재사용한다(인자 구성이 위 fetchNarrativeSignal/skyUHD 블록과 동일) — 없으면 기존 RPC로 폴백.
         const { data } = await cachedOrRpc<ChannelNarrativeRpcRow>(
@@ -1572,7 +1588,7 @@ export async function GET(request: Request) {
           dateStr,
           MART_SLOT.narrative28,
           code,
-          martFingerprint([code, targetLabel, programTargetLabel, demographicLabels, dateStr, 28, 8, null]),
+          martFingerprint([code, targetLabel, programTargetLabel, demographicLabels, dateStr, 28, 8, null, declineNoiseFloor]),
           () =>
             supabase.rpc("get_channel_daily_narrative", {
               p_channel_code: code,
@@ -1580,6 +1596,7 @@ export async function GET(request: Request) {
               p_program_target_label: programTargetLabel,
               p_demographic_labels: demographicLabels,
               p_as_of_date: dateStr,
+              p_decline_noise_floor: declineNoiseFloor,
             })
         );
         if (!data?.[0]) return null;

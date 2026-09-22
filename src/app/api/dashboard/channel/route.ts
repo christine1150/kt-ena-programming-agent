@@ -308,6 +308,10 @@ export async function GET(request: Request) {
   // 도는 skyUHD류 폴백 재조회 하나뿐이다(2026-09-01: 순서가 필요했던 나머지 하나였던 affinity
   // 조회는 화면에서 쓰이지 않는 죽은 코드라 제거됨 — 위 N절 Phase 1).
   const programTargetLabel = resolveProgramLevelTargetLabel(channel.primary_target);
+  // 사용자 지시(2026-09-22): get_channel_daily_narrative의 decline_program 노이즈 필터(기본
+  // 0.05)는 일반 채널 시청률 대역 기준값이라, skyUHD(유료방송가구, 0.0001~0.02대)는 어떤
+  // 프로그램도 넘을 수 없어 "특정 프로그램 원인 없이 채널 전반 순위 하락"만 나오게 됐다.
+  const declineNoiseFloor = channel.code === "SKYUHD" ? 0.0005 : 0.05;
   // 사용자 지시(2026-08-25): TOP 20 인포그래픽에 "올해 1/1~분석일 채널 평균 대비 높낮이"가
   // 필요 — Page 1 히어로 카드가 쓰는 것과 같은 방식(랭킹 시트 target_id로 ratings.rank/rating
   // 기간 평균, get_channel_period_rank_and_rating)을 재사용한다. 랭킹 시트 표기(resolveRankSheetTargetLabel)로
@@ -662,6 +666,7 @@ export async function GET(request: Request) {
         84,
         narrativeBaselineWeeksFp,
         sdowDowFp,
+        declineNoiseFloor,
       ]),
       () =>
         supabase.rpc("get_channel_daily_narrative", {
@@ -671,6 +676,10 @@ export async function GET(request: Request) {
           p_demographic_labels: demographicTargets,
           p_as_of_date: dateTo,
           p_baseline_days: 84,
+          // 사용자 지시(2026-09-22): "특정 프로그램 원인 없이 채널 전반 순위 하락"이 skyUHD에서
+          // 항상 뜨던 원인 — 기본 노이즈 필터(0.05)가 skyUHD의 훨씬 작은 시청률 대역(가구,
+          // 0.0001~0.02대)에서는 어떤 프로그램도 통과할 수 없었다(Page 1과 동일 처방).
+          p_decline_noise_floor: declineNoiseFloor,
           ...sdowNarrativeParams,
         })
     ),

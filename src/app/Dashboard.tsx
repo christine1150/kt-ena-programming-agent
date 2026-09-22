@@ -776,7 +776,15 @@ function buildChannelInsightSummary(
       // 없애고, 특정 프로그램을 지목할 근거가 없다는 사실 자체를 그대로 서술한다(새 진단을
       // 지어내지 않음). 화면에서는 이 진단을 프로그램 액션(파란색)과 구분해 진한 회색으로
       // 표시한다(actionKind="diagnosis").
-      actionLine = diff >= 0 ? null : "특정 프로그램 원인 없이 채널 전반 순위 하락";
+      // 사용자 재지적(2026-09-22): "'특정 프로그램 원인 없이 채널 전반 순위 하락'은 말이 안돼."
+      // — decline_program 판정 로직 자체의 실제 버그(skyUHD 노이즈 필터 0.05가 시청률 대역과
+      // 안 맞아 원인이 항상 숨었던 문제, 위 get_channel_daily_narrative 수정으로 해결)를 먼저
+      // 고쳤다. 이 문장은 그 로직을 다 거치고도 진짜로 특정 프로그램을 지목할 근거가 없을 때만
+      // 나오는 정직한 최종 폴백인데, 기존 표현("원인 없이"+"하락"이 한 문장에서 서로 부딪힘)이
+      // 문장으로서 어색했다 — 없는 원인을 지어내지 않으면서도 "OO 때문에 하락"처럼 완결된
+      // 문장이 되도록 "전반적 시청 흐름 약세로"(이미 계산된 채널 전체 등락이라는 사실 그대로)로
+      // 바꾼다.
+      actionLine = diff >= 0 ? null : "전반적 시청 흐름 약세로 순위 하락";
       // 특정 프로그램 근거가 아니라 채널 순위 변동만으로 나온 진단이라 태그를 달지 않는다.
       if (actionLine) actionKind = "diagnosis";
     }
@@ -1161,9 +1169,29 @@ function ChannelStatusCard({ channels, narrativeSignals }: { channels: Map<strin
           옮겨줄것" — 제목 위 eyebrow에서 제목과 같은 줄 오른쪽 끝으로. */}
       {/* 사용자 재지시(2026-09-03): "Today's ratings는 한글 오른쪽 바로 옆으로 붙여주고" —
           justify-between으로 카드 오른쪽 끝까지 밀어냈던 것을 제목 바로 옆으로 당긴다. */}
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className={REPORT_TITLE}>오늘의 시청률</h2>
-        <p className={REPORT_EYEBROW}>TODAY&rsquo;S RATINGS</p>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className={REPORT_TITLE}>오늘의 시청률</h2>
+          <p className={REPORT_EYEBROW}>TODAY&rsquo;S RATINGS</p>
+        </div>
+        {/* 사용자 지시(2026-09-22): "1페이지... 오늘의 시청률 칸 우측 상단에 삽입해줘. 1페이지에서
+            눌렀을 때는 ENA가 기본으로 나오면 되고" — 처음엔 페이지 상단 아이콘 그룹에 넣었다가,
+            "오늘의 시청률" 카드 자체의 우측 상단으로 옮긴다. 1페이지는 특정 채널 컨텍스트가 없는
+            포트폴리오 화면이라 기본 채널을 ENA로 고정하고, 새 탭으로 열어 조회 흐름을 끊지 않는다. */}
+        <Link
+          href="/schedule-grid?channel=ENA"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="8" height="16" rx="1.5" />
+            <rect x="13" y="4" width="8" height="16" rx="1.5" />
+            <line x1="6" y1="9" x2="8" y2="9" />
+            <line x1="16" y1="9" x2="18" y2="9" />
+          </svg>
+          주간 비교
+        </Link>
       </div>
       <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-12">
         {ena && (
@@ -4889,25 +4917,6 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 ))}
               </div>
             )}
-            {/* 사용자 지시(2026-09-22): "1페이지... 채널 내가 체크한 부분에 '주간 비교'
-                편성표로 갈 수 있는 버튼을 추가로 삽입해줘. 1페이지에서 눌렀을 때는 ENA가
-                기본으로 나오면 되고" — 1페이지는 특정 채널 컨텍스트가 없는 포트폴리오 화면이라
-                기본 채널을 ENA로 고정한다. 새 탭으로 열어 대시보드 조회 흐름을 끊지 않는다. */}
-            <Link
-              href="/schedule-grid?channel=ENA"
-              target="_blank"
-              rel="noopener noreferrer"
-              title="주간 비교"
-              aria-label="주간 비교"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-700"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="4" width="8" height="16" rx="1.5" />
-                <rect x="13" y="4" width="8" height="16" rx="1.5" />
-                <line x1="6" y1="9" x2="8" y2="9" />
-                <line x1="16" y1="9" x2="18" y2="9" />
-              </svg>
-            </Link>
             {/* 사용자 재지시(2026-09-02): "skyUHD 오른쪽에 있는 관리자화면 버튼 아이콘을 '큰
                 글씨로 보기' 아이콘으로 교체 — 글자 말고 직관적으로 깔끔하고 심플한 아이콘으로."
                 두 관리자 아이콘(이 자리 + 새로고침 오른쪽) 중 채널 로고 바로 옆(=skyUHD 오른쪽)
