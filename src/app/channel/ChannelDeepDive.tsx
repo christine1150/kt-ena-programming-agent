@@ -656,9 +656,10 @@ interface ChannelData {
   // 같은 방식(당일 program_id 단위 시청률), 정렬만 반대(하위 3개). 단일 일자 조회일 때만 채워짐.
   weakProgramsToday: { canonical_name: string; rating: number; start_time: string }[];
   // Tier 1 확장(2026-08-26, 사용자 지시: "규칙을 안 어겨도 되는 확장 모두 적용") — route.ts가
-  // 이미 검증된 값만으로 OpenAI가 종합한 오늘의 브리핑 핵심 문단(단일 일자 모드만). 없으면
-  // 기존 규칙 기반 문장으로 조용히 대체.
-  briefingLlm: string | null;
+  // 이미 검증된 값만으로 OpenAI가 종합한 오늘의 브리핑 핵심 사실 항목들(단일 일자 모드만).
+  // 없으면 기존 규칙 기반 항목으로 조용히 대체. 사용자 지시(2026-09-22): 문단 하나가 아니라
+  // 숫자 위주 짧은 항목 배열로 바뀌었다(briefingReportLlm.ts 참고).
+  briefingLlm: string[] | null;
   // O절(2026-09-01) — 닐슨 주간 파일의 기간 단위 시장 순위(get_channel_period_rank_movement).
   // 해당 기간 파일이 아직 업로드되지 않았으면 null.
   periodRankMovement: {
@@ -1327,18 +1328,23 @@ function buildBriefingReport(
       return [`${refLabel} 브리핑을 작성할 데이터가 아직 부족합니다.`];
     }
 
+    // 사용자 지시(2026-09-22): "오늘의 브리핑을 줄글 형태가 아닌 수치와 팩트 위주의 가독률
+    // 좋은 내용 위주로... 지금은 말이 너무 길어서 읽기 힘들다" — 완결된 서술문(~습니다) 대신
+    // 숫자가 맨 앞에 오는 짧은 사실 항목으로 바꾼다. 계산은 전부 그대로(새 수치 없음), 표현
+    // 방식만 바뀐다. LLM 경로(위 briefingReportLlm.ts)도 같은 형식을 쓰도록 프롬프트를 맞췄다.
     const sentences: string[] = [];
     // 사용자 지시(2026-08-25): ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널에서
-    // 매우 중요하므로 그 성과를 오늘의 브리핑 첫 문장으로.
+    // 매우 중요하므로 그 성과를 오늘의 브리핑 첫 문장으로 — 이미 완성된 짧은 문장이라 그대로 둔다.
     const enaLeadSentence = data.enaOriginalDaily.length > 0 ? buildEnaOriginalHighlightSentence(data.enaOriginalDaily, fmtR) : data.rerunLeadSentence;
     if (enaLeadSentence) sentences.push(enaLeadSentence);
-    sentences.push(`${refLabel} ${data.channel.name} 시청률은 ${fmtR(current.rating)}입니다.`);
 
+    const baselineLabelText = sdowLabel ?? "최근 12주 평균";
     if (s.rating_delta_pct !== null) {
-      const dir = s.rating_delta_pct >= 0 ? "높은" : "낮은";
       sentences.push(
-        `${sdowLabel ?? "최근 12주 평균"}(${fmtR(s.baseline_avg_rating)})보다 ${Math.abs(s.rating_delta_pct).toFixed(1)}% ${dir} 수준입니다.`
+        `${refLabel} ${fmtR(current.rating)} (${s.rating_delta_pct >= 0 ? "▲" : "▼"}${Math.abs(s.rating_delta_pct).toFixed(1)}%, ${baselineLabelText} 대비)`
       );
+    } else {
+      sentences.push(`${refLabel} ${fmtR(current.rating)}`);
     }
 
     // 요일별 패턴: 해당 요일의 12주 평균이 전체 평균보다 강한/약한 요일인지 — SDoW 활성화 시
@@ -1346,9 +1352,7 @@ function buildBriefingReport(
     if (!sdowLabel && s.dow_baseline_avg_rating !== null && s.baseline_avg_rating !== null && s.baseline_avg_rating > 0) {
       const dowPct = ((s.dow_baseline_avg_rating - s.baseline_avg_rating) / s.baseline_avg_rating) * 100;
       if (Math.abs(dowPct) >= 10) {
-        sentences.push(
-          `${refLabel}의 요일은 평소(최근 12주) 이 채널이 ${dowPct >= 0 ? "강세를 보이는" : "약세를 보이는"} 요일입니다(같은 요일 평균 ${fmtR(s.dow_baseline_avg_rating)}).`
-        );
+        sentences.push(`동요일 평균 ${fmtR(s.dow_baseline_avg_rating)} — 평소 ${dowPct >= 0 ? "강세" : "약세"} 요일`);
       }
     }
 
@@ -1364,7 +1368,7 @@ function buildBriefingReport(
     // 같은 이름의 모든 방영분(재방송 포함)을 평균 내면 주 1회 편성되는 오리지널의 등락률이
     // 비정상적으로 부풀려졌다(예: 712%) — get_channel_daily_narrative가 이제 본방 슬롯만 비교한다.
     let contribProgramName: string | null = null;
-    let contribClause: string | null = null; // 주어 없는 종속절("...보다 N% 높게 기여했습니다" 형태)
+    let contribPct: number | null = null;
     if (
       s.top_program_name &&
       s.top_program_baseline_days !== null &&
@@ -1376,42 +1380,26 @@ function buildBriefingReport(
       const pct = ((s.top_program_rating - s.top_program_baseline_avg) / s.top_program_baseline_avg) * 100;
       if (Math.abs(pct) >= 20) {
         contribProgramName = s.top_program_name;
-        contribClause = `같은 요일·시간대(본방 슬롯) 기준 ${sdowLabel ?? "최근 8주 평균"}(${fmtR(s.top_program_baseline_avg)})보다 ${Math.abs(pct).toFixed(0)}% ${pct >= 0 ? "높게 기여했습니다" : "낮아 비기여했습니다"}`;
+        contribPct = pct;
       }
     }
     const peakMatchesContrib =
       s.today_peak_program_name !== null && contribProgramName !== null && s.today_peak_program_name === contribProgramName;
 
-    if (s.today_peak_hour !== null && s.baseline_peak_hour !== null) {
-      const peakProgramParen = s.today_peak_program_name
-        ? `'${s.today_peak_program_name}' ${fmtR(s.today_peak_program_rating)}`
-        : fmtR(s.today_peak_rating);
-      if (s.today_peak_hour !== s.baseline_peak_hour) {
-        if (peakMatchesContrib && contribClause) {
-          sentences.push(
-            `평소 강세 시간대는 ${s.baseline_peak_hour}시대(평균 ${fmtR(s.baseline_peak_rating)})인데, ${refLabel}은 ${s.today_peak_hour}시대(${peakProgramParen})에서 가장 높은 시청률을 기록해 시간대 흐름이 평소와 달랐으며, 이 프로그램은 ${contribClause}.`
-          );
-        } else {
-          sentences.push(
-            `평소 강세 시간대는 ${s.baseline_peak_hour}시대(평균 ${fmtR(s.baseline_peak_rating)})인데, ${refLabel}은 ${s.today_peak_hour}시대(${peakProgramParen})에서 가장 높은 시청률을 기록해 시간대 흐름이 평소와 달랐습니다.`
-          );
-        }
-      } else {
-        if (peakMatchesContrib && contribClause) {
-          sentences.push(
-            `${refLabel}도 평소와 같이 ${s.today_peak_hour}시대(${peakProgramParen})가 가장 강세였으며, 이 프로그램은 ${contribClause}.`
-          );
-        } else {
-          sentences.push(`${refLabel}도 평소와 같이 ${s.today_peak_hour}시대가 가장 강세였습니다(${peakProgramParen}).`);
-        }
+    if (s.today_peak_hour !== null && s.today_peak_rating !== null) {
+      const peakProgramText = s.today_peak_program_name ? `'${s.today_peak_program_name}' ${fmtR(s.today_peak_program_rating)}` : fmtR(s.today_peak_rating);
+      const contribSuffix = peakMatchesContrib && contribPct !== null ? ` (${contribPct >= 0 ? "▲" : "▼"}${Math.abs(contribPct).toFixed(0)}%, 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비)` : "";
+      sentences.push(`피크 ${s.today_peak_hour}시 · ${peakProgramText}${contribSuffix}`);
+      if (s.today_peak_hour !== s.baseline_peak_hour && s.baseline_peak_hour !== null) {
+        sentences.push(`평소 피크는 ${s.baseline_peak_hour}시 (평균 ${fmtR(s.baseline_peak_rating)})`);
       }
     }
 
     // 피크 시간대 프로그램과 오늘 최고 기여 프로그램이 다를 때만(또는 피크 시간대 정보 자체가
-    // 없을 때만) 별도 문장으로 — 같으면 위에서 이미 한 문장으로 합쳐졌다.
-    if (contribClause && contribProgramName && !peakMatchesContrib) {
+    // 없을 때만) 별도 항목으로 — 같으면 위에서 이미 한 줄로 합쳐졌다.
+    if (contribPct !== null && contribProgramName && !peakMatchesContrib) {
       sentences.push(
-        `${refLabel} 가장 시청률이 높았던 프로그램은 '${contribProgramName}'(${fmtR(s.top_program_rating)}, ${s.top_program_start_time ? fmtTime(s.top_program_start_time) : ""})으로, ${contribClause}.`
+        `'${contribProgramName}' ${fmtR(s.top_program_rating)}${s.top_program_start_time ? ` (${fmtTime(s.top_program_start_time)})` : ""} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ${contribPct >= 0 ? "▲" : "▼"}${Math.abs(contribPct).toFixed(0)}%`
       );
     }
 
@@ -1421,9 +1409,7 @@ function buildBriefingReport(
         .filter((d) => d.delta_pct !== null && Math.abs(d.delta_pct) >= 25 && d.today !== null)
         .sort((a, b) => Math.abs(b.delta_pct!) - Math.abs(a.delta_pct!))[0];
       if (notable) {
-        sentences.push(
-          `연령대별로는 ${shortDemoLabel(notable.label)}에서 평소보다 ${Math.abs(notable.delta_pct!).toFixed(0)}% ${notable.delta_pct! >= 0 ? "상승한" : "하락한"} ${fmtR(notable.today)}을 기록해 가장 뚜렷한 변화를 보였습니다.`
-        );
+        sentences.push(`${shortDemoLabel(notable.label)} ${fmtR(notable.today)} (${notable.delta_pct! >= 0 ? "▲" : "▼"}${Math.abs(notable.delta_pct!).toFixed(0)}%)`);
       }
     }
 
@@ -1433,20 +1419,20 @@ function buildBriefingReport(
     // join(" ")으로 한 문단에 합쳐 렌더링하던 것이 원인이었다. 문장 생성 로직은 그대로 두고,
     // 문장 각각을 별개 paragraph로 push해 렌더링부(문단마다 <p> 하나, 5282행)에서 자연히
     // 줄 단위로 분리되게 한다. LLM 종합 문단은 이미 짧게 요약된 것이라 그대로 한 문단 유지.
-    if (data.briefingLlm) {
-      paragraphs.push(data.briefingLlm);
+    if (data.briefingLlm && data.briefingLlm.length > 0) {
+      paragraphs.push(...data.briefingLlm);
     } else {
       paragraphs.push(...sentences);
     }
 
     // 버그 수정(2026-09-02): SDoW 문장을 위 sentences 배열 안에 넣었더니, briefingLlm이 있을 때
     // (기본 경로) sentences 전체가 통째로 버려져 SDoW 비교 문장이 화면에 안 보였다 — LLM 요약과
-    // 무관하게 항상 보이도록 별도 문단으로 분리한다(사용자 지시: "브리핑 텍스트 바인딩... 완벽히
+    // 무관하게 항상 보이도록 별도 항목으로 분리한다(사용자 지시: "브리핑 텍스트 바인딩... 완벽히
     // 바인딩되도록 설계").
     if (sdowContext && data.sameWeekdayReport && data.sameWeekdayReport.avgRating !== null && data.sameWeekdayReport.avgRating > 0 && current.rating !== null) {
       const pct = ((current.rating - data.sameWeekdayReport.avgRating) / data.sameWeekdayReport.avgRating) * 100;
       paragraphs.push(
-        `${sdowContext.weeksLabel} ${sdowContext.dowLabel}요일 평균(${fmtR(data.sameWeekdayReport.avgRating)}, 표본 ${data.sameWeekdayReport.sampleDays}일) 대비 ${Math.abs(pct).toFixed(1)}% ${pct >= 0 ? "상승" : "하락"}했습니다.`
+        `${sdowContext.weeksLabel} ${sdowContext.dowLabel}요일 평균 ${fmtR(data.sameWeekdayReport.avgRating)} (표본 ${data.sameWeekdayReport.sampleDays}일) 대비 ${pct >= 0 ? "▲" : "▼"}${Math.abs(pct).toFixed(1)}%`
       );
     }
   }
@@ -5466,7 +5452,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               현상이 재발해 지적받았다 — 파일 전체의 서술형 <p>에서 max-w-2xl을 제거했다(스코어
               카드 하나만 예외였던 것도 포함). 표에 붙는 캡션류(예: 위 페이지 안내문) 등 원래
               줄 폭 제한이 의미 있는 짧은 문구는 max-w-2xl이 없었으므로 영향 없음. */}
-          <div className="flex flex-col gap-3">
+          {/* 사용자 지시(2026-09-22): "오늘의 브리핑을 줄글 형태가 아닌 수치와 팩트 위주의
+              가독률 좋은 내용으로 — 지금은 말이 너무 길어서 읽기 힘들다" — buildBriefingReport가
+              이제 완결된 문장 대신 숫자로 시작하는 짧은 사실 항목을 돌려준다(로직은 그대로,
+              문장 조립 방식만 축약). 줄 간격이 넓은 prose 스타일(leading-relaxed) 대신 Page 1
+              액션 라인과 같은 촘촘한 스타일로 바꿔 한눈에 훑어보기 쉽게 한다. */}
+          <div className="flex flex-col gap-2">
             {buildBriefingReport(
               data,
               referenceLabel,
@@ -5474,7 +5465,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               comparisonLabel,
               isSdowActive && effectiveDow !== null ? { weeksLabel: SDOW_WEEKS_LABEL[periodPreset] ?? "", dowLabel: DOW_CHIP_LABELS[effectiveDow] } : null
             ).map((para, i) => (
-              <p key={i} className="text-base leading-relaxed text-zinc-700">
+              <p key={i} className="text-sm leading-snug font-medium text-zinc-700">
                 {highlightNarrativeText(para, "#059669", "#e11d48")}
               </p>
             ))}

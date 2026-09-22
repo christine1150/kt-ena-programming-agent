@@ -1198,7 +1198,12 @@ export async function GET(request: Request) {
   // "오늘의 브리핑"(단일 일자 모드만, 기간 모드는 baseline 개념이 달라 대상 아님)도 이미
   // 계산·검증된 값만 OpenAI에 줘서 한 문단으로 종합한다. 실패/키 없음이면 null → 프론트가
   // 기존 규칙 기반 buildBriefingReport로 조용히 대체.
-  let briefingLlm: string | null = null;
+  // 사용자 지시(2026-09-22): "오늘의 브리핑을... 수치와 팩트 위주의 가독률 좋은 내용으로" —
+  // 한 문단 대신 짧은 사실 항목 배열로 바뀌었다(briefingReportLlm.ts). cachedLlmText는 다른
+  // 서술 job(Page 1 채널별 인사이트)과 공유하는 범용 문자열 캐시라 배열을 직접 못 받으므로,
+  // 캐시 저장 시에만 줄바꿈으로 이어붙였다가 꺼낼 때 다시 배열로 나눈다(캐시 유틸 자체는
+  // 그대로 유지 — 다른 호출부에 영향 없음).
+  let briefingLlm: string[] | null = null;
   if (!isRangeMode && narrativeSignal) {
     const currentTrendRow = (trend ?? []).find((t: { period: string }) => t.period === "current");
     const currentRating = (currentTrendRow as { rating: number | null } | undefined)?.rating ?? null;
@@ -1247,9 +1252,15 @@ export async function GET(request: Request) {
       })),
       baselineLabel: sdowBaselineLabelForLlm,
     };
-    briefingLlm = await cachedLlmText(`briefing_report:${channel.code}`, dateTo, briefingLlmInput, () =>
-      buildBriefingReportViaLlm(briefingLlmInput)
-    );
+    // 사용자 지시(2026-09-22): 프롬프트가 "한 문단"에서 "짧은 사실 항목 배열"로 바뀌었는데
+    // cachedLlmText는 입력값 지문(md5)만으로 캐시 키를 만든다 — 입력 필드 자체는 그대로라
+    // kind를 바꾸지 않으면 예전 프롬프트로 만든 옛 문단이 계속 캐시에서 나온다. kind에 버전을
+    // 붙여 강제로 새로 생성하게 한다.
+    const briefingLlmJoined = await cachedLlmText(`briefing_report_v2:${channel.code}`, dateTo, briefingLlmInput, async () => {
+      const facts = await buildBriefingReportViaLlm(briefingLlmInput);
+      return facts ? facts.join("\n") : null;
+    });
+    briefingLlm = briefingLlmJoined ? briefingLlmJoined.split("\n").filter((f) => f.length > 0) : null;
   }
 
   return NextResponse.json({

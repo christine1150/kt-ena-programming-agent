@@ -32,14 +32,21 @@ export interface BriefingLlmInput {
   baselineLabel?: string;
 }
 
+// 사용자 지시(2026-09-22): "오늘의 브리핑을 줄글 형태가 아닌 수치와 팩트 위주의 가독률 좋은
+// 내용 위주로... 지금은 말이 너무 길어서 읽기 힘들다" — 3~6문장짜리 문단 하나 대신, 숫자가
+// 맨 앞에 오는 짧은 사실 나열(각 3~5개)로 바꾼다. 계산 자체는 그대로(새 수치 없음), 문장을
+// 짧게 끊어 PD가 훑어보기 쉽게 하는 표현 방식만 바뀐다.
 function buildSystemPrompt(baselineLabel: string): string {
   return [
     "너는 KT ENA 편성 PD를 위한 Page 2 '오늘의 브리핑' 작성기다.",
+    "PD들은 줄글을 읽기 힘들어한다 — 문장이 아니라 숫자·사실 위주의 짧은 항목 3~5개 배열로 만들어라.",
+    "각 항목은 하나의 사실만 담고, 반드시 숫자나 프로그램명으로 시작하며, 15자 안팎으로 짧게 끊는다 — 서술어(~습니다, ~했습니다, ~보였습니다)를 쓰지 마라.",
+    '예시 형식: "0.126 (▼51.6%, {baseline} 대비)" / "피크 15시 · \'걸어서 세계속으로\' 0.0141" / "\'걸어서 세계속으로\' {baseline} 대비 ▲490.3%" / "여20대 ▼89.5% · 여40대 ▲24.3%"',
     `가장 중요한 규칙: baseline(비교 기준) 수치를 언급할 땐 반드시 정확히 "${baselineLabel}"라는 표현만 써라. "최근 12주 평균"이나 "최근 8주 평균" 같은 다른 기간을 절대 쓰지 마라 — ${baselineLabel}가 실제로 이번 계산에 쓰인 기준이다.`,
-    `아래 JSON에 담긴 신호(채널 시청률, ${baselineLabel} 대비 등락, 요일 패턴, 피크 시간대와 그 시간대를 이끈 프로그램, 연령대 변화)를 하나의 자연스러운 한국어 문단(3~6문장)으로 종합해라.`,
-    "enaLeadSentence 필드가 있으면 그 문장은 절대 다시 쓰지 말고 그대로 맨 앞에 두고 이어서 작성해라(null이면 채널 시청률 언급부터 시작).",
-    `피크 시간대 프로그램명(today_peak_program_name)이 top_program_name과 같으면, top_program_baseline_avg 대비 등락률(같은 요일·시간대 본방 슬롯 기준 ${baselineLabel} 대비, top_program_baseline_days>=3일 때만 유효)까지 그 시간대 문장에 자연스럽게 엮어라. 둘이 다르면 억지로 합치지 말고 각자 따로 언급해라.`,
-    "값이 null이거나 변화폭이 미미한 지표는 굳이 언급하지 마라 — 대략 10~25% 안팎 이상 변화 정도를 뚜렷한 신호로 본다.",
+    "enaLeadSentence 필드가 있으면 그 문장(이미 완성된 문장이므로 줄이지 말고 그대로)을 배열의 첫 항목으로 넣어라(null이면 생략).",
+    `피크 시간대 프로그램명(today_peak_program_name)이 top_program_name과 같으면 한 항목으로 합쳐라(예: "피크 15시 · '걸어서 세계속으로' 0.0141 (▲490.3%, ${baselineLabel} 대비)"). 둘이 다르면 각각 별도 항목으로 나눠라.`,
+    "값이 null이거나 변화폭이 미미한 지표는 항목으로 만들지 마라 — 대략 10~25% 안팎 이상 변화 정도를 뚜렷한 신호로 본다.",
+    "연령대(demographics) 변화가 여러 개면 한 항목에 가운뎃점(·)으로 묶어라(위 예시 참고), 항목 수를 늘리지 마라.",
     `다시 한번: baseline 관련 수치의 기준을 언급할 땐 반드시 "${baselineLabel}"라고만 표현해라(다른 기간을 지어내지 마라).`,
     LLM_SYNTHESIS_GUARDRAIL,
   ].join("\n");
@@ -47,19 +54,19 @@ function buildSystemPrompt(baselineLabel: string): string {
 
 const SCHEMA = {
   type: "object",
-  properties: { briefing: { type: "string" } },
-  required: ["briefing"],
+  properties: { facts: { type: "array", items: { type: "string" } } },
+  required: ["facts"],
   additionalProperties: false,
 };
 
-export async function buildBriefingReportViaLlm(input: BriefingLlmInput): Promise<string | null> {
+export async function buildBriefingReportViaLlm(input: BriefingLlmInput): Promise<string[] | null> {
   const baselineLabel = input.baselineLabel ?? "최근 12주 평균";
   // 사용자 지시(2026-09-02, SDoW): baselineLabel 문구 준수가 중요해(실측 중 기본 온도에서
   // gpt-4o-mini가 가끔 "최근 12주 평균" 관용구를 그대로 재현하는 것을 발견) 이 호출만 온도를
   // 낮춰 지시 준수를 높인다(다른 서술 job들의 기본값 0.3은 그대로 둠).
-  const result = await callOpenAiJsonSynthesis<{ briefing: string }>(buildSystemPrompt(baselineLabel), input, "briefing_report", SCHEMA, {
+  const result = await callOpenAiJsonSynthesis<{ facts: string[] }>(buildSystemPrompt(baselineLabel), input, "briefing_report", SCHEMA, {
     temperature: 0.1,
   });
-  const briefing = result?.briefing?.trim();
-  return briefing && briefing.length > 0 ? briefing : null;
+  const facts = (result?.facts ?? []).map((f) => f.trim()).filter((f) => f.length > 0);
+  return facts.length > 0 ? facts : null;
 }
