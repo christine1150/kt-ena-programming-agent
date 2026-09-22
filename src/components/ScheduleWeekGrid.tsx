@@ -61,28 +61,27 @@ function intensityColor(themeHex: string, intensity: number): { bg: string; isDa
 // 사용자 지시(2026-09-22): "경쟁 채널의 편성표를 골랐을 때는 0은 흰색 그대로 두고, 높은
 // 시청률은 긍정(진한 블루 계열에서 약하게), 낮은 시청률은 낮을수록 진한 부정(진한 붉은색)으로
 // 그라데이션" — UI 디자이너 페르소나 검토 결과, 자사 채널의 단일색(브랜드색) 그라데이션과
-// 시각적으로 확실히 구분되도록 경쟁채널은 빨강↔흰색↔파랑의 대비 배색을 쓴다. 파랑은 최고
-// 시청률에서도 blue-300의 70%까지만 섞어(cap) "약하게" 유지하고, 빨강은 캡 없이 0에 가까울수록
-// red-700까지 진해져 부정 신호가 시각적으로 확실히 우세하도록 한다(파랑이 튀지 않게).
-// 기준선(pivot)은 자사 채널의 "연간 평균" 같은 고정값이 경쟁채널엔 없어(연간 데이터를
-// 지어내지 않음), 이 주차 자체의 평균 시청률(기존 avgRating, 볼드 판정에 이미 쓰던 값)을
-// 그대로 재사용한다.
+// 시각적으로 확실히 구분되도록 경쟁채널은 빨강↔흰색↔파랑의 대비 배색을 쓴다.
+// 사용자 재지시(2026-09-22, 2차): "긍정쪽(잘 나오는 시청률) 그라데이션은 ENA와 비슷한 색깔
+// 구분이 되게" — 기존엔 흰색→blue-300을 70%까지만 섞어 색 구분이 부족했다. intensityColor와
+// 완전히 같은 2단계 공식(흰색→테마색 0~0.6, 테마색→검정 0.6~1)을 파랑에도 그대로 재사용해,
+// 자사 채널과 같은 방식으로 낮은 시청률은 옅은 파랑, 높은 시청률은 진한 파랑까지 계단감 있게
+// 이어지도록 한다. "낮을수록 진한 부정(빨강)"은 캡 없이 유지.
+// 사용자 재지시(2026-09-22, 3차): "잘 안 나오는 시청률(빨강)은 아무리 진해도 흰 글씨 대신
+// 편성표 기본 글씨색을 쓰라" — 부정(빨강) 쪽은 배경이 아무리 진해져도 isDark를 항상 false로
+// 고정해 흰 글씨로 전환되지 않게 한다(긍정/파랑 쪽은 자사 채널과 동일하게 어두우면 흰 글씨 유지).
+const COMPETITOR_POSITIVE_HUE = "#3b82f6"; // blue-500 — ENA 등 자사 인디고 계열과 톤은 다르지만 같은 2단계 공식으로 계단감을 맞춘다.
 function competitorIntensityColor(rating: number, pivot: number | null, maxRating: number): { bg: string; isDark: boolean } {
   const white: [number, number, number] = [255, 255, 255];
   const red700: [number, number, number] = [185, 28, 28];
-  const blue300: [number, number, number] = [147, 197, 253];
   const p = pivot !== null && pivot > 0 ? pivot : maxRating / 2;
-  let rgb: [number, number, number];
   if (rating < p) {
     const t = p > 0 ? Math.min(1, 1 - rating / p) : 0;
-    rgb = mixRgb(white, red700, t);
-  } else {
-    const span = Math.max(1e-9, maxRating - p);
-    const t = Math.min(1, (rating - p) / span) * 0.7;
-    rgb = mixRgb(white, blue300, t);
+    const rgb = mixRgb(white, red700, t);
+    return { bg: rgbToHex(rgb), isDark: false };
   }
-  const luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
-  return { bg: rgbToHex(rgb), isDark: luminance < 0.5 };
+  const intensity = Math.min(1, (rating - p) / Math.max(1e-9, maxRating - p));
+  return intensityColor(COMPETITOR_POSITIVE_HUE, intensity);
 }
 // 사용자 지시(2026-09-20): "다른 주로 이동할 수 있는 메뉴" — week prop 없이(Page 2 모달처럼
 // 서버가 "이번 주"를 알아서 고르는 자기관리 모드) 쓰일 때만 이전/다음 주 이동을 지원한다.
