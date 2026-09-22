@@ -32,6 +32,23 @@ function toExtMinutes(t: string): number {
   const eh = h < 2 ? h + 24 : h;
   return eh * 60 + m;
 }
+// 사용자 지시(2026-09-23): "'회차·부제 반영'이라고 적혀있는데 회차나 부제가 안 나온다" —
+// scheduleGridSource.ts가 이미 회차·부제를 program_name_raw="{제목} - {부제}" 문자열로
+// 합치고, 회차 숫자는 tags="{N}회"(또는 "{N}회 {기존 태그}") 형태로 내려주는데, 셀 렌더러가
+// 이를 그대로 한 줄 truncate에 욱여넣어 부제가 붙으면 제목까지 잘려 나갔고 회차는 title
+// 툴팁에만 있어 클릭 없이는 안 보였다. 제목/부제/회차를 분리해 각각 제자리(제목 줄, 부제
+// 줄, 작은 배지)에 배치할 수 있도록 여기서 미리 파싱해둔다.
+function splitProgramTitleSubtitle(raw: string): { title: string; subtitle: string | null } {
+  const idx = raw.indexOf(" - ");
+  if (idx === -1) return { title: raw, subtitle: null };
+  const subtitle = raw.slice(idx + 3).trim();
+  return { title: raw.slice(0, idx), subtitle: subtitle.length > 0 ? subtitle : null };
+}
+function extractEpisodeTag(tags: string | null): { episode: string | null } {
+  if (!tags) return { episode: null };
+  const m = tags.match(/^(\d+)회/);
+  return { episode: m ? m[1] : null };
+}
 // 사용자 지시(2026-09-22): "그라데이션 색도 바로 인쇄 가능하게" + "높은 시청률은 채널 로고
 // 색보다 좀 더 진한색 + 흰글씨까지 나오게 단계를 더 나눠줘" — 기존엔 themeColor에 알파값만
 // 얹어(흰 배경 위에서만 옅어 보이는) 단조로운 한 방향 그라데이션이었다. 0~0.6 구간은
@@ -394,6 +411,12 @@ export function ScheduleWeekGrid({
                       const nameColor = isDark ? "#ffffff" : "#27272a"; // zinc-800
                       const ratingColor = isZero ? (isDark ? "#e4e4e7" : "#a1a1aa") : isDark ? "#ffffff" : "#18181b";
                       const decimals = channelCode === "SKYUHD" ? 4 : 3;
+                      const { title, subtitle } = splitProgramTitleSubtitle(r.program_name_raw);
+                      const { episode } = extractEpisodeTag(r.tags);
+                      // 부제 줄은 세로 공간이 실제로 있을 때만 보여준다(대략 1시간 블록부터).
+                      // 그보다 좁은 칸은 제목+회차 배지+시청률만으로도 22px 최소 높이가 빠듯해,
+                      // 부제까지 넣으면 서로 겹친다.
+                      const showSubtitleLine = subtitle !== null && height >= 34;
                       return (
                         <div
                           key={`${r.start_time}-${ri}`}
@@ -402,10 +425,29 @@ export function ScheduleWeekGrid({
                           title={`${label} ${r.start_time.slice(0, 5)}~${r.end_time ? r.end_time.slice(0, 5) : "?"} ${r.program_name_raw}${r.tags ? ` ${r.tags}` : ""} — ${rating !== null ? rating.toFixed(decimals) : "매칭 안 됨"}`}
                         >
                           {height >= 22 ? (
-                            <div className="flex h-full flex-col items-center justify-center leading-tight">
-                              <span className="w-full truncate text-center text-[9.5px] font-medium" style={{ color: nameColor }}>
-                                {r.program_name_raw}
-                              </span>
+                            <div className="flex h-full flex-col items-center justify-center gap-0.5 leading-tight">
+                              {/* 사용자 지시(2026-09-23): 회차는 제목과 구분되는 작은 배지로,
+                                  부제는 제목 아래 옅은 글씨로 — 이 파일의 기존 "0시청률은 항상
+                                  작게" 관행처럼, 있을 때만 나타나고 배경 밝기(isDark)에 맞춰
+                                  자동으로 흰/짙은 색을 오가도록 nameColor를 그대로 재사용한다. */}
+                              <div className="flex w-full min-w-0 items-baseline justify-center gap-1 px-0.5">
+                                {episode && (
+                                  <span
+                                    className="shrink-0 rounded px-1 text-[7.5px] font-semibold leading-tight"
+                                    style={{ backgroundColor: isDark ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.08)", color: nameColor }}
+                                  >
+                                    {episode}회
+                                  </span>
+                                )}
+                                <span className="min-w-0 flex-1 truncate text-center text-[9.5px] font-medium" style={{ color: nameColor }}>
+                                  {title}
+                                </span>
+                              </div>
+                              {showSubtitleLine && (
+                                <span className="w-full truncate text-center text-[8px] leading-tight" style={{ color: nameColor, opacity: isDark ? 0.85 : 0.65 }}>
+                                  {subtitle}
+                                </span>
+                              )}
                               {rating !== null ? (
                                 // 사용자 지시(2026-09-20): "시청률이 잘 보이게 아주 큰 글씨, 가운데
                                 // 정렬. 평균 이상이면 볼드. 0이면 0.000 대신 0으로, 회색 글씨."
@@ -430,8 +472,14 @@ export function ScheduleWeekGrid({
                             // 나오게" — 30분 이하 짧은 프로그램은 이름+시청률을 나눠 쌓을 세로 공간이
                             // 없으므로, 한 줄에 "프로그램명 시청률"을 이어 붙이고 넘치면 말줄임한다.
                             <div className="flex h-full items-center justify-center overflow-hidden">
+                              {/* 사용자 지시(2026-09-23): 좁은 칸은 부제까지 넣을 세로 공간이
+                                  없으니 그대로 두되, 예전처럼 program_name_raw(제목+부제 통짜
+                                  문자열)를 넣으면 부제가 붙는 순간 제목까지 잘려나갔다. 여기서는
+                                  분리한 title만 써서 최소한 제목은 온전히 보이게 하고, 회차는
+                                  짧은 접두어로만 붙인다(넘치면 기존과 동일하게 truncate됨). */}
                               <span className="w-full truncate text-center text-[8.5px] leading-none" style={{ color: nameColor }}>
-                                {r.program_name_raw}
+                                {episode && `${episode}회 `}
+                                {title}
                                 {rating !== null && <span style={{ color: ratingColor }}> {isZero ? "0" : rating.toFixed(decimals)}</span>}
                               </span>
                             </div>
