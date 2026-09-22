@@ -71,7 +71,11 @@ function ScheduleComparisonInner() {
           channelName: body.channelName ?? channelCode,
           themeColor: body.themeColor || "#6366f1",
           weeks: ws,
-          week: (preferSecondWeek ? ws[1]?.weekStart : ws[0]?.weekStart) ?? "",
+          // 사용자 지시(2026-09-22)로 좌우 독립 선택이 된 뒤: 오른쪽의 기본값은 "그 채널의
+          // 두 번째로 최근인 주"이지만, 데이터가 한 주뿐인 채널(예: 이번에 새로 추가한
+          // 경쟁채널)에는 두 번째 주가 없어 공백이 되어 그리드 자체가 안 그려졌다 — 없으면
+          // 있는 첫 주로 대체한다.
+          week: (preferSecondWeek ? (ws[1]?.weekStart ?? ws[0]?.weekStart) : ws[0]?.weekStart) ?? "",
           loaded: true,
         });
       })
