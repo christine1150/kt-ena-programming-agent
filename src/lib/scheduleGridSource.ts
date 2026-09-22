@@ -138,17 +138,23 @@ function formatUploadDisplayTags(tags: string | null, episodeNumber: number | nu
   if (episodeNumber === null) return tags;
   return tags ? `${episodeNumber}회 ${tags}` : `${episodeNumber}회`;
 }
-// 사용자 지시(2026-09-23): "skyUHD 편성표 일부 부분에서 부제/회차 안 나오는 모습 확인됨" —
-// 실측 확인 결과 skyUHD는 episode_number가 항상 null이고, 진짜 회차 번호("16회" 같은 텍스트)가
-// episode_subtitle 칸에 그대로 들어와 있었다(skyUHD 수기 파일 파싱 특성 — 원본 데이터는 건드리지
-// 않고 표시 시점에만 보정). 그 결과 회차가 "부제"로 오인돼 제목 배지 자리엔 아무 것도 안 뜨고,
-// 셀이 좁으면(부제 줄은 1시간 이상 블록에서만 보임) 회차 정보 자체가 통째로 사라졌다. episode_
-// subtitle이 "숫자+회" 패턴이면 회차로 재해석해 episode_number 쪽으로 돌려준다.
+// 사용자 지시(2026-09-23): "skyUHD 편성표 일부 부분에서 부제/회차 안 나오는 모습 확인됨" →
+// "다른 채널도 같은 회차 오염 있는지 확인해줘"로 전 채널 실측 확인. 두 가지 오염 패턴이 있었다:
+//  1) skyUHD(6,366건 전부): episode_number가 항상 null이고, 진짜 회차 번호("16회" 텍스트)가
+//     episode_subtitle 칸에 통째로 들어와 있었다(수기 파일 파싱 특성).
+//  2) OLIFE(23,273건 중 835건): episode_number는 정상(예: 1)인데, episode_subtitle에도 "1회"
+//     처럼 같은 회차를 텍스트로 중복 입력해 둔 행이 섞여 있었다(EPG 파이프라인의 "부제 없음"
+//     케이스 처리 특성으로 추정) — episode_number가 이미 있다는 이유로 넘어가면 이 중복
+//     텍스트가 진짜 부제인 것처럼 그대로 화면에 붙어버린다.
+// 두 경우 모두 episode_subtitle이 "숫자+회" 패턴이면 그 자체가 회차를 중복 표현한 것뿐이지
+// 진짜 부제가 아니므로, episode_number 유무와 무관하게 subtitle은 항상 비우고(1번 케이스만
+// episode_number가 비어 있으므로 그 값으로 채워준다) 표시 시점에 정리한다(원본 DB는 그대로).
 const EPISODE_ONLY_SUBTITLE_RE = /^(\d+)회$/;
 function reinterpretEpisodeFields(episodeNumber: number | null, episodeSubtitle: string | null): { episodeNumber: number | null; episodeSubtitle: string | null } {
-  if (episodeNumber !== null || episodeSubtitle === null) return { episodeNumber, episodeSubtitle };
+  if (episodeSubtitle === null) return { episodeNumber, episodeSubtitle };
   const m = episodeSubtitle.trim().match(EPISODE_ONLY_SUBTITLE_RE);
-  return m ? { episodeNumber: Number(m[1]), episodeSubtitle: null } : { episodeNumber, episodeSubtitle };
+  if (!m) return { episodeNumber, episodeSubtitle };
+  return { episodeNumber: episodeNumber ?? Number(m[1]), episodeSubtitle: null };
 }
 // 사용자 지시(2026-09-20 재지시): "기본적으로 DB 기반으로 구성하되, 업로드된 편성표가
 // 매치되는 회차나 부제가 있으면 그것만 덧붙이는 형태로" — 세 가지 상태를 구분한다.
