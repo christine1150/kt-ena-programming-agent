@@ -13,7 +13,7 @@ import { extractFullYearFromFileName, parseNielsenAnnualWorkbook } from "@/lib/n
 import { applyOlifeEpgForDate } from "@/lib/olifeEpgStaging";
 // 성능 개선(2026-09-17): 적재 직후 Page 1/Page 2 당일 화면용 집계를 미리 계산해 둔다.
 import { refreshDailyDashboardMart } from "@/lib/dailyMartCache";
-import { toChannelCode } from "@/lib/channelMaster";
+import { toChannelCode, canonicalChannelName } from "@/lib/channelMaster";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import {
   checkChannelCoverage,
@@ -66,7 +66,9 @@ export async function loadNielsenIngestContext(): Promise<NielsenIngestContext |
   // parseRankSheet은 시트에 적힌 원래 표기("tvN")로 필터링하고, 결과의 channelCode는
   // toChannelCode()로 정규화("TVN")해서 돌려주므로, 저장할 땐 원래 표기로 되돌리는 맵이 필요하다.
   const { data: competitorRows } = await supabase.from("competitors").select("competitor_name, channel_id");
-  const competitorNames = new Set((competitorRows ?? []).map((r) => r.competitor_name));
+  // 옛 채널명이 등록돼 있어도 현재 이름으로 읽는다(2026-09-22, SBS F!L UHD → SBS NEX) —
+  // 닐슨 시트는 이미 새 이름으로 내려오므로 등록 이름을 그대로 쓰면 매칭이 안 된다.
+  const competitorNames = new Set((competitorRows ?? []).map((r) => canonicalChannelName(r.competitor_name)));
   const competitorNameByCode = new Map<string, string>();
   for (const name of competitorNames) {
     competitorNameByCode.set(toChannelCode(name), name);
@@ -78,7 +80,7 @@ export async function loadNielsenIngestContext(): Promise<NielsenIngestContext |
   for (const row of competitorRows ?? []) {
     if (!row.channel_id) continue;
     const set = registeredCompetitorByChannel.get(row.channel_id) ?? new Set<string>();
-    set.add(row.competitor_name);
+    set.add(canonicalChannelName(row.competitor_name)); // 옛 채널명도 현재 이름으로 통일
     registeredCompetitorByChannel.set(row.channel_id, set);
   }
 

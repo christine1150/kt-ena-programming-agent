@@ -119,6 +119,13 @@ export function parseRankSheet(rows: Row[], ourChannelDisplayNames: Set<string>)
     if (label) blockCols.push({ col, label });
   }
 
+  // 채널명 매칭을 정규화 기준으로(2026-09-22 사용자 지적 — "닐슨 일일보고서에 Asia UHD
+  // 시청률 및 순위가 나와있는데 반영이 되지 않았음"). 기존에는 시트에 적힌 이름과 등록된 이름을
+  // 정확히 일치시켜야 해서, 시트의 "Asia UHD"가 등록된 "ASIA UHD"와 대소문자만 달라도 행이
+  // 통째로 버려졌다(조용한 누락 — 오류도 경고도 남지 않는다). toChannelCode는 대문자화 +
+  // 공백→밑줄이라 표기 흔들림을 흡수한다.
+  const acceptedCodes = new Set(Array.from(ourChannelDisplayNames, (n) => toChannelCode(n)));
+
   const dataStart = labelRowIdx + 2;
   for (const block of blockCols) {
     for (let r = dataStart; r < rows.length; r++) {
@@ -126,7 +133,7 @@ export function parseRankSheet(rows: Row[], ourChannelDisplayNames: Set<string>)
       const rankRaw = row?.[block.col];
       if (rankRaw === undefined || rankRaw === "") continue;
       const channelName = String(row[block.col + 1] ?? "").trim();
-      if (!ourChannelDisplayNames.has(channelName)) continue;
+      if (!acceptedCodes.has(toChannelCode(channelName))) continue;
 
       results.push({
         channelCode: toChannelCode(channelName),

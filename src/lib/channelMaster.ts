@@ -10,6 +10,25 @@ export function toChannelCode(displayName: string): string {
   return displayName.trim().toUpperCase().replace(/\s+/g, "_");
 }
 
+/**
+ * 방송사 채널명 변경 이력(2026-09-22 사용자 지시: "SBS FIL UHD → SBS NEX 로 채널명 변경되었음.
+ * 이 부분 경쟁 채널명 및 데이터에 반영하여 향후 그대로 사용할 것").
+ *
+ * 채널 마스터 엑셀에 옛 이름이 남아 있어도 현재 이름으로 통일한다 — 채널 마스터 업로드는
+ * competitors를 매번 전체 교체하므로, DB만 고치면 다음 업로드 때 옛 이름으로 되돌아간다.
+ * 키는 toChannelCode() 결과(대소문자·공백 무시)로 두어 "SBS FIL UHD"/"SBS F!L UHD" 같은
+ * 표기 흔들림도 함께 흡수한다.
+ */
+const CHANNEL_RENAMES: Record<string, string> = {
+  "SBS_F!L_UHD": "SBS NEX",
+  "SBS_FIL_UHD": "SBS NEX",
+};
+
+/** 옛 채널명이면 현재 이름으로 바꿔 돌려준다(해당 없으면 원래 이름 그대로). */
+export function canonicalChannelName(displayName: string): string {
+  return CHANNEL_RENAMES[toChannelCode(displayName)] ?? displayName.trim();
+}
+
 /** KPI 시청률 문구에서 시장구분을 유도한다 (PRD.md 5번에 명시된 규칙 그대로). */
 export function toMarket(kpiText: string): "수도권" | "전국" {
   return kpiText.trim().startsWith("수도권") ? "수도권" : "전국";

@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
 import {
   parseChannelMasterWorkbook,
+  canonicalChannelName,
   logoPathFor,
   TARGET_GOAL_YEAR,
 } from "@/lib/channelMaster";
@@ -103,15 +104,18 @@ export async function POST(request: Request) {
     // 3) competitors — 이 채널의 기존 목록을 지우고 새로 넣는다 (Channel Master는 매번 전체 교체)
     await supabase.from("competitors").delete().eq("channel_id", channel.id);
 
+    // 옛 채널명은 현재 이름으로 바꿔 저장한다(2026-09-22 사용자 지시: "SBS FIL UHD → SBS NEX
+    // 로 채널명 변경되었음 ... 향후 그대로 사용할 것"). 채널 마스터는 매번 전체 교체라
+    // 여기서 통일하지 않으면 엑셀에 남은 옛 이름이 다시 들어와 닐슨 시트와 매칭이 끊긴다.
     const competitorRows = [
       ...row.competitors.map((name) => ({
         channel_id: channel.id,
-        competitor_name: name,
+        competitor_name: canonicalChannelName(name),
         is_internal_comparison: false,
       })),
       ...row.internalComparison.map((name) => ({
         channel_id: channel.id,
-        competitor_name: name,
+        competitor_name: canonicalChannelName(name),
         is_internal_comparison: true,
       })),
     ];
