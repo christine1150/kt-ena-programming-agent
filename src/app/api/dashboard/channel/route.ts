@@ -180,6 +180,7 @@ export async function GET(request: Request) {
       enaOriginalDaily: [],
       rerunLeadSentence: null,
       briefingLlm: null,
+      primeSummary: null,
       dowHourBlockPattern: [],
       dowHourPattern: [],
       topPrograms: [],
@@ -1125,6 +1126,11 @@ export async function GET(request: Request) {
   // Score(의도적으로 기간과 무관하게 설계됨, §U)를 재사용해 값이 어긋나 있었다. top3Programs와
   // 완전히 같은 방식(하루치 program_id 단위 시청률, 정렬만 반대)으로 당일 하위 3개를 뽑는다.
   let weakProgramsToday: { canonical_name: string; rating: number; start_time: string }[] = [];
+  // 사용자 지시(2026-09-23 후속): "프라임타임이나 주요 콘텐츠 관리에 해당하는 콘텐츠의 본방
+  // 효율 등이 정확하게 어떤 컨텐츠 때문에 올랐거나 내렸는지가 나오는 게 더 좋다" — 아래
+  // weakAllRows는 이미 당일 전체 프로그램을 가져오고 있었으므로(하위 3개만 쓰고 버리던 것),
+  // 그 목록을 그대로 남겨 프라임 구간 프로그램을 뽑는 데 재사용한다(새 쿼리 없음).
+  let allProgramsToday: { canonical_name: string; rating: number; start_time: string }[] = [];
   if (!isRangeMode) {
     const { data: targetRow } = await supabase.from("targets").select("id").eq("label", programTargetLabel).maybeSingle();
     if (targetRow) {
@@ -1176,8 +1182,8 @@ export async function GET(request: Request) {
         if (hour >= 14 && hour <= 18) return 2; // 오후
         return 1; // 저녁·심야(19~25, 0~1시 포함)
       };
-      weakProgramsToday = (weakAllRows ?? [])
-        .map(mapRow)
+      allProgramsToday = (weakAllRows ?? []).map(mapRow);
+      weakProgramsToday = [...allProgramsToday]
         .sort((a, b) => a.rating - b.rating || daypartTiePriority(a.start_time) - daypartTiePriority(b.start_time))
         .slice(0, 3);
     }
@@ -1257,6 +1263,17 @@ export async function GET(request: Request) {
   // 캐시 저장 시에만 줄바꿈으로 이어붙였다가 꺼낼 때 다시 배열로 나눈다(캐시 유틸 자체는
   // 그대로 유지 — 다른 호출부에 영향 없음).
   let briefingLlm: BriefingReport | null = null;
+  // 프라임타임 요약(사용자 지시 2026-09-23 후속) — LLM 경로와 규칙 기반 폴백이 같은 값을 쓰도록
+  // 응답에도 그대로 싣는다. 프라임 정의는 primeTime.ts 하나만 쓴다(prime-time-definition 규칙).
+  let primeSummary: {
+    label: string;
+    from: number;
+    to: number;
+    todayAvgRating: number | null;
+    baselineAvgRating: number | null;
+    topProgram: { name: string; rating: number; startTime: string } | null;
+    worstProgram: { name: string; rating: number; startTime: string } | null;
+  } | null = null;
   if (!isRangeMode && narrativeSignal) {
     const currentTrendRow = (trend ?? []).find((t: { period: string }) => t.period === "current");
     const currentRating = (currentTrendRow as { rating: number | null } | undefined)?.rating ?? null;
@@ -1299,6 +1316,34 @@ export async function GET(request: Request) {
     const primeBaseline = avgPrimeRating(hourlyBaselinePattern as { broadcast_hour: number; avg_rating: number | null }[] | null);
     const currentShare = (currentTrendRow as { share: number | null } | undefined)?.share ?? null;
     const currentTimeSpentSeconds = (currentTrendRow as { time_spent_seconds: number | null } | undefined)?.time_spent_seconds ?? null;
+    // 프라임 구간에 "무엇이 편성돼 있었나" — 평균만으로는 원인 콘텐츠를 알 수 없어 당일 프로그램
+    // 목록(allProgramsToday, 이미 조회된 값)에서 시작 시각이 프라임 구간에 드는 것만 고른다.
+    // 시작 시각 기준으로 판정하므로 프라임 직전에 시작해 프라임까지 이어지는 편성은 제외된다 —
+    // 화면 문구도 "프라임 편성 중"이라고만 쓰고 그 이상으로 단정하지 않는다.
+    const primePrograms = allProgramsToday.filter((p) => {
+      const h = parseInt(p.start_time.split(":")[0] ?? "", 10);
+      return !Number.isNaN(h) && h >= primeFrom && h < primeTo;
+    });
+    const primeSorted = [...primePrograms].sort((a, b) => b.rating - a.rating);
+    const primeTopProgram = primeSorted[0] ?? null;
+    // 프라임 편성이 1건뿐이거나 최고·최저가 같은 프로그램(같은 작품의 다른 회차·부)일 때는
+    // 한 프로그램을 강세 근거와 약세 근거로 동시에 쓰게 되므로 최저는 비운다.
+    const primeWorstCandidate = primeSorted.length >= 2 ? primeSorted[primeSorted.length - 1] : null;
+    const primeWorstProgram = primeWorstCandidate && primeWorstCandidate.canonical_name !== primeSorted[0].canonical_name ? primeWorstCandidate : null;
+    // 프라임이 올랐으면 최고 프로그램이, 내렸으면 최저 프로그램이 그 등락의 근거다.
+    const primeRose = primeToday !== null && primeBaseline !== null && primeToday >= primeBaseline;
+    const primeFocusProgram = primeRose ? primeTopProgram : (primeWorstProgram ?? primeTopProgram);
+    primeSummary = {
+      label: `${DAY_TYPE_LABEL[primeDayType]} ${primeFrom}~${primeTo}시`,
+      // 화면 쪽에서 "피크가 프라임 밖인가"를 판정할 때 라벨 문자열을 다시 파싱하지 않도록
+      // 구간 경계를 숫자 그대로 내려준다(프라임 정의는 서버의 primeTime.ts 하나뿐).
+      from: primeFrom,
+      to: primeTo,
+      todayAvgRating: primeToday,
+      baselineAvgRating: primeBaseline,
+      topProgram: primeTopProgram ? { name: primeTopProgram.canonical_name, rating: primeTopProgram.rating, startTime: primeTopProgram.start_time } : null,
+      worstProgram: primeWorstProgram ? { name: primeWorstProgram.canonical_name, rating: primeWorstProgram.rating, startTime: primeWorstProgram.start_time } : null,
+    };
     // 성능 개선(2026-09-17): 같은 날짜·같은 입력이면 문장도 같으므로 결과를 캐시해 OpenAI
     // 왕복(최대 8초)을 하루 첫 조회로 제한한다 — 입력이 바뀌면 지문이 달라져 자동 재생성되고,
     // 캐시가 없거나 실패하면 지금까지와 똑같이 그 자리에서 생성한다.
@@ -1357,6 +1402,12 @@ export async function GET(request: Request) {
       prime_label: `${DAY_TYPE_LABEL[primeDayType]} ${primeFrom}~${primeTo}시`,
       prime_today_avg_rating: ratingFmt(primeToday),
       prime_baseline_avg_rating: ratingFmt(primeBaseline),
+      // 프라임 구간에 실제로 편성돼 있던 프로그램 — "프라임이 빠졌다"까지만 말하고 무엇 때문에
+      // 빠졌는지는 못 말하던 것을 메우는 값이다(사용자 지시 2026-09-23 후속). 등락 방향에 맞는
+      // 한 건만 넘긴다(둘 다 주면 하락한 날에도 최고 프로그램을 인용하는 사례가 있었다).
+      prime_focus_program_name: primeFocusProgram?.canonical_name ?? null,
+      prime_focus_program_rating: ratingFmt(primeFocusProgram?.rating ?? null),
+      prime_focus_program_start_time: primeFocusProgram?.start_time ?? null,
       // 시청시간·점유율(채널 단위 당일값).
       today_time_spent_minutes: currentTimeSpentSeconds === null ? null : Number((currentTimeSpentSeconds / 60).toFixed(1)),
       today_share_pct: pctFmt(currentShare),
@@ -1373,7 +1424,15 @@ export async function GET(request: Request) {
     // v4(2026-09-23): 브라우저 검증에서 LLM이 연령대를 drivers(편성 근거)에 섞어 넣는 것과
     // 가구 시청률에 100을 곱하는 것을 발견해 프롬프트를 고쳤다. 입력 필드는 그대로라 지문이
     // 안 바뀌므로, 버전을 올리지 않으면 옛 프롬프트로 만든 캐시가 계속 나온다.
-    const briefingLlmJson = await cachedLlmText(`briefing_report_v4:${channel.code}`, dateTo, briefingLlmInput, async () => {
+    // v5(2026-09-23 후속): "왜 그랬나/누가 봤나 라벨은 없어도 되고, 정확히 어떤 콘텐츠 때문에
+    // 올랐거나 내렸는지가 더 중요하다. 시사점 칸은 긴데 내용이 없고 성과를 나열만 했다"는
+    // 지적에 따라 프롬프트를 고쳤다 — 항목 수 상한, 프라임 원인 콘텐츠 의무화, 시사점의
+    // 성과 재진술 금지. 입력 필드도 늘었지만 형식 혼선을 막으려 버전도 함께 올린다.
+    // v6: 가구 시청률을 LLM이 쓰지 않도록 프롬프트에서 제외(자릿수를 바꿔 쓰는 사례 확인).
+    // v7: 시사점에 지시 대상(프로그램·시각·연령대)을 의무화(대상 없는 "콘텐츠 강화 필요" 방지).
+    // v8: 시사점 상투어("지속적인 관리 필요" 등) 금지 — 대상만 있고 실행할 것이 없는 문장 방지.
+    // v9: 프라임 원인 프로그램을 등락 방향에 맞는 한 건(prime_focus_program_*)만 넘기도록 변경.
+    const briefingLlmJson = await cachedLlmText(`briefing_report_v9:${channel.code}`, dateTo, briefingLlmInput, async () => {
       const report = await buildBriefingReportViaLlm(briefingLlmInput);
       return report ? JSON.stringify(report) : null;
     });
@@ -1400,6 +1459,7 @@ export async function GET(request: Request) {
     },
     selfChannelBrands,
     briefingLlm,
+    primeSummary,
     // 사용자 지시(2026-09-22): "가구 시청률 1% 초과 예외" — 예외가 실제로 발동한 날에만
     // 브리핑에 가구 시청률을 사실 항목으로 보여준다(발동 안 하면 null, 화면에서 조용히 생략).
     groupAHouseholdException: groupAHouseholdException ? groupAHouseholdRatingToday : null,

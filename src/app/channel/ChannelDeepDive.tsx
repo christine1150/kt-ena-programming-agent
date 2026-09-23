@@ -669,6 +669,18 @@ interface ChannelData {
   // 없으면 기존 규칙 기반 항목으로 조용히 대체. 사용자 지시(2026-09-23): 평평한 문자열 배열이
   // 아니라 "헤드라인 + 근거 2갈래 + 시사점" 구조로 바뀌었다(briefingReportLlm.ts 참고).
   briefingLlm: BriefingReport | null;
+  // 사용자 지시(2026-09-23 후속): "프라임타임의 어떤 콘텐츠 때문에 올랐거나 내렸는지가 정확하게
+  // 나오는 게 더 좋다" — 프라임 구간 평균과 그 구간에 실제로 편성돼 있던 최고·최저 프로그램.
+  // 프라임 정의는 서버(primeTime.ts)에서 한 번만 판정해 라벨까지 내려준다. 단일 일자 모드만.
+  primeSummary: {
+    label: string;
+    from: number;
+    to: number;
+    todayAvgRating: number | null;
+    baselineAvgRating: number | null;
+    topProgram: { name: string; rating: number; startTime: string } | null;
+    worstProgram: { name: string; rating: number; startTime: string } | null;
+  } | null;
   // 사용자 지시(2026-09-22): "가구 시청률 1% 초과 예외도 구현해줘" — ENA/ENA Play/ENA Drama의
   // 2049 한정 원칙 예외가 오늘 실제로 발동했을 때만(가구 시청률 1% 초과 또는 시청시간 30분
   // 이상) 그 가구 시청률 값을 담는다. 발동 안 하면 null(화면에서 조용히 생략).
@@ -1324,6 +1336,10 @@ interface BriefingView {
   audience: string[];
   implication: string | null;
   extras: string[];
+  // 사용자 지시(2026-09-23 후속): 상단 배지 줄과 근거 항목이 같은 프로그램을 두 번 말해 화면이
+  // 길어졌다 — 배지 줄을 없애고, 근거에서 이미 언급한 프로그램을 뺀 나머지 상위 프로그램만
+  // 좌단 마지막에 한 줄로 붙인다(정보는 유지, 줄 수는 감소).
+  otherTop: string | null;
 }
 
 function buildBriefingReport(
@@ -1336,7 +1352,7 @@ function buildBriefingReport(
   sdowContext?: { weeksLabel: string; dowLabel: string } | null
 ): BriefingView {
   const s = data.narrativeSignal;
-  const view: BriefingView = { headline: null, verdict: "flat", drivers: [], audience: [], implication: null, extras: [] };
+  const view: BriefingView = { headline: null, verdict: "flat", drivers: [], audience: [], implication: null, extras: [], otherTop: null };
   const paragraphs: string[] = view.extras;
   // skyUHD만 예외적으로 소수점 5자리(사용자 지시 2026-08-20).
   const fmtR = (v: number | null) => fmt(v, data.channel.code === "SKYUHD" ? 5 : 3);
@@ -1463,6 +1479,19 @@ function buildBriefingReport(
       );
     }
 
+    // 사용자 지시(2026-09-23 후속): "프라임타임의 어떤 콘텐츠 때문에 올랐거나 내렸는지가
+    // 정확하게 나오는 게 더 좋다" — 프라임 평균 등락에 그 구간 편성 프로그램을 붙여서 말한다.
+    // 등락 방향에 따라 인용 대상을 바꾼다(올랐으면 최고, 내렸으면 최저 프로그램).
+    const prime = data.primeSummary;
+    if (prime && prime.todayAvgRating !== null && prime.baselineAvgRating !== null && prime.baselineAvgRating > 0) {
+      const primePct = ((prime.todayAvgRating - prime.baselineAvgRating) / prime.baselineAvgRating) * 100;
+      if (Math.abs(primePct) >= 15) {
+        const culprit = primePct >= 0 ? prime.topProgram : (prime.worstProgram ?? prime.topProgram);
+        const culpritText = culprit ? ` · '${culprit.name}' ${fmtR(culprit.rating)}(${fmtTime(culprit.startTime)})` : "";
+        drivers.push(`프라임 ${prime.label} ${fmtR(prime.todayAvgRating)} (평소 ${fmtR(prime.baselineAvgRating)} 대비 ${primePct >= 0 ? "▲" : "▼"}${Math.abs(primePct).toFixed(0)}%)${culpritText}`);
+      }
+    }
+
     // 연령대: 가장 크게 움직인 연령대
     if (s.demographics && s.demographics.length > 0) {
       const notable = s.demographics
@@ -1507,8 +1536,77 @@ function buildBriefingReport(
       view.audience = data.briefingLlm.audience;
       view.implication = data.briefingLlm.implication;
     } else {
-      view.drivers = drivers;
-      view.audience = audience;
+      // 사용자 지시(2026-09-23 후속): "너무 여러 줄이 되지 않도록" — 규칙 기반 경로도 LLM 경로와
+      // 같은 상한(편성 근거 3 / 시청자 근거 2)을 지킨다. 앞쪽 항목일수록 중요도가 높게 쌓인다.
+      view.drivers = drivers.slice(0, 3);
+      view.audience = audience.slice(0, 2);
+    }
+
+    // 가구 시청률만은 LLM에 맡기지 않고 직접 렌더한다 — 브라우저 검증(2026-09-23)에서 입력값
+    // 4.82를 모델이 "4.821%"로 한 자리 늘려 쓰는 것을 확인했다(CLAUDE.md No Hallucination).
+    // 예외가 발동한 날에만 값이 들어오고, 그 줄은 항상 시청자 근거의 마지막에 붙는다.
+    view.audience = view.audience.filter((a) => !a.includes("가구 시청률")).slice(0, 2);
+    if (data.groupAHouseholdException !== null) {
+      view.audience.push(`가구 시청률 ${data.groupAHouseholdException.toFixed(2)}% (전국 유료가구)`);
+    }
+
+    // 사용자 지시(2026-09-23 후속): "시사점이라기보다는 그냥 성과를 나열했다. 정확한 분석과
+    // 시사점이 나올 수 있도록" — LLM이 시사점을 비웠거나 성과 재진술이라 버려졌을 때, 이미
+    // 검증된 값들 사이의 관계에서 읽어낼 수 있는 해석 + 다음 확인거리를 규칙으로 만든다.
+    // 우선순위는 편성 판단에 미치는 영향이 큰 순서다(시장 전체 위축 판별 → 원인 콘텐츠 →
+    // 프라임 구조 → 피크 위치 → 견인 콘텐츠). 어느 것도 성립하지 않으면 null로 둬서 화면에서
+    // 그 줄을 통째로 생략한다(없는 시사점을 지어내지 않는다).
+    if (!view.implication) {
+      const declineIsReal =
+        s.decline_program_name !== null &&
+        s.decline_program_delta_pct !== null &&
+        s.decline_program_delta_pct <= -15 &&
+        (s.decline_program_baseline_days ?? 0) >= 3;
+      const shareHeld =
+        s.rating_delta_pct !== null &&
+        s.rating_delta_pct <= -10 &&
+        s.today_share !== null &&
+        s.baseline_avg_share !== null &&
+        s.baseline_avg_share > 0 &&
+        (s.today_share - s.baseline_avg_share) / s.baseline_avg_share >= -0.05;
+      const primePct =
+        prime && prime.todayAvgRating !== null && prime.baselineAvgRating !== null && prime.baselineAvgRating > 0
+          ? ((prime.todayAvgRating - prime.baselineAvgRating) / prime.baselineAvgRating) * 100
+          : null;
+      const peakOutsidePrime =
+        s.today_peak_hour !== null && prime !== null && (s.today_peak_hour < prime.from || s.today_peak_hour >= prime.to);
+
+      // 버그 방지(브라우저 검증 2026-09-23): 채널이 오른 날에도 하락 주범 분기가 먼저 걸려
+      // "'신병4사보타주' 본방 부진이 하락을 주도"처럼 헤드라인과 정반대인 시사점이 나왔다.
+      // 하락 서술은 채널이 실제로 빠진 날에만, 그리고 그 프로그램이 오늘의 견인 프로그램이
+      // 아닐 때만 쓴다.
+      const channelDown = s.rating_delta_pct !== null && s.rating_delta_pct < 0;
+      if (shareHeld) {
+        view.implication = "시청률은 빠졌지만 점유율은 유지 — 시장 전체 위축 가능성, 자사 요인만으로 판단하지 말 것";
+      } else if (channelDown && declineIsReal && s.decline_program_name !== contribProgramName) {
+        view.implication = `'${s.decline_program_name}' 본방 부진이 하락을 주도 — 같은 슬롯의 경쟁 편성과 회차 소재 점검 필요`;
+      } else if (channelDown && primePct !== null && primePct <= -15) {
+        const culprit = prime?.worstProgram ?? prime?.topProgram ?? null;
+        view.implication = culprit
+          ? `프라임 약세의 진원은 '${culprit.name}'(${fmtTime(culprit.startTime)}) — 해당 슬롯 교체·이동 검토 필요`
+          : "프라임 구간이 채널 평균을 끌어내림 — 해당 시간대 편성 경쟁력 점검 필요";
+      } else if (!channelDown && primePct !== null && primePct >= 15 && prime?.topProgram) {
+        view.implication = `프라임 강세를 '${prime.topProgram.name}'${josaIga(prime.topProgram.name)} 견인 — 같은 슬롯·소재의 편성 유지 검토`;
+      } else if (!channelDown && contribPct !== null && contribPct >= 20 && contribProgramName) {
+        view.implication = `'${contribProgramName}' 강세가 당일 성과를 견인 — 동일 슬롯 반복 편성 효과 확인 필요`;
+      } else if (peakOutsidePrime && s.today_peak_hour !== null) {
+        view.implication = `피크가 프라임 밖 ${s.today_peak_hour}시에 형성 — 프라임 편성 경쟁력과 유입 동선 점검 필요`;
+      } else if (primePct !== null && primePct <= -15) {
+        view.implication = "채널은 유지됐지만 프라임 구간이 평소보다 약함 — 해당 시간대 편성 경쟁력 점검 필요";
+      }
+    }
+
+    // 상단 배지 줄을 대체하는 "그 외 상위 프로그램" 한 줄 — 근거 문장에서 이미 이름이 나온
+    // 프로그램은 빼서 같은 내용을 두 번 읽게 하지 않는다(사용자 지시 2026-09-23 후속).
+    const namedInBody = [...view.drivers, ...view.audience, view.implication ?? ""].join(" ");
+    const otherTopItems = data.top3Programs.filter((p) => !namedInBody.includes(p.canonical_name)).slice(0, 3);
+    if (otherTopItems.length > 0) {
+      view.otherTop = otherTopItems.map((p) => `'${p.canonical_name}' ${fmtR(p.rating)}`).join(" · ");
     }
 
     // 버그 수정(2026-09-02): SDoW 문장을 위 sentences 배열 안에 넣었더니, briefingLlm이 있을 때
@@ -1576,60 +1674,78 @@ function buildBriefingReport(
 // 괜찮겠음" + "심미적으로도 좋게 설계 필요" — 헤드라인(전폭) → 근거 2단 → 시사점(전폭) 순의
 // BLUF 위계. 근거를 왼쪽('왜 그랬나' = 편성·프로그램)과 오른쪽('누가 봤나' = 타깃·점유율)으로
 // 나눈 이유는 편성 PD가 두 질문을 서로 다른 목적으로 읽기 때문이다(편성 조정 vs 타깃 점검).
-function BriefingBody({ view, accentColor }: { view: BriefingView; accentColor: string }) {
+// 사용자 재지시(2026-09-23 후속): "더 간결하게 — 너무 여러 줄이 되지 않도록. '왜 그랬나',
+// '누가 봤나' 등은 안 써 있어도 됨. 헤드라인은 '오늘의 브리핑' 제목 옆 우측에 적혀 있어도
+// 바로 알 수 있음." — 제목 줄과 헤드라인을 한 줄로 합치고(블록 하나 제거), 2단의 칼럼 제목을
+// 없애며(두 줄 제거), 상단 배지 줄은 좌단 마지막의 '그 외 상위' 한 줄로 흡수했다. 좌우 구분은
+// 라벨 대신 불릿 색(좌=채널색=편성/콘텐츠, 우=회색=시청자)으로만 암시한다.
+function BriefingBody({ title, view, accentColor }: { title: string; view: BriefingView; accentColor: string }) {
   const verdictTone =
     view.verdict === "up"
-      ? { border: "#059669", bg: "#ecfdf5", text: "#065f46" }
+      ? { bg: "#ecfdf5", text: "#047857", ring: "#a7f3d0" }
       : view.verdict === "down"
-        ? { border: "#e11d48", bg: "#fff1f2", text: "#9f1239" }
-        : { border: "#a1a1aa", bg: "#fafafa", text: "#3f3f46" };
+        ? { bg: "#fff1f2", text: "#be123c", ring: "#fecdd3" }
+        : { bg: "#fafafa", text: "#3f3f46", ring: "#e4e4e7" };
   const hasColumns = view.drivers.length > 0 || view.audience.length > 0;
-  const column = (title: string, items: string[]) =>
-    items.length === 0 ? null : (
-      <section>
-        <h3 className="mb-2 text-[11px] font-bold tracking-wider text-zinc-400">{title}</h3>
-        <ul className="flex flex-col gap-1.5">
-          {items.map((item, i) => (
-            <li key={i} className="flex gap-2 text-sm leading-snug font-medium text-zinc-700">
-              <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full" style={{ backgroundColor: accentColor }} />
-              <span>{highlightNarrativeText(item, "#059669", "#e11d48")}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+  const column = (items: string[], dotColor: string, tail?: string | null) =>
+    items.length === 0 && !tail ? null : (
+      <ul className="flex flex-col gap-1">
+        {items.map((item, i) => (
+          <li key={i} className="flex gap-2 text-[13.5px] leading-snug font-medium text-zinc-700">
+            <span className="mt-[6px] h-1 w-1 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} />
+            <span>{highlightNarrativeText(item, "#059669", "#e11d48")}</span>
+          </li>
+        ))}
+        {tail && (
+          <li className="flex gap-2 text-[12.5px] leading-snug text-zinc-400">
+            <span className="mt-[6px] h-1 w-1 shrink-0 rounded-full bg-zinc-200" />
+            <span>그 외 상위 {tail}</span>
+          </li>
+        )}
+      </ul>
     );
 
   return (
-    <div className="flex flex-col gap-4">
-      {view.headline && (
-        <div className="rounded-2xl border-l-4 px-4 py-3" style={{ borderColor: verdictTone.border, backgroundColor: verdictTone.bg }}>
-          <p className="text-[15px] leading-snug font-bold" style={{ color: verdictTone.text }}>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+        <h2 className={SECTION_TITLE_P2}>{title}</h2>
+        {view.headline && (
+          <span
+            className="rounded-full px-3 py-1 text-[13.5px] leading-snug font-bold ring-1 ring-inset"
+            style={{ backgroundColor: verdictTone.bg, color: verdictTone.text, ["--tw-ring-color" as string]: verdictTone.ring }}
+          >
             {highlightNarrativeText(view.headline, "#059669", "#e11d48")}
-          </p>
-        </div>
-      )}
+          </span>
+        )}
+      </div>
       {hasColumns && (
-        <div className="grid gap-x-8 gap-y-4 md:grid-cols-2">
-          {column("왜 그랬나", view.drivers)}
-          {column("누가 봤나", view.audience)}
+        <div className="grid gap-x-8 gap-y-1 md:grid-cols-2">
+          {column(view.drivers, accentColor, view.otherTop)}
+          {column(view.audience, "#a1a1aa")}
         </div>
       )}
       {view.implication && (
-        <div className="rounded-xl bg-zinc-50 px-4 py-2.5 ring-1 ring-zinc-100">
-          <p className="text-sm leading-snug font-medium text-zinc-700">
-            <span className="mr-1.5 text-[11px] font-bold tracking-wider text-zinc-400">시사점</span>
-            {highlightNarrativeText(view.implication, "#059669", "#e11d48")}
-          </p>
-        </div>
+        <p className="flex gap-2 border-t border-zinc-100 pt-2.5 text-[13.5px] leading-snug font-medium text-zinc-700">
+          <span className="mt-[1px] shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-bold text-zinc-500">시사점</span>
+          <span>{highlightNarrativeText(view.implication, "#059669", "#e11d48")}</span>
+        </p>
       )}
+      {/* 참고 문단(연령대 특이사항·경쟁 격차 등)은 그날의 결론에 종속되지 않는 별개 내용이라
+          펼침으로 접어 둔다 — 사용자 지시(2026-09-23 후속) "너무 여러 줄이 되지 않도록". 내용은
+          그대로 유지되고(정보 삭제 아님), 기본 상태에서 카드 높이만 줄어든다. */}
       {view.extras.length > 0 && (
-        <div className="flex flex-col gap-2 border-t border-zinc-100 pt-3">
-          {view.extras.map((para, i) => (
-            <p key={i} className="text-sm leading-snug font-medium text-zinc-600">
-              {highlightNarrativeText(para, "#059669", "#e11d48")}
-            </p>
-          ))}
-        </div>
+        <details className="border-t border-zinc-100 pt-2.5">
+          <summary className="cursor-pointer list-none text-[12px] font-semibold text-zinc-400 hover:text-zinc-600">
+            참고 {view.extras.length}건 자세히 보기
+          </summary>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {view.extras.map((para, i) => (
+              <p key={i} className="text-[13px] leading-snug text-zinc-500">
+                {highlightNarrativeText(para, "#059669", "#e11d48")}
+              </p>
+            ))}
+          </div>
+        </details>
       )}
     </div>
   );
@@ -5554,82 +5670,15 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </div>
         )}
 
-        {/* 오늘의 브리핑 — 보고서 줄글 형태(사용자 지시: What/Why 라벨 없이, 목표 달성률 제외) */}
+        {/* 오늘의 브리핑 — 사용자 재지시(2026-09-23 후속): "더 간결하게 볼 수 있도록(너무 여러
+            줄이 되지 않도록) 레이아웃 조정. 제목 옆에 헤드라인이 적혀 있어도 바로 알 수 있음."
+            제목·헤드라인·근거·시사점을 BriefingBody 하나가 전부 그린다. 예전 상단 배지 줄
+            (등락폭 + TOP3 프로그램)은 없앴다 — 등락폭은 헤드라인이 이미 말하고, TOP3는 근거
+            항목과 내용이 겹쳐 같은 프로그램을 두 번 읽게 만들었다(겹치지 않는 것만 좌단
+            마지막의 "그 외 상위" 한 줄로 남는다). */}
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={`${SECTION_TITLE_P2} mb-3`}>{buildBriefingTitle(periodPreset)}</h2>
-          {/* 인포그래픽 제안(사용자 지시 2026-08-22, Page 2 전체 구현): 긴 줄글을 읽기 전에 핵심
-              지표를 먼저 스캔할 수 있도록 상단 배지 스트립 — 아래 프로세 문장이 이미 다루는 값을
-              그대로 배지로 옮긴 것(새 계산 없음), 헤더의 오늘 시청률/등위와 겹치지 않는 항목만
-              골랐다(등락폭/피크 시간대/1위 프로그램). 단일 일자 조회일 때만 표시(기간 모드는
-              baseline 개념이 달라 아래 WHAT HAPPENED?/표를 참고). */}
-          {!showComparisonView && narrativeSignal && (
-            <div className="mb-4 flex flex-wrap gap-2">
-              {narrativeSignal.rating_delta_pct !== null && (
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold ring-1 ring-inset ${
-                    narrativeSignal.rating_delta_pct >= 0 ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-rose-200"
-                  }`}
-                >
-                  {narrativeSignal.rating_delta_pct >= 0 ? "▲" : "▼"} {sdowCompareLabel ?? "최근 12주 평균 대비"} {Math.abs(narrativeSignal.rating_delta_pct).toFixed(1)}%
-                </span>
-              )}
-              {/* 사용자 지시(2026-09-02): "당일의 최고 프로그램과 피크 시간대가 겹치므로, Top1은
-                  시간대와 프로그램명, 시청률이 나오게 하나로 통합하여 표시. Top1만 다른 색으로
-                  강조" — 기존엔 "피크 XX시대 rating" 배지와 "1위 프로그램명 rating" 배지가 같은
-                  순간을 가리키면서 따로 떠 있었다(사용자 스크린샷: 둘 다 0.142). 피크 시간대를
-                  Top1 배지 안으로 합치고, 그 배지만 진한 배경(흰 글씨)으로 나머지 2·3위와 구분한다. */}
-              {data.top3Programs.length > 0
-                ? data.top3Programs.map((p, i) =>
-                    i === 0 ? (
-                      <span
-                        key={`${p.canonical_name}-0`}
-                        className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold text-white"
-                        style={{ backgroundColor: accentColor }}
-                      >
-                        {narrativeSignal.today_peak_hour !== null && `피크 ${narrativeSignal.today_peak_hour}시대 · `}
-                        {p.canonical_name} {fmtR(p.rating)}
-                      </span>
-                    ) : (
-                      <span
-                        key={`${p.canonical_name}-${i}`}
-                        className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-semibold"
-                        style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}
-                      >
-                        {p.canonical_name} {fmtR(p.rating)}
-                      </span>
-                    )
-                  )
-                : narrativeSignal.top_program_name && (
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold text-white"
-                      style={{ backgroundColor: accentColor }}
-                    >
-                      {narrativeSignal.today_peak_hour !== null && `피크 ${narrativeSignal.today_peak_hour}시대 · `}
-                      {narrativeSignal.top_program_name} {fmtR(narrativeSignal.top_program_rating)}
-                    </span>
-                  )}
-            </div>
-          )}
-          {/* 사용자 지시(2026-08-26, 가독성 개선 5번 "타이포그래피 기본기"): 줄 폭 제한 + 등락
-              수치 강조 — buildBriefingReport의 문장 조립 로직은 그대로, 표시만 바꾼다. 이
-              페이지는 이미 emerald/rose를 상승/하락 색으로 쓰고 있어(위 배지·DivergingDeltaBar)
-              같은 톤을 그대로 쓴다. */}
-          {/* 사용자 재지시(2026-08-27): "오늘의 브리핑 우측이 비어 보이는 현상 해결" — 위
-              max-w-2xl(가독성을 위한 줄 폭 제한)이 이 카드처럼 넓은 화면에서는 텍스트 오른쪽에
-              큰 빈 공간을 남겨 마치 콘텐츠가 잘리거나 잘못 배치된 것처럼 보였다. 이 섹션만
-              줄 폭 제한을 없애 카드 폭을 그대로 채운다(leading-relaxed로 가독성은 유지).
-              사용자 재지시(2026-09-01): "중간중간 줄글이... 좌우 내용이 꽉 차게" — 당시엔
-              "이번에 지적된 곳만"으로 범위를 좁혔지만, 이번엔 WHY?/OPPORTUNITY?/CONTENT FITS?/
-              COMPARED WITH? 등 나머지 서술 문단(sectionLlm으로 받는 문단 포함) 전부에서 같은
-              현상이 재발해 지적받았다 — 파일 전체의 서술형 <p>에서 max-w-2xl을 제거했다(스코어
-              카드 하나만 예외였던 것도 포함). 표에 붙는 캡션류(예: 위 페이지 안내문) 등 원래
-              줄 폭 제한이 의미 있는 짧은 문구는 max-w-2xl이 없었으므로 영향 없음. */}
-          {/* 사용자 지시(2026-09-22): "오늘의 브리핑을 줄글 형태가 아닌 수치와 팩트 위주의
-              가독률 좋은 내용으로 — 지금은 말이 너무 길어서 읽기 힘들다" — buildBriefingReport가
-              이제 완결된 문장 대신 숫자로 시작하는 짧은 사실 항목을 돌려준다(로직은 그대로,
-              문장 조립 방식만 축약). 줄 간격이 넓은 prose 스타일(leading-relaxed) 대신 Page 1
-              액션 라인과 같은 촘촘한 스타일로 바꿔 한눈에 훑어보기 쉽게 한다. */}
           <BriefingBody
+            title={buildBriefingTitle(periodPreset)}
             accentColor={accentColor}
             view={buildBriefingReport(
               data,
