@@ -11,8 +11,9 @@ import {
 import { loadNaverMailEnvConfig, fetchUnprocessedNielsenMailFromNaver } from "@/lib/naverMailClient";
 import { ingestAnyNielsenFile, loadNielsenFileDispatchContext, type NielsenFileSummary } from "@/lib/nielsenFileDispatch";
 import { ingestOlifeEpgFile, detectEpgChannelCode, DAILY_EPG_ATTACHMENT_PATTERN, type OlifeEpgFileSummary } from "@/lib/olifeEpgDispatch";
+import { ingestSkyUhdRatingFile, SKYUHD_RATING_ATTACHMENT_PATTERN, type SkyUhdFileSummary } from "@/lib/skyUhdDispatch";
 
-type AnyIngestFileSummary = NielsenFileSummary | OlifeEpgFileSummary;
+type AnyIngestFileSummary = NielsenFileSummary | OlifeEpgFileSummary | SkyUhdFileSummary;
 
 export interface MailIngestionRunResult {
   ok: boolean;
@@ -112,14 +113,15 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
         .from("mail_ingestion_log")
         .update({
           status: "skipped",
-          error_message: "조건에 맞는 닐슨 채널시청률·일일운행표(EPG) 엑셀 첨부파일을 찾지 못했습니다.",
+          error_message: "조건에 맞는 닐슨 채널시청률·일일운행표(EPG)·skyUHD 시청률 엑셀 첨부파일을 찾지 못했습니다.",
           processed_at: new Date().toISOString(),
         })
         .eq("message_id", item.messageId);
       continue;
     }
 
-    // 첨부파일마다 파일명 패턴으로 어느 처리 경로(닐슨 시청률/일일운행표 EPG)로 보낼지 정한다.
+    // 첨부파일마다 파일명 패턴으로 어느 처리 경로(닐슨 시청률/일일운행표 EPG/skyUHD 시청률)로
+    // 보낼지 정한다.
     // EPG는 "어느 채널의 편성인지"를 메일 제목에서 한 번만 찾아 이 메일의 모든 EPG 첨부에
     // 공통으로 쓴다(사용자 지시: 제목의 채널명+EPG 문구로 자동 매치, 대소문자·띄어쓰기 무관).
     const epgChannelCode = detectEpgChannelCode(item.subject);
@@ -143,8 +145,14 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
         fileSummaries.push(await ingestOlifeEpgFile(attachment.buffer, attachment.fileName, epgChannelId));
       } else if (NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(attachment.fileName)) {
         fileSummaries.push(await ingestAnyNielsenFile(attachment.buffer, attachment.fileName, nielsenCtx));
+      } else if (SKYUHD_RATING_ATTACHMENT_PATTERN.test(attachment.fileName)) {
+        // 사용자 지시(2026-09-23): "skyUHD 시청률 엑셀 파일이 오면 날짜를 읽어서 자동으로
+        // 업로드 및 적용" — 채널이 항상 SKYUHD로 고정이라 EPG처럼 제목에서 채널을 찾을
+        // 필요가 없다. 날짜는 파일명이 아니라 parseSkyUhdWorkbook이 시트 내용에서 직접
+        // 읽는다(skyUhdDispatch.ts 참고).
+        fileSummaries.push(await ingestSkyUhdRatingFile(attachment.buffer, attachment.fileName));
       }
-      // 둘 다 아니면(이론상 도달 불가 — 두 클라이언트가 이미 이 두 패턴으로만 첨부를
+      // 셋 다 아니면(이론상 도달 불가 — 두 클라이언트가 이미 이 세 패턴으로만 첨부를
       // 걸러서 넘긴다) 조용히 건너뛴다.
     }
     const anyFailed = fileSummaries.some((f) => !f.ok);

@@ -16,6 +16,7 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN, type NielsenMailAttachment, type NielsenMailItem } from "@/lib/gmailClient";
 import { DAILY_EPG_ATTACHMENT_PATTERN } from "@/lib/olifeEpgDispatch";
+import { SKYUHD_RATING_ATTACHMENT_PATTERN } from "@/lib/skyUhdDispatch";
 
 export interface NaverMailEnvConfig {
   userEmail: string;
@@ -36,8 +37,17 @@ export function loadNaverMailEnvConfig(): NaverMailEnvConfig | { error: string }
 // 대상으로 한다. IMAP SEARCH는 "제목에 A와 B가 모두 포함"을 한 번에 표현하기
 // 까다로워(서버마다 부분일치 AND 처리가 다름), 서버에는 두 키워드를 OR로 넓게
 // 물어보고(아래 search 호출) 정확한 포함 여부는 이쪽에서 다시 확인한다.
+// 사용자 지시(2026-09-23): "'skyUHD' '시청률' 엑셀 파일이 오면 날짜를 읽어서 자동으로
+// 업로드" — skyUHD 수기 시청률 메일은 제목에 "닐슨"/"EPG"가 없을 가능성이 커, 후보
+// 목록에 아예 안 걸릴 수 있다. "skyUHD"·"시청률" 키워드도 같은 방식(넓게 물어보고 여기서
+// 재확인)으로 추가한다 — 실제 제목 문구를 몰라도 이 두 단어 중 하나만 있으면 걸린다.
 function subjectMatches(subject: string): boolean {
-  return (subject.includes("닐슨") && subject.includes("보고서")) || subject.toUpperCase().includes("EPG");
+  return (
+    (subject.includes("닐슨") && subject.includes("보고서")) ||
+    subject.toUpperCase().includes("EPG") ||
+    subject.toLowerCase().includes("skyuhd") ||
+    subject.includes("시청률")
+  );
 }
 
 /** 아직 처리하지 않은(processedMessageIds에 없는) Nielsen 일일 보고서 메일을 네이버
@@ -63,7 +73,12 @@ export async function fetchUnprocessedNielsenMailFromNaver(
       // 네이버 서버 쪽 SEARCH 응답도 가벼워진다.
       const since = new Date();
       since.setDate(since.getDate() - 30);
-      const seqs = await client.search({ or: [{ subject: "닐슨" }, { subject: "EPG" }], since }, { uid: true });
+      // imapflow의 `or`는 2항목 배열만 안전하게 보장돼(문서화된 형태) 4개 키워드를 이항 OR로
+      // 중첩한다 — subjectMatches()가 어차피 다시 정확히 확인하므로 여기는 넓게만 걸러도 된다.
+      const seqs = await client.search(
+        { or: [{ or: [{ subject: "닐슨" }, { subject: "EPG" }] }, { or: [{ subject: "skyUHD" }, { subject: "시청률" }] }], since },
+        { uid: true }
+      );
       if (!seqs || seqs.length === 0) return items;
 
       for (const uid of seqs) {
@@ -87,7 +102,11 @@ export async function fetchUnprocessedNielsenMailFromNaver(
         for (const att of parsed.attachments) {
           if (
             !att.filename ||
-            !(NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(att.filename) || DAILY_EPG_ATTACHMENT_PATTERN.test(att.filename))
+            !(
+              NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(att.filename) ||
+              DAILY_EPG_ATTACHMENT_PATTERN.test(att.filename) ||
+              SKYUHD_RATING_ATTACHMENT_PATTERN.test(att.filename)
+            )
           )
             continue;
           attachments.push({ fileName: att.filename, buffer: att.content });

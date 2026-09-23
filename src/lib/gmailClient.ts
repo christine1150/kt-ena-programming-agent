@@ -11,6 +11,7 @@
 //   GMAIL_CLIENT_SECRET   - 위 클라이언트의 시크릿
 //   GMAIL_REFRESH_TOKEN   - 최초 1회 OAuth2 동의 후 발급받은 refresh token
 import { DAILY_EPG_ATTACHMENT_PATTERN } from "@/lib/olifeEpgDispatch";
+import { SKYUHD_RATING_ATTACHMENT_PATTERN } from "@/lib/skyUhdDispatch";
 
 export interface GmailEnvConfig {
   userEmail: string;
@@ -85,7 +86,11 @@ export interface NielsenMailItem {
 // 있는 메일"(OLIFE 일일운행표) 두 종류를 대상으로 한다 — Gmail 검색 문법 subject:(A B)는
 // 제목에 A와 B가 모두(순서 무관) 있는 메일을, OR은 둘 중 하나를 찾아준다. 네이버 메일 쪽
 // (naverMailClient.ts)도 같은 규칙을 쓴다.
-const SUBJECT_QUERY = "(subject:(닐슨 보고서) OR subject:EPG) has:attachment";
+// 사용자 지시(2026-09-23): "'skyUHD' '시청률' 엑셀 파일이 오면 날짜를 읽어서 자동으로
+// 업로드" — skyUHD 수기 시청률 메일은 제목에 "닐슨"/"EPG"가 없을 가능성이 커 원래 쿼리로는
+// 아예 후보 목록에 안 걸렸다. skyUHD·시청률 키워드를 OR로 추가한다(네이버 메일 쪽
+// naverMailClient.ts의 subjectMatches()와 같은 원칙).
+const SUBJECT_QUERY = "(subject:(닐슨 보고서) OR subject:EPG OR subject:skyUHD OR subject:시청률) has:attachment";
 
 // 정식 파일명 패턴(DATA_DICTIONARY.md §0): 일간 "닐슨_채널시청률(YYMMDD).xls" 또는
 // 주간·월간·연간 "닐슨_채널시청률(YYMMDD-YYMMDD).xls"(날짜 범위) — 괄호 안 두 번째
@@ -144,7 +149,11 @@ export async function fetchUnprocessedNielsenMail(
     for (const part of attachmentParts) {
       if (
         !part.filename ||
-        !(NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(part.filename) || DAILY_EPG_ATTACHMENT_PATTERN.test(part.filename))
+        !(
+          NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(part.filename) ||
+          DAILY_EPG_ATTACHMENT_PATTERN.test(part.filename) ||
+          SKYUHD_RATING_ATTACHMENT_PATTERN.test(part.filename)
+        )
       )
         continue;
       const attachmentId = part.body!.attachmentId!;
