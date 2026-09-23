@@ -323,9 +323,12 @@ export function ScheduleWeekGrid({
             </label>
           )}
         </div>
-        {/* 사용자 지시(2026-09-22): 경쟁채널은 업로드·엑셀 내보내기 대상이 아니라(우리 채널
-            전용 export 라우트가 이 코드를 모름) 다운로드 아이콘을 숨긴다. */}
-        {showExport && !isCompetitor && rows.length > 0 && (
+        {/* 사용자 지시(2026-09-23): "우측의 경쟁사 채널 편성표도 다운로드 및 인쇄 가능하도록" —
+            2026-09-22엔 경쟁채널 export 라우트가 없어 다운로드 아이콘을 숨겼는데, 이제
+            /api/schedule-grid/export가 경쟁채널 코드도 처리하므로(위 라우트 수정) 그대로
+            노출한다. 인쇄는 애초에 서버 라우트 없이 클라이언트 window.print()라 경쟁채널도
+            항상 가능했다 — 숨긴 게 다운로드 아이콘과 한 조건문에 묶여 있었을 뿐이다. */}
+        {showExport && rows.length > 0 && (
           <div className="flex shrink-0 items-center gap-1 print:hidden">
             <a
               href={`${apiBase}/export?channel=${encodeURIComponent(channelCode)}&week=${resolvedWeek.week}${forceUpload ? "&view=upload" : ""}`}

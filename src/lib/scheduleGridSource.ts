@@ -65,18 +65,33 @@ export async function getCompetitorScheduleWeeks(competitorName: string): Promis
     .sort((a, b) => (a.weekStart < b.weekStart ? 1 : -1));
 }
 
+// 경쟁채널 프로그램명 끝의 "▶ N회" 표기를 회차로 분리한다(2026-09-23 사용자 지시:
+// "비키니 폴 Go ▶ 8회는 ▶ 없이 8회가 회차로 인식되도록"). 실측 확인(전체 competitor_program_
+// ratings, 19건) — 이 표기는 UHD Dream TV 프로그램명에만 등장하고, ▶ 뒤는 예외 없이 "N회"
+// 형태였다. tags에 "{N}회"를 담아 ScheduleWeekGrid.tsx의 extractEpisodeTag()가 그대로
+// 배지로 뽑아내게 하고(우리 채널의 tags 관례와 동일), 제목에서는 그 꼬리를 떼어낸다.
+const ARROW_EPISODE_RE = /\s*▶\s*(\d+)\s*회\s*$/;
+function splitCompetitorEpisode(raw: string): { title: string; tags: string | null } {
+  const m = raw.match(ARROW_EPISODE_RE);
+  if (!m || m.index === undefined) return { title: raw, tags: null };
+  return { title: raw.slice(0, m.index).trim(), tags: `${m[1]}회` };
+}
+
 export async function getCompetitorWeekScheduleRows(competitorName: string, week: string): Promise<ScheduleGridSourceRow[]> {
   const { data, error } = await supabase.rpc("get_competitor_week_schedule", { p_competitor_name: competitorName, p_week_start: week });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as { dow: number; broadcast_date: string; start_time: string; end_time: string | null; program_name_raw: string; matched_rating: number | null }[]).map((r) => ({
-    dow: r.dow,
-    broadcast_date: r.broadcast_date,
-    start_time: r.start_time,
-    end_time: r.end_time,
-    program_name_raw: r.program_name_raw,
-    tags: null,
-    matched_rating: r.matched_rating,
-  }));
+  return ((data ?? []) as { dow: number; broadcast_date: string; start_time: string; end_time: string | null; program_name_raw: string; matched_rating: number | null }[]).map((r) => {
+    const { title, tags } = splitCompetitorEpisode(r.program_name_raw);
+    return {
+      dow: r.dow,
+      broadcast_date: r.broadcast_date,
+      start_time: r.start_time,
+      end_time: r.end_time,
+      program_name_raw: title,
+      tags,
+      matched_rating: r.matched_rating,
+    };
+  });
 }
 
 // 사용자 지시(2026-09-20): "관리자 화면의 링크가 아닌 2페이지에서의 링크로" — PD 세션용
