@@ -1334,7 +1334,8 @@ interface BriefingView {
   verdict: "up" | "down" | "flat";
   drivers: string[];
   audience: string[];
-  implication: string | null;
+  // 사용자 지시(2026-09-23 3차): 시사점을 1개에서 최대 2개로 — 약점 진단 1줄 + 대안 1줄.
+  implications: string[];
   extras: string[];
   // 사용자 지시(2026-09-23 후속): 상단 배지 줄과 근거 항목이 같은 프로그램을 두 번 말해 화면이
   // 길어졌다 — 배지 줄을 없애고, 근거에서 이미 언급한 프로그램을 뺀 나머지 상위 프로그램만
@@ -1352,7 +1353,7 @@ function buildBriefingReport(
   sdowContext?: { weeksLabel: string; dowLabel: string } | null
 ): BriefingView {
   const s = data.narrativeSignal;
-  const view: BriefingView = { headline: null, verdict: "flat", drivers: [], audience: [], implication: null, extras: [], otherTop: null };
+  const view: BriefingView = { headline: null, verdict: "flat", drivers: [], audience: [], implications: [], extras: [], otherTop: null };
   const paragraphs: string[] = view.extras;
   // skyUHD만 예외적으로 소수점 5자리(사용자 지시 2026-08-20).
   const fmtR = (v: number | null) => fmt(v, data.channel.code === "SKYUHD" ? 5 : 3);
@@ -1377,12 +1378,16 @@ function buildBriefingReport(
     // 방식만 바뀐다. LLM 경로(위 briefingReportLlm.ts)도 같은 형식을 쓰도록 프롬프트를 맞췄다.
     // 사용자 지시(2026-09-23): 규칙 기반 폴백도 LLM 경로와 같은 위계(헤드라인 + 근거 2갈래)로
     // 만든다 — 한쪽만 고치면 OpenAI 키가 없거나 호출이 실패한 날에만 옛 평면 나열이 되살아난다.
-    const drivers: string[] = [];
+    // 근거 항목은 최대 3개만 보여주므로(사용자 지시 2026-09-23) 어떤 3개가 남는지가 중요하다 —
+    // 조립 순서가 아니라 편성 판단에서의 중요도 순으로 자르기 위해 우선순위를 함께 담는다.
+    // 1=주요 콘텐츠 본방, 2=피크, 3=프라임, 4=하락 주범, 5=최고 기여, 6=평소 피크, 7=요일 패턴.
+    const driverItems: { p: number; text: string }[] = [];
+    const pushDriver = (p: number, text: string) => driverItems.push({ p, text });
     const audience: string[] = [];
     // 사용자 지시(2026-08-25): ENA는 매주 오리지널 드라마·예능·독점 콘텐츠 성과가 채널에서
     // 매우 중요하므로 그 성과를 오늘의 브리핑 첫 문장으로 — 이미 완성된 짧은 문장이라 그대로 둔다.
     const enaLeadSentence = data.enaOriginalDaily.length > 0 ? buildEnaOriginalHighlightSentence(data.enaOriginalDaily, fmtR) : data.rerunLeadSentence;
-    if (enaLeadSentence) drivers.push(enaLeadSentence);
+    if (enaLeadSentence) pushDriver(1, enaLeadSentence);
 
     const baselineLabelText = sdowLabel ?? "최근 12주 평균";
     // 헤드라인 — 그날의 결론 한 줄. 등락 방향과 폭을 판정어로 바꿔 "무슨 날이었나"에 답한다.
@@ -1413,7 +1418,7 @@ function buildBriefingReport(
     if (!sdowLabel && s.dow_baseline_avg_rating !== null && s.baseline_avg_rating !== null && s.baseline_avg_rating > 0) {
       const dowPct = ((s.dow_baseline_avg_rating - s.baseline_avg_rating) / s.baseline_avg_rating) * 100;
       if (Math.abs(dowPct) >= 10) {
-        drivers.push(`동요일 평균 ${fmtR(s.dow_baseline_avg_rating)} — 평소 ${dowPct >= 0 ? "강세" : "약세"} 요일`);
+        pushDriver(7, `동요일 평균 ${fmtR(s.dow_baseline_avg_rating)} — 평소 ${dowPct >= 0 ? "강세" : "약세"} 요일`);
       }
     }
 
@@ -1448,18 +1453,22 @@ function buildBriefingReport(
       s.today_peak_program_name !== null && contribProgramName !== null && s.today_peak_program_name === contribProgramName;
 
     if (s.today_peak_hour !== null && s.today_peak_rating !== null) {
-      const peakProgramText = s.today_peak_program_name ? `'${s.today_peak_program_name}' ${fmtR(s.today_peak_program_rating)}` : fmtR(s.today_peak_rating);
+      // 주요 콘텐츠 문장(enaLeadSentence)이 이미 그 프로그램 성적을 말했으면 시각만 덧붙인다.
+      const peakNamedInLead = s.today_peak_program_name !== null && (enaLeadSentence ?? "").includes(s.today_peak_program_name);
+      const peakProgramText =
+        s.today_peak_program_name && !peakNamedInLead ? `'${s.today_peak_program_name}' ${fmtR(s.today_peak_program_rating)}` : fmtR(s.today_peak_rating);
       const contribSuffix = peakMatchesContrib && contribPct !== null ? ` (${contribPct >= 0 ? "▲" : "▼"}${Math.abs(contribPct).toFixed(0)}%, 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비)` : "";
-      drivers.push(`피크 ${s.today_peak_hour}시 · ${peakProgramText}${contribSuffix}`);
+      // 시각은 시사점·편성표와 같은 두 자리 표기로 통일한다("2시"와 "02시"가 섞이지 않도록).
+      pushDriver(2, `피크 ${String(s.today_peak_hour).padStart(2, "0")}시 · ${peakProgramText}${contribSuffix}`);
       if (s.today_peak_hour !== s.baseline_peak_hour && s.baseline_peak_hour !== null) {
-        drivers.push(`평소 피크는 ${s.baseline_peak_hour}시 (평균 ${fmtR(s.baseline_peak_rating)})`);
+        pushDriver(6, `평소 피크는 ${String(s.baseline_peak_hour).padStart(2, "0")}시 (평균 ${fmtR(s.baseline_peak_rating)})`);
       }
     }
 
     // 피크 시간대 프로그램과 오늘 최고 기여 프로그램이 다를 때만(또는 피크 시간대 정보 자체가
     // 없을 때만) 별도 항목으로 — 같으면 위에서 이미 한 줄로 합쳐졌다.
     if (contribPct !== null && contribProgramName && !peakMatchesContrib) {
-      drivers.push(
+      pushDriver(5, 
         `'${contribProgramName}' ${fmtR(s.top_program_rating)}${s.top_program_start_time ? ` (${fmtTime(s.top_program_start_time)})` : ""} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ${contribPct >= 0 ? "▲" : "▼"}${Math.abs(contribPct).toFixed(0)}%`
       );
     }
@@ -1474,7 +1483,7 @@ function buildBriefingReport(
       s.decline_program_baseline_days >= 3 &&
       s.decline_program_name !== contribProgramName
     ) {
-      drivers.push(
+      pushDriver(4, 
         `'${s.decline_program_name}' ${fmtR(s.decline_program_rating)}${s.decline_program_start_time ? ` (${fmtTime(s.decline_program_start_time)})` : ""} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ▼${Math.abs(s.decline_program_delta_pct).toFixed(0)}%`
       );
     }
@@ -1487,8 +1496,11 @@ function buildBriefingReport(
       const primePct = ((prime.todayAvgRating - prime.baselineAvgRating) / prime.baselineAvgRating) * 100;
       if (Math.abs(primePct) >= 15) {
         const culprit = primePct >= 0 ? prime.topProgram : (prime.worstProgram ?? prime.topProgram);
-        const culpritText = culprit ? ` · '${culprit.name}' ${fmtR(culprit.rating)}(${fmtTime(culprit.startTime)})` : "";
-        drivers.push(`프라임 ${prime.label} ${fmtR(prime.todayAvgRating)} (평소 ${fmtR(prime.baselineAvgRating)} 대비 ${primePct >= 0 ? "▲" : "▼"}${Math.abs(primePct).toFixed(0)}%)${culpritText}`);
+        // 피크 항목이 이미 같은 프로그램을 말했으면 이름을 반복하지 않는다(한 프로그램이 근거
+        // 세 줄에 연달아 나오는 화면을 만들지 않기 위함).
+        const culpritIsPeak = culprit !== null && culprit.name === s.today_peak_program_name;
+        const culpritText = culprit && !culpritIsPeak ? ` · '${culprit.name}' ${fmtR(culprit.rating)}(${fmtTime(culprit.startTime)})` : "";
+        pushDriver(3, `프라임 ${prime.label} ${fmtR(prime.todayAvgRating)} (평소 ${fmtR(prime.baselineAvgRating)} 대비 ${primePct >= 0 ? "▲" : "▼"}${Math.abs(primePct).toFixed(0)}%)${culpritText}`);
       }
     }
 
@@ -1529,17 +1541,23 @@ function buildBriefingReport(
     // 줄 단위로 분리되게 한다. LLM 종합 문단은 이미 짧게 요약된 것이라 그대로 한 문단 유지.
     // 사용자 지시(2026-09-23): LLM이 만든 구조(헤드라인 + 근거 2갈래 + 시사점)가 있으면 그걸
     // 쓰고, 없으면(키 없음/호출 실패) 바로 위에서 같은 위계로 조립한 규칙 기반 결과를 쓴다.
+    // 근거·시사점의 수치는 전부 이 코드가 계산한 값만 쓴다(CLAUDE.md: 계산은 DB/코드가 전담,
+    // LLM은 해석만). 2026-09-23 브라우저 검증에서 모델이 프라임 등락률을 프로그램 항목에
+    // "슬롯 평균 ▲174%"로 옮겨 붙이고, 비교 기준이 없는 프로그램에 등락률을 지어내는 것을
+    // 반복 확인했다 — 프롬프트로는 막히지 않아 LLM의 역할을 헤드라인 한 줄로 좁혔다.
+    // 사용자 지시(2026-09-23 후속): 근거는 편성 3개 / 시청자 2개까지만 — 중요도 순으로 자른다.
+    view.drivers = [...driverItems].sort((a, b) => a.p - b.p).map((d) => d.text).slice(0, 3);
+    view.audience = audience.slice(0, 2);
     if (data.briefingLlm && data.briefingLlm.headline) {
-      view.headline = data.briefingLlm.headline;
-      view.verdict = data.briefingLlm.verdict;
-      view.drivers = data.briefingLlm.drivers;
-      view.audience = data.briefingLlm.audience;
-      view.implication = data.briefingLlm.implication;
-    } else {
-      // 사용자 지시(2026-09-23 후속): "너무 여러 줄이 되지 않도록" — 규칙 기반 경로도 LLM 경로와
-      // 같은 상한(편성 근거 3 / 시청자 근거 2)을 지킨다. 앞쪽 항목일수록 중요도가 높게 쌓인다.
-      view.drivers = drivers.slice(0, 3);
-      view.audience = audience.slice(0, 2);
+      // 같은 등락률이 헤드라인에 두 번 들어가는 사례("시청률 ▼84%로 최근 12주 평균 대비 ▼84%")가
+      // 프롬프트로 막아도 반복돼, 그럴 때만 위에서 만든 규칙 기반 헤드라인을 그대로 둔다.
+      const llmHeadline = data.briefingLlm.headline;
+      const pctTokens = llmHeadline.match(/[▲▼]\s?\d+(\.\d+)?%/g) ?? [];
+      const hasDuplicatePct = new Set(pctTokens.map((t) => t.replace(/\s/g, ""))).size < pctTokens.length;
+      if (!hasDuplicatePct) {
+        view.headline = llmHeadline;
+        view.verdict = data.briefingLlm.verdict;
+      }
     }
 
     // 가구 시청률만은 LLM에 맡기지 않고 직접 렌더한다 — 브라우저 검증(2026-09-23)에서 입력값
@@ -1554,9 +1572,14 @@ function buildBriefingReport(
     // 시사점이 나올 수 있도록" — LLM이 시사점을 비웠거나 성과 재진술이라 버려졌을 때, 이미
     // 검증된 값들 사이의 관계에서 읽어낼 수 있는 해석 + 다음 확인거리를 규칙으로 만든다.
     // 우선순위는 편성 판단에 미치는 영향이 큰 순서다(시장 전체 위축 판별 → 원인 콘텐츠 →
-    // 프라임 구조 → 피크 위치 → 견인 콘텐츠). 어느 것도 성립하지 않으면 null로 둬서 화면에서
+    // 프라임 구조 → 피크 위치 → 견인 콘텐츠). 어느 것도 성립하지 않으면 빈 배열로 둬서 화면에서
     // 그 줄을 통째로 생략한다(없는 시사점을 지어내지 않는다).
-    if (!view.implication) {
+    //
+    // 사용자 재지시(2026-09-23 3차): "시사점은 2가지 정도 잡아주면 좋겠다. 몇 시대의 어떤
+    // 프로그램이 어느 정도 약세인지, 그럼 혹시 대안이 있는지 정도를 정확히 알려달라" — 첫 줄은
+    // "{시각}시 '{프로그램}' {수치} — {기준} 대비 ▼{낙폭}%, {시각}시대 {조치}" 형식으로 고정하고,
+    // 둘째 줄은 오늘 실제로 강했던 시간대·프로그램을 대안 후보로 제시한다(없으면 생략).
+    if (view.implications.length === 0) {
       const declineIsReal =
         s.decline_program_name !== null &&
         s.decline_program_delta_pct !== null &&
@@ -1581,29 +1604,82 @@ function buildBriefingReport(
       // 하락 서술은 채널이 실제로 빠진 날에만, 그리고 그 프로그램이 오늘의 견인 프로그램이
       // 아닐 때만 쓴다.
       const channelDown = s.rating_delta_pct !== null && s.rating_delta_pct < 0;
-      if (shareHeld) {
-        view.implication = "시청률은 빠졌지만 점유율은 유지 — 시장 전체 위축 가능성, 자사 요인만으로 판단하지 말 것";
-      } else if (channelDown && declineIsReal && s.decline_program_name !== contribProgramName) {
-        view.implication = `'${s.decline_program_name}' 본방 부진이 하락을 주도 — 같은 슬롯의 경쟁 편성과 회차 소재 점검 필요`;
+      // "20:43:43" → 20. 시각을 못 읽으면 시간대 없는 문장으로 떨어진다(형식보다 사실이 우선).
+      // 편성표와 같이 두 자리로 읽히도록 "09시"처럼 0을 채운다.
+      const hourOf = (t: string | null): string | null => {
+        const h = parseInt((t ?? "").split(":")[0] ?? "", 10);
+        return Number.isNaN(h) ? null : String(h).padStart(2, "0");
+      };
+      const items: string[] = [];
+
+      // ① 그날의 약점(또는 강점)을 시각·프로그램·낙폭·조치까지 한 줄로.
+      const declineHour = hourOf(s.decline_program_start_time);
+      if (channelDown && declineIsReal && s.decline_program_name !== contribProgramName) {
+        const slot = declineHour !== null ? `${declineHour}시` : "해당 슬롯";
+        items.push(
+          `${slot} '${s.decline_program_name}' ${fmtR(s.decline_program_rating)} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ▼${Math.abs(s.decline_program_delta_pct!).toFixed(0)}%, ${slot}대 편성 전략 변경 필요`
+        );
       } else if (channelDown && primePct !== null && primePct <= -15) {
         const culprit = prime?.worstProgram ?? prime?.topProgram ?? null;
-        view.implication = culprit
-          ? `프라임 약세의 진원은 '${culprit.name}'(${fmtTime(culprit.startTime)}) — 해당 슬롯 교체·이동 검토 필요`
-          : "프라임 구간이 채널 평균을 끌어내림 — 해당 시간대 편성 경쟁력 점검 필요";
+        const culpritHour = culprit ? hourOf(culprit.startTime) : null;
+        // 이 프로그램의 낙폭은 프라임 구간 평균 대비로만 말할 수 있다(프로그램별 baseline은
+        // 하락 주범 값에만 있으므로, 없는 기준을 지어내지 않는다).
+        const vsPrime =
+          culprit && prime?.baselineAvgRating ? ((culprit.rating - prime.baselineAvgRating) / prime.baselineAvgRating) * 100 : null;
+        const slot = culpritHour !== null ? `${culpritHour}시` : "해당 슬롯";
+        items.push(
+          culprit && vsPrime !== null
+            ? `${slot} '${culprit.name}' ${fmtR(culprit.rating)} — 프라임 평균 대비 ▼${Math.abs(vsPrime).toFixed(0)}%, ${slot}대 편성 전략 변경 필요`
+            : `프라임 ${prime?.label ?? ""} 평소 대비 ▼${Math.abs(primePct).toFixed(0)}% — 해당 시간대 편성 경쟁력 점검 필요`
+        );
       } else if (!channelDown && primePct !== null && primePct >= 15 && prime?.topProgram) {
-        view.implication = `프라임 강세를 '${prime.topProgram.name}'${josaIga(prime.topProgram.name)} 견인 — 같은 슬롯·소재의 편성 유지 검토`;
+        const h = hourOf(prime.topProgram.startTime);
+        const slot = h !== null ? `${h}시` : "프라임";
+        items.push(`${slot} '${prime.topProgram.name}' ${fmtR(prime.topProgram.rating)} — 프라임 평균 대비 ▲${primePct.toFixed(0)}%, ${slot}대 편성 유지·확대 검토`);
       } else if (!channelDown && contribPct !== null && contribPct >= 20 && contribProgramName) {
-        view.implication = `'${contribProgramName}' 강세가 당일 성과를 견인 — 동일 슬롯 반복 편성 효과 확인 필요`;
-      } else if (peakOutsidePrime && s.today_peak_hour !== null) {
-        view.implication = `피크가 프라임 밖 ${s.today_peak_hour}시에 형성 — 프라임 편성 경쟁력과 유입 동선 점검 필요`;
+        const h = hourOf(s.top_program_start_time);
+        const slot = h !== null ? `${h}시` : "해당 슬롯";
+        items.push(`${slot} '${contribProgramName}' ${fmtR(s.top_program_rating)} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ▲${contribPct.toFixed(0)}%, ${slot}대 편성 유지·확대 검토`);
       } else if (primePct !== null && primePct <= -15) {
-        view.implication = "채널은 유지됐지만 프라임 구간이 평소보다 약함 — 해당 시간대 편성 경쟁력 점검 필요";
+        items.push(`프라임 ${prime?.label ?? ""} 평소 대비 ▼${Math.abs(primePct).toFixed(0)}% — 해당 시간대 편성 경쟁력 점검 필요`);
+      }
+
+      // ② 대안 — 오늘 실제로 강했던 시간대·프로그램이 있을 때만. 기대 효과는 계산된 값이
+      // 아니므로 단정하지 않고 "검토"까지만 말한다(CLAUDE.md: 예측 수치를 만들지 않음).
+      const weakSlotHour = declineHour ?? (prime?.worstProgram ? hourOf(prime.worstProgram.startTime) : null);
+      // 오늘 가장 잘 나온 프로그램 — 피크 시간대 프로그램이 비어 있는 날(피크 시각만 있고 그
+      // 시간대의 프로그램 단위 값이 없는 경우)에는 당일 최고 기여 프로그램으로 대체한다.
+      const strongName = s.today_peak_program_name ?? contribProgramName;
+      const strongHour = s.today_peak_program_name && s.today_peak_hour !== null ? String(s.today_peak_hour).padStart(2, "0") : hourOf(s.top_program_start_time);
+      const strongRating = s.today_peak_program_name ? s.today_peak_program_rating : s.top_program_rating;
+      // 이 후보가 "잘 나왔다"는 근거: 본방 슬롯 대비 등락률이 신뢰할 만하면(표본 3일 이상, 위
+      // contribPct) 그 수치를, 아니면 당일 채널 평균을 크게 웃돌았다는 사실만 말한다. 표본 하루
+      // 짜리 등락률(예: ▲300%)은 근거로 쓰지 않는다.
+      const strongIsNotable = strongRating !== null && current.rating !== null && strongRating >= current.rating * 1.5;
+      const strongEvidence = contribPct !== null && contribPct >= 20 ? `▲${contribPct.toFixed(0)}%` : "당일 최고";
+      if (items.length > 0 && channelDown && strongName && strongHour !== null && (strongIsNotable || (contribPct !== null && contribPct >= 20))) {
+        const target = weakSlotHour !== null ? `${weakSlotHour}시대` : "약세 시간대";
+        items.push(`대안 후보 — ${strongHour}시 '${strongName}' ${fmtR(strongRating)}(${strongEvidence}), 동일 소재의 ${target} 편성 검토`);
+      }
+
+      // ③ 시청률은 빠졌는데 점유율이 버틴 날은 "우리 문제"가 아닐 수 있다는 해석을 덧붙인다.
+      if (shareHeld) {
+        items.push("시청률은 빠졌지만 점유율은 유지 — 시장 전체 위축 가능성, 자사 요인만으로 판단하지 말 것");
+      } else if (items.length < 2 && peakOutsidePrime && s.today_peak_hour !== null) {
+        items.push(`피크가 프라임 밖 ${String(s.today_peak_hour).padStart(2, "0")}시에 형성 — 프라임 편성 경쟁력과 유입 동선 점검 필요`);
+      }
+
+      view.implications = items.slice(0, 2);
+      // 시사점 첫 줄이 하락 주범을 이미 (더 자세히) 말하면 같은 내용의 근거 항목은 뺀다 —
+      // 근거와 시사점이 나란히 같은 문장을 반복하지 않도록(사용자 지시 2026-09-23: 간결하게).
+      if (s.decline_program_name && view.implications.some((t) => t.includes(s.decline_program_name!))) {
+        view.drivers = view.drivers.filter((d) => !d.includes(`'${s.decline_program_name}'`));
       }
     }
 
     // 상단 배지 줄을 대체하는 "그 외 상위 프로그램" 한 줄 — 근거 문장에서 이미 이름이 나온
     // 프로그램은 빼서 같은 내용을 두 번 읽게 하지 않는다(사용자 지시 2026-09-23 후속).
-    const namedInBody = [...view.drivers, ...view.audience, view.implication ?? ""].join(" ");
+    const namedInBody = [...view.drivers, ...view.audience, ...view.implications].join(" ");
     const otherTopItems = data.top3Programs.filter((p) => !namedInBody.includes(p.canonical_name)).slice(0, 3);
     if (otherTopItems.length > 0) {
       view.otherTop = otherTopItems.map((p) => `'${p.canonical_name}' ${fmtR(p.rating)}`).join(" · ");
@@ -1620,7 +1696,7 @@ function buildBriefingReport(
       view.drivers = [
         `${sdowContext.weeksLabel} ${sdowContext.dowLabel}요일 평균 ${fmtR(data.sameWeekdayReport.avgRating)} (표본 ${data.sameWeekdayReport.sampleDays}일) 대비 ${pct >= 0 ? "▲" : "▼"}${Math.abs(pct).toFixed(1)}%`,
         ...view.drivers,
-      ];
+      ].slice(0, 3);
     }
   }
 
@@ -1707,7 +1783,10 @@ function BriefingBody({ title, view, accentColor }: { title: string; view: Brief
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+      {/* 사용자 재지시(2026-09-23 3차): "'오늘의 브리핑' 글씨 바로 옆으로(약간만 띄워서) 왼쪽에서
+          보일 수 있게 정렬" — 헤드라인을 카드 오른쪽 끝으로 밀던 justify-between을 없애고 제목
+          바로 뒤에 붙인다. 제목 기준선에 맞추기 위해 items-baseline을 쓴다. */}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
         <h2 className={SECTION_TITLE_P2}>{title}</h2>
         {view.headline && (
           <span
@@ -1724,11 +1803,18 @@ function BriefingBody({ title, view, accentColor }: { title: string; view: Brief
           {column(view.audience, "#a1a1aa")}
         </div>
       )}
-      {view.implication && (
-        <p className="flex gap-2 border-t border-zinc-100 pt-2.5 text-[13.5px] leading-snug font-medium text-zinc-700">
+      {/* 시사점 1~2줄 — 라벨은 첫 줄에만 붙이고 둘째 줄은 같은 들여쓰기로 이어 붙인다. */}
+      {view.implications.length > 0 && (
+        <div className="flex gap-2 border-t border-zinc-100 pt-2.5">
           <span className="mt-[1px] shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-bold text-zinc-500">시사점</span>
-          <span>{highlightNarrativeText(view.implication, "#059669", "#e11d48")}</span>
-        </p>
+          <div className="flex flex-col gap-1">
+            {view.implications.map((text, i) => (
+              <p key={i} className="text-[13.5px] leading-snug font-medium text-zinc-700">
+                {highlightNarrativeText(text, "#059669", "#e11d48")}
+              </p>
+            ))}
+          </div>
+        </div>
       )}
       {/* 참고 문단(연령대 특이사항·경쟁 격차 등)은 그날의 결론에 종속되지 않는 별개 내용이라
           펼침으로 접어 둔다 — 사용자 지시(2026-09-23 후속) "너무 여러 줄이 되지 않도록". 내용은

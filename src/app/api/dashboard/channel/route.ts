@@ -1312,6 +1312,12 @@ export async function GET(request: Request) {
     // 점유율·가구 시청률처럼 이미 퍼센트 단위인 값은 소수 2자리로 끊는다(시청률의 3자리
     // 규칙과는 별개 — 퍼센트 값을 3~4자리로 주면 문장이 "3.1782%"처럼 지저분해진다).
     const pctFmt = (v: number | null | undefined): number | null => (v === null || v === undefined ? null : Number(v.toFixed(2)));
+    // 프로그램 단위 baseline은 표본 3일 미만이거나 0이면 등락률 계산 자체가 성립하지 않는다
+    // (화면의 규칙 기반 경로가 쓰는 조건과 동일). 그런 값은 LLM에도 넘기지 않는다.
+    const usableBaseline = (avg: number | null, days: number | null): number | null =>
+      avg !== null && avg > 0 && (days ?? 0) >= 3 ? ratingFmt(avg) : null;
+    const topProgramIsPeak =
+      narrativeSignal.top_program_name !== null && narrativeSignal.top_program_name === narrativeSignal.today_peak_program_name;
     const primeToday = avgPrimeRating(hourlyPattern as { broadcast_hour: number; avg_rating: number | null }[] | null);
     const primeBaseline = avgPrimeRating(hourlyBaselinePattern as { broadcast_hour: number; avg_rating: number | null }[] | null);
     const currentShare = (currentTrendRow as { share: number | null } | undefined)?.share ?? null;
@@ -1361,11 +1367,27 @@ export async function GET(request: Request) {
       today_peak_program_rating: ratingFmt(narrativeSignal.today_peak_program_rating),
       baseline_peak_hour: narrativeSignal.baseline_peak_hour,
       baseline_peak_rating: ratingFmt(narrativeSignal.baseline_peak_rating),
-      top_program_name: narrativeSignal.top_program_name,
-      top_program_rating: ratingFmt(narrativeSignal.top_program_rating),
-      top_program_start_time: narrativeSignal.top_program_start_time,
-      top_program_baseline_avg: ratingFmt(narrativeSignal.top_program_baseline_avg),
-      top_program_baseline_days: narrativeSignal.top_program_baseline_days,
+      // 피크 시간대 등락률을 미리 계산해 준다 — 안 주면 모델이 두 숫자를 나눠 자기 퍼센트를
+      // 만들어 낸다(브라우저 검증 2026-09-23에서 근거 없는 "▲42.9%"/"▲490.3%" 확인).
+      today_peak_vs_baseline_peak_pct:
+        narrativeSignal.today_peak_rating !== null && narrativeSignal.baseline_peak_rating !== null && narrativeSignal.baseline_peak_rating > 0
+          ? Number((((narrativeSignal.today_peak_rating - narrativeSignal.baseline_peak_rating) / narrativeSignal.baseline_peak_rating) * 100).toFixed(1))
+          : null,
+      // 피크 시간대 프로그램과 같은 프로그램이면 아예 넘기지 않는다 — 프롬프트로 "합쳐라"라고
+      // 해도 모델이 같은 프로그램을 항목 두세 개로 반복하고, 비교 기준이 없는데도 다른 항목의
+      // 퍼센트를 옮겨 붙이는 것이 실측됐다(2026-09-23). 중복은 입력 단계에서 없애는 것이 확실하다.
+      top_program_name: topProgramIsPeak ? null : narrativeSignal.top_program_name,
+      top_program_rating: topProgramIsPeak ? null : ratingFmt(narrativeSignal.top_program_rating),
+      top_program_start_time: topProgramIsPeak ? null : narrativeSignal.top_program_start_time,
+      // 버그 수정(브라우저 검증 2026-09-23): baseline이 0이거나 표본이 하루뿐인데도 LLM이
+      // 등락률을 지어내는 것을 확인했다(base=0, days=1인 날에 "▲45.0%", 다른 날엔 "▲490.3%").
+      // 화면의 규칙 기반 경로는 이미 같은 조건을 막고 있었는데 LLM 입력에만 빠져 있었다 —
+      // 비교가 성립하지 않는 값은 아예 null로 보내고, 프롬프트도 그때는 등락률을 쓰지 못하게 한다.
+      top_program_baseline_avg: topProgramIsPeak ? null : usableBaseline(narrativeSignal.top_program_baseline_avg, narrativeSignal.top_program_baseline_days),
+      top_program_baseline_days:
+        topProgramIsPeak || usableBaseline(narrativeSignal.top_program_baseline_avg, narrativeSignal.top_program_baseline_days) === null
+          ? null
+          : narrativeSignal.top_program_baseline_days,
       demographics: (narrativeSignal.demographics ?? []).map((d: { label: string; today: number | null; baseline_avg: number | null; delta_pct: number | null }) => ({
         ...d,
         today: ratingFmt(d.today),
@@ -1387,9 +1409,15 @@ export async function GET(request: Request) {
       decline_program_name: narrativeSignal.decline_program_name,
       decline_program_rating: ratingFmt(narrativeSignal.decline_program_rating),
       decline_program_start_time: narrativeSignal.decline_program_start_time,
-      decline_program_baseline_avg: ratingFmt(narrativeSignal.decline_program_baseline_avg),
-      decline_program_baseline_days: narrativeSignal.decline_program_baseline_days,
-      decline_program_delta_pct: narrativeSignal.decline_program_delta_pct,
+      decline_program_baseline_avg: usableBaseline(narrativeSignal.decline_program_baseline_avg, narrativeSignal.decline_program_baseline_days),
+      decline_program_baseline_days:
+        usableBaseline(narrativeSignal.decline_program_baseline_avg, narrativeSignal.decline_program_baseline_days) === null
+          ? null
+          : narrativeSignal.decline_program_baseline_days,
+      decline_program_delta_pct:
+        usableBaseline(narrativeSignal.decline_program_baseline_avg, narrativeSignal.decline_program_baseline_days) === null
+          ? null
+          : narrativeSignal.decline_program_delta_pct,
       // 목표 대비 — 그 자체는 "결과"라 원인으로 쓰면 안 되지만(2026-09-22 사용자 지시),
       // 맨 아래 "시사점" 한 줄에서 오늘의 결과를 목표선에 얹는 용도로는 유효하다.
       target_rank: targetAchievement?.target_rank ?? null,
@@ -1432,7 +1460,18 @@ export async function GET(request: Request) {
     // v7: 시사점에 지시 대상(프로그램·시각·연령대)을 의무화(대상 없는 "콘텐츠 강화 필요" 방지).
     // v8: 시사점 상투어("지속적인 관리 필요" 등) 금지 — 대상만 있고 실행할 것이 없는 문장 방지.
     // v9: 프라임 원인 프로그램을 등락 방향에 맞는 한 건(prime_focus_program_*)만 넘기도록 변경.
-    const briefingLlmJson = await cachedLlmText(`briefing_report_v9:${channel.code}`, dateTo, briefingLlmInput, async () => {
+    // v10(사용자 지시 2026-09-23 3차): 시사점 형식을 "#시대 '프로그램명' 낙폭 — #시대 편성 조치"로
+    // 고정하고 대안 제시를 요구했더니 모델이 없는 비교값을 지어내기 시작해(09시 프로그램을
+    // '프라임 평균 대비'로 비교, 존재하지 않는 ▲153.8%), 시사점 자체를 LLM 출력에서 제외하고
+    // 화면이 검증된 수치로 직접 만들도록 바꿨다.
+    // v12: 피크 항목의 등락률이 "시간대끼리의 비교"임이 드러나도록 문장 순서를 고정(프로그램
+    // 시청률 뒤에 붙어 있어 그 프로그램이 빠진 것처럼 읽혔다). 프롬프트만 바뀌면 입력 지문이
+    // 같아 옛 캐시가 그대로 나오므로 버전을 올린다.
+    // v13: 헤드라인에 같은 수치가 두 번 들어가는 사례("▼84%로 ... 대비 ▼84%") 금지.
+    // v14: 같은 프로그램이 여러 항목에 반복되는 것과, 한 항목의 퍼센트를 다른 항목에 옮겨 쓰는
+    // 것(프라임 등락률을 프로그램 항목에 "슬롯 평균 ▲174%"로 붙임)을 금지.
+    // v16: LLM의 역할을 헤드라인 한 줄로 좁혔다(근거·시사점은 화면이 검증된 수치로 직접 조립).
+    const briefingLlmJson = await cachedLlmText(`briefing_report_v16:${channel.code}`, dateTo, briefingLlmInput, async () => {
       const report = await buildBriefingReportViaLlm(briefingLlmInput);
       return report ? JSON.stringify(report) : null;
     });
