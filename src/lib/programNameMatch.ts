@@ -48,23 +48,40 @@ export function normalizeProgramCanonicalName(name: string): string {
  * 정규화 기준으로 같은 프로그램인지 먼저 찾는다 — 찾으면 그 id를 재사용하고 canonical_name은
  * 절대 덮어쓰지 않는다(Nielsen 원본 표기를 유지해야 ratings.program_id 조인이 계속 맞음).
  * 없을 때만 새 행을 만든다.
+ *
+ * 사용자 지시(2026-09-28): "캐리어하나로떠나는주문짐쌀라비움이 정식 명칭이고 짐쌀라비움만
+ * 보이면 돼 — 둘 다 한 프로그램으로 인식해줘." 원인은 이 함수가 "정규화 후 완전 일치"만
+ * 찾다 보니, "요일 별 리뷰 프로그램" 시트에 적힌 축약 표기("짐쌀라비움")가 Nielsen 원본
+ * 표기("캐리어하나로떠나는주문짐쌀라비움")와 정확히 안 맞아 매번 새 programs 행을 만들던
+ * 것 — 정확 일치 다음 단계로, 같은 채널 안에서 한쪽이 다른 쪽의 부분 문자열인 후보를
+ * 찾는다. 그런 후보가 정확히 하나뿐일 때만 같은 프로그램으로 보고 재사용한다(둘 이상이면
+ * 어느 쪽인지 알 수 없으므로 잘못 합치는 대신 안전하게 새로 만드는 기존 동작으로 폴백).
  */
 export async function findOrCreateProgramByNormalizedName(
   supabase: SupabaseClient,
   channelId: string,
   title: string,
   extra: { rawName?: string; episodeNumber?: number | null } = {}
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; canonicalName: string } | null> {
   const target = normalizeProgramCanonicalName(title);
   const { data: existing } = await supabase.from("programs").select("id, canonical_name").eq("channel_id", channelId);
-  const matched = (existing ?? []).find((p) => normalizeProgramCanonicalName(p.canonical_name) === target);
+  const rows = existing ?? [];
+  let matched = rows.find((p) => normalizeProgramCanonicalName(p.canonical_name) === target);
+
+  if (!matched && target.length >= 2) {
+    const containmentCandidates = rows.filter((p) => {
+      const norm = normalizeProgramCanonicalName(p.canonical_name);
+      return norm.length >= 2 && (norm.includes(target) || target.includes(norm));
+    });
+    if (containmentCandidates.length === 1) matched = containmentCandidates[0];
+  }
 
   if (matched) {
     await supabase
       .from("programs")
       .update({ raw_name: extra.rawName ?? title, episode_number: extra.episodeNumber ?? null })
       .eq("id", matched.id);
-    return { id: matched.id };
+    return { id: matched.id, canonicalName: matched.canonical_name };
   }
 
   const { data: created, error } = await supabase
@@ -73,8 +90,8 @@ export async function findOrCreateProgramByNormalizedName(
       { channel_id: channelId, canonical_name: title, raw_name: extra.rawName ?? title, episode_number: extra.episodeNumber ?? null },
       { onConflict: "channel_id,canonical_name" }
     )
-    .select("id")
+    .select("id, canonical_name")
     .single();
   if (error || !created) return null;
-  return created;
+  return { id: created.id, canonicalName: created.canonical_name };
 }

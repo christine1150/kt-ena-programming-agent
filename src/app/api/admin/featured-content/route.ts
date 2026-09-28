@@ -20,7 +20,7 @@ export async function GET() {
     // — simulcast_competitor_name(자유 텍스트) 함께 조회.
     .select(
       `id, category, broadcast_schedule_text, broadcast_day_of_week, broadcast_time, broadcast_start_date, broadcast_end_date, expected_episode_count,
-       simulcast_channel_id, rerun_channel_id, simulcast_competitor_name,
+       simulcast_channel_id, rerun_channel_id, simulcast_competitor_name, display_name,
        programs(id, canonical_name, channel_id, channels(code, name)),
        simulcast_channel:channels!featured_content_simulcast_channel_id_fkey(code, name),
        rerun_channel:channels!featured_content_rerun_channel_id_fkey(code, name)`
@@ -91,6 +91,10 @@ export async function POST(request: Request) {
       rerun_channel_id: body?.rerunChannelId || null,
       // 사용자 지시(2026-09-02): 동시방송 파트너가 우리 채널이 아닐 때(예: SBS Plus) 직접 입력.
       simulcast_competitor_name: body?.simulcastCompetitorName || null,
+      // 사용자 지시(2026-09-28): "정식 명칭은 유지하고 화면엔 짧은 이름만" — canonical_name은
+      // findOrCreateProgramByNormalizedName이 이미 Nielsen 매칭용으로 보존해주므로, 화면
+      // 표시만 바꾸고 싶을 때 이 필드로 override한다.
+      display_name: typeof body?.displayName === "string" ? body.displayName.trim() || null : null,
     },
     { onConflict: "program_id" }
   );

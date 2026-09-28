@@ -31,6 +31,9 @@ type FeaturedItem = {
   // 사용자 지시(2026-09-02): 동시방송 파트너가 우리 7개 채널이 아닐 때(예: SBS Plus) 채널명을
   // 직접 입력 — simulcast_channel_id(내부)와 별개, 보통 둘 중 하나만 값을 가진다.
   simulcast_competitor_name: string | null;
+  // 사용자 지시(2026-09-28): "정식 명칭은 유지하고 화면엔 짧은 이름만" — programs.canonical_name
+  // (Nielsen 매칭용 정식 명칭)과 별개로 Page 1에 보여줄 이름을 여기서 override.
+  display_name: string | null;
   programs: {
     id: string;
     canonical_name: string;
@@ -46,6 +49,7 @@ const DAY_OPTIONS = ["월", "화", "수", "목", "금", "토", "일"];
 const emptyForm = {
   channelId: "",
   title: "",
+  displayName: "",
   category: "",
   episodeCount: "",
   scheduleText: "",
@@ -92,6 +96,7 @@ function mergeDuplicateFeaturedItems(items: FeaturedItem[]): (FeaturedItem & { m
       simulcast_channel: primary.simulcast_channel ?? item.simulcast_channel,
       rerun_channel: primary.rerun_channel ?? item.rerun_channel,
       simulcast_competitor_name: primary.simulcast_competitor_name ?? item.simulcast_competitor_name,
+      display_name: primary.display_name ?? item.display_name,
       mergedCount: primary.mergedCount + 1,
     };
   }
@@ -129,7 +134,13 @@ function FeaturedContentRow({
       <td className={`py-1.5 font-medium ${titleClass}`}>
         {/* 사용자 지시(2026-09-02): "N건 통합" 배지 삭제(불필요) — 병합 자체(mergeDuplicateFeaturedItems)는
             그대로 유지, 화면에 그 사실을 알리는 표시만 없앤다. */}
-        {item.programs?.canonical_name ?? "—"}
+        {/* 사용자 지시(2026-09-28): display_name이 있으면 그걸 보여주고, 정식 명칭(canonical_name)은
+            달라졌을 때만 회색 보조 텍스트로 옆에 병기 — 정식 명칭 자체는 지운 게 아니라
+            그대로 DB에 남아있음을 화면에서도 알 수 있게 한다. */}
+        {item.display_name ?? item.programs?.canonical_name ?? "—"}
+        {item.display_name && item.programs?.canonical_name && item.display_name !== item.programs.canonical_name && (
+          <span className="ml-1.5 text-xs font-normal text-zinc-400">({item.programs.canonical_name})</span>
+        )}
       </td>
       <td className={`whitespace-nowrap py-1.5 ${dim ? "text-zinc-300" : "text-zinc-800"}`}>{item.programs?.channels?.name ?? "—"}</td>
       {/* 사용자 지시(2026-09-02): 내부 채널이 없으면 외부(경쟁) 채널명(예: "SBS Plus")을 대신 표시. */}
@@ -225,6 +236,7 @@ export default function FeaturedContentManager() {
     setForm({
       channelId: item.programs?.channel_id ?? "",
       title: item.programs?.canonical_name ?? "",
+      displayName: item.display_name ?? "",
       category: item.category,
       episodeCount: "",
       scheduleText: item.broadcast_schedule_text ?? "",
@@ -253,6 +265,7 @@ export default function FeaturedContentManager() {
     const payload = {
       channelId: form.channelId,
       title: form.title,
+      displayName: form.displayName.trim() || null,
       category: form.category,
       episodeCount: form.episodeCount ? Number(form.episodeCount) : null,
       scheduleText: form.scheduleText,
@@ -341,8 +354,20 @@ export default function FeaturedContentManager() {
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               disabled={!!editingId}
-              placeholder="타이틀명"
+              placeholder="타이틀명(정식 명칭 — Nielsen 매칭 기준)"
               className="rounded-lg border border-zinc-200 px-3 py-2 text-sm disabled:bg-zinc-100"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* 사용자 지시(2026-09-28): "정식 명칭은 유지하고 화면엔 짧은 이름만" — 타이틀명(위,
+                Nielsen 매칭용)과 별개로 Page 1에 보여줄 이름만 여기서 바꾼다. 비워두면 타이틀명
+                그대로 보인다. */}
+            <input
+              value={form.displayName}
+              onChange={(e) => setForm({ ...form, displayName: e.target.value })}
+              placeholder="화면 표시명(선택 — 비우면 타이틀명 그대로 표시)"
+              className="rounded-lg border border-zinc-200 px-3 py-2 text-sm"
             />
           </div>
 

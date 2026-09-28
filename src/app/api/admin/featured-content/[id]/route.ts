@@ -27,6 +27,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if ("rerunChannelId" in (body ?? {})) update.rerun_channel_id = body.rerunChannelId || null;
   // 사용자 지시(2026-09-02): 동시방송 파트너가 우리 채널이 아닐 때(예: SBS Plus) 직접 입력.
   if ("simulcastCompetitorName" in (body ?? {})) update.simulcast_competitor_name = body.simulcastCompetitorName || null;
+  // 사용자 지시(2026-09-28): "정식 명칭은 유지하고 화면엔 짧은 이름만 보이게" — programs.canonical_name은
+  // 건드리지 않고 이 필드만으로 Page 1 표시명을 override한다.
+  if ("displayName" in (body ?? {})) update.display_name = (typeof body.displayName === "string" ? body.displayName.trim() : "") || null;
 
   // 사용자 지시(2026-08-21): 이번 수정으로 첫 방송일자·매주 반복 요일·예상 회차가 전부(이번
   // 요청 값 또는 기존 저장값) 갖춰지면 끝 방송일자를 자동 재계산한다 — 부분 수정(PATCH)이라

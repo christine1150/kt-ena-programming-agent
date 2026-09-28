@@ -198,6 +198,14 @@ export async function POST(request: Request) {
         continue;
       }
 
+      // 사용자 지시(2026-09-28): 정확 일치가 아니라 부분 문자열로 기존 programs 행을 재사용한
+      // 경우(예: 시트 표기 "짐쌀라비움" ↔ 기존 canonical_name "캐리어하나로떠나는주문짐쌀라비움"),
+      // canonical_name은 그대로 두고(Nielsen 매칭 유지) 이 시트에 적힌 표기를 화면 표시명으로
+      // 저장한다 — 정확히 일치했을 때는 건드리지 않는다(기존에 관리자가 다른 이유로 설정해둔
+      // display_name을 덮어쓰지 않기 위해 그때는 키 자체를 upsert payload에서 뺀다).
+      const displayNameOverride =
+        normalizeProgramCanonicalName(entry.title) !== normalizeProgramCanonicalName(program.canonicalName) ? entry.title : undefined;
+
       const { error: featuredError } = await supabase.from("featured_content").upsert(
         {
           program_id: program.id,
@@ -207,6 +215,7 @@ export async function POST(request: Request) {
           broadcast_time: entry.parsedSchedule.time,
           broadcast_start_date: entry.parsedSchedule.startDate,
           broadcast_end_date: entry.parsedSchedule.endDate,
+          ...(displayNameOverride !== undefined ? { display_name: displayNameOverride } : {}),
         },
         { onConflict: "program_id" }
       );
@@ -294,6 +303,13 @@ export async function POST(request: Request) {
 
       // 예상 회차는 시트에 "계속"/"정기"처럼 숫자가 아닌 값도 들어와 그대로는 숫자 컬럼에 못 넣는다.
       const expectedEpisodeNum = entry.expectedEpisodeCount ? Number(entry.expectedEpisodeCount) : null;
+      // 사용자 지시(2026-09-28): 위 "KT ENA 오리지널" 시트 처리와 동일 — 부분 문자열로 기존
+      // programs 행을 재사용했을 때(예: "짐쌀라비움" ↔ "캐리어하나로떠나는주문짐쌀라비움")만
+      // 이 시트 표기를 화면 표시명으로 저장한다.
+      const displayNameOverride =
+        normalizeProgramCanonicalName(entry.programName) !== normalizeProgramCanonicalName(reviewProgram.canonicalName)
+          ? entry.programName
+          : undefined;
       const { error: featuredUpsertError } = await supabase.from("featured_content").upsert(
         {
           program_id: reviewProgram.id,
@@ -306,6 +322,7 @@ export async function POST(request: Request) {
           expected_episode_count: Number.isFinite(expectedEpisodeNum) ? expectedEpisodeNum : null,
           simulcast_channel_id: entry.simulcastChannelCode ? (channelIdByCode.get(entry.simulcastChannelCode) ?? null) : null,
           rerun_channel_id: entry.rerunChannelCode ? (channelIdByCode.get(entry.rerunChannelCode) ?? null) : null,
+          ...(displayNameOverride !== undefined ? { display_name: displayNameOverride } : {}),
         },
         { onConflict: "program_id" }
       );
