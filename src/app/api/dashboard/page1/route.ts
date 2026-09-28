@@ -1165,9 +1165,37 @@ export async function GET(request: Request) {
       manualReport: manualReportByRowKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
     }));
 
+    // 사용자 지시(2026-09-28): "<니돈내산>처럼 1회인 타이틀은 최근 성적 대비에서 최근 동시간
+    // 지난 4주 평균 성적과 비교" — 과거 방영 이력(ratingHistory.own2049)이 2건 미만이라
+    // computeRecentComparison(직전 회차 평균)이 비교 대상을 못 찾는 항목만, 같은 채널·같은
+    // 요일+시간대(본방 슬롯)에서 최근 4주간 방영된 프로그램들의 평균을 대신 baseline으로
+    // 받아온다(get_program_slot_recent_avg, 새 암산 없이 DB 집계 그대로).
+    const slotBaselineByRowKey = new Map<string, { avgRating: number | null; sampleCount: number }>();
+    await Promise.all(
+      dailyWithManualReport
+        .filter((row) => row.matched_program_name && row.matched_start_time && (row.ratingHistory?.own2049.length ?? 0) < 2)
+        .map(async (row) => {
+          const key = `${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`;
+          if (slotBaselineByRowKey.has(key)) return;
+          const { data } = await supabase.rpc("get_program_slot_recent_avg", {
+            p_channel_code: row.broadcast_channel_code,
+            p_target_label: "수도권 2049",
+            p_as_of_date: asOfDate,
+            p_start_time: row.expected_time,
+            p_weeks: 4,
+          });
+          const r = ((data ?? []) as { avg_rating: number | null; sample_count: number }[])[0];
+          slotBaselineByRowKey.set(key, { avgRating: r?.avg_rating ?? null, sampleCount: r?.sample_count ?? 0 });
+        })
+    );
+    const dailyWithSlotBaseline = dailyWithManualReport.map((row) => ({
+      ...row,
+      slotBaseline: slotBaselineByRowKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
+    }));
+
     // 사용자 지시(2026-09-20): whitelistCount>0(화이트리스트 항목이 아직 "활성"으로 잡혀 있음)
-    // 이라도 실제 방영 기록(dailyWithManualReport)이 하나도 없으면 -7일 종합 리뷰로 대체한다.
-    originalContentReport = dailyWithManualReport.length > 0 ? { mode: "daily", daily: dailyWithManualReport, weekly: [] } : await buildWeeklyReviewFallback();
+    // 이라도 실제 방영 기록(dailyWithSlotBaseline)이 하나도 없으면 -7일 종합 리뷰로 대체한다.
+    originalContentReport = dailyWithSlotBaseline.length > 0 ? { mode: "daily", daily: dailyWithSlotBaseline, weekly: [] } : await buildWeeklyReviewFallback();
   } else {
     // 사용자 지시(2026-09-05): 화이트리스트 없는 요일의 대체 뷰는 asOfDate 기준 "트레일링 7일"이
     // 아니라 달력에 정렬된 한 주를 쓴다 — 이번 주 토·일이 아직 지나지 않았으면(월~금) 지난주

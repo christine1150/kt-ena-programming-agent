@@ -204,6 +204,21 @@ export default function FeaturedContentManager() {
     };
   }, []);
 
+  // 사용자 지시(2026-09-28): "Channel Master 업로드를 했는데 같은 파일에 있는 '주요 콘텐츠
+  // 관리(요일별 리뷰 프로그램)' 리스트가 업데이트 되지 않았어 — 한번에 반영되게" — 채널
+  // 마스터 업로드가 실제로는 featured_content를 정상적으로 갱신하고 있었지만(route.ts가
+  // upsert), 이 화면이 처음 마운트될 때 딱 한 번만 불러오는 구조라 업로드 후에도 다시
+  // 가져오지 않아 옛 목록이 그대로 보였다. 같은 페이지의 ChannelMasterUploader가 업로드
+  // 성공 시 이 커스텀 이벤트를 쏘고, 여기서 받아 loadAll()로 다시 불러온다(부모가 서버
+  // 컴포넌트라 props로 상태를 내려줄 수 없어 이벤트로 느슨하게 연결).
+  useEffect(() => {
+    function handleChannelMasterUploaded() {
+      loadAll();
+    }
+    window.addEventListener("channel-master-uploaded", handleChannelMasterUploaded);
+    return () => window.removeEventListener("channel-master-uploaded", handleChannelMasterUploaded);
+  }, []);
+
   function startEdit(item: FeaturedItem) {
     setEditingId(item.id);
     setShowForm(true);

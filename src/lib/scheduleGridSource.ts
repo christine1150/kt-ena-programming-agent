@@ -378,6 +378,33 @@ export async function ingestScheduleGridFile(file: File): Promise<ScheduleGridUp
 // "그 주의 1등"은 항상 가장 진하게 보임). 대신 이 채널의 연초~오늘 누적 평균 시청률(Page 1
 // 히어로 카드·get_channel_period_rank_and_rating과 같은 계산, 새 지표 아님)을 고정 기준선으로
 // 써서, "이 채널의 평소 대비 얼마나 강한가"가 채널 간에도 같은 눈금으로 비교되게 한다.
+// 사용자 지시(2026-09-28): "주간비교 페이지에서 각 요일 밑 날짜 밑에 굵고 진한 글씨로
+// 시청률과 순위가 시청률(순위) 형태로 나오게" — 프로그램 단위 편성표 행(rows)과 별개로,
+// 그 날짜의 채널 단위(program_id가 없는) 시청률·닐슨 등위(SSOT: ratings.rank)를 요일 헤더에
+// 붙여준다. getChannelAnnualAvgRating과 동일하게 채널의 primary_target으로 target_id를 찾는다.
+export async function getChannelDailyStatsForWeek(
+  channelId: string,
+  primaryTarget: string | null,
+  week: string
+): Promise<{ date: string; rating: number | null; rank: number | null }[]> {
+  if (!primaryTarget) return [];
+  const { data: targetRow } = await supabase.from("targets").select("id").eq("label", resolveRankSheetTargetLabel(primaryTarget)).maybeSingle();
+  if (!targetRow) return [];
+  const { data } = await supabase
+    .from("ratings")
+    .select("broadcast_date, rating, rank")
+    .eq("channel_id", channelId)
+    .eq("target_id", targetRow.id)
+    .is("program_id", null)
+    .gte("broadcast_date", week)
+    .lte("broadcast_date", addDaysStr(week, 6));
+  return (data ?? []).map((r) => ({
+    date: r.broadcast_date as string,
+    rating: r.rating as number | null,
+    rank: r.rank as number | null,
+  }));
+}
+
 export async function getChannelAnnualAvgRating(channelId: string, primaryTarget: string | null): Promise<number | null> {
   if (!primaryTarget) return null;
   const { data: targetRow } = await supabase.from("targets").select("id").eq("label", resolveRankSheetTargetLabel(primaryTarget)).maybeSingle();

@@ -14,7 +14,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
-import { getScheduleGridRows, getChannelAnnualAvgRating, addDaysStr } from "@/lib/scheduleGridSource";
+import { getScheduleGridRows, getChannelAnnualAvgRating, getChannelDailyStatsForWeek, addDaysStr } from "@/lib/scheduleGridSource";
 
 export async function GET(request: Request) {
   const admin = await getAdminSession();
@@ -30,11 +30,12 @@ export async function GET(request: Request) {
   if (!channel) return NextResponse.json({ ok: false, message: "채널을 찾지 못했습니다." }, { status: 400 });
 
   try {
-    const [{ source, rows, hasUpload, hasEpgData }, channelAnnualAvgRating] = await Promise.all([
+    const [{ source, rows, hasUpload, hasEpgData }, channelAnnualAvgRating, dailyStats] = await Promise.all([
       getScheduleGridRows(channel.id, channelCode, channel.primary_target, week, { forceUpload }),
       getChannelAnnualAvgRating(channel.id, channel.primary_target),
+      getChannelDailyStatsForWeek(channel.id, channel.primary_target, week),
     ]);
-    return NextResponse.json({ ok: true, channelName: channel.name, themeColor: channel.theme_color, source, hasUpload, hasEpgData, week, weekEnd: addDaysStr(week, 6), channelAnnualAvgRating, rows });
+    return NextResponse.json({ ok: true, channelName: channel.name, themeColor: channel.theme_color, source, hasUpload, hasEpgData, week, weekEnd: addDaysStr(week, 6), channelAnnualAvgRating, dailyStats, rows });
   } catch (e) {
     return NextResponse.json({ ok: false, message: e instanceof Error ? e.message : "조회 중 오류가 발생했습니다." }, { status: 500 });
   }

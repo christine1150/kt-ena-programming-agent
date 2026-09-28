@@ -11,6 +11,10 @@ type UploadResult = {
   alert?: string;
   summary?: { channel: string; competitors: number; targetGoal: boolean }[];
   warnings?: string[];
+  // route.ts는 이미 "KT ENA 오리지널"·"요일 별 리뷰 프로그램" 시트 반영 건수를 돌려주고
+  // 있었는데 이 화면이 읽지 않고 있었다 — 사용자 지시(2026-09-28)로 아래에 함께 보여준다.
+  featuredContent?: { saved: number; skippedNoSchedule: number };
+  originalReviewSaved?: number;
 };
 
 export default function ChannelMasterUploader() {
@@ -41,6 +45,15 @@ export default function ChannelMasterUploader() {
     const body: UploadResult = await res.json().catch(() => ({ ok: false, message: "업로드 응답을 읽지 못했습니다." }));
     setResult(body);
     setUploading(false);
+
+    // 사용자 지시(2026-09-28): "같은 파일에 있는 '주요 콘텐츠 관리(요일별 리뷰 프로그램)'
+    // 리스트가 업데이트 되지 않았어 — 한번에 반영되게" — 이 업로드가 featured_content도 함께
+    // 갱신하는데(route.ts "KT ENA 오리지널"·"요일 별 리뷰 프로그램" 시트 처리), 같은 페이지의
+    // FeaturedContentManager는 최초 마운트 때만 목록을 불러와 업로드 후에도 옛 목록이 그대로
+    // 보였다. 성공 시 이벤트를 쏴서 그 화면이 즉시 다시 불러오게 한다.
+    if (body.ok) {
+      window.dispatchEvent(new Event("channel-master-uploaded"));
+    }
   }
 
   return (
@@ -91,6 +104,14 @@ export default function ChannelMasterUploader() {
               ))}
             </tbody>
           </table>
+          {/* 사용자 지시(2026-09-28): 이 시트가 실제로 반영됐는지 이 카드에서 바로 확인할 수
+              있게 — 아래 "주요 콘텐츠 관리" 목록은 이 업로드 직후 자동으로 다시 불러온다. */}
+          {(result.featuredContent || typeof result.originalReviewSaved === "number") && (
+            <p className="text-xs text-zinc-500">
+              주요 콘텐츠(KT ENA 오리지널) {result.featuredContent?.saved ?? 0}건 · 요일 별 리뷰 프로그램{" "}
+              {result.originalReviewSaved ?? 0}건 반영됨 — 아래 &ldquo;주요 콘텐츠 관리&rdquo; 목록에 자동 반영됩니다.
+            </p>
+          )}
           {result.warnings && result.warnings.length > 0 && (
             <ul className="list-inside list-disc rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
               {result.warnings.map((w, i) => (

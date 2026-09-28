@@ -2115,8 +2115,12 @@ function buildEfficiencyTypeMap(contentFitsRows: FitScoreItem[]): Map<string, Pr
   return new Map(ranked.map((r) => [r.canonicalName, r.programType]));
 }
 
+// 사용자 지시(2026-09-28): "효율형만 초록색 뱃지인데, 균형형과 총량형도 색을 만들어줘 —
+// 둘 중 하나는 회색이어도 됨" — 총량형("편성을 많이 써서 버티는 중")은 효율형(초록, 긍정)과
+// 대비되는 주의색(호박색)으로 구분하고, 균형형은 어느 쪽도 아닌 중립이라는 의미를 살려
+// 그대로 회색을 유지한다.
 const PROGRAM_TYPE_BADGE_STYLE: Record<ProgramType, string> = {
-  총량형: "bg-zinc-100 text-zinc-600",
+  총량형: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
   효율형: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
   균형형: "bg-zinc-50 text-zinc-500",
 };
@@ -3960,22 +3964,12 @@ interface ScatterPoint {
   // 새 계산 없이 그대로 넘길 수 있음.
   tag?: string | null;
 }
-// UI 디자이너·UX 리서처 개선안(2026-09-09): 점마다 무조건 라벨을 그리던 기존 방식(겹침의
-// 직접 원인)을 걷어내고, ① 사분면 중심에서 가장 먼(가장 극단적인) 상위 2개 + ② REPLACE
-// 태그 중 아직 안 뽑힌 것 1개까지, 차트당 최대 3개만 상시 라벨을 켠다(리서처 권고 "차트당
-// 3~6개" 하한 쪽 채택 — 이 차트는 점 개수가 적어 6개까지 갈 필요가 없음). 나머지는 점+호버
-// 툴팁(이미 있음)만 유지. 골라진 소수만 라벨을 켜므로 FitScoreQuadrantChart 수준의 정교한
-// 2차원 충돌검사까지는 필요 없고, x좌표 기준 1차원 lane 스태킹(FitScoreQuadrantChart와 같은
-// 원리, RULE 04 상수 재사용)만으로 충분히 안 겹치게 배치할 수 있다.
-function selectAlwaysLabelPoints(points: ScatterPoint[], xSplit: number, ySplit: number, xRange: number, yRange: number): Set<number> {
-  const byDistDesc = points
-    .map((p, i) => ({ i, dist: Math.hypot((p.x - xSplit) / (xRange || 1), (p.y - ySplit) / (yRange || 1)) }))
-    .sort((a, b) => b.dist - a.dist);
-  const picked = new Set<number>(byDistDesc.slice(0, 2).map((d) => d.i));
-  const replaceIdx = byDistDesc.map((d) => d.i).find((i) => points[i].tag === "REPLACE" && !picked.has(i));
-  if (replaceIdx !== undefined) picked.add(replaceIdx);
-  return picked;
-}
+// 사용자 지시(2026-09-28): "Program Portfolio에서는 프로그램명이 겹치지 않는 선에서 그래프
+// 안에서 그릴 수 있으면 표기해줘" — 2026-09-09엔 겹침을 막으려 차트당 최대 3개(사분면 극단
+// 2개 + REPLACE 1개)만 상시 라벨을 켜고 나머지는 호버로만 보게 했었다. 이제 그 반대 방향으로
+// 바꾼다: 모든 점에 라벨을 "시도"하되, 아래 lane 배치에서 실제로 자리가 안 나는(겹치는) 점만
+// 라벨을 생략한다(그런 점은 여전히 <title> 호버로 이름 확인 가능) — "겹치지 않는 선에서"라는
+// 지시를 그대로 만족.
 function ScatterQuadrantChart({
   points,
   xDomain,
@@ -4016,23 +4010,43 @@ function ScatterQuadrantChart({
   const xOf = (v: number) => PAD + ((v - xDomain[0]) / (xDomain[1] - xDomain[0] || 1)) * (W - PAD * 2);
   const yOf = (v: number) => H - PAD - ((v - yDomain[0]) / (yDomain[1] - yDomain[0] || 1)) * (H - PAD * 2);
   const rOf = (v: number | null) => (v === null ? 5 : 4 + (v / maxBubble) * 10);
-  const alwaysLabel = selectAlwaysLabelPoints(points, xSplit, ySplit, xDomain[1] - xDomain[0], yDomain[1] - yDomain[0]);
-  // x좌표순으로 훑으며 겹치면 한 단(lane)씩 아래로 미는 그리디 배치 — FitScoreQuadrantChart와
-  // 같은 원리(CHAR_WIDTH_PX/LANE_STEP_PX도 그 파일이 이미 검증한 값 재사용).
+  // 실측 버그 수정(2026-09-28): x좌표 정렬 후 lane(줄) 하나만 올려 피하는 1차원 방식은, 점들이
+  // 사분면 한쪽에 x·y 모두 가깝게 몰린 경우(WEAK 사분면 등) lane은 다르게 배정돼도 "그 점 자신의
+  // y + lane*STEP"이 다른 점의 라벨과 실제 화면 좌표에서 겹치는 사고가 났다(실측: bottom-left
+  // 클러스터에서 여러 프로그램명이 같은 자리에 겹쳐 찍힘). 점 각각의 y가 서로 다른 산점도에서는
+  // "다른 lane=다른 y"가 보장되지 않는다 — 대신 실제 사각형(bounding box) 충돌 검사로 바꾼다:
+  // 원 크기(도달율)가 큰 점부터 순서대로 기본 위치에 라벨을 놓아보고, 이미 배치된 라벨과
+  // 겹치면 조금씩 아래로 내려가며 재시도, 차트 바닥까지 자리가 없으면 그 점은 라벨을 생략한다
+  // (여전히 <title> 호버로 이름 확인 가능 — "겹치지 않는 선에서 표기"라는 지시를 그대로 만족).
   const CHAR_WIDTH_PX = 8.5;
-  const LABEL_GAP_PX = 4;
-  const LANE_STEP_PX = 14;
-  const laneByIndex = new Map<number, number>();
-  const laneRightEdge: number[] = [];
-  Array.from(alwaysLabel)
-    .map((i) => ({ i, px: xOf(points[i].x), width: points[i].name.length * CHAR_WIDTH_PX }))
-    .sort((a, b) => a.px - b.px)
-    .forEach(({ i, px, width }) => {
-      const left = px - width / 2;
-      let lane = 0;
-      while (laneRightEdge[lane] !== undefined && laneRightEdge[lane] > left) lane++;
-      laneRightEdge[lane] = left + width + LABEL_GAP_PX;
-      laneByIndex.set(i, lane);
+  const LABEL_H_PX = 12;
+  const STEP_PX = 11;
+  const MAX_TRIES = 12;
+  const labelYByIndex = new Map<number, number>();
+  const placedBoxes: { left: number; right: number; top: number; bottom: number }[] = [];
+  points
+    .map((p, i) => ({ i, cx: xOf(p.x), cy: yOf(p.y), r: rOf(p.bubble), width: p.name.length * CHAR_WIDTH_PX }))
+    .sort((a, b) => b.r - a.r)
+    .forEach(({ i, cx, cy, r, width }) => {
+      // 렌더링 시 textAnchor가 가장자리 근처에서 start/end로 바뀌므로(아래 렌더 루프와 동일
+      // 조건), 충돌 검사용 박스도 실제로 그려질 위치와 같은 기준으로 잡는다 — 안 맞추면
+      // 가장자리 라벨이 겹침 검사를 피해가고도 실제로는 겹쳐 보일 수 있다.
+      const anchor = cx < W * 0.15 ? "start" : cx > W * 0.85 ? "end" : "middle";
+      const left = (anchor === "start" ? cx : anchor === "end" ? cx - width : cx - width / 2) - 2;
+      const right = left + width + 4;
+      let y = cy + r + 9;
+      for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
+        const top = y - LABEL_H_PX;
+        const bottom = y + 2;
+        if (bottom > H - 4) return; // 차트 바닥 밖 — 이 점은 라벨 생략
+        const collides = placedBoxes.some((b) => left < b.right && right > b.left && top < b.bottom && bottom > b.top);
+        if (!collides) {
+          placedBoxes.push({ left, right, top, bottom });
+          labelYByIndex.set(i, y);
+          return;
+        }
+        y += STEP_PX;
+      }
     });
   return (
     <div className="overflow-x-auto">
@@ -4068,8 +4082,7 @@ function ScatterQuadrantChart({
           const cx = xOf(p.x);
           const cy = yOf(p.y);
           const r = rOf(p.bubble);
-          const showLabel = alwaysLabel.has(i);
-          const lane = laneByIndex.get(i) ?? 0;
+          const labelY = labelYByIndex.get(i);
           return (
             <g key={i}>
               <circle cx={cx} cy={cy} r={r} fill={accentColor} fillOpacity={0.55} stroke={accentColor} strokeWidth={1}>
@@ -4078,15 +4091,13 @@ function ScatterQuadrantChart({
                   {p.bubble !== null ? `, 도달율 ${p.bubble.toFixed(2)}%` : ""}
                 </title>
               </circle>
-              {/* UI 디자이너·UX 리서처 개선안(2026-09-09): "점들이 무엇을 의미하는지 알 수
-                  없음"이라는 2026-08-27 지시의 취지(라벨을 아예 없애지 않음)는 지키되, 이번엔
-                  점마다 무조건이 아니라 사분면 극단·REPLACE 태그로 선정된 소수(차트당 최대 3개)
-                  에만 라벨을 켠다 — 나머지는 <title> 호버로 여전히 이름을 확인할 수 있다. 선정된
-                  라벨은 이제 몇 개 안 되므로 8자 줄임 없이 전체 이름을 보여줘도 겹치지 않는다. */}
-              {showLabel && (
+              {/* 사용자 지시(2026-09-28): 겹치지 않는 한 모든 점에 라벨을 표기 — 위 박스 충돌
+                  검사에서 자리를 못 찾은 점만 라벨이 빠지고, 그런 점도 <title> 호버로는
+                  여전히 이름을 확인할 수 있다. */}
+              {labelY !== undefined && (
                 <text
                   x={cx}
-                  y={cy + r + 9 + lane * LANE_STEP_PX}
+                  y={labelY}
                   textAnchor={cx < W * 0.15 ? "start" : cx > W * 0.85 ? "end" : "middle"}
                   fontSize={11}
                   fontWeight={600}

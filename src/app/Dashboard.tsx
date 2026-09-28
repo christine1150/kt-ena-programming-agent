@@ -152,6 +152,11 @@ interface OriginalDailyItem {
   // 덮어써서 반영" — 관리자가 올린 회차별 수동 리포트(manual-drama-report 업로드)가 있으면
   // 함께 내려온다. 없으면 null(기존 자동 계산 그대로 표시).
   manualReport: ManualDramaReportData | null;
+  // 사용자 지시(2026-09-28): "<니돈내산>처럼 1회인 타이틀은 최근 성적 대비에서 최근 동시간
+  // 지난 4주 평균 성적과 비교" — ratingHistory.own2049가 2건 미만(직전 회차 비교 불가)일 때만
+  // route.ts가 채워준다. 같은 채널·같은 요일+시간대(본방 슬롯)에서 최근 4주간 방영된
+  // 프로그램들(프로그램명 무관)의 평균.
+  slotBaseline: { avgRating: number | null; sampleCount: number } | null;
 }
 interface ManualMinuteRating {
   time: string; // "HH:MM"
@@ -3245,18 +3250,39 @@ function shortAgeGenderLabel(label: string): string {
 // 사용자 지시(2026-09-03): "전 주나 지난 4주간의 성적 대비 등 입체적인 내용" — ratingHistory에
 // 이미 받아 둔 본방 회차별 시계열에서 직전 회차·직전 4회 평균과의 비교만 뽑는다(DB가 계산해 준
 // 값들의 평균·차이일 뿐 새 지표를 만들지 않는다). 오늘 회차는 제외하고 그 이전만 평균 낸다.
-function computeRecentComparison(history: RatingHistoryResult | null): { prevAvg4: number | null; deltaPctVs4: number | null; sampleCount: number } {
+// 사용자 지시(2026-09-28): "<니돈내산>처럼 1회인 타이틀은 최근 동시간 지난 4주 평균 성적과
+// 비교" — 직전 회차가 없거나(1회차 신규 편성) 부족하면 route.ts가 함께 내려준 slotBaseline
+// (같은 채널·같은 요일+시간대에서 최근 4주간 방영된 프로그램들의 평균, 프로그램명 무관)으로
+// 대체한다. mode로 두 경우를 구분해 렌더링 쪽에서 문구를 다르게 쓴다.
+function computeRecentComparison(
+  history: RatingHistoryResult | null,
+  slotBaseline: { avgRating: number | null; sampleCount: number } | null
+): { prevAvg4: number | null; deltaPctVs4: number | null; sampleCount: number; mode: "episode" | "slot" } {
   const pts = history?.own2049 ?? [];
-  if (pts.length < 2) return { prevAvg4: null, deltaPctVs4: null, sampleCount: 0 };
+  if (pts.length === 0) return { prevAvg4: null, deltaPctVs4: null, sampleCount: 0, mode: "episode" };
   const today = pts[pts.length - 1];
-  const prior = pts.slice(Math.max(0, pts.length - 5), pts.length - 1);
-  if (prior.length === 0) return { prevAvg4: null, deltaPctVs4: null, sampleCount: 0 };
-  const avg = prior.reduce((s, p) => s + p.rating, 0) / prior.length;
-  return {
-    prevAvg4: avg,
-    deltaPctVs4: avg > 0 ? ((today.rating - avg) / avg) * 100 : null,
-    sampleCount: prior.length,
-  };
+  if (pts.length >= 2) {
+    const prior = pts.slice(Math.max(0, pts.length - 5), pts.length - 1);
+    if (prior.length > 0) {
+      const avg = prior.reduce((s, p) => s + p.rating, 0) / prior.length;
+      return {
+        prevAvg4: avg,
+        deltaPctVs4: avg > 0 ? ((today.rating - avg) / avg) * 100 : null,
+        sampleCount: prior.length,
+        mode: "episode",
+      };
+    }
+  }
+  if (slotBaseline?.avgRating != null && slotBaseline.sampleCount > 0) {
+    const avg = slotBaseline.avgRating;
+    return {
+      prevAvg4: avg,
+      deltaPctVs4: avg > 0 ? ((today.rating - avg) / avg) * 100 : null,
+      sampleCount: slotBaseline.sampleCount,
+      mode: "slot",
+    };
+  }
+  return { prevAvg4: null, deltaPctVs4: null, sampleCount: 0, mode: "episode" };
 }
 
 // 시청시간(초)을 "34분 12초"로 — 초가 0이면 분까지만(2026-09-03에 ChannelDeepDive.fmtSeconds에
@@ -3350,20 +3376,25 @@ function ChuseokSpecialReportCard() {
           <h2 className={REPORT_TITLE}>2026 추석 연휴 시청률 성과 분석</h2>
           <p className={REPORT_EYEBROW}>CHUSEOK SPECIAL · 10/2(금)까지 공개</p>
         </div>
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-          className={`shrink-0 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        {/* 사용자 지시(2026-09-28): "펼침 아이콘 좀 더 잘보이게" — 옅은 회색 줄 하나(20px,
+            zinc-400)라 배경 카드와 거의 구분이 안 됐다. 이 화면 다른 아이콘 버튼(새로고침·설정
+            등)과 같은 원형 배지 스타일로 감싸고, 획도 굵고 진하게 바꾼다. */}
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 ring-1 ring-zinc-200">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className={`text-zinc-700 transition-transform ${open ? "rotate-180" : ""}`}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
       </button>
 
       {open && (
@@ -3499,7 +3530,7 @@ function OriginalContentReportCard({
               const broadcastChannelName = CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] ?? h.broadcast_channel_code;
               const { peak, trough } = pickPeakTroughPoints(h.ratingHistory);
               // 사용자 지시(2026-09-03): "전 주나 지난 4주간의 성적 대비" — 직전 4회 평균 대비.
-              const recent = computeRecentComparison(h.ratingHistory);
+              const recent = computeRecentComparison(h.ratingHistory, h.slotBaseline);
               // 사용자 지시(2026-09-03): "연령대별 인사이트" — get_original_content_daily가 이미
               // 계산해 내려주던 age_breakdown(본방 슬롯 연령대별 시청률 상위)이 그동안 타입에만
               // 있고 화면 어디에도 렌더되지 않고 있었다. 상위 4개만 막대로 보여준다.
@@ -3688,7 +3719,13 @@ function OriginalContentReportCard({
                           다 다른 줄로 각각 보여주세요" — 직전(2차)의 한 줄 쉼표 나열 형태를
                           되돌려 다시 3줄로 분리(라벨-값 순서는 그대로 유지). */}
                       <p className={REPORT_EYEBROW}>몰입도</p>
-                      <div className="mt-2.5 space-y-2">
+                      {/* 사용자 지시(2026-09-28): "점유율, 시청시간, 시청비율, 도달률 좌정렬,
+                          각 수치는 좀 띄어쓰기 한 뒤 수치끼리 좌정렬" — 라벨 글자 수가 달라
+                          (점유율 3자 vs 시청시간 4자) 인라인 스팬으로는 값의 시작 x좌표가
+                          들쭉날쭉했다. 그리드로 라벨 열(가장 넓은 라벨 폭에 맞춰 자동 정렬)과
+                          값 열을 분리해, 라벨은 모두 왼쪽 정렬·값은 라벨 폭만큼 띄운 자리에서
+                          서로 일직선으로 정렬되게 한다. */}
+                      <div className="mt-2.5 grid grid-cols-[auto_auto] items-baseline gap-x-3 gap-y-2">
                         {/* 사용자 지시(2026-09-06): "분석 순서는 본방 타깃 시청률 → 부타깃(가구) →
                             점유율 → 시청시간 → 연령대" — 시청률·가구는 왼쪽 시청률 칸에 이미 그
                             순서로 있으므로, 이 몰입도 칸 맨 위에 점유율을 추가해 시청시간보다
@@ -3698,31 +3735,31 @@ function OriginalContentReportCard({
                             값 16px(font-bold)로 위계 분리 — 이전엔 라벨·값이 같은 14px라
                             네 줄이 같은 리듬으로 나열돼 값만 골라 스캔하기 어려웠음. */}
                         {h.matched_share !== null && (
-                          <p className="text-[12px] text-zinc-500">
-                            <span>점유율 </span>
+                          <>
+                            <span className="text-[12px] text-zinc-500 whitespace-nowrap">점유율</span>
                             <span className="font-bold tabular-nums text-[16px] text-zinc-900">{h.matched_share.toFixed(2)}%</span>
-                          </p>
+                          </>
                         )}
                         {h.matched_time_spent_seconds !== null && (
-                          <p className="text-[12px] text-zinc-500">
-                            <span>시청시간 </span>
+                          <>
+                            <span className="text-[12px] text-zinc-500 whitespace-nowrap">시청시간</span>
                             <span className="font-bold tabular-nums text-[16px] text-zinc-900">{fmtSecondsCompactKorean(h.matched_time_spent_seconds)}</span>
-                          </p>
+                          </>
                         )}
                         {h.matched_time_spent_share !== null && (
-                          <p className="text-[12px] text-zinc-500">
-                            <span>시청비율 </span>
+                          <>
+                            <span className="text-[12px] text-zinc-500 whitespace-nowrap">시청비율</span>
                             <span className="font-bold tabular-nums text-[16px] text-zinc-900">{h.matched_time_spent_share.toFixed(2)}%</span>
-                          </p>
+                          </>
                         )}
                         {h.matched_reach !== null && (
-                          <p className="text-[12px] text-zinc-500">
-                            <span>도달율 </span>
+                          <>
+                            <span className="text-[12px] text-zinc-500 whitespace-nowrap">도달율</span>
                             <span className="font-bold tabular-nums text-[16px] text-zinc-900">{h.matched_reach.toFixed(2)}%</span>
-                          </p>
+                          </>
                         )}
                         {h.matched_share === null && h.matched_time_spent_seconds === null && h.matched_time_spent_share === null && h.matched_reach === null && (
-                          <p className="text-[12px] text-zinc-300">자료 없음</p>
+                          <p className="col-span-2 text-[12px] text-zinc-300">자료 없음</p>
                         )}
                       </div>
                     </div>
@@ -3735,10 +3772,18 @@ function OriginalContentReportCard({
                                 <span className="font-semibold tabular-nums" style={{ color: recent.deltaPctVs4 >= 0 ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR }}>
                                   {recent.deltaPctVs4 >= 0 ? "▲" : "▼"} {Math.abs(recent.deltaPctVs4).toFixed(1)}%
                                 </span>
-                                <span className="ml-1.5 text-[12px] text-zinc-400">직전 {recent.sampleCount}회 평균 대비</span>
+                                {/* 사용자 지시(2026-09-28): "<니돈내산>처럼 1회인 타이틀은
+                                    최근 동시간 지난 4주 평균 성적과 비교" — 직전 회차 비교가
+                                    안 되는 신규 편성은 recent.mode가 "slot"이 되어 문구도
+                                    "동시간대 최근 N주 평균"으로 바뀐다. */}
+                                <span className="ml-1.5 text-[12px] text-zinc-400">
+                                  {recent.mode === "slot" ? `동시간대 최근 ${recent.sampleCount}주 평균 대비` : `직전 ${recent.sampleCount}회 평균 대비`}
+                                </span>
                               </p>
                               <p className="text-[12px] tabular-nums text-zinc-400">
-                                직전 {recent.sampleCount}회 평균 {formatRating(recent.prevAvg4, h.broadcast_channel_code)}
+                                {recent.mode === "slot"
+                                  ? `동시간대 최근 ${recent.sampleCount}주 평균 ${formatRating(recent.prevAvg4, h.broadcast_channel_code)}`
+                                  : `직전 ${recent.sampleCount}회 평균 ${formatRating(recent.prevAvg4, h.broadcast_channel_code)}`}
                               </p>
                             </>
                           ) : (

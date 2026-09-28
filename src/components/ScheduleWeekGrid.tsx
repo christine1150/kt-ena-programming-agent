@@ -6,6 +6,7 @@
 // 그리며, apiBase로 관리자 전용 API(/api/admin/schedule-grid)와 PD 세션 허용 API
 // (/api/schedule-grid)를 전환할 수 있고, showExport로 엑셀 다운로드 링크 노출 여부를 정한다.
 import { useEffect, useId, useState } from "react";
+import { NARRATIVE_UP_COLOR } from "@/lib/highlightNarrative";
 
 export type ScheduleGridRow = {
   dow: number;
@@ -160,6 +161,10 @@ export function ScheduleWeekGrid({
   // 최댓값으로 색을 정하면 채널 간 비교가 왜곡된다. 이 채널의 연초~오늘 누적 평균(고정 기준선)을
   // 함께 받아 색 강도·볼드 판정에 쓴다.
   const [channelAnnualAvgRating, setChannelAnnualAvgRating] = useState<number | null>(null);
+  // 사용자 지시(2026-09-28): "각 요일 밑 날짜 밑에 굵고 진한 글씨로 시청률과 순위가
+  // 시청률(순위) 형태로" — 프로그램 단위 rows와 별개로 그 날짜의 채널 단위 시청률·등위
+  // (ratings.rank, 닐슨 등위 SSOT)를 날짜별로 받아둔다.
+  const [dailyStatsByDate, setDailyStatsByDate] = useState<Map<string, { rating: number | null; rank: number | null }>>(new Map());
   const [dateByDow, setDateByDow] = useState<Map<number, string>>(new Map());
   const [resolvedWeek, setResolvedWeek] = useState<{ week: string; weekEnd: string } | null>(week && weekEnd ? { week, weekEnd } : null);
   // 사용자 지시(2026-09-20): "편성표 팝업에서 바로... 프린트하기" — 이 컴포넌트가 한 화면에
@@ -223,6 +228,8 @@ export function ScheduleWeekGrid({
         setHasUpload(body.hasUpload ?? false);
         setHasEpgData(body.hasEpgData ?? false);
         setChannelAnnualAvgRating(body.channelAnnualAvgRating ?? null);
+        const dailyStats: { date: string; rating: number | null; rank: number | null }[] = body.dailyStats ?? [];
+        setDailyStatsByDate(new Map(dailyStats.map((d) => [d.date, { rating: d.rating, rank: d.rank }])));
         setDateByDow(new Map(rs.map((r) => [r.dow, r.broadcast_date])));
         if (body.ok && body.week && body.weekEnd) setResolvedWeek({ week: body.week, weekEnd: body.weekEnd });
       })
@@ -375,11 +382,30 @@ export function ScheduleWeekGrid({
             {DOW_LABELS.map((label, i) => {
               const dow = i + 1;
               const dayRows = (byDow.get(dow) ?? []).slice().sort((a, b) => a.start_time.localeCompare(b.start_time));
+              // 사용자 지시(2026-09-28): "각 요일 밑에 날짜가 나오지? 그 밑에 굵고 진한 글씨로
+              // 시청률과 순위가 시청률(순위) 형태로... 연간 채널 평균 시청률보다 높은 날은
+              // 긍정 색으로."
+              const dayDate = dateByDow.get(dow);
+              const dayStat = dayDate ? dailyStatsByDate.get(dayDate) : undefined;
+              const isAboveAnnual =
+                dayStat?.rating !== null &&
+                dayStat?.rating !== undefined &&
+                channelAnnualAvgRating !== null &&
+                dayStat.rating > channelAnnualAvgRating;
               return (
                 <div key={dow} className="min-w-0 flex-1 border-l border-zinc-100">
                   <div className="bg-zinc-50 py-1 text-center">
                     <div className={`text-[11px] font-medium ${label === "토" ? "text-blue-500" : label === "일" ? "text-rose-500" : "text-zinc-500"}`}>{label}</div>
-                    <div className="text-[9px] text-zinc-400">{dateByDow.get(dow)?.slice(5) ?? ""}</div>
+                    <div className="text-[9px] text-zinc-400">{dayDate?.slice(5) ?? ""}</div>
+                    {dayStat && dayStat.rating !== null && (
+                      <div
+                        className="text-[11px] font-bold tabular-nums"
+                        style={{ color: isAboveAnnual ? NARRATIVE_UP_COLOR : "#27272a" }}
+                      >
+                        {dayStat.rating.toFixed(channelCode === "SKYUHD" ? 4 : 3)}
+                        {dayStat.rank !== null ? `(${dayStat.rank}위)` : ""}
+                      </div>
+                    )}
                   </div>
                   <div
                     className="relative"
