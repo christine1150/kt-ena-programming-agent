@@ -3304,6 +3304,137 @@ function highlightChannelNames(text: string, colorMap: Map<string, string>) {
   );
 }
 
+// 사용자 지시(2026-09-28): "이번주 금요일(10월 2일)까지 오늘의 시청률과 주요컨텐츠 리뷰
+// 사이에 '2026 추석 연휴 시청률 성과 분석'이라는 제목으로 핵심판이 보여지게 해줘. 웹 내에서
+// 한장씩 넘겨가며 보게 해주고, 클릭으로 상세판을 누르면 상세판이 보여지게 해줘. 다운로드도
+// 가능하게 해서... 다만 성과 분석은 접어뒀다가 누르면 열려서 보이는 형태로 만들어줘." —
+// 파일 자체는 public/이 아니라 /api/reports/chuseok(로그인 세션 필수 + 다운로드 시 로그인
+// 이력에 기록)를 통해서만 내려준다.
+const CHUSEOK_REPORT_VISIBLE_UNTIL_UTC_MS = Date.UTC(2026, 9, 2, 14, 59, 59, 999); // 2026-10-02 23:59:59 KST
+// PDF에 페이지 카운트를 직접 읽는 라이브러리 없이(이 환경엔 pdfjs-dist 등이 설치돼 있지 않음)
+// 파일 구조를 훑어 얻은 실측값 — 표지·별첨 포함 실제 쪽수와 한두 쪽 오차가 있어도, "다음" 버튼을
+// 몇 번 더 누르는 정도의 사소한 영향만 있다.
+const CHUSEOK_REPORT_TOTAL_PAGES = { summary: 30, detail: 50 } as const;
+const CHUSEOK_REPORT_LABEL = { summary: "핵심판", detail: "상세판" } as const;
+// 렌더 함수 안에서 Date.now()를 직접 부르면 react-compiler purity 규칙에 걸린다(비결정
+// 함수 호출 금지) — 모듈이 로드되는 시점(=페이지가 열리는 시점) 한 번만 계산해 상수로 둔다.
+// 새로고침해야 값이 갱신되는 건 이 대시보드의 다른 날짜 판단 로직과 동일한 특성이라 문제없다.
+const CHUSEOK_REPORT_VISIBLE = Date.now() <= CHUSEOK_REPORT_VISIBLE_UNTIL_UTC_MS;
+
+function ChuseokSpecialReportCard() {
+  const [open, setOpen] = useState(false);
+  const [variant, setVariant] = useState<"summary" | "detail">("summary");
+  const [page, setPage] = useState(1);
+
+  // 마감(10/2 금 자정 KST)이 지나면 컴포넌트 자체를 렌더링하지 않는다 — 이후엔 코드를 다시
+  // 고치지 않아도 이 섹션이 화면에서 자동으로 사라진다.
+  if (!CHUSEOK_REPORT_VISIBLE) return null;
+
+  const totalPages = CHUSEOK_REPORT_TOTAL_PAGES[variant];
+  const viewSrc = `/api/reports/chuseok?variant=${variant}&mode=view#page=${page}`;
+
+  const switchVariant = (v: "summary" | "detail") => {
+    setVariant(v);
+    setPage(1);
+  };
+
+  return (
+    <section className={REPORT_CARD}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-3 text-left"
+        aria-expanded={open}
+      >
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className={REPORT_TITLE}>2026 추석 연휴 시청률 성과 분석</h2>
+          <p className={REPORT_EYEBROW}>CHUSEOK SPECIAL · 10/2(금)까지 공개</p>
+        </div>
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className={`shrink-0 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="mt-6 flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex gap-2">
+              {(["summary", "detail"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => switchVariant(v)}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                    variant === v ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  }`}
+                >
+                  {CHUSEOK_REPORT_LABEL[v]}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              {(["summary", "detail"] as const).map((v) => (
+                <a
+                  key={v}
+                  href={`/api/reports/chuseok?variant=${v}&mode=download`}
+                  className="rounded-full bg-[#f1f0f9] px-3.5 py-1.5 text-xs font-semibold text-[#2017bb] transition hover:bg-[#e4e2f7]"
+                >
+                  {CHUSEOK_REPORT_LABEL[v]} 다운로드
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-xl ring-1 ring-zinc-200">
+            {/* key로 iframe을 강제 재마운트 — 같은 문서 안 해시(#page=N)만 바뀌면 일부 브라우저의
+                내장 PDF 뷰어가 페이지 이동을 반영하지 않는 경우가 있어, variant·page가 바뀔
+                때마다 새 프레임으로 다시 로드시킨다. */}
+            <iframe
+              key={`${variant}-${page}`}
+              src={viewSrc}
+              title={`2026 추석 연휴 시청률 성과 분석 ${CHUSEOK_REPORT_LABEL[variant]} ${page}쪽`}
+              className="h-[70vh] w-full"
+            />
+          </div>
+
+          <div className="flex items-center justify-center gap-4">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-full bg-zinc-100 px-4 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-200 disabled:opacity-40"
+            >
+              ← 이전
+            </button>
+            <span className="text-sm text-zinc-500">
+              {page} / {totalPages}쪽
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="rounded-full bg-zinc-100 px-4 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-200 disabled:opacity-40"
+            >
+              다음 →
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function OriginalContentReportCard({
   report,
   enaAccentColor,
@@ -5091,6 +5222,11 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 2열 배치를 그대로 둔다. */}
             <div className="lg:col-span-2">
               <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} />
+            </div>
+            {/* 사용자 지시(2026-09-28): "오늘의 시청률과 주요컨텐츠 리뷰 사이에" 추석 연휴 성과
+                분석 섹션을 넣는다 — 10/2(금)까지만 노출(컴포넌트 내부에서 자체 판단). */}
+            <div className="lg:col-span-2">
+              <ChuseokSpecialReportCard />
             </div>
             <div className="lg:col-span-2">
               <OriginalContentReportCard

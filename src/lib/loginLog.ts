@@ -28,6 +28,37 @@ export async function recordLogin(params: {
   }
 }
 
+// 사용자 지시(2026-09-28): "다운을 받으면 관리자 모드에서 로그인 이력 내에서 누가 다운로드를
+// 받았는지도 로그를 남겨줘" — 추석 연휴 성과 분석 보고서 다운로드 시 login_log에 'download'
+// 이벤트로 남긴다. detail에 어떤 자료인지(핵심판/상세판) 적어 관리자 화면에서 구분되게 한다.
+export async function recordDownload(params: {
+  role: "admin" | "pd";
+  actorId: string;
+  actorName: string;
+  detail: string;
+  request: Request;
+}) {
+  const { role, actorId, actorName, detail, request } = params;
+
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const ip = forwardedFor ? forwardedFor.split(",")[0].trim() : request.headers.get("x-real-ip");
+  const userAgent = request.headers.get("user-agent");
+
+  const { error } = await supabase.from("login_log").insert({
+    role,
+    actor_id: actorId,
+    actor_name: actorName,
+    ip,
+    user_agent: userAgent,
+    event_type: "download",
+    detail,
+  });
+
+  if (error) {
+    console.error("다운로드 이력 저장 실패:", error.message);
+  }
+}
+
 // 사용자 지시(2026-09-09): "30일간 재로그인하지 않아도 접속하면 기록을 남게 할 수는 있어?"
 // PD/관리자 세션이 길게 유지되는 동안엔 recordLogin()이 전혀 호출되지 않아 실제 접속 여부를
 // 알 수 없었다 — 세션만으로 들어온 방문도 기록하되, 페이지 이동마다 한 행씩 쌓이면 감사

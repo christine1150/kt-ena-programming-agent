@@ -14,7 +14,7 @@ export default async function LoginHistoryPage() {
 
   const { data: logs, error } = await supabase
     .from("login_log")
-    .select("id, role, actor_name, ip, user_agent, logged_in_at, event_type")
+    .select("id, role, actor_name, ip, user_agent, logged_in_at, event_type, detail")
     .order("logged_in_at", { ascending: false })
     .limit(300);
 
@@ -54,6 +54,7 @@ export default async function LoginHistoryPage() {
                   <th className="whitespace-nowrap px-4 py-3 font-medium">구분</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">유형</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">이름</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">자료</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">IP</th>
                   <th className="whitespace-nowrap px-4 py-3 font-medium">기기/브라우저</th>
                 </tr>
@@ -83,18 +84,29 @@ export default async function LoginHistoryPage() {
                     <td className="whitespace-nowrap px-4 py-3">
                       {/* 사용자 지시(2026-09-09): 세션만으로 들어온 접속(로그인 폼을 거치지 않은
                           방문)과 실제 로그인을 구분해 보여준다 — 30일 세션 동안 로그인 없이도
-                          들어왔는지를 관리자가 확인할 수 있게. */}
+                          들어왔는지를 관리자가 확인할 수 있게.
+                          사용자 지시(2026-09-28): 보고서 다운로드도 같은 표에 'download' 이벤트로
+                          함께 남긴다 — 누가 어떤 자료를 받았는지 확인 가능. */}
                       <span
                         className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${
                           log.event_type === "access"
                             ? "bg-amber-50 text-amber-700"
-                            : "bg-emerald-50 text-emerald-700"
+                            : log.event_type === "download"
+                              ? "bg-sky-50 text-sky-700"
+                              : "bg-emerald-50 text-emerald-700"
                         }`}
                       >
-                        {log.event_type === "access" ? "접속(세션)" : "로그인"}
+                        {log.event_type === "access"
+                          ? "접속(세션)"
+                          : log.event_type === "download"
+                            ? "다운로드"
+                            : "로그인"}
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-zinc-900">{log.actor_name}</td>
+                    <td className="max-w-[220px] truncate px-4 py-3 text-zinc-500" title={log.detail ?? undefined}>
+                      {log.detail ?? "-"}
+                    </td>
                     <td className="whitespace-nowrap px-4 py-3 text-zinc-500">{log.ip ?? "-"}</td>
                     <td
                       className="max-w-sm truncate px-4 py-3 text-zinc-400"
