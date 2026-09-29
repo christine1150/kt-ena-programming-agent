@@ -1000,30 +1000,33 @@ export async function GET(request: Request) {
   }));
 
   // 사용자 지시(2026-09-02, 재지시): "패턴을 찾으라는 게 아니라, 그 프로그램/시간대가 채널에
-  // 미친 영향(시청률·연령·시간대)을 분석해달라" — 대상은 자사 채널만(사용자 확인). 단일 일자
-  // 조회일 때만(심층 분석 섹션이 단일 일자 전용이라 같이 묶음). fullDemographicTargets(위에서
-  // 이미 계산된 12개 연령대, WHO IS WATCHING?과 동일)를 그대로 넘겨 이 슬롯의 주 시청 연령대까지
-  // 함께 계산한다.
+  // 미친 영향(시청률·연령·시간대)을 분석해달라" — 대상은 자사 채널만(사용자 확인).
+  // fullDemographicTargets(위에서 이미 계산된 12개 연령대, WHO IS WATCHING?과 동일)를 그대로
+  // 넘겨 이 슬롯의 주 시청 연령대까지 함께 계산한다.
   // 성능 개선(2026-09-17): 실측 2.1초이면서 위 병렬 묶음 **밖에서 순차로** 돌던 조회라 그대로
   // 응답 지연에 더해지고 있었다 — 사전 계산(MART) 우선, 없으면 기존 RPC 그대로(폴백).
-  const { data: stableSlotPatternsRaw } = !isRangeMode
-    ? await cachedOrRpc<object>(
-        martCache,
-        dateTo,
-        MART_SLOT.stableSlotPatterns,
-        channel.code,
-        martFingerprint([channel.code, programTargetLabel, dateTo, fullDemographicTargets, 8, 3]),
-        () =>
-          supabase.rpc("get_channel_stable_slot_patterns", {
-            p_channel_code: channel.code,
-            p_program_target_label: programTargetLabel,
-            p_as_of_date: dateTo,
-            p_demographic_labels: fullDemographicTargets,
-            p_lookback_weeks: 8,
-            p_min_consecutive_weeks: 3,
-          })
-      )
-    : { data: [] as object[] };
+  // 버그 수정(2026-09-30, 사용자 지시): "7일 이상 기간에서 하위 카테고리가 실제 데이터로
+  // 반영되지 않는 버그" — 이 RPC는 p_as_of_date(dateTo) 기준 최근 8주 누적이라 dateFrom과
+  // 무관한데(ChannelDeepDive.tsx의 2026-09-19 UI Finish-Gate Reviewer 지적으로 프론트는 이미
+  // "편성 안정성"을 기간 비교 모드에서도 보이게 분리했다), 여기 백엔드만 옛 전제("심층 분석은
+  // 단일 일자 전용")로 !isRangeMode에 묶여 있어 기간 모드에서 항상 빈 배열이 내려가 "패턴이
+  // 없습니다"라는 잘못된 문구가 떴다. dateFrom과 무관하므로 isRangeMode와 상관없이 항상 조회.
+  const { data: stableSlotPatternsRaw } = await cachedOrRpc<object>(
+    martCache,
+    dateTo,
+    MART_SLOT.stableSlotPatterns,
+    channel.code,
+    martFingerprint([channel.code, programTargetLabel, dateTo, fullDemographicTargets, 8, 3]),
+    () =>
+      supabase.rpc("get_channel_stable_slot_patterns", {
+        p_channel_code: channel.code,
+        p_program_target_label: programTargetLabel,
+        p_as_of_date: dateTo,
+        p_demographic_labels: fullDemographicTargets,
+        p_lookback_weeks: 8,
+        p_min_consecutive_weeks: 3,
+      })
+  );
   const topProgramsData = topProgramsCompetitorRes.data;
   const rootCauseAlert = rootCauseRes.data?.[0] ?? null;
   const opportunityAlert = opportunityAlertRes.data?.[0] ?? null;
