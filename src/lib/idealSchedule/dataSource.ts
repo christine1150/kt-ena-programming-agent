@@ -1,0 +1,44 @@
+// 이상적 1주일 편성 데이터 입력 — 승인된 RPC 2종(20260930020100)만 호출한다. 두 RPC 모두
+// broadcast_date <= as_of를 SQL에서 강제하므로(백테스트 미래 데이터 차단) 여기서는 조회만 하고
+// 형태 변환은 mapping.ts(순수 함수)에 맡긴다.
+import { supabase } from "@/lib/supabase";
+import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
+import type { IdealScheduleConfig } from "./config";
+import { mapCompetitorData, mapOwnAirings, SKYUHD_KPI_KEY, targetLabelsToFetch, type RawCompetitor, type RawOwn } from "./mapping";
+import type { CompetitorBundle, OwnAiringsBundle } from "./types";
+
+export interface ChannelRef {
+  id: string;
+  code: string;
+  primaryTarget: string | null;
+  kpiLabel: string;
+}
+
+export async function loadChannelRef(channelCode: string): Promise<ChannelRef> {
+  const { data, error } = await supabase.from("channels").select("id, code, primary_target").eq("code", channelCode).maybeSingle();
+  if (error || !data) throw new Error(`채널을 찾을 수 없습니다: ${channelCode}`);
+  const kpiLabel = data.code === "SKYUHD" || !data.primary_target ? SKYUHD_KPI_KEY : resolveProgramLevelTargetLabel(data.primary_target);
+  return { id: data.id, code: data.code, primaryTarget: data.primary_target, kpiLabel };
+}
+
+export async function fetchOwnAirings(channel: ChannelRef, asOfDate: string, config: IdealScheduleConfig): Promise<OwnAiringsBundle> {
+  const { data, error } = await supabase.rpc("get_ideal_schedule_own_airings", {
+    p_channel_code: channel.code,
+    p_as_of_date: asOfDate,
+    p_lookback_days: config.expected_kpi.lookback_days,
+    p_target_labels: targetLabelsToFetch(config, channel.kpiLabel),
+  });
+  if (error) throw new Error(`get_ideal_schedule_own_airings 실패: ${error.message}`);
+  return mapOwnAirings(data as RawOwn);
+}
+
+export async function fetchCompetitorData(competitorNames: string[], asOfDate: string, lookbackDays: number): Promise<CompetitorBundle> {
+  if (competitorNames.length === 0) return { dateFrom: asOfDate, dateTo: asOfDate, airings: [], daily: [] };
+  const { data, error } = await supabase.rpc("get_ideal_schedule_competitor_data", {
+    p_competitor_names: [...competitorNames].sort(),
+    p_as_of_date: asOfDate,
+    p_lookback_days: lookbackDays,
+  });
+  if (error) throw new Error(`get_ideal_schedule_competitor_data 실패: ${error.message}`);
+  return mapCompetitorData(data as RawCompetitor);
+}

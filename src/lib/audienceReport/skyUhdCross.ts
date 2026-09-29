@@ -7,7 +7,8 @@ import type { SkyUhdProgramLogRow } from "./dataCollector";
 // 사용자가 2026-08-27에 직접 전달해 메모리(skyuhd-program-genre-map.md)에 저장해 둔 22개
 // 프로그램→장르 표 그대로. 메모리는 세션 간 내 컨텍스트용이라 런타임에서 쓰려면 코드에도
 // 있어야 한다 — 표에 없는 프로그램은 "미분류"로 두고 절대 추정하지 않는다.
-const SKYUHD_GENRE_MAP_RAW: Record<string, string> = {
+// 이상적 1주일 편성 장르 시드(scripts/seed-program-genre-map.mts)도 같은 표를 쓰도록 export(2026-09-30).
+export const SKYUHD_GENRE_MAP_RAW: Record<string, string> = {
   "퍼슨 오브 인터레스트": "미국 드라마",
   세계테마기행: "여행",
   "애정이이 : 오직, 사랑": "중국 드라마",

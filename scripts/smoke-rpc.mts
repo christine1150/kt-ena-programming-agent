@@ -178,6 +178,25 @@ async function main() {
     record(`RPC 응답(${rpc.name})`, !error, error ? error.message : "정상 응답.");
   }
 
+  // ── 6) 이상적 1주일 편성 Feature RPC — 미래 데이터 차단(as_of 이후 행 0건) 확인(2026-09-30) ──
+  {
+    const asOf = addDaysStr(latest, -7);
+    const own = await supabase.rpc("get_ideal_schedule_own_airings", { p_channel_code: "ENA", p_as_of_date: asOf, p_lookback_days: 84, p_target_labels: null });
+    const ownDates: string[] = ((own.data as { airings?: { date: string }[] } | null)?.airings ?? []).map((a) => a.date);
+    record(
+      "이상적 편성 자사 입력 as_of 차단",
+      !own.error && ownDates.length > 0 && ownDates.every((d) => d <= asOf),
+      own.error ? own.error.message : `${ownDates.length}건, 최대 날짜 ${ownDates.sort().at(-1)} ≤ as_of ${asOf}.`
+    );
+    const comp = await supabase.rpc("get_ideal_schedule_competitor_data", { p_competitor_names: ["tvN"], p_as_of_date: asOf, p_lookback_days: 84 });
+    const compDates: string[] = ((comp.data as { airings?: { date: string }[] } | null)?.airings ?? []).map((a) => a.date);
+    record(
+      "이상적 편성 경쟁 입력 as_of 차단",
+      !comp.error && compDates.every((d) => d <= asOf),
+      comp.error ? comp.error.message : `${compDates.length}건, 최대 날짜 ${compDates.sort().at(-1) ?? "-"} ≤ as_of ${asOf}.`
+    );
+  }
+
   console.log("\n────────────────────────────────────");
   const failed = results.filter((r) => !r.ok);
   console.log(`${results.length - failed.length}/${results.length} 통과`);
