@@ -3340,7 +3340,9 @@ const CHUSEOK_REPORT_VISIBLE_UNTIL_UTC_MS = Date.UTC(2026, 9, 2, 14, 59, 59, 999
 // PDF에 페이지 카운트를 직접 읽는 라이브러리 없이(이 환경엔 pdfjs-dist 등이 설치돼 있지 않음)
 // 파일 구조를 훑어 얻은 실측값 — 표지·별첨 포함 실제 쪽수와 한두 쪽 오차가 있어도, "다음" 버튼을
 // 몇 번 더 누르는 정도의 사소한 영향만 있다.
-const CHUSEOK_REPORT_TOTAL_PAGES = { summary: 30, detail: 50 } as const;
+// 2026-09-29: EBS·OCN 계열 참고채널 학습 슬라이드를 EOD 직전에 추가하면서 쪽수가
+// 늘었다(핵심판 30→31, 상세판 50→52) — 실제 PDF 쪽수와 맞춰 갱신.
+const CHUSEOK_REPORT_TOTAL_PAGES = { summary: 31, detail: 52 } as const;
 const CHUSEOK_REPORT_LABEL = { summary: "핵심판", detail: "상세판" } as const;
 // 렌더 함수 안에서 Date.now()를 직접 부르면 react-compiler purity 규칙에 걸린다(비결정
 // 함수 호출 금지) — 모듈이 로드되는 시점(=페이지가 열리는 시점) 한 번만 계산해 상수로 둔다.
