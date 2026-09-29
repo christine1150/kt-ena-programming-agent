@@ -110,6 +110,14 @@ function addDaysLocal(dateStr: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+// 사용자 지시(2026-09-30): "9월 3주" 같은 월중 몇째 주 표기 — 그 요일(월요일)이 이 달에
+// 몇 번째로 나오는지는 "일자 ÷ 7 올림"으로 항상 정확하다(요일 계산 라이브러리 불필요).
+function weekOfMonthLabel(mondayStr: string): string {
+  const d = new Date(`${mondayStr}T00:00:00Z`);
+  const month = d.getUTCMonth() + 1;
+  const occurrence = Math.ceil(d.getUTCDate() / 7);
+  return `${month}월 ${occurrence}주`;
+}
 
 export function ScheduleWeekGrid({
   channelCode,
@@ -165,6 +173,8 @@ export function ScheduleWeekGrid({
   // 시청률(순위) 형태로" — 프로그램 단위 rows와 별개로 그 날짜의 채널 단위 시청률·등위
   // (ratings.rank, 닐슨 등위 SSOT)를 날짜별로 받아둔다.
   const [dailyStatsByDate, setDailyStatsByDate] = useState<Map<string, { rating: number | null; rank: number | null }>>(new Map());
+  // 사용자 지시(2026-09-30): "주간 시청률과 주간 순위도 알고 있다면 날짜 옆에 적어주면 좋겠어"
+  const [weeklyStats, setWeeklyStats] = useState<{ rating: number | null; rank: number | null } | null>(null);
   const [dateByDow, setDateByDow] = useState<Map<number, string>>(new Map());
   const [resolvedWeek, setResolvedWeek] = useState<{ week: string; weekEnd: string } | null>(week && weekEnd ? { week, weekEnd } : null);
   // 사용자 지시(2026-09-20): "편성표 팝업에서 바로... 프린트하기" — 이 컴포넌트가 한 화면에
@@ -230,6 +240,7 @@ export function ScheduleWeekGrid({
         setChannelAnnualAvgRating(body.channelAnnualAvgRating ?? null);
         const dailyStats: { date: string; rating: number | null; rank: number | null }[] = body.dailyStats ?? [];
         setDailyStatsByDate(new Map(dailyStats.map((d) => [d.date, { rating: d.rating, rank: d.rank }])));
+        setWeeklyStats(body.weeklyStats ?? null);
         setDateByDow(new Map(rs.map((r) => [r.dow, r.broadcast_date])));
         if (body.ok && body.week && body.weekEnd) setResolvedWeek({ week: body.week, weekEnd: body.weekEnd });
       })
@@ -294,6 +305,17 @@ export function ScheduleWeekGrid({
           )}
           <p className="text-sm font-semibold text-zinc-700">
             {resolvedWeek.week} ~ {resolvedWeek.weekEnd}
+            {/* 사용자 지시(2026-09-30): "주간 시청률과 주간 순위도 알고 있다면 날짜 옆에" —
+                예시: "2026-09-21 ~ 2026-09-27 : 9월 3주 0.370 (12위)". */}
+            {weeklyStats && weeklyStats.rating !== null && (
+              <span className="ml-1.5 font-normal text-zinc-400">
+                : {weekOfMonthLabel(resolvedWeek.week)}{" "}
+                <span className="font-bold tabular-nums text-zinc-700">
+                  {weeklyStats.rating.toFixed(channelCode === "SKYUHD" ? 4 : 3)}
+                  {weeklyStats.rank !== null ? ` (${weeklyStats.rank}위)` : ""}
+                </span>
+              </span>
+            )}
           </p>
           {/* 사용자 지시(2026-09-20 재지시): "기본적으로 DB 기반으로 구성하되, 업로드된
               편성표가 매치되는 회차나 부제가 있으면 그것만 덧붙이는" — source가 세 가지로
@@ -403,7 +425,8 @@ export function ScheduleWeekGrid({
                         style={{ color: isAboveAnnual ? NARRATIVE_UP_COLOR : "#27272a" }}
                       >
                         {dayStat.rating.toFixed(channelCode === "SKYUHD" ? 4 : 3)}
-                        {dayStat.rank !== null ? `(${dayStat.rank}위)` : ""}
+                        {/* 사용자 지시(2026-09-30): "시청률과 순위 사이는 띄어쓰기를 해줘" */}
+                        {dayStat.rank !== null ? ` (${dayStat.rank}위)` : ""}
                       </div>
                     )}
                   </div>

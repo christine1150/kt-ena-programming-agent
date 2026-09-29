@@ -13,6 +13,8 @@ import {
   getScheduleGridRows,
   getChannelAnnualAvgRating,
   getChannelDailyStatsForWeek,
+  getCompetitorDailyStatsForWeek,
+  computeWeeklyAvgStat,
   mondayOf,
   addDaysStr,
   isCompetitorScheduleCode,
@@ -36,7 +38,10 @@ export async function GET(request: Request) {
   if (isCompetitorScheduleCode(channelCode)) {
     const competitorName = decodeCompetitorScheduleCode(channelCode);
     try {
-      const rows = await getCompetitorWeekScheduleRows(competitorName, week);
+      const [rows, dailyStats] = await Promise.all([
+        getCompetitorWeekScheduleRows(competitorName, week),
+        getCompetitorDailyStatsForWeek(competitorName, week),
+      ]);
       return NextResponse.json({
         ok: true,
         channelName: competitorName,
@@ -47,6 +52,8 @@ export async function GET(request: Request) {
         week,
         weekEnd: addDaysStr(week, 6),
         channelAnnualAvgRating: null,
+        dailyStats,
+        weeklyStats: computeWeeklyAvgStat(dailyStats),
         rows,
       });
     } catch (e) {
@@ -63,7 +70,7 @@ export async function GET(request: Request) {
       getChannelAnnualAvgRating(channel.id, channel.primary_target),
       getChannelDailyStatsForWeek(channel.id, channel.primary_target, week),
     ]);
-    return NextResponse.json({ ok: true, channelName: channel.name, themeColor: channel.theme_color, source, hasUpload, hasEpgData, week, weekEnd: addDaysStr(week, 6), channelAnnualAvgRating, dailyStats, rows });
+    return NextResponse.json({ ok: true, channelName: channel.name, themeColor: channel.theme_color, source, hasUpload, hasEpgData, week, weekEnd: addDaysStr(week, 6), channelAnnualAvgRating, dailyStats, weeklyStats: computeWeeklyAvgStat(dailyStats), rows });
   } catch (e) {
     return NextResponse.json({ ok: false, message: e instanceof Error ? e.message : "조회 중 오류가 발생했습니다." }, { status: 500 });
   }

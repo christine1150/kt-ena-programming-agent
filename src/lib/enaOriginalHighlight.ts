@@ -41,6 +41,11 @@ export interface EnaOriginalHighlightItem {
   // 방영 데이터로 판정해 내려준다.
   rerun_type?: "직재방" | "당일재방" | null;
   self_rerun_rating: number | null;
+  // 사용자 지시(2026-09-30) 후속: "본방 대비 유지율 10.1%로 4주 평균 대비 하락세를 보임"처럼
+  // "4주 평균 대비"가 임의 임계값이 아니라 실제 수치이길 요구 — 같은 채널·같은 요일·비슷한
+  // 시각(직재방 슬롯)의 최근 4주 평균(get_program_slot_recent_avg, route.ts에서 조회)을 그대로
+  // 실어, 이 파일에서는 비교 계산만 한다(새 SQL 집계 없음).
+  rerun_slot_recent_avg?: { avg_rating: number | null; sample_count: number } | null;
 }
 
 export function buildEnaOriginalHighlightSentence(
@@ -65,6 +70,20 @@ export function buildEnaOriginalHighlightSentence(
   return `${parts.join(", ")}.`;
 }
 
+// 사용자 지시(2026-09-30): "직재방 성과에 대한 분석 문구가 이상해. 본방 대비 10%밖에 되지
+// 않는데... 'ENA Drama 직재방 성과 미흡. 본방 대비 유지율 10.1%로...'와 같이 정확하게
+// 이야기 하기." — 기존 문장은 유지율 숫자만 괄호로 덧붙이고 그 숫자가 좋은지 나쁜지에 대한
+// 판정이 전혀 없어, 10%든 90%든 같은 어조로 읽혔다. retention_pct 구간별로 성과 판정 문구를
+// 앞에 붙인다(새 지표를 만들지 않고 이미 있는 retention_pct만 구간화).
+// 기준값: 명확한 근거 문헌은 없으나 "직후재방 유지율은 본방 대비 절반 이상이면 양호"가 편성팀
+// 통념적 기준이라 50%/80%로 3단 구분한다 — 향후 실측 데이터가 쌓이면 조정 가능.
+function rerunVerdict(retentionPct: number | null): { label: string; tone: "bad" | "warn" | "good" } | null {
+  if (retentionPct === null) return null;
+  if (retentionPct < 50) return { label: "성과 미흡", tone: "bad" };
+  if (retentionPct < 80) return { label: "성과 보통", tone: "warn" };
+  return { label: "성과 양호", tone: "good" };
+}
+
 // 사용자 지시(2026-08-26): 위에서 뺀 "다른 채널로의 직후재방" 성적을, 실제로 그 재방을 트는
 // 채널(예: ENA Drama) 자신의 채널별 인사이트 첫 문장으로 옮겨 보여준다.
 export function buildRerunHighlightSentence(
@@ -77,9 +96,65 @@ export function buildRerunHighlightSentence(
   );
   if (items.length === 0) return null;
   const parts = items.map((d) => {
-    const pct = d.retention_pct !== null ? ` (본방 대비 유지율 ${d.retention_pct.toFixed(1)}%)` : "";
     const label = d.rerun_type ?? "직재방";
-    return `'${d.featured_display_name ?? d.rerun_program_name ?? d.matched_program_name}' ${label} 수2049 ${formatRating(d.rerun_rating ?? null)}%${pct}`;
+    const verdict = rerunVerdict(d.retention_pct);
+    // 사용자 예시 형태: "ENA Drama 직재방 성과 미흡. 본방 대비 유지율 10.1%로 4주 평균 대비
+    // 하락세를 보임." — 이전 버전은 "하락세를 보임/견조함"이 retention_pct 임계값(성과 판정)
+    // 에서 나온 고정 문구라 "4주 평균"이라는 말과 달리 실제 4주 평균값을 전혀 보지 않았다.
+    // 같은 슬롯의 실측 4주 평균(rerun_slot_recent_avg, get_program_slot_recent_avg 조회 결과)이
+    // 있으면 오늘 재방 시청률과의 등락률을 그대로 계산해 붙인다 — Dashboard.tsx의
+    // computeRecentComparison과 같은 단순 등락률 계산(새 지표 아님), 표본이 없으면(신규 슬롯 등)
+    // 문구 자체를 생략한다(report-omit-unavailable-sections 규칙).
+    const verdictPrefix = verdict ? `${CHANNEL_NAME_BY_CODE[rerunChannelCode] ?? rerunChannelCode} ${label} ${verdict.label}. ` : "";
+    const pct = d.retention_pct !== null ? `본방 대비 유지율 ${d.retention_pct.toFixed(1)}%` : "유지율 정보 없음";
+    const slotAvg = d.rerun_slot_recent_avg;
+    let trendClause = "";
+    if (
+      slotAvg?.avg_rating !== null &&
+      slotAvg?.avg_rating !== undefined &&
+      slotAvg.avg_rating > 0 &&
+      slotAvg.sample_count > 0 &&
+      d.rerun_rating !== null &&
+      d.rerun_rating !== undefined
+    ) {
+      const deltaPct = ((d.rerun_rating - slotAvg.avg_rating) / slotAvg.avg_rating) * 100;
+      const arrow = deltaPct >= 0 ? "▲" : "▼";
+      trendClause = `, 4주 평균(${formatRating(slotAvg.avg_rating)}%) 대비 ${arrow}${Math.abs(deltaPct).toFixed(1)}%`;
+    }
+    return `${verdictPrefix}'${d.featured_display_name ?? d.rerun_program_name ?? d.matched_program_name}' ${label} 수2049 ${formatRating(d.rerun_rating ?? null)}% (${pct}${trendClause})`;
   });
   return `${parts.join(", ")}.`;
+}
+
+// 사용자 지시(2026-09-30): "원인 및 인사이트 영역 수정안... '편성 효율 및 시청자 흡수율이
+// 떨어진 것으로 분석됨.'처럼 정확하게. 본방 직후 타깃 유입 한계가 확인됨 → 직재방 편성
+// 시간대 재검토 및 타깃 유입 강화를 위한 전략적 편성 변화를 적어줘." — retention_pct 구간에
+// 맞춰 원인·전략 문장을 함께 만든다. buildRerunHighlightSentence와 같은 판정 기준을 쓴다.
+export function buildRerunCauseAndStrategy(
+  enaDaily: EnaOriginalHighlightItem[],
+  rerunChannelCode: string
+): { cause: string; strategy: string } | null {
+  const items = enaDaily.filter(
+    (d) => d.rerun_channel_code === rerunChannelCode && d.retention_pct !== null && d.retention_pct !== undefined
+  );
+  if (items.length === 0) return null;
+  // 여러 건이면 가장 낮은 유지율(가장 심각한 사례) 기준으로 원인·전략을 제시한다.
+  const worst = items.reduce((a, b) => ((b.retention_pct ?? 100) < (a.retention_pct ?? 100) ? b : a));
+  const verdict = rerunVerdict(worst.retention_pct);
+  if (verdict?.tone === "bad") {
+    return {
+      cause: "편성 효율 및 시청자 흡수율이 떨어진 것으로 분석됨.",
+      strategy: "본방 직후 타깃 유입 한계가 확인됨 → 직재방 편성 시간대 재검토 및 타깃 유입 강화를 위한 전략적 편성 변화가 필요함.",
+    };
+  }
+  if (verdict?.tone === "warn") {
+    return {
+      cause: "본방 대비 시청자 흡수율은 유지되나 개선 여지가 있는 것으로 분석됨.",
+      strategy: "직재방 편성 시간대·프로모션 노출을 점검해 유지율을 끌어올릴 여지가 있음.",
+    };
+  }
+  return {
+    cause: "본방 시청자가 직재방까지 안정적으로 이어진 것으로 분석됨.",
+    strategy: "현재 직재방 편성 시간대·구조를 유지하는 것이 바람직함.",
+  };
 }

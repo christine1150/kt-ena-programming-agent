@@ -659,6 +659,8 @@ interface ChannelData {
   // 사용자 지시(2026-08-26): ENA가 아닌 채널(재방을 트는 채널)의 오늘의 브리핑 첫 문장 —
   // 규칙기반 폴백용(LLM 성공 시엔 briefingLlm이 이미 이 값을 반영해 우선 사용됨).
   rerunLeadSentence: string | null;
+  // 사용자 지시(2026-09-30): 직재방 유지율 판정에 따른 원인·전략 문구(ENA가 아닌 채널만).
+  rerunCauseAndStrategy: { cause: string; strategy: string } | null;
   // 사용자 지시(2026-08-25): 오늘의 브리핑 상단 키워드 1~3위 나열용(단일 일자 조회일 때만 채워짐).
   top3Programs: { canonical_name: string; rating: number; start_time: string }[];
   // 사용자 지시(2026-09-02): 스코어 카드의 WEAK PROGRAMS가 당일 내용을 반영하도록 — top3Programs와
@@ -1094,7 +1096,14 @@ function hasEnoughSample(m: PeriodProgramMoverRow): boolean {
 // 기간 중 최고/최저일(get_rating_period_report 그대로 문장화, 새 계산 없음).
 // comparisonLabel: 비교 분석 프리셋(DoD/WoW/MoM/QoQ/YoY)이면 "전일"/"전주"/"전월"/"전분기"/
 // "전년 동기"로, 아니면 null(지난 N일류는 "직전 동일 길이 기간"이라는 일반 표현 유지).
-function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string | null): string | null {
+// 사용자 지시(2026-09-30): "전년 대비 이번년도 누적을 요청했는데 '브리핑을 작성할 데이터가
+// 부족하다'... 여러가지 버그가 발생했어. 모든 채널이 그래." — 실측 확인 결과 데이터 자체는
+// 정상이었고(avg_rating 등 전부 채워짐), 문제는 이 함수가 만든 문장 전체가 headline 없이
+// 통째로 접이식 "참고 N건 자세히 보기"에만 들어가, 화면을 열어도 아무 요약도 안 보이는 것이
+// "부족하다"는 오해를 만들었다. 문장을 배열로 반환해(join하지 않고) 호출부가 앞 1~2개는
+// 눈에 띄는 headline으로, 나머지(최고/최저일·연령대·프로그램 기여 등 상세)는 그대로 접이식에
+// 남기도록 나눠 쓸 수 있게 한다.
+function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string | null): string[] | null {
   const p = data.periodReport;
   if (!p || p.avg_rating === null) return null;
   // skyUHD만 예외적으로 소수점 5자리(사용자 지시 2026-08-20) — 아래 fmt(는 전부 이 부분적용 fmtR로 교체.
@@ -1216,7 +1225,7 @@ function buildPeriodSummaryParagraph(data: ChannelData, comparisonLabel: string 
     sentences.push(`데이터 없는날 ${data.missingDatesInfo.count}일(${data.missingDatesInfo.firstMissingDate}~)`);
   }
 
-  return sentences.join(" ");
+  return sentences;
 }
 
 // 사용자 지시(2026-08-21): "WHAT HAPPENED? 기간별 비교도... 어떤것이 여전히 시청률/점유율/
@@ -1364,8 +1373,20 @@ function buildBriefingReport(
   const sdowLabel = sdowContext ? `${sdowContext.weeksLabel} ${sdowContext.dowLabel}요일 평균` : null;
 
   if (showComparisonView) {
-    const periodParagraph = buildPeriodSummaryParagraph(data, comparisonLabel);
-    if (periodParagraph) paragraphs.push(periodParagraph);
+    const periodSentences = buildPeriodSummaryParagraph(data, comparisonLabel);
+    if (periodSentences && periodSentences.length > 0) {
+      // 사용자 지시(2026-09-30): 앞 1~2문장(기간 평균 + 직전 기간 대비 등락)을 headline으로
+      // 눈에 띄게 보여준다 — 단일 일자 모드의 헤드라인 색상 판정(verdict)과 같은 기준(±10%/±25%)
+      // 을 그대로 써서, 비교 모드에서도 헤드라인 색이 오르내림을 말해주게 한다.
+      const p = data.periodReport;
+      const headlineCount = p?.prior_period_change_pct !== null && p?.prior_period_change_pct !== undefined ? 2 : 1;
+      view.headline = periodSentences.slice(0, headlineCount).join(" ");
+      if (p?.prior_period_change_pct !== null && p?.prior_period_change_pct !== undefined) {
+        const abs = Math.abs(p.prior_period_change_pct);
+        view.verdict = abs < 10 ? "flat" : p.prior_period_change_pct > 0 ? "up" : "down";
+      }
+      paragraphs.push(...periodSentences.slice(headlineCount));
+    }
   } else {
     const current = data.trend.find((t) => t.period === "current");
     if (!s || current?.rating === null || current?.rating === undefined) {
@@ -1388,6 +1409,9 @@ function buildBriefingReport(
     // 매우 중요하므로 그 성과를 오늘의 브리핑 첫 문장으로 — 이미 완성된 짧은 문장이라 그대로 둔다.
     const enaLeadSentence = data.enaOriginalDaily.length > 0 ? buildEnaOriginalHighlightSentence(data.enaOriginalDaily, fmtR) : data.rerunLeadSentence;
     if (enaLeadSentence) pushDriver(1, enaLeadSentence);
+    // 사용자 지시(2026-09-30): 직재방 유지율 판정에 따른 원인 문구 — 재방 성적 근거 바로
+    // 다음 줄에 붙여, "무엇이 일어났나(위 문장) → 왜(이 문장)"로 이어지게 한다.
+    if (data.rerunCauseAndStrategy) pushDriver(1.5, data.rerunCauseAndStrategy.cause);
 
     const baselineLabelText = sdowLabel ?? "최근 12주 평균";
     // 헤드라인 — 그날의 결론 한 줄. 등락 방향과 폭을 판정어로 바꿔 "무슨 날이었나"에 답한다.
@@ -1669,6 +1693,9 @@ function buildBriefingReport(
         items.push(`피크가 프라임 밖 ${String(s.today_peak_hour).padStart(2, "0")}시에 형성 — 프라임 편성 경쟁력과 유입 동선 점검 필요`);
       }
 
+      // 사용자 지시(2026-09-30): 직재방 유지율이 낮은 날은 그 전략 제안을 시사점 맨 앞에 둔다
+      // (채널 전체 시사점보다 오늘 브리핑 첫 줄과 바로 이어지는 내용이라 우선순위가 높음).
+      if (data.rerunCauseAndStrategy) items.unshift(data.rerunCauseAndStrategy.strategy);
       view.implications = items.slice(0, 2);
       // 시사점 첫 줄이 하락 주범을 이미 (더 자세히) 말하면 같은 내용의 근거 항목은 뺀다 —
       // 근거와 시사점이 나란히 같은 문장을 반복하지 않도록(사용자 지시 2026-09-23: 간결하게).

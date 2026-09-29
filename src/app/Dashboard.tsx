@@ -3359,7 +3359,11 @@ function ChuseokSpecialReportCard() {
   if (!CHUSEOK_REPORT_VISIBLE) return null;
 
   const totalPages = CHUSEOK_REPORT_TOTAL_PAGES[variant];
-  const viewSrc = `/api/reports/chuseok?variant=${variant}&mode=view#page=${page}`;
+  // 사용자 지시(2026-09-30): "한눈에 한 쪽이 잘 보일수 있게" — 브라우저 내장 PDF 뷰어는 이전에
+  // 사용자가 확대해 둔 배율(예: 130%)을 문서가 바뀌어도 그대로 기억해, 페이지 아래위가 잘린
+  // 채로 열리는 경우가 있었다. zoom=page-fit을 명시해 매번 "페이지 전체가 한 화면에 들어오는"
+  // 배율로 강제 초기화한다(Chrome/Edge 내장 PDF 뷰어가 지원하는 레거시 Acrobat 오픈 파라미터).
+  const viewSrc = `/api/reports/chuseok?variant=${variant}&mode=view#page=${page}&zoom=page-fit`;
 
   const switchVariant = (v: "summary" | "detail") => {
     setVariant(v);

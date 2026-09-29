@@ -405,6 +405,59 @@ export async function getChannelDailyStatsForWeek(
   }));
 }
 
+// 사용자 지시(2026-09-30): "주간 비교에서 경쟁 채널도 일간 순위 및 시청률을 알고 있다면
+// 자사 채널처럼 적어줘" — 경쟁채널은 channels.primary_target이 없으므로(우리 7개 채널
+// 전용 컬럼), competitors 테이블에서 그 경쟁채널을 등록해 둔 우리 채널을 찾아 그 채널의
+// primary_target을 빌려 쓴다(같은 경쟁채널이 여러 채널에 등록돼 있으면 그중 하나로 충분 —
+// competitor_ratings 자체가 랭킹 시트 기준 "채널 단위" 값이라 등록 채널마다 값이 달라지지
+// 않음). getChannelDailyStatsForWeek와 동일하게 랭킹 시트 표기(resolveRankSheetTargetLabel)로
+// 맞춰 조회한다.
+export async function getCompetitorDailyStatsForWeek(
+  competitorName: string,
+  week: string
+): Promise<{ date: string; rating: number | null; rank: number | null }[]> {
+  const { data: reg } = await supabase
+    .from("competitors")
+    .select("channels(primary_target)")
+    .eq("competitor_name", competitorName)
+    .limit(1)
+    .maybeSingle();
+  // Supabase가 조인 결과를 배열로 돌려주는 경우도 있어(단일 객체로 가정한 캐스팅은 tsc가
+  // 타입 불일치로 잡아냄), 다른 조인 매핑(위 mapRow)과 같은 Array.isArray 분기로 처리한다.
+  const channelsJoin = reg?.channels as { primary_target: string | null } | { primary_target: string | null }[] | null;
+  const primaryTarget = (Array.isArray(channelsJoin) ? channelsJoin[0]?.primary_target : channelsJoin?.primary_target) ?? null;
+  if (!primaryTarget) return [];
+  const { data: targetRow } = await supabase.from("targets").select("id").eq("label", resolveRankSheetTargetLabel(primaryTarget)).maybeSingle();
+  if (!targetRow) return [];
+  const { data } = await supabase
+    .from("competitor_ratings")
+    .select("broadcast_date, rating, rank")
+    .eq("competitor_name", competitorName)
+    .eq("target_id", targetRow.id)
+    .gte("broadcast_date", week)
+    .lte("broadcast_date", addDaysStr(week, 6));
+  return (data ?? []).map((r) => ({
+    date: r.broadcast_date as string,
+    rating: r.rating as number | null,
+    rank: r.rank as number | null,
+  }));
+}
+
+// 사용자 지시(2026-09-30): "주간 시청률과 주간 순위도 알고 있다면 날짜 옆에 적어주면 좋겠어"
+// — 이미 받아둔 하루치 배열(자사·경쟁채널 공용)을 그대로 평균낸다. 순위는 Nielsen이 매일
+// 이미 계산해 둔 값의 평균이며(get_channel_period_rank_and_rating과 같은 원칙 — 재계산하지
+// 않음), 표시는 "등위는 반올림한 자연수로" 관례에 맞춰 정수로 반올림한다.
+export function computeWeeklyAvgStat(
+  daily: { rating: number | null; rank: number | null }[]
+): { rating: number | null; rank: number | null } {
+  const ratings = daily.map((d) => d.rating).filter((v): v is number => v !== null);
+  const ranks = daily.map((d) => d.rank).filter((v): v is number => v !== null);
+  return {
+    rating: ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null,
+    rank: ranks.length > 0 ? Math.round(ranks.reduce((a, b) => a + b, 0) / ranks.length) : null,
+  };
+}
+
 export async function getChannelAnnualAvgRating(channelId: string, primaryTarget: string | null): Promise<number | null> {
   if (!primaryTarget) return null;
   const { data: targetRow } = await supabase.from("targets").select("id").eq("label", resolveRankSheetTargetLabel(primaryTarget)).maybeSingle();

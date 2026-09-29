@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL, resolveMarketYtdTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
-import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
+import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence, buildRerunCauseAndStrategy } from "@/lib/enaOriginalHighlight";
 import { buildBriefingReportViaLlm, type BriefingReport } from "@/lib/briefingReportLlm";
 // 사용자 지시(2026-09-18): WHY? 진단이 causeClassifier.ts의 편성량/성과 항등 분해를 쓰도록,
 // Page 1 월간 리뷰가 이미 쓰는 프라임 정의(하나의 정의만 쓴다는 원칙)를 그대로 재사용.
@@ -179,6 +179,7 @@ export async function GET(request: Request) {
       weakProgramsToday: [],
       enaOriginalDaily: [],
       rerunLeadSentence: null,
+      rerunCauseAndStrategy: null,
       briefingLlm: null,
       primeSummary: null,
       dowHourBlockPattern: [],
@@ -1208,6 +1209,9 @@ export async function GET(request: Request) {
   // ENA 자신이면 enaOriginalDaily(기존 그대로), 재방 목적지 채널이면 아래 rerunLeadSentence로
   // 나눠 쓴다.
   let rerunLeadSentence: string | null = null;
+  // 사용자 지시(2026-09-30): 직재방 유지율 판정에 따른 원인·전략 문구 — buildRerunHighlightSentence
+  // 와 같은 rows에서 함께 만든다(재조회 없음).
+  let rerunCauseAndStrategy: { cause: string; strategy: string } | null = null;
   if (!isRangeMode) {
     type OriginalDailyRawRow = {
       broadcast_channel_code: string;
@@ -1220,6 +1224,7 @@ export async function GET(request: Request) {
       retention_pct: number | null;
       rerun_channel_code: string | null;
       rerun_program_name: string | null;
+      rerun_start_time: string | null;
       rerun_rating: number | null;
       self_rerun_rating: number | null;
     };
@@ -1249,7 +1254,41 @@ export async function GET(request: Request) {
           self_rerun_rating: r.self_rerun_rating,
         }));
     } else {
-      rerunLeadSentence = buildRerunHighlightSentence(rows, channel.code, (v) => (v === null ? "—" : v.toFixed(channel.code === "SKYUHD" ? 5 : 3)));
+      // 사용자 지시(2026-09-30) 후속: "본방 대비 유지율 10.1%로 4주 평균 대비 하락세를 보임"처럼
+      // "4주 평균 대비"를 실제 수치로 말하려면, 직재방 슬롯(같은 채널·같은 요일·비슷한 시각)의
+      // 최근 4주 평균 시청률이 필요하다. get_program_slot_recent_avg(이미 page1에서 "신규
+      // 파일럿 baseline"으로 쓰는 동일 RPC)를 그 슬롯에 대해 불러 온다 — 새 계산식 없이 DB
+      // 집계 그대로, programTargetLabel(위 321행에서 이미 channel.primary_target로 구한 값)은
+      // get_original_content_daily가 내부에서 쓰는 program_target_label과 같은 표기라 그대로
+      // 재사용 가능(둘 다 Group A 채널이면 "수도권 2049"로 일치).
+      const rerunRows = rows.filter(
+        (r) => r.rerun_channel_code === channel.code && r.rerun_rating !== null && r.rerun_start_time !== null
+      );
+      const slotAvgByStartTime = new Map<string, { avg_rating: number | null; sample_count: number }>();
+      await Promise.all(
+        rerunRows
+          .filter((r) => !slotAvgByStartTime.has(r.rerun_start_time as string))
+          .map(async (r) => {
+            const startTime = r.rerun_start_time as string;
+            slotAvgByStartTime.set(startTime, { avg_rating: null, sample_count: 0 }); // 중복 조회 방지용 선점
+            const { data } = await supabase.rpc("get_program_slot_recent_avg", {
+              p_channel_code: channel.code,
+              p_target_label: programTargetLabel,
+              p_as_of_date: dateTo,
+              p_start_time: startTime,
+              p_weeks: 4,
+            });
+            const avgRow = ((data ?? []) as { avg_rating: number | null; sample_count: number }[])[0];
+            slotAvgByStartTime.set(startTime, { avg_rating: avgRow?.avg_rating ?? null, sample_count: avgRow?.sample_count ?? 0 });
+          })
+      );
+      const rowsWithSlotAvg = rows.map((r) => ({
+        ...r,
+        rerun_slot_recent_avg:
+          r.rerun_start_time !== null ? (slotAvgByStartTime.get(r.rerun_start_time) ?? null) : null,
+      }));
+      rerunLeadSentence = buildRerunHighlightSentence(rowsWithSlotAvg, channel.code, (v) => (v === null ? "—" : v.toFixed(channel.code === "SKYUHD" ? 5 : 3)));
+      rerunCauseAndStrategy = buildRerunCauseAndStrategy(rowsWithSlotAvg, channel.code);
     }
   }
 
@@ -1530,6 +1569,7 @@ export async function GET(request: Request) {
     // 사용자 지시(2026-08-26): ENA가 아닌 채널(재방을 트는 채널)의 오늘의 브리핑 규칙기반
     // 폴백용 — LLM 실패 시 클라이언트가 이 값으로 직접 문장을 만든다.
     rerunLeadSentence,
+    rerunCauseAndStrategy,
     demographicHighlights,
     competitorInsightReport: competitorInsightReport ?? [],
     marketYtdCompetitorSnapshot,
