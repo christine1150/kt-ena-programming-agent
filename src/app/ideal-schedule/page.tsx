@@ -1,22 +1,30 @@
 "use client";
 
-// 이상적 1주일 편성(Ideal Weekly Grid) — 사용자 지시(2026-09-30). 최근 12주 Nielsen 데이터로 결정론적 엔진이
+// 이상적 1주일 편성(Ideal Weekly Grid) — "시청률 자판기". 최근 12주 Nielsen 데이터로 결정론적 엔진이
 // 계산한 "데이터 기반 이상적 주간 편성표"를 보여준다. 모든 수치·편성 결정은 서버 엔진(src/lib/idealSchedule)이
 // 계산해 저장한 값이며, 이 화면은 조건 입력·표시·수동 교체만 한다. 기대값은 "최근 12주 데이터 기반 기대
-// 시청률"이지 실제 미래 시청률 예측이 아니다. 한 페이지 스크롤(탭 없음 — 사용자 선호).
-// 기본값은 선택한 자사 채널의 편성 프로그램만(경쟁사 콘텐츠는 사용자가 켰을 때만 — 사용자 지시).
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { VendingCoinIcon } from "@/components/VendingIcons";
+// 시청률"이지 실제 미래 시청률 예측이 아니다. 기본값은 선택한 자사 채널의 편성 프로그램만(경쟁사는 켰을 때만).
+//
+// 2026-09-30 개편(페르소나 4인 검토 — 편성 PD·UX·통계·프론트엔드 — 종합):
+// - 결과 우선: 진입하면 가장 최근 편성안(다음 주 저장본 → 다음 주 최신 → 저장본 → 최신)을 바로 연다.
+// - 2패널: 넓은 화면(xl)에서 좌측 340px 패널(요약·주요 변경·조건·필수 편성·성향) + 우측 편성표. 좁으면 위아래로 쌓는다.
+//   탭은 쓰지 않는다(사용자 선호: 한 페이지 스크롤).
+// - 편성표: 한눈에 맞춤/확대/전체 화면, 지난주 대비 변경 배지, 범례, 대체 후보 미리보기(What-if), 인쇄(A4 가로).
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
-import { addDaysLocal, weekOfMonthLabel } from "@/lib/scheduleGridLayout";
+import { VendingCoinIcon, VendingMachineIcon } from "@/components/VendingIcons";
+import { DOW_LABELS, addDaysLocal, minToLabel, weekOfMonthLabel } from "@/lib/scheduleGridLayout";
 import { BacktestPanel } from "./BacktestPanel";
-import { BlockDrawer } from "./BlockDrawer";
+import { BlockDrawer, type Candidate } from "./BlockDrawer";
 import { CompareTable } from "./CompareTable";
-import { IdealWeekGrid } from "./IdealWeekGrid";
+import { GridLegend } from "./GridLegend";
+import { IdealWeekGrid, type BlockDiff } from "./IdealWeekGrid";
 import { RequiredScheduleEditor } from "./RequiredScheduleEditor";
-import { mondayOfLocal, normalizeBlock, pct, type BlockRow, type RunRow } from "./model";
+import { SummaryPanel } from "./SummaryPanel";
+import { SMALL_GAIN_RATIO, mondayOfLocal, normalizeBlock, signedPct, weeklyExpected, type BlockRow, type CompareRow, type RunRow } from "./model";
 
 type ChannelOpt = { code: string; name: string; theme_color: string | null; logo_path: string | null; logo_visible_ratio: number | null; logo_visible_top_ratio: number | null };
 type Options = {
@@ -47,12 +55,21 @@ const WEIGHT_HELP: Record<string, string> = {
   stability: "회차마다 시청률이 들쭉날쭉하지 않고 꾸준한 프로그램을 우선합니다.",
   lead: "앞 프로그램에 이어 붙였을 때 시청이 이어진 적 있는 조합을 우선합니다(관측일 뿐 효과 보장 아님).",
 };
+// 프리셋 이름은 PD 검토 의견대로 "~안"으로(게임처럼 보이지 않게). 프리셋끼리 우열은 매기지 않는다.
 const WEIGHT_PRESETS: { name: string; hint: string; values: Record<string, number> }[] = [
-  { name: "기본(균형)", hint: "채널 기본 비율", values: { kpi: 35, weekday_slot: 20, target: 20, trend: 10, stability: 5, lead: 10 } },
-  { name: "성적 우선", hint: "실제 시청률이 높았던 프로그램 위주", values: { kpi: 60, weekday_slot: 15, target: 10, trend: 5, stability: 5, lead: 5 } },
-  { name: "꾸준함 우선", hint: "들쭉날쭉하지 않은 프로그램 위주", values: { kpi: 30, weekday_slot: 20, target: 10, trend: 5, stability: 30, lead: 5 } },
-  { name: "상승세 우선", hint: "최근 오르는 프로그램 위주", values: { kpi: 25, weekday_slot: 15, target: 10, trend: 40, stability: 5, lead: 5 } },
+  { name: "기본안", hint: "채널 기본 비율", values: { kpi: 35, weekday_slot: 20, target: 20, trend: 10, stability: 5, lead: 10 } },
+  { name: "시청률 우선안", hint: "기대 시청률만 봅니다(다른 항목 0)", values: { kpi: 100, weekday_slot: 0, target: 0, trend: 0, stability: 0, lead: 0 } },
+  { name: "안정 운영안", hint: "들쭉날쭉하지 않은 프로그램 위주", values: { kpi: 30, weekday_slot: 20, target: 10, trend: 5, stability: 30, lead: 5 } },
+  { name: "상승세 반영안", hint: "최근 오르는 프로그램 위주", values: { kpi: 25, weekday_slot: 15, target: 10, trend: 40, stability: 5, lead: 5 } },
+  { name: "핵심 시청층 강화안", hint: "채널 핵심 타깃 구성비가 높은 프로그램 위주", values: { kpi: 30, weekday_slot: 15, target: 40, trend: 5, stability: 5, lead: 5 } },
 ];
+
+// 그리드 배율: "맞춤"은 화면 높이에 24시간이 들어오게, 나머지는 1분당 px(0.6 = ENA 주간 비교와 같은 100%)
+const ZOOM_STEPS = [0.6, 0.9, 1.2];
+const PRINT_PPM = 0.4; // A4 가로 한 장에 24시간이 들어가는 배율
+
+const kpiText = (label: string | undefined | null) => (label === "__SKYUHD__" ? "유료방송가구" : (label ?? "-"));
+const kstTime = (iso: string) => new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 
 function IdealSchedulePage() {
   const router = useRouter();
@@ -61,10 +78,10 @@ function IdealSchedulePage() {
   const runParam = sp.get("run");
 
   const thisMonday = useMemo(() => mondayOfLocal(new Date()), []);
-  const weekChoices = useMemo(() => Array.from({ length: 8 }, (_, i) => addDaysLocal(thisMonday, 7 - 7 * i)), [thisMonday]);
+  const nextMonday = addDaysLocal(thisMonday, 7);
 
   const [opts, setOpts] = useState<Options | null>(null);
-  const [weekStart, setWeekStart] = useState(addDaysLocal(thisMonday, 7));
+  const [weekStart, setWeekStart] = useState(nextMonday);
   const [mode, setMode] = useState<"KEEP_CURRENT" | "AI_OPTIMIZED">("KEEP_CURRENT");
   const [target, setTarget] = useState("");
   const [competitors, setCompetitors] = useState<string[]>([]);
@@ -79,12 +96,29 @@ function IdealSchedulePage() {
   const [configMsg, setConfigMsg] = useState<string | null>(null);
 
   const [data, setData] = useState<RunData | null>(null);
+  const [compareRows, setCompareRows] = useState<{ runId: string; rows: CompareRow[]; currentWeekStart: string | null } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCompare, setShowCompare] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [dimUnchanged, setDimUnchanged] = useState(false);
   const [runs, setRuns] = useState<RunListItem[]>([]);
+  const [runsChannel, setRunsChannel] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  // What-if: 실제 편성(data)과 분리된 미리보기 상태 — [적용]을 눌러야 기존 교체 API가 호출된다
+  const [rawPreview, setPreview] = useState<{ block: BlockRow; cand: Candidate } | null>(null);
+  // 그리드 배율·전체 화면·인쇄
+  const [zoom, setZoom] = useState<"fit" | number>("fit");
+  const [fitPpm, setFitPpm] = useState(0.5);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const compareRef = useRef<HTMLDetailsElement>(null);
+
+  const lastRun = useRef<RunRow | null>(null);
+  const syncedRun = useRef<string | null>(null);
+  const optsChannel = useRef<string | null>(null);
+  const applyRunRef = useRef<(r: RunRow) => void>(() => undefined);
 
   // 채널이 바뀌면 선택지(타깃·경쟁채널·설정)를 다시 받는다
   useEffect(() => {
@@ -102,6 +136,12 @@ function IdealSchedulePage() {
         setWeights(b.config.weights);
         setSavedWeights(b.config.weights);
         setSavedCaps({ daily: b.config.repeat_rules.daily_cap, weekly: b.config.repeat_rules.weekly_cap });
+        optsChannel.current = channelCode;
+        const loaded = lastRun.current;
+        if (loaded && loaded.channels?.code === channelCode) {
+          syncedRun.current = loaded.id;
+          applyRunRef.current(loaded);
+        }
       });
     return () => {
       alive = false;
@@ -111,7 +151,11 @@ function IdealSchedulePage() {
   const loadRuns = useCallback(() => {
     fetch(`/api/scheduling/ideal-schedule?channel=${encodeURIComponent(channelCode)}`)
       .then((r) => r.json())
-      .then((b) => b.ok && setRuns(b.runs));
+      .then((b) => {
+        if (!b.ok) return;
+        setRuns(b.runs);
+        setRunsChannel(channelCode);
+      });
   }, [channelCode]);
   useEffect(() => {
     loadRuns();
@@ -123,6 +167,13 @@ function IdealSchedulePage() {
       .then((b) => {
         if (!b.ok) throw new Error(b.message);
         setData({ run: b.run, blocks: (b.blocks as Record<string, unknown>[]).map(normalizeBlock), channelAnnualAvgRating: b.channelAnnualAvgRating });
+        const run = b.run as RunRow;
+        lastRun.current = run;
+        // 같은 편성안을 다시 불러올 때(교체 후 등)는 사용자가 바꾼 조건을 덮어쓰지 않는다
+        if (syncedRun.current !== run.id && optsChannel.current === run.channels?.code) {
+          syncedRun.current = run.id;
+          applyRunRef.current(run);
+        }
       })
       .catch((e: Error) => setError(e.message));
   }, []);
@@ -130,20 +181,133 @@ function IdealSchedulePage() {
     if (runParam) void loadRun(runParam);
   }, [runParam, loadRun]);
 
+  // 결과 우선 진입: ?run= 없이 들어오면 가장 알맞은 최근 편성안을 연다(PD·UX 검토)
+  useEffect(() => {
+    if (runParam || runsChannel !== channelCode || runs.length === 0) return;
+    const pick = runs.find((r) => r.saved_at && r.week_start === nextMonday) ?? runs.find((r) => r.week_start === nextMonday) ?? runs.find((r) => r.saved_at) ?? runs[0];
+    router.replace(`/ideal-schedule?channel=${encodeURIComponent(channelCode)}&run=${pick.id}`);
+  }, [runParam, runs, runsChannel, channelCode, nextMonday, router]);
+
+  // 다른 채널의 실행이 남아 보이지 않게 — 지금 채널의 실행만 화면에 쓴다
+  const view = data && data.run.channels?.code === channelCode ? data : null;
+  const runId = view?.run.id ?? null;
+
+  // 불러온 편성안의 조건을 좌측 조건 칸에 되돌려 맞춘다(다시 뽑으면 보고 있는 결과와 같은 조건).
+  // 편성안 불러오기와 채널 옵션 불러오기 중 늦게 끝난 쪽에서 적용한다(옵션 초기화가 덮어쓰지 않게).
+  function applyRunConditions(r: RunRow) {
+    setWeekStart(r.week_start);
+    setMode(r.structure_mode);
+    setTarget(r.optimize_target_is_channel_kpi ? "" : r.optimize_target_label);
+    setCompetitors(r.competitor_names ?? []);
+    setStrategyMode(r.strategy_mode);
+    setPlacement((r.benchmark_placement as "NONE" | "SUGGEST_ONLY" | "MIX") ?? "NONE");
+    setEpisodeMode(r.episode_mode ?? "PROGRAM");
+    const snap = r.config_snapshot;
+    if (snap?.weights) setWeights(snap.weights);
+    if (snap?.repeat_rules) setCaps({ daily: snap.repeat_rules.daily_cap, weekly: snap.repeat_rules.weekly_cap });
+  }
+  useEffect(() => {
+    applyRunRef.current = applyRunConditions;
+  });
+
+  // 지난주 실제 편성 대비 변경(/compare) — 요약·주요 변경·그리드 배지·대조표가 한 번 받은 값을 같이 쓴다
+  useEffect(() => {
+    if (!runId) return;
+    let alive = true;
+    fetch(`/api/scheduling/ideal-schedule/${runId}/compare`)
+      .then((r) => r.json())
+      .then((b) => alive && b.ok && setCompareRows({ runId, rows: b.rows, currentWeekStart: b.currentWeekStart }));
+    return () => {
+      alive = false;
+    };
+  }, [runId, view?.blocks]);
+  const rows = compareRows && compareRows.runId === runId ? compareRows.rows : null;
+
+  // 한눈에 맞춤 배율: 페이지 맨 위에서 볼 때 02~26시가 화면 안에 모두 들어오게 — 편성표 본문이 시작하는
+  // 실제 위치(툴바·범례·미리보기 바 높이에 따라 달라짐)를 재서 남는 높이로 나눈다
+  // (미리보기 바가 떴다 사라질 때마다 배율이 바뀌면 편성표가 출렁여서, 미리보기는 재계산 조건에서 뺀다)
+  useEffect(() => {
+    const calc = () => {
+      const el = document.querySelector<HTMLElement>('[data-ideal-grid="IDEAL"]');
+      const scroller = fullscreen ? el?.closest<HTMLElement>("[data-grid-scroller]") : null;
+      const top = el ? el.getBoundingClientRect().top + (scroller ? scroller.scrollTop : window.scrollY) : fullscreen ? 90 : 210;
+      const chrome = 37 + 40 + 16; // 편성표 제목 줄 + 요일 칸 + 아래 여유
+      setFitPpm(Math.min(1, Math.max(0.35, (window.innerHeight - top - chrome) / 1440)));
+    };
+    calc();
+    window.addEventListener("resize", calc);
+    return () => window.removeEventListener("resize", calc);
+  }, [fullscreen, runId, showCompare]);
+  const changeZoom = (z: "fit" | number) => setZoom(z);
+  const ppm = printing ? PRINT_PPM : zoom === "fit" ? fitPpm : zoom;
+
+  // 인쇄: 인쇄 직전 A4 한 장 배율로 바꾸고, 끝나면 되돌린다(Ctrl+P도 같은 처리)
+  useEffect(() => {
+    const before = () => flushSync(() => setPrinting(true));
+    const after = () => setPrinting(false);
+    window.addEventListener("beforeprint", before);
+    window.addEventListener("afterprint", after);
+    return () => {
+      window.removeEventListener("beforeprint", before);
+      window.removeEventListener("afterprint", after);
+    };
+  }, []);
+  const doPrint = () => {
+    flushSync(() => setPrinting(true));
+    window.print();
+  };
+
+  // 전체 화면(Esc로 닫기 — 드로어가 열려 있으면 드로어 먼저)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (rawPreview) setPreview(null);
+      else if (selectedId) setSelectedId(null);
+      else if (fullscreen) setFullscreen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen, selectedId, rawPreview]);
+
   const channelOpt = opts?.channels.find((c) => c.code === channelCode) ?? null;
-  const themeColor = data?.run.channels?.theme_color || channelOpt?.theme_color || "#6366f1";
+  const themeColor = view?.run.channels?.theme_color || channelOpt?.theme_color || "#6366f1";
   const decimals = channelCode === "SKYUHD" ? 4 : 3;
-  const runId = data?.run.id ?? null;
-  const summary = data?.run.summary ?? null;
-  const ideal = useMemo(() => (data?.blocks ?? []).filter((b) => b.layer === "IDEAL"), [data]);
-  const current = useMemo(() => (data?.blocks ?? []).filter((b) => b.layer === "CURRENT"), [data]);
-  const selected = data?.blocks.find((b) => b.id === selectedId) ?? null;
-  const pivot = data?.channelAnnualAvgRating ? data.channelAnnualAvgRating * 2 : null;
+  const summary = view?.run.summary ?? null;
+  const ideal = useMemo(() => (view?.blocks ?? []).filter((b) => b.layer === "IDEAL"), [view]);
+  const current = useMemo(() => (view?.blocks ?? []).filter((b) => b.layer === "CURRENT"), [view]);
+  const selected = view?.blocks.find((b) => b.id === selectedId) ?? null;
+  // 채널·편성안이 바뀌면 이전 미리보기는 자동으로 무시된다(지금 편성안 블록에 대한 것만 사용)
+  const preview = rawPreview && ideal.some((b) => b.id === rawPreview.block.id) ? rawPreview : null;
+  const pivot = view?.channelAnnualAvgRating ? view.channelAnnualAvgRating * 2 : null;
+  const runKpi = kpiText(view?.run.optimize_target_label ?? opts?.channelKpiLabel);
+
+  const diffById = useMemo(() => {
+    const m = new Map<string, BlockDiff>();
+    for (const r of rows ?? []) {
+      const q = r.expectedKpiDiff !== null && r.current?.expectedKpi ? r.expectedKpiDiff / r.current.expectedKpi : null;
+      m.set(r.ideal.blockId, { changed: r.changed, diff: r.expectedKpiDiff, currentName: r.current?.programName ?? null, small: q !== null && Math.abs(q) < SMALL_GAIN_RATIO });
+    }
+    return m;
+  }, [rows]);
+  const selectedCompare = rows?.find((r) => r.ideal.blockId === selectedId) ?? null;
+
+  // What-if 합계: 같은 식(편성 분 가중 평균)으로 이 칸만 후보 값으로 바꿔 다시 합산 — 이웃 영향은 넣지 않는다
+  const whatIf = useMemo(() => {
+    if (!preview) return null;
+    const before = weeklyExpected(ideal);
+    const after = weeklyExpected(ideal.map((b) => (b.id === preview.block.id ? { ...b, expected_kpi: preview.cand.expected_kpi, content_type: preview.cand.candidate.contentType as BlockRow["content_type"] } : b)));
+    return { before, after, lenMismatch: (preview.cand.penalties?.runtime_mismatch ?? 0) > 0.0005 };
+  }, [preview, ideal]);
+
+  const selectBlock = (id: string | null) => {
+    setPreview(null);
+    setSelectedId(id);
+  };
 
   async function generate() {
-    setBusy("이상적 편성을 계산하고 있습니다… (보통 5~15초)");
+    setBusy("편성표를 뽑고 있습니다… (보통 5~15초)");
     setError(null);
-    setSelectedId(null);
+    selectBlock(null);
     const r = await fetch("/api/scheduling/ideal-schedule", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -170,8 +334,10 @@ function IdealSchedulePage() {
 
   async function recalc(keepOverrides: boolean) {
     if (!runId) return;
+    if (!keepOverrides && !window.confirm("수동 교체·잠금을 모두 지우고 처음부터 다시 계산할까요?")) return;
     setBusy(keepOverrides ? "수동 변경을 유지하고 다시 계산하고 있습니다…" : "수동 변경을 지우고 다시 계산하고 있습니다…");
     setError(null);
+    selectBlock(null);
     const r = await fetch(`/api/scheduling/ideal-schedule/${runId}/recalculate`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ keepOverrides }) });
     const j = await r.json();
     setBusy(null);
@@ -191,6 +357,17 @@ function IdealSchedulePage() {
     loadRuns();
   }
 
+  async function applyPreview() {
+    if (!preview || !runId) return;
+    setBusy("교체하고 있습니다…");
+    const r = await fetch(`/api/scheduling/ideal-schedule/${runId}/blocks/${preview.block.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "swap", candidateId: preview.cand.id }) });
+    const j = await r.json();
+    setBusy(null);
+    if (!j.ok) return setError(j.message ?? "교체하지 못했습니다.");
+    setPreview(null);
+    await loadRun(runId);
+  }
+
   async function saveConfig() {
     if (!caps || !weights) return;
     setConfigMsg(null);
@@ -207,91 +384,319 @@ function IdealSchedulePage() {
     setConfigMsg(j.ok ? `${channelOpt?.name ?? channelCode} 설정을 저장했습니다. 이제 이 채널의 기본값입니다.` : (j.message ?? "저장하지 못했습니다."));
   }
 
+  const openCompare = () => {
+    setCompareOpen(true);
+    requestAnimationFrame(() => compareRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
   const fmt = (v: number | null | undefined) => (v === null || v === undefined ? "-" : v.toFixed(decimals));
-  const sel = "rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-700";
+  const sel = "w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-700";
+  const card = "rounded-2xl border border-zinc-200 bg-white p-4";
+  const pill = "rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-40";
+  const weightsChanged =
+    !!weights && !!savedWeights && (WEIGHT_ORDER.some((k) => (weights[k] ?? 0) !== (savedWeights[k] ?? 0)) || (!!caps && !!savedCaps && (caps.daily !== savedCaps.daily || caps.weekly !== savedCaps.weekly)));
+  const activePreset = weights ? WEIGHT_PRESETS.find((p) => WEIGHT_ORDER.every((k) => (p.values[k] ?? 0) === (weights[k] ?? 0)))?.name : undefined;
+  const weekChoices = useMemo(() => {
+    const base = Array.from({ length: 8 }, (_, i) => addDaysLocal(thisMonday, 7 - 7 * i));
+    return base.includes(weekStart) ? base : [weekStart, ...base];
+  }, [thisMonday, weekStart]);
+  const conflictsOrWarnings = view && (view.run.conflicts.length > 0 || (summary?.warnings?.length ?? 0) > 0);
+
+  const gridArea = view && (
+    <div data-grid-scroller className={fullscreen ? "fixed inset-0 z-50 space-y-3 overflow-auto bg-white p-4" : "space-y-3"}>
+      {/* 툴바 */}
+      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
+        <div className="flex items-center gap-1 rounded-full border border-zinc-200 bg-white p-0.5 text-xs">
+          <button type="button" onClick={() => changeZoom("fit")} className={`rounded-full px-2.5 py-1 ${zoom === "fit" ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-50"}`}>
+            한눈에 맞춤
+          </button>
+          <button
+            type="button"
+            aria-label="축소"
+            onClick={() => {
+              const cur = zoom === "fit" ? fitPpm : zoom;
+              const next = [...ZOOM_STEPS].reverse().find((z) => z < cur - 0.01);
+              changeZoom(next ?? "fit");
+            }}
+            className="rounded-full px-2 py-1 text-zinc-600 hover:bg-zinc-50"
+          >
+            −
+          </button>
+          <span className="w-10 text-center tabular-nums text-zinc-600">{Math.round((ppm / 0.6) * 100)}%</span>
+          <button
+            type="button"
+            aria-label="확대"
+            onClick={() => {
+              const cur = zoom === "fit" ? fitPpm : zoom;
+              const next = ZOOM_STEPS.find((z) => z > cur + 0.01);
+              if (next) changeZoom(next);
+            }}
+            className="rounded-full px-2 py-1 text-zinc-600 hover:bg-zinc-50"
+          >
+            +
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <label className="flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-zinc-600">
+            <input type="checkbox" checked={dimUnchanged} onChange={(e) => setDimUnchanged(e.target.checked)} />
+            바뀐 칸만 강조
+          </label>
+          <button type="button" onClick={() => setShowCompare((v) => !v)} className={`rounded-full border px-2.5 py-1 ${showCompare ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"}`}>
+            지난주 실제와 나란히
+          </button>
+          <button type="button" onClick={() => setFullscreen((v) => !v)} className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-zinc-600 hover:bg-zinc-50">
+            {fullscreen ? "전체 화면 닫기(Esc)" : "전체 화면"}
+          </button>
+        </div>
+      </div>
+      <GridLegend themeColor={themeColor} pivot={pivot} decimals={decimals} />
+
+      {/* What-if 미리보기 바 */}
+      {preview && whatIf && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white print:hidden">
+          <p className="min-w-0">
+            <span className="text-zinc-300">
+              미리보기 · {DOW_LABELS[preview.block.weekday - 1]} {minToLabel(preview.block.start_min)}
+            </span>{" "}
+            〈{preview.block.program_name}〉 → <b>〈{preview.cand.candidate.programName}〉</b>
+            {whatIf.before !== null && whatIf.after !== null && (
+              <span className="ml-2 tabular-nums">
+                주간 기대 {fmt(whatIf.before)} → {fmt(whatIf.after)}
+                {whatIf.before > 0 && <span className={whatIf.after >= whatIf.before ? "text-emerald-300" : "text-rose-300"}> ({signedPct((whatIf.after - whatIf.before) / whatIf.before, 2)})</span>}
+              </span>
+            )}
+            <span className="block text-[11px] text-zinc-400">
+              이 칸만 바꾼 값입니다. 앞뒤 편성 연관·반복 제한은 [다시 계산] 때 반영됩니다.{whatIf.lenMismatch ? " 후보의 방영 길이가 이 칸과 다릅니다." : ""}
+            </span>
+          </p>
+          <div className="flex shrink-0 gap-1.5">
+            <button type="button" disabled={!!busy} onClick={applyPreview} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-zinc-900 hover:bg-zinc-100 disabled:opacity-50">
+              적용
+            </button>
+            <button type="button" onClick={() => setPreview(null)} className="rounded-full border border-zinc-600 px-3 py-1 text-xs text-zinc-200 hover:bg-zinc-800">
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className={`grid gap-3 ${showCompare && !printing ? "2xl:grid-cols-2" : ""}`}>
+        {showCompare && !printing && (
+          <div className="print:hidden">
+            <IdealWeekGrid
+              title={`지난주 실제 편성 — ${view.run.current_week_start ?? "-"} 주(숫자는 실측)`}
+              blocks={current}
+              weekStart={view.run.current_week_start ?? view.run.week_start}
+              themeColor={themeColor}
+              pivot={pivot}
+              decimals={decimals}
+              selectedId={selectedId}
+              onSelect={(b) => selectBlock(b.id)}
+              pxPerMin={ppm}
+              minWidth={620}
+            />
+          </div>
+        )}
+        <IdealWeekGrid
+          title={`이상적 편성 — ${view.run.week_start} 주(숫자는 최근 12주 데이터 기반 기대 시청률)`}
+          blocks={ideal}
+          weekStart={view.run.week_start}
+          themeColor={themeColor}
+          pivot={pivot}
+          decimals={decimals}
+          selectedId={selectedId}
+          onSelect={(b) => selectBlock(b.id)}
+          gaps={view.run.gaps}
+          pxPerMin={ppm}
+          diffById={diffById}
+          dimUnchanged={dimUnchanged && !printing}
+          ghost={preview ? { blockId: preview.block.id, programName: preview.cand.candidate.programName, expected: preview.cand.expected_kpi } : null}
+          minWidth={showCompare ? 620 : 760}
+        />
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-zinc-50 px-4 py-8 md:px-6">
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5">
-        {/* 헤더 */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-zinc-900">{channelOpt?.name ?? channelCode} 스마트 시청률 자판기</h1>
-            <p className="text-sm text-zinc-500">최근 12주 실제 시청률로 계산한 데이터 기반 편성안입니다. 숫자는 기대값이며 실제 미래 시청률이 아닙니다.</p>
+    <div className="min-h-screen bg-zinc-50 [-webkit-print-color-adjust:exact] [print-color-adjust:exact] print:bg-white">
+      <style>{`@media print { @page { size: A4 landscape; margin: 8mm; } body { background: #fff !important; } }`}</style>
+
+      {/* 헤더 */}
+      <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 md:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <VendingMachineIcon size={22} />
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold text-zinc-900">{channelOpt?.name ?? channelCode} 시청률 자판기</h1>
+              <p className="truncate text-xs text-zinc-500">
+                {view ? (
+                  <>
+                    {weekOfMonthLabel(view.run.week_start)} ({view.run.week_start.slice(5)} ~ {addDaysLocal(view.run.week_start, 6).slice(5)}) · {runKpi} · {MODE_LABEL[view.run.structure_mode]} · {kstTime(view.run.created_at)} 생성
+                    {view.run.title ? ` · ★ ${view.run.title}` : view.run.saved_at ? " · ★ 저장됨" : ""}
+                  </>
+                ) : (
+                  "최근 12주 실제 시청률로 계산한 데이터 기반 편성안"
+                )}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            {(opts?.channels ?? []).map((c) => (
-              <Link
-                key={c.code}
-                href={`/ideal-schedule?channel=${c.code}`}
-                title={c.name}
-                aria-label={c.name}
-                className={`flex h-11 w-11 items-center justify-center rounded-full bg-white ring-1 transition ${c.code === channelCode ? "ring-2 ring-zinc-800" : "ring-zinc-200 hover:ring-zinc-300"}`}
-              >
-                <ChannelLogo channel={{ logoPath: c.logo_path, name: c.name, logoVisibleRatio: c.logo_visible_ratio, logoVisibleTopRatio: c.logo_visible_top_ratio }} heightPx={22} maxWidthPx={32} />
-              </Link>
-            ))}
-            <Link href={`/channel/${channelCode}`} className="ml-2 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50">
-              채널 분석으로
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="mr-1 hidden items-center gap-1 lg:flex">
+              {(opts?.channels ?? []).map((c) => (
+                <Link
+                  key={c.code}
+                  href={`/ideal-schedule?channel=${c.code}`}
+                  title={c.name}
+                  aria-label={c.name}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full bg-white ring-1 transition ${c.code === channelCode ? "ring-2 ring-zinc-800" : "ring-zinc-200 hover:ring-zinc-300"}`}
+                >
+                  <ChannelLogo channel={{ logoPath: c.logo_path, name: c.name, logoVisibleRatio: c.logo_visible_ratio, logoVisibleTopRatio: c.logo_visible_top_ratio }} heightPx={16} maxWidthPx={24} />
+                </Link>
+              ))}
+            </div>
+            <button type="button" disabled={!!busy || !opts} onClick={generate} className="rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
+              <span className="inline-flex items-center gap-1.5">
+                <VendingCoinIcon size={15} />
+                편성표 뽑기
+              </span>
+            </button>
+            <button type="button" disabled={!runId} onClick={openCompare} className={pill}>
+              지난주와 비교
+            </button>
+            {runId ? (
+              <a href={`/api/scheduling/ideal-schedule/${runId}/export`} className={pill}>
+                엑셀 저장
+              </a>
+            ) : (
+              <button type="button" disabled className={pill}>
+                엑셀 저장
+              </button>
+            )}
+            <button type="button" disabled={!runId} onClick={doPrint} className={pill}>
+              인쇄
+            </button>
+            <Link href={`/channel/${channelCode}`} className="rounded-full px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
+              채널 분석 →
             </Link>
           </div>
         </div>
+        {(busy || error) && (
+          <div className={`px-4 pb-2 text-sm md:px-6 ${error ? "text-rose-600" : "text-zinc-500"}`}>
+            {busy ?? error}
+            {error && (
+              <button type="button" onClick={() => setError(null)} className="ml-2 text-xs text-zinc-400 hover:underline">
+                닫기
+              </button>
+            )}
+          </div>
+        )}
+      </header>
 
-        {/* 조건 */}
-        <section className="rounded-2xl border border-zinc-200 bg-white p-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label className="flex flex-col gap-1 text-xs text-zinc-500">
-              대상 주
-              <select className={sel} value={weekStart} onChange={(e) => setWeekStart(e.target.value)}>
-                {weekChoices.map((w) => (
-                  <option key={w} value={w}>
-                    {weekOfMonthLabel(w)} ({w} ~ {addDaysLocal(w, 6).slice(5)}){w > thisMonday ? " · 다음 주" : w === thisMonday ? " · 이번 주" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex flex-col gap-1 text-xs text-zinc-500">
-              편성 시간 구조
-              <div className="flex rounded-lg border border-zinc-300 p-0.5">
-                {(["KEEP_CURRENT", "AI_OPTIMIZED"] as const).map((m) => (
-                  <button key={m} type="button" onClick={() => setMode(m)} className={`flex-1 rounded-md px-2 py-1 text-sm ${mode === m ? "bg-zinc-900 text-white" : "text-zinc-600"}`}>
-                    {MODE_LABEL[m]}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <label className="flex flex-col gap-1 text-xs text-zinc-500">
-              최적화 타깃
-              <select className={sel} value={target} onChange={(e) => setTarget(e.target.value)} disabled={!opts || opts.targets.length === 0}>
-                <option value="">채널 KPI ({opts?.channelKpiLabel === "__SKYUHD__" ? "유료방송가구" : (opts?.channelKpiLabel ?? "-")})</option>
-                {(opts?.targets ?? [])
-                  .filter((t) => t.label !== opts?.channelKpiLabel)
-                  .map((t) => (
-                    <option key={t.label} value={t.label}>
-                      {t.label}
+      {/* 인쇄 전용 머리글 */}
+      {view && (
+        <div className="hidden px-1 pb-2 print:block">
+          <p className="text-sm font-semibold text-zinc-900">
+            {channelOpt?.name ?? channelCode} 이상적 1주일 편성 · {view.run.week_start} ~ {addDaysLocal(view.run.week_start, 6)} · {runKpi}
+          </p>
+          <p className="text-[10px] text-zinc-600">
+            최근 12주 데이터 기반 기대 시청률(미래 예측 아님) · {MODE_LABEL[view.run.structure_mode]} · {view.run.as_of_date}까지 데이터 · {kstTime(view.run.created_at)} 생성
+            {summary?.expectedAvgRating !== null && summary?.expectedAvgRating !== undefined ? ` · 주간 기대 ${fmt(summary.expectedAvgRating)}` : ""}
+            {summary?.current?.expectedAvgRating ? ` (지난주 실제 편성 기대 ${fmt(summary.current.expectedAvgRating)})` : ""}
+          </p>
+        </div>
+      )}
+
+      <div className="grid gap-4 px-4 py-4 md:px-6 xl:grid-cols-[340px_minmax(0,1fr)] print:block print:p-0">
+        {/* 좌측 패널 */}
+        {/* 좁은 화면(xl 미만)에서는 편성표가 먼저, 패널은 그 아래(편성표가 주인공 — PD·UX 검토) */}
+        <aside className="order-2 space-y-3 print:hidden xl:order-1 xl:sticky xl:top-[4.25rem] xl:max-h-[calc(100dvh-5rem)] xl:self-start xl:overflow-y-auto xl:pr-1">
+          {view && summary && (
+            <SummaryPanel run={view.run} ideal={ideal} compareRows={rows} decimals={decimals} kpiLabel={runKpi} onSelectBlock={(id) => selectBlock(id)} onOpenCompare={openCompare} />
+          )}
+
+          {view && conflictsOrWarnings && (
+            <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+              {view.run.conflicts.map((c, i) => (
+                <p key={i}>
+                  충돌: {DOW_LABELS[c.weekday - 1]}요일 &lsquo;{c.a.programName}&rsquo;과 &lsquo;{c.b.programName}&rsquo;이 겹칩니다 — 우선순위가 같아 어느 쪽도 배치하지 않았습니다. 필수 편성을 조정해 주세요.
+                </p>
+              ))}
+              {(summary?.warnings ?? []).map((w, i) => (
+                <p key={`w${i}`}>{w}</p>
+              ))}
+            </section>
+          )}
+
+          {/* 조건 */}
+          <section className={card}>
+            <h2 className="text-sm font-semibold text-zinc-800">뽑기 조건</h2>
+            <div className="mt-2 space-y-2.5">
+              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+                대상 주
+                <select className={sel} value={weekStart} onChange={(e) => setWeekStart(e.target.value)}>
+                  {weekChoices.map((w) => (
+                    <option key={w} value={w}>
+                      {weekOfMonthLabel(w)} ({w.slice(5)} ~ {addDaysLocal(w, 6).slice(5)}){w > thisMonday ? " · 다음 주" : w === thisMonday ? " · 이번 주" : ""}
                     </option>
                   ))}
-              </select>
-            </label>
-            {opts?.hasEpisodeOption ? (
+                </select>
+              </label>
               <div className="flex flex-col gap-1 text-xs text-zinc-500">
-                부제(에피소드)
+                편성 시간 구조
                 <div className="flex rounded-lg border border-zinc-300 p-0.5">
-                  {(["PROGRAM", "EPISODE"] as const).map((m) => (
-                    <button key={m} type="button" onClick={() => setEpisodeMode(m)} className={`flex-1 rounded-md px-2 py-1 text-sm ${episodeMode === m ? "bg-zinc-900 text-white" : "text-zinc-600"}`}>
-                      {m === "PROGRAM" ? "부제 미반영" : "부제 반영"}
+                  {(["KEEP_CURRENT", "AI_OPTIMIZED"] as const).map((m) => (
+                    <button key={m} type="button" onClick={() => setMode(m)} className={`flex-1 rounded-md px-2 py-1 text-sm ${mode === m ? "bg-zinc-900 text-white" : "text-zinc-600"}`}>
+                      {MODE_LABEL[m]}
                     </button>
                   ))}
                 </div>
               </div>
-            ) : (
-              <div />
-            )}
-          </div>
+              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+                최적화 타깃
+                <select className={sel} value={target} onChange={(e) => setTarget(e.target.value)} disabled={!opts || opts.targets.length === 0}>
+                  <option value="">채널 KPI ({kpiText(opts?.channelKpiLabel)})</option>
+                  {(opts?.targets ?? [])
+                    .filter((t) => t.label !== opts?.channelKpiLabel)
+                    .map((t) => (
+                      <option key={t.label} value={t.label}>
+                        {t.label}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              {opts?.hasEpisodeOption && (
+                <div className="flex flex-col gap-1 text-xs text-zinc-500">
+                  부제(에피소드)
+                  <div className="flex rounded-lg border border-zinc-300 p-0.5">
+                    {(["PROGRAM", "EPISODE"] as const).map((m) => (
+                      <button key={m} type="button" onClick={() => setEpisodeMode(m)} className={`flex-1 rounded-md px-2 py-1 text-sm ${episodeMode === m ? "bg-zinc-900 text-white" : "text-zinc-600"}`}>
+                        {m === "PROGRAM" ? "부제 미반영" : "부제 반영"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <button type="button" disabled={!!busy || !opts} onClick={generate} className="mt-3 w-full rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
+              <span className="inline-flex items-center gap-1.5">
+                <VendingCoinIcon size={16} />
+                이 조건으로 편성표 뽑기
+              </span>
+            </button>
+            {weightsChanged && <p className="mt-1.5 text-center text-[11px] text-amber-700">바꾼 편성 성향이 이번 뽑기에 적용됩니다.</p>}
+          </section>
 
-          <details className="mt-3 rounded-xl border border-zinc-100 px-3 py-2">
-            <summary className="cursor-pointer text-sm text-zinc-600">
-              경쟁채널 비교(선택) {competitors.length > 0 ? `· ${competitors.length}개 선택` : "· 선택 안 함 — 자사 편성 프로그램만으로 계산"}
+          {/* 필수 편성(뽑기 전에 넣는 항목이라 조건 바로 아래 — PD 검토) */}
+          <details className={card} open>
+            <summary className="cursor-pointer text-sm font-semibold text-zinc-800">필수 편성</summary>
+            <div className="mt-2">
+              <RequiredScheduleEditor compact channelCode={channelCode} weekStart={weekStart} onChanged={() => undefined} />
+            </div>
+          </details>
+
+          <details className={card}>
+            <summary className="cursor-pointer text-sm font-semibold text-zinc-800">
+              경쟁채널 비교 <span className="text-xs font-normal text-zinc-500">{competitors.length > 0 ? `· ${competitors.length}개 선택` : "· 선택 안 함(자사 프로그램만)"}</span>
             </summary>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {(opts?.competitors ?? []).map((c) => {
@@ -309,7 +714,7 @@ function IdealSchedulePage() {
               })}
             </div>
             {competitors.length > 0 && (
-              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="mt-3 space-y-2.5">
                 <label className="flex flex-col gap-1 text-xs text-zinc-500">
                   경쟁 강세 시간대 전략
                   <select className={sel} value={strategyMode} onChange={(e) => setStrategyMode(e.target.value)}>
@@ -328,238 +733,192 @@ function IdealSchedulePage() {
                     <option value="MIX">일부 편성에 섞기(Benchmark Mix)</option>
                   </select>
                 </label>
-                <p className="text-[11px] text-zinc-400 md:col-span-2">
-                  경쟁채널을 고르면 그 채널이 강한 시간대를 분석해 같은 장르로 맞설지(MATCH) 다른 장르로 피할지(COUNTER)를 반영합니다. 경쟁사 프로그램은 실제 확보·편성 가능한 콘텐츠가 아니며, 켠 경우에도 &lsquo;가상&rsquo;으로 표시됩니다.
+                <p className="text-[11px] leading-snug text-zinc-400">
+                  경쟁채널이 강한 시간대에 같은 장르로 맞설지(MATCH) 다른 장르로 피할지(COUNTER)를 반영합니다. 경쟁사 프로그램은 실제 편성 가능한 콘텐츠가 아니며 &lsquo;가상&rsquo;으로 표시됩니다.
                 </p>
               </div>
             )}
           </details>
 
-          <details className="mt-2 rounded-xl border border-zinc-100 px-3 py-2" open={showAdvanced} onToggle={(e) => setShowAdvanced((e.target as HTMLDetailsElement).open)}>
-            <summary className="cursor-pointer text-sm text-zinc-600">
+          <details className={card} open={showAdvanced} onToggle={(e) => setShowAdvanced((e.target as HTMLDetailsElement).open)}>
+            <summary className="cursor-pointer text-sm font-semibold text-zinc-800">
               편성 성향·반복 제한
-              {weights && savedWeights && (WEIGHT_ORDER.some((k) => (weights[k] ?? 0) !== (savedWeights[k] ?? 0)) || (caps && savedCaps && (caps.daily !== savedCaps.daily || caps.weekly !== savedCaps.weekly))) && (
-                <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">바꾼 값 있음</span>
-              )}
+              {activePreset && <span className="ml-1.5 text-xs font-normal text-zinc-500">· {activePreset}</span>}
+              {weightsChanged && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">바꾼 값 있음</span>}
             </summary>
             {caps && weights && (
               <div className="mt-3 space-y-4">
-                <p className="text-xs leading-relaxed text-zinc-500">
-                  프로그램을 고를 때 무엇을 더 따질지 정합니다. 막대를 오른쪽으로 밀수록 그 항목을 더 중요하게 봅니다. 숫자는 비율이라 합이 100이 아니어도 됩니다.
-                  바꾼 뒤 <b className="font-semibold text-zinc-700">&lsquo;편성표 뽑기&rsquo;</b>를 누르면 저장하지 않아도 이번 편성표에 바로 적용되고,
-                  <b className="font-semibold text-zinc-700"> &lsquo;이 채널 설정 저장&rsquo;</b>을 누르면 다음에도 이 값으로 시작합니다.
+                <p className="text-[11px] leading-relaxed text-zinc-500">
+                  프로그램을 고를 때 무엇을 더 따질지 정합니다. 바꾼 뒤 편성표를 뽑으면 저장하지 않아도 이번 편성표에 적용되고, &lsquo;이 채널 설정 저장&rsquo;을 누르면 다음에도 이 값으로 시작합니다.
                 </p>
-
                 <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                  <span className="text-zinc-500">한 번에 고르기</span>
                   {WEIGHT_PRESETS.map((pr) => (
-                    <button key={pr.name} type="button" title={pr.hint} onClick={() => setWeights({ ...weights, ...pr.values })} className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-zinc-700 hover:bg-zinc-50">
+                    <button
+                      key={pr.name}
+                      type="button"
+                      title={pr.hint}
+                      onClick={() => setWeights({ ...weights, ...pr.values })}
+                      className={`rounded-full border px-2.5 py-1 ${activePreset === pr.name ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"}`}
+                    >
                       {pr.name}
                     </button>
                   ))}
-                  {savedWeights && (
-                    <button type="button" onClick={() => setWeights(savedWeights)} className="rounded-full px-2.5 py-1 text-zinc-500 underline decoration-dotted hover:text-zinc-700">
-                      저장된 값으로 되돌리기
+                  {savedWeights && weightsChanged && (
+                    <button type="button" onClick={() => { setWeights(savedWeights); if (savedCaps) setCaps(savedCaps); }} className="rounded-full px-2 py-1 text-zinc-500 underline decoration-dotted hover:text-zinc-700">
+                      저장된 값으로
                     </button>
                   )}
                 </div>
-
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {WEIGHT_ORDER.filter((k) => k in weights).map((k) => {
                     const total = Object.values(weights).reduce((a, b) => a + (b || 0), 0);
                     const share = total > 0 ? Math.round(((weights[k] || 0) / total) * 100) : 0;
                     return (
-                      <div key={k} className="grid grid-cols-[minmax(0,1fr)_minmax(140px,220px)_48px] items-center gap-x-3 gap-y-0.5 sm:grid-cols-[minmax(0,1.3fr)_minmax(160px,1fr)_52px]">
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-zinc-700">{WEIGHT_LABEL[k] ?? k}</div>
-                          <div className="text-[11px] leading-snug text-zinc-500">{WEIGHT_HELP[k]}</div>
+                      <div key={k}>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-sm font-medium text-zinc-700" title={WEIGHT_HELP[k]}>
+                            {WEIGHT_LABEL[k] ?? k}
+                          </span>
+                          <span className="text-sm font-semibold tabular-nums text-zinc-800">{share}%</span>
                         </div>
                         <input type="range" min={0} max={100} step={5} value={weights[k] ?? 0} onChange={(e) => setWeights({ ...weights, [k]: Number(e.target.value) })} className="w-full accent-zinc-800" aria-label={`${WEIGHT_LABEL[k] ?? k} 비중`} />
-                        <div className="text-right text-sm font-semibold tabular-nums text-zinc-800">{share}%</div>
+                        <p className="text-[11px] leading-snug text-zinc-500">{WEIGHT_HELP[k]}</p>
                       </div>
                     );
                   })}
                   {Object.values(weights).every((v) => !v) && <p className="text-xs text-rose-600">모든 항목이 0이면 계산할 수 없습니다. 하나 이상 올려 주세요.</p>}
                 </div>
-
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-zinc-100 pt-3 text-sm text-zinc-600">
-                  <label className="flex items-center gap-1.5">
-                    같은 프로그램 하루 최대
-                    <input type="number" min={1} max={24} value={caps.daily} onChange={(e) => setCaps({ ...caps, daily: Number(e.target.value) })} className="w-16 rounded-lg border border-zinc-300 px-2 py-1" />회
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    일주일 최대
-                    <input type="number" min={1} max={100} value={caps.weekly} onChange={(e) => setCaps({ ...caps, weekly: Number(e.target.value) })} className="w-16 rounded-lg border border-zinc-300 px-2 py-1" />회
-                  </label>
-                  <span className="text-[11px] text-zinc-500">본방·재방을 합쳐 셉니다. 줄이면 다양한 프로그램이 들어가고, 늘리면 잘 나오는 프로그램이 더 자주 나옵니다.</span>
+                <div className="space-y-2 border-t border-zinc-100 pt-3 text-sm text-zinc-600">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <label className="flex items-center gap-1.5">
+                      같은 프로그램 하루 최대
+                      <input type="number" min={1} max={24} value={caps.daily} onChange={(e) => setCaps({ ...caps, daily: Number(e.target.value) })} className="w-14 rounded-lg border border-zinc-300 px-2 py-1" />회
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      일주일 최대
+                      <input type="number" min={1} max={100} value={caps.weekly} onChange={(e) => setCaps({ ...caps, weekly: Number(e.target.value) })} className="w-14 rounded-lg border border-zinc-300 px-2 py-1" />회
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-zinc-500">본방·재방을 합쳐 셉니다. 줄이면 다양한 프로그램이, 늘리면 잘 나오는 프로그램이 더 자주 들어갑니다.</p>
                 </div>
-
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <button type="button" onClick={saveConfig} className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50">
                     이 채널 설정 저장
                   </button>
-                  <span className="text-xs text-zinc-500">{configMsg ?? "이 채널에만 적용됩니다. 전체 기본값 변경은 관리자만 할 수 있습니다."}</span>
+                  <span className="text-[11px] text-zinc-500">{configMsg ?? "이 채널에만 적용됩니다."}</span>
                 </div>
               </div>
             )}
           </details>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button type="button" disabled={!!busy || !opts} onClick={generate} className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
-              <span className="inline-flex items-center gap-1.5">
-                <VendingCoinIcon size={16} />
-                편성표 뽑기
-              </span>
-            </button>
-            <button type="button" disabled={!runId} onClick={() => setShowCompare((v) => !v)} className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-40">
-              {showCompare ? "비교 닫기" : "현재 편성과 비교"}
-            </button>
-            <button type="button" disabled={!runId || !!busy} onClick={() => recalc(true)} className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-40">
-              다시 계산(수동 변경 유지)
-            </button>
-            <button type="button" disabled={!runId || !!busy} onClick={() => recalc(false)} className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-40">
-              다시 계산(초기화)
-            </button>
-            <span className="flex items-center gap-1">
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="편성안 이름(선택)" disabled={!runId} className="w-40 rounded-full border border-zinc-300 px-3 py-2 text-sm disabled:opacity-40" />
-              <button type="button" disabled={!runId} onClick={save} className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-40">
-                저장
-              </button>
-            </span>
-            {runId && (
-              <a href={`/api/scheduling/ideal-schedule/${runId}/export`} className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
-                엑셀 다운로드
-              </a>
-            )}
-            {busy && <span className="text-sm text-zinc-500">{busy}</span>}
-            {error && <span className="text-sm text-rose-600">{error}</span>}
-          </div>
-        </section>
-
-        {/* 요약 */}
-        {data && summary && (
-          <section className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-            {[
-              { k: "필수 편성", v: `${summary.requiredCount + summary.lockedCount}` },
-              { k: "AI 추천 블록", v: `${summary.aiCount}` },
-              { k: "수동 변경", v: `${summary.manualOverrideCount}` },
-              { k: "충돌", v: `${summary.conflictCount}`, warn: summary.conflictCount > 0 },
-              { k: "평균 신뢰도", v: pct(summary.avgConfidence) },
-              { k: `기대 시청률(${summary.optimizeTarget.label === "__SKYUHD__" ? "유료방송가구" : summary.optimizeTarget.label})`, v: fmt(summary.expectedAvgRating) },
-              { k: `현재 편성 기대(${summary.current?.weekStart?.slice(5) ?? "-"} 주)`, v: fmt(summary.current?.expectedAvgRating) },
-              summary.episodeMode === "EPISODE"
-                ? { k: "부제 배정", v: `${summary.episodeAssigned ?? 0}${summary.episodeUnassigned ? ` / 미배정 ${summary.episodeUnassigned}` : ""}` }
-                : data.run.benchmark_placement !== "NONE"
-                  ? { k: "경쟁 Benchmark 후보", v: `${summary.benchmarkCandidateCount}` }
-                  : { k: "편성 여백", v: `${summary.gapMinutes}분` },
-            ].map((t) => (
-              <div key={t.k} className={`rounded-2xl border bg-white px-4 py-3 ${"warn" in t && t.warn ? "border-rose-300" : "border-zinc-200"}`}>
-                <p className="text-[11px] text-zinc-500">{t.k}</p>
-                <p className={`mt-0.5 text-lg font-semibold tabular-nums ${"warn" in t && t.warn ? "text-rose-600" : "text-zinc-900"}`}>{t.v}</p>
+          {/* 이 편성안 */}
+          {runId && (
+            <section className={card}>
+              <h2 className="text-sm font-semibold text-zinc-800">이 편성안</h2>
+              <div className="mt-2 flex items-center gap-1.5">
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={view?.run.title ?? "편성안 이름(선택)"} className="min-w-0 flex-1 rounded-full border border-zinc-300 px-3 py-1.5 text-sm" />
+                <button type="button" onClick={save} className={pill}>
+                  저장
+                </button>
               </div>
-            ))}
-          </section>
-        )}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button type="button" disabled={!!busy} onClick={() => recalc(true)} className={pill}>
+                  다시 계산
+                </button>
+                <button type="button" disabled={!!busy} onClick={() => recalc(false)} className="rounded-full px-3 py-1.5 text-sm text-zinc-500 hover:text-rose-600 disabled:opacity-40">
+                  수동 변경 지우고 다시 계산
+                </button>
+              </div>
+              {view?.run.needs_recalc && <p className="mt-1.5 text-[11px] text-amber-700">수동 교체가 있습니다. [다시 계산]을 누르면 교체는 유지하고 앞뒤 연관·반복 제한·합계를 갱신합니다.</p>}
+            </section>
+          )}
 
-        {data && (
-          <p className="-mt-2 text-xs text-zinc-500">
-            {MODE_LABEL[data.run.structure_mode]} · 최적화 타깃 {data.run.optimize_target_label === "__SKYUHD__" ? "유료방송가구" : data.run.optimize_target_label}
-            {data.run.competitor_names.length ? ` · 경쟁채널 ${data.run.competitor_names.join(", ")}(${STRATEGY_LABEL[data.run.strategy_mode] ?? data.run.strategy_mode})` : " · 자사 편성 프로그램만"}
-            {data.run.episode_mode === "EPISODE" ? " · 부제 반영" : ""} · {data.run.as_of_date}까지 12주 데이터
-            {data.run.title ? ` · 저장됨: ${data.run.title}` : data.run.saved_at ? " · 저장됨" : ""}
-            {data.run.needs_recalc ? " · 수동 변경 후 합계 미갱신([다시 계산]을 누르면 반영)" : ""}
-          </p>
-        )}
+          {runs.length > 0 && (
+            <details className={card}>
+              <summary className="cursor-pointer text-sm font-semibold text-zinc-800">
+                이전 편성안 <span className="text-xs font-normal text-zinc-500">· {runs.length}건</span>
+              </summary>
+              <ul className="mt-2 divide-y divide-zinc-100 text-xs">
+                {runs.slice(0, 15).map((r) => (
+                  <li key={r.id} className="py-1.5">
+                    <Link href={`/ideal-schedule?channel=${channelCode}&run=${r.id}`} className={`block truncate hover:underline ${r.id === runId ? "font-semibold text-zinc-900" : "text-zinc-700"}`}>
+                      {r.saved_at ? "★ " : ""}
+                      {r.title ?? `${weekOfMonthLabel(r.week_start)} · ${MODE_LABEL[r.structure_mode] ?? r.structure_mode}`}
+                    </Link>
+                    <span className="tabular-nums text-zinc-400">
+                      기대 {fmt(r.summary?.expectedAvgRating)} · {kstTime(r.created_at)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </aside>
 
-        {/* 충돌·경고 */}
-        {data && (data.run.conflicts.length > 0 || (summary?.warnings?.length ?? 0) > 0) && (
-          <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            {data.run.conflicts.map((c, i) => (
-              <p key={i}>
-                충돌: {["월", "화", "수", "목", "금", "토", "일"][c.weekday - 1]}요일 &lsquo;{c.a.programName}&rsquo;({c.a.source})과 &lsquo;{c.b.programName}&rsquo;({c.b.source})이 겹칩니다 — 우선순위가 같아 어느 쪽도 배치하지 않았습니다. 필수 편성을 조정해 주세요.
-              </p>
-            ))}
-            {(summary?.warnings ?? []).map((w, i) => (
-              <p key={`w${i}`}>{w}</p>
-            ))}
-          </section>
-        )}
+        {/* 우측: 편성표 */}
+        <main className="order-1 min-w-0 space-y-3 xl:order-2">
+          {view && summary && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm xl:hidden print:hidden">
+              <span>
+                주간 기대 <b className="tabular-nums">{fmt(view.run.needs_recalc ? weeklyExpected(ideal) : summary.expectedAvgRating)}</b>
+                {summary.current?.expectedAvgRating && summary.expectedAvgRating !== null && (
+                  <span className="ml-1 tabular-nums text-zinc-500">(지난주 대비 {signedPct((summary.expectedAvgRating - summary.current.expectedAvgRating) / summary.current.expectedAvgRating)})</span>
+                )}
+              </span>
+              <span className="text-zinc-600">바뀐 칸 {rows ? rows.filter((r) => r.changed).length : "…"}</span>
+              <span className={summary.conflictCount > 0 ? "text-rose-600" : "text-zinc-600"}>충돌 {summary.conflictCount}</span>
+              <span className="text-[11px] text-zinc-400">요약·조건은 편성표 아래에 있습니다</span>
+            </div>
+          )}
+          {gridArea}
+          {view && (
+            <div className="hidden print:block print:pt-2">
+              <GridLegend themeColor={themeColor} pivot={pivot} decimals={decimals} />
+            </div>
+          )}
 
-        {/* 편성표 */}
-        {data && (
-          <section className={`grid gap-4 ${showCompare ? "xl:grid-cols-2" : ""}`}>
-            {showCompare && (
-              <IdealWeekGrid
-                title={`현재 편성 — ${data.run.current_week_start ?? "-"} 주 실제(숫자는 실측)`}
-                blocks={current}
-                weekStart={data.run.current_week_start ?? data.run.week_start}
-                themeColor={themeColor}
-                pivot={pivot}
+          {!view && (runParam || runsChannel !== channelCode || busy) && (
+            <section className="flex h-[60vh] items-center justify-center rounded-2xl border border-zinc-200 bg-white text-sm text-zinc-400">{busy ?? "최근 편성안을 불러오는 중…"}</section>
+          )}
+          {!view && !runParam && runsChannel === channelCode && runs.length === 0 && !busy && (
+            <section className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center text-sm text-zinc-500">
+              아직 뽑은 편성표가 없습니다. 왼쪽 조건을 확인하고 &lsquo;편성표 뽑기&rsquo;를 눌러 주세요.
+              <br />
+              기본은 이 채널의 편성 프로그램만으로 계산합니다.
+            </section>
+          )}
+
+          {view && rows && (
+            <details ref={compareRef} open={compareOpen} onToggle={(e) => setCompareOpen((e.target as HTMLDetailsElement).open)} className="print:hidden">
+              <summary className="cursor-pointer rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800">
+                지난주 실제 편성 대비 전체 대조표 <span className="font-normal text-zinc-500">· 바뀐 칸 {rows.filter((r) => r.changed).length}개</span>
+              </summary>
+              <div className="mt-2">
+                <CompareTable rows={rows} currentWeekStart={compareRows?.currentWeekStart ?? null} decimals={decimals} onSelectBlock={(id) => selectBlock(id)} />
+              </div>
+            </details>
+          )}
+
+          <details className="print:hidden">
+            <summary className="cursor-pointer rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800">
+              모델 검증(과거 주 백테스트) <span className="font-normal text-zinc-500">· 기대값이 실제와 얼마나 맞았는지</span>
+            </summary>
+            <div className="mt-2">
+              <BacktestPanel
                 decimals={decimals}
-                selectedId={selectedId}
-                onSelect={(b) => setSelectedId(b.id)}
+                params={{
+                  channelCode,
+                  mode,
+                  strategyMode,
+                  competitorNames: competitors,
+                  benchmarkPlacement: competitors.length ? placement : "NONE",
+                  optimizeTargetLabel: target || undefined,
+                  episodeMode: opts?.hasEpisodeOption ? episodeMode : "PROGRAM",
+                }}
               />
-            )}
-            <IdealWeekGrid
-              title={`이상적 편성 — ${data.run.week_start} 주(숫자는 최근 12주 데이터 기반 기대 시청률)`}
-              blocks={ideal}
-              weekStart={data.run.week_start}
-              themeColor={themeColor}
-              pivot={pivot}
-              decimals={decimals}
-              selectedId={selectedId}
-              onSelect={(b) => setSelectedId(b.id)}
-              gaps={data.run.gaps}
-            />
-          </section>
-        )}
-        {data && (
-          <p className="-mt-2 text-[11px] text-zinc-500">
-            🔒 굵은 테두리 = 필수 편성·잠금 · AI = 엔진 추천 · 수동 = 직접 교체 · 가상(보라 점선) = 경쟁사 Benchmark · 근거 부족 = 그 프로그램 자체 이력이 없어 장르·채널 평균으로 추정 · 빗금 = 편성 여백. 블록을 누르면 상세와 대체 후보가 나옵니다.
-          </p>
-        )}
-
-        {data && showCompare && runId && <CompareTable runId={runId} decimals={decimals} onSelectBlock={(id) => setSelectedId(id)} />}
-
-        {!data && !busy && (
-          <section className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center text-sm text-zinc-500">
-            조건을 고른 뒤 &lsquo;편성표 뽑기&rsquo;을 눌러 주세요. 기본은 이 채널의 편성 프로그램만으로 계산합니다.
-          </section>
-        )}
-
-        <RequiredScheduleEditor channelCode={channelCode} weekStart={weekStart} onChanged={() => undefined} />
-
-        <BacktestPanel
-          decimals={decimals}
-          params={{
-            channelCode,
-            mode,
-            strategyMode,
-            competitorNames: competitors,
-            benchmarkPlacement: competitors.length ? placement : "NONE",
-            optimizeTargetLabel: target || undefined,
-            episodeMode: opts?.hasEpisodeOption ? episodeMode : "PROGRAM",
-          }}
-        />
-
-        {runs.length > 0 && (
-          <section className="rounded-2xl border border-zinc-200 bg-white p-4">
-            <h3 className="text-sm font-semibold text-zinc-800">이전 실행</h3>
-            <ul className="mt-2 divide-y divide-zinc-100 text-sm">
-              {runs.slice(0, 12).map((r) => (
-                <li key={r.id} className="flex items-center justify-between gap-2 py-1.5">
-                  <Link href={`/ideal-schedule?channel=${channelCode}&run=${r.id}`} className="min-w-0 truncate text-zinc-700 hover:underline">
-                    {r.saved_at ? "★ " : ""}
-                    {r.title ?? `${r.week_start} 주 · ${MODE_LABEL[r.structure_mode] ?? r.structure_mode} · ${r.optimize_target_label === "__SKYUHD__" ? "유료방송가구" : r.optimize_target_label}`}
-                  </Link>
-                  <span className="shrink-0 text-xs tabular-nums text-zinc-400">
-                    기대 {fmt(r.summary?.expectedAvgRating)} · {r.created_at.slice(5, 16).replace("T", " ")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+            </div>
+          </details>
+        </main>
       </div>
 
       {selected && runId && (
@@ -568,8 +927,11 @@ function IdealSchedulePage() {
           runId={runId}
           block={selected}
           decimals={decimals}
-          targetLabel={data?.run.optimize_target_label === "__SKYUHD__" ? "유료방송가구" : (data?.run.optimize_target_label ?? "")}
-          onClose={() => setSelectedId(null)}
+          targetLabel={runKpi}
+          compareRow={selectedCompare}
+          previewCandidateId={preview?.block.id === selected.id ? preview.cand.id : null}
+          onPreview={(c) => setPreview(c ? { block: selected, cand: c } : null)}
+          onClose={() => selectBlock(null)}
           onChanged={() => {
             if (runId) void loadRun(runId);
           }}

@@ -30,6 +30,21 @@ export interface ExcelBlock {
   confidence_score: number | string | null;
 }
 
+/** 지난주 실제 편성 대비 대조 한 행(runStore.buildComparison 결과에서 필요한 값만). */
+export interface ExcelCompareRow {
+  weekday: number;
+  startMin: number;
+  endMin: number;
+  currentName: string | null;
+  currentExpected: number | null;
+  currentActual: number | null;
+  idealName: string;
+  idealStatus: string;
+  idealExpected: number | null;
+  changed: boolean;
+  diff: number | null;
+}
+
 export async function buildIdealScheduleExcel(opts: {
   channelName: string;
   themeColor: string | null;
@@ -39,6 +54,9 @@ export async function buildIdealScheduleExcel(opts: {
   decimals: number;
   pivot: number | null; // 색 강도 기준(채널 연간 평균 × 2)
   blocks: ExcelBlock[];
+  // 2026-09-30 추가 시트(선택): 지난주 대비 대조, 필수·고정 편성, 설정 — 모두 저장된 값 그대로
+  compare?: { currentWeekStart: string | null; rows: ExcelCompareRow[] };
+  settings?: [string, string][];
 }): Promise<ArrayBuffer> {
   const premieres = premiereBlocks(opts.blocks); // 같은 에피소드 24시간 3방 중 첫 방송(<본>)
   const theme = opts.themeColor || "#6366f1";
@@ -111,6 +129,52 @@ export async function buildIdealScheduleExcel(opts: {
       c.alignment = { wrapText: true, vertical: "middle", horizontal: "center" };
       c.font = { size: 7, bold: b.status === "REQUIRED" || b.status === "LOCKED" };
     }
+  }
+
+  const headerStyle = (row: ExcelJS.Row) => {
+    row.font = { bold: true, size: 10 };
+    row.eachCell((c) => {
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4F4F5" } };
+      c.border = { bottom: { style: "thin", color: { argb: "FFD4D4D8" } } };
+    });
+  };
+  const numFmt = opts.decimals === 4 ? "0.0000" : "0.000";
+
+  // 시트 2: 지난주 실제 편성 대비
+  if (opts.compare) {
+    const s2 = wb.addWorksheet("지난주 대비", { views: [{ state: "frozen", ySplit: 2 }] });
+    s2.mergeCells(1, 1, 1, 10);
+    s2.getCell(1, 1).value = `지난주 실제 편성(${opts.compare.currentWeekStart ?? "-"} 주) → 이상적 편성 · 기대값은 최근 12주 데이터 기반(${opts.targetLabel})`;
+    s2.getCell(1, 1).font = { bold: true, size: 11 };
+    s2.addRow(["요일", "시작", "종료", "지난주 실제", "지난주 기대", "지난주 실측", "이상적", "이상적 기대", "기대 차이", "판단"]);
+    headerStyle(s2.getRow(2));
+    for (const r of opts.compare.rows) {
+      const ratio = r.diff !== null && r.currentExpected ? r.diff / r.currentExpected : null;
+      const verdict = !r.changed ? "유지" : ratio !== null && Math.abs(ratio) < 0.03 ? "교체(차이 3% 미만)" : "교체";
+      s2.addRow([DOW_LABELS[r.weekday - 1], minToLabel(r.startMin), minToLabel(r.endMin), r.currentName ?? "(없음)", r.currentExpected, r.currentActual, `${r.idealName}${STATUS_LABEL[r.idealStatus] && r.idealStatus !== "AI" ? ` [${STATUS_LABEL[r.idealStatus]}]` : ""}`, r.idealExpected, r.diff, verdict]);
+    }
+    [6, 8, 8, 24, 11, 11, 24, 11, 10, 16].forEach((w, i) => (s2.getColumn(i + 1).width = w));
+    [5, 6, 8, 9].forEach((ci) => (s2.getColumn(ci).numFmt = numFmt));
+  }
+
+  // 시트 3: 필수·고정·수동 편성
+  const fixed = opts.blocks.filter((b) => b.status !== "AI").sort((a, b) => a.weekday - b.weekday || Number(a.start_min) - Number(b.start_min));
+  const s3 = wb.addWorksheet("필수·고정 편성");
+  s3.addRow(["요일", "시작", "종료", "프로그램", "구분", "기대"]);
+  headerStyle(s3.getRow(1));
+  for (const b of fixed) s3.addRow([DOW_LABELS[b.weekday - 1], minToLabel(Number(b.start_min)), minToLabel(Number(b.end_min)), b.program_name, STATUS_LABEL[b.status] ?? b.status, b.expected_kpi === null ? null : Number(b.expected_kpi)]);
+  if (!fixed.length) s3.addRow(["", "", "", "필수·고정·수동 편성 없음"]);
+  [6, 8, 8, 30, 12, 10].forEach((w, i) => (s3.getColumn(i + 1).width = w));
+  s3.getColumn(6).numFmt = numFmt;
+
+  // 시트 4: 설정
+  if (opts.settings?.length) {
+    const s4 = wb.addWorksheet("설정");
+    s4.addRow(["항목", "값"]);
+    headerStyle(s4.getRow(1));
+    for (const [k, v] of opts.settings) s4.addRow([k, v]);
+    s4.getColumn(1).width = 24;
+    s4.getColumn(2).width = 70;
   }
   return wb.xlsx.writeBuffer();
 }

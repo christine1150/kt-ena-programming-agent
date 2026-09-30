@@ -80,6 +80,7 @@ export type RunRow = {
   saved_at: string | null;
   created_at: string;
   current_week_start: string | null;
+  config_snapshot?: { weights?: Record<string, number>; repeat_rules?: { daily_cap: number; weekly_cap: number } } | null;
   summary: RunSummary;
   conflicts: { weekday: number; startMin: number; endMin: number; a: { programName: string; source: string }; b: { programName: string; source: string } }[];
   gaps: { weekday: number; startMin: number; endMin: number }[];
@@ -175,6 +176,46 @@ export function mondayOfLocal(d: Date): string {
   kst.setUTCDate(kst.getUTCDate() - (dow - 1));
   return kst.toISOString().slice(0, 10);
 }
+
+/** /compare 응답 한 행(IDEAL 블록 ↔ 가장 많이 겹치는 지난주 실제 편성 블록). 값은 모두 저장된 엔진 값. */
+export type CompareRow = {
+  weekday: number;
+  startMin: number;
+  endMin: number;
+  ideal: { blockId: string; programName: string; episodeSubtitle: string | null; status: string; contentType: string; expectedKpi: number | null; confidence: number | null; reasons: Reason[] | null };
+  current: { programName: string; episodeSubtitle: string | null; startMin: number; expectedKpi: number | null; actualKpi: number | null } | null;
+  changed: boolean;
+  expectedKpiDiff: number | null;
+};
+
+/** "차이 작음" 표시 기준(기대값 차이 ÷ 지난주 편성 기대값). 표시 전용 임시 기준 — 백테스트 오차로 보정 예정(2단계). */
+export const SMALL_GAIN_RATIO = 0.03;
+
+/** 기대값 근거 등급(표시 전용). A = 그 프로그램의 같은 시간대 이력(1~2단계)이 있고 신뢰도가 0이 아님,
+ *  B = 그 프로그램 전체 이력(3단계)이나 표본이 적어 신뢰도 0, C = 프로그램 자체 이력 없이 장르·채널 평균(4~6단계).
+ *  실데이터 확인(2026-09-30, ENA): 3단계인데 신뢰도 0인 블록이 많아, 신뢰도 0만으로 "장르 평균 추정"이라 부르지 않는다. */
+export function evidenceGrade(b: { fallback_level: number | null; confidence_score: number | null; expected_kpi_type?: string | null }): { grade: "A" | "B" | "C" | "가정"; label: string } {
+  if (b.expected_kpi_type === "BENCHMARK_TRANSFER") return { grade: "가정", label: "경쟁사 지수 전이 가정" };
+  const lv = b.fallback_level ?? 6;
+  if (lv >= 4) return { grade: "C", label: "근거 부족(장르·채널 평균 추정)" };
+  if (lv === 3 || (b.confidence_score !== null && b.confidence_score < 0.005)) return { grade: "B", label: lv === 3 ? "근거 보통(프로그램 전체 이력)" : "근거 보통(같은 시간대 표본 적음)" };
+  return { grade: "A", label: "근거 충분(같은 시간대 이력)" };
+}
+
+/** 주간 기대 평균 = 편성 분 가중 평균(엔진 요약과 같은 식, 경쟁사 가상 편성 제외). 저장된 블록 값만 쓴다. */
+export function weeklyExpected(blocks: Pick<BlockRow, "start_min" | "end_min" | "expected_kpi" | "content_type">[]): number | null {
+  let num = 0;
+  let den = 0;
+  for (const b of blocks) {
+    if (b.content_type === "COMPETITOR_BENCHMARK" || b.expected_kpi === null) continue;
+    num += b.expected_kpi * (b.end_min - b.start_min);
+    den += b.end_min - b.start_min;
+  }
+  return den > 0 ? num / den : null;
+}
+
+export const signed = (v: number, decimals: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(decimals)}`;
+export const signedPct = (v: number, digits = 1) => `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixed(digits)}%`;
 
 /** 같은 에피소드 24시간 3방 중 첫 방송 블록 id — 판정은 lib/idealSchedule/premiere.ts. */
 export function premiereBlockIds(blocks: BlockRow[]): Set<string> {
