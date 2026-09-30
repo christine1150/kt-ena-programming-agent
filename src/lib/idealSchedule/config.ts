@@ -62,7 +62,9 @@ export interface IdealStructureConfig {
   episodic_programs?: Record<string, string[]>;
   episode_cycle_max?: number; // 같은 에피소드 한 사이클 최대 편성 수(사용자 규칙: 3)
   episode_cycle_hours?: number; // 사이클 폭(시간, 사용자 규칙: 24)
-  episode_rest_days?: number; // 에피소드 마지막 방영 후 최소 휴지 일수
+  episode_rest_days?: number; // 에피소드 새 묶음 사이 최소 휴지 일수(현재 0 = 없음)
+  episode_periods?: number[][]; // 에피소드 구간(주중 [1..5] / 주말 [6,7]) — 구간이 다르면 다른 에피소드
+  episode_repeat_within_period?: boolean; // 같은 구간 안에서 다른 날 재편성 허용
 }
 
 export interface IdealTargetGroup {

@@ -5,10 +5,12 @@
 // 1) 같은 프로그램이 하루 여러 번 나와도 서로 다른 에피소드면 "반복"이 아니다 → 프로그램 단위 일·주 cap 대신
 //    최근 12주에 실제로 관측된 최대치(하루·주간 최대 방영 수)를 한도로 쓴다(임의 상한 없음, 데이터 기준).
 // 2) 반복 제한은 에피소드 단위로 건다(사용자 규칙 2026-09-30: "OLIFE 같은 에피소드는 24시간 내 최대 세 번"):
-//    편성 주 안에서 같은 에피소드는 최대 episode_cycle_max회이며, 그 편성들이 모두 episode_cycle_hours시간 안에
-//    모여 있어야 한다(본방 후 24시간 안 재방). 24시간 묶음이 끝난 뒤 같은 주에 다시 시작하지 않는다 — 휴지 규칙
-//    없이 이 규칙만 두면(사용자 지시로 7일 휴지 제거) 가장 강한 에피소드가 매일 반복되던 문제(2026-09-30 테스트)를
-//    이 해석으로 막는다. episode_rest_days(>0이면 기준일 전 최근 방영 에피소드 휴지)는 기본 0(끔).
+//    같은 에피소드는 한 묶음에 최대 episode_cycle_max회, 묶음 안의 편성은 episode_cycle_hours시간 안(본방 후 24시간
+//    안 재방).
+//    최종 사용자 규칙(2026-09-30): "월화수목금 주중, 토일 주말 이렇게 에피소드를 다르게, 같은 에피소드를 편성할 수
+//    있게" — episode_periods(주중 [1..5] / 주말 [6,7])로 구간을 나눠 한 에피소드는 한 구간에서만 쓰고,
+//    episode_repeat_within_period=true면 같은 구간 안에서는 다른 날에도 새 묶음으로 다시 편성할 수 있다.
+//    (repeat_within_period=false면 구간 안 묶음 하나만. episode_rest_days>0이면 새 묶음 사이 휴지 — 현재 0)
 // 3) 최적화가 정한 블록마다 구체적인 에피소드를 배정한다. 에피소드 지수 = 그 에피소드 방영의 Σ시청률 ÷ Σ슬롯
 //    baseline, 프로그램 지수 대비 상대값을 표본 수만큼 1쪽으로 수축(k = shrinkage_k). 동률이면 오래 쉰 에피소드 우선.
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
@@ -123,14 +125,37 @@ export function assignEpisodes(
   blocks: EpisodeBlockInput[],
   stats: Map<string, EpisodeStat[]>,
   programIndex: (programId: string) => number | null,
-  opts: { weekStart: string; cycleMax: number; cycleHours: number; restDays: number; shrinkageK: number }
+  opts: {
+    weekStart: string;
+    cycleMax: number;
+    cycleHours: number;
+    restDays: number;
+    shrinkageK: number;
+    periods?: number[][] | null; // 요일 구간(없으면 한 주 전체가 한 구간)
+    repeatWithinPeriod?: boolean; // 같은 구간 안에서 새 묶음 허용
+  }
 ): Map<number, EpisodeAssignment | { none: true; reason: string }> {
   const out = new Map<number, EpisodeAssignment | { none: true; reason: string }>();
-  const cycles = new Map<string, number[][]>(); // "pid|epKey" → 사이클별 절대 분 목록
+  const times = new Map<string, number[]>(); // "pid|epKey" → 이번 주 편성 시각(주 기준 연속 분)
+  const periodOfEp = new Map<string, number>(); // "pid|epKey" → 처음 쓴 구간
+  const periodIndex = (weekday: number) => {
+    const i = (opts.periods ?? []).findIndex((p) => p.includes(weekday));
+    return i === -1 ? 0 : i;
+  };
   const absOf = (weekday: number, startMin: number) => (weekday - 1) * 1440 + startMin; // 방송일 분 → 주 기준 연속 분
   const dayMs = 86400000;
   const daysBetween = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / dayMs;
   const windowMin = opts.cycleHours * 60;
+  /** 어느 cycleHours 구간을 잡아도 같은 에피소드가 cycleMax회 이하인가(슬라이딩 윈도). */
+  const windowOk = (ts: number[]) => {
+    const s = [...ts].sort((x, y) => x - y);
+    for (let i = 0; i < s.length; i++) {
+      let n = 0;
+      for (let j = i; j < s.length && s[j] - s[i] < windowMin; j++) n++;
+      if (n > opts.cycleMax) return false;
+    }
+    return true;
+  };
   const order = [...blocks].sort((a, b) => b.value - a.value || a.weekday - b.weekday || a.startMin - b.startMin);
   for (const b of order) {
     const list = stats.get(b.programId) ?? [];
@@ -140,17 +165,24 @@ export function assignEpisodes(
     }
     const date = addDays(opts.weekStart, b.weekday - 1);
     const abs = absOf(b.weekday, b.startMin);
+    const period = periodIndex(b.weekday);
     const progIdx = programIndex(b.programId);
-    let best: { e: EpisodeStat; rel: number; join: number[] | null } | null = null;
+    let best: { e: EpisodeStat; rel: number } | null = null;
     for (const e of list) {
-      const c = cycles.get(`${b.programId}|${e.key}`)?.[0] ?? null;
-      let join: number[] | null = null;
-      if (c) {
-        // 이번 주에 이미 쓴 에피소드: 횟수 < cycleMax 이고 합쳐도 cycleHours 안일 때만(주당 24시간 묶음 하나)
-        if (c.length >= opts.cycleMax || Math.max(abs, ...c) - Math.min(abs, ...c) >= windowMin) continue;
-        join = c;
-      } else if (opts.restDays > 0 && daysBetween(date, e.lastAired) < opts.restDays) {
-        continue; // (설정 시) 기준일 전 최근 방영 에피소드 휴지
+      const epId = `${b.programId}|${e.key}`;
+      // 주중·주말 구간 분리: 다른 구간에서 이미 쓴 에피소드는 쓰지 않는다
+      const usedPeriod = periodOfEp.get(epId);
+      if (usedPeriod !== undefined && usedPeriod !== period) continue;
+      const ts = times.get(epId) ?? [];
+      const next = [...ts, abs];
+      // 24시간 안 최대 cycleMax회(어느 24시간 구간이든)
+      if (!windowOk(next)) continue;
+      // 같은 구간 재편성 허용이 아니면 이번 주 편성이 모두 cycleHours 안에 모여야 함(묶음 하나)
+      if (!opts.repeatWithinPeriod && ts.length > 0 && Math.max(...next) - Math.min(...next) >= windowMin) continue;
+      // (설정 시) 휴지: 기준일 전 마지막 방영, 그리고 24시간 묶음 밖의 이번 주 편성으로부터 restDays일 이상
+      if (opts.restDays > 0) {
+        if (daysBetween(date, e.lastAired) < opts.restDays) continue;
+        if (ts.some((m) => Math.abs(m - abs) >= windowMin && Math.abs(m - abs) < opts.restDays * 1440)) continue;
       }
       const raw = e.index !== null && progIdx !== null && progIdx > 0 ? e.index / progIdx : 1;
       const rel = (e.n * raw + opts.shrinkageK) / (e.n + opts.shrinkageK);
@@ -158,15 +190,18 @@ export function assignEpisodes(
         !best ||
         rel > best.rel + 1e-12 ||
         (Math.abs(rel - best.rel) <= 1e-12 && (e.lastAired < best.e.lastAired || (e.lastAired === best.e.lastAired && e.key < best.e.key)));
-      if (better) best = { e, rel, join };
+      if (better) best = { e, rel };
     }
     if (!best) {
-      out.set(b.id, { none: true, reason: `같은 에피소드 ${opts.cycleHours}시간 내 ${opts.cycleMax}회 조건을 만족하는 에피소드 없음${opts.restDays > 0 ? `(휴지 ${opts.restDays}일 포함)` : ""}` });
+      out.set(b.id, {
+        none: true,
+        reason: `같은 에피소드 ${opts.cycleHours}시간 내 ${opts.cycleMax}회${opts.periods?.length ? "·주중/주말 구분" : ""}${opts.restDays > 0 ? `·휴지 ${opts.restDays}일` : ""} 조건을 만족하는 에피소드 없음`,
+      });
       continue;
     }
     const k = `${b.programId}|${best.e.key}`;
-    if (best.join) best.join.push(abs);
-    else cycles.set(k, [...(cycles.get(k) ?? []), [abs]]);
+    times.set(k, [...(times.get(k) ?? []), abs]);
+    periodOfEp.set(k, period);
     out.set(b.id, {
       subtitle: best.e.subtitle,
       episodeNumber: best.e.episodeNumber,

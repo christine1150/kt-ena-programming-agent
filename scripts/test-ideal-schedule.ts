@@ -490,6 +490,28 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   check("휴지 중(최근 방영 7일 이내)인 에피소드는 배정 안 함", ![...as.values()].some((a) => !("none" in a) && a.subtitle === "에피소드A"));
   const as2 = assignEpisodes([{ ...blocks[0], weekday: 7 }], new Map([["P", [stats.get("P")![0]]]]), () => 1, epOpts);
   check("휴지 기간이 지나면 다시 배정 가능(일요일 10/4 ≥ 9/26+7)", (() => { const a = as2.get(1); return !!a && !("none" in a); })());
+  // 최종 사용자 규칙(2026-09-30): 주중(월~금)·주말(토·일)은 서로 다른 에피소드, 같은 구간 안 재편성 가능, 24시간 내 3회 유지
+  const pOpts = { ...epOpts, restDays: 0, periods: [[1, 2, 3, 4, 5], [6, 7]], repeatWithinPeriod: true };
+  const pBlocks = [
+    { id: 1, programId: "P", weekday: 1, startMin: 1260, value: 10, expected: 1 }, // 월 21
+    { id: 2, programId: "P", weekday: 3, startMin: 1260, value: 9, expected: 1 }, // 수 21
+    { id: 3, programId: "P", weekday: 6, startMin: 1260, value: 8, expected: 1 }, // 토 21
+    { id: 4, programId: "P", weekday: 7, startMin: 1260, value: 7, expected: 1 }, // 일 21
+    { id: 5, programId: "P", weekday: 1, startMin: 1320, value: 6, expected: 1 }, // 월 22
+    { id: 6, programId: "P", weekday: 1, startMin: 1380, value: 5, expected: 1 }, // 월 23
+    { id: 7, programId: "P", weekday: 1, startMin: 1500, value: 4, expected: 1 }, // 월 25(4번째, 24시간 안)
+  ];
+  const ps = assignEpisodes(pBlocks, stats, () => 1, pOpts);
+  const psub = (id: number) => {
+    const a = ps.get(id);
+    return a && !("none" in a) ? a.subtitle : null;
+  };
+  check("주중 안에서는 같은 에피소드 재편성 가능(월·수 모두 C)", psub(1) === "에피소드C" && psub(2) === "에피소드C");
+  check("주말은 주중과 다른 에피소드(토·일 C 아님), 주말 안에서는 같은 에피소드 가능", psub(3) !== null && psub(3) !== "에피소드C" && psub(4) === psub(3));
+  check("24시간 안 같은 에피소드 최대 3회 유지(월 21·22·23 C, 월 25시는 다른 에피소드)", psub(5) === "에피소드C" && psub(6) === "에피소드C" && psub(7) !== "에피소드C" && psub(7) !== null);
+  const weekdayEps = new Set([1, 2, 5, 6, 7].map(psub));
+  check("주중·주말 에피소드 집합이 겹치지 않음", ![psub(3), psub(4)].some((s) => weekdayEps.has(s)));
+
   const cfg = { ...engineConfig, structure: { ...engineConfig.structure, episodic_programs: { ENA: ["프로그램 C"] } } };
   check("에피소드 시리즈 판정은 설정 목록·이름 정규화 기준", isEpisodicProgram(cfg, "ENA", "프로그램C") && !isEpisodicProgram(cfg, "OLIFE", "프로그램C"));
 
