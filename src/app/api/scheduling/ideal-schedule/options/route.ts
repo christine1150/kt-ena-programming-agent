@@ -5,6 +5,10 @@ import { bad, fail, isDate, requireActor } from "@/lib/idealSchedule/apiUtil";
 import { loadIdealScheduleConfig } from "@/lib/idealSchedule/configStore";
 import { fetchTargetLabels, loadChannelRef } from "@/lib/idealSchedule/dataSource";
 import { getAllRegisteredCompetitorNames } from "@/lib/scheduleGridSource";
+import { supabase } from "@/lib/supabase";
+import { isEpisodicProgram } from "@/lib/idealSchedule/episodes";
+
+const OWN_CHANNELS = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
 export async function GET(request: Request) {
   const auth = await requireActor();
@@ -17,11 +21,26 @@ export async function GET(request: Request) {
     const ch = await loadChannelRef(channelCode);
     const config = await loadIdealScheduleConfig(ch.id);
     const asOfDate = isDate(asOf) ? asOf : new Date().toISOString().slice(0, 10);
-    const [targets, competitors] = await Promise.all([
+    const [targets, competitors, channelRows] = await Promise.all([
       ch.code === "SKYUHD" ? Promise.resolve([]) : fetchTargetLabels(ch.code, asOfDate, config.expected_kpi.lookback_days),
       getAllRegisteredCompetitorNames(),
+      supabase.from("channels").select("code, name, theme_color, logo_path, logo_visible_ratio, logo_visible_top_ratio").in("code", OWN_CHANNELS),
     ]);
-    return NextResponse.json({ ok: true, channel: ch, channelKpiLabel: ch.kpiLabel, targets, competitors, config, isAdmin: auth.isAdmin });
+    const channels = OWN_CHANNELS.map((code) => (channelRows.data ?? []).find((c) => c.code === code)).filter(Boolean);
+    // 부제 반영 옵션은 설정에 에피소드 시리즈가 있는 채널(현재 OLIFE)에서만 보여준다
+    const episodicPrograms = config.structure.episodic_programs?.[ch.code] ?? [];
+    return NextResponse.json({
+      ok: true,
+      channel: ch,
+      channelKpiLabel: ch.kpiLabel,
+      targets,
+      competitors,
+      channels,
+      episodicPrograms,
+      hasEpisodeOption: episodicPrograms.length > 0 && isEpisodicProgram(config, ch.code, episodicPrograms[0]),
+      config,
+      isAdmin: auth.isAdmin,
+    });
   } catch (e) {
     return fail(e);
   }

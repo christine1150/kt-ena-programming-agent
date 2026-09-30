@@ -167,7 +167,7 @@ export async function saveRun(req: RunRequest, out: RunOutcome, actor: Actor, pa
 }
 
 export async function loadRun(runId: string) {
-  const { data: run, error } = await supabase.from("ideal_schedule_runs").select("*, channels(code, name, theme_color)").eq("id", runId).maybeSingle();
+  const { data: run, error } = await supabase.from("ideal_schedule_runs").select("*, channels(id, code, name, theme_color, primary_target)").eq("id", runId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!run) return null;
   const blocks: Record<string, unknown>[] = [];

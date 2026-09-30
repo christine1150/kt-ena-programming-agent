@@ -34,6 +34,8 @@ import ScheduleGridUploader from "./ScheduleGridUploader";
 import OlifeEpisodeCatalogUploader from "./OlifeEpisodeCatalogUploader";
 import DailyNewsManager from "./DailyNewsManager";
 import MarketYtdRankUploader from "./MarketYtdRankUploader";
+// 사용자 결정(2026-09-30): 이상적 1주일 편성의 장르 분류는 규칙으로 1차 분류 후 관리자가 보완
+import GenreMapManager from "./GenreMapManager";
 import LogoutButton from "./LogoutButton";
 
 // 묶음 소제목 — 카드가 아니라 구분선 역할만 한다(첫 묶음은 위 여백을 주지 않아도 되게 mt로만 조정).
@@ -151,6 +153,7 @@ export default async function AdminPage() {
         <TargetGoalsManager />
         <MarketYtdRankUploader />
         <OlifeEpisodeCatalogUploader />
+        <GenreMapManager />
 
         <AdminSectionHeading title="점검" description="자동 수집이 제대로 돌고 있는지 확인합니다." />
         <MailIngestionManager />

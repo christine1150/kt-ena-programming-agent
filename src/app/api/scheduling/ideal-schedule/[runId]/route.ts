@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { fail, requireActor } from "@/lib/idealSchedule/apiUtil";
 import { loadRun, saveRunAs } from "@/lib/idealSchedule/runStore";
+import { getChannelAnnualAvgRating } from "@/lib/scheduleGridSource";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ runId: string }> }) {
   const auth = await requireActor();
@@ -10,7 +11,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
   try {
     const loaded = await loadRun(runId);
     if (!loaded) return NextResponse.json({ ok: false, message: "실행을 찾을 수 없습니다." }, { status: 404 });
-    return NextResponse.json({ ok: true, run: loaded.run, blocks: loaded.blocks });
+    // 그리드 색 기준선 — "ENA 주간 비교"와 같은 채널 연간 평균(연초~오늘, 표시용)
+    const chRaw = (loaded.run as { channels: unknown }).channels;
+    const ch = (Array.isArray(chRaw) ? chRaw[0] : chRaw) as { id: string; primary_target: string | null } | null;
+    const channelAnnualAvgRating = ch ? await getChannelAnnualAvgRating(ch.id, ch.primary_target).catch(() => null) : null;
+    return NextResponse.json({ ok: true, run: loaded.run, blocks: loaded.blocks, channelAnnualAvgRating });
   } catch (e) {
     return fail(e);
   }

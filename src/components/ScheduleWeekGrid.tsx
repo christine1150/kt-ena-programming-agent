@@ -7,6 +7,21 @@
 // (/api/schedule-grid)를 전환할 수 있고, showExport로 엑셀 다운로드 링크 노출 여부를 정한다.
 import { useEffect, useId, useState } from "react";
 import { NARRATIVE_UP_COLOR } from "@/lib/highlightNarrative";
+// 시간축·색 계산은 이상적 1주일 편성 화면과 공유하도록 scheduleGridLayout.ts로 옮김(2026-09-30, 동작 동일)
+import {
+  DOW_LABELS,
+  GRID_END_MIN,
+  GRID_HEIGHT,
+  GRID_START_MIN,
+  HOUR_PX,
+  HOUR_TICKS,
+  PX_PER_MIN,
+  addDaysLocal,
+  intensityColor,
+  mixRgb,
+  rgbToHex,
+  weekOfMonthLabel,
+} from "@/lib/scheduleGridLayout";
 
 export type ScheduleGridRow = {
   dow: number;
@@ -18,15 +33,6 @@ export type ScheduleGridRow = {
   matched_rating: number | null;
 };
 type DataSource = "upload" | "db" | "db+upload";
-
-const DOW_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
-// 이 앱의 "02~26시" 관행(닐슨 방송일 경계) 그대로 — 02:00부터 다음날 02:00 직전까지 24시간.
-const GRID_START_MIN = 2 * 60;
-const GRID_END_MIN = 26 * 60;
-const PX_PER_MIN = 0.6; // 1440분 * 0.6 = 864px — 실제 길이 비례 표시
-const GRID_HEIGHT = (GRID_END_MIN - GRID_START_MIN) * PX_PER_MIN;
-const HOUR_PX = 60 * PX_PER_MIN;
-const HOUR_TICKS = Array.from({ length: 24 }, (_, i) => 2 + i);
 
 function toExtMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -55,27 +61,6 @@ function extractEpisodeTag(tags: string | null): { episode: string | null } {
 // 얹어(흰 배경 위에서만 옅어 보이는) 단조로운 한 방향 그라데이션이었다. 0~0.6 구간은
 // 흰색→로고색, 0.6~1 구간은 로고색→검정 쪽으로 섞어(최대 55%) 로고색 자체보다 진한 색까지
 // 나오게 하고, 배경 밝기(luminance)를 계산해 어두워지면 글자색을 자동으로 흰색으로 바꾼다.
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace("#", "");
-  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
-  const n = parseInt(full, 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function mixRgb(a: [number, number, number], b: [number, number, number], t: number): [number, number, number] {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-}
-function rgbToHex(rgb: [number, number, number]): string {
-  return `#${rgb.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("")}`;
-}
-function intensityColor(themeHex: string, intensity: number): { bg: string; isDark: boolean } {
-  const white: [number, number, number] = [255, 255, 255];
-  const black: [number, number, number] = [0, 0, 0];
-  const theme = hexToRgb(themeHex);
-  const rgb: [number, number, number] =
-    intensity <= 0.6 ? mixRgb(white, theme, intensity / 0.6) : mixRgb(theme, black, ((intensity - 0.6) / 0.4) * 0.55);
-  const luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
-  return { bg: rgbToHex(rgb), isDark: luminance < 0.5 };
-}
 // 사용자 지시(2026-09-22): "경쟁 채널의 편성표를 골랐을 때는 0은 흰색 그대로 두고, 높은
 // 시청률은 긍정(진한 블루 계열에서 약하게), 낮은 시청률은 낮을수록 진한 부정(진한 붉은색)으로
 // 그라데이션" — UI 디자이너 페르소나 검토 결과, 자사 채널의 단일색(브랜드색) 그라데이션과
@@ -105,20 +90,6 @@ function competitorIntensityColor(rating: number, pivot: number | null, maxRatin
 // 서버가 "이번 주"를 알아서 고르는 자기관리 모드) 쓰일 때만 이전/다음 주 이동을 지원한다.
 // scheduleGridSource.ts의 addDaysStr과 같은 계산이지만, 이 파일은 클라이언트 컴포넌트라
 // 서버 전용 코드를 끌어오지 않기 위해 여기서 따로 둔다(값 자체는 완전히 동일).
-function addDaysLocal(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-// 사용자 지시(2026-09-30): "9월 3주" 같은 월중 몇째 주 표기 — 그 요일(월요일)이 이 달에
-// 몇 번째로 나오는지는 "일자 ÷ 7 올림"으로 항상 정확하다(요일 계산 라이브러리 불필요).
-function weekOfMonthLabel(mondayStr: string): string {
-  const d = new Date(`${mondayStr}T00:00:00Z`);
-  const month = d.getUTCMonth() + 1;
-  const occurrence = Math.ceil(d.getUTCDate() / 7);
-  return `${month}월 ${occurrence}주`;
-}
-
 export function ScheduleWeekGrid({
   channelCode,
   week,

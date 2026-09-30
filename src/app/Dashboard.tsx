@@ -1247,6 +1247,7 @@ function ChannelStatusCard({ channels, narrativeSignals }: { channels: Map<strin
             눌렀을 때는 ENA가 기본으로 나오면 되고" — 처음엔 페이지 상단 아이콘 그룹에 넣었다가,
             "오늘의 시청률" 카드 자체의 우측 상단으로 옮긴다. 1페이지는 특정 채널 컨텍스트가 없는
             포트폴리오 화면이라 기본 채널을 ENA로 고정하고, 새 탭으로 열어 조회 흐름을 끊지 않는다. */}
+        <div className="flex items-center gap-2">
         <Link
           href="/schedule-grid?channel=ENA"
           target="_blank"
@@ -1261,6 +1262,22 @@ function ChannelStatusCard({ channels, narrativeSignals }: { channels: Map<strin
           </svg>
           주간 비교
         </Link>
+        {/* 사용자 지시(2026-09-30): "이 페이지로 갈 수 있는 버튼을 1페이지와 2페이지의 채널로 갈 수 있는 버튼
+            옆에 하나씩 더" — 주간 비교 버튼 바로 옆에 이상적 1주일 편성(독립 페이지) 진입 버튼. 1페이지는 ENA 기본. */}
+        <Link
+          href="/ideal-schedule?channel=ENA"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+            <path d="M9 15l2 2 4-4" />
+          </svg>
+          이상적 편성
+        </Link>
+        </div>
       </div>
       <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-12">
         {ena && (

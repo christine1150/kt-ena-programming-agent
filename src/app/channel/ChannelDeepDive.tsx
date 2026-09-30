@@ -5440,6 +5440,20 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </svg>
                 주간 비교
               </Link>
+              {/* 사용자 지시(2026-09-30): 주간 비교 버튼 옆에 이상적 1주일 편성(독립 페이지) 진입 버튼 — 지금 보고 있는 채널로 연다. */}
+              <Link
+                href={`/ideal-schedule?channel=${code}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/30"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                  <path d="M9 15l2 2 4-4" />
+                </svg>
+                이상적 편성
+              </Link>
               {/* 사용자 지시(2026-08-21): 드랍박스를 열면 옵션 글씨가 안 보이던 버그 — optgroup으로
                   묶으면서 option이 select의 "직계 자식"이 아니게 돼([&>option] 선택자가 더는
                   안 먹힘) 흰 배경에 흰 글씨(투명)로 남아있었다. 자손 선택자([&_option])로 바꾸고

@@ -301,7 +301,10 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
   for (const eb of final.blocks) {
     if (eb.fixed || eb.slotIndex === undefined) continue;
     const src = assigned[eb.slotIndex]!;
-    eb.alternatives = alternativesFor(scorer, blocks, src, slotCandidates(slots[eb.slotIndex], input.pool, input, true), maxGap, 10);
+    // 대체 후보(Swap용)는 배치 기준(길이 ±허용오차)보다 넓게: 편성 가능한 자사 프로그램 전체를 같은 자리에서 평가해
+    // 길이 불일치 패널티가 반영된 순위로 보여준다(2026-09-30 화면 점검: 긴 슬롯은 후보가 1개뿐이라 교체할 수 없었음).
+    const altPool = [...new Set([...slotCandidates(slots[eb.slotIndex], input.pool, input, true), ...input.pool.filter((c) => c.aiEligible && c.contentType === "OWN")])];
+    eb.alternatives = alternativesFor(scorer, blocks, src, altPool, maxGap, 10);
   }
   return { mode: "KEEP_CURRENT", blocks: final.blocks, objective: final.objective, emptySlots, gaps: [], localSearchMoves: moves };
 }
