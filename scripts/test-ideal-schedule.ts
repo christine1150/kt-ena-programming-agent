@@ -468,20 +468,27 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
       ],
     ],
   ]);
+  // 사용자 규칙(2026-09-30): 같은 에피소드는 24시간 안에 최대 3회
   const blocks = [
-    { id: 1, programId: "P", weekday: 1, startMin: 1260, value: 10, expected: 1 },
-    { id: 2, programId: "P", weekday: 2, startMin: 1260, value: 9, expected: 1 },
-    { id: 3, programId: "P", weekday: 3, startMin: 1260, value: 8, expected: 1 },
+    { id: 1, programId: "P", weekday: 1, startMin: 1260, value: 10, expected: 1 }, // 월 21:00
+    { id: 2, programId: "P", weekday: 1, startMin: 1380, value: 9, expected: 1 }, // 월 23:00
+    { id: 3, programId: "P", weekday: 2, startMin: 180, value: 8, expected: 1 }, // 화 03:00(월 21시부터 6시간)
+    { id: 4, programId: "P", weekday: 2, startMin: 1320, value: 7, expected: 1 }, // 화 22:00(월 21시부터 25시간)
+    { id: 5, programId: "P", weekday: 3, startMin: 1260, value: 6, expected: 1 }, // 수 21:00(화 22시부터 23시간)
+    { id: 6, programId: "P", weekday: 4, startMin: 1260, value: 5, expected: 1 }, // 목 21:00
   ];
-  const as = assignEpisodes(blocks, stats, () => 1, { weekStart: "2026-09-28", weeklyCap: 1, restDays: 7, shrinkageK: 4 });
+  const epOpts = { weekStart: "2026-09-28", cycleMax: 3, cycleHours: 24, restDays: 7, shrinkageK: 4 };
+  const as = assignEpisodes(blocks, stats, () => 1, epOpts);
   const sub = (id: number) => {
     const a = as.get(id);
     return a && !("none" in a) ? a.subtitle : null;
   };
-  // C: (1×3.0 + 4)/5 = 1.4, B: (4×1.2+4)/8 = 1.1 → 가치 큰 월요일에 C, 화요일 B, 수요일은 A가 휴지(9/26+7 > 9/30) → 미배정
-  check("에피소드 배정: 상대 지수(표본 수축) 높은 순, 같은 에피소드 주 1회", sub(1) === "에피소드C" && sub(2) === "에피소드B");
-  check("에피소드 휴지 기간(7일) 중인 에피소드는 배정 안 함 → 사유와 함께 미배정", sub(3) === null && "none" in (as.get(3) as object));
-  const as2 = assignEpisodes(blocks.slice(0, 1).map((b) => ({ ...b, weekday: 7 })), stats, () => 1, { weekStart: "2026-09-28", weeklyCap: 1, restDays: 7, shrinkageK: 4 });
+  // C: (1×3.0+4)/5 = 1.4, B: (4×1.2+4)/8 = 1.1, A는 9/26 방영으로 휴지 중
+  check("24시간 안 같은 에피소드 최대 3회: 가장 강한 C가 월21·월23·화03에 모임", sub(1) === "에피소드C" && sub(2) === "에피소드C" && sub(3) === "에피소드C");
+  check("사이클 3회 초과·24시간 밖은 다음 에피소드(B)로, B는 화22·수21(23시간) 사이클", sub(4) === "에피소드B" && sub(5) === "에피소드B");
+  check("조건을 만족하는 에피소드가 없으면 사유와 함께 미배정(목: B 사이클 24시간 밖, A 휴지 중)", sub(6) === null && "none" in (as.get(6) as object));
+  check("휴지 중(최근 방영 7일 이내)인 에피소드는 배정 안 함", ![...as.values()].some((a) => !("none" in a) && a.subtitle === "에피소드A"));
+  const as2 = assignEpisodes([{ ...blocks[0], weekday: 7 }], new Map([["P", [stats.get("P")![0]]]]), () => 1, epOpts);
   check("휴지 기간이 지나면 다시 배정 가능(일요일 10/4 ≥ 9/26+7)", (() => { const a = as2.get(1); return !!a && !("none" in a); })());
   const cfg = { ...engineConfig, structure: { ...engineConfig.structure, episodic_programs: { ENA: ["프로그램 C"] } } };
   check("에피소드 시리즈 판정은 설정 목록·이름 정규화 기준", isEpisodicProgram(cfg, "ENA", "프로그램C") && !isEpisodicProgram(cfg, "OLIFE", "프로그램C"));
@@ -496,7 +503,10 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   const cBlocks = on.output.blocks.filter((b) => b.candidate.programKey === "C");
   const keys = cBlocks.map((b) => (b.episode && !("none" in b.episode) ? b.episode.key : null)).filter(Boolean);
   check("부제 미반영(기본): 에피소드 배정 없음", off.summary.episodeMode === "PROGRAM" && off.output.blocks.every((b) => !b.episode));
-  check("부제 반영: 시리즈 블록마다 에피소드 배정, 주 안 중복 없음", on.summary.episodeMode === "EPISODE" && keys.length > 0 && keys.length === new Set(keys).size && on.summary.episodeAssigned === keys.length);
+  const byEp = new Map<string, number[]>();
+  for (const b of cBlocks) if (b.episode && !("none" in b.episode)) (byEp.get(b.episode.key) ?? byEp.set(b.episode.key, []).get(b.episode.key)!).push((b.weekday - 1) * 1440 + b.startMin);
+  const ruleOk = [...byEp.values()].every((t) => t.length <= 3 && Math.max(...t) - Math.min(...t) < 24 * 60);
+  check("부제 반영: 시리즈 블록마다 에피소드 배정, 같은 에피소드는 24시간 안 최대 3회", on.summary.episodeMode === "EPISODE" && keys.length > 0 && ruleOk && on.summary.episodeAssigned === keys.length, JSON.stringify([...byEp.values()].slice(0, 3)));
   check("부제 반영: 지문이 미반영과 다름(옵션이 결과 식별에 포함)", on.fingerprint !== off.fingerprint);
 }
 

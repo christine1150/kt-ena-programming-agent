@@ -259,7 +259,8 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       (pid) => fs.rating.rawIndex(`p|${pid}`).index,
       {
         weekStart: input.weekStart,
-        weeklyCap: config.structure.episode_weekly_cap ?? 1,
+        cycleMax: config.structure.episode_cycle_max ?? 3,
+        cycleHours: config.structure.episode_cycle_hours ?? 24,
         restDays: config.structure.episode_rest_days ?? 7,
         shrinkageK: config.expected_kpi.shrinkage_k,
       }

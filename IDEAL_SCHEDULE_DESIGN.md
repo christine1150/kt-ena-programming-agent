@@ -323,10 +323,10 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 
 - 실행 파라미터 `episodeMode`: `PROGRAM`(부제 미반영, 기본) / `EPISODE`(부제 반영)
 - 대상 시리즈는 설정 `structure.episodic_programs`(초기값 OLIFE: 걸어서세계속으로·세계테마기행)
-- 부제 반영 시: 같은 시리즈가 하루 여러 번 나와도 에피소드가 다르면 반복이 아님 → 프로그램 한도는 최근 12주 **관측 최대 방영 수**(하루·주간), 반복 제한은 **에피소드 단위**(주 `episode_weekly_cap`회, 마지막 방영 후 `episode_rest_days`일 휴지)
+- 부제 반영 시: 같은 시리즈가 하루 여러 번 나와도 에피소드가 다르면 반복이 아님 → 프로그램 한도는 최근 12주 **관측 최대 방영 수**(하루·주간), 반복 제한은 **에피소드 단위: 같은 에피소드는 24시간 안에 최대 3회**(사용자 규칙, `episode_cycle_max`·`episode_cycle_hours`). 새 사이클은 기준일 전 마지막 방영·앞선 사이클로부터 `episode_rest_days`(초기 7일) 뒤 — 이 휴지는 사용자 규칙과 별개의 설정값
 - 블록별 에피소드 배정: 가치 큰 블록부터, 에피소드 지수(Σ시청률÷Σ슬롯 baseline)의 프로그램 대비 상대값을 표본 수만큼 수축해 높은 순, 동률은 오래 쉰 에피소드. 배정 불가 시 사유 기록
 - 에피소드 원천은 최근 12주 방영 기록의 부제(OLIFE EPG로 채워진 `ratings.episode_subtitle`). `olife_episode_catalog`(미방영 에피소드 재고) 연동은 추후
-- 실측(OLIFE 10/05 주): 기존 틀 유지 37블록·AI 시간 최적화 56블록 전부 서로 다른 부제 배정, 기대 시청률 소폭 상승(0.1193→0.1201 / 0.1250→0.1315)
+- 실측(OLIFE 10/05 주, 24시간 규칙 적용): 기존 틀 유지 37블록(에피소드 16종)·AI 시간 최적화 56블록(22종) 전부 배정, 같은 에피소드 최대 3회·최대 폭 23~24시간 이내, 기대 시청률 0.1193→0.1201 / 0.1250→0.1315
 
 ### G-5. 자사 최적화 타깃 선택(2026-09-30 사용자 지시)
 
@@ -462,6 +462,7 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 | 5 | `20260930070000_ideal_schedule_runs_saved.sql` | [저장] 이름·저장 시각 | **적용 완료** |
 | 6 | `20260930080000_ideal_schedule_own_only_default.sql` | Benchmark 기본값 NONE(자사 프로그램만) | **적용 완료** |
 | 7 | `20260930090000_ideal_schedule_episode_mode.sql` | 방영 입력에 회차·부제, 에피소드 시리즈 설정, 실행·블록 부제 저장 | **적용 완료** |
+| 8 | `20260930100000_ideal_schedule_episode_24h_rule.sql` | 같은 에피소드 24시간 내 최대 3회(주 1회 제한 제거) | **적용 완료** |
 
 - `ratings` 인덱스 추가는 보류: 기존 `(channel_id, broadcast_date)`로 채널당 1.4초 이내라 필요 없음
 
