@@ -31,7 +31,7 @@ export type RawOwn = {
   date_to: string;
   holidays: string[];
   dates_with_data: string[];
-  airings: { date: string; start: string; end: string | null; program_id: string; program_name: string; first_run: boolean | null; m: Record<string, RawMetric> }[];
+  airings: { date: string; start: string; end: string | null; program_id: string; program_name: string; first_run: boolean | null; ep?: number | null; sub?: string | null; m: Record<string, RawMetric> }[];
 };
 
 const EMPTY_METRIC: AiringMetric = { r: null, s: null, reach: null, ts: null };
@@ -56,6 +56,8 @@ export function mapOwnAirings(raw: RawOwn): OwnAiringsBundle {
       programId: a.program_id,
       programName: a.program_name,
       airingType,
+      episodeNumber: a.ep ?? null,
+      episodeSubtitle: a.sub ?? null,
       isHoliday: holidaySet.has(a.date),
       kpi: metrics[raw.kpi_label] ?? EMPTY_METRIC,
       metrics,

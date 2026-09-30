@@ -16,6 +16,7 @@ import { runIdealScheduleEngine, type EngineRunInput, type EngineRunResult, type
 import { mapCompetitorData, withOptimizeTarget } from "../src/lib/idealSchedule/mapping";
 import { buildScoringContext, Scorer } from "../src/lib/idealSchedule/scoring";
 import { addDays as addDaysT } from "../src/lib/idealSchedule/time";
+import { assignEpisodes, isEpisodicProgram, observedProgramMaxima } from "../src/lib/idealSchedule/episodes";
 import type { Genre } from "../src/lib/idealSchedule/types";
 
 let passed = 0;
@@ -44,7 +45,7 @@ const close = (a: number | null | undefined, b: number, eps = 1e-9) => a !== nul
 }
 
 // ── 픽스처: 자사 채널 4주 ──────────────────────────────────────────
-type RawA = { date: string; start: string; end: string | null; program_id: string; program_name: string; first_run: boolean | null; m: Record<string, { r: number | null; s: number | null; reach: number | null; ts: number | null }> };
+type RawA = { date: string; start: string; end: string | null; program_id: string; program_name: string; first_run: boolean | null; ep?: number | null; sub?: string | null; m: Record<string, { r: number | null; s: number | null; reach: number | null; ts: number | null }> };
 const KPI = "수도권 2049";
 const mk = (date: string, start: string, end: string, pid: string, r: number | null, extra: Partial<RawA> = {}): RawA => ({
   date,
@@ -453,6 +454,50 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
     rT.summary.optimizeTarget.label === "전국 유료가구" && !rT.summary.optimizeTarget.isChannelKpi && rKpi.summary.optimizeTarget.isChannelKpi && rT.featureSet.options.composition === null
   );
   check("타깃 선택 실행: 기대값이 선택 타깃 단위(가구 = 2049의 2배 픽스처)", (rT.summary.expectedAvgRating ?? 0) > (rKpi.summary.expectedAvgRating ?? 0));
+}
+
+{
+  // 부제 반영(EPISODE) 모드 — 사용자 지시(2026-09-30)
+  const stats = new Map([
+    [
+      "P",
+      [
+        { key: "a", subtitle: "에피소드A", episodeNumber: 1, n: 4, index: 1.5, lastAired: "2026-09-26" }, // 최근 방영 → 휴지 중
+        { key: "b", subtitle: "에피소드B", episodeNumber: 2, n: 4, index: 1.2, lastAired: "2026-09-01" },
+        { key: "c", subtitle: "에피소드C", episodeNumber: 3, n: 1, index: 3.0, lastAired: "2026-08-20" }, // 표본 1 → 수축
+      ],
+    ],
+  ]);
+  const blocks = [
+    { id: 1, programId: "P", weekday: 1, startMin: 1260, value: 10, expected: 1 },
+    { id: 2, programId: "P", weekday: 2, startMin: 1260, value: 9, expected: 1 },
+    { id: 3, programId: "P", weekday: 3, startMin: 1260, value: 8, expected: 1 },
+  ];
+  const as = assignEpisodes(blocks, stats, () => 1, { weekStart: "2026-09-28", weeklyCap: 1, restDays: 7, shrinkageK: 4 });
+  const sub = (id: number) => {
+    const a = as.get(id);
+    return a && !("none" in a) ? a.subtitle : null;
+  };
+  // C: (1×3.0 + 4)/5 = 1.4, B: (4×1.2+4)/8 = 1.1 → 가치 큰 월요일에 C, 화요일 B, 수요일은 A가 휴지(9/26+7 > 9/30) → 미배정
+  check("에피소드 배정: 상대 지수(표본 수축) 높은 순, 같은 에피소드 주 1회", sub(1) === "에피소드C" && sub(2) === "에피소드B");
+  check("에피소드 휴지 기간(7일) 중인 에피소드는 배정 안 함 → 사유와 함께 미배정", sub(3) === null && "none" in (as.get(3) as object));
+  const as2 = assignEpisodes(blocks.slice(0, 1).map((b) => ({ ...b, weekday: 7 })), stats, () => 1, { weekStart: "2026-09-28", weeklyCap: 1, restDays: 7, shrinkageK: 4 });
+  check("휴지 기간이 지나면 다시 배정 가능(일요일 10/4 ≥ 9/26+7)", (() => { const a = as2.get(1); return !!a && !("none" in a); })());
+  const cfg = { ...engineConfig, structure: { ...engineConfig.structure, episodic_programs: { ENA: ["프로그램 C"] } } };
+  check("에피소드 시리즈 판정은 설정 목록·이름 정규화 기준", isEpisodicProgram(cfg, "ENA", "프로그램C") && !isEpisodicProgram(cfg, "OLIFE", "프로그램C"));
+
+  // 엔진: 프로그램 C를 에피소드 시리즈로 두고 부제를 넣은 픽스처
+  const epRaw = { ...engineRaw, airings: engineRaw.airings.map((a, i) => (a.program_name === "프로그램C" ? { ...a, ep: i, sub: `C편 ${i % 20}` } : a)) };
+  const epBundle = mapOwnAirings(epRaw);
+  const obs = observedProgramMaxima(epBundle.airings, new Set(["C"]));
+  check("관측 최대 방영 수(하루·주간)", obs.get("C")?.daily === 1 && obs.get("C")?.weekly === 7);
+  const off = runIdealScheduleEngine(baseRun({ bundle: epBundle, config: cfg }));
+  const on = runIdealScheduleEngine(baseRun({ bundle: epBundle, config: cfg, episodeMode: "EPISODE" }));
+  const cBlocks = on.output.blocks.filter((b) => b.candidate.programKey === "C");
+  const keys = cBlocks.map((b) => (b.episode && !("none" in b.episode) ? b.episode.key : null)).filter(Boolean);
+  check("부제 미반영(기본): 에피소드 배정 없음", off.summary.episodeMode === "PROGRAM" && off.output.blocks.every((b) => !b.episode));
+  check("부제 반영: 시리즈 블록마다 에피소드 배정, 주 안 중복 없음", on.summary.episodeMode === "EPISODE" && keys.length > 0 && keys.length === new Set(keys).size && on.summary.episodeAssigned === keys.length);
+  check("부제 반영: 지문이 미반영과 다름(옵션이 결과 식별에 포함)", on.fingerprint !== off.fingerprint);
 }
 
 console.log(`\n${passed}건 통과, ${failures.length}건 실패`);

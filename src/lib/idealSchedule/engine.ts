@@ -10,6 +10,7 @@ import { evaluateSchedule, optimizeWeek, type EngineOutput, type EvaluatedBlock,
 import { buildCandidatePool, buildScoringContext, Scorer, strongSlotMap, type EngineCandidate, type StrategyMode } from "./scoring";
 import { buildSkeleton, type SkeletonSlot } from "./skeleton";
 import { addDays } from "./time";
+import { assignEpisodes, buildEpisodeStats, isEpisodicProgram, observedProgramMaxima, type EpisodeMode } from "./episodes";
 import type { CompetitorBundle, Genre, OwnAiring, OwnAiringsBundle } from "./types";
 import { UNCLASSIFIED } from "./types";
 
@@ -22,6 +23,7 @@ export interface EngineRunInput {
   strategyMode: StrategyMode;
   competitorTargetMode?: CompetitorTargetMode; // 미지정 시 config 값
   benchmarkPlacement?: BenchmarkPlacement; // 미지정 시 config 값
+  episodeMode?: EpisodeMode; // 부제 반영(EPISODE) / 미반영(PROGRAM, 기본)
   config: IdealScheduleConfig;
   bundle: OwnAiringsBundle; // 최적화 타깃을 바꾼 경우 withOptimizeTarget 적용 후 값
   channelKpiLabel?: string; // 채널 원래 KPI(미지정 = bundle.kpiLabel). 다르면 "타깃 선택 최적화"
@@ -62,6 +64,10 @@ export interface EngineSummary {
   expectedAvgShare: number | null;
   expectedAvgTimeSpent: number | null;
   objective: number;
+  episodeMode: EpisodeMode;
+  episodePrograms: string[];
+  episodeAssigned: number;
+  episodeUnassigned: number;
   optimizeTarget: { label: string; isChannelKpi: boolean }; // 이 편성안이 최적화한 타깃
   competitorTargets: { competitor: string; programTarget: string | null; programReason: string | null; dailyTarget: string | null; matchesOwnKpi: boolean | null }[];
   featureWindow: { from: string; to: string };
@@ -218,7 +224,16 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     if (rts.length) archetypeRuntime.set(g, rts[Math.floor(rts.length / 2)]);
   }
 
+  // 부제 반영 모드: 설정된 에피소드 시리즈는 프로그램 한도를 관측 최대치로, 반복은 에피소드 단위로
+  const episodeMode: EpisodeMode = input.episodeMode ?? "PROGRAM";
+  const episodicIds = new Set(
+    episodeMode === "EPISODE" ? fs.units.filter((u) => isEpisodicProgram(config, channelCode, u.programName)).map((u) => u.programId) : []
+  );
+  const eligible = eligibleAirings(bundle, opts);
+  const programCapOverride = episodicIds.size ? observedProgramMaxima(eligible, episodicIds) : undefined;
+
   const output = optimizeWeek({
+    programCapOverride,
     mode: input.mode,
     config,
     scorer,
@@ -229,6 +244,34 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     archetypeRuntime,
     benchmarkMaxShare: placement === "MIX" ? config.strategy.benchmark_max_share : 0,
   });
+
+  // 에피소드 배정(부제 반영 모드) — 최적화가 정한 블록(필수 편성 포함)에 구체적 에피소드를 붙인다
+  let episodeAssigned = 0;
+  let episodeUnassigned = 0;
+  if (episodicIds.size) {
+    const stats = buildEpisodeStats(eligible, fs.rating, episodicIds);
+    const targets = output.blocks
+      .map((b, id) => ({ b, id }))
+      .filter(({ b }) => b.candidate.programId !== null && episodicIds.has(b.candidate.programId));
+    const assigned = assignEpisodes(
+      targets.map(({ b, id }) => ({ id, programId: b.candidate.programId as string, weekday: b.weekday, startMin: b.startMin, value: b.eval.value, expected: b.eval.expected })),
+      stats,
+      (pid) => fs.rating.rawIndex(`p|${pid}`).index,
+      {
+        weekStart: input.weekStart,
+        weeklyCap: config.structure.episode_weekly_cap ?? 1,
+        restDays: config.structure.episode_rest_days ?? 7,
+        shrinkageK: config.expected_kpi.shrinkage_k,
+      }
+    );
+    for (const { b, id } of targets) {
+      const a = assigned.get(id);
+      if (!a) continue;
+      b.episode = a;
+      if ("none" in a) episodeUnassigned++;
+      else episodeAssigned++;
+    }
+  }
 
   // 요약
   const includeBm = config.strategy.include_benchmark_in_totals;
@@ -268,6 +311,10 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     expectedAvgTimeSpent: wavg((b) => b.eval.expectedTimeSpent),
     objective: output.objective,
     optimizeTarget: { label: bundle.kpiLabel, isChannelKpi: !customTarget },
+    episodeMode,
+    episodePrograms: [...episodicIds].map((pid) => fs.units.find((u) => u.programId === pid)?.programName ?? pid),
+    episodeAssigned,
+    episodeUnassigned,
     competitorTargets: competitorFeatures.map((c) => ({
       competitor: c.competitor,
       programTarget: c.programTarget?.kind ?? null,
@@ -287,6 +334,7 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       // 지문은 "실제 적용값" 기준 — 기본값을 명시했든 생략했든 같은 입력이면 같은 지문
       ctm: input.competitorTargetMode ?? config.strategy.competitor_target_mode,
       bp: placement,
+      em: input.episodeMode ?? "PROGRAM",
       comps: input.competitorBundle ? [...new Set(input.competitorBundle.airings.map((a) => a.competitor))].sort() : [],
       config,
       target: bundle.kpiLabel,
@@ -342,6 +390,10 @@ export function evaluateActualSchedule(
   for (const a of airings) if (a.date >= weekStart && a.date <= weekEnd) actualByKey.set(`${a.dow}|${a.startMin}|${a.programId}`, a);
   const rows = ev.blocks.map((b) => {
     const a = actualByKey.get(`${b.weekday}|${b.startMin}|${b.candidate.programId}`);
+    // 실제 편성의 부제(있으면)를 함께 보여 준다 — 비교 화면용, 평가값에는 영향 없음
+    if (a?.episodeSubtitle) {
+      b.episode = { subtitle: a.episodeSubtitle, episodeNumber: a.episodeNumber, key: a.episodeSubtitle, n: 0, relIndex: 1, expected: null, lastAired: null };
+    }
     return { block: b, actual: { r: a?.kpi.r ?? null, s: a?.kpi.s ?? null, ts: a?.kpi.ts ?? null } };
   });
   const wavg = (pick: (r: (typeof rows)[number]) => number | null) => {

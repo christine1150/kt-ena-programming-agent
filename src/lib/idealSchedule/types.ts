@@ -20,6 +20,8 @@ export interface OwnAiring {
   programId: string;
   programName: string;
   airingType: AiringType;
+  episodeNumber: number | null; // 회차(OLIFE EPG 등으로 채워진 경우)
+  episodeSubtitle: string | null; // 부제
   isHoliday: boolean;
   kpi: AiringMetric; // 채널 KPI 타깃 값
   metrics: Record<string, AiringMetric>; // 타깃 라벨별(보조 타깃 포함)

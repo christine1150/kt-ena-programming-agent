@@ -15,6 +15,7 @@ import { cutSkeletonByFixed, type SkeletonSlot } from "./skeleton";
 import { Scorer, type BlockEval, type EngineCandidate } from "./scoring";
 import { BROADCAST_DAY_END_MIN, BROADCAST_DAY_START_MIN, hourBucket } from "./time";
 import { UNCLASSIFIED } from "./types";
+import type { EpisodeAssignment } from "./episodes";
 
 export type BlockStatus = "LOCKED" | "REQUIRED" | "AI" | "MANUAL_OVERRIDE";
 
@@ -27,6 +28,7 @@ export interface PlacedBlock {
   fixed: boolean;
   constraint?: { id: string; source: string; constraintType: string; rank: number; durationDerived?: boolean };
   slotIndex?: number; // KEEP 모드 슬롯 번호
+  episode?: EpisodeAssignment | { none: true; reason: string }; // 부제 반영 모드에서 배정된 에피소드
 }
 
 export interface EvaluatedBlock extends PlacedBlock {
@@ -118,7 +120,11 @@ export interface EngineInput {
   skeleton: SkeletonSlot[];
   archetypeRuntime: Map<string, number>; // 장르 → 자사 같은 장르 runtime 중앙값(AI 모드 원형 블록 길이)
   benchmarkMaxShare: number; // 경쟁 Benchmark·장르 원형이 차지할 수 있는 AI 편성 분 비율(0 = 배치 안 함)
+  /** 프로그램별 일·주 한도 대체값(부제 반영 모드의 에피소드 시리즈 = 관측 최대 방영 수) */
+  programCapOverride?: Map<string, { daily: number; weekly: number }>;
 }
+
+let capOverride: Map<string, { daily: number; weekly: number }> | undefined; // optimizeWeek 호출 동안만 설정
 
 const isHypothetical = (c: EngineCandidate) => c.contentType !== "OWN";
 
@@ -154,7 +160,8 @@ function capsOk(c: EngineCandidate, weekday: number, blocks: PlacedBlock[], conf
     if (b.weekday === weekday) day++;
   }
   if (c.weeklyLimit !== null && sameUnit + 1 > c.weeklyLimit) return false;
-  return day + 1 <= config.repeat_rules.daily_cap && week + 1 <= config.repeat_rules.weekly_cap;
+  const ov = capOverride?.get(c.programKey);
+  return day + 1 <= (ov?.daily ?? config.repeat_rules.daily_cap) && week + 1 <= (ov?.weekly ?? config.repeat_rules.weekly_cap);
 }
 
 /** 블록 자리의 대체 후보 순위(Swap용) — 같은 자리에 넣었을 때의 블록 평가값 순. */
@@ -428,7 +435,8 @@ function optimizeAiTimes(input: EngineInput): EngineOutput {
       const limitOf = (group: string): number => {
         if (group.startsWith("P:")) {
           const pk = group.slice(2);
-          return Math.min(config.repeat_rules.daily_cap, config.repeat_rules.weekly_cap - (weekCount.get(group) ?? 0)) - pins.filter((p) => p.candidate.programKey === pk).length;
+          const ov = capOverride?.get(pk);
+          return Math.min(ov?.daily ?? config.repeat_rules.daily_cap, (ov?.weekly ?? config.repeat_rules.weekly_cap) - (weekCount.get(group) ?? 0)) - pins.filter((p) => p.candidate.programKey === pk).length;
         }
         const key = group.slice(2);
         const unitLimit = candLens.find((x) => x.c.key === key)?.c.weeklyLimit ?? Infinity;
@@ -536,5 +544,10 @@ function optimizeAiTimes(input: EngineInput): EngineOutput {
 }
 
 export function optimizeWeek(input: EngineInput): EngineOutput {
-  return input.mode === "KEEP_CURRENT" ? optimizeKeepCurrent(input) : optimizeAiTimes(input);
+  capOverride = input.programCapOverride;
+  try {
+    return input.mode === "KEEP_CURRENT" ? optimizeKeepCurrent(input) : optimizeAiTimes(input);
+  } finally {
+    capOverride = undefined;
+  }
 }

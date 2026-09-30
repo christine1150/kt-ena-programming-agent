@@ -58,6 +58,10 @@ export interface IdealStructureConfig {
   runtime_tolerance_min: number;
   max_gap_min: number;
   max_local_search_iter: number;
+  /** 부제 반영(EPISODE) 모드에서 에피소드 단위로 편성할 시리즈 — 채널 코드 → 프로그램명 목록 */
+  episodic_programs?: Record<string, string[]>;
+  episode_weekly_cap?: number; // 같은 에피소드 주간 최대 편성 수
+  episode_rest_days?: number; // 에피소드 마지막 방영 후 최소 휴지 일수
 }
 
 export interface IdealTargetGroup {

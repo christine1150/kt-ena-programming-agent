@@ -20,6 +20,7 @@ export interface RunRequest {
   competitorNames: string[];
   competitorTargetMode?: CompetitorTargetMode;
   benchmarkPlacement?: BenchmarkPlacement; // 미지정 시 설정값(기본 NONE = 자사 프로그램만). SUGGEST_ONLY·MIX는 명시적으로 켰을 때만
+  episodeMode?: "PROGRAM" | "EPISODE"; // 부제 반영 여부(설정된 에피소드 시리즈가 있는 채널, 예: OLIFE)
   optimizeTargetLabel?: string; // 자사 채널 최적화 타깃(미지정 = 채널 KPI). fetchTargetLabels 목록 중 하나
   extraLocks?: HardConstraintInput[]; // 화면에서 LOCK·수동 변경 유지한 블록(rank 1)
   asOfDate?: string; // 기본 weekStart − 1(백테스트 누수 방지)
@@ -78,6 +79,7 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     strategyMode: req.strategyMode,
     competitorTargetMode: req.competitorTargetMode,
     benchmarkPlacement: req.benchmarkPlacement,
+    episodeMode: req.episodeMode,
     config,
     bundle,
     channelKpiLabel: channel.kpiLabel,

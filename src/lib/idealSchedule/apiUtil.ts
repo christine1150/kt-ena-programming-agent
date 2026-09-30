@@ -31,7 +31,8 @@ export const isDate = (v: unknown): v is string => typeof v === "string" && /^\d
 /** 실행 요청 본문 → RunRequest(검증 실패 시 메시지). */
 export function parseRunRequest(body: Record<string, unknown> | null): RunRequest | string {
   if (!body) return "요청 본문이 없습니다.";
-  const { channelCode, weekStart, mode, strategyMode, competitorNames, competitorTargetMode, benchmarkPlacement, optimizeTargetLabel } = body;
+  const { channelCode, weekStart, mode, strategyMode, competitorNames, competitorTargetMode, benchmarkPlacement, optimizeTargetLabel, episodeMode } = body;
+  if (episodeMode !== undefined && episodeMode !== "PROGRAM" && episodeMode !== "EPISODE") return "episodeMode는 PROGRAM(부제 미반영)/EPISODE(부제 반영) 중 하나여야 합니다.";
   if (typeof channelCode !== "string" || !channelCode) return "channelCode가 필요합니다.";
   if (!isDate(weekStart) || isoDow(weekStart) !== 1) return "weekStart는 월요일 날짜(YYYY-MM-DD)여야 합니다.";
   if (!MODES.includes(mode as StructureMode)) return `mode는 ${MODES.join("/")} 중 하나여야 합니다.`;
@@ -49,5 +50,6 @@ export function parseRunRequest(body: Record<string, unknown> | null): RunReques
     competitorTargetMode: competitorTargetMode as CompetitorTargetMode | undefined,
     benchmarkPlacement: benchmarkPlacement as BenchmarkPlacement | undefined,
     optimizeTargetLabel: typeof optimizeTargetLabel === "string" && optimizeTargetLabel ? optimizeTargetLabel : undefined,
+    episodeMode: (episodeMode as "PROGRAM" | "EPISODE" | undefined) ?? "PROGRAM",
   };
 }

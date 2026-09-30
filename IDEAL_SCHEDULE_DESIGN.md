@@ -319,6 +319,15 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 - `benchmark_placement`: **NONE(기본)** = 경쟁 프로그램·장르 원형을 후보·대체 후보·요약 어디에도 넣지 않음 / SUGGEST_ONLY = 대체 후보로만 제안(자사 후보 뒤) / MIX = 편성 분 일부 배치
 - 경쟁채널을 선택해도 기본값에서는 강세 슬롯 분석(MATCH/COUNTER 라벨)에만 쓰고 후보는 자사 프로그램뿐
 
+### G-7. 부제(에피소드) 반영 옵션(2026-09-30 사용자 지시)
+
+- 실행 파라미터 `episodeMode`: `PROGRAM`(부제 미반영, 기본) / `EPISODE`(부제 반영)
+- 대상 시리즈는 설정 `structure.episodic_programs`(초기값 OLIFE: 걸어서세계속으로·세계테마기행)
+- 부제 반영 시: 같은 시리즈가 하루 여러 번 나와도 에피소드가 다르면 반복이 아님 → 프로그램 한도는 최근 12주 **관측 최대 방영 수**(하루·주간), 반복 제한은 **에피소드 단위**(주 `episode_weekly_cap`회, 마지막 방영 후 `episode_rest_days`일 휴지)
+- 블록별 에피소드 배정: 가치 큰 블록부터, 에피소드 지수(Σ시청률÷Σ슬롯 baseline)의 프로그램 대비 상대값을 표본 수만큼 수축해 높은 순, 동률은 오래 쉰 에피소드. 배정 불가 시 사유 기록
+- 에피소드 원천은 최근 12주 방영 기록의 부제(OLIFE EPG로 채워진 `ratings.episode_subtitle`). `olife_episode_catalog`(미방영 에피소드 재고) 연동은 추후
+- 실측(OLIFE 10/05 주): 기존 틀 유지 37블록·AI 시간 최적화 56블록 전부 서로 다른 부제 배정, 기대 시청률 소폭 상승(0.1193→0.1201 / 0.1250→0.1315)
+
 ### G-5. 자사 최적화 타깃 선택(2026-09-30 사용자 지시)
 
 - 실행 파라미터 `optimizeTargetLabel`: 채널 KPI 대신 원하는 타깃 기준 편성안(예: ENA Play 수도권 2039·수도권 여20대, ONCE 전국 5064·전국 남50대)
@@ -452,6 +461,7 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 | 4 | `20260930060000_ideal_schedule_runs_backtest.sql` | 실행·블록(IDEAL/CURRENT)·대체 후보·백테스트 2종 | **적용 완료** |
 | 5 | `20260930070000_ideal_schedule_runs_saved.sql` | [저장] 이름·저장 시각 | **적용 완료** |
 | 6 | `20260930080000_ideal_schedule_own_only_default.sql` | Benchmark 기본값 NONE(자사 프로그램만) | **적용 완료** |
+| 7 | `20260930090000_ideal_schedule_episode_mode.sql` | 방영 입력에 회차·부제, 에피소드 시리즈 설정, 실행·블록 부제 저장 | **적용 완료** |
 
 - `ratings` 인덱스 추가는 보류: 기존 `(channel_id, broadcast_date)`로 채널당 1.4초 이내라 필요 없음
 
@@ -513,6 +523,8 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 | 5 | 대상 채널 | skyUHD 포함(7채널) | 아래 skyUHD 처리 규칙 적용 |
 | 6 | Group B 핵심 타깃 | 전국 가구(별도 연령대 아님) | 구성비 항목 제외(20260930030000) |
 | 7 | 자사 최적화 타깃 | 채널별로 원하는 타깃 선택 가능(데이터 있는 라벨만) | G-5 |
+| 8 | 경쟁사 콘텐츠 기본값 | 자사 채널 프로그램만(경쟁사 콘텐츠는 사용자가 켰을 때만) | G-6 |
+| 9 | OLIFE 부제 | 부제 반영/미반영 옵션 | G-7 |
 
 **skyUHD 처리 규칙**
 

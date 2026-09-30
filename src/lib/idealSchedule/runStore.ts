@@ -75,6 +75,9 @@ function blockRow(runId: string, layer: "IDEAL" | "CURRENT", b: EvaluatedBlock, 
     match_score: r6(e.strategy.matchScore),
     counter_score: r6(e.strategy.counterScore),
     constraint_ref: b.constraint ?? null,
+    episode_number: b.episode && !("none" in b.episode) ? b.episode.episodeNumber : null,
+    episode_subtitle: b.episode && !("none" in b.episode) ? b.episode.subtitle : null,
+    episode_info: b.episode ?? null,
     actual_kpi: r6(actualKpi),
     ...evalColumns(e),
   };
@@ -117,6 +120,7 @@ export async function saveRun(req: RunRequest, out: RunOutcome, actor: Actor, pa
     benchmark_placement: req.benchmarkPlacement ?? out.config.strategy.benchmark_placement,
     competitor_names: [...req.competitorNames].sort(),
     competitor_target_mode: req.competitorTargetMode ?? out.config.strategy.competitor_target_mode,
+    episode_mode: req.episodeMode ?? "PROGRAM",
     optimize_target_label: out.summary.optimizeTarget.label,
     optimize_target_is_channel_kpi: out.summary.optimizeTarget.isChannelKpi,
     config_snapshot: out.config,
@@ -305,6 +309,7 @@ export async function recalcRequestFrom(runId: string, keepOverrides: boolean): 
       competitorTargetMode: (run.competitor_target_mode as RunRequest["competitorTargetMode"]) ?? undefined,
       benchmarkPlacement: run.benchmark_placement as RunRequest["benchmarkPlacement"],
       optimizeTargetLabel: run.optimize_target_is_channel_kpi ? undefined : (run.optimize_target_label as string),
+      episodeMode: (run.episode_mode as RunRequest["episodeMode"]) ?? "PROGRAM",
       extraLocks,
     },
   };
@@ -335,9 +340,9 @@ export function buildComparison(blocks: Record<string, unknown>[]) {
       weekday: b.weekday,
       startMin: s,
       endMin: e,
-      ideal: { blockId: b.id, programName: b.program_name, programKey: b.program_key, status: b.status, contentType: b.content_type, expectedKpi: ie, expectedKpiType: b.expected_kpi_type, expectedShare: num(b.expected_share), confidence: num(b.confidence_score), reasons: b.reasons },
+      ideal: { blockId: b.id, programName: b.program_name, episodeSubtitle: b.episode_subtitle ?? null, programKey: b.program_key, status: b.status, contentType: b.content_type, expectedKpi: ie, expectedKpiType: b.expected_kpi_type, expectedShare: num(b.expected_share), confidence: num(b.confidence_score), reasons: b.reasons },
       current: best
-        ? { blockId: best.id, programName: best.program_name, programKey: best.program_key, startMin: Number(best.start_min), endMin: Number(best.end_min), expectedKpi: ce, expectedShare: num(best.expected_share), actualKpi: num(best.actual_kpi) }
+        ? { blockId: best.id, programName: best.program_name, episodeSubtitle: best.episode_subtitle ?? null, programKey: best.program_key, startMin: Number(best.start_min), endMin: Number(best.end_min), expectedKpi: ce, expectedShare: num(best.expected_share), actualKpi: num(best.actual_kpi) }
         : null,
       changed: !best || best.program_key !== b.program_key,
       expectedKpiDiff: ie !== null && ce !== null ? ie - ce : null,
