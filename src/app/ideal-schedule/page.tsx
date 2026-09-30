@@ -188,7 +188,7 @@ function IdealSchedulePage() {
         {/* 헤더 */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold text-zinc-900">{channelOpt?.name ?? channelCode} 스마트 편성 실험실</h1>
+            <h1 className="text-xl font-semibold text-zinc-900">{channelOpt?.name ?? channelCode} 스마트 시청률 자판기</h1>
             <p className="text-sm text-zinc-500">최근 12주 실제 시청률로 계산한 데이터 기반 편성안입니다. 숫자는 기대값이며 실제 미래 시청률이 아닙니다.</p>
           </div>
           <div className="flex items-center gap-1.5">

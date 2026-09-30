@@ -5166,7 +5166,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               </div>
             )}
             {/* 사용자 지시(2026-09-30): 이상적 편성 버튼을 카드 안이 아니라 페이지 상단 skyUHD 우측으로 옮기고 이름을
-                "편성 실험실"로. 1페이지는 특정 채널 컨텍스트가 없어 ENA 기본, 새 탭으로 열어 조회 흐름을 끊지 않는다. */}
+                "시청률 자판기"로. 1페이지는 특정 채널 컨텍스트가 없어 ENA 기본, 새 탭으로 열어 조회 흐름을 끊지 않는다. */}
             <Link
               href="/ideal-schedule?channel=ENA"
               target="_blank"
@@ -5178,7 +5178,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
             <line x1="3" y1="10" x2="21" y2="10" />
             <path d="M9 15l2 2 4-4" />
           </svg>
-              편성 실험실
+              시청률 자판기
             </Link>
             {/* 사용자 재지시(2026-09-02): "skyUHD 오른쪽에 있는 관리자화면 버튼 아이콘을 '큰
                 글씨로 보기' 아이콘으로 교체 — 글자 말고 직관적으로 깔끔하고 심플한 아이콘으로."

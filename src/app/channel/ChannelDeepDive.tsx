@@ -5452,7 +5452,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <line x1="3" y1="10" x2="21" y2="10" />
                   <path d="M9 15l2 2 4-4" />
                 </svg>
-                편성 실험실
+                시청률 자판기
               </Link>
               {/* 사용자 지시(2026-08-21): 드랍박스를 열면 옵션 글씨가 안 보이던 버그 — optgroup으로
                   묶으면서 option이 select의 "직계 자식"이 아니게 돼([&>option] 선택자가 더는
