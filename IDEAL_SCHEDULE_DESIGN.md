@@ -1,6 +1,6 @@
 # 이상적 1주일 편성(Ideal Weekly Grid) — STEP 1 분석·설계안
 
-- 작성: 2026-09-30 / 상태: **설계 확정(결정 5건 반영), STEP 2 대기**
+- 작성: 2026-09-30 / 상태: **STEP 1~5 구현 완료**(이후 운영 피드백 반영 단계)
 - 원칙: 기존 기능 무변경, 기존 DB·RPC·컴포넌트 재사용 우선, 수치·편성 결정은 전부 결정론적 로직(LLM은 설명만)
 - 전제: **이 PC·Vercel 환경에 Python 없음** → 엔진은 **TypeScript(Next.js API Route) + PostgreSQL 집계**로 설계
 
@@ -328,6 +328,12 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 - 에피소드 원천은 최근 12주 방영 기록의 부제(OLIFE EPG로 채워진 `ratings.episode_subtitle`). `olife_episode_catalog`(미방영 에피소드 재고) 연동은 추후
 - 실측(OLIFE 10/05 주, 최종 규칙): 기존 틀 유지 37블록·AI 시간 최적화 56블록 전부 배정, 24시간 최대 3회·주중/주말 겹침 0 확인. 재편성 허용으로 성적 좋은 에피소드에 집중돼 주간 에피소드 종류는 6~8종(한 에피소드가 주중 5일 모두 편성되기도 함)
 
+### G-8. 장르 체계(2026-09-30 사용자 지시)
+
+- 장르: 드라마 · **오리지널 드라마** · 예능 · **오리지널 예능** · 영화 · 다큐·교양 · **여행**(교양 중 여행) · 뉴스·시사 · 스포츠 · 음악 · 애니·키즈 · **사업형**(브랜디드) · 홈쇼핑·기타 · 미분류
+- 상위 묶음: 오리지널 드라마→드라마, 오리지널 예능→예능, 여행→다큐·교양. 경쟁 대응(MATCH/COUNTER)·장르 편중은 상위 묶음 기준
+- 1차 규칙: 여행 키워드(기행·걸어서·세계테마·여행 등)→여행, 주요 콘텐츠 분류(오리지널 드라마·오리지널 예능·사업형)→같은 이름 장르. 관리자 화면 "장르 분류 보완"에서 편성 분 많은 순으로 보완(관리자 값 우선)
+
 ### G-5. 자사 최적화 타깃 선택(2026-09-30 사용자 지시)
 
 - 실행 파라미터 `optimizeTargetLabel`: 채널 KPI 대신 원하는 타깃 기준 편성안(예: ENA Play 수도권 2039·수도권 여20대, ONCE 전국 5064·전국 남50대)
@@ -479,7 +485,7 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 | STEP 2 **(완료)** | Migration 3건, Feature RPC 2종, `src/lib/idealSchedule/*`(time·mapping·features·competitorFeatures·competitorTarget·genreRules·config), 장르 시드 2,890건, `npm run test:ideal` 41건 | `npm run smoke` 15/15, 7채널 실데이터 미래 데이터 차단 검증 |
 | STEP 3 **(완료)** | constraints·skeleton·scoring·optimizer(KEEP_CURRENT·AI_OPTIMIZED)·engine·engineRunner·constraintStore, 타깃 선택 | `npm run test:ideal` 84건(설계 23종 포함), 7채널×2모드 실데이터 실행 0.8~7초, 결정론 확인 |
 | STEP 4 **(완료)** | runStore·backtest·apiUtil, API 10종(`/api/scheduling/ideal-schedule/**`), CURRENT 레이어 | 개발 서버 실HTTP 검증(생성·조회·대체 후보·Swap·LOCK·비교·재계산 유지/초기화·저장·필수 편성 CRUD·설정 권한·백테스트·401/400/409), 테스트 86건 |
-| STEP 5 | `/ideal-schedule` UI, Grid 레이아웃 추출, Swap·비교·엑셀 | 브라우저 검증, 기존 주간 비교 화면 스크린샷 동일성 |
+| STEP 5 **(완료)** | `/ideal-schedule` 화면(조건·요약·편성표·상세/교체/잠금·현재 편성 비교·필수 편성 입력·백테스트·이전 실행·엑셀), `scheduleGridLayout.ts` 추출, 관리자 장르 분류 보완, 1·2페이지 진입 버튼 | 개발 서버 실사용 검증(ENA·OLIFE 부제 반영, 교체→수동 변경, 비교표, 엑셀 xlsx, 필수 편성 추가·삭제, 2주 백테스트 14초, 모바일 가로 넘침 없음), 테스트 103건 |
 
 **테스트 설계**: 프레임워크 추가 없이 `scripts/test-ideal-schedule.ts`(tsx, 픽스처 기반 순수 함수 테스트) + `smoke-rpc.mts`에 RPC 항목 추가.
 

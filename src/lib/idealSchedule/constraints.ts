@@ -10,6 +10,8 @@
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { addDays } from "./time";
 
+const DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
+
 export type HardRank = 1 | 2 | 3 | 4;
 
 export interface HardConstraintInput {
@@ -93,7 +95,7 @@ export function resolveHardConstraints(inputs: HardConstraintInput[], weekStart:
       continue;
     }
     if (i.durationMin === null || !(i.durationMin > 0)) {
-      res.warnings.push(`'${i.programName}'(${i.weekday}요일) 방영 길이를 알 수 없어 배치하지 않았습니다 — 실측 이력이 없으면 길이를 입력해 주세요.`);
+      res.warnings.push(`'${i.programName}'(${DOW_KO[i.weekday - 1]}요일) 방영 길이를 알 수 없어 배치하지 않았습니다 — 실측 이력이 없는 프로그램이라 아래 '필수 편성'에 방영 길이와 함께 입력해 주세요.`);
       continue;
     }
     active.push({ ...i, date, endMin: i.startMin + i.durationMin });
