@@ -26,6 +26,8 @@ export interface RunRequest {
   optimizeTargetLabel?: string; // 자사 채널 최적화 타깃(미지정 = 채널 KPI). fetchTargetLabels 목록 중 하나
   extraLocks?: HardConstraintInput[]; // 화면에서 LOCK·수동 변경 유지한 블록(rank 1)
   asOfDate?: string; // 기본 weekStart − 1(백테스트 누수 방지)
+  /** 이번 실행에만 적용하는 설정 덮어쓰기(채널 저장값은 바꾸지 않음) — 화면에서 가중치·반복 제한을 바꾼 뒤 저장하지 않고 바로 뽑아 볼 수 있게 한다. 실행의 config_snapshot에 그대로 남는다. */
+  configOverride?: { weights?: Record<string, number>; repeat_rules?: { daily_cap?: number; weekly_cap?: number } };
   includeActualWeek?: boolean; // 백테스트: 대상 주 실제 편성을 같은 모델로 평가(모델에는 넣지 않음)
 }
 
@@ -107,7 +109,10 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
   const t0 = Date.now();
   const asOfDate = req.asOfDate ?? addDays(req.weekStart, -1);
   const channel = await loadChannelRef(req.channelCode);
-  const config = await loadIdealScheduleConfig(channel.id);
+  const saved = await loadIdealScheduleConfig(channel.id);
+  const config = req.configOverride
+    ? { ...saved, weights: { ...saved.weights, ...(req.configOverride.weights ?? {}) }, repeat_rules: { ...saved.repeat_rules, ...(req.configOverride.repeat_rules ?? {}) } }
+    : saved;
   const target = req.optimizeTargetLabel ?? null;
   const [rawBundle, competitorBundle, genreMap, constraintLoad, actualWeek] = await Promise.all([
     fetchOwnAirings(channel, asOfDate, config, target),

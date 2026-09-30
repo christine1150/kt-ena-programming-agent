@@ -4,6 +4,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { VendingMachineIcon } from "@/components/VendingIcons";
 
 interface ChannelOption {
   code: string;
@@ -13,6 +14,8 @@ interface ChannelOption {
 
 export default function ChannelSidebar({ channels }: { channels: ChannelOption[] }) {
   const pathname = usePathname();
+  // 지금 보는 채널 코드(/channel/CODE)를 시청률 자판기에 넘긴다. 채널 페이지가 아니면 ENA.
+  const currentCode = pathname.match(/^\/channel\/([^/?#]+)/)?.[1] ?? "ENA";
 
   // 사용자 피드백(2026-08-20): 홈 아이콘이 mt-auto로 사이드바 맨 아래에 있었는데, 사이드바가
   // 페이지 본문과 함께 스크롤되는 일반 문서 흐름 안에 있어서 본문이 길어지면(8대 질문 섹션
@@ -43,6 +46,19 @@ export default function ChannelSidebar({ channels }: { channels: ChannelOption[]
           </Link>
         );
       })}
+      {/* 사용자 지시(2026-09-30): 2페이지에서는 "시청률 자판기" 아이콘을 채널 버튼 아래, 홈 버튼 위에 둔다. 새 탭으로 열어
+          채널 조회 흐름을 끊지 않는다. */}
+      <Link
+        href={`/ideal-schedule?channel=${currentCode}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="시청률 자판기"
+        aria-label="시청률 자판기"
+        className="flex w-16 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center text-zinc-500 transition hover:bg-white/70 hover:text-zinc-800"
+      >
+        <VendingMachineIcon size={24} strokeWidth={1.8} />
+        <span className="text-[10px]">자판기</span>
+      </Link>
       {/* 사용자 지시(2026-08-20, 2026-08-21 재조정): 1페이지(종합 대시보드)로 돌아가는 홈
           아이콘 — 위 채널 아이콘들과 같은 모양·간격. 처음엔 mt-auto로 사이드바 맨 아래(뷰포트
           하단)에 뒀는데, 채널 아이콘 7개 다음 화면 끝까지 큰 빈틈이 생겨 페이지마다 skyUHD와

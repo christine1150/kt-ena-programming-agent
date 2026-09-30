@@ -4,6 +4,7 @@
 // 글래스모피즘 화이트 카드 톤을 따른다). 숫자는 전부 /api/dashboard/page1이 SQL로 계산해
 // 내려준 값을 그대로 표시하고, 여기서는 문장 조립(줄글 인사이트)만 한다.
 import { useEffect, useState } from "react";
+import { VendingMachineIcon } from "@/components/VendingIcons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
@@ -5173,11 +5174,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               rel="noopener noreferrer"
               className="flex h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-sm font-medium text-zinc-600 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-800"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-            <path d="M9 15l2 2 4-4" />
-          </svg>
+              <VendingMachineIcon size={18} />
               시청률 자판기
             </Link>
             {/* 사용자 재지시(2026-09-02): "skyUHD 오른쪽에 있는 관리자화면 버튼 아이콘을 '큰

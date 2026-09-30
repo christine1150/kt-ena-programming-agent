@@ -29,9 +29,44 @@ const TARGET_MODES: CompetitorTargetMode[] = ["AUTO_MATCH_KPI", "2049", "HOUSEHO
 export const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 /** 실행 요청 본문 → RunRequest(검증 실패 시 메시지). */
+const WEIGHT_KEYS = ["kpi", "target", "weekday_slot", "trend", "stability", "lead"];
+
+/** 화면에서 보낸 이번 실행용 설정 덮어쓰기 검증(가중치 0~100, 반복 제한 1~100). 없으면 null. */
+function parseConfigOverride(raw: unknown): NonNullable<RunRequest["configOverride"]> | null | string {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== "object") return "configOverride 형식이 올바르지 않습니다.";
+  const o = raw as { weights?: unknown; repeat_rules?: unknown };
+  const out: NonNullable<RunRequest["configOverride"]> = {};
+  if (o.weights !== undefined) {
+    if (typeof o.weights !== "object" || o.weights === null) return "weights 형식이 올바르지 않습니다.";
+    const w: Record<string, number> = {};
+    for (const [k, v] of Object.entries(o.weights)) {
+      if (!WEIGHT_KEYS.includes(k) || typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 100) return "가중치는 0~100 사이 숫자여야 합니다.";
+      w[k] = v;
+    }
+    if (Object.keys(w).length && Object.values(w).every((v) => v === 0)) return "가중치를 모두 0으로 둘 수 없습니다.";
+    out.weights = w;
+  }
+  if (o.repeat_rules !== undefined) {
+    const r = o.repeat_rules as { daily_cap?: unknown; weekly_cap?: unknown } | null;
+    if (typeof r !== "object" || r === null) return "repeat_rules 형식이 올바르지 않습니다.";
+    const rr: { daily_cap?: number; weekly_cap?: number } = {};
+    for (const k of ["daily_cap", "weekly_cap"] as const) {
+      const v = r[k];
+      if (v === undefined) continue;
+      if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 100) return "반복 제한은 1~100 사이 정수여야 합니다.";
+      rr[k] = v;
+    }
+    out.repeat_rules = rr;
+  }
+  return out;
+}
+
 export function parseRunRequest(body: Record<string, unknown> | null): RunRequest | string {
   if (!body) return "요청 본문이 없습니다.";
-  const { channelCode, weekStart, mode, strategyMode, competitorNames, competitorTargetMode, benchmarkPlacement, optimizeTargetLabel, episodeMode } = body;
+  const { channelCode, weekStart, mode, strategyMode, competitorNames, competitorTargetMode, benchmarkPlacement, optimizeTargetLabel, episodeMode, configOverride } = body;
+  const override = parseConfigOverride(configOverride);
+  if (typeof override === "string") return override;
   if (episodeMode !== undefined && episodeMode !== "PROGRAM" && episodeMode !== "EPISODE") return "episodeMode는 PROGRAM(부제 미반영)/EPISODE(부제 반영) 중 하나여야 합니다.";
   if (typeof channelCode !== "string" || !channelCode) return "channelCode가 필요합니다.";
   if (!isDate(weekStart) || isoDow(weekStart) !== 1) return "weekStart는 월요일 날짜(YYYY-MM-DD)여야 합니다.";
@@ -51,5 +86,6 @@ export function parseRunRequest(body: Record<string, unknown> | null): RunReques
     benchmarkPlacement: benchmarkPlacement as BenchmarkPlacement | undefined,
     optimizeTargetLabel: typeof optimizeTargetLabel === "string" && optimizeTargetLabel ? optimizeTargetLabel : undefined,
     episodeMode: (episodeMode as "PROGRAM" | "EPISODE" | undefined) ?? "PROGRAM",
+    configOverride: override ?? undefined,
   };
 }

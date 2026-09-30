@@ -273,6 +273,12 @@ export async function saveRunAs(runId: string, title: string | null, actor: Acto
 }
 
 /** [다시 계산]에 넘길 원래 실행 파라미터 + (유지 선택 시) 수동 변경·LOCK 블록을 rank 1 제약으로. */
+function snapshotOverride(snap: unknown): RunRequest["configOverride"] {
+  const s = snap as { weights?: Record<string, number>; repeat_rules?: { daily_cap?: number; weekly_cap?: number } } | null;
+  if (!s) return undefined;
+  return { weights: s.weights, repeat_rules: s.repeat_rules ? { daily_cap: s.repeat_rules.daily_cap, weekly_cap: s.repeat_rules.weekly_cap } : undefined };
+}
+
 export async function recalcRequestFrom(runId: string, keepOverrides: boolean): Promise<{ req: RunRequest; parentRunId: string }> {
   const loaded = await loadRun(runId);
   if (!loaded) throw new ClientError("실행을 찾을 수 없습니다.");
@@ -310,6 +316,8 @@ export async function recalcRequestFrom(runId: string, keepOverrides: boolean): 
       benchmarkPlacement: run.benchmark_placement as RunRequest["benchmarkPlacement"],
       optimizeTargetLabel: run.optimize_target_is_channel_kpi ? undefined : (run.optimize_target_label as string),
       episodeMode: (run.episode_mode as RunRequest["episodeMode"]) ?? "PROGRAM",
+      // 다시 계산도 그 실행을 만들 때의 가중치·반복 제한을 그대로 쓴다(저장 안 한 화면 값으로 뽑은 실행이 저장값으로 바뀌지 않게)
+      configOverride: snapshotOverride(run.config_snapshot),
       extraLocks,
     },
   };

@@ -6,6 +6,7 @@
 // 시청률"이지 실제 미래 시청률 예측이 아니다. 한 페이지 스크롤(탭 없음 — 사용자 선호).
 // 기본값은 선택한 자사 채널의 편성 프로그램만(경쟁사 콘텐츠는 사용자가 켰을 때만 — 사용자 지시).
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { VendingCoinIcon } from "@/components/VendingIcons";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
@@ -36,6 +37,23 @@ const MODE_LABEL: Record<string, string> = { KEEP_CURRENT: "기존 틀 유지", 
 const STRATEGY_LABEL: Record<string, string> = { AUTO: "자동", MATCH: "맞대응(MATCH)", COUNTER: "차별화(COUNTER)", MIX: "혼합(MIX)" };
 const WEIGHT_LABEL: Record<string, string> = { kpi: "KPI 성과", target: "타깃 적합도", weekday_slot: "요일×시간 적합도", trend: "최근 추세", stability: "안정성", lead: "앞뒤 편성 연관" };
 
+// 편성 성향 항목: 화면 순서·쉬운 설명·한 번에 고르기(비율만 의미가 있어 합이 100일 필요 없음)
+const WEIGHT_ORDER = ["kpi", "weekday_slot", "target", "trend", "stability", "lead"];
+const WEIGHT_HELP: Record<string, string> = {
+  kpi: "최근 12주 동안 실제로 시청률이 잘 나온 프로그램을 우선합니다.",
+  weekday_slot: "그 요일·시간대에 평소 잘 나오는 프로그램을 우선합니다.",
+  target: "채널의 핵심 시청층이 많이 보는 프로그램을 우선합니다.",
+  trend: "최근 4주 성적이 12주 평균보다 오르는 프로그램을 우선합니다.",
+  stability: "회차마다 시청률이 들쭉날쭉하지 않고 꾸준한 프로그램을 우선합니다.",
+  lead: "앞 프로그램에 이어 붙였을 때 시청이 이어진 적 있는 조합을 우선합니다(관측일 뿐 효과 보장 아님).",
+};
+const WEIGHT_PRESETS: { name: string; hint: string; values: Record<string, number> }[] = [
+  { name: "기본(균형)", hint: "채널 기본 비율", values: { kpi: 35, weekday_slot: 20, target: 20, trend: 10, stability: 5, lead: 10 } },
+  { name: "성적 우선", hint: "실제 시청률이 높았던 프로그램 위주", values: { kpi: 60, weekday_slot: 15, target: 10, trend: 5, stability: 5, lead: 5 } },
+  { name: "꾸준함 우선", hint: "들쭉날쭉하지 않은 프로그램 위주", values: { kpi: 30, weekday_slot: 20, target: 10, trend: 5, stability: 30, lead: 5 } },
+  { name: "상승세 우선", hint: "최근 오르는 프로그램 위주", values: { kpi: 25, weekday_slot: 15, target: 10, trend: 40, stability: 5, lead: 5 } },
+];
+
 function IdealSchedulePage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -56,6 +74,8 @@ function IdealSchedulePage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [caps, setCaps] = useState<{ daily: number; weekly: number } | null>(null);
   const [weights, setWeights] = useState<Record<string, number> | null>(null);
+  const [savedWeights, setSavedWeights] = useState<Record<string, number> | null>(null); // 채널에 저장된 값(되돌리기·변경 표시용)
+  const [savedCaps, setSavedCaps] = useState<{ daily: number; weekly: number } | null>(null);
   const [configMsg, setConfigMsg] = useState<string | null>(null);
 
   const [data, setData] = useState<RunData | null>(null);
@@ -80,6 +100,8 @@ function IdealSchedulePage() {
         setEpisodeMode("PROGRAM");
         setCaps({ daily: b.config.repeat_rules.daily_cap, weekly: b.config.repeat_rules.weekly_cap });
         setWeights(b.config.weights);
+        setSavedWeights(b.config.weights);
+        setSavedCaps({ daily: b.config.repeat_rules.daily_cap, weekly: b.config.repeat_rules.weekly_cap });
       });
     return () => {
       alive = false;
@@ -134,6 +156,8 @@ function IdealSchedulePage() {
         benchmarkPlacement: competitors.length ? placement : "NONE",
         optimizeTargetLabel: target || undefined,
         episodeMode: opts?.hasEpisodeOption ? episodeMode : "PROGRAM",
+        // 화면에서 바꾼 성향·반복 제한은 저장하지 않아도 이번 편성표에 적용된다
+        configOverride: weights && caps ? { weights, repeat_rules: { daily_cap: caps.daily, weekly_cap: caps.weekly } } : undefined,
       }),
     });
     const j = await r.json();
@@ -176,7 +200,11 @@ function IdealSchedulePage() {
       body: JSON.stringify({ channelCode, repeat_rules: { daily_cap: caps.daily, weekly_cap: caps.weekly }, weights }),
     });
     const j = await r.json();
-    setConfigMsg(j.ok ? `${channelOpt?.name ?? channelCode} 설정을 저장했습니다. 다음 계산부터 적용됩니다.` : (j.message ?? "저장하지 못했습니다."));
+    if (j.ok) {
+      setSavedWeights(weights);
+      setSavedCaps(caps);
+    }
+    setConfigMsg(j.ok ? `${channelOpt?.name ?? channelCode} 설정을 저장했습니다. 이제 이 채널의 기본값입니다.` : (j.message ?? "저장하지 못했습니다."));
   }
 
   const fmt = (v: number | null | undefined) => (v === null || v === undefined ? "-" : v.toFixed(decimals));
@@ -308,27 +336,64 @@ function IdealSchedulePage() {
           </details>
 
           <details className="mt-2 rounded-xl border border-zinc-100 px-3 py-2" open={showAdvanced} onToggle={(e) => setShowAdvanced((e.target as HTMLDetailsElement).open)}>
-            <summary className="cursor-pointer text-sm text-zinc-600">반복 제한·가중치(채널 설정)</summary>
+            <summary className="cursor-pointer text-sm text-zinc-600">
+              편성 성향·반복 제한
+              {weights && savedWeights && (WEIGHT_ORDER.some((k) => (weights[k] ?? 0) !== (savedWeights[k] ?? 0)) || (caps && savedCaps && (caps.daily !== savedCaps.daily || caps.weekly !== savedCaps.weekly))) && (
+                <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">바꾼 값 있음</span>
+              )}
+            </summary>
             {caps && weights && (
-              <div className="mt-2 space-y-3">
-                <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-600">
+              <div className="mt-3 space-y-4">
+                <p className="text-xs leading-relaxed text-zinc-500">
+                  프로그램을 고를 때 무엇을 더 따질지 정합니다. 막대를 오른쪽으로 밀수록 그 항목을 더 중요하게 봅니다. 숫자는 비율이라 합이 100이 아니어도 됩니다.
+                  바꾼 뒤 <b className="font-semibold text-zinc-700">&lsquo;편성표 뽑기&rsquo;</b>를 누르면 저장하지 않아도 이번 편성표에 바로 적용되고,
+                  <b className="font-semibold text-zinc-700"> &lsquo;이 채널 설정 저장&rsquo;</b>을 누르면 다음에도 이 값으로 시작합니다.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="text-zinc-500">한 번에 고르기</span>
+                  {WEIGHT_PRESETS.map((pr) => (
+                    <button key={pr.name} type="button" title={pr.hint} onClick={() => setWeights({ ...weights, ...pr.values })} className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-zinc-700 hover:bg-zinc-50">
+                      {pr.name}
+                    </button>
+                  ))}
+                  {savedWeights && (
+                    <button type="button" onClick={() => setWeights(savedWeights)} className="rounded-full px-2.5 py-1 text-zinc-500 underline decoration-dotted hover:text-zinc-700">
+                      저장된 값으로 되돌리기
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2.5">
+                  {WEIGHT_ORDER.filter((k) => k in weights).map((k) => {
+                    const total = Object.values(weights).reduce((a, b) => a + (b || 0), 0);
+                    const share = total > 0 ? Math.round(((weights[k] || 0) / total) * 100) : 0;
+                    return (
+                      <div key={k} className="grid grid-cols-[minmax(0,1fr)_minmax(140px,220px)_48px] items-center gap-x-3 gap-y-0.5 sm:grid-cols-[minmax(0,1.3fr)_minmax(160px,1fr)_52px]">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-zinc-700">{WEIGHT_LABEL[k] ?? k}</div>
+                          <div className="text-[11px] leading-snug text-zinc-500">{WEIGHT_HELP[k]}</div>
+                        </div>
+                        <input type="range" min={0} max={100} step={5} value={weights[k] ?? 0} onChange={(e) => setWeights({ ...weights, [k]: Number(e.target.value) })} className="w-full accent-zinc-800" aria-label={`${WEIGHT_LABEL[k] ?? k} 비중`} />
+                        <div className="text-right text-sm font-semibold tabular-nums text-zinc-800">{share}%</div>
+                      </div>
+                    );
+                  })}
+                  {Object.values(weights).every((v) => !v) && <p className="text-xs text-rose-600">모든 항목이 0이면 계산할 수 없습니다. 하나 이상 올려 주세요.</p>}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-zinc-100 pt-3 text-sm text-zinc-600">
                   <label className="flex items-center gap-1.5">
                     같은 프로그램 하루 최대
                     <input type="number" min={1} max={24} value={caps.daily} onChange={(e) => setCaps({ ...caps, daily: Number(e.target.value) })} className="w-16 rounded-lg border border-zinc-300 px-2 py-1" />회
                   </label>
                   <label className="flex items-center gap-1.5">
-                    주간 최대
+                    일주일 최대
                     <input type="number" min={1} max={100} value={caps.weekly} onChange={(e) => setCaps({ ...caps, weekly: Number(e.target.value) })} className="w-16 rounded-lg border border-zinc-300 px-2 py-1" />회
                   </label>
+                  <span className="text-[11px] text-zinc-500">본방·재방을 합쳐 셉니다. 줄이면 다양한 프로그램이 들어가고, 늘리면 잘 나오는 프로그램이 더 자주 나옵니다.</span>
                 </div>
-                <div className="flex flex-wrap gap-3 text-sm text-zinc-600">
-                  {Object.entries(weights).map(([k, v]) => (
-                    <label key={k} className="flex items-center gap-1.5">
-                      {WEIGHT_LABEL[k] ?? k}
-                      <input type="number" min={0} max={100} value={v} onChange={(e) => setWeights({ ...weights, [k]: Number(e.target.value) })} className="w-16 rounded-lg border border-zinc-300 px-2 py-1" />
-                    </label>
-                  ))}
-                </div>
+
                 <div className="flex items-center gap-3">
                   <button type="button" onClick={saveConfig} className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50">
                     이 채널 설정 저장
@@ -341,7 +406,10 @@ function IdealSchedulePage() {
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button type="button" disabled={!!busy || !opts} onClick={generate} className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
-              이상적 편성 생성
+              <span className="inline-flex items-center gap-1.5">
+                <VendingCoinIcon size={16} />
+                편성표 뽑기
+              </span>
             </button>
             <button type="button" disabled={!runId} onClick={() => setShowCompare((v) => !v)} className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-40">
               {showCompare ? "비교 닫기" : "현재 편성과 비교"}
@@ -455,7 +523,7 @@ function IdealSchedulePage() {
 
         {!data && !busy && (
           <section className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center text-sm text-zinc-500">
-            조건을 고른 뒤 &lsquo;이상적 편성 생성&rsquo;을 눌러 주세요. 기본은 이 채널의 편성 프로그램만으로 계산합니다.
+            조건을 고른 뒤 &lsquo;편성표 뽑기&rsquo;을 눌러 주세요. 기본은 이 채널의 편성 프로그램만으로 계산합니다.
           </section>
         )}
 

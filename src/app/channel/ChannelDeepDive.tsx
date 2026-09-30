@@ -6,6 +6,7 @@
 // 줄글 형태로 재구성했다. WHY?/OPPORTUNITY?의 원인 추적·기회 탐지는 상관관계만 참고 정보로
 // 제공하고 인과관계로 단정하지 않는다(CLAUDE.md 원칙).
 import { Fragment, useEffect, useRef, useState } from "react";
+import { VendingMachineIcon } from "@/components/VendingIcons";
 import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDow } from "@/lib/dateFormat";
@@ -5447,11 +5448,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/30"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="3" y="4" width="18" height="16" rx="2" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                  <path d="M9 15l2 2 4-4" />
-                </svg>
+                <VendingMachineIcon size={18} />
                 시청률 자판기
               </Link>
               {/* 사용자 지시(2026-08-21): 드랍박스를 열면 옵션 글씨가 안 보이던 버그 — optgroup으로
