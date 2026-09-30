@@ -21,15 +21,22 @@ export async function loadChannelRef(channelCode: string): Promise<ChannelRef> {
   return { id: data.id, code: data.code, primaryTarget: data.primary_target, kpiLabel };
 }
 
-export async function fetchOwnAirings(channel: ChannelRef, asOfDate: string, config: IdealScheduleConfig): Promise<OwnAiringsBundle> {
+export async function fetchOwnAirings(channel: ChannelRef, asOfDate: string, config: IdealScheduleConfig, optimizeTarget?: string | null): Promise<OwnAiringsBundle> {
   const { data, error } = await supabase.rpc("get_ideal_schedule_own_airings", {
     p_channel_code: channel.code,
     p_as_of_date: asOfDate,
     p_lookback_days: config.expected_kpi.lookback_days,
-    p_target_labels: targetLabelsToFetch(config, channel.kpiLabel),
+    p_target_labels: targetLabelsToFetch(config, channel.kpiLabel, optimizeTarget),
   });
   if (error) throw new Error(`get_ideal_schedule_own_airings 실패: ${error.message}`);
   return mapOwnAirings(data as RawOwn);
+}
+
+/** 최적화 타깃 선택 목록 — 그 채널에 실제 프로그램 단위 데이터가 있는 타깃만(추측 없음). */
+export async function fetchTargetLabels(channelCode: string, asOfDate: string, lookbackDays: number): Promise<{ label: string; airingCount: number }[]> {
+  const { data, error } = await supabase.rpc("get_ideal_schedule_target_labels", { p_channel_code: channelCode, p_as_of_date: asOfDate, p_lookback_days: lookbackDays });
+  if (error) throw new Error(`get_ideal_schedule_target_labels 실패: ${error.message}`);
+  return ((data ?? []) as { target_label: string; airing_count: number }[]).map((r) => ({ label: r.target_label, airingCount: Number(r.airing_count) }));
 }
 
 export async function fetchCompetitorData(competitorNames: string[], asOfDate: string, lookbackDays: number): Promise<CompetitorBundle> {

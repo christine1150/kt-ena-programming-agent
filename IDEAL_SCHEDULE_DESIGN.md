@@ -282,6 +282,28 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 - 반복 규칙: daily/weekly cap은 Hard, consecutive/same_slot은 Soft 패널티, locked·fixed에는 미적용
 - Manual Override: 재생성 시 "유지"면 Hard(LOCK 순위)로 편입, "초기화"면 삭제
 
+### G-4. STEP 3 구현에서 확정한 편성 현실성 규칙(실데이터 점검 결과)
+
+| 규칙 | 내용 | 계기 |
+|---|---|---|
+| 반복 판정 단위 = 프로그램 | 일·주 cap, 연속 편성, 같은 시 반복은 본방·재방을 합친 프로그램 단위 | 본/재 단위로 따로 세서 같은 프로그램이 하루 5회 배치됨 |
+| 본방 후보 조건 | 본방 단위는 기준일 전 7일 안에 본방이 있었던 "방영 중" 시리즈만, 주간 관측 최대 방영 수 이내 | 종영 드라마가 본방 성적으로 월 21시에 배치됨 |
+| 표본 부족 후보 | 유효 표본 < min_n이면 AI 신규 배치 제외(기존 틀 모드의 현 편성 프로그램·필수 편성은 예외) | 1~2회 특집이 반복 배치됨 |
+| 신뢰도 | 프로그램 자체 표본(1~3단계)만 반영, 장르·채널 폴백은 신뢰도 0 | 장르 표본으로 신뢰도 1.0이 나옴 |
+| 주요 콘텐츠 길이 | 길이 미입력 시 실측 runtime 중앙값, 기존 틀 모드에서는 그 프로그램이 차지하던 골격 슬롯 끝까지 | 중앙값이 슬롯보다 짧아 뒤에 몇 분짜리 조각 슬롯 생성 |
+| 이름 매칭 | 프로그램 id → 이름 정규화 일치 → 포함 관계가 정확히 1개일 때만 | 주요 콘텐츠 "케이팝업차트쇼" ↔ 닐슨 "ENA케이팝업차트쇼" |
+| AI 모드 여백 | 연속 여백 합계도 max_gap_min 이내 | 여백 전이가 이어져 15~20분 여백 발생 |
+| 경쟁 Benchmark 배치 | 기본 SUGGEST_ONLY(대체 후보·제안만), MIX에서만 AI 편성 분의 benchmark_max_share(초기 20%) 이내 배치. 지수도 표본 수 수축 | 수축·제한 없이 경쟁시키면 AI 배치 128개 중 118개가 경쟁 프로그램 |
+
+### G-5. 자사 최적화 타깃 선택(2026-09-30 사용자 지시)
+
+- 실행 파라미터 `optimizeTargetLabel`: 채널 KPI 대신 원하는 타깃 기준 편성안(예: ENA Play 수도권 2039·수도권 여20대, ONCE 전국 5064·전국 남50대)
+- 선택 목록은 `get_ideal_schedule_target_labels`가 돌려주는, 그 채널에 실제 프로그램 단위 데이터가 있는 라벨만
+- **여러 연령대를 합친 타깃(예: 여성 2039)은 만들지 않음** — 연령대별 모집단 크기 없이 정확히 합산할 수 없음. 여20대·여30대를 각각 선택
+- 타깃을 바꾸면 Feature·baseline·기대값 전부 그 타깃 값으로 계산, 채널 KPI 기준 구성비(Target Audience) 항목은 제외 후 재정규화
+- 경쟁사 비교 타깃은 H-1b 규칙 그대로(선택 타깃이 2049/가구가 아니면 자사 KPI 불일치로 표시·감점)
+- skyUHD는 가구 단일 값뿐이라 타깃 선택 없음
+
 ---
 
 ## H. 경쟁사 Benchmark · MATCH / COUNTER
@@ -400,6 +422,9 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 | 1 | `20260930020000_ideal_schedule_config_constraints_genre.sql` | config(기본행)·필수 편성·장르 매핑 테이블 + RLS | **적용 완료** |
 | 2 | `20260930020100_ideal_schedule_feature_rpcs.sql` | Feature RPC 2종(as_of 강제) + `competitor_program_ratings(competitor_name, broadcast_date)` 인덱스 | **적용 완료** |
 | 3 | `20260930020200_ideal_schedule_config_target_composition.sql` | Target Audience 구성비 정의, 장르 source `NONE`(미분류) 허용 | **적용 완료** |
+| 3b | `20260930030000_ideal_schedule_group_b_core_household.sql` | Group B 핵심 타깃 = 전국 가구(구성비 항목 제거) | **적용 완료** |
+| 3c | `20260930040000_ideal_schedule_benchmark_placement.sql` | Benchmark 배치 방식(SUGGEST_ONLY/MIX)·최대 비율 | **적용 완료** |
+| 3d | `20260930050000_ideal_schedule_target_labels.sql` | 최적화 타깃 선택 목록 RPC | **적용 완료** |
 | 4 | `…_ideal_schedule_runs_blocks_candidates.sql` | 실행·블록·후보 | STEP 4 |
 | 5 | `…_ideal_schedule_backtest.sql` | 백테스트 2종 | STEP 4 |
 
@@ -415,7 +440,7 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 |---|---|---|
 | STEP 1 | 본 문서 | — |
 | STEP 2 **(완료)** | Migration 3건, Feature RPC 2종, `src/lib/idealSchedule/*`(time·mapping·features·competitorFeatures·competitorTarget·genreRules·config), 장르 시드 2,890건, `npm run test:ideal` 41건 | `npm run smoke` 15/15, 7채널 실데이터 미래 데이터 차단 검증 |
-| STEP 3 | `src/lib/idealSchedule/`(expected·constraints·optimizer·strategy), 엔진 테스트 스크립트 | `tsc`, 엔진 테스트 23종 |
+| STEP 3 **(완료)** | constraints·skeleton·scoring·optimizer(KEEP_CURRENT·AI_OPTIMIZED)·engine·engineRunner·constraintStore, 타깃 선택 | `npm run test:ideal` 84건(설계 23종 포함), 7채널×2모드 실데이터 실행 0.8~7초, 결정론 확인 |
 | STEP 4 | Migration 4~5, API 9종, 백테스트 | API 응답·DB 저장, 과거 4주 walk-forward |
 | STEP 5 | `/ideal-schedule` UI, Grid 레이아웃 추출, Swap·비교·엑셀 | 브라우저 검증, 기존 주간 비교 화면 스크린샷 동일성 |
 
@@ -459,6 +484,8 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 | 3 | Benchmark 기대값 | 가정 명시 후 산출 | `BENCHMARK_TRANSFER` 산출, 블록·툴팁에 "지수 전이 가정" 문구, 신뢰도 상한 적용, KPI 합계는 기본 제외(토글) |
 | 4 | 권한 | PD 포함 | 필수 편성 CRUD·Swap·Lock·저장·실행: admin·pd 세션 모두 허용. 모든 쓰기에 `created_by`/`updated_by`(adminId 또는 pdId) 기록. 전체 기본 설정(`ideal_schedule_config` 기본행) 변경만 관리자 전용 |
 | 5 | 대상 채널 | skyUHD 포함(7채널) | 아래 skyUHD 처리 규칙 적용 |
+| 6 | Group B 핵심 타깃 | 전국 가구(별도 연령대 아님) | 구성비 항목 제외(20260930030000) |
+| 7 | 자사 최적화 타깃 | 채널별로 원하는 타깃 선택 가능(데이터 있는 라벨만) | G-5 |
 
 **skyUHD 처리 규칙**
 

@@ -11,6 +11,11 @@ import { chooseCompetitorTarget, targetKindOfLabel } from "../src/lib/idealSched
 import { buildCompetitorFeatures } from "../src/lib/idealSchedule/competitorFeatures";
 import { classifyGenreByRule, genreFromSkyUhdLabel } from "../src/lib/idealSchedule/genreRules";
 import { mergeIdealConfig } from "../src/lib/idealSchedule/config";
+import { freeIntervals, resolveHardConstraints, type HardConstraintInput } from "../src/lib/idealSchedule/constraints";
+import { runIdealScheduleEngine, type EngineRunInput, type EngineRunResult, type GenreResolver } from "../src/lib/idealSchedule/engine";
+import { mapCompetitorData, withOptimizeTarget } from "../src/lib/idealSchedule/mapping";
+import { buildScoringContext, Scorer } from "../src/lib/idealSchedule/scoring";
+import { addDays as addDaysT } from "../src/lib/idealSchedule/time";
 import type { Genre } from "../src/lib/idealSchedule/types";
 
 let passed = 0;
@@ -201,6 +206,243 @@ const genreOf = (name: string): Genre => (name === "드라마A" ? "드라마" : 
     { repeat_rules: { daily_cap: 2 } }
   );
   check("채널 설정이 기본값을 섹션 단위로 덮어씀", merged.repeat_rules.daily_cap === 2 && merged.weights.kpi === 35);
+}
+
+// ════════════════ STEP 3: Hard 제약·최적화 엔진 ════════════════
+const cInput = (o: Partial<HardConstraintInput> & { id: string; weekday: number; startMin: number; durationMin: number | null; rank: HardConstraintInput["rank"] }): HardConstraintInput => ({
+  priority: 3,
+  source: "WEEKLY_INPUT",
+  constraintType: "WEEKLY_PREMIERE",
+  programId: null,
+  programName: o.id,
+  activeFrom: null,
+  activeTo: null,
+  locked: true,
+  ...o,
+});
+{
+  const WEEK = "2026-09-28";
+  const r1 = resolveHardConstraints(
+    [
+      cInput({ id: "X", rank: 3, weekday: 5, startMin: 1280, durationMin: 70 }),
+      cInput({ id: "Y", rank: 3, weekday: 5, startMin: 1300, durationMin: 60 }),
+    ],
+    WEEK
+  );
+  check("[1] 같은 우선순위 겹침 → 둘 다 배치 안 함 + Conflict + 그 시간 AI 금지", r1.fixed.length === 0 && r1.conflicts.length === 1 && r1.blockedZones.length === 2 && r1.conflicts[0].a.id === "X" && r1.conflicts[0].b.id === "Y");
+  const r2 = resolveHardConstraints(
+    [
+      cInput({ id: "LOCK", rank: 1, weekday: 1, startMin: 1320, durationMin: 60, source: "USER_LOCK", constraintType: "USER_LOCK" }),
+      cInput({ id: "PREMIERE", rank: 3, weekday: 1, startMin: 1350, durationMin: 60 }),
+    ],
+    WEEK
+  );
+  check("[2] LOCK 보존: 하위 우선순위 겹침은 대체됨(삭제 아님, 기록)", r2.fixed.length === 1 && r2.fixed[0].input.id === "LOCK" && r2.overridden.length === 1 && r2.overridden[0].dropped.id === "PREMIERE");
+  const r3 = resolveHardConstraints([cInput({ id: "신규예능A", rank: 3, weekday: 5, startMin: 21 * 60 + 20, durationMin: 70, activeFrom: "2026-10-02", activeTo: "2026-12-18" })], WEEK);
+  check("[3] 금주 필수 편성(금 21:20, 70분) 배치", r3.fixed.length === 1 && r3.fixed[0].startMin === 1280 && r3.fixed[0].endMin === 1350 && r3.fixed[0].date === "2026-10-02");
+  const r4 = resolveHardConstraints([cInput({ id: "미래편성", rank: 3, weekday: 1, startMin: 1320, durationMin: 60, activeFrom: "2026-10-05" }), cInput({ id: "종영", rank: 3, weekday: 2, startMin: 1320, durationMin: 60, activeTo: "2026-09-28" })], WEEK);
+  check("[4] active_from 이전·active_to 이후 날짜는 비활성", r4.fixed.length === 0 && r4.inactive.length === 2);
+  const r5 = resolveHardConstraints(
+    [
+      cInput({ id: "fc", rank: 2, weekday: 3, startMin: 1350, durationMin: 80, programName: "나는 SOLO", source: "MAIN_CONTENT_LIST", constraintType: "AUTO_MAIN_CONTENT" }),
+      cInput({ id: "wk", rank: 3, weekday: 3, startMin: 1350, durationMin: 80, programName: "나는SOLO" }),
+    ],
+    WEEK
+  );
+  check("[21] 같은 요일·시각·프로그램 중복 입력 → 충돌 아님, 우선순위 높은 쪽 하나만", r5.fixed.length === 1 && r5.fixed[0].input.id === "fc" && r5.duplicates.length === 1 && r5.conflicts.length === 0);
+  const r6 = resolveHardConstraints([cInput({ id: "심야", rank: 3, weekday: 6, startMin: 1530, durationMin: 60 })], WEEK);
+  check("[5] 자정 넘김 고정 편성(25:30~26:30) 분리 없이 유지", r6.fixed.length === 1 && r6.fixed[0].endMin === 1590);
+  const r7 = resolveHardConstraints([cInput({ id: "길이미상", rank: 2, weekday: 1, startMin: 1320, durationMin: null })], WEEK);
+  check("길이를 모르는 제약은 추정하지 않고 경고", r7.fixed.length === 0 && r7.warnings.length === 1);
+  const free = freeIntervals(1, 120, 1560, [{ weekday: 1, startMin: 1320, endMin: 1380 }]);
+  check("빈 구간 계산", free.length === 2 && free[0].endMin === 1320 && free[1].startMin === 1380);
+}
+
+// ── 엔진 픽스처: 4주 × 7일, 20~24시 60분 프로그램 4개 + 30분 E + 종영 본방 F + 방영 중 본방 G ──
+const engineConfig = mergeIdealConfig(
+  {
+    weights: { kpi: 35, target: 20, weekday_slot: 20, trend: 10, stability: 5, lead: 10 },
+    repeat_rules: { daily_cap: 3, weekly_cap: 14, consecutive_penalty: 0.15, same_slot_penalty: 0.05, genre_concentration_penalty: 0.05, low_confidence_penalty: 0.1, runtime_mismatch_penalty: 0.1 },
+    expected_kpi: { lookback_days: 84, recent_days: 28, recent_weight: 2, shrinkage_k: 4, min_n: 3, full_confidence_n: 12, exclude_holidays: true },
+    strategy: { strong_threshold: 1.2, match_weight: 0.5, counter_weight: 0.5, benchmark_confidence_cap: 0.4, target_mismatch_penalty: 0.2, include_benchmark_in_totals: false, competitor_target_mode: "AUTO_MATCH_KPI", benchmark_placement: "SUGGEST_ONLY", benchmark_max_share: 0.05 },
+    structure: { default_mode: "KEEP_CURRENT", skeleton_weeks: 4, grid_minutes: 5, runtime_tolerance_min: 10, max_gap_min: 10, max_local_search_iter: 2000 },
+    targets: { GROUP_A: { kpi: KPI, extra: [], composition: null }, GROUP_B: { kpi: "전국 유료가구", extra: [], composition: null }, SKYUHD: { kpi: null, extra: [], composition: null } },
+  },
+  null
+);
+const E_PROGRAMS: { id: string; start: string; end: string; r: number; first?: boolean | null; onlyWeek?: number }[] = [
+  { id: "A", start: "20:00:00", end: "21:00:00", r: 1.0 },
+  { id: "B", start: "21:00:00", end: "22:00:00", r: 1.0 },
+  { id: "C", start: "22:00:00", end: "23:00:00", r: 0.5 },
+  { id: "D", start: "23:00:00", end: "00:00:00", r: 0.4 },
+  { id: "E", start: "00:00:00", end: "00:30:00", r: 0.2 },
+  { id: "F", start: "19:00:00", end: "20:00:00", r: 0.9, first: true, onlyWeek: 0 }, // 첫 주만 본방(종영)
+  { id: "G", start: "19:00:00", end: "20:00:00", r: 0.9, first: true, onlyWeek: 3 }, // 마지막 주 본방(방영 중)
+];
+const engineRaw = {
+  channel_code: "ENA",
+  kpi_label: KPI,
+  date_from: "2026-07-06",
+  date_to: "2026-09-27",
+  holidays: [] as string[],
+  dates_with_data: [] as string[],
+  airings: [] as RawA[],
+};
+for (let w = 0; w < 4; w++) {
+  for (let d = 0; d < 7; d++) {
+    const date = addDaysT("2026-08-31", w * 7 + d);
+    engineRaw.dates_with_data.push(date);
+    for (const p of E_PROGRAMS) {
+      if (p.onlyWeek !== undefined && p.onlyWeek !== w) continue;
+      engineRaw.airings.push({ ...mk(date, p.start, p.end, p.id, p.r), program_name: `프로그램${p.id}`, first_run: p.first ?? null });
+    }
+  }
+}
+const eGenre: GenreResolver = (scope, _owner, name) =>
+  scope === "COMPETITOR" ? (name.startsWith("드라마") ? "드라마" : "미분류") : name === "프로그램A" ? "드라마" : name === "프로그램B" || name === "프로그램D" ? "예능" : "미분류";
+const baseRun = (over: Partial<EngineRunInput> = {}): EngineRunInput => ({
+  weekStart: "2026-09-28",
+  asOfDate: "2026-09-27",
+  mode: "KEEP_CURRENT",
+  strategyMode: "AUTO",
+  config: engineConfig,
+  bundle: mapOwnAirings(engineRaw),
+  competitorBundle: null,
+  constraints: [],
+  genreOf: eGenre,
+  ...over,
+});
+const aiBlocks = (r: EngineRunResult) => r.output.blocks.filter((b) => !b.fixed);
+const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineRunResult["output"]["blocks"][number]) => string) => {
+  const m = new Map<string, number>();
+  for (const b of blocks) m.set(keyFn(b), (m.get(keyFn(b)) ?? 0) + 1);
+  return m;
+};
+{
+  const r = runIdealScheduleEngine(baseRun());
+  check("KEEP: 골격 슬롯(요일별 19·20·21·22·23·24시) 생성", r.skeleton.filter((s) => s.weekday === 1).length >= 5, `${r.skeleton.filter((s) => s.weekday === 1).length}`);
+  const r2 = runIdealScheduleEngine(baseRun());
+  check("[18] 같은 입력 → 같은 지문·같은 편성·같은 점수", r.fingerprint === r2.fingerprint && JSON.stringify(aiBlocks(r).map((b) => [b.weekday, b.startMin, b.candidate.key])) === JSON.stringify(aiBlocks(r2).map((b) => [b.weekday, b.startMin, b.candidate.key])) && r.summary.objective === r2.summary.objective);
+  const pool = r.output.blocks.flatMap((b) => b.alternatives ?? []).map((a) => a.candidate);
+  const f = pool.find((c) => c.key.startsWith("F|"));
+  const g = pool.find((c) => c.key.startsWith("G|"));
+  check("종영 본방(F) AI 후보 아님 / 방영 중 본방(G) AI 후보 + 주간 한도", !!f && f.aiEligible === false && !!g && g.aiEligible === true && g.weeklyLimit === 7, `F=${f?.aiEligible} G=${g?.aiEligible}/${g?.weeklyLimit}`);
+  check("기대값 유형: 자사 = 과거 성과 기반", aiBlocks(r).every((b) => b.eval.expectedKpiType === "HISTORICAL_EXPECTED"));
+  check("모든 AI 블록에 선정 이유(structured) 존재", aiBlocks(r).every((b) => b.eval.reasons.length > 0));
+
+  const capDay = runIdealScheduleEngine(baseRun({ config: { ...engineConfig, repeat_rules: { ...engineConfig.repeat_rules, daily_cap: 1 } } }));
+  const perDay = countBy(aiBlocks(capDay), (b) => `${b.weekday}|${b.candidate.programKey}`);
+  check("[12] 일 cap=1: 같은 프로그램 하루 1회 이하(본방·재방 합산)", [...perDay.values()].every((n) => n <= 1));
+  const capWeek = runIdealScheduleEngine(baseRun({ config: { ...engineConfig, repeat_rules: { ...engineConfig.repeat_rules, weekly_cap: 2 } } }));
+  const perWeek = countBy(aiBlocks(capWeek), (b) => b.candidate.programKey);
+  check("[13] 주 cap=2: 같은 프로그램 주 2회 이하 + 채우지 못한 슬롯은 사유와 함께 빈 슬롯", [...perWeek.values()].every((n) => n <= 2) && capWeek.output.emptySlots.length > 0 && capWeek.output.emptySlots.every((s) => s.reason.length > 0));
+}
+{
+  // [14] 연속 편성 패널티 / [22] runtime 불일치 패널티
+  const r = runIdealScheduleEngine(baseRun());
+  const blocks = r.output.blocks;
+  const cand = blocks[0].candidate;
+  const scorerForTest = new Scorer(buildScoringContext(r.featureSet, engineConfig, "AUTO", null, false));
+  const base = { weekday: 1, startMin: 1260, endMin: 1320, prevKey: null, prevProgramKey: null, fixed: false, sameSlotOtherDays: 0, dayGenreShare: 0 };
+  const e0 = scorerForTest.evaluate(cand, base);
+  const e1 = scorerForTest.evaluate(cand, { ...base, prevKey: cand.key, prevProgramKey: cand.programKey });
+  check("[14] 같은 프로그램 연속 편성 → 연속 패널티·가치 감소", (e1.penalties.consecutive ?? 0) > 0 && e1.value < e0.value);
+  const fixedEval = scorerForTest.evaluate(cand, { ...base, prevKey: cand.key, prevProgramKey: cand.programKey, fixed: true });
+  check("고정·LOCK 블록에는 반복 패널티 미적용", Object.keys(fixedEval.penalties).length === 0);
+  const eShort = scorerForTest.evaluate({ ...cand, runtimeMin: 30 }, base);
+  check("[22] runtime 30분 후보를 60분 슬롯에 → runtime 불일치 패널티", (eShort.penalties.runtime_mismatch ?? 0) > 0);
+}
+{
+  // [23] 후보·데이터 없음
+  const empty = runIdealScheduleEngine(baseRun({ bundle: mapOwnAirings({ ...engineRaw, airings: [], dates_with_data: [] }) }));
+  check("[23] 데이터·후보 없음 → 오류 없이 빈 결과", empty.output.blocks.length === 0 && empty.summary.expectedAvgRating === null);
+  const emptyAi = runIdealScheduleEngine(baseRun({ mode: "AI_OPTIMIZED", bundle: mapOwnAirings({ ...engineRaw, airings: [], dates_with_data: [] }) }));
+  check("[23] AI 모드 후보 없음 → 전 구간 여백으로 보고", emptyAi.output.blocks.length === 0 && emptyAi.output.gaps.length === 7);
+}
+{
+  // [20] 수동 변경 유지 + 금주 필수 편성이 결과에 반영
+  const locks = [
+    cInput({ id: "override1", rank: 1, weekday: 2, startMin: 1260, durationMin: 60, programId: "C", programName: "프로그램C", source: "USER_LOCK", constraintType: "MANUAL_OVERRIDE" }),
+    cInput({ id: "premiere", rank: 3, weekday: 5, startMin: 1280, durationMin: 70, programName: "신규예능A" }),
+  ];
+  const r = runIdealScheduleEngine(baseRun({ constraints: locks }));
+  const ov = r.output.blocks.find((b) => b.weekday === 2 && b.startMin === 1260);
+  const pr = r.output.blocks.find((b) => b.weekday === 5 && b.startMin === 1280);
+  check("[20] 수동 변경(MANUAL_OVERRIDE) 블록 그대로 유지", ov?.status === "MANUAL_OVERRIDE" && ov.candidate.programKey === "C");
+  check("[3] 신규 프로그램 필수 편성: 실측 없어도 배치, 기대값은 장르·채널 기준", pr?.status === "REQUIRED" && pr.candidate.key.startsWith("NEW:") && pr.eval.fallbackLevel >= 4);
+  check("고정 블록과 AI 블록이 겹치지 않음", !r.output.blocks.some((a, i) => r.output.blocks.some((b, j) => i < j && a.weekday === b.weekday && a.startMin < b.endMin && b.startMin < a.endMin)));
+  const conflictRun = runIdealScheduleEngine(baseRun({ constraints: [cInput({ id: "X", rank: 3, weekday: 3, startMin: 1260, durationMin: 60 }), cInput({ id: "Y", rank: 3, weekday: 3, startMin: 1290, durationMin: 60 })] }));
+  check("[1] 충돌 구간은 AI도 채우지 않음", conflictRun.summary.conflictCount === 1 && !conflictRun.output.blocks.some((b) => b.weekday === 3 && b.startMin < 1350 && b.endMin > 1260));
+}
+{
+  // AI 시간 최적화: 겹침 없음, 여백은 연속 합계도 max_gap 이내, 반복 cap 준수, 고정 블록 유지
+  const cfg = { ...engineConfig, repeat_rules: { ...engineConfig.repeat_rules, daily_cap: 30, weekly_cap: 200 } };
+  const r = runIdealScheduleEngine(baseRun({ mode: "AI_OPTIMIZED", config: cfg, constraints: [cInput({ id: "premiere", rank: 3, weekday: 1, startMin: 1350, durationMin: 70, programName: "신규예능A" })] }));
+  const overlaps = r.output.blocks.some((a, i) => r.output.blocks.some((b, j) => i < j && a.weekday === b.weekday && a.startMin < b.endMin && b.startMin < a.endMin));
+  check("AI 모드: 블록 겹침 없음", !overlaps);
+  check("AI 모드: 여백(연속 합계 포함) ≤ max_gap_min", r.output.gaps.every((g) => g.endMin - g.startMin <= cfg.structure.max_gap_min), JSON.stringify(r.output.gaps.slice(0, 3)));
+  check("AI 모드: 필수 편성 유지", r.output.blocks.some((b) => b.weekday === 1 && b.startMin === 1350 && b.status === "REQUIRED"));
+  check("AI 모드: 블록 시작이 grid(5분) 단위(고정 제외)", aiBlocks(r).every((b) => (b.startMin - 120) % 5 === 0 || r.output.blocks.some((f) => f.fixed && f.weekday === b.weekday && f.endMin === b.startMin)));
+  const capR = runIdealScheduleEngine(baseRun({ mode: "AI_OPTIMIZED", config: { ...engineConfig, repeat_rules: { ...engineConfig.repeat_rules, daily_cap: 2 } } }));
+  check("[12] AI 모드 일 cap=2 준수", [...countBy(aiBlocks(capR), (b) => `${b.weekday}|${b.candidate.programKey}`).values()].every((n) => n <= 2));
+  const g = aiBlocks(r).filter((b) => b.candidate.key.startsWith("G|"));
+  check("AI 모드: 방영 중 본방(G)은 주간 관측 최대(7회) 이내", g.length <= 7);
+  const r2 = runIdealScheduleEngine(baseRun({ mode: "AI_OPTIMIZED", config: cfg }));
+  const r3 = runIdealScheduleEngine(baseRun({ mode: "AI_OPTIMIZED", config: cfg }));
+  check("[18] AI 모드 결정론", r2.fingerprint === r3.fingerprint && JSON.stringify(aiBlocks(r2).map((b) => [b.weekday, b.startMin, b.candidate.key])) === JSON.stringify(aiBlocks(r3).map((b) => [b.weekday, b.startMin, b.candidate.key])));
+}
+{
+  // [15][16][17] 경쟁사 강세 슬롯(월 21시 드라마) — MATCH는 같은 장르, COUNTER는 다른 장르
+  const compAirings = [];
+  for (let w = 0; w < 4; w++) {
+    const mon = addDaysT("2026-08-31", w * 7);
+    compAirings.push({ competitor: "tvN", date: mon, start: "21:00:00", end: "22:00:00", program_name: "드라마X", target_label: "개인2049", r: 3.0, s: null });
+    for (let d = 0; d < 7; d++) {
+      const date = addDaysT("2026-08-31", w * 7 + d);
+      compAirings.push({ competitor: "tvN", date, start: "10:00:00", end: "11:00:00", program_name: "재방Y", target_label: "개인2049", r: 0.3, s: null });
+      compAirings.push({ competitor: "tvN", date, start: "15:00:00", end: "16:00:00", program_name: "재방Z", target_label: "개인2049", r: 0.3, s: null });
+    }
+  }
+  const compBundle = mapCompetitorData({ date_from: "2026-07-06", date_to: "2026-09-27", airings: compAirings, daily: [] });
+  const at = (r: EngineRunResult) => r.output.blocks.find((b) => b.weekday === 1 && b.startMin === 1260)!;
+  const m = runIdealScheduleEngine(baseRun({ competitorBundle: compBundle, strategyMode: "MATCH" }));
+  const c = runIdealScheduleEngine(baseRun({ competitorBundle: compBundle, strategyMode: "COUNTER" }));
+  check("[16] MATCH: 경쟁 드라마 강세 슬롯에 자사 드라마", at(m).eval.strategy.type === "MATCH" && at(m).candidate.genre === "드라마", `${at(m).candidate.programName}/${at(m).eval.strategy.type}`);
+  check("[17] COUNTER: 같은 슬롯에 다른 장르", at(c).eval.strategy.type === "COUNTER" && at(c).candidate.genre !== "드라마", `${at(c).candidate.programName}/${at(c).eval.strategy.type}`);
+  check("전략 결과 저장값(강도·match/counter 점수)", (at(m).eval.strategy.competitorSlotStrength ?? 0) >= 1.2 && at(m).eval.strategy.matchScore > 0 && at(c).eval.strategy.counterScore > 0);
+  check("[15] 경쟁사 타깃 선택 결과가 요약에 기록", m.summary.competitorTargets.length === 1 && m.summary.competitorTargets[0].programTarget === "2049" && m.summary.competitorTargets[0].matchesOwnKpi === true);
+  check("기본(제안만): 경쟁 Benchmark 배치 0건, 대체 후보에는 표시", m.summary.benchmarkBlockCount === 0 && m.output.blocks.some((b) => (b.alternatives ?? []).some((a) => a.candidate.contentType === "COMPETITOR_BENCHMARK")));
+  const alt = m.output.blocks.flatMap((b) => b.alternatives ?? []).find((a) => a.candidate.contentType === "COMPETITOR_BENCHMARK")!;
+  check("Benchmark 기대값 = 지수 전이 가정 표기 + 신뢰도 상한", alt.eval.expectedKpiType === "BENCHMARK_TRANSFER" && alt.eval.confidence <= engineConfig.strategy.benchmark_confidence_cap + 1e-9);
+  const mix = runIdealScheduleEngine(baseRun({ competitorBundle: compBundle, strategyMode: "AUTO", benchmarkPlacement: "MIX", config: { ...engineConfig, strategy: { ...engineConfig.strategy, benchmark_max_share: 0.05 } } }));
+  const slotMin = mix.skeleton.reduce((s, x) => s + (x.endMin - x.startMin), 0);
+  const hypMin = aiBlocks(mix).filter((b) => b.candidate.contentType !== "OWN").reduce((s, b) => s + (b.endMin - b.startMin), 0);
+  check("MIX: 가상 후보 편성 분 ≤ 예산(비율 × 편성 분), 실제로 1건 이상 배치", hypMin > 0 && hypMin <= 0.05 * slotMin + 1e-9, `${hypMin} / ${0.05 * slotMin}`);
+  check("Benchmark는 KPI 합계에서 기본 제외", mix.summary.expectedAvgRating !== null);
+}
+
+{
+  // 자사 최적화 타깃 선택(사용자 지시 2026-09-30)
+  const b = mapOwnAirings(engineRaw);
+  const t = withOptimizeTarget(b, "전국 유료가구");
+  check(
+    "타깃 선택: 모든 방영의 KPI 값이 선택 타깃 값으로 바뀜",
+    t.kpiLabel === "전국 유료가구" && t.airings.every((a, i) => a.kpi.r === (b.airings[i].kpi.r === null ? null : (b.airings[i].kpi.r as number) * 2))
+  );
+  let threw = false;
+  try {
+    withOptimizeTarget(b, "수도권 여2039");
+  } catch {
+    threw = true;
+  }
+  check("타깃 선택: 원본에 없는 합성 타깃(여2039)은 추정하지 않고 오류", threw);
+  const rKpi = runIdealScheduleEngine(baseRun());
+  const rT = runIdealScheduleEngine(baseRun({ bundle: t, channelKpiLabel: KPI }));
+  check(
+    "타깃 선택 실행: 요약에 최적화 타깃 기록 + 구성비 항목 제외",
+    rT.summary.optimizeTarget.label === "전국 유료가구" && !rT.summary.optimizeTarget.isChannelKpi && rKpi.summary.optimizeTarget.isChannelKpi && rT.featureSet.options.composition === null
+  );
+  check("타깃 선택 실행: 기대값이 선택 타깃 단위(가구 = 2049의 2배 픽스처)", (rT.summary.expectedAvgRating ?? 0) > (rKpi.summary.expectedAvgRating ?? 0));
 }
 
 console.log(`\n${passed}건 통과, ${failures.length}건 실패`);

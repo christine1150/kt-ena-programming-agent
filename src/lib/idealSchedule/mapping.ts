@@ -6,12 +6,21 @@ import type { AiringMetric, AiringType, CompetitorAiring, CompetitorBundle, OwnA
 
 export const SKYUHD_KPI_KEY = "__SKYUHD__";
 
-/** 조회할 타깃 라벨: KPI + 보조 타깃 + 구성비(Target Audience) 계산용 라벨(중복 제거, 순서 고정). */
-export function targetLabelsToFetch(config: IdealScheduleConfig, kpiLabel: string): string[] | null {
+/** 조회할 타깃 라벨: KPI + 보조 타깃 + 구성비(Target Audience) 계산용 라벨 + (선택 시) 최적화 타깃. */
+export function targetLabelsToFetch(config: IdealScheduleConfig, kpiLabel: string, optimizeTarget?: string | null): string[] | null {
   if (kpiLabel === SKYUHD_KPI_KEY) return null;
   const group = targetGroupForKpiLabel(config, kpiLabel);
-  const labels = [kpiLabel, ...group.extra, ...(group.composition ? [group.composition.num, group.composition.den] : [])];
+  const labels = [kpiLabel, ...group.extra, ...(group.composition ? [group.composition.num, group.composition.den] : []), ...(optimizeTarget ? [optimizeTarget] : [])];
   return [...new Set(labels)];
+}
+
+/** 최적화 기준 타깃을 바꾼다(사용자 지시 2026-09-30: 자사 채널은 원하는 타깃의 시청률 최적화 편성표).
+ *  모든 Feature·기대값·baseline이 이 타깃 값으로 계산된다. 채널 KPI 자체를 바꾸는 것이 아니라 "이 타깃 기준
+ *  편성안"을 따로 뽑는 것 — 원본에 없는 라벨이면 추정하지 않고 오류. */
+export function withOptimizeTarget(bundle: OwnAiringsBundle, label: string): OwnAiringsBundle {
+  if (label === bundle.kpiLabel) return bundle;
+  if (!bundle.airings.some((a) => a.metrics[label])) throw new Error(`'${label}' 타깃 데이터가 이 채널·기간에 없습니다.`);
+  return { ...bundle, kpiLabel: label, airings: bundle.airings.map((a) => ({ ...a, kpi: a.metrics[label] ?? EMPTY_METRIC })) };
 }
 
 type RawMetric = { r: number | null; s: number | null; reach: number | null; ts: number | null };

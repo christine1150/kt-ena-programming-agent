@@ -40,7 +40,13 @@ export interface IdealStrategyConfig {
   target_mismatch_penalty: number;
   include_benchmark_in_totals: boolean;
   competitor_target_mode: CompetitorTargetMode;
+  /** SUGGEST_ONLY: 경쟁 Benchmark·장르 원형은 배치하지 않고 대체 후보·제안으로만 표시(기본)
+   *  MIX: 가상 편성표에 배치하되 AI 편성 분의 benchmark_max_share 이내 */
+  benchmark_placement: BenchmarkPlacement;
+  benchmark_max_share: number;
 }
+
+export type BenchmarkPlacement = "SUGGEST_ONLY" | "MIX";
 
 export type StructureMode = "KEEP_CURRENT" | "AI_OPTIMIZED";
 

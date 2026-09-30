@@ -50,6 +50,7 @@ export interface ExpectedResult {
   baseline: number | null; // 목표 슬롯 baseline
   fallbackLevel: 1 | 2 | 3 | 4 | 5 | 6;
   sampleCount: number; // fallbackLevel의 표본 수(6이면 0)
+  programSampleCount: number; // 프로그램 자체 단계(1~3) 중 최소 표본을 만족한 가장 구체적 단계의 표본 수
   confidence: number; // 0~1
   levels: LevelDetail[];
 }
@@ -180,6 +181,16 @@ export class MetricModel {
     return { volatility: cv, stability: 1 - Math.min(cv, 1) };
   }
 
+  /** 요일×시 적합도: 그 프로그램이 이 요일×시에서 낸 지수 ÷ 프로그램 전체 지수(표본 수로 1쪽 수축).
+   *  이 슬롯에 방영 이력이 없으면 근거 없음 → null. */
+  weekdaySlotFit(programId: string, airingType: AiringType, dow: number, hour: number): { n: number; fit: number } | null {
+    const l1 = this.rawIndex(`u|${unitKeyOf(programId, airingType)}|${dh(dow, hour)}`);
+    const l3 = this.rawIndex(`p|${programId}`);
+    if (l1.index === null || l1.n === 0 || l3.index === null || l3.index <= 0) return null;
+    const k = this.opts.shrinkageK;
+    return { n: l1.n, fit: (l1.n * (l1.index / l3.index) + k) / (l1.n + k) };
+  }
+
   /** 6단계 수축 Expected. unit은 programId|airingType. */
   expected(programId: string, airingType: AiringType, genre: Genre, dow: number, hour: number): ExpectedResult {
     const unit = unitKeyOf(programId, airingType);
@@ -205,9 +216,12 @@ export class MetricModel {
     const sampleCount = hit?.n ?? 0;
     const base = this.baseline(dow, hour);
     const stab = this.stability(unit).stability;
-    // 신뢰도 = 표본 충족도 × 안정성. 안정성을 계산할 수 없으면(표본 2 미만) 곱하지 않는다 — 이때는
-    // 표본 충족도 자체가 이미 낮다.
-    const confidence = Math.min(1, sampleCount / this.opts.fullConfidenceN) * (stab ?? 1);
+    // 신뢰도 = 프로그램 자체 표본 충족도 × 안정성. 장르·채널 단계(4~6)로 폴백한 기대값은 그 프로그램에 대한
+    // 직접 근거가 아니므로 신뢰도에 넣지 않는다(2026-09-30 실데이터 점검: 장르 표본이 많아 신뢰도 1.0이
+    // 나오던 문제). 안정성을 계산할 수 없으면(표본 2 미만) 곱하지 않는다 — 이때는 표본 충족도가 이미 낮다.
+    const programHit = levels.find((l) => l.level <= 3 && l.index !== null && l.n >= this.opts.minN);
+    const programSampleCount = programHit?.n ?? 0;
+    const confidence = Math.min(1, programSampleCount / this.opts.fullConfidenceN) * (stab ?? 1);
     levels.push({ level: 6, n: 0, index: 1 });
     return {
       expected: base === null ? null : idx * base,
@@ -215,6 +229,7 @@ export class MetricModel {
       baseline: base,
       fallbackLevel,
       sampleCount,
+      programSampleCount,
       confidence,
       levels,
     };
@@ -246,6 +261,8 @@ export interface UnitFeatures {
   weekly_repeat_avg: number;
   daily_repeat_max: number;
   same_slot_repeat_max: number; // 같은 요일×시에 나온 서로 다른 날짜 수의 최대
+  last_aired: string; // 창 안 마지막 방영일
+  max_weekly_airings: number; // 한 주(월~일)에 가장 많이 방영된 횟수
   observed_slots: { dow: number; hour: number; n: number }[];
 }
 
@@ -398,6 +415,8 @@ export function buildFeatureSet(
       (slotDates.get(key) ?? slotDates.set(key, new Set()).get(key)!).add(a.date);
     }
     const unitComp = compRatio(list);
+    const perWeek = new Map<string, number>();
+    for (const a of list) perWeek.set(mondayKey(a.date), (perWeek.get(mondayKey(a.date)) ?? 0) + 1);
     const stab = rating.stability(unitKey);
     units.push({
       unitKey,
@@ -424,6 +443,8 @@ export function buildFeatureSet(
       weekly_repeat_avg: list.length / weeksWithData,
       daily_repeat_max: Math.max(...perDay.values()),
       same_slot_repeat_max: Math.max(...[...slotDates.values()].map((s) => s.size)),
+      last_aired: list[list.length - 1].date,
+      max_weekly_airings: Math.max(...perWeek.values()),
       observed_slots: [...slotDates]
         .map(([key, s]) => {
           const [dow, hour] = key.split("|").map(Number);
