@@ -17,6 +17,7 @@ import { mapCompetitorData, withOptimizeTarget } from "../src/lib/idealSchedule/
 import { buildScoringContext, Scorer } from "../src/lib/idealSchedule/scoring";
 import { addDays as addDaysT } from "../src/lib/idealSchedule/time";
 import { assignEpisodes, isEpisodicProgram, observedProgramMaxima } from "../src/lib/idealSchedule/episodes";
+import { premiereBlocks } from "../src/lib/idealSchedule/premiere";
 import { genreFamily, type Genre } from "../src/lib/idealSchedule/types";
 
 let passed = 0;
@@ -394,6 +395,26 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   check("고정 블록과 AI 블록이 겹치지 않음", !r.output.blocks.some((a, i) => r.output.blocks.some((b, j) => i < j && a.weekday === b.weekday && a.startMin < b.endMin && b.startMin < a.endMin)));
   const conflictRun = runIdealScheduleEngine(baseRun({ constraints: [cInput({ id: "X", rank: 3, weekday: 3, startMin: 1260, durationMin: 60 }), cInput({ id: "Y", rank: 3, weekday: 3, startMin: 1290, durationMin: 60 })] }));
   check("[1] 충돌 구간은 AI도 채우지 않음", conflictRun.summary.conflictCount === 1 && !conflictRun.output.blocks.some((b) => b.weekday === 3 && b.startMin < 1350 && b.endMin > 1260));
+}
+{
+  // 길이 미입력 필수 편성: ① 과거 방영 이력(작년 편성 등) ② 같은 채널 같은 장르 기존 길이 ③ 둘 다 없으면 배치 안 함
+  const withGenre: GenreResolver = (scope, owner, name) => (name === "신규드라마X" ? "오리지널 드라마" : eGenre(scope, owner, name));
+  const g = runIdealScheduleEngine(baseRun({ genreOf: withGenre, constraints: [cInput({ id: "gx", rank: 2, weekday: 1, startMin: 1320, durationMin: null, programName: "신규드라마X" })] }));
+  const gb = g.output.blocks.find((b) => b.weekday === 1 && b.startMin === 1320);
+  check("길이 미입력 + 이력 없음 → 같은 채널 오리지널 드라마 기존 길이(60분)로 배치", !!gb && gb.endMin - gb.startMin === 60 && gb.fixed, gb ? `${gb.endMin - gb.startMin}` : "미배치");
+  check("길이를 장르 기준으로 채웠다는 안내가 경고에 남음", g.resolution.warnings.some((w) => w.includes("신규드라마X") && w.includes("오리지널 드라마 기존 길이 60분")));
+  const h = runIdealScheduleEngine(baseRun({ constraints: [cInput({ id: "hx", rank: 2, weekday: 6, startMin: 510, durationMin: null, programName: "작년방영도시락" })], historicalRuntime: { hx: { min: 48, from: "2025-04~" } } }));
+  const hb = h.output.blocks.find((b) => b.weekday === 6 && b.startMin === 510);
+  check("길이 미입력 + 작년 방영 이력 → 과거 길이(48분)로 배치", !!hb && hb.endMin - hb.startMin === 48, hb ? `${hb.endMin - hb.startMin}` : "미배치");
+  const n = runIdealScheduleEngine(baseRun({ constraints: [cInput({ id: "nx", rank: 2, weekday: 6, startMin: 510, durationMin: null, programName: "이력장르모두없음" })] }));
+  check("이력·장르 모두 없으면 배치하지 않고 경고", !n.output.blocks.some((b) => b.weekday === 6 && b.startMin === 510) && n.resolution.warnings.some((w) => w.includes("이력장르모두없음") && w.includes("길이를 알 수 없어")));
+}
+{
+  // 같은 에피소드 24시간 3방 중 첫 방송(<본>)
+  const mkB = (weekday: number, start_min: number, sub: string | null, prog = "P") => ({ program_key: prog, program_name: prog, episode_subtitle: sub, weekday, start_min });
+  const bs = [mkB(1, 600, "가"), mkB(1, 1200, "가"), mkB(2, 300, "가"), mkB(2, 900, "가"), mkB(1, 700, "나"), mkB(3, 600, null)];
+  const pr = premiereBlocks(bs);
+  check("<본>: 24시간 묶음의 첫 블록만(가: 월10시·화15시, 나: 월11시), 부제 없으면 없음", pr.has(bs[0]) && !pr.has(bs[1]) && !pr.has(bs[2]) && pr.has(bs[3]) && pr.has(bs[4]) && !pr.has(bs[5]) && pr.size === 3, `${pr.size}`);
 }
 {
   // AI 시간 최적화: 겹침 없음, 여백은 연속 합계도 max_gap 이내, 반복 cap 준수, 고정 블록 유지

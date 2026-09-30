@@ -1262,21 +1262,6 @@ function ChannelStatusCard({ channels, narrativeSignals }: { channels: Map<strin
           </svg>
           주간 비교
         </Link>
-        {/* 사용자 지시(2026-09-30): "이 페이지로 갈 수 있는 버튼을 1페이지와 2페이지의 채널로 갈 수 있는 버튼
-            옆에 하나씩 더" — 주간 비교 버튼 바로 옆에 이상적 1주일 편성(독립 페이지) 진입 버튼. 1페이지는 ENA 기본. */}
-        <Link
-          href="/ideal-schedule?channel=ENA"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-            <path d="M9 15l2 2 4-4" />
-          </svg>
-          이상적 편성
-        </Link>
         </div>
       </div>
       <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-12">
@@ -5180,6 +5165,21 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 ))}
               </div>
             )}
+            {/* 사용자 지시(2026-09-30): 이상적 편성 버튼을 카드 안이 아니라 페이지 상단 skyUHD 우측으로 옮기고 이름을
+                "편성 실험실"로. 1페이지는 특정 채널 컨텍스트가 없어 ENA 기본, 새 탭으로 열어 조회 흐름을 끊지 않는다. */}
+            <Link
+              href="/ideal-schedule?channel=ENA"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-sm font-medium text-zinc-600 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-800"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+            <path d="M9 15l2 2 4-4" />
+          </svg>
+              편성 실험실
+            </Link>
             {/* 사용자 재지시(2026-09-02): "skyUHD 오른쪽에 있는 관리자화면 버튼 아이콘을 '큰
                 글씨로 보기' 아이콘으로 교체 — 글자 말고 직관적으로 깔끔하고 심플한 아이콘으로."
                 두 관리자 아이콘(이 자리 + 새로고침 오른쪽) 중 채널 로고 바로 옆(=skyUHD 오른쪽)

@@ -6,6 +6,8 @@ import { loadConstraintInputs } from "./constraintStore";
 import { fetchCompetitorData, fetchOwnAirings, fetchWeekAirings, loadChannelRef, type ChannelRef } from "./dataSource";
 import { runIdealScheduleEngine, type EngineRunResult } from "./engine";
 import { resolveGenre } from "./genreRules";
+import { supabase } from "@/lib/supabase";
+import { airingSpan } from "./time";
 import { loadGenreMap } from "./genreStore";
 import { withOptimizeTarget } from "./mapping";
 import type { StrategyMode } from "./scoring";
@@ -50,6 +52,57 @@ export function pickCurrentWeek(bundle: OwnAiringsBundle, weekStart: string): st
   return bundle.datesWithData.some((d) => d >= prev) ? prev : null;
 }
 
+/** 길이 미입력 제약(주요 콘텐츠 자동 연동 등)의 과거 방영 길이 — 최근 12주 밖(작년 편성 등)까지 이 채널의 방영 기록에서
+ *  찾는다. 프로그램 id가 같은 기록 + 이름이 포함 관계인 같은 채널 프로그램(예: 〈트렌드다큐도시락〉 ↔ 닐슨 〈락트렌드다큐도시락〉)의
+ *  기록을 합쳐 방영 길이 중앙값을 낸다(스페셜·특집 프로그램은 이름에 없으면 제외). 기준일(as_of) 이후 기록은 쓰지 않는다. */
+async function loadHistoricalRuntimes(channelId: string, inputs: HardConstraintInput[], asOfDate: string): Promise<Record<string, { min: number; from: string }>> {
+  const out: Record<string, { min: number; from: string }> = {};
+  const need = inputs.filter((c) => c.durationMin === null);
+  if (need.length === 0) return out;
+  const byName = new Map<string, { min: number; from: string } | null>();
+  const special = /스페셜|특집|몰아보기|하이라이트|베스트/;
+  for (const c of need) {
+    const key = `${c.programId ?? ""}|${c.programName}`;
+    if (!byName.has(key)) {
+      const ids = new Set<string>();
+      if (c.programId) ids.add(c.programId);
+      const safe = c.programName.replace(/[%_,()]/g, " ").trim();
+      if (safe.length >= 3) {
+        const { data } = await supabase.from("programs").select("id, canonical_name").eq("channel_id", channelId).ilike("canonical_name", `%${safe}%`).limit(20);
+        for (const p of data ?? []) if (special.test(c.programName) || !special.test(p.canonical_name)) ids.add(p.id);
+      }
+      let result: { min: number; from: string } | null = null;
+      if (ids.size > 0) {
+        const { data } = await supabase
+          .from("ratings")
+          .select("broadcast_date, start_time, end_time")
+          .in("program_id", [...ids])
+          .lte("broadcast_date", asOfDate)
+          .order("broadcast_date", { ascending: false })
+          .limit(400);
+        const mins: number[] = [];
+        let oldest = "";
+        for (const r of data ?? []) {
+          const span = airingSpan(r.start_time, r.end_time);
+          if (span?.durationMin && span.durationMin >= 5 && span.durationMin <= 360) {
+            mins.push(span.durationMin);
+            oldest = r.broadcast_date;
+          }
+        }
+        if (mins.length > 0) {
+          mins.sort((a, b) => a - b);
+          const median = mins.length % 2 ? mins[(mins.length - 1) / 2] : (mins[mins.length / 2 - 1] + mins[mins.length / 2]) / 2;
+          result = { min: median, from: `${oldest.slice(0, 7)}~` };
+        }
+      }
+      byName.set(key, result);
+    }
+    const r = byName.get(key);
+    if (r) out[c.id] = r;
+  }
+  return out;
+}
+
 export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
   const t0 = Date.now();
   const asOfDate = req.asOfDate ?? addDays(req.weekStart, -1);
@@ -71,6 +124,7 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     const wk = target ? withOptimizeTarget(actualWeek, target) : actualWeek;
     evaluateAirings.push({ label: "ACTUAL", weekStart: req.weekStart, airings: wk.airings });
   }
+  const historicalRuntime = await loadHistoricalRuntimes(channel.id, constraintLoad.inputs, asOfDate);
   const t1 = Date.now();
   const result = runIdealScheduleEngine({
     weekStart: req.weekStart,
@@ -85,6 +139,7 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     channelKpiLabel: channel.kpiLabel,
     competitorBundle: req.competitorNames.length ? competitorBundle : null,
     constraints: [...constraintLoad.inputs, ...(req.extraLocks ?? [])],
+    historicalRuntime,
     genreOf: (scope, owner, name) => resolveGenre(genreMap, scope, owner, name),
     evaluateAirings,
   });

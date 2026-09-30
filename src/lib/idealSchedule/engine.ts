@@ -12,7 +12,7 @@ import { buildSkeleton, type SkeletonSlot } from "./skeleton";
 import { addDays } from "./time";
 import { assignEpisodes, buildEpisodeStats, isEpisodicProgram, observedProgramMaxima, type EpisodeMode } from "./episodes";
 import type { CompetitorBundle, Genre, OwnAiring, OwnAiringsBundle } from "./types";
-import { UNCLASSIFIED } from "./types";
+import { UNCLASSIFIED, genreFamily } from "./types";
 
 export type GenreResolver = (scope: "OWN" | "COMPETITOR", ownerKey: string, programName: string) => Genre;
 
@@ -29,6 +29,8 @@ export interface EngineRunInput {
   channelKpiLabel?: string; // 채널 원래 KPI(미지정 = bundle.kpiLabel). 다르면 "타깃 선택 최적화"
   competitorBundle: CompetitorBundle | null;
   constraints: HardConstraintInput[];
+  /** 길이 미입력 제약의 과거 방영 길이(분, 제약 id → 중앙값) — 최근 12주 밖(작년 편성 등) 이력. 러너가 DB에서 채운다. */
+  historicalRuntime?: Record<string, { min: number; from: string }>;
   genreOf: GenreResolver;
   /** 같은 모델(같은 as_of)로 평가할 실제 편성들 — CURRENT(비교 기준)·백테스트 실제 주. 방영 기록은 편성 구조와
    *  실측 비교에만 쓰이고 모델(Feature)에는 들어가지 않는다(누수 없음). */
@@ -133,8 +135,22 @@ function ownCandidateFor(pool: EngineCandidate[], programId: string | null, prog
   if (!name) return null;
   const exact = [...new Set(own.filter((p) => normalizeProgramCanonicalName(p.programName) === name).map((p) => p.programKey))];
   if (exact.length === 1) return pick(exact[0]);
-  const partial = [...new Set(own.filter((p) => { const n = normalizeProgramCanonicalName(p.programName); return n.includes(name) || name.includes(n); }).map((p) => p.programKey))];
-  return partial.length === 1 ? pick(partial[0]) : null;
+  const partialCands = own.filter((p) => { const n = normalizeProgramCanonicalName(p.programName); return n.includes(name) || name.includes(n); });
+  const partial = [...new Set(partialCands.map((p) => p.programKey))];
+  if (partial.length === 1) return pick(partial[0]);
+  if (partial.length === 0) return null;
+  // 여러 프로그램이 걸리면(예: 〈트렌드다큐도시락〉 ↔ 닐슨 〈락트렌드다큐도시락〉·〈…스페셜〉) 스페셜·특집을 빼고
+  // 이름 길이가 가장 가까운 하나를 고른다. 이름 길이 차이가 같은 후보가 둘이면 모호하므로 찾지 않는다.
+  const special = /스페셜|특집|몰아보기|하이라이트|베스트/;
+  const wantsSpecial = special.test(name);
+  const byName = new Map<string, string>(); // programKey → 정규화 이름
+  for (const p of partialCands) byName.set(p.programKey, normalizeProgramCanonicalName(p.programName));
+  const ranked = [...byName]
+    .filter(([, n]) => wantsSpecial || !special.test(n))
+    .map(([key, n]) => ({ key, gap: Math.abs(n.length - name.length) }))
+    .sort((a, b) => a.gap - b.gap || (a.key < b.key ? -1 : 1));
+  if (ranked.length === 0 || (ranked.length > 1 && ranked[0].gap === ranked[1].gap)) return null;
+  return pick(ranked[0].key);
 }
 
 function newCandidate(name: string, programId: string | null, runtime: number | null, channelCode: string, genreOf: GenreResolver): EngineCandidate {
@@ -187,14 +203,40 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
   const placement = input.benchmarkPlacement ?? config.strategy.benchmark_placement;
   const pool = buildCandidatePool(fs, strong ? { channels: competitorFeatures, strong, minN: config.expected_kpi.min_n, placeable: placement === "MIX", include: placement !== "NONE" } : null);
 
-  // Hard 제약: 길이 미입력 항목은 그 프로그램의 실측 runtime 중앙값으로 채움(실측 없으면 비워 둬 경고)
+  // Hard 제약: 길이 미입력 항목은 ① 최근 12주 그 프로그램 실측 runtime 중앙값 → ② 12주 밖 과거 방영 길이(작년 편성 등)
+  // → ③ 같은 채널 같은 장르(오리지널 드라마 등) 프로그램의 기존 길이 중앙값 순으로 채운다(사용자 지시 2026-09-30:
+  // "오리지널 드라마 기존 듀레이션으로 일단 계산, 작년에 편성했던 프로그램은 찾아서 배치"). 셋 다 없으면 비워 경고.
+  const median = (v: number[]) => {
+    const s = [...v].sort((a, b) => a - b);
+    return s.length === 0 ? null : s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+  };
+  const durationNotes = new Map<string, string>(); // 제약 id → 안내 문구
   const filled = input.constraints.map((c) => {
     if (c.durationMin !== null) return c;
     const own = ownCandidateFor(pool, c.programId, c.programName);
-    const derived = own?.runtimeMin !== null && own?.runtimeMin !== undefined ? Math.round(own.runtimeMin) : null;
-    return { ...c, durationMin: derived, durationDerived: derived !== null };
+    if (own?.runtimeMin !== null && own?.runtimeMin !== undefined) return { ...c, durationMin: Math.round(own.runtimeMin), durationDerived: true };
+    const hist = input.historicalRuntime?.[c.id];
+    if (hist) {
+      const basis = `과거 방영 이력(${hist.from}) 기준 ${Math.round(hist.min)}분`;
+      durationNotes.set(c.id, `'${c.programName}' 길이를 ${basis}으로 계산했습니다.`);
+      return { ...c, durationMin: Math.round(hist.min), durationDerived: true, durationBasis: basis };
+    }
+    const g = input.genreOf("OWN", channelCode, c.programName);
+    if (g !== UNCLASSIFIED) {
+      const same = (family: boolean) =>
+        pool.filter((p) => p.contentType === "OWN" && p.runtimeMin !== null && (family ? genreFamily(p.genre) === genreFamily(g) : p.genre === g)).map((p) => p.runtimeMin as number);
+      const m = median(same(false)) ?? median(same(true));
+      if (m !== null) {
+        const basis = `같은 채널 ${g} 기존 길이 ${Math.round(m)}분`;
+        durationNotes.set(c.id, `'${c.programName}'은 방영 이력이 없어 ${basis}으로 계산했습니다. 실제 길이가 다르면 '필수 편성'에 입력해 주세요.`);
+        return { ...c, durationMin: Math.round(m), durationDerived: true, durationBasis: basis };
+      }
+    }
+    return c;
   });
   const resolution = resolveHardConstraints(filled, input.weekStart);
+  // 길이를 추정해 실제로 배치된 항목만 안내(요일별로 같은 문구가 반복되지 않게 중복 제거)
+  resolution.warnings.push(...new Set(resolution.fixed.map((f) => durationNotes.get(f.input.id)).filter((n): n is string => !!n)));
   const fixedBlocks: PlacedBlock[] = resolution.fixed.map((f) => {
     const cand =
       (f.input.candidateKey ? pool.find((p) => p.key === f.input.candidateKey) : undefined) ??

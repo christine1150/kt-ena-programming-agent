@@ -1,6 +1,8 @@
 // 이상적 1주일 편성 화면 공용 타입·표시 도우미(클라이언트). 수치는 API가 준 엔진 계산값 그대로 쓰고,
 // 화면은 표시 형식만 바꾼다. 선정 이유 문장은 저장된 구조화 근거(reasons)만으로 만든다(LLM·추정 없음).
 
+import { premiereBlocks } from "@/lib/idealSchedule/premiere";
+
 export type Reason = { code: string; value: number | string | null; detail?: string };
 
 export type BlockRow = {
@@ -172,4 +174,9 @@ export function mondayOfLocal(d: Date): string {
   const dow = kst.getUTCDay() === 0 ? 7 : kst.getUTCDay();
   kst.setUTCDate(kst.getUTCDate() - (dow - 1));
   return kst.toISOString().slice(0, 10);
+}
+
+/** 같은 에피소드 24시간 3방 중 첫 방송 블록 id — 판정은 lib/idealSchedule/premiere.ts. */
+export function premiereBlockIds(blocks: BlockRow[]): Set<string> {
+  return new Set([...premiereBlocks(blocks)].map((b) => b.id));
 }

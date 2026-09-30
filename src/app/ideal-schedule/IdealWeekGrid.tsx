@@ -16,7 +16,7 @@ import {
   intensityColor,
   minToLabel,
 } from "@/lib/scheduleGridLayout";
-import { STATUS_LABEL, type BlockRow } from "./model";
+import { STATUS_LABEL, premiereBlockIds, type BlockRow } from "./model";
 
 // 그리드에는 "그 프로그램 자체 표본이 없어 장르·채널 평균으로 추정한 블록"(신뢰도 0)만 "근거 부족"으로 표시한다.
 // 신뢰도가 전반적으로 낮게 나와(표본 충족도 기준이 엄격) 일정 기준 미만을 모두 표시하면 거의 모든 블록에 붙어
@@ -48,6 +48,8 @@ export function IdealWeekGrid({
   const maxVal = Math.max(1e-9, ...blocks.map((b) => valueOf(b) ?? 0));
   const ceiling = pivot && pivot > 0 ? pivot : maxVal;
   const isCurrent = blocks.length > 0 && blocks[0].layer === "CURRENT";
+  // 같은 에피소드 24시간 3방 중 첫 방송(<본>) — 부제 반영 모드에서만 나온다
+  const premieres = premiereBlockIds(blocks);
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
@@ -111,6 +113,8 @@ export function IdealWeekGrid({
                   const fixed = b.status === "REQUIRED" || b.status === "LOCKED";
                   const lowConf = !isCurrent && b.content_type === "OWN" && b.confidence_score !== null && b.confidence_score < NO_EVIDENCE;
                   const selected = selectedId === b.id;
+                  const minute = Math.round(Number(b.start_min)) % 60; // 정시가 아니면 셀 좌측 위에 시작 분(예: 10시 15분 → 15)
+                  const premiere = premieres.has(b.id);
                   const border = selected
                     ? "2px solid #f59e0b"
                     : hyp
@@ -127,8 +131,18 @@ export function IdealWeekGrid({
                       onClick={() => onSelect?.(b)}
                       className="absolute left-0 right-0 overflow-hidden px-1 text-left"
                       style={{ top, height, backgroundColor: bg, border, zIndex: selected ? 2 : 1 }}
-                      title={`${label} ${minToLabel(b.start_min)}~${minToLabel(b.end_min)} ${b.program_name}${b.episode_subtitle ? ` 〈${b.episode_subtitle}〉` : ""} · ${STATUS_LABEL[b.status] ?? b.status}${v !== null ? ` · ${isCurrent ? "실측" : "기대"} ${v.toFixed(decimals)}` : ""}${b.confidence_score !== null && !isCurrent ? ` · 신뢰 ${Math.round(b.confidence_score * 100)}%` : ""}`}
+                      title={`${label} ${minToLabel(b.start_min)}~${minToLabel(b.end_min)} ${b.program_name}${b.episode_subtitle ? ` 〈${b.episode_subtitle}〉` : ""}${premiere ? " <본>" : ""} · ${STATUS_LABEL[b.status] ?? b.status}${v !== null ? ` · ${isCurrent ? "실측" : "기대"} ${v.toFixed(decimals)}` : ""}${b.confidence_score !== null && !isCurrent ? ` · 신뢰 ${Math.round(b.confidence_score * 100)}%` : ""}`}
                     >
+                      {minute !== 0 && (
+                        <span className="absolute left-0.5 top-0 text-[8px] font-semibold leading-none tabular-nums" style={{ color: ink, opacity: 0.9 }}>
+                          {String(minute).padStart(2, "0")}
+                        </span>
+                      )}
+                      {premiere && (
+                        <span className="absolute right-0.5 top-0 text-[8px] font-semibold leading-none" style={{ color: ink, opacity: 0.9 }}>
+                          &lt;본&gt;
+                        </span>
+                      )}
                       {height >= 22 ? (
                         <div className="flex h-full flex-col items-center justify-center gap-0.5 leading-tight">
                           <div className="flex w-full min-w-0 items-center justify-center gap-0.5">

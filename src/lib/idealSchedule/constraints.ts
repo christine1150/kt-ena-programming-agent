@@ -28,7 +28,8 @@ export interface HardConstraintInput {
   activeFrom: string | null;
   activeTo: string | null;
   locked: boolean;
-  durationDerived?: boolean; // 길이를 입력받지 않고 실측 runtime 중앙값으로 채운 경우
+  durationDerived?: boolean; // 길이를 입력받지 않고 추정해 채운 경우
+  durationBasis?: string; // 추정 근거(예: "같은 채널 오리지널 드라마 기존 길이 70분") — 경고 문구에만 쓴다
   candidateKey?: string; // 재계산 시 LOCK·수동 변경 블록을 같은 후보(경쟁 Benchmark 포함)로 복원
 }
 

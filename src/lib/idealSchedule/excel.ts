@@ -1,6 +1,7 @@
 // 이상적 1주일 편성 엑셀 다운로드 — "ENA 주간 비교" 엑셀(scheduleGridExcel.ts)과 같은 5분 격자·셀 병합 방식.
 // 값은 저장된 엔진 결과 그대로(기대값 = 최근 12주 데이터 기반 기대 시청률, 실제 미래 시청률 아님).
 import ExcelJS from "exceljs";
+import { premiereBlocks } from "./premiere";
 import { DOW_LABELS, GRID_END_MIN, GRID_START_MIN, addDaysLocal, minToLabel } from "@/lib/scheduleGridLayout";
 
 const BUCKET_MIN = 5;
@@ -17,6 +18,7 @@ function blendWithWhite(hex: string, factor: number): string {
 }
 
 export interface ExcelBlock {
+  program_key?: string | null;
   weekday: number;
   start_min: number | string;
   end_min: number | string;
@@ -38,6 +40,7 @@ export async function buildIdealScheduleExcel(opts: {
   pivot: number | null; // 색 강도 기준(채널 연간 평균 × 2)
   blocks: ExcelBlock[];
 }): Promise<ArrayBuffer> {
+  const premieres = premiereBlocks(opts.blocks); // 같은 에피소드 24시간 3방 중 첫 방송(<본>)
   const theme = opts.themeColor || "#6366f1";
   const wb = new ExcelJS.Workbook();
   wb.creator = "KT ENA 편성 AI Agent";
@@ -99,7 +102,7 @@ export async function buildIdealScheduleExcel(opts: {
       c.border = { top: hair, bottom: hair, left: hair, right: hair };
       const conf = b.confidence_score === null ? null : Number(b.confidence_score);
       c.value = [
-        `${minToLabel(Number(b.start_min))} ${b.program_name}${hyp ? " [가상 Benchmark]" : ""}`,
+        `${minToLabel(Number(b.start_min))} ${b.program_name}${premieres.has(b) ? " <본>" : ""}${hyp ? " [가상 Benchmark]" : ""}`,
         b.episode_subtitle ? `〈${b.episode_subtitle}〉` : null,
         `${STATUS_LABEL[b.status] ?? b.status} · 기대 ${exp !== null ? exp.toFixed(opts.decimals) : "-"}${conf !== null ? ` · 신뢰 ${Math.round(conf * 100)}%` : ""}`,
       ]
