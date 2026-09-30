@@ -5,9 +5,10 @@
 // 1) 같은 프로그램이 하루 여러 번 나와도 서로 다른 에피소드면 "반복"이 아니다 → 프로그램 단위 일·주 cap 대신
 //    최근 12주에 실제로 관측된 최대치(하루·주간 최대 방영 수)를 한도로 쓴다(임의 상한 없음, 데이터 기준).
 // 2) 반복 제한은 에피소드 단위로 건다(사용자 규칙 2026-09-30: "OLIFE 같은 에피소드는 24시간 내 최대 세 번"):
-//    같은 에피소드 편성은 한 "사이클"에 최대 episode_cycle_max회이며 사이클 안의 편성은 episode_cycle_hours시간
-//    안에 모여 있어야 한다(본방 후 24시간 안 재방). 새 사이클은 기준일 전 마지막 방영·앞선 사이클로부터
-//    episode_rest_days일이 지나야 시작할 수 있다(휴지 — 사용자 규칙과 별개의 설정값).
+//    편성 주 안에서 같은 에피소드는 최대 episode_cycle_max회이며, 그 편성들이 모두 episode_cycle_hours시간 안에
+//    모여 있어야 한다(본방 후 24시간 안 재방). 24시간 묶음이 끝난 뒤 같은 주에 다시 시작하지 않는다 — 휴지 규칙
+//    없이 이 규칙만 두면(사용자 지시로 7일 휴지 제거) 가장 강한 에피소드가 매일 반복되던 문제(2026-09-30 테스트)를
+//    이 해석으로 막는다. episode_rest_days(>0이면 기준일 전 최근 방영 에피소드 휴지)는 기본 0(끔).
 // 3) 최적화가 정한 블록마다 구체적인 에피소드를 배정한다. 에피소드 지수 = 그 에피소드 방영의 Σ시청률 ÷ Σ슬롯
 //    baseline, 프로그램 지수 대비 상대값을 표본 수만큼 1쪽으로 수축(k = shrinkage_k). 동률이면 오래 쉰 에피소드 우선.
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
@@ -142,22 +143,14 @@ export function assignEpisodes(
     const progIdx = programIndex(b.programId);
     let best: { e: EpisodeStat; rel: number; join: number[] | null } | null = null;
     for (const e of list) {
-      const cs = cycles.get(`${b.programId}|${e.key}`) ?? [];
-      // ① 기존 사이클에 합류: 횟수 < cycleMax 이고 합류 후 사이클 폭 < cycleHours
+      const c = cycles.get(`${b.programId}|${e.key}`)?.[0] ?? null;
       let join: number[] | null = null;
-      for (const c of cs) {
-        const lo = Math.min(abs, ...c);
-        const hi = Math.max(abs, ...c);
-        if (c.length < opts.cycleMax && hi - lo < windowMin) {
-          join = c;
-          break;
-        }
-      }
-      // ② 새 사이클: 기준일 전 마지막 방영과 이번 주 앞선 사이클 모두로부터 restDays일 이상
-      if (!join) {
-        if (daysBetween(date, e.lastAired) < opts.restDays) continue;
-        const clash = cs.some((c) => c.some((m) => Math.abs(m - abs) < opts.restDays * 1440));
-        if (clash) continue;
+      if (c) {
+        // 이번 주에 이미 쓴 에피소드: 횟수 < cycleMax 이고 합쳐도 cycleHours 안일 때만(주당 24시간 묶음 하나)
+        if (c.length >= opts.cycleMax || Math.max(abs, ...c) - Math.min(abs, ...c) >= windowMin) continue;
+        join = c;
+      } else if (opts.restDays > 0 && daysBetween(date, e.lastAired) < opts.restDays) {
+        continue; // (설정 시) 기준일 전 최근 방영 에피소드 휴지
       }
       const raw = e.index !== null && progIdx !== null && progIdx > 0 ? e.index / progIdx : 1;
       const rel = (e.n * raw + opts.shrinkageK) / (e.n + opts.shrinkageK);
@@ -168,7 +161,7 @@ export function assignEpisodes(
       if (better) best = { e, rel, join };
     }
     if (!best) {
-      out.set(b.id, { none: true, reason: `같은 에피소드 ${opts.cycleHours}시간 내 ${opts.cycleMax}회·휴지(${opts.restDays}일) 조건을 만족하는 에피소드 없음` });
+      out.set(b.id, { none: true, reason: `같은 에피소드 ${opts.cycleHours}시간 내 ${opts.cycleMax}회 조건을 만족하는 에피소드 없음${opts.restDays > 0 ? `(휴지 ${opts.restDays}일 포함)` : ""}` });
       continue;
     }
     const k = `${b.programId}|${best.e.key}`;
