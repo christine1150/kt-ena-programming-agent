@@ -170,7 +170,9 @@ export function IdealWeekGrid({
                         </span>
                       )}
                       {height >= 22 ? (
-                        <div className="flex h-full flex-col items-center justify-center gap-0.5 leading-tight">
+                        // 사용자 지시(2026-09-30): 타이틀 가독성 — 제목을 기대값보다 크고 굵게, 칸 높이가 되면 두 줄까지
+                        // 줄바꿈(임의 축약 금지 규칙 유지, 전체 이름은 툴팁). 시작 분·<본> 표시와 겹치지 않게 위 여백.
+                        <div className={`flex h-full flex-col items-center justify-center gap-0.5 leading-tight ${(minute !== 0 || premiere) && height >= 30 ? "pt-2" : ""}`}>
                           <div className="flex w-full min-w-0 items-center justify-center gap-0.5">
                             {fixed && !isGhost && (
                               <svg viewBox="0 0 12 12" className="h-2 w-2 shrink-0" fill={ink} aria-label="고정">
@@ -180,17 +182,30 @@ export function IdealWeekGrid({
                             {isGhost && <span className="shrink-0 rounded bg-zinc-700 px-0.5 text-[7px] font-semibold text-white">미리보기</span>}
                             {!isGhost && b.status === "MANUAL_OVERRIDE" && height >= 34 && <span className="shrink-0 rounded bg-sky-500 px-0.5 text-[7px] font-semibold text-white">수동</span>}
                             {hyp && height >= 34 && <span className="shrink-0 rounded bg-violet-600 px-0.5 text-[7px] font-semibold text-white">가상</span>}
-                            <span className="min-w-0 truncate text-center text-[9.5px] font-medium" style={{ color: ink }}>
+                            <span
+                              className="min-w-0 text-center font-semibold tracking-tight"
+                              style={{
+                                color: ink,
+                                fontSize: `${Math.min(13, Math.max(10.5, height / 4.2))}px`,
+                                lineHeight: 1.15,
+                                textShadow: isDark ? "0 0 2px rgba(0,0,0,0.35)" : undefined,
+                                display: "-webkit-box",
+                                WebkitLineClamp: height >= 40 ? 2 : 1,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                                wordBreak: "break-all",
+                              }}
+                            >
                               {name}
                             </span>
                           </div>
-                          {!isGhost && b.episode_subtitle && height >= 34 && (
+                          {!isGhost && b.episode_subtitle && height >= 60 && (
                             <span className="w-full truncate text-center text-[8px]" style={{ color: ink, opacity: 0.75 }}>
                               {b.episode_subtitle}
                             </span>
                           )}
                           {v !== null && (
-                            <span className="w-full text-center font-semibold leading-none tabular-nums" style={{ fontSize: `${Math.min(15, Math.max(9.5, height / 3.2))}px`, color: ink }}>
+                            <span className="w-full text-center font-medium leading-none tabular-nums" style={{ fontSize: `${Math.min(12, Math.max(9, height / 5))}px`, color: ink, opacity: 0.9 }}>
                               {v.toFixed(decimals)}
                             </span>
                           )}
@@ -199,14 +214,14 @@ export function IdealWeekGrid({
                               시간 변경
                             </span>
                           )}
-                          {height >= 64 && !isGhost && d?.changed && !d.small && d.currentName && (
+                          {height >= 84 && !isGhost && d?.changed && !d.small && d.currentName && (
                             <span className="w-full truncate text-center text-[7.5px]" style={{ color: ink, opacity: 0.75 }}>
                               지난주 {d.currentName}
                             </span>
                           )}
                         </div>
                       ) : height >= 12 ? (
-                        <span className="block truncate text-[8px]" style={{ color: ink }}>
+                        <span className="block truncate text-[9.5px] font-semibold leading-tight" style={{ color: ink }}>
                           {name}
                         </span>
                       ) : null}
