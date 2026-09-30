@@ -23,6 +23,8 @@ export interface IdealRepeatRules {
   rotation_series?: boolean;
   rotation_min_days?: number; // 하루 2회 이상 방영한 날이 최소 며칠(기본 4)
   rotation_min_ratio?: number; // 방영한 날 중 하루 2회 이상인 날 비율(기본 0.5)
+  /** 반복 한도(하루·주)를 적용하지 않는 장르 — 오리지널 드라마·오리지널 예능(사용자 규칙 2026-10-01) */
+  uncapped_genres?: string[];
 }
 
 export interface IdealExpectedKpiConfig {

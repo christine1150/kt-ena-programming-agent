@@ -300,6 +300,21 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       if (o) programCapOverride.set(pid, { daily: Math.max(o.daily, config.repeat_rules.daily_cap), weekly: Math.max(o.weekly, config.repeat_rules.weekly_cap) });
     }
   }
+  // 권리상 방영 횟수 제한이 없는 장르(사용자 규칙 2026-10-01: 오리지널 드라마·예능 — "권리 관계상의 원칙이고, 너무 많이
+  // 틀면 효율이 떨어지기는 하겠지. 성과가 좋으면 활용도가 높다는 뜻") — 기본 한도(하루·주)로 줄이지 않고 12주 실제 편성
+  // 최대치까지 허용한다. 그 이상은 과거에 없던 반복이라 기대값을 외삽할 근거가 없어 막는다. 설정 repeat_rules.uncapped_genres
+  const uncapped = new Set<string>(config.repeat_rules.uncapped_genres ?? []);
+  const originalIds = new Set(pool.filter((c) => c.contentType === "OWN" && c.programId && uncapped.has(c.genre)).map((c) => c.programId as string));
+  if (originalIds.size) {
+    const obs = observedProgramMaxima(eligible, originalIds);
+    for (const [pid, o] of obs) {
+      const cur = programCapOverride?.get(pid);
+      (programCapOverride ??= new Map()).set(pid, {
+        daily: Math.max(o.daily, cur?.daily ?? 0, config.repeat_rules.daily_cap),
+        weekly: Math.max(o.weekly, cur?.weekly ?? 0, config.repeat_rules.weekly_cap),
+      });
+    }
+  }
 
   // 지난주 실제 편성(비교 기준 주) — 기존 틀 유지 모드의 "차이 작으면 유지" 기준. 방영 기록은 구조로만 쓰고 모델에는 넣지 않는다.
   const currentEval = (input.evaluateAirings ?? []).find((e) => e.label === "CURRENT");
