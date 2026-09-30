@@ -28,6 +28,11 @@ export interface IdealExpectedKpiConfig {
   min_n: number;
   full_confidence_n: number;
   exclude_holidays: boolean;
+  /** 예상 범위 분위(기대값 × 과거 오차 배율의 하위·상위) — 없으면 0.1·0.9 */
+  range_low_q?: number;
+  range_high_q?: number;
+  /** 근거 등급별 백테스트 잔차가 이 수 미만이면 등급을 합쳐 쓴다 — 없으면 30 */
+  range_min_rows?: number;
 }
 
 export type CompetitorTargetMode = "AUTO_MATCH_KPI" | "2049" | "HOUSEHOLD";
@@ -65,6 +70,10 @@ export interface IdealStructureConfig {
   episode_rest_days?: number; // 에피소드 새 묶음 사이 최소 휴지 일수(현재 0 = 없음)
   episode_periods?: number[][]; // 에피소드 구간(주중 [1..5] / 주말 [6,7]) — 구간이 다르면 다른 에피소드
   episode_repeat_within_period?: boolean; // 같은 구간 안에서 다른 날 재편성 허용
+  /** 기존 틀 유지 모드: 지난주 실제 편성보다 기대값이 뚜렷하게 높지 않으면 지난주 편성을 유지(2단계, 기본 true) */
+  decision_keep_current?: boolean;
+  decision_min_rel_gain?: number; // 최소 개선율(지난주 편성 기대값 대비, 기본 0.03)
+  decision_z?: number; // 합성 표준오차 배수(기본 1.0)
 }
 
 export interface IdealTargetGroup {

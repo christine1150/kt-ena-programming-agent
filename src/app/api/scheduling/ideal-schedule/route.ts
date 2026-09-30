@@ -40,7 +40,11 @@ export async function GET(request: Request) {
     if (savedOnly) q = q.not("saved_at", "is", null);
     const { data, error } = await q;
     if (error) return fail(error);
-    const runs = (data ?? []).map((r) => {
+    // 과거 주 검증(백테스트)이 만든 실행은 편성안 목록에서 뺀다(검증용이라 PD가 고를 편성안이 아님)
+    const ids = (data ?? []).map((r) => r.id as string);
+    const { data: bt } = ids.length ? await supabase.from("ideal_schedule_backtest_results").select("ideal_run_id").in("ideal_run_id", ids) : { data: [] };
+    const backtestIds = new Set((bt ?? []).map((b) => b.ideal_run_id as string));
+    const runs = (data ?? []).filter((r) => !backtestIds.has(r.id as string)).map((r) => {
       const s = r.summary as Record<string, unknown>;
       return { ...r, summary: { expectedAvgRating: s.expectedAvgRating, avgConfidence: s.avgConfidence, aiCount: s.aiCount, requiredCount: s.requiredCount, conflictCount: s.conflictCount } };
     });

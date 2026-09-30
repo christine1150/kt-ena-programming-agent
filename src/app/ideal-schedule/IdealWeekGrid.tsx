@@ -194,12 +194,12 @@ export function IdealWeekGrid({
                               {v.toFixed(decimals)}
                             </span>
                           )}
-                          {height >= 46 && !isGhost && (weak || b.time_changed) && (
+                          {height >= 46 && !isGhost && b.time_changed && (
                             <span className="text-[7.5px]" style={{ color: ink, opacity: 0.8 }}>
-                              {[weak ? "근거 부족" : null, b.time_changed ? "시간 변경" : null].filter(Boolean).join(" · ")}
+                              시간 변경
                             </span>
                           )}
-                          {height >= 64 && !isGhost && d?.changed && d.currentName && (
+                          {height >= 64 && !isGhost && d?.changed && !d.small && d.currentName && (
                             <span className="w-full truncate text-center text-[7.5px]" style={{ color: ink, opacity: 0.75 }}>
                               지난주 {d.currentName}
                             </span>
@@ -210,7 +210,7 @@ export function IdealWeekGrid({
                           {name}
                         </span>
                       ) : null}
-                      {d?.changed && !isGhost && (
+                      {d?.changed && !d.small && !isGhost && (
                         height >= 22 ? (
                           <span
                             className={`absolute bottom-0.5 right-0.5 rounded-full bg-white/90 px-1 text-[8px] font-semibold leading-[12px] tabular-nums ring-1 ring-black/5 ${d.diff === null ? "text-zinc-600" : d.small ? "text-zinc-500" : d.diff >= 0 ? "text-emerald-600" : "text-rose-600"}`}

@@ -15,13 +15,16 @@ export function actorOf(session: { role: "admin"; adminId: string } | { role: "p
 
 const r6 = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round(v * 1e6) / 1e6);
 
-function evalColumns(e: BlockEval) {
+export function evalColumns(e: BlockEval) {
   return {
     expected_kpi: r6(e.expected),
     expected_kpi_type: e.expectedKpiType,
     expected_share: r6(e.expectedShare),
     expected_time_spent: r6(e.expectedTimeSpent),
     confidence_score: r6(e.confidence),
+    expected_low: r6(e.range?.low),
+    expected_high: r6(e.range?.high),
+    range_basis: e.range?.basis ?? null,
     sample_count: e.sampleCount,
     fallback_level: e.fallbackLevel,
     fitness_score: r6(e.fitness),
@@ -32,7 +35,7 @@ function evalColumns(e: BlockEval) {
   };
 }
 
-function candidateJson(c: EngineCandidate) {
+export function candidateJson(c: EngineCandidate) {
   return {
     key: c.key,
     programKey: c.programKey,
@@ -79,6 +82,7 @@ function blockRow(runId: string, layer: "IDEAL" | "CURRENT", b: EvaluatedBlock, 
     episode_subtitle: b.episode && !("none" in b.episode) ? b.episode.subtitle : null,
     episode_info: b.episode ?? null,
     actual_kpi: r6(actualKpi),
+    decision: layer === "IDEAL" ? (b.decision ?? null) : null,
     ...evalColumns(e),
   };
 }
@@ -219,6 +223,10 @@ export async function swapBlock(runId: string, blockId: string, candidateId: str
       expected_share: cand.expected_share,
       expected_time_spent: cand.expected_time_spent,
       confidence_score: cand.confidence_score,
+      expected_low: cand.expected_low ?? null,
+      expected_high: cand.expected_high ?? null,
+      range_basis: cand.range_basis ?? null,
+      decision: null, // 직접 교체 — 엔진의 유지/교체 판단은 더 이상 이 블록에 해당하지 않음
       sample_count: cand.sample_count,
       fallback_level: cand.fallback_level,
       fitness_score: cand.fitness_score,

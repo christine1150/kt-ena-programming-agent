@@ -9,7 +9,8 @@ const BUCKETS_PER_HOUR = 60 / BUCKET_MIN;
 const BUCKET_COUNT = (GRID_END_MIN - GRID_START_MIN) / BUCKET_MIN;
 const HEADER_ROWS = 4; // 제목·조건·안내·요일
 
-const STATUS_LABEL: Record<string, string> = { REQUIRED: "필수", LOCKED: "잠금", MANUAL_OVERRIDE: "수동 변경", AI: "AI 추천" };
+// 추천(엔진 배치) 블록은 상태를 적지 않는다(사용자 지시 2026-09-30: 칸마다 AI라고 쓸 필요 없음)
+const STATUS_LABEL: Record<string, string> = { REQUIRED: "필수", LOCKED: "잠금", MANUAL_OVERRIDE: "수동 변경" };
 
 function blendWithWhite(hex: string, factor: number): string {
   const clean = hex.replace("#", "").padEnd(6, "0").slice(0, 6);
@@ -61,7 +62,7 @@ export async function buildIdealScheduleExcel(opts: {
   const premieres = premiereBlocks(opts.blocks); // 같은 에피소드 24시간 3방 중 첫 방송(<본>)
   const theme = opts.themeColor || "#6366f1";
   const wb = new ExcelJS.Workbook();
-  wb.creator = "KT ENA 편성 AI Agent";
+  wb.creator = "KT ENA 시청률 자판기";
   wb.created = new Date(0);
   const sheet = wb.addWorksheet("이상적 편성", { views: [{ state: "frozen", ySplit: HEADER_ROWS }] });
   sheet.getColumn(1).width = 7;
@@ -118,11 +119,10 @@ export async function buildIdealScheduleExcel(opts: {
       const intensity = exp !== null && opts.pivot && opts.pivot > 0 ? Math.min(1, exp / opts.pivot) : 0;
       c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: hyp ? "FFFFFFFF" : blendWithWhite(theme, 0.08 + intensity * 0.72) } };
       c.border = { top: hair, bottom: hair, left: hair, right: hair };
-      const conf = b.confidence_score === null ? null : Number(b.confidence_score);
       c.value = [
         `${minToLabel(Number(b.start_min))} ${b.program_name}${premieres.has(b) ? " <본>" : ""}${hyp ? " [가상 Benchmark]" : ""}`,
         b.episode_subtitle ? `〈${b.episode_subtitle}〉` : null,
-        `${STATUS_LABEL[b.status] ?? b.status} · 기대 ${exp !== null ? exp.toFixed(opts.decimals) : "-"}${conf !== null ? ` · 신뢰 ${Math.round(conf * 100)}%` : ""}`,
+        `${STATUS_LABEL[b.status] ? `${STATUS_LABEL[b.status]} · ` : ""}기대 ${exp !== null ? exp.toFixed(opts.decimals) : "-"}`,
       ]
         .filter(Boolean)
         .join("\n");
@@ -151,14 +151,14 @@ export async function buildIdealScheduleExcel(opts: {
     for (const r of opts.compare.rows) {
       const ratio = r.diff !== null && r.currentExpected ? r.diff / r.currentExpected : null;
       const verdict = !r.changed ? "유지" : ratio !== null && Math.abs(ratio) < 0.03 ? "교체(차이 3% 미만)" : "교체";
-      s2.addRow([DOW_LABELS[r.weekday - 1], minToLabel(r.startMin), minToLabel(r.endMin), r.currentName ?? "(없음)", r.currentExpected, r.currentActual, `${r.idealName}${STATUS_LABEL[r.idealStatus] && r.idealStatus !== "AI" ? ` [${STATUS_LABEL[r.idealStatus]}]` : ""}`, r.idealExpected, r.diff, verdict]);
+      s2.addRow([DOW_LABELS[r.weekday - 1], minToLabel(r.startMin), minToLabel(r.endMin), r.currentName ?? "(없음)", r.currentExpected, r.currentActual, `${r.idealName}${STATUS_LABEL[r.idealStatus] ? ` [${STATUS_LABEL[r.idealStatus]}]` : ""}`, r.idealExpected, r.diff, verdict]);
     }
     [6, 8, 8, 24, 11, 11, 24, 11, 10, 16].forEach((w, i) => (s2.getColumn(i + 1).width = w));
     [5, 6, 8, 9].forEach((ci) => (s2.getColumn(ci).numFmt = numFmt));
   }
 
   // 시트 3: 필수·고정·수동 편성
-  const fixed = opts.blocks.filter((b) => b.status !== "AI").sort((a, b) => a.weekday - b.weekday || Number(a.start_min) - Number(b.start_min));
+  const fixed = opts.blocks.filter((b) => STATUS_LABEL[b.status]).sort((a, b) => a.weekday - b.weekday || Number(a.start_min) - Number(b.start_min));
   const s3 = wb.addWorksheet("필수·고정 편성");
   s3.addRow(["요일", "시작", "종료", "프로그램", "구분", "기대"]);
   headerStyle(s3.getRow(1));

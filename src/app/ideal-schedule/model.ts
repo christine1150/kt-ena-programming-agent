@@ -40,7 +40,28 @@ export type BlockRow = {
   episode_subtitle: string | null;
   episode_number: number | null;
   episode_info: { relIndex?: number; n?: number; reason?: string; none?: boolean } | null;
+  // 2단계: 예상 범위(기대값 × 과거 오차 배율 분위)·지난주 대비 판단
+  expected_low?: number | null;
+  expected_high?: number | null;
+  range_basis?: "BACKTEST" | "TRAINING" | null;
+  decision?: BlockDecision | null;
 };
+
+/** 지난주 실제 편성 대비 엔진 판단(lib/idealSchedule/optimizer.ts BlockDecision과 같은 모양) */
+export type BlockDecision = {
+  kind: "SAME" | "KEEP" | "CHANGE" | "NEW" | null;
+  incumbent: { name: string; expected: number | null } | null;
+  delta: number | null;
+  threshold: number | null;
+  reverted: boolean;
+  capBlocked?: boolean;
+  runnerUp: { name: string; expected: number | null } | null;
+  margin: number | null;
+  certainty: "HIGH" | "MID" | "LOW" | null;
+};
+
+export const CERTAINTY_LABEL: Record<string, string> = { HIGH: "다음 후보와 차이 뚜렷함", MID: "다음 후보와 차이 보통", LOW: "다음 후보와 차이 작음" };
+export const RANGE_BASIS_LABEL: Record<string, string> = { BACKTEST: "과거 주 검증 오차 기준", TRAINING: "과거 변동 기준(검증 전)" };
 
 export type RunSummary = {
   requiredCount: number;
@@ -61,6 +82,9 @@ export type RunSummary = {
   optimizeTarget: { label: string; isChannelKpi: boolean };
   warnings?: string[];
   current: { weekStart: string; expectedAvgRating: number | null; actualAvgRating: number | null } | null;
+  decisions?: { same: number; keep: number; change: number; newSlot: number; capBlocked: number; certainty: { HIGH: number; MID: number; LOW: number } };
+  uncertainty?: { basis: string; n: number; qLow: number; qHigh: number } | null;
+  multiEpisodePrograms?: string[];
 };
 
 export type RunRow = {
@@ -94,7 +118,7 @@ export const pct = (v: number | null | undefined, digits = 0) => (v === null || 
 /** DB numeric 컬럼(문자열로 올 수 있음) → number로 정규화 */
 export function normalizeBlock(b: Record<string, unknown>): BlockRow {
   const out = { ...b } as unknown as BlockRow;
-  for (const k of ["start_min", "end_min", "expected_kpi", "expected_share", "expected_time_spent", "confidence_score", "competitor_slot_strength", "benchmark_index", "fitness_score", "actual_kpi"] as const) {
+  for (const k of ["start_min", "end_min", "expected_kpi", "expected_share", "expected_time_spent", "confidence_score", "competitor_slot_strength", "benchmark_index", "fitness_score", "actual_kpi", "expected_low", "expected_high"] as const) {
     (out as unknown as Record<string, number | null>)[k] = num(b[k]);
   }
   return out;
@@ -104,7 +128,7 @@ export const STATUS_LABEL: Record<string, string> = {
   REQUIRED: "필수 편성",
   LOCKED: "잠금",
   MANUAL_OVERRIDE: "수동 변경",
-  AI: "AI 추천",
+  AI: "추천",
   CURRENT: "현재 편성",
 };
 
@@ -135,6 +159,10 @@ export function reasonText(r: Reason, decimals: number): string | null {
       return `타깃 구성비 ${fmtIdx(v)}(채널 평균=100)`;
     case "STABILITY":
       return typeof v === "number" ? `성과 안정성 ${Math.round(v * 100)}점` : null;
+    case "EPISODE_CHAIN":
+      return `같은 시리즈 다음 회차 연결 편성 때 성과 ${fmtIdx(v)}(평소=100, 관측 연관)${r.detail ? ` · ${r.detail}` : ""}`;
+    case "MANUAL_SEARCH":
+      return r.detail ?? "직접 검색해 추가한 후보";
     case "LEAD_SYNERGY":
       return `앞 프로그램과 함께 편성됐을 때 성과 ${fmtIdx(v)}(평소=100, 관측 연관이며 효과 단정 아님)`;
     case "STRATEGY_MATCH":

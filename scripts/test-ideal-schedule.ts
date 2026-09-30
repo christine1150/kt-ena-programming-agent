@@ -6,7 +6,7 @@
 // 경쟁사 타깃 선택, 장르 규칙, 결정론. (제약·최적화 케이스는 STEP 3에서 추가)
 import { airingSpan, hourBucket, isoDow, broadcastMinToLabel } from "../src/lib/idealSchedule/time";
 import { mapOwnAirings } from "../src/lib/idealSchedule/mapping";
-import { buildFeatureSet, type FeatureOptions } from "../src/lib/idealSchedule/features";
+import { buildFeatureSet, detectMultiEpisodePrograms, type FeatureOptions } from "../src/lib/idealSchedule/features";
 import { chooseCompetitorTarget, targetKindOfLabel } from "../src/lib/idealSchedule/competitorTarget";
 import { buildCompetitorFeatures } from "../src/lib/idealSchedule/competitorFeatures";
 import { classifyGenreByRule, genreFromSkyUhdLabel, ownCommonOverrides, pickOwnCommonGenre } from "../src/lib/idealSchedule/genreRules";
@@ -19,6 +19,7 @@ import { addDays as addDaysT } from "../src/lib/idealSchedule/time";
 import { assignEpisodes, isEpisodicProgram, observedProgramMaxima } from "../src/lib/idealSchedule/episodes";
 import { premiereBlocks } from "../src/lib/idealSchedule/premiere";
 import { genreFamily, type Genre } from "../src/lib/idealSchedule/types";
+import { bandForLevel, certaintyOf, uncertaintyFromResiduals } from "../src/lib/idealSchedule/uncertainty";
 
 let passed = 0;
 const failures: string[] = [];
@@ -571,6 +572,46 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   const ruleOk = [...byEp.values()].every((t) => t.length <= 3 && Math.max(...t) - Math.min(...t) < 24 * 60);
   check("부제 반영: 시리즈 블록마다 에피소드 배정, 같은 에피소드는 24시간 안 최대 3회", on.summary.episodeMode === "EPISODE" && keys.length > 0 && ruleOk && on.summary.episodeAssigned === keys.length, JSON.stringify([...byEp.values()].slice(0, 3)));
   check("부제 반영: 지문이 미반영과 다름(옵션이 결과 식별에 포함)", on.fingerprint !== off.fingerprint);
+}
+
+// ── 2단계: 예상 범위·차이 작으면 지난주 유지 ──
+{
+  const rows = Array.from({ length: 40 }, (_, i) => ({ expected: 1, actual: 0.6 + i * 0.02, fallbackLevel: 1 }));
+  const m = uncertaintyFromResiduals([...rows, { expected: 0.01, actual: 5, fallbackLevel: 1 }], { lowQ: 0.1, highQ: 0.9, minRows: 30 });
+  check("잔차 → 배율 분위(기대값이 채널 평균 10% 미만인 방영 제외)", !!m && m.basis === "BACKTEST" && m.all.n === 40 && close(m.all.qLow, 0.678, 1e-6) && close(m.all.qHigh, 1.302, 1e-6), JSON.stringify(m?.all));
+  check("등급 표본 부족이면 전체 분포로 대체(B·C 없음 → 전체)", !!m && m.byGrade.B === null && bandForLevel(m, 3) === m.all && bandForLevel(m, 1) === m.byGrade.A);
+  check("잔차가 최소 표본 미만이면 null(학습 기간 변동으로 대체)", uncertaintyFromResiduals(rows.slice(0, 10), { lowQ: 0.1, highQ: 0.9, minRows: 30 }) === null);
+  check("확실도 구분: z≥2 뚜렷, 1~2 보통, <1 차이 작음", certaintyOf(2.5) === "HIGH" && certaintyOf(1.2) === "MID" && certaintyOf(0.3) === "LOW" && certaintyOf(null) === null);
+
+  // 지난주 실제 편성: 월 22시에 C 대신 D가 나갔다고 가정(모델 입력은 그대로, 비교 기준만 바꿈)
+  const bundle = mapOwnAirings(engineRaw);
+  const cur = bundle.airings.map((a) => (a.date === "2026-09-21" && a.programId === "C" ? { ...a, programId: "D", programName: "프로그램D" } : a));
+  const withCur = (structure: Partial<typeof engineConfig.structure>) =>
+    runIdealScheduleEngine(baseRun({ config: { ...engineConfig, structure: { ...engineConfig.structure, ...structure } }, evaluateAirings: [{ label: "CURRENT", weekStart: "2026-09-21", airings: cur }] }));
+  const mon22 = (r: EngineRunResult) => r.output.blocks.find((b) => !b.fixed && b.weekday === 1 && b.startMin === 1320);
+  const off = withCur({ decision_keep_current: false });
+  const def = withCur({});
+  const strict = withCur({ decision_min_rel_gain: 10 });
+  check("유지 규칙 끔: 월 22시 지난주 D 대신 다른 프로그램, 판단 CHANGE(지난주 D·개선폭 기록)", !!mon22(off) && mon22(off)!.candidate.programKey !== "D" && mon22(off)?.decision?.kind === "CHANGE" && mon22(off)?.decision?.incumbent?.name === "프로그램D" && (mon22(off)?.decision?.delta ?? 0) > 0);
+  check("기본(3%): 개선폭이 뚜렷하면 교체 유지", mon22(def)?.candidate.programKey === mon22(off)?.candidate.programKey && mon22(def)?.decision?.kind === "CHANGE");
+  check("기준을 크게 두면 지난주 편성(D)으로 되돌림(KEEP·reverted)", mon22(strict)?.candidate.programKey === "D" && mon22(strict)?.decision?.kind === "KEEP" && mon22(strict)?.decision?.reverted === true && strict.summary.decisions.keep >= 1);
+  check("지난주와 같은 칸은 SAME", aiBlocks(def).some((b) => b.decision?.kind === "SAME") && def.summary.decisions.same > 0);
+  const ranged = aiBlocks(def).filter((b) => b.eval.range);
+  check("예상 범위: 백테스트 없으면 학습 기간 변동(TRAINING), 하한 ≤ 기대 ≤ 상한", ranged.length > 0 && def.summary.uncertainty?.basis === "TRAINING" && ranged.every((b) => b.eval.range!.low <= (b.eval.expected as number) + 1e-12 && (b.eval.expected as number) <= b.eval.range!.high + 1e-12));
+  check("유지 규칙·범위도 결정론(같은 입력 → 같은 지문·결과)", withCur({}).fingerprint === def.fingerprint && JSON.stringify(aiBlocks(withCur({})).map((b) => b.decision?.kind)) === JSON.stringify(aiBlocks(def).map((b) => b.decision?.kind)));
+}
+
+// ── 회차 시리즈(OLIFE 확인 2026-09-30): 같은 이름이라도 회차가 다르면 프로그램 단위 반복 제한 대상 아님 ──
+{
+  const a = (date: string, pid: string, sub: string | null) => ({ date, programId: pid, episodeSubtitle: sub, episodeNumber: null }) as unknown as import("../src/lib/idealSchedule/types").OwnAiring;
+  const set = detectMultiEpisodePrograms([
+    a("2026-09-01", "S", "파미르 1부"), a("2026-09-01", "S", "튀니지 3부"), a("2026-09-02", "S", "태국 1부"),
+    a("2026-09-01", "R", null), a("2026-09-01", "R", null),
+    a("2026-07-13", "S", null), a("2026-07-13", "S", null), a("2026-07-13", "S", null), // 회차 정보가 아예 없던 날은 판정에서 제외
+  ]);
+  check("회차가 다른 반복은 회차 시리즈, 회차 정보 없는 반복은 아님(정보 없던 날은 판정 제외)", set.has("S") && !set.has("R"), JSON.stringify([...set]));
+  const same = detectMultiEpisodePrograms([a("2026-09-01", "T", "같은 회"), a("2026-09-01", "T", "같은 회"), a("2026-09-01", "T", "같은 회")]);
+  check("같은 회차만 반복하면 회차 시리즈 아님", !same.has("T"));
 }
 
 console.log(`\n${passed}건 통과, ${failures.length}건 실패`);

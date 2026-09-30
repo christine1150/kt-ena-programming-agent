@@ -13,6 +13,7 @@ import { withOptimizeTarget } from "./mapping";
 import type { StrategyMode } from "./scoring";
 import { addDays } from "./time";
 import type { OwnAiring, OwnAiringsBundle } from "./types";
+import type { ResidualRow } from "./uncertainty";
 
 export interface RunRequest {
   channelCode: string;
@@ -105,6 +106,30 @@ async function loadHistoricalRuntimes(channelId: string, inputs: HardConstraintI
   return out;
 }
 
+/** 과거 주 검증(백테스트) 방영별 잔차 — 이 채널·타깃, 그리고 "그 주 실측이 기준일 이전에 끝난" 주만(누수 방지:
+ *  week_start + 6 ≤ as_of). 같은 주를 여러 번 검증했으면 가장 최근 결과 하나만 쓴다. */
+export async function loadBacktestResiduals(channelId: string, targetLabel: string, asOfDate: string): Promise<ResidualRow[]> {
+  const { data, error } = await supabase
+    .from("ideal_schedule_backtest_results")
+    .select("week_start, created_at, detail, ideal_schedule_backtest_runs!inner(channel_id)")
+    .eq("ideal_schedule_backtest_runs.channel_id", channelId)
+    .eq("target_label", targetLabel)
+    .lte("week_start", addDays(asOfDate, -6))
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) return []; // 잔차가 없어도 엔진은 돈다(학습 기간 변동으로 대체)
+  const seen = new Set<string>();
+  const out: ResidualRow[] = [];
+  for (const r of data ?? []) {
+    if (seen.has(r.week_start as string)) continue;
+    seen.add(r.week_start as string);
+    for (const d of (r.detail as { expected: number | null; actual: number | null; fallbackLevel: number }[] | null) ?? []) {
+      out.push({ expected: d.expected === null ? null : Number(d.expected), actual: d.actual === null ? null : Number(d.actual), fallbackLevel: Number(d.fallbackLevel) });
+    }
+  }
+  return out;
+}
+
 export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
   const t0 = Date.now();
   const asOfDate = req.asOfDate ?? addDays(req.weekStart, -1);
@@ -129,7 +154,10 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     const wk = target ? withOptimizeTarget(actualWeek, target) : actualWeek;
     evaluateAirings.push({ label: "ACTUAL", weekStart: req.weekStart, airings: wk.airings });
   }
-  const historicalRuntime = await loadHistoricalRuntimes(channel.id, constraintLoad.inputs, asOfDate);
+  const [historicalRuntime, residuals] = await Promise.all([
+    loadHistoricalRuntimes(channel.id, constraintLoad.inputs, asOfDate),
+    loadBacktestResiduals(channel.id, bundle.kpiLabel, asOfDate),
+  ]);
   const t1 = Date.now();
   const result = runIdealScheduleEngine({
     weekStart: req.weekStart,
@@ -145,6 +173,7 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     competitorBundle: req.competitorNames.length ? competitorBundle : null,
     constraints: [...constraintLoad.inputs, ...(req.extraLocks ?? [])],
     historicalRuntime,
+    residuals,
     genreOf: (scope, owner, name) => resolveGenre(genreMap, scope, owner, name),
     evaluateAirings,
   });

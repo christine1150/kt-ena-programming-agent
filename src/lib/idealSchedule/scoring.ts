@@ -14,6 +14,7 @@ import type { ExpectedResult, FeatureSet } from "./features";
 import { addDays, hourBucket } from "./time";
 import type { AiringType, Genre } from "./types";
 import { UNCLASSIFIED, genreFamily } from "./types";
+import { bandForLevel, standardError, type UncertaintyBasis, type UncertaintyModel } from "./uncertainty";
 
 export type ContentType = "OWN" | "COMPETITOR_BENCHMARK" | "ARCHETYPE";
 export type StrategyMode = "AUTO" | "MATCH" | "COUNTER" | "MIX";
@@ -58,6 +59,8 @@ export interface ScoringContext {
   strongSlots: Map<string, StrongSlotInfo> | null; // "dow|hour" → 선택 경쟁사 중 최강(경쟁사 미선택이면 null)
   channelMedianStability: number | null;
   hasComposition: boolean;
+  /** 예상 범위·표준오차용 오차 배율 분포(없으면 범위를 만들지 않는다) */
+  uncertainty: UncertaintyModel | null;
 }
 
 export interface Reason {
@@ -74,7 +77,12 @@ export interface BlockEval {
   baseline: number | null;
   confidence: number;
   sampleCount: number;
+  programSampleCount: number;
   fallbackLevel: number;
+  /** 예상 범위(기대값 × 과거 오차 배율 분위) — 오차 자료가 없으면 null */
+  range: { low: number; high: number; basis: UncertaintyBasis } | null;
+  /** 평균 추정 표준오차(유지/교체 판단·확실도용) */
+  se: number | null;
   components: Record<string, number | null>;
   fitness: number;
   strategy: {
@@ -101,6 +109,9 @@ export interface PlacementContext {
   fixed: boolean; // 고정 블록은 패널티 없음
   sameSlotOtherDays: number; // 같은 후보가 다른 요일 같은 시에 놓인 횟수
   dayGenreShare: number; // 이 후보 장르의 그날 편성 분 비중(0~1, 미분류 0)
+  /** 같은 프로그램이 EPISODE_CHAIN_GAP_MIN분 안에 앞에 있음(사이에 짧은 편성물이 있어도) — 회차 시리즈 연결 편성 판정용.
+   *  없으면 바로 앞 블록이 같은 프로그램인지로 판정 */
+  episodeChain?: boolean;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -110,12 +121,13 @@ export function buildScoringContext(
   config: IdealScheduleConfig,
   strategyMode: StrategyMode,
   strongSlots: Map<string, StrongSlotInfo> | null,
-  hasComposition: boolean
+  hasComposition: boolean,
+  uncertainty: UncertaintyModel | null = null
 ): ScoringContext {
   const stabs = fs.units.map((u) => u.stability_index).filter((v): v is number => v !== null).sort((a, b) => a - b);
   const mid = Math.floor(stabs.length / 2);
   const med = stabs.length === 0 ? null : stabs.length % 2 ? stabs[mid] : (stabs[mid - 1] + stabs[mid]) / 2;
-  return { fs, config, strategyMode, strongSlots, channelMedianStability: med, hasComposition };
+  return { fs, config, strategyMode, strongSlots, channelMedianStability: med, hasComposition, uncertainty };
 }
 
 /** 경쟁 선택 시 강세 슬롯 맵(strongestCompetitorBySlot 결과를 threshold로 거른 것). */
@@ -259,6 +271,7 @@ export class Scorer {
     let baseline: number | null;
     let confidence: number;
     let sampleCount: number;
+    let programSampleCount: number;
     let fallbackLevel: number;
 
     if (c.contentType === "COMPETITOR_BENCHMARK" && c.benchmark) {
@@ -271,6 +284,7 @@ export class Scorer {
       confidence = cap * Math.min(1, c.benchmark.n / config.expected_kpi.full_confidence_n);
       if (!c.benchmark.targetMatchesOwnKpi) confidence *= 1 - config.strategy.target_mismatch_penalty;
       sampleCount = c.benchmark.n;
+      programSampleCount = 0; // 자사 편성 이력 없음 — 범위·표준오차는 가장 넓은(근거 C) 기준
       fallbackLevel = 0;
       components.kpi = c.benchmark.index;
       addReason({ code: "BENCHMARK_TRANSFER_ASSUMPTION", value: c.benchmark.index, detail: `${c.benchmark.competitor} 자기 기준 지수 × 자사 슬롯 baseline(가정)` });
@@ -283,6 +297,7 @@ export class Scorer {
       baseline = e.r.baseline;
       confidence = e.r.confidence;
       sampleCount = e.r.sampleCount;
+      programSampleCount = e.r.programSampleCount;
       fallbackLevel = e.r.fallbackLevel;
       components.kpi = e.r.index;
       addReason({ code: "EXPECTED_LEVEL", value: e.r.fallbackLevel, detail: `표본 ${e.r.sampleCount}건` });
@@ -307,10 +322,17 @@ export class Scorer {
       }
     }
 
-    const lead = this.leadSynergy(p.prevKey, c.key);
+    // 회차 시리즈가 앞 회차 바로 뒤에 이어지면(연속·연결 편성) 그 시리즈의 "연속 회차 관측 연관"을 lead로 쓴다
+    const multiEp = c.contentType === "OWN" && c.programId !== null && fs.multiEpisodePrograms.has(c.programId);
+    const chain = multiEp && (p.episodeChain ?? p.prevProgramKey === c.programKey);
+    const lead = chain ? (fs.selfLead.get(c.programKey)?.synergy ?? null) : this.leadSynergy(p.prevKey, c.key);
     if (lead !== null) {
       components.lead = clamp(lead, 0, 2);
-      addReason({ code: "LEAD_SYNERGY", value: lead, detail: `앞 편성 ${p.prevKey}와의 관측 연관(효과 아님)` });
+      addReason(
+        chain
+          ? { code: "EPISODE_CHAIN", value: lead, detail: `같은 시리즈 다음 회차 연속 편성 ${fs.selfLead.get(c.programKey)?.n ?? 0}회 관측(효과 아님)` }
+          : { code: "LEAD_SYNERGY", value: lead, detail: `앞 편성 ${p.prevKey}와의 관측 연관(효과 아님)` }
+      );
     }
 
     const weightOf: Record<string, number> = { kpi: w.kpi, target: w.target, weekday_slot: w.weekday_slot, trend: w.trend, stability: w.stability, lead: w.lead };
@@ -347,7 +369,8 @@ export class Scorer {
     const r = this.ctx.config.repeat_rules;
     const penalties: Record<string, number> = {};
     if (!p.fixed) {
-      if (p.prevProgramKey && p.prevProgramKey === c.programKey) penalties.consecutive = r.consecutive_penalty;
+      // 회차 시리즈의 다음 회차 연속 편성은 감점하지 않는다(OLIFE 강점 전략 — 사용자 설명 2026-09-30)
+      if (p.prevProgramKey && p.prevProgramKey === c.programKey && !multiEp) penalties.consecutive = r.consecutive_penalty;
       if (p.sameSlotOtherDays > 0) penalties.same_slot = r.same_slot_penalty * p.sameSlotOtherDays;
       if (c.genre !== UNCLASSIFIED && p.dayGenreShare > 0) penalties.genre_concentration = r.genre_concentration_penalty * p.dayGenreShare;
       penalties.low_confidence = r.low_confidence_penalty * (1 - confidence);
@@ -355,6 +378,13 @@ export class Scorer {
     }
     const penaltySum = Math.min(0.95, Object.values(penalties).reduce((a, b) => a + b, 0));
     const value = expected === null || baseline === null ? 0 : fitness * (1 + bonus) * baseline * minutes * (1 - penaltySum);
+
+    // 예상 범위·표준오차(경쟁 가상 편성은 근거 C 기준 — 단계 0을 6으로 본다)
+    const unc = this.ctx.uncertainty;
+    const rangeLevel = fallbackLevel === 0 ? 6 : fallbackLevel;
+    const band = bandForLevel(unc, rangeLevel);
+    const range = unc && band && expected !== null ? { low: expected * band.qLow, high: expected * band.qHigh, basis: unc.basis } : null;
+    const se = standardError(unc, expected, programSampleCount, config.expected_kpi.shrinkage_k, rangeLevel);
 
     return {
       expected,
@@ -364,7 +394,10 @@ export class Scorer {
       baseline,
       confidence,
       sampleCount,
+      programSampleCount,
       fallbackLevel,
+      range,
+      se,
       components,
       fitness,
       strategy: {

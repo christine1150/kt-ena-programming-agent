@@ -6,7 +6,7 @@
 // 주간 기대 변화를 확인한 뒤 [교체]할 수 있다.
 import { useEffect, useState } from "react";
 import { DOW_LABELS, minToLabel } from "@/lib/scheduleGridLayout";
-import { COMPONENT_LABEL, LEVEL_LABEL, PENALTY_LABEL, SMALL_GAIN_RATIO, STATUS_LABEL, evidenceGrade, num, pct, reasonText, signed, signedPct, type BlockRow, type CompareRow, type Reason } from "./model";
+import { CERTAINTY_LABEL, COMPONENT_LABEL, LEVEL_LABEL, PENALTY_LABEL, RANGE_BASIS_LABEL, SMALL_GAIN_RATIO, STATUS_LABEL, evidenceGrade, num, pct, reasonText, signed, signedPct, type BlockRow, type CompareRow, type Reason } from "./model";
 
 export type Candidate = {
   id: string;
@@ -14,6 +14,8 @@ export type Candidate = {
   candidate: { key: string; programName: string; contentType: string; genre: string; sourceChannel: string; runtimeMin: number | null };
   expected_kpi: number | null;
   expected_kpi_type: string | null;
+  expected_low?: number | null;
+  expected_high?: number | null;
   confidence_score: number | null;
   sample_count: number | null;
   fallback_level: number | null;
@@ -36,6 +38,7 @@ const CONSTRAINT_LABEL: Record<string, string> = {
 const GRADE_STYLE: Record<string, string> = { A: "bg-emerald-50 text-emerald-700", B: "bg-amber-50 text-amber-700", C: "bg-rose-50 text-rose-700", 가정: "bg-violet-50 text-violet-700" };
 
 const reasonValue = (reasons: Reason[] | null, code: string) => reasons?.find((r) => r.code === code) ?? null;
+const normCand = (c: Candidate): Candidate => ({ ...c, expected_kpi: num(c.expected_kpi), confidence_score: num(c.confidence_score), expected_low: num(c.expected_low), expected_high: num(c.expected_high) });
 
 export function BlockDrawer({
   runId,
@@ -61,6 +64,10 @@ export function BlockDrawer({
   const [cands, setCands] = useState<Candidate[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 직접 찾아 넣기(사용자 제안 2026-09-30)
+  const [q, setQ] = useState("");
+  const [found, setFound] = useState<{ programId: string; name: string }[] | null>(null);
+  const [adding, setAdding] = useState<string | null>(null);
   const isIdeal = block.layer === "IDEAL";
   const swappable = isIdeal && (block.status === "AI" || block.status === "MANUAL_OVERRIDE");
 
@@ -70,13 +77,40 @@ export function BlockDrawer({
     fetch(`/api/scheduling/ideal-schedule/${runId}/blocks/${block.id}`)
       .then((r) => r.json())
       .then((body) => {
-        if (alive) setCands(body.ok ? (body.candidates as Candidate[]).map((c) => ({ ...c, expected_kpi: num(c.expected_kpi), confidence_score: num(c.confidence_score) })) : []);
+        if (alive) setCands(body.ok ? (body.candidates as Candidate[]).map(normCand) : []);
       })
       .catch(() => alive && setCands([]));
     return () => {
       alive = false;
     };
   }, [runId, block.id, isIdeal]);
+
+  // 검색(입력 멈춘 뒤 0.3초)
+  useEffect(() => {
+    const term = q.trim();
+    if (!term) return;
+    const t = setTimeout(() => {
+      fetch(`/api/scheduling/ideal-schedule/${runId}/blocks/${block.id}/manual?q=${encodeURIComponent(term)}`)
+        .then((r) => r.json())
+        .then((b) => setFound(b.ok ? b.programs : []))
+        .catch(() => setFound([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q, runId, block.id]);
+
+  async function addManual(programId: string) {
+    setAdding(programId);
+    setError(null);
+    const r = await fetch(`/api/scheduling/ideal-schedule/${runId}/blocks/${block.id}/manual`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ programId }) });
+    const j = await r.json();
+    setAdding(null);
+    if (!j.ok) return setError(j.message ?? "후보를 계산하지 못했습니다.");
+    const c = normCand(j.candidate as Candidate);
+    setCands((prev) => (prev?.some((x) => x.id === c.id) ? prev : [...(prev ?? []), c]));
+    setQ("");
+    setFound(null);
+    onPreview(c); // 추가하면 바로 편성표에 미리보기
+  }
 
   async function patch(body: object) {
     setBusy(true);
@@ -105,10 +139,20 @@ export function BlockDrawer({
 
   // 한 줄 판단 — 저장된 상태·대조·후보 값만으로 만든다(추정 문장 없음)
   const bestAlt = (cands ?? []).filter((c) => c.candidate.key !== block.candidate_key && c.expected_kpi !== null).sort((a, b) => (b.expected_kpi as number) - (a.expected_kpi as number))[0] ?? null;
+  const dec = block.decision ?? null;
   const verdict = (() => {
     if (!isIdeal) return "지난주 실제 편성을 이상적 편성과 같은 방식으로 평가한 값입니다.";
-    if (block.status === "REQUIRED" || block.status === "LOCKED") return `고정 편성 — ${CONSTRAINT_LABEL[block.constraint_ref?.constraintType ?? ""] ?? "필수 편성"}이라 AI가 바꾸지 않습니다.`;
+    if (block.status === "REQUIRED" || block.status === "LOCKED") return `고정 편성 — ${CONSTRAINT_LABEL[block.constraint_ref?.constraintType ?? ""] ?? "필수 편성"}이라 바꾸지 않습니다.`;
     if (block.status === "MANUAL_OVERRIDE") return "직접 교체한 편성입니다. 다시 계산해도 유지됩니다.";
+    if (dec?.kind === "SAME") return "지난주와 같은 편성입니다.";
+    if (dec?.kind === "KEEP")
+      return `지난주 편성 유지 — 다른 프로그램으로 바꿔도 기대 차이(${dec.delta !== null ? signed(dec.delta, decimals) : "-"})가 기준(${dec.threshold !== null ? dec.threshold.toFixed(decimals) : "-"}) 이하라 바꿀 근거가 부족합니다.`;
+    if (dec?.kind === "CHANGE" && dec.incumbent) {
+      if (dec.capBlocked) return `지난주 〈${dec.incumbent.name}〉는 반복 제한(같은 프로그램 하루·주 횟수)에 걸려 넣지 못해 바꿨습니다.`;
+      const ratio = dec.delta !== null && dec.incumbent.expected ? dec.delta / dec.incumbent.expected : null;
+      return `지난주 〈${dec.incumbent.name}〉 대신 — 기대 ${dec.delta !== null ? signed(dec.delta, decimals) : "-"}${ratio !== null ? `(${signedPct(ratio)})` : ""}로 기준(${dec.threshold !== null ? dec.threshold.toFixed(decimals) : "-"})보다 커서 바꿨습니다.`;
+    }
+    if (dec?.kind === "NEW") return "지난주에 편성이 없던 자리입니다.";
     if (compareRow && !compareRow.changed) {
       if (bestAlt && block.expected_kpi !== null && bestAlt.expected_kpi !== null) {
         const gap = block.expected_kpi - bestAlt.expected_kpi;
@@ -127,7 +171,7 @@ export function BlockDrawer({
       const small = ratio !== null && Math.abs(ratio) < SMALL_GAIN_RATIO;
       return `${from} 배치 — 기대 ${signed(d, decimals)}${ratio !== null ? `(${signedPct(ratio)})` : ""}${small ? " · 차이가 작아 유지도 검토할 만합니다" : ""}.`;
     }
-    return "AI가 이 자리에 추천한 편성입니다.";
+    return "이 자리 추천 편성입니다.";
   })();
   const topReason = (block.reasons ?? [])
     .filter((r) => ["WEEKDAY_SLOT_FIT", "LEVEL_1_INDEX", "LEVEL_2_INDEX", "RECENT_4W_INDEX", "TARGET_FIT", "STRATEGY_MATCH", "STRATEGY_COUNTER"].includes(r.code))
@@ -177,6 +221,18 @@ export function BlockDrawer({
               <dd className="mt-0.5 text-base font-semibold tabular-nums text-zinc-900">{fmt(avg12)}</dd>
             </div>
           </dl>
+          {block.expected_low !== null && block.expected_low !== undefined && block.expected_high !== null && block.expected_high !== undefined && (
+            <p className="px-1 text-xs text-zinc-600">
+              예상 범위 <b className="tabular-nums">{block.expected_low.toFixed(decimals)} ~ {block.expected_high.toFixed(decimals)}</b>
+              <span className="text-zinc-400"> · {RANGE_BASIS_LABEL[block.range_basis ?? ""] ?? ""}(실측이 이 안에 든 비율 약 80%)</span>
+            </p>
+          )}
+          {isIdeal && dec?.certainty && (
+            <p className="px-1 text-xs text-zinc-600">
+              {CERTAINTY_LABEL[dec.certainty]}
+              {dec.runnerUp ? <span className="text-zinc-400"> · 다음 후보 〈{dec.runnerUp.name}〉 {dec.runnerUp.expected !== null ? dec.runnerUp.expected.toFixed(decimals) : "-"}</span> : null}
+            </p>
+          )}
           <p className="px-1 text-[11px] text-zinc-400">
             {grade.label} · {targetLabel} 기준 · 최근 12주 데이터 기반 기대값(미래 예측 아님)
           </p>
@@ -261,6 +317,37 @@ export function BlockDrawer({
                   );
                 })}
               </ol>
+            )}
+            {swappable && (
+              <div className="mt-3 rounded-xl border border-dashed border-zinc-300 p-2.5">
+                <label className="text-xs font-semibold text-zinc-600" htmlFor="manual-search">
+                  직접 찾아 넣기
+                </label>
+                <input
+                  id="manual-search"
+                  value={q}
+                  onChange={(e) => {
+                    setQ(e.target.value);
+                    if (!e.target.value.trim()) setFound(null);
+                  }}
+                  placeholder="이 채널 프로그램 이름"
+                  className="mt-1 w-full rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm"
+                />
+                {q.trim() && found && (
+                  <ul className="mt-1.5 max-h-44 overflow-y-auto text-sm">
+                    {found.length === 0 && <li className="px-1 py-1 text-xs text-zinc-400">찾는 프로그램이 없습니다.</li>}
+                    {found.map((p) => (
+                      <li key={p.programId}>
+                        <button type="button" disabled={!!adding} onClick={() => addManual(p.programId)} className="flex w-full items-center justify-between rounded-lg px-1.5 py-1 text-left hover:bg-zinc-50 disabled:opacity-50">
+                          <span className="truncate">{p.name}</span>
+                          <span className="shrink-0 text-[11px] text-zinc-400">{adding === p.programId ? "계산 중…" : "추가"}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-1 text-[11px] text-zinc-400">고르면 이 자리 기준으로 기대값을 계산해(수 초) 후보에 넣고 미리보기로 보여줍니다.</p>
+              </div>
             )}
             {swappable && <p className="mt-2 text-[11px] text-zinc-400">괄호 안은 지금 배치된 프로그램 대비 기대 차이입니다. 교체한 블록은 &lsquo;수동 변경&rsquo;으로 잠기며, 이웃 블록 점수와 합계는 [다시 계산] 후 갱신됩니다.</p>}
           </section>

@@ -37,7 +37,16 @@ export function SummaryPanel({
   const weakCount = ideal.filter((b) => b.content_type === "OWN" && evidenceGrade(b).grade === "C").length;
   // 주간 평균에 미치는 크기(기대 차이 × 편성 분) 순 — 긴 프로그램에 걸친 짧은 자투리 칸이 위로 오지 않게
   const impact = (r: CompareRow) => Math.abs(r.expectedKpiDiff ?? 0) * (r.endMin - r.startMin);
-  const top = [...changedRows].sort((a, b) => impact(b) - impact(a)).slice(0, 8);
+  // 뚜렷하게 바뀐 칸만(차이 작은 칸은 빼고) 5건 — 사용자 지시: 심플하게
+  const top = [...changedRows]
+    .filter((r) => {
+      const q = ratioOf(r);
+      return !(q !== null && Math.abs(q) < SMALL_GAIN_RATIO);
+    })
+    .sort((a, b) => impact(b) - impact(a))
+    .slice(0, 5);
+  const dec = s.decisions;
+  const multi = s.multiEpisodePrograms ?? [];
   const fmt = (v: number | null | undefined) => (v === null || v === undefined ? "-" : v.toFixed(decimals));
 
   const stat = (k: string, v: string, tone: "default" | "warn" | "muted" = "default", hint?: string) => (
@@ -67,7 +76,7 @@ export function SummaryPanel({
         {s.current?.actualAvgRating !== null && s.current?.actualAvgRating !== undefined ? ` · 실측 ${fmt(s.current.actualAvgRating)}` : ""}
       </p>
       <p className="mt-1 text-[10px] leading-snug text-zinc-400">
-        최근 12주 데이터 기반 기대 시청률입니다(미래 시청률 예측 아님).{run.needs_recalc ? " 수동 교체를 반영해 다시 합산한 값이며, 앞뒤 연관·반복 제한은 [다시 계산] 때 반영됩니다." : ""}
+        최근 12주 데이터 기반 기대값(미래 예측 아님).{run.needs_recalc ? " 수동 교체 반영 합계 — 앞뒤 연관·반복 제한은 [다시 계산] 때 반영." : ""}
       </p>
 
       <div className="mt-3 grid grid-cols-4 gap-1.5">
@@ -76,12 +85,17 @@ export function SummaryPanel({
         {stat("필수·잠금", `${s.requiredCount + s.lockedCount}`, "muted")}
         {stat("충돌", `${s.conflictCount}`, s.conflictCount > 0 ? "warn" : "muted")}
       </div>
-      {(smallCount > 0 || weakCount > 0) && (
-        <p className="mt-2 text-[11px] text-zinc-500">
-          {smallCount > 0 && <>바뀐 칸 중 {smallCount}칸은 기대 차이 {Math.round(SMALL_GAIN_RATIO * 100)}% 미만(유지 검토) · </>}
-          {weakCount > 0 && <>근거 부족 {weakCount}칸(빗금)</>}
-        </p>
-      )}
+      <ul className="mt-2 space-y-0.5 text-[11px] text-zinc-500">
+        {dec && dec.keep > 0 && <li>· 차이가 작아 지난주 편성을 그대로 둔 칸 {dec.keep}</li>}
+        {dec && dec.capBlocked > 0 && <li>· 반복 제한 때문에 지난주 편성을 못 넣은 칸 {dec.capBlocked}</li>}
+        {multi.length > 0 && (
+          <li title={multi.join(", ")}>
+            · 회차 시리즈 {multi.length}개(반복 제한 완화·연결 편성 감점 없음): {multi.slice(0, 2).join(", ")}
+            {multi.length > 2 ? ` 외 ${multi.length - 2}` : ""}
+          </li>
+        )}
+        {weakCount > 0 && <li>· 근거 부족 {weakCount}칸(빗금)</li>}
+      </ul>
 
       {top.length > 0 && (
         <div className="mt-3 border-t border-zinc-100 pt-3">

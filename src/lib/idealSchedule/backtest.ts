@@ -55,6 +55,11 @@ export async function runBacktestWeek(req: BacktestWeekRequest, actor: Actor) {
     actual: r.actual.r,
     fallbackLevel: r.block.eval.fallbackLevel,
     confidence: r.block.eval.confidence,
+    programSampleCount: r.block.eval.programSampleCount,
+    // 예상 범위(이 주 기준일 이전 잔차·학습 변동으로 만든 것) — 범위 적중률 계산용
+    low: r.block.eval.range?.low ?? null,
+    high: r.block.eval.range?.high ?? null,
+    rangeBasis: r.block.eval.range?.basis ?? null,
   }));
   const row = {
     backtest_run_id: backtestRunId,
@@ -77,8 +82,8 @@ export async function runBacktestWeek(req: BacktestWeekRequest, actor: Actor) {
   };
   const { error: rErr } = await supabase.from("ideal_schedule_backtest_results").upsert(row, { onConflict: "backtest_run_id,week_start" });
   if (rErr) throw new Error(`백테스트 결과 저장 실패: ${rErr.message}`);
-  await refreshBacktestSummary(backtestRunId);
-  return { backtestRunId, idealRunId, result: row };
+  const summary = await refreshBacktestSummary(backtestRunId);
+  return { backtestRunId, idealRunId, result: row, summary };
 }
 
 /** 백테스트 요약(주별 결과 평균) 갱신 — 저장된 값의 단순 평균만. */
@@ -92,15 +97,38 @@ export async function refreshBacktestSummary(backtestRunId: string) {
   const uplift = rows
     .filter((r) => r.expected_ideal !== null && r.expected_actual_schedule !== null)
     .map((r) => Number(r.expected_ideal) - Number(r.expected_actual_schedule));
+  // 방영 단위 지표(2단계): 중앙 절대오차, 상대 MAE(MAE ÷ 실측 평균), 근거 등급별 MAE, 예상 범위 적중률
+  type D = { expected: number | null; actual: number | null; fallbackLevel: number; low?: number | null; high?: number | null };
+  const det = rows.flatMap((r) => ((r.detail as unknown as D[] | null) ?? [])).filter((d) => d.expected !== null && d.actual !== null) as (D & { expected: number; actual: number })[];
+  const absErr = det.map((d) => Math.abs(d.expected - d.actual)).sort((a, b) => a - b);
+  const mae = absErr.length ? absErr.reduce((a, b) => a + b, 0) / absErr.length : null;
+  const actualMean = det.length ? det.reduce((s, d) => s + d.actual, 0) / det.length : null;
+  const grade = (lv: number) => (lv <= 2 ? "A" : lv === 3 ? "B" : "C");
+  const byGrade: Record<string, { n: number; mae: number | null; bias: number | null }> = {};
+  for (const g of ["A", "B", "C"]) {
+    const list = det.filter((d) => grade(Number(d.fallbackLevel)) === g);
+    byGrade[g] = {
+      n: list.length,
+      mae: list.length ? list.reduce((s, d) => s + Math.abs(d.expected - d.actual), 0) / list.length : null,
+      bias: list.length ? list.reduce((s, d) => s + (d.expected - d.actual), 0) / list.length : null,
+    };
+  }
+  const ranged = det.filter((d) => d.low !== null && d.low !== undefined && d.high !== null && d.high !== undefined);
   const summary = {
     weeks: rows.map((r) => r.week_start),
+    airings: det.length,
+    medianAbsError: absErr.length ? (absErr.length % 2 ? absErr[(absErr.length - 1) / 2] : (absErr[absErr.length / 2 - 1] + absErr[absErr.length / 2]) / 2) : null,
+    relativeMae: mae !== null && actualMean ? mae / actualMean : null,
+    byGrade,
+    rangeHitRate: ranged.length ? ranged.filter((d) => d.actual >= (d.low as number) && d.actual <= (d.high as number)).length / ranged.length : null,
+    rangeN: ranged.length,
     avgCalibrationMae: avg("calibration_mae"),
     avgCalibrationBias: avg("calibration_bias"),
     avgActualRating: avg("actual_avg_rating"),
     avgExpectedActualSchedule: avg("expected_actual_schedule"),
     avgExpectedIdeal: avg("expected_ideal"),
     avgEstimatedUplift: uplift.length ? uplift.reduce((a, b) => a + b, 0) / uplift.length : null,
-    note: "추정 개선폭은 같은 모델 기준 기대값 차이이며 실현된 시청률이 아님",
+    note: "추정 개선폭은 같은 모델 기준 기대값 차이이며 실현된 시청률이 아님(기대값이 큰 후보를 골라 뽑으므로 상한 추정)",
   };
   await supabase.from("ideal_schedule_backtest_runs").update({ summary }).eq("id", backtestRunId);
   return summary;

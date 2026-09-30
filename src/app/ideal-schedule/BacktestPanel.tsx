@@ -26,10 +26,13 @@ export function BacktestPanel({
   const [results, setResults] = useState<Result[]>([]);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 누적 요약(서버 계산): 방영별 중앙 절대오차·상대 오차·예상 범위 적중률(2단계)
+  const [agg, setAgg] = useState<{ airings: number; medianAbsError: number | null; relativeMae: number | null; rangeHitRate: number | null; rangeN: number } | null>(null);
 
   async function run() {
     setError(null);
     setResults([]);
+    setAgg(null);
     const thisMonday = mondayOfLocal(new Date());
     const list = Array.from({ length: weeks }, (_, i) => addDaysLocal(thisMonday, -7 * (weeks - i)));
     let backtestRunId: string | undefined;
@@ -48,6 +51,7 @@ export function BacktestPanel({
       backtestRunId = j.backtestRunId;
       const res = j.result as Result;
       setResults((prev) => [...prev, res]);
+      if (j.summary) setAgg(j.summary);
     }
     setProgress(null);
   }
@@ -114,6 +118,12 @@ export function BacktestPanel({
               </tr>
             </tbody>
           </table>
+          {agg && (
+            <p className="mt-2 text-xs text-zinc-600">
+              방영 {agg.airings}건 기준 · 중앙 오차 {f(agg.medianAbsError)} · 상대 오차 {agg.relativeMae !== null ? `${Math.round(agg.relativeMae * 100)}%` : "-"}
+              {agg.rangeHitRate !== null ? ` · 실측이 예상 범위 안에 든 비율 ${Math.round(agg.rangeHitRate * 100)}%(${agg.rangeN}건, 목표 약 80%)` : ""}
+            </p>
+          )}
           <p className="mt-2 text-[11px] text-zinc-400">
             &lsquo;실제 편성 기대&rsquo;와 &lsquo;실측&rsquo;의 차이(오차·편향)가 이 모델의 정확도입니다. &lsquo;이상적 편성 기대&rsquo;는 같은 모델로 본 추정치이며, 이상적 편성의 실제 시청률은 관측할 수 없습니다.
           </p>

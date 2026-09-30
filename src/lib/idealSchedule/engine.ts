@@ -13,6 +13,7 @@ import { addDays } from "./time";
 import { assignEpisodes, buildEpisodeStats, isEpisodicProgram, observedProgramMaxima, type EpisodeMode } from "./episodes";
 import type { CompetitorBundle, Genre, OwnAiring, OwnAiringsBundle } from "./types";
 import { UNCLASSIFIED, genreFamily } from "./types";
+import { uncertaintyFromResiduals, uncertaintyFromTraining, type ResidualRow, type UncertaintyModel } from "./uncertainty";
 
 export type GenreResolver = (scope: "OWN" | "COMPETITOR", ownerKey: string, programName: string) => Genre;
 
@@ -35,6 +36,8 @@ export interface EngineRunInput {
   /** 같은 모델(같은 as_of)로 평가할 실제 편성들 — CURRENT(비교 기준)·백테스트 실제 주. 방영 기록은 편성 구조와
    *  실측 비교에만 쓰이고 모델(Feature)에는 들어가지 않는다(누수 없음). */
   evaluateAirings?: { label: string; weekStart: string; airings: OwnAiring[] }[];
+  /** 이 채널·타깃의 과거 주 검증(백테스트) 방영별 잔차 — 기준일 이전에 끝난 주만(누수 없음). 없으면 학습 기간 변동으로 대체 */
+  residuals?: ResidualRow[];
 }
 
 export interface ScheduleEvaluationResult {
@@ -71,6 +74,12 @@ export interface EngineSummary {
   episodeAssigned: number;
   episodeUnassigned: number;
   optimizeTarget: { label: string; isChannelKpi: boolean }; // 이 편성안이 최적화한 타깃
+  /** 회차가 달라 프로그램 단위 반복 제한을 완화한 시리즈 이름 */
+  multiEpisodePrograms: string[];
+  /** 예상 범위 근거(BACKTEST = 과거 주 검증 잔차 n건, TRAINING = 검증 전 학습 기간 변동) */
+  uncertainty: { basis: string; n: number; qLow: number; qHigh: number } | null;
+  /** 지난주 실제 편성 대비 판단 개수(기존 틀 유지 모드) + 확실도 분포 */
+  decisions: { same: number; keep: number; change: number; newSlot: number; capBlocked: number; certainty: { HIGH: number; MID: number; LOW: number } };
   competitorTargets: { competitor: string; programTarget: string | null; programReason: string | null; dailyTarget: string | null; matchesOwnKpi: boolean | null }[];
   featureWindow: { from: string; to: string };
 }
@@ -199,7 +208,9 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     strong = strongSlotMap(strongestCompetitorBySlot(competitorFeatures), config.strategy.strong_threshold);
   }
 
-  const scorer = new Scorer(buildScoringContext(fs, config, input.strategyMode, strong, opts.composition !== null));
+  // 예상 범위·표준오차용 오차 배율: 과거 주 검증 잔차가 충분하면 그것, 아니면 학습 기간 방영별 변동(검증 전)
+  const uncertainty = buildUncertainty(config, input.residuals ?? [], fs);
+  const scorer = new Scorer(buildScoringContext(fs, config, input.strategyMode, strong, opts.composition !== null, uncertainty));
   const placement = input.benchmarkPlacement ?? config.strategy.benchmark_placement;
   const pool = buildCandidatePool(fs, strong ? { channels: competitorFeatures, strong, minN: config.expected_kpi.min_n, placeable: placement === "MIX", include: placement !== "NONE" } : null);
 
@@ -272,9 +283,25 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     episodeMode === "EPISODE" ? fs.units.filter((u) => isEpisodicProgram(config, channelCode, u.programName)).map((u) => u.programId) : []
   );
   const eligible = eligibleAirings(bundle, opts);
-  const programCapOverride = episodicIds.size ? observedProgramMaxima(eligible, episodicIds) : undefined;
+  // 회차 시리즈(자동 판정)는 "같은 프로그램" 하루·주 한도를 12주 관측 최대치까지 완화(설정값보다 낮추지는 않음) —
+  // 같은 이름이라도 회차가 달라 반복이 아니다(사용자 확인 2026-09-30, OLIFE)
+  const capIds = new Set([...episodicIds, ...fs.multiEpisodePrograms]);
+  let programCapOverride: Map<string, { daily: number; weekly: number }> | undefined;
+  if (capIds.size) {
+    programCapOverride = observedProgramMaxima(eligible, capIds);
+    for (const pid of fs.multiEpisodePrograms) {
+      if (episodicIds.has(pid)) continue;
+      const o = programCapOverride.get(pid);
+      if (o) programCapOverride.set(pid, { daily: Math.max(o.daily, config.repeat_rules.daily_cap), weekly: Math.max(o.weekly, config.repeat_rules.weekly_cap) });
+    }
+  }
+
+  // 지난주 실제 편성(비교 기준 주) — 기존 틀 유지 모드의 "차이 작으면 유지" 기준. 방영 기록은 구조로만 쓰고 모델에는 넣지 않는다.
+  const currentEval = (input.evaluateAirings ?? []).find((e) => e.label === "CURRENT");
+  const incumbents = currentEval ? scheduleFromAirings(currentEval.airings, currentEval.weekStart, pool, channelCode, input.genreOf) : [];
 
   const output = optimizeWeek({
+    incumbents,
     programCapOverride,
     mode: input.mode,
     config,
@@ -356,6 +383,22 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     expectedAvgTimeSpent: wavg((b) => b.eval.expectedTimeSpent),
     objective: output.objective,
     optimizeTarget: { label: bundle.kpiLabel, isChannelKpi: !customTarget },
+    multiEpisodePrograms: [...fs.multiEpisodePrograms].map((pid) => fs.units.find((u) => u.programId === pid)?.programName ?? pid).sort(),
+    uncertainty: uncertainty ? { basis: uncertainty.basis, n: uncertainty.all.n, qLow: uncertainty.all.qLow, qHigh: uncertainty.all.qHigh } : null,
+    decisions: (() => {
+      const d = { same: 0, keep: 0, change: 0, newSlot: 0, capBlocked: 0, certainty: { HIGH: 0, MID: 0, LOW: 0 } };
+      for (const b of output.blocks) {
+        const x = b.decision;
+        if (!x) continue;
+        if (x.kind === "SAME") d.same++;
+        else if (x.kind === "KEEP") d.keep++;
+        else if (x.kind === "CHANGE") d.change++;
+        else if (x.kind === "NEW") d.newSlot++;
+        if (x.capBlocked) d.capBlocked++;
+        if (x.certainty) d.certainty[x.certainty]++;
+      }
+      return d;
+    })(),
     episodeMode,
     episodePrograms: [...episodicIds].map((pid) => fs.units.find((u) => u.programId === pid)?.programName ?? pid),
     episodeAssigned,
@@ -386,6 +429,8 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       constraints: [...input.constraints].sort((a, b) => (a.id < b.id ? -1 : 1)),
       own: bundle.airings.filter((a) => a.date <= input.asOfDate),
       comp: input.competitorBundle ? input.competitorBundle.airings.filter((a) => a.date <= input.asOfDate) : null,
+      // 예상 범위·유지 판단은 과거 검증 잔차에 따라 달라지므로 지문에 포함
+      unc: uncertainty ? [uncertainty.basis, uncertainty.all.n, uncertainty.all.qLow, uncertainty.all.qHigh, uncertainty.all.sd] : null,
     })
   );
 
@@ -395,6 +440,14 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
   }
 
   return { output, resolution, summary, skeleton, featureSet: fs, competitorFeatures, fingerprint: fp, evaluations };
+}
+
+/** 오차 배율 모델: 백테스트 잔차(충분할 때) → 학습 기간 변동. 둘 다 없으면 null(범위 없음, 판단은 최소 개선율만). */
+export function buildUncertainty(config: IdealScheduleConfig, residuals: ResidualRow[], fs: FeatureSet): UncertaintyModel | null {
+  const lowQ = config.expected_kpi.range_low_q ?? 0.1;
+  const highQ = config.expected_kpi.range_high_q ?? 0.9;
+  const minRows = config.expected_kpi.range_min_rows ?? 30;
+  return uncertaintyFromResiduals(residuals, { lowQ, highQ, minRows }) ?? uncertaintyFromTraining(fs.rating.relativeSpread(config.expected_kpi.min_n), { lowQ, highQ });
 }
 
 /** 실제 방영 기록(특정 주)을 같은 목적함수로 평가할 수 있는 블록 목록으로 바꾼다 — 현재 편성 비교·백테스트용.
@@ -471,4 +524,4 @@ export function evaluateActualSchedule(
   };
 }
 
-export { evaluateSchedule, UNCLASSIFIED };
+export { evaluateSchedule, UNCLASSIFIED, newCandidate, ownCandidateFor };

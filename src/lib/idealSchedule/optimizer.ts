@@ -15,7 +15,9 @@ import { cutSkeletonByFixed, type SkeletonSlot } from "./skeleton";
 import { Scorer, type BlockEval, type EngineCandidate } from "./scoring";
 import { BROADCAST_DAY_END_MIN, BROADCAST_DAY_START_MIN, hourBucket } from "./time";
 import { UNCLASSIFIED, genreFamily } from "./types";
+import { EPISODE_CHAIN_GAP_MIN } from "./features";
 import type { EpisodeAssignment } from "./episodes";
+import { certaintyOf, marginZ, type Certainty } from "./uncertainty";
 
 export type BlockStatus = "LOCKED" | "REQUIRED" | "AI" | "MANUAL_OVERRIDE";
 
@@ -31,10 +33,26 @@ export interface PlacedBlock {
   episode?: EpisodeAssignment | { none: true; reason: string }; // 부제 반영 모드에서 배정된 에피소드
 }
 
+/** 지난주 실제 편성 대비 판단(2단계). 수치는 모두 엔진 기대값·표준오차에서 나온다. */
+export interface BlockDecision {
+  /** SAME = 지난주와 같은 프로그램, KEEP = 차이가 작아 지난주 편성 유지, CHANGE = 뚜렷한 개선으로 교체,
+   *  NEW = 지난주 편성이 없던 자리, null = 시간 구조가 바뀌는 AI 시간 최적화 모드(지난주와 1:1 대응 없음) */
+  kind: "SAME" | "KEEP" | "CHANGE" | "NEW" | null;
+  incumbent: { name: string; expected: number | null } | null;
+  delta: number | null; // 선택 기대 − 지난주 편성 기대(같은 자리)
+  threshold: number | null; // 이 이하이면 "차이 작음"
+  reverted: boolean; // 엔진이 바꿨다가 기준 미달로 지난주 편성으로 되돌림
+  capBlocked?: boolean; // 되돌리려 했으나 반복 제한 때문에 못 함
+  runnerUp: { name: string; expected: number | null } | null; // 같은 자리 차순위(다른 프로그램)
+  margin: number | null; // (선택 − 차순위) ÷ 합성 표준오차
+  certainty: Certainty | null;
+}
+
 export interface EvaluatedBlock extends PlacedBlock {
   eval: BlockEval;
   timeChanged?: boolean;
   alternatives?: { candidate: EngineCandidate; eval: BlockEval }[];
+  decision?: BlockDecision;
 }
 
 export interface ScheduleEvaluation {
@@ -66,6 +84,14 @@ function evaluateInternal(scorer: Scorer, blocks: PlacedBlock[], maxGapMin: numb
     const b = sorted[i];
     if (days && !days.has(b.weekday)) continue;
     const prev = i > 0 && sorted[i - 1].weekday === b.weekday && b.startMin - sorted[i - 1].endMin <= maxGapMin ? sorted[i - 1] : null;
+    // 같은 프로그램이 짧은 편성물을 사이에 두고 이어지는지(회차 시리즈 연결 편성)
+    let episodeChain = false;
+    for (let k = i - 1; k >= 0 && sorted[k].weekday === b.weekday && b.startMin - sorted[k].endMin <= EPISODE_CHAIN_GAP_MIN; k--) {
+      if (sorted[k].candidate.programKey === b.candidate.programKey) {
+        episodeChain = true;
+        break;
+      }
+    }
     const e = scorer.evaluate(b.candidate, {
       weekday: b.weekday,
       startMin: b.startMin,
@@ -73,6 +99,7 @@ function evaluateInternal(scorer: Scorer, blocks: PlacedBlock[], maxGapMin: numb
       prevKey: prev?.candidate.key ?? null,
       prevProgramKey: prev?.candidate.programKey ?? null,
       fixed: b.fixed,
+      episodeChain,
       sameSlotOtherDays: (sameSlotDays.get(`${b.candidate.programKey}|${hourBucket(b.startMin)}`)?.size ?? 1) - 1,
       dayGenreShare: b.candidate.genre === UNCLASSIFIED ? 0 : genreShare.get(`${b.weekday}|${genreFamily(b.candidate.genre)}`) ?? 0,
     });
@@ -122,6 +149,8 @@ export interface EngineInput {
   benchmarkMaxShare: number; // 경쟁 Benchmark·장르 원형이 차지할 수 있는 AI 편성 분 비율(0 = 배치 안 함)
   /** 프로그램별 일·주 한도 대체값(부제 반영 모드의 에피소드 시리즈 = 관측 최대 방영 수) */
   programCapOverride?: Map<string, { daily: number; weekly: number }>;
+  /** 지난주 실제 편성(비교 기준 주) 블록 — 기존 틀 유지 모드의 "차이 작으면 유지" 판단 기준 */
+  incumbents?: PlacedBlock[];
 }
 
 let capOverride: Map<string, { daily: number; weekly: number }> | undefined; // optimizeWeek 호출 동안만 설정
@@ -296,6 +325,12 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
     }
   }
 
+  // 3) 차이가 작으면 지난주 편성 유지(2026-09-30 2단계, 통계 검토): 엔진이 바꾼 칸마다 같은 자리의 기대 시청률을
+  //    지난주 편성과 비교해, 개선폭 ≤ max(최소 개선율 × 지난주 기대, z × 합성 표준오차)이면 지난주 편성으로 되돌린다.
+  //    판정은 fitness가 아니라 기대 시청률(KPI 최우선). 개선폭이 작은 칸부터 처리하고, 매번 반복 제한을 다시 확인한다.
+  //    탐욕·국소탐색 단계의 기준을 바꾸면 결과가 탐색 순서에 좌우되므로 후처리로 둔다.
+  const decisions = keepInsignificant(input, slots, assigned, blocks, budgetMin);
+
   scorer.detail = true;
   const final = evaluateSchedule(scorer, blocks, maxGap);
   for (const eb of final.blocks) {
@@ -305,8 +340,92 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
     // 길이 불일치 패널티가 반영된 순위로 보여준다(2026-09-30 화면 점검: 긴 슬롯은 후보가 1개뿐이라 교체할 수 없었음).
     const altPool = [...new Set([...slotCandidates(slots[eb.slotIndex], input.pool, input, true), ...input.pool.filter((c) => c.aiEligible && c.contentType === "OWN")])];
     eb.alternatives = alternativesFor(scorer, blocks, src, altPool, maxGap, 10);
+    eb.decision = withRunnerUp(decisions.get(eb.slotIndex) ?? emptyDecision(null), eb);
   }
   return { mode: "KEEP_CURRENT", blocks: final.blocks, objective: final.objective, emptySlots, gaps: [], localSearchMoves: moves };
+}
+
+const emptyDecision = (kind: BlockDecision["kind"]): BlockDecision => ({ kind, incumbent: null, delta: null, threshold: null, reverted: false, runnerUp: null, margin: null, certainty: null });
+
+/** 같은 자리 차순위(다른 프로그램, 자사) 대비 확실도. 대체 후보 평가값(같은 자리·같은 앞 편성 기준)을 쓴다. */
+function withRunnerUp(d: BlockDecision, eb: EvaluatedBlock): BlockDecision {
+  const ru = (eb.alternatives ?? [])
+    .filter((a) => a.candidate.programKey !== eb.candidate.programKey && a.candidate.contentType === "OWN" && a.eval.expected !== null)
+    .sort((a, b) => (b.eval.expected as number) - (a.eval.expected as number) || (a.candidate.key < b.candidate.key ? -1 : 1))[0];
+  if (!ru || eb.eval.expected === null) return d;
+  const margin = marginZ(eb.eval.expected - (ru.eval.expected as number), eb.eval.se, ru.eval.se);
+  return { ...d, runnerUp: { name: ru.candidate.programName, expected: ru.eval.expected }, margin, certainty: certaintyOf(margin) };
+}
+
+function keepInsignificant(input: EngineInput, slots: SkeletonSlot[], assigned: (PlacedBlock | null)[], blocks: PlacedBlock[], budgetMin: number): Map<number, BlockDecision> {
+  const { config, scorer } = input;
+  const out = new Map<number, BlockDecision>();
+  const enabled = config.structure.decision_keep_current ?? true;
+  const minRel = config.structure.decision_min_rel_gain ?? 0.03;
+  const zCrit = config.structure.decision_z ?? 1;
+  const incumbents = input.incumbents ?? [];
+  // 같은 자리 기대값·표준오차(앞뒤 편성과 무관한 값만 쓰므로 이웃 없이 평가)
+  const probe = (c: EngineCandidate, s: SkeletonSlot) =>
+    scorer.evaluate(c, { weekday: s.weekday, startMin: s.startMin, endMin: s.endMin, prevKey: null, prevProgramKey: null, fixed: false, sameSlotOtherDays: 0, dayGenreShare: 0 });
+  // 지난주 이 자리 프로그램: 같은 요일, 이 칸과 절반 이상 겹친 방영 중 가장 많이 겹친 것
+  const incumbentOf = (s: SkeletonSlot): EngineCandidate | null => {
+    let best: PlacedBlock | null = null;
+    let bestOv = 0;
+    for (const b of incumbents) {
+      if (b.weekday !== s.weekday) continue;
+      const ov = Math.min(s.endMin, b.endMin) - Math.max(s.startMin, b.startMin);
+      if (ov > bestOv) {
+        bestOv = ov;
+        best = b;
+      }
+    }
+    if (!best || bestOv < (s.endMin - s.startMin) / 2) return null;
+    return input.pool.find((p) => p.key === best!.candidate.key) ?? best.candidate;
+  };
+  const pending: { i: number; inc: EngineCandidate; incExp: number | null; delta: number; threshold: number }[] = [];
+  for (let i = 0; i < slots.length; i++) {
+    const cur = assigned[i];
+    if (!cur) continue;
+    const inc = incumbentOf(slots[i]);
+    if (!inc) {
+      out.set(i, emptyDecision("NEW"));
+      continue;
+    }
+    const eInc = probe(inc, slots[i]);
+    const incumbent = { name: inc.programName, expected: eInc.expected };
+    if (inc.programKey === cur.candidate.programKey) {
+      out.set(i, { ...emptyDecision("SAME"), incumbent });
+      continue;
+    }
+    const eNew = probe(cur.candidate, slots[i]);
+    if (eNew.expected === null || eInc.expected === null) {
+      out.set(i, { ...emptyDecision("CHANGE"), incumbent });
+      continue;
+    }
+    const delta = eNew.expected - eInc.expected;
+    const seTerm = eNew.se !== null && eInc.se !== null ? zCrit * Math.sqrt(eNew.se ** 2 + eInc.se ** 2) : 0;
+    const threshold = Math.max(minRel * eInc.expected, seTerm);
+    out.set(i, { ...emptyDecision("CHANGE"), incumbent, delta, threshold });
+    if (enabled && delta <= threshold) pending.push({ i, inc, incExp: eInc.expected, delta, threshold });
+  }
+  // 개선폭이 기준 대비 작은 칸부터 되돌린다(결정론: 동률은 요일·시각 순)
+  pending.sort((a, b) => a.delta / (a.threshold || 1) - b.delta / (b.threshold || 1) || slots[a.i].weekday - slots[b.i].weekday || slots[a.i].startMin - slots[b.i].startMin);
+  // 되돌릴 때마다 다른 칸의 반복 횟수가 풀리므로(되돌린 칸에 있던 프로그램이 빠짐) 더 되돌릴 칸이 없을 때까지 반복
+  let left = pending;
+  for (let pass = 0; pass < 8 && left.length > 0; pass++) {
+    const next: typeof pending = [];
+    for (const p of left) {
+      const cur = assigned[p.i]!;
+      if (capsOk(p.inc, cur.weekday, blocks, config, [cur]) && benchmarkBudgetOk(p.inc, cur.endMin - cur.startMin, blocks, budgetMin, [cur])) {
+        cur.candidate = p.inc;
+        out.set(p.i, { ...out.get(p.i)!, kind: "KEEP", reverted: true });
+      } else next.push(p);
+    }
+    if (next.length === left.length) break;
+    left = next;
+  }
+  for (const p of left) out.set(p.i, { ...out.get(p.i)!, capBlocked: true });
+  return out;
 }
 
 // ── AI_OPTIMIZED ────────────────────────────────────────────────────
@@ -542,6 +661,7 @@ function optimizeAiTimes(input: EngineInput): EngineOutput {
     const len = eb.endMin - eb.startMin;
     const alts = [...(byLen.get(len) ?? []), ...suggestLens.filter((x) => x.len === len).map((x) => x.c)];
     eb.alternatives = alternativesFor(scorer, blocks, src, alts, maxGap, 10);
+    eb.decision = withRunnerUp(emptyDecision(null), eb);
   }
   return { mode: "AI_OPTIMIZED", blocks: final.blocks, objective: final.objective, emptySlots: [], gaps: gapsOut, localSearchMoves: moves };
 }
