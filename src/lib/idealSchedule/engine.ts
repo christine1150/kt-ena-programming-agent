@@ -6,7 +6,7 @@ import { targetKindOfLabel } from "./competitorTarget";
 import { targetGroupForKpiLabel, type BenchmarkPlacement, type CompetitorTargetMode, type IdealScheduleConfig, type StructureMode } from "./config";
 import { resolveHardConstraints, type ConstraintResolution, type HardConstraintInput } from "./constraints";
 import { buildFeatureSet, eligibleAirings, type FeatureOptions, type FeatureSet } from "./features";
-import { evaluateSchedule, optimizeWeek, type EngineOutput, type PlacedBlock } from "./optimizer";
+import { evaluateSchedule, optimizeWeek, type EngineOutput, type EvaluatedBlock, type PlacedBlock } from "./optimizer";
 import { buildCandidatePool, buildScoringContext, Scorer, strongSlotMap, type EngineCandidate, type StrategyMode } from "./scoring";
 import { buildSkeleton, type SkeletonSlot } from "./skeleton";
 import { addDays } from "./time";
@@ -28,6 +28,22 @@ export interface EngineRunInput {
   competitorBundle: CompetitorBundle | null;
   constraints: HardConstraintInput[];
   genreOf: GenreResolver;
+  /** 같은 모델(같은 as_of)로 평가할 실제 편성들 — CURRENT(비교 기준)·백테스트 실제 주. 방영 기록은 편성 구조와
+   *  실측 비교에만 쓰이고 모델(Feature)에는 들어가지 않는다(누수 없음). */
+  evaluateAirings?: { label: string; weekStart: string; airings: OwnAiring[] }[];
+}
+
+export interface ScheduleEvaluationResult {
+  weekStart: string;
+  rows: { block: EvaluatedBlock; actual: { r: number | null; s: number | null; ts: number | null } }[];
+  objective: number;
+  expectedAvgRating: number | null;
+  actualAvgRating: number | null;
+  expectedAvgShare: number | null;
+  actualAvgShare: number | null;
+  expectedAvgTimeSpent: number | null;
+  actualAvgTimeSpent: number | null;
+  calibration: { mae: number | null; bias: number | null; n: number };
 }
 
 export interface EngineSummary {
@@ -59,6 +75,7 @@ export interface EngineRunResult {
   featureSet: FeatureSet;
   competitorFeatures: CompetitorChannelFeature[];
   fingerprint: string;
+  evaluations: Record<string, ScheduleEvaluationResult>;
 }
 
 /** FNV-1a 32bit — 입력 지문(같은 입력·같은 설정 = 같은 지문 = 같은 결과). */
@@ -162,7 +179,7 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
 
   const scorer = new Scorer(buildScoringContext(fs, config, input.strategyMode, strong, opts.composition !== null));
   const placement = input.benchmarkPlacement ?? config.strategy.benchmark_placement;
-  const pool = buildCandidatePool(fs, strong ? { channels: competitorFeatures, strong, minN: config.expected_kpi.min_n, placeable: placement === "MIX" } : null);
+  const pool = buildCandidatePool(fs, strong ? { channels: competitorFeatures, strong, minN: config.expected_kpi.min_n, placeable: placement === "MIX", include: placement !== "NONE" } : null);
 
   // Hard 제약: 길이 미입력 항목은 그 프로그램의 실측 runtime 중앙값으로 채움(실측 없으면 비워 둬 경고)
   const filled = input.constraints.map((c) => {
@@ -173,7 +190,10 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
   });
   const resolution = resolveHardConstraints(filled, input.weekStart);
   const fixedBlocks: PlacedBlock[] = resolution.fixed.map((f) => {
-    const cand = ownCandidateFor(pool, f.input.programId, f.input.programName) ?? newCandidate(f.input.programName, f.input.programId, f.endMin - f.startMin, channelCode, input.genreOf);
+    const cand =
+      (f.input.candidateKey ? pool.find((p) => p.key === f.input.candidateKey) : undefined) ??
+      ownCandidateFor(pool, f.input.programId, f.input.programName) ??
+      newCandidate(f.input.programName, f.input.programId, f.endMin - f.startMin, channelCode, input.genreOf);
     return {
       weekday: f.weekday,
       startMin: f.startMin,
@@ -264,8 +284,10 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       asOf: input.asOfDate,
       mode: input.mode,
       strategy: input.strategyMode,
-      ctm: input.competitorTargetMode ?? null,
-      bp: input.benchmarkPlacement ?? null,
+      // 지문은 "실제 적용값" 기준 — 기본값을 명시했든 생략했든 같은 입력이면 같은 지문
+      ctm: input.competitorTargetMode ?? config.strategy.competitor_target_mode,
+      bp: placement,
+      comps: input.competitorBundle ? [...new Set(input.competitorBundle.airings.map((a) => a.competitor))].sort() : [],
       config,
       target: bundle.kpiLabel,
       constraints: [...input.constraints].sort((a, b) => (a.id < b.id ? -1 : 1)),
@@ -274,7 +296,12 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     })
   );
 
-  return { output, resolution, summary, skeleton, featureSet: fs, competitorFeatures, fingerprint: fp };
+  const evaluations: Record<string, ScheduleEvaluationResult> = {};
+  for (const ev of input.evaluateAirings ?? []) {
+    evaluations[ev.label] = evaluateActualSchedule(scorer, pool, ev.airings, ev.weekStart, channelCode, input.genreOf, config.structure.max_gap_min);
+  }
+
+  return { output, resolution, summary, skeleton, featureSet: fs, competitorFeatures, fingerprint: fp, evaluations };
 }
 
 /** 실제 방영 기록(특정 주)을 같은 목적함수로 평가할 수 있는 블록 목록으로 바꾼다 — 현재 편성 비교·백테스트용.
@@ -295,6 +322,56 @@ export function scheduleFromAirings(
       const cand = pool.find((p) => p.key === key) ?? { ...newCandidate(a.programName, a.programId, a.durationMin, channelCode, genreOf), key, programKey: a.programId, airingType: a.airingType };
       return { weekday: a.dow, startMin: a.startMin, endMin: a.endMin as number, candidate: cand, status: "AI" as const, fixed: false };
     });
+}
+
+/** 실제 편성(방영 기록)을 엔진과 같은 모델·목적함수로 평가 + 실측과 대조(편성 분 가중 평균, 방영별 오차). */
+export function evaluateActualSchedule(
+  scorer: Scorer,
+  pool: EngineCandidate[],
+  airings: OwnAiring[],
+  weekStart: string,
+  channelCode: string,
+  genreOf: GenreResolver,
+  maxGapMin: number
+): ScheduleEvaluationResult {
+  const blocks = scheduleFromAirings(airings, weekStart, pool, channelCode, genreOf);
+  scorer.detail = true;
+  const ev = evaluateSchedule(scorer, blocks, maxGapMin);
+  const weekEnd = addDays(weekStart, 6);
+  const actualByKey = new Map<string, OwnAiring>();
+  for (const a of airings) if (a.date >= weekStart && a.date <= weekEnd) actualByKey.set(`${a.dow}|${a.startMin}|${a.programId}`, a);
+  const rows = ev.blocks.map((b) => {
+    const a = actualByKey.get(`${b.weekday}|${b.startMin}|${b.candidate.programId}`);
+    return { block: b, actual: { r: a?.kpi.r ?? null, s: a?.kpi.s ?? null, ts: a?.kpi.ts ?? null } };
+  });
+  const wavg = (pick: (r: (typeof rows)[number]) => number | null) => {
+    let num = 0;
+    let den = 0;
+    for (const r of rows) {
+      const v = pick(r);
+      if (v === null) continue;
+      num += v * (r.block.endMin - r.block.startMin);
+      den += r.block.endMin - r.block.startMin;
+    }
+    return den > 0 ? num / den : null;
+  };
+  const errs = rows.filter((r) => r.actual.r !== null && r.block.eval.expected !== null).map((r) => (r.block.eval.expected as number) - (r.actual.r as number));
+  return {
+    weekStart,
+    rows,
+    objective: ev.objective,
+    expectedAvgRating: wavg((r) => r.block.eval.expected),
+    actualAvgRating: wavg((r) => r.actual.r),
+    expectedAvgShare: wavg((r) => r.block.eval.expectedShare),
+    actualAvgShare: wavg((r) => r.actual.s),
+    expectedAvgTimeSpent: wavg((r) => r.block.eval.expectedTimeSpent),
+    actualAvgTimeSpent: wavg((r) => r.actual.ts),
+    calibration: {
+      mae: errs.length ? errs.reduce((s, e) => s + Math.abs(e), 0) / errs.length : null,
+      bias: errs.length ? errs.reduce((s, e) => s + e, 0) / errs.length : null,
+      n: errs.length,
+    },
+  };
 }
 
 export { evaluateSchedule, UNCLASSIFIED };

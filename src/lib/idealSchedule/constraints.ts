@@ -27,6 +27,7 @@ export interface HardConstraintInput {
   activeTo: string | null;
   locked: boolean;
   durationDerived?: boolean; // 길이를 입력받지 않고 실측 runtime 중앙값으로 채운 경우
+  candidateKey?: string; // 재계산 시 LOCK·수동 변경 블록을 같은 후보(경쟁 Benchmark 포함)로 복원
 }
 
 export interface ResolvedFixed {

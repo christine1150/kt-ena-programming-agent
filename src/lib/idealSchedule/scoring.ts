@@ -131,7 +131,7 @@ export function strongSlotMap(
 /** 후보 풀: 자사 프로그램 + (경쟁 선택 시) Benchmark·Archetype. 정렬 고정(결정론). */
 export function buildCandidatePool(
   fs: FeatureSet,
-  competitor: { channels: CompetitorChannelFeature[]; strong: Map<string, StrongSlotInfo>; minN: number; placeable: boolean } | null
+  competitor: { channels: CompetitorChannelFeature[]; strong: Map<string, StrongSlotInfo>; minN: number; placeable: boolean; include: boolean } | null
 ): EngineCandidate[] {
   const pool: EngineCandidate[] = [];
   // 본방(<본>) 단위는 "지금 방영 중"(기준일 전 7일 안에 본방이 있었음)일 때만 AI 후보 — 종영 시리즈의 본방 성적으로
@@ -154,7 +154,8 @@ export function buildCandidatePool(
       weeklyLimit: u.airingType === "FIRST" ? u.max_weekly_airings : null,
     });
   }
-  if (competitor) {
+  // 경쟁 프로그램·장르 원형은 사용자가 Benchmark 옵션을 켰을 때만(include) 후보에 넣는다 — 기본(NONE)은 자사만
+  if (competitor && competitor.include) {
     for (const ch of competitor.channels) {
       if (!ch.programTarget) continue;
       for (const p of ch.programs) {

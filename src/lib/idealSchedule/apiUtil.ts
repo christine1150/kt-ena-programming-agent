@@ -1,0 +1,53 @@
+// 이상적 1주일 편성 API 공통 — 세션 확인(관리자·PD 모두 허용, 사용자 결정 2026-09-30)과 입력 검증.
+import { NextResponse } from "next/server";
+import { getCurrentSession } from "@/lib/adminAuth";
+import type { BenchmarkPlacement, CompetitorTargetMode, StructureMode } from "./config";
+import type { RunRequest } from "./engineRunner";
+import { actorOf, type Actor } from "./runStore";
+import type { StrategyMode } from "./scoring";
+import { isoDow } from "./time";
+import { ClientError } from "./errors";
+
+export async function requireActor(): Promise<{ actor: Actor; isAdmin: boolean } | NextResponse> {
+  const session = await getCurrentSession();
+  if (!session) return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
+  return { actor: actorOf(session), isAdmin: session.role === "admin" };
+}
+
+export const bad = (message: string, status = 400) => NextResponse.json({ ok: false, message }, { status });
+export const fail = (e: unknown) =>
+  NextResponse.json(
+    { ok: false, message: e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e) },
+    { status: e instanceof ClientError ? 400 : 500 }
+  );
+
+const MODES: StructureMode[] = ["KEEP_CURRENT", "AI_OPTIMIZED"];
+const STRATEGIES: StrategyMode[] = ["AUTO", "MATCH", "COUNTER", "MIX"];
+const PLACEMENTS: BenchmarkPlacement[] = ["NONE", "SUGGEST_ONLY", "MIX"];
+const TARGET_MODES: CompetitorTargetMode[] = ["AUTO_MATCH_KPI", "2049", "HOUSEHOLD"];
+
+export const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+/** 실행 요청 본문 → RunRequest(검증 실패 시 메시지). */
+export function parseRunRequest(body: Record<string, unknown> | null): RunRequest | string {
+  if (!body) return "요청 본문이 없습니다.";
+  const { channelCode, weekStart, mode, strategyMode, competitorNames, competitorTargetMode, benchmarkPlacement, optimizeTargetLabel } = body;
+  if (typeof channelCode !== "string" || !channelCode) return "channelCode가 필요합니다.";
+  if (!isDate(weekStart) || isoDow(weekStart) !== 1) return "weekStart는 월요일 날짜(YYYY-MM-DD)여야 합니다.";
+  if (!MODES.includes(mode as StructureMode)) return `mode는 ${MODES.join("/")} 중 하나여야 합니다.`;
+  const strat = (strategyMode ?? "AUTO") as StrategyMode;
+  if (!STRATEGIES.includes(strat)) return `strategyMode는 ${STRATEGIES.join("/")} 중 하나여야 합니다.`;
+  const comps = Array.isArray(competitorNames) ? competitorNames.filter((c): c is string => typeof c === "string" && c.length > 0) : [];
+  if (benchmarkPlacement !== undefined && !PLACEMENTS.includes(benchmarkPlacement as BenchmarkPlacement)) return `benchmarkPlacement는 ${PLACEMENTS.join("/")} 중 하나여야 합니다.`;
+  if (competitorTargetMode !== undefined && !TARGET_MODES.includes(competitorTargetMode as CompetitorTargetMode)) return `competitorTargetMode는 ${TARGET_MODES.join("/")} 중 하나여야 합니다.`;
+  return {
+    channelCode,
+    weekStart,
+    mode: mode as StructureMode,
+    strategyMode: strat,
+    competitorNames: [...new Set(comps)],
+    competitorTargetMode: competitorTargetMode as CompetitorTargetMode | undefined,
+    benchmarkPlacement: benchmarkPlacement as BenchmarkPlacement | undefined,
+    optimizeTargetLabel: typeof optimizeTargetLabel === "string" && optimizeTargetLabel ? optimizeTargetLabel : undefined,
+  };
+}

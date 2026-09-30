@@ -6,6 +6,7 @@ import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import type { IdealScheduleConfig } from "./config";
 import { mapCompetitorData, mapOwnAirings, SKYUHD_KPI_KEY, targetLabelsToFetch, type RawCompetitor, type RawOwn } from "./mapping";
 import type { CompetitorBundle, OwnAiringsBundle } from "./types";
+import { addDays } from "./time";
 
 export interface ChannelRef {
   id: string;
@@ -29,6 +30,19 @@ export async function fetchOwnAirings(channel: ChannelRef, asOfDate: string, con
     p_target_labels: targetLabelsToFetch(config, channel.kpiLabel, optimizeTarget),
   });
   if (error) throw new Error(`get_ideal_schedule_own_airings 실패: ${error.message}`);
+  return mapOwnAirings(data as RawOwn);
+}
+
+/** 특정 주(월~일)의 실제 방영 — 백테스트에서 "실제 편성·실측"으로만 쓴다(모델 입력 아님).
+ *  as_of = 그 주 일요일, 조회 기간 7일. */
+export async function fetchWeekAirings(channel: ChannelRef, weekStart: string, config: IdealScheduleConfig, optimizeTarget?: string | null): Promise<OwnAiringsBundle> {
+  const { data, error } = await supabase.rpc("get_ideal_schedule_own_airings", {
+    p_channel_code: channel.code,
+    p_as_of_date: addDays(weekStart, 6),
+    p_lookback_days: 7,
+    p_target_labels: targetLabelsToFetch(config, channel.kpiLabel, optimizeTarget),
+  });
+  if (error) throw new Error(`get_ideal_schedule_own_airings(주간) 실패: ${error.message}`);
   return mapOwnAirings(data as RawOwn);
 }
 

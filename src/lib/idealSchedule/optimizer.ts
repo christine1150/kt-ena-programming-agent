@@ -168,7 +168,12 @@ function alternativesFor(scorer: Scorer, blocks: PlacedBlock[], target: PlacedBl
     if (ev) rows.push({ candidate: c, eval: ev.eval });
   }
   target.candidate = original;
-  return rows.sort((a, b) => b.eval.value - a.eval.value || (a.candidate.key < b.candidate.key ? -1 : 1)).slice(0, topN);
+  // 순위: 자사 실측 기반 후보(OWN)를 먼저, 가정 기반 후보(경쟁 Benchmark·장르 원형)는 뒤에 별도로 — 가정값이
+  // 실측 기반 후보보다 앞 순위로 섞이지 않게 한다(2026-09-30 API 점검).
+  const byValue = (a: (typeof rows)[number], b: (typeof rows)[number]) => b.eval.value - a.eval.value || (a.candidate.key < b.candidate.key ? -1 : 1);
+  const own = rows.filter((r) => !isHypothetical(r.candidate)).sort(byValue).slice(0, topN);
+  const hyp = rows.filter((r) => isHypothetical(r.candidate)).sort(byValue).slice(0, Math.ceil(topN / 2));
+  return [...own, ...hyp];
 }
 
 // ── KEEP_CURRENT ────────────────────────────────────────────────────

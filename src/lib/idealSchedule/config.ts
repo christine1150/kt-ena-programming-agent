@@ -40,13 +40,14 @@ export interface IdealStrategyConfig {
   target_mismatch_penalty: number;
   include_benchmark_in_totals: boolean;
   competitor_target_mode: CompetitorTargetMode;
-  /** SUGGEST_ONLY: 경쟁 Benchmark·장르 원형은 배치하지 않고 대체 후보·제안으로만 표시(기본)
-   *  MIX: 가상 편성표에 배치하되 AI 편성 분의 benchmark_max_share 이내 */
+  /** NONE(기본): 자사 채널 편성 프로그램만 — 경쟁 프로그램·장르 원형을 후보·대체 후보 어디에도 넣지 않음
+   *  (사용자 지시 2026-09-30: "처음부터 경쟁사 컨텐츠를 섞으면 절대 안돼")
+   *  SUGGEST_ONLY: 배치하지 않고 대체 후보로만 제안 / MIX: AI 편성 분의 benchmark_max_share 이내 배치 */
   benchmark_placement: BenchmarkPlacement;
   benchmark_max_share: number;
 }
 
-export type BenchmarkPlacement = "SUGGEST_ONLY" | "MIX";
+export type BenchmarkPlacement = "NONE" | "SUGGEST_ONLY" | "MIX";
 
 export type StructureMode = "KEEP_CURRENT" | "AI_OPTIMIZED";
 

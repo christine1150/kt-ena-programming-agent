@@ -151,7 +151,25 @@ SQL은 "방영 1건 = 1원소"까지만 줄여 jsonb 1개로 반환(PostgREST 10
 
 - Fit Score 마트(`mart_*`)는 실행 시 쓰지 않음: skyUHD가 마트에 없고, 백테스트마다 `refresh_fit_score_mart` 재계산은 무겁기 때문. 대신 같은 규칙(84일·02시 경계·4구간 daypart·본/재 분리)을 TS에서 재현
 
-### D-3. API(기존 `/api/scheduling/*` 규칙 준수, 세션 게이트)
+### D-3. API(기존 `/api/scheduling/*` 규칙 준수, 세션 게이트) — STEP 4 구현 확정
+
+| 메서드·경로(`/api/scheduling/ideal-schedule` 기준) | 기능 | 권한 |
+|---|---|---|
+| `POST /` · `GET /?channel=&saved=1` | 실행 생성(즉시 저장) · 실행 목록 | 관리자·PD |
+| `GET /[runId]` · `PATCH /[runId]` | 실행·블록(IDEAL/CURRENT) 조회 · [저장](이름) | 관리자·PD |
+| `GET /[runId]/blocks/[blockId]` · `PATCH` | 대체 후보 · Swap(MANUAL_OVERRIDE+LOCK)/LOCK | 관리자·PD(필수 편성은 교체 불가) |
+| `GET /[runId]/compare` | CURRENT vs IDEAL 대조 | 관리자·PD |
+| `POST /[runId]/recalculate` | 다시 계산(수동 변경 유지/초기화) | 관리자·PD |
+| `GET·POST /constraints` · `PATCH·DELETE /constraints/[id]` | 필수 편성 CRUD | 관리자·PD |
+| `GET /options?channel=` | KPI·최적화 타깃 목록·경쟁채널·설정 | 관리자·PD |
+| `GET·PUT /config` | 설정 조회·저장 | 채널별 PD 가능, 전체 기본값은 관리자 |
+| `POST /backtest` · `GET /backtest?id=` | 1주 walk-forward(여러 주는 id로 묶어 순차) · 결과 | 관리자·PD |
+| 엑셀 다운로드 | STEP 5(화면 그리드 서식과 함께) | — |
+
+- CURRENT 레이어 = 대상 주 직전부터 거슬러 **7일 데이터가 모두 있고 공휴일 없는 첫 주**(명절 특집 주 제외)를 같은 모델로 평가
+- Swap은 저장된 대체 후보로만 교체, 이웃 점수·합계는 [다시 계산] 전까지 갱신 안 됨(`needs_recalc` 표시)
+
+#### (참고) 설계 초안 API
 
 | 메서드·경로 | 기능 |
 |---|---|
@@ -295,6 +313,12 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 | AI 모드 여백 | 연속 여백 합계도 max_gap_min 이내 | 여백 전이가 이어져 15~20분 여백 발생 |
 | 경쟁 Benchmark 배치 | 기본 SUGGEST_ONLY(대체 후보·제안만), MIX에서만 AI 편성 분의 benchmark_max_share(초기 20%) 이내 배치. 지수도 표본 수 수축 | 수축·제한 없이 경쟁시키면 AI 배치 128개 중 118개가 경쟁 프로그램 |
 
+### G-6. 경쟁사 콘텐츠 기본값 = 사용하지 않음(2026-09-30 사용자 지시)
+
+- "기본값은 선택한 채널 안의 편성 프로그램으로만 이상적 편성표를 도출. 처음부터 경쟁사 컨텐츠를 섞으면 절대 안 됨"
+- `benchmark_placement`: **NONE(기본)** = 경쟁 프로그램·장르 원형을 후보·대체 후보·요약 어디에도 넣지 않음 / SUGGEST_ONLY = 대체 후보로만 제안(자사 후보 뒤) / MIX = 편성 분 일부 배치
+- 경쟁채널을 선택해도 기본값에서는 강세 슬롯 분석(MATCH/COUNTER 라벨)에만 쓰고 후보는 자사 프로그램뿐
+
 ### G-5. 자사 최적화 타깃 선택(2026-09-30 사용자 지시)
 
 - 실행 파라미터 `optimizeTargetLabel`: 채널 KPI 대신 원하는 타깃 기준 편성안(예: ENA Play 수도권 2039·수도권 여20대, ONCE 전국 5064·전국 남50대)
@@ -425,8 +449,9 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 | 3b | `20260930030000_ideal_schedule_group_b_core_household.sql` | Group B 핵심 타깃 = 전국 가구(구성비 항목 제거) | **적용 완료** |
 | 3c | `20260930040000_ideal_schedule_benchmark_placement.sql` | Benchmark 배치 방식(SUGGEST_ONLY/MIX)·최대 비율 | **적용 완료** |
 | 3d | `20260930050000_ideal_schedule_target_labels.sql` | 최적화 타깃 선택 목록 RPC | **적용 완료** |
-| 4 | `…_ideal_schedule_runs_blocks_candidates.sql` | 실행·블록·후보 | STEP 4 |
-| 5 | `…_ideal_schedule_backtest.sql` | 백테스트 2종 | STEP 4 |
+| 4 | `20260930060000_ideal_schedule_runs_backtest.sql` | 실행·블록(IDEAL/CURRENT)·대체 후보·백테스트 2종 | **적용 완료** |
+| 5 | `20260930070000_ideal_schedule_runs_saved.sql` | [저장] 이름·저장 시각 | **적용 완료** |
+| 6 | `20260930080000_ideal_schedule_own_only_default.sql` | Benchmark 기본값 NONE(자사 프로그램만) | **적용 완료** |
 
 - `ratings` 인덱스 추가는 보류: 기존 `(channel_id, broadcast_date)`로 채널당 1.4초 이내라 필요 없음
 
@@ -441,7 +466,7 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 | STEP 1 | 본 문서 | — |
 | STEP 2 **(완료)** | Migration 3건, Feature RPC 2종, `src/lib/idealSchedule/*`(time·mapping·features·competitorFeatures·competitorTarget·genreRules·config), 장르 시드 2,890건, `npm run test:ideal` 41건 | `npm run smoke` 15/15, 7채널 실데이터 미래 데이터 차단 검증 |
 | STEP 3 **(완료)** | constraints·skeleton·scoring·optimizer(KEEP_CURRENT·AI_OPTIMIZED)·engine·engineRunner·constraintStore, 타깃 선택 | `npm run test:ideal` 84건(설계 23종 포함), 7채널×2모드 실데이터 실행 0.8~7초, 결정론 확인 |
-| STEP 4 | Migration 4~5, API 9종, 백테스트 | API 응답·DB 저장, 과거 4주 walk-forward |
+| STEP 4 **(완료)** | runStore·backtest·apiUtil, API 10종(`/api/scheduling/ideal-schedule/**`), CURRENT 레이어 | 개발 서버 실HTTP 검증(생성·조회·대체 후보·Swap·LOCK·비교·재계산 유지/초기화·저장·필수 편성 CRUD·설정 권한·백테스트·401/400/409), 테스트 86건 |
 | STEP 5 | `/ideal-schedule` UI, Grid 레이아웃 추출, Swap·비교·엑셀 | 브라우저 검증, 기존 주간 비교 화면 스크린샷 동일성 |
 
 **테스트 설계**: 프레임워크 추가 없이 `scripts/test-ideal-schedule.ts`(tsx, 픽스처 기반 순수 함수 테스트) + `smoke-rpc.mts`에 RPC 항목 추가.
@@ -463,6 +488,8 @@ objective = Σ_slots (fitness × slot_minutes_weight)
 |---|---|---|
 | 1 | **장르 데이터 없음**(자사·경쟁 모두) → MATCH/COUNTER·genre_fit 불가 | `program_genre_map` 신설, 규칙 시드 + 관리자 수기 보완. 미분류는 NEUTRAL. **STEP 2 실측: 규칙 분류 후 자사 편성 분 기준 커버리지 ENA 53%·ENA Drama 37%·ENA Play 32%·ENA Story 38%·OLIFE 69%·ONCE 3%·skyUHD 49%, 경쟁 프로그램 2,055/2,614건 미분류** → 관리자 보완 전까지 MATCH/COUNTER 대부분 NEUTRAL |
 | 1b | 신뢰도(confidence)가 전반적으로 낮게 나옴(프로그램 단위 중앙값 0~0.16) | 표본 충족도(같은 슬롯 12주 기준) × 안정성의 정직한 결과. STEP 4 백테스트 보정도로 `full_confidence_n` 등 설정값 재검토 |
+| 1c | 백테스트(ENA 3주·OLIFE 2주): 주간 평균 기대값 편향 ±1~2%p 내외, 방영별 MAE는 평균 시청률의 35~50% | 주간 합계 수준에서는 쓸 만하나 개별 슬롯 기대값은 잡음이 큼 → 화면에 신뢰도·"기대값" 표기 필수 |
+| 1d | 기본 일 반복 cap 3이 실제 편성 관행과 다름(OLIFE 현재 편성은 같은 프로그램 하루 6~8회) | 목적함수상 이상적 편성이 높게 나오는 주요 원인이 반복 패널티 — 채널별 cap을 설정 화면에서 조정하도록 안내 |
 | 2 | 경쟁 프로그램 데이터는 타깃 1개·시청시간 없음 | H-1b 타깃 선택 규칙, 자기 기준 정규화만 사용, 타깃 불일치 시 감점·배지, Benchmark 기대값은 가정 명시·저신뢰 |
 | 3 | Benchmark 기대값은 관측 불가 | BENCHMARK_TRANSFER 표기, KPI 합계 기본 제외 |
 | 4 | 12주 창에 추석 특집 포함 | 공휴일 제외 기본값 |

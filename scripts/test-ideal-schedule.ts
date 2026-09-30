@@ -264,7 +264,7 @@ const engineConfig = mergeIdealConfig(
     weights: { kpi: 35, target: 20, weekday_slot: 20, trend: 10, stability: 5, lead: 10 },
     repeat_rules: { daily_cap: 3, weekly_cap: 14, consecutive_penalty: 0.15, same_slot_penalty: 0.05, genre_concentration_penalty: 0.05, low_confidence_penalty: 0.1, runtime_mismatch_penalty: 0.1 },
     expected_kpi: { lookback_days: 84, recent_days: 28, recent_weight: 2, shrinkage_k: 4, min_n: 3, full_confidence_n: 12, exclude_holidays: true },
-    strategy: { strong_threshold: 1.2, match_weight: 0.5, counter_weight: 0.5, benchmark_confidence_cap: 0.4, target_mismatch_penalty: 0.2, include_benchmark_in_totals: false, competitor_target_mode: "AUTO_MATCH_KPI", benchmark_placement: "SUGGEST_ONLY", benchmark_max_share: 0.05 },
+    strategy: { strong_threshold: 1.2, match_weight: 0.5, counter_weight: 0.5, benchmark_confidence_cap: 0.4, target_mismatch_penalty: 0.2, include_benchmark_in_totals: false, competitor_target_mode: "AUTO_MATCH_KPI", benchmark_placement: "NONE", benchmark_max_share: 0.05 },
     structure: { default_mode: "KEEP_CURRENT", skeleton_weeks: 4, grid_minutes: 5, runtime_tolerance_min: 10, max_gap_min: 10, max_local_search_iter: 2000 },
     targets: { GROUP_A: { kpi: KPI, extra: [], composition: null }, GROUP_B: { kpi: "전국 유료가구", extra: [], composition: null }, SKYUHD: { kpi: null, extra: [], composition: null } },
   },
@@ -411,8 +411,18 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   check("[17] COUNTER: 같은 슬롯에 다른 장르", at(c).eval.strategy.type === "COUNTER" && at(c).candidate.genre !== "드라마", `${at(c).candidate.programName}/${at(c).eval.strategy.type}`);
   check("전략 결과 저장값(강도·match/counter 점수)", (at(m).eval.strategy.competitorSlotStrength ?? 0) >= 1.2 && at(m).eval.strategy.matchScore > 0 && at(c).eval.strategy.counterScore > 0);
   check("[15] 경쟁사 타깃 선택 결과가 요약에 기록", m.summary.competitorTargets.length === 1 && m.summary.competitorTargets[0].programTarget === "2049" && m.summary.competitorTargets[0].matchesOwnKpi === true);
-  check("기본(제안만): 경쟁 Benchmark 배치 0건, 대체 후보에는 표시", m.summary.benchmarkBlockCount === 0 && m.output.blocks.some((b) => (b.alternatives ?? []).some((a) => a.candidate.contentType === "COMPETITOR_BENCHMARK")));
-  const alt = m.output.blocks.flatMap((b) => b.alternatives ?? []).find((a) => a.candidate.contentType === "COMPETITOR_BENCHMARK")!;
+  // 사용자 지시(2026-09-30): 기본값은 자사 채널 프로그램만 — 경쟁사 콘텐츠·장르 원형은 편성·대체 후보 어디에도 없음
+  const hypAnywhere = (r: EngineRunResult) =>
+    r.output.blocks.some((b) => b.candidate.contentType !== "OWN" || (b.alternatives ?? []).some((a) => a.candidate.contentType !== "OWN"));
+  check("기본(NONE): 경쟁사를 골라도 편성·대체 후보 모두 자사 프로그램만", !hypAnywhere(m) && !hypAnywhere(c) && m.summary.benchmarkCandidateCount === 0);
+  const sug = runIdealScheduleEngine(baseRun({ competitorBundle: compBundle, strategyMode: "MATCH", benchmarkPlacement: "SUGGEST_ONLY" }));
+  check("SUGGEST_ONLY(명시적으로 켰을 때): 배치 0건, 대체 후보에만 표시(자사 후보 뒤)", sug.summary.benchmarkBlockCount === 0 && sug.output.blocks.some((b) => (b.alternatives ?? []).some((a) => a.candidate.contentType === "COMPETITOR_BENCHMARK")));
+  const altOrderOk = sug.output.blocks.every((b) => {
+    const t = (b.alternatives ?? []).map((a) => a.candidate.contentType === "OWN");
+    return t.indexOf(false) === -1 || t.slice(t.indexOf(false)).every((x) => !x);
+  });
+  check("대체 후보 순서: 자사 후보가 가정 후보보다 항상 앞", altOrderOk);
+  const alt = sug.output.blocks.flatMap((b) => b.alternatives ?? []).find((a) => a.candidate.contentType === "COMPETITOR_BENCHMARK")!;
   check("Benchmark 기대값 = 지수 전이 가정 표기 + 신뢰도 상한", alt.eval.expectedKpiType === "BENCHMARK_TRANSFER" && alt.eval.confidence <= engineConfig.strategy.benchmark_confidence_cap + 1e-9);
   const mix = runIdealScheduleEngine(baseRun({ competitorBundle: compBundle, strategyMode: "AUTO", benchmarkPlacement: "MIX", config: { ...engineConfig, strategy: { ...engineConfig.strategy, benchmark_max_share: 0.05 } } }));
   const slotMin = mix.skeleton.reduce((s, x) => s + (x.endMin - x.startMin), 0);
