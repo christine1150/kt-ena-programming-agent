@@ -21,11 +21,14 @@ export async function GET(request: Request) {
     const ch = await loadChannelRef(channelCode);
     const config = await loadIdealScheduleConfig(ch.id);
     const asOfDate = isDate(asOf) ? asOf : new Date().toISOString().slice(0, 10);
-    const [targets, competitors, channelRows] = await Promise.all([
+    const [targets, competitors, channelRows, planRows] = await Promise.all([
       ch.code === "SKYUHD" ? Promise.resolve([]) : fetchTargetLabels(ch.code, asOfDate, config.expected_kpi.lookback_days),
       getAllRegisteredCompetitorNames(),
       supabase.from("channels").select("code, name, theme_color, logo_path, logo_visible_ratio, logo_visible_top_ratio").in("code", OWN_CHANNELS),
+      // 업로드된 주간 편성표(편성표 회차 반영 옵션, 2026-10-01) — 학습 기간(12주 남짓) 이후 주만
+      supabase.from("program_schedule_grid").select("week_start").eq("channel_id", ch.id).gte("week_start", new Date(Date.parse(asOfDate) - 91 * 86400000).toISOString().slice(0, 10)).limit(5000),
     ]);
+    const planWeeks = [...new Set((planRows.data ?? []).map((r) => r.week_start as string))].sort();
     const channels = OWN_CHANNELS.map((code) => (channelRows.data ?? []).find((c) => c.code === code)).filter(Boolean);
     // 부제 반영 옵션은 설정에 에피소드 시리즈가 있는 채널(현재 OLIFE)에서만 보여준다
     const episodicPrograms = config.structure.episodic_programs?.[ch.code] ?? [];
@@ -37,6 +40,7 @@ export async function GET(request: Request) {
       competitors,
       channels,
       episodicPrograms,
+      planWeeks,
       hasEpisodeOption: episodicPrograms.length > 0 && isEpisodicProgram(config, ch.code, episodicPrograms[0]),
       config,
       isAdmin: auth.isAdmin,

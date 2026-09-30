@@ -349,6 +349,18 @@ export async function ingestScheduleGridFile(file: File): Promise<ScheduleGridUp
     source_file_name: file.name,
   }));
 
+  // 같은 주 편성표를 다시 올리면(수정안 등) 그 주 행을 새 파일로 통째로 바꾼다 — 시각이 바뀐 옛 행이 남아
+  // 두 안이 섞이지 않게(2026-10-01, 시청률 자판기 편성표 회차 반영)
+  const { error: clearError } = await supabase
+    .from("program_schedule_grid")
+    .delete()
+    .eq("channel_id", channel.id)
+    .gte("broadcast_date", parsed.weekStart)
+    .lte("broadcast_date", parsed.weekEnd);
+  if (clearError) {
+    return { ok: false, message: "기존 편성표 정리에 실패했습니다: " + clearError.message };
+  }
+
   const { error: upsertError } = await supabase
     .from("program_schedule_grid")
     .upsert(rowsToUpsert, { onConflict: "channel_id,broadcast_date,start_time" });

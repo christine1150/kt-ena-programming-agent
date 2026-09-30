@@ -10,6 +10,7 @@ import { evaluateSchedule, optimizeWeek, type EngineOutput, type EvaluatedBlock,
 import { buildCandidatePool, buildScoringContext, Scorer, strongSlotMap, type EngineCandidate, type StrategyMode } from "./scoring";
 import { buildSkeleton, type SkeletonSlot } from "./skeleton";
 import { addDays } from "./time";
+import { planEpisodeHints, type PlanRow } from "./planEpisodes";
 import { assignEpisodes, buildEpisodeStats, isEpisodicProgram, observedProgramMaxima, type EpisodeMode } from "./episodes";
 import type { CompetitorBundle, Genre, OwnAiring, OwnAiringsBundle } from "./types";
 import { UNCLASSIFIED, genreFamily } from "./types";
@@ -38,6 +39,9 @@ export interface EngineRunInput {
   evaluateAirings?: { label: string; weekStart: string; airings: OwnAiring[] }[];
   /** 이 채널·타깃의 과거 주 검증(백테스트) 방영별 잔차 — 기준일 이전에 끝난 주만(누수 없음). 없으면 학습 기간 변동으로 대체 */
   residuals?: ResidualRow[];
+  /** 업로드 편성표 회차(B안, 옵션 켰을 때만) — 닐슨 방송일 기준으로 정규화된 행. 방영 회차 채우기는 러너가 먼저 한다 */
+  planRows?: PlanRow[];
+  planFilled?: number; // 러너가 편성표로 회차를 채운 방영 수(요약 표시용)
 }
 
 export interface ScheduleEvaluationResult {
@@ -76,6 +80,8 @@ export interface EngineSummary {
   optimizeTarget: { label: string; isChannelKpi: boolean }; // 이 편성안이 최적화한 타깃
   /** 회차가 달라 프로그램 단위 반복 제한을 완화한 시리즈 이름 */
   multiEpisodePrograms: string[];
+  /** 편성표 회차 반영(B안): 쓴 편성표 주, 회차를 채운 과거 방영 수, 편성안에 회차를 붙인 블록 수(대상 주 편성표/이전 주에서 이어짐) */
+  planEpisodes: { weeks: string[]; filledAirings: number; plan: number; flow: number } | null;
   /** 회차 정보 없이 하루 여러 번 도는 패턴으로 판정한 순환 편성 프로그램 이름(설정으로 켠 채널만, 위 목록과 겹치지 않음) */
   rotationPrograms: string[];
   /** 예상 범위 근거(BACKTEST = 과거 주 검증 잔차 n건, TRAINING = 검증 전 학습 기간 변동) */
@@ -365,6 +371,36 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     }
   }
 
+  // 편성표 회차(B안) — 대상 주 편성표가 있으면 그 회차, 없으면 이전 주 편성표 흐름을 이어 블록에 회차를 붙인다
+  let planCount = 0;
+  let flowCount = 0;
+  if (input.planRows?.length) {
+    const own = output.blocks.map((b, id) => ({ b, id })).filter(({ b }) => b.candidate.contentType === "OWN");
+    const hints = planEpisodeHints(
+      own.map(({ b, id }) => ({ id, weekday: b.weekday, startMin: b.startMin, programName: b.candidate.programName, programId: b.candidate.programId })),
+      input.planRows,
+      input.weekStart
+    );
+    for (const { b, id } of own) {
+      const h = hints.get(id);
+      if (!h || (b.episode && !("none" in b.episode))) continue;
+      const wk = h.fromWeek.slice(5).replace("-", "/");
+      b.episode = {
+        subtitle: h.subtitle ? `${h.episodeNumber}회 ${h.subtitle}` : `${h.episodeNumber}회`,
+        episodeNumber: h.episodeNumber,
+        key: `plan:${h.episodeNumber}`,
+        n: 0,
+        relIndex: 1,
+        expected: null,
+        lastAired: null,
+        source: h.source,
+        reason: h.source === "PLAN" ? `${wk}주 편성표 회차` : `${wk}주 편성표 회차 흐름에서 이어짐(예상)`,
+      };
+      if (h.source === "PLAN") planCount++;
+      else flowCount++;
+    }
+  }
+
   // 요약
   const includeBm = config.strategy.include_benchmark_in_totals;
   let minSum = 0;
@@ -404,6 +440,9 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     objective: output.objective,
     optimizeTarget: { label: bundle.kpiLabel, isChannelKpi: !customTarget },
     multiEpisodePrograms: [...fs.multiEpisodePrograms].filter((pid) => !fs.rotationPrograms.has(pid)).map((pid) => fs.units.find((u) => u.programId === pid)?.programName ?? pid).sort(),
+    planEpisodes: input.planRows?.length
+      ? { weeks: [...new Set(input.planRows.map((p) => p.weekStart))].sort(), filledAirings: input.planFilled ?? 0, plan: planCount, flow: flowCount }
+      : null,
     rotationPrograms: [...fs.rotationPrograms].map((pid) => fs.units.find((u) => u.programId === pid)?.programName ?? pid).sort(),
     uncertainty: uncertainty ? { basis: uncertainty.basis, n: uncertainty.all.n, qLow: uncertainty.all.qLow, qHigh: uncertainty.all.qHigh } : null,
     decisions: (() => {
@@ -444,6 +483,8 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       ctm: input.competitorTargetMode ?? config.strategy.competitor_target_mode,
       bp: placement,
       em: input.episodeMode ?? "PROGRAM",
+      // 편성표 회차(B안): 회차를 채운 방영은 own에 이미 반영, 차주 흐름 근거 행은 여기서
+      plan: input.planRows?.length ? input.planRows.map((p) => [p.date, p.startMin, p.norm, p.episodeNumber]) : null,
       comps: input.competitorBundle ? [...new Set(input.competitorBundle.airings.map((a) => a.competitor))].sort() : [],
       config,
       target: bundle.kpiLabel,
@@ -510,8 +551,10 @@ export function evaluateActualSchedule(
   const rows = ev.blocks.map((b) => {
     const a = actualByKey.get(`${b.weekday}|${b.startMin}|${b.candidate.programId}`);
     // 실제 편성의 부제(있으면)를 함께 보여 준다 — 비교 화면용, 평가값에는 영향 없음
-    if (a?.episodeSubtitle) {
-      b.episode = { subtitle: a.episodeSubtitle, episodeNumber: a.episodeNumber, key: a.episodeSubtitle, n: 0, relIndex: 1, expected: null, lastAired: null };
+    if (a?.episodeSubtitle || (a && a.episodeNumber !== null)) {
+      // 편성표로 회차만 채운 방영(B안)은 "몇 회"로 표시
+      const label = a.episodeSubtitle ?? `${a.episodeNumber}회`;
+      b.episode = { subtitle: label, episodeNumber: a.episodeNumber, key: label, n: 0, relIndex: 1, expected: null, lastAired: null };
     }
     return { block: b, actual: { r: a?.kpi.r ?? null, s: a?.kpi.s ?? null, ts: a?.kpi.ts ?? null } };
   });

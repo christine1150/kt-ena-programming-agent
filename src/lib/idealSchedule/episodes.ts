@@ -38,6 +38,9 @@ export interface EpisodeAssignment {
   relIndex: number; // 프로그램 대비 상대 지수(수축 후, 1 = 프로그램 평균)
   expected: number | null; // 블록 기대값 × relIndex
   lastAired: string | null; // 기준일 이전 마지막 방영일
+  /** 업로드 편성표에서 온 회차(PLAN = 대상 주 편성표, FLOW = 이전 주 편성표에서 이어짐) — 없으면 부제 반영 모드 배정 */
+  source?: "PLAN" | "FLOW";
+  reason?: string;
 }
 
 export const episodeKeyOf = (subtitle: string) => normalizeProgramCanonicalName(subtitle);

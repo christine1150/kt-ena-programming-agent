@@ -64,7 +64,7 @@ function parseConfigOverride(raw: unknown): NonNullable<RunRequest["configOverri
 
 export function parseRunRequest(body: Record<string, unknown> | null): RunRequest | string {
   if (!body) return "요청 본문이 없습니다.";
-  const { channelCode, weekStart, mode, strategyMode, competitorNames, competitorTargetMode, benchmarkPlacement, optimizeTargetLabel, episodeMode, configOverride } = body;
+  const { channelCode, weekStart, mode, strategyMode, competitorNames, competitorTargetMode, benchmarkPlacement, optimizeTargetLabel, episodeMode, configOverride, usePlanEpisodes } = body;
   const override = parseConfigOverride(configOverride);
   if (typeof override === "string") return override;
   if (episodeMode !== undefined && episodeMode !== "PROGRAM" && episodeMode !== "EPISODE") return "episodeMode는 PROGRAM(부제 미반영)/EPISODE(부제 반영) 중 하나여야 합니다.";
@@ -87,5 +87,6 @@ export function parseRunRequest(body: Record<string, unknown> | null): RunReques
     optimizeTargetLabel: typeof optimizeTargetLabel === "string" && optimizeTargetLabel ? optimizeTargetLabel : undefined,
     episodeMode: (episodeMode as "PROGRAM" | "EPISODE" | undefined) ?? "PROGRAM",
     configOverride: override ?? undefined,
+    usePlanEpisodes: usePlanEpisodes === true,
   };
 }

@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { airingSpan } from "./time";
 import { loadGenreMap } from "./genreStore";
 import { withOptimizeTarget } from "./mapping";
+import { enrichAiringsWithPlan, normalizePlanRows, type PlanRow, type PlanRowRaw } from "./planEpisodes";
 import type { StrategyMode } from "./scoring";
 import { addDays } from "./time";
 import type { OwnAiring, OwnAiringsBundle } from "./types";
@@ -30,6 +31,21 @@ export interface RunRequest {
   /** 이번 실행에만 적용하는 설정 덮어쓰기(채널 저장값은 바꾸지 않음) — 화면에서 가중치·반복 제한을 바꾼 뒤 저장하지 않고 바로 뽑아 볼 수 있게 한다. 실행의 config_snapshot에 그대로 남는다. */
   configOverride?: { weights?: Record<string, number>; repeat_rules?: { daily_cap?: number; weekly_cap?: number } };
   includeActualWeek?: boolean; // 백테스트: 대상 주 실제 편성을 같은 모델로 평가(모델에는 넣지 않음)
+  /** 편성표 회차 반영(B안, 사용자 지시 2026-10-01) — 업로드된 주간 편성표의 회차로 과거 방영 회차를 채우고 차주 흐름을 잇는다 */
+  usePlanEpisodes?: boolean;
+}
+
+/** 업로드 편성표 행(학습 기간 ~ 대상 주) — program_schedule_grid. 편성표는 방송 전에 확정되는 계획이라 대상 주 것도 누수 아님 */
+export async function loadPlanRows(channelId: string, fromDate: string, toDate: string): Promise<PlanRow[]> {
+  const { data, error } = await supabase
+    .from("program_schedule_grid")
+    .select("week_start, broadcast_date, start_time, end_time, program_name_raw, episode_number, episode_subtitle, matched_program_id, tags")
+    .eq("channel_id", channelId)
+    .gte("broadcast_date", fromDate)
+    .lte("broadcast_date", toDate)
+    .limit(20000);
+  if (error) throw new Error(`편성표 조회 실패: ${error.message}`);
+  return normalizePlanRows((data ?? []) as PlanRowRaw[]);
 }
 
 export interface RunOutcome extends EngineRunResult {
@@ -146,12 +162,16 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     loadConstraintInputs(channel.id, req.weekStart),
     req.includeActualWeek ? fetchWeekAirings(channel, req.weekStart, config, target) : Promise.resolve(null),
   ]);
-  const bundle = target ? withOptimizeTarget(rawBundle, target) : rawBundle;
+  const planRows = req.usePlanEpisodes ? await loadPlanRows(channel.id, addDays(asOfDate, -config.expected_kpi.lookback_days), addDays(req.weekStart, 6)) : [];
+  const enriched = enrichAiringsWithPlan(rawBundle.airings, planRows);
+  const bundle0 = planRows.length ? { ...rawBundle, airings: enriched.airings } : rawBundle;
+  const bundle = target ? withOptimizeTarget(bundle0, target) : bundle0;
   const currentWeekStart = pickCurrentWeek(bundle, req.weekStart);
   const evaluateAirings: { label: string; weekStart: string; airings: OwnAiring[] }[] = [];
   if (currentWeekStart) evaluateAirings.push({ label: "CURRENT", weekStart: currentWeekStart, airings: bundle.airings });
   if (actualWeek && actualWeek.airings.length > 0) {
-    const wk = target ? withOptimizeTarget(actualWeek, target) : actualWeek;
+    const aw = planRows.length ? { ...actualWeek, airings: enrichAiringsWithPlan(actualWeek.airings, planRows).airings } : actualWeek;
+    const wk = target ? withOptimizeTarget(aw, target) : aw;
     evaluateAirings.push({ label: "ACTUAL", weekStart: req.weekStart, airings: wk.airings });
   }
   const [historicalRuntime, residuals] = await Promise.all([
@@ -176,6 +196,8 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     residuals,
     genreOf: (scope, owner, name) => resolveGenre(genreMap, scope, owner, name),
     evaluateAirings,
+    planRows: planRows.length ? planRows : undefined,
+    planFilled: enriched.filled,
   });
   const t2 = Date.now();
   return {

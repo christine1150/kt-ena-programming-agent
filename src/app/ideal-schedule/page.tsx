@@ -35,6 +35,7 @@ type Options = {
   channels: ChannelOpt[];
   hasEpisodeOption: boolean;
   episodicPrograms: string[];
+  planWeeks?: string[];
   isAdmin: boolean;
   config: { repeat_rules: { daily_cap: number; weekly_cap: number }; weights: Record<string, number> };
 };
@@ -108,6 +109,10 @@ function IdealSchedulePage() {
   const [strategyMode, setStrategyMode] = useState("AUTO");
   const [placement, setPlacement] = useState<"NONE" | "SUGGEST_ONLY" | "MIX">("NONE");
   const [episodeMode, setEpisodeMode] = useState<"PROGRAM" | "EPISODE">("PROGRAM");
+  // 편성표 회차 반영(B안) — 편성표가 올라와 있으면 기본으로 켠다(사용자 지시 2026-10-01)
+  const [usePlan, setUsePlan] = useState(true);
+  const [planMsg, setPlanMsg] = useState<string | null>(null);
+  const planInput = useRef<HTMLInputElement>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [caps, setCaps] = useState<{ daily: number; weekly: number } | null>(null);
   const [weights, setWeights] = useState<Record<string, number> | null>(null);
@@ -152,6 +157,8 @@ function IdealSchedulePage() {
         setCompetitors([]);
         setPlacement("NONE");
         setEpisodeMode("PROGRAM");
+        setUsePlan(true);
+        setPlanMsg(null);
         setCaps({ daily: b.config.repeat_rules.daily_cap, weekly: b.config.repeat_rules.weekly_cap });
         setWeights(b.config.weights);
         setSavedWeights(b.config.weights);
@@ -222,6 +229,7 @@ function IdealSchedulePage() {
     setStrategyMode(r.strategy_mode);
     setPlacement((r.benchmark_placement as "NONE" | "SUGGEST_ONLY" | "MIX") ?? "NONE");
     setEpisodeMode(r.episode_mode ?? "PROGRAM");
+    setUsePlan(r.plan_episodes ?? false);
     const snap = r.config_snapshot;
     if (snap?.weights) setWeights(snap.weights);
     if (snap?.repeat_rules) setCaps({ daily: snap.repeat_rules.daily_cap, weekly: snap.repeat_rules.weekly_cap });
@@ -324,6 +332,27 @@ function IdealSchedulePage() {
     setSelectedId(id);
   };
 
+  // 주간 편성표 올리기 — 편성표 검토 화면과 같은 업로드(채널·주는 파일에서 자동 인식), 끝나면 올린 주 목록만 새로 받는다
+  async function uploadPlan(file: File | null) {
+    if (planInput.current) planInput.current.value = "";
+    if (!file) return;
+    setBusy("plan");
+    setPlanMsg(null);
+    const fd = new FormData();
+    fd.append("file", file);
+    const j = await fetch("/api/schedule-grid/upload", { method: "POST", body: fd })
+      .then((r) => r.json())
+      .catch(() => ({ ok: false, message: "올리지 못했습니다." }));
+    setBusy(null);
+    if (!j.ok) return setPlanMsg(j.message ?? "올리지 못했습니다.");
+    const other = j.channelCode !== channelCode;
+    setPlanMsg(`${String(j.weekStart).slice(5).replace("-", "/")}주 ${j.channelCode} 편성표 ${j.rowsSaved}칸 저장${other ? " (다른 채널 파일)" : ""}`);
+    if (other) return;
+    const b = await fetch(`/api/scheduling/ideal-schedule/options?channel=${encodeURIComponent(channelCode)}`).then((r) => r.json());
+    if (b.ok) setOpts((o) => (o ? { ...o, planWeeks: b.planWeeks } : o));
+    setUsePlan(true);
+  }
+
   async function generate() {
     setBusy("편성표를 뽑고 있습니다… (보통 5~15초)");
     setError(null);
@@ -340,6 +369,7 @@ function IdealSchedulePage() {
         benchmarkPlacement: competitors.length ? placement : "NONE",
         optimizeTargetLabel: target || undefined,
         episodeMode: opts?.hasEpisodeOption ? episodeMode : "PROGRAM",
+        usePlanEpisodes: usePlan && (opts?.planWeeks?.length ?? 0) > 0,
         // 화면에서 바꾼 성향·반복 제한은 저장하지 않아도 이번 편성표에 적용된다
         configOverride: weights && caps ? { weights, repeat_rules: { daily_cap: caps.daily, weekly_cap: caps.weekly } } : undefined,
       }),
@@ -686,6 +716,32 @@ function IdealSchedulePage() {
                     ))}
                 </select>
               </label>
+              <div className="flex flex-col gap-1 text-xs text-zinc-500">
+                <span className="flex items-center justify-between">
+                  편성표 회차
+                  <button type="button" onClick={() => planInput.current?.click()} disabled={busy === "plan"} className="text-[11px] text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline disabled:opacity-40">
+                    {busy === "plan" ? "올리는 중…" : "편성표 올리기"}
+                  </button>
+                </span>
+                <input ref={planInput} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => uploadPlan(e.target.files?.[0] ?? null)} />
+                {(opts?.planWeeks?.length ?? 0) > 0 ? (
+                  <>
+                    <div className="flex rounded-lg border border-zinc-300 p-0.5">
+                      {([true, false] as const).map((v) => (
+                        <button key={String(v)} type="button" onClick={() => setUsePlan(v)} className={`flex-1 rounded-md px-2 py-1 text-sm ${usePlan === v ? "bg-zinc-900 text-white" : "text-zinc-600"}`}>
+                          {v ? "반영" : "미반영"}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[11px] text-zinc-400" title="올린 편성표의 회차로 지난 방영의 회차를 확인하고, 이번 주 편성안에 이어질 회차를 붙입니다.">
+                      {(opts?.planWeeks ?? []).map((w) => w.slice(5).replace("-", "/")).join(" · ")}주 편성표
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-[11px] text-zinc-400">올린 편성표가 없습니다</span>
+                )}
+                {planMsg && <span className="text-[11px] text-zinc-600">{planMsg}</span>}
+              </div>
               {opts?.hasEpisodeOption && (
                 <div className="flex flex-col gap-1 text-xs text-zinc-500">
                   부제(에피소드)

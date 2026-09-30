@@ -7,12 +7,14 @@ export interface PremiereInput {
   episode_subtitle: string | null;
   weekday: number;
   start_min: number | string;
+  /** 편성표에서 온 회차(PLAN·FLOW)는 본방 여부를 편성표가 정하므로 여기서 <본>을 붙이지 않는다(2026-10-01) */
+  episode_info?: { source?: string } | null;
 }
 
 export function premiereBlocks<T extends PremiereInput>(blocks: T[]): Set<T> {
   const groups = new Map<string, T[]>();
   for (const b of blocks) {
-    if (!b.episode_subtitle) continue;
+    if (!b.episode_subtitle || b.episode_info?.source) continue;
     const k = `${b.program_key ?? b.program_name}|${b.episode_subtitle}`;
     groups.set(k, [...(groups.get(k) ?? []), b]);
   }

@@ -125,6 +125,7 @@ export async function saveRun(req: RunRequest, out: RunOutcome, actor: Actor, pa
     competitor_names: [...req.competitorNames].sort(),
     competitor_target_mode: req.competitorTargetMode ?? out.config.strategy.competitor_target_mode,
     episode_mode: req.episodeMode ?? "PROGRAM",
+    plan_episodes: req.usePlanEpisodes === true,
     optimize_target_label: out.summary.optimizeTarget.label,
     optimize_target_is_channel_kpi: out.summary.optimizeTarget.isChannelKpi,
     config_snapshot: out.config,
@@ -324,6 +325,7 @@ export async function recalcRequestFrom(runId: string, keepOverrides: boolean): 
       benchmarkPlacement: run.benchmark_placement as RunRequest["benchmarkPlacement"],
       optimizeTargetLabel: run.optimize_target_is_channel_kpi ? undefined : (run.optimize_target_label as string),
       episodeMode: (run.episode_mode as RunRequest["episodeMode"]) ?? "PROGRAM",
+      usePlanEpisodes: run.plan_episodes === true,
       // 다시 계산도 그 실행을 만들 때의 가중치·반복 제한을 그대로 쓴다(저장 안 한 화면 값으로 뽑은 실행이 저장값으로 바뀌지 않게)
       configOverride: snapshotOverride(run.config_snapshot),
       extraLocks,

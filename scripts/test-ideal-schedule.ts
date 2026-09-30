@@ -20,6 +20,7 @@ import { assignEpisodes, isEpisodicProgram, observedProgramMaxima } from "../src
 import { premiereBlocks } from "../src/lib/idealSchedule/premiere";
 import { genreFamily, type Genre } from "../src/lib/idealSchedule/types";
 import { bandForLevel, certaintyOf, uncertaintyFromResiduals } from "../src/lib/idealSchedule/uncertainty";
+import { enrichAiringsWithPlan, normalizePlanRows, planEpisodeHints } from "../src/lib/idealSchedule/planEpisodes";
 
 let passed = 0;
 const failures: string[] = [];
@@ -612,6 +613,33 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   check("회차가 다른 반복은 회차 시리즈, 회차 정보 없는 반복은 아님(정보 없던 날은 판정 제외)", set.has("S") && !set.has("R"), JSON.stringify([...set]));
   const same = detectMultiEpisodePrograms([a("2026-09-01", "T", "같은 회"), a("2026-09-01", "T", "같은 회"), a("2026-09-01", "T", "같은 회")]);
   check("같은 회차만 반복하면 회차 시리즈 아님", !same.has("T"));
+}
+
+// ── 편성표 회차 반영(B안, 2026-10-01) ──
+{
+  const raw = (week: string, date: string, start: string, end: string | null, name: string, ep: number | null, tags: string | null = null) =>
+    ({ week_start: week, broadcast_date: date, start_time: start, end_time: end, program_name_raw: name, episode_number: ep, episode_subtitle: null, matched_program_id: null, tags });
+  const W1 = "2026-09-28";
+  const plan = normalizePlanRows([
+    raw(W1, W1, "17:40", "19:00", "인간극장 베스트", 396), raw(W1, W1, "19:00", "20:10", "인간극장 베스트", 397),
+    raw(W1, W1, "20:10", "01:00", "인간극장 베스트", 398), raw(W1, W1, "01:00", "03:10", "천일야사", 202), raw(W1, W1, "03:10", null, "애로부부", 13),
+    raw(W1, "2026-09-29", "09:20", "10:30", "인간극장 베스트", 396), raw(W1, "2026-09-29", "17:40", null, "인간극장 베스트", 399),
+    raw(W1, "2026-09-28", "22:00", "23:00", "신병4 : 사보타주<본>", 11, "[해][초][본][H][15]"), raw(W1, "2026-09-29", "22:00", null, "신병4 : 사보타주", 12, "[초][본]"),
+    raw(W1, "2026-09-29", "08:00", null, "신병4 : 사보타주", 10, "[재]"),
+  ]);
+  const t = (name: string, ep: number) => plan.find((p) => p.name === name && p.episodeNumber === ep);
+  check("편성표 자정 넘김: 01:00은 같은 방송일 25:00, 03:10은 닐슨상 다음 날 03:10", t("천일야사", 202)?.date === W1 && t("천일야사", 202)?.startMin === 25 * 60 && t("애로부부", 13)?.date === "2026-09-29" && t("애로부부", 13)?.startMin === 190);
+  const air = (date: string, startMin: number, name: string) => ({ date, dow: isoDow(date), startMin, programId: name, programName: name, episodeNumber: null, episodeSubtitle: null }) as unknown as import("../src/lib/idealSchedule/types").OwnAiring;
+  const en = enrichAiringsWithPlan([air(W1, 17 * 60 + 44, "인간극장"), air(W1, 18 * 60, "기막힌이야기실제상황")], plan);
+  check("닐슨 방영에 편성표 회차 채움(이름 포함 관계·±30분), 안 맞는 이름은 그대로", en.filled === 1 && en.airings[0].episodeNumber === 396 && en.airings[1].episodeNumber === null);
+  const hints = planEpisodeHints(
+    [{ id: 1, weekday: 1, startMin: 17 * 60 + 40, programName: "인간극장", programId: null }, { id: 2, weekday: 1, startMin: 22 * 60, programName: "신병4사보타주", programId: null }],
+    plan,
+    "2026-10-05"
+  );
+  check("차주 흐름: 태그 없으면 첫~마지막 회차 폭(396~399 → +4), 본방 표시 있으면 새 회차 수(11·12 → +2)", hints.get(1)?.episodeNumber === 400 && hints.get(1)?.source === "FLOW" && hints.get(2)?.episodeNumber === 13, JSON.stringify([...hints]));
+  const same = planEpisodeHints([{ id: 1, weekday: 1, startMin: 17 * 60 + 40, programName: "인간극장", programId: null }], plan, W1);
+  check("대상 주 편성표가 있으면 그 주 회차 그대로(PLAN)", same.get(1)?.episodeNumber === 396 && same.get(1)?.source === "PLAN");
 }
 
 // ── 순환 편성(ENA STORY 확인 2026-09-30): 회차 정보 없이 하루 여러 번 도는 프로그램 ──

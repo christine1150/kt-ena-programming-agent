@@ -187,7 +187,11 @@ export function BlockDrawer({
             {block.locked && block.status !== "REQUIRED" ? " · 잠금" : ""}
           </p>
           <h3 className="mt-0.5 truncate text-base font-semibold text-zinc-900">{block.program_name}</h3>
-          {block.episode_subtitle && <p className="truncate text-sm text-zinc-600">〈{block.episode_subtitle}〉</p>}
+          {block.episode_subtitle && (
+            <p className="truncate text-sm text-zinc-600">
+              〈{block.episode_subtitle}〉{block.episode_info?.reason && !block.episode_info.none && <span className="ml-1 text-xs text-zinc-400">{block.episode_info.reason}</span>}
+            </p>
+          )}
           {hyp && <p className="mt-1 text-xs font-medium text-violet-700">가상 Benchmark — 실제 확보·편성 가능한 콘텐츠가 아닙니다({block.source_channel})</p>}
         </div>
         <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100" aria-label="닫기">

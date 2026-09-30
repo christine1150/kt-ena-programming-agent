@@ -12,6 +12,9 @@
 import * as XLSX from "xlsx";
 
 const DATE_HEADER_RE = /^(\d{2})\/(\d{2})\(.\)$/;
+// ENA 편성표 헤더는 "9/28/26"(월/일/연도 2자리) 형식이고 시 열 이름도 "HR"·"KR"이다(2026-10-01 확인)
+const DATE_HEADER_MDY_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/;
+const HOUR_HEADER_RE = /^(시|HR|KR)$/;
 // olifeWeeklySchedule.ts와 같은 형식(제목 다음 행에 오는 "6(자오족, 여인의 길)" / "12 (미얀마
 // 물장수, 엄마의 꿈)" / "5"(부제 없음) 패턴) — 사용자 지시(2026-09-22): "(자)/(오픈) 정보는
 // 편성표에 드러나지 않아도 되니, 오히려 회차나 부제를 적어달라"에 따라 이 값을 더 이상 버리지
@@ -50,6 +53,7 @@ export interface ScheduleGridParseError {
 // export 안 돼 있어 여기서 별도로 유지한다(같은 목록을 두 곳에서 export/import로 공유하려면
 // olifeEpgDispatch.ts를 고쳐야 하는데, 이 기능만을 위해 그 파일을 건드리지 않기 위함).
 const CHANNEL_TITLE_PATTERNS: { pattern: RegExp; code: string }[] = [
+  { pattern: /sky\s*UHD/i, code: "SKYUHD" },
   { pattern: /ENA\s*PLAY/i, code: "ENA_PLAY" },
   { pattern: /ENA\s*DRAMA/i, code: "ENA_DRAMA" },
   { pattern: /ENA\s*STORY/i, code: "ENA_STORY" },
@@ -70,6 +74,79 @@ function isoDow(dateStr: string): number {
   const d = new Date(`${dateStr}T00:00:00Z`);
   const js = d.getUTCDay();
   return js === 0 ? 7 : js;
+}
+
+// ── 요일×10분 칸 병합 셀 형식(ENA STORY·skyUHD, 2026-10-01 사용자 제공 파일로 확인) ─────────────
+// 헤더 "9월 28일"·"10월5일(月)", 왼쪽 "시 간" 열(시 forward-fill) + 바로 옆 열(분, 비면 0). 프로그램은 병합 범위의
+// 첫 칸에 "천일야사 202회" / "인간극장 베스트 393회 99세 동환씨, 한 백년 살다보니"처럼 이름·회차·부제가 한 칸에 있다.
+// 자정 이후는 시가 1·2·3…으로 다시 작게 시작한다(첫 시보다 작으면 다음 날 새벽 — 저장은 기존 형식과 같은 "01:00").
+const GRID_DATE_RE = /(\d{1,2})월\s*(\d{1,2})일/;
+const GRID_TITLE_RE = /^(.*?)\s*(\d+)회(?:\s*\(최종회\))?\s*(.*)$/;
+
+function parseMergedGrid(rows: (string | null)[][], channelCode: string, baseYear: number): ScheduleGridParseResult | null {
+  const cell = (r: number, c: number) => (rows[r]?.[c] === null || rows[r]?.[c] === undefined ? "" : String(rows[r][c]).replace(/\s+/g, " ").trim());
+  let hi = -1;
+  for (let r = 0; r < Math.min(rows.length, 10); r++) {
+    if ((rows[r] ?? []).some((_, c) => GRID_DATE_RE.test(cell(r, c)))) {
+      hi = r;
+      break;
+    }
+  }
+  if (hi === -1) return null;
+  const header = (rows[hi] ?? []).map((_, c) => cell(hi, c));
+  const hourCol = header.findIndex((h) => h.replace(/\s/g, "") === "시간");
+  if (hourCol === -1) return null;
+  const dateCols = header
+    .map((h, c) => ({ c, m: h.match(GRID_DATE_RE) }))
+    .filter((x): x is { c: number; m: RegExpMatchArray } => x.m !== null)
+    .map(({ c, m }) => ({ col: c, date: `${baseYear}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}` }));
+  if (dateCols.length === 0) return null;
+
+  // 행별 시각(분) — 시 forward-fill, 분은 옆 열(없으면 0)
+  const rowMin: (number | null)[] = new Array(rows.length).fill(null);
+  let hour: number | null = null;
+  let firstHour: number | null = null;
+  for (let r = hi + 1; r < rows.length; r++) {
+    const hv = cell(r, hourCol);
+    if (/^\d{1,2}$/.test(hv)) {
+      hour = Number(hv);
+      if (firstHour === null) firstHour = hour;
+    }
+    if (hour === null) continue;
+    const mv = cell(r, hourCol + 1);
+    const h = firstHour !== null && hour < firstHour ? hour + 24 : hour;
+    rowMin[r] = h * 60 + (/^\d{1,2}$/.test(mv) ? Number(mv) : 0);
+  }
+  const hhmm = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+  const result: ScheduleGridRow[] = [];
+  for (const { col, date } of dateCols) {
+    const segs: { min: number; text: string }[] = [];
+    for (let r = hi + 1; r < rows.length; r++) {
+      const v = cell(r, col);
+      if (!v || rowMin[r] === null) continue;
+      segs.push({ min: rowMin[r] as number, text: v });
+    }
+    for (let i = 0; i < segs.length; i++) {
+      const m = segs[i].text.match(GRID_TITLE_RE);
+      // "( 870 871 872 )"처럼 괄호 속 숫자만 있는 꼬리는 내부 관리 번호라 부제로 쓰지 않는다
+      const rest = m ? m[3].trim() : "";
+      const subtitle = rest && !/^\(?[\d\s]*\)?$/.test(rest) ? rest : null;
+      result.push({
+        dow: isoDow(date),
+        broadcastDate: date,
+        startTime: hhmm(segs[i].min),
+        endTime: i + 1 < segs.length ? hhmm(segs[i + 1].min) : null,
+        programNameRaw: m ? m[1].trim() : segs[i].text,
+        tags: null,
+        episodeNumber: m ? Number(m[2]) : null,
+        episodeSubtitle: subtitle,
+      });
+    }
+  }
+  if (result.length === 0) return null;
+  const dates = dateCols.map((d) => d.date).sort();
+  return { ok: true, channelCode, weekStart: dates[0], weekEnd: dates[dates.length - 1], rows: result };
 }
 
 export function parseScheduleGridWorkbook(buffer: Buffer, fileName: string): ScheduleGridParseResult | ScheduleGridParseError {
@@ -107,7 +184,9 @@ export function parseScheduleGridWorkbook(buffer: Buffer, fileName: string): Sch
       const cell = row[c] ? String(row[c]).trim() : "";
       const m = cell.match(DATE_HEADER_RE);
       if (m) found.push({ col: c, date: `${baseYear}-${m[1]}-${m[2]}` });
-      if (cell === "시") hours.push(c);
+      const mdy = cell.match(DATE_HEADER_MDY_RE);
+      if (mdy) found.push({ col: c, date: `20${mdy[3]}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}` });
+      if (HOUR_HEADER_RE.test(cell)) hours.push(c);
     }
     if (found.length > 0) {
       headerRowIdx = r;
@@ -117,6 +196,9 @@ export function parseScheduleGridWorkbook(buffer: Buffer, fileName: string): Sch
     }
   }
   if (headerRowIdx === -1 || dateCols.length === 0) {
+    // 요일×10분 칸 병합 셀 형식(ENA STORY·skyUHD 주간편성표, 헤더 "9월 28일"·"10월5일(月)")
+    const grid = parseMergedGrid(rows, channelCode, baseYear);
+    if (grid) return grid;
     return { ok: false, message: `${fileName}: 날짜 헤더("MM/DD(요일)")를 찾을 수 없습니다 — 주간 편성표 형식이 맞는지 확인해주세요.` };
   }
 

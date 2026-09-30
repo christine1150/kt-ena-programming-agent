@@ -39,7 +39,7 @@ export type BlockRow = {
   actual_kpi: number | null;
   episode_subtitle: string | null;
   episode_number: number | null;
-  episode_info: { relIndex?: number; n?: number; reason?: string; none?: boolean } | null;
+  episode_info: { relIndex?: number; n?: number; reason?: string; none?: boolean; source?: "PLAN" | "FLOW" } | null;
   // 2단계: 예상 범위(기대값 × 과거 오차 배율 분위)·지난주 대비 판단
   expected_low?: number | null;
   expected_high?: number | null;
@@ -86,6 +86,7 @@ export type RunSummary = {
   uncertainty?: { basis: string; n: number; qLow: number; qHigh: number } | null;
   multiEpisodePrograms?: string[];
   rotationPrograms?: string[];
+  planEpisodes?: { weeks: string[]; filledAirings: number; plan: number; flow: number } | null;
 };
 
 export type RunRow = {
@@ -99,6 +100,7 @@ export type RunRow = {
   optimize_target_label: string;
   optimize_target_is_channel_kpi: boolean;
   episode_mode: "PROGRAM" | "EPISODE";
+  plan_episodes?: boolean;
   status: "DONE" | "CONFLICT";
   needs_recalc: boolean;
   title: string | null;

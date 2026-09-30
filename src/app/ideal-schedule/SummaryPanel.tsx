@@ -48,6 +48,7 @@ export function SummaryPanel({
   const dec = s.decisions;
   const multi = s.multiEpisodePrograms ?? [];
   const rotation = s.rotationPrograms ?? [];
+  const plan = s.planEpisodes;
   const fmt = (v: number | null | undefined) => (v === null || v === undefined ? "-" : v.toFixed(decimals));
 
   const stat = (k: string, v: string, tone: "default" | "warn" | "muted" = "default", hint?: string) => (
@@ -99,6 +100,13 @@ export function SummaryPanel({
           <li title={rotation.join(", ")}>
             · 순환 편성 {rotation.length}개(하루 반복 허용·이어 붙이면 다음 회차): {rotation.slice(0, 2).join(", ")}
             {rotation.length > 2 ? ` 외 ${rotation.length - 2}` : ""}
+          </li>
+        )}
+        {plan && (
+          <li>
+            · 편성표 회차 반영({plan.weeks.map((w) => w.slice(5).replace("-", "/")).join("·")}주): 지난 방영 {plan.filledAirings}건 회차 확인
+            {plan.plan > 0 ? ` · 이번 주 편성표 회차 ${plan.plan}칸` : ""}
+            {plan.flow > 0 ? ` · 회차 흐름 예상 ${plan.flow}칸` : ""}
           </li>
         )}
         {weakCount > 0 && <li>· 근거 부족 {weakCount}칸(빗금)</li>}
