@@ -14,7 +14,7 @@ import { freeIntervals, type ConstraintResolution } from "./constraints";
 import { cutSkeletonByFixed, type SkeletonSlot } from "./skeleton";
 import { Scorer, type BlockEval, type EngineCandidate } from "./scoring";
 import { BROADCAST_DAY_END_MIN, BROADCAST_DAY_START_MIN, hourBucket } from "./time";
-import { UNCLASSIFIED } from "./types";
+import { UNCLASSIFIED, genreFamily } from "./types";
 import type { EpisodeAssignment } from "./episodes";
 
 export type BlockStatus = "LOCKED" | "REQUIRED" | "AI" | "MANUAL_OVERRIDE";
@@ -57,7 +57,7 @@ function evaluateInternal(scorer: Scorer, blocks: PlacedBlock[], maxGapMin: numb
   const genreShare = new Map<string, number>(); // "day|genre" → 비중
   for (const b of sorted) {
     if (b.candidate.genre === UNCLASSIFIED) continue;
-    const k = `${b.weekday}|${b.candidate.genre}`;
+    const k = `${b.weekday}|${genreFamily(b.candidate.genre)}`; // 장르 편중은 상위 묶음 기준
     genreShare.set(k, (genreShare.get(k) ?? 0) + (b.endMin - b.startMin) / (dayMinutes.get(b.weekday) || 1));
   }
   const out: EvaluatedBlock[] = [];
@@ -74,7 +74,7 @@ function evaluateInternal(scorer: Scorer, blocks: PlacedBlock[], maxGapMin: numb
       prevProgramKey: prev?.candidate.programKey ?? null,
       fixed: b.fixed,
       sameSlotOtherDays: (sameSlotDays.get(`${b.candidate.programKey}|${hourBucket(b.startMin)}`)?.size ?? 1) - 1,
-      dayGenreShare: b.candidate.genre === UNCLASSIFIED ? 0 : genreShare.get(`${b.weekday}|${b.candidate.genre}`) ?? 0,
+      dayGenreShare: b.candidate.genre === UNCLASSIFIED ? 0 : genreShare.get(`${b.weekday}|${genreFamily(b.candidate.genre)}`) ?? 0,
     });
     objective += e.value;
     out.push({ ...b, eval: e });

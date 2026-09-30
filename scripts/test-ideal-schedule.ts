@@ -17,7 +17,7 @@ import { mapCompetitorData, withOptimizeTarget } from "../src/lib/idealSchedule/
 import { buildScoringContext, Scorer } from "../src/lib/idealSchedule/scoring";
 import { addDays as addDaysT } from "../src/lib/idealSchedule/time";
 import { assignEpisodes, isEpisodicProgram, observedProgramMaxima } from "../src/lib/idealSchedule/episodes";
-import type { Genre } from "../src/lib/idealSchedule/types";
+import { genreFamily, type Genre } from "../src/lib/idealSchedule/types";
 
 let passed = 0;
 const failures: string[] = [];
@@ -197,7 +197,11 @@ const genreOf = (name: string): Genre => (name === "드라마A" ? "드라마" : 
   check("KBS중계석(공연)을 스포츠로 오분류하지 않음", classifyGenreByRule("KBS중계석 심포니", "KBS1").genre !== "스포츠");
   check("영문 제목 일부(EPL)로 스포츠 오분류 안 함", classifyGenreByRule("M플러스 FANS CHOICE PLUS", "Mnet").genre !== "스포츠");
   check("채널 성격만으로 분류하지 않음", classifyGenreByRule("삼시세끼 바다목장편", "DRAMAcube").genre === "미분류");
-  check("skyUHD 사용자 표기 변환", genreFromSkyUhdLabel("중국 드라마") === "드라마" && genreFromSkyUhdLabel("여행") === "다큐·교양" && genreFromSkyUhdLabel("실버") === "미분류");
+  check("skyUHD 사용자 표기 변환", genreFromSkyUhdLabel("중국 드라마") === "드라마" && genreFromSkyUhdLabel("오리지널 드라마") === "오리지널 드라마" && genreFromSkyUhdLabel("오리지널 예능") === "오리지널 예능" && genreFromSkyUhdLabel("여행") === "여행" && genreFromSkyUhdLabel("실버") === "미분류");
+  // 사용자 지시(2026-09-30): 오리지널 드라마·오리지널 예능·여행 장르 추가, 여행은 교양 중 여행
+  check("여행 키워드 → 여행(세계테마기행·걸어서세계속으로·한국기행)", ["세계테마기행", "걸어서 세계속으로", "한국기행"].every((n) => classifyGenreByRule(n, "OLIFE").genre === "여행"));
+  check("여행이 아닌 다큐는 다큐·교양 유지", classifyGenreByRule("인간극장", "KBS1").genre === "다큐·교양");
+  check("상위 장르 묶음: 오리지널 드라마→드라마, 오리지널 예능→예능, 여행→다큐·교양", genreFamily("오리지널 드라마") === "드라마" && genreFamily("오리지널 예능") === "예능" && genreFamily("여행") === "다큐·교양" && genreFamily("영화") === "영화");
 }
 
 // ── 설정 병합 ────────────────────────────────────────────────────
@@ -300,7 +304,7 @@ for (let w = 0; w < 4; w++) {
   }
 }
 const eGenre: GenreResolver = (scope, _owner, name) =>
-  scope === "COMPETITOR" ? (name.startsWith("드라마") ? "드라마" : "미분류") : name === "프로그램A" ? "드라마" : name === "프로그램B" || name === "프로그램D" ? "예능" : "미분류";
+  scope === "COMPETITOR" ? (name.startsWith("드라마") ? "드라마" : "미분류") : name === "프로그램A" ? "오리지널 드라마" : name === "프로그램B" || name === "프로그램D" ? "예능" : "미분류";
 const baseRun = (over: Partial<EngineRunInput> = {}): EngineRunInput => ({
   weekStart: "2026-09-28",
   asOfDate: "2026-09-27",
@@ -408,8 +412,8 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   const at = (r: EngineRunResult) => r.output.blocks.find((b) => b.weekday === 1 && b.startMin === 1260)!;
   const m = runIdealScheduleEngine(baseRun({ competitorBundle: compBundle, strategyMode: "MATCH" }));
   const c = runIdealScheduleEngine(baseRun({ competitorBundle: compBundle, strategyMode: "COUNTER" }));
-  check("[16] MATCH: 경쟁 드라마 강세 슬롯에 자사 드라마", at(m).eval.strategy.type === "MATCH" && at(m).candidate.genre === "드라마", `${at(m).candidate.programName}/${at(m).eval.strategy.type}`);
-  check("[17] COUNTER: 같은 슬롯에 다른 장르", at(c).eval.strategy.type === "COUNTER" && at(c).candidate.genre !== "드라마", `${at(c).candidate.programName}/${at(c).eval.strategy.type}`);
+  check("[16] MATCH: 경쟁 드라마 강세 슬롯에 자사 드라마 계열(오리지널 드라마 포함)", at(m).eval.strategy.type === "MATCH" && genreFamily(at(m).candidate.genre) === "드라마", `${at(m).candidate.programName}/${at(m).eval.strategy.type}`);
+  check("[17] COUNTER: 같은 슬롯에 다른 장르", at(c).eval.strategy.type === "COUNTER" && genreFamily(at(c).candidate.genre) !== "드라마", `${at(c).candidate.programName}/${at(c).eval.strategy.type}`);
   check("전략 결과 저장값(강도·match/counter 점수)", (at(m).eval.strategy.competitorSlotStrength ?? 0) >= 1.2 && at(m).eval.strategy.matchScore > 0 && at(c).eval.strategy.counterScore > 0);
   check("[15] 경쟁사 타깃 선택 결과가 요약에 기록", m.summary.competitorTargets.length === 1 && m.summary.competitorTargets[0].programTarget === "2049" && m.summary.competitorTargets[0].matchesOwnKpi === true);
   // 사용자 지시(2026-09-30): 기본값은 자사 채널 프로그램만 — 경쟁사 콘텐츠·장르 원형은 편성·대체 후보 어디에도 없음

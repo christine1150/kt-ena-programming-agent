@@ -17,7 +17,9 @@ export interface GenreRuleResult {
 // (사용자 정정, 특선영화 집계 제외 규칙) 다큐 규칙을 영화보다 먼저 둔다.
 const KEYWORD_RULES: { genre: Genre; pattern: RegExp; note: string }[] = [
   { genre: "뉴스·시사", pattern: /뉴스|NEWS|시사|토론|뉴스룸|브리핑|정치/i, note: "제목 키워드(뉴스·시사)" },
-  { genre: "다큐·교양", pattern: /다큐|기행|걸어서|세계테마|인간극장|강연|특강|생로병사|교양|명의|자연인/, note: "제목 키워드(다큐·교양)" },
+  // 여행(교양 중 여행 장르, 사용자 지시 2026-09-30) — 다큐·교양보다 먼저 판정
+  { genre: "여행", pattern: /기행|걸어서|세계테마|여행|트래블|배낭|원정기|탐방/, note: "제목 키워드(여행)" },
+  { genre: "다큐·교양", pattern: /다큐|인간극장|강연|특강|생로병사|교양|명의|자연인/, note: "제목 키워드(다큐·교양)" },
   // "쇼핑" 단독은 넣지 않는다 — 드라마 〈아이쇼핑〉(skyUHD) 같은 오분류가 생긴다.
   { genre: "홈쇼핑·기타", pattern: /홈쇼핑|정보광고|인포머셜/, note: "제목 키워드(쇼핑)" },
   // "중계"는 넣지 않는다(〈KBS중계석〉은 클래식·국악 공연). 영문 약어(EPL·MLB·UFC)는 공백이 제거된 영문
@@ -36,12 +38,12 @@ const KEYWORD_RULES: { genre: Genre; pattern: RegExp; note: string }[] = [
 
 // 주요 콘텐츠 관리 분류 → 장르("사업형"은 장르 정보가 아니라 매핑하지 않음).
 const FEATURED_CATEGORY_GENRE: Record<string, Genre> = {
-  "오리지널 드라마": "드라마",
-  "오리지널드라마": "드라마",
+  "오리지널 드라마": "오리지널 드라마",
+  "오리지널드라마": "오리지널 드라마",
   "독점 예능": "예능",
   "독점예능": "예능",
-  "오리지널 예능": "예능",
-  "오리지널예능": "예능",
+  "오리지널 예능": "오리지널 예능",
+  "오리지널예능": "오리지널 예능",
   "구매예능": "예능",
   "구매 예능": "예능",
 };
@@ -54,9 +56,11 @@ export function genreFromFeaturedCategory(category: string | null | undefined): 
 /** 사용자 제공 skyUHD 장르표(2026-08-27, skyUhdCross.ts) 세부 표기 → 공통 장르. "실버"처럼 공통 장르로
  *  옮길 근거가 없는 표기는 미분류로 두고 원표기를 note에 남긴다. */
 export function genreFromSkyUhdLabel(label: string): Genre {
+  if (/오리지널 드라마/.test(label)) return "오리지널 드라마";
+  if (/오리지널 예능/.test(label)) return "오리지널 예능";
   if (/드라마/.test(label)) return "드라마";
   if (/예능/.test(label)) return "예능";
-  if (/여행/.test(label)) return "다큐·교양";
+  if (/여행/.test(label)) return "여행";
   return UNCLASSIFIED;
 }
 

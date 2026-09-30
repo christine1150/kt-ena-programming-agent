@@ -7,7 +7,7 @@ import { chooseCompetitorTarget, DAILY_LABELS_BY_KIND, type CompetitorTargetChoi
 import type { CompetitorTargetMode } from "./config";
 import { addDays, hourBucket } from "./time";
 import type { CompetitorAiring, CompetitorBundle, Genre, TargetKind } from "./types";
-import { UNCLASSIFIED } from "./types";
+import { UNCLASSIFIED, genreFamily } from "./types";
 
 export interface CompetitorFeatureOptions {
   asOfDate: string;
@@ -94,7 +94,7 @@ export function buildCompetitorFeatures(
       const h = hourBucket(a.startMin);
       (hourVals.get(h) ?? hourVals.set(h, []).get(h)!).push(a.r as number);
       (dowHourVals.get(key(a.dow, h)) ?? dowHourVals.set(key(a.dow, h), []).get(key(a.dow, h))!).push(a.r as number);
-      const g = genreOf(competitor, a.programName);
+      const g = genreFamily(genreOf(competitor, a.programName)); // 지배 장르는 상위 묶음 기준
       const gm = genreMinutes.get(key(a.dow, h)) ?? genreMinutes.set(key(a.dow, h), new Map()).get(key(a.dow, h))!;
       gm.set(g, (gm.get(g) ?? 0) + (a.durationMin ?? 0));
     }

@@ -13,7 +13,7 @@ import type { CompetitorChannelFeature } from "./competitorFeatures";
 import type { ExpectedResult, FeatureSet } from "./features";
 import { addDays, hourBucket } from "./time";
 import type { AiringType, Genre } from "./types";
-import { UNCLASSIFIED } from "./types";
+import { UNCLASSIFIED, genreFamily } from "./types";
 
 export type ContentType = "OWN" | "COMPETITOR_BENCHMARK" | "ARCHETYPE";
 export type StrategyMode = "AUTO" | "MATCH" | "COUNTER" | "MIX";
@@ -330,7 +330,8 @@ export class Scorer {
     let matchScore = 0;
     let counterScore = 0;
     if (strong && strong.dominantGenre !== UNCLASSIFIED && c.genre !== UNCLASSIFIED) {
-      const isMatch = c.genre === strong.dominantGenre;
+      // 상위 장르 묶음 기준(오리지널 드라마 ↔ 드라마 = 같은 계열)
+      const isMatch = genreFamily(c.genre) === genreFamily(strong.dominantGenre);
       type = isMatch ? "MATCH" : "COUNTER";
       matchScore = isMatch ? fitness : 0;
       counterScore = isMatch ? 0 : fitness;
