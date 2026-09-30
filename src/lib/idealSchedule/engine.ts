@@ -261,7 +261,7 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
         weekStart: input.weekStart,
         cycleMax: config.structure.episode_cycle_max ?? 3,
         cycleHours: config.structure.episode_cycle_hours ?? 24,
-        restDays: config.structure.episode_rest_days ?? 7,
+        restDays: config.structure.episode_rest_days ?? 0,
         shrinkageK: config.expected_kpi.shrinkage_k,
       }
     );
