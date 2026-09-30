@@ -34,6 +34,7 @@ const CONSTRAINT_LABEL: Record<string, string> = {
   FIXED_SLOT: "고정 편성",
   USER_LOCK: "직접 잠금",
   MANUAL_OVERRIDE: "직접 교체",
+  PLAN_NEW: "편성표 신규 프로그램(최근 3달 실적 없음)",
 };
 const GRADE_STYLE: Record<string, string> = { A: "bg-emerald-50 text-emerald-700", B: "bg-amber-50 text-amber-700", C: "bg-rose-50 text-rose-700", 가정: "bg-violet-50 text-violet-700" };
 
@@ -50,6 +51,7 @@ export function BlockDrawer({
   onPreview,
   onClose,
   onChanged,
+  frameLabel = "지난주",
 }: {
   runId: string;
   block: BlockRow;
@@ -60,6 +62,8 @@ export function BlockDrawer({
   onPreview: (c: Candidate | null) => void;
   onClose: () => void;
   onChanged: () => void;
+  /** 기존 틀 기준 — 대상 주 편성표를 기준으로 뽑았으면 "편성표"(2026-10-01) */
+  frameLabel?: string;
 }) {
   const [cands, setCands] = useState<Candidate[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -144,15 +148,15 @@ export function BlockDrawer({
     if (!isIdeal) return "지난주 실제 편성을 이상적 편성과 같은 방식으로 평가한 값입니다.";
     if (block.status === "REQUIRED" || block.status === "LOCKED") return `고정 편성 — ${CONSTRAINT_LABEL[block.constraint_ref?.constraintType ?? ""] ?? "필수 편성"}이라 바꾸지 않습니다.`;
     if (block.status === "MANUAL_OVERRIDE") return "직접 교체한 편성입니다. 다시 계산해도 유지됩니다.";
-    if (dec?.kind === "SAME") return "지난주와 같은 편성입니다.";
+    if (dec?.kind === "SAME") return `${frameLabel}와 같은 편성입니다.`;
     if (dec?.kind === "KEEP")
-      return `지난주 편성 유지 — 다른 프로그램으로 바꿔도 기대 차이(${dec.delta !== null ? signed(dec.delta, decimals) : "-"})가 기준(${dec.threshold !== null ? dec.threshold.toFixed(decimals) : "-"}) 이하라 바꿀 근거가 부족합니다.`;
+      return `${frameLabel} 편성 유지 — 다른 프로그램으로 바꿔도 기대 차이(${dec.delta !== null ? signed(dec.delta, decimals) : "-"})가 기준(${dec.threshold !== null ? dec.threshold.toFixed(decimals) : "-"}) 이하라 바꿀 근거가 부족합니다.`;
     if (dec?.kind === "CHANGE" && dec.incumbent) {
-      if (dec.capBlocked) return `지난주 〈${dec.incumbent.name}〉는 반복 제한(같은 프로그램 하루·주 횟수)에 걸려 넣지 못해 바꿨습니다.`;
+      if (dec.capBlocked) return `${frameLabel} 〈${dec.incumbent.name}〉는 반복 제한(같은 프로그램 하루·주 횟수)에 걸려 넣지 못해 바꿨습니다.`;
       const ratio = dec.delta !== null && dec.incumbent.expected ? dec.delta / dec.incumbent.expected : null;
-      return `지난주 〈${dec.incumbent.name}〉 대신 — 기대 ${dec.delta !== null ? signed(dec.delta, decimals) : "-"}${ratio !== null ? `(${signedPct(ratio)})` : ""}로 기준(${dec.threshold !== null ? dec.threshold.toFixed(decimals) : "-"})보다 커서 바꿨습니다.`;
+      return `${frameLabel} 〈${dec.incumbent.name}〉 대신 — 기대 ${dec.delta !== null ? signed(dec.delta, decimals) : "-"}${ratio !== null ? `(${signedPct(ratio)})` : ""}로 기준(${dec.threshold !== null ? dec.threshold.toFixed(decimals) : "-"})보다 커서 바꿨습니다.`;
     }
-    if (dec?.kind === "NEW") return "지난주에 편성이 없던 자리입니다.";
+    if (dec?.kind === "NEW") return `${frameLabel}에 편성이 없던 자리입니다.`;
     if (compareRow && !compareRow.changed) {
       if (bestAlt && block.expected_kpi !== null && bestAlt.expected_kpi !== null) {
         const gap = block.expected_kpi - bestAlt.expected_kpi;
@@ -221,7 +225,7 @@ export function BlockDrawer({
               <dd className="mt-0.5 text-base font-semibold tabular-nums text-zinc-900">{block.sample_count ?? "-"}<span className="text-[10px] font-normal text-zinc-500">회</span></dd>
             </div>
             <div className="rounded-xl border border-zinc-100 px-1 py-2">
-              <dt className="text-[10px] text-zinc-500">12주 평균</dt>
+              <dt className="text-[10px] text-zinc-500">3달 평균</dt>
               <dd className="mt-0.5 text-base font-semibold tabular-nums text-zinc-900">{fmt(avg12)}</dd>
             </div>
           </dl>
@@ -238,7 +242,7 @@ export function BlockDrawer({
             </p>
           )}
           <p className="px-1 text-[11px] text-zinc-400">
-            {grade.label} · {targetLabel} 기준 · 최근 12주 데이터 기반 기대값(미래 예측 아님)
+            {grade.label} · {targetLabel} 기준 · 최근 3달 데이터 기반 기대값(미래 예측 아님)
           </p>
         </section>
 

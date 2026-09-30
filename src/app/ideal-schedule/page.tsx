@@ -1,8 +1,8 @@
 "use client";
 
-// 이상적 1주일 편성(Ideal Weekly Grid) — "시청률 자판기". 최근 12주 Nielsen 데이터로 결정론적 엔진이
+// 이상적 1주일 편성(Ideal Weekly Grid) — "시청률 자판기". 최근 3달 Nielsen 데이터로 결정론적 엔진이
 // 계산한 "데이터 기반 이상적 주간 편성표"를 보여준다. 모든 수치·편성 결정은 서버 엔진(src/lib/idealSchedule)이
-// 계산해 저장한 값이며, 이 화면은 조건 입력·표시·수동 교체만 한다. 기대값은 "최근 12주 데이터 기반 기대
+// 계산해 저장한 값이며, 이 화면은 조건 입력·표시·수동 교체만 한다. 기대값은 "최근 3달 데이터 기반 기대
 // 시청률"이지 실제 미래 시청률 예측이 아니다. 기본값은 선택한 자사 채널의 편성 프로그램만(경쟁사는 켰을 때만).
 //
 // 2026-09-30 개편(페르소나 4인 검토 — 편성 PD·UX·통계·프론트엔드 — 종합):
@@ -49,10 +49,10 @@ const WEIGHT_LABEL: Record<string, string> = { kpi: "KPI 성과", target: "타�
 // 편성 성향 항목: 화면 순서·쉬운 설명·한 번에 고르기(비율만 의미가 있어 합이 100일 필요 없음)
 const WEIGHT_ORDER = ["kpi", "weekday_slot", "target", "trend", "stability", "lead"];
 const WEIGHT_HELP: Record<string, string> = {
-  kpi: "최근 12주 동안 실제로 시청률이 잘 나온 프로그램을 우선합니다.",
+  kpi: "최근 3달 동안 실제로 시청률이 잘 나온 프로그램을 우선합니다.",
   weekday_slot: "그 요일·시간대에 평소 잘 나오는 프로그램을 우선합니다.",
   target: "채널의 핵심 시청층이 많이 보는 프로그램을 우선합니다.",
-  trend: "최근 4주 성적이 12주 평균보다 오르는 프로그램을 우선합니다.",
+  trend: "최근 4주 성적이 3달 평균보다 오르는 프로그램을 우선합니다.",
   stability: "회차마다 시청률이 들쭉날쭉하지 않고 꾸준한 프로그램을 우선합니다.",
   lead: "앞 프로그램에 이어 붙였을 때 시청이 이어진 적 있는 조합을 우선합니다(관측일 뿐 효과 보장 아님).",
 };
@@ -549,7 +549,7 @@ function IdealSchedulePage() {
           </div>
         )}
         <IdealWeekGrid
-          title={`이상적 편성 — ${view.run.week_start} 주(숫자는 최근 12주 데이터 기반 기대 시청률)`}
+          title={`이상적 편성 — ${view.run.week_start} 주(숫자는 최근 3달 데이터 기반 기대 시청률)`}
           blocks={ideal}
           weekStart={view.run.week_start}
           themeColor={themeColor}
@@ -586,7 +586,7 @@ function IdealSchedulePage() {
                     {view.run.title ? ` · ★ ${view.run.title}` : view.run.saved_at ? " · ★ 저장됨" : ""}
                   </>
                 ) : (
-                  "최근 12주 실제 시청률로 계산한 데이터 기반 편성안"
+                  "최근 3달 실제 시청률로 계산한 데이터 기반 편성안"
                 )}
               </p>
             </div>
@@ -651,7 +651,7 @@ function IdealSchedulePage() {
             {channelOpt?.name ?? channelCode} 이상적 1주일 편성 · {view.run.week_start} ~ {addDaysLocal(view.run.week_start, 6)} · {runKpi}
           </p>
           <p className="text-[10px] text-zinc-600">
-            최근 12주 데이터 기반 기대 시청률(미래 예측 아님) · {MODE_LABEL[view.run.structure_mode]} · {view.run.as_of_date}까지 데이터 · {kstTime(view.run.created_at)} 생성
+            최근 3달 데이터 기반 기대 시청률(미래 예측 아님) · {MODE_LABEL[view.run.structure_mode]} · {view.run.as_of_date}까지 데이터 · {kstTime(view.run.created_at)} 생성
             {summary?.expectedAvgRating !== null && summary?.expectedAvgRating !== undefined ? ` · 주간 기대 ${fmt(summary.expectedAvgRating)}` : ""}
             {summary?.current?.expectedAvgRating ? ` (지난주 실제 편성 기대 ${fmt(summary.current.expectedAvgRating)})` : ""}
           </p>
@@ -718,7 +718,7 @@ function IdealSchedulePage() {
               </label>
               <div className="flex flex-col gap-1 text-xs text-zinc-500">
                 <span className="flex items-center justify-between">
-                  편성표 회차
+                  편성표 반영
                   <button type="button" onClick={() => planInput.current?.click()} disabled={busy === "plan"} className="text-[11px] text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline disabled:opacity-40">
                     {busy === "plan" ? "올리는 중…" : "편성표 올리기"}
                   </button>
@@ -733,7 +733,7 @@ function IdealSchedulePage() {
                         </button>
                       ))}
                     </div>
-                    <span className="text-[11px] text-zinc-400" title="올린 편성표의 회차로 지난 방영의 회차를 확인하고, 이번 주 편성안에 이어질 회차를 붙입니다.">
+                    <span className="text-[11px] text-zinc-400" title="이번 주 편성표가 있으면 그 편성을 기존 틀로 쓰고, 올린 편성표의 회차로 지난 방영 회차를 확인해 편성안에 이어질 회차를 붙입니다. 기대 시청률은 최근 3달 실적으로만 계산합니다.">
                       {(opts?.planWeeks ?? []).map((w) => w.slice(5).replace("-", "/")).join(" · ")}주 편성표
                     </span>
                   </>
@@ -1013,6 +1013,7 @@ function IdealSchedulePage() {
           onChanged={() => {
             if (runId) void loadRun(runId);
           }}
+          frameLabel={data?.run.summary?.frame === "PLAN" ? "편성표" : "지난주"}
         />
       )}
     </div>

@@ -20,7 +20,7 @@ import { assignEpisodes, isEpisodicProgram, observedProgramMaxima } from "../src
 import { premiereBlocks } from "../src/lib/idealSchedule/premiere";
 import { genreFamily, type Genre } from "../src/lib/idealSchedule/types";
 import { bandForLevel, certaintyOf, uncertaintyFromResiduals } from "../src/lib/idealSchedule/uncertainty";
-import { enrichAiringsWithPlan, normalizePlanRows, planEpisodeHints } from "../src/lib/idealSchedule/planEpisodes";
+import { enrichAiringsWithPlan, normalizePlanRows, planEpisodeHints, planWeekFrame } from "../src/lib/idealSchedule/planEpisodes";
 
 let passed = 0;
 const failures: string[] = [];
@@ -640,6 +640,9 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   check("차주 흐름: 태그 없으면 첫~마지막 회차 폭(396~399 → +4), 본방 표시 있으면 새 회차 수(11·12 → +2)", hints.get(1)?.episodeNumber === 400 && hints.get(1)?.source === "FLOW" && hints.get(2)?.episodeNumber === 13, JSON.stringify([...hints]));
   const same = planEpisodeHints([{ id: 1, weekday: 1, startMin: 17 * 60 + 40, programName: "인간극장", programId: null }], plan, W1);
   check("대상 주 편성표가 있으면 그 주 회차 그대로(PLAN)", same.get(1)?.episodeNumber === 396 && same.get(1)?.source === "PLAN");
+  const frame = planWeekFrame(plan, W1);
+  const mon = frame.filter((r) => r.date === W1);
+  check("편성표 기존 틀: 끝 = 같은 방송일 다음 행 시작, 마지막 행은 26:00", mon[0].startMin === 17 * 60 + 40 && mon[0].endMin === 19 * 60 && mon[mon.length - 1].endMin === 26 * 60 && frame.every((r) => r.endMin > r.startMin), JSON.stringify(mon.map((r) => [r.startMin, r.endMin])));
 }
 
 // ── 순환 편성(ENA STORY 확인 2026-09-30): 회차 정보 없이 하루 여러 번 도는 프로그램 ──

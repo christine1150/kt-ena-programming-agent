@@ -1,5 +1,5 @@
 // 이상적 1주일 편성 엑셀 다운로드 — "ENA 주간 비교" 엑셀(scheduleGridExcel.ts)과 같은 5분 격자·셀 병합 방식.
-// 값은 저장된 엔진 결과 그대로(기대값 = 최근 12주 데이터 기반 기대 시청률, 실제 미래 시청률 아님).
+// 값은 저장된 엔진 결과 그대로(기대값 = 최근 3달 데이터 기반 기대 시청률, 실제 미래 시청률 아님).
 import ExcelJS from "exceljs";
 import { premiereBlocks } from "./premiere";
 import { DOW_LABELS, GRID_END_MIN, GRID_START_MIN, addDaysLocal, minToLabel } from "@/lib/scheduleGridLayout";
@@ -76,7 +76,7 @@ export async function buildIdealScheduleExcel(opts: {
   };
   line(1, `${opts.channelName} 이상적 1주일 편성 (${opts.weekStart} ~ ${addDaysLocal(opts.weekStart, 6)})`, { bold: true, size: 13 });
   line(2, opts.conditionText, { size: 9, color: { argb: "FF52525B" } });
-  line(3, `숫자는 최근 12주 데이터 기반 기대 시청률(${opts.targetLabel})이며 실제 미래 시청률이 아닙니다. 경쟁사 Benchmark는 가상 편성입니다.`, { italic: true, size: 9, color: { argb: "FFB45309" } });
+  line(3, `숫자는 최근 3달 데이터 기반 기대 시청률(${opts.targetLabel})이며 실제 미래 시청률이 아닙니다. 경쟁사 Benchmark는 가상 편성입니다.`, { italic: true, size: 9, color: { argb: "FFB45309" } });
 
   const header = sheet.getRow(HEADER_ROWS);
   header.getCell(1).value = "시간";
@@ -144,7 +144,7 @@ export async function buildIdealScheduleExcel(opts: {
   if (opts.compare) {
     const s2 = wb.addWorksheet("지난주 대비", { views: [{ state: "frozen", ySplit: 2 }] });
     s2.mergeCells(1, 1, 1, 10);
-    s2.getCell(1, 1).value = `지난주 실제 편성(${opts.compare.currentWeekStart ?? "-"} 주) → 이상적 편성 · 기대값은 최근 12주 데이터 기반(${opts.targetLabel})`;
+    s2.getCell(1, 1).value = `지난주 실제 편성(${opts.compare.currentWeekStart ?? "-"} 주) → 이상적 편성 · 기대값은 최근 3달 데이터 기반(${opts.targetLabel})`;
     s2.getCell(1, 1).font = { bold: true, size: 11 };
     s2.addRow(["요일", "시작", "종료", "지난주 실제", "지난주 기대", "지난주 실측", "이상적", "이상적 기대", "기대 차이", "판단"]);
     headerStyle(s2.getRow(2));

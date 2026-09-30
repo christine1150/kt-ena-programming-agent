@@ -36,6 +36,7 @@ export interface PlanRow {
   episodeNumber: number | null;
   subtitle: string | null; // 의미 있는 부제만("7회" 같은 반복 표기는 버림)
   isNew: boolean; // 편성표 태그에 본방·초방 표시([본]·[초])
+  isRerun: boolean; // 편성표 태그에 재방 표시([재])
 }
 
 export interface PlanEpisodeHint {
@@ -111,6 +112,7 @@ export function normalizePlanRows(raw: PlanRowRaw[]): PlanRow[] {
         episodeNumber: r.episode_number,
         subtitle: sub && !/^\d+회$|^최종회$/.test(sub) ? sub : null,
         isNew: /\[(본|초)\]/.test(r.tags ?? ""),
+        isRerun: /\[재\]/.test(r.tags ?? ""),
       });
     }
   }
@@ -216,4 +218,23 @@ export function planEpisodeHints(
     out.set(b.id, { episodeNumber: (near.episodeNumber as number) + k * a, subtitle: null, source: "FLOW", fromWeek: ref });
   }
   return out;
+}
+
+/** 3) 대상 주 편성표를 "기존 틀"로(사용자 지시 2026-10-01: 대상 주 편성표가 있으면 지난주 대신 그 편성을 기존 틀로).
+ *  그 주 행을 요일·시각순으로 늘어놓고 끝 시각 = 같은 방송일 다음 행 시작(마지막 행은 방송일 끝 26:00). 편성표는
+ *  구조(자리·프로그램)만 알려 주고, 기대 시청률은 여전히 최근 3달 실적으로만 계산한다. */
+export function planWeekFrame(plan: PlanRow[], weekStart: string): (PlanRow & { endMin: number })[] {
+  const weekEnd = addDays(weekStart, 6);
+  const rows = plan.filter((p) => p.weekStart === weekStart && p.date >= weekStart && p.date <= weekEnd);
+  const out: (PlanRow & { endMin: number })[] = [];
+  const byDate = new Map<string, PlanRow[]>();
+  for (const p of rows) (byDate.get(p.date) ?? byDate.set(p.date, []).get(p.date)!).push(p);
+  for (const list of byDate.values()) {
+    const s = [...list].sort((a, b) => a.startMin - b.startMin);
+    for (let i = 0; i < s.length; i++) {
+      const endMin = i + 1 < s.length ? s[i + 1].startMin : 26 * 60;
+      if (endMin > s[i].startMin) out.push({ ...s[i], endMin });
+    }
+  }
+  return out.sort((a, b) => a.dow - b.dow || a.startMin - b.startMin);
 }

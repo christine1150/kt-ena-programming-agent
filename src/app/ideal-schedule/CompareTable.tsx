@@ -78,7 +78,7 @@ export function CompareTable({ rows: allRows, currentWeekStart, decimals, onSele
         </table>
       </div>
       <p className="border-t border-zinc-100 px-4 py-2 text-[11px] text-zinc-400">
-        기대값은 최근 12주 데이터 기반 기대 시청률이며 실제 미래 시청률이 아닙니다. 지난주 실제 편성도 같은 방식으로 계산한 기대값과 실측을 함께 표시합니다. &lsquo;차이 작음&rsquo;은 기대 차이 {Math.round(SMALL_GAIN_RATIO * 100)}% 미만(임시 기준)입니다.
+        기대값은 최근 3달 데이터 기반 기대 시청률이며 실제 미래 시청률이 아닙니다. 지난주 실제 편성도 같은 방식으로 계산한 기대값과 실측을 함께 표시합니다. &lsquo;차이 작음&rsquo;은 기대 차이 {Math.round(SMALL_GAIN_RATIO * 100)}% 미만(임시 기준)입니다.
       </p>
     </div>
   );

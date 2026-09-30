@@ -10,7 +10,7 @@ import { evaluateSchedule, optimizeWeek, type EngineOutput, type EvaluatedBlock,
 import { buildCandidatePool, buildScoringContext, Scorer, strongSlotMap, type EngineCandidate, type StrategyMode } from "./scoring";
 import { buildSkeleton, type SkeletonSlot } from "./skeleton";
 import { addDays } from "./time";
-import { planEpisodeHints, type PlanRow } from "./planEpisodes";
+import { namesCompatible, planEpisodeHints, planNameKey, planWeekFrame, type PlanRow } from "./planEpisodes";
 import { assignEpisodes, buildEpisodeStats, isEpisodicProgram, observedProgramMaxima, type EpisodeMode } from "./episodes";
 import type { CompetitorBundle, Genre, OwnAiring, OwnAiringsBundle } from "./types";
 import { UNCLASSIFIED, genreFamily } from "./types";
@@ -82,6 +82,9 @@ export interface EngineSummary {
   multiEpisodePrograms: string[];
   /** 편성표 회차 반영(B안): 쓴 편성표 주, 회차를 채운 과거 방영 수, 편성안에 회차를 붙인 블록 수(대상 주 편성표/이전 주에서 이어짐) */
   planEpisodes: { weeks: string[]; filledAirings: number; plan: number; flow: number } | null;
+  /** 기존 틀 기준: 대상 주 편성표(PLAN) 또는 지난주 실제 편성(LAST_WEEK). PLAN이면 3달 실적 없는 편성표 신규 프로그램 목록 */
+  frame: "PLAN" | "LAST_WEEK";
+  planNewPrograms: string[];
   /** 회차 정보 없이 하루 여러 번 도는 패턴으로 판정한 순환 편성 프로그램 이름(설정으로 켠 채널만, 위 목록과 겹치지 않음) */
   rotationPrograms: string[];
   /** 예상 범위 근거(BACKTEST = 과거 주 검증 잔차 n건, TRAINING = 검증 전 학습 기간 변동) */
@@ -275,7 +278,7 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     };
   });
 
-  const skeleton = buildSkeleton(eligibleAirings(bundle, opts), {
+  const histSkeleton = buildSkeleton(eligibleAirings(bundle, opts), {
     asOfDate: input.asOfDate,
     weeks: config.structure.skeleton_weeks,
     gridMinutes: config.structure.grid_minutes,
@@ -324,7 +327,76 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
 
   // 지난주 실제 편성(비교 기준 주) — 기존 틀 유지 모드의 "차이 작으면 유지" 기준. 방영 기록은 구조로만 쓰고 모델에는 넣지 않는다.
   const currentEval = (input.evaluateAirings ?? []).find((e) => e.label === "CURRENT");
-  const incumbents = currentEval ? scheduleFromAirings(currentEval.airings, currentEval.weekStart, pool, channelCode, input.genreOf) : [];
+  const lastWeek = currentEval ? scheduleFromAirings(currentEval.airings, currentEval.weekStart, pool, channelCode, input.genreOf) : [];
+
+  // 대상 주 편성표가 있으면 그 편성을 "기존 틀"로(사용자 지시 2026-10-01). 편성표는 자리·프로그램만 정하고 기대값은
+  // 최근 3달 실적으로만 계산한다. 3달 실적이 없는 새 프로그램은 평가할 근거가 없어 편성표대로 고정한다.
+  // 편성표가 비워 둔 시간(월요일 새벽 등 앞 주 편성표 소관)은 지난주 틀을 그대로 쓴다.
+  const frameRows = input.mode === "KEEP_CURRENT" && input.planRows?.length ? planWeekFrame(input.planRows, input.weekStart) : [];
+  let skeleton: SkeletonSlot[] = histSkeleton;
+  let incumbents = lastWeek;
+  const planNewPrograms = new Set<string>();
+  if (frameRows.length) {
+    const own = pool.filter((c) => c.contentType === "OWN" && c.programId);
+    const pidFor = (name: string, matched: string | null): string | null => {
+      const n = planNameKey(name);
+      const ids = (score: 1 | 2) => [...new Set(own.filter((c) => namesCompatible(planNameKey(c.programName), n) === score).map((c) => c.programId as string))];
+      const exact = ids(2);
+      if (exact.length === 1) return exact[0];
+      if (matched && own.some((c) => c.programId === matched)) return matched;
+      const part = ids(1);
+      return part.length === 1 ? part[0] : null;
+    };
+    const candFor = (pid: string, rerun: boolean, fresh: boolean): EngineCandidate | null => {
+      const order = rerun ? ["RERUN", "UNTAGGED", "FIRST"] : fresh ? ["FIRST", "UNTAGGED", "RERUN"] : ["UNTAGGED", "FIRST", "RERUN"];
+      for (const t of order) {
+        const c = pool.find((p) => p.key === `${pid}|${t}`);
+        if (c) return c;
+      }
+      return null;
+    };
+    const overlapsFixed = (w: number, s: number, e: number) => fixedBlocks.some((f) => f.weekday === w && f.startMin < e && s < f.endMin);
+    const planSlots: SkeletonSlot[] = [];
+    const planIncumbents: PlacedBlock[] = [];
+    for (const r of frameRows) {
+      const pid = pidFor(r.name, r.programId);
+      const cand = pid ? candFor(pid, r.isRerun, r.isNew) : null;
+      if (cand) {
+        planSlots.push({ weekday: r.dow, startMin: r.startMin, endMin: r.endMin, weeksSeen: 1, weeksTotal: 1, occupants: [{ key: cand.key, programName: cand.programName, n: 1 }] });
+        planIncumbents.push({ weekday: r.dow, startMin: r.startMin, endMin: r.endMin, candidate: cand, status: "AI", fixed: false });
+      } else if (!overlapsFixed(r.dow, r.startMin, r.endMin)) {
+        planNewPrograms.add(r.name);
+        fixedBlocks.push({
+          weekday: r.dow,
+          startMin: r.startMin,
+          endMin: r.endMin,
+          candidate: newCandidate(r.name, null, r.endMin - r.startMin, channelCode, input.genreOf),
+          status: "REQUIRED",
+          fixed: true,
+          constraint: { id: `plan:${r.dow}:${r.startMin}`, source: "PLAN", constraintType: "PLAN_NEW", rank: 2 },
+        });
+      }
+    }
+    const covered = (w: number, s: number, e: number) => frameRows.some((r) => r.dow === w && r.startMin < e && s < r.endMin);
+    skeleton = [...planSlots, ...histSkeleton.filter((s) => !covered(s.weekday, s.startMin, s.endMin))].sort((a, b) => a.weekday - b.weekday || a.startMin - b.startMin);
+    incumbents = [...planIncumbents, ...lastWeek.filter((b) => !covered(b.weekday, b.startMin, b.endMin))];
+    // 편성표가 정한 편성 횟수는 PD가 정한 운영량 — 그 프로그램 반복 한도를 편성표 횟수보다 낮게 두지 않는다
+    const perDay = new Map<string, number>();
+    const perWeek = new Map<string, number>();
+    for (const b of planIncumbents) {
+      const pk = b.candidate.programKey;
+      perDay.set(`${pk}|${b.weekday}`, (perDay.get(`${pk}|${b.weekday}`) ?? 0) + 1);
+      perWeek.set(pk, (perWeek.get(pk) ?? 0) + 1);
+    }
+    for (const [pk, w] of perWeek) {
+      const d = Math.max(...[1, 2, 3, 4, 5, 6, 7].map((x) => perDay.get(`${pk}|${x}`) ?? 0));
+      const cur = programCapOverride?.get(pk);
+      (programCapOverride ??= new Map()).set(pk, {
+        daily: Math.max(d, cur?.daily ?? config.repeat_rules.daily_cap),
+        weekly: Math.max(w, cur?.weekly ?? config.repeat_rules.weekly_cap),
+      });
+    }
+  }
 
   const output = optimizeWeek({
     incumbents,
@@ -440,6 +512,8 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     objective: output.objective,
     optimizeTarget: { label: bundle.kpiLabel, isChannelKpi: !customTarget },
     multiEpisodePrograms: [...fs.multiEpisodePrograms].filter((pid) => !fs.rotationPrograms.has(pid)).map((pid) => fs.units.find((u) => u.programId === pid)?.programName ?? pid).sort(),
+    frame: frameRows.length ? "PLAN" : "LAST_WEEK",
+    planNewPrograms: [...planNewPrograms].sort(),
     planEpisodes: input.planRows?.length
       ? { weeks: [...new Set(input.planRows.map((p) => p.weekStart))].sort(), filledAirings: input.planFilled ?? 0, plan: planCount, flow: flowCount }
       : null,

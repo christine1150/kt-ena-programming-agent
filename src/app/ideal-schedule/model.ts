@@ -87,6 +87,8 @@ export type RunSummary = {
   multiEpisodePrograms?: string[];
   rotationPrograms?: string[];
   planEpisodes?: { weeks: string[]; filledAirings: number; plan: number; flow: number } | null;
+  frame?: "PLAN" | "LAST_WEEK";
+  planNewPrograms?: string[];
 };
 
 export type RunRow = {
@@ -153,7 +155,7 @@ export function reasonText(r: Reason, decimals: number): string | null {
     case "EXPECTED_LEVEL":
       return `기대값 근거: ${LEVEL_LABEL[Number(v)] ?? "-"}${r.detail ? ` (${r.detail})` : ""}`;
     case "AVG_12W":
-      return typeof v === "number" ? `최근 12주 평균 시청률 ${v.toFixed(decimals)}` : null;
+      return typeof v === "number" ? `최근 3달 평균 시청률 ${v.toFixed(decimals)}` : null;
     case "RECENT_4W_INDEX":
       return `최근 4주 성과: 슬롯 평균의 ${fmtIdx(v)}%`;
     case "WEEKDAY_SLOT_FIT":

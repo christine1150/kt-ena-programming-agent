@@ -1,7 +1,7 @@
 "use client";
 
 // 좌측 패널 맨 위 — 이번 편성안 요약과 주요 변경. 모든 값은 저장된 엔진 계산값(요약·/compare)이고,
-// 화면은 두 저장값의 차이·비율과 개수만 센다. 기대값은 "최근 12주 데이터 기반 기대 시청률"이다.
+// 화면은 두 저장값의 차이·비율과 개수만 센다. 기대값은 "최근 3달 데이터 기반 기대 시청률"이다.
 import { DOW_LABELS, minToLabel } from "@/lib/scheduleGridLayout";
 import { SMALL_GAIN_RATIO, evidenceGrade, signed, signedPct, weeklyExpected, type BlockRow, type CompareRow, type RunRow } from "./model";
 
@@ -78,7 +78,7 @@ export function SummaryPanel({
         {s.current?.actualAvgRating !== null && s.current?.actualAvgRating !== undefined ? ` · 실측 ${fmt(s.current.actualAvgRating)}` : ""}
       </p>
       <p className="mt-1 text-[10px] leading-snug text-zinc-400">
-        최근 12주 데이터 기반 기대값(미래 예측 아님).{run.needs_recalc ? " 수동 교체 반영 합계 — 앞뒤 연관·반복 제한은 [다시 계산] 때 반영." : ""}
+        최근 3달 데이터 기반 기대값(미래 예측 아님).{run.needs_recalc ? " 수동 교체 반영 합계 — 앞뒤 연관·반복 제한은 [다시 계산] 때 반영." : ""}
       </p>
 
       <div className="mt-3 grid grid-cols-4 gap-1.5">
@@ -100,6 +100,12 @@ export function SummaryPanel({
           <li title={rotation.join(", ")}>
             · 순환 편성 {rotation.length}개(하루 반복 허용·이어 붙이면 다음 회차): {rotation.slice(0, 2).join(", ")}
             {rotation.length > 2 ? ` 외 ${rotation.length - 2}` : ""}
+          </li>
+        )}
+        {s.frame === "PLAN" && (
+          <li title={(s.planNewPrograms ?? []).join(", ")}>
+            · 올린 이번 주 편성표를 기존 틀로 사용
+            {(s.planNewPrograms ?? []).length > 0 ? ` · 3달 실적 없는 신규 ${(s.planNewPrograms ?? []).length}개는 편성표대로 고정` : ""}
           </li>
         )}
         {plan && (
