@@ -1,15 +1,15 @@
 // 장르 분류 관리(관리자 전용) — 사용자 결정(2026-09-30): "규칙으로 1차 분류한 뒤 관리자가 보완".
 // GET: 채널(자사 코드 또는 경쟁채널명)의 최근 84일 방영 프로그램을 편성 분 많은 순으로, 현재 장르·출처와 함께.
-// PATCH: 장르를 MANUAL로 저장(규칙 시드가 다시 돌아도 덮어쓰지 않음).
+// PATCH: 장르를 MANUAL로 저장(규칙 시드가 다시 돌아도 덮어쓰지 않음). 자사 채널이면 같은 이름의 다른 자사
+//        채널 행에도 공통 적용(사용자 지시 2026-09-30 — 채널별로 직접 저장한 관리자 값은 유지).
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { mapCompetitorData, mapOwnAirings, type RawCompetitor, type RawOwn } from "@/lib/idealSchedule/mapping";
 import { classifyGenreByRule } from "@/lib/idealSchedule/genreRules";
+import { applyOwnCommonGenres, OWN_CHANNEL_CODES as OWN } from "@/lib/idealSchedule/genreStore";
 import { GENRES, type Genre } from "@/lib/idealSchedule/types";
-
-const OWN = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
 export async function GET(request: Request) {
   const admin = await getAdminSession();
@@ -64,11 +64,12 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: false, message: "owner, canonicalName, genre(허용 목록)가 필요합니다." }, { status: 400 });
   }
   const scope = OWN.includes(body.owner) ? "OWN" : "COMPETITOR";
+  const canonicalName = normalizeProgramCanonicalName(body.canonicalName);
   const { error } = await supabase.from("program_genre_map").upsert(
     {
       scope,
       owner_key: body.owner,
-      canonical_name: normalizeProgramCanonicalName(body.canonicalName),
+      canonical_name: canonicalName,
       genre: body.genre,
       source: "MANUAL",
       rule_note: "관리자 보완",
@@ -78,5 +79,6 @@ export async function PATCH(request: Request) {
     { onConflict: "scope,owner_key,canonical_name" }
   );
   if (error) return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  const propagated = scope === "OWN" ? await applyOwnCommonGenres([canonicalName]) : 0;
+  return NextResponse.json({ ok: true, propagated });
 }

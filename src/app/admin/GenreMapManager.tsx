@@ -15,7 +15,7 @@ const OWN = [
   { code: "ONCE", name: "ONCE" },
   { code: "SKYUHD", name: "skyUHD" },
 ];
-const SOURCE_LABEL: Record<string, string> = { MANUAL: "관리자", FEATURED_CATEGORY: "주요 콘텐츠 분류", RULE_KEYWORD: "제목 규칙", NONE: "미분류" };
+const SOURCE_LABEL: Record<string, string> = { MANUAL: "관리자", FEATURED_CATEGORY: "주요 콘텐츠 분류", OWN_COMMON: "자사 공통", NAVER_SEARCH: "네이버 검색", RULE_KEYWORD: "제목 규칙", NONE: "미분류" };
 
 export default function GenreMapManager() {
   const [owner, setOwner] = useState("ENA");

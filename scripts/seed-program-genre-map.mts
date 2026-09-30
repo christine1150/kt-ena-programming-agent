@@ -12,6 +12,7 @@ import { normalizeProgramCanonicalName } from "../src/lib/programNameMatch";
 import { SKYUHD_GENRE_MAP_RAW } from "../src/lib/audienceReport/skyUhdCross";
 import { classifyGenreByRule, genreFromFeaturedCategory, genreFromSkyUhdLabel, type GenreSource } from "../src/lib/idealSchedule/genreRules";
 import type { Genre } from "../src/lib/idealSchedule/types";
+import { applyOwnCommonGenres } from "../src/lib/idealSchedule/genreStore";
 
 const asOf = process.argv[2] ?? new Date().toISOString().slice(0, 10);
 const OWN_CHANNELS = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
@@ -69,11 +70,11 @@ for (let i = 0; i < compNames.length; i += 5) {
   }
 }
 
-// 5) 관리자 MANUAL 행 보존 — 이미 MANUAL인 키는 시드 대상에서 뺀다(시드가 만든 skyUHD MANUAL 행은 갱신 허용)
+// 5) 관리자 MANUAL·네이버 검색 분류 행 보존 — 시드 대상에서 뺀다(시드가 만든 skyUHD MANUAL 행은 갱신 허용)
 const manualKeys = new Set<string>();
 for (let from = 0; ; from += 1000) {
-  const { data } = await supabase.from("program_genre_map").select("scope, owner_key, canonical_name, updated_by").eq("source", "MANUAL").range(from, from + 999);
-  for (const m of data ?? []) if (!String(m.updated_by ?? "").startsWith("seed:")) manualKeys.add(`${m.scope}|${m.owner_key}|${m.canonical_name}`);
+  const { data } = await supabase.from("program_genre_map").select("scope, owner_key, canonical_name, source, updated_by").in("source", ["MANUAL", "NAVER_SEARCH"]).range(from, from + 999);
+  for (const m of data ?? []) if (m.source === "NAVER_SEARCH" || !String(m.updated_by ?? "").startsWith("seed:")) manualKeys.add(`${m.scope}|${m.owner_key}|${m.canonical_name}`);
   if (!data || data.length < 1000) break;
 }
 const toUpsert = [...rows.entries()].filter(([k, r]) => r.canonical_name && !manualKeys.has(k)).map(([, r]) => ({ ...r, updated_at: new Date().toISOString() }));
@@ -85,5 +86,7 @@ for (let i = 0; i < toUpsert.length; i += 500) {
 
 const summary = new Map<string, number>();
 for (const r of toUpsert) summary.set(`${r.scope}:${r.genre}`, (summary.get(`${r.scope}:${r.genre}`) ?? 0) + 1);
-console.log(`as_of=${asOf} upsert ${toUpsert.length}건 (관리자 MANUAL 보존 ${manualKeys.size}건)`);
+console.log(`as_of=${asOf} upsert ${toUpsert.length}건 (관리자 MANUAL·네이버 분류 보존 ${manualKeys.size}건)`);
+// 6) 자사 공통 장르(사용자 지시 2026-09-30) — 한 자사 채널의 관리자·주요 콘텐츠 분류를 7개 자사 채널에 적용
+console.log(`자사 공통 적용 ${await applyOwnCommonGenres()}건`);
 for (const [k, n] of [...summary].sort()) console.log(`  ${k} ${n}`);

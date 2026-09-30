@@ -5,7 +5,25 @@
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { UNCLASSIFIED, type Genre } from "./types";
 
-export type GenreSource = "FEATURED_CATEGORY" | "RULE_KEYWORD" | "RULE_CHANNEL" | "MANUAL"; // + DB의 'NONE'(미분류)
+export type GenreSource = "FEATURED_CATEGORY" | "RULE_KEYWORD" | "RULE_CHANNEL" | "MANUAL" | "OWN_COMMON" | "NAVER_SEARCH"; // + DB의 'NONE'(미분류)
+
+/** 자사 공통 장르(사용자 지시 2026-09-30: "자사 채널 분류를 7개 자사 채널에 공통으로 적용").
+ *  같은 이름의 자사 행 중 자기 근거가 있는 분류(관리자 MANUAL > 주요 콘텐츠 분류)만 투표하고, 다수결 → 동률이면
+ *  먼저 들어온 행(id 순). OWN_COMMON(이어받은 행)은 투표하지 않는다 — 복사본이 원본을 이기면 안 된다. */
+export function pickOwnCommonGenre(rows: { ownerKey: string; genre: Genre; source: string }[]): { genre: Genre; from: string } | null {
+  for (const src of ["MANUAL", "FEATURED_CATEGORY"]) {
+    const voters = rows.filter((r) => r.source === src && r.genre !== UNCLASSIFIED);
+    if (!voters.length) continue;
+    const count = new Map<Genre, number>();
+    for (const r of voters) count.set(r.genre, (count.get(r.genre) ?? 0) + 1);
+    const best = voters.reduce((a, r) => (count.get(r.genre)! > count.get(a.genre)! ? r : a));
+    return { genre: best.genre, from: best.ownerKey };
+  }
+  return null;
+}
+
+/** 자사 공통 장르가 이 행을 덮어써야 하는가 — 자기 근거가 있는 관리자·주요 콘텐츠 분류는 채널별 값을 존중한다. */
+export const ownCommonOverrides = (source: string) => source !== "MANUAL" && source !== "FEATURED_CATEGORY";
 
 export interface GenreRuleResult {
   genre: Genre;
@@ -24,7 +42,7 @@ const KEYWORD_RULES: { genre: Genre; pattern: RegExp; note: string }[] = [
   { genre: "홈쇼핑·기타", pattern: /홈쇼핑|정보광고|인포머셜/, note: "제목 키워드(쇼핑)" },
   // "중계"는 넣지 않는다(〈KBS중계석〉은 클래식·국악 공연). 영문 약어(EPL·MLB·UFC)는 공백이 제거된 영문
   // 제목 일부와 충돌해(예: FANSCHOICEPLUS → EPL) 넣지 않는다 — 2026-09-30 시드 검수에서 확인.
-  { genre: "스포츠", pattern: /야구|축구|골프|배구|농구|KBO|K리그|스포츠|당구|볼링|씨름|테니스|레슬링|복싱/, note: "제목 키워드(스포츠)" },
+  { genre: "스포츠", pattern: /야구|축구|골프|배구|농구|KBO|K리그|스포츠|당구|볼링|씨름|테니스|레슬링|복싱|아시안게임|올림픽|월드컵|ASIANGAMES/i, note: "제목 키워드(스포츠)" },
   { genre: "영화", pattern: /영화|시네마|무비|MOVIE|극장판/i, note: "제목 키워드(영화)" },
   { genre: "애니·키즈", pattern: /애니|키즈|뽀로로|핑크퐁|어린이|만화|타요/, note: "제목 키워드(애니·키즈)" },
   // "콘서트"는 넣지 않는다 — 〈개그콘서트〉는 예능이다.
