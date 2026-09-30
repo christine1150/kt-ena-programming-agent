@@ -68,6 +68,26 @@ const WEIGHT_PRESETS: { name: string; hint: string; values: Record<string, numbe
 const ZOOM_STEPS = [0.6, 0.9, 1.2];
 const PRINT_PPM = 0.4; // A4 가로 한 장에 24시간이 들어가는 배율
 
+// 헤더 아이콘(엑셀 저장·인쇄) — 선 굵기·크기는 다른 헤더 아이콘과 맞춤
+function ExcelIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <path d="m9 12 5 5M14 12l-5 5" stroke="#059669" />
+    </svg>
+  );
+}
+function PrintIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7 9V3h10v6" />
+      <rect x="3" y="9" width="18" height="8" rx="2" />
+      <path d="M7 14h10v7H7z" />
+    </svg>
+  );
+}
+
 const kpiText = (label: string | undefined | null) => (label === "__SKYUHD__" ? "유료방송가구" : (label ?? "-"));
 const kstTime = (iso: string) => new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 
@@ -393,6 +413,7 @@ function IdealSchedulePage() {
   const sel = "w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-700";
   const card = "rounded-2xl border border-zinc-200 bg-white p-4";
   const pill = "rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-40";
+  const iconBtn = "flex h-8 w-8 items-center justify-center rounded-full border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 disabled:opacity-40";
   const weightsChanged =
     !!weights && !!savedWeights && (WEIGHT_ORDER.some((k) => (weights[k] ?? 0) !== (savedWeights[k] ?? 0)) || (!!caps && !!savedCaps && (caps.daily !== savedCaps.daily || caps.weekly !== savedCaps.weekly)));
   const activePreset = weights ? WEIGHT_PRESETS.find((p) => WEIGHT_ORDER.every((k) => (p.values[k] ?? 0) === (weights[k] ?? 0)))?.name : undefined;
@@ -563,17 +584,18 @@ function IdealSchedulePage() {
             <button type="button" disabled={!runId} onClick={openCompare} className={pill}>
               지난주와 비교
             </button>
+            {/* 사용자 지시(2026-09-30): 엑셀 저장·인쇄는 간단한 아이콘 버튼으로 */}
             {runId ? (
-              <a href={`/api/scheduling/ideal-schedule/${runId}/export`} className={pill}>
-                엑셀 저장
+              <a href={`/api/scheduling/ideal-schedule/${runId}/export`} title="엑셀 저장" aria-label="엑셀 저장" className={iconBtn}>
+                <ExcelIcon />
               </a>
             ) : (
-              <button type="button" disabled className={pill}>
-                엑셀 저장
+              <button type="button" disabled title="엑셀 저장" aria-label="엑셀 저장" className={iconBtn}>
+                <ExcelIcon />
               </button>
             )}
-            <button type="button" disabled={!runId} onClick={doPrint} className={pill}>
-              인쇄
+            <button type="button" disabled={!runId} onClick={doPrint} title="인쇄(A4 가로)" aria-label="인쇄" className={iconBtn}>
+              <PrintIcon />
             </button>
             <Link href={`/channel/${channelCode}`} className="rounded-full px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
               채널 분석 →
