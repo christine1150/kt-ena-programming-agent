@@ -43,7 +43,14 @@ export function buildSkeleton(
       else clusters.push([a]);
     }
     const need = Math.ceil(dates.length / 2);
-    const kept = clusters.filter((c) => new Set(c.map((a) => a.date)).size >= need);
+    // 편성 틀이 기간 중에 바뀐 경우(ENA STORY 8월 말 ↔ 9월 중순, 2026-09-30 확인) 옛 틀과 새 틀 경계가 절반 기준을 둘 다
+    // 넘어 한 칸이 잘게 쪼개졌다 — 과반이 아닌 경계는 가장 최근 날짜에 있을 때만(지금 틀) 쓴다.
+    const latest = dates[0];
+    const majority = Math.floor(dates.length / 2) + 1;
+    const kept = clusters.filter((c) => {
+      const ds = new Set(c.map((a) => a.date));
+      return ds.size >= majority || (ds.size >= need && ds.has(latest));
+    });
     if (kept.length === 0) continue;
 
     const lastEnds = dates
@@ -51,10 +58,31 @@ export function buildSkeleton(
       .filter((v) => Number.isFinite(v));
     const dayEnd = lastEnds.length ? median(lastEnds) : null;
 
-    const starts = kept.map((c) => median(c.map((a) => a.startMin)));
-    for (let i = 0; i < kept.length; i++) {
+    // 시작 시각이 주마다 grid 이상 흔들리는 구간(ENA STORY 저녁 20:50~21:14 등)은 군집이 절반 기준을 못 넘어 빠지고,
+    // 앞 슬롯이 다음 경계까지 늘어나 4시간짜리 한 칸이 됐다(2026-09-30 실데이터). 그런 구간은 날짜별 방영 순서로 맞춘다:
+    // 구간 안 시작 수가 같은 날이 절반 이상이면 i번째 시작의 중앙값을 경계로 추가.
+    const starts0 = kept.map((c) => median(c.map((a) => a.startMin)));
+    const starts: number[] = [];
+    const seen: number[] = [];
+    for (let i = 0; i < starts0.length; i++) {
+      starts.push(starts0[i]);
+      seen.push(new Set(kept[i].map((a) => a.date)).size);
+      const s = starts0[i];
+      const e = i + 1 < starts0.length ? starts0[i + 1] : dayEnd ?? s;
+      const byDate = dates.map((d) => day.filter((a) => a.date === d && a.startMin > s + opts.gridMinutes && a.startMin < e - opts.gridMinutes).map((a) => a.startMin));
+      const countFreq = new Map<number, number>();
+      for (const l of byDate) if (l.length) countFreq.set(l.length, (countFreq.get(l.length) ?? 0) + 1);
+      const [k, n] = [...countFreq].sort((x, y) => y[1] - x[1] || y[0] - x[0])[0] ?? [0, 0];
+      if (k === 0 || n < need || (n < majority && byDate[0].length !== k)) continue; // 위와 같은 기준(과반 또는 최근 날짜 포함)
+      const aligned = byDate.filter((l) => l.length === k);
+      for (let j = 0; j < k; j++) {
+        starts.push(median(aligned.map((l) => l[j])));
+        seen.push(n);
+      }
+    }
+    for (let i = 0; i < starts.length; i++) {
       const startMin = starts[i];
-      const endMin = i + 1 < kept.length ? starts[i + 1] : dayEnd ?? startMin;
+      const endMin = i + 1 < starts.length ? starts[i + 1] : dayEnd ?? startMin;
       if (endMin <= startMin) continue;
       // 이 슬롯 구간에 시작한 방영(군집 사이에 끼인 소규모 방영 포함)의 프로그램 빈도
       const inside = day.filter((a) => a.startMin >= startMin - opts.gridMinutes && a.startMin < endMin - opts.gridMinutes / 2);
@@ -69,7 +97,7 @@ export function buildSkeleton(
         weekday: dow,
         startMin,
         endMin,
-        weeksSeen: new Set(kept[i].map((a) => a.date)).size,
+        weeksSeen: seen[i],
         weeksTotal: dates.length,
         occupants: [...freq]
           .map(([key, f]) => ({ key, programName: f.programName, n: f.n }))

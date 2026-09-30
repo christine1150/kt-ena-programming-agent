@@ -18,6 +18,11 @@ export interface IdealRepeatRules {
   genre_concentration_penalty: number;
   low_confidence_penalty: number;
   runtime_mismatch_penalty: number;
+  /** 순환 편성 채널(ENA STORY 등, 채널 행에서 켬): 닐슨에 회차 정보가 없어도 하루 여러 번 도는 프로그램을
+   *  회차 시리즈처럼 취급 — 반복 한도를 관측 최대치까지 허용, 같은 프로그램 연속(3회 묶음 등)은 다음 회차 연결 편성 */
+  rotation_series?: boolean;
+  rotation_min_days?: number; // 하루 2회 이상 방영한 날이 최소 며칠(기본 4)
+  rotation_min_ratio?: number; // 방영한 날 중 하루 2회 이상인 날 비율(기본 0.5)
 }
 
 export interface IdealExpectedKpiConfig {

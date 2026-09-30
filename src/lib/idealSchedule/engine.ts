@@ -76,6 +76,8 @@ export interface EngineSummary {
   optimizeTarget: { label: string; isChannelKpi: boolean }; // 이 편성안이 최적화한 타깃
   /** 회차가 달라 프로그램 단위 반복 제한을 완화한 시리즈 이름 */
   multiEpisodePrograms: string[];
+  /** 회차 정보 없이 하루 여러 번 도는 패턴으로 판정한 순환 편성 프로그램 이름(설정으로 켠 채널만, 위 목록과 겹치지 않음) */
+  rotationPrograms: string[];
   /** 예상 범위 근거(BACKTEST = 과거 주 검증 잔차 n건, TRAINING = 검증 전 학습 기간 변동) */
   uncertainty: { basis: string; n: number; qLow: number; qHigh: number } | null;
   /** 지난주 실제 편성 대비 판단 개수(기존 틀 유지 모드) + 확실도 분포 */
@@ -121,6 +123,9 @@ export function featureOptionsFor(config: IdealScheduleConfig, kpiLabel: string,
     fullConfidenceN: e.full_confidence_n,
     composition: group.composition,
     extraTargets: group.extra,
+    rotation: config.repeat_rules.rotation_series
+      ? { minDays: config.repeat_rules.rotation_min_days ?? 4, minRatio: config.repeat_rules.rotation_min_ratio ?? 0.5 }
+      : null,
   };
 }
 
@@ -383,7 +388,8 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     expectedAvgTimeSpent: wavg((b) => b.eval.expectedTimeSpent),
     objective: output.objective,
     optimizeTarget: { label: bundle.kpiLabel, isChannelKpi: !customTarget },
-    multiEpisodePrograms: [...fs.multiEpisodePrograms].map((pid) => fs.units.find((u) => u.programId === pid)?.programName ?? pid).sort(),
+    multiEpisodePrograms: [...fs.multiEpisodePrograms].filter((pid) => !fs.rotationPrograms.has(pid)).map((pid) => fs.units.find((u) => u.programId === pid)?.programName ?? pid).sort(),
+    rotationPrograms: [...fs.rotationPrograms].map((pid) => fs.units.find((u) => u.programId === pid)?.programName ?? pid).sort(),
     uncertainty: uncertainty ? { basis: uncertainty.basis, n: uncertainty.all.n, qLow: uncertainty.all.qLow, qHigh: uncertainty.all.qHigh } : null,
     decisions: (() => {
       const d = { same: 0, keep: 0, change: 0, newSlot: 0, capBlocked: 0, certainty: { HIGH: 0, MID: 0, LOW: 0 } };

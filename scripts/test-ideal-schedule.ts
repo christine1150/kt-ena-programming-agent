@@ -6,7 +6,7 @@
 // 경쟁사 타깃 선택, 장르 규칙, 결정론. (제약·최적화 케이스는 STEP 3에서 추가)
 import { airingSpan, hourBucket, isoDow, broadcastMinToLabel } from "../src/lib/idealSchedule/time";
 import { mapOwnAirings } from "../src/lib/idealSchedule/mapping";
-import { buildFeatureSet, detectMultiEpisodePrograms, type FeatureOptions } from "../src/lib/idealSchedule/features";
+import { buildFeatureSet, detectMultiEpisodePrograms, detectRotationPrograms, type FeatureOptions } from "../src/lib/idealSchedule/features";
 import { chooseCompetitorTarget, targetKindOfLabel } from "../src/lib/idealSchedule/competitorTarget";
 import { buildCompetitorFeatures } from "../src/lib/idealSchedule/competitorFeatures";
 import { classifyGenreByRule, genreFromSkyUhdLabel, ownCommonOverrides, pickOwnCommonGenre } from "../src/lib/idealSchedule/genreRules";
@@ -612,6 +612,20 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   check("회차가 다른 반복은 회차 시리즈, 회차 정보 없는 반복은 아님(정보 없던 날은 판정 제외)", set.has("S") && !set.has("R"), JSON.stringify([...set]));
   const same = detectMultiEpisodePrograms([a("2026-09-01", "T", "같은 회"), a("2026-09-01", "T", "같은 회"), a("2026-09-01", "T", "같은 회")]);
   check("같은 회차만 반복하면 회차 시리즈 아님", !same.has("T"));
+}
+
+// ── 순환 편성(ENA STORY 확인 2026-09-30): 회차 정보 없이 하루 여러 번 도는 프로그램 ──
+{
+  const a = (date: string, pid: string) => ({ date, programId: pid, episodeSubtitle: null, episodeNumber: null }) as unknown as import("../src/lib/idealSchedule/types").OwnAiring;
+  const days = ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25"];
+  const list = [
+    ...days.flatMap((d) => [a(d, "HUMAN"), a(d, "HUMAN"), a(d, "HUMAN")]), // 매일 3회
+    ...days.map((d) => a(d, "ONCE")), // 매일 1회
+    a("2026-09-21", "RARE"), a("2026-09-21", "RARE"), ...days.slice(1).map((d) => a(d, "RARE")), // 2회인 날 1일뿐
+  ];
+  const set = detectRotationPrograms(list, 4, 0.5);
+  check("하루 여러 번 도는 날이 많으면 순환 편성, 하루 1회·가끔 2회는 아님", set.has("HUMAN") && !set.has("ONCE") && !set.has("RARE"), JSON.stringify([...set]));
+  check("기준 일수를 못 채우면 순환 편성 아님", !detectRotationPrograms(list, 6, 0.5).has("HUMAN"));
 }
 
 console.log(`\n${passed}건 통과, ${failures.length}건 실패`);

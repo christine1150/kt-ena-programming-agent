@@ -47,6 +47,7 @@ export function SummaryPanel({
     .slice(0, 5);
   const dec = s.decisions;
   const multi = s.multiEpisodePrograms ?? [];
+  const rotation = s.rotationPrograms ?? [];
   const fmt = (v: number | null | undefined) => (v === null || v === undefined ? "-" : v.toFixed(decimals));
 
   const stat = (k: string, v: string, tone: "default" | "warn" | "muted" = "default", hint?: string) => (
@@ -92,6 +93,12 @@ export function SummaryPanel({
           <li title={multi.join(", ")}>
             · 회차 시리즈 {multi.length}개(반복 제한 완화·연결 편성 감점 없음): {multi.slice(0, 2).join(", ")}
             {multi.length > 2 ? ` 외 ${multi.length - 2}` : ""}
+          </li>
+        )}
+        {rotation.length > 0 && (
+          <li title={rotation.join(", ")}>
+            · 순환 편성 {rotation.length}개(하루 반복 허용·이어 붙이면 다음 회차): {rotation.slice(0, 2).join(", ")}
+            {rotation.length > 2 ? ` 외 ${rotation.length - 2}` : ""}
           </li>
         )}
         {weakCount > 0 && <li>· 근거 부족 {weakCount}칸(빗금)</li>}

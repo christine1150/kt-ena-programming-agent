@@ -85,6 +85,7 @@ export type RunSummary = {
   decisions?: { same: number; keep: number; change: number; newSlot: number; capBlocked: number; certainty: { HIGH: number; MID: number; LOW: number } };
   uncertainty?: { basis: string; n: number; qLow: number; qHigh: number } | null;
   multiEpisodePrograms?: string[];
+  rotationPrograms?: string[];
 };
 
 export type RunRow = {

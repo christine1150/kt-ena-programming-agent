@@ -31,6 +31,8 @@ export interface FeatureOptions {
   fullConfidenceN: number;
   composition: { num: string; den: string } | null;
   extraTargets: string[];
+  /** 순환 편성 판정 기준(설정 repeat_rules.rotation_series가 켜진 채널만) — 없으면 판정 안 함 */
+  rotation?: { minDays: number; minRatio: number } | null;
 }
 
 interface Acc {
@@ -296,6 +298,8 @@ export interface AdjacencyStat {
 export interface FeatureSet {
   /** 회차가 다른 에피소드를 하루에도 여러 번 트는 시리즈(programId) — 프로그램 단위 반복 제한·연속 편성 감점 제외 */
   multiEpisodePrograms: Set<string>;
+  /** 그중 회차 정보 없이 "하루 여러 번 도는" 패턴으로 판정한 순환 편성 프로그램(설정으로 켠 채널만) */
+  rotationPrograms: Set<string>;
   /** 같은 시리즈 다음 회차를 바로 이어 붙였을 때(연속·연결 편성)의 관측 연관 — programId 기준 */
   selfLead: Map<string, AdjacencyStat>;
   options: FeatureOptions;
@@ -343,12 +347,30 @@ export function detectMultiEpisodePrograms(airings: OwnAiring[]): Set<string> {
   return out;
 }
 
+/** 순환 편성 프로그램 판정(회차 정보 없는 채널용, 설정으로 켠 채널만). ENA STORY 주간편성표 확인(2026-09-30):
+ *  〈기막힌 이야기 실제상황〉·〈한블리〉는 같은 회차를 하루 3~4회 돌리고 다음 날 다음 회로, 〈인간극장〉은 3회 묶음을
+ *  저녁에 새로 편성하고 다음 날 아침 재방(하루 6회) — 닐슨에는 회차·본/재 표시가 없어 회차 기준 판정이 불가하다.
+ *  그래서 "방영한 날 중 하루 2회 이상인 날"이 minDays일 이상이고 그 비율이 minRatio 이상이면 순환 편성으로 본다. */
+export function detectRotationPrograms(airings: OwnAiring[], minDays: number, minRatio: number): Set<string> {
+  const perProgDay = new Map<string, Map<string, number>>();
+  for (const a of airings) {
+    const m = perProgDay.get(a.programId) ?? perProgDay.set(a.programId, new Map()).get(a.programId)!;
+    m.set(a.date, (m.get(a.date) ?? 0) + 1);
+  }
+  const out = new Set<string>();
+  for (const [pid, days] of perProgDay) {
+    const multi = [...days.values()].filter((n) => n >= 2).length;
+    if (multi >= minDays && multi / days.size >= minRatio) out.add(pid);
+  }
+  return out;
+}
+
 /** 같은 시리즈 다음 회차를 "이어 붙였다"고 보는 최대 간격(분). 실데이터(OLIFE)에서 연결 편성 사이에 10~18분짜리
  *  짧은 편성물이 끼는 경우가 대부분이라 20분으로 둔다(그 사이 다른 프로그램이 있어도 같은 시리즈의 연결 편성). */
 export const EPISODE_CHAIN_GAP_MIN = 20;
 
 /** 인접 방영(앞 방영 종료 ~ 다음 방영 시작 간격 5분 이내) 쌍의 관측 연관. */
-function buildAdjacency(airings: OwnAiring[], rating: MetricModel, minN: number, multiEp: Set<string> = new Set()) {
+function buildAdjacency(airings: OwnAiring[], rating: MetricModel, minN: number, multiEp: Set<string> = new Set(), rotation: Set<string> = new Set()) {
   const byDate = new Map<string, OwnAiring[]>();
   for (const a of airings) (byDate.get(a.date) ?? byDate.set(a.date, []).get(a.date)!).push(a);
   const idxOf = (a: OwnAiring): number | null => {
@@ -376,7 +398,9 @@ function buildAdjacency(airings: OwnAiring[], rating: MetricModel, minN: number,
         const p0 = s[j - 1];
         const n0 = s[j];
         if (p0.endMin === null || n0.startMin - p0.endMin < -5 || n0.startMin - p0.endMin > EPISODE_CHAIN_GAP_MIN) continue;
-        const differs = (p0.episodeSubtitle ?? `#${p0.episodeNumber}`) !== (n0.episodeSubtitle ?? `#${n0.episodeNumber}`);
+        // 순환 편성 프로그램은 회차 정보가 없어도 바로 이어 붙인 같은 프로그램을 다른 회차로 본다(같은 회를 연달아 틀지 않음)
+        const noInfo = !p0.episodeSubtitle && p0.episodeNumber === null && !n0.episodeSubtitle && n0.episodeNumber === null;
+        const differs = noInfo && rotation.has(pid) ? true : (p0.episodeSubtitle ?? `#${p0.episodeNumber}`) !== (n0.episodeSubtitle ?? `#${n0.episodeNumber}`);
         const ni0 = idxOf(n0);
         if (differs && ni0 !== null) (selfRaw.get(pid) ?? selfRaw.set(pid, []).get(pid)!).push(ni0);
       }
@@ -531,10 +555,12 @@ export function buildFeatureSet(
     });
   }
 
-  const multiEpisodePrograms = detectMultiEpisodePrograms(airings);
-  const { leadIn, leadOut, selfLead } = buildAdjacency(airings, rating, opts.minN, multiEpisodePrograms);
+  const rotationPrograms = opts.rotation ? detectRotationPrograms(airings, opts.rotation.minDays, opts.rotation.minRatio) : new Set<string>();
+  const multiEpisodePrograms = new Set([...detectMultiEpisodePrograms(airings), ...rotationPrograms]);
+  const { leadIn, leadOut, selfLead } = buildAdjacency(airings, rating, opts.minN, multiEpisodePrograms, rotationPrograms);
   return {
     multiEpisodePrograms,
+    rotationPrograms,
     selfLead,
     options: opts,
     channelCode: bundle.channelCode,
