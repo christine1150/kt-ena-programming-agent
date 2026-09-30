@@ -69,10 +69,12 @@ export interface CompetitorBundle {
   daily: CompetitorDaily[];
 }
 
-// 사용자 지시(2026-09-30): "오리지널 드라마", "오리지널 예능", "여행"(교양 중 여행 장르), "사업형"(브랜디드) 추가.
+// 사용자 지시(2026-09-30): "오리지널 드라마", "오리지널 예능", "여행"(교양 중 여행 장르), "사업형"(브랜디드), "영미 드라마"·"중국 드라마" 추가.
 export const GENRES = [
   "드라마",
   "오리지널 드라마",
+  "영미 드라마",
+  "중국 드라마",
   "예능",
   "오리지널 예능",
   "영화",
@@ -88,6 +90,6 @@ export const GENRES = [
 ] as const;
 export type Genre = (typeof GENRES)[number];
 /** 상위 장르 묶음 — 경쟁 대응(MATCH/COUNTER)·장르 편중 판단은 이 묶음 기준(오리지널 드라마도 드라마 계열). */
-const GENRE_FAMILY: Partial<Record<Genre, Genre>> = { "오리지널 드라마": "드라마", "오리지널 예능": "예능", 여행: "다큐·교양" };
+const GENRE_FAMILY: Partial<Record<Genre, Genre>> = { "오리지널 드라마": "드라마", "영미 드라마": "드라마", "중국 드라마": "드라마", "오리지널 예능": "예능", 여행: "다큐·교양" };
 export const genreFamily = (g: Genre): Genre => GENRE_FAMILY[g] ?? g;
 export const UNCLASSIFIED: Genre = "미분류";

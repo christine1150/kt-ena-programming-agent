@@ -58,6 +58,8 @@ export function genreFromFeaturedCategory(category: string | null | undefined): 
  *  옮길 근거가 없는 표기는 미분류로 두고 원표기를 note에 남긴다. */
 export function genreFromSkyUhdLabel(label: string): Genre {
   if (/오리지널 드라마/.test(label)) return "오리지널 드라마";
+  if (/미국 드라마|영국 드라마|영미 드라마/.test(label)) return "영미 드라마";
+  if (/중국 드라마/.test(label)) return "중국 드라마";
   if (/오리지널 예능/.test(label)) return "오리지널 예능";
   if (/드라마/.test(label)) return "드라마";
   if (/예능/.test(label)) return "예능";

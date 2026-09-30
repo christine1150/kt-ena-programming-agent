@@ -197,11 +197,11 @@ const genreOf = (name: string): Genre => (name === "드라마A" ? "드라마" : 
   check("KBS중계석(공연)을 스포츠로 오분류하지 않음", classifyGenreByRule("KBS중계석 심포니", "KBS1").genre !== "스포츠");
   check("영문 제목 일부(EPL)로 스포츠 오분류 안 함", classifyGenreByRule("M플러스 FANS CHOICE PLUS", "Mnet").genre !== "스포츠");
   check("채널 성격만으로 분류하지 않음", classifyGenreByRule("삼시세끼 바다목장편", "DRAMAcube").genre === "미분류");
-  check("skyUHD 사용자 표기 변환", genreFromSkyUhdLabel("중국 드라마") === "드라마" && genreFromSkyUhdLabel("오리지널 드라마") === "오리지널 드라마" && genreFromSkyUhdLabel("오리지널 예능") === "오리지널 예능" && genreFromSkyUhdLabel("여행") === "여행" && genreFromSkyUhdLabel("실버") === "미분류");
+  check("skyUHD 사용자 표기 변환", genreFromSkyUhdLabel("중국 드라마") === "중국 드라마" && genreFromSkyUhdLabel("미국 드라마") === "영미 드라마" && genreFromSkyUhdLabel("국내 드라마") === "드라마" && genreFromSkyUhdLabel("오리지널 드라마") === "오리지널 드라마" && genreFromSkyUhdLabel("오리지널 예능") === "오리지널 예능" && genreFromSkyUhdLabel("여행") === "여행" && genreFromSkyUhdLabel("실버") === "미분류");
   // 사용자 지시(2026-09-30): 오리지널 드라마·오리지널 예능·여행 장르 추가, 여행은 교양 중 여행
   check("여행 키워드 → 여행(세계테마기행·걸어서세계속으로·한국기행)", ["세계테마기행", "걸어서 세계속으로", "한국기행"].every((n) => classifyGenreByRule(n, "OLIFE").genre === "여행"));
   check("여행이 아닌 다큐는 다큐·교양 유지", classifyGenreByRule("인간극장", "KBS1").genre === "다큐·교양");
-  check("상위 장르 묶음: 오리지널 드라마→드라마, 오리지널 예능→예능, 여행→다큐·교양", genreFamily("오리지널 드라마") === "드라마" && genreFamily("오리지널 예능") === "예능" && genreFamily("여행") === "다큐·교양" && genreFamily("영화") === "영화");
+  check("상위 장르 묶음: 오리지널 드라마→드라마, 오리지널 예능→예능, 여행→다큐·교양", genreFamily("오리지널 드라마") === "드라마" && genreFamily("오리지널 예능") === "예능" && genreFamily("여행") === "다큐·교양" && genreFamily("영화") === "영화" && genreFamily("영미 드라마") === "드라마" && genreFamily("중국 드라마") === "드라마");
 }
 
 // ── 설정 병합 ────────────────────────────────────────────────────
