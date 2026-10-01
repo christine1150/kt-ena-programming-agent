@@ -687,19 +687,6 @@ function IdealSchedulePage() {
             <SummaryPanel run={view.run} ideal={ideal} compareRows={rows} decimals={decimals} kpiLabel={runKpi} onSelectBlock={(id) => selectBlock(id)} onOpenCompare={openCompare} />
           )}
 
-          {view && conflictsOrWarnings && (
-            <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
-              {view.run.conflicts.map((c, i) => (
-                <p key={i}>
-                  충돌: {DOW_LABELS[c.weekday - 1]}요일 &lsquo;{c.a.programName}&rsquo;과 &lsquo;{c.b.programName}&rsquo;이 겹칩니다 — 우선순위가 같아 어느 쪽도 배치하지 않았습니다. 필수 편성을 조정해 주세요.
-                </p>
-              ))}
-              {(summary?.warnings ?? []).map((w, i) => (
-                <p key={`w${i}`}>{w}</p>
-              ))}
-            </section>
-          )}
-
           <PlanUploadCard channelCode={channelCode} planWeeks={opts?.planWeeks ?? []} weekStart={weekStart} onUploaded={() => void refreshPlanWeeks()} />
 
           {/* 조건 */}
@@ -946,6 +933,21 @@ function IdealSchedulePage() {
                 ))}
               </ul>
             </details>
+          )}
+
+          {/* 사용자 지시(2026-10-01): 충돌·안내 문구는 눈에 잘 띄는 자리 대신 패널 "최하단에 적어" —
+              이전엔 요약 바로 아래(업로드 칸 위)에 있어 과하게 튀었다. */}
+          {view && conflictsOrWarnings && (
+            <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+              {view.run.conflicts.map((c, i) => (
+                <p key={i}>
+                  충돌: {DOW_LABELS[c.weekday - 1]}요일 &lsquo;{c.a.programName}&rsquo;과 &lsquo;{c.b.programName}&rsquo;이 겹칩니다 — 우선순위가 같아 어느 쪽도 배치하지 않았습니다. 필수 편성을 조정해 주세요.
+                </p>
+              ))}
+              {(summary?.warnings ?? []).map((w, i) => (
+                <p key={`w${i}`}>{w}</p>
+              ))}
+            </section>
           )}
         </aside>
 
