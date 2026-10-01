@@ -87,13 +87,15 @@ export function PlanUploadCard({
           ))}
         </div>
       </div>
-      {/* 업로드하는 곳이 한눈에 보이게(사용자 지시 2026-10-01) — 칸 너비 전체의 점선 버튼, 높이는 뽑기 조건을 가리지 않을 만큼만 */}
+      {/* 업로드하는 곳이 한눈에 보이게(사용자 지시 2026-10-01) — 칸 너비 전체의 점선 버튼, 높이는 뽑기 조건을 가리지 않을 만큼만.
+          사용자 재지시(2026-10-01, 2차): "색이 너무 세고 점선도 굵다 — 전체와 잘 어울리는 색으로" — 이 페이지 전역이 쓰는
+          zinc 모노톤(선택/강조는 zinc-900, 테두리는 zinc-200/300)에 맞춰 에메랄드 그린 대신 같은 톤으로, 테두리도 1px로. */}
       <button
         type="button"
         disabled={!!busy}
         onClick={() => input.current?.click()}
-        className={`mt-2 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed px-3 py-2.5 text-sm font-semibold transition disabled:opacity-60 ${
-          drag ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-emerald-400 bg-emerald-50/40 text-emerald-800 hover:border-emerald-600 hover:bg-emerald-50"
+        className={`mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-sm font-semibold transition disabled:opacity-60 ${
+          drag ? "border-zinc-800 bg-zinc-100 text-zinc-800" : "border-zinc-300 bg-zinc-50/60 text-zinc-700 hover:border-zinc-500 hover:bg-zinc-50"
         }`}
       >
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -101,7 +103,7 @@ export function PlanUploadCard({
           <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
         </svg>
         {busy ? `올리는 중… ${busy}` : drag ? "여기에 놓으세요" : "편성표 엑셀 올리기"}
-        {!busy && !drag && <span className="text-[11px] font-normal text-emerald-700/80">클릭 또는 끌어다 놓기</span>}
+        {!busy && !drag && <span className="text-[11px] font-normal text-zinc-500">클릭 또는 끌어다 놓기</span>}
       </button>
       <input ref={input} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => void upload([...(e.target.files ?? [])])} />
       {planWeeks.length === 0 && <p className="mt-1 text-[11px] text-zinc-500">아직 올린 편성표가 없습니다.</p>}
