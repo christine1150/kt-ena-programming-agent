@@ -1793,43 +1793,40 @@ export async function GET(request: Request) {
       return occupants.find((o) => o.canonical_name !== m.canonical_name) ?? null;
     }
 
-    // 사용자 지시(2026-10-01): "그대에게 드림이 종영하면서 신병4가 론칭했는데, 신병4가 더 잘
-    // 됐으면 그건 하락 요인이 아니다 — 진짜로 채널 시청률을 하락시킨 요인을 찾아라" — 기여도가
-    // 가장 큰 음수라는 이유만으로 하락 요인을 뽑지 않는다. 이번 기간 편성이 0회(=종영)라서
-    // 생긴 음수 기여는, 그 슬롯을 이어받은 콘텐츠가 종영 전보다 뚜렷이(±10% 밖) 더 잘 됐다면
-    // "하락"이 아니라 "성공적 교체"다(상승 견인 쪽에서 이미 신병4로 잡힌다) — 이 경우는
-    // 하락 요인 후보에서 제외하고 다음으로 큰 음수 후보를 본다. 반대로 계속 방영 중인(종영이
-    // 아니라 편성량·성과가 줄었을 뿐인) 프로그램은 이 게이트를 적용하지 않는다 — 대체 콘텐츠의
-    // 성과와 무관하게 자기 자신의 편성 비중·성과가 준 것 자체가 정당한 하락 요인이기 때문이다.
-    const downSorted = eligible.filter((m) => m.contribution_delta! < 0).sort((a, b) => a.contribution_delta! - b.contribution_delta!);
-    let down: DriverRow | null = null;
-    let downReplacement: SlotOccupant | null = null;
-    for (const candidate of downSorted) {
-      const ended = (candidate.period_airings ?? 0) === 0;
-      if (!ended) {
-        down = candidate;
-        break;
+    // 사용자 지시(2026-10-01, 2차): "그대에게 드림이 종영하면서 신병4가 론칭했는데, 신병4가
+    // 더 잘 됐으면 그건 하락 요인이 아니다"에 이어 "풍향GO2사전모임도 빠지고 그 자리에 뭐가
+    // 바뀌었는데 그것때문에 빠졌다면 그걸[=대체 콘텐츠를] 적어"라고 정정 — 종영한 프로그램이
+    // 대체 콘텐츠보다 못했든 더 나았든, 이미 방영을 멈춘 프로그램 자신은 "지금 채널을 깎아먹는
+    // 중인 요인"이 될 수 없다. 그 슬롯에 무언가 들어왔다면, 하락의 실체는 그 후속 콘텐츠 자신의
+    // 성과이지 종영작의 "있었다가 없어짐" 통계가 아니다 — 그래서 종영(이번 기간 편성 0회) +
+    // 후속 콘텐츠가 존재하는 후보는 그 상태 자체로 후보에서 제외한다(더 잘했는지 따질 필요 없이).
+    // 후속 콘텐츠가 그 자리에서 부진하다면, 후속 콘텐츠는 자기 자신의 기여도/프라임 등락으로
+    // 이 목록에 자기 이름으로 올라온다(별도 재귀 조회 불필요 — rows에 이미 모든 프로그램이
+    // 있으므로 정렬 순서상 자연스럽게 다음 후보로 떠오른다). 슬롯에 아무것도 들어오지 않았다면
+    // (후속 콘텐츠 없음) 종영 자체가 순수한 하락 요인이므로 그대로 둔다.
+    // 계속 방영 중인(종영이 아니라 편성량·성과가 줄었을 뿐인) 프로그램은 이 게이트 대상이 아니다
+    // — 자기 자신의 편성 비중·성과가 준 것 자체가 정당한 하락 요인이기 때문이다.
+    async function pickDeclineCandidate(sorted: DriverRow[]): Promise<{ picked: DriverRow | null; replacement: SlotOccupant | null }> {
+      for (const candidate of sorted) {
+        const ended = (candidate.period_airings ?? 0) === 0;
+        if (!ended) return { picked: candidate, replacement: null };
+        const replacement = await fetchSlotReplacement(candidate);
+        if (replacement) continue; // 종영 + 후속 콘텐츠 있음 — 이 종영작은 제외, 후속 콘텐츠는 자기 몫의 후보로 따로 떠오른다.
+        return { picked: candidate, replacement: null }; // 종영 + 후속 콘텐츠 없음 — 종영 자체가 하락 요인.
       }
-      const replacement = await fetchSlotReplacement(candidate);
-      const replacedFromRating = candidate.period_avg_rating ?? candidate.prior_avg_rating;
-      const replacementIsBetter =
-        !!replacement &&
-        replacement.avg_rating !== null &&
-        replacedFromRating !== null &&
-        replacedFromRating > 0 &&
-        replacement.avg_rating >= replacedFromRating * 1.1;
-      if (replacementIsBetter) continue; // 종영 + 더 잘된 대체 = 하락 요인 아님, 다음 후보로.
-      down = candidate;
-      downReplacement = replacement;
-      break;
+      return { picked: null, replacement: null };
     }
+
+    const downSorted = eligible.filter((m) => m.contribution_delta! < 0).sort((a, b) => a.contribution_delta! - b.contribution_delta!);
+    const { picked: down } = await pickDeclineCandidate(downSorted);
     if (down) weaknessDriver = toDriver(down);
 
     // 하락 요인의 옛 주력 슬롯(main_slot_dow/main_slot_hour_block)에 이번 기간 실제로 무엇이
     // 편성됐는지 "대체 콘텐츠"로 명시한다(자기 자신이 그대로 최다 점유자면 비워둠 — 지어내지
-    // 않는다). 위 게이트 루프에서 이미 조회한 경우(종영 사례)는 재조회하지 않고 재사용한다.
+    // 않는다). down이 뽑혔다는 것은 위 게이트를 통과했다는 뜻이므로, 여기서 나오는 대체 콘텐츠는
+    // (종영이면) 없거나, (계속 방영 중이면) 같은 슬롯을 일부 나눠 가진 다른 프로그램이다.
     if (down && weaknessDriver) {
-      const replacement = downReplacement ?? (await fetchSlotReplacement(down));
+      const replacement = await fetchSlotReplacement(down);
       if (replacement) {
         weaknessDriver.replacedByName = replacement.canonical_name;
         weaknessDriver.replacedByRating = replacement.avg_rating;
@@ -1857,7 +1854,10 @@ export async function GET(request: Request) {
       priorPrimeAirCount: m.prior_prime_airings ?? 0,
     });
     const primeUp = primeCandidates.filter((m) => m.prime_rating_delta! > 0).sort((a, b) => b.prime_rating_delta! - a.prime_rating_delta!)[0];
-    const primeDown = primeCandidates.filter((m) => m.prime_rating_delta! < 0).sort((a, b) => a.prime_rating_delta! - b.prime_rating_delta!)[0];
+    // 프라임 하락도 하락 요인과 같은 게이트를 쓴다 — "그대에게 드림 ▼0.278"처럼 종영+대체된
+    // 프로그램이 프라임 하락 1위로 뽑히던 것과 동일한 문제(사용자 지적, 2026-10-01 2차).
+    const primeDownSorted = primeCandidates.filter((m) => m.prime_rating_delta! < 0).sort((a, b) => a.prime_rating_delta! - b.prime_rating_delta!);
+    const { picked: primeDown } = await pickDeclineCandidate(primeDownSorted);
     primeMovers = [primeUp, primeDown].filter(Boolean).map((m) => toPrime(m!));
 
     return { growthDriver, weaknessDriver, primeMovers };
