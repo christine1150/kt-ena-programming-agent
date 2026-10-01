@@ -147,6 +147,7 @@ export function IdealWeekGrid({
                     <button
                       type="button"
                       key={b.id}
+                      data-block-id={b.id}
                       onClick={() => onSelect?.(b)}
                       className="absolute left-0 right-0 overflow-hidden px-1 text-left transition-opacity"
                       style={{

@@ -304,6 +304,18 @@ function IdealSchedulePage() {
   const ideal = useMemo(() => (view?.blocks ?? []).filter((b) => b.layer === "IDEAL"), [view]);
   const current = useMemo(() => (view?.blocks ?? []).filter((b) => b.layer === "CURRENT"), [view]);
   const selected = view?.blocks.find((b) => b.id === selectedId) ?? null;
+  // 블록 상세(오른쪽 패널)가 열리면 편성표가 패널 밑에 가려지지 않게(사용자 지적 2026-10-01: 주말 칸은 미리보기를 눌러도
+  // 패널에 가려 보이지 않음 — UX 검토): ① 넓은 화면에서는 왼쪽 요약·조건 패널을 잠시 접고 오른쪽에 패널 폭만큼 자리를
+  // 비워 7일이 남은 폭에 다시 맞춰지게, ② 그래도 가로 스크롤이 생기는 폭이면 고른 칸(미리보기 칸)을 보이는 곳으로 옮긴다.
+  const drawerOpen = !!selected && !printing;
+  useEffect(() => {
+    if (!selectedId) return;
+    const t = window.setTimeout(() => {
+      const el = document.querySelector(`[data-ideal-grid="IDEAL"] [data-block-id="${selectedId}"]`);
+      el?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [selectedId, rawPreview]);
   // 채널·편성안이 바뀌면 이전 미리보기는 자동으로 무시된다(지금 편성안 블록에 대한 것만 사용)
   const preview = rawPreview && ideal.some((b) => b.id === rawPreview.block.id) ? rawPreview : null;
   const pivot = view?.channelAnnualAvgRating ? view.channelAnnualAvgRating * 2 : null;
@@ -582,7 +594,7 @@ function IdealSchedulePage() {
 
       {/* 헤더 */}
       <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur print:hidden">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 md:px-6">
+        <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 md:px-6 ${drawerOpen ? "lg:pr-[416px]" : ""}`}>
           <div className="flex min-w-0 items-center gap-3">
             <VendingMachineIcon size={22} />
             <div className="min-w-0">
@@ -632,7 +644,7 @@ function IdealSchedulePage() {
                 <ExcelIcon />
               </button>
             )}
-            <button type="button" disabled={!runId} onClick={doPrint} title="인쇄(A4 가로)" aria-label="인쇄" className={iconBtn}>
+            <button type="button" disabled={!runId} onClick={doPrint} title="인쇄(A4 세로)" aria-label="인쇄" className={iconBtn}>
               <PrintIcon />
             </button>
             <Link href={`/channel/${channelCode}`} className="rounded-full px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
@@ -667,10 +679,10 @@ function IdealSchedulePage() {
         </div>
       )}
 
-      <div className="grid gap-4 px-4 py-4 md:px-6 xl:grid-cols-[340px_minmax(0,1fr)] print:block print:p-0">
+      <div className={`grid gap-4 px-4 py-4 md:px-6 print:block print:p-0 ${drawerOpen ? "lg:pr-[416px] xl:grid-cols-1" : "xl:grid-cols-[340px_minmax(0,1fr)]"}`}>
         {/* 좌측 패널 */}
         {/* 좁은 화면(xl 미만)에서는 편성표가 먼저, 패널은 그 아래(편성표가 주인공 — PD·UX 검토) */}
-        <aside className="order-2 space-y-3 print:hidden xl:order-1 xl:sticky xl:top-[4.25rem] xl:max-h-[calc(100dvh-5rem)] xl:self-start xl:overflow-y-auto xl:pr-1">
+        <aside className={`order-2 space-y-3 print:hidden xl:order-1 xl:sticky xl:top-[4.25rem] xl:max-h-[calc(100dvh-5rem)] xl:self-start xl:overflow-y-auto xl:pr-1 ${drawerOpen ? "xl:hidden" : ""}`}>
           {view && summary && (
             <SummaryPanel run={view.run} ideal={ideal} compareRows={rows} decimals={decimals} kpiLabel={runKpi} onSelectBlock={(id) => selectBlock(id)} onOpenCompare={openCompare} />
           )}
