@@ -39,7 +39,7 @@ export interface RunRequest {
 }
 
 /** 닐슨 주간 순위(채널·랭킹 시트 타깃) — 기준일까지 최근 lookbackDays일 */
-async function loadWeeklyRanks(channelId: string, targetLabel: string, asOfDate: string, lookbackDays: number): Promise<WeeklyRankRow[]> {
+export async function loadWeeklyRanks(channelId: string, targetLabel: string, asOfDate: string, lookbackDays: number): Promise<WeeklyRankRow[]> {
   const { data, error } = await supabase
     .from("nielsen_period_rank")
     .select("date_from, rank, rating, targets!inner(label)")
