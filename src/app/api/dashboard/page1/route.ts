@@ -1713,10 +1713,11 @@ export async function GET(request: Request) {
     // skyUHD는 프로그램 단위 nielsen_daily 행이 없어(J절 Phase 1에서 실측 확인) 이 RPC가 항상
     // 빈 결과다 — 왕복하지 않고 건너뛴다.
     if (code === "SKYUHD" || !ch.primary_target) return { growthDriver, weaknessDriver, primeMovers };
+    const primaryTarget = ch.primary_target; // 아래 중첩 함수(fetchSlotReplacement)에서도 좁혀진 타입을 쓰기 위해 지역 변수로 캡처.
 
     const { data: driverRows } = await supabase.rpc("get_channel_monthly_program_drivers", {
       p_channel_code: code,
-      p_program_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
+      p_program_target_label: resolveProgramLevelTargetLabel(primaryTarget),
       p_date_from: dateFrom,
       p_date_to: dateTo,
       p_prior_date_from: priorDateFrom,
@@ -1774,25 +1775,62 @@ export async function GET(request: Request) {
     const up = eligible
       .filter((m) => m.contribution_delta! > 0 && isSlotLiftMeaningful(m))
       .sort((a, b) => b.contribution_delta! - a.contribution_delta!)[0];
-    const down = eligible.filter((m) => m.contribution_delta! < 0).sort((a, b) => a.contribution_delta! - b.contribution_delta!)[0];
     if (up) growthDriver = toDriver(up);
+
+    type DriverRow = (typeof rows)[number];
+    type SlotOccupant = { canonical_name: string; air_count: number; avg_rating: number | null };
+    async function fetchSlotReplacement(m: DriverRow): Promise<SlotOccupant | null> {
+      if (m.main_slot_dow === null || m.main_slot_hour_block === null) return null;
+      const { data: occupantRows } = await supabase.rpc("get_channel_slot_current_occupant", {
+        p_channel_code: code,
+        p_program_target_label: resolveProgramLevelTargetLabel(primaryTarget),
+        p_date_from: dateFrom,
+        p_date_to: dateTo,
+        p_dow: m.main_slot_dow,
+        p_hour_block: m.main_slot_hour_block,
+      });
+      const occupants = (occupantRows ?? []) as SlotOccupant[];
+      return occupants.find((o) => o.canonical_name !== m.canonical_name) ?? null;
+    }
+
+    // 사용자 지시(2026-10-01): "그대에게 드림이 종영하면서 신병4가 론칭했는데, 신병4가 더 잘
+    // 됐으면 그건 하락 요인이 아니다 — 진짜로 채널 시청률을 하락시킨 요인을 찾아라" — 기여도가
+    // 가장 큰 음수라는 이유만으로 하락 요인을 뽑지 않는다. 이번 기간 편성이 0회(=종영)라서
+    // 생긴 음수 기여는, 그 슬롯을 이어받은 콘텐츠가 종영 전보다 뚜렷이(±10% 밖) 더 잘 됐다면
+    // "하락"이 아니라 "성공적 교체"다(상승 견인 쪽에서 이미 신병4로 잡힌다) — 이 경우는
+    // 하락 요인 후보에서 제외하고 다음으로 큰 음수 후보를 본다. 반대로 계속 방영 중인(종영이
+    // 아니라 편성량·성과가 줄었을 뿐인) 프로그램은 이 게이트를 적용하지 않는다 — 대체 콘텐츠의
+    // 성과와 무관하게 자기 자신의 편성 비중·성과가 준 것 자체가 정당한 하락 요인이기 때문이다.
+    const downSorted = eligible.filter((m) => m.contribution_delta! < 0).sort((a, b) => a.contribution_delta! - b.contribution_delta!);
+    let down: DriverRow | null = null;
+    let downReplacement: SlotOccupant | null = null;
+    for (const candidate of downSorted) {
+      const ended = (candidate.period_airings ?? 0) === 0;
+      if (!ended) {
+        down = candidate;
+        break;
+      }
+      const replacement = await fetchSlotReplacement(candidate);
+      const replacedFromRating = candidate.period_avg_rating ?? candidate.prior_avg_rating;
+      const replacementIsBetter =
+        !!replacement &&
+        replacement.avg_rating !== null &&
+        replacedFromRating !== null &&
+        replacedFromRating > 0 &&
+        replacement.avg_rating >= replacedFromRating * 1.1;
+      if (replacementIsBetter) continue; // 종영 + 더 잘된 대체 = 하락 요인 아님, 다음 후보로.
+      down = candidate;
+      downReplacement = replacement;
+      break;
+    }
     if (down) weaknessDriver = toDriver(down);
 
     // 하락 요인의 옛 주력 슬롯(main_slot_dow/main_slot_hour_block)에 이번 기간 실제로 무엇이
-    // 편성됐는지 조회해, 하락 요인 자신이 아닌 다른 프로그램이 그 자리를 차지했으면 "대체
-    // 콘텐츠"로 명시한다(자기 자신이 그대로 최다 점유자면 비워둠 — 지어내지 않는다).
-    if (down && down.main_slot_dow !== null && down.main_slot_hour_block !== null) {
-      const { data: occupantRows } = await supabase.rpc("get_channel_slot_current_occupant", {
-        p_channel_code: code,
-        p_program_target_label: resolveProgramLevelTargetLabel(ch.primary_target),
-        p_date_from: dateFrom,
-        p_date_to: dateTo,
-        p_dow: down.main_slot_dow,
-        p_hour_block: down.main_slot_hour_block,
-      });
-      const occupants = (occupantRows ?? []) as { canonical_name: string; air_count: number; avg_rating: number | null }[];
-      const replacement = occupants.find((o) => o.canonical_name !== down!.canonical_name);
-      if (replacement && weaknessDriver) {
+    // 편성됐는지 "대체 콘텐츠"로 명시한다(자기 자신이 그대로 최다 점유자면 비워둠 — 지어내지
+    // 않는다). 위 게이트 루프에서 이미 조회한 경우(종영 사례)는 재조회하지 않고 재사용한다.
+    if (down && weaknessDriver) {
+      const replacement = downReplacement ?? (await fetchSlotReplacement(down));
+      if (replacement) {
         weaknessDriver.replacedByName = replacement.canonical_name;
         weaknessDriver.replacedByRating = replacement.avg_rating;
         weaknessDriver.replacedByAirCount = replacement.air_count;
