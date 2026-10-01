@@ -5,7 +5,20 @@ import { useState } from "react";
 import { DOW_LABELS, minToLabel } from "@/lib/scheduleGridLayout";
 import { SMALL_GAIN_RATIO, reasonText, signedPct, type CompareRow } from "./model";
 
-export function CompareTable({ rows: allRows, currentWeekStart, decimals, onSelectBlock }: { rows: CompareRow[]; currentWeekStart: string | null; decimals: number; onSelectBlock: (blockId: string) => void }) {
+export function CompareTable({
+  rows: allRows,
+  currentWeekStart,
+  decimals,
+  onSelectBlock,
+  planWeek = null,
+}: {
+  rows: CompareRow[];
+  currentWeekStart: string | null;
+  decimals: number;
+  onSelectBlock: (blockId: string) => void;
+  /** 이번 주 업로드 편성표를 기존 틀로 뽑은 편성안이면 그 주(사용자 질문 2026-10-01: 무엇을 무엇과 비교하는지 분명히) */
+  planWeek?: string | null;
+}) {
   const [showAll, setShowAll] = useState(false);
   const rows = allRows.filter((r) => showAll || r.changed);
   const fmt = (v: number | null) => (v === null ? "-" : v.toFixed(decimals));
@@ -14,7 +27,8 @@ export function CompareTable({ rows: allRows, currentWeekStart, decimals, onSele
     <div className="rounded-2xl border border-zinc-200 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-4 py-3">
         <p className="text-sm font-semibold text-zinc-800">
-          지난주 실제 편성({currentWeekStart ?? "-"} 주) → AI 스마트 편성 <span className="font-normal text-zinc-500">· 바뀐 칸 {allRows.filter((r) => r.changed).length}개 / 전체 {allRows.length}개</span>
+          지난주 실제 편성({currentWeekStart ?? "-"} 주) → AI 스마트 편성{planWeek ? `(업로드 편성표 ${planWeek} 주 틀 기준)` : "(편성표 뽑기 결과)"}{" "}
+          <span className="font-normal text-zinc-500">· 바뀐 칸 {allRows.filter((r) => r.changed).length}개 / 전체 {allRows.length}개</span>
         </p>
         <label className="flex items-center gap-1.5 text-xs text-zinc-600">
           <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />

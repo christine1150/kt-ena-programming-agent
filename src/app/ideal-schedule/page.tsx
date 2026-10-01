@@ -567,7 +567,10 @@ function IdealSchedulePage() {
                   <span className="ml-1 text-xs font-normal text-zinc-500">(지난주 {summary.expectedRank.refRank}위)</span>
                 </span>
               )}
-              <span className="text-xs font-normal text-zinc-500">숫자는 최근 3달 데이터 기반 기대 시청률</span>
+              <span className="text-xs font-normal text-zinc-500">
+                숫자는 최근 3달 데이터 기반 기대 시청률 · {kstTime(view.run.created_at)} 편성표 뽑기 결과 · 기준 틀:{" "}
+                {summary?.frame === "PLAN" ? `업로드한 이번 주 편성표(${view.run.week_start} 주)` : `지난주 실제 편성(${summary?.current?.weekStart ?? "-"} 주)`}
+              </span>
             </span>
           }
           blocks={ideal}
@@ -990,7 +993,7 @@ function IdealSchedulePage() {
                 지난주 실제 편성 대비 전체 대조표 <span className="font-normal text-zinc-500">· 바뀐 칸 {rows.filter((r) => r.changed).length}개</span>
               </summary>
               <div className="mt-2">
-                <CompareTable rows={rows} currentWeekStart={compareRows?.currentWeekStart ?? null} decimals={decimals} onSelectBlock={(id) => selectBlock(id)} />
+                <CompareTable rows={rows} currentWeekStart={compareRows?.currentWeekStart ?? null} decimals={decimals} onSelectBlock={(id) => selectBlock(id)} planWeek={summary?.frame === "PLAN" ? view.run.week_start : null} />
               </div>
             </details>
           )}
