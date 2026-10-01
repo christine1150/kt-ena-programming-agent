@@ -165,7 +165,9 @@ function formatUploadDisplayTags(tags: string | null, episodeNumber: number | nu
 // 진짜 부제가 아니므로, episode_number 유무와 무관하게 subtitle은 항상 비우고(1번 케이스만
 // episode_number가 비어 있으므로 그 값으로 채워준다) 표시 시점에 정리한다(원본 DB는 그대로).
 const EPISODE_ONLY_SUBTITLE_RE = /^(\d+)회$/;
-function reinterpretEpisodeFields(episodeNumber: number | null, episodeSubtitle: string | null): { episodeNumber: number | null; episodeSubtitle: string | null } {
+// 다른 화면(Page 1 일일 시청률 등)도 업로드 편성표의 회차·부제를 가져다 쓸 때 같은 오염 정리를
+// 거치도록 export한다 — "숫자+회" 중복 표기 판정 로직을 두 곳에 따로 두지 않기 위함.
+export function reinterpretEpisodeFields(episodeNumber: number | null, episodeSubtitle: string | null): { episodeNumber: number | null; episodeSubtitle: string | null } {
   if (episodeSubtitle === null) return { episodeNumber, episodeSubtitle };
   const m = episodeSubtitle.trim().match(EPISODE_ONLY_SUBTITLE_RE);
   if (!m) return { episodeNumber, episodeSubtitle };

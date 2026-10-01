@@ -21,6 +21,7 @@ import { buildChannelNarrativeViaLlm } from "@/lib/channelNarrativeLlm";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { detectPortfolioAnomaly } from "@/lib/portfolioAnomaly";
 import { PRIME_RPC_ARGS } from "@/lib/audienceReport/primeTime";
+import { reinterpretEpisodeFields } from "@/lib/scheduleGridSource";
 // 사용자 지시(2026-09-18): Page 1 액션 요약·채널별 인사이트에 Page 2와 같은 5대 액션 태그
 // 배지를 붙이기 위해 타입만 가져온다(값 계산은 기존 mart_scheduling_fit_score 조회만 함).
 import type { ActionTag } from "@/lib/actionTags";
@@ -1496,7 +1497,7 @@ export async function GET(request: Request) {
     if (!targetRow) return [] as TodayTopProgramRow[];
     const { data } = await supabase
       .from("ratings")
-      .select("rating, start_time, is_first_run, episode_number, episode_subtitle, programs(canonical_name)")
+      .select("rating, start_time, is_first_run, episode_number, episode_subtitle, program_id, programs(canonical_name)")
       .eq("channel_id", ch.id)
       .eq("target_id", targetRow.id)
       .in("source_type", ["nielsen_daily", "skyuhd"])
@@ -1511,8 +1512,43 @@ export async function GET(request: Request) {
       is_first_run: boolean | null;
       episode_number: number | null;
       episode_subtitle: string | null;
+      program_id: string | null;
       programs: { canonical_name: string } | { canonical_name: string }[] | null;
     }[];
+
+    // 사용자 지시(2026-10-01): "업로드 된 편성표는 개별 회차나 부제가 파악된다면 1페이지 일일
+    // 시청률에도 반영. 매칭된것만" — 닐슨 EPG(ratings.episode_number/subtitle)에 회차·부제가
+    // 비어 있는 행만, 그 프로그램이 실제로 매칭된 업로드 편성표(program_schedule_grid.
+    // matched_program_id)가 있으면 그 값으로 보강한다. EPG에 이미 값이 있으면 건드리지 않는다
+    // (EPG가 매칭 신뢰도가 더 높음 — scheduleGridSource.ts의 "업로드 있으면 업로드, 없으면
+    // EPG"와 반대로 여기선 EPG가 1차, 업로드가 보강이다: 이 표는 원래 EPG 전용이었고, 업로드는
+    // EPG 공백만 메우는 역할이기 때문).
+    const needsFallback = rows.filter((r) => r.program_id && r.episode_number === null && r.episode_subtitle === null);
+    if (needsFallback.length > 0) {
+      const { data: planRows } = await supabase
+        .from("program_schedule_grid")
+        .select("matched_program_id, start_time, episode_number, episode_subtitle")
+        .eq("channel_id", ch.id)
+        .eq("broadcast_date", asOfDate)
+        .in(
+          "matched_program_id",
+          needsFallback.map((r) => r.program_id!)
+        )
+        .or("episode_number.not.is.null,episode_subtitle.not.is.null");
+      const toMinutes = (t: string) => {
+        const [h, m] = t.split(":").map(Number);
+        return h * 60 + m;
+      };
+      for (const r of needsFallback) {
+        const candidates = (planRows ?? []).filter((p) => p.matched_program_id === r.program_id);
+        if (candidates.length === 0) continue;
+        const target = toMinutes(r.start_time);
+        const best = candidates.reduce((a, b) => (Math.abs(toMinutes(b.start_time) - target) < Math.abs(toMinutes(a.start_time) - target) ? b : a));
+        const fixed = reinterpretEpisodeFields(best.episode_number, best.episode_subtitle);
+        r.episode_number = fixed.episodeNumber;
+        r.episode_subtitle = fixed.episodeSubtitle;
+      }
+    }
 
     // 사용자 지시(2026-08-21): "비교 시청률"(채널별 지정된 참고 타깃) 열도 함께 — 같은
     // 프로그램·시작시간의 비교 타깃 시청률을 한 번 더 조회해 매칭한다(새 SQL 없이 단순 조회).
