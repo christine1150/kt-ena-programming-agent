@@ -399,6 +399,61 @@ function parseCompetitorProgramSheet(rows: Row[]): Omit<CompetitorProgramRow, "o
   return results;
 }
 
+// 사용자 지시(2026-10-02, 예측 시청률 시스템): 위 parseCompetitorProgramSheet는 시청률 3개 타깃
+// (개인2049/개인2039/유료방송가구) 중 첫 번째만 저장해 왔다 — 지상파·tvN·JTBC 프로그램의 가구·2039
+// 시청률이 시트엔 있는데 DB엔 없었다(채널 일 단위 competitor_ratings엔 있음). 기존 테이블
+// (competitor_program_ratings)은 50여 개 RPC가 "프로그램×시간당 1행"을 전제로 쓰고 있어 행을 늘리면
+// 집계가 깨질 수 있으므로 건드리지 않고(Delta-Only), 3개 타깃을 전부 담는 별도 테이블
+// (competitor_program_target_ratings)용 행을 추가로 만든다. 시청률 3칸(col+3~5)과 점유율 3칸
+// (col+6~8)이 같은 순서이고, 타깃 라벨은 시트 헤더 그대로 쓴다(빈 라벨 칸은 건너뜀).
+export interface CompetitorProgramTargetRow {
+  competitorName: string;
+  startTime: string;
+  endTime: string | null;
+  programName: string;
+  targetLabel: string;
+  rating: number | null;
+  share: number | null;
+}
+
+function parseCompetitorProgramTargetSheet(rows: Row[]): CompetitorProgramTargetRow[] {
+  const results: CompetitorProgramTargetRow[] = [];
+  const selfNameSet = new Set(ALL_SELF_DISPLAY_NAMES);
+
+  for (const block of findCompetitorBlocks(rows)) {
+    if (selfNameSet.has(block.name)) continue;
+
+    const labelRow = rows[block.headerRowIdx + 1];
+    const targets = [0, 1, 2]
+      .map((i) => ({ ratingCol: block.col + 3 + i, label: String(labelRow?.[block.col + 3 + i] ?? "").trim() }))
+      .filter((t) => t.label);
+    if (targets.length === 0) continue;
+
+    for (let r = block.headerRowIdx + 2; r < rows.length; r++) {
+      const row = rows[r];
+      const first = String(row?.[block.col] ?? "").trim();
+      if (first === "하루 전체" || first === "하루전체") break;
+      if (!first) continue;
+      const programName = String(row?.[block.col + 2] ?? "").trim();
+      const startTime = normalizeTime(row[block.col]);
+      if (!programName || !startTime) continue;
+
+      for (const { ratingCol, label } of targets) {
+        results.push({
+          competitorName: block.name,
+          startTime,
+          endTime: normalizeTime(row?.[block.col + 1]),
+          programName,
+          targetLabel: label,
+          rating: parseNumberCell(row?.[ratingCol]),
+          share: parseNumberCell(row?.[ratingCol + 3]),
+        });
+      }
+    }
+  }
+  return results;
+}
+
 // ── 파일 전체 파싱 ────────────────────────────────────────────
 export interface NielsenDailyParseResult {
   ok: true;
@@ -406,6 +461,7 @@ export interface NielsenDailyParseResult {
   rankRows: RankRow[];
   competitorRankRows: RankRow[]; // 등록된 경쟁채널의 채널 단위 랭킹 (개발 단위 16번)
   competitorProgramRows: CompetitorProgramRow[]; // 페어링된 경쟁채널 1개의 프로그램 단위 데이터
+  competitorProgramTargetRows: CompetitorProgramTargetRow[]; // 같은 데이터의 3개 타깃 전체(개인2049/2039/가구) — 예측 시청률용
   programRows: ProgramTargetRow[];
   missingSheets: string[]; // 10개 중 못 찾은 시트 (있어도 치명적이진 않음, 경고만)
 }
@@ -512,11 +568,13 @@ export function parseNielsenDailyWorkbook(
 
   // 4개 시트의 경쟁채널 블록을 전부 하나의 풀로 모은다(위 설명 참고).
   const pooledCompetitorRows: Omit<CompetitorProgramRow, "ourChannelCode">[] = [];
+  const competitorProgramTargetRows: CompetitorProgramTargetRow[] = [];
   for (const sheetName of COMPETITOR_SHEET_NAMES) {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) continue; // 필수 시트가 아니므로(경고만) 없으면 조용히 건너뜀
     const rows = XLSX.utils.sheet_to_json<Row>(sheet, { header: 1, blankrows: true });
     pooledCompetitorRows.push(...parseCompetitorProgramSheet(rows));
+    competitorProgramTargetRows.push(...parseCompetitorProgramTargetSheet(rows));
     // 버그 수정(2026-08-21): 이 4개 시트에 섞여 있는 자사 채널 블록(ONCE/OLIFE/ENA STORY)에서
     // §1.3엔 없는 타깃(개인2049/여자3049)만 뽑아 programRows에 합친다(위 설명 참고).
     programRows.push(...parseSelfExtraTargetBlocks(rows));
@@ -529,5 +587,5 @@ export function parseNielsenDailyWorkbook(
     competitorProgramRows.push(...pooledCompetitorRows.map((row) => ({ ...row, ourChannelCode })));
   }
 
-  return { ok: true, reportDate, rankRows, competitorRankRows, competitorProgramRows, programRows, missingSheets };
+  return { ok: true, reportDate, rankRows, competitorRankRows, competitorProgramRows, competitorProgramTargetRows, programRows, missingSheets };
 }

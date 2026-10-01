@@ -251,6 +251,7 @@ export async function ingestNielsenDailyFile(
     .in("channel_id", touchedChannelIds);
   await supabase.from("competitor_ratings").delete().eq("broadcast_date", parsed.reportDate);
   await supabase.from("competitor_program_ratings").delete().eq("broadcast_date", parsed.reportDate);
+  await supabase.from("competitor_program_target_ratings").delete().eq("broadcast_date", parsed.reportDate);
 
   let ratingsInserted = 0;
   const rowsToInsert: Record<string, unknown>[] = [];
@@ -438,6 +439,29 @@ export async function ingestNielsenDailyFile(
   }
   if (competitorProgramRowsToInsert.length > 0) {
     await supabase.from("competitor_program_ratings").insert(competitorProgramRowsToInsert);
+  }
+
+  // 3-2) 같은 프로그램 행의 3개 타깃 전체(개인2049/개인2039/유료방송가구 등) — 위 테이블은 첫 타깃만
+  //      저장해 가구·2039가 없었다(2026-10-02 예측 시청률 시스템용 별도 테이블). 경쟁채널 성과는 우리
+  //      채널과 무관하므로 our_channel_id 없이, 어느 자사 채널이든 등록된 경쟁채널이면 1회만 저장한다.
+  const registeredAnywhere = new Set<string>();
+  for (const names of ctx.registeredCompetitorByChannel.values()) for (const n of names) registeredAnywhere.add(n);
+  const targetRowsToInsert = parsed.competitorProgramTargetRows
+    .filter((row) => registeredAnywhere.has(row.competitorName))
+    .map((row) => ({
+      broadcast_date: parsed.reportDate,
+      competitor_name: row.competitorName,
+      start_time: row.startTime,
+      end_time: row.endTime,
+      program_name: row.programName,
+      target_label: row.targetLabel,
+      rating: row.rating,
+      share: row.share,
+    }));
+  for (let i = 0; i < targetRowsToInsert.length; i += 1000) {
+    await supabase
+      .from("competitor_program_target_ratings")
+      .upsert(targetRowsToInsert.slice(i, i + 1000), { onConflict: "broadcast_date,competitor_name,start_time,program_name,target_label", ignoreDuplicates: true });
   }
 
   // 대량 insert (Supabase 기본 제한을 고려해 1000개씩 나눠 넣는다)
