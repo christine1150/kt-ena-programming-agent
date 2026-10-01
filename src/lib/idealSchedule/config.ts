@@ -85,6 +85,9 @@ export interface IdealStructureConfig {
   decision_z?: number; // 합성 표준오차 배수(기본 1.0)
   /** 오리지널 본방 연계 재방 규칙(직전회차 재방·직재방, 사용자 확인 2026-10-01) — rerunRules.ts */
   rerun_rules?: RerunRuleConfig;
+  /** 방영 이력이 없는 프로그램의 기본 길이(분, 장르별) — 사용자 지시 2026-10-01: "오리지널 드라마는 70분 정도. 기본적으로
+   *  그렇게 잡고 실제 데이터가 들어오면 수정 반영". 실측(최근 3달·과거 이력)이 있으면 그 값이 우선 */
+  default_runtime_by_genre?: Record<string, number>;
 }
 
 export interface IdealTargetGroup {

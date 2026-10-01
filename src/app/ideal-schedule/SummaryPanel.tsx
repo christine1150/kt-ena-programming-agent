@@ -3,7 +3,7 @@
 // 좌측 패널 맨 위 — 이번 편성안 요약과 주요 변경. 모든 값은 저장된 엔진 계산값(요약·/compare)이고,
 // 화면은 두 저장값의 차이·비율과 개수만 센다. 기대값은 "최근 3달 데이터 기반 기대 시청률"이다.
 import { DOW_LABELS, minToLabel } from "@/lib/scheduleGridLayout";
-import { SMALL_GAIN_RATIO, evidenceGrade, signed, signedPct, weeklyExpected, type BlockRow, type CompareRow, type RunRow } from "./model";
+import { SMALL_GAIN_RATIO, evidenceGrade, signed, signedPct, weeklyExpected, type BlockRow, type CompareRow, type RunRow, rankText } from "./model";
 
 export function SummaryPanel({
   run,
@@ -77,6 +77,14 @@ export function SummaryPanel({
         </div>
         {change !== null && (
           <p className={`pb-1 text-sm font-semibold tabular-nums ${Math.abs(change) < 0.0005 ? "text-zinc-500" : change > 0 ? "text-emerald-600" : "text-rose-600"}`}>{signedPct(change)}</p>
+        )}
+        {/* 주간 기대 등위(사용자 지시 2026-10-01: 주간 기대 시청률 옆에) */}
+        {s.expectedRank && (
+          <div className="ml-auto text-right" title={`지난주(${s.expectedRank.refWeek} 주) 닐슨 주간 등위 ${s.expectedRank.refRank}위와 최근 3달 주간 등위 실적(${s.expectedRank.weeks}주)으로 추정한 값입니다. 경쟁 채널 편성 변화는 반영되지 않습니다.`}>
+            <p className="text-[11px] text-zinc-500">주간 기대 등위</p>
+            <p className="text-2xl font-semibold tabular-nums text-zinc-900">{rankText(s.expectedRank)}</p>
+            <p className="text-[10px] text-zinc-400">지난주 {s.expectedRank.refRank}위</p>
+          </div>
         )}
       </div>
       <p className="text-[11px] text-zinc-500">

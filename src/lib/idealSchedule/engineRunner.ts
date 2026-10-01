@@ -196,7 +196,7 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
   // 오리지널 본방 연계 재방(직전회차 재방·직재방) — 주요 콘텐츠 관리 본방 스케줄 + 최근 3달 이 채널 편성에서 배운 직재방 간격
   const rerunCfg = config.structure.rerun_rules;
   const specs = rerunCfg ? await loadOriginalSpecs([channel.code, ...(rerunCfg.sister_sources?.[channel.code] ?? [])], addDays(asOfDate, -config.expected_kpi.lookback_days)) : [];
-  const rerun = buildRerunConstraints(specs, rawBundle.airings, req.weekStart, channel.code, rerunCfg);
+  const rerun = buildRerunConstraints(specs, rawBundle.airings, req.weekStart, channel.code, rerunCfg, config.structure.default_runtime_by_genre);
   const [historicalRuntime, residuals] = await Promise.all([
     loadHistoricalRuntimes(channel.id, constraintLoad.inputs, asOfDate),
     loadBacktestResiduals(channel.id, bundle.kpiLabel, asOfDate),

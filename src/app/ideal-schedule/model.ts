@@ -131,6 +131,11 @@ export function normalizeBlock(b: Record<string, unknown>): BlockRow {
   return out;
 }
 
+/** 주간 기대 등위 표기(닐슨 주간 순위 추정) — 최근 3달 범위를 벗어나면 "N위 이내/밖" */
+export function rankText(r: { rank: number; bound: "ABOVE" | "BELOW" | null }): string {
+  return r.bound === "ABOVE" ? `${r.rank}위 이내` : r.bound === "BELOW" ? `${r.rank}위 밖` : `약 ${r.rank}위`;
+}
+
 export const STATUS_LABEL: Record<string, string> = {
   REQUIRED: "필수 편성",
   LOCKED: "잠금",

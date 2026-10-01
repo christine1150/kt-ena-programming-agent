@@ -51,7 +51,8 @@ export function buildRerunConstraints(
   airings: OwnAiring[],
   weekStart: string,
   channelCode: string,
-  cfg: RerunRuleConfig | undefined
+  cfg: RerunRuleConfig | undefined,
+  defaultRuntime: Record<string, number> = {}
 ): { inputs: HardConstraintInput[]; warnings: string[] } {
   const inputs: HardConstraintInput[] = [];
   const warnings: string[] = [];
@@ -67,6 +68,8 @@ export function buildRerunConstraints(
   const runtimeOf = (s: OriginalSpec): number | null => {
     const own = airings.filter((a) => a.durationMin !== null && sameProgram(a.programName, s.programName)).map((a) => a.durationMin as number);
     if (own.length) return Math.round(median(own));
+    // 처음 방영하는 작품은 장르 기본 길이(오리지널 드라마 70분, 사용자 지시 2026-10-01)
+    if (defaultRuntime[s.category]) return defaultRuntime[s.category];
     const slot = airings.filter((a) => a.durationMin !== null && s.days.includes(a.dow) && Math.abs(a.startMin - s.startMin) <= 10).map((a) => a.durationMin as number);
     return slot.length ? Math.round(median(slot)) : null;
   };

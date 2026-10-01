@@ -250,6 +250,12 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       return { ...c, durationMin: Math.round(hist.min), durationDerived: true, durationBasis: basis };
     }
     const g = input.genreOf("OWN", channelCode, c.programName);
+    const def = config.structure.default_runtime_by_genre?.[g];
+    if (def) {
+      const basis = `${g} 기본 길이 ${def}분`;
+      durationNotes.set(c.id, `'${c.programName}'은 방영 이력이 없어 ${basis}으로 잡았습니다. 실제 방영 데이터가 들어오면 그 길이로 바뀝니다.`);
+      return { ...c, durationMin: def, durationDerived: true, durationDefault: true, durationBasis: basis };
+    }
     if (g !== UNCLASSIFIED) {
       const same = (family: boolean) =>
         pool.filter((p) => p.contentType === "OWN" && p.runtimeMin !== null && (family ? genreFamily(p.genre) === genreFamily(g) : p.genre === g)).map((p) => p.runtimeMin as number);
@@ -277,7 +283,7 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       candidate: cand,
       status: f.input.rank === 1 ? (f.input.constraintType === "MANUAL_OVERRIDE" ? "MANUAL_OVERRIDE" : "LOCKED") : "REQUIRED",
       fixed: true,
-      constraint: { id: f.input.id, source: f.input.source, constraintType: f.input.constraintType, rank: f.input.rank, durationDerived: f.input.durationDerived ?? false },
+      constraint: { id: f.input.id, source: f.input.source, constraintType: f.input.constraintType, rank: f.input.rank, durationDerived: f.input.durationDerived ?? false, durationDefault: f.input.durationDefault ?? false },
     };
   });
 

@@ -25,7 +25,7 @@ import { GridLegend } from "./GridLegend";
 import { IdealWeekGrid, type BlockDiff } from "./IdealWeekGrid";
 import { RequiredScheduleEditor } from "./RequiredScheduleEditor";
 import { SummaryPanel } from "./SummaryPanel";
-import { SMALL_GAIN_RATIO, mondayOfLocal, normalizeBlock, signedPct, weeklyExpected, type BlockRow, type CompareRow, type RunRow } from "./model";
+import { SMALL_GAIN_RATIO, mondayOfLocal, normalizeBlock, rankText, signedPct, weeklyExpected, type BlockRow, type CompareRow, type RunRow } from "./model";
 
 type ChannelOpt = { code: string; name: string; theme_color: string | null; logo_path: string | null; logo_visible_ratio: number | null; logo_visible_top_ratio: number | null };
 type Options = {
@@ -549,11 +549,8 @@ function IdealSchedulePage() {
                 </span>
               )}
               {summary?.expectedRank && (
-                <span className="text-zinc-900" title={`지난주(${summary.expectedRank.refWeek} 주) 닐슨 주간 순위 ${summary.expectedRank.refRank}위와 최근 3달 주간 순위 실적(${summary.expectedRank.weeks}주)으로 추정한 값입니다. 경쟁 채널 편성 변화는 반영되지 않습니다.`}>
-                  예상 순위{" "}
-                  <b className="tabular-nums">
-                    {summary.expectedRank.bound === "ABOVE" ? `${summary.expectedRank.rank}위 이내` : summary.expectedRank.bound === "BELOW" ? `${summary.expectedRank.rank}위 밖` : `약 ${summary.expectedRank.rank}위`}
-                  </b>
+                <span className="text-zinc-900" title={`지난주(${summary.expectedRank.refWeek} 주) 닐슨 주간 등위 ${summary.expectedRank.refRank}위와 최근 3달 주간 등위 실적(${summary.expectedRank.weeks}주)으로 추정한 값입니다. 경쟁 채널 편성 변화는 반영되지 않습니다.`}>
+                  주간 기대 등위 <b className="tabular-nums">{rankText(summary.expectedRank)}</b>
                   {summary.expectedRank.bound && <span className="ml-1 text-xs font-normal text-zinc-500">{summary.expectedRank.bound === "ABOVE" ? "최근 3달 최고 수준보다 높음" : "최근 3달 최저 수준보다 낮음"}</span>}
                   <span className="ml-1 text-xs font-normal text-zinc-500">(지난주 {summary.expectedRank.refRank}위)</span>
                 </span>
@@ -665,7 +662,7 @@ function IdealSchedulePage() {
             최근 3달 데이터 기반 기대 시청률(미래 예측 아님) · {MODE_LABEL[view.run.structure_mode]} · {view.run.as_of_date}까지 데이터 · {kstTime(view.run.created_at)} 생성
             {summary?.expectedAvgRating !== null && summary?.expectedAvgRating !== undefined ? ` · 주간 기대 ${fmt(summary.expectedAvgRating)}` : ""}
             {summary?.current?.expectedAvgRating ? ` (지난주 실제 편성 기대 ${fmt(summary.current.expectedAvgRating)})` : ""}
-            {summary?.expectedRank ? ` · 예상 순위 ${summary.expectedRank.bound === "ABOVE" ? `${summary.expectedRank.rank}위 이내` : summary.expectedRank.bound === "BELOW" ? `${summary.expectedRank.rank}위 밖` : `약 ${summary.expectedRank.rank}위`}(지난주 ${summary.expectedRank.refRank}위)` : ""}
+            {summary?.expectedRank ? ` · 주간 기대 등위 ${rankText(summary.expectedRank)}(지난주 ${summary.expectedRank.refRank}위)` : ""}
           </p>
         </div>
       )}

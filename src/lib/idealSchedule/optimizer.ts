@@ -28,7 +28,7 @@ export interface PlacedBlock {
   candidate: EngineCandidate;
   status: BlockStatus;
   fixed: boolean;
-  constraint?: { id: string; source: string; constraintType: string; rank: number; durationDerived?: boolean };
+  constraint?: { id: string; source: string; constraintType: string; rank: number; durationDerived?: boolean; durationDefault?: boolean };
   slotIndex?: number; // KEEP 모드 슬롯 번호
   episode?: EpisodeAssignment | { none: true; reason: string }; // 부제 반영 모드에서 배정된 에피소드
 }
@@ -235,7 +235,7 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
   // 슬롯에서 시작하면, 골격 슬롯 끝까지를 그 블록 자리로 본다 — 중앙값이 실제 슬롯보다 짧아 뒤에 몇 분짜리
   // 조각 슬롯이 생기고 거기에 같은 프로그램이 또 들어가던 문제(2026-09-30 실데이터 점검) 방지.
   const fixedBlocks = input.fixedBlocks.map((f) => {
-    if (!f.constraint?.durationDerived) return f;
+    if (!f.constraint?.durationDerived || f.constraint.durationDefault) return f; // 장르 기본 길이(사용자 지정 70분 등)는 그대로
     // 같은 프로그램이 차지하던 슬롯이 아니어도(새 본방이 지난 본방 자리에 들어올 때), 추정 길이와 슬롯 끝 차이가 허용 오차 2배
     // 이내면 추정보다 기존 슬롯을 믿는다 — 67분 추정 뒤 13분 조각에 다른 프로그램이 들어가던 문제(2026-10-01 ENA 〈연애박사〉)
     const slot = input.skeleton.find(
