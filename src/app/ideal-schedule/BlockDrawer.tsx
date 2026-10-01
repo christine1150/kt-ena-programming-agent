@@ -35,6 +35,8 @@ const CONSTRAINT_LABEL: Record<string, string> = {
   USER_LOCK: "직접 잠금",
   MANUAL_OVERRIDE: "직접 교체",
   PLAN_NEW: "편성표 신규 프로그램(최근 3달 실적 없음)",
+  PREV_EPISODE_RERUN: "오리지널 직전회차 재방(본방 바로 앞)",
+  SAME_NIGHT_RERUN: "오리지널 직재방(본방 당일 밤)",
 };
 const GRADE_STYLE: Record<string, string> = { A: "bg-emerald-50 text-emerald-700", B: "bg-amber-50 text-amber-700", C: "bg-rose-50 text-rose-700", 가정: "bg-violet-50 text-violet-700" };
 
@@ -145,7 +147,7 @@ export function BlockDrawer({
   const bestAlt = (cands ?? []).filter((c) => c.candidate.key !== block.candidate_key && c.expected_kpi !== null).sort((a, b) => (b.expected_kpi as number) - (a.expected_kpi as number))[0] ?? null;
   const dec = block.decision ?? null;
   const verdict = (() => {
-    if (!isIdeal) return "지난주 실제 편성을 이상적 편성과 같은 방식으로 평가한 값입니다.";
+    if (!isIdeal) return "지난주 실제 편성을 AI 스마트 편성과 같은 방식으로 평가한 값입니다.";
     if (block.status === "REQUIRED" || block.status === "LOCKED") return `고정 편성 — ${CONSTRAINT_LABEL[block.constraint_ref?.constraintType ?? ""] ?? "필수 편성"}이라 바꾸지 않습니다.`;
     if (block.status === "MANUAL_OVERRIDE") return "직접 교체한 편성입니다. 다시 계산해도 유지됩니다.";
     if (dec?.kind === "SAME") return `${frameLabel}와 같은 편성입니다.`;

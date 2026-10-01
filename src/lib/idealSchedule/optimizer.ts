@@ -236,15 +236,22 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
   // 조각 슬롯이 생기고 거기에 같은 프로그램이 또 들어가던 문제(2026-09-30 실데이터 점검) 방지.
   const fixedBlocks = input.fixedBlocks.map((f) => {
     if (!f.constraint?.durationDerived) return f;
+    // 같은 프로그램이 차지하던 슬롯이 아니어도(새 본방이 지난 본방 자리에 들어올 때), 추정 길이와 슬롯 끝 차이가 허용 오차 2배
+    // 이내면 추정보다 기존 슬롯을 믿는다 — 67분 추정 뒤 13분 조각에 다른 프로그램이 들어가던 문제(2026-10-01 ENA 〈연애박사〉)
     const slot = input.skeleton.find(
-      (s) => s.weekday === f.weekday && Math.abs(s.startMin - f.startMin) <= config.structure.grid_minutes && s.occupants.some((o) => o.key.startsWith(`${f.candidate.programKey}|`))
+      (s) =>
+        s.weekday === f.weekday &&
+        Math.abs(s.startMin - f.startMin) <= config.structure.grid_minutes &&
+        (s.occupants.some((o) => o.key.startsWith(`${f.candidate.programKey}|`)) || s.endMin - f.endMin <= 2 * config.structure.runtime_tolerance_min)
     );
     if (!slot || slot.endMin <= f.endMin) return f;
     const clash = input.fixedBlocks.some((o) => o !== f && o.weekday === f.weekday && o.startMin < slot.endMin && o.startMin >= f.endMin);
     return clash ? f : { ...f, endMin: slot.endMin };
   });
   const occupied = [...fixedBlocks, ...input.resolution.blockedZones];
-  const slots = cutSkeletonByFixed(input.skeleton, occupied, config.structure.grid_minutes);
+  // 고정 블록에 잘려 남은 조각이 허용 여백(max_gap_min)보다 짧으면 칸으로 만들지 않는다 — 6~7분짜리 조각에
+  // 프로그램이 들어가던 문제(2026-10-01 직재방 규칙 추가 후 점검)
+  const slots = cutSkeletonByFixed(input.skeleton, occupied, Math.max(config.structure.grid_minutes, config.structure.max_gap_min));
   const candsBySlot = slots.map((s) => slotCandidates(s, input.pool, input));
   const budgetMin = input.benchmarkMaxShare * slots.reduce((sum, s) => sum + (s.endMin - s.startMin), 0);
 

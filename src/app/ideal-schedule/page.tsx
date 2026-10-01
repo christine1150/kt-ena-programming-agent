@@ -15,7 +15,7 @@ import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
-import { VendingCoinIcon, VendingMachineIcon } from "@/components/VendingIcons";
+import { GachaIcon, VendingMachineIcon } from "@/components/VendingIcons";
 import { DOW_LABELS, addDaysLocal, minToLabel, weekOfMonthLabel } from "@/lib/scheduleGridLayout";
 import { BacktestPanel } from "./BacktestPanel";
 import { BlockDrawer, type Candidate } from "./BlockDrawer";
@@ -67,15 +67,17 @@ const WEIGHT_PRESETS: { name: string; hint: string; values: Record<string, numbe
 
 // 그리드 배율: "맞춤"은 화면 높이에 24시간이 들어오게, 나머지는 1분당 px(0.6 = ENA 주간 비교와 같은 100%)
 const ZOOM_STEPS = [0.6, 0.9, 1.2];
-const PRINT_PPM = 0.4; // A4 가로 한 장에 24시간이 들어가는 배율
+const PRINT_PPM = 0.55; // A4 세로 한 장에 24시간이 들어가는 배율(사용자 지시 2026-10-01: 인쇄는 A4 세로 한 장)
 
 // 헤더 아이콘(엑셀 저장·인쇄) — 선 굵기·크기는 다른 헤더 아이콘과 맞춤
 function ExcelIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-      <path d="M14 3v5h5" />
-      <path d="m9 12 5 5M14 12l-5 5" stroke="#059669" />
+    // 엑셀인 게 한눈에 보이게(사용자 지시 2026-10-01): 초록 표 문서 + 앞쪽 초록 네모 안 흰 X
+    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+      <rect x="7" y="3" width="14" height="18" rx="2" fill="#e7f5ec" stroke="#1d6f42" strokeWidth="1.2" />
+      <path d="M14 3v18M7 9h14M7 15h14" stroke="#1d6f42" strokeWidth="1" strokeOpacity="0.55" />
+      <rect x="2.5" y="6.5" width="11" height="11" rx="2" fill="#1d6f42" />
+      <path d="m5.6 9.4 4.8 5.2m0-5.2-4.8 5.2" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -549,7 +551,7 @@ function IdealSchedulePage() {
           </div>
         )}
         <IdealWeekGrid
-          title={`이상적 편성 — ${view.run.week_start} 주(숫자는 최근 3달 데이터 기반 기대 시청률)`}
+          title={`AI 스마트 편성 — ${view.run.week_start} 주(숫자는 최근 3달 데이터 기반 기대 시청률)`}
           blocks={ideal}
           weekStart={view.run.week_start}
           themeColor={themeColor}
@@ -570,7 +572,7 @@ function IdealSchedulePage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 [-webkit-print-color-adjust:exact] [print-color-adjust:exact] print:bg-white">
-      <style>{`@media print { @page { size: A4 landscape; margin: 8mm; } body { background: #fff !important; } }`}</style>
+      <style>{`@media print { @page { size: A4 portrait; margin: 8mm; } body { background: #fff !important; } }`}</style>
 
       {/* 헤더 */}
       <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur print:hidden">
@@ -605,9 +607,9 @@ function IdealSchedulePage() {
                 </Link>
               ))}
             </div>
-            <button type="button" disabled={!!busy || !opts} onClick={generate} className="rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
+            <button type="button" disabled={!!busy || !opts} onClick={generate} className="group rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
               <span className="inline-flex items-center gap-1.5">
-                <VendingCoinIcon size={15} />
+                <GachaIcon size={18} />
                 편성표 뽑기
               </span>
             </button>
@@ -648,7 +650,7 @@ function IdealSchedulePage() {
       {view && (
         <div className="hidden px-1 pb-2 print:block">
           <p className="text-sm font-semibold text-zinc-900">
-            {channelOpt?.name ?? channelCode} 이상적 1주일 편성 · {view.run.week_start} ~ {addDaysLocal(view.run.week_start, 6)} · {runKpi}
+            {channelOpt?.name ?? channelCode} AI 스마트 편성 · {view.run.week_start} ~ {addDaysLocal(view.run.week_start, 6)} · {runKpi}
           </p>
           <p className="text-[10px] text-zinc-600">
             최근 3달 데이터 기반 기대 시청률(미래 예측 아님) · {MODE_LABEL[view.run.structure_mode]} · {view.run.as_of_date}까지 데이터 · {kstTime(view.run.created_at)} 생성
@@ -755,9 +757,9 @@ function IdealSchedulePage() {
                 </div>
               )}
             </div>
-            <button type="button" disabled={!!busy || !opts} onClick={generate} className="mt-3 w-full rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
+            <button type="button" disabled={!!busy || !opts} onClick={generate} className="group mt-3 w-full rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
               <span className="inline-flex items-center gap-1.5">
-                <VendingCoinIcon size={16} />
+                <GachaIcon size={19} />
                 이 조건으로 편성표 뽑기
               </span>
             </button>

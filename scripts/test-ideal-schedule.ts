@@ -21,6 +21,7 @@ import { premiereBlocks } from "../src/lib/idealSchedule/premiere";
 import { genreFamily, type Genre } from "../src/lib/idealSchedule/types";
 import { bandForLevel, certaintyOf, uncertaintyFromResiduals } from "../src/lib/idealSchedule/uncertainty";
 import { enrichAiringsWithPlan, normalizePlanRows, planEpisodeHints, planWeekFrame } from "../src/lib/idealSchedule/planEpisodes";
+import { buildRerunConstraints } from "../src/lib/idealSchedule/rerunRules";
 
 let passed = 0;
 const failures: string[] = [];
@@ -643,6 +644,25 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   const frame = planWeekFrame(plan, W1);
   const mon = frame.filter((r) => r.date === W1);
   check("편성표 기존 틀: 끝 = 같은 방송일 다음 행 시작, 마지막 행은 26:00", mon[0].startMin === 17 * 60 + 40 && mon[0].endMin === 19 * 60 && mon[mon.length - 1].endMin === 26 * 60 && frame.every((r) => r.endMin > r.startMin), JSON.stringify(mon.map((r) => [r.startMin, r.endMin])));
+}
+
+// ── 오리지널 본방 연계 재방(2026-10-01 사용자 확인): 직전회차 재방·직재방·자매 채널 직재방 ──
+{
+  const air = (date: string, startMin: number, dur: number, name: string) => ({ date, dow: isoDow(date), startMin, durationMin: dur, programId: name, programName: name }) as unknown as import("../src/lib/idealSchedule/types").OwnAiring;
+  // 과거 3주: 월 22:00 본방(75분) → 00:45(24:45) 같은 프로그램 재방
+  const hist = ["2026-09-07", "2026-09-14", "2026-09-21"].flatMap((d) => [air(d, 1320, 75, "신병4사보타주"), air(d, 1485, 75, "신병4사보타주")]);
+  const specs = [
+    { id: "a", sourceChannel: "ENA", programId: "신병4사보타주", programName: "신병4사보타주", category: "오리지널 드라마", days: [1, 2], startMin: 1320, activeFrom: "2026-08-24", activeTo: "2026-09-29" },
+    { id: "b", sourceChannel: "ENA", programId: "연애박사", programName: "연애박사", category: "오리지널 드라마", days: [1, 2], startMin: 1320, activeFrom: "2026-10-05", activeTo: "2026-11-10" },
+  ];
+  const cfg = { prev_episode_genres: ["오리지널 드라마"], same_night_genres: ["오리지널 드라마", "오리지널 예능"], sister_sources: { ENA_DRAMA: ["ENA"] } };
+  const r = buildRerunConstraints(specs, hist, "2026-10-05", "ENA", cfg);
+  const prev = r.inputs.filter((x) => x.constraintType === "PREV_EPISODE_RERUN");
+  const night = r.inputs.filter((x) => x.constraintType === "SAME_NIGHT_RERUN");
+  check("직전회차 재방: 첫 방영일(월)은 없고 화요일만, 본방 바로 앞", prev.length === 1 && prev[0].weekday === 2 && prev[0].startMin + (prev[0].durationMin ?? 0) === 1320, JSON.stringify(prev));
+  check("직재방: 과거 본방→그날 밤 재방 간격(165분)을 배워 새 드라마에 적용", night.length === 2 && night.every((x) => x.programName === "연애박사" && x.startMin === 1485), JSON.stringify(night.map((x) => [x.weekday, x.startMin])));
+  const sis = buildRerunConstraints(specs, [...["2026-09-07", "2026-09-14", "2026-09-21"].map((d) => air(d, 1385, 70, "신병4사보타주"))], "2026-10-05", "ENA_DRAMA", cfg);
+  check("자매 채널(ENA DRAMA) 직재방: 직전회차 재방은 없고 직재방만(본방+65분)", sis.inputs.every((x) => x.constraintType === "SAME_NIGHT_RERUN") && sis.inputs.length === 2 && sis.inputs[0].startMin === 1385);
 }
 
 // ── 순환 편성(ENA STORY 확인 2026-09-30): 회차 정보 없이 하루 여러 번 도는 프로그램 ──

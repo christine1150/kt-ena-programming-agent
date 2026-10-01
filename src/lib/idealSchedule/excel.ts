@@ -64,7 +64,7 @@ export async function buildIdealScheduleExcel(opts: {
   const wb = new ExcelJS.Workbook();
   wb.creator = "KT ENA 시청률 자판기";
   wb.created = new Date(0);
-  const sheet = wb.addWorksheet("이상적 편성", { views: [{ state: "frozen", ySplit: HEADER_ROWS }] });
+  const sheet = wb.addWorksheet("AI 스마트 편성", { views: [{ state: "frozen", ySplit: HEADER_ROWS }] });
   sheet.getColumn(1).width = 7;
   for (let d = 1; d <= 7; d++) sheet.getColumn(d + 1).width = 22;
 
@@ -74,7 +74,7 @@ export async function buildIdealScheduleExcel(opts: {
     c.value = text;
     c.font = font;
   };
-  line(1, `${opts.channelName} 이상적 1주일 편성 (${opts.weekStart} ~ ${addDaysLocal(opts.weekStart, 6)})`, { bold: true, size: 13 });
+  line(1, `${opts.channelName} AI 스마트 편성 (${opts.weekStart} ~ ${addDaysLocal(opts.weekStart, 6)})`, { bold: true, size: 13 });
   line(2, opts.conditionText, { size: 9, color: { argb: "FF52525B" } });
   line(3, `숫자는 최근 3달 데이터 기반 기대 시청률(${opts.targetLabel})이며 실제 미래 시청률이 아닙니다. 경쟁사 Benchmark는 가상 편성입니다.`, { italic: true, size: 9, color: { argb: "FFB45309" } });
 
@@ -144,9 +144,9 @@ export async function buildIdealScheduleExcel(opts: {
   if (opts.compare) {
     const s2 = wb.addWorksheet("지난주 대비", { views: [{ state: "frozen", ySplit: 2 }] });
     s2.mergeCells(1, 1, 1, 10);
-    s2.getCell(1, 1).value = `지난주 실제 편성(${opts.compare.currentWeekStart ?? "-"} 주) → 이상적 편성 · 기대값은 최근 3달 데이터 기반(${opts.targetLabel})`;
+    s2.getCell(1, 1).value = `지난주 실제 편성(${opts.compare.currentWeekStart ?? "-"} 주) → AI 스마트 편성 · 기대값은 최근 3달 데이터 기반(${opts.targetLabel})`;
     s2.getCell(1, 1).font = { bold: true, size: 11 };
-    s2.addRow(["요일", "시작", "종료", "지난주 실제", "지난주 기대", "지난주 실측", "이상적", "이상적 기대", "기대 차이", "판단"]);
+    s2.addRow(["요일", "시작", "종료", "지난주 실제", "지난주 기대", "지난주 실측", "AI 스마트", "AI 스마트 기대", "기대 차이", "판단"]);
     headerStyle(s2.getRow(2));
     for (const r of opts.compare.rows) {
       const ratio = r.diff !== null && r.currentExpected ? r.diff / r.currentExpected : null;

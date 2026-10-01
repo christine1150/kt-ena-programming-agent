@@ -63,7 +63,7 @@ export default function GenreMapManager() {
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h3 className="text-base font-semibold text-zinc-900">장르 분류 보완(이상적 편성용)</h3>
+          <h3 className="text-base font-semibold text-zinc-900">장르 분류 보완(AI 스마트 편성용)</h3>
           <p className="text-sm text-zinc-500">제목 규칙으로 1차 분류한 장르를 확인·보완합니다. 편성 시간이 긴 프로그램부터 채우면 효과가 큽니다.</p>
         </div>
         {rows && (

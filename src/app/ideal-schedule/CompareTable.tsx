@@ -14,7 +14,7 @@ export function CompareTable({ rows: allRows, currentWeekStart, decimals, onSele
     <div className="rounded-2xl border border-zinc-200 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-4 py-3">
         <p className="text-sm font-semibold text-zinc-800">
-          지난주 실제 편성({currentWeekStart ?? "-"} 주) → 이상적 편성 <span className="font-normal text-zinc-500">· 바뀐 칸 {allRows.filter((r) => r.changed).length}개 / 전체 {allRows.length}개</span>
+          지난주 실제 편성({currentWeekStart ?? "-"} 주) → AI 스마트 편성 <span className="font-normal text-zinc-500">· 바뀐 칸 {allRows.filter((r) => r.changed).length}개 / 전체 {allRows.length}개</span>
         </p>
         <label className="flex items-center gap-1.5 text-xs text-zinc-600">
           <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
@@ -27,7 +27,7 @@ export function CompareTable({ rows: allRows, currentWeekStart, decimals, onSele
             <tr>
               <th className="px-3 py-2 text-left font-medium">요일·시간</th>
               <th className="px-3 py-2 text-left font-medium">지난주 실제</th>
-              <th className="px-3 py-2 text-left font-medium">이상적</th>
+              <th className="px-3 py-2 text-left font-medium">AI 스마트</th>
               <th className="px-3 py-2 text-right font-medium">기대 차이</th>
               <th className="px-3 py-2 text-left font-medium">판단</th>
             </tr>

@@ -92,7 +92,7 @@ export function BacktestPanel({
                 <th className="py-1 text-left font-medium">주</th>
                 <th className="py-1 text-right font-medium">실제 편성 실측</th>
                 <th className="py-1 text-right font-medium">실제 편성 기대</th>
-                <th className="py-1 text-right font-medium">이상적 편성 기대</th>
+                <th className="py-1 text-right font-medium">AI 스마트 편성 기대</th>
                 <th className="py-1 text-right font-medium">방영별 오차(MAE)</th>
                 <th className="py-1 text-right font-medium">편향</th>
               </tr>
@@ -125,7 +125,7 @@ export function BacktestPanel({
             </p>
           )}
           <p className="mt-2 text-[11px] text-zinc-400">
-            &lsquo;실제 편성 기대&rsquo;와 &lsquo;실측&rsquo;의 차이(오차·편향)가 이 모델의 정확도입니다. &lsquo;이상적 편성 기대&rsquo;는 같은 모델로 본 추정치이며, 이상적 편성의 실제 시청률은 관측할 수 없습니다.
+            &lsquo;실제 편성 기대&rsquo;와 &lsquo;실측&rsquo;의 차이(오차·편향)가 이 모델의 정확도입니다. &lsquo;AI 스마트 편성 기대&rsquo;는 같은 모델로 본 추정치이며, AI 스마트 편성의 실제 시청률은 관측할 수 없습니다.
           </p>
         </>
       )}

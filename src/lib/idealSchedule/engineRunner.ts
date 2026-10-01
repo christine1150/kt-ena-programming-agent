@@ -2,7 +2,8 @@
 import type { BenchmarkPlacement, CompetitorTargetMode, IdealScheduleConfig, StructureMode } from "./config";
 import { loadIdealScheduleConfig } from "./configStore";
 import type { HardConstraintInput } from "./constraints";
-import { loadConstraintInputs } from "./constraintStore";
+import { loadConstraintInputs, loadOriginalSpecs } from "./constraintStore";
+import { buildRerunConstraints } from "./rerunRules";
 import { fetchCompetitorData, fetchOwnAirings, fetchWeekAirings, loadChannelRef, type ChannelRef } from "./dataSource";
 import { runIdealScheduleEngine, type EngineRunResult } from "./engine";
 import { resolveGenre } from "./genreRules";
@@ -174,6 +175,10 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     const wk = target ? withOptimizeTarget(aw, target) : aw;
     evaluateAirings.push({ label: "ACTUAL", weekStart: req.weekStart, airings: wk.airings });
   }
+  // 오리지널 본방 연계 재방(직전회차 재방·직재방) — 주요 콘텐츠 관리 본방 스케줄 + 최근 3달 이 채널 편성에서 배운 직재방 간격
+  const rerunCfg = config.structure.rerun_rules;
+  const specs = rerunCfg ? await loadOriginalSpecs([channel.code, ...(rerunCfg.sister_sources?.[channel.code] ?? [])], addDays(asOfDate, -config.expected_kpi.lookback_days)) : [];
+  const rerun = buildRerunConstraints(specs, rawBundle.airings, req.weekStart, channel.code, rerunCfg);
   const [historicalRuntime, residuals] = await Promise.all([
     loadHistoricalRuntimes(channel.id, constraintLoad.inputs, asOfDate),
     loadBacktestResiduals(channel.id, bundle.kpiLabel, asOfDate),
@@ -191,7 +196,7 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     bundle,
     channelKpiLabel: channel.kpiLabel,
     competitorBundle: req.competitorNames.length ? competitorBundle : null,
-    constraints: [...constraintLoad.inputs, ...(req.extraLocks ?? [])],
+    constraints: [...constraintLoad.inputs, ...rerun.inputs, ...(req.extraLocks ?? [])],
     historicalRuntime,
     residuals,
     genreOf: (scope, owner, name) => resolveGenre(genreMap, scope, owner, name),
@@ -206,7 +211,7 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     config,
     asOfDate,
     currentWeekStart,
-    warnings: [...constraintLoad.warnings, ...result.resolution.warnings],
+    warnings: [...constraintLoad.warnings, ...rerun.warnings, ...result.resolution.warnings],
     timingsMs: { load: t1 - t0, engine: t2 - t1 },
   };
 }

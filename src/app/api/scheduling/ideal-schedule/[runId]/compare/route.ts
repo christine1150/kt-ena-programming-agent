@@ -1,5 +1,5 @@
 // 현재 편성(CURRENT) vs 이상적 편성(IDEAL) 대조 — 둘 다 같은 모델로 계산해 저장된 값의 차이만 돌려준다.
-// 이상적 편성의 기대값은 실제 미래 시청률이 아니라 "최근 12주 데이터 기반 기대 시청률"이다.
+// 이상적 편성의 기대값은 실제 미래 시청률이 아니라 "최근 3달 데이터 기반 기대 시청률"이다.
 import { NextResponse } from "next/server";
 import { fail, requireActor } from "@/lib/idealSchedule/apiUtil";
 import { buildComparison, loadRun } from "@/lib/idealSchedule/runStore";

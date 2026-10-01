@@ -37,8 +37,14 @@ export function SummaryPanel({
   const weakCount = ideal.filter((b) => b.content_type === "OWN" && evidenceGrade(b).grade === "C").length;
   // 주간 평균에 미치는 크기(기대 차이 × 편성 분) 순 — 긴 프로그램에 걸친 짧은 자투리 칸이 위로 오지 않게
   const impact = (r: CompareRow) => Math.abs(r.expectedKpiDiff ?? 0) * (r.endMin - r.startMin);
+  // 필수·잠금·직접 교체 칸은 엔진 추천이 아니라 주요 콘텐츠 관리·필수 편성·사용자 선택이라 "주요 변경"에서 빼고 개수만 따로
+  // (2026-10-01 사용자 질문: 기대가 더 낮은 프로그램으로 왜 바꾸라고 하나 — 대부분 필수 편성(신규 본방)이었다)
+  const forced = (r: CompareRow) => r.ideal.status === "REQUIRED" || r.ideal.status === "LOCKED" || r.ideal.status === "MANUAL_OVERRIDE";
+  const forcedCount = changedRows.filter(forced).length;
+  const decOf = new Map(ideal.map((b) => [b.id, b.decision]));
   // 뚜렷하게 바뀐 칸만(차이 작은 칸은 빼고) 5건 — 사용자 지시: 심플하게
   const top = [...changedRows]
+    .filter((r) => !forced(r))
     .filter((r) => {
       const q = ratioOf(r);
       return !(q !== null && Math.abs(q) < SMALL_GAIN_RATIO);
@@ -138,12 +144,14 @@ export function SummaryPanel({
                     <span className={`tabular-nums ${d === null ? "text-zinc-400" : small ? "text-zinc-500" : d >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                       {d === null ? "-" : signed(d, decimals)}
                       {small && <span className="ml-0.5 text-[10px]">작음</span>}
+                      {d !== null && d < 0 && decOf.get(r.ideal.blockId)?.capBlocked && <span className="ml-0.5 text-[10px] text-zinc-500">반복 제한</span>}
                     </span>
                   </button>
                 </li>
               );
             })}
           </ul>
+          {forcedCount > 0 && <p className="mt-1 px-1.5 text-[11px] text-zinc-500">필수 편성(주요 콘텐츠 관리·편성표 신규 등)으로 바뀐 칸 {forcedCount}개는 추천이 아니라 따로 셉니다.</p>}
           <button type="button" onClick={onOpenCompare} className="mt-1 px-1.5 text-[11px] text-zinc-500 underline decoration-dotted hover:text-zinc-700">
             {changedRows.length > top.length ? `외 ${changedRows.length - top.length}건 · ` : ""}전체 대조표 보기
           </button>

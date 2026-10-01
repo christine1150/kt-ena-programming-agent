@@ -76,7 +76,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
       pivot: annual !== null ? annual * 2 : null,
       blocks: (loaded.blocks as unknown as (ExcelBlock & { layer: string })[]).filter((b) => b.layer === "IDEAL"),
     });
-    const filename = encodeURIComponent(`${ch.name}_이상적편성_${run.week_start}.xlsx`);
+    const filename = encodeURIComponent(`${ch.name}_AI스마트편성_${run.week_start}.xlsx`);
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

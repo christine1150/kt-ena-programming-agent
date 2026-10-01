@@ -352,8 +352,17 @@ export function buildComparison(blocks: Record<string, unknown>[]) {
         best = c;
       }
     }
+    // 짝이 된 지난주 블록이 다른 이상적 블록과 더 많이 겹치면(자리 길이가 바뀌어 생긴 짧은 조각 등) 같은 자리 비교가
+    // 아니라 기대 차이를 내지 않는다 — 13분짜리 조각이 지난주 본방 전체와 비교돼 −1.5로 보이던 문제(2026-10-01 사용자 지적)
+    const mutual = (() => {
+      if (!best) return false;
+      const cs = Number(best.start_min);
+      const ce0 = Number(best.end_min);
+      const mine = Math.min(e, ce0) - Math.max(s, cs);
+      return !ideal.some((o) => o !== b && o.weekday === b.weekday && Math.min(Number(o.end_min), ce0) - Math.max(Number(o.start_min), cs) > mine);
+    })();
     const ie = num(b.expected_kpi);
-    const ce = best ? num(best.expected_kpi) : null;
+    const ce = best && mutual ? num(best.expected_kpi) : null;
     return {
       weekday: b.weekday,
       startMin: s,

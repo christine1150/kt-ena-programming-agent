@@ -1,6 +1,8 @@
 // 이상적 1주일 편성 설정(ideal_schedule_config) — 가중치·반복 규칙·Expected KPI 파라미터를 코드에
 // 하드코딩하지 않고 DB 한 곳에서만 관리한다(사용자 지시 2026-09-30). channel_id NULL 행이 기본값,
 // 채널 행이 있으면 섹션 단위로 덮어쓴다.
+import type { RerunRuleConfig } from "./rerunRules";
+
 export interface IdealWeights {
   kpi: number;
   target: number;
@@ -81,6 +83,8 @@ export interface IdealStructureConfig {
   decision_keep_current?: boolean;
   decision_min_rel_gain?: number; // 최소 개선율(지난주 편성 기대값 대비, 기본 0.03)
   decision_z?: number; // 합성 표준오차 배수(기본 1.0)
+  /** 오리지널 본방 연계 재방 규칙(직전회차 재방·직재방, 사용자 확인 2026-10-01) — rerunRules.ts */
+  rerun_rules?: RerunRuleConfig;
 }
 
 export interface IdealTargetGroup {

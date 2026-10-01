@@ -2,6 +2,7 @@
 // featured_content는 복사하지 않고 실행할 때마다 읽는다(설계 문서 D절, 이중 저장 방지).
 import { supabase } from "@/lib/supabase";
 import type { HardConstraintInput, HardRank } from "./constraints";
+import type { OriginalSpec } from "./rerunRules";
 import { addDays, clockToMinutes, toBroadcastMin } from "./time";
 
 const KOREAN_DOW_TO_ISO: Record<string, number> = { 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6, 일: 7 };
@@ -84,4 +85,35 @@ export async function loadConstraintInputs(channelId: string, weekStart: string)
     });
   }
   return { inputs, warnings };
+}
+
+/** 오리지널 본방 연계 재방 규칙(rerunRules.ts)의 입력 — 이 채널과 자매 본방 채널(설정 sister_sources)의 주요 콘텐츠
+ *  관리 본방 스케줄. 직재방 간격 학습을 위해 학습 기간(fromDate) 이후에 방영한 종영작도 포함한다. */
+export async function loadOriginalSpecs(channelCodes: string[], fromDate: string): Promise<OriginalSpec[]> {
+  const { data, error } = await supabase
+    .from("featured_content")
+    .select("id, program_id, category, broadcast_day_of_week, broadcast_time, broadcast_start_date, broadcast_end_date, display_name, programs!inner(canonical_name, channels!inner(code))")
+    .in("programs.channels.code", channelCodes)
+    .or(`broadcast_end_date.is.null,broadcast_end_date.gte.${fromDate}`);
+  if (error) throw new Error(`featured_content(재방 규칙) 조회 실패: ${error.message}`);
+  const out: OriginalSpec[] = [];
+  type SpecRow = Omit<FeaturedRow, "programs"> & { category: string; programs: { canonical_name: string; channels: { code: string } } };
+  for (const f of (data ?? []) as unknown as SpecRow[]) {
+    const p = f.programs;
+    const clock = clockToMinutes(f.broadcast_time);
+    const days = (f.broadcast_day_of_week ?? []).map((d) => KOREAN_DOW_TO_ISO[d]).filter((d): d is number => d !== undefined);
+    if (!p || clock === null || days.length === 0) continue;
+    out.push({
+      id: f.id,
+      sourceChannel: p.channels.code,
+      programId: f.program_id,
+      programName: f.display_name ?? p.canonical_name,
+      category: f.category,
+      days,
+      startMin: toBroadcastMin(clock),
+      activeFrom: f.broadcast_start_date,
+      activeTo: f.broadcast_end_date,
+    });
+  }
+  return out;
 }
