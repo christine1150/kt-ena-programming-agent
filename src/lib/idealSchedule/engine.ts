@@ -10,6 +10,7 @@ import { evaluateSchedule, optimizeWeek, type EngineOutput, type EvaluatedBlock,
 import { buildCandidatePool, buildScoringContext, Scorer, strongSlotMap, type EngineCandidate, type StrategyMode } from "./scoring";
 import { buildSkeleton, type SkeletonSlot } from "./skeleton";
 import { addDays } from "./time";
+import type { RankEstimate } from "./rankEstimate";
 import { namesCompatible, planEpisodeHints, planNameKey, planWeekFrame, type PlanRow } from "./planEpisodes";
 import { assignEpisodes, buildEpisodeStats, isEpisodicProgram, observedProgramMaxima, type EpisodeMode } from "./episodes";
 import type { CompetitorBundle, Genre, OwnAiring, OwnAiringsBundle } from "./types";
@@ -85,6 +86,8 @@ export interface EngineSummary {
   /** 기존 틀 기준: 대상 주 편성표(PLAN) 또는 지난주 실제 편성(LAST_WEEK). PLAN이면 3달 실적 없는 편성표 신규 프로그램 목록 */
   frame: "PLAN" | "LAST_WEEK";
   planNewPrograms: string[];
+  /** 주간 예상 순위(러너가 닐슨 주간 순위로 채움, rankEstimate.ts) — 채널 KPI로 뽑을 때만 */
+  expectedRank?: RankEstimate | null;
   /** 회차 정보 없이 하루 여러 번 도는 패턴으로 판정한 순환 편성 프로그램 이름(설정으로 켠 채널만, 위 목록과 겹치지 않음) */
   rotationPrograms: string[];
   /** 예상 범위 근거(BACKTEST = 과거 주 검증 잔차 n건, TRAINING = 검증 전 학습 기간 변동) */

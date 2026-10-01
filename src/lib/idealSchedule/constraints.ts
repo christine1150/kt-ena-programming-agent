@@ -175,3 +175,19 @@ export function freeIntervals(
   if (cursor < to) out.push({ startMin: cursor, endMin: to });
   return out.filter((f) => f.endMin > f.startMin);
 }
+
+/** 주요 콘텐츠 관리 편성 문구의 월 1회 규칙 — "매월 마지막주" → LAST, "매월 N째주" → N, "매월 1회"(주차 없음) → UNKNOWN, 매주 → null */
+export function monthlyRule(text: string | null): number | "LAST" | "UNKNOWN" | null {
+  if (!text || !/매월|월s*1s*회/.test(text)) return null;
+  if (/마지막s*주/.test(text)) return "LAST";
+  const m = text.match(/(첫|둘|셋|넷|다섯|[1-5])s*(째|번째)?s*주/);
+  if (m) return { 첫: 1, 둘: 2, 셋: 3, 넷: 4, 다섯: 5 }[m[1] as "첫"] ?? Number(m[1]);
+  return "UNKNOWN";
+}
+
+/** 그 날짜가 그 달의 N째(또는 마지막) 같은 요일인가 */
+export function inMonthlyWeek(date: string, rule: number | "LAST"): boolean {
+  const day = Number(date.slice(8, 10));
+  if (rule === "LAST") return addDays(date, 7).slice(0, 7) !== date.slice(0, 7);
+  return Math.ceil(day / 7) === rule;
+}

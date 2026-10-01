@@ -14,6 +14,8 @@ export type GhostBlock = { blockId: string; programName: string; expected: numbe
 
 const HATCH = "repeating-linear-gradient(135deg, rgba(255,255,255,0.55) 0, rgba(255,255,255,0.55) 2px, transparent 2px, transparent 6px)";
 
+const DAY_HEAD_PX = 52;
+
 export function IdealWeekGrid({
   blocks,
   weekStart,
@@ -37,7 +39,7 @@ export function IdealWeekGrid({
   decimals: number;
   selectedId?: string | null;
   onSelect?: (b: BlockRow) => void;
-  title?: string;
+  title?: React.ReactNode;
   gaps?: { weekday: number; startMin: number; endMin: number }[];
   pxPerMin?: number;
   diffById?: Map<string, BlockDiff>;
@@ -57,10 +59,11 @@ export function IdealWeekGrid({
   return (
     <div data-ideal-grid={isCurrent ? "CURRENT" : "IDEAL"} className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white print:overflow-visible print:rounded-none print:border-0">
       {title && <div className="border-b border-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-700 print:hidden">{title}</div>}
+      {/* 요일 머리 높이(사용자 지시 2026-10-01: 요일·날짜 글자를 키워 가독성↑ — 40 → 52px) */}
       <div className="flex" style={{ minWidth }}>
-        <div className="relative w-9 shrink-0" style={{ height: gridHeight + 40 }}>
+        <div className="relative w-9 shrink-0" style={{ height: gridHeight + DAY_HEAD_PX }}>
           {HOUR_TICKS.map((h) => (
-            <div key={h} className="absolute left-0 right-1 text-right text-[9px] text-zinc-400" style={{ top: (h * 60 - GRID_START_MIN) * pxPerMin + 40 - 5 }}>
+            <div key={h} className="absolute left-0 right-1 text-right text-[9px] text-zinc-400" style={{ top: (h * 60 - GRID_START_MIN) * pxPerMin + DAY_HEAD_PX - 5 }}>
               {pxPerMin < 0.45 && h % 2 === 1 ? "" : `${h}시`}
             </div>
           ))}
@@ -79,12 +82,12 @@ export function IdealWeekGrid({
           }
           return (
             <div key={dow} className="min-w-0 flex-1 border-l border-zinc-100">
-              <div className="h-10 bg-zinc-50 py-1 text-center">
-                <div className={`text-[11px] font-medium ${label === "토" ? "text-blue-500" : label === "일" ? "text-rose-500" : "text-zinc-500"}`}>
-                  {label} <span className="text-[9px] font-normal text-zinc-400">{date.slice(5)}</span>
+              <div className="bg-zinc-50 py-1 text-center" style={{ height: DAY_HEAD_PX }}>
+                <div className={`text-[15px] font-bold leading-5 ${label === "토" ? "text-blue-600" : label === "일" ? "text-rose-600" : "text-zinc-800"}`}>
+                  {label} <span className="text-[13px] font-semibold tabular-nums text-zinc-600">{date.slice(5).replace("-", "/")}</span>
                 </div>
                 {den > 0 && (
-                  <div className="text-[10px] font-semibold tabular-nums text-zinc-700">
+                  <div className="mt-0.5 text-xs font-semibold tabular-nums text-zinc-700">
                     {isCurrent ? "실측·기대" : "기대"} {(num / den).toFixed(decimals)}
                   </div>
                 )}

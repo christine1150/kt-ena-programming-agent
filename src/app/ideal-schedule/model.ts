@@ -89,6 +89,8 @@ export type RunSummary = {
   planEpisodes?: { weeks: string[]; filledAirings: number; plan: number; flow: number } | null;
   frame?: "PLAN" | "LAST_WEEK";
   planNewPrograms?: string[];
+  /** 주간 예상 순위(닐슨 주간 순위 기반 추정) */
+  expectedRank?: { rank: number; bound: "ABOVE" | "BELOW" | null; refWeek: string; refRank: number; weeks: number } | null;
 };
 
 export type RunRow = {

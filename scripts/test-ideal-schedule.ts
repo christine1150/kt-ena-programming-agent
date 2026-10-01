@@ -11,7 +11,8 @@ import { chooseCompetitorTarget, targetKindOfLabel } from "../src/lib/idealSched
 import { buildCompetitorFeatures } from "../src/lib/idealSchedule/competitorFeatures";
 import { classifyGenreByRule, genreFromSkyUhdLabel, ownCommonOverrides, pickOwnCommonGenre } from "../src/lib/idealSchedule/genreRules";
 import { mergeIdealConfig } from "../src/lib/idealSchedule/config";
-import { freeIntervals, resolveHardConstraints, type HardConstraintInput } from "../src/lib/idealSchedule/constraints";
+import { freeIntervals, inMonthlyWeek, monthlyRule, resolveHardConstraints, type HardConstraintInput } from "../src/lib/idealSchedule/constraints";
+import { estimateWeeklyRank } from "../src/lib/idealSchedule/rankEstimate";
 import { runIdealScheduleEngine, type EngineRunInput, type EngineRunResult, type GenreResolver } from "../src/lib/idealSchedule/engine";
 import { mapCompetitorData, withOptimizeTarget } from "../src/lib/idealSchedule/mapping";
 import { buildScoringContext, Scorer } from "../src/lib/idealSchedule/scoring";
@@ -663,6 +664,25 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   check("직재방: 과거 본방→그날 밤 재방 간격(165분)을 배워 새 드라마에 적용", night.length === 2 && night.every((x) => x.programName === "연애박사" && x.startMin === 1485), JSON.stringify(night.map((x) => [x.weekday, x.startMin])));
   const sis = buildRerunConstraints(specs, [...["2026-09-07", "2026-09-14", "2026-09-21"].map((d) => air(d, 1385, 70, "신병4사보타주"))], "2026-10-05", "ENA_DRAMA", cfg);
   check("자매 채널(ENA DRAMA) 직재방: 직전회차 재방은 없고 직재방만(본방+65분)", sis.inputs.every((x) => x.constraintType === "SAME_NIGHT_RERUN") && sis.inputs.length === 2 && sis.inputs[0].startMin === 1385);
+}
+
+// ── 월 1회 편성(2026-10-01, 송영주의 재즈 포레스트 "매월 마지막주 일 23:10") ──
+{
+  check("월 1회 문구 해석", monthlyRule("매월 마지막주 일 23:10") === "LAST" && monthlyRule("매월 1회 (금 17:40)") === "UNKNOWN" && monthlyRule("매주 토 19:50") === null && monthlyRule("매월 둘째주 수") === 2);
+  check("마지막주·N째주 판정", inMonthlyWeek("2026-10-25", "LAST") && !inMonthlyWeek("2026-10-18", "LAST") && inMonthlyWeek("2026-10-14", 2) && !inMonthlyWeek("2026-10-07", 2));
+}
+
+// ── 주간 예상 순위(2026-10-01) ──
+{
+  const hist = [
+    { weekStart: "2026-08-31", rating: 0.15, rank: 5 },
+    { weekStart: "2026-09-07", rating: 0.12, rank: 9 },
+    { weekStart: "2026-09-14", rating: 0.13, rank: 7 },
+    { weekStart: "2026-09-21", rating: 0.1, rank: 14 },
+  ];
+  const e = estimateWeeklyRank(hist, 0.14 * (0.14 / 0.13), 0.14, "2026-09-14"); // 기준 주 0.13 → 비율만큼 0.14로
+  check("예상 순위: 지난주 닐슨 시청률을 기대 비율만큼 옮겨 실적 사이 보간(0.14 → 5~7위 사이 6위)", e?.rank === 6 && e.refRank === 7, JSON.stringify(e));
+  check("예상 순위: 실적 최고보다 높으면 최고 순위 이상", estimateWeeklyRank(hist, 0.2, 0.13, "2026-09-14")?.bound === "ABOVE");
 }
 
 // ── 순환 편성(ENA STORY 확인 2026-09-30): 회차 정보 없이 하루 여러 번 도는 프로그램 ──

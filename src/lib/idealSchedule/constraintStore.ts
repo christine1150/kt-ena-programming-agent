@@ -1,7 +1,7 @@
 // Hard 제약 입력 조회(DB) — 주요 콘텐츠 관리(featured_content, 자동 연동) + 필수 편성(ideal_schedule_constraints).
 // featured_content는 복사하지 않고 실행할 때마다 읽는다(설계 문서 D절, 이중 저장 방지).
 import { supabase } from "@/lib/supabase";
-import type { HardConstraintInput, HardRank } from "./constraints";
+import { inMonthlyWeek, monthlyRule, type HardConstraintInput, type HardRank } from "./constraints";
 import type { OriginalSpec } from "./rerunRules";
 import { addDays, clockToMinutes, toBroadcastMin } from "./time";
 
@@ -26,13 +26,14 @@ export async function loadConstraintInputs(channelId: string, weekStart: string)
   // 1) 주요 콘텐츠 자동 연동(rank 2)
   const { data: featured, error: fErr } = await supabase
     .from("featured_content")
-    .select("id, program_id, broadcast_day_of_week, broadcast_time, broadcast_start_date, broadcast_end_date, display_name, programs!inner(canonical_name, channel_id)")
+    .select("id, program_id, broadcast_schedule_text, broadcast_day_of_week, broadcast_time, broadcast_start_date, broadcast_end_date, display_name, programs!inner(canonical_name, channel_id)")
     .eq("programs.channel_id", channelId);
   if (fErr) throw new Error(`featured_content 조회 실패: ${fErr.message}`);
-  for (const f of (featured ?? []) as FeaturedRow[]) {
+  for (const f of (featured ?? []) as (FeaturedRow & { broadcast_schedule_text: string | null })[]) {
     const p = Array.isArray(f.programs) ? f.programs[0] : f.programs;
     if (!p) continue;
     const name = f.display_name ?? p.canonical_name;
+    const monthly = monthlyRule(f.broadcast_schedule_text);
     const clock = clockToMinutes(f.broadcast_time);
     const days = (f.broadcast_day_of_week ?? []).map((d) => KOREAN_DOW_TO_ISO[d]).filter((d): d is number => d !== undefined);
     if (clock === null || days.length === 0) {
@@ -40,6 +41,12 @@ export async function loadConstraintInputs(channelId: string, weekStart: string)
       continue;
     }
     for (const weekday of days) {
+      // 월 1회 편성("매월 마지막주 일 23:10" 등)은 그 주차일 때만. 주차를 알 수 없는 "매월 1회"는 고정하지 않는다(2026-10-01)
+      if (monthly === "UNKNOWN") {
+        warnings.push(`'${name}'은 월 1회 편성인데 몇째 주인지 주요 콘텐츠 관리에 없어 고정하지 않았습니다("매월 마지막주"처럼 적어 주세요).`);
+        break;
+      }
+      if (monthly && !inMonthlyWeek(addDays(weekStart, weekday - 1), monthly)) continue;
       inputs.push({
         id: `featured:${f.id}:${weekday}`,
         rank: 2,

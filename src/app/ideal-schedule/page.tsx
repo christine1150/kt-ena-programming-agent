@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { GachaIcon, VendingMachineIcon } from "@/components/VendingIcons";
+import { PlanUploadCard } from "./PlanUploadCard";
 import { DOW_LABELS, addDaysLocal, minToLabel, weekOfMonthLabel } from "@/lib/scheduleGridLayout";
 import { BacktestPanel } from "./BacktestPanel";
 import { BlockDrawer, type Candidate } from "./BlockDrawer";
@@ -113,8 +114,6 @@ function IdealSchedulePage() {
   const [episodeMode, setEpisodeMode] = useState<"PROGRAM" | "EPISODE">("PROGRAM");
   // 편성표 회차 반영(B안) — 편성표가 올라와 있으면 기본으로 켠다(사용자 지시 2026-10-01)
   const [usePlan, setUsePlan] = useState(true);
-  const [planMsg, setPlanMsg] = useState<string | null>(null);
-  const planInput = useRef<HTMLInputElement>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [caps, setCaps] = useState<{ daily: number; weekly: number } | null>(null);
   const [weights, setWeights] = useState<Record<string, number> | null>(null);
@@ -160,7 +159,6 @@ function IdealSchedulePage() {
         setPlacement("NONE");
         setEpisodeMode("PROGRAM");
         setUsePlan(true);
-        setPlanMsg(null);
         setCaps({ daily: b.config.repeat_rules.daily_cap, weekly: b.config.repeat_rules.weekly_cap });
         setWeights(b.config.weights);
         setSavedWeights(b.config.weights);
@@ -334,22 +332,8 @@ function IdealSchedulePage() {
     setSelectedId(id);
   };
 
-  // 주간 편성표 올리기 — 편성표 검토 화면과 같은 업로드(채널·주는 파일에서 자동 인식), 끝나면 올린 주 목록만 새로 받는다
-  async function uploadPlan(file: File | null) {
-    if (planInput.current) planInput.current.value = "";
-    if (!file) return;
-    setBusy("plan");
-    setPlanMsg(null);
-    const fd = new FormData();
-    fd.append("file", file);
-    const j = await fetch("/api/schedule-grid/upload", { method: "POST", body: fd })
-      .then((r) => r.json())
-      .catch(() => ({ ok: false, message: "올리지 못했습니다." }));
-    setBusy(null);
-    if (!j.ok) return setPlanMsg(j.message ?? "올리지 못했습니다.");
-    const other = j.channelCode !== channelCode;
-    setPlanMsg(`${String(j.weekStart).slice(5).replace("-", "/")}주 ${j.channelCode} 편성표 ${j.rowsSaved}칸 저장${other ? " (다른 채널 파일)" : ""}`);
-    if (other) return;
+  // 실제 편성표 업로드 칸에서 이 채널 편성표를 올린 뒤 — 올린 주 목록만 새로 받고 '편성표 반영'을 켠다
+  async function refreshPlanWeeks() {
     const b = await fetch(`/api/scheduling/ideal-schedule/options?channel=${encodeURIComponent(channelCode)}`).then((r) => r.json());
     if (b.ok) setOpts((o) => (o ? { ...o, planWeeks: b.planWeeks } : o));
     setUsePlan(true);
@@ -551,7 +535,32 @@ function IdealSchedulePage() {
           </div>
         )}
         <IdealWeekGrid
-          title={`AI 스마트 편성 — ${view.run.week_start} 주(숫자는 최근 3달 데이터 기반 기대 시청률)`}
+          title={
+            <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+              <span>AI 스마트 편성 — {view.run.week_start} 주</span>
+              {summary?.expectedAvgRating !== null && summary?.expectedAvgRating !== undefined && (
+                <span className="text-zinc-900">
+                  주간 기대 시청률 <b className="tabular-nums">{fmt(summary.expectedAvgRating)}</b>
+                  {summary.current?.expectedAvgRating ? (
+                    <span className={`ml-1 text-xs font-medium ${summary.expectedAvgRating >= summary.current.expectedAvgRating ? "text-emerald-600" : "text-rose-600"}`}>
+                      지난주 대비 {signedPct((summary.expectedAvgRating - summary.current.expectedAvgRating) / summary.current.expectedAvgRating)}
+                    </span>
+                  ) : null}
+                </span>
+              )}
+              {summary?.expectedRank && (
+                <span className="text-zinc-900" title={`지난주(${summary.expectedRank.refWeek} 주) 닐슨 주간 순위 ${summary.expectedRank.refRank}위와 최근 3달 주간 순위 실적(${summary.expectedRank.weeks}주)으로 추정한 값입니다. 경쟁 채널 편성 변화는 반영되지 않습니다.`}>
+                  예상 순위{" "}
+                  <b className="tabular-nums">
+                    {summary.expectedRank.bound === "ABOVE" ? `${summary.expectedRank.rank}위 이내` : summary.expectedRank.bound === "BELOW" ? `${summary.expectedRank.rank}위 밖` : `약 ${summary.expectedRank.rank}위`}
+                  </b>
+                  {summary.expectedRank.bound && <span className="ml-1 text-xs font-normal text-zinc-500">{summary.expectedRank.bound === "ABOVE" ? "최근 3달 최고 수준보다 높음" : "최근 3달 최저 수준보다 낮음"}</span>}
+                  <span className="ml-1 text-xs font-normal text-zinc-500">(지난주 {summary.expectedRank.refRank}위)</span>
+                </span>
+              )}
+              <span className="text-xs font-normal text-zinc-500">숫자는 최근 3달 데이터 기반 기대 시청률</span>
+            </span>
+          }
           blocks={ideal}
           weekStart={view.run.week_start}
           themeColor={themeColor}
@@ -656,6 +665,7 @@ function IdealSchedulePage() {
             최근 3달 데이터 기반 기대 시청률(미래 예측 아님) · {MODE_LABEL[view.run.structure_mode]} · {view.run.as_of_date}까지 데이터 · {kstTime(view.run.created_at)} 생성
             {summary?.expectedAvgRating !== null && summary?.expectedAvgRating !== undefined ? ` · 주간 기대 ${fmt(summary.expectedAvgRating)}` : ""}
             {summary?.current?.expectedAvgRating ? ` (지난주 실제 편성 기대 ${fmt(summary.current.expectedAvgRating)})` : ""}
+            {summary?.expectedRank ? ` · 예상 순위 ${summary.expectedRank.bound === "ABOVE" ? `${summary.expectedRank.rank}위 이내` : summary.expectedRank.bound === "BELOW" ? `${summary.expectedRank.rank}위 밖` : `약 ${summary.expectedRank.rank}위`}(지난주 ${summary.expectedRank.refRank}위)` : ""}
           </p>
         </div>
       )}
@@ -680,6 +690,8 @@ function IdealSchedulePage() {
               ))}
             </section>
           )}
+
+          <PlanUploadCard channelCode={channelCode} planWeeks={opts?.planWeeks ?? []} weekStart={weekStart} onUploaded={() => void refreshPlanWeeks()} />
 
           {/* 조건 */}
           <section className={card}>
@@ -719,13 +731,7 @@ function IdealSchedulePage() {
                 </select>
               </label>
               <div className="flex flex-col gap-1 text-xs text-zinc-500">
-                <span className="flex items-center justify-between">
-                  편성표 반영
-                  <button type="button" onClick={() => planInput.current?.click()} disabled={busy === "plan"} className="text-[11px] text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline disabled:opacity-40">
-                    {busy === "plan" ? "올리는 중…" : "편성표 올리기"}
-                  </button>
-                </span>
-                <input ref={planInput} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => uploadPlan(e.target.files?.[0] ?? null)} />
+                편성표 반영
                 {(opts?.planWeeks?.length ?? 0) > 0 ? (
                   <>
                     <div className="flex rounded-lg border border-zinc-300 p-0.5">
@@ -740,9 +746,8 @@ function IdealSchedulePage() {
                     </span>
                   </>
                 ) : (
-                  <span className="text-[11px] text-zinc-400">올린 편성표가 없습니다</span>
+                  <span className="text-[11px] text-zinc-400">위 &lsquo;실제 편성표 올리기&rsquo;에서 올리면 켤 수 있습니다</span>
                 )}
-                {planMsg && <span className="text-[11px] text-zinc-600">{planMsg}</span>}
               </div>
               {opts?.hasEpisodeOption && (
                 <div className="flex flex-col gap-1 text-xs text-zinc-500">

@@ -4,6 +4,8 @@ import { loadIdealScheduleConfig } from "./configStore";
 import type { HardConstraintInput } from "./constraints";
 import { loadConstraintInputs, loadOriginalSpecs } from "./constraintStore";
 import { buildRerunConstraints } from "./rerunRules";
+import { estimateWeeklyRank, type WeeklyRankRow } from "./rankEstimate";
+import { resolveRankSheetTargetLabel } from "@/lib/targetResolution";
 import { fetchCompetitorData, fetchOwnAirings, fetchWeekAirings, loadChannelRef, type ChannelRef } from "./dataSource";
 import { runIdealScheduleEngine, type EngineRunResult } from "./engine";
 import { resolveGenre } from "./genreRules";
@@ -34,6 +36,22 @@ export interface RunRequest {
   includeActualWeek?: boolean; // 백테스트: 대상 주 실제 편성을 같은 모델로 평가(모델에는 넣지 않음)
   /** 편성표 회차 반영(B안, 사용자 지시 2026-10-01) — 업로드된 주간 편성표의 회차로 과거 방영 회차를 채우고 차주 흐름을 잇는다 */
   usePlanEpisodes?: boolean;
+}
+
+/** 닐슨 주간 순위(채널·랭킹 시트 타깃) — 기준일까지 최근 lookbackDays일 */
+async function loadWeeklyRanks(channelId: string, targetLabel: string, asOfDate: string, lookbackDays: number): Promise<WeeklyRankRow[]> {
+  const { data, error } = await supabase
+    .from("nielsen_period_rank")
+    .select("date_from, rank, rating, targets!inner(label)")
+    .eq("channel_id", channelId)
+    .eq("period_type", "weekly")
+    .eq("targets.label", targetLabel)
+    .lte("date_to", asOfDate)
+    .gte("date_from", addDays(asOfDate, -lookbackDays));
+  if (error) return [];
+  return (data ?? [])
+    .filter((r) => r.rank !== null && r.rating !== null)
+    .map((r) => ({ weekStart: r.date_from as string, rating: Number(r.rating), rank: Number(r.rank) }));
 }
 
 /** 업로드 편성표 행(학습 기간 ~ 대상 주) — program_schedule_grid. 편성표는 방송 전에 확정되는 계획이라 대상 주 것도 누수 아님 */
@@ -204,6 +222,17 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     planRows: planRows.length ? planRows : undefined,
     planFilled: enriched.filled,
   });
+  // 주간 예상 순위 — 채널 KPI 기준일 때 최근 3달 닐슨 주간 순위(랭킹 시트 타깃 표기)로 추정
+  const curEval = result.evaluations.CURRENT ?? null;
+  result.summary.expectedRank =
+    result.summary.optimizeTarget.isChannelKpi && channel.primaryTarget && curEval
+      ? estimateWeeklyRank(
+          await loadWeeklyRanks(channel.id, resolveRankSheetTargetLabel(channel.primaryTarget), asOfDate, config.expected_kpi.lookback_days),
+          result.summary.expectedAvgRating,
+          curEval.expectedAvgRating,
+          curEval.weekStart
+        )
+      : null;
   const t2 = Date.now();
   return {
     ...result,
