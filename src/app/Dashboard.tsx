@@ -3,7 +3,7 @@
 // Page 1 종합 대시보드 (DESIGN.md 1.2 참고 — 참고 이미지의 파스텔 블루·라벤더 그라디언트 +
 // 글래스모피즘 화이트 카드 톤을 따른다). 숫자는 전부 /api/dashboard/page1이 SQL로 계산해
 // 내려준 값을 그대로 표시하고, 여기서는 문장 조립(줄글 인사이트)만 한다.
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { VendingMachineIcon } from "@/components/VendingIcons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -472,6 +472,45 @@ const CHANNEL_NAME_BY_CODE: Record<string, string> = {
   ONCE: "ONCE",
   SKYUHD: "skyUHD",
 };
+
+// 월간/주간 리뷰 인사이트 줄글에서 채널명을 찾아 로고색+볼드로 강조하기 위한 (code,name) 목록 —
+// CHANNEL_NAME_BY_CODE를 그대로 펼친 것뿐, 별도 데이터 추가 없음. 긴 이름부터 매칭해야
+// "ENA Play"가 "ENA"+"Play"로 잘못 쪼개지지 않는다(아래 쪼갠 이름의 하위 문자열 주의, 이 파일의
+// highlightChannelNames(text, colorMap)와 같은 원칙).
+const CHANNEL_NAME_LIST = Object.entries(CHANNEL_NAME_BY_CODE)
+  .map(([code, name]) => ({ code, name }))
+  .sort((a, b) => b.name.length - a.name.length);
+
+// 사용자 지시(2026-10-01): 월간/주간 리뷰 "[이번 달/주 인사이트]" 박스의 채널명을 로고색+볼드로.
+// highlightNarrativeText가 이미 만든 노드 배열(문자열 + 등락 강조 <b>가 섞여 있음) 중 순수
+// 문자열 조각만 다시 훑어 채널명을 찾는다 — 등락 강조 패턴(▲▼%위)과 채널명(알파벳)은 서로
+// 겹치지 않으므로 두 강조를 순서대로 적용해도 안전하다.
+function colorizeChannelNamesInNodes(nodes: ReactNode[], themeColorByCode: Map<string, string | null>): ReactNode[] {
+  const pattern = new RegExp(`(${CHANNEL_NAME_LIST.map((n) => n.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "g");
+  let key = 0;
+  const result: ReactNode[] = [];
+  nodes.forEach((node) => {
+    if (typeof node !== "string") {
+      result.push(node);
+      return;
+    }
+    node.split(pattern).forEach((part) => {
+      if (!part) return;
+      const found = CHANNEL_NAME_LIST.find((n) => n.name === part);
+      if (found) {
+        const color = themeColorByCode.get(found.code) ?? undefined;
+        result.push(
+          <b key={`ch-${key++}`} style={color ? { color, fontWeight: 700 } : { fontWeight: 700 }}>
+            {part}
+          </b>
+        );
+      } else {
+        result.push(part);
+      }
+    });
+  });
+  return result;
+}
 
 function fmtTime(t: string): string {
   return t.slice(0, 5);
@@ -1430,6 +1469,44 @@ function MonthlyRankTrendChart({
   // 순위는 낮을수록 좋다 — 최상위(minRank)를 위로 올린다.
   const yOf = (rank: number) => PAD_Y + ((rank - minRank) / range) * (H - PAD_Y * 2);
   const tickRanks = [minRank, Math.round((minRank + maxRank) / 2), maxRank].filter((v, i, a) => a.indexOf(v) === i);
+  // 사용자 지시(2026-10-01): "순위 숫자가 겹쳐서 가독률 떨어지지 않게, 겹칠 경우 숫자를 좌우
+  // 또는 상하로 이동" — 채널별로는 best/worst/last 3곳만 상시 표기하지만, 여러 채널이 같은
+  // 달에 같거나 비슷한 순위를 찍으면 그 숫자 라벨들이 같은 자리에 겹친다. 점(circle) 위치는
+  // 그대로 두고, 라벨 텍스트의 y좌표만 같은 달(x 동일) 안에서 순위 오름차순으로 최소 간격
+  // (MIN_LABEL_GAP)을 보장하도록 아래로 밀어낸다.
+  const MIN_LABEL_GAP = 9;
+  const notableByChannel = new Map<string, { month: number; rank: number }[]>();
+  ranked.forEach((c) => {
+    const pts = c.months.filter((m) => m.rank !== null);
+    if (pts.length === 0) return;
+    const last = pts[pts.length - 1];
+    const bestPt = pts.reduce((a, b) => (b.rank! < a.rank! ? b : a), pts[0]);
+    const worstPt = pts.reduce((a, b) => (b.rank! > a.rank! ? b : a), pts[0]);
+    const notable = [last, bestPt, worstPt].filter((p, i, arr) => p && arr.findIndex((q) => q?.month === p.month) === i);
+    notableByChannel.set(
+      c.channelCode,
+      notable.map((m) => ({ month: m!.month, rank: m!.rank! }))
+    );
+  });
+  const labelYByKey = new Map<string, number>();
+  const byMonth = new Map<number, { channelCode: string; month: number; rank: number }[]>();
+  notableByChannel.forEach((entries, channelCode) => {
+    entries.forEach(({ month, rank }) => {
+      const arr = byMonth.get(month) ?? [];
+      arr.push({ channelCode, month, rank });
+      byMonth.set(month, arr);
+    });
+  });
+  byMonth.forEach((group) => {
+    const sorted = [...group].sort((a, b) => yOf(a.rank) - yOf(b.rank));
+    let prevY = -Infinity;
+    sorted.forEach(({ channelCode, month, rank }) => {
+      let y = yOf(rank) - 6;
+      if (y - prevY < MIN_LABEL_GAP) y = prevY + MIN_LABEL_GAP;
+      prevY = y;
+      labelYByKey.set(`${channelCode}-${month}`, y);
+    });
+  });
   return (
     <div className="rounded-xl bg-zinc-50 p-3">
       <p className="mb-1 text-[11px] font-semibold text-zinc-500">
@@ -1476,7 +1553,15 @@ function MonthlyRankTrendChart({
                   않다 — 다른 월과 동일하게 점으로 표시" — 최근 지점만 테두리 원으로 이중 강조하던
                   것을 제거, 위 pts.map의 일반 점(r=2.2)과 동일하게 통일. */}
               {notable.map((m) => (
-                <text key={m!.month} x={xOf(m!.month)} y={yOf(m!.rank!) - 6} textAnchor="middle" fontSize={9} fontWeight={700} fill={color}>
+                <text
+                  key={m!.month}
+                  x={xOf(m!.month)}
+                  y={labelYByKey.get(`${c.channelCode}-${m!.month}`) ?? yOf(m!.rank!) - 6}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fontWeight={700}
+                  fill={color}
+                >
                   #{m!.rank}
                 </text>
               ))}
@@ -1717,16 +1802,13 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
       <h2 className={`font-heading mb-1 text-xl font-bold tracking-tight ${ACCENT_HEADING}`}>
         {review.year}년 {review.month}월 월간 리뷰
       </h2>
-      <p className="mb-4 text-sm text-zinc-400">
-        {review.monthStart} ~ {review.monthEnd} 전체를 닐슨이 기간 단위로 매긴 시장 순위입니다(일별 순위의 평균이 아닙니다). 아래 그래프는 올해 1월부터 이번 달까지의 흐름입니다.
-      </p>
-
       <div className="mb-4 rounded-xl bg-amber-50 p-3">
         <p className="mb-1 text-[12px] font-semibold text-amber-700">[이번 달 인사이트]</p>
         <ul className="space-y-1">
           {insights.map((line, i) => (
             <li key={i} className="text-[13px] leading-relaxed text-amber-800">
-              · {highlightNarrativeText(line, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
+              ·{" "}
+              {colorizeChannelNamesInNodes(highlightNarrativeText(line, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR), themeColorByCode)}
             </li>
           ))}
         </ul>
@@ -1991,7 +2073,8 @@ function WeeklyReviewCard({ review, themeColorByCode }: { review: WeeklyReview; 
         <ul className="space-y-1">
           {insights.map((line, i) => (
             <li key={i} className="text-[13px] leading-relaxed text-amber-800">
-              · {highlightNarrativeText(line, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
+              ·{" "}
+              {colorizeChannelNamesInNodes(highlightNarrativeText(line, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR), themeColorByCode)}
             </li>
           ))}
         </ul>
