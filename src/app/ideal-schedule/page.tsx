@@ -529,22 +529,22 @@ function IdealSchedulePage() {
         </div>
       )}
 
-      <div className={`grid gap-3 ${showCompare && !printing ? "2xl:grid-cols-2" : ""}`}>
+      <div className={`grid gap-3 ${showCompare && !printing ? "2xl:grid-cols-2 2xl:[grid-template-rows:auto_auto]" : ""}`}>
         {showCompare && !printing && (
-          <div className="print:hidden">
-            <IdealWeekGrid
-              title={`지난주 실제 편성 — ${view.run.current_week_start ?? "-"} 주(숫자는 실측)`}
-              blocks={current}
-              weekStart={view.run.current_week_start ?? view.run.week_start}
-              themeColor={themeColor}
-              pivot={pivot}
-              decimals={decimals}
-              selectedId={selectedId}
-              onSelect={(b) => selectBlock(b.id)}
-              pxPerMin={ppm}
-              minWidth={620}
-            />
-          </div>
+          <IdealWeekGrid
+            title={`지난주 실제 편성 — ${view.run.current_week_start ?? "-"} 주(숫자는 실측)`}
+            blocks={current}
+            weekStart={view.run.current_week_start ?? view.run.week_start}
+            themeColor={themeColor}
+            pivot={pivot}
+            decimals={decimals}
+            selectedId={selectedId}
+            onSelect={(b) => selectBlock(b.id)}
+            pxPerMin={ppm}
+            minWidth={620}
+            syncTitleRow={showCompare && !printing}
+            hideOnPrint
+          />
         )}
         <IdealWeekGrid
           title={
@@ -586,6 +586,7 @@ function IdealSchedulePage() {
           dimUnchanged={dimUnchanged && !printing}
           ghost={preview ? { blockId: preview.block.id, programName: preview.cand.candidate.programName, expected: preview.cand.expected_kpi } : null}
           minWidth={showCompare ? 620 : 760}
+          syncTitleRow={showCompare && !printing}
         />
       </div>
     </div>

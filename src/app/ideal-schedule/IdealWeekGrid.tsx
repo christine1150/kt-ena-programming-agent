@@ -31,6 +31,8 @@ export function IdealWeekGrid({
   dimUnchanged = false,
   ghost = null,
   minWidth = 760,
+  syncTitleRow = false,
+  hideOnPrint = false,
 }: {
   blocks: BlockRow[];
   weekStart: string;
@@ -46,6 +48,17 @@ export function IdealWeekGrid({
   dimUnchanged?: boolean;
   ghost?: GhostBlock | null;
   minWidth?: number;
+  /** 사용자 지시(2026-10-01): "지난주 편성과 나란히 볼 때 2시대부터 시작하는 편성표의 높이가
+   *  같도록 틀 시작 높이 맞춰줘" — "지난주 실제 편성"(제목 한 줄)과 "AI 스마트 편성"(주간 기대
+   *  시청률·등위·기준 틀까지 최대 3줄) 제목 길이가 서로 달라 그 아래 요일 헤더·시간대가 어긋나
+   *  보였다. 고정 min-height로는 내용 길이가 뷰포트 폭에 따라 또 달라져 완전히 맞지 않아서,
+   *  부모(page.tsx)가 두 그리드를 감싸는 grid에 명시적 2행(제목행·본문행)을 두고, 이 카드가
+   *  CSS subgrid로 그 행 트랙을 그대로 물려받게 한다 — 제목 줄 수와 무관하게 두 카드의 제목행
+   *  높이가 항상 "더 긴 쪽" 기준으로 같아진다(1열 보기·인쇄 등 나란히 보지 않을 때는 false). */
+  syncTitleRow?: boolean;
+  /** page.tsx가 이 카드를 감싸던 `<div className="print:hidden">`을 대신한다 — subgrid가 부모의
+   *  직계 자식이어야 행 트랙을 물려받으므로 감싸는 div를 없애고 이 prop으로 옮겼다. */
+  hideOnPrint?: boolean;
 }) {
   const gridHeight = (GRID_END_MIN - GRID_START_MIN) * pxPerMin;
   const hourPx = 60 * pxPerMin;
@@ -57,8 +70,13 @@ export function IdealWeekGrid({
   const premieres = premiereBlockIds(blocks);
 
   return (
-    <div data-ideal-grid={isCurrent ? "CURRENT" : "IDEAL"} className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white print:overflow-visible print:rounded-none print:border-0">
-      {title && <div className="border-b border-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-700 print:hidden">{title}</div>}
+    <div
+      data-ideal-grid={isCurrent ? "CURRENT" : "IDEAL"}
+      className={`overflow-x-auto rounded-2xl border border-zinc-200 bg-white print:overflow-visible print:rounded-none print:border-0 ${
+        syncTitleRow ? "2xl:grid 2xl:grid-rows-subgrid 2xl:row-span-2" : ""
+      } ${hideOnPrint ? "print:hidden" : ""}`}
+    >
+      {title && <div className="flex items-center border-b border-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-700 print:hidden">{title}</div>}
       {/* 요일 머리 높이(사용자 지시 2026-10-01: 요일·날짜 글자를 키워 가독성↑ — 40 → 52px) */}
       <div className="flex" style={{ minWidth }}>
         <div className="relative w-9 shrink-0" style={{ height: gridHeight + DAY_HEAD_PX }}>
