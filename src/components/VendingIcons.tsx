@@ -1,18 +1,21 @@
 // 시청률 자판기 전용 아이콘(사용자 지시 2026-09-30: "귀여운 자판기 아이콘") — 1페이지·2페이지 진입 버튼과
 // 화면 안 "편성표 뽑기" 버튼에서 공용. currentColor를 쓰므로 버튼 글자색을 그대로 따른다.
 
-/** 귀여운 자판기: 웃는 얼굴 창, 동전 투입구, 배출구, 버튼. */
-export function VendingMachineIcon({ size = 14, strokeWidth = 2 }: { size?: number; strokeWidth?: number }) {
+/** 귀여운 자판기(사용자 재지시 2026-10-01: "옆의 이모지도 귀여운걸로") — 기존 모노톤 선화 대신
+ *  GachaIcon과 같은 톤의 알록달록한 채색 캐릭터로. 몸체 윤곽만 currentColor를 써서 버튼 글자색에
+ *  맞게 번지고, 창 안 과자/캔은 GachaIcon 캡슐과 같은 파스텔 팔레트를 재사용해 둘이 한 가족처럼
+ *  보이게 했다. */
+export function VendingMachineIcon({ size = 14, strokeWidth = 1.6 }: { size?: number; strokeWidth?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="4" y="2" width="16" height="20" rx="3.5" />
-      <rect x="7" y="5" width="10" height="8" rx="2" />
-      <circle cx="10" cy="8.2" r="0.6" fill="currentColor" stroke="none" />
-      <circle cx="14" cy="8.2" r="0.6" fill="currentColor" stroke="none" />
-      <path d="M10.2 10.4c1 0.9 2.6 0.9 3.6 0" />
-      <path d="M8 16h4" />
-      <circle cx="15.5" cy="16" r="0.8" fill="currentColor" stroke="none" />
-      <rect x="8" y="18.2" width="8" height="2" rx="1" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="4" y="2" width="16" height="20" rx="3.5" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth={strokeWidth} />
+      <rect x="6.6" y="4.6" width="10.8" height="8.4" rx="1.8" fill="#fff" fillOpacity="0.85" stroke="currentColor" strokeWidth={strokeWidth * 0.8} />
+      <circle cx="9.9" cy="8.9" r="1.15" fill="#38bdf8" />
+      <circle cx="12.9" cy="7.6" r="1.15" fill="#fb7185" />
+      <circle cx="15.3" cy="9.4" r="0.95" fill="#facc15" />
+      <circle cx="10.3" cy="18" r="1.4" fill="#a3e635" stroke="currentColor" strokeWidth="0.9" />
+      <rect x="13.6" y="16.9" width="3.2" height="2.2" rx="0.7" fill="#fb7185" stroke="currentColor" strokeWidth="0.9" />
+      <path d="M8.4 21.2h7.2" stroke="currentColor" strokeWidth={strokeWidth * 0.8} strokeLinecap="round" />
     </svg>
   );
 }
