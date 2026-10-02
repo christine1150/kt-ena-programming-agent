@@ -65,8 +65,8 @@ function PurchaseSimulator() {
   const resultRef = useRef<HTMLDivElement>(null);
 
   // 1) 검색: 문장에서 프로그램·요일·시각·타깃·채널을 해석하고 프로그램 후보를 찾는다.
-  const search = useCallback(async () => {
-    const text = q.trim();
+  const search = useCallback(async (override?: string) => {
+    const text = (override ?? q).trim();
     if (!text) return;
     setBusy("프로그램을 찾는 중…");
     setError(null);
@@ -183,7 +183,7 @@ function PurchaseSimulator() {
               className={`${input} flex-1`}
               aria-label="프로그램명 또는 문장"
             />
-            <button type="button" onClick={search} disabled={!q.trim() || !!busy} className="rounded-lg bg-zinc-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
+            <button type="button" onClick={() => search()} disabled={!q.trim() || !!busy} className="rounded-lg bg-zinc-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
               찾기
             </button>
           </div>
@@ -306,8 +306,86 @@ function PurchaseSimulator() {
             </p>
           </div>
         )}
+
+        <RecoSection
+          channel={channel}
+          windowDays={windowDays}
+          onPick={(name) => {
+            setQ(name);
+            search(name);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
       </main>
     </div>
+  );
+}
+
+type RecoItem = { rank: number; group_key: string; rep_key: string; display_name: string; genre: string | null; prediction: number; prediction_low: number | null; prediction_high: number | null; peer_count: number; peer_airings: number; channel_annual_avg: number | null; vs_annual_avg: number | null; confidence: string | null; as_of: string; target: string };
+
+// 구매 추천: 해당 채널에서 방영한 적 없는 프로그램 중 타 채널(케이블 재방 3곳 이상) 실적으로 본 예상 시청률 순위. 사전 계산 결과를 읽는다.
+function RecoSection({ channel, windowDays, onPick }: { channel: string; windowDays: number; onPick: (name: string) => void }) {
+  const [items, setItems] = useState<RecoItem[] | null>(null);
+  const [genre, setGenre] = useState("전체");
+  const [loadedKey, setLoadedKey] = useState("");
+  const key = `${channel}|${windowDays}`;
+  if (loadedKey !== key) {
+    setLoadedKey(key);
+    setItems(null);
+    fetch(`/api/scheduling/purchase-sim/recommendations?channel=${channel}&window=${windowDays}`)
+      .then((r) => r.json())
+      .then((j) => setItems(j.ok ? (j.rows as RecoItem[]) : []))
+      .catch(() => setItems([]));
+  }
+  const genres = ["전체", ...Array.from(new Set((items ?? []).map((i) => i.genre ?? "미분류")))];
+  const shown = (items ?? []).filter((i) => genre === "전체" || (i.genre ?? "미분류") === genre).slice(0, 10);
+  const avg = items?.[0]?.channel_annual_avg ?? null;
+  const targetName = items?.[0] ? TARGET_NAME[items[0].target] : "";
+  const label = WINDOW_OPTS.find((w) => w.days === windowDays)?.label.replace(" (기본)", "") ?? "";
+  return (
+    <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold text-zinc-900">
+          구매 추천 <span className="text-xs font-normal text-zinc-500">· {CHANNEL_OPTS.find((c) => c.code === channel)?.name} · {label} 기준{targetName ? ` · ${targetName}` : ""}</span>
+        </h2>
+        {items && items.length > 0 && (
+          <select value={genre} onChange={(e) => setGenre(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700" aria-label="장르">
+            {genres.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+        )}
+      </div>
+      {items === null && <p className="mt-2 text-sm text-zinc-500">불러오는 중…</p>}
+      {items && items.length === 0 && <p className="mt-2 text-sm text-zinc-500">이 채널·기간의 구매 추천은 아직 준비되지 않았습니다.</p>}
+      {items && items.length > 0 && (
+        <>
+          <p className="mt-1 text-xs text-zinc-500">우리 채널에서 방영한 적 없는 프로그램 중 타 채널 재방 실적으로 계산한 월 평균 예상 시청률 순입니다. 항목을 누르면 위에서 바로 시뮬레이션합니다.</p>
+          <ol className="mt-2 divide-y divide-zinc-100">
+            {shown.map((i, n) => {
+              const below = avg !== null && i.prediction < avg;
+              return (
+                <li key={i.group_key}>
+                  <button type="button" onClick={() => onPick(i.display_name)} className="flex w-full items-center justify-between gap-3 py-2 text-left hover:bg-zinc-50">
+                    <span className="min-w-0">
+                      <span className="text-sm font-medium text-zinc-900">{n + 1}. {i.display_name}</span>
+                      <span className="ml-2 text-xs text-zinc-400">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회</span>
+                    </span>
+                    <span className="shrink-0 text-right tabular-nums">
+                      <span className={`text-sm font-semibold ${below ? "text-rose-600" : "text-zinc-900"}`}>{fmt(i.prediction)}%</span>
+                      {i.vs_annual_avg !== null && <span className="ml-2 text-xs text-zinc-500">연평균 대비 {fmt(i.vs_annual_avg, 2)}배</span>}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+          <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+            기준일 {items[0].as_of}{avg !== null ? ` · 채널 최근 1년 평균 ${fmt(avg)}%` : ""}. 가격·판권 가능 여부는 반영하지 않았습니다. 수도권 2049의 신규 구매 예측은 과거 검증에서 슬롯 평균 수준과 큰 차이가 없어 순위는 후보를 좁히는 참고용입니다. 재방 횟수가 많은 장수 콘텐츠는 긴 기간 기준에서 높게 나옵니다.
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 
