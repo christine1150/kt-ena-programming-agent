@@ -64,3 +64,19 @@ export async function latestCompetitorDate(client: SupabaseClient): Promise<stri
   if (error || !data?.length) throw new Error("경쟁 프로그램 최신 날짜를 확인할 수 없습니다.");
   return data[0].broadcast_date as string;
 }
+
+/** 백테스트용 배치 입력: 같은 기준일·채널·타깃에서 여러 그룹을 한 번에(단일 윈도우). 결과는 group_key → SimInputs. */
+export async function fetchSimInputsMulti(
+  client: SupabaseClient,
+  args: { groups: { group_key: string; members: string[] }[]; ownChannel: string; target: string; asOf: string; window?: number }
+): Promise<Record<string, SimInputs>> {
+  const { data, error } = await client.rpc("get_purchase_sim_inputs_multi", {
+    p_groups: args.groups.map((g) => ({ group_key: g.group_key, members: g.members.map((m) => m.toUpperCase()) })),
+    p_own_channel_code: args.ownChannel,
+    p_target: args.target,
+    p_as_of: args.asOf,
+    p_window: args.window ?? PARAMS.windowDays,
+  });
+  if (error) throw new Error(`get_purchase_sim_inputs_multi 실패: ${error.message}`);
+  return (data ?? {}) as Record<string, SimInputs>;
+}

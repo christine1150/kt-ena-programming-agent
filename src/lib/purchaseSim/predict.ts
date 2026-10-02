@@ -32,6 +32,7 @@ export interface PredictRequest {
   asOf?: string;
   save?: boolean;
   createdBy?: string;
+  includeRolling?: boolean; // 4·26·52주 롤링 표(느린 조회 — 화면은 별도 호출로 지연 로딩)
 }
 
 export interface TargetResult {
@@ -93,24 +94,26 @@ export async function runPrediction(client: SupabaseClient, req: PredictRequest)
 
   // 3) 타깃별 입력·예측
   for (const target of targets) {
-    const [inputs, calibration] = await Promise.all([
-      fetchSimInputs(client, { groupKeys: resolved.memberKeys, ownChannel, target, asOf }),
+    // 예측은 기준 윈도우(91일) 하나만 조회해 빠르게 처리하고, 롤링 표는 요청 시에만 넓은 윈도우로 따로 조회한다.
+    const [inputs, calibration, rollInputs] = await Promise.all([
+      fetchSimInputs(client, { groupKeys: resolved.memberKeys, ownChannel, target, asOf, windows: [PARAMS.windowDays] }),
       loadCalibration(client, MODEL_VERSION, target),
+      req.includeRolling ? fetchSimInputs(client, { groupKeys: resolved.memberKeys, ownChannel, target, asOf }) : Promise.resolve(null),
     ]);
     const w = PARAMS.windowDays;
     const allPeers = peerIndexes(inputs, w);
-    const slots: TargetResult["slots"] = [];
-    for (const s of slotReqs) {
-      const startMin = broadcastMinutes(s.startTime);
-      const slot = slotOf(s.isoDow, startMin);
-      const pred = predictSlot(inputs, target, slot, calibration);
-      const competition = await fetchCompetition(client, { isoDow: s.isoDow, startHour: Math.floor(startMin / 60), target, asOf }).catch(() => []);
-      slots.push({ ...pred, isoDow: s.isoDow, startTime: s.startTime, competition });
-    }
+    const slots: TargetResult["slots"] = await Promise.all(
+      slotReqs.map(async (s) => {
+        const startMin = broadcastMinutes(s.startTime);
+        const pred = predictSlot(inputs, target, slotOf(s.isoDow, startMin), calibration);
+        const competition = await fetchCompetition(client, { isoDow: s.isoDow, startHour: Math.floor(startMin / 60), target, asOf }).catch(() => []);
+        return { ...pred, isoDow: s.isoDow, startTime: s.startTime, competition };
+      })
+    );
     base.results.push({
       target,
       targetLabel: TARGET_LABEL[target],
-      rolling: rollingTable(inputs),
+      rolling: rollInputs ? rollingTable(rollInputs) : [],
       peers: allPeers.filter((p) => !p.isHub).sort((a, b) => b.nBase - a.nBase),
       hubReference: allPeers.filter((p) => p.isHub).sort((a, b) => b.nBase - a.nBase),
       slots,

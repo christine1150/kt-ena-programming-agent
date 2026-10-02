@@ -11,7 +11,7 @@ async function main() {
   const channel = process.argv[3] && !process.argv[3].startsWith("--") ? process.argv[3] : undefined;
   const client = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const t0 = Date.now();
-  const res = await runPrediction(client, { query, ownChannel: channel, save: process.argv.includes("--save") });
+  const res = await runPrediction(client, { query, ownChannel: channel, save: process.argv.includes("--save"), includeRolling: process.argv.includes("--rolling") });
   console.log(`입력: ${query}  (${Date.now() - t0}ms, 기준일 ${res.asOf}, 모델 ${res.modelVersion})`);
   console.log("해석:", JSON.stringify({ program: res.parsed.programQuery, dow: res.parsed.isoDow, time: res.parsed.startTime, target: res.parsed.target, channel: res.parsed.channelCode }));
   console.log("식별:", res.identity ? `${res.identity.status} conf=${res.identity.identityConfidence.toFixed(2)} → ${res.identity.chosen?.displayName ?? res.identity.candidates.map((c) => c.displayName).join(", ")}` : "(그룹 지정)");

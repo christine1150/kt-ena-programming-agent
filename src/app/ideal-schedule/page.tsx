@@ -651,6 +651,9 @@ function IdealSchedulePage() {
             <button type="button" disabled={!runId} onClick={doPrint} title="인쇄(A4 세로)" aria-label="인쇄" className={iconBtn}>
               <PrintIcon />
             </button>
+            <Link href={`/ideal-schedule/purchase?channel=${channelCode}`} className={pill}>
+              콘텐츠 구매 시뮬레이터
+            </Link>
             <Link href={`/channel/${channelCode}`} className="rounded-full px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
               채널 분석 →
             </Link>

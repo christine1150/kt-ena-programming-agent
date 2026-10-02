@@ -9,7 +9,7 @@
 //   (라디오스타 MBC 본방 1.58 vs 케이블 재방 0.95), 가구↔2049 환산, 모멘텀·경쟁강도·포화의 수치 반영(표시 전용, 검증 전).
 import type { SimTarget } from "./queryParse";
 
-export const MODEL_VERSION = "purchase-v1.0";
+export const MODEL_VERSION = "purchase-v1.1";
 
 export const PARAMS = {
   windowDays: 91, // 자판기 기대값 기준과 같은 최근 3달(lookback_days 91)
@@ -18,7 +18,8 @@ export const PARAMS = {
   minPeerAirings: 8, // 피어 채널 지수 최소 표본(하네스 minPeerAirings)
   minOwnAirings: 4, // 자사 이력 지수 최소 표본(하네스 minHist)
   kPeer: 48, // 피어 지수를 1 쪽으로 수축하는 강도(편성 수 단위) — 하네스 k 격자 12~96 중 A2049·HH 모두 오차 최소 구간(48)
-  kOwn: 16, // 자사 이력 신뢰도 가중 Z = n/(n+kOwn) — 하네스 8~32 중 16(차이 작음)
+  peerCountRef: 3, // 피어 채널이 이보다 적으면 수축을 (ref/채널수)² 배로 강화 — 백테스트(2026-10-02): 피어 1~2곳은 슬롯 평균보다 나을 게 없고 3곳+ 에서만 개선(HH WAPE 0.320→0.284)
+  kOwn: 8, // 자사 이력 신뢰도 가중 Z = n/(n+kOwn) — 백테스트 격자 4~64 중 작을수록 오차 감소(4: 0.402, 8: 0.405, 16: 0.409), 과적합을 피해 중간값 8
   // 본방 허브(지상파·종편·tvN): 구매 후 재방 편성 기대의 근거로 쓰지 않는다(표시 전용).
   hubChannels: ["KBS1", "KBS2", "MBC", "SBS", "JTBC", "TV CHOSUN", "채널A", "MBN", "tvN"],
   lowRatingThreshold: { A2049: 0.02, HH: 0.03 } as Record<string, number>, // 구간 보정 시 낮은 시청률 구간 분리 기준
@@ -242,6 +243,8 @@ export interface SlotPrediction {
   high: number | null;
   intervalLevel: number | null;
   scenario: string | null;
+  calibrationN: number | null; // 보정에 쓴 과거 예측 수(같은 유형)
+  calibrationMaeLog: number | null; // 그 과거 예측의 평균 로그 오차
   confidence: Confidence;
   confidenceReasons: string[];
   notes: string[];
@@ -259,7 +262,12 @@ function pickCalibration(cal: CalibrationRow[], scen: { base: string; bucket: st
 }
 
 /** 한 슬롯의 예측. cutoff 이전 데이터만 담긴 inputs 가 들어온다고 가정한다(누수 방지는 RPC 의 as_of). */
-export function predictSlot(inputs: SimInputs, target: string, slot: string, calibration: CalibrationRow[]): SlotPrediction {
+export interface PredictOptions {
+  /** 신규 구매 시뮬레이션: 자사 채널의 그 프로그램 이력을 지수에 쓰지 않는다(슬롯 기준값의 그 프로그램 제외는 유지). 백테스트의 PEER 시나리오용. */
+  ignoreOwnHistory?: boolean;
+}
+
+export function predictSlot(inputs: SimInputs, target: string, slot: string, calibration: CalibrationRow[], options: PredictOptions = {}): SlotPrediction {
   const w = PARAMS.windowDays;
   const baseline = loBaseline(toMap(inputs.own_chan_slots, w), toMap(inputs.own_prog_slots, w), slot, PARAMS.minBaselineN, true);
   const notes: string[] = [];
@@ -282,6 +290,8 @@ export function predictSlot(inputs: SimInputs, target: string, slot: string, cal
     high: null,
     intervalLevel: null,
     scenario: null,
+    calibrationN: null,
+    calibrationMaeLog: null,
     confidence: "INSUFFICIENT",
     confidenceReasons: [],
     notes,
@@ -301,11 +311,12 @@ export function predictSlot(inputs: SimInputs, target: string, slot: string, cal
   if (peers.length > 0) {
     peerRaw = median(peers.map((p) => p.idx));
     nP = peers.reduce((a, p) => a + p.nBase, 0);
-    peerIdx = (nP * peerRaw + PARAMS.kPeer * 1) / (nP + PARAMS.kPeer);
+    const kEff = PARAMS.kPeer * Math.pow(Math.max(1, PARAMS.peerCountRef / peers.length), 2);
+    peerIdx = (nP * peerRaw + kEff) / (nP + kEff);
   }
   // 자사 이력
   const own = ownIndex(inputs, w);
-  const ownOk = own !== null && own.nBase >= PARAMS.minOwnAirings && own.idx > 0;
+  const ownOk = !options.ignoreOwnHistory && own !== null && own.nBase >= PARAMS.minOwnAirings && own.idx > 0;
 
   let contentIdx: number | null = null;
   let caseType: CaseType = "NONE";
@@ -323,7 +334,7 @@ export function predictSlot(inputs: SimInputs, target: string, slot: string, cal
     caseType = "PEER";
   }
 
-  Object.assign(base, { caseType, peerIdxRaw: peerRaw, peerIdx, peerCount: peers.length, peerAirings: nP, ownIdx: ownOk ? own!.idx : null, ownN: own?.nBase ?? 0, ownWeight, contentIdx });
+  Object.assign(base, { caseType, peerIdxRaw: peerRaw, peerIdx, peerCount: peers.length, peerAirings: nP, ownIdx: ownOk ? own!.idx : null, ownN: options.ignoreOwnHistory ? 0 : own?.nBase ?? 0, ownWeight, contentIdx });
   if (contentIdx === null) {
     base.status = "INSUFFICIENT_EVIDENCE";
     notes.push("같은 콘텐츠의 비교 가능한 방영 데이터가 부족해 예측값을 내지 않습니다.");
@@ -333,10 +344,23 @@ export function predictSlot(inputs: SimInputs, target: string, slot: string, cal
   const prediction = baseline.mean * contentIdx;
   base.prediction = prediction;
 
+  return withInterval(base, target, calibration);
+}
+
+/** 점 예측에 보정 구간·신뢰도를 입힌다. 백테스트는 이 함수에 "그 시점까지의 보정"만 넘겨 walk-forward 로 검증한다. */
+export function withInterval(point: SlotPrediction, target: string, calibration: CalibrationRow[]): SlotPrediction {
+  const base: SlotPrediction = { ...point, low: null, high: null, intervalLevel: null, scenario: null, calibrationN: null, calibrationMaeLog: null, confidence: "INSUFFICIENT", confidenceReasons: [], notes: point.notes.filter((n) => !n.startsWith("과거 예측 오차")) };
+  const { notes, baseline, caseType, prediction } = base;
+  if (prediction === null || baseline === null) return base;
+  const own = { nBase: base.ownN };
+  const peers = { length: base.peerCount };
+  const nP = base.peerAirings;
   // 구간: 백테스트 잔차 분위수(임의 ±% 아님). 보정이 없으면 구간·신뢰도 상한을 둔다.
   const scen = scenarioOf(String(target), caseType, prediction);
   const cal = pickCalibration(calibration, scen);
   base.scenario = cal?.scenario ?? scen.base;
+  base.calibrationN = cal?.n ?? null;
+  base.calibrationMaeLog = cal?.mae_log ?? null;
   if (cal && cal.q10 !== null && cal.q90 !== null) {
     const eps = PARAMS.logEps;
     base.low = Math.max(0, (prediction + eps) * Math.exp(cal.q10) - eps);
@@ -350,15 +374,15 @@ export function predictSlot(inputs: SimInputs, target: string, slot: string, cal
   const reasons: string[] = [];
   let conf: Confidence = "LOW";
   const calMae = cal?.mae_log ?? null;
-  const strongOwn = (caseType === "OWN" || caseType === "OWN_PEER") && (own?.nBase ?? 0) >= 24;
-  const okOwn = (caseType === "OWN" || caseType === "OWN_PEER") && (own?.nBase ?? 0) >= 8;
+  const strongOwn = (caseType === "OWN" || caseType === "OWN_PEER") && (own.nBase) >= 24;
+  const okOwn = (caseType === "OWN" || caseType === "OWN_PEER") && (own.nBase) >= 8;
   const okPeer = caseType === "PEER" && peers.length >= 3 && nP >= 48;
   if (strongOwn && calMae !== null && calMae <= 0.3 && baseline.level === 0) {
     conf = "HIGH";
-    reasons.push(`당사 채널 방영 ${own!.nBase}회 이력`, `같은 유형 과거 예측 오차(로그 MAE) ${calMae.toFixed(2)}`);
+    reasons.push(`당사 채널 방영 ${own.nBase}회 이력`, `같은 유형 과거 예측 오차(로그 MAE) ${calMae.toFixed(2)}`);
   } else if ((okOwn || okPeer) && calMae !== null && calMae <= 0.45 && baseline.level <= 1) {
     conf = "MEDIUM";
-    reasons.push(okOwn ? `당사 채널 방영 ${own!.nBase}회 이력` : `비교 채널 ${peers.length}곳·${nP}회`);
+    reasons.push(okOwn ? `당사 채널 방영 ${own.nBase}회 이력` : `비교 채널 ${peers.length}곳·${nP}회`);
   } else {
     if (cal === null) reasons.push("같은 유형의 백테스트 보정이 없음");
     if (caseType === "PEER" && peers.length < 3) reasons.push(`비교 채널 ${peers.length}곳뿐`);
