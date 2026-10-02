@@ -25,6 +25,8 @@ export async function GET(request: Request) {
   if (!channelCode) return NextResponse.json({ ok: false, message: "channel 파라미터가 필요합니다." }, { status: 400 });
   const week = params.get("week") ?? mondayOf(new Date().toISOString().slice(0, 10));
   const forceUpload = params.get("view") === "upload";
+  // ?view=db: 업로드가 있어도 시청률 DB만으로 자동 구성(업로드 회차·태그를 덧붙이지 않음)
+  const forceDb = params.get("view") === "db";
 
   // 사용자 지시(2026-09-23): "우측의 경쟁사 채널 편성표도 다운로드 및 인쇄 가능하도록" — 지금까지
   // 이 라우트는 우리 채널 코드만 다뤘다(경쟁채널 코드로 오면 channels 테이블 조회가 실패해 400).
@@ -54,7 +56,7 @@ export async function GET(request: Request) {
   let source: ScheduleGridSource;
   let rows: ScheduleGridSourceRow[];
   try {
-    ({ source, rows } = await getScheduleGridRows(channel.id, channelCode, channel.primary_target, week, { forceUpload }));
+    ({ source, rows } = await getScheduleGridRows(channel.id, channelCode, channel.primary_target, week, { forceUpload, forceDb }));
   } catch (e) {
     return NextResponse.json({ ok: false, message: e instanceof Error ? e.message : "조회 중 오류가 발생했습니다." }, { status: 500 });
   }

@@ -1287,22 +1287,6 @@ function ChannelStatusCard({ channels, narrativeSignals }: { channels: Map<strin
             눌렀을 때는 ENA가 기본으로 나오면 되고" — 처음엔 페이지 상단 아이콘 그룹에 넣었다가,
             "오늘의 시청률" 카드 자체의 우측 상단으로 옮긴다. 1페이지는 특정 채널 컨텍스트가 없는
             포트폴리오 화면이라 기본 채널을 ENA로 고정하고, 새 탭으로 열어 조회 흐름을 끊지 않는다. */}
-        <div className="flex items-center gap-2">
-        <Link
-          href="/schedule-grid?channel=ENA"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3" y="4" width="8" height="16" rx="1.5" />
-            <rect x="13" y="4" width="8" height="16" rx="1.5" />
-            <line x1="6" y1="9" x2="8" y2="9" />
-            <line x1="16" y1="9" x2="18" y2="9" />
-          </svg>
-          주간 비교
-        </Link>
-        </div>
       </div>
       <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-12">
         {ena && (
@@ -5251,6 +5235,22 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
             )}
             {/* 사용자 지시(2026-09-30): 이상적 편성 버튼을 카드 안이 아니라 페이지 상단 skyUHD 우측으로 옮기고 이름을
                 "시청률 자판기"로. 1페이지는 특정 채널 컨텍스트가 없어 ENA 기본, 새 탭으로 열어 조회 흐름을 끊지 않는다. */}
+            {/* 사용자 지시(2026-10-02): 주간 비교를 "오늘의 시청률" 카드 우측 상단에서 페이지 상단 skyUHD 오른쪽·시청률 자판기 왼쪽으로 옮김.
+                (원래 지시 2026-09-22: 1페이지에서는 ENA 기본, 새 탭으로 열어 조회 흐름을 끊지 않음) */}
+            <Link
+              href="/schedule-grid?channel=ENA"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-sm font-medium text-zinc-600 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-800"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="8" height="16" rx="1.5" />
+                <rect x="13" y="4" width="8" height="16" rx="1.5" />
+                <line x1="6" y1="9" x2="8" y2="9" />
+                <line x1="16" y1="9" x2="18" y2="9" />
+              </svg>
+              주간 비교
+            </Link>
             <Link
               href="/ideal-schedule?channel=ENA"
               target="_blank"

@@ -130,7 +130,9 @@ export function ScheduleWeekGrid({
   // 서버가 항상 알려주는 값이라, 지금 기본(DB+업로드 보강)을 보고 있어도 원본으로 전환할 수
   // 있는지 판단할 수 있다.
   const [hasUpload, setHasUpload] = useState(false);
-  const [forceUpload, setForceUpload] = useState(false);
+  // 업로드가 있을 때 보는 방식: 기본(DB+업로드 보강) / DB 시청률로 자동 구성 / 업로드 원본 그대로
+  const [viewMode, setViewMode] = useState<"default" | "db" | "upload">("default");
+  const forceUpload = viewMode === "upload";
   // 사용자 지시(2026-09-20): "OLIFE는 네이버 메일함을 통해서나 직접 업로드를 통해서 회차와
   // 부제 정보를 획득... 그것들도 편성표에 반영해줘" — 업로드가 없어도 EPG 매칭으로 회차·부제가
   // 채워진 채널(현재 OLIFE)이 있어, "부제·회차 없음" 배지가 잘못 뜨지 않도록 구분해둔다.
@@ -210,7 +212,7 @@ export function ScheduleWeekGrid({
   useEffect(() => {
     setRows(null);
     setSource(null);
-    const query = `${effectiveWeek ? `&week=${effectiveWeek}` : ""}${forceUpload ? "&view=upload" : ""}`;
+    const query = `${effectiveWeek ? `&week=${effectiveWeek}` : ""}${viewMode === "upload" ? "&view=upload" : viewMode === "db" ? "&view=db" : ""}`;
     fetch(`${apiBase}/data?channel=${encodeURIComponent(channelCode)}${query}`)
       .then((r) => r.json())
       .then((body) => {
@@ -227,7 +229,7 @@ export function ScheduleWeekGrid({
         if (body.ok && body.week && body.weekEnd) setResolvedWeek({ week: body.week, weekEnd: body.weekEnd });
       })
       .catch(() => setRows([]));
-  }, [apiBase, channelCode, effectiveWeek, forceUpload, reloadKey]);
+  }, [apiBase, channelCode, effectiveWeek, viewMode, reloadKey]);
 
   if (rows === null || !resolvedWeek) return <p className="text-sm text-zinc-400">불러오는 중...</p>;
 
@@ -328,10 +330,17 @@ export function ScheduleWeekGrid({
             </span>
           ) : null}
           {hasUpload && (
-            <label className="flex cursor-pointer items-center gap-1 text-[10px] text-zinc-400 print:hidden">
-              <input type="checkbox" checked={forceUpload} onChange={(e) => setForceUpload(e.target.checked)} className="h-3 w-3 rounded border-zinc-300" />
-              업로드 원본 그대로 보기
-            </label>
+            <>
+              {/* 사용자 지시(2026-10-02): 업로드가 있어도 시청률 DB만으로 구성한 모습을 볼 수 있게 "DB 시청률로 자동 구성" 선택을 왼쪽에 둔다. 둘 중 하나만 켜진다. */}
+              <label className="flex cursor-pointer items-center gap-1 text-[10px] text-zinc-400 print:hidden">
+                <input type="checkbox" checked={viewMode === "db"} onChange={(e) => setViewMode(e.target.checked ? "db" : "default")} className="h-3 w-3 rounded border-zinc-300" />
+                DB 시청률로 자동 구성
+              </label>
+              <label className="flex cursor-pointer items-center gap-1 text-[10px] text-zinc-400 print:hidden">
+                <input type="checkbox" checked={viewMode === "upload"} onChange={(e) => setViewMode(e.target.checked ? "upload" : "default")} className="h-3 w-3 rounded border-zinc-300" />
+                업로드 원본 그대로 보기
+              </label>
+            </>
           )}
         </div>
         {/* 사용자 지시(2026-09-23): "우측의 경쟁사 채널 편성표도 다운로드 및 인쇄 가능하도록" —
@@ -342,7 +351,7 @@ export function ScheduleWeekGrid({
         {showExport && rows.length > 0 && (
           <div className="flex shrink-0 items-center gap-1 print:hidden">
             <a
-              href={`${apiBase}/export?channel=${encodeURIComponent(channelCode)}&week=${resolvedWeek.week}${forceUpload ? "&view=upload" : ""}`}
+              href={`${apiBase}/export?channel=${encodeURIComponent(channelCode)}&week=${resolvedWeek.week}${viewMode === "upload" ? "&view=upload" : viewMode === "db" ? "&view=db" : ""}`}
               title="엑셀 다운로드"
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-300 text-zinc-500 hover:bg-zinc-50"
             >

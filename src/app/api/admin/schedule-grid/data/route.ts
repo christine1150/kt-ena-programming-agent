@@ -24,6 +24,8 @@ export async function GET(request: Request) {
   const channelCode = params.get("channel");
   const week = params.get("week");
   const forceUpload = params.get("view") === "upload";
+  // ?view=db: 업로드가 있어도 시청률 DB만으로 자동 구성(업로드 회차·태그를 덧붙이지 않음)
+  const forceDb = params.get("view") === "db";
   if (!channelCode || !week) return NextResponse.json({ ok: false, message: "channel, week 파라미터가 필요합니다." }, { status: 400 });
 
   const { data: channel } = await supabase.from("channels").select("id, name, theme_color, primary_target").eq("code", channelCode).maybeSingle();
@@ -31,7 +33,7 @@ export async function GET(request: Request) {
 
   try {
     const [{ source, rows, hasUpload, hasEpgData }, channelAnnualAvgRating, dailyStats] = await Promise.all([
-      getScheduleGridRows(channel.id, channelCode, channel.primary_target, week, { forceUpload }),
+      getScheduleGridRows(channel.id, channelCode, channel.primary_target, week, { forceUpload, forceDb }),
       getChannelAnnualAvgRating(channel.id, channel.primary_target),
       getChannelDailyStatsForWeek(channel.id, channel.primary_target, week),
     ]);

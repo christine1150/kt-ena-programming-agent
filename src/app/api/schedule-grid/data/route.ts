@@ -31,6 +31,8 @@ export async function GET(request: Request) {
   if (!channelCode) return NextResponse.json({ ok: false, message: "channel 파라미터가 필요합니다." }, { status: 400 });
   const week = params.get("week") ?? mondayOf(new Date().toISOString().slice(0, 10));
   const forceUpload = params.get("view") === "upload";
+  // ?view=db: 업로드가 있어도 시청률 DB만으로 자동 구성(업로드 회차·태그를 덧붙이지 않음)
+  const forceDb = params.get("view") === "db";
 
   // 사용자 지시(2026-09-22): "우리가 분석 가능한 모든 경쟁채널을 선택할 수 있게" — 경쟁채널
   // 코드(COMPETITOR::이름)면 우리 채널 조회 경로 대신 경쟁채널 전용 조회로 분기한다. 업로드
@@ -66,7 +68,7 @@ export async function GET(request: Request) {
 
   try {
     const [{ source, rows, hasUpload, hasEpgData }, channelAnnualAvgRating, dailyStats] = await Promise.all([
-      getScheduleGridRows(channel.id, channelCode, channel.primary_target, week, { forceUpload }),
+      getScheduleGridRows(channel.id, channelCode, channel.primary_target, week, { forceUpload, forceDb }),
       getChannelAnnualAvgRating(channel.id, channel.primary_target),
       getChannelDailyStatsForWeek(channel.id, channel.primary_target, week),
     ]);

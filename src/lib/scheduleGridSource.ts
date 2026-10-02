@@ -187,7 +187,8 @@ export async function getScheduleGridRows(
   week: string,
   // 사용자 지시(2026-09-20): "업로드 원본 그대로 보기" 옵션 — 기본은 DB 기반(+업로드 메타데이터
   // 보강)이고, 이걸 켰을 때만 업로드 파일 원본 그리드를 그대로 쓴다.
-  options?: { forceUpload?: boolean }
+  // forceDb(사용자 지시 2026-10-02): 업로드가 있어도 업로드 회차·태그를 덧붙이지 않고 시청률 DB만으로 구성
+  options?: { forceUpload?: boolean; forceDb?: boolean }
 ): Promise<{ source: ScheduleGridSource; rows: ScheduleGridSourceRow[]; hasUpload: boolean; hasEpgData: boolean }> {
   // 사용자 지시(2026-09-22): "편성표를 올린 것과 DB 기반이 많이 상이하고 매칭이 안 되는
   // 문제" — 원인 중 하나는 match_schedule_grid_ratings가 "업로드 시점"에만 한 번 실행돼,
@@ -270,7 +271,7 @@ export async function getScheduleGridRows(
     return (h < 2 ? h + 24 : h) * 60 + m;
   };
   const uploadsByKey = new Map<string, { start: number; meta: UploadMeta }[]>();
-  if (hasUpload) {
+  if (hasUpload && !options?.forceDb) {
     for (const u of uploadedRows!) {
       if (!u.matched_program_id) continue;
       const key = `${u.dow}__${u.matched_program_id}`;
@@ -346,7 +347,7 @@ export async function getScheduleGridRows(
     const upload = uploadForDbRow.get(rowIdx);
     return (upload?.episode_number ?? r.episode_number) !== null || (upload?.episode_subtitle ?? r.episode_subtitle) !== null;
   });
-  return { source: hasUpload ? "db+upload" : "db", rows, hasUpload, hasEpgData: hasEpisodeInfo };
+  return { source: hasUpload && !options?.forceDb ? "db+upload" : "db", rows, hasUpload, hasEpgData: hasEpisodeInfo };
 }
 
 export type ScheduleGridUploadResult = {
