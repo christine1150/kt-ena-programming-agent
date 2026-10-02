@@ -9,6 +9,7 @@ import { useEffect, useId, useState } from "react";
 import { NARRATIVE_UP_COLOR } from "@/lib/highlightNarrative";
 // 시간축·색 계산은 이상적 1주일 편성 화면과 공유하도록 scheduleGridLayout.ts로 옮김(2026-09-30, 동작 동일)
 import {
+  DAY_HEAD_PX,
   DOW_LABELS,
   GRID_END_MIN,
   GRID_HEIGHT,
@@ -55,6 +56,16 @@ function extractEpisodeTag(tags: string | null): { episode: string | null } {
   if (!tags) return { episode: null };
   const m = tags.match(/^(\d+)회/);
   return { episode: m ? m[1] : null };
+}
+// 업로드 편성표의 태그("273회 [초][본][H][15]")에서 대괄호 표시만 뽑아 엑셀처럼 작은 칩으로 보여준다.
+// 숫자는 시청 연령(12·15·19), H는 HD, 나머지(자·수·재·해·초·본 등)는 원문 그대로.
+type TagChip = { text: string; kind: "age" | "hd" | "tag" };
+function parseTagChips(tags: string | null): TagChip[] {
+  if (!tags) return [];
+  return [...tags.matchAll(/\[([^\]]+)\]/g)].map((m): TagChip => {
+    const text = m[1].trim();
+    return { text, kind: /^\d+$/.test(text) || text === "ALL" ? "age" : text === "H" ? "hd" : "tag" };
+  });
 }
 // 사용자 지시(2026-09-22): "그라데이션 색도 바로 인쇄 가능하게" + "높은 시청률은 채널 로고
 // 색보다 좀 더 진한색 + 흰글씨까지 나오게 단계를 더 나눠줘" — 기존엔 themeColor에 알파값만
@@ -361,12 +372,12 @@ export function ScheduleWeekGrid({
       ) : (
         <div className="overflow-x-auto rounded-xl ring-1 ring-zinc-100">
           <div className="flex" style={{ minWidth: 560 }}>
-            <div className="relative w-10 shrink-0 bg-zinc-50 pt-5" style={{ height: GRID_HEIGHT + 20 }}>
+            <div className="relative w-10 shrink-0 bg-zinc-50" style={{ height: GRID_HEIGHT + DAY_HEAD_PX }}>
               {HOUR_TICKS.map((h) => (
                 <div
                   key={h}
                   className="absolute left-0 right-1 text-right text-[9px] text-zinc-400"
-                  style={{ top: (h * 60 - GRID_START_MIN) * PX_PER_MIN + 20 - 5 }}
+                  style={{ top: (h * 60 - GRID_START_MIN) * PX_PER_MIN + DAY_HEAD_PX - 5 }}
                 >
                   {h}시
                 </div>
@@ -387,7 +398,7 @@ export function ScheduleWeekGrid({
                 dayStat.rating > channelAnnualAvgRating;
               return (
                 <div key={dow} className="min-w-0 flex-1 border-l border-zinc-100">
-                  <div className="bg-zinc-50 py-1 text-center">
+                  <div className="flex flex-col items-center justify-center overflow-hidden bg-zinc-50 text-center" style={{ height: DAY_HEAD_PX }}>
                     <div className={`text-[11px] font-medium ${label === "토" ? "text-blue-500" : label === "일" ? "text-rose-500" : "text-zinc-500"}`}>{label}</div>
                     <div className="text-[9px] text-zinc-400">{dayDate?.slice(5) ?? ""}</div>
                     {dayStat && dayStat.rating !== null && (
@@ -436,70 +447,88 @@ export function ScheduleWeekGrid({
                       const decimals = channelCode === "SKYUHD" ? 4 : 3;
                       const { title, subtitle } = splitProgramTitleSubtitle(r.program_name_raw);
                       const { episode } = extractEpisodeTag(r.tags);
-                      // 부제 줄은 세로 공간이 실제로 있을 때만 보여준다(대략 1시간 블록부터).
-                      // 그보다 좁은 칸은 제목+회차 배지+시청률만으로도 22px 최소 높이가 빠듯해,
-                      // 부제까지 넣으면 서로 겹친다.
-                      const showSubtitleLine = subtitle !== null && height >= 34;
+                      const chips = parseTagChips(r.tags);
+                      const isFirstRun = chips.some((c) => c.text === "초") && chips.some((c) => c.text === "본");
+                      const startMinute = r.start_time.slice(3, 5);
+                      // 엑셀 편성표와 같은 칸 구성(사용자 지시 2026-10-02): 윗줄 왼쪽에 시작 분(파랑), 오른쪽에 태그, 가운데 제목,
+                      // 맨 아래 "회차(부제)". 높이가 모자라면 아래 줄부터 순서대로 뺀다.
+                      const showTopRow = height >= 30;
+                      const bottomText = episode ? `${episode}(${subtitle ?? `${episode}회`})` : subtitle ? `(${subtitle})` : null;
+                      const showBottomLine = bottomText !== null && height >= 46;
                       return (
                         <div
                           key={`${r.start_time}-${ri}`}
-                          className="absolute left-0 right-0 overflow-hidden border-b border-white px-1"
-                          style={{ top, height, backgroundColor: bg, outline: "1px solid rgba(0,0,0,0.05)" }}
+                          className="absolute left-0 right-0 overflow-hidden border-b border-white px-0.5"
+                          style={{
+                            top,
+                            height,
+                            backgroundColor: bg,
+                            outline: "1px solid rgba(0,0,0,0.05)",
+                            // 첫 방송(초·본)은 엑셀처럼 분홍으로 구분 — 시청률 색은 그대로 두고 왼쪽 띠로만 표시
+                            boxShadow: isFirstRun ? "inset 3px 0 0 #f472b6" : undefined,
+                          }}
                           title={`${label} ${r.start_time.slice(0, 5)}~${r.end_time ? r.end_time.slice(0, 5) : "?"} ${r.program_name_raw}${r.tags ? ` ${r.tags}` : ""} — ${rating !== null ? rating.toFixed(decimals) : "매칭 안 됨"}`}
                         >
                           {height >= 22 ? (
-                            <div className="flex h-full flex-col items-center justify-center gap-0.5 leading-tight">
-                              {/* 사용자 지시(2026-09-23): 회차는 제목과 구분되는 작은 배지로,
-                                  부제는 제목 아래 옅은 글씨로 — 이 파일의 기존 "0시청률은 항상
-                                  작게" 관행처럼, 있을 때만 나타나고 배경 밝기(isDark)에 맞춰
-                                  자동으로 흰/짙은 색을 오가도록 nameColor를 그대로 재사용한다. */}
-                              <div className="flex w-full min-w-0 items-baseline justify-center gap-1 px-0.5">
-                                {episode && (
-                                  <span
-                                    className="shrink-0 rounded px-1 text-[7.5px] font-semibold leading-tight"
-                                    style={{ backgroundColor: isDark ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.08)", color: nameColor }}
-                                  >
-                                    {episode}회
+                            <div className="flex h-full flex-col leading-tight">
+                              {showTopRow && (
+                                <div className="flex shrink-0 items-start justify-between gap-0.5 pt-px leading-none">
+                                  <span className="text-[8px] font-semibold tabular-nums" style={{ color: isDark ? "#bfdbfe" : "#2563eb" }}>
+                                    {startMinute}
                                   </span>
-                                )}
-                                <span className="min-w-0 flex-1 truncate text-center text-[9.5px] font-medium" style={{ color: nameColor }}>
+                                  <span className="flex min-w-0 shrink items-center justify-end gap-px overflow-hidden">
+                                    {chips.map((c, ci) => (
+                                      <span
+                                        key={ci}
+                                        className="shrink-0 rounded-[2px] px-[2px] text-[6.5px] font-bold leading-[9px]"
+                                        style={
+                                          c.kind === "age"
+                                            ? { color: "#ea580c", border: "1px solid #fdba74", backgroundColor: "#fff" }
+                                            : c.kind === "hd"
+                                              ? { color: "#fff", backgroundColor: "#18181b" }
+                                              : { color: "#18181b", backgroundColor: "#fde047" }
+                                        }
+                                      >
+                                        {c.text}
+                                      </span>
+                                    ))}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden">
+                                <span
+                                  className={`w-full text-center text-[9.5px] font-medium leading-[1.15] ${height >= 40 ? "line-clamp-2" : "truncate"}`}
+                                  style={{ color: nameColor }}
+                                >
                                   {title}
                                 </span>
+                                {rating !== null ? (
+                                  // 사용자 지시(2026-09-20): "시청률이 잘 보이게 아주 큰 글씨, 가운데 정렬. 평균 이상이면
+                                  // 볼드. 0이면 0.000 대신 0으로, 회색 글씨." 재지시: "0은 좀 더 작게" — 0은 칸 크기와
+                                  // 무관하게 항상 작은 고정 크기. 재지시(2026-09-22): 배경이 진해지면(isDark) 글자색은 흰색.
+                                  <span
+                                    className={`w-full text-center leading-none ${isZero ? "font-normal" : boldThreshold !== null && rating >= boldThreshold ? "font-bold" : "font-normal"}`}
+                                    style={{ fontSize: isZero ? "10px" : `${Math.min(16, Math.max(10, height / 3.2))}px`, color: ratingColor }}
+                                  >
+                                    {isZero ? "0" : rating.toFixed(decimals)}
+                                  </span>
+                                ) : (
+                                  <span className="w-full truncate text-center text-[9px]" style={{ color: isDark ? "#ffffff" : "#71717a" }}>
+                                    매칭 안 됨
+                                  </span>
+                                )}
                               </div>
-                              {showSubtitleLine && (
-                                <span className="w-full truncate text-center text-[8px] leading-tight" style={{ color: nameColor, opacity: isDark ? 0.85 : 0.65 }}>
-                                  {subtitle}
-                                </span>
-                              )}
-                              {rating !== null ? (
-                                // 사용자 지시(2026-09-20): "시청률이 잘 보이게 아주 큰 글씨, 가운데
-                                // 정렬. 평균 이상이면 볼드. 0이면 0.000 대신 0으로, 회색 글씨."
-                                // 재지시: "0은 좀 더 작게" — 실제 값과 시각적 비중이 같으면
-                                // 오히려 눈에 띄어 방해가 되므로, 0은 칸 크기와 무관하게 항상
-                                // 작은 고정 크기로 표시한다. 재지시(2026-09-22): 배경이 진해지면
-                                // (isDark) 글자색을 흰색으로 바꿔 대비를 유지한다.
-                                <span
-                                  className={`w-full text-center leading-none ${isZero ? "font-normal" : boldThreshold !== null && rating >= boldThreshold ? "font-bold" : "font-normal"}`}
-                                  style={{ fontSize: isZero ? "10px" : `${Math.min(16, Math.max(10, height / 3))}px`, color: ratingColor }}
-                                >
-                                  {isZero ? "0" : rating.toFixed(decimals)}
-                                </span>
-                              ) : (
-                                <span className="w-full truncate text-center text-[9px]" style={{ color: isDark ? "#ffffff" : "#71717a" }}>
-                                  매칭 안 됨
+                              {showBottomLine && (
+                                <span className="w-full shrink-0 truncate pb-px text-center text-[7.5px] leading-tight" style={{ color: nameColor, opacity: isDark ? 0.85 : 0.65 }}>
+                                  {bottomText}
                                 </span>
                               )}
                             </div>
                           ) : height >= 8 ? (
-                            // 사용자 지시(2026-09-22): "칸이 좁아서 시청률이 안 나오는 곳은 한줄로라도
-                            // 나오게" — 30분 이하 짧은 프로그램은 이름+시청률을 나눠 쌓을 세로 공간이
-                            // 없으므로, 한 줄에 "프로그램명 시청률"을 이어 붙이고 넘치면 말줄임한다.
+                            // 사용자 지시(2026-09-22): "칸이 좁아서 시청률이 안 나오는 곳은 한줄로라도 나오게" — 30분 이하
+                            // 짧은 프로그램은 이름+시청률을 한 줄에 이어 붙이고 넘치면 말줄임한다. 제목만 써서(부제 제외)
+                            // 제목이 잘리지 않게 하고, 회차는 짧은 접두어로만 붙인다.
                             <div className="flex h-full items-center justify-center overflow-hidden">
-                              {/* 사용자 지시(2026-09-23): 좁은 칸은 부제까지 넣을 세로 공간이
-                                  없으니 그대로 두되, 예전처럼 program_name_raw(제목+부제 통짜
-                                  문자열)를 넣으면 부제가 붙는 순간 제목까지 잘려나갔다. 여기서는
-                                  분리한 title만 써서 최소한 제목은 온전히 보이게 하고, 회차는
-                                  짧은 접두어로만 붙인다(넘치면 기존과 동일하게 truncate됨). */}
                               <span className="w-full truncate text-center text-[8.5px] leading-none" style={{ color: nameColor }}>
                                 {episode && `${episode}회 `}
                                 {title}

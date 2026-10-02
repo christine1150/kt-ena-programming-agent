@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ScheduleWeekGrid } from "@/components/ScheduleWeekGrid";
 import { ChannelLogo } from "@/components/ChannelLogo";
+import { ScheduleUploadSlot, type UploadedSchedule } from "@/components/ScheduleUploadSlot";
 
 type Week = { weekStart: string; weekEnd: string; hasUpload: boolean };
 type ChannelOption = {
@@ -45,6 +46,8 @@ function ScheduleComparisonInner() {
   const [allCompetitors, setAllCompetitors] = useState<CompetitorOption[]>([]);
   const [left, setLeft] = useState<SideState>(EMPTY_SIDE);
   const [right, setRight] = useState<SideState>(EMPTY_SIDE);
+  // 업로드 직후 편성표를 다시 불러오게 하는 값(ScheduleWeekGrid reloadKey)
+  const [reloadKey, setReloadKey] = useState(0);
 
   // 사용자 지시(2026-09-22): "같은 채널로 비교하는 것을 기본값으로" — URL의 channel이 바뀌면
   // (Page 2의 "주간 비교" 링크로 새로 들어오거나, 아래 최상단 드롭다운으로 전환했을 때) 좌/우
@@ -80,6 +83,32 @@ function ScheduleComparisonInner() {
         });
       })
       .catch(() => setSide((prev) => ({ ...prev, loaded: true })));
+  }
+
+  // 사용자 지시(2026-10-02): 이 화면에서 실제 편성표를 올리면 — 올린 채널을 보고 있는 쪽의 주 목록을 갱신하고(고른 주는 유지),
+  // 올린 주가 어느 쪽에도 안 보이면 오른쪽에 그 주를 띄워 바로 확인하게 한다. 그리드는 reloadKey로 다시 불러온다.
+  function handleUploaded(done: UploadedSchedule[]) {
+    const refresh = (side: SideState, setSide: Dispatch<SetStateAction<SideState>>, isRight: boolean) => {
+      if (!side.channelCode) return;
+      const mine = done.filter((d) => d.channelCode === side.channelCode);
+      if (!mine.length) return;
+      fetch(`/api/schedule-grid/weeks?channel=${encodeURIComponent(side.channelCode)}`)
+        .then((r) => r.json())
+        .then((body) => {
+          if (!body.ok) return;
+          const ws: Week[] = body.weeks ?? [];
+          setSide((prev) => {
+            const uploadedWeek = mine[mine.length - 1].weekStart;
+            const shown = [left.week, right.week];
+            const week = isRight && !shown.includes(uploadedWeek) && ws.some((w) => w.weekStart === uploadedWeek) ? uploadedWeek : prev.week;
+            return { ...prev, weeks: ws, week };
+          });
+        })
+        .catch(() => {});
+    };
+    refresh(left, setLeft, false);
+    refresh(right, setRight, true);
+    setReloadKey((k) => k + 1);
   }
 
   // 사용자 지시(2026-09-22): "기본 조건은 왼쪽에 지난주, 오른쪽이 이번주로 뜨게" — 기존엔
@@ -156,6 +185,7 @@ function ScheduleComparisonInner() {
               <p className="text-sm text-zinc-500">기본은 같은 채널의 두 주 비교이며, 좌우 각각 채널·기간을 따로 바꿀 수 있습니다.</p>
             </div>
           </div>
+          <ScheduleUploadSlot onUploaded={handleUploaded} />
           {/* Page 1 상단과 동일한 원형 로고 링크 — 지금 보고 있는 채널도 포함해 7개 모두의
               Page 2로 바로 이동할 수 있게 한다. */}
           <div className="flex items-center gap-1.5">
@@ -213,6 +243,7 @@ function ScheduleComparisonInner() {
                   week={side.week}
                   weekEnd={side.weeks.find((w) => w.weekStart === side.week)?.weekEnd ?? ""}
                   themeColor={side.themeColor}
+                  reloadKey={reloadKey}
                 />
               )}
             </div>

@@ -10,6 +10,9 @@ export const PX_PER_MIN = 0.6; // 1440분 * 0.6 = 864px — 실제 길이 비례
 export const GRID_HEIGHT = (GRID_END_MIN - GRID_START_MIN) * PX_PER_MIN;
 export const HOUR_PX = 60 * PX_PER_MIN;
 export const HOUR_TICKS = Array.from({ length: 24 }, (_, i) => 2 + i);
+// 요일·날짜·시청률을 담는 머리줄 높이. 왼쪽 시간축도 같은 높이만큼 띄워야 눈금이 블록 위치와 맞는다
+// (사용자 지적 2026-10-02: 라디오스타 18:05 시작이 19시처럼 보임 — 머리줄 55px인데 시간축은 20px만 띄웠던 오류).
+export const DAY_HEAD_PX = 56;
 
 export function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "");

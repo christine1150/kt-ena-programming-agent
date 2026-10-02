@@ -260,24 +260,63 @@ export async function getScheduleGridRows(
   // "매칭"되기만 하면 무조건 그 업로드 이름·태그만 쓰고 EPG(ratings.episode_number/subtitle)
   // 쪽에 있을 수 있는 값은 통째로 버려지고 있었다. 이제 제목은 업로드가 있으면 업로드 쪽을
   // 우선하되(태그가 더 풍부), 회차·부제는 "업로드에 있으면 업로드, 없으면 EPG"로 합성한다.
-  const uploadByDowAndProgram = new Map<string, { program_name_raw: string; tags: string | null; episode_number: number | null; episode_subtitle: string | null }>();
+  // 사용자 지시(2026-10-02, ENA Play 09-28주 확인): 같은 요일에 같은 프로그램이 여러 번 나오면(나는 SOLO 272회·273회,
+  // 신병4 11회·12회 등) "요일+프로그램" 첫 건만 쓰던 매칭이 모든 방영에 같은 회차·태그를 붙였다. 같은 요일·같은 프로그램
+  // 안에서 시작 시각이 가장 가까운 것끼리 1:1로 짝짓는다(60분 넘게 벌어지면 짝짓지 않음, 양쪽이 하나씩뿐이면 그대로 짝).
+  type UploadMeta = { program_name_raw: string; tags: string | null; episode_number: number | null; episode_subtitle: string | null };
+  const MATCH_WINDOW_MIN = 60;
+  const extMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return (h < 2 ? h + 24 : h) * 60 + m;
+  };
+  const uploadsByKey = new Map<string, { start: number; meta: UploadMeta }[]>();
   if (hasUpload) {
     for (const u of uploadedRows!) {
       if (!u.matched_program_id) continue;
       const key = `${u.dow}__${u.matched_program_id}`;
-      if (!uploadByDowAndProgram.has(key)) {
-        uploadByDowAndProgram.set(key, {
-          program_name_raw: u.program_name_raw,
-          tags: u.tags,
-          episode_number: u.episode_number,
-          episode_subtitle: u.episode_subtitle,
-        });
-      }
+      if (!uploadsByKey.has(key)) uploadsByKey.set(key, []);
+      uploadsByKey.get(key)!.push({
+        start: extMin(u.start_time),
+        meta: { program_name_raw: u.program_name_raw, tags: u.tags, episode_number: u.episode_number, episode_subtitle: u.episode_subtitle },
+      });
+    }
+  }
+  const dbIdxByKey = new Map<string, number[]>();
+  dbRows.forEach((r, i) => {
+    if (!r.program_id) return;
+    const key = `${r.dow}__${r.program_id}`;
+    if (!dbIdxByKey.has(key)) dbIdxByKey.set(key, []);
+    dbIdxByKey.get(key)!.push(i);
+  });
+  const uploadForDbRow = new Map<number, UploadMeta>();
+  for (const [key, idxs] of dbIdxByKey) {
+    const ups = uploadsByKey.get(key);
+    if (!ups) continue;
+    if (idxs.length === 1 && ups.length === 1) {
+      uploadForDbRow.set(idxs[0], ups[0].meta);
+      continue;
+    }
+    const pairs: { di: number; ui: number; diff: number }[] = [];
+    for (const di of idxs) {
+      const s = extMin(dbRows[di].start_time);
+      ups.forEach((u, ui) => {
+        const diff = Math.abs(u.start - s);
+        if (diff <= MATCH_WINDOW_MIN) pairs.push({ di, ui, diff });
+      });
+    }
+    pairs.sort((a, b) => a.diff - b.diff);
+    const usedDb = new Set<number>();
+    const usedUp = new Set<number>();
+    for (const p of pairs) {
+      if (usedDb.has(p.di) || usedUp.has(p.ui)) continue;
+      usedDb.add(p.di);
+      usedUp.add(p.ui);
+      uploadForDbRow.set(p.di, ups[p.ui].meta);
     }
   }
 
-  const rows: ScheduleGridSourceRow[] = dbRows.map((r) => {
-    const upload = r.program_id ? uploadByDowAndProgram.get(`${r.dow}__${r.program_id}`) : undefined;
+  const rows: ScheduleGridSourceRow[] = dbRows.map((r, rowIdx) => {
+    const upload = uploadForDbRow.get(rowIdx);
     // 사용자 지시(2026-09-20): "OLIFE는 네이버 메일함을 통해서나 직접 업로드를 통해서 회차와
     // 부제 정보를 획득... 그것들도 편성표에 반영해줘" — ratings.episode_number/episode_subtitle은
     // 이미 OLIFE EPG(일일운행표) 매칭으로 채워져 있는 값이다(새 매칭 로직 아님).
@@ -303,8 +342,8 @@ export async function getScheduleGridRows(
   // 올라간 파일)에도 "회차·부제 반영" 배지가 잘못 뜬다. 위에서 합성한 최종 결과(episodeNumber/
   // episodeSubtitle, 업로드+EPG 중 하나라도 있으면 값이 들어감) 기준으로 실제로 하나라도
   // 있었는지를 별도로 판정해, 화면 배지 문구가 실제 데이터와 어긋나지 않게 한다.
-  const hasEpisodeInfo = dbRows.some((r) => {
-    const upload = r.program_id ? uploadByDowAndProgram.get(`${r.dow}__${r.program_id}`) : undefined;
+  const hasEpisodeInfo = dbRows.some((r, rowIdx) => {
+    const upload = uploadForDbRow.get(rowIdx);
     return (upload?.episode_number ?? r.episode_number) !== null || (upload?.episode_subtitle ?? r.episode_subtitle) !== null;
   });
   return { source: hasUpload ? "db+upload" : "db", rows, hasUpload, hasEpgData: hasEpisodeInfo };
