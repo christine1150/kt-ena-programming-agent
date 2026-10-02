@@ -1,0 +1,29 @@
+name: 구매 추천 주간 갱신
+
+# 콘텐츠 구매 시뮬레이터의 구매 추천(채널 6개 × 기간 4개 = 24건)을 사전 계산해 DB(purchase_recommendations)에 저장한다.
+# 계산에 약 1시간이 걸려 Vercel 크론으로는 못 돌리므로 GitHub Actions 에서 매주 월요일 03:00(KST)에 실행한다.
+# 필요한 저장소 시크릿(Settings > Secrets and variables > Actions): NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# 한계: schedule 은 몇 분 지연될 수 있고, 60일 이상 커밋이 없으면 GitHub 가 예약 실행을 끈다(수동 재활성화 필요).
+# 닐슨 데이터가 더 쌓이면 다음 주 실행부터 반영된다. 즉시 갱신하려면 Actions 탭에서 수동 실행(workflow_dispatch).
+
+on:
+  schedule:
+    - cron: "0 18 * * 0" # 일요일 18:00 UTC = 월요일 03:00 KST
+  workflow_dispatch: {}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 구매 추천 갱신
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/refresh-purchase-recommendations.ts
