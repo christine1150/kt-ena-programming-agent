@@ -1,7 +1,7 @@
 // 구매 시뮬레이터 오케스트레이터: 질의 → 식별 → (타깃×슬롯) 예측 → 설명용 근거 조립 → 스냅샷 저장.
 // 계산은 전부 engine.ts(순수 함수)와 RPC가 하고, 이 파일은 호출 순서와 응답 조립만 한다.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchCompetition, fetchGroupMembers, fetchSimInputs, latestCompetitorDate, loadCalibration, type CompetitionRow } from "./dataSource";
+import { fetchChannelAnnualAvg, fetchCompetition, fetchGroupMembers, fetchSimInputs, latestCompetitorDate, loadCalibration, type CompetitionRow } from "./dataSource";
 import {
   MODEL_VERSION,
   PARAMS,
@@ -44,6 +44,7 @@ export interface TargetResult {
   rolling: RollingRow[];
   peers: PeerInfo[]; // 케이블 재방 피어(예측 근거)
   hubReference: PeerInfo[]; // 본방 허브(표시 전용, 예측에 쓰지 않음)
+  channelAnnualAvg: number | null; // 채널 최근 1년 평균 시청률(예상값이 이보다 낮으면 화면에서 붉게 표시)
   recommended: SlotPrediction[]; // 편성 추천 시간 TOP3(예상 시청률 높은 순, 경쟁 미반영)
   slots: (SlotPrediction & { isoDow: number; startTime: string; competition: CompetitionRow[] })[];
 }
@@ -102,10 +103,11 @@ export async function runPrediction(client: SupabaseClient, req: PredictRequest)
   const perTarget = await Promise.all(
     targets.map(async (target): Promise<TargetResult> => {
     // 예측은 기준 윈도우(91일) 하나만 조회해 빠르게 처리하고, 롤링 표는 요청 시에만 넓은 윈도우로 따로 조회한다.
-    const [inputs, calibration, rollInputs] = await Promise.all([
+    const [inputs, calibration, rollInputs, channelAnnualAvg] = await Promise.all([
       fetchSimInputs(client, { groupKeys: resolved.memberKeys, ownChannel, target, asOf, windows: [windowDays] }),
       loadCalibration(client, MODEL_VERSION, target),
       req.includeRolling ? fetchSimInputs(client, { groupKeys: resolved.memberKeys, ownChannel, target, asOf }) : Promise.resolve(null),
+      fetchChannelAnnualAvg(client, { ownChannel, target, asOf }),
     ]);
     const allPeers = peerIndexes(inputs, windowDays);
     const opt = { windowDays };
@@ -127,6 +129,7 @@ export async function runPrediction(client: SupabaseClient, req: PredictRequest)
       rolling: rollInputs ? rollingTable(rollInputs) : [],
       peers: allPeers.filter((p) => !p.isHub).sort((a, b) => b.nBase - a.nBase),
       hubReference: allPeers.filter((p) => p.isHub).sort((a, b) => b.nBase - a.nBase),
+      channelAnnualAvg,
       recommended: recommendSlots(inputs, target, calibration, opt).map(capConf),
       slots: slots,
     };

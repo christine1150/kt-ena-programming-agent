@@ -80,3 +80,11 @@ export async function fetchSimInputsMulti(
   if (error) throw new Error(`get_purchase_sim_inputs_multi 실패: ${error.message}`);
   return (data ?? {}) as Record<string, SimInputs>;
 }
+
+/** 채널의 최근 1년 평균 시청률(편성 단위). 데이터가 없으면 null. */
+export async function fetchChannelAnnualAvg(client: SupabaseClient, args: { ownChannel: string; target: string; asOf: string }): Promise<number | null> {
+  const { data, error } = await client.rpc("get_purchase_channel_avg", { p_own_channel_code: args.ownChannel, p_target: args.target, p_as_of: args.asOf });
+  if (error) return null;
+  const a = (data as { avg: number | null } | null)?.avg;
+  return a === null || a === undefined ? null : Number(a);
+}

@@ -2,7 +2,7 @@
 
 // 콘텐츠 구매 시뮬레이터 — 구매를 검토 중인 프로그램을 우리 채널의 특정 요일·시간에 편성했을 때의 예상 시청률.
 // 모든 수치는 서버(DB RPC + 결정론 엔진 src/lib/purchaseSim)가 계산한 값이고, 이 화면은 조건 입력·표시만 한다.
-// 예측은 "최근 3달 실적 기반 기대값 + 과거 예측 오차로 만든 범위"이며 확정 시청률이 아니다.
+// 예측은 "최근 3개월 실적 기반 기대값 + 과거 예측 오차로 만든 범위"이며 확정 시청률이 아니다.
 // 가격·예산·ROI 는 다루지 않는다(PRD 범위 밖). 한 페이지 스크롤(탭 없음), 요약 우선.
 import { Suspense, useCallback, useRef, useState } from "react";
 import Link from "next/link";
@@ -23,8 +23,8 @@ const CHANNEL_OPTS: { code: string; name: string }[] = [
   { code: "SKYUHD", name: "skyUHD" },
 ];
 const WINDOW_OPTS: { days: number; label: string }[] = [
-  { days: 91, label: "최근 3달 (기본)" },
-  { days: 182, label: "최근 6달" },
+  { days: 91, label: "최근 3개월 (기본)" },
+  { days: 182, label: "최근 6개월" },
   { days: 364, label: "최근 1년" },
   { days: 728, label: "최근 2년" },
 ];
@@ -161,7 +161,7 @@ function PurchaseSimulator() {
             <VendingMachineIcon size={22} />
             <div>
               <h1 className="text-base font-semibold text-zinc-900">콘텐츠 구매 시뮬레이터</h1>
-              <p className="text-xs text-zinc-500">구매 검토 프로그램을 우리 채널에 편성했을 때의 예상 시청률(기본: 최근 3달 실적 기준)</p>
+              <p className="text-xs text-zinc-500">구매 검토 프로그램을 우리 채널에 편성했을 때의 예상 시청률(기본: 최근 3개월 실적 기준)</p>
             </div>
           </div>
           <Link href={`/ideal-schedule?channel=${channel}`} className="rounded-full px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
@@ -244,7 +244,7 @@ function PurchaseSimulator() {
                     <option key={w.days} value={w.days}>{w.label}</option>
                   ))}
                 </select>
-                {windowDays !== 91 && <p className="mt-1 text-xs text-amber-700">예상 범위·신뢰도는 3달 기준으로 보정한 값이라 참고용입니다.{windowDays >= 364 ? " 계산에 최대 1분 걸릴 수 있습니다." : ""}</p>}
+                {windowDays !== 91 && <p className="mt-1 text-xs text-amber-700">예상 범위·신뢰도는 3개월 기준으로 보정한 값이라 참고용입니다.{windowDays >= 364 ? " 계산에 최대 1분 걸릴 수 있습니다." : ""}</p>}
               </div>
               <div>
                 <div className="mb-1 text-xs text-zinc-500">시청 타깃(채널 핵심 타깃이 기본)</div>
@@ -328,11 +328,13 @@ function CandidateList({ identity, onPick, current }: { identity: IdentityResolu
 
 function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp; rolling: RollingRow[] | "loading" | undefined; onRolling: () => void }) {
   const multi = t.slots.length > 1;
+  const avg = t.channelAnnualAvg;
+  const low = (v: number | null) => v !== null && avg !== null && v < avg; // 채널 연평균보다 낮으면 붉게
   const best = multi ? [...t.slots].filter((s) => s.prediction !== null).sort((a, b) => (b.prediction ?? 0) - (a.prediction ?? 0))[0] : null;
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold text-zinc-900">{t.targetLabel} <span className="text-xs font-normal text-zinc-500">· {res.ownChannel} 편성 가정</span></h2>
+        <h2 className="text-base font-semibold text-zinc-900">{t.targetLabel} <span className="text-xs font-normal text-zinc-500">· {res.ownChannel} 편성 가정{avg !== null ? ` · 채널 최근 1년 평균 ${fmt(avg)}%(이보다 낮으면 붉은색)` : ""}</span></h2>
       </div>
 
       {/* 슬롯 요약 */}
@@ -346,7 +348,7 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
             {s.prediction !== null ? (
               <>
                 <div className="mt-1.5 text-2xl font-semibold tabular-nums text-zinc-900">
-                  {fmt(s.prediction)}<span className="ml-0.5 text-sm font-normal text-zinc-500">%</span>
+                  <span className={low(s.prediction) ? "text-rose-600" : ""}>{fmt(s.prediction)}</span><span className="ml-0.5 text-sm font-normal text-zinc-500">%</span>
                 </div>
                 <div className="text-sm text-zinc-600">
                   {s.low !== null && s.high !== null ? `예상 범위 ${fmt(s.low)} ~ ${fmt(s.high)}% (${Math.round((s.intervalLevel ?? 0.8) * 100)}% 구간)` : "예상 범위는 과거 예측 오차 보정이 쌓이면 표시됩니다."}
@@ -373,7 +375,7 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
             {t.recommended.map((r, i) => (
               <li key={r.slot} className="flex flex-wrap items-baseline gap-x-2">
                 <span className="font-semibold text-zinc-900">{i + 1}. {r.slotLabel}</span>
-                <span className="tabular-nums">{fmt(r.prediction)}%</span>
+                <span className={`tabular-nums ${low(r.prediction) ? "text-rose-600" : ""}`}>{fmt(r.prediction)}%</span>
                 {r.low !== null && r.high !== null && <span className="text-xs text-zinc-500">({fmt(r.low)} ~ {fmt(r.high)})</span>}
                 <span className="text-xs text-zinc-400">{CONF_LABEL[r.confidence]}</span>
               </li>
@@ -399,7 +401,7 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
               {t.slots.map((s) => (
                 <tr key={`${s.isoDow}-${s.startTime}`} className="border-b border-zinc-100">
                   <td className="py-1.5 pr-3 text-zinc-700">{DOW[s.isoDow - 1]} {s.startTime}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums font-medium">{fmt(s.prediction)}</td>
+                  <td className={`py-1.5 pr-3 text-right tabular-nums font-medium ${low(s.prediction) ? "text-rose-600" : ""}`}>{fmt(s.prediction)}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums text-zinc-500">{s.low !== null ? `${fmt(s.low)} ~ ${fmt(s.high)}` : "-"}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">{fmt(s.contentIdx, 2)}</td>
                   <td className="py-1.5 text-zinc-600">{CONF_LABEL[s.confidence]}</td>
@@ -418,7 +420,7 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
           <div>
             <div className="mb-1 text-xs font-medium text-zinc-500">다른 케이블 채널에서의 실적(예측에 사용)</div>
             {t.peers.length === 0 ? (
-              <p className="text-xs text-zinc-500">최근 3달 동안 비교 가능한 케이블 방영이 없습니다.</p>
+              <p className="text-xs text-zinc-500">최근 3개월 동안 비교 가능한 케이블 방영이 없습니다.</p>
             ) : (
               <table className="w-full text-xs">
                 <thead>
