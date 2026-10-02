@@ -49,7 +49,7 @@ export function ScheduleUploadSlot({ onUploaded }: { onUploaded: (done: Uploaded
 
   return (
     <div
-      className="flex flex-col items-end gap-0.5"
+      className="flex flex-col items-start gap-0.5"
       onDragOver={(e) => {
         e.preventDefault();
         setDrag(true);
@@ -78,7 +78,7 @@ export function ScheduleUploadSlot({ onUploaded }: { onUploaded: (done: Uploaded
       </button>
       <input ref={input} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => void upload([...(e.target.files ?? [])])} />
       {results.length > 0 && (
-        <ul className="space-y-px text-right text-[11px]">
+        <ul className="space-y-px text-[11px]">
           {results.map((r, i) => (
             <li key={i} className={r.ok ? "text-emerald-700" : "text-rose-600"} title={r.file}>
               {r.ok ? "✓" : "✕"} {r.text}

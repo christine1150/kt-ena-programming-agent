@@ -184,8 +184,8 @@ function ScheduleComparisonInner() {
               <h1 className="text-xl font-semibold text-zinc-900">{left.channelName || urlChannelCode} 주간 비교</h1>
               <p className="text-sm text-zinc-500">기본은 같은 채널의 두 주 비교이며, 좌우 각각 채널·기간을 따로 바꿀 수 있습니다.</p>
             </div>
+            <ScheduleUploadSlot onUploaded={handleUploaded} />
           </div>
-          <ScheduleUploadSlot onUploaded={handleUploaded} />
           {/* Page 1 상단과 동일한 원형 로고 링크 — 지금 보고 있는 채널도 포함해 7개 모두의
               Page 2로 바로 이동할 수 있게 한다. */}
           <div className="flex items-center gap-1.5">
