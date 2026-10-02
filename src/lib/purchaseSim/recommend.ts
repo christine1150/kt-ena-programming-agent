@@ -25,6 +25,8 @@ export const RECO_CONFIGS: { channel: string; target: "A2049" | "HH" }[] = [
   { channel: "ENA_PLAY", target: "A2049" },
   { channel: "ENA_STORY", target: "HH" },
   { channel: "ONCE", target: "HH" },
+  { channel: "ENA", target: "A2049" },
+  { channel: "OLIFE", target: "HH" },
 ];
 export const RECO_WINDOWS = [91, 182, 364, 728];
 
