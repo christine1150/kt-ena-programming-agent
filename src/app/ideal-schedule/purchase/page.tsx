@@ -193,6 +193,12 @@ function PurchaseSimulator() {
         </section>
 
         {/* 식별 결과 */}
+        {!identity && groupKey && (
+          <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <h2 className="text-base font-semibold text-zinc-900">{groupName}</h2>
+            <p className="mt-1 text-xs text-zinc-500">구매 추천 목록에서 고른 프로그램입니다. 조건을 확인하고 예상 시청률을 보세요.</p>
+          </section>
+        )}
         {identity && (
           <section className="rounded-2xl border border-zinc-200 bg-white p-4">
             {identity.status === "RESOLVED" && identity.chosen ? (
@@ -225,7 +231,7 @@ function PurchaseSimulator() {
         )}
 
         {/* 조건 */}
-        {identity && (groupKey || !needChoose) && (
+        {(identity || groupKey) && (groupKey || !needChoose) && (
           <section className="rounded-2xl border border-zinc-200 bg-white p-4">
             <h2 className="mb-3 text-sm font-semibold text-zinc-900">편성 조건</h2>
             <div className="grid gap-4 md:grid-cols-3">
@@ -310,9 +316,13 @@ function PurchaseSimulator() {
         <RecoSection
           channel={channel}
           windowDays={windowDays}
-          onPick={(name) => {
+          onPick={(name, repKey) => {
             setQ(name);
-            search(name);
+            setIdentity(null);
+            setParsed(null);
+            setResult(null);
+            setGroupKey(repKey);
+            setGroupName(name);
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
         />
@@ -324,7 +334,7 @@ function PurchaseSimulator() {
 type RecoItem = { rank: number; group_key: string; rep_key: string; display_name: string; genre: string | null; prediction: number; prediction_low: number | null; prediction_high: number | null; peer_count: number; peer_airings: number; channel_annual_avg: number | null; vs_annual_avg: number | null; confidence: string | null; as_of: string; target: string };
 
 // 구매 추천: 해당 채널에서 방영한 적 없는 프로그램 중 타 채널(케이블 재방 3곳 이상) 실적으로 본 예상 시청률 순위. 사전 계산 결과를 읽는다.
-function RecoSection({ channel, windowDays, onPick }: { channel: string; windowDays: number; onPick: (name: string) => void }) {
+function RecoSection({ channel, windowDays, onPick }: { channel: string; windowDays: number; onPick: (name: string, repKey: string) => void }) {
   const [items, setItems] = useState<RecoItem[] | null>(null);
   const [genre, setGenre] = useState("전체");
   const [loadedKey, setLoadedKey] = useState("");
@@ -366,7 +376,7 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
               const below = avg !== null && i.prediction < avg;
               return (
                 <li key={i.group_key}>
-                  <button type="button" onClick={() => onPick(i.display_name)} className="flex w-full items-center justify-between gap-3 py-2 text-left hover:bg-zinc-50">
+                  <button type="button" onClick={() => onPick(i.display_name, i.rep_key)} className="flex w-full items-center justify-between gap-3 py-2 text-left hover:bg-zinc-50">
                     <span className="min-w-0">
                       <span className="text-sm font-medium text-zinc-900">{n + 1}. {i.display_name}</span>
                       <span className="ml-2 text-xs text-zinc-400">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회</span>
