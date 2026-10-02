@@ -5,7 +5,9 @@ import { bad, fail, isDate, requireActor } from "@/lib/idealSchedule/apiUtil";
 import { supabase } from "@/lib/supabase";
 import { runPrediction, type SlotRequest } from "@/lib/purchaseSim/predict";
 
-const CHANNELS = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE"];
+export const maxDuration = 120;
+
+const CHANNELS = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
 export async function POST(request: Request) {
   const auth = await requireActor();
@@ -32,9 +34,10 @@ export async function POST(request: Request) {
     }
     if (slots.length > 12) return bad("한 번에 비교할 수 있는 시간대는 12개까지입니다.");
   }
+  const windowDays = typeof body.windowDays === "number" && [91, 182, 364, 728].includes(body.windowDays) ? body.windowDays : 91;
   const asOf = isDate(body.asOf) ? body.asOf : undefined;
   try {
-    const res = await runPrediction(supabase, { query, groupKey, ownChannel, targets, slots, asOf, createdBy: auth.actor, save: true });
+    const res = await runPrediction(supabase, { query, groupKey, ownChannel, targets, slots, asOf, windowDays, createdBy: auth.actor, save: true });
     return NextResponse.json({ ok: true, ...res });
   } catch (e) {
     return fail(e);

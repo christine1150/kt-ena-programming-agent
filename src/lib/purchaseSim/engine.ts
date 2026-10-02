@@ -265,10 +265,12 @@ function pickCalibration(cal: CalibrationRow[], scen: { base: string; bucket: st
 export interface PredictOptions {
   /** 신규 구매 시뮬레이션: 자사 채널의 그 프로그램 이력을 지수에 쓰지 않는다(슬롯 기준값의 그 프로그램 제외는 유지). 백테스트의 PEER 시나리오용. */
   ignoreOwnHistory?: boolean;
+  /** 집계 기간(일). inputs 에 담긴 윈도우 중 하나. 기본 91일(백테스트·보정이 이 기간 기준). */
+  windowDays?: number;
 }
 
 export function predictSlot(inputs: SimInputs, target: string, slot: string, calibration: CalibrationRow[], options: PredictOptions = {}): SlotPrediction {
-  const w = PARAMS.windowDays;
+  const w = options.windowDays ?? PARAMS.windowDays;
   const baseline = loBaseline(toMap(inputs.own_chan_slots, w), toMap(inputs.own_prog_slots, w), slot, PARAMS.minBaselineN, true);
   const notes: string[] = [];
   const base: SlotPrediction = {
@@ -392,4 +394,42 @@ export function withInterval(point: SlotPrediction, target: string, calibration:
   base.confidence = conf;
   base.confidenceReasons = reasons;
   return base;
+}
+
+/** 슬롯을 정하지 않은 "월 평균" 예측: 우리 채널의 최근 편성 구성(슬롯별 방영 수)을 가중치로 슬롯 예측을 평균한다. */
+export function monthlyAverage(inputs: SimInputs, target: string, calibration: CalibrationRow[], options: PredictOptions = {}): SlotPrediction {
+  const w = options.windowDays ?? PARAMS.windowDays;
+  const weights = inputs.own_chan_slots.filter((r) => r.w === w && Number(r.n) > 0).map((r) => ({ slot: r.slot, n: Number(r.n) }));
+  const preds = weights.map((x) => ({ x, p: predictSlot(inputs, target, x.slot, calibration, options) })).filter((y) => y.p.prediction !== null);
+  const dominant = preds.slice().sort((a, b) => b.x.n - a.x.n)[0];
+  if (!dominant) return predictSlot(inputs, target, "WD|6", calibration, options);
+  const tot = preds.reduce((a, y) => a + y.x.n, 0);
+  const avg = (f: (p: SlotPrediction) => number | null) => {
+    const v = preds.filter((y) => f(y.p) !== null);
+    const t = v.reduce((a, y) => a + y.x.n, 0);
+    return t > 0 ? v.reduce((a, y) => a + y.x.n * (f(y.p) as number), 0) / t : null;
+  };
+  const d = dominant.p;
+  return {
+    ...d,
+    slot: "MONTHLY",
+    slotLabel: "월 평균(최근 편성 구성 기준)",
+    prediction: avg((p) => p.prediction),
+    low: avg((p) => p.low),
+    high: avg((p) => p.high),
+    contentIdx: avg((p) => p.contentIdx),
+    baseline: { mean: avg((p) => p.baseline?.mean ?? null) ?? d.baseline!.mean, n: preds.reduce((a, y) => a + (y.p.baseline?.n ?? 0), 0), level: d.baseline!.level },
+    notes: [...d.notes, `채널의 최근 편성 ${tot}회 구성(슬롯별 방영 수)을 가중치로 평균했습니다.`],
+  };
+}
+
+/** 편성 추천 시간: 우리 채널이 최근 편성한 슬롯(기준값 표본 충분) 중 예상 시청률이 높은 순. 경쟁 편성·시간대 충돌은 반영하지 않는다. */
+export function recommendSlots(inputs: SimInputs, target: string, calibration: CalibrationRow[], options: PredictOptions = {}, top = 3): SlotPrediction[] {
+  const w = options.windowDays ?? PARAMS.windowDays;
+  const slots = inputs.own_chan_slots.filter((r) => r.w === w && Number(r.n) >= PARAMS.minBaselineN).map((r) => r.slot);
+  return slots
+    .map((s) => predictSlot(inputs, target, s, calibration, options))
+    .filter((p) => p.prediction !== null && p.baseline?.level === 0)
+    .sort((a, b) => (b.prediction ?? 0) - (a.prediction ?? 0))
+    .slice(0, top);
 }

@@ -7,6 +7,8 @@ import {
   PARAMS,
   broadcastMinutes,
   peerIndexes,
+  monthlyAverage,
+  recommendSlots,
   predictSlot,
   rollingTable,
   slotOf,
@@ -32,6 +34,7 @@ export interface PredictRequest {
   asOf?: string;
   save?: boolean;
   createdBy?: string;
+  windowDays?: number; // 집계 기간(일): 91(기본)·182·364·728
   includeRolling?: boolean; // 4·26·52주 롤링 표(느린 조회 — 화면은 별도 호출로 지연 로딩)
 }
 
@@ -41,6 +44,7 @@ export interface TargetResult {
   rolling: RollingRow[];
   peers: PeerInfo[]; // 케이블 재방 피어(예측 근거)
   hubReference: PeerInfo[]; // 본방 허브(표시 전용, 예측에 쓰지 않음)
+  recommended: SlotPrediction[]; // 편성 추천 시간 TOP3(예상 시청률 높은 순, 경쟁 미반영)
   slots: (SlotPrediction & { isoDow: number; startTime: string; competition: CompetitionRow[] })[];
 }
 
@@ -89,36 +93,46 @@ export async function runPrediction(client: SupabaseClient, req: PredictRequest)
   const targets = req.targets ?? (parsed.target === "A2049" || parsed.target === "HH" ? [parsed.target as "A2049" | "HH"] : defaultTargets(ownChannel));
   if (parsed.target && parsed.target !== "A2049" && parsed.target !== "HH") warnings.push(`'${parsed.target}' 타깃은 아직 예측을 지원하지 않아 채널 기본 타깃으로 계산했습니다.`);
 
-  const base: PredictResponse = { modelVersion: MODEL_VERSION, asOf, parsed, identity, resolved, ownChannel, needsSlot: slotReqs.length === 0, results: [], warnings };
-  if (!resolved || slotReqs.length === 0) return base;
+  const base: PredictResponse = { modelVersion: MODEL_VERSION, asOf, parsed, identity, resolved, ownChannel, needsSlot: false, results: [], warnings };
+  if (!resolved) return base;
+  const windowDays = [91, 182, 364, 728].includes(req.windowDays ?? 91) ? (req.windowDays ?? 91) : 91;
+  if (windowDays !== PARAMS.windowDays) warnings.push(`집계 기간 ${windowDays}일은 참고용입니다. 예측 범위·신뢰도는 최근 3달 기준 과거 예측 오차로 보정한 값입니다.`);
 
   // 3) 타깃별 입력·예측
-  for (const target of targets) {
+  const perTarget = await Promise.all(
+    targets.map(async (target): Promise<TargetResult> => {
     // 예측은 기준 윈도우(91일) 하나만 조회해 빠르게 처리하고, 롤링 표는 요청 시에만 넓은 윈도우로 따로 조회한다.
     const [inputs, calibration, rollInputs] = await Promise.all([
-      fetchSimInputs(client, { groupKeys: resolved.memberKeys, ownChannel, target, asOf, windows: [PARAMS.windowDays] }),
+      fetchSimInputs(client, { groupKeys: resolved.memberKeys, ownChannel, target, asOf, windows: [windowDays] }),
       loadCalibration(client, MODEL_VERSION, target),
       req.includeRolling ? fetchSimInputs(client, { groupKeys: resolved.memberKeys, ownChannel, target, asOf }) : Promise.resolve(null),
     ]);
-    const w = PARAMS.windowDays;
-    const allPeers = peerIndexes(inputs, w);
-    const slots: TargetResult["slots"] = await Promise.all(
-      slotReqs.map(async (s) => {
-        const startMin = broadcastMinutes(s.startTime);
-        const pred = predictSlot(inputs, target, slotOf(s.isoDow, startMin), calibration);
-        const competition = await fetchCompetition(client, { isoDow: s.isoDow, startHour: Math.floor(startMin / 60), target, asOf }).catch(() => []);
-        return { ...pred, isoDow: s.isoDow, startTime: s.startTime, competition };
-      })
-    );
-    base.results.push({
+    const allPeers = peerIndexes(inputs, windowDays);
+    const opt = { windowDays };
+    const capConf = (p: SlotPrediction): SlotPrediction => (windowDays !== PARAMS.windowDays && p.confidence === "HIGH" ? { ...p, confidence: "MEDIUM", confidenceReasons: [...p.confidenceReasons, "3달 외 기간은 보정 근거가 없어 한 단계 낮춤"] } : p);
+    const slots: TargetResult["slots"] =
+      slotReqs.length === 0
+        ? [{ ...capConf(monthlyAverage(inputs, target, calibration, opt)), isoDow: 0, startTime: "", competition: [] }]
+        : await Promise.all(
+            slotReqs.map(async (s) => {
+              const startMin = broadcastMinutes(s.startTime);
+              const pred = predictSlot(inputs, target, slotOf(s.isoDow, startMin), calibration, opt);
+              const competition = await fetchCompetition(client, { isoDow: s.isoDow, startHour: Math.floor(startMin / 60), target, asOf }).catch(() => []);
+              return { ...capConf(pred), isoDow: s.isoDow, startTime: s.startTime, competition };
+            })
+          );
+    return {
       target,
       targetLabel: TARGET_LABEL[target],
       rolling: rollInputs ? rollingTable(rollInputs) : [],
       peers: allPeers.filter((p) => !p.isHub).sort((a, b) => b.nBase - a.nBase),
       hubReference: allPeers.filter((p) => p.isHub).sort((a, b) => b.nBase - a.nBase),
-      slots,
-    });
-  }
+      recommended: recommendSlots(inputs, target, calibration, opt).map(capConf),
+      slots: slots,
+    };
+    })
+  );
+  base.results.push(...perTarget);
 
   if (req.save !== false) await savePredictions(client, base, req.createdBy ?? null).catch((e) => warnings.push(`스냅샷 저장 실패: ${e instanceof Error ? e.message : String(e)}`));
   return base;

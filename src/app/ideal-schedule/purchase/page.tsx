@@ -14,12 +14,19 @@ import type { ParsedPredictionQuery } from "@/lib/purchaseSim/queryParse";
 import type { RollingRow } from "@/lib/purchaseSim/engine";
 
 const CHANNEL_OPTS: { code: string; name: string }[] = [
-  { code: "ENA_PLAY", name: "ENA Play" },
   { code: "ENA", name: "ENA" },
   { code: "ENA_DRAMA", name: "ENA Drama" },
+  { code: "ENA_PLAY", name: "ENA Play" },
   { code: "ENA_STORY", name: "ENA Story" },
   { code: "OLIFE", name: "OLIFE" },
   { code: "ONCE", name: "ONCE" },
+  { code: "SKYUHD", name: "skyUHD" },
+];
+const WINDOW_OPTS: { days: number; label: string }[] = [
+  { days: 91, label: "최근 3달 (기본)" },
+  { days: 182, label: "최근 6달" },
+  { days: 364, label: "최근 1년" },
+  { days: 728, label: "최근 2년" },
 ];
 const GROUP_A = ["ENA", "ENA_PLAY", "ENA_DRAMA"];
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
@@ -42,7 +49,9 @@ const defaultKpiTargets = (ch: string): ("A2049" | "HH")[] => (GROUP_A.includes(
 function PurchaseSimulator() {
   const sp = useSearchParams();
   const [q, setQ] = useState("");
-  const [channel, setChannel] = useState(sp.get("channel") && CHANNEL_OPTS.some((c) => c.code === sp.get("channel")) ? (sp.get("channel") as string) : "ENA_PLAY");
+  const [channel, setChannel] = useState(sp.get("channel") && CHANNEL_OPTS.some((c) => c.code === sp.get("channel")) ? (sp.get("channel") as string) : "ENA");
+  const [windowDays, setWindowDays] = useState(91);
+  const [useSlots, setUseSlots] = useState(false);
   const [targets, setTargets] = useState<("A2049" | "HH")[]>(defaultKpiTargets(channel));
   const [slots, setSlots] = useState<SlotRow[]>([{ isoDow: 5, startTime: "22:00" }]);
   const [identity, setIdentity] = useState<IdentityResolution | null>(null);
@@ -78,7 +87,10 @@ function PurchaseSimulator() {
       }
       if (p.target === "A2049" || p.target === "HH") setTargets([p.target]);
       else setTargets(defaultKpiTargets(nextChannel));
-      if (p.isoDow && p.startTime) setSlots([{ isoDow: p.isoDow, startTime: p.startTime }]);
+      if (p.isoDow && p.startTime) {
+        setSlots([{ isoDow: p.isoDow, startTime: p.startTime }]);
+        setUseSlots(true);
+      }
       if (idn.status === "RESOLVED" && idn.chosen) {
         setGroupKey(idn.chosen.repKey);
         setGroupName(idn.chosen.displayName);
@@ -103,7 +115,7 @@ function PurchaseSimulator() {
       const r = await fetch("/api/scheduling/purchase-sim/predict", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: groupName, groupKey, ownChannel: channel, targets, slots }),
+        body: JSON.stringify({ query: groupName, groupKey, ownChannel: channel, targets, windowDays, ...(useSlots ? { slots } : {}) }),
       });
       const j = (await r.json()) as Resp;
       if (!j.ok) throw new Error(j.message);
@@ -114,7 +126,7 @@ function PurchaseSimulator() {
     } finally {
       setBusy(null);
     }
-  }, [groupKey, groupName, channel, targets, slots]);
+  }, [groupKey, groupName, channel, targets, slots, windowDays, useSlots]);
 
   // 3) 기간별 추이(느린 조회라 눌렀을 때만)
   const loadRolling = useCallback(
@@ -149,7 +161,7 @@ function PurchaseSimulator() {
             <VendingMachineIcon size={22} />
             <div>
               <h1 className="text-base font-semibold text-zinc-900">콘텐츠 구매 시뮬레이터</h1>
-              <p className="text-xs text-zinc-500">구매 검토 프로그램을 우리 채널에 편성했을 때의 예상 시청률(최근 3달 실적 기준)</p>
+              <p className="text-xs text-zinc-500">구매 검토 프로그램을 우리 채널에 편성했을 때의 예상 시청률(기본: 최근 3달 실적 기준)</p>
             </div>
           </div>
           <Link href={`/ideal-schedule?channel=${channel}`} className="rounded-full px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
@@ -226,6 +238,15 @@ function PurchaseSimulator() {
                 </select>
               </div>
               <div>
+                <div className="mb-1 text-xs text-zinc-500">실적 기준 기간</div>
+                <select value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} className={`${input} w-full`}>
+                  {WINDOW_OPTS.map((w) => (
+                    <option key={w.days} value={w.days}>{w.label}</option>
+                  ))}
+                </select>
+                {windowDays !== 91 && <p className="mt-1 text-xs text-amber-700">예상 범위·신뢰도는 3달 기준으로 보정한 값이라 참고용입니다.{windowDays >= 364 ? " 계산에 최대 1분 걸릴 수 있습니다." : ""}</p>}
+              </div>
+              <div>
                 <div className="mb-1 text-xs text-zinc-500">시청 타깃(채널 핵심 타깃이 기본)</div>
                 <div className="flex gap-3 pt-1.5 text-sm text-zinc-700">
                   {(["A2049", "HH"] as const).map((t) => (
@@ -237,9 +258,15 @@ function PurchaseSimulator() {
                 </div>
                 <p className="mt-1 text-xs text-zinc-400">두 타깃은 서로 환산하지 않고 각각 따로 계산합니다.</p>
               </div>
-              <div>
-                <div className="mb-1 text-xs text-zinc-500">요일·시작 시각(여러 개면 비교)</div>
-                <div className="space-y-1.5">
+            </div>
+            <div className="mt-4 border-t border-zinc-100 pt-3">
+              <label className="inline-flex items-center gap-2 text-sm font-medium text-zinc-700">
+                <input type="checkbox" checked={useSlots} onChange={(e) => setUseSlots(e.target.checked)} />
+                추가 분석: 요일·시작 시각별로 비교
+              </label>
+              <p className="mt-0.5 text-xs text-zinc-400">끄면 채널의 최근 편성 구성을 기준으로 한 달 평균 예상 시청률을 보여줍니다. 켜면 시간대를 여러 개 넣어 비교할 수 있습니다.</p>
+              {useSlots && (
+                <div className="mt-2 space-y-1.5">
                   {slots.map((s, i) => (
                     <div key={i} className="flex items-center gap-1.5">
                       <select value={s.isoDow} onChange={(e) => setSlots((cur) => cur.map((x, j) => (j === i ? { ...x, isoDow: Number(e.target.value) } : x)))} className={input}>
@@ -257,7 +284,7 @@ function PurchaseSimulator() {
                     <button type="button" onClick={() => setSlots((cur) => [...cur, { isoDow: 5, startTime: "21:00" }])} className="text-xs text-zinc-500 hover:text-zinc-800">+ 시간대 추가</button>
                   )}
                 </div>
-              </div>
+              )}
             </div>
             <div className="mt-4">
               <button type="button" onClick={run} disabled={!groupKey || !targets.length || !!busy} className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
@@ -313,7 +340,7 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
         {t.slots.map((s) => (
           <div key={`${s.isoDow}-${s.startTime}`} className={`rounded-xl border p-3 ${best && best === s ? "border-emerald-300 bg-emerald-50/40" : "border-zinc-200"}`}>
             <div className="flex items-center justify-between text-xs text-zinc-500">
-              <span>{DOW[s.isoDow - 1]}요일 {s.startTime} · {s.slotLabel}</span>
+              <span>{s.isoDow === 0 ? s.slotLabel : `${DOW[s.isoDow - 1]}요일 ${s.startTime} · ${s.slotLabel}`}</span>
               <span className={`rounded-full px-2 py-0.5 ring-1 ${CONF_STYLE[s.confidence]}`}>{CONF_LABEL[s.confidence]}</span>
             </div>
             {s.prediction !== null ? (
@@ -325,7 +352,7 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
                   {s.low !== null && s.high !== null ? `예상 범위 ${fmt(s.low)} ~ ${fmt(s.high)}% (${Math.round((s.intervalLevel ?? 0.8) * 100)}% 구간)` : "예상 범위는 과거 예측 오차 보정이 쌓이면 표시됩니다."}
                 </div>
                 <div className="mt-1 text-xs text-zinc-500">
-                  {s.slotLabel} 우리 채널 평균 {fmt(s.baseline?.mean)}% × 콘텐츠 지수 {fmt(s.contentIdx, 2)}배 · 근거: {CASE_LABEL[s.caseType]}
+                  {s.isoDow === 0 ? "채널 평균" : `${s.slotLabel} 우리 채널 평균`} {fmt(s.baseline?.mean)}% × 콘텐츠 지수 {fmt(s.contentIdx, 2)}배 · 근거: {CASE_LABEL[s.caseType]}
                 </div>
               </>
             ) : (
@@ -338,6 +365,23 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
           </div>
         ))}
       </div>
+
+      {t.recommended.length > 0 && (
+        <div className="mt-3 rounded-xl bg-zinc-50 px-3 py-2.5">
+          <div className="text-xs font-medium text-zinc-700">편성 추천 시간 TOP {t.recommended.length}</div>
+          <ol className="mt-1 space-y-0.5 text-sm text-zinc-700">
+            {t.recommended.map((r, i) => (
+              <li key={r.slot} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-semibold text-zinc-900">{i + 1}. {r.slotLabel}</span>
+                <span className="tabular-nums">{fmt(r.prediction)}%</span>
+                {r.low !== null && r.high !== null && <span className="text-xs text-zinc-500">({fmt(r.low)} ~ {fmt(r.high)})</span>}
+                <span className="text-xs text-zinc-400">{CONF_LABEL[r.confidence]}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-1 text-xs text-zinc-400">우리 채널이 최근 편성해 온 시간대 중 예상 시청률이 높은 순입니다. 경쟁 편성·앞뒤 프로그램과의 충돌은 반영하지 않았으니 참고용으로 보세요. 1위와 범위가 겹치는 시간대는 우열을 단정할 수 없습니다.</p>
+        </div>
+      )}
 
       {multi && (
         <div className="mt-3 overflow-x-auto">
@@ -406,7 +450,7 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
           )}
           {t.slots.map((s) => (
             <div key={`ev-${s.isoDow}-${s.startTime}`} className="text-xs text-zinc-600">
-              <div className="font-medium text-zinc-700">{DOW[s.isoDow - 1]} {s.startTime}</div>
+              <div className="font-medium text-zinc-700">{s.isoDow === 0 ? "월 평균" : `${DOW[s.isoDow - 1]} ${s.startTime}`}</div>
               <ul className="mt-0.5 list-disc pl-4 text-zinc-500">
                 <li>피어 지수 {fmt(s.peerIdxRaw, 2)} → 표본 수 반영 후 {fmt(s.peerIdx, 2)} ({s.peerCount}채널·{s.peerAirings}회)</li>
                 <li>당사 지수 {fmt(s.ownIdx, 2)} ({s.ownN}회){s.ownWeight !== null ? ` · 반영 비중 ${Math.round(s.ownWeight * 100)}%` : ""}</li>
