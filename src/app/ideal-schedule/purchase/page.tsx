@@ -192,6 +192,29 @@ function PurchaseSimulator() {
           {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
         </section>
 
+        {/* 채널·기간: 검색 전에도 보이며 구매 추천 목록에도 적용된다 */}
+        <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+          <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <div className="mb-1 text-xs text-zinc-500">편성할 채널</div>
+                <select value={channel} onChange={(e) => { setChannel(e.target.value); setTargets(defaultKpiTargets(e.target.value)); }} className={`${input} w-full`}>
+                  {CHANNEL_OPTS.map((c) => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="mb-1 text-xs text-zinc-500">실적 기준 기간</div>
+                <select value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} className={`${input} w-full`}>
+                  {WINDOW_OPTS.map((w) => (
+                    <option key={w.days} value={w.days}>{w.label}</option>
+                  ))}
+                </select>
+                {windowDays !== 91 && <p className="mt-1 text-xs text-amber-700">예상 범위·신뢰도는 3개월 기준으로 보정한 값이라 참고용입니다.{windowDays >= 364 ? " 계산에 최대 1분 걸릴 수 있습니다." : ""}</p>}
+              </div>
+          </div>
+        </section>
+
         {/* 식별 결과 */}
         {!identity && groupKey && (
           <section className="rounded-2xl border border-zinc-200 bg-white p-4">
@@ -234,24 +257,7 @@ function PurchaseSimulator() {
         {(identity || groupKey) && (groupKey || !needChoose) && (
           <section className="rounded-2xl border border-zinc-200 bg-white p-4">
             <h2 className="mb-3 text-sm font-semibold text-zinc-900">편성 조건</h2>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
-                <div className="mb-1 text-xs text-zinc-500">편성할 채널</div>
-                <select value={channel} onChange={(e) => { setChannel(e.target.value); setTargets(defaultKpiTargets(e.target.value)); }} className={`${input} w-full`}>
-                  {CHANNEL_OPTS.map((c) => (
-                    <option key={c.code} value={c.code}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div className="mb-1 text-xs text-zinc-500">실적 기준 기간</div>
-                <select value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} className={`${input} w-full`}>
-                  {WINDOW_OPTS.map((w) => (
-                    <option key={w.days} value={w.days}>{w.label}</option>
-                  ))}
-                </select>
-                {windowDays !== 91 && <p className="mt-1 text-xs text-amber-700">예상 범위·신뢰도는 3개월 기준으로 보정한 값이라 참고용입니다.{windowDays >= 364 ? " 계산에 최대 1분 걸릴 수 있습니다." : ""}</p>}
-              </div>
+            <div className="grid gap-4 md:grid-cols-1">
               <div>
                 <div className="mb-1 text-xs text-zinc-500">시청 타깃(채널 핵심 타깃이 기본)</div>
                 <div className="flex gap-3 pt-1.5 text-sm text-zinc-700">
