@@ -1,9 +1,9 @@
-// 1페이지 "해당일 상위 프로그램 TOP 9"(2026-10-06 사용자 지시) — 순수 함수.
-// 기준: 그날 수도권 개인2049 채널 순위 1~20위 채널의 프로그램(뉴스 제외)을 수도권 2049 시청률 높은 순으로 9개(괄호 안은 유료방송가구).
+// 1페이지 "해당일 상위 프로그램 TOP 12"(2026-10-06 사용자 지시, 2026-10-07 9개→12개) — 순수 함수.
+// 기준: 그날 수도권 개인2049 채널 순위 1~20위 채널의 프로그램(뉴스 제외)을 수도권 2049 시청률 높은 순으로 12개(괄호 안은 유료방송가구).
 // 새 지표를 계산하지 않는다 — 저장된 프로그램 시청률을 골라 정렬할 뿐이다. 프로그램 단위 자료가 없는 채널은 후보에 들 수 없다(자료 범위는 화면에 밝힌다).
 import { broadcastHour } from "@/lib/workspace/dates";
 
-export const TOP_PROGRAM_LIMIT = 9;
+export const TOP_PROGRAM_LIMIT = 12;
 export const CHANNEL_RANK_LIMIT = 20;
 
 export type TargetKind = "p2049" | "household" | "other";
@@ -22,6 +22,32 @@ export const isNewsProgram = (name: string): boolean => /뉴스|news/i.test(name
 /** 프로그램명에서 본/재 표시를 걷어낸다(회차·부제는 이 화면에서 쓰지 않는다). */
 export function cleanProgramName(raw: string): string {
   return raw.replace(/<\s*[본재]\s*>/g, "").replace(/\s+/g, " ").trim();
+}
+
+// 채널명과 프로그램명 앞머리가 겹치는 경우를 정리한다(사용자 지시 2026-10-07): 칩에 채널명이 이미 있는데 프로그램명도 "KBS1일일드라마(엄마가미쳤어요)"처럼
+// 채널명으로 시작하면, 채널명을 떼고 "일일드라마-엄마가미쳤어요"로 줄인다. 채널명이 겹칠 때만 괄호를 "-"로 바꾸고, 겹치지 않는 이름은 그대로 둔다.
+// 영문 채널명의 한글 표기("TV CHOSUN" ↔ "TV조선")도 같은 채널명으로 본다.
+const CHANNEL_NAME_ALIASES: Record<string, string[]> = { "tvchosun": ["TV조선", "티비조선"], "채널a": ["채널A"] };
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export function displayProgramName(channelName: string, programName: string): string {
+  const key = channelName.replace(/\s+/g, "").toLowerCase();
+  const candidates = [channelName, ...(CHANNEL_NAME_ALIASES[key] ?? [])].map((c) => c.replace(/\s+/g, "")).filter(Boolean).sort((a, b) => b.length - a.length);
+  for (const c of candidates) {
+    // 글자 사이 공백이 있어도("TV 조선") 같은 이름으로 본다.
+    const re = new RegExp("^" + [...c].map(escapeRe).join("\\s*") + "\\s*", "i");
+    const m = programName.match(re);
+    if (!m) continue;
+    const rest = programName.slice(m[0].length).trim();
+    if (!rest) return programName;
+    const open = rest.indexOf("(");
+    if (open > 0) {
+      const base = rest.slice(0, open).trim();
+      const inner = rest.slice(open + 1).replace(/\)\s*$/, "").trim();
+      if (base && inner) return `${base}-${inner}`;
+    }
+    return rest;
+  }
+  return programName;
 }
 
 /** 시작 시각 표기 — 이 앱의 방송일 관행(02~26시): 새벽 0~1시대는 24~25시로 이어서 쓴다. 예: "21:10", "24:35". */

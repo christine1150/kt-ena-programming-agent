@@ -1,4 +1,4 @@
-// 1페이지 상위 프로그램 TOP 9 테스트 — 순수 함수만(DB·네트워크 없음). 실행: npm run test:markettop
+// 1페이지 상위 프로그램 TOP 12 테스트 — 순수 함수만(DB·네트워크 없음). 실행: npm run test:markettop
 import fs from "node:fs";
 import path from "node:path";
 
@@ -27,13 +27,16 @@ async function main() {
 
   // 선택·정렬
   const samples: S[] = [];
-  const names = ["가", "나", "다", "라", "마", "바", "사", "아", "자", "차", "카"];
+  const names = ["가", "나", "다", "라", "마", "바", "사", "아", "자", "차", "카", "타", "파", "하"];
   names.forEach((n, i) => {
     samples.push(mk("채널" + n, i + 1, "프로그램" + n, "21:00:00", "p2049", 1 - i * 0.05));
     samples.push(mk("채널" + n, i + 1, "프로그램" + n, "21:00:00", "household", 2 - i * 0.05));
   });
   const top = M.pickTopPrograms(samples);
-  check("정확히 9개를 2049 시청률 내림차순으로", top.length === 9 && top.every((r, i) => i === 0 || top[i - 1].rating >= r.rating) && top[0].rank === 1 && top[8].rank === 9);
+  check("정확히 12개를 2049 시청률 내림차순으로", top.length === 12 && top.every((r, i) => i === 0 || top[i - 1].rating >= r.rating) && top[0].rank === 1 && top[11].rank === 12);
+  check("프로그램명 앞의 채널명 중복을 걷고 괄호를 -로", M.displayProgramName("KBS1", "KBS1일일드라마(엄마가미쳤어요)") === "일일드라마-엄마가미쳤어요" && M.displayProgramName("MBC", "MBC일일드라마(가족관계증명서)") === "일일드라마-가족관계증명서");
+  check("영문 채널명의 한글 표기도 중복으로 본다(닫는 괄호 없는 값 포함)", M.displayProgramName("TV CHOSUN", "TV조선스포츠축구(하나은행초청국가대표팀친선경기한국:우즈베키스탄") === "스포츠축구-하나은행초청국가대표팀친선경기한국:우즈베키스탄");
+  check("겹치지 않는 이름은 그대로", M.displayProgramName("SBS", "틈만나면") === "틈만나면" && M.displayProgramName("tvN", "축구국가대표팀친선경기") === "축구국가대표팀친선경기" && M.displayProgramName("MBC", "MBC") === "MBC");
   check("괄호 속 가구 시청률이 같은 프로그램의 값이다", top[0].householdRating === 2 && top[3].householdRating === 2 - 3 * 0.05);
   check("1~20위 밖 채널은 제외", M.pickTopPrograms([mk("밖", 21, "높은 프로그램", "21:00", "p2049", 9), mk("안", 20, "낮은 프로그램", "21:00", "p2049", 0.1)]).map((r) => r.programName).join() === "낮은 프로그램");
   check("경계: 20위는 포함, 1위 미만(0)은 제외", M.pickTopPrograms([mk("a", 20, "x", "21:00", "p2049", 1)]).length === 1 && M.pickTopPrograms([mk("a", 0, "x", "21:00", "p2049", 1)]).length === 0);
@@ -65,8 +68,8 @@ async function main() {
   check("화면: 로딩·오류·빈 상태·이전 날짜 흐림이 모두 있다", comp.includes("Skeleton") && comp.includes('role="alert"') && comp.includes("순위 1~20위 채널 중") && comp.includes("!f.isCurrent"));
   check("화면: 자료 범위(몇 개 채널 기준)와 가구 기준을 밝힌다", comp.includes("프로그램 단위 시청률 자료가 있는 채널") && comp.includes("KBS1·MBC·SBS만 수도권"));
   const dash = read("src/app/Dashboard.tsx");
-  check("홈: 오늘의 시청률 카드 안쪽 맨 아래에 이어 붙고 KPI 표 위에 있다", dash.includes("footer={<MarketTopPrograms") && dash.indexOf("footer={<MarketTopPrograms") < dash.indexOf("<KpiTable groups") && dash.includes("{footer && <div"));
-  check("프로그램명은 잘리지 않고 한 줄에 맞춰 글씨만 줄어든다(말줄임·줄 수 제한 없음)", comp.includes("FitOneLine text={r.programName}") && comp.includes("scale(") && comp.includes("whitespace-nowrap") && !/truncate|line-clamp|text-ellipsis/.test(comp));
+  check("홈: 오늘의 시청률 카드 안쪽 맨 아래에 이어 붙는다", dash.includes("footer={<MarketTopPrograms") && dash.includes("{footer && <div"));
+  check("프로그램명은 잘리지 않고 한 줄에 맞춰 글씨만 줄어든다(말줄임·줄 수 제한 없음)", comp.includes("FitOneLine text={displayProgramName(") && comp.includes("scale(") && comp.includes("whitespace-nowrap") && !/truncate|line-clamp|text-ellipsis/.test(comp));
   check("별도 제목 없이 정보만(제목 문구 없음)", !comp.includes("오늘의 상위 프로그램") && !comp.includes("<h2"));
   check("낮은 높이: 한 줄 행(py 6~7px)과 3단", /py-\[[67]px\]/.test(comp) && comp.includes("md:grid-cols-3"));
   // (순위 막대는 간소화로 제거했다)
