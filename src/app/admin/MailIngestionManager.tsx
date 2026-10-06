@@ -121,7 +121,19 @@ export default function MailIngestionManager() {
             {naverConfigured ? "✅ 네이버 메일 연동이 설정되어 있습니다." : "⚠️ 네이버 메일 연동이 아직 설정되지 않았습니다."}
           </p>
           {!naverConfigured && (
-            <p className="mt-1 text-xs">설정 절차는 기술 문서(docs/ops/mail-ingestion-setup.md)에 있습니다. 자격증명은 화면이나 채팅에 입력하지 않습니다.</p>
+            <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs">
+              <li>네이버 메일 접속 → 환경설정 → POP3/IMAP 설정에서 &ldquo;IMAP 사용&rdquo;을 켭니다.</li>
+              <li>
+                2단계 인증을 쓰고 있다면 네이버 계정 → 보안설정 → 2단계 인증에서 이 서비스 전용{" "}
+                <b>앱 비밀번호</b>를 새로 발급합니다(2단계 인증을 안 쓴다면 평소 로그인 비밀번호를
+                그대로 씁니다).
+              </li>
+              <li>
+                <code>.env</code>에 <code>NAVER_MAIL_USER</code>(네이버 메일 주소)와{" "}
+                <code>NAVER_MAIL_PASSWORD</code>(위에서 만든 비밀번호)를 직접 추가합니다 — 이
+                값은 채팅으로 알려주지 마시고 파일에 바로 넣어주세요.
+              </li>
+            </ol>
           )}
         </div>
         <div
@@ -131,7 +143,12 @@ export default function MailIngestionManager() {
             {gmailConfigured ? "✅ Gmail 연동이 설정되어 있습니다." : "Gmail 연동(선택, 미설정)"}
           </p>
           {!gmailConfigured && (
-            <p className="mt-1 text-xs">선택 사항이며 지금은 네이버 직접 연동을 씁니다. 설정 절차는 기술 문서(docs/ops/mail-ingestion-setup.md)를 참고하세요.</p>
+            <p className="mt-1 text-xs">
+              그룹웨어 2FA 때문에 Bizbox 메일을 직접 자동화하기 어려운 경우, Gmail로 전달(forward)받아
+              대신 쓰는 경로입니다 — 지금은 네이버 메일 직접 연동을 쓰므로 필수는 아닙니다.{" "}
+              <code>.env</code>에 <code>GMAIL_USER_EMAIL</code>/<code>GMAIL_CLIENT_ID</code>/
+              <code>GMAIL_CLIENT_SECRET</code>/<code>GMAIL_REFRESH_TOKEN</code>을 채우면 활성화됩니다.
+            </p>
           )}
         </div>
       </div>
