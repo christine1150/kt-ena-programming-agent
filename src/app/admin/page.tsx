@@ -37,7 +37,7 @@ import MarketYtdRankUploader from "./MarketYtdRankUploader";
 // 사용자 결정(2026-09-30): 이상적 1주일 편성의 장르 분류는 규칙으로 1차 분류 후 관리자가 보완
 import GenreMapManager from "./GenreMapManager";
 import LogoutButton from "./LogoutButton";
-// 단계 05(2026-10-06): 관리자 첫 화면 — 업로드 버튼 모음 위에 채널×자료종류 수신·반영 현황을 둔다.
+// 단계 05(2026-10-06): 채널×자료종류 수신·반영 현황 — 사용자 지시(2026-10-07)로 관리자 화면 맨 아래에 둔다.
 import DataStatusPanel from "./DataStatusPanel";
 import AvailManager from "./AvailManager";
 
@@ -137,9 +137,6 @@ export default async function AdminPage() {
             로그인이 이미 있어 더 이상 필요하지 않음). trash-can/anonymous-pd-share-link-2026-09-02/
             로 이동. */}
 
-        <AdminSectionHeading title="수신·반영 현황" description="어떤 채널의 어떤 자료가 언제까지 들어왔고, 분석에 반영됐는지 확인합니다." />
-        <DataStatusPanel />
-
         <AdminSectionHeading title="매일 올리는 자료" description="닐슨이 보내주는 파일을 그대로 올리는 곳입니다." />
         <NielsenUploader />
         <SkyUhdUploader />
@@ -164,6 +161,10 @@ export default async function AdminPage() {
 
         <AdminSectionHeading title="점검" description="자동 수집이 제대로 돌고 있는지 확인합니다." />
         <MailIngestionManager />
+
+        {/* 사용자 지시(2026-10-07): 수신·반영 현황은 관리자 화면 맨 아래로 둔다. */}
+        <AdminSectionHeading title="수신·반영 현황" description="어떤 채널의 어떤 자료가 언제까지 들어왔고, 분석에 반영됐는지 확인합니다." />
+        <DataStatusPanel />
       </div>
     </div>
   );
