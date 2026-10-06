@@ -78,7 +78,7 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
     <div aria-label="해당일 상위 프로그램 9개" role="group">
       {/* 기준만 작게 — 제목은 두지 않는다 */}
       <p className="mb-0.5 text-right text-[11px] text-zinc-500" title={coverageNote || undefined}>
-        {data?.date ? `${data.date.slice(5).replace("-", "/")} ` : ""}수도권 개인2049 시청률 순 · 채널 1~20위 · ( ) 유료방송가구
+        {data?.date ? `${data.date.slice(5).replace("-", "/")} ` : ""}수도권 개인2049 시청률 순 · 채널 1~20위 · 뉴스 제외 · ( ) 유료방송가구
         {cov && cov.rankedChannels > 0 && (
           <span className="ml-1.5 text-zinc-400" aria-label={coverageNote}>
             ⓘ 자료 {cov.withProgramData}/{cov.rankedChannels}개 채널

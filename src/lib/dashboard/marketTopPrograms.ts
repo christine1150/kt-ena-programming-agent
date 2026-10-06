@@ -1,5 +1,5 @@
 // 1페이지 "해당일 상위 프로그램 TOP 9"(2026-10-06 사용자 지시) — 순수 함수.
-// 기준: 그날 수도권 개인2049 채널 순위 1~20위 채널의 프로그램을 수도권 2049 시청률 높은 순으로 9개(괄호 안은 유료방송가구).
+// 기준: 그날 수도권 개인2049 채널 순위 1~20위 채널의 프로그램(뉴스 제외)을 수도권 2049 시청률 높은 순으로 9개(괄호 안은 유료방송가구).
 // 새 지표를 계산하지 않는다 — 저장된 프로그램 시청률을 골라 정렬할 뿐이다. 프로그램 단위 자료가 없는 채널은 후보에 들 수 없다(자료 범위는 화면에 밝힌다).
 import { broadcastHour } from "@/lib/workspace/dates";
 
@@ -15,6 +15,9 @@ export function classifyTargetLabel(label: string | null | undefined): TargetKin
   if (t.includes("가구")) return "household";
   return "other";
 }
+
+/** 뉴스 프로그램 여부(사용자 지시 2026-10-07: 뉴스는 제외하고 계산). 장르 자료가 없는 경쟁채널까지 같은 기준으로 거르려고 프로그램명으로 판정한다("뉴스데스크", "SBS8뉴스", "KBS9시뉴스", "뉴스룸" 등). */
+export const isNewsProgram = (name: string): boolean => /뉴스|news/i.test(name);
 
 /** 프로그램명에서 본/재 표시를 걷어낸다(회차·부제는 이 화면에서 쓰지 않는다). */
 export function cleanProgramName(raw: string): string {
@@ -63,7 +66,7 @@ export function pickTopPrograms(samples: ProgramSample[], limit = TOP_PROGRAM_LI
     if (s.target === "other") continue;
     if (!(s.channelRank >= 1 && s.channelRank <= rankLimit)) continue;
     const name = cleanProgramName(s.programName);
-    if (!name) continue;
+    if (!name || isNewsProgram(name)) continue; // 뉴스는 순위 계산에서 뺀다(빠진 자리는 다음 프로그램이 채운다)
     const key = `${s.channelName}|${s.startTime.slice(0, 5)}|${name}`;
     const cur = byKey.get(key) ?? { base: { ...s, programName: name }, p2049: null, hh: null };
     if (s.target === "p2049") cur.p2049 = s.rating;

@@ -37,6 +37,10 @@ async function main() {
   check("괄호 속 가구 시청률이 같은 프로그램의 값이다", top[0].householdRating === 2 && top[3].householdRating === 2 - 3 * 0.05);
   check("1~20위 밖 채널은 제외", M.pickTopPrograms([mk("밖", 21, "높은 프로그램", "21:00", "p2049", 9), mk("안", 20, "낮은 프로그램", "21:00", "p2049", 0.1)]).map((r) => r.programName).join() === "낮은 프로그램");
   check("경계: 20위는 포함, 1위 미만(0)은 제외", M.pickTopPrograms([mk("a", 20, "x", "21:00", "p2049", 1)]).length === 1 && M.pickTopPrograms([mk("a", 0, "x", "21:00", "p2049", 1)]).length === 0);
+  check("뉴스 프로그램은 순위 계산에서 빠지고 다음 프로그램이 채운다", (() => {
+    const r = M.pickTopPrograms([mk("MBC", 3, "MBC뉴스데스크", "19:42", "p2049", 1.14), mk("SBS", 5, "SBS8뉴스", "19:48", "p2049", 0.84), mk("KBS1", 6, "KBS9시뉴스", "21:00", "p2049", 0.7), mk("JTBC", 4, "JTBC뉴스룸", "20:00", "p2049", 0.9), mk("SBS", 2, "틈만나면", "21:02", "p2049", 1.31)]);
+    return r.length === 1 && r[0].programName === "틈만나면" && M.isNewsProgram("MBC뉴스데스크") && !M.isNewsProgram("PD수첩") && !M.isNewsProgram("틈만나면");
+  })());
   check("2049 시청률이 없으면 가구만 있어도 제외", M.pickTopPrograms([mk("a", 3, "x", "21:00", "household", 5)]).length === 0 && M.pickTopPrograms([mk("a", 3, "x", "21:00", "p2049", null)]).length === 0);
   check("가구 값이 없으면 null(표시는 —)", M.pickTopPrograms([mk("a", 3, "x", "21:00", "p2049", 1)])[0].householdRating === null && M.formatRating(null) === "—");
   check("다른 타깃(other) 값은 섞이지 않는다", M.pickTopPrograms([mk("a", 3, "x", "21:00", "other", 9), mk("a", 3, "x", "21:00", "p2049", 1)])[0].rating === 1);
