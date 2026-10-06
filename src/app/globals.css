@@ -70,3 +70,21 @@ body {
      섞여도 자연스럽게 각자의 글꼴로 렌더링됨). */
   font-family: var(--font-geist-sans), var(--font-noto-sans-kr), Arial, Helvetica, sans-serif;
 }
+
+/* 사용자 지시(2026-10-07): "전반적으로 페이지 전체의 폰트 크기를 좀 키워줘. 가독률이 너무 떨어져" — 1페이지(Dashboard) 안의 작은 글자
+   (8~14.5px, text-xs/text-sm)를 약 1.5~2px씩 키운다. 큰 제목·큰 숫자(15px 이상)는 그대로 둔다. 클래스 이름 단위로 덮어써서
+   컴포넌트 코드는 건드리지 않는다(되돌리려면 이 블록을 지우면 됨). "큰 글씨로 보기" 버튼(zoom 1.3)은 이 위에 그대로 겹쳐 적용된다. */
+.page1-readable .text-\[8px\] { font-size: 10px; }
+.page1-readable .text-\[9px\] { font-size: 11px; }
+.page1-readable .text-\[10px\] { font-size: 11.5px; }
+.page1-readable .text-\[11px\] { font-size: 12.5px; }
+.page1-readable .text-\[12px\] { font-size: 13.5px; }
+.page1-readable .text-\[13px\] { font-size: 14.5px; }
+.page1-readable .text-\[14px\] { font-size: 15.5px; }
+.page1-readable .text-\[10\.5px\] { font-size: 12px; }
+.page1-readable .text-\[11\.5px\] { font-size: 13px; }
+.page1-readable .text-\[12\.5px\] { font-size: 14px; }
+.page1-readable .text-\[13\.5px\] { font-size: 15px; }
+.page1-readable .text-\[14\.5px\] { font-size: 16px; }
+.page1-readable .text-xs { font-size: 13.5px; }
+.page1-readable .text-sm { font-size: 15px; }

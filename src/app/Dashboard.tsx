@@ -1121,7 +1121,6 @@ function kpiTooltip(k: KpiRow): string {
     `목표 시청률 ${k.goal.ratingText} · 격차 ${k.goal.gapText}${k.goal.achievementPct !== null ? ` · 달성 ${k.goal.achievementText}` : ""}`,
     `${k.rank.text} · ${k.targetRank.text}${k.rankGap.value !== null ? ` (${k.rankGap.text})` : ""}`,
     `전일 ${k.dod.ppText} / ${pct(k.dod)} · 전주 동요일 ${k.wow.ppText} / ${pct(k.wow)}`,
-    ...k.notes,
   ].join("\n");
 }
 function KpiLines({ kpi, detailed = false }: { kpi: KpiRow | undefined; detailed?: boolean }) {
@@ -1411,7 +1410,7 @@ function ChannelTile({
           재지시(2026-09-20): 프로그램 지목 액션(파란색)과 순위만으로 나온 진단(진한 회색)을
           구분해 표시한다. */}
       <p
-        className="line-clamp-2 min-h-[2.7em] text-[11px] font-medium leading-snug"
+        className="min-h-[2.7em] text-[11px] font-medium leading-snug"
         title={actionLine ?? undefined}
         style={{ color: actionKind === "program" ? "#281fc7" : actionKind === "diagnosis" ? "#3f3f46" : "#a1a1aa" }}
       >
@@ -1488,16 +1487,6 @@ function ChannelStatusCard({ channels, narrativeSignals, kpiRows, footer }: { ch
             ))}
           </div>
         </div>
-      </div>
-      {/* 채널 KPI 범례(2026-10-07 통합): 표를 없앤 대신 읽는 법과 주의 사항을 한 줄로 남긴다. */}
-      <div className="mt-5 space-y-0.5 text-[11px] leading-relaxed text-zinc-400">
-        <p>
-          시청률은 채널별 핵심 타깃 기준(2049 = 수도권 개인 2049, 가구 = 전국 유료방송가구)이며 순위는 같은 타깃의 닐슨 랭킹 기준입니다. 목표 줄의 ●는 달성률
-          100% 이상 초록 · 90% 이상 주황 · 미만 빨강, 전일·전주 동요일 증감은 %p이고 마우스를 올리면 %와 순위 격차가 보입니다.
-        </p>
-        {[...new Set(kpiRows.flatMap((r) => r.notes.map((n) => `${r.name}: ${n}`)))].map((n, i) => (
-          <p key={i}>※ {n}</p>
-        ))}
       </div>
       {/* 사용자 지시(2026-10-06): 카드 맨 아래에 제목 없이 정보만 자연스럽게 이어 붙인다(해당일 상위 프로그램 9개) */}
       {footer && <div className="mt-6 border-t border-zinc-100 pt-3">{footer}</div>}
@@ -5445,7 +5434,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
       : (data?.channels ?? []).map((c) => ({ channelCode: c.code, channelName: c.name, rankChange: null, primeUp: null, primeDown: null, weaknessProgram: null }));
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-zinc-50 px-6 py-8" style={{ zoom: largeFontMode ? 1.3 : 1 }}>
+    <div className="page1-readable relative min-h-screen overflow-x-hidden bg-zinc-50 px-6 py-8" style={{ zoom: largeFontMode ? 1.3 : 1 }}>
       {/* 사용자 지시(2026-08-21, Page 1 전면 개편): "기존 배경은 버리고 모던하고 깔끔한 배경을
           제안" — 파스텔 그라디언트 + 블러 블롭 장식(흐릿한 원형 광원 효과, 대표적인 "AI가 만든
           느낌")을 전부 제거하고, 옅은 회색 단색 배경(zinc-50) + 흰 카드 + 그림자로만 위계를
