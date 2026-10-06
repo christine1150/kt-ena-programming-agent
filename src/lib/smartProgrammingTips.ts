@@ -6,6 +6,7 @@
 // 가능성이 높습니다") 브레인스토밍하게 한다. 다만 완전히 무제한은 아니다 — 아래 제공된 값
 // 밖의 숫자·사실은 여전히 만들 수 없다(No Hallucination은 그대로, 헤지 강도만 낮춘다).
 import { callOpenAiJsonSynthesis } from "./llmSynthesis";
+import { guardForInput } from "./insight/guardInput";
 
 export interface SmartTipsInput {
   channelName: string;
@@ -74,6 +75,10 @@ const SCHEMA = {
 export async function generateSmartProgrammingTips(input: SmartTipsInput): Promise<SmartTip[] | null> {
   const result = await callOpenAiJsonSynthesis<{ tips: SmartTip[] }>(buildSystemPrompt(), input, "smart_programming_tips", SCHEMA, { temperature: 0.5 });
   if (!result) return null;
-  const tips = (result.tips ?? []).filter((t) => t.headline?.trim() && t.rationale?.trim()).slice(0, 4);
+  // 단계 04: 이 코너는 '검증 안 된 AI 추정'이라 가설 표현(가능성·추정)은 허용하되, 입력에 없는 수치·기준·방향 어긋남은 팁 단위로 폐기한다.
+  const tips = (result.tips ?? [])
+    .filter((t) => t.headline?.trim() && t.rationale?.trim())
+    .filter((t) => guardForInput(`${t.headline} ${t.rationale}`, input, { label: "smart_tip", rules: [{ match: /change_pct$|gap_change$/, valueKind: "pct_change" }], baselineLabels: [input.periodLabel], options: { allowCausal: false } }) !== null)
+    .slice(0, 4);
   return tips;
 }

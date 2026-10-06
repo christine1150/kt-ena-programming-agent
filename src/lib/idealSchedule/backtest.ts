@@ -20,6 +20,9 @@ export async function runBacktestWeek(req: BacktestWeekRequest, actor: Actor) {
   if (isoDow(req.weekStart) !== 1) throw new ClientError("weekStart는 월요일이어야 합니다.");
   const runReq: RunRequest = { ...req, includeActualWeek: true, asOfDate: addDays(req.weekStart, -1) };
   const out = await runIdealSchedule(runReq);
+  // 시간 마감·취소로 끝난 탐색은 수렴한 결과가 아니라 검증 자료로 쓰지 않는다(조용히 섞이지 않게 거부)
+  const stop = out.summary.search?.stoppedBy;
+  if (stop === "DEADLINE" || stop === "CANCELLED" || stop === "EVAL_BUDGET") throw new ClientError(`${req.weekStart} 주의 탐색이 끝까지 수렴하지 못해(${stop}) 백테스트에 쓰지 않았습니다. 잠시 후 다시 시도해 주세요.`);
   const actual = out.evaluations.ACTUAL;
   if (!actual || actual.rows.length === 0) throw new ClientError(`${req.weekStart} 주의 실제 방영 데이터가 없어 백테스트할 수 없습니다.`);
   const idealRunId = await saveRun(runReq, out, actor);

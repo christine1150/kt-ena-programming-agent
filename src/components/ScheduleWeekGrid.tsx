@@ -5,24 +5,29 @@
 // 비교 및 다운로드는 관리자 페이지에서처럼 새 페이지로 넘어가서" — 이 컴포넌트 자체는 한 주만
 // 그리며, apiBase로 관리자 전용 API(/api/admin/schedule-grid)와 PD 세션 허용 API
 // (/api/schedule-grid)를 전환할 수 있고, showExport로 엑셀 다운로드 링크 노출 여부를 정한다.
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { NARRATIVE_UP_COLOR } from "@/lib/highlightNarrative";
 // 시간축·색 계산은 이상적 1주일 편성 화면과 공유하도록 scheduleGridLayout.ts로 옮김(2026-09-30, 동작 동일)
+import { DAY_HEAD_PX, DOW_LABELS, addDaysLocal, intensityColor, mixRgb, rgbToHex, weekOfMonthLabel } from "@/lib/scheduleGridLayout";
+// 단계 10: 보기 범위·요일·밀도·색 모드(공통 절대·0 중심 차이)·상대 주 표기는 순수 모듈(workspace/weekCompare)에서 가져온다.
+import { kstToday } from "@/lib/workspace/dates";
 import {
-  DAY_HEAD_PX,
-  DOW_LABELS,
-  GRID_END_MIN,
-  GRID_HEIGHT,
-  GRID_START_MIN,
-  HOUR_PX,
-  HOUR_TICKS,
-  PX_PER_MIN,
-  addDaysLocal,
-  intensityColor,
-  mixRgb,
-  rgbToHex,
-  weekOfMonthLabel,
-} from "@/lib/scheduleGridLayout";
+  COLOR_MODE_HELP,
+  COLOR_MODE_LABEL,
+  HOUR_RANGES,
+  SOURCE_LABEL,
+  absoluteColor,
+  cellDiff,
+  divergingColor,
+  gridGeometry,
+  neighborCell,
+  signedDiffText,
+  weekLabel,
+  type ColorMode,
+  type Density,
+  type GridCell,
+  type HourRangeKey,
+} from "@/lib/workspace/weekCompare";
 
 export type ScheduleGridRow = {
   dow: number;
@@ -34,6 +39,23 @@ export type ScheduleGridRow = {
   matched_rating: number | null;
 };
 type DataSource = "upload" | "db" | "db+upload";
+/** 불러온 한 주 편성표의 요약 — 상위 화면이 좌우 머리글·차이 색·범례를 만들 때 쓴다. key가 현재 선택과 다르면 쓰지 않는다. */
+export type GridMeta = {
+  key: string;
+  channelCode: string;
+  week: string;
+  targetLabel: string | null;
+  source: DataSource | null;
+  hasUpload: boolean;
+  hasEpgData: boolean;
+  channelAnnualAvgRating: number | null;
+  cells: GridCell[];
+};
+/** 칸 key(요일-정렬 순번) — 선택·키보드 이동에 쓴다 */
+const cellKey = (sig: string, dow: number, ri: number) => `${sig}|${dow}-${ri}`;
+const LINE_CLAMP: Record<number, string> = { 1: "line-clamp-1", 2: "line-clamp-2", 3: "line-clamp-3" };
+/** 시청률이 없는(미관측) 칸의 색 외 표시 — 빗금 */
+const UNOBSERVED_HATCH = "repeating-linear-gradient(135deg, rgba(0,0,0,0.07) 0, rgba(0,0,0,0.07) 2px, transparent 2px, transparent 7px)";
 
 function toExtMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -109,6 +131,15 @@ export function ScheduleWeekGrid({
   apiBase,
   showExport = true,
   reloadKey,
+  highlightHour = null,
+  range = "all",
+  dayFilter = null,
+  density = "balanced",
+  colorMode = "channel",
+  otherCells = null,
+  diffMax = null,
+  onMeta,
+  registerScroller,
 }: {
   channelCode: string;
   // 사용자 지시(2026-09-20): "이번 주"는 서버가 계산하는 게 맞다(클라이언트 시간대 계산을
@@ -121,8 +152,34 @@ export function ScheduleWeekGrid({
   showExport?: boolean;
   // 사용자 지시(2026-09-20): 업로드 직후 그 자리에서 바로 갱신되도록 — 값이 바뀌면 재조회한다.
   reloadKey?: number;
+  /** 단계 07: 결정 카드에서 이어진 슬롯(방송일 기준 확장 시각)을 띠로 강조한다 */
+  highlightHour?: number | null;
+  /** 단계 10: 시간 범위(하루 전체/프라임)·요일 하나·글자 밀도·색 모드. 기본값은 기존 화면 그대로 */
+  range?: HourRangeKey;
+  dayFilter?: number | null;
+  density?: Density;
+  colorMode?: ColorMode;
+  /** 차이 모드에서 비교할 반대편 칸들과 0 중심 색 척도의 한계 */
+  otherCells?: GridCell[] | null;
+  diffMax?: number | null;
+  /** 불러온 결과 요약(불러오는 중·오류면 null) — 같은 페이지의 다른 편과 비교하는 화면용 */
+  onMeta?: (meta: GridMeta | null) => void;
+  /** 가로 스크롤 컨테이너를 등록해 좌우를 동기화한다. 해제 함수를 돌려준다 */
+  registerScroller?: (el: HTMLElement) => () => void;
 }) {
   const [rows, setRows] = useState<ScheduleGridRow[] | null>(null);
+  // 단계 10: 불러오기 실패와 "데이터 없음"을 구분하고, 선택한 칸(근거 패널)·키보드 이동 대상을 관리한다.
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // 로빙 tabindex: Tab 정지점은 칸 하나(마지막으로 포커스한 칸), 나머지는 방향키로 이동한다.
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const cellRefs = useRef(new Map<string, HTMLElement>());
+  const scrollElRef = useRef<HTMLDivElement | null>(null);
+  const onMetaRef = useRef(onMeta);
+  useEffect(() => {
+    onMetaRef.current = onMeta;
+  });
   const [source, setSource] = useState<DataSource | null>(null);
   // 사용자 지시(2026-09-20 재지시): "기본적으로 DB 기반으로 구성하되, 업로드된 편성표가
   // 매치되는 회차나 부제가 있으면 그것만 덧붙이는" — 기본값이 DB(+업로드 보강)로 바뀌었으므로,
@@ -158,7 +215,7 @@ export function ScheduleWeekGrid({
   // (ratings.rank, 닐슨 등위 SSOT)를 날짜별로 받아둔다.
   const [dailyStatsByDate, setDailyStatsByDate] = useState<Map<string, { rating: number | null; rank: number | null }>>(new Map());
   // 사용자 지시(2026-09-30): "주간 시청률과 주간 순위도 알고 있다면 날짜 옆에 적어주면 좋겠어"
-  const [weeklyStats, setWeeklyStats] = useState<{ rating: number | null; rank: number | null } | null>(null);
+  const [weeklyStats, setWeeklyStats] = useState<{ rating: number | null; rankText: string | null; source: "official" | "provisional_daily" | "none"; note: string | null } | null>(null);
   const [dateByDow, setDateByDow] = useState<Map<number, string>>(new Map());
   const [resolvedWeek, setResolvedWeek] = useState<{ week: string; weekEnd: string } | null>(week && weekEnd ? { week, weekEnd } : null);
   // 사용자 지시(2026-09-20): "편성표 팝업에서 바로... 프린트하기" — 이 컴포넌트가 한 화면에
@@ -210,13 +267,30 @@ export function ScheduleWeekGrid({
   }
 
   useEffect(() => {
+    // 단계 10: 채널·주를 빠르게 바꿨을 때 늦게 도착한 이전 응답이 새 선택 위에 덮이지 않게 한다(cancelled).
+    let cancelled = false;
     setRows(null);
     setSource(null);
-    const query = `${effectiveWeek ? `&week=${effectiveWeek}` : ""}${viewMode === "upload" ? "&view=upload" : viewMode === "db" ? "&view=db" : ""}`;
+    setLoadError(false);
+    setSelectedKey(null);
+    setWeeklyStats(null);
+    setDailyStatsByDate(new Map());
+    setDateByDow(new Map());
+    setChannelAnnualAvgRating(null);
+    onMetaRef.current?.(null);
+    const query = `${effectiveWeek ? `&week=${encodeURIComponent(effectiveWeek)}` : ""}${viewMode === "upload" ? "&view=upload" : viewMode === "db" ? "&view=db" : ""}`;
     fetch(`${apiBase}/data?channel=${encodeURIComponent(channelCode)}${query}`)
       .then((r) => r.json())
       .then((body) => {
-        const rs: ScheduleGridRow[] = body.ok ? body.rows : [];
+        if (cancelled) return;
+        if (!body.ok) {
+          // 오류를 "이 주차에는 시청률 데이터도 없습니다"로 바꿔 말하지 않는다.
+          setRows([]);
+          setLoadError(true);
+          onMetaRef.current?.(null);
+          return;
+        }
+        const rs: ScheduleGridRow[] = body.rows;
         setRows(rs);
         setSource(body.source ?? null);
         setHasUpload(body.hasUpload ?? false);
@@ -226,12 +300,56 @@ export function ScheduleWeekGrid({
         setDailyStatsByDate(new Map(dailyStats.map((d) => [d.date, { rating: d.rating, rank: d.rank }])));
         setWeeklyStats(body.weeklyStats ?? null);
         setDateByDow(new Map(rs.map((r) => [r.dow, r.broadcast_date])));
-        if (body.ok && body.week && body.weekEnd) setResolvedWeek({ week: body.week, weekEnd: body.weekEnd });
+        if (body.week && body.weekEnd) setResolvedWeek({ week: body.week, weekEnd: body.weekEnd });
+        onMetaRef.current?.({
+          key: `${channelCode}|${body.week ?? effectiveWeek ?? ""}|${viewMode}`,
+          channelCode,
+          week: body.week ?? effectiveWeek ?? "",
+          targetLabel: body.metricContext?.targetLabel ?? null,
+          source: body.source ?? null,
+          hasUpload: body.hasUpload ?? false,
+          hasEpgData: body.hasEpgData ?? false,
+          channelAnnualAvgRating: body.channelAnnualAvgRating ?? null,
+          cells: rs.map((r) => {
+            const startMin = toExtMinutes(r.start_time);
+            let endMin = r.end_time ? toExtMinutes(r.end_time) : startMin + 60;
+            if (endMin <= startMin) endMin = startMin + 30;
+            return { dow: r.dow, startMin, endMin, rating: r.matched_rating };
+          }),
+        });
       })
-      .catch(() => setRows([]));
-  }, [apiBase, channelCode, effectiveWeek, viewMode, reloadKey]);
+      .catch(() => {
+        if (cancelled) return;
+        setRows([]);
+        setLoadError(true);
+        onMetaRef.current?.(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBase, channelCode, effectiveWeek, viewMode, reloadKey, retryKey]);
 
-  if (rows === null || !resolvedWeek) return <p className="text-sm text-zinc-400">불러오는 중...</p>;
+  // 가로 스크롤 동기화 등록(좌우 편성표가 같은 시간축·같은 위치를 보게 한다)
+  useEffect(() => {
+    const el = scrollElRef.current;
+    if (!el || !registerScroller) return;
+    return registerScroller(el);
+  }, [registerScroller, rows, resolvedWeek]);
+
+  if (rows === null) return <p className="text-sm text-zinc-400">불러오는 중...</p>;
+  if (!resolvedWeek) {
+    // 첫 조회가 실패하면 주 정보가 없다 — 영구 로딩이 아니라 실패 화면과 다시 시도를 보여 준다.
+    return loadError ? (
+      <div className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">
+        편성표를 불러오지 못했습니다. 데이터가 없는 것이 아니라 조회에 실패한 것입니다.
+        <button type="button" onClick={() => setRetryKey((k) => k + 1)} className="ml-2 underline">
+          다시 시도
+        </button>
+      </div>
+    ) : (
+      <p className="text-sm text-zinc-400">불러오는 중...</p>
+    );
+  }
 
   const ratings = rows.map((r) => r.matched_rating).filter((v): v is number => v !== null && v > 0);
   const maxRating = Math.max(1e-9, ...ratings);
@@ -254,6 +372,57 @@ export function ScheduleWeekGrid({
     if (!byDow.has(r.dow)) byDow.set(r.dow, []);
     byDow.get(r.dow)!.push(r);
   }
+  // 단계 10: 눈금·글자 배율은 보기 범위와 요일 필터로 정한다(기본값은 기존 눈금과 같다 — 테스트로 고정).
+  const geo = gridGeometry(range, dayFilter);
+  const viewSig = `${range}:${dayFilter ?? "all"}`;
+  const fs = geo.fontScale;
+  const today = kstToday();
+  const decimalsAll = channelCode === "SKYUHD" ? 4 : 3;
+  // 키보드 이동·근거 패널용 칸 목록(화면에 그려지는 칸만, 요일별 시작 시각순 — 아래 렌더와 같은 정렬)
+  const sortedByDow = new Map<number, ScheduleGridRow[]>();
+  for (const [d, list] of byDow) sortedByDow.set(d, list.slice().sort((a, b) => a.start_time.localeCompare(b.start_time)));
+  const navList: { key: string; dow: number; startMin: number; endMin: number; row: ScheduleGridRow }[] = [];
+  for (const [d, list] of sortedByDow) {
+    if (dayFilter !== null && d !== dayFilter) continue;
+    list.forEach((r, ri) => {
+      const s = toExtMinutes(r.start_time);
+      let e = r.end_time ? toExtMinutes(r.end_time) : s + 60;
+      if (e <= s) e = s + 30;
+      if (Math.min(geo.endMin, e) <= Math.max(geo.startMin, s)) return;
+      navList.push({ key: cellKey(viewSig, d, ri), dow: d, startMin: s, endMin: e, row: r });
+    });
+  }
+  const selected = selectedKey ? (navList.find((c) => c.key === selectedKey) ?? null) : null;
+  const tabStop = activeKey && navList.some((c) => c.key === activeKey) ? activeKey : (navList[0]?.key ?? null);
+  function onCellKey(e: React.KeyboardEvent<HTMLElement>, key: string) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setSelectedKey((cur) => (cur === key ? null : key));
+      return;
+    }
+    if (e.key === "Escape") {
+      if (selectedKey) {
+        e.preventDefault();
+        setSelectedKey(null); // 포커스는 이 칸에 그대로 남는다(원래 위치 복귀)
+      }
+      return;
+    }
+    if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      const idx = navList.findIndex((c) => c.key === key);
+      const n = idx < 0 ? null : neighborCell(navList, idx, e.key);
+      if (n !== null) {
+        e.preventDefault();
+        const nk = navList[n].key;
+        cellRefs.current.get(nk)?.focus();
+        if (selectedKey) setSelectedKey(nk); // 근거 패널이 열려 있으면 이동한 칸을 따라간다
+      }
+    }
+  }
+  function closePanel() {
+    const k = selectedKey;
+    setSelectedKey(null);
+    if (k) requestAnimationFrame(() => cellRefs.current.get(k)?.focus()); // 닫으면 선택했던 칸으로 포커스 복귀
+  }
 
   return (
     <div id={printAreaId} className="min-w-0 flex-1">
@@ -266,7 +435,7 @@ export function ScheduleWeekGrid({
             <div className="flex shrink-0 items-center gap-0.5 print:hidden">
               <button
                 type="button"
-                onClick={() => setWeekOverride(addDaysLocal(resolvedWeek.week, -7))}
+                onClick={() => setWeekOverride(addDaysLocal(effectiveWeek ?? resolvedWeek.week, -7))}
                 title="이전 주"
                 className="flex h-6 w-6 items-center justify-center rounded border border-zinc-300 text-zinc-500 hover:bg-zinc-50"
               >
@@ -274,7 +443,7 @@ export function ScheduleWeekGrid({
               </button>
               <button
                 type="button"
-                onClick={() => setWeekOverride(addDaysLocal(resolvedWeek.week, 7))}
+                onClick={() => setWeekOverride(addDaysLocal(effectiveWeek ?? resolvedWeek.week, 7))}
                 title="다음 주"
                 className="flex h-6 w-6 items-center justify-center rounded border border-zinc-300 text-zinc-500 hover:bg-zinc-50"
               >
@@ -288,7 +457,7 @@ export function ScheduleWeekGrid({
             </div>
           )}
           <p className="text-sm font-semibold text-zinc-700">
-            {resolvedWeek.week} ~ {resolvedWeek.weekEnd}
+            {weekLabel(effectiveWeek ?? resolvedWeek.week, today, effectiveWeek ? undefined : resolvedWeek.weekEnd)}
             {/* 사용자 지시(2026-09-30): "주간 시청률과 주간 순위도 알고 있다면 날짜 옆에" —
                 예시: "2026-09-21 ~ 2026-09-27 : 9월 3주 0.370 (12위)". */}
             {weeklyStats && weeklyStats.rating !== null && (
@@ -296,8 +465,13 @@ export function ScheduleWeekGrid({
                 : {weekOfMonthLabel(resolvedWeek.week)}{" "}
                 <span className="font-bold tabular-nums text-zinc-700">
                   {weeklyStats.rating.toFixed(channelCode === "SKYUHD" ? 4 : 3)}
-                  {weeklyStats.rank !== null ? ` (${weeklyStats.rank}위)` : ""}
+                  {weeklyStats.rankText ? ` (${weeklyStats.rankText})` : ""}
                 </span>
+                {weeklyStats.source === "provisional_daily" && (
+                  <span className="ml-1 text-[11px] font-normal text-amber-600" title={weeklyStats.note ?? undefined}>
+                    잠정(공식 주간 값 미수신)
+                  </span>
+                )}
               </span>
             )}
           </p>
@@ -376,25 +550,37 @@ export function ScheduleWeekGrid({
           </div>
         )}
       </div>
-      {rows.length === 0 ? (
+      {rows.length > 0 && !loadError && <p className="mb-1 text-[10px] text-zinc-500 print:hidden">칸을 선택(클릭·Enter)하면 근거 · 방향키로 이동 · Esc로 닫기</p>}
+      <p className="hidden text-[9px] text-zinc-600 print:block">
+        색 기준: {COLOR_MODE_LABEL[colorMode]} — {COLOR_MODE_HELP[colorMode]} · 시간 {HOUR_RANGES[range].label} · 요일 {dayFilter === null ? "전체 주" : DOW_LABELS[dayFilter - 1]}
+      </p>
+      {loadError ? (
+        <div className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">
+          편성표를 불러오지 못했습니다. 데이터가 없는 것이 아니라 조회에 실패한 것입니다.
+          <button type="button" onClick={() => setRetryKey((k) => k + 1)} className="ml-2 underline">
+            다시 시도
+          </button>
+        </div>
+      ) : rows.length === 0 ? (
         <p className="text-sm text-zinc-400">이 주차에는 시청률 데이터도 없습니다.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl ring-1 ring-zinc-100">
+        <div ref={scrollElRef} className="overflow-x-auto rounded-xl ring-1 ring-zinc-100">
           <div className="flex" style={{ minWidth: 560 }}>
-            <div className="relative w-10 shrink-0 bg-zinc-50" style={{ height: GRID_HEIGHT + DAY_HEAD_PX }}>
-              {HOUR_TICKS.map((h) => (
+            <div className="relative w-10 shrink-0 bg-zinc-50" style={{ height: geo.heightPx + DAY_HEAD_PX }}>
+              {geo.hourTicks.map((h) => (
                 <div
                   key={h}
                   className="absolute left-0 right-1 text-right text-[9px] text-zinc-400"
-                  style={{ top: (h * 60 - GRID_START_MIN) * PX_PER_MIN + DAY_HEAD_PX - 5 }}
+                  style={{ top: (h * 60 - geo.startMin) * geo.pxPerMin + DAY_HEAD_PX - 5 }}
                 >
                   {h}시
                 </div>
               ))}
             </div>
-            {DOW_LABELS.map((label, i) => {
-              const dow = i + 1;
-              const dayRows = (byDow.get(dow) ?? []).slice().sort((a, b) => a.start_time.localeCompare(b.start_time));
+            {DOW_LABELS.map((label, i) => ({ label, dow: i + 1 }))
+              .filter((d) => dayFilter === null || d.dow === dayFilter)
+              .map(({ label, dow }) => {
+              const dayRows = sortedByDow.get(dow) ?? [];
               // 사용자 지시(2026-09-28): "각 요일 밑에 날짜가 나오지? 그 밑에 굵고 진한 글씨로
               // 시청률과 순위가 시청률(순위) 형태로... 연간 채널 평균 시청률보다 높은 날은
               // 긍정 색으로."
@@ -424,18 +610,28 @@ export function ScheduleWeekGrid({
                   <div
                     className="relative"
                     style={{
-                      height: GRID_HEIGHT,
-                      backgroundImage: `repeating-linear-gradient(to bottom, #f4f4f5 0, #f4f4f5 1px, transparent 1px, transparent ${HOUR_PX}px)`,
+                      height: geo.heightPx,
+                      backgroundImage: `repeating-linear-gradient(to bottom, #f4f4f5 0, #f4f4f5 1px, transparent 1px, transparent ${60 * geo.pxPerMin}px)`,
                     }}
                   >
+                    {highlightHour !== null && highlightHour * 60 >= geo.startMin && highlightHour * 60 < geo.endMin && (
+                      <div
+                        aria-hidden="true"
+                        data-slot-highlight={highlightHour}
+                        className="pointer-events-none absolute inset-x-0 z-[1] bg-indigo-300/20 ring-1 ring-inset ring-indigo-400/70"
+                        style={{ top: (highlightHour * 60 - geo.startMin) * geo.pxPerMin, height: 60 * geo.pxPerMin }}
+                      />
+                    )}
                     {dayRows.map((r, ri) => {
-                      const startMin = Math.max(GRID_START_MIN, toExtMinutes(r.start_time));
-                      let endMin = r.end_time ? toExtMinutes(r.end_time) : startMin + 60;
-                      if (endMin <= startMin) endMin = startMin + 30;
-                      endMin = Math.min(GRID_END_MIN, endMin);
+                      const rawStart = toExtMinutes(r.start_time);
+                      let rawEnd = r.end_time ? toExtMinutes(r.end_time) : rawStart + 60;
+                      if (rawEnd <= rawStart) rawEnd = rawStart + 30;
+                      // 보기 범위 밖은 자르고(프라임 보기 등), 완전히 밖이면 그리지 않는다
+                      const startMin = Math.max(geo.startMin, rawStart);
+                      const endMin = Math.min(geo.endMin, rawEnd);
                       if (endMin <= startMin) return null;
-                      const top = (startMin - GRID_START_MIN) * PX_PER_MIN;
-                      const height = Math.max(4, (endMin - startMin) * PX_PER_MIN);
+                      const top = (startMin - geo.startMin) * geo.pxPerMin;
+                      const height = Math.max(4, (endMin - startMin) * geo.pxPerMin);
                       const rating = r.matched_rating;
                       const isZero = rating === 0;
                       const intensity = rating !== null && rating > 0 ? Math.min(1, rating / intensityPivot) : 0;
@@ -443,14 +639,40 @@ export function ScheduleWeekGrid({
                       // 데이터가 아예 없는 칸(회색 배경 없음)과 구분되도록 얇은 테두리만 남긴다.
                       // 사용자 재지시(2026-09-22): 경쟁채널은 브랜드색 단색 그라데이션 대신
                       // 빨강(부정)↔흰색(0)↔파랑(긍정, 약하게) 대비 배색을 쓴다.
+                      // 단계 10 색 모드: 채널 기준(기존) / 공통 절대(같은 시청률 = 같은 색) / 0 중심 차이(반대편 같은 요일·시간대 대비)
+                      const diffRes = colorMode === "diff" && otherCells ? cellDiff({ dow, startMin: rawStart, endMin: rawEnd, rating }, otherCells) : null;
+                      const diffValue = diffRes ? diffRes.diff : null;
+                      const unobserved = colorMode === "diff" ? diffValue === null : rating === null;
                       const { bg, isDark } =
-                        rating === null
-                          ? { bg: "#fafafa", isDark: false }
-                          : isZero
-                            ? { bg: "#ffffff", isDark: false }
-                            : isCompetitor
-                              ? competitorIntensityColor(rating, boldThreshold, maxRating)
-                              : intensityColor(themeColor, intensity);
+                        colorMode === "diff"
+                          ? diffValue !== null && diffMax !== null
+                            ? divergingColor(diffValue, Math.max(diffMax, 1e-9))
+                            : { bg: "#fafafa", isDark: false }
+                          : rating === null
+                            ? { bg: "#fafafa", isDark: false }
+                            : isZero
+                              ? { bg: "#ffffff", isDark: false }
+                              : colorMode === "absolute"
+                                ? absoluteColor(rating)
+                                : isCompetitor
+                                  ? competitorIntensityColor(rating, boldThreshold, maxRating)
+                                  : intensityColor(themeColor, intensity);
+                      const mainText =
+                        colorMode === "diff"
+                          ? diffValue !== null
+                            ? signedDiffText(diffValue, decimalsAll)
+                            : rating === null
+                              ? null
+                              : "비교 없음"
+                          : rating === null
+                            ? null
+                            : isZero
+                              ? "0"
+                              : rating.toFixed(decimalsAll);
+                      const key = cellKey(viewSig, dow, ri);
+                      const isSelected = selectedKey === key;
+                      const titleLines = height < 40 ? 0 : density === "title" ? (height >= 70 ? 3 : 2) : density === "value" ? 1 : 2;
+                      const ratingMax = density === "value" ? 22 : density === "title" ? 12 : 16;
                       const nameColor = isDark ? "#ffffff" : "#27272a"; // zinc-800
                       const ratingColor = isZero ? (isDark ? "#e4e4e7" : "#a1a1aa") : isDark ? "#ffffff" : "#18181b";
                       const decimals = channelCode === "SKYUHD" ? 4 : 3;
@@ -467,12 +689,25 @@ export function ScheduleWeekGrid({
                       return (
                         <div
                           key={`${r.start_time}-${ri}`}
-                          className="absolute left-0 right-0 overflow-hidden border-b border-white px-0.5"
+                          ref={(el) => {
+                            if (el) cellRefs.current.set(key, el);
+                            else cellRefs.current.delete(key);
+                          }}
+                          role="button"
+                          tabIndex={key === tabStop ? 0 : -1}
+                          onFocus={() => setActiveKey(key)}
+                          aria-pressed={isSelected}
+                          aria-label={`${label}요일 ${r.start_time.slice(0, 5)} ${r.program_name_raw} ${mainText ?? "시청률 매칭 안 됨"}`}
+                          onClick={() => setSelectedKey((cur) => (cur === key ? null : key))}
+                          onKeyDown={(e) => onCellKey(e, key)}
+                          className={`absolute left-0 right-0 cursor-pointer overflow-hidden border-b border-white px-0.5 outline ${isSelected ? "outline-2 -outline-offset-2 outline-indigo-600 print:outline-1 print:outline-black/5" : "outline-1 outline-black/5"} focus-visible:z-[2] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-indigo-600`}
                           style={{
                             top,
                             height,
                             backgroundColor: bg,
-                            outline: "1px solid rgba(0,0,0,0.05)",
+                            // 시청률 없음(미관측)은 색만이 아니라 빗금으로도 표시한다
+                            backgroundImage: unobserved ? UNOBSERVED_HATCH : undefined,
+                            // 윤곽선(기본·선택·포커스 링)은 모두 클래스로 둔다 — 인라인 스타일이면 포커스 링을 가린다.
                             // 첫 방송(초·본)은 엑셀처럼 분홍으로 구분 — 시청률 색은 그대로 두고 왼쪽 띠로만 표시
                             boxShadow: isFirstRun ? "inset 3px 0 0 #f472b6" : undefined,
                           }}
@@ -506,21 +741,29 @@ export function ScheduleWeekGrid({
                               )}
                               <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden">
                                 <span
-                                  className={`w-full text-center text-[9.5px] font-medium leading-[1.15] ${height >= 40 ? "line-clamp-2" : "truncate"}`}
-                                  style={{ color: nameColor }}
+                                  className={`w-full text-center font-medium leading-[1.15] ${titleLines > 0 ? LINE_CLAMP[titleLines] : "truncate"}`}
+                                  style={{ color: nameColor, fontSize: `${Math.round(9.5 * fs * 10) / 10}px` }}
                                 >
                                   {title}
                                 </span>
-                                {rating !== null ? (
+                                {mainText !== null ? (
                                   // 사용자 지시(2026-09-20): "시청률이 잘 보이게 아주 큰 글씨, 가운데 정렬. 평균 이상이면
                                   // 볼드. 0이면 0.000 대신 0으로, 회색 글씨." 재지시: "0은 좀 더 작게" — 0은 칸 크기와
                                   // 무관하게 항상 작은 고정 크기. 재지시(2026-09-22): 배경이 진해지면(isDark) 글자색은 흰색.
+                                  <>
                                   <span
-                                    className={`w-full text-center leading-none ${isZero ? "font-normal" : boldThreshold !== null && rating >= boldThreshold ? "font-bold" : "font-normal"}`}
-                                    style={{ fontSize: isZero ? "10px" : `${Math.min(16, Math.max(10, height / 3.2))}px`, color: ratingColor }}
+                                    className={`w-full text-center leading-none ${isZero ? "font-normal" : boldThreshold !== null && rating !== null && rating >= boldThreshold ? "font-bold" : "font-normal"}`}
+                                    style={{ fontSize: mainText === "비교 없음" || (isZero && colorMode !== "diff") ? "10px" : `${Math.round(Math.min(ratingMax, Math.max(10, height / 3.2)) * Math.min(fs, 1.25) * 10) / 10}px`, color: ratingColor }}
                                   >
-                                    {isZero ? "0" : rating.toFixed(decimals)}
+                                    {mainText}
                                   </span>
+                                  {/* 차이 모드: 칸의 실제 시청률과 반대편 평균을 함께 보여 준다(차이만 보이면 본값을 알 수 없다) */}
+                                  {colorMode === "diff" && diffRes && diffValue !== null && rating !== null && diffRes.other !== null && height >= 40 && (
+                                    <span className="w-full truncate text-center text-[8px] leading-none" style={{ color: ratingColor, opacity: 0.85 }}>
+                                      {rating.toFixed(decimalsAll)} / 반대편 {diffRes.other.toFixed(decimalsAll)}
+                                    </span>
+                                  )}
+                                  </>
                                 ) : (
                                   <span className="w-full truncate text-center text-[9px]" style={{ color: isDark ? "#ffffff" : "#71717a" }}>
                                     매칭 안 됨
@@ -541,7 +784,7 @@ export function ScheduleWeekGrid({
                               <span className="w-full truncate text-center text-[8.5px] leading-none" style={{ color: nameColor }}>
                                 {episode && `${episode}회 `}
                                 {title}
-                                {rating !== null && <span style={{ color: ratingColor }}> {isZero ? "0" : rating.toFixed(decimals)}</span>}
+                                {mainText !== null && <span style={{ color: ratingColor }}> {mainText}</span>}
                               </span>
                             </div>
                           ) : null}
@@ -555,6 +798,107 @@ export function ScheduleWeekGrid({
           </div>
         </div>
       )}
+      {selected && (
+        <EvidencePanel
+          row={selected.row}
+          dowLabel={DOW_LABELS[selected.dow - 1]}
+          source={source}
+          hasEpgData={hasEpgData}
+          decimals={decimalsAll}
+          colorMode={colorMode}
+          otherAvg={colorMode === "diff" && otherCells ? cellDiff({ dow: selected.dow, startMin: selected.startMin, endMin: selected.endMin, rating: selected.row.matched_rating }, otherCells) : null}
+          annualAvg={channelAnnualAvgRating}
+          onClose={closePanel}
+        />
+      )}
     </div>
+  );
+}
+
+// 단계 10: 선택한 칸의 근거 — 긴 제목은 칸에서 잘리므로 여기서 전부 보여 준다. 시청률·회차·부제가 어디서 온 값인지 함께 적는다.
+function EvidencePanel({
+  row,
+  dowLabel,
+  source,
+  hasEpgData,
+  decimals,
+  colorMode,
+  otherAvg,
+  annualAvg,
+  onClose,
+}: {
+  row: ScheduleGridRow;
+  dowLabel: string;
+  source: DataSource | null;
+  hasEpgData: boolean;
+  decimals: number;
+  colorMode: ColorMode;
+  otherAvg: { diff: number | null; other: number | null; coverage: number } | null;
+  annualAvg: number | null;
+  onClose: () => void;
+}) {
+  const { title, subtitle } = splitProgramTitleSubtitle(row.program_name_raw);
+  const { episode } = extractEpisodeTag(row.tags);
+  const chips = parseTagChips(row.tags);
+  const rating = row.matched_rating;
+  const episodeFrom = source === "upload" ? "업로드 편성표" : source === "db+upload" ? (hasEpgData ? "업로드 편성표·EPG" : "업로드 편성표") : source === "db" ? (hasEpgData ? "EPG" : null) : null;
+  return (
+    <section
+      role="region"
+      aria-label="선택한 칸의 근거"
+      aria-live="polite"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onClose();
+        }
+      }}
+      className="sticky bottom-3 z-10 mt-2 rounded-xl border border-indigo-200 bg-white p-3 text-xs text-zinc-700 shadow-lg print:hidden"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="break-words text-sm font-semibold text-zinc-900">{title}</p>
+          {subtitle && <p className="break-words text-zinc-600">{subtitle}</p>}
+        </div>
+        <button type="button" onClick={onClose} className="shrink-0 rounded-lg border border-zinc-300 px-2 py-0.5 text-[11px] text-zinc-600 hover:bg-zinc-50">
+          닫기(Esc)
+        </button>
+      </div>
+      <dl className="mt-2 grid grid-cols-[72px_minmax(0,1fr)] gap-x-2 gap-y-1">
+        <dt className="text-zinc-400">방송</dt>
+        <dd>
+          {dowLabel}요일 {row.broadcast_date.slice(5)} · {row.start_time.slice(0, 5)} ~ {row.end_time ? row.end_time.slice(0, 5) : "미확인"}
+        </dd>
+        <dt className="text-zinc-400">시청률</dt>
+        <dd>
+          {rating === null ? "시청률 DB와 매칭되지 않음(미관측 — 0이 아님)" : <span className="tabular-nums">{rating === 0 ? "0" : rating.toFixed(decimals)}</span>}
+          {rating !== null && annualAvg !== null && annualAvg > 0 && <span className="ml-1 text-zinc-500">· 이 채널 연평균의 {Math.round((rating / annualAvg) * 100)}%</span>}
+        </dd>
+        {colorMode === "diff" && (
+          <>
+            <dt className="text-zinc-400">반대편</dt>
+            <dd>
+              {otherAvg && otherAvg.other !== null && otherAvg.diff !== null ? (
+                <span className="tabular-nums">
+                  같은 요일·시간대 평균 {otherAvg.other.toFixed(decimals)} → 차이 {signedDiffText(otherAvg.diff, decimals)}
+                </span>
+              ) : (
+                "반대편에 같은 시간대의 시청률이 충분히 없어 차이를 계산하지 않았습니다(추정하지 않음)."
+              )}
+            </dd>
+          </>
+        )}
+        <dt className="text-zinc-400">회차</dt>
+        <dd>{episode ? `${episode}회${episodeFrom ? ` (${episodeFrom} 기재)` : ""}` : "회차 정보 없음 — 이 화면이 회차를 추정하지 않습니다"}</dd>
+        {chips.length > 0 && (
+          <>
+            <dt className="text-zinc-400">태그</dt>
+            <dd>{chips.map((c) => c.text).join(" · ")}</dd>
+          </>
+        )}
+        <dt className="text-zinc-400">자료 출처</dt>
+        <dd>{source ? SOURCE_LABEL[source] : "미확인"}</dd>
+      </dl>
+    </section>
   );
 }

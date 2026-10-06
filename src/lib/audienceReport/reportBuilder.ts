@@ -18,6 +18,7 @@ import { buildRecommendationSection } from "./recommendationSection";
 import { buildChannelExecutiveSummary, buildStrategicImplications } from "./narrativeLlm";
 import type { OriginalReviewSection, EnaLiveAiringSection, SkyUhdSubstituteSection, CompetitorInsightRow, ComparisonMatrixRow, AudienceReportDocument, BestWorstDayDetail } from "./reportModel";
 import { buildModeASection, buildModeBSection, buildModeCSection, buildModeDSection } from "./reportSections";
+import { buildMetricContext, dataSnapshotId, datesIn } from "@/lib/metrics";
 
 export type AudienceReportRequest =
   | { mode: "single_day"; date: string }
@@ -134,6 +135,22 @@ export async function buildAudienceReport(channelCode: string, request: Audience
   const { data: channelRow } = await supabase.from("channels").select("id, name, theme_color").eq("code", channelCode).maybeSingle();
   if (!channelRow) throw new Error(`채널을 찾을 수 없습니다: ${channelCode}`);
 
+  // 단계 02: 웹·Word·PPT가 같은 문서에서 나오므로 지표 컨텍스트와 스냅샷 ID도 문서에 함께 실어 한 번만 만든다.
+  const expectedDays = datesIn({ from: period.dateFrom, to: period.dateTo }).length;
+  const presentDays = raw.periodReport?.days_with_data ?? expectedDays;
+  const metricContext = buildMetricContext({
+    channelCode,
+    targetLabel: raw.rankTargetLabel,
+    metric: "rating",
+    grain: "derived",
+    period: { from: period.dateFrom, to: period.dateTo, kind: period.mode, label: period.label },
+    comparison: { from: period.priorDateFrom, to: period.priorDateTo, kind: "prior", label: period.comparisonLabel ?? "비교 기간" },
+    aggregation: period.dateFrom === period.dateTo ? "single_day" : "daily_mean_provisional",
+    knowledgeCutoff: period.dateTo,
+    coverage: { expectedDays, presentDays, missingDates: [], complete: presentDays >= expectedDays },
+  });
+  const metricMeta = { metricContext, dataSnapshotId: dataSnapshotId(metricContext) };
+
   // Phase 9(§08) — 편성 제언은 메인 기간·모드와 무관하게 항상 붙는 마무리 섹션이라, 여기서 한 번만
   // 계산해 아래 4개 모드 분기 전부에 그대로 붙인다.
   const recommendation = await buildRecommendationSection(channelCode, raw.programTargetLabel, raw.rankTargetLabel, period.dateFrom, period.dateTo, raw);
@@ -164,7 +181,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
     });
     const bodyA = { mode: "single_day" as const, sections };
     const aiSummaryA = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyA, channelCode);
-    return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyA, recommendation, aiSummary: aiSummaryA };
+    return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyA, recommendation, aiSummary: aiSummaryA, ...metricMeta };
   }
 
   if (period.mode === "range") {
@@ -180,7 +197,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
     const sections = buildModeBSection(raw, { originalReview, enaLiveAiring, skyUhd, bestDayDetail, worstDayDetail });
     const bodyB = { mode: "range" as const, sections };
     const aiSummaryB = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyB, channelCode);
-    return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyB, recommendation, aiSummary: aiSummaryB };
+    return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyB, recommendation, aiSummary: aiSummaryB, ...metricMeta };
   }
 
   if (period.mode === "compare") {
@@ -211,7 +228,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
     });
     const bodyC = { mode: "compare" as const, sections };
     const aiSummaryC = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyC, channelCode);
-    return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyC, recommendation, aiSummary: aiSummaryC };
+    return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyC, recommendation, aiSummary: aiSummaryC, ...metricMeta };
   }
 
   // MODE D(cumulative)
@@ -246,7 +263,7 @@ export async function buildAudienceReport(channelCode: string, request: Audience
   sections.strategicImplications = await buildStrategicImplications(channelRow.name, period.label, raw, sections);
   const bodyD = { mode: "cumulative" as const, sections };
   const aiSummaryD = await buildChannelExecutiveSummary(channelRow.name, period.label, bodyD, channelCode);
-  return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyD, recommendation, aiSummary: aiSummaryD };
+  return { channelCode, channelName: channelRow.name, themeColor: channelRow.theme_color, groupCode: raw.group.code, groupLabel: raw.group.label, period, masterInfo: raw.masterInfo, qualityIssues, body: bodyD, recommendation, aiSummary: aiSummaryD, ...metricMeta };
 }
 
 async function fetchDayDetail(channelCode: string, programTargetLabel: string, date: string, rating: number | null): Promise<BestWorstDayDetail> {

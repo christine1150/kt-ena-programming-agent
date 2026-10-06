@@ -2,6 +2,7 @@
 // COMPARED WITH?(경쟁채널과 비교하면) 서술도 규칙 기반이었다. 같은 입력값(경쟁채널별 오늘
 // 시청률·12주 평균 대비 등락·오늘 최고 성적 프로그램)을 LLM에 줘서 하나의 문단으로 종합한다.
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "./llmSynthesis";
+import { guardForInput } from "./insight/guardInput";
 
 export interface CompetitorNarrativeLlmInput {
   channelName: string;
@@ -39,12 +40,16 @@ const SCHEMA = {
 export async function buildCompetitorNarrativeViaLlm(input: CompetitorNarrativeLlmInput): Promise<string | null> {
   if (input.competitors.length === 0) return null;
   const baselineLabel = input.baselineLabel ?? "12주 평균";
-  const result = await callOpenAiJsonSynthesis<{ narrative: string }>(
-    buildSystemPrompt(baselineLabel),
-    { channelName: input.channelName, competitors: input.competitors },
-    "competitor_narrative",
-    SCHEMA
-  );
-  const narrative = result?.narrative?.trim();
-  return narrative && narrative.length > 0 ? narrative : null;
+  // AI가 인용할 수 있는 자리수를 입력 단계에서 고정한다(시청률 3자리, 등락률 1자리) — 검증이 표기 차이로 멀쩡한 문장을 버리지 않도록.
+  const sent = {
+    channelName: input.channelName,
+    competitors: input.competitors.map((c) => ({
+      ...c,
+      today_rating: c.today_rating === null ? null : Math.round(c.today_rating * 1000) / 1000,
+      delta_pct: c.delta_pct === null ? null : Math.round(c.delta_pct * 10) / 10,
+    })),
+  };
+  const result = await callOpenAiJsonSynthesis<{ narrative: string }>(buildSystemPrompt(baselineLabel), sent, "competitor_narrative", SCHEMA);
+  // 단계 04: 숫자·기준·인과 검증. delta_pct의 기준은 baselineLabel 하나뿐이다.
+  return guardForInput(result?.narrative, sent, { label: "competitor_narrative", rules: [{ match: /delta_pct$/, valueKind: "pct_change" }], baselineLabels: [baselineLabel] });
 }

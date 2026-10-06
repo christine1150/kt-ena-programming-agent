@@ -699,6 +699,31 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   check("기준 일수를 못 채우면 순환 편성 아님", !detectRotationPrograms(list, 6, 0.5).has("HUMAN"));
 }
 
+{
+  // 권리(Avail) 게이트(단계 06): 게이트가 없으면 이전과 같고, 게이트가 막은 후보는 점수가 높아도 AI가 배치하지 않는다.
+  const base = runIdealScheduleEngine(baseRun());
+  const sig = (r: EngineRunResult) => JSON.stringify(aiBlocks(r).map((b) => [b.weekday, b.startMin, b.candidate.key]));
+  const top = [...countBy(aiBlocks(base), (b) => b.candidate.programKey).entries()].sort((a, b) => b[1] - a[1])[0];
+  const victim = top[0];
+  check("권리 게이트: 가장 많이 배치되던(=점수가 높은) 프로그램이 기준 편성에 있다", !!victim && top[1] >= 1);
+  const noGate = runIdealScheduleEngine(baseRun({ rights: undefined }));
+  check("권리 게이트: 게이트를 넘기지 않으면 지문·편성이 이전과 같다(현재 동작 유지)", noGate.fingerprint === base.fingerprint && sig(noGate) === sig(base));
+  const gated = runIdealScheduleEngine(baseRun({ rights: { fingerprint: "inv-1", slotAllowed: (c) => c.programKey !== victim } }));
+  check("권리 게이트(기존 틀 유지): 막힌 프로그램은 AI 블록에 들어가지 않는다", aiBlocks(gated).every((b) => b.candidate.programKey !== victim) && aiBlocks(gated).length > 0);
+  check("권리 게이트: 대체 후보 목록에도 막힌 프로그램이 없다", gated.output.blocks.every((b) => (b.alternatives ?? []).every((a) => a.candidate.programKey !== victim)));
+  check("권리 게이트: 쓰면 지문에 권리 목록 버전이 반영되어 다르다", gated.fingerprint !== base.fingerprint && runIdealScheduleEngine(baseRun({ rights: { fingerprint: "inv-2", slotAllowed: (c) => c.programKey !== victim } })).fingerprint !== gated.fingerprint);
+  const baseAi = runIdealScheduleEngine(baseRun({ mode: "AI_OPTIMIZED" }));
+  const topAi = [...countBy(aiBlocks(baseAi), (b) => b.candidate.programKey).entries()].sort((a, b) => b[1] - a[1])[0];
+  const gatedAi = runIdealScheduleEngine(baseRun({ mode: "AI_OPTIMIZED", rights: { fingerprint: "inv-1", slotAllowed: (c) => c.programKey !== topAi[0] } }));
+  check("권리 게이트(AI 시간 최적화): 막힌 프로그램은 어떤 시간에도 배치되지 않는다", !!topAi && aiBlocks(gatedAi).every((b) => b.candidate.programKey !== topAi[0]));
+  const timeGate = runIdealScheduleEngine(baseRun({ rights: { fingerprint: "inv-3", slotAllowed: (c, wd) => !(c.programKey === victim && wd <= 3) } }));
+  check("권리 게이트: 요일별로도 막을 수 있다(월~수만 불가 → 월~수에는 없음)", aiBlocks(timeGate).every((b) => !(b.candidate.programKey === victim && b.weekday <= 3)));
+  const none = runIdealScheduleEngine(baseRun({ rights: { fingerprint: "inv-4", slotAllowed: () => false } }));
+  check("권리 게이트: 모두 막히면 AI가 임의로 채우지 않고 사유(권리 조건)와 함께 빈 슬롯", aiBlocks(none).length === 0 && none.output.emptySlots.length > 0 && none.output.emptySlots.every((e) => e.reason.includes("권리")));
+  const lock = runIdealScheduleEngine(baseRun({ constraints: [cInput({ id: "lockR", rank: 1, weekday: 2, startMin: 1260, durationMin: 60, programName: "고정편성작" })], rights: { fingerprint: "inv-5", slotAllowed: () => false } }));
+  check("권리 게이트: 사용자 고정·필수 편성 블록은 게이트가 지우지 않는다(검토 대상으로 남김)", lock.output.blocks.some((b) => b.fixed && b.candidate.programName === "고정편성작"));
+}
+
 console.log(`\n${passed}건 통과, ${failures.length}건 실패`);
 if (failures.length > 0) {
   for (const f of failures) console.log(`  ❌ ${f}`);

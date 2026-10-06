@@ -29,6 +29,8 @@ import type { ActionTag } from "@/lib/actionTags";
 // (mart_daily_dashboard_cache / mart_llm_text_cache — 마이그레이션 20260917010000).
 import { loadDailyMartCache, cachedOrRpc, martFingerprint, MART_SLOT, MART_GLOBAL_CODE } from "@/lib/dailyMartCache";
 import { cachedLlmText } from "@/lib/llmTextCache";
+import { buildMetricContext, dataSnapshotId } from "@/lib/metrics";
+import { selectRepresentativeCompetitors } from "@/lib/broadcastTime/overlap";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -124,6 +126,9 @@ interface CompetitorOverlapRow {
   competitor_name: string;
   competitor_program_name: string;
   competitor_start_time: string;
+  /** 겹침 RPC가 함께 돌려주는 종료 시각 — 대표성(겹친 초) 계산에 쓴다(단계 03) */
+  our_end_time?: string | null;
+  competitor_end_time?: string | null;
   competitor_rating: number | null;
   rating_gap: number | null;
 }
@@ -784,7 +789,8 @@ export async function GET(request: Request) {
                 p_limit: 30,
               })
           ).then(({ data: overlap }) => {
-            overlapByChannel.set(code, overlap ?? []);
+            // 단계 03: 겹침이 짧은 경쟁작(예: 38초)은 대표 경쟁작·동시간대 순위에서 제외한다
+            overlapByChannel.set(code, selectRepresentativeCompetitors(overlap ?? []));
           }),
         ];
         if (HOUSEHOLD_ELIGIBLE_CODES.has(code)) {
@@ -803,7 +809,7 @@ export async function GET(request: Request) {
                   p_limit: 30,
                 })
             ).then(({ data: overlap }) => {
-              householdOverlapByChannel.set(code, overlap ?? []);
+              householdOverlapByChannel.set(code, selectRepresentativeCompetitors(overlap ?? []));
             })
           );
         }
@@ -1365,7 +1371,7 @@ export async function GET(request: Request) {
           }
         : null,
     };
-    signal.llmNarrative = await cachedLlmText(`channel_narrative:${code}`, asOfDate, narrativeLlmInput, () =>
+    signal.llmNarrative = await cachedLlmText(`channel_narrative_v2:${code}`, asOfDate, narrativeLlmInput, () =>
       buildChannelNarrativeViaLlm(narrativeLlmInput)
     );
     return signal;
@@ -2193,8 +2199,33 @@ export async function GET(request: Request) {
     }
   }
 
+  // 단계 02: 홈의 일간 KPI·순위가 어느 타깃·기간의 값인지 채널별로 고정하고, 화면 전체가 같은 data_snapshot_id를 공유한다.
+  const metricContexts = Object.fromEntries(
+    channels
+      .filter((c) => c.primary_target)
+      .map((c) => [
+        c.code,
+        buildMetricContext({
+          channelCode: c.code,
+          targetLabel: resolveRankSheetTargetLabel(c.primary_target as string),
+          metric: "rating",
+          grain: "channel_daily",
+          period: { from: asOfDate, to: asOfDate, kind: "day", label: asOfDate },
+          aggregation: "single_day",
+          rankKind: "official_daily",
+          rankUniverse: "닐슨 랭킹 시트 전체 채널",
+          knowledgeCutoff: latestAvailableDate,
+        }),
+      ])
+  );
+  const homeSnapshotId = dataSnapshotId(
+    buildMetricContext({ channelCode: "ALL", targetLabel: "(채널별 KPI 타깃)", metric: "rating", grain: "channel_daily", period: { from: asOfDate, to: asOfDate, kind: "day", label: asOfDate }, aggregation: "single_day", knowledgeCutoff: latestAvailableDate })
+  );
+
   return NextResponse.json({
     ok: true,
+    metricContexts,
+    dataSnapshotId: homeSnapshotId,
     asOfDate,
     latestAvailableDate,
     requestedDateNoData,

@@ -1,7 +1,10 @@
 // 홈 화면 = Page 1 종합 대시보드 (개발 단위 14번).
 // (proxy.ts가 관리자/PD 세션이 없으면 이 화면에 오기 전에 /access-denied로 돌려보낸다)
+import { Suspense } from "react";
 import { headers } from "next/headers";
 import { getCurrentSession } from "@/lib/adminAuth";
+import { roleOfSession } from "@/lib/admin/permissions";
+import GlobalNav from "@/components/workspace/GlobalNav";
 import { recordAccessIfNotLoggedToday } from "@/lib/loginLog";
 import Dashboard from "./Dashboard";
 
@@ -22,5 +25,13 @@ export default async function Home() {
     await recordAccessIfNotLoggedToday({ role: session.role, actorId, actorName, ip, userAgent });
   }
 
-  return <Dashboard isAdmin={session?.role === "admin"} />;
+  // 단계 07: 전역 메뉴 + URL 문맥(기준일·보기)을 읽는 Dashboard(useSearchParams는 Suspense 안에서만 사용).
+  return (
+    <>
+      <GlobalNav role={roleOfSession(session)} />
+      <Suspense fallback={<div className="min-h-screen bg-zinc-50 p-8 text-sm text-zinc-500">불러오는 중...</div>}>
+        <Dashboard isAdmin={session?.role === "admin"} />
+      </Suspense>
+    </>
+  );
 }

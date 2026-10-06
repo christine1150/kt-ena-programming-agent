@@ -4,6 +4,7 @@
 // "기여도"류는 워터폴이 아니라 독립 편차 순위 막대로 그린다 — WhyCandidateRankingChart(구
 // 시스템)가 세운 원칙(막대 합=총 변화량으로 보이는 워터폴은 검증되지 않은 인과 분해로 오해받을
 // 수 있어 피한다, CLAUDE.md No Hallucination) 그대로 승계.
+import { HOURLY_ESTIMATE_NOTE } from "@/lib/broadcastTime/hourly";
 import type {
   ChartCaptionInfo,
   HourlyProfilePoint,
@@ -80,6 +81,7 @@ export function HourlyProfileChart({ points, caption }: { points: HourlyProfileP
         <span><span className="inline-block h-0.5 w-3 align-middle bg-[#3a30df]" /> 오늘</span>
         <span><span className="inline-block h-0.5 w-3 align-middle bg-[#94a3b8]" style={{ borderTop: "1.5px dashed #94a3b8" }} /> 최근 12주 평균</span>
       </div>
+      <p className="mt-1 text-[11px] text-neutral-500">{HOURLY_ESTIMATE_NOTE}</p>
       <ChartCaption caption={caption} />
     </div>
   );

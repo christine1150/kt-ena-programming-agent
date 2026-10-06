@@ -497,21 +497,6 @@ export async function getCompetitorDailyStatsForWeek(
   }));
 }
 
-// 사용자 지시(2026-09-30): "주간 시청률과 주간 순위도 알고 있다면 날짜 옆에 적어주면 좋겠어"
-// — 이미 받아둔 하루치 배열(자사·경쟁채널 공용)을 그대로 평균낸다. 순위는 Nielsen이 매일
-// 이미 계산해 둔 값의 평균이며(get_channel_period_rank_and_rating과 같은 원칙 — 재계산하지
-// 않음), 표시는 "등위는 반올림한 자연수로" 관례에 맞춰 정수로 반올림한다.
-export function computeWeeklyAvgStat(
-  daily: { rating: number | null; rank: number | null }[]
-): { rating: number | null; rank: number | null } {
-  const ratings = daily.map((d) => d.rating).filter((v): v is number => v !== null);
-  const ranks = daily.map((d) => d.rank).filter((v): v is number => v !== null);
-  return {
-    rating: ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null,
-    rank: ranks.length > 0 ? Math.round(ranks.reduce((a, b) => a + b, 0) / ranks.length) : null,
-  };
-}
-
 export async function getChannelAnnualAvgRating(channelId: string, primaryTarget: string | null): Promise<number | null> {
   if (!primaryTarget) return null;
   const { data: targetRow } = await supabase.from("targets").select("id").eq("label", resolveRankSheetTargetLabel(primaryTarget)).maybeSingle();

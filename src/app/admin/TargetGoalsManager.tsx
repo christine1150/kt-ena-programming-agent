@@ -12,6 +12,10 @@ type Row = {
   primaryTarget: string;
   targetRank: string | null;
   targetRating: number | null;
+  /** 수동 잠금(단계 05): 잠겨 있으면 Channel Master 파일 업로드가 이 목표를 덮어쓰지 않는다 */
+  locked?: boolean;
+  lockedBy?: string | null;
+  lockedAt?: string | null;
 };
 
 export default function TargetGoalsManager() {
@@ -21,6 +25,8 @@ export default function TargetGoalsManager() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState<Record<string, { rank: string; rating: string }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [lockAvailable, setLockAvailable] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,6 +39,7 @@ export default function TargetGoalsManager() {
         setErrorMessage(body.message ?? "불러오지 못했습니다.");
       } else {
         setRows(body.rows);
+        setLockAvailable(body.lockAvailable !== false);
         setErrorMessage(null);
       }
       setLoading(false);
@@ -40,7 +47,15 @@ export default function TargetGoalsManager() {
     return () => {
       cancelled = true;
     };
-  }, [year]);
+  }, [year, reloadKey]);
+
+  async function release(row: Row) {
+    if (!window.confirm(`${row.name}의 수동 잠금을 해제합니다. 이후 Channel Master 파일을 올리면 이 목표가 파일 값으로 바뀔 수 있습니다. 진행할까요?`)) return;
+    const res = await fetch(`/api/admin/target-goals?channelId=${encodeURIComponent(row.channelId)}&year=${year}`, { method: "DELETE" });
+    const body = await res.json().catch(() => ({ ok: false }));
+    if (!res.ok || !body.ok) setErrorMessage(body.message ?? "잠금을 해제하지 못했습니다.");
+    else setReloadKey((k) => k + 1);
+  }
 
   function startEdit(row: Row) {
     setEditing((prev) => ({
@@ -122,7 +137,8 @@ export default function TargetGoalsManager() {
         <p className="text-sm text-zinc-400">불러오는 중...</p>
       ) : (
         <>
-          {errorMessage && <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
+          {!lockAvailable && <p className="mb-2 text-xs text-amber-700">수동 잠금 테이블이 아직 적용되지 않아, 저장해도 Channel Master 재업로드로 덮일 수 있습니다.</p>}
+      {errorMessage && <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="text-zinc-400">
@@ -181,6 +197,14 @@ export default function TargetGoalsManager() {
                           >
                             수정
                           </button>
+                          {row.locked && (
+                            <>
+                              <span className="ml-2 text-xs text-amber-700" title={`${row.lockedBy ?? ""} · ${row.lockedAt ? new Date(row.lockedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }) : ""}`}>수동 잠금</span>
+                              <button onClick={() => release(row)} className="ml-1 rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50">
+                                잠금 해제
+                              </button>
+                            </>
+                          )}
                         </td>
                       </>
                     )}

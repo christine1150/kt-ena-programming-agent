@@ -2,6 +2,7 @@
 // 화면은 표시 형식만 바꾼다. 선정 이유 문장은 저장된 구조화 근거(reasons)만으로 만든다(LLM·추정 없음).
 
 import { premiereBlocks } from "@/lib/idealSchedule/premiere";
+import type { SearchReport } from "@/lib/idealSchedule/searchControl";
 
 export type Reason = { code: string; value: number | string | null; detail?: string };
 
@@ -91,6 +92,20 @@ export type RunSummary = {
   planNewPrograms?: string[];
   /** 주간 예상 순위(닐슨 주간 순위 기반 추정) */
   expectedRank?: { rank: number; bound: "ABOVE" | "BELOW" | null; refWeek: string; refRank: number; weeks: number } | null;
+  /** 하드 제약 독립 검증 결과(OPT03). 오래된 편성안에는 없다. */
+  validation?: { ok: boolean; checked: string[]; violations: { constraintId: string; source: string; weekday: number; startMin: number; message: string }[] } | null;
+  /** 주간 horizon 대비 평가된 시간(OPT03) */
+  horizon?: { horizonMinutes: number; evaluatedMinutes: number; unevaluatedMinutes: number; coverage: number; avgOverEvaluated: number | null; lowerBound: number | null; full: boolean } | null;
+  /** 보고 지표와 선택 점수의 관계(OPT03) */
+  objectiveInfo?: { primary: "weekly_expected_rating"; selectionScoreMixed: boolean; nonKpiWeightShare: number } | null;
+  /** 탐색 결과의 성격 — 최적을 증명하지 않는다(OPT03) */
+  searchKind?: "SEARCHED_BEST" | null;
+  /** 탐색 보고서(OPT04) — 종료 사유·평가 횟수·단계별 시간. 오래된 실행에는 없다. */
+  search?: SearchReport | null;
+  /** 이 실행에 쓰인 모델·입력 버전(OPT02). 오래된 편성안에는 없다. */
+  versions?: { model: string; features: string; genreDigest: string; constraintsDigest: string; configDigest: string; rangeBasis: "BACKTEST" | "TRAINING" | "NONE"; validated: boolean } | null;
+  /** 계산 시점의 권리(Avail) 확인 상태(단계 06 엔진이 저장). 오래된 편성안에는 없다. */
+  rights?: { status: "not_configured" | "applied" | "error"; mode: string; inventoryVersion: string | null; unconfirmedInterpretations: string[]; message: string | null } | null;
 };
 
 export type RunRow = {

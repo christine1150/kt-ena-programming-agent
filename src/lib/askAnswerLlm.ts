@@ -6,6 +6,7 @@
 // 맞게 OpenAI가 다시 쓰게 한다 — 숫자·사실 필드는 절대 건드리지 않는다(새로 만들지 않음).
 // 실패하면 null을 돌려주고 호출부(ask/route.ts)가 기존 템플릿 문구를 그대로 쓴다.
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "./llmSynthesis";
+import { guardForInput } from "./insight/guardInput";
 
 export interface AskAnswerLlmInput {
   question: string; // 사용자가 실제로 입력한 질문 원문
@@ -45,8 +46,9 @@ export async function enhanceAskAnswerViaLlm(input: AskAnswerLlmInput): Promise<
     SCHEMA
   );
   if (!result) return null;
-  const interpretation = result.interpretation?.trim();
-  const programmingAction = result.programmingAction?.trim();
+  // 단계 04: 이미 SQL이 계산한 결론·핵심 수치·비교 기준·근거에 있는 수치와 기준만 인용했는지 검증한다. 둘 중 하나라도 실패하면 기존 템플릿 문구를 그대로 쓴다.
+  const interpretation = guardForInput(result.interpretation, input, { label: "ask_answer.interpretation" });
+  const programmingAction = guardForInput(result.programmingAction, input, { label: "ask_answer.programmingAction" });
   if (!interpretation || !programmingAction) return null;
   return { interpretation, programmingAction };
 }

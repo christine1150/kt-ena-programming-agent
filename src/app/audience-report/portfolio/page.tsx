@@ -3,10 +3,13 @@
 // Phase 8(2026-08-28, 계획서 J절 §07) — 종합(포트폴리오) 리포트 렌더러. 채널별 리포트를
 // 이어붙이면 종합이 되지 않는다는 원칙대로, 여기 있는 모든 섹션은 "채널 사이의 관계"만 다룬다.
 // Group A/B는 어느 표·차트에도 함께 담기지 않는다(portfolioModel.ts가 타입 레벨에서부터 분리).
+import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import ReportSnapshotNotice from "@/components/workspace/ReportSnapshotNotice";
 import type { PortfolioReportDocument, PortfolioDeepCompare } from "@/lib/audienceReport/portfolioModel";
 import { formatRating } from "@/lib/audienceReport/format";
+import { CONCENTRATION_METHOD, GROUP_METRIC_METHOD, PIPELINE_RATIO_LABEL, pipelineView } from "@/lib/audienceReport/portfolioDecisions";
 import { PeerScatterChart, PipelineStepChart, ChannelHourHeatmap, TrendSparkline, SlotOverlapTable } from "@/components/audienceReport/portfolioCharts";
 
 /**
@@ -75,6 +78,122 @@ function PrimeUsageCompare({ deep }: { deep: PortfolioDeepCompare }) {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** 단계 09 — 임원 핵심 결정: 채널별 TOP ACTIONS의 긴급 신호에서 파생한 최대 3건. 평균 순위 하락만으로 역할 재편을 권하지 않는다. */
+function ExecutiveDecisions({ decisions }: { decisions: NonNullable<PortfolioReportDocument["executiveDecisions"]> }) {
+  if (decisions.length === 0) {
+    return <p className="rounded bg-neutral-100 px-3 py-2 text-sm text-neutral-600">이 기간에는 긴급 신호(교체·이동 또는 편성 점검)가 확인된 채널이 없어 임원 결정 항목을 만들지 않았습니다.</p>;
+  }
+  return (
+    <ol className="space-y-4">
+      {decisions.map((d) => (
+        <li key={d.actionId} className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+          <div className="mb-1 text-sm font-semibold">
+            {d.rank}. {d.channelName} · {d.content}
+            {d.slot ? " 시간대" : ""}
+          </div>
+          <dl className="space-y-1 text-sm">
+            <div><dt className="inline text-neutral-500">왜 </dt><dd className="inline">{d.why}</dd></div>
+            <div><dt className="inline text-neutral-500">언제 </dt><dd className="inline">{d.when}</dd></div>
+            <div><dt className="inline text-neutral-500">대안 </dt><dd className="inline">{d.alternatives.join(" / ")}</dd></div>
+            <div><dt className="inline text-neutral-500">영향 </dt><dd className="inline">{d.impact}</dd></div>
+            <div><dt className="inline text-neutral-500">확인 조건 </dt><dd className="inline">{d.confirm}</dd></div>
+            <div><dt className="inline text-neutral-500">제약 </dt><dd className="inline text-amber-800">{d.constraints.join(" / ")}</dd></div>
+          </dl>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <Link href={d.links.channel} className="rounded-md border border-neutral-300 px-3 py-1.5 font-medium hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800">채널 상세에서 근거 보기</Link>
+            <Link href={d.links.schedule} className="rounded-md border border-neutral-300 px-3 py-1.5 font-medium hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800">편성안에서 대안 비교</Link>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function PolicyTable({ rows }: { rows: NonNullable<PortfolioReportDocument["channelPolicies"]> }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] text-sm">
+        <thead>
+          <tr className="text-left text-xs text-neutral-500">
+            <th className="py-1">채널</th><th className="py-1">핵심 타깃</th><th className="py-1">역할</th><th className="py-1">목표</th><th className="py-1">편성 방향</th><th className="py-1">정책 상태</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p) => (
+            <tr key={p.channelCode} className="border-t border-neutral-200/60 dark:border-neutral-800/60">
+              <td className="py-1 font-medium">{p.channelName}</td>
+              <td className="py-1">{p.coreTarget}</td>
+              <td className="py-1">{p.role ?? "—"}</td>
+              <td className="py-1">{p.goal ?? "—"}</td>
+              <td className="py-1">{p.direction ?? "—"}</td>
+              <td className={`py-1 text-xs ${p.state === "active" ? "" : "text-amber-700"}`}>{p.validText}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-2 text-[11px] text-neutral-500">역할·목표·편성 방향은 운영자가 입력한 정책만 표시합니다. 관찰 자료만으로 채널 역할을 확정하지 않습니다.</p>
+    </div>
+  );
+}
+
+function ConcentrationTable({ rows, groups }: { rows: NonNullable<PortfolioReportDocument["concentration"]>; groups: { A: string[]; B: string[] } }) {
+  return (
+    <div className="space-y-3">
+      {(["A", "B"] as const).map((g) => {
+        const rs = rows.filter((r) => groups[g].includes(r.channelCode));
+        if (rs.length === 0) return null;
+        return (
+          <div key={g}>
+            <p className="mb-1 text-xs font-medium text-neutral-500">Group {g}</p>
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-xs text-neutral-500"><th className="py-1">채널</th><th className="py-1 text-right">프로그램 수</th><th className="py-1">1위 프로그램</th><th className="py-1 text-right">1위 비중</th><th className="py-1 text-right">상위 3개 비중</th></tr></thead>
+              <tbody>
+                {rs.map((r) => (
+                  <tr key={r.channelCode} className="border-t border-neutral-200/60 dark:border-neutral-800/60">
+                    <td className="py-1">{r.channelName}</td>
+                    <td className="py-1 text-right tabular-nums">{r.programCount}</td>
+                    <td className="py-1">{r.top1Name ?? "—"}</td>
+                    <td className="py-1 text-right tabular-nums">{r.top1SharePct === null ? "—" : `${r.top1SharePct}%`}</td>
+                    <td className="py-1 text-right tabular-nums">{r.top3SharePct === null ? "—" : `${r.top3SharePct}%`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+      <p className="text-[11px] text-neutral-500">{CONCENTRATION_METHOD}</p>
+    </div>
+  );
+}
+
+function RightsBlock({ rights }: { rights: PortfolioReportDocument["rights"] }) {
+  if (rights === undefined) return null;
+  if (!rights) return <p className="text-sm text-neutral-500">권리 정보를 읽지 못했습니다(문제 없음이 아니라 확인하지 못함).</p>;
+  if (!rights.tablesApplied) return <p className="text-sm text-neutral-500">권리(Avail) 저장소가 아직 적용되지 않아 만료·소진 현황을 표시할 수 없습니다.</p>;
+  if (!rights.configured) return <p className="text-sm text-neutral-500">권리 정보가 입력되지 않았습니다. 입력 전에는 만료·소진을 판단할 수 없습니다.</p>;
+  return (
+    <div className="space-y-2 text-sm">
+      <p>
+        {rights.windowDays}일 안에 종료되는 권리 <b>{rights.expiringTotal}</b>건{rights.endedStillListed > 0 ? ` · 종료일이 지났는데 남은 권리 ${rights.endedStillListed}건` : ""}
+      </p>
+      {rights.expiring.length > 0 && (
+        <ul className="space-y-0.5">
+          {rights.expiring.map((e) => (
+            <li key={e.grantId} className="flex flex-wrap gap-x-3 text-xs">
+              <span className="font-medium">{e.title}</span><span className="text-neutral-500">{e.channels}</span><span>{e.end} 종료({e.daysLeft === 0 ? "오늘" : `${e.daysLeft}일`})</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <ul className="space-y-0.5 text-[11px] text-neutral-500">
+        {rights.notes.map((n, i) => (<li key={i}>※ {n}</li>))}
+        <li>※ 채널 간 공유 풀의 동시 소진은 계약 해석 확인 전이라 이 문서에서 판단하지 않습니다(조건부).</li>
+      </ul>
     </div>
   );
 }
@@ -177,6 +296,8 @@ function PortfolioReportPageInner() {
             자체 검산에서 그룹 혼입 가능성이 감지됐습니다 — 아래 표를 다시 확인해주세요.
           </div>
         )}
+        {/* 단계 07: 종합 보고서 문서에는 데이터 시점이 없어 링크의 시점(cut)과 보고서 종료일만 비교한다. */}
+        <ReportSnapshotNotice periodTo={report.period.dateTo} reportCutoff={null} />
         {/* 2026-09-17(사용자 지시) — 이 화면이 종합 보고서의 "Word 미리보기"이고, 여기서 받는
             파일은 Word 하나뿐이다. PPT는 아래 교차 이동 버튼으로 PPT 미리보기에 가서 받는다. */}
         <div className="mt-3 flex flex-wrap gap-2">
@@ -210,12 +331,32 @@ function PortfolioReportPageInner() {
         </section>
       )}
 
+      {report.executiveDecisions && (
+        <Section title="임원 핵심 결정">
+          <ExecutiveDecisions decisions={report.executiveDecisions} />
+          <p className="mt-2 text-[11px] text-neutral-500">결정은 채널별 TOP 3 ACTIONS(09)의 긴급 신호에서 파생했고 새 점수 체계를 만들지 않았습니다. 평균 순위 하락만으로 역할 재편을 권하지 않습니다.</p>
+        </Section>
+      )}
+
       <Section title="01 포트폴리오 한 줄">
         <div className="space-y-1 text-base">
           <p>{report.groupA.oneLiner}</p>
           <p>{report.groupB.oneLiner}</p>
         </div>
+        <p className="mt-2 text-[11px] text-neutral-500">그룹 지표 정의 — {GROUP_METRIC_METHOD}</p>
       </Section>
+
+      {report.channelPolicies && (
+        <Section title="01c 채널 역할·운영정책">
+          <PolicyTable rows={report.channelPolicies} />
+        </Section>
+      )}
+
+      {report.concentration && report.concentration.length > 0 && (
+        <Section title="01d 콘텐츠 집중도">
+          <ConcentrationTable rows={report.concentration} groups={{ A: report.groupA.peers.map((p) => p.channelCode), B: report.groupB.peers.map((p) => p.channelCode) }} />
+        </Section>
+      )}
 
       <Section title="01b 채널 간 주요시간 활용도 비교">
         <PrimeUsageCompare deep={report.deepCompare} />
@@ -226,7 +367,12 @@ function PortfolioReportPageInner() {
       </Section>
 
       <Section title="03 오리지널 파이프라인">
-        <PipelineStepChart edges={report.groupA.pipeline} caption={{ periodLabel: report.period.label, targetUniverse: "수도권 2049", measure: "본방→재방 시청률 및 유지율" }} />
+        <PipelineStepChart edges={report.groupA.pipeline} caption={{ periodLabel: report.period.label, targetUniverse: "수도권 2049", measure: `본방→재방 시청률 및 ${PIPELINE_RATIO_LABEL}(시청자 유지율 아님)` }} />
+        {report.groupA.pipeline.length > 0 && (
+          <ul className="mt-2 space-y-0.5 text-[11px] text-neutral-500">
+            {pipelineView(report.groupA.pipeline[0]).caveats.map((c, i) => (<li key={i}>※ {c}</li>))}
+          </ul>
+        )}
       </Section>
 
       <Section title="04 Group B 내부 비교(전국 유료가구)">
@@ -259,7 +405,14 @@ function PortfolioReportPageInner() {
         {report.groupB.skyUhd ? (
           <div className="space-y-2 text-sm">
             <div className="text-xs text-neutral-500">
-              수기 자료 커버리지: {report.groupB.skyUhd.coverage.daysWithProgramData}/{report.groupB.skyUhd.coverage.totalDays}일 ({report.groupB.skyUhd.coverage.coveragePct.toFixed(0)}%)
+              {report.skyUhdCoverage ? (
+                <>
+                  채널 집계: {report.skyUhdCoverage.channelDays ? `${report.skyUhdCoverage.channelDays.present}/${report.skyUhdCoverage.channelDays.total}일` : "일별 추이가 아니어서 확인하지 않음"} · 프로그램 상세·시간대(수기 자료):{" "}
+                  {report.skyUhdCoverage.programDays.present}/{report.skyUhdCoverage.programDays.total}일 ({report.groupB.skyUhd.coverage.coveragePct.toFixed(0)}%)
+                </>
+              ) : (
+                <>수기 자료 커버리지: {report.groupB.skyUhd.coverage.daysWithProgramData}/{report.groupB.skyUhd.coverage.totalDays}일 ({report.groupB.skyUhd.coverage.coveragePct.toFixed(0)}%)</>
+              )}
             </div>
             {report.groupB.skyUhd.genrePerformance.length > 0 ? (
               <table className="w-full">
@@ -281,6 +434,12 @@ function PortfolioReportPageInner() {
           <p className="text-sm text-neutral-500">skyUHD 자료가 없습니다.</p>
         )}
       </Section>
+
+      {report.rights !== undefined && (
+        <Section title="08b Avail 권리 만료·소진">
+          <RightsBlock rights={report.rights} />
+        </Section>
+      )}
 
       <Section title="09 채널별 TOP 3 ACTIONS">
         <div className="space-y-4">

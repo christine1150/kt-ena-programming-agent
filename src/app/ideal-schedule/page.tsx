@@ -14,6 +14,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { actionQuerySuffix, parseFocusHour } from "@/lib/workspace/viewContext";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { GachaIcon, VendingMachineIcon } from "@/components/VendingIcons";
 import { PlanUploadCard } from "./PlanUploadCard";
@@ -25,6 +26,11 @@ import { GridLegend } from "./GridLegend";
 import { IdealWeekGrid, type BlockDiff } from "./IdealWeekGrid";
 import { RequiredScheduleEditor } from "./RequiredScheduleEditor";
 import { SummaryPanel } from "./SummaryPanel";
+import { RunStatusStrip } from "./RunStatusStrip";
+import { changeHeadline, countManualOverrides, summarizeChanges } from "./changeSummary";
+import { kstToday } from "@/lib/workspace/dates";
+import { compareOnCommonSupport, type ComparableBlock } from "@/lib/idealSchedule/comparison";
+import { periodText, weekLabel, weekWord } from "@/lib/workspace/weekCompare";
 import { SMALL_GAIN_RATIO, mondayOfLocal, normalizeBlock, rankText, signedPct, weeklyExpected, type BlockRow, type CompareRow, type RunRow } from "./model";
 
 type ChannelOpt = { code: string; name: string; theme_color: string | null; logo_path: string | null; logo_visible_ratio: number | null; logo_visible_top_ratio: number | null };
@@ -100,6 +106,9 @@ function IdealSchedulePage() {
   const sp = useSearchParams();
   const channelCode = sp.get("channel") ?? "ENA";
   const runParam = sp.get("run");
+  // 단계 07: 결정 카드에서 이어진 액션 문맥(from·ft·sj·hour·date·cut)은 run을 바꿔 URL을 다시 쓸 때도 유지한다.
+  const actionSuffix = actionQuerySuffix((k) => sp.get(k));
+  const focusHour = parseFocusHour(sp.get("hour"));
 
   const thisMonday = useMemo(() => mondayOfLocal(new Date()), []);
   const nextMonday = addDaysLocal(thisMonday, 7);
@@ -125,6 +134,15 @@ function IdealSchedulePage() {
   const [compareRows, setCompareRows] = useState<{ runId: string; rows: CompareRow[]; currentWeekStart: string | null } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 계산 진행 표시(OPT04): 서버가 진행률을 알려 주지 않으므로 퍼센트는 만들지 않고 경과 시간만 보여 주며, 사용자가 취소할 수 있다.
+  const [computeElapsed, setComputeElapsed] = useState<number | null>(null);
+  const computeAbort = useRef<AbortController | null>(null);
+  const computing = computeElapsed !== null;
+  useEffect(() => {
+    if (!computing) return;
+    const id = setInterval(() => setComputeElapsed((e) => (e === null ? e : e + 1)), 1000);
+    return () => clearInterval(id);
+  }, [computing]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCompare, setShowCompare] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -189,7 +207,11 @@ function IdealSchedulePage() {
   }, [loadRuns]);
 
   const loadRun = useCallback((id: string) => {
-    return fetch(`/api/scheduling/ideal-schedule/${id}`)
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      // effect 안에서 동기 setState를 부르지 않도록 비동기로 알린다.
+      return Promise.resolve().then(() => setError("편성안 주소(run)가 올바르지 않습니다."));
+    }
+    return fetch(`/api/scheduling/ideal-schedule/${encodeURIComponent(id)}`)
       .then((r) => r.json())
       .then((b) => {
         if (!b.ok) throw new Error(b.message);
@@ -212,8 +234,8 @@ function IdealSchedulePage() {
   useEffect(() => {
     if (runParam || runsChannel !== channelCode || runs.length === 0) return;
     const pick = runs.find((r) => r.saved_at && r.week_start === nextMonday) ?? runs.find((r) => r.week_start === nextMonday) ?? runs.find((r) => r.saved_at) ?? runs[0];
-    router.replace(`/ideal-schedule?channel=${encodeURIComponent(channelCode)}&run=${pick.id}`);
-  }, [runParam, runs, runsChannel, channelCode, nextMonday, router]);
+    router.replace(`/ideal-schedule?channel=${encodeURIComponent(channelCode)}&run=${pick.id}${actionSuffix}`);
+  }, [runParam, runs, runsChannel, channelCode, nextMonday, router, actionSuffix]);
 
   // 다른 채널의 실행이 남아 보이지 않게 — 지금 채널의 실행만 화면에 쓴다
   const view = data && data.run.channels?.code === channelCode ? data : null;
@@ -320,6 +342,20 @@ function IdealSchedulePage() {
   const preview = rawPreview && ideal.some((b) => b.id === rawPreview.block.id) ? rawPreview : null;
   const pivot = view?.channelAnnualAvgRating ? view.channelAnnualAvgRating * 2 : null;
   const runKpi = kpiText(view?.run.optimize_target_label ?? opts?.channelKpiLabel);
+  // 단계 10(사용자 결정 2026-10-06): 기준 주는 실제로 지난주일 때만 "지난주", 아니면 실제 기간으로 표기한다.
+  const today = useMemo(() => kstToday(), []);
+  const refWord = weekWord(view?.run.current_week_start, today);
+  // 상단·편성표 제목·요약이 같은 값을 쓰도록 주간 기대 시청률은 한 곳에서 정한다(수동 교체 후 재계산 전이면 칸 값 합산).
+  const dirtyRun = !!view?.run.needs_recalc;
+  const shownExpected = summary ? (dirtyRun ? weeklyExpected(ideal) : summary.expectedAvgRating) : null;
+  const changeSummary = useMemo(() => (rows ? summarizeChanges(rows) : null), [rows]);
+  // OPT01: 개선율은 두 편성 모두 평가값이 있는 같은 시간(요일·분)만으로 다시 계산한다(평균끼리 비교하면 시간 범위가 달라 부풀 수 있음).
+  const supportCmp = useMemo(() => {
+    const toCmp = (b: BlockRow): ComparableBlock => ({ weekday: b.weekday, startMin: b.start_min, endMin: b.end_min, expected: b.expected_kpi, countable: b.content_type !== "COMPETITOR_BENCHMARK" });
+    return current.length > 0 ? compareOnCommonSupport(ideal.map(toCmp), current.map(toCmp)) : null;
+  }, [ideal, current]);
+  const improvement =
+    supportCmp?.ratio ?? (shownExpected !== null && summary?.current?.expectedAvgRating ? (shownExpected - summary.current.expectedAvgRating) / summary.current.expectedAvgRating : null);
 
   const diffById = useMemo(() => {
     const m = new Map<string, BlockDiff>();
@@ -351,14 +387,36 @@ function IdealSchedulePage() {
     setUsePlan(true);
   }
 
-  async function generate() {
-    setBusy("편성표를 뽑고 있습니다… (보통 5~15초)");
+  /** 계산 요청(편성표 뽑기·다시 계산). 취소하거나 실패해도 이전에 저장된 편성안은 바뀌지 않는다(서버가 취소된 계산을 저장하지 않는다). */
+  async function postCompute(url: string, body: unknown, label: string, failText: string): Promise<{ runId: string } | null> {
+    const ac = new AbortController();
+    computeAbort.current = ac;
+    setBusy(label);
     setError(null);
+    setComputeElapsed(0);
+    try {
+      const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: ac.signal });
+      const j = await r.json().catch(() => null);
+      if (!j?.ok) {
+        setError(j?.cancelled ? "계산을 취소했습니다. 이전 편성안은 그대로입니다." : (j?.message ?? (r.status === 504 ? "서버 제한 시간(60초)을 넘겨 계산이 끝나지 않았습니다. 이전 편성안은 그대로입니다." : failText)));
+        return null;
+      }
+      return j as { runId: string };
+    } catch {
+      setError(ac.signal.aborted ? "계산을 취소했습니다. 이전 편성안은 그대로입니다." : "서버와 통신하지 못했습니다. 이전 편성안은 그대로입니다.");
+      return null;
+    } finally {
+      computeAbort.current = null;
+      setBusy(null);
+      setComputeElapsed(null);
+    }
+  }
+
+  async function generate() {
     selectBlock(null);
-    const r = await fetch("/api/scheduling/ideal-schedule", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
+    const j = await postCompute(
+      "/api/scheduling/ideal-schedule",
+      {
         channelCode,
         weekStart,
         mode,
@@ -370,12 +428,12 @@ function IdealSchedulePage() {
         usePlanEpisodes: usePlan && (opts?.planWeeks?.length ?? 0) > 0,
         // 화면에서 바꾼 성향·반복 제한은 저장하지 않아도 이번 편성표에 적용된다
         configOverride: weights && caps ? { weights, repeat_rules: { daily_cap: caps.daily, weekly_cap: caps.weekly } } : undefined,
-      }),
-    });
-    const j = await r.json();
-    setBusy(null);
-    if (!j.ok) return setError(j.message ?? "계산하지 못했습니다.");
-    router.replace(`/ideal-schedule?channel=${encodeURIComponent(channelCode)}&run=${j.runId}`);
+      },
+      "편성표를 뽑고 있습니다…",
+      "계산하지 못했습니다."
+    );
+    if (!j) return;
+    router.replace(`/ideal-schedule?channel=${encodeURIComponent(channelCode)}&run=${j.runId}${actionSuffix}`);
     await loadRun(j.runId);
     loadRuns();
   }
@@ -383,14 +441,15 @@ function IdealSchedulePage() {
   async function recalc(keepOverrides: boolean) {
     if (!runId) return;
     if (!keepOverrides && !window.confirm("수동 교체·잠금을 모두 지우고 처음부터 다시 계산할까요?")) return;
-    setBusy(keepOverrides ? "수동 변경을 유지하고 다시 계산하고 있습니다…" : "수동 변경을 지우고 다시 계산하고 있습니다…");
-    setError(null);
     selectBlock(null);
-    const r = await fetch(`/api/scheduling/ideal-schedule/${runId}/recalculate`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ keepOverrides }) });
-    const j = await r.json();
-    setBusy(null);
-    if (!j.ok) return setError(j.message ?? "다시 계산하지 못했습니다.");
-    router.replace(`/ideal-schedule?channel=${encodeURIComponent(channelCode)}&run=${j.runId}`);
+    const j = await postCompute(
+      `/api/scheduling/ideal-schedule/${runId}/recalculate`,
+      { keepOverrides },
+      keepOverrides ? "수동 변경을 유지하고 다시 계산하고 있습니다…" : "수동 변경을 지우고 다시 계산하고 있습니다…",
+      "다시 계산하지 못했습니다."
+    );
+    if (!j) return;
+    router.replace(`/ideal-schedule?channel=${encodeURIComponent(channelCode)}&run=${j.runId}${actionSuffix}`);
     await loadRun(j.runId);
     loadRuns();
   }
@@ -491,14 +550,14 @@ function IdealSchedulePage() {
             바뀐 칸만 강조
           </label>
           <button type="button" onClick={() => setShowCompare((v) => !v)} className={`rounded-full border px-2.5 py-1 ${showCompare ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"}`}>
-            지난주 실제와 나란히
+            {refWord} 실제와 나란히
           </button>
           <button type="button" onClick={() => setFullscreen((v) => !v)} className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-zinc-600 hover:bg-zinc-50">
             {fullscreen ? "전체 화면 닫기(Esc)" : "전체 화면"}
           </button>
         </div>
       </div>
-      <GridLegend themeColor={themeColor} pivot={pivot} decimals={decimals} />
+      <GridLegend themeColor={themeColor} pivot={pivot} decimals={decimals} refWord={refWord} />
 
       {/* What-if 미리보기 바 */}
       {preview && whatIf && (
@@ -532,15 +591,17 @@ function IdealSchedulePage() {
       <div className={`grid gap-3 ${showCompare && !printing ? "2xl:grid-cols-2 2xl:[grid-template-rows:auto_auto]" : ""}`}>
         {showCompare && !printing && (
           <IdealWeekGrid
-            title={`지난주 실제 편성 — ${view.run.current_week_start ?? "-"} 주(숫자는 실측)`}
+            title={`${view.run.current_week_start ? weekLabel(view.run.current_week_start, today) : refWord} 실제 편성 — 숫자는 실측`}
             blocks={current}
             weekStart={view.run.current_week_start ?? view.run.week_start}
+            refWord={refWord}
             themeColor={themeColor}
             pivot={pivot}
             decimals={decimals}
             selectedId={selectedId}
             onSelect={(b) => selectBlock(b.id)}
             pxPerMin={ppm}
+            highlightHour={focusHour}
             minWidth={620}
             syncTitleRow={showCompare && !printing}
             hideOnPrint
@@ -549,32 +610,39 @@ function IdealSchedulePage() {
         <IdealWeekGrid
           title={
             <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-              <span>AI 스마트 편성 — {view.run.week_start} 주</span>
-              {summary?.expectedAvgRating !== null && summary?.expectedAvgRating !== undefined && (
+              <span>AI 스마트 편성 — {weekLabel(view.run.week_start, today)}</span>
+              {shownExpected !== null && (
                 <span className="text-zinc-900">
-                  주간 기대 시청률 <b className="tabular-nums">{fmt(summary.expectedAvgRating)}</b>
-                  {summary.current?.expectedAvgRating ? (
-                    <span className={`ml-1 text-xs font-medium ${summary.expectedAvgRating >= summary.current.expectedAvgRating ? "text-emerald-600" : "text-rose-600"}`}>
-                      지난주 대비 {signedPct((summary.expectedAvgRating - summary.current.expectedAvgRating) / summary.current.expectedAvgRating)}
+                  주간 기대 시청률 <b className="tabular-nums">{fmt(shownExpected)}</b>
+                  {dirtyRun && <span className="ml-1 text-[11px] font-normal text-amber-700">수동 교체 반영·재계산 전</span>}
+                  {improvement !== null ? (
+                    <span className={`ml-1 text-xs font-medium ${improvement >= 0 ? "text-emerald-600" : "text-rose-600"}`} title="두 편성 모두 평가값이 있는 같은 시간(요일·분)만으로 계산한 모델상 기대 차이입니다. 실제 시청률 개선이 아닙니다.">
+                      같은 시간 기준 {refWord} 대비 {signedPct(improvement)}
                     </span>
                   ) : null}
+                  {changeSummary?.large && changeSummary.slotShare !== null && (
+                    <span className="ml-1 text-xs font-semibold text-amber-700">변경 {Math.round(Math.max(changeSummary.slotShare, changeSummary.minuteShare ?? 0) * 100)}% · 크게 다름</span>
+                  )}
                 </span>
               )}
               {summary?.expectedRank && (
-                <span className="text-zinc-900" title={`지난주(${summary.expectedRank.refWeek} 주) 닐슨 주간 등위 ${summary.expectedRank.refRank}위와 최근 3달 주간 등위 실적(${summary.expectedRank.weeks}주)으로 추정한 값입니다. 경쟁 채널 편성 변화는 반영되지 않습니다.`}>
+                <span className="text-zinc-900" title={`${weekWord(summary.expectedRank.refWeek, today)}(${periodText(summary.expectedRank.refWeek, today)}) 닐슨 주간 등위 ${summary.expectedRank.refRank}위와 최근 3달 주간 등위 실적(${summary.expectedRank.weeks}주)으로 추정한 값입니다. 실제 순위가 아니며 경쟁 채널 편성 변화는 반영되지 않습니다.`}>
                   주간 기대 등위 <b className="tabular-nums">{rankText(summary.expectedRank)}</b>
                   {summary.expectedRank.bound && <span className="ml-1 text-xs font-normal text-zinc-500">{summary.expectedRank.bound === "ABOVE" ? "최근 3달 최고 수준보다 높음" : "최근 3달 최저 수준보다 낮음"}</span>}
-                  <span className="ml-1 text-xs font-normal text-zinc-500">(지난주 {summary.expectedRank.refRank}위)</span>
+                  <span className="ml-1 text-xs font-normal text-zinc-500">
+                    ({weekWord(summary.expectedRank.refWeek, today)} {summary.expectedRank.refRank}위 기준 추정 · 실적 순위 아님{dirtyRun ? " · 교체 전 계산값" : ""})
+                  </span>
                 </span>
               )}
               <span className="text-xs font-normal text-zinc-500">
                 숫자는 최근 3달 데이터 기반 기대 시청률 · {kstTime(view.run.created_at)} 편성표 뽑기 결과 · 기준 틀:{" "}
-                {summary?.frame === "PLAN" ? `업로드한 이번 주 편성표(${view.run.week_start} 주)` : `지난주 실제 편성(${summary?.current?.weekStart ?? "-"} 주)`}
+                {summary?.frame === "PLAN" ? `업로드한 편성표(${periodText(view.run.week_start, today)} 주)` : `${summary?.current?.weekStart ? weekLabel(summary.current.weekStart, today) : refWord} 실제 편성`}
               </span>
             </span>
           }
           blocks={ideal}
           weekStart={view.run.week_start}
+          refWord={refWord}
           themeColor={themeColor}
           pivot={pivot}
           decimals={decimals}
@@ -582,6 +650,7 @@ function IdealSchedulePage() {
           onSelect={(b) => selectBlock(b.id)}
           gaps={view.run.gaps}
           pxPerMin={ppm}
+          highlightHour={focusHour}
           diffById={diffById}
           dimUnchanged={dimUnchanged && !printing}
           ghost={preview ? { blockId: preview.block.id, programName: preview.cand.candidate.programName, expected: preview.cand.expected_kpi } : null}
@@ -636,7 +705,7 @@ function IdealSchedulePage() {
               </span>
             </button>
             <button type="button" disabled={!runId} onClick={openCompare} className={pill}>
-              지난주와 비교
+              {refWord}와 비교
             </button>
             {/* 사용자 지시(2026-09-30): 엑셀 저장·인쇄는 간단한 아이콘 버튼으로 */}
             {runId ? (
@@ -651,7 +720,7 @@ function IdealSchedulePage() {
             <button type="button" disabled={!runId} onClick={doPrint} title="인쇄(A4 세로)" aria-label="인쇄" className={iconBtn}>
               <PrintIcon />
             </button>
-            <Link href={`/ideal-schedule/purchase?channel=${channelCode}`} className={pill}>
+            <Link href={`/ideal-schedule/purchase?channel=${channelCode}${actionSuffix}`} className={pill}>
               콘텐츠 구매 시뮬레이터
             </Link>
             <Link href={`/channel/${channelCode}`} className="rounded-full px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
@@ -662,6 +731,14 @@ function IdealSchedulePage() {
         {(busy || error) && (
           <div className={`px-4 pb-2 text-sm md:px-6 ${error ? "text-rose-600" : "text-zinc-500"}`}>
             {busy ?? error}
+            {computing && (
+              <>
+                <span className="ml-1 tabular-nums">· {computeElapsed}초 경과</span>
+                <button type="button" onClick={() => computeAbort.current?.abort()} className="ml-3 rounded-full border border-zinc-300 px-2.5 py-0.5 text-xs text-zinc-600 hover:bg-zinc-100">
+                  계산 취소
+                </button>
+              </>
+            )}
             {error && (
               <button type="button" onClick={() => setError(null)} className="ml-2 text-xs text-zinc-400 hover:underline">
                 닫기
@@ -679,9 +756,10 @@ function IdealSchedulePage() {
           </p>
           <p className="text-[10px] text-zinc-600">
             최근 3달 데이터 기반 기대 시청률(미래 예측 아님) · {MODE_LABEL[view.run.structure_mode]} · {view.run.as_of_date}까지 데이터 · {kstTime(view.run.created_at)} 생성
-            {summary?.expectedAvgRating !== null && summary?.expectedAvgRating !== undefined ? ` · 주간 기대 ${fmt(summary.expectedAvgRating)}` : ""}
-            {summary?.current?.expectedAvgRating ? ` (지난주 실제 편성 기대 ${fmt(summary.current.expectedAvgRating)})` : ""}
-            {summary?.expectedRank ? ` · 주간 기대 등위 ${rankText(summary.expectedRank)}(지난주 ${summary.expectedRank.refRank}위)` : ""}
+            {shownExpected !== null ? ` · 주간 기대 ${fmt(shownExpected)}${dirtyRun ? "(수동 교체 반영·재계산 전)" : ""}` : ""}
+            {summary?.current?.expectedAvgRating ? ` (${refWord} 실제 편성 기대 ${fmt(summary.current.expectedAvgRating)})` : ""}
+            {summary?.expectedRank ? ` · 주간 기대 등위 ${rankText(summary.expectedRank)}(${weekWord(summary.expectedRank.refWeek, today)} ${summary.expectedRank.refRank}위 기준 추정, 실적 순위 아님)` : ""}
+            {changeSummary?.large ? ` · ${changeHeadline(changeSummary)} — 기준 편성과 크게 다른 안(기대 상승만으로 개선이라 단정하지 마세요)` : ""}
           </p>
         </div>
       )}
@@ -691,7 +769,7 @@ function IdealSchedulePage() {
         {/* 좁은 화면(xl 미만)에서는 편성표가 먼저, 패널은 그 아래(편성표가 주인공 — PD·UX 검토) */}
         <aside className={`order-2 space-y-3 print:hidden xl:order-1 xl:sticky xl:top-[4.25rem] xl:max-h-[calc(100dvh-5rem)] xl:self-start xl:overflow-y-auto xl:pr-1 ${drawerOpen ? "xl:hidden" : ""}`}>
           {view && summary && (
-            <SummaryPanel run={view.run} ideal={ideal} compareRows={rows} decimals={decimals} kpiLabel={runKpi} onSelectBlock={(id) => selectBlock(id)} onOpenCompare={openCompare} />
+            <SummaryPanel run={view.run} ideal={ideal} compareRows={rows} decimals={decimals} kpiLabel={runKpi} onSelectBlock={(id) => selectBlock(id)} onOpenCompare={openCompare} refWord={refWord} today={today} changes={changeSummary} support={supportCmp} />
           )}
 
           <PlanUploadCard channelCode={channelCode} planWeeks={opts?.planWeeks ?? []} weekStart={weekStart} onUploaded={() => void refreshPlanWeeks()} />
@@ -929,12 +1007,12 @@ function IdealSchedulePage() {
               <ul className="mt-2 divide-y divide-zinc-100 text-xs">
                 {runs.slice(0, 15).map((r) => (
                   <li key={r.id} className="py-1.5">
-                    <Link href={`/ideal-schedule?channel=${channelCode}&run=${r.id}`} className={`block truncate hover:underline ${r.id === runId ? "font-semibold text-zinc-900" : "text-zinc-700"}`}>
+                    <Link href={`/ideal-schedule?channel=${channelCode}&run=${r.id}${actionSuffix}`} className={`block truncate hover:underline ${r.id === runId ? "font-semibold text-zinc-900" : "text-zinc-700"}`}>
                       {r.saved_at ? "★ " : ""}
                       {r.title ?? `${weekOfMonthLabel(r.week_start)} · ${MODE_LABEL[r.structure_mode] ?? r.structure_mode}`}
                     </Link>
                     <span className="tabular-nums text-zinc-400">
-                      기대 {fmt(r.summary?.expectedAvgRating)} · {kstTime(r.created_at)}
+                      기대 {fmt(r.id === runId ? shownExpected : r.summary?.expectedAvgRating)} · {kstTime(r.created_at)}
                     </span>
                   </li>
                 ))}
@@ -963,20 +1041,20 @@ function IdealSchedulePage() {
           {view && summary && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm xl:hidden print:hidden">
               <span>
-                주간 기대 <b className="tabular-nums">{fmt(view.run.needs_recalc ? weeklyExpected(ideal) : summary.expectedAvgRating)}</b>
-                {summary.current?.expectedAvgRating && summary.expectedAvgRating !== null && (
-                  <span className="ml-1 tabular-nums text-zinc-500">(지난주 대비 {signedPct((summary.expectedAvgRating - summary.current.expectedAvgRating) / summary.current.expectedAvgRating)})</span>
-                )}
+                주간 기대 <b className="tabular-nums">{fmt(shownExpected)}</b>
+                {dirtyRun && <span className="ml-1 text-[11px] text-amber-700">수동 교체 반영·재계산 전</span>}
+                {improvement !== null && <span className="ml-1 tabular-nums text-zinc-500">(같은 시간 기준 {refWord} 대비 {signedPct(improvement)})</span>}
               </span>
               <span className="text-zinc-600">바뀐 칸 {rows ? rows.filter((r) => r.changed).length : "…"}</span>
               <span className={summary.conflictCount > 0 ? "text-rose-600" : "text-zinc-600"}>충돌 {summary.conflictCount}</span>
               <span className="text-[11px] text-zinc-400">요약·조건은 편성표 아래에 있습니다</span>
             </div>
           )}
+          {view && <RunStatusStrip run={view.run} change={changeSummary} today={today} busy={!!busy} manualCount={countManualOverrides(ideal)} support={supportCmp} onRecalc={() => void recalc(true)} />}
           {gridArea}
           {view && (
             <div className="hidden print:block print:pt-2">
-              <GridLegend themeColor={themeColor} pivot={pivot} decimals={decimals} />
+              <GridLegend themeColor={themeColor} pivot={pivot} decimals={decimals} refWord={refWord} />
             </div>
           )}
 
@@ -994,10 +1072,10 @@ function IdealSchedulePage() {
           {view && rows && (
             <details ref={compareRef} open={compareOpen} onToggle={(e) => setCompareOpen((e.target as HTMLDetailsElement).open)} className="print:hidden">
               <summary className="cursor-pointer rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800">
-                지난주 실제 편성 대비 전체 대조표 <span className="font-normal text-zinc-500">· 바뀐 칸 {rows.filter((r) => r.changed).length}개</span>
+                {refWord} 실제 편성 대비 전체 대조표 <span className="font-normal text-zinc-500">· 바뀐 칸 {rows.filter((r) => r.changed).length}개</span>
               </summary>
               <div className="mt-2">
-                <CompareTable rows={rows} currentWeekStart={compareRows?.currentWeekStart ?? null} decimals={decimals} onSelectBlock={(id) => selectBlock(id)} planWeek={summary?.frame === "PLAN" ? view.run.week_start : null} />
+                <CompareTable rows={rows} currentWeekStart={compareRows?.currentWeekStart ?? null} refWord={refWord} decimals={decimals} onSelectBlock={(id) => selectBlock(id)} planWeek={summary?.frame === "PLAN" ? view.run.week_start : null} />
               </div>
             </details>
           )}
@@ -1038,7 +1116,8 @@ function IdealSchedulePage() {
           onChanged={() => {
             if (runId) void loadRun(runId);
           }}
-          frameLabel={data?.run.summary?.frame === "PLAN" ? "편성표" : "지난주"}
+          frameLabel={data?.run.summary?.frame === "PLAN" ? "편성표" : refWord}
+          refWord={refWord}
         />
       )}
     </div>

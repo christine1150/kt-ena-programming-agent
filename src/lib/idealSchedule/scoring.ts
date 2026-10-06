@@ -223,15 +223,25 @@ type ExpectedBundle = { r: ExpectedResult; s: ExpectedResult; ts: ExpectedResult
 
 /** 점수 계산기 — 같은 (후보, 요일, 시) 기대값은 한 번만 계산한다. */
 export class Scorer {
-  private readonly cache = new Map<string, ExpectedBundle>();
+  // 후보 key → (요일×32+시) → 기대값. 문자열 합성 키를 매 평가마다 만들지 않도록 중첩 Map을 쓴다.
+  private readonly cache = new Map<string, Map<number, ExpectedBundle>>();
+  private readonly fitCache = new Map<string, Map<number, { n: number; fit: number } | null>>();
+  /** 계측(OPT04): 기대값 캐시 적중·미스, evaluate 호출 수 — 결과에는 영향 없음 */
+  stats = { evaluations: 0, expectedHits: 0, expectedMisses: 0 };
   /** true일 때만 선정 이유(reasons)를 만든다 — 탐색 중에는 끄고 최종 평가·대체 후보 계산 때만 켠다(속도). */
   detail = true;
   constructor(readonly ctx: ScoringContext) {}
 
   private expectedFor(c: EngineCandidate, dow: number, hour: number): ExpectedBundle {
-    const k = `${c.key}|${dow}|${hour}`;
-    const hit = this.cache.get(k);
-    if (hit) return hit;
+    const slot = dow * 32 + hour;
+    let byCand = this.cache.get(c.key);
+    if (!byCand) this.cache.set(c.key, (byCand = new Map()));
+    const hit = byCand.get(slot);
+    if (hit) {
+      this.stats.expectedHits++;
+      return hit;
+    }
+    this.stats.expectedMisses++;
     // 자사 프로그램은 자기 이력, 신규(NEW)·원형(AR)은 이력 없는 가상 id로 장르→채널 단계 폴백
     const pid = c.contentType === "OWN" && c.programId ? c.programId : `__${c.key}__`;
     const { fs } = this.ctx;
@@ -241,8 +251,19 @@ export class Scorer {
       ts: fs.timeSpent.expected(pid, c.airingType, c.genre, dow, hour),
       programIdForModel: pid,
     };
-    this.cache.set(k, out);
+    byCand.set(slot, out);
     return out;
+  }
+
+  /** 요일×시 적합도 — (후보, 요일, 시)마다 한 번만 계산(순수 함수라 결과 동일). */
+  private weekdaySlotFitFor(c: EngineCandidate, dow: number, hour: number): { n: number; fit: number } | null {
+    const slot = dow * 32 + hour;
+    let byCand = this.fitCache.get(c.key);
+    if (!byCand) this.fitCache.set(c.key, (byCand = new Map()));
+    if (byCand.has(slot)) return byCand.get(slot) ?? null;
+    const v = this.ctx.fs.rating.weekdaySlotFit(c.programId as string, c.airingType, dow, hour);
+    byCand.set(slot, v);
+    return v;
   }
 
   leadSynergy(prevKey: string | null, curKey: string): number | null {
@@ -255,6 +276,7 @@ export class Scorer {
 
   evaluate(c: EngineCandidate, p: PlacementContext): BlockEval {
     const { config, fs } = this.ctx;
+    this.stats.evaluations++;
     const hour = hourBucket(p.startMin);
     const minutes = Math.max(0, p.endMin - p.startMin);
     const w = config.weights;
@@ -307,7 +329,7 @@ export class Scorer {
         const u = fs.unitsByKey.get(c.key);
         if (u) {
           if (this.ctx.hasComposition && u.target_fit !== null) components.target = u.target_fit;
-          const ws = fs.rating.weekdaySlotFit(c.programId, c.airingType, p.weekday, hour);
+          const ws = this.weekdaySlotFitFor(c, p.weekday, hour);
           if (ws) components.weekday_slot = ws.fit;
           if (u.trend_index !== null) components.trend = clamp(u.trend_index, 0, 2);
           if (u.stability_index !== null && this.ctx.channelMedianStability && this.ctx.channelMedianStability > 0) {

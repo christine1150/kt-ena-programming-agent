@@ -15,7 +15,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
   const keepOverrides = body?.keepOverrides !== false; // 기본 유지
   try {
     const { req, parentRunId } = await recalcRequestFrom(runId, keepOverrides);
-    const out = await runIdealSchedule(req);
+    const out = await runIdealSchedule(req, { signal: request.signal });
+    if (out.cancelled) return NextResponse.json({ ok: false, cancelled: true, message: "계산이 취소되어 저장하지 않았습니다. 이전 편성안은 그대로입니다." }, { status: 499 });
     const newRunId = await saveRun(req, out, auth.actor, parentRunId);
     return NextResponse.json({ ok: true, runId: newRunId, keptOverrides: req.extraLocks?.length ?? 0, summary: out.summary, conflicts: out.resolution.conflicts });
   } catch (e) {

@@ -54,7 +54,10 @@ export function BlockDrawer({
   onClose,
   onChanged,
   frameLabel = "지난주",
+  refWord = "지난주",
 }: {
+  /** 기준 주 표기("지난주"는 실제 지난주일 때만, 아니면 기간 — 단계 10) */
+  refWord?: string;
   runId: string;
   block: BlockRow;
   decimals: number;
@@ -147,7 +150,7 @@ export function BlockDrawer({
   const bestAlt = (cands ?? []).filter((c) => c.candidate.key !== block.candidate_key && c.expected_kpi !== null).sort((a, b) => (b.expected_kpi as number) - (a.expected_kpi as number))[0] ?? null;
   const dec = block.decision ?? null;
   const verdict = (() => {
-    if (!isIdeal) return "지난주 실제 편성을 AI 스마트 편성과 같은 방식으로 평가한 값입니다.";
+    if (!isIdeal) return `${refWord} 실제 편성을 AI 스마트 편성과 같은 방식으로 평가한 값입니다.`;
     if (block.status === "REQUIRED" || block.status === "LOCKED") return `고정 편성 — ${CONSTRAINT_LABEL[block.constraint_ref?.constraintType ?? ""] ?? "필수 편성"}이라 바꾸지 않습니다.`;
     if (block.status === "MANUAL_OVERRIDE") return "직접 교체한 편성입니다. 다시 계산해도 유지됩니다.";
     if (dec?.kind === "SAME") return `${frameLabel}와 같은 편성입니다.`;
@@ -163,16 +166,16 @@ export function BlockDrawer({
       if (bestAlt && block.expected_kpi !== null && bestAlt.expected_kpi !== null) {
         const gap = block.expected_kpi - bestAlt.expected_kpi;
         const ratio = block.expected_kpi > 0 ? gap / block.expected_kpi : null;
-        if (gap >= 0) return `지난주 편성 유지 — 다음 후보 〈${bestAlt.candidate.programName}〉보다 기대 ${signed(gap, decimals)}${ratio !== null ? `(${signedPct(ratio)})` : ""} 높습니다.`;
-        return `지난주 편성 유지 — 〈${bestAlt.candidate.programName}〉 기대값이 더 높지만(${signed(-gap, decimals)}) 종합 점수(편성 성향·반복 제한 반영)로 유지됐습니다.`;
+        if (gap >= 0) return `${refWord} 편성 유지 — 다음 후보 〈${bestAlt.candidate.programName}〉보다 기대 ${signed(gap, decimals)}${ratio !== null ? `(${signedPct(ratio)})` : ""} 높습니다.`;
+        return `${refWord} 편성 유지 — 〈${bestAlt.candidate.programName}〉 기대값이 더 높지만(${signed(-gap, decimals)}) 종합 점수(편성 성향·반복 제한 반영)로 유지됐습니다.`;
       }
-      return "지난주 편성 유지 — 바꿀 만한 후보가 없습니다.";
+      return `${refWord} 편성 유지 — 바꿀 만한 후보가 없습니다.`;
     }
     if (compareRow?.changed) {
       const d = compareRow.expectedKpiDiff;
       const base = compareRow.current?.expectedKpi ?? null;
       const ratio = d !== null && base ? d / base : null;
-      const from = compareRow.current ? `지난주 〈${compareRow.current.programName}〉 대신` : "지난주 편성이 없던 자리에";
+      const from = compareRow.current ? `${refWord} 〈${compareRow.current.programName}〉 대신` : `${refWord} 편성이 없던 자리에`;
       if (d === null) return `${from} 배치했습니다.`;
       const small = ratio !== null && Math.abs(ratio) < SMALL_GAIN_RATIO;
       return `${from} 배치 — 기대 ${signed(d, decimals)}${ratio !== null ? `(${signedPct(ratio)})` : ""}${small ? " · 차이가 작아 유지도 검토할 만합니다" : ""}.`;
@@ -223,8 +226,8 @@ export function BlockDrawer({
               </dd>
             </div>
             <div className="rounded-xl border border-zinc-100 px-1 py-2">
-              <dt className="text-[10px] text-zinc-500">표본</dt>
-              <dd className="mt-0.5 text-base font-semibold tabular-nums text-zinc-900">{block.sample_count ?? "-"}<span className="text-[10px] font-normal text-zinc-500">회</span></dd>
+              <dt className="text-[10px] text-zinc-500" title="이 기대값에 쓰인 과거 방송 건수(근거 단계에서 모인 방영 횟수)입니다. 시청자 패널 표본 수가 아닙니다.">근거 방송</dt>
+              <dd className="mt-0.5 text-base font-semibold tabular-nums text-zinc-900">{block.sample_count ?? "-"}<span className="text-[10px] font-normal text-zinc-500">건</span></dd>
             </div>
             <div className="rounded-xl border border-zinc-100 px-1 py-2">
               <dt className="text-[10px] text-zinc-500">3달 평균</dt>
@@ -234,7 +237,7 @@ export function BlockDrawer({
           {block.expected_low !== null && block.expected_low !== undefined && block.expected_high !== null && block.expected_high !== undefined && (
             <p className="px-1 text-xs text-zinc-600">
               예상 범위 <b className="tabular-nums">{block.expected_low.toFixed(decimals)} ~ {block.expected_high.toFixed(decimals)}</b>
-              <span className="text-zinc-400"> · {RANGE_BASIS_LABEL[block.range_basis ?? ""] ?? ""}(실측이 이 안에 든 비율 약 80%)</span>
+              <span className="text-zinc-500"> · {RANGE_BASIS_LABEL[block.range_basis ?? ""] ?? ""} — {block.range_basis === "BACKTEST" ? "과거 오차 분포의 10~90% 구간이며 미래의 적중을 보장하지 않습니다" : "학습 기간 안 변동 기준이라 실제 오차보다 좁을 수 있고 아직 검증되지 않았습니다"}</span>
             </p>
           )}
           {isIdeal && dec?.certainty && (

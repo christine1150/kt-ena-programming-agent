@@ -264,11 +264,11 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
           : [{ kind: "note", text: "임계값(±15%) 이상의 변곡점이 관찰되지 않았습니다" }],
     });
     sections.push({
-      title: "08 누적 기여 상위",
+      title: "08 기간 평균 상위(편성 횟수 반영, 시간가중 분해 아님)",
       blocks:
         s.topContributors.length > 0
           ? [{ kind: "table", headers: ["프로그램", "기간 평균", "방영 횟수"], rows: s.topContributors.map((m) => [m.canonicalName, formatRating(m.periodAvgRating, code), String(m.periodAirCount ?? "—")]) }]
-          : [{ kind: "note", text: "누적 기여 자료가 없습니다" }],
+          : [{ kind: "note", text: "기간 평균 상위 자료가 없습니다" }],
     });
     // N절 Phase 2b(2026-09-01) — §06 번호 순서 밖.
     if (s.daypartWinWeakness.win || s.daypartWinWeakness.weakness) {

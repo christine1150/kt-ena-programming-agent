@@ -22,6 +22,7 @@ import {
   computeFirstRunInsights,
 } from "./deepDiveAnalyzer";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
+import { RANK_KPI_LABEL } from "./reportModel";
 import type {
   ModeASection,
   ModeBSection,
@@ -232,17 +233,19 @@ function buildCompetitorScheduleChangesSection(raw: AudienceReportRawData): { av
 /** Rating·Share·Reach·시청시간·순위 5종 KPI 카드 — periodReport(+선택적 rank)만 골라 씀. */
 function buildKpiCards(raw: AudienceReportRawData, rankAvg: { current: number | null; prior: number | null } | null): KpiCard[] {
   const p = raw.periodReport;
+  // 여러 날 기간의 값은 공급자 기간 값이 아니라 일별 값의 평균이다(Share·Reach·시청시간은 기간 값으로 합산·평균할 수 없는 지표라 특히 "일평균"을 밝힌다).
+  const sfx = raw.period.dateFrom !== raw.period.dateTo ? "(일평균)" : "";
   const cards: KpiCard[] = [
     {
-      label: "Rating",
+      label: `Rating${sfx}`,
       formatted: formatRating(p?.avg_rating ?? null, raw.channelCode),
       priorDeltaPct: p?.prior_period_change_pct ?? null,
       baselineDeltaPct: p?.baseline_change_pct ?? null,
     },
-    { label: "Share", formatted: formatPercent(p?.avg_share ?? null), priorDeltaPct: null, baselineDeltaPct: null },
-    { label: "Reach", formatted: formatPercent(p?.avg_reach ?? null), priorDeltaPct: null, baselineDeltaPct: null },
+    { label: `Share${sfx}`, formatted: formatPercent(p?.avg_share ?? null), priorDeltaPct: null, baselineDeltaPct: null },
+    { label: `Reach${sfx}`, formatted: formatPercent(p?.avg_reach ?? null), priorDeltaPct: null, baselineDeltaPct: null },
     {
-      label: "시청시간(초)",
+      label: `시청시간(초)${sfx}`,
       formatted: p?.avg_time_spent_seconds != null ? Math.round(p.avg_time_spent_seconds).toString() : "—",
       priorDeltaPct: null,
       baselineDeltaPct: null,
@@ -250,8 +253,8 @@ function buildKpiCards(raw: AudienceReportRawData, rankAvg: { current: number | 
   ];
   if (rankAvg) {
     cards.push({
-      label: "순위",
-      formatted: rankAvg.current != null ? rankAvg.current.toFixed(1) : "—",
+      label: RANK_KPI_LABEL,
+      formatted: rankAvg.current != null ? `${Math.round(rankAvg.current)}위` : "—",
       priorDeltaPct: pctChange(rankAvg.current, rankAvg.prior),
       baselineDeltaPct: null,
     });
@@ -514,13 +517,13 @@ export function buildModeCSection(raw: AudienceReportRawData, extra: ModeCExtra)
       formattedB: extra.periodBKpi.avgTimeSpentSeconds != null ? Math.round(extra.periodBKpi.avgTimeSpentSeconds).toString() : "—",
     },
     {
-      label: "순위",
+      label: RANK_KPI_LABEL,
       periodA: extra.rankPeriodA?.avgRank ?? null,
       periodB: extra.rankPeriodB?.avgRank ?? null,
       absoluteChange: extra.rankPeriodA?.avgRank != null && extra.rankPeriodB?.avgRank != null ? extra.rankPeriodA.avgRank - extra.rankPeriodB.avgRank : null,
       pctChange: pctChange(extra.rankPeriodA?.avgRank ?? null, extra.rankPeriodB?.avgRank ?? null),
-      formattedA: extra.rankPeriodA?.avgRank != null ? extra.rankPeriodA.avgRank.toFixed(1) : "확인 불가",
-      formattedB: extra.rankPeriodB?.avgRank != null ? extra.rankPeriodB.avgRank.toFixed(1) : "확인 불가",
+      formattedA: extra.rankPeriodA?.avgRank != null ? `${Math.round(extra.rankPeriodA.avgRank)}위` : "확인 불가",
+      formattedB: extra.rankPeriodB?.avgRank != null ? `${Math.round(extra.rankPeriodB.avgRank)}위` : "확인 불가",
     },
   ];
 

@@ -3,6 +3,8 @@
 // 지난주 실제 편성 vs 이상적 편성 전체 대조표 — page가 한 번 받아온 /compare 결과(저장값의 차이)를 그대로 표시.
 import { useState } from "react";
 import { DOW_LABELS, minToLabel } from "@/lib/scheduleGridLayout";
+import { kstToday } from "@/lib/workspace/dates";
+import { weekLabel } from "@/lib/workspace/weekCompare";
 import { SMALL_GAIN_RATIO, reasonText, signedPct, type CompareRow } from "./model";
 
 export function CompareTable({
@@ -11,7 +13,10 @@ export function CompareTable({
   decimals,
   onSelectBlock,
   planWeek = null,
+  refWord = "지난주",
 }: {
+  /** 기준 주 표기("지난주"는 실제 지난주일 때만, 아니면 기간 — 단계 10) */
+  refWord?: string;
   rows: CompareRow[];
   currentWeekStart: string | null;
   decimals: number;
@@ -27,7 +32,7 @@ export function CompareTable({
     <div className="rounded-2xl border border-zinc-200 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-4 py-3">
         <p className="text-sm font-semibold text-zinc-800">
-          지난주 실제 편성({currentWeekStart ?? "-"} 주) → AI 스마트 편성{planWeek ? `(업로드 편성표 ${planWeek} 주 틀 기준)` : "(편성표 뽑기 결과)"}{" "}
+          {currentWeekStart ? weekLabel(currentWeekStart, kstToday()) : refWord} 실제 편성 → AI 스마트 편성{planWeek ? `(업로드 편성표 ${planWeek} 주 틀 기준)` : "(편성표 뽑기 결과)"}{" "}
           <span className="font-normal text-zinc-500">· 바뀐 칸 {allRows.filter((r) => r.changed).length}개 / 전체 {allRows.length}개</span>
         </p>
         <label className="flex items-center gap-1.5 text-xs text-zinc-600">
@@ -40,7 +45,7 @@ export function CompareTable({
           <thead className="sticky top-0 bg-zinc-50 text-xs text-zinc-500">
             <tr>
               <th className="px-3 py-2 text-left font-medium">요일·시간</th>
-              <th className="px-3 py-2 text-left font-medium">지난주 실제</th>
+              <th className="px-3 py-2 text-left font-medium">{refWord} 실제</th>
               <th className="px-3 py-2 text-left font-medium">AI 스마트</th>
               <th className="px-3 py-2 text-right font-medium">기대 차이</th>
               <th className="px-3 py-2 text-left font-medium">판단</th>
@@ -71,7 +76,7 @@ export function CompareTable({
                         <span className="block text-xs tabular-nums text-zinc-400">기대 {fmt(r.current.expectedKpi)} · 실측 {fmt(r.current.actualKpi)}</span>
                       </>
                     ) : (
-                      <span className="text-zinc-400">(지난주 편성 없음)</span>
+                      <span className="text-zinc-400">({refWord} 편성 없음)</span>
                     )}
                   </td>
                   <td className="px-3 py-2 font-medium text-zinc-800">
@@ -92,7 +97,7 @@ export function CompareTable({
         </table>
       </div>
       <p className="border-t border-zinc-100 px-4 py-2 text-[11px] text-zinc-400">
-        기대값은 최근 3달 데이터 기반 기대 시청률이며 실제 미래 시청률이 아닙니다. 지난주 실제 편성도 같은 방식으로 계산한 기대값과 실측을 함께 표시합니다. &lsquo;차이 작음&rsquo;은 기대 차이 {Math.round(SMALL_GAIN_RATIO * 100)}% 미만(임시 기준)입니다.
+        기대값은 최근 3달 데이터 기반 기대 시청률이며 실제 미래 시청률이 아닙니다. {refWord} 실제 편성도 같은 방식으로 계산한 기대값과 실측을 함께 표시합니다. &lsquo;차이 작음&rsquo;은 기대 차이 {Math.round(SMALL_GAIN_RATIO * 100)}% 미만(임시 기준)입니다.
       </p>
     </div>
   );

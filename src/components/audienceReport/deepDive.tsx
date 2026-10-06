@@ -24,6 +24,7 @@ import type {
   TargetIndexPoint,
 } from "@/lib/audienceReport/deepDiveAnalyzer";
 import { TARGET_INDEX_STRONG, TARGET_INDEX_WEAK } from "@/lib/audienceReport/deepDiveAnalyzer";
+import { INDEX_NOT_COMPOSITION_NOTE, buildTargetSentence } from "@/lib/insight/wording";
 import { ChartCaption, H, PAD, scaleLinear, yDomainFrom } from "@/components/audienceReport/charts";
 import { formatPercent, formatRating } from "@/lib/audienceReport/format";
 
@@ -473,21 +474,16 @@ function TargetIndexChart({ points, caption }: { points: TargetIndexPoint[]; cap
         </text>
       </svg>
       <div className="text-[11px] text-neutral-500">
-        {TARGET_INDEX_STRONG} 이상은 강세, {TARGET_INDEX_WEAK} 이하는 미진으로 표시함
+        {TARGET_INDEX_STRONG} 이상은 강세, {TARGET_INDEX_WEAK} 이하는 약세(미진)로 표시하며, 100 미만은 별도로 ‘채널 평균 미만’이라고 부름. {INDEX_NOT_COMPOSITION_NOTE}
       </div>
       <ChartCaption caption={caption} />
     </div>
   );
 }
 
-/** 확장부 하단 한 줄 — "남20대(319)·여40대(218)에서 강세, 여30대(68)만 채널 평균 이하임" 형태. */
-function buildTargetSentence(p: ProgramProfile): string {
-  const strong = p.strongTargets.slice(0, 2).map((t) => `${t.demographicLabel}(${t.index})`);
-  const weak = p.weakTargets.slice(0, 1).map((t) => `${t.demographicLabel}(${t.index})`);
-  if (strong.length === 0 && weak.length === 0) return "채널 평균에서 크게 벗어난 타깃이 없어 전 연령대가 고르게 나온 편임.";
-  if (strong.length === 0) return `채널 평균을 뚜렷하게 상회한 타깃은 없고, ${weak[0]}만 채널 평균 이하임.`;
-  if (weak.length === 0) return `${strong.join("·")}에서 강세이며, 채널 평균을 크게 밑도는 타깃은 없음.`;
-  return `${strong.join("·")}에서 강세, ${weak[0]}만 채널 평균 이하임.`;
+/** 확장부 하단 한 줄 — 판정 문장은 insight/wording이 만든다(여러 집단이 평균 미만이면 "한 집단만"이라고 쓰지 않음). */
+function programTargetSentence(p: ProgramProfile): string {
+  return buildTargetSentence(p.targetPoints.map((t) => ({ label: t.demographicLabel, index: t.index })));
 }
 
 function ProgramProfilesView({ programs, caption, channelCode }: { programs: ProgramProfile[]; caption: ChartCaptionInfo; channelCode: string }) {
@@ -524,7 +520,7 @@ function ProgramProfilesView({ programs, caption, channelCode }: { programs: Pro
                     <td className="py-1.5 text-right tabular-nums">{p.airings}회</td>
                     <td className="py-1.5 tabular-nums">{p.peakHour === null ? "—" : `${p.peakHour}시 ${formatRating(p.peakRating, channelCode)}`}</td>
                     <td className="py-1.5">{p.strongTargets.slice(0, 2).map((t) => `${t.demographicLabel} ${t.index}`).join(", ") || "—"}</td>
-                    <td className="py-1.5">{p.weakTargets.slice(0, 1).map((t) => `${t.demographicLabel} ${t.index}`).join(", ") || "—"}</td>
+                    <td className="py-1.5">{p.weakTargets.length === 0 ? "—" : `${p.weakTargets.slice(0, 3).map((t) => `${t.demographicLabel} ${t.index}`).join(", ")}${p.weakTargets.length > 3 ? ` 외 ${p.weakTargets.length - 3}개` : ""}`}</td>
                     <td className="py-1.5">{p.engagementType ?? "—"}</td>
                   </tr>
                   {isOpen && (
@@ -534,7 +530,7 @@ function ProgramProfilesView({ programs, caption, channelCode }: { programs: Pro
                           <HourBarChart points={p.hourPoints} caption={caption} channelCode={channelCode} />
                           <TargetIndexChart points={p.targetPoints} caption={caption} />
                         </div>
-                        <p className="mt-2 text-xs text-neutral-600">{buildTargetSentence(p)}</p>
+                        <p className="mt-2 text-xs text-neutral-600">{programTargetSentence(p)}</p>
                       </td>
                     </tr>
                   )}

@@ -5,6 +5,7 @@
 // 않고, 이미 계산된 값만 인용한다(originalContentInsight.ts와 동일한 안전 패턴,
 // llmSynthesis.ts의 공용 가드레일 재사용).
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "./llmSynthesis";
+import { guardForInput } from "./insight/guardInput";
 
 // 사용자 지시(2026-08-26): "채널별 인사이트 안에서 어떤건 %까지 표시하고 어떤건 숫자만
 // 표시 — skyUHD 제외 모든 채널은 소수점 아래 3자리까지만". 원인은 이 함수가 시청률 원본
@@ -89,6 +90,8 @@ const SCHEMA = {
 export async function buildChannelNarrativeViaLlm(input: ChannelNarrativeLlmInput): Promise<string | null> {
   const rounded = {
     ...input,
+    // 순위는 정수로 보여 준다(소수 순위를 AI가 인용하지 않도록 입력 단계에서 반올림).
+    baseline_avg_rank: input.baseline_avg_rank === null ? null : Math.round(input.baseline_avg_rank),
     today_rating: round3(input.today_rating),
     baseline_avg_rating: round3(input.baseline_avg_rating),
     priorWeekRating: round3(input.priorWeekRating),
@@ -108,6 +111,14 @@ export async function buildChannelNarrativeViaLlm(input: ChannelNarrativeLlmInpu
       : null,
   };
   const result = await callOpenAiJsonSynthesis<{ narrative: string }>(buildSystemPrompt(), rounded, "channel_narrative", SCHEMA);
-  const narrative = result?.narrative?.trim();
-  return narrative && narrative.length > 0 ? narrative : null;
+  // 단계 04: AI 문장 검증 — 숫자·단위·기준·방향·인과 단정을 입력 값과 대조하고, 통과하지 못하면 null(호출부가 규칙 기반 문구로 대체).
+  return guardForInput(result?.narrative, rounded, {
+    label: "channel_narrative",
+    // rating_delta_pct·baseline_avg_rating은 최근 4주(28일) 평균 기준, 부진 프로그램 등락률은 같은 요일·시간대 본방 슬롯 평균 기준이다.
+    rules: [
+      { match: /^rating_delta_pct$/, comparison: "rolling_4w" },
+      { match: /^decline_program_delta_pct$/, comparison: "slot_avg" },
+    ],
+    allowedBaselines: ["rolling_4w", "rolling_8w", "prior_week", "prior_week2", "same_dow", "slot_avg"],
+  });
 }

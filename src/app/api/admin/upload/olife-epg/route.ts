@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
 import { parseEpgWorkbook, type EpgRow } from "@/lib/epgMatch";
 import { parseOlifeWeeklyScheduleWorkbook } from "@/lib/olifeWeeklySchedule";
-import { storeOlifeEpgStaging, applyOlifeEpgForDate } from "@/lib/olifeEpgStaging";
+import { storeOlifeEpgStaging, applyOlifeEpgForDate, type EpgQueueItem } from "@/lib/olifeEpgStaging";
 
 interface FileSummary {
   fileName: string;
@@ -20,6 +20,9 @@ interface FileSummary {
   datesProcessed?: string[];
   matchedCount?: number;
   unmatchedCount?: number;
+  /** 단계 05: 자동 반영하지 못한 방영분(미매칭·모호 후보)과 이유·후보 증거 */
+  unmatchedQueue?: EpgQueueItem[];
+  ambiguousCount?: number;
   sourceFormat?: "daily_epg" | "weekly_schedule";
 }
 
@@ -66,6 +69,8 @@ export async function POST(request: Request) {
 
     let totalMatched = 0;
     let totalUnmatched = 0;
+    let totalAmbiguous = 0;
+    const queue: EpgQueueItem[] = [];
     let uploadError: string | null = null;
 
     for (const [date, epgRows] of byDate) {
@@ -96,6 +101,8 @@ export async function POST(request: Request) {
       }
       totalMatched += result.matched;
       totalUnmatched += result.unmatched;
+      totalAmbiguous += result.ambiguousGroups ?? 0;
+      queue.push(...(result.queue ?? []));
     }
 
     if (uploadError) {
@@ -109,6 +116,8 @@ export async function POST(request: Request) {
       datesProcessed: [...byDate.keys()],
       matchedCount: totalMatched,
       unmatchedCount: totalUnmatched,
+      ambiguousCount: totalAmbiguous,
+      unmatchedQueue: queue.slice(0, 50),
       sourceFormat: source,
     });
   }

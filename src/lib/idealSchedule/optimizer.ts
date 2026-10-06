@@ -12,12 +12,13 @@
 import type { IdealScheduleConfig } from "./config";
 import { freeIntervals, type ConstraintResolution } from "./constraints";
 import { cutSkeletonByFixed, type SkeletonSlot } from "./skeleton";
-import { Scorer, type BlockEval, type EngineCandidate } from "./scoring";
+import { Scorer, type BlockEval, type EngineCandidate, type PlacementContext } from "./scoring";
 import { BROADCAST_DAY_END_MIN, BROADCAST_DAY_START_MIN, hourBucket } from "./time";
 import { UNCLASSIFIED, genreFamily } from "./types";
 import { EPISODE_CHAIN_GAP_MIN } from "./features";
 import type { EpisodeAssignment } from "./episodes";
 import { certaintyOf, marginZ, type Certainty } from "./uncertainty";
+import { SearchGate, type SearchControl, type SearchReport, type StopReason } from "./searchControl";
 
 export type BlockStatus = "LOCKED" | "REQUIRED" | "AI" | "MANUAL_OVERRIDE";
 
@@ -63,26 +64,46 @@ export interface ScheduleEvaluation {
 const EPS = 1e-9;
 
 // ── 목적함수 ────────────────────────────────────────────────────────
-function evaluateInternal(scorer: Scorer, blocks: PlacedBlock[], maxGapMin: number, days: Set<number> | null): ScheduleEvaluation {
-  const sorted = [...blocks].sort((a, b) => a.weekday - b.weekday || a.startMin - b.startMin);
-  const sameSlotDays = new Map<string, Set<number>>();
-  for (const b of sorted) {
-    const k = `${b.candidate.programKey}|${hourBucket(b.startMin)}`;
-    (sameSlotDays.get(k) ?? sameSlotDays.set(k, new Set()).get(k)!).add(b.weekday);
+/** 블록 하나의 평가 입력: 후보 + 놓인 맥락(앞 편성·같은 시 반복·그날 장르 비중 …). 평가값은 이 둘만의 함수다. */
+interface Placement {
+  b: PlacedBlock;
+  cand: EngineCandidate;
+  ctx: PlacementContext;
+}
+
+// 문자열 키를 매 호출마다 만들지 않도록 프로그램·장르 묶음을 정수 id로 바꿔 쓴다(id는 계산 결과에 영향 없음).
+const internIds = new Map<string, number>();
+const intern = (s: string): number => {
+  let v = internIds.get(s);
+  if (v === undefined) internIds.set(s, (v = internIds.size));
+  return v;
+};
+const popcount = (m: number): number => {
+  let n = 0;
+  for (; m; m &= m - 1) n++;
+  return n;
+};
+
+function placementsOf(blocks: PlacedBlock[], maxGapMin: number, days: Set<number> | null): Placement[] {
+  // 같은 시 반복 횟수는 요일 간 유일한 상호작용이라 전체 블록으로 세고(프로그램×시 → 놓인 요일 비트마스크),
+  // 정렬·요일별 합·장르 비중·평가는 대상 요일만 한다(결과 동일, 속도).
+  const sameSlotMask = new Map<number, number>();
+  for (const b of blocks) {
+    const k = intern(b.candidate.programKey) * 32 + hourBucket(b.startMin);
+    sameSlotMask.set(k, (sameSlotMask.get(k) ?? 0) | (1 << b.weekday));
   }
+  const sorted = (days ? blocks.filter((b) => days.has(b.weekday)) : [...blocks]).sort((a, b) => a.weekday - b.weekday || a.startMin - b.startMin);
   const dayMinutes = new Map<number, number>();
   for (const b of sorted) dayMinutes.set(b.weekday, (dayMinutes.get(b.weekday) ?? 0) + (b.endMin - b.startMin));
-  const genreShare = new Map<string, number>(); // "day|genre" → 비중
+  const genreShare = new Map<number, number>(); // 요일×100만+장르 묶음 id → 비중
   for (const b of sorted) {
     if (b.candidate.genre === UNCLASSIFIED) continue;
-    const k = `${b.weekday}|${genreFamily(b.candidate.genre)}`; // 장르 편중은 상위 묶음 기준
+    const k = b.weekday * 1_000_000 + intern(genreFamily(b.candidate.genre)); // 장르 편중은 상위 묶음 기준
     genreShare.set(k, (genreShare.get(k) ?? 0) + (b.endMin - b.startMin) / (dayMinutes.get(b.weekday) || 1));
   }
-  const out: EvaluatedBlock[] = [];
-  let objective = 0;
+  const out: Placement[] = [];
   for (let i = 0; i < sorted.length; i++) {
     const b = sorted[i];
-    if (days && !days.has(b.weekday)) continue;
     const prev = i > 0 && sorted[i - 1].weekday === b.weekday && b.startMin - sorted[i - 1].endMin <= maxGapMin ? sorted[i - 1] : null;
     // 같은 프로그램이 짧은 편성물을 사이에 두고 이어지는지(회차 시리즈 연결 편성)
     let episodeChain = false;
@@ -92,21 +113,48 @@ function evaluateInternal(scorer: Scorer, blocks: PlacedBlock[], maxGapMin: numb
         break;
       }
     }
-    const e = scorer.evaluate(b.candidate, {
-      weekday: b.weekday,
-      startMin: b.startMin,
-      endMin: b.endMin,
-      prevKey: prev?.candidate.key ?? null,
-      prevProgramKey: prev?.candidate.programKey ?? null,
-      fixed: b.fixed,
-      episodeChain,
-      sameSlotOtherDays: (sameSlotDays.get(`${b.candidate.programKey}|${hourBucket(b.startMin)}`)?.size ?? 1) - 1,
-      dayGenreShare: b.candidate.genre === UNCLASSIFIED ? 0 : genreShare.get(`${b.weekday}|${genreFamily(b.candidate.genre)}`) ?? 0,
+    out.push({
+      b,
+      cand: b.candidate,
+      ctx: {
+        weekday: b.weekday,
+        startMin: b.startMin,
+        endMin: b.endMin,
+        prevKey: prev?.candidate.key ?? null,
+        prevProgramKey: prev?.candidate.programKey ?? null,
+        fixed: b.fixed,
+        episodeChain,
+        sameSlotOtherDays: popcount(sameSlotMask.get(intern(b.candidate.programKey) * 32 + hourBucket(b.startMin)) ?? 1 << b.weekday) - 1,
+        dayGenreShare: b.candidate.genre === UNCLASSIFIED ? 0 : genreShare.get(b.weekday * 1_000_000 + intern(genreFamily(b.candidate.genre))) ?? 0,
+      },
     });
+  }
+  return out;
+}
+
+function evaluateInternal(scorer: Scorer, blocks: PlacedBlock[], maxGapMin: number, days: Set<number> | null): ScheduleEvaluation {
+  const out: EvaluatedBlock[] = [];
+  let objective = 0;
+  for (const p of placementsOf(blocks, maxGapMin, days)) {
+    const e = scorer.evaluate(p.cand, p.ctx);
     objective += e.value;
-    out.push({ ...b, eval: e });
+    out.push({ ...p.b, eval: e });
   }
   return { blocks: out, objective };
+}
+
+/** 두 상태의 같은 블록이 평가 입력(후보·맥락)까지 같으면 평가값도 같다 — 다시 평가하지 않는다. */
+function samePlacement(x: Placement, y: Placement): boolean {
+  const a = x.ctx;
+  const c = y.ctx;
+  return (
+    x.cand.key === y.cand.key &&
+    a.prevKey === c.prevKey &&
+    a.prevProgramKey === c.prevProgramKey &&
+    a.episodeChain === c.episodeChain &&
+    a.sameSlotOtherDays === c.sameSlotOtherDays &&
+    a.dayGenreShare === c.dayGenreShare
+  );
 }
 
 /** 스케줄 전체 평가: 요일별 정렬 → 직전 블록·그날 장르 비중·같은 시 반복 횟수를 계산해 블록마다 평가. */
@@ -126,14 +174,29 @@ function affectedDays(blocks: PlacedBlock[], changed: PlacedBlock[], programKeys
 
 /** 변경 적용 전후 목적함수 차이(영향 요일만 재평가). apply/revert는 호출부가 블록을 직접 바꾸는 함수. */
 function deltaOf(scorer: Scorer, blocks: PlacedBlock[], maxGap: number, changed: PlacedBlock[], apply: () => void, revert: () => void, oldKeys: string[]) {
+  deltaCalls++;
   apply();
   const newKeys = changed.map((b) => b.candidate.programKey);
   revert();
   const days = affectedDays(blocks, changed, [...oldKeys, ...newKeys]);
-  const before = evaluateInternal(scorer, blocks, maxGap, days).objective;
+  // 영향 요일의 블록별 (후보, 맥락)을 바꾸기 전·후로 계산하고, 둘이 달라진 블록만 평가해 차이를 더한다.
+  // 안 달라진 블록의 평가값은 전후가 같으므로 전체 재평가와 같은 값이다(속도: 요일 전체 → 바뀐 블록만).
+  const was = placementsOf(blocks, maxGap, days);
+  const refBefore = verifyDelta ? evaluateInternal(scorer, blocks, maxGap, days).objective : 0;
   apply();
-  const after = evaluateInternal(scorer, blocks, maxGap, days).objective;
-  return after - before; // 적용된 상태로 반환 — 채택하지 않으면 호출부가 revert
+  const now = placementsOf(blocks, maxGap, days);
+  let d = 0;
+  for (let i = 0; i < now.length; i++) {
+    if (samePlacement(was[i], now[i])) continue;
+    d += scorer.evaluate(now[i].cand, now[i].ctx).value - scorer.evaluate(was[i].cand, was[i].ctx).value;
+  }
+  if (verifyDelta) {
+    const diff = Math.abs(evaluateInternal(scorer, blocks, maxGap, days).objective - refBefore - d);
+    deltaCheck.checked++;
+    if (diff > EPS) deltaCheck.mismatches++;
+    deltaCheck.maxAbsDiff = Math.max(deltaCheck.maxAbsDiff, diff);
+  }
+  return d; // 적용된 상태로 반환 — 채택하지 않으면 호출부가 revert
 }
 
 // ── 공통 도우미 ─────────────────────────────────────────────────────
@@ -151,11 +214,23 @@ export interface EngineInput {
   programCapOverride?: Map<string, { daily: number; weekly: number }>;
   /** 지난주 실제 편성(비교 기준 주) 블록 — 기존 틀 유지 모드의 "차이 작으면 유지" 판단 기준 */
   incumbents?: PlacedBlock[];
+  /** 권리(Avail) 게이트(단계 06, 선택) — 이 자리에 이 후보를 놓아도 되는가. 없으면 모든 후보를 허용(현재 동작 그대로).
+   *  권리 조건이 안 맞는 후보는 점수가 높아도 AI가 배치하지 않는다(사용자 고정·필수 편성 블록은 건드리지 않는다). */
+  slotAllowed?: (c: EngineCandidate, weekday: number, startMin: number, endMin: number) => boolean;
+  /** 탐색 제어(OPT04, 선택) — 평가 횟수·시간 예산·취소. 없으면 수렴할 때까지(현재 동작 그대로). */
+  search?: SearchControl;
 }
 
+let gate = new SearchGate(undefined, () => 0, 0); // optimizeWeek 호출 동안만 설정
+let deltaCalls = 0;
+let verifyDelta = false; // optimizeWeek 호출 동안만 설정(검증 모드)
+let deltaCheck = { checked: 0, mismatches: 0, maxAbsDiff: 0 };
 let capOverride: Map<string, { daily: number; weekly: number }> | undefined; // optimizeWeek 호출 동안만 설정
 
 const isHypothetical = (c: EngineCandidate) => c.contentType !== "OWN";
+
+/** 권리 게이트(단계 06) — 게이트가 없으면 항상 허용. */
+const okAt = (input: EngineInput, c: EngineCandidate, weekday: number, startMin: number, endMin: number) => !input.slotAllowed || input.slotAllowed(c, weekday, startMin, endMin);
 
 /** 가상 후보(경쟁 Benchmark·장르 원형) 편성 분 예산 확인. */
 function benchmarkBudgetOk(c: EngineCandidate, len: number, blocks: PlacedBlock[], budgetMin: number, ignore: PlacedBlock[] = []): boolean {
@@ -173,6 +248,8 @@ export interface EngineOutput {
   emptySlots: { weekday: number; startMin: number; endMin: number; reason: string }[];
   gaps: { weekday: number; startMin: number; endMin: number }[];
   localSearchMoves: number;
+  /** 탐색 보고서(OPT04): 종료 사유·평가 횟수·단계별 시간 */
+  search: SearchReport;
 }
 
 /** 반복 cap(프로그램 단위, 고정 블록 제외) + 후보 단위 주간 한도(본방): 이 후보를 weekday에 하나 더 놓아도 되는가. */
@@ -212,24 +289,72 @@ function alternativesFor(scorer: Scorer, blocks: PlacedBlock[], target: PlacedBl
   return [...own, ...hyp];
 }
 
+/** 단계별 소요 시간(시계를 주입했을 때만). */
+function phaseTimer(input: EngineInput) {
+  const now = input.search?.now;
+  const out: Record<string, number> = {};
+  let last = now ? now() : 0;
+  return {
+    lap(name: string) {
+      if (!now) return;
+      const t = now();
+      out[name] = (out[name] ?? 0) + (t - last);
+      last = t;
+    },
+    result: now ? out : undefined,
+  };
+}
+
+function buildReport(
+  input: EngineInput,
+  r: { moves: number; maxIter: number; objectiveAfterConstruction: number | null; objectiveAfterSearch: number | null; startedFrom: "GREEDY" | "INCUMBENT"; objectiveFinal: number; phaseMs?: Record<string, number>; alternativesSkipped: boolean; fastFilledSlots: number; startEvals: number; startHits: number; startMisses: number; startDeltas: number }
+): SearchReport {
+  const st = input.scorer.stats;
+  const stoppedBy: StopReason = gate.stopReason ?? (r.moves >= r.maxIter ? "MAX_MOVES" : "CONVERGED");
+  return {
+    stoppedBy,
+    reproducible: stoppedBy !== "DEADLINE" && stoppedBy !== "CANCELLED",
+    evaluations: st.evaluations - r.startEvals,
+    deltaCalls: deltaCalls - r.startDeltas,
+    expectedCacheHits: st.expectedHits - r.startHits,
+    expectedCacheMisses: st.expectedMisses - r.startMisses,
+    moves: r.moves,
+    objectiveAfterConstruction: r.objectiveAfterConstruction,
+    objectiveAfterSearch: r.objectiveAfterSearch,
+    startedFrom: r.startedFrom,
+    objectiveFinal: r.objectiveFinal,
+    ...(verifyDelta ? { deltaCheck: { ...deltaCheck } } : {}),
+    ...(r.phaseMs ? { phaseMs: r.phaseMs } : {}),
+    alternativesSkipped: r.alternativesSkipped,
+    fastFilledSlots: r.fastFilledSlots,
+  };
+}
+
 // ── KEEP_CURRENT ────────────────────────────────────────────────────
 /** 슬롯 후보. includeSuggestions=true면 배치 불가(제안 전용) 가상 후보까지 포함 — 대체 후보(Swap) 목록용. */
-function slotCandidates(slot: SkeletonSlot, pool: EngineCandidate[], input: EngineInput, includeSuggestions = false): EngineCandidate[] {
+function slotCandidates(slot: SkeletonSlot, pool: EngineCandidate[], input: EngineInput, includeSuggestions = false, ignoreRights = false): EngineCandidate[] {
   const len = slot.endMin - slot.startMin;
   const tol = input.config.structure.runtime_tolerance_min;
   const occupantKeys = new Set(slot.occupants.map((o) => o.key));
   const strong = input.scorer.ctx.strongSlots?.has(`${slot.weekday}|${hourBucket(slot.startMin)}`) ?? false;
-  return pool.filter((c) => {
+  const base = pool.filter((c) => {
     const allowed = c.aiEligible || (includeSuggestions && isHypothetical(c));
     if (c.contentType === "ARCHETYPE") return strong && allowed;
     if (occupantKeys.has(c.key)) return true; // 현재 이 슬롯을 차지하는 프로그램은 표본이 적어도 후보(기존 틀 유지)
     return allowed && c.runtimeMin !== null && Math.abs(c.runtimeMin - len) <= tol;
   });
+  // 권리 조건이 안 맞는 후보는 제외(단계 06). 게이트가 없으면 그대로.
+  return ignoreRights ? base : base.filter((c) => okAt(input, c, slot.weekday, slot.startMin, slot.endMin));
 }
 
 function optimizeKeepCurrent(input: EngineInput): EngineOutput {
   const { config, scorer } = input;
   scorer.detail = false;
+  const timer = phaseTimer(input);
+  const startStats = { startEvals: scorer.stats.evaluations, startHits: scorer.stats.expectedHits, startMisses: scorer.stats.expectedMisses, startDeltas: deltaCalls };
+  let fastFilledSlots = 0;
+  const warm = input.search?.startFrom === "INCUMBENT" && (input.incumbents?.length ?? 0) > 0;
+  let warmUsed = 0;
   const maxGap = config.structure.max_gap_min;
   // 기존 틀 유지: 길이를 실측 중앙값으로 채운 고정 블록(주요 콘텐츠 자동 연동)이 같은 프로그램이 차지하던 골격
   // 슬롯에서 시작하면, 골격 슬롯 끝까지를 그 블록 자리로 본다 — 중앙값이 실제 슬롯보다 짧아 뒤에 몇 분짜리
@@ -265,9 +390,28 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
   for (const i of order) {
     const s = slots[i];
     const pb: PlacedBlock = { weekday: s.weekday, startMin: s.startMin, endMin: s.endMin, candidate: candsBySlot[i][0], status: "AI", fixed: false, slotIndex: i };
+    if (warm) {
+      // 웜 스타트: 지난주 이 자리 프로그램이 후보에 있고 반복 제한을 지키면 그대로 시작점으로 둔다(유효성은 같은 기준으로 확인)
+      const inc = incumbentCandidate(input, s);
+      const same = inc ? candsBySlot[i].find((c) => c.key === inc.key) : undefined;
+      if (same && capsOk(same, s.weekday, blocks, config) && benchmarkBudgetOk(same, s.endMin - s.startMin, blocks, budgetMin)) {
+        pb.candidate = same;
+        blocks.push(pb);
+        assigned[i] = pb;
+        warmUsed++;
+        continue;
+      }
+    }
     let best: { c: EngineCandidate; d: number } | null = null;
+    // 예산을 다 쓰면 남은 칸은 이웃 상호작용 없이 후보 단독 가치로 채운다(항상 유효한 편성안을 낸다)
+    const hurry = gate.check() !== null;
     for (const c of candsBySlot[i]) {
       if (!capsOk(c, s.weekday, blocks, config) || !benchmarkBudgetOk(c, s.endMin - s.startMin, blocks, budgetMin)) continue;
+      if (hurry) {
+        const v = scorer.evaluate(c, { weekday: s.weekday, startMin: s.startMin, endMin: s.endMin, prevKey: null, prevProgramKey: null, fixed: false, sameSlotOtherDays: 0, dayGenreShare: 0 }).value;
+        if (!best || v > best.d + EPS) best = { c, d: v };
+        continue;
+      }
       pb.candidate = c;
       blocks.push(pb);
       const days = affectedDays(blocks, [pb], [c.programKey]);
@@ -278,25 +422,29 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
       if (!best || d > best.d + EPS) best = { c, d };
     }
     if (!best) {
-      emptySlots.push({ weekday: s.weekday, startMin: s.startMin, endMin: s.endMin, reason: candsBySlot[i].length === 0 ? "후보 없음" : "반복 cap 초과로 배치 가능한 후보 없음" });
+      emptySlots.push({ weekday: s.weekday, startMin: s.startMin, endMin: s.endMin, reason: candsBySlot[i].length === 0 ? (input.slotAllowed && slotCandidates(s, input.pool, input, false, true).length > 0 ? "권리(Avail) 조건을 충족하는 후보 없음" : "후보 없음") : "반복 cap 초과로 배치 가능한 후보 없음" });
       continue;
     }
+    if (hurry) fastFilledSlots++;
     pb.candidate = best.c;
     blocks.push(pb);
     assigned[i] = pb;
   }
+  timer.lap("construct");
+  const objectiveAfterConstruction = evaluateInternal(scorer, blocks, maxGap, null).objective;
 
-  // 2) 국소탐색: 교체 → 맞교환, 목적함수가 엄격히 좋아질 때만 채택
+  // 2) 국소탐색: 교체 → 맞교환, 목적함수가 엄격히 좋아질 때만 채택(예산·취소 시 지금까지의 최선안으로 멈춤)
   let moves = 0;
   const maxIter = config.structure.max_local_search_iter;
   let improved = true;
-  while (improved && moves < maxIter) {
+  while (improved && moves < maxIter && !gate.stopped) {
     improved = false;
-    for (let i = 0; i < slots.length && moves < maxIter; i++) {
+    for (let i = 0; i < slots.length && moves < maxIter && !gate.stopped; i++) {
       const cur = assigned[i];
       if (!cur) continue;
       for (const c of candsBySlot[i]) {
         if (c.key === cur.candidate.key || !capsOk(c, cur.weekday, blocks, config, [cur]) || !benchmarkBudgetOk(c, cur.endMin - cur.startMin, blocks, budgetMin, [cur])) continue;
+        if (gate.check()) break;
         const saved = cur.candidate;
         const d = deltaOf(scorer, blocks, maxGap, [cur], () => (cur.candidate = c), () => (cur.candidate = saved), [saved.programKey]);
         if (d > EPS) {
@@ -305,8 +453,8 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
         } else cur.candidate = saved;
       }
     }
-    for (let i = 0; i < slots.length && moves < maxIter; i++) {
-      for (let j = i + 1; j < slots.length && moves < maxIter; j++) {
+    for (let i = 0; i < slots.length && moves < maxIter && !gate.stopped; i++) {
+      for (let j = i + 1; j < slots.length && moves < maxIter && !gate.stopped; j++) {
         const a = assigned[i];
         const b = assigned[j];
         if (!a || !b || a.candidate.programKey === b.candidate.programKey) continue;
@@ -323,6 +471,7 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
         };
         if (!capsOk(cb, a.weekday, blocks, config, [a, b]) || !capsOk(ca, b.weekday, blocks, config, [a, b])) continue;
         if (!benchmarkBudgetOk(cb, a.endMin - a.startMin, blocks, budgetMin, [a, b]) || !benchmarkBudgetOk(ca, b.endMin - b.startMin, blocks, budgetMin, [a, b])) continue;
+        if (gate.check()) break;
         const d = deltaOf(scorer, blocks, maxGap, [a, b], apply, revert, [ca.programKey, cb.programKey]);
         if (d > EPS) {
           moves++;
@@ -336,20 +485,32 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
   //    지난주 편성과 비교해, 개선폭 ≤ max(최소 개선율 × 지난주 기대, z × 합성 표준오차)이면 지난주 편성으로 되돌린다.
   //    판정은 fitness가 아니라 기대 시청률(KPI 최우선). 개선폭이 작은 칸부터 처리하고, 매번 반복 제한을 다시 확인한다.
   //    탐욕·국소탐색 단계의 기준을 바꾸면 결과가 탐색 순서에 좌우되므로 후처리로 둔다.
+  timer.lap("local_search");
+  const objectiveAfterSearch = evaluateInternal(scorer, blocks, maxGap, null).objective;
   const decisions = keepInsignificant(input, slots, assigned, blocks, budgetMin);
+  timer.lap("decisions");
 
   scorer.detail = true;
   const final = evaluateSchedule(scorer, blocks, maxGap);
+  // 시간 마감·취소로 멈췄으면 대체 후보(Swap용, 계산량이 큼)는 생략한다 — 편성안과 제약 검증에는 영향 없음
+  const skipAlternatives = gate.stopReason === "DEADLINE" || gate.stopReason === "CANCELLED";
   for (const eb of final.blocks) {
     if (eb.fixed || eb.slotIndex === undefined) continue;
     const src = assigned[eb.slotIndex]!;
+    if (skipAlternatives) {
+      eb.alternatives = [];
+      eb.decision = emptyDecision(null);
+      continue;
+    }
     // 대체 후보(Swap용)는 배치 기준(길이 ±허용오차)보다 넓게: 편성 가능한 자사 프로그램 전체를 같은 자리에서 평가해
     // 길이 불일치 패널티가 반영된 순위로 보여준다(2026-09-30 화면 점검: 긴 슬롯은 후보가 1개뿐이라 교체할 수 없었음).
-    const altPool = [...new Set([...slotCandidates(slots[eb.slotIndex], input.pool, input, true), ...input.pool.filter((c) => c.aiEligible && c.contentType === "OWN")])];
+    const altPool = [...new Set([...slotCandidates(slots[eb.slotIndex], input.pool, input, true), ...input.pool.filter((c) => c.aiEligible && c.contentType === "OWN")])].filter((c) => okAt(input, c, eb.weekday, eb.startMin, eb.endMin));
     eb.alternatives = alternativesFor(scorer, blocks, src, altPool, maxGap, 10);
     eb.decision = withRunnerUp(decisions.get(eb.slotIndex) ?? emptyDecision(null), eb);
   }
-  return { mode: "KEEP_CURRENT", blocks: final.blocks, objective: final.objective, emptySlots, gaps: [], localSearchMoves: moves };
+  timer.lap("alternatives");
+  const search = buildReport(input, { moves, maxIter, objectiveAfterConstruction, objectiveAfterSearch, startedFrom: warm && warmUsed > 0 ? "INCUMBENT" : "GREEDY", objectiveFinal: final.objective, phaseMs: timer.result, alternativesSkipped: skipAlternatives, fastFilledSlots, ...startStats });
+  return { mode: "KEEP_CURRENT", blocks: final.blocks, objective: final.objective, emptySlots, gaps: [], localSearchMoves: moves, search };
 }
 
 const emptyDecision = (kind: BlockDecision["kind"]): BlockDecision => ({ kind, incumbent: null, delta: null, threshold: null, reverted: false, runnerUp: null, margin: null, certainty: null });
@@ -364,31 +525,32 @@ function withRunnerUp(d: BlockDecision, eb: EvaluatedBlock): BlockDecision {
   return { ...d, runnerUp: { name: ru.candidate.programName, expected: ru.eval.expected }, margin, certainty: certaintyOf(margin) };
 }
 
+/** 지난주 이 자리 프로그램: 같은 요일, 이 칸과 절반 이상 겹친 방영 중 가장 많이 겹친 것. */
+function incumbentCandidate(input: EngineInput, s: SkeletonSlot): EngineCandidate | null {
+  let best: PlacedBlock | null = null;
+  let bestOv = 0;
+  for (const b of input.incumbents ?? []) {
+    if (b.weekday !== s.weekday) continue;
+    const ov = Math.min(s.endMin, b.endMin) - Math.max(s.startMin, b.startMin);
+    if (ov > bestOv) {
+      bestOv = ov;
+      best = b;
+    }
+  }
+  if (!best || bestOv < (s.endMin - s.startMin) / 2) return null;
+  return input.pool.find((p) => p.key === best!.candidate.key) ?? best.candidate;
+}
+
 function keepInsignificant(input: EngineInput, slots: SkeletonSlot[], assigned: (PlacedBlock | null)[], blocks: PlacedBlock[], budgetMin: number): Map<number, BlockDecision> {
   const { config, scorer } = input;
   const out = new Map<number, BlockDecision>();
   const enabled = config.structure.decision_keep_current ?? true;
   const minRel = config.structure.decision_min_rel_gain ?? 0.03;
   const zCrit = config.structure.decision_z ?? 1;
-  const incumbents = input.incumbents ?? [];
   // 같은 자리 기대값·표준오차(앞뒤 편성과 무관한 값만 쓰므로 이웃 없이 평가)
   const probe = (c: EngineCandidate, s: SkeletonSlot) =>
     scorer.evaluate(c, { weekday: s.weekday, startMin: s.startMin, endMin: s.endMin, prevKey: null, prevProgramKey: null, fixed: false, sameSlotOtherDays: 0, dayGenreShare: 0 });
-  // 지난주 이 자리 프로그램: 같은 요일, 이 칸과 절반 이상 겹친 방영 중 가장 많이 겹친 것
-  const incumbentOf = (s: SkeletonSlot): EngineCandidate | null => {
-    let best: PlacedBlock | null = null;
-    let bestOv = 0;
-    for (const b of incumbents) {
-      if (b.weekday !== s.weekday) continue;
-      const ov = Math.min(s.endMin, b.endMin) - Math.max(s.startMin, b.startMin);
-      if (ov > bestOv) {
-        bestOv = ov;
-        best = b;
-      }
-    }
-    if (!best || bestOv < (s.endMin - s.startMin) / 2) return null;
-    return input.pool.find((p) => p.key === best!.candidate.key) ?? best.candidate;
-  };
+  const incumbentOf = (s: SkeletonSlot) => incumbentCandidate(input, s);
   const pending: { i: number; inc: EngineCandidate; incExp: number | null; delta: number; threshold: number }[] = [];
   for (let i = 0; i < slots.length; i++) {
     const cur = assigned[i];
@@ -423,6 +585,7 @@ function keepInsignificant(input: EngineInput, slots: SkeletonSlot[], assigned: 
     const next: typeof pending = [];
     for (const p of left) {
       const cur = assigned[p.i]!;
+      if (!okAt(input, p.inc, cur.weekday, cur.startMin, cur.endMin)) continue; // 지난주 편성이 권리 조건에 안 맞으면 되돌리지 않는다
       if (capsOk(p.inc, cur.weekday, blocks, config, [cur]) && benchmarkBudgetOk(p.inc, cur.endMin - cur.startMin, blocks, budgetMin, [cur])) {
         cur.candidate = p.inc;
         out.set(p.i, { ...out.get(p.i)!, kind: "KEEP", reverted: true });
@@ -480,6 +643,7 @@ function runIntervalDp(
         if (k > K) continue;
         const startMin = pos(j);
         const endMin = startMin + len;
+        if (!okAt(input, c, weekday, startMin, endMin)) continue; // 권리 게이트(단계 06)
         const ev = input.scorer.evaluate(c, {
           weekday,
           startMin,
@@ -516,6 +680,8 @@ function runIntervalDp(
 function optimizeAiTimes(input: EngineInput): EngineOutput {
   const { config, scorer } = input;
   scorer.detail = false;
+  const timer = phaseTimer(input);
+  const startStats = { startEvals: scorer.stats.evaluations, startHits: scorer.stats.expectedHits, startMisses: scorer.stats.expectedMisses, startDeltas: deltaCalls };
   const grid = config.structure.grid_minutes;
   const maxGap = config.structure.max_gap_min;
   const roundLen = (m: number) => Math.max(grid, Math.round(m / grid) * grid);
@@ -637,18 +803,21 @@ function optimizeAiTimes(input: EngineInput): EngineOutput {
     }
   }
 
+  timer.lap("dp");
+  const objectiveAfterConstruction = evaluateInternal(scorer, blocks, maxGap, null).objective;
   // 국소탐색: 같은 길이(grid 반올림) 후보로 교체 — 시간 틀은 DP 결과 그대로
   let moves = 0;
   const maxIter = config.structure.max_local_search_iter;
   const byLen = new Map<number, EngineCandidate[]>();
   for (const { c, len } of candLens) (byLen.get(len) ?? byLen.set(len, []).get(len)!).push(c);
   let improved = true;
-  while (improved && moves < maxIter) {
+  while (improved && moves < maxIter && !gate.stopped) {
     improved = false;
     for (const b of blocks.filter((x) => !x.fixed).sort((x, y) => x.weekday - y.weekday || x.startMin - y.startMin)) {
-      if (moves >= maxIter) break;
+      if (moves >= maxIter || gate.stopped) break;
       for (const c of byLen.get(b.endMin - b.startMin) ?? []) {
-        if (c.key === b.candidate.key || !capsOk(c, b.weekday, blocks, config, [b]) || !benchmarkBudgetOk(c, b.endMin - b.startMin, blocks, weekBudget, [b])) continue;
+        if (c.key === b.candidate.key || !okAt(input, c, b.weekday, b.startMin, b.endMin) || !capsOk(c, b.weekday, blocks, config, [b]) || !benchmarkBudgetOk(c, b.endMin - b.startMin, blocks, weekBudget, [b])) continue;
+        if (gate.check()) break;
         const saved = b.candidate;
         const d = deltaOf(scorer, blocks, maxGap, [b], () => (b.candidate = c), () => (b.candidate = saved), [saved.programKey]);
         if (d > EPS) {
@@ -659,22 +828,35 @@ function optimizeAiTimes(input: EngineInput): EngineOutput {
     }
   }
 
+  timer.lap("local_search");
+  const objectiveAfterSearch = evaluateInternal(scorer, blocks, maxGap, null).objective;
   scorer.detail = true;
   const final = evaluateSchedule(scorer, blocks, maxGap);
+  const skipAlternatives = gate.stopReason === "DEADLINE" || gate.stopReason === "CANCELLED";
   for (const eb of final.blocks) {
     if (eb.fixed) continue;
     eb.timeChanged = !input.skeleton.some((s) => s.weekday === eb.weekday && Math.abs(s.startMin - eb.startMin) <= grid);
+    if (skipAlternatives) {
+      eb.alternatives = [];
+      eb.decision = emptyDecision(null);
+      continue;
+    }
     const src = blocks.find((b) => !b.fixed && b.weekday === eb.weekday && b.startMin === eb.startMin)!;
     const len = eb.endMin - eb.startMin;
-    const alts = [...(byLen.get(len) ?? []), ...suggestLens.filter((x) => x.len === len).map((x) => x.c)];
+    const alts = [...(byLen.get(len) ?? []), ...suggestLens.filter((x) => x.len === len).map((x) => x.c)].filter((c) => okAt(input, c, eb.weekday, eb.startMin, eb.endMin));
     eb.alternatives = alternativesFor(scorer, blocks, src, alts, maxGap, 10);
     eb.decision = withRunnerUp(emptyDecision(null), eb);
   }
-  return { mode: "AI_OPTIMIZED", blocks: final.blocks, objective: final.objective, emptySlots: [], gaps: gapsOut, localSearchMoves: moves };
+  timer.lap("alternatives");
+  const search = buildReport(input, { moves, maxIter, objectiveAfterConstruction, objectiveAfterSearch, startedFrom: "GREEDY", objectiveFinal: final.objective, phaseMs: timer.result, alternativesSkipped: skipAlternatives, fastFilledSlots: 0, ...startStats });
+  return { mode: "AI_OPTIMIZED", blocks: final.blocks, objective: final.objective, emptySlots: [], gaps: gapsOut, localSearchMoves: moves, search };
 }
 
 export function optimizeWeek(input: EngineInput): EngineOutput {
   capOverride = input.programCapOverride;
+  gate = new SearchGate(input.search, () => input.scorer.stats.evaluations, input.scorer.stats.evaluations);
+  verifyDelta = input.search?.verifyDelta === true;
+  deltaCheck = { checked: 0, mismatches: 0, maxAbsDiff: 0 };
   try {
     return input.mode === "KEEP_CURRENT" ? optimizeKeepCurrent(input) : optimizeAiTimes(input);
   } finally {

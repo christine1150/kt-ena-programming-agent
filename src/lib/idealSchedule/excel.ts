@@ -57,6 +57,9 @@ export async function buildIdealScheduleExcel(opts: {
   blocks: ExcelBlock[];
   // 2026-09-30 추가 시트(선택): 지난주 대비 대조, 필수·고정 편성, 설정 — 모두 저장된 값 그대로
   compare?: { currentWeekStart: string | null; rows: ExcelCompareRow[] };
+  /** 기준 주 표기 — "지난주"는 실제 지난주일 때만, 아니면 기간(단계 10). 기본값은 기존 표기 */
+  refWord?: string;
+  refLabel?: string;
   settings?: [string, string][];
 }): Promise<ArrayBuffer> {
   const premieres = premiereBlocks(opts.blocks); // 같은 에피소드 24시간 3방 중 첫 방송(<본>)
@@ -142,11 +145,12 @@ export async function buildIdealScheduleExcel(opts: {
 
   // 시트 2: 지난주 실제 편성 대비
   if (opts.compare) {
-    const s2 = wb.addWorksheet("지난주 대비", { views: [{ state: "frozen", ySplit: 2 }] });
+    const refWord = opts.refWord ?? "지난주";
+    const s2 = wb.addWorksheet(`${refWord} 대비`.slice(0, 31), { views: [{ state: "frozen", ySplit: 2 }] });
     s2.mergeCells(1, 1, 1, 10);
-    s2.getCell(1, 1).value = `지난주 실제 편성(${opts.compare.currentWeekStart ?? "-"} 주) → AI 스마트 편성 · 기대값은 최근 3달 데이터 기반(${opts.targetLabel})`;
+    s2.getCell(1, 1).value = `${opts.refLabel ?? `${refWord} 실제 편성(${opts.compare.currentWeekStart ?? "-"} 주)`} → AI 스마트 편성 · 기대값은 최근 3달 데이터 기반(${opts.targetLabel})`;
     s2.getCell(1, 1).font = { bold: true, size: 11 };
-    s2.addRow(["요일", "시작", "종료", "지난주 실제", "지난주 기대", "지난주 실측", "AI 스마트", "AI 스마트 기대", "기대 차이", "판단"]);
+    s2.addRow(["요일", "시작", "종료", `${refWord} 실제`, `${refWord} 기대`, `${refWord} 실측`, "AI 스마트", "AI 스마트 기대", "기대 차이", "판단"]);
     headerStyle(s2.getRow(2));
     for (const r of opts.compare.rows) {
       const ratio = r.diff !== null && r.currentExpected ? r.diff / r.currentExpected : null;

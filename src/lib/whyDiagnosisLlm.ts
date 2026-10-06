@@ -4,6 +4,7 @@
 // 신호가 있는 것만 모은 것 — 새 계산 없음)을 LLM에 주고, 주도 요인을 중심으로 하되 다른 요인과의
 // 동시 발생/상호작용까지 자연스럽게 짚은 문장으로 종합한다.
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "./llmSynthesis";
+import { guardForInput } from "./insight/guardInput";
 
 export interface WhyDiagnosisLlmInput {
   channelName: string;
@@ -30,6 +31,6 @@ const SCHEMA = {
 export async function buildWhyDiagnosisViaLlm(input: WhyDiagnosisLlmInput): Promise<string | null> {
   if (input.candidates.length === 0) return null;
   const result = await callOpenAiJsonSynthesis<{ leadSentence: string }>(buildSystemPrompt(), input, "why_diagnosis", SCHEMA);
-  const leadSentence = result?.leadSentence?.trim();
-  return leadSentence && leadSentence.length > 0 ? leadSentence : null;
+  // 단계 04: 후보 문장(sentence)에 있는 수치·기준만 인용했는지, 인과를 단정하지 않았는지 검증한다.
+  return guardForInput(result?.leadSentence, input, { label: "why_diagnosis", rules: [{ match: /strengthPct$/, valueKind: "pct_change" }] });
 }

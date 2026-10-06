@@ -52,11 +52,18 @@ export interface SlotOverlapRow {
   hour: number;
   canonicalName: string;
   channelCodes: string[];
+  /** 단계 09: 등록된 동시방송·재방 편성인지(의도된 편성) 확인 필요인지. 오류로 자동 판정하지 않는다 */
+  intent?: "registered" | "needs_check";
+  intentLabel?: string;
 }
 
 export interface ChannelActionItem {
   channelCode: string;
   channelName: string;
+  /** 단계 09: 신호 종류·대상(프로그램명 또는 시간대)·긴급 여부 — 임원 핵심 결정을 같은 신호에서 파생하기 위한 구조화 값(기존 문장 필드는 그대로) */
+  kind?: "program_up" | "structure_temp" | "daypart_weak" | "program_down" | "daypart_win";
+  subject?: string | null;
+  urgent?: boolean;
   basis: string; // [근거]
   suggestion: string; // [제안]
   verification: string; // [확인]
@@ -123,4 +130,17 @@ export interface PortfolioReportDocument {
   actionsByChannel: ChannelActions[]; // 7개 채널 전부, 신호 없어도 빈 items로 포함
   isolationOk: boolean; // checkGroupIsolation 결과(항상 true여야 정상 — 방어적 확인용)
   aiSummary: string | null; // Phase 10(§12) — reportModel.ts의 AudienceReportDocument.aiSummary와 같은 원칙
+  // ── 단계 09(모두 선택 필드: 이전에 만든 문서·소비자와 호환) ──
+  /** 임원 핵심 결정(최대 3건) — 채널별 TOP ACTIONS의 긴급 신호에서 파생, 새 점수 체계 없음 */
+  executiveDecisions?: import("./portfolioDecisions").ExecutiveDecision[];
+  /** 채널 역할·핵심 타깃·목표·편성 방향(유효기간 있는 운영정책, 입력 전에는 '미설정') */
+  channelPolicies?: import("./portfolioPolicy").ChannelPolicyView[];
+  /** Avail 권리 만료·기소진 현황(없으면 null = 권리 저장소 미적용·읽기 실패) */
+  rights?: import("@/lib/avail/homeSummary").RightsHomeSummary | null;
+  concentration?: import("./portfolioDecisions").ConcentrationRow[];
+  skyUhdCoverage?: import("./portfolioDecisions").SkyUhdCoverageView | null;
+  groupMetrics?: { A: import("./portfolioDecisions").GroupMetric; B: import("./portfolioDecisions").GroupMetric };
+  /** 채널 보고서와 같은 방식의 지표 컨텍스트·snapshot(같은 기간·같은 시점이면 같은 값) */
+  metricContext?: import("@/lib/metrics").MetricContext;
+  dataSnapshotId?: string;
 }

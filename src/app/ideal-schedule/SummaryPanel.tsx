@@ -3,6 +3,9 @@
 // 좌측 패널 맨 위 — 이번 편성안 요약과 주요 변경. 모든 값은 저장된 엔진 계산값(요약·/compare)이고,
 // 화면은 두 저장값의 차이·비율과 개수만 센다. 기대값은 "최근 3달 데이터 기반 기대 시청률"이다.
 import { DOW_LABELS, minToLabel } from "@/lib/scheduleGridLayout";
+import { periodText, weekLabel, weekWord } from "@/lib/workspace/weekCompare";
+import type { SupportComparison } from "@/lib/idealSchedule/comparison";
+import { countRequiredOrLocked, type ChangeSummary } from "./changeSummary";
 import { SMALL_GAIN_RATIO, evidenceGrade, signed, signedPct, weeklyExpected, type BlockRow, type CompareRow, type RunRow, rankText } from "./model";
 
 export function SummaryPanel({
@@ -13,7 +16,18 @@ export function SummaryPanel({
   kpiLabel,
   onSelectBlock,
   onOpenCompare,
+  refWord = "지난주",
+  today,
+  changes = null,
+  support = null,
 }: {
+  /** OPT01: 같은 시간(두 편성 모두 평가값이 있는 분) 기준 비교 */
+  support?: SupportComparison | null;
+  /** 기준 주 표기("지난주"는 실제 지난주일 때만, 아니면 기간 — 단계 10) */
+  refWord?: string;
+  today: string;
+  /** 변경 규모(저장된 /compare 행 기준) */
+  changes?: ChangeSummary | null;
   run: RunRow;
   ideal: BlockRow[];
   compareRows: CompareRow[] | null;
@@ -26,7 +40,8 @@ export function SummaryPanel({
   // 수동 교체 후 [다시 계산] 전에는 저장 요약이 교체 전 값이라, 지금 블록 값으로 같은 식(편성 분 가중)을 다시 합산해 보여준다.
   const idealExp = run.needs_recalc ? weeklyExpected(ideal) : s.expectedAvgRating;
   const curExp = s.current?.expectedAvgRating ?? null;
-  const change = idealExp !== null && curExp ? (idealExp - curExp) / curExp : null;
+  // 개선율은 같은 시간 기준(OPT01). 비교할 현재 편성 블록이 없으면 기존 전체 평균 비교로 대체한다.
+  const change = support?.ratio ?? (idealExp !== null && curExp ? (idealExp - curExp) / curExp : null);
   const rows = compareRows ?? [];
   const changedRows = rows.filter((r) => r.changed);
   const ratioOf = (r: CompareRow) => (r.expectedKpiDiff !== null && r.current?.expectedKpi ? r.expectedKpiDiff / r.current.expectedKpi : null);
@@ -78,17 +93,25 @@ export function SummaryPanel({
         {change !== null && (
           <p className={`pb-1 text-sm font-semibold tabular-nums ${Math.abs(change) < 0.0005 ? "text-zinc-500" : change > 0 ? "text-emerald-600" : "text-rose-600"}`}>{signedPct(change)}</p>
         )}
+        {changes?.large && changes.slotShare !== null && (
+          <span className="pb-1 text-[11px] font-semibold text-amber-700" title="기준 편성과 크게 다른 안입니다. 기대 상승만으로 개선이라 단정하지 마세요.">
+            변경 {Math.round(Math.max(changes.slotShare, changes.minuteShare ?? 0) * 100)}% · 크게 다름
+          </span>
+        )}
         {/* 주간 기대 등위(사용자 지시 2026-10-01: 주간 기대 시청률 옆에) */}
         {s.expectedRank && (
-          <div className="ml-auto text-right" title={`지난주(${s.expectedRank.refWeek} 주) 닐슨 주간 등위 ${s.expectedRank.refRank}위와 최근 3달 주간 등위 실적(${s.expectedRank.weeks}주)으로 추정한 값입니다. 경쟁 채널 편성 변화는 반영되지 않습니다.`}>
+          <div className="ml-auto text-right" title={`${weekWord(s.expectedRank.refWeek, today)}(${periodText(s.expectedRank.refWeek, today)}) 닐슨 주간 등위 ${s.expectedRank.refRank}위와 최근 3달 주간 등위 실적(${s.expectedRank.weeks}주)으로 추정한 값입니다. 실제 순위가 아니며 경쟁 채널 편성 변화는 반영되지 않습니다.`}>
             <p className="text-[11px] text-zinc-500">주간 기대 등위</p>
             <p className="text-2xl font-semibold tabular-nums text-zinc-900">{rankText(s.expectedRank)}</p>
-            <p className="text-[10px] text-zinc-400">지난주 {s.expectedRank.refRank}위</p>
+            <p className="text-[10px] text-zinc-400">
+              {weekWord(s.expectedRank.refWeek, today)} {s.expectedRank.refRank}위 기준 추정(실적 순위 아님)
+              {run.needs_recalc ? " · 교체 전 계산값" : ""}
+            </p>
           </div>
         )}
       </div>
       <p className="text-[11px] text-zinc-500">
-        지난주 실제 편성({s.current?.weekStart?.slice(5) ?? "-"} 주) 같은 방식 기대 {fmt(curExp)}
+        {s.current?.weekStart ? weekLabel(s.current.weekStart, today) : refWord} 실제 편성 같은 방식 기대 {fmt(curExp)}
         {s.current?.actualAvgRating !== null && s.current?.actualAvgRating !== undefined ? ` · 실측 ${fmt(s.current.actualAvgRating)}` : ""}
       </p>
       <p className="mt-1 text-[10px] leading-snug text-zinc-400">
@@ -98,12 +121,13 @@ export function SummaryPanel({
       <div className="mt-3 grid grid-cols-4 gap-1.5">
         {stat("바뀐 칸", compareRows ? `${changedRows.length}` : "…", "default", smallCount ? `그중 기대 차이 ${Math.round(SMALL_GAIN_RATIO * 100)}% 미만 ${smallCount}칸` : undefined)}
         {stat("유지", compareRows ? `${rows.length - changedRows.length}` : "…", "muted")}
-        {stat("필수·잠금", `${s.requiredCount + s.lockedCount}`, "muted")}
+        {stat("필수·잠금", `${countRequiredOrLocked(ideal)}`, "muted")}
         {stat("충돌", `${s.conflictCount}`, s.conflictCount > 0 ? "warn" : "muted")}
       </div>
       <ul className="mt-2 space-y-0.5 text-[11px] text-zinc-500">
-        {dec && dec.keep > 0 && <li>· 차이가 작아 지난주 편성을 그대로 둔 칸 {dec.keep}</li>}
-        {dec && dec.capBlocked > 0 && <li>· 반복 제한 때문에 지난주 편성을 못 넣은 칸 {dec.capBlocked}</li>}
+        {dec && dec.keep > 0 && <li>· 차이가 작아 {refWord} 편성을 그대로 둔 칸 {dec.keep}</li>}
+        {dec && dec.capBlocked > 0 && <li>· 반복 제한 때문에 {refWord} 편성을 못 넣은 칸 {dec.capBlocked}</li>}
+        {changes && changes.downChanged > 0 && <li>· 바뀐 칸 중 기대가 낮아지는 칸 {changes.downChanged}(필수·잠금 제외) — 주간 합계만 보지 말고 칸별로 확인하세요</li>}
         {multi.length > 0 && (
           <li title={multi.join(", ")}>
             · 회차 시리즈 {multi.length}개(반복 제한 완화·연결 편성 감점 없음): {multi.slice(0, 2).join(", ")}
@@ -165,7 +189,7 @@ export function SummaryPanel({
           </button>
         </div>
       )}
-      {compareRows && changedRows.length === 0 && <p className="mt-3 border-t border-zinc-100 pt-3 text-xs text-zinc-500">지난주 실제 편성과 같은 편성안입니다(엔진이 바꾼 칸 없음).</p>}
+      {compareRows && changedRows.length === 0 && <p className="mt-3 border-t border-zinc-100 pt-3 text-xs text-zinc-500">{refWord} 실제 편성과 같은 편성안입니다(엔진이 바꾼 칸 없음).</p>}
     </section>
   );
 }

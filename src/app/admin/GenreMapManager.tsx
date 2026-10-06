@@ -4,6 +4,7 @@
 // 채널(자사 또는 경쟁채널)을 고르면 최근 12주 방영 프로그램을 편성 분이 많은 순으로 보여주고, 장르를 고르면
 // 즉시 관리자 값(MANUAL)으로 저장된다. MATCH/COUNTER·장르 적합도 계산에 쓰인다.
 import { useEffect, useState } from "react";
+import { formatCoverage } from "@/lib/admin/genreCoverage";
 
 type Row = { canonicalName: string; programName: string; minutes: number; airings: number; genre: string; source: string; note: string | null };
 const OWN = [
@@ -58,6 +59,8 @@ export default function GenreMapManager() {
   const visible = (rows ?? []).filter((r) => !onlyUnclassified || r.genre === "미분류");
   const totalMin = (rows ?? []).reduce((s, r) => s + r.minutes, 0);
   const classifiedMin = (rows ?? []).filter((r) => r.genre !== "미분류").reduce((s, r) => s + r.minutes, 0);
+  // 단계 05: 반올림으로 100%처럼 보이지 않게 내림하고 미분류 건수·분을 함께 표시한다.
+  const coverage = formatCoverage({ classifiedMinutes: classifiedMin, totalMinutes: totalMin, unclassifiedCount: (rows ?? []).filter((r) => r.genre === "미분류").length });
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
@@ -68,7 +71,7 @@ export default function GenreMapManager() {
         </div>
         {rows && (
           <p className="text-sm text-zinc-600">
-            편성 분 기준 분류율 <span className="font-semibold">{totalMin > 0 ? Math.round((classifiedMin / totalMin) * 100) : 0}%</span>
+            편성 분 기준 분류율 <span className="font-semibold">{coverage.text}</span>
           </p>
         )}
       </div>

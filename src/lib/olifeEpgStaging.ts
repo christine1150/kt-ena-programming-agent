@@ -5,7 +5,28 @@
 // — 여기는 "그 로직을 언제·어디 데이터에 적용할지"만 담당(admin 업로드 API·Nielsen ingest
 // 파이프라인 양쪽에서 공용으로 호출).
 import { supabase } from "./supabase";
-import { matchEpgToRatings, type EpgRow } from "./epgMatch";
+import { matchEpgWithEvidence, type EpgMatchEvidence, type EpgRow } from "./epgMatch";
+
+/** 미매칭 큐 한 건 — 닐슨 방영분과 EPG 후보·이유(원제목·부제·회차 증거 포함). */
+export interface EpgQueueItem {
+  date: string;
+  programName: string;
+  startTime: string;
+  status: "ambiguous" | "unmatched";
+  reason: string;
+  candidates: { title: string; startTime: string; episodeNumber: number | null; subtitle: string | null; diffMinutes: number; nameMatch: "exact" | "partial" }[];
+}
+
+function toQueueItem(date: string, ev: EpgMatchEvidence<{ startTime: string; canonicalName: string }>): EpgQueueItem {
+  return {
+    date,
+    programName: ev.item.canonicalName,
+    startTime: ev.item.startTime.slice(0, 5),
+    status: ev.status === "ambiguous" ? "ambiguous" : "unmatched",
+    reason: ev.reason,
+    candidates: ev.candidates.map((c) => ({ title: c.programNameRaw, startTime: c.startTime, episodeNumber: c.episodeNumber, subtitle: c.subtitle, diffMinutes: c.diffMinutes, nameMatch: c.nameMatch })),
+  };
+}
 
 /** 파싱된 EPG 행을 Nielsen 데이터 유무와 무관하게 그대로 저장(재업로드 시 최신값으로 덮어씀).
  *  실측 버그 수정(2026-08-27): 이전에는 upsert 결과의 에러를 확인하지 않아 배치 전체가 실패해도
@@ -52,7 +73,7 @@ export async function storeOlifeEpgStaging(
 export async function applyOlifeEpgForDate(
   olifeChannelId: string,
   date: string
-): Promise<{ matched: number; unmatched: number; hasRatings: boolean }> {
+): Promise<{ matched: number; unmatched: number; hasRatings: boolean; matchedGroups?: number; unmatchedGroups?: number; ambiguousGroups?: number; queue?: EpgQueueItem[] }> {
   const { data: ratingRows } = await supabase
     .from("ratings")
     .select("id, start_time, programs(canonical_name)")
@@ -106,13 +127,28 @@ export async function applyOlifeEpgForDate(
     grouped.get(key)!.rowIds.push(r.id);
   }
   const groupList = [...grouped.values()];
-  const matches = matchEpgToRatings(groupList, epgRows);
+  const evidence = matchEpgWithEvidence(groupList, epgRows);
 
   let matched = 0;
-  for (const [group, m] of matches) {
-    const { error } = await supabase.from("ratings").update({ episode_number: m.episodeNumber, episode_subtitle: m.subtitle }).in("id", group.rowIds);
-    if (!error) matched += group.rowIds.length;
+  let matchedGroups = 0;
+  for (const ev of evidence) {
+    if (!ev.chosen) continue; // matched와 ambiguous(가장 가까운 후보로 채움) 모두 반영
+    const { error } = await supabase.from("ratings").update({ episode_number: ev.chosen.episodeNumber, episode_subtitle: ev.chosen.subtitle }).in("id", ev.item.rowIds);
+    if (!error) {
+      matched += ev.item.rowIds.length;
+      matchedGroups++;
+    }
   }
-  const unmatched = groupList.length - matches.size;
-  return { matched, unmatched, hasRatings: true };
+  // 큐에는 미매칭(채우지 못함)과 모호(채웠지만 확인 필요)를 함께 올린다.
+  const pending = evidence.filter((e) => e.status !== "matched");
+  // matched는 기존대로 행 수, unmatched는 방영분(묶음) 수였다 — 단위가 섞여 있어 방영분 단위 집계를 따로 돌려준다(단계 05).
+  return {
+    matched,
+    unmatched: pending.filter((e) => e.status === "unmatched").length,
+    hasRatings: true,
+    matchedGroups,
+    unmatchedGroups: pending.filter((e) => e.status === "unmatched").length,
+    ambiguousGroups: pending.filter((e) => e.status === "ambiguous").length,
+    queue: pending.slice(0, 30).map((e) => toQueueItem(date, e)),
+  };
 }

@@ -3,7 +3,8 @@
 // Page 2 좌측 채널 선택 사이드바 (DESIGN.md 1.3 — 로고 아이콘 세로 배치).
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { parseViewContext, serializeContext } from "@/lib/workspace/viewContext";
 import { VendingMachineIcon } from "@/components/VendingIcons";
 
 interface ChannelOption {
@@ -14,6 +15,10 @@ interface ChannelOption {
 
 export default function ChannelSidebar({ channels }: { channels: ChannelOption[] }) {
   const pathname = usePathname();
+  // 단계 07: 채널을 바꿔도 기간(프리셋·직접 선택·동요일)은 그대로 이어지게 현재 문맥을 링크에 싣는다.
+  const sp = useSearchParams();
+  const ctxQuery = serializeContext(parseViewContext((k) => sp.get(k)).ctx).toString();
+  const withCtx = (path: string) => (ctxQuery ? `${path}?${ctxQuery}` : path);
   // 지금 보는 채널 코드(/channel/CODE)를 시청률 자판기에 넘긴다. 채널 페이지가 아니면 ENA.
   const currentCode = pathname.match(/^\/channel\/([^/?#]+)/)?.[1] ?? "ENA";
 
@@ -30,7 +35,7 @@ export default function ChannelSidebar({ channels }: { channels: ChannelOption[]
         return (
           <Link
             key={c.code}
-            href={`/channel/${c.code}`}
+            href={withCtx(`/channel/${c.code}`)}
             className={`flex w-16 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center transition ${
               active ? "bg-white shadow-sm ring-1 ring-zinc-200" : "hover:bg-white/70"
             }`}

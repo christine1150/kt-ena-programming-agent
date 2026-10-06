@@ -4,6 +4,8 @@
 // 종합한다(새 숫자 계산 없음). 기간(범위) 조회 모드는 대상에서 뺐다 — 그쪽은 baseline 개념이
 // 완전히 달라 별도 설계가 필요해 이번 Tier 1 범위에서는 규칙 기반을 그대로 둔다.
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "./llmSynthesis";
+import { guardForInput } from "./insight/guardInput";
+import type { Fact } from "./insight/types";
 
 export interface BriefingLlmInput {
   channelName: string;
@@ -99,7 +101,7 @@ function buildSystemPrompt(baselineLabel: string): string {
     "화면의 근거 항목과 시사점은 이미 시스템이 검증된 수치로 만들어 두었다. 너는 그 위에 얹힐 '오늘 이 채널은 무슨 날이었나'라는 결론 한 줄만 쓴다.",
     "",
     "[headline] 오늘 하루를 규정하는 한 문장(공백 포함 34자 이내 — 화면에서 제목 옆 한 줄에 들어가야 한다). 반드시 (1) 판정과 (2) 그 판정의 근거 수치 1개를 함께 담아라.",
-    `  예: "프라임 강세로 ${baselineLabel} 대비 ▲12% 반등" / "'신병4' 부진이 끌어내린 날 ▼51.6%" / "시청률은 빠졌지만 점유율은 방어"`,
+    `  예: "프라임 강세로 ${baselineLabel} 대비 ▲12% 반등" / "'신병4' 부진 속 ▼51.6%" / "시청률은 빠졌지만 점유율은 방어"`,
     "  판정 근거가 여러 개면 가장 크게 움직인 것 하나만 헤드라인에 쓰고 나머지는 아래로 내려라.",
     '  같은 수치를 한 문장에 두 번 쓰지 마라 — "시청률 ▼84%로 최근 12주 평균 대비 ▼84%"처럼 반복되면 안 된다(실측 사례).',
     "[verdict] headline의 방향: 상승/호조면 up, 하락/부진이면 down, 평소 수준이면 flat.",
@@ -167,6 +169,25 @@ export async function buildBriefingReportViaLlm(input: BriefingLlmInput): Promis
     return allowedPcts.some((a) => Math.abs(a - n) <= 1.5);
   });
   if (!everyPctIsKnown) return null;
+  // 단계 04: 숫자·기준·방향·인과 검증 — 입력 등락률(및 입력끼리의 정당한 비교값)만 인용하고, 기준은 baselineLabel 하나뿐이다.
+  const derivedPctFacts: Fact[] = [
+    pctOf(input.prime_today_avg_rating, input.prime_baseline_avg_rating),
+    pctOf(input.today_share, input.baseline_avg_share),
+    pctOf(input.currentRating, input.same_weekday_avg_rating),
+    pctOf(input.currentRating, input.baseline_avg_rating),
+    pctOf(input.currentRating, input.dow_baseline_avg_rating),
+    pctOf(input.top_program_rating, input.top_program_baseline_avg),
+  ]
+    .filter((v): v is number => v !== null && Number.isFinite(v))
+    .map((v, i) => ({ id: `derived:${i}`, metricId: "pct_change", context: "파생 등락률", value: v, valueKind: "pct_change" as const, unit: "%", display: `${v.toFixed(1)}%`, provenance: { source: "briefing_input" }, basis: "derived" as const }));
+  const guarded = guardForInput(headline, input, {
+    label: "briefing_headline",
+    rules: [{ match: /delta_pct$|vs_baseline_peak_pct$/, valueKind: "pct_change" }],
+    baselineLabels: [baselineLabel],
+    extraFacts: derivedPctFacts,
+    options: { pctTolerance: 1.5 },
+  });
+  if (!guarded) return null;
   return {
     headline,
     verdict: result?.verdict === "up" || result?.verdict === "down" ? result.verdict : "flat",

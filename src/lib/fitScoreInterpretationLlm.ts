@@ -3,6 +3,7 @@
 // 쌍으로만 기계적 문장화). 같은 6개 하위지표·신뢰도·태그를 LLM에 줘서 더 자연스러운 해석
 // 문단으로 종합한다. 프로그램당 펼쳤을 때만 호출(항상 계산하지 않음 — 비용 절감).
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "./llmSynthesis";
+import { guardForInput } from "./insight/guardInput";
 
 export interface FitScoreInterpretationLlmInput {
   programName: string;
@@ -34,6 +35,6 @@ const SCHEMA = {
 
 export async function buildFitScoreInterpretationViaLlm(input: FitScoreInterpretationLlmInput): Promise<string | null> {
   const result = await callOpenAiJsonSynthesis<{ interpretation: string }>(buildSystemPrompt(), input, "fit_score_interpretation", SCHEMA);
-  const interpretation = result?.interpretation?.trim();
-  return interpretation && interpretation.length > 0 ? interpretation : null;
+  // 단계 04: 이 해석은 0~100 점수(정수)가 내용이라 단위 없는 정수도 입력과 대조한다. 규칙 문구의 판정선(70·40·60)은 허용한다.
+  return guardForInput(result?.interpretation, input, { label: "fit_score_interpretation", options: { strictIntegers: true, extraNumbers: [70, 40, 60, 100] } });
 }

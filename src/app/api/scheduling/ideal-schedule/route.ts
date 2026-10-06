@@ -16,7 +16,9 @@ export async function POST(request: Request) {
   const req = parseRunRequest(body);
   if (typeof req === "string") return bad(req);
   try {
-    const out = await runIdealSchedule(req);
+    const out = await runIdealSchedule(req, { signal: request.signal });
+    // 취소된 계산은 저장하지 않는다 — 이전에 저장된 유효 편성안이 그대로 남는다
+    if (out.cancelled) return NextResponse.json({ ok: false, cancelled: true, message: "계산이 취소되어 저장하지 않았습니다. 이전 편성안은 그대로입니다." }, { status: 499 });
     const runId = await saveRun(req, out, auth.actor);
     return NextResponse.json({ ok: true, runId, summary: out.summary, conflicts: out.resolution.conflicts, warnings: out.warnings });
   } catch (e) {

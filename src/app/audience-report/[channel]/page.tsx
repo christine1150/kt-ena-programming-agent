@@ -8,7 +8,8 @@
 // 이 페이지는 아직 앱 내 어디서도 링크되지 않는다(2버튼 UI는 §11-8, 다음 Phase) — 직접 URL로만 접근.
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import type { AudienceReportDocument, KpiCard, Maybe } from "@/lib/audienceReport/reportModel";
+import ReportSnapshotNotice from "@/components/workspace/ReportSnapshotNotice";
+import { RANK_KPI_LABEL, type AudienceReportDocument, type KpiCard, type Maybe } from "@/lib/audienceReport/reportModel";
 import { formatRating, formatPercent } from "@/lib/audienceReport/format";
 import {
   HourlyProfileChart,
@@ -118,6 +119,9 @@ export default function AudienceReportPage() {
             자체 검산에서 확인이 필요한 항목이 있습니다: {report.qualityIssues.filter((i) => i.severity === "critical").map((i) => i.message).join(" / ")}
           </div>
         )}
+        {/* 단계 07: 링크를 만든 화면의 데이터 시점과 다르거나 아직 받지 못한 날을 포함하면 알린다. */}
+        {/* 이 보고서의 knowledgeCutoff는 '기간 종료일'이지 '최신 수신일'이 아니라서 화면의 cut(최신 수신일)과 비교하면 어제·과거 구간 보고서에 틀린 '이전 snapshot' 안내가 뜬다. 종료일 > cut 검사만 한다. */}
+        <ReportSnapshotNotice periodTo={report.period.dateTo} reportCutoff={null} />
         <p className="mt-2 text-[11px] text-neutral-400">시청률은 소수점 {digits}자리까지 표시합니다.</p>
         {/* N절 Phase 2a(2026-09-01) — 구 시스템에만 있던 Word/PPT 내보내기를 이 시스템으로 이식.
             현재 화면과 정확히 같은 기간 파라미터를 그대로 붙여, 화면과 문서가 다른 기간을
@@ -561,7 +565,7 @@ function ModeDBody({ sections: s, channelCode }: { sections: import("@/lib/audie
           <Unavailable reason="임계값(±15%) 이상의 변곡점이 관찰되지 않았습니다" />
         )}
       </Section>
-      <Section title="08 누적 기여 상위">
+      <Section title="08 기간 평균 상위(편성 횟수 반영, 시간가중 분해 아님)">
         <MoverTable rows={s.topContributors} channelCode={channelCode} />
       </Section>
       {/* N절 Phase 2b(2026-09-01, 구 시스템 Quarterly/Annual tier 이식) — §06 번호 순서 밖. */}
@@ -732,13 +736,13 @@ function MoverTable({ rows, channelCode }: { rows: import("@/lib/audienceReport/
 }
 
 // 지표별로 절대 변화량의 소수점 자릿수가 다르다(Rating은 채널별 3~5자리, Share/Reach는 %p 2자리,
-// 시청시간은 초 단위 정수, 순위는 1자리) — formattedA/formattedB(format.ts 기준)와 같은 정밀도로
+// 시청시간은 초 단위 정수, 순위는 정수) — formattedA/formattedB(format.ts 기준)와 같은 정밀도로
 // 맞춰 "455.500초" 같은 어색한 표기를 피한다.
 function formatAbsoluteChange(label: string, v: number | null, channelCode: string): string {
   if (v === null) return "—";
   if (label === "Rating") return v.toFixed(channelCode === "SKYUHD" ? 5 : 3);
   if (label === "시청시간(초)") return Math.round(v).toString();
-  if (label === "순위") return v.toFixed(1);
+  if (label === RANK_KPI_LABEL) return Math.round(v).toString();
   return v.toFixed(2); // Share/Reach(%p)
 }
 

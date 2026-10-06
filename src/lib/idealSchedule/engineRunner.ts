@@ -7,6 +7,7 @@ import { buildRerunConstraints } from "./rerunRules";
 import { estimateWeeklyRank, type WeeklyRankRow } from "./rankEstimate";
 import { resolveRankSheetTargetLabel } from "@/lib/targetResolution";
 import { fetchCompetitorData, fetchOwnAirings, fetchWeekAirings, loadChannelRef, type ChannelRef } from "./dataSource";
+import { buildRightsGate } from "@/lib/avail/engineGate";
 import { runIdealScheduleEngine, type EngineRunResult } from "./engine";
 import { resolveGenre } from "./genreRules";
 import { supabase } from "@/lib/supabase";
@@ -16,6 +17,7 @@ import { withOptimizeTarget } from "./mapping";
 import { enrichAiringsWithPlan, normalizePlanRows, type PlanRow, type PlanRowRaw } from "./planEpisodes";
 import type { StrategyMode } from "./scoring";
 import { addDays } from "./time";
+import { DEFAULT_SEARCH_DEADLINE_MS } from "./searchControl";
 import type { OwnAiring, OwnAiringsBundle } from "./types";
 import type { ResidualRow } from "./uncertainty";
 
@@ -36,6 +38,8 @@ export interface RunRequest {
   includeActualWeek?: boolean; // 백테스트: 대상 주 실제 편성을 같은 모델로 평가(모델에는 넣지 않음)
   /** 편성표 회차 반영(B안, 사용자 지시 2026-10-01) — 업로드된 주간 편성표의 회차로 과거 방영 회차를 채우고 차주 흐름을 잇는다 */
   usePlanEpisodes?: boolean;
+  /** 권리(Avail) 기준(단계 06): explore = 권리상 불가인 후보만 제외(기본, 조건부·미확인은 라벨로 분리) / executable = 권리가 확인된 후보만. Avail가 입력되지 않은 설치에서는 무시된다 */
+  rightsMode?: "explore" | "executable";
 }
 
 /** 닐슨 주간 순위(채널·랭킹 시트 타깃) — 기준일까지 최근 lookbackDays일 */
@@ -67,7 +71,16 @@ export async function loadPlanRows(channelId: string, fromDate: string, toDate: 
   return normalizePlanRows((data ?? []) as PlanRowRaw[]);
 }
 
+export interface RunOptions {
+  /** 요청 취소(브라우저가 연결을 끊음·새 요청으로 대체). 취소되면 탐색을 멈추고 결과를 채택하지 않는다(호출자는 저장하지 않는다). */
+  signal?: AbortSignal;
+  /** 이 호출의 탐색 마감(요청 시작 기준 ms). 기본 DEFAULT_SEARCH_DEADLINE_MS */
+  deadlineMs?: number;
+}
+
 export interface RunOutcome extends EngineRunResult {
+  /** 탐색이 취소로 끝남 — 이 결과는 저장·채택하지 않는다(이전 유효 편성안 유지) */
+  cancelled: boolean;
   channel: ChannelRef;
   config: IdealScheduleConfig;
   asOfDate: string;
@@ -165,8 +178,10 @@ export async function loadBacktestResiduals(channelId: string, targetLabel: stri
   return out;
 }
 
-export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
+export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): Promise<RunOutcome> {
   const t0 = Date.now();
+  const envDeadline = Number(process.env.IDEAL_SEARCH_DEADLINE_MS);
+  const deadlineMs = opts.deadlineMs ?? (Number.isFinite(envDeadline) && envDeadline > 0 ? envDeadline : DEFAULT_SEARCH_DEADLINE_MS);
   const asOfDate = req.asOfDate ?? addDays(req.weekStart, -1);
   const channel = await loadChannelRef(req.channelCode);
   const saved = await loadIdealScheduleConfig(channel.id);
@@ -201,6 +216,9 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     loadHistoricalRuntimes(channel.id, constraintLoad.inputs, asOfDate),
     loadBacktestResiduals(channel.id, bundle.kpiLabel, asOfDate),
   ]);
+  // 권리(Avail) 게이트 — Avail 자료가 있을 때만 켜진다(없으면 현재 동작 그대로, 실행 가능 판정은 보류)
+  const rightsMode = req.rightsMode ?? "explore";
+  const rights = await buildRightsGate(channel.code, req.weekStart, rightsMode);
   const t1 = Date.now();
   const result = runIdealScheduleEngine({
     weekStart: req.weekStart,
@@ -221,7 +239,11 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
     evaluateAirings,
     planRows: planRows.length ? planRows : undefined,
     planFilled: enriched.filled,
+    rights: rights.gate ? { slotAllowed: rights.gate.slotAllowed, fingerprint: rights.gate.fingerprint } : undefined,
+    // 탐색 마감·취소(OPT04): 서버 제한 시간 안에 지금까지의 최선안으로 마무리하고, 취소되면 멈춘다
+    search: { now: Date.now, deadlineAt: t0 + deadlineMs, isCancelled: () => opts.signal?.aborted === true },
   });
+  result.summary.rights = { status: rights.status, mode: rightsMode, inventoryVersion: rights.gate?.inventoryVersion ?? null, unconfirmedInterpretations: rights.gate?.unconfirmedInterpretations ?? [], message: rights.message };
   // 주간 예상 순위 — 채널 KPI 기준일 때 최근 3달 닐슨 주간 순위(랭킹 시트 타깃 표기)로 추정
   const curEval = result.evaluations.CURRENT ?? null;
   result.summary.expectedRank =
@@ -236,6 +258,7 @@ export async function runIdealSchedule(req: RunRequest): Promise<RunOutcome> {
   const t2 = Date.now();
   return {
     ...result,
+    cancelled: result.output.search.stoppedBy === "CANCELLED",
     channel,
     config,
     asOfDate,

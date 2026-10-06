@@ -88,6 +88,20 @@ export function splitProgramName(raw: string): { canonical: string; firstRun: bo
 
 export type Row = (string | number | undefined)[];
 
+/** 일간 파일 랭킹 시트 상단의 "- 분석기간 : 2026. 10. 04. (일요일)" 줄에서 날짜 하나를 읽는다.
+ *  날짜가 하나가 아니면(범위 파일이거나 줄이 없으면) null — 파일명이 아니라 시트 내용이 날짜의 1차 근거다(단계 01). */
+export function parseDailyAnalysisDate(rows: Row[]): string | null {
+  for (const row of rows.slice(0, 12)) {
+    const text = String(row?.[0] ?? "");
+    if (!text.includes("분석기간")) continue;
+    const dates = text.match(/(\d{4})\s*\.\s*(\d{1,2})\s*\.\s*(\d{1,2})/g);
+    if (!dates || dates.length !== 1) return null;
+    const m = dates[0].match(/(\d{4})\s*\.\s*(\d{1,2})\s*\.\s*(\d{1,2})/);
+    return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : null;
+  }
+  return null;
+}
+
 // ── ①"유료방송가입가구"/"개인" 전체 채널 랭킹 시트 ──────────────
 // 블록 폭 7컬럼: No. | 채널명 | 시청률 | 점유율 | 도달율 | 시청시간 | (빈 구분칸)
 export interface RankRow {
@@ -458,6 +472,8 @@ function parseCompetitorProgramTargetSheet(rows: Row[]): CompetitorProgramTarget
 export interface NielsenDailyParseResult {
   ok: true;
   reportDate: string; // "YYYY-MM-DD"
+  /** 날짜의 근거: 시트 분석기간(+파일명 일치) / 시트만 / 파일명만(시트에 분석기간이 없을 때) */
+  dateSource: "sheet+filename" | "sheet" | "filename";
   rankRows: RankRow[];
   competitorRankRows: RankRow[]; // 등록된 경쟁채널의 채널 단위 랭킹 (개발 단위 16번)
   competitorProgramRows: CompetitorProgramRow[]; // 페어링된 경쟁채널 1개의 프로그램 단위 데이터
@@ -507,14 +523,20 @@ export function parseNielsenDailyWorkbook(
         "주간/월간 집계 파일로 보입니다 (파일명에 날짜 범위가 있음). 이 기능은 하루 단위 일별 파일과, 1/1~12/31 전체를 덮는 연간 파일만 처리합니다.",
     };
   }
+  // 날짜는 시트의 분석기간 줄이 1차 근거, 파일명은 보조 신호다(단계 01). 둘 다 있는데 다르면 어느 하루 데이터를
+  // 다른 날짜로 덮어쓸 수 있으므로 적재하지 않고 거부한다.
   const dateMatch = fileName.match(/\((\d{6})\)/);
-  if (!dateMatch) {
-    return { ok: false, message: "파일명에서 날짜(YYMMDD)를 찾을 수 없습니다." };
+  const fileDate = dateMatch ? `20${dateMatch[1].slice(0, 2)}-${dateMatch[1].slice(2, 4)}-${dateMatch[1].slice(4, 6)}` : null;
+  const firstRankSheet = RANK_SHEETS.find((s) => workbook.Sheets[s]);
+  const sheetDate = firstRankSheet ? parseDailyAnalysisDate(XLSX.utils.sheet_to_json<Row>(workbook.Sheets[firstRankSheet], { header: 1, blankrows: true })) : null;
+  if (!fileDate && !sheetDate) {
+    return { ok: false, message: "날짜를 찾을 수 없습니다(시트의 분석기간 줄과 파일명 날짜(YYMMDD) 모두 없음)." };
   }
-  const yy = dateMatch[1].slice(0, 2);
-  const mm = dateMatch[1].slice(2, 4);
-  const dd = dateMatch[1].slice(4, 6);
-  const reportDate = `20${yy}-${mm}-${dd}`;
+  if (fileDate && sheetDate && fileDate !== sheetDate) {
+    return { ok: false, message: `파일명 날짜(${fileDate})와 시트 분석기간(${sheetDate})이 다릅니다. 다른 날짜 데이터를 덮어쓰지 않도록 적재하지 않았습니다.` };
+  }
+  const reportDate = (sheetDate ?? fileDate) as string;
+  const dateSource: NielsenDailyParseResult["dateSource"] = sheetDate ? (fileDate ? "sheet+filename" : "sheet") : "filename";
 
   const combinedSheetName = workbook.SheetNames.find((name) => COMBINED_TARGET_SHEET_PATTERN.test(name));
 
@@ -587,5 +609,5 @@ export function parseNielsenDailyWorkbook(
     competitorProgramRows.push(...pooledCompetitorRows.map((row) => ({ ...row, ourChannelCode })));
   }
 
-  return { ok: true, reportDate, rankRows, competitorRankRows, competitorProgramRows, competitorProgramTargetRows, programRows, missingSheets };
+  return { ok: true, reportDate, dateSource, rankRows, competitorRankRows, competitorProgramRows, competitorProgramTargetRows, programRows, missingSheets };
 }

@@ -10,6 +10,7 @@ import {
 } from "@/lib/gmailClient";
 import { loadNaverMailEnvConfig, fetchUnprocessedNielsenMailFromNaver } from "@/lib/naverMailClient";
 import { ingestAnyNielsenFile, loadNielsenFileDispatchContext, type NielsenFileSummary } from "@/lib/nielsenFileDispatch";
+import { MAIL_MAX_ATTEMPTS, mailRetryState } from "@/lib/nielsenIngestChecks";
 import { ingestOlifeEpgFile, detectEpgChannelCode, DAILY_EPG_ATTACHMENT_PATTERN, type OlifeEpgFileSummary } from "@/lib/olifeEpgDispatch";
 import { ingestSkyUhdRatingFile, SKYUHD_RATING_ATTACHMENT_PATTERN, type SkyUhdFileSummary } from "@/lib/skyUhdDispatch";
 
@@ -39,9 +40,21 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
     };
   }
 
-  // 이미 처리한 메일은 건너뛴다(mail_ingestion_log에 message_id로 기록).
-  const { data: existingLogs } = await supabase.from("mail_ingestion_log").select("message_id");
-  const processedMessageIds = new Set((existingLogs ?? []).map((r) => r.message_id as string));
+  // 이미 처리한 메일은 건너뛴다(mail_ingestion_log에 message_id로 기록). 단 error 상태 메일은 일정 간격이 지나면 다시 시도하고
+  // (mailRetryState), 시도 횟수 상한에 닿은 것(dead-letter)은 자동 재시도를 멈춘다. attempt_count 컬럼이 아직 없으면
+  // (마이그레이션 적용 전) 예전처럼 기록된 메일을 모두 처리 완료로 본다.
+  type MailLogRow = { message_id: string; status: string; attempt_count?: number | null; processed_at?: string | null };
+  const withAttempts = await supabase.from("mail_ingestion_log").select("message_id, status, attempt_count, processed_at");
+  const logRows: MailLogRow[] = !withAttempts.error
+    ? ((withAttempts.data ?? []) as MailLogRow[])
+    : ((await supabase.from("mail_ingestion_log").select("message_id")).data ?? []).map((r) => ({ message_id: r.message_id as string, status: "processed" }));
+  const processedMessageIds = new Set<string>();
+  const retryAttempts = new Map<string, number>(); // 다시 시도할 메일 → 지금까지 시도 횟수
+  const now = new Date();
+  for (const row of logRows) {
+    if (mailRetryState(row, now) === "retry") retryAttempts.set(row.message_id, row.attempt_count ?? 1);
+    else processedMessageIds.add(row.message_id);
+  }
 
   const mailItems: SourcedMailItem[] = [];
   const fetchErrors: string[] = [];
@@ -95,18 +108,35 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
     // status="processing"으로 먼저 선점(claim)한다 — message_id 유니크 제약 위반이면
     // 다른 실행이 이미 선점한 것이므로 조용히 건너뛰고, 선점에 성공했을 때만 적재를
     // 진행한 뒤 같은 행을 최종 상태로 갱신한다.
-    const { error: claimError } = await supabase.from("mail_ingestion_log").insert({
-      message_id: item.messageId,
-      subject: item.subject,
-      received_at: item.receivedAt,
-      source: item.source,
-      status: "processing",
-    });
-    if (claimError) {
-      // 23505 = unique_violation(다른 실행이 이미 선점) — 그 외 오류도 이번 실행에서는
-      // 이 메일을 건너뛴다(선점 자체가 안 됐으니 적재를 시작하지 않는 것이 안전).
-      continue;
+    const priorAttempts = retryAttempts.get(item.messageId);
+    let attemptNow = 1;
+    if (priorAttempts !== undefined) {
+      // 재시도: error 상태이면서 시도 횟수가 그대로인 행만 processing으로 바꿔 선점한다(다른 실행과 겹치면 한쪽만 성공).
+      attemptNow = priorAttempts + 1;
+      const { data: claimed, error: retryClaimError } = await supabase
+        .from("mail_ingestion_log")
+        .update({ status: "processing", attempt_count: attemptNow })
+        .eq("message_id", item.messageId)
+        .eq("status", "error")
+        .eq("attempt_count", priorAttempts)
+        .select("message_id");
+      if (retryClaimError || !claimed || claimed.length === 0) continue;
+    } else {
+      const { error: claimError } = await supabase.from("mail_ingestion_log").insert({
+        message_id: item.messageId,
+        subject: item.subject,
+        received_at: item.receivedAt,
+        source: item.source,
+        status: "processing",
+      });
+      if (claimError) {
+        // 23505 = unique_violation(다른 실행이 이미 선점) — 그 외 오류도 이번 실행에서는
+        // 이 메일을 건너뛴다(선점 자체가 안 됐으니 적재를 시작하지 않는 것이 안전).
+        continue;
+      }
     }
+    // 이 메일에서 나온 적재는 같은 원장 배치에 메일 ID가 남도록 수집 경로를 넘긴다(수신됨→파싱됨→검증됨→반영됨은 원장 단계).
+    const itemNielsenCtx = { ...nielsenCtx, origin: { source: "mail" as const, ref: item.messageId } };
 
     if (item.attachments.length === 0) {
       await supabase
@@ -144,7 +174,7 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
         }
         fileSummaries.push(await ingestOlifeEpgFile(attachment.buffer, attachment.fileName, epgChannelId));
       } else if (NIELSEN_CHANNEL_RATING_ATTACHMENT_PATTERN.test(attachment.fileName)) {
-        fileSummaries.push(await ingestAnyNielsenFile(attachment.buffer, attachment.fileName, nielsenCtx));
+        fileSummaries.push(await ingestAnyNielsenFile(attachment.buffer, attachment.fileName, itemNielsenCtx));
       } else if (SKYUHD_RATING_ATTACHMENT_PATTERN.test(attachment.fileName)) {
         // 사용자 지시(2026-09-23): "skyUHD 시청률 엑셀 파일이 오면 날짜를 읽어서 자동으로
         // 업로드 및 적용" — 채널이 항상 SKYUHD로 고정이라 EPG처럼 제목에서 채널을 찾을
@@ -166,7 +196,7 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
           ? fileSummaries
               .filter((f) => !f.ok)
               .map((f) => `${f.fileName}: ${f.message}`)
-              .join(" / ")
+              .join(" / ") + (attemptNow >= MAIL_MAX_ATTEMPTS ? ` (시도 ${attemptNow}회 — 자동 재시도 중단, 관리자 확인 필요)` : "")
           : null,
         processed_at: new Date().toISOString(),
       })

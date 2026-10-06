@@ -62,7 +62,7 @@ export function PipelineStepChart({ edges, caption }: { edges: PipelineEdge[]; c
               <rect x={barX} y={yy + 2} width={fromW} height={8} fill="#3a30df" />
               <rect x={barX} y={yy + 14} width={toW} height={8} fill="#9d95ff" />
               <text x={barX + Math.max(fromW, toW) + 6} y={yy + 12} fontSize={9} fill="currentColor">
-                {e.retentionPct !== null ? `유지율 ${e.retentionPct.toFixed(1)}%` : ""}
+                {e.retentionPct !== null ? `재방 시청률 비율 ${e.retentionPct.toFixed(1)}%` : ""}
               </text>
             </g>
           );
@@ -175,6 +175,7 @@ export function SlotOverlapTable({ rows }: { rows: SlotOverlapRow[] }) {
           <th className="py-1">시간대</th>
           <th className="py-1">프로그램</th>
           <th className="py-1">겹치는 채널</th>
+          <th className="py-1">구분</th>
         </tr>
       </thead>
       <tbody>
@@ -184,6 +185,7 @@ export function SlotOverlapTable({ rows }: { rows: SlotOverlapRow[] }) {
             <td className="py-1">{r.hour}시</td>
             <td className="py-1">{r.canonicalName}</td>
             <td className="py-1">{r.channelCodes.join(", ")}</td>
+            <td className={`py-1 text-xs ${r.intent === "registered" ? "text-neutral-500" : "text-amber-700"}`}>{r.intentLabel ?? "—"}</td>
           </tr>
         ))}
       </tbody>

@@ -19,6 +19,9 @@ export interface ChartCaptionInfo {
   measure: string;
 }
 
+/** 보고서 KPI의 순위 라벨 — 일별 공식 순위의 평균(정수로 반올림)이지 닐슨 기간(주간·월간) 공식 순위가 아니므로 이름으로 구분한다. */
+export const RANK_KPI_LABEL = "일별 평균 순위";
+
 export interface KpiCard {
   label: string; // "Rating" | "Share" | "Reach" | "시청시간" | "순위"
   formatted: string;
@@ -356,4 +359,7 @@ export interface AudienceReportDocument {
   // 못하면 null(지어내는 것보다 안 보여주는 게 낫다는 원칙 — 화면은 이 필드가 null이면 그
   // 자리 자체를 렌더링하지 않는다).
   aiSummary: string | null;
+  /** 이 문서의 KPI가 무엇의 어느 기간 값인지(단계 02). 웹·Word·PPT가 같은 문서를 쓰므로 같은 값을 공유한다. */
+  metricContext?: import("@/lib/metrics").MetricContext;
+  dataSnapshotId?: string;
 }

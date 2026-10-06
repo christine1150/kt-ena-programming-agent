@@ -23,6 +23,17 @@ import {
   formatIssuesForLog,
   type QualityIssue,
 } from "@/lib/dataQuality";
+import {
+  NIELSEN_PARSER_VERSION,
+  checkKpiTargetCoverage,
+  crossCheckOwnChannelTargets,
+  diffRankRows,
+  fileSha256,
+  inspectDailyWorkbook,
+  type RankDiff,
+  type RankSnapshotRow,
+} from "@/lib/nielsenIngestChecks";
+import { beginBatch, finishBatch, findLatestApplied, isSameAsLatest, markStage, recordDuplicate, type IngestOrigin } from "@/lib/nielsenIngestLedger";
 
 // SKYUHD는 채널 단위 랭킹(§1.1 "유료방송가입가구" 시트의 "SkyUHD" 행)만 여기서 채운다 —
 // 프로그램 단위 데이터는 별도 skyUHD 수기 업로드(source_type='skyuhd')가 담당해 서로 겹치지 않는다.
@@ -38,6 +49,15 @@ export interface FileSummary {
   competitorRatingsInserted?: number;
   missingSheets?: string[];
   qualityWarnings?: string[];
+  /** 같은 파일(해시·파서 버전)이 이미 최신 반영본이라 아무것도 바꾸지 않았다 */
+  duplicate?: boolean;
+  /** 같은 기간 반영 개정 번호(1부터) */
+  revision?: number;
+  /** 같은 기간 이전 반영본과의 차이(수정본 재업로드일 때) */
+  diff?: RankDiff;
+  /** 핵심(ratings)은 반영했으나 경쟁채널 테이블 일부가 실패한 부분 성공 */
+  partial?: boolean;
+  dateSource?: string;
 }
 
 /** 여러 파일을 처리하는 동안 재사용하는 채널/타깃/경쟁채널 조회 결과(매 파일마다 다시 조회하지 않음). */
@@ -48,17 +68,22 @@ export interface NielsenIngestContext {
   competitorNames: Set<string>;
   competitorNameByCode: Map<string, string>;
   registeredCompetitorByChannel: Map<string, Set<string>>;
+  /** 채널 코드 → KPI 타깃 문구(channels.primary_target) — KPI 타깃 누락 점검용 */
+  primaryTargetByCode?: Map<string, string | null>;
+  /** 수집 경로(수동 업로드/메일) — 원장에 남긴다 */
+  origin?: IngestOrigin;
 }
 
 export async function loadNielsenIngestContext(): Promise<NielsenIngestContext | { error: string }> {
   const { data: channels, error: channelsError } = await supabase
     .from("channels")
-    .select("id, code")
+    .select("id, code, primary_target")
     .in("code", OUR_CHANNEL_CODES);
   if (channelsError || !channels || channels.length === 0) {
     return { error: "채널 정보를 찾을 수 없습니다. Channel Master를 먼저 업로드해주세요." };
   }
   const channelIdByCode = new Map(channels.map((c) => [c.code, c.id]));
+  const primaryTargetByCode = new Map<string, string | null>(channels.map((c) => [c.code as string, (c.primary_target as string | null) ?? null]));
 
   const { data: existingTargets } = await supabase.from("targets").select("label");
   const knownTargetLabels = new Set((existingTargets ?? []).map((t) => t.label));
@@ -92,6 +117,7 @@ export async function loadNielsenIngestContext(): Promise<NielsenIngestContext |
     competitorNames,
     competitorNameByCode,
     registeredCompetitorByChannel,
+    primaryTargetByCode,
   };
 }
 
@@ -138,6 +164,53 @@ function sanitizeRatingFields<T extends { rating: number | null; share?: number 
     }
   }
   return cleaned;
+}
+
+const SNAPSHOT_PAGE = 1000;
+
+/** 이 날짜 nielsen_daily ratings 전체를 메모리에 백업한다(삭제 후 삽입이 실패하면 되돌리기 위함 — DB 트랜잭션이 없는 구조의 보완). */
+async function snapshotDailyRatings(reportDate: string, channelIds: string[]): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = [];
+  for (let from = 0; ; from += SNAPSHOT_PAGE) {
+    const { data, error } = await supabase
+      .from("ratings")
+      .select("*")
+      .eq("source_type", "nielsen_daily")
+      .eq("broadcast_date", reportDate)
+      .in("channel_id", channelIds)
+      .order("id")
+      .range(from, from + SNAPSHOT_PAGE - 1);
+    if (error) throw new Error(error.message);
+    out.push(...((data ?? []) as Record<string, unknown>[]));
+    if (!data || data.length < SNAPSHOT_PAGE) break;
+  }
+  return out;
+}
+
+/** 삽입 실패 시 이 날짜 행을 지우고 백업으로 되돌린다. 성공하면 null, 실패하면 사유. */
+async function restoreDailyRatings(reportDate: string, channelIds: string[], snapshot: Record<string, unknown>[]): Promise<string | null> {
+  const del = await supabase.from("ratings").delete().eq("source_type", "nielsen_daily").eq("broadcast_date", reportDate).in("channel_id", channelIds);
+  if (del.error) return del.error.message;
+  for (let i = 0; i < snapshot.length; i += SNAPSHOT_PAGE) {
+    const { error } = await supabase.from("ratings").insert(snapshot.slice(i, i + SNAPSHOT_PAGE));
+    if (error) return error.message;
+  }
+  return null;
+}
+
+/** 백업 행 중 채널 단위 랭킹 행(순위 있음)을 채널코드·타깃라벨 기준으로 바꿔 차이 비교에 쓴다. */
+async function rankRowsOfSnapshot(snapshot: Record<string, unknown>[], channelIdByCode: Map<string, string>): Promise<RankSnapshotRow[]> {
+  const rankRows = snapshot.filter((r) => r.program_id === null && r.rank !== null && r.rank !== undefined);
+  if (rankRows.length === 0) return [];
+  const codeById = new Map(Array.from(channelIdByCode, ([code, id]) => [id, code]));
+  const { data } = await supabase.from("targets").select("id, label");
+  const labelById = new Map((data ?? []).map((t) => [t.id as string, t.label as string]));
+  return rankRows.map((r) => ({
+    channelCode: codeById.get(r.channel_id as string) ?? String(r.channel_id),
+    targetLabel: labelById.get(r.target_id as string) ?? String(r.target_id),
+    rank: r.rank === null ? null : Number(r.rank),
+    rating: r.rating === null || r.rating === undefined ? null : Number(r.rating),
+  }));
 }
 
 export async function ingestNielsenAnnualFile(
@@ -242,7 +315,64 @@ export async function ingestNielsenDailyFile(
 
   const touchedChannelIds = Array.from(ctx.channelIdByCode.values());
 
-  // 이 날짜의 기존 데이터를 지우고 새로 채운다 (재업로드 = 덮어쓰기).
+  // ── 원장·멱등(단계 01): 같은 기간의 최신 반영본과 해시·파서 버전이 같으면 아무것도 바꾸지 않는다.
+  const sha = fileSha256(buffer);
+  const batchInit = { fileSha256: sha, fileName, kind: "daily" as const, periodFrom: parsed.reportDate, periodTo: parsed.reportDate, origin: ctx.origin };
+  const latest = await findLatestApplied("daily", parsed.reportDate, parsed.reportDate);
+  if (latest && isSameAsLatest(latest, sha)) {
+    await recordDuplicate(batchInit, latest);
+    return {
+      fileName,
+      ok: true,
+      duplicate: true,
+      message: "이미 반영된 동일 파일입니다(파일 해시 일치) — 데이터를 바꾸지 않았습니다.",
+      reportDate: parsed.reportDate,
+      revision: latest.revision,
+      ratingsInserted: 0,
+      dateSource: parsed.dateSource,
+    };
+  }
+  const batch = await beginBatch(batchInit, latest);
+  markStage(batch, "parsed");
+
+  // ── 검증(삭제 전): 시트 교차 검증·KPI 타깃 누락·날짜 근거. 경고만 남기고 적재는 막지 않는다.
+  const dailyIssues: QualityIssue[] = [];
+  const inspection = inspectDailyWorkbook(buffer);
+  const cross = crossCheckOwnChannelTargets(parsed.programRows, inspection);
+  dailyIssues.push(...cross.issues);
+  if (ctx.primaryTargetByCode) dailyIssues.push(...checkKpiTargetCoverage(parsed.rankRows, ctx.primaryTargetByCode));
+  if (parsed.dateSource === "filename") dailyIssues.push({ severity: "warning", category: "structure", message: "시트에 분석기간이 없어 파일명 날짜로 적재했습니다." });
+  markStage(batch, "validated");
+  const sheetMeta = {
+    parserVersion: NIELSEN_PARSER_VERSION,
+    dateSource: parsed.dateSource,
+    sheetNames: inspection?.sheetNames ?? null,
+    rankSheetLabels: inspection?.rankSheets ?? null,
+    targetDetailHeaders: inspection?.targetDetail ?? null,
+    crossCheck: { checked: cross.checked, matched: cross.matched, mismatched: cross.mismatches.length },
+    missingSheets: parsed.missingSheets,
+  };
+
+  // ── 백업(롤백용)과 이전 반영본 대비 차이. 백업이 안 되면 되돌릴 수 없으므로 아무것도 지우지 않고 중단한다.
+  let snapshot: Record<string, unknown>[] = [];
+  try {
+    snapshot = await snapshotDailyRatings(parsed.reportDate, touchedChannelIds);
+  } catch (e) {
+    const msg = `기존 데이터 백업에 실패해 적재를 중단했습니다(아무것도 지우지 않음): ${e instanceof Error ? e.message : String(e)}`;
+    await finishBatch(batch, { status: "failed", sheetMeta, errorMessage: msg });
+    await supabase.from("file_uploads").insert({ file_name: fileName, file_type: "nielsen_daily", reference_date: parsed.reportDate, file_hash: sha, status: "error", error_message: msg });
+    return { fileName, ok: false, message: msg, alert: "DATA_QUALITY_ALERT", reportDate: parsed.reportDate };
+  }
+  let diff: RankDiff | undefined;
+  if (snapshot.length > 0) {
+    const before = await rankRowsOfSnapshot(snapshot, ctx.channelIdByCode);
+    diff = diffRankRows(before, parsed.rankRows.map((r) => ({ channelCode: r.channelCode, targetLabel: r.targetLabel, rank: r.rank, rating: r.rating })));
+    if (diff.changed + diff.added + diff.removed > 0) {
+      dailyIssues.push({ severity: "warning", category: "completeness", message: `같은 날짜(${parsed.reportDate})의 이전 반영본과 채널×타깃 ${diff.changed}건이 다릅니다(추가 ${diff.added}·삭제 ${diff.removed}) — 수정본 재업로드로 개정 ${batch.revision}을 만들었습니다.` });
+    }
+  }
+
+  // 이 날짜의 기존 데이터를 지우고 새로 채운다 (재업로드 = 덮어쓰기). 핵심(ratings)이 실패하면 위 백업으로 되돌린다.
   await supabase
     .from("ratings")
     .delete()
@@ -255,7 +385,7 @@ export async function ingestNielsenDailyFile(
 
   let ratingsInserted = 0;
   const rowsToInsert: Record<string, unknown>[] = [];
-  const dailyIssues: QualityIssue[] = [];
+  let competitorFailures = 0;
   const foundChannelCodesDaily = new Set<string>();
   const labelsInFileDaily = new Set<string>();
 
@@ -404,7 +534,11 @@ export async function ingestNielsenDailyFile(
     });
   }
   if (competitorRowsToInsert.length > 0) {
-    await supabase.from("competitor_ratings").insert(competitorRowsToInsert);
+    const { error } = await supabase.from("competitor_ratings").insert(competitorRowsToInsert);
+    if (error) {
+      competitorFailures++;
+      dailyIssues.push({ severity: "warning", category: "completeness", message: `경쟁채널 일 단위 순위(competitor_ratings) 적재 실패: ${error.message}` });
+    }
   }
 
   // 등록은 돼 있는데 이번 파일에서 한 행도 못 찾은 경쟁채널을 경고로 남긴다(2026-09-22 사용자
@@ -438,7 +572,11 @@ export async function ingestNielsenDailyFile(
     });
   }
   if (competitorProgramRowsToInsert.length > 0) {
-    await supabase.from("competitor_program_ratings").insert(competitorProgramRowsToInsert);
+    const { error } = await supabase.from("competitor_program_ratings").insert(competitorProgramRowsToInsert);
+    if (error) {
+      competitorFailures++;
+      dailyIssues.push({ severity: "warning", category: "completeness", message: `경쟁채널 프로그램 편성(competitor_program_ratings) 적재 실패: ${error.message}` });
+    }
   }
 
   // 3-2) 같은 프로그램 행의 3개 타깃 전체(개인2049/개인2039/유료방송가구 등) — 위 테이블은 첫 타깃만
@@ -459,9 +597,14 @@ export async function ingestNielsenDailyFile(
       share: row.share,
     }));
   for (let i = 0; i < targetRowsToInsert.length; i += 1000) {
-    await supabase
+    const { error } = await supabase
       .from("competitor_program_target_ratings")
       .upsert(targetRowsToInsert.slice(i, i + 1000), { onConflict: "broadcast_date,competitor_name,start_time,program_name,target_label", ignoreDuplicates: true });
+    if (error) {
+      competitorFailures++;
+      dailyIssues.push({ severity: "warning", category: "completeness", message: `경쟁채널 타깃별 프로그램 시청률(competitor_program_target_ratings) 적재 실패: ${error.message}` });
+      break;
+    }
   }
 
   // 대량 insert (Supabase 기본 제한을 고려해 1000개씩 나눠 넣는다)
@@ -475,6 +618,18 @@ export async function ingestNielsenDailyFile(
       break;
     }
     ratingsInserted += chunk.length;
+  }
+
+  // 핵심 ratings 삽입이 실패하면 이 날짜를 백업(삭제 전 상태)으로 되돌린다 — 일부만 들어간 날짜가 남지 않게.
+  let rollbackNote: string | null = null;
+  if (insertError) {
+    const restoreError = await restoreDailyRatings(parsed.reportDate, touchedChannelIds, snapshot);
+    ratingsInserted = 0;
+    rollbackNote = restoreError
+      ? `복구도 실패했습니다(${restoreError}) — ${parsed.reportDate} 데이터 확인이 필요합니다.`
+      : snapshot.length > 0
+        ? "이전에 반영된 데이터로 되돌렸습니다."
+        : "이 날짜에는 이전 데이터가 없어 부분 입력만 지웠습니다.";
   }
 
   // 사용자 지시(2026-08-26): "OLIFE EPG를 닐슨 데이터 없이도 미리 등록" — 미리 등록해둔
@@ -500,23 +655,37 @@ export async function ingestNielsenDailyFile(
     await refreshDailyDashboardMart(parsed.reportDate).catch(() => null);
   }
 
+  const failMessage = insertError ? `${insertError} — ${rollbackNote}` : null;
+  await finishBatch(batch, {
+    status: insertError ? "failed" : competitorFailures > 0 ? "partial" : "applied",
+    sheetMeta,
+    rowCounts: { ratings: ratingsInserted, competitorRatings: competitorRowsToInsert.length, competitorFailures },
+    diff,
+    warnings: dailyIssues.map((i) => i.message),
+    errorMessage: failMessage,
+  });
   await supabase.from("file_uploads").insert({
     file_name: fileName,
     file_type: "nielsen_daily",
     reference_date: parsed.reportDate,
+    file_hash: sha,
     status: insertError ? "error" : "processed",
-    error_message: insertError ?? (dailyIssues.length > 0 ? formatIssuesForLog(dailyIssues) : null),
+    error_message: failMessage ?? (dailyIssues.length > 0 ? formatIssuesForLog(dailyIssues) : null),
   });
 
   return {
     fileName,
     qualityWarnings: dailyIssues.length > 0 ? dailyIssues.map((i) => i.message) : undefined,
     ok: !insertError,
-    message: insertError ?? undefined,
+    message: failMessage ?? undefined,
     reportDate: parsed.reportDate,
     ratingsInserted,
     competitorRatingsInserted: competitorRowsToInsert.length,
     missingSheets: parsed.missingSheets.length > 0 ? parsed.missingSheets : undefined,
+    revision: batch.revision,
+    diff,
+    partial: !insertError && competitorFailures > 0 ? true : undefined,
+    dateSource: parsed.dateSource,
   };
 }
 

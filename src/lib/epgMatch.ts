@@ -111,31 +111,99 @@ function toComparableMinutes(hhmm: string): number {
   return total < 120 ? total + 1440 : total; // 02시 이전은 "익일 새벽"으로 취급(Nielsen 관행과 동일)
 }
 
-/** 같은 날짜의 닐슨 ratings 행(프로그램 단위) 목록에 EPG 회차·부제를 매칭한다. */
+export interface EpgCandidate {
+  programNameRaw: string;
+  startTime: string;
+  episodeNumber: number | null;
+  subtitle: string | null;
+  runType: string | null;
+  /** 닐슨 시작 시각과의 차이(분, 절댓값) */
+  diffMinutes: number;
+  /** exact: 정규화한 프로그램명이 같음 / partial: 한쪽이 다른 쪽을 포함(스페셜·편집판일 수 있음) */
+  nameMatch: "exact" | "partial";
+}
+
+export interface EpgMatchEvidence<T> {
+  item: T;
+  status: "matched" | "ambiguous" | "unmatched";
+  chosen: EpgCandidate | null;
+  candidates: EpgCandidate[];
+  /** 사람이 읽는 이유(미매칭 큐에 그대로 보여 준다) */
+  reason: string;
+}
+
+/** 후보가 둘 이상일 때 1순위와 2순위의 시각 차이가 이 값(분) 미만이면 어느 쪽인지 확신할 수 없어 자동 반영하지 않는다. */
+export const EPG_AMBIGUITY_GAP_MINUTES = 10;
+
+/**
+ * 같은 날짜의 닐슨 방영분마다 EPG 후보를 모두 모아 증거와 함께 판정한다(원제목·부제·회차 증거 보존).
+ * - 이름이 같은(exact) 후보가 허용 오차 안에 있으면 부분 일치 후보는 무시한다.
+ * - 후보가 하나면 matched, 여럿이면 1·2순위 시각 차이가 충분할 때만 matched, 아니면 ambiguous.
+ *   ambiguous도 기존 동작(가장 가까운 후보로 채움)을 유지하되 chosen에 그 후보를 담고 미매칭 큐에 "채움·확인 필요"로 표시한다(사용자 결정 2026-10-06).
+ * - 후보가 없으면 unmatched이며 이유(EPG에 이름 없음 / 시각 차이가 허용 오차 초과)를 남긴다.
+ */
+export function matchEpgWithEvidence<T extends { startTime: string; canonicalName: string }>(
+  nielsenPrograms: T[],
+  epgRows: EpgRow[],
+  toleranceMinutes = 60,
+  ambiguityGapMinutes = EPG_AMBIGUITY_GAP_MINUTES
+): EpgMatchEvidence<T>[] {
+  const out: EpgMatchEvidence<T>[] = [];
+  for (const np of nielsenPrograms) {
+    const npCanon = canonicalizeEpgProgramName(np.canonicalName).replace(/<본>|<재>/g, "");
+    if (!npCanon) {
+      out.push({ item: np, status: "unmatched", chosen: null, candidates: [], reason: "프로그램명이 비어 있어 매칭할 수 없음" });
+      continue;
+    }
+    const npMinutes = toComparableMinutes(np.startTime.slice(0, 5));
+    const named: EpgCandidate[] = [];
+    for (const e of epgRows) {
+      const epgCanon = canonicalizeEpgProgramName(e.programNameRaw);
+      if (!epgCanon) continue;
+      const exact = epgCanon === npCanon;
+      if (!exact && !epgCanon.includes(npCanon) && !npCanon.includes(epgCanon)) continue;
+      named.push({
+        programNameRaw: e.programNameRaw,
+        startTime: e.startTime,
+        episodeNumber: e.episodeNumber,
+        subtitle: e.subtitle,
+        runType: e.runType,
+        diffMinutes: Math.abs(toComparableMinutes(e.startTime) - npMinutes),
+        nameMatch: exact ? "exact" : "partial",
+      });
+    }
+    const inTol = named.filter((c) => c.diffMinutes <= toleranceMinutes);
+    if (inTol.length === 0) {
+      const nearest = named.length ? Math.min(...named.map((c) => c.diffMinutes)) : null;
+      out.push({
+        item: np,
+        status: "unmatched",
+        chosen: null,
+        candidates: named.sort((a, b) => a.diffMinutes - b.diffMinutes).slice(0, 3),
+        reason: nearest === null ? "EPG에 같은 프로그램명이 없음" : `이름이 맞는 EPG 행은 있으나 시작 시각 차이가 ${nearest}분으로 허용 오차(${toleranceMinutes}분)를 넘음`,
+      });
+      continue;
+    }
+    const exactInTol = inTol.filter((c) => c.nameMatch === "exact");
+    const pool = (exactInTol.length > 0 ? exactInTol : inTol).sort((a, b) => a.diffMinutes - b.diffMinutes);
+    if (pool.length === 1 || pool[1].diffMinutes - pool[0].diffMinutes >= ambiguityGapMinutes) {
+      out.push({ item: np, status: "matched", chosen: pool[0], candidates: pool.slice(0, 3), reason: pool[0].nameMatch === "partial" ? "프로그램명이 부분 일치(원제목 확인 권장)" : "프로그램명 일치" });
+    } else {
+      out.push({ item: np, status: "ambiguous", chosen: pool[0], candidates: pool.slice(0, 3), reason: `후보 ${pool.length}건의 시작 시각 차이가 ${ambiguityGapMinutes}분 미만이라 어느 회차인지 확신할 수 없음 — 가장 가까운 후보로 채웠으니 확인이 필요함` });
+    }
+  }
+  return out;
+}
+
+/** 같은 날짜의 닐슨 ratings 행(프로그램 단위) 목록에 EPG 회차·부제를 매칭한다. 모호한 후보도 가장 가까운 후보로 채운다(기존 동작 유지). */
 export function matchEpgToRatings<T extends { startTime: string; canonicalName: string }>(
   nielsenPrograms: T[],
   epgRows: EpgRow[],
   toleranceMinutes = 60
 ): Map<T, { episodeNumber: number | null; subtitle: string | null }> {
   const result = new Map<T, { episodeNumber: number | null; subtitle: string | null }>();
-  for (const np of nielsenPrograms) {
-    const npCanon = canonicalizeEpgProgramName(np.canonicalName).replace(/<본>|<재>/g, "");
-    if (!npCanon) continue;
-    const npMinutes = toComparableMinutes(np.startTime.slice(0, 5));
-    let best: EpgRow | null = null;
-    let bestDiff = Infinity;
-    for (const e of epgRows) {
-      const epgCanon = canonicalizeEpgProgramName(e.programNameRaw);
-      if (!epgCanon.includes(npCanon) && !npCanon.includes(epgCanon)) continue;
-      const diff = Math.abs(toComparableMinutes(e.startTime) - npMinutes);
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        best = e;
-      }
-    }
-    if (best && bestDiff <= toleranceMinutes) {
-      result.set(np, { episodeNumber: best.episodeNumber, subtitle: best.subtitle });
-    }
+  for (const ev of matchEpgWithEvidence(nielsenPrograms, epgRows, toleranceMinutes)) {
+    if (ev.chosen) result.set(ev.item, { episodeNumber: ev.chosen.episodeNumber, subtitle: ev.chosen.subtitle });
   }
   return result;
 }

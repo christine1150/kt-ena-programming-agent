@@ -30,3 +30,6 @@ yarn-error.log*
 .vercel
 .env*
 .cache/
+
+# OPT02: 실제 방영 내보내기 파일(원자료) — 커밋·외부 전송 금지
+own-airings-*.json

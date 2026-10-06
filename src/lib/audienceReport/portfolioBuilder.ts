@@ -90,6 +90,13 @@ import { computeDaypartWinWeakness, computeGrowthWeaknessMovers, computeStructur
 import { checkGroupIsolation } from "./validate";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { buildPortfolioExecutiveSummary } from "./narrativeLlm";
+// 단계 09: 임원 결정·그룹 지표·정책·집중도·커버리지·권리 요약(순수 모듈 + 권리 저장소 읽기)
+import { buildExecutiveDecisions, buildSkyUhdCoverage, classifySlotOverlap, computeConcentration, computeGroupMetric, type ConcentrationRow } from "./portfolioDecisions";
+import { buildChannelPolicyViews } from "./portfolioPolicy";
+import { summarizeRightsForHome, type RightsHomeSummary } from "@/lib/avail/homeSummary";
+import { loadAvailState } from "@/lib/avail/store";
+import { kstToday } from "@/lib/workspace/dates";
+import { buildMetricContext, dataSnapshotId, datesIn } from "@/lib/metrics";
 import type {
   PortfolioReportDocument,
   PeerRow,
@@ -99,11 +106,6 @@ import type {
   SlotOverlapRow,
   ChannelActionItem,
 } from "./portfolioModel";
-
-function average(values: (number | null)[]): number | null {
-  const valid = values.filter((v): v is number => v !== null);
-  return valid.length > 0 ? valid.reduce((s, v) => s + v, 0) / valid.length : null;
-}
 
 function findProgramRating(movers: ProgramMoverRow[], canonicalName: string): number | null {
   const key = normalizeProgramCanonicalName(canonicalName);
@@ -152,9 +154,12 @@ function computeOpportunities(peers: PeerRow[], commonPattern: CommonPatternResu
 }
 
 function buildOneLiner(groupLabel: string, peers: PeerRow[], commonPattern: CommonPatternResult): string {
-  const avgTrend = average(peers.map((p) => p.trend));
+  // 단계 09: 그룹 지표의 방식(채널 추세의 단순평균, 가중 없음)과 계산에서 빠진 채널을 문장에 밝힌다.
+  const m = computeGroupMetric("A", peers);
+  const avgTrend = m.avgTrendPct;
   const trendText = avgTrend === null ? "비교 기준 없음" : avgTrend > 0 ? `평균 ▲${avgTrend.toFixed(1)}%` : avgTrend < 0 ? `평균 ▼${Math.abs(avgTrend).toFixed(1)}%` : "평균 변화 없음";
-  return `${groupLabel} ${peers.length}개 채널, 최근 12주 평균 대비 ${trendText}${commonPattern.direction ? ` — ${commonPattern.label}` : ""}`;
+  const basis = `${m.includedChannels.length}개 채널 단순평균·가중 없음${m.excludedChannels.length > 0 ? `, 비교 기준 없는 ${m.excludedChannels.join("·")} 제외` : ""}`;
+  return `${groupLabel} ${peers.length}개 채널, 최근 12주 평균 대비 ${trendText}(${basis})${commonPattern.direction ? ` — ${commonPattern.label}` : ""}`;
 }
 
 // 채널별 TOP 3 ACTIONS(v1, §07-09) — 이미 모은 신호(성장/약세 프로그램, daypart win/weakness,
@@ -172,12 +177,15 @@ function buildChannelActions(code: string, name: string, raw: AudienceReportRawD
   const { win, weakness: daypartWeakness } = computeDaypartWinWeakness(raw.daypartOpportunity);
   const structural = computeStructuralVsTemporary(raw.trend);
 
-  const candidateList: ({ item: ChannelActionItem; urgent: boolean } | null)[] = [
+  type Cand = { item: ChannelActionItem; urgent: boolean };
+  const candidateList: (Cand | null)[] = [
     growth[0]
       ? {
           item: {
             channelCode: code,
             channelName: name,
+            kind: "program_up",
+            subject: growth[0].canonicalName,
             basis: `${growth[0].canonicalName}이(가) 직전 대비 시청률 ${growth[0].ratingDelta?.toFixed(digits)} 상승했습니다`,
             suggestion: "이 프로그램의 편성 확대나 유사 콘텐츠 편성을 검토해볼 만합니다",
             verification: "다음 기간 같은 프로그램의 시청률 추이로 효과를 확인하세요",
@@ -190,6 +198,8 @@ function buildChannelActions(code: string, name: string, raw: AudienceReportRawD
           item: {
             channelCode: code,
             channelName: name,
+            kind: "structure_temp",
+            subject: null,
             basis: structural.label,
             suggestion: "최근 흐름이 단일 이벤트 주도일 수 있어, 편성 변경 전 다음 구간까지 지켜볼 것을 검토해볼 만합니다",
             verification: "다음 기간 추이가 같은 방향으로 이어지는지 확인하세요",
@@ -202,6 +212,8 @@ function buildChannelActions(code: string, name: string, raw: AudienceReportRawD
           item: {
             channelCode: code,
             channelName: name,
+            kind: "daypart_weak",
+            subject: daypartWeakness.daypartLabel,
             basis: `${daypartWeakness.daypartLabel} 시간대 경쟁채널 대비 격차가 ${daypartWeakness.gapChange.toFixed(4)} 벌어졌습니다`,
             suggestion: "이 시간대 편성 점검을 검토해볼 만합니다",
             verification: "다음 기간 같은 시간대 격차로 개선 여부를 확인하세요",
@@ -214,6 +226,8 @@ function buildChannelActions(code: string, name: string, raw: AudienceReportRawD
           item: {
             channelCode: code,
             channelName: name,
+            kind: "program_down",
+            subject: weakness[0].canonicalName,
             basis: `${weakness[0].canonicalName}이(가) 직전 대비 시청률 ${weakness[0].ratingDelta?.toFixed(digits)} 하락했습니다`,
             suggestion: "이 프로그램의 편성 시간 이동이나 교체를 검토해볼 만합니다",
             verification: "다음 기간 같은 프로그램의 시청률 추이로 효과를 확인하세요",
@@ -226,6 +240,8 @@ function buildChannelActions(code: string, name: string, raw: AudienceReportRawD
           item: {
             channelCode: code,
             channelName: name,
+            kind: "daypart_win",
+            subject: win.daypartLabel,
             basis: `${win.daypartLabel} 시간대 경쟁채널 대비 격차가 ${win.gapChange.toFixed(4)} 좁혀졌습니다`,
             suggestion: "이 시간대의 강점을 유지·강화하는 편성을 검토해볼 만합니다",
             verification: "다음 기간 같은 시간대 격차로 유지 여부를 확인하세요",
@@ -234,8 +250,8 @@ function buildChannelActions(code: string, name: string, raw: AudienceReportRawD
         }
       : null,
   ];
-  const kept = candidateList.filter((c): c is { item: ChannelActionItem; urgent: boolean } => c !== null).slice(0, 3);
-  return { items: kept.map((c) => c.item), priorityScore: kept.filter((c) => c.urgent).length };
+  const kept = candidateList.filter((c): c is Cand => c !== null).slice(0, 3);
+  return { items: kept.map((c) => ({ ...c.item, urgent: c.urgent })), priorityScore: kept.filter((c) => c.urgent).length };
 }
 
 // Phase 12(2026-08-28, 계획서 J절 Phase 12) — 요일까지 일치할 때만 "슬롯 중복"으로 판정한다(기존은
@@ -327,7 +343,8 @@ export async function buildPortfolioReport(request: AudienceReportRequest): Prom
 
   const groupB: PortfolioReportDocument["groupB"] = { code: "B", label: AUDIENCE_GROUPS.B.label, oneLiner: oneLinerB, peers: peersB, commonPattern: commonPatternB, opportunities: opportunitiesB, skyUhd };
 
-  const slotOverlap = computeSlotOverlap(rawByCode);
+  // 단계 09: 등록된 동시방송·재방 편성은 의도된 편성으로, 나머지는 '확인 필요'로 구분한다(오류로 자동 제거하지 않음).
+  const slotOverlap = classifySlotOverlap(computeSlotOverlap(rawByCode), pipeline);
   // flatMap이면 신호가 0개인 채널이 통째로 배열에서 사라진다(실 서버 검증 중 발견) — 채널마다
   // 항상 나타나도록 {channelCode, channelName, items} 형태로 감싼다.
   const actionsByChannel = allCodes.map((code) => {
@@ -337,7 +354,56 @@ export async function buildPortfolioReport(request: AudienceReportRequest): Prom
   });
 
   const deepCompare = buildPortfolioDeepCompare(rawList);
-  const draft = { period, deepCompare, groupA, groupB, slotOverlap, actionsByChannel, isolationOk, aiSummary: null };
+
+  // ── 단계 09 ──
+  const names = Object.fromEntries(allCodes.map((c) => [c, nameByCode.get(c) ?? c]));
+  const executiveDecisions = buildExecutiveDecisions(actionsByChannel, { period });
+  const channelPolicies = buildChannelPolicyViews(period.dateTo, names);
+  const concentration = allCodes
+    .map((c) => computeConcentration(c, names[c], rawByCode[c].programMovers))
+    .filter((r): r is ConcentrationRow => r !== null);
+  const totalDays = datesIn({ from: period.dateFrom, to: period.dateTo }).length;
+  const skyUhdCoverage = skyUhd
+    ? buildSkyUhdCoverage({ trend: rawByCode.SKYUHD.trend, granularity: rawByCode.SKYUHD.trendGranularity, dateFrom: period.dateFrom, dateTo: period.dateTo, programDays: skyUhd.coverage.daysWithProgramData, totalDays })
+    : null;
+  // Avail 권리 만료·기소진 현황 — 저장소가 없거나 읽기에 실패해도 보고서는 만든다(null = 확인하지 못함, '문제 없음'이 아님).
+  let rights: RightsHomeSummary | null = null;
+  try {
+    const loaded = await loadAvailState();
+    rights = summarizeRightsForHome(loaded.state, { today: kstToday(), tablesApplied: loaded.available });
+  } catch {
+    rights = null;
+  }
+  const groupMetrics = { A: computeGroupMetric("A", peersA), B: computeGroupMetric("B", peersB) };
+  // 채널 보고서와 같은 방식(기간 종료일 = 알 수 있는 시점)으로 지표 컨텍스트·snapshot을 싣는다.
+  const metricContext = buildMetricContext({
+    channelCode: "ALL",
+    targetLabel: "(그룹별 타깃: 수도권 2049 / 전국 유료가구)",
+    metric: "rating",
+    grain: "derived",
+    period: { from: period.dateFrom, to: period.dateTo, kind: "custom", label: period.label },
+    aggregation: "daily_mean_provisional",
+    knowledgeCutoff: period.dateTo,
+  });
+
+  const draft = {
+    period,
+    deepCompare,
+    groupA,
+    groupB,
+    slotOverlap,
+    actionsByChannel,
+    isolationOk,
+    aiSummary: null,
+    executiveDecisions,
+    channelPolicies,
+    rights,
+    concentration,
+    skyUhdCoverage,
+    groupMetrics,
+    metricContext,
+    dataSnapshotId: dataSnapshotId(metricContext),
+  };
   // Phase 10(§12) — 그룹별 한 줄 + 공통 패턴 + 채널 수준·추세를 사실로 준 AI Executive Summary.
   const aiSummary = await buildPortfolioExecutiveSummary(period.label, draft);
   return { ...draft, aiSummary };

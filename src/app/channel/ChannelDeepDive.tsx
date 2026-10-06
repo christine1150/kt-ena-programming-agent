@@ -6,12 +6,23 @@
 // 줄글 형태로 재구성했다. WHY?/OPPORTUNITY?의 원인 추적·기회 탐지는 상관관계만 참고 정보로
 // 제공하고 인과관계로 단정하지 않는다(CLAUDE.md 원칙).
 import { Fragment, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+// 단계 07: 기간·채널 문맥은 URL이 단일 출처이고, 요청 상태(loading/stale/ready/error)·오래된 응답 무시는 useContextData가 맡는다.
+import ContextBar from "@/components/workspace/ContextBar";
+import { deriveChannelPeriod, type ChannelPeriod } from "@/lib/workspace/channelQuery";
+import { parseTargetRank } from "@/lib/workspace/kpi";
+import { buildContextBar } from "@/lib/workspace/contextBar";
+import { kstToday } from "@/lib/workspace/dates";
+import { evaluateReportGuard } from "@/lib/workspace/reportGate";
+import { useContextData } from "@/lib/workspace/useContextData";
+import { dataKey, parseViewContext, serializeContext, type ViewContext } from "@/lib/workspace/viewContext";
 import { VendingMachineIcon } from "@/components/VendingIcons";
 import Link from "next/link";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { formatDateWithDow } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun, josaEulReul } from "@/lib/josa";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
+import { actionPhrase, programActionFor } from "@/lib/insight/actionCandidate";
 // 사용자 지시(2026-09-18/19): "질문하기" 섹션이 Page 1과 같은 로직(자연어 질의→conclusion/
 // keyNumbers/evidence/programmingAction)을 이 파일에 그대로 복제해 두고 있었다 — 공용
 // 컴포넌트(AskAssistantWidget, 원래 이 파일에서 뽑아 나간 것)로 교체해 중복을 없앴다(기능·
@@ -42,11 +53,7 @@ import {
   type PeriodPreset,
   PERIOD_PRESET_LABELS,
   PERIOD_PRESET_GROUPS,
-  COMPARISON_PRESETS,
-  COMPARISON_LABELS,
-  computePeriodPreset,
   SDOW_PRESETS,
-  SDOW_WEEKS_BACK,
   SDOW_WEEKS_LABEL,
   addDaysStr,
   toDateStr,
@@ -58,6 +65,8 @@ import {
 // 번들에 서버 코드가 섞이지 않게 한다.
 import { computeEfficiencyRanking, type ProgramType } from "@/lib/audienceReport/deepDiveAnalyzer";
 import type { ProgramSlotProfileRow } from "@/lib/audienceReport/dataCollector";
+import { formatDurationKo } from "@/lib/metrics";
+import { HOURLY_ESTIMATE_NOTE } from "@/lib/broadcastTime/hourly";
 
 interface TrendRow {
   period: string;
@@ -116,6 +125,10 @@ interface CompetitorInsightRow {
   resolved_target_label: string | null;
 }
 interface CompetitorOverlapRow {
+  /** 단계 03: 서버가 계산한 겹친 초와 대표성 근거(없으면 이전 응답) */
+  overlapSeconds?: number;
+  reason?: string;
+  caveats?: string[];
   our_program_name: string;
   our_start_time: string;
   our_end_time: string | null;
@@ -582,6 +595,9 @@ interface CompetitorPeriodTopProgramRow {
 }
 
 interface ChannelData {
+  /** 단계 02: 이 응답 KPI의 타깃·기간·집계 방식·기준일(서버가 채움) */
+  metricContext?: import("@/lib/metrics").MetricContext;
+  dataSnapshotId?: string;
   channel: {
     code: string;
     name: string;
@@ -763,12 +779,9 @@ function fmt(v: number | null, digits = 3): string {
 function fmtTime(t: string): string {
   return t.slice(0, 5);
 }
+// 사용자 지시(2026-09-03): "34분 0초"처럼 초가 0이면 분 단위까지만 쓴다. 초를 먼저 반올림해 "28분 60초"가 생기지 않게 공통 함수를 쓴다(단계 02).
 function fmtSeconds(v: number | null): string {
-  if (v === null || v === undefined) return "—";
-  const m = Math.floor(v / 60);
-  const s = Math.round(v % 60);
-  // 사용자 지시(2026-09-03): "34분 0초"처럼 초가 0이면 분 단위까지만 쓴다.
-  return s === 0 ? `${m}분` : `${m}분 ${s}초`;
+  return formatDurationKo(v);
 }
 function shortDemoLabel(label: string): string {
   return label.replace(/^(수도권|전국)\s*/, "");
@@ -823,6 +836,22 @@ function toDeckHref(href: string): string {
   const qIdx = href.indexOf("?");
   return qIdx === -1 ? `${href}/deck` : `${href.slice(0, qIdx)}/deck${href.slice(qIdx)}`;
 }
+// 단계 07: 보고서 아이콘 링크. 지금 선택한 문맥의 값이 준비되지 않았으면(로딩·이전 선택의 값) 열 수 없게 막고 이유를 보인다.
+function ReportIconLink({ href, ready, blockedText, title, children }: { href: string; ready: boolean; blockedText: string; title: string; children: React.ReactNode }) {
+  if (!ready) {
+    return (
+      <span title={blockedText} aria-disabled="true" className="cursor-not-allowed opacity-40">
+        {children}
+      </span>
+    );
+  }
+  return (
+    <Link href={href} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title={title}>
+      {children}
+    </Link>
+  );
+}
+
 function WordIconBadge() {
   return (
     <svg width="18" height="18" viewBox="0 0 20 20" aria-label="Word로 보기">
@@ -1636,13 +1665,21 @@ function buildBriefingReport(
         return Number.isNaN(h) ? null : String(h).padStart(2, "0");
       };
       const items: string[] = [];
+      // 단계 04: 홈과 같은 판단 함수(programActionFor) — 같은 프로그램·슬롯이면 같은 판단 문구와 action_id가 나온다.
+      // 이 화면의 신호에는 Fit Score 태그가 없어 태그 판단은 홈에서만 붙는다(한계는 PROGRESS.md에 기록).
+      const detailAction = (name: string, hourText: string | null, pct: number, baselineLabel: string, days: number | null): string => {
+        const h = hourText === null ? null : Number(hourText);
+        return actionPhrase(
+          programActionFor({ programName: name, startHour: h === null ? null : h < 2 ? h + 24 : h, deviationPct: pct, baselineLabel, baselineDays: days, fitScoreTag: null, observationText: `${name} ${baselineLabel} 대비 ${pct.toFixed(0)}%` })
+        );
+      };
 
       // ① 그날의 약점(또는 강점)을 시각·프로그램·낙폭·조치까지 한 줄로.
       const declineHour = hourOf(s.decline_program_start_time);
       if (channelDown && declineIsReal && s.decline_program_name !== contribProgramName) {
         const slot = declineHour !== null ? `${declineHour}시` : "해당 슬롯";
         items.push(
-          `${slot} '${s.decline_program_name}' ${fmtR(s.decline_program_rating)} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ▼${Math.abs(s.decline_program_delta_pct!).toFixed(0)}%, ${slot}대 편성 전략 변경 필요`
+          `${slot} '${s.decline_program_name}' ${fmtR(s.decline_program_rating)} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ▼${Math.abs(s.decline_program_delta_pct!).toFixed(0)}%, ${detailAction(s.decline_program_name!, declineHour, s.decline_program_delta_pct!, "본방 슬롯 최근 8주 평균", s.decline_program_baseline_days ?? null)}`
         );
       } else if (channelDown && primePct !== null && primePct <= -15) {
         const culprit = prime?.worstProgram ?? prime?.topProgram ?? null;
@@ -1654,17 +1691,17 @@ function buildBriefingReport(
         const slot = culpritHour !== null ? `${culpritHour}시` : "해당 슬롯";
         items.push(
           culprit && vsPrime !== null
-            ? `${slot} '${culprit.name}' ${fmtR(culprit.rating)} — 프라임 평균 대비 ▼${Math.abs(vsPrime).toFixed(0)}%, ${slot}대 편성 전략 변경 필요`
+            ? `${slot} '${culprit.name}' ${fmtR(culprit.rating)} — 프라임 평균 대비 ▼${Math.abs(vsPrime).toFixed(0)}%, ${detailAction(culprit.name, culpritHour, vsPrime, "프라임 평균", null)}`
             : `프라임 ${prime?.label ?? ""} 평소 대비 ▼${Math.abs(primePct).toFixed(0)}% — 해당 시간대 편성 경쟁력 점검 필요`
         );
       } else if (!channelDown && primePct !== null && primePct >= 15 && prime?.topProgram) {
         const h = hourOf(prime.topProgram.startTime);
         const slot = h !== null ? `${h}시` : "프라임";
-        items.push(`${slot} '${prime.topProgram.name}' ${fmtR(prime.topProgram.rating)} — 프라임 평균 대비 ▲${primePct.toFixed(0)}%, ${slot}대 편성 유지·확대 검토`);
+        items.push(`${slot} '${prime.topProgram.name}' ${fmtR(prime.topProgram.rating)} — 프라임 평균 대비 ▲${primePct.toFixed(0)}%, ${detailAction(prime.topProgram.name, h, primePct, "프라임 평균", null)}`);
       } else if (!channelDown && contribPct !== null && contribPct >= 20 && contribProgramName) {
         const h = hourOf(s.top_program_start_time);
         const slot = h !== null ? `${h}시` : "해당 슬롯";
-        items.push(`${slot} '${contribProgramName}' ${fmtR(s.top_program_rating)} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ▲${contribPct.toFixed(0)}%, ${slot}대 편성 유지·확대 검토`);
+        items.push(`${slot} '${contribProgramName}' ${fmtR(s.top_program_rating)} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ▲${contribPct.toFixed(0)}%, ${detailAction(contribProgramName, h, contribPct, "본방 슬롯 최근 8주 평균", s.top_program_baseline_days ?? null)}`);
       } else if (primePct !== null && primePct <= -15) {
         items.push(`프라임 ${prime?.label ?? ""} 평소 대비 ▼${Math.abs(primePct).toFixed(0)}% — 해당 시간대 편성 경쟁력 점검 필요`);
       }
@@ -4415,9 +4452,7 @@ function getPastSameDayDates(asOfDate: string, dow: number, weeks: number): stri
 }
 
 export default function ChannelDeepDive({ code }: { code: string }) {
-  const [data, setData] = useState<ChannelData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // (단계 07) data·loading·errorMessage는 아래 useContextData가 돌려준다.
   // 사용자 지시(2026-09-02): "2페이지 전반적으로 폰트 크기를 키워 가독률을 높일 것 — 특히
   // skyUHD는 폰트를 더 키워서 볼 수 있는 옵션을 왼쪽 상단에 추가". 5900줄 전체의 text-* 클래스를
   // 하나씩 키우면 레이아웃이 곳곳에서 깨질 위험이 커서, 페이지 전체를 감싸는 CSS zoom으로
@@ -4590,50 +4625,72 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 나뉘어 있었는데, DoD/WoW가 기준일 자체를 과거로 옮겨버려 "오늘의 브리핑" 등이 어제/전주를
   // 마치 "오늘"인 것처럼 보여주는 문제가 있어 하나로 합쳤다 — 이제 "오늘"은 항상 진짜 오늘이고,
   // 전일/전주 대비 분석은 WHAT HAPPENED? 표와 헤더에 항상 같이 나온다. 기본값은 "오늘(최신)".
-  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("today");
-  const [customFrom, setCustomFrom] = useState<string>("");
-  const [customTo, setCustomTo] = useState<string>("");
+  // 단계 07: 기간 프리셋·직접 선택 기간·동요일은 URL에서 읽는다(새로고침·북마크·뒤로가기·보고서 링크에서 유지).
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlCtx = parseViewContext((k) => searchParams.get(k), { channelFromPath: code }).ctx;
+  const periodPreset: PeriodPreset = urlCtx.preset ?? "today";
+  const customFrom = urlCtx.dateFrom ?? "";
+  const customTo = urlCtx.dateTo ?? "";
+  // 기간 관련 쿼리만 바꾸고 나머지(from·ft·hour·cut 등 액션·시점 쿼리)는 그대로 둔다.
+  function updateCtx(patch: Partial<ViewContext>, mode: "push" | "replace" = "push") {
+    const qs = new URLSearchParams(searchParams.toString());
+    for (const k of ["preset", "dateFrom", "dateTo", "date", "compareFrom", "compareTo", "dow"]) qs.delete(k);
+    serializeContext({ ...urlCtx, ...patch }).forEach((v, k) => qs.set(k, v));
+    const q = qs.toString();
+    router[mode](q ? `${pathname}?${q}` : pathname, { scroll: false });
+  }
   // 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" 요일 선택 — null이면 "자동 매칭"(기준일의
   // 요일을 그대로 씀), 사용자가 요일 칩을 클릭하면 그 값으로 고정된다. periodPreset이 SDoW
   // 그룹을 벗어나면 다음에 다시 SDoW로 들어왔을 때 또 자동 매칭되도록 null로 되돌린다.
-  const [selectedDow, setSelectedDow] = useState<number | null>(null);
+  const selectedDow = urlCtx.dow;
   const isSdowActive = SDOW_PRESETS.has(periodPreset);
 
   // 기간 설정에 따라 실제 API에 넘길 dateFrom/dateTo(+비교 분석 프리셋이면 priorFrom/priorTo)
   // 계산. "오늘"이거나, 아직 최신 날짜(latestAvailableDate)를 몰라 계산할 수 없는 첫 로딩
   // 시점엔 둘 다 null로 둬서 서버가 최신 날짜를 자동으로 고르게 한다(기존 "오늘" 동작과 동일).
-  let selectedDateFrom: string | null = null;
-  let selectedDateTo: string | null = null;
-  let selectedPriorFrom: string | null = null;
-  let selectedPriorTo: string | null = null;
-  if (periodPreset === "today") {
-    selectedDateFrom = null;
-    selectedDateTo = null;
-  } else if (data?.latestAvailableDate) {
-    const range = computePeriodPreset(data.latestAvailableDate, periodPreset, customFrom, customTo);
-    selectedDateFrom = range?.from ?? null;
-    selectedDateTo = range?.to ?? null;
-    selectedPriorFrom = range?.priorFrom ?? null;
-    selectedPriorTo = range?.priorTo ?? null;
-  }
-  const isComparisonPreset = COMPARISON_PRESETS.has(periodPreset);
+  // 단계 07: 요청 키는 URL 문맥(채널·프리셋·기간·요일)이다. 키가 바뀌면 이전 요청을 취소하고, 늦게 온 이전 응답은 버린다.
+  // 값이 도착하기 전까지 이전 값은 stale이며 아래 ContextBar가 "이전 선택의 값"임을 알린다.
+  const latestRef = useRef<string | null>(null);
+  const fetched = useContextData<ChannelData>(dataKey(urlCtx, "channel"), async (signal) => {
+    setLazyHourPattern(null); // 채널·기간이 바뀌면 이전 1시간 단위 캐시는 더 이상 유효하지 않음
+    const load = async (q: ChannelPeriod) => {
+      const res = await fetch(`/api/dashboard/channel?code=${code}${q.dateQuery}${q.priorQuery}${q.sdowQuery}`, { signal });
+      const body = await res.json().catch(() => ({ ok: false }));
+      if (!res.ok || !body.ok) throw new Error(body.message ?? "불러오지 못했습니다.");
+      return body as ChannelData;
+    };
+    const args = { preset: periodPreset, customFrom, customTo, selectedDow, latest: latestRef.current };
+    let body = await load(deriveChannelPeriod(args));
+    // 최신 수신일을 몰라 비워 둔 첫 요청이었다면, 알게 된 최신일로 기간을 계산해 한 번 더 받는다(기존 동작과 같음).
+    if (!args.latest && body.latestAvailableDate) {
+      latestRef.current = body.latestAvailableDate;
+      const next = deriveChannelPeriod({ ...args, latest: body.latestAvailableDate });
+      if (next.dateQuery || next.sdowQuery) body = await load(next);
+    }
+    latestRef.current = body.latestAvailableDate ?? latestRef.current;
+    return body;
+  });
+  const data = fetched.data;
+  const loading = fetched.status === "loading" || fetched.status === "stale" || fetched.refreshing;
+  const errorMessage = fetched.status === "error" && !data ? fetched.errorMessage : null;
+  const { selectedDateFrom, selectedDateTo, selectedPriorFrom, selectedPriorTo, isComparisonPreset, comparisonLabel, dateQuery, priorQuery, fitScoreDateQuery, effectiveDow, sdowWeeksBack, sdowQuery } = deriveChannelPeriod({
+    preset: periodPreset,
+    customFrom,
+    customTo,
+    selectedDow,
+    latest: data?.latestAvailableDate ?? null,
+  });
   // "오늘의 브리핑"/헤더 큰 숫자/HOW DEEPLY?/WHAT HAPPENED? 기간 요약 패널을 "기간 리포트" 스타일로
   // 보여줄지 결정한다. 지난 N일류는 기간이 하루보다 길면(dateFrom !== dateTo) 자동으로, 비교 분석
   // 프리셋(DoD 포함)은 "이번 기간"이 하루뿐이어도(DoD) 항상 비교 리포트 스타일을 보여준다.
   const showComparisonView =
     isComparisonPreset || (selectedDateFrom !== null && selectedDateTo !== null && selectedDateFrom !== selectedDateTo);
-  const comparisonLabel = COMPARISON_LABELS[periodPreset] ?? null;
-  const dateQuery = selectedDateFrom && selectedDateTo ? `&dateFrom=${selectedDateFrom}&dateTo=${selectedDateTo}` : "";
-  const priorQuery = selectedPriorFrom && selectedPriorTo ? `&priorDateFrom=${selectedPriorFrom}&priorDateTo=${selectedPriorTo}` : "";
-  const fitScoreDateQuery = selectedDateTo ? `&date=${selectedDateTo}` : "";
   // 사용자 지시(2026-09-02): SDoW 초기 렌더링 로직 — "기준일이 수요일이면 요일 선택기의 '수'가
   // 자동 활성화". selectedDow가 아직 null(수동 선택 전)이면 기준일(selectedDateTo, SDoW에서는
   // latestAvailableDate와 같음)의 요일로 자동 매칭한다. JS Date.getDay()는 0=일~6=토로 Postgres
   // extract(dow)와 동일해 별도 변환이 필요 없다.
-  const effectiveDow =
-    selectedDow ?? (selectedDateTo ? new Date(`${selectedDateTo}T00:00:00`).getDay() : data?.latestAvailableDate ? new Date(`${data.latestAvailableDate}T00:00:00`).getDay() : null);
-  const sdowWeeksBack = SDOW_WEEKS_BACK[periodPreset] ?? null;
-  const sdowQuery = isSdowActive && effectiveDow !== null && sdowWeeksBack !== null ? `&sdowDow=${effectiveDow}&sdowWeeks=${sdowWeeksBack}` : "";
   const DOW_CHIP_LABELS = ["일", "월", "화", "수", "목", "금", "토"]; // JS getDay() 인덱스(0~6)와 그대로 매칭.
   // 사용자 지시(2026-09-02): "브리핑부터 경쟁채널 분석까지 모두 선택한 기간의 내용으로 반영" —
   // 아래 여러 섹션(오늘의 브리핑/WHO IS WATCHING?/COMPARED WITH?/시간대 그래프/TOP20/AI 종합)이
@@ -4661,27 +4718,37 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 덧붙인다. 새 날짜 계산 없음 — selectedDateFrom/To·selectedPriorFrom/To(위에서 이미 계산됨)만 씀.
   const periodRangeLabel = (from: string | null, to: string | null) => (from && to ? `${formatDateWithDow(from)} ~ ${formatDateWithDow(to)}` : "");
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setLazyHourPattern(null); // 채널·기간이 바뀌면 이전 1시간 단위 캐시는 더 이상 유효하지 않음
-      const res = await fetch(`/api/dashboard/channel?code=${code}${dateQuery}${priorQuery}${sdowQuery}`);
-      const body = await res.json().catch(() => ({ ok: false }));
-      if (cancelled) return;
-      if (!res.ok || !body.ok) {
-        setErrorMessage(body.message ?? "불러오지 못했습니다.");
-      } else {
-        setData(body);
-        setErrorMessage(null);
-      }
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
+  // 단계 07: 공통 ContextBar 모델. 칩은 "지금 보이는 값"이 속한 문맥(채널·기간)으로 그리고, 새 선택의 값이 아직 안 왔으면 배너로 알린다.
+  const shownPeriod = data?.metricContext?.period ?? null;
+  const shownPeriodText = shownPeriod ? (shownPeriod.from === shownPeriod.to ? shownPeriod.from : `${shownPeriod.from} ~ ${shownPeriod.to}`) : null;
+  const shownComparison = data?.metricContext?.comparison ?? null;
+  const requestedRange = selectedDateFrom && selectedDateTo ? (selectedDateFrom === selectedDateTo ? selectedDateFrom : `${selectedDateFrom} ~ ${selectedDateTo}`) : "";
+  const contextBar = buildContextBar({
+    scopeLabel: data?.channel.name ?? code,
+    targetLabel: data?.metricContext?.targetLabel ?? data?.channel.primaryTarget ?? null,
+    periodLabel: shownPeriodText,
+    compareLabel: shownComparison ? `${shownComparison.from} ~ ${shownComparison.to}` : null,
+    latestDate: data?.latestAvailableDate ?? null,
+    today: kstToday(),
+    // 채널 화면의 기간 값은 일간 수신값을 합산·평균한 값이라 공식 기간 값(주간·월간)이 수신되면 달라질 수 있다.
+    finality: "provisional",
+    status: fetched.status,
+    isCurrent: fetched.isCurrent,
+    shownLabel: data ? `${data.channel.name} · ${shownPeriodText ?? ""}`.trim() : null,
+    requestedPeriodLabel: `${code} · ${PERIOD_PRESET_LABELS[periodPreset]}${requestedRange ? ` (${requestedRange})` : ""}`,
+    errorMessage: fetched.errorMessage,
+  });
+  // 보고서·PPT 링크는 지금 선택한 문맥의 값이 준비됐을 때만 연다(이전 선택의 값으로 새 기간 보고서를 만들지 않는다).
+  const reportGuard = evaluateReportGuard({
+    status: fetched.status,
+    isCurrent: fetched.isCurrent,
+    requestedTo: selectedDateTo ?? data?.dateTo ?? null,
+    latestAvailableDate: data?.latestAvailableDate ?? null,
+    linkCutoff: null,
+    reportCutoff: null,
+  });
 
-  }, [code, dateQuery, priorQuery, sdowQuery]);
+  // (단계 07) 채널 데이터 요청은 위 useContextData로 옮겼다.
 
   const effective1h = dowHeatmapGranularity === "1h";
   // 성능 조사(2026-09-19, 사용자 지시: "다시 각 페이지 로딩 속도가 느려졌는데 원인을 파악하고
@@ -5287,7 +5354,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           max-w-7xl(1280px)로 넓혔던 것을, 사용자 재지시(2026-09-02) "좌우 폭을 최대한 넓히고"에
           따라 max-w-[1800px]로 한 번 더 넓힌다(초광폭 모니터에서도 표·그래프가 과하게 늘어지지
           않도록 완전 무제한 대신 넉넉한 상한을 둠). */}
-      <div className="mx-auto flex max-w-[1800px] flex-col gap-6">
+      <div className={`mx-auto flex max-w-[1800px] flex-col gap-6 transition-opacity ${loading ? "opacity-60" : ""}`} aria-busy={loading}>
+        {/* 단계 02(F02): 기간·채널을 바꾸는 동안 새 제목과 이전 값이 섞여 보이지 않게, 새 값이 올 때까지 이전 값임을 명시하고 흐리게 표시한다. */}
+        <ContextBar model={contextBar} />
         {/* 헤더 재설계(2026-09-02, 사용자 지시): "상단 레이아웃이 매우 복잡해졌어. 가독률 좋고,
             세련되게... 하이엔드 패션 매거진 스타일로. 너무 여러줄에 걸쳐 나오지 않게. 상단 바
             높이가 너무 높지 않게" — 기존 18개 정보·기능을 전부 그대로 유지하되(데이터 바인딩·
@@ -5338,7 +5407,19 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           숫자가 문장 중간에 있는 skyUHD의 target_rank를 못 읽어(문자열 시작이
                           숫자여야만 파싱됨) 목표 등위가 항상 "-"로 보였다 — 문자열 어디에 있든
                           첫 숫자를 정규식으로 뽑도록 교체. */}
-                      ({narrativeSignal.today_rank}/{data.targetAchievement?.target_rank?.match(/\d+/)?.[0] ?? "-"})
+                      {/* 단계 07: 목표 순위가 "경쟁채널 중 2위"처럼 시장 순위와 기준이 다르면 "(188/2)"로 묶지 않고 따로 표기한다. */}
+                      {(() => {
+                        const tr = parseTargetRank(data.targetAchievement?.target_rank);
+                        return tr.scope === "peer" ? (
+                          <>
+                            ({narrativeSignal.today_rank}) <span className="text-xs">경쟁군 목표 {tr.value}위</span>
+                          </>
+                        ) : (
+                          <>
+                            ({narrativeSignal.today_rank}/{tr.value ?? "-"})
+                          </>
+                        );
+                      })()}
                     </span>
                   )}
                   {showComparisonView && (
@@ -5386,8 +5467,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 // 날짜를 자동으로 고르게 하는 기존 동작, :3220-3226) 위 구 버튼과 동일하게
                 // data.dateTo(서버가 실제로 확정한 최신일)로 폴백한다.
                 const resolvedDateTo = selectedDateTo ?? data.dateTo ?? "";
-                const audienceHref = buildAudienceReportHref(code, periodPreset, selectedDateFrom ?? "", resolvedDateTo);
-                const portfolioHref = buildPortfolioReportHref(periodPreset, selectedDateFrom ?? "", resolvedDateTo);
+                // 단계 07: 링크에 이 화면의 데이터 시점(cut)을 실어, 보고서가 다른 시점이면 보고서 화면이 알린다.
+                const withCut = (h: string | null) => (h && data.latestAvailableDate ? `${h}${h.includes("?") ? "&" : "?"}cut=${data.latestAvailableDate}` : h);
+                const audienceHref = withCut(buildAudienceReportHref(code, periodPreset, selectedDateFrom ?? "", resolvedDateTo));
+                const portfolioHref = withCut(buildPortfolioReportHref(periodPreset, selectedDateFrom ?? "", resolvedDateTo));
+                const reportReady = reportGuard.mode !== "blocked";
+                const reportBlockedText = reportGuard.message ?? "";
                 // Phase 13(2026-09-01, 사용자 지시) — 이모지 제거, 제목 옆에 Word/PPT 아이콘
                 // 두 개를 각각 클릭 가능하게. 제목 자체는 더 이상 링크가 아니다(두 아이콘이
                 // 각자의 목적지를 갖는다) — Word 아이콘은 기존 줄글 리포트, PPT 아이콘은 새
@@ -5398,23 +5483,23 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white">
                         {/* 사용자 지시(2026-09-01): "각 채널 보고서"→"채널 리포트"로 이름 변경 */}
                         채널 리포트
-                        <Link href={audienceHref} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="Word로 보기">
+                        <ReportIconLink href={audienceHref} ready={reportReady} blockedText={reportBlockedText} title="Word로 보기">
                           <WordIconBadge />
-                        </Link>
-                        <Link href={toDeckHref(audienceHref)} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="PPT로 보기">
+                        </ReportIconLink>
+                        <ReportIconLink href={toDeckHref(audienceHref)} ready={reportReady} blockedText={reportBlockedText} title="PPT로 보기">
                           <PptIconBadge />
-                        </Link>
+                        </ReportIconLink>
                       </span>
                     )}
                     {portfolioHref && (
                       <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white">
                         종합 보고서
-                        <Link href={portfolioHref} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="Word로 보기">
+                        <ReportIconLink href={portfolioHref} ready={reportReady} blockedText={reportBlockedText} title="Word로 보기">
                           <WordIconBadge />
-                        </Link>
-                        <Link href={toDeckHref(portfolioHref)} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title="PPT로 보기">
+                        </ReportIconLink>
+                        <ReportIconLink href={toDeckHref(portfolioHref)} ready={reportReady} blockedText={reportBlockedText} title="PPT로 보기">
                           <PptIconBadge />
-                        </Link>
+                        </ReportIconLink>
                       </span>
                     )}
                   </>
@@ -5459,10 +5544,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 value={periodPreset}
                 onChange={(e) => {
                   const next = e.target.value as PeriodPreset;
-                  setPeriodPreset(next);
                   // 사용자 지시(2026-09-02): SDoW 그룹을 벗어나면 요일 선택을 초기화해, 다음에
                   // 다시 SDoW로 들어왔을 때 기준일 요일로 자동 매칭되게 한다(수동 선택 기억 안 함).
-                  if (!SDOW_PRESETS.has(next)) setSelectedDow(null);
+                  // 직접 선택이 아니면 이전에 고른 시작·종료일도 버린다(URL에 남은 옛 기간과 프리셋이 어긋나지 않게).
+                  updateCtx({
+                    preset: next === "today" ? null : next,
+                    dow: SDOW_PRESETS.has(next) ? urlCtx.dow : null,
+                    ...(next === "custom" ? {} : { dateFrom: null, dateTo: null }),
+                  });
                 }}
                 className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none [&_option]:text-zinc-900 [&_optgroup]:text-zinc-500"
               >
@@ -5481,14 +5570,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <input
                     type="date"
                     value={customFrom}
-                    onChange={(e) => setCustomFrom(e.target.value)}
+                    onChange={(e) => updateCtx({ dateFrom: e.target.value || null }, "replace")}
                     className="rounded-full bg-white/20 px-2.5 py-1.5 text-sm font-medium text-white outline-none"
                   />
                   <span className="text-white/70">~</span>
                   <input
                     type="date"
                     value={customTo}
-                    onChange={(e) => setCustomTo(e.target.value)}
+                    onChange={(e) => updateCtx({ dateTo: e.target.value || null }, "replace")}
                     className="rounded-full bg-white/20 px-2.5 py-1.5 text-sm font-medium text-white outline-none"
                   />
                 </div>
@@ -5502,7 +5591,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     <button
                       key={dow}
                       type="button"
-                      onClick={() => setSelectedDow(dow)}
+                      onClick={() => updateCtx({ dow })}
                       className={`h-6 w-6 rounded-full text-xs font-semibold transition ${
                         effectiveDow === dow ? "bg-white text-indigo-700" : "text-white/70 hover:bg-white/20"
                       }`}
@@ -5838,6 +5927,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   (선택한 날짜에 프로그램 데이터가 아직 없어 최근 데이터 기준 {formatDateWithDow(hourlyEffectiveDate)}로 대신 표시)
                 </span>
               )}
+              <span className="ml-2 text-xs font-normal text-zinc-500">{HOURLY_ESTIMATE_NOTE}</span>
             </h2>
             {!hasPriorRange && !showSdowDualView && (
             <div className="flex flex-wrap gap-3 text-sm">
@@ -7877,8 +7967,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <div className="mt-6 border-t border-zinc-100 pt-5">
             <h3 className="mb-1 text-sm font-semibold text-zinc-500">{referenceLabel} 시간대별 경쟁 프로그램</h3>
             <p className="mb-3 text-sm text-zinc-400">
-              방영 시간이 겹치는 등록 경쟁채널 프로그램(시청률 상위 3개)을 나란히
-              보여줍니다 — &ldquo;그 시간대에 경쟁채널이 무엇으로 잘했는가&rdquo;를 직접 비교할 수 있습니다.
+              방송 시간이 충분히 겹치는(10분 이상이면서 한쪽 방송의 30% 이상) 등록 경쟁채널 프로그램 중 시청률 상위 3개를 나란히
+              보여줍니다 — &ldquo;그 시간대에 경쟁채널이 무엇으로 잘했는가&rdquo;를 볼 수 있습니다. 프로그램 평균 시청률끼리의 비교이며, 겹친 구간만의 분 단위 시청률 비교는 아닙니다.
             </p>
             {competitorProgramOverlap.length === 0 ? (
               <p className="text-sm text-zinc-400">{referenceLabel} 시간대가 겹치는 등록 경쟁채널 프로그램 데이터가 없습니다.</p>

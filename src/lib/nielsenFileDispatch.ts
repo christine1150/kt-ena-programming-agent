@@ -16,6 +16,18 @@ import {
 import { RANK_SHEETS, type Row } from "@/lib/nielsenDaily";
 import { parseAnalysisPeriod, parseNielsenPeriodWorkbook } from "@/lib/nielsenPeriod";
 import { extractFullYearFromFileName } from "@/lib/nielsenAnnual";
+import {
+  NIELSEN_PARSER_VERSION,
+  buildPeriodRecords,
+  checkWeeklyShape,
+  diffRankRows,
+  fileSha256,
+  periodAdapterStatus,
+  type AdapterStatus,
+  type RankDiff,
+  type RankSnapshotRow,
+} from "@/lib/nielsenIngestChecks";
+import { beginBatch, finishBatch, findLatestApplied, isSameAsLatest, markStage, recordDuplicate, type IngestKind, type IngestOrigin } from "@/lib/nielsenIngestLedger";
 
 export type NielsenFileSummary =
   // annual: 파일명이 1/1~12/31 전체 연도 범위인 YoY 기준값 파일(ingestNielsenFile이 내부적으로
@@ -31,12 +43,21 @@ export type NielsenFileSummary =
       dateTo?: string;
       inserted?: number;
       skippedUnknown?: string[];
+      /** 같은 파일(해시·파서 버전)이 이미 최신 반영본이라 아무것도 바꾸지 않았다 */
+      duplicate?: boolean;
+      revision?: number;
+      /** 같은 기간 이전 반영본과의 차이(수정본 재업로드일 때) */
+      diff?: RankDiff;
+      adapterStatus?: AdapterStatus;
+      qualityWarnings?: string[];
     };
 
 export interface NielsenFileDispatchContext {
   dailyCtx: NielsenIngestContext;
   channelIdByCode: Map<string, string>;
   targetIdByLabel: Map<string, string>;
+  /** 수집 경로(수동 업로드/메일) — 원장에 남긴다 */
+  origin?: IngestOrigin;
 }
 
 export async function loadNielsenFileDispatchContext(): Promise<NielsenFileDispatchContext | { error: string }> {
@@ -90,48 +111,83 @@ export async function ingestAnyNielsenFile(
       return { fileName, kind: "period", ok: false, message: parsed.message };
     }
 
-    const unknown = new Set<string>();
-    const records = parsed.rows
-      .map((r) => {
-        const channelId = ctx.channelIdByCode.get(r.channelCode);
-        const targetId = ctx.targetIdByLabel.get(r.targetLabel);
-        if (!channelId || !targetId) {
-          unknown.add(!channelId ? `채널:${r.channelCode}` : `타깃:${r.targetLabel}`);
-          return null;
-        }
-        return {
-          period_type: parsed.periodType,
-          date_from: parsed.dateFrom,
-          date_to: parsed.dateTo,
-          channel_id: channelId,
-          target_id: targetId,
-          rank: r.rank,
-          rating: r.rating,
-          share: r.share,
-          reach: r.reach,
-          time_spent_seconds: r.timeSpentSeconds,
-          source_file: fileName,
-          updated_at: new Date().toISOString(),
-        };
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null);
+    // 주간·월간 파일은 nielsen_period_rank에만 쓴다 — ratings·programs(프로그램 상세)는 만들지도 지우지도 않는다(단계 01 경계).
+    const { records, unknown: unknownList } = buildPeriodRecords(parsed, fileName, ctx.channelIdByCode, ctx.targetIdByLabel, new Date().toISOString());
+    const unknown = new Set(unknownList);
+    const adapter = periodAdapterStatus(parsed.periodType);
+    const warnings: string[] = [];
+    if (adapter.note) warnings.push(adapter.note);
+    if (parsed.periodType === "weekly") warnings.push(...checkWeeklyShape(parsed.dateFrom, parsed.dateTo).map((i) => i.message));
+    if (unknown.size > 0) warnings.push(`매핑하지 못해 건너뛴 항목: ${[...unknown].join(", ")}`);
 
-    if (records.length === 0) {
+    const kind: IngestKind = parsed.periodType === "weekly" ? "period_weekly" : "period_monthly";
+    const sha = fileSha256(buffer);
+    const batchInit = { fileSha256: sha, fileName, kind, periodFrom: parsed.dateFrom, periodTo: parsed.dateTo, adapterStatus: adapter.status, origin: ctx.origin };
+    const latest = await findLatestApplied(kind, parsed.dateFrom, parsed.dateTo);
+    if (latest && isSameAsLatest(latest, sha)) {
+      await recordDuplicate(batchInit, latest);
       return {
         fileName,
         kind: "period",
-        ok: false,
-        message: "적재할 행이 없습니다(채널·타깃 매핑 실패).",
-        skippedUnknown: [...unknown],
+        ok: true,
+        duplicate: true,
+        message: "이미 반영된 동일 파일입니다(파일 해시 일치) — 데이터를 바꾸지 않았습니다.",
+        periodType: parsed.periodType,
+        dateFrom: parsed.dateFrom,
+        dateTo: parsed.dateTo,
+        inserted: 0,
+        revision: latest.revision,
+        adapterStatus: adapter.status,
       };
+    }
+    const batch = await beginBatch(batchInit, latest);
+    markStage(batch, "parsed");
+
+    if (records.length === 0) {
+      const message = "적재할 행이 없습니다(채널·타깃 매핑 실패).";
+      await finishBatch(batch, { status: "failed", warnings, errorMessage: message });
+      return { fileName, kind: "period", ok: false, message, skippedUnknown: [...unknown] };
+    }
+    markStage(batch, "validated");
+
+    // 같은 기간 이전 반영본과의 차이(수정본 재업로드). upsert는 같은 기간·채널·타깃 행을 덮어쓰고 이전 반영본에 없던 행은 남는다.
+    let diff: RankDiff | undefined;
+    const { data: existing } = await supabase
+      .from("nielsen_period_rank")
+      .select("channel_id, target_id, rank, rating")
+      .eq("period_type", parsed.periodType)
+      .eq("date_from", parsed.dateFrom)
+      .eq("date_to", parsed.dateTo);
+    if (existing && existing.length > 0) {
+      const codeById = new Map(Array.from(ctx.channelIdByCode, ([code, id]) => [id, code]));
+      const labelById = new Map(Array.from(ctx.targetIdByLabel, ([label, id]) => [id, label]));
+      const before: RankSnapshotRow[] = existing.map((r) => ({
+        channelCode: codeById.get(r.channel_id as string) ?? String(r.channel_id),
+        targetLabel: labelById.get(r.target_id as string) ?? String(r.target_id),
+        rank: r.rank === null ? null : Number(r.rank),
+        rating: r.rating === null ? null : Number(r.rating),
+      }));
+      diff = diffRankRows(before, parsed.rows.map((r) => ({ channelCode: r.channelCode, targetLabel: r.targetLabel, rank: r.rank, rating: r.rating })));
+      if (diff.changed + diff.added + diff.removed > 0) {
+        warnings.push(`같은 기간(${parsed.dateFrom}~${parsed.dateTo})의 이전 반영본과 ${diff.changed}건이 다릅니다(추가 ${diff.added}·이전에만 있음 ${diff.removed}) — 개정 ${batch.revision}.`);
+      }
     }
 
     const { error } = await supabase
       .from("nielsen_period_rank")
       .upsert(records, { onConflict: "period_type,date_from,date_to,channel_id,target_id" });
     if (error) {
-      return { fileName, kind: "period", ok: false, message: `적재 실패: ${error.message}` };
+      const message = `적재 실패: ${error.message}`;
+      await finishBatch(batch, { status: "failed", warnings, errorMessage: message });
+      return { fileName, kind: "period", ok: false, message };
     }
+    await finishBatch(batch, {
+      status: "applied",
+      sheetMeta: { parserVersion: NIELSEN_PARSER_VERSION, periodType: parsed.periodType, adapterStatus: adapter.status, targetLabels: [...new Set(parsed.rows.map((r) => r.targetLabel))] },
+      rowCounts: { periodRank: records.length },
+      diff,
+      warnings,
+    });
 
     return {
       fileName,
@@ -141,11 +197,15 @@ export async function ingestAnyNielsenFile(
       dateFrom: parsed.dateFrom,
       dateTo: parsed.dateTo,
       inserted: records.length,
+      revision: batch.revision,
+      diff,
+      adapterStatus: adapter.status,
+      ...(warnings.length > 0 ? { qualityWarnings: warnings } : {}),
       ...(unknown.size > 0 ? { skippedUnknown: [...unknown] } : {}),
     };
   }
 
   // ── 일간(또는 연간 YoY 기준값) 파일.
-  const result = await ingestNielsenFile(buffer, fileName, ctx.dailyCtx);
+  const result = await ingestNielsenFile(buffer, fileName, { ...ctx.dailyCtx, origin: ctx.origin });
   return { ...result, kind: "daily", annual: !!extractFullYearFromFileName(fileName) };
 }

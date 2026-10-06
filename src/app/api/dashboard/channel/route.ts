@@ -13,6 +13,9 @@ import { PRIME_RPC_ARGS, dayTypeOf, primeRangeFor, DAY_TYPE_LABEL } from "@/lib/
 // (mart_daily_dashboard_cache / mart_llm_text_cache — 마이그레이션 20260917010000).
 import { loadDailyMartCache, cachedOrRpc, martFingerprint, MART_SLOT, MART_GLOBAL_CODE } from "@/lib/dailyMartCache";
 import { cachedLlmText } from "@/lib/llmTextCache";
+import { buildMetricContext, dataSnapshotId } from "@/lib/metrics";
+import { fetchHourlyPattern } from "@/lib/broadcastTime/hourlyFetch";
+import { DEFAULT_OVERLAP_CONFIG, selectRepresentativeCompetitors, type OverlapRowLike } from "@/lib/broadcastTime/overlap";
 
 // 로컬 날짜 구성요소로 "YYYY-MM-DD" 문자열을 만든다 — toISOString()은 UTC로 바꾸면서 자정 근처
 // 날짜가 하루 밀리는 문제가 실제로 있었다(ChannelDeepDive.tsx에서 이미 겪고 고친 것과 동일한
@@ -306,6 +309,9 @@ export async function GET(request: Request) {
   // 각 함수의 기존 기본값(하위호환)이 그대로 적용된다.
   const sdowNarrativeParams = isSdowActive ? { p_program_baseline_weeks: sdowWeeks!, p_target_dow: sdowDow! } : {};
   const sdowHourlyParams = isSdowActive ? { p_target_dow: sdowDow!, p_target_weeks: sdowWeeks! } : {};
+  // 단계 03: 시간대별 값은 시작 시각이 아니라 방송 구간이 시간대와 겹친 시간으로 배분한 추정치다(broadcastTime/hourlyFetch.ts).
+  const hourlyPatternFetch = (targetLabel: string, from: string, to: string, sdow?: { p_target_dow?: number; p_target_weeks?: number }) =>
+    fetchHourlyPattern({ channelCode: channel.code, targetLabel, dateFrom: from, dateTo: to, targetDow: sdow?.p_target_dow, targetWeeks: sdow?.p_target_weeks });
   // 성능 개선(2026-09-17) MART 지문용 — 위 스프레드가 실제로 넘기는 값(생략 시 함수 기본값 8)을
   // 그대로 적어 둔다. SDoW가 켜지면 값이 달라져 사전 계산 결과와 지문이 어긋나고, 그때는 기존
   // 실시간 RPC로 폴백된다(= 사전 계산은 "오늘 기본 진입"에만 적용된다).
@@ -521,24 +527,16 @@ export async function GET(request: Request) {
     ),
     // HOW DEEPLY? / 02~26시 시간대별 그래프 — 프로그램 단위 데이터가 필요해서, 타깃 라벨을
     // 타깃상세 시트 표기로 바꿔서 조회한다. 기간 설정(사용자 지시): dateFrom~dateTo 범위 전체 집계.
-    supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
+    hourlyPatternFetch(programTargetLabel, dateFrom, dateTo),
     // 사용자 지시: 시간대별 그래프에 어떤 프로그램이 편성됐는지 보이게.
     supabase.rpc("get_hourly_program_titles", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
     // 사용자 지시(2026-08-20): "각 채널의 최근 12주 시간대별 평균 시청률을 연한 색으로 꺾은선
     // 그래프로 그려서 기준점을 보여줄 것" — 선택 기간과 별개로 dateTo 기준 직전 84일 고정 윈도우.
-    cachedOrRpc<object>(
-      martCache,
-      dateTo,
-      MART_SLOT.hourlyBaseline84,
-      channel.code,
-      martFingerprint([channel.code, programTargetLabel, addDaysStr(dateTo, -83), dateTo, sdowDowFp, sdowWeeksFp]),
-      () => supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: addDaysStr(dateTo, -83), p_date_to: dateTo, ...sdowHourlyParams })
-    ),
+    // 12주 기준선도 같은 겹침 배분 방식이어야 막대와 비교가 맞는다 — 시작 시각 기준으로 미리 계산된 사전 캐시(MART)는 쓰지 않는다.
+    hourlyPatternFetch(programTargetLabel, addDaysStr(dateTo, -83), dateTo, sdowHourlyParams),
     Promise.all(
       extraTargetLabels.map((targetLabel) =>
-        supabase
-          .rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: targetLabel, p_date_from: dateFrom, p_date_to: dateTo })
-          .then((r) => ({ targetLabel, rows: r.data ?? [] }))
+        hourlyPatternFetch(targetLabel, dateFrom, dateTo).then((r) => ({ targetLabel, rows: r.data ?? [] }))
       )
     ),
     // 기간 요약(WHAT HAPPENED?/HOW DEEPLY?의 기간 범위 버전) — 기간 평균, 직전 동일 길이 기간
@@ -571,7 +569,7 @@ export async function GET(request: Request) {
         })
     ),
     // 동시간대 겹치는 경쟁 프로그램 비교(overlap) — 여러 날을 합치면 의미가 흐려져 dateTo 하루만.
-    supabase.rpc("get_competitor_program_overlap", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_as_of_date: dateTo }),
+    supabase.rpc("get_competitor_program_overlap", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_as_of_date: dateTo, p_limit: 30 }),
     supabase.rpc("get_competitor_top_programs", { p_channel_code: channel.code, p_as_of_date: dateTo, p_limit: 5, p_date_from: dateFrom }),
     // WHY? — 원인 추적(Root-Cause 참고 분석). matchedTargetLabel 기준, dateTo가 trailing window 기준일.
     supabase.rpc("get_root_cause_alert", { p_channel_code: channel.code, p_target_label: matchedTargetLabel, p_as_of_date: dateTo }),
@@ -758,7 +756,7 @@ export async function GET(request: Request) {
         )
       : Promise.resolve({ data: [] as unknown[] }),
     hasPriorRange
-      ? supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: priorDateFrom, p_date_to: priorDateTo })
+      ? hourlyPatternFetch(programTargetLabel, priorDateFrom, priorDateTo)
       : Promise.resolve({ data: [] as unknown[] }),
     hasPriorRange
       ? supabase.rpc("get_hourly_program_titles", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: priorDateFrom, p_date_to: priorDateTo })
@@ -829,7 +827,7 @@ export async function GET(request: Request) {
     // 패널은 priorDateTo 기준 직전 84일 고정 윈도우(이번 기간 패널의 hourlyBaselinePattern과
     // 동일한 방식, 기준일만 다름).
     hasPriorRange
-      ? supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: addDaysStr(priorDateTo, -83), p_date_to: priorDateTo })
+      ? hourlyPatternFetch(programTargetLabel, addDaysStr(priorDateTo, -83), priorDateTo)
       : Promise.resolve({ data: [] as unknown[] }),
     // 사용자 지시(2026-08-21): "TOP20에는 없지만 전체 점유율 1~5위인 콘텐츠가 있으면 별도 명기" —
     // TOP20(시청률 기준)과 별개로 점유율 기준 상위 5개를 직접 조회한다(get_channel_top_share_programs).
@@ -994,7 +992,8 @@ export async function GET(request: Request) {
         supabase.rpc("get_channel_top_share_programs", { p_channel_code: channel.code, p_program_target_label: programTargetLabel, p_as_of_date: dateTo, p_window_days: 1, p_limit: 5 }),
       ])
     : [{ data: [] as unknown[] }, { data: [] as unknown[] }];
-  const overlapData = (overlapRes.data as { our_start_time: string; our_program_name: string }[] | null)?.map((row) => ({
+  // 단계 03: 대표 경쟁작은 평균 시청률이 높은 순이 아니라 양쪽 방송이 실제로 충분히 겹치는 것만(38초 겹침 제외) — 우리 방송별 상위 3개.
+  const overlapData = selectRepresentativeCompetitors((overlapRes.data ?? []) as OverlapRowLike[] & { our_start_time: string; our_program_name: string }[], DEFAULT_OVERLAP_CONFIG, { topN: 3, ourTargetLabel: programTargetLabel }).map((row) => ({
     ...row,
     our_household_rating: householdOverlapTargetLabel ? (householdRatingByOurSlot.get(`${row.our_start_time}__${row.our_program_name}`) ?? null) : null,
   }));
@@ -1092,7 +1091,7 @@ export async function GET(request: Request) {
     if (fallbackDateRow?.broadcast_date) {
       hourlyEffectiveDate = fallbackDateRow.broadcast_date;
       const [{ data: fallbackPattern }, { data: fallbackTitles }] = await Promise.all([
-        supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: hourlyEffectiveDate, p_date_to: hourlyEffectiveDate }),
+        hourlyPatternFetch(programTargetLabel, fallbackDateRow.broadcast_date, fallbackDateRow.broadcast_date),
         supabase.rpc("get_hourly_program_titles", { p_channel_code: channel.code, p_target_label: programTargetLabel, p_date_from: hourlyEffectiveDate, p_date_to: hourlyEffectiveDate }),
       ]);
       hourlyPattern = fallbackPattern;
@@ -1513,7 +1512,7 @@ export async function GET(request: Request) {
     // v14: 같은 프로그램이 여러 항목에 반복되는 것과, 한 항목의 퍼센트를 다른 항목에 옮겨 쓰는
     // 것(프라임 등락률을 프로그램 항목에 "슬롯 평균 ▲174%"로 붙임)을 금지.
     // v16: LLM의 역할을 헤드라인 한 줄로 좁혔다(근거·시사점은 화면이 검증된 수치로 직접 조립).
-    const briefingLlmJson = await cachedLlmText(`briefing_report_v16:${channel.code}`, dateTo, briefingLlmInput, async () => {
+    const briefingLlmJson = await cachedLlmText(`briefing_report_v17:${channel.code}`, dateTo, briefingLlmInput, async () => {
       const report = await buildBriefingReportViaLlm(briefingLlmInput);
       return report ? JSON.stringify(report) : null;
     });
@@ -1526,8 +1525,22 @@ export async function GET(request: Request) {
     }
   }
 
+  // 단계 02: 이 응답의 KPI가 무엇의 어느 기간 값인지 한 객체로 고정한다(타깃·기간·집계 방식·비교 기간·지식 기준일).
+  const metricContext = buildMetricContext({
+    channelCode: channel.code,
+    targetLabel: resolveRankSheetTargetLabel(channel.primary_target),
+    metric: "rating",
+    grain: "derived",
+    period: { from: dateFrom, to: dateTo, kind: isRangeMode ? "custom" : "day", label: isRangeMode ? `${dateFrom} ~ ${dateTo}` : dateTo },
+    comparison: { from: effectivePriorDateFrom, to: effectivePriorDateTo, kind: "prior", label: "비교 기간" },
+    aggregation: isRangeMode ? "daily_mean_provisional" : "single_day",
+    knowledgeCutoff: latestAvailableDate ?? dateTo,
+  });
+
   return NextResponse.json({
     ok: true,
+    metricContext,
+    dataSnapshotId: dataSnapshotId(metricContext),
     channel: {
       code: channel.code,
       name: channel.name,

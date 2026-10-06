@@ -6,6 +6,7 @@ import type { PortfolioReportDocument } from "./portfolioModel";
 import type { DocSection, DocBlock, FlatReport } from "./reportFlatten";
 import { applyGaejosik } from "./reportFlatten";
 import { formatRating } from "./format";
+import { CONCENTRATION_METHOD, GROUP_METRIC_METHOD, PIPELINE_RATIO_LABEL, pipelineView } from "./portfolioDecisions";
 
 function pct(v: number | null | undefined): string {
   return v === null || v === undefined ? "—" : `${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(1)}%`;
@@ -16,10 +17,66 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
 
   if (doc.aiSummary) sections.push({ title: "AI Executive Summary", blocks: [{ kind: "text", text: doc.aiSummary }] });
 
+  // 단계 09 — 임원 핵심 결정(채널별 TOP ACTIONS의 긴급 신호에서 파생, 새 점수 체계 없음). 제목이 ' — 요약'으로 끝나 PPT 앞머리에 고정 배치된다.
+  if (doc.executiveDecisions) {
+    const d = doc.executiveDecisions;
+    sections.push({
+      title: "임원 핵심 결정 — 요약",
+      blocks:
+        d.length > 0
+          ? [
+              ...d.map((x): DocBlock => ({
+                kind: "bullets",
+                items: [
+                  `[${x.rank}] ${x.channelName} · ${x.content}${x.slot ? " 시간대" : ""} — 왜: ${x.why}`,
+                  `언제: ${x.when}`,
+                  `대안: ${x.alternatives.join(" / ")}`,
+                  `영향: ${x.impact}`,
+                  `확인 조건: ${x.confirm}`,
+                  `제약: ${x.constraints.join(" / ")}`,
+                ],
+              })),
+              { kind: "note", text: "평균 순위 하락만으로 역할 재편을 권하지 않으며, 각 결정은 채널 화면의 근거와 편성안 화면의 제약 확인으로 이어집니다." },
+            ]
+          : [{ kind: "note", text: "이 기간에는 긴급 신호(교체·이동 또는 편성 점검)가 확인된 채널이 없어 임원 결정 항목을 만들지 않았습니다." }],
+    });
+  }
+
   sections.push({
     title: "01 포트폴리오 한 줄",
-    blocks: [{ kind: "bullets", items: [`Group A: ${doc.groupA.oneLiner}`, `Group B: ${doc.groupB.oneLiner}`] }],
+    blocks: [
+      { kind: "bullets", items: [`Group A: ${doc.groupA.oneLiner}`, `Group B: ${doc.groupB.oneLiner}`] },
+      { kind: "note", text: `그룹 지표 정의 — ${GROUP_METRIC_METHOD}` },
+    ],
   });
+
+  // 단계 09 — 채널 역할·핵심 타깃·목표·편성 방향(유효기간 있는 운영정책). 입력 전에는 미설정으로 표시하고 임의 페르소나를 만들지 않는다.
+  if (doc.channelPolicies) {
+    sections.push({
+      title: "01c 채널 역할·운영정책",
+      blocks: [
+        {
+          kind: "table",
+          headers: ["채널", "핵심 타깃", "역할", "목표", "편성 방향", "정책 상태"],
+          rows: doc.channelPolicies.map((p) => [p.channelName, p.coreTarget, p.role ?? "—", p.goal ?? "—", p.direction ?? "—", p.validText]),
+        },
+        { kind: "note", text: "역할·목표·편성 방향은 운영자가 입력한 정책만 표시합니다. 관찰 자료만으로 채널 역할을 확정하지 않습니다." },
+      ],
+    });
+  }
+
+  // 단계 09 — 콘텐츠 집중도(그룹별로 표를 나눈다)
+  if (doc.concentration && doc.concentration.length > 0) {
+    const blocks: DocBlock[] = [];
+    for (const g of ["A", "B"] as const) {
+      const codes = g === "A" ? doc.groupA.peers.map((p) => p.channelCode) : doc.groupB.peers.map((p) => p.channelCode);
+      const rows = doc.concentration.filter((r) => codes.includes(r.channelCode));
+      if (rows.length === 0) continue;
+      blocks.push({ kind: "table", headers: [`Group ${g} 채널`, "프로그램 수", "1위 프로그램", "1위 비중", "상위 3개 비중"], rows: rows.map((r) => [r.channelName, String(r.programCount), r.top1Name ?? "—", r.top1SharePct === null ? "—" : `${r.top1SharePct}%`, r.top3SharePct === null ? "—" : `${r.top3SharePct}%`]) });
+    }
+    blocks.push({ kind: "note", text: CONCENTRATION_METHOD });
+    sections.push({ title: "01d 콘텐츠 집중도", blocks });
+  }
 
   // W절(2026-09-10) — 채널 간 주요시간 활용도 비교. 그룹을 한 표에 섞지 않고 두 표로 나눈다:
   // Group A(수도권 2049)와 Group B(전국 유료가구)는 측정 유니버스가 달라 나란히 놓으면 안 된다.
@@ -75,7 +132,7 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
         ? [
             {
               kind: "table",
-              headers: ["작품", "관계", "홈 채널", "홈 시청률", "대상 채널", "대상 시청률", "유지율"],
+              headers: ["작품", "관계", "홈 채널", "홈 시청률", "대상 채널", "대상 시청률", PIPELINE_RATIO_LABEL],
               rows: doc.groupA.pipeline.map((e) => [
                 e.canonicalName,
                 e.relation === "simulcast" ? "동시방송" : "재방",
@@ -83,9 +140,10 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
                 formatRating(e.fromRating, e.fromChannelCode),
                 e.toChannelName,
                 formatRating(e.toRating, e.toChannelCode),
-                e.retentionPct !== null ? `${e.retentionPct.toFixed(1)}%` : "—",
+                pipelineView(e).ratioText,
               ]),
             },
+            { kind: "note", text: pipelineView(doc.groupA.pipeline[0]).caveats.join(" ") },
           ]
         : [{ kind: "note", text: "이 기간 오리지널 파이프라인 이동이 없습니다" }],
   });
@@ -109,7 +167,10 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
     title: "07 슬롯 중복 점검(요일·시간대)",
     blocks:
       doc.slotOverlap.length > 0
-        ? [{ kind: "table", headers: ["요일", "시간", "프로그램", "채널"], rows: doc.slotOverlap.map((r) => [r.dowLabel, `${r.hour}시`, r.canonicalName, r.channelCodes.join(", ")]) }]
+        ? [
+            { kind: "table", headers: ["요일", "시간", "프로그램", "채널", "구분"], rows: doc.slotOverlap.map((r) => [r.dowLabel, `${r.hour}시`, r.canonicalName, r.channelCodes.join(", "), r.intentLabel ?? "—"]) },
+            { kind: "note", text: "같은 요일·시간대의 같은 프로그램 겹침입니다. 의도된 공동 편성은 오류로 제거하지 않으며, 실제 겹침 분·타깃·권리 제약은 채널 화면과 편성안 화면에서 확인합니다." },
+          ]
         : [{ kind: "note", text: "관찰된 편성 중복이 없습니다" }],
   });
 
@@ -118,9 +179,33 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
     sections.push({
       title: "08 skyUHD",
       blocks: [
-        { kind: "text", text: `수기 자료 커버리지 ${s.coverage.daysWithProgramData}/${s.coverage.totalDays}일` },
+        {
+          kind: "text",
+          text: doc.skyUhdCoverage
+            ? `채널 집계 ${doc.skyUhdCoverage.channelDays ? `${doc.skyUhdCoverage.channelDays.present}/${doc.skyUhdCoverage.channelDays.total}일` : "일별 추이가 아니어서 확인하지 않음"} · 프로그램 상세·시간대(수기 자료) ${doc.skyUhdCoverage.programDays.present}/${doc.skyUhdCoverage.programDays.total}일`
+            : `수기 자료 커버리지 ${s.coverage.daysWithProgramData}/${s.coverage.totalDays}일`,
+        },
         { kind: "table", headers: ["장르", "평균 시청률", "편성 수"], rows: s.genrePerformance.map((g) => [g.genre, formatRating(g.avgRating, "SKYUHD"), String(g.episodeCount)]) },
       ],
+    });
+  }
+
+  // 단계 09 — Avail 권리 만료·기소진 현황(공유풀 동시 소진은 계약 해석 확인 전이라 판단하지 않는다).
+  if (doc.rights !== undefined) {
+    const r = doc.rights;
+    sections.push({
+      title: "08b Avail 권리 만료·소진",
+      blocks: !r
+        ? [{ kind: "note", text: "권리 정보를 읽지 못했습니다(문제 없음이 아니라 확인하지 못함)." }]
+        : !r.tablesApplied
+          ? [{ kind: "note", text: "권리(Avail) 저장소가 아직 적용되지 않아 만료·소진 현황을 표시할 수 없습니다." }]
+          : !r.configured
+            ? [{ kind: "note", text: "권리 정보가 입력되지 않았습니다. 입력 전에는 만료·소진을 판단할 수 없습니다." }]
+            : [
+                { kind: "text", text: `${r.windowDays}일 안에 종료되는 권리 ${r.expiringTotal}건${r.endedStillListed > 0 ? ` · 종료일이 지났는데 남은 권리 ${r.endedStillListed}건` : ""}` },
+                ...(r.expiring.length > 0 ? [{ kind: "table" as const, headers: ["콘텐츠", "채널", "종료일", "남은 일수"], rows: r.expiring.map((e) => [e.title, e.channels, e.end, e.daysLeft === 0 ? "오늘" : `${e.daysLeft}일`]) }] : []),
+                { kind: "bullets", items: [...r.notes, "채널 간 공유 풀의 동시 소진은 계약 해석 확인 전이라 이 문서에서 판단하지 않습니다(조건부)."] },
+              ],
     });
   }
 

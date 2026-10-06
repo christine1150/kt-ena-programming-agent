@@ -13,6 +13,27 @@ import { formatRating } from "./format";
 import type { KpiCard, AudienceReportBody, ModeDSection, DeepDiveSection } from "./reportModel";
 import type { PortfolioReportDocument } from "./portfolioModel";
 import type { AudienceReportRawData } from "./dataCollector";
+import { comparisonKindFromLabel, guardNarrative } from "@/lib/insight/narrativeGuard";
+import type { ComparisonKind, Fact } from "@/lib/insight/types";
+
+/** 서술용 근거(라벨+포맷 문자열)를 검증기용 Fact로 바꾼다. 라벨의 비교 기준(전기간·12주 평균)과 지수 값을 구조로 옮긴다. */
+function toGuardFact(f: NarrativeFact, i: number): Fact {
+  const idx = f.formatted.match(/^(d+(?:.d+)?)s*지수$/);
+  const kinds = comparisonKindFromLabel(f.label);
+  const comparison: { kind: ComparisonKind; label: string; baseValue: null; direction: null } | undefined = kinds.length > 0 ? { kind: kinds[0], label: f.label, baseValue: null, direction: null } : undefined;
+  return {
+    id: `nf:${i}`,
+    metricId: f.label,
+    context: f.label,
+    value: idx ? Number(idx[1]) : null,
+    valueKind: idx ? "index100" : "text",
+    unit: "",
+    display: f.formatted,
+    comparison,
+    provenance: { source: "audience_report_facts" },
+    basis: "observed",
+  };
+}
 
 export interface NarrativeFact {
   label: string;
@@ -215,6 +236,15 @@ function extractUnitNumbers(text: string): { value: number; unit: string }[] {
 }
 
 function factCheckNarrative(text: string, facts: NarrativeFact[]): boolean {
+  if (!basicFactCheck(text, facts)) return false;
+  // 단계 04: 기준 바꿔치기·방향 불일치·인과 단정·지수 오표기·구성비 단정까지 검증한다.
+  const guardFacts = facts.map(toGuardFact);
+  const r = guardNarrative(text, guardFacts, { allowedBaselines: facts.flatMap((f) => comparisonKindFromLabel(f.label)) });
+  if (!r.ok) console.warn(`[narrativeGuard] audience_report 문장 폐기: ${[...new Set(r.violations.map((v) => v.code))].join(",")}`);
+  return r.ok;
+}
+
+function basicFactCheck(text: string, facts: NarrativeFact[]): boolean {
   const allowedDecimals = new Set(facts.flatMap((f) => extractDecimalNumbers(f.formatted)));
   const foundDecimals = extractDecimalNumbers(text);
   const decimalsOk = foundDecimals.every((n) => Array.from(allowedDecimals).some((a) => Math.abs(a - n) < 1e-6));

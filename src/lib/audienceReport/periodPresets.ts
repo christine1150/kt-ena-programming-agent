@@ -34,11 +34,11 @@ export const PERIOD_PRESET_LABELS: Record<PeriodPreset, string> = {
   ytd: "연간 누적(YTD, 1월 1일~오늘)",
   last7: "지난 7일",
   last30: "지난 1달",
-  dod: "어제 대비 오늘 분석(DoD)",
-  wow: "전주 대비 이번주 분석(WoW)",
-  mom: "전월 대비 이번달 분석(MoM)",
-  qoq: "전분기 대비 이번분기 분석(QoQ)",
-  yoy: "전년 동기 대비 이번년도 누적 분석(YoY)",
+  dod: "전일 대비 분석(DoD)",
+  wow: "최근 7일 vs 직전 7일(롤링 WoW)",
+  mom: "월누계 vs 전월 같은 일수(MTD 비교)",
+  qoq: "분기누계 vs 전분기 같은 경과 일수(QTD 비교)",
+  yoy: "연누계 vs 전년 같은 기간(YTD/YoY)",
   // 사용자 지시(2026-09-02): "방송 편성 분석의 특성상 '동요일' 시청률 비교가 필수적" — 오늘과
   // 같은 요일(기본) 또는 사용자가 고른 요일의 과거 N주 평균을 비교 기준으로 삼는 그룹. "오늘"의
   // 단일 일자 범위는 그대로 두고 비교 기준(baseline)만 바꾸는 방식이라, DoD처럼 range는 today와

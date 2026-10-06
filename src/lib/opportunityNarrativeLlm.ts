@@ -6,6 +6,7 @@
 // 이미 클라이언트에서 포맷된 문자열("심야(2~4시)" 등)을 그대로 받아 LLM이 새로 이름을 짓지
 // 않게 한다(No Hallucination 원칙 — 시간대 이름도 준 값만 인용).
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "./llmSynthesis";
+import { guardForInput } from "./insight/guardInput";
 
 export interface OpportunityNarrativeLlmInput {
   channelName: string;
@@ -42,7 +43,15 @@ const SCHEMA = {
 
 export async function buildOpportunityNarrativeViaLlm(input: OpportunityNarrativeLlmInput): Promise<string | null> {
   if (input.hourBlocks.length === 0) return null;
-  const result = await callOpenAiJsonSynthesis<{ narrative: string }>(buildSystemPrompt(), input, "opportunity_narrative", SCHEMA);
-  const narrative = result?.narrative?.trim();
-  return narrative && narrative.length > 0 ? narrative : null;
+  // 시청률·격차는 3자리, 점수는 1자리로 고정해 AI가 인용할 수 있는 표기를 하나로 만든다(검증이 표기 차이로 문장을 버리지 않도록).
+  const r3 = (v: number | null) => (v === null ? null : Math.round(v * 1000) / 1000);
+  const r1 = (v: number | null) => (v === null ? null : Math.round(v * 10) / 10);
+  const sent: OpportunityNarrativeLlmInput = {
+    ...input,
+    hourBlocks: input.hourBlocks.map((b) => ({ ...b, our_full_avg: r3(b.our_full_avg), our_recent_avg: r3(b.our_recent_avg), gap_full: r3(b.gap_full), gap_recent: r3(b.gap_recent), gap_change: r3(b.gap_change) })),
+    candidatePrograms: input.candidatePrograms.map((c) => ({ ...c, targetAffinityScore: r1(c.targetAffinityScore), audienceFlowScore: r1(c.audienceFlowScore) })),
+  };
+  const result = await callOpenAiJsonSynthesis<{ narrative: string }>(buildSystemPrompt(), sent, "opportunity_narrative", SCHEMA);
+  // 단계 04: 수치·기준·인과 검증. 규칙 문구의 임계값(70)은 허용한다.
+  return guardForInput(result?.narrative, sent, { label: "opportunity_narrative", baselineLabels: [input.recentLabel], options: { extraNumbers: [70] } });
 }

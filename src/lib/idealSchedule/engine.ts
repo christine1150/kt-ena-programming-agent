@@ -1,14 +1,17 @@
 // 이상적 1주일 편성 엔진 진입점(순수 함수) — Feature → 후보 → Hard 제약 → 최적화 → 요약.
 // DB 조회는 engineRunner.ts가 하고, 여기는 같은 입력이면 항상 같은 결과를 낸다(input_fingerprint로 확인).
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
+import { validateEngineOutput, type OutputValidation } from "./outputValidator";
+import { horizonExpected, type HorizonCoverage } from "./horizon";
 import { buildCompetitorFeatures, strongestCompetitorBySlot, type CompetitorChannelFeature } from "./competitorFeatures";
 import { targetKindOfLabel } from "./competitorTarget";
 import { targetGroupForKpiLabel, type BenchmarkPlacement, type CompetitorTargetMode, type IdealScheduleConfig, type StructureMode } from "./config";
 import { resolveHardConstraints, type ConstraintResolution, type HardConstraintInput } from "./constraints";
 import { buildFeatureSet, eligibleAirings, type FeatureOptions, type FeatureSet } from "./features";
-import { evaluateSchedule, optimizeWeek, type EngineOutput, type EvaluatedBlock, type PlacedBlock } from "./optimizer";
+import { evaluateSchedule, optimizeWeek, type EngineInput, type EngineOutput, type EvaluatedBlock, type PlacedBlock } from "./optimizer";
 import { buildCandidatePool, buildScoringContext, Scorer, strongSlotMap, type EngineCandidate, type StrategyMode } from "./scoring";
 import { buildSkeleton, type SkeletonSlot } from "./skeleton";
+import { STOP_LABEL, type SearchControl, type SearchReport } from "./searchControl";
 import { addDays } from "./time";
 import type { RankEstimate } from "./rankEstimate";
 import { namesCompatible, planEpisodeHints, planNameKey, planWeekFrame, type PlanRow } from "./planEpisodes";
@@ -43,6 +46,10 @@ export interface EngineRunInput {
   /** 업로드 편성표 회차(B안, 옵션 켰을 때만) — 닐슨 방송일 기준으로 정규화된 행. 방영 회차 채우기는 러너가 먼저 한다 */
   planRows?: PlanRow[];
   planFilled?: number; // 러너가 편성표로 회차를 채운 방영 수(요약 표시용)
+  /** 권리(Avail) 게이트(단계 06, 선택). 없으면 현재 동작 그대로. fingerprint = 권리 목록 버전+모드(같은 권리·같은 입력이면 같은 결과) */
+  rights?: { slotAllowed: NonNullable<EngineInput["slotAllowed"]>; fingerprint: string };
+  /** 탐색 제어(OPT04, 선택) — 평가 횟수·시간 예산·취소. 평가 횟수 예산만 지문에 들어간다(같은 예산이면 같은 결과). */
+  search?: SearchControl;
 }
 
 export interface ScheduleEvaluationResult {
@@ -96,6 +103,48 @@ export interface EngineSummary {
   decisions: { same: number; keep: number; change: number; newSlot: number; capBlocked: number; certainty: { HIGH: number; MID: number; LOW: number } };
   competitorTargets: { competitor: string; programTarget: string | null; programReason: string | null; dailyTarget: string | null; matchesOwnKpi: boolean | null }[];
   featureWindow: { from: string; to: string };
+  /** 하드 제약 독립 검증 결과(OPT03) — 위반이 있으면 점수와 무관하게 이 편성안은 유효하지 않다. 오래된 실행에는 없다. */
+  validation?: OutputValidation;
+  /** 주간 horizon 대비 평가된 시간(OPT03) — 평가되지 않은 시간은 평균에서 조용히 사라지지 않고 coverage로 드러난다. */
+  horizon?: HorizonCoverage;
+  /** 목적함수 정보(OPT03): 화면의 주간 기대 시청률은 예측값이고, 탐색의 선택 점수는 가중치 혼합이다 */
+  objectiveInfo?: ObjectiveInfo;
+  /** 탐색 결과의 성격 — 이 엔진은 최적을 증명하지 않는다(탐색된 최선안) */
+  searchKind?: "SEARCHED_BEST";
+  /** 탐색 보고서(OPT04): 종료 사유·평가 횟수·단계별 시간·재현 가능 여부. 오래된 실행에는 없다. */
+  search?: SearchReport;
+  /** 이 실행에 쓰인 모델·입력의 버전(OPT02). 같은 값이면 같은 계산이 재현된다. 오래된 실행에는 없다. */
+  versions?: RunVersions;
+  /** 권리(Avail) 게이트 적용 상태(단계 06, 러너가 채움). 없으면 이전 실행. error면 이번 실행에 권리 조건이 적용되지 않았다 */
+  rights?: { status: "not_configured" | "applied" | "error"; mode: string; inventoryVersion: string | null; unconfirmedInterpretations: string[]; message: string | null } | null;
+}
+
+/** 예측 모델·특징 정의 버전 — 식·수축 방식·특징 목록을 바꾸면 올린다(이전 실행과 값이 달라지는 변경의 표시). */
+export const MODEL_VERSION = "idx-shrink-v1";
+export const FEATURE_VERSION = "f6-levels-v1";
+
+export interface RunVersions {
+  model: string;
+  features: string;
+  /** 후보 프로그램별 장르 분류(장르 맵의 현재 값이 만든 결과)의 지문 — 장르 맵이 바뀌면 달라진다 */
+  genreDigest: string;
+  /** 필수·잠금·직재방 제약 입력의 지문 */
+  constraintsDigest: string;
+  /** 설정(가중치·반복 한도·예측 상수)의 지문 */
+  configDigest: string;
+  /** 예상 범위의 근거 — BACKTEST(과거 주 검증 잔차 n건) / TRAINING(학습 기간 변동, 검증 전) / NONE */
+  rangeBasis: "BACKTEST" | "TRAINING" | "NONE";
+  /** 검증 완료 여부: 과거 주 검증 잔차가 충분하면 true. false면 예상 범위·유지 판단은 '검증 전' 근거로 만들어졌다 */
+  validated: boolean;
+}
+
+export interface ObjectiveInfo {
+  /** 보고 지표: 주간 핵심 타깃 기대 시청률(편성 분 가중 산술평균) */
+  primary: "weekly_expected_rating";
+  /** 시청률 외 성분(타깃 구성비·요일×시·추세·안정성·연결)이 선택 점수에 섞였는가 */
+  selectionScoreMixed: boolean;
+  /** 시청률(KPI) 성분이 아닌 가중치의 비중(0~1) */
+  nonKpiWeightShare: number;
 }
 
 export interface EngineRunResult {
@@ -419,7 +468,17 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     skeleton,
     archetypeRuntime,
     benchmarkMaxShare: placement === "MIX" ? config.strategy.benchmark_max_share : 0,
+    slotAllowed: input.rights?.slotAllowed,
+    search: input.search,
   });
+  // 예산·취소로 멈췄으면 사용자에게 알린다 — 수렴해서 끝난 것과 다르다
+  if (output.search.stoppedBy === "EVAL_BUDGET" || output.search.stoppedBy === "DEADLINE" || output.search.stoppedBy === "CANCELLED") {
+    resolution.warnings.push(`[탐색 중단] ${STOP_LABEL[output.search.stoppedBy]}`);
+  }
+
+  // 하드 제약 독립 검증(OPT03) — 탐색기가 만든 결과를 다시 확인한다. 위반은 경고로 남기고 요약에 기록한다(편성안을 조용히 고치지 않는다).
+  const validation = validateEngineOutput({ blocks: output.blocks, fixed: resolution.fixed, config, capOverride: programCapOverride, slotAllowed: input.rights?.slotAllowed });
+  if (!validation.ok) resolution.warnings.push(...validation.violations.map((v) => `[제약 검증 실패] ${v.message}`));
 
   // 에피소드 배정(부제 반영 모드) — 최적화가 정한 블록(필수 편성 포함)에 구체적 에피소드를 붙인다
   let episodeAssigned = 0;
@@ -554,6 +613,25 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       matchesOwnKpi: c.programTarget?.matchesOwnKpi ?? null,
     })),
     featureWindow: { from: addDays(input.asOfDate, -(opts.lookbackDays - 1)), to: input.asOfDate },
+    validation,
+    horizon: horizonExpected(output.blocks.map((b) => ({ startMin: b.startMin, endMin: b.endMin, expected: b.eval.expected, countable: includeBm || b.candidate.contentType !== "COMPETITOR_BENCHMARK" }))),
+    objectiveInfo: (() => {
+      const w = config.weights;
+      const total = w.kpi + w.target + w.weekday_slot + w.trend + w.stability + w.lead;
+      const non = total > 0 ? (total - w.kpi) / total : 0;
+      return { primary: "weekly_expected_rating" as const, selectionScoreMixed: non > 1e-9, nonKpiWeightShare: non };
+    })(),
+    searchKind: "SEARCHED_BEST" as const,
+    search: output.search,
+    versions: {
+      model: MODEL_VERSION,
+      features: FEATURE_VERSION,
+      genreDigest: fingerprint(JSON.stringify(fs.units.map((u) => [u.programId, u.genre]).sort())),
+      constraintsDigest: fingerprint(JSON.stringify([...input.constraints].sort((a, b) => (a.id < b.id ? -1 : 1)))),
+      configDigest: fingerprint(JSON.stringify(config)),
+      rangeBasis: uncertainty ? uncertainty.basis : "NONE",
+      validated: uncertainty?.basis === "BACKTEST",
+    },
   };
 
   const fp = fingerprint(
@@ -574,8 +652,17 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       constraints: [...input.constraints].sort((a, b) => (a.id < b.id ? -1 : 1)),
       own: bundle.airings.filter((a) => a.date <= input.asOfDate),
       comp: input.competitorBundle ? input.competitorBundle.airings.filter((a) => a.date <= input.asOfDate) : null,
+      // 모델·특징 버전과 장르 분류 결과(장르 맵의 현재 값)도 지문에 포함 — 장르 맵이 바뀌면 같은 방영 자료로도 결과가 달라지므로(OPT02)
+      mv: [MODEL_VERSION, FEATURE_VERSION],
+      gd: fs.units.map((u) => [u.programId, u.genre]).sort(),
       // 예상 범위·유지 판단은 과거 검증 잔차에 따라 달라지므로 지문에 포함
       unc: uncertainty ? [uncertainty.basis, uncertainty.all.n, uncertainty.all.qLow, uncertainty.all.qHigh, uncertainty.all.sd] : null,
+      // 권리 게이트를 쓴 실행만 지문에 권리 목록 버전이 들어간다(쓰지 않은 실행의 지문은 이전과 같다)
+      ...(input.rights ? { rights: input.rights.fingerprint } : {}),
+      // 평가 횟수 예산을 쓴 실행만 지문에 예산이 들어간다(쓰지 않은 실행의 지문은 이전과 같다). 시간 마감·취소는 지문 밖(재현 불가로 표시)
+      ...(input.search?.maxEvaluations !== undefined ? { eb: input.search.maxEvaluations } : {}),
+      // 시작점을 지난주 편성으로 바꾸면 결과가 달라지므로 기본(GREEDY)이 아닐 때만 지문에 들어간다
+      ...(input.search?.startFrom === "INCUMBENT" ? { sf: "INCUMBENT" } : {}),
     })
   );
 

@@ -17,6 +17,7 @@ import { resolveTimePeriod } from "./timeResolver";
 import { extractParameters } from "./parameterExtractor";
 import { dispatchIntent } from "./dispatch";
 import { callOpenAiJsonSynthesis, LLM_SYNTHESIS_GUARDRAIL } from "@/lib/llmSynthesis";
+import { guardForInput } from "@/lib/insight/guardInput";
 import type { AskHistoryTurn, EvidenceAnswer, ExtractedParameters, MacroIntentId, RouteResult } from "./types";
 
 const OPENAI_MODEL = "gpt-4o-mini";
@@ -201,14 +202,15 @@ export async function answerViaFunctionCalling(question: string, referenceDate: 
   // 2개 이상 — 각 답변은 이미 완결된 Evidence(숫자·근거 전부 SQL 계산값)이므로 그대로 이어
   // 붙이고, LLM은 "여러 각도를 종합하는 1~2문장"만 새로 쓴다(askAnswerLlm.ts와 동일 원칙:
   // 숫자는 절대 새로 안 만들고, 이미 준 conclusion/keyNumbers만 인용해 종합).
-  const synthesis = await callOpenAiJsonSynthesis<{ conclusion: string; interpretation: string; programmingAction: string }>(
+  const synthesisInput = { question, answers: results.map((r) => ({ intent: r.intentId, conclusion: r.answer.conclusion, keyNumbers: r.answer.keyNumbers, evidence: r.answer.evidence })) };
+  const synthesisRaw = await callOpenAiJsonSynthesis<{ conclusion: string; interpretation: string; programmingAction: string }>(
     [
       "너는 KT ENA 편성 AI 비서다. 아래 JSON에는 사용자의 질문과, 서로 다른 분석 함수 여러 개가 이미 계산한 결론들(answers)이 들어있다.",
       "이 여러 결론을 종합해 (1) conclusion — 전체를 아우르는 1~2문장 결론, (2) interpretation — 여러 신호가 함께 시사하는 바(2~3문장), (3) programmingAction — 편성PD가 다음에 확인할 구체적 행동 1문장을 새로 써라.",
       "answers에 없는 숫자나 사실을 새로 만들지 마라 — 이미 준 conclusion/keyNumbers/evidence만 인용·종합해라.",
       LLM_SYNTHESIS_GUARDRAIL,
     ].join("\n"),
-    { question, answers: results.map((r) => ({ intent: r.intentId, conclusion: r.answer.conclusion, keyNumbers: r.answer.keyNumbers, evidence: r.answer.evidence })) },
+    synthesisInput,
     "freeform_multi_synthesis",
     {
       type: "object",
@@ -217,6 +219,15 @@ export async function answerViaFunctionCalling(question: string, referenceDate: 
       additionalProperties: false,
     }
   );
+
+  // 단계 04: 각 필드를 SQL이 계산한 answers의 수치·기준과 대조한다. 실패한 필드는 아래의 기존 대체 문구를 쓴다.
+  const synthesis = synthesisRaw
+    ? {
+        conclusion: guardForInput(synthesisRaw.conclusion, synthesisInput, { label: "freeform.conclusion" }) ?? "",
+        interpretation: guardForInput(synthesisRaw.interpretation, synthesisInput, { label: "freeform.interpretation" }) ?? "",
+        programmingAction: guardForInput(synthesisRaw.programmingAction, synthesisInput, { label: "freeform.programmingAction" }) ?? "",
+      }
+    : null;
 
   const minConfidence = results.reduce((min, r) => (CONFIDENCE_RANK[r.answer.confidence] < CONFIDENCE_RANK[min] ? r.answer.confidence : min), results[0].answer.confidence);
   const followups = [...new Set(results.flatMap((r) => r.answer.followups ?? []))].slice(0, 2);

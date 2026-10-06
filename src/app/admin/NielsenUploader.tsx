@@ -24,6 +24,12 @@ type FileSummary = {
   dateTo?: string;
   inserted?: number;
   skippedUnknown?: string[];
+  // 공통(단계 01): 재수신 멱등·개정·경고
+  duplicate?: boolean;
+  revision?: number;
+  partial?: boolean;
+  adapterStatus?: "verified" | "provisional";
+  qualityWarnings?: string[];
 };
 
 function kindLabel(r: FileSummary): string {
@@ -82,8 +88,9 @@ export default function NielsenUploader() {
         <code>분석기간</code>을 보고 종류를 자동으로 구분합니다. 일별은 6개 채널(ENA/ENA Drama/ENA
         Play/ENA Story/OLIFE/ONCE)의 시청률에, 주간·월간은 그 기간의 <b>시장 전체 순위</b>(2페이지
         &ldquo;주간 순위 변화&rdquo;용)에, 연간 파일은 YoY(전년 대비) 비교용 기준값에 반영됩니다.
-        여러 파일을 한 번에 선택할 수 있고, 같은 날짜(또는 같은 기간·연도)를 다시 올리면 그
-        데이터를 덮어씁니다. (skyUHD는 별도 카드에서 처리)
+        여러 파일을 한 번에 선택할 수 있습니다. 같은 파일을 다시 올리면 변경 없이 건너뛰고, 같은 날짜(또는
+        같은 기간·연도)의 수정본을 올리면 그 데이터를 덮어쓰면서 이전 반영본과 달라진 건수를 알려줍니다.
+        (skyUHD는 별도 카드에서 처리)
       </p>
 
       <div className="mb-4 flex items-center gap-3">
@@ -122,14 +129,23 @@ export default function NielsenUploader() {
                     <td className="py-1.5 text-zinc-600">{r.ok ? kindLabel(r) : "—"}</td>
                     <td className="py-1.5 text-zinc-600">{r.ok ? dateOrPeriodLabel(r) : "—"}</td>
                     <td className="py-1.5">
-                      {r.ok ? (
-                        <span className="text-zinc-600">{r.kind === "period" ? r.inserted : r.ratingsInserted}건 저장</span>
+                      {r.ok && r.duplicate ? (
+                        <span className="text-zinc-600">변경 없음(이미 반영된 동일 파일)</span>
+                      ) : r.ok ? (
+                        <span className="text-zinc-600">
+                          {r.kind === "period" ? r.inserted : r.ratingsInserted}건 저장
+                          {r.revision && r.revision > 1 ? ` · 개정 ${r.revision}` : ""}
+                          {r.partial ? " · 일부 항목 실패(아래 경고)" : ""}
+                        </span>
                       ) : (
                         <span className="text-red-600">{r.message}</span>
                       )}
                       {r.kind === "daily" && r.missingSheets && r.missingSheets.length > 0 && (
                         <div className="text-xs text-amber-600">누락된 시트(참고용, 처리엔 영향 없음): {r.missingSheets.join(", ")}</div>
                       )}
+                      {r.ok && !r.duplicate && r.qualityWarnings?.map((w, i) => (
+                        <div key={i} className="text-xs text-amber-600">{w}</div>
+                      ))}
                       {r.kind === "period" && r.skippedUnknown && r.skippedUnknown.length > 0 && (
                         <div className="text-xs text-amber-600">매핑 실패로 건너뜀: {r.skippedUnknown.join(", ")}</div>
                       )}

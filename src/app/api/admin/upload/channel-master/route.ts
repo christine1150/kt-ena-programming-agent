@@ -19,6 +19,7 @@ import { parseOriginalReviewScheduleWorkbook } from "@/lib/originalReviewSchedul
 import { checkChannelCoverage, checkPercentValue } from "@/lib/dataQuality";
 import { findOrCreateProgramByNormalizedName, normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { invalidateReferenceDataCache } from "@/lib/intent/referenceData";
+import { decideGoalFromFile, logChange } from "@/lib/admin/lockStore";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -132,7 +133,12 @@ export async function POST(request: Request) {
     const targetRatingIssue = checkPercentValue(row.targetRating, "목표 시청률", row.channelName);
     if (targetRatingIssue) warnings.push(targetRatingIssue.message);
 
-    if (row.targetRating !== null && !Number.isNaN(row.targetRating) && !targetRatingIssue) {
+    // 단계 05: 운영자가 직접 정한 목표(수동 잠금)는 파일 재업로드가 조용히 덮지 못한다 — 건너뛰고 결과에 알린다.
+    const incomingGoal = { target_rank: row.targetRank || null, target_rating: row.targetRating };
+    const { decision: goalDecision, key: goalKey } = await decideGoalFromFile({ channelCode: row.channelCode, year: TARGET_GOAL_YEAR, incoming: incomingGoal, actor: admin.email, fileName });
+    if (goalDecision.action === "skip_locked") {
+      warnings.push(`${row.channelName}: 수동 잠금 목표를 유지하고 파일 값은 반영하지 않았습니다 — ${goalDecision.reason}`);
+    } else if (row.targetRating !== null && !Number.isNaN(row.targetRating) && !targetRatingIssue) {
       const { error: targetGoalError } = await supabase.from("target_goals").upsert(
         {
           channel_id: channel.id,
@@ -146,6 +152,7 @@ export async function POST(request: Request) {
         warnings.push(`${row.channelName}: 목표 시청률 저장 실패 — ${targetGoalError.message}`);
       } else {
         targetGoalSaved = true;
+        await logChange({ field: "target_goal", key: goalKey, action: "upload_write", oldValue: null, newValue: incomingGoal, source: "channel_master_file", actor: admin.email, reason: fileName });
       }
     } else if (!targetRatingIssue) {
       // targetRatingIssue가 있으면 이미 위에서 그 이유(범위 이탈)를 경고했으므로 중복 메시지를 남기지 않는다.

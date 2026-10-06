@@ -2,11 +2,12 @@
 // 사용법: npx tsx --env-file=.env scripts/recommend-purchase.mts ONCE HH 드라마
 import { createClient } from "@supabase/supabase-js";
 import { fetchChannelAnnualAvg, fetchSimInputsMulti, latestCompetitorDate } from "../src/lib/purchaseSim/dataSource";
-import { monthlyAverage, peerIndexes } from "../src/lib/purchaseSim/engine";
+import { PARAMS, monthlyAverage, peerIndexes } from "../src/lib/purchaseSim/engine";
 import { normalizeProgramKey } from "../src/lib/purchaseSim/normalize";
 
-const [channel, target, genreFilter] = [process.argv[2], process.argv[3] as "A2049" | "HH", process.argv[4]];
-const WINDOW = 182;
+const [channel, target] = [process.argv[2], process.argv[3] as "A2049" | "HH"];
+const genreFilter = process.argv[4] && process.argv[4] !== "전체" ? process.argv[4] : undefined;
+const WINDOW = Number(process.argv[5] ?? 182);
 const c = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 const asOf = await latestCompetitorDate(c);
 const from = new Date(Date.parse(asOf) - WINDOW * 86400000).toISOString().slice(0, 10);
@@ -37,7 +38,8 @@ const genreOf = (keys: string[]) => {
 };
 const groups = new Map<string, { display: string; members: string[]; total: number }>();
 for (const r of ident) {
-  if (r.comp_channels.length === 0) continue;
+  // 예측에 쓰는 비교 채널은 케이블(허브 제외) 3곳 이상이어야 하므로 미리 걸러 조회량을 줄인다.
+  if (r.comp_channels.filter((ch) => !(PARAMS.hubChannels as readonly string[]).includes(ch)).length < 3) continue;
   const g = groups.get(r.group_key) ?? { display: r.display_name, members: [], total: 0 };
   g.members.push(r.key.toUpperCase());
   g.total += r.airings_total;
@@ -48,8 +50,8 @@ console.log(`후보 ${list.length}개(장르 ${genreFilter ?? "전체"}), 기준
 
 const annual = await fetchChannelAnnualAvg(c, { ownChannel: channel, target, asOf });
 const out: { name: string; genre: string; pred: number; low: number | null; high: number | null; idx: number; peers: number; airings: number; conf: string; vsAvg: number }[] = [];
-for (let i = 0; i < list.length; i += 40) {
-  const chunk = list.slice(i, i + 40);
+for (let i = 0; i < list.length; i += 25) {
+  const chunk = list.slice(i, i + 25);
   const multi = await fetchSimInputsMulti(c, { groups: chunk.map((g) => ({ group_key: g.group_key, members: g.members })), ownChannel: channel, target, asOf, window: WINDOW });
   for (const g of chunk) {
     const inp = multi[g.group_key];
@@ -66,4 +68,4 @@ for (let i = 0; i < list.length; i += 40) {
 }
 out.sort((a, b) => b.pred - a.pred);
 console.log(`\n${channel} ${target} 채널 1년 평균 ${annual?.toFixed(4)} · 적격 후보 ${out.length}개`);
-for (const r of out.slice(0, 15)) console.log(`${r.name} [${r.genre}] 예상 ${r.pred.toFixed(4)} (연평균 대비 ${r.vsAvg.toFixed(2)}배) 지수 ${r.idx.toFixed(2)} 비교채널 ${r.peers}곳·${r.airings}회`);
+for (const r of out.slice(0, 10)) console.log(`${r.name} [${r.genre}] 예상 ${r.pred.toFixed(4)} (연평균 대비 ${r.vsAvg.toFixed(2)}배) 지수 ${r.idx.toFixed(2)} 비교채널 ${r.peers}곳·${r.airings}회`);

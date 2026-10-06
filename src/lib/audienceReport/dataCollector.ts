@@ -10,6 +10,7 @@ import type { ResolvedAudiencePeriod } from "./periodResolver";
 import { getChannelMasterInfo, type ChannelMasterInfo } from "./masterData";
 import { fetchRecentProgramIds } from "@/lib/recentProgramAirings";
 import { PRIME_RPC_ARGS } from "./primeTime";
+import { fetchHourlyPattern } from "@/lib/broadcastTime/hourlyFetch";
 
 export interface DailyTrendPoint {
   date: string; // "주별"이면 week_start, "월별"이면 month_start를 그대로 date 필드에 담는다(호출부가 granularity로 구분)
@@ -569,7 +570,7 @@ export async function collectAudienceReportData(channelCode: string, period: Res
       light ? EMPTY : supabase.rpc("get_competitor_period_top_programs", { p_channel_code: channelCode, p_target_label: rankTargetLabel, p_date_from: dateFrom, p_date_to: dateTo, p_channel_limit: 5, p_program_limit: 7 }),
       getChannelMasterInfo(channelCode),
       skyUhd ? supabase.rpc("get_skyuhd_program_log", { p_date_from: dateFrom, p_date_to: dateTo }) : Promise.resolve({ data: null }),
-      skyUhd ? EMPTY : supabase.rpc("get_hourly_rating_pattern", { p_channel_code: channelCode, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
+      skyUhd ? EMPTY : fetchHourlyPattern({ channelCode, targetLabel: programTargetLabel, dateFrom, dateTo }),
       skyUhd ? EMPTY : supabase.rpc("get_hourly_program_titles", { p_channel_code: channelCode, p_target_label: programTargetLabel, p_date_from: dateFrom, p_date_to: dateTo }),
       !light && wantsDemographicHighlights
         ? supabase.rpc("get_channel_demographic_program_highlights", {

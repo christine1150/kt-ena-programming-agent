@@ -6,7 +6,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { VendingMachineIcon } from "@/components/VendingIcons";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { highlightNarrativeText, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR } from "@/lib/highlightNarrative";
 // 사용자 지시(2026-09-09): 1페이지 "채널별 인사이트"의 안정/약세/주의 Health Score 배지를
@@ -27,6 +27,20 @@ import { monthlyDriverCauseLabel, type MonthlyDriver } from "@/lib/causeClassifi
 // 위해 어휘·색의 단일 출처(TAG_LABEL_KO/TAG_DOT_COLOR)를 그대로 import — Page 1·Page 2가
 // 같은 태그를 다른 말로 부르는 사고를 막는다.
 import { TAG_LABEL_KO, TAG_DOT_COLOR, type ActionTag } from "@/lib/actionTags";
+import { actionPhrase, programActionFor } from "@/lib/insight/actionCandidate";
+import { formatArrowPct, formatDurationClock, formatDurationKo, formatRatingDelta } from "@/lib/metrics";
+// 단계 07: 전역 문맥(URL)·요청 상태·홈 모델. 계산은 src/lib/workspace, 화면은 components/home·workspace.
+import ContextBar from "@/components/workspace/ContextBar";
+import { DataStatusCard, DecisionCards, FollowupsCard, HomeViewTabs, KpiTable, PANEL, PanelHeader, type ReviewStoreState } from "@/components/home/HomePanels";
+import MarketTopPrograms from "@/components/home/MarketTopPrograms";
+import { MonthlyPlanningPanels, NextWeekPanel, type MonthlyChannelItem, type NextWeekItem } from "@/components/home/PeriodPanels";
+import { pendingFollowups, type ReviewEvent } from "@/lib/workspace/actionReview";
+import { buildContextBar } from "@/lib/workspace/contextBar";
+import { shortDateKo, kstToday, lastMonthEndOnOrBefore, lastSundayOnOrBefore } from "@/lib/workspace/dates";
+import { buildDataStatus, buildTodayDecisions } from "@/lib/workspace/homeData";
+import { buildKpiGroups, parseTargetRank } from "@/lib/workspace/kpi";
+import { useContextData } from "@/lib/workspace/useContextData";
+import { dataKey, hrefFor, parseViewContext, serializeContext, type HomeView, type ViewContext } from "@/lib/workspace/viewContext";
 
 interface ChannelSummary {
   code: string;
@@ -353,6 +367,9 @@ interface PortfolioAnomaly {
 }
 
 interface DashboardData {
+  /** 단계 02: 채널별 KPI가 어느 타깃·기간·순위 모집단의 값인지(서버가 채움) */
+  metricContexts?: Record<string, { targetLabel: string; rankUniverse: string | null }>;
+  dataSnapshotId?: string;
   asOfDate: string;
   // 사용자 지시(2026-08-25): "채널 종합리포트 우측에 날짜를 선택할 수 있는 검색 기능" — API가
   // 실제 데이터 존재 최신일(latestAvailableDate)과, 요청한 날짜에 데이터가 없었는지 여부를
@@ -808,7 +825,17 @@ function buildChannelInsightSummary(
   if (s.decline_program_name && s.decline_program_name !== s.top_program_name && s.decline_program_delta_pct !== null) {
     causeLine = `'${s.decline_program_name}' 부진 — 같은 슬롯 평균 대비 ▼${Math.abs(s.decline_program_delta_pct).toFixed(0)}%`;
     const hourLabel = s.decline_program_start_time ? `(${extBroadcastHour(s.decline_program_start_time)}시)` : "";
-    actionLine = `'${s.decline_program_name}'${hourLabel} 편성 ${s.decline_program_tag ? TAG_LABEL_KO[s.decline_program_tag] : "재검토 필요"}`;
+    // 단계 04: 상세 화면과 같은 판단 함수(programActionFor) — 1회 급락만으로 교체·이동을 권하지 않고 확인 조건을 함께 보인다.
+    const declineAction = programActionFor({
+      programName: s.decline_program_name,
+      startHour: s.decline_program_start_time ? extBroadcastHour(s.decline_program_start_time) : null,
+      deviationPct: s.decline_program_delta_pct,
+      baselineLabel: "본방 슬롯 최근 8주 평균",
+      baselineDays: s.decline_program_baseline_days,
+      fitScoreTag: s.decline_program_tag ?? null,
+      observationText: causeLine,
+    });
+    actionLine = `'${s.decline_program_name}'${hourLabel} 편성 ${actionPhrase(declineAction)}`;
     actionTag = s.decline_program_tag ?? null;
     actionKind = "program";
   } else if (
@@ -823,7 +850,16 @@ function buildChannelInsightSummary(
     if (Math.abs(pct) >= 30) {
       causeLine = `'${s.top_program_name}' 같은 슬롯 평균 대비 ${pct >= 0 ? "▲" : "▼"}${Math.abs(pct).toFixed(0)}%`;
       const hourLabel = s.top_program_start_time ? `(${extBroadcastHour(s.top_program_start_time)}시)` : "";
-      actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${s.top_program_tag ? TAG_LABEL_KO[s.top_program_tag] : pct >= 0 ? "강화 검토" : "재검토 필요"}`;
+      const topAction = programActionFor({
+        programName: s.top_program_name,
+        startHour: s.top_program_start_time ? extBroadcastHour(s.top_program_start_time) : null,
+        deviationPct: pct,
+        baselineLabel: "본방 슬롯 최근 8주 평균",
+        baselineDays: s.top_program_baseline_days,
+        fitScoreTag: s.top_program_tag ?? null,
+        observationText: causeLine,
+      });
+      actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${actionPhrase(topAction)}`;
       actionTag = s.top_program_tag ?? null;
       actionKind = "program";
     }
@@ -861,7 +897,16 @@ function buildChannelInsightSummary(
       if (programDeclinePct !== null && s.top_program_name) {
         const hourLabel = s.top_program_start_time ? `(${extBroadcastHour(s.top_program_start_time)}시)` : "";
         causeLine = `${gapNote} '${s.top_program_name}' 같은 슬롯 평균 대비 ▼${Math.abs(programDeclinePct).toFixed(0)}%`;
-        actionLine = `'${s.top_program_name}'${hourLabel} 편성 재검토 필요 — 목표(${target.targetRankNum}위) 미달의 주요 요인`;
+        const goalAction = programActionFor({
+          programName: s.top_program_name,
+          startHour: s.top_program_start_time ? extBroadcastHour(s.top_program_start_time) : null,
+          deviationPct: programDeclinePct,
+          baselineLabel: "본방 슬롯 최근 8주 평균",
+          baselineDays: s.top_program_baseline_days,
+          fitScoreTag: s.top_program_tag ?? null,
+          observationText: causeLine,
+        });
+        actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${actionPhrase(goalAction)} — 목표(${target.targetRankNum}위) 미달과 함께 관찰됨(원인 단정 아님)`;
         actionKind = "program";
       } else if (s.rating_delta_pct !== null && s.rating_delta_pct <= -10 && s.baseline_avg_rating !== null) {
         causeLine = `${gapNote} 최근 12주 평균(${formatRating(s.baseline_avg_rating)}) 대비 ▼${Math.abs(s.rating_delta_pct).toFixed(0)}% 하락 지속`;
@@ -992,15 +1037,27 @@ function RankPair({
   targetRankNum,
   baselineAvgRank,
   sizeClass,
+  targetScope,
 }: {
   todayRank: number | null;
   targetRankNum: number | null;
+  // 단계 07: 목표 순위가 "경쟁채널 중 2위"처럼 시장 순위와 기준이 다른 값이면 "(188/2)"로 묶지 않고 따로 표기한다.
+  targetScope?: "market" | "peer" | "unknown";
   // 사용자 지시(2026-09-20): "평소 평균 순위는 (70/60)처럼 평균 숫자 나온 것 옆에 작게
   // 연한회색으로" — "오늘의 시청률" 타일(ChannelHero/ChannelTile)에서만 넘겨준다(값이 없으면
   // 기존 그대로 (오늘등위/목표등위)만 표시).
   baselineAvgRank?: number | null;
   sizeClass: string;
 }) {
+  if (targetScope === "peer") {
+    return (
+      <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`}>
+        (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>)
+        <span className="ml-1 text-[0.62em] font-normal text-zinc-400">경쟁군 목표 {targetRankNum ?? "-"}위</span>
+        {baselineAvgRank !== null && baselineAvgRank !== undefined && <span className="ml-1 text-[0.7em] font-normal text-zinc-300">평소{Math.round(baselineAvgRank)}</span>}
+      </span>
+    );
+  }
   return (
     <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`}>
       (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>
@@ -1044,7 +1101,7 @@ function ChannelHero({
         <span className="text-[64px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em] text-zinc-900">
           {formatRating(channel.currentRating)}
         </span>
-        <RankPair todayRank={channel.currentRank} targetRankNum={heroTargetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[28px]" />
+        <RankPair todayRank={channel.currentRank} targetRankNum={heroTargetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[28px]" targetScope={parseTargetRank(channel.targetRank).scope} />
         {/* 사용자 재지시(2026-08-22/25): ENA도 6개 타일과 동일하게 RankChangeIndicator 하나만. */}
         <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
@@ -1238,7 +1295,7 @@ function ChannelTile({
           <span className={`font-bold tabular-nums tracking-tight text-zinc-900 ${isSkyUhd ? "text-lg" : "text-xl"}`}>
             {formatRating(channel.currentRating, channel.code)}
           </span>
-          <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[13px]" />
+          <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[13px]" targetScope={parseTargetRank(channel.targetRank).scope} />
         </span>
         <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
@@ -1261,7 +1318,7 @@ function ChannelTile({
 }
 
 // ① 채널 현황 카드 — R1C1("오늘의 시청률")
-function ChannelStatusCard({ channels, narrativeSignals }: { channels: Map<string, ChannelSummary>; narrativeSignals: ChannelNarrativeSignal[] }) {
+function ChannelStatusCard({ channels, narrativeSignals, footer }: { channels: Map<string, ChannelSummary>; narrativeSignals: ChannelNarrativeSignal[]; footer?: React.ReactNode }) {
   const ena = channels.get("ENA");
   const rest = ["ENA_PLAY", "ENA_DRAMA", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"]
     .map((c) => channels.get(c))
@@ -1325,6 +1382,8 @@ function ChannelStatusCard({ channels, narrativeSignals }: { channels: Map<strin
           </div>
         </div>
       </div>
+      {/* 사용자 지시(2026-10-06): 카드 맨 아래에 제목 없이 정보만 자연스럽게 이어 붙인다(해당일 상위 프로그램 9개) */}
+      {footer && <div className="mt-6 border-t border-zinc-100 pt-3">{footer}</div>}
     </section>
   );
 }
@@ -1885,7 +1944,7 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
                       ? ""
                       : c.ratingChangePct === 0
                         ? "유지"
-                        : `${c.ratingChangePct > 0 ? "▲" : "▼"}${Math.abs(c.ratingChangePct).toFixed(1)}%`}
+                        : formatArrowPct(c.ratingChangePct)}
                   </td>
                   {/* 사용자 지시(2026-09-01, 로직 재설계): 표시 수치를 "회당 평균 등락"에서
                       "채널 월간 평균 기여도 변화(%p)"로 바꿨다 — 전 프로그램 합이 채널 평균의
@@ -2131,7 +2190,7 @@ function WeeklyReviewCard({ review, themeColorByCode }: { review: WeeklyReview; 
                       ? ""
                       : c.ratingChangePct === 0
                         ? "유지"
-                        : `${c.ratingChangePct > 0 ? "▲" : "▼"}${Math.abs(c.ratingChangePct).toFixed(1)}%`}
+                        : formatArrowPct(c.ratingChangePct)}
                   </td>
                   <td className="py-1.5 pl-3 text-zinc-500">
                     <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta >= 0)} channelCode={c.channelCode} periodLabel="전주" />
@@ -2558,7 +2617,7 @@ function buildOriginalInsight(
   if (historicalAvgRetention !== null && crossRetentionPct !== null && crossRetentionPct < historicalAvgRetention && rerunChannelName) {
     causeLine = `${rerunChannelName} 재방 유지율 ${crossRetentionPct.toFixed(1)}%로 과거 평균(${historicalAvgRetention.toFixed(1)}%)보다 낮음`;
   } else if (rank !== null && rank > 1 && beatenBy.length > 0) {
-    causeLine = `동시간대 ${rank}위 — ${beatenBy[0].competitor_name} '${beatenBy[0].competitor_program_name}'에 밀림`;
+    causeLine = `동시간대 ${rank}위 — ${beatenBy[0].competitor_name} '${beatenBy[0].competitor_program_name}'이(가) 더 높게 집계됨(순위 관측, 원인 아님)`;
   } else if (rank === 1) {
     causeLine = "동시간대 타깃 1위 — 경쟁 프로그램 대비 우위 유지";
   }
@@ -3393,9 +3452,7 @@ function computeRecentComparison(
 // 시청시간(초)을 "34분 12초"로 — 초가 0이면 분까지만(2026-09-03에 ChannelDeepDive.fmtSeconds에
 // 적용한 것과 같은 사용자 규칙을 이 카드에서도 동일하게 따른다).
 function fmtSecondsCompactKorean(v: number): string {
-  const m = Math.floor(v / 60);
-  const s = Math.round(v % 60);
-  return s === 0 ? `${m}분` : `${m}분 ${s}초`;
+  return formatDurationKo(v);
 }
 
 // 사용자 지시(2026-09-03, 3차): "SBS Plus, ENA, ENA Play, ENA Drama 등의 글씨는 각 채널의
@@ -4456,7 +4513,7 @@ const SHORT_DAYPART_LABEL: Record<string, string> = { 새벽: "새벽", 오전: 
 // (값·계산 로직은 기존 buildKillerContentOneLiner와 동일, 표시 방식만 분리).
 function buildKillerContentBadges(k: KillerContentDaypartRow): string[] {
   const totalRating = k.avg_rating * k.airing_count;
-  const parts: string[] = [`${k.airing_count}회 · 총합 ${formatRating(totalRating)}`];
+  const parts: string[] = [`${k.airing_count}회 · 시청률 합계(평균×횟수) ${formatRating(totalRating)}`];
   if (k.best_daypart) parts.push(`강세 ${SHORT_DAYPART_LABEL[k.best_daypart] ?? k.best_daypart} ${formatRating(k.best_daypart_avg)}`);
   if (k.worst_daypart) parts.push(`약세 ${SHORT_DAYPART_LABEL[k.worst_daypart] ?? k.worst_daypart} ${formatRating(k.worst_daypart_avg)}`);
   // 사용자 지시(2026-08-20): 시청률은 약해도 점유율/유료가구 시청률이 채널 평균보다 좋으면(±15%
@@ -4723,10 +4780,7 @@ interface ChannelDailyDetailApiRow {
 // 좁아 ChannelDeepDive.tsx의 fmtSeconds("M분 S초")는 폭이 너무 크다. 이 표 전용으로 "M:SS"
 // 압축 표기(다른 시간 표기 관례를 바꾸는 게 아니라 이 표만의 지역 함수).
 function fmtSecondsCompact(v: number | null): string {
-  if (v === null || v === undefined) return "—";
-  const m = Math.floor(v / 60);
-  const s = Math.round(v % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
+  return formatDurationClock(v);
 }
 
 // 사용자 지시(2026-09-02): "채널별 인사이트 우측에 클릭하면 우측에 정보가 열리는 옵션... 클릭 시
@@ -5142,55 +5196,129 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
 
 export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   const router = useRouter();
-  const [data, setData] = useState<DashboardData | null>(null);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // 단계 07: 기준일·보기(일간/주간/월간)는 URL이 단일 출처다 — 새로고침·북마크·뒤로가기에서 유지된다.
+  const urlCtx = parseViewContext((k) => searchParams.get(k)).ctx;
+  const view: HomeView = urlCtx.view;
+  const selectedDate = urlCtx.date ?? "";
+  function updateUrl(patch: Partial<ViewContext>, mode: "push" | "replace" = "push") {
+    const qs = serializeContext({ ...urlCtx, ...patch }).toString();
+    router[mode](qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+  // 요청 키가 같을 때만 현재 값이다. 날짜를 바꾸는 동안 이전 값은 'stale'로 표시되고, 늦게 도착한 이전 응답은 버려진다.
+  const fetched = useContextData<DashboardData>(dataKey(urlCtx, "home"), async (signal) => {
+    const res = await fetch(urlCtx.date ? `/api/dashboard/page1?date=${urlCtx.date}` : "/api/dashboard/page1", { signal });
+    const body = await res.json().catch(() => ({ ok: false }));
+    if (!res.ok || !body.ok) throw new Error(body.message ?? "불러오지 못했습니다.");
+    return body as DashboardData;
+  });
+  const reviews = useContextData<{ available: boolean; events: ReviewEvent[] }>("reviews|all", async (signal) => {
+    const res = await fetch("/api/actions/review", { signal });
+    const body = await res.json().catch(() => ({ ok: false }));
+    if (!res.ok || !body.ok) throw new Error(body.message ?? "검토 기록을 불러오지 못했습니다.");
+    return { available: !!body.available, events: body.events ?? [] };
+  });
+  const data = fetched.data;
+  const loading = fetched.status === "loading" || fetched.status === "stale" || fetched.refreshing;
+  const notCurrent = fetched.status === "stale" || (fetched.status === "error" && !fetched.isCurrent);
+  const errorMessage = fetched.status === "error" ? fetched.errorMessage : null;
   // 사용자 지시(2026-09-02): "skyUHD 오른쪽 관리자화면 버튼 아이콘을 '큰 글씨로 보기' 아이콘으로
   // 교체... 누르면 전체적으로 큰 글씨로" — Page 2(ChannelDeepDive.tsx)에 이미 있는 zoom 토글과
   // 같은 방식.
   const [largeFontMode, setLargeFontMode] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // 사용자 지시(2026-08-25): "채널 종합리포트 우측에 날짜를 선택할 수 있는 검색 기능을 추가...
-  // 선택한 당일의 해당 채널 종합 리포트도 볼 수 있도록". 빈 문자열 = 최신 날짜(기본값).
-  const [selectedDate, setSelectedDate] = useState<string>("");
   // 사용자 지시(2026-09-02): 채널별 인사이트의 클릭 아이콘 — 켜져 있으면 "채널별 상위 프로그램"
   // 자리가 그 채널의 일간 세부 내역 패널로 바뀐다. 같은 채널을 다시 누르면 닫힘(토글).
   const [selectedInsightChannel, setSelectedInsightChannel] = useState<string | null>(null);
 
-  async function load(dateStr?: string) {
-    setLoading(true);
-    const url = dateStr ? `/api/dashboard/page1?date=${dateStr}` : "/api/dashboard/page1";
-    const res = await fetch(url);
-    const body = await res.json().catch(() => ({ ok: false }));
-    if (!res.ok || !body.ok) {
-      setErrorMessage(body.message ?? "불러오지 못했습니다.");
-    } else {
-      setData(body);
-      setErrorMessage(null);
-    }
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const res = await fetch("/api/dashboard/page1");
-      const body = await res.json().catch(() => ({ ok: false }));
-      if (cancelled) return;
-      if (!res.ok || !body.ok) {
-        setErrorMessage(body.message ?? "불러오지 못했습니다.");
-      } else {
-        setData(body);
-        setErrorMessage(null);
-      }
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const byCode = new Map(data?.channels.map((c) => [c.code, c]) ?? []);
+
+  // ── 단계 07 홈 모델(이미 계산된 값만 사용) ──
+  const today = kstToday();
+  const themeByCode = new Map((data?.channels ?? []).map((c) => [c.code, c.themeColor]));
+  const kpiGroups = data
+    ? buildKpiGroups(data.channels, {
+        asOfDate: data.asOfDate,
+        signals: data.narrativeSignals.map((s) => ({ channelCode: s.channelCode, priorWeekRating: s.priorWeekRating })),
+        contexts: data.metricContexts,
+      })
+    : [];
+  const dataStatus = data
+    ? buildDataStatus({
+        view,
+        asOfDate: data.asOfDate,
+        latestAvailableDate: data.latestAvailableDate,
+        requestedDateNoData: data.requestedDateNoData,
+        today,
+        missingChannelNames: data.channels.filter((c) => c.currentRating === null).map((c) => c.name),
+        hasWeeklyReview: !!data.weeklyReview,
+        hasMonthlyReview: !!data.monthlyReview,
+      })
+    : null;
+  // 검토 기록 저장소 상태: 불러오는 중·실패·미적용을 구분해 알린다(불러오는 동안 '미적용'이라고 말하지 않는다).
+  const reviewStore: ReviewStoreState = reviews.status === "loading" || reviews.status === "stale" ? "loading" : reviews.status === "error" ? "error" : reviews.data?.available ? "ready" : "unavailable";
+  const reviewEvents = reviews.data?.events ?? [];
+  const decisions =
+    data && dataStatus
+      ? buildTodayDecisions({
+          ctx: urlCtx,
+          asOfDate: data.asOfDate,
+          latestAvailableDate: data.latestAvailableDate,
+          today,
+          signals: data.narrativeSignals,
+          channelNames: CHANNEL_NAME_BY_CODE,
+          anomaly: data.portfolioAnomaly,
+          dataStatus,
+          reviews: reviewEvents,
+          snapshotId: data.dataSnapshotId ?? null,
+        })
+      : null;
+  const followups = pendingFollowups(reviewEvents, { today });
+  const contextBar = buildContextBar({
+    scopeLabel: "전 채널",
+    targetLabel: kpiGroups.length > 0 ? kpiGroups.map((g) => g.title.replace(/ 기준$/, "")).join(" · ") : null,
+    // 주간·월간 보기는 그 리뷰의 기간을 보인다(하루 날짜를 그대로 쓰면 '확정(공식 기간 값)'과 어긋난다). 리뷰가 없으면 없다고 쓴다.
+    periodLabel: !data
+      ? null
+      : view === "weekly"
+        ? data.weeklyReview
+          ? `${formatMonthDayDow(data.weeklyReview.weekStart)} ~ ${formatMonthDayDow(data.weeklyReview.weekEnd)}`
+          : "주간 리뷰 없음(기준일이 일요일일 때 계산)"
+        : view === "monthly"
+          ? data.monthlyReview
+            ? `${data.monthlyReview.year}년 ${data.monthlyReview.month}월`
+            : "월간 리뷰 없음(월말 기준일에 계산)"
+          : shortDateKo(data.asOfDate),
+    compareLabel: view === "weekly" ? "전주" : view === "monthly" ? "전월" : "전일·전주 동요일(KPI 표에 표기)",
+    latestDate: data?.latestAvailableDate ?? null,
+    today,
+    finality: dataStatus?.finality ?? "unknown",
+    status: fetched.status,
+    isCurrent: fetched.isCurrent,
+    requestedPeriodLabel: urlCtx.date ? shortDateKo(urlCtx.date) : "최신 수신일",
+    errorMessage,
+  });
+  const nextWeekItems: NextWeekItem[] = (data?.weeklyReview?.channels ?? []).map((c) => ({
+    channelCode: c.channelCode,
+    channelName: CHANNEL_NAME_BY_CODE[c.channelCode] ?? c.channelCode,
+    program: c.weaknessDriver?.programName ?? null,
+    observation: c.weaknessDriver
+      ? `지난주 채널 시청률 기여 ${formatRatingDelta(c.weaknessDriver.contributionDelta)} (편성량 효과 ${formatRatingDelta(c.weaknessDriver.volumeEffect)}, 성과 효과 ${formatRatingDelta(c.weaknessDriver.performanceEffect)})`
+      : null,
+  }));
+  const monthlyItemsFromReview: MonthlyChannelItem[] = (data?.monthlyReview?.channels ?? []).map((c) => ({
+    channelCode: c.channelCode,
+    channelName: CHANNEL_NAME_BY_CODE[c.channelCode] ?? c.channelCode,
+    rankChange: c.rankChange,
+    primeUp: (c.primeMovers ?? []).find((m) => m.primeDelta >= 0)?.programName ?? null,
+    primeDown: (c.primeMovers ?? []).find((m) => m.primeDelta < 0)?.programName ?? null,
+    weaknessProgram: c.weaknessDriver?.programName ?? null,
+  }));
+  // 월간 리뷰가 없으면 채널 목록만(역할 칸은 운영정책에서 읽는다) — 빈 표 머리글만 보이지 않게 한다.
+  const monthlyItems: MonthlyChannelItem[] =
+    monthlyItemsFromReview.length > 0
+      ? monthlyItemsFromReview
+      : (data?.channels ?? []).map((c) => ({ channelCode: c.code, channelName: c.name, rankChange: null, primeUp: null, primeDown: null, weaknessProgram: null }));
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-zinc-50 px-6 py-8" style={{ zoom: largeFontMode ? 1.3 : 1 }}>
@@ -5214,6 +5342,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
             <img src="/kt-ena-ci-black.png" alt="KT ENA" style={{ height: 26, width: "auto" }} />
             <h1 className="font-heading text-2xl font-bold tracking-tight text-zinc-900">
               {formatDateWithDowDots(data?.asOfDate)} 채널 종합리포트
+              {view !== "daily" && <span className="ml-2 text-base font-medium text-zinc-400">{view === "weekly" ? "주간 보기" : "월간 보기"}</span>}
             </h1>
             {/* 사용자 지시(2026-08-25): "채널 종합리포트 우측에 날짜를 선택할 수 있는 검색 기능을
                 추가하자. 선택한 당일의 해당 채널 종합 리포트도 볼 수 있도록". 최신 데이터 날짜를
@@ -5225,20 +5354,16 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               max={data?.latestAvailableDate}
               onChange={(e) => {
                 const v = e.target.value;
-                setSelectedDate(v);
-                if (v) load(v);
+                if (v) updateUrl({ date: v });
               }}
-              disabled={loading || !data}
+              disabled={!data}
               title="리포트 날짜 선택"
               aria-label="리포트 날짜 선택"
               className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-sm text-zinc-600 shadow-sm disabled:opacity-50"
             />
             {selectedDate && data?.latestAvailableDate && selectedDate !== data.latestAvailableDate && (
               <button
-                onClick={() => {
-                  setSelectedDate("");
-                  load();
-                }}
+                onClick={() => updateUrl({ date: null })}
                 className="rounded-lg px-2 py-1 text-xs font-medium text-zinc-400 underline decoration-dotted hover:text-zinc-600"
               >
                 최신으로
@@ -5254,7 +5379,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 {data.channels.map((c) => (
                   <Link
                     key={c.code}
-                    href={`/channel/${c.code}`}
+                    href={hrefFor("channel", { ...urlCtx, channel: c.code, view: "daily" })}
                     title={c.name}
                     aria-label={c.name}
                     className="flex h-11 w-11 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:ring-zinc-300"
@@ -5317,7 +5442,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               </svg>
             </button>
             <button
-              onClick={() => load(selectedDate || undefined)}
+              onClick={() => fetched.reload()}
               disabled={loading}
               title="새로고침"
               aria-label="새로고침"
@@ -5380,7 +5505,12 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           </div>
         </div>
 
-        {errorMessage && <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">{errorMessage}</div>}
+        {/* 단계 07: 공통 ContextBar — 채널·타깃·분석 기간·비교 기간·최신 수신일·잠정/확정 상태. 값이 이전 선택의 것이면 배너로 알린다. */}
+        <ContextBar
+          model={contextBar}
+          className="mb-5"
+          right={<HomeViewTabs view={view} onChange={(v) => updateUrl({ view: v })} />}
+        />
 
         {data?.requestedDateNoData && (
           <div className="mb-4 rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-700 ring-1 ring-amber-100">
@@ -5391,93 +5521,130 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
 
         {loading && !data && <p className="text-sm text-zinc-500">불러오는 중...</p>}
 
-        {data && (
-          // 그리드 재배치(사용자 지시, 2026-08-21): "오늘의 빠른 요약"·"주요 콘텐츠 편성 리포트"는
-          // 삭제. 채널별 킬러 콘텐츠는 좌/우 2컬럼 하나의 통합 섹션(전체 폭)으로 마지막에 배치.
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* 사용자 지시(2026-09-03, UI/UX REDESIGN 1항): "「오늘의 시청률」과 「주요 콘텐츠
-                리뷰」를 좌우 2열로 배치하지 않는다 — ① 오늘의 시청률 ↓ ② 주요 콘텐츠 리뷰의
-                세로 흐름으로, 두 섹션 모두 화면 전체 폭(100%)을 사용한다."
-                ※ 이 지시는 2026-09-01의 "오늘의 시청률 우측에는 항상 주요 컨텐츠 리뷰가 나와야
-                함"(좌우 배치)을 명시적으로 대체한다 — 그때는 좌우 2열 전제에서 오른쪽 칸이 비는
-                문제를 고친 것이고, 이번엔 좌우 2열 구조 자체를 없앤다. 두 섹션 아래(채널별
-                인사이트/일간 세부 내역·주요 뉴스·킬러 콘텐츠)는 이번 지시 범위 밖이라 기존
-                2열 배치를 그대로 둔다. */}
-            <div className="lg:col-span-2">
-              <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} />
-            </div>
-            {/* 사용자 지시(2026-09-28): "오늘의 시청률과 주요컨텐츠 리뷰 사이에" 추석 연휴 성과
-                분석 섹션을 넣는다 — 10/2(금)까지만 노출(컴포넌트 내부에서 자체 판단). */}
-            <div className="lg:col-span-2">
-              <ChuseokSpecialReportCard />
-            </div>
-            <div className="lg:col-span-2">
-              <OriginalContentReportCard
-                report={data.originalContentReport}
-                enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
-                achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
-                themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
-              />
-            </div>
+        {data && dataStatus && (
+          <div className={`flex flex-col gap-6 transition-opacity ${notCurrent ? "opacity-60" : ""}`} aria-busy={notCurrent}>
+            {/* 단계 07 홈 순서(일간): 데이터 상태 → 오늘 결정할 사항 → 채널 KPI → 변화 근거 → 오리지널 리뷰 → 후속 액션 → 참고.
+                뉴스·킬러 콘텐츠 등 전체 상세는 맨 아래 참고로 내렸다. 기존 카드는 지우지 않고 위치만 옮겼다. */}
+            <DataStatusCard status={dataStatus} />
 
-            {/* 사용자 지시(2026-09-07): "주요 컨텐츠리뷰 아래, 주말 리포트 위에 주간 보고서" —
-                날짜를 따지지 않고 nielsen_period_rank에 새 주간 파일이 쌓이는 즉시 다음
-                새로고침부터 자동으로 그 주가 보인다(route.ts가 매 요청마다 최신 완료 주로
-                다시 계산). */}
-            {data.weeklyReview && (
-              <div className="lg:col-span-2">
-                <WeeklyReviewCard review={data.weeklyReview} themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))} />
-              </div>
+            {view === "daily" && decisions && (
+              <>
+                {(data.weeklyReview || data.monthlyReview) && (
+                  <p className="rounded-xl bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-900 ring-1 ring-indigo-200">
+                    {data.weeklyReview && (
+                      <>
+                        새 주간 리뷰({formatMonthDayDow(data.weeklyReview.weekStart)} ~ {formatMonthDayDow(data.weeklyReview.weekEnd)})가 있습니다 —{" "}
+                        <button type="button" className="font-medium text-indigo-700 underline" onClick={() => updateUrl({ view: "weekly" })}>
+                          주간 보기
+                        </button>
+                        {data.monthlyReview ? " · " : ""}
+                      </>
+                    )}
+                    {data.monthlyReview && (
+                      <>
+                        {data.monthlyReview.month}월 월간 리뷰가 있습니다 —{" "}
+                        <button type="button" className="font-medium text-indigo-700 underline" onClick={() => updateUrl({ view: "monthly" })}>
+                          월간 보기
+                        </button>
+                      </>
+                    )}
+                  </p>
+                )}
+                <DecisionCards cards={decisions.cards} suppressed={decisions.suppressed} candidates={decisions.candidates} reviewStore={reviewStore} />
+                {/* 사용자 지시(2026-10-06): "오늘의 시청률" 아랫줄에 해당일 채널 순위 1~20위 안의 상위 프로그램 9개(수2049, 괄호 안 가구)를 3단으로 */}
+                <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} footer={<MarketTopPrograms date={data.asOfDate} />} />
+                <KpiTable groups={kpiGroups} asOfLabel={`${shortDateKo(data.asOfDate)} 기준`} />
+
+                {/* 변화 근거: 채널별 인사이트와 오늘의 상위 프로그램(또는 선택 채널의 일간 세부 내역) */}
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                  <ChannelNarrativeCard
+                    signals={data.narrativeSignals}
+                    themeColorByCode={themeByCode}
+                    targetRankByCode={new Map(data.channels.map((c) => [c.code, c.targetRank]))}
+                    enaOriginalDaily={data.originalContentReport.daily}
+                    selectedChannel={selectedInsightChannel}
+                    onOpenChannelDetail={(code) => setSelectedInsightChannel((cur) => (cur === code ? null : code))}
+                  />
+                  {selectedInsightChannel ? (
+                    <ChannelDailyDetailPanel
+                      channelCode={selectedInsightChannel}
+                      channelName={CHANNEL_NAME_BY_CODE[selectedInsightChannel] ?? selectedInsightChannel}
+                      themeColor={byCode.get(selectedInsightChannel)?.themeColor ?? null}
+                      asOfDate={data.asOfDate}
+                      onClose={() => setSelectedInsightChannel(null)}
+                      annualAvgRating={byCode.get(selectedInsightChannel)?.ytdAvgRating ?? null}
+                    />
+                  ) : (
+                    <TodayTopProgramsCard
+                      rows={data.todayTopPrograms}
+                      themeColorByCode={themeByCode}
+                      ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
+                      enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
+                    />
+                  )}
+                </div>
+
+                {/* 사용자 지시(2026-08-26): 월요일엔 주말 리포트(토·일) — 일간 보기의 변화 근거에 붙인다. */}
+                {data.weekendReport && <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />}
+
+                {/* 사용자 지시(2026-09-28): 추석 연휴 성과 분석 — 10/2(금)까지만 노출(컴포넌트 내부에서 자체 판단). */}
+                <ChuseokSpecialReportCard />
+                <OriginalContentReportCard
+                  report={data.originalContentReport}
+                  enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
+                  achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
+                  themeColorByCode={themeByCode}
+                />
+
+                <FollowupsCard followups={followups} reviewStore={reviewStore} />
+
+                {/* 참고: 채널별 킬러 콘텐츠 → 주요 뉴스(사용자 지시 2026-10-07: 킬러 콘텐츠가 주요 뉴스보다 위, 세로로 쌓는다) */}
+                <div className="flex flex-col gap-6">
+                  <KillerContentCard rows={data.killerContentDaypart} themeColorByCode={themeByCode} ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))} />
+                  <DailyNewsCard items={data.dailyNews} />
+                </div>
+              </>
             )}
 
-            {/* 사용자 지시(2026-08-26): "오늘의 시청률 섹션 밑에 주말 리포트 섹션 신설" — 실제
-                월요일(route.ts가 asOfDate=일요일일 때 채워줌)에만 표시.
-                사용자 지시(2026-09-01): 주말 리포트와 월간 리뷰가 같은 날 겹칠 수 있으므로 둘을
-                합치지 않고 각각 독립된 섹션으로 나란히 둔다. */}
-            {data.weekendReport && (
-              <div className="lg:col-span-2">
-                <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />
-              </div>
-            )}
-            {data.monthlyReview && (
-              <div className="lg:col-span-2">
-                <MonthlyReviewCard review={data.monthlyReview} themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))} />
-              </div>
-            )}
-
-            <ChannelNarrativeCard
-              signals={data.narrativeSignals}
-              themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
-              targetRankByCode={new Map(data.channels.map((c) => [c.code, c.targetRank]))}
-              enaOriginalDaily={data.originalContentReport.daily}
-              selectedChannel={selectedInsightChannel}
-              onOpenChannelDetail={(code) => setSelectedInsightChannel((cur) => (cur === code ? null : code))}
-            />
-            {selectedInsightChannel ? (
-              <ChannelDailyDetailPanel
-                channelCode={selectedInsightChannel}
-                channelName={CHANNEL_NAME_BY_CODE[selectedInsightChannel] ?? selectedInsightChannel}
-                themeColor={byCode.get(selectedInsightChannel)?.themeColor ?? null}
-                asOfDate={data.asOfDate}
-                onClose={() => setSelectedInsightChannel(null)}
-                annualAvgRating={byCode.get(selectedInsightChannel)?.ytdAvgRating ?? null}
-              />
-            ) : (
-              <TodayTopProgramsCard
-                rows={data.todayTopPrograms}
-                themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
-                ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
-                enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
-              />
+            {view === "weekly" && (
+              <>
+                {data.weeklyReview ? (
+                  <WeeklyReviewCard review={data.weeklyReview} themeColorByCode={themeByCode} />
+                ) : (
+                  <section className={PANEL} data-section="week_review">
+                    <PanelHeader title="주간 성적과 기여 분해" />
+                    <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-600">
+                      주간 리뷰는 표시 기준일이 일요일일 때 계산됩니다(지금 기준일 {shortDateKo(data.asOfDate)}). 공식 주간 값이 없어서가 아니라 계산 조건이 아닐 뿐이며, 가장 최근 일요일({shortDateKo(lastSundayOnOrBefore(data.asOfDate))})로 보면 그 주 리뷰를 볼 수 있습니다.{" "}
+                      <button type="button" className="font-medium text-indigo-700 underline" onClick={() => updateUrl({ date: lastSundayOnOrBefore(data.asOfDate), view: "weekly" })}>
+                        {shortDateKo(lastSundayOnOrBefore(data.asOfDate))} 주간 보기
+                      </button>
+                    </p>
+                  </section>
+                )}
+                <NextWeekPanel items={nextWeekItems} ctx={urlCtx} />
+                <FollowupsCard followups={followups} reviewStore={reviewStore} />
+              </>
             )}
 
-            <DailyNewsCard items={data.dailyNews} />
-
-            <KillerContentCard
-              rows={data.killerContentDaypart}
-              themeColorByCode={new Map(data.channels.map((c) => [c.code, c.themeColor]))}
-              ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))}
-            />
+            {view === "monthly" && (
+              <>
+                {data.monthlyReview ? (
+                  <MonthlyReviewCard review={data.monthlyReview} themeColorByCode={themeByCode} />
+                ) : (
+                  <section className={PANEL} data-section="month_review">
+                    <PanelHeader title="월간 성적" />
+                    <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-600">
+                      월간 리뷰는 표시 기준일이 그 달의 마지막 날일 때 계산됩니다(지금 기준일 {shortDateKo(data.asOfDate)}). 가장 최근 월말({shortDateKo(lastMonthEndOnOrBefore(data.asOfDate))})로 보면 그 달 리뷰를 볼 수 있습니다.{" "}
+                      <button type="button" className="font-medium text-indigo-700 underline" onClick={() => updateUrl({ date: lastMonthEndOnOrBefore(data.asOfDate), view: "monthly" })}>
+                        {shortDateKo(lastMonthEndOnOrBefore(data.asOfDate))} 월간 보기
+                      </button>
+                    </p>
+                  </section>
+                )}
+                <MonthlyPlanningPanels channels={monthlyItems} monthLabel={data.monthlyReview ? `${data.monthlyReview.year}-${data.monthlyReview.month}` : null} ctx={urlCtx} />
+                <FollowupsCard followups={followups} reviewStore={reviewStore} />
+              </>
+            )}
           </div>
         )}
       </div>

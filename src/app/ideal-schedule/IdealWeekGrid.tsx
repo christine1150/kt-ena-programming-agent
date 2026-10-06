@@ -33,7 +33,11 @@ export function IdealWeekGrid({
   minWidth = 760,
   syncTitleRow = false,
   hideOnPrint = false,
+  highlightHour = null,
+  refWord = "지난주",
 }: {
+  /** 기준 주 표기("지난주"는 실제 지난주일 때만, 아니면 기간 — 단계 10) */
+  refWord?: string;
   blocks: BlockRow[];
   weekStart: string;
   themeColor: string;
@@ -59,6 +63,8 @@ export function IdealWeekGrid({
   /** page.tsx가 이 카드를 감싸던 `<div className="print:hidden">`을 대신한다 — subgrid가 부모의
    *  직계 자식이어야 행 트랙을 물려받으므로 감싸는 div를 없애고 이 prop으로 옮겼다. */
   hideOnPrint?: boolean;
+  /** 단계 07: 결정 카드에서 이어진 슬롯(방송일 기준 확장 시각)을 띠로 강조한다 */
+  highlightHour?: number | null;
 }) {
   const gridHeight = (GRID_END_MIN - GRID_START_MIN) * pxPerMin;
   const hourPx = 60 * pxPerMin;
@@ -114,6 +120,14 @@ export function IdealWeekGrid({
                 className="relative"
                 style={{ height: gridHeight, backgroundImage: `repeating-linear-gradient(to bottom, #f4f4f5 0, #f4f4f5 1px, transparent 1px, transparent ${hourPx}px)` }}
               >
+                {highlightHour !== null && (
+                  <div
+                    aria-hidden="true"
+                    data-slot-highlight={highlightHour}
+                    className="pointer-events-none absolute inset-x-0 z-[1] bg-indigo-300/20 ring-1 ring-inset ring-indigo-400/70"
+                    style={{ top: (highlightHour * 60 - GRID_START_MIN) * pxPerMin, height: 60 * pxPerMin }}
+                  />
+                )}
                 {gaps
                   .filter((g) => g.weekday === dow)
                   .map((g, gi) => {
@@ -160,7 +174,7 @@ export function IdealWeekGrid({
                           ? "2px solid #0ea5e9"
                           : "1px solid rgba(0,0,0,0.06)";
                   const statusText = isGhost ? "미리보기" : (STATUS_LABEL[b.status] ?? b.status);
-                  const diffText = d && d.changed ? (d.diff !== null ? ` · 지난주 〈${d.currentName ?? "-"}〉 대비 ${d.diff >= 0 ? "+" : "−"}${Math.abs(d.diff).toFixed(decimals)}` : ` · 지난주 〈${d.currentName ?? "없음"}〉에서 교체`) : d ? " · 지난주와 같음" : "";
+                  const diffText = d && d.changed ? (d.diff !== null ? ` · ${refWord} 〈${d.currentName ?? "-"}〉 대비 ${d.diff >= 0 ? "+" : "−"}${Math.abs(d.diff).toFixed(decimals)}` : ` · ${refWord} 〈${d.currentName ?? "없음"}〉에서 교체`) : d ? ` · ${refWord}와 같음` : "";
                   return (
                     <button
                       type="button"
@@ -238,7 +252,7 @@ export function IdealWeekGrid({
                           )}
                           {height >= 84 && !isGhost && d?.changed && !d.small && d.currentName && (
                             <span className="w-full truncate text-center text-[7.5px]" style={{ color: ink, opacity: 0.75 }}>
-                              지난주 {d.currentName}
+                              {refWord} {d.currentName}
                             </span>
                           )}
                         </div>

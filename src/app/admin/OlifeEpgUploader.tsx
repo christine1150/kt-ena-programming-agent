@@ -19,6 +19,8 @@ type FileSummary = {
   datesProcessed?: string[];
   matchedCount?: number;
   unmatchedCount?: number;
+  ambiguousCount?: number;
+  unmatchedQueue?: { date: string; programName: string; startTime: string; status: "ambiguous" | "unmatched"; reason: string; candidates: { title: string; startTime: string; episodeNumber: number | null; subtitle: string | null; diffMinutes: number; nameMatch: "exact" | "partial" }[] }[];
   sourceFormat?: "daily_epg" | "weekly_schedule";
 };
 
@@ -94,8 +96,27 @@ export default function OlifeEpgUploader() {
               <span className="font-medium">{r.fileName}</span>
               {r.sourceFormat && <span className="ml-1 text-xs text-zinc-400">[{SOURCE_FORMAT_LABEL[r.sourceFormat]}]</span>}:{" "}
               {r.ok
-                ? r.message ?? `${r.datesProcessed?.join(", ")} — 매칭 ${r.matchedCount}건, 미매칭 ${r.unmatchedCount}건`
+                ? r.message ?? `${r.datesProcessed?.join(", ")} — 매칭 ${r.matchedCount}건, 미매칭 ${r.unmatchedCount}건, 모호(가까운 후보로 채움·확인 필요) ${r.ambiguousCount ?? 0}건`
                 : r.message}
+              {r.ok && r.unmatchedQueue && r.unmatchedQueue.length > 0 && (
+                <details className="mt-1 text-xs text-zinc-600">
+                  <summary className="cursor-pointer font-medium text-zinc-700">미매칭·모호 목록 {r.unmatchedQueue.length}건 (미매칭은 비워 둠, 모호는 가까운 후보로 채움)</summary>
+                  <ul className="mt-1 flex flex-col gap-1">
+                    {r.unmatchedQueue.map((q, qi) => (
+                      <li key={qi} className="rounded bg-zinc-50 p-1.5">
+                        <b>{q.date} {q.startTime} {q.programName}</b> — {q.status === "ambiguous" ? "모호(채움)" : "미매칭(비움)"}: {q.reason}
+                        {q.candidates.map((c, ci) => (
+                          <div key={ci} className="pl-2 text-zinc-500">
+                            후보 {c.title} · {c.startTime} · 시각 차이 {c.diffMinutes}분 · {c.nameMatch === "exact" ? "이름 일치" : "이름 부분 일치"}
+                            {c.episodeNumber !== null ? ` · ${c.episodeNumber}회` : ""}
+                            {c.subtitle ? ` · 부제 ${c.subtitle}` : ""}
+                          </div>
+                        ))}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </div>
           ))}
         </div>
