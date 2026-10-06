@@ -178,11 +178,21 @@ interface ManualCompetitorProgramRow {
   target_share: number | null;
   household_rating: number | null;
 }
+// PD 리포트 회차 시트에 적힌 이 프로그램의 동시간대 성적(시청률·점유율은 % 단위, 순위는 동시간대 순위).
+interface ManualOwnStats {
+  targetRating: number | null;
+  targetShare: number | null;
+  targetRank: number | null;
+  householdRating: number | null;
+  householdRank: number | null;
+  householdMetroRating: number | null;
+  householdMetroRank: number | null;
+}
 interface ManualDramaReportData {
   episode_number: number | null;
   headline_bullets: string[];
   minute_ratings: ManualMinuteRating[] | null;
-  competitor_rank_snapshot: { target: ManualChannelRankRow[]; household: ManualChannelRankRow[] } | null;
+  competitor_rank_snapshot: { target: ManualChannelRankRow[]; household: ManualChannelRankRow[]; own?: ManualOwnStats | null } | null;
   competitor_programs: ManualCompetitorProgramRow[] | null;
   // 사용자 지시(2026-08-26): 광고 브레이크 등 주요 이벤트 시각 — PD 엑셀의 네이티브 차트를
   // 관리자가 육안으로 보고 수동 입력한 값(자동 파싱 불가, 없으면 null).
@@ -2300,13 +2310,17 @@ function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null
   let rank: number | null = null;
   let beatenBy: OriginalCompetitorHighlight[] = [];
   const rankParts: string[] = [];
+  // 사용자 지시(2026-10-06): 업로드한 PD 리포트에 동시간대 순위(타깃·전국가구)가 있으면 제목의 순위도 PD 값으로
+  // 덮어쓴다(예: PD 리포트 "동시간대 각 8위, 6위"인데 제목은 DB 비교 순위 "타깃 10위, 가구 1위"로 남던 문제).
+  const pdOwn = item.manualReport?.competitor_rank_snapshot?.own ?? null;
   if (item.matched_rating !== null) {
     beatenBy = item.competitorHighlights
       .filter((c) => c.competitor_rating !== null && c.competitor_rating > item.matched_rating!)
       .sort((a, b) => (b.competitor_rating ?? 0) - (a.competitor_rating ?? 0));
-    rank = 1 + beatenBy.length;
+    rank = pdOwn?.targetRank != null ? pdOwn.targetRank : 1 + beatenBy.length;
     rankParts.push(`동시간대 타깃 ${rank}위`);
-    if (item.householdRank !== null) rankParts.push(`가구 ${item.householdRank}위`);
+    const householdRank = pdOwn?.householdRank != null ? pdOwn.householdRank : item.householdRank;
+    if (householdRank !== null) rankParts.push(`가구 ${householdRank}위`);
   }
   const rankText = rankParts.join(", ");
   const normalSuffix = rankText ? ` (${rankText})` : "";
@@ -2969,6 +2983,18 @@ function CompetitorLogoBadge({ channelName, color, heightPx = 7 }: { channelName
     />
   );
 }
+// 경쟁 프로그램 시작·종료 시각을 "HH:MM"으로 맞춘다. 업로드 파서가 엑셀 시간 숫자를 "0.9166…" 문자열 그대로
+// 저장한 옛 회차(신병4 8·9·10회 등)도 그래프가 깨지지 않게 화면에서 한 번 더 보정한다.
+function normalizeClock(value: string | null): string | null {
+  if (!value) return null;
+  const t = value.trim();
+  if (/^\d*\.\d+$/.test(t)) {
+    const total = Math.round(parseFloat(t) * 1440);
+    return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  }
+  const m = t.match(/^(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2, "0")}:${m[2]}` : null;
+}
 function ManualMinuteRatingChart({
   minuteRatings,
   competitorPrograms,
@@ -3018,15 +3044,29 @@ function ManualMinuteRatingChart({
   // 정렬 후 최소 간격 미달분만 밀어내고, 어긋나면 leader line으로 잇기)을 그대로 따른다.
   const PAD_R = 96; // 오른쪽 채널명 라벨 자리
   const PAD_Y = 24; // 최고 시청률 칩이 앉을 여유 + 격자선과 상하 여백
-  const toMinutes = (hhmm: string) => {
+  const toMinutesRaw = (hhmm: string) => {
     const [h, m] = hhmm.split(":").map(Number);
     return h * 60 + m;
   };
-  const startMin = toMinutes(minuteRatings[0].time);
+  const startMin = toMinutesRaw(minuteRatings[0].time);
+  // 방송이 자정을 넘기면(예: 23:40 → 00:15) 새벽 시각은 +24시간으로 이어 붙인다.
+  const toMinutes = (hhmm: string) => {
+    const m = toMinutesRaw(hhmm);
+    return m < 360 && startMin >= 720 ? m + 1440 : m;
+  };
   const endMin = toMinutes(minuteRatings[minuteRatings.length - 1].time);
   const span = endMin - startMin || 1;
   const xOf = (hhmm: string) => PAD_L + ((toMinutes(hhmm) - startMin) / span) * (W - PAD_L - PAD_R);
-  const maxRating = Math.max(...minuteRatings.map((p) => p.rating), ...(competitorPrograms ?? []).map((c) => c.target_rating ?? 0), 0.0001);
+  // PD가 뽑은 "동시간대 경쟁 프로그램" 목록 — 자사 본방(rank=null) 행은 제외, 실제 방영구간이 이 그래프 시간창과
+  // 겹치는 것만, 시청률 순 상위 6개까지만. y축 최댓값도 이 경쟁 구간 기준으로 잡는다(사용자 보고 2026-10-06: 자사 "#"
+  // 행 값이 y축에 섞여 들어가 선이 바닥에 붙던 문제).
+  const bands = (competitorPrograms ?? [])
+    .map((c) => ({ ...c, start_time: normalizeClock(c.start_time), end_time: normalizeClock(c.end_time) }))
+    .filter((c) => c.rank !== null && c.channel_name !== ownChannelName && c.start_time && c.end_time && c.target_rating !== null && Number.isFinite(c.target_rating))
+    .filter((c) => toMinutes(c.start_time!) < endMin && toMinutes(c.end_time!) > startMin)
+    .sort((a, b) => (b.target_rating ?? 0) - (a.target_rating ?? 0))
+    .slice(0, 6);
+  const maxRating = Math.max(...minuteRatings.map((p) => p.rating), ...bands.map((c) => c.target_rating ?? 0), 0.0001);
   const yOf = (v: number) => PAD_Y + (1 - v / maxRating) * (H - PAD_Y * 2);
   const path = minuteRatings.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.time).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(" ");
   const baselineY = H - PAD_Y;
@@ -3047,11 +3087,6 @@ function ManualMinuteRatingChart({
   // "#"(자사 본방 기준행, rank=null)뿐 아니라, PD 목록 안에 같은 채널명으로 자기 자신이
   // 순위권에도 또 한 번 나오는 경우(신병4사보타주 실측 확인)가 있어 같은 채널명은 전부 제외
   // — 안 그러면 자사 선(굵은 실선)과 겹치는 중복 구간이 또 그려진다.
-  const bands = (competitorPrograms ?? [])
-    .filter((c) => c.rank !== null && c.channel_name !== ownChannelName && c.start_time && c.end_time && c.target_rating !== null)
-    .filter((c) => toMinutes(c.start_time!.slice(0, 5)) < endMin && toMinutes(c.end_time!.slice(0, 5)) > startMin)
-    .sort((a, b) => (b.target_rating ?? 0) - (a.target_rating ?? 0))
-    .slice(0, 6);
   // 오른쪽 gutter 라벨의 y좌표 — 시청률이 비슷한 구간끼리 글자가 겹치지 않게, y좌표 오름차순으로
   // 훑으며 최소 간격(11px)에 못 미치는 것만 아래로 밀어낸다(1패스). 밀려서 선과 어긋난 라벨은
   // 아래 렌더링에서 가는 leader line으로 이어 준다.

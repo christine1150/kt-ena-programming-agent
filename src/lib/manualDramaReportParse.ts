@@ -25,6 +25,17 @@ export interface ManualCompetitorProgramRow {
   target_share: number | null;
   household_rating: number | null;
 }
+// 회차 시트 위쪽 "ENA 수도권 2049 / 가구(전국) / 가구(수도권)" 표에서 읽은 이 프로그램 자신의 동시간대 성적.
+// 시청률·점유율은 이미 % 단위로 입력돼 있다(실측: 0.3542 = 0.3542%).
+export interface ManualOwnStats {
+  targetRating: number | null;
+  targetShare: number | null;
+  targetRank: number | null;
+  householdRating: number | null; // 전국가구
+  householdRank: number | null;
+  householdMetroRating: number | null; // 수도권가구
+  householdMetroRank: number | null;
+}
 export interface ManualDramaReport {
   episodeNumber: number;
   broadcastDate: string; // YYYY-MM-DD
@@ -34,6 +45,7 @@ export interface ManualDramaReport {
   targetRanking: ManualChannelRankRow[];
   householdRanking: ManualChannelRankRow[];
   competitorPrograms: ManualCompetitorProgramRow[];
+  ownStats: ManualOwnStats | null;
 }
 export interface ManualDramaParseError {
   ok: false;
@@ -97,10 +109,74 @@ function scalePercentCell(raw: unknown): number | null {
   return Math.round(value * 100000) / 100000;
 }
 
+// 사용자 보고(2026-10-06, 연애박사 1회): 이 표의 자사 "#" 행만 시청률이 이미 % 단위(0.354)로 입력돼 있어
+// "5보다 크면 %" 기준으로는 ×100(35.4)돼 그래프 y축이 무너졌다. 같은 파일의 회차 시트 위쪽 표(own)에 이 프로그램
+// 자신의 시청률이 % 단위로 있으므로, 자사 행은 "원값"과 "원값×100" 중 그 값에 더 가까운 쪽을 고른다(신병4 6회처럼
+// 비율 단위로 입력된 파일도 같은 규칙으로 맞음). 다른 행에는 기준이 없어 비율로 보되, 비율은 0.5(=50%)를 넘을 수
+// 없으므로 0.5 초과만 이미 %로 본다.
+function scaleRatingCell(raw: unknown, ref: number | null): number | null {
+  if (typeof raw !== "number") return null;
+  let value = raw > 0.5 ? raw : raw * 100;
+  if (ref !== null && ref > 0 && raw > 0) {
+    value = Math.abs(Math.log(raw / ref)) <= Math.abs(Math.log((raw * 100) / ref)) ? raw : raw * 100;
+  }
+  return Math.round(value * 100000) / 100000;
+}
+
+// 시작·종료시간 셀은 파일마다 문자열("22:00:00")이거나 엑셀 시간 숫자(0.9167)로 들어온다(연애박사 1회는 숫자).
+// 숫자를 그대로 문자열로 바꾸면 "0.9166…"가 되어 그래프 시간축이 깨진다 — 예능 양식 파서와 같은 방식으로 변환한다.
+function cellToTimeString(v: unknown): string | null {
+  if (typeof v === "number") {
+    const totalSeconds = Math.round(v * 86400);
+    const hh = String(Math.floor(totalSeconds / 3600) % 24).padStart(2, "0");
+    const mm = String(Math.floor(totalSeconds / 60) % 60).padStart(2, "0");
+    const ss = String(totalSeconds % 60).padStart(2, "0");
+    return `${hh}:${mm}:${ss}`;
+  }
+  const text = cellText(v);
+  return text || null;
+}
+
+// 실측 확인(연애박사 1회·신병4 6회): 회차 시트의 "기간 | 시청자수 | 시청률 | 점유율 | 순위 …" 헤더 바로 윗줄이
+// 그룹 라벨("ENA 수도권 2049", "ENA 가구(전국)", "ENA 가구(수도권)")이고, 헤더 아래 "<프로그램> N회" 줄이 이
+// 프로그램의 성적이다. 라벨·헤더가 기대와 다르면 null(추정하지 않음).
+function extractOwnStats(rows: unknown[][], episodeNumber: number): ManualOwnStats | null {
+  const headerIdx = rows.findIndex((r) => cellText(r[1]) === "기간" && cellText(r[3]) === "시청률");
+  if (headerIdx < 1) return null;
+  const header = rows[headerIdx];
+  const groups = rows[headerIdx - 1] ?? [];
+  const label = new RegExp(`(^|\\s)${episodeNumber}\\s*회`);
+  let row: unknown[] | null = null;
+  for (let i = headerIdx + 1; i < Math.min(rows.length, headerIdx + 8); i++) {
+    if (label.test(cellText(rows[i][1]))) {
+      row = rows[i];
+      break;
+    }
+  }
+  if (!row) return null;
+  const num = (v: unknown) => (typeof v === "number" ? v : null);
+  const groupCol = (re: RegExp) => groups.findIndex((g) => re.test(cellText(g)));
+  const nat = groupCol(/가구.*전국|전국.*가구/);
+  const metro = groupCol(/가구.*수도권|수도권.*가구/);
+  const pair = (col: number) => (col >= 0 && cellText(header[col]) === "시청률" && cellText(header[col + 1]) === "순위" ? { rating: num(row![col]), rank: num(row![col + 1]) } : { rating: null, rank: null });
+  const target = { rating: num(row[3]), share: cellText(header[4]) === "점유율" ? num(row[4]) : null, rank: cellText(header[5]) === "순위" ? num(row[5]) : null };
+  const national = pair(nat);
+  const metroPair = pair(metro);
+  return {
+    targetRating: target.rating,
+    targetShare: target.share,
+    targetRank: target.rank,
+    householdRating: national.rating,
+    householdRank: national.rank,
+    householdMetroRating: metroPair.rating,
+    householdMetroRank: metroPair.rank,
+  };
+}
+
 // 실측 확인: "동시간대 경쟁 프로그램" 표 — 헤더 행(열B="프로그램", 열F="채널"...) 다음부터
 // 데이터. 열 위치(0-index): 1=순위("#" 또는 숫자), 2=프로그램명, 5=채널명, 6=시작시간,
 // 7=종료시간, 8=2049시청률, 9=2049점유율, 10=가구시청률(scalePercentCell로 스케일 보정).
-function extractCompetitorPrograms(rows: unknown[][]): ManualCompetitorProgramRow[] {
+function extractCompetitorPrograms(rows: unknown[][], own: ManualOwnStats | null): ManualCompetitorProgramRow[] {
   const headerIdx = rows.findIndex((r) => cellText(r[1]) === "프로그램" && cellText(r[5]) === "채널");
   if (headerIdx < 0) return [];
   const result: ManualCompetitorProgramRow[] = [];
@@ -109,15 +185,16 @@ function extractCompetitorPrograms(rows: unknown[][]): ManualCompetitorProgramRo
     const programName = cellText(r[2]);
     if (!programName) break; // 표가 끝나면 중단
     const rankRaw = cellText(r[1]);
+    const isSelf = rankRaw === "#" || rankRaw === "";
     result.push({
-      rank: rankRaw === "#" || rankRaw === "" ? null : Number(rankRaw),
+      rank: isSelf ? null : Number(rankRaw),
       program_name: programName,
       channel_name: cellText(r[5]),
-      start_time: cellText(r[6]) || null,
-      end_time: cellText(r[7]) || null,
-      target_rating: scalePercentCell(r[8]),
+      start_time: cellToTimeString(r[6]),
+      end_time: cellToTimeString(r[7]),
+      target_rating: scaleRatingCell(r[8], isSelf ? own?.targetRating ?? null : null),
       target_share: scalePercentCell(r[9]),
-      household_rating: scalePercentCell(r[10]),
+      household_rating: scaleRatingCell(r[10], isSelf ? own?.householdRating ?? null : null),
     });
   }
   return result;
@@ -194,6 +271,7 @@ export function parseManualDramaReportWorkbook(buffer: Buffer, fileName: string)
 
     const colBValues = rows.map((r) => cellText(r[1]));
     const { target, household } = extractChannelRanking(rows);
+    const ownStats = extractOwnStats(rows, parsedTitle.episodeNumber);
     reports.push({
       episodeNumber: parsedTitle.episodeNumber,
       broadcastDate: parsedTitle.broadcastDate,
@@ -202,7 +280,8 @@ export function parseManualDramaReportWorkbook(buffer: Buffer, fileName: string)
       minuteRatings: extractMinuteRatings(minuteRows, parsedTitle.episodeNumber),
       targetRanking: target,
       householdRanking: household,
-      competitorPrograms: extractCompetitorPrograms(rows),
+      competitorPrograms: extractCompetitorPrograms(rows, ownStats),
+      ownStats,
     });
   }
 

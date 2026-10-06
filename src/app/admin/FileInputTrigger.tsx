@@ -16,10 +16,13 @@ export function FileInputTrigger({
   inputRef,
   accept,
   multiple,
+  onFiles,
 }: {
   inputRef: RefObject<HTMLInputElement | null>;
   accept: string;
   multiple?: boolean;
+  /** 파일을 고르거나 놓는 즉시 호출 — "파일 선택 → 업로드 버튼" 두 단계를 한 단계로 줄이는 위젯이 쓴다. */
+  onFiles?: (files: File[]) => void;
 }) {
   const [fileNames, setFileNames] = useState<string[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -34,6 +37,7 @@ export function FileInputTrigger({
       Array.from(files).forEach((f) => dt.items.add(f));
       inputRef.current.files = dt.files;
     }
+    onFiles?.(Array.from(files));
   }
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
@@ -50,7 +54,11 @@ export function FileInputTrigger({
         accept={accept}
         multiple={multiple}
         className="hidden"
-        onChange={(e) => setFileNames(Array.from(e.target.files ?? []).map((f) => f.name))}
+        onChange={(e) => {
+          const list = Array.from(e.target.files ?? []);
+          setFileNames(list.map((f) => f.name));
+          if (list.length > 0) onFiles?.(list);
+        }}
       />
       <div
         role="button"

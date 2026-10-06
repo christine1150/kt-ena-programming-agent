@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
 import { parseManualOriginalReportWorkbook } from "@/lib/manualOriginalReportParse";
+import { detectReportChannelCode } from "@/lib/manualReportChannel";
 
 export async function POST(request: Request) {
   const admin = await getAdminSession();
@@ -17,14 +18,9 @@ export async function POST(request: Request) {
 
   const formData = await request.formData();
   const file = formData.get("file");
-  const channelCode = formData.get("channelCode");
-  if (!(file instanceof File) || typeof channelCode !== "string" || !channelCode) {
-    return NextResponse.json({ ok: false, message: "파일과 채널을 모두 지정해주세요." }, { status: 400 });
-  }
-
-  const { data: channel } = await supabase.from("channels").select("id").eq("code", channelCode).maybeSingle();
-  if (!channel) {
-    return NextResponse.json({ ok: false, message: "채널 정보를 찾을 수 없습니다." }, { status: 400 });
+  const channelCodeInput = formData.get("channelCode");
+  if (!(file instanceof File)) {
+    return NextResponse.json({ ok: false, message: "파일을 지정해주세요." }, { status: 400 });
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -33,7 +29,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: parsed.message }, { status: 400 });
   }
 
-  const saved: { episodeNumber: number; broadcastDate: string; canonicalNameNormalized: string }[] = [];
+  // 사용자 지시(2026-10-06): 채널 선택 없이 올린다 — 제목 셀의 채널명으로 자동 인식하고, 못 찾을 때만 선택값을 쓴다.
+  const channelCode = typeof channelCodeInput === "string" && channelCodeInput ? channelCodeInput : detectReportChannelCode(buffer);
+  if (!channelCode) {
+    return NextResponse.json({ ok: false, needChannel: true, message: "파일에서 채널을 찾지 못했습니다. 채널을 선택해주세요." }, { status: 400 });
+  }
+  const { data: channel } = await supabase.from("channels").select("id").eq("code", channelCode).maybeSingle();
+  if (!channel) {
+    return NextResponse.json({ ok: false, message: "채널 정보를 찾을 수 없습니다." }, { status: 400 });
+  }
+
+  const saved: { episodeNumber: number; broadcastDate: string; canonicalNameNormalized: string; programName: string | null; channelCode: string }[] = [];
   for (const report of parsed.reports) {
     const { error } = await supabase.from("program_manual_reports").upsert(
       {
@@ -49,7 +55,7 @@ export async function POST(request: Request) {
       },
       { onConflict: "channel_id,canonical_name_normalized,broadcast_date" }
     );
-    if (!error) saved.push({ episodeNumber: report.episodeNumber, broadcastDate: report.broadcastDate, canonicalNameNormalized: report.canonicalNameNormalized });
+    if (!error) saved.push({ episodeNumber: report.episodeNumber, broadcastDate: report.broadcastDate, canonicalNameNormalized: report.canonicalNameNormalized, programName: report.programName, channelCode });
   }
 
   if (saved.length === 0) {
