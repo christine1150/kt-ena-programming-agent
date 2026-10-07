@@ -1148,9 +1148,10 @@ function RankPair({
 }) {
   if (targetScope === "peer") {
     return (
-      <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`}>
-        (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>)
-        <span className="ml-1 text-[0.62em] font-normal text-zinc-400">경쟁군 목표 {targetRankNum ?? "-"}위</span>
+      // 사용자 지시(2026-10-07): "경쟁군 목표 2위"라고 길게 적지 말고 다른 채널처럼 괄호 안에 (오늘/목표)로 — 목표 2위는 경쟁채널 중 순위라 마우스 오버로 풀어 준다.
+      <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`} title={`오늘 시장 순위 ${todayRank ?? "-"}위 / 목표: 경쟁채널 중 ${targetRankNum ?? "-"}위`}>
+        (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>
+        <span className="font-medium">/{targetRankNum ?? "-"}</span>)
         {baselineAvgRank !== null && baselineAvgRank !== undefined && <span className="ml-1 text-[0.7em] font-normal text-zinc-300">평소{Math.round(baselineAvgRank)}</span>}
       </span>
     );
@@ -1246,15 +1247,15 @@ function ChannelHero({
         )}
       </div>
       {/* 숫자·순위·등락을 하나의 baseline에 정렬 — 정교한 alignment 지시. */}
-      <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-[64px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em] text-zinc-900">
+      <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-[56px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em] text-zinc-900">
           {formatRating(channel.currentRating)}
         </span>
-        <RankPair todayRank={channel.currentRank} targetRankNum={heroTargetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[28px]" targetScope={parseTargetRank(channel.targetRank).scope} />
+        <RankPair todayRank={channel.currentRank} targetRankNum={heroTargetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[26px]" targetScope={parseTargetRank(channel.targetRank).scope} />
         {/* 사용자 재지시(2026-08-22/25): ENA도 6개 타일과 동일하게 RankChangeIndicator 하나만. */}
         <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
-      <div className="mt-3">
+      <div className="mt-2">
         <KpiLines kpi={kpi} detailed />
       </div>
       {/* 사용자 재지시(2026-08-22): 도넛 게이지 대신 6개 타일과 동일한 최근 7일 스파크라인.
@@ -1263,8 +1264,8 @@ function ChannelHero({
           사용자 재지시(2026-09-03, 2차): "너무 완만해서 등락을 알 수 없음" — 높이도 14→48로
           키워 같은 등락이 더 뚜렷하게 보이도록 하고, 포인트에 마우스오버 시 "N월 N일 · 순위"
           툴팁을 붙인다. */}
-      <div className="mt-5">
-        <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} width={293} height={48} points={channel.recentRatingsDetail} />
+      <div className="mt-3">
+        <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} width={293} height={36} points={channel.recentRatingsDetail} />
       </div>
       {/* 사용자 지시(2026-09-20): "AI 편성 비서와 오늘의 액션 요약은 삭제. 대신 오늘의 시청률
           부분에 각 채널 그래프 밑에 오늘의 액션 요약에 들어가 있던 말을 한 줄로 넣어준다" —
@@ -1414,7 +1415,7 @@ function ChannelTile({
     // 없애고, 부모 그리드의 gap-px가 만드는 얇은 격자선만으로 칸을 구분한다(얇은 divider 지시).
     <Link
       href={`/channel/${channel.code}`}
-      className="flex flex-col gap-2.5 bg-white px-4 py-4 transition hover:bg-zinc-50"
+      className="flex flex-col gap-1.5 bg-white px-4 py-3 transition hover:bg-zinc-50"
     >
       {/* 사용자 지시: 채널명 텍스트 제거, 로고만 깔끔하게.
           사용자 재지시(2026-09-02): "채널별 시청률" 타일에서만 ENA Drama/Play/Story는 가로형
@@ -1462,7 +1463,8 @@ function ChannelTile({
         </span>
         <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
       </div>
-      <KpiLines kpi={kpi} />
+      {/* 사용자 지시(2026-10-07): skyUHD는 목표·전일·전주 줄을 보이지 않는다 */}
+      {!isSkyUhd && <KpiLines kpi={kpi} />}
       {/* 사용자 지시(2026-09-03, 2차)의 호버 툴팁을 서브 채널 타일에도 동일하게 적용(같은
           recentRatingsDetail 데이터, 새 조회 없음) — 높이·폭은 타일 기존 값 그대로 유지. */}
       <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#a1a1aa"} points={channel.recentRatingsDetail} />
@@ -1521,7 +1523,8 @@ function ChannelStatusCard({
     // 사용자 지시(2026-09-03, UI/UX REDESIGN): 화면 전체 폭을 쓰는 하나의 넓은 가로 영역 +
     // 내부를 약 40:60으로(왼쪽 ENA 메인 KPI / 오른쪽 6개 서브 채널). 두 영역은 박스가 아니라
     // 얇은 세로 divider로만 나눈다(장식 대신 여백·정렬로 위계 표현 지시).
-    <section className={REPORT_CARD}>
+    // 사용자 지시(2026-10-07): "오늘의 시청률은 너무 많은 높이를 차지하지 않도록" — 이 카드만 위아래 여백과 안쪽 간격을 줄인다.
+    <section className="rounded-xl bg-white px-6 py-5 ring-1 ring-zinc-200/80 sm:px-9 sm:py-5">
       {/* 사용자 지시(2026-09-03): "영어로 위에 장식되어 있는 내용은 제목 오른쪽으로 자리를
           옮겨줄것" — 제목 위 eyebrow에서 제목과 같은 줄 오른쪽 끝으로. */}
       {/* 사용자 재지시(2026-09-03): "Today's ratings는 한글 오른쪽 바로 옆으로 붙여주고" —
@@ -1537,7 +1540,7 @@ function ChannelStatusCard({
             "오늘의 시청률" 카드 자체의 우측 상단으로 옮긴다. 1페이지는 특정 채널 컨텍스트가 없는
             포트폴리오 화면이라 기본 채널을 ENA로 고정하고, 새 탭으로 열어 조회 흐름을 끊지 않는다. */}
       </div>
-      <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-12">
+      <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-10">
         {ena && (
           <ChannelHero
             channel={ena}
@@ -1550,7 +1553,7 @@ function ChannelStatusCard({
         {/* 바깥 div는 세로 divider·좌측 여백만, 안쪽 grid는 gap-px + 배경색으로 칸 사이 1px
             격자선만 남기는 표형 배치(테두리 박스 없음) — 두 역할을 한 요소에 겹치면 여백까지
             격자 배경색으로 칠해지므로 분리한다. */}
-        <div className="lg:self-start lg:border-l lg:border-zinc-100 lg:pl-12">
+        <div className="lg:self-start lg:border-l lg:border-zinc-100 lg:pl-10">
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-zinc-100 sm:grid-cols-3">
             {rest.map((c) => (
               <ChannelTile

@@ -5,6 +5,7 @@
 // 프로그램명이 길면 글씨를 줄여 한 줄에 넣는다(잘라 내지 않음). 값은 API(/api/dashboard/top-programs)가 저장된 시청률을 고른 것이며 이 컴포넌트는 그리기만 한다.
 import { useLayoutEffect, useRef, useState } from "react";
 import { displayProgramName, formatRating, type TopProgramRow } from "@/lib/dashboard/marketTopPrograms";
+import { channelBrand } from "@/lib/dashboard/channelBrandColors";
 import { useContextData } from "@/lib/workspace/useContextData";
 
 interface Payload {
@@ -66,7 +67,7 @@ function Skeleton() {
   return (
     <div className="grid gap-x-6 md:grid-cols-3" aria-busy="true" aria-label="상위 프로그램을 불러오는 중">
       {Array.from({ length: 21 }, (_, i) => (
-        <div key={i} className="flex items-center gap-2 py-[7px]">
+        <div key={i} className="flex items-center gap-2 py-[5px]">
           <div className="h-3.5 w-4 animate-pulse rounded bg-zinc-100" />
           <div className="h-3.5 w-12 animate-pulse rounded bg-zinc-100" />
           <div className="h-3.5 flex-1 animate-pulse rounded bg-zinc-100" />
@@ -84,9 +85,11 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
     if (!res.ok || !body.ok) throw new Error(body.message ?? "상위 프로그램을 불러오지 못했습니다.");
     return body as Payload;
   });
-  // 사용자 지시(2026-10-07): 드라마·예능 프로그램만 보기 전환
-  const [onlyDramaVariety, setOnlyDramaVariety] = useState(false);
+  // 사용자 지시(2026-10-07): 드라마·예능이 먼저 보이는 것이 기본, 전체는 버튼을 눌렀을 때만(구 응답에 드라마·예능 목록이 없으면 전체로 대신한다)
+  const [showAll, setShowAll] = useState(false);
   const data = f.data;
+  const hasGenreRows = !!data?.rowsDramaVariety;
+  const onlyDramaVariety = !showAll && hasGenreRows;
   const rows = data ? (onlyDramaVariety ? (data.rowsDramaVariety ?? []) : data.rows) : [];
   const stale = !!data && !f.isCurrent; // 날짜를 바꾸는 중에는 이전 날짜 값임을 흐리게 표시
   const cov = data?.coverage;
@@ -100,15 +103,15 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
       <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <div role="group" aria-label="장르 보기" className="inline-flex rounded-full bg-zinc-100 p-0.5 text-[11px]">
           {[
-            { v: false, label: "전체" },
-            { v: true, label: "드라마·예능" },
+            { all: false, label: "드라마·예능" },
+            { all: true, label: "전체" },
           ].map((o) => (
             <button
               key={o.label}
               type="button"
-              aria-pressed={onlyDramaVariety === o.v}
-              onClick={() => setOnlyDramaVariety(o.v)}
-              className={`rounded-full px-2.5 py-0.5 font-medium transition ${onlyDramaVariety === o.v ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800"}`}
+              aria-pressed={showAll === o.all}
+              onClick={() => setShowAll(o.all)}
+              className={`rounded-full px-2.5 py-0.5 font-medium transition ${showAll === o.all ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800"}`}
             >
               {o.label}
             </button>
@@ -145,16 +148,23 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
           <ol className="grid grid-cols-1 gap-x-6 md:grid-cols-3">
             {rows.map((r) => (
               // 칸 폭을 고정해 3단 모두에서 순위·채널·프로그램명·시각·시청률 열이 위아래로 정확히 맞는다(사용자 지시 2026-10-07: 정렬 정돈).
-              <li key={`${r.channelName}|${r.startTime}|${r.programName}`} className="grid grid-cols-[1rem_4.7rem_minmax(0,1fr)_2.6rem_5.7rem] items-center gap-x-1.5 py-[6px]">
+              <li key={`${r.channelName}|${r.startTime}|${r.programName}`} className="grid grid-cols-[1rem_4.7rem_minmax(0,1fr)_2.6rem_5.7rem] items-center gap-x-1.5 py-[4px]">
                 <span className={`text-center text-[12px] font-bold tabular-nums ${r.rank <= 3 ? "text-zinc-900" : "text-zinc-400"}`} aria-label={`${r.rank}위`}>
                   {r.rank}
                 </span>
                 <span
                   title={`그날 수도권 개인2049 채널 순위 ${r.channelRank}위`}
-                  className={`block overflow-hidden whitespace-nowrap rounded px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none ${r.own ? "" : "bg-zinc-100 text-zinc-700"}`}
+                  className={`block overflow-hidden whitespace-nowrap rounded px-1.5 py-0.5 text-center text-[11px] font-bold leading-none ${r.own ? "" : "bg-zinc-100 text-zinc-700"}`}
                   style={r.own ? { backgroundColor: ownChipStyle(r.channelName).bg, color: ownChipStyle(r.channelName).fg } : undefined}
                 >
-                  {chipLabel(r.channelName)}
+                  {/* 자사는 로고색 칩, 경쟁사는 로고색 글씨(JTBC는 그라데이션). 색을 모르는 채널은 기본 회색 */}
+                  {!r.own && channelBrand(r.channelName).gradient ? (
+                    <span style={{ backgroundImage: channelBrand(r.channelName).gradient, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{chipLabel(r.channelName)}</span>
+                  ) : !r.own && channelBrand(r.channelName).color ? (
+                    <span style={{ color: channelBrand(r.channelName).color }}>{chipLabel(r.channelName)}</span>
+                  ) : (
+                    chipLabel(r.channelName)
+                  )}
                   {r.own && <span className="sr-only"> (자사 채널)</span>}
                 </span>
                 <FitOneLine text={displayProgramName(r.channelName, r.programName)} className="text-[13px] font-medium text-zinc-900" />
