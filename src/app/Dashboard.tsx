@@ -2713,7 +2713,7 @@ function buildOriginalInsight(
     bullets.push(
       formatRating(item.rerun_rating) === "0"
         ? `${rerunChannelName} ${rerunLabel} 효과: ${rerunChannelName} ${rerunLabel}(${rerunTimeText}) 시청률은 0%를 기록하여 실질적인 유입 견인 효과를 거두지 못함`
-        : `${rerunChannelName} ${rerunLabel} 효과: ${rerunChannelName} ${rerunLabel}(${rerunTimeText}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 ${crossRetentionPct < 10 ? "유입 효과는 미미함" : "유입을 견인함"}`
+        : `${rerunChannelName} ${rerunLabel} 효과: ${rerunChannelName} ${rerunLabel}(${rerunTimeText}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 ${crossRetentionPct < 10 ? "유입 효과 미미" : "유입을 견인함"}`
     );
     // 사용자 지시(2026-09-07): "유입 효과나 직재방 성과가 평균보다 낮다면 편성 효과가 낮다고
     // 솔직하게 말할것" — 이 재방 채널의 과거 유지율 평균(이미 있는 회차별 추이 데이터로 계산,
@@ -2776,7 +2776,7 @@ function buildOriginalInsight(
       formatRating(item.self_rerun_rating) === "0"
         ? `${broadcastChannelName} ${selfRerunLabel} 효과: 본방 종료 후 재방(${selfRerunTimeText}) 시청률은 0%를 기록하여 실질적인 유입 견인 효과를 거두지 못함`
         : selfRetentionPct < 10
-          ? `${broadcastChannelName} ${selfRerunLabel} 효과: 본방 종료 후 재방(${selfRerunTimeText}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%에 그쳐 유입 효과는 미미함`
+          ? `${broadcastChannelName} ${selfRerunLabel} 효과: 본방 종료 후 재방(${selfRerunTimeText}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%에 그쳐 유입 효과 미미`
           : `${broadcastChannelName} ${selfRerunLabel} 효과: 본방 종료 후 재방(${selfRerunTimeText}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
     );
   }
@@ -3195,6 +3195,16 @@ const COMPETITOR_LOGO_FILE: Record<string, string> = {
   "TV CHOSUN": "TV_CHOSUN.png",
   MBN: "MBN.png",
   채널A: "CHANNEL_A.png",
+  // 사용자가 모아 준 로고 모음(경쟁채널.png)에서 채널명 부분만 잘라 추가(2026-10-07)
+  "MBC every1": "MBC_every1.png",
+  "KBS JOY": "KBS_JOY.png",
+  "tvN STORY": "tvN_STORY.png",
+  "tvN SHOW": "tvN_SHOW.png",
+  "SBS funE": "SBS_funE.png",
+  "SBS Sports": "SBS_Sports.png",
+  "OCN Movies": "OCN_MOVIES.png",
+  "OCN Movies2": "OCN_MOVIES_2.png",
+  "연합뉴스TV": "연합뉴스TV.png",
 };
 function competitorLogoSrc(channelName: string): string {
   const file = COMPETITOR_LOGO_FILE[channelName] ?? `${channelName.replace(/[^A-Za-z0-9가-힣]/g, "_")}.png`;
@@ -3213,7 +3223,7 @@ function competitorLogoSrc(channelName: string): string {
 // 않게 한다.
 function CompetitorLogoBadge({ channelName, color, heightPx = 7 }: { channelName: string; color: string; heightPx?: number }) {
   const [failed, setFailed] = useState(false);
-  const maxWidthPx = Math.round(heightPx * 3.6);
+  const maxWidthPx = Math.round(heightPx * 5);
   if (failed) {
     const badgePx = Math.max(8, Math.round(heightPx * 1.1));
     return (
@@ -3488,7 +3498,7 @@ function ManualMinuteRatingChart({
                 title={`${c.channel_name} '${c.program_name}' ${c.start_time!.slice(0, 5)} ${c.target_rating!.toFixed(3)}%`}
               >
                 <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-                <CompetitorLogoBadge channelName={c.channel_name} color={color} />
+                <CompetitorLogoBadge channelName={c.channel_name} color={color} heightPx={12} />
                 <span className="max-w-[9rem] truncate text-zinc-600">{c.program_name}</span>
                 <span className="shrink-0 font-semibold tabular-nums" style={{ color }}>
                   {c.target_rating!.toFixed(2)}%
