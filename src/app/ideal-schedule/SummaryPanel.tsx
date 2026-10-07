@@ -85,29 +85,36 @@ export function SummaryPanel({
         <h2 className="text-sm font-semibold text-zinc-800">이번 편성안 요약</h2>
         <span className="text-[10px] text-zinc-400">{kpiLabel} 기준</span>
       </div>
-      <div className="mt-2 flex items-end gap-3">
+      {/* 사용자 지시(2026-10-07): "65위 이내 글자 깨지는 것도 해결, 등위랑 시청률이 한 줄에 보이게" — 시청률(+증감)과 등위를 같은 줄 두 칸으로 두고, 등위 글자는 줄바꿈하지 않는다. '크게 다름' 표시는 아래 줄로. */}
+      <div className="mt-2 grid grid-cols-[auto_1fr] items-end gap-x-4 gap-y-1">
         <div>
           <p className="text-[11px] text-zinc-500">주간 기대 시청률</p>
-          <p className="text-2xl font-semibold tabular-nums text-zinc-900">{fmt(idealExp)}</p>
+          <p className="flex items-baseline gap-1.5 whitespace-nowrap">
+            <span className="text-2xl font-semibold tabular-nums text-zinc-900">{fmt(idealExp)}</span>
+            {change !== null && (
+              <span className={`text-sm font-semibold tabular-nums ${Math.abs(change) < 0.0005 ? "text-zinc-500" : change > 0 ? "text-emerald-600" : "text-rose-600"}`}>{signedPct(change)}</span>
+            )}
+          </p>
         </div>
-        {change !== null && (
-          <p className={`pb-1 text-sm font-semibold tabular-nums ${Math.abs(change) < 0.0005 ? "text-zinc-500" : change > 0 ? "text-emerald-600" : "text-rose-600"}`}>{signedPct(change)}</p>
+        {/* 주간 기대 등위(사용자 지시 2026-10-01: 주간 기대 시청률 옆에) */}
+        {s.expectedRank ? (
+          <div className="min-w-0 text-right" title={`${weekWord(s.expectedRank.refWeek, today)}(${periodText(s.expectedRank.refWeek, today)}) 닐슨 주간 등위 ${s.expectedRank.refRank}위와 최근 3달 주간 등위 실적(${s.expectedRank.weeks}주)으로 추정한 값입니다. 실제 순위가 아니며 경쟁 채널 편성 변화는 반영되지 않습니다.`}>
+            <p className="text-[11px] text-zinc-500">주간 기대 등위</p>
+            <p className="whitespace-nowrap text-2xl font-semibold tabular-nums text-zinc-900">{rankText(s.expectedRank)}</p>
+          </div>
+        ) : (
+          <div />
         )}
         {changes?.large && changes.slotShare !== null && (
-          <span className="pb-1 text-[11px] font-semibold text-amber-700" title="기준 편성과 크게 다른 안입니다. 기대 상승만으로 개선이라 단정하지 마세요.">
+          <span className="col-span-2 text-[11px] font-semibold text-amber-700" title="기준 편성과 크게 다른 안입니다. 기대 상승만으로 개선이라 단정하지 마세요.">
             변경 {Math.round(Math.max(changes.slotShare, changes.minuteShare ?? 0) * 100)}% · 크게 다름
           </span>
         )}
-        {/* 주간 기대 등위(사용자 지시 2026-10-01: 주간 기대 시청률 옆에) */}
         {s.expectedRank && (
-          <div className="ml-auto text-right" title={`${weekWord(s.expectedRank.refWeek, today)}(${periodText(s.expectedRank.refWeek, today)}) 닐슨 주간 등위 ${s.expectedRank.refRank}위와 최근 3달 주간 등위 실적(${s.expectedRank.weeks}주)으로 추정한 값입니다. 실제 순위가 아니며 경쟁 채널 편성 변화는 반영되지 않습니다.`}>
-            <p className="text-[11px] text-zinc-500">주간 기대 등위</p>
-            <p className="text-2xl font-semibold tabular-nums text-zinc-900">{rankText(s.expectedRank)}</p>
-            <p className="text-[10px] text-zinc-400">
-              {weekWord(s.expectedRank.refWeek, today)} {s.expectedRank.refRank}위 기준 추정(실적 순위 아님)
-              {run.needs_recalc ? " · 교체 전 계산값" : ""}
-            </p>
-          </div>
+          <p className="col-span-2 text-[10px] text-zinc-400">
+            {weekWord(s.expectedRank.refWeek, today)} {s.expectedRank.refRank}위 기준 추정(실적 순위 아님)
+            {run.needs_recalc ? " · 교체 전 계산값" : ""}
+          </p>
         )}
       </div>
       <p className="text-[11px] text-zinc-500">

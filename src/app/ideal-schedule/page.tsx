@@ -1136,8 +1136,6 @@ function IdealSchedulePage() {
               <span className="text-[11px] text-zinc-400">요약·조건은 편성표 아래에 있습니다</span>
             </div>
           )}
-          {view && <RunStatusStrip run={view.run} change={changeSummary} today={today} busy={!!busy} manualCount={countManualOverrides(ideal)} support={supportCmp} working={view.working} onRecalc={() => void recalc(true)} />}
-          {view?.working && <WorkingPanel working={view.working} busy={!!busy} note={editNote} onUndo={() => void editAction("undo")} onRedo={() => void editAction("redo")} onReevaluate={() => void editAction("reevaluate")} onRevert={() => void revertAll()} />}
           {gridArea}
           {view && (
             <div className="hidden print:block print:pt-2">
@@ -1199,6 +1197,9 @@ function IdealSchedulePage() {
               />
             </div>
           </details>
+          {/* 사용자 지시(2026-10-07): 대상 주·기준 편성 상태 줄과 편성안 버전 패널은 화면 맨 아래(모델 검증 아래)로 */}
+          {view && <RunStatusStrip run={view.run} change={changeSummary} today={today} busy={!!busy} manualCount={countManualOverrides(ideal)} support={supportCmp} working={view.working} onRecalc={() => void recalc(true)} />}
+          {view?.working && <WorkingPanel working={view.working} busy={!!busy} note={editNote} onUndo={() => void editAction("undo")} onRedo={() => void editAction("redo")} onReevaluate={() => void editAction("reevaluate")} onRevert={() => void revertAll()} />}
         </main>
       </div>
 
