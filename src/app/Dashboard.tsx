@@ -2367,6 +2367,72 @@ function buildWeeklyReviewInsights(review: WeeklyReview): string[] {
   return lines;
 }
 
+// 사용자 지시(2026-10-07): "가지고 있는 가장 최근 4개까지 비교해서 볼 수 있도록" — 리뷰가 이미 내려주는 주별·월별 순위·시청률(채널×기간)에서 최근 4개를 나란히 놓고 앞 기간 대비 증감을 보인다(새 계산 없음).
+interface ComparePoint {
+  label: string;
+  rank: number | null;
+  rating: number | null;
+}
+function RecentPeriodCompare({
+  title,
+  rows,
+  themeColorByCode,
+}: {
+  title: string;
+  rows: { code: string; points: ComparePoint[] }[];
+  themeColorByCode: Map<string, string | null>;
+}) {
+  const shown = rows.filter((r) => r.points.length > 0);
+  if (shown.length === 0) return null;
+  const labels = shown[0].points.map((p) => p.label);
+  return (
+    <section className={PANEL} data-section="recent_compare">
+      <PanelHeader title={title} />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-[13px]">
+          <thead>
+            <tr className="text-zinc-500">
+              <th className="pb-2 pr-3 font-medium">채널</th>
+              {labels.map((l, i) => (
+                <th key={l} className={`pb-2 pr-3 font-medium ${i === labels.length - 1 ? "text-zinc-900" : ""}`}>
+                  {l}
+                  {i === labels.length - 1 ? " (최근)" : ""}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((r) => (
+              <tr key={r.code} className="border-t border-zinc-100 align-top">
+                <td className="whitespace-nowrap py-2 pr-3 font-bold" style={{ color: themeColorByCode.get(r.code) ?? "#3f3f46" }}>
+                  {CHANNEL_NAME_BY_CODE[r.code] ?? r.code}
+                </td>
+                {r.points.map((pt, i) => {
+                  const prev = i > 0 ? r.points[i - 1] : null;
+                  const pct = prev && prev.rating !== null && prev.rating > 0 && pt.rating !== null ? ((pt.rating - prev.rating) / prev.rating) * 100 : null;
+                  const rankDiff = prev && prev.rank !== null && pt.rank !== null ? prev.rank - pt.rank : null;
+                  return (
+                    <td key={pt.label} className="whitespace-nowrap py-2 pr-3 tabular-nums">
+                      <span className={i === r.points.length - 1 ? "font-bold text-zinc-900" : "text-zinc-700"}>{formatRating(pt.rating, r.code)}</span>
+                      {pt.rank !== null && <span className="ml-1.5 text-[12px] text-zinc-500">{pt.rank}위</span>}
+                      {(pct !== null || rankDiff) && (
+                        <span className="ml-1.5 text-[12px] font-medium" style={{ color: (pct ?? rankDiff ?? 0) >= 0 ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR }}>
+                          {pct !== null ? `${pct >= 0 ? "▲" : "▼"}${Math.abs(pct).toFixed(0)}%` : ""}
+                          {rankDiff ? ` ${rankDiff > 0 ? "↑" : "↓"}${Math.abs(rankDiff)}` : ""}
+                        </span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function WeeklyReviewCard({ review, themeColorByCode }: { review: WeeklyReview; themeColorByCode: Map<string, string | null> }) {
   const byCode = new Map(review.channels.map((c) => [c.channelCode, c]));
   const groupA = MONTHLY_GROUP_A.map((code) => byCode.get(code)).filter((c): c is WeeklyReviewChannel => !!c);
@@ -5343,6 +5409,14 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
     const qs = serializeContext({ ...urlCtx, ...patch }).toString();
     router[mode](qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
+  // 사용자 지시(2026-10-07): "일간·주간·월간을 누르면 해당 리뷰 중 가장 최근 것을 보이게" — 주간은 가장 최근 일요일, 월간은 가장 최근 월말(그 날짜에 리뷰가 계산된다), 일간은 가장 최근 수신일.
+  function goView(v: HomeView) {
+    const latest = data?.latestAvailableDate ?? data?.asOfDate ?? null;
+    if (!latest) return updateUrl({ view: v });
+    if (v === "weekly") return updateUrl({ view: v, date: lastSundayOnOrBefore(latest) });
+    if (v === "monthly") return updateUrl({ view: v, date: lastMonthEndOnOrBefore(latest) });
+    return updateUrl({ view: v, date: null });
+  }
   // 요청 키가 같을 때만 현재 값이다. 날짜를 바꾸는 동안 이전 값은 'stale'로 표시되고, 늦게 도착한 이전 응답은 버려진다.
   const fetched = useContextData<DashboardData>(dataKey(urlCtx, "home"), async (signal) => {
     const res = await fetch(urlCtx.date ? `/api/dashboard/page1?date=${urlCtx.date}` : "/api/dashboard/page1", { signal });
@@ -5444,11 +5518,11 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
       : view === "weekly"
         ? data.weeklyReview
           ? `${formatMonthDayDow(data.weeklyReview.weekStart)} ~ ${formatMonthDayDow(data.weeklyReview.weekEnd)}`
-          : "주간 리뷰 없음(기준일이 일요일일 때 계산)"
+          : "주간 리뷰 없음"
         : view === "monthly"
           ? data.monthlyReview
             ? `${data.monthlyReview.year}년 ${data.monthlyReview.month}월`
-            : "월간 리뷰 없음(월말 기준일에 계산)"
+            : "월간 리뷰 없음"
           : shortDateKo(data.asOfDate),
     compareLabel: view === "weekly" ? "전주" : view === "monthly" ? "전월" : "전일·전주 동요일(KPI 표에 표기)",
     latestDate: data?.latestAvailableDate ?? null,
@@ -5720,7 +5794,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                   </p>
                 )}
                 {/* 사용자 지시(2026-10-06): "오늘의 시청률" 아랫줄에 해당일 채널 순위 1~20위 안의 상위 프로그램 9개(수2049, 괄호 안 가구)를 3단으로 */}
-                <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} kpiRows={kpiGroups.flatMap((g) => g.rows)} aiByCode={aiByCode} viewTabs={<HomeViewTabs view={view} onChange={(v) => updateUrl({ view: v })} />} footer={<MarketTopPrograms date={data.asOfDate} />} />
+                <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} kpiRows={kpiGroups.flatMap((g) => g.rows)} aiByCode={aiByCode} viewTabs={<HomeViewTabs view={view} onChange={goView} />} footer={<MarketTopPrograms date={data.asOfDate} />} />
 
                 {/* 사용자 지시(2026-08-26): 월요일엔 주말 리포트(토·일) — 일간 보기의 변화 근거에 붙인다. */}
                 {data.weekendReport && <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />}
@@ -5779,19 +5853,24 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
             {view === "weekly" && (
               <>
                 <div className="flex justify-end">
-                  <HomeViewTabs view={view} onChange={(v) => updateUrl({ view: v })} />
+                  <HomeViewTabs view={view} onChange={goView} />
                 </div>
                 {data.weeklyReview ? (
-                  <WeeklyReviewCard review={data.weeklyReview} themeColorByCode={themeByCode} />
+                  <>
+                    <WeeklyReviewCard review={data.weeklyReview} themeColorByCode={themeByCode} />
+                    <RecentPeriodCompare
+                      title="최근 4주 비교"
+                      themeColorByCode={themeByCode}
+                      rows={data.weeklyReview.channels.map((c) => ({
+                        code: c.channelCode,
+                        points: c.weeks.slice(-4).map((w) => ({ label: `${shortDateKo(w.weekStart).replace(/\(.\)/, "")}~`, rank: w.rank, rating: w.rating })),
+                      }))}
+                    />
+                  </>
                 ) : (
                   <section className={PANEL} data-section="week_review">
                     <PanelHeader title="주간 성적과 기여 분해" />
-                    <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-600">
-                      주간 리뷰는 표시 기준일이 일요일일 때 계산됩니다(지금 기준일 {shortDateKo(data.asOfDate)}). 공식 주간 값이 없어서가 아니라 계산 조건이 아닐 뿐이며, 가장 최근 일요일({shortDateKo(lastSundayOnOrBefore(data.asOfDate))})로 보면 그 주 리뷰를 볼 수 있습니다.{" "}
-                      <button type="button" className="font-medium text-indigo-700 underline" onClick={() => updateUrl({ date: lastSundayOnOrBefore(data.asOfDate), view: "weekly" })}>
-                        {shortDateKo(lastSundayOnOrBefore(data.asOfDate))} 주간 보기
-                      </button>
-                    </p>
+                    <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-500">이 기간의 주간 리뷰가 없습니다.</p>
                   </section>
                 )}
                 <NextWeekPanel items={nextWeekItems} ctx={urlCtx} />
@@ -5802,19 +5881,24 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
             {view === "monthly" && (
               <>
                 <div className="flex justify-end">
-                  <HomeViewTabs view={view} onChange={(v) => updateUrl({ view: v })} />
+                  <HomeViewTabs view={view} onChange={goView} />
                 </div>
                 {data.monthlyReview ? (
-                  <MonthlyReviewCard review={data.monthlyReview} themeColorByCode={themeByCode} />
+                  <>
+                    <MonthlyReviewCard review={data.monthlyReview} themeColorByCode={themeByCode} />
+                    <RecentPeriodCompare
+                      title="최근 4개월 비교"
+                      themeColorByCode={themeByCode}
+                      rows={data.monthlyReview.channels.map((c) => ({
+                        code: c.channelCode,
+                        points: c.months.slice(-4).map((m) => ({ label: `${m.month}월`, rank: m.rank, rating: m.rating })),
+                      }))}
+                    />
+                  </>
                 ) : (
                   <section className={PANEL} data-section="month_review">
                     <PanelHeader title="월간 성적" />
-                    <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-600">
-                      월간 리뷰는 표시 기준일이 그 달의 마지막 날일 때 계산됩니다(지금 기준일 {shortDateKo(data.asOfDate)}). 가장 최근 월말({shortDateKo(lastMonthEndOnOrBefore(data.asOfDate))})로 보면 그 달 리뷰를 볼 수 있습니다.{" "}
-                      <button type="button" className="font-medium text-indigo-700 underline" onClick={() => updateUrl({ date: lastMonthEndOnOrBefore(data.asOfDate), view: "monthly" })}>
-                        {shortDateKo(lastMonthEndOnOrBefore(data.asOfDate))} 월간 보기
-                      </button>
-                    </p>
+                    <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-500">이 기간의 월간 리뷰가 없습니다.</p>
                   </section>
                 )}
                 <MonthlyPlanningPanels channels={monthlyItems} monthLabel={data.monthlyReview ? `${data.monthlyReview.year}-${data.monthlyReview.month}` : null} ctx={urlCtx} />
