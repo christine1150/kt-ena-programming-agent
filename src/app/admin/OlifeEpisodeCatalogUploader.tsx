@@ -64,7 +64,7 @@ export default function OlifeEpisodeCatalogUploader() {
         </button>
       </div>
 
-      {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+      {errorMessage && <p className="text-sm text-red-600" role="alert">{errorMessage}</p>}
 
       {results && (
         <div className="flex flex-col gap-1.5 text-sm">

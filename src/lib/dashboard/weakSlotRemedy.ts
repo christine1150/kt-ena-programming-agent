@@ -190,9 +190,9 @@ async function compute(channelCode: string, asOfDate: string, focus: string, hou
 
   // ── 문구 조립: 1줄 = 원인(설명 가능한 외부 요인 우선), 2줄 = 할 일 ──
   let cause: string;
-  if (holiday) cause = `${holiday.name} 전후 방영${likelyRerun ? "인 재방 방송분" : ""}이라 평소와 단순 비교가 어렵습니다`;
-  else if (likelyRerun) cause = premium ? `${where} 자리는 이 프로그램의 본방 자리(${premium.label}, 평소 ${fmt(premium.med)})가 아닌 재방 자리로, 같은 자리 중앙값은 ${fmt(med)}입니다` : `${where} 재방 방송분으로, 같은 자리 재방 최근 ${sample}회 중앙값 ${fmt(med)} 대비 ${fmt(w.a.rating)}입니다`;
-  else if (!likelyRerun && leadIn && leadIn.dev <= -0.2 && Math.abs(leadIn.dev) >= Math.abs(w.dev) * 0.5) cause = `앞 프로그램 '${leadIn.name}'도 평소보다 ▼${pct(leadIn.dev)} 낮아 이어진 하락일 수 있습니다`;
+  if (holiday) cause = `${holiday.name} 전후 방영${likelyRerun ? "인 재방 방송분" : ""}이라 다른 날 방영분과 단순 비교가 어렵습니다`;
+  else if (likelyRerun) cause = premium ? `${where} 자리는 이 프로그램의 본방 자리(${premium.label}, 중앙값 ${fmt(premium.med)})가 아닌 재방 자리로, 같은 자리 중앙값은 ${fmt(med)}입니다` : `${where} 재방 방송분으로, 같은 자리 재방 최근 ${sample}회 중앙값 ${fmt(med)} 대비 ${fmt(w.a.rating)}입니다`;
+  else if (!likelyRerun && leadIn && leadIn.dev <= -0.2 && Math.abs(leadIn.dev) >= Math.abs(w.dev) * 0.5) cause = `앞 프로그램 '${leadIn.name}'도 기준선보다 ▼${pct(leadIn.dev)} 낮아 이어진 하락일 수 있습니다`;
   else if (channelWide) cause = `이 채널 다른 프로그램도 같은 날 대체로 낮아 이 프로그램만의 문제로 보기 어렵습니다`;
   else if (continuing) cause = `같은 자리 최근 ${recent.length + 1}회 중 ${prevBelow + 1}회가 기준선(${fmt(dropLine)}) 아래로, 일시적이 아닌 약세입니다`;
   else cause = `같은 자리 최근 ${sample}회 중 이번 1회만 낮은 단발성 하락으로 보입니다`;
@@ -200,14 +200,14 @@ async function compute(channelCode: string, asOfDate: string, focus: string, hou
   let action: string;
   let concrete = false;
   if (better && likelyRerun) {
-    action = `같은 프로그램이 ${better.label}에는 평소 ${fmt(better.med)}(최근 ${better.n}회)로 ${vsSlot(better.med / med)}이었습니다 — 재방을 그 시간대로 옮기는 안을 검토`;
+    action = `같은 프로그램이 ${better.label}에는 중앙값 ${fmt(better.med)}(최근 ${better.n}회)로 ${vsSlot(better.med / med)}이었습니다 — 재방을 그 시간대로 옮기는 안을 검토`;
     concrete = true;
   } else if (likelyRerun && !holiday && !channelWide) {
     action = `이 재방 자리가 계속 기준선 ${fmt(dropLine)} 아래이면 재방 시간대(요일·시각) 변경을 검토`;
   } else if (holiday || channelWide) {
     action = `다음 주 같은 자리(${DOW_KO[w.a.dow - 1]}요일) 방영이 기준선 ${fmt(dropLine)} 아래인지 확인한 뒤 판단`;
   } else if (better && continuing && !likelyRerun) {
-    action = `같은 프로그램이 ${better.label}에는 평소 ${fmt(better.med)}(최근 ${better.n}회)로 ${vsSlot(better.med / med)}이었습니다 — 이 자리 방송분을 그 시간대로 옮기거나 합치는 안을 검토`;
+    action = `같은 프로그램이 ${better.label}에는 중앙값 ${fmt(better.med)}(최근 ${better.n}회)로 ${vsSlot(better.med / med)}이었습니다 — 이 자리 방송분을 그 시간대로 옮기거나 합치는 안을 검토`;
     concrete = true;
   } else if (leadIn && leadIn.dev <= -0.2) {
     action = `앞 프로그램 보강(앞 편성 점검)이 먼저이며, 이 자리는 다음 방영이 ${fmt(dropLine)} 아래일 때 이동·교체 검토`;

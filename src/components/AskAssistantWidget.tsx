@@ -126,7 +126,7 @@ export function AskAssistantWidget({
           {askLoading ? "확인 중..." : "질문하기"}
         </button>
       </div>
-      {askError && <p className="mt-3 text-sm text-rose-600">{askError}</p>}
+      {askError && <p className="mt-3 text-sm text-rose-600" role="alert">{askError}</p>}
       {askAnswer && (
         <div className="mt-4 space-y-2 rounded-2xl bg-zinc-50 p-4 text-sm">
           <p className="font-semibold text-zinc-800">{askAnswer.conclusion}</p>
@@ -166,7 +166,7 @@ export function AskAssistantWidget({
             </div>
           )}
           {askAnswer.visualization?.type === "table" && (askAnswer.visualization.rows?.length ?? 0) > 0 && (
-            <div className="mt-1 overflow-x-auto rounded-xl bg-white p-3 ring-1 ring-zinc-100">
+            <div className="mt-1 overflow-x-auto rounded-xl bg-white p-3 ring-1 ring-zinc-100" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
               <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
               <table className="w-full text-left text-xs">
                 <thead>
@@ -212,8 +212,8 @@ export function AskAssistantWidget({
                   .filter((s): s is string => s !== null)
                   .join(" ");
                 return (
-                  <div className="overflow-x-auto">
-                    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H }}>
+                  <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
+                    <svg role="img" aria-label="답변에 첨부된 그래프" viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H }}>
                       <text x={2} y={12} fontSize={9} fill="#a1a1aa">
                         {max.toFixed(2)}
                       </text>
@@ -234,7 +234,7 @@ export function AskAssistantWidget({
             </div>
           )}
           {askAnswer.visualization?.type === "heatmap" && (askAnswer.visualization.heatmapRowLabels?.length ?? 0) > 0 && (
-            <div className="mt-1 overflow-x-auto rounded-xl bg-white p-3 ring-1 ring-zinc-100">
+            <div className="mt-1 overflow-x-auto rounded-xl bg-white p-3 ring-1 ring-zinc-100" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
               <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
               {(() => {
                 const viz = askAnswer.visualization!;

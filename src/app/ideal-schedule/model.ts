@@ -189,13 +189,13 @@ export function reasonText(r: Reason, decimals: number): string | null {
     case "STABILITY":
       return typeof v === "number" ? `성과 안정성 ${Math.round(v * 100)}점` : null;
     case "EPISODE_CHAIN":
-      return `같은 시리즈 다음 회차 연결 편성 때 성과 ${fmtIdx(v)}(평소=100, 관측 연관)${r.detail ? ` · ${r.detail}` : ""}`;
+      return `같은 시리즈 다음 회차 연결 편성 때 성과 ${fmtIdx(v)}(같은 슬롯 평균=100, 관측 연관)${r.detail ? ` · ${r.detail}` : ""}`;
     case "MANUAL_SEARCH":
       return r.detail ?? "직접 검색해 추가한 후보";
     case "RIGHTS_AT_SWAP":
       return r.detail ?? "교체 시점 권리 판정";
     case "LEAD_SYNERGY":
-      return `앞 프로그램과 함께 편성됐을 때 성과 ${fmtIdx(v)}(평소=100, 관측 연관이며 효과 단정 아님)`;
+      return `앞 프로그램과 함께 편성됐을 때 성과 ${fmtIdx(v)}(같은 슬롯 평균=100, 관측 연관이며 효과 단정 아님)`;
     case "STRATEGY_MATCH":
       return `${r.detail ?? "경쟁 강세"} 시간대 — 같은 장르로 맞대응(MATCH)`;
     case "STRATEGY_COUNTER":

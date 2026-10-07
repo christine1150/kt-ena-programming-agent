@@ -18,6 +18,7 @@ import { evidenceOf, transferOf, type EvidenceView } from "@/lib/purchaseReview/
 import { markerSpread } from "@/lib/purchaseReview/productionYear";
 import { recoVsSim } from "@/lib/purchaseReview/alignment";
 import { buildReviewSnapshot } from "@/lib/purchaseReview/snapshot";
+import { VENDING } from "@/lib/ui/pageTitles";
 
 const CHANNEL_OPTS: { code: string; name: string }[] = [
   { code: "ENA", name: "ENA" },
@@ -290,7 +291,7 @@ function PurchaseSimulator() {
               <p className="text-xs text-zinc-500">구매 검토 프로그램을 우리 채널에 편성했을 때의 예상 시청률(기본: 최근 3개월 실적 기준)</p>
             </div>
           </div>
-          <Link href={`/ideal-schedule?channel=${channel}`} className="rounded-full px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
+          <Link href={`/ideal-schedule?channel=${channel}`} title={VENDING.linkLabel} className="rounded-full px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
             ← 시청률 자판기
           </Link>
         </div>
@@ -321,7 +322,7 @@ function PurchaseSimulator() {
         )}
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-4 px-4 py-5 md:px-6">
+      <div className="mx-auto max-w-5xl space-y-4 px-4 py-5 md:px-6">
         {/* 검색 */}
         <section className="rounded-2xl border border-zinc-200 bg-white p-4">
           <label className="mb-1.5 block text-sm font-medium text-zinc-800">어떤 프로그램인가요?</label>
@@ -340,7 +341,7 @@ function PurchaseSimulator() {
           </div>
           <p className="mt-1.5 text-xs text-zinc-500">오타·띄어쓰기·부제 차이가 있어도 찾습니다. 요일·시각·타깃을 같이 적으면 아래 조건에 자동으로 채워집니다.</p>
           {busy && <p className="mt-2 text-sm text-zinc-500">{busy}</p>}
-          {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+          {error && <p className="mt-2 text-sm text-rose-600" role="alert">{error}</p>}
         </section>
 
         {/* 채널·기간: 검색 전에도 보이며 구매 추천 목록에도 적용된다 */}
@@ -348,7 +349,7 @@ function PurchaseSimulator() {
           <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <div className="mb-1 text-xs text-zinc-500">편성할 채널</div>
-                <select value={channel} onChange={(e) => { setChannel(e.target.value); setTargets(defaultKpiTargets(e.target.value)); }} className={`${input} w-full`}>
+                <select aria-label="편성할 채널" value={channel} onChange={(e) => { setChannel(e.target.value); setTargets(defaultKpiTargets(e.target.value)); }} className={`${input} w-full`}>
                   {CHANNEL_OPTS.map((c) => (
                     <option key={c.code} value={c.code}>{c.name}</option>
                   ))}
@@ -356,7 +357,7 @@ function PurchaseSimulator() {
               </div>
               <div>
                 <div className="mb-1 text-xs text-zinc-500">실적 기준 기간</div>
-                <select value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} className={`${input} w-full`}>
+                <select aria-label="실적 기준 기간" value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} className={`${input} w-full`}>
                   {WINDOW_OPTS.map((w) => (
                     <option key={w.days} value={w.days}>{w.label}</option>
                   ))}
@@ -434,7 +435,7 @@ function PurchaseSimulator() {
                 <div className="mt-2 space-y-1.5">
                   {slots.map((s, i) => (
                     <div key={i} className="flex items-center gap-1.5">
-                      <select value={s.isoDow} onChange={(e) => setSlots((cur) => cur.map((x, j) => (j === i ? { ...x, isoDow: Number(e.target.value) } : x)))} className={input}>
+                      <select aria-label={`${i + 1}번째 편성 칸 요일`} value={s.isoDow} onChange={(e) => setSlots((cur) => cur.map((x, j) => (j === i ? { ...x, isoDow: Number(e.target.value) } : x)))} className={input}>
                         {DOW.map((d, k) => (
                           <option key={d} value={k + 1}>{d}요일</option>
                         ))}
@@ -513,7 +514,7 @@ function PurchaseSimulator() {
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
         />
-      </main>
+      </div>
     </div>
   );
 }
@@ -562,7 +563,7 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
           </select>
         )}
       </div>
-      {items === null && <p className="mt-2 text-sm text-zinc-500">불러오는 중…</p>}
+      {items === null && <p className="mt-2 text-sm text-zinc-500" role="status">불러오는 중…</p>}
       {items && items.length === 0 && <p className="mt-2 text-sm text-zinc-500">이 채널·기간의 구매 추천은 아직 준비되지 않았습니다.</p>}
       {items && items.length > 0 && (
         <>
@@ -685,7 +686,7 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
       )}
 
       {multi && (
-        <div className="mt-3 overflow-x-auto">
+        <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500">
@@ -770,7 +771,7 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
             {rolling === undefined && (
               <button type="button" onClick={onRolling} className="text-xs text-zinc-500 underline hover:text-zinc-800">기간별 추이 보기(4주·3개월·6개월·1년, 몇 초 걸립니다)</button>
             )}
-            {rolling === "loading" && <p className="text-xs text-zinc-500">기간별 추이를 불러오는 중…</p>}
+            {rolling === "loading" && <p className="text-xs text-zinc-500" role="status">기간별 추이를 불러오는 중…</p>}
             {Array.isArray(rolling) && (
               <table className="w-full text-xs">
                 <thead>
@@ -889,7 +890,7 @@ function ReviewPanel({ review, err, alts, res, onAlts }: { review: (ReviewRespon
         </p>
       )}
       {a.grants.length > 0 && (
-        <div className="mt-3 overflow-x-auto">
+        <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-zinc-200 text-left text-zinc-500">
@@ -987,7 +988,7 @@ function AlternativesPanel({ blocks, res, review }: { blocks: AlternativeBlock[]
                 편성 변경 부담: 최근 3개월 이 시간대 묶음에서 가장 많이 편성된 프로그램은 {b.incumbent.displayName}({b.incumbent.slotAirings}회)입니다. 새 작품이 들어가면 이 자리가 바뀔 수 있습니다(확정 편성표가 아니라 최근 편성 이력 기준).
               </p>
             )}
-            <div className="mt-2 overflow-x-auto">
+            <div className="mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-zinc-200 text-left text-zinc-500">

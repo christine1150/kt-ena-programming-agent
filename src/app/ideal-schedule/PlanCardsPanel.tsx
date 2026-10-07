@@ -72,7 +72,7 @@ export function PlanCardsPanel({ runId, planVersion, workingState, decimals, onS
           <>
             <p className="text-[11px] text-zinc-500">
               지금 편성안 <b className="font-mono text-zinc-800">{data.planVersion}</b>
-              {stale && <span className="ml-1 text-amber-700">(이 카드는 이전 버전 값입니다 — 다시 불러오는 중)</span>}
+              {stale && <span className="ml-1 text-amber-700" role="status">(이 카드는 이전 버전 값입니다 — 다시 불러오는 중)</span>}
               {data.consistency && data.consistency.diff !== null && Math.abs(data.consistency.diff) > 1e-6 && (
                 <span className="ml-1 text-amber-700">
                   · 성과우선안 주간 기대 {data.consistency.evaluated?.toFixed(decimals + 1)}는 화면의 {data.consistency.shown?.toFixed(decimals + 1)}와 다릅니다(같은 모델로 다시 평가한 값과 저장 값의 차이)

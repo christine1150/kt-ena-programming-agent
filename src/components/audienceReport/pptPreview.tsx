@@ -137,7 +137,7 @@ function BlockView({ block, accent, accentBare }: { block: DocBlock; accent: str
     case "table":
       return (
         <div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
           <table className="w-full min-w-[520px] text-sm">
             <thead>
               <tr>
@@ -204,7 +204,7 @@ export function PptPreview({
   const total = slides.length;
 
   return (
-    <main className="mx-auto max-w-4xl px-4 pb-24 pt-8" style={{ "--deck-accent": accent } as React.CSSProperties}>
+    <div className="mx-auto max-w-4xl px-4 pb-24 pt-8" style={{ "--deck-accent": accent } as React.CSSProperties}>
       {/* KT Flow — ena-design assets/fonts 원본을 그대로 서빙(public/ena-design/fonts). 굵기별
           개별 패밀리를 직접 지정한다(합성 볼드 금지 규칙). */}
       <style>{`
@@ -254,7 +254,7 @@ export function PptPreview({
           brand={brand}
         />
       ))}
-    </main>
+    </div>
   );
 }
 

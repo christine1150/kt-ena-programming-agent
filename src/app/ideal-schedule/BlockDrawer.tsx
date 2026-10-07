@@ -280,9 +280,9 @@ export function BlockDrawer({
               )}
             </div>
             {!swappable && <p className="mt-2 text-xs text-zinc-500">필수 편성·잠금 편성은 교체할 수 없습니다.</p>}
-            {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
+            {error && <p className="mt-2 text-xs text-rose-600" role="alert">{error}</p>}
             {cands === null ? (
-              <p className="mt-2 text-xs text-zinc-400">불러오는 중…</p>
+              <p className="mt-2 text-xs text-zinc-400" role="status">불러오는 중…</p>
             ) : cands.length === 0 ? (
               <p className="mt-2 text-xs text-zinc-400">대체 후보가 없습니다.</p>
             ) : (

@@ -75,7 +75,7 @@ export function ReportLoading({ what, hint }: { what: string; hint?: string }) {
 export function ReportError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="p-8" role="alert">
-      <div className="text-rose-600">{message}</div>
+      <div className="text-rose-600" role="alert">{message}</div>
       <button type="button" onClick={onRetry} className="mt-3 rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800">
         다시 시도
       </button>

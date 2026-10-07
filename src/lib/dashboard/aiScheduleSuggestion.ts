@@ -132,7 +132,7 @@ export function basisText(reasons: { code: string; value: number | string | null
     if (r.code === "WEEKDAY_SLOT_FIT" && v !== null) out.push(`이 요일·시간대 적합도 ${v}(프로그램 평균=100)`);
     else if (r.code === "RECENT_4W_INDEX" && v !== null) out.push(`최근 4주 성과가 같은 시간대 평균의 ${v}%`);
     else if (r.code === "TARGET_FIT" && v !== null) out.push(`타깃 구성비 ${v}(채널 평균=100)`);
-    else if (r.code === "LEAD_SYNERGY" && v !== null) out.push(`앞 프로그램과 함께 편성됐을 때 성과 ${v}(평소=100)`);
+    else if (r.code === "LEAD_SYNERGY" && v !== null) out.push(`앞 프로그램과 함께 편성됐을 때 성과 ${v}(같은 슬롯 평균=100)`);
   }
   return out;
 }

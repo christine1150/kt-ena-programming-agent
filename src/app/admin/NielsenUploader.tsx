@@ -105,7 +105,7 @@ export default function NielsenUploader() {
       </div>
 
       {progressText && <p className="mb-3 text-sm text-zinc-500">{progressText}</p>}
-      {errorMessage && <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
+      {errorMessage && <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{errorMessage}</div>}
 
       {results && (
         <div className="space-y-3">
@@ -138,7 +138,7 @@ export default function NielsenUploader() {
                           {r.partial ? " · 일부 항목 실패(아래 경고)" : ""}
                         </span>
                       ) : (
-                        <span className="text-red-600">{r.message}</span>
+                        <span className="text-red-600" role="alert">{r.message}</span>
                       )}
                       {r.kind === "daily" && r.missingSheets && r.missingSheets.length > 0 && (
                         <div className="text-xs text-amber-600">누락된 시트(참고용, 처리엔 영향 없음): {r.missingSheets.join(", ")}</div>

@@ -35,6 +35,7 @@ import type { WorkingView } from "@/lib/idealSchedule/workingView";
 import { changeHeadline, countManualOverrides, summarizeChanges } from "./changeSummary";
 import { kstToday } from "@/lib/workspace/dates";
 import { compareOnCommonSupport, type ComparableBlock } from "@/lib/idealSchedule/comparison";
+import { VENDING } from "@/lib/ui/pageTitles";
 import { periodText, weekLabel, weekWord } from "@/lib/workspace/weekCompare";
 import { SMALL_GAIN_RATIO, mondayOfLocal, normalizeBlock, rankText, signedPct, weeklyExpected, type BlockRow, type CompareRow, type RunRow } from "./model";
 
@@ -62,7 +63,7 @@ const WEIGHT_LABEL: Record<string, string> = { kpi: "KPI 성과", target: "타�
 const WEIGHT_ORDER = ["kpi", "weekday_slot", "target", "trend", "stability", "lead"];
 const WEIGHT_HELP: Record<string, string> = {
   kpi: "최근 3달 동안 실제로 시청률이 잘 나온 프로그램을 우선합니다.",
-  weekday_slot: "그 요일·시간대에 평소 잘 나오는 프로그램을 우선합니다.",
+  weekday_slot: "그 요일·시간대의 과거 시청률이 높았던 프로그램을 우선합니다.",
   target: "채널의 핵심 시청층이 많이 보는 프로그램을 우선합니다.",
   trend: "최근 4주 성적이 3달 평균보다 오르는 프로그램을 우선합니다.",
   stability: "회차마다 시청률이 들쭉날쭉하지 않고 꾸준한 프로그램을 우선합니다.",
@@ -749,7 +750,10 @@ function IdealSchedulePage() {
           <div className="flex min-w-0 items-center gap-3">
             <VendingMachineIcon size={22} />
             <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold text-zinc-900">{channelOpt?.name ?? channelCode} 시청률 자판기</h1>
+              <h1 className="truncate text-base font-semibold text-zinc-900">
+                {channelOpt?.name ?? channelCode} {VENDING.productName}
+                <span className="ml-1.5 text-xs font-normal text-zinc-500">· {VENDING.descriptor}</span>
+              </h1>
               <p className="truncate text-xs text-zinc-500">
                 {view ? (
                   <>
@@ -776,7 +780,7 @@ function IdealSchedulePage() {
                 </Link>
               ))}
             </div>
-            <button type="button" disabled={!!busy || !opts} onClick={generate} className="group rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
+            <button type="button" disabled={!!busy || !opts} onClick={generate} title={busy ? `${busy} (끝나면 다시 누를 수 있습니다)` : !opts ? "채널·주차 선택지를 불러오는 중이라 아직 누를 수 없습니다" : `${VENDING.actionDescriptor} — 최근 3달 실제 시청률로 계산합니다`} className="group rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
               <span className="inline-flex items-center gap-1.5">
                 <GachaIcon size={18} />
                 편성표 뽑기
@@ -787,11 +791,11 @@ function IdealSchedulePage() {
             </button>
             {/* 사용자 지시(2026-09-30): 엑셀 저장·인쇄는 간단한 아이콘 버튼으로 */}
             {runId ? (
-              <a href={`/api/scheduling/ideal-schedule/${runId}/export`} title="엑셀 저장" aria-label="엑셀 저장" className={iconBtn}>
+              <a href={`/api/scheduling/ideal-schedule/${runId}/export`} title="엑셀 내려받기" aria-label="엑셀 내려받기" className={iconBtn}>
                 <ExcelIcon />
               </a>
             ) : (
-              <button type="button" disabled title="엑셀 저장" aria-label="엑셀 저장" className={iconBtn}>
+              <button type="button" disabled title="엑셀 내려받기" aria-label="엑셀 내려받기" className={iconBtn}>
                 <ExcelIcon />
               </button>
             )}
@@ -921,7 +925,7 @@ function IdealSchedulePage() {
                 </div>
               )}
             </div>
-            <button type="button" disabled={!!busy || !opts} onClick={generate} className="group mt-3 w-full rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
+            <button type="button" disabled={!!busy || !opts} onClick={generate} title={busy ? `${busy} (끝나면 다시 누를 수 있습니다)` : !opts ? "채널·주차 선택지를 불러오는 중이라 아직 누를 수 없습니다" : `${VENDING.actionDescriptor} — 위 조건으로 새 편성안을 만듭니다(저장은 따로 합니다)`} className="group mt-3 w-full rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
               <span className="inline-flex items-center gap-1.5">
                 <GachaIcon size={19} />
                 이 조건으로 편성표 뽑기
@@ -986,7 +990,7 @@ function IdealSchedulePage() {
                   </select>
                 </label>
                 <p className="text-[11px] leading-snug text-zinc-400">
-                  경쟁채널이 강한 시간대에 같은 장르로 맞설지(MATCH) 다른 장르로 피할지(COUNTER)를 반영합니다. 경쟁사 프로그램은 실제 편성 가능한 콘텐츠가 아니며 &lsquo;가상&rsquo;으로 표시됩니다.
+                  경쟁채널이 강한 시간대에 같은 장르로 맞설지(맞대응) 다른 장르로 피할지(비껴가기)를 반영합니다. 경쟁사 프로그램은 실제 편성 가능한 콘텐츠가 아니며 &lsquo;가상&rsquo;으로 표시됩니다.
                 </p>
               </div>
             )}
@@ -1123,7 +1127,7 @@ function IdealSchedulePage() {
         </aside>
 
         {/* 우측: 편성표 */}
-        <main className="order-1 min-w-0 space-y-3 xl:order-2">
+        <div className="order-1 min-w-0 space-y-3 xl:order-2">
           {view && summary && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm xl:hidden print:hidden">
               <span>
@@ -1200,7 +1204,7 @@ function IdealSchedulePage() {
           {/* 사용자 지시(2026-10-07): 대상 주·기준 편성 상태 줄과 편성안 버전 패널은 화면 맨 아래(모델 검증 아래)로 */}
           {view && <RunStatusStrip run={view.run} change={changeSummary} today={today} busy={!!busy} manualCount={countManualOverrides(ideal)} support={supportCmp} working={view.working} onRecalc={() => void recalc(true)} />}
           {view?.working && <WorkingPanel working={view.working} busy={!!busy} note={editNote} onUndo={() => void editAction("undo")} onRedo={() => void editAction("redo")} onReevaluate={() => void editAction("reevaluate")} onRevert={() => void revertAll()} />}
-        </main>
+        </div>
       </div>
 
       {selected && runId && (

@@ -271,7 +271,7 @@ export function computeEfficiencyRanking(slotProfile: ProgramSlotProfileRow[], l
     const compensatingMetrics: string[] = [];
     if (!aboveChannelAvg) {
       if (p.avgShare !== null && channelAvgShare !== null && p.avgShare > channelAvgShare) compensatingMetrics.push("점유율");
-      if (p.avgReach !== null && channelAvgReach !== null && p.avgReach > channelAvgReach) compensatingMetrics.push("도달율");
+      if (p.avgReach !== null && channelAvgReach !== null && p.avgReach > channelAvgReach) compensatingMetrics.push("도달률");
       if (p.avgTimeSpentShare !== null && channelAvgTss !== null && p.avgTimeSpentShare > channelAvgTss)
         compensatingMetrics.push("시청시간 비율");
     }

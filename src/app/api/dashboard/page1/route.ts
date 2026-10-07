@@ -29,6 +29,7 @@ import type { ActionTag } from "@/lib/actionTags";
 // (mart_daily_dashboard_cache / mart_llm_text_cache — 마이그레이션 20260917010000).
 import { loadDailyMartCache, cachedOrRpc, martFingerprint, MART_SLOT, MART_GLOBAL_CODE } from "@/lib/dailyMartCache";
 import { cachedLlmText } from "@/lib/llmTextCache";
+import { createStageTimer } from "@/lib/perf/serverTiming";
 import { buildMetricContext, dataSnapshotId } from "@/lib/metrics";
 import { selectRepresentativeCompetitors } from "@/lib/broadcastTime/overlap";
 
@@ -367,6 +368,7 @@ interface TrendSummaryRow {
 }
 
 export async function GET(request: Request) {
+  const timer = createStageTimer(); // 단계 15: 요청 단계별 시간(Server-Timing 헤더)
   const session = await getCurrentSession();
   if (!session) {
     return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
@@ -374,6 +376,7 @@ export async function GET(request: Request) {
 
   // 이 대시보드의 "오늘"은 달력상의 오늘이 아니라, 실제로 데이터가 들어와 있는 가장 최근 날짜다
   // (아직 업로드되지 않은 날짜를 "오늘"로 잡으면 전부 빈 값이 되므로).
+  timer.mark("session");
   const { data: latestRow, error: latestError } = await supabase
     .from("ratings")
     .select("broadcast_date")
@@ -423,6 +426,7 @@ export async function GET(request: Request) {
   // 그 결과를 **한 번의 조회로 통째로** 가져와 각 호출 자리에서 꺼내 쓰고, 없으면(사전 계산 전
   // 과거 일자 등) 기존 실시간 RPC로 그대로 폴백한다 — 숫자는 동일하고 왕복만 줄어든다.
   // 주말 리포트(asOfDate가 일요일일 때)는 토요일(asOfDate-1)치도 같은 슬롯을 쓰므로 함께 담는다.
+  timer.mark("latest_date");
   const martCache = await loadDailyMartCache({
     dates: [asOfDate, offsetDateStr(asOfDate, -1)],
     slots: [
@@ -436,6 +440,7 @@ export async function GET(request: Request) {
     ],
   });
 
+  timer.mark("mart_cache");
   const { data: channels, error: channelsError } = await supabase
     .from("channels")
     .select("id, code, name, logo_path, theme_color, logo_visible_ratio, logo_visible_top_ratio, primary_target, market")
@@ -450,6 +455,7 @@ export async function GET(request: Request) {
   // 왕복 지연이 그대로 누적된다. 채널끼리는 서로 독립적인 계산이라 Promise.all로 병렬화해도
   // 결과가 같다(각자 자기 channel_id/target_id만 건드림, 공유 상태 없음) — 계산 로직 자체는
   // 그대로 두고 실행 순서만 바꿨다.
+  timer.mark("channels");
   const summaryResults = await mapWithConcurrency(channels, 4, async (channel) => {
       // 1) 목표 대비 달성률 (오늘 하루 기준) — 이 함수가 Channel Master 표기("수도권 개인2049")와
       //    Nielsen 표기("수도권 2049")가 다른 채널의 동의어 매칭까지 이미 처리해주므로,
@@ -688,6 +694,7 @@ export async function GET(request: Request) {
   // get_original_content_daily와 동일한 소스(featured_content)·동일한 조건으로 맞춘다.
   const asOfDateIsoDow = ((new Date(`${asOfDate}T00:00:00`).getDay() + 6) % 7) + 1; // 1=월 ... 7=일
   const DOW_KR_LABELS = ["", "월", "화", "수", "목", "금", "토", "일"];
+  timer.mark("channel_kpi");
   const { count: whitelistCount } = await supabase
     .from("featured_content")
     .select("id", { count: "exact", head: true })
@@ -1214,6 +1221,7 @@ export async function GET(request: Request) {
   }
 
   // 5) 킬러 콘텐츠 (최근 4주 평균 상위, 채널별 3개까지)
+  timer.mark("original_content_and_llm_insight");
   const { data: killerContent } = await supabase
     .from("killer_content_v")
     .select("*, channels(code, name)")
@@ -1382,9 +1390,11 @@ export async function GET(request: Request) {
   // 최대 16개)을 전부 한꺼번에 병렬로 쏘면 오히려 Supabase Postgres 인스턴스가 경합해 18초까지
   // 걸렸다(단독 호출은 1초 안팎). mapWithConcurrency로 동시 실행 개수를 3개로 제한하고, 두
   // 그룹(narrative/killerContentDaypart)도 동시에 겹치지 않게 순서대로 돌린다.
+  timer.mark("killer_content");
   const narrativeSignalResults = await mapWithConcurrency(INSIGHT_CHANNEL_ORDER, 3, (code) => fetchNarrativeSignal(code));
   // skyUHD — 사용자 지시: "등위가 10위 이상 바뀌지 않으면 내용 작성하지 않는다" (프로그램/
   // 연령대 신호는 skyUHD에 타깃 구분이 없어 계산되지 않으므로 등위만 본다).
+  timer.mark("narrative_signals_and_llm");
   const skyuhdSignalResult = await (async () => {
     const skyuhdTargetLabel = matchedTargetLabelByCode.get("SKYUHD");
     if (!skyuhdTargetLabel) return null;
@@ -1411,6 +1421,7 @@ export async function GET(request: Request) {
     return data?.[0] ? ({ channelCode: "SKYUHD", ...data[0] } as ChannelNarrativeSignal) : null;
   })();
   // 7) 채널별 킬러 콘텐츠의 강세/약세 시간대 — 같은 순서.
+  timer.mark("skyuhd_signal");
   const killerContentDaypartResults = await mapWithConcurrency(INSIGHT_CHANNEL_ORDER, 3, async (code) => {
     const ch = channelByCode.get(code);
     if (!ch?.primary_target) return [] as KillerContentDaypartRow[];
@@ -1495,6 +1506,7 @@ export async function GET(request: Request) {
   // 4주 평균이 아니라 "오늘 하루"만 보는 간단 표. 새 SQL 함수 없이 채널별 타깃 시청률로
   // 필터+정렬+상위 5개만 뽑는 단순 조회라 supabase-js 쿼리로 직접 처리(CLAUDE.md 원칙: 집계·
   // 계산이 없는 단순 조회는 기존 killer_content_v 조회처럼 SQL 함수 없이 바로 써도 무방).
+  timer.mark("killer_daypart");
   const todayTopProgramsResults = await mapWithConcurrency(INSIGHT_CHANNEL_ORDER, 3, async (code) => {
     const ch = channelByCode.get(code);
     if (!ch?.primary_target) return [] as TodayTopProgramRow[];
@@ -1598,6 +1610,7 @@ export async function GET(request: Request) {
 
 
   // 10) 주요 뉴스(베타, 사용자 지시 2026-08-21) — 관리자가 텍스트로 업로드한 목록을 그대로.
+  timer.mark("today_top_programs");
   const { data: dailyNewsRows } = await supabase
     .from("daily_news_items")
     .select("category, title, url, display_order")
@@ -2222,6 +2235,7 @@ export async function GET(request: Request) {
     buildMetricContext({ channelCode: "ALL", targetLabel: "(채널별 KPI 타깃)", metric: "rating", grain: "channel_daily", period: { from: asOfDate, to: asOfDate, kind: "day", label: asOfDate }, aggregation: "single_day", knowledgeCutoff: latestAvailableDate })
   );
 
+  timer.mark("weekend_monthly_weekly_news_misc");
   return NextResponse.json({
     ok: true,
     metricContexts,
@@ -2240,5 +2254,5 @@ export async function GET(request: Request) {
     weekendReport,
     monthlyReview,
     weeklyReview,
-  });
+  }, { headers: { "Server-Timing": timer.header() } });
 }

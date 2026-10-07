@@ -37,7 +37,7 @@ export default async function LoginHistoryPage() {
           </Link>
         </div>
 
-        <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-zinc-100">
+        <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-zinc-100" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
           {error ? (
             <p className="p-6 text-sm text-red-600">
               로그인 이력을 불러오지 못했습니다: {error.message}

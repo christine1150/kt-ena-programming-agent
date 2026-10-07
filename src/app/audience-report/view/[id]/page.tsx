@@ -139,7 +139,7 @@ export default function ReportViewPage() {
   if (state.status === "error") return <ReportError message={state.message} onRetry={retry} />;
   const { model, snapshot } = state;
   return (
-    <main className="bg-neutral-100 pb-16 print:bg-white print:pb-0">
+    <div className="bg-neutral-100 pb-16 print:bg-white print:pb-0">
       <style>{`
         @page { size: A4; margin: 16mm 14mm 16mm; }
         .print-only-fixed { display: none; }
@@ -163,6 +163,6 @@ export default function ReportViewPage() {
       <div className="mt-3 print:mt-0">
         <Document model={model} />
       </div>
-    </main>
+    </div>
   );
 }

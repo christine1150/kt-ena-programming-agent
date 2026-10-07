@@ -99,7 +99,7 @@ export function SkyUhdSlotProgramAnalysis({
         <h2 className="font-heading mb-1 text-xl font-bold tracking-tight text-zinc-800">
           편성 시간대 × 프로그램 분석
         </h2>
-        <p className="text-sm text-zinc-400">불러오는 중...</p>
+        <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
       </div>
     );
   }
@@ -151,7 +151,7 @@ export function SkyUhdSlotProgramAnalysis({
           막대 전체 높이가 그 시간대의 총 편성 횟수, 진한 부분이 그중 시청률이 실제로 나온 횟수입니다.
         </p>
         <SlotHitBars analysis={analysis} accentColor={accentColor} />
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead>
               <tr className="text-zinc-400">
@@ -201,7 +201,7 @@ export function SkyUhdSlotProgramAnalysis({
           프로그램이 {SKYUHD_SLOT_THRESHOLDS.MIN_AIR_COUNT_PER_SLOT_CELL}회 이상 편성된 시간대 중 평균이 가장
           높았던 곳입니다. 둘이 다르면 아래 제언에서 시간대 이동 후보로 짚습니다.
         </p>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
           <table className="w-full min-w-[680px] text-left text-sm">
             <thead>
               <tr className="text-zinc-400">

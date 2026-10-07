@@ -95,7 +95,7 @@ export function ExclusionEditor({ channelCode, onChanged }: { channelCode: strin
                 {x.channel_id ? " · 이 채널" : ""}
                 {x.active_to ? ` · ~${x.active_to.slice(5)}` : ""}
               </span>
-              <button type="button" onClick={() => remove(x.id)} aria-label={`${x.program_name} 제외 해제`} className="flex h-5 w-5 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-200 hover:text-rose-600">
+              <button type="button" onClick={() => remove(x.id)} aria-label={`${x.program_name} 제외 해제`} className="flex h-6 w-6 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-200 hover:text-rose-600">
                 ×
               </button>
             </li>
@@ -169,7 +169,7 @@ export function ExclusionEditor({ channelCode, onChanged }: { channelCode: strin
             <button type="button" onClick={() => setFormOpen(false)} className="text-xs text-zinc-500 hover:underline">
               닫기
             </button>
-            {error && <span className="text-xs text-rose-600">{error}</span>}
+            {error && <span className="text-xs text-rose-600" role="alert">{error}</span>}
           </div>
         </div>
       ) : (

@@ -60,9 +60,9 @@ export function computeChannelHealthScore(input: ChannelHealthInput): ChannelHea
     axes.push({ key: "rank", label: "순위", verdict: "neutral", reason: "비교 가능한 데이터 없음" });
   } else {
     const diff = input.baselineAvgRank - input.todayRank; // 양수=순위 상승(숫자가 작아짐)
-    if (diff >= RANK_DIFF_THRESHOLD) axes.push({ key: "rank", label: "순위", verdict: "positive", reason: `평소보다 ${diff.toFixed(1)}위 상승한 ${input.todayRank}위` });
-    else if (diff <= -RANK_DIFF_THRESHOLD) axes.push({ key: "rank", label: "순위", verdict: "negative", reason: `평소보다 ${Math.abs(diff).toFixed(1)}위 하락한 ${input.todayRank}위` });
-    else axes.push({ key: "rank", label: "순위", verdict: "neutral", reason: `평소 수준(${input.todayRank}위)` });
+    if (diff >= RANK_DIFF_THRESHOLD) axes.push({ key: "rank", label: "순위", verdict: "positive", reason: `최근 4주 평균보다 ${diff.toFixed(1)}위 상승한 ${input.todayRank}위` });
+    else if (diff <= -RANK_DIFF_THRESHOLD) axes.push({ key: "rank", label: "순위", verdict: "negative", reason: `최근 4주 평균보다 ${Math.abs(diff).toFixed(1)}위 하락한 ${input.todayRank}위` });
+    else axes.push({ key: "rank", label: "순위", verdict: "neutral", reason: `최근 4주 평균과 비슷(${input.todayRank}위)` });
   }
 
   // ③ 편성 상태 — Fit Score 태그 분포(STRENGTHEN/KEEP=긍정, MOVE/REPLACE=부정, TEST 제외).
@@ -72,9 +72,9 @@ export function computeChannelHealthScore(input: ChannelHealthInput): ChannelHea
   if (positiveTagCount + negativeTagCount === 0) {
     axes.push({ key: "programSlate", label: "편성 상태", verdict: "neutral", reason: "Fit Score 판정 대상 없음" });
   } else if (negativeTagCount > positiveTagCount) {
-    axes.push({ key: "programSlate", label: "편성 상태", verdict: "negative", reason: `MOVE/REPLACE ${negativeTagCount}건 > STRENGTHEN/KEEP ${positiveTagCount}건` });
+    axes.push({ key: "programSlate", label: "편성 상태", verdict: "negative", reason: `이동·교체 검토 ${negativeTagCount}건 > 강화·유지 ${positiveTagCount}건` });
   } else if (positiveTagCount > negativeTagCount) {
-    axes.push({ key: "programSlate", label: "편성 상태", verdict: "positive", reason: `STRENGTHEN/KEEP ${positiveTagCount}건 > MOVE/REPLACE ${negativeTagCount}건` });
+    axes.push({ key: "programSlate", label: "편성 상태", verdict: "positive", reason: `강화·유지 ${positiveTagCount}건 > 이동·교체 검토 ${negativeTagCount}건` });
   } else {
     axes.push({ key: "programSlate", label: "편성 상태", verdict: "neutral", reason: "긍정·부정 태그가 비슷함" });
   }

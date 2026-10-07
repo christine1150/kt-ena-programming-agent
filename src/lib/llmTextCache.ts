@@ -11,8 +11,8 @@
 //  - 파일을 다시 올려 수치가 바뀌면 지문이 달라져 자동으로 새 문장이 생성된다(옛 문장이
 //    남아 보이는 사고가 구조적으로 불가능).
 //  - 캐시 조회·저장이 실패해도 그냥 평소대로 생성한다(캐시는 가속 장치일 뿐).
-import { createHash } from "crypto";
 import { supabase } from "@/lib/supabase";
+import { cachedLlmTextWith, type CacheDb } from "@/lib/llmTextCacheCore";
 
 export async function cachedLlmText(
   kind: string,
@@ -20,30 +20,5 @@ export async function cachedLlmText(
   input: unknown,
   generate: () => Promise<string | null>
 ): Promise<string | null> {
-  let cacheKey: string;
-  try {
-    cacheKey = createHash("md5").update(`${kind}|${JSON.stringify(input)}`).digest("hex");
-  } catch {
-    return generate(); // 입력을 직렬화할 수 없는 예외 상황 — 그냥 평소대로 생성
-  }
-
-  try {
-    const { data } = await supabase.from("mart_llm_text_cache").select("text_value").eq("cache_key", cacheKey).maybeSingle();
-    const cached = data?.text_value;
-    if (typeof cached === "string" && cached.length > 0) return cached;
-  } catch {
-    // 조회 실패는 무시하고 생성 경로로
-  }
-
-  const generated = await generate();
-  if (generated && generated.length > 0) {
-    try {
-      await supabase
-        .from("mart_llm_text_cache")
-        .upsert({ cache_key: cacheKey, kind, as_of_date: asOfDate, text_value: generated }, { onConflict: "cache_key" });
-    } catch {
-      // 저장 실패는 무시 — 다음 요청이 다시 생성할 뿐이다
-    }
-  }
-  return generated;
+  return cachedLlmTextWith(supabase as unknown as CacheDb, kind, asOfDate, input, generate);
 }

@@ -38,7 +38,7 @@ function PrimeUsageCompare({ deep }: { deep: PortfolioDeepCompare }) {
         return (
           <div key={g}>
             <p className="mb-1 text-xs font-medium text-neutral-500">Group {g}</p>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
               <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="border-b border-neutral-200 text-xs text-neutral-500">
@@ -49,7 +49,7 @@ function PrimeUsageCompare({ deep }: { deep: PortfolioDeepCompare }) {
                     <th className="py-1 text-right font-medium">배율</th>
                     <th className="py-1 text-right font-medium">평일</th>
                     <th className="py-1 text-right font-medium">주말·공휴일</th>
-                    <th className="py-1 text-right font-medium">도달율</th>
+                    <th className="py-1 text-right font-medium">도달률</th>
                     <th className="py-1 text-right font-medium">시청시간 비율</th>
                   </tr>
                 </thead>
@@ -117,7 +117,7 @@ function ExecutiveDecisions({ decisions }: { decisions: NonNullable<PortfolioRep
 
 function PolicyTable({ rows }: { rows: NonNullable<PortfolioReportDocument["channelPolicies"]> }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
       <table className="w-full min-w-[640px] text-sm">
         <thead>
           <tr className="text-left text-xs text-neutral-500">
@@ -244,7 +244,7 @@ function GroupPeerSection({ group, groupLabel, periodLabel }: { group: Portfolio
 
 export default function PortfolioReportPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-neutral-500">불러오는 중...</div>}>
+    <Suspense fallback={<div className="p-8 text-neutral-500" role="status">불러오는 중...</div>}>
       <PortfolioReportPageInner />
     </Suspense>
   );
@@ -261,7 +261,7 @@ function PortfolioReportPageInner() {
   const deckHref = `/audience-report/portfolio/deck?${snapshot.persisted ? `snapshot=${snapshot.id}` : qs}`;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-8">
+    <div className="mx-auto max-w-3xl px-4 pb-24 pt-8">
       <header className="mb-6">
         <div className="text-xs uppercase tracking-wide text-neutral-500">Audience Intelligence Report · 종합</div>
         <h1 className="text-2xl font-bold">KT ENA 7채널 포트폴리오</h1>
@@ -441,6 +441,6 @@ function PortfolioReportPageInner() {
           ))}
         </div>
       </Section>
-    </main>
+    </div>
   );
 }

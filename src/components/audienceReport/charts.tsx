@@ -121,7 +121,7 @@ export function WeekdayHourHeatmap({ cells, caption }: { cells: WeekdayHourCell[
   const cellByKey = new Map(cells.map((c) => [`${c.dow}_${c.hourBlock}`, c]));
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="border-collapse text-[11px]">
           <thead>
             <tr>
@@ -165,7 +165,7 @@ export function TargetHourlyHeatmap({ cells, caption }: { cells: TargetHourlyCel
   const cellByKey = new Map(cells.map((c) => [`${c.demographicLabel}_${c.hour}`, c]));
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="border-collapse text-[11px]">
           <thead>
             <tr>

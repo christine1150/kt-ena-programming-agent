@@ -459,7 +459,7 @@ function ScheduleComparisonInner() {
                     ) : side.loaded ? (
                       <span className="text-sm text-zinc-400">이 채널은 편성표 데이터가 없습니다.</span>
                     ) : (
-                      <span className="text-sm text-zinc-400">불러오는 중...</span>
+                      <span className="text-sm text-zinc-400" role="status">불러오는 중...</span>
                     )}
                   </div>
                   {/* 채널·타깃·기간·자료 출처 — 좌우에서 다른 항목은 강조한다. 바꾸는 중에는 이전 값을 지운다. */}
@@ -576,7 +576,7 @@ function sideScaleText(side: SideState, meta: GridMeta | null, fmt: (v: number) 
 
 export default function ScheduleComparisonPage() {
   return (
-    <Suspense fallback={<div className="p-10 text-sm text-zinc-400">불러오는 중...</div>}>
+    <Suspense fallback={<div className="p-10 text-sm text-zinc-400" role="status">불러오는 중...</div>}>
       <ScheduleComparisonInner />
     </Suspense>
   );

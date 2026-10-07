@@ -274,7 +274,7 @@ export function KpiTable({ groups, asOfLabel }: { groups: KpiGroup[]; asOfLabel:
           <div key={g.groupKey}>
             <h3 className="mb-2 text-[13px] font-semibold text-zinc-600">{g.title}</h3>
             {/* 데스크톱: 표 */}
-            <div className="hidden overflow-x-auto md:block">
+            <div className="hidden overflow-x-auto md:block" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
               <table className="w-full text-left text-[12.5px]">
                 <thead>
                   <tr className="text-zinc-400">
@@ -362,7 +362,7 @@ export function FollowupsCard({ followups, reviewStore }: { followups: Followup[
     <section className={PANEL} aria-label="후속 액션" data-section="followups">
       <PanelHeader title="후속 액션" question="이전에 검토한 것 중 지금 처리할 것만 표시합니다" />
       {reviewStore === "loading" ? (
-        <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-600">검토 기록을 불러오는 중입니다…</p>
+        <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-600" role="status">검토 기록을 불러오는 중입니다…</p>
       ) : reviewStore === "error" ? (
         <p className="rounded-lg bg-amber-50 px-4 py-3 text-[13px] text-amber-900">검토 기록을 불러오지 못해 후속 액션을 표시할 수 없습니다.</p>
       ) : reviewStore === "unavailable" ? (

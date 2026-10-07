@@ -7,6 +7,10 @@ import { roleOfSession } from "@/lib/admin/permissions";
 import GlobalNav from "@/components/workspace/GlobalNav";
 import { recordAccessIfNotLoggedToday } from "@/lib/loginLog";
 import Dashboard from "./Dashboard";
+import type { Metadata } from "next";
+import { PAGE_TITLE } from "@/lib/ui/pageTitles";
+
+export const metadata: Metadata = { title: PAGE_TITLE.home };
 
 export default async function Home() {
   const session = await getCurrentSession();
@@ -29,7 +33,7 @@ export default async function Home() {
   return (
     <>
       <GlobalNav role={roleOfSession(session)} />
-      <Suspense fallback={<div className="min-h-screen bg-zinc-50 p-8 text-sm text-zinc-500">불러오는 중...</div>}>
+      <Suspense fallback={<div className="min-h-screen bg-zinc-50 p-8 text-sm text-zinc-500" role="status">불러오는 중...</div>}>
         <Dashboard isAdmin={session?.role === "admin"} />
       </Suspense>
     </>

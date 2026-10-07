@@ -174,7 +174,7 @@ function EfficiencyView({
             </div>
             <div
               className="flex h-3 w-full overflow-hidden rounded bg-neutral-100"
-              title={`백분위 — 시청률 ${r.ratingEfficiencyPctl} · 도달율 ${r.reachPctl} · 시청시간 비율 ${r.timeSpentSharePctl}`}
+              title={`백분위 — 시청률 ${r.ratingEfficiencyPctl} · 도달률 ${r.reachPctl} · 시청시간 비율 ${r.timeSpentSharePctl}`}
             >
               <div style={{ width: `${r.ratingEfficiencyPctl / 3}%`, backgroundColor: C_STRONG }} />
               <div style={{ width: `${r.reachPctl / 3}%`, backgroundColor: C_MID }} />
@@ -191,7 +191,7 @@ function EfficiencyView({
         </span>
         <span>
           <span className="mr-1 inline-block h-2 w-2 align-middle rounded-sm" style={{ backgroundColor: C_MID }} />
-          도달율 백분위
+          도달률 백분위
         </span>
         <span>
           <span className="mr-1 inline-block h-2 w-2 align-middle rounded-sm" style={{ backgroundColor: C_LIGHT }} />
@@ -202,7 +202,7 @@ function EfficiencyView({
 
       <details className="mt-3">
         <summary className="cursor-pointer text-xs text-neutral-500">수치 표 펼치기</summary>
-        <div className="mt-2 overflow-x-auto">
+        <div className="mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
           <table className="w-full min-w-[600px] text-sm">
             <thead>
               <tr className="text-left text-xs text-neutral-500">
@@ -257,7 +257,7 @@ function LowSlotView({ rows, caption }: { rows: SlotRelativeRow[]; caption: Char
   return (
     <div>
       <p className="mb-2 text-xs text-neutral-600">채널 평균이 아니라 그 프로그램이 놓인 시간대의 채널 평균과 비교한 값입니다.</p>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="w-full min-w-[600px] text-sm">
           <thead>
             <tr className="text-left text-xs text-neutral-500">
@@ -325,7 +325,7 @@ function PrimeGapView({
         채널 전체의 주요시간 배율은 {baseline === null ? "—" : `${baseline}배`}입니다. 프로그램 배율이 이보다 높으면 그 프로그램이 주요시간에 특히 강한 것이고, 낮으면
         주요시간이라 함께 오른 수준입니다.
       </p>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="w-full min-w-[600px] text-sm">
           <thead>
             <tr className="text-left text-xs text-neutral-500">
@@ -492,7 +492,7 @@ function ProgramProfilesView({ programs, caption, channelCode }: { programs: Pro
   const [openProgram, setOpenProgram] = useState<string | null>(null);
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="text-left text-xs text-neutral-500">
@@ -549,7 +549,7 @@ function ProgramProfilesView({ programs, caption, channelCode }: { programs: Pro
 // ── 심층 04 요일 × 시간대 편성 배분과 성과 ────────────────────────────────────
 function QuadrantTable({ rows, channelCode }: { rows: QuadrantRow[]; channelCode: string }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
       <table className="w-full min-w-[560px] text-sm">
         <thead>
           <tr className="text-left text-xs text-neutral-500">
@@ -557,7 +557,7 @@ function QuadrantTable({ rows, channelCode }: { rows: QuadrantRow[]; channelCode
             <th className="py-1 text-right">편성</th>
             <th className="py-1 text-right">시청률</th>
             <th className="py-1 text-right">점유율</th>
-            <th className="py-1 text-right">도달율</th>
+            <th className="py-1 text-right">도달률</th>
             <th className="py-1 text-right">시청시간 비율</th>
           </tr>
         </thead>
@@ -593,7 +593,7 @@ function DowHourHeatmap({ cells, channelCode }: { cells: DowHourCell[]; channelC
   const labelByDow = new Map(cells.map((c) => [c.dow, c.dowLabel]));
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="border-collapse text-[10px]">
           <thead>
             <tr>
@@ -706,7 +706,7 @@ function OriginalRerunView({ rows, channelCode }: { rows: OriginalRerunInsight[]
       <p className="mb-2 text-xs text-neutral-600">
         확산 배수는 본방일부터 1주일 내 방영분(본방·동시방영·재방 채널)의 시청률 합산을 본방 합산으로 나눈 값입니다. 1.0이면 재방 기여가 없다는 뜻입니다.
       </p>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="w-full min-w-[860px] text-sm">
           <thead>
             <tr className="text-left text-xs text-neutral-500">
@@ -772,7 +772,7 @@ function FirstRunView({ rows, channelCode }: { rows: FirstRunInsight[]; channelC
       <p className="mb-2 text-xs text-neutral-600">
         &lsquo;&lt;본&gt;&rsquo; 태그 또는 등록된 본방 슬롯(요일·시각 기준)을 근거로 본방 여부를 판정한 값입니다. 두 근거 중 하나만 맞아도 본방으로 보며, 프로그램명 옆 배지로 어느 근거로 판정했는지 표시합니다.
       </p>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr className="text-left text-xs text-neutral-500">

@@ -129,16 +129,16 @@ export default function TargetGoalsManager() {
             여기서 고친 값이 다음 Channel Master 업로드로 덮여 쓰인다는 점이 어디에도 안 적혀
             있어 실수하기 쉬웠다. 그 관계를 한 줄로 명시한다. */}{" "}
         <span className="text-amber-600">
-          여기서 고친 값은 다음 번 Channel Master 업로드 때 그 파일의 값으로 덮어써집니다(같은 target_goals를 씁니다).
+          여기서 고친 값은 다음 번 Channel Master 업로드 때 그 파일의 값으로 덮어써집니다(같은 목표 값을 씁니다).
         </span>
       </p>
 
       {loading ? (
-        <p className="text-sm text-zinc-400">불러오는 중...</p>
+        <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
       ) : (
         <>
           {!lockAvailable && <p className="mb-2 text-xs text-amber-700">수동 잠금 테이블이 아직 적용되지 않아, 저장해도 Channel Master 재업로드로 덮일 수 있습니다.</p>}
-      {errorMessage && <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
+      {errorMessage && <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{errorMessage}</div>}
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="text-zinc-400">

@@ -83,7 +83,7 @@ export function BacktestPanel({
         </div>
       </div>
       {progress && <p className="mt-2 text-xs text-zinc-500">{progress}</p>}
-      {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
+      {error && <p className="mt-2 text-xs text-rose-600" role="alert">{error}</p>}
       {results.length > 0 && (
         <>
           <table className="mt-3 w-full text-sm tabular-nums">
@@ -93,7 +93,7 @@ export function BacktestPanel({
                 <th className="py-1 text-right font-medium">실제 편성 실측</th>
                 <th className="py-1 text-right font-medium">실제 편성 기대</th>
                 <th className="py-1 text-right font-medium">AI 스마트 편성 기대</th>
-                <th className="py-1 text-right font-medium">방영별 오차(MAE)</th>
+                <th className="py-1 text-right font-medium">방영별 평균 오차(MAE·절대값 평균)</th>
                 <th className="py-1 text-right font-medium">편향</th>
               </tr>
             </thead>

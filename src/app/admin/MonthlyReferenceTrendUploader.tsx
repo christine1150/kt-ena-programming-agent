@@ -172,7 +172,7 @@ export default function MonthlyReferenceTrendUploader() {
         </button>
       </div>
 
-      {errorMessage && <p className="mb-3 text-sm text-red-600">{errorMessage}</p>}
+      {errorMessage && <p className="mb-3 text-sm text-red-600" role="alert">{errorMessage}</p>}
       {result && (
         <div className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
           {result.monthsFound.map(monthLabel).join(", ")} 반영 완료 — 장르별 {result.genreRowCount}행, 프로그램별 {result.programRowCount}행
@@ -196,7 +196,7 @@ export default function MonthlyReferenceTrendUploader() {
             <p className="text-xs text-zinc-400">아직 저장된 값이 없습니다.</p>
           )}
           {preview && preview.genreRows.length > 0 && (
-            <div className="mb-3 overflow-x-auto">
+            <div className="mb-3 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
               <table className="w-full text-left text-[11px]">
                 <thead>
                   <tr className="text-zinc-400">
@@ -218,7 +218,7 @@ export default function MonthlyReferenceTrendUploader() {
             </div>
           )}
           {preview && preview.programRows.length > 0 && (
-            <div className="mb-3 overflow-x-auto">
+            <div className="mb-3 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
               <table className="w-full text-left text-[11px]">
                 <thead>
                   <tr className="text-zinc-400">

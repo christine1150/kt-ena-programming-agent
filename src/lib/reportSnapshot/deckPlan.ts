@@ -266,7 +266,7 @@ export function planPortfolioDeck(model: ReportModel, doc: PortfolioReportDocume
     const a = gm?.A.avgTrendPct ?? null;
     const b = gm?.B.avgTrendPct ?? null;
     const charts = model.body.concat(model.appendix).flatMap((s) => (s.key === "peer_a" || s.key === "peer_b" ? s.blocks.filter((x) => x.kind === "chart") : []));
-    const evidence: DocBlock = { kind: "bullets", items: [g(`Group A: ${doc.groupA.oneLiner}`), g(`Group B: ${doc.groupB.oneLiner}`), g("그룹 값은 채널 추세의 단순평균이며 가중하지 않고, 시청률·도달율을 채널 사이에 합산하지 않음")] };
+    const evidence: DocBlock = { kind: "bullets", items: [g(`Group A: ${doc.groupA.oneLiner}`), g(`Group B: ${doc.groupB.oneLiner}`), g("그룹 값은 채널 추세의 단순평균이며 가중하지 않고, 시청률·도달률을 채널 사이에 합산하지 않음")] };
     if (charts.length > 0) content(`Group A ${pctText(a)}, Group B ${pctText(b)} — 최근 12주 평균 대비 그룹 평균`, [...charts.slice(0, 2), evidence]);
     else content(`Group A ${pctText(a)}, Group B ${pctText(b)} — 최근 12주 평균 대비 그룹 평균`, [evidence]);
   }

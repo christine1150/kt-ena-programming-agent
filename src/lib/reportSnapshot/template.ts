@@ -66,8 +66,8 @@ function rowCap(cadence: ReportCadence, key: SectionKey): number {
 
 const NIELSEN = "Nielsen Korea 수신 데이터 · 자체 집계";
 const SECTION_META: Partial<Record<SectionKey, { unit: string; source: string; compare?: boolean }>> = {
-  kpi: { unit: "시청률·점유율·도달율 %, 시청시간 초, 순위 위", source: NIELSEN, compare: true },
-  kpi_compare: { unit: "시청률·점유율·도달율 %, 시청시간 초, 순위 위", source: NIELSEN, compare: true },
+  kpi: { unit: "시청률·점유율·도달률 %, 시청시간 초, 순위 위", source: NIELSEN, compare: true },
+  kpi_compare: { unit: "시청률·점유율·도달률 %, 시청시간 초, 순위 위", source: NIELSEN, compare: true },
   hourly: { unit: "시청률 %", source: NIELSEN },
   slot_dev: { unit: "시청률 %, 편차 %", source: NIELSEN },
   audience: { unit: "시청률 %, 등락 %", source: NIELSEN, compare: true },
@@ -88,11 +88,11 @@ const SECTION_META: Partial<Record<SectionKey, { unit: string; source: string; c
   deep_lowslot: { unit: "시청률 %, 비율 %", source: NIELSEN },
   deep_prime: { unit: "시청률 %, 배율 배", source: NIELSEN },
   deep_profile: { unit: "시청률 %, 지수", source: NIELSEN },
-  deep_canvas: { unit: "시청률·점유율·도달율·시청시간 비율 %", source: NIELSEN },
+  deep_canvas: { unit: "시청률·점유율·도달률·시청시간 비율 %", source: NIELSEN },
   deep_rerun: { unit: "시청률 %, 편성 회, 배", source: NIELSEN },
   deep_firstrun: { unit: "시청률 %, 편성 회, 유지율 %", source: NIELSEN },
   target_hourly: { unit: "시청률 %", source: NIELSEN },
-  program_target: { unit: "지표별(시청률·점유율 %, 도달율 %, 시청시간 초)", source: NIELSEN },
+  program_target: { unit: "지표별(시청률·점유율 %, 도달률 %, 시청시간 초)", source: NIELSEN },
   competitor_changes: { unit: "변경 횟수 회", source: NIELSEN },
   weekday_flow: { unit: "시청률 %", source: NIELSEN },
   peer_a: { unit: "수준 시청률 %, 추세 %(최근 12주 평균 대비)", source: NIELSEN },

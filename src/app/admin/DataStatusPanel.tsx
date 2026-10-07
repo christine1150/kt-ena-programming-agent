@@ -64,8 +64,8 @@ export default function DataStatusPanel() {
         {data && <p className="text-xs text-zinc-400">기준일 {data.today} · 최근 {data.window.from} ~ 어제</p>}
       </div>
 
-      {loading && <p className="text-sm text-zinc-500">불러오는 중…</p>}
-      {error && <p className="text-sm text-rose-600">{error}</p>}
+      {loading && <p className="text-sm text-zinc-500" role="status">불러오는 중…</p>}
+      {error && <p className="text-sm text-rose-600" role="alert">{error}</p>}
 
       {data && (
         <>
@@ -77,7 +77,7 @@ export default function DataStatusPanel() {
             <span className="rounded-md bg-zinc-100 px-2 py-1">정상 {data.summary.ok} / 전체 {data.summary.total}</span>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
             <table className="w-full min-w-[820px] text-xs">
               <thead>
                 <tr className="text-left text-zinc-500">

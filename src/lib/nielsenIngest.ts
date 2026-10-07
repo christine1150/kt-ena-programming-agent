@@ -157,7 +157,7 @@ function sanitizeRatingFields<T extends { rating: number | null; share?: number 
     }
   }
   if ("reach" in row) {
-    const reachIssue = checkPercentValue(row.reach, "도달율", context);
+    const reachIssue = checkPercentValue(row.reach, "도달률", context);
     if (reachIssue) {
       issues.push(reachIssue);
       cleaned.reach = null;

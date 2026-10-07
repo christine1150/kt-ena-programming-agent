@@ -30,7 +30,7 @@ import { actionPhrase, programActionFor } from "@/lib/insight/actionCandidate";
 import { AskAssistantWidget } from "@/components/AskAssistantWidget";
 import { ScheduleWeekGrid } from "@/components/ScheduleWeekGrid";
 import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from "@/lib/enaOriginalHighlight";
-import { highlightNarrativeText } from "@/lib/highlightNarrative";
+import { highlightNarrativeText, NARRATIVE_DOWN_COLOR, NARRATIVE_UP_COLOR } from "@/lib/highlightNarrative";
 import type { BriefingReport } from "@/lib/briefingReportLlm";
 import { computeChannelHealthScore } from "@/lib/channelHealthScore";
 import { HealthScoreBadge, verdictColor } from "@/components/HealthScoreBadge";
@@ -66,6 +66,9 @@ import {
 import { computeEfficiencyRanking, type ProgramType } from "@/lib/audienceReport/deepDiveAnalyzer";
 import type { ProgramSlotProfileRow } from "@/lib/audienceReport/dataCollector";
 import { formatDurationKo } from "@/lib/metrics";
+import { VENDING } from "@/lib/ui/pageTitles";
+import { brandText } from "@/lib/ui/contrast";
+import { Modal } from "@/components/ui/Modal";
 import { HOURLY_ESTIMATE_NOTE } from "@/lib/broadcastTime/hourly";
 
 interface TrendRow {
@@ -101,7 +104,7 @@ type HourlyMetricKey = "avg_rating" | "avg_share" | "avg_reach" | "avg_time_spen
 const HOURLY_METRICS: { key: HourlyMetricKey; label: string; color: string }[] = [
   { key: "avg_rating", label: "시청률", color: "#4338ca" },
   { key: "avg_share", label: "점유율", color: "#0891b2" },
-  { key: "avg_reach", label: "도달율", color: "#059669" },
+  { key: "avg_reach", label: "도달률", color: "#059669" },
   { key: "avg_time_spent_seconds", label: "시청시간", color: "#d97706" },
 ];
 
@@ -421,7 +424,7 @@ interface DemographicHighlightRow {
 const METRIC_LABEL: Record<DemographicHighlightRow["metric"], string> = {
   rating: "시청률",
   share: "점유율",
-  reach: "도달율",
+  reach: "도달률",
   time_spent_seconds: "시청시간",
   time_spent_share: "시청시간 비율",
 };
@@ -846,7 +849,7 @@ function ReportIconLink({ href, ready, blockedText, title, children }: { href: s
     );
   }
   return (
-    <Link href={href} target="_blank" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title={title}>
+    <Link href={href} target="_blank" className="inline-flex min-h-6 min-w-6 items-center justify-center rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title={title}>
       {children}
     </Link>
   );
@@ -978,7 +981,7 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
         가로축 = 적합도, 세로축 = 신뢰도(표본 충분성) — 아래 표의 태그가 어떤 기준으로 나뉘었는지 그대로
         보여줍니다(신뢰도 {FIT_QUADRANT_CONFIDENCE_CUTOFF}% 미만은 점수와 무관하게 테스트).
       </p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+      <svg role="img" aria-label="적합도(가로)와 신뢰도(세로) 산점도" viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         {FIT_QUADRANT_BANDS.map((b) => (
           <rect key={b.tag} x={xOf(b.from)} y={PAD_T} width={xOf(b.to) - xOf(b.from)} height={plotH} fill={TAG_DOT_COLOR[b.tag]} fillOpacity={0.07} />
         ))}
@@ -1349,7 +1352,7 @@ function buildDemographicHighlightsParagraph(rows: DemographicHighlightRow[]): s
     const reachRow = sameCombo.find((r) => r.metric === "reach");
     const tsShareRow = sameCombo.find((r) => r.metric === "time_spent_share");
     if (riser.metric === "time_spent_share" && reachRow && reachRow.delta_pct !== null && reachRow.delta_pct < riser.delta_pct! - 20) {
-      text += ` 도달율(${reachRow.delta_pct >= 0 ? "▲" : "▼"} ${Math.abs(reachRow.delta_pct).toFixed(0)}%)보다 시청시간 비율 증가폭이 더 커, 실제로 본 사람들의 집중도가 강했던 것으로 보입니다.`;
+      text += ` 도달률(${reachRow.delta_pct >= 0 ? "▲" : "▼"} ${Math.abs(reachRow.delta_pct).toFixed(0)}%)보다 시청시간 비율 증가폭이 더 커, 실제로 본 사람들의 집중도가 강했던 것으로 보입니다.`;
     } else if (riser.metric !== "time_spent_share" && tsShareRow && tsShareRow.delta_pct !== null && tsShareRow.delta_pct >= 20) {
       text += ` 시청시간 비율도 최근 8주 평균 대비 ${tsShareRow.delta_pct >= 0 ? "▲" : "▼"} ${Math.abs(tsShareRow.delta_pct).toFixed(0)}%로 함께 높아, 단순 시청을 넘어 집중해서 본 것으로 보입니다.`;
     }
@@ -1449,7 +1452,7 @@ function buildBriefingReport(
     if (s.rating_delta_pct !== null) {
       const abs = Math.abs(s.rating_delta_pct);
       view.verdict = abs < 10 ? "flat" : s.rating_delta_pct > 0 ? "up" : "down";
-      const verdictWord = abs < 10 ? "평소 수준" : s.rating_delta_pct > 0 ? (abs >= 25 ? "뚜렷한 강세" : "소폭 강세") : abs >= 25 ? "뚜렷한 부진" : "소폭 약세";
+      const verdictWord = abs < 10 ? "보합 수준" : s.rating_delta_pct > 0 ? (abs >= 25 ? "뚜렷한 강세" : "소폭 강세") : abs >= 25 ? "뚜렷한 부진" : "소폭 약세";
       view.headline = `${refLabel} ${fmtR(current.rating)} — ${baselineLabelText} 대비 ${s.rating_delta_pct >= 0 ? "▲" : "▼"}${abs.toFixed(1)}%로 ${verdictWord}`;
     } else {
       view.headline = `${refLabel} ${fmtR(current.rating)}`;
@@ -1458,12 +1461,12 @@ function buildBriefingReport(
     // (Nielsen·Barb 공통 관행). 값이 둘 다 있을 때만 쓴다.
     if (s.today_share !== null && s.baseline_avg_share !== null && s.baseline_avg_share > 0) {
       const sharePct = ((s.today_share - s.baseline_avg_share) / s.baseline_avg_share) * 100;
-      audience.push(`점유율 ${s.today_share.toFixed(2)}% (평소 ${s.baseline_avg_share.toFixed(2)}%, ${sharePct >= 0 ? "▲" : "▼"}${Math.abs(sharePct).toFixed(0)}%)`);
+      audience.push(`점유율 ${s.today_share.toFixed(2)}% (${baselineLabelText} ${s.baseline_avg_share.toFixed(2)}%, ${sharePct >= 0 ? "▲" : "▼"}${Math.abs(sharePct).toFixed(0)}%)`);
     }
     if (s.today_rank !== null && s.baseline_avg_rank !== null) {
       const rankDiff = s.baseline_avg_rank - s.today_rank; // 양수면 순위 상승(숫자가 작아짐)
       if (Math.abs(rankDiff) >= 1) {
-        audience.push(`${s.today_rank}위 (평소 ${s.baseline_avg_rank.toFixed(0)}위, ${rankDiff > 0 ? "▲" : "▼"}${Math.abs(rankDiff).toFixed(0)}단계)`);
+        audience.push(`${s.today_rank}위 (${baselineLabelText} ${s.baseline_avg_rank.toFixed(0)}위, ${rankDiff > 0 ? "▲" : "▼"}${Math.abs(rankDiff).toFixed(0)}단계)`);
       }
     }
 
@@ -1554,7 +1557,7 @@ function buildBriefingReport(
         // 세 줄에 연달아 나오는 화면을 만들지 않기 위함).
         const culpritIsPeak = culprit !== null && culprit.name === s.today_peak_program_name;
         const culpritText = culprit && !culpritIsPeak ? ` · '${culprit.name}' ${fmtR(culprit.rating)}(${fmtTime(culprit.startTime)})` : "";
-        pushDriver(3, `프라임 ${prime.label} ${fmtR(prime.todayAvgRating)} (평소 ${fmtR(prime.baselineAvgRating)} 대비 ${primePct >= 0 ? "▲" : "▼"}${Math.abs(primePct).toFixed(0)}%)${culpritText}`);
+        pushDriver(3, `프라임 ${prime.label} ${fmtR(prime.todayAvgRating)} (최근 12주 평균 ${fmtR(prime.baselineAvgRating)} 대비 ${primePct >= 0 ? "▲" : "▼"}${Math.abs(primePct).toFixed(0)}%)${culpritText}`);
       }
     }
 
@@ -1692,7 +1695,7 @@ function buildBriefingReport(
         items.push(
           culprit && vsPrime !== null
             ? `${slot} '${culprit.name}' ${fmtR(culprit.rating)} — 프라임 평균 대비 ▼${Math.abs(vsPrime).toFixed(0)}%, ${detailAction(culprit.name, culpritHour, vsPrime, "프라임 평균", null)}`
-            : `프라임 ${prime?.label ?? ""} 평소 대비 ▼${Math.abs(primePct).toFixed(0)}% — 해당 시간대 편성 경쟁력 점검 필요`
+            : `프라임 ${prime?.label ?? ""} 최근 12주 평균 대비 ▼${Math.abs(primePct).toFixed(0)}% — 해당 시간대 편성 경쟁력 점검 필요`
         );
       } else if (!channelDown && primePct !== null && primePct >= 15 && prime?.topProgram) {
         const h = hourOf(prime.topProgram.startTime);
@@ -1703,7 +1706,7 @@ function buildBriefingReport(
         const slot = h !== null ? `${h}시` : "해당 슬롯";
         items.push(`${slot} '${contribProgramName}' ${fmtR(s.top_program_rating)} — 본방 슬롯 ${sdowLabel ?? "8주 평균"} 대비 ▲${contribPct.toFixed(0)}%, ${detailAction(contribProgramName, h, contribPct, "본방 슬롯 최근 8주 평균", s.top_program_baseline_days ?? null)}`);
       } else if (primePct !== null && primePct <= -15) {
-        items.push(`프라임 ${prime?.label ?? ""} 평소 대비 ▼${Math.abs(primePct).toFixed(0)}% — 해당 시간대 편성 경쟁력 점검 필요`);
+        items.push(`프라임 ${prime?.label ?? ""} 최근 12주 평균 대비 ▼${Math.abs(primePct).toFixed(0)}% — 해당 시간대 편성 경쟁력 점검 필요`);
       }
 
       // ② 대안 — 오늘 실제로 강했던 시간대·프로그램이 있을 때만. 기대 효과는 계산된 값이
@@ -1834,7 +1837,7 @@ function BriefingBody({ title, view, accentColor }: { title: string; view: Brief
         {items.map((item, i) => (
           <li key={i} className="flex gap-2 text-[13.5px] leading-snug font-medium text-zinc-700">
             <span className="mt-[6px] h-1 w-1 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} />
-            <span>{highlightNarrativeText(item, "#059669", "#e11d48")}</span>
+            <span>{highlightNarrativeText(item, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}</span>
           </li>
         ))}
         {tail && (
@@ -1858,7 +1861,7 @@ function BriefingBody({ title, view, accentColor }: { title: string; view: Brief
             className="rounded-full px-3 py-1 text-[13.5px] leading-snug font-bold ring-1 ring-inset"
             style={{ backgroundColor: verdictTone.bg, color: verdictTone.text, ["--tw-ring-color" as string]: verdictTone.ring }}
           >
-            {highlightNarrativeText(view.headline, "#059669", "#e11d48")}
+            {highlightNarrativeText(view.headline, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
           </span>
         )}
       </div>
@@ -1875,7 +1878,7 @@ function BriefingBody({ title, view, accentColor }: { title: string; view: Brief
           <div className="flex flex-col gap-1">
             {view.implications.map((text, i) => (
               <p key={i} className="text-[13.5px] leading-snug font-medium text-zinc-700">
-                {highlightNarrativeText(text, "#059669", "#e11d48")}
+                {highlightNarrativeText(text, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
               </p>
             ))}
           </div>
@@ -1892,7 +1895,7 @@ function BriefingBody({ title, view, accentColor }: { title: string; view: Brief
           <div className="mt-2 flex flex-col gap-1.5">
             {view.extras.map((para, i) => (
               <p key={i} className="text-[13px] leading-snug text-zinc-500">
-                {highlightNarrativeText(para, "#059669", "#e11d48")}
+                {highlightNarrativeText(para, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
               </p>
             ))}
           </div>
@@ -1913,7 +1916,7 @@ function buildHowDeeplyExplanation(
   const parts: string[] = [];
   parts.push(`시청률 ${fmt(stats.rating, isSkyUhd ? 5 : 3)}은 ${periodLabel} 이 채널을 시청한 사람의 비율입니다.`);
   if (stats.share !== null) parts.push(`점유율 ${stats.share.toFixed(2)}%는 TV를 보고 있던 사람 중 이 채널을 선택한 비중입니다.`);
-  if (stats.reach !== null) parts.push(`도달율 ${stats.reach.toFixed(2)}%는 ${periodLabel} 한 번이라도 이 채널을 튼 사람의 비율로, 시청률(순간 평균)보다 항상 크거나 같습니다.`);
+  if (stats.reach !== null) parts.push(`도달률 ${stats.reach.toFixed(2)}%는 ${periodLabel} 한 번이라도 이 채널을 튼 사람의 비율로, 시청률(순간 평균)보다 항상 크거나 같습니다.`);
   if (stats.time_spent_seconds !== null) parts.push(`시청시간 ${fmtSeconds(stats.time_spent_seconds)}은 시청자 1인이 이 채널에 평균적으로 머문 시간입니다.`);
   return parts.join(" ");
 }
@@ -2030,7 +2033,7 @@ function buildInternalDemographicNarrative(
     const text = movedNotable
       .map((n) => `${shortDemoLabel(n.label)}${josaIga(shortDemoLabel(n.label))} ${n.deltaPct! >= 0 ? "▲" : "▼"} ${Math.abs(n.deltaPct!).toFixed(0)}%`)
       .join(", ");
-    sentences.push(`${baselineWord} 대비로는 ${text}로 가장 뚜렷하게 움직여, 이 연령대의 시청 비중이 평소와 달랐습니다.`);
+    sentences.push(`${baselineWord} 대비로는 ${text}로 가장 뚜렷하게 움직여, 이 연령대의 시청 비중이 ${baselineWord}과 달랐습니다.`);
   } else {
     sentences.push(`${baselineWord}와 비교해 연령대별 구성에 뚜렷한 변화는 없었습니다.`);
   }
@@ -2339,7 +2342,7 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
       candidates.push({
         variable: "Target Profile",
         strengthPct: Math.abs(worst.delta_pct!),
-        sentence: `${shortDemoLabel(worst.label)}${josaIga(shortDemoLabel(worst.label))} ${fmtR(worst.today)}로 평소 대비 ${Math.abs(worst.delta_pct!).toFixed(1)}% 감소해, 전체 하락 대비 성과 감소폭이 가장 컸습니다.`,
+        sentence: `${shortDemoLabel(worst.label)}${josaIga(shortDemoLabel(worst.label))} ${fmtR(worst.today)}로 최근 한 달 평균 대비 ${Math.abs(worst.delta_pct!).toFixed(1)}% 감소해, 전체 하락 대비 성과 감소폭이 가장 컸습니다.`,
         daypart: null,
         programName: null,
         // ns.demographics는 route.ts가 p_baseline_days=84(12주)로 호출한 값 그대로(새 계산 없음).
@@ -2368,7 +2371,7 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
       candidates.push({
         variable: "Day/Time Slot",
         strengthPct: Math.abs(worstHour.deltaPct),
-        sentence: `하락은 ${worstHour.hour}시대에 집중됐습니다(평소 대비 ${Math.abs(worstHour.deltaPct).toFixed(1)}% 낮음)${titleRow ? ` — 이 시간대 방영: ${titleRow.program_names}` : ""}.`,
+        sentence: `하락은 ${worstHour.hour}시대에 집중됐습니다(최근 12주 평균 대비 ${Math.abs(worstHour.deltaPct).toFixed(1)}% 낮음)${titleRow ? ` — 이 시간대 방영: ${titleRow.program_names}` : ""}.`,
         daypart: slotDaypart,
         programName: slotProgramName,
         // hourlyBaselinePattern은 route.ts가 dateTo 기준 직전 84일(12주) 고정 윈도우로 조회한
@@ -2672,8 +2675,8 @@ function CompetitorPositioningScatter({
         가로축 = 오늘 시청률, 세로축 = {baseline} 대비 등락률 — 오른쪽 위일수록 &ldquo;강한데 더 강해지는&rdquo; 채널, 왼쪽
         아래일수록 &ldquo;약한데 더 약해지는&rdquo; 채널입니다.
       </p>
-      <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ height: H, width: W }}>
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
+      <svg role="img" aria-label="오늘 시청률(가로)과 등락률(세로) 산점도" viewBox={`0 0 ${W} ${H}`} style={{ height: H, width: W }}>
         <line x1={PAD_L} y1={yOf(0)} x2={W - PAD_R} y2={yOf(0)} stroke="#a1a1aa" strokeWidth={1} />
         <line x1={xOf(medianRating)} y1={PAD_T} x2={xOf(medianRating)} y2={H - PAD_B} stroke="#e4e4e7" strokeWidth={1} strokeDasharray="3 3" />
         <text x={W - PAD_R} y={yOf(0) - 4} textAnchor="end" fontSize={11} fill="#a1a1aa">
@@ -2747,7 +2750,7 @@ function buildCompetitorNarrative(rows: CompetitorInsightRow[], baselineLabel?: 
   }
   if (fallers.length > 0) {
     const fallersText = fallers.map((r) => `${r.competitor_name}(▼${Math.abs(r.delta_pct!).toFixed(1)}%)`).join(", ");
-    parts.push(`${fallersText}${josaEunNeun(fallersText)} 반대로 평소보다 약세를 보였습니다.`);
+    parts.push(`${fallersText}${josaEunNeun(fallersText)} 반대로 ${label}보다 약세를 보였습니다.`);
   }
   if (parts.length === 0) {
     parts.push(`등록 경쟁채널 대부분이 ${label}과 비슷한 수준을 유지했습니다.`);
@@ -2869,7 +2872,7 @@ function HourlyGraphPanel({
         <>
           <div className="relative h-40">
             {baselinePts.length >= 2 && (
-              <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${pattern.length} 100`} preserveAspectRatio="none">
+              <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${pattern.length} 100`} preserveAspectRatio="none">
                 <polyline fill="none" stroke={accentColor ?? "#6366f1"} strokeOpacity={0.35} strokeWidth={1.5} vectorEffect="non-scaling-stroke" points={baselinePts.join(" ")} />
               </svg>
             )}
@@ -3101,7 +3104,7 @@ function OpportunityGapSlopeChart({ rows, fmtR }: { rows: HourBlockOpportunityRo
         시간대별 &ldquo;이전 평균 → {`최근`}&rdquo; 경쟁채널 대비 격차 변화 — 아래로 내려가면 격차가 좁혀진(기회) 시간대,
         위로 올라가면 격차가 벌어진(방어 필요) 시간대입니다.
       </p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+      <svg role="img" aria-label="시간대별 경쟁채널 대비 격차 변화 그래프" viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         <line x1={xLeft} y1={PAD_T} x2={xLeft} y2={H - PAD_B} stroke="#d4d4d8" strokeWidth={1} />
         <line x1={xRight} y1={PAD_T} x2={xRight} y2={H - PAD_B} stroke="#d4d4d8" strokeWidth={1} />
         <text x={xLeft} y={H - 4} textAnchor="middle" fontSize={11} fill="#a1a1aa">
@@ -3360,7 +3363,7 @@ function DowHourBlockTable({
   // 사용자 지시(2026-08-21): "좌우로 마우스를 움직이지 않도록" — 강제 min-width로 가로 스크롤을
   // 만들던 방식을 버리고, 셀 크기·글자·여백을 줄여 카드 폭 안에 8행 전체가 들어오게 한다.
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
       {/* 사용자 지시(2026-08-22): "시간대(예: 23~25시) 라벨이 두 줄로 내려가지 않고 1줄에
           보이도록" — 첫 열 폭(w-11=44px)이 라벨 폭(6자 내외)보다 좁아 줄바꿈되던 문제. 열 폭을
           넓히고 whitespace-nowrap을 명시해 항상 한 줄로 고정한다. */}
@@ -3530,7 +3533,7 @@ function WeekdayProfileSparklines({ pattern, accentColor }: { pattern: DowHourBl
                   <p className="text-[11px] font-semibold" style={{ color: dowColor }}>
                     {label}
                   </p>
-                  <svg viewBox={`0 0 ${W} ${H}`} className="mt-0.5 w-full" style={{ height: H }}>
+                  <svg role="img" aria-label="요일별 시청률 미니 그래프" viewBox={`0 0 ${W} ${H}`} className="mt-0.5 w-full" style={{ height: H }}>
                     <path d={path} fill="none" stroke={accentColor} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" opacity={0.85} />
                   </svg>
                   <p className="mt-0.5 text-[9.5px] text-zinc-400">피크 {hourBlockLabel(peakHour)}</p>
@@ -3831,10 +3834,10 @@ function buildScheduleRecommendationNote(
     // 통계 용어 없이 "이 프로그램의 다른 시간대 대비"로 풀어 쓴다(계산 방식 자체는 그대로,
     // 극단값에 흔들리지 않는 중앙값 기준 유지 — 표현만 쉽게).
     if (confidence === "strong" && weakHour !== null) {
-      return `최근 ${weeks}주 분석 결과 ${weakHour}시대 '${programName}'${josaEunNeun(programName)} 이 프로그램의 다른 시간대들보다 점유율이 뚜렷이 낮음(평소의 ${weakShareVsMedianPct?.toFixed(0)}% 수준, ${weakAirCount}회) — 그 시간대만 이동/교체 검토`;
+      return `최근 ${weeks}주 분석 결과 ${weakHour}시대 '${programName}'${josaEunNeun(programName)} 이 프로그램의 다른 시간대들보다 점유율이 뚜렷이 낮음(다른 시간대 중앙값의 ${weakShareVsMedianPct?.toFixed(0)}% 수준, ${weakAirCount}회) — 그 시간대만 이동/교체 검토`;
     }
     if (confidence === "mild" && weakHour !== null) {
-      return `최근 ${weeks}주 기준 ${weakHour}시대가 '${programName}'의 여러 방영 시간대 중 상대적으로 가장 약함(평소의 ${weakShareVsMedianPct?.toFixed(0)}% 수준) — 우선 점검 대상으로 참고`;
+      return `최근 ${weeks}주 기준 ${weakHour}시대가 '${programName}'의 여러 방영 시간대 중 상대적으로 가장 약함(다른 시간대 중앙값의 ${weakShareVsMedianPct?.toFixed(0)}% 수준) — 우선 점검 대상으로 참고`;
     }
     return "여러 시간대 반복 편성 프로그램으로, 전체보다 시간대별 판단이 필요하나 뚜렷한 저효율 시간대는 없음";
   }
@@ -3883,10 +3886,10 @@ const AUDIENCE_ROLE_LABEL: Record<AudienceRole, string> = {
   ZAPPING_RISK: "이탈위험형",
 };
 const AUDIENCE_ROLE_NOTE: Record<AudienceRole, string> = {
-  MASS: "도달율·시청시간 비율 모두 채널 내 상위권입니다 — 널리 보고 오래 봅니다.",
-  CORE: "도달율은 낮지만 시청시간 비율은 상위권입니다 — 적게 유입돼도 오래 봅니다(코어 팬덤형).",
-  ACQUISITION: "도달율은 상위권이지만 시청시간 비율은 하위권입니다 — 많이 유입되지만 짧게 봅니다.",
-  ZAPPING_RISK: "도달율·시청시간 비율 모두 채널 내 하위권입니다 — 유입도 적고 오래 붙잡지 못합니다.",
+  MASS: "도달률·시청시간 비율 모두 채널 내 상위권입니다 — 널리 보고 오래 봅니다.",
+  CORE: "도달률은 낮지만 시청시간 비율은 상위권입니다 — 적게 유입돼도 오래 봅니다(코어 팬덤형).",
+  ACQUISITION: "도달률은 상위권이지만 시청시간 비율은 하위권입니다 — 많이 유입되지만 짧게 봅니다.",
+  ZAPPING_RISK: "도달률·시청시간 비율 모두 채널 내 하위권입니다 — 유입도 적고 오래 붙잡지 못합니다.",
 };
 function classifyAudienceRole(evidence: FitScoreEvidence): AudienceRole | null {
   const r = evidence.reach_pctl;
@@ -4194,8 +4197,8 @@ function ScatterQuadrantChart({
       }
     });
   return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H }}>
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
+      <svg role="img" aria-label="프로그램 분포 그래프" viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H }}>
         {/* 사분면 배경 — 아주 옅게, 텍스트 가독성을 해치지 않는 선에서 */}
         <rect x={PAD} y={PAD} width={xOf(xSplit) - PAD} height={yOf(ySplit) - PAD} fill={accentColor} opacity={0.05} />
         <rect x={xOf(xSplit)} y={yOf(yDomain[1])} width={W - PAD - xOf(xSplit)} height={yOf(ySplit) - yOf(yDomain[1])} fill={accentColor} opacity={0.1} />
@@ -4233,7 +4236,7 @@ function ScatterQuadrantChart({
               <circle cx={cx} cy={cy} r={r} fill={accentColor} fillOpacity={0.55} stroke={accentColor} strokeWidth={1}>
                 <title>
                   {p.name} — {xLabel} {fmtX(p.x)}, {yLabel} {fmtY(p.y)}
-                  {p.bubble !== null ? `, 도달율 ${p.bubble.toFixed(2)}%` : ""}
+                  {p.bubble !== null ? `, 도달률 ${p.bubble.toFixed(2)}%` : ""}
                 </title>
               </circle>
               {/* 사용자 지시(2026-09-28): 겹치지 않는 한 모든 점에 라벨을 표기 — 위 박스 충돌
@@ -4321,7 +4324,7 @@ function TimeSlotCompetitionChart({ rows, accentColor, fmtR, channelName }: { ro
         <div key={i} className="contents">
           {/* 시간대 그룹 사이 구분선 — 모든 열을 가로지르는 한 줄(막대 시작점 정렬에는 영향 없음). */}
           {r.groupStart && <div className="col-span-5 mt-1.5 border-t border-zinc-100 pt-1.5" />}
-          <span className={`truncate text-[11px] ${r.isOurs ? "font-semibold" : "text-zinc-500"}`} style={r.isOurs ? { color: accentColor } : undefined} title={r.channelName}>
+          <span className={`truncate text-[11px] ${r.isOurs ? "font-semibold" : "text-zinc-500"}`} style={r.isOurs ? { color: brandText(accentColor) } : undefined} title={r.channelName}>
             {r.channelName}
           </span>
           <span className="text-[11px] tabular-nums text-zinc-400">{r.time}</span>
@@ -5125,10 +5128,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   }, [code, selectedDateFrom, selectedDateTo]);
 
   if (loading && !data) {
-    return <p className="p-8 text-sm text-zinc-500">불러오는 중...</p>;
+    return <p className="p-8 text-sm text-zinc-500" role="status">불러오는 중...</p>;
   }
   if (errorMessage) {
-    return <p className="p-8 text-sm text-red-600">{errorMessage}</p>;
+    return <p className="p-8 text-sm text-red-600" role="alert">{errorMessage}</p>;
   }
   if (!data) return null;
 
@@ -5331,7 +5334,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           })(),
         },
         {
-          label: "도달율",
+          label: "도달률",
           value: current.reach !== null ? `${current.reach.toFixed(2)}%` : "—",
           deltaLabel: (() => {
             const d = pctDelta(current.reach, compareBaseline?.reach);
@@ -5357,7 +5360,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         {
           label: "순위",
           value: narrativeSignal?.today_rank != null ? `${narrativeSignal.today_rank}위` : "—",
-          deltaLabel: narrativeSignal?.baseline_avg_rank != null ? `평소 ${narrativeSignal.baseline_avg_rank.toFixed(1)}위 (4주 평균)` : null,
+          deltaLabel: narrativeSignal?.baseline_avg_rank != null ? `4주 평균 ${narrativeSignal.baseline_avg_rank.toFixed(1)}위` : null,
           deltaDirection:
             narrativeSignal?.today_rank != null && narrativeSignal?.baseline_avg_rank != null
               ? narrativeSignal.baseline_avg_rank - narrativeSignal.today_rank >= 0
@@ -5627,6 +5630,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 href={`/ideal-schedule?channel=${code}`}
                 target="_blank"
                 rel="noopener noreferrer"
+                title={VENDING.linkLabel}
                 className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/30"
               >
                 <VendingMachineIcon size={18} />
@@ -5637,6 +5641,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   안 먹힘) 흰 배경에 흰 글씨(투명)로 남아있었다. 자손 선택자([&_option])로 바꾸고
                   optgroup 라벨 색도 함께 지정. */}
               <select
+                aria-label="기간 선택"
                 value={periodPreset}
                 onChange={(e) => {
                   const next = e.target.value as PeriodPreset;
@@ -5792,7 +5797,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 return (
                   <a
                     href="#what-to-schedule"
-                    className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
+                    className="flex items-center gap-1 min-h-6 rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
                     title="무엇을 편성할까요? 표로 이동"
                   >
                     <span aria-hidden className="text-white/30">·</span>
@@ -5806,7 +5811,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {((!showComparisonView && (showCompetitorOverlapSection || showWhoIsWatchingSection)) || showStableSlotSection) && (
               <a
                 href="#deep-analysis"
-                className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
+                className="flex items-center gap-1 min-h-6 rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
                 title="심층 분석으로 이동"
               >
                 <span aria-hidden className="text-white/30">·</span>
@@ -5838,7 +5843,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide" style={{ color: accentForegroundColor(accentColor) }}>
                 Executive Summary
               </p>
-              <p className="text-base leading-relaxed text-zinc-700">{highlightNarrativeText(insight, "#059669", "#e11d48")}</p>
+              <p className="text-base leading-relaxed text-zinc-700">{highlightNarrativeText(insight, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}</p>
             </div>
           );
         })()}
@@ -6207,7 +6212,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     .filter((p): p is string => p !== null);
                   if (pts.length < 2) return null;
                   return (
-                    <svg
+                    <svg aria-hidden="true"
                       className="pointer-events-none absolute inset-0 h-full w-full"
                       viewBox={`0 0 ${hourlyPattern.length} 100`}
                       preserveAspectRatio="none"
@@ -6423,7 +6428,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 />
                 프로그램명 보기
               </label>
-              {effective1h && !lazyHourPattern && <span className="text-xs text-zinc-400">불러오는 중...</span>}
+              {effective1h && !lazyHourPattern && <span className="text-xs text-zinc-400" role="status">불러오는 중...</span>}
               {/* 사용자 지시(2026-09-20): "이번 주 실제 편성표 보기"를 여기 체크박스 줄 옆에 —
                   위 히트맵은 최근 12주(또는 선택 기간)를 뭉친 근사치라, 이번 주 하나만 분 단위로
                   정확히 보여주는 정밀 버전을 같은 자리에서 열 수 있게 한다(모달, 스크롤 위치 보존). */}
@@ -6472,15 +6477,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               연결한다. 재지시: 2주 비교·다운로드 안내 문구를 상단으로 옮기고 "주간 비교"로
               줄이며, 채널 로고색·볼드로 표시한다. 링크는 관리자 화면이 아니라 PD 세션으로도
               열리는 /schedule-grid로 — PD가 관리자 화면에 접근할 필요가 없어야 한다. */}
+          {/* 단계 15: 공용 Modal — 포커스 이동·Tab 순환·Esc 닫기·닫은 뒤 포커스 복귀 */}
           {showScheduleModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowScheduleModal(false)}>
-              <div
-                className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-xl ring-1 ring-zinc-100"
-                onClick={(e) => e.stopPropagation()}
-              >
+            <Modal open onClose={() => setShowScheduleModal(false)} titleId="schedule-modal-title" className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-6 shadow-xl ring-1 ring-zinc-100">
+              <div>
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <h3 className="text-sm font-semibold text-zinc-800">이번 주 실제 편성표</h3>
+                    <h3 id="schedule-modal-title" className="text-sm font-semibold text-zinc-800">이번 주 실제 편성표</h3>
                     <Link
                       href={`/schedule-grid?channel=${code}`}
                       target="_blank"
@@ -6502,7 +6505,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   reloadKey={scheduleReloadKey}
                 />
               </div>
-            </div>
+            </Modal>
           )}
           <p className="mb-3 text-sm text-zinc-400">
             {showSdowDualView
@@ -6719,7 +6722,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             위 WHY?/OPPORTUNITY?는 원인을 단정하지 않는 확정 근거 위주입니다. 이 코너는 같은 데이터를 바탕으로
             AI가 조금 더 과감하게 세운 가설이며, 실제 편성 결정 전 반드시 별도 검증이 필요합니다.
           </p>
-          {smartTipsError && <p className="text-sm text-rose-600">{smartTipsError}</p>}
+          {smartTipsError && <p className="text-sm text-rose-600" role="alert">{smartTipsError}</p>}
           {smartTips && smartTips.length === 0 && !smartTipsError && (
             <p className="text-sm text-zinc-400">현재 종합할 만한 뚜렷한 신호가 없습니다.</p>
           )}
@@ -6748,12 +6751,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {code === "SKYUHD" ? (
             <>
               <p className="mb-3 text-sm text-zinc-400">
-                skyUHD는 타깃 구분이 없는 원본 자료 한계로 PRD 고정 Fit Score(타깃 기반) 공식을 적용할 수
+                skyUHD는 타깃 구분이 없는 원본 자료 한계로 기준 문서의 Fit Score(타깃 기반) 공식을 적용할 수
                 없습니다 — 대신 채널 내 시청률 percentile과 최근 4주/이전 8주 추세만으로 분류한 참고 지표입니다
-                (다른 채널의 STRENGTHEN/KEEP/MOVE/REPLACE/TEST 5태그와는 별개 개념).
+                (다른 채널의 강화·유지·이동 검토·교체 검토·테스트 5개 태그와는 별개 개념).
               </p>
               {skyuhdScorecardLoading ? (
-                <p className="text-sm text-zinc-400">불러오는 중...</p>
+                <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
               ) : !skyuhdScorecard || skyuhdScorecard.length === 0 ? (
                 <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
               ) : (
@@ -6781,7 +6784,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   return (
                     <>
                       {mainItems.length > 0 ? (
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
                           <table className="w-full min-w-[560px] text-left text-sm">
                             <thead>
                               <tr className="text-zinc-400">
@@ -6800,7 +6803,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       {lowSampleItems.length > 0 && (
                         <div className="mt-3 border-t border-dashed border-zinc-200 pt-3">
                           <p className="mb-1 text-sm text-zinc-400">표본 부족(방영 5회 이하) — 참고용</p>
-                          <div className="overflow-x-auto">
+                          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
                             <table className="w-full min-w-[560px] text-left text-sm">
                               <tbody>{renderRows(lowSampleItems)}</tbody>
                             </table>
@@ -6815,13 +6818,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           ) : (
           <>
           {fitScoreLoading ? (
-            <p className="text-sm text-zinc-400">불러오는 중...</p>
+            <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
           ) : !fitScoreItems || fitScoreItems.length === 0 ? (
             <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
           ) : (
             // 사용자 지시(2026-08-21): 표 형태로 재구성 — 태그는 한글, 제목은 한 줄(truncate),
             // 가운데 열에 제안 사항 한 줄, Fit Score/Confidence는 오른쪽. 클릭하면 아래에 근거 펼침.
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
               <table className="w-full min-w-[640px] text-left text-sm">
                 <thead>
                   <tr className="text-zinc-400">
@@ -6880,9 +6883,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             <td colSpan={4} className="p-3">
                               <div className="grid grid-cols-2 gap-2 text-sm text-zinc-600 sm:grid-cols-3">
                                 <p>평균 시청률: {fmtR(item.evidence.avg_rating)}</p>
-                                <p>도달율: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
+                                <p>도달률: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
                                 <p>
-                                  시청시간비율: {item.evidence.avg_time_spent_share !== null ? `${item.evidence.avg_time_spent_share.toFixed(2)}%` : "—"}
+                                  시청시간 비율: {item.evidence.avg_time_spent_share !== null ? `${item.evidence.avg_time_spent_share.toFixed(2)}%` : "—"}
                                 </p>
                                 <p>연령대 선호도 평균: {item.evidence.affinity_avg_index?.toFixed(1) ?? "—"}</p>
                                 <p>경쟁 강도: {item.evidence.competitive_pressure?.toFixed(1) ?? "—"}</p>
@@ -7012,7 +7015,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 {marketYtdCompetitorSnapshot[0]?.date_to}) 유료가구 기준 시장 전체 순위로 UHD 경쟁채널 6개 사이의
                 위치를 대신 보여줍니다.
               </p>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
                 <table className="w-full min-w-[420px] text-left text-sm">
                   <thead>
                     <tr className="text-zinc-400">
@@ -7110,7 +7113,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       baselineLabel={sdowBaselineShortLabel ?? undefined}
                       selfChannelBrands={data.selfChannelBrands}
                     />
-                    <div className="mb-3 overflow-x-auto">
+                    <div className="mb-3 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
                     <table className="w-full min-w-[560px] text-left text-sm">
                       <thead>
                         <tr className="text-zinc-400">
@@ -7137,7 +7140,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                               className="py-1.5 pr-2 font-medium"
                               style={
                                 c.isOurs
-                                  ? { color: data.channel.themeColor ?? undefined, fontWeight: 700 }
+                                  ? { color: brandText(data.channel.themeColor), fontWeight: 700 }
                                   : selfBrandColor
                                     ? { color: selfBrandColor, fontWeight: 700 }
                                     : { color: undefined }
@@ -7207,8 +7210,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               <p className="mb-4 text-base leading-relaxed text-zinc-700">
                 {highlightNarrativeText(
                   sectionLlmCurrent.competitor ?? buildCompetitorNarrative(competitorInsightReport, sdowBaselineShortLabel ?? undefined),
-                  "#059669",
-                  "#e11d48"
+                  NARRATIVE_UP_COLOR,
+                  NARRATIVE_DOWN_COLOR
                 )}
               </p>
             </>
@@ -7242,7 +7245,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   }, {})
                 );
                 return (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
                     <table className="w-full min-w-[720px] text-left text-sm">
                       <thead>
                         <tr className="text-zinc-400">
@@ -7467,7 +7470,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               아래 표는 (참고) 선택 기간 마지막 날짜({data.dateTo}) 시점 기준 DoD/WoW/MoM/QoQ/YoY/YTD 비교입니다.
             </p>
           )}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
             <table className="w-full min-w-[560px] text-left text-sm">
               <thead>
                 <tr className="text-zinc-400">
@@ -7632,7 +7635,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     <p className="text-sm font-semibold text-rose-700">주도 요인(편차가 가장 큰 변수)</p>
                     {/* Tier 1 확장(2026-08-26): OpenAI가 후보들을 종합한 문장(sectionLlm.why)이
                         있으면 그걸, 없으면 기존 규칙 기반 leadSentence로. */}
-                    <p className="mt-1 text-sm text-zinc-600">{highlightNarrativeText(sectionLlmCurrent.why ?? why.leadSentence, "#059669", "#e11d48")}</p>
+                    <p className="mt-1 text-sm text-zinc-600">{highlightNarrativeText(sectionLlmCurrent.why ?? why.leadSentence, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}</p>
                     <WhyCandidateRankingChart candidates={why.candidates} />
                     {why.supportingBullets.length > 0 && (
                       <>
@@ -7641,7 +7644,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           {why.supportingBullets.map((b, i) => (
                             <li key={i} className="flex gap-1.5 text-sm text-zinc-600">
                               <span className="shrink-0 text-rose-300">•</span>
-                              <span>{highlightNarrativeText(b, "#059669", "#e11d48")}</span>
+                              <span>{highlightNarrativeText(b, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}</span>
                             </li>
                           ))}
                         </ul>
@@ -7677,8 +7680,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <p className="mt-1 text-sm text-zinc-600">
                     {highlightNarrativeText(
                       `${h.highlight_date}에 ${fmtR(h.rating)}을 기록해 최근 28일 평균(${fmtR(h.baseline_avg)}) 대비 ${isRise ? "▲" : "▼"} ${Math.abs(h.change_pct).toFixed(1)}% ${isRise ? "상승" : "하락"}했습니다. 3일 연속 조건(하락 -10%p 이상)에는 못 미쳐 경보로는 표시하지 않지만, 최근 흐름에서 가장 눈에 띈 변화입니다.`,
-                      "#059669",
-                      "#e11d48"
+                      NARRATIVE_UP_COLOR,
+                      NARRATIVE_DOWN_COLOR
                     )}
                   </p>
                 </div>
@@ -7836,7 +7839,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </p>
             )}
           {/* 사용자 지시(2026-09-02): "연령대가 주요하게 움직였거나, 특별하게 시청 시간이 길었던
-              컨텐츠가 눈에 보인다면 반드시 함께 언급" — 위 문단은 임계값(±30%)을 넘을 때만 나오지만,
+              콘텐츠가 눈에 보인다면 반드시 함께 언급" — 위 문단은 임계값(±30%)을 넘을 때만 나오지만,
               여기는 화면에 이미 "주목" 타일로 뜬 연령대는 근거가 있는 한 임계값 없이 항상 짚는다. */}
           {!showComparisonView &&
             (() => {
@@ -7894,7 +7897,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {[
               { label: "시청률", value: fmtR(howDeeplyStats?.rating ?? null) },
               { label: "점유율", value: howDeeplyStats?.share !== null && howDeeplyStats?.share !== undefined ? `${howDeeplyStats.share.toFixed(2)}%` : "—" },
-              { label: "도달율", value: howDeeplyStats?.reach !== null && howDeeplyStats?.reach !== undefined ? `${howDeeplyStats.reach.toFixed(2)}%` : "—" },
+              { label: "도달률", value: howDeeplyStats?.reach !== null && howDeeplyStats?.reach !== undefined ? `${howDeeplyStats.reach.toFixed(2)}%` : "—" },
               { label: "시청시간", value: fmtSeconds(howDeeplyStats?.time_spent_seconds ?? null) },
             ].map((stat) => (
               <div key={stat.label} className="rounded-2xl bg-zinc-50 p-4">
@@ -7904,7 +7907,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             ))}
           </div>
           <p className="mt-3 text-base leading-relaxed text-zinc-700">
-            {highlightNarrativeText(buildHowDeeplyExplanation(howDeeplyStats, howDeeplyPeriodLabel, code === "SKYUHD"), "#059669", "#e11d48")}
+            {highlightNarrativeText(buildHowDeeplyExplanation(howDeeplyStats, howDeeplyPeriodLabel, code === "SKYUHD"), NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
           </p>
         </div>
 
@@ -7923,12 +7926,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 Target Performance/Affinity/Engagement 표와는 별개 개념).
               </p>
               {skyuhdScorecardLoading ? (
-                <p className="text-sm text-zinc-400">불러오는 중...</p>
+                <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
               ) : !skyuhdScorecard || skyuhdScorecard.length === 0 ? (
                 <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
               ) : (
                 <>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
                     <table className="w-full min-w-[520px] text-left text-sm">
                       <thead>
                         <tr className="text-zinc-400">
@@ -7968,8 +7971,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             const worstName = skyuhdScorecard[skyuhdScorecard.length - 1].program_name;
                             return `'${bestName}'${josaIga(bestName)} 채널 내 시청률 상위권(${skyuhdScorecard[0].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[0].rating_pctl).toFixed(0)}%` : "—"})으로 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 가장 낮아(${skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl!).toFixed(0)}%` : "—"}) 편성 조정을 검토해볼 만합니다.`;
                           })(),
-                          "#059669",
-                          "#e11d48"
+                          NARRATIVE_UP_COLOR,
+                          NARRATIVE_DOWN_COLOR
                         )
                       : ""}
                   </p>
@@ -7980,19 +7983,19 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <>
               <p className="mb-3 text-sm text-zinc-400">
                 Fit Score 하위지표 — Target Performance(시청률·슬롯·데이파트) / Target Affinity(핵심 연령대
-                구성비, 프로그램 단위) / Audience Engagement(Reach·시청시간비율). 전부 최근 12주 자사 채널 내
+                구성비, 프로그램 단위) / Audience Engagement(도달률·시청시간 비율). 전부 최근 12주 자사 채널 내
                 percentile(0~100), 채널에 도움이 되는 순으로 정렬했습니다. 프로그램명 옆 배지는 편성 물량
                 대비 회당 성과 유형입니다 — 총량형(편성을 많이 써서 버티는 중) / 효율형(적게 틀어도 채널
                 평균보다 잘 나옴) / 균형형(뚜렷한 쏠림 없음). 정확한 총 방영시간 대신 방영 일수로 근사한
                 값이라 참고용으로 봐주세요.
               </p>
               {fitScoreLoading ? (
-                <p className="text-sm text-zinc-400">불러오는 중...</p>
+                <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
               ) : contentFitsRows.length === 0 ? (
                 <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
               ) : (
                 <>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
                     <table className="w-full min-w-[520px] text-left text-sm">
                       <thead>
                         <tr className="text-zinc-400">
@@ -8029,8 +8032,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             const worstName = contentFitsRows[contentFitsRows.length - 1].programs?.canonical_name ?? "";
                             return `'${bestName}'${josaIga(bestName)} 종합 ${contentFitsHelpScore(contentFitsRows[0]).toFixed(0)}점으로 채널에 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 종합 ${contentFitsHelpScore(contentFitsRows[contentFitsRows.length - 1]).toFixed(0)}점으로 가장 낮아 편성 조정을 검토해볼 만합니다.`;
                           })(),
-                          "#059669",
-                          "#e11d48"
+                          NARRATIVE_UP_COLOR,
+                          NARRATIVE_DOWN_COLOR
                         )
                       : ""}
                   </p>
@@ -8047,7 +8050,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
             <h2 className={`${SECTION_TITLE_P2} mb-1`}>Program Portfolio</h2>
             <p className="mb-4 text-sm text-zinc-400">
-              위 CONTENT FITS? 표와 같은 값을 그래프로 — 오른쪽 위(HERO)일수록 타깃 실적·시청 몰입도 둘 다 채널 내 상위권입니다. 원 크기는 도달율(Reach).
+              위 CONTENT FITS? 표와 같은 값을 그래프로 — 오른쪽 위(최상위 구간)일수록 타깃 실적·시청 몰입도 둘 다 채널 내 상위권입니다. 원 크기는 도달률(Reach).
             </p>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div>
@@ -8056,7 +8059,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     refresh_fit_score_mart()가 Target Affinity를 채널 하루 전체 집계 기준으로 채널당
                     1번만 계산해 그 채널의 모든 프로그램에 동일 적용하고 있어(실측: ENA Drama 12개
                     프로그램 전부 0.00) 산점도가 가로 일직선이 되고 사분면이 무의미해졌다 — 프로그램
-                    마다 실제로 차이 나는 Audience Engagement(Reach·시청시간비율 기반)로 교체했다.
+                    마다 실제로 차이 나는 Audience Engagement(도달률·시청시간 비율 기반)로 교체했다.
                     2026-09-02: Target Affinity 계산 자체를 프로그램 단위로 재설계해 이제는 프로그램
                     마다 값이 다르지만(위 CONTENT FITS? 표 확인), Y축 재검토는 사용자 지시가 없어
                     Audience Engagement를 그대로 유지한다. */}
@@ -8081,12 +8084,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 />
               </div>
               <div>
-                <p className="mb-2 text-xs font-medium text-zinc-500">도달율(Reach) × 시청률(Rating)</p>
+                <p className="mb-2 text-xs font-medium text-zinc-500">도달률(Reach) × 시청률(Rating)</p>
                 {(() => {
                   const reachRatingPoints = contentFitsRows
                     .filter((r) => r.evidence.avg_reach !== null && r.evidence.avg_rating !== null)
                     .map((r) => ({ name: r.programs?.canonical_name ?? "이름 없음", x: r.evidence.avg_reach!, y: r.evidence.avg_rating!, bubble: null as number | null }));
-                  if (reachRatingPoints.length < 2) return <p className="text-sm text-zinc-400">도달율 데이터가 충분하지 않습니다.</p>;
+                  if (reachRatingPoints.length < 2) return <p className="text-sm text-zinc-400">도달률 데이터가 충분하지 않습니다.</p>;
                   const reachValues = reachRatingPoints.map((p) => p.x);
                   const ratingValues = reachRatingPoints.map((p) => p.y);
                   const median = (arr: number[]) => {
@@ -8097,7 +8100,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   return (
                     <ScatterQuadrantChart
                       accentColor={accentColor}
-                      xLabel="도달율(%)"
+                      xLabel="도달률(%)"
                       yLabel="시청률(%)"
                       xFormat={(v) => v.toFixed(2)}
                       yFormat={(v) => v.toFixed(3)}
@@ -8113,7 +8116,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
             </div>
             <p className="mt-3 text-xs text-zinc-400">
-              도달율×시청률 산점도의 사분면 기준은 이 채널의 현재 프로그램들 사이의 중앙값(median)입니다 — 절대 기준이 아니라 상대 비교용입니다.
+              도달률×시청률 산점도의 사분면 기준은 이 채널의 현재 프로그램들 사이의 중앙값(median)입니다 — 절대 기준이 아니라 상대 비교용입니다.
             </p>
             {/* Program Momentum Index(2026-08-27, Phase 2 — 사용자 지시로 새 조회 추가) —
                 /api/scheduling/program-momentum. 최근 방영일 실측 vs 최근 4주(28일) 평균 비율. */}
@@ -8174,7 +8177,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           {hourBlockOpportunity.length > 0 && <OpportunityGapSlopeChart rows={hourBlockOpportunity} fmtR={fmtR} />}
           {hourBlockOpportunity.length > 0 && <OpportunityHourBlockTiles rows={hourBlockOpportunity} fmtR={fmtR} isEnaStory={isEnaStory} />}
           {hourBlockOpportunity.length > 0 && (
-            <div className="mb-3 overflow-x-auto">
+            <div className="mb-3 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
               <table className="w-full min-w-[620px] text-left text-sm">
                 <thead>
                   <tr className="text-zinc-400">
@@ -8225,8 +8228,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <p className="mb-3 text-base leading-relaxed text-zinc-700">
             {highlightNarrativeText(
               sectionLlmCurrent.opportunity ?? buildOpportunityNarrative(hourBlockOpportunity, fitScoreItems, opportunityRecentLabel, code === "SKYUHD"),
-              "#059669",
-              "#e11d48"
+              NARRATIVE_UP_COLOR,
+              NARRATIVE_DOWN_COLOR
             )}
           </p>
           <p className="mb-2 text-sm text-zinc-400">

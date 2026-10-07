@@ -62,7 +62,7 @@ export default function AdminLoginPage() {
           placeholder="비밀번호"
         />
 
-        {errorMessage && <p className="mb-4 text-sm text-red-600">{errorMessage}</p>}
+        {errorMessage && <p className="mb-4 text-sm text-red-600" role="alert">{errorMessage}</p>}
 
         <button
           type="submit"

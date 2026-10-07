@@ -66,8 +66,8 @@ function RightsBlock() {
     return body;
   });
   const s = r.data?.summary;
-  if (r.status === "loading" || (!s && r.status !== "error")) return <p className="text-[13px] text-zinc-500">권리 현황을 불러오는 중…</p>;
-  if (!s) return <p className="text-[13px] text-red-700">{r.errorMessage}</p>;
+  if (r.status === "loading" || (!s && r.status !== "error")) return <p className="text-[13px] text-zinc-500" role="status">권리 현황을 불러오는 중…</p>;
+  if (!s) return <p className="text-[13px] text-red-700" role="alert">{r.errorMessage}</p>;
   if (!s.tablesApplied) return <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-600">권리(Avail) 저장소가 아직 적용되지 않아 권리 소진 현황을 표시할 수 없습니다.</p>;
   if (!s.configured) return <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-600">권리 정보가 입력되지 않았습니다. 입력 전에는 권리 소진을 판단할 수 없고, 이 상태를 &lsquo;문제 없음&rsquo;으로 보지 않습니다.</p>;
   return (
@@ -113,7 +113,7 @@ export function MonthlyPlanningPanels({ channels, monthLabel, ctx }: { channels:
     <>
       <section className={PANEL} aria-label="채널 역할·라인업" data-section="roles">
         <PanelHeader title="채널 역할·라인업" question="채널 역할에 맞는 라인업이 유지되는가" />
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
           <table className="w-full text-left text-[12.5px]">
             <thead>
               <tr className="text-zinc-400">

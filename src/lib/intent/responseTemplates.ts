@@ -251,10 +251,10 @@ export function buildChannelPerformanceAnswer(
     evidence: `직전 기간 평균 ${fmt(r.prior_period_avg_rating)}(${pct(r.prior_period_change_pct)}) · 최근 12주 평균 ${fmt(r.baseline_avg_rating)}`,
     interpretation:
       r.baseline_change_pct !== null && r.baseline_change_pct >= 15
-        ? "평소보다 뚜렷하게 강세입니다."
+        ? "최근 12주 평균보다 뚜렷하게 강세입니다."
         : r.baseline_change_pct !== null && r.baseline_change_pct <= -15
-          ? "평소보다 뚜렷하게 약세입니다."
-          : "평소와 비슷한 수준입니다.",
+          ? "최근 12주 평균보다 뚜렷하게 약세입니다."
+          : "최근 12주 평균과 비슷한 수준입니다.",
     programmingAction: "자세한 원인/시간대/경쟁채널 비교는 Page 2에서 확인하세요.",
     confidence,
     confidenceNote: isSingleDay ? "실측 데이터 1일 기준(사실 조회, 추세 추정 아님)." : CONFIDENCE_NOTE[confidence],

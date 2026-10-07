@@ -113,7 +113,7 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
       if (rows.length === 0) continue;
       blocks.push({
         kind: "table",
-        headers: [`Group ${g} 채널`, "주요시간 편성 비중", "주요시간 평균", "그 외 평균", "배율", "평일", "주말·공휴일", "도달율", "시청시간 비율"],
+        headers: [`Group ${g} 채널`, "주요시간 편성 비중", "주요시간 평균", "그 외 평균", "배율", "평일", "주말·공휴일", "도달률", "시청시간 비율"],
         rows: rows.map((r) => [
           r.channelCode,
           r.primeAirtimePct === null ? "—" : `${r.primeAirtimePct}%`,

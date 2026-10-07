@@ -116,7 +116,7 @@ function buildDeepDiveSection(raw: AudienceReportRawData): DeepDiveSection {
               channelAvgRating: ranking[0]?.channelAvgRating ?? null,
               caption: baseCaption(
                 raw,
-                `기간 내 백분위 합산(시청률·도달율·시청시간 비율), 편성 ${MIN_AIRINGS_FOR_RANKING}회 미만 제외 · 최근 12주 Fit Score와 목적이 다름`
+                `기간 내 백분위 합산(시청률·도달률·시청시간 비율), 편성 ${MIN_AIRINGS_FOR_RANKING}회 미만 제외 · 최근 12주 Fit Score와 목적이 다름`
               ),
             },
           }
@@ -311,7 +311,7 @@ export function buildModeASection(raw: AudienceReportRawData, extra: ModeAExtra)
   const programsBySlotDeviation: ModeASection["programsBySlotDeviation"] =
     !isSkyUhd && sortedDeviation.length > 0
       ? { available: true, data: { top: sortedDeviation.slice(0, 5), bottom: sortedDeviation.slice(-5).reverse() } }
-      : { available: false, reason: isSkyUhd ? "skyUHD는 시간대별 슬롯 평소 수준 비교가 불가합니다" : "비교할 시간대 자료가 없습니다" };
+      : { available: false, reason: isSkyUhd ? "skyUHD는 시간대별 슬롯 기준선 비교가 불가합니다" : "비교할 시간대 자료가 없습니다" };
 
   const originalReview: ModeASection["originalReview"] = isGroupA && extra.originalReview
     ? { available: true, data: extra.originalReview }

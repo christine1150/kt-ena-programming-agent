@@ -175,7 +175,7 @@ export default function DailyNewsManager() {
           {saving ? "저장 중..." : "전체 교체 저장"}
         </button>
         {message && <span className="text-sm text-emerald-600">{message}</span>}
-        {errorMessage && <span className="text-sm text-red-600">{errorMessage}</span>}
+        {errorMessage && <span className="text-sm text-red-600" role="alert">{errorMessage}</span>}
       </div>
 
       {preview && (
@@ -206,7 +206,7 @@ export default function DailyNewsManager() {
       <div className="mt-5 border-t border-zinc-100 pt-4">
         <h3 className="mb-2 text-sm font-medium text-zinc-700">현재 등록된 뉴스</h3>
         {loading ? (
-          <p className="text-sm text-zinc-400">불러오는 중...</p>
+          <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
         ) : items.length === 0 ? (
           <p className="text-sm text-zinc-400">등록된 뉴스가 없습니다.</p>
         ) : (

@@ -17,8 +17,15 @@ function reducer<T>(s: RequestState<T>, a: Action<T>): RequestState<T> {
   return failRequest(s, a.seq, a.key, a.message);
 }
 
+/** 응답이 이 시간(ms) 안에 오지 않으면 요청을 끊고 실패로 표시한다(화면이 끝없이 "불러오는 중"으로 남지 않게 한다). 다시 시도는 reload. */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 90_000;
+
 /** fetcher는 응답 본문을 data로 돌려주거나 Error를 던진다. key가 null이면 요청하지 않는다. */
-export function useContextData<T>(key: string | null, fetcher: (signal: AbortSignal) => Promise<T>): Display<T> & { reload: () => void } {
+export function useContextData<T>(
+  key: string | null,
+  fetcher: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS
+): Display<T> & { reload: () => void } {
   const [state, dispatch] = useReducer(reducer<T>, undefined, () => initialRequestState<T>());
   const seqRef = useRef(0);
   const fetcherRef = useRef(fetcher);
@@ -34,15 +41,25 @@ export function useContextData<T>(key: string | null, fetcher: (signal: AbortSig
     const ctrl = new AbortController();
     ctrlRef.current = ctrl;
     dispatch({ type: "begin", key: k, seq });
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      ctrl.abort();
+      dispatch({ type: "fail", key: k, seq, message: `응답이 ${Math.round(timeoutMs / 1000)}초 넘게 없어 중단했습니다. 잠시 뒤 다시 시도해 주세요.` });
+    }, timeoutMs);
     fetcherRef
       .current(ctrl.signal)
-      .then((data) => dispatch({ type: "ok", key: k, seq, data, at: Date.now() }))
+      .then((data) => {
+        clearTimeout(timer);
+        if (!timedOut) dispatch({ type: "ok", key: k, seq, data, at: Date.now() });
+      })
       .catch((e: unknown) => {
-        if (ctrl.signal.aborted) return;
+        clearTimeout(timer);
+        if (timedOut || ctrl.signal.aborted) return;
         dispatch({ type: "fail", key: k, seq, message: e instanceof Error ? e.message : "불러오지 못했습니다." });
       });
     return ctrl;
-  }, []);
+  }, [timeoutMs]);
 
   useEffect(() => {
     if (key === null) return;

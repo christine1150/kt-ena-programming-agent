@@ -191,7 +191,7 @@ export function SummaryPanel({
             })}
           </ul>
           {forcedCount > 0 && <p className="mt-1 px-1.5 text-[11px] text-zinc-500">필수 편성(주요 콘텐츠 관리·편성표 신규 등)으로 바뀐 칸 {forcedCount}개는 추천이 아니라 따로 셉니다.</p>}
-          <button type="button" onClick={onOpenCompare} className="mt-1 px-1.5 text-[11px] text-zinc-500 underline decoration-dotted hover:text-zinc-700">
+          <button type="button" onClick={onOpenCompare} className="mt-1 min-h-6 px-1.5 py-1 text-[11px] text-zinc-500 underline decoration-dotted hover:text-zinc-700">
             {changedRows.length > top.length ? `외 ${changedRows.length - top.length}건 · ` : ""}전체 대조표 보기
           </button>
         </div>

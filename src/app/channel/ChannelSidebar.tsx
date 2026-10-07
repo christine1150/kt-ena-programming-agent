@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { parseViewContext, serializeContext } from "@/lib/workspace/viewContext";
 import { VendingMachineIcon } from "@/components/VendingIcons";
+import { VENDING } from "@/lib/ui/pageTitles";
 
 interface ChannelOption {
   code: string;
@@ -29,7 +30,7 @@ export default function ChannelSidebar({ channels }: { channels: ChannelOption[]
   // 아이콘들과 홈 아이콘이 항상 화면에 보이게 한다(내용이 뷰포트보다 많아지면 사이드바 자체만
   // 세로 스크롤).
   return (
-    <nav className="sticky top-0 flex h-screen w-20 shrink-0 flex-col items-center gap-3 overflow-y-auto border-r border-zinc-100 bg-white/60 py-6 sm:w-24">
+    <nav aria-label="채널 선택" className="sticky top-0 flex h-screen w-20 shrink-0 flex-col items-center gap-3 overflow-y-auto border-r border-zinc-100 bg-white/60 py-6 sm:w-24">
       {channels.map((c) => {
         const active = pathname === `/channel/${c.code}`;
         return (
@@ -57,8 +58,8 @@ export default function ChannelSidebar({ channels }: { channels: ChannelOption[]
         href={`/ideal-schedule?channel=${currentCode}`}
         target="_blank"
         rel="noopener noreferrer"
-        title="시청률 자판기"
-        aria-label="시청률 자판기"
+        title={VENDING.linkLabel}
+        aria-label={VENDING.linkLabel}
         className="flex w-16 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center text-zinc-500 transition hover:bg-white/70 hover:text-zinc-800"
       >
         <VendingMachineIcon size={24} strokeWidth={1.8} />
@@ -77,6 +78,7 @@ export default function ChannelSidebar({ channels }: { channels: ChannelOption[]
         className="flex w-16 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center transition hover:bg-white/70"
       >
         <svg
+          aria-hidden="true"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"

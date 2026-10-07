@@ -506,7 +506,7 @@ export default function FeaturedContentManager() {
             />
           </div>
 
-          {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+          {errorMessage && <p className="text-sm text-red-600" role="alert">{errorMessage}</p>}
 
           <button
             onClick={handleSave}
@@ -519,12 +519,12 @@ export default function FeaturedContentManager() {
       )}
 
       {loading ? (
-        <p className="text-sm text-zinc-400">불러오는 중...</p>
+        <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
       ) : items.length === 0 ? (
         <p className="text-sm text-zinc-400">등록된 주요 콘텐츠가 없습니다.</p>
       ) : (
         <>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
             <table className="w-full text-left text-sm">
               <thead>
                 {/* 사용자 지시(2026-08-26): 채널기본정보.xlsx "요일 별 리뷰 프로그램" 시트와 같은
@@ -563,7 +563,7 @@ export default function FeaturedContentManager() {
                 {showEnded ? "▲ " : "▼ "}종영된 콘텐츠 {endedItems.length}건 {showEnded ? "접기" : "보기"}
               </button>
               {showEnded && (
-                <div className="mt-2 overflow-x-auto">
+                <div className="mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
                   <table className="w-full text-left text-sm">
                     <thead>
                       <tr className="text-zinc-300">

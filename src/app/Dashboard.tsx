@@ -41,6 +41,8 @@ import { shortDateKo, kstToday, lastMonthEndOnOrBefore, lastSundayOnOrBefore } f
 import { buildDataStatus, buildTodayDecisions } from "@/lib/workspace/homeData";
 import { buildKpiGroups, parseTargetRank, type KpiRow } from "@/lib/workspace/kpi";
 import { useContextData } from "@/lib/workspace/useContextData";
+import { VENDING } from "@/lib/ui/pageTitles";
+import { brandText } from "@/lib/ui/contrast";
 import { dataKey, hrefFor, parseViewContext, serializeContext, type HomeView, type ViewContext } from "@/lib/workspace/viewContext";
 
 interface ChannelSummary {
@@ -528,7 +530,7 @@ function colorizeChannelNamesInNodes(nodes: ReactNode[], themeColorByCode: Map<s
       if (found) {
         const color = themeColorByCode.get(found.code) ?? undefined;
         result.push(
-          <b key={`ch-${key++}`} style={color ? { color, fontWeight: 700 } : { fontWeight: 700 }}>
+          <b key={`ch-${key++}`} style={color ? { color: brandText(color), fontWeight: 700 } : { fontWeight: 700 }}>
             {part}
           </b>
         );
@@ -633,7 +635,7 @@ function buildChannelNarrative(
         tier: 1,
         priority: Math.abs(diff) * 3,
         // 사용자 지시(2026-09-20): "평소 평균 N위 같은 정보는 무조건 반올림으로 정수로 표현".
-        text: `순위가 평소(평균 ${Math.round(s.baseline_avg_rank)}위)보다 ${Math.round(Math.abs(diff))}위 ${diff >= 0 ? "상승" : "하락"}한 ${s.today_rank}위입니다.`,
+        text: `순위가 최근 4주 평균(${Math.round(s.baseline_avg_rank)}위)보다 ${Math.round(Math.abs(diff))}위 ${diff >= 0 ? "상승" : "하락"}한 ${s.today_rank}위입니다.`,
       });
     }
   }
@@ -698,7 +700,7 @@ function buildChannelNarrative(
     sentences.push({
       tier: 2,
       priority: 20,
-      text: `평소 강세 시간대(${s.baseline_peak_hour}시대)와 달리 오늘은 ${s.today_peak_hour}시대에 가장 높은 시청률(${peakDetail})을 보였습니다.`,
+      text: `최근 4주 강세 시간대(${s.baseline_peak_hour}시대)와 달리 오늘은 ${s.today_peak_hour}시대에 가장 높은 시청률(${peakDetail})을 보였습니다.`,
     });
   }
 
@@ -739,7 +741,7 @@ function buildChannelNarrative(
       sentences.push({
         tier: 2,
         priority: isZeroedOut(notable) ? 1 : Math.abs(notable.delta_pct!),
-        text: `${shortDemoLabel(notable.label)} 시청률이 평소보다 ${Math.abs(notable.delta_pct!).toFixed(0)}% ${notable.delta_pct! >= 0 ? "상승한" : "하락한"} ${formatRating(notable.today)}을 기록했습니다.`,
+        text: `${shortDemoLabel(notable.label)} 시청률이 최근 4주 평균보다 ${Math.abs(notable.delta_pct!).toFixed(0)}% ${notable.delta_pct! >= 0 ? "상승한" : "하락한"} ${formatRating(notable.today)}을 기록했습니다.`,
       });
     }
   }
@@ -748,7 +750,7 @@ function buildChannelNarrative(
   // 않고 별도 필드로 돌려줘서 렌더링 쪽에서 색을 입힐 수 있게 한다.
   const leadPrefix = leadSentence ? `${leadSentence} ` : "";
   if (sentences.length === 0) {
-    const fallback = `${leadPrefix}특별한 변화 없이 평소 수준을 유지했습니다.`;
+    const fallback = `${leadPrefix}특별한 변화 없이 최근 4주 평균 수준을 유지했습니다.`;
     return { channelName, text: fallback, sentences: [fallback] };
   }
   // 사용자 지시(2026-08-21): 배치 위계 — tier 1(총평, PD·임원진이 바로 이해)을 앞에, tier 2(전문
@@ -858,7 +860,7 @@ function resolveChannelAction(
 }
 function AiTag() {
   return (
-    <span className="mr-1 inline-block rounded bg-[#281fc7] px-1 py-px align-middle text-[0.78em] font-bold leading-none text-white" title="시청률 자판기(AI 스마트 편성) 계산 결과">
+    <span className="mr-1 inline-block rounded bg-[#281fc7] px-1 py-px align-middle text-xs font-bold leading-none text-white" title="시청률 자판기(AI 스마트 편성) 계산 결과">
       AI
     </span>
   );
@@ -890,7 +892,7 @@ function useAiSuggestions(date: string | null, codes: string[], focusJson = "{}"
 // 할 일을 구체적으로 쓴다: 1회 하락은 "다음 방영도 낮으면 이동·교체 검토", 호조는 "방영 확대(재방·슬롯 추가) 검토".
 function programActionText(name: string, hourLabel: string, direction: "down" | "up", c: { kind: string; shortLabel: string; permanentChangeSupported: boolean }, deviationPct?: number | null): string {
   const head = `'${name}'${hourLabel}`;
-  const dev = deviationPct !== null && deviationPct !== undefined && Number.isFinite(deviationPct) ? ` 평소 대비 ${deviationPct >= 0 ? "▲" : "▼"}${Math.abs(deviationPct).toFixed(0)}%` : "";
+  const dev = deviationPct !== null && deviationPct !== undefined && Number.isFinite(deviationPct) ? ` 같은 슬롯 평균 대비 ${deviationPct >= 0 ? "▲" : "▼"}${Math.abs(deviationPct).toFixed(0)}%` : "";
   if (direction === "up") return `${head}${dev || " 호조"} — 방영 확대(재방·슬롯 추가) 검토`;
   if ((c.kind === "MOVE" || c.kind === "REPLACE") && c.permanentChangeSupported) return `${head}${dev} 하락 반복 — ${c.shortLabel}`;
   return `${head}${dev || " 하락"} — 다음 방영도 낮으면 이동·교체 검토`;
@@ -1051,7 +1053,7 @@ function buildChannelInsightSummary(
     if (Math.abs(diff) >= 3) {
       // 사용자 지시(2026-09-20): "'평소 평균 65.8위' 같은 정보는 무조건 반올림으로 정수로
       // 표현" — 순위는 원래 정수 개념이라 소수점 표기가 오히려 어색하다.
-      causeLine = `평소(평균 ${Math.round(s.baseline_avg_rank)}위) 대비 ${Math.round(Math.abs(diff))}위 ${diff >= 0 ? "상승" : "하락"}`;
+      causeLine = `최근 4주 평균(${Math.round(s.baseline_avg_rank)}위) 대비 ${Math.round(Math.abs(diff))}위 ${diff >= 0 ? "상승" : "하락"}`;
       // 사용자 재지적(2026-09-20): "오늘 몇위인지는 이미 로고 밑에 (오늘등위/목표등위)로
       // 적혀있고, 평소 평균도 그 옆에 작게 붙여줄 것이므로 다시 적을 필요 없음" + "'편성
       // 경쟁력 점검 필요'는 모호하니 더 직접적이고 구체적인 멘트로" — 순위 숫자 재진술을
@@ -1215,7 +1217,7 @@ function RankPair({
       <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`} title={`오늘 시장 순위 ${todayRank ?? "-"}위 / 목표: 경쟁채널 중 ${targetRankNum ?? "-"}위`}>
         (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>
         <span className="font-medium">/{targetRankNum ?? "-"}</span>)
-        {baselineAvgRank !== null && baselineAvgRank !== undefined && <span className="ml-1 text-[0.7em] font-normal text-zinc-300">평소{Math.round(baselineAvgRank)}</span>}
+        {baselineAvgRank !== null && baselineAvgRank !== undefined && <span className="ml-1 text-xs font-normal text-zinc-500">4주 평균 {Math.round(baselineAvgRank)}위</span>}
       </span>
     );
   }
@@ -1224,7 +1226,7 @@ function RankPair({
       (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>
       <span className="font-medium">/{targetRankNum ?? "-"}</span>)
       {baselineAvgRank !== null && baselineAvgRank !== undefined && (
-        <span className="ml-1 text-[0.7em] font-normal text-zinc-300">평소{Math.round(baselineAvgRank)}</span>
+        <span className="ml-1 text-xs font-normal text-zinc-500">4주 평균 {Math.round(baselineAvgRank)}위</span>
       )}
     </span>
   );
@@ -1429,7 +1431,7 @@ function MiniSparkline({
     drawing = true;
   });
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="block">
+    <svg role="img" aria-label="시청률 추이 미니 그래프" width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="block">
       <path d={path.trim()} fill="none" stroke={color} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" opacity={0.75} />
       {points?.map((p, i) => {
         if (p.rating === null) return null;
@@ -1697,7 +1699,7 @@ function WeekendReportDayColumn({
                   채널 로고 색상을 활용한 채널 폰트 색상 반영, 볼드 표시로" — 월간 리뷰는 이미
                   이 방식(themeColorByCode + font-semibold/bold)으로 돼 있었고, 주말 리포트만
                   <ChannelLogo> 이미지를 쓰고 있어 여기만 같은 방식으로 교체한다. */}
-              <p className="mb-1 text-[11px] font-bold" style={{ color: ch.themeColor ?? UNBRANDED_CHANNEL_COLOR }}>
+              <p className="mb-1 text-[11px] font-bold" style={{ color: brandText(ch.themeColor ?? UNBRANDED_CHANNEL_COLOR) }}>
                 {ch.name}
               </p>
               <ul className="space-y-0.5">
@@ -1831,7 +1833,7 @@ function MonthlyRankTrendChart({
       <p className="mb-1 text-[11px] font-semibold text-zinc-500">
         {groupLabel} <span className="font-normal text-zinc-400">{shortRankTargetLabel(targetLabel)} 기준 순위</span>
       </p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+      <svg role="img" aria-label={`${groupLabel} 순위 추이 그래프`} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         {tickRanks.map((r) => (
           <g key={r}>
             <line x1={PAD_L} y1={yOf(r)} x2={W - PAD_R} y2={yOf(r)} stroke="#e4e4e7" strokeWidth={1} />
@@ -2161,7 +2163,7 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
             대신 사용자가 명시한 색을 쓴다(전역 관례를 바꾸는 게 아니라 이 표 한정 요청).
           - "상승 견인/하락 요인"도 같은 원칙으로 두 열로 분리해 프로그램명·등락폭 위치가
             채널마다 흔들리지 않게 한다. */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="w-full text-left text-[12px]">
           <thead>
             {/* 사용자 지시(2026-09-07): "프라임성과는 상승 하락 위 아래 두 줄로 하지 말고 한
@@ -2193,7 +2195,7 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
                 c.ratingChangePct === null || c.ratingChangePct === 0 ? MONTHLY_FLAT_COLOR : c.ratingChangePct > 0 ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR;
               return (
                 <tr key={c.channelCode} className="border-t border-zinc-100 align-top">
-                  <td className="py-1.5 pr-3 font-semibold" style={{ color }}>
+                  <td className="py-1.5 pr-3 font-semibold" style={{ color: brandText(color) }}>
                     {nameOf(c.channelCode)}
                   </td>
                   {/* 사용자 지시(2026-09-01): "순위 폰트는 검정색으로 다시 변경" — 채널 로고색은
@@ -2282,7 +2284,7 @@ function WeeklyRankTrendChart({
       <p className="mb-1 text-[11px] font-semibold text-zinc-500">
         {groupLabel} <span className="font-normal text-zinc-400">{shortRankTargetLabel(targetLabel)} 기준 순위</span>
       </p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+      <svg role="img" aria-label={`${groupLabel} 순위 추이 그래프`} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         {tickRanks.map((r) => (
           <g key={r}>
             <line x1={PAD_L} y1={yOf(r)} x2={W - PAD_R} y2={yOf(r)} stroke="#e4e4e7" strokeWidth={1} />
@@ -2392,7 +2394,7 @@ function RecentPeriodCompare({
   return (
     <section className={PANEL} data-section="recent_compare">
       <PanelHeader title={title} />
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="w-full min-w-[640px] text-left text-[13px]">
           <thead>
             <tr className="text-zinc-500">
@@ -2408,7 +2410,7 @@ function RecentPeriodCompare({
           <tbody>
             {shown.map((r) => (
               <tr key={r.code} className="border-t border-zinc-100 align-top">
-                <td className="whitespace-nowrap py-2 pr-3 font-bold" style={{ color: themeColorByCode.get(r.code) ?? "#3f3f46" }}>
+                <td className="whitespace-nowrap py-2 pr-3 font-bold" style={{ color: brandText(themeColorByCode.get(r.code) ?? "#3f3f46") }}>
                   {CHANNEL_NAME_BY_CODE[r.code] ?? r.code}
                 </td>
                 {r.points.map((pt, i) => {
@@ -2480,7 +2482,7 @@ function WeeklyReviewCard({ review, themeColorByCode }: { review: WeeklyReview; 
         />
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="w-full text-left text-[12px]">
           <thead>
             {/* 사용자 지시(2026-09-07): 월간 리뷰와 동일하게 프라임 성과 헤더를 단일 행으로
@@ -2507,7 +2509,7 @@ function WeeklyReviewCard({ review, themeColorByCode }: { review: WeeklyReview; 
                 c.ratingChangePct === null || c.ratingChangePct === 0 ? MONTHLY_FLAT_COLOR : c.ratingChangePct > 0 ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR;
               return (
                 <tr key={c.channelCode} className="border-t border-zinc-100 align-top">
-                  <td className="py-1.5 pr-3 font-semibold" style={{ color }}>
+                  <td className="py-1.5 pr-3 font-semibold" style={{ color: brandText(color) }}>
                     {nameOf(c.channelCode)}
                   </td>
                   <td className="py-1.5 pr-1 text-right font-bold tabular-nums text-zinc-900">
@@ -2579,7 +2581,7 @@ function MonthlyReferenceTrendBlock({ ref_, themeColorByCode }: { ref_: MonthlyR
   return (
     <div className="mt-6 border-t border-zinc-200 pt-5">
       <div className="mb-1 flex flex-wrap items-baseline gap-x-2">
-        <h3 className="text-sm font-bold" style={{ color }}>
+        <h3 className="text-sm font-bold" style={{ color: brandText(color) }}>
           {channelName}
         </h3>
         <span className="text-sm font-semibold text-zinc-700">장르별 · 오리지널 프로그램별 월간 추이</span>
@@ -2920,7 +2922,7 @@ function buildOriginalInsight(
 
   // 도달율 — 1% 미만이면 시청률/점유율이 양호해도 "본 사람의 폭 자체가 좁다"는 별도 신호.
   if (item.matched_reach !== null && item.matched_reach < 1) {
-    secondaryBullets.push(`도달율(Reach) ${item.matched_reach.toFixed(2)}%로 1% 미만 — 시청은 유지되고 있으나 시청 가구의 폭 자체는 좁음`);
+    secondaryBullets.push(`도달률(Reach) ${item.matched_reach.toFixed(2)}%로 1% 미만 — 시청은 유지되고 있으나 시청 가구의 폭 자체는 좁음`);
   }
 
   // [편성 인사이트] — 여러 근거를 모두 짚을 수 있어 배열로 관리한다. 각 항목은 패턴이 실제로
@@ -3145,7 +3147,7 @@ function ProgramRatingHistoryChart({
   return (
     <div className="mt-2 rounded-xl bg-zinc-50 p-3">
       <div className="relative">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
+        <svg role="img" aria-label="시청률 비교 선 그래프" viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
           {ownHousehold.length >= 2 && <path d={pathOf(ownHousehold, yHousehold)} fill="none" stroke={accentColor} strokeOpacity={0.3} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />}
           {competitorSeries.map((s, i) => (
             <path key={s.seriesName} d={pathOf(s.points, y2049)} fill="none" stroke={COMPETITOR_LINE_COLORS[i % COMPETITOR_LINE_COLORS.length]} strokeWidth={1.3} strokeDasharray="3 2" strokeLinecap="round" strokeLinejoin="round" />
@@ -3215,7 +3217,7 @@ function ProgramRatingHistoryChart({
           {peakPoint && !peakIsToday && (
             <span
               className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[9px] font-bold tabular-nums"
-              style={{ left: `${(xOf(peakPoint.broadcast_date) / W) * 100}%`, top: clampLabelY(y2049(peakPoint.rating) - 3), color: accentColor }}
+              style={{ left: `${(xOf(peakPoint.broadcast_date) / W) * 100}%`, top: clampLabelY(y2049(peakPoint.rating) - 3), color: brandText(accentColor) }}
             >
               {formatRating(peakPoint.rating)}
             </span>
@@ -3239,7 +3241,7 @@ function ProgramRatingHistoryChart({
           {todayHouseholdPoint && (
             <span
               className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[8px] font-semibold tabular-nums"
-              style={{ left: `${(xOf(todayHouseholdPoint.broadcast_date) / W) * 100}%`, top: clampLabelY(yHousehold(todayHouseholdPoint.rating) - 3), color: accentColor, opacity: 0.55 }}
+              style={{ left: `${(xOf(todayHouseholdPoint.broadcast_date) / W) * 100}%`, top: clampLabelY(yHousehold(todayHouseholdPoint.rating) - 3), color: brandText(accentColor), opacity: 0.55 }}
             >
               가구 {formatRating(todayHouseholdPoint.rating)}
             </span>
@@ -3267,12 +3269,12 @@ function ProgramRatingHistoryChart({
           동시방영·직후재방)만 그 채널색+볼드로 표시하고, 경쟁채널은 기존처럼 회색·비볼드로 남겨
           자사와 구분한다. */}
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
-        <span className="inline-flex items-center gap-1 font-bold" style={{ color: accentColor }}>
+        <span className="inline-flex items-center gap-1 font-bold" style={{ color: brandText(accentColor) }}>
           <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: accentColor }} />
           {ownChannelName}
         </span>
         {ownHousehold.length >= 2 && (
-          <span className="inline-flex items-center gap-1 font-bold" style={{ color: accentColor, opacity: 0.55 }}>
+          <span className="inline-flex items-center gap-1 font-bold" style={{ color: brandText(accentColor), opacity: 0.55 }}>
             <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: accentColor, opacity: 0.3 }} />
             {ownChannelName} (가구)
           </span>
@@ -3280,7 +3282,7 @@ function ProgramRatingHistoryChart({
         {otherSeries.map((s) => {
           const color = themeColorByCode.get(s.seriesName) ?? channelBrandSolid(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR;
           return (
-            <span key={s.seriesName} className="inline-flex items-center gap-1 font-bold" style={{ color }}>
+            <span key={s.seriesName} className="inline-flex items-center gap-1 font-bold" style={{ color: brandText(color) }}>
               <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: color }} />
               {CHANNEL_NAME_BY_CODE[s.seriesName] ?? s.seriesName}
             </span>
@@ -3581,7 +3583,7 @@ function ManualMinuteRatingChart({
               원인이었음). */}
           <span
             className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold tabular-nums shadow-sm ring-1 ring-black/5"
-            style={{ left: `${(xOf(peak.time) / W) * 100}%`, top: `${((yOf(peak.rating) - 4) / H) * 100}%`, color: accentColor }}
+            style={{ left: `${(xOf(peak.time) / W) * 100}%`, top: `${((yOf(peak.rating) - 4) / H) * 100}%`, color: brandText(accentColor) }}
           >
             {peak.time} {peak.rating.toFixed(3)}%
           </span>
@@ -3625,7 +3627,7 @@ function ManualMinuteRatingChart({
           3열 grid로 폭을 고정한다. 이제 이 카드가 경쟁 프로그램 정보의 유일한 출처다(차트
           위 로고 배지는 제거) — 카드 톤도 살짝 다듬어 각 항목이 더 뚜렷이 구분되게 한다. */}
       {bands.length > 0 && (
-        <div className="mt-2 flex flex-nowrap gap-1.5 overflow-x-auto pb-1">
+        <div className="mt-2 flex flex-nowrap gap-1.5 overflow-x-auto pb-1" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
           {bands.map((c, i) => {
             const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
             return (
@@ -3637,7 +3639,7 @@ function ManualMinuteRatingChart({
                 <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
                 <CompetitorLogoBadge channelName={c.channel_name} color={color} heightPx={12} />
                 <span className="max-w-[9rem] truncate text-zinc-600">{c.program_name}</span>
-                <span className="shrink-0 font-semibold tabular-nums" style={{ color }}>
+                <span className="shrink-0 font-semibold tabular-nums" style={{ color: brandText(color) }}>
                   {c.target_rating!.toFixed(2)}%
                 </span>
               </div>
@@ -3825,7 +3827,7 @@ function highlightChannelNames(text: string, colorMap: Map<string, string>) {
   const pattern = new RegExp(`(${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "g");
   return text.split(pattern).map((part, i) =>
     colorMap.has(part) ? (
-      <span key={i} className="font-bold" style={{ color: colorMap.get(part) }}>
+      <span key={i} className="font-bold" style={{ color: brandText(colorMap.get(part)) }}>
         {part}
       </span>
     ) : (
@@ -3994,12 +3996,12 @@ function OriginalContentReportCard({
     // 화면 전체 폭을 쓰는 하나의 긴 Editorial Report 섹션으로 바꾼다(프로그램마다 동일한 디자인
     // 언어를 쓰되 내용 길이에 따라 자연스럽게 확장).
     <section className={REPORT_CARD}>
-      {/* 사용자 지시(2026-08-21): 카드 제목을 "주요 컨텐츠 리뷰"로.
+      {/* 사용자 지시(2026-08-21): 카드 제목을 "주요 콘텐츠 리뷰"로.
           사용자 지시(2026-09-03): 영문 장식(eyebrow)은 제목 위가 아니라 제목 오른쪽으로. */}
       {/* 사용자 재지시(2026-09-03): "content review는 한글 오른쪽 바로 옆으로" — 위 "오늘의
           시청률"과 동일하게 카드 오른쪽 끝이 아니라 제목 바로 옆에 붙인다. */}
       <div className="mb-7 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className={REPORT_TITLE}>주요 컨텐츠 리뷰</h2>
+        <h2 className={REPORT_TITLE}>주요 콘텐츠 리뷰</h2>
         <p className={REPORT_EYEBROW}>CONTENT REVIEW</p>
       </div>
 
@@ -4272,7 +4274,7 @@ function OriginalContentReportCard({
                         )}
                       </p>
                       {secondKpi && (
-                        <p className="mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[13px]" style={{ color: themeColorByCode.get(secondKpi.channelCode) ?? UNBRANDED_CHANNEL_COLOR }}>
+                        <p className="mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[13px]" style={{ color: brandText(themeColorByCode.get(secondKpi.channelCode) ?? UNBRANDED_CHANNEL_COLOR) }}>
                           <span className="whitespace-nowrap font-semibold">{secondKpi.labelPrefix}</span>
                           <span className="whitespace-nowrap font-semibold">{CHANNEL_NAME_BY_CODE[secondKpi.channelCode] ?? secondKpi.channelCode}</span>
                           {secondKpi.time && <span className="whitespace-nowrap text-zinc-600">{fmtTimeKorean(secondKpi.time)}</span>}
@@ -4311,7 +4313,7 @@ function OriginalContentReportCard({
                             <div><p className="text-[11px] text-zinc-500">시청비율</p><p className="whitespace-nowrap text-[15px] font-bold tabular-nums text-zinc-900">{h.matched_time_spent_share.toFixed(2)}%</p></div>
                           )}
                           {h.matched_reach !== null && (
-                            <div><p className="text-[11px] text-zinc-500">도달율</p><p className="whitespace-nowrap text-[15px] font-bold tabular-nums text-zinc-900">{h.matched_reach.toFixed(2)}%</p></div>
+                            <div><p className="text-[11px] text-zinc-500">도달률</p><p className="whitespace-nowrap text-[15px] font-bold tabular-nums text-zinc-900">{h.matched_reach.toFixed(2)}%</p></div>
                           )}
                         </div>
                       ) : (
@@ -4399,7 +4401,7 @@ function OriginalContentReportCard({
               토일월화수목금 순"은 route.ts가 계산한 날짜 구간을 RPC가 이미 그 순서(target_date
               오름차순)로 돌려주므로, 여기서는 받은 순서 그대로 렌더링하기만 하면 된다(재정렬 없음).
               폰트 확대 + 한 줄에 두 타이틀(2열 그리드) + 채널명 로고색 볼드로 재구성.
-              사용자 지시(2026-09-05, 2차): "신병4사보타주처럼 주 2회(월,화) 방영하는 컨텐츠는
+              사용자 지시(2026-09-05, 2차): "신병4사보타주처럼 주 2회(월,화) 방영하는 콘텐츠는
               월/화 내용을 각각 적어야 함" — RPC가 이제 그 작품의 요일별 회차를 각각 별도 행으로
               주므로(이번 주 월요일 회차·화요일 회차), 같은 프로그램+채널이 이 목록에 2번 이상
               나오면 나란히 놓인 두 카드가 오류처럼 보이지 않게 제목에 요일을 붙인다. */}
@@ -4425,7 +4427,7 @@ function OriginalContentReportCard({
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <p className="text-[17px] font-bold text-zinc-800">{displayTitle}</p>
-                    <p className="text-[14px] font-bold" style={{ color: channelColor }}>
+                    <p className="text-[14px] font-bold" style={{ color: brandText(channelColor) }}>
                       {CHANNEL_NAME_BY_CODE[w.broadcast_channel_code] ?? w.broadcast_channel_code}
                     </p>
                   </div>
@@ -4608,7 +4610,7 @@ function ChannelNarrativeCard({
             // 넓히고 whitespace-nowrap을 명시해 항상 한 줄로 고정.
             <div key={i} className="grid grid-cols-[104px_1fr] items-start gap-x-3">
               <div className="flex flex-col gap-1">
-                <span className="flex items-center gap-1 whitespace-nowrap font-bold" style={{ color: line.color ?? undefined }}>
+                <span className="flex items-center gap-1 whitespace-nowrap font-bold" style={{ color: brandText(line.color) }}>
                   {line.channelName}
                   {/* 사용자 지시(2026-09-02): "클릭 아이콘 신설. 세모 정도로" — 클릭 시 우측
                       "채널별 상위 프로그램" 자리가 이 채널의 일간 세부 내역 패널로 전환된다.
@@ -4620,7 +4622,7 @@ function ChannelNarrativeCard({
                     title="일간 세부 내역 보기"
                     aria-label={`${line.channelName} 일간 세부 내역 보기`}
                     className="text-[10px] leading-none opacity-50 hover:opacity-100"
-                    style={{ color: line.color ?? undefined }}
+                    style={{ color: brandText(line.color) }}
                   >
                     {selectedChannel === line.code ? "▶" : "▼"}
                   </button>
@@ -4793,7 +4795,7 @@ function KillerContentCard({
     const ytdAvg = ytdAvgByCode.get(code) ?? null;
     return (
       <div key={code}>
-        <p className="mb-1 text-sm font-bold tracking-tight" style={{ color: themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR }}>
+        <p className="mb-1 text-sm font-bold tracking-tight" style={{ color: brandText(themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR) }}>
           {CHANNEL_NAME_BY_CODE[code]}
         </p>
         <div className="flex flex-col gap-2.5">
@@ -4901,7 +4903,7 @@ function TodayTopProgramsCard({
                 <thead>
                   <tr>
                     <th colSpan={2} className="pb-1 text-left">
-                      <span className="text-sm font-bold" style={{ color: themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR }}>
+                      <span className="text-sm font-bold" style={{ color: brandText(themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR) }}>
                         {CHANNEL_NAME_BY_CODE[code]}
                       </span>
                     </th>
@@ -5143,8 +5145,8 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
       {/* 사용자 지시(2026-09-02): "표의 맨 위에는 해당일자와 요일도 언급". */}
       <p className="mb-4 text-sm font-semibold text-zinc-600">{formatDateWithDowDots(asOfDate)}</p>
       {/* 사용자 재지시(2026-09-02): 설명 문단 전체 삭제. */}
-      {state.loading && <p className="text-sm text-zinc-400">불러오는 중...</p>}
-      {!state.loading && state.error && <p className="text-sm text-red-500">{state.error}</p>}
+      {state.loading && <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>}
+      {!state.loading && state.error && <p className="text-sm text-red-500" role="alert">{state.error}</p>}
       {!state.loading && !state.error && state.rows.length === 0 && (
         <p className="text-sm text-zinc-400">이 날짜엔 프로그램 단위 시청률 데이터가 없습니다.</p>
       )}
@@ -5654,6 +5656,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               href="/ideal-schedule?channel=ENA"
               target="_blank"
               rel="noopener noreferrer"
+              title={VENDING.linkLabel}
               className="flex h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-sm font-medium text-zinc-600 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-800"
             >
               <VendingMachineIcon size={18} />
@@ -5765,11 +5768,11 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           </div>
         )}
 
-        {loading && !data && <p className="text-sm text-zinc-500">불러오는 중...</p>}
+        {loading && !data && <p className="text-sm text-zinc-500" role="status">불러오는 중...</p>}
 
         {data && dataStatus && (
           <div className={`flex flex-col gap-6 transition-opacity ${notCurrent ? "opacity-60" : ""}`} aria-busy={notCurrent}>
-            {/* 홈 순서(일간, 사용자 지시 2026-10-07): 데이터 상태 → 오늘의 시청률(채널 KPI 포함) → 주요 컨텐츠 리뷰 → 채널별 인사이트·상위 프로그램
+            {/* 홈 순서(일간, 사용자 지시 2026-10-07): 데이터 상태 → 오늘의 시청률(채널 KPI 포함) → 주요 콘텐츠 리뷰 → 채널별 인사이트·상위 프로그램
                 → 오늘 결정할 사항 → 채널별 킬러 콘텐츠 → 후속 액션 → 주요 뉴스. 기존 카드는 지우지 않고 위치만 옮겼다. */}
             {/* 사용자 지시(2026-10-07): 데이터 상태 박스는 삭제. 다만 수신 누락 같은 경고(warn)일 때는 알려야 해서 그때만 보인다. */}
             {dataStatus.level === "warn" && <DataStatusCard status={dataStatus} />}
@@ -5843,7 +5846,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                   )}
                 </div>
 
-                {/* 사용자 지시(2026-10-07): 홈 순서 — 오늘의 시청률 → 주요 컨텐츠 리뷰 → 채널별 인사이트 → 채널별 상위 프로그램 → 오늘 결정할 사항 → 채널별 킬러 콘텐츠. */}
+                {/* 사용자 지시(2026-10-07): 홈 순서 — 오늘의 시청률 → 주요 콘텐츠 리뷰 → 채널별 인사이트 → 채널별 상위 프로그램 → 오늘 결정할 사항 → 채널별 킬러 콘텐츠. */}
                 <DecisionCards cards={decisions.cards} suppressed={decisions.suppressed} candidates={decisions.candidates} reviewStore={reviewStore} channelNames={CHANNEL_NAME_BY_CODE} colorByCode={themeByCode} asOfDate={data.asOfDate} />
 
                 <KillerContentCard rows={data.killerContentDaypart} themeColorByCode={themeByCode} ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))} />

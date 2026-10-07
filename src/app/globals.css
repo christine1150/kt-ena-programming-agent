@@ -74,9 +74,9 @@ body {
 /* 사용자 지시(2026-10-07): "전반적으로 페이지 전체의 폰트 크기를 좀 키워줘. 가독률이 너무 떨어져" — 1페이지(Dashboard) 안의 작은 글자
    (8~14.5px, text-xs/text-sm)를 약 1.5~2px씩 키운다. 큰 제목·큰 숫자(15px 이상)는 그대로 둔다. 클래스 이름 단위로 덮어써서
    컴포넌트 코드는 건드리지 않는다(되돌리려면 이 블록을 지우면 됨). "큰 글씨로 보기" 버튼(zoom 1.3)은 이 위에 그대로 겹쳐 적용된다. */
-.page1-readable .text-\[8px\] { font-size: 10px; }
-.page1-readable .text-\[9px\] { font-size: 11px; }
-.page1-readable .text-\[10px\] { font-size: 11.5px; }
+.page1-readable .text-\[8px\] { font-size: 12px; }
+.page1-readable .text-\[9px\] { font-size: 12px; }
+.page1-readable .text-\[10px\] { font-size: 12px; }
 .page1-readable .text-\[11px\] { font-size: 12.5px; }
 .page1-readable .text-\[12px\] { font-size: 13.5px; }
 .page1-readable .text-\[13px\] { font-size: 14.5px; }
@@ -88,3 +88,141 @@ body {
 .page1-readable .text-\[14\.5px\] { font-size: 16px; }
 .page1-readable .text-xs { font-size: 13.5px; }
 .page1-readable .text-sm { font-size: 15px; }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   단계 15 — 디자인 토큰과 접근성 보정. 값은 src/lib/ui/tokens.ts와 같아야 하며
+   scripts/test-ui-polish.ts가 둘을 대조하고 WCAG 대비를 계산한다.
+   채널 브랜드색은 정체성(로고·막대 구분), 성과색은 증감, 상태색은 권리·오류로 용도를 나눈다.
+   본문 14~16px·실무 표 12~14px는 브랜드 고정 규격이 아니라 검증할 설계안이다. */
+:root {
+  /* 면(배경) */
+  --surface-page: #ffffff;
+  --surface-subtle: #fafafa;
+  --surface-muted: #f4f4f5;
+  /* 글자: 회색 면(#f4f4f5) 위에서도 4.5:1 이상 */
+  --text-primary: #18181b;
+  --text-secondary: #3f3f46;
+  --text-tertiary: #52525b;
+  --text-muted: #696971;
+  /* 테두리: 장식 구분선과 컨트롤 테두리(비텍스트 3:1)를 구분 */
+  --border-subtle: #e4e4e7;
+  --border-control: #8a8a93;
+  /* 포커스 */
+  --focus-ring: #1d4ed8;
+  --focus-width: 2px;
+  --focus-offset: 2px;
+  /* 성과색(증감) — 홈 서술의 기존 색과 동일. ▲▼ 기호·부호 글자와 함께 쓴다 */
+  --perf-up: #281fc7;
+  --perf-up-tint: #eef2ff;
+  --perf-down: #be123c;
+  --perf-down-tint: #fff1f2;
+  --perf-flat: #3f3f46;
+  /* 상태색(권리·오류) — 아이콘 글자와 상태 이름을 함께 쓴다 */
+  --status-confirmed: #15803d;
+  --status-confirmed-tint: #f0fdf4;
+  --status-conditional: #b45309;
+  --status-conditional-tint: #fffbeb;
+  --status-unconfirmed: #52525b;
+  --status-unconfirmed-tint: #f4f4f5;
+  --status-blocked: #b91c1c;
+  --status-blocked-tint: #fef2f2;
+  /* 차트 */
+  --chart-1: #1d4ed8;
+  --chart-2: #b45309;
+  --chart-3: #15803d;
+  --chart-4: #a21caf;
+  --chart-5: #0e7490;
+  --chart-6: #52525b;
+  --chart-grid: #d4d4d8;
+  --chart-axis-text: #52525b;
+  --chart-reference: #b91c1c;
+  /* 글자 크기·줄 간격 */
+  --type-body: 15px;
+  --type-table: 13px;
+  --type-caption: 12px;
+  --line-body: 1.6;
+  --line-table: 1.45;
+  /* 간격·모서리 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-xxl: 32px;
+  --radius-control: 6px;
+  --radius-card: 10px;
+  /* 클릭 영역(WCAG 2.2 대상 크기 최소 24 CSS px) */
+  --target-min: 24px;
+  --target-comfortable: 32px;
+}
+
+/* 키보드 포커스: 모든 조작 요소에 같은 링. Tailwind의 focus:outline-none이 링을 지운 곳도 키보드 포커스에서는 되살린다 */
+:where(a[href], button, input, select, textarea, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring) !important;
+  outline-offset: var(--focus-offset);
+}
+
+/* 회색 보조 글자 대비 보정(단계 15): Tailwind 기본 회색(zinc/neutral 300·400·500)이 흰 면에서 2.6:1, 회색 면에서 4.4:1이라
+   WCAG 2.2 AA(일반 글자 4.5:1)에 못 미쳤다. 클래스 이름 단위로 덮어써서 컴포넌트 코드는 건드리지 않는다(되돌리려면 이 블록을 지우면 됨).
+   placeholder:/hover: 변형은 영향받지 않는다. */
+.text-zinc-300,
+.text-zinc-400,
+.text-zinc-500,
+.text-neutral-300,
+.text-neutral-400,
+.text-neutral-500 {
+  color: var(--text-muted);
+}
+/* 상태·증감 글자색: 흰 면·회색 면 어디서든 4.5:1 이상 */
+.text-emerald-500,
+.text-emerald-600 { color: #047857; }
+.text-rose-500,
+.text-rose-600 { color: #be123c; }
+.text-red-500,
+.text-red-600 { color: #b91c1c; }
+.text-amber-500,
+.text-amber-600 { color: #b45309; }
+.text-sky-500,
+.text-sky-600 { color: #0369a1; }
+.text-blue-500 { color: #1d4ed8; }
+.text-orange-600 { color: #c2410c; }
+
+/* 모션 줄이기 설정을 존중 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 화면 낭독기 전용 글자(시각적으로 숨김) */
+.sr-only-ko {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* OS 다크 모드에서 dark:bg-neutral-900 상자 안의 회색 글자는 밝게(위 보정은 밝은 면 기준) */
+@media (prefers-color-scheme: dark) {
+  .dark\:bg-neutral-900.text-neutral-500,
+  .dark\:bg-neutral-900 .text-neutral-500,
+  .dark\:bg-neutral-900 .text-neutral-400 { color: #a1a1aa; }
+}
+
+/* 글자 크기 바닥(단계 15): 9~11.5px 보조 글자를 12px(--type-caption)로 올린다. 시간 비례 격자(편성표 칸)는 칸 높이가 시간에 비례해
+   글자를 키울 수 없으므로 .dense-grid 안은 제외한다(그 대신 칸 제목은 툴팁·상세 패널·전체 화면에서 읽는다). 홈의 .page1-readable 규칙(12.5px 이상)은 그대로 이긴다. */
+.text-\[9px\]:not(.dense-grid *):not(.page1-readable *),
+.text-\[10px\]:not(.dense-grid *):not(.page1-readable *),
+.text-\[10\.5px\]:not(.dense-grid *):not(.page1-readable *),
+.text-\[11px\]:not(.dense-grid *):not(.page1-readable *),
+.text-\[11\.5px\]:not(.dense-grid *):not(.page1-readable *) {
+  font-size: var(--type-caption);
+}

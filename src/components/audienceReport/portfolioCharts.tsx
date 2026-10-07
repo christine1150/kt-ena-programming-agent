@@ -91,7 +91,7 @@ export function ChannelHourHeatmap({
   const max = allValues.length > 0 ? Math.max(...allValues) : 1;
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="border-collapse text-[11px]">
           <thead>
             <tr>

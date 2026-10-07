@@ -188,11 +188,11 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
       ]),
     });
     sections.push({
-      key: "slot_dev", title: "04 그날의 프로그램(슬롯 평소 수준 대비)",
+      key: "slot_dev", title: "04 그날의 프로그램(같은 슬롯 기준선 대비)",
       blocks: fromMaybe(s.programsBySlotDeviation, (d) => [
-        { kind: "text", text: "평소보다 높았던 시간대" },
+        { kind: "text", text: "기준선보다 높았던 시간대" },
         { kind: "table", headers: ["시간", "프로그램", "시청률", "기준선", "편차"], rows: d.top.map((r) => [`${r.hour}시`, r.programNames, formatRating(r.todayRating, code), formatRating(r.baselineRating, code), pct(r.deviationPct)]) },
-        { kind: "text", text: "평소보다 낮았던 시간대" },
+        { kind: "text", text: "기준선보다 낮았던 시간대" },
         { kind: "table", headers: ["시간", "프로그램", "시청률", "기준선", "편차"], rows: d.bottom.map((r) => [`${r.hour}시`, r.programNames, formatRating(r.todayRating, code), formatRating(r.baselineRating, code), pct(r.deviationPct)]) },
       ]),
     });
@@ -451,7 +451,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
       const blocks: DocBlock[] = [
         {
           kind: "table",
-          headers: ["구분", "편성", "시청률", "점유율", "도달율", "시청시간 비율"],
+          headers: ["구분", "편성", "시청률", "점유율", "도달률", "시청시간 비율"],
           rows: d.quadrants.map((q) => [
             `${q.dayType} ${q.primeLabel}`,
             `${q.airings}회`,

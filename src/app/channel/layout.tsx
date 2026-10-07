@@ -1,7 +1,11 @@
 // Page 2(채널별 딥다이브) 공통 레이아웃 — 좌측 채널 선택 사이드바 + 오른쪽 상세 화면.
+import type { Metadata } from "next";
 import { supabase } from "@/lib/supabase";
+import { PAGE_TITLE } from "@/lib/ui/pageTitles";
 import WorkspaceNav from "@/components/workspace/WorkspaceNav";
 import ChannelSidebar from "./ChannelSidebar";
+
+export const metadata: Metadata = { title: PAGE_TITLE.channel };
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -20,7 +24,7 @@ export default async function ChannelLayout({ children }: { children: React.Reac
         <ChannelSidebar
           channels={(channels ?? []).map((c) => ({ code: c.code, name: c.name, logoPath: c.logo_path }))}
         />
-        <div className="flex-1">{children}</div>
+        <div className="min-w-0 flex-1">{children}</div>
       </div>
     </>
   );

@@ -13,6 +13,7 @@ import { buildWhyDiagnosisViaLlm, type WhyDiagnosisLlmInput } from "@/lib/whyDia
 import { buildOpportunityNarrativeViaLlm, type OpportunityNarrativeLlmInput } from "@/lib/opportunityNarrativeLlm";
 import { buildCompetitorNarrativeViaLlm, type CompetitorNarrativeLlmInput } from "@/lib/competitorNarrativeLlm";
 import { buildFitScoreInterpretationViaLlm, type FitScoreInterpretationLlmInput } from "@/lib/fitScoreInterpretationLlm";
+import { cachedLlmText } from "@/lib/llmTextCache";
 
 type Job =
   | { section: "why"; input: WhyDiagnosisLlmInput }
@@ -20,7 +21,16 @@ type Job =
   | { section: "competitor"; input: CompetitorNarrativeLlmInput }
   | { section: "fit_score"; input: FitScoreInterpretationLlmInput };
 
+// 단계 15: 같은 입력(기간·타깃·수치가 모두 들어 있는 검증된 값)이면 같은 문장을 다시 쓰지 않는다. 입력이 하나라도 바뀌면 지문이 달라져
+// 새로 생성되므로 옛 문장이 남을 수 없고, 프롬프트·모델 규칙을 바꾸면 버전 문자열을 올려 캐시를 무효화한다.
+// 이전에는 채널 화면을 열 때마다 OpenAI를 다시 불렀다(측정: 한 번에 약 3.4초).
+const LLM_SYNTH_CACHE_VERSION = "v1";
+
 async function runJob(job: Job): Promise<string | null> {
+  return cachedLlmText(`llm_synth:${LLM_SYNTH_CACHE_VERSION}:${job.section}`, null, job.input, () => runJobUncached(job));
+}
+
+async function runJobUncached(job: Job): Promise<string | null> {
   switch (job.section) {
     case "why":
       return buildWhyDiagnosisViaLlm(job.input);

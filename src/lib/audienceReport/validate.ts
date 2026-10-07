@@ -24,7 +24,7 @@ export function checkRatingRange(rawData: AudienceReportRawData): QualityIssue[]
   if (rawData.periodReport) {
     push(rawData.periodReport.avg_rating, "평균 시청률", `${rawData.channelCode} periodReport`);
     push(rawData.periodReport.avg_share, "평균 점유율", `${rawData.channelCode} periodReport`);
-    push(rawData.periodReport.avg_reach, "평균 도달율", `${rawData.channelCode} periodReport`);
+    push(rawData.periodReport.avg_reach, "평균 도달률", `${rawData.channelCode} periodReport`);
   }
   for (const t of rawData.trend) push(t.avgRating, "추이 시청률", `${rawData.channelCode} trend(${t.date})`);
   for (const m of rawData.programMovers) {
@@ -34,7 +34,7 @@ export function checkRatingRange(rawData: AudienceReportRawData): QualityIssue[]
   for (const h of rawData.hourlyPattern) {
     push(h.avgRating, "시간대 시청률", `${rawData.channelCode} hourlyPattern(${h.broadcastHour}시)`);
     push(h.avgShare, "시간대 점유율", `${rawData.channelCode} hourlyPattern(${h.broadcastHour}시)`);
-    push(h.avgReach, "시간대 도달율", `${rawData.channelCode} hourlyPattern(${h.broadcastHour}시)`);
+    push(h.avgReach, "시간대 도달률", `${rawData.channelCode} hourlyPattern(${h.broadcastHour}시)`);
   }
   for (const p of rawData.topPrograms) push(p.avg_rating, "프로그램 평균 시청률", `${rawData.channelCode} topPrograms(${p.program_name})`);
   for (const d of rawData.demographics) {

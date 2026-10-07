@@ -182,7 +182,7 @@ export default function MailIngestionManager() {
                               : f.kind === "olife_epg"
                                 ? `OLIFE EPG ${(f.datesProcessed ?? []).join(", ")} — 매칭 ${f.matchedCount ?? 0}건${f.message ? ` (${f.message})` : ""}`
                                 : `${f.ratingsInserted}건 저장`
-                            : <span className="text-red-600">{f.message}</span>}
+                            : <span className="text-red-600" role="alert">{f.message}</span>}
                         </p>
                       ))}
                     </div>
@@ -191,7 +191,7 @@ export default function MailIngestionManager() {
               )}
             </>
           ) : (
-            <p className="text-red-600">{runResult.message}</p>
+            <p className="text-red-600" role="alert">{runResult.message}</p>
           )}
         </div>
       )}

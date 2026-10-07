@@ -57,7 +57,7 @@ export async function GET() {
   // 원장(있을 때): 일간 배치 중 반영되지 않은 날짜(실패·수집만 됨)를 채널 전체에 표시한다.
   const ledger = await supabase.from("nielsen_ingest_batches").select("kind, period_to, status, received_at").eq("kind", "daily").gte("period_to", from).order("received_at", { ascending: false }).limit(200);
   const ledgerAvailable = !ledger.error;
-  if (ledger.error) notes.push("수집 원장(nielsen_ingest_batches)이 아직 적용되지 않아 수집 실패·수집만 된 건은 표시되지 않습니다.");
+  if (ledger.error) notes.push("수집 원장이 아직 적용되지 않아 수집 실패·수집만 된 건은 표시되지 않습니다.");
   else {
     const appliedDates = new Set(facts.filter((f) => f.kind === "nielsen_daily").map((f) => f.date));
     const seen = new Set<string>();

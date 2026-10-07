@@ -3,6 +3,7 @@
 // 홈 "오늘 결정할 사항"의 "대안 비교"(사용자 지시 2026-10-07): 새 창으로 가지 않고 카드 아래에서 바로 — 그 자리(요일·시각)에 다른 프로그램을 편성하면 기대 시청률이
 // 어느 정도인지 시뮬레이션한다. 값은 /api/dashboard/slot-simulation(시청률 자판기 엔진의 읽기 전용 기대값)이며 이 컴포넌트는 고르고 그리기만 한다.
 import { useEffect, useMemo, useState } from "react";
+import { VENDING } from "@/lib/ui/pageTitles";
 
 interface Alt {
   name: string;
@@ -106,7 +107,7 @@ export function AlternativeCompare({
           {deepLink && (
             <>
               {" "}
-              <a href={deepLink} className="font-medium text-indigo-700 underline">시청률 자판기에서 직접 비교</a>
+              <a href={deepLink} title={VENDING.linkLabel} className="font-medium text-indigo-700 underline">시청률 자판기에서 직접 비교</a>
             </>
           )}
         </p>
@@ -149,7 +150,7 @@ export function AlternativeCompare({
             <span className="text-[12px] text-zinc-500">행을 누르면 위 시뮬레이션이 그 프로그램으로 바뀝니다 · 후보 {alts.length}개</span>
           </div>
 
-          <div className="mt-2 overflow-x-auto">
+          <div className="mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
             <table className="w-full min-w-[560px] text-left text-[13px]">
               <thead>
                 <tr className="text-zinc-500">

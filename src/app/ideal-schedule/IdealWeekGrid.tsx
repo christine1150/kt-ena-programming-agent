@@ -78,7 +78,7 @@ export function IdealWeekGrid({
   return (
     <div
       data-ideal-grid={isCurrent ? "CURRENT" : "IDEAL"}
-      className={`overflow-x-auto rounded-2xl border border-zinc-200 bg-white print:overflow-visible print:rounded-none print:border-0 ${
+      className={`dense-grid overflow-x-auto rounded-2xl border border-zinc-200 bg-white print:overflow-visible print:rounded-none print:border-0 ${
         syncTitleRow ? "2xl:grid 2xl:grid-rows-subgrid 2xl:row-span-2" : ""
       } ${hideOnPrint ? "print:hidden" : ""}`}
     >

@@ -19,6 +19,7 @@
     "test:avail": "tsx scripts/test-avail.ts",
     "test:purchase-review": "tsx scripts/test-purchase-review.ts",
     "test:report-snapshot": "tsx scripts/test-report-snapshot.ts",
+    "test:ui-polish": "tsx scripts/test-ui-polish.ts",
     "test:workspace": "tsx scripts/test-workspace.ts",
     "test:portfolio": "tsx scripts/test-portfolio.ts",
     "test:schedcompare": "tsx scripts/test-schedule-compare.ts",

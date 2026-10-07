@@ -153,7 +153,7 @@ export function RequiredScheduleEditor({ channelCode, weekStart, onChanged, comp
               <button type="button" onClick={() => setFormOpen(false)} className="text-xs text-zinc-500 hover:underline">
                 닫기
               </button>
-              {error && <span className="text-xs text-rose-600">{error}</span>}
+              {error && <span className="text-xs text-rose-600" role="alert">{error}</span>}
             </div>
           </div>
         ) : (
@@ -190,7 +190,7 @@ export function RequiredScheduleEditor({ channelCode, weekStart, onChanged, comp
           {form.weekdays.length > 1 ? `필수 편성 ${form.weekdays.length}개 요일 추가` : "필수 편성 추가"}
         </button>
         <span className="text-xs text-zinc-400">시작 시각 · 길이(분) · 시작일 · 종료일(선택)</span>
-        {error && <span className="text-xs text-rose-600">{error}</span>}
+        {error && <span className="text-xs text-rose-600" role="alert">{error}</span>}
       </div>
       {items.length > 0 && (
         <table className="mt-3 w-full text-sm">

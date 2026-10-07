@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_KR } from "next/font/google";
 import localFont from "next/font/local";
+import { SERVICE_NAME } from "@/lib/ui/pageTitles";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -40,7 +41,7 @@ const pretendard = localFont({
 
 export const metadata: Metadata = {
   // 단계 07(F19): 기본 템플릿 제목("Create Next App")을 서비스 이름으로 교체.
-  title: "KT ENA 편성 AI Agent",
+  title: { default: SERVICE_NAME, template: `%s · ${SERVICE_NAME}` },
   description: "닐슨 시청률·편성 데이터 기반 편성 의사결정 지원",
 };
 
@@ -50,7 +51,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} ${notoSansKr.variable} ${pretendard.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {/* 단계 15: 본문 랜드마크 — 화면 낭독기가 '본문'으로 바로 이동한다. 페이지별 <main>은 <div>로 바꿔 중복을 피했다 */}
+        <main id="main-content" className="flex min-h-full flex-1 flex-col">
+          {children}
+        </main>
+      </body>
     </html>
   );
 }

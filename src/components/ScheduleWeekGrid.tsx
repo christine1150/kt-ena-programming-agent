@@ -336,7 +336,7 @@ export function ScheduleWeekGrid({
     return registerScroller(el);
   }, [registerScroller, rows, resolvedWeek]);
 
-  if (rows === null) return <p className="text-sm text-zinc-400">불러오는 중...</p>;
+  if (rows === null) return <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>;
   if (!resolvedWeek) {
     // 첫 조회가 실패하면 주 정보가 없다 — 영구 로딩이 아니라 실패 화면과 다시 시도를 보여 준다.
     return loadError ? (
@@ -347,7 +347,7 @@ export function ScheduleWeekGrid({
         </button>
       </div>
     ) : (
-      <p className="text-sm text-zinc-400">불러오는 중...</p>
+      <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
     );
   }
 
@@ -425,7 +425,7 @@ export function ScheduleWeekGrid({
   }
 
   return (
-    <div id={printAreaId} className="min-w-0 flex-1">
+    <div id={printAreaId} className="dense-grid min-w-0 flex-1">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {/* 사용자 지시(2026-09-20): "다른 주로 이동할 수 있는 메뉴를 추가해서 좌측에" —
@@ -527,9 +527,10 @@ export function ScheduleWeekGrid({
             <a
               href={`${apiBase}/export?channel=${encodeURIComponent(channelCode)}&week=${resolvedWeek.week}${viewMode === "upload" ? "&view=upload" : viewMode === "db" ? "&view=db" : ""}`}
               title="엑셀 다운로드"
+              aria-label="엑셀 다운로드"
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-300 text-zinc-500 hover:bg-zinc-50"
             >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 3v12" />
                 <path d="M7 10l5 5 5-5" />
                 <path d="M4 19h16" />
@@ -539,9 +540,10 @@ export function ScheduleWeekGrid({
               type="button"
               onClick={handlePrint}
               title="인쇄하기"
+              aria-label="인쇄하기"
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-300 text-zinc-500 hover:bg-zinc-50"
             >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 9V3h12v6" />
                 <rect x="4" y="9" width="16" height="8" rx="1" />
                 <path d="M6 17v4h12v-4" />

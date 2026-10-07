@@ -44,7 +44,7 @@ function WithMaybe<T>({ maybe, render }: { maybe: Maybe<T>; render: (data: T) =>
 function DeltaText({ pct }: { pct: number | null | undefined }) {
   if (pct === null || pct === undefined) return <span className="text-neutral-400">—</span>;
   const up = pct > 0;
-  return <span className={up ? "text-emerald-600" : pct < 0 ? "text-rose-600" : "text-neutral-500"}>{up ? "▲" : pct < 0 ? "▼" : "＝"}{Math.abs(pct).toFixed(1)}%</span>;
+  return <span className={up ? "text-[color:var(--perf-up)]" : pct < 0 ? "text-[color:var(--perf-down)]" : "text-neutral-500"}>{up ? "▲" : pct < 0 ? "▼" : "＝"}{Math.abs(pct).toFixed(1)}%</span>;
 }
 
 function KpiCardRow({ cards }: { cards: KpiCard[] }) {
@@ -80,7 +80,7 @@ export default function AudienceReportPage() {
   const digits = report.channelCode === "SKYUHD" ? 5 : 3;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-8">
+    <div className="mx-auto max-w-3xl px-4 pb-24 pt-8">
       <header className="mb-6">
         <div className="text-xs uppercase tracking-wide text-neutral-500">Audience Intelligence Report</div>
         <h1 className="text-2xl font-bold">{report.channelName}</h1>
@@ -149,7 +149,7 @@ export default function AudienceReportPage() {
       <DeepDiveView deep={report.body.sections.deepDive} channelCode={report.channelCode} />
       <CrossAxisView data={report.body.sections} />
       <RecommendationView data={report.recommendation} channelCode={report.channelCode} />
-    </main>
+    </div>
   );
 }
 
@@ -181,7 +181,7 @@ function CrossAxisView({ data }: { data: CrossAxisSections }) {
 function CompetitorScheduleChangeTable({ groups }: { groups: import("@/lib/audienceReport/analyzer").CompetitorScheduleChangeGroup[] }) {
   if (groups.length === 0) return <Unavailable reason="이 기간 동안 편성 변화가 관찰되지 않았거나, 페어링된 경쟁채널 자료가 없습니다" />;
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
       <table className="w-full min-w-[640px] table-fixed text-sm">
         <thead>
           <tr className="text-left text-xs text-neutral-500">
@@ -248,7 +248,7 @@ function ModeABody({ sections: s, channelCode }: { sections: import("@/lib/audie
                   <td className="py-1">{m.canonicalName ?? "이름 없음"}</td>
                   <td className="py-1 text-right tabular-nums">{m.momentum !== null ? m.momentum.toFixed(2) : "—"}</td>
                   <td className="py-1">
-                    {m.label === "RISING" && <span className="text-emerald-600">▲ 상승세</span>}
+                    {m.label === "RISING" && <span className="text-[color:var(--perf-up)]">▲ 상승세</span>}
                     {m.label === "DECLINING" && <span className="text-rose-600">▼ 하락세</span>}
                     {m.label === "STABLE" && <span className="text-neutral-500">유지</span>}
                     {m.label === null && "—"}
@@ -268,17 +268,17 @@ function ModeABody({ sections: s, channelCode }: { sections: import("@/lib/audie
       <Section title="03 시간대 프로파일">
         <WithMaybe maybe={s.hourlyProfile} render={(d) => <HourlyProfileChart points={d.points} caption={d.caption} />} />
       </Section>
-      <Section title="04 그날의 프로그램(슬롯 평소 수준 대비)">
+      <Section title="04 그날의 프로그램(같은 슬롯 기준선 대비)">
         <WithMaybe
           maybe={s.programsBySlotDeviation}
           render={(d) => (
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <div className="mb-1 text-xs font-medium text-neutral-500">평소보다 높았던 시간대</div>
+                <div className="mb-1 text-xs font-medium text-neutral-500">기준선보다 높았던 시간대</div>
                 <SlotDeviationTable rows={d.top} channelCode={channelCode} />
               </div>
               <div>
-                <div className="mb-1 text-xs font-medium text-neutral-500">평소보다 낮았던 시간대</div>
+                <div className="mb-1 text-xs font-medium text-neutral-500">기준선보다 낮았던 시간대</div>
                 <SlotDeviationTable rows={d.bottom} channelCode={channelCode} />
               </div>
             </div>

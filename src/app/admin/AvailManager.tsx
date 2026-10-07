@@ -226,7 +226,7 @@ export default function AvailManager() {
 
       {notice && <p className="mb-3 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-800">{notice}</p>}
 
-      {preview && !preview.ok && !preview.sheets && <p className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{preview.message}</p>}
+      {preview && !preview.ok && !preview.sheets && <p className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{preview.message}</p>}
       {preview?.sheets && (
         <div className="mb-4 space-y-3">
           {preview.sheets.map((s) => (

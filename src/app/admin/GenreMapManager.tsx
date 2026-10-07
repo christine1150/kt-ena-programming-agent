@@ -103,7 +103,7 @@ export default function GenreMapManager() {
         </button>
       </div>
       {rows === null ? (
-        <p className="mt-3 text-sm text-zinc-400">불러오는 중…</p>
+        <p className="mt-3 text-sm text-zinc-400" role="status">불러오는 중…</p>
       ) : (
         <div className="mt-3 max-h-[420px] overflow-y-auto">
           <table className="w-full text-sm">

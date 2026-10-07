@@ -15,6 +15,7 @@ import { loadDailyMartCache, cachedOrRpc, martFingerprint, MART_SLOT, MART_GLOBA
 import { cachedLlmText } from "@/lib/llmTextCache";
 import { buildMetricContext, dataSnapshotId } from "@/lib/metrics";
 import { fetchHourlyPattern } from "@/lib/broadcastTime/hourlyFetch";
+import { createStageTimer } from "@/lib/perf/serverTiming";
 import { DEFAULT_OVERLAP_CONFIG, selectRepresentativeCompetitors, type OverlapRowLike } from "@/lib/broadcastTime/overlap";
 
 // 로컬 날짜 구성요소로 "YYYY-MM-DD" 문자열을 만든다 — toISOString()은 UTC로 바꾸면서 자정 근처
@@ -67,6 +68,7 @@ interface ChannelNarrativeRow {
 }
 
 export async function GET(request: Request) {
+  const timer = createStageTimer(); // 단계 15: 요청 단계별 시간(Server-Timing 헤더)
   const session = await getCurrentSession();
   if (!session) {
     return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
@@ -84,6 +86,7 @@ export async function GET(request: Request) {
   // 불러오도록 하고, 기본 조회에서는 완전히 건너뛴다(요청 하나당 RPC 1~2개 절감).
   const include1h = searchParams.get("include1h") === "1";
 
+  timer.mark("session");
   const { data: channel, error: channelError } = await supabase
     .from("channels")
     .select("id, code, name, logo_path, theme_color, logo_visible_ratio, logo_visible_top_ratio, primary_target, market")
@@ -97,6 +100,7 @@ export async function GET(request: Request) {
   // OLIFE/skyUHD)이 보이면 볼드 + 그 채널 로고색으로 표시" — COMPARED WITH? 표·산점도가
   // competitor_name과 대조할 자사 7개 채널의 이름·로고색 목록. 이 화면은 채널 하나만
   // 조회하므로(위 .eq("code", code)) 별도로 전체 채널을 가볍게(7행) 조회해 내려준다.
+  timer.mark("channel_row");
   const { data: allChannelBrandsRaw } = await supabase.from("channels").select("code, name, theme_color");
   const selfChannelBrands = (allChannelBrandsRaw ?? []).map((c) => ({ code: c.code, name: c.name, themeColor: c.theme_color }));
 
@@ -129,6 +133,7 @@ export async function GET(request: Request) {
   const sdowWeeks = sdowWeeksParam !== null ? parseInt(sdowWeeksParam, 10) : null;
 
   // 가장 최근 데이터 날짜(기본값 "오늘")도 함께 내려줘서, 화면에서 "오늘"이 정확히 언제인지 표시.
+  timer.mark("brand_colors");
   const { data: latestDateRow } = await supabase
     .from("ratings")
     .select("broadcast_date")
@@ -224,6 +229,7 @@ export async function GET(request: Request) {
   // get_channel_daypart_opportunity 3.8초, get_channel_stable_slot_patterns 2.1초). 기간을 직접
   // 선택했거나 SDoW를 켠 경우에는 인자가 달라 자연히 캐시 미스가 되고 기존 실시간 경로가 그대로
   // 돈다 — 아래 각 호출의 지문(martFingerprint)에 실제로 넘기는 인자를 모두 담아 두었기 때문이다.
+  timer.mark("latest_date");
   const martCache = await loadDailyMartCache({
     dates: [dateTo],
     channelCodes: [channel.code],
@@ -237,6 +243,7 @@ export async function GET(request: Request) {
   // 사용자 지시(2026-09-23): 브리핑 "시사점"에서 목표선을 쓰려면 달성률·목표 등위가 필요하다 —
   // get_target_achievement가 원래 돌려주던 컬럼인데 이 제네릭에 matched_target_label만 적혀
   // 있어 타입상 존재하지 않는 것으로 취급되고 있었다(응답 JSON에는 이미 그대로 실려 나간다).
+  timer.mark("mart_cache");
   const { data: achievementForMatch } = await cachedOrRpc<{
     matched_target_label: string | null;
     achievement_pct: number | null;
@@ -333,6 +340,7 @@ export async function GET(request: Request) {
   // 필요 — Page 1 히어로 카드가 쓰는 것과 같은 방식(랭킹 시트 target_id로 ratings.rank/rating
   // 기간 평균, get_channel_period_rank_and_rating)을 재사용한다. 랭킹 시트 표기(resolveRankSheetTargetLabel)로
   // target_id를 먼저 찾아둔다(찾으면 아래 병렬 블록에서 실제 평균을 조회, 없으면 null 유지).
+  timer.mark("target_achievement");
   const { data: rankTargetRow } = await supabase.from("targets").select("id").eq("label", resolveRankSheetTargetLabel(channel.primary_target)).maybeSingle();
   const rankTargetId: string | null = rankTargetRow?.id ?? null;
   // 사용자 지시(2026-08-21): 채널별로 정확히 2개의 "비교 시청률"을 지정해주셨다(타깃 시청률이
@@ -1010,6 +1018,7 @@ export async function GET(request: Request) {
   // "편성 안정성"을 기간 비교 모드에서도 보이게 분리했다), 여기 백엔드만 옛 전제("심층 분석은
   // 단일 일자 전용")로 !isRangeMode에 묶여 있어 기간 모드에서 항상 빈 배열이 내려가 "패턴이
   // 없습니다"라는 잘못된 문구가 떴다. dateFrom과 무관하므로 isRangeMode와 상관없이 항상 조회.
+  timer.mark("main_parallel_queries");
   const { data: stableSlotPatternsRaw } = await cachedOrRpc<object>(
     martCache,
     dateTo,
@@ -1107,6 +1116,7 @@ export async function GET(request: Request) {
   // 랭킹 시트에서 그대로 읽어온 라벨("개인2049")로 저장돼 있는데, matchedTargetLabel은 Channel
   // Master 표기("수도권 개인2049")라 서로 안 맞는다(CLAUDE.md에 문서화된 표기 차이 함정 — 실제로
   // 이 화면이 처음엔 비어서 나왔다).
+  timer.mark("stable_slot_patterns");
   const { data: rankMovementRows } = await supabase.rpc("get_channel_period_rank_movement", {
     p_channel_code: channel.code,
     p_target_label: resolveRankSheetTargetLabel(channel.primary_target),
@@ -1537,6 +1547,7 @@ export async function GET(request: Request) {
     knowledgeCutoff: latestAvailableDate ?? dateTo,
   });
 
+  timer.mark("rank_movement_and_assembly");
   return NextResponse.json({
     ok: true,
     metricContext,
@@ -1633,5 +1644,5 @@ export async function GET(request: Request) {
     topProgramsToday: topProgramsTodayRes.data ?? [],
     topSharePatternsToday: topSharePatternsTodayRes.data ?? [],
     competitorPeriodTopProgramsSdow: competitorPeriodTopProgramsSdowRes.data ?? [],
-  });
+  }, { headers: { "Server-Timing": timer.header() } });
 }
