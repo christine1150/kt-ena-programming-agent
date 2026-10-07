@@ -789,6 +789,43 @@ async function main() {
     check("실제 파일: 신병4 회차 #1~12", eps?.length === 12);
   }
 
+  // ── 운영자 입력 권리: 채널별 편성 가능 시점(시각 포함) ──
+  {
+    const built = A.buildManualGrants({
+      title: "결이 다른 전쟁사",
+      windows: [
+        { channels: ["ENA Drama"], startDate: "2026-10-25", startTime: "23:50" },
+        { channels: ["ENA Play", "ENA Story", "OLIFE", "ONCE", "skyUHD"], startDate: "2026-11-20", startTime: "23:50" },
+      ],
+      actor: "tester",
+      enteredAt: "2026-10-07T12:00:00+09:00",
+    });
+    check("운영자 입력: 두 시점이 채널 묶음별 권리 2건으로 만들어지고 운영자 입력 표시가 붙는다", built.ok && built.grants.length === 2 && built.grants.every((g) => g.source.kind === "manual" && g.manual?.override === true));
+    const grants = built.ok ? built.grants : [];
+    const ctx = ctxOf(grants);
+    const ep = (date: string, startMin: number, channel: string) => A.evaluateEligibility(q("결이 다른 전쟁사", null), slot(date, startMin, startMin + 60, channel), ctx);
+    const before = ep("2026-10-25", 1430 - 5, "ENA Drama"); // 23:45
+    check("운영자 입력: 시작 시각(23:50) 5분 전 방송은 종료일을 몰라도 불가(WINDOW_NOT_STARTED)", before.status === "unavailable" && has(before, "WINDOW_NOT_STARTED"));
+    const atStart = ep("2026-10-25", 1430, "ENA Drama");
+    check("운영자 입력: 시작 시각 정각부터는 불가가 아니다 — 종료일·방수가 비어 있어 '확인 못함'이지 '가능'이 아니다", atStart.status !== "unavailable" && atStart.status !== "available" && !has(atStart, "WINDOW_NOT_STARTED"));
+    check("운영자 입력: 종료일이 비어 있음을 무기한으로 보지 않는다(WINDOW_UNKNOWN)", has(atStart, "WINDOW_UNKNOWN"));
+    const earlyDay = ep("2026-10-24", 1500, "ENA Drama"); // 10/24 방송일 25:00 = 달력 10/25 01:00
+    check("운영자 입력: 방송일 24시를 넘긴 이른 시각(달력으로는 시작일 새벽)도 시작 시각 전이면 불가", earlyDay.status === "unavailable");
+    const otherEarly = ep("2026-10-25", 1500, "ENA Play");
+    check("운영자 입력: ENA Drama의 시작일이 지나도 ENA Play는 11/20 전이라 불가", otherEarly.status === "unavailable" && has(otherEarly, "WINDOW_NOT_STARTED"));
+    const otherOk = ep("2026-11-20", 1430, "skyUHD");
+    check("운영자 입력: skyUHD는 11/20 23:50부터 불가가 아니다", otherOk.status !== "unavailable");
+    const wrongCh = ep("2026-12-01", 1300, "ENA");
+    check("운영자 입력: 입력하지 않은 채널(ENA)은 허용 채널 밖이라 불가", wrongCh.status === "unavailable" && has(wrongCh, "CHANNEL_NOT_ALLOWED"));
+    // 입력 검증·재입력
+    check("운영자 입력: 시각 형식 오류·없는 채널·중복 채널·빈 제목은 거부한다", !A.buildManualGrants({ title: "x", windows: [{ channels: ["ENA"], startDate: "2026-10-25", startTime: "25시" }], actor: "t", enteredAt: "2026-10-07" }).ok && !A.buildManualGrants({ title: "x", windows: [{ channels: ["EBS"], startDate: "2026-10-25" }], actor: "t", enteredAt: "2026-10-07" }).ok && !A.buildManualGrants({ title: "x", windows: [{ channels: ["ENA"], startDate: "2026-10-25" }, { channels: ["ENA", "ONCE"], startDate: "2026-10-26" }], actor: "t", enteredAt: "2026-10-07" }).ok && !A.buildManualGrants({ title: " ", windows: [{ channels: ["ENA"], startDate: "2026-10-25" }], actor: "t", enteredAt: "2026-10-07" }).ok);
+    const again = A.buildManualGrants({ title: "결이 다른 전쟁사", windows: [{ channels: ["ENA Drama"], startDate: "2026-10-25", startTime: "23:50" }], actor: "t", enteredAt: "2026-10-08", existing: grants });
+    check("운영자 입력: 같은 내용을 다시 넣으면 새 revision을 만들지 않는다", again.ok && again.grants.length === 0);
+    const changed = A.buildManualGrants({ title: "결이 다른 전쟁사", windows: [{ channels: ["ENA Drama"], startDate: "2026-10-26", startTime: "23:50" }], actor: "t", enteredAt: "2026-10-08", existing: grants });
+    check("운영자 입력: 시점을 고치면 같은 권리의 새 revision이 이전 revision을 이어받는다(과거 판정 보존)", changed.ok && changed.grants.length === 1 && changed.grants[0].supersedesRevisionId === grants[0].revisionId && changed.grants[0].grantId === grants[0].grantId);
+    check("운영자 입력: 시작 시각을 비우면 시작일 0시부터(startMin 없음)", (() => { const r = A.buildManualGrants({ title: "y", windows: [{ channels: ["ENA"], startDate: "2026-10-25" }], actor: "t", enteredAt: "2026-10-07" }); return r.ok && r.grants[0].window.startMin === undefined; })());
+  }
+
   console.log(`\n${passed}건 통과, ${failures.length}건 실패`);
   if (failures.length) {
     console.log("실패 목록:\n" + failures.map((f) => ` - ${f}`).join("\n"));

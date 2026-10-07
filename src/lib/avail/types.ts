@@ -27,6 +27,8 @@ export interface RightsWindow {
   start: Tri<string>;
   /** 종료일(YYYY-MM-DD). unbounded = 영구/제한없음 */
   end: Tri<string>;
+  /** 시작일 안의 시작 시각(방송일 분, 예 23:50 = 1430) — 이 시각 이전에 시작하는 방송은 시작 전이다. 없으면 시작일 0시부터. 운영자 입력 권리에만 쓴다 */
+  startMin?: number | null;
   /** 계약서 원문 표기 보존 — 년수·방영권 적용 */
   termRaw: string | null;
   appliesRaw: string | null;

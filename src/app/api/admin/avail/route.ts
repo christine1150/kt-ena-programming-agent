@@ -10,7 +10,8 @@ import { currentGrants } from "@/lib/avail/inventory";
 import { DEFAULT_INTERPRETATION, type InterpKey } from "@/lib/avail/interpretation";
 import { proposeLinks } from "@/lib/avail/identity";
 import { US_DRAMA_1ST_WINDOW } from "@/lib/avail/seeds/usDrama1stWindow";
-import { loadAvailState, saveAddenda, saveConfirmation, saveInterpretation, saveLink } from "@/lib/avail/store";
+import { buildManualGrants } from "@/lib/avail/manualGrant";
+import { loadAvailState, saveAddenda, saveConfirmation, saveImport, saveInterpretation, saveLink } from "@/lib/avail/store";
 import { buildOverview } from "@/lib/avail/summary";
 import { supabase } from "@/lib/supabase";
 
@@ -73,6 +74,22 @@ export async function POST(request: Request) {
     case "link_content": {
       if (typeof body.programId !== "string" || typeof body.canonicalKey !== "string" || !current.some((g) => g.content.canonicalKey === body.canonicalKey)) return NextResponse.json({ ok: false, message: "프로그램과 Avail 제목 키가 필요합니다." }, { status: 400 });
       return done(await saveLink({ programId: body.programId, canonicalKey: body.canonicalKey }, actor));
+    }
+    case "add_manual_grant": {
+      // 원본 Avail 파일에 아직 없는 콘텐츠의 채널별 편성 가능 시점을 직접 넣는다(종료일·방수 등은 비워 둔다 — 빈칸은 무제한이 아니다)
+      const windows = Array.isArray(body.windows) ? (body.windows as { channels?: unknown; startDate?: unknown; startTime?: unknown }[]) : [];
+      const built = buildManualGrants({
+        title: typeof body.title === "string" ? body.title : "",
+        windows: windows.map((w) => ({ channels: Array.isArray(w.channels) ? w.channels.map(String) : [], startDate: String(w.startDate ?? ""), startTime: typeof w.startTime === "string" ? w.startTime : null })),
+        actor,
+        enteredAt: new Date().toISOString(),
+        existing: loaded.state.revisions,
+        note: typeof body.note === "string" ? body.note.trim() || null : null,
+      });
+      if (!built.ok) return NextResponse.json({ ok: false, message: built.message }, { status: 400 });
+      if (built.grants.length === 0) return NextResponse.json({ ok: true, stored: 0, message: "이미 같은 내용이 입력되어 있습니다." });
+      const saved = await saveImport({ kind: "incremental", scope: null, fileName: "운영자 입력", fileHash: null, sheetSummary: [], planSummary: { manualGrants: built.grants.map((g) => ({ grantId: g.grantId, channels: (g.scope.channels as { ids?: string[] }).ids ?? [], start: g.window.start, startMin: g.window.startMin ?? null })) }, actor, note: typeof body.note === "string" ? body.note : undefined }, built.grants);
+      return saved.ok ? NextResponse.json({ ok: true, stored: saved.stored }) : NextResponse.json({ ok: false, message: saved.message }, { status: 500 });
     }
     case "seed_addenda": {
       if (body.name !== "us_drama_1st_window") return NextResponse.json({ ok: false, message: "알 수 없는 보충 속성 묶음입니다." }, { status: 400 });

@@ -72,6 +72,8 @@ export default function AvailManager() {
   const [notice, setNotice] = useState<string | null>(null);
   const [linkQuery, setLinkQuery] = useState("");
   const [baseline, setBaseline] = useState({ prefix: "", evidence: "" });
+  // 운영자 입력 권리(원본 Avail 파일에 아직 없는 콘텐츠의 채널별 편성 가능 시점)
+  const [mg, setMg] = useState<{ title: string; note: string; rows: { channels: string[]; startDate: string; startTime: string }[] }>({ title: "", note: "", rows: [{ channels: [], startDate: "", startTime: "" }] });
   const [links, setLinks] = useState<{ canonicalKey: string; title: string; candidates: { programId: string; programName: string; basis: string; confidence: number; markerConflicts: string[] }[] }[] | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -396,6 +398,55 @@ export default function AvailManager() {
               </ul>
             )}
             {ov.addenda.productionYearMissing.length > 0 && <p className="mt-2 text-xs text-zinc-600">제작년도 미입력 {ov.addenda.productionYearMissing.length}건(제작년도는 같은 제목의 리메이크·다른 판을 가르는 데 중요합니다): {ov.addenda.productionYearMissing.slice(0, 6).join(", ")} 외</p>}
+          </div>
+
+          <div>
+            <p className="mb-1 text-sm font-medium text-zinc-800">운영자 입력 — 편성 가능 시점(원본 Avail 파일에 아직 없는 콘텐츠)</p>
+            <p className="mb-2 text-xs text-zinc-500">
+              아는 것만 넣습니다: 제목, 채널별 편성 가능 시작일과 시각. 종료일·방수·플랫폼은 비워 두며 빈칸은 무제한이 아니라 &lsquo;미확인&rsquo;입니다. 시작 전에는 편성할 수 없고(불가), 시작 뒤에도 종료일·방수를 채우기 전에는 &lsquo;확인 못함&rsquo;이라 실행 가능으로 표시되지 않습니다.
+              같은 제목이 Avail 파일에 올라오면 파일이 우선이고 충돌로 표시됩니다.
+            </p>
+            <input value={mg.title} onChange={(e) => setMg({ ...mg, title: e.target.value })} placeholder="제목(예: 결이 다른 전쟁사)" aria-label="운영자 입력 제목" className="mb-2 w-full max-w-md rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm" />
+            {mg.rows.map((row, i) => (
+              <div key={i} className="mb-2 rounded-lg border border-zinc-200 p-2.5">
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-700">
+                  {["ENA", "ENA Drama", "ENA Play", "ENA Story", "OLIFE", "ONCE", "skyUHD"].map((c) => (
+                    <label key={c} className="inline-flex items-center gap-1">
+                      <input type="checkbox" checked={row.channels.includes(c)} onChange={(e) => setMg({ ...mg, rows: mg.rows.map((r, k) => (k === i ? { ...r, channels: e.target.checked ? [...r.channels, c] : r.channels.filter((x) => x !== c) } : r)) })} />
+                      {c}
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-zinc-700">
+                  <label className="inline-flex items-center gap-1">
+                    시작일
+                    <input type="date" value={row.startDate} onChange={(e) => setMg({ ...mg, rows: mg.rows.map((r, k) => (k === i ? { ...r, startDate: e.target.value } : r)) })} className="rounded-lg border border-zinc-300 px-2 py-1" />
+                  </label>
+                  <label className="inline-flex items-center gap-1">
+                    이 시각 이후(HH:MM, 선택)
+                    <input value={row.startTime} placeholder="23:50" onChange={(e) => setMg({ ...mg, rows: mg.rows.map((r, k) => (k === i ? { ...r, startTime: e.target.value } : r)) })} className="w-20 rounded-lg border border-zinc-300 px-2 py-1" />
+                  </label>
+                  {mg.rows.length > 1 && (
+                    <button type="button" onClick={() => setMg({ ...mg, rows: mg.rows.filter((_, k) => k !== i) })} className="text-zinc-500 underline">
+                      이 줄 삭제
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setMg({ ...mg, rows: [...mg.rows, { channels: [], startDate: "", startTime: "" }] })} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+                채널 묶음 추가
+              </button>
+              <button
+                type="button"
+                disabled={busy || !mg.title.trim() || mg.rows.some((r) => r.channels.length === 0 || !r.startDate)}
+                onClick={() => void act({ action: "add_manual_grant", title: mg.title, note: mg.note, windows: mg.rows.map((r) => ({ channels: r.channels, startDate: r.startDate, startTime: r.startTime || null })) }, (b) => (Number(b.stored ?? 0) > 0 ? `운영자 입력 권리 ${String(b.stored)}건을 저장했습니다.` : "이미 같은 내용이 입력되어 있습니다."))}
+                className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              >
+                저장
+              </button>
+            </div>
           </div>
 
           <div>

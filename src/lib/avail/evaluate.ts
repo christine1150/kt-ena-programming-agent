@@ -8,7 +8,7 @@
 //  - Avail 행이 있으면 항상 그 행이 우선이다. 행이 없을 때만 오리지널 설정이 쓰인다.
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { LINEAR_PLATFORMS, channelKey, parsePlatforms } from "./adapters/common";
-import { addDaysIso, addMonthsIso, calendarDateOf, dayNumber, parseTerm, positionInWindow, type BoundaryConvention, type WindowPosition } from "./dates";
+import { addDaysIso, addMonthsIso, calendarDateOf, calendarMinute, dayNumber, parseTerm, positionInWindow, type BoundaryConvention, type WindowPosition } from "./dates";
 import { episodeAllowed, listEpisodes } from "./episodes";
 import { identityMarkers, titleVariants } from "./identity";
 import { optionsFor, type Interpretation } from "./interpretation";
@@ -276,6 +276,15 @@ function evalGrant(g: Grant, q: ContentQuery, episode: number | null, slot: Slot
     let remaining: number | null = null;
     let expiresOn: string | null = null;
 
+    // 시작 시각이 있는 권리(운영자 입력): 시작일의 그 시각 이전에 시작하는 방송은 불가 — 종료일을 몰라도 "시작 전"은 확실하다
+    // (시각이 있으면 달력 시각으로 비교한다: 방송일 24시 넘김 방송도 실제 달력 시각 기준)
+    if (startV.state === "value" && typeof g.window.startMin === "number") {
+      const lo = dayNumber(startV.value) * 1440 + g.window.startMin;
+      if (calendarMinute(slot.broadcastDate, slot.startMin) < lo) {
+        const hh = `${String(Math.floor(g.window.startMin / 60)).padStart(2, "0")}:${String(g.window.startMin % 60).padStart(2, "0")}`;
+        rs.push({ code: "WINDOW_NOT_STARTED", text: `방영 가능 시작(${startV.value} ${hh}) 이전입니다`, severity: "unavailable" });
+      }
+    }
     // 유효 기간: (달력/방송일) × (종료일 포함 여부) × (걸친 방송 정책) × (회차별 기간 기준 적용 여부)
     if (startV.state === "value" && (endV.state === "value" || endV.state === "unbounded")) {
       const outerEnd: string | "unbounded" = endV.state === "unbounded" ? "unbounded" : endV.value;
@@ -307,7 +316,7 @@ function evalGrant(g: Grant, q: ContentQuery, episode: number | null, slot: Slot
       if (outs.size === 1 && outs.has("in")) ok.push("window");
       else if (outs.size === 1) {
         const pos = positionInWindow(slot, startV.value, outerEnd, { basis: cs[0].basis, endInclusive: cs[0].inclusive });
-        rs.push({ code: pos === "before_start" || pos === "straddles_start" ? "WINDOW_NOT_STARTED" : "WINDOW_EXPIRED", text: `방영 기간(${startV.value} ~ ${outerEnd === "unbounded" ? "무기한" : outerEnd}) 밖입니다`, severity: "unavailable" });
+        if (!(rs.some((r) => r.code === "WINDOW_NOT_STARTED") && (pos === "before_start" || pos === "straddles_start"))) rs.push({ code: pos === "before_start" || pos === "straddles_start" ? "WINDOW_NOT_STARTED" : "WINDOW_EXPIRED", text: `방영 기간(${startV.value} ~ ${outerEnd === "unbounded" ? "무기한" : outerEnd}) 밖입니다`, severity: "unavailable" });
       } else {
         const keys = splitKeys(cs, outcome);
         const label: Record<string, string> = { basis: "달력/방송일 기준", inclusive: "종료일 포함 여부", span: "자정 넘어 만료되는 방송의 판단", end: "회차별 기간 기준" };
@@ -468,7 +477,9 @@ export function evaluateEligibility(q: ContentQuery, slot: SlotRef, ctx: EvalCon
   }
 
   const evals = m.grants.map((g) => evalGrant(g, q, q.episodeNumber ?? null, slot, ctx));
-  const best = [...evals].sort((a, b) => RANK[b.status] - RANK[a.status] || (b.remaining ?? 0) - (a.remaining ?? 0))[0];
+  // 같은 제목의 권리가 채널별로 나뉘어 있을 때(운영자 입력 등), 상태가 같으면 그 채널의 권리가 사유를 설명하게 한다 — "허용 채널에 없다"보다 "시작 전이다"가 이 채널에는 맞는 설명이다
+  const channelMiss = (e: (typeof evals)[number]) => (e.reasons.some((r) => r.code === "CHANNEL_NOT_ALLOWED") ? 1 : 0);
+  const best = [...evals].sort((a, b) => RANK[b.status] - RANK[a.status] || channelMiss(a) - channelMiss(b) || (b.remaining ?? 0) - (a.remaining ?? 0))[0];
   const status = best.status;
   const used = status === "available" ? evals.filter((e) => e.status === "available") : [best];
   const reasons = status === "available" ? [] : best.reasons;
