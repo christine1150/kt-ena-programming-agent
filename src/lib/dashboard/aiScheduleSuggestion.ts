@@ -8,6 +8,8 @@ import { addDays, isoDow } from "@/lib/idealSchedule/time";
 export interface AiSuggestion {
   channelCode: string;
   weekStart: string;
+  /** 기준일의 요일(1=월 … 7=일). 제안은 이 요일의 편성에 대해서만 한다. */
+  weekday: number;
   /** 지난주 실제 편성의 주간 평균 기대 시청률(엔진 기대값) */
   currentExpected: number | null;
   /** AI 편성안의 주간 평균 기대 시청률 */
@@ -27,20 +29,24 @@ export function nextMondayAfter(date: string): string {
 
 export async function computeAiSuggestion(channelCode: string, asOfDate: string): Promise<AiSuggestion> {
   const weekStart = nextMondayAfter(asOfDate);
-  const key = `${channelCode}|${weekStart}|${asOfDate}`;
+  const key = `v2|${channelCode}|${weekStart}|${asOfDate}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 
   const out = await runIdealSchedule({ channelCode, weekStart, mode: "KEEP_CURRENT", strategyMode: "AUTO", competitorNames: [], asOfDate });
   type Block = { status?: string; weekday: number; startMin: number; candidate: { programName: string }; decision?: { kind: string | null; incumbent: { name: string } | null; delta: number | null; certainty: "HIGH" | "MID" | "LOW" | null } };
   const blocks = ((out.output as unknown as { blocks?: Block[] }).blocks ?? []).filter((b) => b.status === "AI" || b.status === undefined);
+  // 사용자 지시(2026-10-07): "오늘은 화요일인데 AI는 토요일·금요일 편성 변경을 말하고 있다 — 제안이 있으면 해당 요일의 편성에 대해서" → 기준일과 같은 요일 칸만 후보로 쓴다.
+  const weekday = isoDow(asOfDate);
   const changes = blocks
+    .filter((b) => b.weekday === weekday)
     .filter((b) => b.decision?.kind === "CHANGE" && (b.decision.delta ?? 0) > 0 && b.decision.incumbent?.name)
     .sort((a, b) => (b.decision!.delta ?? 0) - (a.decision!.delta ?? 0));
   const top = changes[0];
   const value: AiSuggestion = {
     channelCode,
     weekStart,
+    weekday,
     currentExpected: (out.evaluations.CURRENT as { expectedAvgRating?: number | null } | undefined)?.expectedAvgRating ?? null,
     aiExpected: out.summary.expectedAvgRating,
     change: top

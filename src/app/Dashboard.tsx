@@ -791,6 +791,7 @@ function extBroadcastHour(startTime: string): number {
 interface AiSuggestionPayload {
   channelCode: string;
   weekStart: string;
+  weekday?: number;
   currentExpected: number | null;
   aiExpected: number | null;
   change: { weekday: number; startMin: number; from: string; to: string; gain: number; certainty: "HIGH" | "MID" | "LOW" | null } | null;
@@ -799,7 +800,7 @@ interface AiSuggestionPayload {
 type AiState = Record<string, AiSuggestionPayload | null | undefined>;
 const AI_DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
 function aiSuggestionLine(s: AiSuggestionPayload): string {
-  if (!s.change) return "AI 계산: 편성 교체로 개선되는 칸이 없습니다";
+  if (!s.change) return `AI 계산: ${s.weekday ? `${AI_DOW_KO[s.weekday - 1]}요일 ` : ""}편성은 교체로 개선되는 칸이 없습니다`;
   return `${AI_DOW_KO[s.change.weekday - 1]} ${Math.floor(s.change.startMin / 60)}시 '${s.change.from}'→'${s.change.to}' 교체 시 기대 ${formatRatingDelta(s.change.gain)}`;
 }
 function resolveChannelAction(
