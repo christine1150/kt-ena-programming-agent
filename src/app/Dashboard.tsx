@@ -5840,7 +5840,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 </div>
 
                 {/* 사용자 지시(2026-10-07): 홈 순서 — 오늘의 시청률 → 주요 컨텐츠 리뷰 → 채널별 인사이트 → 채널별 상위 프로그램 → 오늘 결정할 사항 → 채널별 킬러 콘텐츠. */}
-                <DecisionCards cards={decisions.cards} suppressed={decisions.suppressed} candidates={decisions.candidates} reviewStore={reviewStore} channelNames={CHANNEL_NAME_BY_CODE} colorByCode={themeByCode} />
+                <DecisionCards cards={decisions.cards} suppressed={decisions.suppressed} candidates={decisions.candidates} reviewStore={reviewStore} channelNames={CHANNEL_NAME_BY_CODE} colorByCode={themeByCode} asOfDate={data.asOfDate} />
 
                 <KillerContentCard rows={data.killerContentDaypart} themeColorByCode={themeByCode} ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))} />
 

@@ -111,6 +111,10 @@ export interface DecisionCard {
   /** 현재 검토 상태(없으면 null) */
   review: ReviewEvent | null;
   notes: string[];
+  /** 프로그램 카드: 대상 프로그램·방송일 기준 시(02~25)·기준 슬롯 평균 문구 — 홈 "대안 비교" 시뮬레이션이 그 자리를 찾는 데 쓴다 */
+  programName?: string | null;
+  hour?: number | null;
+  baselineText?: string | null;
 }
 
 export const MAX_DECISIONS = 3;
@@ -272,6 +276,9 @@ export function buildTodayDecisions(i: {
       priority,
       why: isDown ? "같은 슬롯 평균 대비 큰 하락이 관측되어 확인 순서가 앞섭니다." : "같은 슬롯 평균 대비 큰 상승이 관측되어 강화 여부를 검토할 만합니다.",
       links: linksFor(s.channelCode, action.actionId, title, hour, subject),
+      programName,
+      hour,
+      baselineText: baseline !== null ? baseText : null,
       review,
       notes: [...(tagFits ? [] : [`Fit Score 태그(${tag})는 오늘 관측 방향(${dev <= 0 ? "하락" : "상승"})과 달라 판단에서 제외했습니다.`]), ...(action.hypothesis ? [`가설(관측 아님): ${action.hypothesis}`] : []), ...(action.constraints.avail === "unverified" ? ["Avail(권리) 미확인 — 이동·교체를 확정하기 전에 권리 확인이 필요합니다."] : []), ...action.constraints.notes],
     });

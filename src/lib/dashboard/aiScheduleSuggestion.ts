@@ -121,7 +121,7 @@ async function keepOnlyCurrentlyAiring(channelId: string, asOfDate: string, deta
 
 const idx = (v: unknown) => (typeof v === "number" ? Math.round(v * 100) : null);
 /** 엔진의 구조화 근거 → 짧은 문장(채널 상세 "편성 제안" 설명용). 필요한 코드만 쓴다. */
-function basisText(reasons: { code: string; value: number | string | null; detail?: string }[]): string[] {
+export function basisText(reasons: { code: string; value: number | string | null; detail?: string }[]): string[] {
   const out: string[] = [];
   for (const r of reasons) {
     if (out.length >= 2) break;

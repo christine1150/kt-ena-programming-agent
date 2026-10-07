@@ -3,7 +3,8 @@
 // 홈 첫 화면 패널(단계 07): 보기 탭·데이터 상태·오늘 결정할 사항·채널 KPI 표·후속 액션.
 // 계산은 src/lib/workspace(순수 모듈)가 하고, 여기서는 그 결과를 그린다. 모바일은 요약·승인 검토 중심으로 카드형 세로 배치.
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { AlternativeCompare } from "@/components/home/AlternativeCompare";
 import { REVIEW_STATUS_LABEL, type Followup } from "@/lib/workspace/actionReview";
 import type { DataStatus, DecisionCard } from "@/lib/workspace/homeData";
 import { EMPTY_CONTEXT, hrefFor, HOME_VIEW_LABEL, HOME_VIEWS, type HomeView } from "@/lib/workspace/viewContext";
@@ -92,15 +93,21 @@ export function DecisionCards({
   candidates,
   channelNames,
   colorByCode,
+  asOfDate,
 }: {
   cards: DecisionCard[];
   suppressed: number;
   candidates: number;
+  /** 화면 기준일(YYYY-MM-DD) — "대안 비교" 시뮬레이션이 이 날짜의 요일·시각 자리를 계산한다 */
+  asOfDate?: string;
   /** (구) 검토 기록 저장소 상태 — 안내 문구를 없애면서 쓰지 않는다. 호출부 호환용으로 남겨 둔다. */
   reviewStore?: ReviewStoreState;
   channelNames?: Record<string, string>;
   colorByCode?: Map<string, string | null>;
 }) {
+  // 사용자 지시(2026-10-07): "대안 비교를 눌렀을 때 새 창이 아니라 하단에 — 그 자리에서 9시 편성을 ○○으로 바꾸면 기대 시청률을 시뮬레이션"
+  const [compareId, setCompareId] = useState<string | null>(null);
+  const compareCard = cards.find((c) => c.id === compareId) ?? null;
   return (
     <section className={PANEL} aria-label="오늘 결정할 사항" data-section="decisions">
       <PanelHeader title="오늘 결정할 사항" question={`기준에 해당하는 항목만 최대 3건 · 후보 ${candidates}건 중`} />
@@ -201,16 +208,41 @@ export function DecisionCards({
                     해당 슬롯
                   </Link>
                 )}
-                {c.links.compare && (
-                  <Link href={c.links.compare} className="rounded-full bg-white px-3 py-1.5 text-[12px] font-medium text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-100">
+                {asOfDate && c.channelCode && c.programName && c.hour !== null && c.hour !== undefined ? (
+                  <button
+                    type="button"
+                    aria-expanded={compareId === c.id}
+                    onClick={() => setCompareId(compareId === c.id ? null : c.id)}
+                    className={`rounded-full px-3 py-1.5 text-[12px] font-medium ring-1 ${compareId === c.id ? "bg-zinc-900 text-white ring-zinc-900" : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-100"}`}
+                  >
                     대안 비교
-                  </Link>
+                  </button>
+                ) : (
+                  c.links.compare && (
+                    <Link href={c.links.compare} className="rounded-full bg-white px-3 py-1.5 text-[12px] font-medium text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-100">
+                      대안 비교
+                    </Link>
+                  )
                 )}
               </div>
             </li>
             );
           })}
         </ol>
+      )}
+      {compareCard && asOfDate && compareCard.channelCode && compareCard.programName && compareCard.hour !== null && compareCard.hour !== undefined && (
+        <AlternativeCompare
+          key={compareCard.id}
+          channelCode={compareCard.channelCode}
+          channelName={channelNames?.[compareCard.channelCode] ?? compareCard.channelCode}
+          asOfDate={asOfDate}
+          hour={compareCard.hour}
+          programName={compareCard.programName}
+          baselineText={compareCard.baselineText ?? null}
+          accent={ink(colorByCode?.get(compareCard.channelCode) ?? null) ?? "#281fc7"}
+          deepLink={compareCard.links.compare}
+          onClose={() => setCompareId(null)}
+        />
       )}
     </section>
   );

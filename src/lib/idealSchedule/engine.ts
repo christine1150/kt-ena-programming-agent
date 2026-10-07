@@ -52,6 +52,8 @@ export interface EngineRunInput {
   rights?: { slotAllowed: NonNullable<EngineInput["slotAllowed"]>; fingerprint: string };
   /** 탐색 제어(OPT04, 선택) — 평가 횟수·시간 예산·취소. 평가 횟수 예산만 지문에 들어간다(같은 예산이면 같은 결과). */
   search?: SearchControl;
+  /** 블록마다 계산할 자사 대체 후보 수(기본 10) */
+  alternativesTopN?: number;
 }
 
 export interface ScheduleEvaluationResult {
@@ -475,6 +477,7 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     benchmarkMaxShare: placement === "MIX" ? config.strategy.benchmark_max_share : 0,
     slotAllowed: input.rights?.slotAllowed,
     search: input.search,
+    alternativesTopN: input.alternativesTopN,
   });
   // 예산·취소로 멈췄으면 사용자에게 알린다 — 수렴해서 끝난 것과 다르다
   if (output.search.stoppedBy === "EVAL_BUDGET" || output.search.stoppedBy === "DEADLINE" || output.search.stoppedBy === "CANCELLED") {

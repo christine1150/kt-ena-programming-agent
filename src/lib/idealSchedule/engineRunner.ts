@@ -43,6 +43,8 @@ export interface RunRequest {
   rightsMode?: "explore" | "executable";
   /** 이번 실행에만 학습(검색) 기간을 덮어쓴다(일) — 홈·채널 상세 교체 제안이 약한 곳을 못 찾을 때 최대 180일(6개월)까지 넓혀 본다. 저장 설정은 바꾸지 않는다. */
   lookbackDays?: number;
+  /** 블록마다 계산할 자사 대체 후보 수(기본 10) */
+  alternativesTopN?: number;
 }
 
 /** 닐슨 주간 순위(채널·랭킹 시트 타깃) — 기준일까지 최근 lookbackDays일 */
@@ -255,6 +257,7 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
     planRows: planRows.length ? planRows : undefined,
     planFilled: enriched.filled,
     rights: combinedRights,
+    alternativesTopN: req.alternativesTopN,
     // 탐색 마감·취소(OPT04): 서버 제한 시간 안에 지금까지의 최선안으로 마무리하고, 취소되면 멈춘다
     search: { now: Date.now, deadlineAt: t0 + deadlineMs, isCancelled: () => opts.signal?.aborted === true },
   });

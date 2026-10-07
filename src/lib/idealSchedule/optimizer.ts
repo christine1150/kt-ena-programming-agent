@@ -219,6 +219,8 @@ export interface EngineInput {
   slotAllowed?: (c: EngineCandidate, weekday: number, startMin: number, endMin: number) => boolean;
   /** 탐색 제어(OPT04, 선택) — 평가 횟수·시간 예산·취소. 없으면 수렴할 때까지(현재 동작 그대로). */
   search?: SearchControl;
+  /** 블록마다 계산해 두는 자사 대체 후보 수(기본 10) — 홈 "대안 비교" 시뮬레이션이 더 많은 후보를 볼 때만 키운다. */
+  alternativesTopN?: number;
 }
 
 let gate = new SearchGate(undefined, () => 0, 0); // optimizeWeek 호출 동안만 설정
@@ -505,7 +507,7 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
     // 대체 후보(Swap용)는 배치 기준(길이 ±허용오차)보다 넓게: 편성 가능한 자사 프로그램 전체를 같은 자리에서 평가해
     // 길이 불일치 패널티가 반영된 순위로 보여준다(2026-09-30 화면 점검: 긴 슬롯은 후보가 1개뿐이라 교체할 수 없었음).
     const altPool = [...new Set([...slotCandidates(slots[eb.slotIndex], input.pool, input, true), ...input.pool.filter((c) => c.aiEligible && c.contentType === "OWN")])].filter((c) => okAt(input, c, eb.weekday, eb.startMin, eb.endMin));
-    eb.alternatives = alternativesFor(scorer, blocks, src, altPool, maxGap, 10);
+    eb.alternatives = alternativesFor(scorer, blocks, src, altPool, maxGap, input.alternativesTopN ?? 10);
     eb.decision = withRunnerUp(decisions.get(eb.slotIndex) ?? emptyDecision(null), eb);
   }
   timer.lap("alternatives");
