@@ -152,6 +152,10 @@ const PLAIN_USUAL_OK = [/로그인 비밀번호/, /평소 편성/, /평소 잘/]
 const usualHits = inventory.filter((i) => !isPromptFile(i.file) && !i.file.startsWith("src/lib/ui/") && usualWithoutBasis(i.text) && !PLAIN_USUAL_OK.some((re) => re.test(i.text)));
 check("비교 기준 없이 쓰인 '평소'(허용 목록 제외) 0건", usualHits.length === 0, `${usualHits.length}건: ${usualHits.slice(0, 6).map((h) => `${h.file.replace("src/", "")}:${h.line} ${h.text.slice(0, 30)}`).join(" | ")}`);
 
+// 화면 문구에 개발 이력(사용자 지시·단계 번호·마이그레이션 번호)이 남지 않는다 — 제품 질문에 개발 설명을 길게 늘어놓지 않는다
+const devHistory = uiVisible.filter((i) => /사용자 지시|사용자 요청|사용자 피드백|단계 ?\d{2}|마이그레이션/.test(i.text));
+check("화면 글자(JSX·속성)에 개발 이력('사용자 지시'·단계 번호·마이그레이션) 0건", devHistory.length === 0, devHistory.slice(0, 4).map((h) => `${h.file}:${h.line} ${h.text.slice(0, 40)}`).join(" | "));
+
 // 버튼·링크 글자의 효과 구분
 const actionLabelHits = uiVisible.filter((i) => misleadingActionLabel(i.text) !== null);
 check("파일 내려받기 버튼이 '저장'으로 표기되지 않는다", actionLabelHits.length === 0, actionLabelHits.map((h) => `${h.file}:${h.line} ${h.text}`).join(" | "));

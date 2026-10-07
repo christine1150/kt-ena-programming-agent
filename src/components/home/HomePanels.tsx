@@ -366,7 +366,7 @@ export function FollowupsCard({ followups, reviewStore }: { followups: Followup[
       ) : reviewStore === "error" ? (
         <p className="rounded-lg bg-amber-50 px-4 py-3 text-[13px] text-amber-900">검토 기록을 불러오지 못해 후속 액션을 표시할 수 없습니다.</p>
       ) : reviewStore === "unavailable" ? (
-        <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-600">검토 기록 저장소가 아직 적용되지 않아 후속 액션을 표시할 수 없습니다(마이그레이션 적용 후 표시).</p>
+        <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-600">검토 기록 저장소가 아직 적용되지 않아 후속 액션을 표시할 수 없습니다(적용 후 표시).</p>
       ) : followups.length === 0 ? (
         <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-600">지금 처리할 후속 액션이 없습니다.</p>
       ) : (

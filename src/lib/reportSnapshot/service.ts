@@ -19,6 +19,7 @@ import { SNAPSHOT_ID_RE, type SnapshotStore } from "./store";
 import { requestKey, type SnapshotRequest } from "./requestKey";
 export { requestKey, type SnapshotRequest };
 import type { ReportCadence, ReportSnapshot, SnapshotExtras } from "./types";
+import { isFeatureOn } from "@/lib/featureFlags";
 
 /** 같은 요청을 이 시간 안에 다시 하면 방금 만든 스냅샷을 쓴다(서버리스 인스턴스 안에서만 유효한 가속 장치 — 정확성에는 영향 없음) */
 export const REUSE_WINDOW_MS = 10 * 60 * 1000;
@@ -103,6 +104,8 @@ async function createAndStore(r: SnapshotRequest, store: SnapshotStore): Promise
   let persisted = true;
   let persistError: string | undefined;
   try {
+    // 단계 16: FEATURE_REPORT_SNAPSHOT_STORE=off면 저장하지 않는다(이전 동작: 다운로드는 다시 계산, PDF 막힘)
+    if (!isFeatureOn("report_snapshot_store")) throw new Error("보고서 저장 기능이 꺼져 있습니다(운영 설정).");
     await store.put(snapshot);
   } catch (e) {
     persisted = false;

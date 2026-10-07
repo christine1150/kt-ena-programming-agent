@@ -147,7 +147,7 @@ export default function AvailManager() {
       </p>
 
       {ov && !ov.tablesApplied && (
-        <div className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">⚠️ Avail 테이블이 아직 적용되지 않았습니다(마이그레이션 20261013010000). 미리보기와 열 매핑 확인은 할 수 있지만 반영·확인 기록은 적용 후에 가능합니다.</div>
+        <div className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">⚠️ Avail 테이블이 아직 적용되지 않았습니다(데이터베이스 변경 적용 대기). 미리보기와 열 매핑 확인은 할 수 있지만 반영·확인 기록은 적용 후에 가능합니다.</div>
       )}
 
       {/* 검증 상태 */}

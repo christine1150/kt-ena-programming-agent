@@ -13,6 +13,7 @@
 //  - 캐시 조회·저장이 실패해도 그냥 평소대로 생성한다(캐시는 가속 장치일 뿐).
 import { supabase } from "@/lib/supabase";
 import { cachedLlmTextWith, type CacheDb } from "@/lib/llmTextCacheCore";
+import { isFeatureOn } from "@/lib/featureFlags";
 
 export async function cachedLlmText(
   kind: string,
@@ -20,5 +21,7 @@ export async function cachedLlmText(
   input: unknown,
   generate: () => Promise<string | null>
 ): Promise<string | null> {
+  // 단계 16: FEATURE_LLM_TEXT_CACHE=off면 캐시를 건너뛰고 매번 생성한다(이전 동작으로 즉시 복귀)
+  if (!isFeatureOn("llm_text_cache")) return generate();
   return cachedLlmTextWith(supabase as unknown as CacheDb, kind, asOfDate, input, generate);
 }
