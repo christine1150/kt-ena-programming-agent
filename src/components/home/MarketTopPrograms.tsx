@@ -1,7 +1,7 @@
 "use client";
 
 // 1페이지 "오늘의 시청률" 카드 안쪽 맨 아래에 이어 붙는 정보 줄 — 해당일 수도권 개인2049 채널 순위 1~20위 채널의 상위 프로그램 21개(2026-10-06 사용자 지시, 2026-10-07 9개→12개→15개→21개).
-// 별도 제목 없이 정보만: 3단 × 7줄, 한 줄 구성 = 순위 · 채널명 · 프로그램명 · 시작 시각 · 시청률(2049) (유료방송가구).
+// 별도 제목 없이 정보만: 세로 우선 3단(1~7위·8~14위·15~21위) × 7줄, 한 줄 구성 = 순위 · 채널명 · 프로그램명 · 시작 시각 · 시청률(2049) (유료방송가구).
 // 프로그램명이 길면 글씨를 줄여 한 줄에 넣는다(잘라 내지 않음). 값은 API(/api/dashboard/top-programs)가 저장된 시청률을 고른 것이며 이 컴포넌트는 그리기만 한다.
 import { useLayoutEffect, useRef, useState } from "react";
 import { displayProgramName, formatRating, type TopProgramRow } from "@/lib/dashboard/marketTopPrograms";
@@ -145,7 +145,7 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
               : "순위 1~20위 채널 중 프로그램 단위 시청률 자료가 있는 채널이 없어 표시할 프로그램이 없습니다."}
           </p>
         ) : (
-          <ol className="grid grid-cols-1 gap-x-6 md:grid-cols-3">
+          <ol className="grid grid-cols-1 gap-x-6 md:grid-flow-col md:grid-cols-3 md:grid-rows-7">
             {rows.map((r) => (
               // 칸 폭을 고정해 3단 모두에서 순위·채널·프로그램명·시각·시청률 열이 위아래로 정확히 맞는다(사용자 지시 2026-10-07: 정렬 정돈).
               <li key={`${r.channelName}|${r.startTime}|${r.programName}`} className="grid grid-cols-[1rem_4.7rem_minmax(0,1fr)_2.6rem_5.7rem] items-center gap-x-1.5 py-[4px]">
