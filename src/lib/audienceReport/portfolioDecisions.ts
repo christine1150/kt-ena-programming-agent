@@ -42,6 +42,14 @@ function fnv(s: string): string {
   return h.toString(16).padStart(8, "0");
 }
 
+/**
+ * 포트폴리오 액션 ID — 임원 핵심 결정과 보고서 스냅샷(단계 14)의 TOP ACTIONS가 같은 신호에 같은 ID를 쓰도록 한 곳에서 만든다.
+ * 같은 채널·신호·대상·기간이면 같은 값이다(형식·재생성과 무관).
+ */
+export function portfolioActionId(channelCode: string, kind: string, content: string, period: { dateFrom: string; dateTo: string }): string {
+  return `portfolio:${channelCode}:${kind}:${fnv(`${channelCode}|${kind}|${content}|${period.dateFrom}~${period.dateTo}`)}`;
+}
+
 const ALTERNATIVES: Record<NonNullable<ChannelActionItem["kind"]>, string[]> = {
   program_down: ["편성을 유지한 채 다음 기간까지 추가 관찰", "다른 슬롯 이동·교체는 편성안 화면에서 대안 비교 후 판단"],
   daypart_weak: ["해당 시간대의 경쟁 편성과 자사 편성을 함께 점검", "관찰을 유지하고 다음 기간 격차 변화 확인"],
@@ -67,7 +75,7 @@ export function buildExecutiveDecisions(
     if (!item || !item.kind) continue;
     const content = item.subject ?? "채널 전체";
     const isDaypart = item.kind === "daypart_weak" || item.kind === "daypart_win";
-    const actionId = `portfolio:${ch.channelCode}:${item.kind}:${fnv(`${ch.channelCode}|${item.kind}|${content}|${args.period.dateFrom}~${args.period.dateTo}`)}`;
+    const actionId = portfolioActionId(ch.channelCode, item.kind, content, args.period);
     const title = `${ch.channelName} ${content} 검토`;
     const extra = { from: actionId, ft: title, sj: `${ch.channelCode}|${content}|portfolio` };
     out.push({

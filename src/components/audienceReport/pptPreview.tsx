@@ -10,7 +10,9 @@
 // 색·그라데이션·슬로건은 enaColorTokens.ts(순수 함수)를 .pptx 렌더러와 공유하고, 레이아웃은
 // enaPptTheme.ts의 본문 마스터 구성(흰 배경 + 우상단 로고 + 눈썹 라벨 + 큰 제목 + 쪽번호)을
 // 화면 비율로 옮겨 그린다. 채널별 리포트와 종합 리포트가 이 컴포넌트 하나를 공유한다.
-import type { PptPreviewPayload, PptSlidePlan } from "@/lib/audienceReport/pptSlidePlan";
+import type { DeckPlan, DeckSlide } from "@/lib/reportSnapshot/deckPlan";
+import type { PublicSnapshot } from "@/lib/reportSnapshot/types";
+import { ChartBars, DownloadButton, MetaCaption, SnapshotBar } from "./snapshotUi";
 import type { DocBlock } from "@/lib/audienceReport/reportFlatten";
 import {
   resolveAccent,
@@ -129,10 +131,12 @@ function BlockView({ block, accent, accentBare }: { block: DocBlock; accent: str
                 })}
               </div>
             ))}
+          <MetaCaption meta={block.meta} />
         </div>
       );
     case "table":
       return (
+        <div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[520px] text-sm">
             <thead>
@@ -157,7 +161,11 @@ function BlockView({ block, accent, accentBare }: { block: DocBlock; accent: str
             </tbody>
           </table>
         </div>
+        <MetaCaption meta={block.meta} />
+        </div>
       );
+    case "chart":
+      return <ChartBars block={block} accent={accent} />;
     case "note":
       // 계획 단계(pptSlidePlan.omitEmptyBlocks)에서 이미 걸러지므로 정상 경로에서는 나타나지 않는다.
       return <p className="rounded bg-neutral-50 p-4 text-center text-xs text-neutral-400">{block.text}</p>;
@@ -168,13 +176,21 @@ export function PptPreview({
   payload,
   pptxHref,
   wordHref,
+  viewHref,
+  reportHref,
+  snapshot,
   headerLabel,
 }: {
-  payload: PptPreviewPayload;
-  /** 이 미리보기의 형식 그대로 받는 다운로드 경로(.pptx) */
+  payload: DeckPlan;
+  /** 이 미리보기의 형식 그대로 받는 다운로드 경로(.pptx, 같은 스냅샷) */
   pptxHref: string;
-  /** 같은 기간의 Word 미리보기로 넘어가는 교차 이동 경로 */
+  /** 같은 스냅샷의 Word 다운로드 경로 */
   wordHref: string;
+  /** 같은 스냅샷의 문서 보기(인쇄·PDF) 경로 */
+  viewHref: string;
+  /** 보고서(웹) 화면으로 돌아가는 경로 */
+  reportHref: string;
+  snapshot: PublicSnapshot | null;
   headerLabel: string;
 }) {
   const { brand, slides } = payload;
@@ -188,7 +204,7 @@ export function PptPreview({
   const total = slides.length;
 
   return (
-    <main className="mx-auto max-w-4xl px-4 pb-24 pt-8">
+    <main className="mx-auto max-w-4xl px-4 pb-24 pt-8" style={{ "--deck-accent": accent } as React.CSSProperties}>
       {/* KT Flow — ena-design assets/fonts 원본을 그대로 서빙(public/ena-design/fonts). 굵기별
           개별 패밀리를 직접 지정한다(합성 볼드 금지 규칙). */}
       <style>{`
@@ -204,26 +220,26 @@ export function PptPreview({
         <div>
           <div className="font-ktflow-bold text-xs uppercase tracking-wide text-neutral-500">{headerLabel}</div>
           <div className="text-sm text-neutral-500">{payload.subtitle}</div>
-          <div className="mt-0.5 text-xs text-neutral-400">총 {total}장 — 아래 미리보기가 그대로 PPT 파일로 저장됩니다.</div>
+          <div className="mt-0.5 text-xs text-neutral-400">총 {total}장 — 아래 미리보기가 그대로 PPT 파일로 저장됩니다(본문 {slides.filter((x) => x.kind === "content" && !x.appendix).length}장 + 부록).</div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <a
+        <div className="flex flex-wrap items-start gap-2">
+          <DownloadButton
             href={pptxHref}
-            className="font-ktflow-bold rounded-md px-3 py-1.5 text-xs text-white hover:opacity-90"
-            style={{ backgroundColor: accent }}
-          >
-            PPT 다운로드
+            label="PPT 다운로드"
+            className="font-ktflow-bold rounded-md px-3 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-60 [background-color:var(--deck-accent)]"
+          />
+          <DownloadButton href={wordHref} label="Word 다운로드" />
+          <a href={viewHref} className="rounded-md border px-3 py-1.5 text-xs font-medium hover:opacity-80" style={{ borderColor: accent, backgroundColor: hex(tint(accentBare, 0.92)), color: accent }}>
+            문서 보기·PDF →
           </a>
-          <a
-            href={wordHref}
-            className="rounded-md border px-3 py-1.5 text-xs font-medium hover:opacity-80"
-            style={{ borderColor: accent, backgroundColor: hex(tint(accentBare, 0.92)), color: accent }}
-          >
-            ← Word 미리보기
+          <a href={reportHref} className="rounded-md border px-3 py-1.5 text-xs font-medium hover:opacity-80" style={{ borderColor: accent, color: accent }}>
+            ← 보고서(웹)
           </a>
         </div>
       </header>
+      {snapshot && <SnapshotBar snapshot={snapshot} />}
 
+      <div className="mt-4" />
       {slides.map((slide, i) => (
         <SlideView
           key={i}
@@ -253,7 +269,7 @@ function SlideView({
   isEnaChannel,
   brand,
 }: {
-  slide: PptSlidePlan;
+  slide: DeckSlide;
   index: number;
   total: number;
   accent: string;
@@ -261,8 +277,18 @@ function SlideView({
   gradient: { from: string; to: string };
   slogan: { line1: string; line2: string; isEnaWordmark: boolean };
   isEnaChannel: boolean;
-  brand: PptPreviewPayload["brand"];
+  brand: DeckPlan["brand"];
 }) {
+  if (slide.kind === "divider") {
+    return (
+      <section className="relative mx-auto mb-6 flex min-h-[18rem] w-full flex-col justify-center overflow-hidden rounded-2xl p-8 text-white shadow-sm sm:p-12" style={{ background: `linear-gradient(90deg, ${hex(gradient.from)}, ${hex(gradient.to)})` }}>
+        <span className="absolute right-8 top-6 text-xs text-white/60">{index} / {total}</span>
+        <div className="font-ktflow-bold text-xs uppercase tracking-wide text-white/70">{slide.eyebrow}</div>
+        <div className="font-ktflow-black mt-2 text-5xl">{slide.title}</div>
+        <div className="font-ktflow-bold mt-3 text-sm text-white/85">{slide.subtitle}</div>
+      </section>
+    );
+  }
   if (slide.kind === "cover") {
     return (
       <section
@@ -324,10 +350,18 @@ function SlideView({
       <span className="font-ktflow-bold absolute bottom-5 right-8 text-xs" style={{ color: "#7C7C8C" }}>
         {index} / {total}
       </span>
-      <Eyebrow text={slide.eyebrow} accent={accent} />
+      <Eyebrow text={slide.appendix ? `${slide.eyebrow} · 부록` : slide.eyebrow} accent={accent} />
       <SlideTitle>{slide.title}</SlideTitle>
       {slide.caption && <div className="mb-2 text-xs text-neutral-500">{slide.caption}</div>}
-      <BlockView block={slide.block} accent={accent} accentBare={accentBare} />
+      <div className="space-y-4">
+        {slide.blocks.some((b) => b.kind === "chart") && (
+          <div className={`grid gap-4 ${slide.blocks.filter((b) => b.kind === "chart").length > 1 ? "sm:grid-cols-2" : ""}`}>
+            {slide.blocks.filter((b) => b.kind === "chart").map((b, i) => <BlockView key={i} block={b} accent={accent} accentBare={accentBare} />)}
+          </div>
+        )}
+        {slide.blocks.filter((b) => b.kind !== "chart").map((b, i) => <BlockView key={i} block={b} accent={accent} accentBare={accentBare} />)}
+      </div>
+      <div className="mt-6 text-[10px] text-neutral-400">{slide.footer}</div>
     </section>
   );
 }

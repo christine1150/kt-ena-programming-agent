@@ -4,9 +4,11 @@
 // 이어붙이면 종합이 되지 않는다는 원칙대로, 여기 있는 모든 섹션은 "채널 사이의 관계"만 다룬다.
 // Group A/B는 어느 표·차트에도 함께 담기지 않는다(portfolioModel.ts가 타입 레벨에서부터 분리).
 import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import ReportSnapshotNotice from "@/components/workspace/ReportSnapshotNotice";
+import { DownloadButton, SnapshotBar } from "@/components/audienceReport/snapshotUi";
+import { ReportError, ReportLoading, useSnapshotReport } from "@/components/audienceReport/useSnapshotReport";
 import type { PortfolioReportDocument, PortfolioDeepCompare } from "@/lib/audienceReport/portfolioModel";
 import { formatRating } from "@/lib/audienceReport/format";
 import { CONCENTRATION_METHOD, GROUP_METRIC_METHOD, PIPELINE_RATIO_LABEL, pipelineView } from "@/lib/audienceReport/portfolioDecisions";
@@ -250,40 +252,13 @@ export default function PortfolioReportPage() {
 
 function PortfolioReportPageInner() {
   const searchParams = useSearchParams();
-  const [report, setReport] = useState<PortfolioReportDocument | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      const qs = new URLSearchParams();
-      for (const key of ["date", "dateFrom", "dateTo", "compareFrom", "compareTo", "preset", "customFrom", "customTo"]) {
-        const v = searchParams.get(key);
-        if (v) qs.set(key, v);
-      }
-      try {
-        const res = await fetch(`/api/audience-report/portfolio?${qs.toString()}`);
-        const json = await res.json();
-        if (cancelled) return;
-        if (!json.ok) setError(json.message ?? "리포트를 불러오지 못했습니다.");
-        else setReport(json.report);
-      } catch {
-        if (!cancelled) setError("리포트를 불러오는 중 오류가 발생했습니다.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [searchParams]);
-
-  if (loading) return <div className="p-8 text-neutral-500">불러오는 중...</div>;
-  if (error) return <div className="p-8 text-rose-600">{error}</div>;
-  if (!report) return null;
+  // 단계 14: 종합 보고서도 스냅샷으로 한 번 만들고 Word·PPT·PDF가 같은 원본을 쓴다.
+  const { state, qs, retry, regenerate, regenerating } = useSnapshotReport<PortfolioReportDocument>("/api/audience-report/portfolio", searchParams);
+  if (state.status === "loading") return <ReportLoading what="종합 보고서" />;
+  if (state.status === "error") return <ReportError message={state.message} onRetry={retry} />;
+  const { report, snapshot } = state;
+  const dl = (path: string) => (snapshot.persisted ? `/api/audience-report/portfolio/${path}?snapshot=${snapshot.id}` : `/api/audience-report/portfolio/${path}?${qs}`);
+  const deckHref = `/audience-report/portfolio/deck?${snapshot.persisted ? `snapshot=${snapshot.id}` : qs}`;
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-24 pt-8">
@@ -300,22 +275,23 @@ function PortfolioReportPageInner() {
         <ReportSnapshotNotice periodTo={report.period.dateTo} reportCutoff={null} />
         {/* 2026-09-17(사용자 지시) — 이 화면이 종합 보고서의 "Word 미리보기"이고, 여기서 받는
             파일은 Word 하나뿐이다. PPT는 아래 교차 이동 버튼으로 PPT 미리보기에 가서 받는다. */}
-        <div className="mt-3 flex flex-wrap gap-2">
+        <SnapshotBar snapshot={snapshot} onRegenerate={regenerate} regenerating={regenerating} />
+        <div className="mt-3 flex flex-wrap items-start gap-2">
+          <DownloadButton href={dl("docx")} label="Word 다운로드" />
+          {snapshot.persisted ? (
+            <a
+              href={`/audience-report/view/${snapshot.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+            >
+              문서 보기·PDF 저장
+            </a>
+          ) : (
+            <span className="rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-xs text-neutral-400">PDF: 원본을 저장하지 못해 사용할 수 없음</span>
+          )}
           <a
-            href={`/api/audience-report/portfolio/docx?${searchParams.toString()}`}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-          >
-            Word 다운로드
-          </a>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-          >
-            PDF로 저장
-          </button>
-          <a
-            href={`/audience-report/portfolio/deck?${searchParams.toString()}`}
+            href={deckHref}
             className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300"
           >
             PPT 미리보기 →

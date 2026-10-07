@@ -71,6 +71,7 @@ export const COMPAT_ROUTES: { route: string; file: string; navId: NavId | null }
   { route: "/channel/[code]", file: "src/app/channel/[code]/page.tsx", navId: "channel" },
   { route: "/audience-report/portfolio", file: "src/app/audience-report/portfolio/page.tsx", navId: "portfolio" },
   { route: "/audience-report/[channel]", file: "src/app/audience-report/[channel]/page.tsx", navId: "reports" },
+  { route: "/audience-report/view/[id]", file: "src/app/audience-report/view/[id]/page.tsx", navId: "reports" },
   { route: "/schedule-grid", file: "src/app/schedule-grid/page.tsx", navId: "compare" },
   { route: "/ideal-schedule", file: "src/app/ideal-schedule/page.tsx", navId: "ai" },
   { route: "/ideal-schedule/purchase", file: "src/app/ideal-schedule/purchase/page.tsx", navId: "content" },

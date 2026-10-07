@@ -32,7 +32,7 @@ function RibbonBody() {
 
   if (!actionId || !title) return null;
   const channelMatch = pathname.match(/^\/(?:channel|audience-report)\/([^/?#]+)/);
-  const { ctx } = parseViewContext((k) => sp.get(k), { channelFromPath: channelMatch && channelMatch[1] !== "portfolio" ? channelMatch[1] : null });
+  const { ctx } = parseViewContext((k) => sp.get(k), { channelFromPath: channelMatch && channelMatch[1] !== "portfolio" && channelMatch[1] !== "view" ? channelMatch[1] : null });
   const runId = sp.get("run");
   const needsReason = REASON_REQUIRED.includes(status);
   const homeHref = hrefFor("home", { ...ctx, view: "daily", date: sp.get("date") ?? ctx.date });

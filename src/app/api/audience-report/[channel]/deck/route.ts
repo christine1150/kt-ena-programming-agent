@@ -1,27 +1,19 @@
-// 2026-09-17(사용자 지시 — "P를 누르면 Powerpoint 상세버전 미리보기") — 채널별 상세 PPT
-// 미리보기 payload. 예전에는 6~9장짜리 임원 요약 덱(deckBuilder.ts)을 돌려줘서 미리보기와
-// 실제 다운로드(.pptx)가 서로 다른 문서였다 — 지금은 다운로드와 **같은 FlatReport·같은 슬라이드
-// 계획**을 그대로 돌려준다(/api/audience-report/[channel]/pptx와 동일한 입력).
-// 쿼리 파라미터 규약은 /api/audience-report/[channel]과 동일(parseRequest.ts 재사용).
+// 단계 14 — 스냅샷 기반 보고서 API(channel · deck). 웹·Word·PPT·PDF가 같은 스냅샷에서 나온다(snapshot=<ID>가 있으면 저장된 그 원본, 없으면 만들거나 방금 만든 것 재사용).
 import { NextResponse } from "next/server";
-import { getCurrentSession } from "@/lib/adminAuth";
-import { buildAudienceReport } from "@/lib/audienceReport/reportBuilder";
-import { parseAudienceReportRequest, AUDIENCE_REPORT_PARAM_ERROR } from "@/lib/audienceReport/parseRequest";
-import { flattenAudienceReport } from "@/lib/audienceReport/reportFlatten";
-import { buildPptPreviewPayload } from "@/lib/audienceReport/pptSlidePlan";
+import { requireSession, resolveSnapshot } from "@/lib/reportSnapshot/http";
+import { deckResponse, failResponse } from "@/lib/reportSnapshot/responses";
+
+export const maxDuration = 120;
 
 export async function GET(request: Request, { params }: { params: Promise<{ channel: string }> }) {
-  const session = await getCurrentSession();
-  if (!session) return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-
+  const denied = await requireSession();
+  if (denied) return denied;
   const { channel } = await params;
-  const reportRequest = parseAudienceReportRequest(new URL(request.url).searchParams);
-  if (!reportRequest) return NextResponse.json({ ok: false, message: AUDIENCE_REPORT_PARAM_ERROR }, { status: 400 });
-
   try {
-    const report = await buildAudienceReport(channel, reportRequest);
-    return NextResponse.json({ ok: true, preview: buildPptPreviewPayload(flattenAudienceReport(report)) });
+    const r = await resolveSnapshot(request, "channel", channel);
+    if (r instanceof NextResponse) return r;
+    return deckResponse(r.result);
   } catch (err) {
-    return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : "PPT 미리보기를 생성하지 못했습니다." }, { status: 500 });
+    return failResponse(err, "PPT 미리보기를 생성하지 못했습니다.");
   }
 }

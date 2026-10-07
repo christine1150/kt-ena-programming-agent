@@ -5,6 +5,7 @@ import { daysBetween } from "@/lib/workspace/dates";
 import type { AvailState } from "./context";
 import { buildEvalContext } from "./context";
 import type { Grant } from "./types";
+import { channelKey } from "./adapters/common";
 
 export interface ExpiringGrant {
   grantId: string;
@@ -40,10 +41,19 @@ const channelsOf = (g: Grant): string => {
   return "채널 미확인";
 };
 
-export function summarizeRightsForHome(state: AvailState, args: { today: string; windowDays?: number; tablesApplied?: boolean; max?: number }): RightsHomeSummary {
+/** channelCode를 주면 그 채널에서 쓸 수 있는 권리(전 채널 + 그 채널을 명시한 권리)만 센다. 채널 범위를 알 수 없는 권리는 세지 않고 노트로 알린다. */
+export function summarizeRightsForHome(state: AvailState, args: { today: string; windowDays?: number; tablesApplied?: boolean; max?: number; channelCode?: string }): RightsHomeSummary {
   const windowDays = args.windowDays ?? 60;
   const { ctx } = buildEvalContext(state, { now: `${args.today}T00:00:00+09:00` });
-  const active = ctx.grants.filter((g) => g.status === "active" && g.mergedInto === null);
+  const allActive = ctx.grants.filter((g) => g.status === "active" && g.mergedInto === null);
+  const wantKey = args.channelCode ? channelKey(args.channelCode) : null;
+  const inChannel = (g: Grant) => {
+    const c = g.scope.channels;
+    if (!wantKey || c.kind === "all") return true;
+    return c.kind === "list" && c.ids.some((i) => channelKey(i) === wantKey);
+  };
+  const active = allActive.filter(inChannel);
+  const unknownScope = wantKey ? allActive.filter((g) => g.scope.channels.kind === "unknown").length : 0;
   const expiring: ExpiringGrant[] = [];
   let endedStillListed = 0;
   let finite = 0;
@@ -64,6 +74,7 @@ export function summarizeRightsForHome(state: AvailState, args: { today: string;
   const notes: string[] = [];
   if (baselineUnknown > 0) notes.push(`방영 횟수 제한이 있는 권리 ${finite}건 중 ${baselineUnknown}건은 기소진(이미 방영한 횟수)을 몰라 잔여 횟수를 말할 수 없습니다.`);
   if (endedStillListed > 0) notes.push(`종료일이 지났는데 목록에 남은 권리가 ${endedStillListed}건 있습니다(갱신 여부 확인).`);
+  if (unknownScope > 0) notes.push(`채널 범위를 알 수 없는 권리 ${unknownScope}건은 이 채널 집계에서 제외했습니다(확인 필요).`);
   notes.push("종료일 당일 포함 여부 등 계약 해석은 권리 담당자 확인 전입니다.");
   return {
     tablesApplied: args.tablesApplied ?? true,

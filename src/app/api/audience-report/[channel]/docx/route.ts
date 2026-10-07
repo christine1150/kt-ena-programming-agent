@@ -1,32 +1,19 @@
-// N절 Phase 2a(2026-09-01) — Audience Intelligence Report Word(.docx) 다운로드.
-// 구 시스템(/api/report/channel/docx)에서 이식하되 구조를 바꿨다: 문서 내용을 이 라우트가
-// 직접 조립하지 않고, buildAudienceReport() → flattenAudienceReport() → renderReportDocx()로
-// 흐른다. 내용 결정은 reportFlatten.ts 한 곳뿐이라 Word/PPT가 갈라질 수 없다.
+// 단계 14 — 스냅샷 기반 보고서 API(channel · docx). 웹·Word·PPT·PDF가 같은 스냅샷에서 나온다(snapshot=<ID>가 있으면 저장된 그 원본, 없으면 만들거나 방금 만든 것 재사용).
 import { NextResponse } from "next/server";
-import { getCurrentSession } from "@/lib/adminAuth";
-import { buildAudienceReport } from "@/lib/audienceReport/reportBuilder";
-import { parseAudienceReportRequest, AUDIENCE_REPORT_PARAM_ERROR, reportContentDisposition } from "@/lib/audienceReport/parseRequest";
-import { flattenAudienceReport } from "@/lib/audienceReport/reportFlatten";
-import { renderReportDocx } from "@/lib/audienceReport/exportRenderers";
+import { requireSession, resolveSnapshot } from "@/lib/reportSnapshot/http";
+import { docxResponse, failResponse } from "@/lib/reportSnapshot/responses";
+
+export const maxDuration = 120;
 
 export async function GET(request: Request, { params }: { params: Promise<{ channel: string }> }) {
-  const session = await getCurrentSession();
-  if (!session) return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-
+  const denied = await requireSession();
+  if (denied) return denied;
   const { channel } = await params;
-  const reportRequest = parseAudienceReportRequest(new URL(request.url).searchParams);
-  if (!reportRequest) return NextResponse.json({ ok: false, message: AUDIENCE_REPORT_PARAM_ERROR }, { status: 400 });
-
   try {
-    const report = await buildAudienceReport(channel, reportRequest);
-    const buffer = await renderReportDocx(flattenAudienceReport(report));
-    return new NextResponse(new Uint8Array(buffer), {
-      headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": reportContentDisposition(report.channelCode, report.period.label, "docx"),
-      },
-    });
+    const r = await resolveSnapshot(request, "channel", channel);
+    if (r instanceof NextResponse) return r;
+    return await docxResponse(r.result);
   } catch (err) {
-    return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : "문서를 생성하지 못했습니다." }, { status: 500 });
+    return failResponse(err, "문서를 생성하지 못했습니다.");
   }
 }

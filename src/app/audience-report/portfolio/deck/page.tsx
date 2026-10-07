@@ -1,52 +1,31 @@
 "use client";
 
-// 2026-09-17(사용자 지시) — 종합 보고서의 **PPT 미리보기**. 채널 버전과 같은 구조이고,
-// 다루는 문서만 7개 채널 비교 분석(flattenPortfolioReport)이다. 이전에 있던 6~9장짜리 임원
-// 요약 덱은 제거했다 — 보고서는 채널(Word/PPT)·종합(Word/PPT) 4종뿐이다.
-import { Suspense, useEffect, useState } from "react";
+// 종합 보고서의 PPT 미리보기. 단계 14: 다운로드되는 .pptx와 같은 스냅샷·같은 슬라이드 계획(본문 최대 10장 + 부록)을 그대로 보여 준다.
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import type { PptPreviewPayload } from "@/lib/audienceReport/pptSlidePlan";
 import { PptPreview } from "@/components/audienceReport/pptPreview";
+import { ReportError, ReportLoading, periodQuery } from "@/components/audienceReport/useSnapshotReport";
+import { useDeckPlan } from "@/components/audienceReport/useDeckPlan";
 
 function PortfolioPptPreviewInner() {
   const searchParams = useSearchParams();
-  const [payload, setPayload] = useState<PptPreviewPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const snapshotParam = searchParams.get("snapshot");
+  const { state, retry } = useDeckPlan("/api/audience-report/portfolio/deck", snapshotParam ? `snapshot=${snapshotParam}` : periodQuery(searchParams));
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/audience-report/portfolio/deck?${searchParams.toString()}`);
-        const json = await res.json();
-        if (cancelled) return;
-        if (!json.ok) setError(json.message ?? "PPT 미리보기를 불러오지 못했습니다.");
-        else setPayload(json.preview);
-      } catch {
-        if (!cancelled) setError("PPT 미리보기를 불러오는 중 오류가 발생했습니다.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [searchParams]);
-
-  if (loading) return <div className="p-8 text-neutral-500">불러오는 중...</div>;
-  if (error) return <div className="p-8 text-rose-600">{error}</div>;
-  if (!payload) return null;
-
-  const qs = searchParams.toString();
+  if (state.status === "loading") return <ReportLoading what="PPT 미리보기" hint="저장된 보고서 원본에서 슬라이드를 구성하는 중입니다(원본이 없으면 새로 계산해 30초~1분 걸립니다)." />;
+  if (state.status === "error") return <ReportError message={state.message} onRetry={retry} />;
+  const { plan, snapshot } = state;
+  const id = snapshot.persisted ? snapshot.id : null;
+  const q = id ? `snapshot=${id}` : snapshotParam ? `snapshot=${snapshotParam}` : periodQuery(searchParams);
   return (
     <PptPreview
-      payload={payload}
-      pptxHref={`/api/audience-report/portfolio/pptx?${qs}`}
-      wordHref={`/audience-report/portfolio?${qs}`}
-      headerLabel="PPT 미리보기 · 종합 보고서(7채널 비교)"
+      payload={plan}
+      snapshot={snapshot}
+      pptxHref={`/api/audience-report/portfolio/pptx?${q}`}
+      wordHref={`/api/audience-report/portfolio/docx?${q}`}
+      viewHref={id ? `/audience-report/view/${id}` : `/audience-report/portfolio?${periodQuery(searchParams)}`}
+      reportHref={`/audience-report/portfolio?${periodQuery(searchParams)}`}
+      headerLabel="PPT 미리보기 · 종합 보고서(7채널)"
     />
   );
 }

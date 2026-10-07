@@ -14,7 +14,7 @@ import ActionRibbon from "./ActionRibbon";
 
 function channelFromPath(pathname: string): string | null {
   const m = pathname.match(/^\/(?:channel|audience-report)\/([^/?#]+)/);
-  return m && m[1] !== "portfolio" ? m[1] : null;
+  return m && m[1] !== "portfolio" && m[1] !== "view" ? m[1] : null;
 }
 
 function NavInner({ role }: { role: Role | null }) {

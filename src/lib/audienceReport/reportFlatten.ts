@@ -16,15 +16,55 @@ import type { AudienceReportDocument, Maybe, KpiCard, RecommendationSection } fr
 import { formatRating, formatPercent } from "./format";
 import { toGaejosik } from "./gaejosik";
 
+/**
+ * 표·KPI·차트가 무엇의 값인지(단계 14) — 단위·기간·타깃·출처를 블록에 붙여 웹·Word·PPT·PDF가 같은 캡션을 낸다.
+ * 값은 템플릿 단계(reportSnapshot/template.ts)가 섹션 종류와 스냅샷에서 채우므로 flatten은 건드리지 않는다.
+ */
+export interface BlockMeta {
+  unit?: string;
+  period?: string;
+  target?: string;
+  source?: string;
+  /** 잠정값·수신 미완료 등 이 블록의 값을 읽을 때 알아야 할 표시(본문 해당 위치에 그대로 나온다) */
+  flags?: string[];
+}
+
 export type DocBlock =
   | { kind: "text"; text: string }
-  | { kind: "kpi"; items: { label: string; value: string; delta: string | null; dir: "up" | "down" | "flat" }[] }
-  | { kind: "table"; headers: string[]; rows: string[][] }
+  | { kind: "kpi"; items: { label: string; value: string; delta: string | null; dir: "up" | "down" | "flat" }[]; meta?: BlockMeta }
+  | { kind: "table"; headers: string[]; rows: string[][]; meta?: BlockMeta }
   | { kind: "bullets"; items: string[] }
   /** 값이 원래 없는 경우의 사유 — 화면의 Maybe<T> 빈 상태를 문서에서도 똑같이 정직하게 남긴다. */
-  | { kind: "note"; text: string };
+  | { kind: "note"; text: string }
+  /** 가로 막대 차트 한 계열. 값이 null이면 막대를 그리지 않고 "—"로 표시한다(0으로 그리지 않음). */
+  | { kind: "chart"; title: string; categories: string[]; values: (number | null)[]; decimals: number; meta?: BlockMeta };
+
+/**
+ * 섹션의 안정적인 종류 — 제목은 번호가 다시 매겨지고 문구가 바뀔 수 있어 템플릿(일간/주간/월간)이
+ * 구분에 쓸 수 없다. 새 섹션을 만들면 여기에 키를 더해야 컴파일된다(분류 누락 방지).
+ */
+export type SectionKey =
+  // 채널 보고서 공통
+  | "ai_summary" | "rec_summary" | "rec_full" | "quality" | "kpi"
+  // 채널 · 하루
+  | "health" | "momentum" | "verdict" | "hourly" | "slot_dev" | "original" | "ena_live" | "audience" | "competitor" | "verify"
+  // 채널 · 시작~끝
+  | "range_summary" | "trend" | "heatmap" | "contribution" | "composition" | "best_worst" | "structural"
+  // 채널 · 기간 비교
+  | "change_summary" | "kpi_compare" | "change_breakdown" | "hour_shift" | "audience_shift" | "sched_diff" | "rating_share"
+  // 채널 · 누적
+  | "position" | "matrix" | "breakdown" | "turning" | "top_contrib" | "daypart" | "fit_portfolio" | "strategic"
+  // 채널 · 심층·교차
+  | "deep_notice" | "deep_efficiency" | "deep_lowslot" | "deep_prime" | "deep_profile" | "deep_canvas" | "deep_rerun" | "deep_firstrun"
+  | "target_hourly" | "program_target" | "competitor_changes" | "weekday_flow"
+  // 종합
+  | "exec_decisions" | "one_liner" | "policies" | "concentration" | "prime_compare" | "peer_a" | "peer_b" | "pipeline"
+  | "common_pattern" | "opportunities" | "slot_overlap" | "skyuhd" | "rights" | "top_actions"
+  // 템플릿 단계에서 만드는 섹션(flatten이 만들지 않음)
+  | "assumptions" | "method_notes" | "channel_policy" | "channel_rights" | "purchase_review";
 
 export interface DocSection {
+  key: SectionKey;
   title: string;
   blocks: DocBlock[];
 }
@@ -88,7 +128,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   const body = doc.body;
 
   if (doc.aiSummary) {
-    sections.push({ title: "AI Executive Summary", blocks: [{ kind: "text", text: doc.aiSummary }] });
+    sections.push({ key: "ai_summary", title: "AI Executive Summary", blocks: [{ kind: "text", text: doc.aiSummary }] });
   }
 
   // 사용자 지시(2026-09-18) — 임원이 앞부분만 보고 넘어가도 실제 액션(편성 제언)이 보이도록,
@@ -100,7 +140,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     const top = rec.recommendations.slice(0, 3);
     if (top.length > 0) {
       sections.push({
-        title: `${rec.title} — 요약`,
+        key: "rec_summary", title: `${rec.title} — 요약`,
         blocks: [
           { kind: "note", text: referenceWindowNotice(rec) },
           { kind: "bullets", items: top.map(recommendationLine) },
@@ -116,7 +156,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     if (s.healthScore.available) {
       const h = s.healthScore.data;
       sections.push({
-        title: "Health Score",
+        key: "health", title: "Health Score",
         blocks: [
           { kind: "text", text: `${h.label} · ${h.score}점` },
           { kind: "bullets", items: h.axes.map((a) => `${a.label}: ${a.reason}`) },
@@ -125,7 +165,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     }
     if (s.programMomentum.available) {
       sections.push({
-        title: "Program Momentum",
+        key: "momentum", title: "Program Momentum",
         blocks: [
           {
             kind: "table",
@@ -135,10 +175,10 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
         ],
       });
     }
-    sections.push({ title: "01 한 줄 판정", blocks: [{ kind: "text", text: s.verdict.label }] });
-    sections.push({ title: "02 그날의 숫자", blocks: [kpiBlock(s.kpiCards)] });
+    sections.push({ key: "verdict", title: "01 한 줄 판정", blocks: [{ kind: "text", text: s.verdict.label }] });
+    sections.push({ key: "kpi", title: "02 그날의 숫자", blocks: [kpiBlock(s.kpiCards)] });
     sections.push({
-      title: "03 시간대 프로파일",
+      key: "hourly", title: "03 시간대 프로파일",
       blocks: fromMaybe(s.hourlyProfile, (d) => [
         {
           kind: "table",
@@ -148,7 +188,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
       ]),
     });
     sections.push({
-      title: "04 그날의 프로그램(슬롯 평소 수준 대비)",
+      key: "slot_dev", title: "04 그날의 프로그램(슬롯 평소 수준 대비)",
       blocks: fromMaybe(s.programsBySlotDeviation, (d) => [
         { kind: "text", text: "평소보다 높았던 시간대" },
         { kind: "table", headers: ["시간", "프로그램", "시청률", "기준선", "편차"], rows: d.top.map((r) => [`${r.hour}시`, r.programNames, formatRating(r.todayRating, code), formatRating(r.baselineRating, code), pct(r.deviationPct)]) },
@@ -156,38 +196,38 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
         { kind: "table", headers: ["시간", "프로그램", "시청률", "기준선", "편차"], rows: d.bottom.map((r) => [`${r.hour}시`, r.programNames, formatRating(r.todayRating, code), formatRating(r.baselineRating, code), pct(r.deviationPct)]) },
       ]),
     });
-    sections.push({ title: "05 오리지널·독점 리뷰", blocks: fromMaybe(s.originalReview, (d) => [{ kind: "bullets", items: d.works.map((w) => `${w.canonicalName} (${w.category})`) }]) });
+    sections.push({ key: "original", title: "05 오리지널·독점 리뷰", blocks: fromMaybe(s.originalReview, (d) => [{ kind: "bullets", items: d.works.map((w) => `${w.canonicalName} (${w.category})`) }]) });
     sections.push({
-      title: "06 ENA 본방송 실적",
+      key: "ena_live", title: "06 ENA 본방송 실적",
       blocks: fromMaybe(s.enaLiveAiring, (d) => [
         { kind: "bullets", items: [`프로그램: ${d.programName ?? "—"}`, `본방 Rating: ${formatRating(d.matchedRating, code)}`, `본방 Share: ${formatPercent(d.matchedShare)}`, `가구 시청률: ${formatRating(d.matchedHouseholdRating, code)}`] },
       ]),
     });
-    sections.push({ title: "07 타깃 반응", blocks: fromMaybe(s.audienceReaction, (rows) => [{ kind: "table", headers: ["연령대", "시청률", "등락"], rows: rows.map((r) => [r.targetLabel, formatRating(r.value, code), pct(r.deltaPct)]) }]) });
+    sections.push({ key: "audience", title: "07 타깃 반응", blocks: fromMaybe(s.audienceReaction, (rows) => [{ kind: "table", headers: ["연령대", "시청률", "등락"], rows: rows.map((r) => [r.targetLabel, formatRating(r.value, code), pct(r.deltaPct)]) }]) });
     sections.push({
-      title: "08 동시간대 경쟁",
+      key: "competitor", title: "08 동시간대 경쟁",
       blocks: fromMaybe(s.competitorSameSlot, (rows) => [
         { kind: "table", headers: ["경쟁채널", "순위", "시청률", "대표 프로그램"], rows: rows.map((r) => [r.competitorName, r.todayRank !== null ? `${r.todayRank}위` : "—", formatRating(r.todayRating, code), r.topProgramName ?? "—"]) },
       ]),
     });
-    sections.push({ title: "09 확인해야 할 것", blocks: [{ kind: "bullets", items: s.thingsToVerify }] });
+    sections.push({ key: "verify", title: "09 확인해야 할 것", blocks: [{ kind: "bullets", items: s.thingsToVerify }] });
   } else if (body.mode === "range") {
     const s = body.sections;
-    sections.push({ title: "01 기간 요약", blocks: [{ kind: "text", text: `기간 평균 ${formatRating(s.summary.avgRating, code)} — 흐름은 ${s.summary.shape} 형태였습니다.` }] });
-    sections.push({ title: "02 기간 스코어카드", blocks: [kpiBlock(s.kpiCards)] });
+    sections.push({ key: "range_summary", title: "01 기간 요약", blocks: [{ kind: "text", text: `기간 평균 ${formatRating(s.summary.avgRating, code)} — 흐름은 ${s.summary.shape} 형태였습니다.` }] });
+    sections.push({ key: "kpi", title: "02 기간 스코어카드", blocks: [kpiBlock(s.kpiCards)] });
     sections.push({
-      title: "03 일자별 추이",
+      key: "trend", title: "03 일자별 추이",
       blocks: [{ kind: "table", headers: ["일자", "시청률", "7일 이동평균"], rows: s.dailyTrend.points.map((p) => [p.date, formatRating(p.rating, code), formatRating(p.movingAvg, code)]) }],
     });
     sections.push({
-      title: "04 요일 × 시간대",
+      key: "heatmap", title: "04 요일 × 시간대",
       blocks: fromMaybe(s.weekdayHourHeatmap, (d) => [
         { kind: "table", headers: ["요일", "시간대", "평균 시청률", "표본"], rows: d.cells.map((c) => [c.dowLabel, `${c.hourBlock}시`, formatRating(c.avgRating, code), String(c.sampleCount)]) },
       ]),
     });
-    sections.push({ title: "05 오리지널·독점 리뷰", blocks: fromMaybe(s.originalReview, (d) => [{ kind: "bullets", items: d.works.map((w) => `${w.canonicalName} (${w.category})`) }]) });
+    sections.push({ key: "original", title: "05 오리지널·독점 리뷰", blocks: fromMaybe(s.originalReview, (d) => [{ kind: "bullets", items: d.works.map((w) => `${w.canonicalName} (${w.category})`) }]) });
     sections.push({
-      title: "07 프로그램 기여도",
+      key: "contribution", title: "07 프로그램 기여도",
       blocks: fromMaybe(s.programContribution, (d) => [
         { kind: "text", text: "채널 평균을 끌어올린 프로그램" },
         { kind: "table", headers: ["프로그램", "기간 평균", "직전 평균", "변화"], rows: d.growth.map((m) => [m.canonicalName, formatRating(m.periodAvgRating, code), formatRating(m.priorAvgRating, code), num(m.ratingDelta, 4)]) },
@@ -195,9 +235,9 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
         { kind: "table", headers: ["프로그램", "기간 평균", "직전 평균", "변화"], rows: d.weakness.map((m) => [m.canonicalName, formatRating(m.periodAvgRating, code), formatRating(m.priorAvgRating, code), num(m.ratingDelta, 4)]) },
       ]),
     });
-    sections.push({ title: "08 타깃 구성", blocks: fromMaybe(s.audienceComposition, (rows) => [{ kind: "table", headers: ["연령대", "시청률", "등락"], rows: rows.map((r) => [r.targetLabel, formatRating(r.value, code), pct(r.deltaPct)]) }]) });
+    sections.push({ key: "composition", title: "08 타깃 구성", blocks: fromMaybe(s.audienceComposition, (rows) => [{ kind: "table", headers: ["연령대", "시청률", "등락"], rows: rows.map((r) => [r.targetLabel, formatRating(r.value, code), pct(r.deltaPct)]) }]) });
     sections.push({
-      title: "09 최고일 · 최저일 해부",
+      key: "best_worst", title: "09 최고일 · 최저일 해부",
       blocks: fromMaybe(s.bestWorstDay, (d) => {
         const out: DocBlock[] = [];
         if (d.best) out.push({ kind: "bullets", items: [`최고일 ${d.best.date} — ${formatRating(d.best.rating, code)}`, `편성: ${d.best.programNames.join(", ") || "—"}`] });
@@ -205,38 +245,38 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
         return out.length > 0 ? out : [{ kind: "note", text: "최고일·최저일을 특정할 수 없습니다" }];
       }),
     });
-    sections.push({ title: "10 일시적 vs 구조적", blocks: [{ kind: "text", text: s.structuralVerdict.label }] });
+    sections.push({ key: "structural", title: "10 일시적 vs 구조적", blocks: [{ kind: "text", text: s.structuralVerdict.label }] });
   } else if (body.mode === "compare") {
     const s = body.sections;
     sections.push({
-      title: "01 변화 요약",
+      key: "change_summary", title: "01 변화 요약",
       blocks: [
         { kind: "text", text: `방향: ${s.changeSummary.direction === "up" ? "상승" : s.changeSummary.direction === "down" ? "하락" : "변화 없음"} ${s.changeSummary.magnitude !== null ? `(${pct(s.changeSummary.magnitude)})` : ""}${s.changeSummary.topContributor ? ` · 가장 크게 움직인 프로그램: ${s.changeSummary.topContributor}` : ""}` },
         ...(s.changeSummary.lengthMismatchNote ? ([{ kind: "note", text: s.changeSummary.lengthMismatchNote }] as DocBlock[]) : []),
       ],
     });
     sections.push({
-      title: "02 KPI 대조표",
+      key: "kpi_compare", title: "02 KPI 대조표",
       blocks: [{ kind: "table", headers: ["지표", "기간 A", "기간 B", "% 변화"], rows: s.kpiCompareTable.rows.map((r) => [r.label, r.formattedA, r.formattedB, pct(r.pctChange)]) }],
     });
     sections.push({
-      title: "03 변화 분해(신규/종영/유지)",
+      key: "change_breakdown", title: "03 변화 분해(신규/종영/유지)",
       blocks: [{ kind: "table", headers: ["프로그램", "구분", "기간 A", "기간 B", "변화"], rows: s.changeBreakdown.slice(0, 20).map((r) => [r.canonicalName, r.kind, formatRating(r.periodAvgRating, code), formatRating(r.priorAvgRating, code), num(r.ratingDelta, 4)]) }],
     });
     sections.push({
-      title: "05 시간대 이동",
+      key: "hour_shift", title: "05 시간대 이동",
       blocks: [{ kind: "table", headers: ["시간대", "기간 A", "기간 B", "델타"], rows: s.hourBlockShift.rows.map((r) => [`${r.hourBlock}시`, formatRating(r.periodA, code), formatRating(r.periodB, code), num(r.delta, 4)]) }],
     });
-    sections.push({ title: "06 타깃 이동", blocks: fromMaybe(s.audienceShift, (rows) => [{ kind: "table", headers: ["연령대", "기간 A", "기간 B", "델타"], rows: rows.map((r) => [r.label, formatRating(r.periodA, code), formatRating(r.periodB, code), num(r.delta, 4)]) }]) });
+    sections.push({ key: "audience_shift", title: "06 타깃 이동", blocks: fromMaybe(s.audienceShift, (rows) => [{ kind: "table", headers: ["연령대", "기간 A", "기간 B", "델타"], rows: rows.map((r) => [r.label, formatRating(r.periodA, code), formatRating(r.periodB, code), num(r.delta, 4)]) }]) });
     sections.push({
-      title: "07 편성 자체의 차이",
+      key: "sched_diff", title: "07 편성 자체의 차이",
       blocks: [{ kind: "bullets", items: [`신규 편성: ${s.schedulingDifference.newPrograms.join(", ") || "없음"}`, `종영: ${s.schedulingDifference.endedPrograms.join(", ") || "없음"}`] }],
     });
-    if (s.ratingShareSplit.note) sections.push({ title: "08 Rating/Share 분리 해석", blocks: [{ kind: "note", text: s.ratingShareSplit.note }] });
+    if (s.ratingShareSplit.note) sections.push({ key: "rating_share", title: "08 Rating/Share 분리 해석", blocks: [{ kind: "note", text: s.ratingShareSplit.note }] });
   } else {
     const s = body.sections;
     sections.push({
-      title: "01 현재 위치",
+      key: "position", title: "01 현재 위치",
       blocks: [
         {
           kind: "bullets",
@@ -248,23 +288,23 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
         },
       ],
     });
-    sections.push({ title: "02 누적 스코어카드", blocks: [kpiBlock(s.kpiCards)] });
+    sections.push({ key: "kpi", title: "02 누적 스코어카드", blocks: [kpiBlock(s.kpiCards)] });
     sections.push({
-      title: "04 주기 비교 매트릭스",
+      key: "matrix", title: "04 주기 비교 매트릭스",
       blocks: [{ kind: "table", headers: ["구분", "이번", "직전", "변화"], rows: s.comparisonMatrix.rows.map((r) => [r.label, formatRating(r.currentAvg, code), formatRating(r.priorAvg, code), pct(r.changePct)]) }],
     });
     if (s.breakdown.rows.length > 0) {
-      sections.push({ title: "05 구간 분해", blocks: [{ kind: "table", headers: ["구간", "평균 시청률", "표본일수"], rows: s.breakdown.rows.map((r) => [r.label, formatRating(r.avgRating, code), String(r.daysWithData)]) }] });
+      sections.push({ key: "breakdown", title: "05 구간 분해", blocks: [{ kind: "table", headers: ["구간", "평균 시청률", "표본일수"], rows: s.breakdown.rows.map((r) => [r.label, formatRating(r.avgRating, code), String(r.daysWithData)]) }] });
     }
     sections.push({
-      title: "07 변곡점",
+      key: "turning", title: "07 변곡점",
       blocks:
         s.turningPoints.length > 0
           ? [{ kind: "table", headers: ["시점", "방향", "등락률", "이전 → 이후"], rows: s.turningPoints.map((t) => [t.periodStart, t.direction === "up" ? "상승" : "하락", pct(t.changePct), `${formatRating(t.fromRating, code)} → ${formatRating(t.toRating, code)}`]) }]
           : [{ kind: "note", text: "임계값(±15%) 이상의 변곡점이 관찰되지 않았습니다" }],
     });
     sections.push({
-      title: "08 기간 평균 상위(편성 횟수 반영, 시간가중 분해 아님)",
+      key: "top_contrib", title: "08 기간 평균 상위(편성 횟수 반영, 시간가중 분해 아님)",
       blocks:
         s.topContributors.length > 0
           ? [{ kind: "table", headers: ["프로그램", "기간 평균", "방영 횟수"], rows: s.topContributors.map((m) => [m.canonicalName, formatRating(m.periodAvgRating, code), String(m.periodAirCount ?? "—")]) }]
@@ -273,7 +313,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     // N절 Phase 2b(2026-09-01) — §06 번호 순서 밖.
     if (s.daypartWinWeakness.win || s.daypartWinWeakness.weakness) {
       sections.push({
-        title: "시간대(daypart) Win/Weakness",
+        key: "daypart", title: "시간대(daypart) Win/Weakness",
         blocks: [
           { kind: "text", text: s.daypartWinWeakness.win ? `Win: ${s.daypartWinWeakness.win.daypartLabel} (${pct(s.daypartWinWeakness.win.gapChange)})` : "Win: 자료 없음" },
           { kind: "text", text: s.daypartWinWeakness.weakness ? `Weakness: ${s.daypartWinWeakness.weakness.daypartLabel} (${pct(s.daypartWinWeakness.weakness.gapChange)})` : "Weakness: 자료 없음" },
@@ -281,7 +321,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
       });
     }
     sections.push({
-      title: "Program Portfolio(Fit Score)",
+      key: "fit_portfolio", title: "Program Portfolio(Fit Score)",
       blocks: fromMaybe(s.programPortfolio, (d) => [
         { kind: "text", text: "STRENGTHEN/KEEP" },
         { kind: "bullets", items: d.strong.map((f) => `${f.canonicalName ?? "이름 없음"} — Fit ${f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}`) },
@@ -290,7 +330,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
       ]),
     });
     if (s.strategicImplications) {
-      sections.push({ title: "Strategic Implications", blocks: [{ kind: "text", text: s.strategicImplications }] });
+      sections.push({ key: "strategic", title: "Strategic Implications", blocks: [{ kind: "text", text: s.strategicImplications }] });
     }
   }
 
@@ -315,10 +355,10 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
           : " 기간 내 공휴일은 포함되지 않음."),
     },
   ];
-  sections.push({ title: "심층 분석 — 분석 기준", blocks: noticeBlocks });
+  sections.push({ key: "deep_notice", title: "심층 분석 — 분석 기준", blocks: noticeBlocks });
 
   sections.push({
-    title: "심층 01 회당 성과가 높은 프로그램",
+    key: "deep_efficiency", title: "심층 01 회당 성과가 높은 프로그램",
     blocks: fromMaybe(deep.efficiencyRanking, (d) => {
       const c = cut(d.rows);
       return [
@@ -342,7 +382,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   });
 
   sections.push({
-    title: "심층 01b 저시청 시간대(02~08시) 주목 콘텐츠",
+    key: "deep_lowslot", title: "심층 01b 저시청 시간대(02~08시) 주목 콘텐츠",
     blocks: fromMaybe(deep.lowSlotStandouts, (d) => [
       { kind: "text", text: "채널 평균이 아니라 그 프로그램이 놓인 시간대의 채널 평균과 비교한 값입니다. 100%를 넘으면 같은 시간대 평균을 상회합니다." },
       {
@@ -362,7 +402,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   });
 
   sections.push({
-    title: "심층 02 주요시간이 만든 차이",
+    key: "deep_prime", title: "심층 02 주요시간이 만든 차이",
     blocks: fromMaybe(deep.primeGap, (d) => [
       {
         kind: "text",
@@ -384,7 +424,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   });
 
   sections.push({
-    title: "심층 03 프로그램별 시간대·타깃 프로파일",
+    key: "deep_profile", title: "심층 03 프로그램별 시간대·타깃 프로파일",
     blocks: fromMaybe(deep.programProfiles, (d) => {
       const c = cut(d.programs);
       return [
@@ -406,7 +446,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   });
 
   sections.push({
-    title: "심층 04 요일 × 시간대 편성 배분과 성과",
+    key: "deep_canvas", title: "심층 04 요일 × 시간대 편성 배분과 성과",
     blocks: fromMaybe(deep.scheduleCanvas, (d) => {
       const blocks: DocBlock[] = [
         {
@@ -437,7 +477,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   });
 
   sections.push({
-    title: "심층 05 오리지널 본방·재방 확산",
+    key: "deep_rerun", title: "심층 05 오리지널 본방·재방 확산",
     blocks: fromMaybe(deep.originalRerun, (rows) => [
       { kind: "text", text: "확산 배수는 본방일부터 1주일 내 방영분(본방·동시방영·재방 채널)의 시청률 합산을 본방 합산으로 나눈 값입니다. 1.0이면 재방 기여가 없다는 뜻입니다." },
       {
@@ -459,7 +499,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   });
 
   sections.push({
-    title: "심층 06 본방(태그·등록 슬롯) vs 본방 외 효율",
+    key: "deep_firstrun", title: "심층 06 본방(태그·등록 슬롯) vs 본방 외 효율",
     blocks: fromMaybe(deep.firstRunEfficiency, (rows) => [
       {
         kind: "text",
@@ -484,7 +524,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   // Phase 12 공통 섹션(4개 모드 전부 같은 모양) — §06 번호 밖.
   const cross = body.sections;
   sections.push({
-    title: "타깃 × 시간대",
+    key: "target_hourly", title: "타깃 × 시간대",
     blocks: fromMaybe(cross.targetHourlyPattern, (d) => [
       // 사용자 지시(2026-09-01, "연령대별... 종합적인 분석을 모두"): 상위 6개만 요약하던 것을
       // 전체 연령대(최대 12개)로 넓혀 어느 연령대가 어느 시간대에 몰리는지 빠짐없이 보여준다.
@@ -492,7 +532,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     ]),
   });
   sections.push({
-    title: "프로그램 × 타깃",
+    key: "program_target", title: "프로그램 × 타깃",
     blocks: fromMaybe(cross.programAudienceCross, (rows) => [
       // 사용자 지시(2026-09-01, "프로그램별... 시청시간... 종합적인 분석을 모두"): 지표에
       // rating뿐 아니라 share/reach/time_spent_seconds/time_spent_share(시청시간)도 이미
@@ -501,7 +541,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     ]),
   });
   sections.push({
-    title: "경쟁채널 편성 변화 이력",
+    key: "competitor_changes", title: "경쟁채널 편성 변화 이력",
     blocks: fromMaybe(cross.competitorScheduleChanges, (groups) => [
       { kind: "table", headers: ["경쟁채널", "시간대", "평소 편성", "변경 횟수", "새로 관찰된 편성"], rows: groups.slice(0, 25).map((g) => [g.competitorName, `${g.hourBlock}시`, g.usualProgram ?? "확인 불가", `${g.changeCount}회`, g.observedPrograms.join(", ")]) },
     ]),
@@ -519,7 +559,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
       const weekdayAvg = avg(weekdayVals);
       const weekendAvg = avg(weekendVals);
       sections.push({
-        title: "요일별 · 주중 vs 주말",
+        key: "weekday_flow", title: "요일별 · 주중 vs 주말",
         blocks: [
           { kind: "table", headers: ["요일", "평균 시청률"], rows: flow.map((w) => [w.dowLabel, formatRating(w.avgRating, code)]) },
           { kind: "text", text: `주중(월~금) 평균 ${formatRating(weekdayAvg, code)}, 주말(토·일) 평균 ${formatRating(weekendAvg, code)}` },
@@ -532,7 +572,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   // referenceWindowNotice 고지 문장을 그대로 재사용한다.
   const rec = doc.recommendation;
   sections.push({
-    title: rec.title,
+    key: "rec_full", title: rec.title,
     blocks: [
       { kind: "note", text: referenceWindowNotice(rec) },
       { kind: "text", text: `참조 구간: ${rec.referenceWindow.dateFrom} ~ ${rec.referenceWindow.dateTo}` },
@@ -544,7 +584,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
 
   // 자체 검산에서 걸린 항목이 있으면 문서에도 남긴다(화면과 동일한 투명성 원칙).
   if (doc.qualityIssues.length > 0) {
-    sections.push({ title: "데이터 확인 사항", blocks: [{ kind: "bullets", items: doc.qualityIssues.map((i) => `[${i.severity}] ${i.message}`) }] });
+    sections.push({ key: "quality", title: "데이터 확인 사항", blocks: [{ kind: "bullets", items: doc.qualityIssues.map((i) => `[${i.severity}] ${i.message}`) }] });
   }
 
   return applyGaejosik({
@@ -558,6 +598,11 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
 // 기존 섹션 제목에 붙어 있던 번호 접두어 — "01 ", "심층 01 ", "심층 01b " 세 형태를 모두 잡는다.
 // "심층 분석 — 분석 기준"처럼 "심층" 뒤에 숫자가 아니라 글자가 오는 제목은 매치되지 않는다.
 const SECTION_NUMBER_PREFIX_RE = /^(?:심층\s+)?\d{1,3}[a-z]?\s+/;
+
+/** 섹션 제목 앞의 순번("01 ", "심층 01b ")을 걷어낸 제목 — 본문·부록을 따로 번호 매기는 템플릿(단계 14)이 쓴다. */
+export function stripSectionNumber(title: string): string {
+  return title.replace(SECTION_NUMBER_PREFIX_RE, "");
+}
 
 /**
  * 사용자 지시(2026-09-18) — 섹션 제목이 모드 전용(01~10) / 심층(심층 01~06) / 번호 없음(공통
@@ -594,6 +639,7 @@ export function applyGaejosik(flat: FlatReport): FlatReport {
       case "table":
         return { ...b, rows: b.rows.map((r) => r.map(toGaejosik)) };
       case "kpi":
+      case "chart":
         return b;
     }
   };

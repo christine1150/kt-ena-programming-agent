@@ -1,58 +1,34 @@
 "use client";
 
-// 2026-09-17(사용자 지시) — 채널 리포트의 **PPT 미리보기**. 2페이지 헤더의 P 버튼이 이 경로로
-// 들어온다. 이전에는 여기에 6~9장짜리 임원 요약 덱이 떴는데, 사용자가 요구한 보고서 구성은
-// 채널(Word/PPT)·종합(Word/PPT) 4종뿐이므로 요약 덱을 없애고 **다운로드되는 상세 .pptx와 같은
-// 내용**을 그대로 보여준다.
-//
-// 화면 자체는 서버가 만든 슬라이드 계획(pptSlidePlan.ts)을 PptPreview 컴포넌트가 그린다 —
-// 이 페이지는 데이터를 받아 넘기는 일만 한다. 채널·종합 두 미리보기가 같은 컴포넌트를 쓴다.
-import { Suspense, useEffect, useState } from "react";
+// 채널 보고서의 PPT 미리보기. 단계 14: 다운로드되는 .pptx와 같은 스냅샷·같은 슬라이드 계획(deckPlan.ts)을 그대로 보여 준다.
+// 주소에 snapshot=<ID>가 있으면 저장된 그 원본을, 없으면 기간 파라미터로 만들거나 방금 만든 것을 쓴다.
+import { Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import type { PptPreviewPayload } from "@/lib/audienceReport/pptSlidePlan";
 import { PptPreview } from "@/components/audienceReport/pptPreview";
+import { ReportError, ReportLoading, periodQuery } from "@/components/audienceReport/useSnapshotReport";
+import { useDeckPlan } from "@/components/audienceReport/useDeckPlan";
 
 function ChannelPptPreviewInner() {
   const params = useParams<{ channel: string }>();
   const searchParams = useSearchParams();
-  const [payload, setPayload] = useState<PptPreviewPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const snapshotParam = searchParams.get("snapshot");
+  const { state, retry } = useDeckPlan(`/api/audience-report/${params.channel}/deck`, snapshotParam ? `snapshot=${snapshotParam}` : periodQuery(searchParams));
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/audience-report/${params.channel}/deck?${searchParams.toString()}`);
-        const json = await res.json();
-        if (cancelled) return;
-        if (!json.ok) setError(json.message ?? "PPT 미리보기를 불러오지 못했습니다.");
-        else setPayload(json.preview);
-      } catch {
-        if (!cancelled) setError("PPT 미리보기를 불러오는 중 오류가 발생했습니다.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [params.channel, searchParams]);
-
-  if (loading) return <div className="p-8 text-neutral-500">불러오는 중...</div>;
-  if (error) return <div className="p-8 text-rose-600">{error}</div>;
-  if (!payload) return null;
-
-  const qs = searchParams.toString();
+  if (state.status === "loading") return <ReportLoading what="PPT 미리보기" hint="저장된 보고서 원본에서 슬라이드를 구성하는 중입니다(원본이 없으면 새로 계산해 30초~1분 걸립니다)." />;
+  if (state.status === "error") return <ReportError message={state.message} onRetry={retry} />;
+  const { plan, snapshot } = state;
+  // 이후 모든 링크는 이 스냅샷 ID로 — 미리보기에서 본 것과 받은 파일이 같은 원본이다.
+  const id = snapshot.persisted ? snapshot.id : null;
+  const q = id ? `snapshot=${id}` : snapshotParam ? `snapshot=${snapshotParam}` : periodQuery(searchParams);
   return (
     <PptPreview
-      payload={payload}
-      // 이 미리보기의 형식 그대로 — PPT 미리보기에서는 .pptx만 받는다(2026-09-17 사용자 지시).
-      pptxHref={`/api/audience-report/${params.channel}/pptx?${qs}`}
-      wordHref={`/audience-report/${params.channel}?${qs}`}
-      headerLabel="PPT 미리보기 · 채널 리포트"
+      payload={plan}
+      snapshot={snapshot}
+      pptxHref={`/api/audience-report/${params.channel}/pptx?${q}`}
+      wordHref={`/api/audience-report/${params.channel}/docx?${q}`}
+      viewHref={id ? `/audience-report/view/${id}` : `/audience-report/${params.channel}?${periodQuery(searchParams)}`}
+      reportHref={`/audience-report/${params.channel}?${periodQuery(searchParams)}`}
+      headerLabel="PPT 미리보기 · 채널 보고서"
     />
   );
 }

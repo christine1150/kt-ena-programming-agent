@@ -52,3 +52,13 @@ export function reportContentDisposition(channelCode: string, periodLabel: strin
   const asciiName = `${asciiBase || channelCode}.${ext}`;
   return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(utf8Name)}`;
 }
+
+/**
+ * 스냅샷 기반 다운로드의 Content-Disposition(단계 14). ASCII 폴백은 파일명 줄기(채널·용도·기간·스냅샷 ID),
+ * UTF-8 원본은 사람이 읽는 한글 이름 + 스냅샷 ID라 같은 날짜의 일간·주간 파일이 한눈에 구분된다.
+ */
+export function snapshotContentDisposition(snap: { name: string; id: string; fileStem: string }, ext: "docx" | "pptx" | "pdf"): string {
+  const safe = snap.name.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+  const utf8Name = `${safe}_${snap.id}.${ext}`;
+  return `attachment; filename="${snap.fileStem}.${ext}"; filename*=UTF-8''${encodeURIComponent(utf8Name)}`;
+}

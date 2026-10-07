@@ -3,6 +3,7 @@
 // "종합 보고서"에도 실제 다운로드 가능한 워드/PPT를 요구해 이 파일로 채운다. 렌더러(docx/pptx)는
 // exportRenderers.ts의 FlatReport 기반 함수를 그대로 재사용한다(새 렌더러 없음).
 import type { PortfolioReportDocument } from "./portfolioModel";
+import type { RightsHomeSummary } from "@/lib/avail/homeSummary";
 import type { DocSection, DocBlock, FlatReport } from "./reportFlatten";
 import { applyGaejosik } from "./reportFlatten";
 import { formatRating } from "./format";
@@ -12,16 +13,31 @@ function pct(v: number | null | undefined): string {
   return v === null || v === undefined ? "—" : `${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(1)}%`;
 }
 
+/**
+ * Avail 권리 만료·소진 블록(종합 08b, 월간 채널 보고서의 권리 섹션이 함께 쓴다). 읽지 못함·저장소 미적용·미입력은
+ * 정상 결과이며 "문제 없음"으로 바꾸지 않는다.
+ */
+export function rightsBlocksOf(r: RightsHomeSummary | null): DocBlock[] {
+  if (!r) return [{ kind: "note", text: "권리 정보를 읽지 못했습니다(문제 없음이 아니라 확인하지 못함)." }];
+  if (!r.tablesApplied) return [{ kind: "note", text: "권리(Avail) 저장소가 아직 적용되지 않아 만료·소진 현황을 표시할 수 없습니다." }];
+  if (!r.configured) return [{ kind: "note", text: "권리 정보가 입력되지 않았습니다. 입력 전에는 만료·소진을 판단할 수 없습니다." }];
+  return [
+    { kind: "text", text: `${r.windowDays}일 안에 종료되는 권리 ${r.expiringTotal}건${r.endedStillListed > 0 ? ` · 종료일이 지났는데 남은 권리 ${r.endedStillListed}건` : ""}` },
+    ...(r.expiring.length > 0 ? [{ kind: "table" as const, headers: ["콘텐츠", "채널", "종료일", "남은 일수"], rows: r.expiring.map((e) => [e.title, e.channels, e.end, e.daysLeft === 0 ? "오늘" : `${e.daysLeft}일`]) }] : []),
+    { kind: "bullets", items: [...r.notes, "채널 간 공유 풀의 동시 소진은 계약 해석 확인 전이라 이 문서에서 판단하지 않습니다(조건부)."] },
+  ];
+}
+
 export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport {
   const sections: DocSection[] = [];
 
-  if (doc.aiSummary) sections.push({ title: "AI Executive Summary", blocks: [{ kind: "text", text: doc.aiSummary }] });
+  if (doc.aiSummary) sections.push({ key: "ai_summary", title: "AI Executive Summary", blocks: [{ kind: "text", text: doc.aiSummary }] });
 
   // 단계 09 — 임원 핵심 결정(채널별 TOP ACTIONS의 긴급 신호에서 파생, 새 점수 체계 없음). 제목이 ' — 요약'으로 끝나 PPT 앞머리에 고정 배치된다.
   if (doc.executiveDecisions) {
     const d = doc.executiveDecisions;
     sections.push({
-      title: "임원 핵심 결정 — 요약",
+      key: "exec_decisions", title: "임원 핵심 결정 — 요약",
       blocks:
         d.length > 0
           ? [
@@ -43,7 +59,7 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
   }
 
   sections.push({
-    title: "01 포트폴리오 한 줄",
+    key: "one_liner", title: "01 포트폴리오 한 줄",
     blocks: [
       { kind: "bullets", items: [`Group A: ${doc.groupA.oneLiner}`, `Group B: ${doc.groupB.oneLiner}`] },
       { kind: "note", text: `그룹 지표 정의 — ${GROUP_METRIC_METHOD}` },
@@ -53,7 +69,7 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
   // 단계 09 — 채널 역할·핵심 타깃·목표·편성 방향(유효기간 있는 운영정책). 입력 전에는 미설정으로 표시하고 임의 페르소나를 만들지 않는다.
   if (doc.channelPolicies) {
     sections.push({
-      title: "01c 채널 역할·운영정책",
+      key: "policies", title: "01c 채널 역할·운영정책",
       blocks: [
         {
           kind: "table",
@@ -75,7 +91,7 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
       blocks.push({ kind: "table", headers: [`Group ${g} 채널`, "프로그램 수", "1위 프로그램", "1위 비중", "상위 3개 비중"], rows: rows.map((r) => [r.channelName, String(r.programCount), r.top1Name ?? "—", r.top1SharePct === null ? "—" : `${r.top1SharePct}%`, r.top3SharePct === null ? "—" : `${r.top3SharePct}%`]) });
     }
     blocks.push({ kind: "note", text: CONCENTRATION_METHOD });
-    sections.push({ title: "01d 콘텐츠 집중도", blocks });
+    sections.push({ key: "concentration", title: "01d 콘텐츠 집중도", blocks });
   }
 
   // W절(2026-09-10) — 채널 간 주요시간 활용도 비교. 그룹을 한 표에 섞지 않고 두 표로 나눈다:
@@ -113,7 +129,7 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
     }
     if (dc.observations.length > 0) blocks.push({ kind: "bullets", items: dc.observations });
     if (dc.rows.length === 0) blocks.push({ kind: "note", text: "요일×시간대 자료가 있는 채널이 없어 비교할 수 없습니다" });
-    sections.push({ title: "01b 채널 간 주요시간 활용도 비교", blocks });
+    sections.push({ key: "prime_compare", title: "01b 채널 간 주요시간 활용도 비교", blocks });
   }
 
   const peerBlock = (label: string, peers: typeof doc.groupA.peers): DocBlock => ({
@@ -122,11 +138,11 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
     rows: peers.map((p) => [p.channelName, p.formattedLevel, pct(p.trend), p.targetRating !== null ? formatRating(p.targetRating, p.channelCode) : "—"]),
   });
   // 2026-09-18(번호 중복 수정) — Group A/B 두 표가 똑같이 "02"였던 것을 "02a"/"02b"로 구분한다.
-  sections.push({ title: "02a Peer 비교 — Group A", blocks: [peerBlock("A", doc.groupA.peers)] });
-  sections.push({ title: "02b Peer 비교 — Group B", blocks: [peerBlock("B", doc.groupB.peers)] });
+  sections.push({ key: "peer_a", title: "02a Peer 비교 — Group A", blocks: [peerBlock("A", doc.groupA.peers)] });
+  sections.push({ key: "peer_b", title: "02b Peer 비교 — Group B", blocks: [peerBlock("B", doc.groupB.peers)] });
 
   sections.push({
-    title: "03 오리지널 파이프라인(Group A)",
+    key: "pipeline", title: "03 오리지널 파이프라인(Group A)",
     blocks:
       doc.groupA.pipeline.length > 0
         ? [
@@ -149,14 +165,14 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
   });
 
   sections.push({
-    title: "05 공통 패턴",
+    key: "common_pattern", title: "05 공통 패턴",
     blocks: [
       { kind: "bullets", items: [doc.groupA.commonPattern.direction ? `Group A: ${doc.groupA.commonPattern.label}` : "Group A: 뚜렷한 공통 패턴 없음", doc.groupB.commonPattern.direction ? `Group B: ${doc.groupB.commonPattern.label}` : "Group B: 뚜렷한 공통 패턴 없음"] },
     ],
   });
 
   sections.push({
-    title: "06 채널 고유 기회",
+    key: "opportunities", title: "06 채널 고유 기회",
     blocks:
       doc.groupA.opportunities.length + doc.groupB.opportunities.length > 0
         ? [{ kind: "bullets", items: [...doc.groupA.opportunities, ...doc.groupB.opportunities].map((o) => `${o.channelName}: ${o.label}`) }]
@@ -164,7 +180,7 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
   });
 
   sections.push({
-    title: "07 슬롯 중복 점검(요일·시간대)",
+    key: "slot_overlap", title: "07 슬롯 중복 점검(요일·시간대)",
     blocks:
       doc.slotOverlap.length > 0
         ? [
@@ -177,7 +193,7 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
   if (doc.groupB.skyUhd) {
     const s = doc.groupB.skyUhd;
     sections.push({
-      title: "08 skyUHD",
+      key: "skyuhd", title: "08 skyUHD",
       blocks: [
         {
           kind: "text",
@@ -192,21 +208,7 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
 
   // 단계 09 — Avail 권리 만료·기소진 현황(공유풀 동시 소진은 계약 해석 확인 전이라 판단하지 않는다).
   if (doc.rights !== undefined) {
-    const r = doc.rights;
-    sections.push({
-      title: "08b Avail 권리 만료·소진",
-      blocks: !r
-        ? [{ kind: "note", text: "권리 정보를 읽지 못했습니다(문제 없음이 아니라 확인하지 못함)." }]
-        : !r.tablesApplied
-          ? [{ kind: "note", text: "권리(Avail) 저장소가 아직 적용되지 않아 만료·소진 현황을 표시할 수 없습니다." }]
-          : !r.configured
-            ? [{ kind: "note", text: "권리 정보가 입력되지 않았습니다. 입력 전에는 만료·소진을 판단할 수 없습니다." }]
-            : [
-                { kind: "text", text: `${r.windowDays}일 안에 종료되는 권리 ${r.expiringTotal}건${r.endedStillListed > 0 ? ` · 종료일이 지났는데 남은 권리 ${r.endedStillListed}건` : ""}` },
-                ...(r.expiring.length > 0 ? [{ kind: "table" as const, headers: ["콘텐츠", "채널", "종료일", "남은 일수"], rows: r.expiring.map((e) => [e.title, e.channels, e.end, e.daysLeft === 0 ? "오늘" : `${e.daysLeft}일`]) }] : []),
-                { kind: "bullets", items: [...r.notes, "채널 간 공유 풀의 동시 소진은 계약 해석 확인 전이라 이 문서에서 판단하지 않습니다(조건부)."] },
-              ],
-    });
+    sections.push({ key: "rights", title: "08b Avail 권리 만료·소진", blocks: rightsBlocksOf(doc.rights) });
   }
 
   // 2026-09-18(§09 정렬) — 고정된 채널 순서(ENA, ENA Drama, ...) 대신 priorityScore(교체/이동·점검
@@ -214,7 +216,7 @@ export function flattenPortfolioReport(doc: PortfolioReportDocument): FlatReport
   // Array#sort는 안정 정렬이라 점수가 같으면 원래 채널 순서를 유지한다.
   const sortedActions = [...doc.actionsByChannel].sort((a, b) => b.priorityScore - a.priorityScore);
   sections.push({
-    title: "09 채널별 TOP 3 ACTIONS",
+    key: "top_actions", title: "09 채널별 TOP 3 ACTIONS",
     blocks: [
       { kind: "text", text: "교체·이동이 필요하거나 점검 진단이 나온 신호가 많은 채널부터 순서대로 정리했습니다." },
       ...sortedActions.flatMap((a): DocBlock[] =>

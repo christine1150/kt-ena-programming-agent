@@ -16,8 +16,7 @@ async function main() {
   const D = await import("../src/lib/audienceReport/portfolioDecisions");
   const PO = await import("../src/lib/audienceReport/portfolioPolicy");
   const FL = await import("../src/lib/audienceReport/portfolioFlatten");
-  const PPT = await import("../src/lib/audienceReport/pptSlidePlan");
-  type Doc = import("../src/lib/audienceReport/portfolioModel").PortfolioReportDocument;
+    type Doc = import("../src/lib/audienceReport/portfolioModel").PortfolioReportDocument;
   type Item = import("../src/lib/audienceReport/portfolioModel").ChannelActionItem;
   type Acts = import("../src/lib/audienceReport/portfolioModel").ChannelActions;
 
@@ -155,8 +154,13 @@ async function main() {
     const titles = flat.sections.map((s) => s.title);
     const all = JSON.stringify(flat);
     check("문서에 임원 핵심 결정이 가장 앞에 있다(제목이 ' — 요약'이라 PPT 앞머리 고정)", titles[0] === "임원 핵심 결정 — 요약" && /— 요약$/.test(titles[0]));
-    const plan = PPT.planReportPpt(flat);
-    check("PPT에서 표지 바로 뒤 고정 슬라이드로 임원 결정이 나온다", plan[1].kind === "content" && (plan[1] as { title: string }).title === "임원 핵심 결정 — 요약");
+    // 단계 14: 슬라이드 계획은 reportSnapshot/deckPlan.ts — 표지 바로 뒤 첫 본문 장이 결정 요청이다(앞머리 고정 중복 없음)
+    const SNAP = await import("../src/lib/reportSnapshot/build");
+    const TPL = await import("../src/lib/reportSnapshot/template");
+    const DECK = await import("../src/lib/reportSnapshot/deckPlan");
+    const model = TPL.buildReportModel(SNAP.buildPortfolioSnapshot(doc, { generatedAt: "2026-10-07T00:00:00.000Z" }));
+    const plan = DECK.planPortfolioDeck(model, doc).slides;
+    check("PPT에서 표지 바로 뒤 첫 본문 장이 임원 결정 요청이다", plan[1].kind === "content" && (plan[1] as { title: string }).title.includes("결정 요청 3건"));
     check("파이프라인 표는 '유지율'이 아니라 '원 채널 대비 재방 시청률 비율'로 표기하고 한계를 덧붙인다", all.includes("원 채널 대비 재방 시청률 비율") && !/"유지율"/.test(all) && (all.includes("유지율이 아닙니다") || all.includes("유지율이 아님")));
     check("그룹 지표 정의와 가중 없음이 문서에 있다", all.includes("단순평균") && all.includes("합산하지 않음"));
     check("채널 정책(미설정)·집중도·권리 읽기 실패가 문서에 정직하게 나온다", all.includes("미설정(운영정책 입력 전)") && all.includes("집중도") && all.includes("확인하지 못함"));
