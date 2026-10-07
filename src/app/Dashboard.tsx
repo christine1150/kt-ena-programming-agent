@@ -801,7 +801,7 @@ interface AiSuggestionPayload {
 type AiState = Record<string, AiSuggestionPayload | null | undefined>;
 const AI_DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
 function aiSuggestionLine(s: AiSuggestionPayload): string {
-  if (!s.change) return `AI 계산: ${s.weekday ? `${AI_DOW_KO[s.weekday - 1]}요일 ` : ""}편성은 교체로 개선되는 칸이 없습니다`;
+  if (!s.change) return `AI 계산: ${s.weekday ? `${AI_DOW_KO[s.weekday - 1]}요일 ` : ""}실제 편성 중 교체로 개선되는 칸이 없습니다`;
   return `${AI_DOW_KO[s.change.weekday - 1]} ${Math.floor(s.change.startMin / 60)}시 '${s.change.from}'→'${s.change.to}' 교체 시 기대 ${formatRatingDelta(s.change.gain)}`;
 }
 function resolveChannelAction(
@@ -1204,7 +1204,7 @@ function KpiLines({ kpi, detailed = false }: { kpi: KpiRow | undefined; detailed
       <p className="break-keep">
         {hasGoal ? (
           <>
-            <span style={{ color: tone }}>●</span> 목표 {kpi.goal.ratingText.replace(/%$/, "")} · <span style={{ color: tone }}>{kpi.goal.gapText}</span>
+            <span className="mr-0.5 inline-block rounded-full align-[-1px]" style={{ backgroundColor: tone, width: detailed ? 11 : 9, height: detailed ? 11 : 9 }} aria-hidden /> 목표 {kpi.goal.ratingText.replace(/%$/, "")} · <span style={{ color: tone }}>{kpi.goal.gapText}</span>
             {a !== null ? ` · ${detailed ? "달성 " : ""}${Math.round(a)}%` : ""}
           </>
         ) : (

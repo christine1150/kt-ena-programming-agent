@@ -3970,20 +3970,55 @@ interface KpiCardSpec {
 }
 function KpiCard({ spec }: { spec: KpiCardSpec }) {
   return (
-    <div className="rounded-2xl bg-zinc-50 p-4">
-      <p className="text-xs font-medium text-zinc-400">{spec.label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums text-zinc-900">{spec.value}</p>
+    // 사용자 지시(2026-10-07): 스코어 카드는 "시청률 / 0.011 ▼36.9%(전일 대비)"를 한두 줄 안에 — 값과 증감을 같은 줄에 두어 카드 높이를 줄인다.
+    <div className="rounded-2xl bg-zinc-50 px-4 py-3">
+      <p className="text-xs font-medium text-zinc-500">{spec.label}</p>
+      <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0">
+      <span className="text-xl font-bold tabular-nums text-zinc-900">{spec.value}</span>
       {spec.deltaLabel && (
         // UI 디자이너 개선안 RULE 03(2026-09-09): 12px 텍스트에 dot용 -600 원색을 그대로 쓰면
         // emerald-600(3.77:1)·rose-600(4.69:1 근접치)이 WCAG AA 4.5:1 기준에 못 미침 — 바로
         // 아래 WinWeaknessCard가 이미 쓰는 emerald-700/rose-700(각 5.48:1/5.88:1)으로 통일.
-        <p className="mt-1 text-xs font-medium" style={{ color: spec.deltaDirection === "up" ? "#047857" : spec.deltaDirection === "down" ? "#be123c" : "#a1a1aa" }}>
+        <span className="whitespace-nowrap text-xs font-medium" style={{ color: spec.deltaDirection === "up" ? "#047857" : spec.deltaDirection === "down" ? "#be123c" : "#71717a" }}>
           {spec.deltaDirection === "up" ? "▲" : spec.deltaDirection === "down" ? "▼" : ""} {spec.deltaLabel}
-        </p>
+        </span>
       )}
+      </p>
     </div>
   );
 }
+
+// 편성 제안용 교체안(/api/dashboard/replace-suggestions) — 서버 ReplacePlan과 같은 모양
+interface ReplaceDetailView {
+  weekday: number;
+  startMin: number;
+  endMin: number;
+  from: string;
+  to: string;
+  fromExpected: number | null;
+  toExpected: number | null;
+  gain: number;
+  certainty: "HIGH" | "MID" | "LOW" | null;
+  runnerUp: string | null;
+  basis: string[];
+}
+interface ReplacePlanView {
+  channelCode: string;
+  weekStart: string;
+  droppedStale?: number;
+  details: ReplaceDetailView[];
+}
+const REPLACE_DOW = ["월", "화", "수", "목", "금", "토", "일"];
+const normTitle = (s: string) => s.replace(/[\s\-_.,·'"()[\]<>]/g, "").toLowerCase();
+const clockOf = (min: number) => {
+  const m = ((Math.round(min) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+};
+/** 방송일 분 기준 시각이 새벽 2~5시대인가(25시=새벽 1시 → 24시 이후는 %24) */
+const isDawnMin = (startMin: number) => {
+  const h = Math.floor((((startMin % 1440) + 1440) % 1440) / 60);
+  return h >= 2 && h < 6;
+};
 
 interface WinWeaknessCardSpec {
   kind: "win" | "weakness";
@@ -4545,6 +4580,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const [selectedExtraTargets, setSelectedExtraTargets] = useState<Set<string>>(new Set());
   const [fitScoreItems, setFitScoreItems] = useState<FitScoreItem[] | null>(null);
   const [fitScoreLoading, setFitScoreLoading] = useState(true);
+  // 편성 제안(사용자 지시 2026-10-07): 교체 프로그램의 요일·시각과 어떤 제목으로 바꿀지를 시청률 자판기 엔진(읽기 전용)으로 계산해 보여 준다.
+  const [replacePlanState, setReplacePlanState] = useState<{ key: string; plan: ReplacePlanView | "error" } | null>(null);
   // Program Momentum Index(2026-08-27, Phase 2 — 사용자 지시로 새 조회 추가 진행) — 이미 화면에
   // 있는 fitScoreItems의 program_id들만 넘겨 계산한다(불필요한 계산 방지). sectionLlm과 동일한
   // key 비교 패턴(위 3253번 줄 주석 참고) — effect 안에서 "이전 채널 값 지우기"를 동기
@@ -4807,6 +4844,20 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     };
 
   }, [code, fitScoreDateQuery]);
+
+  const replaceKey = data?.asOfDate && code !== "SKYUHD" ? `${code}|${data.asOfDate}` : null;
+  useEffect(() => {
+    if (!replaceKey) return;
+    const [c, d] = replaceKey.split("|");
+    const ctrl = new AbortController();
+    fetch(`/api/dashboard/replace-suggestions?channel=${encodeURIComponent(c)}&date=${encodeURIComponent(d)}`, { signal: ctrl.signal })
+      .then((r) => r.json())
+      .then((b) => setReplacePlanState({ key: replaceKey, plan: b.ok ? (b.plan as ReplacePlanView) : "error" }))
+      .catch((e) => {
+        if (e?.name !== "AbortError") setReplacePlanState({ key: replaceKey, plan: "error" });
+      });
+    return () => ctrl.abort();
+  }, [replaceKey]);
 
   // Program Momentum Index(2026-08-27, Phase 2) — fitScoreItems가 준비된 뒤에만(program_id
   // 목록이 필요) 호출. skyUHD는 target 기반이 아니라 대상 밖(program-momentum route가 그
@@ -5799,52 +5850,88 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             const { hour, daypart, timeLabel } = resolveTiming(item);
             const programName = item.programs?.canonical_name ?? "이름 없음";
             let action: string;
+            // 사용자 지시(2026-10-07): 태그 칩("교체 검토")과 같은 말을 뒤에 또 쓰지 않는다 — 칩과 겹치는 문구는 빼고 구체적인 내용만 적는다.
             if (item.tag === "STRENGTHEN") {
-              action = "강화 검토";
-            } else if (item.slotEfficiency?.isMultiSlot && item.slotEfficiency.weakSlot) {
-              action = "이 시간대만 이동 검토";
+              action = "방영 확대";
+            } else if (item.tag === "MOVE" && item.slotEfficiency?.isMultiSlot && item.slotEfficiency.weakSlot) {
+              action = "이 시간대만 재배치";
             } else {
               const recommendedDaypart = item.tag === "MOVE" ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity) : null;
-              action = recommendedDaypart ? `${SHORT_DAYPART[recommendedDaypart] ?? recommendedDaypart}로 이동 검토` : item.tag === "MOVE" ? "다른 시간대 재배치 검토" : "교체 검토";
+              action = recommendedDaypart ? `${SHORT_DAYPART[recommendedDaypart] ?? recommendedDaypart}로 재배치` : item.tag === "MOVE" ? "다른 시간대로 재배치" : "";
             }
-            return { item, programName, hour, timeLabel, action, sortKey: daypartPriority(daypart) };
+            const isDawn = (hour !== null && hour >= 2 && hour < 6) || daypart === "새벽";
+            return { item, programName, hour, timeLabel, action, sortKey: daypartPriority(daypart), isDawn };
           };
-          // 사용자 지시(2026-09-19): "새벽 2시~6시는 제안하지 말라" — 정확한 방영 시각을 아는
-          // 경우에만 그 범위(2~5시)를 걸러낸다(daypart만 아는 경우는 02~08시 전체를 뭉뚱그린
-          // 값이라 2~6시인지 확신할 수 없어 그대로 둔다 — 없는 확신을 지어내지 않는다). 후보
-          // 선정(worst/best fit_score) 전에 걸러야 제외된 자리를 다음 후보가 채운다.
-          const inExcludedDawn = (item: FitScoreItem) => {
-            const { hour } = resolveTiming(item);
-            return hour !== null && hour >= 2 && hour < 6;
-          };
-          const attentionItems = (fitScoreItems ?? [])
-            .filter((item) => (item.tag === "REPLACE" || item.tag === "MOVE") && !inExcludedDawn(item))
-            .sort((a, b) => (a.fit_score ?? 0) - (b.fit_score ?? 0))
-            .slice(0, 3)
+          // 사용자 지시(2026-10-07): "프라임타임이나 주요 시간대 액션이 필요한 편성을 먼저, 2~5시 편성은 후순위" — 새벽 2~6시는 이제 빼지 않고 맨 뒤로 보낸다
+          // (이전엔 2~6시 정확한 시각이 있으면 아예 제외했다). 후보를 고를 때 새벽을 뒤로 밀고, 고른 뒤에는 시간대 중요도 순으로 보여 준다.
+          const attentionAll = (fitScoreItems ?? [])
+            .filter((item) => item.tag === "REPLACE" || item.tag === "MOVE")
             .map(buildLine)
-            .sort((a, b) => a.sortKey - b.sortKey);
+            .sort((a, b) => Number(a.isDawn) - Number(b.isDawn) || (a.item.fit_score ?? 0) - (b.item.fit_score ?? 0));
+          const attentionItems = attentionAll.slice(0, 3).sort((a, b) => Number(a.isDawn) - Number(b.isDawn) || a.sortKey - b.sortKey);
           const opportunityItems = (fitScoreItems ?? [])
-            .filter((item) => item.tag === "STRENGTHEN" && !inExcludedDawn(item))
-            .sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0))
-            .slice(0, 2)
+            .filter((item) => item.tag === "STRENGTHEN")
             .map(buildLine)
-            .sort((a, b) => a.sortKey - b.sortKey);
+            .sort((a, b) => Number(a.isDawn) - Number(b.isDawn) || (b.item.fit_score ?? 0) - (a.item.fit_score ?? 0))
+            .slice(0, 2)
+            .sort((a, b) => Number(a.isDawn) - Number(b.isDawn) || a.sortKey - b.sortKey);
           if (attentionItems.length === 0 && opportunityItems.length === 0) return null;
-          // 사용자 지시(2026-09-19): "가로로 길게 한 줄로만 표시" — 항목마다 줄을 바꾸던 것을,
-          // 한 행 안에 가운뎃점으로 이어붙인다(좁은 화면에서만 줄바꿈).
-          const renderRow = (items: ReturnType<typeof buildLine>[], hoverBg: string) => (
-            <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-sm">
-              {items.map(({ item, programName, timeLabel, action }, i) => (
-                <span key={item.program_id} className="flex items-center gap-1.5">
-                  {i > 0 && <span className="mx-1 text-zinc-300">·</span>}
-                  <a href="#what-to-schedule" className={`flex items-center gap-1.5 rounded-lg px-1.5 py-0.5 transition-colors ${hoverBg}`} title="무엇을 편성할까요? 표에서 자세히 보기">
+          const plan = replacePlanState && replacePlanState.key === replaceKey ? replacePlanState.plan : null;
+          // 교체 칸: 이 프로그램을 지난주에 편성했던 칸 중 AI가 기대 개선폭이 큰 칸 — 주요 시간대 칸을 우선(새벽 2~5시는 다른 칸이 없을 때만)
+          const replaceFor = (programName: string): ReplaceDetailView | null => {
+            if (!plan || plan === "error") return null;
+            const key = normTitle(programName);
+            const hits = plan.details.filter((d) => {
+              const k = normTitle(d.from);
+              return k === key || (k.length >= 3 && (k.includes(key) || key.includes(k)));
+            });
+            if (hits.length === 0) return null;
+            return [...hits].sort((a, b) => Number(isDawnMin(a.startMin)) - Number(isDawnMin(b.startMin)) || b.gain - a.gain)[0];
+          };
+          const CERT_KO = { HIGH: "신뢰 높음", MID: "신뢰 보통", LOW: "신뢰 낮음" } as const;
+          const fmtExp = (v: number | null) => (v === null ? "-" : v.toFixed(3));
+          // 한 제안 = 한 줄(줄바꿈 없음): [태그] 시각 ‘현재’ → ‘추천’ 설명
+          const renderRow = (items: ReturnType<typeof buildLine>[], hoverBg: string, withReplace: boolean) => (
+            <div className="flex flex-col gap-1.5 text-sm">
+              {items.map(({ item, programName, timeLabel, action }) => {
+                const d = withReplace && item.tag === "REPLACE" ? replaceFor(programName) : null;
+                return (
+                  <a
+                    key={item.program_id}
+                    href="#what-to-schedule"
+                    className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-0.5 transition-colors ${hoverBg}`}
+                    title="무엇을 편성할까요? 표에서 자세히 보기"
+                  >
                     <DotTag label={TAG_LABEL_KO[item.tag ?? "STRENGTHEN"]} color={TAG_DOT_COLOR[item.tag ?? "STRENGTHEN"]} />
-                    {timeLabel && <span className="font-semibold text-zinc-500">{timeLabel}</span>}
-                    <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>
-                    <span className="text-zinc-500">{action}</span>
+                    {d ? (
+                      <>
+                        <span className="font-semibold text-zinc-600">
+                          {REPLACE_DOW[d.weekday - 1]} {clockOf(d.startMin)}~{clockOf(d.endMin)}
+                        </span>
+                        <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>
+                        <span className="text-zinc-400">→</span>
+                        <span className="font-bold" style={{ color: accentForegroundColor(accentColor) }}>&lsquo;{d.to}&rsquo; 추천</span>
+                        <span className="min-w-0 truncate text-zinc-500" title={[`기대 시청률 ${fmtExp(d.fromExpected)} → ${fmtExp(d.toExpected)}(+${d.gain.toFixed(3)}%p)`, ...d.basis, d.runnerUp ? `차순위 후보 ${d.runnerUp}` : "", d.certainty ? CERT_KO[d.certainty] : ""].filter(Boolean).join(" · ")}>
+                          기대 {fmtExp(d.fromExpected)}→{fmtExp(d.toExpected)}(+{d.gain.toFixed(3)}%p)
+                          {d.basis[0] ? ` · ${d.basis[0]}` : ""}
+                          {d.certainty ? ` · ${CERT_KO[d.certainty]}` : ""}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        {timeLabel && <span className="font-semibold text-zinc-500">{timeLabel}</span>}
+                        <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>
+                        {action && <span className="text-zinc-500">{action}</span>}
+                        {withReplace && item.tag === "REPLACE" && (
+                          <span className="text-zinc-400">
+                            {!plan ? "· AI 교체안 계산 중…" : plan === "error" ? "· AI 교체안을 계산하지 못했습니다" : "· AI 계산: 지금 실제 편성 기준으로 기대가 더 높은 교체 후보가 없습니다"}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </a>
-                </span>
-              ))}
+                );
+              })}
             </div>
           );
           return (
@@ -5852,9 +5939,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               {attentionItems.length > 0 && (
               <>
                 <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
-                  지금 검토가 필요한 편성
+                  편성 제안
                 </p>
-                {renderRow(attentionItems, "hover:bg-zinc-50")}
+                {renderRow(attentionItems, "hover:bg-zinc-50", true)}
               </>
               )}
               {opportunityItems.length > 0 && (
@@ -5862,7 +5949,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
                   더 밀어줄 만한 편성
                 </p>
-                {renderRow(opportunityItems, "hover:bg-emerald-50/60")}
+                {renderRow(opportunityItems, "hover:bg-emerald-50/60", false)}
               </div>
               )}
             </div>
