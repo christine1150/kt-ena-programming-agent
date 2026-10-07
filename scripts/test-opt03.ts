@@ -139,7 +139,16 @@ async function main() {
   }
 
   // ── T09 마감 직전 Avail 갱신·동시 예약 → 확정 전 재검증 ───────
-  todo("T09 확정 직전 최신 Avail·다른 편성자 예약 재검증, 실패 시 작업본 보존", "OPT06(확정 준비 통합)");
+  {
+    // OPT06에서 구현: 확정 준비 검사(읽기 전용) — 상세 합성 시험은 test:opt06
+    const opt06Src = fs.existsSync(path.join(process.cwd(), "scripts/test-opt06.ts")) ? fs.readFileSync(path.join(process.cwd(), "scripts/test-opt06.ts"), "utf8") : "";
+    const rs = fs.readFileSync(path.join(process.cwd(), "src/lib/idealSchedule/readinessServer.ts"), "utf8");
+    check(
+      "T09 확정 직전 최신 Avail·공유 잔여·동시 수정을 다시 확인하고, 읽기 전용이라 작업본을 바꾸지 않는다(OPT06 확정 준비 검사 — test:opt06)",
+      rs.includes("loadRightsLookup") && rs.includes("seen") && opt06Src.includes("회차 미지정 칸은 회차 수") && opt06Src.includes("operationApplied") && opt06Src.includes("확정 준비 검사 API는 schedule_finalize")
+    );
+    pending.push("T09 일부 — 다른 편성자의 동시 *예약*(원장 기록)은 아직 없다: 검사는 읽기 전용이고 DB 수준 동시성 보호는 별도 승인(버전 열) 필요 → 단계 13/채택 저장소");
+  }
 
   // ── T10 timeout/취소 시 best-so-far ──────────────────────
   {

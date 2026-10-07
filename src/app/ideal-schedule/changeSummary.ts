@@ -91,18 +91,16 @@ export function impactText(s: ChangeSummary): string | null {
 
 // ───────────── 수동 교체 후: 지금 유효한 것 / 다시 계산해야 하는 것 ─────────────
 
-/** 교체한 칸 자체의 값은 후보 평가값으로 즉시 바뀌고, 이웃·합계·등위 등은 [다시 계산] 전까지 교체 이전 값이다(runStore.swapBlock 주석과 같은 범위). */
+/** 교체한 칸 자체의 값은 후보 평가값으로 즉시 바뀌고, 이웃·반복·합계는 [재평가] 전까지, 등위·판단 건수는 [다시 계산] 전까지 교체 이전 값이다(workingCopy.ts와 같은 범위). */
 export const VALID_NOW = [
   "교체한 칸의 기대 시청률·예상 범위·근거(그 후보를 같은 자리에서 평가한 값)",
   "주간 기대 시청률 — 칸 값을 편성 분으로 가중 합산한 값(앞뒤 연관은 미반영)",
   "기준 편성 대비 바뀐 칸 비교(저장된 칸 값 기준)",
 ];
 export const NEEDS_RECALC = [
-  "교체한 칸의 앞뒤 편성 연관(시청 흐름) 재평가",
-  "반복 제한(하루·주 횟수) 재확인과 충돌 검사",
-  "주간 기대 등위 — 교체 이전 계산값이 그대로 남아 있음",
-  "엔진의 유지·교체 판단 건수와 요약 문구",
-  "권리(Avail) 확인 — 수동 교체는 권리 판정을 거치지 않음",
+  "교체한 칸의 앞뒤 편성 연관(시청 흐름)·같은 프로그램 반복 노출·그날 장르 편중 — [재평가]로 반영",
+  "주간 기대 등위 — 교체 이전 계산값이 그대로 남아 있음([다시 계산] 필요)",
+  "엔진의 유지·교체 판단 건수와 요약 문구([다시 계산] 필요)",
 ];
 
 /** 현재 편성안 블록에서 직접 교체한 칸 수 — 저장 요약(summary.manualOverrideCount)은 생성 시점 값이라 수동 교체 후에는 쓰지 않는다. */
@@ -119,7 +117,7 @@ export type RightsSummary = NonNullable<RunSummary["rights"]>;
 
 /** 권리 확인 상태 문구. 계산 시점에 권리 자료를 쓰지 못했으면 "확인되지 않음"을 그대로 말한다. */
 export function rightsText(r: RunSummary["rights"], manualOverrideCount: number): { tone: "ok" | "warn" | "muted"; text: string } {
-  const manual = manualOverrideCount > 0 ? ` 직접 교체한 ${manualOverrideCount}칸은 권리 판정을 거치지 않았습니다.` : "";
+  const manual = manualOverrideCount > 0 ? ` 직접 교체한 ${manualOverrideCount}칸은 교체할 때 최신 권리로 판정했고, 조건부·미확인이면 검토안으로 표시합니다(확정 준비 검사에서 다시 확인).` : "";
   if (!r) return { tone: "muted", text: `권리(Avail) 확인 기록 없음 — 이 편성안은 권리 확인 여부를 알 수 없습니다.${manual}` };
   if (r.status === "applied") return { tone: manualOverrideCount > 0 ? "warn" : "ok", text: `권리 확인 반영(${r.mode === "executable" ? "실행 가능한 편성만" : "탐색 모드 — 권리 불명확 후보 포함 가능"}).${manual}` };
   if (r.status === "not_configured") return { tone: "warn", text: `권리(Avail) 자료가 입력되지 않아 권리 확인 없이 계산했습니다 — 실행 가능 여부는 확인되지 않았습니다.${manual}` };

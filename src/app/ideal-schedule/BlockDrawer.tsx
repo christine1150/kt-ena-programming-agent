@@ -25,7 +25,12 @@ export type Candidate = {
   strategy_type: string | null;
   penalties: Record<string, number> | null;
   reasons: Reason[] | null;
+  /** 이 자리에서의 권리 판정(최신 Avail, 조회뿐) — 권리상 불가면 교체할 수 없고, 조건부·미확인이면 검토안으로만 둔다 */
+  rights?: { status: string; label: string; reasons: string[] };
+  swapVerdict?: { allowed: boolean; reviewOnly: boolean; message: string | null };
 };
+
+const RIGHTS_TONE: Record<string, string> = { available: "bg-emerald-50 text-emerald-800", conditional: "bg-amber-50 text-amber-900", unknown: "bg-amber-50 text-amber-900", unavailable: "bg-rose-50 text-rose-800", not_checked: "bg-zinc-100 text-zinc-800" };
 
 const CONSTRAINT_LABEL: Record<string, string> = {
   AUTO_MAIN_CONTENT: "주요 콘텐츠 관리 자동 반영",
@@ -53,9 +58,12 @@ export function BlockDrawer({
   onPreview,
   onClose,
   onChanged,
+  editSeq = null,
   frameLabel = "지난주",
   refWord = "지난주",
 }: {
+  /** 화면이 마지막으로 본 작업본 수정 번호 — 다른 화면에서 같은 작업본이 바뀌었으면 서버가 거부한다 */
+  editSeq?: number | null;
   /** 기준 주 표기("지난주"는 실제 지난주일 때만, 아니면 기간 — 단계 10) */
   refWord?: string;
   runId: string;
@@ -77,6 +85,9 @@ export function BlockDrawer({
   const [q, setQ] = useState("");
   const [found, setFound] = useState<{ programId: string; name: string }[] | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
+  // 교체 전 확인(변경 이유 입력)
+  const [pendingSwap, setPendingSwap] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
   const isIdeal = block.layer === "IDEAL";
   const swappable = isIdeal && (block.status === "AI" || block.status === "MANUAL_OVERRIDE");
 
@@ -124,12 +135,14 @@ export function BlockDrawer({
   async function patch(body: object) {
     setBusy(true);
     setError(null);
-    const r = await fetch(`/api/scheduling/ideal-schedule/${runId}/blocks/${block.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    const j = await r.json();
+    const r = await fetch(`/api/scheduling/ideal-schedule/${runId}/blocks/${block.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, baseSeq: editSeq ?? undefined }) });
+    const j = await r.json().catch(() => null);
     setBusy(false);
-    if (!j.ok) setError(j.message ?? "변경하지 못했습니다.");
+    if (!j?.ok) setError(`${j?.message ?? (r.status === 403 ? "편성 수정 권한이 없습니다." : "변경하지 못했습니다.")} (편성안은 바뀌지 않았습니다.)`);
     else {
       onPreview(null);
+      setPendingSwap(null);
+      setReason("");
       onChanged();
     }
   }
@@ -316,16 +329,35 @@ export function BlockDrawer({
                               </button>
                               <button
                                 type="button"
-                                disabled={busy}
-                                onClick={() => patch({ action: "swap", candidateId: c.id })}
+                                disabled={busy || c.swapVerdict?.allowed === false}
+                                title={c.swapVerdict?.allowed === false ? (c.swapVerdict.message ?? "권리상 교체할 수 없습니다.") : undefined}
+                                onClick={() => setPendingSwap(pendingSwap === c.id ? null : c.id)}
                                 className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
                               >
-                                교체
+                                {pendingSwap === c.id ? "취소" : "교체"}
                               </button>
                             </div>
                           )
                         )}
                       </div>
+                      {!isCurrent && c.rights && (
+                        <p className="mt-1 text-[11px]">
+                          <span className={`rounded px-1 ${RIGHTS_TONE[c.rights.status] ?? RIGHTS_TONE.not_checked}`}>{c.rights.label}</span>
+                          {(c.swapVerdict?.message || c.rights.reasons[0]) && <span className="ml-1 text-zinc-500">{c.swapVerdict?.message ?? c.rights.reasons[0]}</span>}
+                        </p>
+                      )}
+                      {swappable && pendingSwap === c.id && (
+                        <div className="mt-2 space-y-1.5 rounded-lg bg-zinc-50 p-2">
+                          {c.swapVerdict?.reviewOnly && <p className="text-[11px] text-amber-800">이 교체는 &lsquo;검토안&rsquo;으로만 남습니다 — 권리가 확인되기 전에는 실행 가능으로 표시되지 않습니다.</p>}
+                          <label className="block text-[11px] text-zinc-600" htmlFor={`swap-reason-${c.id}`}>
+                            변경 이유(선택, 이력에 남습니다)
+                          </label>
+                          <input id={`swap-reason-${c.id}`} value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} placeholder="예: 경쟁작 대응, 신규 회차 홍보" className="w-full rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm" />
+                          <button type="button" disabled={busy} onClick={() => patch({ action: "swap", candidateId: c.id, reason })} className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
+                            {busy ? "교체 중…" : "교체 확정"}
+                          </button>
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -362,7 +394,7 @@ export function BlockDrawer({
                 <p className="mt-1 text-[11px] text-zinc-400">고르면 이 자리 기준으로 기대값을 계산해(수 초) 후보에 넣고 미리보기로 보여줍니다.</p>
               </div>
             )}
-            {swappable && <p className="mt-2 text-[11px] text-zinc-400">괄호 안은 지금 배치된 프로그램 대비 기대 차이입니다. 교체한 블록은 &lsquo;수동 변경&rsquo;으로 잠기며, 이웃 블록 점수와 합계는 [다시 계산] 후 갱신됩니다.</p>}
+            {swappable && <p className="mt-2 text-[11px] text-zinc-400">괄호 안은 지금 배치된 프로그램 대비 기대 차이입니다. 교체한 블록은 &lsquo;수동 변경&rsquo;으로 잠기며, 교체 직후 자동으로 재평가해 이웃 블록 점수·반복·합계를 갱신합니다(탐색은 하지 않습니다). 권리상 불가인 후보는 교체할 수 없고, 조건부·미확인 후보는 검토안으로만 둡니다. 되돌리려면 화면 위 작업본의 [실행 취소]를 쓰세요.</p>}
           </section>
         )}
 

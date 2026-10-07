@@ -27,6 +27,10 @@ import { IdealWeekGrid, type BlockDiff } from "./IdealWeekGrid";
 import { RequiredScheduleEditor } from "./RequiredScheduleEditor";
 import { SummaryPanel } from "./SummaryPanel";
 import { RunStatusStrip } from "./RunStatusStrip";
+import { WorkingPanel } from "./WorkingPanel";
+import { PlanCardsPanel } from "./PlanCardsPanel";
+import { ReadinessPanel } from "./ReadinessPanel";
+import type { WorkingView } from "@/lib/idealSchedule/workingView";
 import { changeHeadline, countManualOverrides, summarizeChanges } from "./changeSummary";
 import { kstToday } from "@/lib/workspace/dates";
 import { compareOnCommonSupport, type ComparableBlock } from "@/lib/idealSchedule/comparison";
@@ -46,7 +50,7 @@ type Options = {
   isAdmin: boolean;
   config: { repeat_rules: { daily_cap: number; weekly_cap: number }; weights: Record<string, number> };
 };
-type RunData = { run: RunRow; blocks: BlockRow[]; channelAnnualAvgRating: number | null };
+type RunData = { run: RunRow; blocks: BlockRow[]; channelAnnualAvgRating: number | null; working: WorkingView | null };
 type RunListItem = { id: string; week_start: string; structure_mode: string; title: string | null; saved_at: string | null; created_at: string; optimize_target_label: string; summary: { expectedAvgRating: number | null } };
 
 const MODE_LABEL: Record<string, string> = { KEEP_CURRENT: "기존 틀 유지", AI_OPTIMIZED: "AI 시간 최적화" };
@@ -152,6 +156,11 @@ function IdealSchedulePage() {
   const [title, setTitle] = useState("");
   // What-if: 실제 편성(data)과 분리된 미리보기 상태 — [적용]을 눌러야 기존 교체 API가 호출된다
   const [rawPreview, setPreview] = useState<{ block: BlockRow; cand: Candidate } | null>(null);
+  // OPT06: 교체 이유·작업본 편집 결과 안내·자동 재평가 중복 방지
+  const [swapReason, setSwapReason] = useState("");
+  const [editNote, setEditNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const autoEvalFor = useRef<string | null>(null);
+  const editActionRef = useRef<(a: "undo" | "redo" | "reevaluate", quiet?: boolean) => Promise<void>>(async () => undefined);
   // 그리드 배율·전체 화면·인쇄
   const [zoom, setZoom] = useState<"fit" | number>("fit");
   const [fitPpm, setFitPpm] = useState(0.5);
@@ -215,7 +224,7 @@ function IdealSchedulePage() {
       .then((r) => r.json())
       .then((b) => {
         if (!b.ok) throw new Error(b.message);
-        setData({ run: b.run, blocks: (b.blocks as Record<string, unknown>[]).map(normalizeBlock), channelAnnualAvgRating: b.channelAnnualAvgRating });
+        setData({ run: b.run, blocks: (b.blocks as Record<string, unknown>[]).map(normalizeBlock), channelAnnualAvgRating: b.channelAnnualAvgRating, working: (b.working as WorkingView | undefined) ?? null });
         const run = b.run as RunRow;
         lastRun.current = run;
         // 같은 편성안을 다시 불러올 때(교체 후 등)는 사용자가 바꾼 조건을 덮어쓰지 않는다
@@ -346,7 +355,10 @@ function IdealSchedulePage() {
   const today = useMemo(() => kstToday(), []);
   const refWord = weekWord(view?.run.current_week_start, today);
   // 상단·편성표 제목·요약이 같은 값을 쓰도록 주간 기대 시청률은 한 곳에서 정한다(수동 교체 후 재계산 전이면 칸 값 합산).
-  const dirtyRun = !!view?.run.needs_recalc;
+  // 서버 작업본 보기(working)가 기준이다: 수정이 있으면(재평가 전·후 모두) 저장 요약 대신 지금 편성안 그대로의 합계를 쓴다.
+  const workingState = view?.working?.state.state ?? null;
+  const dirtyRun = workingState !== null ? workingState !== "COMPUTED" : !!view?.run.needs_recalc;
+  const workingTag = workingState === "DIRTY" ? "수동 수정 반영·재평가 전" : workingState === "REEVALUATED" ? "수동 수정 반영·재평가됨" : dirtyRun ? "수동 교체 반영·재계산 전" : null;
   const shownExpected = summary ? (dirtyRun ? weeklyExpected(ideal) : summary.expectedAvgRating) : null;
   const changeSummary = useMemo(() => (rows ? summarizeChanges(rows) : null), [rows]);
   // OPT01: 개선율은 두 편성 모두 평가값이 있는 같은 시간(요일·분)만으로 다시 계산한다(평균끼리 비교하면 시간 범위가 달라 부풀 수 있음).
@@ -467,13 +479,77 @@ function IdealSchedulePage() {
   async function applyPreview() {
     if (!preview || !runId) return;
     setBusy("교체하고 있습니다…");
-    const r = await fetch(`/api/scheduling/ideal-schedule/${runId}/blocks/${preview.block.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "swap", candidateId: preview.cand.id }) });
-    const j = await r.json();
+    setEditNote(null);
+    const r = await fetch(`/api/scheduling/ideal-schedule/${runId}/blocks/${preview.block.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "swap", candidateId: preview.cand.id, reason: swapReason, baseSeq: view?.working?.editSeq }),
+    });
+    const j = await r.json().catch(() => null);
     setBusy(null);
-    if (!j.ok) return setError(j.message ?? "교체하지 못했습니다.");
+    if (!j?.ok) return setError(`${j?.message ?? (r.status === 403 ? "편성 수정 권한이 없습니다." : "교체하지 못했습니다.")} (편성안은 바뀌지 않았습니다.)`);
     setPreview(null);
+    setSwapReason("");
+    if (j.rights?.reviewOnly) setEditNote({ tone: "ok", text: `교체했습니다 — 검토안입니다(실행 가능 아님): ${j.rights.message ?? j.rights.label}` });
     await loadRun(runId);
   }
+
+  /** 실행 취소·다시 실행·재평가 — 실패하면 이전 편성안이 그대로임을 알린다. 다른 화면에서 바뀌었으면 서버가 거부한다(editSeq). */
+  async function editAction(action: "undo" | "redo" | "reevaluate", quiet = false) {
+    if (!runId) return;
+    setBusy(action === "reevaluate" ? "지금 편성 그대로 재평가하고 있습니다…" : action === "undo" ? "수정을 되돌리고 있습니다…" : "수정을 다시 실행하고 있습니다…");
+    if (!quiet) setEditNote(null);
+    try {
+      const r = await fetch(`/api/scheduling/ideal-schedule/${runId}/edits`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, baseSeq: view?.working?.editSeq }) });
+      const j = await r.json().catch(() => null);
+      if (!j?.ok) {
+        setEditNote({ tone: "error", text: `${j?.message ?? (r.status === 403 ? "편성 수정 권한이 없습니다." : r.status === 504 ? "서버 제한 시간(60초)을 넘겨 끝나지 않았습니다." : "처리하지 못했습니다.")} 이전 편성안은 그대로입니다.${action === "reevaluate" ? " [재평가] 버튼으로 다시 시도할 수 있습니다." : ""}` });
+        return;
+      }
+      if (action === "reevaluate") setEditNote({ tone: "ok", text: "지금 편성 그대로 재평가했습니다(탐색 없음 — 다른 칸은 바뀌지 않았습니다)." });
+      await loadRun(runId);
+    } catch {
+      setEditNote({ tone: "error", text: "서버와 통신하지 못했습니다. 이전 편성안은 그대로입니다." });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function revertAll() {
+    if (!runId || !view?.working?.canUndo) return;
+    if (!window.confirm("수동 수정을 모두 되돌려 계산 완료본으로 돌릴까요? (다시 실행으로 복구할 수 있습니다)")) return;
+    setBusy("수정을 모두 되돌리고 있습니다…");
+    setEditNote(null);
+    let seq = view.working.editSeq;
+    let can = view.working.canUndo;
+    try {
+      while (can) {
+        const r = await fetch(`/api/scheduling/ideal-schedule/${runId}/edits`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "undo", baseSeq: seq }) });
+        const j = await r.json().catch(() => null);
+        if (!j?.ok) {
+          setEditNote({ tone: "error", text: `${j?.message ?? "되돌리지 못했습니다."} 여기까지 되돌린 상태가 저장되어 있습니다.` });
+          break;
+        }
+        seq = j.working.editSeq;
+        can = j.working.canUndo;
+      }
+    } finally {
+      setBusy(null);
+    }
+    await loadRun(runId);
+  }
+  useEffect(() => {
+    editActionRef.current = editAction;
+  });
+  // 수정 뒤 재평가 전(DIRTY)이면 한 번 자동으로 재평가한다(탐색 없음). 실패해도 되풀이하지 않고 [재평가] 버튼으로 남긴다.
+  const autoWorking = view?.working ?? null;
+  useEffect(() => {
+    if (!autoWorking || autoWorking.state.state !== "DIRTY" || busy) return;
+    const key = `${runId}:${autoWorking.planVersion}:${autoWorking.editSeq}`;
+    if (autoEvalFor.current === key) return;
+    autoEvalFor.current = key;
+    void editActionRef.current("reevaluate", true);
+  }, [autoWorking, busy, runId]);
 
   async function saveConfig() {
     if (!caps || !weights) return;
@@ -574,10 +650,11 @@ function IdealSchedulePage() {
               </span>
             )}
             <span className="block text-[11px] text-zinc-400">
-              이 칸만 바꾼 값입니다. 앞뒤 편성 연관·반복 제한은 [다시 계산] 때 반영됩니다.{whatIf.lenMismatch ? " 후보의 방영 길이가 이 칸과 다릅니다." : ""}
+              이 칸만 바꾼 값입니다. 적용하면 권리를 판정하고(불가면 거부) 자동으로 재평가해 앞뒤 연관·반복·합계를 반영합니다.{whatIf.lenMismatch ? " 후보의 방영 길이가 이 칸과 다릅니다." : ""}
             </span>
           </p>
-          <div className="flex shrink-0 gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
+            <input value={swapReason} maxLength={200} onChange={(e) => setSwapReason(e.target.value)} placeholder="변경 이유(선택)" aria-label="변경 이유" className="w-40 rounded-full border border-zinc-600 bg-zinc-800 px-3 py-1 text-xs text-white placeholder:text-zinc-400" />
             <button type="button" disabled={!!busy} onClick={applyPreview} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-zinc-900 hover:bg-zinc-100 disabled:opacity-50">
               적용
             </button>
@@ -614,7 +691,7 @@ function IdealSchedulePage() {
               {shownExpected !== null && (
                 <span className="text-zinc-900">
                   주간 기대 시청률 <b className="tabular-nums">{fmt(shownExpected)}</b>
-                  {dirtyRun && <span className="ml-1 text-[11px] font-normal text-amber-700">수동 교체 반영·재계산 전</span>}
+                  {workingTag && <span className="ml-1 text-[11px] font-normal text-amber-700">{workingTag}</span>}
                   {improvement !== null ? (
                     <span className={`ml-1 text-xs font-medium ${improvement >= 0 ? "text-emerald-600" : "text-rose-600"}`} title="두 편성 모두 평가값이 있는 같은 시간(요일·분)만으로 계산한 모델상 기대 차이입니다. 실제 시청률 개선이 아닙니다.">
                       같은 시간 기준 {refWord} 대비 {signedPct(improvement)}
@@ -756,7 +833,7 @@ function IdealSchedulePage() {
           </p>
           <p className="text-[10px] text-zinc-600">
             최근 3달 데이터 기반 기대 시청률(미래 예측 아님) · {MODE_LABEL[view.run.structure_mode]} · {view.run.as_of_date}까지 데이터 · {kstTime(view.run.created_at)} 생성
-            {shownExpected !== null ? ` · 주간 기대 ${fmt(shownExpected)}${dirtyRun ? "(수동 교체 반영·재계산 전)" : ""}` : ""}
+            {shownExpected !== null ? ` · 주간 기대 ${fmt(shownExpected)}${workingTag ? `(${workingTag})` : ""}` : ""}
             {summary?.current?.expectedAvgRating ? ` (${refWord} 실제 편성 기대 ${fmt(summary.current.expectedAvgRating)})` : ""}
             {summary?.expectedRank ? ` · 주간 기대 등위 ${rankText(summary.expectedRank)}(${weekWord(summary.expectedRank.refWeek, today)} ${summary.expectedRank.refRank}위 기준 추정, 실적 순위 아님)` : ""}
             {changeSummary?.large ? ` · ${changeHeadline(changeSummary)} — 기준 편성과 크게 다른 안(기대 상승만으로 개선이라 단정하지 마세요)` : ""}
@@ -995,7 +1072,7 @@ function IdealSchedulePage() {
                   수동 변경 지우고 다시 계산
                 </button>
               </div>
-              {view?.run.needs_recalc && <p className="mt-1.5 text-[11px] text-amber-700">수동 교체가 있습니다. [다시 계산]을 누르면 교체는 유지하고 앞뒤 연관·반복 제한·합계를 갱신합니다.</p>}
+              {dirtyRun && <p className="mt-1.5 text-[11px] text-amber-700">수동 수정이 있습니다. 지금 작업본의 값은 편성표 위 [재평가]로 갱신합니다. [다시 계산]은 새 실행을 만들며 수동 변경을 유지한 채 나머지 칸을 새로 탐색합니다.</p>}
             </section>
           )}
 
@@ -1042,7 +1119,7 @@ function IdealSchedulePage() {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm xl:hidden print:hidden">
               <span>
                 주간 기대 <b className="tabular-nums">{fmt(shownExpected)}</b>
-                {dirtyRun && <span className="ml-1 text-[11px] text-amber-700">수동 교체 반영·재계산 전</span>}
+                {workingTag && <span className="ml-1 text-[11px] text-amber-700">{workingTag}</span>}
                 {improvement !== null && <span className="ml-1 tabular-nums text-zinc-500">(같은 시간 기준 {refWord} 대비 {signedPct(improvement)})</span>}
               </span>
               <span className="text-zinc-600">바뀐 칸 {rows ? rows.filter((r) => r.changed).length : "…"}</span>
@@ -1050,7 +1127,8 @@ function IdealSchedulePage() {
               <span className="text-[11px] text-zinc-400">요약·조건은 편성표 아래에 있습니다</span>
             </div>
           )}
-          {view && <RunStatusStrip run={view.run} change={changeSummary} today={today} busy={!!busy} manualCount={countManualOverrides(ideal)} support={supportCmp} onRecalc={() => void recalc(true)} />}
+          {view && <RunStatusStrip run={view.run} change={changeSummary} today={today} busy={!!busy} manualCount={countManualOverrides(ideal)} support={supportCmp} working={view.working} onRecalc={() => void recalc(true)} />}
+          {view?.working && <WorkingPanel working={view.working} busy={!!busy} note={editNote} onUndo={() => void editAction("undo")} onRedo={() => void editAction("redo")} onReevaluate={() => void editAction("reevaluate")} onRevert={() => void revertAll()} />}
           {gridArea}
           {view && (
             <div className="hidden print:block print:pt-2">
@@ -1078,6 +1156,19 @@ function IdealSchedulePage() {
                 <CompareTable rows={rows} currentWeekStart={compareRows?.currentWeekStart ?? null} refWord={refWord} decimals={decimals} onSelectBlock={(id) => selectBlock(id)} planWeek={summary?.frame === "PLAN" ? view.run.week_start : null} />
               </div>
             </details>
+          )}
+
+          {view && runId && view.working && <PlanCardsPanel runId={runId} planVersion={view.working.planVersion} workingState={view.working.state.state} decimals={decimals} onSelectBlock={(id) => selectBlock(id)} />}
+          {view && runId && view.working && (
+            <ReadinessPanel
+              runId={runId}
+              planVersion={view.working.planVersion}
+              editSeq={view.working.editSeq}
+              stored={view.working.readiness ? { label: view.working.readiness.label, checkedAt: view.working.readiness.checkedAt, current: view.working.readiness.current, state: view.working.readiness.state } : null}
+              busy={!!busy}
+              onRecorded={() => void loadRun(runId)}
+              onSelectBlock={(id) => selectBlock(id)}
+            />
           )}
 
           <details className="print:hidden">
@@ -1112,6 +1203,7 @@ function IdealSchedulePage() {
           compareRow={selectedCompare}
           previewCandidateId={preview?.block.id === selected.id ? preview.cand.id : null}
           onPreview={(c) => setPreview(c ? { block: selected, cand: c } : null)}
+          editSeq={view?.working?.editSeq ?? null}
           onClose={() => selectBlock(null)}
           onChanged={() => {
             if (runId) void loadRun(runId);

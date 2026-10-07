@@ -192,6 +192,8 @@ export function reasonText(r: Reason, decimals: number): string | null {
       return `같은 시리즈 다음 회차 연결 편성 때 성과 ${fmtIdx(v)}(평소=100, 관측 연관)${r.detail ? ` · ${r.detail}` : ""}`;
     case "MANUAL_SEARCH":
       return r.detail ?? "직접 검색해 추가한 후보";
+    case "RIGHTS_AT_SWAP":
+      return r.detail ?? "교체 시점 권리 판정";
     case "LEAD_SYNERGY":
       return `앞 프로그램과 함께 편성됐을 때 성과 ${fmtIdx(v)}(평소=100, 관측 연관이며 효과 단정 아님)`;
     case "STRATEGY_MATCH":

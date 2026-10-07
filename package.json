@@ -31,6 +31,7 @@
     "test:opt04": "tsx scripts/test-opt04.ts",
     "test:opt05": "tsx scripts/test-opt05.ts",
     "opt05:bench": "tsx scripts/opt05-bench.ts",
+    "test:opt06": "tsx scripts/test-opt06.ts",
     "rollback:home": "node scripts/rollback-home.mjs"
   },
   "dependencies": {

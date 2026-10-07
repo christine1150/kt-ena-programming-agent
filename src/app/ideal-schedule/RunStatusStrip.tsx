@@ -9,6 +9,7 @@ import { supportNote, type SupportComparison } from "@/lib/idealSchedule/compari
 import { coverageNote } from "@/lib/idealSchedule/horizon";
 import { STOP_LABEL, searchNote } from "@/lib/idealSchedule/searchControl";
 import type { RunRow } from "./model";
+import type { WorkingView } from "@/lib/idealSchedule/workingView";
 
 const fmtPct = (v: number | null) => (v === null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
 
@@ -26,7 +27,10 @@ export function RunStatusStrip({
   onRecalc,
   manualCount,
   support = null,
+  working = null,
 }: {
+  /** OPT06: 서버가 만든 작업본 보기 — 편성안 버전·재평가 여부의 기준 */
+  working?: WorkingView | null;
   /** OPT01: 같은 시간 기준 비교 결과 — 두 편성의 평가 시간이 다르면 안내한다 */
   support?: SupportComparison | null;
   /** 현재 블록에서 센 직접 교체 칸 수(저장 요약은 생성 시점 값) */
@@ -38,7 +42,9 @@ export function RunStatusStrip({
   onRecalc: () => void;
 }) {
   const s = run.summary;
-  const dirty = run.needs_recalc;
+  // 작업본 보기가 있으면 그 상태가 기준(재평가 전에만 "재계산 전" 안내), 없으면 저장 플래그를 쓴다
+  const dirty = working ? working.state.state === "DIRTY" : run.needs_recalc;
+  const edited = working ? working.state.state !== "COMPUTED" : run.needs_recalc;
   const manual = manualCount;
   const rights = rightsText(s.rights, manual);
   const base =
@@ -55,8 +61,8 @@ export function RunStatusStrip({
         <b className="font-semibold text-zinc-800">{weekLabel(run.week_start, today)}</b>
         <span className="text-zinc-400">기준 편성</span>
         <b className="font-semibold text-zinc-800">{base}</b>
-        <span className={`${chip} ${dirty ? TONE.warn : TONE.ok}`} title={dirty ? "수동 교체가 저장되어 있고 아직 다시 계산하지 않았습니다." : "엔진이 계산해 저장한 값입니다."}>
-          {dirty ? `작업본 · 수동 교체 ${manual}건 · 재계산 전` : "계산 완료본"}
+        <span className={`${chip} ${dirty ? TONE.warn : edited ? TONE.muted : TONE.ok}`} title={working ? working.state.detail : dirty ? "수동 교체가 저장되어 있고 아직 다시 계산하지 않았습니다." : "엔진이 계산해 저장한 값입니다."}>
+          {working ? `${working.state.label} · ${working.planVersion}` : dirty ? `작업본 · 수동 교체 ${manual}건 · 재계산 전` : "계산 완료본"}
         </span>
         <span className={`${chip} ${TONE[rights.tone]}`} title={rights.text}>
           {s.rights?.status === "applied" ? "권리 확인 반영" : s.rights?.status === "not_configured" ? "권리 자료 미입력" : s.rights?.status === "error" ? "권리 확인 실패" : "권리 확인 기록 없음"}
@@ -94,8 +100,8 @@ export function RunStatusStrip({
         <span className={`${chip} ${s.conflictCount > 0 ? TONE.warn : TONE.muted}`} title="필수 편성끼리 겹쳐 엔진이 배치하지 못한 건수입니다. 권리 위반 건수는 권리 판정을 거친 칸에 한해 위 '권리' 상태로 알립니다.">
           필수 충돌 {s.conflictCount}건
         </span>
-        {dirty && (
-          <button type="button" disabled={busy} onClick={onRecalc} className="ml-auto rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40">
+        {edited && (
+          <button type="button" disabled={busy} onClick={onRecalc} className="ml-auto rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40" title="새 실행을 만들어 수동 변경을 유지한 채 나머지 칸을 새로 탐색합니다(지금 작업본은 그대로 남습니다).">
             다시 계산
           </button>
         )}
@@ -162,7 +168,7 @@ export function RunStatusStrip({
               </ul>
             </div>
             <div>
-              <p className="font-semibold text-amber-700">다시 계산 필요([다시 계산] 전까지 반영되지 않음)</p>
+              <p className="font-semibold text-amber-700">아직 반영되지 않음([재평가]·[다시 계산] 전까지)</p>
               <ul className="list-disc pl-4">
                 {NEEDS_RECALC.map((t) => (
                   <li key={t}>{t}</li>
@@ -170,7 +176,7 @@ export function RunStatusStrip({
               </ul>
             </div>
           </div>
-          <p className="mt-1 text-zinc-400">교체를 되돌리려면 그 칸에서 원래 프로그램을 후보로 다시 고르거나 [수동 변경 지우고 다시 계산]을 사용하세요(실행 취소·다시 실행은 아직 없습니다).</p>
+          <p className="mt-1 text-zinc-400">교체를 되돌리려면 아래 작업본의 [실행 취소]를 쓰세요(다시 실행으로 복구할 수 있습니다).</p>
         </details>
       )}
     </section>

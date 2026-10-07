@@ -180,13 +180,13 @@ async function main() {
     check("칸이 없으면 비율은 null, 큰 변경 아님", none.slotShare === null && none.large === false && S.changeHeadline(none) === "비교할 칸이 없습니다.");
     const unknown = S.summarizeChanges([mk(0, true, null), mk(1, true, null)]);
     check("기대 차이를 계산할 수 없으면 집중도를 만들지 않는다", unknown.impactTop === null && S.impactText(unknown) === null && unknown.measurable === 0);
-    check("교체 후 유효·재계산 목록에 권리 판정 누락이 들어 있다", S.NEEDS_RECALC.some((t) => t.includes("권리") && t.includes("거치지 않음")) && S.VALID_NOW.length >= 3);
+    check("교체 후 목록: 권리 판정 누락 문구는 없고(교체 때 판정), 재평가·다시 계산이 필요한 것을 구분한다", !S.NEEDS_RECALC.some((t) => t.includes("거치지 않음")) && S.NEEDS_RECALC.some((t) => t.includes("재평가")) && S.NEEDS_RECALC.some((t) => t.includes("다시 계산")) && S.VALID_NOW.length >= 3);
     const r0 = S.rightsText(null, 0);
     const r1 = S.rightsText({ status: "applied", mode: "executable", inventoryVersion: "v1", unconfirmedInterpretations: [], message: null }, 0);
     const r2 = S.rightsText({ status: "not_configured", mode: "explore", inventoryVersion: null, unconfirmedInterpretations: [], message: null }, 2);
     const r3 = S.rightsText({ status: "error", mode: "explore", inventoryVersion: null, unconfirmedInterpretations: [], message: "읽기 실패" }, 0);
     check("권리 상태: 기록 없음·적용·미입력·실패를 구분한다", r0.tone === "muted" && r1.tone === "ok" && r2.tone === "warn" && r3.tone === "warn" && r3.text.includes("읽기 실패"));
-    check("권리 적용이어도 직접 교체가 있으면 경고하고 그 칸은 판정 밖임을 밝힌다", S.rightsText({ status: "applied", mode: "explore", inventoryVersion: "v1", unconfirmedInterpretations: [], message: null }, 3).tone === "warn" && r2.text.includes("2칸은 권리 판정을 거치지 않았습니다"));
+    check("권리 적용이어도 직접 교체가 있으면 경고하고, 그 칸은 교체 때 판정했으며 조건부·미확인은 검토안임을 밝힌다", S.rightsText({ status: "applied", mode: "explore", inventoryVersion: "v1", unconfirmedInterpretations: [], message: null }, 3).tone === "warn" && r2.text.includes("2칸은 교체할 때 최신 권리로 판정") && r2.text.includes("검토안"));
     check("권리 미입력을 '문제 없음'으로 말하지 않는다", r2.text.includes("확인되지 않았습니다") && !r2.text.includes("문제 없음"));
   }
 
@@ -312,7 +312,7 @@ async function main() {
     const excel = read("src/lib/idealSchedule/excel.ts");
     const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     check("엑셀: 시트 이름·제목·열 머리글에 고정 '지난주'가 없다(기본값 제외)", !strip(excel).replace(/refWord \?\? "지난주"/g, "").includes("지난주"), (strip(excel).replace(/refWord \?\? "지난주"/g, "").match(/.{0,20}지난주.{0,20}/) ?? [""])[0]);
-    check("엑셀: 수동 교체 후 재계산 전이면 칸 합산값과 작업 상태를 쓴다", exRoute.includes("const dirty = run.needs_recalc === true") && exRoute.includes("수동 교체 반영·재계산 전") && exRoute.includes('["작업 상태"'));
+    check("엑셀: 수동 수정이 있으면 작업본 보기의 합계(weeklyExpected)와 작업 상태·편성안 버전·예측 한계를 쓴다(OPT06)", exRoute.includes('const dirty = working.state.state !== "COMPUTED"') && exRoute.includes("working.weeklyExpected") && exRoute.includes("...meta.rows") && exRoute.includes("meta.limits") && exRoute.includes("needsConfirm"));
     const ideal = read("src/app/ideal-schedule/page.tsx");
     check("자판기: 이전 편성안 목록의 현재 편성안 값도 shownExpected", ideal.includes("r.id === runId ? shownExpected"));
     check("자판기: 직접 교체 개수는 현재 블록에서 센다", ideal.includes("manualCount={countManualOverrides(ideal)}"));

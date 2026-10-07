@@ -1,6 +1,7 @@
 // 이상적 1주일 편성 API 공통 — 세션 확인(관리자·PD 모두 허용, 사용자 결정 2026-09-30)과 입력 검증.
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/adminAuth";
+import { can, roleOfSession, type AdminAction } from "@/lib/admin/permissions";
 import type { BenchmarkPlacement, CompetitorTargetMode, StructureMode } from "./config";
 import type { RunRequest } from "./engineRunner";
 import { actorOf, type Actor } from "./runStore";
@@ -11,6 +12,17 @@ import { ClientError } from "./errors";
 export async function requireActor(): Promise<{ actor: Actor; isAdmin: boolean } | NextResponse> {
   const session = await getCurrentSession();
   if (!session) return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
+  return { actor: actorOf(session), isAdmin: session.role === "admin" };
+}
+
+/**
+ * 행동별 권한 확인(OPT06) — 판정은 권한표(admin/permissions.ts) 한 곳에서만 한다. 지금은 편성 수정·확정이 편성자(PD)에게도 열려 있고(사용자 결정 2026-10-07),
+ * 추후 부서별 권한을 두면 권한표만 바꾸면 된다. 로그인하지 않았으면 401, 권한이 없으면 403.
+ */
+export async function requireActorFor(action: AdminAction): Promise<{ actor: Actor; isAdmin: boolean } | NextResponse> {
+  const session = await getCurrentSession();
+  if (!session) return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
+  if (!can(roleOfSession(session), action)) return NextResponse.json({ ok: false, message: "이 작업을 할 권한이 없습니다." }, { status: 403 });
   return { actor: actorOf(session), isAdmin: session.role === "admin" };
 }
 

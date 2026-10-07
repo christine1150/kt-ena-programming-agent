@@ -496,3 +496,17 @@
 **승인 필요:** 합격선 제안(OPT05_VALIDATION.md 5절, `PROPOSED_THRESHOLDS`)과 채택 기록 저장소 마이그레이션.
 **남은 한계:** 모든 수치 합성(실제 σ·이동 이력에 따라 낙관 +0~+15%p), 선택 편향 보정은 미구현, 실제 성과는 방송 후, 다회차·시즌·프로모션·경쟁 효과는 검증 밖.
 **다음:** OPT06(변경 칸 수 제한 없음, PD 확정 가능).
+
+## 단계 OPT06 — 편성안 비교·수동 수정·Avail·확정 준비 통합 (완료, 로컬 검증·읽기 전용 실데이터 확인)
+
+**산출물:** `docs/agent-improvement/OPT06_INTEGRATION.md`, 순수 모듈 `src/lib/idealSchedule/{slotRights,planVersion,editLog,planCards,topChanges,readiness,exportMeta,workingView}.ts`, 서버 `{rightsServer,workingContext,workingCopy,blockCandidates,readinessServer,variantsServer}.ts`, API(`blocks/[blockId]` 교체·잠금 개편, `edits`, `variants`, `readiness`, 실행·비교·내보내기 작업본 보기 통일), 화면(`WorkingPanel`·`PlanCardsPanel`·`ReadinessPanel`·드로어 후보별 권리·변경 이유), `npm run test:opt06`(127건).
+
+**달라진 동작:** 편성안 버전(내용 지문)을 상단·편성표·비교·내보내기·이력·확정 준비가 함께 가리킴 / 수동 교체가 권리 판정을 거침(불가 거부, 조건부·미확인은 검토안 — 엔진 게이트 우회 오류 수정) / 변경 이유·실행 취소·다시 실행(수정 개수 제한 없음, 이력 저장 보호로 120건에서 거부+안내) / 수정 뒤 자동 재평가(탐색 없음) / 비교 카드 4종 + 주요 변경 5건(최고 기대안≠최적 증명, 슬롯 %는 주간 확률 아님) / 확정 준비 검사 8항목(읽기 전용, 검토안 저장) / 내보내기에 버전·예측 한계·확인 필요 칸 / 새 권한 `schedule_edit`(PD 가능, `permissions.ts` 한 곳). **DB 마이그레이션 없음**(`summary.workingCopy` jsonb).
+
+**실행한 명령:** tsc, eslint(변경 영역), `npm run build`, test:opt06 127 + 기존 17개 스위트(ideal·opt01~05·workspace·schedcompare·portfolio·admin·avail·insight·nielsen·metrics·broadcast·intent) 통과. 변이 점검 14건 중 3건 생존 → 보강 후 검출.
+**기존 테스트 변경(근거 있음):** schedcompare 3건(수동 교체는 권리 판정을 거치지 않는다는 옛 동작 고정 2건 → 새 동작, 엑셀 작업 상태 소스 검사 1건 → 작업본 보기), opt03 T09 대기 → 구현 표시(일부 대기 유지). 이번 변경과 무관한 기존 실패 1건: test:markettop 낮은 높이 py 검사(홈 컴포넌트가 이전 커밋에서 py-[5px]로 바뀜).
+
+**실데이터에서 드러난 것(읽기 전용 확인):** 모델 버전 기록 이전에 만든 실행은 다시 평가하면 저장 값과 다르다(주간 기대 0.5211 vs 0.5094) → 재평가가 계산 완료본도 같은 모델로 다시 평가해 모델 차이와 수정 효과를 분리해 표시. 반복 한도 거짓 위반 9건을 엔진이 받아들인 계산안 횟수를 허용치로 써서 해소.
+**남은 한계:** 거의 동시 요청은 못 막음(버전 열=승인 필요) · 최소변경·균형안은 칸 구조가 같을 때만 · Benchmark/원형 칸은 재평가 안 함 · 실제 운영 반영 미구현 · 실제 Avail 입력 후 화면 미확인 · 유사 방송 이력·긴 제목·특집·다른 시즌 식별은 미구현 · 합성/단일 실행 근거.
+**승인 대기(변동 없음):** OPT05 합격선 제안, 채택 기록 저장소 마이그레이션, 마이그레이션 20261011~14 운영 적용, OPT04 작업 큐 테이블.
+**다음:** 단계 13(경제성/ROI 제외), 14, 15(“시청률 자판기” 이름·아이콘 유지), 16. 단계 08은 사용자 판단 대기.

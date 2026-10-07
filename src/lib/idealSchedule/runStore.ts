@@ -198,77 +198,7 @@ export async function loadCandidates(runId: string, blockId: string) {
   return data ?? [];
 }
 
-/** Swap: 저장된 대체 후보로 블록을 교체 → MANUAL_OVERRIDE + LOCK. 이웃 블록 점수·합계는 [다시 계산] 전까지
- *  갱신되지 않으므로 실행에 needs_recalc 표시. 후보의 평가값은 같은 자리·같은 직전 편성 기준으로 엔진이 계산한 값. */
-export async function swapBlock(runId: string, blockId: string, candidateId: string, actor: Actor) {
-  const { data: cand, error } = await supabase.from("ideal_schedule_candidates").select("*").eq("id", candidateId).eq("block_id", blockId).eq("run_id", runId).maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!cand) throw new ClientError("해당 블록의 대체 후보가 아닙니다.");
-  const c = cand.candidate as ReturnType<typeof candidateJson>;
-  const strategy = cand.strategy as BlockEval["strategy"];
-  const { data: updated, error: uErr } = await supabase
-    .from("ideal_schedule_blocks")
-    .update({
-      program_id: c.contentType === "OWN" && c.programId && !c.programId.startsWith("__") ? c.programId : null,
-      candidate_key: c.key,
-      program_key: c.programKey,
-      program_name: c.programName,
-      content_type: c.contentType,
-      source_channel: c.sourceChannel,
-      genre: c.genre,
-      airing_type: c.airingType,
-      status: "MANUAL_OVERRIDE",
-      locked: true,
-      expected_kpi: cand.expected_kpi,
-      expected_kpi_type: cand.expected_kpi_type,
-      expected_share: cand.expected_share,
-      expected_time_spent: cand.expected_time_spent,
-      confidence_score: cand.confidence_score,
-      expected_low: cand.expected_low ?? null,
-      expected_high: cand.expected_high ?? null,
-      range_basis: cand.range_basis ?? null,
-      decision: null, // 직접 교체 — 엔진의 유지/교체 판단은 더 이상 이 블록에 해당하지 않음
-      sample_count: cand.sample_count,
-      fallback_level: cand.fallback_level,
-      fitness_score: cand.fitness_score,
-      block_value: cand.block_value,
-      strategy_type: cand.strategy_type,
-      competitor_slot_strength: strategy?.competitorSlotStrength ?? null,
-      benchmark_index: strategy?.benchmarkIndex ?? null,
-      match_score: strategy?.matchScore ?? null,
-      counter_score: strategy?.counterScore ?? null,
-      score_components: cand.score_components,
-      penalties: cand.penalties,
-      reasons: cand.reasons,
-      updated_by: actor,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", blockId)
-    .eq("run_id", runId)
-    .eq("layer", "IDEAL")
-    .in("status", ["AI", "MANUAL_OVERRIDE"]) // 필수·LOCK 편성은 교체 불가
-    .select("*")
-    .maybeSingle();
-  if (uErr) throw new Error(uErr.message);
-  if (!updated) throw new ClientError("교체할 수 없는 블록입니다(필수 편성·LOCK은 교체 불가).");
-  await supabase.from("ideal_schedule_runs").update({ needs_recalc: true }).eq("id", runId);
-  return updated;
-}
-
-export async function setBlockLock(runId: string, blockId: string, locked: boolean, actor: Actor) {
-  const { data, error } = await supabase
-    .from("ideal_schedule_blocks")
-    .update({ locked, updated_by: actor, updated_at: new Date().toISOString() })
-    .eq("id", blockId)
-    .eq("run_id", runId)
-    .eq("layer", "IDEAL")
-    .in("status", ["AI", "MANUAL_OVERRIDE"]) // 필수 편성은 항상 고정
-    .select("*")
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) throw new ClientError("잠금을 바꿀 수 없는 블록입니다.");
-  return data;
-}
+// 수동 교체·잠금·되돌리기·재평가는 작업본 이력과 함께 workingCopy.ts에서 처리한다(OPT06).
 
 export async function saveRunAs(runId: string, title: string | null, actor: Actor) {
   const { data, error } = await supabase

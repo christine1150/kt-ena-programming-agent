@@ -1,7 +1,8 @@
 // 이상적 1주일 편성 실행 조회(GET: 실행·IDEAL/CURRENT 블록) / 저장(PATCH: 이름 붙여 편성안으로 저장).
 import { NextResponse } from "next/server";
 import { fail, requireActor } from "@/lib/idealSchedule/apiUtil";
-import { loadRun, saveRunAs } from "@/lib/idealSchedule/runStore";
+import { saveRunAs } from "@/lib/idealSchedule/runStore";
+import { loadRunView } from "@/lib/idealSchedule/workingCopy";
 import { getChannelAnnualAvgRating } from "@/lib/scheduleGridSource";
 import { loadWeeklyRanks } from "@/lib/idealSchedule/engineRunner";
 import { estimateWeeklyRank } from "@/lib/idealSchedule/rankEstimate";
@@ -12,7 +13,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
   if (auth instanceof NextResponse) return auth;
   const { runId } = await params;
   try {
-    const loaded = await loadRun(runId);
+    // 지금 편성안: 같은 버전의 재평가 값이 덮어쓰인 블록 + 작업본 보기(상단·격자·내보내기·이력이 같은 편성안을 가리킨다)
+    const loaded = await loadRunView(runId);
     if (!loaded) return NextResponse.json({ ok: false, message: "실행을 찾을 수 없습니다." }, { status: 404 });
     // 그리드 색 기준선 — "ENA 주간 비교"와 같은 채널 연간 평균(연초~오늘, 표시용)
     const chRaw = (loaded.run as { channels: unknown }).channels;
@@ -25,7 +27,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
       const hist = await loadWeeklyRanks(ch.id, resolveRankSheetTargetLabel(ch.primary_target), run.as_of_date, run.config_snapshot?.expected_kpi?.lookback_days ?? 91).catch(() => []);
       s.expectedRank = estimateWeeklyRank(hist, s.expectedAvgRating ?? null, s.current.expectedAvgRating ?? null, s.current.weekStart);
     }
-    return NextResponse.json({ ok: true, run: loaded.run, blocks: loaded.blocks, channelAnnualAvgRating });
+    return NextResponse.json({ ok: true, run: loaded.run, blocks: loaded.blocks, working: loaded.working, channelAnnualAvgRating });
   } catch (e) {
     return fail(e);
   }

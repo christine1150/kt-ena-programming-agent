@@ -7,7 +7,7 @@
 //  FIXED       고정·필수·잠금 제약이 정확한 요일·시각에 그대로 배치됨        (constraints.ts: LOCK/필수/고정 규칙)
 //  RIGHTS      권리 게이트(slotAllowed)가 있으면 AI가 배치한 블록은 허용 슬롯  (Avail 게이트, 단계 06)
 //  CAPS        프로그램 단위 하루·주 한도, 본방 후보 단위 주간 한도          (repeat_rules + 프로그램별 대체 한도)
-// 검사하지 않는 것(정직하게): 수동 교체 블록의 권리(수동 교체 경로에는 권리 판정이 없음 — OPT06에서 추가), 길이 불일치(패널티일 뿐 하드 제약 아님).
+// 검사하지 않는 것(정직하게): 수동 교체 블록의 권리(교체 때 workingCopy.swapWithLog가 판정하고, 확정 준비 검사 readinessServer가 최신 Avail로 다시 판정한다 — OPT06), 길이 불일치(패널티일 뿐 하드 제약 아님).
 import type { IdealScheduleConfig } from "./config";
 import type { ResolvedFixed } from "./constraints";
 import type { PlacedBlock } from "./optimizer";
@@ -61,7 +61,7 @@ export function validateEngineOutput(args: {
   }
   if (slotAllowed) {
     for (const b of sorted) {
-      if (b.fixed || b.status === "MANUAL_OVERRIDE") continue; // 사용자 고정·수동 교체는 권리 게이트 밖(수동 교체 경로의 한계는 문서화)
+      if (b.fixed || b.status === "MANUAL_OVERRIDE") continue; // 사용자 고정·수동 교체는 이 엔진 게이트 밖 — 수동 교체의 권리는 교체 때(swapWithLog)와 확정 준비 검사(readinessServer)가 판정한다
       if (!slotAllowed(b.candidate, b.weekday, b.startMin, b.endMin)) {
         out.push({ constraintId: "RIGHTS", source: "권리 게이트(Avail)", weekday: b.weekday, startMin: b.startMin, message: `${b.candidate.programName}은 이 자리에서 권리상 허용되지 않음` });
       }

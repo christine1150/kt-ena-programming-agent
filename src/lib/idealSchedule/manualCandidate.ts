@@ -3,18 +3,12 @@
 // 이웃 블록(반복 횟수·장르 편중)은 반영하지 않고, 앞 편성과의 관측 연관만 같은 자리 기준으로 반영한다(자동 후보와 같은 방식).
 import { supabase } from "@/lib/supabase";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
-import type { IdealScheduleConfig } from "./config";
-import { loadIdealScheduleConfig } from "./configStore";
-import { fetchOwnAirings, loadChannelRef } from "./dataSource";
-import { buildUncertainty, featureOptionsFor, newCandidate } from "./engine";
-import { loadBacktestResiduals } from "./engineRunner";
+import { newCandidate } from "./engine";
 import { ClientError } from "./errors";
-import { EPISODE_CHAIN_GAP_MIN, buildFeatureSet } from "./features";
-import { resolveGenre } from "./genreRules";
-import { loadGenreMap } from "./genreStore";
-import { withOptimizeTarget } from "./mapping";
+import { EPISODE_CHAIN_GAP_MIN } from "./features";
 import { candidateJson, evalColumns, loadRun } from "./runStore";
-import { Scorer, buildCandidatePool, buildScoringContext, type BlockEval, type EngineCandidate, type StrategyMode } from "./scoring";
+import type { BlockEval, EngineCandidate } from "./scoring";
+import { buildRunScorer, type RunRow } from "./workingContext";
 
 type RunRecord = Record<string, unknown> & { channels: { id: string; code: string } | { id: string; code: string }[] };
 
@@ -45,21 +39,8 @@ export async function addManualCandidate(runId: string, blockId: string, program
   const { data: prog } = await supabase.from("programs").select("id, canonical_name, channel_id").eq("id", programId).maybeSingle();
   if (!prog || prog.channel_id !== ch.id) throw new ClientError("이 채널의 프로그램이 아닙니다.");
 
-  const channel = await loadChannelRef(ch.code);
-  // 실행 당시 설정(config_snapshot)으로 평가 — 없는 키는 현재 채널 설정으로 채운다
-  const current = await loadIdealScheduleConfig(channel.id);
-  const snap = (run.config_snapshot ?? {}) as Partial<IdealScheduleConfig>;
-  const config: IdealScheduleConfig = { ...current, ...snap } as IdealScheduleConfig;
-  const asOf = run.as_of_date as string;
-  const target = run.optimize_target_is_channel_kpi ? null : (run.optimize_target_label as string);
-  const [raw, genreMap] = await Promise.all([fetchOwnAirings(channel, asOf, config, target), loadGenreMap()]);
-  const bundle = target ? withOptimizeTarget(raw, target) : raw;
-  const genreOf = (name: string) => resolveGenre(genreMap, "OWN", channel.code, name);
-  const opts = featureOptionsFor(config, channel.kpiLabel, asOf, bundle.kpiLabel !== channel.kpiLabel);
-  const fs = buildFeatureSet(bundle, opts, genreOf);
-  const residuals = await loadBacktestResiduals(channel.id, bundle.kpiLabel, asOf);
-  const scorer = new Scorer(buildScoringContext(fs, config, (run.strategy_mode as StrategyMode) ?? "AUTO", null, opts.composition !== null, buildUncertainty(config, residuals, fs)));
-  const pool = buildCandidatePool(fs, null);
+  // 실행 당시 기준일·설정·장르 분류·오차 배율로 평가(workingContext — 재평가·비교 카드와 같은 맥락)
+  const { channel, config, scorer, pool, genreOf } = await buildRunScorer(run as unknown as RunRow, ch.code);
   const variants: EngineCandidate[] = pool.filter((p) => p.programId === programId);
   if (variants.length === 0) variants.push(newCandidate(prog.canonical_name as string, programId, null, channel.code, (_s, _o, n) => genreOf(n)));
 
