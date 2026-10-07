@@ -4008,6 +4008,31 @@ interface ReplacePlanView {
   droppedStale?: number;
   details: ReplaceDetailView[];
 }
+// 교체 후보가 없는 약세 프로그램의 보완 제안(/api/dashboard/weak-remedy) — 원인 한 줄 + 할 일 한 줄. 같은 조건은 한 번만 조회한다.
+type WeakRemedyView = { lines: string[]; concrete: boolean; sample: number } | null;
+const weakRemedyCache = new Map<string, Promise<WeakRemedyView>>();
+function WeakRemedyNote({ channel, date, program, hour }: { channel: string; date: string; program: string; hour: number | null }) {
+  const key = `${channel}|${date}|${program}|${hour ?? ""}`;
+  const [state, setState] = useState<{ key: string; remedy: WeakRemedyView } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    let p = weakRemedyCache.get(key);
+    if (!p) {
+      p = fetch(`/api/dashboard/weak-remedy?channel=${encodeURIComponent(channel)}&date=${encodeURIComponent(date)}&program=${encodeURIComponent(program)}${hour !== null ? `&hour=${hour}` : ""}`)
+        .then((r) => r.json())
+        .then((b) => (b.ok ? (b.remedy as WeakRemedyView) : null))
+        .catch(() => null);
+      weakRemedyCache.set(key, p);
+    }
+    p.then((remedy) => alive && setState({ key, remedy }));
+    return () => {
+      alive = false;
+    };
+  }, [key, channel, date, program, hour]);
+  if (!state || state.key !== key) return null;
+  if (!state.remedy) return <p className="pl-1.5 text-xs text-zinc-400">지금 실제 편성 기준으로 기대가 더 높은 교체 후보가 없고, 같은 자리 비교 자료도 부족해 다음 방영 추이를 먼저 확인합니다</p>;
+  return <p className={`whitespace-pre-line pl-1.5 text-xs leading-relaxed ${state.remedy.concrete ? "font-medium text-zinc-700" : "text-zinc-500"}`}>{state.remedy.lines.join("\n")}</p>;
+}
 const REPLACE_DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const normTitle = (s: string) => s.replace(/[\s\-_.,·'"()[\]<>]/g, "").toLowerCase();
 const clockOf = (min: number) => {
@@ -5893,11 +5918,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           // 한 제안 = 한 줄(줄바꿈 없음): [태그] 시각 ‘현재’ → ‘추천’ 설명
           const renderRow = (items: ReturnType<typeof buildLine>[], hoverBg: string, withReplace: boolean) => (
             <div className="flex flex-col gap-1.5 text-sm">
-              {items.map(({ item, programName, timeLabel, action }) => {
+              {items.map(({ item, programName, timeLabel, action, hour }) => {
                 const d = withReplace && item.tag === "REPLACE" ? replaceFor(programName) : null;
                 return (
+                  <div key={item.program_id} className="flex flex-col gap-0.5">
                   <a
-                    key={item.program_id}
                     href="#what-to-schedule"
                     className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-0.5 transition-colors ${hoverBg}`}
                     title="무엇을 편성할까요? 표에서 자세히 보기"
@@ -5922,14 +5947,16 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         {timeLabel && <span className="font-semibold text-zinc-500">{timeLabel}</span>}
                         <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>
                         {action && <span className="text-zinc-500">{action}</span>}
-                        {withReplace && item.tag === "REPLACE" && (
-                          <span className="text-zinc-400">
-                            {!plan ? "· AI 교체안 계산 중…" : plan === "error" ? "· AI 교체안을 계산하지 못했습니다" : "· 지금 실제 편성 기준으로 기대가 더 높은 교체 후보가 없습니다"}
-                          </span>
+                        {withReplace && item.tag === "REPLACE" && (!plan || plan === "error") && (
+                          <span className="text-zinc-400">{!plan ? "· AI 교체안 계산 중…" : "· AI 교체안을 계산하지 못했습니다"}</span>
                         )}
                       </>
                     )}
                   </a>
+                  {withReplace && item.tag === "REPLACE" && plan && plan !== "error" && !d && data?.asOfDate && (
+                    <WeakRemedyNote channel={code} date={data.asOfDate} program={programName} hour={hour} />
+                  )}
+                  </div>
                 );
               })}
             </div>

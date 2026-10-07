@@ -94,16 +94,17 @@ function priorOf(all: Airing[], a: Airing, asOfDate: string, sameProgram: boolea
     .map((x) => x.rating);
 }
 
-export async function computeWeakSlotRemedy(channelCode: string, asOfDate: string, focus: string): Promise<WeakSlotRemedy | null> {
-  const cacheKey = `${channelCode}|${asOfDate}|${focus}`;
+/** hour: 보려는 자리의 시각(0~23, 선택) — 같은 프로그램이 하루에 여러 번 나올 때 그 시각의 방영을 우선한다 */
+export async function computeWeakSlotRemedy(channelCode: string, asOfDate: string, focus: string, hour?: number | null): Promise<WeakSlotRemedy | null> {
+  const cacheKey = `${channelCode}|${asOfDate}|${focus}|${hour ?? ""}`;
   const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
-  const value = await compute(channelCode, asOfDate, focus);
+  const value = await compute(channelCode, asOfDate, focus, hour ?? null);
   cache.set(cacheKey, { at: Date.now(), value });
   return value;
 }
 
-async function compute(channelCode: string, asOfDate: string, focus: string): Promise<WeakSlotRemedy | null> {
+async function compute(channelCode: string, asOfDate: string, focus: string, hourHint: number | null): Promise<WeakSlotRemedy | null> {
   const ch = await loadChannelRef(channelCode);
   if (channelCode === "SKYUHD" || !ch.primaryTarget) return null; // skyUHD는 프로그램 단위 타깃 데이터가 없다
   const { data: tg } = await supabase.from("targets").select("id").eq("code", ch.kpiLabel).maybeSingle();
@@ -111,12 +112,19 @@ async function compute(channelCode: string, asOfDate: string, focus: string): Pr
   const all = await loadAirings(ch.id, tg.id as string, asOfDate);
   if (!all) return null;
 
-  const todays = all.filter((a) => a.date === asOfDate && sameTitle(a.name, focus));
-  if (todays.length === 0) return null;
+  // 기준일에 방영이 없으면(채널 상세의 편성 제안 등) 최근 14일 안의 가장 최근 방영일을 기준으로 삼는다
+  const mineAll = all.filter((a) => sameTitle(a.name, focus));
+  const wantHour = hourHint === null ? null : hourHint < 2 ? hourHint + 24 : hourHint;
+  const recentMine = mineAll.filter((a) => a.date <= asOfDate && a.date >= addDays(asOfDate, -14));
+  // 보려는 시각이 있으면 그 시각의 방영을 우선하고, 없으면 가장 최근 방영일 전체를 본다
+  const pool = wantHour !== null && recentMine.some((a) => Math.floor(a.startMin / 60) === wantHour) ? recentMine.filter((a) => Math.floor(a.startMin / 60) === wantHour) : recentMine;
+  const day = pool.map((a) => a.date).sort().pop();
+  if (!day) return null;
+  const todays = pool.filter((a) => a.date === day);
   // 같은 자리 중앙값 대비 가장 낮은 오늘 방영을 약해진 자리로 본다(표본 3회 이상일 때만 비교)
   const scored = todays
     .map((a) => {
-      const prior = priorOf(all, a, asOfDate, true);
+      const prior = priorOf(all, a, day, true);
       const med = median(prior);
       return { a, prior, med, dev: med !== null && med > 0 && prior.length >= 3 ? a.rating / med - 1 : null };
     })
@@ -125,31 +133,32 @@ async function compute(channelCode: string, asOfDate: string, focus: string): Pr
   const hour = Math.floor(w.a.startMin / 60);
   const where = `${DOW_KO[w.a.dow - 1]} ${hour}시`;
   if (w.dev === null || w.med === null) {
-    return { lines: [`'${focus}' ${where} 자리는 같은 자리 비교 방영이 ${w.prior.length}회뿐이라 원인을 가르기 어렵습니다 — 다음 방영 확인 후 판단`], concrete: false, sample: w.prior.length };
+    const basis = w.prior.length === 0 ? "같은 자리에서 비교할 지난 방영 기록이 없어" : `같은 자리 비교 방영이 ${w.prior.length}회뿐이라`;
+    return { lines: [`'${focus}' ${where} 자리는 ${basis} 원인을 가르기 어렵습니다 — 다음 방영 확인 후 판단`], concrete: false, sample: w.prior.length };
   }
   const med = w.med;
   const sample = w.prior.length;
 
   // ① 공휴일·연휴(전후 1일 포함) — 평소와 단순 비교가 어렵다
-  const { data: hol } = await supabase.from("public_holidays").select("holiday_date, name").gte("holiday_date", addDays(asOfDate, -1)).lte("holiday_date", addDays(asOfDate, 1));
+  const { data: hol } = await supabase.from("public_holidays").select("holiday_date, name").gte("holiday_date", addDays(day, -1)).lte("holiday_date", addDays(day, 1));
   const holiday = (hol ?? [])[0] as { holiday_date: string; name: string } | undefined;
 
   // ② 앞 프로그램 동반 하락 — 같은 날 이 방영 바로 앞(3시간 안)에 끝난 프로그램
   const prev = all
-    .filter((x) => x.date === asOfDate && x.startMin < w.a.startMin && w.a.startMin - x.startMin <= 180 && !sameTitle(x.name, focus))
+    .filter((x) => x.date === day && x.startMin < w.a.startMin && w.a.startMin - x.startMin <= 180 && !sameTitle(x.name, focus))
     .sort((p, q) => q.startMin - p.startMin)[0];
   let leadIn: { name: string; dev: number } | null = null;
   if (prev) {
-    const pm = median(priorOf(all, prev, asOfDate, true));
-    const pn = priorOf(all, prev, asOfDate, true).length;
+    const pm = median(priorOf(all, prev, day, true));
+    const pn = priorOf(all, prev, day, true).length;
     if (pm && pm > 0 && pn >= 3) leadIn = { name: prev.name, dev: prev.rating / pm - 1 };
   }
 
   // ③ 채널 전체 동반 하락 — 같은 날 다른 프로그램 중 비교 가능한 것의 과반이 평소보다 15% 이상 낮음
-  const others = all.filter((x) => x.date === asOfDate && !sameTitle(x.name, focus));
+  const others = all.filter((x) => x.date === day && !sameTitle(x.name, focus));
   const otherDevs = others
     .map((x) => {
-      const p = priorOf(all, x, asOfDate, true);
+      const p = priorOf(all, x, day, true);
       const m = median(p);
       return m && m > 0 && p.length >= 3 ? x.rating / m - 1 : null;
     })
@@ -163,7 +172,7 @@ async function compute(channelCode: string, asOfDate: string, focus: string): Pr
   const continuing = w.dev <= -0.2 && recent[0] !== undefined && recent[0] < dropLine; // 오늘 + 바로 직전 방영이 연속으로 기준선 아래
 
   // ⑤ 같은 프로그램의 다른 자리(요일·시·본/재방)가 더 잘 나왔나 — 표본 3회 이상, 이 자리 중앙값의 1.25배 이상
-  const mine = all.filter((x) => sameTitle(x.name, focus) && x.date < asOfDate).sort((p, q) => (p.date < q.date ? 1 : -1));
+  const mine = all.filter((x) => sameTitle(x.name, focus) && x.date < day).sort((p, q) => (p.date < q.date ? 1 : -1));
   const bySlot = new Map<string, Airing[]>();
   for (const x of mine) bySlot.set(slotKey(x), [...(bySlot.get(slotKey(x)) ?? []), x]);
   // 다른 자리의 중앙값(표본 3회 이상). 이 자리의 3배 이상으로 높은 자리는 이 프로그램의 "본방 자리"로 본다 —
