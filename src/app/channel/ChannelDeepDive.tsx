@@ -975,7 +975,7 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
   return (
     <div className="mb-4 rounded-2xl bg-zinc-50 p-4">
       <p className="mb-2 text-[12px] text-zinc-500">
-        가로축 = 적합도(Fit Score), 세로축 = 신뢰도(표본 충분성) — 아래 표의 태그가 어떤 기준으로 나뉘었는지 그대로
+        가로축 = 적합도, 세로축 = 신뢰도(표본 충분성) — 아래 표의 태그가 어떤 기준으로 나뉘었는지 그대로
         보여줍니다(신뢰도 {FIT_QUADRANT_CONFIDENCE_CUTOFF}% 미만은 점수와 무관하게 테스트).
       </p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
@@ -2451,7 +2451,7 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
         candidates.push({
           variable: "Lead-in",
           strengthPct: deviationPct,
-          sentence: `직전 프로그램 대비 유입 비율(Lead-in Retention)이 ${retention.toFixed(2)}로 낮아, Lead-in 영향 가능성이 관찰됩니다.`,
+          sentence: `직전 프로그램 대비 유입 비율(리드인 유지율)이 ${retention.toFixed(2)}로 낮아, 리드인 영향 가능성이 관찰됩니다.`,
           daypart: slotDaypart,
           programName: leadInSourceName,
           sampleNote: flowSampleDays !== null ? `(최근 ${flowSampleDays}일 기준)` : null,
@@ -2574,8 +2574,8 @@ function buildOpportunityNarrative(
     const strongCandidate = candidates.find((c) => (c.target_affinity_score ?? 0) >= 70 || (c.audience_flow_score ?? 0) >= 70);
     if (strongCandidate) {
       const parts: string[] = [];
-      if ((strongCandidate.target_affinity_score ?? 0) >= 70) parts.push(`Target Affinity ${strongCandidate.target_affinity_score}`);
-      if ((strongCandidate.audience_flow_score ?? 0) >= 70) parts.push(`Audience Flow ${strongCandidate.audience_flow_score}`);
+      if ((strongCandidate.target_affinity_score ?? 0) >= 70) parts.push(`타깃 선호도 ${strongCandidate.target_affinity_score}`);
+      if ((strongCandidate.audience_flow_score ?? 0) >= 70) parts.push(`시청 흐름 ${strongCandidate.audience_flow_score}`);
       const partsText = parts.join(", ");
       text += `'${strongCandidate.programs?.canonical_name}'${josaEunNeun(strongCandidate.programs?.canonical_name ?? "")} ${partsText}${josaIga(partsText)} 높아 해당 시간대로의 유입 가능성이 확인됩니다.`;
     }
@@ -2612,7 +2612,7 @@ function buildExecutiveProgrammingInsight(
     `'${candidate.programs.canonical_name}'의 Fit Score가 ${candidate.fit_score.toFixed(1)}로 확인돼, 이 슬롯에 우선 ${candidate.tag === "TEST" ? "TEST" : "배치"} 편성을 검토할 가치가 있습니다.`
   );
   if ((candidate.evidence.competitive_pressure ?? 0) >= 90) {
-    sentences.push(`다만 이 daypart의 경쟁압력이 높은 편이라(Competitive Pressure ${candidate.evidence.competitive_pressure?.toFixed(0)}) 즉각적인 REPLACE보다는 TEST 후 성과 확인을 권고합니다.`);
+    sentences.push(`다만 이 daypart의 경쟁압력이 높은 편이라(경쟁 강도 ${candidate.evidence.competitive_pressure?.toFixed(0)}) 즉각적인 REPLACE보다는 TEST 후 성과 확인을 권고합니다.`);
   }
   return sentences.join(" ");
 }
@@ -3591,16 +3591,19 @@ function TopProgramListItems({
   accentColor = "#71717a",
   isEnaStory,
   ytdAvgRating,
+  allRows,
 }: {
   rows: TopProgramRow[];
   fmtR: (v: number | null) => string;
+  /** 2단으로 나눠 그릴 때 막대 길이·점유 이상치를 전체 목록 기준으로 맞추기 위한 전체 행 */
+  allRows?: TopProgramRow[];
   indexOffset?: number;
   accentColor?: string;
   isEnaStory?: boolean;
   ytdAvgRating?: number | null;
 }) {
-  const shareOutliers = findShareOutliers(rows);
-  const maxRating = Math.max(0.0001, ...rows.map((r) => r.avg_rating ?? 0));
+  const shareOutliers = findShareOutliers(allRows ?? rows);
+  const maxRating = Math.max(0.0001, ...(allRows ?? rows).map((r) => r.avg_rating ?? 0));
   return (
     <>
       {rows.map((p, i) => {
@@ -3713,6 +3716,7 @@ function TopProgramsList({
   accentColor,
   isEnaStory,
   ytdAvgRating,
+  twoColumns,
 }: {
   rows: TopProgramRow[];
   fmtR: (v: number | null) => string;
@@ -3721,14 +3725,30 @@ function TopProgramsList({
   accentColor?: string;
   isEnaStory?: boolean;
   ytdAvgRating?: number | null;
+  /** 사용자 지시(2026-10-07): "TOP 20은 10개씩 2단으로" — 단일 목록일 때 11위부터는 오른쪽 단 */
+  twoColumns?: boolean;
 }) {
   if (rows.length === 0) {
     return <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>;
   }
+  const renderOl = (list: TopProgramRow[], offset = 0, all?: TopProgramRow[]) => (
+    <ol className="space-y-1 text-sm">
+      <TopProgramListItems rows={list} fmtR={fmtR} indexOffset={offset} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={ytdAvgRating} allRows={all} />
+    </ol>
+  );
+  const renderCols = (list: TopProgramRow[]) =>
+    twoColumns && list.length > 10 ? (
+      <div className="grid gap-x-10 gap-y-1 lg:grid-cols-2">
+        {renderOl(list.slice(0, 10), 0, list)}
+        {renderOl(list.slice(10), 10, list)}
+      </div>
+    ) : (
+      renderOl(list)
+    );
   if (!showLowSampleSplit) {
     return (
       <div>
-        <ol className="space-y-1 text-sm">{<TopProgramListItems rows={rows} fmtR={fmtR} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={ytdAvgRating} />}</ol>
+        {renderCols(rows)}
         {shareTop && <TopShareOutsideList shareTop={shareTop} topRows={rows} fmtR={fmtR} />}
       </div>
     );
@@ -3737,7 +3757,7 @@ function TopProgramsList({
   const lowSampleRows = rows.filter((p) => p.air_count < 5);
   return (
     <div>
-      <ol className="space-y-1 text-sm">{<TopProgramListItems rows={mainRows} fmtR={fmtR} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={ytdAvgRating} />}</ol>
+      {renderCols(mainRows)}
       {lowSampleRows.length > 0 && (
         <div className="mt-3 border-t border-dashed border-zinc-200 pt-3">
           <p className="mb-1 text-sm text-zinc-400">표본 부족(편성 5회 미만) — 참고용으로만 활용하세요.</p>
@@ -3843,12 +3863,12 @@ function buildScheduleRecommendationNote(
 // 강점(≥70)·주의(≤40)를 항상 쌍으로 문장화하고(둘 다 없으면 그 문장은 생략), 태그별 DECISION
 // 질문 한 줄을 덧붙인다. 임의의 시청률 상승 수치나 Fatigue는 만들지 않는다(데이터 없음).
 const FIT_SUBSCORE_LABELS: { key: keyof FitScoreItem; label: string }[] = [
-  { key: "target_performance_score", label: "Target Performance" },
-  { key: "target_affinity_score", label: "Target Affinity" },
-  { key: "audience_engagement_score", label: "Audience Engagement" },
-  { key: "slot_performance_score", label: "Slot Performance" },
-  { key: "competitive_opportunity_score", label: "Competitive Opportunity" },
-  { key: "audience_flow_score", label: "Audience Flow" },
+  { key: "target_performance_score", label: "타깃 성과" },
+  { key: "target_affinity_score", label: "타깃 선호도" },
+  { key: "audience_engagement_score", label: "시청 몰입도" },
+  { key: "slot_performance_score", label: "슬롯 성과" },
+  { key: "competitive_opportunity_score", label: "경쟁 기회" },
+  { key: "audience_flow_score", label: "시청 흐름" },
 ];
 // 사용자 지시(2026-08-25, 감사 후속: 원 명세 13번 "Reach + Time Spent / Audience Role") —
 // 도달율(Reach)과 시청시간 비율(Time Spent Share)을 함께 봐서 "이 프로그램이 시청자를 얼마나
@@ -3857,10 +3877,10 @@ const FIT_SUBSCORE_LABELS: { key: keyof FitScoreItem; label: string }[] = [
 // 않아 classifyDaypartOpportunity와 같은 태도로 억지 분류하지 않는다(null = 판단 근거 부족).
 type AudienceRole = "MASS" | "CORE" | "ACQUISITION" | "ZAPPING_RISK";
 const AUDIENCE_ROLE_LABEL: Record<AudienceRole, string> = {
-  MASS: "대중형(MASS)",
-  CORE: "코어형(CORE)",
-  ACQUISITION: "신규유입형(ACQUISITION)",
-  ZAPPING_RISK: "이탈위험(ZAPPING RISK)",
+  MASS: "대중형",
+  CORE: "코어형",
+  ACQUISITION: "신규유입형",
+  ZAPPING_RISK: "이탈위험형",
 };
 const AUDIENCE_ROLE_NOTE: Record<AudienceRole, string> = {
   MASS: "도달율·시청시간 비율 모두 채널 내 상위권입니다 — 널리 보고 오래 봅니다.",
@@ -6544,7 +6564,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <p className="text-sm text-zinc-400">해당 기간의 프로그램 단위 데이터가 없습니다.</p>
           ) : (
             <>
-              <TopProgramsList rows={topPrograms} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7 || isSdowActive} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
+              <TopProgramsList twoColumns rows={topPrograms} fmtR={fmtR} showLowSampleSplit={code === "SKYUHD" || periodWindowDays >= 7 || isSdowActive} shareTop={topSharePrograms} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={data.ytdAvgRating} />
               {(hourBlockStrength.strongest !== null || hourBlockStrength.weakest !== null) && (
                 <p className="mt-3 text-base leading-relaxed text-zinc-700">
                   위 상위 콘텐츠들과 같은 기간 기준으로 볼 때,
@@ -6556,6 +6576,686 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </p>
               )}
             </>
+          )}
+        </div>
+
+        {/* 사용자 지시(2026-10-07): AI 편성 비서 - 스마트 편성 팁 → 무엇을 편성할까요? → 경쟁채널과 비교하면? 순서로 '시청률 상위 콘텐츠 TOP 20' 바로 아래에 둔다 */}
+        {/* Tier 3(2026-08-26, 사용자 지시: "티어3에서 11번까지는 우선 진행" — 원 제안 11번
+            "AI 가설" 별도 섹션, 화면 제목은 사용자 지시대로 "AI 편성 비서 - 스마트 편성 팁").
+            위 WHY?/OPPORTUNITY?/WHAT TO SCHEDULE?는 여전히 인과 단정 금지 원칙을 그대로
+            지키고, 이 섹션만 명확히 "AI 추정 · 검증 안 됨" 라벨을 달고 분리해 더 과감한
+            가설을 보여준다 — 클릭해야만 호출(자동 로드 아님, 불필요한 OpenAI 비용 방지). */}
+        <div className="rounded-3xl bg-gradient-to-br from-violet-50 to-white p-6 shadow-sm ring-1 ring-violet-100">
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <h2 className={SECTION_TITLE_P2}>
+              AI 편성 비서 - 스마트 편성 팁
+              <span className="ml-2 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">AI 추정 · 검증 안 됨</span>
+            </h2>
+            <button
+              type="button"
+              onClick={loadSmartTips}
+              disabled={smartTipsLoading}
+              className="rounded-xl px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+              style={{ backgroundColor: accentColor }}
+            >
+              {smartTipsLoading ? "생성 중..." : smartTips ? "다시 생성" : "AI 팁 보기"}
+            </button>
+          </div>
+          <p className="mb-3 text-sm text-zinc-400">
+            위 WHY?/OPPORTUNITY?는 원인을 단정하지 않는 확정 근거 위주입니다. 이 코너는 같은 데이터를 바탕으로
+            AI가 조금 더 과감하게 세운 가설이며, 실제 편성 결정 전 반드시 별도 검증이 필요합니다.
+          </p>
+          {smartTipsError && <p className="text-sm text-rose-600">{smartTipsError}</p>}
+          {smartTips && smartTips.length === 0 && !smartTipsError && (
+            <p className="text-sm text-zinc-400">현재 종합할 만한 뚜렷한 신호가 없습니다.</p>
+          )}
+          {smartTips && smartTips.length > 0 && (
+            <ul className="space-y-2">
+              {smartTips.map((tip, i) => (
+                <li key={i} className="rounded-xl bg-white/70 p-3 text-sm ring-1 ring-violet-100">
+                  <p className="font-semibold text-zinc-800">💡 {tip.headline}</p>
+                  <p className="mt-1 text-zinc-600">{tip.rationale}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {!showComparisonView && (
+        <>
+        {/* WHAT TO SCHEDULE? — skyUHD는 타깃 구분이 없는 원본 자료 한계로 PRD Fit Score를 계산할
+            수 없어(사용자 확인, 2026-08-21) 채널 단위 대체 지표(skyuhdScorecard) 표로 대체한다.
+            id="what-to-schedule"는 UX 리서처 개선안(2026-09-09)의 헤더 "Action N건" 칩이
+            여기로 스크롤 이동하기 위한 앵커. */}
+        <div id="what-to-schedule" className="scroll-mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+          <h2 className={SECTION_TITLE_P2}>
+            무엇을 편성할까요?<span className={ENG_TITLE_ANNOTATION}>(WHAT TO SCHEDULE?)</span>
+          </h2>
+          {code === "SKYUHD" ? (
+            <>
+              <p className="mb-3 text-sm text-zinc-400">
+                skyUHD는 타깃 구분이 없는 원본 자료 한계로 PRD 고정 Fit Score(타깃 기반) 공식을 적용할 수
+                없습니다 — 대신 채널 내 시청률 percentile과 최근 4주/이전 8주 추세만으로 분류한 참고 지표입니다
+                (다른 채널의 STRENGTHEN/KEEP/MOVE/REPLACE/TEST 5태그와는 별개 개념).
+              </p>
+              {skyuhdScorecardLoading ? (
+                <p className="text-sm text-zinc-400">불러오는 중...</p>
+              ) : !skyuhdScorecard || skyuhdScorecard.length === 0 ? (
+                <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
+              ) : (
+                (() => {
+                  // 사용자 지시(2026-08-26): "skyUHD의 이 콘텐츠, 적합한가요 부분은 방영횟수가
+                  // 5회 이하이면 별도 지표로 아래에 내려서 관리" — TOP20(2026-08-21)과 같은
+                  // 이유(수기 누적 파일 특성상 표본이 적은 프로그램이 우연히 상위권에 섞이기
+                  // 쉬움)로 이 표에도 같은 원칙을 적용한다.
+                  const mainItems = skyuhdScorecard.filter((item) => item.air_count > 5);
+                  const lowSampleItems = skyuhdScorecard.filter((item) => item.air_count <= 5);
+                  const renderRows = (items: SkyuhdScorecardItem[]) =>
+                    items.map((item) => {
+                      const tier = skyuhdScorecardTier(item);
+                      return (
+                        <tr key={item.program_id} className="border-t border-zinc-100 align-top">
+                          <td className="whitespace-nowrap py-2 pr-2">
+                            <DotTag label={tier} color={SKYUHD_TIER_DOT_COLOR[tier]} />
+                          </td>
+                          <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">{item.program_name}</td>
+                          <td className="py-2 pr-2 text-zinc-600">{buildSkyuhdScorecardNote(item)}</td>
+                          <td className="whitespace-nowrap py-2 text-zinc-500">{item.air_count}회</td>
+                        </tr>
+                      );
+                    });
+                  return (
+                    <>
+                      {mainItems.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[560px] text-left text-sm">
+                            <thead>
+                              <tr className="text-zinc-400">
+                                <th className="pb-1.5 pr-2 font-medium">분류</th>
+                                <th className="pb-1.5 pr-2 font-medium">프로그램</th>
+                                <th className="pb-1.5 pr-2 font-medium">제안 사항</th>
+                                <th className="pb-1.5 font-medium">방영횟수</th>
+                              </tr>
+                            </thead>
+                            <tbody>{renderRows(mainItems)}</tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-zinc-400">방영 5회 초과 프로그램이 아직 없습니다.</p>
+                      )}
+                      {lowSampleItems.length > 0 && (
+                        <div className="mt-3 border-t border-dashed border-zinc-200 pt-3">
+                          <p className="mb-1 text-sm text-zinc-400">표본 부족(방영 5회 이하) — 참고용</p>
+                          <div className="overflow-x-auto">
+                            <table className="w-full min-w-[560px] text-left text-sm">
+                              <tbody>{renderRows(lowSampleItems)}</tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()
+              )}
+            </>
+          ) : (
+          <>
+          {fitScoreLoading ? (
+            <p className="text-sm text-zinc-400">불러오는 중...</p>
+          ) : !fitScoreItems || fitScoreItems.length === 0 ? (
+            <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
+          ) : (
+            // 사용자 지시(2026-08-21): 표 형태로 재구성 — 태그는 한글, 제목은 한 줄(truncate),
+            // 가운데 열에 제안 사항 한 줄, Fit Score/Confidence는 오른쪽. 클릭하면 아래에 근거 펼침.
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-sm">
+                <thead>
+                  <tr className="text-zinc-400">
+                    <th className="pb-1.5 pr-2 font-medium">태그</th>
+                    <th className="pb-1.5 pr-2 font-medium">프로그램</th>
+                    <th className="pb-1.5 pr-2 font-medium">제안 사항</th>
+                    {/* 사용자 지시(2026-08-21): "Fit Score"를 한국말로, 그 옆에 (신뢰도) 표기를
+                        붙여 아래 셀의 괄호 숫자가 무엇인지 헤더에서 바로 알 수 있게 한다. */}
+                    <th className="pb-1.5 font-medium">적합도(신뢰도)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fitScoreItems.map((item) => {
+                    const isOpen = expandedProgram === item.program_id;
+                    const recommendedDaypart =
+                      item.tag && (item.tag === "STRENGTHEN" || item.tag === "TEST" || item.tag === "MOVE")
+                        ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity)
+                        : null;
+                    const note = buildScheduleRecommendationNote(item, recommendedDaypart);
+                    return (
+                      <Fragment key={item.program_id}>
+                        <tr
+                          className="cursor-pointer border-t border-zinc-100 align-top hover:bg-zinc-50"
+                          onClick={() => setExpandedProgram(isOpen ? null : item.program_id)}
+                        >
+                          <td className="whitespace-nowrap py-2 pr-2">
+                            {item.tag ? <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} /> : <span className="text-zinc-400">—</span>}
+                          </td>
+                          {/* 사용자 지시(2026-08-21): 프로그램 타이틀은 가독성이 좋게 볼드로.
+                              사용자 재지시(2026-08-25): "ENA의 본방송, ENA Play와 ENA Drama의
+                              동시/직재방 방송은 별도의 프로그램으로 따로 떼어서... <본>이라고
+                              표시하면 돼" — mart_scheduling_fit_score가 channel_id+program_id
+                              단위라 채널마다 이미 별도 행으로 관리되고 있었고(이 표는 그 채널
+                              페이지의 프로그램만 나열), 다만 그 행이 본방인지 동시방영/직후재방인지
+                              구분이 안 보여 헷갈릴 수 있었다 — Page 1 "채널별 상위 프로그램"과
+                              동일하게 programs.first_run으로 <본>/<재> 태그를 붙인다(값이 없는
+                              프로그램은 태그 없이 이름만, 억지 분류 금지). */}
+                          <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">
+                            {item.programs?.canonical_name ?? "이름 없음"}
+                            {item.programs?.first_run !== null && item.programs?.first_run !== undefined && (
+                              <span className="ml-1 text-[12px] font-normal text-zinc-400">
+                                {item.programs.first_run ? "<본>" : "<재>"}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-2 text-zinc-600">{note}</td>
+                          <td className="whitespace-nowrap py-2 text-zinc-500">
+                            {item.fit_score?.toFixed(1) ?? "—"}
+                            <span className="ml-1 text-[12px] text-zinc-400">
+                              ({item.confidence_pct?.toFixed(0) ?? "—"}%)
+                            </span>
+                          </td>
+                        </tr>
+                        {isOpen && (
+                          <tr className="border-t border-zinc-100 bg-zinc-50/60">
+                            <td colSpan={4} className="p-3">
+                              <div className="grid grid-cols-2 gap-2 text-sm text-zinc-600 sm:grid-cols-3">
+                                <p>평균 시청률: {fmtR(item.evidence.avg_rating)}</p>
+                                <p>도달율: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
+                                <p>
+                                  시청시간비율: {item.evidence.avg_time_spent_share !== null ? `${item.evidence.avg_time_spent_share.toFixed(2)}%` : "—"}
+                                </p>
+                                <p>연령대 선호도 평균: {item.evidence.affinity_avg_index?.toFixed(1) ?? "—"}</p>
+                                <p>경쟁 강도: {item.evidence.competitive_pressure?.toFixed(1) ?? "—"}</p>
+                                <p>리드인 유지율: {item.evidence.avg_lead_in_retention?.toFixed(2) ?? "— (직전 프로그램 없음)"}</p>
+                              </div>
+                              {/* 사용자 지시(2026-08-21, 8-Step Insight Flow): Fit Score를 "결과값"이
+                                  아니라 "설명 가능한 점수"로 — 6개 하위지표 + 강점/주의 해석 + DECISION. */}
+                              {(() => {
+                                const fi = buildFitScoreInterpretation(item);
+                                return (
+                                  <div className="mt-3 border-t border-zinc-200 pt-3">
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-zinc-500">
+                                      {fi.subScores.map((s) => (
+                                        <span key={s.label}>
+                                          {s.label} {s.value ?? "—"}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 해석(펼칠 때만
+                                        조회)이 있으면 그걸, 없으면(아직 조회 중이거나 실패)
+                                        기존 규칙 기반 fi.interpretation으로. */}
+                                    {(fitScoreInterpretationLlm[item.program_id] ?? fi.interpretation) && (
+                                      <p className="mt-2 text-sm text-zinc-600">{fitScoreInterpretationLlm[item.program_id] ?? fi.interpretation}</p>
+                                    )}
+                                    {/* 원 명세 13번(Audience Role) — Reach/Time Spent Share 둘 다 뚜렷할 때만 표시. */}
+                                    {fi.audienceRole && (
+                                      <p className="mt-2 text-sm text-zinc-600">
+                                        <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>
+                                          시청자 유형
+                                        </span>{" "}
+                                        {AUDIENCE_ROLE_LABEL[fi.audienceRole]} — {AUDIENCE_ROLE_NOTE[fi.audienceRole]}
+                                      </p>
+                                    )}
+                                    {/* 원 명세 11번(GOLDEN/WEAK SLOT)·12번(SLOT TRANSFERABILITY) —
+                                        표본이 충분할 때만 표시(부족하면 아예 렌더링 안 함). */}
+                                    {item.slotEfficiency && (item.slotEfficiency.goldenSlot || item.slotEfficiency.weakSlot || item.slotEfficiency.transferability) && (
+                                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-600">
+                                        {item.slotEfficiency.goldenSlot && (
+                                          <span>
+                                            <span className="font-semibold text-emerald-700">황금 슬롯</span> {item.slotEfficiency.goldenSlot.hour}시대
+                                            (자기 중앙값의 {item.slotEfficiency.goldenSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.goldenSlot.airCount}회)
+                                          </span>
+                                        )}
+                                        {item.slotEfficiency.weakSlot && (
+                                          <span>
+                                            <span className="font-semibold text-rose-700">약세 슬롯</span> {item.slotEfficiency.weakSlot.hour}시대
+                                            (자기 중앙값의 {item.slotEfficiency.weakSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.weakSlot.airCount}회)
+                                          </span>
+                                        )}
+                                        {item.slotEfficiency.transferability && (
+                                          <span>
+                                            <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>
+                                              슬롯 이동성
+                                            </span>{" "}
+                                            {item.slotEfficiency.transferability === "FLEXIBLE"
+                                              ? `유연형 — 최근 ${item.slotEfficiency.weeks}주 ${item.slotEfficiency.slotSampleCount}개 슬롯에서 성과 편차가 작아, 다른 시간대로 옮겨도 유지될 가능성이 관찰됩니다`
+                                              : item.slotEfficiency.transferability === "PRIME_DEPENDENT"
+                                                ? `프라임 의존형 — 강세가 주요시간(${PRIME_UNION_LABEL}) 구간에만 몰려 있어, 그 밖 시간대로 옮기면 성과 유지가 불확실합니다`
+                                                : "슬롯 특화형 — 슬롯별 성과 편차가 커서, 이동 시 현재 성과가 유지될지 추가 검증이 필요합니다"}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                    {fi.sampleNote && <p className="mt-1 text-sm text-amber-600">{fi.sampleNote}</p>}
+                                    {fi.decision && (
+                                      <p className="mt-2 text-sm text-zinc-600">
+                                        <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>판단</span> {fi.decision}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {/* 사용자 지시(2026-10-07): 적합도 산식 설명과 사분면 그래프는 이 섹션 맨 아래(목록 아래)로. 이 섹션이 OPPORTUNITY?보다 위로 옮겨져 '위' 표현은 뺀다. */}
+          <p className="mb-3 mt-6 text-sm text-zinc-400">
+            적합도(0~100) = 타깃 성과 30% + 타깃 선호도 20% + 시청 몰입도 15% + 슬롯 성과 15% + 경쟁 기회 10% + 시청 흐름
+            10%. 신뢰도(표본 신뢰도)가 낮으면 점수와 무관하게 &lsquo;테스트&rsquo;로 표시한다. 경쟁채널 대비 기회 시간대(OPPORTUNITY?)에
+            &lsquo;강화&rsquo;·&lsquo;테스트&rsquo; 태그 프로그램을 배치하는 것을 우선 검토하세요.
+          </p>
+          {fitScoreItems && fitScoreItems.length > 0 && <FitScoreQuadrantChart items={fitScoreItems} />}
+          </>
+          )}
+        </div>
+        </>
+        )}
+
+        {/* COMPARED WITH? — 재설계(사용자 지시): Competitive Pressure 제거, 순위 높은 순 +
+            12주 평균 대비 등락 + 최고 성적 프로그램(시간대) 보고서. 기간 범위 선택 시 순위/시청률이
+            그 기간 평균으로 집계된다(사용자 지시 2026-08-20). */}
+        <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+          <h2 className={SECTION_TITLE_P2}>
+            경쟁채널과 비교하면?<span className={ENG_TITLE_ANNOTATION}>(COMPARED WITH?)</span>
+          </h2>
+          {/* 사용자 지시(2026-08-21): skyUHD는 일별 비교가 아니라 연간 누적 순위를 쓰므로, 이
+              안내 문구도 그 경우엔 아래 skyUHD 전용 문단으로 대체한다(중복 안내 방지). */}
+          {!useSkyuhdYtdCompetitorFallback && (
+            <p className="mb-3 text-sm text-zinc-400">
+              시간대별(전일/전주/전월/전분기/전년) 비교는 위 WHAT HAPPENED?를 참고하세요. 아래는 등록 경쟁채널을
+              {isRangeMode
+                ? " 선택 기간 평균 순위가 높은 순으로 나열하고, 그 이전 12주 평균 대비 등락과 기간 중 가장 잘 된 프로그램(시간대)을"
+                : ` ${referenceLabel} 순위가 높은 순으로 나열하고, ${sdowCompareLabel ?? "최근 12주 평균 대비"} ${referenceLabel} 등락과 ${referenceLabel} 가장 잘 된 프로그램(시간대)을`}
+              함께 보여줍니다.
+            </p>
+          )}
+          {/* 사용자 지시(2026-08-25): "개인2049와 수도권2049가 같으므로" 이 안내 문구를 빼달라는
+              요청 — 검증된 동의어(랭킹 시트 '개인2049' = 타깃상세 시트 '수도권 2049')로 정상
+              대체되는 흔한 경우까지 매번 경고로 보일 필요는 없다는 판단. resolved_target_label
+              자체는 계속 반환되니(SQL) 필요해지면 다시 조건부로 노출할 수 있다. */}
+          {useSkyuhdYtdCompetitorFallback ? (
+            // 사용자 지시(2026-08-21): skyUHD는 §1.2 경쟁채널 시트 자체가 없는 수기 업로드
+            // 채널이라, 일별 경쟁채널 비교(get_competitor_insight_report)는 등록 경쟁채널 5개 중
+            // 일부만(그것도 최고 성적 프로그램 없이) 불완전하게 나온다 — 대신 관리자가 업로드한
+            // 연간 누적(1/1~오늘) 시장 전체 순위 파일로 skyUHD와 등록 UHD 경쟁채널 5개(총 6개)
+            // 모두의 위치를 보여준다(일별 비교표를 대체).
+            <div className="mb-4">
+              <p className="mb-2 text-sm text-zinc-400">
+                skyUHD는 일별 등록 경쟁채널 데이터가 없어, 연간 누적({marketYtdCompetitorSnapshot[0]?.date_from}~
+                {marketYtdCompetitorSnapshot[0]?.date_to}) 유료가구 기준 시장 전체 순위로 UHD 경쟁채널 6개 사이의
+                위치를 대신 보여줍니다.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[420px] text-left text-sm">
+                  <thead>
+                    <tr className="text-zinc-400">
+                      <th className="pb-1.5 pr-2 font-medium">No.</th>
+                      <th className="pb-1.5 pr-2 font-medium">채널</th>
+                      <th className="pb-1.5 pr-2 font-medium">시장 전체 순위</th>
+                      <th className="pb-1.5 font-medium">연간 누적 시청률</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {marketYtdCompetitorSnapshot.map((r, i) => (
+                      <tr
+                        key={r.channel_name}
+                        className="border-t border-zinc-100"
+                        style={r.is_self ? { backgroundColor: `${accentColor}14` } : undefined}
+                      >
+                        <td className="py-1.5 pr-2 text-zinc-500">{i + 1}</td>
+                        <td
+                          className="py-1.5 pr-2 font-medium"
+                          style={r.is_self ? { color: accentForegroundColor(accentColor), fontWeight: 700 } : undefined}
+                        >
+                          {r.channel_name}
+                        </td>
+                        <td className="py-1.5 pr-2 text-zinc-600">{r.rank}위 (전체 217개 채널 중)</td>
+                        <td className="py-1.5 text-zinc-600">{fmt(r.rating, 5)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {(() => {
+                const selfIdx = marketYtdCompetitorSnapshot.findIndex((r) => r.is_self);
+                if (selfIdx < 0) return null;
+                return (
+                  <p className="mt-2 text-sm text-zinc-600">
+                    skyUHD는 이 6개 UHD 채널 중 {selfIdx + 1}위입니다(시장 전체 순위 기준으로는 {marketYtdCompetitorSnapshot[selfIdx].rank}위).
+                  </p>
+                );
+              })()}
+            </div>
+          ) : competitorInsightReport.length === 0 ? (
+            <p className="mb-4 text-sm text-zinc-400">등록 경쟁채널 데이터가 없습니다.</p>
+          ) : (
+            <>
+              {(() => {
+                // 사용자 지시(2026-08-21): "순위 내에 해당 채널도 같이 표기, 로고 색깔 반영 및
+                // 볼드 처리하여 당사 채널이 경쟁 채널 중 몇 위에 해당하는지" — 이 표가 이미 쓰는
+                // 시청률 기준(기간 평균/단일 일자)과 동일한 우리 채널 값을 끼워 넣고, 시청률
+                // 순으로 다시 정렬해 순위를 매긴다(새 계산 없이 이미 있는 값 재사용).
+                const ourRating = isRangeMode ? (data.periodReport?.avg_rating ?? null) : (narrativeSignal?.today_rating ?? null);
+                // 사용자 지시(2026-08-21): "비교 대상이 되는 자기 채널도 오늘 최고 성적 프로그램이
+                // 나올 수 있게" — 기간 모드는 periodProgramMovers(이미 조회된 이번 기간 평균)에서
+                // 가장 높은 프로그램을, 단일 일자 모드는 narrativeSignal의 그날 1위 프로그램을 쓴다.
+                const ourTopProgram = isRangeMode
+                  ? [...data.periodProgramMovers].filter((m) => m.period_avg_rating !== null).sort((a, b) => (b.period_avg_rating ?? 0) - (a.period_avg_rating ?? 0))[0] ?? null
+                  : null;
+                // 사용자 지시(2026-08-25): 개인2049 원본 시트와 매칭이 정확해진 걸 확인했으니,
+                // 시트처럼 시청률 옆에 시장 전체 순위(몇 위)도 함께 표기한다. 순위는 SQL이 이미
+                // 내려주는 값(경쟁채널=today_rank, 우리 채널=narrativeSignal.today_rank)을 그대로
+                // 쓴다 — 이 표의 "No." 열(단순 나열 번호)과는 다른 개념이라 시청률 옆에 붙인다.
+                type MergedRow = { competitor_name: string; today_rating: number | null; today_rank: number | null; delta_pct: number | null; top_program_name: string | null; top_program_start_time: string | null; top_program_rating: number | null; top_program_air_count: number | null; isOurs: boolean };
+                const merged: MergedRow[] = competitorInsightReport.map((c) => ({ ...c, isOurs: false }));
+                if (ourRating !== null) {
+                  merged.push({
+                    competitor_name: data.channel.name,
+                    today_rating: ourRating,
+                    // 사용자 지시(2026-09-01, 버그 수정): "기준 채널 등위가 빠진 버그" — 기간
+                    // 모드에서 경쟁채널의 today_rank는 이미 선택 기간 중 최고 순위(min(rank))로
+                    // 채워지는데(get_competitor_insight_report), 우리 채널만 null로 비워 순위
+                    // 표기가 빠지는 비대칭이 있었다. 같은 개념으로 계산한
+                    // data.ourPeriodBestRank(get_channel_period_best_rank)를 기간 모드에서 쓴다.
+                    today_rank: isRangeMode ? (data.ourPeriodBestRank ?? null) : (narrativeSignal?.today_rank ?? null),
+                    // 사용자 지시(2026-08-25): 경쟁채널과 마찬가지로 우리 채널도 "12주 평균 대비"
+                    // 등락을 표시 — data.periodReport.baseline_change_pct가 이미 같은 개념(최근
+                    // 12주/84일 평균 대비, 단일 일자든 기간 평균이든 periodReport 자체가 그때그때
+                    // 맞춰 계산)이라 새 계산 없이 그대로 쓴다.
+                    // 사용자 지시(2026-09-02, SDoW): 활성화 시엔 위 12주 baseline 대신
+                    // sameWeekdayReport(선택 요일 최근 N주 평균, KPI 카드와 동일 baseline)로
+                    // 교체 — 경쟁채널 쪽(get_competitor_insight_report)도 이미 같은 방식으로
+                    // SDoW-aware해졌으니 우리 채널 행만 다른 기준을 쓰면 산점도·표가 어긋난다.
+                    delta_pct: isSdowActive ? pctDelta(ourRating, data.sameWeekdayReport?.avgRating) : (data.periodReport?.baseline_change_pct ?? null),
+                    top_program_name: isRangeMode ? (ourTopProgram?.canonical_name ?? null) : (narrativeSignal?.top_program_name ?? null),
+                    top_program_start_time: isRangeMode ? null : (narrativeSignal?.top_program_start_time ?? null),
+                    top_program_rating: isRangeMode ? (ourTopProgram?.period_avg_rating ?? null) : (narrativeSignal?.top_program_rating ?? null),
+                    top_program_air_count: isRangeMode ? (ourTopProgram?.period_air_count ?? null) : null,
+                    isOurs: true,
+                  });
+                }
+                merged.sort((a, b) => (b.today_rating ?? -Infinity) - (a.today_rating ?? -Infinity));
+                return (
+                  <>
+                    <CompetitorPositioningScatter
+                      points={merged}
+                      accentColor={accentColor}
+                      baselineLabel={sdowBaselineShortLabel ?? undefined}
+                      selfChannelBrands={data.selfChannelBrands}
+                    />
+                    <div className="mb-3 overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-left text-sm">
+                      <thead>
+                        <tr className="text-zinc-400">
+                          {/* 사용자 지시(2026-08-21): 이 번호는 등수(순위)가 아니라 단순 나열 번호 —
+                              제목을 "No."로 바꿔 오해를 줄인다. */}
+                          <th className="pb-1.5 pr-2 font-medium">No.</th>
+                          <th className="pb-1.5 pr-2 font-medium">채널</th>
+                          <th className="pb-1.5 pr-2 font-medium">{isRangeMode ? "기간 평균 시청률" : `${referenceLabel} 시청률`}</th>
+                          <th className="pb-1.5 pr-2 font-medium">{sdowCompareLabel ?? "12주 평균 대비"}</th>
+                          <th className="pb-1.5 font-medium">{isRangeMode ? "기간 중 최고 성적 프로그램" : `${referenceLabel} 최고 성적 프로그램`}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {merged.map((c, i) => {
+                          const selfBrandColor = c.isOurs ? null : selfChannelBrandColor(c.competitor_name, data.selfChannelBrands);
+                          return (
+                          <tr
+                            key={c.competitor_name}
+                            className="border-t border-zinc-100"
+                            style={c.isOurs ? { backgroundColor: `${accentColor}14` } : undefined}
+                          >
+                            <td className="py-1.5 pr-2 text-zinc-500">{i + 1}</td>
+                            <td
+                              className="py-1.5 pr-2 font-medium"
+                              style={
+                                c.isOurs
+                                  ? { color: data.channel.themeColor ?? undefined, fontWeight: 700 }
+                                  : selfBrandColor
+                                    ? { color: selfBrandColor, fontWeight: 700 }
+                                    : { color: undefined }
+                              }
+                            >
+                              {c.competitor_name}
+                            </td>
+                            {/* 사용자 지시(2026-08-25): 원본 개인2049 시트처럼 시청률 옆에 시장
+                                전체 순위를 함께 — 순위가 없는 경우(기간 평균 등)만 생략. */}
+                            {/* 사용자 지시(2026-09-22): "시청률 옆에 등위가 등위끼리 좌정렬 맞게
+                                — 시청률은 시청률끼리, 등위는 등위끼리 좌정렬" — 시청률 문자열
+                                뒤에 바로 "(N위)"를 붙이면 시청률 자릿수가 채널마다 달라 등위
+                                시작 위치가 들쭉날쭉했다. 시청률 칸에 고정 폭을 줘 등위가 항상
+                                같은 x 위치에서 시작하게 한다(tabular-nums로 숫자 폭도 통일). */}
+                            <td className="py-1.5 pr-2 text-zinc-600">
+                              <span className="inline-flex items-baseline gap-1">
+                                <span className="inline-block w-16 shrink-0 tabular-nums">{fmtR(c.today_rating)}</span>
+                                {c.today_rank !== null && <span className="tabular-nums text-zinc-400">({c.today_rank}위)</span>}
+                              </span>
+                            </td>
+                            <td className="py-1.5 pr-2">
+                              {/* 인포그래픽 제안(사용자 지시 2026-08-22, Page 2 전체 구현): 맨텍스트
+                                  화살표를 Page 1과 같은 톤(bg-50+ring)의 방향 배지로 — 여러 경쟁채널을
+                                  세로로 훑을 때 더 빠르게 스캔 가능. */}
+                              {c.delta_pct === null ? (
+                                <span className="text-zinc-400">—</span>
+                              ) : (
+                                <span
+                                  className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[12px] font-semibold ring-1 ring-inset ${
+                                    c.delta_pct >= 0 ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-rose-200"
+                                  }`}
+                                >
+                                  {c.delta_pct >= 0 ? "▲" : "▼"} {Math.abs(c.delta_pct).toFixed(1)}%
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-1.5 text-zinc-600">
+                              {/* 사용자 재지시(2026-08-22): 프로그램명만 채널명과 같은 굵기(font-medium)로
+                                  잘 보이게, 뒤 괄호(평균/회차 등 부가 정보)는 기존처럼 옅게. */}
+                              {c.top_program_name ? (
+                                <>
+                                  <span className="font-medium text-zinc-800">{c.top_program_name}</span>{" "}
+                                  <span className="text-zinc-500">
+                                    {c.top_program_start_time
+                                      ? `(${fmtTime(c.top_program_start_time)}, ${fmtR(c.top_program_rating)})`
+                                      : c.top_program_rating !== null
+                                        ? `(평균 ${fmtR(c.top_program_rating)}${c.top_program_air_count ? `, ${c.top_program_air_count}회` : ""})`
+                                        : ""}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-zinc-300">—</span>
+                              )}
+                            </td>
+                          </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    </div>
+                  </>
+                );
+              })()}
+              {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 문단(sectionLlm.competitor)이 있으면
+                  그걸, 없으면 기존 규칙 기반 buildCompetitorNarrative로. 가독성 개선 5번
+                  (2026-08-26): 줄 폭 제한 + 등락 수치 강조(표시만, 문장 로직은 그대로). */}
+              <p className="mb-4 text-base leading-relaxed text-zinc-700">
+                {highlightNarrativeText(
+                  sectionLlmCurrent.competitor ?? buildCompetitorNarrative(competitorInsightReport, sdowBaselineShortLabel ?? undefined),
+                  "#059669",
+                  "#e11d48"
+                )}
+              </p>
+            </>
+          )}
+
+          {/* 사용자 지시(2026-08-21, 기능 #15-11): 오늘/어제/당일 직접 지정에서만 "시간대별
+              경쟁 프로그램"(동시간대 겹치는 프로그램 비교, 하루 단위 개념이라 기간에는 의미가
+              없음)을 보여주고, 그 외 기간은 "동기간 경쟁사 주요 프로그램 리뷰"로 대체한다 —
+              상위 5개 채널로 좁힌 뒤 그 안에서 상위 7개 프로그램. */}
+          {/* 사용자 지시(2026-09-17): skyUHD는 겹치는 경쟁 프로그램 자료가 없어 이 표가 항상 비어
+              있다 — showCompetitorOverlapSection(판정기)이 false면 통째로 감춘다. */}
+          {!showComparisonView && showCompetitorOverlapSection && (
+          <div className="mt-6 border-t border-zinc-100 pt-5">
+            <h3 className="mb-1 text-sm font-semibold text-zinc-500">{referenceLabel} 시간대별 경쟁 프로그램</h3>
+            <p className="mb-3 text-sm text-zinc-400">
+              방송 시간이 충분히 겹치는(10분 이상이면서 한쪽 방송의 30% 이상) 등록 경쟁채널 프로그램 중 시청률 상위 3개를 나란히
+              보여줍니다 — &ldquo;그 시간대에 경쟁채널이 무엇으로 잘했는가&rdquo;를 볼 수 있습니다. 프로그램 평균 시청률끼리의 비교이며, 겹친 구간만의 분 단위 시청률 비교는 아닙니다.
+            </p>
+            {competitorProgramOverlap.length === 0 ? (
+              <p className="text-sm text-zinc-400">{referenceLabel} 시간대가 겹치는 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
+            ) : (
+              // 사용자 재지시(2026-08-22): "당사 윗줄/경쟁사 아랫줄" 2줄 구조 대신 당사 프로그램당
+              // 한 줄(표 행)로 — 시간·당사 프로그램은 왼쪽 고정 열, 경쟁 프로그램 최대 3개는
+              // 각자의 열에 나란히(칸 안에서만 2줄: 채널·시간 / 프로그램명·시청률·격차).
+              (() => {
+                const grouped = Object.entries(
+                  competitorProgramOverlap.reduce<Record<string, CompetitorOverlapRow[]>>((acc, row) => {
+                    const key = `${row.our_start_time}__${row.our_program_name}`;
+                    (acc[key] ??= []).push(row);
+                    return acc;
+                  }, {})
+                );
+                return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-left text-sm">
+                      <thead>
+                        <tr className="text-zinc-400">
+                          <th className="w-14 pb-1.5 pr-2 font-medium">시간</th>
+                          <th className="pb-1.5 pr-3 font-medium">당사 프로그램</th>
+                          <th className="pb-1.5 pr-3 font-medium">경쟁 1</th>
+                          <th className="pb-1.5 pr-3 font-medium">경쟁 2</th>
+                          <th className="pb-1.5 font-medium">경쟁 3</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {grouped.map(([key, rows]) => (
+                          <tr key={key} className="border-t border-zinc-100 align-top">
+                            <td className="py-2 pr-2 text-zinc-500">{rows[0].our_start_time.slice(0, 5)}</td>
+                            <td className="py-2 pr-3">
+                              <span className="font-medium text-zinc-800">{rows[0].our_program_name}</span>{" "}
+                              <span className="text-zinc-500">({fmtR(rows[0].our_rating)})</span>
+                            </td>
+                            {[0, 1, 2].map((idx) => {
+                              const r = rows[idx];
+                              return (
+                                <td key={idx} className="py-2 pr-3">
+                                  {r ? (
+                                    <div>
+                                      <p className="text-[11px] text-zinc-400">
+                                        {r.competitor_name} · {r.competitor_start_time.slice(0, 5)}
+                                      </p>
+                                      <p className="text-zinc-700">
+                                        {r.competitor_program_name} <span className="font-semibold text-zinc-800">{fmtR(r.competitor_rating)}</span>
+                                        {r.rating_gap !== null && (
+                                          <span className={r.rating_gap >= 0 ? "text-rose-600" : "text-emerald-600"}>
+                                            {" "}
+                                            ({r.rating_gap >= 0 ? "+" : ""}
+                                            {r.rating_gap.toFixed(3)})
+                                          </span>
+                                        )}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <span className="text-zinc-300">—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()
+            )}
+          </div>
+          )}
+
+          {/* 사용자 지시(2026-09-17): skyUHD는 등록 경쟁채널의 프로그램 단위 자료가 없어 이 목록이
+              비어 있다 — 단일 일자 쪽은 showCompetitorTopProgramsSection(판정기)으로, 기간 쪽은
+              실제 행 수로 각각 판단해 비어 있으면 통째로 감춘다(안내 문구도 남기지 않음). */}
+          {!showComparisonView && !showSdowDualView ? (
+          showCompetitorTopProgramsSection && (
+          <div className="mt-5 border-t border-zinc-100 pt-5">
+            <h3 className="mb-1 text-sm font-semibold text-zinc-500">{referenceLabel} 경쟁채널 TOP 5 프로그램</h3>
+            <p className="mb-3 text-sm text-zinc-400">
+              이 채널의 프로그램과 무관하게, 등록된 경쟁채널 중 {referenceLabel} 시청률이 가장
+              높았던 방영 순위입니다(시장 전체 동향 참고용).
+            </p>
+            {competitorTopPrograms.length === 0 ? (
+              <p className="text-sm text-zinc-400">{referenceLabel} 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
+            ) : (
+              // UX 아키텍트 개선안(2026-09-09): 채널명+시간+프로그램명을 한 span(w-56)에
+              // 공백으로 이어붙이던 구조 — truncate/nowrap이 없어 224px를 넘으면 자동
+              // 줄바꿈되어 프로그램명이 다음 줄로 밀렸다("동시간대 경쟁 상황"이 2026-08-22에
+              // 이미 겪고 고친 것과 같은 문제, 3438~3454행 패턴 참고). 필드마다 독립된 grid
+              // 열로 분리 — 값 종류를 통제할 수 없는 채널명·프로그램명은 truncate+title로
+              // 안전하게, 시간·시청률처럼 짧고 예측 가능한 값은 고정폭+tabular-nums로.
+              // 2026-08-22 지시(시청률을 제목 바로 옆에)는 grid 열 순서 자체로 충족.
+              <ol className="space-y-1.5 text-sm">
+                {competitorTopPrograms.map((p, i) => (
+                  <li key={i} className="grid grid-cols-[1.5rem_5.25rem_3rem_minmax(0,1fr)_4.5rem] items-baseline gap-x-2">
+                    <span className="text-right font-medium text-zinc-400">{i + 1}</span>
+                    <span className="truncate font-medium text-zinc-700" title={p.competitor_name}>
+                      {p.competitor_name}
+                    </span>
+                    <span className="tabular-nums text-zinc-500">{p.start_time.slice(0, 5)}</span>
+                    <span className="truncate text-zinc-500" title={p.program_name}>
+                      {p.program_name}
+                    </span>
+                    <span className="text-right font-semibold tabular-nums text-zinc-800">{fmtR(p.rating)}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+          )
+          ) : (
+          (skyuhdGate === null || competitorPeriodTopPrograms.length > 0) && (
+          <div className="mt-5 border-t border-zinc-100 pt-5">
+            <h3 className="mb-1 text-sm font-semibold text-zinc-500">
+              {showSdowDualView ? "동요일" : comparisonLabel ? `${comparisonLabel} 대비 이번 기간` : "선택 기간"} 동기간 경쟁사 주요 프로그램 리뷰
+            </h3>
+            <p className="mb-3 text-sm text-zinc-400">
+              {showSdowDualView ? sdowBaselineShortLabel ?? "비교 대상" : "이 기간"} 평균 시청률이 가장 높았던 등록 경쟁채널 상위 5개 안에서, 그{" "}
+              {showSdowDualView ? "요일" : "기간"} 동안의 <b>프로그램별 평균 시청률</b>이 높은 상위 7개를 뽑았습니다(일회성 반짝 편성이 아니라
+              꾸준히 강했던 프로그램 기준 — 같은 프로그램은 한 번만 표시, 시장 전체 동향 참고용).
+            </p>
+            {hasPriorRange || showSdowDualView ? (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-zinc-600">
+                    {showSdowDualView
+                      ? `${sdowBaselineShortLabel ?? "비교 대상"}`
+                      : `${comparisonLabel ?? "이전"} 기간 ${periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}`}
+                  </p>
+                  <CompetitorPeriodTopProgramsList rows={showSdowDualView ? data.competitorPeriodTopProgramsSdow : competitorPeriodTopProgramsPrior} fmtR={fmtR} />
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-zinc-600">
+                    {showSdowDualView ? "오늘" : `이번 기간 ${periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}`}
+                  </p>
+                  <CompetitorPeriodTopProgramsList rows={competitorPeriodTopPrograms} fmtR={fmtR} />
+                </div>
+              </div>
+            ) : (
+              <CompetitorPeriodTopProgramsList rows={competitorPeriodTopPrograms} fmtR={fmtR} />
+            )}
+          </div>
+          )
           )}
         </div>
 
@@ -7183,9 +7883,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       <thead>
                         <tr className="text-zinc-400">
                           <th className="pb-2 font-medium">프로그램</th>
-                          <th className="pb-2 font-medium">Target Performance</th>
-                          <th className="pb-2 font-medium">Target Affinity</th>
-                          <th className="pb-2 font-medium">Audience Engagement</th>
+                          <th className="pb-2 font-medium">타깃 성과</th>
+                          <th className="pb-2 font-medium">타깃 선호도</th>
+                          <th className="pb-2 font-medium">시청 몰입도</th>
                           <th className="pb-2 font-medium">종합(3개 평균)</th>
                         </tr>
                       </thead>
@@ -7248,8 +7948,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     Audience Engagement를 그대로 유지한다. */}
                 <ScatterQuadrantChart
                   accentColor={accentColor}
-                  xLabel="Target Performance(percentile)"
-                  yLabel="Audience Engagement(percentile)"
+                  xLabel="타깃 성과(백분위)"
+                  yLabel="시청 몰입도(백분위)"
                   xDomain={[0, 100]}
                   xSplit={50}
                   yDomain={[0, 100]}
@@ -7439,682 +8139,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         </div>
         )}
 
-        {/* WHAT TO SCHEDULE? — skyUHD는 타깃 구분이 없는 원본 자료 한계로 PRD Fit Score를 계산할
-            수 없어(사용자 확인, 2026-08-21) 채널 단위 대체 지표(skyuhdScorecard) 표로 대체한다.
-            id="what-to-schedule"는 UX 리서처 개선안(2026-09-09)의 헤더 "Action N건" 칩이
-            여기로 스크롤 이동하기 위한 앵커. */}
-        <div id="what-to-schedule" className="scroll-mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={SECTION_TITLE_P2}>
-            무엇을 편성할까요?<span className={ENG_TITLE_ANNOTATION}>(WHAT TO SCHEDULE?)</span>
-          </h2>
-          {code === "SKYUHD" ? (
-            <>
-              <p className="mb-3 text-sm text-zinc-400">
-                skyUHD는 타깃 구분이 없는 원본 자료 한계로 PRD 고정 Fit Score(타깃 기반) 공식을 적용할 수
-                없습니다 — 대신 채널 내 시청률 percentile과 최근 4주/이전 8주 추세만으로 분류한 참고 지표입니다
-                (다른 채널의 STRENGTHEN/KEEP/MOVE/REPLACE/TEST 5태그와는 별개 개념).
-              </p>
-              {skyuhdScorecardLoading ? (
-                <p className="text-sm text-zinc-400">불러오는 중...</p>
-              ) : !skyuhdScorecard || skyuhdScorecard.length === 0 ? (
-                <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
-              ) : (
-                (() => {
-                  // 사용자 지시(2026-08-26): "skyUHD의 이 콘텐츠, 적합한가요 부분은 방영횟수가
-                  // 5회 이하이면 별도 지표로 아래에 내려서 관리" — TOP20(2026-08-21)과 같은
-                  // 이유(수기 누적 파일 특성상 표본이 적은 프로그램이 우연히 상위권에 섞이기
-                  // 쉬움)로 이 표에도 같은 원칙을 적용한다.
-                  const mainItems = skyuhdScorecard.filter((item) => item.air_count > 5);
-                  const lowSampleItems = skyuhdScorecard.filter((item) => item.air_count <= 5);
-                  const renderRows = (items: SkyuhdScorecardItem[]) =>
-                    items.map((item) => {
-                      const tier = skyuhdScorecardTier(item);
-                      return (
-                        <tr key={item.program_id} className="border-t border-zinc-100 align-top">
-                          <td className="whitespace-nowrap py-2 pr-2">
-                            <DotTag label={tier} color={SKYUHD_TIER_DOT_COLOR[tier]} />
-                          </td>
-                          <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">{item.program_name}</td>
-                          <td className="py-2 pr-2 text-zinc-600">{buildSkyuhdScorecardNote(item)}</td>
-                          <td className="whitespace-nowrap py-2 text-zinc-500">{item.air_count}회</td>
-                        </tr>
-                      );
-                    });
-                  return (
-                    <>
-                      {mainItems.length > 0 ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full min-w-[560px] text-left text-sm">
-                            <thead>
-                              <tr className="text-zinc-400">
-                                <th className="pb-1.5 pr-2 font-medium">분류</th>
-                                <th className="pb-1.5 pr-2 font-medium">프로그램</th>
-                                <th className="pb-1.5 pr-2 font-medium">제안 사항</th>
-                                <th className="pb-1.5 font-medium">방영횟수</th>
-                              </tr>
-                            </thead>
-                            <tbody>{renderRows(mainItems)}</tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-zinc-400">방영 5회 초과 프로그램이 아직 없습니다.</p>
-                      )}
-                      {lowSampleItems.length > 0 && (
-                        <div className="mt-3 border-t border-dashed border-zinc-200 pt-3">
-                          <p className="mb-1 text-sm text-zinc-400">표본 부족(방영 5회 이하) — 참고용</p>
-                          <div className="overflow-x-auto">
-                            <table className="w-full min-w-[560px] text-left text-sm">
-                              <tbody>{renderRows(lowSampleItems)}</tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()
-              )}
-            </>
-          ) : (
-          <>
-          <p className="mb-3 text-sm text-zinc-400">
-            Fit Score(0~100) = 30% Target Performance + 20% Target Affinity + 15% Audience Engagement + 15% Slot
-            Performance + 10% Competitive Opportunity + 10% Audience Flow. Confidence(표본 신뢰도)가 낮으면 점수와
-            무관하게 TEST로 표시한다. 위 OPPORTUNITY?에서 찾은 기회 시간대에 STRENGTHEN/TEST 태그 프로그램을
-            배치하는 것을 우선 검토하세요.
-          </p>
-          {fitScoreItems && fitScoreItems.length > 0 && <FitScoreQuadrantChart items={fitScoreItems} />}
-          {fitScoreLoading ? (
-            <p className="text-sm text-zinc-400">불러오는 중...</p>
-          ) : !fitScoreItems || fitScoreItems.length === 0 ? (
-            <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
-          ) : (
-            // 사용자 지시(2026-08-21): 표 형태로 재구성 — 태그는 한글, 제목은 한 줄(truncate),
-            // 가운데 열에 제안 사항 한 줄, Fit Score/Confidence는 오른쪽. 클릭하면 아래에 근거 펼침.
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
-                <thead>
-                  <tr className="text-zinc-400">
-                    <th className="pb-1.5 pr-2 font-medium">태그</th>
-                    <th className="pb-1.5 pr-2 font-medium">프로그램</th>
-                    <th className="pb-1.5 pr-2 font-medium">제안 사항</th>
-                    {/* 사용자 지시(2026-08-21): "Fit Score"를 한국말로, 그 옆에 (신뢰도) 표기를
-                        붙여 아래 셀의 괄호 숫자가 무엇인지 헤더에서 바로 알 수 있게 한다. */}
-                    <th className="pb-1.5 font-medium">적합도(신뢰도)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fitScoreItems.map((item) => {
-                    const isOpen = expandedProgram === item.program_id;
-                    const recommendedDaypart =
-                      item.tag && (item.tag === "STRENGTHEN" || item.tag === "TEST" || item.tag === "MOVE")
-                        ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity)
-                        : null;
-                    const note = buildScheduleRecommendationNote(item, recommendedDaypart);
-                    return (
-                      <Fragment key={item.program_id}>
-                        <tr
-                          className="cursor-pointer border-t border-zinc-100 align-top hover:bg-zinc-50"
-                          onClick={() => setExpandedProgram(isOpen ? null : item.program_id)}
-                        >
-                          <td className="whitespace-nowrap py-2 pr-2">
-                            {item.tag ? <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} /> : <span className="text-zinc-400">—</span>}
-                          </td>
-                          {/* 사용자 지시(2026-08-21): 프로그램 타이틀은 가독성이 좋게 볼드로.
-                              사용자 재지시(2026-08-25): "ENA의 본방송, ENA Play와 ENA Drama의
-                              동시/직재방 방송은 별도의 프로그램으로 따로 떼어서... <본>이라고
-                              표시하면 돼" — mart_scheduling_fit_score가 channel_id+program_id
-                              단위라 채널마다 이미 별도 행으로 관리되고 있었고(이 표는 그 채널
-                              페이지의 프로그램만 나열), 다만 그 행이 본방인지 동시방영/직후재방인지
-                              구분이 안 보여 헷갈릴 수 있었다 — Page 1 "채널별 상위 프로그램"과
-                              동일하게 programs.first_run으로 <본>/<재> 태그를 붙인다(값이 없는
-                              프로그램은 태그 없이 이름만, 억지 분류 금지). */}
-                          <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">
-                            {item.programs?.canonical_name ?? "이름 없음"}
-                            {item.programs?.first_run !== null && item.programs?.first_run !== undefined && (
-                              <span className="ml-1 text-[12px] font-normal text-zinc-400">
-                                {item.programs.first_run ? "<본>" : "<재>"}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2 pr-2 text-zinc-600">{note}</td>
-                          <td className="whitespace-nowrap py-2 text-zinc-500">
-                            {item.fit_score?.toFixed(1) ?? "—"}
-                            <span className="ml-1 text-[12px] text-zinc-400">
-                              ({item.confidence_pct?.toFixed(0) ?? "—"}%)
-                            </span>
-                          </td>
-                        </tr>
-                        {isOpen && (
-                          <tr className="border-t border-zinc-100 bg-zinc-50/60">
-                            <td colSpan={4} className="p-3">
-                              <div className="grid grid-cols-2 gap-2 text-sm text-zinc-600 sm:grid-cols-3">
-                                <p>평균 시청률: {fmtR(item.evidence.avg_rating)}</p>
-                                <p>Reach: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
-                                <p>
-                                  시청시간비율: {item.evidence.avg_time_spent_share !== null ? `${item.evidence.avg_time_spent_share.toFixed(2)}%` : "—"}
-                                </p>
-                                <p>연령대 Affinity 평균: {item.evidence.affinity_avg_index?.toFixed(1) ?? "—"}</p>
-                                <p>Competitive Pressure: {item.evidence.competitive_pressure?.toFixed(1) ?? "—"}</p>
-                                <p>Lead-in Retention: {item.evidence.avg_lead_in_retention?.toFixed(2) ?? "— (직전 프로그램 없음)"}</p>
-                              </div>
-                              {/* 사용자 지시(2026-08-21, 8-Step Insight Flow): Fit Score를 "결과값"이
-                                  아니라 "설명 가능한 점수"로 — 6개 하위지표 + 강점/주의 해석 + DECISION. */}
-                              {(() => {
-                                const fi = buildFitScoreInterpretation(item);
-                                return (
-                                  <div className="mt-3 border-t border-zinc-200 pt-3">
-                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-zinc-500">
-                                      {fi.subScores.map((s) => (
-                                        <span key={s.label}>
-                                          {s.label} {s.value ?? "—"}
-                                        </span>
-                                      ))}
-                                    </div>
-                                    {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 해석(펼칠 때만
-                                        조회)이 있으면 그걸, 없으면(아직 조회 중이거나 실패)
-                                        기존 규칙 기반 fi.interpretation으로. */}
-                                    {(fitScoreInterpretationLlm[item.program_id] ?? fi.interpretation) && (
-                                      <p className="mt-2 text-sm text-zinc-600">{fitScoreInterpretationLlm[item.program_id] ?? fi.interpretation}</p>
-                                    )}
-                                    {/* 원 명세 13번(Audience Role) — Reach/Time Spent Share 둘 다 뚜렷할 때만 표시. */}
-                                    {fi.audienceRole && (
-                                      <p className="mt-2 text-sm text-zinc-600">
-                                        <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>
-                                          시청자 유형
-                                        </span>{" "}
-                                        {AUDIENCE_ROLE_LABEL[fi.audienceRole]} — {AUDIENCE_ROLE_NOTE[fi.audienceRole]}
-                                      </p>
-                                    )}
-                                    {/* 원 명세 11번(GOLDEN/WEAK SLOT)·12번(SLOT TRANSFERABILITY) —
-                                        표본이 충분할 때만 표시(부족하면 아예 렌더링 안 함). */}
-                                    {item.slotEfficiency && (item.slotEfficiency.goldenSlot || item.slotEfficiency.weakSlot || item.slotEfficiency.transferability) && (
-                                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-600">
-                                        {item.slotEfficiency.goldenSlot && (
-                                          <span>
-                                            <span className="font-semibold text-emerald-700">황금 슬롯</span> {item.slotEfficiency.goldenSlot.hour}시대
-                                            (자기 중앙값의 {item.slotEfficiency.goldenSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.goldenSlot.airCount}회)
-                                          </span>
-                                        )}
-                                        {item.slotEfficiency.weakSlot && (
-                                          <span>
-                                            <span className="font-semibold text-rose-700">약세 슬롯</span> {item.slotEfficiency.weakSlot.hour}시대
-                                            (자기 중앙값의 {item.slotEfficiency.weakSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.weakSlot.airCount}회)
-                                          </span>
-                                        )}
-                                        {item.slotEfficiency.transferability && (
-                                          <span>
-                                            <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>
-                                              슬롯 이동성
-                                            </span>{" "}
-                                            {item.slotEfficiency.transferability === "FLEXIBLE"
-                                              ? `유연형(FLEXIBLE) — 최근 ${item.slotEfficiency.weeks}주 ${item.slotEfficiency.slotSampleCount}개 슬롯에서 성과 편차가 작아, 다른 시간대로 옮겨도 유지될 가능성이 관찰됩니다`
-                                              : item.slotEfficiency.transferability === "PRIME_DEPENDENT"
-                                                ? `프라임 의존형(PRIME-DEPENDENT) — 강세가 주요시간(${PRIME_UNION_LABEL}) 구간에만 몰려 있어, 그 밖 시간대로 옮기면 성과 유지가 불확실합니다`
-                                                : "슬롯 특화형(SLOT-SPECIFIC) — 슬롯별 성과 편차가 커서, 이동 시 현재 성과가 유지될지 추가 검증이 필요합니다"}
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-                                    {fi.sampleNote && <p className="mt-1 text-sm text-amber-600">{fi.sampleNote}</p>}
-                                    {fi.decision && (
-                                      <p className="mt-2 text-sm text-zinc-600">
-                                        <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>판단</span> {fi.decision}
-                                      </p>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-          </>
-          )}
-        </div>
         </>
         )}
 
-        {/* Tier 3(2026-08-26, 사용자 지시: "티어3에서 11번까지는 우선 진행" — 원 제안 11번
-            "AI 가설" 별도 섹션, 화면 제목은 사용자 지시대로 "AI 편성 비서 - 스마트 편성 팁").
-            위 WHY?/OPPORTUNITY?/WHAT TO SCHEDULE?는 여전히 인과 단정 금지 원칙을 그대로
-            지키고, 이 섹션만 명확히 "AI 추정 · 검증 안 됨" 라벨을 달고 분리해 더 과감한
-            가설을 보여준다 — 클릭해야만 호출(자동 로드 아님, 불필요한 OpenAI 비용 방지). */}
-        <div className="rounded-3xl bg-gradient-to-br from-violet-50 to-white p-6 shadow-sm ring-1 ring-violet-100">
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-            <h2 className={SECTION_TITLE_P2}>
-              AI 편성 비서 - 스마트 편성 팁
-              <span className="ml-2 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">AI 추정 · 검증 안 됨</span>
-            </h2>
-            <button
-              type="button"
-              onClick={loadSmartTips}
-              disabled={smartTipsLoading}
-              className="rounded-xl px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-              style={{ backgroundColor: accentColor }}
-            >
-              {smartTipsLoading ? "생성 중..." : smartTips ? "다시 생성" : "AI 팁 보기"}
-            </button>
-          </div>
-          <p className="mb-3 text-sm text-zinc-400">
-            위 WHY?/OPPORTUNITY?는 원인을 단정하지 않는 확정 근거 위주입니다. 이 코너는 같은 데이터를 바탕으로
-            AI가 조금 더 과감하게 세운 가설이며, 실제 편성 결정 전 반드시 별도 검증이 필요합니다.
-          </p>
-          {smartTipsError && <p className="text-sm text-rose-600">{smartTipsError}</p>}
-          {smartTips && smartTips.length === 0 && !smartTipsError && (
-            <p className="text-sm text-zinc-400">현재 종합할 만한 뚜렷한 신호가 없습니다.</p>
-          )}
-          {smartTips && smartTips.length > 0 && (
-            <ul className="space-y-2">
-              {smartTips.map((tip, i) => (
-                <li key={i} className="rounded-xl bg-white/70 p-3 text-sm ring-1 ring-violet-100">
-                  <p className="font-semibold text-zinc-800">💡 {tip.headline}</p>
-                  <p className="mt-1 text-zinc-600">{tip.rationale}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
 
-        {/* COMPARED WITH? — 재설계(사용자 지시): Competitive Pressure 제거, 순위 높은 순 +
-            12주 평균 대비 등락 + 최고 성적 프로그램(시간대) 보고서. 기간 범위 선택 시 순위/시청률이
-            그 기간 평균으로 집계된다(사용자 지시 2026-08-20). */}
-        <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={SECTION_TITLE_P2}>
-            경쟁채널과 비교하면?<span className={ENG_TITLE_ANNOTATION}>(COMPARED WITH?)</span>
-          </h2>
-          {/* 사용자 지시(2026-08-21): skyUHD는 일별 비교가 아니라 연간 누적 순위를 쓰므로, 이
-              안내 문구도 그 경우엔 아래 skyUHD 전용 문단으로 대체한다(중복 안내 방지). */}
-          {!useSkyuhdYtdCompetitorFallback && (
-            <p className="mb-3 text-sm text-zinc-400">
-              시간대별(전일/전주/전월/전분기/전년) 비교는 위 WHAT HAPPENED?를 참고하세요. 아래는 등록 경쟁채널을
-              {isRangeMode
-                ? " 선택 기간 평균 순위가 높은 순으로 나열하고, 그 이전 12주 평균 대비 등락과 기간 중 가장 잘 된 프로그램(시간대)을"
-                : ` ${referenceLabel} 순위가 높은 순으로 나열하고, ${sdowCompareLabel ?? "최근 12주 평균 대비"} ${referenceLabel} 등락과 ${referenceLabel} 가장 잘 된 프로그램(시간대)을`}
-              함께 보여줍니다.
-            </p>
-          )}
-          {/* 사용자 지시(2026-08-25): "개인2049와 수도권2049가 같으므로" 이 안내 문구를 빼달라는
-              요청 — 검증된 동의어(랭킹 시트 '개인2049' = 타깃상세 시트 '수도권 2049')로 정상
-              대체되는 흔한 경우까지 매번 경고로 보일 필요는 없다는 판단. resolved_target_label
-              자체는 계속 반환되니(SQL) 필요해지면 다시 조건부로 노출할 수 있다. */}
-          {useSkyuhdYtdCompetitorFallback ? (
-            // 사용자 지시(2026-08-21): skyUHD는 §1.2 경쟁채널 시트 자체가 없는 수기 업로드
-            // 채널이라, 일별 경쟁채널 비교(get_competitor_insight_report)는 등록 경쟁채널 5개 중
-            // 일부만(그것도 최고 성적 프로그램 없이) 불완전하게 나온다 — 대신 관리자가 업로드한
-            // 연간 누적(1/1~오늘) 시장 전체 순위 파일로 skyUHD와 등록 UHD 경쟁채널 5개(총 6개)
-            // 모두의 위치를 보여준다(일별 비교표를 대체).
-            <div className="mb-4">
-              <p className="mb-2 text-sm text-zinc-400">
-                skyUHD는 일별 등록 경쟁채널 데이터가 없어, 연간 누적({marketYtdCompetitorSnapshot[0]?.date_from}~
-                {marketYtdCompetitorSnapshot[0]?.date_to}) 유료가구 기준 시장 전체 순위로 UHD 경쟁채널 6개 사이의
-                위치를 대신 보여줍니다.
-              </p>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[420px] text-left text-sm">
-                  <thead>
-                    <tr className="text-zinc-400">
-                      <th className="pb-1.5 pr-2 font-medium">No.</th>
-                      <th className="pb-1.5 pr-2 font-medium">채널</th>
-                      <th className="pb-1.5 pr-2 font-medium">시장 전체 순위</th>
-                      <th className="pb-1.5 font-medium">연간 누적 시청률</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {marketYtdCompetitorSnapshot.map((r, i) => (
-                      <tr
-                        key={r.channel_name}
-                        className="border-t border-zinc-100"
-                        style={r.is_self ? { backgroundColor: `${accentColor}14` } : undefined}
-                      >
-                        <td className="py-1.5 pr-2 text-zinc-500">{i + 1}</td>
-                        <td
-                          className="py-1.5 pr-2 font-medium"
-                          style={r.is_self ? { color: accentForegroundColor(accentColor), fontWeight: 700 } : undefined}
-                        >
-                          {r.channel_name}
-                        </td>
-                        <td className="py-1.5 pr-2 text-zinc-600">{r.rank}위 (전체 217개 채널 중)</td>
-                        <td className="py-1.5 text-zinc-600">{fmt(r.rating, 5)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {(() => {
-                const selfIdx = marketYtdCompetitorSnapshot.findIndex((r) => r.is_self);
-                if (selfIdx < 0) return null;
-                return (
-                  <p className="mt-2 text-sm text-zinc-600">
-                    skyUHD는 이 6개 UHD 채널 중 {selfIdx + 1}위입니다(시장 전체 순위 기준으로는 {marketYtdCompetitorSnapshot[selfIdx].rank}위).
-                  </p>
-                );
-              })()}
-            </div>
-          ) : competitorInsightReport.length === 0 ? (
-            <p className="mb-4 text-sm text-zinc-400">등록 경쟁채널 데이터가 없습니다.</p>
-          ) : (
-            <>
-              {(() => {
-                // 사용자 지시(2026-08-21): "순위 내에 해당 채널도 같이 표기, 로고 색깔 반영 및
-                // 볼드 처리하여 당사 채널이 경쟁 채널 중 몇 위에 해당하는지" — 이 표가 이미 쓰는
-                // 시청률 기준(기간 평균/단일 일자)과 동일한 우리 채널 값을 끼워 넣고, 시청률
-                // 순으로 다시 정렬해 순위를 매긴다(새 계산 없이 이미 있는 값 재사용).
-                const ourRating = isRangeMode ? (data.periodReport?.avg_rating ?? null) : (narrativeSignal?.today_rating ?? null);
-                // 사용자 지시(2026-08-21): "비교 대상이 되는 자기 채널도 오늘 최고 성적 프로그램이
-                // 나올 수 있게" — 기간 모드는 periodProgramMovers(이미 조회된 이번 기간 평균)에서
-                // 가장 높은 프로그램을, 단일 일자 모드는 narrativeSignal의 그날 1위 프로그램을 쓴다.
-                const ourTopProgram = isRangeMode
-                  ? [...data.periodProgramMovers].filter((m) => m.period_avg_rating !== null).sort((a, b) => (b.period_avg_rating ?? 0) - (a.period_avg_rating ?? 0))[0] ?? null
-                  : null;
-                // 사용자 지시(2026-08-25): 개인2049 원본 시트와 매칭이 정확해진 걸 확인했으니,
-                // 시트처럼 시청률 옆에 시장 전체 순위(몇 위)도 함께 표기한다. 순위는 SQL이 이미
-                // 내려주는 값(경쟁채널=today_rank, 우리 채널=narrativeSignal.today_rank)을 그대로
-                // 쓴다 — 이 표의 "No." 열(단순 나열 번호)과는 다른 개념이라 시청률 옆에 붙인다.
-                type MergedRow = { competitor_name: string; today_rating: number | null; today_rank: number | null; delta_pct: number | null; top_program_name: string | null; top_program_start_time: string | null; top_program_rating: number | null; top_program_air_count: number | null; isOurs: boolean };
-                const merged: MergedRow[] = competitorInsightReport.map((c) => ({ ...c, isOurs: false }));
-                if (ourRating !== null) {
-                  merged.push({
-                    competitor_name: data.channel.name,
-                    today_rating: ourRating,
-                    // 사용자 지시(2026-09-01, 버그 수정): "기준 채널 등위가 빠진 버그" — 기간
-                    // 모드에서 경쟁채널의 today_rank는 이미 선택 기간 중 최고 순위(min(rank))로
-                    // 채워지는데(get_competitor_insight_report), 우리 채널만 null로 비워 순위
-                    // 표기가 빠지는 비대칭이 있었다. 같은 개념으로 계산한
-                    // data.ourPeriodBestRank(get_channel_period_best_rank)를 기간 모드에서 쓴다.
-                    today_rank: isRangeMode ? (data.ourPeriodBestRank ?? null) : (narrativeSignal?.today_rank ?? null),
-                    // 사용자 지시(2026-08-25): 경쟁채널과 마찬가지로 우리 채널도 "12주 평균 대비"
-                    // 등락을 표시 — data.periodReport.baseline_change_pct가 이미 같은 개념(최근
-                    // 12주/84일 평균 대비, 단일 일자든 기간 평균이든 periodReport 자체가 그때그때
-                    // 맞춰 계산)이라 새 계산 없이 그대로 쓴다.
-                    // 사용자 지시(2026-09-02, SDoW): 활성화 시엔 위 12주 baseline 대신
-                    // sameWeekdayReport(선택 요일 최근 N주 평균, KPI 카드와 동일 baseline)로
-                    // 교체 — 경쟁채널 쪽(get_competitor_insight_report)도 이미 같은 방식으로
-                    // SDoW-aware해졌으니 우리 채널 행만 다른 기준을 쓰면 산점도·표가 어긋난다.
-                    delta_pct: isSdowActive ? pctDelta(ourRating, data.sameWeekdayReport?.avgRating) : (data.periodReport?.baseline_change_pct ?? null),
-                    top_program_name: isRangeMode ? (ourTopProgram?.canonical_name ?? null) : (narrativeSignal?.top_program_name ?? null),
-                    top_program_start_time: isRangeMode ? null : (narrativeSignal?.top_program_start_time ?? null),
-                    top_program_rating: isRangeMode ? (ourTopProgram?.period_avg_rating ?? null) : (narrativeSignal?.top_program_rating ?? null),
-                    top_program_air_count: isRangeMode ? (ourTopProgram?.period_air_count ?? null) : null,
-                    isOurs: true,
-                  });
-                }
-                merged.sort((a, b) => (b.today_rating ?? -Infinity) - (a.today_rating ?? -Infinity));
-                return (
-                  <>
-                    <CompetitorPositioningScatter
-                      points={merged}
-                      accentColor={accentColor}
-                      baselineLabel={sdowBaselineShortLabel ?? undefined}
-                      selfChannelBrands={data.selfChannelBrands}
-                    />
-                    <div className="mb-3 overflow-x-auto">
-                    <table className="w-full min-w-[560px] text-left text-sm">
-                      <thead>
-                        <tr className="text-zinc-400">
-                          {/* 사용자 지시(2026-08-21): 이 번호는 등수(순위)가 아니라 단순 나열 번호 —
-                              제목을 "No."로 바꿔 오해를 줄인다. */}
-                          <th className="pb-1.5 pr-2 font-medium">No.</th>
-                          <th className="pb-1.5 pr-2 font-medium">채널</th>
-                          <th className="pb-1.5 pr-2 font-medium">{isRangeMode ? "기간 평균 시청률" : `${referenceLabel} 시청률`}</th>
-                          <th className="pb-1.5 pr-2 font-medium">{sdowCompareLabel ?? "12주 평균 대비"}</th>
-                          <th className="pb-1.5 font-medium">{isRangeMode ? "기간 중 최고 성적 프로그램" : `${referenceLabel} 최고 성적 프로그램`}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {merged.map((c, i) => {
-                          const selfBrandColor = c.isOurs ? null : selfChannelBrandColor(c.competitor_name, data.selfChannelBrands);
-                          return (
-                          <tr
-                            key={c.competitor_name}
-                            className="border-t border-zinc-100"
-                            style={c.isOurs ? { backgroundColor: `${accentColor}14` } : undefined}
-                          >
-                            <td className="py-1.5 pr-2 text-zinc-500">{i + 1}</td>
-                            <td
-                              className="py-1.5 pr-2 font-medium"
-                              style={
-                                c.isOurs
-                                  ? { color: data.channel.themeColor ?? undefined, fontWeight: 700 }
-                                  : selfBrandColor
-                                    ? { color: selfBrandColor, fontWeight: 700 }
-                                    : { color: undefined }
-                              }
-                            >
-                              {c.competitor_name}
-                            </td>
-                            {/* 사용자 지시(2026-08-25): 원본 개인2049 시트처럼 시청률 옆에 시장
-                                전체 순위를 함께 — 순위가 없는 경우(기간 평균 등)만 생략. */}
-                            {/* 사용자 지시(2026-09-22): "시청률 옆에 등위가 등위끼리 좌정렬 맞게
-                                — 시청률은 시청률끼리, 등위는 등위끼리 좌정렬" — 시청률 문자열
-                                뒤에 바로 "(N위)"를 붙이면 시청률 자릿수가 채널마다 달라 등위
-                                시작 위치가 들쭉날쭉했다. 시청률 칸에 고정 폭을 줘 등위가 항상
-                                같은 x 위치에서 시작하게 한다(tabular-nums로 숫자 폭도 통일). */}
-                            <td className="py-1.5 pr-2 text-zinc-600">
-                              <span className="inline-flex items-baseline gap-1">
-                                <span className="inline-block w-16 shrink-0 tabular-nums">{fmtR(c.today_rating)}</span>
-                                {c.today_rank !== null && <span className="tabular-nums text-zinc-400">({c.today_rank}위)</span>}
-                              </span>
-                            </td>
-                            <td className="py-1.5 pr-2">
-                              {/* 인포그래픽 제안(사용자 지시 2026-08-22, Page 2 전체 구현): 맨텍스트
-                                  화살표를 Page 1과 같은 톤(bg-50+ring)의 방향 배지로 — 여러 경쟁채널을
-                                  세로로 훑을 때 더 빠르게 스캔 가능. */}
-                              {c.delta_pct === null ? (
-                                <span className="text-zinc-400">—</span>
-                              ) : (
-                                <span
-                                  className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[12px] font-semibold ring-1 ring-inset ${
-                                    c.delta_pct >= 0 ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-rose-200"
-                                  }`}
-                                >
-                                  {c.delta_pct >= 0 ? "▲" : "▼"} {Math.abs(c.delta_pct).toFixed(1)}%
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-1.5 text-zinc-600">
-                              {/* 사용자 재지시(2026-08-22): 프로그램명만 채널명과 같은 굵기(font-medium)로
-                                  잘 보이게, 뒤 괄호(평균/회차 등 부가 정보)는 기존처럼 옅게. */}
-                              {c.top_program_name ? (
-                                <>
-                                  <span className="font-medium text-zinc-800">{c.top_program_name}</span>{" "}
-                                  <span className="text-zinc-500">
-                                    {c.top_program_start_time
-                                      ? `(${fmtTime(c.top_program_start_time)}, ${fmtR(c.top_program_rating)})`
-                                      : c.top_program_rating !== null
-                                        ? `(평균 ${fmtR(c.top_program_rating)}${c.top_program_air_count ? `, ${c.top_program_air_count}회` : ""})`
-                                        : ""}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="text-zinc-300">—</span>
-                              )}
-                            </td>
-                          </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    </div>
-                  </>
-                );
-              })()}
-              {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 문단(sectionLlm.competitor)이 있으면
-                  그걸, 없으면 기존 규칙 기반 buildCompetitorNarrative로. 가독성 개선 5번
-                  (2026-08-26): 줄 폭 제한 + 등락 수치 강조(표시만, 문장 로직은 그대로). */}
-              <p className="mb-4 text-base leading-relaxed text-zinc-700">
-                {highlightNarrativeText(
-                  sectionLlmCurrent.competitor ?? buildCompetitorNarrative(competitorInsightReport, sdowBaselineShortLabel ?? undefined),
-                  "#059669",
-                  "#e11d48"
-                )}
-              </p>
-            </>
-          )}
-
-          {/* 사용자 지시(2026-08-21, 기능 #15-11): 오늘/어제/당일 직접 지정에서만 "시간대별
-              경쟁 프로그램"(동시간대 겹치는 프로그램 비교, 하루 단위 개념이라 기간에는 의미가
-              없음)을 보여주고, 그 외 기간은 "동기간 경쟁사 주요 프로그램 리뷰"로 대체한다 —
-              상위 5개 채널로 좁힌 뒤 그 안에서 상위 7개 프로그램. */}
-          {/* 사용자 지시(2026-09-17): skyUHD는 겹치는 경쟁 프로그램 자료가 없어 이 표가 항상 비어
-              있다 — showCompetitorOverlapSection(판정기)이 false면 통째로 감춘다. */}
-          {!showComparisonView && showCompetitorOverlapSection && (
-          <div className="mt-6 border-t border-zinc-100 pt-5">
-            <h3 className="mb-1 text-sm font-semibold text-zinc-500">{referenceLabel} 시간대별 경쟁 프로그램</h3>
-            <p className="mb-3 text-sm text-zinc-400">
-              방송 시간이 충분히 겹치는(10분 이상이면서 한쪽 방송의 30% 이상) 등록 경쟁채널 프로그램 중 시청률 상위 3개를 나란히
-              보여줍니다 — &ldquo;그 시간대에 경쟁채널이 무엇으로 잘했는가&rdquo;를 볼 수 있습니다. 프로그램 평균 시청률끼리의 비교이며, 겹친 구간만의 분 단위 시청률 비교는 아닙니다.
-            </p>
-            {competitorProgramOverlap.length === 0 ? (
-              <p className="text-sm text-zinc-400">{referenceLabel} 시간대가 겹치는 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
-            ) : (
-              // 사용자 재지시(2026-08-22): "당사 윗줄/경쟁사 아랫줄" 2줄 구조 대신 당사 프로그램당
-              // 한 줄(표 행)로 — 시간·당사 프로그램은 왼쪽 고정 열, 경쟁 프로그램 최대 3개는
-              // 각자의 열에 나란히(칸 안에서만 2줄: 채널·시간 / 프로그램명·시청률·격차).
-              (() => {
-                const grouped = Object.entries(
-                  competitorProgramOverlap.reduce<Record<string, CompetitorOverlapRow[]>>((acc, row) => {
-                    const key = `${row.our_start_time}__${row.our_program_name}`;
-                    (acc[key] ??= []).push(row);
-                    return acc;
-                  }, {})
-                );
-                return (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[720px] text-left text-sm">
-                      <thead>
-                        <tr className="text-zinc-400">
-                          <th className="w-14 pb-1.5 pr-2 font-medium">시간</th>
-                          <th className="pb-1.5 pr-3 font-medium">당사 프로그램</th>
-                          <th className="pb-1.5 pr-3 font-medium">경쟁 1</th>
-                          <th className="pb-1.5 pr-3 font-medium">경쟁 2</th>
-                          <th className="pb-1.5 font-medium">경쟁 3</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {grouped.map(([key, rows]) => (
-                          <tr key={key} className="border-t border-zinc-100 align-top">
-                            <td className="py-2 pr-2 text-zinc-500">{rows[0].our_start_time.slice(0, 5)}</td>
-                            <td className="py-2 pr-3">
-                              <span className="font-medium text-zinc-800">{rows[0].our_program_name}</span>{" "}
-                              <span className="text-zinc-500">({fmtR(rows[0].our_rating)})</span>
-                            </td>
-                            {[0, 1, 2].map((idx) => {
-                              const r = rows[idx];
-                              return (
-                                <td key={idx} className="py-2 pr-3">
-                                  {r ? (
-                                    <div>
-                                      <p className="text-[11px] text-zinc-400">
-                                        {r.competitor_name} · {r.competitor_start_time.slice(0, 5)}
-                                      </p>
-                                      <p className="text-zinc-700">
-                                        {r.competitor_program_name} <span className="font-semibold text-zinc-800">{fmtR(r.competitor_rating)}</span>
-                                        {r.rating_gap !== null && (
-                                          <span className={r.rating_gap >= 0 ? "text-rose-600" : "text-emerald-600"}>
-                                            {" "}
-                                            ({r.rating_gap >= 0 ? "+" : ""}
-                                            {r.rating_gap.toFixed(3)})
-                                          </span>
-                                        )}
-                                      </p>
-                                    </div>
-                                  ) : (
-                                    <span className="text-zinc-300">—</span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()
-            )}
-          </div>
-          )}
-
-          {/* 사용자 지시(2026-09-17): skyUHD는 등록 경쟁채널의 프로그램 단위 자료가 없어 이 목록이
-              비어 있다 — 단일 일자 쪽은 showCompetitorTopProgramsSection(판정기)으로, 기간 쪽은
-              실제 행 수로 각각 판단해 비어 있으면 통째로 감춘다(안내 문구도 남기지 않음). */}
-          {!showComparisonView && !showSdowDualView ? (
-          showCompetitorTopProgramsSection && (
-          <div className="mt-5 border-t border-zinc-100 pt-5">
-            <h3 className="mb-1 text-sm font-semibold text-zinc-500">{referenceLabel} 경쟁채널 TOP 5 프로그램</h3>
-            <p className="mb-3 text-sm text-zinc-400">
-              이 채널의 프로그램과 무관하게, 등록된 경쟁채널 중 {referenceLabel} 시청률이 가장
-              높았던 방영 순위입니다(시장 전체 동향 참고용).
-            </p>
-            {competitorTopPrograms.length === 0 ? (
-              <p className="text-sm text-zinc-400">{referenceLabel} 등록 경쟁채널 프로그램 데이터가 없습니다.</p>
-            ) : (
-              // UX 아키텍트 개선안(2026-09-09): 채널명+시간+프로그램명을 한 span(w-56)에
-              // 공백으로 이어붙이던 구조 — truncate/nowrap이 없어 224px를 넘으면 자동
-              // 줄바꿈되어 프로그램명이 다음 줄로 밀렸다("동시간대 경쟁 상황"이 2026-08-22에
-              // 이미 겪고 고친 것과 같은 문제, 3438~3454행 패턴 참고). 필드마다 독립된 grid
-              // 열로 분리 — 값 종류를 통제할 수 없는 채널명·프로그램명은 truncate+title로
-              // 안전하게, 시간·시청률처럼 짧고 예측 가능한 값은 고정폭+tabular-nums로.
-              // 2026-08-22 지시(시청률을 제목 바로 옆에)는 grid 열 순서 자체로 충족.
-              <ol className="space-y-1.5 text-sm">
-                {competitorTopPrograms.map((p, i) => (
-                  <li key={i} className="grid grid-cols-[1.5rem_5.25rem_3rem_minmax(0,1fr)_4.5rem] items-baseline gap-x-2">
-                    <span className="text-right font-medium text-zinc-400">{i + 1}</span>
-                    <span className="truncate font-medium text-zinc-700" title={p.competitor_name}>
-                      {p.competitor_name}
-                    </span>
-                    <span className="tabular-nums text-zinc-500">{p.start_time.slice(0, 5)}</span>
-                    <span className="truncate text-zinc-500" title={p.program_name}>
-                      {p.program_name}
-                    </span>
-                    <span className="text-right font-semibold tabular-nums text-zinc-800">{fmtR(p.rating)}</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-          )
-          ) : (
-          (skyuhdGate === null || competitorPeriodTopPrograms.length > 0) && (
-          <div className="mt-5 border-t border-zinc-100 pt-5">
-            <h3 className="mb-1 text-sm font-semibold text-zinc-500">
-              {showSdowDualView ? "동요일" : comparisonLabel ? `${comparisonLabel} 대비 이번 기간` : "선택 기간"} 동기간 경쟁사 주요 프로그램 리뷰
-            </h3>
-            <p className="mb-3 text-sm text-zinc-400">
-              {showSdowDualView ? sdowBaselineShortLabel ?? "비교 대상" : "이 기간"} 평균 시청률이 가장 높았던 등록 경쟁채널 상위 5개 안에서, 그{" "}
-              {showSdowDualView ? "요일" : "기간"} 동안의 <b>프로그램별 평균 시청률</b>이 높은 상위 7개를 뽑았습니다(일회성 반짝 편성이 아니라
-              꾸준히 강했던 프로그램 기준 — 같은 프로그램은 한 번만 표시, 시장 전체 동향 참고용).
-            </p>
-            {hasPriorRange || showSdowDualView ? (
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <div>
-                  <p className="mb-2 text-sm font-semibold text-zinc-600">
-                    {showSdowDualView
-                      ? `${sdowBaselineShortLabel ?? "비교 대상"}`
-                      : `${comparisonLabel ?? "이전"} 기간 ${periodRangeLabel(selectedPriorFrom, selectedPriorTo) && `(${periodRangeLabel(selectedPriorFrom, selectedPriorTo)})`}`}
-                  </p>
-                  <CompetitorPeriodTopProgramsList rows={showSdowDualView ? data.competitorPeriodTopProgramsSdow : competitorPeriodTopProgramsPrior} fmtR={fmtR} />
-                </div>
-                <div>
-                  <p className="mb-2 text-sm font-semibold text-zinc-600">
-                    {showSdowDualView ? "오늘" : `이번 기간 ${periodRangeLabel(selectedDateFrom, selectedDateTo) && `(${periodRangeLabel(selectedDateFrom, selectedDateTo)})`}`}
-                  </p>
-                  <CompetitorPeriodTopProgramsList rows={competitorPeriodTopPrograms} fmtR={fmtR} />
-                </div>
-              </div>
-            ) : (
-              <CompetitorPeriodTopProgramsList rows={competitorPeriodTopPrograms} fmtR={fmtR} />
-            )}
-          </div>
-          )
-          )}
-        </div>
 
         {/* 사용자 지시(2026-09-22): "질문하기 · AI 편성 비서는 각 페이지 최하단으로 내리자" —
             기존엔 히트맵·경쟁채널 TOP5 등 여러 섹션보다 위에 있었다. 자연어 질문(18번) — 공용
