@@ -814,7 +814,8 @@ function aiSuggestionLine(s: AiSuggestionPayload): string {
   if (!s.change && s.remedy?.lines.length) return s.remedy.lines.join("\n");
   if (!s.change) {
     const where = s.focus ? `'${s.focus}' 자리` : `${s.weekday ? `${AI_DOW_KO[s.weekday - 1]}요일 ` : ""}실제 편성`;
-    return `${where}${s.focus ? "는" : "은"} ${s.widenedLookbackDays ? "최근 6개월 실적으로도 " : ""}교체로 개선되는 후보를 찾지 못했습니다`;
+    const basis = s.widenedLookbackDays ? "최근 6개월 실적 기준으로 " : "";
+    return s.focus ? `${where}는 ${basis}교체해도 기대 시청률이 오르는 후보가 없어 다음 방영 추이를 먼저 확인합니다` : `${where}은 ${basis}교체해도 기대 시청률이 오르는 후보가 없어 현재 편성 유지가 낫다고 계산됐습니다`;
   }
   return `${AI_DOW_KO[s.change.weekday - 1]} ${aiClock(s.change.startMin)} '${s.change.from}'→'${s.change.to}' 교체 시 기대 ${formatRatingDelta(s.change.gain)}${s.widenedLookbackDays ? " · 최근 6개월 실적 기준" : ""}`;
 }
