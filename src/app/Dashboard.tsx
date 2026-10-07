@@ -800,6 +800,8 @@ interface AiSuggestionPayload {
   widenedLookbackDays?: number | null;
   /** 약해진 프로그램을 지정해 그 자리의 교체안을 찾은 경우 그 이름 */
   focus?: string | null;
+  /** 교체 후보가 없을 때의 보완 제안(원인 → 할 일) */
+  remedy?: { lines: string[]; concrete: boolean; sample: number } | null;
 }
 /** undefined = 계산 중, null = 계산 실패 */
 type AiState = Record<string, AiSuggestionPayload | null | undefined>;
@@ -809,9 +811,10 @@ const aiClock = (min: number) => {
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 };
 function aiSuggestionLine(s: AiSuggestionPayload): string {
+  if (!s.change && s.remedy?.lines.length) return s.remedy.lines.join("\n");
   if (!s.change) {
     const where = s.focus ? `'${s.focus}' 자리` : `${s.weekday ? `${AI_DOW_KO[s.weekday - 1]}요일 ` : ""}실제 편성`;
-    return `AI 계산: ${where}${s.focus ? "는" : "은"} ${s.widenedLookbackDays ? "최근 6개월 실적으로도 " : ""}교체로 개선되는 후보를 찾지 못했습니다`;
+    return `${where}${s.focus ? "는" : "은"} ${s.widenedLookbackDays ? "최근 6개월 실적으로도 " : ""}교체로 개선되는 후보를 찾지 못했습니다`;
   }
   return `${AI_DOW_KO[s.change.weekday - 1]} ${aiClock(s.change.startMin)} '${s.change.from}'→'${s.change.to}' 교체 시 기대 ${formatRatingDelta(s.change.gain)}${s.widenedLookbackDays ? " · 최근 6개월 실적 기준" : ""}`;
 }
@@ -842,13 +845,13 @@ function resolveChannelAction(
   if (base.needsAi) {
     if (s === undefined) return { line: "AI 편성안 계산 중…", kind: "ai", positive: false, extra: null };
     if (s === null) return { line: "AI 편성안을 계산하지 못했습니다", kind: "ai", positive: false, extra: null };
-    return { line: aiSuggestionLine(s), kind: "ai", positive: !!s.change, extra: null };
+    return { line: aiSuggestionLine(s), kind: "ai", positive: !!s.change || !!s.remedy?.concrete, extra: null };
   }
   let extra: ResolvedAction["extra"] = null;
   if (base.wantsAi && base.actionKind) {
     if (s === undefined) extra = { text: "AI 대체 편성 계산 중…", positive: false };
     else if (s === null) extra = { text: "AI 대체 편성을 계산하지 못했습니다", positive: false };
-    else extra = { text: aiSuggestionLine(s), positive: !!s.change };
+    else extra = { text: aiSuggestionLine(s), positive: !!s.change || !!s.remedy?.concrete };
   }
   return { line: base.actionLine, kind: base.actionKind, positive: false, extra };
 }
@@ -1341,7 +1344,7 @@ function ChannelHero({
         {actionLine ?? "현재 편성 유지"}
       </p>
       {extra && (
-        <p className="mt-1 text-[13px] font-medium" style={{ color: extra.positive ? ACTION_BLUE : ACTION_BLACK }}>
+        <p className="mt-1 whitespace-pre-line text-[13px] font-medium" style={{ color: extra.positive ? ACTION_BLUE : ACTION_BLACK }}>
           <AiTag />
           {extra.text}
         </p>
@@ -4668,7 +4671,7 @@ function ChannelNarrativeCard({
                     {line.actionTag && <ActionTagDot tag={line.actionTag} />}
                   </p>
                   {a.extra && (
-                    <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] leading-snug font-medium" style={{ color: a.extra.positive ? ACTION_BLUE : ACTION_BLACK }}>
+                    <p className="flex flex-wrap items-center gap-1.5 whitespace-pre-line text-[13.5px] leading-snug font-medium" style={{ color: a.extra.positive ? ACTION_BLUE : ACTION_BLACK }}>
                       <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">대체</span>
                       <AiTag />
                       {a.extra.text}

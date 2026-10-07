@@ -9,6 +9,7 @@ import { loadChannelRef } from "@/lib/idealSchedule/dataSource";
 import { exclusionFingerprint, loadActiveExclusions } from "@/lib/idealSchedule/exclusions";
 import { supabase } from "@/lib/supabase";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
+import { computeWeakSlotRemedy, type WeakSlotRemedy } from "./weakSlotRemedy";
 
 export type Certainty = "HIGH" | "MID" | "LOW" | null;
 
@@ -43,6 +44,8 @@ export interface AiSuggestion {
   widenedLookbackDays: number | null;
   /** 약한 프로그램을 지정해 그 자리의 교체안을 찾았으면 그 이름 */
   focus: string | null;
+  /** 교체 후보가 없을 때의 보완 제안(원인 → 할 일, 최근 방영 실측으로 계산) — 약해진 프로그램을 지정했고 계산됐을 때만 */
+  remedy: WeakSlotRemedy | null;
 }
 
 export interface ReplacePlan {
@@ -209,6 +212,8 @@ export async function computeAiSuggestion(channelCode: string, asOfDate: string,
     plan = await computeReplacePlan(channelCode, asOfDate, 180);
     top = pickDetail(plan.details, weekday, focus);
   }
+  // 사용자 지시(2026-10-07): 교체 후보가 없으면 "못 찾았다"로 끝내지 말고 시청률이 빠지는 부분의 보완 방안을 제안한다
+  const remedy = !top && focus ? await computeWeakSlotRemedy(channelCode, asOfDate, focus).catch(() => null) : null;
   return {
     channelCode,
     weekStart: plan.weekStart,
@@ -218,5 +223,6 @@ export async function computeAiSuggestion(channelCode: string, asOfDate: string,
     change: top ? { weekday: top.weekday, startMin: top.startMin, from: top.from, to: top.to, gain: top.gain, certainty: top.certainty } : null,
     widenedLookbackDays: widened,
     focus,
+    remedy,
   };
 }

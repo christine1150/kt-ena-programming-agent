@@ -5924,7 +5924,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         {action && <span className="text-zinc-500">{action}</span>}
                         {withReplace && item.tag === "REPLACE" && (
                           <span className="text-zinc-400">
-                            {!plan ? "· AI 교체안 계산 중…" : plan === "error" ? "· AI 교체안을 계산하지 못했습니다" : "· AI 계산: 지금 실제 편성 기준으로 기대가 더 높은 교체 후보가 없습니다"}
+                            {!plan ? "· AI 교체안 계산 중…" : plan === "error" ? "· AI 교체안을 계산하지 못했습니다" : "· 지금 실제 편성 기준으로 기대가 더 높은 교체 후보가 없습니다"}
                           </span>
                         )}
                       </>
