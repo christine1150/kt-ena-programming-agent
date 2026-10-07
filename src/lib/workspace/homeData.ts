@@ -248,7 +248,7 @@ export function buildTodayDecisions(i: {
     // 제목에는 판단 이름(shortLabel)만 쓴다. 확인 조건은 별도 필드(confirm)로 보여 준다(actionPhrase는 조건까지 붙이는 한 줄용).
     // 이동·교체는 반복 확인이 있어야 권할 수 있다(단계 04). 근거가 부족하면 태그가 MOVE/REPLACE여도 제목은 '추적 점검'이다.
     const premature = (action.kind === "MOVE" || action.kind === "REPLACE") && !action.permanentChangeSupported;
-    const title = `${name(s.channelCode)} '${programName}'${hourLabel} — ${premature ? "추적 점검(반복 확인 후 이동·교체 판단)" : action.shortLabel}`;
+    const title = `${name(s.channelCode)} '${programName}'${hourLabel} — ${premature || (dev <= 0 && action.kind === "MONITOR") ? "다음 방영도 낮으면 이동·교체 검토" : action.shortLabel}`;
     const isDown = dev <= 0;
     const priority = isDown ? 60 + Math.min(30, Math.abs(dev) / 3) + STRENGTH_BONUS[action.evidence.strength] : 30 + Math.min(20, Math.abs(dev) / 5);
     // 상승은 RISE_PCT 이상만 카드로 올린다(단계 04 기준과 동일). 하락은 채널 신호(-30% 이상)가 이미 걸러 준 값.

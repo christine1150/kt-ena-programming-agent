@@ -46,17 +46,18 @@ function FitOneLine({ text, className = "", center = false, children }: { text: 
     const fit = () => {
       const avail = b.clientWidth;
       const natural = i.scrollWidth; // transform의 영향을 받지 않는 레이아웃 폭
-      i.style.transform = natural > avail && avail > 0 ? `scale(${Math.max(MIN_SCALE, avail / natural)})` : "";
+      const s = natural > avail && avail > 0 ? Math.max(MIN_SCALE, avail / natural) : 1;
+      i.style.transform = s < 1 ? (center ? `translateX(${Math.max(0, (avail - natural * s) / 2)}px) scale(${s})` : `scale(${s})`) : "";
     };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(b);
     void document.fonts?.ready.then(fit);
     return () => ro.disconnect();
-  }, [text]);
+  }, [text, center]);
   return (
     <span ref={box} className={`block min-w-0 overflow-hidden whitespace-nowrap ${center ? "text-center" : ""} ${className}`} title={text}>
-      <span ref={inner} className={`inline-block whitespace-nowrap ${center ? "origin-center" : "origin-left"}`}>
+      <span ref={inner} className="inline-block origin-left whitespace-nowrap">
         {children ?? text}
       </span>
     </span>
@@ -169,7 +170,7 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
                   </FitOneLine>
                   {r.own && <span className="sr-only"> (자사 채널)</span>}
                 </span>
-                <FitOneLine text={displayProgramName(r.channelName, r.programName)} className="text-[13px] font-medium text-zinc-900" />
+                <FitOneLine text={`${displayProgramName(r.channelName, r.programName)}${r.firstRun === true ? " <본>" : r.firstRun === false ? " <재>" : ""}`} className="text-[13px] font-medium text-zinc-900" />
                 <span className="whitespace-nowrap text-right text-[11.5px] tabular-nums text-zinc-500">{r.startTime}</span>
                 <span className="whitespace-nowrap text-right tabular-nums" title="수도권 개인2049 시청률(괄호: 유료방송가구)">
                   <b className="text-[13px] font-bold text-zinc-900">{formatRating(r.rating)}</b>{" "}

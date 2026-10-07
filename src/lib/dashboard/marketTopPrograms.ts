@@ -71,6 +71,8 @@ export interface ProgramSample {
   rating: number | null;
   /** 장르 묶음(드라마 계열·예능 계열만 구분, 나머지·미분류는 null) — "드라마·예능만 보기" 필터용 */
   genre?: ProgramGenreFamily;
+  /** 본방(true)·재방(false) 여부 — 자사 프로그램에서 programs.first_run을 아는 경우만(모르면 null/undefined) */
+  firstRun?: boolean | null;
 }
 
 export interface TopProgramRow {
@@ -86,6 +88,7 @@ export interface TopProgramRow {
   /** 같은 프로그램의 유료방송가구 시청률(없으면 null) */
   householdRating: number | null;
   genre: ProgramGenreFamily;
+  firstRun: boolean | null;
 }
 
 /**
@@ -118,6 +121,7 @@ export function pickTopPrograms(samples: ProgramSample[], limit = TOP_PROGRAM_LI
     rating: v.p2049 as number,
     householdRating: v.hh !== null && Number.isFinite(v.hh) ? v.hh : null,
     genre: v.base.genre ?? null,
+    firstRun: v.base.firstRun ?? null,
   }));
 }
 

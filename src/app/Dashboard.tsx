@@ -846,11 +846,14 @@ function useAiSuggestions(date: string | null, codes: string[]): AiState {
 // 사용자 지시(2026-10-07): 타일의 액션 문구는 짧고 뜻이 분명해야 한다. "편성 강화 검토"는 모호해서(확대인지 유지인지) "호조 — 편성 확대 검토"로 풀어 쓰고,
 // 확인 조건 설명("반복 확인 후 판단 — 다음 2회 …")은 붙이지 않는다. 이동·교체 검토는 같은 하락이 2회 이상 반복 관측돼 근거가 확인된 경우에만 제안하고,
 // 그 전에는 "하락 — 추적 점검"으로만 적는다.
-function programActionText(name: string, hourLabel: string, direction: "down" | "up", c: { kind: string; shortLabel: string; permanentChangeSupported: boolean }): string {
+// 사용자 지시(2026-10-07): "'세계테마기행'(11시) 하락 — 추적 점검은 대체 뭘 하라는 건지 명확하게" — 평소(같은 슬롯 최근 평균) 대비 몇 % 달라졌는지를 적고,
+// 할 일을 구체적으로 쓴다: 1회 하락은 "다음 방영도 낮으면 이동·교체 검토", 호조는 "방영 확대(재방·슬롯 추가) 검토".
+function programActionText(name: string, hourLabel: string, direction: "down" | "up", c: { kind: string; shortLabel: string; permanentChangeSupported: boolean }, deviationPct?: number | null): string {
   const head = `'${name}'${hourLabel}`;
-  if (direction === "up") return `${head} 호조 — 편성 확대 검토`;
-  if ((c.kind === "MOVE" || c.kind === "REPLACE") && c.permanentChangeSupported) return `${head} 하락 반복 — ${c.shortLabel}`;
-  return `${head} 하락 — 추적 점검`;
+  const dev = deviationPct !== null && deviationPct !== undefined && Number.isFinite(deviationPct) ? ` 평소 대비 ${deviationPct >= 0 ? "▲" : "▼"}${Math.abs(deviationPct).toFixed(0)}%` : "";
+  if (direction === "up") return `${head}${dev || " 호조"} — 방영 확대(재방·슬롯 추가) 검토`;
+  if ((c.kind === "MOVE" || c.kind === "REPLACE") && c.permanentChangeSupported) return `${head}${dev} 하락 반복 — ${c.shortLabel}`;
+  return `${head}${dev || " 하락"} — 다음 방영도 낮으면 이동·교체 검토`;
 }
 function buildChannelInsightSummary(
   s: ChannelNarrativeSignal,
@@ -909,7 +912,7 @@ function buildChannelInsightSummary(
       fitScoreTag: s.decline_program_tag ?? null,
       observationText: causeLine,
     });
-    actionLine = programActionText(s.decline_program_name, hourLabel, "down", declineAction);
+    actionLine = programActionText(s.decline_program_name, hourLabel, "down", declineAction, s.decline_program_delta_pct);
     actionTag = s.decline_program_tag ?? null;
     actionKind = "program";
   } else if (
@@ -933,7 +936,7 @@ function buildChannelInsightSummary(
         fitScoreTag: s.top_program_tag ?? null,
         observationText: causeLine,
       });
-      actionLine = programActionText(s.top_program_name, hourLabel, pct >= 0 ? "up" : "down", topAction);
+      actionLine = programActionText(s.top_program_name, hourLabel, pct >= 0 ? "up" : "down", topAction, pct);
       actionTag = s.top_program_tag ?? null;
       actionKind = "program";
     }
@@ -980,7 +983,7 @@ function buildChannelInsightSummary(
           fitScoreTag: s.top_program_tag ?? null,
           observationText: causeLine,
         });
-        actionLine = programActionText(s.top_program_name, hourLabel, "down", goalAction);
+        actionLine = programActionText(s.top_program_name, hourLabel, "down", goalAction, programDeclinePct);
         actionKind = "program";
       } else if (bigRecentDrop && recentDropPct !== null) {
         causeLine = `${gapNote} 최근 2주 같은 요일 평균 대비 ▼${Math.abs(recentDropPct).toFixed(0)}% 하락`;
@@ -2710,7 +2713,7 @@ function buildOriginalInsight(
     bullets.push(
       formatRating(item.rerun_rating) === "0"
         ? `${rerunChannelName} ${rerunLabel} 효과: ${rerunChannelName} ${rerunLabel}(${rerunTimeText}) 시청률은 0%를 기록하여 실질적인 유입 견인 효과를 거두지 못함`
-        : `${rerunChannelName} ${rerunLabel} 효과: ${rerunChannelName} ${rerunLabel}(${rerunTimeText}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 유입을 견인함`
+        : `${rerunChannelName} ${rerunLabel} 효과: ${rerunChannelName} ${rerunLabel}(${rerunTimeText}) 시청률은 ${formatRating(item.rerun_rating)}%(본방 대비 ${crossRetentionPct.toFixed(1)}%)로 ${crossRetentionPct < 10 ? "유입 효과는 미미함" : "유입을 견인함"}`
     );
     // 사용자 지시(2026-09-07): "유입 효과나 직재방 성과가 평균보다 낮다면 편성 효과가 낮다고
     // 솔직하게 말할것" — 이 재방 채널의 과거 유지율 평균(이미 있는 회차별 추이 데이터로 계산,
@@ -2772,7 +2775,9 @@ function buildOriginalInsight(
     secondaryBullets.push(
       formatRating(item.self_rerun_rating) === "0"
         ? `${broadcastChannelName} ${selfRerunLabel} 효과: 본방 종료 후 재방(${selfRerunTimeText}) 시청률은 0%를 기록하여 실질적인 유입 견인 효과를 거두지 못함`
-        : `${broadcastChannelName} ${selfRerunLabel} 효과: 본방 종료 후 재방(${selfRerunTimeText}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
+        : selfRetentionPct < 10
+          ? `${broadcastChannelName} ${selfRerunLabel} 효과: 본방 종료 후 재방(${selfRerunTimeText}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%에 그쳐 유입 효과는 미미함`
+          : `${broadcastChannelName} ${selfRerunLabel} 효과: 본방 종료 후 재방(${selfRerunTimeText}) 시청률은 ${formatRating(item.self_rerun_rating)}%로, 본방 대비 ${selfRetentionPct.toFixed(1)}%의 시청 유입을 견인함`
     );
   }
 
@@ -3295,7 +3300,7 @@ function ManualMinuteRatingChart({
   // 각 구간선의 높이에 채널명을 적는다 — 이 프로젝트가 이미 쓰는 방식(슬로프 차트: y좌표순
   // 정렬 후 최소 간격 미달분만 밀어내고, 어긋나면 leader line으로 잇기)을 그대로 따른다.
   const PAD_R = 96; // 오른쪽 채널명 라벨 자리
-  const PAD_Y = 16; // 최고 시청률 칩이 앉을 여유 + 격자선과 상하 여백
+  const PAD_Y = 22; // 최고 시청률 칩이 앉을 여유 + 격자선과 상하 여백(위쪽 우측 자사 채널명 라벨이 잘리지 않을 높이)
   const toMinutesRaw = (hhmm: string) => {
     const [h, m] = hhmm.split(":").map(Number);
     return h * 60 + m;

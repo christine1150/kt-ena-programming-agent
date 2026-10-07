@@ -69,9 +69,9 @@ async function main() {
   check("화면: 자료 범위(몇 개 채널 기준)와 가구 기준을 밝힌다", comp.includes("프로그램 단위 시청률 자료가 있는 채널") && comp.includes("KBS1·MBC·SBS만 수도권"));
   const dash = read("src/app/Dashboard.tsx");
   check("홈: 오늘의 시청률 카드 안쪽 맨 아래에 이어 붙는다", dash.includes("footer={<MarketTopPrograms") && dash.includes("{footer && <div"));
-  check("프로그램명은 잘리지 않고 한 줄에 맞춰 글씨만 줄어든다(말줄임·줄 수 제한 없음)", comp.includes("FitOneLine text={displayProgramName(") && comp.includes("scale(") && comp.includes("whitespace-nowrap") && !/truncate|line-clamp|text-ellipsis/.test(comp));
+  check("프로그램명은 잘리지 않고 한 줄에 맞춰 글씨만 줄어든다(말줄임·줄 수 제한 없음)", comp.includes("<FitOneLine text={`${displayProgramName(") && comp.includes("scale(") && comp.includes("whitespace-nowrap") && !/truncate|line-clamp|text-ellipsis/.test(comp));
   check("별도 제목 없이 정보만(제목 문구 없음)", !comp.includes("오늘의 상위 프로그램") && !comp.includes("<h2"));
-  check("낮은 높이: 한 줄 행(py 6~7px)과 3단", /py-\[[67]px\]/.test(comp) && comp.includes("md:grid-cols-3"));
+  check("낮은 높이: 한 줄 행(py 4~7px)과 3단", /py-\[[4-7]px\]/.test(comp) && comp.includes("md:grid-cols-3"));
   // (순위 막대는 간소화로 제거했다)
 
   console.log(`\n통과 ${passed} / 실패 ${failures.length}`);

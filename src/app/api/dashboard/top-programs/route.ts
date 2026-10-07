@@ -83,7 +83,7 @@ export async function GET(request: Request) {
       if (targetIds.length > 0) {
         const { data: progRows, error: e3 } = await supabase
           .from("ratings")
-          .select("channel_id, target_id, rating, start_time, programs(canonical_name)")
+          .select("channel_id, target_id, rating, start_time, is_first_run, programs(canonical_name)")
           .in("channel_id", ownIds)
           .in("target_id", targetIds)
           .in("source_type", ["nielsen_daily", "skyuhd"])
@@ -91,13 +91,14 @@ export async function GET(request: Request) {
           .not("program_id", "is", null)
           .not("rating", "is", null);
         if (e3) throw new Error(e3.message);
-        for (const r of (progRows ?? []) as unknown as { channel_id: string; target_id: string; rating: number; start_time: string | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
-          const name = Array.isArray(r.programs) ? r.programs[0]?.canonical_name : r.programs?.canonical_name;
+        for (const r of (progRows ?? []) as unknown as { channel_id: string; target_id: string; rating: number; start_time: string | null; is_first_run: boolean | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
+          const prog = Array.isArray(r.programs) ? r.programs[0] : r.programs;
+          const name = prog?.canonical_name;
           const channelName = ownNames.get(r.channel_id);
           const rank = ownRank.get(r.channel_id);
           if (!name || !channelName || rank === undefined || !r.start_time) continue;
           withData.add(channelName);
-          samples.push({ channelName, own: true, genre: familyOf(resolveGenre(genreMap, "OWN", channelName, name)), channelRank: rank, programName: name, startTime: r.start_time, target: kindByTarget.get(r.target_id) ?? "other", rating: r.rating });
+          samples.push({ channelName, own: true, firstRun: typeof r.is_first_run === "boolean" ? r.is_first_run : null, genre: familyOf(resolveGenre(genreMap, "OWN", channelName, name)), channelRank: rank, programName: name, startTime: r.start_time, target: kindByTarget.get(r.target_id) ?? "other", rating: r.rating });
         }
       }
     }
