@@ -2,6 +2,7 @@
 // mart_scheduling_fit_score)이 미리 해두고, 여기서는 오늘 날짜로 계산된 값이 없으면 한 번
 // 새로 계산시킨 뒤 결과를 그대로 돌려준다 — Claude는 결과를 해석·설명만 한다(CLAUDE.md 원칙).
 import { NextResponse } from "next/server";
+import { isTitleExcluded, loadActiveExclusions } from "@/lib/idealSchedule/exclusions";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
@@ -154,7 +155,13 @@ export async function GET(request: Request) {
   // 누락된 근본 원인. 페이지네이션으로 전량을 모으는 공용 헬퍼로 교체.
   const recentProgramIds = await fetchRecentProgramIds(channel.id, fourteenDaysAgoStr);
 
-  const items = (rows ?? []).filter((r) => recentProgramIds.has(r.program_id));
+  // 사용자 지시(2026-10-06/07): 제외 편성한 제목은 "무엇을 편성할까요?" 후보 목록에도 나오지 않는다(기간이 겹치는 제외만).
+  const exclusionRows = await loadActiveExclusions(channel.id, asOfDate);
+  const progNameOf = (r: { programs?: unknown }) => {
+    const p = r.programs as { canonical_name?: string } | { canonical_name?: string }[] | null | undefined;
+    return Array.isArray(p) ? p[0]?.canonical_name : p?.canonical_name;
+  };
+  const items = (rows ?? []).filter((r) => recentProgramIds.has(r.program_id) && !isTitleExcluded(exclusionRows, progNameOf(r)));
 
   // 사용자 지시(2026-08-21): MOVE/REPLACE로 태깅된 프로그램 중 여러 시간대에 반복 편성된
   // ("재방 많은") 것은 프로그램 전체가 아니라 특정 시간대만 짚어 의견을 낸다.

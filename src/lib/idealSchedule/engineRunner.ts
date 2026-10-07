@@ -18,7 +18,7 @@ import { enrichAiringsWithPlan, normalizePlanRows, type PlanRow, type PlanRowRaw
 import type { StrategyMode } from "./scoring";
 import { addDays } from "./time";
 import { DEFAULT_SEARCH_DEADLINE_MS } from "./searchControl";
-import { buildExcludedPredicate, exclusionFingerprint, loadActiveExclusions } from "./exclusions";
+import { buildExcludedPredicate, exclusionFingerprint, isTitleExcluded, loadActiveExclusions } from "./exclusions";
 import type { OwnAiring, OwnAiringsBundle } from "./types";
 import type { ResidualRow } from "./uncertainty";
 
@@ -236,6 +236,15 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
           fingerprint: `${rightsGate?.fingerprint ?? ""}${isExcluded ? `|excl:${exclusionFingerprint(exclusionRows)}` : ""}`,
         }
       : undefined;
+  // 제외 편성이 후보를 얼마나 줄였는지 한 줄로 알린다(사용자 설계 2026-10-06): 최근 방영 프로그램 중 제외로 빠진 수, 20% 이상이면 "크게 줄었습니다"
+  const recentNames = new Set(bundle.airings.map((a) => a.programName));
+  const droppedNames = [...recentNames].filter((n) => isTitleExcluded(exclusionRows, n));
+  const exclusionNotice =
+    exclusionRows.length > 0
+      ? [
+          `제외 편성 ${exclusionRows.length}건 적용(${exclusionRows.map((r) => r.program_name).join(", ")}) — 최근 방영 프로그램 ${recentNames.size}개 중 ${droppedNames.length}개가 후보에서 빠졌습니다${droppedNames.length > 0 ? `: ${droppedNames.slice(0, 5).join(", ")}${droppedNames.length > 5 ? " 외" : ""}` : ""}${recentNames.size > 0 && droppedNames.length / recentNames.size >= 0.2 ? " — 편성 가능한 후보가 크게 줄었습니다" : ""}`,
+        ]
+      : [];
   const t1 = Date.now();
   const result = runIdealScheduleEngine({
     weekStart: req.weekStart,
@@ -281,7 +290,7 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
     config,
     asOfDate,
     currentWeekStart,
-    warnings: [...constraintLoad.warnings, ...rerun.warnings, ...result.resolution.warnings, ...(exclusionRows.length > 0 ? [`제외 편성 ${exclusionRows.length}건 적용: ${exclusionRows.map((r) => r.program_name).join(", ")}`] : [])],
+    warnings: [...constraintLoad.warnings, ...rerun.warnings, ...result.resolution.warnings, ...exclusionNotice],
     timingsMs: { load: t1 - t0, engine: t2 - t1 },
   };
 }

@@ -43,6 +43,16 @@ export function buildExcludedPredicate(rows: ExclusionRow[]): ((c: EngineCandida
   };
 }
 
+/** 이름만으로 제외 여부 판정(후보 객체가 없는 화면·API용 — 적합도 목록·후보 감소 안내 등). 규칙은 buildExcludedPredicate와 같다. */
+export function isTitleExcluded(rows: ExclusionRow[], name: string | null | undefined): boolean {
+  if (!name) return false;
+  const k = exclusionKey(name);
+  return rows.some((r) => {
+    const x = exclusionKey(r.program_name);
+    return x.length >= 2 && k.includes(x);
+  });
+}
+
 /** 캐시 키 등에 쓰는 짧은 지문 */
 export function exclusionFingerprint(rows: ExclusionRow[]): string {
   return rows.map((r) => `${r.id}`).sort().join(",");
