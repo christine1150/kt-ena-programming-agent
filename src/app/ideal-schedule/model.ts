@@ -100,6 +100,8 @@ export type RunSummary = {
   objectiveInfo?: { primary: "weekly_expected_rating"; selectionScoreMixed: boolean; nonKpiWeightShare: number } | null;
   /** 탐색 결과의 성격 — 최적을 증명하지 않는다(OPT03) */
   searchKind?: "SEARCHED_BEST" | null;
+  /** 검증 오차 시나리오 점검(OPT05) — 잔차가 부족하면 null/없음. 선택 편향은 반영하지 않는다. */
+  robustness?: { scenarios: number; point: number | null; pPositive: number | null; p10: number | null; p50: number | null; p90: number | null; evidenceMix: { A: number; B: number; C: number }; uniqueShare: number | null; residualN: number; pooledGrades: string[] } | null;
   /** 탐색 보고서(OPT04) — 종료 사유·평가 횟수·단계별 시간. 오래된 실행에는 없다. */
   search?: SearchReport | null;
   /** 이 실행에 쓰인 모델·입력 버전(OPT02). 오래된 편성안에는 없다. */

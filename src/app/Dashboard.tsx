@@ -27,10 +27,9 @@ import { monthlyDriverCauseLabel, type MonthlyDriver } from "@/lib/causeClassifi
 // 위해 어휘·색의 단일 출처(TAG_LABEL_KO/TAG_DOT_COLOR)를 그대로 import — Page 1·Page 2가
 // 같은 태그를 다른 말로 부르는 사고를 막는다.
 import { TAG_LABEL_KO, TAG_DOT_COLOR, type ActionTag } from "@/lib/actionTags";
-import { actionPhrase, programActionFor } from "@/lib/insight/actionCandidate";
+import { programActionFor } from "@/lib/insight/actionCandidate";
 import { formatArrowPct, formatDurationClock, formatDurationKo, formatRatingDelta } from "@/lib/metrics";
 // 단계 07: 전역 문맥(URL)·요청 상태·홈 모델. 계산은 src/lib/workspace, 화면은 components/home·workspace.
-import ContextBar from "@/components/workspace/ContextBar";
 import { DataStatusCard, DecisionCards, FollowupsCard, HomeViewTabs, PANEL, PanelHeader, type ReviewStoreState } from "@/components/home/HomePanels";
 import MarketTopPrograms from "@/components/home/MarketTopPrograms";
 import { MonthlyPlanningPanels, NextWeekPanel, type MonthlyChannelItem, type NextWeekItem } from "@/components/home/PeriodPanels";
@@ -785,6 +784,12 @@ function extBroadcastHour(startTime: string): number {
   const h = parseInt(startTime.slice(0, 2), 10);
   return h < 2 ? h + 24 : h;
 }
+// 사용자 지시(2026-10-07): 타일의 액션 문구는 짧게 — "반복 확인 후 판단 — 다음 2회 방영에서도 … 이동·교체 검토에 착수" 같은 확인 조건 설명은
+// 붙이지 않는다. 이동·교체 검토는 같은 하락이 2회 이상 반복 관측돼 근거가 확인된 경우에만 제안하고, 그 전에는 "추적 점검"으로만 적는다.
+function shortActionPhrase(c: { kind: string; shortLabel: string; permanentChangeSupported: boolean }): string {
+  if ((c.kind === "MOVE" || c.kind === "REPLACE") && !c.permanentChangeSupported) return "추적 점검";
+  return c.shortLabel;
+}
 function buildChannelInsightSummary(
   s: ChannelNarrativeSignal,
   // 사용자 지시(2026-09-22): "ENA Play는 목표가 30위인데 오늘 40위, 전일 대비도 하락했는데
@@ -821,6 +826,11 @@ function buildChannelInsightSummary(
   let actionLine: string | null = null;
   let actionTag: ActionTag | null = null;
   let actionKind: "program" | "diagnosis" | null = null;
+  // 최근 2주 추이: 오늘 시청률이 전주·전전주 같은 요일 평균보다 얼마나 낮은가(%). 두 주 값이 없으면 12주 평균 대비로 대신한다.
+  const twoWeekAvg = s.priorWeekRating !== null && s.priorWeek2Rating !== null ? (s.priorWeekRating + s.priorWeek2Rating) / 2 : null;
+  const recentDropPct =
+    s.today_rating !== null && twoWeekAvg !== null && twoWeekAvg > 0 ? ((s.today_rating - twoWeekAvg) / twoWeekAvg) * 100 : s.rating_delta_pct;
+  const bigRecentDrop = recentDropPct !== null && recentDropPct <= -20;
 
   if (s.decline_program_name && s.decline_program_name !== s.top_program_name && s.decline_program_delta_pct !== null) {
     causeLine = `'${s.decline_program_name}' 부진 — 같은 슬롯 평균 대비 ▼${Math.abs(s.decline_program_delta_pct).toFixed(0)}%`;
@@ -835,7 +845,7 @@ function buildChannelInsightSummary(
       fitScoreTag: s.decline_program_tag ?? null,
       observationText: causeLine,
     });
-    actionLine = `'${s.decline_program_name}'${hourLabel} 편성 ${actionPhrase(declineAction)}`;
+    actionLine = `'${s.decline_program_name}'${hourLabel} 편성 ${shortActionPhrase(declineAction)}`;
     actionTag = s.decline_program_tag ?? null;
     actionKind = "program";
   } else if (
@@ -859,7 +869,7 @@ function buildChannelInsightSummary(
         fitScoreTag: s.top_program_tag ?? null,
         observationText: causeLine,
       });
-      actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${actionPhrase(topAction)}`;
+      actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${shortActionPhrase(topAction)}`;
       actionTag = s.top_program_tag ?? null;
       actionKind = "program";
     }
@@ -906,11 +916,11 @@ function buildChannelInsightSummary(
           fitScoreTag: s.top_program_tag ?? null,
           observationText: causeLine,
         });
-        actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${actionPhrase(goalAction)} — 목표(${target.targetRankNum}위) 미달과 함께 관찰됨(원인 단정 아님)`;
+        actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${shortActionPhrase(goalAction)}`;
         actionKind = "program";
-      } else if (s.rating_delta_pct !== null && s.rating_delta_pct <= -10 && s.baseline_avg_rating !== null) {
-        causeLine = `${gapNote} 최근 12주 평균(${formatRating(s.baseline_avg_rating)}) 대비 ▼${Math.abs(s.rating_delta_pct).toFixed(0)}% 하락 지속`;
-        actionLine = `최근 12주 평균 대비 ${Math.abs(s.rating_delta_pct).toFixed(0)}% 하락 — 목표(${target.targetRankNum}위) 회복을 위해 편성 전략 재점검 필요`;
+      } else if (bigRecentDrop && recentDropPct !== null) {
+        causeLine = `${gapNote} 최근 2주 같은 요일 평균 대비 ▼${Math.abs(recentDropPct).toFixed(0)}% 하락`;
+        actionLine = "편성 전략 재점검";
         actionKind = "diagnosis";
       }
       // 위 두 조건 모두 해당 없으면 causeLine/actionLine을 세팅하지 않고 다음 분기(순위-평소
@@ -949,33 +959,21 @@ function buildChannelInsightSummary(
   // 여기서 목표 미달이면 추이(평소 대비)별로 항상 액션을 낸다. 문구는 이미 계산된 값(목표·평소 대비 %·오늘 최고 프로그램의 슬롯
   // 평균 대비)만 쓰고 원인을 단정하지 않는다("검토·점검"). 목표 달성 채널은 이 분기에 오지 않아 기존 문구를 그대로 쓴다.
   if (!actionLine && target?.targetRankNum != null && s.today_rank !== null && s.today_rank > target.targetRankNum) {
-    const t = target.targetRankNum;
-    const rankWorse = s.baseline_avg_rank !== null ? s.today_rank - Math.round(s.baseline_avg_rank) : null;
-    const trend: "down" | "up" | "flat" =
-      s.rating_delta_pct !== null && Math.abs(s.rating_delta_pct) >= 3
-        ? s.rating_delta_pct < 0
-          ? "down"
-          : "up"
-        : rankWorse !== null && Math.abs(rankWorse) >= 1
-          ? rankWorse > 0
-            ? "down"
-            : "up"
-          : "flat";
-    // 오늘 최고 성적 프로그램이 자기 슬롯 평균 이상일 때만 "그 프로그램 중심"으로 말한다(근거 없는 지목 금지).
+    // 오늘 최고 성적 프로그램이 자기 슬롯 평균 이상일 때만 그 프로그램을 지목한다(근거 없는 지목 금지).
     const topPct =
       s.top_program_name && s.top_program_rating !== null && s.top_program_baseline_avg !== null && s.top_program_baseline_avg > 0 && (s.top_program_baseline_days ?? 0) >= 3
         ? ((s.top_program_rating - s.top_program_baseline_avg) / s.top_program_baseline_avg) * 100
         : null;
-    const topName = topPct !== null && topPct >= 0 ? s.top_program_name : null;
-    if (trend === "down") {
-      actionLine = `평소보다 하락, 목표(${t}위) 미달 — 약한 시간대 점검`;
+    if (bigRecentDrop) {
+      actionLine = "편성 전략 재점검";
       actionKind = "diagnosis";
-    } else if (trend === "flat") {
-      actionLine = topName ? `목표(${t}위) 미달 — '${topName}' 중심 보강 검토` : `목표(${t}위) 미달 — AI 스마트 편성 개선안 검토`;
-      actionKind = topName ? "program" : "diagnosis";
+    } else if (topPct !== null && topPct >= 0 && s.top_program_name) {
+      const hourLabel = s.top_program_start_time ? `(${extBroadcastHour(s.top_program_start_time)}시)` : "";
+      actionLine = `'${s.top_program_name}'${hourLabel} 편성 강화 검토`;
+      actionKind = "program";
     } else {
-      actionLine = topName ? `상승세지만 목표(${t}위) 미달 — '${topName}' 강화 검토` : `상승세지만 목표(${t}위) 미달 — 약한 시간대 보강`;
-      actionKind = topName ? "program" : "diagnosis";
+      actionLine = "AI 스마트 편성 개선안 검토";
+      actionKind = "diagnosis";
     }
   }
 
@@ -1421,7 +1419,7 @@ function ChannelTile({
 }
 
 // ① 채널 현황 카드 — R1C1("오늘의 시청률")
-function ChannelStatusCard({ channels, narrativeSignals, kpiRows, footer }: { channels: Map<string, ChannelSummary>; narrativeSignals: ChannelNarrativeSignal[]; kpiRows: KpiRow[]; footer?: React.ReactNode }) {
+function ChannelStatusCard({ channels, narrativeSignals, kpiRows, footer, viewTabs }: { channels: Map<string, ChannelSummary>; narrativeSignals: ChannelNarrativeSignal[]; kpiRows: KpiRow[]; footer?: React.ReactNode; viewTabs?: React.ReactNode }) {
   const kpiByCode = new Map(kpiRows.map((r) => [r.code, r]));
   const ena = channels.get("ENA");
   const rest = ["ENA_PLAY", "ENA_DRAMA", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"]
@@ -1454,6 +1452,7 @@ function ChannelStatusCard({ channels, narrativeSignals, kpiRows, footer }: { ch
           <h2 className={REPORT_TITLE}>오늘의 시청률</h2>
           <p className={REPORT_EYEBROW}>TODAY&rsquo;S RATINGS</p>
         </div>
+        {viewTabs && <div className="self-center">{viewTabs}</div>}
         {/* 사용자 지시(2026-09-22): "1페이지... 오늘의 시청률 칸 우측 상단에 삽입해줘. 1페이지에서
             눌렀을 때는 ENA가 기본으로 나오면 되고" — 처음엔 페이지 상단 아이콘 그룹에 넣었다가,
             "오늘의 시청률" 카드 자체의 우측 상단으로 옮긴다. 1페이지는 특정 채널 컨텍스트가 없는
@@ -5618,12 +5617,19 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           </div>
         </div>
 
-        {/* 단계 07: 공통 ContextBar — 채널·타깃·분석 기간·비교 기간·최신 수신일·잠정/확정 상태. 값이 이전 선택의 것이면 배너로 알린다. */}
-        <ContextBar
-          model={contextBar}
-          className="mb-5"
-          right={<HomeViewTabs view={view} onChange={(v) => updateUrl({ view: v })} />}
-        />
+        {/* 사용자 지시(2026-10-07): 상단 칩 줄(채널·타깃·기간·최신 수신일·상태)은 삭제하고, 일간/주간/월간 버튼은 "오늘의 시청률" 카드 우측 상단으로 옮긴다.
+            불러오는 중·오류·이전 선택 값 안내(banner)는 사용자가 알아야 해서 그대로 남긴다. */}
+        {contextBar.banner && (
+          <p
+            role="status"
+            aria-live="polite"
+            className={`mb-4 rounded-lg px-3 py-2 text-[13px] ring-1 ${
+              contextBar.banner.tone === "error" ? "bg-red-50 text-red-700 ring-red-100" : contextBar.banner.tone === "warn" ? "bg-amber-50 text-amber-800 ring-amber-100" : "bg-zinc-50 text-zinc-600 ring-zinc-200"
+            }`}
+          >
+            {contextBar.banner.text}
+          </p>
+        )}
 
         {data?.requestedDateNoData && (
           <div className="mb-4 rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-700 ring-1 ring-amber-100">
@@ -5664,7 +5670,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                   </p>
                 )}
                 {/* 사용자 지시(2026-10-06): "오늘의 시청률" 아랫줄에 해당일 채널 순위 1~20위 안의 상위 프로그램 9개(수2049, 괄호 안 가구)를 3단으로 */}
-                <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} kpiRows={kpiGroups.flatMap((g) => g.rows)} footer={<MarketTopPrograms date={data.asOfDate} />} />
+                <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} kpiRows={kpiGroups.flatMap((g) => g.rows)} viewTabs={<HomeViewTabs view={view} onChange={(v) => updateUrl({ view: v })} />} footer={<MarketTopPrograms date={data.asOfDate} />} />
 
                 {/* 사용자 지시(2026-08-26): 월요일엔 주말 리포트(토·일) — 일간 보기의 변화 근거에 붙인다. */}
                 {data.weekendReport && <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />}
@@ -5720,6 +5726,9 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
 
             {view === "weekly" && (
               <>
+                <div className="flex justify-end">
+                  <HomeViewTabs view={view} onChange={(v) => updateUrl({ view: v })} />
+                </div>
                 {data.weeklyReview ? (
                   <WeeklyReviewCard review={data.weeklyReview} themeColorByCode={themeByCode} />
                 ) : (
@@ -5740,6 +5749,9 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
 
             {view === "monthly" && (
               <>
+                <div className="flex justify-end">
+                  <HomeViewTabs view={view} onChange={(v) => updateUrl({ view: v })} />
+                </div>
                 {data.monthlyReview ? (
                   <MonthlyReviewCard review={data.monthlyReview} themeColorByCode={themeByCode} />
                 ) : (

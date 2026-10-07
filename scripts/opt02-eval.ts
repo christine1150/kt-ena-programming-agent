@@ -53,7 +53,7 @@ interface Prog {
 }
 
 /** 합성 세계: 프로그램 생애주기(신규 투입·종영), 안정적인 주간 편성표 + 일부 교체, 본/재방, 특집, 새벽 0시청률. 값은 실제 채널이 아니다. */
-function syntheticRaw(seed: number, weeks: number): { raw: RawOwn; genres: Map<string, Genre> } {
+export function syntheticRaw(seed: number, weeks: number): { raw: RawOwn; genres: Map<string, Genre> } {
   const r = rng(seed);
   const nProg = 34;
   const progs: Prog[] = Array.from({ length: nProg }, (_, i) => {
@@ -243,4 +243,4 @@ function main() {
   console.log(`\n시간 버전이 관리되지 않는 입력(검증이 "현재 값"으로 과거를 재현): ${UNVERSIONED_INPUTS.join(" / ")}`);
   console.log("구간은 이전 목표 주 잔차(실측÷예측)의 10~90% 분위수에서 만든 *실증 범위*이며 미래 적중을 보장하는 예측분포가 아니다. 적중률은 이후 목표 주에서 센 값이다.");
 }
-main();
+if (process.argv[1] && /opt02-eval/.test(process.argv[1])) main();

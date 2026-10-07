@@ -75,7 +75,7 @@ async function main() {
   // ── 지표 계산 ────────────────────────────────────────────
   {
     const mk = (pred: number | null, actual: number, over: Partial<import("../src/lib/idealSchedule/validation").EvalRow> = {}) =>
-      ({ originWeek: "w1", model: "m", programId: "P", date: "2026-02-02", dow: 1, hour: 21, airingType: "FIRST", genre: "미분류", newProgram: false, knownOtherSlot: false, programHistory: 5, actual, predicted: pred, lowRating: false, ...over }) as import("../src/lib/idealSchedule/validation").EvalRow;
+      ({ originWeek: "w1", model: "m", programId: "P", date: "2026-02-02", dow: 1, hour: 21, airingType: "FIRST", genre: "미분류", newProgram: false, knownOtherSlot: false, programHistory: 5, firstRunSeen: true, actual, predicted: pred, lowRating: false, ...over }) as import("../src/lib/idealSchedule/validation").EvalRow;
     const m = V.metricsOf([mk(1.2, 1.0), mk(0.7, 1.0), mk(null, 5)]);
     check("MAE·bias는 예측 있는 건만(예측 없음은 missing)", m.n === 2 && m.missing === 1 && near(m.mae, 0.25) && near(m.bias, -0.05), JSON.stringify(m));
     check("RMSE", near(m.rmse, Math.sqrt((0.04 + 0.09) / 2), 1e-9));
@@ -136,7 +136,7 @@ async function main() {
     check("부분풀링: 슬롯 평균 2.0, 프로그램 평균 4.0, α=0.5 → 3.0", near(slot.predicted, 2.0) && near(pooled.predicted, 3.0), String(pooled.predicted));
   }
   {
-    const nan = V.metricsOf([{ originWeek: "w", model: "m", programId: "P", date: "d", dow: 1, hour: 21, airingType: "FIRST", genre: "미분류", newProgram: false, knownOtherSlot: false, programHistory: 5, actual: 1, predicted: Number.NaN, lowRating: false }, { originWeek: "w", model: "m", programId: "P", date: "d", dow: 1, hour: 21, airingType: "FIRST", genre: "미분류", newProgram: false, knownOtherSlot: false, programHistory: 5, actual: 1, predicted: 1.5, lowRating: false }]);
+    const nan = V.metricsOf([{ originWeek: "w", model: "m", programId: "P", date: "d", dow: 1, hour: 21, airingType: "FIRST", genre: "미분류", newProgram: false, knownOtherSlot: false, programHistory: 5, firstRunSeen: true, actual: 1, predicted: Number.NaN, lowRating: false }, { originWeek: "w", model: "m", programId: "P", date: "d", dow: 1, hour: 21, airingType: "FIRST", genre: "미분류", newProgram: false, knownOtherSlot: false, programHistory: 5, firstRunSeen: true, actual: 1, predicted: 1.5, lowRating: false }]);
     check("NaN 예측은 평가에서 빠지고 missing으로 센다(지표가 NaN이 되지 않는다)", nan.n === 1 && nan.missing === 1 && near(nan.mae, 0.5));
   }
 
@@ -147,7 +147,7 @@ async function main() {
     for (let w = 0; w < 6; w++) {
       for (let i = 0; i < 40; i++) {
         const ratio = i % 2 === 0 ? 0.5 : 1.5;
-        rows.push({ originWeek: `2026-0${w + 1}-01`, model: "m", programId: `P${i}`, date: `d${w}${i}`, dow: 1, hour: 21, airingType: "FIRST", genre: "미분류", newProgram: false, knownOtherSlot: false, programHistory: 9, actual: ratio, predicted: 1, lowRating: false });
+        rows.push({ originWeek: `2026-0${w + 1}-01`, model: "m", programId: `P${i}`, date: `d${w}${i}`, dow: 1, hour: 21, airingType: "FIRST", genre: "미분류", newProgram: false, knownOtherSlot: false, programHistory: 9, firstRunSeen: true, actual: ratio, predicted: 1, lowRating: false });
       }
     }
     const iv = V.empiricalIntervals(rows, ["m"], { minResiduals: 30 })[0];
@@ -159,7 +159,7 @@ async function main() {
 
   // ── 튜닝/최종 holdout 분리 ───────────────────────────────
   {
-    const mk = (model: string, origin: string, err: number) => ({ originWeek: origin, model, programId: "P", date: origin, dow: 1, hour: 21, airingType: "FIRST", genre: "미분류" as const, newProgram: false, knownOtherSlot: false, programHistory: 5, actual: 1, predicted: 1 + err, lowRating: false });
+    const mk = (model: string, origin: string, err: number) => ({ originWeek: origin, model, programId: "P", date: origin, dow: 1, hour: 21, airingType: "FIRST", genre: "미분류" as const, newProgram: false, knownOtherSlot: false, programHistory: 5, firstRunSeen: true, actual: 1, predicted: 1 + err, lowRating: false });
     const rows = [
       // A는 앞쪽(튜닝)에서 좋고 뒤쪽(holdout)에서 나쁨, B는 반대
       ...["w1", "w2"].flatMap((o) => [mk("A", o, 0.1), mk("B", o, 0.5)]),

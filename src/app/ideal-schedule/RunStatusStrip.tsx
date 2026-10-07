@@ -10,6 +10,8 @@ import { coverageNote } from "@/lib/idealSchedule/horizon";
 import { STOP_LABEL, searchNote } from "@/lib/idealSchedule/searchControl";
 import type { RunRow } from "./model";
 
+const fmtPct = (v: number | null) => (v === null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
+
 const TONE: Record<"ok" | "warn" | "muted", string> = {
   ok: "bg-emerald-50 text-emerald-800",
   warn: "bg-amber-50 text-amber-900",
@@ -120,6 +122,11 @@ export function RunStatusStrip({
         <p className="rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] leading-snug text-rose-900" role="alert">
           제약 검증에서 위반이 발견되었습니다: {s.validation.violations.slice(0, 3).map((v) => v.message).join(" / ")}
           {s.validation.violations.length > 3 ? ` 외 ${s.validation.violations.length - 3}건` : ""} — 이 편성안은 그대로 실행 후보로 쓰지 말고 조건을 확인하세요.
+        </p>
+      )}
+      {s.robustness && s.robustness.p10 !== null && s.robustness.p90 !== null && (
+        <p className="text-[11px] leading-snug text-zinc-600" title="과거 주 검증 오차(실측÷예측)를 프로그램 단위로 공유시켜 400번 흔들어 본 결과입니다. 최고값만 골라서 생기는 편향(승자의 저주)은 반영하지 않아, 후보가 많을수록 실제 불확실성보다 좁을 수 있습니다.">
+          <b className="font-semibold text-zinc-800">검증 오차 점검</b> 기준 대비 개선율이 {fmtPct(s.robustness.p10)} ~ {fmtPct(s.robustness.p90)}(중앙 {fmtPct(s.robustness.p50)}) 범위에서 움직입니다 · 개선이 양수일 시나리오 {s.robustness.pPositive === null ? "—" : `${Math.round(s.robustness.pPositive * 100)}%`} · 근거 부족(C) 비중 {Math.round(s.robustness.evidenceMix.C * 100)}% · 기준 편성에 없는 프로그램 비중 {s.robustness.uniqueShare === null ? "—" : `${Math.round(s.robustness.uniqueShare * 100)}%`}. 이 범위는 고르면서 생기는 낙관을 덜어내지 않은 값이라 보수적으로 읽으세요.
         </p>
       )}
       {searchNote(s.search) && (

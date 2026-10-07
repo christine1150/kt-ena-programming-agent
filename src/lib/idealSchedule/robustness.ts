@@ -4,6 +4,8 @@
 // (한 프로그램을 여러 슬롯에 반복 편성했을 때 그 프로그램을 과대평가했다면 전부 같이 빗나가는 위험을 반영 — 독립 오차로 보면 위험이 과소평가된다).
 // 같은 프로그램이 기준안·후보안 양쪽에 있으면 같은 오차를 받으므로 상쇄되고, 후보안에만 있는 프로그램의 오차는 개선율을 흔든다.
 // 임의의 risk coefficient를 시청률 단위에 더하지 않는다 — 결과는 개선율의 분포(양수일 확률, 하위 10%·중앙·상위 90%)와 근거 등급별 비중으로만 낸다.
+import { gradeOfLevel, type ResidualRow } from "./uncertainty";
+
 export type Grade = "A" | "B" | "C";
 
 export interface RobustBlock {
@@ -64,6 +66,29 @@ const avgOf = (blocks: RobustBlock[], mult: (b: RobustBlock) => number): number 
   }
   return m > 0 ? s / m : null;
 };
+
+/** 과거 주 검증 잔차(실측÷예측 배율)를 근거 등급별 표본으로 바꾼다. 표본이 minPerGrade 미만인 등급은 전체 잔차 분포로 대신하고(가정) 그 등급을 알린다. 전체 표본도 minTotal 미만이면 null. */
+export function ratiosFromResiduals(rows: ResidualRow[], opts: { minPerGrade?: number; minTotal?: number } = {}): { ratios: RatioSamples; pooledGrades: Grade[]; n: number } | null {
+  const minPer = opts.minPerGrade ?? 20;
+  const minTotal = opts.minTotal ?? 30;
+  const all: number[] = [];
+  const by: RatioSamples = { A: [], B: [], C: [] };
+  for (const r of rows) {
+    if (r.expected === null || r.actual === null || !(r.expected > 0) || !Number.isFinite(r.actual)) continue;
+    const ratio = r.actual / r.expected;
+    all.push(ratio);
+    by[gradeOfLevel(r.fallbackLevel)].push(ratio);
+  }
+  if (all.length < minTotal) return null;
+  const pooled: Grade[] = [];
+  for (const g of ["A", "B", "C"] as const) {
+    if (by[g].length < minPer) {
+      pooled.push(g);
+      by[g] = [...all];
+    }
+  }
+  return { ratios: by, pooledGrades: pooled, n: all.length };
+}
 
 /** 후보안(plan)과 기준안(baseline)의 개선율이 검증 오차 시나리오에서 얼마나 유지되는지. 표본이 없는 등급은 오차 없음(1)으로 두지 않고 결과에 evidenceMix로 드러낸다. */
 export function robustnessCheck(plan: RobustBlock[], baseline: RobustBlock[], ratios: RatioSamples, opts: { scenarios?: number; seed?: number } = {}): RobustnessResult {

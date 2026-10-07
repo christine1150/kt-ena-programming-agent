@@ -12,6 +12,8 @@ import { evaluateSchedule, optimizeWeek, type EngineInput, type EngineOutput, ty
 import { buildCandidatePool, buildScoringContext, Scorer, strongSlotMap, type EngineCandidate, type StrategyMode } from "./scoring";
 import { buildSkeleton, type SkeletonSlot } from "./skeleton";
 import { STOP_LABEL, type SearchControl, type SearchReport } from "./searchControl";
+import { ratiosFromResiduals, robustnessCheck, type RobustBlock, type RobustnessResult } from "./robustness";
+import { gradeOfLevel } from "./uncertainty";
 import { addDays } from "./time";
 import type { RankEstimate } from "./rankEstimate";
 import { namesCompatible, planEpisodeHints, planNameKey, planWeekFrame, type PlanRow } from "./planEpisodes";
@@ -111,6 +113,9 @@ export interface EngineSummary {
   objectiveInfo?: ObjectiveInfo;
   /** 탐색 결과의 성격 — 이 엔진은 최적을 증명하지 않는다(탐색된 최선안) */
   searchKind?: "SEARCHED_BEST";
+  /** 검증 오차 시나리오 점검(OPT05): 기준 편성 대비 개선율이 과거 주 검증 오차에서 얼마나 유지되는지. 잔차가 부족하면 null.
+   *  프로그램 단위 오차를 공유한 시나리오이며, 최고값만 골라서 생기는 선택 편향은 반영하지 않아 실제 불확실성보다 좁을 수 있다. */
+  robustness?: (RobustnessResult & { residualN: number; pooledGrades: string[] }) | null;
   /** 탐색 보고서(OPT04): 종료 사유·평가 횟수·단계별 시간·재현 가능 여부. 오래된 실행에는 없다. */
   search?: SearchReport;
   /** 이 실행에 쓰인 모델·입력의 버전(OPT02). 같은 값이면 같은 계산이 재현된다. 오래된 실행에는 없다. */
@@ -670,6 +675,24 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
   for (const ev of input.evaluateAirings ?? []) {
     evaluations[ev.label] = evaluateActualSchedule(scorer, pool, ev.airings, ev.weekStart, channelCode, input.genreOf, config.structure.max_gap_min);
   }
+
+  // 검증 오차 시나리오 점검 — 기준(CURRENT) 편성이 있고 과거 주 검증 잔차가 충분할 때만(없으면 만들지 않는다, 임의 오차를 가정하지 않음)
+  const curEval = evaluations.CURRENT;
+  const rat = ratiosFromResiduals(input.residuals ?? []);
+  if (curEval && curEval.rows.length > 0 && rat) {
+    const toRobust = (b: EvaluatedBlock): RobustBlock => ({
+      programKey: b.candidate.programKey,
+      minutes: b.endMin - b.startMin,
+      expected: b.eval.expected,
+      // 자사 실측이 아닌 가정 기반 후보(경쟁 Benchmark·장르 원형)는 근거 부족(C)으로 본다
+      grade: b.candidate.contentType === "OWN" ? gradeOfLevel(b.eval.fallbackLevel) : "C",
+    });
+    summary.robustness = {
+      ...robustnessCheck(output.blocks.map(toRobust), curEval.rows.map((r) => toRobust(r.block)), rat.ratios, { scenarios: 400, seed: 1 }),
+      residualN: rat.n,
+      pooledGrades: rat.pooledGrades,
+    };
+  } else summary.robustness = null;
 
   return { output, resolution, summary, skeleton, featureSet: fs, competitorFeatures, fingerprint: fp, evaluations };
 }

@@ -6,14 +6,23 @@ import { mapOwnAirings } from "../src/lib/idealSchedule/mapping";
 import { mergeIdealConfig } from "../src/lib/idealSchedule/config";
 import { runIdealScheduleEngine, fingerprint, type EngineRunInput, type EngineRunResult, type GenreResolver } from "../src/lib/idealSchedule/engine";
 import { addDays } from "../src/lib/idealSchedule/time";
+import type { ResidualRow } from "../src/lib/idealSchedule/uncertainty";
 import type { SearchControl, SearchReport } from "../src/lib/idealSchedule/searchControl";
 
 const KPI = "수도권 2049";
 const START = "2026-07-06"; // 월
 const WEEKS = 12;
 const TARGET_WEEK = "2026-09-28";
-const N_PROGRAMS = 20;
-const APPEAL_SD = 0.2;
+let N_PROGRAMS = 20;
+let APPEAL_SD = 0.2;
+/** true면 매주 편성표가 바뀌는 세계(프로그램 효과와 슬롯 효과를 분리해 학습할 수 있다). 기본 false = 한 슬롯에 같은 프로그램이 계속 놓이는 세계(두 효과가 섞여 구분되지 않음). */
+let ROTATE = false;
+/** 합성 세계의 프로그램 수·프로그램 간 진짜 매력 차이(로그 표준편차)를 바꾼다 — OPT05 낙관 편향 실험용(기본값은 OPT04 측정과 같다) */
+export function configureWorld(o: { programs?: number; appealSd?: number; rotate?: boolean }) {
+  if (o.rotate !== undefined) ROTATE = o.rotate;
+  if (o.programs !== undefined) N_PROGRAMS = o.programs;
+  if (o.appealSd !== undefined) APPEAL_SD = o.appealSd;
+}
 const INTERACTION_SD = 0;
 const DRIFT_SD = 0;
 const DROP_PRIME = 0;
@@ -37,17 +46,19 @@ const slotEffect = (h: number) => (h <= 6 ? 0.2 : h <= 11 ? 0.35 : h <= 16 ? 0.5
 const dowEffect = (dow: number) => (dow >= 6 ? 1.1 : 1.0);
 const pad = (n: number) => String(n).padStart(2, "0");
 
-interface World {
+export interface World {
   appeal: number[]; // 프로그램별 진짜 매력(합성)
   gamma: number[][]; // 프로그램×4시간 블록 상호작용(로그)
   drift: number[][]; // 프로그램별 주차 누적 변동(로그), 길이 WEEKS+1
   grid: number[][]; // grid[dow-1][hour-2] = 프로그램 번호
+  /** 매주 다른 편성표(rotate 세계에서만): gridW[주][dow-1][hour-2] */
+  gridW?: number[][][];
   noiseSd: number;
 }
-const truthRating = (w: World, programIdx: number, dow: number, hour: number, wk = WEEKS) =>
+export const truthRating = (w: World, programIdx: number, dow: number, hour: number, wk = WEEKS) =>
   0.1 * w.appeal[programIdx] * Math.exp(w.gamma[programIdx][Math.floor((hour - 2) / 4)] + w.drift[programIdx][wk]) * slotEffect(hour) * dowEffect(dow);
 
-function makeWorld(seed: number): World {
+export function makeWorld(seed: number): World {
   const r = rng(seed);
   const appeal = Array.from({ length: N_PROGRAMS }, () => Math.exp(APPEAL_SD * normal(r)));
   const gamma = Array.from({ length: N_PROGRAMS }, () => Array.from({ length: 6 }, () => INTERACTION_SD * normal(r)));
@@ -67,7 +78,22 @@ function makeWorld(seed: number): World {
     }
     grid.push(row);
   }
-  return { appeal, gamma, drift, grid, noiseSd: 0.25 };
+  let gridW: number[][][] | undefined;
+  if (ROTATE) {
+    const rr = rng(seed * 13 + 7); // 별도 난수열 — 기본 세계의 난수 소비를 바꾸지 않는다
+    gridW = Array.from({ length: WEEKS }, () =>
+      Array.from({ length: 7 }, () => {
+        const row: number[] = [];
+        for (let h = 0; h < 24; h++) {
+          let p = Math.floor(rr() * N_PROGRAMS);
+          if (h > 0 && p === row[h - 1]) p = (p + 1) % N_PROGRAMS;
+          row.push(p);
+        }
+        return row;
+      })
+    );
+  }
+  return { appeal, gamma, drift, grid, gridW, noiseSd: 0.25 };
 }
 
 type Raw = { date: string; start: string; end: string; program_id: string; program_name: string; first_run: boolean | null; m: Record<string, { r: number | null; s: number | null; reach: number | null; ts: number | null }> };
@@ -81,7 +107,7 @@ function history(w: World, seed: number): { airings: Raw[]; dates: string[] } {
     dates.push(date);
     const dow = (i % 7) + 1;
     for (let h = 2; h < 26; h++) {
-      const p = w.grid[dow - 1][h - 2];
+      const p = (w.gridW ? w.gridW[Math.floor(i / 7)] : w.grid)[dow - 1][h - 2];
       const rating = Math.max(0, truthRating(w, p, dow, h, Math.floor(i / 7)) * Math.exp(w.noiseSd * normal(r) - (w.noiseSd * w.noiseSd) / 2));
       if (DROP_PRIME > 0 && date >= addDays(TARGET_WEEK, -7) && date < TARGET_WEEK && h >= 19 && h <= 23 && r() < DROP_PRIME) continue;
       const startH = h % 24;
@@ -141,7 +167,7 @@ export interface BenchRow {
   search: SearchReport | undefined;
 }
 
-export function runWorld(seed: number, mode: "KEEP_CURRENT" | "AI_OPTIMIZED", search?: SearchControl, opts: { genres?: boolean; maxIter?: number; caps?: { daily: number; weekly: number } } = {}): { res: EngineRunResult; ms: number } {
+export function runWorld(seed: number, mode: "KEEP_CURRENT" | "AI_OPTIMIZED", search?: SearchControl, opts: { genres?: boolean; maxIter?: number; caps?: { daily: number; weekly: number }; residuals?: ResidualRow[] } = {}): { res: EngineRunResult; ms: number; world: World } {
   const world = makeWorld(seed);
   const h = history(world, seed);
   const raw = { channel_code: "ENA", kpi_label: KPI, date_from: START, date_to: addDays(START, WEEKS * 7 - 1), holidays: [] as string[], dates_with_data: h.dates, airings: h.airings };
@@ -158,13 +184,14 @@ export function runWorld(seed: number, mode: "KEEP_CURRENT" | "AI_OPTIMIZED", se
     genreOf: opts.genres ? genreCycle : genreOf,
     evaluateAirings: [{ label: "CURRENT", weekStart: addDays(TARGET_WEEK, -7), airings: bundle.airings }],
     search: { now: () => performance.now(), ...search },
+    residuals: opts.residuals,
   };
   const t0 = Date.now();
   const res = runIdealScheduleEngine(input);
-  return { res, ms: Date.now() - t0 };
+  return { res, ms: Date.now() - t0, world };
 }
 
-export function runBench(seed: number, mode: "KEEP_CURRENT" | "AI_OPTIMIZED", search?: SearchControl, opts: { genres?: boolean; maxIter?: number; caps?: { daily: number; weekly: number } } = {}): BenchRow {
+export function runBench(seed: number, mode: "KEEP_CURRENT" | "AI_OPTIMIZED", search?: SearchControl, opts: { genres?: boolean; maxIter?: number; caps?: { daily: number; weekly: number }; residuals?: ResidualRow[] } = {}): BenchRow {
   const { res, ms } = runWorld(seed, mode, search, opts);
   const sig = res.output.blocks.map((b) => `${b.weekday}|${b.startMin}|${b.endMin}|${b.candidate.key}`).join(";") + `#${res.output.objective.toFixed(10)}`;
   return {

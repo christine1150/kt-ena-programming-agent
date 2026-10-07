@@ -1,7 +1,7 @@
 "use client";
 
-// 1페이지 "오늘의 시청률" 카드 안쪽 맨 아래에 이어 붙는 정보 줄 — 해당일 수도권 개인2049 채널 순위 1~20위 채널의 상위 프로그램 12개(2026-10-06 사용자 지시, 2026-10-07 9개→12개).
-// 별도 제목 없이 정보만: 3단 × 4줄, 한 줄 구성 = 순위 · 채널명 · 프로그램명 · 시작 시각 · 시청률(2049) (유료방송가구).
+// 1페이지 "오늘의 시청률" 카드 안쪽 맨 아래에 이어 붙는 정보 줄 — 해당일 수도권 개인2049 채널 순위 1~20위 채널의 상위 프로그램 15개(2026-10-06 사용자 지시, 2026-10-07 9개→12개→15개).
+// 별도 제목 없이 정보만: 3단 × 5줄, 한 줄 구성 = 순위 · 채널명 · 프로그램명 · 시작 시각 · 시청률(2049) (유료방송가구).
 // 프로그램명이 길면 글씨를 줄여 한 줄에 넣는다(잘라 내지 않음). 값은 API(/api/dashboard/top-programs)가 저장된 시청률을 고른 것이며 이 컴포넌트는 그리기만 한다.
 import { useLayoutEffect, useRef } from "react";
 import { displayProgramName, formatRating, type TopProgramRow } from "@/lib/dashboard/marketTopPrograms";
@@ -63,7 +63,7 @@ function FitOneLine({ text, className = "" }: { text: string; className?: string
 function Skeleton() {
   return (
     <div className="grid gap-x-6 md:grid-cols-3" aria-busy="true" aria-label="상위 프로그램을 불러오는 중">
-      {Array.from({ length: 12 }, (_, i) => (
+      {Array.from({ length: 15 }, (_, i) => (
         <div key={i} className="flex items-center gap-2 py-[7px]">
           <div className="h-3.5 w-4 animate-pulse rounded bg-zinc-100" />
           <div className="h-3.5 w-12 animate-pulse rounded bg-zinc-100" />
@@ -90,7 +90,7 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
     : "";
 
   return (
-    <div aria-label="해당일 상위 프로그램 12개" role="group">
+    <div aria-label="해당일 상위 프로그램 15개" role="group">
       {/* 기준만 작게 — 제목은 두지 않는다 */}
       <p className="mb-0.5 text-right text-[11px] text-zinc-500" title={coverageNote || undefined}>
         {data?.date ? `${data.date.slice(5).replace("-", "/")} ` : ""}수도권 개인2049 시청률 순 · 채널 1~20위 · 뉴스 제외 · ( ) 유료방송가구

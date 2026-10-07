@@ -96,6 +96,30 @@ export function slotRecentModel(weeks = 4): ModelSpec {
   };
 }
 
+/** 기준 B1': 같은 요일·시간대 최근 중앙값 — 극단값(특집·사건)이 평균을 끌고 가는 것을 막는 강건 기준(OPT02 T05 발견 확인용) */
+export function slotMedianModel(weeks = 8): ModelSpec {
+  const med = (xs: number[]) => {
+    if (xs.length === 0) return null;
+    const v = [...xs].sort((a, b) => a - b);
+    const m = Math.floor(v.length / 2);
+    return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+  };
+  return {
+    id: `slotmed${weeks}w`,
+    label: `같은 요일·시간대 최근 ${weeks}주 중앙값`,
+    build({ train, asOf }) {
+      const recent = recentOf(train, asOf, weeks);
+      const all = med(recent.map((a) => valueOf(a) as number));
+      return (a) => {
+        const s = recent.filter((x) => sameSlot(x, a)).map((x) => valueOf(x) as number);
+        if (s.length > 0) return med(s);
+        const h = recent.filter((x) => hourOf(x) === hourOf(a)).map((x) => valueOf(x) as number);
+        return h.length > 0 ? med(h) : all;
+      };
+    },
+  };
+}
+
 /** 기준 B2: 같은 프로그램(같은 방영유형 우선) 최근 n회 평균 — 슬롯을 보지 않는다. 이력 없으면 B1로 대체. */
 export function programRecentModel(n = 4, weeks = 12): ModelSpec {
   const fallback = slotRecentModel(4);
@@ -158,6 +182,8 @@ export interface EvalRow {
   knownOtherSlot: boolean;
   /** 학습 자료의 이 프로그램 방영 수 */
   programHistory: number;
+  /** 학습 자료에 이 프로그램의 본방(FIRST) 방영이 있음 — 재방 예측이 "본방을 이미 관측한 작품의 다음 재방"인지 가른다 */
+  firstRunSeen: boolean;
   actual: number;
   predicted: number | null;
   /** 채널 평균 대비 매우 낮은 실측(저시청, 0 포함) */
@@ -191,6 +217,7 @@ export function runRollingOrigin(bundle: OwnAiringsBundle, opts: ValidationOptio
     const channelMean = mean(recentOf(trainAll, asOf, 12).map((a) => valueOf(a) as number)) ?? 0;
     const history = new Map<string, number>();
     for (const a of trainAll) history.set(a.programId, (history.get(a.programId) ?? 0) + 1);
+    const firstSeen = new Set(trainAll.filter((a) => a.airingType === "FIRST").map((a) => a.programId));
     const slotKnown = new Set(trainAll.map((a) => `${a.programId}|${a.dow}|${hourOf(a)}`));
     for (const m of opts.models) {
       const predict = m.build(ctx);
@@ -209,6 +236,7 @@ export function runRollingOrigin(bundle: OwnAiringsBundle, opts: ValidationOptio
           newProgram: h === 0,
           knownOtherSlot: h > 0 && !slotKnown.has(`${t.programId}|${t.dow}|${hourOf(t)}`),
           programHistory: h,
+          firstRunSeen: firstSeen.has(t.programId),
           actual,
           predicted: predict(t),
           lowRating: channelMean > 0 && actual < channelMean * 0.1,
@@ -246,7 +274,7 @@ export function metricsOf(rows: EvalRow[]): Metrics {
   };
 }
 
-export type GroupKey = "all" | "newProgram" | "knownOtherSlot" | "knownSameSlot" | "smallSample" | "lowRating" | "prime" | "nonPrime" | "firstRun" | "rerun";
+export type GroupKey = "all" | "newProgram" | "knownOtherSlot" | "knownSameSlot" | "smallSample" | "lowRating" | "prime" | "nonPrime" | "firstRun" | "rerun" | "firstRunKnown" | "firstRunNew" | "rerunObserved" | "rerunUnobserved";
 export const GROUP_LABEL: Record<GroupKey, string> = {
   all: "전체",
   newProgram: "신규 프로그램(학습 이력 없음)",
@@ -258,6 +286,10 @@ export const GROUP_LABEL: Record<GroupKey, string> = {
   nonPrime: "프라임 밖",
   firstRun: "본방",
   rerun: "재방·미표기",
+  firstRunKnown: "본방 · 보유 프로그램(다음 회차 예측)",
+  firstRunNew: "본방 · 신규 프로그램(새 작품 예측)",
+  rerunObserved: "재방 · 학습에서 본방을 관측한 작품(다음 재방 예측)",
+  rerunUnobserved: "재방 · 본방 이력 미관측 작품",
 };
 export const GROUPS: Record<GroupKey, (r: EvalRow) => boolean> = {
   all: () => true,
@@ -270,7 +302,36 @@ export const GROUPS: Record<GroupKey, (r: EvalRow) => boolean> = {
   nonPrime: (r) => !(r.hour >= 19 && r.hour <= 22),
   firstRun: (r) => r.airingType === "FIRST",
   rerun: (r) => r.airingType !== "FIRST",
+  firstRunKnown: (r) => r.airingType === "FIRST" && !r.newProgram,
+  firstRunNew: (r) => r.airingType === "FIRST" && r.newProgram,
+  rerunObserved: (r) => r.airingType !== "FIRST" && r.firstRunSeen,
+  rerunUnobserved: (r) => r.airingType !== "FIRST" && !r.firstRunSeen,
 };
+
+/** 검증 표본의 노출 — 건수만이 아니라 실제 검증 기간·방송일 수·고유 프로그램·방영(프로그램×날짜) 수·목표 주 수를 함께 보고한다(UI의 "최근 N주" 선택만으로 표본이 충분해지지 않는다). */
+export interface Exposure {
+  from: string | null;
+  to: string | null;
+  airings: number;
+  broadcastDays: number;
+  programs: number;
+  /** 프로그램×방송일 단위(같은 날 같은 프로그램 여러 번은 1로 센다) — 회차에 가까운 단위 */
+  programDays: number;
+  originWeeks: number;
+}
+export function exposureOf(rows: EvalRow[]): Exposure {
+  const used = rows.filter((r) => r.predicted !== null);
+  const dates = used.map((r) => r.date).sort();
+  return {
+    from: dates[0] ?? null,
+    to: dates[dates.length - 1] ?? null,
+    airings: used.length,
+    broadcastDays: new Set(dates).size,
+    programs: new Set(used.map((r) => r.programId)).size,
+    programDays: new Set(used.map((r) => `${r.programId}|${r.date}`)).size,
+    originWeeks: new Set(used.map((r) => r.originWeek)).size,
+  };
+}
 
 export interface ModelReport {
   model: string;
