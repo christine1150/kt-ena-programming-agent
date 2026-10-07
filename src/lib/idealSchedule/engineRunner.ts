@@ -41,6 +41,8 @@ export interface RunRequest {
   usePlanEpisodes?: boolean;
   /** 권리(Avail) 기준(단계 06): explore = 권리상 불가인 후보만 제외(기본, 조건부·미확인은 라벨로 분리) / executable = 권리가 확인된 후보만. Avail가 입력되지 않은 설치에서는 무시된다 */
   rightsMode?: "explore" | "executable";
+  /** 이번 실행에만 학습(검색) 기간을 덮어쓴다(일) — 홈·채널 상세 교체 제안이 약한 곳을 못 찾을 때 최대 180일(6개월)까지 넓혀 본다. 저장 설정은 바꾸지 않는다. */
+  lookbackDays?: number;
 }
 
 /** 닐슨 주간 순위(채널·랭킹 시트 타깃) — 기준일까지 최근 lookbackDays일 */
@@ -186,9 +188,10 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
   const asOfDate = req.asOfDate ?? addDays(req.weekStart, -1);
   const channel = await loadChannelRef(req.channelCode);
   const saved = await loadIdealScheduleConfig(channel.id);
-  const config = req.configOverride
+  const config0 = req.configOverride
     ? { ...saved, weights: { ...saved.weights, ...(req.configOverride.weights ?? {}) }, repeat_rules: { ...saved.repeat_rules, ...(req.configOverride.repeat_rules ?? {}) } }
     : saved;
+  const config = req.lookbackDays && req.lookbackDays > 0 ? { ...config0, expected_kpi: { ...config0.expected_kpi, lookback_days: Math.min(180, Math.round(req.lookbackDays)) } } : config0;
   const target = req.optimizeTargetLabel ?? null;
   const [rawBundle, competitorBundle, genreMap, constraintLoad, actualWeek] = await Promise.all([
     fetchOwnAirings(channel, asOfDate, config, target),

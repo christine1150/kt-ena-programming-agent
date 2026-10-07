@@ -796,25 +796,61 @@ interface AiSuggestionPayload {
   currentExpected: number | null;
   aiExpected: number | null;
   change: { weekday: number; startMin: number; from: string; to: string; gain: number; certainty: "HIGH" | "MID" | "LOW" | null } | null;
+  /** 검색 범위를 최대 6개월(180일)까지 넓혀 계산한 경우 그 일수 */
+  widenedLookbackDays?: number | null;
+  /** 약해진 프로그램을 지정해 그 자리의 교체안을 찾은 경우 그 이름 */
+  focus?: string | null;
 }
 /** undefined = 계산 중, null = 계산 실패 */
 type AiState = Record<string, AiSuggestionPayload | null | undefined>;
 const AI_DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
+const aiClock = (min: number) => {
+  const m = ((Math.round(min) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+};
 function aiSuggestionLine(s: AiSuggestionPayload): string {
-  if (!s.change) return `AI 계산: ${s.weekday ? `${AI_DOW_KO[s.weekday - 1]}요일 ` : ""}실제 편성 중 교체로 개선되는 칸이 없습니다`;
-  return `${AI_DOW_KO[s.change.weekday - 1]} ${Math.floor(s.change.startMin / 60)}시 '${s.change.from}'→'${s.change.to}' 교체 시 기대 ${formatRatingDelta(s.change.gain)}`;
+  if (!s.change) {
+    const where = s.focus ? `'${s.focus}' 자리` : `${s.weekday ? `${AI_DOW_KO[s.weekday - 1]}요일 ` : ""}실제 편성`;
+    return `AI 계산: ${where}${s.focus ? "는" : "은"} ${s.widenedLookbackDays ? "최근 6개월 실적으로도 " : ""}교체로 개선되는 후보를 찾지 못했습니다`;
+  }
+  return `${AI_DOW_KO[s.change.weekday - 1]} ${aiClock(s.change.startMin)} '${s.change.from}'→'${s.change.to}' 교체 시 기대 ${formatRatingDelta(s.change.gain)}${s.widenedLookbackDays ? " · 최근 6개월 실적 기준" : ""}`;
+}
+// 사용자 지시(2026-10-07): "'평소 대비 ▼38% — 다음 방영도 낮으면…'·'AI 계산: …없습니다' 같은 내용은 검정색으로, 개선 방법을 찾아 제안" — 진단·근거 문구는 검정,
+// 실제로 개선되는 교체안(AI 계산 결과)만 파란색으로 강조하고, 약해진 프로그램 줄 아래에 AI 대체 편성 제안 줄을 따로 붙인다.
+interface ResolvedAction {
+  line: string | null;
+  kind: "program" | "diagnosis" | "ai" | null;
+  /** kind가 ai일 때 개선되는 교체안이 있는가(없으면 검정 안내 문구) */
+  positive: boolean;
+  /** 약해진 곳 아래 따로 붙는 AI 대체 편성 제안 줄 */
+  extra: { text: string; positive: boolean } | null;
+}
+const ACTION_BLACK = "#18181b";
+const ACTION_BLUE = "#281fc7";
+function actionColor(kind: ResolvedAction["kind"], positive: boolean): string {
+  if (kind === "ai") return positive ? ACTION_BLUE : ACTION_BLACK;
+  if (kind === "program" || kind === "diagnosis") return ACTION_BLACK;
+  return "#a1a1aa";
 }
 function resolveChannelAction(
-  base: { actionLine: string | null; actionKind: "program" | "diagnosis" | null; needsAi?: boolean } | undefined,
+  base: { actionLine: string | null; actionKind: "program" | "diagnosis" | null; needsAi?: boolean; wantsAi?: boolean } | undefined,
   ai: AiState,
   code: string
-): { line: string | null; kind: "program" | "diagnosis" | "ai" | null } {
-  if (!base) return { line: null, kind: null };
-  if (!base.needsAi) return { line: base.actionLine, kind: base.actionKind };
+): ResolvedAction {
+  if (!base) return { line: null, kind: null, positive: false, extra: null };
   const s = ai[code];
-  if (s === undefined) return { line: "AI 편성안 계산 중…", kind: "ai" };
-  if (s === null) return { line: "AI 편성안을 계산하지 못했습니다", kind: "ai" };
-  return { line: aiSuggestionLine(s), kind: "ai" };
+  if (base.needsAi) {
+    if (s === undefined) return { line: "AI 편성안 계산 중…", kind: "ai", positive: false, extra: null };
+    if (s === null) return { line: "AI 편성안을 계산하지 못했습니다", kind: "ai", positive: false, extra: null };
+    return { line: aiSuggestionLine(s), kind: "ai", positive: !!s.change, extra: null };
+  }
+  let extra: ResolvedAction["extra"] = null;
+  if (base.wantsAi && base.actionKind) {
+    if (s === undefined) extra = { text: "AI 대체 편성 계산 중…", positive: false };
+    else if (s === null) extra = { text: "AI 대체 편성을 계산하지 못했습니다", positive: false };
+    else extra = { text: aiSuggestionLine(s), positive: !!s.change };
+  }
+  return { line: base.actionLine, kind: base.actionKind, positive: false, extra };
 }
 function AiTag() {
   return (
@@ -823,16 +859,16 @@ function AiTag() {
     </span>
   );
 }
-function useAiSuggestions(date: string | null, codes: string[]): AiState {
+function useAiSuggestions(date: string | null, codes: string[], focusJson = "{}"): AiState {
   const codesKey = codes.slice().sort().join(",");
-  const key = date && codesKey ? `${date}|${codesKey}` : "";
+  const key = date && codesKey ? [date, codesKey, focusJson].join("\u0001") : "";
   const [state, setState] = useState<{ key: string; data: AiState }>({ key: "", data: {} });
   useEffect(() => {
     if (!key) return;
-    const [d, cs] = key.split("|");
+    const [d, cs, fj] = key.split("\u0001");
     const ctrl = new AbortController();
     const failed = Object.fromEntries(cs.split(",").map((c) => [c, null]));
-    fetch(`/api/dashboard/ai-suggestions?date=${encodeURIComponent(d)}&channels=${encodeURIComponent(cs)}`, { signal: ctrl.signal })
+    fetch(`/api/dashboard/ai-suggestions?date=${encodeURIComponent(d)}&channels=${encodeURIComponent(cs)}&focus=${encodeURIComponent(fj)}`, { signal: ctrl.signal })
       .then((r) => r.json())
       .then((b) => setState({ key, data: b.ok ? b.suggestions : failed }))
       .catch((e) => {
@@ -879,6 +915,10 @@ function buildChannelInsightSummary(
   baselineAvgRank: number | null;
   /** 목표 미달인데 프로그램 근거·큰 하락이 없어, 시청률 자판기(AI) 제안을 계산해 보여 줘야 하는가 */
   needsAi: boolean;
+  /** 액션이 지목한 프로그램(없으면 null) — 그 프로그램 자리의 교체안을 AI가 계산할 때 쓴다 */
+  actionProgramName: string | null;
+  /** 약해진 곳(하락 프로그램·전략 재점검·근거 없음)이라 AI 대체 편성 제안을 붙여야 하는가 — 호조 프로그램은 제외 */
+  wantsAi: boolean;
 } {
   const situationLine =
     s.today_rating !== null
@@ -893,6 +933,8 @@ function buildChannelInsightSummary(
   let actionLine: string | null = null;
   let actionTag: ActionTag | null = null;
   let actionKind: "program" | "diagnosis" | null = null;
+  let actionProgramName: string | null = null;
+  let actionDown = false;
   // 최근 2주 추이: 오늘 시청률이 전주·전전주 같은 요일 평균보다 얼마나 낮은가(%). 두 주 값이 없으면 12주 평균 대비로 대신한다.
   const twoWeekAvg = s.priorWeekRating !== null && s.priorWeek2Rating !== null ? (s.priorWeekRating + s.priorWeek2Rating) / 2 : null;
   const recentDropPct =
@@ -913,6 +955,8 @@ function buildChannelInsightSummary(
       observationText: causeLine,
     });
     actionLine = programActionText(s.decline_program_name, hourLabel, "down", declineAction, s.decline_program_delta_pct);
+    actionProgramName = s.decline_program_name;
+    actionDown = true;
     actionTag = s.decline_program_tag ?? null;
     actionKind = "program";
   } else if (
@@ -937,6 +981,8 @@ function buildChannelInsightSummary(
         observationText: causeLine,
       });
       actionLine = programActionText(s.top_program_name, hourLabel, pct >= 0 ? "up" : "down", topAction, pct);
+      actionProgramName = s.top_program_name;
+      actionDown = pct < 0;
       actionTag = s.top_program_tag ?? null;
       actionKind = "program";
     }
@@ -984,6 +1030,8 @@ function buildChannelInsightSummary(
           observationText: causeLine,
         });
         actionLine = programActionText(s.top_program_name, hourLabel, "down", goalAction, programDeclinePct);
+        actionProgramName = s.top_program_name;
+        actionDown = true;
         actionKind = "program";
       } else if (bigRecentDrop && recentDropPct !== null) {
         causeLine = `${gapNote} 최근 2주 같은 요일 평균 대비 ▼${Math.abs(recentDropPct).toFixed(0)}% 하락`;
@@ -1041,6 +1089,8 @@ function buildChannelInsightSummary(
       const hourLabel = s.top_program_start_time ? `(${extBroadcastHour(s.top_program_start_time)}시)` : "";
       actionLine = `'${s.top_program_name}'${hourLabel} 호조 — 편성 확대 검토`;
       actionKind = "program";
+      actionProgramName = s.top_program_name;
+      actionDown = false;
     } else {
       actionLine = null;
       actionKind = null;
@@ -1048,7 +1098,8 @@ function buildChannelInsightSummary(
     }
   }
 
-  return { situationLine, causeLine, actionLine, actionTag, actionKind, baselineAvgRank: s.baseline_avg_rank, needsAi };
+  const wantsAi = needsAi || actionKind === "diagnosis" || (actionKind === "program" && actionDown);
+  return { situationLine, causeLine, actionLine, actionTag, actionKind, baselineAvgRank: s.baseline_avg_rank, needsAi, actionProgramName, wantsAi };
 }
 
 // 사용자 지시(2026-09-18): 채널별 액션 문구 옆 5대 액션 태그 배지 — ChannelDeepDive.tsx의
@@ -1226,12 +1277,16 @@ function ChannelHero({
   channel,
   actionLine,
   actionKind,
+  actionPositive = false,
+  extra = null,
   baselineAvgRank,
   kpi,
 }: {
   channel: ChannelSummary;
   actionLine: string | null;
   actionKind: "program" | "diagnosis" | "ai" | null;
+  actionPositive?: boolean;
+  extra?: ResolvedAction["extra"];
   baselineAvgRank: number | null;
   kpi?: KpiRow;
 }) {
@@ -1281,14 +1336,16 @@ function ChannelHero({
           옮긴다(계산 로직은 buildChannelInsightSummary 그대로, 새 계산 없음).
           재지시(2026-09-20): 프로그램을 지목한 액션(파란색)과, 프로그램 근거 없이 채널
           순위만으로 나온 진단(진한 회색)을 구분해 표시한다. */}
-      <p
-        className="mt-2 text-[13px] font-medium"
-        title={actionLine ?? undefined}
-        style={{ color: actionKind === "program" || actionKind === "ai" ? "#281fc7" : actionKind === "diagnosis" ? "#3f3f46" : "#a1a1aa" }}
-      >
+      <p className="mt-2 text-[13px] font-medium" title={actionLine ?? undefined} style={{ color: actionColor(actionKind, actionPositive) }}>
         {actionKind === "ai" && <AiTag />}
         {actionLine ?? "현재 편성 유지"}
       </p>
+      {extra && (
+        <p className="mt-1 text-[13px] font-medium" style={{ color: extra.positive ? ACTION_BLUE : ACTION_BLACK }}>
+          <AiTag />
+          {extra.text}
+        </p>
+      )}
     </Link>
   );
 }
@@ -1405,6 +1462,8 @@ function ChannelTile({
   logoReference,
   actionLine,
   actionKind,
+  actionPositive = false,
+  extra = null,
   baselineAvgRank,
   kpi,
 }: {
@@ -1412,6 +1471,8 @@ function ChannelTile({
   logoReference?: ChannelSummary;
   actionLine: string | null;
   actionKind: "program" | "diagnosis" | "ai" | null;
+  actionPositive?: boolean;
+  extra?: ResolvedAction["extra"];
   baselineAvgRank: number | null;
   kpi?: KpiRow;
 }) {
@@ -1481,14 +1542,16 @@ function ChannelTile({
           ChannelHero와 동일한 한 줄(계산은 buildChannelInsightSummary 재사용, 새 계산 없음).
           재지시(2026-09-20): 프로그램 지목 액션(파란색)과 순위만으로 나온 진단(진한 회색)을
           구분해 표시한다. */}
-      <p
-        className="min-h-[2.7em] text-[11px] font-medium leading-snug"
-        title={actionLine ?? undefined}
-        style={{ color: actionKind === "program" || actionKind === "ai" ? "#281fc7" : actionKind === "diagnosis" ? "#3f3f46" : "#a1a1aa" }}
-      >
+      <p className="min-h-[2.7em] text-[11px] font-medium leading-snug" title={actionLine ?? undefined} style={{ color: actionColor(actionKind, actionPositive) }}>
         {actionKind === "ai" && <AiTag />}
         {actionLine ?? "현재 편성 유지"}
       </p>
+      {extra && (
+        <p className="text-[11px] font-medium leading-snug" style={{ color: extra.positive ? ACTION_BLUE : ACTION_BLACK }}>
+          <AiTag />
+          {extra.text}
+        </p>
+      )}
     </Link>
   );
 }
@@ -1554,6 +1617,8 @@ function ChannelStatusCard({
             channel={ena}
             actionLine={resolveChannelAction(insightByCode.get("ENA"), aiByCode, "ENA").line}
             actionKind={resolveChannelAction(insightByCode.get("ENA"), aiByCode, "ENA").kind}
+            actionPositive={resolveChannelAction(insightByCode.get("ENA"), aiByCode, "ENA").positive}
+            extra={resolveChannelAction(insightByCode.get("ENA"), aiByCode, "ENA").extra}
             baselineAvgRank={insightByCode.get("ENA")?.baselineAvgRank ?? null}
             kpi={kpiByCode.get("ENA")}
           />
@@ -1570,6 +1635,8 @@ function ChannelStatusCard({
                 logoReference={ena}
                 actionLine={resolveChannelAction(insightByCode.get(c.code), aiByCode, c.code).line}
                 actionKind={resolveChannelAction(insightByCode.get(c.code), aiByCode, c.code).kind}
+                actionPositive={resolveChannelAction(insightByCode.get(c.code), aiByCode, c.code).positive}
+                extra={resolveChannelAction(insightByCode.get(c.code), aiByCode, c.code).extra}
                 baselineAvgRank={insightByCode.get(c.code)?.baselineAvgRank ?? null}
                 kpi={kpiByCode.get(c.code)}
               />
@@ -4519,24 +4586,31 @@ function ChannelNarrativeCard({
                       {highlightNarrativeText(line.causeLine, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
                     </p>
                   )}
-                  <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] leading-snug font-medium" style={{ color: line.actionLine || line.needsAi ? "#281fc7" : undefined }}>
-                    <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: line.actionLine || line.needsAi ? "#8b87e0" : "#a1a1aa" }}>
+                  {(() => {
+                  const a = resolveChannelAction(line, aiByCode, line.code);
+                  return (
+                  <>
+                  <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] leading-snug font-medium" style={{ color: a.line ? actionColor(a.kind, a.positive) : undefined }}>
+                    <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">
                       액션
                     </span>
-                    {(() => {
-                      const a = resolveChannelAction(line, aiByCode, line.code);
-                      return (
-                        <>
-                          {a.kind === "ai" && <AiTag />}
-                          {a.line ?? <span className="text-zinc-500">현재 편성 유지</span>}
-                        </>
-                      );
-                    })()}
+                    {a.kind === "ai" && <AiTag />}
+                    {a.line ?? <span className="text-zinc-500">현재 편성 유지</span>}
                     {/* 사용자 지시(2026-09-18): 이 액션의 근거 프로그램이 Page 2 Fit Score로
                         이미 판정된 경우에만 배지를 붙인다(오늘 Page 2 미방문 등으로 계산값이
                         없으면 조용히 생략 — 근거 없는 배지를 지어내지 않는다). */}
                     {line.actionTag && <ActionTagDot tag={line.actionTag} />}
                   </p>
+                  {a.extra && (
+                    <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] leading-snug font-medium" style={{ color: a.extra.positive ? ACTION_BLUE : ACTION_BLACK }}>
+                      <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">대체</span>
+                      <AiTag />
+                      {a.extra.text}
+                    </p>
+                  )}
+                  </>
+                  );
+                  })()}
                 </div>
                 {/* 원문 문단이 없는 채널(2026-09-17 기준 skyUHD — 등위 변화가 10위 미만이면
                     문장을 만들지 않는 기존 규칙)에서는 빈 "자세히 보기"를 띄우지 않는다. */}
@@ -5296,19 +5370,22 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
 
   const byCode = new Map(data?.channels.map((c) => [c.code, c]) ?? []);
   // 사용자 지시(2026-10-07): 목표 미달인데 근거 없는 채널의 AI 스마트 편성 제안을 실제로 계산해 가져온다(채널당 약 2초, 서버 캐시).
-  const aiCodes = data
+  const aiPlan = data
     ? data.narrativeSignals
-        .filter(
-          (s) =>
-            s.channelCode !== "SKYUHD" &&
-            buildChannelInsightSummary(s, {
-              targetRankNum: parseTargetRankNum(byCode.get(s.channelCode)?.targetRank ?? null),
-              achievementPct: byCode.get(s.channelCode)?.achievementPct ?? null,
-            }).needsAi
-        )
-        .map((s) => s.channelCode)
+        .filter((s) => s.channelCode !== "SKYUHD")
+        .map((s) => ({
+          code: s.channelCode,
+          sum: buildChannelInsightSummary(s, {
+            targetRankNum: parseTargetRankNum(byCode.get(s.channelCode)?.targetRank ?? null),
+            achievementPct: byCode.get(s.channelCode)?.achievementPct ?? null,
+          }),
+        }))
+        .filter((x) => x.sum.wantsAi)
     : [];
-  const aiByCode = useAiSuggestions(data?.asOfDate ?? null, aiCodes);
+  const aiCodes = aiPlan.map((x) => x.code);
+  // 약해진 프로그램이 지목된 채널은 그 프로그램 자리의 교체안을 찾는다(없으면 기준일 요일의 가장 개선폭 큰 칸)
+  const aiFocusJson = JSON.stringify(Object.fromEntries(aiPlan.filter((x) => x.sum.actionProgramName && !x.sum.needsAi).map((x) => [x.code, x.sum.actionProgramName as string])));
+  const aiByCode = useAiSuggestions(data?.asOfDate ?? null, aiCodes, aiFocusJson);
 
   // ── 단계 07 홈 모델(이미 계산된 값만 사용) ──
   const today = kstToday();

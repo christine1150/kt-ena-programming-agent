@@ -39,6 +39,10 @@ export interface AiSuggestion {
   aiExpected: number | null;
   /** 기대 시청률이 가장 크게 오르는 교체 한 칸. 교체로 개선되는 칸이 없으면 null */
   change: { weekday: number; startMin: number; from: string; to: string; gain: number; certainty: Certainty } | null;
+  /** 검색 범위를 넓혀(최근 6개월) 찾았거나 찾아본 경우 그 일수(180). 기본 범위(약 3개월)로 찾았으면 null */
+  widenedLookbackDays: number | null;
+  /** 약한 프로그램을 지정해 그 자리의 교체안을 찾았으면 그 이름 */
+  focus: string | null;
 }
 
 export interface ReplacePlan {
@@ -46,6 +50,8 @@ export interface ReplacePlan {
   weekStart: string;
   currentExpected: number | null;
   aiExpected: number | null;
+  /** 이 계산의 학습(검색) 기간(일) — 기본 설정이면 null */
+  lookbackDays?: number | null;
   /** 개선폭이 큰 순 — 최근 실제 편성과 대조해 지금 그 자리에 실제로 방영 중인 프로그램을 바꾸는 안만 남긴다 */
   details: ReplaceDetail[];
   /** 엔진이 제안했지만 최근 실제 편성에 없는(이미 바뀐 자리의) 교체안 수 — 버린 개수만 알린다 */
@@ -128,15 +134,15 @@ function basisText(reasons: { code: string; value: number | string | null; detai
   return out;
 }
 
-export async function computeReplacePlan(channelCode: string, asOfDate: string): Promise<ReplacePlan> {
+export async function computeReplacePlan(channelCode: string, asOfDate: string, lookbackDays?: number): Promise<ReplacePlan> {
   const weekStart = nextMondayAfter(asOfDate);
   // 제외 편성이 바뀌면 캐시를 쓰지 않도록 지문을 키에 넣는다(사용자 지시 2026-10-07)
   const exclFp = exclusionFingerprint(await loadActiveExclusions((await loadChannelRef(channelCode)).id, weekStart));
-  const key = `v5|${channelCode}|${weekStart}|${asOfDate}|${exclFp}`;
+  const key = `v6|${channelCode}|${weekStart}|${asOfDate}|${exclFp}|${lookbackDays ?? "d"}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 
-  const out = await runIdealSchedule({ channelCode, weekStart, mode: "KEEP_CURRENT", strategyMode: "AUTO", competitorNames: [], asOfDate });
+  const out = await runIdealSchedule({ channelCode, weekStart, mode: "KEEP_CURRENT", strategyMode: "AUTO", competitorNames: [], asOfDate, lookbackDays });
   type Block = {
     status?: string;
     weekday: number;
@@ -169,6 +175,7 @@ export async function computeReplacePlan(channelCode: string, asOfDate: string):
     channelCode,
     weekStart,
     droppedStale: checked.dropped,
+    lookbackDays: lookbackDays ?? null,
     currentExpected: (out.evaluations.CURRENT as { expectedAvgRating?: number | null } | undefined)?.expectedAvgRating ?? null,
     aiExpected: out.summary.expectedAvgRating,
     details: checked.kept,
@@ -177,12 +184,31 @@ export async function computeReplacePlan(channelCode: string, asOfDate: string):
   return value;
 }
 
-/** 홈 채널 타일용 — 기준일과 같은 요일 칸 중 개선폭이 가장 큰 한 칸 */
-export async function computeAiSuggestion(channelCode: string, asOfDate: string): Promise<AiSuggestion> {
-  const plan = await computeReplacePlan(channelCode, asOfDate);
+/** 같은 프로그램이 여러 칸이면 기준일 요일 칸·주요 시간대(새벽 2~5시 제외)를 우선하고 그다음 개선폭이 큰 칸 */
+function pickDetail(details: ReplaceDetail[], weekday: number, focus: string | null): ReplaceDetail | null {
+  // 약해진 프로그램은 기준일(오늘) 그 요일에 방영된 것이므로 focus가 있어도 같은 요일 칸만 본다
+  const pool = details.filter((d) => d.weekday === weekday && (!focus || sameTitle(d.from, focus)));
+  if (pool.length === 0) return null;
+  const dawn = (d: ReplaceDetail) => {
+    const h = Math.floor((((Math.round(d.startMin) % 1440) + 1440) % 1440) / 60);
+    return h >= 2 && h < 6 ? 1 : 0;
+  };
+  return [...pool].sort((a, b) => Number(b.weekday === weekday) - Number(a.weekday === weekday) || dawn(a) - dawn(b) || b.gain - a.gain)[0];
+}
+
+/** 홈 채널 타일용 — focus(약해진 프로그램)가 있으면 그 프로그램 자리, 없으면 기준일과 같은 요일 칸 중 개선폭이 가장 큰 한 칸.
+ *  사용자 지시(2026-10-07): 약한 곳을 못 찾겠으면 검색 범위를 최대 6개월(180일)까지 넓혀서라도 대체 편성을 찾는다 → 기본 범위에서 못 찾을 때만 한 번 더 넓혀 계산한다. */
+export async function computeAiSuggestion(channelCode: string, asOfDate: string, focus: string | null = null): Promise<AiSuggestion> {
   // 사용자 지시(2026-10-07): "오늘은 화요일인데 AI는 토요일·금요일 편성 변경을 말하고 있다 — 제안이 있으면 해당 요일의 편성에 대해서" → 기준일과 같은 요일 칸만 후보로 쓴다.
   const weekday = isoDow(asOfDate);
-  const top = plan.details.find((d) => d.weekday === weekday);
+  let plan = await computeReplacePlan(channelCode, asOfDate);
+  let top = pickDetail(plan.details, weekday, focus);
+  let widened: number | null = null;
+  if (!top) {
+    widened = 180;
+    plan = await computeReplacePlan(channelCode, asOfDate, 180);
+    top = pickDetail(plan.details, weekday, focus);
+  }
   return {
     channelCode,
     weekStart: plan.weekStart,
@@ -190,5 +216,7 @@ export async function computeAiSuggestion(channelCode: string, asOfDate: string)
     currentExpected: plan.currentExpected,
     aiExpected: plan.aiExpected,
     change: top ? { weekday: top.weekday, startMin: top.startMin, from: top.from, to: top.to, gain: top.gain, certainty: top.certainty } : null,
+    widenedLookbackDays: widened,
+    focus,
   };
 }

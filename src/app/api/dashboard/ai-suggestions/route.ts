@@ -22,12 +22,20 @@ export async function GET(request: Request) {
     .map((c) => c.trim())
     .filter((c) => OWN_CODES.has(c));
   if (channels.length === 0) return NextResponse.json({ ok: true, suggestions: {} });
+  // 약해진 프로그램을 채널별로 지정할 수 있다(focus={"ENA":"프로그램명"}) — 그 프로그램 자리의 교체안을 찾는다.
+  let focus: Record<string, string> = {};
+  try {
+    const raw = params.get("focus");
+    if (raw) focus = JSON.parse(raw) as Record<string, string>;
+  } catch {
+    focus = {};
+  }
 
   const suggestions: Record<string, AiSuggestion | null> = {};
   await Promise.all(
     channels.slice(0, 7).map(async (code) => {
       try {
-        suggestions[code] = await computeAiSuggestion(code, date);
+        suggestions[code] = await computeAiSuggestion(code, date, typeof focus[code] === "string" && focus[code].trim() ? focus[code].trim().slice(0, 80) : null);
       } catch (e) {
         console.error("[ai-suggestions]", code, e instanceof Error ? e.message : e);
         suggestions[code] = null; // 이 채널만 계산 실패 — 화면은 "계산하지 못했습니다"로 표시
