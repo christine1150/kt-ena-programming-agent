@@ -25,6 +25,7 @@ import { CompareTable } from "./CompareTable";
 import { GridLegend } from "./GridLegend";
 import { IdealWeekGrid, type BlockDiff } from "./IdealWeekGrid";
 import { RequiredScheduleEditor } from "./RequiredScheduleEditor";
+import { ExclusionEditor } from "./ExclusionEditor";
 import { SummaryPanel } from "./SummaryPanel";
 import { RunStatusStrip } from "./RunStatusStrip";
 import { WorkingPanel } from "./WorkingPanel";
@@ -934,6 +935,14 @@ function IdealSchedulePage() {
             <summary className="cursor-pointer text-sm font-semibold text-zinc-800">필수 편성</summary>
             <div className="mt-2">
               <RequiredScheduleEditor compact channelCode={channelCode} weekStart={weekStart} onChanged={() => undefined} />
+            </div>
+          </details>
+
+          {/* 제외 편성(사용자 지시 2026-10-06/07) — 필수 편성과 같은 틀, 종영·방영권 만료·사용 비권장 제목을 빼고 뽑는다 */}
+          <details className={card} open>
+            <summary className="cursor-pointer text-sm font-semibold text-zinc-800">제외 편성</summary>
+            <div className="mt-2">
+              <ExclusionEditor channelCode={channelCode} onChanged={() => undefined} />
             </div>
           </details>
 

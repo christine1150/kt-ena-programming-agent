@@ -18,6 +18,7 @@ import { enrichAiringsWithPlan, normalizePlanRows, type PlanRow, type PlanRowRaw
 import type { StrategyMode } from "./scoring";
 import { addDays } from "./time";
 import { DEFAULT_SEARCH_DEADLINE_MS } from "./searchControl";
+import { buildExcludedPredicate, exclusionFingerprint, loadActiveExclusions } from "./exclusions";
 import type { OwnAiring, OwnAiringsBundle } from "./types";
 import type { ResidualRow } from "./uncertainty";
 
@@ -219,6 +220,17 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
   // 권리(Avail) 게이트 — Avail 자료가 있을 때만 켜진다(없으면 현재 동작 그대로, 실행 가능 판정은 보류)
   const rightsMode = req.rightsMode ?? "explore";
   const rights = await buildRightsGate(channel.code, req.weekStart, rightsMode);
+  // 제외 편성(사용자 지시 2026-10-07): 권리 게이트와 같은 slotAllowed 자리에 합쳐, 제외 제목은 AI가 새로 배치하지 못하고 현재 편성에 있어도 교체 대상이 된다.
+  const exclusionRows = await loadActiveExclusions(channel.id, req.weekStart);
+  const isExcluded = buildExcludedPredicate(exclusionRows);
+  const rightsGate = rights.gate ? rights.gate : null;
+  const combinedRights =
+    rightsGate || isExcluded
+      ? {
+          slotAllowed: ((c, weekday, startMin, endMin) => !(isExcluded && isExcluded(c)) && (!rightsGate || rightsGate.slotAllowed(c, weekday, startMin, endMin))) as NonNullable<typeof rightsGate>["slotAllowed"],
+          fingerprint: `${rightsGate?.fingerprint ?? ""}${isExcluded ? `|excl:${exclusionFingerprint(exclusionRows)}` : ""}`,
+        }
+      : undefined;
   const t1 = Date.now();
   const result = runIdealScheduleEngine({
     weekStart: req.weekStart,
@@ -239,7 +251,7 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
     evaluateAirings,
     planRows: planRows.length ? planRows : undefined,
     planFilled: enriched.filled,
-    rights: rights.gate ? { slotAllowed: rights.gate.slotAllowed, fingerprint: rights.gate.fingerprint } : undefined,
+    rights: combinedRights,
     // 탐색 마감·취소(OPT04): 서버 제한 시간 안에 지금까지의 최선안으로 마무리하고, 취소되면 멈춘다
     search: { now: Date.now, deadlineAt: t0 + deadlineMs, isCancelled: () => opts.signal?.aborted === true },
   });
@@ -263,7 +275,7 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
     config,
     asOfDate,
     currentWeekStart,
-    warnings: [...constraintLoad.warnings, ...rerun.warnings, ...result.resolution.warnings],
+    warnings: [...constraintLoad.warnings, ...rerun.warnings, ...result.resolution.warnings, ...(exclusionRows.length > 0 ? [`제외 편성 ${exclusionRows.length}건 적용: ${exclusionRows.map((r) => r.program_name).join(", ")}`] : [])],
     timingsMs: { load: t1 - t0, engine: t2 - t1 },
   };
 }

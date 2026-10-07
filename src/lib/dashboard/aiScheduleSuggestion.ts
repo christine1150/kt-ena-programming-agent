@@ -4,6 +4,8 @@
 // 새로 추정하지 않는다. 저장하지 않는 읽기 전용 실행이고(편성안 목록에 쌓이지 않음), 같은 날짜·채널은 1시간 동안 메모리에 캐시한다.
 import { runIdealSchedule } from "@/lib/idealSchedule/engineRunner";
 import { addDays, isoDow } from "@/lib/idealSchedule/time";
+import { loadChannelRef } from "@/lib/idealSchedule/dataSource";
+import { exclusionFingerprint, loadActiveExclusions } from "@/lib/idealSchedule/exclusions";
 
 export interface AiSuggestion {
   channelCode: string;
@@ -29,7 +31,9 @@ export function nextMondayAfter(date: string): string {
 
 export async function computeAiSuggestion(channelCode: string, asOfDate: string): Promise<AiSuggestion> {
   const weekStart = nextMondayAfter(asOfDate);
-  const key = `v2|${channelCode}|${weekStart}|${asOfDate}`;
+  // 제외 편성이 바뀌면 캐시를 쓰지 않도록 지문을 키에 넣는다(사용자 지시 2026-10-07)
+  const exclFp = exclusionFingerprint(await loadActiveExclusions((await loadChannelRef(channelCode)).id, weekStart));
+  const key = `v3|${channelCode}|${weekStart}|${asOfDate}|${exclFp}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 

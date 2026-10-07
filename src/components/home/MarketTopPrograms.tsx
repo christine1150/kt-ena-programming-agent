@@ -36,7 +36,7 @@ const chipLabel = (name: string) => (name === "TV CHOSUN" ? "TV 조선" : name);
 const MIN_SCALE = 0.5;
 
 /** 한 줄에 맞추기 — 자연 폭이 칸보다 넓으면 그 비율만큼 글씨를 줄인다. DOM을 직접 갱신해 재렌더를 만들지 않는다. */
-function FitOneLine({ text, className = "" }: { text: string; className?: string }) {
+function FitOneLine({ text, className = "", center = false, children }: { text: string; className?: string; center?: boolean; children?: React.ReactNode }) {
   const box = useRef<HTMLSpanElement>(null);
   const inner = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
@@ -55,9 +55,9 @@ function FitOneLine({ text, className = "" }: { text: string; className?: string
     return () => ro.disconnect();
   }, [text]);
   return (
-    <span ref={box} className={`block min-w-0 overflow-hidden whitespace-nowrap ${className}`} title={text}>
-      <span ref={inner} className="inline-block origin-left whitespace-nowrap">
-        {text}
+    <span ref={box} className={`block min-w-0 overflow-hidden whitespace-nowrap ${center ? "text-center" : ""} ${className}`} title={text}>
+      <span ref={inner} className={`inline-block whitespace-nowrap ${center ? "origin-center" : "origin-left"}`}>
+        {children ?? text}
       </span>
     </span>
   );
@@ -157,14 +157,16 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
                   className={`block overflow-hidden whitespace-nowrap rounded px-1.5 py-0.5 text-center text-[11px] font-bold leading-none ${r.own ? "" : "bg-zinc-100 text-zinc-700"}`}
                   style={r.own ? { backgroundColor: ownChipStyle(r.channelName).bg, color: ownChipStyle(r.channelName).fg } : undefined}
                 >
-                  {/* 자사는 로고색 칩, 경쟁사는 로고색 글씨(JTBC는 그라데이션). 색을 모르는 채널은 기본 회색 */}
-                  {!r.own && channelBrand(r.channelName).gradient ? (
-                    <span style={{ backgroundImage: channelBrand(r.channelName).gradient, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{chipLabel(r.channelName)}</span>
-                  ) : !r.own && channelBrand(r.channelName).color ? (
-                    <span style={{ color: channelBrand(r.channelName).color }}>{chipLabel(r.channelName)}</span>
-                  ) : (
-                    chipLabel(r.channelName)
-                  )}
+                  {/* 자사는 로고색 칩, 경쟁사는 로고색 글씨(JTBC는 그라데이션). 색을 모르는 채널은 기본 회색. 이름이 칩보다 길면(MBC every1 등) 글씨를 줄여 틀 안에 넣는다(사용자 지시 2026-10-07) */}
+                  <FitOneLine text={chipLabel(r.channelName)} center className="leading-none">
+                    {!r.own && channelBrand(r.channelName).gradient ? (
+                      <span style={{ backgroundImage: channelBrand(r.channelName).gradient, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{chipLabel(r.channelName)}</span>
+                    ) : !r.own && channelBrand(r.channelName).color ? (
+                      <span style={{ color: channelBrand(r.channelName).color }}>{chipLabel(r.channelName)}</span>
+                    ) : (
+                      chipLabel(r.channelName)
+                    )}
+                  </FitOneLine>
                   {r.own && <span className="sr-only"> (자사 채널)</span>}
                 </span>
                 <FitOneLine text={displayProgramName(r.channelName, r.programName)} className="text-[13px] font-medium text-zinc-900" />

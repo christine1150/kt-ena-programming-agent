@@ -9,6 +9,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import ReviewPanels, { type ReviewPanelItem } from "@/components/home/ReviewPanels";
+import { channelBrandSolid } from "@/lib/dashboard/channelBrandColors";
 import { highlightNarrativeText, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR } from "@/lib/highlightNarrative";
 // 사용자 지시(2026-09-09): 1페이지 "채널별 인사이트"의 안정/약세/주의 Health Score 배지를
 // 걷어내고 그 자리에 "오늘의 시청률" 카드와 같은 형식(시청률+등위)을 넣었다 — 그 배지를
@@ -3012,7 +3013,7 @@ function ProgramRatingHistoryChart({
               key={s.seriesName}
               d={pathOf(s.points, y2049)}
               fill="none"
-              stroke={themeColorByCode.get(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR}
+              stroke={themeColorByCode.get(s.seriesName) ?? channelBrandSolid(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR}
               strokeWidth={1.3}
               strokeDasharray="3 2"
               strokeLinecap="round"
@@ -3038,7 +3039,7 @@ function ProgramRatingHistoryChart({
             />
           ))}
           {otherSeries.map((s) => {
-            const color = themeColorByCode.get(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR;
+            const color = themeColorByCode.get(s.seriesName) ?? channelBrandSolid(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR;
             return s.points.map((p, i) => (
               <span
                 key={`${s.seriesName}-${i}`}
@@ -3135,7 +3136,7 @@ function ProgramRatingHistoryChart({
           </span>
         )}
         {otherSeries.map((s) => {
-          const color = themeColorByCode.get(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR;
+          const color = themeColorByCode.get(s.seriesName) ?? channelBrandSolid(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR;
           return (
             <span key={s.seriesName} className="inline-flex items-center gap-1 font-bold" style={{ color }}>
               <span className="inline-block h-0.5 w-3 rounded-full" style={{ backgroundColor: color }} />
@@ -3659,7 +3660,7 @@ function buildReviewChannelColorMap(h: OriginalDailyItem, themeColorByCode: Map<
   if (h.rerun_channel_code) add(CHANNEL_NAME_BY_CODE[h.rerun_channel_code] ?? h.rerun_channel_code, h.rerun_channel_code);
   // 경쟁 채널(tvN·SBS·MBC 등)은 channels 테이블에 브랜드색이 없어 항상 UNBRANDED_CHANNEL_COLOR.
   for (const c of h.competitorHighlights) {
-    if (c.competitor_name && !map.has(c.competitor_name)) map.set(c.competitor_name, UNBRANDED_CHANNEL_COLOR);
+    if (c.competitor_name && !map.has(c.competitor_name)) map.set(c.competitor_name, channelBrandSolid(c.competitor_name) ?? UNBRANDED_CHANNEL_COLOR);
   }
   return map;
 }
@@ -3672,7 +3673,7 @@ function highlightChannelNames(text: string, colorMap: Map<string, string>) {
   const pattern = new RegExp(`(${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "g");
   return text.split(pattern).map((part, i) =>
     colorMap.has(part) ? (
-      <span key={i} className="font-semibold" style={{ color: colorMap.get(part) }}>
+      <span key={i} className="font-bold" style={{ color: colorMap.get(part) }}>
         {part}
       </span>
     ) : (
@@ -4063,7 +4064,7 @@ function OriginalContentReportCard({
                                 {h.competitorHighlights.slice(0, 3).map((c, i) => (
                                   <div key={i} className={`flex items-baseline gap-2 py-1.5 ${i > 0 ? "border-t border-zinc-200/70" : ""}`} title={`${c.competitor_name} · ${fmtTimeKorean(c.competitor_start_time)} · ${c.competitor_program_name}`}>
                                     <span className="min-w-0 flex-1 truncate text-[12.5px] text-zinc-600">
-                                      <span className="text-zinc-500">{c.competitor_name}</span> {c.competitor_program_name}
+                                      <b style={{ color: channelBrandSolid(c.competitor_name) ?? "#52525b" }}>{c.competitor_name}</b> {c.competitor_program_name}
                                     </span>
                                     <span className="shrink-0 text-[12.5px] font-semibold tabular-nums text-zinc-700">{formatRating(c.competitor_rating)}</span>
                                   </div>
