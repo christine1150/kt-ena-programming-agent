@@ -17,6 +17,7 @@
     "test:insight": "tsx scripts/test-insight.ts",
     "test:admin": "tsx scripts/test-admin-ops.ts",
     "test:avail": "tsx scripts/test-avail.ts",
+    "test:purchase-review": "tsx scripts/test-purchase-review.ts",
     "test:workspace": "tsx scripts/test-workspace.ts",
     "test:portfolio": "tsx scripts/test-portfolio.ts",
     "test:schedcompare": "tsx scripts/test-schedule-compare.ts",

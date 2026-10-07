@@ -59,6 +59,8 @@ export interface PredictResponse {
   needsSlot: boolean; // 요일·시각이 정해지지 않아 예측을 못 했을 때
   results: TargetResult[];
   warnings: string[];
+  /** 이 조회를 예측 기록(rating_predictions)으로 남겼는지 — 재현·사후 비교용이며 권리 소진·구매 요청과 무관하다 */
+  history: { saved: number; requested: boolean; note: string };
 }
 
 export const TARGET_LABEL: Record<string, string> = { A2049: "수도권 2049", HH: "전국 유료가구" };
@@ -94,7 +96,7 @@ export async function runPrediction(client: SupabaseClient, req: PredictRequest)
   const targets = req.targets ?? (parsed.target === "A2049" || parsed.target === "HH" ? [parsed.target as "A2049" | "HH"] : defaultTargets(ownChannel));
   if (parsed.target && parsed.target !== "A2049" && parsed.target !== "HH") warnings.push(`'${parsed.target}' 타깃은 아직 예측을 지원하지 않아 채널 기본 타깃으로 계산했습니다.`);
 
-  const base: PredictResponse = { modelVersion: MODEL_VERSION, asOf, parsed, identity, resolved, ownChannel, needsSlot: false, results: [], warnings };
+  const base: PredictResponse = { modelVersion: MODEL_VERSION, asOf, parsed, identity, resolved, ownChannel, needsSlot: false, results: [], warnings, history: { saved: 0, requested: req.save !== false, note: "" } };
   if (!resolved) return base;
   const windowDays = [91, 182, 364, 728].includes(req.windowDays ?? 91) ? (req.windowDays ?? 91) : 91;
   if (windowDays !== PARAMS.windowDays) warnings.push(`집계 기간 ${windowDays}일은 참고용입니다. 예측 범위·신뢰도는 최근 3달 기준 과거 예측 오차로 보정한 값입니다.`);
@@ -137,13 +139,23 @@ export async function runPrediction(client: SupabaseClient, req: PredictRequest)
   );
   base.results.push(...perTarget);
 
-  if (req.save !== false) await savePredictions(client, base, req.createdBy ?? null).catch((e) => warnings.push(`스냅샷 저장 실패: ${e instanceof Error ? e.message : String(e)}`));
+  if (req.save !== false) {
+    try {
+      base.history.saved = await savePredictions(client, base, req.createdBy ?? null);
+      base.history.note = `예측 기록 ${base.history.saved}건을 남겼습니다(기준일 ${asOf} · 모델 ${MODEL_VERSION}). 방송 후 실제 값과 비교하는 용도이며 계약 권리 소진·구매 요청은 일어나지 않았습니다.`;
+    } catch (e) {
+      warnings.push(`스냅샷 저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+      base.history.note = "예측 기록 저장에 실패했습니다(계산 결과는 그대로 유효합니다).";
+    }
+  } else {
+    base.history.note = "이번 조회는 예측 기록을 남기지 않았습니다(탐색만).";
+  }
   return base;
 }
 
 /** 예측 스냅샷 저장(재현·사후 비교용). 방송 후 actual_rating 을 채워 오차를 기록한다. */
-export async function savePredictions(client: SupabaseClient, res: PredictResponse, createdBy: string | null): Promise<void> {
-  if (!res.resolved) return;
+export async function savePredictions(client: SupabaseClient, res: PredictResponse, createdBy: string | null): Promise<number> {
+  if (!res.resolved) return 0;
   const rows = res.results.flatMap((t) =>
     t.slots.map((s) => ({
       created_by: createdBy,
@@ -172,9 +184,10 @@ export async function savePredictions(client: SupabaseClient, res: PredictRespon
       components: { slotLabel: s.slotLabel, notes: s.notes, confidenceReasons: s.confidenceReasons, scenario: s.scenario, peerIdxRaw: s.peerIdxRaw, params: { windowDays: PARAMS.windowDays, kPeer: PARAMS.kPeer, kOwn: PARAMS.kOwn } },
     }))
   );
-  if (rows.length === 0) return;
+  if (rows.length === 0) return 0;
   const { error } = await client.from("rating_predictions").insert(rows);
   if (error) throw new Error(error.message);
+  return rows.length;
 }
 
 export type { SimTarget };

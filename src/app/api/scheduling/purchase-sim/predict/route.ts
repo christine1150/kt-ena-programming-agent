@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   const windowDays = typeof body.windowDays === "number" && [91, 182, 364, 728].includes(body.windowDays) ? body.windowDays : 91;
   const asOf = isDate(body.asOf) ? body.asOf : undefined;
   try {
-    const res = await runPrediction(supabase, { query, groupKey, ownChannel, targets, slots, asOf, windowDays, createdBy: auth.actor, save: true });
+    const res = await runPrediction(supabase, { query, groupKey, ownChannel, targets, slots, asOf, windowDays, createdBy: auth.actor, save: body.save !== false });
     return NextResponse.json({ ok: true, ...res });
   } catch (e) {
     return fail(e);
