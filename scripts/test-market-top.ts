@@ -1,4 +1,4 @@
-// 1페이지 상위 프로그램 TOP 15 테스트 — 순수 함수만(DB·네트워크 없음). 실행: npm run test:markettop
+// 1페이지 상위 프로그램 TOP 21 테스트 — 순수 함수만(DB·네트워크 없음). 실행: npm run test:markettop
 import fs from "node:fs";
 import path from "node:path";
 
@@ -27,13 +27,13 @@ async function main() {
 
   // 선택·정렬
   const samples: S[] = [];
-  const names = ["가", "나", "다", "라", "마", "바", "사", "아", "자", "차", "카", "타", "파", "하", "거", "너", "더"];
+  const names = ["가", "나", "다", "라", "마", "바", "사", "아", "자", "차", "카", "타", "파", "하", "거", "너", "더", "러", "머", "버", "서", "어", "저", "처"];
   names.forEach((n, i) => {
-    samples.push(mk("채널" + n, i + 1, "프로그램" + n, "21:00:00", "p2049", 1 - i * 0.05));
-    samples.push(mk("채널" + n, i + 1, "프로그램" + n, "21:00:00", "household", 2 - i * 0.05));
+    samples.push(mk("채널" + n, Math.min(i + 1, 20), "프로그램" + n, "21:00:00", "p2049", 1 - i * 0.05));
+    samples.push(mk("채널" + n, Math.min(i + 1, 20), "프로그램" + n, "21:00:00", "household", 2 - i * 0.05));
   });
   const top = M.pickTopPrograms(samples);
-  check("정확히 15개를 2049 시청률 내림차순으로", top.length === 15 && top.every((r, i) => i === 0 || top[i - 1].rating >= r.rating) && top[0].rank === 1 && top[14].rank === 15);
+  check("정확히 21개를 2049 시청률 내림차순으로", top.length === 21 && top.every((r, i) => i === 0 || top[i - 1].rating >= r.rating) && top[0].rank === 1 && top[20].rank === 21);
   check("프로그램명 앞의 채널명 중복을 걷고 괄호를 -로", M.displayProgramName("KBS1", "KBS1일일드라마(엄마가미쳤어요)") === "일일드라마-엄마가미쳤어요" && M.displayProgramName("MBC", "MBC일일드라마(가족관계증명서)") === "일일드라마-가족관계증명서");
   check("영문 채널명의 한글 표기도 중복으로 본다(닫는 괄호 없는 값 포함)", M.displayProgramName("TV CHOSUN", "TV조선스포츠축구(하나은행초청국가대표팀친선경기한국:우즈베키스탄") === "스포츠축구-하나은행초청국가대표팀친선경기한국:우즈베키스탄");
   check("겹치지 않는 이름은 그대로", M.displayProgramName("SBS", "틈만나면") === "틈만나면" && M.displayProgramName("tvN", "축구국가대표팀친선경기") === "축구국가대표팀친선경기" && M.displayProgramName("MBC", "MBC") === "MBC");

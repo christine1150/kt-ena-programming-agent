@@ -1,9 +1,9 @@
-// 1페이지 "해당일 상위 프로그램 TOP 15"(2026-10-06 사용자 지시, 2026-10-07 9개→12개→15개) — 순수 함수.
-// 기준: 그날 수도권 개인2049 채널 순위 1~20위 채널의 프로그램(뉴스 제외)을 수도권 2049 시청률 높은 순으로 15개(괄호 안은 유료방송가구).
+// 1페이지 "해당일 상위 프로그램 TOP 21"(2026-10-06 사용자 지시, 2026-10-07 9개→12개→15개→21개) — 순수 함수.
+// 기준: 그날 수도권 개인2049 채널 순위 1~20위 채널의 프로그램(뉴스 제외)을 수도권 2049 시청률 높은 순으로 21개(괄호 안은 유료방송가구).
 // 새 지표를 계산하지 않는다 — 저장된 프로그램 시청률을 골라 정렬할 뿐이다. 프로그램 단위 자료가 없는 채널은 후보에 들 수 없다(자료 범위는 화면에 밝힌다).
 import { broadcastHour } from "@/lib/workspace/dates";
 
-export const TOP_PROGRAM_LIMIT = 15;
+export const TOP_PROGRAM_LIMIT = 21;
 export const CHANNEL_RANK_LIMIT = 20;
 
 export type TargetKind = "p2049" | "household" | "other";
@@ -56,6 +56,9 @@ export function displayStartTime(startTime: string | null | undefined): string {
   return `${String(broadcastHour(startTime)).padStart(2, "0")}:${startTime.slice(3, 5)}`;
 }
 
+/** 드라마·예능 필터용 장르 묶음. 오리지널 드라마·영미/중국 드라마는 "드라마", 오리지널 예능은 "예능"으로 본다. */
+export type ProgramGenreFamily = "드라마" | "예능" | null;
+
 export interface ProgramSample {
   channelName: string;
   /** 자사 채널이면 true */
@@ -66,6 +69,8 @@ export interface ProgramSample {
   startTime: string;
   target: TargetKind;
   rating: number | null;
+  /** 장르 묶음(드라마 계열·예능 계열만 구분, 나머지·미분류는 null) — "드라마·예능만 보기" 필터용 */
+  genre?: ProgramGenreFamily;
 }
 
 export interface TopProgramRow {
@@ -80,6 +85,7 @@ export interface TopProgramRow {
   rating: number;
   /** 같은 프로그램의 유료방송가구 시청률(없으면 null) */
   householdRating: number | null;
+  genre: ProgramGenreFamily;
 }
 
 /**
@@ -111,6 +117,7 @@ export function pickTopPrograms(samples: ProgramSample[], limit = TOP_PROGRAM_LI
     startTime: displayStartTime(v.base.startTime),
     rating: v.p2049 as number,
     householdRating: v.hh !== null && Number.isFinite(v.hh) ? v.hh : null,
+    genre: v.base.genre ?? null,
   }));
 }
 

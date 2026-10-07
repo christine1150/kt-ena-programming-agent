@@ -66,14 +66,41 @@ const KIND_LABEL: Record<DecisionCard["kind"], string> = { data: "데이터", an
 
 export type ReviewStoreState = "loading" | "ready" | "unavailable" | "error";
 
-const REVIEW_STORE_NOTE: Record<ReviewStoreState, string> = {
-  ready: "",
-  loading: " (검토 기록을 불러오는 중입니다 — 이미 처리한 항목이 잠시 다시 보일 수 있습니다.)",
-  unavailable: " (검토 기록 저장소가 아직 적용되지 않아 기록은 저장되지 않습니다.)",
-  error: " (검토 기록을 불러오지 못해 이미 처리한 항목이 다시 보일 수 있습니다.)",
+// 사용자 지시(2026-10-07): "오늘 결정할 사항에 각 채널 로고 색상으로 채널명을 강조하고, 동그란 네모 박스도 채널 색을 흐릿하게 반영한 계열 색으로(회색 말고)".
+// 카드의 채널 색은 로고 색(채널 테마색)이고, 박스 배경·테두리·칩은 같은 색을 옅게(투명도) 쓴다. 연두(OLIFE)처럼 밝은 색은 글씨로 쓸 때 어둡게 눌러 읽히게 한다.
+function parseHex(hex: string | null | undefined): [number, number, number] | null {
+  const m = (hex ?? "").trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+const tint = (hex: string | null | undefined, alpha: number): string | undefined => {
+  const rgb = parseHex(hex);
+  return rgb ? `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})` : undefined;
+};
+const ink = (hex: string | null | undefined): string | undefined => {
+  const rgb = parseHex(hex);
+  if (!rgb) return undefined;
+  const lum = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+  const k = lum > 0.6 ? 0.55 : 1; // 밝은 색은 어둡게
+  return `rgb(${Math.round(rgb[0] * k)}, ${Math.round(rgb[1] * k)}, ${Math.round(rgb[2] * k)})`;
 };
 
-export function DecisionCards({ cards, suppressed, candidates, reviewStore }: { cards: DecisionCard[]; suppressed: number; candidates: number; reviewStore: ReviewStoreState }) {
+export function DecisionCards({
+  cards,
+  suppressed,
+  candidates,
+  channelNames,
+  colorByCode,
+}: {
+  cards: DecisionCard[];
+  suppressed: number;
+  candidates: number;
+  /** (구) 검토 기록 저장소 상태 — 안내 문구를 없애면서 쓰지 않는다. 호출부 호환용으로 남겨 둔다. */
+  reviewStore?: ReviewStoreState;
+  channelNames?: Record<string, string>;
+  colorByCode?: Map<string, string | null>;
+}) {
   return (
     <section className={PANEL} aria-label="오늘 결정할 사항" data-section="decisions">
       <PanelHeader title="오늘 결정할 사항" question={`기준에 해당하는 항목만 최대 3건 · 후보 ${candidates}건 중`} />
@@ -83,11 +110,27 @@ export function DecisionCards({ cards, suppressed, candidates, reviewStore }: { 
         </p>
       ) : (
         <ol className="grid gap-4 lg:grid-cols-3">
-          {cards.map((c, idx) => (
-            <li key={c.id} className="flex flex-col rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/70" data-decision={c.id}>
+          {cards.map((c, idx) => {
+            const color = c.channelCode ? colorByCode?.get(c.channelCode) ?? null : null;
+            const chName = c.channelCode ? channelNames?.[c.channelCode] : undefined;
+            const hasColor = !!parseHex(color);
+            return (
+            <li
+              key={c.id}
+              className={`flex flex-col rounded-xl p-4 ${hasColor ? "" : "bg-zinc-50 ring-1 ring-zinc-200/70"}`}
+              style={hasColor ? { backgroundColor: tint(color, 0.07), boxShadow: `inset 0 0 0 1px ${tint(color, 0.28)}` } : undefined}
+              data-decision={c.id}
+            >
               <div className="mb-2 flex flex-wrap items-center gap-2">
-                <span className="text-[12px] font-semibold tabular-nums text-zinc-400">{idx + 1}</span>
-                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-zinc-600 ring-1 ring-zinc-200">{KIND_LABEL[c.kind]}</span>
+                <span className="text-[12px] font-semibold tabular-nums" style={{ color: hasColor ? ink(color) : "#a1a1aa" }}>
+                  {idx + 1}
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${hasColor ? "" : "bg-white text-zinc-600 ring-1 ring-zinc-200"}`}
+                  style={hasColor ? { backgroundColor: tint(color, 0.16), color: ink(color) } : undefined}
+                >
+                  {KIND_LABEL[c.kind]}
+                </span>
                 {c.review && (
                   <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-100">
                     {REVIEW_STATUS_LABEL[c.review.status]}
@@ -95,7 +138,18 @@ export function DecisionCards({ cards, suppressed, candidates, reviewStore }: { 
                   </span>
                 )}
               </div>
-              <h3 className="text-[15px] font-bold leading-snug text-zinc-900">{c.title}</h3>
+              <h3 className="text-[15px] font-bold leading-snug text-zinc-900">
+                {chName && hasColor && c.title.startsWith(chName) ? (
+                  <>
+                    <span className="font-extrabold" style={{ color: ink(color) }}>
+                      {chName}
+                    </span>
+                    {c.title.slice(chName.length)}
+                  </>
+                ) : (
+                  c.title
+                )}
+              </h3>
               <p className="mt-1 text-[11.5px] text-zinc-400">{c.why}</p>
               <div className="mt-3">
                 <p className="text-[11px] font-semibold text-zinc-400">근거</p>
@@ -154,13 +208,10 @@ export function DecisionCards({ cards, suppressed, candidates, reviewStore }: { 
                 )}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ol>
       )}
-      <p className="mt-3 text-[11.5px] text-zinc-400">
-        카드는 같은 슬롯 평균 대비 변화 등 이미 계산된 값만으로 골랐고 원인을 단정하지 않습니다. 검토 상태 기록은 근거·슬롯·대안 화면 위의 띠에서 남깁니다.
-        {REVIEW_STORE_NOTE[reviewStore]}
-      </p>
     </section>
   );
 }

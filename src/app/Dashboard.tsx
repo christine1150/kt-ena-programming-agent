@@ -784,11 +784,68 @@ function extBroadcastHour(startTime: string): number {
   const h = parseInt(startTime.slice(0, 2), 10);
   return h < 2 ? h + 24 : h;
 }
-// 사용자 지시(2026-10-07): 타일의 액션 문구는 짧게 — "반복 확인 후 판단 — 다음 2회 방영에서도 … 이동·교체 검토에 착수" 같은 확인 조건 설명은
-// 붙이지 않는다. 이동·교체 검토는 같은 하락이 2회 이상 반복 관측돼 근거가 확인된 경우에만 제안하고, 그 전에는 "추적 점검"으로만 적는다.
-function shortActionPhrase(c: { kind: string; shortLabel: string; permanentChangeSupported: boolean }): string {
-  if ((c.kind === "MOVE" || c.kind === "REPLACE") && !c.permanentChangeSupported) return "추적 점검";
-  return c.shortLabel;
+// ── AI 스마트 편성 제안(시청률 자판기 엔진 계산 결과) ──
+interface AiSuggestionPayload {
+  channelCode: string;
+  weekStart: string;
+  currentExpected: number | null;
+  aiExpected: number | null;
+  change: { weekday: number; startMin: number; from: string; to: string; gain: number; certainty: "HIGH" | "MID" | "LOW" | null } | null;
+}
+/** undefined = 계산 중, null = 계산 실패 */
+type AiState = Record<string, AiSuggestionPayload | null | undefined>;
+const AI_DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
+function aiSuggestionLine(s: AiSuggestionPayload): string {
+  if (!s.change) return "AI 계산: 편성 교체로 개선되는 칸이 없습니다";
+  return `${AI_DOW_KO[s.change.weekday - 1]} ${Math.floor(s.change.startMin / 60)}시 '${s.change.from}'→'${s.change.to}' 교체 시 기대 ${formatRatingDelta(s.change.gain)}`;
+}
+function resolveChannelAction(
+  base: { actionLine: string | null; actionKind: "program" | "diagnosis" | null; needsAi?: boolean } | undefined,
+  ai: AiState,
+  code: string
+): { line: string | null; kind: "program" | "diagnosis" | "ai" | null } {
+  if (!base) return { line: null, kind: null };
+  if (!base.needsAi) return { line: base.actionLine, kind: base.actionKind };
+  const s = ai[code];
+  if (s === undefined) return { line: "AI 편성안 계산 중…", kind: "ai" };
+  if (s === null) return { line: "AI 편성안을 계산하지 못했습니다", kind: "ai" };
+  return { line: aiSuggestionLine(s), kind: "ai" };
+}
+function AiTag() {
+  return (
+    <span className="mr-1 inline-block rounded bg-[#281fc7] px-1 py-px align-middle text-[0.78em] font-bold leading-none text-white" title="시청률 자판기(AI 스마트 편성) 계산 결과">
+      AI
+    </span>
+  );
+}
+function useAiSuggestions(date: string | null, codes: string[]): AiState {
+  const codesKey = codes.slice().sort().join(",");
+  const key = date && codesKey ? `${date}|${codesKey}` : "";
+  const [state, setState] = useState<{ key: string; data: AiState }>({ key: "", data: {} });
+  useEffect(() => {
+    if (!key) return;
+    const [d, cs] = key.split("|");
+    const ctrl = new AbortController();
+    const failed = Object.fromEntries(cs.split(",").map((c) => [c, null]));
+    fetch(`/api/dashboard/ai-suggestions?date=${encodeURIComponent(d)}&channels=${encodeURIComponent(cs)}`, { signal: ctrl.signal })
+      .then((r) => r.json())
+      .then((b) => setState({ key, data: b.ok ? b.suggestions : failed }))
+      .catch((e) => {
+        if (e?.name !== "AbortError") setState({ key, data: failed });
+      });
+    return () => ctrl.abort();
+  }, [key]);
+  return state.key === key ? state.data : {};
+}
+
+// 사용자 지시(2026-10-07): 타일의 액션 문구는 짧고 뜻이 분명해야 한다. "편성 강화 검토"는 모호해서(확대인지 유지인지) "호조 — 편성 확대 검토"로 풀어 쓰고,
+// 확인 조건 설명("반복 확인 후 판단 — 다음 2회 …")은 붙이지 않는다. 이동·교체 검토는 같은 하락이 2회 이상 반복 관측돼 근거가 확인된 경우에만 제안하고,
+// 그 전에는 "하락 — 추적 점검"으로만 적는다.
+function programActionText(name: string, hourLabel: string, direction: "down" | "up", c: { kind: string; shortLabel: string; permanentChangeSupported: boolean }): string {
+  const head = `'${name}'${hourLabel}`;
+  if (direction === "up") return `${head} 호조 — 편성 확대 검토`;
+  if ((c.kind === "MOVE" || c.kind === "REPLACE") && c.permanentChangeSupported) return `${head} 하락 반복 — ${c.shortLabel}`;
+  return `${head} 하락 — 추적 점검`;
 }
 function buildChannelInsightSummary(
   s: ChannelNarrativeSignal,
@@ -812,6 +869,8 @@ function buildChannelInsightSummary(
   // 안 됐다.
   actionKind: "program" | "diagnosis" | null;
   baselineAvgRank: number | null;
+  /** 목표 미달인데 프로그램 근거·큰 하락이 없어, 시청률 자판기(AI) 제안을 계산해 보여 줘야 하는가 */
+  needsAi: boolean;
 } {
   const situationLine =
     s.today_rating !== null
@@ -845,7 +904,7 @@ function buildChannelInsightSummary(
       fitScoreTag: s.decline_program_tag ?? null,
       observationText: causeLine,
     });
-    actionLine = `'${s.decline_program_name}'${hourLabel} 편성 ${shortActionPhrase(declineAction)}`;
+    actionLine = programActionText(s.decline_program_name, hourLabel, "down", declineAction);
     actionTag = s.decline_program_tag ?? null;
     actionKind = "program";
   } else if (
@@ -869,7 +928,7 @@ function buildChannelInsightSummary(
         fitScoreTag: s.top_program_tag ?? null,
         observationText: causeLine,
       });
-      actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${shortActionPhrase(topAction)}`;
+      actionLine = programActionText(s.top_program_name, hourLabel, pct >= 0 ? "up" : "down", topAction);
       actionTag = s.top_program_tag ?? null;
       actionKind = "program";
     }
@@ -916,7 +975,7 @@ function buildChannelInsightSummary(
           fitScoreTag: s.top_program_tag ?? null,
           observationText: causeLine,
         });
-        actionLine = `'${s.top_program_name}'${hourLabel} 편성 ${shortActionPhrase(goalAction)}`;
+        actionLine = programActionText(s.top_program_name, hourLabel, "down", goalAction);
         actionKind = "program";
       } else if (bigRecentDrop && recentDropPct !== null) {
         causeLine = `${gapNote} 최근 2주 같은 요일 평균 대비 ▼${Math.abs(recentDropPct).toFixed(0)}% 하락`;
@@ -958,8 +1017,11 @@ function buildChannelInsightSummary(
   // 징후가 확인될 때"만 액션을 만들어서, 평소와 비슷하게(또는 올라서) 목표에 못 미치는 채널은 액션 없음 → "현재 편성 유지"로 떨어졌다.
   // 여기서 목표 미달이면 추이(평소 대비)별로 항상 액션을 낸다. 문구는 이미 계산된 값(목표·평소 대비 %·오늘 최고 프로그램의 슬롯
   // 평균 대비)만 쓰고 원인을 단정하지 않는다("검토·점검"). 목표 달성 채널은 이 분기에 오지 않아 기존 문구를 그대로 쓴다.
-  if (!actionLine && target?.targetRankNum != null && s.today_rank !== null && s.today_rank > target.targetRankNum) {
-    // 오늘 최고 성적 프로그램이 자기 슬롯 평균 이상일 때만 그 프로그램을 지목한다(근거 없는 지목 금지).
+  // 사용자 지시(2026-10-07): 목표 등위보다 낮은데 구체적 근거가 없을 때 "AI 스마트 편성 개선안 검토"처럼 말만 하지 않는다 — 시청률 자판기 엔진으로 실제 개선 칸을
+  // 계산한 결과(AI 태그)를 보여 준다(/api/dashboard/ai-suggestions). 프로그램 하락 근거가 있으면 그 프로그램 액션, 최근 2주가 크게 떨어졌으면 "편성 전략 재점검"을 쓴다.
+  let needsAi = false;
+  const belowTarget = target?.targetRankNum != null && s.today_rank !== null && s.today_rank > target.targetRankNum;
+  if (belowTarget && actionKind !== "program" && actionLine !== "편성 전략 재점검") {
     const topPct =
       s.top_program_name && s.top_program_rating !== null && s.top_program_baseline_avg !== null && s.top_program_baseline_avg > 0 && (s.top_program_baseline_days ?? 0) >= 3
         ? ((s.top_program_rating - s.top_program_baseline_avg) / s.top_program_baseline_avg) * 100
@@ -969,15 +1031,16 @@ function buildChannelInsightSummary(
       actionKind = "diagnosis";
     } else if (topPct !== null && topPct >= 0 && s.top_program_name) {
       const hourLabel = s.top_program_start_time ? `(${extBroadcastHour(s.top_program_start_time)}시)` : "";
-      actionLine = `'${s.top_program_name}'${hourLabel} 편성 강화 검토`;
+      actionLine = `'${s.top_program_name}'${hourLabel} 호조 — 편성 확대 검토`;
       actionKind = "program";
     } else {
-      actionLine = "AI 스마트 편성 개선안 검토";
-      actionKind = "diagnosis";
+      actionLine = null;
+      actionKind = null;
+      needsAi = true;
     }
   }
 
-  return { situationLine, causeLine, actionLine, actionTag, actionKind, baselineAvgRank: s.baseline_avg_rank };
+  return { situationLine, causeLine, actionLine, actionTag, actionKind, baselineAvgRank: s.baseline_avg_rank, needsAi };
 }
 
 // 사용자 지시(2026-09-18): 채널별 액션 문구 옆 5대 액션 태그 배지 — ChannelDeepDive.tsx의
@@ -1159,7 +1222,7 @@ function ChannelHero({
 }: {
   channel: ChannelSummary;
   actionLine: string | null;
-  actionKind: "program" | "diagnosis" | null;
+  actionKind: "program" | "diagnosis" | "ai" | null;
   baselineAvgRank: number | null;
   kpi?: KpiRow;
 }) {
@@ -1212,8 +1275,9 @@ function ChannelHero({
       <p
         className="mt-2 text-[13px] font-medium"
         title={actionLine ?? undefined}
-        style={{ color: actionKind === "program" ? "#281fc7" : actionKind === "diagnosis" ? "#3f3f46" : "#a1a1aa" }}
+        style={{ color: actionKind === "program" || actionKind === "ai" ? "#281fc7" : actionKind === "diagnosis" ? "#3f3f46" : "#a1a1aa" }}
       >
+        {actionKind === "ai" && <AiTag />}
         {actionLine ?? "현재 편성 유지"}
       </p>
     </Link>
@@ -1338,7 +1402,7 @@ function ChannelTile({
   channel: ChannelSummary;
   logoReference?: ChannelSummary;
   actionLine: string | null;
-  actionKind: "program" | "diagnosis" | null;
+  actionKind: "program" | "diagnosis" | "ai" | null;
   baselineAvgRank: number | null;
   kpi?: KpiRow;
 }) {
@@ -1410,8 +1474,9 @@ function ChannelTile({
       <p
         className="min-h-[2.7em] text-[11px] font-medium leading-snug"
         title={actionLine ?? undefined}
-        style={{ color: actionKind === "program" ? "#281fc7" : actionKind === "diagnosis" ? "#3f3f46" : "#a1a1aa" }}
+        style={{ color: actionKind === "program" || actionKind === "ai" ? "#281fc7" : actionKind === "diagnosis" ? "#3f3f46" : "#a1a1aa" }}
       >
+        {actionKind === "ai" && <AiTag />}
         {actionLine ?? "현재 편성 유지"}
       </p>
     </Link>
@@ -1419,7 +1484,21 @@ function ChannelTile({
 }
 
 // ① 채널 현황 카드 — R1C1("오늘의 시청률")
-function ChannelStatusCard({ channels, narrativeSignals, kpiRows, footer, viewTabs }: { channels: Map<string, ChannelSummary>; narrativeSignals: ChannelNarrativeSignal[]; kpiRows: KpiRow[]; footer?: React.ReactNode; viewTabs?: React.ReactNode }) {
+function ChannelStatusCard({
+  channels,
+  narrativeSignals,
+  kpiRows,
+  aiByCode,
+  footer,
+  viewTabs,
+}: {
+  channels: Map<string, ChannelSummary>;
+  narrativeSignals: ChannelNarrativeSignal[];
+  kpiRows: KpiRow[];
+  aiByCode: AiState;
+  footer?: React.ReactNode;
+  viewTabs?: React.ReactNode;
+}) {
   const kpiByCode = new Map(kpiRows.map((r) => [r.code, r]));
   const ena = channels.get("ENA");
   const rest = ["ENA_PLAY", "ENA_DRAMA", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"]
@@ -1462,8 +1541,8 @@ function ChannelStatusCard({ channels, narrativeSignals, kpiRows, footer, viewTa
         {ena && (
           <ChannelHero
             channel={ena}
-            actionLine={insightByCode.get("ENA")?.actionLine ?? null}
-            actionKind={insightByCode.get("ENA")?.actionKind ?? null}
+            actionLine={resolveChannelAction(insightByCode.get("ENA"), aiByCode, "ENA").line}
+            actionKind={resolveChannelAction(insightByCode.get("ENA"), aiByCode, "ENA").kind}
             baselineAvgRank={insightByCode.get("ENA")?.baselineAvgRank ?? null}
             kpi={kpiByCode.get("ENA")}
           />
@@ -1478,8 +1557,8 @@ function ChannelStatusCard({ channels, narrativeSignals, kpiRows, footer, viewTa
                 key={c.code}
                 channel={c}
                 logoReference={ena}
-                actionLine={insightByCode.get(c.code)?.actionLine ?? null}
-                actionKind={insightByCode.get(c.code)?.actionKind ?? null}
+                actionLine={resolveChannelAction(insightByCode.get(c.code), aiByCode, c.code).line}
+                actionKind={resolveChannelAction(insightByCode.get(c.code), aiByCode, c.code).kind}
                 baselineAvgRank={insightByCode.get(c.code)?.baselineAvgRank ?? null}
                 kpi={kpiByCode.get(c.code)}
               />
@@ -4429,7 +4508,11 @@ function ChannelNarrativeCard({
   enaOriginalDaily,
   onOpenChannelDetail,
   selectedChannel,
+  aiByCode,
+  achievementPctByCode,
 }: {
+  aiByCode: AiState;
+  achievementPctByCode: Map<string, number | null>;
   signals: ChannelNarrativeSignal[];
   themeColorByCode: Map<string, string | null>;
   // 사용자 지시(2026-09-09): 안정/약세/주의 Health Score 배지 대신 "시청률 (오늘 등위/목표
@@ -4457,6 +4540,8 @@ function ChannelNarrativeCard({
     situationLine: string | null;
     causeLine: string | null;
     actionLine: string | null;
+    actionKind: "program" | "diagnosis" | null;
+    needsAi: boolean;
     actionTag: ActionTag | null;
   }[] = [];
   const enaLeadSentence = buildEnaOriginalHighlightSentence(enaOriginalDaily.filter((d) => d.broadcast_channel_code === "ENA"));
@@ -4479,7 +4564,7 @@ function ChannelNarrativeCard({
       deltaPct: s.rating_delta_pct,
       todayRating: s.today_rating,
       todayRank: s.today_rank,
-      ...buildChannelInsightSummary(s, { targetRankNum: parseTargetRankNum(targetRankByCode.get(code) ?? null), achievementPct: null }),
+      ...buildChannelInsightSummary(s, { targetRankNum: parseTargetRankNum(targetRankByCode.get(code) ?? null), achievementPct: achievementPctByCode.get(code) ?? null }),
     });
   }
   const skyuhdSignal = byCode.get("SKYUHD");
@@ -4571,11 +4656,19 @@ function ChannelNarrativeCard({
                       {highlightNarrativeText(line.causeLine, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
                     </p>
                   )}
-                  <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] leading-snug font-medium" style={{ color: line.actionLine ? "#281fc7" : undefined }}>
-                    <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: line.actionLine ? "#8b87e0" : "#a1a1aa" }}>
+                  <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] leading-snug font-medium" style={{ color: line.actionLine || line.needsAi ? "#281fc7" : undefined }}>
+                    <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ color: line.actionLine || line.needsAi ? "#8b87e0" : "#a1a1aa" }}>
                       액션
                     </span>
-                    {line.actionLine ?? <span className="text-zinc-500">현재 편성 유지</span>}
+                    {(() => {
+                      const a = resolveChannelAction(line, aiByCode, line.code);
+                      return (
+                        <>
+                          {a.kind === "ai" && <AiTag />}
+                          {a.line ?? <span className="text-zinc-500">현재 편성 유지</span>}
+                        </>
+                      );
+                    })()}
                     {/* 사용자 지시(2026-09-18): 이 액션의 근거 프로그램이 Page 2 Fit Score로
                         이미 판정된 경우에만 배지를 붙인다(오늘 Page 2 미방문 등으로 계산값이
                         없으면 조용히 생략 — 근거 없는 배지를 지어내지 않는다). */}
@@ -4730,7 +4823,9 @@ function KillerContentCard({
   return (
     <div className={`${CARD} lg:col-span-2`}>
       <h2 className={SECTION_TITLE}>채널별 킬러 콘텐츠</h2>
-      <p className="mb-4 text-xs text-zinc-400">최근 4주 평균 시청률 상위 프로그램 — 강세·약세 시간대가 있으면 함께 표시합니다.</p>
+      <p className="mb-4 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-zinc-400" title="최근 4주 평균 시청률 상위 프로그램 — 강세·약세 시간대가 있으면 함께 표시합니다.">
+        최근 4주 평균 시청률 상위 프로그램 — 강세·약세 시간대가 있으면 함께 표시합니다.
+      </p>
       {rows.length === 0 ? (
         <p className="text-sm text-zinc-400">데이터가 아직 부족합니다.</p>
       ) : (
@@ -5337,6 +5432,20 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   const [selectedInsightChannel, setSelectedInsightChannel] = useState<string | null>(null);
 
   const byCode = new Map(data?.channels.map((c) => [c.code, c]) ?? []);
+  // 사용자 지시(2026-10-07): 목표 미달인데 근거 없는 채널의 AI 스마트 편성 제안을 실제로 계산해 가져온다(채널당 약 2초, 서버 캐시).
+  const aiCodes = data
+    ? data.narrativeSignals
+        .filter(
+          (s) =>
+            s.channelCode !== "SKYUHD" &&
+            buildChannelInsightSummary(s, {
+              targetRankNum: parseTargetRankNum(byCode.get(s.channelCode)?.targetRank ?? null),
+              achievementPct: byCode.get(s.channelCode)?.achievementPct ?? null,
+            }).needsAi
+        )
+        .map((s) => s.channelCode)
+    : [];
+  const aiByCode = useAiSuggestions(data?.asOfDate ?? null, aiCodes);
 
   // ── 단계 07 홈 모델(이미 계산된 값만 사용) ──
   const today = kstToday();
@@ -5644,7 +5753,8 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           <div className={`flex flex-col gap-6 transition-opacity ${notCurrent ? "opacity-60" : ""}`} aria-busy={notCurrent}>
             {/* 홈 순서(일간, 사용자 지시 2026-10-07): 데이터 상태 → 오늘의 시청률(채널 KPI 포함) → 주요 컨텐츠 리뷰 → 채널별 인사이트·상위 프로그램
                 → 오늘 결정할 사항 → 채널별 킬러 콘텐츠 → 후속 액션 → 주요 뉴스. 기존 카드는 지우지 않고 위치만 옮겼다. */}
-            <DataStatusCard status={dataStatus} />
+            {/* 사용자 지시(2026-10-07): 데이터 상태 박스는 삭제. 다만 수신 누락 같은 경고(warn)일 때는 알려야 해서 그때만 보인다. */}
+            {dataStatus.level === "warn" && <DataStatusCard status={dataStatus} />}
 
             {view === "daily" && decisions && (
               <>
@@ -5670,7 +5780,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                   </p>
                 )}
                 {/* 사용자 지시(2026-10-06): "오늘의 시청률" 아랫줄에 해당일 채널 순위 1~20위 안의 상위 프로그램 9개(수2049, 괄호 안 가구)를 3단으로 */}
-                <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} kpiRows={kpiGroups.flatMap((g) => g.rows)} viewTabs={<HomeViewTabs view={view} onChange={(v) => updateUrl({ view: v })} />} footer={<MarketTopPrograms date={data.asOfDate} />} />
+                <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} kpiRows={kpiGroups.flatMap((g) => g.rows)} aiByCode={aiByCode} viewTabs={<HomeViewTabs view={view} onChange={(v) => updateUrl({ view: v })} />} footer={<MarketTopPrograms date={data.asOfDate} />} />
 
                 {/* 사용자 지시(2026-08-26): 월요일엔 주말 리포트(토·일) — 일간 보기의 변화 근거에 붙인다. */}
                 {data.weekendReport && <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />}
@@ -5692,6 +5802,8 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                     targetRankByCode={new Map(data.channels.map((c) => [c.code, c.targetRank]))}
                     enaOriginalDaily={data.originalContentReport.daily}
                     selectedChannel={selectedInsightChannel}
+                    aiByCode={aiByCode}
+                    achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
                     onOpenChannelDetail={(code) => setSelectedInsightChannel((cur) => (cur === code ? null : code))}
                   />
                   {selectedInsightChannel ? (
@@ -5714,7 +5826,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 </div>
 
                 {/* 사용자 지시(2026-10-07): 홈 순서 — 오늘의 시청률 → 주요 컨텐츠 리뷰 → 채널별 인사이트 → 채널별 상위 프로그램 → 오늘 결정할 사항 → 채널별 킬러 콘텐츠. */}
-                <DecisionCards cards={decisions.cards} suppressed={decisions.suppressed} candidates={decisions.candidates} reviewStore={reviewStore} />
+                <DecisionCards cards={decisions.cards} suppressed={decisions.suppressed} candidates={decisions.candidates} reviewStore={reviewStore} channelNames={CHANNEL_NAME_BY_CODE} colorByCode={themeByCode} />
 
                 <KillerContentCard rows={data.killerContentDaypart} themeColorByCode={themeByCode} ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))} />
 
