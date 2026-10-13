@@ -61,6 +61,8 @@ export function AskAssistantWidget({
   const [askQuestion, setAskQuestion] = useState("");
   const [askAnswer, setAskAnswer] = useState<AskAnswer | null>(null);
   const [askDataAsOf, setAskDataAsOf] = useState<string | null>(null);
+  const [askShownQuestion, setAskShownQuestion] = useState("");
+  const [askExporting, setAskExporting] = useState(false);
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
   // ChannelDeepDive.tsx와 동일 — "그럼 지난주는?"류 후속 질문 맥락(최근 3턴, 답변 본문 제외).
@@ -86,6 +88,7 @@ export function AskAssistantWidget({
       } else {
         setAskAnswer(json.answer);
         setAskDataAsOf(typeof json.dataAsOf === "string" ? json.dataAsOf : null);
+        setAskShownQuestion(q);
         setAskHistory((prev) => [
           ...prev.slice(-2),
           {
@@ -102,6 +105,34 @@ export function AskAssistantWidget({
       setAskAnswer(null);
     } finally {
       setAskLoading(false);
+    }
+  }
+
+  // 답변 + 근거표를 엑셀로 받는다(서버가 화면에 보이는 답변을 xlsx 로 만든다 — 숫자를 화면에서 다시 계산하지 않는다).
+  async function downloadAskExcel() {
+    if (!askAnswer || askExporting) return;
+    setAskExporting(true);
+    try {
+      const res = await fetch("/api/ask/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: askShownQuestion, dataAsOf: askDataAsOf, answer: askAnswer }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        setAskError(j?.message ?? "엑셀을 만들지 못했습니다.");
+        return;
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ask-answer-${askDataAsOf ?? "export"}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setAskError("엑셀을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setAskExporting(false);
     }
   }
 
@@ -292,6 +323,16 @@ export function AskAssistantWidget({
                 );
               })()}
             </div>
+          )}
+          {askAnswer.visualization && (
+            <button
+              type="button"
+              onClick={() => void downloadAskExcel()}
+              disabled={askExporting}
+              className="mt-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+            >
+              {askExporting ? "만드는 중..." : "답변·근거표 엑셀로 받기"}
+            </button>
           )}
           {askAnswer.followups && askAnswer.followups.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-1">

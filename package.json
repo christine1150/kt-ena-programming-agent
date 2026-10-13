@@ -43,7 +43,8 @@
     "rollback:home": "node scripts/rollback-home.mjs",
     "test:competitor-airings": "tsx scripts/test-competitor-airings.ts",
     "test:month-math": "tsx scripts/test-month-math.ts",
-    "test:stats": "tsx scripts/test-stats.ts"
+    "test:stats": "tsx scripts/test-stats.ts",
+    "test:ask-export": "tsx scripts/test-ask-export.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
