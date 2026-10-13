@@ -14,9 +14,13 @@ import fs from "node:fs";
 import { supabase } from "../src/lib/supabase";
 import { normalizeProgramCanonicalName } from "../src/lib/programNameMatch";
 import type { Genre } from "../src/lib/idealSchedule/types";
-import { decideFromHit, queryVariants, searchNaver, type NaverHit } from "../src/lib/idealSchedule/genreNaver";
+import { decideFromDaumHit, decideFromHit, queryVariants, searchDaum, searchNaver, type DaumHit, type NaverHit } from "../src/lib/idealSchedule/genreNaver";
 
 const DRY = process.argv.includes("--dry");
+const NO_DAUM = process.argv.includes("--no-daum");
+const DAUM_CACHE = ".cache/daum-genre-cache.json";
+const daumCache: Record<string, DaumHit | null> = fs.existsSync(DAUM_CACHE) ? JSON.parse(fs.readFileSync(DAUM_CACHE, "utf8")) : {};
+let daumSearched = 0;
 const LIMIT = Number(process.argv[process.argv.indexOf("--limit") + 1]) || Infinity;
 const CACHE = ".cache/naver-genre-cache.json";
 const DELAY_MS = 900; // 과도한 요청 방지
@@ -74,9 +78,27 @@ for (const [i, name] of names.entries()) {
     decided.set(name, d);
     break;
   }
+  // 네이버에서 못 찾으면 다음(Daum) 검색 카드로 한 번 더 확인(사용자 지시 2026-10-13). 구글은 검색 결과를 주지 않아 쓰지 않는다.
+  if (!decided.has(name) && !NO_DAUM) {
+    for (const q of queryVariants(q1)) {
+      let hit = daumCache[q];
+      if (hit === undefined) {
+        hit = await searchDaum(q).catch(() => null);
+        if (hit) daumCache[q] = hit;
+        daumSearched++;
+        if (daumSearched % 25 === 0) fs.writeFileSync(DAUM_CACHE, JSON.stringify(daumCache));
+        await new Promise((r) => setTimeout(r, DELAY_MS));
+      }
+      const d = decideFromDaumHit(q1, hit);
+      if (!d) continue;
+      decided.set(name, d);
+      break;
+    }
+  }
   if ((i + 1) % 50 === 0) console.log(`${i + 1}/${names.length} 검색, 분류 ${decided.size}`);
 }
 fs.writeFileSync(CACHE, JSON.stringify(cache));
+fs.writeFileSync(DAUM_CACHE, JSON.stringify(daumCache));
 
 // 4) 반영(미분류 행만)
 const rows = targets.filter((t) => decided.has(t.canonical_name));

@@ -7,7 +7,7 @@
 import { supabase } from "@/lib/supabase";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { classifyGenreByRule } from "./genreRules";
-import { decideFromHit, queryVariants, searchNaver, type NaverHit } from "./genreNaver";
+import { decideFromDaumHit, decideFromHit, queryVariants, searchDaum, searchNaver, type DaumHit, type NaverHit } from "./genreNaver";
 import { OWN_CHANNEL_CODES } from "./genreStore";
 import { UNCLASSIFIED, type Genre } from "./types";
 
@@ -108,6 +108,7 @@ export async function runWeeklyGenreUpdate(opts: { budgetMs?: number } = {}): Pr
   }
 
   const cache = new Map<string, NaverHit>();
+  const daumCache = new Map<string, DaumHit>();
   let searchedNames = 0;
   let classifiedNames = 0;
   let classifiedRows = 0;
@@ -138,6 +139,21 @@ export async function runWeeklyGenreUpdate(opts: { budgetMs?: number } = {}): Pr
       decided = decideFromHit(q1, hit);
       if (decided) break;
     }
+    // 네이버에서 못 찾으면 다음(Daum) 검색 카드로 한 번 더 확인한다(사용자 지시 2026-10-13). 다음 실패는 건너뛰고 계속한다.
+    if (!decided && failures < 6) {
+      for (const q of queryVariants(q1)) {
+        let hit = daumCache.get(q);
+        if (!hit) {
+          hit = await searchDaum(q).catch(() => undefined);
+          if (hit) daumCache.set(q, hit);
+          await new Promise((r) => setTimeout(r, DELAY_MS));
+        }
+        if (!hit) continue;
+        anyResponse = true;
+        decided = decideFromDaumHit(q1, hit);
+        if (decided) break;
+      }
+    }
     if (failures >= 6) {
       stoppedBy = "naver-blocked"; // 연속 실패 — 차단·점검으로 보고 이번 실행은 멈춘다
       break;
@@ -156,7 +172,7 @@ export async function runWeeklyGenreUpdate(opts: { budgetMs?: number } = {}): Pr
     } else if (anyResponse) {
       await supabase
         .from("program_genre_map")
-        .update({ rule_note: `네이버 검색 ${asOf}: 일치하는 방송 정보 없음 — 관리자 보완 필요`, updated_at: new Date().toISOString() })
+        .update({ rule_note: `네이버·다음 검색 ${asOf}: 일치하는 방송 정보 없음 — 관리자 보완 필요`, updated_at: new Date().toISOString() })
         .eq("canonical_name", name)
         .eq("source", "NONE");
     }
