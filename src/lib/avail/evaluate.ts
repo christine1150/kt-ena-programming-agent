@@ -10,7 +10,7 @@ import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { LINEAR_PLATFORMS, channelKey, parsePlatforms } from "./adapters/common";
 import { addDaysIso, addMonthsIso, calendarDateOf, calendarMinute, dayNumber, parseTerm, positionInWindow, type BoundaryConvention, type WindowPosition } from "./dates";
 import { episodeAllowed, listEpisodes } from "./episodes";
-import { identityMarkers, titleVariants } from "./identity";
+import { identityMarkers, seasonNotationKey, titleVariants } from "./identity";
 import { optionsFor, type Interpretation } from "./interpretation";
 import { countedUsages, latestByUsage, usedUnits } from "./ledger";
 import type { Condition, ContentQuery, EligibilityResult, EligibilityStatus, Grant, SlotRef, UsageEntry } from "./types";
@@ -131,7 +131,9 @@ export function matchGrants(q: ContentQuery, ctx: EvalContext): GrantMatch {
   const qv = titleVariants(q.programName);
   const key = qv.mainKey || normalizeProgramCanonicalName(q.programName);
   const cm = identityMarkers(q.programName);
-  const exact = active.filter((g) => g.content.canonicalKey === key);
+  // 시즌 표기만 다른 제목("S2" ↔ "2")은 같은 키로 본다 — 시즌 숫자·편집판 표지가 같을 때만(identity.seasonNotationKey)
+  const nKey = seasonNotationKey(key);
+  const exact = active.filter((g) => g.content.canonicalKey === key || (seasonNotationKey(g.content.canonicalKey) === nKey && cm.season !== null && identityMarkers(g.content.titleRaw).season === cm.season));
   if (exact.length) {
     const conflicts: string[] = [];
     const season = q.season ?? cm.season;

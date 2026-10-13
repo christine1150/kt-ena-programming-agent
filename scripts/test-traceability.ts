@@ -63,7 +63,8 @@ const noNote = ALL_ITEMS.filter((i) => (i.status === "partial" || i.status === "
 check("부분·실제 자료 필요·미구현 항목에는 사유(note)가 있다", noNote.length === 0, noNote.map((i) => i.id).join(","));
 const falselyVerified = ALL_ITEMS.filter((i) => (i.status === "verified" || i.status === "verified_original") && /미검증|미구현|검증하지 못/.test(i.note ?? ""));
 check("미검증 항목은 통과로 표시되지 않는다(검증됨 상태의 note에 '미검증·미구현' 표현 없음)", falselyVerified.length === 0, falselyVerified.map((i) => i.id).join(","));
-check("Avail 19건은 실제 양식 미검증이라 모두 '실제 자료 필요'로 표시", AVAIL_CASES.every((i) => i.status === "needs_real_data"));
+const availRealIds = AVAIL_CASES.filter((i) => i.status === "verified_original").map((i) => i.id).join(",");
+check("Avail 19건 중 실제 파일 검사가 연결된 것(A02·A05·A06·A14)만 '원본 필요 검증', 나머지 15건은 '실제 자료 필요'로 남긴다", availRealIds === "A02,A05,A06,A14" && AVAIL_CASES.filter((i) => i.status === "needs_real_data").length === 15 && AVAIL_CASES.filter((i) => i.status === "verified_original").every((i) => i.refs.some((r) => r.find.startsWith("실제 파일:") || r.find.includes("실제 파일: '"))));
 const realOnly = ALL_ITEMS.filter((i) => i.status === "verified_original");
 check("로컬 원본 파일이 필요한 항목은 따로 구분돼 있다(파일이 없으면 SKIP인 검사)", realOnly.length >= 8 && realOnly.every((i) => i.refs.length > 0));
 const scenarioBad = SCENARIOS.flatMap((s) => (["daily", "weekly", "monthly"] as const).map((k) => ({ s, k, c: s[k] }))).filter(({ c }) => c.status !== "verified" && c.status !== "verified_original" && !(c.note && c.note.length > 10));

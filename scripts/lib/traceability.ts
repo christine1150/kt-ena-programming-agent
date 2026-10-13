@@ -94,9 +94,9 @@ export const CHECKLIST: TraceItem[] = [
     refs: [T(ADM, "관리자 API의 모든 핸들러가 서버에서 관리자 세션을 검사한다"), T(ADM, "쓰기(POST/PUT/PATCH/DELETE) API는 모두 세션 검사를 한다"), T(ADM, "수집만 된 날짜(received)는 '수집됨·미반영'으로 분리된다"), T(ING, "원장: 원본 헤더(시트명·타깃 라벨)와 교차검증 요약 보존")] },
   { id: "O02", group: "운영·Avail", title: "수동 목표·PD 메모·실적·EPG·예정 편성의 필드 우선순위와 버전", status: "verified",
     refs: [T(ADM, "수동 목표 보호: 잠긴 목표를 Channel Master 파일이 덮지 못한다"), T(ADM, "PD 메모는 공식 시청률 사실을 덮을 수 없다"), T(ADM, "수정 EPG가 자동 EPG보다 우선"), T(ADM, "일간 실적이 주간 예정보다 우선"), T(ADM, "PD 수동 리뷰가 계산 리뷰보다 우선")] },
-  { id: "O03", group: "운영·Avail", title: "Avail A01~A19 결과표, 실제 양식 adapter 미검증 상태를 정직하게 표시", status: "needs_real_data",
+  { id: "O03", group: "운영·Avail", title: "Avail A01~A19 결과표와 실제 양식 어댑터 검증 상태를 정직하게 표시", status: "partial",
     refs: [T(AVL, "A01 다른 채널은 unavailable"), T(AVL, "A19 as-of 이전에는 나중에 입력된 권리가 보이지 않는다"), T(AVL, "A18 평가 결과는 AVAIL_NOT_LOADED")],
-    note: "A01~A19는 합성 자료로 모두 통과(아래 Avail 표). **실제 Avail 파일 양식 어댑터는 실제 샘플이 없어 검증하지 못했다**(AVAIL_ADAPTER_NOTES.md) — 실제 샘플 필요." },
+    note: "A01~A19는 합성 자료로 모두 통과하고 그중 A02·A05·A06·A14는 실제 파일 검사도 연결했다(아래 Avail 표). 콘텐츠별 Avail 실제 파일(1,164행)의 열·값 형식·'소재' 시트 판정·원본 행 근거는 확인했다. **채널별 Avail 실제 파일은 아직 없고, 계약 해석 5가지는 권리 담당자 확인 전이다**(AVAIL_ADAPTER_NOTES.md)." },
   { id: "O04", group: "운영·Avail", title: "권리 개정 영향 슬롯 재검증, 공유 풀 동시 예약, 취소·복원, 실적 멱등 반영", status: "verified",
     refs: [T(AVL, "A12 개정 후 기존 초안은 재검증 필요로 바뀐다"), T(AVL, "A08 두 편성자가 동시에 마지막 1회를 잡으면 한 건만 성공"), T(AVL, "A13 해제하면 횟수가 돌아오고 원장에는 이벤트가 남는다"), T(AVL, "A13 실제 방송 실적은 예약을 소진으로 바꾸고, 같은 실적 재수신은 중복 반영하지 않는다")],
     note: "동시 예약은 메모리 원장(합성)에서 한 건만 성공함을 확인했다. DB의 SQL 함수(advisory lock)는 코드 확인만이고 동시 실행은 시험하지 못했다. 편성안 DB 버전 열은 승인 대기이며 확정 준비 검사는 읽기 전용이다." },
@@ -173,7 +173,7 @@ export const FINDINGS: TraceItem[] = [
   { id: "F06", group: "발견사항", title: "홈·상세 액션 충돌", status: "verified", refs: [T(INS, "홈과 상세가 같은 입력이면 같은 action_id·snapshot"), T(WRK, "상승 관측에 MOVE 태그가 붙어도 카드 제목이 '이동 검토'가 되지 않고")] },
   { id: "F07", group: "발견사항", title: "빈 값 0 처리·덮어쓰기", status: "partial", refs: [T(ING, "빈 셀=결측(null), 숫자 0=관측값 0 구분"), T(ING, "같은 날짜 수정본 → 개정 2"), T(ING, "ratings 삽입 실패 → 실패 보고")], note: "닐슨 일간은 닫았다. skyUHD 수기 파일의 빈 시청률 처리와 운영 롤백 정책은 코드 확인만이고 이번 테스트 범위 밖이다." },
   { id: "F08", group: "발견사항", title: "KPI 버전 혼재(run 원시값 분모)", status: "verified", refs: [T(O06, "다른 버전(0.047/0.048 사례)의 값은 쓰지 않는다"), T(O06, "예상값이 달라지면(재평가) 스냅샷 ID도 달라진다")] },
-  { id: "F09", group: "발견사항", title: "Avail(권리) 연결", status: "needs_real_data", refs: [T(AVL, "A01 다른 채널은 unavailable"), T(AVL, "A18 탐색은 작동하고 '권리 미확인'으로 표시")], note: "구현은 합성 자료로 검증했고 실제 Avail 양식·계약 해석 확인은 필요하다." },
+  { id: "F09", group: "발견사항", title: "Avail(권리) 연결", status: "partial", refs: [T(AVL, "A01 다른 채널은 unavailable"), T(AVL, "A18 탐색은 작동하고 '권리 미확인'으로 표시"), T(AVL, "실제 파일: 1,164행 모두 소재코드로 식별되어 권리 1,164건")], note: "콘텐츠별 Avail 실제 파일 1,164행은 어댑터가 읽고 판정에 연결된다. 운영 DB에는 아직 올리지 않았고(운영자 입력 2건뿐) 계약 해석 확인·채널별 Avail 실제 파일·시스템 프로그램과의 제목 연결 확인(약 절반 미연결, AVAIL_ADAPTER_NOTES 7절)이 남아 있다." },
   { id: "F10", group: "발견사항", title: "예측 검증 수준(구간·표본 독립성)", status: "partial", refs: [T(O05, "시나리오 구간 포함률"), T(O02, "고유 프로그램·방송일·목표 주 수를 함께 낸다")], note: "합격선 승인 대기, 후보 간 구간 겹침 자동 판정 없음(P03 참고)." },
   { id: "F11", group: "발견사항", title: "주간 '36위 이내' 표기", status: "partial", refs: [T(IDL, "예상 순위: 지난주 닐슨 시청률을 기대 비율만큼 옮겨 실적 사이 보간")], note: "표기는 '약 N위·N위 이내·N위 밖'으로 한계를 드러내지만, 경쟁 채널 편성 변화는 반영되지 않는다는 고지는 툴팁 수준이다." },
   { id: "F12", group: "발견사항", title: "인과 단정", status: "verified", refs: [T(INS, "인과 단정(때문에)은 차단"), T(INS, "'~에 밀림' 같은 인과 서술도 차단"), T(WRK, "카드 문구가 원인을 단정하지 않는다")] },
@@ -186,14 +186,16 @@ export const FINDINGS: TraceItem[] = [
   { id: "F19", group: "발견사항", title: "시각·워딩('28분 60초'·'Create Next App' 등)", status: "verified", refs: [T(UIP, "28분 60초가 생기지 않는다"), T(UIP, "기본 템플릿 제목 'Create Next App' 없음"), T(UIP, "모든 화면 경로에 업무별 제목이 있다")] },
 ];
 
+// 합성 사례 + 실제 Avail 파일 검사가 모두 연결된 항목(실제 파일 검사는 파일이 있을 때만 실행)
+const availReal = (id: string, title: string, find: string, real: string[]): TraceItem => ({ id, group: "Avail", title, status: "verified_original", refs: [T(AVL, find), ...real.map((f) => T(AVL, f))], note: "합성 사례와 실제 Avail 파일(Contents Availlist_260930, 1,164행)로 확인했다 — 파일이 있을 때만 실행되는 검사(없으면 건너뜀). 계약 해석 5가지는 권리 담당자 확인 전이다." });
 const avail = (id: string, title: string, find: string): TraceItem => ({ id, group: "Avail", title, status: "needs_real_data", refs: [T(AVL, find)], note: "합성 자료로 통과. 실제 Avail 양식에서의 동작은 미검증." });
 export const AVAIL_CASES: TraceItem[] = [
   avail("A01", "허용 채널과 다른 채널: 제외 사유 표시", "A01 다른 채널은 unavailable + 사유 + 원본 행"),
-  avail("A02", "시작 전·만료 후 제외, 시작·종료 경계", "A02 종료일 다음 날 제외"),
+  availReal("A02", "시작 전·만료 후 제외, 시작·종료 경계", "A02 종료일 다음 날 제외", ["실제 파일: 시작일 전날은 불가", "실제 파일: 종료일 다음 날은 불가"]),
   avail("A03", "25:30 편성과 자정 만료: 계약 기준에 맞게 달력 날짜 검사", "A03 달력 기준: 10-04 방송일의 25:30은 10-05 01:30이라 만료 후 불가"),
   avail("A04", "시작은 허용, 끝은 만료 이후: 종료 조건에 따라 제외·조건부", "A04 종료까지 허용돼야 하면 불가"),
-  avail("A05", "전체 12회 중 특정 회차만 허용: 나머지 제외", "A05 나머지 회차는 불가 + 사유"),
-  avail("A06", "동일 제목 다른 시즌·편집판: 매칭 확인 전 unknown", "A06 시즌 표지가 다르면 확인 전 unknown(자동 병합 안 함)"),
+  availReal("A05", "전체 12회 중 특정 회차만 허용: 나머지 제외", "A05 나머지 회차는 불가 + 사유", ["실제 파일: 허용 회차(1~11) 밖은 불가"]),
+  availReal("A06", "동일 제목 다른 시즌·편집판: 매칭 확인 전 unknown", "A06 시즌 표지가 다르면 확인 전 unknown(자동 병합 안 함)", ["A06 'S2'와 '2'는 같은 시즌 표기라 같은 권리로 연결된다", "A06 시즌 숫자가 다르면(S2 ↔ 3) 표기가 비슷해도 연결하지 않는다", "실제 파일: 'S2' 표기 행(라자루스 프로젝트 S2)이 시스템 제목"]),
   avail("A07", "잔여 0회: 점수와 무관하게 실행 후보 제외", "A07 점수가 높아도 권리가 안 맞으면 실행가능안에 들어가지 않는다"),
   avail("A08", "공유 풀 마지막 1회 동시 예약: 한 건만 성공", "A08 두 편성자가 동시에 마지막 1회를 잡으면 한 건만 성공"),
   avail("A09", "동일 파일·행 재업로드: 중복 없음", "A09 같은 행 재업로드는 변화 없음(권리·횟수 중복 없음)"),
@@ -201,7 +203,7 @@ export const AVAIL_CASES: TraceItem[] = [
   avail("A11", "부분 파일에서 누락: 기존 권리 자동 삭제 없음", "A11 증분 파일에서 빠진 행은 철회가 아니다"),
   avail("A12", "개정 계약으로 만료 단축: 기존 초안 재검증 필요", "A12 개정 후 기존 초안은 재검증 필요로 바뀐다"),
   avail("A13", "취소·undo·실제 방송 재수신: 예약·소진 정합성", "A13 실제 방송 실적은 예약을 소진으로 바꾸고, 같은 실적 재수신은 중복 반영하지 않는다"),
-  avail("A14", "필수 조건 빈칸: available·무제한으로 추정하지 않음", "A14 방수가 빈칸이면 available도 무제한도 아니다(unknown)"),
+  availReal("A14", "필수 조건 빈칸: available·무제한으로 추정하지 않음", "A14 방수가 빈칸이면 available도 무제한도 아니다(unknown)", ["실제 파일: 종료일 무제한 231건(= 년수"]),
   avail("A15", "별도 승인 조건: 승인 증빙 없이는 확정 불가", "A15 승인 증빙 없이는 확정할 수 없다"),
   avail("A16", "과거 계획 조회: 당시 rights snapshot 보존, 현재 효력 별도 표시", "A16 당시 판정은 보존하고 현재 효력은 따로 표시"),
   avail("A17", "권리 부족으로 해 없음: 위반 조건을 보여주고 임의 완화 안 함", "A17 임의로 완화하지 않는다"),

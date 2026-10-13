@@ -26,6 +26,14 @@ export function identityMarkers(title: string): IdentityMarkers {
   return { season, versions, year: y ? y[0] : null };
 }
 
+/**
+ * 시즌 표기만 다른 두 제목을 같은 키로 맞춘다 — 끝의 "S2"·"시즌2"를 "2"로(한글·숫자 바로 뒤일 때만). 실제 Avail 파일(260930)이 "라자루스 프로젝트 S2"처럼 쓰고
+ * 시스템 제목은 "라자루스프로젝트2"라 같은 시즌이 연결되지 못하던 문제를 푼다. 시즌 숫자가 다르면(S2 ↔ 3) 여전히 다른 키다. 영문 단어 끝(KBS2)은 건드리지 않는다.
+ */
+export function seasonNotationKey(key: string): string {
+  return key.replace(/시즌(\d+)$/, "$1").replace(/(?<=[가-힣0-9])[sS](\d+)$/, "$1");
+}
+
 /** 같은 제목에서 시즌·꼬리 숫자를 뗀 키 — "시즌만 다른 후보"를 찾는 용도(병합 근거 아님). */
 export function baseKey(title: string): string {
   return normalizeProgramCanonicalName(title)
@@ -92,6 +100,7 @@ export function proposeLinks(content: ContentTitleInput, programs: ProgramRow[])
   for (const p of programs) {
     const pKey = normalizeProgramCanonicalName(p.name);
     if (!pKey) continue;
+    const sameNotation = seasonNotationKey(pKey) === seasonNotationKey(v.mainKey);
     const pm = identityMarkers(p.name);
     const conflicts: string[] = [];
     if (cm.season && pm.season && cm.season !== pm.season) conflicts.push(`시즌 ${cm.season} ↔ ${pm.season}`);
@@ -102,7 +111,7 @@ export function proposeLinks(content: ContentTitleInput, programs: ProgramRow[])
     if (content.productionYear && pm.year && !content.productionYear.includes(pm.year)) conflicts.push(`제작년도 ${content.productionYear} ↔ ${pm.year}`);
     let basis: LinkBasis | null = null;
     let confidence = 0;
-    if (pKey === v.mainKey) {
+    if (pKey === v.mainKey || (sameNotation && cm.season !== null && cm.season === pm.season && cm.versions.join("|") === pm.versions.join("|"))) {
       basis = "exact";
       confidence = 1;
     } else if (v.aliasKeys.includes(pKey)) {

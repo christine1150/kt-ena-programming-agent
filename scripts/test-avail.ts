@@ -208,6 +208,15 @@ async function main() {
     check("A06 이름이 정확히 같고 표지 충돌이 없으면 자동 연결(공백·문장부호 무시)", ex.status === "RESOLVED" && ex.programId === "9");
     const seasonDiff = A.proposeLinks({ title: "신병3" }, [{ id: "7", name: "신병S1" }]);
     check("A06 숫자만 다른 시즌은 별개로 취급(시즌 다름 후보, 자동 연결 아님)", A.decideLink(seasonDiff).status !== "RESOLVED");
+    // 시즌 표기만 다른 제목("S2" ↔ "2")은 같은 시즌으로 잇는다 — 실제 Avail 파일의 "라자루스 프로젝트 S2" ↔ 시스템 "라자루스프로젝트2"
+    const gs2 = grant({ id: "GS2", title: "샘플 프로젝트 S2", season: "2" });
+    const cs2 = ctxOf([gs2]);
+    const notation = status({ programId: null, programName: "샘플프로젝트2", episodeNumber: 3 }, slot(), cs2);
+    check("A06 'S2'와 '2'는 같은 시즌 표기라 같은 권리로 연결된다", notation.status === "available" && notation.grantRevisionIds.length === 1, `${notation.status} ${notation.reasonCodes.join(",")}`);
+    check("A06 시즌 숫자가 다르면(S2 ↔ 3) 표기가 비슷해도 연결하지 않는다", status({ programId: null, programName: "샘플프로젝트3", episodeNumber: 3 }, slot(), cs2).grantRevisionIds.length === 0);
+    check("A06 시즌 표기 없는 제목은 'S2' 행과 자동 연결하지 않는다(시즌 확인 필요)", status({ programId: null, programName: "샘플프로젝트", episodeNumber: 3 }, slot(), cs2).grantRevisionIds.length === 0);
+    check("A06 후보 목록에서도 'S2'↔'2'는 이름 일치(자동 연결 가능), 시즌 3은 아님", A.decideLink(A.proposeLinks({ title: "샘플프로젝트2" }, [{ id: "n1", name: "샘플 프로젝트 S2" }])).status === "RESOLVED" && A.decideLink(A.proposeLinks({ title: "샘플프로젝트2" }, [{ id: "n2", name: "샘플 프로젝트 S3" }])).status !== "RESOLVED");
+    check("A06 표기 정규화는 영문 단어 끝(KBS2)·편집판 표지가 다른 제목을 건드리지 않는다", A.seasonNotationKey("kbs2") === "kbs2" && A.seasonNotationKey("프로젝트s2") === "프로젝트2" && A.seasonNotationKey("프로젝트시즌2") === "프로젝트2" && A.decideLink(A.proposeLinks({ title: "샘플프로젝트2스페셜" }, [{ id: "n3", name: "샘플 프로젝트 S2" }])).status !== "RESOLVED");
   }
 
   console.log("\n— A07 잔여 0회 —");
@@ -722,7 +731,7 @@ async function main() {
   }
 
   // ══ 실제 파일(있을 때만) ══════════════════════════════
-  const samplePath = process.env.AVAIL_SAMPLE_FILE ?? "C:/Users/sky tv/Downloads/(배포용) Contents Availlist_260930 (1).xlsx";
+  const samplePath = process.env.AVAIL_SAMPLE_FILE ?? ["C:/Users/sky tv/Downloads/Contents Availlist_260930.xlsx", "C:/Users/sky tv/Downloads/(배포용) Contents Availlist_260930 (1).xlsx"].find((p) => fs.existsSync(p)) ?? "C:/Users/sky tv/Downloads/Contents Availlist_260930.xlsx";
   console.log("\n— 실제 Avail 파일 어댑터 검증 —");
   if (!fs.existsSync(samplePath)) console.log(`(실제 파일 없음: ${samplePath} — 이 구간은 건너뜁니다. 실제 양식 검증은 미수행으로 보고해야 합니다)`);
   else {
@@ -787,6 +796,9 @@ async function main() {
     check("실제 파일: 자체 드라마(신병4)도 Avail 행(10년·50방)이 우선 적용되어 행이 근거로 붙는다", own.grantRevisionIds.length === 1 && own.sourceRefs[0].sheet === "소재" && own.expiresOn === "2036-08-23", `${own.status} ${own.expiresOn}`);
     const eps = A.listEpisodes(grants.find((g) => g.content.sourceCode === "D26082101")?.scope.episodes ?? { kind: "all" });
     check("실제 파일: 신병4 회차 #1~12", eps?.length === 12);
+    // 시즌 표기가 "S2"인 실제 행("라자루스 프로젝트 S2")이 시스템 제목("라자루스프로젝트2")과 연결된다
+    const lz = A.evaluateEligibility({ programId: null, programName: "라자루스프로젝트2", episodeNumber: 1 }, slot("2026-09-10", 1200, 1260, "ENA Drama"), ctxG);
+    check("실제 파일: 'S2' 표기 행(라자루스 프로젝트 S2)이 시스템 제목 '라자루스프로젝트2'와 연결되고 원본 행이 근거로 붙는다", lz.grantRevisionIds.length >= 1 && lz.sourceRefs.every((r) => r.sheet === "소재"), `${lz.status} ${lz.reasonCodes.join(",")}`);
   }
 
   // ── 운영자 입력 권리: 채널별 편성 가능 시점(시각 포함) ──
