@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/fetch-nielsen-mail",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/update-program-genre",
+      "schedule": "0 22 * * 0"
     }
   ]
 }

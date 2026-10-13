@@ -25,6 +25,7 @@ export default function GenreMapManager() {
   const [genres, setGenres] = useState<string[]>([]);
   const [onlyUnclassified, setOnlyUnclassified] = useState(true);
   const [savedKey, setSavedKey] = useState<string | null>(null);
+  const [savedExtra, setSavedExtra] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export default function GenreMapManager() {
     const j = await r.json();
     if (j.ok) {
       setSavedKey(row.canonicalName);
+      setSavedExtra(Number(j.propagated) || 0);
       setRows((prev) => (prev ? prev.map((x) => (x.canonicalName === row.canonicalName ? { ...x, genre, source: "MANUAL" } : x)) : prev));
     }
   }
@@ -67,7 +69,7 @@ export default function GenreMapManager() {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h3 className="text-base font-semibold text-zinc-900">장르 분류 보완(AI 스마트 편성용)</h3>
-          <p className="text-sm text-zinc-500">제목 규칙으로 1차 분류한 장르를 확인·보완합니다. 편성 시간이 긴 프로그램부터 채우면 효과가 큽니다.</p>
+          <p className="text-sm text-zinc-500">제목 규칙·네이버 검색으로 1차 분류한 장르를 확인·보완합니다. 한 채널에서 고치면 같은 이름의 다른 채널에도 반영됩니다(자사 오리지널은 자사 채널끼리만). 네이버 검색은 매주 월요일 아침 7시에 자동으로 다시 돕니다.</p>
         </div>
         {rows && (
           <p className="text-sm text-zinc-600">
@@ -130,9 +132,9 @@ export default function GenreMapManager() {
                         </option>
                       ))}
                     </select>
-                    {savedKey === r.canonicalName && <span className="ml-1 text-xs text-emerald-600">저장됨</span>}
+                    {savedKey === r.canonicalName && <span className="ml-1 text-xs text-emerald-600">저장됨{savedExtra > 0 ? ` · 같은 프로그램 ${savedExtra}곳에도 반영` : ""}</span>}
                   </td>
-                  <td className="px-2 py-1.5 text-xs text-zinc-500">{SOURCE_LABEL[r.source] ?? r.source}</td>
+                  <td className="px-2 py-1.5 text-xs text-zinc-500">{r.source === "MANUAL" && r.note?.startsWith("같은 프로그램 공통") ? "같은 프로그램 공통" : (SOURCE_LABEL[r.source] ?? r.source)}</td>
                 </tr>
               ))}
             </tbody>

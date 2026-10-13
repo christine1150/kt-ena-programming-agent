@@ -9,16 +9,24 @@ import { ownCommonOverrides, pickOwnCommonGenre } from "./genreRules";
 // 같은 이름이 여러 채널에 있을 때 와일드카드 값은 출처 신뢰도 순으로 고른다(동률은 조회 순서 = id 순).
 const SOURCE_RANK: Record<string, number> = { MANUAL: 0, FEATURED_CATEGORY: 1, OWN_COMMON: 2, NAVER_SEARCH: 3, RULE_KEYWORD: 4, RULE_CHANNEL: 5 };
 
+const ORIGINAL_GENRES: Genre[] = ["오리지널 드라마", "오리지널 예능"];
+/** 자사 오리지널 행인가 — 주요 콘텐츠 분류 근거이거나 장르가 오리지널 드라마·예능. */
+export const isOwnOriginalRow = (r: { scope: string; source: string; genre: Genre }) =>
+  r.scope === "OWN" && (r.source === "FEATURED_CATEGORY" || ORIGINAL_GENRES.includes(r.genre));
+
 export const OWN_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
-type StoredRow = { id: string; scope: string; owner_key: string; canonical_name: string; genre: Genre; source: string };
+type StoredRow = { id: string; scope: string; owner_key: string; canonical_name: string; genre: Genre; source: string; updated_by?: string | null };
 
-async function loadAllRows(filter?: { scope: string; names: string[] }): Promise<StoredRow[]> {
+async function loadAllRows(filter?: { scope?: string; names: string[] }): Promise<StoredRow[]> {
   const out: StoredRow[] = [];
   const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
-    let q = supabase.from("program_genre_map").select("id, scope, owner_key, canonical_name, genre, source");
-    if (filter) q = q.eq("scope", filter.scope).in("canonical_name", filter.names);
+    let q = supabase.from("program_genre_map").select("id, scope, owner_key, canonical_name, genre, source, updated_by");
+    if (filter) {
+      if (filter.scope) q = q.eq("scope", filter.scope);
+      q = q.in("canonical_name", filter.names);
+    }
     const { data, error } = await q.order("id").range(from, from + PAGE - 1);
     if (error) throw new Error(`program_genre_map 조회 실패: ${error.message}`);
     out.push(...((data ?? []) as StoredRow[]));
@@ -40,6 +48,17 @@ export async function loadGenreMap(): Promise<Map<string, Genre>> {
     const pick = pickOwnCommonGenre(rs.map((r) => ({ ownerKey: r.owner_key, genre: r.genre, source: r.source })));
     if (pick) common.set(name, pick.genre);
   }
+  // 같은 프로그램 공통 장르(사용자 지시 2026-10-13) — 어느 채널이든 관리자가 고친 값(MANUAL)이 있으면, 같은 이름의 규칙·네이버
+  // 분류 행(나중에 생긴 행 포함)도 그 값을 따른다. 자사 오리지널은 자사 채널 행에만 적용한다.
+  const ownOriginalNames = new Set(rows.filter(isOwnOriginalRow).map((r) => r.canonical_name));
+  const manualAny = new Map<string, Genre>();
+  const manualOwn = new Map<string, Genre>();
+  for (const r of rows) {
+    if (r.source !== "MANUAL" || r.genre === UNCLASSIFIED) continue;
+    if (!manualAny.has(r.canonical_name)) manualAny.set(r.canonical_name, r.genre);
+    if (r.scope === "OWN" && !manualOwn.has(r.canonical_name)) manualOwn.set(r.canonical_name, r.genre);
+  }
+  const WEAK_SOURCES = new Set(["RULE_KEYWORD", "RULE_CHANNEL", "NAVER_SEARCH"]);
   for (const row of rows) {
     let genre = row.genre;
     let source = row.source;
@@ -47,6 +66,12 @@ export async function loadGenreMap(): Promise<Map<string, Genre>> {
     if (c && ownCommonOverrides(source)) {
       genre = c;
       source = "OWN_COMMON";
+    } else if (WEAK_SOURCES.has(source)) {
+      const shared = ownOriginalNames.has(row.canonical_name) ? (row.scope === "OWN" ? manualOwn.get(row.canonical_name) : undefined) : manualAny.get(row.canonical_name);
+      if (shared) {
+        genre = shared;
+        source = "MANUAL";
+      }
     }
     if (genre === UNCLASSIFIED) continue;
     map.set(`${row.scope}|${row.owner_key}|${row.canonical_name}`, genre);
@@ -88,4 +113,41 @@ export async function applyOwnCommonGenres(names?: string[]): Promise<number> {
     if (error) throw new Error(`자사 공통 장르 반영 실패: ${error.message}`);
   }
   return updates.length;
+}
+
+// ── 같은 프로그램 장르 공통 적용(사용자 지시 2026-10-13) ──
+// "같은 프로그램이면 한 채널에서 장르를 고치면 다른 채널에서도 반영(자사 오리지널 제외)". 관리자가 한 채널에서 저장하면
+// 같은 이름의 다른 채널 행(자사·경쟁 모두)을 같은 장르로 맞춘다. 자사 오리지널 드라마·예능은 경쟁채널에 퍼뜨리지 않고
+// 자사 7개 채널 안에서만 동시에 적용한다(주요 콘텐츠 분류 행도 같이 맞춘다).
+export const CROSS_COMMON_NOTE_PREFIX = "같은 프로그램 공통 적용";
+
+/** 방금 저장한 장르를 같은 이름의 다른 채널 행에 맞춘다. 반환: 갱신한 행 수.
+ *  사용자가 제공한 skyUHD 장르표(seed:user-map)는 덮어쓰지 않는다. */
+export async function propagateGenreAcrossChannels(args: { canonicalName: string; genre: Genre; origin: { scope: string; ownerKey: string }; adminId?: string }): Promise<number> {
+  const { canonicalName, genre, origin } = args;
+  if (!canonicalName || genre === UNCLASSIFIED) return 0;
+  const rows = await loadAllRows({ names: [canonicalName] });
+  // 오리지널 여부는 저장 직전 값이 아니라 지금 행들로 판단한다 — 이번 저장으로 방금 바뀐 원본 행은 새 장르를 갖고 있다.
+  const ownOriginal = rows.some(isOwnOriginalRow) || (origin.scope === "OWN" && ORIGINAL_GENRES.includes(genre));
+  const targets = rows.filter((r) => {
+    if (r.scope === origin.scope && r.owner_key === origin.ownerKey) return false; // 저장한 행 자신
+    if (ownOriginal && r.scope !== "OWN") return false; // 오리지널은 자사 채널 안에서만
+    if (String(r.updated_by ?? "").startsWith("seed:user-map")) return false; // 사용자 제공 장르표
+    return !(r.genre === genre && (r.source === "MANUAL" || r.source === "FEATURED_CATEGORY")); // 이미 같은 값이면 건너뜀
+  });
+  if (!targets.length) return 0;
+  const note = `${CROSS_COMMON_NOTE_PREFIX}(${origin.ownerKey} 수정)`;
+  // 주요 콘텐츠 분류 행은 오리지널 근거이므로 출처(FEATURED_CATEGORY)를 유지한 채 장르만 맞춘다(이후에도 오리지널로 인식).
+  const updatedBy = "system:cross-common" + (args.adminId ? `:${args.adminId}` : "");
+  const now = new Date().toISOString();
+  for (const featured of [true, false]) {
+    const group = targets.filter((r) => (r.source === "FEATURED_CATEGORY") === featured);
+    for (let i = 0; i < group.length; i += 200) {
+      const ids = group.slice(i, i + 200).map((r) => r.id);
+      const patch = featured ? { genre, rule_note: note, updated_by: updatedBy, updated_at: now } : { genre, source: "MANUAL", rule_note: note, updated_by: updatedBy, updated_at: now };
+      const { error } = await supabase.from("program_genre_map").update(patch).in("id", ids);
+      if (error) throw new Error(`같은 프로그램 장르 반영 실패: ${error.message}`);
+    }
+  }
+  return targets.length;
 }

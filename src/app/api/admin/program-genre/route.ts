@@ -1,14 +1,14 @@
 // 장르 분류 관리(관리자 전용) — 사용자 결정(2026-09-30): "규칙으로 1차 분류한 뒤 관리자가 보완".
 // GET: 채널(자사 코드 또는 경쟁채널명)의 최근 84일 방영 프로그램을 편성 분 많은 순으로, 현재 장르·출처와 함께.
-// PATCH: 장르를 MANUAL로 저장(규칙 시드가 다시 돌아도 덮어쓰지 않음). 자사 채널이면 같은 이름의 다른 자사
-//        채널 행에도 공통 적용(사용자 지시 2026-09-30 — 채널별로 직접 저장한 관리자 값은 유지).
+// PATCH: 장르를 MANUAL로 저장(규칙 시드가 다시 돌아도 덮어쓰지 않음). 같은 이름의 다른 채널 행(자사·경쟁 모두)에도
+//        같은 장르를 적용한다(사용자 지시 2026-10-13). 자사 오리지널 드라마·예능은 경쟁채널에는 적용하지 않고 자사 채널끼리만 동시 적용.
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { mapCompetitorData, mapOwnAirings, type RawCompetitor, type RawOwn } from "@/lib/idealSchedule/mapping";
 import { classifyGenreByRule } from "@/lib/idealSchedule/genreRules";
-import { applyOwnCommonGenres, OWN_CHANNEL_CODES as OWN } from "@/lib/idealSchedule/genreStore";
+import { applyOwnCommonGenres, propagateGenreAcrossChannels, OWN_CHANNEL_CODES as OWN } from "@/lib/idealSchedule/genreStore";
 import { GENRES, type Genre } from "@/lib/idealSchedule/types";
 
 export async function GET(request: Request) {
@@ -79,6 +79,9 @@ export async function PATCH(request: Request) {
     { onConflict: "scope,owner_key,canonical_name" }
   );
   if (error) return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
-  const propagated = scope === "OWN" ? await applyOwnCommonGenres([canonicalName]) : 0;
-  return NextResponse.json({ ok: true, propagated });
+  const genre = body.genre as Genre;
+  const propagated = await propagateGenreAcrossChannels({ canonicalName, genre, origin: { scope, ownerKey: body.owner }, adminId: admin.adminId });
+  // 자사 공통 규칙(관리자 값 > 주요 콘텐츠 분류)도 그대로 적용 — 미분류 저장 등 위에서 건너뛴 경우의 보정
+  const ownCommon = scope === "OWN" ? await applyOwnCommonGenres([canonicalName]) : 0;
+  return NextResponse.json({ ok: true, propagated: propagated + ownCommon });
 }
