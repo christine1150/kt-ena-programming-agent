@@ -267,6 +267,7 @@ async function main() {
       const daily = D.parseNielsenDailyWorkbook(read("닐슨_채널시청률(261004).xls"), "닐슨_채널시청률(261004).xls", comp);
       const weekly = P.parseNielsenPeriodWorkbook(read("닐슨_채널시청률(260928-261004).xls"));
       check("실제 일간 파일 파싱(10/4, 시트 분석기간 기준)", daily.ok && daily.reportDate === "2026-10-04" && daily.dateSource === "sheet+filename" && daily.missingSheets.length === 0);
+      check("실제 일간 파일: ENA 경쟁채널 시트 A3의 지역 예외(KBS1·MBC·SBS=수도권)를 원문 그대로 보존(H1)", daily.ok && daily.competitorRegionNotes.some((n) => n.sheet === "ENA경쟁채널시청률" && n.note.includes("수도권 기준") && n.regionalChannels.join(",") === "KBS1,MBC,SBS") && daily.competitorRegionNotes.every((n) => n.sheet.endsWith("경쟁채널시청률")), daily.ok ? JSON.stringify(daily.competitorRegionNotes) : "파싱 실패");
       check("실제 주간 파일 파싱(2시트, 9/28~10/4, 주간)", !("message" in weekly) && weekly.periodType === "weekly" && weekly.dateFrom === "2026-09-28" && weekly.dateTo === "2026-10-04");
       if (daily.ok && !("message" in weekly)) {
         // 골든 target 표기 → 파서 라벨: 시트의 개인2049 / National 유료방송가입가구

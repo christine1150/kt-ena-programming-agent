@@ -2,6 +2,7 @@
 // 기준: 그날 수도권 개인2049 채널 순위 1~20위 채널의 프로그램(뉴스 제외)을 수도권 2049 시청률 높은 순으로 21개(괄호 안은 유료방송가구).
 // 새 지표를 계산하지 않는다 — 저장된 프로그램 시청률을 골라 정렬할 뿐이다. 프로그램 단위 자료가 없는 채널은 후보에 들 수 없다(자료 범위는 화면에 밝힌다).
 import { broadcastHour } from "@/lib/workspace/dates";
+import { isRegionalHousehold } from "@/lib/competitorRegion";
 
 export const TOP_PROGRAM_LIMIT = 21;
 export const CHANNEL_RANK_LIMIT = 20;
@@ -87,6 +88,8 @@ export interface TopProgramRow {
   rating: number;
   /** 같은 프로그램의 유료방송가구 시청률(없으면 null) */
   householdRating: number | null;
+  /** 경쟁 채널 중 가구 시청률이 수도권 기준인 채널(KBS1·MBC·SBS) — 전국 값과 직접 비교하면 안 된다(닐슨 파일 A3 문구) */
+  householdRegional: boolean;
   genre: ProgramGenreFamily;
   firstRun: boolean | null;
 }
@@ -120,6 +123,7 @@ export function pickTopPrograms(samples: ProgramSample[], limit = TOP_PROGRAM_LI
     startTime: displayStartTime(v.base.startTime),
     rating: v.p2049 as number,
     householdRating: v.hh !== null && Number.isFinite(v.hh) ? v.hh : null,
+    householdRegional: !v.base.own && v.hh !== null && isRegionalHousehold(v.base.channelName),
     genre: v.base.genre ?? null,
     firstRun: v.base.firstRun ?? null,
   }));

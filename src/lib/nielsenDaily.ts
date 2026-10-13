@@ -3,6 +3,7 @@
 // 구조는 DATA_DICTIONARY.md에 문서화된 내용을 그대로 따른다.
 import * as XLSX from "xlsx";
 import { toChannelCode } from "@/lib/channelMaster";
+import { regionNoteFor, type RegionNote } from "@/lib/competitorRegion";
 
 // ── 시트 이름 ──────────────────────────────────────────────
 export const RANK_SHEETS = ["유료방송가입가구", "개인"] as const;
@@ -480,6 +481,8 @@ export interface NielsenDailyParseResult {
   competitorProgramTargetRows: CompetitorProgramTargetRow[]; // 같은 데이터의 3개 타깃 전체(개인2049/2039/가구) — 예측 시청률용
   programRows: ProgramTargetRow[];
   missingSheets: string[]; // 10개 중 못 찾은 시트 (있어도 치명적이진 않음, 경고만)
+  /** 경쟁채널 시트 A3에 적힌 가구 지표의 지역 예외(예: KBS1·MBC·SBS는 수도권 기준) — 원문 보존용, 화면 주의 문구의 근거(단계 16 H1) */
+  competitorRegionNotes: RegionNote[];
 }
 export interface NielsenDailyParseError {
   ok: false;
@@ -591,10 +594,13 @@ export function parseNielsenDailyWorkbook(
   // 4개 시트의 경쟁채널 블록을 전부 하나의 풀로 모은다(위 설명 참고).
   const pooledCompetitorRows: Omit<CompetitorProgramRow, "ourChannelCode">[] = [];
   const competitorProgramTargetRows: CompetitorProgramTargetRow[] = [];
+  const competitorRegionNotes: RegionNote[] = [];
   for (const sheetName of COMPETITOR_SHEET_NAMES) {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) continue; // 필수 시트가 아니므로(경고만) 없으면 조용히 건너뜀
     const rows = XLSX.utils.sheet_to_json<Row>(sheet, { header: 1, blankrows: true });
+    const regionNote = regionNoteFor(sheetName, rows[2]?.[0]); // A3 문구에 적힌 지역 예외(없으면 null)
+    if (regionNote) competitorRegionNotes.push(regionNote);
     pooledCompetitorRows.push(...parseCompetitorProgramSheet(rows));
     competitorProgramTargetRows.push(...parseCompetitorProgramTargetSheet(rows));
     // 버그 수정(2026-08-21): 이 4개 시트에 섞여 있는 자사 채널 블록(ONCE/OLIFE/ENA STORY)에서
@@ -609,5 +615,5 @@ export function parseNielsenDailyWorkbook(
     competitorProgramRows.push(...pooledCompetitorRows.map((row) => ({ ...row, ourChannelCode })));
   }
 
-  return { ok: true, reportDate, dateSource, rankRows, competitorRankRows, competitorProgramRows, competitorProgramTargetRows, programRows, missingSheets };
+  return { ok: true, reportDate, dateSource, rankRows, competitorRankRows, competitorProgramRows, competitorProgramTargetRows, programRows, missingSheets, competitorRegionNotes };
 }

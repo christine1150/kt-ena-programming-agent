@@ -70,8 +70,10 @@ const scenarioBad = SCENARIOS.flatMap((s) => (["daily", "weekly", "monthly"] as 
 check("시나리오 칸 중 검증됨이 아닌 칸에는 사유가 있다", scenarioBad.length === 0, scenarioBad.map((b) => `${b.s.id}.${b.k}`).join(","));
 check("월간 칸은 실제 월간 양식 미검증을 합성 검증과 분리해 밝힌다", SCENARIOS.every((s) => s.monthly.status === "verified" || /월간|실제/.test(s.monthly.note ?? "")) && SCENARIOS.filter((s) => s.monthly.status === "needs_real_data").every((s) => (s.monthly.note ?? "").includes("실제 월간 파일 샘플 없음") || (s.monthly.note ?? "").includes("실제 Avail 양식은 미검증")));
 check("시나리오 12개 × 일간·주간·월간", SCENARIOS.length === 12 && SCENARIOS.every((s) => s.daily && s.weekly && s.monthly));
-const noGoldenHidden = !ALL_ITEMS.some((i) => i.id === "PE3" && i.status !== "not_done");
-check("미구현 항목(PE3 지역 예외)이 통과로 바뀌어 있지 않다", noGoldenHidden);
+// PE3(지역 예외)는 파서 보존·홈 표시까지만 했고 저장 열·구매 검토 예측 반영은 남아 있으므로 '검증됨'으로 올라가 있으면 안 된다(partial 유지, 근거 연결 필수)
+const pe3 = ALL_ITEMS.find((i) => i.id === "PE3");
+const noGoldenHidden = !!pe3 && pe3.status === "partial" && pe3.refs.length > 0 && /구매 검토 예측/.test(pe3.note ?? "");
+check("PE3 지역 예외는 일부만 반영(partial)으로 남고 남은 범위를 적는다", noGoldenHidden);
 
 // ── 4. 문서가 원본 표와 같다 ────────────────────────────────
 const docPath = "docs/agent-improvement/TRACEABILITY.md";

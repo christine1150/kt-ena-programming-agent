@@ -6,6 +6,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { displayProgramName, formatRating, type TopProgramRow } from "@/lib/dashboard/marketTopPrograms";
 import { channelBrand } from "@/lib/dashboard/channelBrandColors";
+import { REGIONAL_HOUSEHOLD_CAUTION } from "@/lib/competitorRegion";
 import { useContextData } from "@/lib/workspace/useContextData";
 
 interface Payload {
@@ -174,12 +175,13 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
                 <span className="whitespace-nowrap text-right text-[11.5px] tabular-nums text-zinc-500">{r.startTime}</span>
                 <span className="whitespace-nowrap text-right tabular-nums" title="수도권 개인2049 시청률(괄호: 유료방송가구)">
                   <b className="text-[13px] font-bold text-zinc-900">{formatRating(r.rating)}</b>{" "}
-                  <span className="text-[11px] text-zinc-500">({formatRating(r.householdRating)})</span>
+                  <span className="text-[11px] text-zinc-500" title={r.householdRegional ? "이 채널의 가구 시청률은 수도권 기준입니다(다른 채널은 전국)" : undefined}>({formatRating(r.householdRating)}{r.householdRegional ? "*" : ""})</span>
                 </span>
               </li>
             ))}
           </ol>
         )}
+        {rows.some((r) => r.householdRegional) && <p className="mt-1 text-right text-[11px] text-zinc-500">{REGIONAL_HOUSEHOLD_CAUTION}</p>}
       </div>
     </div>
   );

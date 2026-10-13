@@ -64,7 +64,7 @@ async function main() {
   check("API: 로그인 필요·날짜 검증·원문 오류 비노출", route.includes("getCurrentSession") && route.includes("401") && route.includes("YYYY-MM-DD") && route.includes("상위 프로그램을 불러오지 못했습니다.") && !route.includes("message: e.message"));
   check("API: 개인2049 순위 1~20위 채널만(자사·경쟁채널 모두)", route.includes(".lte(\"rank\", CHANNEL_RANK_LIMIT)") && (route.match(/lte\("rank", CHANNEL_RANK_LIMIT\)/g) ?? []).length === 2 && route.includes("competitor_ratings") && route.includes("competitor_program_target_ratings"));
   const comp = read("src/components/home/MarketTopPrograms.tsx");
-  check("화면: 3단 그리드와 괄호 가구 표기", comp.includes("md:grid-cols-3") && comp.includes("({formatRating(r.householdRating)})"));
+  check("화면: 3단 그리드와 괄호 가구 표기", comp.includes("md:grid-cols-3") && comp.includes("({formatRating(r.householdRating)}"));
   check("화면: 로딩·오류·빈 상태·이전 날짜 흐림이 모두 있다", comp.includes("Skeleton") && comp.includes('role="alert"') && comp.includes("순위 1~20위 채널 중") && comp.includes("!f.isCurrent"));
   check("화면: 자료 범위(몇 개 채널 기준)와 가구 기준을 밝힌다", comp.includes("프로그램 단위 시청률 자료가 있는 채널") && comp.includes("KBS1·MBC·SBS만 수도권"));
   const dash = read("src/app/Dashboard.tsx");
@@ -73,6 +73,23 @@ async function main() {
   check("별도 제목 없이 정보만(제목 문구 없음)", !comp.includes("오늘의 상위 프로그램") && !comp.includes("<h2"));
   check("낮은 높이: 한 줄 행(py 4~7px)과 3단", /py-\[[4-7]px\]/.test(comp) && comp.includes("md:grid-cols-3"));
   // (순위 막대는 간소화로 제거했다)
+
+  // ── 가구 값의 지역 예외(단계 16 H1): 닐슨 A3 "KBS1, MBC, SBS는 수도권 기준"을 보존·표시 ──
+  const R = await import("../src/lib/competitorRegion");
+  const A3_ENA = "■ 개인2049(수도권) / 개인2039(수도권) / 유료방송가입가구(National)-KBS1, MBC, SBS는 수도권 기준";
+  check("A3 문구에서 수도권 기준 채널을 읽는다(KBS1·MBC·SBS)", JSON.stringify(R.parseRegionExceptions(A3_ENA)) === JSON.stringify(["KBS1", "MBC", "SBS"]));
+  check("예외가 없는 시트 문구는 빈 목록", R.parseRegionExceptions("■ 개인2049(수도권) / 여자3049(수도권) / 유료방송가입가구(National)").length === 0 && R.parseRegionExceptions("").length === 0 && R.parseRegionExceptions(undefined as unknown as string).length === 0);
+  check("regionNoteFor: 예외가 있을 때만 원문과 함께 돌려준다", R.regionNoteFor("ENA경쟁채널시청률", A3_ENA)?.note === A3_ENA && R.regionNoteFor("ENA경쟁채널시청률", A3_ENA)?.regionalChannels.length === 3 && R.regionNoteFor("ENA PLAY경쟁채널시청률", "■ 개인2049(수도권)") === null);
+  check("파일에서 읽은 목록이 마지막 확인 목록보다 우선한다", R.isRegionalHousehold("KBS2", ["KBS2"]) && !R.isRegionalHousehold("KBS1", ["KBS2"]) && R.isRegionalHousehold("kbs1") && R.isRegionalHousehold("MBC") && !R.isRegionalHousehold("MBC every1") && !R.isRegionalHousehold("tvN") && !R.isRegionalHousehold("KBS2"));
+  const regional = M.pickTopPrograms([
+    mk("SBS", 1, "정글", "21:00", "p2049", 1.2), mk("SBS", 1, "정글", "21:00", "household", 3.1),
+    mk("tvN", 2, "응답", "20:00", "p2049", 1.1), mk("tvN", 2, "응답", "20:00", "household", 2.9),
+    mk("ENA", 3, "자체", "22:00", "p2049", 0.9, true), mk("ENA", 3, "자체", "22:00", "household", 1.5, true),
+    mk("MBC", 4, "가구없음", "19:00", "p2049", 0.8),
+  ]);
+  const flag = (n: string) => regional.find((r) => r.channelName === n)?.householdRegional;
+  check("상위 프로그램: 수도권 기준 채널의 가구 값에만 표시(SBS), 전국 채널·자사·가구 값 없는 행은 아님", flag("SBS") === true && flag("tvN") === false && flag("ENA") === false && flag("MBC") === false);
+  check("화면: 수도권 기준 가구 값에 별표와 고정 주의 문구, 문구의 근거는 파서가 보존한 A3", comp.includes("householdRegional") && comp.includes("REGIONAL_HOUSEHOLD_CAUTION") && R.REGIONAL_HOUSEHOLD_CAUTION.includes("수도권 기준") && read("src/lib/nielsenDaily.ts").includes("regionNoteFor(sheetName, rows[2]?.[0])") && read("src/lib/nielsenDaily.ts").includes("competitorRegionNotes"));
 
   console.log(`\n통과 ${passed} / 실패 ${failures.length}`);
   if (failures.length) {
