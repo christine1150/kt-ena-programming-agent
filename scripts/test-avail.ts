@@ -802,6 +802,28 @@ async function main() {
     check("실제 파일: 'S2' 표기 행(라자루스 프로젝트 S2)이 시스템 제목 '라자루스프로젝트2'와 연결되고 원본 행이 근거로 붙는다", lz.grantRevisionIds.length >= 1 && lz.sourceRefs.every((r) => r.sheet === "소재"), `${lz.status} ${lz.reasonCodes.join(",")}`);
   }
 
+  // ── 슬롯 게이트: 달력 날짜 묶음 캐시가 정밀 계산과 같은 답을 낸다(AI 탐색 속도, 실측 3초→33초 회귀 방지) ──
+  {
+    const gEnd = grant({ id: "GE", title: "경계 시리즈", start: "2026-10-01", end: "2026-10-07", channels: ["ENA"], count: "unbounded" });
+    const manual = A.buildManualGrants({ title: "시각 시리즈", windows: [{ channels: ["ENA"], startDate: "2026-10-06", startTime: "23:50" }], actor: "t", enteredAt: NOW, existing: [] });
+    const grants = [gEnd, ...(manual.ok ? manual.grants : [])];
+    const ctxList = [ctxOf(grants), ctxOf(grants, { interpretation: A.DEFAULT_INTERPRETATION }), ctxOf(grants, { interpretation: confirmedWith({ spanPolicy: "through_end" }) })];
+    const cands = [{ key: "c1", programId: null, programName: "경계 시리즈", score: null }, { key: "c2", programId: null, programName: "시각 시리즈", score: null }, { key: "c3", programId: null, programName: "없는 프로그램", score: null }];
+    let diff = 0;
+    let total = 0;
+    for (const ctxG2 of ctxList) for (const mode of ["explore", "executable"] as const) {
+      const byKey = new Map(cands.map((c) => [c.key, c]));
+      const gate = A.makeSlotGate({ weekStart: "2026-10-05", channelId: "ENA", ctx: ctxG2, mode, toCandidate: (ec) => byKey.get((ec as { key: string }).key) ?? null });
+      for (const c of cands) for (let wd = 1; wd <= 7; wd++) for (let st = 1080; st <= 1620; st += 30) for (const dur of [30, 60, 90, 180]) {
+        const exact = A.evaluateEligibility({ programId: null, programName: c.programName, episodeNumber: null }, slot(A.addDaysIso("2026-10-05", wd - 1), st, st + dur, "ENA"), ctxG2).status;
+        const ok = mode === "executable" ? exact === "available" : exact !== "unavailable";
+        total++;
+        if (gate({ key: c.key }, wd, st, st + dur) !== ok) diff++;
+      }
+    }
+    check("슬롯 게이트: 날짜 묶음 캐시와 정밀 계산이 모든 요일·시각·길이·모드에서 같다(자정 걸침·시작 시각 있는 권리 포함)", total > 1000 && diff === 0, `${diff}/${total} 다름`);
+  }
+
   // ── 영미 드라마 23건 보충 속성: 참고 열 보존 + NBCU 목록 파일 대조(파일이 있을 때만) ──
   {
     const ref = A.US_DRAMA_1ST_WINDOW;

@@ -3,7 +3,7 @@
 //  - 실행 가능(executable): 권리가 확인된(available) 후보만 쓴다. 점수가 아무리 높아도 권리 조건이 안 맞으면 들어가지 않는다.
 //  - Avail 자료가 하나도 없으면(미입력 설치) 성과 분석·탐색은 그대로 되고, 실행 가능 판정은 '보류'다(A18).
 //  - 쓸 수 있는 후보가 하나도 없으면 위반 조건을 보여 줄 뿐 임의로 완화하지 않는다(A17).
-import { evaluateEligibility, type EvalContext } from "./evaluate";
+import { evaluateEligibility, matchGrants, type EvalContext } from "./evaluate";
 import { addDaysIso } from "./dates";
 import type { ContentQuery, EligibilityResult, EligibilityStatus, SlotRef } from "./types";
 
@@ -91,14 +91,29 @@ export function selectCandidates<C extends RightsCandidate>(cands: C[], slot: Sl
  */
 export function makeSlotGate<C extends RightsCandidate>(opts: { weekStart: string; channelId: string; ctx: EvalContext; mode: SelectorMode; toCandidate: (engineCandidate: unknown) => C | null }): (engineCandidate: unknown, weekday: number, startMin: number, endMin: number) => boolean {
   const cache = new Map<string, boolean>();
+  // 시각(분)이 판정을 바꾸는 권리가 있는지: 시작 시각이 있는 권리(운영자 입력)·시간대 규칙. 없으면 판정은 시작·끝이 걸치는 달력 날짜에만 달라지므로
+  // (방송일 24시를 넘기는지) 같은 날짜 묶음은 한 번만 계산한다 — 후보×(요일·시작·끝) 조합마다 계산하면 AI 탐색이 10배 느려졌다(실측 3초→33초).
+  // 후보마다 따로 본다 — 운영자 입력 2건 때문에 모든 후보가 정밀 계산으로 떨어지지 않게 한다. 맞는 권리가 없으면(미확인·연결 대기) 시각과 무관하다.
+  const sens = new Map<string, boolean>();
+  const timeSensitiveFor = (c: C): boolean => {
+    let v = sens.get(c.key);
+    if (v === undefined) {
+      v = matchGrants(toQuery(c), opts.ctx).grants.some((g) => typeof g.window.startMin === "number" || g.rules.timeOfDay.state === "value");
+      sens.set(c.key, v);
+    }
+    return v;
+  };
   return (ec, weekday, startMin, endMin) => {
     if (opts.ctx.grants.length === 0) return true;
     const c = opts.toCandidate(ec);
     if (!c) return true; // 권리 대상이 아닌 후보(경쟁 Benchmark·장르 원형 등)
-    const k = `${c.key}|${weekday}|${startMin}|${endMin}`;
+    const dayStart = Math.floor(startMin / 1440);
+    const dayEnd = Math.floor(Math.max(startMin, endMin - 1) / 1440);
+    const [qs, qe] = timeSensitiveFor(c) ? [startMin, endMin] : [dayStart * 1440 + 600, Math.max(dayStart * 1440 + 601, dayEnd * 1440 + 601)];
+    const k = `${c.key}|${weekday}|${qs}|${qe}`;
     const hit = cache.get(k);
     if (hit !== undefined) return hit;
-    const slot: SlotRef = { broadcastDate: addDaysIso(opts.weekStart, weekday - 1), startMin, endMin, channelId: opts.channelId };
+    const slot: SlotRef = { broadcastDate: addDaysIso(opts.weekStart, weekday - 1), startMin: qs, endMin: qe, channelId: opts.channelId };
     const s = evaluateEligibility(toQuery(c), slot, opts.ctx).status;
     const ok = opts.mode === "executable" ? s === "available" : s !== "unavailable";
     cache.set(k, ok);

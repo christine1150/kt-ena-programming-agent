@@ -1,6 +1,7 @@
 // 편성표 뽑기 ↔ 권리(Avail) 연결(단계 06, 서버 전용).
 // Avail 자료가 하나도 없거나 테이블이 없으면 gate=null(status not_configured)을 돌려준다 — 그러면 엔진은 지금처럼 동작한다(성과 분석·탐색은 막지 않는다).
 // 있으면 슬롯마다 후보의 권리를 판정해 '권리상 불가'(탐색) 또는 '확인된 것만'(실행가능)을 걸러낸다.
+import { isFeatureOn } from "@/lib/featureFlags";
 import type { EngineCandidate } from "@/lib/idealSchedule/scoring";
 import { buildEvalContext } from "./context";
 import { unconfirmedKeys } from "./interpretation";
@@ -24,6 +25,7 @@ export interface RightsGateResult {
 }
 
 export async function buildRightsGate(channelCode: string, weekStart: string, mode: SelectorMode): Promise<RightsGateResult> {
+  if (!isFeatureOn("rights_gate")) return { gate: null, status: "not_configured", message: "권리 판정이 꺼져 있습니다(FEATURE_RIGHTS_GATE=off)." };
   try {
     const loaded = await loadAvailState();
     if (!loaded.available || loaded.state.revisions.length === 0) return { gate: null, status: "not_configured", message: loaded.error };

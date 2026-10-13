@@ -127,6 +127,7 @@ const rec = (over: Partial<RankRecord> = {}): RankRecord => ({ date: "2026-10-04
 {
   check("feature flag 목록: 새 경로마다 끄는 방법과 끄면 어떻게 되는지가 있다", Object.values(FEATURE_FLAGS).every((f) => f.env.length > 0 && f.whenOff.length > 10 && f.since.length > 0) && Object.keys(FEATURE_FLAGS).length >= 2);
   check("기능 끄개 기본값은 켜짐", isFeatureOn("llm_text_cache", {}) && isFeatureOn("report_snapshot_store", {}));
+  check("권리 판정 끄개: 기본 켜짐, FEATURE_RIGHTS_GATE=off면 꺼지고 권리 게이트 생성 경로(engineGate)에 연결돼 있다", isFeatureOn("rights_gate", {}) && !isFeatureOn("rights_gate", { FEATURE_RIGHTS_GATE: "off" }) && code("src/lib/avail/engineGate.ts").includes('isFeatureOn("rights_gate")'));
   check("시리즈 연결 끄개: 기본 켜짐, FEATURE_SERIES_LINK=off면 꺼지고 실제 경로(seriesLinkServer)에 연결돼 있다", isFeatureOn("series_link", {}) && !isFeatureOn("series_link", { FEATURE_SERIES_LINK: "off" }) && code("src/lib/idealSchedule/seriesLinkServer.ts").includes('isFeatureOn("series_link")'));
   check("FEATURE_*=off(0·false·off)이면 꺼진다", !isFeatureOn("llm_text_cache", { FEATURE_LLM_TEXT_CACHE: "off" }) && !isFeatureOn("report_snapshot_store", { FEATURE_REPORT_SNAPSHOT_STORE: "0" }) && !isFeatureOn("llm_text_cache", { FEATURE_LLM_TEXT_CACHE: " FALSE " }));
   check("다른 값(on·빈 문자열 아님)은 켜짐으로 본다", isFeatureOn("llm_text_cache", { FEATURE_LLM_TEXT_CACHE: "on" }));
