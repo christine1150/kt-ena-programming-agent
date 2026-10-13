@@ -7,6 +7,7 @@ import { emptyRules, rowHashOf } from "../src/lib/avail/adapters/common";
 import { parseContentAvailRows } from "../src/lib/avail/adapters/contentAvail";
 import { parseStandardRows, standardTemplateRows } from "../src/lib/avail/adapters/standard";
 import type { Grant } from "../src/lib/avail";
+import { memoTtl, clearMemo } from "../src/lib/idealSchedule/memo";
 const channelKeyOf = (c: string | null): string => (c ?? "").toLowerCase().replace(/[s_-]+/g, "");
 
 let passed = 0;
@@ -822,6 +823,28 @@ async function main() {
     // 시즌 표기가 "S2"인 실제 행("라자루스 프로젝트 S2")이 시스템 제목("라자루스프로젝트2")과 연결된다
     const lz = A.evaluateEligibility({ programId: null, programName: "라자루스프로젝트2", episodeNumber: 1 }, slot("2026-09-10", 1200, 1260, "ENA Drama"), ctxG);
     check("실제 파일: 'S2' 표기 행(라자루스 프로젝트 S2)이 시스템 제목 '라자루스프로젝트2'와 연결되고 원본 행이 근거로 붙는다", lz.grantRevisionIds.length >= 1 && lz.sourceRefs.every((r) => r.sheet === "소재"), `${lz.status} ${lz.reasonCodes.join(",")}`);
+  }
+
+  // ── 편성 계산 속도용 짧은 기억(memo.ts) ──
+  {
+    clearMemo();
+    let calls = 0;
+    let clock = 1000;
+    const now = () => clock;
+    const f = async () => ++calls;
+    const a = await memoTtl("k", 100, f, now);
+    const b = await memoTtl("k", 100, f, now);
+    check("memoTtl: TTL 안에서는 다시 읽지 않고 같은 값을 준다", a === 1 && b === 1 && calls === 1);
+    clock += 150;
+    check("memoTtl: TTL이 지나면 새로 읽는다", (await memoTtl("k", 100, f, now)) === 2 && calls === 2);
+    const [x, y] = await Promise.all([memoTtl("c", 100, async () => { await new Promise((r) => setTimeout(r, 5)); return ++calls; }, now), memoTtl("c", 100, f, now)]);
+    check("memoTtl: 동시에 같은 키를 부르면 한 번만 읽고 모두 그 결과를 받는다", x === y);
+    let tries = 0;
+    const flaky = async () => { tries++; if (tries === 1) throw new Error("실패"); return "ok"; };
+    let threw = false;
+    try { await memoTtl("e", 100, flaky, now); } catch { threw = true; }
+    check("memoTtl: 실패는 기억하지 않아 다음 호출이 다시 시도한다", threw && (await memoTtl("e", 100, flaky, now)) === "ok" && tries === 2);
+    check("memoTtl: 키가 다르면 따로 읽고 clearMemo로 비운다", (await memoTtl("other", 100, f, now)) !== a && (clearMemo(), (await memoTtl("k", 100, f, now)) > 2));
   }
 
   // ── 슬롯 게이트: 달력 날짜 묶음 캐시가 정밀 계산과 같은 답을 낸다(AI 탐색 속도, 실측 3초→33초 회귀 방지) ──

@@ -2,6 +2,7 @@
 // DB에는 SELECT만 한다. 계산은 seriesLink.ts(순수)가 한다. 본방 회차 = ratings.is_first_run=true를 같은 방송일·시작시각으로 묶은 방영(재방 제외).
 import { supabase } from "@/lib/supabase";
 import { isFeatureOn } from "@/lib/featureFlags";
+import { memoTtl } from "./memo";
 import { addDays, hourBucket, isoDow } from "./time";
 import { SERIES_LINKS, normSeriesName, type SeriesLink, type SeriesPriorInput } from "./seriesLink";
 
@@ -94,7 +95,13 @@ export async function loadOneSeriesPrior(args: { channelId: string; link: Series
 }
 
 /** 이 채널에 등록된 연결 중 `names`(이번 주 필수 편성 등 제목)에 새 시즌 제목이 있는 것만 읽는다. names를 주지 않으면 이 채널의 모든 연결. */
-export async function loadSeriesPriorInputs(args: { channelId: string; channelCode: string; kpiLabel: string; asOfDate: string; lookbackDays: number; names?: string[] }): Promise<{ inputs: SeriesPriorInput[]; notes: string[] }> {
+export function loadSeriesPriorInputs(args: { channelId: string; channelCode: string; kpiLabel: string; asOfDate: string; lookbackDays: number; names?: string[] }): Promise<{ inputs: SeriesPriorInput[]; notes: string[] }> {
+  // 과거 방영 자료로 만든 값이라 같은 기준일·타깃이면 같다 — 10분 기억(한 번의 계산에서 두 번·채널 요청마다 되풀이 읽지 않게)
+  const key = `series|${isFeatureOn("series_link") ? "on" : "off"}|${args.channelCode}|${args.kpiLabel}|${args.asOfDate}|${args.lookbackDays}|${(args.names ?? ["*"]).map((n) => normSeriesName(n)).sort().join(",")}`;
+  return memoTtl(key, 600_000, () => loadSeriesPriorInputsUncached(args));
+}
+
+async function loadSeriesPriorInputsUncached(args: { channelId: string; channelCode: string; kpiLabel: string; asOfDate: string; lookbackDays: number; names?: string[] }): Promise<{ inputs: SeriesPriorInput[]; notes: string[] }> {
   const wanted = args.names ? new Set(args.names.map(normSeriesName)) : null;
   const links = SERIES_LINKS.filter((l) => l.channelCode === args.channelCode && (!wanted || wanted.has(normSeriesName(l.target))));
   const inputs: SeriesPriorInput[] = [];

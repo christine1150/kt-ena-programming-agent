@@ -204,12 +204,16 @@ function pickDetail(details: ReplaceDetail[], weekday: number, focus: string | n
 export async function computeAiSuggestion(channelCode: string, asOfDate: string, focus: string | null = null): Promise<AiSuggestion> {
   // 사용자 지시(2026-10-07): "오늘은 화요일인데 AI는 토요일·금요일 편성 변경을 말하고 있다 — 제안이 있으면 해당 요일의 편성에 대해서" → 기준일과 같은 요일 칸만 후보로 쓴다.
   const weekday = isoDow(asOfDate);
+  // 기본 범위에서 못 찾으면 180일로 다시 계산한다 — 그 두 번째 계산의 읽기(DB 대기)를 기다리지 않도록 처음부터 함께 시작해 둔다(결과는 같다).
+  // 기본 범위에서 찾으면 두 번째 결과는 쓰지 않는다(이미 계산 중인 것은 끝까지 가서 캐시에만 남는다).
+  const widePromise = computeReplacePlan(channelCode, asOfDate, 180);
+  widePromise.catch(() => undefined);
   let plan = await computeReplacePlan(channelCode, asOfDate);
   let top = pickDetail(plan.details, weekday, focus);
   let widened: number | null = null;
   if (!top) {
     widened = 180;
-    plan = await computeReplacePlan(channelCode, asOfDate, 180);
+    plan = await widePromise;
     top = pickDetail(plan.details, weekday, focus);
   }
   // 사용자 지시(2026-10-07): 교체 후보가 없으면 "못 찾았다"로 끝내지 말고 시청률이 빠지는 부분의 보완 방안을 제안한다

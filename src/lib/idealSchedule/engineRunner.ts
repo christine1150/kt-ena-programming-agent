@@ -19,6 +19,7 @@ import type { StrategyMode } from "./scoring";
 import { addDays } from "./time";
 import { DEFAULT_SEARCH_DEADLINE_MS } from "./searchControl";
 import { loadSeriesPriorInputs } from "./seriesLinkServer";
+import { memoTtl } from "./memo";
 import { buildExcludedPredicate, exclusionFingerprint, isTitleExcluded, loadActiveExclusions } from "./exclusions";
 import type { OwnAiring, OwnAiringsBundle } from "./types";
 import type { ResidualRow } from "./uncertainty";
@@ -118,9 +119,14 @@ async function loadHistoricalRuntimes(channelId: string, inputs: HardConstraintI
   if (need.length === 0) return out;
   const byName = new Map<string, { min: number; from: string } | null>();
   const special = /스페셜|특집|몰아보기|하이라이트|베스트/;
+  // 이름별 조회는 서로 독립이라 한꺼번에 한다(고유 이름 20여 개를 하나씩 기다리면 3초 가까이 걸렸다). 결과는 같다.
+  const uniq = new Map<string, HardConstraintInput>();
   for (const c of need) {
-    const key = `${c.programId ?? ""}|${c.programName}`;
-    if (!byName.has(key)) {
+    const k = `${c.programId ?? ""}|${c.programName}`;
+    if (!uniq.has(k)) uniq.set(k, c);
+  }
+  await Promise.all([...uniq].map(async ([key, c]) => {
+    {
       const ids = new Set<string>();
       if (c.programId) ids.add(c.programId);
       const safe = c.programName.replace(/[%_,()]/g, " ").trim();
@@ -154,7 +160,9 @@ async function loadHistoricalRuntimes(channelId: string, inputs: HardConstraintI
       }
       byName.set(key, result);
     }
-    const r = byName.get(key);
+  }));
+  for (const c of need) {
+    const r = byName.get(`${c.programId ?? ""}|${c.programName}`);
     if (r) out[c.id] = r;
   }
   return out;
@@ -190,20 +198,30 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
   const deadlineMs = opts.deadlineMs ?? (Number.isFinite(envDeadline) && envDeadline > 0 ? envDeadline : DEFAULT_SEARCH_DEADLINE_MS);
   const asOfDate = req.asOfDate ?? addDays(req.weekStart, -1);
   const channel = await loadChannelRef(req.channelCode);
+  const tStart = Date.now();
   const saved = await loadIdealScheduleConfig(channel.id);
   const config0 = req.configOverride
     ? { ...saved, weights: { ...saved.weights, ...(req.configOverride.weights ?? {}) }, repeat_rules: { ...saved.repeat_rules, ...(req.configOverride.repeat_rules ?? {}) } }
     : saved;
   const config = req.lookbackDays && req.lookbackDays > 0 ? { ...config0, expected_kpi: { ...config0.expected_kpi, lookback_days: Math.min(180, Math.round(req.lookbackDays)) } } : config0;
   const target = req.optimizeTargetLabel ?? null;
-  const [rawBundle, competitorBundle, genreMap, constraintLoad, actualWeek] = await Promise.all([
+  // 서로 기다릴 필요 없는 읽기는 한꺼번에 시작한다(순서대로 기다리면 채널당 읽기만 3~7초였다). 권리(Avail) 게이트 — Avail 자료가 있을 때만 켜진다(없으면 현재 동작 그대로).
+  const rerunCfg = config.structure.rerun_rules;
+  const rightsMode = req.rightsMode ?? "explore";
+  const [rawBundle, competitorBundle, genreMap, constraintLoad, actualWeek, planRows, specs, rights, exclusionRows] = await Promise.all([
     fetchOwnAirings(channel, asOfDate, config, target),
     fetchCompetitorData(req.competitorNames, asOfDate, config.expected_kpi.lookback_days),
-    loadGenreMap(),
+    memoTtl("genreMap", 15_000, () => loadGenreMap()),
     loadConstraintInputs(channel.id, req.weekStart),
     req.includeActualWeek ? fetchWeekAirings(channel, req.weekStart, config, target) : Promise.resolve(null),
+    req.usePlanEpisodes ? loadPlanRows(channel.id, addDays(asOfDate, -config.expected_kpi.lookback_days), addDays(req.weekStart, 6)) : Promise.resolve([] as PlanRow[]),
+    rerunCfg ? loadOriginalSpecs([channel.code, ...(rerunCfg.sister_sources?.[channel.code] ?? [])], addDays(asOfDate, -config.expected_kpi.lookback_days)) : Promise.resolve([] as Awaited<ReturnType<typeof loadOriginalSpecs>>),
+    buildRightsGate(channel.code, req.weekStart, rightsMode),
+    loadActiveExclusions(channel.id, req.weekStart),
   ]);
-  const planRows = req.usePlanEpisodes ? await loadPlanRows(channel.id, addDays(asOfDate, -config.expected_kpi.lookback_days), addDays(req.weekStart, 6)) : [];
+  // 주간 예상 순위용 닐슨 주간 순위도 미리 읽어 둔다(엔진이 끝난 뒤에 읽으면 그만큼 더 기다린다) — 쓰지 않을 수도 있다
+  const tA = Date.now();
+  const weeklyRanksP = channel.primaryTarget ? loadWeeklyRanks(channel.id, resolveRankSheetTargetLabel(channel.primaryTarget), asOfDate, config.expected_kpi.lookback_days).catch(() => []) : null;
   const enriched = enrichAiringsWithPlan(rawBundle.airings, planRows);
   const bundle0 = planRows.length ? { ...rawBundle, airings: enriched.airings } : rawBundle;
   const bundle = target ? withOptimizeTarget(bundle0, target) : bundle0;
@@ -216,18 +234,15 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
     evaluateAirings.push({ label: "ACTUAL", weekStart: req.weekStart, airings: wk.airings });
   }
   // 오리지널 본방 연계 재방(직전회차 재방·직재방) — 주요 콘텐츠 관리 본방 스케줄 + 최근 3달 이 채널 편성에서 배운 직재방 간격
-  const rerunCfg = config.structure.rerun_rules;
-  const specs = rerunCfg ? await loadOriginalSpecs([channel.code, ...(rerunCfg.sister_sources?.[channel.code] ?? [])], addDays(asOfDate, -config.expected_kpi.lookback_days)) : [];
   const rerun = buildRerunConstraints(specs, rawBundle.airings, req.weekStart, channel.code, rerunCfg, config.structure.default_runtime_by_genre);
-  const [historicalRuntime, residuals] = await Promise.all([
+  // 시리즈 연결(seriesLink.ts): 이번 주 필수 편성 제목 중 등록된 새 시즌이 있으면 지난 시즌 본방 회차에서 출발하는 기대값을 읽는다(읽기 전용)
+  const lockInputs = [...constraintLoad.inputs, ...rerun.inputs, ...(req.extraLocks ?? [])];
+  const [historicalRuntime, residuals, series] = await Promise.all([
     loadHistoricalRuntimes(channel.id, constraintLoad.inputs, asOfDate),
     loadBacktestResiduals(channel.id, bundle.kpiLabel, asOfDate),
+    loadSeriesPriorInputs({ channelId: channel.id, channelCode: channel.code, kpiLabel: bundle.kpiLabel, asOfDate, lookbackDays: config.expected_kpi.lookback_days, names: lockInputs.map((c) => c.programName) }),
   ]);
-  // 권리(Avail) 게이트 — Avail 자료가 있을 때만 켜진다(없으면 현재 동작 그대로, 실행 가능 판정은 보류)
-  const rightsMode = req.rightsMode ?? "explore";
-  const rights = await buildRightsGate(channel.code, req.weekStart, rightsMode);
   // 제외 편성(사용자 지시 2026-10-07): 권리 게이트와 같은 slotAllowed 자리에 합쳐, 제외 제목은 AI가 새로 배치하지 못하고 현재 편성에 있어도 교체 대상이 된다.
-  const exclusionRows = await loadActiveExclusions(channel.id, req.weekStart);
   const isExcluded = buildExcludedPredicate(exclusionRows);
   const rightsGate = rights.gate ? rights.gate : null;
   const combinedRights =
@@ -246,10 +261,8 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
           `제외 편성 ${exclusionRows.length}건 적용(${exclusionRows.map((r) => r.program_name).join(", ")}) — 최근 방영 프로그램 ${recentNames.size}개 중 ${droppedNames.length}개가 후보에서 빠졌습니다${droppedNames.length > 0 ? `: ${droppedNames.slice(0, 5).join(", ")}${droppedNames.length > 5 ? " 외" : ""}` : ""}${recentNames.size > 0 && droppedNames.length / recentNames.size >= 0.2 ? " — 편성 가능한 후보가 크게 줄었습니다" : ""}`,
         ]
       : [];
-  // 시리즈 연결(seriesLink.ts): 이번 주 필수 편성 제목 중 등록된 새 시즌이 있으면 지난 시즌 본방 회차에서 출발하는 기대값을 읽는다(읽기 전용)
-  const lockInputs = [...constraintLoad.inputs, ...rerun.inputs, ...(req.extraLocks ?? [])];
-  const series = await loadSeriesPriorInputs({ channelId: channel.id, channelCode: channel.code, kpiLabel: bundle.kpiLabel, asOfDate, lookbackDays: config.expected_kpi.lookback_days, names: lockInputs.map((c) => c.programName) });
   const t1 = Date.now();
+  const tB = t1;
   const result = runIdealScheduleEngine({
     weekStart: req.weekStart,
     asOfDate,
@@ -281,7 +294,7 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
   result.summary.expectedRank =
     result.summary.optimizeTarget.isChannelKpi && channel.primaryTarget && curEval
       ? estimateWeeklyRank(
-          await loadWeeklyRanks(channel.id, resolveRankSheetTargetLabel(channel.primaryTarget), asOfDate, config.expected_kpi.lookback_days),
+          (await weeklyRanksP) ?? [],
           result.summary.expectedAvgRating,
           curEval.expectedAvgRating,
           curEval.weekStart
@@ -296,6 +309,7 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
     asOfDate,
     currentWeekStart,
     warnings: [...constraintLoad.warnings, ...rerun.warnings, ...result.resolution.warnings, ...exclusionNotice, ...series.notes],
-    timingsMs: { load: t1 - t0, engine: t2 - t1 },
+    // readA = 채널·설정 확인 뒤 첫 묶음 읽기, readB = 그다음 묶음(과거 길이·잔차·시리즈) — 느릴 때 어느 쪽인지 보려고 남긴다
+    timingsMs: { load: t1 - t0, engine: t2 - t1, readA: tA - tStart, readB: tB - tA },
   };
 }

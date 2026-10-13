@@ -2,6 +2,7 @@
 // broadcast_date <= as_of를 SQL에서 강제하므로(백테스트 미래 데이터 차단) 여기서는 조회만 하고
 // 형태 변환은 mapping.ts(순수 함수)에 맡긴다.
 import { supabase } from "@/lib/supabase";
+import { memoTtl } from "./memo";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import type { IdealScheduleConfig } from "./config";
 import { mapCompetitorData, mapOwnAirings, SKYUHD_KPI_KEY, targetLabelsToFetch, type RawCompetitor, type RawOwn } from "./mapping";
@@ -15,7 +16,12 @@ export interface ChannelRef {
   kpiLabel: string;
 }
 
-export async function loadChannelRef(channelCode: string): Promise<ChannelRef> {
+export function loadChannelRef(channelCode: string): Promise<ChannelRef> {
+  // 채널 이름·KPI 타깃은 거의 바뀌지 않아 5분 기억한다(한 번의 편성 계산에서 여러 번 부른다)
+  return memoTtl(`channelRef|${channelCode}`, 300_000, () => loadChannelRefUncached(channelCode));
+}
+
+async function loadChannelRefUncached(channelCode: string): Promise<ChannelRef> {
   const { data, error } = await supabase.from("channels").select("id, code, primary_target").eq("code", channelCode).maybeSingle();
   if (error || !data) throw new Error(`채널을 찾을 수 없습니다: ${channelCode}`);
   const kpiLabel = data.code === "SKYUHD" || !data.primary_target ? SKYUHD_KPI_KEY : resolveProgramLevelTargetLabel(data.primary_target);
