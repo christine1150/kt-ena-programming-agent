@@ -21,6 +21,8 @@ import { buildRunScorer, candidateOf } from "./workingContext";
 type Row = Record<string, unknown>;
 
 const SWAPPABLE = ["AI", "MANUAL_OVERRIDE"];
+/** 이 편성안에서만 풀 수 있는 고정 상태(필수 편성·직접 고정) */
+const RELEASABLE = ["REQUIRED", "LOCKED"];
 
 /** 교체 때 붙은 기록은 재평가해도 지우지 않는다 */
 const KEEP_REASON_CODES = new Set(["MANUAL_SEARCH", "RIGHTS_AT_SWAP"]);
@@ -179,6 +181,35 @@ export async function setLockWithLog(runId: string, blockId: string, locked: boo
   const before = snapshotOf(block);
   const updated = await writeBlock(runId, blockId, { locked }, actor);
   const rec = recordEdit(log, { kind: locked ? "LOCK" : "UNLOCK", blockId, slot: { weekday: Number(block.weekday), startMin: Number(block.start_min), endMin: Number(block.end_min) }, before, after: snapshotOf(updated), reason: null, actor, at: new Date().toISOString(), rights: null, from: String(block.program_name), to: String(block.program_name) });
+  if (!rec.ok) {
+    await writeBlock(runId, blockId, before as unknown as Row, actor).catch(() => null);
+    throw new ClientError(rec.message);
+  }
+  try {
+    return { block: updated, working: await finish(runId, run, withBlock(blocks, updated), rec.log, evaluation) };
+  } catch (e) {
+    await writeBlock(runId, blockId, before as unknown as Row, actor).catch(() => null);
+    throw e;
+  }
+}
+
+/**
+ * 필수·고정 편성 잠금 해제 — 자물쇠를 눌러 이 *편성안에서만* 그 칸을 풀어 교체할 수 있게 한다(수동 변경 상태로 바뀜).
+ * 필수 편성 설정(주요 콘텐츠 관리·직접 입력한 필수 편성) 자체는 그대로라서, 풀고 나서 다른 프로그램으로 바꾸면 확정 준비 검사에서
+ * '필수·고정 편성 이탈'로 확정 불가가 된다. 이력에 남아 실행 취소할 수 있고, [다시 계산]은 '수동 변경 유지'를 고르지 않으면 필수 편성을 다시 적용한다.
+ */
+export async function releaseFixedWithLog(runId: string, blockId: string, actor: Actor, opts: { reason?: unknown; baseSeq?: unknown } = {}): Promise<EditResult> {
+  const { run, blocks, log, evaluation } = await loadForEdit(runId);
+  checkSeq(log, opts.baseSeq);
+  const block = blocks.find((b) => b.id === blockId && (b.layer ?? "IDEAL") === "IDEAL");
+  if (!block || !RELEASABLE.includes(String(block.status))) throw new ClientError("필수·고정 편성이 아닌 칸이라 풀 수 없습니다.");
+  if (log.entries.slice(0, log.cursor).length >= MAX_ENTRIES) throw new ClientError(`수정 이력이 ${MAX_ENTRIES}건에 도달했습니다 — 이 작업본을 저장하고 [다시 계산]으로 새 편성안을 만들어 주세요.`);
+  const before = snapshotOf(block);
+  const prevStatus = String(block.status);
+  const baseReasons = Array.isArray(block.reasons) ? (block.reasons as unknown[]) : [];
+  const reasons = [...baseReasons, { code: "FIXED_RELEASED", value: prevStatus, detail: `${prevStatus === "REQUIRED" ? "필수 편성" : "고정 편성"} 잠금을 이 편성안에서 풀었습니다(설정은 그대로)` }];
+  const updated = await writeBlock(runId, blockId, { status: "MANUAL_OVERRIDE", locked: false, reasons }, actor);
+  const rec = recordEdit(log, { kind: "RELEASE", blockId, slot: { weekday: Number(block.weekday), startMin: Number(block.start_min), endMin: Number(block.end_min) }, before, after: snapshotOf(updated), reason: cleanReason(opts.reason), actor, at: new Date().toISOString(), rights: null, from: String(block.program_name), to: String(block.program_name) });
   if (!rec.ok) {
     await writeBlock(runId, blockId, before as unknown as Row, actor).catch(() => null);
     throw new ClientError(rec.message);

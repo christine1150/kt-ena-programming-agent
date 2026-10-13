@@ -496,6 +496,32 @@ function IdealSchedulePage() {
     await loadRun(runId);
   }
 
+  /**
+   * 편성표 칸의 자물쇠를 눌러 잠금 해제. 필수·고정 편성은 이 편성안에서만 풀린다(필수 편성 설정은 그대로 — 풀고 다른 프로그램으로 바꾸면
+   * 확정 준비 검사에서 '필수 편성 이탈'로 확정할 수 없다). 직접 잠근 칸은 바로 푼다. 모두 수정 이력에 남아 실행 취소할 수 있다.
+   */
+  async function unlockBlock(b: BlockRow) {
+    if (!runId || busy) return;
+    const fixedStatus = b.status === "REQUIRED" || b.status === "LOCKED";
+    if (fixedStatus && !window.confirm(`'${b.program_name}'은(는) ${b.status === "REQUIRED" ? "필수 편성" : "고정 편성"}입니다.
+
+이 편성안에서만 잠금을 풀어 교체할 수 있게 합니다. 필수 편성 설정 자체는 바뀌지 않으며, 다른 프로그램으로 바꾸면 확정 준비 검사에서 '필수 편성 이탈'로 확정할 수 없습니다. 실행 취소로 되돌릴 수 있습니다.
+
+잠금을 풀까요?`)) return;
+    setBusy("잠금을 풀고 있습니다…");
+    setEditNote(null);
+    const r = await fetch(`/api/scheduling/ideal-schedule/${runId}/blocks/${b.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(fixedStatus ? { action: "release", baseSeq: view?.working?.editSeq } : { action: "lock", locked: false, baseSeq: view?.working?.editSeq }),
+    });
+    const j = await r.json().catch(() => null);
+    setBusy(null);
+    if (!j?.ok) return setError(`${j?.message ?? (r.status === 403 ? "편성 수정 권한이 없습니다." : "잠금을 풀지 못했습니다.")} (편성안은 바뀌지 않았습니다.)`);
+    setEditNote({ tone: "ok", text: fixedStatus ? `'${b.program_name}'의 잠금을 이 편성안에서 풀었습니다 — 이제 교체할 수 있습니다. 실행 취소로 되돌릴 수 있습니다.` : `'${b.program_name}'의 잠금을 풀었습니다.` });
+    await loadRun(runId);
+  }
+
   /** 실행 취소·다시 실행·재평가 — 실패하면 이전 편성안이 그대로임을 알린다. 다른 화면에서 바뀌었으면 서버가 거부한다(editSeq). */
   async function editAction(action: "undo" | "redo" | "reevaluate", quiet = false) {
     if (!runId) return;
@@ -727,6 +753,7 @@ function IdealSchedulePage() {
           decimals={decimals}
           selectedId={selectedId}
           onSelect={(b) => selectBlock(b.id)}
+          onUnlock={printing ? undefined : unlockBlock}
           gaps={view.run.gaps}
           pxPerMin={ppm}
           highlightHour={focusHour}

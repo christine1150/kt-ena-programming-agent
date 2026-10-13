@@ -2,10 +2,11 @@
 // Swap은 저장된 대체 후보(엔진이 같은 자리 기준으로 계산한 값)로만 교체하며 MANUAL_OVERRIDE + LOCK이 된다.
 // OPT06: 교체도 권리 판정을 거친다(권리상 불가 거부 · 조건부/미확인은 검토안만). 수정은 이력에 남아 실행 취소할 수 있고, 변경 이유를 함께 받는다.
 // 권한은 권한표(admin/permissions.ts)의 schedule_edit 한 곳에서 판정한다.
+// 단계 16 이후: release = 필수·고정 편성의 자물쇠를 눌러 이 편성안에서만 풀기(이력·실행 취소 가능, 설정은 그대로).
 import { NextResponse } from "next/server";
 import { bad, fail, requireActor, requireActorFor } from "@/lib/idealSchedule/apiUtil";
 import { loadCandidatesWithRights } from "@/lib/idealSchedule/blockCandidates";
-import { setLockWithLog, swapWithLog } from "@/lib/idealSchedule/workingCopy";
+import { releaseFixedWithLog, setLockWithLog, swapWithLog } from "@/lib/idealSchedule/workingCopy";
 
 type Ctx = { params: Promise<{ runId: string; blockId: string }> };
 
@@ -37,7 +38,11 @@ export async function PATCH(request: Request, { params }: Ctx) {
       const r = await setLockWithLog(runId, blockId, body.locked, auth.actor, { baseSeq: body.baseSeq });
       return NextResponse.json({ ok: true, block: r.block, working: r.working });
     }
-    return bad("action은 swap 또는 lock이어야 합니다.");
+    if (body?.action === "release") {
+      const r = await releaseFixedWithLog(runId, blockId, auth.actor, { reason: body.reason, baseSeq: body.baseSeq });
+      return NextResponse.json({ ok: true, block: r.block, working: r.working });
+    }
+    return bad("action은 swap·lock·release 중 하나여야 합니다.");
   } catch (e) {
     return fail(e);
   }

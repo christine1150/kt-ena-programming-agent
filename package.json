@@ -23,6 +23,7 @@
     "test:traceability": "tsx scripts/test-traceability.ts",
     "gen:traceability": "tsx scripts/gen-traceability.ts",
     "dryrun:engine": "node --env-file=.env --import tsx scripts/dryrun-engine-diff.ts",
+    "forecast:series": "node --env-file=.env --import tsx scripts/series-forecast.ts",
     "retrospective": "node --env-file=.env --import tsx scripts/retrospective.ts",
     "test:workspace": "tsx scripts/test-workspace.ts",
     "test:portfolio": "tsx scripts/test-portfolio.ts",

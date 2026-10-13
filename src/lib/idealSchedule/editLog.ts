@@ -48,7 +48,8 @@ export function snapshotOf(row: Record<string, unknown>): BlockSnapshot {
   return out as BlockSnapshot;
 }
 
-export type EditKind = "SWAP" | "LOCK" | "UNLOCK";
+/** RELEASE: 필수·고정 편성을 이 편성안에서만 풀어 교체할 수 있게 함(필수 편성 설정 자체는 바뀌지 않는다) */
+export type EditKind = "SWAP" | "LOCK" | "UNLOCK" | "RELEASE";
 
 export interface EditEntry {
   seq: number;
@@ -142,7 +143,7 @@ export function historyLines(log: EditLog): { seq: number; applied: boolean; kin
       seq: e.seq,
       applied: i < log.cursor,
       kind: e.kind,
-      text: e.kind === "SWAP" ? `${e.from} → ${e.to}` : e.kind === "LOCK" ? `${e.from} 잠금` : `${e.from} 잠금 해제`,
+      text: e.kind === "SWAP" ? `${e.from} → ${e.to}` : e.kind === "LOCK" ? `${e.from} 잠금` : e.kind === "RELEASE" ? `${e.from} 필수·고정 해제(이 편성안에서만)` : `${e.from} 잠금 해제`,
       reason: e.reason,
       actor: e.actor,
       at: e.at,

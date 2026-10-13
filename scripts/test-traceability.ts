@@ -12,6 +12,7 @@ import { renderTraceabilityMd } from "./lib/traceabilityRender";
 import { compareRankRecords, planBackfill, renderDryRunMarkdown, ROLLBACK_STEPS, type RankRecord } from "../src/lib/ops/dryRun";
 import { summarizeByChannelTarget, summarizeByTarget, summarizeRetro, renderRetroMarkdown, type WeekResult } from "../src/lib/ops/retrospective";
 import { FEATURE_FLAGS, isFeatureOn } from "../src/lib/featureFlags";
+import { quantile, seriesForecast } from "../src/lib/ops/seriesForecast";
 
 let passed = 0;
 const failures: string[] = [];
@@ -143,6 +144,19 @@ const rec = (over: Partial<RankRecord> = {}): RankRecord => ({ date: "2026-10-04
   check("운영 문서 목차가 6종을 모두 연결한다", guides.slice(1).every((g) => read("docs/operations/README.md").includes(path.basename(g))));
   const dict = exists("docs/operations/지표_사전.md") ? read("docs/operations/지표_사전.md") : "";
   check("지표 사전: 표준 용어(콘텐츠·도달률·시청시간 비율)를 쓰고 금지 표기가 없다", dict.includes("도달률") && dict.includes("시청시간 비율") && !/컨텐츠|도달율/.test(dict.split("\n").filter((l) => !l.includes("원본 용어:")).join("\n")));
+}
+
+// ── 9. 시리즈 기준 예상(읽기 전용 계산) ──────────────────────
+{
+  const s3a = [0.555, 0.684, 0.332, 0.703, 0.819, 1.185, 1.125, 1.046, 0.745, 0.798, 0.94, 0.564, 0.813, 1.117, 0.747];
+  const f = seriesForecast({ episodes: s3a, levelRatio: 0.9 });
+  check("시리즈 예상: 회차 평균·중앙값·첫 3회·종반 6회", !!f && f.n === 15 && Math.abs(f.mean - 0.8115) < 1e-3 && Math.abs(f.median - 0.798) < 1e-9 && Math.abs(f.firstThreeMean - 0.5237) < 1e-3 && Math.abs(f.lastSixMean - 0.8298) < 1e-3);
+  check("시리즈 예상: 보정 비율을 곱한 값과 회차 범위", !!f && Math.abs(f.scaled.seasonMean - f.mean * 0.9) < 1e-12 && Math.abs(f.scaled.premiere - 0.555 * 0.9) < 1e-12 && f.scaled.low < f.scaled.seasonMean && f.scaled.seasonMean < f.scaled.high);
+  check("시리즈 예상: 분위수는 선형 보간", Math.abs(quantile([1, 2, 3, 4], 0.5) - 2.5) < 1e-12 && quantile([5], 0.9) === 5 && Number.isNaN(quantile([], 0.5)));
+  check("시리즈 예상: 3회 미만이면 시즌 수준을 말하지 않는다(null), 값 없는 회차는 건너뛴다", seriesForecast({ episodes: [0.5, 0.6], levelRatio: 1 }) === null && seriesForecast({ episodes: [0.5, null, 0.6, 0.7], levelRatio: 1 })?.n === 3);
+  check("시리즈 예상: 보정 비율이 0 이하이면 거부", (() => { try { seriesForecast({ episodes: [1, 2, 3], levelRatio: 0 }); return false; } catch { return true; } })());
+  const sf = code("scripts/series-forecast.ts");
+  check("시리즈 예상 스크립트도 DB에 쓰지 않는다", exists("scripts/series-forecast.ts") && !/\.(insert|update|upsert|delete)\s*\(|\.rpc\s*\(/.test(sf) && sf.includes(".select("));
 }
 
 console.log(`\n${passed}개 통과, ${failures.length}개 실패`);

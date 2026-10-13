@@ -268,6 +268,23 @@ export function BlockDrawer({
           <section>
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-semibold text-zinc-500">대체 후보</h4>
+              {(block.status === "REQUIRED" || block.status === "LOCKED") && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    if (window.confirm(`'${block.program_name}'은(는) ${block.status === "REQUIRED" ? "필수 편성" : "고정 편성"}입니다.
+
+이 편성안에서만 잠금을 풀어 교체할 수 있게 합니다. 필수 편성 설정 자체는 바뀌지 않으며, 다른 프로그램으로 바꾸면 확정 준비 검사에서 '필수 편성 이탈'로 확정할 수 없습니다. 실행 취소로 되돌릴 수 있습니다.
+
+잠금을 풀까요?`)) patch({ action: "release" });
+                  }}
+                  className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                  title="이 편성안에서만 잠금을 풉니다(필수 편성 설정은 그대로)"
+                >
+                  🔓 {block.status === "REQUIRED" ? "필수 편성" : "고정 편성"} 잠금 해제
+                </button>
+              )}
               {(block.status === "AI" || block.status === "MANUAL_OVERRIDE") && (
                 <button
                   type="button"
@@ -279,7 +296,7 @@ export function BlockDrawer({
                 </button>
               )}
             </div>
-            {!swappable && <p className="mt-2 text-xs text-zinc-500">필수 편성·잠금 편성은 교체할 수 없습니다.</p>}
+            {!swappable && <p className="mt-2 text-xs text-zinc-500">필수 편성·잠금 편성은 교체할 수 없습니다. 위 &lsquo;잠금 해제&rsquo; 버튼(또는 편성표의 자물쇠)을 누르면 이 편성안에서만 풀립니다.</p>}
             {error && <p className="mt-2 text-xs text-rose-600" role="alert">{error}</p>}
             {cands === null ? (
               <p className="mt-2 text-xs text-zinc-400" role="status">불러오는 중…</p>

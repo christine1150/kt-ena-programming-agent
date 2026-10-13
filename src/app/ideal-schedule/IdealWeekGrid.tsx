@@ -6,6 +6,7 @@
 // 빗금 = 근거 부족(장르·채널 평균 추정), 우하단 작은 배지 = 지난주 실제 편성 대비 변경. 편성 여백은 빗금 대신
 // 점선 칸으로 바꿔 근거 부족 빗금과 헷갈리지 않게 했다. 확대·한눈 맞춤은 pxPerMin으로만 조절하고 공용 상수는
 // 건드리지 않는다(ENA 주간 비교 화면 영향 없음). 경쟁사 실제 시청률의 빨강/파랑 의미는 쓰지 않는다(설계 문서 J절).
+import { Fragment } from "react";
 import { DOW_LABELS, GRID_END_MIN, GRID_START_MIN, HOUR_TICKS, PX_PER_MIN, addDaysLocal, intensityColor, minToLabel } from "@/lib/scheduleGridLayout";
 import { STATUS_LABEL, evidenceGrade, premiereBlockIds, type BlockRow } from "./model";
 
@@ -35,7 +36,10 @@ export function IdealWeekGrid({
   hideOnPrint = false,
   highlightHour = null,
   refWord = "지난주",
+  onUnlock,
 }: {
+  /** 필수·고정·직접 잠금 칸의 자물쇠를 누르면 호출 — 이 편성안에서만 풀어 교체할 수 있게 한다(없으면 자물쇠는 표시만) */
+  onUnlock?: (b: BlockRow) => void;
   /** 기준 주 표기("지난주"는 실제 지난주일 때만, 아니면 기간 — 단계 10) */
   refWord?: string;
   blocks: BlockRow[];
@@ -175,10 +179,12 @@ export function IdealWeekGrid({
                           : "1px solid rgba(0,0,0,0.06)";
                   const statusText = isGhost ? "미리보기" : (STATUS_LABEL[b.status] ?? b.status);
                   const diffText = d && d.changed ? (d.diff !== null ? ` · ${refWord} 〈${d.currentName ?? "-"}〉 대비 ${d.diff >= 0 ? "+" : "−"}${Math.abs(d.diff).toFixed(decimals)}` : ` · ${refWord} 〈${d.currentName ?? "없음"}〉에서 교체`) : d ? ` · ${refWord}와 같음` : "";
+                  // 자물쇠 버튼: 칸 버튼 안에 또 버튼을 넣을 수 없어 칸 모서리에 따로 둔다(키보드·낭독기로도 누를 수 있음)
+                  const canUnlock = !!onUnlock && !isCurrent && !isGhost && (fixed || b.locked) && height >= 22;
                   return (
+                    <Fragment key={b.id}>
                     <button
                       type="button"
-                      key={b.id}
                       data-block-id={b.id}
                       onClick={() => onSelect?.(b)}
                       className="absolute left-0 right-0 overflow-hidden px-1 text-left transition-opacity"
@@ -210,7 +216,7 @@ export function IdealWeekGrid({
                         // 줄바꿈(임의 축약 금지 규칙 유지, 전체 이름은 툴팁). 시작 분·<본> 표시와 겹치지 않게 위 여백.
                         <div className={`flex h-full flex-col items-center justify-center gap-0.5 leading-tight ${(minute !== 0 || premiere) && height >= 30 ? "pt-2" : ""}`}>
                           <div className="flex w-full min-w-0 items-center justify-center gap-0.5">
-                            {fixed && !isGhost && (
+                            {fixed && !isGhost && !canUnlock && (
                               <svg viewBox="0 0 12 12" className="h-2 w-2 shrink-0" fill={ink} aria-label="고정">
                                 <path d="M3 5V3.5a3 3 0 0 1 6 0V5h.5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-5a.5.5 0 0 1 .5-.5H3Zm1.2 0h3.6V3.5a1.8 1.8 0 0 0-3.6 0V5Z" />
                               </svg>
@@ -273,6 +279,25 @@ export function IdealWeekGrid({
                         )
                       )}
                     </button>
+                    {canUnlock && (
+                      <button
+                        type="button"
+                        data-unlock-id={b.id}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          onUnlock?.(b);
+                        }}
+                        aria-label={`${name} ${fixed ? (b.status === "REQUIRED" ? "필수 편성" : "고정 편성") : "직접 잠금"} 잠금 해제`}
+                        title={fixed ? "자물쇠를 누르면 이 편성안에서만 잠금을 풉니다(필수 편성 설정은 그대로)" : "자물쇠를 누르면 잠금을 풉니다"}
+                        className="absolute flex h-5 w-5 items-center justify-center rounded-full bg-white/90 text-zinc-800 shadow ring-1 ring-zinc-300 hover:bg-white"
+                        style={{ top: top + height - 22, right: 2, zIndex: 3 }}
+                      >
+                        <svg viewBox="0 0 12 12" className="h-3 w-3" fill="currentColor" aria-hidden="true">
+                          <path d="M3 5V3.5a3 3 0 0 1 6 0V5h.5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-5a.5.5 0 0 1 .5-.5H3Zm1.2 0h3.6V3.5a1.8 1.8 0 0 0-3.6 0V5Z" />
+                        </svg>
+                      </button>
+                    )}
+                    </Fragment>
                   );
                 })}
               </div>

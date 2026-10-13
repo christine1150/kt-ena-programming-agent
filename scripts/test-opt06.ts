@@ -179,6 +179,28 @@ async function main() {
     check("이유는 공백 정리·200자 제한, 빈 문자열은 null", L.cleanReason("  경쟁작   대응 ") === "경쟁작 대응" && L.cleanReason("x".repeat(500))?.length === 200 && L.cleanReason("   ") === null && L.cleanReason(5) === null);
     check("깨진 저장 JSON은 null(빈 이력으로 시작)", L.parseLog(null) === null && L.parseLog({ seq: 1, cursor: 5, entries: [], baseVersion: "x" }) === null && L.parseLog(log) !== null);
     check("스냅샷은 수동 교체가 바꾸는 열 전체를 담는다(복원 정확성)", L.EDIT_COLUMNS.includes("candidate_key") && L.EDIT_COLUMNS.includes("expected_kpi") && L.EDIT_COLUMNS.includes("reasons") && L.EDIT_COLUMNS.includes("locked") && L.EDIT_COLUMNS.includes("status"));
+    // 필수·고정 잠금 해제(RELEASE): 자물쇠를 눌러 이 편성안에서만 푼다 — 이력·실행 취소·확정 준비 검사와 어긋나지 않아야 한다
+    {
+      const reqSnap = L.snapshotOf({ candidate_key: "필수쇼|FIRST", program_name: "필수쇼", program_key: "필수쇼", status: "REQUIRED", locked: true });
+      const freeSnap = L.snapshotOf({ candidate_key: "필수쇼|FIRST", program_name: "필수쇼", program_key: "필수쇼", status: "MANUAL_OVERRIDE", locked: false });
+      const rel = L.recordEdit(L.emptyLog("P0"), { kind: "RELEASE", blockId: "r1", slot: { weekday: 6, startMin: 1190, endMin: 1330 }, before: reqSnap, after: freeSnap, reason: "경쟁작 대응", actor: "pd:1", at: NOW, rights: null, from: "필수쇼", to: "필수쇼" });
+      check("필수 잠금 해제: 이력에 남고 줄 문구가 '필수·고정 해제(이 편성안에서만)'", rel.ok && L.historyLines(rel.log)[0].text.includes("필수·고정 해제") && L.historyLines(rel.log)[0].kind === "RELEASE");
+      check("필수 잠금 해제는 내용 수정 칸으로 세지 않는다(프로그램이 그대로)", rel.ok && L.netEditedBlocks(rel.log).length === 0);
+      const undone = rel.ok ? L.undoStep(rel.log) : null;
+      check("필수 잠금 해제 실행 취소: 수정 전 상태(필수 편성·잠김)를 그대로 복원", !!undone && undone.entry.before.status === "REQUIRED" && undone.entry.before.locked === true && undone.log.cursor === 0);
+      const wc = read("src/lib/idealSchedule/workingCopy.ts");
+      const relSrc = wc.slice(wc.indexOf("export async function releaseFixedWithLog"), wc.indexOf("async function applySnapshot"));
+      check("해제는 필수·고정(REQUIRED·LOCKED)만 대상, 상태는 수동 변경·잠금 꺼짐, 사유 기록", /RELEASABLE = \["REQUIRED", "LOCKED"\]/.test(wc) && relSrc.includes('status: "MANUAL_OVERRIDE", locked: false') && relSrc.includes("FIXED_RELEASED") && relSrc.includes('kind: "RELEASE"'));
+      check("해제도 동시 수정 감지(baseSeq)·이력 한도·실패 시 원복을 지킨다", relSrc.includes("checkSeq(log, opts.baseSeq)") && relSrc.includes("MAX_ENTRIES") && (relSrc.match(/writeBlock\(runId, blockId, before/g) ?? []).length >= 2);
+      const route = read("src/app/api/scheduling/ideal-schedule/[runId]/blocks/[blockId]/route.ts");
+      check("API: PATCH action=release가 schedule_edit 권한 아래에서 해제를 부른다", route.includes('body?.action === "release"') && route.includes("releaseFixedWithLog") && route.indexOf('requireActorFor("schedule_edit")') < route.indexOf('body?.action === "release"'));
+      const grid = read("src/app/ideal-schedule/IdealWeekGrid.tsx");
+      check("편성표: 필수·고정·직접 잠금 칸의 자물쇠가 누를 수 있는 버튼(칸 버튼 안에 중첩하지 않음)", grid.includes("data-unlock-id") && grid.includes("onUnlock?.(b)") && grid.includes("(fixed || b.locked)") && /aria-label=\{`\$\{name\}/.test(grid));
+      const pg = read("src/app/ideal-schedule/page.tsx");
+      check("화면: 필수·고정 해제는 확인을 거쳐 release로, 직접 잠금은 바로 lock=false로, 인쇄 중에는 연결하지 않는다", pg.includes('{ action: "release"') && pg.includes("window.confirm") && pg.includes('{ action: "lock", locked: false') && pg.includes("onUnlock={printing ? undefined : unlockBlock}"));
+      const drawer = read("src/app/ideal-schedule/BlockDrawer.tsx");
+      check("상세 패널에도 필수·고정 잠금 해제 버튼이 있다", drawer.includes('patch({ action: "release" })') && drawer.includes('block.status === "REQUIRED" || block.status === "LOCKED"'));
+    }
     // swapWithLog가 바꾸는 열과 EDIT_COLUMNS가 같은 집합인지 소스로 대조(한쪽만 고치면 되돌리기가 틀어진다)
     const swapSrc = read("src/lib/idealSchedule/workingCopy.ts");
     const upd = swapSrc.slice(swapSrc.indexOf("export async function swapWithLog"), swapSrc.indexOf("export async function setLockWithLog"));
