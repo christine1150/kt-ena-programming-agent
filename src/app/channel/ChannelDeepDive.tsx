@@ -3834,10 +3834,10 @@ function buildScheduleRecommendationNote(
     // 통계 용어 없이 "이 프로그램의 다른 시간대 대비"로 풀어 쓴다(계산 방식 자체는 그대로,
     // 극단값에 흔들리지 않는 중앙값 기준 유지 — 표현만 쉽게).
     if (confidence === "strong" && weakHour !== null) {
-      return `최근 ${weeks}주 분석 결과 ${weakHour}시대 '${programName}'${josaEunNeun(programName)} 이 프로그램의 다른 시간대들보다 점유율이 뚜렷이 낮음(다른 시간대 중앙값의 ${weakShareVsMedianPct?.toFixed(0)}% 수준, ${weakAirCount}회) — 그 시간대만 이동/교체 검토`;
+      return `최근 ${weeks}주 분석 결과 ${weakHour}시대 '${programName}'${josaEunNeun(programName)} 이 프로그램의 다른 시간대들보다 점유율이 뚜렷이 낮음(다른 시간대 보통 수준의 ${weakShareVsMedianPct?.toFixed(0)}% 수준, ${weakAirCount}회) — 그 시간대만 이동/교체 검토`;
     }
     if (confidence === "mild" && weakHour !== null) {
-      return `최근 ${weeks}주 기준 ${weakHour}시대가 '${programName}'의 여러 방영 시간대 중 상대적으로 가장 약함(다른 시간대 중앙값의 ${weakShareVsMedianPct?.toFixed(0)}% 수준) — 우선 점검 대상으로 참고`;
+      return `최근 ${weeks}주 기준 ${weakHour}시대가 '${programName}'의 여러 방영 시간대 중 상대적으로 가장 약함(다른 시간대 보통 수준의 ${weakShareVsMedianPct?.toFixed(0)}% 수준) — 우선 점검 대상으로 참고`;
     }
     return "여러 시간대 반복 편성 프로그램으로, 전체보다 시간대별 판단이 필요하나 뚜렷한 저효율 시간대는 없음";
   }
@@ -6926,13 +6926,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                         {item.slotEfficiency.goldenSlot && (
                                           <span>
                                             <span className="font-semibold text-emerald-700">황금 슬롯</span> {item.slotEfficiency.goldenSlot.hour}시대
-                                            (자기 중앙값의 {item.slotEfficiency.goldenSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.goldenSlot.airCount}회)
+                                            (자기 보통 수준의 {item.slotEfficiency.goldenSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.goldenSlot.airCount}회)
                                           </span>
                                         )}
                                         {item.slotEfficiency.weakSlot && (
                                           <span>
                                             <span className="font-semibold text-rose-700">약세 슬롯</span> {item.slotEfficiency.weakSlot.hour}시대
-                                            (자기 중앙값의 {item.slotEfficiency.weakSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.weakSlot.airCount}회)
+                                            (자기 보통 수준의 {item.slotEfficiency.weakSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.weakSlot.airCount}회)
                                           </span>
                                         )}
                                         {item.slotEfficiency.transferability && (
@@ -8116,7 +8116,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
             </div>
             <p className="mt-3 text-xs text-zinc-400">
-              도달률×시청률 산점도의 사분면 기준은 이 채널의 현재 프로그램들 사이의 중앙값(median)입니다 — 절대 기준이 아니라 상대 비교용입니다.
+              도달률×시청률 산점도의 사분면 기준은 이 채널의 현재 프로그램들 사이의 한가운데 값입니다 — 절대 기준이 아니라 상대 비교용입니다.
             </p>
             {/* Program Momentum Index(2026-08-27, Phase 2 — 사용자 지시로 새 조회 추가) —
                 /api/scheduling/program-momentum. 최근 방영일 실측 vs 최근 4주(28일) 평균 비율. */}

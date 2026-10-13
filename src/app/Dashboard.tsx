@@ -858,13 +858,6 @@ function resolveChannelAction(
   }
   return { line: base.actionLine, kind: base.actionKind, positive: false, extra };
 }
-function AiTag() {
-  return (
-    <span className="mr-1 inline-block rounded bg-[#281fc7] px-1 py-px align-middle text-xs font-bold leading-none text-white" title="시청률 자판기(AI 스마트 편성) 계산 결과">
-      AI
-    </span>
-  );
-}
 function useAiSuggestions(date: string | null, codes: string[], focusJson = "{}"): AiState {
   const codesKey = codes.slice().sort().join(",");
   const key = date && codesKey ? [date, codesKey, focusJson].join("\u0001") : "";
@@ -1217,7 +1210,7 @@ function RankPair({
       <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`} title={`오늘 시장 순위 ${todayRank ?? "-"}위 / 목표: 경쟁채널 중 ${targetRankNum ?? "-"}위`}>
         (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>
         <span className="font-medium">/{targetRankNum ?? "-"}</span>)
-        {baselineAvgRank !== null && baselineAvgRank !== undefined && <span className="ml-1 text-xs font-normal text-zinc-500">4주 평균 {Math.round(baselineAvgRank)}위</span>}
+        {baselineAvgRank !== null && baselineAvgRank !== undefined && <span className="ml-1 text-xs font-normal text-zinc-500" title="최근 4주 평균 순위">{Math.round(baselineAvgRank)}위</span>}
       </span>
     );
   }
@@ -1226,7 +1219,7 @@ function RankPair({
       (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>
       <span className="font-medium">/{targetRankNum ?? "-"}</span>)
       {baselineAvgRank !== null && baselineAvgRank !== undefined && (
-        <span className="ml-1 text-xs font-normal text-zinc-500">4주 평균 {Math.round(baselineAvgRank)}위</span>
+        <span className="ml-1 text-xs font-normal text-zinc-500" title="최근 4주 평균 순위">{Math.round(baselineAvgRank)}위</span>
       )}
     </span>
   );
@@ -1343,12 +1336,10 @@ function ChannelHero({
           재지시(2026-09-20): 프로그램을 지목한 액션(파란색)과, 프로그램 근거 없이 채널
           순위만으로 나온 진단(진한 회색)을 구분해 표시한다. */}
       <p className="mt-2 text-[13px] font-medium" title={actionLine ?? undefined} style={{ color: actionColor(actionKind, actionPositive) }}>
-        {actionKind === "ai" && <AiTag />}
         {actionLine ?? "현재 편성 유지"}
       </p>
       {extra && (
         <p className="mt-1 whitespace-pre-line text-[13px] font-medium" style={{ color: extra.positive ? ACTION_BLUE : ACTION_BLACK }}>
-          <AiTag />
           {extra.text}
         </p>
       )}
@@ -1549,12 +1540,10 @@ function ChannelTile({
           재지시(2026-09-20): 프로그램 지목 액션(파란색)과 순위만으로 나온 진단(진한 회색)을
           구분해 표시한다. */}
       <p className="min-h-[2.7em] text-[11px] font-medium leading-snug" title={actionLine ?? undefined} style={{ color: actionColor(actionKind, actionPositive) }}>
-        {actionKind === "ai" && <AiTag />}
         {actionLine ?? "현재 편성 유지"}
       </p>
       {extra && (
         <p className="text-[11px] font-medium leading-snug" style={{ color: extra.positive ? ACTION_BLUE : ACTION_BLACK }}>
-          <AiTag />
           {extra.text}
         </p>
       )}
@@ -1617,7 +1606,8 @@ function ChannelStatusCard({
             "오늘의 시청률" 카드 자체의 우측 상단으로 옮긴다. 1페이지는 특정 채널 컨텍스트가 없는
             포트폴리오 화면이라 기본 채널을 ENA로 고정하고, 새 탭으로 열어 조회 흐름을 끊지 않는다. */}
       </div>
-      <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-10">
+      {/* 사용자 지시(2026-10-13): ENA 칸은 넓고 나머지 6개 칸은 좁아 줄이 길어진다 — 넓은 화면(xl)에서는 ENA 칸을 줄이고 6개 칸 폭을 넓힌다. */}
+      <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-8 xl:grid-cols-[minmax(340px,1fr)_minmax(0,2.5fr)]">
         {ena && (
           <ChannelHero
             channel={ena}
@@ -1632,7 +1622,7 @@ function ChannelStatusCard({
         {/* 바깥 div는 세로 divider·좌측 여백만, 안쪽 grid는 gap-px + 배경색으로 칸 사이 1px
             격자선만 남기는 표형 배치(테두리 박스 없음) — 두 역할을 한 요소에 겹치면 여백까지
             격자 배경색으로 칠해지므로 분리한다. */}
-        <div className="lg:self-start lg:border-l lg:border-zinc-100 lg:pl-10">
+        <div className="lg:self-start lg:border-l lg:border-zinc-100 lg:pl-8">
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-zinc-100 sm:grid-cols-3">
             {rest.map((c) => (
               <ChannelTile
@@ -4666,7 +4656,6 @@ function ChannelNarrativeCard({
                     <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">
                       액션
                     </span>
-                    {a.kind === "ai" && <AiTag />}
                     {a.line ?? <span className="text-zinc-500">현재 편성 유지</span>}
                     {/* 사용자 지시(2026-09-18): 이 액션의 근거 프로그램이 Page 2 Fit Score로
                         이미 판정된 경우에만 배지를 붙인다(오늘 Page 2 미방문 등으로 계산값이
@@ -4676,7 +4665,6 @@ function ChannelNarrativeCard({
                   {a.extra && (
                     <p className="flex flex-wrap items-center gap-1.5 whitespace-pre-line text-[13.5px] leading-snug font-medium" style={{ color: a.extra.positive ? ACTION_BLUE : ACTION_BLACK }}>
                       <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">대체</span>
-                      <AiTag />
                       {a.extra.text}
                     </p>
                   )}

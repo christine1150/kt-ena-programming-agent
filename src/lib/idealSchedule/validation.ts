@@ -106,7 +106,7 @@ export function slotMedianModel(weeks = 8): ModelSpec {
   };
   return {
     id: `slotmed${weeks}w`,
-    label: `같은 요일·시간대 최근 ${weeks}주 중앙값`,
+    label: `같은 요일·시간대 최근 ${weeks}주 보통 수준(한가운데 값)`,
     build({ train, asOf }) {
       const recent = recentOf(train, asOf, weeks);
       const all = med(recent.map((a) => valueOf(a) as number));
