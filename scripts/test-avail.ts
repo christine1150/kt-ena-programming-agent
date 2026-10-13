@@ -711,6 +711,7 @@ async function main() {
     const failed = await ST.saveImport({ kind: "incremental", scope: null, fileName: "t3.xlsx", fileHash: "h3", sheetSummary: [], planSummary: {}, actor: "a@x.kr" }, many);
     check("저장 중 실패하면 이번 배치가 쌓은 revision만 되돌린다(앞서 쌓은 청크 포함, 이전 권리는 그대로)", !failed.ok && db.rows("avail_grants").length === before && db.rows("avail_batches").some((b) => b.status === "failed"));
 
+    GATE.clearRightsGateCache(); // 30초 기억을 비우고 방금 저장한 권리를 읽는다
     const gateOk = await GATE.buildRightsGate("ENA", "2026-10-05", "explore");
     check("권리가 있으면 게이트가 만들어지고 권리 목록 버전이 지문에 들어간다", gateOk.status === "applied" && !!gateOk.gate && gateOk.gate.fingerprint.endsWith("|explore") && gateOk.gate.unconfirmedInterpretations.length === 5);
     const gate = gateOk.gate!;

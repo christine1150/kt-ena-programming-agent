@@ -18,7 +18,8 @@ export function clearRightsGateCache(): void {
 async function loadAvailStateCached(): Promise<LoadedAvail> {
   if (availCache && Date.now() - availCache.at < AVAIL_CACHE_MS) return availCache.loaded;
   const loaded = await loadAvailState();
-  if (loaded.available && !loaded.error) availCache = { at: Date.now(), loaded };
+  // 권리가 하나도 없는 상태(미입력 설치)는 기억하지 않는다 — 올리는 순간부터 바로 켜져야 한다
+  if (loaded.available && !loaded.error && loaded.state.revisions.length > 0) availCache = { at: Date.now(), loaded };
   return loaded;
 }
 
