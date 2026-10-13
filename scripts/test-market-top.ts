@@ -89,6 +89,8 @@ async function main() {
   ]);
   const flag = (n: string) => regional.find((r) => r.channelName === n)?.householdRegional;
   check("상위 프로그램: 수도권 기준 채널의 가구 값에만 표시(SBS), 전국 채널·자사·가구 값 없는 행은 아님", flag("SBS") === true && flag("tvN") === false && flag("ENA") === false && flag("MBC") === false);
+  const dashSrc = read("src/app/Dashboard.tsx");
+  check("홈 AI 대체 편성: 채널마다 따로 요청해(한 요청에 7개를 몰지 않음) 서버 제한 60초를 넘겨 전부 '계산하지 못했습니다'가 되지 않는다", dashSrc.includes("channels=${encodeURIComponent(code)}") && !dashSrc.includes("channels=${encodeURIComponent(cs)}") && dashSrc.includes("for (const code of cs.split(\",\"))"));
   const purchasePage = read("src/app/ideal-schedule/purchase/page.tsx");
   check("구매 검토: 같은 시간대 경쟁 목록도 가구 타깃일 때 수도권 기준 채널에 별표·주의 문구(예측값은 채널 내 지수라 영향 없음)", purchasePage.includes("t.target === \"HH\" && isRegionalHousehold(c.ch)") && purchasePage.includes("수도권 기준 가구 시청률 — 다른 채널은 전국") && purchasePage.includes("competitorRegion"));
   check("화면: 수도권 기준 가구 값에 별표와 고정 주의 문구, 문구의 근거는 파서가 보존한 A3", comp.includes("householdRegional") && comp.includes("REGIONAL_HOUSEHOLD_CAUTION") && R.REGIONAL_HOUSEHOLD_CAUTION.includes("수도권 기준") && read("src/lib/nielsenDaily.ts").includes("regionNoteFor(sheetName, rows[2]?.[0])") && read("src/lib/nielsenDaily.ts").includes("competitorRegionNotes"));

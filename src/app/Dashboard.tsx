@@ -868,13 +868,25 @@ function useAiSuggestions(date: string | null, codes: string[], focusJson = "{}"
     if (!key) return;
     const [d, cs, fj] = key.split("\u0001");
     const ctrl = new AbortController();
-    const failed = Object.fromEntries(cs.split(",").map((c) => [c, null]));
-    fetch(`/api/dashboard/ai-suggestions?date=${encodeURIComponent(d)}&channels=${encodeURIComponent(cs)}&focus=${encodeURIComponent(fj)}`, { signal: ctrl.signal })
-      .then((r) => r.json())
-      .then((b) => setState({ key, data: b.ok ? b.suggestions : failed }))
-      .catch((e) => {
-        if (e?.name !== "AbortError") setState({ key, data: failed });
-      });
+    let focus: Record<string, string> = {};
+    try {
+      focus = JSON.parse(fj) as Record<string, string>;
+    } catch {
+      focus = {};
+    }
+    // 채널마다 따로 요청한다 — 7개 채널을 한 요청에 몰면 서버 제한 시간(60초)을 넘겨 전부 "계산하지 못했습니다"가 됐다(실측 한 요청 약 79초).
+    // 채널별 요청은 서로 다른 서버 인스턴스에서 병렬로 돌고, 끝나는 채널부터 화면에 채워진다.
+    const put = (code: string, value: AiSuggestionPayload | null) =>
+      setState((prev) => ({ key, data: { ...(prev.key === key ? prev.data : {}), [code]: value } }));
+    for (const code of cs.split(",")) {
+      const f = typeof focus[code] === "string" ? JSON.stringify({ [code]: focus[code] }) : "{}";
+      fetch(`/api/dashboard/ai-suggestions?date=${encodeURIComponent(d)}&channels=${encodeURIComponent(code)}&focus=${encodeURIComponent(f)}`, { signal: ctrl.signal })
+        .then((r) => r.json())
+        .then((b) => put(code, b.ok && b.suggestions && b.suggestions[code] ? b.suggestions[code] : null))
+        .catch((e) => {
+          if (e?.name !== "AbortError") put(code, null);
+        });
+    }
     return () => ctrl.abort();
   }, [key]);
   return state.key === key ? state.data : {};

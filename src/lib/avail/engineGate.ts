@@ -6,7 +6,21 @@ import type { EngineCandidate } from "@/lib/idealSchedule/scoring";
 import { buildEvalContext } from "./context";
 import { unconfirmedKeys } from "./interpretation";
 import { makeSlotGate, type SelectorMode } from "./selector";
-import { loadAvailState } from "./store";
+import { loadAvailState, type LoadedAvail } from "./store";
+
+// 같은 서버 안에서 편성안 계산이 연달아 돌 때(홈 채널 7개·교체안 2회씩) 권리 전체(1천여 건)를 매번 읽지 않도록 30초만 기억한다.
+// 권리·확인을 바꾼 직후에는 최대 30초 늦게 반영될 수 있다(관리자 화면의 현황·확인 목록은 이 기억을 쓰지 않는다).
+const AVAIL_CACHE_MS = 30_000;
+let availCache: { at: number; loaded: LoadedAvail } | null = null;
+export function clearRightsGateCache(): void {
+  availCache = null;
+}
+async function loadAvailStateCached(): Promise<LoadedAvail> {
+  if (availCache && Date.now() - availCache.at < AVAIL_CACHE_MS) return availCache.loaded;
+  const loaded = await loadAvailState();
+  if (loaded.available && !loaded.error) availCache = { at: Date.now(), loaded };
+  return loaded;
+}
 
 export interface RightsGate {
   slotAllowed: (c: EngineCandidate, weekday: number, startMin: number, endMin: number) => boolean;
@@ -27,7 +41,7 @@ export interface RightsGateResult {
 export async function buildRightsGate(channelCode: string, weekStart: string, mode: SelectorMode): Promise<RightsGateResult> {
   if (!isFeatureOn("rights_gate")) return { gate: null, status: "not_configured", message: "권리 판정이 꺼져 있습니다(FEATURE_RIGHTS_GATE=off)." };
   try {
-    const loaded = await loadAvailState();
+    const loaded = await loadAvailStateCached();
     if (!loaded.available || loaded.state.revisions.length === 0) return { gate: null, status: "not_configured", message: loaded.error };
     const built = buildEvalContext(loaded.state, { now: new Date().toISOString() });
     if (built.ctx.grants.length === 0) return { gate: null, status: "not_configured", message: null };
