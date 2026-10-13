@@ -86,6 +86,7 @@ export async function POST(request: Request) {
         timeContext: null,
         usedLlmFallback: true,
         usedFunctionCalling: true,
+        dataAsOf: referenceDate,
         answer: withVizStats(freeform.answer),
       });
     }
@@ -107,7 +108,7 @@ export async function POST(request: Request) {
     }
 
     const answer = buildUnsupportedAnswer(routed.missing);
-    return NextResponse.json({ ok: true, intent_id: null, answer });
+    return NextResponse.json({ ok: true, intent_id: null, dataAsOf: referenceDate, answer });
   }
 
   const answer = await dispatchIntent(routed, question);
@@ -138,6 +139,8 @@ export async function POST(request: Request) {
     parameters: routed.parameters,
     timeContext: routed.timeContext,
     usedLlmFallback,
+    // 데이터 기준일(사용자 지시 2026-10-13, B 에이전트 비교): 답이 DB 의 어느 날짜까지를 본 것인지 화면에 밝힌다. 질문의 "오늘"도 이 날짜를 기준으로 풀린다.
+    dataAsOf: referenceDate,
     answer: withVizStats(finalAnswer),
   });
 }

@@ -60,6 +60,7 @@ export function AskAssistantWidget({
 }: AskAssistantWidgetProps) {
   const [askQuestion, setAskQuestion] = useState("");
   const [askAnswer, setAskAnswer] = useState<AskAnswer | null>(null);
+  const [askDataAsOf, setAskDataAsOf] = useState<string | null>(null);
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
   // ChannelDeepDive.tsx와 동일 — "그럼 지난주는?"류 후속 질문 맥락(최근 3턴, 답변 본문 제외).
@@ -84,6 +85,7 @@ export function AskAssistantWidget({
         setAskAnswer(null);
       } else {
         setAskAnswer(json.answer);
+        setAskDataAsOf(typeof json.dataAsOf === "string" ? json.dataAsOf : null);
         setAskHistory((prev) => [
           ...prev.slice(-2),
           {
@@ -139,6 +141,7 @@ export function AskAssistantWidget({
             <p style={{ color: accentForegroundColor(accentColor) }}>편성 조치: {askAnswer.programmingAction}</p>
           )}
           <p className="text-sm text-zinc-400">신뢰도: {askAnswer.confidenceNote}</p>
+          {askDataAsOf && <p className="text-xs text-zinc-400">데이터 기준일 {askDataAsOf} (이 날짜까지 반영된 자료로 답했습니다)</p>}
           {askAnswer.visualization?.type === "bar" && askAnswer.visualization.series.length > 0 && (
             <div className="mt-1 rounded-xl bg-white p-3 ring-1 ring-zinc-100">
               <p className="mb-2 text-xs font-medium text-zinc-500">{askAnswer.visualization.title}</p>
