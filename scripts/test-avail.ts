@@ -7,6 +7,7 @@ import { emptyRules, rowHashOf } from "../src/lib/avail/adapters/common";
 import { parseContentAvailRows } from "../src/lib/avail/adapters/contentAvail";
 import { parseStandardRows, standardTemplateRows } from "../src/lib/avail/adapters/standard";
 import type { Grant } from "../src/lib/avail";
+const channelKeyOf = (c: string | null): string => (c ?? "").toLowerCase().replace(/[s_-]+/g, "");
 
 let passed = 0;
 const failures: string[] = [];
@@ -799,6 +800,38 @@ async function main() {
     // 시즌 표기가 "S2"인 실제 행("라자루스 프로젝트 S2")이 시스템 제목("라자루스프로젝트2")과 연결된다
     const lz = A.evaluateEligibility({ programId: null, programName: "라자루스프로젝트2", episodeNumber: 1 }, slot("2026-09-10", 1200, 1260, "ENA Drama"), ctxG);
     check("실제 파일: 'S2' 표기 행(라자루스 프로젝트 S2)이 시스템 제목 '라자루스프로젝트2'와 연결되고 원본 행이 근거로 붙는다", lz.grantRevisionIds.length >= 1 && lz.sourceRefs.every((r) => r.sheet === "소재"), `${lz.status} ${lz.reasonCodes.join(",")}`);
+  }
+
+  // ── 영미 드라마 23건 보충 속성: 참고 열 보존 + NBCU 목록 파일 대조(파일이 있을 때만) ──
+  {
+    const ref = A.US_DRAMA_1ST_WINDOW;
+    check("보충 속성 23건 모두 '편성 여부'·'Material' 참고 열 원문을 보존한다(판정에는 쓰지 않음)", ref.length === 23 && ref.every((a) => a.reference && a.reference.source.includes("26 NBCU 드라마 23편.xlsx")));
+    const by = (code: string) => ref.find((a) => a.sourceCode === code)!.reference!;
+    check("참고 열 값: 스위트피 편성 여부 2026-09-19·소재 O, 슈츠 LA 소재 '요청함', 유령마을 소재 빈칸", by("D26081207").scheduling === "2026-09-19" && by("D26081207").material === "O" && by("D26081221").material === "요청함" && by("D26081219").material === null && by("D26081204").scheduling === "10월 편성");
+    const withRef = A.applyAddenda([grant({ id: "NB1", code: "D26081201", title: "더 이래셔널 시즌1", start: "2026-08-31", end: "2028-08-30" })], ref).grants[0];
+    const bare = A.applyAddenda([grant({ id: "NB1", code: "D26081201", title: "더 이래셔널 시즌1", start: "2026-08-31", end: "2028-08-30" })], ref.map((a) => ({ ...a, reference: null }))).grants[0];
+    check("참고 열은 권리 행·판정을 바꾸지 않는다(있어도 없어도 같은 Grant)", JSON.stringify(withRef) === JSON.stringify(bare));
+    const nbcu = process.env.NBCU_LIST_FILE ?? "C:/Users/sky tv/Downloads/26 NBCU 드라마 23편.xlsx";
+    if (!fs.existsSync(nbcu)) console.log(`(NBCU 목록 파일 없음: ${nbcu} — 이 구간은 건너뜁니다)`);
+    else {
+      const XLSX = await import("xlsx");
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(XLSX.read(fs.readFileSync(nbcu)).Sheets["Sheet1"], { header: 1, blankrows: false }).slice(1);
+      const iso = (n: unknown) => (typeof n === "number" ? new Date(Date.UTC(1899, 11, 30) + n * 86400000).toISOString().slice(0, 10) : null);
+      const bad: string[] = [];
+      for (const r of rows) {
+        const a = ref[Number(r[0]) - 1];
+        const st = iso(r[6]);
+        if (!a) { bad.push(`번호 ${r[0]} 없음`); continue; }
+        if (st && a.expected?.startDate !== st) bad.push(`${r[0]} 시작일`);
+        if (a.expected?.episodeCount !== Number(r[8])) bad.push(`${r[0]} 편수`);
+        if (channelKeyOf(a.firstWindowChannel) !== channelKeyOf(String(r[7]))) bad.push(`${r[0]} 1st`);
+        const mat = r[10] === undefined || r[10] === null || String(r[10]).trim() === "" ? null : String(r[10]).trim();
+        if ((a.reference?.material ?? null) !== mat) bad.push(`${r[0]} 소재`);
+        const sc = r[9] === undefined || r[9] === null || String(r[9]).trim() === "" ? null : typeof r[9] === "number" ? iso(r[9]) : String(r[9]).trim();
+        if ((a.reference?.scheduling ?? null) !== sc) bad.push(`${r[0]} 편성여부`);
+      }
+      check("NBCU 목록 파일 23행: 시작일(날짜 값)·편수·1st window 채널·편성 여부·Material이 보충 속성과 모두 같다", rows.length === 23 && bad.length === 0, bad.join(", "));
+    }
   }
 
   // ── 운영자 입력 권리: 채널별 편성 가능 시점(시각 포함) ──

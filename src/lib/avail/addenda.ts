@@ -27,6 +27,8 @@ export interface Addendum {
     firstChannel: string | null;
     freeAfterFirstWindow?: boolean;
   } | null;
+  /** 운영자 목록의 참고 열(원문 그대로) — 판정에는 쓰지 않는다. '편성 여부'·'Material'의 정확한 뜻은 확인 전이라 해석하지 않고 보존만 한다. */
+  reference?: { scheduling: string | null; material: string | null; source: string } | null;
   provenance: string;
 }
 

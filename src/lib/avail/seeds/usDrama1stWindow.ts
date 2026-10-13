@@ -5,7 +5,8 @@
 // 제작년도는 전달받은 값만 넣었다(AMADEUS #01 (2025/26)만 표기). 나머지는 입력 전이다.
 import type { Addendum } from "../addenda";
 
-const BY = "운영자 전달 2026-10-06(영미 드라마 1st window 목록)";
+const BY = "운영자 전달 2026-10-06(영미 드라마 1st window 목록) + 파일 '26 NBCU 드라마 23편.xlsx' Sheet1(2026-10-13)";
+const REF_SOURCE = "26 NBCU 드라마 23편.xlsx Sheet1 '편성 여부'·'Material' 열(2026-10-13, 원문 보존)";
 
 interface Row {
   no: number;
@@ -47,6 +48,17 @@ const ROWS: Row[] = [
   { no: 23, code: "D26081223", title: "올 허 폴트: 그날의 책임", product: "ALL HER FAULT #01", start: "2026-12-15", startYearInferred: true, first: "skyUHD", eps: 8, runtime: 60 },
 ];
 
+// 파일 '26 NBCU 드라마 23편.xlsx' Sheet1의 참고 열(번호 기준). 시작일·1st window 채널·편수는 위 목록과 파일이 같았다(2026-10-13 대조).
+// 편성 여부: O / 미정 / 날짜(엑셀 일련번호 46284=2026-09-19, 46280=2026-09-15) / "10월 편성" / 빈칸. Material: O / 요청함 / 빈칸.
+const FILE_REF: Record<number, { sched: string | null; material: string | null }> = {
+  1: { sched: "O", material: "O" }, 2: { sched: "O", material: "O" }, 3: { sched: "O", material: "O" }, 4: { sched: "O", material: "O" },
+  5: { sched: "미정", material: "O" }, 6: { sched: "2026-09-19", material: "O" }, 7: { sched: "2026-09-15", material: "O" },
+  8: { sched: "10월 편성", material: "O" }, 9: { sched: "10월 편성", material: "O" }, 10: { sched: "10월 편성", material: "O" },
+  11: { sched: null, material: "O" }, 12: { sched: null, material: "O" }, 13: { sched: null, material: "O" }, 14: { sched: null, material: "O" }, 15: { sched: null, material: "O" },
+  16: { sched: null, material: "요청함" }, 17: { sched: null, material: "요청함" }, 18: { sched: null, material: "요청함" }, 19: { sched: null, material: "요청함" },
+  20: { sched: null, material: null }, 21: { sched: null, material: null }, 22: { sched: null, material: null }, 23: { sched: null, material: null },
+};
+
 export const US_DRAMA_1ST_WINDOW: Addendum[] = ROWS.map((r) => ({
   addendumId: `usdrama1w:${r.code}`,
   sourceCode: r.code,
@@ -56,5 +68,6 @@ export const US_DRAMA_1ST_WINDOW: Addendum[] = ROWS.map((r) => ({
   productionYear: r.year ?? null,
   origination: "acquired",
   expected: { displayTitle: r.title, startDate: r.start, startYearInferred: r.startYearInferred, episodeCount: r.eps, runtimeMin: r.runtime, termMonths: 24, firstChannel: r.first, freeAfterFirstWindow: true },
+  reference: FILE_REF[r.no] ? { scheduling: FILE_REF[r.no].sched, material: FILE_REF[r.no].material, source: REF_SOURCE } : null,
   provenance: BY,
 }));
