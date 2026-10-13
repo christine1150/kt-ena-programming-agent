@@ -226,6 +226,17 @@ async function main() {
     const c = ctxOf([grant({ count: 3 })], { ledger: used });
     const r = status(q(), slot(), c);
     check("A07 잔여 0회면 불가(COUNT_EXHAUSTED)", r.status === "unavailable" && has(r, "COUNT_EXHAUSTED"));
+    // 방수 적용 방식(운영자 결정 2026-10-14): 방수는 합산, 일단 경고만 — 판정은 바꾸지 않고 경고(assumptions)로만 남긴다
+    const warn = status(q(), slot(), ctxOf([grant({ count: 3 })], { ledger: used, countPolicy: "warn_only" }));
+    check("방수 경고만(warn_only): 잔여 0이어도 불가·조건부로 만들지 않고 '경고(방수…)'만 남긴다", warn.status === "available" && !has(warn, "COUNT_EXHAUSTED") && warn.assumptions.some((a) => a.startsWith("경고(방수")), `${warn.status} ${warn.assumptions.join("|")}`);
+    check("방수 경고만: 기본(enforce)은 그대로 불가", status(q(), slot(), ctxOf([grant({ count: 3 })], { ledger: used, countPolicy: "enforce" })).status === "unavailable");
+    const unkW = grant({ count: 2, id: "GBW", baseline: "unknown" });
+    const rw = status(q(), slot(), ctxOf([unkW], { countPolicy: "warn_only" }));
+    check("방수 경고만: 기소진을 몰라도 조건부가 되지 않고 경고만(다른 조건은 그대로 판정)", rw.status === "available" && rw.assumptions.some((a) => a.includes("기소진")) && !has(rw, "USAGE_BASELINE_UNKNOWN"));
+    const outOfWindow = status(q(), slot("2027-06-01"), ctxOf([grant({ count: 3, end: "2026-12-31" })], { ledger: used, countPolicy: "warn_only" }));
+    check("방수 경고만이어도 기간·채널·회차 같은 다른 조건은 그대로 불가", outOfWindow.status === "unavailable" && has(outOfWindow, "WINDOW_EXPIRED"));
+    const stateOf = (extra: object) => ({ revisions: [grant()], addenda: [], ledger: [], links: [], confirmations: [], interpretationConfirmations: extra }) as unknown as Parameters<typeof A.buildEvalContext>[0];
+    check("방수 적용 방식: 'countEnforcement=warn_only' 확인이 있어야 경고만, 없으면 enforce, 확인 이전 시점(knownAt)에는 enforce", A.buildEvalContext(stateOf({ countEnforcement: { value: "warn_only", by: "t", at: NOW } }), { now: NOW }).ctx.countPolicy === "warn_only" && A.buildEvalContext(stateOf({}), { now: NOW }).ctx.countPolicy === "enforce" && A.buildEvalContext(stateOf({ countEnforcement: { value: "warn_only", by: "t", at: "2026-10-10T00:00:00Z" } }), { now: NOW, knownAt: "2026-10-01T00:00:00Z" }).ctx.countPolicy === "enforce" && A.buildEvalContext(stateOf({ countEnforcement: { value: "enforce", by: "t", at: NOW } }), { now: NOW }).ctx.countPolicy === "enforce");
     const left = ctxOf([grant({ count: 3 })], { ledger: used.slice(0, 2) });
     const r2 = status(q(), slot(), left);
     check("A07 잔여 1회면 가능하고 잔여를 보여 준다", r2.status === "available" && r2.remaining === 1);

@@ -96,7 +96,7 @@ export const CHECKLIST: TraceItem[] = [
     refs: [T(ADM, "수동 목표 보호: 잠긴 목표를 Channel Master 파일이 덮지 못한다"), T(ADM, "PD 메모는 공식 시청률 사실을 덮을 수 없다"), T(ADM, "수정 EPG가 자동 EPG보다 우선"), T(ADM, "일간 실적이 주간 예정보다 우선"), T(ADM, "PD 수동 리뷰가 계산 리뷰보다 우선")] },
   { id: "O03", group: "운영·Avail", title: "Avail A01~A19 결과표와 실제 양식 어댑터 검증 상태를 정직하게 표시", status: "partial",
     refs: [T(AVL, "A01 다른 채널은 unavailable"), T(AVL, "A19 as-of 이전에는 나중에 입력된 권리가 보이지 않는다"), T(AVL, "A18 평가 결과는 AVAIL_NOT_LOADED")],
-    note: "A01~A19는 합성 자료로 모두 통과하고 그중 A02·A05·A06·A14는 실제 파일 검사도 연결했다(아래 Avail 표). 콘텐츠별 Avail 실제 파일(1,164행)의 열·값 형식·'소재' 시트 판정·원본 행 근거는 확인했다. **채널별 Avail 실제 파일은 아직 없고, 계약 해석 5가지는 권리 담당자 확인 전이다**(AVAIL_ADAPTER_NOTES.md)." },
+    note: "A01~A19는 합성 자료로 모두 통과하고 그중 A02·A05·A06·A14는 실제 파일 검사도 연결했다(아래 Avail 표). 콘텐츠별 Avail 실제 파일(1,164행)의 열·값 형식·'소재' 시트 판정·원본 행 근거는 확인했다. **채널별 Avail 실제 파일은 아직 없다. 계약 해석 5가지는 2026-10-14에 확인했다(방수는 합산이되 경고만)**(AVAIL_ADAPTER_NOTES.md)." },
   { id: "O04", group: "운영·Avail", title: "권리 개정 영향 슬롯 재검증, 공유 풀 동시 예약, 취소·복원, 실적 멱등 반영", status: "verified",
     refs: [T(AVL, "A12 개정 후 기존 초안은 재검증 필요로 바뀐다"), T(AVL, "A08 두 편성자가 동시에 마지막 1회를 잡으면 한 건만 성공"), T(AVL, "A13 해제하면 횟수가 돌아오고 원장에는 이벤트가 남는다"), T(AVL, "A13 실제 방송 실적은 예약을 소진으로 바꾸고, 같은 실적 재수신은 중복 반영하지 않는다")],
     note: "동시 예약은 메모리 원장(합성)에서 한 건만 성공함을 확인했다. DB의 SQL 함수(advisory lock)는 코드 확인만이고 동시 실행은 시험하지 못했다. 편성안 DB 버전 열은 승인 대기이며 확정 준비 검사는 읽기 전용이다." },
@@ -173,7 +173,7 @@ export const FINDINGS: TraceItem[] = [
   { id: "F06", group: "발견사항", title: "홈·상세 액션 충돌", status: "verified", refs: [T(INS, "홈과 상세가 같은 입력이면 같은 action_id·snapshot"), T(WRK, "상승 관측에 MOVE 태그가 붙어도 카드 제목이 '이동 검토'가 되지 않고")] },
   { id: "F07", group: "발견사항", title: "빈 값 0 처리·덮어쓰기", status: "partial", refs: [T(ING, "빈 셀=결측(null), 숫자 0=관측값 0 구분"), T(ING, "같은 날짜 수정본 → 개정 2"), T(ING, "ratings 삽입 실패 → 실패 보고")], note: "닐슨 일간은 닫았다. skyUHD 수기 파일의 빈 시청률 처리와 운영 롤백 정책은 코드 확인만이고 이번 테스트 범위 밖이다." },
   { id: "F08", group: "발견사항", title: "KPI 버전 혼재(run 원시값 분모)", status: "verified", refs: [T(O06, "다른 버전(0.047/0.048 사례)의 값은 쓰지 않는다"), T(O06, "예상값이 달라지면(재평가) 스냅샷 ID도 달라진다")] },
-  { id: "F09", group: "발견사항", title: "Avail(권리) 연결", status: "partial", refs: [T(AVL, "A01 다른 채널은 unavailable"), T(AVL, "A18 탐색은 작동하고 '권리 미확인'으로 표시"), T(AVL, "실제 파일: 1,164행 모두 소재코드로 식별되어 권리 1,164건")], note: "콘텐츠별 Avail 실제 파일 1,164행은 어댑터가 읽고 판정에 연결된다. 운영 DB에는 아직 올리지 않았고(운영자 입력 2건뿐) 계약 해석 확인·채널별 Avail 실제 파일·시스템 프로그램과의 제목 연결 확인(약 절반 미연결, AVAIL_ADAPTER_NOTES 7절)이 남아 있다." },
+  { id: "F09", group: "발견사항", title: "Avail(권리) 연결", status: "partial", refs: [T(AVL, "A01 다른 채널은 unavailable"), T(AVL, "A18 탐색은 작동하고 '권리 미확인'으로 표시"), T(AVL, "실제 파일: 1,164행 모두 소재코드로 식별되어 권리 1,164건")], note: "콘텐츠별 Avail 실제 파일 1,164행은 어댑터가 읽고 판정에 연결된다. 운영 DB에는 2026-10-13에 올렸고 계약 해석도 확인했다. 시스템 프로그램과의 제목 연결 확인(약 절반 미연결, AVAIL_ADAPTER_NOTES 7절)·채널별 Avail 실제 파일이 남아 있다." },
   { id: "F10", group: "발견사항", title: "예측 검증 수준(구간·표본 독립성)", status: "partial", refs: [T(O05, "시나리오 구간 포함률"), T(O02, "고유 프로그램·방송일·목표 주 수를 함께 낸다")], note: "합격선 승인 대기, 후보 간 구간 겹침 자동 판정 없음(P03 참고)." },
   { id: "F11", group: "발견사항", title: "주간 '36위 이내' 표기", status: "partial", refs: [T(IDL, "예상 순위: 지난주 닐슨 시청률을 기대 비율만큼 옮겨 실적 사이 보간")], note: "표기는 '약 N위·N위 이내·N위 밖'으로 한계를 드러내지만, 경쟁 채널 편성 변화는 반영되지 않는다는 고지는 툴팁 수준이다." },
   { id: "F12", group: "발견사항", title: "인과 단정", status: "verified", refs: [T(INS, "인과 단정(때문에)은 차단"), T(INS, "'~에 밀림' 같은 인과 서술도 차단"), T(WRK, "카드 문구가 원인을 단정하지 않는다")] },
@@ -187,7 +187,7 @@ export const FINDINGS: TraceItem[] = [
 ];
 
 // 합성 사례 + 실제 Avail 파일 검사가 모두 연결된 항목(실제 파일 검사는 파일이 있을 때만 실행)
-const availReal = (id: string, title: string, find: string, real: string[]): TraceItem => ({ id, group: "Avail", title, status: "verified_original", refs: [T(AVL, find), ...real.map((f) => T(AVL, f))], note: "합성 사례와 실제 Avail 파일(Contents Availlist_260930, 1,164행)로 확인했다 — 파일이 있을 때만 실행되는 검사(없으면 건너뜀). 계약 해석 5가지는 권리 담당자 확인 전이다." });
+const availReal = (id: string, title: string, find: string, real: string[]): TraceItem => ({ id, group: "Avail", title, status: "verified_original", refs: [T(AVL, find), ...real.map((f) => T(AVL, f))], note: "합성 사례와 실제 Avail 파일(Contents Availlist_260930, 1,164행)로 확인했다 — 파일이 있을 때만 실행되는 검사(없으면 건너뜀). 계약 해석 5가지는 2026-10-14에 확인했다." });
 const avail = (id: string, title: string, find: string): TraceItem => ({ id, group: "Avail", title, status: "needs_real_data", refs: [T(AVL, find)], note: "합성 자료로 통과. 실제 Avail 양식에서의 동작은 미검증." });
 export const AVAIL_CASES: TraceItem[] = [
   avail("A01", "허용 채널과 다른 채널: 제외 사유 표시", "A01 다른 채널은 unavailable + 사유 + 원본 행"),

@@ -61,6 +61,8 @@ export interface EvalContext {
   scheduleRevisionId?: string | null;
   /** 운영자가 '오리지널'로 표시한 프로그램 ID(장르 표시와 별개) */
   originalProgramIds?: string[];
+  /** 방수(횟수) 한도 적용 방식 — enforce(기본): 잔여 0은 불가·기소진 모름은 조건부 / warn_only(운영자 결정 2026-10-14): 판정은 바꾸지 않고 경고만 남긴다 */
+  countPolicy?: "enforce" | "warn_only";
 }
 
 export interface Reason {
@@ -327,21 +329,26 @@ function evalGrant(g: Grant, q: ContentQuery, episode: number | null, slot: Slot
       }
     }
 
-    // 횟수
+    // 횟수 — warn_only면 아래 사유는 판정에 넣지 않고 '경고'로만 남긴다(잔여·원장 계산은 그대로)
+    const warnOnly = ctx.countPolicy === "warn_only";
+    const countReason = (r: Reason) => {
+      if (warnOnly) asm.push(`경고(방수, 판정에는 반영하지 않음): ${r.text}`);
+      else rs.push(r);
+    };
     const lim = g.rules.count.limit;
     if (lim.state === "unknown") {
-      rs.push({ code: "COUNT_LIMIT_UNKNOWN", text: "방수(방영 가능 횟수)가 비어 있거나 읽을 수 없습니다(무제한으로 보지 않음)", severity: "unknown" });
-      missing.push("count_limit");
+      countReason({ code: "COUNT_LIMIT_UNKNOWN", text: "방수(방영 가능 횟수)가 비어 있거나 읽을 수 없습니다(무제한으로 보지 않음)", severity: "unknown" });
+      if (!warnOnly) missing.push("count_limit");
     } else if (lim.state === "value") {
       const unitOpts = optionsFor(I.countUnit);
       const rems = unitOpts.map((u) => lim.value - usedUnits(ctx.ledger, { poolId: pool, episode: ep, channelId: u === "per_episode_per_channel" ? slot.channelId : undefined }));
       remaining = Math.min(...rems);
-      if (rems.every((r) => r <= 0)) rs.push({ code: "COUNT_EXHAUSTED", text: `잔여 횟수가 0입니다(한도 ${lim.value}회)`, severity: "unavailable" });
-      else if (rems.some((r) => r <= 0)) rs.push({ code: "COUNT_UNIT_UNCONFIRMED", text: "방수가 채널 합산인지 채널별인지에 따라 잔여가 0이 됩니다 — 단위 확인 필요", severity: "conditional" });
+      if (rems.every((r) => r <= 0)) countReason({ code: "COUNT_EXHAUSTED", text: `잔여 횟수가 0입니다(한도 ${lim.value}회)`, severity: "unavailable" });
+      else if (rems.some((r) => r <= 0)) countReason({ code: "COUNT_UNIT_UNCONFIRMED", text: "방수가 채널 합산인지 채널별인지에 따라 잔여가 0이 됩니다 — 단위 확인 필요", severity: "conditional" });
       else {
         const baselineOk = g.usageBaseline !== "unknown" || ctx.confirmations.some((x) => x.grantId === g.grantId && x.rowHash === g.rowHash && x.topic === "usage_baseline");
         if (baselineOk) ok.push("count");
-        else rs.push({ code: "USAGE_BASELINE_UNKNOWN", text: "이미 방영한 횟수가 원장에 없어 잔여 횟수를 단정할 수 없습니다(기소진 확인 필요)", severity: "conditional" });
+        else countReason({ code: "USAGE_BASELINE_UNKNOWN", text: "이미 방영한 횟수가 원장에 없어 잔여 횟수를 단정할 수 없습니다(기소진 확인 필요)", severity: "conditional" });
       }
     } else ok.push("count");
 

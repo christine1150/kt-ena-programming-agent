@@ -45,6 +45,8 @@ export function buildEvalContext(state: AvailState, opts: { now: string; knownAt
     inventoryVersion,
     scheduleRevisionId: opts.scheduleRevisionId ?? null,
     originalProgramIds: state.originalProgramIds,
+    // 방수 적용 방식(운영자 결정): 'countEnforcement' 확인이 warn_only일 때만 경고만 남긴다. 확인이 없으면 지금까지처럼 적용(enforce)
+    countPolicy: (state.interpretationConfirmations as Record<string, { value?: unknown; at?: string | null } | undefined>)["countEnforcement"]?.value === "warn_only" && known((state.interpretationConfirmations as Record<string, { at?: string | null } | undefined>)["countEnforcement"]?.at) ? "warn_only" : "enforce",
   };
   return { ctx, interpretation, duplicates: dup.unresolved, unmatchedAddenda: withAddenda.unmatched };
 }
