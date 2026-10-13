@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase";
 import { routeQuestion } from "@/lib/intent/intentRouter";
 import { classifyQuestionWithLlm } from "@/lib/intent/llmClassifier";
 import { getLatestAvailableDate } from "@/lib/intent/referenceData";
+import { withVizStats } from "@/lib/intent/vizStats";
 import { enhanceAskAnswerViaLlm } from "@/lib/askAnswerLlm";
 import { dispatchIntent } from "@/lib/intent/dispatch";
 import { buildUnsupportedAnswer } from "@/lib/intent/responseTemplates";
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
         timeContext: null,
         usedLlmFallback: true,
         usedFunctionCalling: true,
-        answer: freeform.answer,
+        answer: withVizStats(freeform.answer),
       });
     }
   }
@@ -137,6 +138,6 @@ export async function POST(request: Request) {
     parameters: routed.parameters,
     timeContext: routed.timeContext,
     usedLlmFallback,
-    answer: finalAnswer,
+    answer: withVizStats(finalAnswer),
   });
 }

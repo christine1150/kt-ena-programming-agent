@@ -75,6 +75,7 @@ export interface VisualizationSpec {
   columns?: string[]; // type="table"일 때만 사용 — 헤더
   rows?: (string | number | null)[][]; // type="table"일 때만 사용 — columns와 같은 길이
   points?: { label: string; value: number | null }[]; // type="line"일 때만 사용 — x축 순서 그대로
+  statsLine?: string; // type="line"일 때만 — 서버가 points 로 낸 보조 통계 한 줄(vizStats.ts). 화면은 그대로 보여 준다.
   // type="heatmap"일 때만 사용 — rowLabels(예: 요일) × colLabels(예: daypart) 격자.
   // cells[i][j]는 rowLabels[i] × colLabels[j] 칸의 값(표본 없으면 null), sampleCounts는 같은 위치의 표본수.
   heatmapRowLabels?: string[];

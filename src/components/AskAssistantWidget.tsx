@@ -11,6 +11,7 @@
 // 로컬 함수가 있는데, 그 파일을 리팩터링하는 위험을 피하려 여기 별도로 작게 복제해 둔다.
 import { useState } from "react";
 import type { EvidenceAnswer as AskAnswer } from "@/lib/intent/types";
+import { VIZ_STATS_NOTE } from "@/lib/intent/vizStats";
 
 function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace("#", "");
@@ -231,6 +232,12 @@ export function AskAssistantWidget({
                   </div>
                 );
               })()}
+              {askAnswer.visualization.statsLine && (
+                <p className="mt-1 text-xs text-zinc-500">
+                  {askAnswer.visualization.statsLine}
+                  <span className="block text-zinc-400">{VIZ_STATS_NOTE}</span>
+                </p>
+              )}
             </div>
           )}
           {askAnswer.visualization?.type === "heatmap" && (askAnswer.visualization.heatmapRowLabels?.length ?? 0) > 0 && (
