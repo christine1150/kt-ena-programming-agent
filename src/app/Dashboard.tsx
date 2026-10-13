@@ -43,6 +43,8 @@ import { buildKpiGroups, parseTargetRank, type KpiRow } from "@/lib/workspace/kp
 import { useContextData } from "@/lib/workspace/useContextData";
 import { VENDING } from "@/lib/ui/pageTitles";
 import { brandText } from "@/lib/ui/contrast";
+import { BasisNote } from "@/components/ui/BasisNote";
+import { HOME_DAILY_BASIS_NOTE } from "@/lib/ui/baselines";
 import { dataKey, hrefFor, parseViewContext, serializeContext, type HomeView, type ViewContext } from "@/lib/workspace/viewContext";
 
 interface ChannelSummary {
@@ -1640,6 +1642,8 @@ function ChannelStatusCard({
           </div>
         </div>
       </div>
+      {/* 사용자 결정(2026-10-13): 홈 전체의 비교 기준 기간은 아주 작고 흐리게, 공통이면 이 한 줄에 모아 적는다 */}
+      <BasisNote className="mt-3 text-right">{HOME_DAILY_BASIS_NOTE}</BasisNote>
       {/* 사용자 지시(2026-10-06): 카드 맨 아래에 제목 없이 정보만 자연스럽게 이어 붙인다(해당일 상위 프로그램 9개) */}
       {footer && <div className="mt-6 border-t border-zinc-100 pt-3">{footer}</div>}
     </section>

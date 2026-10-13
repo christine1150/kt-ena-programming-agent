@@ -17,6 +17,7 @@ import { nextFocusIndex } from "../src/lib/ui/focusTrap";
 import { PAGE_TITLE, VENDING, SERVICE_NAME } from "../src/lib/ui/pageTitles";
 import { NAV_ITEMS } from "../src/lib/workspace/nav";
 import { SURFACES, TEXT, BORDER, FOCUS, PERFORMANCE, STATUS, CHART, TYPE, SPACE, TARGET } from "../src/lib/ui/tokens";
+import * as B from "../src/lib/ui/baselines";
 
 let passed = 0;
 const failures: string[] = [];
@@ -252,6 +253,20 @@ async function cacheChecks() {
   const circular: Record<string, unknown> = {};
   circular.self = circular;
   check("직렬화할 수 없는 입력은 캐시 없이 그냥 생성", (await cachedLlmTextWith(cdb, kind, null, circular, make("순환 입력"))) === "순환 입력");
+}
+
+// ── 비교 기준 기간 표기(사용자 결정 2026-10-13): 홈 공통 기준을 한 곳에 작고 흐리게 ──
+{
+  const sqlDir = path.join(ROOT, "supabase/migrations");
+  const last = fs.readdirSync(sqlDir).filter((f) => f.endsWith(".sql") && /function (?:public.)?get_channel_daily_narrative/.test(fs.readFileSync(path.join(sqlDir, f), "utf8"))).sort().pop();
+  const sql = last ? fs.readFileSync(path.join(sqlDir, last), "utf8") : "";
+  check("비교 기준: 홈이 쓰는 SQL 기본값(28일·같은 요일 8주)과 표기 숫자가 같다", !!last && sql.includes(`p_baseline_days int default ${B.HOME_BASELINE_DAYS},`) && sql.includes(`p_program_baseline_weeks int default ${B.HOME_SLOT_BASELINE_WEEKS},`), last ?? "함수 정의 없음");
+  check("비교 기준: 홈 page1 API는 서술 RPC의 기준 기간을 덮어쓰지 않는다(그래야 기본값이 곧 화면 기준)", !/p_baseline_days|p_program_baseline_weeks/.test(read("src/app/api/dashboard/page1/route.ts")));
+  check("비교 기준: 홈 공통 한 줄에 채널 기준(4주·28일)과 같은 슬롯 기준(8주)이 모두 있다", B.HOME_DAILY_BASIS_NOTE.includes("최근 4주(28일) 평균") && B.HOME_DAILY_BASIS_NOTE.includes("같은 요일·같은 시간대 최근 8주 평균") && B.HOME_DAILY_BASIS_NOTE.includes("전일 대비"));
+  const dash = code("src/app/Dashboard.tsx");
+  check("비교 기준: 홈에는 공통 한 줄이 한 곳에만 있다(여러 곳에 흩어 적지 않음)", (dash.match(/HOME_DAILY_BASIS_NOTE/g) ?? []).length === 2 && dash.includes("<BasisNote"));
+  const note = code("src/components/ui/BasisNote.tsx");
+  check("비교 기준: 기준 한 줄은 작은 글자·가장 옅은 허용 색(zinc-500)이고 대비 규칙 안이다", note.includes("text-[11px]") && note.includes("text-zinc-500") && contrastRatio(TEXT.muted, SURFACES.page) >= WCAG_NORMAL_TEXT);
 }
 
 cacheChecks().then(() => {
