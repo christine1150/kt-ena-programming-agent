@@ -331,7 +331,8 @@ export default function AvailManager() {
             <div>
               <p className="mb-1 text-sm font-medium text-zinc-800">메모·홀드백 문구별 확인(같은 문구는 묶어서)</p>
               <p className="mb-2 text-xs text-zinc-500">권리 담당자가 그 문구의 뜻을 확인한 경우에만 누르세요. 확인하면 그 문구가 달린 권리의 조건이 풀립니다(원본 행이 바뀌면 다시 확인 대기가 됩니다).</p>
-              {ov.pendingTexts.slice(0, 15).map((t) => (
+              <div className="max-h-96 overflow-y-auto pr-1" tabIndex={0} aria-label="메모·홀드백 문구 목록">
+              {ov.pendingTexts.map((t) => (
                 <div key={t.topic + t.text} className="mb-1 flex items-center justify-between gap-2 rounded border border-zinc-200 px-2 py-1 text-sm">
                   <span>
                     <span className="text-xs text-zinc-500">{t.topic === "memo" ? "메모" : "홀드백"}</span> {t.text} · <b>{t.count}</b>건
@@ -341,6 +342,7 @@ export default function AvailManager() {
                   </button>
                 </div>
               ))}
+              </div>
             </div>
           )}
 

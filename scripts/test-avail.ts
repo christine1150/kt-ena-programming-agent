@@ -736,6 +736,10 @@ async function main() {
     check("확인·해석·연결·보충 속성을 저장하고 읽는다", st.confirmations.length === 1 && st.interpretationConfirmations.endInclusive?.value === true && st.links.length === 1 && st.addenda.length === 2);
     const ov = (await import("../src/lib/avail/summary")).buildOverview(await ST.loadAvailState(), NOW);
     check("현황 요약: 해석 확인 4개 남음, 보충 속성 2/23 적용", ov.interpretation.filter((i) => !i.confirmed).length === 4 && ov.addenda.seedStored === 2 && ov.addenda.seedAvailable === 23 && ov.rightsConfigured);
+    // 메모·홀드백 문구 확인 목록은 자르지 않는다(실제 파일은 메모 132종·홀드백 94종 — 25/15개로 자르면 나머지는 화면에서 확인할 수 없었다)
+    const manyTexts = Array.from({ length: 60 }, (_, i) => grant({ id: `GM${i}`, title: `문구시리즈${i}`, conditions: [{ code: i % 2 ? "HOLDBACK_REVIEW" : "MEMO_REVIEW", kind: i % 2 ? "holdback" : "memo", raw: `문구 ${i}`, needs: "확인" } as unknown as A.Condition] }));
+    const ovMany = (await import("../src/lib/avail/summary")).buildOverview({ available: true, error: null, state: { revisions: manyTexts, addenda: [], ledger: [], links: [], confirmations: [], interpretationConfirmations: {} } }, NOW);
+    check("현황 요약: 메모·홀드백 문구 60종이 모두 나온다(25개로 자르지 않음)", ovMany.pendingTexts.length === 60 && ovMany.pendingTexts.filter((t) => t.topic === "memo").length === 30);
     const snap = A.snapshotPlanRights("p1", "rev1", [{ slotKey: "s", candidateKey: "c", query: q(), slot: slot() }], ctxOf([g1]));
     await ST.saveSnapshot(snap);
     const again = await ST.saveSnapshot(snap);

@@ -77,7 +77,8 @@ export function buildOverview(loaded: LoadedAvail, now: string): Overview {
     },
     inventoryVersion: ctx.inventoryVersion,
     interpretation: (Object.keys(interp) as InterpKey[]).map((k) => ({ key: k, label: interp[k].label, note: interp[k].note, value: interp[k].value, plausible: interp[k].plausible, confirmed: interp[k].confirmed, confirmedBy: interp[k].confirmedBy })),
-    pendingTexts: [...texts.values()].sort((a, b) => b.count - a.count).slice(0, 25),
+    // 문구 종류는 많아야 수십 개라 자르지 않는다(잘리면 화면에서 확인할 수 없는 문구가 생긴다)
+    pendingTexts: [...texts.values()].sort((a, b) => b.count - a.count || (a.text < b.text ? -1 : 1)),
     pending: [...pend.entries()].map(([code, count]) => ({ code, label: PENDING_LABEL[code] ?? code, count })).sort((a, b) => b.count - a.count),
     duplicates: built.duplicates.map((d) => ({ a: d.a, b: d.b, titleA: byId.get(d.a)?.content.titleRaw ?? d.a, titleB: byId.get(d.b)?.content.titleRaw ?? d.b, reasons: d.reasons })),
     addenda: { stored: state.addenda.length, seedAvailable: US_DRAMA_1ST_WINDOW.length, seedStored: US_DRAMA_1ST_WINDOW.filter((a) => stored.has(a.addendumId)).length, unmatched: built.unmatchedAddenda.map((a) => a.addendumId), conflicts: cmp.conflicts, productionYearMissing: seedMissingYear },
