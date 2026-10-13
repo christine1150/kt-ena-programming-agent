@@ -106,7 +106,7 @@ const tally = new Map<string, number>();
 for (const r of rows) tally.set(decided.get(r.canonical_name)!.genre, (tally.get(decided.get(r.canonical_name)!.genre) ?? 0) + 1);
 console.log(`대상 ${targets.length}행 / 이름 ${names.length}개 → 분류 ${decided.size}개 이름, ${rows.length}행${DRY ? " (DRY)" : ""}`);
 for (const [g, n] of [...tally].sort((a, b) => b[1] - a[1])) console.log(`  ${g} ${n}`);
-if (DRY) for (const [n, d] of decided) console.log(`  · ${display.get(n) ?? n} → ${d.genre} [${d.note}]`);
+for (const [n, d] of decided) console.log(`  · ${display.get(n) ?? n} → ${d.genre} [${d.note}]`);
 if (!DRY) {
   for (const r of rows) {
     const d = decided.get(r.canonical_name)!;

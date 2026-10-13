@@ -69,7 +69,7 @@ export default function GenreMapManager() {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h3 className="text-base font-semibold text-zinc-900">장르 분류 보완(AI 스마트 편성용)</h3>
-          <p className="text-sm text-zinc-500">제목 규칙·네이버·다음 검색으로 1차 분류한 장르를 확인·보완합니다. 한 채널에서 고치면 같은 이름의 다른 채널에도 반영됩니다(자사 오리지널은 자사 채널끼리만). 네이버·다음 검색은 매주 월요일 아침 7시에 자동으로 다시 돕니다.</p>
+          <p className="text-sm text-zinc-500">제목 규칙·네이버·다음 검색으로 1차 분류한 장르를 확인·보완합니다. 한 채널에서 고치면 같은 이름의 다른 채널에도 반영됩니다(자사 오리지널은 자사 채널끼리만). 네이버 검색은 매주 월요일 아침 7시에 자동으로 다시 돕니다.</p>
         </div>
         {rows && (
           <p className="text-sm text-zinc-600">

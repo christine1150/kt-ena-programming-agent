@@ -23,6 +23,7 @@ export interface GenreUpdateSummary {
 }
 
 const DELAY_MS = 700; // 네이버 과도 요청 방지
+const USE_DAUM_FALLBACK = false;
 const kstDate = () => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 
 type Airing = { scope: "OWN" | "COMPETITOR"; owner: string; name: string };
@@ -139,8 +140,9 @@ export async function runWeeklyGenreUpdate(opts: { budgetMs?: number } = {}): Pr
       decided = decideFromHit(q1, hit);
       if (decided) break;
     }
-    // 네이버에서 못 찾으면 다음(Daum) 검색 카드로 한 번 더 확인한다(사용자 지시 2026-10-13). 다음 실패는 건너뛰고 계속한다.
-    if (!decided && failures < 6) {
+    // 사용자 지시(2026-10-14): 다음(Daum) 검색은 1회 일괄 반영으로 끝내고, 이후 매주 자동 검색은 네이버만 쓴다.
+    // 다시 켜려면 USE_DAUM_FALLBACK을 true로 바꾼다(searchDaum·decideFromDaumHit은 genreNaver.ts에 그대로 있다).
+    if (USE_DAUM_FALLBACK && !decided && failures < 6) {
       for (const q of queryVariants(q1)) {
         let hit = daumCache.get(q);
         if (!hit) {
@@ -172,7 +174,7 @@ export async function runWeeklyGenreUpdate(opts: { budgetMs?: number } = {}): Pr
     } else if (anyResponse) {
       await supabase
         .from("program_genre_map")
-        .update({ rule_note: `네이버·다음 검색 ${asOf}: 일치하는 방송 정보 없음 — 관리자 보완 필요`, updated_at: new Date().toISOString() })
+        .update({ rule_note: `네이버 검색 ${asOf}: 일치하는 방송 정보 없음 — 관리자 보완 필요`, updated_at: new Date().toISOString() })
         .eq("canonical_name", name)
         .eq("source", "NONE");
     }
