@@ -63,7 +63,11 @@ export function ensureTextContrast(hex: string, bg: string = "#f4f4f5", min: num
   return out;
 }
 
-/** 글자에 쓰는 채널 브랜드색(없으면 undefined). 가장 옅은 회색 면(#f4f4f5) 위에서도 4.5:1을 넘긴다. */
+/**
+ * 글자에 쓰는 채널 브랜드색(없으면 undefined).
+ * 사용자 지시(2026-10-13): 당사 채널명 글자가 로고색보다 어두워 보이므로 보정 없이 로고 기본색을 그대로 쓴다.
+ * 대비 보정이 필요한 곳은 ensureTextContrast를 직접 호출한다.
+ */
 export function brandText(color: string | null | undefined): string | undefined {
-  return color ? ensureTextContrast(color) : undefined;
+  return color || undefined;
 }
