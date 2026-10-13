@@ -19,6 +19,7 @@ import { markerSpread } from "@/lib/purchaseReview/productionYear";
 import { recoVsSim } from "@/lib/purchaseReview/alignment";
 import { buildReviewSnapshot } from "@/lib/purchaseReview/snapshot";
 import { VENDING } from "@/lib/ui/pageTitles";
+import { isRegionalHousehold } from "@/lib/competitorRegion";
 
 const CHANNEL_OPTS: { code: string; name: string }[] = [
   { code: "ENA", name: "ENA" },
@@ -763,7 +764,7 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
               </ul>
               <TransferBlock s={s} peers={t.peers} target={t.target} />
               {s.competition.length > 0 && (
-                <div className="mt-1 text-zinc-500">같은 요일·시각 경쟁(참고, 예측 미반영): {s.competition.slice(0, 4).map((c) => `${c.ch} ${c.program} ${fmt(c.avg_rating)}%`).join(" · ")}</div>
+                <div className="mt-1 text-zinc-500">같은 요일·시각 경쟁(참고, 예측 미반영): {s.competition.slice(0, 4).map((c) => `${c.ch} ${c.program} ${fmt(c.avg_rating)}%${t.target === "HH" && isRegionalHousehold(c.ch) ? "*" : ""}`).join(" · ")}{t.target === "HH" && s.competition.slice(0, 4).some((c) => isRegionalHousehold(c.ch)) ? " (* 수도권 기준 가구 시청률 — 다른 채널은 전국)" : ""}</div>
               )}
             </div>
           ))}
