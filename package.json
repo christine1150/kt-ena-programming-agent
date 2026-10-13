@@ -41,7 +41,8 @@
     "opt05:bench": "tsx scripts/opt05-bench.ts",
     "test:opt06": "tsx scripts/test-opt06.ts",
     "rollback:home": "node scripts/rollback-home.mjs",
-    "test:competitor-airings": "tsx scripts/test-competitor-airings.ts"
+    "test:competitor-airings": "tsx scripts/test-competitor-airings.ts",
+    "test:month-math": "tsx scripts/test-month-math.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
