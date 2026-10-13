@@ -13,6 +13,7 @@ export interface FlagSpec {
 export const FEATURE_FLAGS = {
   llm_text_cache: { env: "LLM_TEXT_CACHE", whenOff: "AI 문장 캐시를 건너뛰고 요청마다 새로 생성한다(속도는 느려지지만 이전 동작).", since: "단계 15 이전(캐시) · 15(채널 AI 설명)" },
   report_snapshot_store: { env: "REPORT_SNAPSHOT_STORE", whenOff: "보고서를 저장하지 않고 만든다 — 다운로드는 파일을 만들 때 다시 계산하고 PDF(문서 보기) 버튼은 막힌다(단계 14 이전 동작).", since: "단계 14" },
+  series_link: { env: "SERIES_LINK", whenOff: "새 시즌 필수 편성(예: 지구마불 세계여행4)이 지난 시즌 기준 없이 슬롯·장르로 수축된 값으로 계산된다(시리즈 연결 이전 동작).", since: "시리즈 연결(2026-10-13)" },
 } as const satisfies Record<string, FlagSpec>;
 
 export type FeatureName = keyof typeof FEATURE_FLAGS;

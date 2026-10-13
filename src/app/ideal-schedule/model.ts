@@ -200,6 +200,8 @@ export function reasonText(r: Reason, decimals: number): string | null {
       return `${r.detail ?? "경쟁 강세"} 시간대 — 같은 장르로 맞대응(MATCH)`;
     case "STRATEGY_COUNTER":
       return `${r.detail ?? "경쟁 강세"} 시간대 — 다른 장르로 차별화(COUNTER)`;
+    case "SERIES_LINK":
+      return `시리즈 기준(지난 시즌 한 개 근거, 슬롯 평균의 ${fmtIdx(v)}%): ${r.detail ?? ""}`;
     case "BENCHMARK_TRANSFER_ASSUMPTION":
       return `가정: ${r.detail ?? ""} (지수 ${fmtIdx(v)})`;
     case "BENCHMARK_TARGET":

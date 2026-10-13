@@ -215,6 +215,22 @@ export class MetricModel {
     return { n: l1.n, fit: (l1.n * (l1.index / l3.index) + k) / (l1.n + k) };
   }
 
+  /** 시리즈 연결 기대값(seriesLink.ts) — 이력 없는 새 시즌이 지난 시즌 지수에서 출발한다. 지난 시즌 하나만 근거이므로 근거 등급은 C(단계 4와 같은 가장 넓은 범위)로
+   *  취급하고, 6단계 수축 표에는 넣지 않는다. 신뢰도는 근거 회차 수만 반영(안정성은 계산하지 않음). */
+  expectedFromPrior(prior: { n: number; index: number }, dow: number, hour: number): ExpectedResult {
+    const base = this.baseline(dow, hour);
+    return {
+      expected: base === null ? null : prior.index * base,
+      index: prior.index,
+      baseline: base,
+      fallbackLevel: 4,
+      sampleCount: prior.n,
+      programSampleCount: prior.n,
+      confidence: Math.min(1, prior.n / this.opts.fullConfidenceN),
+      levels: [{ level: 6, n: 0, index: 1 }],
+    };
+  }
+
   /** 6단계 수축 Expected. unit은 programId|airingType. */
   expected(programId: string, airingType: AiringType, genre: Genre, dow: number, hour: number): ExpectedResult {
     const unit = unitKeyOf(programId, airingType);

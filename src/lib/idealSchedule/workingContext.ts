@@ -10,6 +10,8 @@ import { resolveGenre } from "./genreRules";
 import { loadGenreMap } from "./genreStore";
 import { withOptimizeTarget } from "./mapping";
 import type { PlacedBlock } from "./optimizer";
+import { buildSeriesPrior, normSeriesName, type SeriesPrior } from "./seriesLink";
+import { loadSeriesPriorInputs } from "./seriesLinkServer";
 import { Scorer, buildCandidatePool, buildScoringContext, type EngineCandidate, type StrategyMode } from "./scoring";
 import type { Genre } from "./types";
 import type { ResidualRow } from "./uncertainty";
@@ -24,6 +26,8 @@ export interface RunScoringContext {
   pool: EngineCandidate[];
   genreOf: (name: string) => Genre;
   residuals: ResidualRow[];
+  /** 시리즈 연결(seriesLink.ts) — 실행 때와 같은 기준일로 다시 만든 새 시즌 기대값 출발점(정규화한 새 시즌 제목 → 값) */
+  seriesPriors: Map<string, SeriesPrior>;
 }
 
 export interface RunRow {
@@ -50,7 +54,13 @@ export async function buildRunScorer(run: RunRow, channelCode: string): Promise<
   const residuals = await loadBacktestResiduals(channel.id, bundle.kpiLabel, asOf);
   const scorer = new Scorer(buildScoringContext(fs, config, (run.strategy_mode as StrategyMode) ?? "AUTO", null, opts.composition !== null, buildUncertainty(config, residuals, fs)));
   const pool = buildCandidatePool(fs, null);
-  return { channel, config, asOf, fs, scorer, pool, genreOf, residuals };
+  const seriesPriors = new Map<string, SeriesPrior>();
+  const series = await loadSeriesPriorInputs({ channelId: channel.id, channelCode: channel.code, kpiLabel: bundle.kpiLabel, asOfDate: asOf, lookbackDays: config.expected_kpi.lookback_days });
+  for (const sp of series.inputs) {
+    const prior = buildSeriesPrior(sp, (d, h) => fs.rating.baseline(d, h));
+    if (prior) seriesPriors.set(normSeriesName(sp.targetName), prior);
+  }
+  return { channel, config, asOf, fs, scorer, pool, genreOf, residuals, seriesPriors };
 }
 
 /**
@@ -83,12 +93,12 @@ export function capOverrideFrom(config: IdealScheduleConfig, ...plans: PlacedBlo
 
 /** 저장된 블록의 후보를 엔진 후보로 되살린다: 풀에 있으면 그것, 없으면(방영 이력 없는 프로그램) 신규 후보. 자사가 아니면 null(재평가하지 않는다). */
 export function candidateOf(
-  ctx: Pick<RunScoringContext, "pool" | "genreOf" | "channel">,
+  ctx: Pick<RunScoringContext, "pool" | "genreOf" | "channel"> & { seriesPriors?: Map<string, SeriesPrior> },
   b: { candidate_key: string; program_key: string; program_id: string | null; program_name: string; content_type: string; airing_type?: string | null }
 ): EngineCandidate | null {
   if (b.content_type !== "OWN") return null;
   const hit = ctx.pool.find((p) => p.key === b.candidate_key);
   if (hit) return hit;
-  const c = newCandidate(b.program_name, b.program_id, null, ctx.channel.code, (_s, _o, n) => ctx.genreOf(n));
+  const c = newCandidate(b.program_name, b.program_id, null, ctx.channel.code, (_s, _o, n) => ctx.genreOf(n), ctx.seriesPriors);
   return { ...c, key: b.candidate_key, programKey: b.program_key || c.programKey, airingType: (b.airing_type as EngineCandidate["airingType"]) ?? c.airingType };
 }

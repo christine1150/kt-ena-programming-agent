@@ -14,6 +14,7 @@ import { buildSkeleton, type SkeletonSlot } from "./skeleton";
 import { STOP_LABEL, type SearchControl, type SearchReport } from "./searchControl";
 import { ratiosFromResiduals, robustnessCheck, type RobustBlock, type RobustnessResult } from "./robustness";
 import { gradeOfLevel } from "./uncertainty";
+import { buildSeriesPrior, type SeriesPrior, type SeriesPriorInput } from "./seriesLink";
 import { addDays } from "./time";
 import type { RankEstimate } from "./rankEstimate";
 import { namesCompatible, planEpisodeHints, planNameKey, planWeekFrame, type PlanRow } from "./planEpisodes";
@@ -54,6 +55,8 @@ export interface EngineRunInput {
   search?: SearchControl;
   /** 블록마다 계산할 자사 대체 후보 수(기본 10) */
   alternativesTopN?: number;
+  /** 시리즈 연결(seriesLink.ts) — 이력 없는 새 시즌 필수 편성이 지난 시즌 본방 회차에서 출발하게 한다. 없으면 현재 동작 그대로(지문도 같다) */
+  seriesPriors?: SeriesPriorInput[];
 }
 
 export interface ScheduleEvaluationResult {
@@ -235,9 +238,12 @@ function ownCandidateFor(pool: EngineCandidate[], programId: string | null, prog
   return pick(ranked[0].key);
 }
 
-function newCandidate(name: string, programId: string | null, runtime: number | null, channelCode: string, genreOf: GenreResolver): EngineCandidate {
-  const key = `NEW:${normalizeProgramCanonicalName(name)}`;
+function newCandidate(name: string, programId: string | null, runtime: number | null, channelCode: string, genreOf: GenreResolver, seriesPriors?: Map<string, SeriesPrior>): EngineCandidate {
+  const norm = normalizeProgramCanonicalName(name);
+  const key = `NEW:${norm}`;
+  const seriesPrior = seriesPriors?.get(norm);
   return {
+    ...(seriesPrior ? { seriesPrior } : {}),
     key,
     programKey: programId ?? key,
     contentType: "OWN",
@@ -259,6 +265,15 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
   const customTarget = channelKpi !== bundle.kpiLabel;
   const opts = featureOptionsFor(config, channelKpi, input.asOfDate, customTarget);
   const fs = buildFeatureSet(bundle, opts, (name) => input.genreOf("OWN", channelCode, name));
+
+  // 시리즈 연결: 지난 시즌 지수를 현재 슬롯 baseline으로 환산(만들 수 없으면 안내만 하고 기존 방식 그대로)
+  const seriesPriors = new Map<string, SeriesPrior>();
+  const seriesNotes: string[] = [];
+  for (const sp of input.seriesPriors ?? []) {
+    const prior = buildSeriesPrior(sp, (d, h) => fs.rating.baseline(d, h));
+    if (prior) seriesPriors.set(normalizeProgramCanonicalName(sp.targetName), prior);
+    else seriesNotes.push(`'${sp.targetName}'은 〈${sp.baseName}〉 기준을 만들 수 없어(본방 3회 미만이거나 지난 시즌 슬롯의 현재 기준값이 없음) 시리즈 연결 없이 계산했습니다.`);
+  }
 
   // 경쟁사(선택 시)
   let competitorFeatures: CompetitorChannelFeature[] = [];
@@ -331,7 +346,7 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
     const cand =
       (f.input.candidateKey ? pool.find((p) => p.key === f.input.candidateKey) : undefined) ??
       ownCandidateFor(pool, f.input.programId, f.input.programName) ??
-      newCandidate(f.input.programName, f.input.programId, f.endMin - f.startMin, channelCode, input.genreOf);
+      newCandidate(f.input.programName, f.input.programId, f.endMin - f.startMin, channelCode, input.genreOf, /RERUN$/.test(f.input.constraintType) ? undefined : seriesPriors); // 재방(직재방·직전회차 재방) 칸에는 첫 방송 기준을 쓰지 않는다
     return {
       weekday: f.weekday,
       startMin: f.startMin,
@@ -342,6 +357,14 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       constraint: { id: f.input.id, source: f.input.source, constraintType: f.input.constraintType, rank: f.input.rank, durationDerived: f.input.durationDerived ?? false, durationDefault: f.input.durationDefault ?? false },
     };
   });
+
+  // 시리즈 연결이 실제로 쓰인 프로그램만 한 줄씩 안내(검증된 예측이 아님을 함께)
+  for (const fb of fixedBlocks) {
+    const sp = fb.candidate.seriesPrior;
+    const note = sp ? `[시리즈 기준] '${fb.candidate.programName}'은 방영 이력이 없어 ${sp.basis}에서 출발한 값입니다. 시즌이 바뀌는 변화는 담지 못합니다.` : null;
+    if (note && !resolution.warnings.includes(note)) resolution.warnings.push(note);
+  }
+  resolution.warnings.push(...seriesNotes);
 
   const histSkeleton = buildSkeleton(eligibleAirings(bundle, opts), {
     asOfDate: input.asOfDate,
@@ -671,6 +694,8 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
       ...(input.search?.maxEvaluations !== undefined ? { eb: input.search.maxEvaluations } : {}),
       // 시작점을 지난주 편성으로 바꾸면 결과가 달라지므로 기본(GREEDY)이 아닐 때만 지문에 들어간다
       ...(input.search?.startFrom === "INCUMBENT" ? { sf: "INCUMBENT" } : {}),
+      // 시리즈 연결을 쓴 실행만 지문에 입력이 들어간다(쓰지 않은 실행의 지문은 이전과 같다)
+      ...(input.seriesPriors?.length ? { sp: input.seriesPriors } : {}),
     })
   );
 

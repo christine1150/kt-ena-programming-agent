@@ -18,6 +18,7 @@ import { enrichAiringsWithPlan, normalizePlanRows, type PlanRow, type PlanRowRaw
 import type { StrategyMode } from "./scoring";
 import { addDays } from "./time";
 import { DEFAULT_SEARCH_DEADLINE_MS } from "./searchControl";
+import { loadSeriesPriorInputs } from "./seriesLinkServer";
 import { buildExcludedPredicate, exclusionFingerprint, isTitleExcluded, loadActiveExclusions } from "./exclusions";
 import type { OwnAiring, OwnAiringsBundle } from "./types";
 import type { ResidualRow } from "./uncertainty";
@@ -245,6 +246,9 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
           `제외 편성 ${exclusionRows.length}건 적용(${exclusionRows.map((r) => r.program_name).join(", ")}) — 최근 방영 프로그램 ${recentNames.size}개 중 ${droppedNames.length}개가 후보에서 빠졌습니다${droppedNames.length > 0 ? `: ${droppedNames.slice(0, 5).join(", ")}${droppedNames.length > 5 ? " 외" : ""}` : ""}${recentNames.size > 0 && droppedNames.length / recentNames.size >= 0.2 ? " — 편성 가능한 후보가 크게 줄었습니다" : ""}`,
         ]
       : [];
+  // 시리즈 연결(seriesLink.ts): 이번 주 필수 편성 제목 중 등록된 새 시즌이 있으면 지난 시즌 본방 회차에서 출발하는 기대값을 읽는다(읽기 전용)
+  const lockInputs = [...constraintLoad.inputs, ...rerun.inputs, ...(req.extraLocks ?? [])];
+  const series = await loadSeriesPriorInputs({ channelId: channel.id, channelCode: channel.code, kpiLabel: bundle.kpiLabel, asOfDate, lookbackDays: config.expected_kpi.lookback_days, names: lockInputs.map((c) => c.programName) });
   const t1 = Date.now();
   const result = runIdealScheduleEngine({
     weekStart: req.weekStart,
@@ -258,7 +262,8 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
     bundle,
     channelKpiLabel: channel.kpiLabel,
     competitorBundle: req.competitorNames.length ? competitorBundle : null,
-    constraints: [...constraintLoad.inputs, ...rerun.inputs, ...(req.extraLocks ?? [])],
+    constraints: lockInputs,
+    seriesPriors: series.inputs.length ? series.inputs : undefined,
     historicalRuntime,
     residuals,
     genreOf: (scope, owner, name) => resolveGenre(genreMap, scope, owner, name),
@@ -290,7 +295,7 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
     config,
     asOfDate,
     currentWeekStart,
-    warnings: [...constraintLoad.warnings, ...rerun.warnings, ...result.resolution.warnings, ...exclusionNotice],
+    warnings: [...constraintLoad.warnings, ...rerun.warnings, ...result.resolution.warnings, ...exclusionNotice, ...series.notes],
     timingsMs: { load: t1 - t0, engine: t2 - t1 },
   };
 }

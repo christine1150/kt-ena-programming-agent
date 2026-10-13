@@ -11,6 +11,7 @@
 import type { IdealScheduleConfig } from "./config";
 import type { CompetitorChannelFeature } from "./competitorFeatures";
 import type { ExpectedResult, FeatureSet } from "./features";
+import type { SeriesPrior } from "./seriesLink";
 import { addDays, hourBucket } from "./time";
 import type { AiringType, Genre } from "./types";
 import { UNCLASSIFIED, genreFamily } from "./types";
@@ -21,6 +22,8 @@ export type StrategyMode = "AUTO" | "MATCH" | "COUNTER" | "MIX";
 export type StrategyType = "MATCH" | "COUNTER" | "NEUTRAL";
 
 export interface EngineCandidate {
+  /** 시리즈 연결(seriesLink.ts) — 이력 없는 새 시즌의 시청률 기대값 출발점. 있으면 시청률(rating)만 이 값을 쓴다 */
+  seriesPrior?: SeriesPrior;
   key: string; // OWN: programId|airingType, BM:경쟁사|프로그램, AR:장르, NEW:프로그램명
   programKey: string; // 반복 cap·연속·같은 시 반복 판정 단위(자사는 programId — 본방/재방을 같은 프로그램으로 셈)
   contentType: ContentType;
@@ -246,7 +249,7 @@ export class Scorer {
     const pid = c.contentType === "OWN" && c.programId ? c.programId : `__${c.key}__`;
     const { fs } = this.ctx;
     const out: ExpectedBundle = {
-      r: fs.rating.expected(pid, c.airingType, c.genre, dow, hour),
+      r: c.seriesPrior ? fs.rating.expectedFromPrior(c.seriesPrior, dow, hour) : fs.rating.expected(pid, c.airingType, c.genre, dow, hour),
       s: fs.share.expected(pid, c.airingType, c.genre, dow, hour),
       ts: fs.timeSpent.expected(pid, c.airingType, c.genre, dow, hour),
       programIdForModel: pid,
@@ -322,8 +325,12 @@ export class Scorer {
       programSampleCount = e.r.programSampleCount;
       fallbackLevel = e.r.fallbackLevel;
       components.kpi = e.r.index;
-      addReason({ code: "EXPECTED_LEVEL", value: e.r.fallbackLevel, detail: `표본 ${e.r.sampleCount}건` });
-      for (const l of e.r.levels) if (l.index !== null && l.n > 0) addReason({ code: `LEVEL_${l.level}_INDEX`, value: l.index, detail: `n=${l.n}` });
+      if (c.seriesPrior) {
+        addReason({ code: "SERIES_LINK", value: e.r.index, detail: c.seriesPrior.basis });
+      } else {
+        addReason({ code: "EXPECTED_LEVEL", value: e.r.fallbackLevel, detail: `표본 ${e.r.sampleCount}건` });
+        for (const l of e.r.levels) if (l.index !== null && l.n > 0) addReason({ code: `LEVEL_${l.level}_INDEX`, value: l.index, detail: `n=${l.n}` });
+      }
 
       if (c.contentType === "OWN" && c.programId) {
         const u = fs.unitsByKey.get(c.key);

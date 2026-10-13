@@ -23,6 +23,7 @@ import { genreFamily, type Genre } from "../src/lib/idealSchedule/types";
 import { bandForLevel, certaintyOf, uncertaintyFromResiduals } from "../src/lib/idealSchedule/uncertainty";
 import { enrichAiringsWithPlan, normalizePlanRows, planEpisodeHints, planWeekFrame } from "../src/lib/idealSchedule/planEpisodes";
 import { buildRerunConstraints } from "../src/lib/idealSchedule/rerunRules";
+import * as SL from "../src/lib/idealSchedule/seriesLink";
 
 let passed = 0;
 const failures: string[] = [];
@@ -722,6 +723,43 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   check("권리 게이트: 모두 막히면 AI가 임의로 채우지 않고 사유(권리 조건)와 함께 빈 슬롯", aiBlocks(none).length === 0 && none.output.emptySlots.length > 0 && none.output.emptySlots.every((e) => e.reason.includes("권리")));
   const lock = runIdealScheduleEngine(baseRun({ constraints: [cInput({ id: "lockR", rank: 1, weekday: 2, startMin: 1260, durationMin: 60, programName: "고정편성작" })], rights: { fingerprint: "inv-5", slotAllowed: () => false } }));
   check("권리 게이트: 사용자 고정·필수 편성 블록은 게이트가 지우지 않는다(검토 대상으로 남김)", lock.output.blocks.some((b) => b.fixed && b.candidate.programName === "고정편성작"));
+}
+
+// ── 시리즈 연결(seriesLink.ts): 이력 없는 새 시즌 필수 편성이 지난 시즌 본방 회차에서 출발 ──
+{
+  const eps = [0.5, 0.6, 0.4, 0.8, 0.9, 1.1, 1.0, 0.9, 0.8, 0.9, 1.0, 0.7, 0.8, 1.0, 0.8];
+  const spInput = { targetName: "신규시즌 4", baseName: "신규시즌3", episodes: eps, levelRatio: 0.9, slotDow: 5, slotHour: 21 };
+  const fs0 = buildFeatureSet(mapOwnAirings(engineRaw), { asOfDate: "2026-09-27", lookbackDays: 84, recentDays: 28, recentWeight: 1, excludeHolidays: false, shrinkageK: 3, minN: 2, fullConfidenceN: 12, composition: null, extraTargets: [] }, (name) => eGenre("OWN", "ENA", name));
+  const baseAt = (d: number, h: number) => fs0.rating.baseline(d, h);
+  const prior = SL.buildSeriesPrior(spInput, baseAt);
+  const first3 = (0.5 + 0.6 + 0.4) / 3;
+  check("시리즈 연결: 첫 3회 평균 × 보정 비율 ÷ 지난 시즌 슬롯 baseline = 지수", !!prior && close(prior.expectedAtBaseSlot, first3 * 0.9) && close(prior.index, (first3 * 0.9) / (baseAt(5, 21) as number), 1e-9) && prior.n === 3);
+  check("시리즈 연결: 본방 3회 미만이거나 슬롯 baseline이 없으면 만들지 않는다", SL.buildSeriesPrior({ ...spInput, episodes: [0.5, 0.6, null] }, baseAt) === null && SL.buildSeriesPrior(spInput, () => null) === null && SL.buildSeriesPrior(spInput, () => 0) === null);
+  check("시리즈 연결: 근거 문구에 지난 시즌 회차 수와 '검증된 예측이 아님'이 있다", !!prior && prior.basis.includes("15회") && prior.basis.includes("검증된 예측이 아님"));
+  const links = [{ channelCode: "ENA", target: "지구마불 세계여행4", base: "지구마불 세계여행3" }];
+  check("시리즈 연결 찾기: 표기 차이(공백)는 같은 제목, 이전 시즌·다른 채널은 아님", SL.seriesLinkFor(links, "ENA", "지구마불 세계여행 4")?.base === "지구마불 세계여행3" && SL.seriesLinkFor(links, "ENA", "지구마불 세계여행3") === null && SL.seriesLinkFor(links, "ONCE", "지구마불 세계여행4") === null);
+  check("등록된 시리즈 연결은 새 시즌 한 줄(지구마불 세계여행4 ← 3)", SL.SERIES_LINKS.some((l) => l.channelCode === "ENA" && SL.normSeriesName(l.target) === "지구마불세계여행4" && SL.normSeriesName(l.base) === "지구마불세계여행3"));
+
+  const req = (over: Partial<HardConstraintInput> = {}) => cInput({ id: "s4", rank: 2, weekday: 5, startMin: 1260, durationMin: 70, programName: "신규시즌 4", ...over });
+  const withSp = runIdealScheduleEngine(baseRun({ constraints: [req()], seriesPriors: [spInput] }));
+  const noSp = runIdealScheduleEngine(baseRun({ constraints: [req()] }));
+  const blk = withSp.output.blocks.find((b) => b.weekday === 5 && b.startMin === 1260);
+  const blk0 = noSp.output.blocks.find((b) => b.weekday === 5 && b.startMin === 1260);
+  check("시리즈 연결: 이력 없는 새 시즌 필수 편성이 지난 시즌 값에서 출발(지난 시즌 슬롯이면 정확히 첫 3회 평균×보정)", !!blk?.candidate.seriesPrior && close(blk.eval.expected, first3 * 0.9, 1e-9), String(blk?.eval.expected));
+  check("시리즈 연결: 근거 등급은 가장 넓은 범위(C, 단계 4)·근거 회차 3·신뢰도 0~1", blk?.eval.fallbackLevel === 4 && blk.eval.programSampleCount === 3 && blk.eval.confidence > 0 && blk.eval.confidence <= 1);
+  check("시리즈 연결: 근거(SERIES_LINK)와 '[시리즈 기준]·검증된 예측이 아님' 안내가 남는다", !!blk?.eval.reasons.some((r) => r.code === "SERIES_LINK") && withSp.resolution.warnings.some((w) => w.startsWith("[시리즈 기준]") && w.includes("검증된 예측이 아님")));
+  check("시리즈 연결: 쓰지 않은 실행은 이전과 같은 값·지문(연결이 지문에 들어가는 건 쓴 실행만)", !!blk0 && !blk0.candidate.seriesPrior && blk0.eval.expected !== blk?.eval.expected && noSp.fingerprint !== withSp.fingerprint && runIdealScheduleEngine(baseRun({ constraints: [req()] })).fingerprint === noSp.fingerprint);
+  check("시리즈 연결: 같은 입력이면 같은 결과·지문(결정론)", runIdealScheduleEngine(baseRun({ constraints: [req()], seriesPriors: [spInput] })).fingerprint === withSp.fingerprint);
+  const rerun = runIdealScheduleEngine(baseRun({ constraints: [req({ constraintType: "SAME_NIGHT_RERUN", rank: 3 })], seriesPriors: [spInput] }));
+  check("시리즈 연결: 재방(직재방) 칸에는 첫 방송 기준을 쓰지 않는다", !rerun.output.blocks.find((b) => b.weekday === 5 && b.startMin === 1260)?.candidate.seriesPrior);
+  const own = runIdealScheduleEngine(baseRun({ constraints: [cInput({ id: "ownA", rank: 2, weekday: 5, startMin: 1260, durationMin: 60, programId: "A", programName: "프로그램A" })], seriesPriors: [{ ...spInput, targetName: "프로그램A" }] }));
+  check("시리즈 연결: 이미 방영 이력이 있는 프로그램에는 연결을 쓰지 않는다(실제 이력 우선)", !own.output.blocks.find((b) => b.weekday === 5 && b.startMin === 1260)?.candidate.seriesPrior);
+  const bad = runIdealScheduleEngine(baseRun({ constraints: [req()], seriesPriors: [{ ...spInput, episodes: [0.5, 0.6] }] }));
+  check("시리즈 연결: 근거를 만들 수 없으면 기존 방식으로 계산하고 이유를 알린다", !bad.output.blocks.find((b) => b.weekday === 5 && b.startMin === 1260)?.candidate.seriesPrior && bad.resolution.warnings.some((w) => w.includes("시리즈 연결 없이 계산")));
+  const sample = SL.buildSeriesPrior({ ...spInput, slotDow: 5, slotHour: 21 }, baseAt)!;
+  const ex = fs0.rating.expectedFromPrior(sample, 5, 21);
+  const exOther = fs0.rating.expectedFromPrior(sample, 2, 20);
+  check("시리즈 기대값: 다른 요일·시에는 그 슬롯 baseline에 같은 지수를 곱한다", close(ex.expected, sample.expectedAtBaseSlot, 1e-9) && close(exOther.expected, sample.index * (baseAt(2, 20) as number), 1e-9) && ex.levels.length === 1 && ex.levels[0].level === 6);
 }
 
 console.log(`\n${passed}건 통과, ${failures.length}건 실패`);
