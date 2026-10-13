@@ -763,7 +763,7 @@ async function main() {
     check("실제 파일: 영미 드라마 23건이 모두 원본 행에 연결된다", applied.applied.length === 23 && applied.unmatched.length === 0);
     const sc = A.seedConfirmations(applied.grants, A.US_DRAMA_1ST_WINDOW);
     console.log(`   · 전달 사실 확인 기록 ${sc.confirmations.length}건, 충돌로 제외 ${sc.skippedForConflict.length}건(${sc.skippedForConflict.join(",")})`);
-    check("실제 파일: 운영자 확인 후 전달 목록과 원본의 충돌이 없다(편수는 Avail 값 13·6, 시작일은 정정 반영)", sc.skippedForConflict.length === 0 && cmp.conflicts.every((c) => c.field === "count_limit"), JSON.stringify(cmp.conflicts.map((c) => [c.displayTitle, c.field])));
+    check("실제 파일: 운영자 확인 후 전달 목록과 원본의 충돌이 없다(편수는 Avail 값 13·6, 시작일은 정정 반영)", sc.skippedForConflict.length === 0 && cmp.conflicts.length === 0, JSON.stringify(cmp.conflicts.map((c) => [c.displayTitle, c.field])));
     const asConf = sc.confirmations.map((c) => ({ grantId: c.grantId, rowHash: c.rowHash, topic: c.topic, value: c.value, evidence: c.evidence, by: "t", at: NOW }));
     const ctxS = ctxOf(A.applyDuplicateResolution(applied.grants, []).grants, { confirmations: asConf, interpretation: A.DEFAULT_INTERPRETATION });
     let availFirst = 0;

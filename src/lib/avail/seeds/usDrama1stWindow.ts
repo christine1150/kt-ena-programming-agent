@@ -1,6 +1,6 @@
 // 영미 드라마 1st window 신규 구매분 23건의 보충 속성(운영자 전달, 2026-10-06).
 // 전달 내용: 모두 1st window로 새로 구매했고 '페이퍼'(30분물)를 빼면 60분물, 당사 전 채널이 2년간 방영 가능,
-// 1st window 채널이 최초 방송을 한 뒤에 나머지 채널이 자유롭게 방영 가능, 제작년도가 중요.
+// 1st window 채널이 최초 방송을 한 뒤에 나머지 채널이 방영 가능(운영자 확인 2026-10-14: 순서 제한만 없다는 뜻이며 방수는 Avail 원본을 따른다), 제작년도가 중요.
 // 원본 Avail 파일(소재코드 D26081201~23)에 이미 있는 행에 붙이는 보충 속성이며, 원본 값은 덮어쓰지 않는다.
 // 제작년도는 전달받은 값만 넣었다(AMADEUS #01 (2025/26)만 표기). 나머지는 입력 전이다.
 import type { Addendum } from "../addenda";
@@ -55,6 +55,6 @@ export const US_DRAMA_1ST_WINDOW: Addendum[] = ROWS.map((r) => ({
   productName: r.product,
   productionYear: r.year ?? null,
   origination: "acquired",
-  expected: { displayTitle: r.title, startDate: r.start, startYearInferred: r.startYearInferred, episodeCount: r.eps, runtimeMin: r.runtime, termMonths: 24, firstChannel: r.first, freeAfterFirstWindow: true },
+  expected: { displayTitle: r.title, startDate: r.start, startYearInferred: r.startYearInferred, episodeCount: r.eps, runtimeMin: r.runtime, termMonths: 24, firstChannel: r.first },
   provenance: BY,
 }));
