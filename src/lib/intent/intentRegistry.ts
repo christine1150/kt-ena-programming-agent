@@ -157,6 +157,18 @@ export const INTENT_REGISTRY: IntentDefinition[] = [
       "mart_scheduling_fit_score(REPLACE/MOVE 태그, 기본 06~25시 한정 — 질문에 시간/요일 범위가 명시되면 그 범위로 대체) + get_program_slot_efficiency(새벽 1년 대비 하락 검증) + get_channel_top_programs(포트폴리오 6채널) + programs/featured_content(추천 후보 A/B 조건 필터) + ratings(요일 필터용 실제 방영일)",
     specificity: 5,
   },
+  // 자료 현황(2026-10-13, B 에이전트 비교 — "무슨 자료 있어?"를 질문으로 물을 수 있게). 채널별로 시청률 자료가 어느 날짜까지 들어와 있는지만 읽기 전용으로 보여 준다.
+  // 키워드는 "최신 데이터 기준으로 …" 같은 일반 문장을 가로채지 않도록 현황·어디까지·들어왔는지 표현으로 좁혔다.
+  {
+    intent_id: "DATA_STATUS",
+    macro_intent: "PORTFOLIO_HEALTH",
+    description: "시청률 자료가 채널별로 어느 날짜까지 들어와 있는지(자료 현황·최신 방송일)를 알려준다.",
+    examples: ["데이터 어디까지 들어왔어?", "자료 현황 알려줘", "ENA PLAY 데이터 최신일은?"],
+    keywords: ["데이터 현황", "자료 현황", "데이터 어디까지", "자료 어디까지", "데이터 들어왔", "자료 들어왔", "데이터 들어와", "자료 들어와", "데이터 최신일", "최신 방송일", "데이터 기준일", "업데이트 됐", "업데이트됐"],
+    required_parameters: [],
+    data_mart: "ratings(채널별 최신 방송일, 읽기 전용 조회)",
+    specificity: 6,
+  },
 ];
 
 export function findIntentById(id: string): IntentDefinition | undefined {

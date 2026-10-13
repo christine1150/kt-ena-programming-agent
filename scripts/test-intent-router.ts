@@ -68,6 +68,12 @@ const CASES: TestCase[] = [
   // question 원문을 직접 재파싱 — 라우팅 단계 파라미터에는 안 실림, 그대로 유지 확인용).
   { question: "ENA PLAY 오후 1시~10시 사이에서만 개선할 곳 찾아줘", expectedIntentId: "SLOT_IMPROVEMENT_RECOMMENDATION", expectedParams: { channelCode: "ENA_PLAY" } },
   { question: "OLIFE 평일 저녁 시간대 중 교체하면 좋을 시간대는?", expectedIntentId: "SLOT_IMPROVEMENT_RECOMMENDATION", expectedParams: { channelCode: "OLIFE" } },
+  // DATA_STATUS(2026-10-13) — 자료 현황 질문. 채널 지정은 선택. "최신 데이터 기준으로 …" 같은 일반 문장은 가로채지 않아야 한다.
+  { question: "데이터 어디까지 들어왔어?", expectedIntentId: "DATA_STATUS" },
+  { question: "자료 현황 알려줘", expectedIntentId: "DATA_STATUS" },
+  { question: "ENA PLAY 데이터 최신일은?", expectedIntentId: "DATA_STATUS", expectedParams: { channelCode: "ENA_PLAY" } },
+  { question: "오늘 데이터 들어왔어?", expectedIntentId: "DATA_STATUS" },
+  { question: "최신 데이터 기준으로 ENA 최근 7일 추이는?", expectedIntentId: "CHANNEL_PERFORMANCE", expectedParams: { channelCode: "ENA" } },
   // UNSUPPORTED — 현재 등록 안 된 Macro(예: Audience Flow, Fatigue/Rerun, ROI 등)
   { question: "이 프로그램 뒤에 편성했을 때 성과가 좋은 프로그램은?", expectedIntentId: "UNSUPPORTED" },
   { question: "이 프로그램의 광고 ROI는 얼마야?", expectedIntentId: "UNSUPPORTED" },

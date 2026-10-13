@@ -853,3 +853,51 @@ export function buildUnsupportedAnswer(missing?: string[]): EvidenceAnswer {
     raw: null,
   };
 }
+
+// ── 자료 현황(DATA_STATUS, 2026-10-13) ─────────────────────────────────────────
+// 채널별 최신 방송일을 그대로 옮긴다. "기준일 대비 지연"은 날짜 차이(일)일 뿐 시청률 계산이 아니다.
+interface DataStatusLike {
+  referenceDate: string | null;
+  rows: { channelCode: string; channelName: string; channelLatest: string | null; programLatest: string | null }[];
+}
+const dayDiff = (later: string, earlier: string) => Math.round((Date.parse(`${later}T00:00:00Z`) - Date.parse(`${earlier}T00:00:00Z`)) / 86400000);
+
+export function buildDataStatusAnswer(data: DataStatusLike): EvidenceAnswer {
+  const ref = data.referenceDate;
+  if (!ref || data.rows.length === 0) {
+    return {
+      ...base("DATA_STATUS", "PORTFOLIO_HEALTH", data),
+      conclusion: "수신된 시청률 자료를 찾지 못했습니다.",
+      keyNumbers: "—",
+      comparisonBasis: "—",
+      evidence: "—",
+      interpretation: "—",
+      programmingAction: "관리자 화면의 자료 수신·반영 현황에서 업로드 상태를 확인해 주세요.",
+      confidence: "HIGH",
+      confidenceNote: "DB에 저장된 최신 방송일을 그대로 보여 줍니다(수치 계산 없음).",
+    };
+  }
+  const lag = (d: string | null) => (d ? dayDiff(ref, d) : null);
+  const behind = data.rows.filter((r) => (lag(r.channelLatest) ?? 1) > 0);
+  const lines = data.rows.map((r) => `${r.channelName}: 채널 단위 ${r.channelLatest ?? "자료 없음"} · 프로그램 단위 ${r.programLatest ?? "자료 없음"}`);
+  const programBehind = data.rows.some((r) => r.channelLatest && r.programLatest && r.programLatest < r.channelLatest);
+  const only = data.rows.length === 1 ? data.rows[0] : null; // 채널을 지정해 물은 경우
+  return {
+    ...base("DATA_STATUS", "PORTFOLIO_HEALTH", data),
+    conclusion: only
+      ? `${only.channelName}의 시청률 자료는 채널 단위 ${only.channelLatest ?? "자료 없음"}, 프로그램 단위 ${only.programLatest ?? "자료 없음"}까지 들어와 있습니다.`
+      : behind.length === 0 ? `시청률 자료는 모든 채널이 ${ref}까지 들어와 있습니다.` : `시청률 자료는 ${ref}까지 들어와 있고, ${behind.map((r) => r.channelName).join(", ")}은(는) 더 이전 날짜까지입니다.`,
+    keyNumbers: only ? `최신 방송일 ${ref}` : `채널 ${data.rows.length}개 중 ${data.rows.length - behind.length}개가 최신일(${ref})까지 반영`,
+    comparisonBasis: "채널별 최신 방송일을 가장 늦은 최신일과 비교",
+    evidence: lines.join("\n"),
+    interpretation: programBehind ? "프로그램 단위 자료가 채널 단위보다 이전 날짜까지라면, 프로그램별 분석은 그 날짜까지만 반영됩니다." : "—",
+    programmingAction: "—",
+    confidence: "HIGH",
+    confidenceNote: "DB에 저장된 최신 방송일을 그대로 보여 줍니다(수치 계산 없음). 값이 비어 있는 날은 자료로 세지 않았습니다.",
+    visualization: table(
+      "채널별 시청률 자료 최신 방송일",
+      ["채널", "채널 단위 최신일", "프로그램 단위 최신일", "기준일 대비 지연(일)"],
+      data.rows.map((r) => [r.channelName, r.channelLatest ?? "자료 없음", r.programLatest ?? "자료 없음", lag(r.channelLatest)])
+    ),
+  };
+}

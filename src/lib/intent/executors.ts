@@ -699,3 +699,43 @@ export async function execSlotImprovementRecommendation(
 
   return { channel, asOfDate, weakSlots, recommendations, dawnAnomalies, customScope };
 }
+
+// ── 자료 현황(DATA_STATUS, 2026-10-13) ─────────────────────────────────────────
+// 채널별로 시청률이 실제로 들어 있는 가장 최근 방송일을 읽기 전용으로 조회한다(새 SQL 함수·계산 없음).
+// 값이 비어 있는 행(skyUHD 미래일 등)은 자료가 아니므로 제외한다(rating IS NOT NULL).
+export interface DataStatusRow {
+  channelCode: string;
+  channelName: string;
+  /** 채널 단위(program_id 없음) 최신 방송일 */
+  channelLatest: string | null;
+  /** 프로그램 단위 최신 방송일 */
+  programLatest: string | null;
+}
+
+async function latestRatingDate(channelId: string, level: "channel" | "program"): Promise<string | null> {
+  const { data } = await supabase
+    .from("ratings")
+    .select("broadcast_date")
+    .eq("channel_id", channelId)
+    .not("rating", "is", null)
+    .filter("program_id", level === "channel" ? "is" : "not.is", null)
+    .order("broadcast_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.broadcast_date ?? null;
+}
+
+export async function execDataStatus(params: ExtractedParameters): Promise<{ referenceDate: string | null; rows: DataStatusRow[] }> {
+  const channels = (await getChannelRefs()).filter((c) => !params.channelCode || c.code === params.channelCode);
+  const { data: ids } = await supabase.from("channels").select("id, code").in("code", channels.map((c) => c.code));
+  const idByCode = new Map((ids ?? []).map((r) => [String(r.code), String(r.id)]));
+  const rows = await Promise.all(
+    channels.map(async (c): Promise<DataStatusRow> => {
+      const id = idByCode.get(c.code);
+      const [channelLatest, programLatest] = id ? await Promise.all([latestRatingDate(id, "channel"), latestRatingDate(id, "program")]) : [null, null];
+      return { channelCode: c.code, channelName: c.name, channelLatest, programLatest };
+    })
+  );
+  const dates = rows.map((r) => r.channelLatest).filter((d): d is string => !!d).sort();
+  return { referenceDate: dates.length ? dates[dates.length - 1] : null, rows };
+}

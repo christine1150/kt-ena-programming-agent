@@ -15,6 +15,7 @@ import {
   execCompetitiveHeadToHead,
   execProgramCrossChannelReach,
   execSlotImprovementRecommendation,
+  execDataStatus,
 } from "./executors";
 import {
   buildPortfolioRankingAnswer,
@@ -28,6 +29,7 @@ import {
   buildCompetitiveHeadToHeadAnswer,
   buildProgramCrossChannelReachAnswer,
   buildSlotImprovementRecommendationAnswer,
+  buildDataStatusAnswer,
   buildUnsupportedAnswer,
 } from "./responseTemplates";
 import type { EvidenceAnswer, RouteResult } from "./types";
@@ -81,6 +83,10 @@ export async function dispatchIntent(routed: RouteResult, question: string): Pro
     case "SLOT_IMPROVEMENT_RECOMMENDATION": {
       const data = await execSlotImprovementRecommendation(parameters, timeContext, question);
       return buildSlotImprovementRecommendationAnswer(data, timeContext);
+    }
+    case "DATA_STATUS": {
+      const data = await execDataStatus(parameters);
+      return buildDataStatusAnswer(data);
     }
     default:
       return buildUnsupportedAnswer();
