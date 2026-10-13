@@ -5,8 +5,7 @@
 // 제작년도는 전달받은 값만 넣었다(AMADEUS #01 (2025/26)만 표기). 나머지는 입력 전이다.
 import type { Addendum } from "../addenda";
 
-const BY = "운영자 전달 2026-10-06(영미 드라마 1st window 목록) + 파일 '26 NBCU 드라마 23편.xlsx' Sheet1(2026-10-13)";
-const REF_SOURCE = "26 NBCU 드라마 23편.xlsx Sheet1 '편성 여부'·'Material' 열(2026-10-13, 원문 보존)";
+const BY = "운영자 전달 2026-10-06(영미 드라마 1st window 목록) + 파일 '26 NBCU 드라마 23편.xlsx' Sheet1(2026-10-13) + 운영자 확인 2026-10-14(4건 정정)";
 
 interface Row {
   no: number;
@@ -39,25 +38,14 @@ const ROWS: Row[] = [
   { no: 15, code: "D26081214", title: "더 헌팅 파티 시즌 2", product: "HUNTING PARTY, THE #02", start: "2026-10-15", first: "skyUHD", eps: 13, runtime: 60 },
   { no: 16, code: "D26081215", title: "언더 솔트 마쉬", product: "UNDER SALT MARSH #01", start: "2026-11-01", first: "skyUHD", eps: 6, runtime: 60 },
   { no: 17, code: "D26081216", title: "엘리전스 시즌 2", product: "ALLEGIANCE #02", start: "2026-11-01", first: "skyUHD", eps: 10, runtime: 60 },
-  { no: 18, code: "D26081221", title: "슈츠 LA 시즌1", product: "SUITS LA #01", start: "2026-11-15", first: "skyUHD", eps: 6, runtime: 60 },
+  { no: 18, code: "D26081221", title: "슈츠 LA 시즌1", product: "SUITS LA #01", start: "2026-11-15", first: "skyUHD", eps: 13, runtime: 60 },
   { no: 19, code: "D26081218", title: "아토믹", product: "ATOMIC #01", start: "2026-11-15", first: "skyUHD", eps: 5, runtime: 60 },
   { no: 20, code: "D26081219", title: "유령마을", product: "BURBS, THE #01", start: "2026-11-15", first: "skyUHD", eps: 8, runtime: 60 },
   { no: 21, code: "D26081220", title: "그로스포인트 정원 협회의 비밀", product: "GROSSE POINT GARDEN SOCIETY", start: "2026-12-01", first: "skyUHD", eps: 13, runtime: 60 },
-  { no: 22, code: "D26081217", title: "라브레아 시즌 3", product: "LA BREA #03", start: "2026-12-01", first: "skyUHD", eps: 13, runtime: 60 },
-  // 시작일이 "12월 15일"로만 전달돼 연도는 2026으로 추정했다(목록이 시간순).
+  { no: 22, code: "D26081217", title: "라브레아 시즌 3", product: "LA BREA #03", start: "2026-12-01", first: "skyUHD", eps: 6, runtime: 60 },
+  // 시작일이 "12월 15일"로만 전달돼 연도는 2026으로 추정했다(목록이 시간순). 운영자가 2026-10-14에 이 날짜를 다시 확인했다.
   { no: 23, code: "D26081223", title: "올 허 폴트: 그날의 책임", product: "ALL HER FAULT #01", start: "2026-12-15", startYearInferred: true, first: "skyUHD", eps: 8, runtime: 60 },
 ];
-
-// 파일 '26 NBCU 드라마 23편.xlsx' Sheet1의 참고 열(번호 기준). 시작일·1st window 채널·편수는 위 목록과 파일이 같았다(2026-10-13 대조).
-// 편성 여부: O / 미정 / 날짜(엑셀 일련번호 46284=2026-09-19, 46280=2026-09-15) / "10월 편성" / 빈칸. Material: O / 요청함 / 빈칸.
-const FILE_REF: Record<number, { sched: string | null; material: string | null }> = {
-  1: { sched: "O", material: "O" }, 2: { sched: "O", material: "O" }, 3: { sched: "O", material: "O" }, 4: { sched: "O", material: "O" },
-  5: { sched: "미정", material: "O" }, 6: { sched: "2026-09-19", material: "O" }, 7: { sched: "2026-09-15", material: "O" },
-  8: { sched: "10월 편성", material: "O" }, 9: { sched: "10월 편성", material: "O" }, 10: { sched: "10월 편성", material: "O" },
-  11: { sched: null, material: "O" }, 12: { sched: null, material: "O" }, 13: { sched: null, material: "O" }, 14: { sched: null, material: "O" }, 15: { sched: null, material: "O" },
-  16: { sched: null, material: "요청함" }, 17: { sched: null, material: "요청함" }, 18: { sched: null, material: "요청함" }, 19: { sched: null, material: "요청함" },
-  20: { sched: null, material: null }, 21: { sched: null, material: null }, 22: { sched: null, material: null }, 23: { sched: null, material: null },
-};
 
 export const US_DRAMA_1ST_WINDOW: Addendum[] = ROWS.map((r) => ({
   addendumId: `usdrama1w:${r.code}`,
@@ -68,6 +56,5 @@ export const US_DRAMA_1ST_WINDOW: Addendum[] = ROWS.map((r) => ({
   productionYear: r.year ?? null,
   origination: "acquired",
   expected: { displayTitle: r.title, startDate: r.start, startYearInferred: r.startYearInferred, episodeCount: r.eps, runtimeMin: r.runtime, termMonths: 24, firstChannel: r.first, freeAfterFirstWindow: true },
-  reference: FILE_REF[r.no] ? { scheduling: FILE_REF[r.no].sched, material: FILE_REF[r.no].material, source: REF_SOURCE } : null,
   provenance: BY,
 }));

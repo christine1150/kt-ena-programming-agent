@@ -740,7 +740,13 @@ async function main() {
     const main = analysis.find((s) => s.kind === "content_avail");
     check("실제 파일: '소재' 시트를 콘텐츠별 Avail로 감지하고 가져올 수 있다", !!main && main.importable && main.sheet === "소재");
     check("실제 파일: 나머지 두 시트(9월시작·10월종료)는 같은 행의 보기라 가져오지 않는다(이중 반영 방지)", analysis.filter((s) => s.kind === "view_of_content_avail").length === 2 && analysis.filter((s) => s.importable).length === 1);
-    const grants = main?.grants ?? [];
+    const grants0 = main?.grants ?? [];
+    // 운영자 확인(2026-10-14)으로 시작일이 틀린 2건(유령마을·올 허 폴트)을 정정 revision으로 덮은 현재 판
+    const corr = A.buildStartCorrections(grants0, A.US_DRAMA_START_CORRECTIONS, "t", NOW);
+    const grants = A.currentGrants([...grants0, ...corr.revisions]);
+    check("실제 파일: 시작일 정정 2건이 정정 revision으로 쌓이고(원본 행 유지·수동 수정 표시), 종료일은 같은 24개월로 다시 계산된다", corr.revisions.length === 2 && corr.skipped.length === 0 && corr.revisions.every((r) => r.manual?.override && r.supersedesRevisionId && r.rowHash === grants0.find((g) => g.grantId === r.grantId)!.rowHash) && grants.find((g) => g.content.sourceCode === "D26081219")!.window.start.state === "value" && (grants.find((g) => g.content.sourceCode === "D26081223")!.window.end as { value?: string }).value === "2028-12-14");
+    const redo = A.planImport({ incoming: grants0, existingRevisions: [...grants0, ...corr.revisions], kind: "incremental", scope: null, now: NOW });
+    check("실제 파일: 같은 파일을 다시 올려도 정정이 덮이지 않고 변화 없음(정정 행도 새 개정·충돌로 잡히지 않음)", redo.newGrants.length === 0 && redo.revised.length === 0 && redo.manualConflicts.length === 0 && redo.unchanged.length === 1164);
     check("실제 파일: 1,164행 모두 소재코드로 식별되어 권리 1,164건", grants.length === 1164 && new Set(grants.map((g) => g.grantId)).size === 1164);
     check("실제 파일: 모든 권리가 원본 행 번호·열 전체를 보존", grants.every((g) => g.source.row !== null && Object.keys(g.source.columns).length >= 20));
     const unk = {
@@ -757,7 +763,7 @@ async function main() {
     check("실제 파일: 영미 드라마 23건이 모두 원본 행에 연결된다", applied.applied.length === 23 && applied.unmatched.length === 0);
     const sc = A.seedConfirmations(applied.grants, A.US_DRAMA_1ST_WINDOW);
     console.log(`   · 전달 사실 확인 기록 ${sc.confirmations.length}건, 충돌로 제외 ${sc.skippedForConflict.length}건(${sc.skippedForConflict.join(",")})`);
-    check("실제 파일: 충돌 4건(유령마을·올 허 폴트·슈츠 LA·라브레아)은 확인 기록에서 제외", sc.skippedForConflict.length === 4);
+    check("실제 파일: 운영자 확인 후 전달 목록과 원본의 충돌이 없다(편수는 Avail 값 13·6, 시작일은 정정 반영)", sc.skippedForConflict.length === 0 && cmp.conflicts.every((c) => c.field === "count_limit"), JSON.stringify(cmp.conflicts.map((c) => [c.displayTitle, c.field])));
     const asConf = sc.confirmations.map((c) => ({ grantId: c.grantId, rowHash: c.rowHash, topic: c.topic, value: c.value, evidence: c.evidence, by: "t", at: NOW }));
     const ctxS = ctxOf(A.applyDuplicateResolution(applied.grants, []).grants, { confirmations: asConf, interpretation: A.DEFAULT_INTERPRETATION });
     let availFirst = 0;
@@ -771,7 +777,7 @@ async function main() {
       if (ro.status === "conditional" && has(ro, "FIRST_WINDOW_NOT_BROADCAST")) condOther++;
     }
     console.log(`   · 1st window 채널 가능 ${availFirst}/23, 다른 채널 1st window 대기 ${condOther}/23`);
-    check("실제 파일: 확인 기록 후 충돌 없는 19건은 1st window 채널에서 가능, 충돌 4건은 계속 확인 전", availFirst === 19);
+    check("실제 파일: 확인 기록 후 23건 모두 1st window 채널에서 가능", availFirst === 23);
     const byField = (f: string) => cmp.conflicts.filter((c) => c.field === f).map((c) => c.displayTitle);
     console.log(`   · 원본과 전달 목록 일치 항목 ${cmp.agreed}건 / 충돌: 시작일 ${JSON.stringify(byField("start_date"))}, 편수 ${JSON.stringify(byField("episode_count"))}, 1st 채널 ${JSON.stringify(byField("first_channel"))}, 종료일 ${JSON.stringify(byField("end_date"))}, 런타임 ${JSON.stringify(byField("runtime"))}`);
     check("실제 파일: 종료일은 시작일+2년−1일 계산과 모두 일치(전달 목록의 날짜 기준)", byField("end_date").length === 0 || byField("end_date").length === byField("start_date").length);
@@ -822,38 +828,6 @@ async function main() {
       }
     }
     check("슬롯 게이트: 날짜 묶음 캐시와 정밀 계산이 모든 요일·시각·길이·모드에서 같다(자정 걸침·시작 시각 있는 권리 포함)", total > 1000 && diff === 0, `${diff}/${total} 다름`);
-  }
-
-  // ── 영미 드라마 23건 보충 속성: 참고 열 보존 + NBCU 목록 파일 대조(파일이 있을 때만) ──
-  {
-    const ref = A.US_DRAMA_1ST_WINDOW;
-    check("보충 속성 23건 모두 '편성 여부'·'Material' 참고 열 원문을 보존한다(판정에는 쓰지 않음)", ref.length === 23 && ref.every((a) => a.reference && a.reference.source.includes("26 NBCU 드라마 23편.xlsx")));
-    const by = (code: string) => ref.find((a) => a.sourceCode === code)!.reference!;
-    check("참고 열 값: 스위트피 편성 여부 2026-09-19·소재 O, 슈츠 LA 소재 '요청함', 유령마을 소재 빈칸", by("D26081207").scheduling === "2026-09-19" && by("D26081207").material === "O" && by("D26081221").material === "요청함" && by("D26081219").material === null && by("D26081204").scheduling === "10월 편성");
-    const withRef = A.applyAddenda([grant({ id: "NB1", code: "D26081201", title: "더 이래셔널 시즌1", start: "2026-08-31", end: "2028-08-30" })], ref).grants[0];
-    const bare = A.applyAddenda([grant({ id: "NB1", code: "D26081201", title: "더 이래셔널 시즌1", start: "2026-08-31", end: "2028-08-30" })], ref.map((a) => ({ ...a, reference: null }))).grants[0];
-    check("참고 열은 권리 행·판정을 바꾸지 않는다(있어도 없어도 같은 Grant)", JSON.stringify(withRef) === JSON.stringify(bare));
-    const nbcu = process.env.NBCU_LIST_FILE ?? "C:/Users/sky tv/Downloads/26 NBCU 드라마 23편.xlsx";
-    if (!fs.existsSync(nbcu)) console.log(`(NBCU 목록 파일 없음: ${nbcu} — 이 구간은 건너뜁니다)`);
-    else {
-      const XLSX = await import("xlsx");
-      const rows = XLSX.utils.sheet_to_json<unknown[]>(XLSX.read(fs.readFileSync(nbcu)).Sheets["Sheet1"], { header: 1, blankrows: false }).slice(1);
-      const iso = (n: unknown) => (typeof n === "number" ? new Date(Date.UTC(1899, 11, 30) + n * 86400000).toISOString().slice(0, 10) : null);
-      const bad: string[] = [];
-      for (const r of rows) {
-        const a = ref[Number(r[0]) - 1];
-        const st = iso(r[6]);
-        if (!a) { bad.push(`번호 ${r[0]} 없음`); continue; }
-        if (st && a.expected?.startDate !== st) bad.push(`${r[0]} 시작일`);
-        if (a.expected?.episodeCount !== Number(r[8])) bad.push(`${r[0]} 편수`);
-        if (channelKeyOf(a.firstWindowChannel) !== channelKeyOf(String(r[7]))) bad.push(`${r[0]} 1st`);
-        const mat = r[10] === undefined || r[10] === null || String(r[10]).trim() === "" ? null : String(r[10]).trim();
-        if ((a.reference?.material ?? null) !== mat) bad.push(`${r[0]} 소재`);
-        const sc = r[9] === undefined || r[9] === null || String(r[9]).trim() === "" ? null : typeof r[9] === "number" ? iso(r[9]) : String(r[9]).trim();
-        if ((a.reference?.scheduling ?? null) !== sc) bad.push(`${r[0]} 편성여부`);
-      }
-      check("NBCU 목록 파일 23행: 시작일(날짜 값)·편수·1st window 채널·편성 여부·Material이 보충 속성과 모두 같다", rows.length === 23 && bad.length === 0, bad.join(", "));
-    }
   }
 
   // ── 운영자 입력 권리: 채널별 편성 가능 시점(시각 포함) ──

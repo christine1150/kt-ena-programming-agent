@@ -13,6 +13,7 @@ export * from "./selector";
 export * from "./revalidation";
 export * from "./addenda";
 export * from "./manualGrant";
+export * from "./corrections";
 export * from "./context";
 export { US_DRAMA_1ST_WINDOW } from "./seeds/usDrama1stWindow";
 export { analyzeMatrices, analyzeWorkbookBuffer } from "./adapters/detect";
