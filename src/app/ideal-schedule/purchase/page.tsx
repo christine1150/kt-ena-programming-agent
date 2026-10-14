@@ -524,7 +524,7 @@ function PurchaseSimulator() {
 type RecoItem = { rank: number; group_key: string; rep_key: string; display_name: string; genre: string | null; prediction: number; prediction_low: number | null; prediction_high: number | null; peer_count: number; peer_airings: number; channel_annual_avg: number | null; vs_annual_avg: number | null; confidence: string | null; as_of: string; target: string; model_version?: string | null; computed_at?: string | null };
 type RecoAlignment = { aligned: boolean; asOfLagDays: number; messages: string[] };
 
-// 구매 추천: 해당 채널에서 방영한 적 없는 프로그램 중 타 채널(케이블 재방 2곳 이상·20회 이상) 실적으로 연평균 이상이 기대되는 후보를, 연평균 대비 배수(방영 횟수로 보정) 순으로 보여 준다. 사전 계산 결과를 읽는다.
+// 구매 추천: 해당 채널에서 방영한 적 없는 프로그램 중 타 채널(케이블 재방 1곳 이상·20회 이상) 실적으로 연평균 이상이 기대되는 후보를, 연평균 대비 배수(방영 횟수로 보정) 순으로 보여 준다. 사전 계산 결과를 읽는다.
 // 사전 계산(주 1회)이라 현재 데이터 기준일·모델과 어긋나면 오래된 추천으로 표시한다. 항목을 열면 최신 기준 시뮬레이션이 값을 갱신한다.
 function RecoSection({ channel, windowDays, onPick }: { channel: string; windowDays: number; onPick: (p: RecoPick) => void }) {
   const [items, setItems] = useState<RecoItem[] | null>(null);

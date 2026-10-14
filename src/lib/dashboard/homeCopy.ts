@@ -150,7 +150,7 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
     const w = o.weak.slice(0, 2).map((x) => `'${x.name}'(ENA 본방이 같은 시간대 평균의 ${x.slotIndex?.toFixed(1) ?? "-"}배)`);
     levers.push({ text: sentence(`재방 축소 검토 — ${w.join(", ")}: ENA 본방 효율이 낮아 이 채널 재방을 줄이는 방안`), positive: false });
   }
-  // 구매 후보: 진입 기준(비교 2곳·20회·연평균 1.0배 이상)을 채운 것만, 1.1배 이상이 있으면 "구매 검토", 1.0~1.1배뿐이면 "구매 참고"로 말한다
+  // 구매 후보: 진입 기준(비교 1곳·20회·연평균 1.0배 이상)을 채운 것만, 1.1배 이상이 있으면 "구매 검토", 1.0~1.1배뿐이면 "구매 참고"로 말한다
   const ext = (ai?.external ?? []).filter((e) => e.vsAvg !== null && e.vsAvg >= RECO_MIN_VS_AVG && recoEvidence(e.peers, e.airings) !== null).slice(0, 2);
   const extBuy = ext.filter((e) => e.vsAvg! >= RECO_BUY_TEXT_MIN_VS_AVG);
   const extShown = extBuy.length > 0 ? extBuy : ext;

@@ -1,0 +1,14 @@
+{
+  "totalCandidateDates": 4252,
+  "alreadyLoaded": 556,
+  "attempted": 5,
+  "successCount": 5,
+  "parseFailCount": 0,
+  "dbErrorCount": 0,
+  "parseFailuresByReason": {},
+  "coverageWarningsSample": [],
+  "coverageWarningsTotal": 0,
+  "newTargetLabelWarningsSample": [],
+  "newTargetLabelWarningsTotal": 0,
+  "dbErrorsSample": []
+}

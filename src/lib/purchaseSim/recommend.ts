@@ -1,4 +1,4 @@
-// 구매 추천 계산: 해당 채널에서 방영 이력이 없는 프로그램 중, 케이블 재방 2곳 이상·20회 이상 근거가 있고 이 채널 연평균 이상(1.0배)으로 추정되는 후보를 연평균 대비 배수(방영 횟수로 보정) 순으로 정렬한다(recoEvidence.ts).
+// 구매 추천 계산: 해당 채널에서 방영 이력이 없는 프로그램 중, 케이블 재방 1곳 이상·20회 이상 근거가 있고 이 채널 연평균 이상(1.0배)으로 추정되는 후보를 연평균 대비 배수(방영 횟수로 보정) 순으로 정렬한다(recoEvidence.ts).
 // 신규 구매 시나리오(타 채널 실적만 사용)이며 가격·판권은 반영하지 않는다. 결과는 purchase_recommendations 에 저장된다.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchChannelAnnualAvg, fetchSimInputsMulti, latestCompetitorDate, loadCalibration } from "./dataSource";
@@ -69,7 +69,7 @@ export async function computeRecommendations(client: SupabaseClient, args: { cha
   const hub = PARAMS.hubChannels as readonly string[];
   const groups = new Map<string, { display: string; rep: string; members: string[] }>();
   for (const r of ident) {
-    if (r.comp_channels.filter((c) => !hub.includes(c)).length < minPeers) continue; // 비교 채널은 케이블 2곳 이상(기본)
+    if (r.comp_channels.filter((c) => !hub.includes(c)).length < minPeers) continue; // 비교 채널은 케이블 1곳 이상(기본)
     if (args.onlyKeys && !args.onlyKeys.has(r.key.toUpperCase())) continue;
     const g = groups.get(r.group_key) ?? { display: r.display_name, rep: r.key, members: [] };
     g.members.push(r.key.toUpperCase());

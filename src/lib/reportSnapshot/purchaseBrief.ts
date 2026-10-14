@@ -19,7 +19,7 @@ export interface RecoRow {
 
 export const PURCHASE_STAGE_TEXT = "보유 예정(권리 획득 가정)";
 export const PURCHASE_BRIEF_NOTE =
-  "구매 추천은 이 채널에서 방영 이력이 없고 케이블 재방 2곳 이상·20회 이상 근거가 있으며 채널 연평균 이상으로 추정되는 후보의 예상 시청률입니다(근거가 충분하지 않은 후보는 검토 후보). 모든 후보는 보유 예정(권리 획득 가정)이며, 실제 권리 확인과 구매 요청은 구매 검토 화면에서 하고 이 보고서에서는 일어나지 않습니다.";
+  "구매 추천은 이 채널에서 방영 이력이 없고 케이블 재방 1곳 이상·20회 이상 근거가 있으며 채널 연평균 이상으로 추정되는 후보의 예상 시청률입니다(근거가 충분하지 않은 후보는 검토 후보). 모든 후보는 보유 예정(권리 획득 가정)이며, 실제 권리 확인과 구매 요청은 구매 검토 화면에서 하고 이 보고서에서는 일어나지 않습니다.";
 
 /** 한 채널당 상위 perChannel건만 싣는다. 예측 범위 폭이 예측값 이상이면 "범위 넓음"으로 표시한다. */
 export function buildPurchaseBrief(rows: RecoRow[], args: { analysisTo: string; names: Record<string, string>; perChannel?: number }): PurchaseReviewBrief {

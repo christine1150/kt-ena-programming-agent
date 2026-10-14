@@ -830,7 +830,7 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   );
   check("Avail 보유: 근거 충분(3곳·48회)은 추천, 비교 1곳 이상·20회 이상은 시험 편성 후보로 남고, 20회 미만·연평균 미만은 빠지며 추천이 먼저 나온다", picked.map((p) => `${p.name}:${p.tier}`).join(",") === "강한후보:rec,한곳뿐:test,약한후보:test", picked.map((p) => `${p.name}:${p.tier}`).join(","));
   const oneLabel = heldLabel(picked[1]);
-  check("Avail 보유: 비교 1곳뿐인 보유작도 후보가 되며 근거 약함으로 표기한다(구매 후보는 2곳 이상)", picked[1].name === "한곳뿐" && picked[1].evidence === "weak" && oneLabel.includes("비교 1곳") && oneLabel.includes("근거 약함") && recoEvidence(1, 60) === null && recoEvidence(1, 60, 1) === "weak" && recoEvidence(1, 19, 1) === null, oneLabel);
+  check("Avail 보유: 비교 1곳뿐인 보유작도 후보가 되며 근거 약함으로 표기한다(구매 후보는 2곳 이상)", picked[1].name === "한곳뿐" && picked[1].evidence === "weak" && oneLabel.includes("비교 1곳") && oneLabel.includes("근거 약함") && recoEvidence(1, 60) === "weak" && recoEvidence(1, 19) === null, oneLabel);
   const testLabel = heldLabel(picked[2]);
   check("Avail 보유: 근거 약한 후보의 표기는 비교 채널 수·방영 횟수와 '근거 약함'을 함께 밝힌다", testLabel.includes("비교 2곳") && testLabel.includes("32회") && testLabel.includes("근거 약함"), testLabel);
   const heldCopy = buildCardCopy({ ...input, ai: { ...base, remedy: null, change: null, availHeld: [picked[2]] } });
@@ -900,11 +900,11 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   check("유지율: 앞 프로그램이 없으면 잡지 않는다", retentionLeak(rows, tgt, null, tgt.date) === null);
 }
 
-// 구매 후보 진입 기준·근거 수준·정렬(2026-10-15 확정: 2곳·20회·1.0배, 충분/보통/약함, 횟수 보정 배수 순)
+// 구매 후보 진입 기준·근거 수준·정렬(2026-10-15 확정: 1곳·20회·1.0배, 충분/보통/약함, 횟수 보정 배수 순)
 {
   check("구매 후보 근거: 3곳·48회 이상 충분 / 3곳·20~47회·2곳·48회 이상 보통 / 2곳·20~47회 약함", recoEvidence(3, 48) === "strong" && recoEvidence(3, 30) === "medium" && recoEvidence(2, 468) === "medium" && recoEvidence(2, 32) === "weak");
-  check("구매 후보 진입: 비교 1곳이거나 방영 20회 미만이면 후보가 아니다", recoEvidence(1, 200) === null && recoEvidence(5, 19) === null && recoEvidence(0, null) === null);
-  check("구매 후보 근거: 방영 횟수를 모르는 옛 값은 3곳 이상이면 충분, 2곳이면 약함", recoEvidence(3, null) === "strong" && recoEvidence(2, undefined) === "weak");
+  check("구매 후보 진입: 비교 1곳 이상·20회 이상이면 후보(1곳은 근거 약함), 비교 0곳이거나 20회 미만이면 후보가 아니다", recoEvidence(1, 200) === "weak" && recoEvidence(1, 20) === "weak" && recoEvidence(5, 19) === null && recoEvidence(0, 100) === null && recoEvidence(0, null) === null);
+  check("구매 후보 근거: 방영 횟수를 모르는 옛 값은 3곳 이상이면 충분, 2곳이면 약함", recoEvidence(3, null) === "strong" && recoEvidence(2, undefined) === "weak" && recoEvidence(1, undefined) === "weak");
   const few = shrunkVsAvg(1.5, 20) as number;
   const many = shrunkVsAvg(1.3, 100) as number;
   check("구매 후보 정렬: 1.5배·20회보다 1.3배·100회가 위(횟수가 적으면 배수를 1.0 쪽으로 당긴다)", few < many && Math.abs(shrunkVsAvg(1.2, 48)! - 1.1) < 1e-9, `${few.toFixed(3)} vs ${many.toFixed(3)}`);
@@ -916,8 +916,8 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   check("홈 문구: 1.1배 이상이면 '구매 검토'로 말하되 비교 곳수·횟수와 근거 수준을 함께 적는다", !!buy.action?.startsWith("구매 검토 —") && buy.action.includes("비교 2곳·40회, 근거 약함"), buy.action ?? "");
   const ref = buildCardCopy({ ...extIn, ai: { ...extBase, external: [{ name: "후보나", vsAvg: 1.05, peers: 4, airings: 90 }] } });
   check("홈 문구: 1.0~1.1배뿐이면 '구매 참고'로 낮춰 말한다", !!ref.action?.startsWith("구매 참고 —") && !ref.action.includes("구매 검토"), ref.action ?? "");
-  const out = buildCardCopy({ ...extIn, ai: { ...extBase, external: [{ name: "후보다", vsAvg: 1.6, peers: 1, airings: 300 }, { name: "후보라", vsAvg: 1.6, peers: 5, airings: 15 }, { name: "후보마", vsAvg: 0.9, peers: 5, airings: 90 }] } });
-  check("홈 문구: 진입 기준(2곳·20회·1.0배)을 못 채운 후보는 구매를 말하지 않는다", ![out.action, ...out.more].join(" ").match(/구매 (검토|참고)/), out.action ?? "");
+  const out = buildCardCopy({ ...extIn, ai: { ...extBase, external: [{ name: "후보다", vsAvg: 1.6, peers: 0, airings: 300 }, { name: "후보라", vsAvg: 1.6, peers: 5, airings: 15 }, { name: "후보마", vsAvg: 0.9, peers: 5, airings: 90 }] } });
+  check("홈 문구: 진입 기준(1곳·20회·1.0배)을 못 채운 후보는 구매를 말하지 않는다", ![out.action, ...out.more].join(" ").match(/구매 (검토|참고)/), out.action ?? "");
   check("근거 수준 이름: 충분·보통·약함", RECO_EVIDENCE_KO.strong === "근거 충분" && RECO_EVIDENCE_KO.medium === "근거 보통" && RECO_EVIDENCE_KO.weak === "근거 약함");
 }
 

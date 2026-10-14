@@ -288,7 +288,7 @@ async function loadExternalCandidates(channelCode: string, limit = 2): Promise<{
     .order("rank", { ascending: true })
     .limit(30);
   if (error) return [];
-  // 진입 기준(비교 2곳·20회·연평균 1.0배 이상)을 다시 확인하고, 방영 횟수로 보정한 배수 순으로 상위만 쓴다(저장된 순서는 갱신 시점의 기준이라 옛 값이 섞일 수 있다)
+  // 진입 기준(비교 1곳·20회·연평균 1.0배 이상)을 다시 확인하고, 방영 횟수로 보정한 배수 순으로 상위만 쓴다(저장된 순서는 갱신 시점의 기준이라 옛 값이 섞일 수 있다)
   return ((data ?? []) as { display_name: string; vs_annual_avg: number | string | null; peer_count: number | string | null; peer_airings: number | string | null }[])
     .filter((r) => !!r.display_name)
     .map((r) => ({ name: r.display_name, vsAvg: r.vs_annual_avg === null ? null : Number(r.vs_annual_avg), peers: r.peer_count === null ? null : Number(r.peer_count), airings: r.peer_airings === null ? null : Number(r.peer_airings) }))
