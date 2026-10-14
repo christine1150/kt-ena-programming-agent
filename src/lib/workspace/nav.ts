@@ -30,7 +30,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "portfolio", label: "포트폴리오", hint: "채널 그룹 종합 보고", dest: "portfolio", minAction: "view" },
   { id: "compare", label: "편성 비교", hint: "주간 편성표 비교", dest: "schedule_grid", minAction: "view" },
   { id: "ai", label: "AI 편성", hint: "편성안 생성·비교·검토", dest: "ideal_schedule", minAction: "view" },
-  { id: "content", label: "콘텐츠·Avail", hint: "구매 검토와 권리(Avail) 상태", dest: "purchase", minAction: "view", extra: [{ label: "Avail 관리", dest: "admin", minAction: "rights_edit" }] },
+  { id: "content", label: "구매 시뮬레이터", hint: "구매 검토와 권리(Avail) 상태", dest: "purchase", minAction: "view", extra: [{ label: "Avail 관리", dest: "admin", minAction: "rights_edit" }] },
   { id: "reports", label: "보고서", hint: "채널 리포트(웹·Word·PPT)", dest: "report", minAction: "view" },
   { id: "admin", label: "관리", hint: "자료 업로드·기준 정보·점검", dest: "admin", minAction: "upload" },
 ];
