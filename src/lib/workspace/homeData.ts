@@ -245,7 +245,7 @@ export function buildTodayDecisions(i: {
     const observation = `'${programName}' 같은 슬롯 평균 대비 ${dir}${Math.abs(dev).toFixed(0)}%`;
     // Fit Score 태그가 관측 방향과 어긋나면(예: 상승인데 MOVE, 하락인데 STRENGTHEN) 한 카드 안에서 판단이 서로 모순되므로
     // 태그를 판단에서 제외하고 그 사실을 노트에 남긴다(단계 04 F06 — 홈·상세 판단 충돌 방지).
-    const tagFits = tag === null || (dev <= 0 ? ["MOVE", "REPLACE", "TEST"] : ["STRENGTHEN", "KEEP", "TEST"]).includes(tag);
+    const tagFits = tag === null || (dev <= 0 ? ["MOVE", "REPLACE", "WATCH", "TEST"] : ["STRENGTHEN", "KEEP", "TEST"]).includes(tag);
     const usedTag = tagFits ? tag : null;
     const action = applyPolicy(programActionFor({ programName, startHour: hour, deviationPct: dev, baselineLabel, baselineDays, fitScoreTag: usedTag, observationText: observation, asOfDate: i.asOfDate, snapshotId: i.snapshotId }), DEFAULT_OPERATING_POLICY, s.channelCode);
     const hourLabel = hour !== null ? ` ${hour}시` : "";

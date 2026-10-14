@@ -2,6 +2,8 @@
 // CLAUDE.md 원칙: 계산은 전부 SQL(이미 있는 get_* 함수들)이 하고, 여기서는 호출·조합만 한다.
 // 새 SQL 함수를 만들지 않고, Page 1/2에서 이미 검증된 함수들을 그대로 재사용한다.
 import { supabase } from "@/lib/supabase";
+import { trendPct } from "@/lib/contentFit";
+import { loadContentFit } from "@/lib/contentFit/source";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import type { ExtractedParameters, TimeContext } from "./types";
 import { getChannelRefs, isNlCompetitorExcluded, type ChannelRef } from "./referenceData";
@@ -460,12 +462,11 @@ export interface SlotFitRow {
   tag: string | null;
   sample_days: number;
   confidence_pct: number | null;
-  target_performance_score: number | null;
-  target_affinity_score: number | null;
-  audience_engagement_score: number | null;
-  slot_performance_score: number | null;
-  competitive_opportunity_score: number | null;
-  audience_flow_score: number | null;
+  // 콘텐츠 적합도 엔진(src/lib/contentFit) 값 — 2026-10-14 재설계로 옛 하위지표 6종(percentile)을 대체했다.
+  slot_index: number | null; // 같은 요일·시간대 다른 프로그램 평균 대비 몇 배
+  scale_index: number | null; // 채널 평균 방영 시청률 대비 몇 배
+  engagement_score: number | null; // 시청 몰입도 0~100
+  trend_pct: number | null; // 최근 4주 vs 이전 8주 변화율(%)
   startHour: number | null; // broadcast hour(2~25) — most_common_start_hour
 }
 export interface SlotRecommendationCandidate {
@@ -510,36 +511,23 @@ export async function execSlotImprovementRecommendation(
   const asOfDate = timeContext.dateTo; // Fit Score(fit-score/route.ts)와 같은 개념 — 데이터 존재 최신일 기준
   const programTargetLabel = resolveProgramLevelTargetLabel(channel.primaryTarget);
 
-  // Fit Score와 동일한 지연 캐싱 패턴: 이 채널·기준일 조합이 마트에 아직 없으면 그때 한 번만 계산한다.
-  const { count } = await supabase
-    .from("mart_scheduling_fit_score")
-    .select("id", { count: "exact", head: true })
-    .eq("as_of_date", asOfDate)
-    .eq("channel_id", channelId);
-  if (!count || count === 0) {
-    const { error: refreshError } = await supabase.rpc("refresh_fit_score_mart", {
-      p_as_of_date: asOfDate,
-      p_window_days: 84,
-      p_channel_code: channel.code,
-    });
-    if (refreshError) {
-      // Fit Score route.ts와 동일한 경합 조건 대비: 다른 요청이 그 사이 이미 채웠는지 재확인.
-      const { count: recheckCount } = await supabase
-        .from("mart_scheduling_fit_score")
-        .select("id", { count: "exact", head: true })
-        .eq("as_of_date", asOfDate)
-        .eq("channel_id", channelId);
-      if (!recheckCount || recheckCount === 0) return null; // 계산 자체가 실패 — 상위(응답 템플릿)가 "데이터 없음"으로 처리
-    }
-  }
-
-  const { data: fitRows } = await supabase
-    .from("mart_scheduling_fit_score")
-    .select(
-      "program_id, fit_score, tag, sample_days, confidence_pct, target_performance_score, target_affinity_score, audience_engagement_score, slot_performance_score, competitive_opportunity_score, audience_flow_score, programs(canonical_name)"
-    )
-    .eq("as_of_date", asOfDate)
-    .eq("channel_id", channelId);
+  // 콘텐츠 적합도(슬롯 대비 성과·시청 규모 중심, 채널 KPI 타깃의 방영 행에서 계산) — 화면(Page 2)과 같은 엔진을 쓴다.
+  const loaded = await loadContentFit(channel.code, asOfDate).catch(() => null);
+  if (!loaded) return null; // 계산 자체가 실패 — 상위(응답 템플릿)가 "데이터 없음"으로 처리
+  const fitRows = loaded.result.items
+    .filter((it) => it.tier !== "HOLD")
+    .map((it) => ({
+      program_id: it.programId,
+      fit_score: it.score,
+      tag: it.tier === "FORMAL" ? it.tag : "TEST",
+      sample_days: it.sampleDays,
+      confidence_pct: it.confidencePct,
+      slot_index: it.slotIndex,
+      scale_index: it.scaleIndex,
+      engagement_score: it.engagementScore,
+      trend_pct: trendPct(it),
+      programs: { canonical_name: loaded.programs.get(it.programId)?.canonicalName ?? "" },
+    }));
 
   // fit-score/route.ts와 동일: 최근 14일 안에 실제로 방영된 프로그램만 "현재 편성 중"으로 본다
   // (12주 표본에는 있지만 이미 종영한 프로그램까지 진단 대상에 섞이지 않도록). broadcast_date도
@@ -570,7 +558,7 @@ export async function execSlotImprovementRecommendation(
   };
 
   type FitRow = Omit<SlotFitRow, "canonical_name" | "startHour"> & { programs: { canonical_name: string } | null };
-  const recentFitRows = ((fitRows ?? []) as unknown as FitRow[]).filter((r) => recentProgramIds.has(r.program_id));
+  const recentFitRows = (fitRows as FitRow[]).filter((r) => recentProgramIds.has(r.program_id));
 
   // 이 채널의 프로그램별 실제 방영 시간(most_common_start_hour, bh 2~25)을 구한다 — Fit Score
   // evidence의 4구간(daypart)만으로는 MAIN(06시)/DAWN(01시) 경계를 정확히 가를 수 없다.

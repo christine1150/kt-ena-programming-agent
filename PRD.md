@@ -101,7 +101,7 @@ KT ENA 편성 PD → 출근 후 Morning Briefing 확인 (WHAT HAPPENED? → WHY?
     - ④ Content/Program Asset Intelligence — 장르·타깃 중심 콘텐츠 생산성 평가 (킬러 콘텐츠·주요 콘텐츠 실적 포함)
     - ⑤ Audience Flow Intelligence — Lead-in/Lead-out 및 블록 편성 효과 참고 분석 (개인 단위 이동 단정 금지, 6번 비범위 원칙 준수)
     - ⑥ Scheduling Intelligence — 편성 추천(Fit Score/Confidence 포함)
-  - 편성 추천: KEEP, MOVE, REPLACE, STRENGTHEN, TEST 중 하나를 근거·Fit Score·Confidence와 함께 제시한다. Program × Slot × Target 단위로 아래 **Fit Score(0~100)**를 계산해 판단 근거로 삼는다 (최근 12주 이상 데이터가 이미 확보되어 있어, 아래 규칙을 처음부터 적용한다):
+  - 편성 추천: KEEP, MOVE, REPLACE, STRENGTHEN, TEST 중 하나를 근거·Fit Score·Confidence와 함께 제시한다. (2026-10-14 개정: 태그에 WATCH 추가, Fit Score는 콘텐츠 적합도로 대체 — 아래 "개정" 항목 참고) Program × Slot × Target 단위로 아래 **Fit Score(0~100)**를 계산해 판단 근거로 삼는다 (최근 12주 이상 데이터가 이미 확보되어 있어, 아래 규칙을 처음부터 적용한다):
     - **Fit Score 구성**: 30% Target Performance + 20% Target Affinity + 15% Audience Engagement + 15% Slot Performance + 10% Competitive Opportunity + 10% Audience Flow (모든 하위 점수는 먼저 0~100으로 표준화한 뒤 가중합)
       - **Target Performance** = 40%×Program Target Rating Score + 30%×Same Slot Historical Score + 30%×Same Daypart Score — 각각 "최근 12주 동일 요일·시간대·타깃" 기준 자사 채널 내 percentile로 0~100 환산
       - **Target Affinity** = Affinity Index(기존 정의 공식)를 최근 12주 percentile로 0~100 환산
@@ -117,6 +117,7 @@ KT ENA 편성 PD → 출근 후 Morning Briefing 확인 (WHAT HAPPENED? → WHY?
       - Fit Score 50 미만 → **REPLACE** 검토
     - Fit Score와 Confidence는 반드시 함께, 별개 지표로 표시한다 (예: "Fit Score 93 / Confidence 38%(표본 6건)" → 점수가 높아도 표본이 적으면 탐색적 추천으로 안내).
     - **구현 방식**: Fit Score는 Claude가 암산하지 않고 SQL/Python으로 사전 계산된 MART 테이블(`MART_PROGRAM_TARGET_SCORE`, `MART_SLOT_SCORE`, `MART_COMPETITIVE_SCORE`, `MART_FLOW_SCORE` → `MART_SCHEDULING_FIT_SCORE`)을 조회해 사용하며, Claude는 결과를 해석해 추천 이유를 설명하는 역할만 담당한다. 가중치(30/20/15/15/10/10)는 코드에 고정하지 않고 CONFIG 테이블로 관리해 운영 데이터로 채널별 튜닝이 가능하게 한다.
+    - **개정(2026-10-14, 사용자 요청 — CONTENT FITS 논리 재검증)**: 위 Fit Score 구성·태그 결정은 **콘텐츠 적합도(`content-fit-v1`)로 대체**되었다. 사유: 타깃 선호도가 실제로는 30대 시청 비중의 역수(순위상관 -0.98)로 판명돼 시청률이 낮은 프로그램이 높은 프로그램보다 높게 나오는 역전이 생겼고, 점수끼리의 보상·슬롯 품질 혼입·결측 50 채움·태그 쏠림(정식 판정의 97%가 MOVE/REPLACE)이 확인됐다. 새 기준: ① 슬롯 대비 성과(같은 요일·시간대 다른 프로그램 평균 대비)와 ② 시청 규모(채널 평균 방영 시청률 대비)를 50:50으로 합산, 표본이 적으면 평균 쪽으로 보정, 몰입도·최근 추세는 −15~+10점 범위 보정으로만 반영. 방영 3일 미만 판단 보류·8일 미만 TEST(표본 적음), 정식 판정은 슬롯 대비 성과로 STRENGTHEN(≥1.5배)/KEEP(≥0.85)/WATCH(≥0.55, 신규 "관찰")/REPLACE, 더 좋은 시간대가 있으면 MOVE — 태그는 6개. 연령 구성(옛 Target Affinity)·경쟁 기회·시청 흐름은 점수에서 제외(검증되지 않았거나 역방향). 계산은 마트 사전 저장 대신 서버의 결정적 순수 함수가 채널 KPI 타깃의 방영 행에서 수행하며 LLM은 계산하지 않는다. 기존 6항 가중 Fit Score와 `MART_*`는 화면·태그의 근거가 아니며 과거 비교용으로만 유지한다. 상세·검증: `docs/content-fit/CONTENT_FIT_LOGIC.md`.
     - 데이터가 충분히 쌓인 이후에는 Confidence 외에 **예상 시청률 Range**(예: "0.25~0.35% 예상")도 함께 제공한다.
 - AI가 꼭 지켜야 할 규칙:
   - Claude는 DB(DW)에 정리·저장된 데이터를 직접 조회해 정해진 공식에 따라 수치를 계산하며, 원본 Excel 파일을 직접 열어 파싱하거나 임의로 계산하지 않는다.

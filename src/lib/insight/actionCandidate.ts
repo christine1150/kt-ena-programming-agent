@@ -85,7 +85,8 @@ export function buildProgramAction(input: ProgramActionInput): ActionCandidate {
   const ev = judgeEvidence(input.baselineDays, repeated, dev);
 
   let kind: ActionKind;
-  if (input.fitScoreTag) kind = input.fitScoreTag;
+  // 관찰(WATCH)은 인사이트 계층의 '추적 점검(MONITOR)'과 같은 성격이다(교체를 권할 근거는 아직 부족, 몇 주 더 지켜봄).
+  if (input.fitScoreTag) kind = input.fitScoreTag === "WATCH" ? "MONITOR" : input.fitScoreTag;
   else if (direction === "down") kind = "MONITOR";
   else if (direction === "up") kind = "STRENGTHEN";
   else kind = "KEEP";

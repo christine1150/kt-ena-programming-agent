@@ -168,6 +168,8 @@
 
 ## 6. 편성 추천(Fit Score) MART 계산 설계 판단 (개발 단위 17번)
 
+> **2026-10-14 이후 이 절의 계산은 화면·액션 태그의 근거가 아니다.** CONTENT FITS 논리 재검증 결과 Target Affinity가 30대 비중의 역수로 판명돼 콘텐츠 적합도(`content-fit-v1`, §17)로 대체했다. 아래는 개편 전 마트(`mart_scheduling_fit_score` 등)의 설계 판단 기록이며, 과거 비교 재현(`scripts/content-fit-research`)을 위해 마트는 그대로 둔다.
+
 PRD.md 5번의 Fit Score 공식(30/20/15/15/10/10 가중치, 각 하위지표는 최근 12주 percentile)은 몇몇 세부사항을 정확히 정의하지 않아, 아래는 실제 구현하면서 정한 판단이다 — 임의 추측이 아니라 원본 데이터 구조상 불가피했던 선택이며, 정직하게 문서화해둔다(개발 단위 16번의 Competitive Pressure "기간 평균 근사"와 같은 성격).
 
 - **Program의 단위**: `programs.canonical_name`(channel_id+canonical_name으로 회차를 넘어 이미 하나의 id로 통합돼 있음, 관리자 업로드 로직의 `onConflict: "channel_id,canonical_name"` 참고) — 회차별이 아니라 시리즈 단위로 Fit Score를 낸다.
@@ -312,6 +314,20 @@ Page 2의 오늘의 브리핑/WHO IS WATCHING?/HOW DEEPLY?/CONTENT FITS?/OPPORTU
 
 ---
 
+## 17. 콘텐츠 적합도(`content-fit-v1`) — CONTENT FITS 논리 재설계 (2026-10-14, 사용자 요청)
+
+- **배경**: ENA Drama에서 `<벌거벗은세계사>`(57일 방영, 시청률 상위)가 `<ENA케이팝업차트쇼>`(5일 방영, 시청률 약 1/4)보다 낮은 종합 점수를 받았다. 기존 종합(타깃 성과·타깃 선호도·시청 몰입도의 단순 평균)을 재검증해 선호도가 30대 시청 비중의 역수(순위상관 -0.98)임을 확인하고 논리를 다시 짰다. 근거·검증 전체는 `docs/content-fit/CONTENT_FIT_LOGIC.md`.
+- **입력**: `ratings` 중 채널 KPI 타깃(`channels.primary_target` → `resolveProgramLevelTargetLabel` → `targets.label`)의 `source_type='nielsen_daily'`, `program_id` 있는 행, 기준일 포함 최근 84일의 `program_id, broadcast_date, start_time, rating, reach, time_spent_share, is_first_run`. 수도권 채널(ENA·ENA Play·ENA Drama)은 수도권 2049, 전국 채널(ENA Story·OLIFE·ONCE)은 전국 유료가구가 KPI다. skyUHD는 타깃 구분이 없어 계산하지 않는다.
+- **계산**: 같은 요일·시간대의 "다른 프로그램" 평균 시청률(프로그램 자신 제외, 다른 프로그램 방영이 15건 미만이면 요일×시간대 → 시간대 → 채널 전체로 확대)을 기대치로 삼아 ① 슬롯 대비 성과(Σ실제÷Σ기대)와 ② 시청 규모(채널 평균 방영 시청률 대비)를 만들고, 표본이 적으면 1.0배 쪽으로 보정한다(채널 평균 시청률의 2배를 사전 질량으로). 두 값을 `50+25·log2(배수)`로 0~100 점수로 바꿔 50:50 합산하고, 몰입도(도달률·시청시간 비율을 같은 방식으로 지수화)와 최근 추세(최근 28일 vs 이전 56일)는 −15~+10점 범위 보정으로만 더한다.
+- **산출물**(`ContentFitItem`, `src/lib/contentFit/types.ts`): 점수(0~100), 슬롯 대비 성과·시청 규모(배), 몰입도 점수, 최근 추세, 표본 반영 비중(`reliability`), 신뢰 구간(`FORMAL` 방영 8일↑·반영 비중 50%↑ / `REFERENCE` 3~7일 / `HOLD` 3일 미만), 태그.
+- **태그 6종**: `STRENGTHEN`(슬롯 대비 ≥1.5배) / `KEEP`(≥0.85) / `WATCH`(≥0.55, 신규 "관찰") / `REPLACE`(그 미만) / `MOVE`(교체 후보가 더 좋은 시간대에서 슬롯 평균 이상을 낸 경우) / `TEST`(표본 적음). 최근 4주가 이전보다 약 30% 이상 하락하면 한 단계 낮춘다. 기존 점수 기준(80/65/50)이 아니다.
+- **저장**: 사전 계산 마트는 없다(요청마다 계산, 채널당 0.4~1초). 홈 액션 배지만 `mart_llm_text_cache`(`kind='content_fit_tags'`, 키 md5(kind|{code, asOf, v}))에 채널·기준일·모델 버전별 `{프로그램명: 태그}` JSON을 캐시하고, `refresh_daily_dashboard_mart`가 닐슨 일별 적재 때 그 날짜의 캐시 행을 지운다.
+- **점수에서 빠진 것**: 타깃 선호도(연령 구성), 경쟁 기회, 시청 흐름 — 사유는 논리 문서 §1·§2.
+- **옛 마트와의 관계**: `mart_program_target_score`·`mart_scheduling_fit_score`·`fit_score_config`는 바꾸지 않았다(마이그레이션 없음). 화면·태그의 근거는 아니며 개편 전 점수와의 비교 재현에만 쓴다(§6 상단 안내 참고).
+- **재현·검증**: `scripts/content-fit-research/README.md`(진단·평가·유지율·보정·민감도·TS↔JS 일치), 단위 테스트 `npm run test:content-fit`.
+
+---
+
 ## Version History
 
 | Version | Date | Changes |
@@ -330,3 +346,4 @@ Page 2의 오늘의 브리핑/WHO IS WATCHING?/HOW DEEPLY?/CONTENT FITS?/OPPORTU
 | 1.2 | 2026-08-20 | §14 신규 작성 — Page 1 ENA 히어로 카드 재구성(가운데 정렬, 시청률(순위)+전일대비+올해 누적 평균 시청률(순위) 대 목표 순위), 채널 로고 7개 전량 교체, 시청률 표시 자릿수를 3자리로 통일(사용자 지시). `get_channel_period_rank_and_rating` 신규 — 경쟁채널 재계산 없이 Nielsen이 이미 계산한 rank 컬럼의 기간 평균만 사용. |
 | 1.3 | 2026-08-20 | §15 신규 작성 — Page 1 Original 리포트 심화(사용자 지시): ENA Play 직후재방 인식 버그(rerun_channel_id 미설정 + day-boundary 비교 오류) 수정, 검증 중 발견한 target_id 미필터링 버그(더 심각, 별도) 수정, ENA 자체 선행재방·당일재방 감지, SBS Plus 교차채널 경쟁 비교(`get_competitor_overlap_via_channel`), 회차 번호 추적(`program_episode_counters`+`get_episode_number`, "나는SOLO" 267회=8/19 seed), 헤드라인 생성. Page 1 채널명 색상+BOLD. Page 2 기간 설정 최종 순서 조정 + WoW를 트레일링 7일 비교로 재정의, 오늘의 브리핑에 점유율·시청시간·연령대·프로그램 드라이버 분석 추가(`get_channel_period_demographics`/`get_channel_period_program_movers` 신규). |
 | 1.4 | 2026-08-20 | §16 신규 작성 — skyUHD 프로그램 분석 버그(target_id NULL 미허용 + source_type 하드코딩, 2가지 원인 모두 실증) 수정, TOP20/킬러 콘텐츠 점유율·유료가구 코멘트, 02~26시 그래프 12주 기준선 오버레이, skyUHD 소수점 자릿수 예외(ESLint `react-hooks/globals`에 걸려 모듈 스코프 변수 대신 파라미터 스레딩으로 재구현), decline_program 신규(노이즈 플로어 0.05 추가로 새벽 필러 오탐 제거), 요일×시간대 히트맵 전치, "약화"→"약세", 날짜 요일 표기(`formatDateWithDow`), 나는 SOLO "오리지널 예능" 태그 수동 추가(programs 테이블 canonical_name 중복 발견), 수요일 화이트리스트 정리(원본 엑셀과 DB 상태 어긋남 — 재업로드 시 되살아남 주의). |
+| 1.5 | 2026-10-14 | §17 신규 작성 — CONTENT FITS 논리 재설계(사용자 요청): 기존 종합의 타깃 선호도가 30대 비중의 역수로 판명돼 슬롯 대비 성과·시청 규모 중심의 콘텐츠 적합도(`content-fit-v1`)로 대체, 태그에 WATCH 추가(6태그), 계산은 서버의 순수 함수(마트 사전 저장 없음), 홈 배지만 `mart_llm_text_cache` 캐시. §6 상단에 "화면·태그의 근거 아님" 안내 추가. |

@@ -1,0 +1,205 @@
+// 콘텐츠 적합도 설명 문구 — 화면·보고서·질의응답이 같은 말을 쓰도록 한 곳에서 만든다(순수 함수).
+// 원칙: 계산된 값만 인용한다(새 숫자를 만들지 않는다). 원인을 단정하지 않고 관찰된 사실과 검토 방향만 말한다.
+import { josaEunNeun, josaIga } from "../josa";
+import type { ContentFitItem, ContentFitTag, Daypart } from "./types";
+
+/** 배수 표기: 소수 둘째 자리("1.34배"). */
+export const fmtTimes = (x: number | null | undefined): string => (x === null || x === undefined || !Number.isFinite(x) ? "—" : `${x.toFixed(2)}배`);
+
+export const DAYPART_KO: Record<Daypart, string> = { 새벽: "새벽(02~08시)", 오전: "오전(09~13시)", 오후: "오후(14~18시)", 저녁_심야: "저녁·심야(19시~)" };
+
+/** 최근 4주 vs 이전 8주 변화율(%) — log2 변화량을 상대 변화로 되돌린 값. */
+export function trendPct(item: ContentFitItem): number | null {
+  if (!item.trend) return null;
+  return Math.round((2 ** item.trend.delta - 1) * 100);
+}
+
+/** 추세 상한: 소표본에서 극단값이 숫자로 튀지 않게 +300% 이상은 "300% 이상"으로 줄여 표기한다. */
+export const TREND_PCT_DISPLAY_CAP = 300;
+
+export function describeTrend(item: ContentFitItem): string | null {
+  const p = trendPct(item);
+  if (p === null) return null;
+  if (p <= -10) return `최근 4주 성과가 이전 8주보다 ${Math.abs(p)}% 낮아졌습니다.`;
+  if (p > TREND_PCT_DISPLAY_CAP) return `최근 4주 성과가 이전 8주보다 ${TREND_PCT_DISPLAY_CAP}% 이상 높아졌습니다.`;
+  if (p >= 10) return `최근 4주 성과가 이전 8주보다 ${p}% 높아졌습니다.`;
+  return "최근 4주 성과는 이전 8주와 비슷합니다.";
+}
+
+/** 표 칸용 짧은 추세 표기: ▲39% / ▼20% / 비슷(±10% 미만) / —(계산 불가). 방향은 direction으로도 돌려줘 화면이 색을 고른다. */
+export function formatTrendCell(item: ContentFitItem): { text: string; direction: "up" | "down" | "flat" | null } {
+  const p = trendPct(item);
+  if (p === null) return { text: "—", direction: null };
+  if (p >= 10) return { text: p > TREND_PCT_DISPLAY_CAP ? `▲${TREND_PCT_DISPLAY_CAP}%+` : `▲${p}%`, direction: "up" };
+  if (p <= -10) return { text: `▼${Math.abs(p)}%`, direction: "down" };
+  return { text: "비슷", direction: "flat" };
+}
+
+/** 시청자 유형(도달률·시청시간 비율을 같은 시간대 다른 프로그램과 견준 배수 기준, ±15%). */
+export type AudienceRole = "MASS" | "CORE" | "ACQUISITION" | "ZAPPING_RISK";
+export function audienceRoleOf(item: Pick<ContentFitItem, "reachIndex" | "timeSpentIndex">): AudienceRole | null {
+  const r = item.reachIndex;
+  const t = item.timeSpentIndex;
+  if (r === null || t === null) return null;
+  const highR = r >= 1.15;
+  const lowR = r <= 0.85;
+  const highT = t >= 1.15;
+  const lowT = t <= 0.85;
+  if (highR && highT) return "MASS";
+  if (lowR && highT) return "CORE";
+  if (highR && lowT) return "ACQUISITION";
+  if (lowR && lowT) return "ZAPPING_RISK";
+  return null;
+}
+
+/**
+ * 규모와 효율의 모양(표의 배지): 기존 총량형·효율형 배지를 새 지수로 정의한다.
+ *  - 효율형: 채널 평균보다 작은 규모(1.0배 미만)로도 같은 시간대 평균의 1.2배 이상 — 적게 틀어도 슬롯 기대 이상.
+ *  - 총량형: 채널 평균의 1.2배 이상 규모인데 같은 시간대 평균에는 못 미침(0.9배 미만) — 규모·좋은 자리에 기댄 성과.
+ * 정식·참고 구간(점수가 있는 것)에만 붙인다.
+ */
+export type FitShape = "효율형" | "총량형";
+export function fitShapeOf(item: Pick<ContentFitItem, "tier" | "slotIndex" | "scaleIndex">): FitShape | null {
+  if (item.tier === "HOLD" || item.slotIndex === null || item.scaleIndex === null) return null;
+  if (item.slotIndex >= 1.2 && item.scaleIndex < 1) return "효율형";
+  if (item.scaleIndex >= 1.2 && item.slotIndex < 0.9) return "총량형";
+  return null;
+}
+
+export interface ContentFitExplanation {
+  /** 한 줄 결론(판정 근거 포함). */
+  headline: string;
+  /** 규모·표본 설명. */
+  basis: string;
+  /** 추세 문장(계산됐을 때만). */
+  trend: string | null;
+}
+
+/** 프로그램 한 줄 해설. name은 화면에 보이는 프로그램 이름. */
+export function explainContentFit(item: ContentFitItem, name: string): ContentFitExplanation {
+  const subj = `'${name}'`;
+  if (item.tier === "HOLD" || item.slotIndex === null || item.scaleIndex === null) {
+    return {
+      headline: `${subj}${josaEunNeun(name)} 방영 ${item.sampleDays}일뿐이라 판단을 보류합니다.`,
+      basis: "방영 3일 이상 쌓이면 점수를 계산합니다.",
+      trend: null,
+    };
+  }
+  const L = fmtTimes(item.slotIndex);
+  const A = fmtTimes(item.scaleIndex);
+  const base = `같은 요일·시간대 다른 프로그램 평균의 ${L}`;
+  const basis = `채널 평균 방영 시청률의 ${A} 규모이며, 최근 12주 중 ${item.sampleDays}일(${item.airings}회) 방영 기준입니다.`;
+  const trend = describeTrend(item);
+
+  if (item.tier === "REFERENCE") {
+    const lean = item.lean === "ABOVE" ? "지금까지는 슬롯 평균보다 높은 흐름" : item.lean === "BELOW" ? "지금까지는 슬롯 평균보다 낮은 흐름" : "지금까지는 슬롯 평균 수준의 흐름";
+    const why = item.sampleDays < 8 ? `방영 ${item.sampleDays}일로 표본이 적어` : "방영 시청 규모가 작아";
+    return {
+      headline: `${subj}${josaEunNeun(name)} ${why} 참고용입니다 — ${lean}입니다(${L}, 표본이 적어 슬롯 평균 쪽으로 보정한 값).`,
+      basis,
+      trend,
+    };
+  }
+  const pctOfSlot = Math.round(item.slotIndex * 100);
+  switch (item.tag as ContentFitTag) {
+    case "STRENGTHEN":
+      return { headline: `${subj}${josaIga(name)} ${base}로 뚜렷하게 앞서 있어, 노출 확대나 더 좋은 시간대 편성을 검토할 만합니다.`, basis, trend };
+    case "KEEP":
+      return {
+        headline:
+          item.slotIndex >= 1
+            ? `${subj}${josaIga(name)} ${base}로 같은 자리의 기대 수준 이상이라 현재 편성을 유지해도 됩니다.`
+            : `${subj}${josaIga(name)} ${base}로 같은 자리의 평균 수준이라 현재 편성을 유지해도 됩니다.`,
+        basis,
+        trend,
+      };
+    case "WATCH":
+      return {
+        headline:
+          item.slotIndex >= 0.85
+            ? `${subj}${josaEunNeun(name)} ${base}로 아직 기대 수준이지만 최근 하락이 보여 다음 몇 주를 지켜볼 만합니다.`
+            : `${subj}${josaEunNeun(name)} ${base}(같은 자리 평균의 ${pctOfSlot}%)로 기대에 못 미쳐 다음 몇 주를 지켜볼 만합니다.`,
+        basis,
+        trend,
+      };
+    case "MOVE":
+      return {
+        headline: `${subj}${josaEunNeun(name)} ${base}(평균의 ${pctOfSlot}%)로 낮은 편이지만, ${item.moveTo ? DAYPART_KO[item.moveTo] : "다른 시간대"}에서는 평균 이상을 냈습니다 — 그 시간대로 옮기는 것을 검토할 만합니다.`,
+        basis,
+        trend,
+      };
+    case "REPLACE":
+      return {
+        headline: `${subj}${josaEunNeun(name)} ${base}(같은 자리 평균의 ${pctOfSlot}%)로 기대에 크게 못 미칩니다 — 교체 또는 시간대 변경을 검토할 만합니다.`,
+        basis,
+        trend,
+      };
+    default:
+      return { headline: `${subj}의 판정 근거를 계산하지 못했습니다.`, basis, trend };
+  }
+}
+
+/** "무엇을 편성할까요?" 표의 제안 사항 한 줄. */
+export function scheduleNote(item: ContentFitItem): string {
+  if (item.tier === "HOLD") return `방영 ${item.sampleDays}일 — 판단 보류(3일 이상 쌓이면 계산)`;
+  if (item.tier === "REFERENCE" || item.tag === "TEST") return `표본 적음(방영 ${item.sampleDays}일) — 8일 이상 쌓인 뒤 재평가`;
+  const L = fmtTimes(item.slotIndex);
+  switch (item.tag) {
+    case "STRENGTHEN":
+      return `같은 시간대 평균의 ${L} — 노출 확대·더 좋은 시간대 편성 검토`;
+    case "KEEP":
+      return `같은 시간대 평균의 ${L} — 현재 편성 유지`;
+    case "WATCH":
+      return `같은 시간대 평균의 ${L} — 기대에 못 미치거나 하락 조짐, 몇 주 더 관찰`;
+    case "MOVE":
+      return `같은 시간대 평균의 ${L} — ${item.moveTo ? DAYPART_KO[item.moveTo] : "다른 시간대"}에서는 평균 이상, 그 시간대로 이동 검토`;
+    case "REPLACE":
+      return `같은 시간대 평균의 ${L} — 교체 또는 시간대 변경 검토`;
+    default:
+      return "—";
+  }
+}
+
+/** 어떤 기준으로 "같은 시간대 평균"을 구했는지(방영 건수 비율). 채널 전체 평균 비중이 크면 시간대 비교 표본이 적었다는 뜻이라 함께 알린다. */
+export function describeBaseline(item: Pick<ContentFitItem, "tier" | "baselineShare">): string | null {
+  if (item.tier === "HOLD") return null;
+  const s = item.baselineShare;
+  const parts: string[] = [];
+  const add = (label: string, v: number) => {
+    if (v >= 0.05) parts.push(`${label} ${Math.round(v * 100)}%`);
+  };
+  add("같은 요일·시각", s.slot);
+  add("같은 요일·시간대", s.dowDaypart);
+  add("같은 시간대", s.daypart);
+  add("채널 전체", s.channel);
+  if (parts.length === 0) return null;
+  const caution = s.channel >= 0.5 ? " — 같은 시간대 비교 표본이 적어 채널 전체 평균과 견준 비중이 큽니다" : "";
+  return `비교 기준(방영 건수 비율): ${parts.join(" · ")}${caution}`;
+}
+
+/** 표 아래 한 문장: 가장 도움이 되는 프로그램과 가장 부진한 프로그램(정식 판정 대상만). */
+export function summarizeTable(items: ContentFitItem[], nameOf: (programId: string) => string): string {
+  const formal = items.filter((i) => i.tier === "FORMAL" && i.score !== null && i.slotIndex !== null);
+  const reference = items.filter((i) => i.tier === "REFERENCE").length;
+  const hold = items.filter((i) => i.tier === "HOLD").length;
+  const tail = [reference > 0 ? `방영 8일 미만 등 표본이 적은 ${reference}개는 참고용` : "", hold > 0 ? `방영 3일 미만 ${hold}개는 판단 보류` : ""].filter(Boolean).join(", ");
+  if (formal.length < 2) return tail ? `정식 판정할 만큼 방영이 쌓인 프로그램이 2개 미만입니다. ${tail}입니다.` : "";
+  const best = formal[0];
+  const worst = formal[formal.length - 1];
+  const bn = nameOf(best.programId);
+  const wn = nameOf(worst.programId);
+  const worstTail = worst.tag === "REPLACE" || worst.tag === "MOVE" ? "로 가장 낮아 교체 검토 대상입니다" : "로 가장 낮습니다";
+  return `'${bn}'${josaIga(bn)} 같은 시간대 평균의 ${fmtTimes(best.slotIndex)}로 채널에 가장 도움이 되고, '${wn}'${josaEunNeun(wn)} ${fmtTimes(worst.slotIndex)}${worstTail}.${tail ? ` ${tail}입니다.` : ""}`;
+}
+
+/** 표 위 안내문(읽는 법) — 용어를 풀어 쓴다. */
+export const CONTENT_FIT_LEGEND = {
+  intro:
+    "최근 12주 방영을 같은 요일·시간대의 다른 프로그램과 견줍니다. 슬롯 대비 성과는 그 자리에서 다른 프로그램이 평균적으로 낸 시청률의 몇 배인지, 시청 규모는 채널 평균 방영 시청률의 몇 배인지입니다(1.0배가 기준). 두 값을 같은 비중으로 합치고, 시청 몰입도와 최근 4주 추세는 점수를 소폭(최대 +10·−15점)만 조정합니다.",
+  reliability:
+    "방영 일수가 적을수록 점수를 기준(1.0배) 쪽으로 보정하고, 8일 미만이면 판정 없이 참고용으로, 3일 미만이면 판단을 보류합니다.",
+  verdict:
+    "판정은 슬롯 대비 성과로 내립니다 — 1.5배 이상 강화 검토, 0.85~1.5배 유지, 0.55~0.85배 관찰, 0.55배 미만 교체 검토(최근 4주 하락이 크면 한 단계 낮춰 봅니다). 이 선은 판정 후 4주 안에 실제로 편성에서 빠진 비율이 달라지는 지점을 근거로 정했습니다.",
+  affinity:
+    "연령 구성(타깃 선호도)은 점수에 넣지 않습니다. 시청층이 어느 연령에 몰려 있는지는 설명 정보일 뿐 이 프로그램이 자리에 맞는지의 근거가 아니며, 검증에서 기존 방식은 시청률이 낮은 프로그램을 오히려 높게 평가했습니다.",
+} as const;

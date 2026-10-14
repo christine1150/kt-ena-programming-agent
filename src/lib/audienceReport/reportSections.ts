@@ -116,7 +116,7 @@ function buildDeepDiveSection(raw: AudienceReportRawData): DeepDiveSection {
               channelAvgRating: ranking[0]?.channelAvgRating ?? null,
               caption: baseCaption(
                 raw,
-                `기간 내 백분위 합산(시청률·도달률·시청시간 비율), 편성 ${MIN_AIRINGS_FOR_RANKING}회 미만 제외 · 최근 12주 Fit Score와 목적이 다름`
+                `기간 내 백분위 합산(시청률·도달률·시청시간 비율), 편성 ${MIN_AIRINGS_FOR_RANKING}회 미만 제외 · 최근 12주 콘텐츠 적합도와 목적이 다름`
               ),
             },
           }
@@ -342,7 +342,7 @@ export function buildModeASection(raw: AudienceReportRawData, extra: ModeAExtra)
   let healthScore: ModeASection["healthScore"] = { available: false, reason: isSkyUhd ? "skyUHD는 Health Score를 제공하지 않습니다" : "Health Score 계산에 필요한 자료가 없습니다" };
   let programMomentum: ModeASection["programMomentum"] = { available: false, reason: isSkyUhd ? "skyUHD는 Program Momentum을 제공하지 않습니다" : "Program Momentum 계산에 필요한 자료가 없습니다" };
   if (health) {
-    const fitScoreTagCounts = { STRENGTHEN: 0, KEEP: 0, MOVE: 0, REPLACE: 0, TEST: 0 };
+    const fitScoreTagCounts = { STRENGTHEN: 0, KEEP: 0, WATCH: 0, MOVE: 0, REPLACE: 0, TEST: 0 };
     for (const item of health.fitScoreItems) {
       if (item.tag) fitScoreTagCounts[item.tag] += 1;
     }
@@ -646,10 +646,10 @@ export function buildModeDSection(raw: AudienceReportRawData, extra: ModeDExtra)
   const weakPrograms = raw.fitScoreItems.filter((f) => f.tag === "REPLACE").sort((a, b) => (a.fitScore ?? 0) - (b.fitScore ?? 0)).slice(0, 5);
   const programPortfolio: ModeDSection["programPortfolio"] =
     isSkyUhd
-      ? { available: false, reason: "skyUHD는 Program Portfolio(Fit Score)를 제공하지 않습니다" }
+      ? { available: false, reason: "skyUHD는 Program Portfolio(콘텐츠 적합도)를 제공하지 않습니다" }
       : strongPrograms.length > 0 || weakPrograms.length > 0
         ? { available: true, data: { strong: strongPrograms, weak: weakPrograms } }
-        : { available: false, reason: "Fit Score 계산 대상 프로그램이 없습니다" };
+        : { available: false, reason: "콘텐츠 적합도 계산 대상 프로그램이 없습니다" };
 
   return {
     currentPosition: {

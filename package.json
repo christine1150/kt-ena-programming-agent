@@ -44,7 +44,8 @@
     "test:competitor-airings": "tsx scripts/test-competitor-airings.ts",
     "test:month-math": "tsx scripts/test-month-math.ts",
     "test:stats": "tsx scripts/test-stats.ts",
-    "test:ask-export": "tsx scripts/test-ask-export.ts"
+    "test:ask-export": "tsx scripts/test-ask-export.ts",
+    "test:content-fit": "tsx scripts/test-content-fit.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

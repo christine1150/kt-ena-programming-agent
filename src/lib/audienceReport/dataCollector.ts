@@ -8,7 +8,8 @@ import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { groupForChannel, isSkyUhd, type AudienceGroup } from "./targetGroups";
 import type { ResolvedAudiencePeriod } from "./periodResolver";
 import { getChannelMasterInfo, type ChannelMasterInfo } from "./masterData";
-import { fetchRecentProgramIds } from "@/lib/recentProgramAirings";
+import { addDaysStr } from "@/lib/contentFit";
+import { loadContentFit } from "@/lib/contentFit/source";
 import { PRIME_RPC_ARGS } from "./primeTime";
 import { fetchHourlyPattern } from "@/lib/broadcastTime/hourlyFetch";
 
@@ -206,7 +207,7 @@ export interface DailyFitScoreItem {
   programId: string;
   canonicalName: string | null;
   fitScore: number | null;
-  tag: "STRENGTHEN" | "KEEP" | "MOVE" | "REPLACE" | "TEST" | null;
+  tag: "STRENGTHEN" | "KEEP" | "WATCH" | "MOVE" | "REPLACE" | "TEST" | null;
 }
 export interface DailyMomentumItem {
   programId: string;
@@ -233,32 +234,21 @@ const MOMENTUM_MIN_SAMPLE_COUNT = 2;
 // N절 Phase 2b(2026-09-01)에서 분리 — Fit Score 조회만 따로 떼어 MODE A(Health Score 입력)와
 // MODE D(Program Portfolio, 아래 참고)가 공유한다. Fit Score 자체가 "as-of-date 기준 최근 12주"
 // 개념이라 기간 모드와 무관하게 항상 dateTo만 있으면 계산 가능 — 계산 로직은 바꾸지 않았다.
+// 2026-10-14 콘텐츠 적합도 재설계: 마트(mart_scheduling_fit_score)·재계산 RPC 대신 Page 2와 같은 엔진(src/lib/contentFit)이 채널 KPI 타깃의
+// 방영 행에서 바로 계산한다. channelId는 호출부 시그니처 호환용(엔진이 채널 코드로 조회한다).
 async function collectFitScoreItems(channelId: string, channelCode: string, dateTo: string): Promise<DailyFitScoreItem[]> {
-  const { count } = await supabase.from("mart_scheduling_fit_score").select("id", { count: "exact", head: true }).eq("as_of_date", dateTo).eq("channel_id", channelId);
-  if (!count || count === 0) {
-    await supabase.rpc("refresh_fit_score_mart", { p_as_of_date: dateTo, p_window_days: 84, p_channel_code: channelCode });
-  }
-  const { data: fitRows } = await supabase
-    .from("mart_scheduling_fit_score")
-    .select("program_id, fit_score, tag, programs(canonical_name)")
-    .eq("as_of_date", dateTo)
-    .eq("channel_id", channelId);
-
-  // 최근 14일 안에 실제로 방영된 프로그램만 "현재 편성 중"으로 본다(fit-score/route.ts와 동일).
-  const fourteenDaysAgo = new Date(`${dateTo}T00:00:00`);
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
-  const fourteenDaysAgoStr = `${fourteenDaysAgo.getFullYear()}-${String(fourteenDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(fourteenDaysAgo.getDate()).padStart(2, "0")}`;
-  // 버그 수정(2026-09-02): .range() 없는 조회가 Supabase 기본 1000행 캡에 걸려 일부 프로그램이
-  // 통째로 누락되던 문제 — 공용 페이지네이션 헬퍼로 교체(fit-score/route.ts와 동일한 수정).
-  const recentProgramIds = await fetchRecentProgramIds(channelId, fourteenDaysAgoStr);
-
-  return ((fitRows ?? []) as { program_id: string; fit_score: number | null; tag: DailyFitScoreItem["tag"]; programs: { canonical_name: string } | { canonical_name: string }[] | null }[])
-    .filter((r) => recentProgramIds.has(r.program_id))
-    .map((r) => ({
-      programId: r.program_id,
-      canonicalName: Array.isArray(r.programs) ? (r.programs[0]?.canonical_name ?? null) : (r.programs?.canonical_name ?? null),
-      fitScore: r.fit_score,
-      tag: r.tag,
+  void channelId;
+  const loaded = await loadContentFit(channelCode, dateTo).catch(() => null);
+  if (!loaded) return [];
+  // 최근 14일 안에 실제로 방영된 프로그램만 "현재 편성 중"으로 본다(Page 2와 동일).
+  const liveFrom = addDaysStr(dateTo, -13);
+  return loaded.result.items
+    .filter((it) => it.tier !== "HOLD" && it.lastAiredDate >= liveFrom)
+    .map((it) => ({
+      programId: it.programId,
+      canonicalName: loaded.programs.get(it.programId)?.canonicalName ?? null,
+      fitScore: it.score,
+      tag: it.tag,
     }));
 }
 

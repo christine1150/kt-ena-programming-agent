@@ -14,6 +14,7 @@ import {
   resolveRankSheetTargetLabel,
 } from "@/lib/targetResolution";
 import { mapWithConcurrency } from "@/lib/concurrency";
+import { loadContentFitTagMaps } from "@/lib/contentFit/tagCache";
 import { buildOriginalProgrammingInsightViaLlm, type OriginalInsightInput } from "@/lib/originalContentInsight";
 import { roundRatingForDisplay, roundPercentForDisplay } from "@/lib/ratingRounding";
 import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
@@ -306,8 +307,7 @@ interface ChannelNarrativeSignal {
   // null — 프론트가 기존 규칙 기반 buildChannelNarrative로 조용히 대체(fallback).
   llmNarrative: string | null;
   // 사용자 지시(2026-09-18): 액션 문구 옆 배지용 — top_program_name/decline_program_name이
-  // Page 2 Fit Score(mart_scheduling_fit_score)에서 어떤 5대 액션 태그로 판정됐는지. 새로
-  // 계산하지 않고 조회만 하므로, 오늘 아직 계산된 적 없으면(Page 2 미방문 등) null로 남는다
+  // Page 2 콘텐츠 적합도 엔진(src/lib/contentFit)이 어떤 액션 태그로 판정했는지. 계산할 수 없는 채널·프로그램이면 null로 남는다
   // (억지 근사치 금지 — optional로 둬서 값을 못 채운 기존 생성 지점들도 그대로 컴파일된다).
   top_program_tag?: ActionTag | null;
   decline_program_tag?: ActionTag | null;
@@ -1446,56 +1446,20 @@ export async function GET(request: Request) {
   if (skyuhdSignalResult) narrativeSignals.push(skyuhdSignalResult);
 
   // (6-1) 사용자 지시(2026-09-18): "오늘의 액션 요약"·채널별 인사이트의 액션 문구 옆에 Page 2와
-  // 같은 5대 편성 액션 태그(STRENGTHEN/KEEP/MOVE/REPLACE/TEST) 배지를 붙인다. refresh RPC는
-  // 부르지 않고 이미 계산돼 있는 mart_scheduling_fit_score를 조회만 한다 — 오늘 아직 Page 2를
-  // 열어보지 않아 이 채널의 Fit Score가 계산된 적 없으면 태그 없이(null) 조용히 넘어간다
-  // (CLAUDE.md 원칙: 억지 근사치를 만들지 않는다). top_program_name/decline_program_name은
-  // get_channel_daily_narrative가 programs.canonical_name을 그대로 돌려주는 값이라
-  // (20260819270000_channel_daily_narrative.sql), programs(channel_id, canonical_name) 유니크
-  // 제약(programNameMatch.ts findOrCreateProgramByNormalizedName 주석 참고)으로 program_id를
-  // 안전하게 되찾을 수 있다. skyUHD는 refresh_fit_score_mart 자체가 제외하는 채널이라 건너뛴다.
+  // 같은 편성 액션 태그(STRENGTHEN/KEEP/WATCH/MOVE/REPLACE/TEST) 배지를 붙인다. 2026-10-14 콘텐츠 적합도 재설계: 태그는 Page 2와 같은
+  // 엔진(src/lib/contentFit)이 슬롯 대비 성과로 판정한 값이고, 채널·기준일별 결과를 캐시해 두 번째 조회부터는 즉시 나온다.
+  // top_program_name/decline_program_name은 get_channel_daily_narrative가 programs.canonical_name을 그대로 돌려주는 값이라
+  // (20260819270000_channel_daily_narrative.sql) 이름으로 바로 찾는다. 계산할 수 없는 채널(skyUHD)·프로그램은 태그 없이(null) 넘어간다
+  // (CLAUDE.md 원칙: 억지 근사치를 만들지 않는다).
   {
-    const namesByChannelId = new Map<string, Set<string>>();
-    for (const s of narrativeSignals) {
-      if (s.channelCode === "SKYUHD") continue;
-      const ch = channelByCode.get(s.channelCode);
-      if (!ch) continue;
-      const names = namesByChannelId.get(ch.id) ?? new Set<string>();
-      if (s.top_program_name) names.add(s.top_program_name);
-      if (s.decline_program_name) names.add(s.decline_program_name);
-      if (names.size > 0) namesByChannelId.set(ch.id, names);
-    }
-    const channelIds = [...namesByChannelId.keys()];
-    const allNames = [...new Set([...namesByChannelId.values()].flatMap((set) => [...set]))];
-    if (channelIds.length > 0 && allNames.length > 0) {
-      const { data: programRows } = await supabase
-        .from("programs")
-        .select("id, channel_id, canonical_name")
-        .in("channel_id", channelIds)
-        .in("canonical_name", allNames);
-      const programIds = [...new Set((programRows ?? []).map((p) => p.id))];
-      if (programIds.length > 0) {
-        const { data: fitRows } = await supabase
-          .from("mart_scheduling_fit_score")
-          .select("program_id, tag")
-          .eq("as_of_date", asOfDate)
-          .in("channel_id", channelIds)
-          .in("program_id", programIds);
-        const tagByProgramId = new Map<string, ActionTag>();
-        for (const f of fitRows ?? []) {
-          if (f.tag) tagByProgramId.set(f.program_id, f.tag as ActionTag);
-        }
-        const tagByChannelAndName = new Map<string, ActionTag>();
-        for (const p of programRows ?? []) {
-          const tag = tagByProgramId.get(p.id);
-          if (tag) tagByChannelAndName.set(`${p.channel_id}|${p.canonical_name}`, tag);
-        }
-        for (const s of narrativeSignals) {
-          const ch = channelByCode.get(s.channelCode);
-          if (!ch) continue;
-          if (s.top_program_name) s.top_program_tag = tagByChannelAndName.get(`${ch.id}|${s.top_program_name}`) ?? null;
-          if (s.decline_program_name) s.decline_program_tag = tagByChannelAndName.get(`${ch.id}|${s.decline_program_name}`) ?? null;
-        }
+    const codesWithNames = [...new Set(narrativeSignals.filter((s) => s.channelCode !== "SKYUHD" && (s.top_program_name || s.decline_program_name)).map((s) => s.channelCode))];
+    if (codesWithNames.length > 0) {
+      const tagMaps = await loadContentFitTagMaps(codesWithNames, asOfDate).catch(() => new Map<string, Record<string, ActionTag>>());
+      for (const s of narrativeSignals) {
+        const m = tagMaps.get(s.channelCode);
+        if (!m) continue;
+        if (s.top_program_name) s.top_program_tag = m[s.top_program_name] ?? null;
+        if (s.decline_program_name) s.decline_program_tag = m[s.decline_program_name] ?? null;
       }
     }
   }

@@ -20,7 +20,8 @@ export interface OpportunityNarrativeLlmInput {
     gap_change: number | null; // 양수=격차 축소(기회), 음수=격차 확대(방어 필요)
     classification: "PROTECT" | "DEFEND" | "IMPROVE" | "OPPORTUNITY" | null;
   }[];
-  candidatePrograms: { name: string; tag: "STRENGTHEN" | "TEST"; targetAffinityScore: number | null; audienceFlowScore: number | null }[];
+  // slotIndex = 지금 편성된 시간대에서 같은 시간대 다른 프로그램 평균의 몇 배(콘텐츠 적합도 재설계 2026-10-14, 소수 둘째 자리)
+  candidatePrograms: { name: string; tag: "STRENGTHEN" | "TEST"; slotIndex: number | null }[];
 }
 
 function buildSystemPrompt(): string {
@@ -28,7 +29,7 @@ function buildSystemPrompt(): string {
     "너는 KT ENA 편성 PD를 위한 'OPPORTUNITY?(기회가 있나요)' 서술 작성기다.",
     "아래 hourBlocks 배열은 3시간 단위 시간대별(label로 이미 이름·시간대가 표기됨) 경쟁채널 대비 격차 변화다 — gap_change가 양수면 격차가 좁혀진(기회) 시간대, 음수면 격차가 벌어진(방어 필요) 시간대다. classification은 이미 판정된 4분류(PROTECT=유지/DEFEND=방어 필요/IMPROVE=개선 필요/OPPORTUNITY=성장 기회)다.",
     "가장 기회가 큰 시간대와 가장 방어가 필요한 시간대를 중심으로 2~4문장 문단을 작성해라. 시간대는 반드시 주어진 label 문자열을 그대로 인용하고(임의로 줄이거나 새 이름을 짓지 마라), 구체적인 격차 수치(gap_full→gap_recent)도 인용해라.",
-    "candidatePrograms에 STRENGTHEN/TEST 태그 프로그램이 있고 기회 시간대가 있으면, 그 프로그램을 그 시간대에 배치하는 것을 검토해볼 만하다고 제안해라(targetAffinityScore/audienceFlowScore가 70 이상이면 근거로 언급).",
+    "candidatePrograms에 STRENGTHEN/TEST 태그 프로그램이 있고 기회 시간대가 있으면, 그 프로그램을 그 시간대에 배치하는 것을 검토해볼 만하다고 제안해라(slotIndex가 1.2 이상이면 '지금 편성된 시간대에서 같은 시간대 다른 프로그램 평균의 N배를 기록 중'이라고 근거로 언급. 입력에 없는 이유는 쓰지 마라).",
     "hourBlocks/candidatePrograms에 없는 시간대·프로그램은 절대 언급하지 마라.",
     LLM_SYNTHESIS_GUARDRAIL,
   ].join("\n");
@@ -45,13 +46,13 @@ export async function buildOpportunityNarrativeViaLlm(input: OpportunityNarrativ
   if (input.hourBlocks.length === 0) return null;
   // 시청률·격차는 3자리, 점수는 1자리로 고정해 AI가 인용할 수 있는 표기를 하나로 만든다(검증이 표기 차이로 문장을 버리지 않도록).
   const r3 = (v: number | null) => (v === null ? null : Math.round(v * 1000) / 1000);
-  const r1 = (v: number | null) => (v === null ? null : Math.round(v * 10) / 10);
+  const r2 = (v: number | null) => (v === null ? null : Math.round(v * 100) / 100);
   const sent: OpportunityNarrativeLlmInput = {
     ...input,
     hourBlocks: input.hourBlocks.map((b) => ({ ...b, our_full_avg: r3(b.our_full_avg), our_recent_avg: r3(b.our_recent_avg), gap_full: r3(b.gap_full), gap_recent: r3(b.gap_recent), gap_change: r3(b.gap_change) })),
-    candidatePrograms: input.candidatePrograms.map((c) => ({ ...c, targetAffinityScore: r1(c.targetAffinityScore), audienceFlowScore: r1(c.audienceFlowScore) })),
+    candidatePrograms: input.candidatePrograms.map((c) => ({ ...c, slotIndex: r2(c.slotIndex) })),
   };
   const result = await callOpenAiJsonSynthesis<{ narrative: string }>(buildSystemPrompt(), sent, "opportunity_narrative", SCHEMA);
-  // 단계 04: 수치·기준·인과 검증. 규칙 문구의 임계값(70)은 허용한다.
-  return guardForInput(result?.narrative, sent, { label: "opportunity_narrative", baselineLabels: [input.recentLabel], options: { extraNumbers: [70] } });
+  // 단계 04: 수치·기준·인과 검증. 규칙 문구의 임계값(1.2배)은 허용한다.
+  return guardForInput(result?.narrative, sent, { label: "opportunity_narrative", baselineLabels: [input.recentLabel], options: { extraNumbers: [1.2] } });
 }

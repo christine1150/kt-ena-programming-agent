@@ -1,13 +1,17 @@
-// 편성 추천(Fit Score 기반 5태그) 조회 API. 계산은 전부 SQL(refresh_fit_score_mart() +
-// mart_scheduling_fit_score)이 미리 해두고, 여기서는 오늘 날짜로 계산된 값이 없으면 한 번
-// 새로 계산시킨 뒤 결과를 그대로 돌려준다 — Claude는 결과를 해석·설명만 한다(CLAUDE.md 원칙).
+// 콘텐츠 적합도(CONTENT FITS)·편성 추천 조회 API. 2026-10-14 재설계: 기존에는 SQL 마트(refresh_fit_score_mart)가 6개 하위지표를
+// 채널 내 percentile로 바꿔 가중합했지만, 검증 결과 타깃 선호도가 "30대 비중이 낮을수록 높은 점수"(상관 -0.98)였고 타깃 성과의
+// 60%가 슬롯 품질이었으며 높은 보조 점수가 낮은 시청률을 보상했다. 이제 계산은 src/lib/contentFit 엔진(슬롯 대비 성과 + 시청 규모 +
+// 몰입도·추세 보정, 표본 수축)이 하고, 이 API는 채널 KPI 타깃의 방영 행을 읽어 엔진에 넘긴 결과를 화면 형식으로 돌려준다.
+// 수치는 전부 DB의 방영 데이터에서 결정론적으로 계산된 값이다(LLM·프론트는 계산하지 않는다 — CLAUDE.md 원칙).
+// 설계·검증 근거: docs/content-fit/CONTENT_FIT_LOGIC.md
 import { NextResponse } from "next/server";
 import { isTitleExcluded, loadActiveExclusions } from "@/lib/idealSchedule/exclusions";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
-import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
-import { fetchRecentProgramIds } from "@/lib/recentProgramAirings";
 import { PRIME_HOURS_UNION } from "@/lib/audienceReport/primeTime";
+import { addDaysStr } from "@/lib/contentFit";
+import { latestBroadcastDate } from "@/lib/contentFit/sourceCore";
+import { loadContentFit } from "@/lib/contentFit/source";
 
 // 사용자 지시(2026-08-21): "재방이 많은 컨텐츠(예: 나는SOLO)를 통째로 이동 검토하라는 건 부적절
 // 하다 — 그 중 효율이 안 좋은 특정 시간대만 짚어서 의견을 달라." 하루에도 여러 시간대에 걸쳐
@@ -45,6 +49,9 @@ const TRANSFERABILITY = {
   primeHours: PRIME_HOURS_UNION,
 };
 
+/** 현재 편성 중으로 보는 기간: 기준일 포함 최근 14일 안에 방영된 프로그램만. */
+const LIVE_DAYS = 14;
+
 interface SlotEfficiencyRow {
   hour_bucket: number;
   avg_rating: number | null;
@@ -76,187 +83,143 @@ export async function GET(request: Request) {
 
   // Page 2와 동일하게 기본은 실제 데이터가 있는 가장 최근 날짜지만, ?date=로 PD가 지정한
   // 날짜가 있으면 그 날짜를 기준으로 삼는다(우측 상단 기간 설정 메뉴).
-  const requestedDate = searchParams.get("date");
-  let asOfDate = requestedDate;
-  if (!asOfDate) {
-    const { data: latestRow } = await supabase
-      .from("ratings")
-      .select("broadcast_date")
-      .eq("channel_id", channel.id)
-      .eq("source_type", "nielsen_daily")
-      .order("broadcast_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    asOfDate = latestRow?.broadcast_date ?? null;
-  }
+  const asOfDate = searchParams.get("date") ?? (await latestBroadcastDate(supabase, channel.id));
   if (!asOfDate) {
     return NextResponse.json({ ok: true, asOfDate: null, items: [] });
   }
 
-  // 이 기준일에 "이 채널"이 이미 계산됐는지 확인 — 없으면 그때 한 번 새로 계산한다(하루
-  // 한 번만 계산되면 되므로, 요청마다 다시 계산하지 않는다). 버그 수정(2026-08-26, 사용자
-  // 제보 "ENA Story에 14일 안에 방영된 데이터가 없다고 나옴"): channel_id 없이 "이 날짜에
-  // 아무 채널이나 행이 있는지"만 봤었다 — 채널 A가 먼저 계산돼 있으면 채널 B(예: ENA Story)는
-  // 아직 계산 안 됐는데도 "이미 있음"으로 오판해 refresh를 건너뛰어 빈 결과만 보였다.
-  const { count } = await supabase
-    .from("mart_scheduling_fit_score")
-    .select("id", { count: "exact", head: true })
-    .eq("as_of_date", asOfDate)
-    .eq("channel_id", channel.id);
-
-  if (!count || count === 0) {
-    // 버그 수정(2026-08-26): 6채널을 한 번에 재계산하면 anon/authenticated
-    // statement_timeout(20초)을 넘겨(실측 확인) 매번 500으로 실패했다 — p_channel_code로
-    // 이 채널 하나만 계산한다(refresh_fit_score_mart 20260826130000, 다른 채널의 기존
-    // 계산은 그대로 보존).
-    const { error: refreshError } = await supabase.rpc("refresh_fit_score_mart", {
-      p_as_of_date: asOfDate,
-      p_window_days: 84,
-      p_channel_code: channel.code,
-    });
-    if (refreshError) {
-      // refresh_fit_score_mart()는 delete 후 재삽입하는 구조라, 같은 as_of_date를 처음 조회하는
-      // 요청이 동시에 여러 개 들어오면 서로의 삭제/삽입이 겹쳐 실패할 수 있다(회고 리뷰에서 확인한
-      // 경합 조건 — 실제로 프리셋을 빠르게 연속 클릭할 때 간헐적 500이 관찰됐었음). 에러를 바로
-      // 반환하기 전에, 그 사이 다른 요청이 이미 계산을 끝냈는지 한 번 더 확인한다.
-      const { count: recheckCount } = await supabase
-        .from("mart_scheduling_fit_score")
-        .select("id", { count: "exact", head: true })
-        .eq("as_of_date", asOfDate)
-        .eq("channel_id", channel.id);
-      if (!recheckCount || recheckCount === 0) {
-        return NextResponse.json({ ok: false, message: `Fit Score 계산 실패: ${refreshError.message}` }, { status: 500 });
-      }
-    }
+  let loadedOrNull: Awaited<ReturnType<typeof loadContentFit>>;
+  try {
+    loadedOrNull = await loadContentFit(channel.code, asOfDate);
+  } catch (e) {
+    return NextResponse.json({ ok: false, message: `콘텐츠 적합도 계산 실패: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
+  // skyUHD처럼 타깃 구분이 없는 채널은 적합도를 계산하지 않는다(별도 대체 지표 사용).
+  if (!loadedOrNull) return NextResponse.json({ ok: true, asOfDate, items: [] });
+  const loaded = loadedOrNull;
 
-  const { data: rows, error } = await supabase
-    .from("mart_scheduling_fit_score")
-    .select(
-      "fit_score, target_performance_score, target_affinity_score, audience_engagement_score, slot_performance_score, competitive_opportunity_score, audience_flow_score, sample_days, confidence_pct, tag, evidence, program_id, programs(canonical_name, raw_name, first_run)"
-    )
-    .eq("as_of_date", asOfDate)
-    .eq("channel_id", channel.id)
-    .order("fit_score", { ascending: false, nullsFirst: false });
-
-  if (error) {
-    return NextResponse.json({ ok: false, message: error.message }, { status: 400 });
-  }
-
-  // 최근 14일 안에 실제로 방영된 프로그램만 "현재 편성 중"으로 보여준다
-  // (12주 표본에는 있지만 이미 오래전에 종영한 프로그램까지 추천 목록에 섞이지 않도록).
-  const fourteenDaysAgo = new Date(asOfDate);
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
-  const fourteenDaysAgoStr = fourteenDaysAgo.toISOString().slice(0, 10);
-
-  // 버그 수정(2026-09-02): 기존엔 .range() 없이 조회해 Supabase 기본 1000행 캡에 걸려, 채널의
-  // 14일 윈도우 방영 행이 1000건을 넘으면(타깃 12개×여러 프로그램이라 흔함) 뒤쪽에 걸린 프로그램이
-  // 정렬 기준도 없이 통째로 잘려나갔다 — ENA Drama "신병4사보타주"(당일 방영)가 CONTENT FITS?에서
-  // 누락된 근본 원인. 페이지네이션으로 전량을 모으는 공용 헬퍼로 교체.
-  const recentProgramIds = await fetchRecentProgramIds(channel.id, fourteenDaysAgoStr);
-
+  const liveFrom = addDaysStr(asOfDate, -(LIVE_DAYS - 1));
   // 사용자 지시(2026-10-06/07): 제외 편성한 제목은 "무엇을 편성할까요?" 후보 목록에도 나오지 않는다(기간이 겹치는 제외만).
   const exclusionRows = await loadActiveExclusions(channel.id, asOfDate);
-  const progNameOf = (r: { programs?: unknown }) => {
-    const p = r.programs as { canonical_name?: string } | { canonical_name?: string }[] | null | undefined;
-    return Array.isArray(p) ? p[0]?.canonical_name : p?.canonical_name;
-  };
-  const items = (rows ?? []).filter((r) => recentProgramIds.has(r.program_id) && !isTitleExcluded(exclusionRows, progNameOf(r)));
+  const items = loaded.result.items
+    .filter((it) => it.lastAiredDate >= liveFrom)
+    .filter((it) => !isTitleExcluded(exclusionRows, loaded.programs.get(it.programId)?.canonicalName));
 
-  // 사용자 지시(2026-08-21): MOVE/REPLACE로 태깅된 프로그램 중 여러 시간대에 반복 편성된
+  // 사용자 지시(2026-08-21): 교체·이동으로 판정된 프로그램 중 여러 시간대에 반복 편성된
   // ("재방 많은") 것은 프로그램 전체가 아니라 특정 시간대만 짚어 의견을 낸다.
-  const programTargetLabel = channel.primary_target ? resolveProgramLevelTargetLabel(channel.primary_target) : null;
-  type ItemRow = (typeof items)[number];
-  type ItemWithSlot = ItemRow & {
-    slotEfficiency: {
-      isMultiSlot: boolean;
-      weeks: number;
-      weakHour: number | null;
-      weakShareVsMedianPct: number | null;
-      weakAirCount: number | null;
-      // "strong" = 중앙값 대비 뚜렷하게 낮음(이동/교체 권장), "mild" = 상대적으로 가장 약함(참고),
-      // null = 표본 부족으로 특정 시간대를 짚을 근거가 없음(여러 시간대 중 고르게 방영).
-      confidence: "strong" | "mild" | null;
-    } | null;
-  };
-  const itemsWithSlotEfficiency: ItemWithSlot[] = await Promise.all(
-    items.map(async (item) => {
-      const canonicalName = (item.programs as { canonical_name?: string } | null)?.canonical_name;
-      if (!programTargetLabel || !canonicalName || (item.tag !== "MOVE" && item.tag !== "REPLACE")) {
-        return { ...item, slotEfficiency: null };
+  const programTargetLabel = loaded.kpiTargetLabel;
+  const rows = await Promise.all(
+    items.map(async (it) => {
+      const meta = loaded.programs.get(it.programId);
+      const canonicalName = meta?.canonicalName ?? null;
+      let slotEfficiency: unknown = null;
+      if (programTargetLabel && canonicalName && (it.tag === "MOVE" || it.tag === "REPLACE")) {
+        slotEfficiency = await buildSlotEfficiency(channel.code, canonicalName, programTargetLabel, asOfDate);
       }
-      const { data: slotRows } = await supabase.rpc("get_program_slot_efficiency", {
-        p_channel_code: channel.code,
-        p_canonical_name: canonicalName,
-        p_program_target_label: programTargetLabel,
-        p_as_of_date: asOfDate,
-        p_weeks: SLOT_EFFICIENCY_WEEKS,
-      });
-      const rows2 = (slotRows ?? []) as SlotEfficiencyRow[];
-      const isMultiSlot = rows2.length >= MULTI_SLOT_HOUR_THRESHOLD;
-      if (!isMultiSlot) {
-        return { ...item, slotEfficiency: null };
-      }
-      // 표본(2회 이상)이 있는 시간대 중 중앙값 대비 가장 낮은 곳을 항상 고른다(사용자 지시: "네가
-      // 시간대별로 판단해서 제안을 해주면 좋겠다") — 얼마나 뚜렷한지에 따라 confidence만 다르게.
-      const candidates = rows2
-        .filter((r) => r.air_count >= WEAK_SLOT_MIN_AIR_COUNT && r.share_vs_median_pct !== null)
-        .sort((a, b) => (a.share_vs_median_pct ?? 0) - (b.share_vs_median_pct ?? 0));
-      const weak = candidates[0] ?? null;
-      const pct = weak?.share_vs_median_pct ?? null;
-      const confidence: "strong" | "mild" | null =
-        pct === null ? null : pct <= WEAK_SLOT_STRONG_PCT_MAX ? "strong" : pct <= WEAK_SLOT_MILD_PCT_MAX ? "mild" : null;
-
-      // ── 원 명세 11번(GOLDEN/WEAK SLOT) ─────────────────────────────────
-      // candidates는 이미 "표본 최소 방영 횟수 이상 + share_vs_median_pct 있음"으로 걸러져
-      // 오름차순 정렬돼 있다. 가장 높은 슬롯이 임계값을 넘으면 GOLDEN, 가장 낮은 슬롯이
-      // 임계값 아래면 WEAK로 각각 표기한다(둘 다 없을 수도 있고, 억지로 만들지 않는다).
-      const best = candidates.length > 0 ? candidates[candidates.length - 1] : null;
-      const goldenSlot =
-        best !== null && (best.share_vs_median_pct ?? 0) >= SLOT_FIT_THRESHOLD.goldenPctMin
-          ? { hour: best.hour_bucket, shareVsMedianPct: best.share_vs_median_pct, airCount: best.air_count }
-          : null;
-      const weakSlot =
-        weak !== null && (weak.share_vs_median_pct ?? 999) <= SLOT_FIT_THRESHOLD.weakPctMax
-          ? { hour: weak.hour_bucket, shareVsMedianPct: weak.share_vs_median_pct, airCount: weak.air_count }
-          : null;
-
-      // ── 원 명세 12번(SLOT TRANSFERABILITY) ────────────────────────────
-      // 슬롯이 충분히 많을 때만 분류한다(명세: 데이터 부족 시 분류하지 않음).
-      let transferability: "SLOT_SPECIFIC" | "FLEXIBLE" | "PRIME_DEPENDENT" | null = null;
-      if (candidates.length >= TRANSFERABILITY.minSlots) {
-        const pcts = candidates.map((r) => r.share_vs_median_pct ?? 0);
-        const spread = Math.max(...pcts) - Math.min(...pcts);
-        // 임계값 이상으로 강한 슬롯들이 전부 프라임 구간이면 PRIME-DEPENDENT.
-        const strongSlots = candidates.filter((r) => (r.share_vs_median_pct ?? 0) >= SLOT_FIT_THRESHOLD.goldenPctMin);
-        const allStrongArePrime =
-          strongSlots.length > 0 && strongSlots.every((r) => TRANSFERABILITY.primeHours.includes(r.hour_bucket));
-        if (spread <= TRANSFERABILITY.flexibleSpreadMax) {
-          transferability = "FLEXIBLE"; // 어느 슬롯이든 자기 중앙값 근처 — 이동해도 유지될 가능성
-        } else if (allStrongArePrime) {
-          transferability = "PRIME_DEPENDENT"; // 강세가 프라임 구간에만 몰림
-        } else {
-          transferability = "SLOT_SPECIFIC"; // 편차가 크고, 강세 슬롯이 프라임에 한정되지도 않음
-        }
-      }
-
       return {
-        ...item,
-        slotEfficiency: {
-          isMultiSlot: true,
-          weeks: SLOT_EFFICIENCY_WEEKS,
-          weakHour: confidence ? (weak?.hour_bucket ?? null) : null,
-          weakShareVsMedianPct: confidence ? pct : null,
-          weakAirCount: confidence ? (weak?.air_count ?? null) : null,
-          confidence,
-          goldenSlot,
-          weakSlot,
-          transferability,
-          slotSampleCount: candidates.length,
+        fit_score: it.score === null ? null : Math.round(it.score * 10) / 10,
+        // 옛 하위지표 6개는 더 이상 점수의 근거가 아니다 — 값을 비워 옛 필드를 읽는 코드가 남아 있어도 틀린 값을 쓰지 못하게 한다.
+        target_performance_score: null,
+        target_affinity_score: null,
+        audience_engagement_score: null,
+        slot_performance_score: null,
+        competitive_opportunity_score: null,
+        audience_flow_score: null,
+        sample_days: it.sampleDays,
+        confidence_pct: it.tier === "HOLD" ? null : it.confidencePct,
+        tag: it.tag,
+        evidence: {
+          avg_rating: it.avgRating,
+          sample_days: it.sampleDays,
+          avg_reach: it.avgReach,
+          avg_time_spent_share: it.avgTimeSpentShare,
+          current_daypart: it.currentDaypart,
         },
+        program_id: it.programId,
+        programs: meta ? { canonical_name: meta.canonicalName, raw_name: meta.rawName ?? meta.canonicalName, first_run: meta.firstRun } : null,
+        content_fit: it,
+        slotEfficiency,
       };
     })
   );
 
-  return NextResponse.json({ ok: true, asOfDate, items: itemsWithSlotEfficiency });
+  return NextResponse.json({
+    ok: true,
+    asOfDate,
+    items: rows,
+    meta: {
+      modelVersion: loaded.result.modelVersion,
+      windowFrom: loaded.result.windowFrom,
+      windowDays: loaded.result.windowDays,
+      channelMeanRating: loaded.result.channelMeanRating,
+      airingCount: loaded.result.airingCount,
+      kpiTargetLabel: loaded.kpiTargetLabel,
+    },
+  });
+}
+
+async function buildSlotEfficiency(channelCode: string, canonicalName: string, programTargetLabel: string, asOfDate: string) {
+  const { data: slotRows } = await supabase.rpc("get_program_slot_efficiency", {
+    p_channel_code: channelCode,
+    p_canonical_name: canonicalName,
+    p_program_target_label: programTargetLabel,
+    p_as_of_date: asOfDate,
+    p_weeks: SLOT_EFFICIENCY_WEEKS,
+  });
+  const rows2 = (slotRows ?? []) as SlotEfficiencyRow[];
+  const isMultiSlot = rows2.length >= MULTI_SLOT_HOUR_THRESHOLD;
+  if (!isMultiSlot) return null;
+  // 표본(2회 이상)이 있는 시간대 중 중앙값 대비 가장 낮은 곳을 항상 고른다(사용자 지시: "네가
+  // 시간대별로 판단해서 제안을 해주면 좋겠다") — 얼마나 뚜렷한지에 따라 confidence만 다르게.
+  const candidates = rows2
+    .filter((r) => r.air_count >= WEAK_SLOT_MIN_AIR_COUNT && r.share_vs_median_pct !== null)
+    .sort((a, b) => (a.share_vs_median_pct ?? 0) - (b.share_vs_median_pct ?? 0));
+  const weak = candidates[0] ?? null;
+  const pct = weak?.share_vs_median_pct ?? null;
+  const confidence: "strong" | "mild" | null = pct === null ? null : pct <= WEAK_SLOT_STRONG_PCT_MAX ? "strong" : pct <= WEAK_SLOT_MILD_PCT_MAX ? "mild" : null;
+
+  // ── 원 명세 11번(GOLDEN/WEAK SLOT) ─────────────────────────────────
+  // candidates는 이미 "표본 최소 방영 횟수 이상 + share_vs_median_pct 있음"으로 걸러져
+  // 오름차순 정렬돼 있다. 가장 높은 슬롯이 임계값을 넘으면 GOLDEN, 가장 낮은 슬롯이
+  // 임계값 아래면 WEAK로 각각 표기한다(둘 다 없을 수도 있고, 억지로 만들지 않는다).
+  const best = candidates.length > 0 ? candidates[candidates.length - 1] : null;
+  const goldenSlot =
+    best !== null && (best.share_vs_median_pct ?? 0) >= SLOT_FIT_THRESHOLD.goldenPctMin
+      ? { hour: best.hour_bucket, shareVsMedianPct: best.share_vs_median_pct, airCount: best.air_count }
+      : null;
+  const weakSlot =
+    weak !== null && (weak.share_vs_median_pct ?? 999) <= SLOT_FIT_THRESHOLD.weakPctMax
+      ? { hour: weak.hour_bucket, shareVsMedianPct: weak.share_vs_median_pct, airCount: weak.air_count }
+      : null;
+
+  // ── 원 명세 12번(SLOT TRANSFERABILITY) ────────────────────────────
+  // 슬롯이 충분히 많을 때만 분류한다(명세: 데이터 부족 시 분류하지 않음).
+  let transferability: "SLOT_SPECIFIC" | "FLEXIBLE" | "PRIME_DEPENDENT" | null = null;
+  if (candidates.length >= TRANSFERABILITY.minSlots) {
+    const pcts = candidates.map((r) => r.share_vs_median_pct ?? 0);
+    const spread = Math.max(...pcts) - Math.min(...pcts);
+    // 임계값 이상으로 강한 슬롯들이 전부 프라임 구간이면 PRIME-DEPENDENT.
+    const strongSlots = candidates.filter((r) => (r.share_vs_median_pct ?? 0) >= SLOT_FIT_THRESHOLD.goldenPctMin);
+    const allStrongArePrime = strongSlots.length > 0 && strongSlots.every((r) => TRANSFERABILITY.primeHours.includes(r.hour_bucket));
+    if (spread <= TRANSFERABILITY.flexibleSpreadMax) {
+      transferability = "FLEXIBLE"; // 어느 슬롯이든 자기 중앙값 근처 — 이동해도 유지될 가능성
+    } else if (allStrongArePrime) {
+      transferability = "PRIME_DEPENDENT"; // 강세가 프라임 구간에만 몰림
+    } else {
+      transferability = "SLOT_SPECIFIC"; // 편차가 크고, 강세 슬롯이 프라임에 한정되지도 않음
+    }
+  }
+
+  return {
+    isMultiSlot: true,
+    weeks: SLOT_EFFICIENCY_WEEKS,
+    weakHour: confidence ? (weak?.hour_bucket ?? null) : null,
+    weakShareVsMedianPct: confidence ? pct : null,
+    weakAirCount: confidence ? (weak?.air_count ?? null) : null,
+    confidence,
+    goldenSlot,
+    weakSlot,
+    transferability,
+    slotSampleCount: candidates.length,
+  };
 }

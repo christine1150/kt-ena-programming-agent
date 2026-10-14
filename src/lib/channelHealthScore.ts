@@ -27,7 +27,8 @@ export interface ChannelHealthInput {
   ratingDeltaPct: number | null; // 오늘 vs 최근 4주 평균(narrativeSignal.rating_delta_pct)
   todayRank: number | null;
   baselineAvgRank: number | null;
-  fitScoreTagCounts: { STRENGTHEN: number; KEEP: number; MOVE: number; REPLACE: number; TEST: number };
+  // 관찰(WATCH)·테스트(TEST)는 긍정도 부정도 아니라 이 축에서 제외한다(2026-10-14 콘텐츠 적합도 재설계로 WATCH 추가).
+  fitScoreTagCounts: { STRENGTHEN: number; KEEP: number; MOVE: number; REPLACE: number; TEST: number; WATCH?: number };
   rootCauseTriggered: boolean; // WHY? 3일 연속 하락 경보
   opportunityTriggered: boolean; // OPPORTUNITY? 7일 상승 + 경쟁채널 약세
   daypartGapChanges: (number | null)[]; // daypartOpportunity의 gap_change 전체(표본 있는 것만)
@@ -65,12 +66,12 @@ export function computeChannelHealthScore(input: ChannelHealthInput): ChannelHea
     else axes.push({ key: "rank", label: "순위", verdict: "neutral", reason: `최근 4주 평균과 비슷(${input.todayRank}위)` });
   }
 
-  // ③ 편성 상태 — Fit Score 태그 분포(STRENGTHEN/KEEP=긍정, MOVE/REPLACE=부정, TEST 제외).
+  // ③ 편성 상태 — 적합도 판정 분포(STRENGTHEN/KEEP=긍정, MOVE/REPLACE=부정, WATCH·TEST 제외).
   const { STRENGTHEN, KEEP, MOVE, REPLACE } = input.fitScoreTagCounts;
   const positiveTagCount = STRENGTHEN + KEEP;
   const negativeTagCount = MOVE + REPLACE;
   if (positiveTagCount + negativeTagCount === 0) {
-    axes.push({ key: "programSlate", label: "편성 상태", verdict: "neutral", reason: "Fit Score 판정 대상 없음" });
+    axes.push({ key: "programSlate", label: "편성 상태", verdict: "neutral", reason: "적합도 판정 대상 없음" });
   } else if (negativeTagCount > positiveTagCount) {
     axes.push({ key: "programSlate", label: "편성 상태", verdict: "negative", reason: `이동·교체 검토 ${negativeTagCount}건 > 강화·유지 ${positiveTagCount}건` });
   } else if (positiveTagCount > negativeTagCount) {

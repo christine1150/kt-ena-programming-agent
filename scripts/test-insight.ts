@@ -334,11 +334,14 @@ async function llmModules() {
   reply = { leadSentence: "프라임 평균이 ▼45% 낮았다." };
   check("WHY 진단: 후보에 없는 수치는 폐기", (await quiet(() => buildWhyDiagnosisViaLlm(whyInput))) === null);
 
-  const fitInput = { programName: "신병4", tag: "REPLACE" as const, fitScore: 42, confidencePct: 55, subScores: [{ label: "타깃 성과", value: 72 }, { label: "경쟁 기회", value: 31 }], audienceRoleLabel: null };
-  reply = { interpretation: "타깃 성과 72는 강점이고 경쟁 기회 31은 주의할 점이다. 신뢰도 55로 참고용이다." };
-  check("Fit 해석: 입력 점수 인용은 통과", (await buildFitScoreInterpretationViaLlm(fitInput)) !== null);
-  reply = { interpretation: "타깃 성과 88은 강점이다." };
-  check("Fit 해석: 지어낸 점수(88)는 폐기", (await quiet(() => buildFitScoreInterpretationViaLlm(fitInput))) === null);
+  const fitInput = { programName: "신병4", tag: "REPLACE" as const, fitScore: 42, confidencePct: 55, sampleDays: 12, slotIndex: 0.52, scaleIndex: 0.84, engagementScore: 31, trendPct: -18, isReference: false, audienceRoleLabel: null };
+  reply = { interpretation: "슬롯 대비 성과는 0.52배로 낮고 시청 몰입도 31도 평균에 못 미친다. 최근 4주는 이전 8주보다 18% 낮아졌다." };
+  check("적합도 해석: 입력 지표(0.52배·31·18%) 인용은 통과", (await buildFitScoreInterpretationViaLlm(fitInput)) !== null);
+  reply = { interpretation: "슬롯 대비 성과는 1.4배로 강점이다." };
+  check("적합도 해석: 지어낸 배수(1.4배)는 폐기", (await quiet(() => buildFitScoreInterpretationViaLlm(fitInput))) === null);
+  reply = { interpretation: "슬롯 대비 성과는 0.52배로 낮아 REPLACE 판정이다." };
+  const koText = await buildFitScoreInterpretationViaLlm(fitInput);
+  check("적합도 해석: 영문 태그가 새어 나오면 한국어(교체 검토)로 바꿔 내보낸다", koText !== null && koText.includes("교체 검토") && !/REPLACE/.test(koText), String(koText));
 
   const askInput = { question: "최근 4주 ENA 시청률은?", conclusion: "ENA 시청률 0.147", keyNumbers: "0.147 / 3위", comparisonBasis: "최근 4주 평균 0.128", evidence: "근거", confidenceNote: "표본 28일" };
   reply = { interpretation: "시청률 0.147은 최근 4주 평균 0.128보다 높다.", programmingAction: "다음 주에도 같은 흐름인지 확인해 볼 만하다." };

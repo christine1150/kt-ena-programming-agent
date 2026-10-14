@@ -573,7 +573,7 @@ function ModeDBody({ sections: s, channelCode }: { sections: import("@/lib/audie
           </div>
         </Section>
       )}
-      <Section title="Program Portfolio(Fit Score)">
+      <Section title="Program Portfolio(콘텐츠 적합도)">
         <WithMaybe
           maybe={s.programPortfolio}
           render={(d) => (
@@ -583,7 +583,7 @@ function ModeDBody({ sections: s, channelCode }: { sections: import("@/lib/audie
                 <ul className="text-sm">
                   {d.strong.map((f) => (
                     <li key={f.programId} className="border-t border-neutral-200/60 py-1 dark:border-neutral-800/60">
-                      {f.canonicalName ?? "이름 없음"} — Fit {f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}
+                      {f.canonicalName ?? "이름 없음"} — 적합도 {f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}
                     </li>
                   ))}
                 </ul>
@@ -593,7 +593,7 @@ function ModeDBody({ sections: s, channelCode }: { sections: import("@/lib/audie
                 <ul className="text-sm">
                   {d.weak.map((f) => (
                     <li key={f.programId} className="border-t border-neutral-200/60 py-1 dark:border-neutral-800/60">
-                      {f.canonicalName ?? "이름 없음"} — Fit {f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}
+                      {f.canonicalName ?? "이름 없음"} — 적합도 {f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}
                     </li>
                   ))}
                 </ul>

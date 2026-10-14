@@ -321,12 +321,12 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
       });
     }
     sections.push({
-      key: "fit_portfolio", title: "Program Portfolio(Fit Score)",
+      key: "fit_portfolio", title: "Program Portfolio(콘텐츠 적합도)",
       blocks: fromMaybe(s.programPortfolio, (d) => [
         { kind: "text", text: "STRENGTHEN/KEEP" },
-        { kind: "bullets", items: d.strong.map((f) => `${f.canonicalName ?? "이름 없음"} — Fit ${f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}`) },
+        { kind: "bullets", items: d.strong.map((f) => `${f.canonicalName ?? "이름 없음"} — 적합도 ${f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}`) },
         { kind: "text", text: "REPLACE" },
-        { kind: "bullets", items: d.weak.map((f) => `${f.canonicalName ?? "이름 없음"} — Fit ${f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}`) },
+        { kind: "bullets", items: d.weak.map((f) => `${f.canonicalName ?? "이름 없음"} — 적합도 ${f.fitScore !== null ? f.fitScore.toFixed(0) : "—"}`) },
       ]),
     });
     if (s.strategicImplications) {

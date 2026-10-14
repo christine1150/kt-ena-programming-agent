@@ -37,7 +37,7 @@ import { HealthScoreBadge, verdictColor } from "@/components/HealthScoreBadge";
 import { PRIME_UNION_LABEL } from "@/lib/audienceReport/primeTime";
 // 5대 편성 액션 태그 색상·한글 라벨 — Page 1(Dashboard.tsx)도 재사용할 수 있도록 공용 lib로
 // 분리했다(2026-09-18, 순수 이동, 값 변경 없음).
-import { TAG_DOT_COLOR, TAG_LABEL_KO } from "@/lib/actionTags";
+import { TAG_DOT_COLOR, TAG_LABEL_KO, type ActionTag } from "@/lib/actionTags";
 // 사용자 지시(2026-09-18): WHY? 진단의 "Program 자체 성과"/"Day/Time Slot" 후보에 Page 1
 // 월간 리뷰가 쓰는 편성량(volumeEffect)/성과(performanceEffect) 항등 분해 판정을 그대로 재사용.
 import { classifyDeclineCause } from "@/lib/causeClassifier";
@@ -58,13 +58,9 @@ import {
   addDaysStr,
   toDateStr,
 } from "@/lib/audienceReport/periodPresets";
-// 사용자 지시(2026-09-18): CONTENT FITS?(Program×Slot×Target Fit) 표에 "이 프로그램이 물량으로
-// 버티는지/적게 틀어도 잘 나오는지" 배지를 붙인다 — Word/PPT 리포트(recommendationSection.ts)가
-// 이미 쓰는 순수 판정 함수를 화면에도 그대로 재사용한다(함수 자체는 수정하지 않음). 타입만
-// 가져오는 dataCollector는 supabase 클라이언트를 갖고 있어 `import type`으로만 참조해 클라이언트
-// 번들에 서버 코드가 섞이지 않게 한다.
-import { computeEfficiencyRanking, type ProgramType } from "@/lib/audienceReport/deepDiveAnalyzer";
-import type { ProgramSlotProfileRow } from "@/lib/audienceReport/dataCollector";
+// 콘텐츠 적합도(2026-10-14 재설계): 계산은 서버(/api/scheduling/fit-score → src/lib/contentFit 엔진)가 하고, 화면은 그 값과
+// 설명 문구 함수(순수 함수, 서버 코드 없음)만 가져다 쓴다. 설계·검증 근거: docs/content-fit/CONTENT_FIT_LOGIC.md
+import { CONTENT_FIT_CONFIG, CONTENT_FIT_LEGEND, audienceRoleOf, describeBaseline, explainContentFit, fitShapeOf, formatTrendCell, fmtTimes, scheduleNote, summarizeTable, type ContentFitItem, type FitShape } from "@/lib/contentFit";
 import { formatDurationKo } from "@/lib/metrics";
 import { VENDING } from "@/lib/ui/pageTitles";
 import { brandText } from "@/lib/ui/contrast";
@@ -253,42 +249,28 @@ function classifyHourBlockOpportunity(d: HourBlockOpportunityRow): OpportunityCl
 }
 
 
+// 콘텐츠 적합도 API(/api/scheduling/fit-score)가 주는 프로그램별 근거. 점수의 근거가 아닌 옛 하위지표(percentile 6종)와
+// 연령 구성·경쟁 압력·리드인 유지율은 2026-10-14 재설계로 점수에서 빠졌고 응답에도 없다.
 interface FitScoreEvidence {
   avg_rating: number | null;
   sample_days: number;
-  program_rating_pctl: number | null;
-  same_slot_pctl: number | null;
-  same_daypart_pctl: number | null;
   avg_reach: number | null;
-  reach_pctl: number | null;
   avg_time_spent_share: number | null;
-  time_spent_share_pctl: number | null;
-  affinity_avg_index: number | null;
-  affinity_channel_pctl: number | null;
-  competitive_pressure: number | null;
-  our_avg_rating: number | null;
-  top3_avg_rating: number | null;
-  avg_lead_in_retention: number | null;
-  flow_sample_days: number | null;
-  // 사용자 지시(2026-08-20): 다른 daypart 재배치를 추천할 근거(daypartOpportunity)와 비교하기
-  // 위한 "이 프로그램이 지금 주로 방영되는 daypart" — refresh_fit_score_mart()에서 계산.
+  // 이 프로그램이 지금 주로 방영되는 시간대(재방 제외) — daypartOpportunity와 견줘 다른 시간대 재배치를 추천할 때 쓴다.
   current_daypart: string | null;
 }
 
 interface FitScoreItem {
+  // 적합도 0~100(판단 보류면 null). 표의 정렬·표시용 — 판정(tag)은 슬롯 대비 성과(content_fit.slotIndex)로 내린다.
   fit_score: number | null;
-  target_performance_score: number | null;
-  target_affinity_score: number | null;
-  audience_engagement_score: number | null;
-  slot_performance_score: number | null;
-  competitive_opportunity_score: number | null;
-  audience_flow_score: number | null;
   sample_days: number;
   confidence_pct: number | null;
-  tag: "STRENGTHEN" | "KEEP" | "MOVE" | "REPLACE" | "TEST" | null;
+  tag: ActionTag | null;
   evidence: FitScoreEvidence;
   program_id: string;
   programs: { canonical_name: string; raw_name: string; first_run: boolean | null } | null;
+  // 엔진 원본(슬롯 대비 성과·시청 규모·몰입도·추세·신뢰도·참고 구간 여부 등) — src/lib/contentFit/types.ts
+  content_fit: ContentFitItem;
   // 사용자 지시(2026-08-21): 재방이 많아 여러 시간대에 걸쳐 방영되는 프로그램은 프로그램 전체가
   // 아니라 그중 효율이 낮은 특정 시간대만 짚어야 한다 — /api/scheduling/fit-score가
   // get_program_slot_efficiency로 미리 계산해 붙여준다(MOVE/REPLACE 태그만 해당, 그 외엔 null).
@@ -902,36 +884,42 @@ function DotTag({ label, color }: { label: string; color: string }) {
   );
 }
 
-// 사용자 지시(2026-08-26): "Fit Score 2×2 매트릭스(포트폴리오 뷰) — Target Performance(x) ×
-// Competitive Opportunity(y)에... 사분면 라벨을 PROTECT/DEFEND/IMPROVE/OPPORTUNITY로." 다만
-// PD가 실제로 판단해야 하는 축은 "이 프로그램을 얼마나 믿고 강화/이동/교체할 것인가"이므로,
-// 새 기준을 만들지 않고 이미 SQL(refresh_fit_score_mart)이 태그를 매기는 실제 컷오프
-// (fit_score 50/65/80, confidence_pct 50)를 그대로 배경 밴드로 시각화한다 — 표의 태그가
-// "왜" 그렇게 매겨졌는지 한눈에 보이는 산점도(맥킨지 포트폴리오 매트릭스 원리를 그대로 옮김,
-// 표 태그 값 자체는 재계산하지 않음). x=적합도(Fit Score), y=신뢰도(표본 충분성).
-const FIT_QUADRANT_CONFIDENCE_CUTOFF = 50; // fit_score_config.min_confidence_pct_for_tag 기본값과 동일
+// 사용자 지시(2026-08-26): "Fit Score 2×2 매트릭스(포트폴리오 뷰)..." 다만 PD가 실제로 판단해야 하는 축은 "이 프로그램을 얼마나 믿고
+// 강화/이동/교체할 것인가"이므로, 표의 판정이 "왜" 그렇게 나뉘었는지 한눈에 보이는 산점도로 둔다(표 판정 자체는 재계산하지 않음).
+// 2026-10-14 재설계: 판정이 슬롯 대비 성과(배수)로 바뀌어, 가로축을 적합도(0~100)에서 슬롯 대비 성과(로그 눈금 0.25~4배)로 바꾸고
+// 배경 밴드를 새 판정선(엔진 설정값 CONTENT_FIT_CONFIG.cut)으로 그린다. 세로축은 그대로 표본 신뢰도(50% 미만·방영 8일 미만은 테스트).
+const FIT_QUADRANT_CONFIDENCE_CUTOFF = 50; // 방영 8일 = 만점(16일)의 절반 — 엔진의 정식 판정 최소 일수와 같다
+const FIT_QUADRANT_X_MIN = 0.25;
+const FIT_QUADRANT_X_MAX = 4;
 const FIT_QUADRANT_BANDS: { from: number; to: number; tag: keyof typeof TAG_DOT_COLOR }[] = [
-  { from: 0, to: 50, tag: "REPLACE" },
-  { from: 50, to: 65, tag: "MOVE" },
-  { from: 65, to: 80, tag: "KEEP" },
-  { from: 80, to: 100, tag: "STRENGTHEN" },
+  { from: FIT_QUADRANT_X_MIN, to: CONTENT_FIT_CONFIG.cut.watch, tag: "REPLACE" },
+  { from: CONTENT_FIT_CONFIG.cut.watch, to: CONTENT_FIT_CONFIG.cut.keep, tag: "WATCH" },
+  { from: CONTENT_FIT_CONFIG.cut.keep, to: CONTENT_FIT_CONFIG.cut.strengthen, tag: "KEEP" },
+  { from: CONTENT_FIT_CONFIG.cut.strengthen, to: FIT_QUADRANT_X_MAX, tag: "STRENGTHEN" },
 ];
 function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
   const plottable = items.filter(
-    (i): i is FitScoreItem & { fit_score: number; confidence_pct: number } => i.fit_score !== null && i.confidence_pct !== null
+    (i): i is FitScoreItem & { confidence_pct: number; content_fit: ContentFitItem & { slotIndex: number } } =>
+      i.content_fit.slotIndex !== null && i.confidence_pct !== null
   );
   if (plottable.length === 0) return null;
   const W = 640;
   const PAD_L = 30;
   const PAD_R = 12;
   const PAD_B = 22;
-  const xOf = (score: number) => PAD_L + (Math.max(0, Math.min(100, score)) / 100) * (W - PAD_L - PAD_R);
+  // 가로 위치: 슬롯 대비 성과(배)를 로그 눈금(0.25배~4배)으로
+  const xOf = (idx: number) => {
+    const lo = Math.log2(FIT_QUADRANT_X_MIN);
+    const hi = Math.log2(FIT_QUADRANT_X_MAX);
+    const v = Math.max(lo, Math.min(hi, Math.log2(Math.max(idx, 1e-6))));
+    return PAD_L + ((v - lo) / (hi - lo)) * (W - PAD_L - PAD_R);
+  };
 
   // 사용자 지시(2026-08-26) 반영 중 실측 확인: 표본 신뢰도 100%인 프로그램이 많아 대부분 점이
   // y=100% 선 위에 몰리고, x(적합도)도 서로 가까워 라벨을 전부 켜면 겹쳐 읽기 어려움 — 최고/최저
   // 적합도 점과 "교체 검토(REPLACE)" 태그가 붙은(가장 의사결정이 급한) 점만 항상 라벨을 켜고,
   // 나머지는 점만(호버 시 <title> 툴팁으로 확인).
-  const byFitAsc = [...plottable].sort((a, b) => a.fit_score - b.fit_score);
+  const byFitAsc = [...plottable].sort((a, b) => a.content_fit.slotIndex - b.content_fit.slotIndex);
   const alwaysLabelIds = new Set<string>([
     byFitAsc[0]?.program_id,
     byFitAsc[byFitAsc.length - 1]?.program_id,
@@ -950,7 +938,7 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
   const MAX_LANES = 6;
   const labelPoints = plottable
     .filter((item) => alwaysLabelIds.has(item.program_id))
-    .map((item) => ({ item, px: xOf(item.fit_score), name: item.programs?.canonical_name ?? "" }))
+    .map((item) => ({ item, px: xOf(item.content_fit.slotIndex), name: item.programs?.canonical_name ?? "" }))
     .sort((a, b) => a.px - b.px);
   const laneRightEdge: number[] = [];
   const laneByProgramId = new Map<string, number>();
@@ -978,10 +966,10 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
   return (
     <div className="mb-4 rounded-2xl bg-zinc-50 p-4">
       <p className="mb-2 text-[12px] text-zinc-500">
-        가로축 = 적합도, 세로축 = 신뢰도(표본 충분성) — 아래 표의 태그가 어떤 기준으로 나뉘었는지 그대로
-        보여줍니다(신뢰도 {FIT_QUADRANT_CONFIDENCE_CUTOFF}% 미만은 점수와 무관하게 테스트).
+        가로축 = 슬롯 대비 성과(같은 시간대 다른 프로그램 평균의 몇 배, 1.0배가 기준), 세로축 = 신뢰도(표본 충분성) — 위 표의 판정이
+        어떤 기준으로 나뉘었는지 그대로 보여줍니다(신뢰도 {FIT_QUADRANT_CONFIDENCE_CUTOFF}% 미만은 성과와 무관하게 테스트).
       </p>
-      <svg role="img" aria-label="적합도(가로)와 신뢰도(세로) 산점도" viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+      <svg role="img" aria-label="슬롯 대비 성과(가로)와 신뢰도(세로) 산점도" viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
         {FIT_QUADRANT_BANDS.map((b) => (
           <rect key={b.tag} x={xOf(b.from)} y={PAD_T} width={xOf(b.to) - xOf(b.from)} height={plotH} fill={TAG_DOT_COLOR[b.tag]} fillOpacity={0.07} />
         ))}
@@ -994,14 +982,14 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
           strokeWidth={1}
           strokeDasharray="4 3"
         />
-        {[50, 65, 80].map((cut) => (
+        {[CONTENT_FIT_CONFIG.cut.watch, CONTENT_FIT_CONFIG.cut.keep, CONTENT_FIT_CONFIG.cut.strengthen].map((cut) => (
           <line key={cut} x1={xOf(cut)} y1={PAD_T} x2={xOf(cut)} y2={H - PAD_B} stroke="#e4e4e7" strokeWidth={1} />
         ))}
         <line x1={PAD_L} y1={H - PAD_B} x2={W - PAD_R} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
         <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
-        {[0, 50, 65, 80, 100].map((v) => (
+        {[FIT_QUADRANT_X_MIN, CONTENT_FIT_CONFIG.cut.watch, 1, CONTENT_FIT_CONFIG.cut.strengthen, FIT_QUADRANT_X_MAX].map((v) => (
           <text key={v} x={xOf(v)} y={H - PAD_B + 12} textAnchor="middle" fontSize={11} fill="#71717a">
-            {v}
+            {v}배
           </text>
         ))}
         <text x={PAD_L - 4} y={yOf(FIT_QUADRANT_CONFIDENCE_CUTOFF) - 3} textAnchor="end" fontSize={11} fill="#71717a">
@@ -1009,10 +997,10 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
         </text>
         {(() => {
           return plottable.map((item) => {
-            const color = item.tag ? TAG_DOT_COLOR[item.tag] : "#a1a1aa";
+            const color = item.tag && item.content_fit.tier === "FORMAL" ? TAG_DOT_COLOR[item.tag] : "#a1a1aa";
             const r = 3 + Math.min(4, item.sample_days / 4);
             const name = item.programs?.canonical_name ?? "";
-            const px = xOf(item.fit_score);
+            const px = xOf(item.content_fit.slotIndex);
             const py = yOf(item.confidence_pct);
             const showLabel = alwaysLabelIds.has(item.program_id);
             const lane = laneByProgramId.get(item.program_id) ?? 0;
@@ -1021,7 +1009,7 @@ function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
               <g key={item.program_id}>
                 <circle cx={px} cy={py} r={r} fill={color} fillOpacity={0.85}>
                   <title>
-                    {name} — 적합도 {item.fit_score.toFixed(1)} · 신뢰도 {item.confidence_pct.toFixed(0)}% · {item.tag ? TAG_LABEL_KO[item.tag] : "—"}
+                    {name} — 슬롯 대비 {item.content_fit.slotIndex.toFixed(2)}배 · 신뢰도 {item.confidence_pct.toFixed(0)}% · {item.content_fit.tier === "FORMAL" && item.tag ? TAG_LABEL_KO[item.tag] : "표본 적음"}
                   </title>
                 </circle>
                 {/* 사용자 지시(2026-08-26): "프로그램 제목 명 잘리는 부분 수정 — 제목 잘리지
@@ -2138,66 +2126,33 @@ function getSingleDayLongWatchFact(demographicHighlights: DemographicHighlightRo
   };
 }
 
-// ── CONTENT FITS? 표+줄글, 채널 기여도 높은 순 정렬(사용자 지시) ──────────────
-function contentFitsHelpScore(item: FitScoreItem): number {
-  const vals = [item.target_performance_score, item.target_affinity_score, item.audience_engagement_score].filter(
-    (v): v is number => v !== null
-  );
-  return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+// ── CONTENT FITS? 표: 정렬·배지(2026-10-14 재설계) ──────────────
+// 서버가 이미 점수 내림차순(판단 보류는 맨 뒤)으로 주지만, 이 규칙을 화면에서도 보장한다. 점수가 같으면 방영 일수가 많은 쪽이 먼저.
+function sortContentFitRows(items: FitScoreItem[]): FitScoreItem[] {
+  return [...items].sort((a, b) => {
+    const ha = a.content_fit.score === null ? 1 : 0;
+    const hb = b.content_fit.score === null ? 1 : 0;
+    if (ha !== hb) return ha - hb;
+    return (b.content_fit.score ?? 0) - (a.content_fit.score ?? 0) || b.sample_days - a.sample_days;
+  });
 }
 
-// ── CONTENT FITS? 총량형/효율형/균형형 배지(2026-09-18, 사용자 지시) ──────────
-// deepDiveAnalyzer.computeEfficiencyRanking(리포트 recommendationSection.ts가 이미 검증해 쓰는
-// 순수 함수)을 화면에도 그대로 재사용한다. 이 함수는 원래 get_channel_program_slot_profile RPC가
-// 주는 ProgramSlotProfileRow[](프로그램×방송시간대, "총 방영시간(airtimeMin)" 포함)를 입력으로
-// 기대하는데, 이 화면은 그 RPC를 호출하지 않고 Fit Score Mart(fitScoreItems)만 들고 있다.
-// Fit Score Mart의 원천 테이블(mart_program_target_score)에는 총 방영시간 컬럼이 아예 없고
-// sample_days(= count(distinct 방송일))만 저장돼 있어, "편성 물량" 축을 정확히 복원할 수는
-// 없다 — 대신 표본 일수를 물량의 근사치로 쓴다. 같은 프로그램은 회차 길이가 대체로 일정하므로
-// 방영 일수와 총 방영시간은 대부분 함께 움직이지만, 회차 길이가 크게 다른 프로그램끼리 비교할
-// 때는 어긋날 수 있다는 한계가 있다(정확한 값을 쓰려면 다음 라운드에서 fit_score_mart에
-// airtime_min 컬럼을 추가해야 함). computeEfficiencyRanking 자체는 건드리지 않았다.
-function toEfficiencyRankingInput(items: FitScoreItem[]): ProgramSlotProfileRow[] {
-  return items
-    .filter((i): i is FitScoreItem & { programs: NonNullable<FitScoreItem["programs"]> } => !!i.programs?.canonical_name)
-    .map((i) => ({
-      canonicalName: i.programs.canonical_name,
-      broadcastHour: 0, // computeEfficiencyRanking은 이 필드를 판정에 쓰지 않는다(그룹핑만 canonicalName 기준)
-      isPrime: false,
-      airings: i.evidence.sample_days,
-      airtimeMin: i.evidence.sample_days, // 근사치 — 위 주석 참고(총 방영시간 데이터 없음)
-      avgRating: i.evidence.avg_rating,
-      avgShare: null, // Fit Score Mart에는 점유율이 없음(compensatingMetrics 판정에서만 쓰이며 배지 자체엔 영향 없음)
-      avgReach: i.evidence.avg_reach,
-      avgTimeSpentSeconds: null,
-      avgTimeSpentShare: i.evidence.avg_time_spent_share,
-    }));
-}
-
-/** CONTENT FITS? 표에 쓸 canonicalName → 총량형/효율형/균형형 매핑. skyUHD는 Fit Score 자체가 없어 대상 밖. */
-function buildEfficiencyTypeMap(contentFitsRows: FitScoreItem[]): Map<string, ProgramType> {
-  if (contentFitsRows.length === 0) return new Map();
-  const input = toEfficiencyRankingInput(contentFitsRows);
-  // limit을 프로그램 수만큼 열어 표에 나온 프로그램 전부에 배지가 붙게 한다(기본 limit=10은 상위만 자름).
-  const ranked = computeEfficiencyRanking(input, input.length);
-  return new Map(ranked.map((r) => [r.canonicalName, r.programType]));
-}
-
-// 사용자 지시(2026-09-28): "효율형만 초록색 뱃지인데, 균형형과 총량형도 색을 만들어줘 —
-// 둘 중 하나는 회색이어도 됨" — 총량형("편성을 많이 써서 버티는 중")은 효율형(초록, 긍정)과
-// 대비되는 주의색(호박색)으로 구분하고, 균형형은 어느 쪽도 아닌 중립이라는 의미를 살려
-// 그대로 회색을 유지한다.
-const PROGRAM_TYPE_BADGE_STYLE: Record<ProgramType, string> = {
+// 규모와 효율의 모양 배지(사용자 지시 2026-09-18/28로 만든 총량형·효율형 배지를 새 지수로 다시 정의, fitShapeOf 참고):
+// 효율형(초록)=적은 규모로 슬롯 기대 이상, 총량형(호박색)=규모에 기대 슬롯 대비로는 평균 미만. 어느 쪽도 아니면 배지 없음 —
+// 옛 '균형형'은 "쏠림 없음"이 좋은 것처럼 읽혀 없앴다.
+const FIT_SHAPE_BADGE_STYLE: Record<FitShape, string> = {
   총량형: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
   효율형: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
-  균형형: "bg-zinc-50 text-zinc-500",
 };
-
-function ProgramTypeBadge({ type }: { type: ProgramType | undefined }) {
-  if (!type) return null;
+const FIT_SHAPE_TITLE: Record<FitShape, string> = {
+  총량형: "채널 평균보다 큰 규모로 방영되지만 같은 시간대 다른 프로그램 평균에는 못 미칩니다.",
+  효율형: "채널 평균보다 작은 규모로도 같은 시간대 다른 프로그램 평균을 크게 웃돕니다.",
+};
+function FitShapeBadge({ shape }: { shape: FitShape | null }) {
+  if (!shape) return null;
   return (
-    <span className={`ml-1.5 inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${PROGRAM_TYPE_BADGE_STYLE[type]}`}>
-      {type}
+    <span title={FIT_SHAPE_TITLE[shape]} className={`ml-1.5 inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[12px] font-medium ${FIT_SHAPE_BADGE_STYLE[shape]}`}>
+      {shape}
     </span>
   );
 }
@@ -2384,14 +2339,12 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
 
   // ③ Program 자체 성과 — 기여도 산식(contributionScore)이 있으면 "기여"로, 없으면(단일 일자)
   // "주요 변화 구간"으로만 표현(사용자 지시의 CONTRIBUTOR 단계 규칙).
-  let programCandidateName: string | null = null;
   if (data.isRangeMode && data.periodProgramMovers.length > 0) {
     const fallers = data.periodProgramMovers.filter((m) => m.rating_delta !== null && m.rating_delta < 0 && hasEnoughSample(m));
     if (fallers.length > 0) {
       const top = [...fallers].sort((a, b) => contributionScore(a) - contributionScore(b))[0];
       if (top.prior_avg_rating && top.prior_avg_rating !== 0 && top.period_avg_rating !== null) {
         const pctChange = ((top.period_avg_rating - top.prior_avg_rating) / top.prior_avg_rating) * 100;
-        programCandidateName = top.canonical_name;
         candidates.push({
           variable: "Program 자체 성과",
           strengthPct: Math.abs(pctChange),
@@ -2407,7 +2360,6 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
   } else if (ns?.top_program_name && ns.top_program_rating !== null && ns.top_program_baseline_avg) {
     const pctChange = ((ns.top_program_rating - ns.top_program_baseline_avg) / ns.top_program_baseline_avg) * 100;
     if (pctChange < 0) {
-      programCandidateName = ns.top_program_name;
       candidates.push({
         variable: "Program 자체 성과",
         strengthPct: Math.abs(pctChange),
@@ -2439,30 +2391,8 @@ function buildWhyDiagnosis(data: ChannelData, fitScoreItems: FitScoreItem[] | nu
     });
   }
 
-  // ⑤ Lead-in — Day/Time Slot에서 찾은 프로그램명으로 fitScoreItems를 매칭했을 때만(추정 금지).
-  const leadInSourceName = slotProgramName ?? programCandidateName;
-  if (leadInSourceName && fitScoreItems) {
-    const match = findFitScoreMatchByName(leadInSourceName, fitScoreItems);
-    const retention = match?.evidence.avg_lead_in_retention;
-    if (retention !== null && retention !== undefined && retention < 1) {
-      const deviationPct = Math.abs(retention - 1) * 100;
-      if (deviationPct >= 15) {
-        // flow_sample_days는 Fit Score MART가 Lead-in Retention 계산에 실제로 쓴 표본 일수를
-        // 그대로 내려주는 값(새 계산 없음) — sample_days(전체 Fit Score 표본)와는 다른 값이라
-        // Lead-in 후보에는 이쪽을 쓴다.
-        const flowSampleDays = match?.evidence.flow_sample_days ?? null;
-        candidates.push({
-          variable: "Lead-in",
-          strengthPct: deviationPct,
-          sentence: `직전 프로그램 대비 유입 비율(리드인 유지율)이 ${retention.toFixed(2)}로 낮아, 리드인 영향 가능성이 관찰됩니다.`,
-          daypart: slotDaypart,
-          programName: leadInSourceName,
-          sampleNote: flowSampleDays !== null ? `(최근 ${flowSampleDays}일 기준)` : null,
-          confidencePct: match?.confidence_pct ?? null,
-        });
-      }
-    }
-  }
+  // ⑤ Lead-in(직전 프로그램 대비 유입 비율)은 2026-10-14 콘텐츠 적합도 재설계에서 점수의 근거에서 빠졌다 — 검증 전 지표라 원인 후보로도
+  // 쓰지 않는다(리드인 효과는 관측 연관일 뿐이며, 쓰려면 별도 검증이 필요하다).
 
   if (candidates.length === 0) {
     return {
@@ -2573,14 +2503,11 @@ function buildOpportunityNarrative(
   if (candidates.length > 0 && best.gap_change !== null && best.gap_change > 0) {
     const candidateText = candidates.map((c) => `'${c.programs?.canonical_name}'`).join(", ");
     text += `아래 WHAT TO SCHEDULE?의 ${candidateText}${josaEulReul(candidateText)} ${opportunityHourBlockLabel(best.hour_block)}에 배치하는 것을 검토해볼 만합니다. `;
-    // 사용자 지시: STRENGTHEN/TEST 후보의 Target Affinity·Audience Flow가 높으면 그 근거를 덧붙인다.
-    const strongCandidate = candidates.find((c) => (c.target_affinity_score ?? 0) >= 70 || (c.audience_flow_score ?? 0) >= 70);
+    // 후보의 근거: 지금 편성된 시간대에서 같은 시간대 다른 프로그램 평균의 1.2배 이상을 내고 있으면 그 사실을 덧붙인다(관찰된 값만).
+    const strongCandidate = candidates.find((c) => (c.content_fit.slotIndex ?? 0) >= 1.2);
     if (strongCandidate) {
-      const parts: string[] = [];
-      if ((strongCandidate.target_affinity_score ?? 0) >= 70) parts.push(`타깃 선호도 ${strongCandidate.target_affinity_score}`);
-      if ((strongCandidate.audience_flow_score ?? 0) >= 70) parts.push(`시청 흐름 ${strongCandidate.audience_flow_score}`);
-      const partsText = parts.join(", ");
-      text += `'${strongCandidate.programs?.canonical_name}'${josaEunNeun(strongCandidate.programs?.canonical_name ?? "")} ${partsText}${josaIga(partsText)} 높아 해당 시간대로의 유입 가능성이 확인됩니다.`;
+      const nm = strongCandidate.programs?.canonical_name ?? "";
+      text += `'${nm}'${josaEunNeun(nm)} 지금 편성된 시간대에서 같은 시간대 다른 프로그램 평균의 ${fmtTimes(strongCandidate.content_fit.slotIndex)}를 기록 중이라 우선 검토 후보입니다.`;
     }
   }
   return text;
@@ -2612,10 +2539,11 @@ function buildExecutiveProgrammingInsight(
   const sentences: string[] = [];
   sentences.push(`${slotLabel} 성과는 ${why.leadSentence.replace(/\.$/, "")}로, 단순 약세 슬롯보다는 ${OPPORTUNITY_CLASS_LABEL[cls]} 슬롯으로 판단됩니다.`);
   sentences.push(
-    `'${candidate.programs.canonical_name}'의 Fit Score가 ${candidate.fit_score.toFixed(1)}로 확인돼, 이 슬롯에 우선 ${candidate.tag === "TEST" ? "TEST" : "배치"} 편성을 검토할 가치가 있습니다.`
+    `'${candidate.programs.canonical_name}'의 적합도 점수가 ${candidate.fit_score.toFixed(1)}(같은 시간대 평균의 ${fmtTimes(candidate.content_fit.slotIndex)})로 확인돼, 이 슬롯에 우선 ${candidate.tag === "TEST" ? "TEST" : "배치"} 편성을 검토할 가치가 있습니다.`
   );
-  if ((candidate.evidence.competitive_pressure ?? 0) >= 90) {
-    sentences.push(`다만 이 daypart의 경쟁압력이 높은 편이라(경쟁 강도 ${candidate.evidence.competitive_pressure?.toFixed(0)}) 즉각적인 REPLACE보다는 TEST 후 성과 확인을 권고합니다.`);
+  // 이 시간대가 '방어(DEFEND)' 구간(성과는 강하지만 경쟁압력이 높아지는 중)이면 즉시 교체보다 시험 편성 후 확인을 권한다.
+  if (cls === "DEFEND") {
+    sentences.push("다만 이 daypart는 경쟁압력이 높아지고 있어 즉각적인 교체보다는 TEST 후 성과 확인을 권고합니다.");
   }
   return sentences.join(" ");
 }
@@ -3185,7 +3113,7 @@ function OpportunityHourBlockTiles({ rows, fmtR, isEnaStory }: { rows: HourBlock
   );
 }
 
-function MiniPctlBar({ value, accentColor, isEnaStory }: { value: number | null; accentColor: string; isEnaStory?: boolean }) {
+function MiniPctlBar({ value, accentColor, isEnaStory, label }: { value: number | null; accentColor: string; isEnaStory?: boolean; label?: string }) {
   if (value === null) return <span className="text-zinc-600">—</span>;
   const clamped = Math.max(0, Math.min(100, value));
   // 사용자 지시(2026-08-22, ENA STORY 특화 디자인 확장): CONTENT FITS?/TOP20 미니 막대도 값
@@ -3196,7 +3124,7 @@ function MiniPctlBar({ value, accentColor, isEnaStory }: { value: number | null;
       <span className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-zinc-100">
         <span className="block h-full rounded-full" style={{ width: `${clamped}%`, backgroundColor: barColor }} />
       </span>
-      <span className="tabular-nums text-zinc-600">{value.toFixed(0)}</span>
+      <span className="tabular-nums text-zinc-600">{label ?? value.toFixed(0)}</span>
     </span>
   );
 }
@@ -3816,9 +3744,8 @@ function buildScheduleRecommendationNote(
   item: FitScoreItem,
   recommendedDaypart: string | null
 ): string {
-  if (item.tag === "TEST") {
-    return `표본 부족(표본 ${item.sample_days}건) — 데이터를 더 쌓은 뒤 재평가 필요`;
-  }
+  // 표본이 적거나(참고용) 방영이 3일 미만(보류)이면 표본 안내가 최우선 — 판정·재배치 제안을 하지 않는다(콘텐츠 적합도 규칙).
+  if (item.content_fit.tier !== "FORMAL") return scheduleNote(item.content_fit);
   // 사용자 지시(2026-08-21): "재방이 많은 컨텐츠를 통째로 이동 검토하라는 건 부적절 — 그 중 효율이
   // 안 좋은 특정 시간대만 짚어서 의견을 달라." 여러 시간대에 반복 편성된 프로그램이면(isMultiSlot)
   // 아래 daypart 재배치 추천보다 이 판단을 우선한다.
@@ -3847,37 +3774,16 @@ function buildScheduleRecommendationNote(
     // 있다)는 뜻임을 짧게 풀어 쓴다(위 OPPORTUNITY? 표의 상세 수치와 같은 근거).
     return `${DAYPART_LABEL[recommendedDaypart] ?? recommendedDaypart}로 이동 검토 — 그 시간대는 경쟁채널과의 시청률 격차가 최근 들어 좁혀지는 중이라(경쟁채널이 상대적으로 약해짐) 편성 시 유리할 수 있음`;
   }
-  switch (item.tag) {
-    case "STRENGTHEN":
-      return "성과가 우수한 편성 — 자원 추가 투입 검토";
-    case "KEEP":
-      return "현재 편성 유지 권장";
-    case "REPLACE":
-      return "성과가 낮은 편성 — 교체 검토";
-    case "MOVE":
-      return "다른 시간대 재배치 검토(구체적 추천 시간대는 데이터 부족)";
-    default:
-      return "—";
-  }
+  // 같은 시간대 다른 프로그램 평균 대비 몇 배인지(근거)와 판정을 한 줄로 — 문구는 src/lib/contentFit/explain.ts 한 곳에서 만든다.
+  return scheduleNote(item.content_fit);
 }
 
-// 사용자 지시(2026-08-21, 8-Step Insight Flow): WHAT TO SCHEDULE?의 Fit Score를 "결과값"이 아니라
-// "설명 가능한 점수"로 — 6개 하위지표는 이미 API가 내려주지만 지금은 펼침 패널에 표시가 안 된다.
-// 강점(≥70)·주의(≤40)를 항상 쌍으로 문장화하고(둘 다 없으면 그 문장은 생략), 태그별 DECISION
-// 질문 한 줄을 덧붙인다. 임의의 시청률 상승 수치나 Fatigue는 만들지 않는다(데이터 없음).
-const FIT_SUBSCORE_LABELS: { key: keyof FitScoreItem; label: string }[] = [
-  { key: "target_performance_score", label: "타깃 성과" },
-  { key: "target_affinity_score", label: "타깃 선호도" },
-  { key: "audience_engagement_score", label: "시청 몰입도" },
-  { key: "slot_performance_score", label: "슬롯 성과" },
-  { key: "competitive_opportunity_score", label: "경쟁 기회" },
-  { key: "audience_flow_score", label: "시청 흐름" },
-];
+// 사용자 지시(2026-08-21, 8-Step Insight Flow): WHAT TO SCHEDULE?의 점수를 "결과값"이 아니라 "설명 가능한 점수"로 —
+// 2026-10-14 재설계로 근거가 바뀌었다: 슬롯 대비 성과·시청 규모(배수), 시청 몰입도, 최근 추세, 표본 신뢰도를 보여주고 한 줄 해설과 판단 질문을 붙인다.
+// 임의의 시청률 상승 수치나 Fatigue는 만들지 않는다(데이터 없음).
 // 사용자 지시(2026-08-25, 감사 후속: 원 명세 13번 "Reach + Time Spent / Audience Role") —
-// 도달율(Reach)과 시청시간 비율(Time Spent Share)을 함께 봐서 "이 프로그램이 시청자를 얼마나
-// 넓게 끌어오고, 얼마나 오래 붙잡아두는지" 4분류한다. 둘 다 이미 계산돼 있는 최근 12주 percentile
-// (0~100, 채널 내 상대 순위)을 그대로 쓴다(새 수치 계산 없음). 중간대(40~60)는 어느 쪽도 뚜렷하지
-// 않아 classifyDaypartOpportunity와 같은 태도로 억지 분류하지 않는다(null = 판단 근거 부족).
+// 도달률(Reach)과 시청시간 비율(Time Spent Share)을 같은 시간대 다른 프로그램과 견줘 "시청자를 얼마나 넓게 끌어오고, 얼마나 오래
+// 붙잡아두는지" 4분류한다(각각 같은 시간대 평균의 1.15배 이상=높음, 0.85배 이하=낮음). 중간대는 억지로 분류하지 않는다(null = 판단 근거 부족).
 type AudienceRole = "MASS" | "CORE" | "ACQUISITION" | "ZAPPING_RISK";
 const AUDIENCE_ROLE_LABEL: Record<AudienceRole, string> = {
   MASS: "대중형",
@@ -3886,74 +3792,54 @@ const AUDIENCE_ROLE_LABEL: Record<AudienceRole, string> = {
   ZAPPING_RISK: "이탈위험형",
 };
 const AUDIENCE_ROLE_NOTE: Record<AudienceRole, string> = {
-  MASS: "도달률·시청시간 비율 모두 채널 내 상위권입니다 — 널리 보고 오래 봅니다.",
-  CORE: "도달률은 낮지만 시청시간 비율은 상위권입니다 — 적게 유입돼도 오래 봅니다(코어 팬덤형).",
-  ACQUISITION: "도달률은 상위권이지만 시청시간 비율은 하위권입니다 — 많이 유입되지만 짧게 봅니다.",
-  ZAPPING_RISK: "도달률·시청시간 비율 모두 채널 내 하위권입니다 — 유입도 적고 오래 붙잡지 못합니다.",
+  MASS: "도달률·시청시간 비율 모두 같은 시간대 다른 프로그램보다 높습니다 — 널리 보고 오래 봅니다.",
+  CORE: "도달률은 낮지만 시청시간 비율은 높습니다 — 적게 유입돼도 오래 봅니다(코어 팬덤형).",
+  ACQUISITION: "도달률은 높지만 시청시간 비율은 낮습니다 — 많이 유입되지만 짧게 봅니다.",
+  ZAPPING_RISK: "도달률·시청시간 비율 모두 같은 시간대 다른 프로그램보다 낮습니다 — 유입도 적고 오래 붙잡지 못합니다.",
 };
-function classifyAudienceRole(evidence: FitScoreEvidence): AudienceRole | null {
-  const r = evidence.reach_pctl;
-  const t = evidence.time_spent_share_pctl;
-  if (r === null || t === null) return null;
-  const highR = r >= 60;
-  const lowR = r < 40;
-  const highT = t >= 60;
-  const lowT = t < 40;
-  if (highR && highT) return "MASS";
-  if (lowR && highT) return "CORE";
-  if (highR && lowT) return "ACQUISITION";
-  if (lowR && lowT) return "ZAPPING_RISK";
-  return null;
-}
 
 interface FitScoreInterpretation {
-  subScores: { label: string; value: number | null }[];
+  components: { label: string; value: string }[];
   interpretation: string | null;
+  trendNote: string | null;
   sampleNote: string | null;
   decision: string | null;
   audienceRole: AudienceRole | null;
 }
 function buildFitScoreInterpretation(item: FitScoreItem): FitScoreInterpretation {
-  const subScores = FIT_SUBSCORE_LABELS.map(({ key, label }) => ({ label, value: item[key] as number | null }));
-  const strengths = subScores
-    .filter((s) => s.value !== null && s.value >= 70)
-    .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
-    .slice(0, 2);
-  const cautions = subScores
-    .filter((s) => s.value !== null && s.value <= 40)
-    .sort((a, b) => (a.value ?? 0) - (b.value ?? 0))
-    .slice(0, 2);
-  const strengthLabel = strengths.map((s) => `${s.label}(${s.value})`).join(", ");
-  const cautionLabel = cautions.map((s) => `${s.label}(${s.value})`).join(", ");
-  let interpretation: string | null = null;
-  if (strengths.length > 0 && cautions.length > 0) {
-    interpretation = `${strengthLabel}${josaIga(strengthLabel)} 높아 추천되었지만, ${cautionLabel}${josaEunNeun(cautionLabel)} 낮아 주의가 필요합니다.`;
-  } else if (strengths.length > 0) {
-    interpretation = `${strengthLabel}${josaIga(strengthLabel)} 높아 추천됩니다.`;
-  } else if (cautions.length > 0) {
-    interpretation = `${cautionLabel}${josaEunNeun(cautionLabel)} 낮아 주의가 필요합니다.`;
-  }
+  const cf = item.content_fit;
+  const name = item.programs?.canonical_name ?? "이 프로그램";
+  const components: { label: string; value: string }[] = [
+    { label: "슬롯 대비 성과", value: fmtTimes(cf.slotIndex) },
+    { label: "시청 규모", value: fmtTimes(cf.scaleIndex) },
+    { label: "시청 몰입도", value: cf.engagementScore === null ? "—" : cf.engagementScore.toFixed(0) },
+    { label: "최근 추세", value: formatTrendCell(cf).text },
+    { label: "데이터 반영", value: cf.tier === "HOLD" ? "—" : `${Math.round(cf.reliability * 100)}%` },
+  ];
+  const ex = explainContentFit(cf, name);
   const sampleNote =
-    item.confidence_pct !== null && item.confidence_pct < 60
-      ? `표본 신뢰도가 낮아(${item.confidence_pct.toFixed(0)}%) 참고용으로만 활용하는 것을 권장합니다.`
+    cf.tier === "FORMAL" && cf.reliability < 0.7
+      ? `방영 시청 규모가 작은 시간대라 값이 기준(1.0배) 쪽으로 많이 보정되었습니다(데이터 반영 ${Math.round(cf.reliability * 100)}%).`
       : null;
   const decision = (() => {
     switch (item.tag) {
       case "REPLACE":
-        return "이 편성을 교체할지 검토가 필요합니다.";
+        return "이 편성을 교체하거나 시간대를 바꿀지 검토가 필요합니다.";
       case "MOVE":
         return "다른 시간대로 이동할지 검토가 필요합니다.";
       case "STRENGTHEN":
-        return "자원을 추가 투입할지 검토가 필요합니다.";
+        return "노출을 늘리거나 더 좋은 시간대에 편성할지 검토가 필요합니다.";
       case "KEEP":
         return "현재 편성 유지가 타당한지 재확인이 필요합니다.";
+      case "WATCH":
+        return "몇 주 더 지켜본 뒤 유지·교체를 판단할지 검토가 필요합니다.";
       case "TEST":
         return "표본을 더 쌓은 뒤 재평가가 필요합니다.";
       default:
         return null;
     }
   })();
-  return { subScores, interpretation, sampleNote, decision, audienceRole: classifyAudienceRole(item.evidence) };
+  return { components, interpretation: `${ex.headline} ${ex.basis}`, trendNote: ex.trend, sampleNote, decision, audienceRole: audienceRoleOf(cf) };
 }
 
 // ── Channel Intelligence Briefing(2026-08-27, "Channel Intelligence Report" 마스터 프롬프트
@@ -4966,8 +4852,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           .map((i) => ({
             name: i.programs?.canonical_name ?? "",
             tag: i.tag as "STRENGTHEN" | "TEST",
-            targetAffinityScore: i.target_affinity_score,
-            audienceFlowScore: i.audience_flow_score,
+            slotIndex: i.content_fit.slotIndex,
           }));
         jobs.push({
           section: "opportunity",
@@ -5056,7 +4941,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 tag: item.tag,
                 fitScore: item.fit_score,
                 confidencePct: item.confidence_pct,
-                subScores: fi.subScores,
+                sampleDays: item.sample_days,
+                slotIndex: item.content_fit.slotIndex === null ? null : Math.round(item.content_fit.slotIndex * 100) / 100,
+                scaleIndex: item.content_fit.scaleIndex === null ? null : Math.round(item.content_fit.scaleIndex * 100) / 100,
+                engagementScore: item.content_fit.engagementScore === null ? null : Math.round(item.content_fit.engagementScore),
+                trendPct: item.content_fit.trend ? Math.round((2 ** item.content_fit.trend.delta - 1) * 100) : null,
+                isReference: item.content_fit.tier !== "FORMAL",
                 audienceRoleLabel: fi.audienceRole ? AUDIENCE_ROLE_LABEL[fi.audienceRole] : null,
               },
             },
@@ -5233,9 +5123,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 사용자 지시(2026-08-20): 여러 타깃 시청률을 함께 볼 때는 각자 따로 정규화하지 않고 같은
   // 상한선(가장 큰 쪽 — 보통 유료가구)으로 맞춰야 막대 높이가 실제 크기 비교로 읽힌다.
   const ratingScaleMax = Math.max(maxByMetric.avg_rating, ...selectedExtraTargetsWithMeta.map((e) => e.max));
-  const contentFitsRows = fitScoreItems ? [...fitScoreItems].sort((a, b) => contentFitsHelpScore(b) - contentFitsHelpScore(a)) : [];
-  // CONTENT FITS? 표의 총량형/효율형/균형형 배지(사용자 지시 2026-09-18) — buildEfficiencyTypeMap 주석 참고.
-  const efficiencyTypeByProgram = buildEfficiencyTypeMap(contentFitsRows);
+  const contentFitsRows = fitScoreItems ? sortContentFitRows(fitScoreItems) : [];
   // HOW DEEPLY?: 기간/비교 분석 프리셋이면 기간 평균(periodReport), 단일 일자 서술 모드면
   // 기존처럼 그날 값(current). DoD(하루짜리 비교 분석)도 periodReport 쪽을 쓴다 — 값 자체는
   // current와 동일하지만(1일 평균=그날 값), "이번 기간" 프레이밍을 일관되게 유지하기 위함.
@@ -5263,7 +5151,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // ── Channel Intelligence Briefing 계산(2026-08-27, Phase 1) — 전부 이미 fetch된 값의 재사용.
   // 단일 일자(오늘) 조회일 때만 의미가 있어(기간 모드는 "오늘 컨디션"이라는 개념 자체가 안 맞음)
   // !showComparisonView일 때만 계산한다.
-  const fitScoreTagCounts = { STRENGTHEN: 0, KEEP: 0, MOVE: 0, REPLACE: 0, TEST: 0 };
+  const fitScoreTagCounts = { STRENGTHEN: 0, KEEP: 0, WATCH: 0, MOVE: 0, REPLACE: 0, TEST: 0 };
   for (const item of fitScoreItems ?? []) {
     if (item.tag) fitScoreTagCounts[item.tag] += 1;
   }
@@ -6887,23 +6775,23 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                 <p>
                                   시청시간 비율: {item.evidence.avg_time_spent_share !== null ? `${item.evidence.avg_time_spent_share.toFixed(2)}%` : "—"}
                                 </p>
-                                <p>연령대 선호도 평균: {item.evidence.affinity_avg_index?.toFixed(1) ?? "—"}</p>
-                                <p>경쟁 강도: {item.evidence.competitive_pressure?.toFixed(1) ?? "—"}</p>
-                                <p>리드인 유지율: {item.evidence.avg_lead_in_retention?.toFixed(2) ?? "— (직전 프로그램 없음)"}</p>
+                                <p>방영: 최근 12주 중 {item.sample_days}일({item.content_fit.airings}회)</p>
                               </div>
-                              {/* 사용자 지시(2026-08-21, 8-Step Insight Flow): Fit Score를 "결과값"이
-                                  아니라 "설명 가능한 점수"로 — 6개 하위지표 + 강점/주의 해석 + DECISION. */}
+                              {/* 사용자 지시(2026-08-21, 8-Step Insight Flow): 적합도를 "결과값"이 아니라 "설명 가능한 점수"로 —
+                                  슬롯 대비 성과·시청 규모·몰입도·추세 + 한 줄 해석 + DECISION(2026-10-14 새 지표로 교체). */}
                               {(() => {
                                 const fi = buildFitScoreInterpretation(item);
                                 return (
                                   <div className="mt-3 border-t border-zinc-200 pt-3">
                                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-zinc-500">
-                                      {fi.subScores.map((s) => (
-                                        <span key={s.label}>
-                                          {s.label} {s.value ?? "—"}
+                                      {fi.components.map((c) => (
+                                        <span key={c.label}>
+                                          {c.label} {c.value}
                                         </span>
                                       ))}
                                     </div>
+                                    {fi.trendNote && <p className="mt-1 text-sm text-zinc-500">{fi.trendNote}</p>}
+                                    {describeBaseline(item.content_fit) && <p className="mt-1 text-[13px] text-zinc-400">{describeBaseline(item.content_fit)}</p>}
                                     {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 해석(펼칠 때만
                                         조회)이 있으면 그걸, 없으면(아직 조회 중이거나 실패)
                                         기존 규칙 기반 fi.interpretation으로. */}
@@ -6970,9 +6858,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
           {/* 사용자 지시(2026-10-07): 적합도 산식 설명과 사분면 그래프는 이 섹션 맨 아래(목록 아래)로. 이 섹션이 OPPORTUNITY?보다 위로 옮겨져 '위' 표현은 뺀다. */}
           <p className="mb-3 mt-6 text-sm text-zinc-400">
-            적합도(0~100) = 타깃 성과 30% + 타깃 선호도 20% + 시청 몰입도 15% + 슬롯 성과 15% + 경쟁 기회 10% + 시청 흐름
-            10%. 신뢰도(표본 신뢰도)가 낮으면 점수와 무관하게 &lsquo;테스트&rsquo;로 표시한다. 경쟁채널 대비 기회 시간대(OPPORTUNITY?)에
-            &lsquo;강화&rsquo;·&lsquo;테스트&rsquo; 태그 프로그램을 배치하는 것을 우선 검토하세요.
+            적합도(0~100) = (슬롯 대비 성과 + 시청 규모) ÷ 2에 시청 몰입도·최근 추세를 최대 +10·−15점까지만 보정한 값입니다. 판정은 같은 요일·시간대
+            다른 프로그램 평균 대비 성과로 내리며, 방영이 8일 미만이면 판정 없이 &lsquo;테스트(표본 적음)&rsquo;로 표시합니다. 경쟁채널 대비 기회
+            시간대(OPPORTUNITY?)에 &lsquo;강화&rsquo;·&lsquo;테스트&rsquo; 프로그램을 배치하는 것을 우선 검토하세요.
           </p>
           {fitScoreItems && fitScoreItems.length > 0 && <FitScoreQuadrantChart items={fitScoreItems} />}
           </>
@@ -7982,12 +7870,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           ) : (
             <>
               <p className="mb-3 text-sm text-zinc-400">
-                Fit Score 하위지표 — Target Performance(시청률·슬롯·데이파트) / Target Affinity(핵심 연령대
-                구성비, 프로그램 단위) / Audience Engagement(도달률·시청시간 비율). 전부 최근 12주 자사 채널 내
-                percentile(0~100), 채널에 도움이 되는 순으로 정렬했습니다. 프로그램명 옆 배지는 편성 물량
-                대비 회당 성과 유형입니다 — 총량형(편성을 많이 써서 버티는 중) / 효율형(적게 틀어도 채널
-                평균보다 잘 나옴) / 균형형(뚜렷한 쏠림 없음). 정확한 총 방영시간 대신 방영 일수로 근사한
-                값이라 참고용으로 봐주세요.
+                {CONTENT_FIT_LEGEND.intro} {CONTENT_FIT_LEGEND.reliability}
               </p>
               {fitScoreLoading ? (
                 <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
@@ -7996,46 +7879,77 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               ) : (
                 <>
                   <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
-                    <table className="w-full min-w-[520px] text-left text-sm">
+                    <table className="w-full min-w-[640px] text-left text-sm">
                       <thead>
                         <tr className="text-zinc-400">
                           <th className="pb-2 font-medium">프로그램</th>
-                          <th className="pb-2 font-medium">타깃 성과</th>
-                          <th className="pb-2 font-medium">타깃 선호도</th>
+                          <th className="pb-2 font-medium">슬롯 대비 성과</th>
+                          <th className="pb-2 font-medium">시청 규모</th>
                           <th className="pb-2 font-medium">시청 몰입도</th>
-                          <th className="pb-2 font-medium">종합(3개 평균)</th>
+                          <th className="pb-2 font-medium">최근 추세</th>
+                          <th className="pb-2 font-medium">적합도</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {contentFitsRows.map((item) => (
-                          <tr key={item.program_id} className="border-t border-zinc-100">
-                            <td className="py-1.5 font-medium text-zinc-800">
-                              <span className="inline-flex items-center">
-                                {item.programs?.canonical_name ?? "이름 없음"}
-                                <ProgramTypeBadge type={item.programs?.canonical_name ? efficiencyTypeByProgram.get(item.programs.canonical_name) : undefined} />
-                              </span>
-                            </td>
-                            <td className="py-1.5"><MiniPctlBar value={item.target_performance_score ?? null} accentColor={accentColor} isEnaStory={isEnaStory} /></td>
-                            <td className="py-1.5"><MiniPctlBar value={item.target_affinity_score ?? null} accentColor={accentColor} isEnaStory={isEnaStory} /></td>
-                            <td className="py-1.5"><MiniPctlBar value={item.audience_engagement_score ?? null} accentColor={accentColor} isEnaStory={isEnaStory} /></td>
-                            <td className="py-1.5 font-semibold text-zinc-900">{contentFitsHelpScore(item).toFixed(0)}</td>
-                          </tr>
-                        ))}
+                        {contentFitsRows.map((item) => {
+                          const cf = item.content_fit;
+                          const muted = cf.tier !== "FORMAL";
+                          const trendCell = formatTrendCell(cf);
+                          return (
+                            <tr key={item.program_id} className={`border-t border-zinc-100 ${muted ? "text-zinc-400" : ""}`}>
+                              <td className="py-1.5 font-medium text-zinc-800">
+                                <span className="inline-flex flex-wrap items-center gap-y-1">
+                                  <span className={muted ? "text-zinc-500" : ""}>{item.programs?.canonical_name ?? "이름 없음"}</span>
+                                  <span className="ml-1.5 text-[12px] font-normal text-zinc-400">{cf.sampleDays}일</span>
+                                  <span className="ml-1.5">
+                                    {cf.tier === "HOLD" ? (
+                                      <DotTag label="판단 보류" color="#a1a1aa" />
+                                    ) : cf.tier === "REFERENCE" ? (
+                                      <DotTag label="표본 적음" color="#a1a1aa" />
+                                    ) : item.tag ? (
+                                      <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} />
+                                    ) : null}
+                                  </span>
+                                  <FitShapeBadge shape={fitShapeOf(cf)} />
+                                </span>
+                              </td>
+                              <td className="py-1.5">
+                                <MiniPctlBar value={cf.slotScore} label={fmtTimes(cf.slotIndex)} accentColor={accentColor} isEnaStory={isEnaStory} />
+                              </td>
+                              <td className="py-1.5">
+                                <MiniPctlBar value={cf.scaleScore} label={fmtTimes(cf.scaleIndex)} accentColor={accentColor} isEnaStory={isEnaStory} />
+                              </td>
+                              <td className="py-1.5">
+                                <MiniPctlBar value={cf.engagementScore} accentColor={accentColor} isEnaStory={isEnaStory} />
+                              </td>
+                              <td className="whitespace-nowrap py-1.5 tabular-nums text-zinc-600">
+                                {trendCell.direction === "up" ? (
+                                  <span style={{ color: NARRATIVE_UP_COLOR }}>{trendCell.text}</span>
+                                ) : trendCell.direction === "down" ? (
+                                  <span style={{ color: NARRATIVE_DOWN_COLOR }}>{trendCell.text}</span>
+                                ) : (
+                                  trendCell.text
+                                )}
+                              </td>
+                              <td className="py-1.5 font-semibold text-zinc-900">{cf.score === null ? "—" : cf.score.toFixed(0)}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
                   <p className="mt-3 text-base leading-relaxed text-zinc-700">
-                    {contentFitsRows.length >= 2
-                      ? highlightNarrativeText(
-                          (() => {
-                            const bestName = contentFitsRows[0].programs?.canonical_name ?? "";
-                            const worstName = contentFitsRows[contentFitsRows.length - 1].programs?.canonical_name ?? "";
-                            return `'${bestName}'${josaIga(bestName)} 종합 ${contentFitsHelpScore(contentFitsRows[0]).toFixed(0)}점으로 채널에 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 종합 ${contentFitsHelpScore(contentFitsRows[contentFitsRows.length - 1]).toFixed(0)}점으로 가장 낮아 편성 조정을 검토해볼 만합니다.`;
-                          })(),
-                          NARRATIVE_UP_COLOR,
-                          NARRATIVE_DOWN_COLOR
-                        )
-                      : ""}
+                    {highlightNarrativeText(
+                      summarizeTable(
+                        contentFitsRows.map((r) => r.content_fit),
+                        (id) => contentFitsRows.find((r) => r.program_id === id)?.programs?.canonical_name ?? "이름 없음"
+                      ),
+                      NARRATIVE_UP_COLOR,
+                      NARRATIVE_DOWN_COLOR
+                    )}
+                  </p>
+                  <p className="mt-2 text-sm text-zinc-400">
+                    {CONTENT_FIT_LEGEND.verdict} {CONTENT_FIT_LEGEND.affinity}
                   </p>
                 </>
               )}
@@ -8050,36 +7964,33 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
             <h2 className={`${SECTION_TITLE_P2} mb-1`}>Program Portfolio</h2>
             <p className="mb-4 text-sm text-zinc-400">
-              위 CONTENT FITS? 표와 같은 값을 그래프로 — 오른쪽 위(최상위 구간)일수록 타깃 실적·시청 몰입도 둘 다 채널 내 상위권입니다. 원 크기는 도달률(Reach).
+              위 CONTENT FITS? 표와 같은 값을 그래프로 — 오른쪽(가로)일수록 같은 시간대 다른 프로그램보다 잘 나오고, 위쪽(세로)일수록 채널 평균보다 큰 규모입니다(1.0배가 기준선, 눈금은 2배씩). 원 크기는 도달률(Reach), 점 색은 판정입니다.
             </p>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div>
-                <p className="mb-2 text-xs font-medium text-zinc-500">타깃 실적 × 시청 몰입도</p>
-                {/* 실측 버그 수정(2026-08-27): 처음엔 Y축을 Target Affinity로 넣었는데, 당시
-                    refresh_fit_score_mart()가 Target Affinity를 채널 하루 전체 집계 기준으로 채널당
-                    1번만 계산해 그 채널의 모든 프로그램에 동일 적용하고 있어(실측: ENA Drama 12개
-                    프로그램 전부 0.00) 산점도가 가로 일직선이 되고 사분면이 무의미해졌다 — 프로그램
-                    마다 실제로 차이 나는 Audience Engagement(도달률·시청시간 비율 기반)로 교체했다.
-                    2026-09-02: Target Affinity 계산 자체를 프로그램 단위로 재설계해 이제는 프로그램
-                    마다 값이 다르지만(위 CONTENT FITS? 표 확인), Y축 재검토는 사용자 지시가 없어
-                    Audience Engagement를 그대로 유지한다. */}
+                <p className="mb-2 text-xs font-medium text-zinc-500">슬롯 대비 성과 × 시청 규모</p>
+                {/* 2026-10-14 재설계: 옛 '타깃 성과 × 시청 몰입도'(채널 내 순위)는 슬롯 품질이 섞여 있어, 콘텐츠 효과(같은 시간대 평균 대비)와
+                    규모(채널 평균 대비)로 바꿨다. 두 값 모두 배수라 로그(2배 단위) 눈금으로 그리고, 기준선은 1.0배다.
+                    사분면: HERO=슬롯 대비도 규모도 높음 / GROWTH=약한 시간대의 강자(규모 작음) / SUPPORT=규모로 버팀(슬롯 대비 낮음) / WEAK=둘 다 낮음. */}
                 <ScatterQuadrantChart
                   accentColor={accentColor}
-                  xLabel="타깃 성과(백분위)"
-                  yLabel="시청 몰입도(백분위)"
-                  xDomain={[0, 100]}
-                  xSplit={50}
-                  yDomain={[0, 100]}
-                  ySplit={50}
-                  quadrantLabels={{ lowXHighY: "GROWTH", highXHighY: "HERO", lowXLowY: "WEAK", highXLowY: "SUPPORT" }}
+                  xLabel="슬롯 대비 성과(배)"
+                  yLabel="시청 규모(배)"
+                  xFormat={(v) => `${(2 ** v).toFixed(2)}배`}
+                  yFormat={(v) => `${(2 ** v).toFixed(2)}배`}
+                  xDomain={[-2, 2]}
+                  xSplit={0}
+                  yDomain={[-3, 2]}
+                  ySplit={0}
+                  quadrantLabels={{ lowXHighY: "SUPPORT", highXHighY: "HERO", lowXLowY: "WEAK", highXLowY: "GROWTH" }}
                   points={contentFitsRows
-                    .filter((r) => r.target_performance_score !== null && r.audience_engagement_score !== null)
+                    .filter((r) => r.content_fit.slotIndex !== null && r.content_fit.scaleIndex !== null)
                     .map((r) => ({
                       name: r.programs?.canonical_name ?? "이름 없음",
-                      x: r.target_performance_score!,
-                      y: r.audience_engagement_score!,
+                      x: Math.max(-2, Math.min(2, Math.log2(r.content_fit.slotIndex as number))),
+                      y: Math.max(-3, Math.min(2, Math.log2(r.content_fit.scaleIndex as number))),
                       bubble: r.evidence.avg_reach,
-                      tag: r.tag,
+                      tag: r.content_fit.tier === "FORMAL" ? r.tag : null,
                     }))}
                 />
               </div>

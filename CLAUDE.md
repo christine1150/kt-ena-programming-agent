@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-본 저장소는 **KT ENA 편성 AI Agent (`kt-ena-programming-agent`)** — Nielsen 시청률 및 편성 데이터를 자동 집계·분석하고, 편성 PD에게 Daily Briefing, Slot Intelligence, 자연어 질의응답 및 5대 편성 액션 추천(KEEP/MOVE/REPLACE/STRENGTHEN/TEST)을 제공하는 AI 의사결정 지원 서비스다.
+본 저장소는 **KT ENA 편성 AI Agent (`kt-ena-programming-agent`)** — Nielsen 시청률 및 편성 데이터를 자동 집계·분석하고, 편성 PD에게 Daily Briefing, Slot Intelligence, 자연어 질의응답 및 6대 편성 액션 추천(STRENGTHEN/KEEP/WATCH/MOVE/REPLACE/TEST)을 제공하는 AI 의사결정 지원 서비스다.
 
 - **현재 상태**: Vercel 배포 완료, Next.js 16(App Router, TypeScript, Tailwind 4) + Supabase(PostgreSQL) 기반 아키텍처 구동 중.
 - **LLM 파이프라인**: OpenAI (`gpt-4o` / `gpt-4o-mini`) 기반 Structured Output Agent + Rule-based Engine Fallback 구조 구축 완료 (`USE_ADVANCED_LLM_AGENT` 환경변수로 제어).
@@ -43,9 +43,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 📊 주요 파이프라인 및 기능
 - **Page 1 (Daily Briefing)**: 7개 채널 현황 카드 그리드, 화이트리스트 기반 Original 콘텐츠 리포트, 팩트 중심 일간 브리핑.
-- **Page 2 (Programming & Slot Intelligence)**: 8대 시간대 슬롯(`02-05`~`23-02`) 진단, Program × Slot Fit 분석, Channel DNA & Target Gap, 5대 Action Framework.
+- **Page 2 (Programming & Slot Intelligence)**: 8대 시간대 슬롯(`02-05`~`23-02`) 진단, Program × Slot Fit 분석, Channel DNA & Target Gap, 6대 Action Framework.
 - **Natural Language Agent (`/api/ask`)**: Intent Registry + Time Resolver + Parameter Extractor 기반. 1차 규칙 기반 라우팅 → 미매칭 시 OpenAI(`gpt-4o-mini`) 라우팅 → DB RPC 실행 → Evidence UI + Dynamic Recharts 차트 반환.
-- **Fit Score (편성 추천 엔진)**: 30% Target Performance + 20% Target Affinity + 15% Audience Engagement + 15% Slot Performance + 10% Competitive Opportunity + 10% Audience Flow (최근 12주 Percentile 표준화).
+- **콘텐츠 적합도 (편성 추천 엔진, `content-fit-v1`, 2026-10-14 재설계)**: 최근 12주 방영 행에서 ① 슬롯 대비 성과(같은 요일·시간대 다른 프로그램 평균 대비)와 ② 시청 규모(채널 평균 방영 시청률 대비)를 50:50으로 합산하고, 표본이 적으면 평균 쪽으로 보정하며, 몰입도·최근 추세는 −15~+10점 범위 보정으로만 반영한다. 방영 3일 미만은 판단 보류, 8일 미만은 TEST(표본 적음), 정식 판정은 슬롯 대비 성과로 STRENGTHEN(≥1.5배)/KEEP(≥0.85)/WATCH(≥0.55)/REPLACE(그 미만)·MOVE(더 좋은 시간대가 있을 때). 연령 구성(옛 Target Affinity)은 30대 비중의 역수로 판명되어 점수에서 제외. 계산은 DB 원본 행을 읽는 서버의 결정적 순수 함수(`src/lib/contentFit`)가 하며 LLM·프런트는 계산하지 않는다(마트 사전 저장 없음 — 원칙 1의 예외, 근거는 `docs/content-fit/CONTENT_FIT_LOGIC.md` §4). 엔진을 고치면 `npm run test:content-fit`과 `npx tsx scripts/content-fit-research/parity.mts`로 확인한다. 옛 Fit Score(30/20/15/15/10/10 percentile 가중합, `mart_scheduling_fit_score`)는 화면·태그의 근거가 아니며 과거 비교용으로만 남겨 둔다.
 
 ### ⚠️ 데이터 파싱 및 도메인 유의사항 (Data Traps)
 - **Nielsen 파일 특성**: `ENA Story`는 일별 파일에 프로그램 단위 데이터가 일부 기간 부재하므로 채널 단위 처리 예외를 명시한다.

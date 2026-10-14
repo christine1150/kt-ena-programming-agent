@@ -213,6 +213,10 @@ function buildAllowed(facts: Fact[], opts: GuardOptions): Allowed {
         a.units.add("%");
         a.pctValues.push(Math.abs(v));
         if (v !== 0) a.arrowVals.add(`${v > 0 ? "▲" : "▼"}|${key(Math.abs(v))}`);
+      } else if (f.valueKind === "ratio_x") {
+        // 배수(슬롯 대비 성과 등): '배' 단위가 근거에 있으면 문장의 "N배"는 근거 값과 같아야 한다(지어낸 배수를 잡는다).
+        a.withUnit.add(unitKey(v, "배"));
+        a.units.add("배");
       } else if (f.valueKind === "composition_pct") {
         a.hasComposition = true;
       }
