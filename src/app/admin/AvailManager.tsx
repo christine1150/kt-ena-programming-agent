@@ -141,10 +141,11 @@ export default function AvailManager() {
     setBusy(true);
     let saved = 0;
     const failed: string[] = [];
-    for (let guard = 0; guard < 20; guard++) {
+    let blocked = false;
+    for (let guard = 0; guard < 30; guard++) {
       setNotice(`네이버에서 종영일을 가져오는 중… (${saved}건 저장)`);
       const res = await fetch("/api/admin/avail", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "fetch_original_ends", ...(contentKeys ? { contentKeys } : {}) }) });
-      const b = (await res.json().catch(() => null)) as { ok: boolean; message?: string; saved?: number; failed?: { title: string }[]; remaining?: number } | null;
+      const b = (await res.json().catch(() => null)) as { ok: boolean; message?: string; saved?: number; failed?: { title: string }[]; remaining?: number; blocked?: boolean } | null;
       if (!b?.ok) {
         setNotice(b?.message ?? "가져오지 못했습니다.");
         setBusy(false);
@@ -153,9 +154,10 @@ export default function AvailManager() {
       }
       saved += b.saved ?? 0;
       failed.push(...(b.failed ?? []).map((f) => f.title));
-      if (contentKeys || !b.remaining || (b.saved ?? 0) === 0) break;
+      if (b.blocked) blocked = true;
+      if (blocked || contentKeys || !b.remaining || (b.saved ?? 0) === 0) break;
     }
-    setNotice(`종영일 ${saved}건을 저장했습니다.${failed.length ? ` 가져오지 못한 작품 ${failed.length}건: ${failed.slice(0, 5).join(", ")}${failed.length > 5 ? " 외" : ""}` : ""}`);
+    setNotice(`종영일 ${saved}건을 저장했습니다.${blocked ? " 네이버가 요청을 제한해 중단했습니다 — 잠시(수십 분~몇 시간) 뒤 '가져오기'를 다시 눌러 이어서 가져오세요(저장된 작품은 건너뜁니다)." : failed.length ? ` 가져오지 못한 작품 ${failed.length}건: ${failed.slice(0, 5).join(", ")}${failed.length > 5 ? " 외" : ""}` : ""}`);
     setBusy(false);
     void load();
   }

@@ -19,7 +19,7 @@ import { supabase } from "@/lib/supabase";
 
 export const maxDuration = 60;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const FETCH_BATCH = 15;
+const FETCH_BATCH = 8; // 요청 사이 1.5초 간격을 지키므로 한 번에 8개(최대 24번 검색)면 서버 제한 60초 안에 끝난다
 
 const TOPICS = ["memo", "holdback", "approval", "usage_baseline", "duplicate"] as const;
 
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, confirmationsAdded: n, skippedForConflict: sc.skippedForConflict });
     }
     case "fetch_original_ends": {
-      // 네이버에서 종영일을 가져온다. 수동으로 고친 작품은 건드리지 않는다. 한 번에 FETCH_BATCH개씩 — 남은 수를 돌려주니 화면이 이어서 부른다.
+      // 네이버에서 종영일을 가져온다. 수동으로 고친 작품은 건드리지 않는다. 한 번에 FETCH_BATCH개씩, 네이버가 요청을 제한하면 그 자리에서 멈춘다 — 남은 수를 돌려주니 화면이 이어서 부른다.
       if (!loaded.originalEndApplied) return NextResponse.json({ ok: false, message: "종영일 테이블이 아직 적용되지 않았습니다(마이그레이션 20261017010000 적용 후 사용할 수 있습니다)." }, { status: 503 });
       const targets = new Map<string, string>();
       for (const g of current) {
@@ -135,16 +135,18 @@ export async function POST(request: Request) {
       const results = await fetchOriginalEnds(batch.map(([contentKey, titleRaw]) => ({ contentKey, titleRaw })), now);
       let saved = 0;
       const failed: { title: string; message: string }[] = [];
+      let blocked = false;
       for (const r of results) {
         if (!r.ok) {
           failed.push({ title: r.titleRaw, message: r.message });
+          if (r.blocked) blocked = true;
           continue;
         }
         const w = await saveOriginalEnd(r.entry);
         if (!w.ok) return done(w);
         saved++;
       }
-      return NextResponse.json({ ok: true, saved, failed, remaining: Math.max(0, todo.length - batch.length) });
+      return NextResponse.json({ ok: true, saved, failed, blocked, remaining: Math.max(0, todo.length - batch.length) });
     }
     case "set_original_end": {
       // 사람이 종영일을 입력·수정한다 → 수동 값이 되어 이후 자동 조회가 덮어쓰지 않는다. 종영일을 비우면 '방송 중(종영일 없음)'.
