@@ -19,6 +19,13 @@ const PICKED: { topic: "memo" | "holdback"; nature: string }[] = [
   { topic: "memo", nature: "재협의 조건" },
   { topic: "memo", nature: "허용 채널 추가·지정 정보" },
 ];
+// 메모 중 '기타'로 분류된 것 가운데 편성 조건이 아닌 정보성 문구(공동제작·금액·교체 회차 등) — 목록을 보여 드리고 요청자가 승인함(2026-10-14)
+const INFO_MEMOS = new Set([
+  "시즌3", "채널A 공동", "(SD)", "보험", "TEO' 공동제작", "MBN 공동", "공동투자제작", "초록뱀미디어, KX엔터 공동제작(정부지원)", "큐큐큐 공동제작(정부지원)",
+  "100만원*6, 50만원*1", "100만원*6, 70만원*1", "1~3(재방권)_단가 300만원, 4~8(초방권)_단가 450만원", "시간당 500만원", "김수현 작가료 26,145,000원 별도 지급", "개미랑 노는 베짱이 보상 건", "후반제작 조건 무료",
+  "#17, 39 소재 교체, 미식어드벤쳐인스페인", "#172~174 방송불가, E23122203_#208~210로 교체", "#182제외→#207교체, E22110906_#172~174→208~210 교체", "8편(#644~651) 교체", "E24022102 #268→#291 교체", "#5~8 UHD 소재",
+  "박범신, 성석제, 원재훈", "캠핑편", "특별판 포함(총 13회)", "파일럿 4편 포함", "23.07.31 채널변경 STORY→PLAY",
+]);
 // 묶음 안에 있어도 편성 시점이 걸려 있어 대기로 남기는 문구
 const KEEP_PENDING = new Set([
   "1개 채널 동시방영, 그 외 채널은 본방 직후 방영 가능",
@@ -29,7 +36,9 @@ const KEEP_PENDING = new Set([
 async function main() {
   if (!file) throw new Error("확인 목록(.md) 경로가 필요합니다.");
   const rows = fs.readFileSync(file, "utf8").split(/\r?\n/).map((l) => /^\| (메모|홀드백) \| (.*) \| (\d+) \| (.*) \| *\|$/.exec(l)).filter((m): m is RegExpExecArray => !!m);
-  const picked = rows.filter((m) => PICKED.some((p) => p.topic === (m[1] === "메모" ? "memo" : "holdback") && p.nature === m[4]));
+  const picked = rows.filter((m) => PICKED.some((p) => p.topic === (m[1] === "메모" ? "memo" : "holdback") && p.nature === m[4]) || (m[1] === "메모" && m[4] === "기타" && INFO_MEMOS.has(m[2])));
+  const absent = [...INFO_MEMOS].filter((t) => !rows.some((m) => m[1] === "메모" && m[2] === t));
+  if (absent.length) console.log(`  목록에 없는 정보성 문구 ${absent.length}종: ${absent.join(" / ")}`);
   const held = picked.filter((m) => KEEP_PENDING.has(m[2]));
   const targets = picked.filter((m) => !KEEP_PENDING.has(m[2]));
 
