@@ -813,6 +813,22 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   const heldSeason: HeldTitle = { key: "고생끝에밥이온다1~12".replace(/[^가-힣0-9]/g, ""), altKey: "고생끝에밥이온다", title: "고생끝에밥이온다1~12", endState: "open", daysToEnd: 200, hasConditions: false };
   const viaAlt = pickHeld([{ key: "고생끝에밥이온다", displayName: "고생끝에밥이온다", vsAvg: 1.2, peers: 3 }], [heldSeason]);
   check("Avail 보유: 예측이 원제 키로 나와도 보유 시즌 행과 이어진다", viaAlt.length === 1 && viaAlt[0].name === "고생끝에밥이온다");
+  // 근거 약한 보유작은 추천이 아니라 시험 편성 후보 — 비교 채널 수·방영 횟수를 밝히고, 기준(1.1배·30회)에 못 미치면 숨긴다
+  const mk = (key: string): HeldTitle => ({ key, altKey: null, title: key, endState: "open", daysToEnd: 300, hasConditions: false });
+  const picked = pickHeld(
+    [
+      { key: "강한후보", displayName: "강한후보", vsAvg: 1.05, peers: 4, airings: 80 },
+      { key: "약한후보", displayName: "약한후보", vsAvg: 1.25, peers: 1, airings: 32 },
+      { key: "약한낮음", displayName: "약한낮음", vsAvg: 1.02, peers: 1, airings: 40 },
+      { key: "약한적음", displayName: "약한적음", vsAvg: 1.3, peers: 2, airings: 12 },
+    ],
+    [mk("강한후보"), mk("약한후보"), mk("약한낮음"), mk("약한적음")]
+  );
+  check("Avail 보유: 추천 근거 충분(3곳·48회)은 추천, 약한 근거는 1.1배 이상·30회 이상만 시험 편성 후보로 남고 추천이 먼저 나온다", picked.map((p) => `${p.name}:${p.tier}`).join(",") === "강한후보:rec,약한후보:test", picked.map((p) => `${p.name}:${p.tier}`).join(","));
+  const testLabel = heldLabel(picked[1]);
+  check("Avail 보유: 근거 약한 후보의 표기는 비교 채널 수·방영 횟수와 '근거 약함'을 함께 밝힌다", testLabel.includes("비교 1곳") && testLabel.includes("32회") && testLabel.includes("근거 약함"), testLabel);
+  const heldCopy = buildCardCopy({ ...input, ai: { ...base, remedy: null, change: null, availHeld: [picked[1]] } });
+  check("홈 문구: 근거 약한 보유작은 '테스트 편성 검토'이며 구매·교체처럼 말하지 않는다", !!heldCopy.action?.startsWith("테스트 편성 검토 — Avail 보유작") && !heldCopy.action.includes("구매 검토"), heldCopy.action ?? "");
 }
 
 // 채널별 인사이트 = 변화 해설(비교·순위·흐름·요일·시간대·타깃층), 목표 대비 진단·조치는 "오늘의 시청률"에만 둔다

@@ -123,8 +123,11 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
         : { text: sentence(`재방 편성 확대 검토 — ENA에서 본방 중인 ${names.join(", ")}`), positive: o.use.some((u) => u.verdict === "fit") }
     );
   }
-  const held = ai?.availHeld && ai.availHeld.length > 0 ? ai.availHeld.slice(0, 2) : null;
-  if (held) levers.push({ text: sentence(`보유 콘텐츠 검토 — Avail 보유작 ${held.map(heldLabel).join(", ")}`), positive: false });
+  const heldAll = ai?.availHeld ?? [];
+  const held = heldAll.filter((h) => h.tier !== "test").slice(0, 2);
+  const heldTest = heldAll.filter((h) => h.tier === "test").slice(0, 2);
+  if (held.length > 0) levers.push({ text: sentence(`보유 콘텐츠 검토 — Avail 보유작 ${held.map(heldLabel).join(", ")}`), positive: false });
+  if (heldTest.length > 0) levers.push({ text: sentence(`테스트 편성 검토 — Avail 보유작 ${heldTest.map(heldLabel).join(", ")}. 추정 근거가 약해 교체 대신 시험 편성으로 확인`), positive: false });
   if (c && !okChange) {
     const n = c.sampleCount ?? 0;
     levers.push({
@@ -142,7 +145,7 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
     levers.push({ text: sentence(`재방 축소 검토 — ${w.join(", ")}: ENA 본방 효율이 낮아 이 채널 재방을 줄이는 방안`), positive: false });
   }
   const ext = (ai?.external ?? []).filter((e) => e.vsAvg !== null && e.vsAvg >= 1.0).slice(0, 2);
-  if (!okChange && !r?.concrete && !(o && o.use.length > 0) && !held && ext.length > 0) {
+  if (!okChange && !r?.concrete && !(o && o.use.length > 0) && held.length === 0 && heldTest.length === 0 && ext.length > 0) {
     levers.push({
       text: sentence(`구매 검토 — ${ext.map((e) => `'${e.name}'${josaEunNeun(e.name)} 타 채널 방영 실적${e.peers ? `(비교 ${e.peers}곳)` : ""}으로 이 채널 연평균의 약 ${e.vsAvg!.toFixed(1)}배로 추정`).join(", ")}`),
       positive: false,

@@ -41,8 +41,10 @@ async function pageAll<T>(q: (from: number, to: number) => PromiseLike<{ data: T
   return out;
 }
 
-export async function computeRecommendations(client: SupabaseClient, args: { channel: string; target: "A2049" | "HH"; window: number; top?: number; /** 지정하면 이 정규화 키(대문자)에 해당하는 프로그램만 계산한다 — Avail 보유 콘텐츠처럼 후보를 미리 좁힌 경우(전체 계산은 수 분 걸린다) */ onlyKeys?: Set<string> }): Promise<{ asOf: string; annualAvg: number | null; rows: RecoRow[] }> {
+export async function computeRecommendations(client: SupabaseClient, args: { channel: string; target: "A2049" | "HH"; window: number; top?: number; /** 지정하면 이 정규화 키(대문자)에 해당하는 프로그램만 계산한다 — Avail 보유 콘텐츠처럼 후보를 미리 좁힌 경우(전체 계산은 수 분 걸린다) */ onlyKeys?: Set<string>; /** 비교 케이블 채널 수 하한(기본 3) — Avail 보유 콘텐츠의 '근거 약한 시험 편성 후보'만 낮춰 쓴다 */ minPeers?: number; /** 비교 방영 횟수 하한(기본 48) */ minAirings?: number }): Promise<{ asOf: string; annualAvg: number | null; rows: RecoRow[] }> {
   const { channel, target, window } = args;
+  const minPeers = args.minPeers ?? 3;
+  const minAirings = args.minAirings ?? 48;
   const asOf = await latestCompetitorDate(client);
   const from = new Date(Date.parse(asOf) - window * 86400000).toISOString().slice(0, 10);
   const ident = await pageAll<{ key: string; group_key: string; display_name: string; comp_channels: string[] }>((a, b) =>
@@ -64,7 +66,7 @@ export async function computeRecommendations(client: SupabaseClient, args: { cha
   const hub = PARAMS.hubChannels as readonly string[];
   const groups = new Map<string, { display: string; rep: string; members: string[] }>();
   for (const r of ident) {
-    if (r.comp_channels.filter((c) => !hub.includes(c)).length < 3) continue; // 비교 채널은 케이블 3곳 이상
+    if (r.comp_channels.filter((c) => !hub.includes(c)).length < minPeers) continue; // 비교 채널은 케이블 3곳 이상(기본)
     if (args.onlyKeys && !args.onlyKeys.has(r.key.toUpperCase())) continue;
     const g = groups.get(r.group_key) ?? { display: r.display_name, rep: r.key, members: [] };
     g.members.push(r.key.toUpperCase());
@@ -81,7 +83,7 @@ export async function computeRecommendations(client: SupabaseClient, args: { cha
       if (!inp || inp.own_prog_slots.some((r) => Number(r.n) > 0)) continue; // 이미 이 채널에서 방영한 프로그램 제외
       const peers = peerIndexes(inp, window).filter((p) => !p.isHub && p.eligible && p.idx > 0);
       const nP = peers.reduce((a, p) => a + p.nBase, 0);
-      if (peers.length < 3 || nP < 48) continue;
+      if (peers.length < minPeers || nP < minAirings) continue;
       const p = monthlyAverage(inp, target, window === PARAMS.windowDays ? calibration : [], { windowDays: window, ignoreOwnHistory: true });
       if (p.prediction === null) continue;
       rows.push({ group_key: g.group_key, rep_key: g.rep, display_name: g.display, genre: g.genre, prediction: p.prediction, low: p.low, high: p.high, idx: p.contentIdx ?? 0, peers: peers.length, airings: nP, vsAvg: annualAvg ? p.prediction / annualAvg : null, confidence: p.confidence });

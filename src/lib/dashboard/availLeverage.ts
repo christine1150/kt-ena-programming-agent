@@ -31,17 +31,17 @@ async function compute(channelCode: string, today: string): Promise<AvailLeverag
   const held = heldTitlesFor(built.ctx.grants, channelCode, today);
   if (held.length === 0) return { heldCount: 0, items: [] };
   const keys = new Set(held.flatMap((h) => (h.altKey ? [h.key, h.altKey] : [h.key])));
-  const reco = await computeRecommendations(supabase, { channel: channelCode, target: cfg.target, window: WINDOW_DAYS, top: 60, onlyKeys: keys });
+  const reco = await computeRecommendations(supabase, { channel: channelCode, target: cfg.target, window: WINDOW_DAYS, top: 60, onlyKeys: keys, minPeers: 1, minAirings: 12 });
   const preds = reco.rows.map((r) => {
     // 별칭 그룹이면 대표 키가 보유 제목 키와 다를 수 있어 대표·그룹 키 중 보유 목록에 있는 쪽으로 잇는다
     const key = [r.rep_key, r.group_key].map((k) => k.toUpperCase()).find((k) => keys.has(k)) ?? r.rep_key.toUpperCase();
-    return { key, displayName: r.display_name, vsAvg: r.vsAvg, peers: r.peers };
+    return { key, displayName: r.display_name, vsAvg: r.vsAvg, peers: r.peers, airings: r.airings };
   });
   return { heldCount: held.length, items: pickHeld(preds, held) };
 }
 
 export async function computeAvailLeverage(channelCode: string, today: string): Promise<AvailLeverage | null> {
-  const fp = { v: "v2", channelCode, today, rights: await rightsFingerprint() };
-  const r = await cachedJson<AvailLeverage | { none: true }>(supabase as unknown as CacheDb, "avail_leverage:v2", today, fp, TTL_MS, async () => (await compute(channelCode, today)) ?? { none: true });
+  const fp = { v: "v3", channelCode, today, rights: await rightsFingerprint() };
+  const r = await cachedJson<AvailLeverage | { none: true }>(supabase as unknown as CacheDb, "avail_leverage:v3", today, fp, TTL_MS, async () => (await compute(channelCode, today)) ?? { none: true });
   return "none" in r.value ? null : r.value;
 }
