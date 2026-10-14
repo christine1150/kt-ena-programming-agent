@@ -4,20 +4,13 @@
 // 기대 수준은 구매 시뮬레이터 예측(타 채널 실적 기반 추정)이며 이 채널에서 방영한 실적이 아니다 — 문구에 "추정"을 붙인다.
 import { briefOf } from "@/lib/purchaseReview/acquisition";
 import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
+import { RECO_MIN_VS_AVG, recoEvidence, shrunkVsAvg } from "@/lib/purchaseSim/recoEvidence";
 import type { Grant } from "@/lib/avail/types";
 
 /** 종료까지 이 일수 이하면 "종료 임박" */
 export const HELD_ENDS_SOON_DAYS = 60;
-/** 이 채널 연평균 대비 이 배수 이상일 때만 권유 */
-export const HELD_MIN_VS_AVG = 1.0;
-/** 구매 시뮬레이터 추천 기준(비교 케이블 3곳 이상·비교 방영 48회 이상)을 채우면 '추천 근거 충분', 못 채우면 '근거 약함 — 시험 편성 후보' */
-export const HELD_REC_MIN_PEERS = 3;
-export const HELD_REC_MIN_AIRINGS = 48;
-/** 비교 케이블 2곳이면서 방영 48회 이상이면 '근거 보통'(추천 기준에는 못 미쳐 시험 편성으로 확인) */
-export const HELD_MID_MIN_PEERS = 2;
-/** 근거가 약한 후보는 연평균보다 확실히 높게(1.1배 이상) 추정되고 비교 방영이 30회 이상일 때만 시험 편성 후보로 보인다(임의 기준 — 사용자 확인 대상) */
-export const HELD_TEST_MIN_VS_AVG = 1.1;
-export const HELD_TEST_MIN_AIRINGS = 30;
+// 진입 기준(비교 2곳·20회·1.0배)과 근거 수준(충분·보통·약함)은 구매 후보와 같은 규칙을 쓴다 — purchaseSim/recoEvidence.ts.
+// 근거 충분이면 '추천', 보통·약함이면 추천이 아니라 시험 편성으로 확인할 후보다.
 
 /**
  * 권리 행 제목에서 시즌·회차 범위·편 꼬리표를 뗀 원제 키 — 방영 기록은 원제로만 쌓여 있어 "고생끝에밥이온다1~12"가 연결되지 않는 문제를 메운다.
@@ -87,15 +80,6 @@ export interface HeldRecommendation {
   evidence?: "strong" | "medium" | "weak";
 }
 
-/** 근거 수준: 비교 케이블 3곳·48회 이상=충분, 2곳·48회 이상=보통, 그 외=약함 */
-export function heldEvidence(peers: number | null | undefined, airings: number | null | undefined): "strong" | "medium" | "weak" {
-  const p = peers ?? 0;
-  const a = airings ?? 0;
-  if (p >= HELD_REC_MIN_PEERS && (airings === undefined || airings === null || a >= HELD_REC_MIN_AIRINGS)) return "strong";
-  if (p >= HELD_MID_MIN_PEERS && a >= HELD_REC_MIN_AIRINGS) return "medium";
-  return "weak";
-}
-
 /** 예측 결과(제목·연평균 대비)와 보유 정보를 합쳐 권유 후보를 고른다 — 연평균 이상만, 높은 순, 최대 3개. */
 export function pickHeld(preds: { key: string; displayName: string; vsAvg: number | null; peers?: number | null; airings?: number | null }[], held: HeldTitle[], limit = 3): HeldRecommendation[] {
   const heldBy = new Map<string, HeldTitle>();
@@ -104,15 +88,16 @@ export function pickHeld(preds: { key: string; displayName: string; vsAvg: numbe
   const out: HeldRecommendation[] = [];
   for (const p of preds) {
     const h = heldBy.get(p.key.toUpperCase());
-    if (!h || p.vsAvg === null || !Number.isFinite(p.vsAvg) || p.vsAvg < HELD_MIN_VS_AVG) continue;
+    if (!h || p.vsAvg === null || !Number.isFinite(p.vsAvg) || p.vsAvg < RECO_MIN_VS_AVG) continue;
     // 방영 횟수를 모르는 예측(옛 호출)은 비교 채널 수만으로 판단한다
-    const evidence = heldEvidence(p.peers, p.airings);
+    const evidence = recoEvidence(p.peers, p.airings);
+    if (evidence === null) continue; // 진입 기준(비교 2곳·20회) 미달
     const strong = evidence === "strong";
-    if (!strong && (p.vsAvg < HELD_TEST_MIN_VS_AVG || (p.airings ?? 0) < HELD_TEST_MIN_AIRINGS)) continue;
     out.push({ name: p.displayName, vsAvg: p.vsAvg, endState: h.endState, daysToEnd: h.daysToEnd, hasConditions: h.hasConditions, peers: p.peers ?? null, airings: p.airings ?? null, tier: strong ? "rec" : "test", evidence });
   }
   const rank = (r: HeldRecommendation) => (r.evidence === "weak" ? 2 : r.evidence === "medium" ? 1 : 0);
-  return out.sort((a, b) => rank(a) - rank(b) || b.vsAvg - a.vsAvg).slice(0, limit);
+  // 근거 수준이 높은 것부터, 같은 수준 안에서는 방영 횟수로 보정한 배수 순
+  return out.sort((a, b) => rank(a) - rank(b) || (shrunkVsAvg(b.vsAvg, b.airings) ?? 0) - (shrunkVsAvg(a.vsAvg, a.airings) ?? 0)).slice(0, limit);
 }
 
 /** 한 후보의 홈 표기 — "이름(타 채널 실적으로 연평균의 약 1.4배 추정, 비교 5곳)", 권리 확인이 필요하면 사유를 덧붙인다. */

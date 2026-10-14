@@ -6,6 +6,7 @@
 //       근거가 약하면 교체를 권하지 않고 테스트인 이유와 표본 수를 밝힌다 / 구매 검토는 구체적 후보와 추천 근거가 있을 때만 말한다.
 import { josaEunNeun, josaIga } from "@/lib/josa";
 import { formatRatingDelta } from "@/lib/metrics";
+import { RECO_BUY_TEXT_MIN_VS_AVG, RECO_EVIDENCE_KO, RECO_MIN_VS_AVG, recoEvidence } from "@/lib/purchaseSim/recoEvidence";
 import { heldLabel, type HeldRecommendation } from "./availHeld";
 import type { OriginalLeverageView } from "./originalClassify";
 import type { WeakSlotRemedyView } from "./weakSlotView";
@@ -22,7 +23,7 @@ export interface AiSuggestionPayload {
   focus?: string | null;
   remedy?: WeakSlotRemedyView | null;
   /** 구매 검토 추천 중 추천 근거(연평균 대비 추정 배수·비교 채널 수)가 있는 후보 */
-  external?: { name: string; vsAvg: number | null; peers: number | null }[];
+  external?: { name: string; vsAvg: number | null; peers: number | null; airings?: number | null }[];
   originals?: OriginalLeverageView | null;
   /** Avail 보유 콘텐츠 중 타 채널 실적으로 채널 연평균 이상이 기대되는 작품(별도 API로 늦게 채워진다) */
   availHeld?: HeldRecommendation[] | null;
@@ -149,10 +150,17 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
     const w = o.weak.slice(0, 2).map((x) => `'${x.name}'(ENA 본방이 같은 시간대 평균의 ${x.slotIndex?.toFixed(1) ?? "-"}배)`);
     levers.push({ text: sentence(`재방 축소 검토 — ${w.join(", ")}: ENA 본방 효율이 낮아 이 채널 재방을 줄이는 방안`), positive: false });
   }
-  const ext = (ai?.external ?? []).filter((e) => e.vsAvg !== null && e.vsAvg >= 1.0).slice(0, 2);
-  if (!okChange && !r?.concrete && !(o && o.use.length > 0) && held.length === 0 && heldTest.length === 0 && ext.length > 0) {
+  // 구매 후보: 진입 기준(비교 2곳·20회·연평균 1.0배 이상)을 채운 것만, 1.1배 이상이 있으면 "구매 검토", 1.0~1.1배뿐이면 "구매 참고"로 말한다
+  const ext = (ai?.external ?? []).filter((e) => e.vsAvg !== null && e.vsAvg >= RECO_MIN_VS_AVG && recoEvidence(e.peers, e.airings) !== null).slice(0, 2);
+  const extBuy = ext.filter((e) => e.vsAvg! >= RECO_BUY_TEXT_MIN_VS_AVG);
+  const extShown = extBuy.length > 0 ? extBuy : ext;
+  const extWhy = (e: (typeof ext)[number]) => {
+    const ev = recoEvidence(e.peers, e.airings)!;
+    return `비교 ${e.peers}곳${e.airings ? `·${e.airings}회` : ""}${ev === "strong" ? "" : `, ${RECO_EVIDENCE_KO[ev]}`}`;
+  };
+  if (!okChange && !r?.concrete && !(o && o.use.length > 0) && held.length === 0 && heldTest.length === 0 && extShown.length > 0) {
     levers.push({
-      text: sentence(`구매 검토 — ${ext.map((e) => `'${e.name}'${josaEunNeun(e.name)} 타 채널 방영 실적${e.peers ? `(비교 ${e.peers}곳)` : ""}으로 이 채널 연평균의 약 ${e.vsAvg!.toFixed(1)}배로 추정`).join(", ")}`),
+      text: sentence(`${extBuy.length > 0 ? "구매 검토" : "구매 참고"} — ${extShown.map((e) => `'${e.name}'${josaEunNeun(e.name)} 타 채널 방영 실적(${extWhy(e)})으로 이 채널 연평균의 약 ${e.vsAvg!.toFixed(1)}배로 추정`).join(", ")}`),
       positive: false,
     });
   }

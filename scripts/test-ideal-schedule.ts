@@ -26,6 +26,7 @@ import { buildRerunConstraints } from "../src/lib/idealSchedule/rerunRules";
 import * as SL from "../src/lib/idealSchedule/seriesLink";
 import { evidenceOf, MIN_SAMPLE_FOR_REPLACE } from "../src/lib/dashboard/evidenceGate";
 import { buildCardCopy, achievementConsistent, upProgramHeadline, type AiSuggestionPayload } from "../src/lib/dashboard/homeCopy";
+import { RECO_EVIDENCE_KO, byShrunkDesc, recoEvidence, shrunkVsAvg } from "../src/lib/purchaseSim/recoEvidence";
 import { baseTitleKey, heldLabel, pickHeld, type HeldTitle } from "../src/lib/dashboard/availHeld";
 import { splitInsightFacts } from "../src/lib/dashboard/insightFacts";
 import { retentionLeak, type LeadAiring } from "../src/lib/dashboard/leadInRetention";
@@ -820,20 +821,21 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   const picked = pickHeld(
     [
       { key: "강한후보", displayName: "강한후보", vsAvg: 1.05, peers: 4, airings: 80 },
-      { key: "약한후보", displayName: "약한후보", vsAvg: 1.25, peers: 1, airings: 32 },
-      { key: "약한낮음", displayName: "약한낮음", vsAvg: 1.02, peers: 1, airings: 40 },
-      { key: "약한적음", displayName: "약한적음", vsAvg: 1.3, peers: 2, airings: 12 },
+      { key: "약한후보", displayName: "약한후보", vsAvg: 1.25, peers: 2, airings: 32 },
+      { key: "한곳뿐", displayName: "한곳뿐", vsAvg: 1.4, peers: 1, airings: 60 },
+      { key: "횟수적음", displayName: "횟수적음", vsAvg: 1.3, peers: 3, airings: 12 },
+      { key: "평균미만", displayName: "평균미만", vsAvg: 0.95, peers: 4, airings: 80 },
     ],
-    [mk("강한후보"), mk("약한후보"), mk("약한낮음"), mk("약한적음")]
+    [mk("강한후보"), mk("약한후보"), mk("한곳뿐"), mk("횟수적음"), mk("평균미만")]
   );
-  check("Avail 보유: 추천 근거 충분(3곳·48회)은 추천, 약한 근거는 1.1배 이상·30회 이상만 시험 편성 후보로 남고 추천이 먼저 나온다", picked.map((p) => `${p.name}:${p.tier}`).join(",") === "강한후보:rec,약한후보:test", picked.map((p) => `${p.name}:${p.tier}`).join(","));
+  check("Avail 보유: 근거 충분(3곳·48회)은 추천, 2곳·20회 이상은 시험 편성 후보로 남고, 1곳뿐·20회 미만·연평균 미만은 빠지며 추천이 먼저 나온다", picked.map((p) => `${p.name}:${p.tier}`).join(",") === "강한후보:rec,약한후보:test", picked.map((p) => `${p.name}:${p.tier}`).join(","));
   const testLabel = heldLabel(picked[1]);
-  check("Avail 보유: 근거 약한 후보의 표기는 비교 채널 수·방영 횟수와 '근거 약함'을 함께 밝힌다", testLabel.includes("비교 1곳") && testLabel.includes("32회") && testLabel.includes("근거 약함"), testLabel);
+  check("Avail 보유: 근거 약한 후보의 표기는 비교 채널 수·방영 횟수와 '근거 약함'을 함께 밝힌다", testLabel.includes("비교 2곳") && testLabel.includes("32회") && testLabel.includes("근거 약함"), testLabel);
   const heldCopy = buildCardCopy({ ...input, ai: { ...base, remedy: null, change: null, availHeld: [picked[1]] } });
   check("홈 문구: 근거 약한 보유작은 '테스트 편성 검토'이며 구매·교체처럼 말하지 않는다", !!heldCopy.action?.startsWith("테스트 편성 검토 — Avail 보유작") && !heldCopy.action.includes("구매 검토"), heldCopy.action ?? "");
   // 비교 케이블 2곳·방영 48회 이상은 '근거 보통'(추천 기준 3곳엔 못 미치므로 여전히 시험 편성)
-  const midPick = pickHeld([{ key: "보통후보", displayName: "보통후보", vsAvg: 1.11, peers: 2, airings: 468 }, { key: "약한후보", displayName: "약한후보", vsAvg: 1.25, peers: 1, airings: 32 }], [mk("보통후보"), mk("약한후보")]);
-  check("Avail 보유: 2곳·48회 이상은 근거 보통, 1곳·30회대는 근거 약함이며 보통이 먼저 나온다", midPick.map((p) => `${p.name}:${p.evidence}`).join(",") === "보통후보:medium,약한후보:weak", midPick.map((p) => `${p.name}:${p.evidence}`).join(","));
+  const midPick = pickHeld([{ key: "보통후보", displayName: "보통후보", vsAvg: 1.11, peers: 2, airings: 468 }, { key: "약한후보", displayName: "약한후보", vsAvg: 1.25, peers: 2, airings: 32 }], [mk("보통후보"), mk("약한후보")]);
+  check("Avail 보유: 2곳·48회 이상은 근거 보통, 2곳·20~47회는 근거 약함이며 보통이 먼저 나온다", midPick.map((p) => `${p.name}:${p.evidence}`).join(",") === "보통후보:medium,약한후보:weak", midPick.map((p) => `${p.name}:${p.evidence}`).join(","));
   const midLabel = heldLabel(midPick[0]);
   check("Avail 보유: 근거 보통의 표기는 비교 채널 수·방영 횟수와 '근거 보통'을 밝힌다", midLabel.includes("비교 2곳") && midLabel.includes("468회") && midLabel.includes("근거 보통") && !midLabel.includes("근거 약함"), midLabel);
   const midCopy = buildCardCopy({ ...input, ai: { ...base, remedy: null, change: null, availHeld: [midPick[0]] } });
@@ -894,6 +896,27 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   check("유지율: 평소의 75% 이상(45%)이면 잡지 않는다", retentionLeak([...rows.slice(0, 12), lead, okTgt], okTgt, lead, okTgt.date) === null);
   check("유지율: 같은 자리 비교 방영이 3회 미만이면 잡지 않는다", retentionLeak([...rows.slice(8, 12), lead, tgt], tgt, lead, tgt.date) === null);
   check("유지율: 앞 프로그램이 없으면 잡지 않는다", retentionLeak(rows, tgt, null, tgt.date) === null);
+}
+
+// 구매 후보 진입 기준·근거 수준·정렬(2026-10-15 확정: 2곳·20회·1.0배, 충분/보통/약함, 횟수 보정 배수 순)
+{
+  check("구매 후보 근거: 3곳·48회 이상 충분 / 3곳·20~47회·2곳·48회 이상 보통 / 2곳·20~47회 약함", recoEvidence(3, 48) === "strong" && recoEvidence(3, 30) === "medium" && recoEvidence(2, 468) === "medium" && recoEvidence(2, 32) === "weak");
+  check("구매 후보 진입: 비교 1곳이거나 방영 20회 미만이면 후보가 아니다", recoEvidence(1, 200) === null && recoEvidence(5, 19) === null && recoEvidence(0, null) === null);
+  check("구매 후보 근거: 방영 횟수를 모르는 옛 값은 3곳 이상이면 충분, 2곳이면 약함", recoEvidence(3, null) === "strong" && recoEvidence(2, undefined) === "weak");
+  const few = shrunkVsAvg(1.5, 20) as number;
+  const many = shrunkVsAvg(1.3, 100) as number;
+  check("구매 후보 정렬: 1.5배·20회보다 1.3배·100회가 위(횟수가 적으면 배수를 1.0 쪽으로 당긴다)", few < many && Math.abs(shrunkVsAvg(1.2, 48)! - 1.1) < 1e-9, `${few.toFixed(3)} vs ${many.toFixed(3)}`);
+  const sorted = [{ n: "A", vsAvg: 1.5, airings: 20 }, { n: "B", vsAvg: 1.3, airings: 100 }, { n: "C", vsAvg: null, airings: 80 }, { n: "D", vsAvg: 1.2, airings: 300 }].sort(byShrunkDesc).map((x) => x.n).join("");
+  check("구매 후보 정렬: 보정 배수 순, 배수를 모르는 후보는 맨 뒤", sorted === "BDAC", sorted);
+  const extIn = { achievementPct: 56, rating: 0.017, goalRating: 0.03, priorPct: 37, structural: true, program: null };
+  const extBase: AiSuggestionPayload = { channelCode: "ENA_PLAY", weekStart: "2026-10-19", currentExpected: null, aiExpected: null, change: null, remedy: null };
+  const buy = buildCardCopy({ ...extIn, ai: { ...extBase, external: [{ name: "후보가", vsAvg: 1.25, peers: 2, airings: 40 }] } });
+  check("홈 문구: 1.1배 이상이면 '구매 검토'로 말하되 비교 곳수·횟수와 근거 수준을 함께 적는다", !!buy.action?.startsWith("구매 검토 —") && buy.action.includes("비교 2곳·40회, 근거 약함"), buy.action ?? "");
+  const ref = buildCardCopy({ ...extIn, ai: { ...extBase, external: [{ name: "후보나", vsAvg: 1.05, peers: 4, airings: 90 }] } });
+  check("홈 문구: 1.0~1.1배뿐이면 '구매 참고'로 낮춰 말한다", !!ref.action?.startsWith("구매 참고 —") && !ref.action.includes("구매 검토"), ref.action ?? "");
+  const out = buildCardCopy({ ...extIn, ai: { ...extBase, external: [{ name: "후보다", vsAvg: 1.6, peers: 1, airings: 300 }, { name: "후보라", vsAvg: 1.6, peers: 5, airings: 15 }, { name: "후보마", vsAvg: 0.9, peers: 5, airings: 90 }] } });
+  check("홈 문구: 진입 기준(2곳·20회·1.0배)을 못 채운 후보는 구매를 말하지 않는다", ![out.action, ...out.more].join(" ").match(/구매 (검토|참고)/), out.action ?? "");
+  check("근거 수준 이름: 충분·보통·약함", RECO_EVIDENCE_KO.strong === "근거 충분" && RECO_EVIDENCE_KO.medium === "근거 보통" && RECO_EVIDENCE_KO.weak === "근거 약함");
 }
 
 // 채널별 인사이트 = 변화 해설(비교·순위·흐름·요일·시간대·타깃층), 목표 대비 진단·조치는 "오늘의 시청률"에만 둔다

@@ -13,6 +13,7 @@ import { rightsFingerprint } from "@/lib/avail/engineGate";
 import { loadIdealScheduleConfig } from "@/lib/idealSchedule/configStore";
 import { llmCacheKey, type CacheDb } from "@/lib/llmTextCacheCore";
 import { cachedJson } from "@/lib/idealSchedule/suggestionCacheCore";
+import { RECO_MIN_VS_AVG, byShrunkDesc, recoEvidence } from "@/lib/purchaseSim/recoEvidence";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { computeWeakSlotRemedy, type WeakSlotRemedy } from "./weakSlotRemedy";
 import { computeOriginalLeverage, type OriginalLeverage } from "./originalLeverage";
@@ -60,7 +61,7 @@ export interface AiSuggestion {
   /** 교체 후보가 없을 때의 보완 제안(원인 → 할 일, 최근 방영 실측으로 계산) — 약해진 프로그램을 지정했고 계산됐을 때만 */
   remedy: WeakSlotRemedy | null;
   /** 자사 편성 안에서 근거 충분한 교체안이 없을 때 보여 줄 풀 밖 대안 — 구매 검토 추천 상위 제목(자사 풀 최적화와는 섞지 않는다) */
-  external: { name: string; vsAvg: number | null; peers: number | null }[];
+  external: { name: string; vsAvg: number | null; peers: number | null; airings: number | null }[];
   /** ENA 본방 오리지널 활용 권유(ENA Play·Drama·Story만) — 활용 후보와 재방 축소 코멘트 대상 */
   originals: OriginalLeverage | null;
 }
@@ -273,23 +274,27 @@ export async function computeAiSuggestion(channelCode: string, asOfDate: string,
   } catch {
     return computeAiSuggestionUncached(channelCode, asOfDate, focus);
   }
-  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v6", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
+  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v7", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
   return r.value;
 }
 
 /** 구매 검토 추천(사전 계산, 해당 채널 방영 이력 없음) 상위 제목과 추천 근거(연평균 대비 추정 배수·비교 채널 수) — 자사 풀 밖 대안으로만 쓴다. 없거나 실패하면 빈 배열 */
-async function loadExternalCandidates(channelCode: string, limit = 2): Promise<{ name: string; vsAvg: number | null; peers: number | null }[]> {
+async function loadExternalCandidates(channelCode: string, limit = 2): Promise<{ name: string; vsAvg: number | null; peers: number | null; airings: number | null }[]> {
   const { data, error } = await supabase
     .from("purchase_recommendations")
-    .select("display_name, rank, vs_annual_avg, peer_count")
+    .select("display_name, rank, vs_annual_avg, peer_count, peer_airings")
     .eq("own_channel_code", channelCode)
     .eq("window_days", 182)
     .order("rank", { ascending: true })
-    .limit(limit);
+    .limit(30);
   if (error) return [];
-  return ((data ?? []) as { display_name: string; vs_annual_avg: number | string | null; peer_count: number | string | null }[])
+  // 진입 기준(비교 2곳·20회·연평균 1.0배 이상)을 다시 확인하고, 방영 횟수로 보정한 배수 순으로 상위만 쓴다(저장된 순서는 갱신 시점의 기준이라 옛 값이 섞일 수 있다)
+  return ((data ?? []) as { display_name: string; vs_annual_avg: number | string | null; peer_count: number | string | null; peer_airings: number | string | null }[])
     .filter((r) => !!r.display_name)
-    .map((r) => ({ name: r.display_name, vsAvg: r.vs_annual_avg === null ? null : Number(r.vs_annual_avg), peers: r.peer_count === null ? null : Number(r.peer_count) }));
+    .map((r) => ({ name: r.display_name, vsAvg: r.vs_annual_avg === null ? null : Number(r.vs_annual_avg), peers: r.peer_count === null ? null : Number(r.peer_count), airings: r.peer_airings === null ? null : Number(r.peer_airings) }))
+    .filter((r) => r.vsAvg !== null && r.vsAvg >= RECO_MIN_VS_AVG && recoEvidence(r.peers, r.airings) !== null)
+    .sort(byShrunkDesc)
+    .slice(0, limit);
 }
 
 export async function computeAiSuggestionUncached(channelCode: string, asOfDate: string, focus: string | null): Promise<AiSuggestion> {

@@ -17,6 +17,7 @@ import { compareEstimates, rankWithTies } from "@/lib/purchaseReview/compare";
 import { evidenceOf, transferOf, type EvidenceView } from "@/lib/purchaseReview/transfer";
 import { markerSpread } from "@/lib/purchaseReview/productionYear";
 import { recoVsSim } from "@/lib/purchaseReview/alignment";
+import { RECO_EVIDENCE_KO, recoEvidence } from "@/lib/purchaseSim/recoEvidence";
 import { buildReviewSnapshot } from "@/lib/purchaseReview/snapshot";
 import { VENDING } from "@/lib/ui/pageTitles";
 import { isRegionalHousehold } from "@/lib/competitorRegion";
@@ -523,7 +524,7 @@ function PurchaseSimulator() {
 type RecoItem = { rank: number; group_key: string; rep_key: string; display_name: string; genre: string | null; prediction: number; prediction_low: number | null; prediction_high: number | null; peer_count: number; peer_airings: number; channel_annual_avg: number | null; vs_annual_avg: number | null; confidence: string | null; as_of: string; target: string; model_version?: string | null; computed_at?: string | null };
 type RecoAlignment = { aligned: boolean; asOfLagDays: number; messages: string[] };
 
-// 구매 추천: 해당 채널에서 방영한 적 없는 프로그램 중 타 채널(케이블 재방 3곳 이상) 실적으로 본 예상 시청률 순위. 사전 계산 결과를 읽는다.
+// 구매 추천: 해당 채널에서 방영한 적 없는 프로그램 중 타 채널(케이블 재방 2곳 이상·20회 이상) 실적으로 연평균 이상이 기대되는 후보를, 연평균 대비 배수(방영 횟수로 보정) 순으로 보여 준다. 사전 계산 결과를 읽는다.
 // 사전 계산(주 1회)이라 현재 데이터 기준일·모델과 어긋나면 오래된 추천으로 표시한다. 항목을 열면 최신 기준 시뮬레이션이 값을 갱신한다.
 function RecoSection({ channel, windowDays, onPick }: { channel: string; windowDays: number; onPick: (p: RecoPick) => void }) {
   const [items, setItems] = useState<RecoItem[] | null>(null);
@@ -545,7 +546,8 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
   }
   const genres = ["전체", ...Array.from(new Set((items ?? []).map((i) => i.genre ?? "미분류")))];
   const filtered = (items ?? []).filter((i) => genre === "전체" || (i.genre ?? "미분류") === genre).slice(0, 10);
-  const shown = rankWithTies(filtered, (i) => ({ value: i.prediction, low: i.prediction_low, high: i.prediction_high, confidence: i.confidence }));
+  // 저장된 순서(연평균 대비 배수를 방영 횟수로 보정한 순)를 그대로 쓴다 — 예상 시청률 순으로 다시 정렬하지 않는다
+  const shown = filtered.map((item, idx) => ({ item, rank: idx + 1 }));
   const avg = items?.[0]?.channel_annual_avg ?? null;
   const targetName = items?.[0] ? TARGET_NAME[items[0].target] : "";
   const label = WINDOW_OPTS.find((w) => w.days === windowDays)?.label.replace(" (기본)", "") ?? "";
@@ -574,7 +576,7 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
             </p>
           )}
           <p className="mt-1 text-xs text-zinc-500">
-            아직 Avail에 없는 신규 구매 검토 후보(보유 예정·권리 획득 가정)입니다. 우리 채널에서 방영한 적 없다는 사실이 구매 가능하다는 뜻은 아닙니다. 타 채널 재방 실적으로 계산한 월 평균 예상 시청률 순이며, 항목을 누르면 위에서 바로 시뮬레이션합니다.
+            아직 Avail에 없는 신규 구매 검토 후보(보유 예정·권리 획득 가정)입니다. 우리 채널에서 방영한 적 없다는 사실이 구매 가능하다는 뜻은 아닙니다. 타 채널 재방 실적으로 이 채널 연평균 이상(1.0배 이상)이 기대되는 후보를 연평균 대비 배수 순으로 보여 주며, 방영 횟수가 적으면 배수를 1.0 쪽으로 당겨 비교합니다. 근거가 충분하지 않은 후보는 추천이 아니라 검토 후보이며, 항목을 누르면 위에서 바로 시뮬레이션합니다.
           </p>
           <ol className="mt-2 divide-y divide-zinc-100">
             {shown.map((r) => {
@@ -589,7 +591,7 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
                   >
                     <span className="min-w-0">
                       <span className="text-sm font-medium text-zinc-900">{r.rank}. {i.display_name}</span>
-                      <span className="ml-2 text-xs text-zinc-400">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회</span>
+                      <span className="ml-2 text-xs text-zinc-400">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회{(() => { const ev = recoEvidence(i.peer_count, i.peer_airings) ?? "weak"; return ev === "strong" ? "" : ` · ${RECO_EVIDENCE_KO[ev]}`; })()}</span>
                       {i.confidence && <span className="ml-2 text-xs text-zinc-400">예측 {CONF_LABEL[i.confidence] ?? i.confidence}</span>}
                     </span>
                     <span className="shrink-0 text-right tabular-nums">

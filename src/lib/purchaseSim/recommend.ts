@@ -1,9 +1,10 @@
-// 구매 추천 계산: 해당 채널에서 방영 이력이 없는 프로그램 중, 케이블 재방 3곳 이상·48회 이상 근거가 있는 후보의 월 평균 예상 시청률 순위.
+// 구매 추천 계산: 해당 채널에서 방영 이력이 없는 프로그램 중, 케이블 재방 2곳 이상·20회 이상 근거가 있고 이 채널 연평균 이상(1.0배)으로 추정되는 후보를 연평균 대비 배수(방영 횟수로 보정) 순으로 정렬한다(recoEvidence.ts).
 // 신규 구매 시나리오(타 채널 실적만 사용)이며 가격·판권은 반영하지 않는다. 결과는 purchase_recommendations 에 저장된다.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchChannelAnnualAvg, fetchSimInputsMulti, latestCompetitorDate, loadCalibration } from "./dataSource";
 import { MODEL_VERSION, PARAMS, monthlyAverage, peerIndexes } from "./engine";
 import { normalizeProgramKey } from "./normalize";
+import { RECO_MIN_AIRINGS, RECO_MIN_PEERS, RECO_MIN_VS_AVG, byShrunkDesc, recoEvidence, type RecoEvidence } from "./recoEvidence";
 
 export interface RecoRow {
   group_key: string;
@@ -18,6 +19,8 @@ export interface RecoRow {
   airings: number;
   vsAvg: number | null;
   confidence: string;
+  /** 근거 수준(충분·보통·약함) — 저장하지 않고 peers·airings로 읽는 쪽에서 다시 계산할 수 있다 */
+  evidence: RecoEvidence;
 }
 
 export const RECO_CONFIGS: { channel: string; target: "A2049" | "HH" }[] = [
@@ -41,10 +44,10 @@ async function pageAll<T>(q: (from: number, to: number) => PromiseLike<{ data: T
   return out;
 }
 
-export async function computeRecommendations(client: SupabaseClient, args: { channel: string; target: "A2049" | "HH"; window: number; top?: number; /** 지정하면 이 정규화 키(대문자)에 해당하는 프로그램만 계산한다 — Avail 보유 콘텐츠처럼 후보를 미리 좁힌 경우(전체 계산은 수 분 걸린다) */ onlyKeys?: Set<string>; /** 비교 케이블 채널 수 하한(기본 3) — Avail 보유 콘텐츠의 '근거 약한 시험 편성 후보'만 낮춰 쓴다 */ minPeers?: number; /** 비교 방영 횟수 하한(기본 48) */ minAirings?: number }): Promise<{ asOf: string; annualAvg: number | null; rows: RecoRow[] }> {
+export async function computeRecommendations(client: SupabaseClient, args: { channel: string; target: "A2049" | "HH"; window: number; top?: number; /** 지정하면 이 정규화 키(대문자)에 해당하는 프로그램만 계산한다 — Avail 보유 콘텐츠처럼 후보를 미리 좁힌 경우(전체 계산은 수 분 걸린다) */ onlyKeys?: Set<string>; /** 비교 케이블 채널 수 하한(기본 RECO_MIN_PEERS) */ minPeers?: number; /** 비교 방영 횟수 하한(기본 RECO_MIN_AIRINGS) */ minAirings?: number }): Promise<{ asOf: string; annualAvg: number | null; rows: RecoRow[] }> {
   const { channel, target, window } = args;
-  const minPeers = args.minPeers ?? 3;
-  const minAirings = args.minAirings ?? 48;
+  const minPeers = args.minPeers ?? RECO_MIN_PEERS;
+  const minAirings = args.minAirings ?? RECO_MIN_AIRINGS;
   const asOf = await latestCompetitorDate(client);
   const from = new Date(Date.parse(asOf) - window * 86400000).toISOString().slice(0, 10);
   const ident = await pageAll<{ key: string; group_key: string; display_name: string; comp_channels: string[] }>((a, b) =>
@@ -66,7 +69,7 @@ export async function computeRecommendations(client: SupabaseClient, args: { cha
   const hub = PARAMS.hubChannels as readonly string[];
   const groups = new Map<string, { display: string; rep: string; members: string[] }>();
   for (const r of ident) {
-    if (r.comp_channels.filter((c) => !hub.includes(c)).length < minPeers) continue; // 비교 채널은 케이블 3곳 이상(기본)
+    if (r.comp_channels.filter((c) => !hub.includes(c)).length < minPeers) continue; // 비교 채널은 케이블 2곳 이상(기본)
     if (args.onlyKeys && !args.onlyKeys.has(r.key.toUpperCase())) continue;
     const g = groups.get(r.group_key) ?? { display: r.display_name, rep: r.key, members: [] };
     g.members.push(r.key.toUpperCase());
@@ -86,9 +89,12 @@ export async function computeRecommendations(client: SupabaseClient, args: { cha
       if (peers.length < minPeers || nP < minAirings) continue;
       const p = monthlyAverage(inp, target, window === PARAMS.windowDays ? calibration : [], { windowDays: window, ignoreOwnHistory: true });
       if (p.prediction === null) continue;
-      rows.push({ group_key: g.group_key, rep_key: g.rep, display_name: g.display, genre: g.genre, prediction: p.prediction, low: p.low, high: p.high, idx: p.contentIdx ?? 0, peers: peers.length, airings: nP, vsAvg: annualAvg ? p.prediction / annualAvg : null, confidence: p.confidence });
+      const vsAvg = annualAvg ? p.prediction / annualAvg : null;
+      if (vsAvg !== null && vsAvg < RECO_MIN_VS_AVG) continue; // 진입: 이 채널 연평균 이상으로 추정되는 후보만
+      rows.push({ group_key: g.group_key, rep_key: g.rep, display_name: g.display, genre: g.genre, prediction: p.prediction, low: p.low, high: p.high, idx: p.contentIdx ?? 0, peers: peers.length, airings: nP, vsAvg, confidence: p.confidence, evidence: recoEvidence(peers.length, nP) ?? "weak" });
     }
   }
-  rows.sort((a, b) => b.prediction - a.prediction);
+  // 우선순위: 연평균 대비 배수를 방영 횟수로 보정한 값 순(횟수도 많고 배수도 높은 후보가 위) — 배수를 모르는 행은 예상 시청률 순으로 뒤에
+  rows.sort((a, b) => byShrunkDesc({ vsAvg: a.vsAvg, airings: a.airings }, { vsAvg: b.vsAvg, airings: b.airings }) || b.prediction - a.prediction);
   return { asOf, annualAvg, rows: rows.slice(0, args.top ?? 30) };
 }
