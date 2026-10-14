@@ -1998,8 +1998,31 @@ const FIT_TYPE_BADGE_STYLE: Record<FitType, string> = {
 function FitTypeBadge({ type }: { type: FitType | null }) {
   if (!type) return null;
   return (
-    <span title={FIT_TYPE_NOTE[type]} className={`ml-1.5 inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[12px] font-medium ${FIT_TYPE_BADGE_STYLE[type]}`}>
+    <span title={FIT_TYPE_NOTE[type]} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-medium leading-none ${FIT_TYPE_BADGE_STYLE[type]}`}>
       {type}
+    </span>
+  );
+}
+// 시청자 유형(대중형·코어형·신규유입형·이탈위험형): 콘텐츠 유형(둥근 알약)과 모양·색 계열을 달리해(각진 칩, 보라·청록 계열) 한눈에 구분한다.
+const AUDIENCE_ROLE_BADGE_STYLE: Record<"MASS" | "CORE" | "ACQUISITION" | "ZAPPING_RISK", string> = {
+  MASS: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200",
+  CORE: "bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-200",
+  ACQUISITION: "bg-cyan-50 text-cyan-800 ring-1 ring-inset ring-cyan-200",
+  ZAPPING_RISK: "bg-fuchsia-50 text-fuchsia-700 ring-1 ring-inset ring-fuchsia-200",
+};
+/** 표의 '유형' 칸 — 펼치지 않아도 콘텐츠 유형(주력형·효율형·총량형·균형형·부진형)과 시청자 유형(대중형 등)을 한 줄로 보여 준다. 정식 판정 구간에만 붙는다. */
+function FitChips({ cf }: { cf: ContentFitItem }) {
+  const type = fitTypeOf(cf);
+  const role = cf.tier === "FORMAL" ? audienceRoleOf(cf) : null;
+  if (!type && !role) return <span className="text-zinc-300">—</span>;
+  return (
+    <span className="flex flex-nowrap items-center gap-1 whitespace-nowrap">
+      <FitTypeBadge type={type} />
+      {role && (
+        <span title={`시청자 유형 — ${AUDIENCE_ROLE_NOTE[role]}`} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11.5px] font-medium leading-none ${AUDIENCE_ROLE_BADGE_STYLE[role]}`}>
+          {AUDIENCE_ROLE_LABEL[role]}
+        </span>
+      )}
     </span>
   );
 }
@@ -6569,16 +6592,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             // 2026-10-15(사용자 요청): "이 콘텐츠, 적합한가요?"와 같은 점수·배수를 되풀이하지 않는다 — 이 표는 판정을 편성 조치로 옮긴 것이다.
             // 결정이 필요한 것부터 묶고, 조치마다 "무엇을 보면 판정이 바뀌는지"(확인 기준)를 함께 준다. 근거 수치·산식·상세 해석은 그 표에 있다.
             <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
-              <table className="w-full min-w-[780px] table-fixed text-left text-sm">
+              <table className="w-full table-fixed text-left text-sm">
                 <colgroup>
-                  <col className="w-[112px]" />
-                  <col className="w-[230px]" />
-                  <col />
-                  <col className="w-[250px]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[17%]" />
+                  <col className="w-[34%]" />
+                  <col className="w-[23%]" />
                 </colgroup>
                 <thead>
                   <tr className="text-zinc-400">
                     <th className="pb-2 pr-3 font-medium">태그</th>
+                    <th className="pb-2 pr-3 font-medium">유형</th>
                     <th className="pb-2 pr-3 font-medium">프로그램</th>
                     <th className="pb-2 pr-3 font-medium">조치</th>
                     <th className="pb-2 font-medium">확인 기준</th>
@@ -6592,7 +6617,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   return (
                     <tbody key={g}>
                       <tr>
-                        <td colSpan={4} className="bg-zinc-50 px-2.5 py-1.5 text-[12.5px] font-semibold text-zinc-500">
+                        <td colSpan={5} className="bg-zinc-50 px-2.5 py-1.5 text-[12.5px] font-semibold text-zinc-500">
                           {SCHEDULE_GROUP_LABEL[g]} · {rows.length}개
                         </td>
                       </tr>
@@ -6607,9 +6632,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             <td className="whitespace-nowrap py-2.5 pr-3 pl-2.5">
                               {item.content_fit.tier === "FORMAL" && item.tag ? <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} fixed /> : <DotTag label={item.content_fit.tier === "HOLD" ? "판단 보류" : "표본 적음"} color="#a1a1aa" fixed />}
                             </td>
+                            <td className="whitespace-nowrap py-2.5 pr-3">
+                              <FitChips cf={item.content_fit} />
+                            </td>
                             <td className="py-2.5 pr-3">
                               <div className="flex min-w-0 items-baseline gap-1">
-                                <span className="truncate font-bold text-zinc-800" title={item.programs?.canonical_name ?? undefined}>
+                                <span className="truncate font-semibold text-zinc-800" title={item.programs?.canonical_name ?? undefined}>
                                   {item.programs?.canonical_name ?? "이름 없음"}
                                 </span>
                                 {item.programs?.first_run !== null && item.programs?.first_run !== undefined && (
@@ -7652,10 +7680,21 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     각 줄을 누르면 시청자 유형·슬롯별 성과·해석이 펼쳐집니다
                   </p>
                   <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
-                    <table className="w-full min-w-[760px] text-left text-sm">
+                    <table className="w-full table-fixed text-left text-sm">
+                      <colgroup>
+                        <col className="w-[10%]" />
+                        <col className="w-[16%]" />
+                        <col className="w-[20%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[11%]" />
+                      </colgroup>
                       <thead>
                         <tr className="text-zinc-400">
-                          <th className="w-[112px] whitespace-nowrap pb-2 pr-3 font-medium">판정</th>
+                          <th className="whitespace-nowrap pb-2 pr-3 font-medium">판정</th>
+                          <th className="whitespace-nowrap pb-2 pr-3 font-medium">유형</th>
                           <th className="pb-2 pr-3 font-medium">프로그램</th>
                           <th className="pb-2 font-medium">슬롯 대비 성과</th>
                           <th className="pb-2 font-medium">시청 규모</th>
@@ -7698,11 +7737,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                   <span className="text-zinc-400">—</span>
                                 )}
                               </td>
+                              <td className="whitespace-nowrap py-2 pr-3 align-middle">
+                                <FitChips cf={cf} />
+                              </td>
                               <td className="py-2 pr-3 align-middle font-medium text-zinc-800">
-                                <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                                  <span className={muted ? "text-zinc-500" : ""}>{item.programs?.canonical_name ?? "이름 없음"}</span>
-                                  <span className="text-[12px] font-normal text-zinc-400">{cf.sampleDays}일</span>
-                                  <FitTypeBadge type={fitTypeOf(cf)} />
+                                <span className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
+                                  <span className={`truncate ${muted ? "text-zinc-500" : ""}`} title={item.programs?.canonical_name ?? undefined}>{item.programs?.canonical_name ?? "이름 없음"}</span>
+                                  <span className="shrink-0 text-[12px] font-normal text-zinc-400">{cf.sampleDays}일</span>
                                 </span>
                               </td>
                               <td className="py-2 align-middle">
@@ -7732,7 +7773,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             </tr>
                             {isOpen && (
                               <tr className="border-t border-zinc-100">
-                                <td colSpan={7} className="p-4 text-sm text-zinc-600" style={{ backgroundColor: `${accentColor}08`, boxShadow: `inset 3px 0 0 ${accentColor}` }}>
+                                <td colSpan={8} className="p-4 text-sm text-zinc-600" style={{ backgroundColor: `${accentColor}08`, boxShadow: `inset 3px 0 0 ${accentColor}` }}>
                                   {(() => {
                                     const fi = buildFitScoreInterpretation(item);
                                     const type = fitTypeOf(cf);

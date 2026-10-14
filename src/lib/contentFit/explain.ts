@@ -116,15 +116,15 @@ export function explainContentFit(item: ContentFitItem, name: string): ContentFi
   }
   const L = fmtTimes(item.slotIndex);
   const A = fmtTimes(item.scaleIndex);
-  const base = `같은 요일·시간대 다른 프로그램 평균의 ${L}`;
-  const basis = `채널 평균 방영 시청률의 ${A} 규모이며, 최근 12주 중 ${item.sampleDays}일(${item.airings}회) 방영 기준입니다.`;
+  const base = `동시간대 평균 ${L}`;
+  const basis = `채널 평균 ${A}, 최근 12주 중 ${item.sampleDays}일(${item.airings}회) 방영 기준입니다.`;
   const trend = describeTrend(item);
 
   if (item.tier === "REFERENCE") {
     const lean = item.lean === "ABOVE" ? "지금까지는 슬롯 평균보다 높은 흐름" : item.lean === "BELOW" ? "지금까지는 슬롯 평균보다 낮은 흐름" : "지금까지는 슬롯 평균 수준의 흐름";
     const why = item.sampleDays < 8 ? `방영 ${item.sampleDays}일로 표본이 적어` : "방영 시청 규모가 작아";
     return {
-      headline: `${subj}${josaEunNeun(name)} ${why} 참고용입니다 — ${lean}입니다(${L}, 표본이 적어 슬롯 평균 쪽으로 보정한 값).`,
+      headline: `${subj}${josaEunNeun(name)} ${why} 참고용입니다 — ${lean}입니다(동시간대 평균 ${L} · 채널 평균 ${A}, 표본이 적어 평균 쪽으로 보정한 값).`,
       basis,
       trend,
     };
@@ -137,7 +137,7 @@ export function explainContentFit(item: ContentFitItem, name: string): ContentFi
       return {
         headline:
           item.slotIndex >= 1
-            ? `${subj}${josaIga(name)} ${base}로 같은 자리의 기대 수준 이상이라 현재 편성을 유지해도 됩니다.`
+            ? `${subj}${josaIga(name)} ${base}로 같은 자리 기대 수준 이상이라 현재 편성을 유지해도 됩니다.`
             : `${subj}${josaIga(name)} ${base}로 같은 자리의 평균 수준이라 현재 편성을 유지해도 됩니다.`,
         basis,
         trend,
@@ -147,7 +147,7 @@ export function explainContentFit(item: ContentFitItem, name: string): ContentFi
         headline:
           item.slotIndex >= 0.85
             ? `${subj}${josaEunNeun(name)} ${base}로 아직 기대 수준이지만 최근 하락이 보여 다음 몇 주를 지켜볼 만합니다.`
-            : `${subj}${josaEunNeun(name)} ${base}(같은 자리 평균의 ${pctOfSlot}%)로 기대에 못 미쳐 다음 몇 주를 지켜볼 만합니다.`,
+            : `${subj}${josaEunNeun(name)} ${base}(동시간대 평균의 ${pctOfSlot}%)로 기대에 못 미쳐 다음 몇 주를 지켜볼 만합니다.`,
         basis,
         trend,
       };
@@ -159,7 +159,7 @@ export function explainContentFit(item: ContentFitItem, name: string): ContentFi
       };
     case "REPLACE":
       return {
-        headline: `${subj}${josaEunNeun(name)} ${base}(같은 자리 평균의 ${pctOfSlot}%)로 기대에 크게 못 미칩니다 — 교체 또는 시간대 변경을 검토할 만합니다.`,
+        headline: `${subj}${josaEunNeun(name)} ${base}(동시간대 평균의 ${pctOfSlot}%)로 기대에 크게 못 미칩니다 — 교체 또는 시간대 변경을 검토할 만합니다.`,
         basis,
         trend,
       };
@@ -168,51 +168,37 @@ export function explainContentFit(item: ContentFitItem, name: string): ContentFi
   }
 }
 
-/** "무엇을 편성할까요?" 표의 제안 사항 한 줄. */
-export function scheduleNote(item: ContentFitItem): string {
-  if (item.tier === "HOLD") return `방영 ${item.sampleDays}일 — 판단 보류(3일 이상 쌓이면 계산)`;
-  if (item.tier === "REFERENCE" || item.tag === "TEST") return `표본 적음(방영 ${item.sampleDays}일) — 8일 이상 쌓인 뒤 재평가`;
+/**
+ * "무엇을 편성할까요?" 표의 조치 한 줄 — 핵심 수치(동시간대 평균·채널 평균)를 앞에, 조치를 뒤에 짧게 적는다(2026-10-15 사용자 요청).
+ * 예: "동시간대 평균 0.94배 · 채널 평균 1.06배 - 편성 유지" / 표본이 적어도 수치를 앞에: "채널 평균 2.59배 · 동시간대 평균 0.88배 - 표본 적음(방영 6일), 8일 이상 쌓인 뒤 재평가".
+ */
+export function scheduleAction(item: ContentFitItem): string {
+  if (item.tier === "HOLD") return `방영 ${item.sampleDays}일 - 판단 보류(${CONTENT_FIT_CONFIG.minDays}일 이상 쌓이면 계산)`;
   const L = fmtTimes(item.slotIndex);
+  const A = fmtTimes(item.scaleIndex);
+  if (item.tier === "REFERENCE" || item.tag === "TEST") {
+    const left = Math.max(1, CONTENT_FIT_CONFIG.fullDays - item.sampleDays);
+    return `채널 평균 ${A} · 동시간대 평균 ${L} - 표본 적음(방영 ${item.sampleDays}일), ${left}일 더 쌓인 뒤 재평가`;
+  }
+  const nums = `동시간대 평균 ${L} · 채널 평균 ${A}`;
   switch (item.tag) {
     case "STRENGTHEN":
-      return `같은 시간대 평균의 ${L} — 노출 확대·더 좋은 시간대 편성 검토`;
+      return `${nums} - 노출 확대·더 좋은 시간대 편성 검토`;
     case "KEEP":
-      return `같은 시간대 평균의 ${L} — 현재 편성 유지`;
+      return `${nums} - 편성 유지`;
     case "WATCH":
-      return `같은 시간대 평균의 ${L} — 기대에 못 미치거나 하락 조짐, 몇 주 더 관찰`;
+      return item.slotIndex !== null && item.slotIndex >= CONTENT_FIT_CONFIG.cut.keep ? `${nums} - 기대 수준이지만 최근 하락, 몇 주 더 관찰` : `${nums} - 기대에 못 미쳐 몇 주 더 관찰`;
     case "MOVE":
-      return `같은 시간대 평균의 ${L} — ${item.moveTo ? DAYPART_KO[item.moveTo] : "다른 시간대"}에서는 평균 이상, 그 시간대로 이동 검토`;
+      return `${nums} - ${item.moveTo ? DAYPART_KO[item.moveTo] : "다른 시간대"}로 이동 검토(그곳에서는 평균 이상)`;
     case "REPLACE":
-      return `같은 시간대 평균의 ${L} — 교체 또는 시간대 변경 검토`;
+      return `${nums} - 교체 또는 시간대 변경 검토`;
     default:
       return "—";
   }
 }
 
-/**
- * "무엇을 편성할까요?" 표의 조치 한 줄 — 근거 수치(슬롯 대비 배수)는 "이 콘텐츠, 적합한가요?"에 있으므로 되풀이하지 않고, 무엇을 할지만 말한다.
- */
-export function scheduleAction(item: ContentFitItem): string {
-  if (item.tier === "HOLD") return `방영 ${item.sampleDays}일 — 판단 보류`;
-  if (item.tier === "REFERENCE" || item.tag === "TEST") {
-    const left = Math.max(1, CONTENT_FIT_CONFIG.fullDays - item.sampleDays);
-    return `표본 적음(방영 ${item.sampleDays}일) — 시험 편성을 유지하며 ${left}일 더 쌓인 뒤 재평가`;
-  }
-  switch (item.tag) {
-    case "STRENGTHEN":
-      return "노출 확대·더 좋은 시간대 편성 검토";
-    case "KEEP":
-      return "현재 편성 유지";
-    case "WATCH":
-      return item.slotIndex !== null && item.slotIndex >= CONTENT_FIT_CONFIG.cut.keep ? "아직 기대 수준이지만 최근 하락이 보여 몇 주 더 관찰" : "기대에 못 미쳐 몇 주 더 관찰";
-    case "MOVE":
-      return `${item.moveTo ? DAYPART_KO[item.moveTo] : "다른 시간대"}로 이동 검토 — 그 시간대에서는 평균 이상을 냈습니다`;
-    case "REPLACE":
-      return "교체 또는 시간대 변경 검토";
-    default:
-      return "—";
-  }
-}
+/** 옛 이름(호환) — scheduleAction과 같다. */
+export const scheduleNote = scheduleAction;
 
 /** 다음에 무엇을 보면 판정이 바뀌는지 — 판정 선(config.cut)을 그대로 인용한다(새 기준을 만들지 않는다). */
 export function scheduleCheck(item: ContentFitItem): string {
@@ -221,15 +207,15 @@ export function scheduleCheck(item: ContentFitItem): string {
   if (item.tier === "REFERENCE" || item.tag === "TEST") return `방영 ${CONTENT_FIT_CONFIG.fullDays}일 이상 쌓이면 정식 판정`;
   switch (item.tag) {
     case "STRENGTHEN":
-      return `같은 시간대 평균의 ${strengthen}배 아래로 내려가면 '유지'로 낮춰 봅니다`;
+      return `동시간대 평균 ${strengthen}배 아래로 내려가면 '유지'로 낮춰 봅니다`;
     case "KEEP":
-      return `같은 시간대 평균의 ${keep}배 아래로 내려가면 '관찰'로 바뀝니다`;
+      return `동시간대 평균 ${keep}배 아래로 내려가면 '관찰'로 바뀝니다`;
     case "WATCH":
       // 같은 시간대 평균 이상인데 최근 하락 때문에 한 단계 낮춰 본 경우와, 평균에 못 미쳐 관찰인 경우의 확인 기준이 다르다
       return item.slotIndex !== null && item.slotIndex >= keep ? "최근 4주 하락이 멈추면 '유지'로 돌아갑니다" : `${keep}배 이상 회복하면 '유지', ${watch}배 아래로 내려가면 '교체 검토'`;
     case "MOVE":
     case "REPLACE":
-      return `옮긴(바꾼) 뒤 같은 시간대 평균의 ${keep}배 이상이면 자리 잡은 것으로 봅니다`;
+      return `옮긴(바꾼) 뒤 동시간대 평균 ${keep}배 이상이면 자리 잡은 것으로 봅니다`;
     default:
       return "—";
   }
@@ -275,7 +261,7 @@ export function summarizeTable(items: ContentFitItem[], nameOf: (programId: stri
   const bn = nameOf(best.programId);
   const wn = nameOf(worst.programId);
   const worstTail = worst.tag === "REPLACE" || worst.tag === "MOVE" ? "로 가장 낮아 교체 검토 대상입니다" : "로 가장 낮습니다";
-  return `'${bn}'${josaIga(bn)} 같은 시간대 평균의 ${fmtTimes(best.slotIndex)}로 채널에 가장 도움이 되고, '${wn}'${josaEunNeun(wn)} ${fmtTimes(worst.slotIndex)}${worstTail}.${tail ? ` ${tail}입니다.` : ""}`;
+  return `'${bn}'${josaIga(bn)} 동시간대 평균 ${fmtTimes(best.slotIndex)}로 채널에 가장 도움이 되고, '${wn}'${josaEunNeun(wn)} ${fmtTimes(worst.slotIndex)}${worstTail}.${tail ? ` ${tail}입니다.` : ""}`;
 }
 
 /** 표 위 안내문(읽는 법) — 용어를 풀어 쓴다. */
