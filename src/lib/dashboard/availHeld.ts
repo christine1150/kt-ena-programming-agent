@@ -13,6 +13,8 @@ export const HELD_MIN_VS_AVG = 1.0;
 /** 구매 시뮬레이터 추천 기준(비교 케이블 3곳 이상·비교 방영 48회 이상)을 채우면 '추천 근거 충분', 못 채우면 '근거 약함 — 시험 편성 후보' */
 export const HELD_REC_MIN_PEERS = 3;
 export const HELD_REC_MIN_AIRINGS = 48;
+/** 비교 케이블 2곳이면서 방영 48회 이상이면 '근거 보통'(추천 기준에는 못 미쳐 시험 편성으로 확인) */
+export const HELD_MID_MIN_PEERS = 2;
 /** 근거가 약한 후보는 연평균보다 확실히 높게(1.1배 이상) 추정되고 비교 방영이 30회 이상일 때만 시험 편성 후보로 보인다(임의 기준 — 사용자 확인 대상) */
 export const HELD_TEST_MIN_VS_AVG = 1.1;
 export const HELD_TEST_MIN_AIRINGS = 30;
@@ -79,8 +81,19 @@ export interface HeldRecommendation {
   peers: number | null;
   /** 추정 근거로 쓴 타 채널 방영 횟수 */
   airings?: number | null;
-  /** rec = 추천 근거 충분 / test = 근거가 약해 시험 편성으로 확인할 후보 (없으면 rec) */
+  /** rec = 추천 근거 충분 / test = 근거가 부족해 시험 편성으로 확인할 후보 (없으면 rec) */
   tier?: "rec" | "test";
+  /** 근거 수준 — strong 충분(3곳·48회 이상) / medium 보통(2곳·48회 이상) / weak 약함(그 미만). 없으면 strong */
+  evidence?: "strong" | "medium" | "weak";
+}
+
+/** 근거 수준: 비교 케이블 3곳·48회 이상=충분, 2곳·48회 이상=보통, 그 외=약함 */
+export function heldEvidence(peers: number | null | undefined, airings: number | null | undefined): "strong" | "medium" | "weak" {
+  const p = peers ?? 0;
+  const a = airings ?? 0;
+  if (p >= HELD_REC_MIN_PEERS && (airings === undefined || airings === null || a >= HELD_REC_MIN_AIRINGS)) return "strong";
+  if (p >= HELD_MID_MIN_PEERS && a >= HELD_REC_MIN_AIRINGS) return "medium";
+  return "weak";
 }
 
 /** 예측 결과(제목·연평균 대비)와 보유 정보를 합쳐 권유 후보를 고른다 — 연평균 이상만, 높은 순, 최대 3개. */
@@ -93,17 +106,22 @@ export function pickHeld(preds: { key: string; displayName: string; vsAvg: numbe
     const h = heldBy.get(p.key.toUpperCase());
     if (!h || p.vsAvg === null || !Number.isFinite(p.vsAvg) || p.vsAvg < HELD_MIN_VS_AVG) continue;
     // 방영 횟수를 모르는 예측(옛 호출)은 비교 채널 수만으로 판단한다
-    const strong = (p.peers ?? 0) >= HELD_REC_MIN_PEERS && (p.airings === undefined || p.airings === null || p.airings >= HELD_REC_MIN_AIRINGS);
+    const evidence = heldEvidence(p.peers, p.airings);
+    const strong = evidence === "strong";
     if (!strong && (p.vsAvg < HELD_TEST_MIN_VS_AVG || (p.airings ?? 0) < HELD_TEST_MIN_AIRINGS)) continue;
-    out.push({ name: p.displayName, vsAvg: p.vsAvg, endState: h.endState, daysToEnd: h.daysToEnd, hasConditions: h.hasConditions, peers: p.peers ?? null, airings: p.airings ?? null, tier: strong ? "rec" : "test" });
+    out.push({ name: p.displayName, vsAvg: p.vsAvg, endState: h.endState, daysToEnd: h.daysToEnd, hasConditions: h.hasConditions, peers: p.peers ?? null, airings: p.airings ?? null, tier: strong ? "rec" : "test", evidence });
   }
-  return out.sort((a, b) => (a.tier === "test" ? 1 : 0) - (b.tier === "test" ? 1 : 0) || b.vsAvg - a.vsAvg).slice(0, limit);
+  const rank = (r: HeldRecommendation) => (r.evidence === "weak" ? 2 : r.evidence === "medium" ? 1 : 0);
+  return out.sort((a, b) => rank(a) - rank(b) || b.vsAvg - a.vsAvg).slice(0, limit);
 }
 
 /** 한 후보의 홈 표기 — "이름(타 채널 실적으로 연평균의 약 1.4배 추정, 비교 5곳)", 권리 확인이 필요하면 사유를 덧붙인다. */
 export function heldLabel(r: HeldRecommendation): string {
   const notes = [`타 채널 실적으로 이 채널 연평균의 약 ${r.vsAvg.toFixed(1)}배 추정`];
-  if (r.peers) notes.push(r.tier === "test" && r.airings ? `비교 ${r.peers}곳·${r.airings}회뿐이라 근거 약함` : `비교 ${r.peers}곳`);
+  if (r.peers) {
+    if (r.tier === "test" && r.airings) notes.push(r.evidence === "medium" ? `비교 ${r.peers}곳·${r.airings}회로 근거 보통` : `비교 ${r.peers}곳·${r.airings}회뿐이라 근거 약함`);
+    else notes.push(`비교 ${r.peers}곳`);
+  }
   if (r.endState === "ends_soon") notes.push(`방영권 종료 ${r.daysToEnd}일 전`);
   else if (r.endState === "unknown") notes.push("방영권 종료일 미확인");
   else if (r.hasConditions) notes.push("권리 조건 확인 필요");

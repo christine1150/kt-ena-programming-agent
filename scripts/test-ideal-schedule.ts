@@ -829,6 +829,13 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   check("Avail 보유: 근거 약한 후보의 표기는 비교 채널 수·방영 횟수와 '근거 약함'을 함께 밝힌다", testLabel.includes("비교 1곳") && testLabel.includes("32회") && testLabel.includes("근거 약함"), testLabel);
   const heldCopy = buildCardCopy({ ...input, ai: { ...base, remedy: null, change: null, availHeld: [picked[1]] } });
   check("홈 문구: 근거 약한 보유작은 '테스트 편성 검토'이며 구매·교체처럼 말하지 않는다", !!heldCopy.action?.startsWith("테스트 편성 검토 — Avail 보유작") && !heldCopy.action.includes("구매 검토"), heldCopy.action ?? "");
+  // 비교 케이블 2곳·방영 48회 이상은 '근거 보통'(추천 기준 3곳엔 못 미치므로 여전히 시험 편성)
+  const midPick = pickHeld([{ key: "보통후보", displayName: "보통후보", vsAvg: 1.11, peers: 2, airings: 468 }, { key: "약한후보", displayName: "약한후보", vsAvg: 1.25, peers: 1, airings: 32 }], [mk("보통후보"), mk("약한후보")]);
+  check("Avail 보유: 2곳·48회 이상은 근거 보통, 1곳·30회대는 근거 약함이며 보통이 먼저 나온다", midPick.map((p) => `${p.name}:${p.evidence}`).join(",") === "보통후보:medium,약한후보:weak", midPick.map((p) => `${p.name}:${p.evidence}`).join(","));
+  const midLabel = heldLabel(midPick[0]);
+  check("Avail 보유: 근거 보통의 표기는 비교 채널 수·방영 횟수와 '근거 보통'을 밝힌다", midLabel.includes("비교 2곳") && midLabel.includes("468회") && midLabel.includes("근거 보통") && !midLabel.includes("근거 약함"), midLabel);
+  const midCopy = buildCardCopy({ ...input, ai: { ...base, remedy: null, change: null, availHeld: [midPick[0]] } });
+  check("홈 문구: 근거 보통만 있으면 '추정 근거가 보통이라 … 시험 편성'으로 적는다", !!midCopy.action?.includes("추정 근거가 보통이라") && !midCopy.action.includes("약해"), midCopy.action ?? "");
 }
 
 // 채널별 인사이트 = 변화 해설(비교·순위·흐름·요일·시간대·타깃층), 목표 대비 진단·조치는 "오늘의 시청률"에만 둔다

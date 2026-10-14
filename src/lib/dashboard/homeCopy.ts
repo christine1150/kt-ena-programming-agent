@@ -127,7 +127,10 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
   const held = heldAll.filter((h) => h.tier !== "test").slice(0, 2);
   const heldTest = heldAll.filter((h) => h.tier === "test").slice(0, 2);
   if (held.length > 0) levers.push({ text: sentence(`보유 콘텐츠 검토 — Avail 보유작 ${held.map(heldLabel).join(", ")}`), positive: false });
-  if (heldTest.length > 0) levers.push({ text: sentence(`테스트 편성 검토 — Avail 보유작 ${heldTest.map(heldLabel).join(", ")}. 추정 근거가 약해 교체 대신 시험 편성으로 확인`), positive: false });
+  if (heldTest.length > 0) {
+    const level = heldTest.every((h) => h.evidence === "medium") ? "보통이라" : "충분하지 않아";
+    levers.push({ text: sentence(`테스트 편성 검토 — Avail 보유작 ${heldTest.map(heldLabel).join(", ")}. 추정 근거가 ${level} 교체 대신 시험 편성으로 확인`), positive: false });
+  }
   if (c && !okChange) {
     const n = c.sampleCount ?? 0;
     levers.push({
