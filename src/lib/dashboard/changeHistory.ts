@@ -21,6 +21,8 @@ export interface PastChange {
   date: string;
   /** 바뀐 뒤 / 바뀌기 전 같은 자리 중앙값의 비 − 1 */
   change: number;
+  /** 내역 정리용 — 이동이면 key=옮긴 프로그램, from/to=이전·이후 자리(요일|시), 교체면 key=새 프로그램, prevKey=이전 프로그램, from=to=그 자리. before/after = 전후 중앙값, beforeN/afterN = 비교 방영 수 */
+  detail?: { key: string; prevKey?: string; from: string; to: string; before: number; after: number; beforeN: number; afterN: number };
 }
 
 export interface ChangeEvidence {
@@ -92,7 +94,8 @@ function detectReplaces(all: HistAiring[]): PastChange[] {
       const before = median(prev.items.slice(-MAX_SEGMENT).map((x) => x.rating));
       const after = median(next.items.slice(0, MAX_SEGMENT).map((x) => x.rating));
       if (before === null || after === null || before <= 0) continue;
-      out.push({ kind: "replace", date: next.items[0].date, change: after / before - 1 });
+      const slot = slotOf(next.items[0]);
+      out.push({ kind: "replace", date: next.items[0].date, change: after / before - 1, detail: { key: next.key, prevKey: prev.key, from: slot, to: slot, before, after, beforeN: Math.min(MAX_SEGMENT, prev.items.length), afterN: Math.min(MAX_SEGMENT, next.items.length) } });
     }
   }
   return out;
@@ -139,7 +142,7 @@ function detectMoves(all: HistAiring[]): PastChange[] {
       const bm = median(before) as number;
       const am = median(after) as number;
       if (bm <= 0) continue;
-      out.push({ kind: "move", date: new Date(m * 86400000).toISOString().slice(0, 10), change: am / bm - 1 });
+      out.push({ kind: "move", date: new Date(m * 86400000).toISOString().slice(0, 10), change: am / bm - 1, detail: { key: list[0].key, from: removed[0], to: added[0], before: bm, after: am, beforeN: before.length, afterN: after.length } });
     }
   }
   return out;

@@ -10,6 +10,7 @@ import { loadChannelRef } from "@/lib/idealSchedule/dataSource";
 import { addDays, isoDow } from "@/lib/idealSchedule/time";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 
+import { retentionLeak } from "./leadInRetention";
 import { detectPastChanges, evidenceLine, summarizeChanges, type ChangeEvidence, type ChangeKind } from "./changeHistory";
 import type { WeakSlotRemedyView } from "./weakSlotView";
 export type WeakSlotRemedy = WeakSlotRemedyView;
@@ -215,6 +216,9 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
     if (pm && pm > 0 && pn >= 3) leadIn = { name: prev.name, dev: prev.rating / pm - 1 };
   }
 
+  // ②-2 앞 프로그램은 보통인데 그 시청자가 이 프로그램으로 이어지지 않는 경우(유지율이 같은 자리 평소보다 크게 낮음) — 앞 프로그램이 낮은 경우(②)와 구분한다
+  const leakCandidate = !w.a.rerun && prev && (!leadIn || leadIn.dev > -0.1) ? retentionLeak(all, w.a, prev, day) : null;
+
   // ③ 채널 전체 동반 하락 — 같은 날 다른 프로그램 중 비교 가능한 것의 과반이 평소보다 15% 이상 낮음
   const others = all.filter((x) => x.date === day && !sameTitle(x.name, focus));
   const otherDevs = others
@@ -249,12 +253,15 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   // 옮길 후보 = 이 자리보다 1.25배 이상 높되 본방 자리(premium) 자체는 아닌 자리 중 가장 높은 곳
   const better = others2.filter((o) => o.med >= med * 1.25 && o.med < med * 3).sort((a, b) => b.med - a.med)[0] ?? null;
 
+  const leak = !holiday && !likelyRerun && !channelWide && !(better && continuing) && !(leadIn && leadIn.dev <= -0.2) ? leakCandidate : null;
+
   // ── 문구 조립: 1줄 = 원인(설명 가능한 외부 요인 우선), 2줄 = 할 일 ──
   let cause: string;
   if (holiday) cause = `${holiday.name} 전후 방영${likelyRerun ? "인 재방 방송분" : ""}이라 다른 날 방영분과 단순 비교가 어렵습니다`;
   else if (likelyRerun) cause = premium ? `${where} 자리는 이 프로그램의 본방 자리(${premium.label}, 보통 시청률 ${fmt(premium.med)})가 아닌 재방 자리로, 같은 자리 보통 시청률은 ${fmt(med)}입니다` : `${where} 재방 방송분으로, 같은 자리 재방 최근 ${sample}회 보통 시청률 ${fmt(med)} 대비 ${fmt(w.a.rating)}입니다`;
   else if (!likelyRerun && leadIn && leadIn.dev <= -0.2 && Math.abs(leadIn.dev) >= Math.abs(w.dev) * 0.5) cause = `앞 프로그램 '${leadIn.name}'도 기준선보다 ▼${pct(leadIn.dev)} 낮아 이어진 하락일 수 있습니다`;
   else if (channelWide) cause = `이 채널 다른 프로그램도 같은 날 대체로 낮아 이 프로그램만의 문제로 보기 어렵습니다`;
+  else if (leak && prev) cause = `앞 프로그램 '${prev.name}'은 보통 수준(${fmt(prev.rating)})인데 그 시청자 중 이 프로그램으로 이어진 비율(유지율)이 ${pct(leak.retention)}로, 같은 자리 최근 ${leak.n}회 중앙값(${pct(leak.typical)})보다 낮습니다`;
   else if (continuing) cause = `같은 자리 최근 ${recent.length + 1}회 중 ${prevBelow + 1}회가 기준선(${fmt(dropLine)}) 아래로, 일시적이 아닌 약세입니다`;
   else cause = `같은 자리 최근 ${sample}회 중 이번 1회만 낮은 단발성 하락으로 보입니다`;
 
@@ -277,6 +284,9 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
     histKind = "move";
   } else if (leadIn && leadIn.dev <= -0.2) {
     action = `앞 프로그램 보강(앞 편성 점검)이 먼저이며, 이 자리는 다음 방영이 ${fmt(dropLine)} 아래일 때 이동·교체 검토`;
+  } else if (leak) {
+    action = `앞 프로그램의 시청자를 이 프로그램이 붙잡지 못하고 있어, 앞 프로그램과 시청층이 맞는 프로그램으로 바꾸거나 앞뒤 편성 순서 조정을 검토`;
+    histKind = "replace";
   } else if (continuing) {
     action = `더 나은 자리가 없고 교체 후보도 못 찾아, 앞뒤 편성 조정이나 방영 시간 이동을 검토`;
     histKind = "move";
@@ -292,6 +302,7 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   else if (likelyRerun) causeBrief = premium ? `재방 방송분이며, 이 프로그램의 본방 자리(${premium.label}, 보통 시청률 ${fmt(premium.med)})보다 낮은 시간대입니다` : "재방 방송분입니다";
   else if (leadIn && leadIn.dev <= -0.2 && Math.abs(leadIn.dev) >= Math.abs(w.dev) * 0.5) causeBrief = `앞 프로그램 '${leadIn.name}'도 기준보다 ${pct(leadIn.dev)} 낮았습니다`;
   else if (channelWide) causeBrief = "같은 날 이 채널 다른 프로그램도 대체로 낮았습니다";
+  else if (leak && prev) causeBrief = `앞 프로그램 '${prev.name}'은 보통 수준(${fmt(prev.rating)})인데 그 시청자 중 이 프로그램으로 이어진 비율(유지율)이 ${pct(leak.retention)}로, 같은 자리 최근 ${leak.n}회 중앙값(${pct(leak.typical)})보다 낮습니다`;
   else if (continuing) causeBrief = `최근 ${recent.length + 1}회 중 ${prevBelow + 1}회가 기준선(${fmt(dropLine)}) 아래입니다`;
   else causeBrief = `최근 ${sample}회 중 이번 한 번만 낮은 일시적 하락으로 보입니다`;
   const times = (r: number) => (r >= 2 ? `${r.toFixed(1)}배` : `${pct(r - 1)} 높은 수준`);
@@ -301,6 +312,7 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   else if (holiday || channelWide) actionBrief = `다음 주 ${DOW_KO[w.a.dow - 1]}요일 방영이 ${fmt(dropLine)} 아래인지 확인한 뒤 판단`;
   else if (better && continuing && !likelyRerun) actionBrief = `이 자리 방송분을 ${better.label}로 옮기거나 합치는 안 검토 — 같은 프로그램이 거기서는 이 자리의 ${times(better.med / med)}이었습니다`;
   else if (leadIn && leadIn.dev <= -0.2) actionBrief = `앞 프로그램 점검이 먼저이며, 이 자리는 다음 방영이 ${fmt(dropLine)} 아래일 때 이동·교체 검토`;
+  else if (leak) actionBrief = "앞 프로그램 시청층과 맞는 프로그램으로 바꾸거나 앞뒤 편성 순서 조정 검토";
   else if (continuing) actionBrief = "더 나은 자리도 교체 후보도 못 찾아, 앞뒤 편성 조정이나 방영 시간 이동 검토";
   else actionBrief = `다음 방영(${DOW_KO[w.a.dow - 1]}요일)이 ${fmt(dropLine)} 아래이면 이동·교체 검토`;
   return { lines: [cause, action], concrete, sample, brief: { cause: causeBrief, action: actionBrief }, hole: { program: w.a.name, hour, ratioPct: Math.round((w.a.rating / med) * 100) }, history };

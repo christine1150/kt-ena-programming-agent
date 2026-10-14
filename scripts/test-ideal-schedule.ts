@@ -28,6 +28,7 @@ import { evidenceOf, MIN_SAMPLE_FOR_REPLACE } from "../src/lib/dashboard/evidenc
 import { buildCardCopy, achievementConsistent, upProgramHeadline, type AiSuggestionPayload } from "../src/lib/dashboard/homeCopy";
 import { baseTitleKey, heldLabel, pickHeld, type HeldTitle } from "../src/lib/dashboard/availHeld";
 import { splitInsightFacts } from "../src/lib/dashboard/insightFacts";
+import { retentionLeak, type LeadAiring } from "../src/lib/dashboard/leadInRetention";
 import { detectPastChanges, evidenceLine, summarizeChanges, type HistAiring } from "../src/lib/dashboard/changeHistory";
 import { classifyOriginals, pickForChannel } from "../src/lib/dashboard/originalClassify";
 
@@ -873,6 +874,26 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   check("홈 문구: 이동 제안 옆에 이 채널의 과거 이동 결과를 근거로 붙인다", !!withHist.basis && withHist.basis.includes("원인은 가리지 않은 단순 비교") && withHist.action === "재방을 월 9시로 옮기는 안 검토 — 같은 프로그램이 거기서는 이 자리의 1.5배였습니다.", JSON.stringify(withHist));
   const otherLead = buildCardCopy({ ...cardIn, ai: { channelCode: "ENA_PLAY", weekStart: "2026-10-19", currentExpected: null, aiExpected: null, change: { weekday: 2, startMin: 14 * 60, from: "가", to: "나", gain: 0.05, certainty: "HIGH", sampleCount: 12, evidence: "ok" }, remedy: { ...rem, concrete: false } } });
   check("홈 문구: 맨 앞 조치가 다른 것(교체안)이면 이동 근거를 붙이지 않는다", otherLead.basis === null, JSON.stringify(otherLead));
+}
+
+// 앞 프로그램 유지율(3단계 구조 레버) — 앞 프로그램은 보통인데 이 프로그램으로 이어지는 비율이 평소보다 크게 낮을 때만 잡는다
+{
+  const mon = "2026-03-02";
+  const d = (w: number, dow: number) => addDaysT(mon, w * 7 + dow - 1);
+  const mk = (w: number, dow: number, h: number, key: string, rating: number): LeadAiring => ({ date: d(w, dow), dow, startMin: h * 60, key, rating });
+  const rows: LeadAiring[] = [];
+  // 화 21시 L(앞, 0.20)·22시 T(0.10) → 유지율 50%가 6주 이어지다가
+  for (let w = 0; w < 6; w++) rows.push(mk(w, 2, 21, "L", 0.2), mk(w, 2, 22, "T", 0.1));
+  // 7주차: 앞은 그대로 0.20인데 T만 0.05(유지율 25%)
+  const lead = mk(6, 2, 21, "L", 0.2);
+  const tgt = mk(6, 2, 22, "T", 0.05);
+  rows.push(lead, tgt);
+  const leak = retentionLeak(rows, tgt, lead, tgt.date);
+  check("유지율: 앞 프로그램은 그대로인데 이어지는 비율이 평소(50%)의 절반(25%)이면 잡는다", !!leak && Math.abs(leak.retention - 0.25) < 1e-9 && Math.abs(leak.typical - 0.5) < 1e-9 && leak.n === 6, JSON.stringify(leak));
+  const okTgt = mk(6, 2, 22, "T", 0.09);
+  check("유지율: 평소의 75% 이상(45%)이면 잡지 않는다", retentionLeak([...rows.slice(0, 12), lead, okTgt], okTgt, lead, okTgt.date) === null);
+  check("유지율: 같은 자리 비교 방영이 3회 미만이면 잡지 않는다", retentionLeak([...rows.slice(8, 12), lead, tgt], tgt, lead, tgt.date) === null);
+  check("유지율: 앞 프로그램이 없으면 잡지 않는다", retentionLeak(rows, tgt, null, tgt.date) === null);
 }
 
 // 채널별 인사이트 = 변화 해설(비교·순위·흐름·요일·시간대·타깃층), 목표 대비 진단·조치는 "오늘의 시청률"에만 둔다
