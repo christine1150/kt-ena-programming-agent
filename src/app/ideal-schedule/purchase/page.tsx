@@ -591,7 +591,7 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
                   >
                     <span className="min-w-0">
                       <span className="text-sm font-medium text-zinc-900">{r.rank}. {i.display_name}</span>
-                      <span className="ml-2 text-xs text-zinc-400">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회{(() => { const ev = recoEvidence(i.peer_count, i.peer_airings) ?? "weak"; return ev === "strong" ? "" : ` · ${RECO_EVIDENCE_KO[ev]}`; })()}</span>
+                      <span className="ml-2 text-xs text-zinc-400">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회{(() => { const ev = recoEvidence(i.peer_count, i.peer_airings) ?? "weak"; return ev === "strong" ? "" : ` · 비교 ${RECO_EVIDENCE_KO[ev]}`; })()}</span>
                       {i.confidence && <span className="ml-2 text-xs text-zinc-400">예측 {CONF_LABEL[i.confidence] ?? i.confidence}</span>}
                     </span>
                     <span className="shrink-0 text-right tabular-nums">
