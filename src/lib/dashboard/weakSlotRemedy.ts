@@ -189,16 +189,17 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   const hour = Math.floor(w.a.startMin / 60);
   const where = `${DOW_KO[w.a.dow - 1]} ${hour}시`;
   if (w.dev === null || w.med === null) {
-    // 문구 기준(2026-10-15): 제목은 카드 제목에 이미 있으므로 되풀이하지 않고(요일도 생략), 오늘 시청률·직전 흐름 같은 현상을 앞에, 표본 상태와 "다음 방영 후 판단"을 뒤에 짧게 적는다(판단 기준은 그대로)
+    // 문구 기준(2026-10-15): 제목은 카드 제목에 이미 있으므로 되풀이하지 않고(요일·시각은 유지), 오늘 시청률·직전 흐름 같은 현상을 앞에, 표본 상태와 "다음 방영 후 판단"을 뒤에 짧게 적는다(판단 기준은 그대로)
     const n = w.prior.length;
+    const when = `${DOW_KO[w.a.dow - 1]}요일 ${hour % 24}시`;
     const fact =
       n === 0
-        ? `${hour % 24}시 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 비교 기록 없음`
+        ? `${when} 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 비교 기록 없음`
         : n < 3
-          ? `${hour % 24}시 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 직전 방영 ${w.prior.slice(0, 3).map(fmt).join("·")}`
+          ? `${when} 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 직전 방영 ${w.prior.slice(0, 3).map(fmt).join("·")}`
           : w.a.rating > 0
-            ? `${hour % 24}시 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 최근 방영은 대체로 0이라 하락 폭을 계산할 수 없음`
-            : `${hour % 24}시 편성은 시청률이 오늘도 같은 자리 최근 방영도 대체로 0이라 하락 폭을 계산할 수 없음`;
+            ? `${when} 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 최근 방영은 대체로 0이라 하락 폭을 계산할 수 없음`
+            : `${when} 편성은 시청률이 오늘도 같은 자리 최근 방영도 대체로 0이라 하락 폭을 계산할 수 없음`;
     const state = n === 0 ? "" : n < 3 ? `비교 ${n}회뿐, ` : `${n}회 방영, `;
     return {
       lines: [`${fact} - ${state}다음 방영 후 판단`],
