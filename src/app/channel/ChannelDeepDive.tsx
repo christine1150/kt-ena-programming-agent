@@ -1986,14 +1986,14 @@ function sortContentFitRows(items: FitScoreItem[]): FitScoreItem[] {
   });
 }
 
-// 콘텐츠 유형 배지(2026-10-15 사용자 요청으로 '균형형' 등 유형 판단을 되살림, fitTypeOf 참고): 슬롯 대비 성과와 시청 규모를 1.0배 기준선으로 나눈 설명이며 판정(강화·유지·관찰…)과는 별개다.
-// 균형형은 "쏠림 없음 = 좋음"으로 읽히지 않게 중립 회색으로 두고 뜻풀이에 좋고 나쁨의 판단이 아님을 적는다.
+// 콘텐츠 유형 배지(2026-10-15 사용자 요청으로 '균형' 등 유형 판단을 되살림, fitTypeOf 참고): 슬롯 대비 성과와 시청 규모를 1.0배 기준선으로 나눈 설명이며 판정(강화·유지·관찰…)과는 별개다.
+// 균형은 "쏠림 없음 = 좋음"으로 읽히지 않게 중립 회색으로 두고 뜻풀이에 좋고 나쁨의 판단이 아님을 적는다.
 const FIT_TYPE_BADGE_STYLE: Record<FitType, string> = {
-  주력형: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200",
-  효율형: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
-  총량형: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
-  균형형: "bg-zinc-50 text-zinc-600 ring-1 ring-inset ring-zinc-200",
-  부진형: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200",
+  주력: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200",
+  효율: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
+  총량: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+  균형: "bg-zinc-50 text-zinc-600 ring-1 ring-inset ring-zinc-200",
+  부진: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200",
 };
 function FitTypeBadge({ type }: { type: FitType | null }) {
   if (!type) return null;
@@ -2003,14 +2003,14 @@ function FitTypeBadge({ type }: { type: FitType | null }) {
     </span>
   );
 }
-// 시청자 유형(대중형·코어형·신규유입형·이탈위험형): 콘텐츠 유형(둥근 알약)과 모양·색 계열을 달리해(각진 칩, 보라·청록 계열) 한눈에 구분한다.
+// 시청자 유형(대중·코어·신규유입·이탈위험): 콘텐츠 유형(둥근 알약)과 모양·색 계열을 달리해(각진 칩, 보라·청록 계열) 한눈에 구분한다.
 const AUDIENCE_ROLE_BADGE_STYLE: Record<"MASS" | "CORE" | "ACQUISITION" | "ZAPPING_RISK", string> = {
   MASS: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200",
   CORE: "bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-200",
   ACQUISITION: "bg-cyan-50 text-cyan-800 ring-1 ring-inset ring-cyan-200",
   ZAPPING_RISK: "bg-fuchsia-50 text-fuchsia-700 ring-1 ring-inset ring-fuchsia-200",
 };
-/** 표의 '유형' 칸 — 펼치지 않아도 콘텐츠 유형(주력형·효율형·총량형·균형형·부진형)과 시청자 유형(대중형 등)을 한 줄로 보여 준다. 정식 판정 구간에만 붙는다. */
+/** 표의 '유형' 칸 — 펼치지 않아도 콘텐츠 유형(주력·효율·총량·균형·부진)과 시청자 유형(대중 등)을 한 줄로 보여 준다. 정식 판정 구간에만 붙는다. */
 function FitChips({ cf }: { cf: ContentFitItem }) {
   const type = fitTypeOf(cf);
   const role = cf.tier === "FORMAL" ? audienceRoleOf(cf) : null;
@@ -3656,10 +3656,10 @@ function buildScheduleRecommendationNote(
 // 붙잡아두는지" 4분류한다(각각 같은 시간대 평균의 1.15배 이상=높음, 0.85배 이하=낮음). 중간대는 억지로 분류하지 않는다(null = 판단 근거 부족).
 type AudienceRole = "MASS" | "CORE" | "ACQUISITION" | "ZAPPING_RISK";
 const AUDIENCE_ROLE_LABEL: Record<AudienceRole, string> = {
-  MASS: "대중형",
-  CORE: "코어형",
-  ACQUISITION: "신규유입형",
-  ZAPPING_RISK: "이탈위험형",
+  MASS: "대중",
+  CORE: "코어",
+  ACQUISITION: "신규유입",
+  ZAPPING_RISK: "이탈위험",
 };
 const AUDIENCE_ROLE_NOTE: Record<AudienceRole, string> = {
   MASS: "도달률·시청시간 비율 모두 같은 시간대 다른 프로그램보다 높습니다 — 널리 보고 오래 봅니다.",

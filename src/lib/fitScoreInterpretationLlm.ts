@@ -22,7 +22,7 @@ export interface FitScoreInterpretationLlmInput {
   trendPct: number | null;
   /** true면 표본이 적어 정식 판정이 아닌 참고용 점수다. */
   isReference: boolean;
-  audienceRoleLabel: string | null; // "대중형" 등, 있으면
+  audienceRoleLabel: string | null; // "대중" 등, 있으면
 }
 
 // 사용자 지시(2026-10-06 예약 작업/2026-10-07): 화면에 영문 지표명·내부 변수명(confidencePct 등)이 나오지 않게 하고 편성 PD가 바로 읽는 한국어 편성 언어로 쓴다.
@@ -47,7 +47,7 @@ export function koreanizeFitText(s: string | null | undefined): string | null {
     .replace(/\bKEEP\b/g, "유지")
     .replace(/\bWATCH\b/g, "관찰")
     .replace(/\bTEST\b/g, "테스트")
-    .replace(/\bMASS\b/g, "대중형");
+    .replace(/\bMASS\b/g, "대중");
 }
 
 function buildSystemPrompt(): string {
