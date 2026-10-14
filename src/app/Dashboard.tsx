@@ -868,6 +868,7 @@ function ActionCopyBlock({ resolved, size }: { resolved: ResolvedAction; size: "
           {copy.action}
         </p>
       )}
+      {copy?.basis && <p className="text-zinc-500">{copy.basis}</p>}
       {copy && copy.more.length > 0 && (
         <div>
           <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="text-[11.5px] font-semibold text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline">

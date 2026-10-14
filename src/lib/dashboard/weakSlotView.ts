@@ -10,4 +10,6 @@ export interface WeakSlotRemedyView {
   brief: { cause: string; action: string };
   /** 이 보완 제안이 가리키는 자리 — 같은 요일·시간대 최근 8회 중앙값 대비 몇 %였나(비교 표본이 모자라면 ratioPct null) */
   hole: { program: string; hour: number; ratioPct: number | null };
+  /** 이 조치와 같은 종류의 과거 변경(이동 또는 교체)이 이 채널에서 그 자리 시청률을 올렸는지 센 결과 한 줄(건수가 부족하면 없음). 원인은 가리지 않은 단순 비교 */
+  history?: { kind: "move" | "replace"; line: string } | null;
 }

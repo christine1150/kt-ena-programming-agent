@@ -28,6 +28,7 @@ import { evidenceOf, MIN_SAMPLE_FOR_REPLACE } from "../src/lib/dashboard/evidenc
 import { buildCardCopy, achievementConsistent, upProgramHeadline, type AiSuggestionPayload } from "../src/lib/dashboard/homeCopy";
 import { baseTitleKey, heldLabel, pickHeld, type HeldTitle } from "../src/lib/dashboard/availHeld";
 import { splitInsightFacts } from "../src/lib/dashboard/insightFacts";
+import { detectPastChanges, evidenceLine, summarizeChanges, type HistAiring } from "../src/lib/dashboard/changeHistory";
 import { classifyOriginals, pickForChannel } from "../src/lib/dashboard/originalClassify";
 
 let passed = 0;
@@ -836,6 +837,42 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   check("Avail 보유: 근거 보통의 표기는 비교 채널 수·방영 횟수와 '근거 보통'을 밝힌다", midLabel.includes("비교 2곳") && midLabel.includes("468회") && midLabel.includes("근거 보통") && !midLabel.includes("근거 약함"), midLabel);
   const midCopy = buildCardCopy({ ...input, ai: { ...base, remedy: null, change: null, availHeld: [midPick[0]] } });
   check("홈 문구: 근거 보통만 있으면 '추정 근거가 보통이라 … 시험 편성'으로 적는다", !!midCopy.action?.includes("추정 근거가 보통이라") && !midCopy.action.includes("약해"), midCopy.action ?? "");
+}
+
+// 과거 편성 변경의 사후 실적(3단계) — 이동·교체를 방영 기록만으로 세고, 건수가 부족하면 근거로 내지 않는다
+{
+  const monday0 = "2026-01-05"; // 월요일
+  const dayOf = (week: number, dow: number) => addDaysT(monday0, week * 7 + dow - 1);
+  const mkAir = (week: number, dow: number, hour: number, key: string, rating: number): HistAiring => ({ date: dayOf(week, dow), dow, startMin: hour * 60, key, rating });
+  const rows: HistAiring[] = [];
+  // 교체: 화 22시 A(0.2) 8주 → B(0.3) 8주 = +50%
+  for (let w = 0; w < 8; w++) rows.push(mkAir(w, 2, 22, "A", 0.2));
+  for (let w = 8; w < 16; w++) rows.push(mkAir(w, 2, 22, "B", 0.3));
+  // 이동: C가 월 21시(0.10) 6주 → 수 21시(0.15) 6주 = +50%
+  for (let w = 0; w < 6; w++) rows.push(mkAir(w, 1, 21, "C", 0.1));
+  for (let w = 6; w < 12; w++) rows.push(mkAir(w, 3, 21, "C", 0.15));
+  // 매일 방영하는 띠 편성 D는 이동으로 세지 않는다
+  for (let w = 0; w < 12; w++) for (let d = 1; d <= 5; d++) rows.push(mkAir(w, d, 10, "D", 0.05));
+  const ch = detectPastChanges(rows, "2026-12-31");
+  const mv = ch.filter((c) => c.kind === "move");
+  const rp = ch.filter((c) => c.kind === "replace" && c.change > 0.4 && c.change < 0.6);
+  check("과거 변경: 한 프로그램이 매주 방영하던 자리를 옮기면 이동 1건으로 세고 전후 시청률 변화를 잰다", mv.length === 1 && Math.abs(mv[0].change - 0.5) < 1e-9, JSON.stringify(mv));
+  check("과거 변경: 같은 자리에서 프로그램이 바뀌면 교체로 세고 전후 시청률 변화를 잰다", rp.length >= 1, JSON.stringify(ch));
+  check("과거 변경: 매일 방영하는 띠 편성은 이동으로 세지 않는다", ch.filter((c) => c.kind === "move").every((c) => Math.abs(c.change - 0.5) < 1e-9));
+  const sum = summarizeChanges([{ kind: "move", date: "2026-01-01", change: 0.3 }, { kind: "move", date: "2026-02-01", change: -0.2 }, { kind: "move", date: "2026-03-01", change: 0.02 }, { kind: "replace", date: "2026-03-01", change: 0.5 }], "move");
+  check("과거 변경: 10% 이상 올랐나·내렸나·비슷한가로 센다", !!sum && sum.n === 3 && sum.up === 1 && sum.down === 1 && sum.flat === 1, JSON.stringify(sum));
+  check("과거 변경: 건수가 3건 미만이면 근거 문구를 내지 않는다", evidenceLine({ kind: "move", n: 2, up: 2, down: 0, flat: 0, medianChange: 0.3 }, "최근 1년") === null && evidenceLine(null, "최근 1년") === null);
+  const line = evidenceLine(sum, "최근 1년") ?? "";
+  check("과거 변경: 근거 문구는 건수·기준(10%)과 '원인은 가리지 않은 단순 비교'를 밝힌다", line.includes("3건 중 1건은") && line.includes("10% 이상 올랐고") && line.includes("원인은 가리지 않은 단순 비교"), line);
+  // 카드 연결: 맨 앞 조치가 이 보완 제안의 조치일 때만 근거를 붙인다
+  const hist = { kind: "move" as const, line };
+  const brief = { cause: "재방 방송분입니다", action: "재방을 월 9시로 옮기는 안 검토 — 같은 프로그램이 거기서는 이 자리의 1.5배였습니다" };
+  const rem = { lines: [], concrete: true, sample: 6, brief, hole: { program: "연애박사", hour: 14, ratioPct: 40 }, history: hist };
+  const cardIn = { achievementPct: 56, rating: 0.017, goalRating: 0.03, priorPct: 37, structural: true, program: null };
+  const withHist = buildCardCopy({ ...cardIn, ai: { channelCode: "ENA_PLAY", weekStart: "2026-10-19", currentExpected: null, aiExpected: null, change: null, remedy: rem } });
+  check("홈 문구: 이동 제안 옆에 이 채널의 과거 이동 결과를 근거로 붙인다", !!withHist.basis && withHist.basis.includes("원인은 가리지 않은 단순 비교") && withHist.action === "재방을 월 9시로 옮기는 안 검토 — 같은 프로그램이 거기서는 이 자리의 1.5배였습니다.", JSON.stringify(withHist));
+  const otherLead = buildCardCopy({ ...cardIn, ai: { channelCode: "ENA_PLAY", weekStart: "2026-10-19", currentExpected: null, aiExpected: null, change: { weekday: 2, startMin: 14 * 60, from: "가", to: "나", gain: 0.05, certainty: "HIGH", sampleCount: 12, evidence: "ok" }, remedy: { ...rem, concrete: false } } });
+  check("홈 문구: 맨 앞 조치가 다른 것(교체안)이면 이동 근거를 붙이지 않는다", otherLead.basis === null, JSON.stringify(otherLead));
 }
 
 // 채널별 인사이트 = 변화 해설(비교·순위·흐름·요일·시간대·타깃층), 목표 대비 진단·조치는 "오늘의 시청률"에만 둔다

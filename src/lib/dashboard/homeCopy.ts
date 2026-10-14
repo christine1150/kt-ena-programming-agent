@@ -52,6 +52,8 @@ export interface CardCopy {
   positive: boolean;
   /** 다른 방법(접어 둔 보조 조치) */
   more: string[];
+  /** 위 조치와 같은 종류의 과거 변경이 이 채널에서 어떻게 됐는지(건수가 모자라거나 조치가 다른 종류면 없음) */
+  basis?: string | null;
 }
 
 const CERT_KO = { HIGH: "높음", MID: "보통", LOW: "낮음" } as const;
@@ -156,5 +158,7 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
   }
   if (levers.length === 0) levers.push({ text: "자사 편성 안에서 근거가 충분한 교체안이 없어 다음 방영 결과를 보고 판단합니다.", positive: false });
 
-  return { headline, cause, action: levers[0].text, positive: levers[0].positive, more: levers.slice(1).map((l) => l.text) };
+  // 과거 변경 근거는 맨 앞 조치가 이 보완 제안의 조치일 때만 붙인다(다른 조치 옆에 엉뚱한 근거가 놓이지 않게)
+  const basis = r?.history?.line && r.brief && levers[0].text === sentence(r.brief.action) ? sentence(r.history.line) : null;
+  return { headline, cause, action: levers[0].text, positive: levers[0].positive, more: levers.slice(1).map((l) => l.text), basis };
 }

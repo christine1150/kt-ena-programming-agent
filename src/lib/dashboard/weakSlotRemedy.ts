@@ -10,11 +10,19 @@ import { loadChannelRef } from "@/lib/idealSchedule/dataSource";
 import { addDays, isoDow } from "@/lib/idealSchedule/time";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 
+import { detectPastChanges, evidenceLine, summarizeChanges, type ChangeEvidence, type ChangeKind } from "./changeHistory";
 import type { WeakSlotRemedyView } from "./weakSlotView";
 export type WeakSlotRemedy = WeakSlotRemedyView;
 
 const DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
 const LOOKBACK_DAYS = 70; // 10주 — 같은 요일 최대 8회 + 여유
+const HISTORY_DAYS = 400; // 과거 변경의 사후 실적을 세는 기간(약 1년 + 변경 전 비교분)
+const HISTORY_TTL_MS = 6 * 60 * 60 * 1000;
+interface HistoryEvidence {
+  move: ChangeEvidence | null;
+  replace: ChangeEvidence | null;
+}
+const historyCache = new Map<string, { at: number; value: HistoryEvidence | null }>();
 const TTL_MS = 60 * 60 * 1000;
 const cache = new Map<string, { at: number; value: WeakSlotRemedy | null }>();
 
@@ -51,16 +59,16 @@ interface Airing {
 const slotKey = (a: Airing) => `${a.dow}|${Math.floor(a.startMin / 60)}|${a.rerun ? "R" : "B"}`;
 const slotLabel = (dow: number, hour: number, rerun: boolean) => `${DOW_KO[dow - 1]} ${hour}시대${rerun ? " 재방" : ""}`;
 
-async function loadAirings(channelId: string, targetId: string, asOfDate: string): Promise<Airing[] | null> {
+async function loadAirings(channelId: string, targetId: string, asOfDate: string, lookbackDays = LOOKBACK_DAYS, maxPages = 8): Promise<Airing[] | null> {
   const out: Airing[] = [];
-  for (let page = 0; page < 8; page++) {
+  for (let page = 0; page < maxPages; page++) {
     const { data, error } = await supabase
       .from("ratings")
       .select("broadcast_date, start_time, rating, is_first_run, programs(canonical_name)")
       .eq("channel_id", channelId)
       .eq("target_id", targetId)
       .eq("source_type", "nielsen_daily")
-      .gte("broadcast_date", addDays(asOfDate, -LOOKBACK_DAYS))
+      .gte("broadcast_date", addDays(asOfDate, -lookbackDays))
       .lte("broadcast_date", asOfDate)
       .not("program_id", "is", null)
       .not("rating", "is", null)
@@ -76,6 +84,20 @@ async function loadAirings(channelId: string, targetId: string, asOfDate: string
     if ((data ?? []).length < 1000) break;
   }
   return out;
+}
+
+/** 이 채널의 과거 1년 편성 변경(이동·교체)이 그 자리 시청률을 올렸는지 센 결과 — 6시간 캐시. 실패하면 null(근거만 빠질 뿐 제안은 그대로). */
+async function loadHistoryEvidence(channelId: string, targetId: string, asOfDate: string): Promise<HistoryEvidence | null> {
+  const key = `${channelId}|${targetId}|${asOfDate}`;
+  const hit = historyCache.get(key);
+  if (hit && Date.now() - hit.at < HISTORY_TTL_MS) return hit.value;
+  const rows = await loadAirings(channelId, targetId, asOfDate, HISTORY_DAYS, 14).catch(() => null);
+  const value = rows ? (() => {
+    const changes = detectPastChanges(rows.map((a) => ({ date: a.date, dow: a.dow, startMin: a.startMin, key: a.key, rating: a.rating })), asOfDate);
+    return { move: summarizeChanges(changes, "move"), replace: summarizeChanges(changes, "replace") };
+  })() : null;
+  historyCache.set(key, { at: Date.now(), value });
+  return value;
 }
 
 /** 같은 프로그램의 같은 자리 비교가 3회 미만이면(편성이 바뀐 지 얼마 안 된 자리) 그 자리를 거쳐 간 모든 프로그램의 최근 8회로 "자리의 평소"를 본다 */
@@ -238,23 +260,32 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
 
   let action: string;
   let concrete = false;
+  // 과거 변경 근거는 조치가 '이동'이면 이동 기록, '이동·교체'면 교체 기록을 붙인다(조치 분기는 바꾸지 않고 종류만 표시)
+  let histKind: ChangeKind | null = null;
   if (better && likelyRerun) {
     action = `같은 프로그램이 ${better.label}에는 보통 시청률 ${fmt(better.med)}(최근 ${better.n}회)로 ${vsSlot(better.med / med)}이었습니다 — 재방을 그 시간대로 옮기는 안을 검토`;
     concrete = true;
+    histKind = "move";
   } else if (likelyRerun && !holiday && !channelWide) {
     action = `이 재방 자리가 계속 기준선 ${fmt(dropLine)} 아래이면 재방 시간대(요일·시각) 변경을 검토`;
+    histKind = "move";
   } else if (holiday || channelWide) {
     action = `다음 주 같은 자리(${DOW_KO[w.a.dow - 1]}요일) 방영이 기준선 ${fmt(dropLine)} 아래인지 확인한 뒤 판단`;
   } else if (better && continuing && !likelyRerun) {
     action = `같은 프로그램이 ${better.label}에는 보통 시청률 ${fmt(better.med)}(최근 ${better.n}회)로 ${vsSlot(better.med / med)}이었습니다 — 이 자리 방송분을 그 시간대로 옮기거나 합치는 안을 검토`;
     concrete = true;
+    histKind = "move";
   } else if (leadIn && leadIn.dev <= -0.2) {
     action = `앞 프로그램 보강(앞 편성 점검)이 먼저이며, 이 자리는 다음 방영이 ${fmt(dropLine)} 아래일 때 이동·교체 검토`;
   } else if (continuing) {
     action = `더 나은 자리가 없고 교체 후보도 못 찾아, 앞뒤 편성 조정이나 방영 시간 이동을 검토`;
+    histKind = "move";
   } else {
     action = `다음 방영(${DOW_KO[w.a.dow - 1]}요일)이 기준선 ${fmt(dropLine)} 아래이면 이동·교체 검토`;
+    histKind = "replace";
   }
+  const hist = histKind ? await loadHistoryEvidence(ch.id, tg.id as string, asOfDate) : null;
+  const history = histKind && hist ? (() => { const line = evidenceLine(hist[histKind], "최근 1년"); return line ? { kind: histKind, line } : null; })() : null;
   // 홈 카드용 문구 — 같은 판단 분기를 그대로 따르되 쉬운 말로 쓰고 비교 기준·수치를 남긴다(판단 기준은 바꾸지 않는다)
   let causeBrief: string;
   if (holiday) causeBrief = `${holiday.name} 전후라 다른 날 방영분과 단순 비교하기 어렵습니다`;
@@ -272,5 +303,5 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   else if (leadIn && leadIn.dev <= -0.2) actionBrief = `앞 프로그램 점검이 먼저이며, 이 자리는 다음 방영이 ${fmt(dropLine)} 아래일 때 이동·교체 검토`;
   else if (continuing) actionBrief = "더 나은 자리도 교체 후보도 못 찾아, 앞뒤 편성 조정이나 방영 시간 이동 검토";
   else actionBrief = `다음 방영(${DOW_KO[w.a.dow - 1]}요일)이 ${fmt(dropLine)} 아래이면 이동·교체 검토`;
-  return { lines: [cause, action], concrete, sample, brief: { cause: causeBrief, action: actionBrief }, hole: { program: w.a.name, hour, ratioPct: Math.round((w.a.rating / med) * 100) } };
+  return { lines: [cause, action], concrete, sample, brief: { cause: causeBrief, action: actionBrief }, hole: { program: w.a.name, hour, ratioPct: Math.round((w.a.rating / med) * 100) }, history };
 }
