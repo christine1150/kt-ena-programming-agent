@@ -1,5 +1,6 @@
 // 콘텐츠 적합도 설명 문구 — 화면·보고서·질의응답이 같은 말을 쓰도록 한 곳에서 만든다(순수 함수).
 // 원칙: 계산된 값만 인용한다(새 숫자를 만들지 않는다). 원인을 단정하지 않고 관찰된 사실과 검토 방향만 말한다.
+
 import { josaEunNeun, josaIga } from "../josa";
 import { CONTENT_FIT_CONFIG } from "./config";
 import type { ContentFitItem, ContentFitTag, Daypart } from "./types";
@@ -104,12 +105,11 @@ export interface ContentFitExplanation {
   trend: string | null;
 }
 
-/** 프로그램 한 줄 해설. name은 화면에 보이는 프로그램 이름. */
-export function explainContentFit(item: ContentFitItem, name: string): ContentFitExplanation {
-  const subj = `'${name}'`;
+/** 프로그램 한 줄 해설. 제목은 표에 이미 보이므로 문장에 되풀이하지 않는다(2026-10-15 사용자 요청) — name은 호환용으로만 받는다. */
+export function explainContentFit(item: ContentFitItem, _name?: string): ContentFitExplanation {
   if (item.tier === "HOLD" || item.slotIndex === null || item.scaleIndex === null) {
     return {
-      headline: `${subj}${josaEunNeun(name)} 방영 ${item.sampleDays}일뿐이라 판단을 보류합니다.`,
+      headline: `방영 ${item.sampleDays}일뿐이라 판단을 보류합니다.`,
       basis: "방영 3일 이상 쌓이면 점수를 계산합니다.",
       trend: null,
     };
@@ -124,7 +124,7 @@ export function explainContentFit(item: ContentFitItem, name: string): ContentFi
     const lean = item.lean === "ABOVE" ? "지금까지는 슬롯 평균보다 높은 흐름" : item.lean === "BELOW" ? "지금까지는 슬롯 평균보다 낮은 흐름" : "지금까지는 슬롯 평균 수준의 흐름";
     const why = item.sampleDays < 8 ? `방영 ${item.sampleDays}일로 표본이 적어` : "방영 시청 규모가 작아";
     return {
-      headline: `${subj}${josaEunNeun(name)} ${why} 참고용입니다 — ${lean}입니다(동시간대 평균 ${L} · 채널 평균 ${A}, 표본이 적어 평균 쪽으로 보정한 값).`,
+      headline: `${why} 참고용입니다 — ${lean}입니다(동시간대 평균 ${L} · 채널 평균 ${A}, 표본이 적어 평균 쪽으로 보정한 값).`,
       basis,
       trend,
     };
@@ -132,13 +132,13 @@ export function explainContentFit(item: ContentFitItem, name: string): ContentFi
   const pctOfSlot = Math.round(item.slotIndex * 100);
   switch (item.tag as ContentFitTag) {
     case "STRENGTHEN":
-      return { headline: `${subj}${josaIga(name)} ${base}로 뚜렷하게 앞서 있어, 노출 확대나 더 좋은 시간대 편성을 검토할 만합니다.`, basis, trend };
+      return { headline: `${base}로 뚜렷하게 앞서 있어, 노출 확대나 더 좋은 시간대 편성을 검토할 만합니다.`, basis, trend };
     case "KEEP":
       return {
         headline:
           item.slotIndex >= 1
-            ? `${subj}${josaIga(name)} ${base}로 같은 자리 기대 수준 이상이라 현재 편성을 유지해도 됩니다.`
-            : `${subj}${josaIga(name)} ${base}로 같은 자리의 평균 수준이라 현재 편성을 유지해도 됩니다.`,
+            ? `${base}로 같은 자리 기대 수준 이상이라 현재 편성을 유지해도 됩니다.`
+            : `${base}로 같은 자리의 평균 수준이라 현재 편성을 유지해도 됩니다.`,
         basis,
         trend,
       };
@@ -146,25 +146,25 @@ export function explainContentFit(item: ContentFitItem, name: string): ContentFi
       return {
         headline:
           item.slotIndex >= 0.85
-            ? `${subj}${josaEunNeun(name)} ${base}로 아직 기대 수준이지만 최근 하락이 보여 다음 몇 주를 지켜볼 만합니다.`
-            : `${subj}${josaEunNeun(name)} ${base}(동시간대 평균의 ${pctOfSlot}%)로 기대에 못 미쳐 다음 몇 주를 지켜볼 만합니다.`,
+            ? `${base}로 아직 기대 수준이지만 최근 하락이 보여 다음 몇 주를 지켜볼 만합니다.`
+            : `${base}(동시간대 평균의 ${pctOfSlot}%)로 기대에 못 미쳐 다음 몇 주를 지켜볼 만합니다.`,
         basis,
         trend,
       };
     case "MOVE":
       return {
-        headline: `${subj}${josaEunNeun(name)} ${base}(평균의 ${pctOfSlot}%)로 낮은 편이지만, ${item.moveTo ? DAYPART_KO[item.moveTo] : "다른 시간대"}에서는 평균 이상을 냈습니다 — 그 시간대로 옮기는 것을 검토할 만합니다.`,
+        headline: `${base}(평균의 ${pctOfSlot}%)로 낮은 편이지만, ${item.moveTo ? DAYPART_KO[item.moveTo] : "다른 시간대"}에서는 평균 이상을 냈습니다 — 그 시간대로 옮기는 것을 검토할 만합니다.`,
         basis,
         trend,
       };
     case "REPLACE":
       return {
-        headline: `${subj}${josaEunNeun(name)} ${base}(동시간대 평균의 ${pctOfSlot}%)로 기대에 크게 못 미칩니다 — 교체 또는 시간대 변경을 검토할 만합니다.`,
+        headline: `${base}(동시간대 평균의 ${pctOfSlot}%)로 기대에 크게 못 미칩니다 — 교체 또는 시간대 변경을 검토할 만합니다.`,
         basis,
         trend,
       };
     default:
-      return { headline: `${subj}의 판정 근거를 계산하지 못했습니다.`, basis, trend };
+      return { headline: "판정 근거를 계산하지 못했습니다.", basis, trend };
   }
 }
 

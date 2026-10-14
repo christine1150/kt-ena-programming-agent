@@ -239,7 +239,7 @@ const itemOf = (res: ReturnType<typeof run>, id: string): ContentFitItem => res.
     const e = explainContentFit(itemOf(res, id), names[id]);
     return `${e.headline} ${e.basis} ${e.trend ?? ""}`;
   });
-  check("설명: 프로그램 이름과 배수가 들어가고 조사가 맞는다('가'/'는')", texts[0].includes("'신병4사보타주'가") && texts[0].includes("배") && texts[2].includes("'곽준빈의세계기사식당2'는"), texts[0]);
+  check("설명: 제목은 표에 이미 있으므로 문장에 되풀이하지 않고, 동시간대 평균 배수부터 시작한다", texts.every((t, i) => !t.includes(names[(["LONG", "NEW", "BAD", "ONE"] as const)[i]])) && texts[0].startsWith("동시간대 평균") && texts[0].includes("배"), texts[0]);
   check("설명: 표본 적음은 '참고용'이라고 밝히고, 보류는 '보류'라고 말한다", texts[1].includes("참고용") && texts[3].includes("보류"), texts[1]);
   check("설명: 교체 검토 문구에 원인 단정 표현이 없다('때문에'·'탓')", !texts.some((t) => /때문에|탓|밀려|원인은/.test(t)), texts.join(" | "));
   check("설명: 화면 문구 규칙(용어·내부 이름) 위반 0건", texts.every((t) => findWordingIssues(t).length === 0), texts.map((t) => findWordingIssues(t).map((i) => i.rule).join(",")).join(" | "));

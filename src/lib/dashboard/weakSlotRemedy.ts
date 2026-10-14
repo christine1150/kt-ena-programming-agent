@@ -189,12 +189,22 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   const hour = Math.floor(w.a.startMin / 60);
   const where = `${DOW_KO[w.a.dow - 1]} ${hour}시`;
   if (w.dev === null || w.med === null) {
-    const basis = w.prior.length === 0 ? "같은 자리에서 비교할 지난 방영 기록이 없어" : `같은 자리 비교 방영이 ${w.prior.length}회뿐이라`;
+    // 문구 기준(2026-10-15): 제목은 카드 제목에 이미 있으므로 되풀이하지 않고(요일도 생략), 오늘 시청률·직전 흐름 같은 현상을 앞에, 표본 상태와 "다음 방영 후 판단"을 뒤에 짧게 적는다(판단 기준은 그대로)
+    const n = w.prior.length;
+    const fact =
+      n === 0
+        ? `${hour % 24}시 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 비교 기록 없음`
+        : n < 3
+          ? `${hour % 24}시 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 직전 방영 ${w.prior.slice(0, 3).map(fmt).join("·")}`
+          : w.a.rating > 0
+            ? `${hour % 24}시 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 최근 방영은 대체로 0이라 하락 폭을 계산할 수 없음`
+            : `${hour % 24}시 편성은 시청률이 오늘도 같은 자리 최근 방영도 대체로 0이라 하락 폭을 계산할 수 없음`;
+    const state = n === 0 ? "" : n < 3 ? `비교 ${n}회뿐, ` : `${n}회 방영, `;
     return {
-      lines: [`'${focus}' ${where} 자리는 ${basis} 원인을 가르기 어렵습니다 — 다음 방영 확인 후 판단`],
+      lines: [`${fact} - ${state}다음 방영 후 판단`],
       concrete: false,
-      sample: w.prior.length,
-      brief: { cause: `같은 자리 비교 방영이 ${w.prior.length}회뿐이라 원인을 가르기 어렵습니다`, action: "다음 방영 결과를 확인한 뒤 판단" },
+      sample: n,
+      brief: { cause: fact, action: `${state}다음 방영 후 판단` },
       hole: { program: w.a.name, hour, ratioPct: null },
     };
   }

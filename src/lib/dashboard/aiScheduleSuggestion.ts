@@ -274,7 +274,7 @@ export async function computeAiSuggestion(channelCode: string, asOfDate: string,
   } catch {
     return computeAiSuggestionUncached(channelCode, asOfDate, focus);
   }
-  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v7", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
+  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v8", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
   return r.value;
 }
 
