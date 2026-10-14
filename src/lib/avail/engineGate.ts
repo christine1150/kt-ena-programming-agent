@@ -39,6 +39,16 @@ export interface RightsGateResult {
   message: string | null;
 }
 
+/** 권리 판정 결과를 바꿀 수 있는 상태의 지문(저장해 둔 계산 결과의 키에 넣는다): 권리 목록 버전·해석 확인·연결·확인·보충 속성 개수 */
+export async function rightsFingerprint(): Promise<string> {
+  if (!isFeatureOn("rights_gate")) return "off";
+  const loaded = await loadAvailStateCached();
+  if (!loaded.available || loaded.state.revisions.length === 0) return "none";
+  const { ctx } = buildEvalContext(loaded.state, { now: new Date().toISOString() });
+  const st = loaded.state;
+  return [ctx.inventoryVersion, JSON.stringify(st.interpretationConfirmations), st.links.length, st.confirmations.length, st.addenda.length].join("|");
+}
+
 export async function buildRightsGate(channelCode: string, weekStart: string, mode: SelectorMode): Promise<RightsGateResult> {
   if (!isFeatureOn("rights_gate")) return { gate: null, status: "not_configured", message: "권리 판정이 꺼져 있습니다(FEATURE_RIGHTS_GATE=off)." };
   try {

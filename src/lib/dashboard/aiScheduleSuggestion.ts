@@ -8,6 +8,11 @@ import { addDays, isoDow } from "@/lib/idealSchedule/time";
 import { loadChannelRef } from "@/lib/idealSchedule/dataSource";
 import { exclusionFingerprint, loadActiveExclusions } from "@/lib/idealSchedule/exclusions";
 import { supabase } from "@/lib/supabase";
+import { isFeatureOn } from "@/lib/featureFlags";
+import { rightsFingerprint } from "@/lib/avail/engineGate";
+import { loadIdealScheduleConfig } from "@/lib/idealSchedule/configStore";
+import { llmCacheKey, type CacheDb } from "@/lib/llmTextCacheCore";
+import { cachedJson } from "@/lib/idealSchedule/suggestionCacheCore";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { computeWeakSlotRemedy, type WeakSlotRemedy } from "./weakSlotRemedy";
 
@@ -201,7 +206,46 @@ function pickDetail(details: ReplaceDetail[], weekday: number, focus: string | n
 
 /** 홈 채널 타일용 — focus(약해진 프로그램)가 있으면 그 프로그램 자리, 없으면 기준일과 같은 요일 칸 중 개선폭이 가장 큰 한 칸.
  *  사용자 지시(2026-10-07): 약한 곳을 못 찾겠으면 검색 범위를 최대 6개월(180일)까지 넓혀서라도 대체 편성을 찾는다 → 기본 범위에서 못 찾을 때만 한 번 더 넓혀 계산한다. */
+// 같은 기준일·채널·입력이면 다른 사람·새로고침·다른 서버에서도 다시 계산하지 않고 저장해 둔 결과를 쓴다(기존 캐시 테이블, 마이그레이션 없음).
+// 키에는 결과를 바꿀 수 있는 입력의 지문(제외 편성·권리 상태·채널 설정·가장 최근 닐슨 업로드 시각·기능 끄개)이 들어가 입력이 바뀌면 자동으로 새로 계산한다.
+// 지문에 못 넣는 변화(예: 장르표 수정)는 6시간 TTL로 제한한다. 지문을 만들지 못하거나 저장소가 실패하면 평소처럼 계산한다.
+const SUGGESTION_CACHE_VERSION = "v1";
+const SUGGESTION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+async function suggestionFingerprint(channelCode: string, asOfDate: string, focus: string | null): Promise<unknown> {
+  const ch = await loadChannelRef(channelCode);
+  const [excl, rights, cfg, up] = await Promise.all([
+    loadActiveExclusions(ch.id, nextMondayAfter(asOfDate)),
+    rightsFingerprint(),
+    loadIdealScheduleConfig(ch.id),
+    supabase.from("file_uploads").select("uploaded_at").eq("file_type", "nielsen_daily").eq("status", "processed").order("uploaded_at", { ascending: false }).limit(1),
+  ]);
+  return {
+    v: SUGGESTION_CACHE_VERSION,
+    channelCode,
+    asOfDate,
+    focus,
+    excl: exclusionFingerprint(excl),
+    rights,
+    cfg: llmCacheKey("cfg", cfg),
+    upload: (up.data?.[0] as { uploaded_at?: string } | undefined)?.uploaded_at ?? null,
+    flags: [isFeatureOn("series_link"), isFeatureOn("rights_gate")],
+  };
+}
+
 export async function computeAiSuggestion(channelCode: string, asOfDate: string, focus: string | null = null): Promise<AiSuggestion> {
+  if (!isFeatureOn("ai_suggestion_cache")) return computeAiSuggestionUncached(channelCode, asOfDate, focus);
+  let fp: unknown;
+  try {
+    fp = await suggestionFingerprint(channelCode, asOfDate, focus);
+  } catch {
+    return computeAiSuggestionUncached(channelCode, asOfDate, focus);
+  }
+  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v1", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
+  return r.value;
+}
+
+async function computeAiSuggestionUncached(channelCode: string, asOfDate: string, focus: string | null): Promise<AiSuggestion> {
   // 사용자 지시(2026-10-07): "오늘은 화요일인데 AI는 토요일·금요일 편성 변경을 말하고 있다 — 제안이 있으면 해당 요일의 편성에 대해서" → 기준일과 같은 요일 칸만 후보로 쓴다.
   const weekday = isoDow(asOfDate);
   // 기본 범위에서 못 찾으면 180일로 다시 계산한다 — 그 두 번째 계산의 읽기(DB 대기)를 기다리지 않도록 처음부터 함께 시작해 둔다(결과는 같다).

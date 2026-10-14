@@ -847,6 +847,34 @@ async function main() {
     check("memoTtl: 키가 다르면 따로 읽고 clearMemo로 비운다", (await memoTtl("other", 100, f, now)) !== a && (clearMemo(), (await memoTtl("k", 100, f, now)) > 2));
   }
 
+  // ── 계산 결과 저장(suggestionCacheCore): 다른 사람·새로고침·다른 서버에서도 다시 계산하지 않는다 ──
+  {
+    const { FakeDb } = await import("./lib/fakeSupabase");
+    const { cachedJson } = await import("../src/lib/idealSchedule/suggestionCacheCore");
+    const cdb = new FakeDb() as unknown as Parameters<typeof cachedJson>[0];
+    let computes = 0;
+    let clock = 1_000_000;
+    const now = () => clock;
+    const make = (v: string) => async () => ({ v, n: ++computes });
+    const fp = { v: "v1", channel: "ENA", upload: "2026-10-13T00:00:00Z", rights: "abc" };
+    const a = await cachedJson(cdb, "ai_suggestion:v1", "2026-10-13", fp, 1000, make("첫 계산"), now);
+    const b = await cachedJson(cdb, "ai_suggestion:v1", "2026-10-13", fp, 1000, make("다른 계산"), now);
+    check("계산 결과 저장: 같은 입력의 두 번째 호출(다른 서버 인스턴스처럼 새 호출)은 다시 계산하지 않고 저장된 결과를 쓴다", !a.hit && b.hit && computes === 1 && JSON.stringify(a.value) === JSON.stringify(b.value));
+    const c = await cachedJson(cdb, "ai_suggestion:v1", "2026-10-13", { ...fp, upload: "2026-10-14T00:00:00Z" }, 1000, make("새 업로드"), now);
+    const d = await cachedJson(cdb, "ai_suggestion:v1", "2026-10-13", { ...fp, rights: "xyz" }, 1000, make("권리 변경"), now);
+    check("계산 결과 저장: 업로드 시각·권리 상태 같은 입력이 바뀌면 키가 달라져 새로 계산한다", !c.hit && !d.hit && computes === 3);
+    clock += 2000;
+    const e = await cachedJson(cdb, "ai_suggestion:v1", "2026-10-13", fp, 1000, make("TTL 지남"), now);
+    check("계산 결과 저장: TTL이 지나면 저장된 결과가 있어도 다시 계산한다", !e.hit && computes === 4);
+    let threw = false;
+    try { await cachedJson(cdb, "ai_suggestion:v1", "2026-10-13", { x: "실패" }, 1000, async () => { throw new Error("계산 실패"); }, now); } catch { threw = true; }
+    const f = await cachedJson(cdb, "ai_suggestion:v1", "2026-10-13", { x: "실패" }, 1000, make("재시도"), now);
+    check("계산 결과 저장: 계산이 실패하면 저장하지 않아 다음 호출이 다시 시도한다", threw && !f.hit);
+    const brokenDb = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => Promise.reject(new Error("DB 오류")) }) }), upsert: () => Promise.reject(new Error("DB 오류")) }) } as unknown as Parameters<typeof cachedJson>[0];
+    const g = await cachedJson(brokenDb, "ai_suggestion:v1", null, fp, 1000, make("저장소 장애"), now);
+    check("계산 결과 저장: 저장소 조회·저장이 실패해도 그냥 계산해서 돌려준다(가속 장치일 뿐)", !g.hit && g.value.v === "저장소 장애");
+  }
+
   // ── 슬롯 게이트: 달력 날짜 묶음 캐시가 정밀 계산과 같은 답을 낸다(AI 탐색 속도, 실측 3초→33초 회귀 방지) ──
   {
     const gEnd = grant({ id: "GE", title: "경계 시리즈", start: "2026-10-01", end: "2026-10-07", channels: ["ENA"], count: "unbounded" });
