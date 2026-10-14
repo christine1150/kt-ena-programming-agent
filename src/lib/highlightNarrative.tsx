@@ -25,7 +25,7 @@ const DOWN_HINT_RE = /▼|하락|감소/;
  * 줄글 문장 하나(또는 여러 문장을 이어붙인 문단)에서 등락 수치·방향 단어만 굵게+색으로 강조한
  * React 노드 배열을 돌려준다. 문장 자체는 한 글자도 바꾸지 않는다 — split/강조만 한다.
  */
-export function highlightNarrativeText(text: string, upColor: string, downColor: string): ReactNode[] {
+export function highlightNarrativeText(text: string, upColor: string, downColor: string, weight: 600 | 700 = 700): ReactNode[] {
   const nodes: ReactNode[] = [];
   let lastIndex = 0;
   let key = 0;
@@ -37,7 +37,7 @@ export function highlightNarrativeText(text: string, upColor: string, downColor:
     const chunk = match[0];
     const color = UP_HINT_RE.test(chunk) ? upColor : DOWN_HINT_RE.test(chunk) ? downColor : undefined;
     nodes.push(
-      <b key={key++} style={color ? { color, fontWeight: 700 } : { fontWeight: 700 }}>
+      <b key={key++} style={color ? { color, fontWeight: weight } : { fontWeight: weight }}>
         {chunk}
       </b>
     );

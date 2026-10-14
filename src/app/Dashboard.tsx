@@ -853,7 +853,7 @@ function ActionCopyBlock({ resolved, size }: { resolved: ResolvedAction; size: "
   const base = size === "hero" ? "text-[13px]" : size === "list" ? "text-[13.5px]" : "text-[11.5px]";
   return (
     <div className={`mt-2 flex flex-col gap-1 ${base} leading-snug`}>
-      {copy?.headline && <p className="font-bold text-zinc-900">{copy.headline}</p>}
+      {copy?.headline && <p className="font-semibold text-zinc-900">{copy.headline}</p>}
       {line && !(copy?.headline && line === "전반적 시청 흐름 약세로 순위 하락") && (
         <p className="flex flex-wrap items-center gap-1.5 font-medium" style={{ color: actionColor(kind, false) }} title={line}>
           {line}
@@ -864,7 +864,7 @@ function ActionCopyBlock({ resolved, size }: { resolved: ResolvedAction; size: "
       {copy?.cause && <p className="text-zinc-600">{copy.cause}</p>}
       {copy?.action && (
         <p className="font-medium" style={{ color: copy.positive ? ACTION_BLUE : ACTION_BLACK }}>
-          <span className="mr-1 font-bold text-zinc-400">조치</span>
+          <span className="mr-1.5 text-[0.85em] font-medium text-zinc-500">조치</span>
           {copy.action}
         </p>
       )}
@@ -1278,7 +1278,7 @@ function RankPair({
     return (
       // 사용자 지시(2026-10-07): "경쟁군 목표 2위"라고 길게 적지 말고 다른 채널처럼 괄호 안에 (오늘/목표)로 — 목표 2위는 경쟁채널 중 순위라 마우스 오버로 풀어 준다.
       <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`} title={`오늘 시장 순위 ${todayRank ?? "-"}위 / 목표: 경쟁채널 중 ${targetRankNum ?? "-"}위`}>
-        (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>
+        (<span className="font-semibold text-zinc-900">{todayRank ?? "-"}</span>
         <span className="font-medium">/{targetRankNum ?? "-"}</span>)
         {baselineAvgRank !== null && baselineAvgRank !== undefined && <span className="ml-1 text-xs font-normal text-zinc-500" title="최근 4주 평균 순위">{Math.round(baselineAvgRank)}위</span>}
       </span>
@@ -1286,7 +1286,7 @@ function RankPair({
   }
   return (
     <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`}>
-      (<span className="font-bold text-zinc-900">{todayRank ?? "-"}</span>
+      (<span className="font-semibold text-zinc-900">{todayRank ?? "-"}</span>
       <span className="font-medium">/{targetRankNum ?? "-"}</span>)
       {baselineAvgRank !== null && baselineAvgRank !== undefined && (
         <span className="ml-1 text-xs font-normal text-zinc-500" title="최근 4주 평균 순위">{Math.round(baselineAvgRank)}위</span>
@@ -1506,7 +1506,7 @@ function RankChangeIndicator({ rankChangeDod }: { rankChangeDod: number | null }
   }
   const improved = rankChangeDod > 0; // 순위 숫자가 작아짐 = 개선
   return (
-    <span className="inline-flex items-center gap-0.5 text-xs font-bold tabular-nums" style={{ color: improved ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR }}>
+    <span className="inline-flex items-center gap-0.5 text-xs font-semibold tabular-nums" style={{ color: improved ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR }}>
       {improved ? "▲" : "▼"} {improved ? `+${rankChangeDod}` : rankChangeDod}
     </span>
   );
@@ -2167,7 +2167,7 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
           {insights.map((line, i) => (
             <li key={i} className="text-[13px] leading-relaxed text-amber-800">
               ·{" "}
-              {colorizeChannelNamesInNodes(highlightNarrativeText(line, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR), themeColorByCode)}
+              {colorizeChannelNamesInNodes(highlightNarrativeText(line, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR, 600), themeColorByCode)}
             </li>
           ))}
         </ul>
@@ -2499,7 +2499,7 @@ function WeeklyReviewCard({ review, themeColorByCode }: { review: WeeklyReview; 
           {insights.map((line, i) => (
             <li key={i} className="text-[13px] leading-relaxed text-amber-800">
               ·{" "}
-              {colorizeChannelNamesInNodes(highlightNarrativeText(line, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR), themeColorByCode)}
+              {colorizeChannelNamesInNodes(highlightNarrativeText(line, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR, 600), themeColorByCode)}
             </li>
           ))}
         </ul>
@@ -4182,7 +4182,7 @@ function OriginalContentReportCard({
                   const summaryNode = pdSummary
                     ? highlightChannelNames(pdSummary, channelColors)
                     : h.schedulingInsight
-                      ? highlightNarrativeText(h.schedulingInsight, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)
+                      ? highlightNarrativeText(h.schedulingInsight, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR, 600)
                       : null;
                   const changeColor = (v: number) => (v >= 0 ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR);
                   const hasImmersion = h.matched_share !== null || h.matched_time_spent_seconds !== null || h.matched_time_spent_share !== null || h.matched_reach !== null;
@@ -4223,7 +4223,7 @@ function OriginalContentReportCard({
                           {pdDetails.length > 0 ? (
                             pdDetails.map((block, i) => (
                               <div key={i} className="border-t border-zinc-200/70 pt-3">
-                                <p className="text-[11px] font-bold text-zinc-500">{block.label}</p>
+                                <p className="text-[11px] font-medium text-zinc-500">{block.label}</p>
                                 <p className="mt-0.5 text-[13.5px] leading-relaxed text-zinc-700">{highlightChannelNames(block.text, channelColors)}</p>
                               </div>
                             ))
@@ -4231,7 +4231,7 @@ function OriginalContentReportCard({
                             !pdSummary && h.schedulingInsight === null && insight.schedulingNote.length > 0 && (
                               <div className="border-t border-zinc-200/70 pt-3">
                                 {insight.schedulingNote.map((note, i) => (
-                                  <p key={i} className="text-[13.5px] leading-relaxed text-zinc-700">{highlightNarrativeText(note, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}</p>
+                                  <p key={i} className="text-[13.5px] leading-relaxed text-zinc-700">{highlightNarrativeText(note, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR, 600)}</p>
                                 ))}
                               </div>
                             )
@@ -4284,8 +4284,8 @@ function OriginalContentReportCard({
                           {/* 2049가 주 타깃인 채널에서 가구는 참고 값 — 이 패널에서만 보여 준다 */}
                           {is2049Channel && h.matched_household_rating !== null && (
                             <p className="text-[13px] text-zinc-600">
-                              <span className="text-[11px] font-bold text-zinc-500">가구 시청률(참고)</span>{" "}
-                              <span className="text-[16px] font-bold tabular-nums text-zinc-800">{formatRating(h.matched_household_rating, h.broadcast_channel_code)}</span>
+                              <span className="text-[11px] font-medium text-zinc-500">가구 시청률(참고)</span>{" "}
+                              <span className="text-[16px] font-semibold tabular-nums text-zinc-800">{formatRating(h.matched_household_rating, h.broadcast_channel_code)}</span>
                             </p>
                           )}
                           {(peak || trough) && (
@@ -4297,13 +4297,13 @@ function OriginalContentReportCard({
                           )}
                           {ages.length > 0 && (
                             <div>
-                              <p className="text-[11px] font-bold text-zinc-500">연령대별 시청률 상위(참고)</p>
+                              <p className="text-[11px] font-medium text-zinc-500">연령대별 시청률 상위(참고)</p>
                               <div className="mt-1.5 space-y-1.5">
                                 {ages.map((a) => (
                                   <div key={a.label} className="flex items-center gap-2">
                                     <span className="w-14 shrink-0 truncate text-[12px] text-zinc-600" title={a.label}>{shortAgeGenderLabel(a.label)}</span>
                                     <span className="h-1.5 min-w-[2px] rounded-full" style={{ width: `${ageMax > 0 ? (a.rating / ageMax) * 52 : 0}%`, backgroundColor: accent, opacity: 0.55 }} />
-                                    <span className="shrink-0 text-[12px] font-semibold tabular-nums text-zinc-700">{formatRating(a.rating, h.broadcast_channel_code)}</span>
+                                    <span className="shrink-0 text-[12px] font-medium tabular-nums text-zinc-700">{formatRating(a.rating, h.broadcast_channel_code)}</span>
                                   </div>
                                 ))}
                               </div>
@@ -4311,14 +4311,14 @@ function OriginalContentReportCard({
                           )}
                           {h.competitorHighlights.length > 0 && (
                             <div>
-                              <p className="text-[11px] font-bold text-zinc-500">동시간대 경쟁 프로그램</p>
+                              <p className="text-[11px] font-medium text-zinc-500">동시간대 경쟁 프로그램</p>
                               <div className="mt-1 flex flex-col">
                                 {h.competitorHighlights.slice(0, 3).map((c, i) => (
                                   <div key={i} className={`flex items-baseline gap-2 py-1.5 ${i > 0 ? "border-t border-zinc-200/70" : ""}`} title={`${c.competitor_name} · ${fmtTimeKorean(c.competitor_start_time)} · ${c.competitor_program_name}`}>
                                     <span className="min-w-0 flex-1 truncate text-[12.5px] text-zinc-600">
                                       <b style={{ color: channelBrandSolid(c.competitor_name) ?? "#52525b" }}>{c.competitor_name}</b> {c.competitor_program_name}
                                     </span>
-                                    <span className="shrink-0 text-[12.5px] font-semibold tabular-nums text-zinc-700">{formatRating(c.competitor_rating)}</span>
+                                    <span className="shrink-0 text-[12.5px] font-medium tabular-nums text-zinc-700">{formatRating(c.competitor_rating)}</span>
                                   </div>
                                 ))}
                               </div>
@@ -4328,7 +4328,7 @@ function OriginalContentReportCard({
                         <div className="min-w-0">
                           {h.ratingHistory && (
                             <>
-                              <p className="text-[11px] font-bold text-zinc-500">회차별 추이</p>
+                              <p className="text-[11px] font-medium text-zinc-500">회차별 추이</p>
                               <ProgramRatingHistoryChart history={h.ratingHistory} accentColor={accent} ownChannelName={broadcastChannelName} themeColorByCode={themeColorByCode} />
                             </>
                           )}
@@ -4343,14 +4343,14 @@ function OriginalContentReportCard({
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
                         <h3 className="font-heading text-[22px] font-bold leading-tight tracking-tight text-zinc-900">{h.featured_display_name ?? h.matched_program_name}</h3>
-                        {h.episode_number !== null && <span className="text-[16px] font-semibold tabular-nums text-zinc-500">{h.episode_number}회</span>}
+                        {h.episode_number !== null && <span className="text-[16px] font-medium tabular-nums text-zinc-500">{h.episode_number}회</span>}
                       </div>
                       <p className="mt-1 truncate whitespace-nowrap text-[12.5px] leading-snug text-zinc-600">
-                        <span className="font-semibold" style={{ color: accent }}>{broadcastChannelName}</span> · {fmtTimeKorean(h.matched_start_time)}
+                        <span className="font-medium" style={{ color: accent }}>{broadcastChannelName}</span> · {fmtTimeKorean(h.matched_start_time)}
                         {headline?.rankText && (
                           <>
                             {" "}
-                            · <span className="font-bold text-zinc-800">{headline.rankText}</span>
+                            · <span className="font-semibold text-zinc-800">{headline.rankText}</span>
                           </>
                         )}
                       </p>
@@ -4373,8 +4373,8 @@ function OriginalContentReportCard({
                       </p>
                       {secondKpi && (
                         <p className="mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[13px]" style={{ color: brandText(themeColorByCode.get(secondKpi.channelCode) ?? UNBRANDED_CHANNEL_COLOR) }}>
-                          <span className="whitespace-nowrap font-semibold">{secondKpi.labelPrefix}</span>
-                          <span className="whitespace-nowrap font-semibold">{CHANNEL_NAME_BY_CODE[secondKpi.channelCode] ?? secondKpi.channelCode}</span>
+                          <span className="whitespace-nowrap font-medium">{secondKpi.labelPrefix}</span>
+                          <span className="whitespace-nowrap font-medium">{CHANNEL_NAME_BY_CODE[secondKpi.channelCode] ?? secondKpi.channelCode}</span>
                           {secondKpi.time && <span className="whitespace-nowrap text-zinc-600">{fmtTimeKorean(secondKpi.time)}</span>}
                           <b className="whitespace-nowrap text-[18px] tabular-nums">{formatRating(secondKpi.rating, h.broadcast_channel_code)}</b>
                           {secondKpi.note && <span className="whitespace-nowrap text-[12px] text-zinc-500">{secondKpi.note}</span>}
@@ -4385,12 +4385,12 @@ function OriginalContentReportCard({
                       <p className={REPORT_EYEBROW}>최근 성적 대비</p>
                       {recent.deltaPctVs4 !== null && recent.prevAvg4 !== null ? (
                         <>
-                          <p className="mt-1.5 whitespace-nowrap text-[22px] font-bold tabular-nums" style={{ color: changeColor(recent.deltaPctVs4) }}>
+                          <p className="mt-1.5 whitespace-nowrap text-[22px] font-semibold tabular-nums" style={{ color: changeColor(recent.deltaPctVs4) }}>
                             {recent.deltaPctVs4 >= 0 ? "▲" : "▼"} {Math.abs(recent.deltaPctVs4).toFixed(1)}%
                           </p>
                           <p className="mt-1 text-[12px] tabular-nums text-zinc-600">
                             {recent.mode === "slot" ? `동시간대 최근 ${recent.sampleCount}주 평균` : `직전 ${recent.sampleCount}회 평균`}{" "}
-                            <span className="whitespace-nowrap font-semibold">{formatRating(recent.prevAvg4, h.broadcast_channel_code)}</span>
+                            <span className="whitespace-nowrap font-medium">{formatRating(recent.prevAvg4, h.broadcast_channel_code)}</span>
                           </p>
                         </>
                       ) : (
@@ -4402,16 +4402,16 @@ function OriginalContentReportCard({
                       {hasImmersion ? (
                         <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-2">
                           {h.matched_share !== null && (
-                            <div><p className="text-[11px] text-zinc-500">점유율</p><p className="whitespace-nowrap text-[15px] font-bold tabular-nums text-zinc-900">{h.matched_share.toFixed(2)}%</p></div>
+                            <div><p className="text-[11px] text-zinc-500">점유율</p><p className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-zinc-900">{h.matched_share.toFixed(2)}%</p></div>
                           )}
                           {h.matched_time_spent_seconds !== null && (
-                            <div><p className="text-[11px] text-zinc-500">시청시간</p><p className="whitespace-nowrap text-[15px] font-bold tabular-nums text-zinc-900">{fmtSecondsCompactKorean(h.matched_time_spent_seconds)}</p></div>
+                            <div><p className="text-[11px] text-zinc-500">시청시간</p><p className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-zinc-900">{fmtSecondsCompactKorean(h.matched_time_spent_seconds)}</p></div>
                           )}
                           {h.matched_time_spent_share !== null && (
-                            <div><p className="text-[11px] text-zinc-500">시청비율</p><p className="whitespace-nowrap text-[15px] font-bold tabular-nums text-zinc-900">{h.matched_time_spent_share.toFixed(2)}%</p></div>
+                            <div><p className="text-[11px] text-zinc-500">시청비율</p><p className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-zinc-900">{h.matched_time_spent_share.toFixed(2)}%</p></div>
                           )}
                           {h.matched_reach !== null && (
-                            <div><p className="text-[11px] text-zinc-500">도달률</p><p className="whitespace-nowrap text-[15px] font-bold tabular-nums text-zinc-900">{h.matched_reach.toFixed(2)}%</p></div>
+                            <div><p className="text-[11px] text-zinc-500">도달률</p><p className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-zinc-900">{h.matched_reach.toFixed(2)}%</p></div>
                           )}
                         </div>
                       ) : (
@@ -4453,23 +4453,23 @@ function OriginalContentReportCard({
                   {/* ③ 인사이트 — 요약 한 줄 + 현황/원인/액션(각 2줄까지). 전문은 아래 "인사이트 전문" 칩 */}
                   {(summaryNode || insight.situationLine || insight.causeLine) && (
                     <div className="mt-4">
-                      {summaryNode && <p className="line-clamp-2 text-[15px] font-bold leading-snug text-zinc-900">{summaryNode}</p>}
+                      {summaryNode && <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-zinc-900">{summaryNode}</p>}
                       {(insight.situationLine || insight.causeLine) && (
                         <div className={`${summaryNode ? "mt-3" : ""} grid gap-x-5 gap-y-2 sm:grid-cols-3`}>
                           {insight.situationLine && (
                             <div className="min-w-0 border-l-2 border-zinc-200 pl-3">
-                              <p className="text-[10.5px] font-bold text-zinc-500">현황</p>
-                              <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-zinc-800">{highlightChannelNames(insight.situationLine, channelColors)}</p>
+                              <p className="text-[10.5px] font-medium text-zinc-500">현황</p>
+                              <p className="line-clamp-2 text-[13px] leading-snug text-zinc-700">{highlightChannelNames(insight.situationLine, channelColors)}</p>
                             </div>
                           )}
                           {insight.causeLine && (
                             <div className="hidden min-w-0 border-l-2 border-zinc-200 pl-3 sm:block">
-                              <p className="text-[10.5px] font-bold text-zinc-500">원인</p>
+                              <p className="text-[10.5px] font-medium text-zinc-500">원인</p>
                               <p className="line-clamp-2 text-[13px] leading-snug text-zinc-700">{highlightChannelNames(insight.causeLine, channelColors)}</p>
                             </div>
                           )}
                           <div className="min-w-0 border-l-2 pl-3" style={{ borderColor: accent }}>
-                            <p className="text-[10.5px] font-bold" style={{ color: accent }}>액션</p>
+                            <p className="text-[10.5px] font-semibold" style={{ color: accent }}>액션</p>
                             <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-zinc-900">{insight.actionLine ?? "현재 편성 유지"}</p>
                           </div>
                         </div>
@@ -4524,8 +4524,8 @@ function OriginalContentReportCard({
                   className="rounded-xl bg-zinc-50 p-4"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <p className="text-[17px] font-bold text-zinc-800">{displayTitle}</p>
-                    <p className="text-[14px] font-bold" style={{ color: brandText(channelColor) }}>
+                    <p className="text-[17px] font-semibold text-zinc-800">{displayTitle}</p>
+                    <p className="text-[14px] font-semibold" style={{ color: brandText(channelColor) }}>
                       {CHANNEL_NAME_BY_CODE[w.broadcast_channel_code] ?? w.broadcast_channel_code}
                     </p>
                   </div>
@@ -4704,7 +4704,7 @@ function ChannelNarrativeCard({
             // 넓히고 whitespace-nowrap을 명시해 항상 한 줄로 고정.
             <div key={i} className="grid grid-cols-[104px_1fr] items-start gap-x-3">
               <div className="flex flex-col gap-1">
-                <span className="flex items-center gap-1 whitespace-nowrap font-bold" style={{ color: brandText(line.color) }}>
+                <span className="flex items-center gap-1 whitespace-nowrap font-semibold" style={{ color: brandText(line.color) }}>
                   {line.channelName}
                   {/* 사용자 지시(2026-09-02): "클릭 아이콘 신설. 세모 정도로" — 클릭 시 우측
                       "채널별 상위 프로그램" 자리가 이 채널의 일간 세부 내역 패널로 전환된다.
@@ -4727,7 +4727,7 @@ function ChannelNarrativeCard({
                     형식이 화면 전체에서 어긋나지 않게 한다(새 계산 없음). */}
                 {line.todayRating !== null && (
                   <span className="flex items-baseline gap-1">
-                    <span className="text-[15px] font-bold tabular-nums tracking-tight text-zinc-900">{formatRating(line.todayRating)}</span>
+                    <span className="text-[15px] font-semibold tabular-nums tracking-tight text-zinc-900">{formatRating(line.todayRating)}</span>
                     <RankPair todayRank={line.todayRank} targetRankNum={parseTargetRankNum(targetRankByCode.get(line.code) ?? null)} sizeClass="text-[11px]" />
                   </span>
                 )}
@@ -4742,8 +4742,8 @@ function ChannelNarrativeCard({
                     <ul className="flex flex-col gap-1">
                       {facts.map((f, k) => (
                         <li key={k} className="grid grid-cols-[52px_1fr] items-baseline gap-x-2 text-[13.5px] leading-snug text-zinc-700">
-                          <span className="whitespace-nowrap text-[10.5px] font-bold text-zinc-400">{f.label}</span>
-                          <span>{highlightNarrativeText(f.text, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}</span>
+                          <span className="whitespace-nowrap text-[11px] font-medium text-zinc-500">{f.label}</span>
+                          <span>{highlightNarrativeText(f.text, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR, 600)}</span>
                         </li>
                       ))}
                     </ul>
@@ -4847,7 +4847,7 @@ function KillerContentCard({
     const ytdAvg = ytdAvgByCode.get(code) ?? null;
     return (
       <div key={code}>
-        <p className="mb-1 text-sm font-bold tracking-tight" style={{ color: brandText(themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR) }}>
+        <p className="mb-1 text-sm font-semibold tracking-tight" style={{ color: brandText(themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR) }}>
           {CHANNEL_NAME_BY_CODE[code]}
         </p>
         <div className="flex flex-col gap-2.5">
@@ -4861,7 +4861,7 @@ function KillerContentCard({
                     정보(배지, 2줄)를 분리하고 여백·폰트 크기 위계를 줘 가독성을 높였다. */}
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="truncate text-sm font-medium text-zinc-800">{k.canonical_name}</span>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums" style={{ color: ytdColor }}>
+                  <span className="shrink-0 text-sm font-medium tabular-nums" style={{ color: ytdColor }}>
                     {formatRating(k.avg_rating)}
                   </span>
                 </div>
@@ -4955,7 +4955,7 @@ function TodayTopProgramsCard({
                 <thead>
                   <tr>
                     <th colSpan={2} className="pb-1 text-left">
-                      <span className="text-sm font-bold" style={{ color: brandText(themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR) }}>
+                      <span className="text-sm font-semibold" style={{ color: brandText(themeColorByCode.get(code) ?? UNBRANDED_CHANNEL_COLOR) }}>
                         {CHANNEL_NAME_BY_CODE[code]}
                       </span>
                     </th>
@@ -4994,7 +4994,7 @@ function TodayTopProgramsCard({
                           {episodeText && <div className="text-[12px] text-zinc-400">{episodeText}</div>}
                         </td>
                         <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(p.start_time)}</td>
-                        <td className="py-1 text-center tabular-nums font-semibold" style={{ color: ratingColor }}>
+                        <td className="py-1 text-center tabular-nums font-medium" style={{ color: ratingColor }}>
                           {formatRating(p.rating)}
                         </td>
                         <td className="py-1 text-center tabular-nums text-zinc-400">
@@ -5429,7 +5429,7 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
       <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
         {[...byCategory.entries()].map(([category, list]) => (
           <div key={category}>
-            <p className={`mb-1 text-sm font-semibold ${ACCENT_HEADING}`}>{category}</p>
+            <p className={`mb-1 text-sm font-medium ${ACCENT_HEADING}`}>{category}</p>
             <ul className="flex flex-col gap-0.5">
               {list.map((item, i) => (
                 <li key={i} className="flex items-baseline gap-1.5">

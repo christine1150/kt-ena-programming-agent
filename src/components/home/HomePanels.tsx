@@ -145,7 +145,7 @@ export function DecisionCards({
                   </span>
                 )}
               </div>
-              <h3 className="text-[15px] font-bold leading-snug text-zinc-900">
+              <h3 className="text-[15px] font-semibold leading-snug text-zinc-900">
                 {chName && hasColor && c.title.startsWith(chName) ? (
                   <>
                     <span className="font-extrabold" style={{ color: ink(color) }}>
@@ -159,7 +159,7 @@ export function DecisionCards({
               </h3>
               <p className="mt-1 text-[11.5px] text-zinc-400">{c.why}</p>
               <div className="mt-3">
-                <p className="text-[11px] font-semibold text-zinc-400">근거</p>
+                <p className="text-[11px] font-medium text-zinc-500">근거</p>
                 <ul className="mt-1 space-y-1">
                   {c.evidence.map((e, i) => (
                     <li key={i} className="text-[13px] leading-snug text-zinc-700">
@@ -170,7 +170,7 @@ export function DecisionCards({
               </div>
               {c.alternatives.length > 0 && (
                 <div className="mt-3">
-                  <p className="text-[11px] font-semibold text-zinc-400">대안</p>
+                  <p className="text-[11px] font-medium text-zinc-500">대안</p>
                   <ul className="mt-1 space-y-1">
                     {c.alternatives.map((a, i) => (
                       <li key={i} className="text-[12.5px] leading-snug text-zinc-600">
@@ -181,7 +181,7 @@ export function DecisionCards({
                 </div>
               )}
               <div className="mt-3">
-                <p className="text-[11px] font-semibold text-zinc-400">확인할 조건</p>
+                <p className="text-[11px] font-medium text-zinc-500">확인할 조건</p>
                 <p className="mt-1 text-[12.5px] leading-snug text-zinc-700">{c.confirm}</p>
               </div>
               <p className="mt-3 text-[12px] text-zinc-500">
@@ -290,8 +290,8 @@ export function KpiTable({ groups, asOfLabel }: { groups: KpiGroup[]; asOfLabel:
                 <tbody>
                   {g.rows.map((r) => (
                     <tr key={r.code} className="border-t border-zinc-100 align-top" data-kpi-row={r.code}>
-                      <td className="py-2 pr-3 font-semibold text-zinc-800">{r.name}</td>
-                      <td className="py-2 pr-3 text-right font-bold tabular-nums text-zinc-900">{r.ratingText}</td>
+                      <td className="py-2 pr-3 font-medium text-zinc-800">{r.name}</td>
+                      <td className="py-2 pr-3 text-right font-semibold tabular-nums text-zinc-900">{r.ratingText}</td>
                       <td className="py-2 pr-3 tabular-nums text-zinc-800" title={r.rank.universeDetail}>
                         {r.rank.text}
                         <span className={`ml-1.5 text-[11px] ${deltaClass(r.rankChange.value)}`}>{r.rankChange.text}</span>
@@ -325,8 +325,8 @@ export function KpiTable({ groups, asOfLabel }: { groups: KpiGroup[]; asOfLabel:
               {g.rows.map((r) => (
                 <li key={r.code} className="rounded-lg bg-zinc-50 px-3 py-2.5 ring-1 ring-zinc-200/70">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-[14px] font-semibold text-zinc-800">{r.name}</span>
-                    <span className="text-[17px] font-bold tabular-nums text-zinc-900">{r.ratingText}</span>
+                    <span className="text-[14px] font-medium text-zinc-800">{r.name}</span>
+                    <span className="text-[17px] font-semibold tabular-nums text-zinc-900">{r.ratingText}</span>
                   </div>
                   <p className="mt-1 text-[12px] text-zinc-600">
                     {r.rank.text} <span className={deltaClass(r.rankChange.value)}>{r.rankChange.text}</span> · {r.targetRank.text}

@@ -89,6 +89,17 @@ body {
 .page1-readable .text-xs { font-size: 13.5px; }
 .page1-readable .text-sm { font-size: 15px; }
 
+/* 2026-10-15 사용자 요청(1페이지 UI·UX·글꼴 가독성): ① 한글은 단어 단위로 줄을 바꾼다 — "이동·교체 검토"가 "검 / 토"로 갈라져 글씨가 깨져 보이던 문제.
+   ② 본문 글꼴을 Pretendard로 통일 — 라틴 전용 Geist + 한글 Noto Sans KR 글자별 폴백 조합은 같은 줄에서 숫자와 한글의 크기·굵기가 어긋나 보였다.
+   굵기는 700 제목·큰 숫자 / 600 핵심 문장·값 / 500 라벨·보조 값 / 400 설명으로 나눴다(컴포넌트 클래스에서 조정). 긴 영문·숫자열은 overflow-wrap으로 넘침을 막는다. */
+.page1-readable {
+  font-family: var(--font-pretendard), var(--font-noto-sans-kr), var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
 /* ───────────────────────────────────────────────────────────────────────────
    단계 15 — 디자인 토큰과 접근성 보정. 값은 src/lib/ui/tokens.ts와 같아야 하며
    scripts/test-ui-polish.ts가 둘을 대조하고 WCAG 대비를 계산한다.
