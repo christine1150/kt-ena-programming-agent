@@ -875,12 +875,25 @@ const SKYUHD_TIER_DOT_COLOR: Record<string, string> = {
 };
 // 사용자 재지시(2026-08-22): 태그 하나를 이 함수로 통일 렌더링 — 흰 배경 + 얇은 테두리 + 작은
 // 색 점(dot) + 무채색 텍스트(각진 rounded-md, 파스텔 배경 없음)로 "생성형 UI 배지" 인상을 줄였다.
-function DotTag({ label, color }: { label: string; color: string }) {
+// fixed: 표의 첫 칸처럼 태그가 줄지어 놓일 때(2026-10-14) — 강화·유지·표본 적음·교체 검토 등 글자 수가 달라도 같은 너비·좌정렬로 맞춘다.
+function DotTag({ label, color, fixed = false }: { label: string; color: string; fixed?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-[12.5px] font-semibold tracking-tight text-zinc-700">
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-[12.5px] font-semibold tracking-tight text-zinc-700 ${fixed ? "w-[96px] justify-start" : ""}`}>
       <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
       {label}
     </span>
+  );
+}
+
+// 눌러서 펼치는 표 행의 안내 화살표(2026-10-14) — 채널 로고색 그대로, 열리면 위로 뒤집힌다.
+// 주의: 가로 스크롤 표 안의 svg는 전역 규칙(globals.css)이 폭 100%로 늘리므로 svg 대신 테두리 두 변으로 그린 화살표를 쓴다.
+function RowChevron({ open, color }: { open: boolean; color: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="mb-0.5 inline-block h-[9px] w-[9px] shrink-0 border-b-2 border-r-2 transition-transform duration-200"
+      style={{ borderColor: color, transform: open ? "rotate(-135deg) translate(-2px, -2px)" : "rotate(45deg)" }}
+    />
   );
 }
 
@@ -6670,7 +6683,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       return (
                         <tr key={item.program_id} className="border-t border-zinc-100 align-top">
                           <td className="whitespace-nowrap py-2 pr-2">
-                            <DotTag label={tier} color={SKYUHD_TIER_DOT_COLOR[tier]} />
+                            <DotTag label={tier} color={SKYUHD_TIER_DOT_COLOR[tier]} fixed />
                           </td>
                           <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">{item.program_name}</td>
                           <td className="py-2 pr-2 text-zinc-600">{buildSkyuhdScorecardNote(item)}</td>
@@ -6721,16 +6734,28 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           ) : (
             // 사용자 지시(2026-08-21): 표 형태로 재구성 — 태그는 한글, 제목은 한 줄(truncate),
             // 가운데 열에 제안 사항 한 줄, Fit Score/Confidence는 오른쪽. 클릭하면 아래에 근거 펼침.
+            <>
+            <p className="mb-2 flex items-center gap-1.5 text-[12.5px] text-zinc-400">
+              <RowChevron open={false} color={accentColor} />
+              각 줄을 누르면 판정 근거가 펼쳐집니다
+            </p>
             <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
-              <table className="w-full min-w-[640px] text-left text-sm">
+              {/* 레이아웃 고정(2026-10-14): 태그·프로그램·적합도 열 너비를 정하고 제안 사항만 남는 폭을 쓴다 — 긴 제목·"64.9 (100%)"가 줄바꿈으로 깨지지 않게 */}
+              <table className="w-full min-w-[780px] table-fixed text-left text-sm">
+                <colgroup>
+                  <col className="w-[112px]" />
+                  <col className="w-[250px]" />
+                  <col />
+                  <col className="w-[170px]" />
+                </colgroup>
                 <thead>
                   <tr className="text-zinc-400">
-                    <th className="pb-1.5 pr-2 font-medium">태그</th>
-                    <th className="pb-1.5 pr-2 font-medium">프로그램</th>
-                    <th className="pb-1.5 pr-2 font-medium">제안 사항</th>
+                    <th className="pb-2 pr-3 font-medium">태그</th>
+                    <th className="pb-2 pr-3 font-medium">프로그램</th>
+                    <th className="pb-2 pr-3 font-medium">제안 사항</th>
                     {/* 사용자 지시(2026-08-21): "Fit Score"를 한국말로, 그 옆에 (신뢰도) 표기를
                         붙여 아래 셀의 괄호 숫자가 무엇인지 헤더에서 바로 알 수 있게 한다. */}
-                    <th className="pb-1.5 font-medium">적합도(신뢰도)</th>
+                    <th className="whitespace-nowrap pb-2 font-medium">적합도(신뢰도)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -6744,11 +6769,22 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     return (
                       <Fragment key={item.program_id}>
                         <tr
-                          className="cursor-pointer border-t border-zinc-100 align-top hover:bg-zinc-50"
+                          className="group cursor-pointer border-t border-zinc-100 align-middle transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                          style={{ ["--tw-ring-color" as string]: accentColor, ...(isOpen ? { backgroundColor: `${accentColor}10` } : {}) }}
+                          tabIndex={0}
+                          role="button"
+                          aria-expanded={isOpen}
+                          aria-label={`${item.programs?.canonical_name ?? "프로그램"} 판정 근거 ${isOpen ? "접기" : "펼치기"}`}
                           onClick={() => setExpandedProgram(isOpen ? null : item.program_id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setExpandedProgram(isOpen ? null : item.program_id);
+                            }
+                          }}
                         >
-                          <td className="whitespace-nowrap py-2 pr-2">
-                            {item.tag ? <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} /> : <span className="text-zinc-400">—</span>}
+                          <td className="whitespace-nowrap py-2.5 pr-3" style={isOpen ? { boxShadow: `inset 3px 0 0 ${accentColor}`, paddingLeft: 10 } : { paddingLeft: 10 }}>
+                            {item.tag ? <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} fixed /> : <span className="text-zinc-400">—</span>}
                           </td>
                           {/* 사용자 지시(2026-08-21): 프로그램 타이틀은 가독성이 좋게 볼드로.
                               사용자 재지시(2026-08-25): "ENA의 본방송, ENA Play와 ENA Drama의
@@ -6759,26 +6795,33 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                               구분이 안 보여 헷갈릴 수 있었다 — Page 1 "채널별 상위 프로그램"과
                               동일하게 programs.first_run으로 <본>/<재> 태그를 붙인다(값이 없는
                               프로그램은 태그 없이 이름만, 억지 분류 금지). */}
-                          <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">
-                            {item.programs?.canonical_name ?? "이름 없음"}
-                            {item.programs?.first_run !== null && item.programs?.first_run !== undefined && (
-                              <span className="ml-1 text-[12px] font-normal text-zinc-400">
-                                {item.programs.first_run ? "<본>" : "<재>"}
+                          <td className="py-2.5 pr-3">
+                            <div className="flex min-w-0 items-baseline gap-1">
+                              <span className="truncate font-bold text-zinc-800" title={item.programs?.canonical_name ?? undefined}>
+                                {item.programs?.canonical_name ?? "이름 없음"}
                               </span>
-                            )}
+                              {item.programs?.first_run !== null && item.programs?.first_run !== undefined && (
+                                <span className="shrink-0 text-[12px] font-normal text-zinc-400">
+                                  {item.programs.first_run ? "<본>" : "<재>"}
+                                </span>
+                              )}
+                            </div>
                           </td>
-                          <td className="py-2 pr-2 text-zinc-600">{note}</td>
-                          <td className="whitespace-nowrap py-2 text-zinc-500">
-                            {item.fit_score?.toFixed(1) ?? "—"}
-                            <span className="ml-1 text-[12px] text-zinc-400">
-                              ({item.confidence_pct?.toFixed(0) ?? "—"}%)
-                            </span>
+                          <td className="py-2.5 pr-3 leading-snug text-zinc-600">{note}</td>
+                          <td className="py-2.5 pr-2">
+                            <div className="flex items-center justify-between gap-2 whitespace-nowrap tabular-nums text-zinc-700">
+                              <span>
+                                <span className="font-medium">{item.fit_score?.toFixed(1) ?? "—"}</span>
+                                <span className="ml-1 text-[12px] text-zinc-400">({item.confidence_pct?.toFixed(0) ?? "—"}%)</span>
+                              </span>
+                              <RowChevron open={isOpen} color={accentColor} />
+                            </div>
                           </td>
                         </tr>
                         {isOpen && (
-                          <tr className="border-t border-zinc-100 bg-zinc-50/60">
-                            <td colSpan={4} className="p-3">
-                              <div className="grid grid-cols-2 gap-2 text-sm text-zinc-600 sm:grid-cols-3">
+                          <tr className="border-t border-zinc-100">
+                            <td colSpan={4} className="p-4" style={{ backgroundColor: `${accentColor}08`, boxShadow: `inset 3px 0 0 ${accentColor}` }}>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-zinc-600 sm:grid-cols-4">
                                 <p>평균 시청률: {fmtR(item.evidence.avg_rating)}</p>
                                 <p>도달률: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
                                 <p>
@@ -6810,7 +6853,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                     {/* 원 명세 13번(Audience Role) — Reach/Time Spent Share 둘 다 뚜렷할 때만 표시. */}
                                     {fi.audienceRole && (
                                       <p className="mt-2 text-sm text-zinc-600">
-                                        <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>
+                                        <span className="font-semibold" style={{ color: accentColor }}>
                                           시청자 유형
                                         </span>{" "}
                                         {AUDIENCE_ROLE_LABEL[fi.audienceRole]} — {AUDIENCE_ROLE_NOTE[fi.audienceRole]}
@@ -6834,7 +6877,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                         )}
                                         {item.slotEfficiency.transferability && (
                                           <span>
-                                            <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>
+                                            <span className="font-semibold" style={{ color: accentColor }}>
                                               슬롯 이동성
                                             </span>{" "}
                                             {item.slotEfficiency.transferability === "FLEXIBLE"
@@ -6849,7 +6892,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                     {fi.sampleNote && <p className="mt-1 text-sm text-amber-600">{fi.sampleNote}</p>}
                                     {fi.decision && (
                                       <p className="mt-2 text-sm text-zinc-600">
-                                        <span className="font-semibold" style={{ color: accentForegroundColor(accentColor) }}>판단</span> {fi.decision}
+                                        <span className="font-semibold" style={{ color: accentColor }}>판단</span> {fi.decision}
                                       </p>
                                     )}
                                   </div>
@@ -6864,6 +6907,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 </tbody>
               </table>
             </div>
+            </>
           )}
           {/* 사용자 지시(2026-10-07): 적합도 산식 설명과 사분면 그래프는 이 섹션 맨 아래(목록 아래)로. 이 섹션이 OPPORTUNITY?보다 위로 옮겨져 '위' 표현은 뺀다. */}
           <p className="mb-3 mt-6 text-sm text-zinc-400">
@@ -7888,10 +7932,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               ) : (
                 <>
                   <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
-                    <table className="w-full min-w-[640px] text-left text-sm">
+                    <table className="w-full min-w-[760px] text-left text-sm">
                       <thead>
                         <tr className="text-zinc-400">
-                          <th className="pb-2 font-medium">프로그램</th>
+                          <th className="w-[112px] whitespace-nowrap pb-2 pr-3 font-medium">판정</th>
+                          <th className="pb-2 pr-3 font-medium">프로그램</th>
                           <th className="pb-2 font-medium">슬롯 대비 성과</th>
                           <th className="pb-2 font-medium">시청 규모</th>
                           <th className="pb-2 font-medium">시청 몰입도</th>
@@ -7906,32 +7951,34 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           const trendCell = formatTrendCell(cf);
                           return (
                             <tr key={item.program_id} className={`border-t border-zinc-100 ${muted ? "text-zinc-400" : ""}`}>
-                              <td className="py-1.5 font-medium text-zinc-800">
-                                <span className="inline-flex flex-wrap items-center gap-y-1">
+                              <td className="whitespace-nowrap py-2 pr-3 align-middle">
+                                {cf.tier === "HOLD" ? (
+                                  <DotTag label="판단 보류" color="#a1a1aa" fixed />
+                                ) : cf.tier === "REFERENCE" ? (
+                                  <DotTag label="표본 적음" color="#a1a1aa" fixed />
+                                ) : item.tag ? (
+                                  <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} fixed />
+                                ) : (
+                                  <span className="text-zinc-400">—</span>
+                                )}
+                              </td>
+                              <td className="py-2 pr-3 align-middle font-medium text-zinc-800">
+                                <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                                   <span className={muted ? "text-zinc-500" : ""}>{item.programs?.canonical_name ?? "이름 없음"}</span>
-                                  <span className="ml-1.5 text-[12px] font-normal text-zinc-400">{cf.sampleDays}일</span>
-                                  <span className="ml-1.5">
-                                    {cf.tier === "HOLD" ? (
-                                      <DotTag label="판단 보류" color="#a1a1aa" />
-                                    ) : cf.tier === "REFERENCE" ? (
-                                      <DotTag label="표본 적음" color="#a1a1aa" />
-                                    ) : item.tag ? (
-                                      <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} />
-                                    ) : null}
-                                  </span>
+                                  <span className="text-[12px] font-normal text-zinc-400">{cf.sampleDays}일</span>
                                   <FitShapeBadge shape={fitShapeOf(cf)} />
                                 </span>
                               </td>
-                              <td className="py-1.5">
+                              <td className="py-2 align-middle">
                                 <MiniPctlBar value={cf.slotScore} label={fmtTimes(cf.slotIndex)} accentColor={accentColor} isEnaStory={isEnaStory} />
                               </td>
-                              <td className="py-1.5">
+                              <td className="py-2 align-middle">
                                 <MiniPctlBar value={cf.scaleScore} label={fmtTimes(cf.scaleIndex)} accentColor={accentColor} isEnaStory={isEnaStory} />
                               </td>
-                              <td className="py-1.5">
+                              <td className="py-2 align-middle">
                                 <MiniPctlBar value={cf.engagementScore} accentColor={accentColor} isEnaStory={isEnaStory} />
                               </td>
-                              <td className="whitespace-nowrap py-1.5 tabular-nums text-zinc-600">
+                              <td className="whitespace-nowrap py-2 align-middle tabular-nums text-zinc-600">
                                 {trendCell.direction === "up" ? (
                                   <span style={{ color: NARRATIVE_UP_COLOR }}>{trendCell.text}</span>
                                 ) : trendCell.direction === "down" ? (
@@ -7940,7 +7987,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                   trendCell.text
                                 )}
                               </td>
-                              <td className="py-1.5 font-semibold text-zinc-900">{cf.score === null ? "—" : cf.score.toFixed(0)}</td>
+                              <td className="py-2 align-middle font-semibold tabular-nums text-zinc-900">{cf.score === null ? "—" : cf.score.toFixed(0)}</td>
                             </tr>
                           );
                         })}

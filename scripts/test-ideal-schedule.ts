@@ -26,6 +26,7 @@ import { buildRerunConstraints } from "../src/lib/idealSchedule/rerunRules";
 import * as SL from "../src/lib/idealSchedule/seriesLink";
 import { evidenceOf, MIN_SAMPLE_FOR_REPLACE } from "../src/lib/dashboard/evidenceGate";
 import { aiSuggestionLine, type AiSuggestionPayload } from "../src/lib/dashboard/aiLine";
+import { classifyOriginals, pickForChannel } from "../src/lib/dashboard/originalClassify";
 
 let passed = 0;
 const failures: string[] = [];
@@ -777,7 +778,7 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   const weak = { weekday: 2, startMin: 14 * 60 + 23, from: "연애박사", to: "입터지는실험실", gain: 0.0745, certainty: "LOW" as const, sampleCount: 4, evidence: "weak" as const };
   const lines = (p: AiSuggestionPayload, structural: boolean) => aiSuggestionLine(p, structural).split(String.fromCharCode(10));
   const l1 = lines({ ...base, change: weak, remedy: { lines: [], concrete: false, sample: 7, brief, hole } }, true);
-  check("홈 문구: 구조적 격차 + 근거 약한 교체 → 진단·테스트·대안 3줄, 대안에 구매 검토 제목", l1.length === 3 && l1[0].startsWith("구조적 격차 · 14시 '연애박사' 평소의 3%") && l1[1].startsWith("테스트 · 14시 '입터지는실험실'(표본 4회)") && l1[2].includes("편성 조정만으론 한계") && l1[2].includes("'외부A'"), l1.join(" / "));
+  check("홈 문구: 구조적 격차 + 근거 약한 교체 → 진단·테스트·대안 3줄, 대안에 구매 검토 제목", l1.length === 3 && l1[0].startsWith("구조적 격차 · 14시 '연애박사' 같은 자리 보통의 3%") && l1[1].startsWith("테스트 · 14시 '입터지는실험실'(표본 4회)") && l1[2].includes("편성 조정만으론 한계") && l1[2].includes("'외부A'"), l1.join(" / "));
   check("홈 문구: 근거 약한 안은 기대 개선폭 수치를 내지 않는다", !l1.join("").includes("0.074") && !l1.join("").includes("%p"));
   const ok = { ...weak, evidence: "ok" as const, certainty: "MID" as const, sampleCount: 12 };
   const l2 = lines({ ...base, change: ok, remedy: { lines: [], concrete: false, sample: 7, brief, hole } }, true);
@@ -787,6 +788,30 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   const l4 = lines({ ...base, external: [] }, true);
   check("홈 문구: 풀 밖 후보가 없어도 '한계' 문구에는 반드시 다른 대안(구매 검토·목표 재점검)이 붙는다", l4[l4.length - 1].includes("편성 조정만으론 한계") && l4[l4.length - 1].includes("목표 재점검"), l4.join(" / "));
   check("홈 문구: '현재 편성 유지가 낫다'는 말을 쓰지 않는다", !aiSuggestionLine(base, false).includes("유지가 낫다"));
+}
+
+// ENA 본방 오리지널 활용 권유(진행·예정·종영 +1주, 적합도 기준)
+{
+  const spec = (id: string, name: string, cat: string, from: string, to: string | null) => ({ programId: id, programName: name, category: cat, activeFrom: from, activeTo: to });
+  const specs = [
+    spec("a", "나는SOLO", "오리지널 예능", "2021-07-14", null),
+    spec("b", "연애박사", "오리지널 드라마", "2026-10-05", "2026-11-10"),
+    spec("c", "신병4사보타주", "오리지널 드라마", "2026-08-24", "2026-09-29"),
+    spec("d", "지구마불 세계여행 4", "오리지널 예능", "2026-10-17", "2027-01-30"),
+    spec("e", "왕자와 거지", "오리지널 예능", "2026-07-27", null),
+    spec("f", "케이팝업차트쇼", "사업형", "2024-06-14", null),
+  ];
+  const fit = (id: string, tier: "FORMAL" | "REFERENCE" | "HOLD", tag: string | null, L: number, A: number, score: number) => ({ programId: id, tier, tag, slotIndex: L, scaleIndex: A, score });
+  const fits = [fit("a", "FORMAL", "KEEP", 1.43, 1.81, 69), fit("b", "REFERENCE", "TEST", 0.87, 1.22, 51), fit("c", "FORMAL", "STRENGTHEN", 2.38, 1.96, 79), fit("e", "FORMAL", "REPLACE", 0.36, 0.52, 16), fit("f", "FORMAL", "KEEP", 1.5, 1.5, 70)];
+  const r = classifyOriginals(specs, fits, "2026-10-13");
+  check("오리지널 활용: 진행 중 정식 판정 우수작은 fit, 방영 초반(표본 적음)은 test, 시작 전은 upcoming", r.use.map((u) => u.name + ":" + u.verdict).join(",") === "나는SOLO:fit,연애박사:test,지구마불 세계여행 4:upcoming", r.use.map((u) => u.name + ":" + u.verdict).join(","));
+  check("오리지널 활용: 종영 +1주를 넘긴 작품·사업형 분류는 제외", !r.use.some((u) => u.name === "신병4사보타주" || u.name === "케이팝업차트쇼"));
+  check("오리지널 활용: ENA 본방 효율이 낮은 진행 중 작품은 활용이 아니라 재방 축소 대상", r.weak.map((w) => w.name).join() === "왕자와 거지" && !r.use.some((u) => u.name === "왕자와 거지"));
+  const r2 = classifyOriginals(specs, fits, "2026-10-05");
+  check("오리지널 활용: 종영 직후 1주 이내는 활용 후보로 남는다", r2.use.some((u) => u.name === "신병4사보타주" && u.status === "종영 직후"));
+  check("오리지널 활용: ENA Drama는 드라마, Play·Story는 예능을 먼저 권한다", pickForChannel(r.use, "ENA_DRAMA")[0].name === "연애박사" && pickForChannel(r.use, "ENA_PLAY")[0].name === "나는SOLO");
+  const l = aiSuggestionLine({ channelCode: "ENA_PLAY", weekStart: "2026-10-19", currentExpected: null, aiExpected: null, change: null, external: ["외부A"], originals: { use: pickForChannel(r.use, "ENA_PLAY").map((u) => ({ name: u.name, verdict: u.verdict, status: u.status, start: u.start })), weak: ["왕자와 거지"] } }, true);
+  check("홈 문구: 오리지널 활용 줄이 있으면 '편성 조정만으론 한계'·구매 검토 대안 줄 대신 쓰고, 부진 작품은 재방 축소 검토로 알린다", l.includes("오리지널 활용 · '나는SOLO'") && l.includes("오리지널 재방 축소 검토 · '왕자와 거지'") && !l.includes("한계") && !l.includes("구매 검토"), l);
 }
 
 console.log(`\n${passed}건 통과, ${failures.length}건 실패`);

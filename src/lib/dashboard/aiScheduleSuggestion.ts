@@ -15,6 +15,7 @@ import { llmCacheKey, type CacheDb } from "@/lib/llmTextCacheCore";
 import { cachedJson } from "@/lib/idealSchedule/suggestionCacheCore";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { computeWeakSlotRemedy, type WeakSlotRemedy } from "./weakSlotRemedy";
+import { computeOriginalLeverage, type OriginalLeverage } from "./originalLeverage";
 
 import { evidenceOf, type Certainty } from "./evidenceGate";
 export { evidenceOf, MIN_SAMPLE_FOR_REPLACE } from "./evidenceGate";
@@ -60,6 +61,8 @@ export interface AiSuggestion {
   remedy: WeakSlotRemedy | null;
   /** 자사 편성 안에서 근거 충분한 교체안이 없을 때 보여 줄 풀 밖 대안 — 구매 검토 추천 상위 제목(자사 풀 최적화와는 섞지 않는다) */
   external: string[];
+  /** ENA 본방 오리지널 활용 권유(ENA Play·Drama·Story만) — 활용 후보와 재방 축소 코멘트 대상 */
+  originals: OriginalLeverage | null;
 }
 
 export interface ReplacePlan {
@@ -238,7 +241,7 @@ function pickDetail(details: ReplaceDetail[], weekday: number, focus: string | n
 // 같은 기준일·채널·입력이면 다른 사람·새로고침·다른 서버에서도 다시 계산하지 않고 저장해 둔 결과를 쓴다(기존 캐시 테이블, 마이그레이션 없음).
 // 키에는 결과를 바꿀 수 있는 입력의 지문(제외 편성·권리 상태·채널 설정·가장 최근 닐슨 업로드 시각·기능 끄개)이 들어가 입력이 바뀌면 자동으로 새로 계산한다.
 // 지문에 못 넣는 변화(예: 장르표 수정)는 6시간 TTL로 제한한다. 지문을 만들지 못하거나 저장소가 실패하면 평소처럼 계산한다.
-const SUGGESTION_CACHE_VERSION = "v3"; // v2: 최근 방영 확인 조회 오류 수정·근거 관문 추가(예전 "후보 없음" 결과를 재사용하지 않도록)
+const SUGGESTION_CACHE_VERSION = "v4"; // v2: 최근 방영 확인 조회 오류 수정·근거 관문 추가(예전 "후보 없음" 결과를 재사용하지 않도록)
 const SUGGESTION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 async function suggestionFingerprint(channelCode: string, asOfDate: string, focus: string | null): Promise<unknown> {
@@ -270,7 +273,7 @@ export async function computeAiSuggestion(channelCode: string, asOfDate: string,
   } catch {
     return computeAiSuggestionUncached(channelCode, asOfDate, focus);
   }
-  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v3", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
+  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v4", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
   return r.value;
 }
 
@@ -313,6 +316,8 @@ export async function computeAiSuggestionUncached(channelCode: string, asOfDate:
   // 사용자 지시(2026-10-07): 교체 후보가 없으면 "못 찾았다"로 끝내지 말고 시청률이 빠지는 부분의 보완 방안을 제안한다
   // 근거 충분한 교체안이 없으면 풀 밖 대안(구매 검토 추천)을 함께 준다
   const external = !top || top.evidence === "weak" ? await loadExternalCandidates(channelCode).catch(() => []) : [];
+  // ENA 본방 오리지널(진행·예정, 종영 +1주까지) 활용 권유 — 방영 횟수 제한이 거의 없어 비용 없이 쓸 수 있는 처방
+  const originals = await computeOriginalLeverage(channelCode, asOfDate).catch(() => null);
   return {
     channelCode,
     weekStart: plan.weekStart,
@@ -324,5 +329,6 @@ export async function computeAiSuggestionUncached(channelCode: string, asOfDate:
     focus,
     remedy,
     external,
+    originals,
   };
 }
