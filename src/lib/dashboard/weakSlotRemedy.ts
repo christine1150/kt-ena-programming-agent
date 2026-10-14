@@ -10,18 +10,8 @@ import { loadChannelRef } from "@/lib/idealSchedule/dataSource";
 import { addDays, isoDow } from "@/lib/idealSchedule/time";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 
-export interface WeakSlotRemedy {
-  /** 화면에 그대로 쓰는 한국어 한두 줄(원인 → 할 일) */
-  lines: string[];
-  /** 수치로 계산된 이동 제안이 있는가(파란색 강조용) */
-  concrete: boolean;
-  /** 같은 자리 비교에 쓴 방영 수 */
-  sample: number;
-  /** 홈 카드용 짧은 문구(원인 한 구 · 할 일 한 구). lines는 채널 상세용 긴 문장 그대로 둔다 */
-  brief: { cause: string; action: string };
-  /** 이 보완 제안이 가리키는 자리 — 평소(같은 자리 최근 8회 중앙값) 대비 몇 %였나. 비교 표본이 모자라면 ratioPct는 null */
-  hole: { program: string; hour: number; ratioPct: number | null };
-}
+import type { WeakSlotRemedyView } from "./weakSlotView";
+export type WeakSlotRemedy = WeakSlotRemedyView;
 
 const DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
 const LOOKBACK_DAYS = 70; // 10주 — 같은 요일 최대 8회 + 여유
@@ -181,7 +171,7 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
       lines: [`'${focus}' ${where} 자리는 ${basis} 원인을 가르기 어렵습니다 — 다음 방영 확인 후 판단`],
       concrete: false,
       sample: w.prior.length,
-      brief: { cause: `비교 방영 ${w.prior.length}회뿐`, action: "다음 방영 확인 후 판단" },
+      brief: { cause: `같은 자리 비교 방영이 ${w.prior.length}회뿐이라 원인을 가르기 어렵습니다`, action: "다음 방영 결과를 확인한 뒤 판단" },
       hole: { program: w.a.name, hour, ratioPct: null },
     };
   }
@@ -265,22 +255,22 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   } else {
     action = `다음 방영(${DOW_KO[w.a.dow - 1]}요일)이 기준선 ${fmt(dropLine)} 아래이면 이동·교체 검토`;
   }
-  // 홈 카드용 짧은 문구 — 같은 판단 분기를 그대로 따르되 수치·설명을 걷어 낸다
+  // 홈 카드용 문구 — 같은 판단 분기를 그대로 따르되 쉬운 말로 쓰고 비교 기준·수치를 남긴다(판단 기준은 바꾸지 않는다)
   let causeBrief: string;
-  if (holiday) causeBrief = `${holiday.name} 전후라 단순 비교 어려움`;
-  else if (likelyRerun) causeBrief = premium ? `재방 자리(본방은 ${premium.label})` : "재방 자리";
-  else if (leadIn && leadIn.dev <= -0.2 && Math.abs(leadIn.dev) >= Math.abs(w.dev) * 0.5) causeBrief = `앞 '${leadIn.name}'도 ▼${pct(leadIn.dev)}`;
-  else if (channelWide) causeBrief = "채널 전체 동반 하락";
-  else if (continuing) causeBrief = `반복 약세(${prevBelow + 1}/${recent.length + 1}회)`;
-  else causeBrief = "단발성 하락";
-  const times = (r: number) => (r >= 2 ? `${r.toFixed(1)}배` : `+${pct(r - 1)}`);
+  if (holiday) causeBrief = `${holiday.name} 전후라 다른 날 방영분과 단순 비교하기 어렵습니다`;
+  else if (likelyRerun) causeBrief = premium ? `재방 방송분이며, 이 프로그램의 본방 자리(${premium.label}, 보통 시청률 ${fmt(premium.med)})보다 낮은 시간대입니다` : "재방 방송분입니다";
+  else if (leadIn && leadIn.dev <= -0.2 && Math.abs(leadIn.dev) >= Math.abs(w.dev) * 0.5) causeBrief = `앞 프로그램 '${leadIn.name}'도 기준보다 ${pct(leadIn.dev)} 낮았습니다`;
+  else if (channelWide) causeBrief = "같은 날 이 채널 다른 프로그램도 대체로 낮았습니다";
+  else if (continuing) causeBrief = `최근 ${recent.length + 1}회 중 ${prevBelow + 1}회가 기준선(${fmt(dropLine)}) 아래입니다`;
+  else causeBrief = `최근 ${sample}회 중 이번 한 번만 낮은 일시적 하락으로 보입니다`;
+  const times = (r: number) => (r >= 2 ? `${r.toFixed(1)}배` : `${pct(r - 1)} 높은 수준`);
   let actionBrief: string;
-  if (better && likelyRerun) actionBrief = `이동 · ${better.label}(${times(better.med / med)})`;
-  else if (likelyRerun && !holiday && !channelWide) actionBrief = `${fmt(dropLine)} 아래 지속 시 재방 시간대 변경`;
-  else if (holiday || channelWide) actionBrief = `다음 주 ${DOW_KO[w.a.dow - 1]}요일 확인 후 판단`;
-  else if (better && continuing && !likelyRerun) actionBrief = `이동 · ${better.label}(${times(better.med / med)})`;
-  else if (leadIn && leadIn.dev <= -0.2) actionBrief = "앞 프로그램 점검이 먼저";
-  else if (continuing) actionBrief = "앞뒤 편성·시간 이동 검토";
-  else actionBrief = `다음 방영 ${fmt(dropLine)} 아래면 이동·교체`;
+  if (better && likelyRerun) actionBrief = `재방을 ${better.label}로 옮기는 안 검토 — 같은 프로그램이 거기서는 이 자리의 ${times(better.med / med)}이었습니다`;
+  else if (likelyRerun && !holiday && !channelWide) actionBrief = `이 재방 자리 시청률이 ${fmt(dropLine)} 아래로 계속되면 재방 시간대(요일·시각) 변경 검토`;
+  else if (holiday || channelWide) actionBrief = `다음 주 ${DOW_KO[w.a.dow - 1]}요일 방영이 ${fmt(dropLine)} 아래인지 확인한 뒤 판단`;
+  else if (better && continuing && !likelyRerun) actionBrief = `이 자리 방송분을 ${better.label}로 옮기거나 합치는 안 검토 — 같은 프로그램이 거기서는 이 자리의 ${times(better.med / med)}이었습니다`;
+  else if (leadIn && leadIn.dev <= -0.2) actionBrief = `앞 프로그램 점검이 먼저이며, 이 자리는 다음 방영이 ${fmt(dropLine)} 아래일 때 이동·교체 검토`;
+  else if (continuing) actionBrief = "더 나은 자리도 교체 후보도 못 찾아, 앞뒤 편성 조정이나 방영 시간 이동 검토";
+  else actionBrief = `다음 방영(${DOW_KO[w.a.dow - 1]}요일)이 ${fmt(dropLine)} 아래이면 이동·교체 검토`;
   return { lines: [cause, action], concrete, sample, brief: { cause: causeBrief, action: actionBrief }, hole: { program: w.a.name, hour, ratioPct: Math.round((w.a.rating / med) * 100) } };
 }

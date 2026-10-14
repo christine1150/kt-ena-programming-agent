@@ -66,10 +66,10 @@ export async function computeOriginalLeverage(channelCode: string, asOf: string)
     asOf
   );
   // 부진 코멘트는 이 채널이 실제로 그 작품을 틀고 있을 때만 의미가 있다
-  let weak: string[] = [];
+  let weak: { name: string; slotIndex: number | null }[] = [];
   if (cls.weak.length > 0) {
     const titles = await recentTitles(channelCode, asOf).catch(() => []);
-    weak = cls.weak.map((w) => w.name).filter((n) => titles.some((t) => sameTitle(t, n)));
+    weak = cls.weak.filter((w) => titles.some((t) => sameTitle(t, w.name)));
   }
   const value = cls.use.length === 0 && weak.length === 0 ? null : { use: pickForChannel(cls.use, channelCode), weak: weak.slice(0, 2) };
   cache.set(key, { at: Date.now(), value });

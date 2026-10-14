@@ -25,7 +25,8 @@ import { enrichAiringsWithPlan, normalizePlanRows, planEpisodeHints, planWeekFra
 import { buildRerunConstraints } from "../src/lib/idealSchedule/rerunRules";
 import * as SL from "../src/lib/idealSchedule/seriesLink";
 import { evidenceOf, MIN_SAMPLE_FOR_REPLACE } from "../src/lib/dashboard/evidenceGate";
-import { aiSuggestionLine, type AiSuggestionPayload } from "../src/lib/dashboard/aiLine";
+import { buildCardCopy, achievementConsistent, upProgramHeadline, type AiSuggestionPayload } from "../src/lib/dashboard/homeCopy";
+import { heldLabel } from "../src/lib/dashboard/availHeld";
 import { classifyOriginals, pickForChannel } from "../src/lib/dashboard/originalClassify";
 
 let passed = 0;
@@ -770,25 +771,38 @@ check("근거 관문: 확실성 낮음은 표본이 많아도 약함", evidenceO
 check("근거 관문: 확실성 보통 이상이라도 표본이 " + MIN_SAMPLE_FOR_REPLACE + "회 미만이면 약함", evidenceOf("MID", MIN_SAMPLE_FOR_REPLACE - 1) === "weak" && evidenceOf("HIGH", 0) === "weak");
 check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추천 가능", evidenceOf("MID", MIN_SAMPLE_FOR_REPLACE) === "ok" && evidenceOf("HIGH", 30) === "ok");
 
-// 홈 카드 문구(진단·처방·대안, 줄마다 한 가지)
+// 홈 카드 문구(2026-10-14 기준: 진단·원인 및 근거·조치, 핵심 수치와 비교 근거를 지우지 않는다)
 {
-  const base: AiSuggestionPayload = { channelCode: "X", weekStart: "2026-10-19", currentExpected: null, aiExpected: null, change: null, external: ["외부A", "외부B"] };
   const hole = { program: "연애박사", hour: 14, ratioPct: 3 };
-  const brief = { cause: "단발성 하락", action: "다음 방영 0.100 아래면 이동·교체" };
+  const brief = { cause: "최근 4회 중 3회가 기준선(0.020) 아래입니다", action: "다음 방영이 0.020 아래이면 이동·교체 검토" };
+  const remedy = { lines: [], concrete: false, sample: 7, brief, hole };
+  const base: AiSuggestionPayload = { channelCode: "ENA_PLAY", weekStart: "2026-10-19", currentExpected: null, aiExpected: null, change: null, remedy };
   const weak = { weekday: 2, startMin: 14 * 60 + 23, from: "연애박사", to: "입터지는실험실", gain: 0.0745, certainty: "LOW" as const, sampleCount: 4, evidence: "weak" as const };
-  const lines = (p: AiSuggestionPayload, structural: boolean) => aiSuggestionLine(p, structural).split(String.fromCharCode(10));
-  const l1 = lines({ ...base, change: weak, remedy: { lines: [], concrete: false, sample: 7, brief, hole } }, true);
-  check("홈 문구: 구조적 격차 + 근거 약한 교체 → 진단·테스트·대안 3줄, 대안에 구매 검토 제목", l1.length === 3 && l1[0].startsWith("구조적 격차 · 14시 '연애박사' 같은 자리 보통의 3%") && l1[1].startsWith("테스트 · 14시 '입터지는실험실'(표본 4회)") && l1[2].includes("편성 조정만으론 한계") && l1[2].includes("'외부A'"), l1.join(" / "));
-  check("홈 문구: 근거 약한 안은 기대 개선폭 수치를 내지 않는다", !l1.join("").includes("0.074") && !l1.join("").includes("%p"));
+  const input = { achievementPct: 56, rating: 0.017, goalRating: 0.03, priorPct: 37, structural: true, program: null };
+  const c1 = buildCardCopy({ ...input, ai: { ...base, change: weak } });
+  check("홈 문구 진단: 목표 달성률과 가장 부진한 프로그램·시간대가 함께 나온다", c1.headline === "목표의 56% 달성 — 14시 '연애박사'가 가장 부진", c1.headline ?? "");
+  check("홈 문구 근거: 비교 기준(같은 요일·시간대 최근 8회 중앙값)과 수치를 남긴다", !!c1.cause && c1.cause.startsWith("14시 '연애박사'는 같은 요일·시간대 최근 8회 중앙값의 3% 수준") && c1.cause.includes("최근 4회 중 3회"), c1.cause ?? "");
+  check("홈 문구 근거: 구조적 부진은 추상어 대신 최근 2주 수치로 풀어 쓴다", !!c1.cause && c1.cause.includes("최근 2주 같은 요일도 목표의 37% 수준") && !c1.cause.includes("구조적") && !(c1.headline ?? "").includes("구조적"));
+  check("홈 문구 조치: 테스트 후보는 테스트인 이유와 표본 수를 밝히고 교체를 확정하지 않는다", !!c1.action && c1.action.includes("표본이 4회뿐") && c1.action.includes("시험 편성") && !c1.action.includes("0.074"), c1.action ?? "");
+  check("홈 문구: '편성 조정만으론 한계'·'반복 약세'·'구조적 격차' 같은 추상어를 쓰지 않는다", ![c1.headline, c1.cause, c1.action, ...c1.more].join(" ").match(/한계|반복 약세|구조적 격차/));
   const ok = { ...weak, evidence: "ok" as const, certainty: "MID" as const, sampleCount: 12 };
-  const l2 = lines({ ...base, change: ok, remedy: { lines: [], concrete: false, sample: 7, brief, hole } }, true);
-  check("홈 문구: 근거 충분한 교체안이 있으면 교체 줄이 나오고 '한계' 대안 줄은 없다", l2.length === 2 && l2[1].startsWith("교체 · 14시") && !l2.join("").includes("한계"), l2.join(" / "));
-  const l3 = lines({ ...base, focus: "연애박사", remedy: { lines: [], concrete: false, sample: 7, brief, hole } }, false);
-  check("홈 문구: 약한 프로그램이 이미 지목된 카드는 원인·처방 두 줄만(대안 줄 없음)", l3.length === 2 && l3[0] === "단발성 하락" && !l3.join("").includes("구매 검토"), l3.join(" / "));
-  const l4 = lines({ ...base, external: [] }, true);
-  check("홈 문구: 풀 밖 후보가 없어도 '한계' 문구에는 반드시 다른 대안(구매 검토·목표 재점검)이 붙는다", l4[l4.length - 1].includes("편성 조정만으론 한계") && l4[l4.length - 1].includes("목표 재점검"), l4.join(" / "));
-  check("홈 문구: '현재 편성 유지가 낫다'는 말을 쓰지 않는다", !aiSuggestionLine(base, false).includes("유지가 낫다"));
+  const c2 = buildCardCopy({ ...input, ai: { ...base, change: ok } });
+  check("홈 문구 조치: 근거 충분한 교체안은 기대 시청률·표본·신뢰도와 함께 구체적으로", !!c2.action && c2.action.includes("'연애박사' 대신 '입터지는실험실'") && c2.action.includes("표본 12회") && c2.action.includes("신뢰도 보통") && c2.positive, c2.action ?? "");
+  const c3 = buildCardCopy({ ...input, achievementPct: 58, rating: 0.106, goalRating: 0.184, program: { name: "나는SOLO", hour: 18 }, ai: { ...base, focus: "나는SOLO", remedy: { ...remedy, brief: { cause: "재방 방송분이며, 이 프로그램의 본방 자리(수 22시대, 보통 시청률 1.580)보다 낮은 시간대입니다", action: "이 재방 자리 시청률이 0.132 아래로 계속되면 재방 시간대(요일·시각) 변경 검토" } } } });
+  check("홈 문구: 약한 프로그램이 지목된 카드는 목표 달성률 + 그 프로그램을 점검 대상으로, 근거·조치를 이어 붙인다", c3.headline === "목표의 58% 달성 — '나는SOLO'(18시) 성과 점검 필요" && !!c3.cause?.includes("본방 자리(수 22시대") && !!c3.action?.includes("0.132 아래로 계속되면"), JSON.stringify(c3));
+  check("홈 문구 검증: 목표 달성률이 현재·목표 시청률과 맞지 않으면 달성률 숫자를 노출하지 않는다", achievementConsistent(56, 0.017, 0.03) && !achievementConsistent(80, 0.017, 0.03) && buildCardCopy({ ...input, achievementPct: 80, ai: base }).headline === null);
+  check("홈 문구: 목표를 넘긴 카드에는 목표 미달 진단을 쓰지 않는다", buildCardCopy({ ...input, achievementPct: 120, rating: 0.036, ai: base }).headline === null);
+  const none = buildCardCopy({ ...input, ai: { ...base, remedy: null, external: [{ name: "후보A", vsAvg: 0.8, peers: 3 }, { name: "후보B", vsAvg: null, peers: null }] } });
+  check("홈 문구: 구매 검토는 추천 근거(연평균 이상 추정)가 있는 후보만 말한다 — 근거가 없으면 구매 검토를 꺼내지 않는다", ![none.action, ...none.more].join(" ").includes("구매 검토") && !!none.action?.includes("교체안이 없어"), none.action ?? "");
+  const buy = buildCardCopy({ ...input, ai: { ...base, remedy: null, external: [{ name: "후보A", vsAvg: 1.3, peers: 4 }] } });
+  check("홈 문구: 구매 검토는 후보 이름·추정 배수·비교 채널 수를 함께 밝힌다", !!buy.action && buy.action.includes("구매 검토") && buy.action.includes("'후보A'") && buy.action.includes("1.3배") && buy.action.includes("비교 4곳"), buy.action ?? "");
+  const hr = { name: "놀면뭐하니", vsAvg: 1.39, endState: "ends_soon" as const, daysToEnd: 14, hasConditions: false, peers: 5 };
+  check("홈 문구: 보유 콘텐츠는 추정 근거와 권리 종료 임박을 함께 밝힌다", heldLabel(hr).includes("연평균의 약 1.4배 추정") && heldLabel(hr).includes("비교 5곳") && heldLabel(hr).includes("방영권 종료 14일 전"), heldLabel(hr));
+  const multi = buildCardCopy({ ...input, ai: { ...base, change: weak, availHeld: [hr] } });
+  check("홈 문구: 조치는 한 가지를 앞에 두고 나머지는 '다른 방법'으로 둔다", !!multi.action?.startsWith("보유 콘텐츠 검토") && multi.more.some((m) => m.startsWith("테스트 편성 검토")), JSON.stringify(multi));
 }
+
+check("홈 문구: 호조 프로그램이 있어도 채널이 목표 미달이면 달성률과 함께 진단 한 줄을 앞에 둔다", upProgramHeadline({ achievementPct: 46, rating: 0.028, goalRating: 0.06, program: { name: "왕가네식구들", hour: 21 } }) === "목표의 46% 달성 — '왕가네식구들'(21시)은 호조지만 채널 전체는 목표 미달" && upProgramHeadline({ achievementPct: 125, rating: 0.115, goalRating: 0.092, program: { name: "A", hour: null } }) === null && upProgramHeadline({ achievementPct: 90, rating: 0.028, goalRating: 0.06, program: { name: "A", hour: null } }) === null);
 
 // ENA 본방 오리지널 활용 권유(진행·예정·종영 +1주, 적합도 기준)
 {
@@ -806,12 +820,13 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   const r = classifyOriginals(specs, fits, "2026-10-13");
   check("오리지널 활용: 진행 중 정식 판정 우수작은 fit, 방영 초반(표본 적음)은 test, 시작 전은 upcoming", r.use.map((u) => u.name + ":" + u.verdict).join(",") === "나는SOLO:fit,연애박사:test,지구마불 세계여행 4:upcoming", r.use.map((u) => u.name + ":" + u.verdict).join(","));
   check("오리지널 활용: 종영 +1주를 넘긴 작품·사업형 분류는 제외", !r.use.some((u) => u.name === "신병4사보타주" || u.name === "케이팝업차트쇼"));
-  check("오리지널 활용: ENA 본방 효율이 낮은 진행 중 작품은 활용이 아니라 재방 축소 대상", r.weak.map((w) => w.name).join() === "왕자와 거지" && !r.use.some((u) => u.name === "왕자와 거지"));
+  check("오리지널 활용: ENA 본방 효율이 낮은 진행 중 작품은 활용이 아니라 재방 축소 대상(슬롯 대비 배수 포함)", r.weak.map((w) => w.name).join() === "왕자와 거지" && r.weak[0].slotIndex === 0.36 && !r.use.some((u) => u.name === "왕자와 거지"));
   const r2 = classifyOriginals(specs, fits, "2026-10-05");
   check("오리지널 활용: 종영 직후 1주 이내는 활용 후보로 남는다", r2.use.some((u) => u.name === "신병4사보타주" && u.status === "종영 직후"));
   check("오리지널 활용: ENA Drama는 드라마, Play·Story는 예능을 먼저 권한다", pickForChannel(r.use, "ENA_DRAMA")[0].name === "연애박사" && pickForChannel(r.use, "ENA_PLAY")[0].name === "나는SOLO");
-  const l = aiSuggestionLine({ channelCode: "ENA_PLAY", weekStart: "2026-10-19", currentExpected: null, aiExpected: null, change: null, external: ["외부A"], originals: { use: pickForChannel(r.use, "ENA_PLAY").map((u) => ({ name: u.name, verdict: u.verdict, status: u.status, start: u.start })), weak: ["왕자와 거지"] } }, true);
-  check("홈 문구: 오리지널 활용 줄이 있으면 '편성 조정만으론 한계'·구매 검토 대안 줄 대신 쓰고, 부진 작품은 재방 축소 검토로 알린다", l.includes("오리지널 활용 · '나는SOLO'") && l.includes("오리지널 재방 축소 검토 · '왕자와 거지'") && !l.includes("한계") && !l.includes("구매 검토"), l);
+  const base: AiSuggestionPayload = { channelCode: "ENA_PLAY", weekStart: "2026-10-19", currentExpected: null, aiExpected: null, change: null };
+  const c = buildCardCopy({ achievementPct: 56, rating: 0.017, goalRating: 0.03, priorPct: null, structural: false, program: null, ai: { ...base, originals: { use: pickForChannel(r.use, "ENA_PLAY"), weak: r.weak } } });
+  check("홈 문구: 오리지널 활용은 ENA 본방의 같은 시간대 대비 배수를 근거로, 부진한 작품은 재방 축소 검토로 알린다", !!c.action?.includes("재방 편성 확대 검토") && c.action.includes("'나는SOLO'(ENA 본방이 같은 시간대 평균의 1.4배)") && c.more.some((m) => m.includes("재방 축소 검토") && m.includes("'왕자와 거지'(ENA 본방이 같은 시간대 평균의 0.4배)")), JSON.stringify(c));
 }
 
 console.log(`\n${passed}건 통과, ${failures.length}건 실패`);

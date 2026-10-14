@@ -38,16 +38,17 @@ export interface OriginalUse {
 }
 export interface OriginalLeverage {
   use: OriginalUse[];
-  /** ENA에서 효율이 기대에 못 미치는 진행 중 오리지널 — 이 채널이 재방을 편성하고 있다면 줄이라고 조언할 대상 */
-  weak: string[];
+  /** ENA에서 효율이 기대에 못 미치는 진행 중 오리지널 — 이 채널이 재방을 편성하고 있다면 줄이라고 조언할 대상(슬롯 대비 배수 포함) */
+  weak: { name: string; slotIndex: number | null }[];
 }
+export type OriginalLeverageView = OriginalLeverage;
 
 /** 순수 분류 — 진행/종영 직후/예정 작품을 ENA 본방 적합도로 활용·부진으로 나눈다. */
-export function classifyOriginals(specs: OriginalSpecLite[], fits: OriginalFitLite[], asOf: string): { use: OriginalUse[]; weak: { name: string }[] } {
+export function classifyOriginals(specs: OriginalSpecLite[], fits: OriginalFitLite[], asOf: string): { use: OriginalUse[]; weak: { name: string; slotIndex: number | null }[] } {
   const fitOf = new Map(fits.map((f) => [f.programId, f]));
   const seen = new Set<string>();
   const use: (OriginalUse & { rank: number })[] = [];
-  const weak: { name: string }[] = [];
+  const weak: { name: string; slotIndex: number | null }[] = [];
   for (const s of specs) {
     if (!ORIGINAL_CATEGORIES.has(s.category) || !s.activeFrom || seen.has(s.programId)) continue;
     const started = s.activeFrom <= asOf;
@@ -71,7 +72,7 @@ export function classifyOriginals(specs: OriginalSpecLite[], fits: OriginalFitLi
     } else if (f.tier === "REFERENCE" && A >= USE_MIN.refScale && L >= USE_MIN.refSlot) {
       use.push({ name: s.programName, category: s.category, verdict: "test", status, start: null, slotIndex: L, scaleIndex: A, rank: f.score ?? 0 });
     } else if (f.tier === "FORMAL" && (f.tag === "REPLACE" || f.tag === "WATCH")) {
-      weak.push({ name: s.programName });
+      weak.push({ name: s.programName, slotIndex: f.slotIndex });
     }
   }
   use.sort((a, b) => b.rank - a.rank);

@@ -60,7 +60,7 @@ export interface AiSuggestion {
   /** 교체 후보가 없을 때의 보완 제안(원인 → 할 일, 최근 방영 실측으로 계산) — 약해진 프로그램을 지정했고 계산됐을 때만 */
   remedy: WeakSlotRemedy | null;
   /** 자사 편성 안에서 근거 충분한 교체안이 없을 때 보여 줄 풀 밖 대안 — 구매 검토 추천 상위 제목(자사 풀 최적화와는 섞지 않는다) */
-  external: string[];
+  external: { name: string; vsAvg: number | null; peers: number | null }[];
   /** ENA 본방 오리지널 활용 권유(ENA Play·Drama·Story만) — 활용 후보와 재방 축소 코멘트 대상 */
   originals: OriginalLeverage | null;
 }
@@ -241,7 +241,7 @@ function pickDetail(details: ReplaceDetail[], weekday: number, focus: string | n
 // 같은 기준일·채널·입력이면 다른 사람·새로고침·다른 서버에서도 다시 계산하지 않고 저장해 둔 결과를 쓴다(기존 캐시 테이블, 마이그레이션 없음).
 // 키에는 결과를 바꿀 수 있는 입력의 지문(제외 편성·권리 상태·채널 설정·가장 최근 닐슨 업로드 시각·기능 끄개)이 들어가 입력이 바뀌면 자동으로 새로 계산한다.
 // 지문에 못 넣는 변화(예: 장르표 수정)는 6시간 TTL로 제한한다. 지문을 만들지 못하거나 저장소가 실패하면 평소처럼 계산한다.
-const SUGGESTION_CACHE_VERSION = "v4"; // v2: 최근 방영 확인 조회 오류 수정·근거 관문 추가(예전 "후보 없음" 결과를 재사용하지 않도록)
+const SUGGESTION_CACHE_VERSION = "v5"; // v2: 최근 방영 확인 조회 오류 수정·근거 관문 추가(예전 "후보 없음" 결과를 재사용하지 않도록)
 const SUGGESTION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 async function suggestionFingerprint(channelCode: string, asOfDate: string, focus: string | null): Promise<unknown> {
@@ -273,21 +273,23 @@ export async function computeAiSuggestion(channelCode: string, asOfDate: string,
   } catch {
     return computeAiSuggestionUncached(channelCode, asOfDate, focus);
   }
-  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v4", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
+  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v5", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
   return r.value;
 }
 
-/** 구매 검토 추천(사전 계산, 해당 채널 방영 이력 없음) 상위 제목 — 자사 풀 밖 대안으로만 쓴다. 없거나 실패하면 빈 배열 */
-async function loadExternalCandidates(channelCode: string, limit = 2): Promise<string[]> {
+/** 구매 검토 추천(사전 계산, 해당 채널 방영 이력 없음) 상위 제목과 추천 근거(연평균 대비 추정 배수·비교 채널 수) — 자사 풀 밖 대안으로만 쓴다. 없거나 실패하면 빈 배열 */
+async function loadExternalCandidates(channelCode: string, limit = 2): Promise<{ name: string; vsAvg: number | null; peers: number | null }[]> {
   const { data, error } = await supabase
     .from("purchase_recommendations")
-    .select("display_name, rank")
+    .select("display_name, rank, vs_annual_avg, peer_count")
     .eq("own_channel_code", channelCode)
     .eq("window_days", 182)
     .order("rank", { ascending: true })
     .limit(limit);
   if (error) return [];
-  return ((data ?? []) as { display_name: string }[]).map((r) => r.display_name).filter(Boolean);
+  return ((data ?? []) as { display_name: string; vs_annual_avg: number | string | null; peer_count: number | string | null }[])
+    .filter((r) => !!r.display_name)
+    .map((r) => ({ name: r.display_name, vsAvg: r.vs_annual_avg === null ? null : Number(r.vs_annual_avg), peers: r.peer_count === null ? null : Number(r.peer_count) }));
 }
 
 export async function computeAiSuggestionUncached(channelCode: string, asOfDate: string, focus: string | null): Promise<AiSuggestion> {

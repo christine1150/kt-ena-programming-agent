@@ -41,7 +41,7 @@ async function pageAll<T>(q: (from: number, to: number) => PromiseLike<{ data: T
   return out;
 }
 
-export async function computeRecommendations(client: SupabaseClient, args: { channel: string; target: "A2049" | "HH"; window: number; top?: number }): Promise<{ asOf: string; annualAvg: number | null; rows: RecoRow[] }> {
+export async function computeRecommendations(client: SupabaseClient, args: { channel: string; target: "A2049" | "HH"; window: number; top?: number; /** 지정하면 이 정규화 키(대문자)에 해당하는 프로그램만 계산한다 — Avail 보유 콘텐츠처럼 후보를 미리 좁힌 경우(전체 계산은 수 분 걸린다) */ onlyKeys?: Set<string> }): Promise<{ asOf: string; annualAvg: number | null; rows: RecoRow[] }> {
   const { channel, target, window } = args;
   const asOf = await latestCompetitorDate(client);
   const from = new Date(Date.parse(asOf) - window * 86400000).toISOString().slice(0, 10);
@@ -65,6 +65,7 @@ export async function computeRecommendations(client: SupabaseClient, args: { cha
   const groups = new Map<string, { display: string; rep: string; members: string[] }>();
   for (const r of ident) {
     if (r.comp_channels.filter((c) => !hub.includes(c)).length < 3) continue; // 비교 채널은 케이블 3곳 이상
+    if (args.onlyKeys && !args.onlyKeys.has(r.key.toUpperCase())) continue;
     const g = groups.get(r.group_key) ?? { display: r.display_name, rep: r.key, members: [] };
     g.members.push(r.key.toUpperCase());
     groups.set(r.group_key, g);
