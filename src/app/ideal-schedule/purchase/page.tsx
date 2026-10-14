@@ -591,7 +591,6 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
                       <span className="text-sm font-medium text-zinc-900">{r.rank}. {i.display_name}</span>
                       <span className="ml-2 text-xs text-zinc-400">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회</span>
                       {i.confidence && <span className="ml-2 text-xs text-zinc-400">예측 {CONF_LABEL[i.confidence] ?? i.confidence}</span>}
-                      {r.tiedWithTop && <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500">1위와 예측 범위가 겹침 — 순위 차이 단정 불가</span>}
                     </span>
                     <span className="shrink-0 text-right tabular-nums">
                       <span className={`text-sm font-semibold ${below ? "text-rose-600" : "text-zinc-900"}`}>{fmt(i.prediction)}%</span>
