@@ -1998,7 +1998,7 @@ const FIT_TYPE_BADGE_STYLE: Record<FitType, string> = {
 function FitTypeBadge({ type }: { type: FitType | null }) {
   if (!type) return null;
   return (
-    <span title={FIT_TYPE_NOTE[type]} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-medium leading-none ${FIT_TYPE_BADGE_STYLE[type]}`}>
+    <span title={FIT_TYPE_NOTE[type]} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium leading-none ${FIT_TYPE_BADGE_STYLE[type]}`}>
       {type}
     </span>
   );
@@ -2016,10 +2016,10 @@ function FitChips({ cf }: { cf: ContentFitItem }) {
   const role = cf.tier === "FORMAL" ? audienceRoleOf(cf) : null;
   if (!type && !role) return <span className="text-zinc-300">—</span>;
   return (
-    <span className="flex flex-nowrap items-center gap-1 whitespace-nowrap">
+    <span className="flex min-h-6 flex-nowrap items-center gap-1 whitespace-nowrap">
       <FitTypeBadge type={type} />
       {role && (
-        <span title={`시청자 유형 — ${AUDIENCE_ROLE_NOTE[role]}`} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11.5px] font-medium leading-none ${AUDIENCE_ROLE_BADGE_STYLE[role]}`}>
+        <span title={`시청자 유형 — ${AUDIENCE_ROLE_NOTE[role]}`} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-medium leading-none ${AUDIENCE_ROLE_BADGE_STYLE[role]}`}>
           {AUDIENCE_ROLE_LABEL[role]}
         </span>
       )}
@@ -6594,11 +6594,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
               <table className="w-full table-fixed text-left text-sm">
                 <colgroup>
+                  <col className="w-[9%]" />
                   <col className="w-[10%]" />
-                  <col className="w-[16%]" />
-                  <col className="w-[17%]" />
-                  <col className="w-[34%]" />
-                  <col className="w-[23%]" />
+                  <col className="w-[21%]" />
+                  <col className="w-[38%]" />
+                  <col className="w-[22%]" />
                 </colgroup>
                 <thead>
                   <tr className="text-zinc-400">
@@ -7682,14 +7682,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
                     <table className="w-full table-fixed text-left text-sm">
                       <colgroup>
+                        <col className="w-[9%]" />
                         <col className="w-[10%]" />
-                        <col className="w-[16%]" />
-                        <col className="w-[20%]" />
+                        <col className="w-[29%]" />
                         <col className="w-[12%]" />
                         <col className="w-[12%]" />
                         <col className="w-[10%]" />
                         <col className="w-[9%]" />
-                        <col className="w-[11%]" />
+                        <col className="w-[9%]" />
                       </colgroup>
                       <thead>
                         <tr className="text-zinc-400">
@@ -7700,7 +7700,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           <th className="pb-2 font-medium">시청 규모</th>
                           <th className="pb-2 font-medium">시청 몰입도</th>
                           <th className="pb-2 font-medium">최근 추세</th>
-                          <th className="pb-2 font-medium">적합도</th>
+                          <th className="pb-2 text-center font-medium">적합도</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -7764,10 +7764,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                   trendCell.text
                                 )}
                               </td>
-                              <td className="py-2 pr-2 align-middle font-semibold tabular-nums text-zinc-900">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span>{cf.score === null ? "—" : cf.score.toFixed(0)}</span>
-                                  <RowChevron open={isOpen} color={accentColor} />
+                              <td className="py-2 align-middle font-semibold tabular-nums text-zinc-900">
+                                <div className="relative flex items-center justify-center">
+                                  <span className="w-6 text-center">{cf.score === null ? "—" : cf.score.toFixed(0)}</span>
+                                  <span className="absolute left-1/2 ml-3.5 flex items-center">
+                                    <RowChevron open={isOpen} color={accentColor} />
+                                  </span>
                                 </div>
                               </td>
                             </tr>
