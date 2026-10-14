@@ -117,9 +117,15 @@ export async function POST(request: Request) {
       // 네이버에서 종영일을 가져온다. 수동으로 고친 작품은 건드리지 않는다. 한 번에 FETCH_BATCH개씩, 네이버가 요청을 제한하면 그 자리에서 멈춘다 — 남은 수를 돌려주니 화면이 이어서 부른다.
       if (!loaded.originalEndApplied) return NextResponse.json({ ok: false, message: "종영일 테이블이 아직 적용되지 않았습니다(마이그레이션 20261017010000 적용 후 사용할 수 있습니다)." }, { status: 503 });
       const targets = new Map<string, string>();
+      const hintsByKey = new Map<string, string[]>();
       for (const g of current) {
         if (g.status !== "active") continue;
-        if (g.conditions.some((c) => c.code === "MEMO_REVIEW" && parseAfterOriginalEnd(c.raw))) targets.set(g.content.canonicalKey, g.content.titleRaw);
+        for (const c of g.conditions) {
+          const rule = c.code === "MEMO_REVIEW" ? parseAfterOriginalEnd(c.raw) : null;
+          if (!rule) continue;
+          targets.set(g.content.canonicalKey, g.content.titleRaw);
+          if (rule.broadcaster) hintsByKey.set(g.content.canonicalKey, [...(hintsByKey.get(g.content.canonicalKey) ?? []), rule.broadcaster]);
+        }
       }
       const stored = new Map((loaded.state.originalEnds ?? []).map((e) => [e.contentKey, e]));
       const wantKeys = Array.isArray(body.contentKeys) ? new Set((body.contentKeys as unknown[]).map(String)) : null;
@@ -132,7 +138,7 @@ export async function POST(request: Request) {
       });
       const batch = todo.slice(0, FETCH_BATCH);
       const now = new Date().toISOString();
-      const results = await fetchOriginalEnds(batch.map(([contentKey, titleRaw]) => ({ contentKey, titleRaw })), now);
+      const results = await fetchOriginalEnds(batch.map(([contentKey, titleRaw]) => ({ contentKey, titleRaw, broadcasterHints: hintsByKey.get(contentKey) })), now);
       let saved = 0;
       const failed: { title: string; message: string }[] = [];
       let blocked = false;

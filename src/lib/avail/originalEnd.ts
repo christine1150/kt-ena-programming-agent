@@ -8,6 +8,8 @@ import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 // ── 메모 문구 해석 ───────────────────────────────────────
 
 export interface AfterEndRule {
+  /** 메모에 적힌 원 방송사(예: "JTBC"). 없으면 null — 네이버가 찾은 방송사와 다르면 다른 작품을 찾은 것이라 종영일을 쓰지 않는다 */
+  broadcaster: string | null;
   /** 종영일로부터 더 기다려야 하는 일수(예: "종료 180일 후" = 180). 없으면 0 */
   offsetDays: number;
   /** 종영 후 방영할 수 있는 채널 수(문구에 있을 때). 판정에는 쓰지 않고 안내만 한다 */
@@ -15,7 +17,7 @@ export interface AfterEndRule {
 }
 
 const BROADCASTER = "(?:KBSM|KBS|MBC|SBS|JTBC|TV조선|채널A|MBN|tvN|EBS)";
-const AFTER_END = new RegExp(`^(?:${BROADCASTER}\\s*)?(?:종영\\s*후|후방)\\s*(\\d+)\\s*(?:개\\s*)?채널$`, "i");
+const AFTER_END = new RegExp(`^(?:(${BROADCASTER})\\s*)?(?:종영\\s*후|후방)\\s*(\\d+)\\s*(?:개\\s*)?채널$`, "i");
 
 /**
  * "{방송사} 종영 후 N개 채널" · "후방 N개채널" 꼴만 읽는다. 다른 조건이 섞인 문구("2개 채널 동시 편성 금지", "종영 후 ALL" 등)는 null — 사람이 확인해야 한다.
@@ -28,7 +30,20 @@ export function parseAfterOriginalEnd(raw: string | null | undefined): AfterEndR
   const m = AFTER_END.exec(bare);
   if (!m) return null;
   const off = /종료\s*(\d+)\s*일\s*후/.exec(t);
-  return { offsetDays: off ? Number(off[1]) : 0, channelCount: Number(m[1]) };
+  return { broadcaster: m[1] ?? null, offsetDays: off ? Number(off[1]) : 0, channelCount: Number(m[2]) };
+}
+
+const normBroadcaster = (s: string) => s.replace(/\s+/g, "").toLowerCase().replace(/^kbs[12m]?$/, "kbs");
+
+/**
+ * 메모의 방송사와 네이버가 찾은 방송사가 다르면 true(= 같은 제목의 다른 작품일 가능성). 한쪽이 비어 있으면 비교할 수 없어 false.
+ * 예) 메모 "MBC 종영 후 1개 채널"인데 네이버가 "일본 NTV"를 돌려준 "우리집". KBS ↔ KBS2는 같은 방송사로 본다.
+ */
+export function broadcasterConflict(hints: (string | null | undefined)[], found: string | null | undefined): boolean {
+  const hs = hints.filter((h): h is string => !!h).map(normBroadcaster);
+  if (hs.length === 0 || !found) return false;
+  const f = normBroadcaster(found);
+  return !hs.some((h) => f === h || f.startsWith(h));
 }
 
 // ── 종영일 저장 모델 ─────────────────────────────────────
@@ -115,9 +130,9 @@ export function sameTitle(a: string, b: string): boolean {
 }
 
 /** 네이버 조회 결과를 저장 형태로 바꾼다. 제목이 다르면 review(자동으로 판정에 쓰지 않음). */
-export function toOriginalEnd(contentKey: string, titleRaw: string, found: NaverBroadcast | null, now: string): OriginalEnd {
+export function toOriginalEnd(contentKey: string, titleRaw: string, found: NaverBroadcast | null, now: string, broadcasterHints: (string | null)[] = []): OriginalEnd {
   const base = { contentKey, titleRaw, source: "naver" as const, note: null, updatedBy: "네이버 조회", updatedAt: now };
   if (!found) return { ...base, status: "not_found", broadcaster: null, startDate: null, endDate: null, matchedTitle: null };
-  const status: OriginalEndStatus = !sameTitle(titleRaw, found.title) ? "review" : found.endDate ? "found" : "ongoing";
+  const status: OriginalEndStatus = !sameTitle(titleRaw, found.title) || broadcasterConflict(broadcasterHints, found.broadcaster) ? "review" : found.endDate ? "found" : "ongoing";
   return { ...base, status, broadcaster: found.broadcaster, startDate: found.startDate, endDate: found.endDate, matchedTitle: found.title };
 }

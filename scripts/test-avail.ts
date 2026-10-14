@@ -989,6 +989,18 @@ async function main() {
     const gOther = grant({ id: "GX", title: "다른메모", code: "X-1", conditions: [other] });
     check("종영 후 규칙이 아닌 메모는 종영일이 있어도 영향받지 않는다", status(q("다른메모", 3), slot(), ctxOf([gOther], { originalEnds: { [gOther.content.canonicalKey]: endE({ contentKey: gOther.content.canonicalKey, endDate: "2099-01-01" }) } })).status === "conditional");
 
+    // 방송사 교차 검증: 메모의 방송사와 네이버의 방송사가 다르면 다른 작품일 수 있어 종영일을 쓰지 않는다(예: 메모 MBC인데 네이버가 일본 NTV)
+    check("메모 해석: 메모에 적힌 방송사를 돌려준다", P("MBC 종영 후 1개 채널")?.broadcaster === "MBC" && P("KBSM 종영 후 1개 채널")?.broadcaster === "KBSM" && P("후방 1개채널")?.broadcaster === null);
+    check("방송사 비교: KBS↔KBS2는 같고 MBC↔일본 NTV는 다르다. 한쪽이 비면 비교하지 않는다", !A.broadcasterConflict(["KBS"], "KBS2") && !A.broadcasterConflict(["KBSM"], "KBS2") && !A.broadcasterConflict(["SBS"], "SBS Plus") && A.broadcasterConflict(["MBC"], "일본 NTV") && A.broadcasterConflict(["JTBC"], "MBN") && !A.broadcasterConflict([], "MBN") && !A.broadcasterConflict(["MBC"], null));
+    check("저장 형태: 제목이 같아도 방송사가 다르면 review", A.toOriginalEnd("우리집", "우리집", { title: "우리 집", broadcaster: "일본 NTV", startDate: "2025-10-12", endDate: "2025-12-14" }, "2026-10-14T00:00:00+09:00", ["MBC"]).status === "review");
+    const memoMbc: A.Condition = { code: "MEMO_REVIEW", kind: "memo", raw: "MBC 종영 후 1개 채널", needs: "메모 확인" };
+    const gW = grant({ id: "GW", title: "우리집테스트", code: "W-1", start: "2024-05-25", end: "2026-05-24", conditions: [memoMbc] });
+    const wrong = endE({ contentKey: gW.content.canonicalKey, broadcaster: "일본 NTV", endDate: "2025-12-14" });
+    check("방송사가 다른 종영일은 판정에 쓰지 않는다 — 종영 전 날짜여도 불가가 아니라 메모 확인 필요", status(q("우리집테스트", 3), slot("2025-06-01"), ctxOf([gW], { originalEnds: { [gW.content.canonicalKey]: wrong } })).status === "conditional");
+    check("방송사가 맞으면 같은 데이터로 판정한다", status(q("우리집테스트", 3), slot("2025-06-01"), ctxOf([gW], { originalEnds: { [gW.content.canonicalKey]: { ...wrong, broadcaster: "MBC" } } })).status === "unavailable");
+    const ovW = (await import("../src/lib/avail/summary")).buildOverview({ available: true, error: null, originalEndApplied: true, state: { revisions: [gW], addenda: [], ledger: [], links: [], confirmations: [], interpretationConfirmations: {}, originalEnds: [wrong] } }, NOW);
+    check("관리자 현황: 방송사 불일치는 사용 중이 아니고 안내 문구가 나온다", ovW.originalEnd.items[0].usable === false && !!ovW.originalEnd.items[0].conflict?.includes("MBC"));
+
     // 끄개: FEATURE_ORIGINAL_END_GATE=off → 컨텍스트에 종영일이 들어가지 않는다
     const stE = { revisions: [gE], addenda: [], ledger: [], links: [], confirmations: [], interpretationConfirmations: {}, originalEnds: [endE()] };
     const onCtx = A.buildEvalContext(stE, { now: NOW }).ctx;

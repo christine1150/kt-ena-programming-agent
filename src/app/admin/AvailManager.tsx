@@ -12,6 +12,7 @@ interface OriginalEndItem {
   texts: string[];
   entry: { source: "naver" | "manual"; status: "found" | "ongoing" | "not_found" | "review"; broadcaster: string | null; startDate: string | null; endDate: string | null; matchedTitle: string | null; note: string | null; updatedBy: string | null } | null;
   usable: boolean;
+  conflict: string | null;
 }
 interface Validation {
   area: string;
@@ -412,7 +413,7 @@ export default function AvailManager() {
                   <div className="max-h-96 overflow-y-auto pr-1" tabIndex={0} aria-label="원 방송 종영일 목록">
                     {ov.originalEnd.items.map((it) => {
                       const e = it.entry;
-                      const state = !e ? "미조회" : it.usable ? "사용 중" : e.status === "review" ? "확인 필요(검색된 제목이 다름)" : e.status === "ongoing" ? "방송 중(종영일 없음)" : "검색 결과 없음";
+                      const state = !e ? "미조회" : it.usable ? "사용 중" : it.conflict ? "확인 필요(방송사 불일치)" : e.status === "review" ? "확인 필요(검색된 제목이 다름)" : e.status === "ongoing" ? "방송 중(종영일 없음)" : "검색 결과 없음";
                       const shown = endEdit[it.contentKey] ?? e?.endDate ?? "";
                       return (
                         <div key={it.contentKey} className="mb-1 rounded border border-zinc-200 px-2 py-1 text-sm">
@@ -428,6 +429,9 @@ export default function AvailManager() {
                               {e.matchedTitle && e.matchedTitle !== it.title ? ` · 검색된 제목: ${e.matchedTitle}` : ""}
                               {e.updatedBy ? ` · ${e.updatedBy}` : ""}
                             </p>
+                          )}
+                          {it.conflict && (
+                            <p className="text-xs text-amber-800">{it.conflict} — 날짜를 확인해 저장하면 &lsquo;수동&rsquo; 값으로 쓰입니다.</p>
                           )}
                           <div className="mt-1 flex flex-wrap items-center gap-2">
                             <label className="text-xs text-zinc-600">

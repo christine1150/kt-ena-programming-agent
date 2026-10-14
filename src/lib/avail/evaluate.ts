@@ -12,7 +12,7 @@ import { addDaysIso, addMonthsIso, calendarDateOf, calendarMinute, dayNumber, pa
 import { episodeAllowed, listEpisodes } from "./episodes";
 import { identityMarkers, seasonNotationKey, titleVariants } from "./identity";
 import { optionsFor, type Interpretation } from "./interpretation";
-import { gateAfterEnd, parseAfterOriginalEnd, usableEndDate, type OriginalEnd } from "./originalEnd";
+import { broadcasterConflict, gateAfterEnd, parseAfterOriginalEnd, usableEndDate, type OriginalEnd } from "./originalEnd";
 import { countedUsages, latestByUsage, usedUnits } from "./ledger";
 import type { Condition, ContentQuery, EligibilityResult, EligibilityStatus, Grant, SlotRef, UsageEntry } from "./types";
 
@@ -266,7 +266,8 @@ function evalGrant(g: Grant, q: ContentQuery, episode: number | null, slot: Slot
     const endRule = c.code === "MEMO_REVIEW" && ctx.originalEnds ? parseAfterOriginalEnd(c.raw) : null;
     if (endRule) {
       const oe = ctx.originalEnds?.[g.content.canonicalKey];
-      const gate = gateAfterEnd(endRule, usableEndDate(oe), slot.broadcastDate);
+      // 메모의 방송사와 저장된 방송사가 다르면 다른 작품의 종영일일 수 있어 쓰지 않는다(확인 필요로 둔다)
+      const gate = gateAfterEnd(endRule, broadcasterConflict([endRule.broadcaster], oe?.broadcaster) ? null : usableEndDate(oe), slot.broadcastDate);
       if (gate.kind === "before_end") {
         add({ code: "ORIGINAL_NOT_ENDED", text: `원 방송(${oe?.broadcaster ?? "원 방송사"})이 ${gate.endDate}에 종영한 뒤 ${gate.availableFrom}부터 편성할 수 있습니다 — 원문: ${c.raw}`, severity: "unavailable" });
         continue;

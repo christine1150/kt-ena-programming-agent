@@ -4,7 +4,7 @@ import { buildEvalContext } from "./context";
 import { conditionConfirmed } from "./evaluate";
 import { unconfirmedKeys, type InterpKey } from "./interpretation";
 import { currentGrants } from "./inventory";
-import { parseAfterOriginalEnd, usableEndDate, type OriginalEnd } from "./originalEnd";
+import { broadcasterConflict, parseAfterOriginalEnd, usableEndDate, type OriginalEnd } from "./originalEnd";
 import { AVAIL_VALIDATION } from "./status";
 import type { LoadedAvail } from "./store";
 import { US_DRAMA_1ST_WINDOW } from "./seeds/usDrama1stWindow";
@@ -19,7 +19,7 @@ export interface Overview {
   /** 확인 대기 중인 메모·홀드백 문구(같은 문구는 묶어서 확인) */
   pendingTexts: { topic: "memo" | "holdback"; text: string; count: number }[];
   /** '원 방송 종영 후 N개 채널' 메모가 있는 작품과 그 종영일(네이버 조회 + 수동 수정) */
-  originalEnd: { tableApplied: boolean; items: { contentKey: string; title: string; texts: string[]; entry: OriginalEnd | null; usable: boolean }[] };
+  originalEnd: { tableApplied: boolean; items: { contentKey: string; title: string; texts: string[]; entry: OriginalEnd | null; usable: boolean; /** 메모의 방송사와 저장된 방송사가 달라 쓰지 않는 경우의 안내 */ conflict: string | null }[] };
   duplicates: { a: string; b: string; titleA: string; titleB: string; reasons: string[] }[];
   addenda: { stored: number; seedAvailable: number; seedStored: number; unmatched: string[]; conflicts: AddendumConflict[]; productionYearMissing: string[] };
   validation: typeof AVAIL_VALIDATION;
@@ -61,13 +61,15 @@ export function buildOverview(loaded: LoadedAvail, now: string): Overview {
       texts.set(k, e);
     }
   }
-  const endTargets = new Map<string, { contentKey: string; title: string; texts: Set<string> }>();
+  const endTargets = new Map<string, { contentKey: string; title: string; texts: Set<string>; hints: Set<string> }>();
   for (const g of ctx.grants) {
     if (g.status !== "active") continue;
     for (const c of g.conditions) {
-      if (c.code !== "MEMO_REVIEW" || !parseAfterOriginalEnd(c.raw)) continue;
-      const e = endTargets.get(g.content.canonicalKey) ?? { contentKey: g.content.canonicalKey, title: g.content.titleRaw, texts: new Set<string>() };
+      const rule = c.code === "MEMO_REVIEW" ? parseAfterOriginalEnd(c.raw) : null;
+      if (!rule) continue;
+      const e = endTargets.get(g.content.canonicalKey) ?? { contentKey: g.content.canonicalKey, title: g.content.titleRaw, texts: new Set<string>(), hints: new Set<string>() };
       e.texts.add(c.raw ?? "");
+      if (rule.broadcaster) e.hints.add(rule.broadcaster);
       endTargets.set(g.content.canonicalKey, e);
     }
   }
@@ -75,7 +77,8 @@ export function buildOverview(loaded: LoadedAvail, now: string): Overview {
   const originalEndItems = [...endTargets.values()]
     .map((t) => {
       const entry = endByKey.get(t.contentKey) ?? null;
-      return { contentKey: t.contentKey, title: t.title, texts: [...t.texts], entry, usable: usableEndDate(entry) !== null };
+      const conflict = entry?.source === "naver" && broadcasterConflict([...t.hints], entry.broadcaster) ? `메모의 방송사(${[...t.hints].join("/")})와 네이버의 방송사(${entry.broadcaster})가 달라 다른 작품일 수 있습니다` : null;
+      return { contentKey: t.contentKey, title: t.title, texts: [...t.texts], entry, usable: usableEndDate(entry) !== null && !conflict, conflict };
     })
     .sort((a, b) => Number(a.usable) - Number(b.usable) || (a.title < b.title ? -1 : 1));
   const byId = new Map(ctx.grants.map((g) => [g.grantId, g]));

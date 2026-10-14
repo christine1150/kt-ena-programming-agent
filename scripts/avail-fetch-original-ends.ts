@@ -14,8 +14,15 @@ async function main() {
   if (!st.available) throw new Error("Avail 테이블이 적용되지 않았습니다.");
   if (!st.originalEndApplied) throw new Error("avail_original_end 테이블이 없습니다(마이그레이션 20261017010000).");
   const targets = new Map<string, string>();
+  const hintsByKey = new Map<string, string[]>();
   for (const g of currentGrants(st.state.revisions)) {
-    if (g.status === "active" && g.conditions.some((c) => c.code === "MEMO_REVIEW" && parseAfterOriginalEnd(c.raw))) targets.set(g.content.canonicalKey, g.content.titleRaw);
+    if (g.status !== "active") continue;
+    for (const c of g.conditions) {
+      const rule = c.code === "MEMO_REVIEW" ? parseAfterOriginalEnd(c.raw) : null;
+      if (!rule) continue;
+      targets.set(g.content.canonicalKey, g.content.titleRaw);
+      if (rule.broadcaster) hintsByKey.set(g.content.canonicalKey, [...(hintsByKey.get(g.content.canonicalKey) ?? []), rule.broadcaster]);
+    }
   }
   const stored = new Map((st.state.originalEnds ?? []).map((e) => [e.contentKey, e]));
   const todo = [...targets].filter(([k]) => {
@@ -25,7 +32,7 @@ async function main() {
   console.log(`모드: ${apply ? "저장(--apply)" : "미리보기(저장 없음)"} · 대상 작품 ${targets.size}개 중 가져올 작품 ${todo.length}개(이미 저장 ${stored.size}개)`);
   const now = new Date().toISOString();
   // 네이버에 부담을 주지 않도록 하나씩 2초 간격으로 보낸다. 제한(403·429)되면 남은 작품은 요청 없이 중단한다.
-  const results = await fetchOriginalEnds(todo.map(([contentKey, titleRaw]) => ({ contentKey, titleRaw })), now, 2000);
+  const results = await fetchOriginalEnds(todo.map(([contentKey, titleRaw]) => ({ contentKey, titleRaw, broadcasterHints: hintsByKey.get(contentKey) })), now, 2000);
   const tally: Record<string, number> = {};
   const lines: string[] = [];
   let saved = 0;
