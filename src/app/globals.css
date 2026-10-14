@@ -226,3 +226,15 @@ body {
 .text-\[11\.5px\]:not(.dense-grid *):not(.page1-readable *) {
   font-size: var(--type-caption);
 }
+
+/* 사용자 지시(2026-10-14): 가로 스크롤 막대는 보이지 않게 한다. 한눈에 보이도록 바꾼 곳 외에, 화면보다 넓은 표는 막대 없이도
+   트랙패드·터치·Shift+휠·키보드(포커스 후 ←→)로 계속 옆으로 넘길 수 있다. */
+.overflow-x-auto,
+[aria-label="가로로 스크롤되는 표"] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.overflow-x-auto::-webkit-scrollbar,
+[aria-label="가로로 스크롤되는 표"]::-webkit-scrollbar {
+  display: none;
+}

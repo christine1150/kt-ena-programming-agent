@@ -3314,6 +3314,62 @@ function ProgramRatingHistoryChart({
 // 사용자 지시(2026-08-26, 재수정): "방송 시간 내에 tvN 자료도 있으면 tvN도 보이게 해서 총
 // 6개 채널이 보이게" — 상위 5개→6개로 확장(색상도 하나 추가).
 const MANUAL_COMPETITOR_BAND_COLORS = ["#f59e0b", "#0891b2", "#a21caf", "#65a30d", "#db2777", "#0d9488"];
+// 사용자 지시(2026-10-14): "경쟁 프로그램 평균 선은 가급적 타 회사 로고 색에 맞게. 다 비슷하면 다른 색으로" — 로고 PNG(public/competitor-logos)에서
+// 뽑은 대표색을 선 색으로 쓰고, 이미 쓰인 색(자사 선 포함)과 비슷하면 위 대체 팔레트에서 구분되는 색을 고른다. 흰 바탕에서 보이도록 밝은 노랑은 한 톤 진하게 맞췄다.
+const COMPETITOR_BRAND_COLOR: Record<string, string> = {
+  SBS: "#0c6095",
+  "SBS Plus": "#23669f",
+  "SBS funE": "#2077be",
+  "SBS Sports": "#1c4286",
+  MBC: "#1f5fa8",
+  "MBC every1": "#53b1ea",
+  "MBC SPORTS+": "#df1f25",
+  KBS1: "#0679e2",
+  KBS2: "#e6a800",
+  "KBS JOY": "#e6a800",
+  KBSN스포츠: "#3479b9",
+  JTBC: "#d9a21b",
+  tvN: "#e8002a",
+  "tvN SHOW": "#f82646",
+  "tvN STORY": "#ed151c",
+  Mnet: "#eb2066",
+  MBN: "#fa7915",
+  채널A: "#ff5a1f",
+  "TV CHOSUN": "#c8102e",
+  SPOTV2: "#de1a20",
+  OCN: "#f5a623",
+  "OCN Movies": "#f5a623",
+  "OCN Movies2": "#f5a623",
+  "연합뉴스TV": "#f8813e",
+};
+const rgbOf = (hex: string): [number, number, number] | null => {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+const colorsClose = (a: string, b: string): boolean => {
+  const x = rgbOf(a);
+  const y = rgbOf(b);
+  if (!x || !y) return false;
+  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < 90;
+};
+function assignBandColors(channelNames: string[], accentColor: string): string[] {
+  const used: string[] = [accentColor];
+  return channelNames.map((name, i) => {
+    const brand = COMPETITOR_BRAND_COLOR[name];
+    const pick =
+      brand && used.every((u) => !colorsClose(u, brand))
+        ? brand
+        : (MANUAL_COMPETITOR_BAND_COLORS.find((c) => used.every((u) => !colorsClose(u, c))) ?? MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length]);
+    used.push(pick);
+    return pick;
+  });
+}
+// 사용자 지시(2026-10-14): 경쟁 프로그램명 앞의 "TVN 특별기획" 문구는 삭제한다.
+function cleanCompetitorProgramName(name: string): string {
+  return name.replace(/tvN\s*특별기획\s*[-:·]?\s*/gi, "").trim() || name;
+}
 // 사용자 지시(2026-08-26, 분당 시청률 재수정): "그래프 위에 겹쳐 쓰던 채널명·프로그램명이
 // 서로 겹쳐 안 읽힘 — 가운데 표(PD 원본 엑셀 참고 이미지)처럼 그래프 아래 정리된 목록으로,
 // 채널 로고를 작게 넣어 표시". 등록 경쟁채널(SBS/MBC/KBS1 등)은 이 채널들(ENA 계열)과 달리
@@ -3504,8 +3560,9 @@ function ManualMinuteRatingChart({
   // 아래 렌더링에서 가는 leader line으로 이어 준다.
   const LABEL_MIN_GAP = 11;
   const bandLabels: { y: number; labelY: number; name: string; color: string }[] = [];
+  const bandColors = assignBandColors(bands.map((c) => c.channel_name), accentColor);
   for (const entry of bands
-    .map((c, i) => ({ y: yOf(c.target_rating!), name: c.channel_name, color: MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length] }))
+    .map((c, i) => ({ y: yOf(c.target_rating!), name: c.channel_name, color: bandColors[i] }))
     .sort((a, b) => a.y - b.y)) {
     const prev = bandLabels[bandLabels.length - 1];
     const labelY = prev && entry.y - prev.labelY < LABEL_MIN_GAP ? prev.labelY + LABEL_MIN_GAP : entry.y;
@@ -3513,9 +3570,7 @@ function ManualMinuteRatingChart({
   }
   return (
     <div className="max-w-[900px]">
-      <p className="mb-1 text-[11.5px] text-zinc-500">
-        분당 시청률 — 굵은 선 {ownChannelName}, 흐린 선 동시간대 경쟁 프로그램 평균
-      </p>
+      {/* 사용자 지시(2026-10-14): "분당 시청률 — 굵은 선 ENA, 흐린 선 …" 안내 문구는 삭제. */}
       <div className="relative">
         {/* preserveAspectRatio="none"이면 <text> 눈금이 가로로 늘어나 찌그러지므로, y축 눈금을
             넣으면서 기본값(비율 유지)으로 바꾼다 — 세로 높이는 style로 고정. */}
@@ -3536,8 +3591,8 @@ function ManualMinuteRatingChart({
             const x1 = Math.max(PAD_L, xOf(c.start_time!.slice(0, 5)));
             const x2 = Math.min(W - PAD_R, xOf(c.end_time!.slice(0, 5)));
             const y = yOf(c.target_rating!);
-            const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
-            const title = `${c.channel_name} '${c.program_name}' — ${c.target_rating!.toFixed(3)}%`;
+            const color = bandColors[i];
+            const title = `${c.channel_name} '${cleanCompetitorProgramName(c.program_name)}' — ${c.target_rating!.toFixed(3)}%`;
             return (
               <g key={`${c.channel_name}-${c.program_name}`}>
                 {/* 사용자 지시(2026-09-02): "경쟁 채널의 시청률은 점선 말고 흐린 실선으로" — dasharray 제거. */}
@@ -3633,18 +3688,20 @@ function ManualMinuteRatingChart({
           3열 grid로 폭을 고정한다. 이제 이 카드가 경쟁 프로그램 정보의 유일한 출처다(차트
           위 로고 배지는 제거) — 카드 톤도 살짝 다듬어 각 항목이 더 뚜렷이 구분되게 한다. */}
       {bands.length > 0 && (
-        <div className="mt-2 flex flex-nowrap gap-1.5 overflow-x-auto pb-1" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
+        // 사용자 지시(2026-10-14): 좌우 스크롤바 없이 한눈에 — 2열 격자로 맞추고 프로그램명은 칸 폭에서 줄임표로 자른다(전체 이름은 마우스 오버).
+        <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
           {bands.map((c, i) => {
-            const color = MANUAL_COMPETITOR_BAND_COLORS[i % MANUAL_COMPETITOR_BAND_COLORS.length];
+            const color = bandColors[i];
+            const programName = cleanCompetitorProgramName(c.program_name);
             return (
               <div
                 key={`${c.channel_name}-${c.program_name}`}
-                className="flex h-6 shrink-0 items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 text-[11px]"
-                title={`${c.channel_name} '${c.program_name}' ${c.start_time!.slice(0, 5)} ${c.target_rating!.toFixed(3)}%`}
+                className="flex h-6 min-w-0 items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 text-[11px]"
+                title={`${c.channel_name} '${programName}' ${c.start_time!.slice(0, 5)} ${c.target_rating!.toFixed(3)}%`}
               >
                 <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
                 <CompetitorLogoBadge channelName={c.channel_name} color={color} heightPx={12} />
-                <span className="max-w-[9rem] truncate text-zinc-600">{c.program_name}</span>
+                <span className="min-w-0 flex-1 truncate text-zinc-600">{programName}</span>
                 <span className="shrink-0 font-semibold tabular-nums" style={{ color: brandText(color) }}>
                   {c.target_rating!.toFixed(2)}%
                 </span>
