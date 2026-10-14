@@ -1,7 +1,0 @@
-{
-  "version": null,
-  "isOldVersion": false,
-  "detectedAt": "2026-10-06T04:52:48.749Z",
-  "ttlSeconds": 3600,
-  "detectError": "claude --version produced no parsable version"
-}
