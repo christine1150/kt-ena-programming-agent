@@ -4,7 +4,7 @@
 // 이 테스트가 보증하는 것: 사용자 제기 사례(시청률 좋은 장기 프로그램이 시청률 낮은 소표본 프로그램보다 낮게 나오는 문제)의
 // 회귀 방지, 시청률 단조성·슬롯 보정·표본 수축·결측/0 처리·보정 폭 상한·결정론·미래 누수 차단·판정선·설명 문구.
 // 보증하지 못하는 것: 운영 데이터에서의 예측 타당도(docs/content-fit/CONTENT_FIT_LOGIC.md의 백테스트 기록 참고).
-import { CONTENT_FIT_CONFIG, computeContentFit, explainContentFit, formatTrendCell, scheduleNote, summarizeTable, audienceRoleOf, describeTrend, fitShapeOf, describeBaseline, trendPct, fmtTimes, type ContentFitAiring, type ContentFitItem } from "../src/lib/contentFit";
+import { CONTENT_FIT_CONFIG, computeContentFit, explainContentFit, formatTrendCell, scheduleNote, scheduleAction, scheduleCheck, scheduleGroupOf, fitTypeOf, fitTypeSummary, summarizeTable, audienceRoleOf, describeTrend, describeBaseline, trendPct, fmtTimes, type ContentFitAiring, type ContentFitItem } from "../src/lib/contentFit";
 import { loadContentFitWith } from "../src/lib/contentFit/sourceCore";
 import { findWordingIssues } from "../src/lib/ui/glossary";
 import { FakeDb } from "./lib/fakeSupabase";
@@ -259,7 +259,16 @@ const itemOf = (res: ReturnType<typeof run>, id: string): ContentFitItem => res.
   check("추세 칸: 큰 상승은 ▲, 큰 하락은 ▼, ±10% 미만은 '비슷', 계산 불가는 '—'", formatTrendCell(mk(Math.log2(1.39))).text === "▲39%" && formatTrendCell(mk(Math.log2(0.8))).text === "▼20%" && formatTrendCell(mk(Math.log2(1.05))).text === "비슷" && formatTrendCell(mk(null)).text === "—");
   check("추세 칸: 극단적 상승은 300%를 넘는 숫자로 표기하지 않는다", formatTrendCell(mk(Math.log2(6))).text === "▲300%+" && (describeTrend(mk(Math.log2(6))) ?? "").includes("300% 이상"), formatTrendCell(mk(Math.log2(6))).text);
   const base = { tier: "FORMAL" as const, slotIndex: 1, scaleIndex: 1 };
-  check("규모 모양: 작은 규모로 슬롯 대비 1.2배 이상이면 효율형, 큰 규모인데 슬롯 대비 0.9배 미만이면 총량형, 아니면 없음", fitShapeOf({ ...base, slotIndex: 1.5, scaleIndex: 0.7 }) === "효율형" && fitShapeOf({ ...base, slotIndex: 0.7, scaleIndex: 1.5 }) === "총량형" && fitShapeOf({ ...base, slotIndex: 1.1, scaleIndex: 1.1 }) === null && fitShapeOf({ tier: "HOLD", slotIndex: null, scaleIndex: null }) === null);
+  check("유형: 평균 근처는 균형형, 자리·규모 모두 이상은 주력형, 작은 규모로 자리 기대 이상은 효율형, 규모만 큰 경우는 총량형, 둘 다 낮으면 부진형", fitTypeOf({ ...base, slotIndex: 1.1, scaleIndex: 1.1 }) === "균형형" && fitTypeOf({ ...base, slotIndex: 1.0, scaleIndex: 0.9 }) === "균형형" && fitTypeOf({ ...base, slotIndex: 1.5, scaleIndex: 1.5 }) === "주력형" && fitTypeOf({ ...base, slotIndex: 1.5, scaleIndex: 0.7 }) === "효율형" && fitTypeOf({ ...base, slotIndex: 0.7, scaleIndex: 1.5 }) === "총량형" && fitTypeOf({ ...base, slotIndex: 0.6, scaleIndex: 0.6 }) === "부진형");
+  check("유형: 표본이 적은 참고·보류 구간에는 유형을 붙이지 않는다", fitTypeOf({ tier: "REFERENCE", slotIndex: 1.5, scaleIndex: 1.5 }) === null && fitTypeOf({ tier: "HOLD", slotIndex: null, scaleIndex: null }) === null);
+  check("유형: 개수 문장은 있는 유형만 적는다", fitTypeSummary([{ ...base, slotIndex: 1.5, scaleIndex: 1.5 }, { ...base, slotIndex: 1.6, scaleIndex: 1.3 }, { ...base, slotIndex: 1.0, scaleIndex: 1.0 }, { tier: "HOLD", slotIndex: null, scaleIndex: null }]) === "유형: 주력형 2개 · 균형형 1개." && fitTypeSummary([]) === "");
+  {
+    const it = (tag: string | null, tier: "FORMAL" | "REFERENCE" | "HOLD", extra: Record<string, unknown> = {}) => ({ tag, tier, sampleDays: 5, moveTo: null, slotIndex: 1, ...extra }) as unknown as ContentFitItem;
+    check("조치: 근거 수치(같은 시간대 평균의 N배)를 되풀이하지 않고 할 일만 적는다", ["STRENGTHEN", "KEEP", "WATCH", "MOVE", "REPLACE"].every((t) => !scheduleAction(it(t, "FORMAL")).includes("평균의") && !/d+.d+배/.test(scheduleAction(it(t, "FORMAL")))));
+    check("조치: 표본 적음은 8일까지 남은 일수와 시험 편성 유지를 알린다", scheduleAction(it("TEST", "REFERENCE")).includes("3일 더") && scheduleAction(it("TEST", "REFERENCE")).includes("시험 편성"), scheduleAction(it("TEST", "REFERENCE")));
+    check("확인 기준: 판정 선(1.5·0.85·0.55)을 그대로 인용한다", scheduleCheck(it("STRENGTHEN", "FORMAL")).includes("1.5배") && scheduleCheck(it("KEEP", "FORMAL")).includes("0.85배") && scheduleCheck(it("WATCH", "FORMAL", { slotIndex: 0.7 })).includes("0.55배") && scheduleCheck(it("WATCH", "FORMAL", { slotIndex: 1.35 })).includes("하락이 멈추면") && scheduleCheck(it("TEST", "REFERENCE")).includes("8일"));
+    check("조치 묶음: 교체·이동은 먼저 결정, 관찰·표본 적음은 지켜볼 것, 강화는 확대, 유지는 그대로", scheduleGroupOf(it("REPLACE", "FORMAL")) === 1 && scheduleGroupOf(it("MOVE", "FORMAL")) === 1 && scheduleGroupOf(it("WATCH", "FORMAL")) === 2 && scheduleGroupOf(it(null, "REFERENCE")) === 2 && scheduleGroupOf(it("STRENGTHEN", "FORMAL")) === 3 && scheduleGroupOf(it("KEEP", "FORMAL")) === 4);
+  }
   check("비교 기준 설명: 같은 시간대 비교 표본이 부족해 채널 전체와 견줬으면 그 사실을 알린다", (describeBaseline({ tier: "FORMAL", baselineShare: { slot: 0, dowDaypart: 0.1, daypart: 0.1, channel: 0.8 } }) ?? "").includes("표본이 적어") && !(describeBaseline({ tier: "FORMAL", baselineShare: { slot: 1, dowDaypart: 0, daypart: 0, channel: 0 } }) ?? "").includes("표본이 적어") && describeBaseline({ tier: "HOLD", baselineShare: { slot: 0, dowDaypart: 0, daypart: 0, channel: 0 } }) === null);
 }
 

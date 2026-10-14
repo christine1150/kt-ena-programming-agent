@@ -60,7 +60,7 @@ import {
 } from "@/lib/audienceReport/periodPresets";
 // 콘텐츠 적합도(2026-10-14 재설계): 계산은 서버(/api/scheduling/fit-score → src/lib/contentFit 엔진)가 하고, 화면은 그 값과
 // 설명 문구 함수(순수 함수, 서버 코드 없음)만 가져다 쓴다. 설계·검증 근거: docs/content-fit/CONTENT_FIT_LOGIC.md
-import { CONTENT_FIT_CONFIG, CONTENT_FIT_LEGEND, audienceRoleOf, describeBaseline, explainContentFit, fitShapeOf, formatTrendCell, fmtTimes, scheduleNote, summarizeTable, type ContentFitItem, type FitShape } from "@/lib/contentFit";
+import { CONTENT_FIT_LEGEND, audienceRoleOf, describeBaseline, explainContentFit, fitTypeOf, fitTypeSummary, FIT_TYPE_NOTE, formatTrendCell, fmtTimes, scheduleAction, scheduleCheck, scheduleGroupOf, SCHEDULE_GROUP_LABEL, summarizeTable, type ContentFitItem, type FitType, type ScheduleGroup } from "@/lib/contentFit";
 import { formatDurationKo } from "@/lib/metrics";
 import { VENDING } from "@/lib/ui/pageTitles";
 import { brandText } from "@/lib/ui/contrast";
@@ -897,170 +897,6 @@ function RowChevron({ open, color }: { open: boolean; color: string }) {
   );
 }
 
-// 사용자 지시(2026-08-26): "Fit Score 2×2 매트릭스(포트폴리오 뷰)..." 다만 PD가 실제로 판단해야 하는 축은 "이 프로그램을 얼마나 믿고
-// 강화/이동/교체할 것인가"이므로, 표의 판정이 "왜" 그렇게 나뉘었는지 한눈에 보이는 산점도로 둔다(표 판정 자체는 재계산하지 않음).
-// 2026-10-14 재설계: 판정이 슬롯 대비 성과(배수)로 바뀌어, 가로축을 적합도(0~100)에서 슬롯 대비 성과(로그 눈금 0.25~4배)로 바꾸고
-// 배경 밴드를 새 판정선(엔진 설정값 CONTENT_FIT_CONFIG.cut)으로 그린다. 세로축은 그대로 표본 신뢰도(50% 미만·방영 8일 미만은 테스트).
-const FIT_QUADRANT_CONFIDENCE_CUTOFF = 50; // 방영 8일 = 만점(16일)의 절반 — 엔진의 정식 판정 최소 일수와 같다
-const FIT_QUADRANT_X_MIN = 0.25;
-const FIT_QUADRANT_X_MAX = 4;
-const FIT_QUADRANT_BANDS: { from: number; to: number; tag: keyof typeof TAG_DOT_COLOR }[] = [
-  { from: FIT_QUADRANT_X_MIN, to: CONTENT_FIT_CONFIG.cut.watch, tag: "REPLACE" },
-  { from: CONTENT_FIT_CONFIG.cut.watch, to: CONTENT_FIT_CONFIG.cut.keep, tag: "WATCH" },
-  { from: CONTENT_FIT_CONFIG.cut.keep, to: CONTENT_FIT_CONFIG.cut.strengthen, tag: "KEEP" },
-  { from: CONTENT_FIT_CONFIG.cut.strengthen, to: FIT_QUADRANT_X_MAX, tag: "STRENGTHEN" },
-];
-function FitScoreQuadrantChart({ items }: { items: FitScoreItem[] }) {
-  const plottable = items.filter(
-    (i): i is FitScoreItem & { confidence_pct: number; content_fit: ContentFitItem & { slotIndex: number } } =>
-      i.content_fit.slotIndex !== null && i.confidence_pct !== null
-  );
-  if (plottable.length === 0) return null;
-  const W = 640;
-  const PAD_L = 30;
-  const PAD_R = 12;
-  const PAD_B = 22;
-  // 가로 위치: 슬롯 대비 성과(배)를 로그 눈금(0.25배~4배)으로
-  const xOf = (idx: number) => {
-    const lo = Math.log2(FIT_QUADRANT_X_MIN);
-    const hi = Math.log2(FIT_QUADRANT_X_MAX);
-    const v = Math.max(lo, Math.min(hi, Math.log2(Math.max(idx, 1e-6))));
-    return PAD_L + ((v - lo) / (hi - lo)) * (W - PAD_L - PAD_R);
-  };
-
-  // 사용자 지시(2026-08-26) 반영 중 실측 확인: 표본 신뢰도 100%인 프로그램이 많아 대부분 점이
-  // y=100% 선 위에 몰리고, x(적합도)도 서로 가까워 라벨을 전부 켜면 겹쳐 읽기 어려움 — 최고/최저
-  // 적합도 점과 "교체 검토(REPLACE)" 태그가 붙은(가장 의사결정이 급한) 점만 항상 라벨을 켜고,
-  // 나머지는 점만(호버 시 <title> 툴팁으로 확인).
-  const byFitAsc = [...plottable].sort((a, b) => a.content_fit.slotIndex - b.content_fit.slotIndex);
-  const alwaysLabelIds = new Set<string>([
-    byFitAsc[0]?.program_id,
-    byFitAsc[byFitAsc.length - 1]?.program_id,
-    ...plottable.filter((i) => i.tag === "REPLACE").map((i) => i.program_id),
-  ]);
-
-  // 사용자 지시(2026-09-02): "타이틀명이 최대한 보이도록 동그라미에서 줄을 그어서 텍스트를
-  // 위아래로 연결하더라도 최대한 겹치지 않게" — 라벨을 켤 점들을 x좌표순으로 훑으며, 가로로
-  // 겹치는 라벨이 있으면 한 단(lane)씩 위로 쌓는 그리디 배치(간트차트 라벨 스태킹과 같은 방식).
-  // lane 0(기본 위치)에 못 들어간 라벨만 점까지 얇은 안내선을 그어 어느 점의 제목인지 잇는다.
-  // UI 디자이너 개선안 RULE 04(2026-09-09): 라벨 폰트를 8px→11px로 올리며 폭 계산도 같이
-  // 보정(6.2 * 11/8 ≈ 8.5) — 노출 로직(항상표시/조건부/호버)은 그대로, 가독 하한선만 맞춤.
-  const CHAR_WIDTH_PX = 8.5; // 11px 폰트, 한글·영문 혼용 어림 폭
-  const LABEL_GAP_PX = 4;
-  const LANE_STEP_PX = 14;
-  const MAX_LANES = 6;
-  const labelPoints = plottable
-    .filter((item) => alwaysLabelIds.has(item.program_id))
-    .map((item) => ({ item, px: xOf(item.content_fit.slotIndex), name: item.programs?.canonical_name ?? "" }))
-    .sort((a, b) => a.px - b.px);
-  const laneRightEdge: number[] = [];
-  const laneByProgramId = new Map<string, number>();
-  for (const p of labelPoints) {
-    const halfW = (p.name.length * CHAR_WIDTH_PX) / 2;
-    let lane = 0;
-    while (lane < MAX_LANES - 1 && laneRightEdge[lane] !== undefined && p.px - halfW < laneRightEdge[lane] + LABEL_GAP_PX) {
-      lane++;
-    }
-    laneRightEdge[lane] = p.px + halfW;
-    laneByProgramId.set(p.item.program_id, lane);
-  }
-  const maxLaneUsed = laneByProgramId.size > 0 ? Math.max(...laneByProgramId.values()) : 0;
-
-  // 실측 버그 수정(2026-08-27, 사용자 지시: "무엇을 편성할까요 인포그래픽 상단이 잘림"): 표본
-  // 신뢰도 100%인 점이 많아 대부분 y=PAD_T 바로 그 자리(그래프 맨 위)에 몰리는데, 라벨은 점
-  // 위쪽(y = py - r - 3)에 그려진다 — 예전 PAD_T=10은 큰 버블(r 최대 7)의 라벨이 SVG viewBox
-  // 위쪽 경계(y=0) 밖으로 나가 잘리기에 부족했다. 라벨 한 줄이 온전히 들어갈 여유를 준다.
-  // 사용자 재지시(2026-09-02): 라벨이 여러 단(lane)으로 쌓일 수 있으므로 그만큼 상단 여백도
-  // 늘려 맨 위 lane의 라벨까지 잘리지 않게 한다.
-  const PAD_T = 20 + maxLaneUsed * LANE_STEP_PX;
-  const H = PAD_T + 220 + PAD_B;
-  const plotH = H - PAD_T - PAD_B;
-  const yOf = (conf: number) => PAD_T + (1 - Math.max(0, Math.min(100, conf)) / 100) * plotH;
-  return (
-    <div className="mb-4 rounded-2xl bg-zinc-50 p-4">
-      <p className="mb-2 text-[12px] text-zinc-500">
-        가로축 = 슬롯 대비 성과(같은 시간대 다른 프로그램 평균의 몇 배, 1.0배가 기준), 세로축 = 신뢰도(표본 충분성) — 위 표의 판정이
-        어떤 기준으로 나뉘었는지 그대로 보여줍니다(신뢰도 {FIT_QUADRANT_CONFIDENCE_CUTOFF}% 미만은 성과와 무관하게 테스트).
-      </p>
-      <svg role="img" aria-label="슬롯 대비 성과(가로)와 신뢰도(세로) 산점도" viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
-        {FIT_QUADRANT_BANDS.map((b) => (
-          <rect key={b.tag} x={xOf(b.from)} y={PAD_T} width={xOf(b.to) - xOf(b.from)} height={plotH} fill={TAG_DOT_COLOR[b.tag]} fillOpacity={0.07} />
-        ))}
-        <line
-          x1={PAD_L}
-          y1={yOf(FIT_QUADRANT_CONFIDENCE_CUTOFF)}
-          x2={W - PAD_R}
-          y2={yOf(FIT_QUADRANT_CONFIDENCE_CUTOFF)}
-          stroke="#a1a1aa"
-          strokeWidth={1}
-          strokeDasharray="4 3"
-        />
-        {[CONTENT_FIT_CONFIG.cut.watch, CONTENT_FIT_CONFIG.cut.keep, CONTENT_FIT_CONFIG.cut.strengthen].map((cut) => (
-          <line key={cut} x1={xOf(cut)} y1={PAD_T} x2={xOf(cut)} y2={H - PAD_B} stroke="#e4e4e7" strokeWidth={1} />
-        ))}
-        <line x1={PAD_L} y1={H - PAD_B} x2={W - PAD_R} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
-        <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={H - PAD_B} stroke="#a1a1aa" strokeWidth={1} />
-        {[FIT_QUADRANT_X_MIN, CONTENT_FIT_CONFIG.cut.watch, 1, CONTENT_FIT_CONFIG.cut.strengthen, FIT_QUADRANT_X_MAX].map((v) => (
-          <text key={v} x={xOf(v)} y={H - PAD_B + 12} textAnchor="middle" fontSize={11} fill="#71717a">
-            {v}배
-          </text>
-        ))}
-        <text x={PAD_L - 4} y={yOf(FIT_QUADRANT_CONFIDENCE_CUTOFF) - 3} textAnchor="end" fontSize={11} fill="#71717a">
-          {FIT_QUADRANT_CONFIDENCE_CUTOFF}%
-        </text>
-        {(() => {
-          return plottable.map((item) => {
-            const color = item.tag && item.content_fit.tier === "FORMAL" ? TAG_DOT_COLOR[item.tag] : "#a1a1aa";
-            const r = 3 + Math.min(4, item.sample_days / 4);
-            const name = item.programs?.canonical_name ?? "";
-            const px = xOf(item.content_fit.slotIndex);
-            const py = yOf(item.confidence_pct);
-            const showLabel = alwaysLabelIds.has(item.program_id);
-            const lane = laneByProgramId.get(item.program_id) ?? 0;
-            const labelY = py - r - 3 - lane * LANE_STEP_PX;
-            return (
-              <g key={item.program_id}>
-                <circle cx={px} cy={py} r={r} fill={color} fillOpacity={0.85}>
-                  <title>
-                    {name} — 슬롯 대비 {item.content_fit.slotIndex.toFixed(2)}배 · 신뢰도 {item.confidence_pct.toFixed(0)}% · {item.content_fit.tier === "FORMAL" && item.tag ? TAG_LABEL_KO[item.tag] : "표본 적음"}
-                  </title>
-                </circle>
-                {/* 사용자 지시(2026-08-26): "프로그램 제목 명 잘리는 부분 수정 — 제목 잘리지
-                    않게" — 7자 말줄임을 없애고 전체 제목을 그대로 표시. 점이 그래프 좌우 끝에
-                    가까우면 가운데 정렬 대신 안쪽으로 붙여 카드 밖으로 삐져나가지 않게 한다.
-                    사용자 재지시(2026-09-02): 라벨이 다른 라벨과 겹쳐 위 lane으로 밀려났을 때만
-                    (lane > 0) 점까지 얇은 안내선을 그어 어느 점의 제목인지 잇는다. */}
-                {showLabel && lane > 0 && (
-                  <line x1={px} y1={py - r} x2={px} y2={labelY + 2} stroke="#d4d4d8" strokeWidth={1} />
-                )}
-                {showLabel && (
-                  <text
-                    x={px}
-                    y={labelY}
-                    textAnchor={px < W * 0.15 ? "start" : px > W * 0.85 ? "end" : "middle"}
-                    fontSize={11}
-                    fill="#52525b"
-                  >
-                    {name}
-                  </text>
-                )}
-              </g>
-            );
-          });
-        })()}
-      </svg>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-zinc-500">
-        {(Object.keys(TAG_LABEL_KO) as (keyof typeof TAG_LABEL_KO)[]).map((tag) => (
-          <span key={tag} className="inline-flex items-center gap-1">
-            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: TAG_DOT_COLOR[tag] }} />
-            {TAG_LABEL_KO[tag]}
-          </span>
-        ))}
-        <span>· 점 크기 = 표본일수(sample_days)</span>
-      </div>
-    </div>
-  );
-}
 const SKYUHD_MIN_AIR_COUNT_FOR_TIER = 5; // 이 미만이면 percentile을 믿지 않고 "표본부족"으로 표시.
 
 function skyuhdScorecardTier(item: SkyuhdScorecardItem): "강세" | "보통" | "약세" | "표본부족" {
@@ -2150,22 +1986,20 @@ function sortContentFitRows(items: FitScoreItem[]): FitScoreItem[] {
   });
 }
 
-// 규모와 효율의 모양 배지(사용자 지시 2026-09-18/28로 만든 총량형·효율형 배지를 새 지수로 다시 정의, fitShapeOf 참고):
-// 효율형(초록)=적은 규모로 슬롯 기대 이상, 총량형(호박색)=규모에 기대 슬롯 대비로는 평균 미만. 어느 쪽도 아니면 배지 없음 —
-// 옛 '균형형'은 "쏠림 없음"이 좋은 것처럼 읽혀 없앴다.
-const FIT_SHAPE_BADGE_STYLE: Record<FitShape, string> = {
-  총량형: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+// 콘텐츠 유형 배지(2026-10-15 사용자 요청으로 '균형형' 등 유형 판단을 되살림, fitTypeOf 참고): 슬롯 대비 성과와 시청 규모를 1.0배 기준선으로 나눈 설명이며 판정(강화·유지·관찰…)과는 별개다.
+// 균형형은 "쏠림 없음 = 좋음"으로 읽히지 않게 중립 회색으로 두고 뜻풀이에 좋고 나쁨의 판단이 아님을 적는다.
+const FIT_TYPE_BADGE_STYLE: Record<FitType, string> = {
+  주력형: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200",
   효율형: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200",
+  총량형: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200",
+  균형형: "bg-zinc-50 text-zinc-600 ring-1 ring-inset ring-zinc-200",
+  부진형: "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200",
 };
-const FIT_SHAPE_TITLE: Record<FitShape, string> = {
-  총량형: "채널 평균보다 큰 규모로 방영되지만 같은 시간대 다른 프로그램 평균에는 못 미칩니다.",
-  효율형: "채널 평균보다 작은 규모로도 같은 시간대 다른 프로그램 평균을 크게 웃돕니다.",
-};
-function FitShapeBadge({ shape }: { shape: FitShape | null }) {
-  if (!shape) return null;
+function FitTypeBadge({ type }: { type: FitType | null }) {
+  if (!type) return null;
   return (
-    <span title={FIT_SHAPE_TITLE[shape]} className={`ml-1.5 inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[12px] font-medium ${FIT_SHAPE_BADGE_STYLE[shape]}`}>
-      {shape}
+    <span title={FIT_TYPE_NOTE[type]} className={`ml-1.5 inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[12px] font-medium ${FIT_TYPE_BADGE_STYLE[type]}`}>
+      {type}
     </span>
   );
 }
@@ -3758,7 +3592,7 @@ function buildScheduleRecommendationNote(
   recommendedDaypart: string | null
 ): string {
   // 표본이 적거나(참고용) 방영이 3일 미만(보류)이면 표본 안내가 최우선 — 판정·재배치 제안을 하지 않는다(콘텐츠 적합도 규칙).
-  if (item.content_fit.tier !== "FORMAL") return scheduleNote(item.content_fit);
+  if (item.content_fit.tier !== "FORMAL") return scheduleAction(item.content_fit);
   // 사용자 지시(2026-08-21): "재방이 많은 컨텐츠를 통째로 이동 검토하라는 건 부적절 — 그 중 효율이
   // 안 좋은 특정 시간대만 짚어서 의견을 달라." 여러 시간대에 반복 편성된 프로그램이면(isMultiSlot)
   // 아래 daypart 재배치 추천보다 이 판단을 우선한다.
@@ -3788,7 +3622,7 @@ function buildScheduleRecommendationNote(
     return `${DAYPART_LABEL[recommendedDaypart] ?? recommendedDaypart}로 이동 검토 — 그 시간대는 경쟁채널과의 시청률 격차가 최근 들어 좁혀지는 중이라(경쟁채널이 상대적으로 약해짐) 편성 시 유리할 수 있음`;
   }
   // 같은 시간대 다른 프로그램 평균 대비 몇 배인지(근거)와 판정을 한 줄로 — 문구는 src/lib/contentFit/explain.ts 한 곳에서 만든다.
-  return scheduleNote(item.content_fit);
+  return scheduleAction(item.content_fit);
 }
 
 // 사용자 지시(2026-08-21, 8-Step Insight Flow): WHAT TO SCHEDULE?의 점수를 "결과값"이 아니라 "설명 가능한 점수"로 —
@@ -4525,7 +4359,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const [skyuhdSlotAnalysis, setSkyuhdSlotAnalysis] = useState<SkyUhdSlotAnalysis | null>(null);
   const [skyuhdTrend, setSkyuhdTrend] = useState<SkyUhdTrendSeries | null>(null);
   const [skyuhdSlotLoading, setSkyuhdSlotLoading] = useState(true);
-  const [expandedProgram, setExpandedProgram] = useState<string | null>(null);
+  const [expandedFit, setExpandedFit] = useState<string | null>(null);
   // Tier 1 확장(2026-08-26): WHAT TO SCHEDULE? 펼침 패널의 Fit Score 해석도 OpenAI로 종합 —
   // 프로그램마다 항상 계산하면 비용이 커지므로, 실제로 펼친 프로그램에 대해서만 그때 호출한다
   // (program_id별로 결과를 캐시해 같은 프로그램을 다시 펼쳐도 재호출하지 않음).
@@ -4938,9 +4772,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   }, [data, fitScoreItems, fitScoreLoading, code, sectionLlmResetKey, sdowBaselineShortLabel]);
 
   useEffect(() => {
-    if (!expandedProgram || code === "SKYUHD") return;
-    if (Object.prototype.hasOwnProperty.call(fitScoreInterpretationLlm, expandedProgram)) return; // 이미 조회함(성공/실패 무관 캐시)
-    const item = fitScoreItems?.find((i) => i.program_id === expandedProgram);
+    if (!expandedFit || code === "SKYUHD") return;
+    if (Object.prototype.hasOwnProperty.call(fitScoreInterpretationLlm, expandedFit)) return; // 이미 조회함(성공/실패 무관 캐시)
+    const item = fitScoreItems?.find((i) => i.program_id === expandedFit);
     if (!item) return;
     let cancelled = false;
     (async () => {
@@ -4973,12 +4807,12 @@ export default function ChannelDeepDive({ code }: { code: string }) {
       const body = await res.json().catch(() => ({ ok: false }));
       const text = body?.ok ? (body.results?.[0] ?? null) : null;
       if (cancelled) return;
-      setFitScoreInterpretationLlm((prev) => ({ ...prev, [expandedProgram]: text }));
+      setFitScoreInterpretationLlm((prev) => ({ ...prev, [expandedFit]: text }));
     })();
     return () => {
       cancelled = true;
     };
-  }, [expandedProgram, code, fitScoreItems, fitScoreInterpretationLlm]);
+  }, [expandedFit, code, fitScoreItems, fitScoreInterpretationLlm]);
 
   useEffect(() => {
     let cancelled = false;
@@ -6732,190 +6566,72 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           ) : !fitScoreItems || fitScoreItems.length === 0 ? (
             <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
           ) : (
-            // 사용자 지시(2026-08-21): 표 형태로 재구성 — 태그는 한글, 제목은 한 줄(truncate),
-            // 가운데 열에 제안 사항 한 줄, Fit Score/Confidence는 오른쪽. 클릭하면 아래에 근거 펼침.
-            <>
-            <p className="mb-2 flex items-center gap-1.5 text-[12.5px] text-zinc-400">
-              <RowChevron open={false} color={accentColor} />
-              각 줄을 누르면 판정 근거가 펼쳐집니다
-            </p>
+            // 2026-10-15(사용자 요청): "이 콘텐츠, 적합한가요?"와 같은 점수·배수를 되풀이하지 않는다 — 이 표는 판정을 편성 조치로 옮긴 것이다.
+            // 결정이 필요한 것부터 묶고, 조치마다 "무엇을 보면 판정이 바뀌는지"(확인 기준)를 함께 준다. 근거 수치·산식·상세 해석은 그 표에 있다.
             <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
-              {/* 레이아웃 고정(2026-10-14): 태그·프로그램·적합도 열 너비를 정하고 제안 사항만 남는 폭을 쓴다 — 긴 제목·"64.9 (100%)"가 줄바꿈으로 깨지지 않게 */}
               <table className="w-full min-w-[780px] table-fixed text-left text-sm">
                 <colgroup>
                   <col className="w-[112px]" />
-                  <col className="w-[250px]" />
+                  <col className="w-[230px]" />
                   <col />
-                  <col className="w-[170px]" />
+                  <col className="w-[250px]" />
                 </colgroup>
                 <thead>
                   <tr className="text-zinc-400">
                     <th className="pb-2 pr-3 font-medium">태그</th>
                     <th className="pb-2 pr-3 font-medium">프로그램</th>
-                    <th className="pb-2 pr-3 font-medium">제안 사항</th>
-                    {/* 사용자 지시(2026-08-21): "Fit Score"를 한국말로, 그 옆에 (신뢰도) 표기를
-                        붙여 아래 셀의 괄호 숫자가 무엇인지 헤더에서 바로 알 수 있게 한다. */}
-                    <th className="whitespace-nowrap pb-2 font-medium">적합도(신뢰도)</th>
+                    <th className="pb-2 pr-3 font-medium">조치</th>
+                    <th className="pb-2 font-medium">확인 기준</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {fitScoreItems.map((item) => {
-                    const isOpen = expandedProgram === item.program_id;
-                    const recommendedDaypart =
-                      item.tag && (item.tag === "STRENGTHEN" || item.tag === "TEST" || item.tag === "MOVE")
-                        ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity)
-                        : null;
-                    const note = buildScheduleRecommendationNote(item, recommendedDaypart);
-                    return (
-                      <Fragment key={item.program_id}>
-                        <tr
-                          className="group cursor-pointer border-t border-zinc-100 align-middle transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
-                          style={{ ["--tw-ring-color" as string]: accentColor, ...(isOpen ? { backgroundColor: `${accentColor}10` } : {}) }}
-                          tabIndex={0}
-                          role="button"
-                          aria-expanded={isOpen}
-                          aria-label={`${item.programs?.canonical_name ?? "프로그램"} 판정 근거 ${isOpen ? "접기" : "펼치기"}`}
-                          onClick={() => setExpandedProgram(isOpen ? null : item.program_id)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              setExpandedProgram(isOpen ? null : item.program_id);
-                            }
-                          }}
-                        >
-                          <td className="whitespace-nowrap py-2.5 pr-3" style={isOpen ? { boxShadow: `inset 3px 0 0 ${accentColor}`, paddingLeft: 10 } : { paddingLeft: 10 }}>
-                            {item.tag ? <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} fixed /> : <span className="text-zinc-400">—</span>}
-                          </td>
-                          {/* 사용자 지시(2026-08-21): 프로그램 타이틀은 가독성이 좋게 볼드로.
-                              사용자 재지시(2026-08-25): "ENA의 본방송, ENA Play와 ENA Drama의
-                              동시/직재방 방송은 별도의 프로그램으로 따로 떼어서... <본>이라고
-                              표시하면 돼" — mart_scheduling_fit_score가 channel_id+program_id
-                              단위라 채널마다 이미 별도 행으로 관리되고 있었고(이 표는 그 채널
-                              페이지의 프로그램만 나열), 다만 그 행이 본방인지 동시방영/직후재방인지
-                              구분이 안 보여 헷갈릴 수 있었다 — Page 1 "채널별 상위 프로그램"과
-                              동일하게 programs.first_run으로 <본>/<재> 태그를 붙인다(값이 없는
-                              프로그램은 태그 없이 이름만, 억지 분류 금지). */}
-                          <td className="py-2.5 pr-3">
-                            <div className="flex min-w-0 items-baseline gap-1">
-                              <span className="truncate font-bold text-zinc-800" title={item.programs?.canonical_name ?? undefined}>
-                                {item.programs?.canonical_name ?? "이름 없음"}
-                              </span>
-                              {item.programs?.first_run !== null && item.programs?.first_run !== undefined && (
-                                <span className="shrink-0 text-[12px] font-normal text-zinc-400">
-                                  {item.programs.first_run ? "<본>" : "<재>"}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-2.5 pr-3 leading-snug text-zinc-600">{note}</td>
-                          <td className="py-2.5 pr-2">
-                            <div className="flex items-center justify-between gap-2 whitespace-nowrap tabular-nums text-zinc-700">
-                              <span>
-                                <span className="font-medium">{item.fit_score?.toFixed(1) ?? "—"}</span>
-                                <span className="ml-1 text-[12px] text-zinc-400">({item.confidence_pct?.toFixed(0) ?? "—"}%)</span>
-                              </span>
-                              <RowChevron open={isOpen} color={accentColor} />
-                            </div>
-                          </td>
-                        </tr>
-                        {isOpen && (
-                          <tr className="border-t border-zinc-100">
-                            <td colSpan={4} className="p-4" style={{ backgroundColor: `${accentColor}08`, boxShadow: `inset 3px 0 0 ${accentColor}` }}>
-                              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-zinc-600 sm:grid-cols-4">
-                                <p>평균 시청률: {fmtR(item.evidence.avg_rating)}</p>
-                                <p>도달률: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
-                                <p>
-                                  시청시간 비율: {item.evidence.avg_time_spent_share !== null ? `${item.evidence.avg_time_spent_share.toFixed(2)}%` : "—"}
-                                </p>
-                                <p>방영: 최근 12주 중 {item.sample_days}일({item.content_fit.airings}회)</p>
-                              </div>
-                              {/* 사용자 지시(2026-08-21, 8-Step Insight Flow): 적합도를 "결과값"이 아니라 "설명 가능한 점수"로 —
-                                  슬롯 대비 성과·시청 규모·몰입도·추세 + 한 줄 해석 + DECISION(2026-10-14 새 지표로 교체). */}
-                              {(() => {
-                                const fi = buildFitScoreInterpretation(item);
-                                return (
-                                  <div className="mt-3 border-t border-zinc-200 pt-3">
-                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-zinc-500">
-                                      {fi.components.map((c) => (
-                                        <span key={c.label}>
-                                          {c.label} {c.value}
-                                        </span>
-                                      ))}
-                                    </div>
-                                    {fi.trendNote && <p className="mt-1 text-sm text-zinc-500">{fi.trendNote}</p>}
-                                    {describeBaseline(item.content_fit) && <p className="mt-1 text-[13px] text-zinc-400">{describeBaseline(item.content_fit)}</p>}
-                                    {/* Tier 1 확장(2026-08-26): OpenAI가 종합한 해석(펼칠 때만
-                                        조회)이 있으면 그걸, 없으면(아직 조회 중이거나 실패)
-                                        기존 규칙 기반 fi.interpretation으로. */}
-                                    {(fitScoreInterpretationLlm[item.program_id] ?? fi.interpretation) && (
-                                      <p className="mt-2 text-sm text-zinc-600">{fitScoreInterpretationLlm[item.program_id] ?? fi.interpretation}</p>
-                                    )}
-                                    {/* 원 명세 13번(Audience Role) — Reach/Time Spent Share 둘 다 뚜렷할 때만 표시. */}
-                                    {fi.audienceRole && (
-                                      <p className="mt-2 text-sm text-zinc-600">
-                                        <span className="font-semibold" style={{ color: accentColor }}>
-                                          시청자 유형
-                                        </span>{" "}
-                                        {AUDIENCE_ROLE_LABEL[fi.audienceRole]} — {AUDIENCE_ROLE_NOTE[fi.audienceRole]}
-                                      </p>
-                                    )}
-                                    {/* 원 명세 11번(GOLDEN/WEAK SLOT)·12번(SLOT TRANSFERABILITY) —
-                                        표본이 충분할 때만 표시(부족하면 아예 렌더링 안 함). */}
-                                    {item.slotEfficiency && (item.slotEfficiency.goldenSlot || item.slotEfficiency.weakSlot || item.slotEfficiency.transferability) && (
-                                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-600">
-                                        {item.slotEfficiency.goldenSlot && (
-                                          <span>
-                                            <span className="font-semibold text-emerald-700">황금 슬롯</span> {item.slotEfficiency.goldenSlot.hour}시대
-                                            (자기 보통 수준의 {item.slotEfficiency.goldenSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.goldenSlot.airCount}회)
-                                          </span>
-                                        )}
-                                        {item.slotEfficiency.weakSlot && (
-                                          <span>
-                                            <span className="font-semibold text-rose-700">약세 슬롯</span> {item.slotEfficiency.weakSlot.hour}시대
-                                            (자기 보통 수준의 {item.slotEfficiency.weakSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.weakSlot.airCount}회)
-                                          </span>
-                                        )}
-                                        {item.slotEfficiency.transferability && (
-                                          <span>
-                                            <span className="font-semibold" style={{ color: accentColor }}>
-                                              슬롯 이동성
-                                            </span>{" "}
-                                            {item.slotEfficiency.transferability === "FLEXIBLE"
-                                              ? `유연형 — 최근 ${item.slotEfficiency.weeks}주 ${item.slotEfficiency.slotSampleCount}개 슬롯에서 성과 편차가 작아, 다른 시간대로 옮겨도 유지될 가능성이 관찰됩니다`
-                                              : item.slotEfficiency.transferability === "PRIME_DEPENDENT"
-                                                ? `프라임 의존형 — 강세가 주요시간(${PRIME_UNION_LABEL}) 구간에만 몰려 있어, 그 밖 시간대로 옮기면 성과 유지가 불확실합니다`
-                                                : "슬롯 특화형 — 슬롯별 성과 편차가 커서, 이동 시 현재 성과가 유지될지 추가 검증이 필요합니다"}
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-                                    {fi.sampleNote && <p className="mt-1 text-sm text-amber-600">{fi.sampleNote}</p>}
-                                    {fi.decision && (
-                                      <p className="mt-2 text-sm text-zinc-600">
-                                        <span className="font-semibold" style={{ color: accentColor }}>판단</span> {fi.decision}
-                                      </p>
-                                    )}
-                                  </div>
-                                );
-                              })()}
+                {([1, 2, 3, 4] as ScheduleGroup[]).map((g) => {
+                  const rows = fitScoreItems
+                    .filter((i) => scheduleGroupOf(i.content_fit) === g)
+                    .sort(g === 1 ? (a, b) => (a.content_fit.slotIndex ?? 0) - (b.content_fit.slotIndex ?? 0) : () => 0);
+                  if (rows.length === 0) return null;
+                  return (
+                    <tbody key={g}>
+                      <tr>
+                        <td colSpan={4} className="bg-zinc-50 px-2.5 py-1.5 text-[12.5px] font-semibold text-zinc-500">
+                          {SCHEDULE_GROUP_LABEL[g]} · {rows.length}개
+                        </td>
+                      </tr>
+                      {rows.map((item) => {
+                        const recommendedDaypart =
+                          item.tag && (item.tag === "STRENGTHEN" || item.tag === "TEST" || item.tag === "MOVE")
+                            ? findRecommendedDaypart(item.evidence.current_daypart, daypartOpportunity)
+                            : null;
+                        const note = buildScheduleRecommendationNote(item, recommendedDaypart);
+                        return (
+                          <tr key={item.program_id} className="border-t border-zinc-100 align-top">
+                            <td className="whitespace-nowrap py-2.5 pr-3 pl-2.5">
+                              {item.content_fit.tier === "FORMAL" && item.tag ? <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} fixed /> : <DotTag label={item.content_fit.tier === "HOLD" ? "판단 보류" : "표본 적음"} color="#a1a1aa" fixed />}
                             </td>
+                            <td className="py-2.5 pr-3">
+                              <div className="flex min-w-0 items-baseline gap-1">
+                                <span className="truncate font-bold text-zinc-800" title={item.programs?.canonical_name ?? undefined}>
+                                  {item.programs?.canonical_name ?? "이름 없음"}
+                                </span>
+                                {item.programs?.first_run !== null && item.programs?.first_run !== undefined && (
+                                  <span className="shrink-0 text-[12px] font-normal text-zinc-400">{item.programs.first_run ? "<본>" : "<재>"}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2.5 pr-3 leading-snug text-zinc-700">{note}</td>
+                            <td className="py-2.5 leading-snug text-zinc-500">{scheduleCheck(item.content_fit)}</td>
                           </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
+                        );
+                      })}
+                    </tbody>
+                  );
+                })}
               </table>
             </div>
-            </>
           )}
-          {/* 사용자 지시(2026-10-07): 적합도 산식 설명과 사분면 그래프는 이 섹션 맨 아래(목록 아래)로. 이 섹션이 OPPORTUNITY?보다 위로 옮겨져 '위' 표현은 뺀다. */}
-          <p className="mb-3 mt-6 text-sm text-zinc-400">
-            적합도(0~100) = (슬롯 대비 성과 + 시청 규모) ÷ 2에 시청 몰입도·최근 추세를 최대 +10·−15점까지만 보정한 값입니다. 판정은 같은 요일·시간대
-            다른 프로그램 평균 대비 성과로 내리며, 방영이 8일 미만이면 판정 없이 &lsquo;테스트(표본 적음)&rsquo;로 표시합니다. 경쟁채널 대비 기회
-            시간대(OPPORTUNITY?)에 &lsquo;강화&rsquo;·&lsquo;테스트&rsquo; 프로그램을 배치하는 것을 우선 검토하세요.
+          {/* 2026-10-15: 산식·판정선 설명과 판정 경계 산점도는 "이 콘텐츠, 적합한가요?"·Program Portfolio와 겹쳐 이 섹션에서 뺐다. */}
+          <p className="mb-1 mt-4 text-sm text-zinc-400">
+            근거 수치(슬롯 대비 성과·시청 규모 등)와 적합도 산식은 아래 <a href="#content-fits" className="underline underline-offset-2 hover:text-zinc-600">‘이 콘텐츠, 적합한가요?’</a>에 있습니다. 이 표는 그 판정을 편성 조치로 옮긴 것이며, 경쟁채널 대비 기회 시간대(OPPORTUNITY?)에 ‘강화’·‘테스트’ 프로그램을 배치하는 것을 우선 검토하세요.
           </p>
-          {fitScoreItems && fitScoreItems.length > 0 && <FitScoreQuadrantChart items={fitScoreItems} />}
           </>
           )}
         </div>
@@ -7855,7 +7571,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         {/* CONTENT FITS? — 표 + 줄글, 채널 기여도 높은 순(사용자 지시). skyUHD는 타깃 구분이
             없는 원본 자료 한계로 PRD Fit Score(타깃 기반)를 계산할 수 없어(사용자 확인,
             2026-08-21) 별도 채널 단위 대체 지표(skyuhdScorecard)를 대신 보여준다. */}
-        <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+        <div id="content-fits" className="scroll-mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
           <h2 className={SECTION_TITLE_P2}>
             이 콘텐츠, 적합한가요?<span className={ENG_TITLE_ANNOTATION}>(CONTENT FITS?)</span>
           </h2>
@@ -7931,6 +7647,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
               ) : (
                 <>
+                  <p className="mb-2 flex items-center gap-1.5 text-[12.5px] text-zinc-400">
+                    <RowChevron open={false} color={accentColor} />
+                    각 줄을 누르면 시청자 유형·슬롯별 성과·해석이 펼쳐집니다
+                  </p>
                   <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
                     <table className="w-full min-w-[760px] text-left text-sm">
                       <thead>
@@ -7949,8 +7669,24 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           const cf = item.content_fit;
                           const muted = cf.tier !== "FORMAL";
                           const trendCell = formatTrendCell(cf);
+                          const isOpen = expandedFit === item.program_id;
                           return (
-                            <tr key={item.program_id} className={`border-t border-zinc-100 ${muted ? "text-zinc-400" : ""}`}>
+                            <Fragment key={item.program_id}>
+                            <tr
+                              className={`group cursor-pointer border-t border-zinc-100 transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${muted ? "text-zinc-400" : ""}`}
+                              style={{ ["--tw-ring-color" as string]: accentColor, ...(isOpen ? { backgroundColor: `${accentColor}10` } : {}) }}
+                              tabIndex={0}
+                              role="button"
+                              aria-expanded={isOpen}
+                              aria-label={`${item.programs?.canonical_name ?? "프로그램"} 상세 ${isOpen ? "접기" : "펼치기"}`}
+                              onClick={() => setExpandedFit(isOpen ? null : item.program_id)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  setExpandedFit(isOpen ? null : item.program_id);
+                                }
+                              }}
+                            >
                               <td className="whitespace-nowrap py-2 pr-3 align-middle">
                                 {cf.tier === "HOLD" ? (
                                   <DotTag label="판단 보류" color="#a1a1aa" fixed />
@@ -7966,7 +7702,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                 <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                                   <span className={muted ? "text-zinc-500" : ""}>{item.programs?.canonical_name ?? "이름 없음"}</span>
                                   <span className="text-[12px] font-normal text-zinc-400">{cf.sampleDays}일</span>
-                                  <FitShapeBadge shape={fitShapeOf(cf)} />
+                                  <FitTypeBadge type={fitTypeOf(cf)} />
                                 </span>
                               </td>
                               <td className="py-2 align-middle">
@@ -7987,8 +7723,77 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                   trendCell.text
                                 )}
                               </td>
-                              <td className="py-2 align-middle font-semibold tabular-nums text-zinc-900">{cf.score === null ? "—" : cf.score.toFixed(0)}</td>
+                              <td className="py-2 pr-2 align-middle font-semibold tabular-nums text-zinc-900">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span>{cf.score === null ? "—" : cf.score.toFixed(0)}</span>
+                                  <RowChevron open={isOpen} color={accentColor} />
+                                </div>
+                              </td>
                             </tr>
+                            {isOpen && (
+                              <tr className="border-t border-zinc-100">
+                                <td colSpan={7} className="p-4 text-sm text-zinc-600" style={{ backgroundColor: `${accentColor}08`, boxShadow: `inset 3px 0 0 ${accentColor}` }}>
+                                  {(() => {
+                                    const fi = buildFitScoreInterpretation(item);
+                                    const type = fitTypeOf(cf);
+                                    const llm = fitScoreInterpretationLlm[item.program_id] ?? fi.interpretation;
+                                    return (
+                                      <>
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                                          <p>평균 시청률: {fmtR(item.evidence.avg_rating)}</p>
+                                          <p>도달률: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
+                                          <p>시청시간 비율: {item.evidence.avg_time_spent_share !== null ? `${item.evidence.avg_time_spent_share.toFixed(2)}%` : "—"}</p>
+                                          <p>방영: 최근 12주 중 {item.sample_days}일({cf.airings}회)</p>
+                                        </div>
+                                        {type && (
+                                          <p className="mt-2">
+                                            <span className="font-semibold" style={{ color: accentColor }}>유형</span> {type} — {FIT_TYPE_NOTE[type]}
+                                          </p>
+                                        )}
+                                        {fi.trendNote && <p className="mt-1 text-zinc-500">{fi.trendNote}</p>}
+                                        {describeBaseline(cf) && <p className="mt-1 text-[13px] text-zinc-400">{describeBaseline(cf)}</p>}
+                                        {fi.sampleNote && <p className="mt-1 text-amber-600">{fi.sampleNote}</p>}
+                                        {llm && <p className="mt-2 text-zinc-600">{llm}</p>}
+                                        {/* 원 명세 13번(Audience Role) — Reach/Time Spent Share 둘 다 뚜렷할 때만 표시. */}
+                                        {fi.audienceRole && (
+                                          <p className="mt-2">
+                                            <span className="font-semibold" style={{ color: accentColor }}>시청자 유형</span> {AUDIENCE_ROLE_LABEL[fi.audienceRole]} — {AUDIENCE_ROLE_NOTE[fi.audienceRole]}
+                                          </p>
+                                        )}
+                                        {/* 원 명세 11번(GOLDEN/WEAK SLOT)·12번(SLOT TRANSFERABILITY) — 표본이 충분할 때만 표시. */}
+                                        {item.slotEfficiency && (item.slotEfficiency.goldenSlot || item.slotEfficiency.weakSlot || item.slotEfficiency.transferability) && (
+                                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                            {item.slotEfficiency.goldenSlot && (
+                                              <span>
+                                                <span className="font-semibold text-emerald-700">황금 슬롯</span> {item.slotEfficiency.goldenSlot.hour}시대
+                                                (자기 보통 수준의 {item.slotEfficiency.goldenSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.goldenSlot.airCount}회)
+                                              </span>
+                                            )}
+                                            {item.slotEfficiency.weakSlot && (
+                                              <span>
+                                                <span className="font-semibold text-rose-700">약세 슬롯</span> {item.slotEfficiency.weakSlot.hour}시대
+                                                (자기 보통 수준의 {item.slotEfficiency.weakSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.weakSlot.airCount}회)
+                                              </span>
+                                            )}
+                                            {item.slotEfficiency.transferability && (
+                                              <span>
+                                                <span className="font-semibold" style={{ color: accentColor }}>슬롯 이동성</span>{" "}
+                                                {item.slotEfficiency.transferability === "FLEXIBLE"
+                                                  ? `유연형 — 최근 ${item.slotEfficiency.weeks}주 ${item.slotEfficiency.slotSampleCount}개 슬롯에서 성과 편차가 작아, 다른 시간대로 옮겨도 유지될 가능성이 관찰됩니다`
+                                                  : item.slotEfficiency.transferability === "PRIME_DEPENDENT"
+                                                    ? `프라임 의존형 — 강세가 주요시간(${PRIME_UNION_LABEL}) 구간에만 몰려 있어, 그 밖 시간대로 옮기면 성과 유지가 불확실합니다`
+                                                    : "슬롯 특화형 — 슬롯별 성과 편차가 커서, 이동 시 현재 성과가 유지될지 추가 검증이 필요합니다"}
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                </td>
+                              </tr>
+                            )}
+                            </Fragment>
                           );
                         })}
                       </tbody>
@@ -8004,6 +7809,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       NARRATIVE_DOWN_COLOR
                     )}
                   </p>
+                  {fitTypeSummary(contentFitsRows.map((r) => r.content_fit)) && (
+                    <p className="mt-2 text-sm text-zinc-600">
+                      {fitTypeSummary(contentFitsRows.map((r) => r.content_fit))} <span className="text-zinc-400">{CONTENT_FIT_LEGEND.type}</span>
+                    </p>
+                  )}
                   <p className="mt-2 text-sm text-zinc-400">
                     {CONTENT_FIT_LEGEND.verdict} {CONTENT_FIT_LEGEND.affinity}
                   </p>
