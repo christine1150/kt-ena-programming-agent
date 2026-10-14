@@ -102,8 +102,8 @@ export function buildProgramAction(input: ProgramActionInput): ActionCandidate {
     hypothesis = "이 프로그램 성과가 약해졌을 가능성(경쟁 편성·공휴일·재방 비중 등 교란요인은 아직 분리하지 않음)";
     confirm.push(`다음 ${need}회 방영에서도 ${input.baselineLabel} 미만이면 이동·교체 검토에 착수`);
     confirm.push("Avail·권리·운영정책 확인 후 확정");
-    alternatives.push("같은 소재를 다른 시간대로 이동 — 목적지는 Page 2 WHAT TO SCHEDULE?의 Fit Score 후보에서 확인");
-    alternatives.push("같은 슬롯에 다른 프로그램 투입 — 슬롯 대안 비교 후 판단");
+    alternatives.push("같은 소재를 다른 시간대로 이동 — 이동할 시간대는 '무엇을 편성할까요?'(WHAT TO SCHEDULE)의 콘텐츠 적합도 후보에서 확인");
+    alternatives.push("같은 슬롯에 다른 프로그램 투입 — '대안 비교'로 기대 시청률을 비교한 뒤 판단");
     alternatives.push(`편성을 유지한 채 ${need}회 추가 관찰`);
     if (input.alternativeFromData) alternatives.unshift(input.alternativeFromData);
     proposal = ev.permanentChangeSupported
@@ -113,7 +113,7 @@ export function buildProgramAction(input: ProgramActionInput): ActionCandidate {
     hypothesis = "이 프로그램 성과가 강해졌을 가능성(교란요인은 아직 분리하지 않음)";
     confirm.push(`다음 ${Math.max(1, need)}회 방영에서도 ${input.baselineLabel} 이상이면 강화 검토를 확정`);
     alternatives.push("현재 슬롯 유지");
-    alternatives.push("인접 슬롯 확대 — 목적지는 Fit Score 후보에서 확인(근거 없는 목적지를 정하지 않음)");
+    alternatives.push("인접 슬롯 확대 — 확대할 시간대는 콘텐츠 적합도 후보에서 확인(근거 없는 목적지를 정하지 않음)");
     if (input.alternativeFromData) alternatives.unshift(input.alternativeFromData);
     proposal = "강한 슬롯을 지키면서 강화 여부를 검토";
   } else {

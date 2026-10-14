@@ -27,6 +27,7 @@ import * as SL from "../src/lib/idealSchedule/seriesLink";
 import { evidenceOf, MIN_SAMPLE_FOR_REPLACE } from "../src/lib/dashboard/evidenceGate";
 import { buildCardCopy, achievementConsistent, upProgramHeadline, type AiSuggestionPayload } from "../src/lib/dashboard/homeCopy";
 import { baseTitleKey, heldLabel, pickHeld, type HeldTitle } from "../src/lib/dashboard/availHeld";
+import { splitInsightFacts } from "../src/lib/dashboard/insightFacts";
 import { classifyOriginals, pickForChannel } from "../src/lib/dashboard/originalClassify";
 
 let passed = 0;
@@ -812,6 +813,19 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   const heldSeason: HeldTitle = { key: "고생끝에밥이온다1~12".replace(/[^가-힣0-9]/g, ""), altKey: "고생끝에밥이온다", title: "고생끝에밥이온다1~12", endState: "open", daysToEnd: 200, hasConditions: false };
   const viaAlt = pickHeld([{ key: "고생끝에밥이온다", displayName: "고생끝에밥이온다", vsAvg: 1.2, peers: 3 }], [heldSeason]);
   check("Avail 보유: 예측이 원제 키로 나와도 보유 시즌 행과 이어진다", viaAlt.length === 1 && viaAlt[0].name === "고생끝에밥이온다");
+}
+
+// 채널별 인사이트 = 변화 해설(비교·순위·흐름·요일·시간대·타깃층), 목표 대비 진단·조치는 "오늘의 시청률"에만 둔다
+{
+  const narrative =
+    "'나는SOLO'는 오늘 0.089(18:19)로, 이 프로그램의 같은 요일·시간대(본방 슬롯) 기준 최근 8주 평균(0.151)보다 41% 하락해 평균을 끌어내렸습니다. 오늘 요일은 평소(최근 4주) 이 채널이 강세를 보이는 요일입니다(같은 요일 평균 0.147 vs 전체 평균 0.120). 순위가 최근 4주 평균(9위)보다 3위 상승한 6위입니다. 남40대 시청률이 최근 4주 평균보다 76% 하락한 0.048을 기록했습니다.";
+  const facts = splitInsightFacts(narrative, { dropProgramVsSlot: true });
+  check("채널별 인사이트: 문단을 종류별 한 줄로 나눈다(순위→요일→타깃층 순)", facts.map((f) => f.label).join(",") === "순위,요일,타깃층", facts.map((f) => f.label).join(","));
+  check("채널별 인사이트: 오늘의 시청률 카드가 이미 말하는 프로그램 슬롯 평균 대비 문장은 뺀다", !facts.some((f) => f.text.includes("(본방 슬롯)")));
+  check("채널별 인사이트: 카드가 말하지 않는 채널에서는 프로그램 문장을 남긴다", splitInsightFacts(narrative, { dropProgramVsSlot: false }).some((f) => f.label === "프로그램"));
+  check("채널별 인사이트: 소수점 수치를 문장 경계로 오인하지 않는다", splitInsightFacts("시청률이 최근 4주 평균(0.021) 대비 18.2% 하락한 0.017을 기록했습니다.", { dropProgramVsSlot: false }).length === 1);
+  const trend = splitInsightFacts("같은 요일 기준 전전주(0.008) → 전주(0.011) → 오늘(0.017)로 2주 연속 상승 추세입니다.", { dropProgramVsSlot: false });
+  check("채널별 인사이트: 추세 문장은 '흐름'으로 분류한다", trend.length === 1 && trend[0].label === "흐름");
 }
 
 check("홈 문구: 호조 프로그램이 있어도 채널이 목표 미달이면 달성률과 함께 진단 한 줄을 앞에 둔다", upProgramHeadline({ achievementPct: 46, rating: 0.028, goalRating: 0.06, program: { name: "왕가네식구들", hour: 21 } }) === "목표의 46% 달성 — '왕가네식구들'(21시)은 호조지만 채널 전체는 목표 미달" && upProgramHeadline({ achievementPct: 125, rating: 0.115, goalRating: 0.092, program: { name: "A", hour: null } }) === null && upProgramHeadline({ achievementPct: 90, rating: 0.028, goalRating: 0.06, program: { name: "A", hour: null } }) === null);

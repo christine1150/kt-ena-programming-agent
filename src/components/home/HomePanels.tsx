@@ -189,7 +189,7 @@ export function DecisionCards({
               </p>
               {c.notes.length > 0 && (
                 <details className="mt-2 text-[12px] text-zinc-500">
-                  <summary className="cursor-pointer">제약·가정 {c.notes.length}건</summary>
+                  <summary className="cursor-pointer">확인해 둘 사항 {c.notes.length}건(가정·권리·정책)</summary>
                   <ul className="mt-1 space-y-1">
                     {c.notes.map((n, i) => (
                       <li key={i}>· {n}</li>

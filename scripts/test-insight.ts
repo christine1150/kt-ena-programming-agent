@@ -206,7 +206,7 @@ const codes = (text: string, facts: Fact[], opts = {}) => guardNarrative(text, f
   check("Fit Score 태그가 있으면 그 판단을 쓰되 반복 확인 전에는 확정으로 보이지 않게 한다", tagged.kind === "REPLACE" && actionPhrase(tagged).includes("반복 확인 후 판단"), actionPhrase(tagged));
   check("태그와 확인 조건이 있는 문구가 같은 화면·같은 입력에서 항상 같다", actionPhrase(buildProgramAction({ ...base, fitScoreTag: "REPLACE" })) === actionPhrase(tagged));
   const up = buildProgramAction({ ...base, deviationPct: 40, observationText: "▲40%" });
-  check("상승 편차는 강화 검토(목적지는 근거 없이 정하지 않음)", up.kind === "STRENGTHEN" && up.shortLabel === "강화 검토" && up.alternatives.some((a) => a.includes("Fit Score")));
+  check("상승 편차는 강화 검토(목적지는 근거 없이 정하지 않음)", up.kind === "STRENGTHEN" && up.shortLabel === "강화 검토" && up.alternatives.some((a) => a.includes("콘텐츠 적합도")));
   const flat = buildProgramAction({ ...base, deviationPct: -3 });
   check("편차가 작으면 유지(검토일·평가 기준 없음)", flat.kind === "KEEP" && flat.reviewBy === null && flat.evaluation === null);
   check("표본이 없으면 근거 부족", judgeEvidence(null, 1, -30).strength === "insufficient" && judgeEvidence(2, 1, -30).strength === "insufficient");

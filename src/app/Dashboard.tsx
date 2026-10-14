@@ -30,6 +30,7 @@ import { monthlyDriverCauseLabel, type MonthlyDriver } from "@/lib/causeClassifi
 // 같은 태그를 다른 말로 부르는 사고를 막는다.
 import { TAG_LABEL_KO, TAG_DOT_COLOR, type ActionTag } from "@/lib/actionTags";
 import { programActionFor } from "@/lib/insight/actionCandidate";
+import { splitInsightFacts } from "@/lib/dashboard/insightFacts";
 import { buildCardCopy, upProgramHeadline, type AiSuggestionPayload, type CardCopy } from "@/lib/dashboard/homeCopy";
 import { formatArrowPct, formatDurationClock, formatDurationKo, formatRatingDelta } from "@/lib/metrics";
 // 단계 07: 전역 문맥(URL)·요청 상태·홈 모델. 계산은 src/lib/workspace, 화면은 components/home·workspace.
@@ -807,6 +808,8 @@ interface ResolvedAction {
   copy: CardCopy | null;
   /** 계산 중·실패 안내 */
   status: string | null;
+  /** 이 액션의 근거 프로그램이 Page 2에서 이미 판정된 태그(없으면 null) — 판단·조치가 있는 "오늘의 시청률" 카드에 붙인다 */
+  tag?: ActionTag | null;
 }
 const ACTION_BLACK = "#18181b";
 const ACTION_BLUE = "#281fc7";
@@ -816,8 +819,11 @@ function actionColor(kind: ResolvedAction["kind"], positive: boolean): string {
   return "#a1a1aa";
 }
 /** 카드 문구에 쓰는 이미 화면에 있는 값(목표 달성률·현재/목표 시청률) — 서로 맞을 때만 숫자를 보여 준다(homeCopy.achievementConsistent) */
-type CopyBase = { actionLine: string | null; actionKind: "program" | "diagnosis" | null; needsAi?: boolean; wantsAi?: boolean; structuralGap?: boolean; priorPct?: number | null; programFocus?: { name: string; hour: number | null; down?: boolean } | null };
+type CopyBase = { actionTag?: ActionTag | null; actionLine: string | null; actionKind: "program" | "diagnosis" | null; needsAi?: boolean; wantsAi?: boolean; structuralGap?: boolean; priorPct?: number | null; programFocus?: { name: string; hour: number | null; down?: boolean } | null };
 function resolveChannelAction(base: CopyBase | undefined, ai: AiState, code: string, kpi?: KpiRow, achievementPct?: number | null): ResolvedAction {
+  return { ...resolveChannelActionCore(base, ai, code, kpi, achievementPct), tag: base?.actionTag ?? null };
+}
+function resolveChannelActionCore(base: CopyBase | undefined, ai: AiState, code: string, kpi?: KpiRow, achievementPct?: number | null): ResolvedAction {
   if (!base) return { line: null, kind: null, positive: false, copy: null, status: null };
   if (!base.needsAi && !(base.wantsAi && base.actionKind)) {
     // AI 계산이 필요 없는 카드: 호조 프로그램이 있는데 채널 전체는 목표 미달이면 진단 한 줄을 앞에 붙인다(문구만, 판정은 그대로)
@@ -843,12 +849,18 @@ function resolveChannelAction(base: CopyBase | undefined, ai: AiState, code: str
 /** 홈 카드의 진단·원인·조치 문구 블록 — 핵심 판단(조치 한 가지)을 먼저 보이고 다른 방법은 눌러서 펼친다. */
 function ActionCopyBlock({ resolved, size }: { resolved: ResolvedAction; size: "hero" | "tile" | "list" }) {
   const [open, setOpen] = useState(false);
-  const { copy, status, line, kind } = resolved;
+  const { copy, status, line, kind, tag } = resolved;
   const base = size === "hero" ? "text-[13px]" : size === "list" ? "text-[13.5px]" : "text-[11.5px]";
   return (
     <div className={`mt-2 flex flex-col gap-1 ${base} leading-snug`}>
       {copy?.headline && <p className="font-bold text-zinc-900">{copy.headline}</p>}
-      {line && !(copy?.headline && line === "전반적 시청 흐름 약세로 순위 하락") && <p className="font-medium" style={{ color: actionColor(kind, false) }} title={line}>{line}</p>}
+      {line && !(copy?.headline && line === "전반적 시청 흐름 약세로 순위 하락") && (
+        <p className="flex flex-wrap items-center gap-1.5 font-medium" style={{ color: actionColor(kind, false) }} title={line}>
+          {line}
+          {/* 사용자 지시(2026-09-18): 이 액션의 근거 프로그램이 Page 2에서 이미 판정된 경우에만 태그를 붙인다(없으면 생략) */}
+          {tag && <ActionTagDot tag={tag} />}
+        </p>
+      )}
       {copy?.cause && <p className="text-zinc-600">{copy.cause}</p>}
       {copy?.action && (
         <p className="font-medium" style={{ color: copy.positive ? ACTION_BLUE : ACTION_BLACK }}>
@@ -1097,8 +1109,7 @@ function buildChannelInsightSummary(
     if (Math.abs(diff) >= 3) {
       // 사용자 지시(2026-09-20): "'평소 평균 65.8위' 같은 정보는 무조건 반올림으로 정수로
       // 표현" — 순위는 원래 정수 개념이라 소수점 표기가 오히려 어색하다.
-      causeLine = `최근 4주 평균(${Math.round(s.baseline_avg_rank)}위) 대비 ${Math.round(Math.abs(diff))}위 ${diff >= 0 ? "상승" : "하락"}`;
-      // 사용자 재지적(2026-09-20): "오늘 몇위인지는 이미 로고 밑에 (오늘등위/목표등위)로
+      causeLine = `최근 4주 평균(${Math.round(s.baseline_avg_rank)}위) 대비 ${Math.round(Math.abs(diff))}위 ${diff >= 0 ? "상승" : "하락"}`;      // 사용자 재지적(2026-09-20): "오늘 몇위인지는 이미 로고 밑에 (오늘등위/목표등위)로
       // 적혀있고, 평소 평균도 그 옆에 작게 붙여줄 것이므로 다시 적을 필요 없음" + "'편성
       // 경쟁력 점검 필요'는 모호하니 더 직접적이고 구체적인 멘트로" — 순위 숫자 재진술을
       // 없애고, 특정 프로그램을 지목할 근거가 없다는 사실 자체를 그대로 서술한다(새 진단을
@@ -2989,12 +3000,15 @@ function buildOriginalInsight(
   // 시점엔 그 계산값이 없어(CLAUDE.md "No Hallucination" 원칙), 같은 배지를 붙이면 검증된
   // Page 2 판정처럼 보여 혼동을 줄 수 있다. 대신 실제로 계산된 신호가 있을 때만 평문으로 제안.
   let actionLine: string | null = null;
+  // 문구 기준(2026-10-14): "~ 필요"만 적지 않고 왜(수치)와 무엇을 할지를 함께 적는다 — 발동 조건은 그대로다.
   if (historicalAvgRetention !== null && crossRetentionPct !== null && crossRetentionPct < historicalAvgRetention) {
-    actionLine = "직재방 편성 시간대 재점검 필요";
+    actionLine = causeLine && causeLine.includes("재방 유지율")
+      ? "직재방 시간대 변경 검토"
+      : `직재방 유지율 ${crossRetentionPct.toFixed(1)}%로 과거 평균(${historicalAvgRetention.toFixed(1)}%)보다 낮음 — 직재방 시간대 변경 검토`;
   } else if (item.matched_reach !== null && item.matched_reach < 1) {
-    actionLine = "도달 확대 방안 검토 필요";
+    actionLine = `도달률 ${item.matched_reach.toFixed(2)}%로 1% 미만 — 시청 가구 폭을 넓힐 방안 검토`;
   } else if (rank !== null && rank > 2) {
-    actionLine = "동시간대 편성 경쟁력 점검 필요";
+    actionLine = `동시간대 ${rank}위 — 상위 프로그램과의 시청률 격차 확인`;
   }
 
   return { bullets, secondaryBullets, schedulingNote, situationLine, causeLine, actionLine };
@@ -4593,10 +4607,8 @@ function ChannelNarrativeCard({
   enaOriginalDaily,
   onOpenChannelDetail,
   selectedChannel,
-  aiByCode,
   achievementPctByCode,
 }: {
-  aiByCode: AiState;
   achievementPctByCode: Map<string, number | null>;
   signals: ChannelNarrativeSignal[];
   themeColorByCode: Map<string, string | null>;
@@ -4676,11 +4688,9 @@ function ChannelNarrativeCard({
       {/* 사용자 지시(2026-08-21, 분석 로직 재설정): 패턴 언급 규칙 변경 반영 — "무조건 회피"에서
           "일일 시청률에 큰 영향을 주는 핵심 패턴이면 예외적으로 언급"으로. */}
       <p className="mb-4 text-xs text-zinc-400">
-        오늘 데이터를 최근 4주 평균·전주·전전주(동일 요일)와 비교해 눈에 띄는 변화를 짚었습니다
-        (반복되는 패턴이라도 오늘 수치에 큰 영향을 주면 예외적으로 언급합니다). 채널명 아래 막대는
-        최근 4주 평균 대비 오늘 시청률 등락폭을 나타냅니다 — 파란색은 상승, 붉은색은 하락이며,
-        막대가 길수록 등락폭이 큽니다(±50% 이상은 막대 길이가 꽉 찬 채로 고정, 정확한 수치는 막대에
-        마우스를 올리면 확인할 수 있습니다).
+        오늘 무엇이 달라졌는지를 최근 4주 평균·전주·전전주(같은 요일)와 비교해 설명합니다.
+        목표 대비 진단과 조치는 위 ‘오늘의 시청률’ 카드에 있습니다. 채널명 아래 막대는 최근 4주 평균 대비
+        오늘 등락폭입니다(파랑 상승·빨강 하락, ±50%에서 길이 고정, 정확한 값은 마우스를 올리면 표시).
       </p>
       <div className="flex flex-col gap-3 text-base leading-relaxed text-zinc-700">
         {lines.length === 0 ? (
@@ -4722,59 +4732,24 @@ function ChannelNarrativeCard({
                 )}
                 {line.deltaPct !== null && <MiniDeltaBar pct={line.deltaPct} />}
               </div>
-              {/* 사용자 지시(2026-08-26, 가독성 개선 5번 "타이포그래피 기본기"): 줄 폭을 제한하고
-                  (한 줄이 너무 길면 다음 줄 시작점을 눈이 놓침) 등락 수치·방향 단어만 굵게+색으로
-                  강조한다 — 문장 생성 로직(buildChannelNarrative/LLM)은 그대로, 표시만 바꾼다.
-                  콘텐츠 크리에이터 개선안(2026-09-09): 긴 문단 대신 현황→원인→액션 3줄을 먼저
-                  보여주고, 원문 문단(문구 변경 없음)은 "자세히 보기"로 접는다. */}
+              {/* 역할 분리(2026-10-14, 사용자 지시): "오늘의 시청률"은 목표 대비 진단·조치를, 이 목록은 오늘 무엇이 달라졌는지(비교·순위·흐름·요일·시간대·타깃층)만 말한다.
+                  시청률·등위·등락은 왼쪽에 이미 있으므로 다시 쓰지 않고, 목표 달성률·조치·"현재 편성 유지"는 쓰지 않는다. 해설 문단(규칙 기반/LLM)은 그대로 두고 종류별 한 줄로 나눠 보여 준다. */}
               <div className="min-w-0 max-w-xl">
-                <div className="flex flex-col gap-1">
-                  {line.situationLine && (
-                    <p className="text-[13.5px] leading-snug">
-                      <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">현황</span>
-                      {highlightNarrativeText(line.situationLine, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
-                    </p>
-                  )}
-                  {line.causeLine && (
-                    <p className="text-[13.5px] leading-snug text-zinc-600">
-                      <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">원인</span>
-                      {highlightNarrativeText(line.causeLine, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
-                    </p>
-                  )}
-                  {(() => {
-                  const a = resolveChannelAction(line, aiByCode, line.code);
-                  return (
-                  <>
-                  <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] leading-snug font-medium" style={{ color: a.line ? actionColor(a.kind, a.positive) : undefined }}>
-                    <span className="mr-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">
-                      액션
-                    </span>
-                    {a.line ?? <span className="text-zinc-500">현재 편성 유지</span>}
-                    {/* 사용자 지시(2026-09-18): 이 액션의 근거 프로그램이 Page 2 Fit Score로
-                        이미 판정된 경우에만 배지를 붙인다(오늘 Page 2 미방문 등으로 계산값이
-                        없으면 조용히 생략 — 근거 없는 배지를 지어내지 않는다). */}
-                    {line.actionTag && <ActionTagDot tag={line.actionTag} />}
-                  </p>
-                  {(a.copy || a.status) && <ActionCopyBlock resolved={{ ...a, line: null }} size="list" />}
-                  </>
+                {(() => {
+                  const facts = splitInsightFacts(line.text, { dropProgramVsSlot: line.actionKind === "program" });
+                  return facts.length > 0 ? (
+                    <ul className="flex flex-col gap-1">
+                      {facts.map((f, k) => (
+                        <li key={k} className="grid grid-cols-[52px_1fr] items-baseline gap-x-2 text-[13.5px] leading-snug text-zinc-700">
+                          <span className="whitespace-nowrap text-[10.5px] font-bold text-zinc-400">{f.label}</span>
+                          <span>{highlightNarrativeText(f.text, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[13.5px] leading-snug text-zinc-400">{line.text ? "이 채널의 변화는 '오늘의 시청률' 카드에 있습니다." : "오늘은 눈에 띄는 변화가 없습니다."}</p>
                   );
-                  })()}
-                </div>
-                {/* 원문 문단이 없는 채널(2026-09-17 기준 skyUHD — 등위 변화가 10위 미만이면
-                    문장을 만들지 않는 기존 규칙)에서는 빈 "자세히 보기"를 띄우지 않는다. */}
-                {line.text && (
-                  <details className="group mt-1.5">
-                    {/* 사용자 지시(2026-09-09): "자세히 보기"가 잘 안 보인다 — 진하게(검정),
-                        글씨도 키움(11px→13px, zinc-400→zinc-800). */}
-                    <summary className="cursor-pointer text-[13px] font-bold text-zinc-800 marker:content-none hover:text-black">
-                      <span className="inline-flex items-center gap-1">
-                        <span className="inline-block transition-transform group-open:rotate-90">▸</span>
-                        자세히 보기(원문)
-                      </span>
-                    </summary>
-                    <span className="mt-1.5 block">{highlightNarrativeText(line.text, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}</span>
-                  </details>
-                )}
+                })()}
               </div>
             </div>
           ))
@@ -4797,12 +4772,12 @@ const SHORT_DAYPART_LABEL: Record<string, string> = { 새벽: "새벽", 오전: 
 function buildKillerContentBadges(k: KillerContentDaypartRow): string[] {
   const totalRating = k.avg_rating * k.airing_count;
   const parts: string[] = [`${k.airing_count}회 · 시청률 합계(평균×횟수) ${formatRating(totalRating)}`];
-  if (k.best_daypart) parts.push(`강세 ${SHORT_DAYPART_LABEL[k.best_daypart] ?? k.best_daypart} ${formatRating(k.best_daypart_avg)}`);
-  if (k.worst_daypart) parts.push(`약세 ${SHORT_DAYPART_LABEL[k.worst_daypart] ?? k.worst_daypart} ${formatRating(k.worst_daypart_avg)}`);
+  if (k.best_daypart) parts.push(`강세 시간대 ${SHORT_DAYPART_LABEL[k.best_daypart] ?? k.best_daypart} ${formatRating(k.best_daypart_avg)}`);
+  if (k.worst_daypart) parts.push(`약세 시간대 ${SHORT_DAYPART_LABEL[k.worst_daypart] ?? k.worst_daypart} ${formatRating(k.worst_daypart_avg)}`);
   // 사용자 지시(2026-08-20): 시청률은 약해도 점유율/유료가구 시청률이 채널 평균보다 좋으면(±15%
   // 이상) 짧게 코멘트.
   if (k.avg_share !== null && k.channel_avg_share_baseline !== null && k.channel_avg_share_baseline > 0 && k.avg_share / k.channel_avg_share_baseline - 1 >= 0.15) {
-    parts.push(`점유율↑ ${k.avg_share.toFixed(2)}%`);
+    parts.push(`점유율 ${k.avg_share.toFixed(2)}% (채널 평균보다 높음)`);
   }
   if (
     k.household_avg_rating !== null &&
@@ -4810,7 +4785,7 @@ function buildKillerContentBadges(k: KillerContentDaypartRow): string[] {
     k.household_baseline_avg_rating > 0 &&
     k.household_avg_rating / k.household_baseline_avg_rating - 1 >= 0.15
   ) {
-    parts.push(`유료가구↑ ${formatRating(k.household_avg_rating)}`);
+    parts.push(`유료가구 ${formatRating(k.household_avg_rating)} (채널 평균보다 높음)`);
   }
   return parts;
 }
@@ -5899,7 +5874,6 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                     targetRankByCode={new Map(data.channels.map((c) => [c.code, c.targetRank]))}
                     enaOriginalDaily={data.originalContentReport.daily}
                     selectedChannel={selectedInsightChannel}
-                    aiByCode={aiByCode}
                     achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
                     onOpenChannelDetail={(code) => setSelectedInsightChannel((cur) => (cur === code ? null : code))}
                   />

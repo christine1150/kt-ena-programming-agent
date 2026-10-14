@@ -121,6 +121,8 @@ export const MAX_DECISIONS = 3;
 /** 같은 주제에서 기각·채택 후 이 기간 동안은 카드로 다시 올리지 않는다(가정: 단계 04의 검토 주기와 같은 14일). */
 export const SUPPRESS_DAYS = 14;
 
+/** 근거 강도의 화면 표기(영문 그대로 노출하지 않는다) */
+const STRENGTH_KO: Record<EvidenceStrength, string> = { strong: "강함", moderate: "보통", weak: "약함", insufficient: "부족" };
 const STRENGTH_BONUS: Record<EvidenceStrength, number> = { strong: 10, moderate: 6, weak: 3, insufficient: 0 };
 
 /** 검토 기록 때문에 오늘 카드로 올리지 않는 주제인가. */
@@ -266,7 +268,7 @@ export function buildTodayDecisions(i: {
       title,
       evidence: [
         `당일 ${ratingText} — ${baselineLabel}(${baseText}) 대비 ${dir}${Math.abs(dev).toFixed(0)}%`,
-        `기준 표본 ${baselineDays ?? "미확인"}회 · 근거 강도 ${action.evidence.strength}${action.evidence.reasons.length ? `(${action.evidence.reasons[0]})` : ""}`,
+        `기준 표본 ${baselineDays ?? "미확인"}회 · 근거 ${STRENGTH_KO[action.evidence.strength]}${action.evidence.reasons.length ? ` — ${action.evidence.reasons[0].replace(/\(([^)]*)\)$/, " — $1")}` : ""}`,
       ],
       alternatives: action.alternatives.slice(0, 3),
       confirm: action.confirmConditions[0] ?? "추가 관측 후 판단",
@@ -274,7 +276,7 @@ export function buildTodayDecisions(i: {
       strength: action.evidence.strength,
       subject,
       priority,
-      why: isDown ? "같은 슬롯 평균 대비 큰 하락이 관측되어 확인 순서가 앞섭니다." : "같은 슬롯 평균 대비 큰 상승이 관측되어 강화 여부를 검토할 만합니다.",
+      why: isDown ? "하락폭과 근거 강도가 큰 순서로 올린 항목입니다." : "상승폭이 큰 순서로 올린 항목입니다.",
       links: linksFor(s.channelCode, action.actionId, title, hour, subject),
       programName,
       hour,
