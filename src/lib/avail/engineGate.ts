@@ -46,7 +46,9 @@ export async function rightsFingerprint(): Promise<string> {
   if (!loaded.available || loaded.state.revisions.length === 0) return "none";
   const { ctx } = buildEvalContext(loaded.state, { now: new Date().toISOString() });
   const st = loaded.state;
-  return [ctx.inventoryVersion, JSON.stringify(st.interpretationConfirmations), st.links.length, st.confirmations.length, st.addenda.length].join("|");
+  // 종영일이 바뀌면 판정이 바뀌므로 지문에 넣는다(작품·종영일·출처)
+  const oe = (ctx.originalEnds ? Object.values(ctx.originalEnds) : []).map((e) => `${e.contentKey}:${e.endDate ?? ""}:${e.source}:${e.status}`).sort().join(",");
+  return [ctx.inventoryVersion, JSON.stringify(st.interpretationConfirmations), st.links.length, st.confirmations.length, st.addenda.length, oe.length ? oe : "-"].join("|");
 }
 
 export async function buildRightsGate(channelCode: string, weekStart: string, mode: SelectorMode): Promise<RightsGateResult> {

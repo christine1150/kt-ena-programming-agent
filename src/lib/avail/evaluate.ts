@@ -12,6 +12,7 @@ import { addDaysIso, addMonthsIso, calendarDateOf, calendarMinute, dayNumber, pa
 import { episodeAllowed, listEpisodes } from "./episodes";
 import { identityMarkers, seasonNotationKey, titleVariants } from "./identity";
 import { optionsFor, type Interpretation } from "./interpretation";
+import { gateAfterEnd, parseAfterOriginalEnd, usableEndDate, type OriginalEnd } from "./originalEnd";
 import { countedUsages, latestByUsage, usedUnits } from "./ledger";
 import type { Condition, ContentQuery, EligibilityResult, EligibilityStatus, Grant, SlotRef, UsageEntry } from "./types";
 
@@ -63,6 +64,8 @@ export interface EvalContext {
   originalProgramIds?: string[];
   /** 방수(횟수) 한도 적용 방식 — enforce(기본): 잔여 0은 불가·기소진 모름은 조건부 / warn_only(운영자 결정 2026-10-14): 판정은 바꾸지 않고 경고만 남긴다 */
   countPolicy?: "enforce" | "warn_only";
+  /** 작품(content.canonicalKey)별 원 방송 종영일 — '원 방송 종영 후 N개 채널' 메모를 날짜로 판정한다(운영자 결정 2026-10-14). 없으면 그 메모는 확인 필요로 둔다 */
+  originalEnds?: Record<string, OriginalEnd>;
 }
 
 export interface Reason {
@@ -259,6 +262,21 @@ function evalGrant(g: Grant, q: ContentQuery, episode: number | null, slot: Slot
 
   // 6) 조건(증빙이 있어야 풀림)
   for (const c of g.conditions) {
+    // '원 방송 종영 후 N개 채널' 메모: 종영일을 알면 날짜로 판정한다(종영 전 = 불가, 종영 후 = 충족). 채널 수 제한은 판정에 넣지 않고 안내만 한다.
+    const endRule = c.code === "MEMO_REVIEW" && ctx.originalEnds ? parseAfterOriginalEnd(c.raw) : null;
+    if (endRule) {
+      const oe = ctx.originalEnds?.[g.content.canonicalKey];
+      const gate = gateAfterEnd(endRule, usableEndDate(oe), slot.broadcastDate);
+      if (gate.kind === "before_end") {
+        add({ code: "ORIGINAL_NOT_ENDED", text: `원 방송(${oe?.broadcaster ?? "원 방송사"})이 ${gate.endDate}에 종영한 뒤 ${gate.availableFrom}부터 편성할 수 있습니다 — 원문: ${c.raw}`, severity: "unavailable" });
+        continue;
+      }
+      if (gate.kind === "after_end") {
+        satisfied.push(`condition:${c.code}`);
+        assumptions.push(`원 방송 종영일 ${gate.endDate}(${oe?.source === "manual" ? "수동 입력" : "네이버"}) 이후라 '${c.raw}' 메모의 시점 조건은 충족으로 봅니다.${gate.channelCount ? ` 종영 후 ${gate.channelCount}개 채널까지라는 채널 수 제한은 판정에 반영하지 않습니다(경고).` : ""}`);
+        continue;
+      }
+    }
     if (conditionConfirmed(g, c, ctx.confirmations)) satisfied.push(`condition:${c.code}`);
     else add({ code: c.code, text: `${c.needs}${c.raw ? ` — 원문: ${c.raw}` : ""}`, severity: "conditional" });
   }

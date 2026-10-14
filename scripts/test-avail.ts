@@ -934,6 +934,76 @@ async function main() {
     check("운영자 입력: 시작 시각을 비우면 시작일 0시부터(startMin 없음)", (() => { const r = A.buildManualGrants({ title: "y", windows: [{ channels: ["ENA"], startDate: "2026-10-25" }], actor: "t", enteredAt: "2026-10-07" }); return r.ok && r.grants[0].window.startMin === undefined; })());
   }
 
+  console.log("\n— 원 방송 종영일: '종영 후 N개 채널' 메모 → 날짜 판정 —");
+  {
+    const P = A.parseAfterOriginalEnd;
+    check("메모 해석: '{방송사} 종영 후 N개 채널' 변형을 읽는다", [P("JTBC 종영 후 1개 채널"), P("JTBC종영 후 1개채널"), P("KBS 종영 후 2개 채널"), P("KBSM 종영 후 1개 채널"), P("TV조선 종영 후 1개 채널"), P("채널A 종영 후 1개 채널"), P("종영 후 1개 채널")].every((r) => r !== null && r.offsetDays === 0));
+    check("메모 해석: '후방 N개채널'·괄호 채널 지정도 읽고 채널 수를 돌려준다", P("후방 1개채널")?.channelCount === 1 && P("후방 2채널")?.channelCount === 2 && P("JTBC 종영 후 1개 채널(ENA DRAMA)")?.channelCount === 1 && P("KBS종영 후 1개 채널(ENA STORY, ONCE)")?.offsetDays === 0);
+    check("메모 해석: '(SBS본방 종료 180일 후)'의 일수를 읽는다", P("후방 1개채널(SBS본방 종료 180일 후)")?.offsetDays === 180 && P("후방 1개채널(SBS본방 종료 후)")?.offsetDays === 0);
+    check("메모 해석: 다른 조건이 섞였거나 종영일 기준이 아닌 문구는 읽지 않는다(사람이 확인)", ["MBC 종영 후 1개 채널, 2개 채널 동시 편성 금지", "본방 직후 2개 채널, 종영 후 ALL", "본방 직후 2개 채널, 종영 후 제안없음", "총 3개 채널, 후방채널은 1주일 후 방송", "후방채널은 ONCE 또는 ENA PLAY로 한정", "ENA STOYR, 종영일로부터 1년", "ONT, 헬스메디(ENA 종영 후 편성)", "KBS 방영 후 1개 채널", "시즌3", "", null].every((t) => P(t as string | null) === null));
+    const rule = P("KBS 종영 후 1개 채널");
+    const g = A.gateAfterEnd;
+    check("날짜 판정: 종영일 당일까지는 불가, 다음 날부터 가능", g(rule, "2026-10-20", "2026-10-20").kind === "before_end" && g(rule, "2026-10-20", "2026-10-21").kind === "after_end" && g(rule, "2026-10-20", "2026-09-01").kind === "before_end");
+    const off = P("후방 1개채널(SBS본방 종료 180일 후)");
+    const offGate = g(off, "2026-01-10", "2026-07-09");
+    check("날짜 판정: 대기 일수가 있으면 종영일 + 일수 다음 날부터(1/10 + 180일 → 7/10)", offGate.kind === "before_end" && offGate.availableFrom === "2026-07-10" && g(off, "2026-01-10", "2026-07-10").kind === "after_end");
+    check("날짜 판정: 종영일을 모르거나 해석한 규칙이 없으면 판정하지 않는다", g(rule, null, "2026-10-21").kind === "end_unknown" && g(null, "2026-10-20", "2026-10-21").kind === "no_rule");
+
+    // 네이버 결과 해석(실제 응답 구조를 줄인 픽스처)
+    const card = (title: string, ch: string, text: string) => `<h2 class="title"><span class="area_text_title"><strong class="_text"><a nocr href="https://x" target="_blank">${title}</a></strong></span></h2><dl class="info txt_3"><div class="info_group"> <dt><span class="cm_bar"></span>편성</dt> <dd> <a nocr href="https://www.sbs.co.kr/" target="_blank">${ch}</a> <span class="text"> ${text} </span> </dd> </div></dl>`;
+    const ended = A.parseNaverBroadcast(card("모범택시3", "SBS", "2025.11.21. ~ 2026.01.10. <em class=\"state\">16부작</em>"));
+    check("네이버 해석: 종영작은 방송사·시작일·종영일을 읽는다", ended?.title === "모범택시3" && ended.broadcaster === "SBS" && ended.startDate === "2025-11-21" && ended.endDate === "2026-01-10");
+    const going = A.parseNaverBroadcast(card("나는SOLO", "MBC", "2013.03.22. ~ "));
+    check("네이버 해석: 방송 중이면 종영일이 없다", going?.startDate === "2013-03-22" && going.endDate === null && going.broadcaster === "MBC");
+    check("네이버 해석: 프로그램 카드가 없거나 편성 줄이 없으면 null(추측하지 않는다)", A.parseNaverBroadcast("<html>검색 결과 없음</html>") === null && A.parseNaverBroadcast('<span class="area_text_title"><strong class="_text">제목만</strong></span>') === null);
+    check("제목 비교: 공백·시즌 표기만 다르면 같은 작품, 시즌 숫자가 다르면 다른 작품", A.sameTitle("나는SOLO", "나는 SOLO") && A.sameTitle("라자루스 프로젝트 S2", "라자루스프로젝트2") && !A.sameTitle("모범택시3", "모범택시2") && !A.sameTitle("나는SOLO", "나는SOLO그후사랑은계속된다"));
+    const NOWI = "2026-10-14T12:00:00+09:00";
+    const okE = A.toOriginalEnd("모범택시3", "모범택시3", ended, NOWI);
+    const reviewE = A.toOriginalEnd("모범택시3", "모범택시3", { ...ended!, title: "모범택시2" }, NOWI);
+    const goingE = A.toOriginalEnd("나는solo", "나는SOLO", going, NOWI);
+    const noneE = A.toOriginalEnd("없는작품", "없는작품", null, NOWI);
+    check("저장 형태: 제목 일치 = found, 방송 중 = ongoing, 제목 불일치 = review, 결과 없음 = not_found", okE.status === "found" && goingE.status === "ongoing" && reviewE.status === "review" && noneE.status === "not_found");
+    check("판정에 쓰는 종영일: found만 쓰고 review·ongoing·not_found는 쓰지 않는다. 수동 값은 항상 쓴다", A.usableEndDate(okE) === "2026-01-10" && A.usableEndDate(reviewE) === null && A.usableEndDate(goingE) === null && A.usableEndDate(noneE) === null && A.usableEndDate({ ...reviewE, source: "manual", status: "found", endDate: "2026-02-01" }) === "2026-02-01" && A.usableEndDate(undefined) === null);
+
+    // 판정 연결
+    const memoSbs: A.Condition = { code: "MEMO_REVIEW", kind: "memo", raw: "SBS 종영 후 1개 채널", needs: "메모 확인" };
+    const gE = grant({ id: "GE", title: "종영작품", code: "E-1", start: "2026-01-01", end: "2027-12-31", conditions: [memoSbs] });
+    const key = gE.content.canonicalKey;
+    const endE = (over: Partial<A.OriginalEnd> = {}): A.OriginalEnd => ({ contentKey: key, titleRaw: "종영작품", source: "naver", status: "found", broadcaster: "SBS", startDate: "2026-08-01", endDate: "2026-10-20", matchedTitle: "종영작품", note: null, updatedBy: null, updatedAt: null, ...over });
+    const withEnd = (e: A.OriginalEnd | null, extra: Partial<A.EvalContext> = {}) => ctxOf([gE], { originalEnds: e ? { [key]: e } : undefined, ...extra });
+    const qE = q("종영작품", 3);
+    const before = status(qE, slot("2026-10-10"), withEnd(endE()));
+    check("종영 전 슬롯은 권리상 불가(ORIGINAL_NOT_ENDED) + 가능일 안내", before.status === "unavailable" && has(before, "ORIGINAL_NOT_ENDED") && before.reasons.some((r) => r.includes("2026-10-21")));
+    check("종영일 당일도 불가, 다음 날부터 메모의 시점 조건이 충족돼 가능", status(qE, slot("2026-10-20"), withEnd(endE())).status === "unavailable" && status(qE, slot("2026-10-21"), withEnd(endE())).status === "available");
+    const after = status(qE, slot("2026-10-25"), withEnd(endE()));
+    check("종영 후에는 채널 수 제한을 판정에 넣지 않고 가정(경고)으로 알린다", after.status === "available" && after.assumptions.some((a) => a.includes("종영일 2026-10-20") && a.includes("채널 수 제한")) && !has(after, "MEMO_REVIEW"));
+    check("종영일을 모르는 작품은 지금처럼 메모 확인 필요(조건부)", status(qE, slot("2026-10-25"), withEnd(null)).status === "conditional" && has(status(qE, slot("2026-10-25"), withEnd(null)), "MEMO_REVIEW") && status(qE, slot("2026-10-25"), ctxOf([gE])).status === "conditional");
+    for (const [name, e] of [["제목이 달라 확인 필요(review)", endE({ status: "review" })], ["방송 중(종영일 없음)", endE({ status: "ongoing", endDate: null })], ["검색 결과 없음", endE({ status: "not_found", endDate: null })]] as [string, A.OriginalEnd][])
+      check(`종영일을 쓸 수 없는 상태(${name})는 판정하지 않고 메모 확인 필요로 둔다`, status(qE, slot("2026-10-10"), withEnd(e)).status === "conditional" && has(status(qE, slot("2026-10-10"), withEnd(e)), "MEMO_REVIEW"));
+    check("수동 종영일이 네이버 값보다 우선한다 — 사람이 12/31로 고치면 11월 슬롯은 불가, 2027-01-01부터 가능", status(qE, slot("2026-11-15"), withEnd(endE({ source: "manual", endDate: "2026-12-31" }))).status === "unavailable" && status(qE, slot("2027-01-01"), withEnd(endE({ source: "manual", endDate: "2026-12-31" }))).status === "available");
+    check("이미 확인 처리한 메모라도 종영 전이면 불가(확인은 '막지 않는다'이고 종영일은 사실 자료)", status(qE, slot("2026-10-10"), withEnd(endE(), { confirmations: [{ grantId: "GE", rowHash: gE.rowHash, topic: "memo", evidence: null, by: "t", at: NOW }] })).status === "unavailable");
+    const gOff = grant({ id: "GO", title: "후방작품", code: "O-1", start: "2026-01-01", end: "2027-12-31", conditions: [{ code: "MEMO_REVIEW", kind: "memo", raw: "후방 1개채널(SBS본방 종료 180일 후)", needs: "메모 확인" }] });
+    const ctxOff = ctxOf([gOff], { originalEnds: { [gOff.content.canonicalKey]: endE({ contentKey: gOff.content.canonicalKey, endDate: "2026-01-10" }) } });
+    check("대기 일수가 있는 메모: 종영 후 180일이 지나야 가능", status(q("후방작품", 3), slot("2026-07-09"), ctxOff).status === "unavailable" && status(q("후방작품", 3), slot("2026-07-10"), ctxOff).status === "available");
+    const other: A.Condition = { code: "MEMO_REVIEW", kind: "memo", raw: "연속 5편 이상 편성 불가", needs: "메모 확인" };
+    const gOther = grant({ id: "GX", title: "다른메모", code: "X-1", conditions: [other] });
+    check("종영 후 규칙이 아닌 메모는 종영일이 있어도 영향받지 않는다", status(q("다른메모", 3), slot(), ctxOf([gOther], { originalEnds: { [gOther.content.canonicalKey]: endE({ contentKey: gOther.content.canonicalKey, endDate: "2099-01-01" }) } })).status === "conditional");
+
+    // 끄개: FEATURE_ORIGINAL_END_GATE=off → 컨텍스트에 종영일이 들어가지 않는다
+    const stE = { revisions: [gE], addenda: [], ledger: [], links: [], confirmations: [], interpretationConfirmations: {}, originalEnds: [endE()] };
+    const onCtx = A.buildEvalContext(stE, { now: NOW }).ctx;
+    process.env.FEATURE_ORIGINAL_END_GATE = "off";
+    const offCtx = A.buildEvalContext(stE, { now: NOW }).ctx;
+    delete process.env.FEATURE_ORIGINAL_END_GATE;
+    check("기능 끄개: 켜져 있으면 종영일이 맥락에 들어가고, 끄면 들어가지 않는다(이전 동작)", !!onCtx.originalEnds && offCtx.originalEnds === undefined);
+
+    // 관리자 현황: 대상 작품 목록과 사용 가능 여부
+    const ovE = (await import("../src/lib/avail/summary")).buildOverview({ available: true, error: null, originalEndApplied: true, state: { ...stE, originalEnds: [endE({ status: "review" })] } }, NOW);
+    check("관리자 현황: 종영 후 메모가 있는 작품이 목록에 나오고 review는 '사용 중'이 아니다", ovE.originalEnd.tableApplied && ovE.originalEnd.items.length === 1 && ovE.originalEnd.items[0].title === "종영작품" && ovE.originalEnd.items[0].usable === false);
+    const ovF = (await import("../src/lib/avail/summary")).buildOverview({ available: true, error: null, originalEndApplied: false, state: { ...stE, originalEnds: [] } }, NOW);
+    check("관리자 현황: 테이블 미적용이면 tableApplied=false지만 대상 목록은 보여 준다", ovF.originalEnd.tableApplied === false && ovF.originalEnd.items.length === 1 && ovF.originalEnd.items[0].entry === null);
+  }
+
   console.log(`\n${passed}건 통과, ${failures.length}건 실패`);
   if (failures.length) {
     console.log("실패 목록:\n" + failures.map((f) => ` - ${f}`).join("\n"));

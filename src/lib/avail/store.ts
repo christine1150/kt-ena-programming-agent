@@ -6,6 +6,7 @@ import type { Addendum } from "./addenda";
 import type { AvailState } from "./context";
 import type { Confirmation } from "./evaluate";
 import type { InterpKey } from "./interpretation";
+import type { OriginalEnd } from "./originalEnd";
 import type { PlanRightsSnapshot } from "./revalidation";
 import type { Grant, UsageEntry } from "./types";
 
@@ -31,6 +32,8 @@ export interface LoadedAvail {
   available: boolean;
   state: AvailState;
   error: string | null;
+  /** avail_original_end 테이블(마이그레이션 20261017010000)이 적용된 환경인지 — 아니면 종영일 기능만 비활성 */
+  originalEndApplied?: boolean;
 }
 
 export const EMPTY_STATE: AvailState = { revisions: [], addenda: [], ledger: [], links: [], confirmations: [], interpretationConfirmations: {} };
@@ -53,23 +56,40 @@ const ledgerFromRow = (r: Row): UsageEntry => ({
   createdAt: String(r.created_at),
 });
 
+const originalEndFromRow = (r: Row): OriginalEnd => ({
+  contentKey: String(r.content_key),
+  titleRaw: String(r.title_raw),
+  source: r.source === "manual" ? "manual" : "naver",
+  status: (r.status as OriginalEnd["status"]) ?? "review",
+  broadcaster: (r.broadcaster as string | null) ?? null,
+  startDate: (r.start_date as string | null) ?? null,
+  endDate: (r.end_date as string | null) ?? null,
+  matchedTitle: (r.matched_title as string | null) ?? null,
+  note: (r.note as string | null) ?? null,
+  updatedBy: (r.updated_by as string | null) ?? null,
+  updatedAt: (r.updated_at as string | null) ?? null,
+});
+
 /** 판정에 필요한 모든 상태를 읽는다. 테이블이 없으면 available=false(= Avail 미입력 설치와 같은 동작). */
 export async function loadAvailState(): Promise<LoadedAvail> {
   const grants = await selectAll("avail_grants", "revision_id, data, entered_at", "entered_at");
   if (grants.missing) return { available: false, state: { ...EMPTY_STATE }, error: null };
   if (grants.error) return { available: false, state: { ...EMPTY_STATE }, error: grants.error };
-  const [addenda, links, conf, interp, ledger] = await Promise.all([
+  const [addenda, links, conf, interp, ledger, oend] = await Promise.all([
     selectAll("avail_addenda", "data"),
     selectAll("avail_content_links", "program_id, canonical_key, confirmed_by, confirmed_at"),
     selectAll("avail_confirmations", "grant_id, row_hash, topic, value, evidence, confirmed_by, confirmed_at"),
     selectAll("avail_interpretation", "key, value, confirmed_by, confirmed_at"),
     selectAll("avail_usage_ledger", "seq, usage_id, event, pool_id, grant_revision_id, channel_id, episode, scheduled_at, actual_at, units, schedule_revision_id, idempotency_key, source_event_id, evidence, created_at", "seq"),
+    selectAll("avail_original_end", "content_key, title_raw, source, status, broadcaster, start_date, end_date, matched_title, note, updated_by, updated_at"),
   ]);
   const err = [addenda, links, conf, interp, ledger].find((x) => x.error && !x.missing)?.error ?? null;
   return {
     available: true,
     error: err,
+    originalEndApplied: !oend.missing && !oend.error,
     state: {
+      originalEnds: oend.rows.map(originalEndFromRow),
       revisions: grants.rows.map((r) => ({ ...(r.data as Grant), enteredAt: String(r.entered_at) })),
       addenda: addenda.rows.map((r) => r.data as Addendum),
       ledger: ledger.rows.map(ledgerFromRow),
@@ -129,6 +149,20 @@ export async function saveLink(l: { programId: string; canonicalKey: string }, a
 
 export async function saveConfirmation(c: Pick<Confirmation, "grantId" | "rowHash" | "topic" | "value" | "evidence">, actor: string): Promise<{ ok: boolean; message?: string }> {
   const { error } = await supabase.from("avail_confirmations").insert({ grant_id: c.grantId, row_hash: c.rowHash, topic: c.topic, value: c.value ?? null, evidence: c.evidence ?? null, confirmed_by: actor });
+  return error ? { ok: false, message: error.message } : { ok: true };
+}
+
+/** 원 방송 종영일 저장(작품당 한 줄). 수동 값을 자동 조회가 덮어쓰지 않도록 호출부에서 source를 확인한다. */
+export async function saveOriginalEnd(e: OriginalEnd): Promise<{ ok: boolean; message?: string }> {
+  const { error } = await supabase.from("avail_original_end").upsert(
+    { content_key: e.contentKey, title_raw: e.titleRaw, source: e.source, status: e.status, broadcaster: e.broadcaster, start_date: e.startDate, end_date: e.endDate, matched_title: e.matchedTitle, note: e.note, updated_by: e.updatedBy, updated_at: e.updatedAt ?? new Date().toISOString() },
+    { onConflict: "content_key" }
+  );
+  return error ? { ok: false, message: error.message } : { ok: true };
+}
+
+export async function deleteOriginalEnd(contentKey: string): Promise<{ ok: boolean; message?: string }> {
+  const { error } = await supabase.from("avail_original_end").delete().eq("content_key", contentKey);
   return error ? { ok: false, message: error.message } : { ok: true };
 }
 

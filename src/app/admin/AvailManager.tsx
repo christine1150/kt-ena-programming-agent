@@ -6,6 +6,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileInputTrigger } from "./FileInputTrigger";
 
+interface OriginalEndItem {
+  contentKey: string;
+  title: string;
+  texts: string[];
+  entry: { source: "naver" | "manual"; status: "found" | "ongoing" | "not_found" | "review"; broadcaster: string | null; startDate: string | null; endDate: string | null; matchedTitle: string | null; note: string | null; updatedBy: string | null } | null;
+  usable: boolean;
+}
 interface Validation {
   area: string;
   state: "verified" | "partial" | "unverified";
@@ -21,6 +28,7 @@ interface Overview {
   interpretation: { key: string; label: string; note: string; value: string | boolean; plausible: (string | boolean)[]; confirmed: boolean; confirmedBy: string | null }[];
   pending: { code: string; label: string; count: number }[];
   pendingTexts: { topic: "memo" | "holdback"; text: string; count: number }[];
+  originalEnd: { tableApplied: boolean; items: OriginalEndItem[] };
   duplicates: { a: string; b: string; titleA: string; titleB: string; reasons: string[] }[];
   addenda: { stored: number; seedAvailable: number; seedStored: number; unmatched: string[]; conflicts: { addendumId: string; displayTitle: string; field: string; fileValue: string; statedValue: string; message: string }[]; productionYearMissing: string[] };
   validation: Validation[];
@@ -76,6 +84,7 @@ export default function AvailManager() {
   const [mg, setMg] = useState<{ title: string; note: string; rows: { channels: string[]; startDate: string; startTime: string }[] }>({ title: "", note: "", rows: [{ channels: [], startDate: "", startTime: "" }] });
   const [links, setLinks] = useState<{ canonicalKey: string; title: string; candidates: { programId: string; programName: string; basis: string; confidence: number; markerConflicts: string[] }[] }[] | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [endEdit, setEndEdit] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin/avail");
@@ -125,6 +134,30 @@ export default function AvailManager() {
     setNotice(body.ok ? (typeof okText === "function" ? okText(body) : okText) : body.message ?? "처리하지 못했습니다.");
     setBusy(false);
     if (body.ok) void load();
+  }
+
+  // 네이버에서 종영일 가져오기: 아직 저장 안 된 작품을 한 번에 15개씩 이어서 가져온다. contentKeys를 주면 그 작품만 다시 가져온다(수동 값은 건드리지 않음).
+  async function fetchEnds(contentKeys?: string[]) {
+    setBusy(true);
+    let saved = 0;
+    const failed: string[] = [];
+    for (let guard = 0; guard < 20; guard++) {
+      setNotice(`네이버에서 종영일을 가져오는 중… (${saved}건 저장)`);
+      const res = await fetch("/api/admin/avail", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "fetch_original_ends", ...(contentKeys ? { contentKeys } : {}) }) });
+      const b = (await res.json().catch(() => null)) as { ok: boolean; message?: string; saved?: number; failed?: { title: string }[]; remaining?: number } | null;
+      if (!b?.ok) {
+        setNotice(b?.message ?? "가져오지 못했습니다.");
+        setBusy(false);
+        void load();
+        return;
+      }
+      saved += b.saved ?? 0;
+      failed.push(...(b.failed ?? []).map((f) => f.title));
+      if (contentKeys || !b.remaining || (b.saved ?? 0) === 0) break;
+    }
+    setNotice(`종영일 ${saved}건을 저장했습니다.${failed.length ? ` 가져오지 못한 작품 ${failed.length}건: ${failed.slice(0, 5).join(", ")}${failed.length > 5 ? " 외" : ""}` : ""}`);
+    setBusy(false);
+    void load();
   }
 
   async function searchLinks() {
@@ -357,6 +390,70 @@ export default function AvailManager() {
               </button>
             </div>
           </div>
+
+          {ov.originalEnd.items.length > 0 && (
+            <div>
+              <p className="mb-1 text-sm font-medium text-zinc-800">원 방송 종영일 — &lsquo;종영 후 N개 채널&rsquo;·&lsquo;후방 N개채널&rsquo; 메모가 있는 작품 {ov.originalEnd.items.length}개</p>
+              <p className="mb-2 text-xs text-zinc-500">
+                네이버에서 가져온 종영일을 기본으로 쓰고, 그 다음 날부터 편성 가능으로 판정합니다(종영 전이면 권리상 불가). 직접 고친 날짜는 &lsquo;수동&rsquo;으로 저장되어 다시 가져와도 덮어쓰지 않습니다. 검색된 제목이 다르면 &lsquo;확인 필요&rsquo;로 표시하고 판정에 쓰지 않으니, 날짜를 확인해 저장해 주세요. 종영 후 몇 개 채널까지라는 제한은 판정에 반영하지 않습니다.
+              </p>
+              {!ov.originalEnd.tableApplied ? (
+                <p className="text-xs text-amber-800">종영일 테이블이 아직 적용되지 않았습니다(마이그레이션 20261017010000).</p>
+              ) : (
+                <>
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <button disabled={busy} onClick={() => void fetchEnds()} className="rounded-lg border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50 disabled:opacity-50">
+                      네이버에서 종영일 가져오기(미조회 {ov.originalEnd.items.filter((i) => !i.entry).length}개)
+                    </button>
+                    <span className="text-xs text-zinc-500">사용 중 {ov.originalEnd.items.filter((i) => i.usable).length}개 · 확인 필요 {ov.originalEnd.items.filter((i) => i.entry?.status === "review").length}개 · 방송 중 {ov.originalEnd.items.filter((i) => i.entry?.status === "ongoing").length}개 · 검색 결과 없음 {ov.originalEnd.items.filter((i) => i.entry?.status === "not_found").length}개</span>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto pr-1" tabIndex={0} aria-label="원 방송 종영일 목록">
+                    {ov.originalEnd.items.map((it) => {
+                      const e = it.entry;
+                      const state = !e ? "미조회" : it.usable ? "사용 중" : e.status === "review" ? "확인 필요(검색된 제목이 다름)" : e.status === "ongoing" ? "방송 중(종영일 없음)" : "검색 결과 없음";
+                      const shown = endEdit[it.contentKey] ?? e?.endDate ?? "";
+                      return (
+                        <div key={it.contentKey} className="mb-1 rounded border border-zinc-200 px-2 py-1 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span>
+                              <b>{it.title}</b> <span className="text-xs text-zinc-500">{it.texts.join(" / ")}</span>
+                            </span>
+                            <span className={`rounded px-1.5 py-0.5 text-xs ${it.usable ? "bg-emerald-50 text-emerald-700" : e ? "bg-amber-50 text-amber-800" : "bg-zinc-100 text-zinc-800"}`}>{state}</span>
+                          </div>
+                          {e && (
+                            <p className="text-xs text-zinc-500">
+                              {e.source === "manual" ? "수동 입력" : "네이버"} · {e.broadcaster ?? "방송사 미상"} · {e.startDate ?? "?"} ~ {e.endDate ?? ""}
+                              {e.matchedTitle && e.matchedTitle !== it.title ? ` · 검색된 제목: ${e.matchedTitle}` : ""}
+                              {e.updatedBy ? ` · ${e.updatedBy}` : ""}
+                            </p>
+                          )}
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <label className="text-xs text-zinc-600">
+                              종영일{" "}
+                              <input type="date" className="rounded border border-zinc-300 px-1 py-0.5 text-sm" value={shown} onChange={(ev) => setEndEdit({ ...endEdit, [it.contentKey]: ev.target.value })} />
+                            </label>
+                            <button disabled={busy} onClick={() => void act({ action: "set_original_end", contentKey: it.contentKey, endDate: shown || null }, `${it.title}: 종영일을 ${shown || "없음(방송 중)"}으로 저장했습니다(수동).`)} className="rounded border border-zinc-300 px-2 py-0.5 text-xs hover:bg-zinc-50 disabled:opacity-50">
+                              이 날짜로 저장
+                            </button>
+                            {e?.source !== "manual" && (
+                              <button disabled={busy} onClick={() => void fetchEnds([it.contentKey])} className="rounded border border-zinc-300 px-2 py-0.5 text-xs hover:bg-zinc-50 disabled:opacity-50">
+                                {e ? "다시 가져오기" : "가져오기"}
+                              </button>
+                            )}
+                            {e && (
+                              <button disabled={busy} onClick={() => void act({ action: "clear_original_end", contentKey: it.contentKey }, `${it.title}: 저장된 종영일을 지웠습니다.`)} className="rounded border border-zinc-300 px-2 py-0.5 text-xs hover:bg-zinc-50 disabled:opacity-50">
+                                지우기
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {ov.duplicates.length > 0 && (
             <div>

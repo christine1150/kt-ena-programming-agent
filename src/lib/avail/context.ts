@@ -3,7 +3,9 @@
 import { applyAddenda, type Addendum } from "./addenda";
 import { applyDuplicateResolution } from "./duplicates";
 import { DEFAULT_ORIGINAL_POLICY, type Confirmation, type ContentLink, type EvalContext, type OriginalPolicy } from "./evaluate";
+import { isFeatureOn } from "@/lib/featureFlags";
 import { applyConfirmations, type Interpretation, type InterpKey } from "./interpretation";
+import type { OriginalEnd } from "./originalEnd";
 import { currentGrants, inventoryVersionOf } from "./inventory";
 import type { Grant, UsageEntry } from "./types";
 
@@ -17,6 +19,8 @@ export interface AvailState {
   interpretationConfirmations: Partial<Record<InterpKey, { value: unknown; by: string | null; at: string | null }>>;
   originalPolicy?: OriginalPolicy;
   originalProgramIds?: string[];
+  /** 원 방송 종영일(작품별). 없으면 '종영 후 N개 채널' 메모는 지금처럼 확인 필요로만 둔다 */
+  originalEnds?: OriginalEnd[];
 }
 
 export interface BuiltContext {
@@ -45,6 +49,7 @@ export function buildEvalContext(state: AvailState, opts: { now: string; knownAt
     inventoryVersion,
     scheduleRevisionId: opts.scheduleRevisionId ?? null,
     originalProgramIds: state.originalProgramIds,
+    originalEnds: isFeatureOn("original_end_gate") && state.originalEnds && state.originalEnds.length > 0 ? Object.fromEntries(state.originalEnds.map((e) => [e.contentKey, e])) : undefined,
     // 방수 적용 방식(운영자 결정): 'countEnforcement' 확인이 warn_only일 때만 경고만 남긴다. 확인이 없으면 지금까지처럼 적용(enforce)
     countPolicy: (state.interpretationConfirmations as Record<string, { value?: unknown; at?: string | null } | undefined>)["countEnforcement"]?.value === "warn_only" && known((state.interpretationConfirmations as Record<string, { at?: string | null } | undefined>)["countEnforcement"]?.at) ? "warn_only" : "enforce",
   };

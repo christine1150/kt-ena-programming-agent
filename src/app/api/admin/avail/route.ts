@@ -11,9 +11,15 @@ import { DEFAULT_INTERPRETATION, type InterpKey } from "@/lib/avail/interpretati
 import { proposeLinks } from "@/lib/avail/identity";
 import { US_DRAMA_1ST_WINDOW } from "@/lib/avail/seeds/usDrama1stWindow";
 import { buildManualGrants } from "@/lib/avail/manualGrant";
-import { loadAvailState, saveAddenda, saveConfirmation, saveImport, saveInterpretation, saveLink } from "@/lib/avail/store";
+import { parseAfterOriginalEnd, type OriginalEnd } from "@/lib/avail/originalEnd";
+import { fetchOriginalEnds } from "@/lib/avail/originalEndFetch";
+import { deleteOriginalEnd, loadAvailState, saveAddenda, saveConfirmation, saveImport, saveInterpretation, saveLink, saveOriginalEnd } from "@/lib/avail/store";
 import { buildOverview } from "@/lib/avail/summary";
 import { supabase } from "@/lib/supabase";
+
+export const maxDuration = 60;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const FETCH_BATCH = 15;
 
 const TOPICS = ["memo", "holdback", "approval", "usage_baseline", "duplicate"] as const;
 
@@ -106,6 +112,68 @@ export async function POST(request: Request) {
         n++;
       }
       return NextResponse.json({ ok: true, confirmationsAdded: n, skippedForConflict: sc.skippedForConflict });
+    }
+    case "fetch_original_ends": {
+      // 네이버에서 종영일을 가져온다. 수동으로 고친 작품은 건드리지 않는다. 한 번에 FETCH_BATCH개씩 — 남은 수를 돌려주니 화면이 이어서 부른다.
+      if (!loaded.originalEndApplied) return NextResponse.json({ ok: false, message: "종영일 테이블이 아직 적용되지 않았습니다(마이그레이션 20261017010000 적용 후 사용할 수 있습니다)." }, { status: 503 });
+      const targets = new Map<string, string>();
+      for (const g of current) {
+        if (g.status !== "active") continue;
+        if (g.conditions.some((c) => c.code === "MEMO_REVIEW" && parseAfterOriginalEnd(c.raw))) targets.set(g.content.canonicalKey, g.content.titleRaw);
+      }
+      const stored = new Map((loaded.state.originalEnds ?? []).map((e) => [e.contentKey, e]));
+      const wantKeys = Array.isArray(body.contentKeys) ? new Set((body.contentKeys as unknown[]).map(String)) : null;
+      const refresh = body.refresh === true;
+      const todo = [...targets].filter(([key]) => {
+        if (wantKeys && !wantKeys.has(key)) return false;
+        const e = stored.get(key);
+        if (e?.source === "manual") return false;
+        return refresh || wantKeys ? true : !e;
+      });
+      const batch = todo.slice(0, FETCH_BATCH);
+      const now = new Date().toISOString();
+      const results = await fetchOriginalEnds(batch.map(([contentKey, titleRaw]) => ({ contentKey, titleRaw })), now);
+      let saved = 0;
+      const failed: { title: string; message: string }[] = [];
+      for (const r of results) {
+        if (!r.ok) {
+          failed.push({ title: r.titleRaw, message: r.message });
+          continue;
+        }
+        const w = await saveOriginalEnd(r.entry);
+        if (!w.ok) return done(w);
+        saved++;
+      }
+      return NextResponse.json({ ok: true, saved, failed, remaining: Math.max(0, todo.length - batch.length) });
+    }
+    case "set_original_end": {
+      // 사람이 종영일을 입력·수정한다 → 수동 값이 되어 이후 자동 조회가 덮어쓰지 않는다. 종영일을 비우면 '방송 중(종영일 없음)'.
+      if (!loaded.originalEndApplied) return NextResponse.json({ ok: false, message: "종영일 테이블이 아직 적용되지 않았습니다." }, { status: 503 });
+      const contentKey = String(body.contentKey ?? "");
+      const g = current.find((x) => x.content.canonicalKey === contentKey);
+      if (!g) return NextResponse.json({ ok: false, message: "해당 작품의 권리를 찾지 못했습니다." }, { status: 404 });
+      const endDate = typeof body.endDate === "string" && body.endDate.trim() ? body.endDate.trim() : null;
+      if (endDate && (!ISO_DATE.test(endDate) || Number.isNaN(Date.parse(endDate)))) return NextResponse.json({ ok: false, message: "종영일은 YYYY-MM-DD 형식이어야 합니다." }, { status: 400 });
+      const prev = (loaded.state.originalEnds ?? []).find((e) => e.contentKey === contentKey);
+      const entry: OriginalEnd = {
+        contentKey,
+        titleRaw: g.content.titleRaw,
+        source: "manual",
+        status: endDate ? "found" : "ongoing",
+        broadcaster: typeof body.broadcaster === "string" && body.broadcaster.trim() ? body.broadcaster.trim() : (prev?.broadcaster ?? null),
+        startDate: prev?.startDate ?? null,
+        endDate,
+        matchedTitle: prev?.matchedTitle ?? null,
+        note: typeof body.note === "string" && body.note.trim() ? body.note.trim() : null,
+        updatedBy: actor,
+        updatedAt: new Date().toISOString(),
+      };
+      return done(await saveOriginalEnd(entry));
+    }
+    case "clear_original_end": {
+      // 저장된 종영일을 지운다(다시 네이버에서 가져올 수 있게 된다)
+      if (!loaded.originalEndApplied) return NextResponse.json({ ok: false, message: "종영일 테이블이 아직 적용되지 않았습니다." }, { status: 503 });
+      return done(await deleteOriginalEnd(String(body.contentKey ?? "")));
     }
     case "confirm_group": {
       // 같은 문구의 메모·홀드백을 한꺼번에 확인한다(권리 담당자가 그 문구를 확인한 뒤에만 사용)

@@ -15,6 +15,7 @@ export * from "./addenda";
 export * from "./manualGrant";
 export * from "./corrections";
 export * from "./context";
+export * from "./originalEnd";
 export { US_DRAMA_1ST_WINDOW } from "./seeds/usDrama1stWindow";
 export { analyzeMatrices, analyzeWorkbookBuffer } from "./adapters/detect";
 export type { SheetAnalysis, SheetKind } from "./adapters/detect";
