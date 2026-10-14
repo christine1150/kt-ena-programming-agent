@@ -24,6 +24,7 @@ import { bandForLevel, certaintyOf, uncertaintyFromResiduals } from "../src/lib/
 import { enrichAiringsWithPlan, normalizePlanRows, planEpisodeHints, planWeekFrame } from "../src/lib/idealSchedule/planEpisodes";
 import { buildRerunConstraints } from "../src/lib/idealSchedule/rerunRules";
 import * as SL from "../src/lib/idealSchedule/seriesLink";
+import { evidenceOf, MIN_SAMPLE_FOR_REPLACE } from "../src/lib/dashboard/evidenceGate";
 
 let passed = 0;
 const failures: string[] = [];

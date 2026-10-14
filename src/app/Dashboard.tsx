@@ -799,7 +799,7 @@ interface AiSuggestionPayload {
   weekday?: number;
   currentExpected: number | null;
   aiExpected: number | null;
-  change: { weekday: number; startMin: number; from: string; to: string; gain: number; certainty: "HIGH" | "MID" | "LOW" | null } | null;
+  change: { weekday: number; startMin: number; from: string; to: string; gain: number; certainty: "HIGH" | "MID" | "LOW" | null; sampleCount?: number; evidence?: "ok" | "weak" } | null;
   /** 검색 범위를 최대 6개월(180일)까지 넓혀 계산한 경우 그 일수 */
   widenedLookbackDays?: number | null;
   /** 약해진 프로그램을 지정해 그 자리의 교체안을 찾은 경우 그 이름 */
@@ -814,12 +814,20 @@ const aiClock = (min: number) => {
   const m = ((Math.round(min) % 1440) + 1440) % 1440;
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 };
+// 수정(2026-10-14): 목표 미달 채널에 "교체 후보가 없어 현재 편성 유지가 낫다"고 말하지 않는다 — 자사 풀 안에서 근거 있는 교체안이 없다는 사실만 말하고 다음 확인으로 잇는다.
+// 근거가 약한 안(표본 적음·확실성 낮음)은 기대 개선폭 수치를 숨기고 '테스트(시험 편성) 후보'로만 제시한다.
 function aiSuggestionLine(s: AiSuggestionPayload): string {
-  if (!s.change && s.remedy?.lines.length) return s.remedy.lines.join("\n");
+  const remedyText = s.remedy?.lines.length ? s.remedy.lines.join("\n") : "";
+  if (s.change?.evidence === "weak") {
+    const c = s.change;
+    const head = `${AI_DOW_KO[c.weekday - 1]} ${aiClock(c.startMin)} '${c.from}' 자리: '${c.to}'는 표본 ${c.sampleCount ?? 0}회로 근거가 약해 교체 추천이 아니라 테스트(시험 편성) 후보입니다`;
+    return remedyText ? `${head}\n${remedyText}` : head;
+  }
+  if (!s.change && remedyText) return remedyText;
   if (!s.change) {
     const where = s.focus ? `'${s.focus}' 자리` : `${s.weekday ? `${AI_DOW_KO[s.weekday - 1]}요일 ` : ""}실제 편성`;
     const basis = s.widenedLookbackDays ? "최근 6개월 실적 기준으로 " : "";
-    return s.focus ? `${where}는 ${basis}교체해도 기대 시청률이 오르는 후보가 없어 다음 방영 추이를 먼저 확인합니다` : `${where}은 ${basis}교체해도 기대 시청률이 오르는 후보가 없어 현재 편성 유지가 낫다고 계산됐습니다`;
+    return s.focus ? `${where}는 ${basis}자사 편성 안에서 근거가 충분한 교체안을 찾지 못해 다음 방영 추이를 먼저 확인합니다` : `${where}은 ${basis}자사 편성 안에서 근거가 충분한 교체안을 찾지 못했습니다 — 목표와의 격차 원인 확인이 먼저입니다`;
   }
   return `${AI_DOW_KO[s.change.weekday - 1]} ${aiClock(s.change.startMin)} '${s.change.from}'→'${s.change.to}' 교체 시 기대 ${formatRatingDelta(s.change.gain)}${s.widenedLookbackDays ? " · 최근 6개월 실적 기준" : ""}`;
 }
@@ -850,13 +858,13 @@ function resolveChannelAction(
   if (base.needsAi) {
     if (s === undefined) return { line: "AI 편성안 계산 중…", kind: "ai", positive: false, extra: null };
     if (s === null) return { line: "AI 편성안을 계산하지 못했습니다", kind: "ai", positive: false, extra: null };
-    return { line: aiSuggestionLine(s), kind: "ai", positive: !!s.change || !!s.remedy?.concrete, extra: null };
+    return { line: aiSuggestionLine(s), kind: "ai", positive: (!!s.change && s.change.evidence !== "weak") || !!s.remedy?.concrete, extra: null };
   }
   let extra: ResolvedAction["extra"] = null;
   if (base.wantsAi && base.actionKind) {
     if (s === undefined) extra = { text: "AI 대체 편성 계산 중…", positive: false };
     else if (s === null) extra = { text: "AI 대체 편성을 계산하지 못했습니다", positive: false };
-    else extra = { text: aiSuggestionLine(s), positive: !!s.change || !!s.remedy?.concrete };
+    else extra = { text: aiSuggestionLine(s), positive: (!!s.change && s.change.evidence !== "weak") || !!s.remedy?.concrete };
   }
   return { line: base.actionLine, kind: base.actionKind, positive: false, extra };
 }

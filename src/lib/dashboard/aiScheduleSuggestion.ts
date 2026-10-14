@@ -16,7 +16,9 @@ import { cachedJson } from "@/lib/idealSchedule/suggestionCacheCore";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { computeWeakSlotRemedy, type WeakSlotRemedy } from "./weakSlotRemedy";
 
-export type Certainty = "HIGH" | "MID" | "LOW" | null;
+import { evidenceOf, type Certainty } from "./evidenceGate";
+export { evidenceOf, MIN_SAMPLE_FOR_REPLACE } from "./evidenceGate";
+export type { Certainty };
 
 /** 엔진이 "바꾸면 기대 시청률이 오른다"고 본 한 칸 */
 export interface ReplaceDetail {
@@ -32,7 +34,12 @@ export interface ReplaceDetail {
   runnerUp: string | null; // 같은 자리 차순위 후보
   /** 교체 후보를 고른 근거(엔진이 저장한 구조화 근거를 문장으로) — 최대 2개 */
   basis: string[];
+  /** 추천 후보가 이 자리 기대값을 낸 표본 방영 수 */
+  toSampleCount: number;
+  /** 근거 관문 결과 — ok: 교체 추천으로 보여 줄 만함 / weak: 표본·확실성이 부족해 '테스트(시험 편성) 후보'로만 보여 준다 */
+  evidence: "ok" | "weak";
 }
+
 
 export interface AiSuggestion {
   channelCode: string;
@@ -44,7 +51,7 @@ export interface AiSuggestion {
   /** AI 편성안의 주간 평균 기대 시청률 */
   aiExpected: number | null;
   /** 기대 시청률이 가장 크게 오르는 교체 한 칸. 교체로 개선되는 칸이 없으면 null */
-  change: { weekday: number; startMin: number; from: string; to: string; gain: number; certainty: Certainty } | null;
+  change: { weekday: number; startMin: number; from: string; to: string; gain: number; certainty: Certainty; sampleCount: number; evidence: "ok" | "weak" } | null;
   /** 검색 범위를 넓혀(최근 6개월) 찾았거나 찾아본 경우 그 일수(180). 기본 범위(약 3개월)로 찾았으면 null */
   widenedLookbackDays: number | null;
   /** 약한 프로그램을 지정해 그 자리의 교체안을 찾았으면 그 이름 */
@@ -92,37 +99,53 @@ const broadcastMin = (t: string) => {
  * 원인: 엔진의 "기존 틀" 기준 주는 명절·결측 주를 건너뛰어 3주 전(예: 09-14~09-20 주)이라, 그 사이 편성이 바뀐 자리의 옛 프로그램을 "교체 대상"이라고 말했다.
  * 해결: 각 교체안의 요일에 대해 기준일 이전 가장 최근 그 요일의 실제 방영(ratings)을 보고, 그 자리(시작 ±30분)에서 실제로 그 프로그램이 방영됐을 때만 남긴다.
  */
+// 수정(2026-10-14): 예전에는 14일치 전체를 limit(8000)으로 한 번에 읽었는데, 서버가 한 번에 1,000행까지만 돌려줘(행이 방영×타깃 수만큼 있다)
+// 가장 오래된 3~4일치만 들어왔다. 그래서 "가장 최근 그 요일"이 2주 전으로 잡혀 엔진의 교체안이 전부 '낡은 안'으로 버려졌다.
+// 이제 필요한 요일의 가장 최근 날짜만 골라 그 날짜들만 페이지로 나눠 끝까지 읽는다(같은 방영이 타깃별로 여러 행이라 중복은 합친다).
 async function keepOnlyCurrentlyAiring(channelId: string, asOfDate: string, details: ReplaceDetail[]): Promise<{ kept: ReplaceDetail[]; dropped: number }> {
   if (details.length === 0) return { kept: details, dropped: 0 };
-  const { data, error } = await supabase
-    .from("ratings")
-    .select("broadcast_date, start_time, programs(canonical_name)")
-    .eq("channel_id", channelId)
-    .eq("source_type", "nielsen_daily")
-    .gte("broadcast_date", addDays(asOfDate, -14))
-    .lte("broadcast_date", asOfDate)
-    .not("program_id", "is", null)
-    .limit(8000);
-  if (error) return { kept: [], dropped: details.length }; // 검증하지 못하면 제안하지 않는다(없는 편성을 말하는 것보다 낫다)
-  const byDate = new Map<string, { min: number; name: string }[]>();
-  for (const r of (data ?? []) as unknown as { broadcast_date: string; start_time: string | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
-    const name = Array.isArray(r.programs) ? r.programs[0]?.canonical_name : r.programs?.canonical_name;
-    if (!name || !r.start_time) continue;
-    const list = byDate.get(r.broadcast_date) ?? [];
-    list.push({ min: broadcastMin(r.start_time), name });
-    byDate.set(r.broadcast_date, list);
-  }
-  const latestDateOf = (weekday: number) => {
+  const dateOfWeekday = new Map<number, string>();
+  for (const w of new Set(details.map((d) => d.weekday))) {
     for (let i = 0; i < 14; i++) {
       const d = addDays(asOfDate, -i);
-      if (isoDow(d) === weekday && byDate.has(d)) return d;
+      if (isoDow(d) === w) {
+        dateOfWeekday.set(w, d);
+        break;
+      }
     }
-    return null;
+  }
+  const dates = [...new Set(dateOfWeekday.values())];
+  const byDate = new Map<string, Map<string, { min: number; name: string }>>();
+  for (let page = 0; page < 20; page++) {
+    const { data, error } = await supabase
+      .from("ratings")
+      .select("broadcast_date, start_time, programs(canonical_name)")
+      .eq("channel_id", channelId)
+      .eq("source_type", "nielsen_daily")
+      .in("broadcast_date", dates)
+      .not("program_id", "is", null)
+      .order("broadcast_date", { ascending: true })
+      .order("start_time", { ascending: true })
+      .order("id", { ascending: true })
+      .range(page * 1000, page * 1000 + 999);
+    if (error) return { kept: [], dropped: details.length }; // 검증하지 못하면 제안하지 않는다(없는 편성을 말하는 것보다 낫다)
+    for (const r of (data ?? []) as unknown as { broadcast_date: string; start_time: string | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
+      const name = Array.isArray(r.programs) ? r.programs[0]?.canonical_name : r.programs?.canonical_name;
+      if (!name || !r.start_time) continue;
+      const m = byDate.get(r.broadcast_date) ?? new Map<string, { min: number; name: string }>();
+      m.set(`${r.start_time}|${name}`, { min: broadcastMin(r.start_time), name });
+      byDate.set(r.broadcast_date, m);
+    }
+    if ((data ?? []).length < 1000) break;
+  }
+  const latestDateOf = (weekday: number) => {
+    const d = dateOfWeekday.get(weekday);
+    return d && byDate.has(d) ? d : null;
   };
   const kept = details.filter((d) => {
     const date = latestDateOf(d.weekday);
     if (!date) return false;
-    return (byDate.get(date) ?? []).some((a) => Math.abs(a.min - d.startMin) <= 30 && sameTitle(a.name, d.from));
+    return [...(byDate.get(date)?.values() ?? [])].some((a) => Math.abs(a.min - d.startMin) <= 30 && sameTitle(a.name, d.from));
   });
   return { kept, dropped: details.length - kept.length };
 }
@@ -146,7 +169,7 @@ export async function computeReplacePlan(channelCode: string, asOfDate: string, 
   const weekStart = nextMondayAfter(asOfDate);
   // 제외 편성이 바뀌면 캐시를 쓰지 않도록 지문을 키에 넣는다(사용자 지시 2026-10-07)
   const exclFp = exclusionFingerprint(await loadActiveExclusions((await loadChannelRef(channelCode)).id, weekStart));
-  const key = `v6|${channelCode}|${weekStart}|${asOfDate}|${exclFp}|${lookbackDays ?? "d"}`;
+  const key = `v7|${channelCode}|${weekStart}|${asOfDate}|${exclFp}|${lookbackDays ?? "d"}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 
@@ -157,7 +180,7 @@ export async function computeReplacePlan(channelCode: string, asOfDate: string, 
     startMin: number;
     endMin: number;
     candidate: { programName: string };
-    eval?: { expected: number | null; reasons?: { code: string; value: number | string | null; detail?: string }[] };
+    eval?: { expected: number | null; sampleCount?: number; reasons?: { code: string; value: number | string | null; detail?: string }[] };
     decision?: { kind: string | null; incumbent: { name: string; expected: number | null } | null; delta: number | null; certainty: Certainty; runnerUp: { name: string } | null };
   };
   const blocks = ((out.output as unknown as { blocks?: Block[] }).blocks ?? []).filter((b) => b.status === "AI" || b.status === undefined);
@@ -175,6 +198,8 @@ export async function computeReplacePlan(channelCode: string, asOfDate: string, 
       certainty: b.decision!.certainty,
       runnerUp: b.decision!.runnerUp?.name ?? null,
       basis: basisText(b.eval?.reasons ?? []),
+      toSampleCount: b.eval?.sampleCount ?? 0,
+      evidence: evidenceOf(b.decision!.certainty, b.eval?.sampleCount ?? 0),
     }))
     .sort((a, b) => b.gain - a.gain);
   const ch = await loadChannelRef(channelCode);
@@ -201,7 +226,8 @@ function pickDetail(details: ReplaceDetail[], weekday: number, focus: string | n
     const h = Math.floor((((Math.round(d.startMin) % 1440) + 1440) % 1440) / 60);
     return h >= 2 && h < 6 ? 1 : 0;
   };
-  return [...pool].sort((a, b) => Number(b.weekday === weekday) - Number(a.weekday === weekday) || dawn(a) - dawn(b) || b.gain - a.gain)[0];
+  // 근거가 충분한 안을 먼저, 그다음 주요 시간대, 근거가 약한 안끼리는 표본이 많은 후보를 우선한다(표본이 적은 후보의 부풀려진 개선폭이 1위가 되지 않게)
+  return [...pool].sort((a, b) => Number(b.evidence === "ok") - Number(a.evidence === "ok") || dawn(a) - dawn(b) || (a.evidence === "weak" ? b.toSampleCount - a.toSampleCount : 0) || b.gain - a.gain)[0];
 }
 
 /** 홈 채널 타일용 — focus(약해진 프로그램)가 있으면 그 프로그램 자리, 없으면 기준일과 같은 요일 칸 중 개선폭이 가장 큰 한 칸.
@@ -209,7 +235,7 @@ function pickDetail(details: ReplaceDetail[], weekday: number, focus: string | n
 // 같은 기준일·채널·입력이면 다른 사람·새로고침·다른 서버에서도 다시 계산하지 않고 저장해 둔 결과를 쓴다(기존 캐시 테이블, 마이그레이션 없음).
 // 키에는 결과를 바꿀 수 있는 입력의 지문(제외 편성·권리 상태·채널 설정·가장 최근 닐슨 업로드 시각·기능 끄개)이 들어가 입력이 바뀌면 자동으로 새로 계산한다.
 // 지문에 못 넣는 변화(예: 장르표 수정)는 6시간 TTL로 제한한다. 지문을 만들지 못하거나 저장소가 실패하면 평소처럼 계산한다.
-const SUGGESTION_CACHE_VERSION = "v1";
+const SUGGESTION_CACHE_VERSION = "v2"; // v2: 최근 방영 확인 조회 오류 수정·근거 관문 추가(예전 "후보 없음" 결과를 재사용하지 않도록)
 const SUGGESTION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 async function suggestionFingerprint(channelCode: string, asOfDate: string, focus: string | null): Promise<unknown> {
@@ -241,7 +267,7 @@ export async function computeAiSuggestion(channelCode: string, asOfDate: string,
   } catch {
     return computeAiSuggestionUncached(channelCode, asOfDate, focus);
   }
-  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v1", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
+  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v2", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
   return r.value;
 }
 
@@ -255,20 +281,25 @@ async function computeAiSuggestionUncached(channelCode: string, asOfDate: string
   let plan = await computeReplacePlan(channelCode, asOfDate);
   let top = pickDetail(plan.details, weekday, focus);
   let widened: number | null = null;
-  if (!top) {
-    widened = 180;
-    plan = await widePromise;
-    top = pickDetail(plan.details, weekday, focus);
+  // 기본 범위에서 못 찾았거나 근거가 약한 안뿐이면 180일로도 본다 — 더 넓은 범위에서 근거가 충분한 안이 나오면 그쪽을 쓴다.
+  if (!top || top.evidence === "weak") {
+    const widePlan = await widePromise;
+    const wideTop = pickDetail(widePlan.details, weekday, focus);
+    if (!top || (wideTop && wideTop.evidence === "ok")) {
+      widened = 180;
+      plan = widePlan;
+      top = wideTop;
+    }
   }
   // 사용자 지시(2026-10-07): 교체 후보가 없으면 "못 찾았다"로 끝내지 말고 시청률이 빠지는 부분의 보완 방안을 제안한다
-  const remedy = !top && focus ? await computeWeakSlotRemedy(channelCode, asOfDate, focus).catch(() => null) : null;
+  const remedy = (!top || top.evidence === "weak") && focus ? await computeWeakSlotRemedy(channelCode, asOfDate, focus).catch(() => null) : null;
   return {
     channelCode,
     weekStart: plan.weekStart,
     weekday,
     currentExpected: plan.currentExpected,
     aiExpected: plan.aiExpected,
-    change: top ? { weekday: top.weekday, startMin: top.startMin, from: top.from, to: top.to, gain: top.gain, certainty: top.certainty } : null,
+    change: top ? { weekday: top.weekday, startMin: top.startMin, from: top.from, to: top.to, gain: top.gain, certainty: top.certainty, sampleCount: top.toSampleCount, evidence: top.evidence } : null,
     widenedLookbackDays: widened,
     focus,
     remedy,

@@ -3890,6 +3890,9 @@ interface ReplaceDetailView {
   certainty: "HIGH" | "MID" | "LOW" | null;
   runnerUp: string | null;
   basis: string[];
+  /** 추천 후보의 표본 방영 수 · 근거 관문 결과(weak면 기대 개선폭을 숨기고 테스트 후보로 표시) */
+  toSampleCount?: number;
+  evidence?: "ok" | "weak";
 }
 interface ReplacePlanView {
   channelCode: string;
@@ -5804,7 +5807,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               return k === key || (k.length >= 3 && (k.includes(key) || key.includes(k)));
             });
             if (hits.length === 0) return null;
-            return [...hits].sort((a, b) => Number(isDawnMin(a.startMin)) - Number(isDawnMin(b.startMin)) || b.gain - a.gain)[0];
+            return [...hits].sort((a, b) => Number(b.evidence !== "weak") - Number(a.evidence !== "weak") || Number(isDawnMin(a.startMin)) - Number(isDawnMin(b.startMin)) || (a.evidence === "weak" ? (b.toSampleCount ?? 0) - (a.toSampleCount ?? 0) : 0) || b.gain - a.gain)[0];
           };
           const CERT_KO = { HIGH: "신뢰 높음", MID: "신뢰 보통", LOW: "신뢰 낮음" } as const;
           const fmtExp = (v: number | null) => (v === null ? "-" : v.toFixed(3));
@@ -5828,12 +5831,18 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         </span>
                         <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>
                         <span className="text-zinc-400">→</span>
-                        <span className="font-bold" style={{ color: accentForegroundColor(accentColor) }}>&lsquo;{d.to}&rsquo; 추천</span>
+                        <span className="font-bold" style={{ color: accentForegroundColor(accentColor) }}>&lsquo;{d.to}&rsquo; {d.evidence === "weak" ? "테스트 후보" : "추천"}</span>
+                        {d.evidence === "weak" ? (
+                          <span className="min-w-0 truncate text-zinc-500" title="표본이 적고 확실성이 낮아 기대 개선폭은 보여 드리지 않습니다. 일정 기간 시험 편성으로 확인하세요.">
+                            표본 {d.toSampleCount ?? 0}회로 근거가 약해 시험 편성으로 확인
+                          </span>
+                        ) : (
                         <span className="min-w-0 truncate text-zinc-500" title={[`기대 시청률 ${fmtExp(d.fromExpected)} → ${fmtExp(d.toExpected)}(+${d.gain.toFixed(3)}%p)`, ...d.basis, d.runnerUp ? `차순위 후보 ${d.runnerUp}` : "", d.certainty ? CERT_KO[d.certainty] : ""].filter(Boolean).join(" · ")}>
                           기대 {fmtExp(d.fromExpected)}→{fmtExp(d.toExpected)}(+{d.gain.toFixed(3)}%p)
                           {d.basis[0] ? ` · ${d.basis[0]}` : ""}
                           {d.certainty ? ` · ${CERT_KO[d.certainty]}` : ""}
                         </span>
+                        )}
                       </>
                     ) : (
                       <>
