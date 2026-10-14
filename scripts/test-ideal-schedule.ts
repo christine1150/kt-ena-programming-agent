@@ -828,10 +828,12 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
     ],
     [mk("강한후보"), mk("약한후보"), mk("한곳뿐"), mk("횟수적음"), mk("평균미만")]
   );
-  check("Avail 보유: 근거 충분(3곳·48회)은 추천, 2곳·20회 이상은 시험 편성 후보로 남고, 1곳뿐·20회 미만·연평균 미만은 빠지며 추천이 먼저 나온다", picked.map((p) => `${p.name}:${p.tier}`).join(",") === "강한후보:rec,약한후보:test", picked.map((p) => `${p.name}:${p.tier}`).join(","));
-  const testLabel = heldLabel(picked[1]);
+  check("Avail 보유: 근거 충분(3곳·48회)은 추천, 비교 1곳 이상·20회 이상은 시험 편성 후보로 남고, 20회 미만·연평균 미만은 빠지며 추천이 먼저 나온다", picked.map((p) => `${p.name}:${p.tier}`).join(",") === "강한후보:rec,한곳뿐:test,약한후보:test", picked.map((p) => `${p.name}:${p.tier}`).join(","));
+  const oneLabel = heldLabel(picked[1]);
+  check("Avail 보유: 비교 1곳뿐인 보유작도 후보가 되며 근거 약함으로 표기한다(구매 후보는 2곳 이상)", picked[1].name === "한곳뿐" && picked[1].evidence === "weak" && oneLabel.includes("비교 1곳") && oneLabel.includes("근거 약함") && recoEvidence(1, 60) === null && recoEvidence(1, 60, 1) === "weak" && recoEvidence(1, 19, 1) === null, oneLabel);
+  const testLabel = heldLabel(picked[2]);
   check("Avail 보유: 근거 약한 후보의 표기는 비교 채널 수·방영 횟수와 '근거 약함'을 함께 밝힌다", testLabel.includes("비교 2곳") && testLabel.includes("32회") && testLabel.includes("근거 약함"), testLabel);
-  const heldCopy = buildCardCopy({ ...input, ai: { ...base, remedy: null, change: null, availHeld: [picked[1]] } });
+  const heldCopy = buildCardCopy({ ...input, ai: { ...base, remedy: null, change: null, availHeld: [picked[2]] } });
   check("홈 문구: 근거 약한 보유작은 '테스트 편성 검토'이며 구매·교체처럼 말하지 않는다", !!heldCopy.action?.startsWith("테스트 편성 검토 — Avail 보유작") && !heldCopy.action.includes("구매 검토"), heldCopy.action ?? "");
   // 비교 케이블 2곳·방영 48회 이상은 '근거 보통'(추천 기준 3곳엔 못 미치므로 여전히 시험 편성)
   const midPick = pickHeld([{ key: "보통후보", displayName: "보통후보", vsAvg: 1.11, peers: 2, airings: 468 }, { key: "약한후보", displayName: "약한후보", vsAvg: 1.25, peers: 2, airings: 32 }], [mk("보통후보"), mk("약한후보")]);

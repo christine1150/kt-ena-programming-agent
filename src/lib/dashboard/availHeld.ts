@@ -4,12 +4,12 @@
 // 기대 수준은 구매 시뮬레이터 예측(타 채널 실적 기반 추정)이며 이 채널에서 방영한 실적이 아니다 — 문구에 "추정"을 붙인다.
 import { briefOf } from "@/lib/purchaseReview/acquisition";
 import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
-import { RECO_MIN_VS_AVG, recoEvidence, shrunkVsAvg } from "@/lib/purchaseSim/recoEvidence";
+import { HELD_MIN_PEERS, RECO_MIN_VS_AVG, recoEvidence, shrunkVsAvg } from "@/lib/purchaseSim/recoEvidence";
 import type { Grant } from "@/lib/avail/types";
 
 /** 종료까지 이 일수 이하면 "종료 임박" */
 export const HELD_ENDS_SOON_DAYS = 60;
-// 진입 기준(비교 2곳·20회·1.0배)과 근거 수준(충분·보통·약함)은 구매 후보와 같은 규칙을 쓴다 — purchaseSim/recoEvidence.ts.
+// 진입 기준(비교 1곳 이상·20회·1.0배 — 구매 후보는 2곳 이상)과 근거 수준(충분·보통·약함)은 구매 후보와 같은 규칙을 쓴다 — purchaseSim/recoEvidence.ts.
 // 근거 충분이면 '추천', 보통·약함이면 추천이 아니라 시험 편성으로 확인할 후보다.
 
 /**
@@ -90,8 +90,8 @@ export function pickHeld(preds: { key: string; displayName: string; vsAvg: numbe
     const h = heldBy.get(p.key.toUpperCase());
     if (!h || p.vsAvg === null || !Number.isFinite(p.vsAvg) || p.vsAvg < RECO_MIN_VS_AVG) continue;
     // 방영 횟수를 모르는 예측(옛 호출)은 비교 채널 수만으로 판단한다
-    const evidence = recoEvidence(p.peers, p.airings);
-    if (evidence === null) continue; // 진입 기준(비교 2곳·20회) 미달
+    const evidence = recoEvidence(p.peers, p.airings, HELD_MIN_PEERS);
+    if (evidence === null) continue; // 진입 기준(비교 1곳 이상·20회 이상) 미달
     const strong = evidence === "strong";
     out.push({ name: p.displayName, vsAvg: p.vsAvg, endState: h.endState, daysToEnd: h.daysToEnd, hasConditions: h.hasConditions, peers: p.peers ?? null, airings: p.airings ?? null, tier: strong ? "rec" : "test", evidence });
   }
