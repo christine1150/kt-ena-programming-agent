@@ -5,7 +5,11 @@ import { MODEL_VERSION } from "../src/lib/purchaseSim/engine";
 import { RECO_CONFIGS, RECO_WINDOWS, computeRecommendations } from "../src/lib/purchaseSim/recommend";
 
 async function main() {
-  const client = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  // 환경변수가 비면 supabase-js가 모호한 오류를 내므로 먼저 이름만 짚어 알린다(값은 출력하지 않는다).
+  for (const name of ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]) {
+    if (!process.env[name]) throw new Error(`환경변수 ${name} 이(가) 비어 있습니다(GitHub Actions 저장소 시크릿 또는 .env 확인).`);
+  }
+  const client =createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const onlyCh = process.argv[2];
   const onlyW = process.argv[3] ? Number(process.argv[3]) : null;
   for (const w of RECO_WINDOWS) {

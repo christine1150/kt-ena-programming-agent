@@ -22,6 +22,21 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # 2026-10-14: 2026-10-04·10-11 예약 실행이 갱신 단계에서 2초 만에 실패했다(계산은 약 1시간 걸리는 작업) — 시크릿 미설정이 원인으로 보여,
+      # 값을 출력하지 않고 어떤 시크릿이 비었는지만 알려 주는 단계를 먼저 둔다.
+      - name: 시크릿 확인
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          missing=0
+          for name in NEXT_PUBLIC_SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::저장소 시크릿 ${name} 이(가) 비어 있습니다. Settings > Secrets and variables > Actions 에서 추가하세요."
+              missing=1
+            fi
+          done
+          exit $missing
       - name: 구매 추천 갱신
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
