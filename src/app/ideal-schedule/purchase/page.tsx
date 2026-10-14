@@ -1005,7 +1005,6 @@ function AlternativesPanel({ blocks, res, review }: { blocks: AlternativeBlock[]
                       <td className="py-1 pr-3 text-zinc-800">
                         {r.rank}. {r.item.name}
                         {r.item.alt?.isIncumbent ? " · 현재 주력 편성" : ""}
-                        {r.tiedWithTop && <span className="ml-1 rounded bg-zinc-100 px-1 py-0.5 font-normal text-zinc-500">1위와 범위 겹침</span>}
                       </td>
                       <td className="py-1 pr-3 text-right tabular-nums">{fmt(r.item.prediction)}</td>
                       <td className="py-1 pr-3 text-right tabular-nums text-zinc-500">{r.item.low !== null ? `${fmt(r.item.low)} ~ ${fmt(r.item.high)}` : "-"}</td>
