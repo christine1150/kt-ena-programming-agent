@@ -238,3 +238,23 @@ body {
 [aria-label="가로로 스크롤되는 표"]::-webkit-scrollbar {
   display: none;
 }
+
+/* 사용자 지시(2026-10-14): 표가 넓은 페이지도 스크롤 막대 없이 한눈에 — 가로 스크롤 영역 안의 표·차트를 화면 폭에 맞춰 줄이고,
+   칸 안 글자는 줄바꿈한다(한글은 낱말 단위, 아주 긴 영문·숫자는 칸 폭에서 자른다). 시간 격자(.dense-grid)는 비례 배치라 제외. */
+:is(.overflow-x-auto, [aria-label="가로로 스크롤되는 표"]):not(.dense-grid) table {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+:is(.overflow-x-auto, [aria-label="가로로 스크롤되는 표"]):not(.dense-grid) :is(th, td) {
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+:is(.overflow-x-auto, [aria-label="가로로 스크롤되는 표"]):not(.dense-grid) svg {
+  width: 100% !important;
+  max-width: 100%;
+  height: auto !important;
+}
+:is(.overflow-x-auto, [aria-label="가로로 스크롤되는 표"]):not(.dense-grid) [style*="min-width"] {
+  min-width: 0 !important;
+}
