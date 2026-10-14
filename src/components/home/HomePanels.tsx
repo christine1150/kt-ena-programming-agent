@@ -199,7 +199,7 @@ export function DecisionCards({
               )}
               <div className="mt-auto flex flex-wrap gap-2 pt-4">
                 {c.links.evidence && (
-                  <Link href={c.links.evidence} className="rounded-full bg-zinc-900 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-zinc-700">
+                  <Link href={c.links.evidence} className="rounded-full bg-white px-3 py-1.5 text-[12px] font-medium text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-100">
                     근거 보기
                   </Link>
                 )}
@@ -213,13 +213,14 @@ export function DecisionCards({
                     type="button"
                     aria-expanded={compareId === c.id}
                     onClick={() => setCompareId(compareId === c.id ? null : c.id)}
-                    className={`rounded-full px-3 py-1.5 text-[12px] font-medium ring-1 ${compareId === c.id ? "bg-zinc-900 text-white ring-zinc-900" : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-100"}`}
+                    className={`rounded-full px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110 ${hasColor ? "" : "bg-indigo-700"} ${compareId === c.id ? "ring-2 ring-offset-1 ring-zinc-400" : ""}`}
+                    style={hasColor ? { backgroundColor: ink(color) } : undefined}
                   >
                     대안 비교
                   </button>
                 ) : (
                   c.links.compare && (
-                    <Link href={c.links.compare} className="rounded-full bg-white px-3 py-1.5 text-[12px] font-medium text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-100">
+                    <Link href={c.links.compare} className={`rounded-full px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110 ${hasColor ? "" : "bg-indigo-700"}`} style={hasColor ? { backgroundColor: ink(color) } : undefined}>
                       대안 비교
                     </Link>
                   )
