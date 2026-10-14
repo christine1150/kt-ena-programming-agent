@@ -17,6 +17,10 @@ export interface WeakSlotRemedy {
   concrete: boolean;
   /** 같은 자리 비교에 쓴 방영 수 */
   sample: number;
+  /** 홈 카드용 짧은 문구(원인 한 구 · 할 일 한 구). lines는 채널 상세용 긴 문장 그대로 둔다 */
+  brief: { cause: string; action: string };
+  /** 이 보완 제안이 가리키는 자리 — 평소(같은 자리 최근 8회 중앙값) 대비 몇 %였나. 비교 표본이 모자라면 ratioPct는 null */
+  hole: { program: string; hour: number; ratioPct: number | null };
 }
 
 const DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
@@ -84,6 +88,12 @@ async function loadAirings(channelId: string, targetId: string, asOfDate: string
   return out;
 }
 
+/** 같은 프로그램의 같은 자리 비교가 3회 미만이면(편성이 바뀐 지 얼마 안 된 자리) 그 자리를 거쳐 간 모든 프로그램의 최근 8회로 "자리의 평소"를 본다 */
+function priorWithSlotFallback(all: Airing[], a: Airing, asOfDate: string): number[] {
+  const own = priorOf(all, a, asOfDate, true);
+  return own.length >= 3 ? own : priorOf(all, a, asOfDate, false);
+}
+
 /** 같은 자리(요일·시·본/재방)의 asOf 이전 최근 8회 시청률 */
 function priorOf(all: Airing[], a: Airing, asOfDate: string, sameProgram: boolean): number[] {
   const k = slotKey(a);
@@ -95,8 +105,31 @@ function priorOf(all: Airing[], a: Airing, asOfDate: string, sameProgram: boolea
 }
 
 /** hour: 보려는 자리의 시각(0~23, 선택) — 같은 프로그램이 하루에 여러 번 나올 때 그 시각의 방영을 우선한다 */
-export async function computeWeakSlotRemedy(channelCode: string, asOfDate: string, focus: string, hour?: number | null): Promise<WeakSlotRemedy | null> {
-  const cacheKey = `${channelCode}|${asOfDate}|${focus}|${hour ?? ""}`;
+/** 방영 길이(분) — 같은 날 다음 방영 시작까지(15~180분, 다음이 없으면 60분) */
+function durationOf(all: Airing[], a: Airing): number {
+  const next = all.filter((x) => x.date === a.date && x.startMin > a.startMin).reduce<number | null>((m, x) => (m === null || x.startMin < m ? x.startMin : m), null);
+  return Math.min(180, Math.max(15, (next ?? a.startMin + 60) - a.startMin));
+}
+
+/** 약한 프로그램을 지목하지 않은 채널(채널 전반 약세)용 — 기준일 방영 중 "평소보다 모자란 시청률 × 방영 분"이 가장 큰 자리를 약한 곳으로 삼는다(같은 자리 비교 3회 이상, 평소의 70% 이하만). */
+function findBiggestHole(all: Airing[], asOfDate: string): { name: string; hour: number } | null {
+  const day = all.filter((a) => a.date <= asOfDate && a.date >= addDays(asOfDate, -14)).map((a) => a.date).sort().pop();
+  if (!day) return null;
+  const todays = all.filter((a) => a.date === day).sort((p, q) => p.startMin - q.startMin);
+  let best: { name: string; hour: number; loss: number } | null = null;
+  todays.forEach((a) => {
+    const prior = priorWithSlotFallback(all, a, day);
+    const med = median(prior);
+    if (prior.length < 3 || !med || med <= 0 || a.rating / med - 1 > -0.3) return;
+    const loss = (med - a.rating) * durationOf(all, a);
+    if (!best || loss > best.loss) best = { name: a.name, hour: Math.floor(a.startMin / 60) % 24, loss };
+  });
+  return best ? { name: (best as { name: string }).name, hour: (best as { hour: number }).hour } : null;
+}
+
+/** focus: 약한 프로그램 이름. null이면 기준일의 가장 큰 구멍 자리를 스스로 찾는다(없으면 null 반환). */
+export async function computeWeakSlotRemedy(channelCode: string, asOfDate: string, focus: string | null, hour?: number | null): Promise<WeakSlotRemedy | null> {
+  const cacheKey = `${channelCode}|${asOfDate}|${focus ?? "(auto)"}|${hour ?? ""}`;
   const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
   const value = await compute(channelCode, asOfDate, focus, hour ?? null);
@@ -104,13 +137,21 @@ export async function computeWeakSlotRemedy(channelCode: string, asOfDate: strin
   return value;
 }
 
-async function compute(channelCode: string, asOfDate: string, focus: string, hourHint: number | null): Promise<WeakSlotRemedy | null> {
+async function compute(channelCode: string, asOfDate: string, focusIn: string | null, hourIn: number | null): Promise<WeakSlotRemedy | null> {
   const ch = await loadChannelRef(channelCode);
   if (channelCode === "SKYUHD" || !ch.primaryTarget) return null; // skyUHD는 프로그램 단위 타깃 데이터가 없다
   const { data: tg } = await supabase.from("targets").select("id").eq("code", ch.kpiLabel).maybeSingle();
   if (!tg?.id) return null;
   const all = await loadAirings(ch.id, tg.id as string, asOfDate);
   if (!all) return null;
+  let focus = focusIn;
+  let hourHint = hourIn;
+  if (focus === null) {
+    const hole = findBiggestHole(all, asOfDate);
+    if (!hole) return null;
+    focus = hole.name;
+    hourHint = hole.hour;
+  }
 
   // 기준일에 방영이 없으면(채널 상세의 편성 제안 등) 최근 14일 안의 가장 최근 방영일을 기준으로 삼는다
   const mineAll = all.filter((a) => sameTitle(a.name, focus));
@@ -124,17 +165,25 @@ async function compute(channelCode: string, asOfDate: string, focus: string, hou
   // 같은 자리 중앙값 대비 가장 낮은 오늘 방영을 약해진 자리로 본다(표본 3회 이상일 때만 비교)
   const scored = todays
     .map((a) => {
-      const prior = priorOf(all, a, day, true);
+      const prior = priorWithSlotFallback(all, a, day);
       const med = median(prior);
-      return { a, prior, med, dev: med !== null && med > 0 && prior.length >= 3 ? a.rating / med - 1 : null };
+      const dev = med !== null && med > 0 && prior.length >= 3 ? a.rating / med - 1 : null;
+      // 같은 프로그램이 하루에 여러 번 나오면 "평소보다 모자란 시청률 × 방영 분"이 가장 큰 방영을 약한 자리로 본다(새벽처럼 평소가 0에 가까운 자리가 비율만으로 뽑히지 않게)
+      return { a, prior, med, dev, loss: dev === null ? 0 : ((med as number) - a.rating) * durationOf(all, a) };
     })
-    .sort((x, y) => (x.dev ?? 9) - (y.dev ?? 9) || y.prior.length - x.prior.length);
+    .sort((x, y) => Number(x.dev === null) - Number(y.dev === null) || y.loss - x.loss || y.prior.length - x.prior.length);
   const w = scored[0];
   const hour = Math.floor(w.a.startMin / 60);
   const where = `${DOW_KO[w.a.dow - 1]} ${hour}시`;
   if (w.dev === null || w.med === null) {
     const basis = w.prior.length === 0 ? "같은 자리에서 비교할 지난 방영 기록이 없어" : `같은 자리 비교 방영이 ${w.prior.length}회뿐이라`;
-    return { lines: [`'${focus}' ${where} 자리는 ${basis} 원인을 가르기 어렵습니다 — 다음 방영 확인 후 판단`], concrete: false, sample: w.prior.length };
+    return {
+      lines: [`'${focus}' ${where} 자리는 ${basis} 원인을 가르기 어렵습니다 — 다음 방영 확인 후 판단`],
+      concrete: false,
+      sample: w.prior.length,
+      brief: { cause: `비교 방영 ${w.prior.length}회뿐`, action: "다음 방영 확인 후 판단" },
+      hole: { program: w.a.name, hour, ratioPct: null },
+    };
   }
   const med = w.med;
   const sample = w.prior.length;
@@ -216,5 +265,22 @@ async function compute(channelCode: string, asOfDate: string, focus: string, hou
   } else {
     action = `다음 방영(${DOW_KO[w.a.dow - 1]}요일)이 기준선 ${fmt(dropLine)} 아래이면 이동·교체 검토`;
   }
-  return { lines: [cause, action], concrete, sample };
+  // 홈 카드용 짧은 문구 — 같은 판단 분기를 그대로 따르되 수치·설명을 걷어 낸다
+  let causeBrief: string;
+  if (holiday) causeBrief = `${holiday.name} 전후라 단순 비교 어려움`;
+  else if (likelyRerun) causeBrief = premium ? `재방 자리(본방은 ${premium.label})` : "재방 자리";
+  else if (leadIn && leadIn.dev <= -0.2 && Math.abs(leadIn.dev) >= Math.abs(w.dev) * 0.5) causeBrief = `앞 '${leadIn.name}'도 ▼${pct(leadIn.dev)}`;
+  else if (channelWide) causeBrief = "채널 전체 동반 하락";
+  else if (continuing) causeBrief = `반복 약세(${prevBelow + 1}/${recent.length + 1}회)`;
+  else causeBrief = "단발성 하락";
+  const times = (r: number) => (r >= 2 ? `${r.toFixed(1)}배` : `+${pct(r - 1)}`);
+  let actionBrief: string;
+  if (better && likelyRerun) actionBrief = `이동 · ${better.label}(${times(better.med / med)})`;
+  else if (likelyRerun && !holiday && !channelWide) actionBrief = `${fmt(dropLine)} 아래 지속 시 재방 시간대 변경`;
+  else if (holiday || channelWide) actionBrief = `다음 주 ${DOW_KO[w.a.dow - 1]}요일 확인 후 판단`;
+  else if (better && continuing && !likelyRerun) actionBrief = `이동 · ${better.label}(${times(better.med / med)})`;
+  else if (leadIn && leadIn.dev <= -0.2) actionBrief = "앞 프로그램 점검이 먼저";
+  else if (continuing) actionBrief = "앞뒤 편성·시간 이동 검토";
+  else actionBrief = `다음 방영 ${fmt(dropLine)} 아래면 이동·교체`;
+  return { lines: [cause, action], concrete, sample, brief: { cause: causeBrief, action: actionBrief }, hole: { program: w.a.name, hour, ratioPct: Math.round((w.a.rating / med) * 100) } };
 }

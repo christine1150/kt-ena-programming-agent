@@ -25,6 +25,7 @@ import { enrichAiringsWithPlan, normalizePlanRows, planEpisodeHints, planWeekFra
 import { buildRerunConstraints } from "../src/lib/idealSchedule/rerunRules";
 import * as SL from "../src/lib/idealSchedule/seriesLink";
 import { evidenceOf, MIN_SAMPLE_FOR_REPLACE } from "../src/lib/dashboard/evidenceGate";
+import { aiSuggestionLine, type AiSuggestionPayload } from "../src/lib/dashboard/aiLine";
 
 let passed = 0;
 const failures: string[] = [];
@@ -761,6 +762,31 @@ const countBy = (blocks: EngineRunResult["output"]["blocks"], keyFn: (b: EngineR
   const ex = fs0.rating.expectedFromPrior(sample, 5, 21);
   const exOther = fs0.rating.expectedFromPrior(sample, 2, 20);
   check("시리즈 기대값: 다른 요일·시에는 그 슬롯 baseline에 같은 지수를 곱한다", close(ex.expected, sample.expectedAtBaseSlot, 1e-9) && close(exOther.expected, sample.index * (baseAt(2, 20) as number), 1e-9) && ex.levels.length === 1 && ex.levels[0].level === 6);
+}
+
+// 교체안 근거 관문(홈·채널 상세 공용)
+check("근거 관문: 확실성 낮음은 표본이 많아도 약함", evidenceOf("LOW", 50) === "weak" && evidenceOf(null, 50) === "weak");
+check("근거 관문: 확실성 보통 이상이라도 표본이 " + MIN_SAMPLE_FOR_REPLACE + "회 미만이면 약함", evidenceOf("MID", MIN_SAMPLE_FOR_REPLACE - 1) === "weak" && evidenceOf("HIGH", 0) === "weak");
+check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추천 가능", evidenceOf("MID", MIN_SAMPLE_FOR_REPLACE) === "ok" && evidenceOf("HIGH", 30) === "ok");
+
+// 홈 카드 문구(진단·처방·대안, 줄마다 한 가지)
+{
+  const base: AiSuggestionPayload = { channelCode: "X", weekStart: "2026-10-19", currentExpected: null, aiExpected: null, change: null, external: ["외부A", "외부B"] };
+  const hole = { program: "연애박사", hour: 14, ratioPct: 3 };
+  const brief = { cause: "단발성 하락", action: "다음 방영 0.100 아래면 이동·교체" };
+  const weak = { weekday: 2, startMin: 14 * 60 + 23, from: "연애박사", to: "입터지는실험실", gain: 0.0745, certainty: "LOW" as const, sampleCount: 4, evidence: "weak" as const };
+  const lines = (p: AiSuggestionPayload, structural: boolean) => aiSuggestionLine(p, structural).split(String.fromCharCode(10));
+  const l1 = lines({ ...base, change: weak, remedy: { lines: [], concrete: false, sample: 7, brief, hole } }, true);
+  check("홈 문구: 구조적 격차 + 근거 약한 교체 → 진단·테스트·대안 3줄, 대안에 구매 검토 제목", l1.length === 3 && l1[0].startsWith("구조적 격차 · 14시 '연애박사' 평소의 3%") && l1[1].startsWith("테스트 · 14시 '입터지는실험실'(표본 4회)") && l1[2].includes("편성 조정만으론 한계") && l1[2].includes("'외부A'"), l1.join(" / "));
+  check("홈 문구: 근거 약한 안은 기대 개선폭 수치를 내지 않는다", !l1.join("").includes("0.074") && !l1.join("").includes("%p"));
+  const ok = { ...weak, evidence: "ok" as const, certainty: "MID" as const, sampleCount: 12 };
+  const l2 = lines({ ...base, change: ok, remedy: { lines: [], concrete: false, sample: 7, brief, hole } }, true);
+  check("홈 문구: 근거 충분한 교체안이 있으면 교체 줄이 나오고 '한계' 대안 줄은 없다", l2.length === 2 && l2[1].startsWith("교체 · 14시") && !l2.join("").includes("한계"), l2.join(" / "));
+  const l3 = lines({ ...base, focus: "연애박사", remedy: { lines: [], concrete: false, sample: 7, brief, hole } }, false);
+  check("홈 문구: 약한 프로그램이 이미 지목된 카드는 원인·처방 두 줄만(대안 줄 없음)", l3.length === 2 && l3[0] === "단발성 하락" && !l3.join("").includes("구매 검토"), l3.join(" / "));
+  const l4 = lines({ ...base, external: [] }, true);
+  check("홈 문구: 풀 밖 후보가 없어도 '한계' 문구에는 반드시 다른 대안(구매 검토·목표 재점검)이 붙는다", l4[l4.length - 1].includes("편성 조정만으론 한계") && l4[l4.length - 1].includes("목표 재점검"), l4.join(" / "));
+  check("홈 문구: '현재 편성 유지가 낫다'는 말을 쓰지 않는다", !aiSuggestionLine(base, false).includes("유지가 낫다"));
 }
 
 console.log(`\n${passed}건 통과, ${failures.length}건 실패`);

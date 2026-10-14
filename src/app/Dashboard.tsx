@@ -30,6 +30,7 @@ import { monthlyDriverCauseLabel, type MonthlyDriver } from "@/lib/causeClassifi
 // 같은 태그를 다른 말로 부르는 사고를 막는다.
 import { TAG_LABEL_KO, TAG_DOT_COLOR, type ActionTag } from "@/lib/actionTags";
 import { programActionFor } from "@/lib/insight/actionCandidate";
+import { aiSuggestionLine, type AiSuggestionPayload } from "@/lib/dashboard/aiLine";
 import { formatArrowPct, formatDurationClock, formatDurationKo, formatRatingDelta } from "@/lib/metrics";
 // 단계 07: 전역 문맥(URL)·요청 상태·홈 모델. 계산은 src/lib/workspace, 화면은 components/home·workspace.
 import { DataStatusCard, DecisionCards, FollowupsCard, HomeViewTabs, PANEL, PanelHeader, type ReviewStoreState } from "@/components/home/HomePanels";
@@ -793,44 +794,8 @@ function extBroadcastHour(startTime: string): number {
   return h < 2 ? h + 24 : h;
 }
 // ── AI 스마트 편성 제안(시청률 자판기 엔진 계산 결과) ──
-interface AiSuggestionPayload {
-  channelCode: string;
-  weekStart: string;
-  weekday?: number;
-  currentExpected: number | null;
-  aiExpected: number | null;
-  change: { weekday: number; startMin: number; from: string; to: string; gain: number; certainty: "HIGH" | "MID" | "LOW" | null; sampleCount?: number; evidence?: "ok" | "weak" } | null;
-  /** 검색 범위를 최대 6개월(180일)까지 넓혀 계산한 경우 그 일수 */
-  widenedLookbackDays?: number | null;
-  /** 약해진 프로그램을 지정해 그 자리의 교체안을 찾은 경우 그 이름 */
-  focus?: string | null;
-  /** 교체 후보가 없을 때의 보완 제안(원인 → 할 일) */
-  remedy?: { lines: string[]; concrete: boolean; sample: number } | null;
-}
 /** undefined = 계산 중, null = 계산 실패 */
 type AiState = Record<string, AiSuggestionPayload | null | undefined>;
-const AI_DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
-const aiClock = (min: number) => {
-  const m = ((Math.round(min) % 1440) + 1440) % 1440;
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-};
-// 수정(2026-10-14): 목표 미달 채널에 "교체 후보가 없어 현재 편성 유지가 낫다"고 말하지 않는다 — 자사 풀 안에서 근거 있는 교체안이 없다는 사실만 말하고 다음 확인으로 잇는다.
-// 근거가 약한 안(표본 적음·확실성 낮음)은 기대 개선폭 수치를 숨기고 '테스트(시험 편성) 후보'로만 제시한다.
-function aiSuggestionLine(s: AiSuggestionPayload): string {
-  const remedyText = s.remedy?.lines.length ? s.remedy.lines.join("\n") : "";
-  if (s.change?.evidence === "weak") {
-    const c = s.change;
-    const head = `${AI_DOW_KO[c.weekday - 1]} ${aiClock(c.startMin)} '${c.from}' 자리: '${c.to}'는 표본 ${c.sampleCount ?? 0}회로 근거가 약해 교체 추천이 아니라 테스트(시험 편성) 후보입니다`;
-    return remedyText ? `${head}\n${remedyText}` : head;
-  }
-  if (!s.change && remedyText) return remedyText;
-  if (!s.change) {
-    const where = s.focus ? `'${s.focus}' 자리` : `${s.weekday ? `${AI_DOW_KO[s.weekday - 1]}요일 ` : ""}실제 편성`;
-    const basis = s.widenedLookbackDays ? "최근 6개월 실적 기준으로 " : "";
-    return s.focus ? `${where}는 ${basis}자사 편성 안에서 근거가 충분한 교체안을 찾지 못해 다음 방영 추이를 먼저 확인합니다` : `${where}은 ${basis}자사 편성 안에서 근거가 충분한 교체안을 찾지 못했습니다 — 목표와의 격차 원인 확인이 먼저입니다`;
-  }
-  return `${AI_DOW_KO[s.change.weekday - 1]} ${aiClock(s.change.startMin)} '${s.change.from}'→'${s.change.to}' 교체 시 기대 ${formatRatingDelta(s.change.gain)}${s.widenedLookbackDays ? " · 최근 6개월 실적 기준" : ""}`;
-}
 // 사용자 지시(2026-10-07): "'평소 대비 ▼38% — 다음 방영도 낮으면…'·'AI 계산: …없습니다' 같은 내용은 검정색으로, 개선 방법을 찾아 제안" — 진단·근거 문구는 검정,
 // 실제로 개선되는 교체안(AI 계산 결과)만 파란색으로 강조하고, 약해진 프로그램 줄 아래에 AI 대체 편성 제안 줄을 따로 붙인다.
 interface ResolvedAction {
@@ -849,7 +814,7 @@ function actionColor(kind: ResolvedAction["kind"], positive: boolean): string {
   return "#a1a1aa";
 }
 function resolveChannelAction(
-  base: { actionLine: string | null; actionKind: "program" | "diagnosis" | null; needsAi?: boolean; wantsAi?: boolean } | undefined,
+  base: { actionLine: string | null; actionKind: "program" | "diagnosis" | null; needsAi?: boolean; wantsAi?: boolean; structuralGap?: boolean } | undefined,
   ai: AiState,
   code: string
 ): ResolvedAction {
@@ -858,13 +823,13 @@ function resolveChannelAction(
   if (base.needsAi) {
     if (s === undefined) return { line: "AI 편성안 계산 중…", kind: "ai", positive: false, extra: null };
     if (s === null) return { line: "AI 편성안을 계산하지 못했습니다", kind: "ai", positive: false, extra: null };
-    return { line: aiSuggestionLine(s), kind: "ai", positive: (!!s.change && s.change.evidence !== "weak") || !!s.remedy?.concrete, extra: null };
+    return { line: aiSuggestionLine(s, !!base.structuralGap), kind: "ai", positive: (!!s.change && s.change.evidence !== "weak") || !!s.remedy?.concrete, extra: null };
   }
   let extra: ResolvedAction["extra"] = null;
   if (base.wantsAi && base.actionKind) {
     if (s === undefined) extra = { text: "AI 대체 편성 계산 중…", positive: false };
     else if (s === null) extra = { text: "AI 대체 편성을 계산하지 못했습니다", positive: false };
-    else extra = { text: aiSuggestionLine(s), positive: (!!s.change && s.change.evidence !== "weak") || !!s.remedy?.concrete };
+    else extra = { text: aiSuggestionLine(s, !!base.structuralGap), positive: (!!s.change && s.change.evidence !== "weak") || !!s.remedy?.concrete };
   }
   return { line: base.actionLine, kind: base.actionKind, positive: false, extra };
 }
@@ -940,6 +905,8 @@ function buildChannelInsightSummary(
   actionProgramName: string | null;
   /** 약해진 곳(하락 프로그램·전략 재점검·근거 없음)이라 AI 대체 편성 제안을 붙여야 하는가 — 호조 프로그램은 제외 */
   wantsAi: boolean;
+  /** 평소(최근 같은 요일 전주들)도 목표의 85%에 못 미치고 오늘도 목표의 80% 미만 — 오늘 하락이 아니라 구조적 격차 */
+  structuralGap: boolean;
 } {
   const situationLine =
     s.today_rating !== null
@@ -1120,7 +1087,11 @@ function buildChannelInsightSummary(
   }
 
   const wantsAi = needsAi || actionKind === "diagnosis" || (actionKind === "program" && actionDown);
-  return { situationLine, causeLine, actionLine, actionTag, actionKind, baselineAvgRank: s.baseline_avg_rank, needsAi, actionProgramName, wantsAi };
+  // 구조적 격차: 목표 시청률 = 오늘 ÷ 달성률 (화면의 달성 %와 같은 값). 전주·전전주 같은 요일 값이 있는 것만 평소로 본다.
+  const targetRating = s.today_rating !== null && s.today_rating > 0 && target?.achievementPct ? s.today_rating / (target.achievementPct / 100) : null;
+  const priors = [s.priorWeekRating, s.priorWeek2Rating].filter((v): v is number => v !== null);
+  const structuralGap = targetRating !== null && (target?.achievementPct ?? 100) < 80 && priors.length > 0 && priors.every((v) => v / targetRating < 0.85);
+  return { situationLine, causeLine, actionLine, actionTag, actionKind, baselineAvgRank: s.baseline_avg_rank, needsAi, actionProgramName, wantsAi, structuralGap };
 }
 
 // 사용자 지시(2026-09-18): 채널별 액션 문구 옆 5대 액션 태그 배지 — ChannelDeepDive.tsx의

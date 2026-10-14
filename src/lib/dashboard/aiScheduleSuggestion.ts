@@ -58,6 +58,8 @@ export interface AiSuggestion {
   focus: string | null;
   /** 교체 후보가 없을 때의 보완 제안(원인 → 할 일, 최근 방영 실측으로 계산) — 약해진 프로그램을 지정했고 계산됐을 때만 */
   remedy: WeakSlotRemedy | null;
+  /** 자사 편성 안에서 근거 충분한 교체안이 없을 때 보여 줄 풀 밖 대안 — 구매 검토 추천 상위 제목(자사 풀 최적화와는 섞지 않는다) */
+  external: string[];
 }
 
 export interface ReplacePlan {
@@ -218,9 +220,10 @@ export async function computeReplacePlan(channelCode: string, asOfDate: string, 
 }
 
 /** 같은 프로그램이 여러 칸이면 기준일 요일 칸·주요 시간대(새벽 2~5시 제외)를 우선하고 그다음 개선폭이 큰 칸 */
-function pickDetail(details: ReplaceDetail[], weekday: number, focus: string | null): ReplaceDetail | null {
-  // 약해진 프로그램은 기준일(오늘) 그 요일에 방영된 것이므로 focus가 있어도 같은 요일 칸만 본다
-  const pool = details.filter((d) => d.weekday === weekday && (!focus || sameTitle(d.from, focus)));
+function pickDetail(details: ReplaceDetail[], weekday: number, focus: string | null, nearHour: number | null = null): ReplaceDetail | null {
+  // 약해진 프로그램은 기준일(오늘) 그 요일에 방영된 것이므로 focus가 있어도 같은 요일 칸만 본다.
+  // 약한 자리의 시각(방송일 시)을 알면 그 자리 ±90분의 칸만 본다 — 같은 프로그램의 다른 시각 방영 칸(새벽 재방 등)을 그 자리 제안으로 내지 않는다.
+  const pool = details.filter((d) => d.weekday === weekday && (!focus || sameTitle(d.from, focus)) && (nearHour === null || Math.abs(d.startMin - nearHour * 60) <= 90));
   if (pool.length === 0) return null;
   const dawn = (d: ReplaceDetail) => {
     const h = Math.floor((((Math.round(d.startMin) % 1440) + 1440) % 1440) / 60);
@@ -235,7 +238,7 @@ function pickDetail(details: ReplaceDetail[], weekday: number, focus: string | n
 // 같은 기준일·채널·입력이면 다른 사람·새로고침·다른 서버에서도 다시 계산하지 않고 저장해 둔 결과를 쓴다(기존 캐시 테이블, 마이그레이션 없음).
 // 키에는 결과를 바꿀 수 있는 입력의 지문(제외 편성·권리 상태·채널 설정·가장 최근 닐슨 업로드 시각·기능 끄개)이 들어가 입력이 바뀌면 자동으로 새로 계산한다.
 // 지문에 못 넣는 변화(예: 장르표 수정)는 6시간 TTL로 제한한다. 지문을 만들지 못하거나 저장소가 실패하면 평소처럼 계산한다.
-const SUGGESTION_CACHE_VERSION = "v2"; // v2: 최근 방영 확인 조회 오류 수정·근거 관문 추가(예전 "후보 없음" 결과를 재사용하지 않도록)
+const SUGGESTION_CACHE_VERSION = "v3"; // v2: 최근 방영 확인 조회 오류 수정·근거 관문 추가(예전 "후보 없음" 결과를 재사용하지 않도록)
 const SUGGESTION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 async function suggestionFingerprint(channelCode: string, asOfDate: string, focus: string | null): Promise<unknown> {
@@ -267,24 +270,40 @@ export async function computeAiSuggestion(channelCode: string, asOfDate: string,
   } catch {
     return computeAiSuggestionUncached(channelCode, asOfDate, focus);
   }
-  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v2", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
+  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v3", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
   return r.value;
 }
 
-async function computeAiSuggestionUncached(channelCode: string, asOfDate: string, focus: string | null): Promise<AiSuggestion> {
+/** 구매 검토 추천(사전 계산, 해당 채널 방영 이력 없음) 상위 제목 — 자사 풀 밖 대안으로만 쓴다. 없거나 실패하면 빈 배열 */
+async function loadExternalCandidates(channelCode: string, limit = 2): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("purchase_recommendations")
+    .select("display_name, rank")
+    .eq("own_channel_code", channelCode)
+    .eq("window_days", 182)
+    .order("rank", { ascending: true })
+    .limit(limit);
+  if (error) return [];
+  return ((data ?? []) as { display_name: string }[]).map((r) => r.display_name).filter(Boolean);
+}
+
+export async function computeAiSuggestionUncached(channelCode: string, asOfDate: string, focus: string | null): Promise<AiSuggestion> {
   // 사용자 지시(2026-10-07): "오늘은 화요일인데 AI는 토요일·금요일 편성 변경을 말하고 있다 — 제안이 있으면 해당 요일의 편성에 대해서" → 기준일과 같은 요일 칸만 후보로 쓴다.
   const weekday = isoDow(asOfDate);
   // 기본 범위에서 못 찾으면 180일로 다시 계산한다 — 그 두 번째 계산의 읽기(DB 대기)를 기다리지 않도록 처음부터 함께 시작해 둔다(결과는 같다).
-  // 기본 범위에서 찾으면 두 번째 결과는 쓰지 않는다(이미 계산 중인 것은 끝까지 가서 캐시에만 남는다).
   const widePromise = computeReplacePlan(channelCode, asOfDate, 180);
   widePromise.catch(() => undefined);
+  // 약한 프로그램이 지목되지 않은 채널(채널 전반 약세)은 기준일의 가장 큰 구멍 자리를 스스로 찾아 그 자리를 본다(2026-10-14, 1단계).
+  const remedy = await computeWeakSlotRemedy(channelCode, asOfDate, focus).catch(() => null);
+  const target = focus ?? remedy?.hole.program ?? null;
+  const nearHour = remedy?.hole.hour ?? null;
   let plan = await computeReplacePlan(channelCode, asOfDate);
-  let top = pickDetail(plan.details, weekday, focus);
+  let top = pickDetail(plan.details, weekday, target, nearHour);
   let widened: number | null = null;
   // 기본 범위에서 못 찾았거나 근거가 약한 안뿐이면 180일로도 본다 — 더 넓은 범위에서 근거가 충분한 안이 나오면 그쪽을 쓴다.
   if (!top || top.evidence === "weak") {
     const widePlan = await widePromise;
-    const wideTop = pickDetail(widePlan.details, weekday, focus);
+    const wideTop = pickDetail(widePlan.details, weekday, target, nearHour);
     if (!top || (wideTop && wideTop.evidence === "ok")) {
       widened = 180;
       plan = widePlan;
@@ -292,7 +311,8 @@ async function computeAiSuggestionUncached(channelCode: string, asOfDate: string
     }
   }
   // 사용자 지시(2026-10-07): 교체 후보가 없으면 "못 찾았다"로 끝내지 말고 시청률이 빠지는 부분의 보완 방안을 제안한다
-  const remedy = (!top || top.evidence === "weak") && focus ? await computeWeakSlotRemedy(channelCode, asOfDate, focus).catch(() => null) : null;
+  // 근거 충분한 교체안이 없으면 풀 밖 대안(구매 검토 추천)을 함께 준다
+  const external = !top || top.evidence === "weak" ? await loadExternalCandidates(channelCode).catch(() => []) : [];
   return {
     channelCode,
     weekStart: plan.weekStart,
@@ -303,5 +323,6 @@ async function computeAiSuggestionUncached(channelCode: string, asOfDate: string
     widenedLookbackDays: widened,
     focus,
     remedy,
+    external,
   };
 }
