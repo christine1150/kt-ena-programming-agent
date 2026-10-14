@@ -26,7 +26,7 @@ import { buildRerunConstraints } from "../src/lib/idealSchedule/rerunRules";
 import * as SL from "../src/lib/idealSchedule/seriesLink";
 import { evidenceOf, MIN_SAMPLE_FOR_REPLACE } from "../src/lib/dashboard/evidenceGate";
 import { buildCardCopy, achievementConsistent, upProgramHeadline, type AiSuggestionPayload } from "../src/lib/dashboard/homeCopy";
-import { heldLabel } from "../src/lib/dashboard/availHeld";
+import { baseTitleKey, heldLabel, pickHeld, type HeldTitle } from "../src/lib/dashboard/availHeld";
 import { classifyOriginals, pickForChannel } from "../src/lib/dashboard/originalClassify";
 
 let passed = 0;
@@ -800,6 +800,18 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   check("홈 문구: 보유 콘텐츠는 추정 근거와 권리 종료 임박을 함께 밝힌다", heldLabel(hr).includes("연평균의 약 1.4배 추정") && heldLabel(hr).includes("비교 5곳") && heldLabel(hr).includes("방영권 종료 14일 전"), heldLabel(hr));
   const multi = buildCardCopy({ ...input, ai: { ...base, change: weak, availHeld: [hr] } });
   check("홈 문구: 조치는 한 가지를 앞에 두고 나머지는 '다른 방법'으로 둔다", !!multi.action?.startsWith("보유 콘텐츠 검토") && multi.more.some((m) => m.startsWith("테스트 편성 검토")), JSON.stringify(multi));
+  // 보유 제목의 시즌·회차 꼬리표를 떼어 원제 방영 기록과 잇는다
+  check(
+    "Avail 보유: 시즌·회차 범위·괄호·계절 꼬리표를 뗀 원제 키를 만들고, 떼도 같거나 너무 짧으면 쓰지 않는다",
+    baseTitleKey("고생끝에밥이온다1~12") === "고생끝에밥이온다" &&
+      baseTitleKey("감성여행섬시즌1(UHD)") === "감성여행섬" &&
+      baseTitleKey("한식기행,종부의손맛-겨울") === "한식기행종부의손맛" &&
+      baseTitleKey("현대건축기행") === null &&
+      baseTitleKey("잠적-정규시즌") === null
+  );
+  const heldSeason: HeldTitle = { key: "고생끝에밥이온다1~12".replace(/[^가-힣0-9]/g, ""), altKey: "고생끝에밥이온다", title: "고생끝에밥이온다1~12", endState: "open", daysToEnd: 200, hasConditions: false };
+  const viaAlt = pickHeld([{ key: "고생끝에밥이온다", displayName: "고생끝에밥이온다", vsAvg: 1.2, peers: 3 }], [heldSeason]);
+  check("Avail 보유: 예측이 원제 키로 나와도 보유 시즌 행과 이어진다", viaAlt.length === 1 && viaAlt[0].name === "고생끝에밥이온다");
 }
 
 check("홈 문구: 호조 프로그램이 있어도 채널이 목표 미달이면 달성률과 함께 진단 한 줄을 앞에 둔다", upProgramHeadline({ achievementPct: 46, rating: 0.028, goalRating: 0.06, program: { name: "왕가네식구들", hour: 21 } }) === "목표의 46% 달성 — '왕가네식구들'(21시)은 호조지만 채널 전체는 목표 미달" && upProgramHeadline({ achievementPct: 125, rating: 0.115, goalRating: 0.092, program: { name: "A", hour: null } }) === null && upProgramHeadline({ achievementPct: 90, rating: 0.028, goalRating: 0.06, program: { name: "A", hour: null } }) === null);

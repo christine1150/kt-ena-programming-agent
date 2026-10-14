@@ -11,9 +11,26 @@ export const HELD_ENDS_SOON_DAYS = 60;
 /** 이 채널 연평균 대비 이 배수 이상일 때만 권유 */
 export const HELD_MIN_VS_AVG = 1.0;
 
+/**
+ * 권리 행 제목에서 시즌·회차 범위·편 꼬리표를 뗀 원제 키 — 방영 기록은 원제로만 쌓여 있어 "고생끝에밥이온다1~12"가 연결되지 않는 문제를 메운다.
+ * 떼어도 원래 키와 같으면 null. 뗀 결과가 너무 짧으면(오연결 위험) null.
+ */
+export function baseTitleKey(title: string): string | null {
+  const base = title
+    .normalize("NFC")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/시즌\s*\d+/g, "")
+    .replace(/\d+\s*~\s*\d+\s*$/g, "")
+    .replace(/-[^-]*$/, (m) => (/(편|봄|여름|가을|겨울|정규시즌|스페셜)$/.test(m) ? "" : m));
+  const key = normalizeProgramKey(base);
+  return key.length >= 4 && key !== normalizeProgramKey(title) ? key : null;
+}
+
 export interface HeldTitle {
   /** 정규화 키(대문자) — program_identity.key와 같은 규칙 */
   key: string;
+  /** 시즌·회차 꼬리표를 뗀 원제 키(방영 기록 연결용 보조). 없으면 null */
+  altKey?: string | null;
   title: string;
   /** 권리 상태: open 종료일 여유 / ends_soon 종료 임박 / unbounded 제한 없음(명시) / unknown 종료일 미확인 */
   endState: "open" | "ends_soon" | "unbounded" | "unknown";
@@ -38,7 +55,7 @@ export function heldTitlesFor(grants: Grant[], channelCode: string, today: strin
     const endState: HeldTitle["endState"] = b.endState === "ends_soon" ? "ends_soon" : b.endState === "open" ? "open" : b.endState === "unbounded" ? "unbounded" : "unknown";
     const key = normalizeProgramKey(g.content.titleRaw);
     if (!key) continue;
-    const cand: HeldTitle = { key, title: g.content.titleRaw, endState, daysToEnd: b.daysToEnd, hasConditions: g.conditions.length > 0 };
+    const cand: HeldTitle = { key, altKey: baseTitleKey(g.content.titleRaw), title: g.content.titleRaw, endState, daysToEnd: b.daysToEnd, hasConditions: g.conditions.length > 0 };
     const cur = byKey.get(key);
     if (!cur || rank(cand.endState, cand.daysToEnd) > rank(cur.endState, cur.daysToEnd)) byKey.set(key, cand);
   }
@@ -58,7 +75,9 @@ export interface HeldRecommendation {
 
 /** 예측 결과(제목·연평균 대비)와 보유 정보를 합쳐 권유 후보를 고른다 — 연평균 이상만, 높은 순, 최대 3개. */
 export function pickHeld(preds: { key: string; displayName: string; vsAvg: number | null; peers?: number | null }[], held: HeldTitle[], limit = 3): HeldRecommendation[] {
-  const heldBy = new Map(held.map((h) => [h.key, h]));
+  const heldBy = new Map<string, HeldTitle>();
+  for (const h of held) if (h.altKey && !heldBy.has(h.altKey)) heldBy.set(h.altKey, h);
+  for (const h of held) heldBy.set(h.key, h); // 제목 그대로의 키가 원제 키보다 우선
   const out: HeldRecommendation[] = [];
   for (const p of preds) {
     const h = heldBy.get(p.key.toUpperCase());
