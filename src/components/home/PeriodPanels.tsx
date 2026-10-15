@@ -20,7 +20,17 @@ export interface NextWeekItem {
   observation: string | null;
 }
 
-export function NextWeekPanel({ items, ctx }: { items: NextWeekItem[]; ctx: ViewContext }) {
+// 채널 로고 색으로 버튼을 칠한다(검정 버튼 금지 — 사용자 지시 2026-10-15). 밝은 색은 글씨·배경으로 쓸 때 어둡게 눌러 읽히게 한다.
+function darkInk(hex: string | null | undefined): string | null {
+  const m = (hex ?? "").trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const k = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255 > 0.6 ? 0.55 : 1;
+  return `rgb(${rgb.map((v) => Math.round(v * k)).join(", ")})`;
+}
+
+export function NextWeekPanel({ items, ctx, colorByCode }: { items: NextWeekItem[]; ctx: ViewContext; colorByCode?: Map<string, string | null> | null }) {
   const withProgram = items.filter((i) => i.program);
   if (items.length === 0) return null; // 주간 리뷰가 없으면(미계산) '변경 없음'이라고 말하지 않고 패널 자체를 만들지 않는다.
   return (
@@ -36,7 +46,7 @@ export function NextWeekPanel({ items, ctx }: { items: NextWeekItem[]; ctx: View
               <span className="min-w-0 flex-1 text-[13px] text-zinc-700">
                 &lsquo;{i.program}&rsquo; — {i.observation}
               </span>
-              <Link href={hrefFor("ideal_schedule", { ...ctx, channel: i.channelCode }, { from: `week:${i.channelCode}:${i.program}`, ft: `${i.channelName} '${i.program}' 슬롯 대안 비교`, sj: `${i.channelCode}|${i.program}|week` })} className="rounded-full bg-zinc-900 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-zinc-700">
+              <Link href={hrefFor("ideal_schedule", { ...ctx, channel: i.channelCode }, { from: `week:${i.channelCode}:${i.program}`, ft: `${i.channelName} '${i.program}' 슬롯 대안 비교`, sj: `${i.channelCode}|${i.program}|week` })} className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110" style={{ backgroundColor: darkInk(colorByCode?.get(i.channelCode)) ?? "#4338ca" }}>
                 슬롯 대안 비교
               </Link>
             </li>

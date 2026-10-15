@@ -29,6 +29,13 @@ const clock = (min: number) => {
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 };
 const fmt = (v: number | null) => (v === null ? "—" : `${v.toFixed(3)}%`);
+// 채널 로고 색(원색)을 옅게 깐 배경·테두리용. 글씨는 부모가 넘긴 accent(밝은 색은 어둡게 눌린 값)를 쓴다.
+const tint = (hex: string | null, alpha: number): string | undefined => {
+  const m = (hex ?? "").trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return undefined;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+};
 const key = (s: string) => s.replace(/[\s\-_.,·'"()[\]<>]/g, "").toLowerCase();
 
 export function AlternativeCompare({
@@ -39,6 +46,7 @@ export function AlternativeCompare({
   programName,
   baselineText,
   accent,
+  color,
   deepLink,
   onClose,
 }: {
@@ -50,6 +58,8 @@ export function AlternativeCompare({
   /** 카드 근거의 "본방 슬롯 최근 8주 평균" 값(있으면 비교에 함께 보인다) */
   baselineText: string | null;
   accent: string;
+  /** 채널 로고 색(원색 hex) — 패널 배경·테두리를 이 색 계열로 칠한다(없으면 기존 중립색) */
+  color?: string | null;
   deepLink: string | null;
   onClose: () => void;
 }) {
@@ -83,18 +93,24 @@ export function AlternativeCompare({
   const delta = target && target.expected !== null && currentExpected !== null ? target.expected - currentExpected : null;
   const deltaPct = delta !== null && currentExpected && currentExpected > 0 ? (delta / currentExpected) * 100 : null;
   const rows = showAll || query ? filtered : filtered.slice(0, 8);
+  const tintBg = tint(color ?? null, 0.06);
 
   return (
-    <section className="mt-4 rounded-xl bg-white p-4 ring-1 ring-zinc-200 sm:p-6" aria-label="대안 비교 시뮬레이션" data-section="alt-compare">
+    <section
+      className={`mt-4 rounded-xl p-4 sm:p-6 ${tintBg ? "" : "bg-white ring-1 ring-zinc-200"}`}
+      style={tintBg ? { backgroundColor: tintBg, boxShadow: `inset 0 0 0 1px ${tint(color ?? null, 0.3)}` } : undefined}
+      aria-label="대안 비교 시뮬레이션"
+      data-section="alt-compare"
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-[16px] font-bold text-zinc-900">
-            <span style={{ color: accent }}>{channelName}</span>{" "}
+          <h3 className="text-[16px] font-bold" style={{ color: accent }}>
+            {channelName}{" "}
             {slot ? `${DOW[slot.weekday - 1]} ${clock(slot.startMin)}~${clock(slot.endMin)}` : `${hour}시`} &lsquo;{programName}&rsquo; 자리 — 대안 비교
           </h3>
           <p className="mt-1 text-[12.5px] text-zinc-500">이 자리에 다른 프로그램을 편성하면 기대 시청률이 어느 정도인지 바로 시뮬레이션합니다(최근 3달 실적 기반 모델 값이며 실제 결과가 아닙니다).</p>
         </div>
-        <button type="button" onClick={onClose} className="rounded-full bg-zinc-100 px-3 py-1 text-[12px] font-medium text-zinc-700 hover:bg-zinc-200">
+        <button type="button" onClick={onClose} className="rounded-full bg-white px-3 py-1 text-[12px] font-medium hover:brightness-95" style={{ color: accent, boxShadow: `inset 0 0 0 1px ${tint(color ?? null, 0.4) ?? "#e4e4e7"}` }}>
           닫기
         </button>
       </div>
@@ -116,11 +132,11 @@ export function AlternativeCompare({
       {slot && (
         <>
           {/* 시뮬레이션 결과 — 고른 대안(기본: 1순위)을 이 자리에 편성했을 때 */}
-          <div className="mt-4 rounded-lg bg-zinc-50 px-4 py-3" aria-live="polite">
-            <p className="text-[12px] font-semibold text-zinc-500">시뮬레이션</p>
+          <div className={`mt-4 rounded-lg px-4 py-3 ${tintBg ? "" : "bg-zinc-50"}`} style={tintBg ? { backgroundColor: tint(color ?? null, 0.13) } : undefined} aria-live="polite">
+            <p className="text-[12px] font-semibold" style={{ color: accent }}>시뮬레이션</p>
             {target ? (
               <p className="mt-1 text-[14.5px] leading-snug text-zinc-800">
-                {DOW[slot.weekday - 1]} {clock(slot.startMin)} 편성을 <b className="font-bold">&lsquo;{target.name}&rsquo;</b>(으)로 바꾸면 기대 시청률{" "}
+                {DOW[slot.weekday - 1]} {clock(slot.startMin)} 편성을 <b className="font-bold" style={{ color: accent }}>&lsquo;{target.name}&rsquo;</b>(으)로 바꾸면 기대 시청률{" "}
                 <b className="text-[17px] font-bold tabular-nums" style={{ color: accent }}>{fmt(target.expected)}</b>
                 {target.low !== null && target.high !== null && <span className="text-zinc-500"> (예상 범위 {target.low.toFixed(3)}~{target.high.toFixed(3)}%)</span>}
                 {delta !== null && current && (
@@ -153,7 +169,7 @@ export function AlternativeCompare({
           <div className="mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
             <table className="w-full min-w-[560px] text-left text-[13px]">
               <thead>
-                <tr className="text-zinc-500">
+                <tr style={{ color: accent }}>
                   <th className="pb-1.5 pr-3 font-medium">프로그램</th>
                   <th className="pb-1.5 pr-3 font-medium">기대 시청률</th>
                   <th className="pb-1.5 pr-3 font-medium">예상 범위</th>
@@ -167,14 +183,14 @@ export function AlternativeCompare({
                   const d = a.expected !== null && currentExpected !== null ? a.expected - currentExpected : null;
                   const on = target?.name === a.name;
                   return (
-                    <tr key={a.name} onClick={() => setPicked(a.name)} className={`cursor-pointer border-t border-zinc-100 hover:bg-zinc-50 ${on ? "bg-indigo-50/60" : ""}`} aria-selected={on}>
-                      <td className="py-1.5 pr-3 font-semibold text-zinc-800">
+                    <tr key={a.name} onClick={() => setPicked(a.name)} className="cursor-pointer border-t hover:brightness-95" style={{ borderColor: tint(color ?? null, 0.22) ?? "#f4f4f5", backgroundColor: on ? tint(color ?? null, 0.2) ?? "rgba(238,242,255,0.6)" : undefined }} aria-selected={on}>
+                      <td className="py-1.5 pr-3 font-semibold" style={{ color: accent }}>
                         {a.name}
-                        {isCurrent && <span className="ml-1.5 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">현재 편성</span>}
-                        {a.name === slot.chosen && !isCurrent && <span className="ml-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700">AI 1순위</span>}
+                        {isCurrent && <span className="ml-1.5 rounded bg-white/70 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">현재 편성</span>}
+                        {a.name === slot.chosen && !isCurrent && <span className="ml-1.5 rounded bg-white px-1.5 py-0.5 text-[11px] font-medium" style={{ color: accent }}>AI 1순위</span>}
                         {a.hypothetical && <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">가정값</span>}
                       </td>
-                      <td className="py-1.5 pr-3 font-bold tabular-nums text-zinc-900">{fmt(a.expected)}</td>
+                      <td className="py-1.5 pr-3 font-bold tabular-nums" style={{ color: accent }}>{fmt(a.expected)}</td>
                       <td className="py-1.5 pr-3 tabular-nums text-zinc-500">{a.low !== null && a.high !== null ? `${a.low.toFixed(3)}~${a.high.toFixed(3)}` : "—"}</td>
                       <td className="py-1.5 pr-3 tabular-nums font-medium" style={{ color: d === null || isCurrent ? "#71717a" : d >= 0 ? "#047857" : "#be123c" }}>
                         {isCurrent || d === null ? "—" : `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(3)}%p`}
@@ -194,14 +210,14 @@ export function AlternativeCompare({
             </table>
           </div>
           {!query && filtered.length > 8 && (
-            <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-2 text-[12.5px] font-medium text-indigo-700 underline">
+            <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-2 text-[12.5px] font-medium underline" style={{ color: accent }}>
               {showAll ? "상위 8개만 보기" : `나머지 ${filtered.length - 8}개 모두 보기`}
             </button>
           )}
           {deepLink && (
             <p className="mt-3 text-[12px] text-zinc-500">
               주간 전체 편성 영향까지 보려면{" "}
-              <a href={deepLink} className="font-medium text-indigo-700 underline">
+              <a href={deepLink} className="font-medium underline" style={{ color: accent }}>
                 시청률 자판기에서 자세히 보기
               </a>
             </p>

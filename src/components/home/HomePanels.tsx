@@ -199,12 +199,12 @@ export function DecisionCards({
               )}
               <div className="mt-auto flex flex-wrap gap-2 pt-4">
                 {c.links.evidence && (
-                  <Link href={c.links.evidence} className="rounded-full bg-white px-3 py-1.5 text-[12px] font-medium text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-100">
+                  <Link href={c.links.evidence} className={`rounded-full bg-white px-3 py-1.5 text-[12px] font-medium hover:brightness-95 ${hasColor ? "" : "text-zinc-500 ring-1 ring-zinc-200"}`} style={hasColor ? { color: ink(color), boxShadow: `inset 0 0 0 1px ${tint(color, 0.4)}` } : undefined}>
                     근거 보기
                   </Link>
                 )}
                 {c.links.slot && (
-                  <Link href={c.links.slot} className="rounded-full bg-white px-3 py-1.5 text-[12px] font-medium text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-100">
+                  <Link href={c.links.slot} className={`rounded-full bg-white px-3 py-1.5 text-[12px] font-medium hover:brightness-95 ${hasColor ? "" : "text-zinc-500 ring-1 ring-zinc-200"}`} style={hasColor ? { color: ink(color), boxShadow: `inset 0 0 0 1px ${tint(color, 0.4)}` } : undefined}>
                     해당 슬롯
                   </Link>
                 )}
@@ -241,6 +241,7 @@ export function DecisionCards({
           programName={compareCard.programName}
           baselineText={compareCard.baselineText ?? null}
           accent={ink(colorByCode?.get(compareCard.channelCode) ?? null) ?? "#281fc7"}
+          color={colorByCode?.get(compareCard.channelCode) ?? null}
           deepLink={compareCard.links.compare}
           onClose={() => setCompareId(null)}
         />

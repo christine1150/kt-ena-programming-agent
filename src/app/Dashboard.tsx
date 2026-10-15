@@ -5931,7 +5931,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                     <p className="rounded-lg bg-zinc-50 px-4 py-3 text-[13px] text-zinc-500">이 기간의 주간 리뷰가 없습니다.</p>
                   </section>
                 )}
-                <NextWeekPanel items={nextWeekItems} ctx={urlCtx} />
+                <NextWeekPanel items={nextWeekItems} ctx={urlCtx} colorByCode={themeByCode} />
                 <FollowupsCard followups={followups} reviewStore={reviewStore} />
               </>
             )}
