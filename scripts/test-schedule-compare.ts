@@ -224,7 +224,8 @@ async function main() {
     check("비교 화면: 결정 카드 등 다른 쿼리를 지우지 않고 자기 키만 갈아 쓴다", page.includes("for (const k of OWN_KEYS) sp.delete(k)") && page.includes("router.replace(`/schedule-grid?${next}`"));
     const ideal = read("src/app/ideal-schedule/page.tsx");
     check("자판기: 상단·편성표 제목·출력 머리글이 같은 주간 기대값(shownExpected)을 쓴다", (ideal.match(/shownExpected/g) ?? []).length >= 8 && !ideal.includes("fmt(summary.expectedAvgRating)"));
-    check("자판기: 상태 띠가 편성표 바로 위에 있다", ideal.indexOf("<RunStatusStrip") > 0 && ideal.indexOf("<RunStatusStrip") < ideal.indexOf("{gridArea}"));
+    // 2026-10-07 사용자 요청(696c316)으로 대상 주 상태 줄·편성안 버전 패널은 모델 검증 아래(맨 아래)로 옮겼다 — 이전 단언(편성표 바로 위)은 낡았다. 2026-10-15 외부 검증 후 확인.
+    check("자판기: 상태 띠는 편성표 아래(맨 아래 구역)에 있다", ideal.indexOf("<RunStatusStrip") > ideal.indexOf("{gridArea}") && ideal.indexOf("{gridArea}") > 0);
     check("자판기 이름·아이콘은 그대로(사용자 결정)", ideal.includes("시청률 자판기") && ideal.includes("<VendingMachineIcon"));
   }
 

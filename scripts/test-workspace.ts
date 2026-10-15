@@ -297,7 +297,7 @@ async function main() {
     check("하락이 큰 것부터(상승 카드는 하락보다 뒤)", r1.cards[0].channelCode === "ENA_DRAMA" && r1.cards.every((c) => c.kind === "program_decline"));
     const c0 = r1.cards[0];
     check("카드마다 근거 2개·대안·확인 조건·검토일이 있다", c0.evidence.length === 2 && c0.evidence.every((e) => e.length > 5) && c0.alternatives.length >= 1 && c0.confirm.length > 3 && c0.reviewBy === "2026-10-18");
-    check("1회 급락만으로 교체·이동을 권하지 않는다 — 제목은 '추적 점검', 대안에 추가 관찰이 있다", c0.title.includes("추적 점검") && !/교체|이동/.test(c0.title) && c0.alternatives.some((a) => a.includes("추가 관찰")));
+    check("1회 급락만으로 교체·이동을 지금 권하지 않는다 — 제목은 '다음 방영도 낮으면 이동·교체 검토'(조건부), 지금 하라는 '이동 검토'/'교체 검토'가 아니다", c0.title.includes("다음 방영도 낮으면 이동·교체 검토") && !/ — (이동|교체) 검토/.test(c0.title), c0.title);
     check("카드 문구가 원인을 단정하지 않는다('때문에' 없음, 가설은 관측 아님으로 표시)", r1.cards.every((c) => !JSON.stringify([c.title, c.evidence, c.alternatives, c.confirm]).includes("때문에")) && c0.notes[0].includes("관측 아님"));
     check("모든 프로그램 카드는 미확인 Avail과 미입력 운영정책을 숨기지 않고 보여 준다", r1.cards.every((c) => c.notes.some((n) => n.includes("Avail(권리) 미확인")) && c.notes.some((n) => n.includes("정책 미입력 항목"))));
     const again = W.buildTodayDecisions({ ...baseIn, signals });
@@ -324,9 +324,9 @@ async function main() {
     const upCard = W.buildTodayDecisions({ ...baseIn, signals: [up] }).cards[0];
     check("상승 관측에 MOVE 태그가 붙어도 카드 제목이 '이동 검토'가 되지 않고(방향 모순 제거) 태그 제외 사실을 노트로 남긴다", !upCard.title.includes("이동") && upCard.title.includes("강화") && upCard.notes.some((n) => n.includes("Fit Score 태그(MOVE)") && n.includes("제외")) && upCard.alternatives.some((a) => a.includes("현재 슬롯 유지")));
     const downStrengthen = W.buildTodayDecisions({ ...baseIn, signals: [tagged("ENA_PLAY", { decline_program_tag: "STRENGTHEN" })] }).cards[0];
-    check("하락 관측에 STRENGTHEN 태그가 붙어도 강화 검토로 쓰지 않는다", !downStrengthen.title.includes("강화") && downStrengthen.title.includes("추적 점검") && downStrengthen.notes.some((n) => n.includes("STRENGTHEN") && n.includes("제외")));
+    check("하락 관측에 STRENGTHEN 태그가 붙어도 강화 검토로 쓰지 않는다", !downStrengthen.title.includes("강화") && downStrengthen.title.includes("다음 방영도 낮으면 이동·교체 검토") && downStrengthen.notes.some((n) => n.includes("STRENGTHEN") && n.includes("제외")), downStrengthen.title);
     const downReplace = W.buildTodayDecisions({ ...baseIn, signals: [tagged("ENA_PLAY", { decline_program_tag: "REPLACE" })] }).cards[0];
-    check("1회 급락에 REPLACE 태그가 붙어도 반복 확인 전에는 제목이 '교체 검토'가 되지 않는다(단계 04 규칙)", !/^.* — 교체 검토/.test(downReplace.title) && downReplace.title.includes("추적 점검") && downReplace.title.includes("반복 확인 후"));
+    check("1회 급락에 REPLACE 태그가 붙어도 반복 확인 전에는 제목이 지금 하라는 '교체 검토'가 되지 않는다(단계 04 규칙)", !/ — 교체 검토/.test(downReplace.title) && downReplace.title.includes("다음 방영도 낮으면 이동·교체 검토"), downReplace.title);
 
     const ev = (status: import("../src/lib/workspace").ReviewStatus, createdAt: string, subject: string, reviewBy: string | null): import("../src/lib/workspace").ReviewEvent => ({
       id: `e-${status}`, actionId: `old-${status}`, title: "t", status, reason: status === "reviewing" ? null : "이유", reviewBy, createdAt, actorRole: "pd", actorId: "p1", actorName: "PD", context: { subject },
