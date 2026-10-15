@@ -150,8 +150,8 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
           <ol className="grid grid-cols-1 gap-x-6 md:grid-flow-col md:grid-cols-3 md:grid-rows-7">
             {rows.map((r) => (
               // 칸 폭을 고정해 3단 모두에서 순위·채널·프로그램명·시각·시청률 열이 위아래로 정확히 맞는다(사용자 지시 2026-10-07: 정렬 정돈).
-              <li key={`${r.channelName}|${r.startTime}|${r.programName}`} className="grid grid-cols-[1rem_4.7rem_minmax(0,1fr)_2.6rem_5.7rem] items-center gap-x-1.5 py-[4px]">
-                <span className={`text-center text-[12px] font-bold tabular-nums ${r.rank <= 3 ? "text-zinc-900" : "text-zinc-400"}`} aria-label={`${r.rank}위`}>
+              <li key={`${r.channelName}|${r.startTime}|${r.programName}`} className="grid grid-cols-[1.4rem_4.7rem_minmax(0,1fr)_2.6rem_5.7rem] items-center gap-x-1.5 py-[4px]">
+                <span className={`whitespace-nowrap text-center text-[12px] font-bold tabular-nums ${r.rank <= 3 ? "text-zinc-900" : "text-zinc-400"}`} aria-label={`${r.rank}위`}>
                   {r.rank}
                 </span>
                 <span
