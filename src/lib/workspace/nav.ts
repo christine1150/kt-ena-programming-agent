@@ -30,7 +30,8 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "compare", label: "편성 비교", hint: "주간 편성표 비교", dest: "schedule_grid", minAction: "view" },
   { id: "ai", label: "AI 편성", hint: "편성안 생성·비교·검토", dest: "ideal_schedule", minAction: "view" },
   { id: "content", label: "구매시뮬레이터", hint: "구매 검토와 권리(Avail) 상태", dest: "purchase", minAction: "view" },
-  { id: "reports", label: "보고서", hint: "채널 리포트(웹·Word·PPT)", dest: "report", minAction: "view" },
+  // 2026-10-15(사용자 지시): 보고서 메뉴는 종합 보고서(포트폴리오)로 연다. 채널별 보고서는 채널 화면의 리포트 버튼에서 연다.
+  { id: "reports", label: "보고서", hint: "종합 보고서(웹·Word·PPT)", dest: "portfolio", minAction: "view" },
   { id: "admin", label: "관리", hint: "자료 업로드·기준 정보·점검", dest: "admin", minAction: "upload" },
 ];
 

@@ -18,6 +18,8 @@ export function periodQuery(searchParams: URLSearchParams): string {
     const v = searchParams.get(key);
     if (v) qs.set(key, v);
   }
+  // 2026-10-15: 기간 없이 열면(상단 메뉴 등) "date, 또는 dateFrom/dateTo, 또는 preset 파라미터가 필요합니다" 오류가 났다 — 기본은 지난 7일.
+  if (qs.toString() === "") qs.set("preset", "last7");
   return qs.toString();
 }
 
