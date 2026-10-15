@@ -67,6 +67,9 @@ async function main() {
     check("메일 재시도: error 1회 + 31분 경과는 재시도", C.mailRetryState({ status: "error", attemptCount: 1, processedAt: ago(31) }, now) === "retry");
     check("메일 재시도: 상한(3회) 도달은 dead-letter", C.mailRetryState({ status: "error", attemptCount: 3, processedAt: ago(500) }, now) === "dead_letter");
     check("메일 재시도: skipped는 재시도 안 함", C.mailRetryState({ status: "skipped" }, now) === "done");
+    check("메일 재시도: 방금 선점한 processing은 진행 중", C.mailRetryState({ status: "processing", attemptCount: 1, processedAt: ago(2) }, now) === "in_progress");
+    check("메일 재시도: 10분 넘게 멈춘 processing은 끊긴 것으로 재시도", C.mailRetryState({ status: "processing", attemptCount: 1, processedAt: ago(30) }, now) === "retry");
+    check("메일 재시도: 끊긴 processing도 상한(3회)이면 dead-letter", C.mailRetryState({ status: "processing", attemptCount: 3, processedAt: ago(30) }, now) === "dead_letter");
   }
 
   // ── B. 합성 일간 파일 파싱 ───────────────────────────────────

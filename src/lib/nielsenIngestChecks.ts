@@ -282,13 +282,22 @@ export function buildPeriodRecords(
 
 export const MAIL_MAX_ATTEMPTS = 3;
 export const MAIL_RETRY_MIN_INTERVAL_MIN = 30;
+// 2026-10-16: processing 행의 processed_at은 "선점한 시각"이다(insert 시 default now()). 실행이 중간에 끊기면
+// 이 행이 영원히 '처리 중'으로 남아 재시도도 안 되던 문제가 있었다 — 이 시간(분)을 넘긴 processing은 끊긴 것으로 본다.
+// 함수 최대 실행 시간(maxDuration 300초)보다 충분히 길게 잡는다.
+export const MAIL_PROCESSING_STALE_MIN = 10;
 
 export type MailRetryState = "done" | "retry" | "waiting" | "dead_letter" | "in_progress";
 
-/** mail_ingestion_log 한 행이 다시 처리 대상인지 판정한다. error만 재시도하며, 시도 횟수가 상한에 닿으면 dead-letter(자동 재시도 중단,
- *  관리자 확인 대상)이고 마지막 시도 후 최소 간격이 지나기 전에는 기다린다. processing은 선점한 실행이 아직 진행 중으로 본다. */
+/** mail_ingestion_log 한 행이 다시 처리 대상인지 판정한다. error와 오래 멈춘 processing(끊긴 실행)을 재시도하며, 시도 횟수가 상한에 닿으면 dead-letter(자동 재시도 중단,
+ *  관리자 확인 대상)이고 error는 마지막 시도 후 최소 간격이 지나기 전에는 기다린다. 최근에 선점된 processing은 다른 실행이 진행 중으로 본다. */
 export function mailRetryState(row: { status: string; attemptCount?: number | null; processedAt?: string | null }, now: Date): MailRetryState {
-  if (row.status === "processing") return "in_progress";
+  if (row.status === "processing") {
+    if (!row.processedAt) return "in_progress";
+    const stale = now.getTime() - Date.parse(row.processedAt) >= MAIL_PROCESSING_STALE_MIN * 60000;
+    if (!stale) return "in_progress";
+    return (row.attemptCount ?? 1) >= MAIL_MAX_ATTEMPTS ? "dead_letter" : "retry";
+  }
   if (row.status !== "error") return "done";
   const attempts = row.attemptCount ?? 1;
   if (attempts >= MAIL_MAX_ATTEMPTS) return "dead_letter";

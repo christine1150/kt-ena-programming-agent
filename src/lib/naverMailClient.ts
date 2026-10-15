@@ -82,21 +82,24 @@ export async function fetchUnprocessedNielsenMailFromNaver(
       if (!seqs || seqs.length === 0) return items;
 
       for (const uid of seqs) {
-        const message = await client.fetchOne(uid, { envelope: true, source: true }, { uid: true });
-        if (!message || !message.envelope) continue;
+        // 2026-10-16 성능 수정: 예전엔 본문(source)까지 한꺼번에 내려받아 이미 처리한 메일도 5분마다 전부
+        // 다시 받았다. 봉투(제목·ID)만 먼저 받아 대상·처리 여부를 가린 뒤, 새 메일만 본문을 내려받는다.
+        const envelopeOnly = await client.fetchOne(uid, { envelope: true }, { uid: true });
+        if (!envelopeOnly || !envelopeOnly.envelope) continue;
 
-        const subject = message.envelope.subject ?? "";
+        const subject = envelopeOnly.envelope.subject ?? "";
         if (!subjectMatches(subject)) continue;
 
         // 메일 하나를 여러 채널(Gmail 전달본 등)에서 동시에 처리해 중복 적재하는
         // 사고를 막기 위해, IMAP UID(메일함 안에서만 유효)가 아니라 전역적으로
         // 안정적인 Message-ID 헤더를 식별자로 쓴다 — Gmail 쪽과 값 공간이 겹치지
         // 않도록 접두사를 붙인다(mail_ingestion_log.message_id는 두 소스가 공유).
-        const rawMessageId = message.envelope.messageId ?? `uid-${uid}`;
+        const rawMessageId = envelopeOnly.envelope.messageId ?? `uid-${uid}`;
         const messageId = `naver:${rawMessageId.replace(/[<>]/g, "")}`;
         if (processedMessageIds.has(messageId)) continue;
 
-        if (!message.source) continue;
+        const message = await client.fetchOne(uid, { source: true }, { uid: true });
+        if (!message || !message.source) continue;
         const parsed = await simpleParser(message.source);
         const attachments: NielsenMailAttachment[] = [];
         for (const att of parsed.attachments) {
@@ -115,7 +118,7 @@ export async function fetchUnprocessedNielsenMailFromNaver(
         items.push({
           messageId,
           subject,
-          receivedAt: message.envelope.date ? message.envelope.date.toISOString() : null,
+          receivedAt: envelopeOnly.envelope.date ? envelopeOnly.envelope.date.toISOString() : null,
           attachments,
         });
       }

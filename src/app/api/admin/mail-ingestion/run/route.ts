@@ -4,6 +4,9 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/adminAuth";
 import { runNielsenMailIngestion } from "@/lib/mailIngestionRunner";
 
+// 2026-10-16: cron 라우트와 같은 실행 본체를 쓰므로 같은 최대 실행 시간을 명시한다.
+export const maxDuration = 300;
+
 export async function POST() {
   const admin = await getAdminSession();
   if (!admin) {

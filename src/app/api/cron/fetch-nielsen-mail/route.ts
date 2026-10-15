@@ -10,6 +10,10 @@ import { NextResponse } from "next/server";
 import { runNielsenMailIngestion } from "@/lib/mailIngestionRunner";
 import { checkCronAuth } from "@/lib/cronAuth";
 
+// 2026-10-16: 기본 제한 시간 안에 끝나지 못하면 함수가 중간에 끊겨 mail_ingestion_log 행이 '처리 중'으로 남을 수 있다
+// (10/15 처리 중 행의 원인으로 추정 — Vercel 로그로는 아직 확인하지 않음). 메일 확인+적재가 끝날 시간을 명시한다(Hobby 상한 300초).
+export const maxDuration = 300;
+
 export async function GET(request: Request) {
   // 2026-10-15: 운영에서 CRON_SECRET이 없으면 거부한다(이전에는 값이 없으면 누구나 호출 가능했음).
   const auth = checkCronAuth(request.headers.get("authorization"));

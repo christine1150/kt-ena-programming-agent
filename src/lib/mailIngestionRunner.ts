@@ -111,13 +111,14 @@ export async function runNielsenMailIngestion(): Promise<MailIngestionRunResult>
     const priorAttempts = retryAttempts.get(item.messageId);
     let attemptNow = 1;
     if (priorAttempts !== undefined) {
-      // 재시도: error 상태이면서 시도 횟수가 그대로인 행만 processing으로 바꿔 선점한다(다른 실행과 겹치면 한쪽만 성공).
+      // 재시도: error(또는 끊겨 오래 멈춘 processing) 상태이면서 시도 횟수가 그대로인 행만 processing으로 바꿔 선점한다(다른 실행과 겹치면 한쪽만 성공).
+      // 선점 시각(processed_at)을 지금으로 갱신해야 방금 잡은 행이 다시 '끊김'으로 오인되지 않는다.
       attemptNow = priorAttempts + 1;
       const { data: claimed, error: retryClaimError } = await supabase
         .from("mail_ingestion_log")
-        .update({ status: "processing", attempt_count: attemptNow })
+        .update({ status: "processing", attempt_count: attemptNow, processed_at: new Date().toISOString() })
         .eq("message_id", item.messageId)
-        .eq("status", "error")
+        .in("status", ["error", "processing"])
         .eq("attempt_count", priorAttempts)
         .select("message_id");
       if (retryClaimError || !claimed || claimed.length === 0) continue;
