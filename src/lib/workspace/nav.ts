@@ -1,10 +1,10 @@
-// 전역 탐색(단계 07) — 브리핑/채널분석/포트폴리오/편성비교/AI편성/콘텐츠·Avail/보고서/관리.
+// 전역 탐색(단계 07) — 브리핑/채널별 분석/편성 비교/AI 편성/구매시뮬레이터/보고서/관리(2026-10-15 사용자 지시로 이 이름·순서, 포트폴리오·Avail 관리 메뉴 제거).
 // 메뉴 노출은 세션 역할(permissions.ts의 can)로 정한다. 화면 숨김은 보안이 아니다 — 각 화면·API는 서버에서 따로 검사한다.
 // 기존 URL은 하나도 바꾸지 않고 그대로 목적지로 쓴다(호환). 새 주소 체계로 옮기는 리다이렉트는 만들지 않았다.
 import { can, type AdminAction, type Role } from "@/lib/admin/permissions";
 import { hrefFor, type Destination, type ViewContext } from "./viewContext";
 
-export type NavId = "briefing" | "channel" | "portfolio" | "compare" | "ai" | "content" | "reports" | "admin";
+export type NavId = "briefing" | "channel" | "compare" | "ai" | "content" | "reports" | "admin";
 
 export interface NavExtraLink {
   label: string;
@@ -26,11 +26,10 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { id: "briefing", label: "브리핑", hint: "오늘 확인할 데이터 상태와 결정할 사항", dest: "home", minAction: "view" },
-  { id: "channel", label: "채널 분석", hint: "채널별 진단·콘텐츠·편성·경쟁", dest: "channel", minAction: "view" },
-  { id: "portfolio", label: "포트폴리오", hint: "채널 그룹 종합 보고", dest: "portfolio", minAction: "view" },
+  { id: "channel", label: "채널별 분석", hint: "채널별 진단·콘텐츠·편성·경쟁", dest: "channel", minAction: "view" },
   { id: "compare", label: "편성 비교", hint: "주간 편성표 비교", dest: "schedule_grid", minAction: "view" },
   { id: "ai", label: "AI 편성", hint: "편성안 생성·비교·검토", dest: "ideal_schedule", minAction: "view" },
-  { id: "content", label: "구매 시뮬레이터", hint: "구매 검토와 권리(Avail) 상태", dest: "purchase", minAction: "view", extra: [{ label: "Avail 관리", dest: "admin", minAction: "rights_edit" }] },
+  { id: "content", label: "구매시뮬레이터", hint: "구매 검토와 권리(Avail) 상태", dest: "purchase", minAction: "view" },
   { id: "reports", label: "보고서", hint: "채널 리포트(웹·Word·PPT)", dest: "report", minAction: "view" },
   { id: "admin", label: "관리", hint: "자료 업로드·기준 정보·점검", dest: "admin", minAction: "upload" },
 ];
@@ -48,8 +47,7 @@ export function visibleExtras(item: NavItem, role: Role | null): NavExtraLink[] 
 export function activeNavId(pathname: string): NavId | null {
   if (pathname === "/") return "briefing";
   if (pathname.startsWith("/channel")) return "channel";
-  if (pathname.startsWith("/audience-report/portfolio")) return "portfolio";
-  if (pathname.startsWith("/audience-report")) return "reports";
+    if (pathname.startsWith("/audience-report")) return "reports";
   if (pathname.startsWith("/schedule-grid")) return "compare";
   if (pathname.startsWith("/ideal-schedule/purchase")) return "content";
   if (pathname.startsWith("/ideal-schedule")) return "ai";
@@ -69,7 +67,7 @@ export function navHref(item: NavItem, ctx: ViewContext, resolvedDateTo?: string
 export const COMPAT_ROUTES: { route: string; file: string; navId: NavId | null }[] = [
   { route: "/", file: "src/app/page.tsx", navId: "briefing" },
   { route: "/channel/[code]", file: "src/app/channel/[code]/page.tsx", navId: "channel" },
-  { route: "/audience-report/portfolio", file: "src/app/audience-report/portfolio/page.tsx", navId: "portfolio" },
+  { route: "/audience-report/portfolio", file: "src/app/audience-report/portfolio/page.tsx", navId: "reports" },
   { route: "/audience-report/[channel]", file: "src/app/audience-report/[channel]/page.tsx", navId: "reports" },
   { route: "/audience-report/view/[id]", file: "src/app/audience-report/view/[id]/page.tsx", navId: "reports" },
   { route: "/schedule-grid", file: "src/app/schedule-grid/page.tsx", navId: "compare" },

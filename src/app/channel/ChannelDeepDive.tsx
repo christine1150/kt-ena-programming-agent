@@ -2473,7 +2473,9 @@ function CompetitorPositioningScatter({
         가로축 = 오늘 시청률, 세로축 = {baseline} 대비 등락률 — 오른쪽 위일수록 &ldquo;강한데 더 강해지는&rdquo; 채널, 왼쪽
         아래일수록 &ldquo;약한데 더 약해지는&rdquo; 채널입니다.
       </p>
-      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
+      {/* 2026-10-15(사용자 요청: "그래프가 너무 커졌어"): 2026-10-14 전역 CSS가 가로 스크롤 안의 svg를 폭 100%·높이 auto로 맞추면서
+          이 산점도가 화면 폭 전체(세로 600px대)로 늘어났다 — 원래 설계 크기(W×H)를 넘지 않게 폭 상한을 둔다(글자도 원래 크기로 돌아온다). */}
+      <div className="overflow-x-auto" style={{ maxWidth: Math.min(W, 900) }} tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
       <svg role="img" aria-label="오늘 시청률(가로)과 등락률(세로) 산점도" viewBox={`0 0 ${W} ${H}`} style={{ height: H, width: W }}>
         <line x1={PAD_L} y1={yOf(0)} x2={W - PAD_R} y2={yOf(0)} stroke="#a1a1aa" strokeWidth={1} />
         <line x1={xOf(medianRating)} y1={PAD_T} x2={xOf(medianRating)} y2={H - PAD_B} stroke="#e4e4e7" strokeWidth={1} strokeDasharray="3 3" />
@@ -5659,7 +5661,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             .filter((item) => item.tag === "REPLACE" || item.tag === "MOVE")
             .map(buildLine)
             .sort((a, b) => Number(a.isDawn) - Number(b.isDawn) || (a.item.fit_score ?? 0) - (b.item.fit_score ?? 0));
-          const attentionItems = attentionAll.slice(0, 3).sort((a, b) => Number(a.isDawn) - Number(b.isDawn) || a.sortKey - b.sortKey);
+          // 사용자 지시(2026-10-15): 편성 제안은 좌우 2단 총 4건 — 점검 대상(교체·이동)과 강화 대상을 각각 최대 2건씩 보인다.
+          const attentionItems = attentionAll.slice(0, 2).sort((a, b) => Number(a.isDawn) - Number(b.isDawn) || a.sortKey - b.sortKey);
           const opportunityItems = (fitScoreItems ?? [])
             .filter((item) => item.tag === "STRENGTHEN")
             .map(buildLine)
@@ -5690,7 +5693,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <div key={item.program_id} className="flex flex-col gap-0.5">
                   <a
                     href="#what-to-schedule"
-                    className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-0.5 transition-colors ${hoverBg}`}
+                    className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg px-1.5 py-0.5 transition-colors ${hoverBg}`}
                     title="무엇을 편성할까요? 표에서 자세히 보기"
                   >
                     <DotTag label={TAG_LABEL_KO[item.tag ?? "STRENGTHEN"]} color={TAG_DOT_COLOR[item.tag ?? "STRENGTHEN"]} />
@@ -5703,11 +5706,11 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         <span className="text-zinc-400">→</span>
                         <span className="font-bold" style={{ color: accentForegroundColor(accentColor) }}>&lsquo;{d.to}&rsquo; {d.evidence === "weak" ? "테스트 후보" : "추천"}</span>
                         {d.evidence === "weak" ? (
-                          <span className="min-w-0 truncate text-zinc-500" title="표본이 적고 확실성이 낮아 기대 개선폭은 보여 드리지 않습니다. 일정 기간 시험 편성으로 확인하세요.">
+                          <span className="min-w-0 text-zinc-500" title="표본이 적고 확실성이 낮아 기대 개선폭은 보여 드리지 않습니다. 일정 기간 시험 편성으로 확인하세요.">
                             표본 {d.toSampleCount ?? 0}회로 근거가 약해 시험 편성으로 확인
                           </span>
                         ) : (
-                        <span className="min-w-0 truncate text-zinc-500" title={[`기대 시청률 ${fmtExp(d.fromExpected)} → ${fmtExp(d.toExpected)}(+${d.gain.toFixed(3)}%p)`, ...d.basis, d.runnerUp ? `차순위 후보 ${d.runnerUp}` : "", d.certainty ? CERT_KO[d.certainty] : ""].filter(Boolean).join(" · ")}>
+                        <span className="min-w-0 text-zinc-500" title={[`기대 시청률 ${fmtExp(d.fromExpected)} → ${fmtExp(d.toExpected)}(+${d.gain.toFixed(3)}%p)`, ...d.basis, d.runnerUp ? `차순위 후보 ${d.runnerUp}` : "", d.certainty ? CERT_KO[d.certainty] : ""].filter(Boolean).join(" · ")}>
                           기대 {fmtExp(d.fromExpected)}→{fmtExp(d.toExpected)}(+{d.gain.toFixed(3)}%p)
                           {d.basis[0] ? ` · ${d.basis[0]}` : ""}
                           {d.certainty ? ` · ${CERT_KO[d.certainty]}` : ""}
@@ -5735,22 +5738,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           );
           return (
             <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
-              {attentionItems.length > 0 && (
-              <>
-                <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
-                  편성 제안
-                </p>
-                {renderRow(attentionItems, "hover:bg-zinc-50", true)}
-              </>
-              )}
-              {opportunityItems.length > 0 && (
-              <div className={attentionItems.length > 0 ? "mt-3" : ""}>
-                <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
-                  더 밀어줄 만한 편성
-                </p>
-                {renderRow(opportunityItems, "hover:bg-emerald-50/60", false)}
+              <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">
+                편성 제안
+              </p>
+              {/* 사용자 지시(2026-10-15): "더 밀어줄 만한 편성" 소제목을 없애고 '편성 제안' 안에서 좌우 2단(왼쪽=교체·이동 검토, 오른쪽=강화)으로 총 4건. 한쪽이 비면 한 단으로 쓴다. */}
+              <div className={`grid gap-x-8 gap-y-3 ${attentionItems.length > 0 && opportunityItems.length > 0 ? "md:grid-cols-2" : ""}`}>
+                {attentionItems.length > 0 && renderRow(attentionItems, "hover:bg-zinc-50", true)}
+                {opportunityItems.length > 0 && renderRow(opportunityItems, "hover:bg-emerald-50/60", false)}
               </div>
-              )}
             </div>
           );
         })()}
@@ -6463,7 +6458,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           )}
         </div>
 
-        {/* 사용자 지시(2026-10-07): AI 편성 비서 - 스마트 편성 팁 → 무엇을 편성할까요? → 경쟁채널과 비교하면? 순서로 '시청률 상위 콘텐츠 TOP 20' 바로 아래에 둔다 */}
+        {/* 사용자 지시(2026-10-07): AI 편성 비서 - 스마트 편성 팁 → 무엇을 편성할까요? → 이 콘텐츠, 적합한가요? → 경쟁채널과 비교하면? 순서로(적합한가요 이동: 2026-10-15 사용자 지시) '시청률 상위 콘텐츠 TOP 20' 바로 아래에 둔다 */}
         {/* Tier 3(2026-08-26, 사용자 지시: "티어3에서 11번까지는 우선 진행" — 원 제안 11번
             "AI 가설" 별도 섹션, 화면 제목은 사용자 지시대로 "AI 편성 비서 - 스마트 편성 팁").
             위 WHY?/OPPORTUNITY?/WHAT TO SCHEDULE?는 여전히 인과 단정 금지 원칙을 그대로
@@ -6665,6 +6660,276 @@ export default function ChannelDeepDive({ code }: { code: string }) {
         </div>
         </>
         )}
+
+        {/* CONTENT FITS? — 표 + 줄글, 채널 기여도 높은 순(사용자 지시). skyUHD는 타깃 구분이
+            없는 원본 자료 한계로 PRD Fit Score(타깃 기반)를 계산할 수 없어(사용자 확인,
+            2026-08-21) 별도 채널 단위 대체 지표(skyuhdScorecard)를 대신 보여준다. */}
+        <div id="content-fits" className="scroll-mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+          <h2 className={SECTION_TITLE_P2}>
+            이 콘텐츠, 적합한가요?<span className={ENG_TITLE_ANNOTATION}>(CONTENT FITS?)</span>
+          </h2>
+          {code === "SKYUHD" ? (
+            <>
+              <p className="mb-3 text-sm text-zinc-400">
+                skyUHD는 원본 자료에 타깃(연령대) 구분이 없어 타깃 기반 Fit Score를 계산할 수 없습니다 — 대신
+                채널 내 시청률 percentile과 최근 4주/이전 8주 추세로 계산한 대체 지표입니다(다른 채널의
+                Target Performance/Affinity/Engagement 표와는 별개 개념).
+              </p>
+              {skyuhdScorecardLoading ? (
+                <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
+              ) : !skyuhdScorecard || skyuhdScorecard.length === 0 ? (
+                <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
+              ) : (
+                <>
+                  <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
+                    <table className="w-full min-w-[520px] text-left text-sm">
+                      <thead>
+                        <tr className="text-zinc-400">
+                          <th className="pb-2 font-medium">프로그램</th>
+                          <th className="pb-2 font-medium">시청률</th>
+                          <th className="pb-2 font-medium">방영횟수</th>
+                          <th className="pb-2 font-medium">주요 시간대</th>
+                          <th className="pb-2 font-medium">채널 내 순위(percentile)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {skyuhdScorecard.map((item) => (
+                          <tr key={item.program_id} className="border-t border-zinc-100">
+                            <td className="py-1.5 font-medium text-zinc-800">{item.program_name}</td>
+                            <td className="py-1.5 text-zinc-600">{fmtR(item.avg_rating)}</td>
+                            <td className="py-1.5 text-zinc-600">{item.air_count}회</td>
+                            <td className="py-1.5 text-zinc-600">
+                              {DAYPART_LABEL[item.top_daypart ?? ""] ?? item.top_daypart ?? "—"}
+                              {item.most_common_start_hour !== null ? ` · 주로 ${item.most_common_start_hour}시` : ""}
+                            </td>
+                            <td className="py-1.5 font-semibold text-zinc-900">
+                              <span className="inline-flex items-center gap-1.5">
+                                <MiniPctlBar value={item.rating_pctl} accentColor={accentColor} isEnaStory={isEnaStory} />
+                                {item.rating_pctl !== null && <span className="text-[12px] font-normal text-zinc-400">(상위 {(100 - item.rating_pctl).toFixed(0)}%)</span>}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-3 text-base leading-relaxed text-zinc-700">
+                    {skyuhdScorecard.length >= 2
+                      ? highlightNarrativeText(
+                          (() => {
+                            const bestName = skyuhdScorecard[0].program_name;
+                            const worstName = skyuhdScorecard[skyuhdScorecard.length - 1].program_name;
+                            return `'${bestName}'${josaIga(bestName)} 채널 내 시청률 상위권(${skyuhdScorecard[0].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[0].rating_pctl).toFixed(0)}%` : "—"})으로 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 가장 낮아(${skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl!).toFixed(0)}%` : "—"}) 편성 조정을 검토해볼 만합니다.`;
+                          })(),
+                          NARRATIVE_UP_COLOR,
+                          NARRATIVE_DOWN_COLOR
+                        )
+                      : ""}
+                  </p>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="mb-3 text-sm text-zinc-400">
+                {CONTENT_FIT_LEGEND.intro} {CONTENT_FIT_LEGEND.reliability}
+              </p>
+              {fitScoreLoading ? (
+                <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
+              ) : contentFitsRows.length === 0 ? (
+                <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
+              ) : (
+                <>
+                  <p className="mb-2 flex items-center gap-1.5 text-[12.5px] text-zinc-400">
+                    <RowChevron open={false} color={accentColor} />
+                    각 줄을 누르면 시청자 유형·슬롯별 성과·해석이 펼쳐집니다
+                  </p>
+                  <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
+                    <table className="w-full table-fixed text-left text-sm">
+                      <colgroup>
+                        <col className="w-[9%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[29%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[9%]" />
+                      </colgroup>
+                      <thead>
+                        <tr className="text-zinc-400">
+                          <th className="whitespace-nowrap pb-2 pr-3 font-medium">판정</th>
+                          <th className="whitespace-nowrap pb-2 pr-3 font-medium">유형</th>
+                          <th className="pb-2 pr-3 font-medium">프로그램</th>
+                          <th className="pb-2 font-medium">슬롯 대비 성과</th>
+                          <th className="pb-2 font-medium">시청 규모</th>
+                          <th className="pb-2 font-medium">시청 몰입도</th>
+                          <th className="pb-2 font-medium">최근 추세</th>
+                          <th className="pb-2 text-center font-medium">적합도</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {contentFitsRows.map((item) => {
+                          const cf = item.content_fit;
+                          const muted = cf.tier !== "FORMAL";
+                          const trendCell = formatTrendCell(cf);
+                          const isOpen = expandedFit === item.program_id;
+                          return (
+                            <Fragment key={item.program_id}>
+                            <tr
+                              className={`group cursor-pointer border-t border-zinc-100 transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${muted ? "text-zinc-400" : ""}`}
+                              style={{ ["--tw-ring-color" as string]: accentColor, ...(isOpen ? { backgroundColor: `${accentColor}10` } : {}) }}
+                              tabIndex={0}
+                              role="button"
+                              aria-expanded={isOpen}
+                              aria-label={`${item.programs?.canonical_name ?? "프로그램"} 상세 ${isOpen ? "접기" : "펼치기"}`}
+                              onClick={() => setExpandedFit(isOpen ? null : item.program_id)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  setExpandedFit(isOpen ? null : item.program_id);
+                                }
+                              }}
+                            >
+                              <td className="whitespace-nowrap py-2 pr-3 align-middle">
+                                {cf.tier === "HOLD" ? (
+                                  <DotTag label="판단 보류" color="#a1a1aa" fixed />
+                                ) : cf.tier === "REFERENCE" ? (
+                                  <DotTag label="표본 적음" color="#a1a1aa" fixed />
+                                ) : item.tag ? (
+                                  <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} fixed />
+                                ) : (
+                                  <span className="text-zinc-400">—</span>
+                                )}
+                              </td>
+                              <td className="whitespace-nowrap py-2 pr-3 align-middle">
+                                <FitChips cf={cf} />
+                              </td>
+                              <td className="py-2 pr-3 align-middle font-medium text-zinc-800">
+                                <span className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
+                                  <span className={`truncate ${muted ? "text-zinc-500" : ""}`} title={item.programs?.canonical_name ?? undefined}>{item.programs?.canonical_name ?? "이름 없음"}</span>
+                                  <span className="shrink-0 text-[12px] font-normal text-zinc-400">{cf.sampleDays}일</span>
+                                </span>
+                              </td>
+                              <td className="py-2 align-middle">
+                                <MiniPctlBar value={cf.slotScore} label={fmtTimes(cf.slotIndex)} accentColor={accentColor} isEnaStory={isEnaStory} />
+                              </td>
+                              <td className="py-2 align-middle">
+                                <MiniPctlBar value={cf.scaleScore} label={fmtTimes(cf.scaleIndex)} accentColor={accentColor} isEnaStory={isEnaStory} />
+                              </td>
+                              <td className="py-2 align-middle">
+                                <MiniPctlBar value={cf.engagementScore} accentColor={accentColor} isEnaStory={isEnaStory} />
+                              </td>
+                              <td className="whitespace-nowrap py-2 align-middle tabular-nums text-zinc-600">
+                                {trendCell.direction === "up" ? (
+                                  <span style={{ color: NARRATIVE_UP_COLOR }}>{trendCell.text}</span>
+                                ) : trendCell.direction === "down" ? (
+                                  <span style={{ color: NARRATIVE_DOWN_COLOR }}>{trendCell.text}</span>
+                                ) : (
+                                  trendCell.text
+                                )}
+                              </td>
+                              <td className="py-2 align-middle font-semibold tabular-nums text-zinc-900">
+                                <div className="relative flex items-center justify-center">
+                                  <span className="w-6 text-center">{cf.score === null ? "—" : cf.score.toFixed(0)}</span>
+                                  <span className="absolute left-1/2 ml-3.5 flex items-center">
+                                    <RowChevron open={isOpen} color={accentColor} />
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                            {isOpen && (
+                              <tr className="border-t border-zinc-100">
+                                <td colSpan={8} className="p-4 text-sm text-zinc-600" style={{ backgroundColor: `${accentColor}08`, boxShadow: `inset 3px 0 0 ${accentColor}` }}>
+                                  {(() => {
+                                    const fi = buildFitScoreInterpretation(item);
+                                    const type = fitTypeOf(cf);
+                                    const llm = fitScoreInterpretationLlm[item.program_id] ?? fi.interpretation;
+                                    return (
+                                      <>
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                                          <p>평균 시청률: {fmtR(item.evidence.avg_rating)}</p>
+                                          <p>도달률: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
+                                          <p>시청시간 비율: {item.evidence.avg_time_spent_share !== null ? `${item.evidence.avg_time_spent_share.toFixed(2)}%` : "—"}</p>
+                                          <p>방영: 최근 12주 중 {item.sample_days}일({cf.airings}회)</p>
+                                        </div>
+                                        {type && (
+                                          <p className="mt-2">
+                                            <span className="font-semibold" style={{ color: accentColor }}>유형</span> {type} — {FIT_TYPE_NOTE[type]}
+                                          </p>
+                                        )}
+                                        {fi.trendNote && <p className="mt-1 text-zinc-500">{fi.trendNote}</p>}
+                                        {describeBaseline(cf) && <p className="mt-1 text-[13px] text-zinc-400">{describeBaseline(cf)}</p>}
+                                        {fi.sampleNote && <p className="mt-1 text-amber-600">{fi.sampleNote}</p>}
+                                        {llm && <p className="mt-2 text-zinc-600">{llm}</p>}
+                                        {/* 원 명세 13번(Audience Role) — Reach/Time Spent Share 둘 다 뚜렷할 때만 표시. */}
+                                        {fi.audienceRole && (
+                                          <p className="mt-2">
+                                            <span className="font-semibold" style={{ color: accentColor }}>시청자 유형</span> {AUDIENCE_ROLE_LABEL[fi.audienceRole]} — {AUDIENCE_ROLE_NOTE[fi.audienceRole]}
+                                          </p>
+                                        )}
+                                        {/* 원 명세 11번(GOLDEN/WEAK SLOT)·12번(SLOT TRANSFERABILITY) — 표본이 충분할 때만 표시. */}
+                                        {item.slotEfficiency && (item.slotEfficiency.goldenSlot || item.slotEfficiency.weakSlot || item.slotEfficiency.transferability) && (
+                                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                            {item.slotEfficiency.goldenSlot && (
+                                              <span>
+                                                <span className="font-semibold text-emerald-700">황금 슬롯</span> {item.slotEfficiency.goldenSlot.hour}시대
+                                                (자기 보통 수준의 {item.slotEfficiency.goldenSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.goldenSlot.airCount}회)
+                                              </span>
+                                            )}
+                                            {item.slotEfficiency.weakSlot && (
+                                              <span>
+                                                <span className="font-semibold text-rose-700">약세 슬롯</span> {item.slotEfficiency.weakSlot.hour}시대
+                                                (자기 보통 수준의 {item.slotEfficiency.weakSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.weakSlot.airCount}회)
+                                              </span>
+                                            )}
+                                            {item.slotEfficiency.transferability && (
+                                              <span>
+                                                <span className="font-semibold" style={{ color: accentColor }}>슬롯 이동성</span>{" "}
+                                                {item.slotEfficiency.transferability === "FLEXIBLE"
+                                                  ? `유연형 — 최근 ${item.slotEfficiency.weeks}주 ${item.slotEfficiency.slotSampleCount}개 슬롯에서 성과 편차가 작아, 다른 시간대로 옮겨도 유지될 가능성이 관찰됩니다`
+                                                  : item.slotEfficiency.transferability === "PRIME_DEPENDENT"
+                                                    ? `프라임 의존형 — 강세가 주요시간(${PRIME_UNION_LABEL}) 구간에만 몰려 있어, 그 밖 시간대로 옮기면 성과 유지가 불확실합니다`
+                                                    : "슬롯 특화형 — 슬롯별 성과 편차가 커서, 이동 시 현재 성과가 유지될지 추가 검증이 필요합니다"}
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                </td>
+                              </tr>
+                            )}
+                            </Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-3 text-base leading-relaxed text-zinc-700">
+                    {highlightNarrativeText(
+                      summarizeTable(
+                        contentFitsRows.map((r) => r.content_fit),
+                        (id) => contentFitsRows.find((r) => r.program_id === id)?.programs?.canonical_name ?? "이름 없음"
+                      ),
+                      NARRATIVE_UP_COLOR,
+                      NARRATIVE_DOWN_COLOR
+                    )}
+                  </p>
+                  {fitTypeSummary(contentFitsRows.map((r) => r.content_fit)) && (
+                    <p className="mt-2 text-sm text-zinc-600">
+                      {fitTypeSummary(contentFitsRows.map((r) => r.content_fit))} <span className="text-zinc-400">{CONTENT_FIT_LEGEND.type}</span>
+                    </p>
+                  )}
+                  <p className="mt-2 text-sm text-zinc-400">
+                    {CONTENT_FIT_LEGEND.verdict} {CONTENT_FIT_LEGEND.affinity}
+                  </p>
+                </>
+              )}
+            </>
+          )}
+        </div>
 
         {/* COMPARED WITH? — 재설계(사용자 지시): Competitive Pressure 제거, 순위 높은 순 +
             12주 평균 대비 등락 + 최고 성적 프로그램(시간대) 보고서. 기간 범위 선택 시 순위/시청률이
@@ -7594,276 +7859,6 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           <p className="mt-3 text-base leading-relaxed text-zinc-700">
             {highlightNarrativeText(buildHowDeeplyExplanation(howDeeplyStats, howDeeplyPeriodLabel, code === "SKYUHD"), NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR)}
           </p>
-        </div>
-
-        {/* CONTENT FITS? — 표 + 줄글, 채널 기여도 높은 순(사용자 지시). skyUHD는 타깃 구분이
-            없는 원본 자료 한계로 PRD Fit Score(타깃 기반)를 계산할 수 없어(사용자 확인,
-            2026-08-21) 별도 채널 단위 대체 지표(skyuhdScorecard)를 대신 보여준다. */}
-        <div id="content-fits" className="scroll-mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-          <h2 className={SECTION_TITLE_P2}>
-            이 콘텐츠, 적합한가요?<span className={ENG_TITLE_ANNOTATION}>(CONTENT FITS?)</span>
-          </h2>
-          {code === "SKYUHD" ? (
-            <>
-              <p className="mb-3 text-sm text-zinc-400">
-                skyUHD는 원본 자료에 타깃(연령대) 구분이 없어 타깃 기반 Fit Score를 계산할 수 없습니다 — 대신
-                채널 내 시청률 percentile과 최근 4주/이전 8주 추세로 계산한 대체 지표입니다(다른 채널의
-                Target Performance/Affinity/Engagement 표와는 별개 개념).
-              </p>
-              {skyuhdScorecardLoading ? (
-                <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
-              ) : !skyuhdScorecard || skyuhdScorecard.length === 0 ? (
-                <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
-              ) : (
-                <>
-                  <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
-                    <table className="w-full min-w-[520px] text-left text-sm">
-                      <thead>
-                        <tr className="text-zinc-400">
-                          <th className="pb-2 font-medium">프로그램</th>
-                          <th className="pb-2 font-medium">시청률</th>
-                          <th className="pb-2 font-medium">방영횟수</th>
-                          <th className="pb-2 font-medium">주요 시간대</th>
-                          <th className="pb-2 font-medium">채널 내 순위(percentile)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {skyuhdScorecard.map((item) => (
-                          <tr key={item.program_id} className="border-t border-zinc-100">
-                            <td className="py-1.5 font-medium text-zinc-800">{item.program_name}</td>
-                            <td className="py-1.5 text-zinc-600">{fmtR(item.avg_rating)}</td>
-                            <td className="py-1.5 text-zinc-600">{item.air_count}회</td>
-                            <td className="py-1.5 text-zinc-600">
-                              {DAYPART_LABEL[item.top_daypart ?? ""] ?? item.top_daypart ?? "—"}
-                              {item.most_common_start_hour !== null ? ` · 주로 ${item.most_common_start_hour}시` : ""}
-                            </td>
-                            <td className="py-1.5 font-semibold text-zinc-900">
-                              <span className="inline-flex items-center gap-1.5">
-                                <MiniPctlBar value={item.rating_pctl} accentColor={accentColor} isEnaStory={isEnaStory} />
-                                {item.rating_pctl !== null && <span className="text-[12px] font-normal text-zinc-400">(상위 {(100 - item.rating_pctl).toFixed(0)}%)</span>}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="mt-3 text-base leading-relaxed text-zinc-700">
-                    {skyuhdScorecard.length >= 2
-                      ? highlightNarrativeText(
-                          (() => {
-                            const bestName = skyuhdScorecard[0].program_name;
-                            const worstName = skyuhdScorecard[skyuhdScorecard.length - 1].program_name;
-                            return `'${bestName}'${josaIga(bestName)} 채널 내 시청률 상위권(${skyuhdScorecard[0].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[0].rating_pctl).toFixed(0)}%` : "—"})으로 가장 도움이 되고 있고, '${worstName}'${josaEunNeun(worstName)} 가장 낮아(${skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl !== null ? `상위 ${(100 - skyuhdScorecard[skyuhdScorecard.length - 1].rating_pctl!).toFixed(0)}%` : "—"}) 편성 조정을 검토해볼 만합니다.`;
-                          })(),
-                          NARRATIVE_UP_COLOR,
-                          NARRATIVE_DOWN_COLOR
-                        )
-                      : ""}
-                  </p>
-                </>
-              )}
-            </>
-          ) : (
-            <>
-              <p className="mb-3 text-sm text-zinc-400">
-                {CONTENT_FIT_LEGEND.intro} {CONTENT_FIT_LEGEND.reliability}
-              </p>
-              {fitScoreLoading ? (
-                <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>
-              ) : contentFitsRows.length === 0 ? (
-                <p className="text-sm text-zinc-400">최근 14일 안에 방영된 프로그램 데이터가 없습니다.</p>
-              ) : (
-                <>
-                  <p className="mb-2 flex items-center gap-1.5 text-[12.5px] text-zinc-400">
-                    <RowChevron open={false} color={accentColor} />
-                    각 줄을 누르면 시청자 유형·슬롯별 성과·해석이 펼쳐집니다
-                  </p>
-                  <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
-                    <table className="w-full table-fixed text-left text-sm">
-                      <colgroup>
-                        <col className="w-[9%]" />
-                        <col className="w-[10%]" />
-                        <col className="w-[29%]" />
-                        <col className="w-[12%]" />
-                        <col className="w-[12%]" />
-                        <col className="w-[10%]" />
-                        <col className="w-[9%]" />
-                        <col className="w-[9%]" />
-                      </colgroup>
-                      <thead>
-                        <tr className="text-zinc-400">
-                          <th className="whitespace-nowrap pb-2 pr-3 font-medium">판정</th>
-                          <th className="whitespace-nowrap pb-2 pr-3 font-medium">유형</th>
-                          <th className="pb-2 pr-3 font-medium">프로그램</th>
-                          <th className="pb-2 font-medium">슬롯 대비 성과</th>
-                          <th className="pb-2 font-medium">시청 규모</th>
-                          <th className="pb-2 font-medium">시청 몰입도</th>
-                          <th className="pb-2 font-medium">최근 추세</th>
-                          <th className="pb-2 text-center font-medium">적합도</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {contentFitsRows.map((item) => {
-                          const cf = item.content_fit;
-                          const muted = cf.tier !== "FORMAL";
-                          const trendCell = formatTrendCell(cf);
-                          const isOpen = expandedFit === item.program_id;
-                          return (
-                            <Fragment key={item.program_id}>
-                            <tr
-                              className={`group cursor-pointer border-t border-zinc-100 transition-colors hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${muted ? "text-zinc-400" : ""}`}
-                              style={{ ["--tw-ring-color" as string]: accentColor, ...(isOpen ? { backgroundColor: `${accentColor}10` } : {}) }}
-                              tabIndex={0}
-                              role="button"
-                              aria-expanded={isOpen}
-                              aria-label={`${item.programs?.canonical_name ?? "프로그램"} 상세 ${isOpen ? "접기" : "펼치기"}`}
-                              onClick={() => setExpandedFit(isOpen ? null : item.program_id)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  setExpandedFit(isOpen ? null : item.program_id);
-                                }
-                              }}
-                            >
-                              <td className="whitespace-nowrap py-2 pr-3 align-middle">
-                                {cf.tier === "HOLD" ? (
-                                  <DotTag label="판단 보류" color="#a1a1aa" fixed />
-                                ) : cf.tier === "REFERENCE" ? (
-                                  <DotTag label="표본 적음" color="#a1a1aa" fixed />
-                                ) : item.tag ? (
-                                  <DotTag label={TAG_LABEL_KO[item.tag]} color={TAG_DOT_COLOR[item.tag]} fixed />
-                                ) : (
-                                  <span className="text-zinc-400">—</span>
-                                )}
-                              </td>
-                              <td className="whitespace-nowrap py-2 pr-3 align-middle">
-                                <FitChips cf={cf} />
-                              </td>
-                              <td className="py-2 pr-3 align-middle font-medium text-zinc-800">
-                                <span className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-                                  <span className={`truncate ${muted ? "text-zinc-500" : ""}`} title={item.programs?.canonical_name ?? undefined}>{item.programs?.canonical_name ?? "이름 없음"}</span>
-                                  <span className="shrink-0 text-[12px] font-normal text-zinc-400">{cf.sampleDays}일</span>
-                                </span>
-                              </td>
-                              <td className="py-2 align-middle">
-                                <MiniPctlBar value={cf.slotScore} label={fmtTimes(cf.slotIndex)} accentColor={accentColor} isEnaStory={isEnaStory} />
-                              </td>
-                              <td className="py-2 align-middle">
-                                <MiniPctlBar value={cf.scaleScore} label={fmtTimes(cf.scaleIndex)} accentColor={accentColor} isEnaStory={isEnaStory} />
-                              </td>
-                              <td className="py-2 align-middle">
-                                <MiniPctlBar value={cf.engagementScore} accentColor={accentColor} isEnaStory={isEnaStory} />
-                              </td>
-                              <td className="whitespace-nowrap py-2 align-middle tabular-nums text-zinc-600">
-                                {trendCell.direction === "up" ? (
-                                  <span style={{ color: NARRATIVE_UP_COLOR }}>{trendCell.text}</span>
-                                ) : trendCell.direction === "down" ? (
-                                  <span style={{ color: NARRATIVE_DOWN_COLOR }}>{trendCell.text}</span>
-                                ) : (
-                                  trendCell.text
-                                )}
-                              </td>
-                              <td className="py-2 align-middle font-semibold tabular-nums text-zinc-900">
-                                <div className="relative flex items-center justify-center">
-                                  <span className="w-6 text-center">{cf.score === null ? "—" : cf.score.toFixed(0)}</span>
-                                  <span className="absolute left-1/2 ml-3.5 flex items-center">
-                                    <RowChevron open={isOpen} color={accentColor} />
-                                  </span>
-                                </div>
-                              </td>
-                            </tr>
-                            {isOpen && (
-                              <tr className="border-t border-zinc-100">
-                                <td colSpan={8} className="p-4 text-sm text-zinc-600" style={{ backgroundColor: `${accentColor}08`, boxShadow: `inset 3px 0 0 ${accentColor}` }}>
-                                  {(() => {
-                                    const fi = buildFitScoreInterpretation(item);
-                                    const type = fitTypeOf(cf);
-                                    const llm = fitScoreInterpretationLlm[item.program_id] ?? fi.interpretation;
-                                    return (
-                                      <>
-                                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-                                          <p>평균 시청률: {fmtR(item.evidence.avg_rating)}</p>
-                                          <p>도달률: {item.evidence.avg_reach !== null ? `${item.evidence.avg_reach.toFixed(2)}%` : "—"}</p>
-                                          <p>시청시간 비율: {item.evidence.avg_time_spent_share !== null ? `${item.evidence.avg_time_spent_share.toFixed(2)}%` : "—"}</p>
-                                          <p>방영: 최근 12주 중 {item.sample_days}일({cf.airings}회)</p>
-                                        </div>
-                                        {type && (
-                                          <p className="mt-2">
-                                            <span className="font-semibold" style={{ color: accentColor }}>유형</span> {type} — {FIT_TYPE_NOTE[type]}
-                                          </p>
-                                        )}
-                                        {fi.trendNote && <p className="mt-1 text-zinc-500">{fi.trendNote}</p>}
-                                        {describeBaseline(cf) && <p className="mt-1 text-[13px] text-zinc-400">{describeBaseline(cf)}</p>}
-                                        {fi.sampleNote && <p className="mt-1 text-amber-600">{fi.sampleNote}</p>}
-                                        {llm && <p className="mt-2 text-zinc-600">{llm}</p>}
-                                        {/* 원 명세 13번(Audience Role) — Reach/Time Spent Share 둘 다 뚜렷할 때만 표시. */}
-                                        {fi.audienceRole && (
-                                          <p className="mt-2">
-                                            <span className="font-semibold" style={{ color: accentColor }}>시청자 유형</span> {AUDIENCE_ROLE_LABEL[fi.audienceRole]} — {AUDIENCE_ROLE_NOTE[fi.audienceRole]}
-                                          </p>
-                                        )}
-                                        {/* 원 명세 11번(GOLDEN/WEAK SLOT)·12번(SLOT TRANSFERABILITY) — 표본이 충분할 때만 표시. */}
-                                        {item.slotEfficiency && (item.slotEfficiency.goldenSlot || item.slotEfficiency.weakSlot || item.slotEfficiency.transferability) && (
-                                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                            {item.slotEfficiency.goldenSlot && (
-                                              <span>
-                                                <span className="font-semibold text-emerald-700">황금 슬롯</span> {item.slotEfficiency.goldenSlot.hour}시대
-                                                (자기 보통 수준의 {item.slotEfficiency.goldenSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.goldenSlot.airCount}회)
-                                              </span>
-                                            )}
-                                            {item.slotEfficiency.weakSlot && (
-                                              <span>
-                                                <span className="font-semibold text-rose-700">약세 슬롯</span> {item.slotEfficiency.weakSlot.hour}시대
-                                                (자기 보통 수준의 {item.slotEfficiency.weakSlot.shareVsMedianPct?.toFixed(0)}%, {item.slotEfficiency.weakSlot.airCount}회)
-                                              </span>
-                                            )}
-                                            {item.slotEfficiency.transferability && (
-                                              <span>
-                                                <span className="font-semibold" style={{ color: accentColor }}>슬롯 이동성</span>{" "}
-                                                {item.slotEfficiency.transferability === "FLEXIBLE"
-                                                  ? `유연형 — 최근 ${item.slotEfficiency.weeks}주 ${item.slotEfficiency.slotSampleCount}개 슬롯에서 성과 편차가 작아, 다른 시간대로 옮겨도 유지될 가능성이 관찰됩니다`
-                                                  : item.slotEfficiency.transferability === "PRIME_DEPENDENT"
-                                                    ? `프라임 의존형 — 강세가 주요시간(${PRIME_UNION_LABEL}) 구간에만 몰려 있어, 그 밖 시간대로 옮기면 성과 유지가 불확실합니다`
-                                                    : "슬롯 특화형 — 슬롯별 성과 편차가 커서, 이동 시 현재 성과가 유지될지 추가 검증이 필요합니다"}
-                                              </span>
-                                            )}
-                                          </div>
-                                        )}
-                                      </>
-                                    );
-                                  })()}
-                                </td>
-                              </tr>
-                            )}
-                            </Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="mt-3 text-base leading-relaxed text-zinc-700">
-                    {highlightNarrativeText(
-                      summarizeTable(
-                        contentFitsRows.map((r) => r.content_fit),
-                        (id) => contentFitsRows.find((r) => r.program_id === id)?.programs?.canonical_name ?? "이름 없음"
-                      ),
-                      NARRATIVE_UP_COLOR,
-                      NARRATIVE_DOWN_COLOR
-                    )}
-                  </p>
-                  {fitTypeSummary(contentFitsRows.map((r) => r.content_fit)) && (
-                    <p className="mt-2 text-sm text-zinc-600">
-                      {fitTypeSummary(contentFitsRows.map((r) => r.content_fit))} <span className="text-zinc-400">{CONTENT_FIT_LEGEND.type}</span>
-                    </p>
-                  )}
-                  <p className="mt-2 text-sm text-zinc-400">
-                    {CONTENT_FIT_LEGEND.verdict} {CONTENT_FIT_LEGEND.affinity}
-                  </p>
-                </>
-              )}
-            </>
-          )}
         </div>
 
         {/* PROGRAM PORTFOLIO / REACH×RATING(2026-08-27, Phase 2, "Channel Intelligence Report"

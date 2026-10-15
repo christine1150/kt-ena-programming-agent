@@ -109,19 +109,19 @@ async function main() {
   {
     const admin = W.visibleNav("admin").map((n) => n.id);
     const planner = W.visibleNav(P.roleOfSession({ role: "pd" })).map((n) => n.id);
-    check("관리자는 8개 메뉴를 모두 본다", admin.length === 8 && ["briefing", "channel", "portfolio", "compare", "ai", "content", "reports", "admin"].every((id) => admin.includes(id as never)));
-    check("편성자(PD)에게는 '관리' 메뉴가 보이지 않는다", !planner.includes("admin") && planner.length === 7);
+    check("관리자는 7개 메뉴를 모두 본다(사용자 지시 2026-10-15: 브리핑·채널별 분석·편성 비교·AI 편성·구매시뮬레이터·보고서·관리)", admin.length === 7 && admin.join() === "briefing,channel,compare,ai,content,reports,admin" && ["briefing", "channel", "compare", "ai", "content", "reports", "admin"].every((id) => admin.includes(id as never)));
+    check("편성자(PD)에게는 '관리' 메뉴가 보이지 않는다", !planner.includes("admin") && planner.length === 6);
     check("로그인하지 않으면 메뉴가 없다", W.visibleNav(null).length === 0);
     const plannerAvail = W.visibleExtras(W.NAV_ITEMS.find((n) => n.id === "content")!, "planner");
     const adminAvail = W.visibleExtras(W.NAV_ITEMS.find((n) => n.id === "content")!, "admin");
-    check("Avail 관리 진입점은 권리 수정 권한이 있는 관리자에게만", plannerAvail.length === 0 && adminAvail.length === 1);
+    check("상단 메뉴에 Avail 관리 진입점은 없다(사용자 지시 2026-10-15)", plannerAvail.length === 0 && adminAvail.length === 0);
     check("메뉴 최소 권한은 서버 권한표에 있는 행동만 쓴다", W.NAV_ITEMS.every((n) => n.minAction in P.MIN_ROLE));
 
     const active: [string, string | null][] = [
-      ["/", "briefing"], ["/channel/ENA", "channel"], ["/audience-report/portfolio", "portfolio"], ["/audience-report/ENA", "reports"],
+      ["/", "briefing"], ["/channel/ENA", "channel"], ["/audience-report/portfolio", "reports"], ["/audience-report/ENA", "reports"],
       ["/schedule-grid", "compare"], ["/ideal-schedule", "ai"], ["/ideal-schedule/purchase", "content"], ["/admin/login-history", "admin"], ["/pd/login", null],
     ];
-    check("경로별 활성 메뉴(구매 검토는 AI 편성이 아니라 콘텐츠·Avail, 포트폴리오와 채널 보고서 구분)", active.every(([p, id]) => W.activeNavId(p) === id), active.filter(([p, id]) => W.activeNavId(p) !== id).map(([p]) => p).join(","));
+    check("경로별 활성 메뉴(구매 검토는 AI 편성이 아니라 콘텐츠·Avail, 포트폴리오는 보고서 메뉴로 표시)", active.every(([p, id]) => W.activeNavId(p) === id), active.filter(([p, id]) => W.activeNavId(p) !== id).map(([p]) => p).join(","));
 
     const missing = W.COMPAT_ROUTES.filter((r) => !fs.existsSync(path.join(ROOT, r.file)));
     check("기존 화면 경로(호환 목록)의 파일이 모두 남아 있다 — 주소를 바꾸지 않았다", missing.length === 0, missing.map((m) => m.route).join(","));
@@ -135,7 +135,7 @@ async function main() {
     check("액션 문맥이 없으면 메뉴 링크에 아무것도 붙이지 않는다", W.navHref(W.NAV_ITEMS[0], W.EMPTY_CONTEXT) === "/" && W.actionQuerySuffix(() => null) === "");
     check("URL을 다시 쓸 때 유지할 액션 문맥 쿼리를 이어 붙인다", W.actionQuerySuffix((k) => ({ from: "act-1", ft: "제목 a", hour: "14" } as Record<string, string>)[k] ?? null) === "&from=act-1&ft=%EC%A0%9C%EB%AA%A9%20a&hour=14");
     check("슬롯 시 파라미터는 2~27 정수만 인정", W.parseFocusHour("14") === 14 && W.parseFocusHour("25") === 25 && W.parseFocusHour("1") === null && W.parseFocusHour("28") === null && W.parseFocusHour("1.5") === null && W.parseFocusHour("x") === null && W.parseFocusHour(null) === null);
-    check("메뉴 8개의 목적지가 모두 호환 목록의 실제 경로", W.NAV_ITEMS.every((n) => {
+    check("메뉴 7개의 목적지가 모두 호환 목록의 실제 경로", W.NAV_ITEMS.every((n) => {
       const href = W.navHref(n, { ...W.EMPTY_CONTEXT, channel: "ENA" }, "2026-10-04").split("?")[0];
       return W.COMPAT_ROUTES.some((r) => r.route === href || (r.route.includes("[") && new RegExp(`^${r.route.replace(/\[[^\]]+\]/g, "[^/]+")}$`).test(href)));
     }));

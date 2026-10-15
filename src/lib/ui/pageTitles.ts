@@ -4,7 +4,7 @@ export const SERVICE_NAME = "KT ENA 편성 AI Agent";
 
 export const PAGE_TITLE = {
   home: "브리핑",
-  channel: "채널 분석",
+  channel: "채널별 분석",
   report: "보고서",
   portfolio: "포트폴리오 보고서",
   reportView: "보고서 문서 보기",
