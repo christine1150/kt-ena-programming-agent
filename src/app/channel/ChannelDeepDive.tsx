@@ -5277,10 +5277,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             ({narrativeSignal.today_rank}) <span className="text-xs">경쟁군 목표 {tr.value}위</span>
                           </>
                         ) : (
-                          // 2026-10-15(외부 검토 지적): "(3/6)"만으로는 무엇의 순위인지 알 수 없어 '위'와 '목표'를 밝힌다.
-                          <span title={`기준일 당일 순위 ${narrativeSignal.today_rank}위 / 목표 순위 ${tr.value ?? "-"}위`}>
-                            ({narrativeSignal.today_rank}위/목표 {tr.value ?? "-"}위)
-                          </span>
+                          <>
+                            ({narrativeSignal.today_rank}/{tr.value ?? "-"})
+                          </>
                         );
                       })()}
                     </span>
