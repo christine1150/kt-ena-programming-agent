@@ -215,7 +215,7 @@ export function scheduleCheck(item: ContentFitItem): string {
       return item.slotIndex !== null && item.slotIndex >= keep ? "최근 4주 하락이 멈추면 '유지'로 돌아갑니다" : `${keep}배 이상 회복하면 '유지', ${watch}배 아래로 내려가면 '교체 검토'`;
     case "MOVE":
     case "REPLACE":
-      return `옮긴(바꾼) 뒤 동시간대 평균 ${keep}배 이상이면 자리 잡은 것으로 봅니다`;
+      return `변경 후 동시간대 평균 ${keep} 이상이면 유지`; // 2026-10-15 사용자 요청: 문구 단순화
     default:
       return "—";
   }
