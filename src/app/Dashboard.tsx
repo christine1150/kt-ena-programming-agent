@@ -17,6 +17,7 @@ import { highlightNarrativeText, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR } from
 // ChannelDeepDive.tsx에는 그대로 남아있음, 여기서만 제거).
 import { formatDateWithDowDots } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun } from "@/lib/josa";
+import { shortenProgramNames } from "@/lib/programAlias";
 import {
   buildEnaOriginalHighlightSentence as buildEnaOriginalHighlightSentenceShared,
   buildRerunHighlightSentence as buildRerunHighlightSentenceShared,
@@ -3919,7 +3920,8 @@ function buildReviewChannelColorMap(h: OriginalDailyItem, themeColorByCode: Map<
 
 // 문장 속 채널명을 그 채널 색으로 칠한다. "ENA"가 "ENA Drama" 안에서 먼저 매칭되지 않도록
 // 긴 이름부터 시도한다(정규식 대체 순서).
-function highlightChannelNames(text: string, colorMap: Map<string, string>) {
+function highlightChannelNames(textIn: string, colorMap: Map<string, string>) {
+  const text = shortenProgramNames(textIn); // 긴 제목은 표시용 약칭으로(나는SOLO그후사랑은계속된다 → 나솔사계)
   if (colorMap.size === 0) return text;
   const names = Array.from(colorMap.keys()).sort((a, b) => b.length - a.length);
   const pattern = new RegExp(`(${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "g");
@@ -4737,7 +4739,7 @@ function ChannelNarrativeCard({
                   시청률·등위·등락은 왼쪽에 이미 있으므로 다시 쓰지 않고, 목표 달성률·조치·"현재 편성 유지"는 쓰지 않는다. 해설 문단(규칙 기반/LLM)은 그대로 두고 종류별 한 줄로 나눠 보여 준다. */}
               <div className="min-w-0 max-w-xl">
                 {(() => {
-                  const facts = splitInsightFacts(line.text, { dropProgramVsSlot: line.actionKind === "program" });
+                  const facts = splitInsightFacts(shortenProgramNames(line.text), { dropProgramVsSlot: line.actionKind === "program" });
                   return facts.length > 0 ? (
                     <ul className="flex flex-col gap-1">
                       {facts.map((f, k) => (

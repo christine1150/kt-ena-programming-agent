@@ -45,7 +45,8 @@
     "test:month-math": "tsx scripts/test-month-math.ts",
     "test:stats": "tsx scripts/test-stats.ts",
     "test:ask-export": "tsx scripts/test-ask-export.ts",
-    "test:content-fit": "tsx scripts/test-content-fit.ts"
+    "test:content-fit": "tsx scripts/test-content-fit.ts",
+    "test:weak-verdict": "tsx scripts/test-weak-verdict.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

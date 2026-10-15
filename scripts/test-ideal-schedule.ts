@@ -779,14 +779,15 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
 {
   const hole = { program: "연애박사", hour: 14, ratioPct: 3 };
   const brief = { cause: "최근 4회 중 3회가 기준선(0.020) 아래입니다", action: "다음 방영이 0.020 아래이면 이동·교체 검토" };
-  const remedy = { lines: [], concrete: false, sample: 7, brief, hole };
+  const verdict = { status: "short_persist" as const, statusKo: "단기 부진 지속", holdReason: null, today: 0.001, median: 0.025, ratioPct: 4, dropLine: 0.02, sampleCount: 7, lowCount: 3, ownCount: 7, missingCount: 0 };
+  const remedy = { lines: [], concrete: false, sample: 7, brief, hole, verdict };
   const base: AiSuggestionPayload = { channelCode: "ENA_PLAY", weekStart: "2026-10-19", currentExpected: null, aiExpected: null, change: null, remedy };
   const weak = { weekday: 2, startMin: 14 * 60 + 23, from: "연애박사", to: "입터지는실험실", gain: 0.0745, certainty: "LOW" as const, sampleCount: 4, evidence: "weak" as const };
   const input = { achievementPct: 56, rating: 0.017, goalRating: 0.03, priorPct: 37, structural: true, program: null };
   const c1 = buildCardCopy({ ...input, ai: { ...base, change: weak } });
-  check("홈 문구 진단: 목표 달성률과 가장 부진한 프로그램·시간대가 함께 나온다", c1.headline === "목표의 56% 달성 — 14시 '연애박사'가 가장 부진", c1.headline ?? "");
-  check("홈 문구 근거: 비교 기준(같은 요일·시간대 최근 8회 중앙값)과 수치를 남긴다", !!c1.cause && c1.cause.startsWith("14시 '연애박사'는 같은 요일·시간대 최근 8회 중앙값의 3% 수준") && c1.cause.includes("최근 4회 중 3회"), c1.cause ?? "");
-  check("홈 문구 근거: 구조적 부진은 추상어 대신 최근 2주 수치로 풀어 쓴다", !!c1.cause && c1.cause.includes("최근 2주 같은 요일도 목표의 37% 수준") && !c1.cause.includes("구조적") && !(c1.headline ?? "").includes("구조적"));
+  check("홈 문구 진단: 목표 달성률과 가장 부진한 프로그램·시간대가 함께 나온다", c1.headline === "목표의 56% 달성 — 같은 자리 중앙값 대비 하락이 가장 큰 곳은 14시 '연애박사'", c1.headline ?? "");
+  check("홈 문구 근거: 비교 기준(같은 요일·시간대 최근 N회 중앙값)과 오늘 수치를 남긴다", !!c1.cause && c1.cause.startsWith("오늘 0.0010, 같은 요일·시간대 최근 7회 중앙값 0.025, 중앙값의 4%") && c1.cause.includes("최근 4회 중 3회"), c1.cause ?? "");
+  check("홈 문구 근거: 구조적 부진은 추상어 대신 최근 2주 수치로 풀어 쓴다", !!c1.cause && c1.cause.includes("채널 전체는 전주·전전주 같은 요일도 목표의 37% 이하") && !c1.cause.includes("구조적") && !(c1.headline ?? "").includes("구조적"));
   check("홈 문구 조치: 테스트 후보는 테스트인 이유와 표본 수를 밝히고 교체를 확정하지 않는다", !!c1.action && c1.action.includes("표본이 4회뿐") && c1.action.includes("시험 편성") && !c1.action.includes("0.074"), c1.action ?? "");
   check("홈 문구: '편성 조정만으론 한계'·'반복 약세'·'구조적 격차' 같은 추상어를 쓰지 않는다", ![c1.headline, c1.cause, c1.action, ...c1.more].join(" ").match(/한계|반복 약세|구조적 격차/));
   const ok = { ...weak, evidence: "ok" as const, certainty: "MID" as const, sampleCount: 12 };

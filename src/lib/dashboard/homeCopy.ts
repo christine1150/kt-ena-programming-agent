@@ -4,10 +4,12 @@
 // 원칙: 핵심 수치와 비교 근거를 지우지 않는다 / '구조적 격차'·'반복 약세' 같은 추상어를 단독으로 쓰지 않는다 /
 //       카드마다 같은 틀을 기계적으로 채우지 않고 가장 중요한 조치 한 가지를 앞에 둔다(나머지는 '다른 방법'으로 접어 둔다) /
 //       근거가 약하면 교체를 권하지 않고 테스트인 이유와 표본 수를 밝힌다 / 구매 검토는 구체적 후보와 추천 근거가 있을 때만 말한다.
-import { josaEunNeun, josaIga } from "@/lib/josa";
+import { josaEunNeun } from "@/lib/josa";
 import { formatRatingDelta } from "@/lib/metrics";
 import { RECO_BUY_TEXT_MIN_VS_AVG, RECO_EVIDENCE_KO, RECO_MIN_VS_AVG, recoEvidence } from "@/lib/purchaseSim/recoEvidence";
+import { shortenProgramNames } from "@/lib/programAlias";
 import { heldLabel, type HeldRecommendation } from "./availHeld";
+import { fmtRating } from "./weakSlotVerdict";
 import type { OriginalLeverageView } from "./originalClassify";
 import type { WeakSlotRemedyView } from "./weakSlotView";
 
@@ -34,7 +36,7 @@ export interface CardCopyInput {
   achievementPct: number | null;
   rating: number | null;
   goalRating: number | null;
-  /** 전주·전전주 같은 요일 중 높은 값이 목표의 몇 %인가(없으면 null). 구조적 부진 판정이 참일 때만 문구에 쓴다 */
+  /** 전주·전전주 같은 요일 중 높은 값이 목표의 몇 %인가(없으면 null). 채널 전체 시청률 기준이며, 구조적 부진 판정이 참일 때만 문구에 쓴다 */
   priorPct: number | null;
   structural: boolean;
   /** 카드가 이미 지목한 약한 프로그램(위 줄이 그 프로그램을 설명한다) */
@@ -90,18 +92,21 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
   if (below) {
     const pct = `목표의 ${Math.round(input.achievementPct!)}% 달성`;
     if (program) headline = `${pct} — '${program.name}'${program.hour !== null ? `(${program.hour}시)` : ""} 성과 점검 필요`;
-    else if (r?.hole) headline = `${pct} — ${r.hole.hour}시 '${r.hole.program}'${josaIga(r.hole.program)} 가장 부진`;
+    else if (r?.hole) headline = `${pct} — 같은 자리 중앙값 대비 하락이 가장 큰 곳은 ${r.hole.hour}시 '${r.hole.program}'`;
     else headline = `${pct} — 전반적으로 시청률이 목표에 못 미침`;
   }
 
   // ── 원인 및 근거 ──
   const causeParts: string[] = [];
-  if (r?.hole && !program) {
-    const pct = r.hole.ratioPct !== null ? `의 ${r.hole.ratioPct}% 수준` : "와 비교할 방영 기록이 부족";
-    causeParts.push(sentence(`${r.hole.hour}시 '${r.hole.program}'${josaEunNeun(r.hole.program)} 같은 요일·시간대 최근 8회 중앙값${pct}`));
+  const v = r?.verdict ?? null;
+  if (r?.hole && !program && v && v.today !== null && v.median !== null) {
+    // 표본 부족·중앙값 0이면 이 문장 없이 remedy.brief.cause(오늘 값과 직전 방영)가 현상을 말한다
+    const ratio = v.today > 0 && v.ratioPct !== null ? `, 중앙값의 ${Math.round(v.ratioPct)}%` : "";
+    // 제목·시각은 바로 위 핵심 결과 줄에 이미 있어 되풀이하지 않는다(사용자 기준 2026-10-15)
+    causeParts.push(sentence(`오늘 ${fmtRating(v.today)}, 같은 요일·시간대 최근 ${v.sampleCount}회 중앙값 ${fmtRating(v.median)}${ratio}`));
   }
   if (r?.brief?.cause) causeParts.push(sentence(r.brief.cause));
-  if (input.structural && input.priorPct !== null) causeParts.push(sentence(`최근 2주 같은 요일도 목표의 ${Math.round(input.priorPct)}% 수준이라 오늘만의 문제가 아닙니다`));
+  if (input.structural && input.priorPct !== null) causeParts.push(sentence(`채널 전체는 전주·전전주 같은 요일도 목표의 ${Math.round(input.priorPct)}% 이하여서 목표 미달이 오늘만의 일은 아닙니다`));
   const cause = causeParts.length > 0 ? causeParts.join(" ") : null;
 
   // ── 조치 후보(중요도 순) ──
@@ -168,5 +173,7 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
 
   // 과거 변경 근거는 맨 앞 조치가 이 보완 제안의 조치일 때만 붙인다(다른 조치 옆에 엉뚱한 근거가 놓이지 않게)
   const basis = r?.history?.line && r.brief && levers[0].text === sentence(r.brief.action) ? sentence(r.history.line) : null;
-  return { headline, cause, action: levers[0].text, positive: levers[0].positive, more: levers.slice(1).map((l) => l.text), basis };
+  // 표시용 약칭(긴 제목 → 통용 약칭) — 판정·집계에는 쓰이지 않는다
+  const short = (t: string | null) => (t === null ? null : shortenProgramNames(t));
+  return { headline: short(headline), cause: short(cause), action: shortenProgramNames(levers[0].text), positive: levers[0].positive, more: levers.slice(1).map((l) => shortenProgramNames(l.text)), basis: short(basis) };
 }
