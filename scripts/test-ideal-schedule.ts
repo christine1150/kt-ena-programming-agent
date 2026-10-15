@@ -138,6 +138,28 @@ const genreOf = (name: string): Genre => (name === "드라마A" ? "드라마" : 
   const snap = (x: typeof fs) => JSON.stringify({ units: x.units, e: x.rating.expected("P2", "UNTAGGED", "예능", 1, 23) });
   check("[18] 동일 입력(순서만 다름) → 동일 결과", snap(fs) === snap(fs2));
 
+  // 튄 방영 제외(2026-10-16): 새벽 8번 중 7번이 0, 한 번 큰 값 → 지수에서 그 한 번을 뺀다. 꾸준한 프로그램은 그대로.
+  {
+    const days = ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06", "2026-09-08", "2026-09-09"];
+    const air: RawA[] = [];
+    days.forEach((d, i) => {
+      air.push(mk(d, "04:00:00", "05:00:00", "PX", i === 5 ? 0.058 : 0)); // 한 번만 튐
+      air.push(mk(d, "04:00:00", "05:00:00", "PF", 0.01)); // 같은 슬롯의 다른 프로그램(baseline 형성)
+      air.push(mk(d, "20:00:00", "21:00:00", "PY", 0.4 + 0.02 * i)); // 꾸준히 높은 프로그램
+    });
+    const raw2 = { ...baseRaw, holidays: [] as string[], dates_with_data: days, airings: air };
+    const fsT = buildFeatureSet(mapOwnAirings(raw2 as never), { ...opts, minN: 3 }, () => "미분류" as Genre);
+    const px = fsT.rating.rawIndex("p|PX");
+    const py = fsT.rating.rawIndex("p|PY");
+    check("튄 방영 제외: 8번 중 한 번만 튄 새벽 프로그램은 지수에서 그 방영을 뺀다(지수 0, 표본 7)", px.n === 7 && close(px.index ?? -1, 0), `n=${px.n} idx=${px.index}`);
+    check("튄 방영 제외: 꾸준한 프로그램은 8회 모두 그대로 쓴다", py.n === 8 && (py.index ?? 0) > 1, `n=${py.n} idx=${py.index}`);
+    const eT = fsT.rating.expected("PX", "UNTAGGED", "미분류", 4, 17);
+    check("튄 방영 제외: 그 프로그램을 낮 시간대에 옮겨도 기대 지수가 1을 넘지 않는다", eT.index <= 1, `idx=${eT.index}`);
+    // 근거가 minN 아래로 줄어들 때는 빼지 않는다(표본 부족 경로로 처리)
+    const fsS = buildFeatureSet(mapOwnAirings({ ...raw2, airings: air.filter((a) => a.program_id !== "PX" || a.date <= "2026-09-03" || a.date === "2026-09-06") } as never), { ...opts, minN: 4 }, () => "미분류" as Genre);
+    check("튄 방영 제외: 빼면 minN 미만이 되는 경우는 빼지 않는다", fsS.rating.rawIndex("p|PX").n === 4, `n=${fsS.rating.rawIndex("p|PX").n}`);
+  }
+
   // 공휴일 포함 옵션이면 09-21 방영이 들어온다
   const fs3 = buildFeatureSet(mapOwnAirings(baseRaw), { ...opts, excludeHolidays: false }, genreOf);
   check("공휴일 포함 설정 시 표본 증가", fs3.unitsByKey.get("P1|UNTAGGED")!.sample_count === 4);

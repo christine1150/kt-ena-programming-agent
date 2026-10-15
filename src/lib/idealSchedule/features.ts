@@ -10,6 +10,7 @@
 //    구체 → 일반 6단계(①프로그램+요일+시 ②프로그램+시 ③프로그램 전체 ④장르+요일+시 ⑤장르+시
 //    ⑥채널 baseline)를 표본 수 기반으로 수축: idx_L = (n_L·idx_L + k·idx_{L+1}) / (n_L + k), idx_6 = 1.
 //    k·최근 가중치·최소 표본 등 모든 상수는 ideal_schedule_config에서 온다(임의 보정값 없음).
+//    단, 한두 번 튄 방영(상위 1~2개가 가중 시청률 합의 공정 몫보다 50%p 넘게 차지)은 지수에서 뺀다(trimmedAcc, 2026-10-16).
 // 3) rating NULL은 표본에서 제외, 0은 포함. 방송 없음은 행이 없는 것.
 // 4) 본방/재방: 슬롯 적합도·후보 단위는 본/재/미표기를 나눈 "프로그램×방영유형", ③프로그램 전체
 //    성과는 본+재 합산(rerun-tag 규칙, 기존 Fit Score와 동일).
@@ -39,6 +40,8 @@ interface Acc {
   n: number;
   sumWR: number;
   sumWB: number;
+  /** 방영별 (가중치, 시청률, 슬롯 baseline) — 한두 번 튄 방영을 가려내 지수에서 빼기 위해 보관한다(2026-10-16) */
+  items: { w: number; r: number; b: number }[];
 }
 
 export interface LevelDetail {
@@ -74,14 +77,38 @@ function median(values: number[]): number | null {
 }
 
 function addAcc(map: Map<string, Acc>, key: string, w: number, r: number, b: number) {
-  const acc = map.get(key) ?? { n: 0, sumWR: 0, sumWB: 0 };
+  const acc = map.get(key) ?? { n: 0, sumWR: 0, sumWB: 0, items: [] };
   acc.n += 1;
   acc.sumWR += w * r;
   acc.sumWB += w * b;
+  acc.items.push({ w, r, b });
   map.set(key, acc);
 }
 
-const accIndex = (acc: Acc | undefined): number | null => (acc && acc.sumWB > 0 ? acc.sumWR / acc.sumWB : null);
+/** 튄 방영 판정: 상위 k개(k≤2) 방영이 가중 시청률 합의 "공정 몫(k/n)보다 50%p 넘게" 차지하면 그 방영들을 지수에서 뺀다.
+ *  한두 번 우연히 높게 잡힌 시청률(특히 평균이 0에 가까운 새벽 슬롯 — 비율이 수 배로 부풀려진다)이 지수 전체를 끌어올려
+ *  다른 시간대 기대값까지 부풀리는 것을 막는다. 근거가 minN 아래로 줄어들면 빼지 않는다(그 경우는 기존 표본 부족 경로로 처리).
+ *  실제 사례(2026-10-16 ENA Play 골든아워4): 새벽 방영 8번 중 7번이 0, 한 번 0.058 → 지수 278%(기대 0.094%) → 빼면 0. */
+export const SPIKE_EXCESS_SHARE = 0.5;
+export const SPIKE_MAX_DROP = 2;
+
+function trimmedAcc(acc: Acc | undefined, minN: number): { n: number; index: number | null } {
+  if (!acc) return { n: 0, index: null };
+  let items = acc.items;
+  const total = items.reduce((s, x) => s + x.w * x.r, 0);
+  if (total > 0) {
+    const byR = [...items].sort((x, y) => y.r * y.w - x.r * x.w);
+    let drop = 0;
+    for (let k = 1; k <= SPIKE_MAX_DROP && items.length - k >= minN; k++) {
+      if (byR[k - 1].r <= 0) break; // 시청률 0인 방영은 튄 값이 아니다
+      const share = byR.slice(0, k).reduce((s, x) => s + x.w * x.r, 0) / total;
+      if (share > k / items.length + SPIKE_EXCESS_SHARE) drop = k;
+    }
+    if (drop > 0) items = byR.slice(drop);
+  }
+  const wb = items.reduce((s, x) => s + x.w * x.b, 0);
+  return { n: items.length, index: wb > 0 ? items.reduce((s, x) => s + x.w * x.r, 0) / wb : null };
+}
 
 /** 분석 창(as_of − lookback + 1 ~ as_of). */
 export function featureWindow(opts: { asOfDate: string; lookbackDays: number }): { from: string; to: string } {
@@ -173,9 +200,9 @@ export class MetricModel {
   }
 
   rawIndex(key: string): { n: number; index: number | null } {
-    const a = this.acc.get(key);
-    return { n: a?.n ?? 0, index: accIndex(a) };
+    return trimmedAcc(this.acc.get(key), this.opts.minN);
   }
+
 
   /** 프로그램×방영유형의 방영별 지수 변동계수 기반 안정성(표본 2 미만이면 계산하지 않음 → null). */
   stability(unitKey: string): { volatility: number | null; stability: number | null } {
@@ -246,6 +273,7 @@ export class MetricModel {
       const raw = key ? this.rawIndex(key) : { n: 0, index: null };
       return { level, n: raw.n, index: raw.index };
     });
+    const base = this.baseline(dow, hour);
     let idx = 1; // ⑥ 채널 baseline = 지수 1
     for (let i = levels.length - 1; i >= 0; i--) {
       const l = levels[i];
@@ -254,7 +282,6 @@ export class MetricModel {
     const hit = levels.find((l) => l.index !== null && l.n >= this.opts.minN);
     const fallbackLevel = (hit?.level ?? 6) as ExpectedResult["fallbackLevel"];
     const sampleCount = hit?.n ?? 0;
-    const base = this.baseline(dow, hour);
     const stab = this.stability(unit).stability;
     // 신뢰도 = 프로그램 자체 표본 충족도 × 안정성. 장르·채널 단계(4~6)로 폴백한 기대값은 그 프로그램에 대한
     // 직접 근거가 아니므로 신뢰도에 넣지 않는다(2026-09-30 실데이터 점검: 장르 표본이 많아 신뢰도 1.0이
