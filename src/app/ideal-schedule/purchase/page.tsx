@@ -54,6 +54,9 @@ type SlotRow = { isoDow: number; startTime: string };
 type Resp = PredictResponse & { ok: boolean; message?: string };
 type RecoPick = { name: string; repKey: string; prediction: number; low: number | null; high: number | null; asOf: string; stale: boolean; staleMessages: string[]; target: string };
 
+// 구매 검토 후보 목록의 열 정렬(데스크톱): 프로그램 | 장르·비교 실적 | 예상 시청률 | 배수 | 비교 근거 | 예측 근거
+const RECO_GRID = "md:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_6rem_4rem_4.5rem_4.5rem]";
+const RECO_EVIDENCE_TONE: Record<string, string> = { strong: "text-zinc-600", medium: "text-amber-700", weak: "text-rose-600" };
 const fmt = (v: number | null | undefined, d = 3) => (v === null || v === undefined || !Number.isFinite(v) ? "-" : v.toFixed(d));
 const defaultKpiTargets = (ch: string): ("A2049" | "HH")[] => (GROUP_A.includes(ch) ? ["A2049", "HH"] : ["HH"]);
 
@@ -285,12 +288,12 @@ function PurchaseSimulator() {
   return (
     <div className="min-h-screen bg-zinc-50">
       <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 md:px-6">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 md:px-6">
           <div className="flex items-center gap-3">
             <VendingMachineIcon size={22} />
             <div>
               <h1 className="text-base font-semibold text-zinc-900">콘텐츠 구매 시뮬레이터</h1>
-              <p className="text-xs text-zinc-500">구매 검토 프로그램을 우리 채널에 편성했을 때의 예상 시청률(기본: 최근 3개월 실적 기준)</p>
+              <p className="text-xs text-zinc-500">편성 시 예상 시청률</p>
             </div>
           </div>
           <Link href={`/ideal-schedule?channel=${channel}`} title={VENDING.linkLabel} className="rounded-full px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
@@ -299,7 +302,7 @@ function PurchaseSimulator() {
         </div>
         {groupKey && (
           <div className="border-t border-zinc-100 bg-zinc-50/90" aria-label="선택한 작품과 비교 기준">
-            <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 text-xs text-zinc-600 md:px-6">
+            <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 text-xs text-zinc-600 md:px-6">
               <span className="text-sm font-semibold text-zinc-900">{groupName}</span>
               <span className="hidden md:inline">
                 {CHANNEL_OPTS.find((c) => c.code === channel)?.name} 편성 가정 · {targets.map((t) => TARGET_NAME[t]).join(", ") || "타깃 미선택"} · {useSlots ? slots.map((s) => `${DOW[s.isoDow - 1]} ${s.startTime}`).join(", ") : "월 평균(최근 편성 구성)"} · {WINDOW_OPTS.find((w) => w.days === windowDays)?.label.replace(" (기본)", "")}
@@ -324,16 +327,16 @@ function PurchaseSimulator() {
         )}
       </header>
 
-      <div className="mx-auto max-w-5xl space-y-4 px-4 py-5 md:px-6">
-        {/* 검색 */}
+      <div className="mx-auto max-w-7xl space-y-4 px-4 py-5 md:px-6">
+        {/* 검색 + 편성 채널·실적 기간(검색 전에도 보이며 구매 검토 후보 목록에도 적용된다) */}
         <section className="rounded-2xl border border-zinc-200 bg-white p-4">
-          <label className="mb-1.5 block text-sm font-medium text-zinc-800">어떤 프로그램인가요?</label>
           <div className="flex gap-2">
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && search()}
               placeholder="예: 황금어장 라디오스타 · 라디오스타 금요일 밤 10시 수도권2049"
+              title="오타·띄어쓰기·부제 차이가 있어도 찾습니다. 요일·시각·타깃을 같이 적으면 아래 조건에 자동으로 채워집니다."
               className={`${input} flex-1`}
               aria-label="프로그램명 또는 문장"
             />
@@ -341,39 +344,34 @@ function PurchaseSimulator() {
               찾기
             </button>
           </div>
-          <p className="mt-1.5 text-xs text-zinc-500">오타·띄어쓰기·부제 차이가 있어도 찾습니다. 요일·시각·타깃을 같이 적으면 아래 조건에 자동으로 채워집니다.</p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-zinc-500">
+            <label className="inline-flex items-center gap-2">
+              편성 채널
+              <select aria-label="편성할 채널" value={channel} onChange={(e) => { setChannel(e.target.value); setTargets(defaultKpiTargets(e.target.value)); }} className={input}>
+                {CHANNEL_OPTS.map((c) => (
+                  <option key={c.code} value={c.code}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="inline-flex items-center gap-2">
+              실적 기간
+              <select aria-label="실적 기준 기간" value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} className={input}>
+                {WINDOW_OPTS.map((w) => (
+                  <option key={w.days} value={w.days}>{w.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {windowDays !== 91 && <p className="mt-1.5 text-xs text-amber-700">예상 범위·신뢰도는 3개월 기준으로 보정한 값이라 참고용입니다.{windowDays >= 364 ? " 계산에 최대 1분 걸릴 수 있습니다." : ""}</p>}
           {busy && <p className="mt-2 text-sm text-zinc-500">{busy}</p>}
           {error && <p className="mt-2 text-sm text-rose-600" role="alert">{error}</p>}
-        </section>
-
-        {/* 채널·기간: 검색 전에도 보이며 구매 추천 목록에도 적용된다 */}
-        <section className="rounded-2xl border border-zinc-200 bg-white p-4">
-          <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <div className="mb-1 text-xs text-zinc-500">편성할 채널</div>
-                <select aria-label="편성할 채널" value={channel} onChange={(e) => { setChannel(e.target.value); setTargets(defaultKpiTargets(e.target.value)); }} className={`${input} w-full`}>
-                  {CHANNEL_OPTS.map((c) => (
-                    <option key={c.code} value={c.code}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div className="mb-1 text-xs text-zinc-500">실적 기준 기간</div>
-                <select aria-label="실적 기준 기간" value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} className={`${input} w-full`}>
-                  {WINDOW_OPTS.map((w) => (
-                    <option key={w.days} value={w.days}>{w.label}</option>
-                  ))}
-                </select>
-                {windowDays !== 91 && <p className="mt-1 text-xs text-amber-700">예상 범위·신뢰도는 3개월 기준으로 보정한 값이라 참고용입니다.{windowDays >= 364 ? " 계산에 최대 1분 걸릴 수 있습니다." : ""}</p>}
-              </div>
-          </div>
         </section>
 
         {/* 식별 결과 */}
         {!identity && groupKey && (
           <section className="rounded-2xl border border-zinc-200 bg-white p-4">
             <h2 className="text-base font-semibold text-zinc-900">{groupName}</h2>
-            <p className="mt-1 text-xs text-zinc-500">구매 검토 후보 목록에서 고른 프로그램입니다. 조건을 확인하고 예상 시청률을 보세요.</p>
+            <p className="mt-1 text-xs text-zinc-500">후보 목록에서 고른 프로그램</p>
           </section>
         )}
         {identity && (
@@ -382,8 +380,8 @@ function PurchaseSimulator() {
               <div>
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <h2 className="text-base font-semibold text-zinc-900">{identity.chosen.displayName}</h2>
-                  <span className="text-xs text-zinc-500">제목 일치 {Math.round(identity.identityConfidence * 100)}% (이름이 비슷한 정도일 뿐, 예측 근거 강도와 별개)</span>
-                  {identity.chosen.isSpecial && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">스페셜·특집 계열(본편과 별개 프로그램)</span>}
+                  <span className="text-xs text-zinc-500" title="이름이 비슷한 정도일 뿐, 예측 근거 강도와 별개">제목 일치 {Math.round(identity.identityConfidence * 100)}%</span>
+                  {identity.chosen.isSpecial && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700" title="스페셜·특집 계열은 본편과 별개 프로그램입니다">특집 계열</span>}
                 </div>
                 <p className="mt-1 text-sm text-zinc-600">
                   최근 91일 방영 {identity.chosen.airings91d}회 · 방영 채널 {[...identity.chosen.ownChannels, ...identity.chosen.compChannels].slice(0, 8).join(", ") || "-"}
@@ -413,26 +411,25 @@ function PurchaseSimulator() {
         {(identity || groupKey) && (groupKey || !needChoose) && (
           <section className="rounded-2xl border border-zinc-200 bg-white p-4">
             <h2 className="mb-3 text-sm font-semibold text-zinc-900">편성 조건</h2>
-            <div className="grid gap-4 md:grid-cols-1">
-              <div>
-                <div className="mb-1 text-xs text-zinc-500">시청 타깃(채널 핵심 타깃이 기본)</div>
-                <div className="flex gap-3 pt-1.5 text-sm text-zinc-700">
-                  {(["A2049", "HH"] as const).map((t) => (
-                    <label key={t} className="inline-flex items-center gap-1.5">
-                      <input type="checkbox" checked={targets.includes(t)} onChange={(e) => setTargets((cur) => (e.target.checked ? [...cur, t] : cur.filter((x) => x !== t)))} />
-                      {TARGET_NAME[t]}
-                    </label>
-                  ))}
-                </div>
-                <p className="mt-1 text-xs text-zinc-400">두 타깃은 서로 환산하지 않고 각각 따로 계산합니다.</p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-zinc-700" title="시청 타깃 — 채널 핵심 타깃이 기본이며, 두 타깃은 서로 환산하지 않고 각각 따로 계산합니다.">
+                <span className="text-xs text-zinc-500">시청 타깃</span>
+                {(["A2049", "HH"] as const).map((t) => (
+                  <label key={t} className="inline-flex items-center gap-1.5">
+                    <input type="checkbox" checked={targets.includes(t)} onChange={(e) => setTargets((cur) => (e.target.checked ? [...cur, t] : cur.filter((x) => x !== t)))} />
+                    {TARGET_NAME[t]}
+                  </label>
+                ))}
               </div>
+              <button type="button" onClick={run} disabled={!groupKey || !targets.length || !!busy} className="ml-auto rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
+                예상 시청률 보기
+              </button>
             </div>
             <div className="mt-4 border-t border-zinc-100 pt-3">
-              <label className="inline-flex items-center gap-2 text-sm font-medium text-zinc-700">
+              <label className="inline-flex items-center gap-2 text-sm font-medium text-zinc-700" title="끄면 채널의 최근 편성 구성을 기준으로 한 달 평균 예상 시청률을 보여줍니다. 켜면 시간대를 여러 개 넣어 비교할 수 있습니다.">
                 <input type="checkbox" checked={useSlots} onChange={(e) => setUseSlots(e.target.checked)} />
-                추가 분석: 요일·시작 시각별로 비교
+                요일·시작 시각별 비교
               </label>
-              <p className="mt-0.5 text-xs text-zinc-400">끄면 채널의 최근 편성 구성을 기준으로 한 달 평균 예상 시청률을 보여줍니다. 켜면 시간대를 여러 개 넣어 비교할 수 있습니다.</p>
               {useSlots && (
                 <div className="mt-2 space-y-1.5">
                   {slots.map((s, i) => (
@@ -456,18 +453,13 @@ function PurchaseSimulator() {
             </div>
             <div className="mt-4 grid gap-3 border-t border-zinc-100 pt-3 md:grid-cols-2">
               <div>
-                <label htmlFor="desired-date" className="mb-1 block text-xs text-zinc-500">편성 희망 시작일(선택 — 권리 기간 판정에 쓰며, 비우면 오늘 이후 첫 해당 요일)</label>
+                <label htmlFor="desired-date" className="mb-1 block text-xs text-zinc-500" title="권리 기간 판정에 쓰며, 비우면 오늘 이후 첫 해당 요일을 기준으로 합니다.">편성 희망 시작일(선택)</label>
                 <input id="desired-date" type="date" value={desiredDate} onChange={(e) => setDesiredDate(e.target.value)} className={input} />
               </div>
-              <label className="flex items-start gap-2 text-xs text-zinc-600">
-                <input type="checkbox" className="mt-0.5" checked={saveHistory} onChange={(e) => setSaveHistory(e.target.checked)} />
-                <span>이번 조회를 예측 기록으로 남김 — 방송 후 실제 값과 비교하기 위한 기록(기준일·모델 포함)이며 계약 권리 소진·구매 요청과 무관합니다. 끄면 탐색만 합니다.</span>
+              <label className="flex items-center gap-2 text-xs text-zinc-600" title="방송 후 실제 값과 비교하기 위한 기록(기준일·모델 포함)이며 계약 권리 소진·구매 요청과 무관합니다. 끄면 탐색만 합니다.">
+                <input type="checkbox" checked={saveHistory} onChange={(e) => setSaveHistory(e.target.checked)} />
+                <span>예측 기록으로 남김</span>
               </label>
-            </div>
-            <div className="mt-4">
-              <button type="button" onClick={run} disabled={!groupKey || !targets.length || !!busy} className="rounded-full bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-40">
-                예상 시청률 보기
-              </button>
             </div>
           </section>
         )}
@@ -475,7 +467,7 @@ function PurchaseSimulator() {
         {/* 결과 */}
         {result && (
           <div ref={resultRef} className={`space-y-4 ${ranKey !== condKey ? "opacity-60" : ""}`}>
-            {ranKey !== condKey && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">작품·채널·타깃·시간대·기간이 바뀌어 아래 결과는 이전 조건의 값입니다. &lsquo;예상 시청률 보기&rsquo;를 다시 눌러 갱신하세요.</p>}
+            {ranKey !== condKey && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">조건이 바뀌었습니다. &lsquo;예상 시청률 보기&rsquo;로 갱신하세요.</p>}
             {recoPick &&
               (() => {
                 const sim = result.results.find((t) => t.target === recoPick.target)?.slots[0];
@@ -487,20 +479,22 @@ function PurchaseSimulator() {
                   </p>
                 );
               })()}
-            {result.results.map((t) => (
-              <TargetCard key={t.target} t={t} res={result} rolling={rolling[t.target]} onRolling={() => loadRolling(t.target)} />
-            ))}
+            <div className={`grid items-start gap-4 ${result.results.length > 1 ? "lg:grid-cols-2" : ""}`}>
+              {result.results.map((t) => (
+                <TargetCard key={t.target} t={t} res={result} sideBySide={result.results.length > 1} rolling={rolling[t.target]} onRolling={() => loadRolling(t.target)} />
+              ))}
+            </div>
             <ReviewPanel review={review} err={reviewErr} alts={alts} res={result} onAlts={() => void loadReview(result, true, seq.current)} />
             {result.warnings.length > 0 && <p className="text-xs text-amber-700">{result.warnings.join(" · ")}</p>}
-            <div className="flex flex-wrap items-center gap-3 px-1 text-xs text-zinc-500">
-              <span>{result.history.note}</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-zinc-500">
+              <span title={`예측은 과거 실적에서 계산한 기대값이며 확정 시청률이 아닙니다. 범위는 같은 방식으로 과거에 예측해 본 오차에서 정했고, 예측 근거 강도는 근거 방영 수와 그 오차를 함께 봅니다(제목 일치 점수와 별개). 가격·광고 수익 정보가 없어 ROI·최대 구매가는 만들지 않습니다. 이 화면의 조회는 구매 요청·권리 예약·편성 저장을 하지 않습니다.`}>
+                기준일 {result.asOf} · 모델 {result.modelVersion} · 확정 시청률 아님 · 가격·수익 정보 없어 ROI 미산출
+              </span>
+              <span title={result.history.note}>{result.history.saved > 0 ? `예측 기록 ${result.history.saved}건 저장` : result.history.note}</span>
               <button type="button" onClick={downloadSnapshot} className="rounded-full border border-zinc-300 px-3 py-1 text-zinc-700 hover:bg-zinc-100">
                 검토 스냅샷 내려받기(JSON)
               </button>
             </div>
-            <p className="px-1 text-xs leading-relaxed text-zinc-400">
-              기준일 {result.asOf} · 모델 {result.modelVersion}. 예측은 과거 실적에서 계산한 기대값이며 확정 시청률이 아닙니다. 범위는 같은 방식으로 과거에 예측해 본 오차에서 정했고, 예측 근거 강도는 근거 방영 수와 그 오차를 함께 봅니다(제목 일치 점수와 별개). 가격·광고 수익 정보가 없어 ROI·최대 구매가는 만들지 않습니다. 이 화면의 조회는 구매 요청·권리 예약·편성 저장을 하지 않습니다.
-            </p>
           </div>
         )}
 
@@ -555,8 +549,11 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold text-zinc-900">
-          구매 검토 후보 <span className="text-xs font-normal text-zinc-500">· {CHANNEL_OPTS.find((c) => c.code === channel)?.name} · {label} 기준{targetName ? ` · ${targetName}` : ""}</span>
+        <h2
+          className="text-base font-semibold text-zinc-900"
+          title="아직 Avail에 없는 신규 구매 검토 후보(보유 예정·권리 획득 가정)입니다. 우리 채널에서 방영한 적 없다는 사실이 구매 가능하다는 뜻은 아닙니다. 타 채널 재방 실적으로 이 채널 연평균 이상(1.0배 이상)이 기대되는 후보를 연평균 대비 배수 순으로 보여 주며, 방영 횟수가 적으면 배수를 1.0 쪽으로 당겨 비교합니다. 모든 항목은 구매 권고가 아니라 검토 후보입니다. 순위는 이 배수 순서일 뿐 근거의 강도와는 별개라서, 근거 강도가 약하거나 예상 범위가 넓은 후보는 순위가 높아도 참고용으로 읽어 주세요. 항목을 누르면 위에서 바로 시뮬레이션합니다."
+        >
+          구매 검토 후보 <span className="text-xs font-normal text-zinc-500">· {CHANNEL_OPTS.find((c) => c.code === channel)?.name} · {label}{targetName ? ` · ${targetName}` : ""}</span>
         </h2>
         {items && items.length > 0 && (
           <select value={genre} onChange={(e) => setGenre(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700" aria-label="장르">
@@ -570,47 +567,50 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
       {items && items.length === 0 && <p className="mt-2 text-sm text-zinc-500">이 채널·기간의 구매 검토 후보는 아직 준비되지 않았습니다.</p>}
       {items && items.length > 0 && (
         <>
-          {stale && (
-            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
-              오래된 추천입니다 — {alignment!.messages.join(" ")} 항목을 누른 뒤 &lsquo;예상 시청률 보기&rsquo;를 하면 최신 기준으로 다시 계산한 값을 보여 줍니다. 이 목록의 순위는 다음 주간 갱신 때 바뀝니다.
-            </p>
-          )}
-          <p className="mt-1 text-xs text-zinc-500">
-            아직 Avail에 없는 신규 구매 검토 후보(보유 예정·권리 획득 가정)입니다. 우리 채널에서 방영한 적 없다는 사실이 구매 가능하다는 뜻은 아닙니다. 타 채널 재방 실적으로 이 채널 연평균 이상(1.0배 이상)이 기대되는 후보를 연평균 대비 배수 순으로 보여 주며, 방영 횟수가 적으면 배수를 1.0 쪽으로 당겨 비교합니다. 모든 항목은 구매 권고가 아니라 검토 후보입니다. 순위는 이 배수 순서일 뿐 근거의 강도와는 별개라서, 근거 강도가 약하거나 예상 범위가 넓은 후보는 순위가 높아도 참고용으로 읽어 주세요. 항목을 누르면 위에서 바로 시뮬레이션합니다.
-          </p>
-          <ol className="mt-2 divide-y divide-zinc-100">
+          {stale && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">오래된 추천 — {alignment!.messages.join(" ")}</p>}
+          <div className={`mt-3 hidden gap-x-4 px-2 pb-1.5 text-xs text-zinc-400 ${RECO_GRID} md:grid`} aria-hidden>
+            <span>프로그램</span>
+            <span>장르 · 비교 실적</span>
+            <span className="text-right">예상 시청률</span>
+            <span className="text-right" title="연평균 대비 배수">배수</span>
+            <span>비교 근거</span>
+            <span>예측 근거</span>
+          </div>
+          <ol className="divide-y divide-zinc-100 border-t border-zinc-100">
             {shown.map((r) => {
               const i = r.item;
               const below = avg !== null && i.prediction < avg;
+              const ev = recoEvidence(i.peer_count, i.peer_airings) ?? "weak";
+              const range = i.prediction_low !== null && i.prediction_high !== null ? `예상 범위 ${fmt(i.prediction_low)} ~ ${fmt(i.prediction_high)}%` : undefined;
               return (
                 <li key={i.group_key}>
                   <button
                     type="button"
                     onClick={() => onPick({ name: i.display_name, repKey: i.rep_key, prediction: i.prediction, low: i.prediction_low, high: i.prediction_high, asOf: i.as_of, stale, staleMessages: alignment?.messages ?? [], target: i.target })}
-                    className="flex w-full items-center justify-between gap-3 py-2 text-left hover:bg-zinc-50"
+                    className={`grid w-full grid-cols-4 items-center gap-x-3 gap-y-0.5 rounded px-2 py-2 text-left hover:bg-zinc-50 md:gap-x-4 ${RECO_GRID}`}
                   >
-                    <span className="min-w-0">
-                      <span className="text-sm font-medium text-zinc-900">{r.rank}. {i.display_name}</span>
-                      <span className="ml-2 text-xs text-zinc-400">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회</span>
-                      {/* 2026-10-15(외부 검토 지적): 순위와 근거 강도를 한 줄에서 함께 보이도록 항상 표시한다(충분일 때도 생략하지 않음) */}
-                      {(() => {
-                        const ev = recoEvidence(i.peer_count, i.peer_airings) ?? "weak";
-                        return <span className={`ml-2 rounded px-1.5 py-0.5 text-[11px] font-medium ${ev === "strong" ? "bg-zinc-100 text-zinc-600" : ev === "medium" ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"}`}>비교 {RECO_EVIDENCE_KO[ev]}</span>;
-                      })()}
-                      {i.confidence && <span className="ml-2 text-xs text-zinc-400">예측 {CONF_LABEL[i.confidence] ?? i.confidence}</span>}
+                    <span className="col-span-4 min-w-0 truncate text-sm font-medium text-zinc-900 md:col-span-1">{r.rank}. {i.display_name}</span>
+                    <span className="col-span-4 truncate text-xs text-zinc-500 md:col-span-1">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회</span>
+                    <span title={range} className={`text-sm font-semibold tabular-nums md:text-right ${below ? "text-rose-600" : "text-zinc-900"}`}>{fmt(i.prediction)}%</span>
+                    <span title="연평균 대비 배수" className="text-sm tabular-nums text-zinc-700 md:text-right">{i.vs_annual_avg !== null ? `${fmt(i.vs_annual_avg, 2)}배` : "-"}</span>
+                    <span className={`text-xs ${RECO_EVIDENCE_TONE[ev]}`}>
+                      <span className="md:hidden">비교 </span>
+                      {RECO_EVIDENCE_KO[ev].replace("근거 ", "")}
                     </span>
-                    <span className="shrink-0 text-right tabular-nums">
-                      <span className={`text-sm font-semibold ${below ? "text-rose-600" : "text-zinc-900"}`}>{fmt(i.prediction)}%</span>
-                      {i.prediction_low !== null && i.prediction_high !== null && <span className="ml-1 text-xs text-zinc-400">({fmt(i.prediction_low)}~{fmt(i.prediction_high)})</span>}
-                      {i.vs_annual_avg !== null && <span className="ml-2 text-xs text-zinc-500">연평균 대비 {fmt(i.vs_annual_avg, 2)}배</span>}
+                    <span className="text-xs text-zinc-500">
+                      <span className="md:hidden">예측 </span>
+                      {i.confidence ? (CONF_LABEL[i.confidence] ?? i.confidence).replace("근거 ", "") : "-"}
                     </span>
                   </button>
                 </li>
               );
             })}
           </ol>
-          <p className="mt-2 text-xs leading-relaxed text-zinc-400">
-            기준일 {items[0].as_of}{items[0].model_version ? ` · 모델 ${items[0].model_version}` : ""}{avg !== null ? ` · 채널 최근 1년 평균 ${fmt(avg)}%` : ""}. 가격·판권 가능 여부는 반영하지 않았습니다. 수도권 2049의 신규 구매 예측은 과거 검증에서 슬롯 평균 수준과 큰 차이가 없어 순위는 후보를 좁히는 참고용입니다. 재방 횟수가 많은 장수 콘텐츠는 긴 기간 기준에서 높게 나옵니다.
+          <p
+            className="mt-2 text-xs text-zinc-400"
+            title="수도권 2049의 신규 구매 예측은 과거 검증에서 슬롯 평균 수준과 큰 차이가 없어 순위는 후보를 좁히는 참고용입니다. 재방 횟수가 많은 장수 콘텐츠는 긴 기간 기준에서 높게 나옵니다."
+          >
+            기준일 {items[0].as_of}{items[0].model_version ? ` · 모델 ${items[0].model_version}` : ""}{avg !== null ? ` · 채널 최근 1년 평균 ${fmt(avg)}%` : ""} · 가격·판권 여부 미반영 · 순위는 후보를 좁히는 참고용
           </p>
         </>
       )}
@@ -633,7 +633,7 @@ function CandidateList({ identity, onPick, current }: { identity: IdentityResolu
   );
 }
 
-function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp; rolling: RollingRow[] | "loading" | undefined; onRolling: () => void }) {
+function TargetCard({ t, res, sideBySide, rolling, onRolling }: { t: TargetResult; res: Resp; sideBySide: boolean; rolling: RollingRow[] | "loading" | undefined; onRolling: () => void }) {
   const multi = t.slots.length > 1;
   const avg = t.channelAnnualAvg;
   const low = (v: number | null) => v !== null && avg !== null && v < avg; // 채널 연평균보다 낮으면 붉게
@@ -641,11 +641,11 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold text-zinc-900">{t.targetLabel} <span className="text-xs font-normal text-zinc-500">· {res.ownChannel} 편성 가정{avg !== null ? ` · 채널 최근 1년 평균 ${fmt(avg)}%(이보다 낮으면 붉은색)` : ""}</span></h2>
+        <h2 className="text-base font-semibold text-zinc-900">{t.targetLabel} <span className="text-xs font-normal text-zinc-500">· {res.ownChannel} 편성 가정{avg !== null ? <span title="이보다 낮으면 붉은색으로 표시합니다"> · 채널 최근 1년 평균 {fmt(avg)}%</span> : ""}</span></h2>
       </div>
 
       {/* 슬롯 요약 */}
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <div className={`mt-3 grid gap-3 ${sideBySide ? "" : "md:grid-cols-2"}`}>
         {t.slots.map((s) => (
           <div key={`${s.isoDow}-${s.startTime}`} className={`rounded-xl border p-3 ${best && best === s ? "border-emerald-300 bg-emerald-50/40" : "border-zinc-200"}`}>
             <div className="flex items-center justify-between text-xs text-zinc-500">
@@ -668,9 +668,9 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
               <p className="mt-2 text-sm text-zinc-600">{s.notes[0] ?? "예측할 근거가 부족합니다."}</p>
             )}
             {s.calibrationN !== null && s.calibrationMaeLog !== null && (
-              <p className="mt-1 text-xs text-zinc-500">같은 유형의 과거 예측 {s.calibrationN.toLocaleString()}건의 평균 오차는 약 {Math.round((Math.exp(s.calibrationMaeLog) - 1) * 100)}%였습니다.</p>
+              <p className="mt-1 text-xs text-zinc-500">과거 유사 예측 {s.calibrationN.toLocaleString()}건 평균 오차 약 {Math.round((Math.exp(s.calibrationMaeLog) - 1) * 100)}%</p>
             )}
-            {s.confidenceReasons.length > 0 && <p className="mt-1 text-xs text-zinc-400">예측 근거 강도 사유: {s.confidenceReasons.join(" · ")}</p>}
+            {s.confidenceReasons.length > 0 && <p className="mt-1 text-xs text-zinc-400">근거 사유: {s.confidenceReasons.join(" · ")}</p>}
           </div>
         ))}
       </div>
@@ -688,7 +688,7 @@ function TargetCard({ t, res, rolling, onRolling }: { t: TargetResult; res: Resp
               </li>
             ))}
           </ol>
-          <p className="mt-1 text-xs text-zinc-400">우리 채널이 최근 편성해 온 시간대 중 예상 시청률이 높은 순입니다. 경쟁 편성·앞뒤 프로그램과의 충돌은 반영하지 않았으니 참고용으로 보세요. 1위와 범위가 겹치는 시간대는 우열을 단정할 수 없습니다.</p>
+          <p className="mt-1 text-xs text-zinc-400">최근 편성 시간대 중 예상 높은 순 · 경쟁 편성 미반영 · 범위가 겹치면 우열 단정 불가</p>
         </div>
       )}
 
@@ -874,15 +874,21 @@ function TransferBlock({ s, peers, target }: { s: Parameters<typeof transferOf>[
 
 // 보유·권리 검토: Avail 기준 단계(보유/보유 예정)·방영권 종료·제작년도·칸별 권리. 조회만 한다.
 function ReviewPanel({ review, err, alts, res, onAlts }: { review: (ReviewResponse & { ok: boolean }) | null; err: string | null; alts: AlternativeBlock[] | "loading" | null; res: Resp; onAlts: () => void }) {
-  if (err) return <section className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-rose-600">보유·권리 검토를 불러오지 못했습니다: {err}</section>;
-  if (!review) return <section className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-500">보유·권리 상태를 확인하는 중…</section>;
+  if (err) return <section className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-rose-600">보유·권리 검토를 불러오지 못했습니다: {err}</section>;
+  if (!review) return <section className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-500">보유·권리 상태를 확인하는 중…</section>;
   const a = review.acquisition;
+  // 기본은 접힘 — 한 줄 요약(단계·방영권 종료)만 보이고, 펼치면 근거·권리 표·칸별 권리·대안 비교가 나온다
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold text-zinc-900">보유·권리 검토 <span className="text-xs font-normal text-zinc-500">· Avail 기준{review.inventoryVersion ? ` · 목록 ${review.inventoryVersion}` : ""} · 조회만(구매 요청·권리 예약 없음)</span></h2>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+    <details className="group rounded-2xl border border-zinc-200 bg-white">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-4 py-3 text-sm [&::-webkit-details-marker]:hidden">
+        <span aria-hidden className="text-xs text-zinc-400 transition-transform group-open:rotate-90">▶</span>
+        <span className="font-semibold text-zinc-900" title={`Avail 기준${review.inventoryVersion ? ` · 목록 ${review.inventoryVersion}` : ""} · 조회만(구매 요청·권리 예약 없음)`}>보유·권리 검토</span>
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${STAGE_STYLE[a.stage]}`}>{a.label}</span>
+        {a.rightsEnd && <span className={`rounded-full px-2 py-0.5 text-xs ring-1 ${a.rightsEnd.state === "ended" ? "bg-rose-50 text-rose-700 ring-rose-200" : a.rightsEnd.state === "ends_soon" ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-zinc-100 text-zinc-600 ring-zinc-200"}`}>{a.rightsEnd.text}</span>}
+        <span className="ml-auto text-xs text-zinc-400 group-open:hidden">펼치기</span>
+      </summary>
+      <div className="border-t border-zinc-100 p-4">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className={`rounded-full px-2.5 py-1 font-medium ring-1 ${STAGE_STYLE[a.stage]}`}>{a.label}</span>
         {a.plannedBasis && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-600">{PLANNED_BASIS_TEXT[a.plannedBasis]}</span>}
         {a.ownedBasis && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-600">{OWNED_BASIS_TEXT[a.ownedBasis]}</span>}
@@ -956,7 +962,8 @@ function ReviewPanel({ review, err, alts, res, onAlts }: { review: (ReviewRespon
         {alts === "loading" && <p className="text-sm text-zinc-500">우리 채널 보유작을 같은 시간대·같은 기준일로 계산하는 중… (최대 1분)</p>}
         {Array.isArray(alts) && <AlternativesPanel blocks={alts} res={res} review={review} />}
       </div>
-    </section>
+      </div>
+    </details>
   );
 }
 

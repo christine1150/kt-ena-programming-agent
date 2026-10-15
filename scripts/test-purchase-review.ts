@@ -324,7 +324,7 @@ const withYear = (g: Grant, y: string): Grant => ({ ...g, content: { ...g.conten
   check("화면: 후보 선택은 모두 pick을 사용", !/onPick=\{\(k, n\) => \{ setGroupKey/.test(page) && (page.match(/onPick=\{pick\}/g) ?? []).length === 2);
   check("화면: 선택 작품·조건·기준일·모델을 헤더에 고정", page.includes("선택한 작품과 비교 기준") && page.includes("조건이 바뀌어 아래 결과는 이전 조건의 값입니다"));
   check("화면: 제목 일치와 예측 근거를 다른 말로 표시", page.includes("제목 일치") && page.includes("이름이 비슷한 정도일 뿐, 예측 근거 강도와 별개") && page.includes('HIGH: "근거 강함"'));
-  check("화면: 오래된 추천 표시", page.includes("오래된 추천입니다"));
+  check("화면: 오래된 추천 표시", page.includes("오래된 추천 — "));
   check("화면: 가격 미입력 시 ROI·최대 구매가를 만들지 않는다고 표시", page.includes("ROI·최대 구매가는 만들지 않습니다"));
   check("화면: 보유작 최선 대안 비교와 남은 방수·종료 표기", page.includes("보유작 최선 대안과 비교하기") && page.includes("남은 방수") && page.includes("종료 "));
   check("화면: 권리가 확인된 최선 대안을 따로 표시", page.includes("권리가 확인된 최선 대안") && read("src/lib/purchaseReview/server.ts").includes("bestConfirmed: items.find((i) => i.rights?.status === \"available\")"));
