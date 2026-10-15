@@ -5457,6 +5457,44 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
   );
 }
 
+/** 홈 첫 로딩 안내(2026-10-15 외부 검토 지적: 10초 넘게 "불러오는 중"만 보이고 재시도 수단이 없었다) — 경과 시간을 보이고, 오래 걸리면 이유와 다시 시도 버튼을 낸다. */
+function HomeLoadingNotice({ onRetry }: { onRetry: () => void }) {
+  const [sec, setSec] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setSec((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="rounded-xl bg-white px-4 py-3 text-sm text-zinc-600 ring-1 ring-zinc-200" role="status" aria-live="polite">
+      <p>브리핑을 불러오는 중입니다… {sec}초</p>
+      {sec >= 8 && <p className="mt-1 text-[13px] text-zinc-500">전 채널의 시청률·편성 신호를 한꺼번에 계산하는 화면이라 처음에는 10~30초 걸릴 수 있습니다.</p>}
+      {sec >= 25 && (
+        <p className="mt-2 text-[13px] text-zinc-500">
+          25초가 넘게 걸리고 있습니다.{" "}
+          <button type="button" onClick={() => { setSec(0); onRetry(); }} className="font-medium text-indigo-700 underline">
+            다시 시도
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** 첫 로딩이 실패했을 때(받아 둔 값이 없음) 원인 문구와 재시도 수단을 보인다. */
+function HomeLoadError({ message, onRetry }: { message: string | null; onRetry: () => void }) {
+  return (
+    <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-100" role="alert">
+      <p>브리핑을 불러오지 못했습니다{message ? ` — ${message}` : ""}</p>
+      <p className="mt-2 text-[13px]">
+        <button type="button" onClick={onRetry} className="font-medium underline">
+          다시 시도
+        </button>
+        <span className="ml-2 text-red-600">계속 실패하면 잠시 뒤 다시 열어 보거나 관리자에게 알려 주세요.</span>
+      </p>
+    </div>
+  );
+}
+
 export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -5822,7 +5860,8 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           </div>
         )}
 
-        {loading && !data && <p className="text-sm text-zinc-500" role="status">불러오는 중...</p>}
+        {loading && !data && <HomeLoadingNotice onRetry={() => fetched.reload()} />}
+        {!loading && !data && fetched.status === "error" && <HomeLoadError message={errorMessage} onRetry={() => fetched.reload()} />}
 
         {data && dataStatus && (
           <div className={`flex flex-col gap-6 transition-opacity ${notCurrent ? "opacity-60" : ""}`} aria-busy={notCurrent}>

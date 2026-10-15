@@ -22,6 +22,7 @@ node --env-file=.env scripts/content-fit-research/dump.mjs
 | 3 | `node scripts/content-fit-research/retention.mjs` | 문서 §3-2: 실제 편성 유지(이후 28일 내 재방영)와의 판별력(AUC), 판정별 유지율, 슬롯 대비 성과 구간별 유지율 |
 | 4 | `node scripts/content-fit-research/calibrate.mjs` | 문서 §2: κ와 칸 최소 표본 M, 대안 구조의 예측 오차(MSE) |
 | 5 | `node scripts/content-fit-research/sensitivity.mjs` | 문서 §2: 점수 비중·판정선을 흔들었을 때 지표와 유지율 서열 |
+| 7 | `node scripts/content-fit-research/validate-holdout.mjs` | 문서 §3-6: 시점 분할(앞쪽에서 상수를 고르고 뒤쪽에서 평가, 반대도), 작품 단위 부트스트랩으로 AUC 차이 95% 구간 |
 | 6 | `npx tsx scripts/content-fit-research/parity.mts` | 문서 §3-4: 운영 TS 엔진 ↔ JS 레퍼런스 불일치 0건(엔진을 고칠 때마다 다시 실행) |
 
 ## 구성

@@ -373,7 +373,7 @@ function PurchaseSimulator() {
         {!identity && groupKey && (
           <section className="rounded-2xl border border-zinc-200 bg-white p-4">
             <h2 className="text-base font-semibold text-zinc-900">{groupName}</h2>
-            <p className="mt-1 text-xs text-zinc-500">구매 추천 목록에서 고른 프로그램입니다. 조건을 확인하고 예상 시청률을 보세요.</p>
+            <p className="mt-1 text-xs text-zinc-500">구매 검토 후보 목록에서 고른 프로그램입니다. 조건을 확인하고 예상 시청률을 보세요.</p>
           </section>
         )}
         {identity && (
@@ -482,7 +482,7 @@ function PurchaseSimulator() {
                 const cmp = sim && sim.isoDow === 0 ? recoVsSim(recoPick.prediction, sim.prediction) : null;
                 return (
                   <p className={`rounded-lg px-3 py-2 text-xs ${recoPick.stale ? "bg-amber-50 text-amber-800" : "bg-zinc-50 text-zinc-600"}`}>
-                    구매 추천 목록에서 고른 작품 · 추천 기준일 {recoPick.asOf}
+                    구매 검토 후보 목록에서 고른 작품 · 후보 계산 기준일 {recoPick.asOf}
                     {recoPick.stale ? ` (오래된 추천: ${recoPick.staleMessages.join(" ")})` : ""} · {cmp ? `${cmp.text}. 아래는 최신 기준으로 다시 계산한 값입니다.` : "추천 값은 월 평균 기준이라 시간대를 지정한 결과와 직접 비교하지 않습니다. 아래는 최신 기준으로 다시 계산한 값입니다."}
                   </p>
                 );
@@ -556,7 +556,7 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
     <section className="rounded-2xl border border-zinc-200 bg-white p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold text-zinc-900">
-          구매 추천 <span className="text-xs font-normal text-zinc-500">· {CHANNEL_OPTS.find((c) => c.code === channel)?.name} · {label} 기준{targetName ? ` · ${targetName}` : ""}</span>
+          구매 검토 후보 <span className="text-xs font-normal text-zinc-500">· {CHANNEL_OPTS.find((c) => c.code === channel)?.name} · {label} 기준{targetName ? ` · ${targetName}` : ""}</span>
         </h2>
         {items && items.length > 0 && (
           <select value={genre} onChange={(e) => setGenre(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700" aria-label="장르">
@@ -567,7 +567,7 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
         )}
       </div>
       {items === null && <p className="mt-2 text-sm text-zinc-500" role="status">불러오는 중…</p>}
-      {items && items.length === 0 && <p className="mt-2 text-sm text-zinc-500">이 채널·기간의 구매 추천은 아직 준비되지 않았습니다.</p>}
+      {items && items.length === 0 && <p className="mt-2 text-sm text-zinc-500">이 채널·기간의 구매 검토 후보는 아직 준비되지 않았습니다.</p>}
       {items && items.length > 0 && (
         <>
           {stale && (
@@ -576,7 +576,7 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
             </p>
           )}
           <p className="mt-1 text-xs text-zinc-500">
-            아직 Avail에 없는 신규 구매 검토 후보(보유 예정·권리 획득 가정)입니다. 우리 채널에서 방영한 적 없다는 사실이 구매 가능하다는 뜻은 아닙니다. 타 채널 재방 실적으로 이 채널 연평균 이상(1.0배 이상)이 기대되는 후보를 연평균 대비 배수 순으로 보여 주며, 방영 횟수가 적으면 배수를 1.0 쪽으로 당겨 비교합니다. 근거가 충분하지 않은 후보는 추천이 아니라 검토 후보이며, 항목을 누르면 위에서 바로 시뮬레이션합니다.
+            아직 Avail에 없는 신규 구매 검토 후보(보유 예정·권리 획득 가정)입니다. 우리 채널에서 방영한 적 없다는 사실이 구매 가능하다는 뜻은 아닙니다. 타 채널 재방 실적으로 이 채널 연평균 이상(1.0배 이상)이 기대되는 후보를 연평균 대비 배수 순으로 보여 주며, 방영 횟수가 적으면 배수를 1.0 쪽으로 당겨 비교합니다. 모든 항목은 구매 권고가 아니라 검토 후보입니다. 순위는 이 배수 순서일 뿐 근거의 강도와는 별개라서, 근거 강도가 약하거나 예상 범위가 넓은 후보는 순위가 높아도 참고용으로 읽어 주세요. 항목을 누르면 위에서 바로 시뮬레이션합니다.
           </p>
           <ol className="mt-2 divide-y divide-zinc-100">
             {shown.map((r) => {
@@ -591,7 +591,12 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
                   >
                     <span className="min-w-0">
                       <span className="text-sm font-medium text-zinc-900">{r.rank}. {i.display_name}</span>
-                      <span className="ml-2 text-xs text-zinc-400">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회{(() => { const ev = recoEvidence(i.peer_count, i.peer_airings) ?? "weak"; return ev === "strong" ? "" : ` · 비교 ${RECO_EVIDENCE_KO[ev]}`; })()}</span>
+                      <span className="ml-2 text-xs text-zinc-400">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회</span>
+                      {/* 2026-10-15(외부 검토 지적): 순위와 근거 강도를 한 줄에서 함께 보이도록 항상 표시한다(충분일 때도 생략하지 않음) */}
+                      {(() => {
+                        const ev = recoEvidence(i.peer_count, i.peer_airings) ?? "weak";
+                        return <span className={`ml-2 rounded px-1.5 py-0.5 text-[11px] font-medium ${ev === "strong" ? "bg-zinc-100 text-zinc-600" : ev === "medium" ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"}`}>비교 {RECO_EVIDENCE_KO[ev]}</span>;
+                      })()}
                       {i.confidence && <span className="ml-2 text-xs text-zinc-400">예측 {CONF_LABEL[i.confidence] ?? i.confidence}</span>}
                     </span>
                     <span className="shrink-0 text-right tabular-nums">

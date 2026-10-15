@@ -5277,9 +5277,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             ({narrativeSignal.today_rank}) <span className="text-xs">경쟁군 목표 {tr.value}위</span>
                           </>
                         ) : (
-                          <>
-                            ({narrativeSignal.today_rank}/{tr.value ?? "-"})
-                          </>
+                          // 2026-10-15(외부 검토 지적): "(3/6)"만으로는 무엇의 순위인지 알 수 없어 '위'와 '목표'를 밝힌다.
+                          <span title={`기준일 당일 순위 ${narrativeSignal.today_rank}위 / 목표 순위 ${tr.value ?? "-"}위`}>
+                            ({narrativeSignal.today_rank}위/목표 {tr.value ?? "-"}위)
+                          </span>
                         );
                       })()}
                     </span>
@@ -5497,9 +5498,13 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 다른 값이라 daily로는 만들 수 없어 별도 테이블에서 온다. 해당 주 파일이 아직
                 업로드되지 않았으면 이 줄 자체가 안 보인다(없는 값을 지어내지 않음). */}
             {data.periodRankMovement?.current_rank != null && (
-              <span className="flex items-center gap-1">
+              <span
+                className="flex items-center gap-1"
+                title={`닐슨 주간 파일의 시장 순위입니다. 이번 ${data.periodRankMovement.current_from} ~ ${data.periodRankMovement.current_to}${data.periodRankMovement.prior_from ? ` / 직전 ${data.periodRankMovement.prior_from} ~ ${data.periodRankMovement.prior_to}` : ""}. 위의 일간 순위와 다른 값입니다.`}
+              >
                 <span aria-hidden className="text-white/30">·</span>
-                주간 순위 {data.periodRankMovement.prior_rank != null && <>#{data.periodRankMovement.prior_rank} → </>}
+                {/* 2026-10-15(외부 검토 지적): 어느 주의 순위인지 날짜 없이는 알 수 없어 기간을 덧붙인다 */}
+                주간 순위({data.periodRankMovement.current_from.slice(5).replace("-", "/")}~{data.periodRankMovement.current_to.slice(5).replace("-", "/")}) {data.periodRankMovement.prior_rank != null && <>전주 #{data.periodRankMovement.prior_rank} → </>}
                 <b className="font-semibold">#{data.periodRankMovement.current_rank}</b>
                 {data.periodRankMovement.rank_change != null && data.periodRankMovement.rank_change !== 0 && (
                   <span className={data.periodRankMovement.rank_change > 0 ? "text-emerald-300" : "text-rose-300"}>
@@ -5544,7 +5549,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {channelHealth && (
               <span className="flex items-center gap-1">
                 <span aria-hidden className="text-white/30">·</span>
-                <HealthScoreBadge health={channelHealth} compact showReason />
+                <HealthScoreBadge health={channelHealth} compact showReason labelPrefix="채널 건강도 " />
               </span>
             )}
             {/* UX 리서처 개선안(2026-09-09): "편성 상태(Action 건수)"가 가장 급한 신호인데
@@ -5561,7 +5566,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                   <a
                     href="#what-to-schedule"
                     className="flex items-center gap-1 min-h-6 rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
-                    title="무엇을 편성할까요? 표로 이동"
+                    title="무엇을 편성할까요? 표로 이동 — 이 조치 건수는 최근 12주 방영을 같은 시간대 다른 프로그램과 견준 콘텐츠 적합도 판정(잠정 기준)에서 나온 것으로, 위 일간·주간 지표와는 기간이 다릅니다"
                   >
                     <span aria-hidden className="text-white/30">·</span>
                     <span style={{ color: slate.verdict === "negative" ? "#fda4af" : "#6ee7b7" }}>{slate.reason}</span>

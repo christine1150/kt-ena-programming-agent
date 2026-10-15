@@ -34,6 +34,7 @@ export function HealthScoreBadge({
   variant = "hero",
   compact = false,
   showReason = false,
+  labelPrefix,
 }: {
   health: ChannelHealthScore;
   variant?: "hero" | "light";
@@ -44,6 +45,8 @@ export function HealthScoreBadge({
   // 사용자 지시(2026-08-27): "왜 주의인지도 아주 짧게 같이 써줄 것" — 부정 등급(WATCH/WEAK)은
   // 가장 먼저 걸린 부정 축을, 긍정 등급(GOOD/EXCELLENT)은 가장 먼저 걸린 긍정 축을 짧게 덧붙인다.
   showReason?: boolean;
+  // 2026-10-15(외부 검토 지적): "매우 좋음 · 90"만 보이면 무엇의 점수인지 알 수 없다 — 지정하면 라벨 앞에 붙인다(예: "채널 건강도 ").
+  labelPrefix?: string;
 }) {
   const style = variant === "hero" ? HERO_BADGE_STYLE[health.label] : LIGHT_BADGE_STYLE[health.label];
   // hero(2페이지 히어로 카드)는 기존 크기(text-sm px-3 py-1) 그대로, light(1페이지처럼 좁은 인라인
@@ -54,9 +57,9 @@ export function HealthScoreBadge({
     <span
       className={`inline-flex items-center font-semibold ${sizeClass}`}
       style={{ backgroundColor: style.bg, color: style.text }}
-      title={health.axes.map((a) => `${a.label}: ${a.reason}`).join(" / ")}
+      title={`채널 건강도 ${health.score}점 — 5개 축(시청률 추세·순위·편성 상태·경쟁 신호·시간대 흐름)을 각각 긍정 +10점·부정 −10점으로 더해 50점에서 가감한 값입니다(0~100). ${health.axes.map((a) => `${a.label}: ${a.reason}`).join(" / ")}`}
     >
-      {health.label === "EXCELLENT" || health.label === "GOOD" ? "●" : health.label === "STABLE" ? "◐" : "○"} {HEALTH_LABEL_KO[health.label]} · {health.score}
+      {health.label === "EXCELLENT" || health.label === "GOOD" ? "●" : health.label === "STABLE" ? "◐" : "○"} {labelPrefix}{HEALTH_LABEL_KO[health.label]} · {health.score}
       {reason && <span className="opacity-80">({reason})</span>}
     </span>
   );
