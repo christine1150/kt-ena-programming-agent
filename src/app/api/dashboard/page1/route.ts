@@ -1487,8 +1487,10 @@ export async function GET(request: Request) {
       .not("program_id", "is", null)
       .not("rating", "is", null)
       .order("rating", { ascending: false })
-      .limit(5);
-    const rows = (data ?? []) as {
+      .limit(15);
+    // 같은 날 같은 방송(프로그램·시작 시각)이 두 행으로 적재된 경우를 방어한다 — 상위 5칸이 같은 방송으로 채워지지 않게 중복을 접고 5개만 쓴다(2026-10-16).
+    const seenAiring = new Set<string>();
+    const rows = ((data ?? []) as {
       rating: number;
       start_time: string;
       is_first_run: boolean | null;
@@ -1496,7 +1498,14 @@ export async function GET(request: Request) {
       episode_subtitle: string | null;
       program_id: string | null;
       programs: { canonical_name: string } | { canonical_name: string }[] | null;
-    }[];
+    }[])
+      .filter((r) => {
+        const key = `${r.program_id}|${r.start_time}`;
+        if (seenAiring.has(key)) return false;
+        seenAiring.add(key);
+        return true;
+      })
+      .slice(0, 5);
 
     // 사용자 지시(2026-10-01): "업로드 된 편성표는 개별 회차나 부제가 파악된다면 1페이지 일일
     // 시청률에도 반영. 매칭된것만" — 닐슨 EPG(ratings.episode_number/subtitle)에 회차·부제가

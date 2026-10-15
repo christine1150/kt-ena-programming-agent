@@ -198,6 +198,67 @@ async function restoreDailyRatings(reportDate: string, channelIds: string[], sna
   return null;
 }
 
+/** 적재 직후 이 날짜에 같은 행이 두 벌 들어갔는지 확인하고 늦게 들어간 쪽을 지운다. ratings에는 유니크 제약이 없고(삭제 후 삽입 구조),
+ *  같은 메일이 겹쳐 처리되면 두 실행의 삽입이 모두 남는다(2026-10-15 일일 파일이 두 번 적재돼 상위 프로그램 1·2위가 같은 방송으로 나온 사고).
+ *  마지막으로 끝나는 실행이 이 정리를 하므로 겹침 순서와 무관하게 한 벌만 남는다. 지운 행 수를 돌려주고, 조회·삭제가 실패하면 0을 돌려준다(적재 결과는 막지 않음). */
+async function dedupeDailyRatings(reportDate: string, channelIds: string[]): Promise<number> {
+  try {
+    const seen = new Set<string>();
+    const dupIds: string[] = [];
+    for (let from = 0; ; from += SNAPSHOT_PAGE) {
+      const { data, error } = await supabase
+        .from("ratings")
+        .select("id, channel_id, target_id, start_time, program_id, rank, rating")
+        .eq("source_type", "nielsen_daily")
+        .eq("broadcast_date", reportDate)
+        .in("channel_id", channelIds)
+        .order("created_at")
+        .order("id")
+        .range(from, from + SNAPSHOT_PAGE - 1);
+      if (error) return 0;
+      for (const r of data ?? []) {
+        const key = [r.channel_id, r.target_id, r.start_time, r.program_id, r.rank, r.rating].join("|");
+        if (seen.has(key)) dupIds.push(r.id as string);
+        else seen.add(key);
+      }
+      if (!data || data.length < SNAPSHOT_PAGE) break;
+    }
+    let deleted = 0;
+    for (let i = 0; i < dupIds.length; i += 200) {
+      const { error } = await supabase.from("ratings").delete().in("id", dupIds.slice(i, i + 200));
+      if (error) break;
+      deleted += Math.min(200, dupIds.length - i);
+    }
+    // 경쟁채널 채널 단위 시청률(competitor_ratings)도 같은 겹침으로 두 벌이 들어간다(10/15 실제 사례) — 같은 방식으로 한 벌만 남긴다.
+    const seenComp = new Set<string>();
+    const compDupIds: string[] = [];
+    for (let from = 0; ; from += SNAPSHOT_PAGE) {
+      const { data, error } = await supabase
+        .from("competitor_ratings")
+        .select("id, competitor_name, target_id, rank, rating, source_type")
+        .eq("broadcast_date", reportDate)
+        .order("created_at")
+        .order("id")
+        .range(from, from + SNAPSHOT_PAGE - 1);
+      if (error) break;
+      for (const r of data ?? []) {
+        const key = [r.competitor_name, r.target_id, r.rank, r.rating, r.source_type].join("|");
+        if (seenComp.has(key)) compDupIds.push(r.id as string);
+        else seenComp.add(key);
+      }
+      if (!data || data.length < SNAPSHOT_PAGE) break;
+    }
+    for (let i = 0; i < compDupIds.length; i += 200) {
+      const { error } = await supabase.from("competitor_ratings").delete().in("id", compDupIds.slice(i, i + 200));
+      if (error) break;
+      deleted += Math.min(200, compDupIds.length - i);
+    }
+    return deleted;
+  } catch {
+    return 0;
+  }
+}
+
 /** 백업 행 중 채널 단위 랭킹 행(순위 있음)을 채널코드·타깃라벨 기준으로 바꿔 차이 비교에 쓴다. */
 async function rankRowsOfSnapshot(snapshot: Record<string, unknown>[], channelIdByCode: Map<string, string>): Promise<RankSnapshotRow[]> {
   const rankRows = snapshot.filter((r) => r.program_id === null && r.rank !== null && r.rank !== undefined);
@@ -630,6 +691,12 @@ export async function ingestNielsenDailyFile(
       : snapshot.length > 0
         ? "이전에 반영된 데이터로 되돌렸습니다."
         : "이 날짜에는 이전 데이터가 없어 부분 입력만 지웠습니다.";
+  }
+
+  // 같은 날짜 적재가 겹쳐 두 벌이 들어갔으면 한 벌만 남긴다(아래 OLIFE 보강·mart 재계산이 중복 없는 상태를 보게).
+  if (!insertError) {
+    const removed = await dedupeDailyRatings(parsed.reportDate, touchedChannelIds);
+    if (removed > 0) dailyIssues.push({ severity: "warning", category: "completeness", message: `같은 날짜(${parsed.reportDate})의 시청률 행이 겹쳐 적재돼 중복 ${removed}행을 정리했습니다(동시 실행 의심).` });
   }
 
   // 사용자 지시(2026-08-26): "OLIFE EPG를 닐슨 데이터 없이도 미리 등록" — 미리 등록해둔
