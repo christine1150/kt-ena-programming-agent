@@ -881,6 +881,22 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   check("홈 문구: 맨 앞 조치가 다른 것(교체안)이면 이동 근거를 붙이지 않는다", otherLead.basis === null, JSON.stringify(otherLead));
 }
 
+// 과거 변경 근거는 시청률 0(측정된 0)을 버리지 않는다 — 외부 검증 L-01(2026-10-15): 예전에는 0을 모두 빼서 하락 사례가 사라졌다
+{
+  const monday0 = "2026-01-05";
+  const dayOf = (week: number, dow: number) => addDaysT(monday0, week * 7 + dow - 1);
+  const mkAir = (week: number, dow: number, hour: number, key: string, rating: number): HistAiring => ({ date: dayOf(week, dow), dow, startMin: hour * 60, key, rating });
+  const zeroAfter: HistAiring[] = [];
+  for (let w = 0; w < 6; w++) zeroAfter.push(mkAir(w, 2, 22, "A", 0.2));
+  for (let w = 6; w < 12; w++) zeroAfter.push(mkAir(w, 2, 22, "B", 0));
+  const down = detectPastChanges(zeroAfter, "2026-12-31").filter((c) => c.kind === "replace");
+  check("과거 변경: 교체 뒤 시청률이 0이 되어도 하락 사례(-100%)로 센다", down.length === 1 && Math.abs(down[0].change + 1) < 1e-9, JSON.stringify(down));
+  const zeroBefore: HistAiring[] = [];
+  for (let w = 0; w < 6; w++) zeroBefore.push(mkAir(w, 2, 22, "A", 0));
+  for (let w = 6; w < 12; w++) zeroBefore.push(mkAir(w, 2, 22, "B", 0.2));
+  check("과거 변경: 교체 전 시청률이 0이면 변화율을 정의할 수 없어 건너뛴다(0으로 나누지 않는다)", detectPastChanges(zeroBefore, "2026-12-31").filter((c) => c.kind === "replace").length === 0);
+}
+
 // 앞 프로그램 유지율(3단계 구조 레버) — 앞 프로그램은 보통인데 이 프로그램으로 이어지는 비율이 평소보다 크게 낮을 때만 잡는다
 {
   const mon = "2026-03-02";
@@ -920,6 +936,11 @@ check("근거 관문: 확실성 보통 이상 + 표본 충분이면 교체 추�
   const out = buildCardCopy({ ...extIn, ai: { ...extBase, external: [{ name: "후보다", vsAvg: 1.6, peers: 0, airings: 300 }, { name: "후보라", vsAvg: 1.6, peers: 5, airings: 15 }, { name: "후보마", vsAvg: 0.9, peers: 5, airings: 90 }] } });
   check("홈 문구: 진입 기준(1곳·20회·1.0배)을 못 채운 후보는 구매를 말하지 않는다", ![out.action, ...out.more].join(" ").match(/구매 (검토|참고)/), out.action ?? "");
   check("근거 수준 이름: 충분·보통·약함", RECO_EVIDENCE_KO.strong === "근거 충분" && RECO_EVIDENCE_KO.medium === "근거 보통" && RECO_EVIDENCE_KO.weak === "근거 약함");
+  // 외부 검증 L-08(2026-10-15): 구매 추천은 주 1회 사전 계산이라 홈 문구에 기준일을 밝히고, 3주 넘게 오래됐으면 그렇게 말한다
+  const fresh = buildCardCopy({ ...extIn, ai: { ...extBase, external: [{ name: "후보가", vsAvg: 1.25, peers: 2, airings: 40, asOf: "2026-10-12" }] } });
+  check("홈 문구: 구매 후보에 사전 계산 기준일(10/12 기준)을 밝히고 최신이면 '오래된 추천'을 붙이지 않는다", !!fresh.action?.startsWith("구매 검토 (10/12 기준 사전 계산) —") && !fresh.action.includes("오래된 추천"), fresh.action ?? "");
+  const stale = buildCardCopy({ ...extIn, ai: { ...extBase, external: [{ name: "후보가", vsAvg: 1.25, peers: 2, airings: 40, asOf: "2026-09-14" }] } });
+  check("홈 문구: 편성 기준 주보다 3주 넘게 오래된 사전 계산은 '오래된 추천'이라고 밝힌다", !!stale.action?.includes("9/14 기준 사전 계산, 오래된 추천"), stale.action ?? "");
 }
 
 // 채널별 인사이트 = 변화 해설(비교·순위·흐름·요일·시간대·타깃층), 목표 대비 진단·조치는 "오늘의 시청률"에만 둔다

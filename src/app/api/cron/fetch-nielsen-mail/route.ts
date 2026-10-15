@@ -8,15 +8,12 @@
 // 실행한다(외부에서 아무나 이 URL을 호출해 반복 실행시키는 것을 막기 위함).
 import { NextResponse } from "next/server";
 import { runNielsenMailIngestion } from "@/lib/mailIngestionRunner";
+import { checkCronAuth } from "@/lib/cronAuth";
 
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ ok: false, message: "인증되지 않은 요청입니다." }, { status: 401 });
-    }
-  }
+  // 2026-10-15: 운영에서 CRON_SECRET이 없으면 거부한다(이전에는 값이 없으면 누구나 호출 가능했음).
+  const auth = checkCronAuth(request.headers.get("authorization"));
+  if (!auth.ok) return NextResponse.json({ ok: false, message: auth.message }, { status: auth.status });
 
   const result = await runNielsenMailIngestion();
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });

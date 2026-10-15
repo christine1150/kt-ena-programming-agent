@@ -150,7 +150,9 @@ function detectMoves(all: HistAiring[]): PastChange[] {
 
 /** 지난 변경들을 찾는다 — 같은 자리 프로그램 교체(replace)와 한 프로그램의 시간대 이동(move). asOf 이후 방영은 쓰지 않는다. */
 export function detectPastChanges(all: HistAiring[], asOf: string): PastChange[] {
-  const data = all.filter((a) => a.date <= asOf && Number.isFinite(a.rating) && a.rating > 0);
+  // 시청률 0은 유효한 값이다(측정된 0). 예전에는 `rating > 0`으로 0을 모두 빼서, 바뀐 뒤 시청률이 0이 된 하락 사례가 사라져 근거가 낙관적으로 기울었다(2026-10-15 외부 검증 L-01).
+  // 0은 그대로 두고, 나누는 쪽(변경 전 중앙값)이 0 이하인 비교만 아래에서 건너뛴다(변화율을 정의할 수 없음).
+  const data = all.filter((a) => a.date <= asOf && Number.isFinite(a.rating) && a.rating >= 0);
   return [...detectReplaces(data), ...detectMoves(data)].sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
 }
 

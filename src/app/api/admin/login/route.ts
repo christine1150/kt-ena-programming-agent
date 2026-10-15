@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { supabase } from "@/lib/supabase";
+import { burnPasswordCheck } from "@/lib/loginTiming";
 import {
   ADMIN_COOKIE_NAME,
   ADMIN_SESSION_TTL_MS,
@@ -30,6 +31,8 @@ export async function POST(request: Request) {
   // 계정이 없거나 DB 조회에 실패한 경우와 비밀번호가 틀린 경우를 같은 메시지로 응답한다
   // (계정 존재 여부를 외부에서 유추하지 못하게 하기 위함).
   if (error || !admin) {
+    // 응답 시간으로도 계정 존재를 유추하지 못하게, 없는 계정에도 같은 비용의 비밀번호 비교를 한 번 수행한다(2026-10-15).
+    await burnPasswordCheck(password);
     return NextResponse.json(
       { ok: false, message: "이메일 또는 비밀번호가 올바르지 않습니다." },
       { status: 401 }

@@ -25,7 +25,7 @@ export interface AiSuggestionPayload {
   focus?: string | null;
   remedy?: WeakSlotRemedyView | null;
   /** 구매 검토 추천 중 추천 근거(연평균 대비 추정 배수·비교 채널 수)가 있는 후보 */
-  external?: { name: string; vsAvg: number | null; peers: number | null; airings?: number | null }[];
+  external?: { name: string; vsAvg: number | null; peers: number | null; airings?: number | null; asOf?: string | null }[];
   originals?: OriginalLeverageView | null;
   /** Avail 보유 콘텐츠 중 타 채널 실적으로 채널 연평균 이상이 기대되는 작품(별도 API로 늦게 채워진다) */
   availHeld?: HeldRecommendation[] | null;
@@ -163,9 +163,12 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
     const ev = recoEvidence(e.peers, e.airings)!;
     return `비교 ${e.peers}곳${e.airings ? `·${e.airings}회` : ""}${ev === "strong" ? "" : `, ${RECO_EVIDENCE_KO[ev]}`}`;
   };
+  // 구매 추천은 주 1회 사전 계산이라 기준일을 밝힌다(2026-10-15 외부 검증 L-08). 편성 기준 주보다 3주 넘게 오래됐으면 '오래된 추천'을 덧붙인다.
+  const extBase = extShown.map((e) => e.asOf).filter((d): d is string => !!d).sort()[0] ?? null;
+  const extBaseLabel = extBase ? ` (${Number(extBase.slice(5, 7))}/${Number(extBase.slice(8, 10))} 기준 사전 계산${ai?.weekStart && Date.parse(ai.weekStart) - Date.parse(extBase) > 21 * 86400000 ? ", 오래된 추천" : ""})` : "";
   if (!okChange && !r?.concrete && !(o && o.use.length > 0) && held.length === 0 && heldTest.length === 0 && extShown.length > 0) {
     levers.push({
-      text: sentence(`${extBuy.length > 0 ? "구매 검토" : "구매 참고"} — ${extShown.map((e) => `'${e.name}'${josaEunNeun(e.name)} 타 채널 방영 실적(${extWhy(e)})으로 이 채널 연평균의 약 ${e.vsAvg!.toFixed(1)}배로 추정`).join(", ")}`),
+      text: sentence(`${extBuy.length > 0 ? "구매 검토" : "구매 참고"}${extBaseLabel} — ${extShown.map((e) => `'${e.name}'${josaEunNeun(e.name)} 타 채널 방영 실적(${extWhy(e)})으로 이 채널 연평균의 약 ${e.vsAvg!.toFixed(1)}배로 추정`).join(", ")}`),
       positive: false,
     });
   }

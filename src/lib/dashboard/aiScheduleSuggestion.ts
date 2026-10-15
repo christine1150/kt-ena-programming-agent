@@ -61,7 +61,7 @@ export interface AiSuggestion {
   /** 교체 후보가 없을 때의 보완 제안(원인 → 할 일, 최근 방영 실측으로 계산) — 약해진 프로그램을 지정했고 계산됐을 때만 */
   remedy: WeakSlotRemedy | null;
   /** 자사 편성 안에서 근거 충분한 교체안이 없을 때 보여 줄 풀 밖 대안 — 구매 검토 추천 상위 제목(자사 풀 최적화와는 섞지 않는다) */
-  external: { name: string; vsAvg: number | null; peers: number | null; airings: number | null }[];
+  external: { name: string; vsAvg: number | null; peers: number | null; airings: number | null; /** 사전 계산 기준일(purchase_recommendations.as_of) — 홈 문구에 밝힌다 */ asOf?: string | null }[];
   /** ENA 본방 오리지널 활용 권유(ENA Play·Drama·Story만) — 활용 후보와 재방 축소 코멘트 대상 */
   originals: OriginalLeverage | null;
 }
@@ -274,24 +274,24 @@ export async function computeAiSuggestion(channelCode: string, asOfDate: string,
   } catch {
     return computeAiSuggestionUncached(channelCode, asOfDate, focus);
   }
-  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v10", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
+  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v11", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
   return r.value;
 }
 
 /** 구매 검토 추천(사전 계산, 해당 채널 방영 이력 없음) 상위 제목과 추천 근거(연평균 대비 추정 배수·비교 채널 수) — 자사 풀 밖 대안으로만 쓴다. 없거나 실패하면 빈 배열 */
-async function loadExternalCandidates(channelCode: string, limit = 2): Promise<{ name: string; vsAvg: number | null; peers: number | null; airings: number | null }[]> {
+async function loadExternalCandidates(channelCode: string, limit = 2): Promise<{ name: string; vsAvg: number | null; peers: number | null; airings: number | null; asOf: string | null }[]> {
   const { data, error } = await supabase
     .from("purchase_recommendations")
-    .select("display_name, rank, vs_annual_avg, peer_count, peer_airings")
+    .select("display_name, rank, vs_annual_avg, peer_count, peer_airings, as_of")
     .eq("own_channel_code", channelCode)
     .eq("window_days", 182)
     .order("rank", { ascending: true })
     .limit(30);
   if (error) return [];
   // 진입 기준(비교 1곳·20회·연평균 1.0배 이상)을 다시 확인하고, 방영 횟수로 보정한 배수 순으로 상위만 쓴다(저장된 순서는 갱신 시점의 기준이라 옛 값이 섞일 수 있다)
-  return ((data ?? []) as { display_name: string; vs_annual_avg: number | string | null; peer_count: number | string | null; peer_airings: number | string | null }[])
+  return ((data ?? []) as { display_name: string; vs_annual_avg: number | string | null; peer_count: number | string | null; peer_airings: number | string | null; as_of: string | null }[])
     .filter((r) => !!r.display_name)
-    .map((r) => ({ name: r.display_name, vsAvg: r.vs_annual_avg === null ? null : Number(r.vs_annual_avg), peers: r.peer_count === null ? null : Number(r.peer_count), airings: r.peer_airings === null ? null : Number(r.peer_airings) }))
+    .map((r) => ({ name: r.display_name, vsAvg: r.vs_annual_avg === null ? null : Number(r.vs_annual_avg), peers: r.peer_count === null ? null : Number(r.peer_count), airings: r.peer_airings === null ? null : Number(r.peer_airings), asOf: r.as_of ?? null }))
     .filter((r) => r.vsAvg !== null && r.vsAvg >= RECO_MIN_VS_AVG && recoEvidence(r.peers, r.airings) !== null)
     .sort(byShrunkDesc)
     .slice(0, limit);

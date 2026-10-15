@@ -144,7 +144,7 @@ export function CompetitorAiringUploadCard({ channelCode }: { channelCode: strin
               <ul className="list-disc space-y-0.5 pl-5 text-zinc-600">
                 <li>시청률 있음 {preview.withRating.toLocaleString()}건 · 편성 예정/미집계(시청률 없음) {preview.withoutRating.toLocaleString()}건</li>
                 {preview.replaceExisting === null ? (
-                  <li className="text-amber-700">저장소가 아직 준비되지 않아(마이그레이션 적용 대기) 지금은 미리보기만 할 수 있습니다. 반영은 적용 후에 가능합니다.</li>
+                  <li className="text-amber-700">저장 기능이 아직 준비되지 않아 지금은 미리보기만 할 수 있습니다. 관리자에게 준비를 요청한 뒤 반영할 수 있습니다.</li>
                 ) : (
                   <li className={preview.replaceExisting ? "text-amber-700" : ""}>
                     같은 경쟁채널·방송일의 기존 {preview.replaceExisting.toLocaleString()}건이 이 파일 내용으로 바뀝니다.

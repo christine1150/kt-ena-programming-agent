@@ -3,15 +3,15 @@
 // CRON_SECRET이 설정돼 있으면 일치하는 Authorization 헤더가 있어야만 실행한다(fetch-nielsen-mail과 같은 방식).
 import { NextResponse } from "next/server";
 import { runWeeklyGenreUpdate } from "@/lib/idealSchedule/genreNaverJob";
+import { checkCronAuth } from "@/lib/cronAuth";
 
 export const maxDuration = 300; // 네이버 검색이 오래 걸려 함수 최대 시간을 늘린다(작업은 240초 안에서 스스로 멈춘다)
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ ok: false, message: "인증되지 않은 요청입니다." }, { status: 401 });
-  }
+  // 2026-10-15: 운영에서 CRON_SECRET이 없으면 거부한다(이전에는 값이 없으면 누구나 호출 가능했음).
+  const auth = checkCronAuth(request.headers.get("authorization"));
+  if (!auth.ok) return NextResponse.json({ ok: false, message: auth.message }, { status: auth.status });
   try {
     const summary = await runWeeklyGenreUpdate();
     return NextResponse.json({ ok: true, ...summary });

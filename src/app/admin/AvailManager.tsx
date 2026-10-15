@@ -401,7 +401,7 @@ export default function AvailManager() {
                 네이버에서 가져온 종영일을 기본으로 쓰고, 그 다음 날부터 편성 가능으로 판정합니다(종영 전이면 권리상 불가). 직접 고친 날짜는 &lsquo;수동&rsquo;으로 저장되어 다시 가져와도 덮어쓰지 않습니다. 검색된 제목이 다르면 &lsquo;확인 필요&rsquo;로 표시하고 판정에 쓰지 않으니, 날짜를 확인해 저장해 주세요. 종영 후 몇 개 채널까지라는 제한은 판정에 반영하지 않습니다.
               </p>
               {!ov.originalEnd.tableApplied ? (
-                <p className="text-xs text-amber-800">종영일 테이블이 아직 적용되지 않았습니다(마이그레이션 20261017010000).</p>
+                <p className="text-xs text-amber-800">종영일 저장 기능이 아직 준비되지 않았습니다. 관리자에게 준비를 요청해 주세요.</p>
               ) : (
                 <>
                   <div className="mb-2 flex flex-wrap items-center gap-2">
