@@ -8,7 +8,8 @@
 //  · 비슷한 제목·시즌/판이 다른 Avail 행은 자동으로 같은 콘텐츠로 보지 않는다.
 //  · Avail 자료가 없으면 '미확보'가 아니라 '확인 못함'이다.
 //  · 방영권 종료일·제작년도는 값이 있을 때만 적고, 없으면 '미확인'이다(빈칸을 무제한으로 보지 않는다).
-import { channelKey } from "@/lib/avail/adapters/common";
+// 채널 표기 정규화 — adapters/common.ts는 node:crypto를 끌어와 브라우저 번들(Dashboard→homeCopy→availHeld)이 깨지므로 같은 규칙을 여기 둔다(common.ts의 channelKey와 동일).
+const channelKey = (raw: string): string => raw.toLowerCase().replace(/[\s_\-]+/g, "");
 import type { GrantMatch } from "@/lib/avail/evaluate";
 import type { Grant } from "@/lib/avail/types";
 

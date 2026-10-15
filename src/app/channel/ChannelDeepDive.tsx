@@ -2039,7 +2039,7 @@ const WHY_ACTION_LABEL: Record<WhyAction, string> = {
   WATCH: "WATCH — 이상징후는 있으나 표본/근거 부족, 추가 관찰 필요",
   TEST: "TEST — 편성 변경 가설은 있으나 효과 미검증",
   MOVE: "MOVE — 프로그램 경쟁력은 있으나 현재 슬롯 적합도 낮음",
-  REPLACE: "REPLACE — 장기 반복 약세 확인, 교체 적극 검토",
+  REPLACE: "REPLACE — 같은 자리 성과가 여러 주 연속 낮음, 교체 적극 검토",
 };
 interface WhyCandidate {
   variable: string;
