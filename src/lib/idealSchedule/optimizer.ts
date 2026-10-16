@@ -492,6 +492,71 @@ function optimizeKeepCurrent(input: EngineInput): EngineOutput {
   const decisions = keepInsignificant(input, slots, assigned, blocks, budgetMin);
   timer.lap("decisions");
 
+  // 3-b) 빈 칸 재시도(2026-10-16, ENA STORY 10/12주 화면 점검): 탐욕 구성은 가치 큰 칸부터 채우다 같은 프로그램이 반복 한도(일·주)를 먼저 다 써 버리면
+  //      뒤 칸을 비워 두는데, 탐색 중에는 그 프로그램이 여러 칸을 차지했다가 위 "차이 작으면 지난주 유지" 단계에서 대부분 되돌아가 한도에 여유가 생겨도
+  //      빈 칸은 다시 보지 않아 한문철·아는 형님 같은 긴 아침 칸이 통째로 비어 나왔다. 그 단계가 끝난 뒤 빈 칸마다 반복 한도를 지키는 후보를 다시 찾아 넣는다
+  //      (한도가 정말 모자라면 그대로 빈 칸으로 보고).
+  for (let i = 0; i < slots.length && !gate.stopped; i++) {
+    if (assigned[i]) continue;
+    const s = slots[i];
+    const pb: PlacedBlock = { weekday: s.weekday, startMin: s.startMin, endMin: s.endMin, candidate: candsBySlot[i][0], status: "AI", fixed: false, slotIndex: i };
+    let best: { c: EngineCandidate; d: number } | null = null;
+    for (const c of candsBySlot[i]) {
+      if (!capsOk(c, s.weekday, blocks, config) || !benchmarkBudgetOk(c, s.endMin - s.startMin, blocks, budgetMin)) continue;
+      if (gate.check()) break;
+      pb.candidate = c;
+      blocks.push(pb);
+      const days = affectedDays(blocks, [pb], [c.programKey]);
+      const withIt = evaluateInternal(scorer, blocks, maxGap, days).objective;
+      blocks.pop();
+      const without = evaluateInternal(scorer, blocks, maxGap, days).objective;
+      const d = withIt - without;
+      if (!best || d > best.d + EPS) best = { c, d };
+    }
+    if (!best) continue;
+    pb.candidate = best.c;
+    blocks.push(pb);
+    assigned[i] = pb;
+    const at = emptySlots.findIndex((e) => e.weekday === s.weekday && e.startMin === s.startMin && e.endMin === s.endMin);
+    if (at >= 0) emptySlots.splice(at, 1);
+  }
+  // 그래도 비는 칸(후보가 그 칸 프로그램 하나뿐인데 같은 프로그램이 이미 한도를 채운 경우, 예: 일요일 한문철 4회) — 같은 프로그램이 한도를 쓰고 있는 다른 칸 하나를
+  // 그 칸의 다른 후보로 바꿔 한도를 비우고 이 칸을 채운다(목적함수 손실이 가장 작은 한 쌍). 30분 미만 자투리 칸은 프로그램을 밀어내면서까지 채우지 않는다.
+  for (let i = 0; i < slots.length && !gate.stopped; i++) {
+    if (assigned[i]) continue;
+    const s = slots[i];
+    if (s.endMin - s.startMin < 30) continue;
+    let best: { c: EngineCandidate; victim: PlacedBlock; repl: EngineCandidate; obj: number } | null = null;
+    const pb: PlacedBlock = { weekday: s.weekday, startMin: s.startMin, endMin: s.endMin, candidate: candsBySlot[i][0], status: "AI", fixed: false, slotIndex: i };
+    for (const c of candsBySlot[i]) {
+      if (!benchmarkBudgetOk(c, s.endMin - s.startMin, blocks, budgetMin)) continue;
+      for (const victim of blocks.filter((b) => !b.fixed && b.slotIndex !== undefined && b.candidate.programKey === c.programKey)) {
+        if (!capsOk(c, s.weekday, blocks, config, [victim])) continue; // 이 칸을 비워도 한도가 안 풀리면 소용없다
+        for (const repl of candsBySlot[victim.slotIndex!]) {
+          if (repl.programKey === c.programKey) continue;
+          if (!capsOk(repl, victim.weekday, blocks, config, [victim]) || !benchmarkBudgetOk(repl, victim.endMin - victim.startMin, blocks, budgetMin, [victim])) continue;
+          if (gate.check()) break;
+          const saved = victim.candidate;
+          victim.candidate = repl;
+          pb.candidate = c;
+          blocks.push(pb);
+          const obj = evaluateInternal(scorer, blocks, maxGap, null).objective;
+          blocks.pop();
+          victim.candidate = saved;
+          if (!best || obj > best.obj + EPS) best = { c, victim, repl, obj };
+        }
+      }
+    }
+    if (!best) continue;
+    best.victim.candidate = best.repl;
+    decisions.delete(best.victim.slotIndex!); // 지난주 유지/변경 판정이 이 칸에는 더 맞지 않는다
+    pb.candidate = best.c;
+    blocks.push(pb);
+    assigned[i] = pb;
+    const at = emptySlots.findIndex((e) => e.weekday === s.weekday && e.startMin === s.startMin && e.endMin === s.endMin);
+    if (at >= 0) emptySlots.splice(at, 1);
+  }
+
   scorer.detail = true;
   const final = evaluateSchedule(scorer, blocks, maxGap);
   // 시간 마감·취소로 멈췄으면 대체 후보(Swap용, 계산량이 큼)는 생략한다 — 편성안과 제약 검증에는 영향 없음
