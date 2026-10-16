@@ -54,9 +54,9 @@ type SlotRow = { isoDow: number; startTime: string };
 type Resp = PredictResponse & { ok: boolean; message?: string };
 type RecoPick = { name: string; repKey: string; prediction: number; low: number | null; high: number | null; asOf: string; stale: boolean; staleMessages: string[]; target: string };
 
-// 구매 검토 후보 목록의 열 정렬(데스크톱): 프로그램 | 장르·비교 실적 | 예상 시청률 | 배수 | 비교 근거 | 예측 근거
-const RECO_GRID = "md:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_6rem_4rem_4.5rem_4.5rem]";
-const RECO_EVIDENCE_TONE: Record<string, string> = { strong: "text-zinc-600", medium: "text-amber-700", weak: "text-rose-600" };
+// 구매 검토 후보 목록의 열 정렬(데스크톱): 프로그램 | 예상 시청률 | 배수 | 장르·비교 실적 | 비교 근거 | 예측 근거(모바일은 제목 아래 두 줄로 쌓임)
+const RECO_GRID = "md:grid-cols-[minmax(10rem,15rem)_5.5rem_3.5rem_minmax(0,1fr)_4.5rem_4.5rem]";
+const RECO_EVIDENCE_TONE: Record<string, string> = { strong: "text-emerald-700", medium: "text-amber-700", weak: "text-rose-600" };
 const fmt = (v: number | null | undefined, d = 3) => (v === null || v === undefined || !Number.isFinite(v) ? "-" : v.toFixed(d));
 const defaultKpiTargets = (ch: string): ("A2049" | "HH")[] => (GROUP_A.includes(ch) ? ["A2049", "HH"] : ["HH"]);
 
@@ -570,11 +570,11 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
           {stale && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">오래된 추천 — {alignment!.messages.join(" ")}</p>}
           <div className={`mt-3 hidden gap-x-4 px-2 pb-1.5 text-xs text-zinc-400 ${RECO_GRID} md:grid`} aria-hidden>
             <span>프로그램</span>
-            <span>장르 · 비교 실적</span>
             <span className="text-right">예상 시청률</span>
             <span className="text-right" title="연평균 대비 배수">배수</span>
-            <span>비교 근거</span>
-            <span>예측 근거</span>
+            <span>장르 · 비교 실적</span>
+            <span className="text-center">비교 근거</span>
+            <span className="text-center">예측 근거</span>
           </div>
           <ol className="divide-y divide-zinc-100 border-t border-zinc-100">
             {shown.map((r) => {
@@ -589,15 +589,15 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
                     onClick={() => onPick({ name: i.display_name, repKey: i.rep_key, prediction: i.prediction, low: i.prediction_low, high: i.prediction_high, asOf: i.as_of, stale, staleMessages: alignment?.messages ?? [], target: i.target })}
                     className={`grid w-full grid-cols-4 items-center gap-x-3 gap-y-0.5 rounded px-2 py-2 text-left hover:bg-zinc-50 md:gap-x-4 ${RECO_GRID}`}
                   >
-                    <span className="col-span-4 min-w-0 truncate text-sm font-medium text-zinc-900 md:col-span-1">{r.rank}. {i.display_name}</span>
-                    <span className="col-span-4 truncate text-xs text-zinc-500 md:col-span-1">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회</span>
-                    <span title={range} className={`text-sm font-semibold tabular-nums md:text-right ${below ? "text-rose-600" : "text-zinc-900"}`}>{fmt(i.prediction)}%</span>
-                    <span title="연평균 대비 배수" className="text-sm tabular-nums text-zinc-700 md:text-right">{i.vs_annual_avg !== null ? `${fmt(i.vs_annual_avg, 2)}배` : "-"}</span>
-                    <span className={`text-xs ${RECO_EVIDENCE_TONE[ev]}`}>
+                    <span title={i.display_name} className="col-span-4 min-w-0 line-clamp-2 text-sm font-medium text-zinc-900 md:col-span-1 md:col-start-1 md:row-start-1">{r.rank}. {i.display_name}</span>
+                    <span className="col-span-4 truncate text-xs text-zinc-500 md:col-span-1 md:col-start-4 md:row-start-1">{i.genre ?? "미분류"} · 비교 채널 {i.peer_count}곳·{i.peer_airings}회</span>
+                    <span title={range} className={`text-sm font-semibold tabular-nums md:col-start-2 md:row-start-1 md:text-right ${below ? "text-rose-600" : "text-zinc-900"}`}>{fmt(i.prediction)}%</span>
+                    <span title="연평균 대비 배수" className="text-sm tabular-nums text-zinc-700 md:col-start-3 md:row-start-1 md:text-right">{i.vs_annual_avg !== null ? `${fmt(i.vs_annual_avg, 2)}배` : "-"}</span>
+                    <span className={`text-center text-xs md:col-start-5 md:row-start-1 ${RECO_EVIDENCE_TONE[ev]}`}>
                       <span className="md:hidden">비교 </span>
                       {RECO_EVIDENCE_KO[ev].replace("근거 ", "")}
                     </span>
-                    <span className="text-xs text-zinc-500">
+                    <span className={`text-center text-xs md:col-start-6 md:row-start-1 ${i.confidence === "HIGH" ? "text-emerald-700" : "text-zinc-500"}`}>
                       <span className="md:hidden">예측 </span>
                       {i.confidence ? (CONF_LABEL[i.confidence] ?? i.confidence).replace("근거 ", "") : "-"}
                     </span>
