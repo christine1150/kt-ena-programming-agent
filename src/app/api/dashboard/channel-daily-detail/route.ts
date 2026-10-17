@@ -22,6 +22,7 @@ import {
   resolveRankSheetTargetLabel,
   EXTRA_TARGET_LABELS_BY_CHANNEL,
 } from "@/lib/targetResolution";
+import { findPlanFill, loadPlanDay } from "@/lib/planDayFill";
 
 // page1/route.ts의 offsetDateStr와 동일한 패턴(로컬 타임존 안전 — toISOString 금지, 이 프로젝트가
 // 자정 근처 날짜 밀림 버그를 이미 겪은 함정).
@@ -49,6 +50,9 @@ export interface ChannelDailyDetailRow {
   // olifeEpgStaging.ts가 OLIFE EPG 카탈로그 매칭으로 채워두고 있는 컬럼(새 파싱 불필요), page1의
   // "채널별 상위 프로그램"이 쓰는 것과 동일한 컬럼을 그대로 select만 추가해 내려준다.
   episode_subtitle: string | null;
+  // 사용자 지시(2026-10-17): 업로드 편성표·EPG의 회차와 본방/재방 표시도 함께 — 닐슨 값이 비어 있으면 편성표 값으로 채운다(planDayFill.ts).
+  episode_number: number | null;
+  is_first_run: boolean | null;
   primary_rating: number | null;
   primary_share: number | null;
   primary_time_spent_seconds: number | null;
@@ -60,6 +64,9 @@ export interface ChannelDailyDetailRow {
 }
 
 interface RatingRow {
+  program_id: string | null;
+  episode_number: number | null;
+  is_first_run: boolean | null;
   start_time: string;
   end_time: string | null;
   rating: number | null;
@@ -114,7 +121,7 @@ export async function GET(request: Request) {
   async function fetchRows(targetId: string, programLevel: boolean) {
     let query = supabase
       .from("ratings")
-      .select("start_time, end_time, rating, share, time_spent_seconds, time_spent_share, episode_subtitle, programs(canonical_name)")
+      .select("start_time, end_time, rating, share, time_spent_seconds, time_spent_share, episode_subtitle, program_id, episode_number, is_first_run, programs(canonical_name)")
       .eq("channel_id", channelRow!.id)
       .in("source_type", ["nielsen_daily", "skyuhd"])
       .eq("broadcast_date", date);
@@ -158,15 +165,21 @@ export async function GET(request: Request) {
   // page1/route.ts의 comparisonByKey와 동일한 패턴(시작시간+프로그램명 키) — 새 매칭 로직 발명 없음.
   const secondaryByKey = new Map(secondaryProgramRows.map((r) => [`${r.start_time}__${nameOf(r)}`, r]));
 
+  // 업로드 편성표(없으면 빈 배열)로 닐슨에 비어 있는 회차·부제·본/재방을 채운다. 닐슨 값이 있으면 그대로 둔다.
+  const plan = await loadPlanDay(channelRow.id, date);
   const rows: ChannelDailyDetailRow[] = primaryProgramRows
     .map((r) => {
       const name = nameOf(r);
       const sec = secondaryByKey.get(`${r.start_time}__${name}`) ?? null;
+      const fill = findPlanFill(plan, { programId: r.program_id, name, startTime: r.start_time });
+      const noEpisode = r.episode_number === null && r.episode_subtitle === null;
       return {
         start_time: r.start_time,
         end_time: r.end_time,
         canonical_name: name,
-        episode_subtitle: r.episode_subtitle,
+        episode_subtitle: noEpisode ? (fill?.subtitle ?? null) : r.episode_subtitle,
+        episode_number: noEpisode ? (fill?.episodeNumber ?? null) : r.episode_number,
+        is_first_run: r.is_first_run ?? fill?.isFirstRun ?? null,
         primary_rating: r.rating,
         primary_share: r.share,
         primary_time_spent_seconds: r.time_spent_seconds,

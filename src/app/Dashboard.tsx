@@ -5030,6 +5030,9 @@ interface ChannelDailyDetailApiRow {
   canonical_name: string;
   // 사용자 지시(2026-09-03): OLIFE처럼 EPG로 부제가 파악되는 경우 프로그램명 아랫줄에 표기.
   episode_subtitle: string | null;
+  // 닐슨에 없으면 업로드 편성표의 회차·본/재방 표시로 채워 내려온다(2026-10-17)
+  episode_number?: number | null;
+  is_first_run?: boolean | null;
   primary_rating: number | null;
   primary_share: number | null;
   primary_time_spent_seconds: number | null;
@@ -5307,8 +5310,9 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                         <span className="truncate" style={highlight ? { color, fontWeight: 700 } : undefined}>
                           {r.canonical_name}
                         </span>
-                        {r.episode_subtitle && (
-                          <span className="shrink-0 text-[11px] text-zinc-400">{r.episode_subtitle}</span>
+                        {r.is_first_run != null && <span className="shrink-0 text-[11px] text-zinc-400">{r.is_first_run ? "<본>" : "<재>"}</span>}
+                        {(r.episode_number != null || r.episode_subtitle) && (
+                          <span className="shrink-0 text-[11px] text-zinc-400">{r.episode_number != null ? `${r.episode_number}회` : ""}{r.episode_number != null && r.episode_subtitle ? " " : ""}{r.episode_subtitle ?? ""}</span>
                         )}
                       </div>
                     </td>
@@ -5336,12 +5340,19 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                       }
                     >
                       {r.canonical_name}
+                      {r.is_first_run != null && <span className="ml-1 text-[11px] font-normal text-zinc-400">{r.is_first_run ? "<본>" : "<재>"}</span>}
                     </div>
                     {/* 사용자 지시(2026-09-03): "OLIFE의 경우 EPG나 편성표를 통해서 부제가
                         파악 가능할 경우 부제를 아랫줄에 명기(1페이지 채널별 상위 프로그램에서
                         하듯이)" — episode_subtitle은 OLIFE EPG 카탈로그 매칭이 채워둔 값이라
                         채널을 하드코딩하지 않고 값이 있을 때만 자연스럽게 표시된다. */}
-                    {r.episode_subtitle && <div className="truncate text-[11px] text-zinc-400">{r.episode_subtitle}</div>}
+                    {(r.episode_number != null || r.episode_subtitle) && (
+                      <div className="truncate text-[11px] text-zinc-400">
+                        {r.episode_number != null ? `${r.episode_number}회` : ""}
+                        {r.episode_number != null && r.episode_subtitle ? " " : ""}
+                        {r.episode_subtitle ?? ""}
+                      </div>
+                    )}
                   </td>
                   <td className="py-1 text-center tabular-nums" style={ratingCellStyle(r.primary_rating, primaryRange, state.primaryMonthAvg)}>
                     {formatDetailRating(r.primary_rating)}
@@ -5457,6 +5468,22 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
   );
 }
 
+/** 불러오는 중에 도는 귀여운 스톱워치(2026-10-17 사용자 요청) — 바늘만 한 바퀴씩 돈다. 움직임을 줄인 설정에서는 멈춰 있다. */
+function TimerIcon() {
+  return (
+    <span className="relative inline-block h-7 w-7 shrink-0" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="absolute inset-0 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+        <circle cx="12" cy="12" r="8" className="fill-indigo-50" />
+        <path d="M10 2h4M12 2v2.4M19 5.2l1.3-1.3" />
+        <path d="M9.6 14.2q2.4 2 4.8 0" strokeWidth="1.3" />
+      </svg>
+      <span className="absolute inset-0 animate-spin motion-reduce:animate-none" style={{ animationDuration: "1.4s", animationTimingFunction: "linear" }}>
+        <span className="absolute left-1/2 top-[22%] h-[28%] w-[2px] -translate-x-1/2 rounded-full bg-indigo-500" />
+      </span>
+    </span>
+  );
+}
+
 /** 홈 첫 로딩 안내(2026-10-15 외부 검토 지적: 10초 넘게 "불러오는 중"만 보이고 재시도 수단이 없었다) — 경과 시간을 보이고, 오래 걸리면 이유와 다시 시도 버튼을 낸다. */
 function HomeLoadingNotice({ onRetry }: { onRetry: () => void }) {
   const [sec, setSec] = useState(0);
@@ -5466,16 +5493,21 @@ function HomeLoadingNotice({ onRetry }: { onRetry: () => void }) {
   }, []);
   return (
     <div className="rounded-xl bg-white px-4 py-3 text-sm text-zinc-600 ring-1 ring-zinc-200" role="status" aria-live="polite">
-      <p>브리핑을 불러오는 중입니다… {sec}초</p>
-      {sec >= 8 && <p className="mt-1 text-[13px] text-zinc-500">전 채널의 시청률·편성 신호를 한꺼번에 계산하는 화면이라 처음에는 10~30초 걸릴 수 있습니다.</p>}
-      {sec >= 25 && (
-        <p className="mt-2 text-[13px] text-zinc-500">
-          25초가 넘게 걸리고 있습니다.{" "}
-          <button type="button" onClick={() => { setSec(0); onRetry(); }} className="font-medium text-indigo-700 underline">
-            다시 시도
-          </button>
-        </p>
-      )}
+      <div className="flex items-center gap-3">
+        <TimerIcon />
+        <div className="min-w-0">
+          <p>브리핑을 불러오는 중입니다… {sec}초</p>
+          {sec >= 8 && <p className="mt-1 text-[13px] text-zinc-500">전 채널의 시청률·편성 신호를 한꺼번에 계산하는 화면이라 처음에는 10~30초 걸릴 수 있습니다.</p>}
+          {sec >= 25 && (
+            <p className="mt-2 text-[13px] text-zinc-500">
+              25초가 넘게 걸리고 있습니다.{" "}
+              <button type="button" onClick={() => { setSec(0); onRetry(); }} className="font-medium text-indigo-700 underline">
+                다시 시도
+              </button>
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -5841,7 +5873,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
 
         {/* 사용자 지시(2026-10-07): 상단 칩 줄(채널·타깃·기간·최신 수신일·상태)은 삭제하고, 일간/주간/월간 버튼은 "오늘의 시청률" 카드 우측 상단으로 옮긴다.
             불러오는 중·오류·이전 선택 값 안내(banner)는 사용자가 알아야 해서 그대로 남긴다. */}
-        {contextBar.banner && (
+        {contextBar.banner && !(!data && (loading || fetched.status === "error")) && (
           <p
             role="status"
             aria-live="polite"

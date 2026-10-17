@@ -23,6 +23,7 @@ import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { detectPortfolioAnomaly } from "@/lib/portfolioAnomaly";
 import { PRIME_RPC_ARGS } from "@/lib/audienceReport/primeTime";
 import { reinterpretEpisodeFields } from "@/lib/scheduleGridSource";
+import { findPlanFill, loadPlanDay } from "@/lib/planDayFill";
 // 사용자 지시(2026-09-18): Page 1 액션 요약·채널별 인사이트에 Page 2와 같은 5대 액션 태그
 // 배지를 붙이기 위해 타입만 가져온다(값 계산은 기존 mart_scheduling_fit_score 조회만 함).
 import type { ActionTag } from "@/lib/actionTags";
@@ -1538,6 +1539,22 @@ export async function GET(request: Request) {
         const fixed = reinterpretEpisodeFields(best.episode_number, best.episode_subtitle);
         r.episode_number = fixed.episodeNumber;
         r.episode_subtitle = fixed.episodeSubtitle;
+      }
+    }
+
+    // 사용자 지시(2026-10-17): 올린 편성표·OLIFE EPG의 회차·부제와 본/재방 표시가 상위 프로그램에 안 나온다 — 위 보강은 편성표 행이 프로그램에 매칭(matched_program_id)된 경우만 잡았다.
+    // 매칭이 비어 있어도 이름이 같고 시작 시각이 30분 이내인 편성표 행으로 빈 값을 채운다. 닐슨 값(회차·부제·본/재방)이 이미 있으면 건드리지 않는다.
+    if (rows.some((r) => (r.episode_number === null && r.episode_subtitle === null) || r.is_first_run === null)) {
+      const plan = await loadPlanDay(ch.id, asOfDate);
+      for (const r of rows) {
+        const name = Array.isArray(r.programs) ? (r.programs[0]?.canonical_name ?? "") : (r.programs?.canonical_name ?? "");
+        const fill = findPlanFill(plan, { programId: r.program_id, name, startTime: r.start_time });
+        if (!fill) continue;
+        if (r.episode_number === null && r.episode_subtitle === null) {
+          r.episode_number = fill.episodeNumber;
+          r.episode_subtitle = fill.subtitle;
+        }
+        if (r.is_first_run === null) r.is_first_run = fill.isFirstRun;
       }
     }
 
