@@ -17,7 +17,7 @@ import { highlightNarrativeText, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR } from
 // ChannelDeepDive.tsx에는 그대로 남아있음, 여기서만 제거).
 import { formatDateWithDowDots } from "@/lib/dateFormat";
 import { josaIga, josaEunNeun } from "@/lib/josa";
-import { shortenProgramNames } from "@/lib/programAlias";
+import { shortenProgramNames, shortProgramName } from "@/lib/programAlias";
 import {
   buildEnaOriginalHighlightSentence as buildEnaOriginalHighlightSentenceShared,
   buildRerunHighlightSentence as buildRerunHighlightSentenceShared,
@@ -4988,7 +4988,7 @@ function TodayTopProgramsCard({
                         <td className="py-1 text-zinc-400">{i + 1}</td>
                         <td className="py-1 text-zinc-700">
                           <div>
-                            {p.canonical_name}
+                            {shortProgramName(p.canonical_name)}
                             {p.isFirstRun === true && <span className="ml-1 text-[12px] text-zinc-400">{"<본>"}</span>}
                           </div>
                           {episodeText && <div className="text-[12px] text-zinc-400">{episodeText}</div>}
@@ -5306,7 +5306,7 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                     <td className="py-1 text-zinc-700">
                       <div className="flex items-baseline gap-1">
                         <span className="truncate" style={highlight ? { color, fontWeight: 700 } : undefined}>
-                          {r.canonical_name}
+                          {shortProgramName(r.canonical_name)}
                         </span>
                         {r.is_first_run === true && <span className="shrink-0 text-[11px] text-zinc-400">{"<본>"}</span>}
                         {(r.episode_number != null || r.episode_subtitle) && (
@@ -5337,7 +5337,7 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                           : undefined
                       }
                     >
-                      {r.canonical_name}
+                      {shortProgramName(r.canonical_name)}
                       {r.is_first_run === true && <span className="ml-1 text-[11px] font-normal text-zinc-400">{"<본>"}</span>}
                     </div>
                     {/* 사용자 지시(2026-09-03): "OLIFE의 경우 EPG나 편성표를 통해서 부제가

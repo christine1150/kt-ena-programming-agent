@@ -5,6 +5,7 @@
 // 프로그램명이 길면 글씨를 줄여 한 줄에 넣는다(잘라 내지 않음). 값은 API(/api/dashboard/top-programs)가 저장된 시청률을 고른 것이며 이 컴포넌트는 그리기만 한다.
 import { useLayoutEffect, useRef, useState } from "react";
 import { displayProgramName, formatRating, type TopProgramRow } from "@/lib/dashboard/marketTopPrograms";
+import { shortProgramName } from "@/lib/programAlias";
 import { channelBrand } from "@/lib/dashboard/channelBrandColors";
 import { REGIONAL_HOUSEHOLD_CAUTION } from "@/lib/competitorRegion";
 import { useContextData } from "@/lib/workspace/useContextData";
@@ -171,7 +172,7 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
                   </FitOneLine>
                   {r.own && <span className="sr-only"> (자사 채널)</span>}
                 </span>
-                <FitOneLine text={`${displayProgramName(r.channelName, r.programName)}${r.firstRun === true ? " <본>" : ""}`} className="text-[13px] font-medium text-zinc-900" />
+                <FitOneLine text={`${shortProgramName(displayProgramName(r.channelName, r.programName))}${r.firstRun === true ? " <본>" : ""}`} className="text-[13px] font-medium text-zinc-900" />
                 <span className="whitespace-nowrap text-right text-[11.5px] tabular-nums text-zinc-500">{r.startTime}</span>
                 <span className="whitespace-nowrap text-right tabular-nums" title="수도권 개인2049 시청률(괄호: 유료방송가구)">
                   <b className="text-[13px] font-bold text-zinc-900">{formatRating(r.rating)}</b>{" "}
