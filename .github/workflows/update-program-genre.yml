@@ -1,0 +1,28 @@
+name: 프로그램 장르 주간 갱신
+
+# 2026-10-18: Vercel Hobby는 크론이 2개까지라, 닐슨 메일 확인을 하루 두 번(08:00·09:30 KST 무렵)으로 늘리면서
+# 매주 월요일 07:00(KST) 장르 갱신을 Vercel 크론에서 이쪽으로 옮겼다. 호출하는 엔드포인트는 그대로(/api/cron/update-program-genre).
+# 저장소 시크릿 CRON_SECRET(Vercel 환경변수와 같은 값)이 필요하다 — nielsen-mail-check.yml과 같은 시크릿.
+
+on:
+  schedule:
+    - cron: "17 22 * * 0" # UTC 일요일 22:17 = KST 월요일 07:17(정각을 피해 GitHub 부하 지연을 줄인다)
+  workflow_dispatch: {}
+
+jobs:
+  update-genre:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: 장르 갱신 엔드포인트 호출
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "::error::저장소 시크릿 CRON_SECRET이 비어 있습니다. Settings > Secrets and variables > Actions 에서 Vercel의 CRON_SECRET과 같은 값을 추가하세요."; exit 1; fi
+          http_code=$(curl -sS --max-time 290 -H "Authorization: Bearer $CRON_SECRET" -o response.json -w "%{http_code}" "https://kt-ena-programming-agent.vercel.app/api/cron/update-program-genre")
+          echo "HTTP $http_code"
+          cat response.json
+          if [ "$http_code" != "200" ]; then
+            echo "::error::엔드포인트가 실패 응답을 반환했습니다 (HTTP $http_code) — 위 응답 본문 참고."
+            exit 1
+          fi
