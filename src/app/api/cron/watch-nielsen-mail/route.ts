@@ -32,8 +32,10 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const hop = Math.max(0, Math.floor(Number(url.searchParams.get("hop") ?? 0)) || 0);
   const startedMs = Date.now();
+  // 이어 붙이기 점검용(인증 필요): test=1이면 "아직 반영 전"으로 보고 두 번째 호출(hop 1)까지만 이어 붙인다.
+  const testMode = url.searchParams.get("test") === "1";
 
-  let done = await todaysReportDone(startedMs);
+  let done = testMode ? false : await todaysReportDone(startedMs);
   let checks = 0;
   let lastMessage: string | undefined;
   let processedCount = 0;
@@ -48,12 +50,12 @@ export async function GET(request: Request) {
     checks++;
     lastMessage = result.message;
     processedCount += result.processed.length;
-    done = await todaysReportDone(Date.now());
+    done = testMode ? false : await todaysReportDone(Date.now());
     if (!shouldPollAgain({ done, nowMs: Date.now(), startedMs })) break;
     await sleep(WATCH_POLL_MS);
   }
 
-  const chain = shouldChain({ done, nowMs: Date.now(), hop });
+  const chain = testMode ? hop < 1 && shouldChain({ done, nowMs: Date.now(), hop }) : shouldChain({ done, nowMs: Date.now(), hop });
   if (chain) {
     // 응답을 돌려준 뒤 다음 호출을 시작한다(응답은 기다리지 않는다 — 다음 호출은 자기 시간 한도 안에서 따로 돈다).
     // 다음 호출은 반드시 공개 운영 도메인으로 보낸다. 크론이 들어온 주소(요청 URL의 배포별 주소)는 Vercel 배포 보호(SSO 302)에 막혀
@@ -62,6 +64,7 @@ export async function GET(request: Request) {
     const base = prodHost ? `https://${prodHost}` : url.origin;
     const next = new URL(base + url.pathname);
     next.searchParams.set("hop", String(hop + 1));
+    if (testMode) next.searchParams.set("test", "1");
     const authorization = request.headers.get("authorization");
     after(async () => {
       // 다음 호출은 끝날 때까지 한참 걸려 8초 안에는 응답이 없는 게 정상이다. 그 안에 오는 응답(302 배포 보호·401·5xx)은 이어 붙이기 실패이므로 로그에 남긴다.
