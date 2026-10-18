@@ -1,5 +1,5 @@
 // 닐슨 메일 감시 규칙(mailWatch.ts) 단위 테스트 — 실행: npm run test:mailwatch
-import { WATCH_BUDGET_MS, WATCH_MAX_HOPS, WATCH_POLL_MS, expectedReportTag, expectedSubjectFragment, inWatchWindow, kstParts, shouldChain, shouldPollAgain } from "../src/lib/mailWatch";
+import { WATCH_BUDGET_MS, WATCH_MAX_HOPS, WATCH_POLL_MS, expectedReportTag, shouldCheckMailNow, expectedSubjectFragment, inWatchWindow, kstParts, shouldChain, shouldPollAgain } from "../src/lib/mailWatch";
 
 let pass = 0;
 let fail = 0;
@@ -33,6 +33,8 @@ t("이어 붙이기: 횟수 상한에서 멈춘다(폭주 방지)", !shouldChain
   t("재확인: 반영됐으면 멈춘다", !shouldPollAgain({ done: true, nowMs: start + 5_000, startedMs: start }));
   t("재확인: 대기 뒤 창을 벗어나면 멈춘다", !shouldPollAgain({ done: false, nowMs: kst("2026-10-18T08:54:30"), startedMs: kst("2026-10-18T08:54:00") }));
 }
+t("메일함 접속은 07:30부터(그 전에는 대기만), 창이 끝나면 그만", !shouldCheckMailNow(kst("2026-10-18T07:29:59")) && shouldCheckMailNow(kst("2026-10-18T07:30:00")) && shouldCheckMailNow(kst("2026-10-18T08:20:00")) && !shouldCheckMailNow(kst("2026-10-18T08:55:00")));
+t("확인 간격은 1분 이하(도착 후 1분 안에 반영)", WATCH_POLL_MS <= 60_000);
 t("한 호출이 덮는 시간 × 최대 호출 수가 감시 창(115분)을 넘는다", ((WATCH_BUDGET_MS + 10_000) * WATCH_MAX_HOPS) / 60_000 >= 115);
 
 console.log(`\n${pass}건 통과, ${fail}건 실패`);
