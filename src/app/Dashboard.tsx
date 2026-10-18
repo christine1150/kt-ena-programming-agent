@@ -4901,6 +4901,39 @@ function KillerContentCard({
   );
 }
 
+// 프로그램명 줄(사용자 지시 2026-10-19): 프로그램명 · <본> · 회차(·부제)를 한 줄에 붙여 보여 주고, 부제가 길어 한 줄에 못 들어갈 때만 아랫줄로 내린다.
+// 글자 폭은 한글 1·그 밖 0.55로 어림하고(부가 글씨는 본문보다 작아 0.8배), maxUnits를 넘으면 부제를 아랫줄로 보낸다. 이름이 칸보다 길면 이름 쪽만 줄임표로 잘린다.
+function textUnits(s: string): number {
+  let n = 0;
+  for (const ch of s) n += ch.charCodeAt(0) > 0x2e80 ? 1 : 0.55;
+  return n;
+}
+function ProgramNameLine({ name, firstRun, episodeNumber, subtitle, maxUnits, nameStyle }: {
+  name: string;
+  firstRun: boolean;
+  episodeNumber: number | null | undefined;
+  subtitle: string | null | undefined;
+  maxUnits: number;
+  nameStyle?: React.CSSProperties;
+}) {
+  const ep = episodeNumber != null ? `${episodeNumber}회` : "";
+  const sub = subtitle?.trim() ?? "";
+  const units = textUnits(name) + (firstRun ? 2.4 : 0) + (textUnits(ep) + textUnits(sub) + (ep && sub ? 0.5 : 0)) * 0.8;
+  const subInline = !!sub && units <= maxUnits;
+  const inline = subInline ? `${ep}${ep ? " " : ""}${sub}` : ep;
+  const below = sub && !subInline ? sub : null;
+  return (
+    <>
+      <div className="flex min-w-0 items-baseline gap-2">
+        <span className="min-w-0 truncate" style={nameStyle}>{name}</span>
+        {firstRun && <span className="shrink-0 text-[11px] font-normal text-zinc-400">{"<본>"}</span>}
+        {inline && <span className="shrink-0 text-[11px] font-normal text-zinc-400">{inline}</span>}
+      </div>
+      {below && <div className="truncate text-[11px] font-normal text-zinc-400">{below}</div>}
+    </>
+  );
+}
+
 // 사용자 지시(2026-08-21): 채널별 인사이트 옆자리(기존 채널별 킬러 콘텐츠 자리)에 새로 배치 —
 // 최근 4주 평균이 아니라 "오늘 하루"의 채널별 시청률 상위 프로그램만 간단한 표로(사용자 지시
 // 2026-09-02: 3개→5개). 채널명은
@@ -4981,17 +5014,11 @@ function TodayTopProgramsCard({
                         : p.rating > ytdAvg
                           ? enaAccentColor
                           : NARRATIVE_DOWN_COLOR;
-                    const episodeText =
-                      p.episodeNumber !== null ? `${p.episodeNumber}회${p.episodeSubtitle ? ` ${p.episodeSubtitle}` : ""}` : null;
                     return (
                       <tr key={i} className="border-t border-zinc-50 align-top">
                         <td className="py-1 text-zinc-400">{i + 1}</td>
                         <td className="py-1 text-zinc-700">
-                          <div>
-                            {shortProgramName(p.canonical_name)}
-                            {p.isFirstRun === true && <span className="ml-1 text-[12px] text-zinc-400">{"<본>"}</span>}
-                          </div>
-                          {episodeText && <div className="text-[12px] text-zinc-400">{episodeText}</div>}
+                          <ProgramNameLine name={shortProgramName(p.canonical_name)} firstRun={p.isFirstRun === true} episodeNumber={p.episodeNumber} subtitle={p.episodeSubtitle} maxUnits={30} />
                         </td>
                         <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(p.start_time)}</td>
                         <td className="py-1 text-center tabular-nums font-medium" style={{ color: ratingColor }}>
@@ -5228,7 +5255,7 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
               </>
             ) : (
               <>
-                <col className="w-11" />
+                <col className="w-12" />
                 <col />
                 <col className="w-14" />
                 {hasSecondary && <col className="w-14" />}
@@ -5244,7 +5271,7 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
               <tr>
                 <th className="pb-1 text-center">시작</th>
                 <th className="pb-1 text-center">끝</th>
-                <th className="pb-1 text-left">프로그램명</th>
+                <th className="pb-1 pl-3 text-left">프로그램명</th>
                 <th className="pb-1 text-center">
                   시청률
                   <br />
@@ -5257,7 +5284,7 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
               <th rowSpan={2} className="pb-1 text-center align-bottom">
                 시작
               </th>
-              <th rowSpan={2} className="pb-1 text-left align-bottom">
+              <th rowSpan={2} className="pb-1 pl-3 text-left align-bottom">
                 프로그램명
               </th>
               <th colSpan={hasSecondary ? 2 : 1} className="pb-0.5 text-center border-b border-zinc-100">
@@ -5303,16 +5330,8 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                   <tr key={i} className="border-t border-zinc-50">
                     <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(r.start_time)}</td>
                     <td className="py-1 text-center tabular-nums text-zinc-400">{r.end_time ? fmtTime(r.end_time) : "—"}</td>
-                    <td className="py-1 text-zinc-700">
-                      <div className="flex items-baseline gap-1">
-                        <span className="truncate" style={highlight ? { color, fontWeight: 700 } : undefined}>
-                          {shortProgramName(r.canonical_name)}
-                        </span>
-                        {r.is_first_run === true && <span className="shrink-0 text-[11px] text-zinc-400">{"<본>"}</span>}
-                        {(r.episode_number != null || r.episode_subtitle) && (
-                          <span className="shrink-0 text-[11px] text-zinc-400">{r.episode_number != null ? `${r.episode_number}회` : ""}{r.episode_number != null && r.episode_subtitle ? " " : ""}{r.episode_subtitle ?? ""}</span>
-                        )}
-                      </div>
+                    <td className="py-1 pl-3 text-zinc-700">
+                      <ProgramNameLine name={shortProgramName(r.canonical_name)} firstRun={r.is_first_run === true} episodeNumber={r.episode_number} subtitle={r.episode_subtitle} maxUnits={30} nameStyle={highlight ? { color, fontWeight: 700 } : undefined} />
                     </td>
                     <td
                       className="py-1 text-center tabular-nums"
@@ -5326,31 +5345,19 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
               return (
                 <tr key={i} className="border-t border-zinc-50">
                   <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(r.start_time)}</td>
-                  <td className="py-1 text-zinc-700">
+                  <td className="py-1 pl-3 text-zinc-700">
                     {/* 사용자 지시(2026-09-07): 타깃 주 시청률(primary_rating)이 연간 채널
-                        평균 이상이면 프로그램명도 채널 로고 색+볼드로 강조. */}
-                    <div
-                      className="truncate"
-                      style={
-                        r.primary_rating !== null && annualAvgRating !== null && r.primary_rating >= annualAvgRating
-                          ? { color, fontWeight: 700 }
-                          : undefined
-                      }
-                    >
-                      {shortProgramName(r.canonical_name)}
-                      {r.is_first_run === true && <span className="ml-1 text-[11px] font-normal text-zinc-400">{"<본>"}</span>}
-                    </div>
-                    {/* 사용자 지시(2026-09-03): "OLIFE의 경우 EPG나 편성표를 통해서 부제가
-                        파악 가능할 경우 부제를 아랫줄에 명기(1페이지 채널별 상위 프로그램에서
-                        하듯이)" — episode_subtitle은 OLIFE EPG 카탈로그 매칭이 채워둔 값이라
-                        채널을 하드코딩하지 않고 값이 있을 때만 자연스럽게 표시된다. */}
-                    {(r.episode_number != null || r.episode_subtitle) && (
-                      <div className="truncate text-[11px] text-zinc-400">
-                        {r.episode_number != null ? `${r.episode_number}회` : ""}
-                        {r.episode_number != null && r.episode_subtitle ? " " : ""}
-                        {r.episode_subtitle ?? ""}
-                      </div>
-                    )}
+                        평균 이상이면 프로그램명도 채널 로고 색+볼드로 강조.
+                        사용자 지시(2026-09-03·2026-10-19): EPG·편성표로 파악된 회차·부제를 프로그램명 오른쪽에 한 줄로 붙이고,
+                        부제가 길 때만 아랫줄로 내린다(episode_*는 값이 있을 때만 나오므로 채널을 하드코딩하지 않는다). */}
+                    <ProgramNameLine
+                      name={shortProgramName(r.canonical_name)}
+                      firstRun={r.is_first_run === true}
+                      episodeNumber={r.episode_number}
+                      subtitle={r.episode_subtitle}
+                      maxUnits={22}
+                      nameStyle={r.primary_rating !== null && annualAvgRating !== null && r.primary_rating >= annualAvgRating ? { color, fontWeight: 700 } : undefined}
+                    />
                   </td>
                   <td className="py-1 text-center tabular-nums" style={ratingCellStyle(r.primary_rating, primaryRange, state.primaryMonthAvg)}>
                     {formatDetailRating(r.primary_rating)}
@@ -5360,17 +5367,18 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                       {r.secondary_rating !== null ? formatDetailRating(r.secondary_rating) : "—"}
                     </td>
                   )}
-                  <td className="py-1 text-center tabular-nums" style={primaryShareAboveAvg ? { color, fontWeight: 700 } : { color: "#a1a1aa" }}>
-                    {r.primary_share !== null ? `${r.primary_share.toFixed(2)}%` : "—"}
+                  {/* 사용자 지시(2026-10-19): 점유율·시청비율은 % 기호를 빼고(머리글이 비율임을 알려 준다) 한 줄에 딱 맞게 — 17.49%·100.00%가 두 줄로 내려가던 문제 */}
+                  <td className="whitespace-nowrap py-1 text-center tabular-nums" style={primaryShareAboveAvg ? { color, fontWeight: 700 } : { color: "#a1a1aa" }}>
+                    {r.primary_share !== null ? r.primary_share.toFixed(2) : "—"}
                   </td>
                   {hasSecondary && (
-                    <td className="py-1 text-center tabular-nums" style={secondaryShareAboveAvg ? { color, fontWeight: 700 } : { color: "#a1a1aa" }}>
-                      {r.secondary_share !== null ? `${r.secondary_share.toFixed(2)}%` : "—"}
+                    <td className="whitespace-nowrap py-1 text-center tabular-nums" style={secondaryShareAboveAvg ? { color, fontWeight: 700 } : { color: "#a1a1aa" }}>
+                      {r.secondary_share !== null ? r.secondary_share.toFixed(2) : "—"}
                     </td>
                   )}
-                  <td className="py-1 text-center tabular-nums text-zinc-500">{fmtSecondsCompact(r.primary_time_spent_seconds)}</td>
-                  <td className="py-1 text-center tabular-nums text-zinc-500">
-                    {r.primary_time_spent_share !== null ? `${r.primary_time_spent_share.toFixed(2)}%` : "—"}
+                  <td className="whitespace-nowrap py-1 text-center tabular-nums text-zinc-500">{fmtSecondsCompact(r.primary_time_spent_seconds)}</td>
+                  <td className="whitespace-nowrap py-1 text-center tabular-nums text-zinc-500">
+                    {r.primary_time_spent_share !== null ? r.primary_time_spent_share.toFixed(2) : "—"}
                   </td>
                 </tr>
               );
@@ -5379,31 +5387,31 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
               <tr className="border-t-2 border-zinc-200 bg-zinc-50 font-bold text-zinc-800">
                 <td className="py-1.5 text-center">—</td>
                 <td className="py-1.5 text-center">—</td>
-                <td className="py-1.5">하루 전체</td>
+                <td className="py-1.5 pl-3">하루 전체</td>
                 <td className="py-1.5 text-center tabular-nums">{formatRating(state.dayTotal.primary_rating, channelCode)}</td>
               </tr>
             )}
             {state.dayTotal && !isSkyUhdPanel && (
               <tr className="border-t-2 border-zinc-200 bg-zinc-50 font-bold text-zinc-800">
                 <td className="py-1.5 text-center">—</td>
-                <td className="py-1.5">하루 전체</td>
+                <td className="py-1.5 pl-3">하루 전체</td>
                 <td className="py-1.5 text-center tabular-nums">{formatRating(state.dayTotal.primary_rating, channelCode)}</td>
                 {hasSecondary && (
                   <td className="py-1.5 text-center tabular-nums">
                     {state.dayTotal.secondary_rating !== null ? formatRating(state.dayTotal.secondary_rating, channelCode) : "—"}
                   </td>
                 )}
-                <td className="py-1.5 text-center tabular-nums">
-                  {state.dayTotal.primary_share !== null ? `${state.dayTotal.primary_share.toFixed(2)}%` : "—"}
+                <td className="whitespace-nowrap py-1.5 text-center tabular-nums">
+                  {state.dayTotal.primary_share !== null ? state.dayTotal.primary_share.toFixed(2) : "—"}
                 </td>
                 {hasSecondary && (
-                  <td className="py-1.5 text-center tabular-nums">
-                    {state.dayTotal.secondary_share !== null ? `${state.dayTotal.secondary_share.toFixed(2)}%` : "—"}
+                  <td className="whitespace-nowrap py-1.5 text-center tabular-nums">
+                    {state.dayTotal.secondary_share !== null ? state.dayTotal.secondary_share.toFixed(2) : "—"}
                   </td>
                 )}
-                <td className="py-1.5 text-center tabular-nums">{fmtSecondsCompact(state.dayTotal.primary_time_spent_seconds)}</td>
-                <td className="py-1.5 text-center tabular-nums">
-                  {state.dayTotal.primary_time_spent_share !== null ? `${state.dayTotal.primary_time_spent_share.toFixed(2)}%` : "—"}
+                <td className="whitespace-nowrap py-1.5 text-center tabular-nums">{fmtSecondsCompact(state.dayTotal.primary_time_spent_seconds)}</td>
+                <td className="whitespace-nowrap py-1.5 text-center tabular-nums">
+                  {state.dayTotal.primary_time_spent_share !== null ? state.dayTotal.primary_time_spent_share.toFixed(2) : "—"}
                 </td>
               </tr>
             )}

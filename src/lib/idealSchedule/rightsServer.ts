@@ -6,7 +6,8 @@ import { evaluateEligibility } from "@/lib/avail/evaluate";
 import { loadAvailState } from "@/lib/avail/store";
 import type { EvalContext } from "@/lib/avail/evaluate";
 import type { ContentQuery, SlotRef } from "@/lib/avail/types";
-import { broadcastDateOf, notChecked, slotRightsOf, type SlotRights } from "./slotRights";
+import { ineligibleReason } from "./channelEligibility";
+import { RIGHTS_LABEL, broadcastDateOf, notChecked, slotRightsOf, type SlotRights } from "./slotRights";
 
 export interface RightsCandidateRef {
   contentType: string;
@@ -57,8 +58,28 @@ function unavailableLookup(status: "not_configured" | "error", message: string |
   };
 }
 
+/** 제목별 편성 가능 채널(channelEligibility.ts)을 권리 판정 앞에 덧씌운다 — 허용 채널이 아니면 Avail 자료 유무와 상관없이 "권리상 불가"로 돌려 수동 교체·후보 목록에서도 막는다. */
+function withChannelEligibility(base: RightsLookup): RightsLookup {
+  return {
+    ...base,
+    check(c, weekStart, channelCode, weekday, startMin, endMin, episodeNumber) {
+      if (c.contentType === "OWN") {
+        const why = ineligibleReason(channelCode, c.programName);
+        if (why) {
+          return { status: "unavailable", label: RIGHTS_LABEL.unavailable, reasonCodes: ["CHANNEL_NOT_ALLOWED"], reasons: [why], remaining: null, eligibleEpisodes: null, expiresOn: null, inventoryVersion: base.inventoryVersion, grantRevisionIds: [], assumptions: [] };
+        }
+      }
+      return base.check(c, weekStart, channelCode, weekday, startMin, endMin, episodeNumber);
+    },
+  };
+}
+
 /** 최신 Avail 상태로 판정기를 만든다. 자료가 없거나 실패하면 모든 칸이 "확인 안 함"이 된다(가능으로 취급하지 않는다). */
 export async function loadRightsLookup(): Promise<RightsLookup> {
+  return withChannelEligibility(await loadAvailLookup());
+}
+
+async function loadAvailLookup(): Promise<RightsLookup> {
   try {
     const loaded = await loadAvailState();
     if (!loaded.available || loaded.state.revisions.length === 0) return unavailableLookup("not_configured", loaded.error);

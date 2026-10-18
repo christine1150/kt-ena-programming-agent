@@ -64,7 +64,7 @@ const toAlt = (a: RawAlt): SlotAlternative => ({
 async function loadDaySlots(channelCode: string, asOfDate: string): Promise<SlotSimulation[]> {
   const weekStart = nextMondayAfter(asOfDate);
   const exclFp = exclusionFingerprint(await loadActiveExclusions((await loadChannelRef(channelCode)).id, weekStart));
-  const key = `s1|${channelCode}|${asOfDate}|${exclFp}`;
+  const key = `s2|${channelCode}|${asOfDate}|${exclFp}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
   const out = await runIdealSchedule({ channelCode, weekStart, mode: "KEEP_CURRENT", strategyMode: "AUTO", competitorNames: [], asOfDate, alternativesTopN: 40 });

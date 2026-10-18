@@ -15,7 +15,8 @@ import { airingSpan } from "./time";
 import { loadGenreMap } from "./genreStore";
 import { withOptimizeTarget } from "./mapping";
 import { enrichAiringsWithPlan, normalizePlanRows, type PlanRow, type PlanRowRaw } from "./planEpisodes";
-import type { StrategyMode } from "./scoring";
+import type { EngineCandidate, StrategyMode } from "./scoring";
+import { buildChannelIneligiblePredicate } from "./channelEligibility";
 import { addDays } from "./time";
 import { DEFAULT_SEARCH_DEADLINE_MS } from "./searchControl";
 import { loadSeriesPriorInputs } from "./seriesLinkServer";
@@ -243,13 +244,16 @@ export async function runIdealSchedule(req: RunRequest, opts: RunOptions = {}): 
     loadSeriesPriorInputs({ channelId: channel.id, channelCode: channel.code, kpiLabel: bundle.kpiLabel, asOfDate, lookbackDays: config.expected_kpi.lookback_days, names: lockInputs.map((c) => c.programName) }),
   ]);
   // 제외 편성(사용자 지시 2026-10-07): 권리 게이트와 같은 slotAllowed 자리에 합쳐, 제외 제목은 AI가 새로 배치하지 못하고 현재 편성에 있어도 교체 대상이 된다.
-  const isExcluded = buildExcludedPredicate(exclusionRows);
+  const isExcludedByList = buildExcludedPredicate(exclusionRows);
+  // 제목별 편성 가능 채널(channelEligibility.ts, 사용자 지시 2026-10-19): 나는솔로·나솔사계는 ENA·ENA Play만, 지구마불은 ENA·ENA Drama·ENA Play·ENA Story만 — 그 밖의 채널에는 AI가 배치하지 못하고 현재 편성에 있어도 교체 대상이 된다.
+  const isChannelIneligible = buildChannelIneligiblePredicate(channel.code);
+  const isExcluded = isExcludedByList || isChannelIneligible ? ((c: EngineCandidate) => !!(isExcludedByList && isExcludedByList(c)) || !!(isChannelIneligible && isChannelIneligible(c))) : null;
   const rightsGate = rights.gate ? rights.gate : null;
   const combinedRights =
     rightsGate || isExcluded
       ? {
           slotAllowed: ((c, weekday, startMin, endMin) => !(isExcluded && isExcluded(c)) && (!rightsGate || rightsGate.slotAllowed(c, weekday, startMin, endMin))) as NonNullable<typeof rightsGate>["slotAllowed"],
-          fingerprint: `${rightsGate?.fingerprint ?? ""}${isExcluded ? `|excl:${exclusionFingerprint(exclusionRows)}` : ""}`,
+          fingerprint: `${rightsGate?.fingerprint ?? ""}${isExcludedByList ? `|excl:${exclusionFingerprint(exclusionRows)}` : ""}${isChannelIneligible ? "|elig:v1" : ""}`,
         }
       : undefined;
   // 제외 편성이 후보를 얼마나 줄였는지 한 줄로 알린다(사용자 설계 2026-10-06): 최근 방영 프로그램 중 제외로 빠진 수, 20% 이상이면 "크게 줄었습니다"
