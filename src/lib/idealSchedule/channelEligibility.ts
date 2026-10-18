@@ -1,5 +1,5 @@
 // 제목별 편성 가능 채널(사용자 지시 2026-10-19) — 순수 함수.
-// 일부 타이틀은 방송사 계약·브랜드 정책상 특정 채널에만 편성할 수 있다. 예) <나는솔로>·<나솔사계>는 ENA·ENA Play만, <지구마불> 시리즈는 ENA·ENA Drama·ENA Play·ENA Story만.
+// 일부 타이틀은 방송사 계약·브랜드 정책상 특정 채널에만 편성할 수 있다. 예) <나는솔로>·<나솔사계>는 ENA·ENA Play만, <지구마불> 시리즈는 ENA·ENA Drama·ENA Play·ENA Story·skyUHD만.
 // 엔진(engineRunner의 slotAllowed 게이트)과 수동 교체·후보 목록(rightsServer)이 같은 규칙을 쓰도록 한 곳에 둔다.
 // 새 규칙은 TITLE_CHANNEL_RULES에 한 줄 추가한다(제목 조각은 공백·기호·대소문자를 없앤 형태로 비교하고, 제목에 그 조각이 들어 있으면 같은 규칙으로 본다).
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
@@ -15,7 +15,7 @@ export interface TitleChannelRule {
 
 export const TITLE_CHANNEL_RULES: TitleChannelRule[] = [
   { label: "나는솔로·나솔사계", titles: ["나는솔로", "나는solo", "나솔사계"], allowedChannels: ["ENA", "ENA_PLAY"] },
-  { label: "지구마불 시리즈", titles: ["지구마불"], allowedChannels: ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY"] },
+  { label: "지구마불 시리즈", titles: ["지구마불"], allowedChannels: ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "SKYUHD"] },
 ];
 
 const CHANNEL_LABEL: Record<string, string> = { ENA: "ENA", ENA_DRAMA: "ENA Drama", ENA_PLAY: "ENA Play", ENA_STORY: "ENA Story", OLIFE: "OLIFE", ONCE: "ONCE", SKYUHD: "skyUHD" };

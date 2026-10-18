@@ -18,8 +18,8 @@ t("나는솔로: ENA Story·ENA Drama·OLIFE·ONCE 불가", ["ENA_STORY", "ENA_D
 t("나솔사계도 같은 규칙", titleAllowedOnChannel("ENA", "나솔사계") && !titleAllowedOnChannel("ENA_STORY", "나솔사계"));
 t("표기 변형(나는 SOLO, 회차·기수 꼬리)도 같은 규칙", !titleAllowedOnChannel("ENA_STORY", "나는 SOLO") && !titleAllowedOnChannel("ENA_STORY", "나는솔로 24기") && !titleAllowedOnChannel("ENA_STORY", "<본> 나는솔로"));
 t("나는 SOLO 그후 사랑은 계속된다도 불가", !titleAllowedOnChannel("ENA_STORY", "나는 SOLO 그후 사랑은 계속된다"));
-t("지구마불: ENA·ENA Drama·ENA Play·ENA Story 가능", ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY"].every((c) => titleAllowedOnChannel(c, "지구마불 세계여행 4")));
-t("지구마불: OLIFE·ONCE·skyUHD 불가", ["OLIFE", "ONCE", "SKYUHD"].every((c) => !titleAllowedOnChannel(c, "지구마불 세계여행4")));
+t("지구마불: ENA·ENA Drama·ENA Play·ENA Story·skyUHD 가능", ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "SKYUHD"].every((c) => titleAllowedOnChannel(c, "지구마불 세계여행 4")));
+t("지구마불: OLIFE·ONCE 불가", ["OLIFE", "ONCE"].every((c) => !titleAllowedOnChannel(c, "지구마불 세계여행4")));
 t("규칙 없는 제목은 어느 채널이든 가능", titleAllowedOnChannel("ENA_STORY", "인간극장") && titleAllowedOnChannel("OLIFE", "한국기행"));
 t("사유 문구: ENA Story에 나는솔로", (ineligibleReason("ENA_STORY", "나는솔로") ?? "").includes("ENA·ENA Play에만"));
 t("사유 문구: 가능하면 null", ineligibleReason("ENA", "나는솔로") === null && ineligibleReason("ENA_STORY", "인간극장") === null);
