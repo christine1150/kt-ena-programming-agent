@@ -56,14 +56,21 @@ export async function GET(request: Request) {
   const chain = shouldChain({ done, nowMs: Date.now(), hop });
   if (chain) {
     // 응답을 돌려준 뒤 다음 호출을 시작한다(응답은 기다리지 않는다 — 다음 호출은 자기 시간 한도 안에서 따로 돈다).
-    const next = new URL(url.origin + url.pathname);
+    // 다음 호출은 반드시 공개 운영 도메인으로 보낸다. 크론이 들어온 주소(요청 URL의 배포별 주소)는 Vercel 배포 보호(SSO 302)에 막혀
+    // 이어 붙이기가 끊겼다(2026-10-19 실측: 10/19 07:29 첫 호출 뒤 다음 호출이 없었고 07:56 메일이 반영되지 않음). 로컬 개발에서는 요청 주소를 그대로 쓴다.
+    const prodHost = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? (process.env.VERCEL ? "kt-ena-programming-agent.vercel.app" : undefined);
+    const base = prodHost ? `https://${prodHost}` : url.origin;
+    const next = new URL(base + url.pathname);
     next.searchParams.set("hop", String(hop + 1));
     const authorization = request.headers.get("authorization");
     after(async () => {
-      await fetch(next, { headers: authorization ? { authorization } : {}, signal: AbortSignal.timeout(8_000) }).catch(() => undefined);
+      // 다음 호출은 끝날 때까지 한참 걸려 8초 안에는 응답이 없는 게 정상이다. 그 안에 오는 응답(302 배포 보호·401·5xx)은 이어 붙이기 실패이므로 로그에 남긴다.
+      const res = await fetch(next, { headers: authorization ? { authorization } : {}, redirect: "manual", signal: AbortSignal.timeout(8_000) }).catch(() => null);
+      if (res && res.status !== 200) console.error(`[watch-nielsen-mail] 다음 호출(hop ${hop + 1}) 이어 붙이기 실패: HTTP ${res.status}`);
     });
   }
 
   const nowKst = kstParts(Date.now());
+  console.log(`[watch-nielsen-mail] hop=${hop} done=${done} checks=${checks} processed=${processedCount} chained=${chain} kstMin=${nowKst.minutes}`);
   return NextResponse.json({ ok: true, done, hop, checks, processedCount, chained: chain, kstMinutes: nowKst.minutes, message: lastMessage });
 }
