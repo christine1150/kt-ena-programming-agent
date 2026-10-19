@@ -5237,7 +5237,7 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
             rel="noopener"
             className="rounded-full px-2 py-0.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
           >
-            표로 크게 보기 ↗
+            표로 크게 보기
           </a>
           <button
             type="button"
