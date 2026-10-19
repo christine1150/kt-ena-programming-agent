@@ -59,7 +59,7 @@ function NavInner({ role }: { role: Role | null }) {
                       title="시청률 표를 새 창으로 엽니다"
                       className="block border-b-2 border-transparent px-3 py-2.5 text-[13px] font-medium text-zinc-500 transition hover:text-zinc-800"
                     >
-                      시청률 표 ↗
+                      시청률 표
                     </a>
                   </li>
                 )}

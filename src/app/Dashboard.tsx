@@ -1661,7 +1661,7 @@ function ChannelStatusCard({
             {/* 사용자 지시(2026-10-19): 일간·주간·월간 왼쪽에 시청률 표(별도 창)로 가는 버튼 — 새 탭으로 열려 이 화면과 나란히 본다. */}
             {ratingsHref && (
               <a href={ratingsHref} target="_blank" rel="noopener" title="시청률 표를 새 창으로 엽니다" className="rounded-full bg-indigo-50 px-3.5 py-1.5 text-[13px] font-semibold text-indigo-700 transition hover:bg-indigo-100">
-                시청률 표 ↗
+                시청률 표
               </a>
             )}
             {viewTabs}
