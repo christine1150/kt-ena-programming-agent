@@ -109,12 +109,12 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
 
   const channelName = CHANNELS.find((c) => c.code === code)?.name ?? code;
   const title = tab === "daily" ? `${channelName} 일일 시청률` : tab === "ranks" ? "전 채널 시청률 순위 · 타깃별 비교" : "주요 채널 수도권 2049 개인 타깃";
-  const sub = tab === "daily" ? "프로그램별 시청률 · 단위 %" : tab === "ranks" ? "타깃별 상위 40개 채널 · 시청률 순 · 단위 %" : "최근 4주 순위 추이 · 단위 %";
+  const hint = tab === "ranks" ? "타깃별 상위 40개 채널 · 시청률 순" : tab === "trend" ? "최근 4주 · 기준일이 속한 주까지(7일이 끝난 주만)" : null;
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-3 px-6 py-3">
+        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-3 px-6 py-2">
           <nav aria-label="시청률 표 보기" className="flex items-center gap-1">
             {TABS.map((t) => (
               <Pill key={t.id} active={tab === t.id} onClick={() => setTab(t.id)}>
@@ -125,17 +125,13 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
-        <div className="flex items-baseline justify-between gap-3 text-[13px] font-medium text-zinc-400">
-          <span>{tab === "trend" ? "" : shown ? longDate(shown) : ""}</span>
-          <span>닐슨코리아 기준</span>
-        </div>
-        <h1 className="mt-1 text-[30px] font-bold leading-tight tracking-tight">{title}</h1>
-        <p className="mt-1 text-[13px] font-medium text-zinc-400">{sub}</p>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-[13px]">
+      <main className="mx-auto max-w-[1500px] px-6 pb-8 pt-3">
+        {/* 제목·기준일·선택 도구를 한 줄에 모아 표(시간~마지막 시청률)가 한 화면에 보이게 한다(사용자 지시 2026-10-19) */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
+          <h1 className="text-[22px] font-bold leading-tight tracking-tight">{title}</h1>
+          {tab !== "trend" && shown && <span className="font-medium text-zinc-400">{longDate(shown)}</span>}
           {tab === "daily" && (
-            <select aria-label="채널" value={code} onChange={(e) => setCode(e.target.value)} className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 font-semibold">
+            <select aria-label="채널" value={code} onChange={(e) => setCode(e.target.value)} className="rounded-lg border border-zinc-200 bg-white px-3 py-1 font-semibold">
               {CHANNELS.map((c) => (
                 <option key={c.code} value={c.code}>
                   {c.name}
@@ -144,18 +140,19 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
             </select>
           )}
           <div className="inline-flex items-center overflow-hidden rounded-lg border border-zinc-200 bg-white">
-            <button type="button" aria-label="전날" onClick={() => shown && setDate(shiftDate(shown, -1))} className="px-2.5 py-1.5 text-zinc-500 hover:bg-zinc-50">
+            <button type="button" aria-label="전날" onClick={() => shown && setDate(shiftDate(shown, -1))} className="px-2.5 py-1 text-zinc-500 hover:bg-zinc-50">
               ‹
             </button>
-            <input type="date" aria-label="기준일" value={shown ?? ""} max={latest ?? undefined} onChange={(e) => e.target.value && setDate(e.target.value)} className="border-x border-zinc-200 px-2 py-1.5 font-semibold tabular-nums" />
-            <button type="button" aria-label="다음 날" disabled={!shown || !latest || shown >= latest} onClick={() => shown && setDate(shiftDate(shown, 1))} className="px-2.5 py-1.5 text-zinc-500 hover:bg-zinc-50 disabled:opacity-30">
+            <input type="date" aria-label="기준일" value={shown ?? ""} max={latest ?? undefined} onChange={(e) => e.target.value && setDate(e.target.value)} className="border-x border-zinc-200 px-2 py-1 font-semibold tabular-nums" />
+            <button type="button" aria-label="다음 날" disabled={!shown || !latest || shown >= latest} onClick={() => shown && setDate(shiftDate(shown, 1))} className="px-2.5 py-1 text-zinc-500 hover:bg-zinc-50 disabled:opacity-30">
               ›
             </button>
           </div>
-          {tab === "trend" && <span className="text-[12px] text-zinc-400">기준일이 속한 주까지 최근 4주(7일이 끝난 주만)</span>}
+          {hint && <span className="text-[12px] text-zinc-400">{hint}</span>}
+          <span className="ml-auto text-[12px] font-medium text-zinc-400">닐슨코리아 기준</span>
         </div>
 
-        <div className="mt-4" aria-busy={view.status === "loading"}>
+        <div className="mt-3" aria-busy={view.status === "loading"}>
           {view.status === "error" ? (
             <p className="rounded-xl bg-white p-6 text-center text-sm text-red-600" role="alert">
               {view.message}
@@ -179,7 +176,6 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
             </div>
           )}
         </div>
-        <footer className="mt-6 text-[12px] text-zinc-400">단위 %</footer>
       </main>
     </div>
   );
@@ -193,10 +189,10 @@ function DailyTable({ v }: { v: DailyView }) {
         <table className="w-full min-w-[640px] text-left text-[14px]">
           <thead className="bg-zinc-100/70 text-[13px] font-semibold text-zinc-500">
             <tr>
-              <th className="w-[132px] px-4 py-2.5 text-center">시간</th>
-              <th className="px-4 py-2.5">프로그램</th>
+              <th className="w-[132px] px-4 py-2 text-center">시간</th>
+              <th className="px-4 py-2">프로그램</th>
               {v.columns.map((c) => (
-                <th key={c} className="w-[120px] px-4 py-2.5 text-right">
+                <th key={c} className="w-[120px] px-4 py-2 text-right">
                   {c}
                 </th>
               ))}
@@ -205,11 +201,11 @@ function DailyTable({ v }: { v: DailyView }) {
           <tbody>
             {v.rows.map((r, i) => (
               <tr key={`${r.start}-${i}`} className={`border-t border-zinc-100 ${r.firstRun ? "" : i % 2 ? "bg-zinc-50/60" : ""}`} style={r.firstRun ? { backgroundColor: OWN_ROW_BG, boxShadow: `inset 4px 0 0 ${ACCENT}` } : undefined}>
-                <td className="px-4 py-2.5 text-center text-[13px] tabular-nums text-zinc-400">
+                <td className="px-4 py-1.5 text-center text-[13px] tabular-nums text-zinc-400">
                   {clock(r.start)}
                   {r.end ? `–${clock(r.end)}` : ""}
                 </td>
-                <td className="px-4 py-2.5">
+                <td className="px-4 py-1.5">
                   <span className="font-semibold" style={r.firstRun ? { color: ACCENT } : undefined}>
                     {r.name}
                   </span>
@@ -217,7 +213,7 @@ function DailyTable({ v }: { v: DailyView }) {
                   {r.episode && <span className="ml-2 text-[12px] text-zinc-400">{r.episode}</span>}
                 </td>
                 {r.values.map((val, k) => (
-                  <td key={k} className="whitespace-nowrap px-4 py-2.5 text-right font-bold tabular-nums" style={k === 0 && val !== null && v.baseline !== null && val >= v.baseline ? { color: ACCENT } : undefined}>
+                  <td key={k} className="whitespace-nowrap px-4 py-1.5 text-right font-bold tabular-nums" style={k === 0 && val !== null && v.baseline !== null && val >= v.baseline ? { color: ACCENT } : undefined}>
                     {r3(val)}
                   </td>
                 ))}
@@ -228,7 +224,6 @@ function DailyTable({ v }: { v: DailyView }) {
       </div>
       <p className="mt-2 text-[12px] text-zinc-400">
         {v.baseline !== null ? `파란 숫자는 첫 열이 직전 30일 채널 평균(${r3(v.baseline)}) 이상인 방송입니다. ` : ""}
-        {v.note ?? ""}
       </p>
     </>
   );

@@ -45,7 +45,6 @@ export interface DailyView {
   /** 첫 열 강조 기준(직전 30일 채널 평균) */
   baseline: number | null;
   rows: DailyRow[];
-  note: string | null;
 }
 
 const orderKey = (t: string) => {
@@ -116,7 +115,6 @@ export async function loadDaily(channelCode: string, date: string): Promise<Dail
     const nums = (month ?? []).map((x) => x.rating as number | null).filter((v): v is number => v !== null);
     baseline = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
   }
-  const missingHousehold = !usedTargets.some((c) => c.head === "수도권 가구") && !isSky;
   return {
     date,
     channelCode,
@@ -125,7 +123,6 @@ export async function loadDaily(channelCode: string, date: string): Promise<Dail
     columns: usedTargets.map((c) => c.head),
     baseline,
     rows,
-    note: missingHousehold ? "수도권 가구 열은 프로그램 단위 자료가 아직 저장되지 않아 표시하지 않습니다(일일 엑셀 업로드 연결 후 추가 예정)." : null,
   };
 }
 

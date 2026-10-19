@@ -1612,6 +1612,7 @@ function ChannelStatusCard({
   aiByCode,
   footer,
   viewTabs,
+  ratingsHref,
 }: {
   channels: Map<string, ChannelSummary>;
   narrativeSignals: ChannelNarrativeSignal[];
@@ -1619,6 +1620,8 @@ function ChannelStatusCard({
   aiByCode: AiState;
   footer?: React.ReactNode;
   viewTabs?: React.ReactNode;
+  /** 시청률 표(별도 창) 주소 — 있으면 보기 단위 탭 왼쪽에 버튼을 둔다 */
+  ratingsHref?: string;
 }) {
   const kpiByCode = new Map(kpiRows.map((r) => [r.code, r]));
   const ena = channels.get("ENA");
@@ -1653,7 +1656,17 @@ function ChannelStatusCard({
           <h2 className={REPORT_TITLE}>오늘의 시청률</h2>
           <p className={REPORT_EYEBROW}>TODAY&rsquo;S RATINGS</p>
         </div>
-        {viewTabs && <div className="self-center">{viewTabs}</div>}
+        {(viewTabs || ratingsHref) && (
+          <div className="flex items-center gap-2 self-center">
+            {/* 사용자 지시(2026-10-19): 일간·주간·월간 왼쪽에 시청률 표(별도 창)로 가는 버튼 — 새 탭으로 열려 이 화면과 나란히 본다. */}
+            {ratingsHref && (
+              <a href={ratingsHref} target="_blank" rel="noopener" title="시청률 표를 새 창으로 엽니다" className="rounded-full bg-indigo-50 px-3.5 py-1.5 text-[13px] font-semibold text-indigo-700 transition hover:bg-indigo-100">
+                시청률 표 ↗
+              </a>
+            )}
+            {viewTabs}
+          </div>
+        )}
         {/* 사용자 지시(2026-09-22): "1페이지... 오늘의 시청률 칸 우측 상단에 삽입해줘. 1페이지에서
             눌렀을 때는 ENA가 기본으로 나오면 되고" — 처음엔 페이지 상단 아이콘 그룹에 넣었다가,
             "오늘의 시청률" 카드 자체의 우측 상단으로 옮긴다. 1페이지는 특정 채널 컨텍스트가 없는
@@ -5943,7 +5956,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                   </p>
                 )}
                 {/* 사용자 지시(2026-10-06): "오늘의 시청률" 아랫줄에 해당일 채널 순위 1~20위 안의 상위 프로그램 9개(수2049, 괄호 안 가구)를 3단으로 */}
-                <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} kpiRows={kpiGroups.flatMap((g) => g.rows)} aiByCode={aiByCode} viewTabs={<HomeViewTabs view={view} onChange={goView} />} footer={<MarketTopPrograms date={data.asOfDate} />} />
+                <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} kpiRows={kpiGroups.flatMap((g) => g.rows)} aiByCode={aiByCode} viewTabs={<HomeViewTabs view={view} onChange={goView} />} ratingsHref={`/ratings?tab=daily&date=${data.asOfDate}`} footer={<MarketTopPrograms date={data.asOfDate} />} />
 
                 {/* 사용자 지시(2026-08-26): 월요일엔 주말 리포트(토·일) — 일간 보기의 변화 근거에 붙인다. */}
                 {data.weekendReport && <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />}

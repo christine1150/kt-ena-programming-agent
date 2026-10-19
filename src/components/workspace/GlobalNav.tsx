@@ -49,6 +49,20 @@ function NavInner({ role }: { role: Role | null }) {
                     {item.label}
                   </Link>
                 </li>
+                {/* 숫자만 크게 읽는 별도 창(/ratings) — 브리핑과 채널별 분석 사이, 새 탭으로 열어 에이전트 화면과 나란히 본다(사용자 요청 2026-10-19). 지금 보는 기준일을 이어 준다. */}
+                {item.id === "briefing" && (
+                  <li className="shrink-0">
+                    <a
+                      href={`/ratings?tab=daily${resolvedTo ? `&date=${resolvedTo}` : ""}`}
+                      target="_blank"
+                      rel="noopener"
+                      title="시청률 표를 새 창으로 엽니다"
+                      className="block border-b-2 border-transparent px-3 py-2.5 text-[13px] font-medium text-zinc-500 transition hover:text-zinc-800"
+                    >
+                      시청률 표 ↗
+                    </a>
+                  </li>
+                )}
                 {visibleExtras(item, role).map((e) => (
                   <li key={`${item.id}-${e.label}`} className="shrink-0">
                     <Link href={hrefFor(e.dest, ctx)} className="block px-2 py-2.5 text-[12px] text-zinc-400 hover:text-zinc-700">
@@ -59,18 +73,6 @@ function NavInner({ role }: { role: Role | null }) {
               </Fragment>
             );
           })}
-          {/* 숫자만 크게 읽는 별도 창(/ratings) — 새 탭으로 열어 에이전트 화면과 나란히 본다(사용자 요청 2026-10-19). 지금 보는 기준일을 이어 준다. */}
-          <li className="ml-auto shrink-0">
-            <a
-              href={`/ratings?tab=daily${resolvedTo ? `&date=${resolvedTo}` : ""}`}
-              target="_blank"
-              rel="noopener"
-              title="시청률 표를 새 창으로 엽니다"
-              className="block rounded-full px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 transition hover:bg-indigo-50"
-            >
-              시청률 표 ↗
-            </a>
-          </li>
         </ul>
       </nav>
       <ActionRibbon />
