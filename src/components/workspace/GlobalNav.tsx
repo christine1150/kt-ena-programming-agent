@@ -59,6 +59,18 @@ function NavInner({ role }: { role: Role | null }) {
               </Fragment>
             );
           })}
+          {/* 숫자만 크게 읽는 별도 창(/ratings) — 새 탭으로 열어 에이전트 화면과 나란히 본다(사용자 요청 2026-10-19). 지금 보는 기준일을 이어 준다. */}
+          <li className="ml-auto shrink-0">
+            <a
+              href={`/ratings?tab=daily${resolvedTo ? `&date=${resolvedTo}` : ""}`}
+              target="_blank"
+              rel="noopener"
+              title="시청률 표를 새 창으로 엽니다"
+              className="block rounded-full px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 transition hover:bg-indigo-50"
+            >
+              시청률 표 ↗
+            </a>
+          </li>
         </ul>
       </nav>
       <ActionRibbon />

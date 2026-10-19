@@ -5216,13 +5216,24 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
         <h2 className={SECTION_TITLE}>
           <span style={{ color: titleColor }}>{channelName}</span> · 일간 세부 내역
         </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
-        >
-          ✕ 닫기
-        </button>
+        <div className="flex items-center gap-1">
+          {/* 숫자를 크게 읽고 싶을 때 — 같은 채널·날짜의 시청률 표(별도 창)를 새 탭으로 연다(사용자 요청 2026-10-19). */}
+          <a
+            href={`/ratings?tab=daily&code=${channelCode}&date=${asOfDate}`}
+            target="_blank"
+            rel="noopener"
+            className="rounded-full px-2 py-0.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+          >
+            표로 크게 보기 ↗
+          </a>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full px-2 py-0.5 text-xs font-medium text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+          >
+            ✕ 닫기
+          </button>
+        </div>
       </div>
       {/* 사용자 지시(2026-09-02): "표의 맨 위에는 해당일자와 요일도 언급". */}
       <p className="mb-4 text-sm font-semibold text-zinc-600">{formatDateWithDowDots(asOfDate)}</p>
