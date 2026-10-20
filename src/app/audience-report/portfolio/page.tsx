@@ -106,8 +106,8 @@ function ExecutiveDecisions({ decisions }: { decisions: NonNullable<PortfolioRep
             <div><dt className="inline text-neutral-500">제약 </dt><dd className="inline text-amber-800">{d.constraints.join(" / ")}</dd></div>
           </dl>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            <Link href={d.links.channel} className="rounded-md border border-neutral-300 px-3 py-1.5 font-medium hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800">채널 상세에서 근거 보기</Link>
-            <Link href={d.links.schedule} className="rounded-md border border-neutral-300 px-3 py-1.5 font-medium hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800">편성안에서 대안 비교</Link>
+            <Link href={d.links.channel} className="rounded-md border border-neutral-300 px-3 py-1.5 font-medium hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800 max-md:inline-flex max-md:min-h-10 max-md:items-center">채널 상세에서 근거 보기</Link>
+            <Link href={d.links.schedule} className="rounded-md border border-neutral-300 px-3 py-1.5 font-medium hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800 max-md:inline-flex max-md:min-h-10 max-md:items-center">편성안에서 대안 비교</Link>
           </div>
         </li>
       ))}
@@ -261,7 +261,7 @@ function PortfolioReportPageInner() {
   const deckHref = `/audience-report/portfolio/deck?${snapshot.persisted ? `snapshot=${snapshot.id}` : qs}`;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-24 pt-8">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-8">
       <header className="mb-6">
         <div className="text-xs uppercase tracking-wide text-neutral-500">Audience Intelligence Report · 종합</div>
         <h1 className="text-2xl font-bold">KT ENA 7채널 포트폴리오</h1>
@@ -283,7 +283,7 @@ function PortfolioReportPageInner() {
               href={`/audience-report/view/${snapshot.id}`}
               target="_blank"
               rel="noreferrer"
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800 max-md:inline-flex max-md:min-h-10 max-md:items-center"
             >
               문서 보기·PDF 저장
             </a>
@@ -292,7 +292,7 @@ function PortfolioReportPageInner() {
           )}
           <a
             href={deckHref}
-            className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300"
+            className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 max-md:inline-flex max-md:min-h-10 max-md:items-center"
           >
             PPT 미리보기 →
           </a>

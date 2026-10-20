@@ -80,7 +80,7 @@ export default function AudienceReportPage() {
   const digits = report.channelCode === "SKYUHD" ? 5 : 3;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-24 pt-8">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-8">
       <header className="mb-6">
         <div className="text-xs uppercase tracking-wide text-neutral-500">Audience Intelligence Report</div>
         <h1 className="text-2xl font-bold">{report.channelName}</h1>
@@ -109,7 +109,7 @@ export default function AudienceReportPage() {
               href={`/audience-report/view/${snapshot.id}`}
               target="_blank"
               rel="noreferrer"
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800 max-md:inline-flex max-md:min-h-10 max-md:items-center"
             >
               🖨 문서 보기·PDF 저장
             </a>
@@ -121,7 +121,7 @@ export default function AudienceReportPage() {
               이동 버튼으로 PPT 미리보기 화면에 가서 거기서 받는다. */}
           <a
             href={deckHref}
-            className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300"
+            className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 max-md:inline-flex max-md:min-h-10 max-md:items-center"
           >
             PPT 미리보기 →
           </a>

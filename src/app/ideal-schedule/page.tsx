@@ -772,7 +772,7 @@ function IdealSchedulePage() {
       <style>{`@media print { @page { size: A4 portrait; margin: 8mm; } body { background: #fff !important; } }`}</style>
 
       {/* 헤더 */}
-      <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur print:hidden">
+      <header className="z-30 border-b border-zinc-200 bg-white/95 backdrop-blur md:sticky md:top-0 print:hidden">
         <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 md:px-6 ${drawerOpen ? "lg:pr-[416px]" : ""}`}>
           <div className="flex min-w-0 items-center gap-3">
             <VendingMachineIcon size={22} />
@@ -901,7 +901,7 @@ function IdealSchedulePage() {
                 편성 시간 구조
                 <div className="flex rounded-lg border border-zinc-300 p-0.5">
                   {(["KEEP_CURRENT", "AI_OPTIMIZED"] as const).map((m) => (
-                    <button key={m} type="button" onClick={() => setMode(m)} className={`flex-1 rounded-md px-2 py-1 text-sm ${mode === m ? "bg-zinc-900 text-white" : "text-zinc-600"}`}>
+                    <button key={m} type="button" onClick={() => setMode(m)} className={`flex-1 rounded-md px-2 py-1 text-sm max-md:min-h-10 ${mode === m ? "bg-zinc-900 text-white" : "text-zinc-600"}`}>
                       {MODE_LABEL[m]}
                     </button>
                   ))}
@@ -926,7 +926,7 @@ function IdealSchedulePage() {
                   <>
                     <div className="flex rounded-lg border border-zinc-300 p-0.5">
                       {([true, false] as const).map((v) => (
-                        <button key={String(v)} type="button" onClick={() => setUsePlan(v)} className={`flex-1 rounded-md px-2 py-1 text-sm ${usePlan === v ? "bg-zinc-900 text-white" : "text-zinc-600"}`}>
+                        <button key={String(v)} type="button" onClick={() => setUsePlan(v)} className={`flex-1 rounded-md px-2 py-1 text-sm max-md:min-h-10 ${usePlan === v ? "bg-zinc-900 text-white" : "text-zinc-600"}`}>
                           {v ? "반영" : "미반영"}
                         </button>
                       ))}
@@ -944,7 +944,7 @@ function IdealSchedulePage() {
                   부제(에피소드)
                   <div className="flex rounded-lg border border-zinc-300 p-0.5">
                     {(["PROGRAM", "EPISODE"] as const).map((m) => (
-                      <button key={m} type="button" onClick={() => setEpisodeMode(m)} className={`flex-1 rounded-md px-2 py-1 text-sm ${episodeMode === m ? "bg-zinc-900 text-white" : "text-zinc-600"}`}>
+                      <button key={m} type="button" onClick={() => setEpisodeMode(m)} className={`flex-1 rounded-md px-2 py-1 text-sm max-md:min-h-10 ${episodeMode === m ? "bg-zinc-900 text-white" : "text-zinc-600"}`}>
                         {m === "PROGRAM" ? "부제 미반영" : "부제 반영"}
                       </button>
                     ))}

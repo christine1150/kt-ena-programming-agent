@@ -567,7 +567,7 @@ export function ScheduleWeekGrid({
         <p className="text-sm text-zinc-400">이 주차에는 시청률 데이터도 없습니다.</p>
       ) : (
         <div ref={scrollElRef} className="overflow-x-auto rounded-xl ring-1 ring-zinc-100">
-          <div className="flex" style={{ minWidth: 560 }}>
+          <div className="grid-min-mobile flex" style={{ minWidth: 560, ["--grid-min" as string]: "560px" }}>
             <div className="relative w-10 shrink-0 bg-zinc-50" style={{ height: geo.heightPx + DAY_HEAD_PX }}>
               {geo.hourTicks.map((h) => (
                 <div

@@ -114,7 +114,7 @@ export default function MarketTopPrograms({ date }: { date: string | null }) {
               type="button"
               aria-pressed={showAll === o.all}
               onClick={() => setShowAll(o.all)}
-              className={`rounded-full px-2.5 py-0.5 font-medium transition ${showAll === o.all ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800"}`}
+              className={`rounded-full px-2.5 py-0.5 font-medium transition max-md:min-h-9 max-md:px-3.5 ${showAll === o.all ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800"}`}
             >
               {o.label}
             </button>

@@ -284,7 +284,7 @@ function ScheduleComparisonInner() {
   const setPref = <K extends keyof CompareViewPrefs>(k: K, v: CompareViewPrefs[K]) => setPrefs((p) => ({ ...p, [k]: v }));
 
   const seg = (active: boolean) =>
-    `rounded-full border px-2.5 py-1 text-xs ${active ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"}`;
+    `rounded-full border px-2.5 py-1 text-xs max-md:min-h-9 max-md:px-3 ${active ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"}`;
   const diffChip = (on: boolean) => (on ? "rounded bg-amber-100 px-1 font-semibold text-amber-800" : "");
 
   const sides = [
@@ -293,14 +293,14 @@ function ScheduleComparisonInner() {
   ];
 
   return (
-    <div className="min-h-screen bg-zinc-50 px-6 py-10">
+    <div className="min-h-screen bg-zinc-50 px-3 py-5 sm:px-6 sm:py-10">
       {/* 사용자 지시(2026-09-20): "양쪽의 화면을 충분히 활용하여, 편성표가 좌우 스크롤바 없이
           보이도록" — 기존 max-w-6xl(1152px)은 두 주 편성표를 나란히 놓기엔 좁아 각 편성표
           내부(overflow-x-auto, minWidth 560px)가 잘려 자체 스크롤바가 생겼다. 훨씬 넓은
           상한으로 바꿔 두 편성표가 화면 안에서 각자 충분한 폭을 받게 한다. */}
       <div className="mx-auto flex w-full max-w-[1920px] flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 max-sm:w-full">
             <label className="flex items-center gap-2 text-sm text-zinc-500">
               채널
               <select
@@ -311,7 +311,7 @@ function ScheduleComparisonInner() {
                   sp.set("channel", e.target.value);
                   router.push(`/schedule-grid?${sp.toString()}`);
                 }}
-                className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm font-medium text-zinc-700"
+                className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm font-medium text-zinc-700 max-md:min-h-10"
               >
                 {channelOptions.map((c) => (
                   <option key={c.code} value={c.code}>
@@ -320,7 +320,7 @@ function ScheduleComparisonInner() {
                 ))}
               </select>
             </label>
-            <div>
+            <div className="max-sm:basis-full">
               <h1 className="text-xl font-semibold text-zinc-900">{left.channelName || urlChannelCode} 주간 비교</h1>
               <p className="text-sm text-zinc-500">기본은 같은 채널의 두 주 비교이며, 좌우 각각 채널·기간을 따로 바꿀 수 있습니다.</p>
             </div>
@@ -328,14 +328,14 @@ function ScheduleComparisonInner() {
           </div>
           {/* Page 1 상단과 동일한 원형 로고 링크 — 지금 보고 있는 채널도 포함해 7개 모두의
               Page 2로 바로 이동할 수 있게 한다. */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 max-sm:w-full max-sm:overflow-x-auto max-sm:pb-1">
             {allChannels.map((c) => (
               <Link
                 key={c.code}
                 href={`/channel/${c.code}`}
                 title={c.name}
                 aria-label={c.name}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:ring-zinc-300"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:ring-zinc-300"
               >
                 <ChannelLogo
                   channel={{ logoPath: c.logoPath, name: c.name, logoVisibleRatio: c.logoVisibleRatio, logoVisibleTopRatio: c.logoVisibleTopRatio }}
@@ -372,7 +372,7 @@ function ScheduleComparisonInner() {
         </section>
 
         {/* 단계 10: 보기 설정(좌우 공통) — 기본값은 기존 화면(하루 전체·전체 주·기본 밀도·채널 기준 색)과 같다. */}
-        <section aria-label="보기 설정" className="sticky top-0 z-20 flex flex-col gap-2 rounded-2xl bg-white p-3 text-xs text-zinc-600 shadow-sm ring-1 ring-zinc-100">
+        <section aria-label="보기 설정" className="md:sticky md:top-0 z-20 flex flex-col gap-2 rounded-2xl bg-white p-3 text-xs text-zinc-600 shadow-sm ring-1 ring-zinc-100">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-zinc-500">시간</span>

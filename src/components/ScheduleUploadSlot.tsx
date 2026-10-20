@@ -66,7 +66,7 @@ export function ScheduleUploadSlot({ onUploaded }: { onUploaded: (done: Uploaded
         disabled={!!busy}
         onClick={() => input.current?.click()}
         title="실제 편성표 엑셀을 올리면 그 주 편성표에 시작 시각·회차·태그가 반영됩니다. 채널·주는 파일에서 자동 인식하고, 같은 주를 다시 올리면 새 파일로 바뀝니다."
-        className={`flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-1.5 text-sm font-medium transition disabled:opacity-60 ${
+        className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-dashed px-3 py-1.5 text-sm font-medium transition disabled:opacity-60 max-md:min-h-10 ${
           drag ? "border-zinc-800 bg-zinc-100 text-zinc-800" : "border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500 hover:bg-zinc-50"
         }`}
       >

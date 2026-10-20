@@ -110,7 +110,7 @@ export function SnapshotBar({ snapshot, onRegenerate, regenerating }: { snapshot
           <span className="font-medium">{snapshot.name}</span>
         </div>
         {onRegenerate && (
-          <button type="button" onClick={onRegenerate} disabled={regenerating} className="rounded border border-neutral-300 px-2 py-1 text-[11px] hover:bg-white disabled:opacity-60 dark:border-neutral-600 dark:hover:bg-neutral-800">
+          <button type="button" onClick={onRegenerate} disabled={regenerating} className="rounded border border-neutral-300 px-2 py-1 text-[11px] hover:bg-white disabled:opacity-60 dark:border-neutral-600 dark:hover:bg-neutral-800 max-md:inline-flex max-md:min-h-10 max-md:items-center">
             {regenerating ? "다시 만드는 중…" : "최신 데이터로 다시 생성"}
           </button>
         )}

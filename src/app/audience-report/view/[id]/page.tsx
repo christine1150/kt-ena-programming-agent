@@ -100,7 +100,7 @@ function Section({ s }: { s: DocSection }) {
 function Document({ model }: { model: ReportModel }) {
   const stamp = `${model.meta.id} · 분석일 ${model.meta.analysis.to} · 생성 ${kstStamp(model.meta.generatedAt)}`;
   return (
-    <div className="mx-auto max-w-[800px] bg-white px-6 py-6 text-neutral-900" style={{ color: INK }}>
+    <div className="mx-auto w-full max-w-[800px] bg-white px-4 py-6 sm:px-6 text-neutral-900" style={{ color: INK }}>
       <h1 className="text-[26px] font-bold leading-tight">{model.title}</h1>
       <div className="mt-1 text-sm text-neutral-500">{model.subtitle}</div>
       <table className="mt-3 w-full border-collapse text-[11.5px]">
@@ -150,7 +150,7 @@ export default function ReportViewPage() {
           h2 { break-after: avoid; }
         }
       `}</style>
-      <div className="mx-auto max-w-[800px] px-4 pt-6 print:hidden">
+      <div className="mx-auto w-full max-w-[800px] px-4 pt-6 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-xs text-neutral-500">문서 보기 · {snapshot.name}</div>
           <button type="button" onClick={() => window.print()} className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700">

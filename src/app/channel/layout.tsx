@@ -20,7 +20,7 @@ export default async function ChannelLayout({ children }: { children: React.Reac
     <>
       {/* 단계 07: 전역 메뉴. 채널 사이드바(채널 전환)는 그대로 둔다. */}
       <WorkspaceNav />
-      <div className="flex min-h-screen bg-gradient-to-br from-sky-50 via-indigo-50 to-violet-50">
+      <div className="flex min-h-screen flex-col bg-gradient-to-br from-sky-50 via-indigo-50 to-violet-50 md:flex-row">
         <ChannelSidebar
           channels={(channels ?? []).map((c) => ({ code: c.code, name: c.name, logoPath: c.logo_path }))}
         />

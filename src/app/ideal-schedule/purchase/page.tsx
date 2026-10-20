@@ -287,7 +287,7 @@ function PurchaseSimulator() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur">
+      <header className="z-30 border-b border-zinc-200 bg-white/95 backdrop-blur md:sticky md:top-0">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 md:px-6">
           <div className="flex items-center gap-3">
             <VendingMachineIcon size={22} />

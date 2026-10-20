@@ -173,7 +173,7 @@ export function SummaryPanel({
               const d = r.expectedKpiDiff;
               return (
                 <li key={r.ideal.blockId}>
-                  <button type="button" onClick={() => onSelectBlock(r.ideal.blockId)} className="grid w-full grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-1.5 py-1 text-left text-xs hover:bg-zinc-50">
+                  <button type="button" onClick={() => onSelectBlock(r.ideal.blockId)} className="grid w-full grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-2 max-md:min-h-10 rounded-lg px-1.5 py-1 text-left text-xs hover:bg-zinc-50">
                     <span className="tabular-nums text-zinc-500">
                       {DOW_LABELS[r.weekday - 1]} {minToLabel(r.startMin)}
                     </span>
@@ -191,7 +191,7 @@ export function SummaryPanel({
             })}
           </ul>
           {forcedCount > 0 && <p className="mt-1 px-1.5 text-[11px] text-zinc-500">필수 편성(주요 콘텐츠 관리·편성표 신규 등)으로 바뀐 칸 {forcedCount}개는 추천이 아니라 따로 셉니다.</p>}
-          <button type="button" onClick={onOpenCompare} className="mt-1 min-h-6 px-1.5 py-1 text-[11px] text-zinc-500 underline decoration-dotted hover:text-zinc-700">
+          <button type="button" onClick={onOpenCompare} className="mt-1 min-h-6 max-md:min-h-9 px-1.5 py-1 text-[11px] text-zinc-500 underline decoration-dotted hover:text-zinc-700">
             {changedRows.length > top.length ? `외 ${changedRows.length - top.length}건 · ` : ""}전체 대조표 보기
           </button>
         </div>

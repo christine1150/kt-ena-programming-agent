@@ -204,7 +204,7 @@ export function PptPreview({
   const total = slides.length;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 pb-24 pt-8" style={{ "--deck-accent": accent } as React.CSSProperties}>
+    <div className="mx-auto w-full max-w-4xl px-4 pb-24 pt-8" style={{ "--deck-accent": accent } as React.CSSProperties}>
       {/* KT Flow — ena-design assets/fonts 원본을 그대로 서빙(public/ena-design/fonts). 굵기별
           개별 패밀리를 직접 지정한다(합성 볼드 금지 규칙). */}
       <style>{`

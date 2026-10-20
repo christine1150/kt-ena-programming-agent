@@ -831,7 +831,7 @@ function ReportIconLink({ href, ready, blockedText, title, children }: { href: s
     );
   }
   return (
-    <Link href={href} target="_blank" className="inline-flex min-h-6 min-w-6 items-center justify-center rounded outline-none focus-visible:ring-2 focus-visible:ring-white" title={title}>
+    <Link href={href} target="_blank" className="inline-flex min-h-6 min-w-6 items-center justify-center rounded outline-none max-md:min-h-9 max-md:min-w-9 focus-visible:ring-2 focus-visible:ring-white" title={title}>
       {children}
     </Link>
   );
@@ -2702,7 +2702,7 @@ function HourlyGraphPanel({
           </div>
           <div className="mt-1 flex gap-1">
             {pattern.map((h) => (
-              <span key={h.broadcast_hour} className="flex-1 shrink-0 text-center text-[9px] text-zinc-400">
+              <span key={h.broadcast_hour} className="min-w-0 flex-1 text-center text-[8px] text-zinc-400 sm:shrink-0 sm:text-[9px]">
                 {h.broadcast_hour}
               </span>
             ))}
@@ -3380,7 +3380,7 @@ function TopProgramMiniBar({
       : accentColor;
   return (
     <span
-      className="inline-block h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-zinc-100"
+      className="inline-block h-1.5 w-10 shrink-0 overflow-hidden rounded-full bg-zinc-100 max-sm:hidden"
       title={`목록 내 최고 대비 ${pct.toFixed(0)}%${ytdAvgRating !== null && ytdAvgRating !== undefined ? ` · 올해 평균(${fmt(ytdAvgRating)}) ${value >= ytdAvgRating ? "이상" : "미만"}` : ""}`}
     >
       <span className="block h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: barColor }} />
@@ -3413,16 +3413,17 @@ function TopProgramListItems({
         const shareRank = shareOutliers.get(p.program_name);
         return (
           <li key={p.program_name} className="border-t border-zinc-100 py-1.5 first:border-t-0">
-            <div className="flex items-center gap-2">
+            {/* 모바일(2026-10-21): 휴대폰에서는 1줄 [순위·이름·시청률], 2줄 [시간대·방영 횟수]로 나눠 넘치지 않게 한다(막대는 숨김). */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 sm:flex-nowrap">
               <span className="w-5 shrink-0 text-right font-medium text-zinc-400">{i + 1 + indexOffset}</span>
-              <span className="min-w-0 flex-1 truncate font-medium text-zinc-800">{p.program_name}</span>
-              <span className="shrink-0 text-sm text-zinc-500">
+              <span className="min-w-0 flex-1 truncate font-medium text-zinc-800 max-sm:basis-1/2">{p.program_name}</span>
+              <span className="shrink-0 text-sm text-zinc-500 max-sm:order-3 max-sm:ml-7">
                 {p.top_daypart ? DAYPART_LABEL[p.top_daypart]?.split("(")[0] ?? p.top_daypart : "—"}
                 {p.most_common_start_hour !== null ? ` · 주로 ${p.most_common_start_hour}시` : ""}
               </span>
-              <span className="shrink-0 text-sm text-zinc-400">{p.air_count}회 방영</span>
+              <span className="shrink-0 text-sm text-zinc-400 max-sm:order-3">{p.air_count}회 방영</span>
               <TopProgramMiniBar value={p.avg_rating} max={maxRating} accentColor={accentColor} isEnaStory={isEnaStory} ytdAvgRating={ytdAvgRating} />
-              <span className="w-16 shrink-0 text-right font-semibold text-zinc-900">{fmtR(p.avg_rating)}</span>
+              <span className="w-16 shrink-0 text-right font-semibold text-zinc-900 max-sm:order-2">{fmtR(p.avg_rating)}</span>
             </div>
             {shareRank !== undefined && (
               <p className="ml-7 mt-0.5 text-sm text-sky-600">
@@ -3541,7 +3542,7 @@ function TopProgramsList({
   );
   const renderCols = (list: TopProgramRow[]) =>
     twoColumns && list.length > 10 ? (
-      <div className="grid gap-x-10 gap-y-1 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-10 gap-y-1 lg:grid-cols-2">
         {renderOl(list.slice(0, 10), 0, list)}
         {renderOl(list.slice(10), 10, list)}
       </div>
@@ -4052,7 +4053,6 @@ function ScatterQuadrantChart({
 // 폭을 max-content(이 표에 실제로 나온 이름 중 가장 긴 것에 자동으로 맞춤)로 지정한다 — CSS
 // Grid는 같은 grid 안의 모든 행이 열 폭을 공유하므로, 이름이 짧은 행도 긴 행과 같은 폭을 쓰게
 // 되어 막대 시작점(x좌표)이 모든 행에서 자동으로 정확히 일치한다(JS로 폭을 추정할 필요 없음).
-const OVERLAP_SHARED_GRID_COLS = "6.5rem 3.2rem max-content 1fr 6.5rem";
 function TimeSlotCompetitionChart({ rows, accentColor, fmtR, channelName }: { rows: CompetitorOverlapRow[]; accentColor: string; fmtR: (v: number | null) => string; channelName: string }) {
   const grouped = Object.values(
     rows.reduce<Record<string, CompetitorOverlapRow[]>>((acc, row) => {
@@ -4079,18 +4079,19 @@ function TimeSlotCompetitionChart({ rows, accentColor, fmtR, channelName }: { ro
     ];
   });
 
+  // 모바일(2026-10-21): 휴대폰에서는 막대 열을 빼고 [채널·시각·프로그램명(말줄임)·시청률] 4열로 줄인다. 넓은 화면(sm 이상)은 기존 공유 grid 열 구성(6.5rem 3.2rem max-content 1fr 6.5rem)과 같다.
   return (
-    <div className="grid items-center gap-x-2 gap-y-1.5" style={{ gridTemplateColumns: OVERLAP_SHARED_GRID_COLS }}>
+    <div className="grid grid-cols-[4.5rem_2.8rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 sm:grid-cols-[6.5rem_3.2rem_max-content_1fr_6.5rem]">
       {flatRows.map((r, i) => (
         <div key={i} className="contents">
           {/* 시간대 그룹 사이 구분선 — 모든 열을 가로지르는 한 줄(막대 시작점 정렬에는 영향 없음). */}
-          {r.groupStart && <div className="col-span-5 mt-1.5 border-t border-zinc-100 pt-1.5" />}
+          {r.groupStart && <div className="col-span-4 mt-1.5 border-t border-zinc-100 pt-1.5 sm:col-span-5" />}
           <span className={`truncate text-[11px] ${r.isOurs ? "font-semibold" : "text-zinc-500"}`} style={r.isOurs ? { color: brandText(accentColor) } : undefined} title={r.channelName}>
             {r.channelName}
           </span>
           <span className="text-[11px] tabular-nums text-zinc-400">{r.time}</span>
-          <span className={`whitespace-nowrap text-[11px] ${r.isOurs ? "font-semibold text-zinc-800" : "text-zinc-600"}`}>{r.program}</span>
-          <div className="h-3.5 min-w-[24px] rounded bg-zinc-50 ring-1 ring-zinc-100">
+          <span className={`min-w-0 truncate text-[11px] sm:whitespace-nowrap ${r.isOurs ? "font-semibold text-zinc-800" : "text-zinc-600"}`} title={r.program}>{r.program}</span>
+          <div className="h-3.5 min-w-[24px] rounded bg-zinc-50 ring-1 ring-zinc-100 max-sm:hidden">
             <div
               className="h-3.5 rounded"
               style={{ width: `${Math.max(2, ((r.rating ?? 0) / maxRating) * 100)}%`, backgroundColor: r.isOurs ? accentColor : "#d4d4d8" }}
@@ -5202,8 +5203,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   const showStableSlotSection = skyuhdGate ? data.stableSlotPatterns.length > 0 : true;
   const showDeepAnalysisSection = showCompetitorOverlapSection || showWhoIsWatchingSection || showStableSlotSection;
 
+  // 모바일 최적화(2026-10-21): 휴대폰 폭(<768px)에서는 화면 전체 확대(zoom 1.1/1.35)를 끄고(globals.css .mobile-no-zoom) 안쪽 여백도 줄인다 — 확대가 걸리면 폭이 휴대폰 화면을 넘는다.
   return (
-    <div className="relative px-6 py-8" style={{ ["--accent" as string]: accentColor, zoom: largeFontMode ? 1.35 : 1.1 }}>
+    <div className="mobile-no-zoom relative px-3 py-5 sm:px-6 sm:py-8" style={{ ["--accent" as string]: accentColor, zoom: largeFontMode ? 1.35 : 1.1 }}>
       {isEnaStory && (
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-white">
           <div className="absolute -left-40 -top-40 h-[36rem] w-[36rem] rounded-full bg-[#7828e0] opacity-[0.16] blur-3xl" />
@@ -5232,7 +5234,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             느낌이 들지 않게" — 2행 구조·정보 배치는 그대로 두고 안쪽 여백만 살짝 늘린다
             (p-6→p-7, 1행-2행 사이 간격 mt-3→mt-4/pt-3→pt-4). */}
         <div
-          className="rounded-3xl p-7 text-white shadow-sm"
+          className="rounded-3xl p-4 text-white shadow-sm sm:p-7"
           style={{
             background: isEnaStory
               ? "linear-gradient(120deg, #7828e0 0%, #c22de0 45%, #f43fc4 78%, #ffb020 100%)"
@@ -5295,7 +5297,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 고르면 헤더의 "전일 대비"와 아래 WHAT HAPPENED? 표가 이미 오늘 대비 전일/전주/전월/
                 전분기/전년을 전부 보여주므로, 기준일 자체를 어제/전주로 옮기는 예전 방식은 "오늘의
                 브리핑" 등이 과거를 마치 오늘인 것처럼 서술하는 문제가 있었다(사용자 지시로 수정). */}
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2 max-sm:justify-start">
               {/* 사용자 지시(2026-09-02): "큰 글씨로 보기는 '큰 글씨'라고만 적고, 아이콘을 채널
                   리포트 좌측으로 이동" — 이 버튼 그룹 맨 앞(=채널 리포트 왼쪽)에 같은 pill
                   스타일(bg-white/20)로 배치. skyUHD처럼 소수점 5자리 시청률이 특히 읽기 어려운
@@ -5305,7 +5307,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 type="button"
                 onClick={() => setLargeFontMode((v) => !v)}
                 title={code === "SKYUHD" ? "큰 글씨로 보기 (skyUHD 추천)" : "큰 글씨로 보기"}
-                className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/30"
+                className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/30 max-md:hidden"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="11" cy="11" r="7" />
@@ -5417,7 +5419,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     ...(next === "custom" ? {} : { dateFrom: null, dateTo: null }),
                   });
                 }}
-                className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none [&_option]:text-zinc-900 [&_optgroup]:text-zinc-500"
+                className="max-w-full rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none max-md:min-h-10 [&_option]:text-zinc-900 [&_optgroup]:text-zinc-500"
               >
                 {PERIOD_PRESET_GROUPS.map((g) => (
                   <optgroup key={g.group} label={g.group}>
@@ -5564,7 +5566,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 return (
                   <a
                     href="#what-to-schedule"
-                    className="flex items-center gap-1 min-h-6 rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
+                    className="flex items-center gap-1 min-h-6 max-md:min-h-9 rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
                     title="무엇을 편성할까요? 표로 이동 — 이 조치 건수는 최근 12주 방영을 같은 시간대 다른 프로그램과 견준 콘텐츠 적합도 판정(잠정 기준)에서 나온 것으로, 위 일간·주간 지표와는 기간이 다릅니다"
                   >
                     <span aria-hidden className="text-white/30">·</span>
@@ -5578,7 +5580,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {((!showComparisonView && (showCompetitorOverlapSection || showWhoIsWatchingSection)) || showStableSlotSection) && (
               <a
                 href="#deep-analysis"
-                className="flex items-center gap-1 min-h-6 rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
+                className="flex items-center gap-1 min-h-6 max-md:min-h-9 rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/90 transition-colors hover:bg-white/20"
                 title="심층 분석으로 이동"
               >
                 <span aria-hidden className="text-white/30">·</span>
@@ -6037,7 +6039,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
               </div>
               <div className="mt-1 flex gap-1">
                 {hourlyPattern.map((h) => (
-                  <span key={h.broadcast_hour} className="flex-1 shrink-0 text-center text-[9px] text-zinc-400">
+                  <span key={h.broadcast_hour} className="min-w-0 flex-1 text-center text-[8px] text-zinc-400 sm:shrink-0 sm:text-[9px]">
                     {h.broadcast_hour}
                   </span>
                 ))}
@@ -6175,8 +6177,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             {/* 사용자 지시(2026-09-19): "우측에 체크박스를 만들어서 2시부터 25시까지 1시간
                 단위로도 비교할 수 있게" — 3시간/1시간 단위 전환. 아래 세 렌더 지점(듀얼 패널
                 2곳 + 단일 패널 1곳) 모두 이 상태를 공유한다. */}
-            <div className="flex shrink-0 flex-wrap items-center gap-3">
-              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:shrink-0">
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500 max-md:min-h-9">
                 <input
                   type="checkbox"
                   checked={effective1h}
@@ -6185,7 +6187,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 />
                 1시간 단위로 보기
               </label>
-              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500 max-md:min-h-9">
                 <input
                   type="checkbox"
                   checked={dowHeatmapShowTopProgram}

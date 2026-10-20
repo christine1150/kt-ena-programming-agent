@@ -88,7 +88,7 @@ export function IdealWeekGrid({
     >
       {title && <div className="flex items-center border-b border-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-700 print:hidden">{title}</div>}
       {/* 요일 머리 높이(사용자 지시 2026-10-01: 요일·날짜 글자를 키워 가독성↑ — 40 → 52px) */}
-      <div className="flex" style={{ minWidth }}>
+      <div className="grid-min-mobile flex" style={{ minWidth, ["--grid-min" as string]: `${minWidth}px` }}>
         <div className="relative w-9 shrink-0" style={{ height: gridHeight + DAY_HEAD_PX }}>
           {HOUR_TICKS.map((h) => (
             <div key={h} className="absolute left-0 right-1 text-right text-[9px] text-zinc-400" style={{ top: (h * 60 - GRID_START_MIN) * pxPerMin + DAY_HEAD_PX - 5 }}>

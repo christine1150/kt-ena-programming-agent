@@ -269,3 +269,32 @@ body {
 :is(.overflow-x-auto, [aria-label="가로로 스크롤되는 표"]):not(.dense-grid) [style*="min-width"] {
   min-width: 0 !important;
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   모바일 최적화(2026-10-21, 사용자 요청) — 휴대폰 폭(<768px) 공통 규칙. 데스크톱 화면에는 영향이 없다.
+   .mobile-no-zoom: 화면 전체 확대(zoom)를 쓰는 화면(채널 분석의 큰 글씨 모드 등)이 휴대폰에서 폭을 넘기지 않게 끈다.
+   .mobile-scroll-x: 폭이 넓은 표·막대를 가로로 밀어 보게 하되 페이지 자체는 옆으로 밀리지 않게 한다. */
+@media (max-width: 767px) {
+  .mobile-no-zoom {
+    zoom: 1 !important;
+  }
+  .mobile-scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* iOS Safari는 글자 크기가 16px 미만인 입력칸을 누르면 화면을 멋대로 확대한다 — 휴대폰에서는 입력칸 글자를 16px로 맞춘다(체크박스·라디오 제외). */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  /* 위 "한눈에 보이게" 규칙(2026-10-14)은 넓은 화면용이다 — 휴대폰에서 열이 6개 이상인 표까지 351px 안으로 누르면 글자가 한 자씩 꺾여
+     읽을 수 없다. 6열 이상 표는 최소 폭(40rem)을 되돌려 옆으로 밀어 보게 하고, 5열 이하 표는 그대로 화면 폭에 맞춘다. */
+  :is(.overflow-x-auto, [aria-label="가로로 스크롤되는 표"]):not(.dense-grid) table:has(tr > :nth-child(6)) {
+    min-width: 40rem !important;
+  }
+  /* 시간 비례 편성표(주간 비교·자판기)는 칸 글자가 읽히도록 원래 최소 폭(--grid-min)을 휴대폰에서 되살려 옆으로 밀어 본다. */
+  :is(.overflow-x-auto, [aria-label="가로로 스크롤되는 표"]):not(.dense-grid) .grid-min-mobile[style*="min-width"] {
+    min-width: var(--grid-min, 560px) !important;
+  }
+}

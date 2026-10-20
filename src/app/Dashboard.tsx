@@ -872,7 +872,7 @@ function ActionCopyBlock({ resolved, size }: { resolved: ResolvedAction; size: "
       {copy?.basis && <p className="text-zinc-500">{copy.basis}</p>}
       {copy && copy.more.length > 0 && (
         <div>
-          <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="text-[11.5px] font-semibold text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline">
+          <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="text-[11.5px] font-semibold text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline max-md:min-h-9">
             {open ? "다른 방법 접기" : `다른 방법 ${copy.more.length}건 보기`}
           </button>
           {open && (
@@ -1504,7 +1504,7 @@ function ChannelDailyColumn({
   const hasActionText = !!(resolved.line || resolved.copy || resolved.status);
 
   return (
-    <div className="flex min-w-0 flex-col bg-white px-3.5 py-4">
+    <div className="flex min-w-0 flex-col bg-white px-3.5 py-4 max-sm:w-[84%] max-sm:shrink-0 max-sm:snap-start">
       <Link href={`/channel/${code}`} className="group block rounded-md transition hover:bg-zinc-50/70">
         <div className="flex items-center justify-between gap-2">
           <ChannelLogo
@@ -1582,7 +1582,7 @@ function ChannelDailyColumn({
 
       <div className="mt-auto flex flex-col gap-1 pt-3">
         <details className="group/detail">
-          <summary className="cursor-pointer list-none text-[12px] font-semibold text-zinc-500 hover:text-zinc-800 [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-9 cursor-pointer list-none items-center text-[12px] font-semibold text-zinc-500 hover:text-zinc-800 [&::-webkit-details-marker]:hidden">
             <span className="mr-1 inline-block text-[10px] transition group-open/detail:rotate-90" aria-hidden>▶</span>판단·조치·추이 보기
           </summary>
           <div className="mt-2">
@@ -1590,7 +1590,7 @@ function ChannelDailyColumn({
             {hasActionText ? <ActionCopyBlock resolved={resolved} size="tile" /> : <p className="mt-2 text-[12px] font-medium" style={{ color: actionColor(null, false) }}>현재 편성 유지</p>}
           </div>
         </details>
-        <a href={`/ratings?tab=daily&code=${code}&date=${asOfDate}`} target="_blank" rel="noopener" className="text-[12px] font-medium text-indigo-700 hover:underline">
+        <a href={`/ratings?tab=daily&code=${code}&date=${asOfDate}`} target="_blank" rel="noopener" className="flex min-h-9 items-center text-[12px] font-medium text-indigo-700 hover:underline">
           표로 크게 보기
         </a>
       </div>
@@ -1644,7 +1644,7 @@ function ChannelStatusCard({
     // 내부를 약 40:60으로(왼쪽 ENA 메인 KPI / 오른쪽 6개 서브 채널). 두 영역은 박스가 아니라
     // 얇은 세로 divider로만 나눈다(장식 대신 여백·정렬로 위계 표현 지시).
     // 사용자 지시(2026-10-07): "오늘의 시청률은 너무 많은 높이를 차지하지 않도록" — 이 카드만 위아래 여백과 안쪽 간격을 줄인다.
-    <section className="rounded-xl bg-white px-6 py-5 ring-1 ring-zinc-200/80 sm:px-9 sm:py-5">
+    <section className="rounded-xl bg-white px-4 py-5 ring-1 ring-zinc-200/80 sm:px-9 sm:py-5">
       {/* 사용자 지시(2026-09-03): "영어로 위에 장식되어 있는 내용은 제목 오른쪽으로 자리를
           옮겨줄것" — 제목 위 eyebrow에서 제목과 같은 줄 오른쪽 끝으로. */}
       {/* 사용자 재지시(2026-09-03): "Today's ratings는 한글 오른쪽 바로 옆으로 붙여주고" —
@@ -1672,7 +1672,8 @@ function ChannelStatusCard({
       </div>
       {/* 사용자 지시(2026-10-21): skyUHD를 뺀 6개 채널(ENA·Play·Drama·Story·OLIFE·ONCE)을 가로로 나란히 — 각 칸은 채널명·시청률(순위)·평균 순위까지의 머리말 아래에 그날의 프로그램별 제목+KPI 시청률만 붙인다.
           칸 사이는 1px 격자선(gap-px + 배경색)만 쓰고, 칸이 좁아지는 화면에서는 3열→2열→1열로 접는다. */}
-      <div className="mt-4 grid grid-cols-1 gap-px overflow-hidden rounded-lg bg-zinc-100 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      {/* 모바일(2026-10-21): 휴대폰에서는 채널 칸을 세로로 쌓지 않고 옆으로 밀어 넘기는 카드(다음 카드가 살짝 보인다)로 둔다 — 페이지가 6배 길어지는 것을 막는다. */}
+      <div className="-mx-1 mt-4 flex snap-x snap-mandatory gap-px overflow-x-auto rounded-lg bg-zinc-100 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-hidden xl:grid-cols-3 2xl:grid-cols-6">
         {[ena, ...rest.filter((c) => c.code !== "SKYUHD")].filter((c): c is ChannelSummary => !!c).map((c) => (
           <ChannelDailyColumn
             key={c.code}
@@ -4718,8 +4719,9 @@ function ChannelNarrativeCard({
             // 채널이 채널명 길이와 무관하게 같은 x 위치에서 시작하도록 고정 폭 그리드로. 84px는
             // "ENA Drama"/"ENA Story"(9자)가 두 줄로 접히기에 딱 부족한 폭이었다 — 104px로
             // 넓히고 whitespace-nowrap을 명시해 항상 한 줄로 고정.
-            <div key={i} className="grid grid-cols-[104px_1fr] items-start gap-x-3">
-              <div className="flex flex-col gap-1">
+            // 모바일(2026-10-21): 휴대폰에서는 채널 머리말(이름·시청률·막대)을 위에 한 줄로 두고 설명을 아래 전체 폭으로 — 설명 칸이 100px대로 좁아져 글자가 꺾이는 것을 막는다.
+            <div key={i} className="grid grid-cols-1 items-start gap-x-3 gap-y-2 sm:grid-cols-[104px_1fr]">
+              <div className="flex flex-col gap-1 max-sm:flex-row max-sm:flex-wrap max-sm:items-center max-sm:gap-x-3">
                 <span className="flex items-center gap-1 whitespace-nowrap font-semibold" style={{ color: brandText(line.color) }}>
                   {line.channelName}
                   {/* 사용자 지시(2026-09-02): "클릭 아이콘 신설. 세모 정도로" — 클릭 시 우측
@@ -4731,7 +4733,7 @@ function ChannelNarrativeCard({
                     onClick={() => onOpenChannelDetail(line.code)}
                     title="일간 세부 내역 보기"
                     aria-label={`${line.channelName} 일간 세부 내역 보기`}
-                    className="text-[10px] leading-none opacity-50 hover:opacity-100"
+                    className="text-[10px] leading-none opacity-50 hover:opacity-100 max-md:flex max-md:h-9 max-md:w-9 max-md:items-center max-md:justify-center"
                     style={{ color: brandText(line.color) }}
                   >
                     {selectedChannel === line.code ? "▶" : "▼"}
@@ -4757,7 +4759,7 @@ function ChannelNarrativeCard({
                   return facts.length > 0 ? (
                     <ul className="flex flex-col gap-1">
                       {facts.map((f, k) => (
-                        <li key={k} className="grid grid-cols-[52px_1fr] items-baseline gap-x-2 text-[13.5px] leading-snug text-zinc-700">
+                        <li key={k} className="grid grid-cols-[44px_1fr] items-baseline gap-x-2 text-[13.5px] leading-snug text-zinc-700 sm:grid-cols-[52px_1fr]">
                           <span className="whitespace-nowrap text-[11px] font-medium text-zinc-500">{f.label}</span>
                           <span>{highlightNarrativeText(f.text, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR, 600)}</span>
                         </li>
@@ -5717,7 +5719,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
       : (data?.channels ?? []).map((c) => ({ channelCode: c.code, channelName: c.name, rankChange: null, primeUp: null, primeDown: null, weaknessProgram: null }));
 
   return (
-    <div className="page1-readable relative min-h-screen overflow-x-hidden bg-zinc-50 px-6 py-8" style={{ zoom: largeFontMode ? 1.3 : 1 }}>
+    <div className="page1-readable mobile-no-zoom relative min-h-screen overflow-x-hidden bg-zinc-50 px-3 py-5 sm:px-6 sm:py-8" style={{ zoom: largeFontMode ? 1.3 : 1 }}>
       {/* 사용자 지시(2026-08-21, Page 1 전면 개편): "기존 배경은 버리고 모던하고 깔끔한 배경을
           제안" — 파스텔 그라디언트 + 블러 블롭 장식(흐릿한 원형 광원 효과, 대표적인 "AI가 만든
           느낌")을 전부 제거하고, 옅은 회색 단색 배경(zinc-50) + 흰 카드 + 그림자로만 위계를
@@ -5727,16 +5729,17 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
           (1152px)이 넓은 모니터에서 양옆 여백만 크게 남기던 문제. max-w-screen-2xl(1536px)로
           넓혀 화면을 더 넓게 쓰도록 한다(작은 화면은 mx-auto+반응형 그리드가 그대로 처리). */}
       <div className="mx-auto max-w-screen-2xl">
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+        {/* 모바일 최적화(2026-10-21): 휴대폰에서는 제목 줄을 [로고·날짜 선택] / [제목] 두 줄로, 오른쪽 도구 묶음은 아래 줄로 내린다. */}
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 sm:mb-8">
           {/* 사용자 지시(2026-08-21, Page 1 매거진 개편): 로고를 줄이고, 로고 하단 라인과 제목
               텍스트 하단 라인을 베이스라인 정렬 — items-center(시각적 중앙 정렬) 대신
               items-baseline으로(이미지의 CSS 베이스라인은 하단 가장자리와 같아 텍스트 베이스
               라인과 자연스럽게 맞물린다). 제목은 Pretendard(옴니고딕 대체) 헤딩 폰트로 크게. */}
-          <div className="flex items-baseline gap-3">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2 max-sm:w-full">
             {/* 사용자 지시(2026-08-20): 좌측 최상단은 채널별 로고가 아니라 고정 KT ENA CI 마크. */}
             {/* eslint-disable-next-line @next/next/no-img-element -- 고정 정적 브랜드 마크(픽셀 크롭 불필요) */}
             <img src="/kt-ena-ci-black.png" alt="KT ENA" style={{ height: 26, width: "auto" }} />
-            <h1 className="font-heading text-2xl font-bold tracking-tight text-zinc-900">
+            <h1 className="font-heading text-xl font-bold tracking-tight text-zinc-900 max-sm:order-3 max-sm:basis-full sm:text-2xl">
               {formatDateWithDowDots(data?.asOfDate)} 채널 종합리포트
               {view !== "daily" && <span className="ml-2 text-base font-medium text-zinc-400">{view === "weekly" ? "주간 보기" : "월간 보기"}</span>}
             </h1>
@@ -5755,30 +5758,30 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               disabled={!data}
               title="리포트 날짜 선택"
               aria-label="리포트 날짜 선택"
-              className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-sm text-zinc-600 shadow-sm disabled:opacity-50"
+              className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-sm text-zinc-600 shadow-sm disabled:opacity-50 max-sm:ml-auto max-sm:min-h-10"
             />
             {selectedDate && data?.latestAvailableDate && selectedDate !== data.latestAvailableDate && (
               <button
                 onClick={() => updateUrl({ date: null })}
-                className="rounded-lg px-2 py-1 text-xs font-medium text-zinc-400 underline decoration-dotted hover:text-zinc-600"
+                className="rounded-lg px-2 py-1 text-xs font-medium text-zinc-400 underline decoration-dotted hover:text-zinc-600 max-sm:min-h-10"
               >
                 최신으로
               </button>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-sm:w-full max-sm:flex-wrap">
             {/* 사용자 지시(2026-08-21): "우측 상단 채널별 로고가 너무 작아 시인성이 떨어진다" —
                 h-8 w-8(로고 14px)에서 h-11 w-11(로고 22px)로 확대, 배경도 불투명 흰색+옅은
                 테두리로 새 무채색 배경 위에서 또렷하게 보이도록. */}
             {data && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 max-sm:w-full max-sm:overflow-x-auto max-sm:pb-1">
                 {data.channels.map((c) => (
                   <Link
                     key={c.code}
                     href={hrefFor("channel", { ...urlCtx, channel: c.code, view: "daily" })}
                     title={c.name}
                     aria-label={c.name}
-                    className="flex h-11 w-11 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:ring-zinc-300"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:ring-zinc-300"
                   >
                     <ChannelLogo
                       channel={{ logoPath: c.logoPath, name: c.name, logoVisibleRatio: c.logoVisibleRatio, logoVisibleTopRatio: c.logoVisibleTopRatio }}
@@ -5827,7 +5830,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               onClick={() => setLargeFontMode((v) => !v)}
               title={largeFontMode ? "기본 글씨 크기로" : "큰 글씨로 보기"}
               aria-label={largeFontMode ? "기본 글씨 크기로" : "큰 글씨로 보기"}
-              className={`flex h-10 w-10 items-center justify-center rounded-full ring-1 transition ${
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 transition max-md:hidden ${
                 largeFontMode ? "bg-zinc-900 text-white ring-zinc-900" : "bg-white text-zinc-500 ring-zinc-200 hover:bg-zinc-50 hover:text-zinc-700"
               }`}
             >
@@ -5843,7 +5846,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               disabled={loading}
               title="새로고침"
               aria-label="새로고침"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:bg-zinc-50 disabled:opacity-50"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 transition hover:bg-zinc-50 disabled:opacity-50"
               style={{ color: NARRATIVE_UP_COLOR }}
             >
               <svg
@@ -5870,7 +5873,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 href="/admin"
                 title="관리자 화면"
                 aria-label="관리자 화면"
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-700"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-700"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="3" />
@@ -5891,7 +5894,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
               }}
               title="로그아웃"
               aria-label="로그아웃"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-700"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-700"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

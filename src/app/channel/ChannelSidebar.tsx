@@ -30,14 +30,14 @@ export default function ChannelSidebar({ channels }: { channels: ChannelOption[]
   // 아이콘들과 홈 아이콘이 항상 화면에 보이게 한다(내용이 뷰포트보다 많아지면 사이드바 자체만
   // 세로 스크롤).
   return (
-    <nav aria-label="채널 선택" className="sticky top-0 flex h-screen w-20 shrink-0 flex-col items-center gap-3 overflow-y-auto border-r border-zinc-100 bg-white/60 py-6 sm:w-24">
+    <nav aria-label="채널 선택" className="z-20 flex w-full shrink-0 flex-row items-center gap-1 overflow-x-auto border-b border-zinc-100 bg-white/90 px-2 py-1.5 backdrop-blur md:sticky md:top-0 md:h-screen md:w-24 md:flex-col md:gap-3 md:overflow-x-visible md:overflow-y-auto md:border-b-0 md:border-r md:bg-white/60 md:px-0 md:py-6 md:backdrop-blur-none">
       {channels.map((c) => {
         const active = pathname === `/channel/${c.code}`;
         return (
           <Link
             key={c.code}
             href={withCtx(`/channel/${c.code}`)}
-            className={`flex w-16 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center transition ${
+            className={`flex min-h-11 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center transition ${
               active ? "bg-white shadow-sm ring-1 ring-zinc-200" : "hover:bg-white/70"
             }`}
           >
@@ -60,7 +60,7 @@ export default function ChannelSidebar({ channels }: { channels: ChannelOption[]
         rel="noopener noreferrer"
         title={VENDING.linkLabel}
         aria-label={VENDING.linkLabel}
-        className="flex w-16 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center text-zinc-500 transition hover:bg-white/70 hover:text-zinc-800"
+        className="flex min-h-11 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center text-zinc-500 transition hover:bg-white/70 hover:text-zinc-800"
       >
         <VendingMachineIcon size={24} strokeWidth={1.8} />
         <span className="text-[10px]">자판기</span>
@@ -75,7 +75,7 @@ export default function ChannelSidebar({ channels }: { channels: ChannelOption[]
         href="/"
         title="메인 화면으로"
         aria-label="메인 화면으로"
-        className="flex w-16 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-center transition hover:bg-white/70"
+        className="flex min-h-11 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center transition hover:bg-white/70"
       >
         <svg
           aria-hidden="true"
