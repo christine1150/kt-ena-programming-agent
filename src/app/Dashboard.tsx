@@ -1339,76 +1339,6 @@ function KpiLines({ kpi, detailed = false }: { kpi: KpiRow | undefined; detailed
   );
 }
 
-// 사용자 재지시(2026-09-03): "나머지 레이아웃은 직전에 했던 대로 되돌리기" — 로고 우측에 숫자를
-// 놓는 가로 배치를 철회하고, 로고 아래에 큰 숫자를 세우는 세로 배치로 되돌린다. 다만 "현재 순위
-// 진한 글씨체로 하고 있는 건 그대로 유지"라 RankPair(오늘 등위 볼드 + 확대된 등위 폰트)는 유지.
-// "연간 누적 평균 …" 설명 줄은 별도 지시로 삭제된 상태 그대로 둔다(레이아웃이 아니라 내용 결정).
-function ChannelHero({
-  channel,
-  resolved,
-  baselineAvgRank,
-  kpi,
-}: {
-  channel: ChannelSummary;
-  resolved: ResolvedAction;
-  baselineAvgRank: number | null;
-  kpi?: KpiRow;
-}) {
-  const heroTargetRankNum = parseTargetRankNum(channel.targetRank);
-  return (
-    <Link href={`/channel/${channel.code}`} className="group block">
-      <div className="flex items-center gap-3">
-        <ChannelLogo
-          channel={{
-            logoPath: channel.logoPath,
-            name: channel.name,
-            logoVisibleRatio: channel.logoVisibleRatio,
-            logoVisibleTopRatio: channel.logoVisibleTopRatio,
-          }}
-          heightPx={44}
-        />
-        {kpi && (
-          <span className="text-[11px] font-medium text-zinc-400" title={`${kpi.targetText} 기준`}>
-            {kpiTargetChip(kpi.targetText)}
-          </span>
-        )}
-      </div>
-      {/* 숫자·순위·등락을 하나의 baseline에 정렬 — 정교한 alignment 지시. */}
-      <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-[56px] font-bold leading-[0.9] tabular-nums tracking-[-0.03em] text-zinc-900">
-          {formatRating(channel.currentRating)}
-        </span>
-        <RankPair todayRank={channel.currentRank} targetRankNum={heroTargetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[26px]" targetScope={parseTargetRank(channel.targetRank).scope} />
-        {/* 사용자 재지시(2026-08-22/25): ENA도 6개 타일과 동일하게 RankChangeIndicator 하나만. */}
-        <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
-      </div>
-      <div className="mt-2">
-        <KpiLines kpi={kpi} detailed />
-      </div>
-      {/* 사용자 재지시(2026-08-22): 도넛 게이지 대신 6개 타일과 동일한 최근 7일 스파크라인.
-          사용자 재지시(2026-09-03): 서브 채널 타일의 "그래프 폭 : 시청률 숫자 폭" 비율(실측
-          약 0.58)을 히어로 숫자 폭(실측 503px)에 그대로 적용한 값(약 293px)으로 확대.
-          사용자 재지시(2026-09-03, 2차): "너무 완만해서 등락을 알 수 없음" — 높이도 14→48로
-          키워 같은 등락이 더 뚜렷하게 보이도록 하고, 포인트에 마우스오버 시 "N월 N일 · 순위"
-          툴팁을 붙인다. */}
-      <div className="mt-3">
-        <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#281fc7"} width={293} height={36} points={channel.recentRatingsDetail} />
-      </div>
-      {/* 사용자 지시(2026-09-20): "AI 편성 비서와 오늘의 액션 요약은 삭제. 대신 오늘의 시청률
-          부분에 각 채널 그래프 밑에 오늘의 액션 요약에 들어가 있던 말을 한 줄로 넣어준다" —
-          별도 카드로 모아 보여주던 채널별 액션 한 줄을, 그 채널 자신의 그래프 바로 아래로
-          옮긴다(계산 로직은 buildChannelInsightSummary 그대로, 새 계산 없음).
-          재지시(2026-09-20): 프로그램을 지목한 액션(파란색)과, 프로그램 근거 없이 채널
-          순위만으로 나온 진단(진한 회색)을 구분해 표시한다. */}
-      {resolved.line || resolved.copy || resolved.status ? (
-        <ActionCopyBlock resolved={resolved} size="hero" />
-      ) : (
-        <p className="mt-2 text-[13px] font-medium" style={{ color: actionColor(null, false) }}>현재 편성 유지</p>
-      )}
-    </Link>
-  );
-}
-
 // 사용자 지시(2026-08-20): ONCE·skyUHD 로고는 원본 워드마크 자체가 가로로 넓어(실측 가로세로비
 // ONCE 4.03, skyUHD 3.70 vs OLIFE 2.26) 높이만 맞추면 이 좁은 칸에서 오른쪽이 잘린다 — 두 채널만
 // 폭 상한을 준다.
@@ -1513,94 +1443,158 @@ function RankChangeIndicator({ rankChangeDod }: { rankChangeDod: number | null }
   );
 }
 
-// 사용자 지시(2026-08-21, Page 1 전면 개편/매거진 개편): 가로로 긴 압축 리스트 행 대신, 위젯형
-// 미니 카드 그리드로 재배열 — 로고만(채널명 텍스트 제거), "시청률 (순위/목표순위)" 한 줄, 증감은
-// 전일 대비 순위 증감(정수)으로.
-function ChannelTile({
+// 사용자 지시(2026-10-21): "오늘의 시청률"을 채널별 세로 칸 6개로 — 머리말(로고·시청률(순위)·평균 순위·증감·목표/전일/전주 줄) 아래에
+// 그날 프로그램별 "시작 시각 · 제목 · KPI 시청률"만 붙인다. 방송일 표기(02:00~25:59)는 시청률 표(/ratings)와 같게 맞춘다.
+// 숫자는 기존 일간 세부 API(/api/dashboard/channel-daily-detail)가 주는 값을 그대로 보여 줄 뿐, 여기서 계산하지 않는다(원칙 1).
+// 주 타깃 시청률이 올해 누적 평균 이상이면 채널 색으로 굵게(일간 세부 내역 패널과 같은 규칙). 판단·조치·추이는 칸마다 접어 두었다가 눌러서 연다.
+function fmtBroadcastClock(t: string): string {
+  const [h, m] = t.split(":");
+  const hh = Number(h);
+  return `${String(hh < 2 ? hh + 24 : hh).padStart(2, "0")}:${m}`;
+}
+function ChannelDailyColumn({
   channel,
   logoReference,
   resolved,
   baselineAvgRank,
   kpi,
+  asOfDate,
 }: {
   channel: ChannelSummary;
   logoReference?: ChannelSummary;
   resolved: ResolvedAction;
   baselineAvgRank: number | null;
   kpi?: KpiRow;
+  asOfDate: string;
 }) {
-  const isSkyUhd = channel.code === "SKYUHD";
+  const code = channel.code;
+  const [state, setState] = useState<{
+    loading: boolean;
+    error: string | null;
+    rows: ChannelDailyDetailApiRow[];
+    dayRating: number | null;
+    primaryLabel: string | null;
+  }>({ loading: true, error: null, rows: [], dayRating: null, primaryLabel: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setState({ loading: true, error: null, rows: [], dayRating: null, primaryLabel: null });
+      try {
+        const res = await fetch(`/api/dashboard/channel-daily-detail?code=${code}&date=${asOfDate}`);
+        const body = await res.json().catch(() => ({ ok: false }));
+        if (cancelled) return;
+        if (!res.ok || !body.ok) {
+          setState({ loading: false, error: body.message ?? "불러오지 못했습니다.", rows: [], dayRating: null, primaryLabel: null });
+        } else {
+          setState({ loading: false, error: null, rows: body.rows ?? [], dayRating: body.dayTotal?.primary_rating ?? null, primaryLabel: body.primaryLabel ?? null });
+        }
+      } catch {
+        if (!cancelled) setState({ loading: false, error: "불러오지 못했습니다.", rows: [], dayRating: null, primaryLabel: null });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [code, asOfDate]);
+
   const targetRankNum = parseTargetRankNum(channel.targetRank);
+  const accent = brandText(DAILY_DETAIL_READABLE_COLOR_OVERRIDE[code] ?? channel.themeColor ?? UNBRANDED_CHANNEL_COLOR);
+  const annualAvg = channel.ytdAvgRating;
+  const hasActionText = !!(resolved.line || resolved.copy || resolved.status);
+
   return (
-    // 사용자 지시(2026-09-03, UI/UX REDESIGN): "작은 카드 여러 개가 난립하는 느낌을 줄이고" +
-    // "카드 안의 카드가 반복되는 구조 최소화" — 타일마다 두르던 회색 배경·링(카드 안의 카드)을
-    // 없애고, 부모 그리드의 gap-px가 만드는 얇은 격자선만으로 칸을 구분한다(얇은 divider 지시).
-    <Link
-      href={`/channel/${channel.code}`}
-      className="flex flex-col gap-1.5 bg-white px-4 py-3 transition hover:bg-zinc-50"
-    >
-      {/* 사용자 지시: 채널명 텍스트 제거, 로고만 깔끔하게.
-          사용자 재지시(2026-09-02): "채널별 시청률" 타일에서만 ENA Drama/Play/Story는 가로형
-          로고(preferWideLogo, channel.code로 매칭) — 다른 자리(헤더 아이콘·주말 리포트 등)는
-          이 prop을 안 켜서 기존 세로형 그대로 유지. */}
-      <div className="flex items-center justify-between gap-2">
-        <ChannelLogo
-          channel={{
-            logoPath: channel.logoPath,
-            name: channel.name,
-            logoVisibleRatio: channel.logoVisibleRatio,
-            logoVisibleTopRatio: channel.logoVisibleTopRatio,
-            code: channel.code,
-          }}
-          reference={
-            logoReference
-              ? {
-                  logoPath: logoReference.logoPath,
-                  name: logoReference.name,
-                  logoVisibleRatio: logoReference.logoVisibleRatio,
-                  logoVisibleTopRatio: logoReference.logoVisibleTopRatio,
-                }
-              : undefined
-          }
-          heightPx={20}
-          maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(channel.code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
-          preferWideLogo
-        />
-        {kpi && (
-          <span className="shrink-0 text-[10px] font-medium text-zinc-400" title={`${kpi.targetText} 기준`}>
-            {kpiTargetChip(kpi.targetText)}
+    <div className="flex min-w-0 flex-col bg-white px-3.5 py-4">
+      <Link href={`/channel/${code}`} className="group block rounded-md transition hover:bg-zinc-50/70">
+        <div className="flex items-center justify-between gap-2">
+          <ChannelLogo
+            channel={{ logoPath: channel.logoPath, name: channel.name, logoVisibleRatio: channel.logoVisibleRatio, logoVisibleTopRatio: channel.logoVisibleTopRatio, code }}
+            reference={
+              logoReference
+                ? { logoPath: logoReference.logoPath, name: logoReference.name, logoVisibleRatio: logoReference.logoVisibleRatio, logoVisibleTopRatio: logoReference.logoVisibleTopRatio }
+                : undefined
+            }
+            heightPx={code === "ENA" ? 30 : 22}
+            maxWidthPx={WIDTH_CAPPED_LOGO_CODES.has(code) ? TILE_LOGO_MAX_WIDTH_PX : undefined}
+            preferWideLogo
+          />
+          {kpi && (
+            <span className="shrink-0 text-[11px] font-medium text-zinc-400" title={`${kpi.targetText} 기준`}>
+              {kpiTargetChip(kpi.targetText)}
+            </span>
+          )}
+        </div>
+        <div className="mt-2.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+          <span className="text-2xl font-bold leading-none tabular-nums tracking-[-0.02em] text-zinc-900">{formatRating(channel.currentRating, code)}</span>
+          <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[13px]" targetScope={parseTargetRank(channel.targetRank).scope} />
+          <span className="ml-auto">
+            <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
           </span>
+        </div>
+        <div className="mt-1.5">
+          <KpiLines kpi={kpi} />
+        </div>
+      </Link>
+
+      <div className="mt-3 border-t border-zinc-100 pt-2.5">
+        <div className="mb-1 flex items-baseline justify-between gap-2 text-[11px] text-zinc-400">
+          <span className="font-medium">일간 세부</span>
+          {state.primaryLabel && <span>{shortTargetLabel(state.primaryLabel)} 시청률</span>}
+        </div>
+        {state.loading && (
+          <div className="flex flex-col gap-1.5 py-1" role="status" aria-label="일간 세부 불러오는 중">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-3.5 animate-pulse rounded bg-zinc-100" style={{ width: `${88 - i * 7}%` }} />
+            ))}
+          </div>
+        )}
+        {!state.loading && state.error && <p className="py-2 text-[12px] text-red-500" role="alert">{state.error}</p>}
+        {!state.loading && !state.error && state.rows.length === 0 && <p className="py-2 text-[12px] text-zinc-400">이 날짜는 프로그램 단위 데이터가 없습니다.</p>}
+        {!state.loading && !state.error && state.rows.length > 0 && (
+          <ul className="flex flex-col">
+            {state.rows.map((r, i) => {
+              const high = r.primary_rating !== null && annualAvg !== null && r.primary_rating >= annualAvg;
+              const name = shortProgramName(r.canonical_name);
+              const detail = [r.is_first_run ? "본방" : null, r.episode_number != null ? `${r.episode_number}회` : null, r.episode_subtitle?.trim() || null].filter(Boolean).join(" · ");
+              return (
+                <li key={i} className="grid grid-cols-[2.7rem_minmax(0,1fr)_auto] items-baseline gap-x-2 border-t border-zinc-50 py-0.5 text-[12.5px] leading-snug first:border-t-0" title={`${fmtBroadcastClock(r.start_time)} ${name}${detail ? ` · ${detail}` : ""}`}>
+                  <span className="text-[11px] tabular-nums text-zinc-400">{fmtBroadcastClock(r.start_time)}</span>
+                  <span className="flex min-w-0 items-baseline gap-1">
+                    <span className="min-w-0 truncate text-zinc-700" style={high ? { color: accent, fontWeight: 600 } : undefined}>{name}</span>
+                    {r.is_first_run && <span className="shrink-0 rounded bg-zinc-100 px-1 text-[10px] font-medium leading-4 text-zinc-500">본</span>}
+                  </span>
+                  <span className={`tabular-nums ${high ? "font-bold" : "font-medium text-zinc-600"}`} style={high ? { color: accent } : undefined}>
+                    {formatRating(r.primary_rating, code)}
+                  </span>
+                </li>
+              );
+            })}
+            {state.dayRating !== null && (
+              <li className="mt-1 grid grid-cols-[2.7rem_minmax(0,1fr)_auto] items-baseline gap-x-2 border-t border-zinc-200 pt-1.5 text-[12.5px] font-semibold text-zinc-800">
+                <span />
+                <span>하루 전체</span>
+                <span className="tabular-nums">{formatRating(state.dayRating, code)}</span>
+              </li>
+            )}
+          </ul>
         )}
       </div>
-      {/* 사용자 재지시(2026-09-03): 로고 우측 가로 배치를 철회하고 "시청률 (순위/목표순위)" 한 줄 +
-          전일 대비 순위 증감의 세로 배치로 되돌린다. 다만 "현재 순위 진한 글씨체"는 유지 지시라
-          RankPair(오늘 등위 볼드 + 확대된 등위 폰트)와 키운 시청률 폰트는 그대로 둔다. */}
-      <div className="flex items-baseline justify-between gap-1.5">
-        <span className="flex items-baseline gap-1.5">
-          {/* skyUHD는 5자리(0.0017)라 다른 채널보다 한 단계 작게 두던 기존 규칙 유지. */}
-          <span className={`font-bold tabular-nums tracking-tight text-zinc-900 ${isSkyUhd ? "text-lg" : "text-xl"}`}>
-            {formatRating(channel.currentRating, channel.code)}
-          </span>
-          <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[13px]" targetScope={parseTargetRank(channel.targetRank).scope} />
-        </span>
-        <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
+
+      <div className="mt-auto flex flex-col gap-1 pt-3">
+        <details className="group/detail">
+          <summary className="cursor-pointer list-none text-[12px] font-semibold text-zinc-500 hover:text-zinc-800 [&::-webkit-details-marker]:hidden">
+            <span className="mr-1 inline-block text-[10px] transition group-open/detail:rotate-90" aria-hidden>▶</span>판단·조치·추이 보기
+          </summary>
+          <div className="mt-2">
+            <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#a1a1aa"} width={180} height={28} points={channel.recentRatingsDetail} />
+            {hasActionText ? <ActionCopyBlock resolved={resolved} size="tile" /> : <p className="mt-2 text-[12px] font-medium" style={{ color: actionColor(null, false) }}>현재 편성 유지</p>}
+          </div>
+        </details>
+        <a href={`/ratings?tab=daily&code=${code}&date=${asOfDate}`} target="_blank" rel="noopener" className="text-[12px] font-medium text-indigo-700 hover:underline">
+          표로 크게 보기
+        </a>
       </div>
-      {/* 사용자 지시(2026-10-07): skyUHD는 목표·전일·전주 줄을 보이지 않는다 */}
-      {!isSkyUhd && <KpiLines kpi={kpi} />}
-      {/* 사용자 지시(2026-09-03, 2차)의 호버 툴팁을 서브 채널 타일에도 동일하게 적용(같은
-          recentRatingsDetail 데이터, 새 조회 없음) — 높이·폭은 타일 기존 값 그대로 유지. */}
-      <MiniSparkline values={channel.recentRatings} color={channel.themeColor ?? "#a1a1aa"} points={channel.recentRatingsDetail} />
-      {/* 사용자 지시(2026-09-20): "AI 편성 비서와 오늘의 액션 요약은 삭제. 대신 오늘의 시청률
-          부분에 각 채널 그래프 밑에 오늘의 액션 요약에 들어가 있던 말을 한 줄로 넣어준다" —
-          ChannelHero와 동일한 한 줄(계산은 buildChannelInsightSummary 재사용, 새 계산 없음).
-          재지시(2026-09-20): 프로그램 지목 액션(파란색)과 순위만으로 나온 진단(진한 회색)을
-          구분해 표시한다. */}
-      {resolved.line || resolved.copy || resolved.status ? (
-        <ActionCopyBlock resolved={resolved} size="tile" />
-      ) : (
-        <p className="min-h-[2.7em] text-[11px] font-medium leading-snug" style={{ color: actionColor(null, false) }}>현재 편성 유지</p>
-      )}
-    </Link>
+    </div>
   );
 }
 
@@ -1613,6 +1607,7 @@ function ChannelStatusCard({
   footer,
   viewTabs,
   ratingsHref,
+  asOfDate,
 }: {
   channels: Map<string, ChannelSummary>;
   narrativeSignals: ChannelNarrativeSignal[];
@@ -1622,9 +1617,12 @@ function ChannelStatusCard({
   viewTabs?: React.ReactNode;
   /** 시청률 표(별도 창) 주소 — 있으면 보기 단위 탭 왼쪽에 버튼을 둔다 */
   ratingsHref?: string;
+  /** 채널별 일간 세부(프로그램 제목·시청률)를 조회할 기준일 */
+  asOfDate: string;
 }) {
   const kpiByCode = new Map(kpiRows.map((r) => [r.code, r]));
   const ena = channels.get("ENA");
+  const skyUhd = channels.get("SKYUHD");
   const rest = ["ENA_PLAY", "ENA_DRAMA", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"]
     .map((c) => channels.get(c))
     .filter((c): c is ChannelSummary => !!c);
@@ -1672,34 +1670,37 @@ function ChannelStatusCard({
             "오늘의 시청률" 카드 자체의 우측 상단으로 옮긴다. 1페이지는 특정 채널 컨텍스트가 없는
             포트폴리오 화면이라 기본 채널을 ENA로 고정하고, 새 탭으로 열어 조회 흐름을 끊지 않는다. */}
       </div>
-      {/* 사용자 지시(2026-10-13): ENA 칸은 넓고 나머지 6개 칸은 좁아 줄이 길어진다 — 넓은 화면(xl)에서는 ENA 칸을 줄이고 6개 칸 폭을 넓힌다. */}
-      <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-8 xl:grid-cols-[minmax(340px,1fr)_minmax(0,2.5fr)]">
-        {ena && (
-          <ChannelHero
-            channel={ena}
-            resolved={resolveChannelAction(insightByCode.get("ENA"), aiByCode, "ENA", kpiByCode.get("ENA"), ena.achievementPct)}
-            baselineAvgRank={insightByCode.get("ENA")?.baselineAvgRank ?? null}
-            kpi={kpiByCode.get("ENA")}
+      {/* 사용자 지시(2026-10-21): skyUHD를 뺀 6개 채널(ENA·Play·Drama·Story·OLIFE·ONCE)을 가로로 나란히 — 각 칸은 채널명·시청률(순위)·평균 순위까지의 머리말 아래에 그날의 프로그램별 제목+KPI 시청률만 붙인다.
+          칸 사이는 1px 격자선(gap-px + 배경색)만 쓰고, 칸이 좁아지는 화면에서는 3열→2열→1열로 접는다. */}
+      <div className="mt-4 grid grid-cols-1 gap-px overflow-hidden rounded-lg bg-zinc-100 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+        {[ena, ...rest.filter((c) => c.code !== "SKYUHD")].filter((c): c is ChannelSummary => !!c).map((c) => (
+          <ChannelDailyColumn
+            key={c.code}
+            channel={c}
+            logoReference={ena}
+            resolved={resolveChannelAction(insightByCode.get(c.code), aiByCode, c.code, kpiByCode.get(c.code), c.achievementPct)}
+            baselineAvgRank={insightByCode.get(c.code)?.baselineAvgRank ?? null}
+            kpi={kpiByCode.get(c.code)}
+            asOfDate={asOfDate}
           />
-        )}
-        {/* 바깥 div는 세로 divider·좌측 여백만, 안쪽 grid는 gap-px + 배경색으로 칸 사이 1px
-            격자선만 남기는 표형 배치(테두리 박스 없음) — 두 역할을 한 요소에 겹치면 여백까지
-            격자 배경색으로 칠해지므로 분리한다. */}
-        <div className="lg:self-start lg:border-l lg:border-zinc-100 lg:pl-8">
-          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-zinc-100 sm:grid-cols-3">
-            {rest.map((c) => (
-              <ChannelTile
-                key={c.code}
-                channel={c}
-                logoReference={ena}
-                resolved={resolveChannelAction(insightByCode.get(c.code), aiByCode, c.code, kpiByCode.get(c.code), c.achievementPct)}
-                baselineAvgRank={insightByCode.get(c.code)?.baselineAvgRank ?? null}
-                kpi={kpiByCode.get(c.code)}
-              />
-            ))}
-          </div>
-        </div>
+        ))}
       </div>
+      {/* skyUHD는 프로그램 단위 세부가 없어 열 대신 한 줄 요약으로만 남긴다(시청률·순위·전일 대비 순위 증감). */}
+      {skyUhd && (
+        <Link href={`/channel/${skyUhd.code}`} className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-1 py-1 transition hover:bg-zinc-50">
+          <ChannelLogo
+            channel={{ logoPath: skyUhd.logoPath, name: skyUhd.name, logoVisibleRatio: skyUhd.logoVisibleRatio, logoVisibleTopRatio: skyUhd.logoVisibleTopRatio, code: skyUhd.code }}
+            reference={ena ? { logoPath: ena.logoPath, name: ena.name, logoVisibleRatio: ena.logoVisibleRatio, logoVisibleTopRatio: ena.logoVisibleTopRatio } : undefined}
+            heightPx={18}
+            maxWidthPx={TILE_LOGO_MAX_WIDTH_PX}
+            preferWideLogo
+          />
+          <span className="text-[11px] font-medium text-zinc-400">{kpiByCode.get("SKYUHD") ? kpiTargetChip(kpiByCode.get("SKYUHD")!.targetText) : "가구"}</span>
+          <span className="text-base font-bold tabular-nums tracking-tight text-zinc-900">{formatRating(skyUhd.currentRating, skyUhd.code)}</span>
+          <RankPair todayRank={skyUhd.currentRank} targetRankNum={parseTargetRankNum(skyUhd.targetRank)} baselineAvgRank={insightByCode.get("SKYUHD")?.baselineAvgRank ?? null} sizeClass="text-[13px]" targetScope={parseTargetRank(skyUhd.targetRank).scope} />
+          <RankChangeIndicator rankChangeDod={skyUhd.rankChangeDod} />
+        </Link>
+      )}
       {/* 사용자 결정(2026-10-13): 홈 전체의 비교 기준 기간은 아주 작고 흐리게, 공통이면 이 한 줄에 모아 적는다 */}
       <BasisNote className="mt-3 text-right">{HOME_DAILY_BASIS_NOTE}</BasisNote>
       {/* 사용자 지시(2026-10-06): 카드 맨 아래에 제목 없이 정보만 자연스럽게 이어 붙인다(해당일 상위 프로그램 9개) */}
@@ -5956,7 +5957,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                   </p>
                 )}
                 {/* 사용자 지시(2026-10-06): "오늘의 시청률" 아랫줄에 해당일 채널 순위 1~20위 안의 상위 프로그램 9개(수2049, 괄호 안 가구)를 3단으로 */}
-                <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} kpiRows={kpiGroups.flatMap((g) => g.rows)} aiByCode={aiByCode} viewTabs={<HomeViewTabs view={view} onChange={goView} />} ratingsHref={`/ratings?tab=daily&date=${data.asOfDate}`} footer={<MarketTopPrograms date={data.asOfDate} />} />
+                <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} kpiRows={kpiGroups.flatMap((g) => g.rows)} aiByCode={aiByCode} viewTabs={<HomeViewTabs view={view} onChange={goView} />} ratingsHref={`/ratings?tab=daily&date=${data.asOfDate}`} asOfDate={data.asOfDate} footer={<MarketTopPrograms date={data.asOfDate} />} />
 
                 {/* 사용자 지시(2026-08-26): 월요일엔 주말 리포트(토·일) — 일간 보기의 변화 근거에 붙인다. */}
                 {data.weekendReport && <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />}
