@@ -1548,7 +1548,7 @@ function ChannelDailyColumn({
       <div className="mt-3 border-t border-zinc-100 pt-2.5">
         <div className="mb-1 flex items-baseline justify-between gap-2 text-[11px] text-zinc-400">
           <span className="font-medium">일간 세부</span>
-          {state.primaryLabel && <span>{shortTargetLabel(state.primaryLabel)} 시청률</span>}
+          {state.primaryLabel && <span>{shortTargetLabel(state.primaryLabel)}</span>}
         </div>
         {state.loading && (
           <div className="flex flex-col gap-1.5 py-1" role="status" aria-label="일간 세부 불러오는 중">
