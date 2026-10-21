@@ -1309,9 +1309,9 @@ function kpiTooltip(k: KpiRow): string {
   const pct = (d: KpiRow["dod"]) => (d.relativePct !== null || d.pctFromServer ? d.pctText : "비교 불가");
   return [
     `${k.name} · ${k.targetText} 기준`,
-    `목표 시청률 ${k.goal.ratingText} · 격차 ${k.goal.gapText}${k.goal.achievementPct !== null ? ` · 달성 ${k.goal.achievementText}` : ""}`,
+    `목표 시청률 ${k.goal.ratingText} · 격차 ${k.goal.gapText.replace(/%p/g, "%")}${k.goal.achievementPct !== null ? ` · 달성 ${k.goal.achievementText}` : ""}`,
     `${k.rank.text} · ${k.targetRank.text}${k.rankGap.value !== null ? ` (${k.rankGap.text})` : ""}`,
-    `전일 ${k.dod.ppText} / ${pct(k.dod)} · 전주 동요일 ${k.wow.ppText} / ${pct(k.wow)}`,
+    `전일 ${k.dod.ppText.replace(/%p/g, "%")} / ${pct(k.dod)} · 전주 동요일 ${k.wow.ppText.replace(/%p/g, "%")} / ${pct(k.wow)}`,
   ].join("\n");
 }
 function KpiLines({ kpi, detailed = false }: { kpi: KpiRow | undefined; detailed?: boolean }) {
@@ -1319,23 +1319,22 @@ function KpiLines({ kpi, detailed = false }: { kpi: KpiRow | undefined; detailed
   const a = kpi.goal.achievementPct;
   const tone = a === null ? "#a1a1aa" : a >= 100 ? "#059669" : a >= 90 ? "#b45309" : "#be123c";
   const hasGoal = kpi.goal.rating !== null;
-  const withPct = (d: KpiRow["dod"]) => (detailed && d.relativePct !== null ? `${d.ppText} (${d.pctText})` : d.ppText);
+  // 사용자 지시(2026-10-21): "%p"의 p는 빼고 "%"만 보인다(값은 그대로, 표기만).
+  const noP = (t: string) => t.replace(/%p/g, "%");
+  const withPct = (d: KpiRow["dod"]) => (detailed && d.relativePct !== null ? `${noP(d.ppText)} (${d.pctText})` : noP(d.ppText));
+  // 사용자 지시(2026-10-21): "목표"부터 "전주"까지를 채널당 한 줄에 — 칸이 넉넉한 화면(sm 이상)에서는 줄바꿈 없이 한 줄, 휴대폰처럼 좁으면 단어 단위로만 넘어간다.
   return (
-    <div className={`flex flex-col gap-0.5 tabular-nums leading-tight text-zinc-500 ${detailed ? "text-[12px]" : "text-[10.5px]"}`} title={kpiTooltip(kpi)}>
-      <p className="break-keep">
-        {hasGoal ? (
-          <>
-            <span className="mr-0.5 inline-block rounded-full align-[-1px]" style={{ backgroundColor: tone, width: detailed ? 11 : 9, height: detailed ? 11 : 9 }} aria-hidden /> 목표 {kpi.goal.ratingText.replace(/%$/, "")} · <span style={{ color: tone }}>{kpi.goal.gapText}</span>
-            {a !== null ? ` · ${detailed ? "달성 " : ""}${Math.round(a)}%` : ""}
-          </>
-        ) : (
-          <span className="text-zinc-400">목표 시청률 미설정</span>
-        )}
-      </p>
-      <p className="break-keep">
-        전일 {withPct(kpi.dod)} · 전주 {withPct(kpi.wow)}
-      </p>
-    </div>
+    <p className={`break-keep tabular-nums leading-tight text-zinc-500 sm:whitespace-nowrap ${detailed ? "text-[12px]" : "text-[10.5px]"}`} title={kpiTooltip(kpi)}>
+      {hasGoal ? (
+        <>
+          <span className="mr-0.5 inline-block rounded-full align-[-1px]" style={{ backgroundColor: tone, width: detailed ? 11 : 9, height: detailed ? 11 : 9 }} aria-hidden /> 목표 {kpi.goal.ratingText.replace(/%$/, "")} · <span style={{ color: tone }}>{noP(kpi.goal.gapText)}</span>
+          {a !== null ? ` · ${detailed ? "달성 " : ""}${Math.round(a)}%` : ""}
+        </>
+      ) : (
+        <span className="text-zinc-400">목표 시청률 미설정</span>
+      )}
+      {" · "}전일 {withPct(kpi.dod)} · 전주 {withPct(kpi.wow)}
+    </p>
   );
 }
 
@@ -1673,7 +1672,7 @@ function ChannelStatusCard({
       {/* 사용자 지시(2026-10-21): skyUHD를 뺀 6개 채널(ENA·Play·Drama·Story·OLIFE·ONCE)을 가로로 나란히 — 각 칸은 채널명·시청률(순위)·평균 순위까지의 머리말 아래에 그날의 프로그램별 제목+KPI 시청률만 붙인다.
           칸 사이는 1px 격자선(gap-px + 배경색)만 쓰고, 칸이 좁아지는 화면에서는 3열→2열→1열로 접는다. */}
       {/* 모바일(2026-10-21): 휴대폰에서는 채널 칸을 세로로 쌓지 않고 옆으로 밀어 넘기는 카드(다음 카드가 살짝 보인다)로 둔다 — 페이지가 6배 길어지는 것을 막는다. */}
-      <div className="-mx-1 mt-4 flex snap-x snap-mandatory gap-px overflow-x-auto rounded-lg bg-zinc-100 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-hidden xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="-mx-1 mt-4 flex snap-x snap-mandatory gap-px overflow-x-auto rounded-lg bg-zinc-100 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-hidden xl:grid-cols-3 min-[2150px]:grid-cols-6">
         {[ena, ...rest.filter((c) => c.code !== "SKYUHD")].filter((c): c is ChannelSummary => !!c).map((c) => (
           <ChannelDailyColumn
             key={c.code}
@@ -2018,7 +2017,7 @@ function PrimeMoverSingleCell({
   return (
     <span className="flex flex-col gap-0.5">
       <span className="flex flex-wrap items-baseline gap-1">
-        <b className="font-semibold text-zinc-700">{mover.programName}</b>
+        <b className="font-semibold text-zinc-700">{shortProgramName(mover.programName)}</b>
         {mover.dow && <span className="rounded bg-zinc-100 px-1 text-[9px] text-zinc-500">{DOW_LABELS[mover.dow]}요일</span>}
         <span className="tabular-nums font-semibold" style={{ color: up ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
           {up ? "▲" : "▼"}
@@ -2071,7 +2070,7 @@ function MonthlyDriverCell({
   return (
     <span className="flex flex-col gap-0.5">
       <span className="flex items-baseline gap-1">
-        <b className="font-semibold text-zinc-700">{driver.programName}</b>
+        <b className="font-semibold text-zinc-700">{shortProgramName(driver.programName)}</b>
         {isPrime && (
           <span className="rounded bg-zinc-100 px-1 text-[9px] text-zinc-500">
             프라임{driver.primeDow ? ` ${DOW_LABELS[driver.primeDow]}` : ""}
@@ -3743,7 +3742,7 @@ function ManualMinuteRatingChart({
         <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
           {bands.map((c, i) => {
             const color = bandColors[i];
-            const programName = cleanCompetitorProgramName(c.program_name);
+            const programName = shortProgramName(cleanCompetitorProgramName(c.program_name));
             return (
               <div
                 key={`${c.channel_name}-${c.program_name}`}
@@ -4534,7 +4533,7 @@ function OriginalContentReportCard({
               const isBelowBaseline = hasBaseline && w.this_week_rating < w.baseline_avg_rating!;
               const thisWeekColor = isAboveBaseline ? NARRATIVE_UP_COLOR : isBelowBaseline ? NARRATIVE_DOWN_COLOR : undefined;
               const isMultiDay = (occurrenceCount.get(`${w.broadcast_channel_code}__${w.program_name}`) ?? 1) > 1;
-              const displayTitle = isMultiDay ? `${w.program_name} (${DOW_LABELS[w.day_of_week_iso]})` : w.program_name;
+              const displayTitle = isMultiDay ? `${shortProgramName(w.program_name)} (${DOW_LABELS[w.day_of_week_iso]})` : shortProgramName(w.program_name);
               return (
                 <div
                   key={`${w.broadcast_channel_code}-${w.program_name}-${w.day_of_week_iso}`}
@@ -4878,7 +4877,7 @@ function KillerContentCard({
                 {/* 사용자 지시(2026-08-22, UI 정렬 요청 #4): 프로그램명·시청률(1줄)과 세부
                     정보(배지, 2줄)를 분리하고 여백·폰트 크기 위계를 줘 가독성을 높였다. */}
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-zinc-800">{k.canonical_name}</span>
+                  <span className="truncate text-sm font-medium text-zinc-800">{shortProgramName(k.canonical_name)}</span>
                   <span className="shrink-0 text-sm font-medium tabular-nums" style={{ color: ytdColor }}>
                     {formatRating(k.avg_rating)}
                   </span>

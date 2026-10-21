@@ -28,6 +28,7 @@ import { actionPhrase, programActionFor } from "@/lib/insight/actionCandidate";
 // 컴포넌트(AskAssistantWidget, 원래 이 파일에서 뽑아 나간 것)로 교체해 중복을 없앴다(기능·
 // 응답 형태 동일, 순수 치환).
 import { AskAssistantWidget } from "@/components/AskAssistantWidget";
+import { shortProgramName, shortenProgramNames } from "@/lib/programAlias";
 import { ScheduleWeekGrid } from "@/components/ScheduleWeekGrid";
 import { buildEnaOriginalHighlightSentence, type EnaOriginalHighlightItem } from "@/lib/enaOriginalHighlight";
 import { highlightNarrativeText, NARRATIVE_DOWN_COLOR, NARRATIVE_UP_COLOR } from "@/lib/highlightNarrative";
@@ -3416,7 +3417,7 @@ function TopProgramListItems({
             {/* 모바일(2026-10-21): 휴대폰에서는 1줄 [순위·이름·시청률], 2줄 [시간대·방영 횟수]로 나눠 넘치지 않게 한다(막대는 숨김). */}
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 sm:flex-nowrap">
               <span className="w-5 shrink-0 text-right font-medium text-zinc-400">{i + 1 + indexOffset}</span>
-              <span className="min-w-0 flex-1 truncate font-medium text-zinc-800 max-sm:basis-1/2">{p.program_name}</span>
+              <span className="min-w-0 flex-1 truncate font-medium text-zinc-800 max-sm:basis-1/2">{shortProgramName(p.program_name)}</span>
               <span className="shrink-0 text-sm text-zinc-500 max-sm:order-3 max-sm:ml-7">
                 {p.top_daypart ? DAYPART_LABEL[p.top_daypart]?.split("(")[0] ?? p.top_daypart : "—"}
                 {p.most_common_start_hour !== null ? ` · 주로 ${p.most_common_start_hour}시` : ""}
@@ -3465,7 +3466,7 @@ function CompetitorPeriodTopProgramsList({ rows, fmtR }: { rows: CompetitorPerio
             </span>
             <span className="tabular-nums text-zinc-500">{p.typical_start_hour !== null ? `${p.typical_start_hour}시경` : ""}</span>
             <span className="truncate text-zinc-700" title={p.program_name}>
-              {p.program_name}
+              {shortProgramName(p.program_name)}
             </span>
             <span className="text-right font-semibold tabular-nums text-zinc-800">{fmtR(p.program_avg_rating)}</span>
           </div>
@@ -3492,7 +3493,7 @@ function TopShareOutsideList({ shareTop, topRows, fmtR }: { shareTop: TopSharePr
         {outside.map((p, i) => (
           <li key={p.program_name} className="flex items-center gap-2 border-t border-zinc-100 py-1 first:border-t-0">
             <span className="w-5 shrink-0 text-right font-medium text-sky-500">{i + 1}</span>
-            <span className="min-w-0 flex-1 truncate font-medium text-zinc-700">{p.program_name}</span>
+            <span className="min-w-0 flex-1 truncate font-medium text-zinc-700">{shortProgramName(p.program_name)}</span>
             <span className="shrink-0 text-sm text-zinc-400">{p.air_count}회 방영</span>
             <span className="shrink-0 text-sm text-sky-600">점유율 {p.avg_share !== null ? `${p.avg_share.toFixed(2)}%` : "—"}</span>
             <span className="w-16 shrink-0 text-right text-sm text-zinc-500">{fmtR(p.avg_rating)}</span>
@@ -3849,7 +3850,7 @@ function BriefingProgramList({ title, tone, rows }: { title: string; tone: "up" 
         {rows.map((r, i) => (
           <li key={i} className="grid grid-cols-[1fr_3.25rem_3.75rem] items-baseline gap-x-3 text-sm">
             <span className="min-w-0 truncate text-zinc-700">
-              {i + 1}. {r.name}
+              {i + 1}. {shortProgramName(r.name)}
             </span>
             <span className="text-left tabular-nums text-zinc-400">{r.time}</span>
             <span className="text-left font-medium tabular-nums text-zinc-500">{r.ratingText}</span>
@@ -3997,7 +3998,7 @@ function ScatterQuadrantChart({
             <g key={i}>
               <circle cx={cx} cy={cy} r={r} fill={accentColor} fillOpacity={0.55} stroke={accentColor} strokeWidth={1}>
                 <title>
-                  {p.name} — {xLabel} {fmtX(p.x)}, {yLabel} {fmtY(p.y)}
+                  {shortProgramName(p.name)} — {xLabel} {fmtX(p.x)}, {yLabel} {fmtY(p.y)}
                   {p.bubble !== null ? `, 도달률 ${p.bubble.toFixed(2)}%` : ""}
                 </title>
               </circle>
@@ -4013,7 +4014,7 @@ function ScatterQuadrantChart({
                   fontWeight={600}
                   fill="#3f3f46"
                 >
-                  {p.name}
+                  {shortProgramName(p.name)}
                 </text>
               )}
             </g>
@@ -4090,7 +4091,7 @@ function TimeSlotCompetitionChart({ rows, accentColor, fmtR, channelName }: { ro
             {r.channelName}
           </span>
           <span className="text-[11px] tabular-nums text-zinc-400">{r.time}</span>
-          <span className={`min-w-0 truncate text-[11px] sm:whitespace-nowrap ${r.isOurs ? "font-semibold text-zinc-800" : "text-zinc-600"}`} title={r.program}>{r.program}</span>
+          <span className={`min-w-0 truncate text-[11px] sm:whitespace-nowrap ${r.isOurs ? "font-semibold text-zinc-800" : "text-zinc-600"}`} title={r.program}>{shortProgramName(r.program)}</span>
           <div className="h-3.5 min-w-[24px] rounded bg-zinc-50 ring-1 ring-zinc-100 max-sm:hidden">
             <div
               className="h-3.5 rounded"
@@ -4216,7 +4217,7 @@ function StableSlotPatternList({
               <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: `${accentColor}1a`, color: accentForegroundColor(accentColor) }}>
                 {r.dow_label}요일 {r.hour_of_day}시
               </span>
-              <b className="font-semibold text-zinc-700">{r.canonical_name}</b>
+              <b className="font-semibold text-zinc-700">{shortProgramName(r.canonical_name)}</b>
               <span className="text-zinc-500">{r.consecutive_weeks}주 연속 편성</span>
             </div>
             <div className="mt-1.5 text-[11px] text-zinc-500">
@@ -5708,9 +5709,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         <span className="font-semibold text-zinc-600">
                           {REPLACE_DOW[d.weekday - 1]} {clockOf(d.startMin)}~{clockOf(d.endMin)}
                         </span>
-                        <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>
+                        <span className="font-bold text-zinc-800">&lsquo;{shortProgramName(programName)}&rsquo;</span>
                         <span className="text-zinc-400">→</span>
-                        <span className="font-bold" style={{ color: accentForegroundColor(accentColor) }}>&lsquo;{d.to}&rsquo; {d.evidence === "weak" ? "테스트 후보" : "추천"}</span>
+                        <span className="font-bold" style={{ color: accentForegroundColor(accentColor) }}>&lsquo;{shortProgramName(d.to)}&rsquo; {d.evidence === "weak" ? "테스트 후보" : "추천"}</span>
                         {d.evidence === "weak" ? (
                           <span className="min-w-0 text-zinc-500" title="표본이 적고 확실성이 낮아 기대 개선폭은 보여 드리지 않습니다. 일정 기간 시험 편성으로 확인하세요.">
                             표본 {d.toSampleCount ?? 0}회로 근거가 약해 시험 편성으로 확인
@@ -5726,7 +5727,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     ) : (
                       <>
                         {timeLabel && <span className="font-semibold text-zinc-500">{timeLabel}</span>}
-                        <span className="font-bold text-zinc-800">&lsquo;{programName}&rsquo;</span>
+                        <span className="font-bold text-zinc-800">&lsquo;{shortProgramName(programName)}&rsquo;</span>
                         {action && <span className="text-zinc-500">{action}</span>}
                         {withReplace && item.tag === "REPLACE" && (!plan || plan === "error") && (
                           <span className="text-zinc-400">{!plan ? "· AI 교체안 계산 중…" : "· AI 교체안을 계산하지 못했습니다"}</span>
@@ -6058,7 +6059,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                 <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-zinc-100 pt-3 text-[13px] text-zinc-500">
                   {hourlyProgramTitles.map((h) => (
                     <span key={h.broadcast_hour}>
-                      <span className="font-medium text-zinc-700">{h.broadcast_hour}시</span> {h.program_names}
+                      <span className="font-medium text-zinc-700">{h.broadcast_hour}시</span> {shortenProgramNames(h.program_names)}
                     </span>
                   ))}
                 </div>
@@ -6543,7 +6544,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           <td className="whitespace-nowrap py-2 pr-2">
                             <DotTag label={tier} color={SKYUHD_TIER_DOT_COLOR[tier]} fixed />
                           </td>
-                          <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">{item.program_name}</td>
+                          <td className="max-w-[180px] truncate py-2 pr-2 font-bold text-zinc-800">{shortProgramName(item.program_name)}</td>
                           <td className="py-2 pr-2 text-zinc-600">{buildSkyuhdScorecardNote(item)}</td>
                           <td className="whitespace-nowrap py-2 text-zinc-500">{item.air_count}회</td>
                         </tr>
@@ -6639,7 +6640,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                             <td className="py-2.5 pr-3">
                               <div className="flex min-w-0 items-baseline gap-1">
                                 <span className="truncate font-semibold text-zinc-800" title={item.programs?.canonical_name ?? undefined}>
-                                  {item.programs?.canonical_name ?? "이름 없음"}
+                                  {item.programs?.canonical_name ? shortProgramName(item.programs.canonical_name) : "이름 없음"}
                                 </span>
                                 {item.programs?.first_run !== null && item.programs?.first_run !== undefined && (
                                   <span className="shrink-0 text-[12px] font-normal text-zinc-400">{item.programs.first_run ? "<본>" : "<재>"}</span>
@@ -6701,7 +6702,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       <tbody>
                         {skyuhdScorecard.map((item) => (
                           <tr key={item.program_id} className="border-t border-zinc-100">
-                            <td className="py-1.5 font-medium text-zinc-800">{item.program_name}</td>
+                            <td className="py-1.5 font-medium text-zinc-800">{shortProgramName(item.program_name)}</td>
                             <td className="py-1.5 text-zinc-600">{fmtR(item.avg_rating)}</td>
                             <td className="py-1.5 text-zinc-600">{item.air_count}회</td>
                             <td className="py-1.5 text-zinc-600">
@@ -6813,7 +6814,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                               </td>
                               <td className="py-2 pr-3 align-middle font-medium text-zinc-800">
                                 <span className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-                                  <span className={`truncate ${muted ? "text-zinc-500" : ""}`} title={item.programs?.canonical_name ?? undefined}>{item.programs?.canonical_name ?? "이름 없음"}</span>
+                                  <span className={`truncate ${muted ? "text-zinc-500" : ""}`} title={item.programs?.canonical_name ?? undefined}>{item.programs?.canonical_name ? shortProgramName(item.programs.canonical_name) : "이름 없음"}</span>
                                   <span className="shrink-0 text-[12px] font-normal text-zinc-400">{cf.sampleDays}일</span>
                                 </span>
                               </td>
@@ -7138,7 +7139,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                   잘 보이게, 뒤 괄호(평균/회차 등 부가 정보)는 기존처럼 옅게. */}
                               {c.top_program_name ? (
                                 <>
-                                  <span className="font-medium text-zinc-800">{c.top_program_name}</span>{" "}
+                                  <span className="font-medium text-zinc-800">{shortProgramName(c.top_program_name)}</span>{" "}
                                   <span className="text-zinc-500">
                                     {c.top_program_start_time
                                       ? `(${fmtTime(c.top_program_start_time)}, ${fmtR(c.top_program_rating)})`
@@ -7217,7 +7218,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                           <tr key={key} className="border-t border-zinc-100 align-top">
                             <td className="py-2 pr-2 text-zinc-500">{rows[0].our_start_time.slice(0, 5)}</td>
                             <td className="py-2 pr-3">
-                              <span className="font-medium text-zinc-800">{rows[0].our_program_name}</span>{" "}
+                              <span className="font-medium text-zinc-800">{shortProgramName(rows[0].our_program_name)}</span>{" "}
                               <span className="text-zinc-500">({fmtR(rows[0].our_rating)})</span>
                             </td>
                             {[0, 1, 2].map((idx) => {
@@ -7230,7 +7231,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                         {r.competitor_name} · {r.competitor_start_time.slice(0, 5)}
                                       </p>
                                       <p className="text-zinc-700">
-                                        {r.competitor_program_name} <span className="font-semibold text-zinc-800">{fmtR(r.competitor_rating)}</span>
+                                        {shortProgramName(r.competitor_program_name)} <span className="font-semibold text-zinc-800">{fmtR(r.competitor_rating)}</span>
                                         {r.rating_gap !== null && (
                                           <span className={r.rating_gap >= 0 ? "text-rose-600" : "text-emerald-600"}>
                                             {" "}
@@ -7287,7 +7288,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                     </span>
                     <span className="tabular-nums text-zinc-500">{p.start_time.slice(0, 5)}</span>
                     <span className="truncate text-zinc-500" title={p.program_name}>
-                      {p.program_name}
+                      {shortProgramName(p.program_name)}
                     </span>
                     <span className="text-right font-semibold tabular-nums text-zinc-800">{fmtR(p.rating)}</span>
                   </li>
@@ -7815,7 +7816,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       <div className="mt-1.5 flex items-center justify-between gap-2 text-sm">
                         <span className="text-zinc-500">영향 프로그램</span>
                         <span className="font-medium text-zinc-800">
-                          {f.programName} <span className="text-zinc-400">({f.metricLabel} {f.metricValue})</span>
+                          {shortProgramName(f.programName)} <span className="text-zinc-400">({f.metricLabel} {f.metricValue})</span>
                         </span>
                       </div>
                     </div>
@@ -7831,7 +7832,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       <div className="mt-1.5 flex items-center justify-between gap-2 text-sm">
                         <span className="text-zinc-500">{longWatch.demoLabel}</span>
                         <span className="font-medium text-zinc-800">
-                          {longWatch.programName} <span className="text-zinc-400">({longWatch.metricLabel} {longWatch.metricValue})</span>
+                          {shortProgramName(longWatch.programName)} <span className="text-zinc-400">({longWatch.metricLabel} {longWatch.metricValue})</span>
                         </span>
                       </div>
                     </div>
@@ -7956,7 +7957,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                       return (
                         <div key={m.program_id} className="flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-3 py-1.5 text-sm">
                           <span className="min-w-0 truncate text-zinc-700" title={`최근 7일 평균 ${fmtR(m.recent_avg_rating)}(표본 ${m.recent_sample_count}일) / 4주 평균 ${fmtR(m.four_week_avg_rating)}`}>
-                            {name}
+                            {shortProgramName(name)}
                           </span>
                           <span className="shrink-0 font-semibold tabular-nums" style={{ color }}>
                             {m.momentum!.toFixed(2)} · {labelKo}

@@ -4,6 +4,7 @@
 // 표는 숫자를 굵게·시간대와 채널은 옅은 회색으로 두고, 자사 행만 색을 입혀 한눈에 읽히게 한다. 값은 /api/ratings-view가 저장된 자료를 모아 준 것을 그리기만 한다.
 import { useEffect, useMemo, useState } from "react";
 import type { DailyView, RankBoard, TrendWeek } from "@/lib/ratingsView";
+import { shortProgramName } from "@/lib/programAlias";
 
 type Tab = "daily" | "ranks" | "trend";
 const TABS: { id: Tab; label: string }[] = [
@@ -208,7 +209,7 @@ function DailyTable({ v }: { v: DailyView }) {
                 </td>
                 <td className="break-keep px-2 py-1.5 md:px-4">
                   <span className="font-semibold" style={r.firstRun ? { color: ACCENT } : undefined}>
-                    {r.name}
+                    {shortProgramName(r.name)}
                   </span>
                   {r.firstRun && <span className="ml-2 rounded-md px-1.5 py-0.5 text-[11px] font-bold text-white" style={{ backgroundColor: ACCENT }}>본방</span>}
                   {r.episode && <span className="ml-2 text-[12px] text-zinc-400">{r.episode}</span>}

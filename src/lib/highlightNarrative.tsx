@@ -6,6 +6,7 @@
 // ChannelDeepDive.tsx는 DivergingDeltaBar 등에서 이미 emerald/rose를 씀) 색은 호출부에서
 // 넘기게 한다 — 이 파일이 임의로 새 팔레트를 강제하지 않는다.
 import type { ReactNode } from "react";
+import { shortenProgramNames } from "@/lib/programAlias";
 
 // Page 1(Dashboard.tsx)의 ACCENT_UP/ACCENT_DOWN 값을 그대로 옮긴 공용 상수 — 이 색이 이미
 // 이 프로젝트의 "상승/하락" 기준색(브랜드 블루/버건디)이라 새 값을 만들지 않고 재노출만 한다.
@@ -25,7 +26,9 @@ const DOWN_HINT_RE = /▼|하락|감소/;
  * 줄글 문장 하나(또는 여러 문장을 이어붙인 문단)에서 등락 수치·방향 단어만 굵게+색으로 강조한
  * React 노드 배열을 돌려준다. 문장 자체는 한 글자도 바꾸지 않는다 — split/강조만 한다.
  */
-export function highlightNarrativeText(text: string, upColor: string, downColor: string, weight: 600 | 700 = 700): ReactNode[] {
+export function highlightNarrativeText(textIn: string, upColor: string, downColor: string, weight: 600 | 700 = 700): ReactNode[] {
+  // 사용자 지시(2026-10-21): 긴 제목은 어디서 문장이 만들어졌든 화면에서는 약칭으로(표시 전용 — 계산·조회 키는 건드리지 않는다).
+  const text = shortenProgramNames(textIn);
   const nodes: ReactNode[] = [];
   let lastIndex = 0;
   let key = 0;
