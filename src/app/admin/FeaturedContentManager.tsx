@@ -128,10 +128,19 @@ function FeaturedContentRow({
 }) {
   const textClass = dim ? "text-zinc-300" : "text-zinc-600";
   const titleClass = dim ? "text-zinc-400" : "text-zinc-900";
+  const [expanded, setExpanded] = useState(false);
+  const scheduleText =
+    item.broadcast_day_of_week && item.broadcast_day_of_week.length > 0
+      ? `매주 ${item.broadcast_day_of_week.join("·")} ${item.broadcast_time ? item.broadcast_time.slice(0, 5) : ""}`
+      : item.broadcast_schedule_text || "—";
+  const scheduleIsLong = scheduleText.length > 24;
+  const fullTitle = [item.display_name ?? item.programs?.canonical_name, item.display_name && item.programs?.canonical_name !== item.display_name ? item.programs?.canonical_name : null]
+    .filter(Boolean)
+    .join(" / ");
   return (
     <tr className="border-t border-zinc-100">
-      <td className={`whitespace-nowrap py-1.5 ${textClass}`}>{item.category}</td>
-      <td className={`py-1.5 font-medium ${titleClass}`}>
+      <td className={`whitespace-nowrap py-2 pr-4 ${textClass}`}>{item.category}</td>
+      <td className={`max-w-[18rem] truncate whitespace-nowrap py-2 pr-4 font-medium ${titleClass}`} title={fullTitle}>
         {/* 사용자 지시(2026-09-02): "N건 통합" 배지 삭제(불필요) — 병합 자체(mergeDuplicateFeaturedItems)는
             그대로 유지, 화면에 그 사실을 알리는 표시만 없앤다. */}
         {/* 사용자 지시(2026-09-28): display_name이 있으면 그걸 보여주고, 정식 명칭(canonical_name)은
@@ -142,22 +151,29 @@ function FeaturedContentRow({
           <span className="ml-1.5 text-xs font-normal text-zinc-400">({item.programs.canonical_name})</span>
         )}
       </td>
-      <td className={`whitespace-nowrap py-1.5 ${dim ? "text-zinc-300" : "text-zinc-800"}`}>{item.programs?.channels?.name ?? "—"}</td>
+      <td className={`whitespace-nowrap py-2 pr-4 ${dim ? "text-zinc-300" : "text-zinc-800"}`}>{item.programs?.channels?.name ?? "—"}</td>
       {/* 사용자 지시(2026-09-02): 내부 채널이 없으면 외부(경쟁) 채널명(예: "SBS Plus")을 대신 표시. */}
-      <td className={`whitespace-nowrap py-1.5 ${textClass}`}>{item.simulcast_channel?.name ?? item.simulcast_competitor_name ?? "—"}</td>
-      <td className={`whitespace-nowrap py-1.5 ${textClass}`}>{item.rerun_channel?.name ?? "—"}</td>
-      <td className={`whitespace-nowrap py-1.5 ${textClass}`}>{item.broadcast_start_date || "—"}</td>
-      <td className={`py-1.5 ${textClass}`}>
-        {item.broadcast_day_of_week && item.broadcast_day_of_week.length > 0
-          ? `매주 ${item.broadcast_day_of_week.join("·")} ${item.broadcast_time ? item.broadcast_time.slice(0, 5) : ""}`
-          : item.broadcast_schedule_text || "—"}
+      <td className={`whitespace-nowrap py-2 pr-4 ${textClass}`}>{item.simulcast_channel?.name ?? item.simulcast_competitor_name ?? "—"}</td>
+      <td className={`whitespace-nowrap py-2 pr-4 ${textClass}`}>{item.rerun_channel?.name ?? "—"}</td>
+      <td className={`whitespace-nowrap py-2 pr-4 ${textClass}`}>{item.broadcast_start_date || "—"}</td>
+      {/* 사용자 요청(2026-10-21): 편성 안내가 긴 항목(예: 비정기 특집 회차별 일정)이 표 전체를 깨뜨리지 않게 한 줄로 줄이고,
+          마우스를 올리면(title) 전체가 보이고 클릭하면 그 칸만 펼쳐진다(터치 기기용). */}
+      <td
+        className={`py-2 pr-4 ${textClass} ${
+          scheduleIsLong ? "cursor-pointer" : ""
+        } ${expanded ? "" : "max-w-[16rem] truncate whitespace-nowrap"}`}
+        title={scheduleIsLong ? `${scheduleText}${expanded ? "" : "\n(클릭하면 펼쳐집니다)"}` : undefined}
+        onClick={scheduleIsLong ? () => setExpanded((v) => !v) : undefined}
+      >
+        {scheduleText}
+        {scheduleIsLong && !expanded && <span className="ml-1 text-xs text-zinc-400">ⓘ</span>}
       </td>
-      <td className={`whitespace-nowrap py-1.5 ${textClass}`}>
+      <td className={`whitespace-nowrap py-2 pr-4 ${textClass}`}>
         {item.expected_episode_count ? `${item.expected_episode_count}회` : "—"}
         {" / "}
         {item.broadcast_end_date || "—"}
       </td>
-      <td className="whitespace-nowrap py-1.5 text-right">
+      <td className="whitespace-nowrap py-2 text-right">
         <button onClick={() => onEdit(item)} className="mr-2 text-zinc-500 hover:text-zinc-900">
           수정
         </button>
@@ -524,21 +540,22 @@ export default function FeaturedContentManager() {
         <p className="text-sm text-zinc-400">등록된 주요 콘텐츠가 없습니다.</p>
       ) : (
         <>
-          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
-            <table className="w-full text-left text-sm">
+          {/* dense-grid: 전역 "표를 화면 폭에 눌러 맞춤" 규칙(globals.css)에서 제외 — 한 타이틀이 한 줄로 보이도록 표 최소 폭을 유지하고 좁으면 옆으로 민다. */}
+          <div className="dense-grid overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
+            <table className="w-full min-w-[980px] text-left text-sm">
               <thead>
                 {/* 사용자 지시(2026-08-26): 채널기본정보.xlsx "요일 별 리뷰 프로그램" 시트와 같은
                     열 구성(분류/타이틀/본방채널/동시방송/직후재방/첫방송일자/매주반복편성/예상회차/
                     종영일)으로 통합 — 별도 위젯이던 화이트리스트 조회 화면을 여기로 흡수했다. */}
                 <tr className="text-zinc-400">
-                  <th className="pb-1 font-medium">분류</th>
-                  <th className="pb-1 font-medium">타이틀</th>
-                  <th className="pb-1 font-medium">본방 채널</th>
-                  <th className="pb-1 font-medium">동시방송</th>
-                  <th className="pb-1 font-medium">직후 재방</th>
-                  <th className="pb-1 font-medium">첫 방송일자</th>
-                  <th className="pb-1 font-medium">매주 반복 편성</th>
-                  <th className="pb-1 font-medium">예상 회차 / 종영일</th>
+                  <th className="whitespace-nowrap pb-1 pr-4 font-medium">분류</th>
+                  <th className="whitespace-nowrap pb-1 pr-4 font-medium">타이틀</th>
+                  <th className="whitespace-nowrap pb-1 pr-4 font-medium">본방 채널</th>
+                  <th className="whitespace-nowrap pb-1 pr-4 font-medium">동시방송</th>
+                  <th className="whitespace-nowrap pb-1 pr-4 font-medium">직후 재방</th>
+                  <th className="whitespace-nowrap pb-1 pr-4 font-medium">첫 방송일자</th>
+                  <th className="whitespace-nowrap pb-1 pr-4 font-medium">매주 반복 편성</th>
+                  <th className="whitespace-nowrap pb-1 pr-4 font-medium">예상 회차 / 종영일</th>
                   <th className="pb-1 font-medium" />
                 </tr>
               </thead>
@@ -563,18 +580,18 @@ export default function FeaturedContentManager() {
                 {showEnded ? "▲ " : "▼ "}종영된 콘텐츠 {endedItems.length}건 {showEnded ? "접기" : "보기"}
               </button>
               {showEnded && (
-                <div className="mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
-                  <table className="w-full text-left text-sm">
+                <div className="dense-grid mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
+                  <table className="w-full min-w-[980px] text-left text-sm">
                     <thead>
                       <tr className="text-zinc-300">
-                        <th className="pb-1 font-medium">분류</th>
-                        <th className="pb-1 font-medium">타이틀</th>
-                        <th className="pb-1 font-medium">본방 채널</th>
-                        <th className="pb-1 font-medium">동시방송</th>
-                        <th className="pb-1 font-medium">직후 재방</th>
-                        <th className="pb-1 font-medium">첫 방송일자</th>
-                        <th className="pb-1 font-medium">매주 반복 편성</th>
-                        <th className="pb-1 font-medium">예상 회차 / 종영일</th>
+                        <th className="whitespace-nowrap pb-1 pr-4 font-medium">분류</th>
+                        <th className="whitespace-nowrap pb-1 pr-4 font-medium">타이틀</th>
+                        <th className="whitespace-nowrap pb-1 pr-4 font-medium">본방 채널</th>
+                        <th className="whitespace-nowrap pb-1 pr-4 font-medium">동시방송</th>
+                        <th className="whitespace-nowrap pb-1 pr-4 font-medium">직후 재방</th>
+                        <th className="whitespace-nowrap pb-1 pr-4 font-medium">첫 방송일자</th>
+                        <th className="whitespace-nowrap pb-1 pr-4 font-medium">매주 반복 편성</th>
+                        <th className="whitespace-nowrap pb-1 pr-4 font-medium">예상 회차 / 종영일</th>
                         <th className="pb-1 font-medium" />
                       </tr>
                     </thead>
