@@ -1264,9 +1264,13 @@ function RankPair({
   baselineAvgRank,
   sizeClass,
   targetScope,
+  goalAccent,
 }: {
   todayRank: number | null;
   targetRankNum: number | null;
+  // 사용자 요청(2026-10-21): 오늘 등위를 목표 등위와 견줘 색으로 보여 준다 — 목표 초과 달성(숫자가 더 작음)=채널 로고색,
+  // 같음=검정, 목표 미달=붉은색. 채널 색을 넘겨주는 곳(오늘의 시청률 칸)에서만 켜지고, 넘기지 않으면 기존 그대로다.
+  goalAccent?: string;
   // 단계 07: 목표 순위가 "경쟁채널 중 2위"처럼 시장 순위와 기준이 다른 값이면 "(188/2)"로 묶지 않고 따로 표기한다.
   targetScope?: "market" | "peer" | "unknown";
   // 사용자 지시(2026-09-20): "평소 평균 순위는 (70/60)처럼 평균 숫자 나온 것 옆에 작게
@@ -1275,19 +1279,25 @@ function RankPair({
   baselineAvgRank?: number | null;
   sizeClass: string;
 }) {
+  const goalColored = goalAccent !== undefined && todayRank !== null && targetRankNum !== null;
+  const todayStyle = goalColored ? { color: todayRank < targetRankNum ? goalAccent : todayRank === targetRankNum ? "#18181b" : "#dc2626" } : undefined;
+  const todayClass = goalColored ? "font-bold" : "font-semibold text-zinc-900";
+  const goalTitle = goalColored
+    ? ` — 목표 ${targetRankNum}위 ${todayRank < targetRankNum ? "초과 달성" : todayRank === targetRankNum ? "달성" : "미달"}`
+    : "";
   if (targetScope === "peer") {
     return (
       // 사용자 지시(2026-10-07): "경쟁군 목표 2위"라고 길게 적지 말고 다른 채널처럼 괄호 안에 (오늘/목표)로 — 목표 2위는 경쟁채널 중 순위라 마우스 오버로 풀어 준다.
-      <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`} title={`오늘 시장 순위 ${todayRank ?? "-"}위 / 목표: 경쟁채널 중 ${targetRankNum ?? "-"}위`}>
-        (<span className="font-semibold text-zinc-900">{todayRank ?? "-"}</span>
+      <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`} title={`오늘 시장 순위 ${todayRank ?? "-"}위 / 목표: 경쟁채널 중 ${targetRankNum ?? "-"}위${goalTitle}`}>
+        (<span className={todayClass} style={todayStyle}>{todayRank ?? "-"}</span>
         <span className="font-medium">/{targetRankNum ?? "-"}</span>)
         {baselineAvgRank !== null && baselineAvgRank !== undefined && <span className="ml-1 text-xs font-normal text-zinc-500" title="최근 4주 평균 순위">{Math.round(baselineAvgRank)}위</span>}
       </span>
     );
   }
   return (
-    <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`}>
-      (<span className="font-semibold text-zinc-900">{todayRank ?? "-"}</span>
+    <span className={`${sizeClass} tabular-nums tracking-tight text-zinc-400`} title={goalTitle ? `오늘 시장 순위 ${todayRank}위 / 목표 ${targetRankNum}위${goalTitle.replace(/^ — /, " — ")}` : undefined}>
+      (<span className={todayClass} style={todayStyle}>{todayRank ?? "-"}</span>
       <span className="font-medium">/{targetRankNum ?? "-"}</span>)
       {baselineAvgRank !== null && baselineAvgRank !== undefined && (
         <span className="ml-1 text-xs font-normal text-zinc-500" title="최근 4주 평균 순위">{Math.round(baselineAvgRank)}위</span>
@@ -1525,7 +1535,7 @@ function ChannelDailyColumn({
         </div>
         <div className="mt-2.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
           <span className="text-2xl font-bold leading-none tabular-nums tracking-[-0.02em] text-zinc-900">{formatRating(channel.currentRating, code)}</span>
-          <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-[13px]" targetScope={parseTargetRank(channel.targetRank).scope} />
+          <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-lg" targetScope={parseTargetRank(channel.targetRank).scope} goalAccent={accent} />
           <span className="ml-auto">
             <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
           </span>
