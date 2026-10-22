@@ -46,13 +46,13 @@ function passes(cls: WorkClass, f: SearchClassFilter): boolean {
   return f === "all" || (f === "drama" && cls === "ORIGINAL_DRAMA") || (f === "variety" && cls === "ORIGINAL_VARIETY");
 }
 
-/** 검색어(부분명·별칭·오타) → 자사 방영 이력이 있는 작품 후보. 검색어가 비면 분류 필터의 오리지널 목록(최근 방영 순). */
+/** 검색어(부분명·별칭·오타) → 자사 방영 이력이 있는 작품 후보. 검색어가 비면 오리지널 목록(최근 방영 순) — 'all'이면 드라마·예능 둘 다(첫 화면 선택 목록). */
 export async function searchWorks(db: PerfDb & { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }> }, q: string, f: SearchClassFilter, today: string): Promise<SearchItem[]> {
   const classMap = await loadWorkClassMap(db);
   const query = q.trim();
   if (!query) {
     return [...classMap.entries()]
-      .filter(([, v]) => passes(v.cls, f) && f !== "all")
+      .filter(([, v]) => passes(v.cls, f) && (v.cls === "ORIGINAL_DRAMA" || v.cls === "ORIGINAL_VARIETY"))
       .map(([g, v]) => ({ groupKey: g, displayName: v.displayName, ownChannels: v.ownChannels, airingsTotal: v.airingsTotal, lastDate: v.lastDate, classification: v.cls }))
       .sort((a, b) => (b.lastDate ?? "").localeCompare(a.lastDate ?? "") || a.displayName.localeCompare(b.displayName));
   }

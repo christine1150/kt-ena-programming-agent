@@ -10,7 +10,7 @@ import { resolveProgramLevelTargetLabel, resolveRankSheetTargetLabel } from "@/l
 import { computeSlotComparison } from "@/lib/contentFit/engine";
 import type { ContentFitAiring } from "@/lib/contentFit/types";
 import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
-import { channelDailyMean, classifyWork, directionOfRatio, dedupeAirings, describeRow, matchesAiringFilter, ratioOf, sampleStateOf, splitStat, type ChannelDayRow, type WorkAiring } from "./metrics";
+import { channelDailyMean, classifyWork, directionOfRatio, dedupeAirings, describeRow, headlineFor, matchesAiringFilter, monthlySeries, ratioOf, sampleStateOf, splitStat, type ChannelDayRow, type WorkAiring } from "./metrics";
 import {
   PROGRAM_PERFORMANCE_VERSION,
   type AiringEvidence,
@@ -189,6 +189,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       fit: null,
       sampleState: "NONE",
       summary: "",
+      monthly: [],
     };
     if (ch.code === "SKYUHD") {
       rows.push({ ...base, status: "UNSUPPORTED", statusNote: "skyUHD는 프로그램 시청률이 별도 수기 파일(타깃 없음·초 단위)이라 이번 비교에서 계산하지 않습니다." });
@@ -224,12 +225,8 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
           "채널 하루 시청률"
         )
       : [];
-    const channelDaily = channelDailyMean(
-      dayRows.map((r): ChannelDayRow => ({ date: r.broadcast_date as string, rating: r.rating === null || r.rating === undefined ? null : Number(r.rating), createdAt: (r.created_at as string | null) ?? null })),
-      from,
-      to,
-      channelLabel
-    );
+    const dayList = dayRows.map((r): ChannelDayRow => ({ date: r.broadcast_date as string, rating: r.rating === null || r.rating === undefined ? null : Number(r.rating), createdAt: (r.created_at as string | null) ?? null }));
+    const channelDaily = channelDailyMean(dayList, from, to, channelLabel);
 
     // 작품 방영 행
     let workRows: WorkAiring[] = [];
@@ -400,6 +397,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       fit,
       sampleState,
       summary: filtered.length === 0 ? "선택한 본재 조건의 방영 없음." : describeRow(vsChannel.direction, slot.ratio.direction, sampleState),
+      monthly: monthlySeries(filtered, dayList, from, to, channelLabel),
     });
   }
 
@@ -414,6 +412,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     period: { from, to, dbFirstDate: dbFirst, latestDataDate: latest, workFirstObserved: workFirst, workFirstFirstRun },
     totals: { channels: observed.filter((r) => r.airings > 0).length, airings: observed.reduce((a, r) => a + r.airings, 0), days: allDays.size, episodes: allEpisodes.size },
     groups,
+    headlines: groups.map((g) => headlineFor(g.kpiGroup, g.rows.find((r) => r.status !== "UNSUPPORTED")?.targetLabel ?? (g.kpiGroup === "2049" ? "수도권 2049" : "전국 유료가구"), g.rows)),
     airings: evidence.slice(0, EVIDENCE_CAP),
     airingsTruncated: evidence.length > EVIDENCE_CAP,
     slotCells,

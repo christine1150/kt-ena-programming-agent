@@ -5,7 +5,7 @@
 // 0/NULL/중복/정정/타깃 중복/소표본/산출 불가 처리, 분류 규칙(승인 메타데이터만), 다른 시즌 분리, 캐시 키 분리, 기존 엔진 무변경.
 // 보증하지 못하는 것: 운영 데이터에서의 값(합성 사례의 이름·수치는 실제 채널 성과가 아니다).
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
-import { channelDailyMean, classifyWork, dedupeAirings, describeRow, directionOfRatio, matchesAiringFilter, ratioOf } from "../src/lib/programPerformance/metrics";
+import { channelDailyMean, classifyWork, dedupeAirings, describeRow, directionOfRatio, headlineFor, matchesAiringFilter, ratioOf } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
 import { searchWorks } from "../src/lib/programPerformance/search";
 import { performanceCacheKey } from "../src/lib/programPerformance/cacheKey";
@@ -256,6 +256,27 @@ async function main() {
   check("검색: 오리지널 예능 필터", s2.length === 1 && s2[0].groupKey === "테스트예능");
   const s3 = await searchWorks(sdb, "", "drama", END);
   check("빠른 진입: 검색어 없이 오리지널 드라마 목록", s3.length === 1 && s3[0].groupKey === "테스트드라마" && s3[0].classification === "ORIGINAL_DRAMA");
+  const s4 = await searchWorks(sdb, "", "all", END);
+  check("첫 화면: 검색어 없이 '전체'면 오리지널 드라마·예능 목록", s4.length === 2 && s4.every((s) => s.classification === "ORIGINAL_DRAMA" || s.classification === "ORIGINAL_VARIETY"));
+
+  // 월간 추이 — 같은 달·같은 구간의 채널 평균과 짝, 방영 없는 달은 0이 아니라 NULL
+  const mEna = ena.monthly;
+  check("월간: 조회 기간의 달마다 한 칸(첫 달·마지막 달은 기간에 맞춰 잘림)", mEna.length === 3 && mEna[0].month === "2026-07" && mEna[0].from === addDays(START, 2) && !mEna[0].partial && mEna[2].to === END && mEna[2].partial, JSON.stringify(mEna.map((m) => [m.month, m.from, m.to])));
+  check("월간: 작품 평균·채널 평균이 같은 달 값(ENA 1.2 vs 0.5)", mEna.every((m) => near(m.programAvg, 1.2) && near(m.channelAvg, 0.5) && m.vsChannel.direction === "HIGHER"));
+  check("월간: 채널 평균 일수는 그 달의 조회 구간 일수", mEna[1].periodDays === 31 && mEna[1].channelValidDays === 31);
+  const pm = rowOf(all, "ENA_PLAY").monthly;
+  const noAir = pm.find((m) => m.airings === 0);
+  check("월간: 방영 없는 달은 작품 평균 NULL(0으로 잇지 않음)·채널 평균은 유지", !!noAir && noAir.programAvg === null && noAir.vsChannel.ratio === null && near(noAir.channelAvg, 0.2), JSON.stringify(noAir));
+  const rm = rowOf(all2, "ENA").monthly;
+  check("월간: 본재 필터가 작품 쪽 관측만 바꿈(ENA 본방 외 → 방영 없음, 채널 평균 그대로)", rm.length === 0 || rm.every((m) => m.airings === 0 && near(m.channelAvg, 0.5)));
+
+  // 핵심 한 줄 — 서버 템플릿, 상회/하회·표본 상태만
+  const h2049 = r.headlines.find((h) => h.kpiGroup === "2049")!;
+  check("핵심 한 줄: 2049 그룹 상회·하회 채널과 소표본 채널을 이름으로", h2049.text.startsWith("수도권 2049:") && /ENA(·ENA PLAY)? 상회/.test(h2049.text) && h2049.text.includes("ENA DRAMA 하회") && h2049.text.includes("3일 미만 ENA PLAY — 판단 유보"), h2049.text);
+  check("핵심 한 줄: 권고 문구 없음", r.headlines.every((h) => !/(강화|교체|유지하세요|늘리|기여)/.test(h.text)));
+  const vh = v.headlines.find((h) => h.kpiGroup === "HH")!;
+  check("핵심 한 줄: 한 채널만 관측되면 그 채널 이름으로", vh.text === "전국 유료가구: OLIFE 채널 평균 상회.", vh.text);
+  check("핵심 한 줄: 관측 없는 그룹", headlineFor("HH", "전국 유료가구", rowOf(all, "OLIFE") ? [rowOf(all, "OLIFE")] : []).text.includes("관측 없음"));
 
   console.log(`\n${passed} passed, ${failures.length} failed`);
   if (failures.length) {

@@ -5,7 +5,7 @@
 //  - 채널 일평균 대비 = 작품 평균 ÷ 채널 일평균(규모 참고 지표 — 시간대 효과를 뺀 효율이 아님)
 //  - 동슬롯 대비 = 콘텐츠 적합도 엔진과 같은 "같은 칸 다른 프로그램 기대치" 대비 수축 배율(편성 효율 지표, 인과 아님)
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
-import type { AiringFilter, ChannelDailyBase, Direction, RatioValue, SplitStat, WorkClass, WorkClassification } from "./types";
+import type { AiringFilter, ChannelDailyBase, ChannelRow, Direction, GroupHeadline, MonthlyPoint, RatioValue, SplitStat, WorkClass, WorkClassification } from "./types";
 
 /** 방향은 화면 표시 자릿수(배율 소수 둘째 자리)로 반올림한 값으로만 정한다 — 임의의 "유의 차이" 임계값을 만들지 않는다. */
 const RATIO_DISPLAY_DIGITS = 2;
@@ -166,7 +166,69 @@ export const WORK_CLASS_LABEL: Record<WorkClass, string> = {
   CONFLICT: "분류 확인 필요",
 };
 
-const DIR_KO: Record<Direction, string> = { HIGHER: "높음", SIMILAR: "비슷", LOWER: "낮음", NA: "산출 불가" };
+function monthEnd(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
+function nextMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
+/**
+ * 월간 추이 — 조회 기간의 각 달에서 (작품 방영별 평균, 같은 구간의 채널 일평균)을 짝지어 낸다.
+ * 분자·분모 모두 '달 ∩ 조회 기간' 같은 구간을 쓴다(9월 월간 값과 9/24~ 작품 평균을 섞지 않음). 방영이 없는 달은 작품 평균 NULL.
+ * 채널 일평균의 정의는 표의 채널 평균과 같다(사내 월간 추이 '채널평균'과 ENA 2026년 1~8월 소수 셋째 자리까지 일치 확인, 2026-10-22).
+ */
+export function monthlySeries(airings: WorkAiring[], dayRows: ChannelDayRow[], from: string, to: string, targetLabel: string): MonthlyPoint[] {
+  const out: MonthlyPoint[] = [];
+  if (!from || !to || from > to) return out;
+  for (let ym = from.slice(0, 7); ym <= to.slice(0, 7); ym = nextMonth(ym)) {
+    const mFrom = `${ym}-01` < from ? from : `${ym}-01`;
+    const mTo = monthEnd(ym) > to ? to : monthEnd(ym);
+    const st = splitStat(airings.filter((a) => a.date >= mFrom && a.date <= mTo));
+    const cd = channelDailyMean(dayRows, mFrom, mTo, targetLabel);
+    out.push({
+      month: ym,
+      from: mFrom,
+      to: mTo,
+      partial: mFrom !== `${ym}-01` || mTo !== monthEnd(ym),
+      airings: st.airings,
+      days: st.days,
+      programAvg: st.avg,
+      channelAvg: cd.mean,
+      channelValidDays: cd.validDays,
+      periodDays: cd.periodDays,
+      vsChannel: st.airings === 0 ? { ...ratioOf(null, cd.mean), naReason: "이 달 방영 없음" } : ratioOf(st.avg, cd.mean, "이 달 채널 하루 시청률 자료 없음"),
+    });
+  }
+  return out;
+}
+
+const HEAD_DIR: Record<Direction, string> = { HIGHER: "상회", LOWER: "하회", SIMILAR: "비슷", NA: "산출 불가" };
+
+/**
+ * KPI 그룹별 핵심 한 줄 — 서버가 확정한 채널 평균 대비 방향과 표본 상태만으로 만드는 템플릿(LLM 없음).
+ * 관측 상태의 서술이지 편성 권고가 아니다. 표본이 8일 미만인 채널은 이름을 밝혀 '방향성 참고'로 붙인다.
+ */
+export function headlineFor(kpiGroup: "2049" | "HH", targetLabel: string, rows: ChannelRow[]): GroupHeadline {
+  const obs = rows.filter((r) => r.status === "OBSERVED" && r.airings > 0);
+  if (obs.length === 0) return { kpiGroup, targetLabel, text: `${targetLabel}: 이 조건의 방영 관측 없음.` };
+  const order: Direction[] = ["HIGHER", "LOWER", "SIMILAR", "NA"];
+  const byDir = order.map((d) => ({ d, names: obs.filter((r) => r.vsChannel.direction === d).map((r) => r.channelName) })).filter((x) => x.names.length);
+  let body: string;
+  if (byDir.length === 1 && obs.length > 1 && byDir[0].d !== "NA") body = `${obs.length}개 채널 모두 채널 평균 ${HEAD_DIR[byDir[0].d]}`;
+  else if (byDir.length === 1 && byDir[0].d !== "NA") body = `${byDir[0].names[0]} 채널 평균 ${HEAD_DIR[byDir[0].d]}`;
+  else body = byDir.map((x) => `${x.names.join("·")} ${HEAD_DIR[x.d]}`).join(", ");
+  const small = obs.filter((r) => r.sampleState === "SMALL").map((r) => r.channelName);
+  const none = obs.filter((r) => r.sampleState === "NONE").map((r) => r.channelName);
+  const notes = [small.length ? `방송일 8일 미만 ${small.join("·")} — 방향성 참고` : "", none.length ? `방송일 3일 미만 ${none.join("·")} — 판단 유보` : ""].filter(Boolean);
+  const tail = notes.length ? ` (${notes.join("; ")})` : "";
+  return { kpiGroup, targetLabel, text: `${targetLabel}: ${body}${tail}.` };
+}
+
+const DIR_KO: Record<Direction, string> ={ HIGHER: "높음", SIMILAR: "비슷", LOWER: "낮음", NA: "산출 불가" };
 
 /**
  * 두 기준을 함께 읽는 한 줄 설명 — 관측 방향의 서술이지 편성 권고가 아니다(강화·교체 권고로 바꾸지 않는다).

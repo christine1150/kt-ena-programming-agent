@@ -2,7 +2,8 @@
 // 설계·지표 정의: docs/ena-features-plan.md §3·§4
 import type { BaselineLevel } from "@/lib/contentFit/types";
 
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1";
+// v1.1(2026-10-22): 계산식은 v1 그대로, 응답에 월간 추이(monthly)·핵심 한 줄(headlines) 추가 — 캐시가 섞이지 않게 버전만 올림
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.1";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
@@ -94,6 +95,30 @@ export interface SplitStat {
   avg: number | null;
 }
 
+/** 월간 추이 한 칸 — 작품 평균과 같은 달(조회 기간 안)의 채널 일평균. 방영이 없는 달은 programAvg=null(0으로 잇지 않음). */
+export interface MonthlyPoint {
+  month: string; // YYYY-MM
+  /** 이 달 중 조회 기간에 들어가는 구간(분자·분모 같은 구간) */
+  from: string;
+  to: string;
+  /** 조회 기간 때문에 달의 일부만 들어간 경우 */
+  partial: boolean;
+  airings: number;
+  days: number;
+  programAvg: number | null;
+  channelAvg: number | null;
+  channelValidDays: number;
+  periodDays: number;
+  vsChannel: RatioValue;
+}
+
+/** KPI 그룹별 핵심 한 줄 — 서버가 상회/하회·표본 상태로만 만든 템플릿 문장(LLM 아님) */
+export interface GroupHeadline {
+  kpiGroup: "2049" | "HH";
+  targetLabel: string;
+  text: string;
+}
+
 export interface ChannelRow {
   channelCode: string;
   channelName: string;
@@ -119,6 +144,8 @@ export interface ChannelRow {
   /** 판단 보류 등 표본 상태 */
   sampleState: "OK" | "SMALL" | "NONE";
   summary: string;
+  /** 선택한 본재 조건의 월별 작품 평균 vs 같은 달 채널 일평균 */
+  monthly: MonthlyPoint[];
 }
 
 export interface AiringEvidence {
@@ -149,6 +176,7 @@ export interface PerformanceResult {
   period: { from: string; to: string; dbFirstDate: string | null; latestDataDate: string | null; workFirstObserved: string | null; workFirstFirstRun: string | null };
   totals: { channels: number; airings: number; days: number; episodes: number };
   groups: { kpiGroup: "2049" | "HH"; rows: ChannelRow[] }[];
+  headlines: GroupHeadline[];
   airings: AiringEvidence[];
   airingsTruncated: boolean;
   slotCells: SlotCell[];
