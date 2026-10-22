@@ -4,10 +4,8 @@
 // 프로그램 id가 같거나, 아니면 이름이 같고 시작 시각이 30분 이내인 행으로 맞춘다. 닐슨 값이 이미 있으면 그대로 두고 빈 곳만 채운다.
 import { supabase } from "@/lib/supabase";
 import { addDays } from "@/lib/idealSchedule/time";
-import { namesCompatible, normalizePlanRows, planNameKey, type PlanRow, type PlanRowRaw } from "@/lib/idealSchedule/planEpisodes";
+import { matchPlanRow, normalizePlanRows, type PlanRow, type PlanRowRaw } from "@/lib/idealSchedule/planEpisodes";
 import { reinterpretEpisodeFields } from "@/lib/scheduleGridSource";
-
-const MATCH_WINDOW_MIN = 30;
 
 export interface PlanDayFill {
   episodeNumber: number | null;
@@ -35,18 +33,7 @@ export async function loadPlanDay(channelId: string, date: string): Promise<Plan
 
 /** 닐슨 방영 한 건에 맞는 편성표 행의 값. 맞는 행이 없으면 null. startTime은 닐슨 "HH:MM[:SS]"(02시 이전은 방송일 끝으로 본다). */
 export function findPlanFill(plan: PlanRow[], airing: { programId: string | null; name: string; startTime: string }): PlanDayFill | null {
-  if (plan.length === 0) return null;
-  const [h, m] = airing.startTime.split(":").map(Number);
-  const startMin = (h || 0) * 60 + (m || 0) + ((h || 0) < 2 ? 1440 : 0);
-  const key = planNameKey(airing.name);
-  let best: { p: PlanRow; score: number; diff: number } | null = null;
-  for (const p of plan) {
-    const diff = Math.abs(p.startMin - startMin);
-    if (diff > MATCH_WINDOW_MIN) continue;
-    const score = airing.programId && p.programId === airing.programId ? 3 : namesCompatible(p.norm, key);
-    if (score === 0) continue;
-    if (!best || score > best.score || (score === best.score && diff < best.diff)) best = { p, score, diff };
-  }
-  if (!best) return null;
-  return { episodeNumber: best.p.episodeNumber, subtitle: best.p.subtitle, isFirstRun: best.p.isNew ? true : best.p.isRerun ? false : null };
+  const p = matchPlanRow(plan, airing);
+  if (!p) return null;
+  return { episodeNumber: p.episodeNumber, subtitle: p.subtitle, isFirstRun: p.isNew ? true : p.isRerun ? false : null };
 }

@@ -8,7 +8,8 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 // v1.4(2026-10-22): 첫 줄을 채널당 한 줄(2049·가구 함께)로, 경쟁 채널 성과(competitors) 추가 — 자사 값 계산식 무변경
 // v1.5(2026-10-22): 첫 줄 형식(지수 %)·pieces, 본방 추이(firstRuns), 기간 preset — 자사 값 계산식 무변경
 // v1.6(2026-10-22): 편성 비교 문구를 본방 시간 기준 한 문장(slotParts)으로, 종합 평가를 겹치지 않는 인사이트(insights)로 — 자사 값 계산식 무변경
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.6";
+// v1.7(2026-10-22): 본방 여부·회차가 비어 있는 방영을 업로드 편성표([본]·[재])로 보완
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.7";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";

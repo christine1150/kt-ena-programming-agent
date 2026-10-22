@@ -121,6 +121,26 @@ export function normalizePlanRows(raw: PlanRowRaw[]): PlanRow[] {
 
 const MATCH_WINDOW_MIN = 30;
 
+/**
+ * 닐슨 방영 한 건에 맞는 편성표 행 — 프로그램 id가 같거나(3점), 이름이 같거나(2점)·한쪽이 다른 쪽을 포함(1점)하면서 시작 시각이 ±30분 이내.
+ * rows는 그 방송일의 편성표 행. startTime은 닐슨 "HH:MM[:SS]"(02시 이전은 방송일 끝으로 본다). 맞는 행이 없으면 null.
+ */
+export function matchPlanRow(rows: PlanRow[], airing: { programId: string | null; name: string; startTime: string }): PlanRow | null {
+  if (rows.length === 0) return null;
+  const [h, m] = airing.startTime.split(":").map(Number);
+  const startMin = (h || 0) * 60 + (m || 0) + ((h || 0) < 2 ? 1440 : 0);
+  const key = planNameKey(airing.name);
+  let best: { p: PlanRow; score: number; diff: number } | null = null;
+  for (const p of rows) {
+    const diff = Math.abs(p.startMin - startMin);
+    if (diff > MATCH_WINDOW_MIN) continue;
+    const score = airing.programId && p.programId === airing.programId ? 3 : namesCompatible(p.norm, key);
+    if (score === 0) continue;
+    if (!best || score > best.score || (score === best.score && diff < best.diff)) best = { p, score, diff };
+  }
+  return best ? best.p : null;
+}
+
 /** 1) 전주 학습: 회차 정보가 없는 방영에 편성표 회차를 채운다(이미 있으면 그대로). 채운 방영 수도 돌려준다. */
 export function enrichAiringsWithPlan(airings: OwnAiring[], plan: PlanRow[]): { airings: OwnAiring[]; filled: number } {
   if (!plan.length) return { airings, filled: 0 };

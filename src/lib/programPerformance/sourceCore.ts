@@ -10,6 +10,8 @@ import { resolveProgramLevelTargetLabel, resolveRankSheetTargetLabel } from "@/l
 import { computeSlotComparison } from "@/lib/contentFit/engine";
 import type { ContentFitAiring } from "@/lib/contentFit/types";
 import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
+import { matchPlanRow, normalizePlanRows, type PlanRow, type PlanRowRaw } from "@/lib/idealSchedule/planEpisodes";
+import { addDays } from "@/lib/idealSchedule/time";
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
 import {
   channelDailyMean,
@@ -57,6 +59,31 @@ export type PerfDb = { from: (table: string) => any };
 const PAGE = 1000;
 const IN_CHUNK = 100;
 const EVIDENCE_CAP = 1500;
+
+/**
+ * 업로드 편성표(program_schedule_grid — 관리자 업로드·메일 EPG 자동 인식)의 [본]·[초]·[재] 표시와 회차를 기간 단위로 읽는다.
+ * 닐슨 방영 행의 본방 여부(is_first_run)는 비어 있는 방영이 많아(<본>·<재> 표시가 이름에 없는 채널) 이 편성표 표시로만 보완한다. 읽기 실패는 빈 목록(보완 없음).
+ */
+async function loadPlanRange(db: PerfDb, channelId: string, from: string, to: string): Promise<PlanRow[]> {
+  try {
+    const raw = await fetchAll<PlanRowRaw>(
+      (a, b) =>
+        db
+          .from("program_schedule_grid")
+          .select("week_start, broadcast_date, start_time, end_time, program_name_raw, episode_number, episode_subtitle, matched_program_id, tags")
+          .eq("channel_id", channelId)
+          .gte("broadcast_date", addDays(from, -1))
+          .lte("broadcast_date", addDays(to, 1))
+          .order("broadcast_date", { ascending: true })
+          .order("start_time", { ascending: true })
+          .range(a, b),
+      "편성표"
+    );
+    return normalizePlanRows(raw).filter((p) => p.date >= from && p.date <= to);
+  } catch {
+    return [];
+  }
+}
 
 /** 화면 순서(기존 채널 목록 순서와 같다) */
 export const CHANNEL_ORDER = ["ENA", "ENA_DRAMA", "ENA_PLAY", "OLIFE", "ONCE", "ENA_STORY", "SKYUHD"];
@@ -409,6 +436,26 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       );
     }
     workRows = dedupeAirings(workRows);
+    // 본방 여부·회차가 비어 있는 방영은 업로드 편성표의 표시로 보완한다(닐슨 값이 있으면 그대로 둔다). 편성표가 없는 기간은 그대로 '미확인'이다.
+    if (workRows.some((r) => r.firstRun === null || r.episode === null)) {
+      const plan = await loadPlanRange(db, ch.id, from, to);
+      if (plan.length > 0) {
+        const byDate = new Map<string, PlanRow[]>();
+        for (const p of plan) byDate.set(p.date, [...(byDate.get(p.date) ?? []), p]);
+        let filledRun = 0;
+        workRows = workRows.map((r) => {
+          if ((r.firstRun !== null && r.episode !== null) || !r.startTime) return r;
+          const hit = matchPlanRow(byDate.get(r.date) ?? [], { programId: r.programId, name: nameById.get(r.programId) ?? "", startTime: r.startTime });
+          if (!hit) return r;
+          const run = r.firstRun ?? (hit.isNew ? true : hit.isRerun ? false : null);
+          if (r.firstRun === null && run !== null) filledRun++;
+          return { ...r, firstRun: run, episode: r.episode ?? hit.episodeNumber };
+        });
+        // 타깃(2049·가구)마다 같은 방영을 읽으므로 같은 안내가 겹쳐 쌓이지 않게 한다
+        const msg = `${base.channelName}: 본방 여부 ${filledRun}건은 업로드 편성표의 [본]·[재] 표시로 보완했습니다.`;
+        if (filledRun > 0 && !notes.includes(msg)) notes.push(msg);
+      }
+    }
 
     if (workRows.length === 0) {
       // 기록 없음 ≠ 미방영. 그 채널 프로그램 단위 자료가 아예 없는 기간이면 그렇게 표시한다(ENA Story 일부 기간 등).

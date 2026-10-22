@@ -5,6 +5,7 @@
 // 0/NULL/중복/정정/타깃 중복/소표본/산출 불가 처리, 분류 규칙(승인 메타데이터만), 다른 시즌 분리, 캐시 키 분리, 기존 엔진 무변경.
 // 보증하지 못하는 것: 운영 데이터에서의 값(합성 사례의 이름·수치는 실제 채널 성과가 아니다).
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
+import { matchPlanRow, normalizePlanRows } from "../src/lib/idealSchedule/planEpisodes";
 import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
 import { searchWorks } from "../src/lib/programPerformance/search";
@@ -397,6 +398,17 @@ async function main() {
     check("인사이트: 재방이 본방과 비슷하면 '본방과 비슷'", (insightsOf({ all: true, first: st(5, 5, 1), rerun: st(5, 5, 0.95), unknown: st(0, 0, null), channelAvg: 1, overallRatio: 1, firstRuns: [] })[0] ?? []).map((x) => x.t).join("") === "재방 효율이 본방과 비슷(95%)");
     check("인사이트: 본재 구분 없는 조회가 아니면 본재 비교는 만들지 않는다", insightsOf({ all: false, first: st(4, 4, 1), rerun: st(9, 9, 0.1), unknown: st(0, 0, null), channelAvg: 1, overallRatio: 1, firstRuns: [] }).length === 0);
     check("인사이트: 본방 여부 미확인이 절반 이상이면 비교 제한을 알린다", (insightsOf({ all: true, first: st(1, 1, 1), rerun: st(0, 0, null), unknown: st(9, 9, 0.5), channelAvg: 1, overallRatio: 0.55, firstRuns: [] })[0] ?? []).map((x) => x.t).join("").includes("미확인"));
+  }
+  // 편성표 보완(2026-10-22) — 닐슨에 본방 표시가 없을 때 업로드 편성표 [본]·[재]로 채운다
+  {
+    const plan = normalizePlanRows([
+      { week_start: "2026-10-12", broadcast_date: "2026-10-18", start_time: "20:30", end_time: "21:50", program_name_raw: "니돈내산", episode_number: 4, episode_subtitle: null, matched_program_id: "p1", tags: "[본][H][15]" },
+      { week_start: "2026-10-12", broadcast_date: "2026-10-18", start_time: "13:50", end_time: "15:20", program_name_raw: "니돈내산", episode_number: 3, episode_subtitle: null, matched_program_id: null, tags: "[재][H][15]" },
+    ]);
+    const m1 = matchPlanRow(plan, { programId: "p1", name: "니돈내산", startTime: "20:34:00" });
+    const m2 = matchPlanRow(plan, { programId: "p9", name: "니돈내산", startTime: "13:54:00" });
+    check("편성표 보완: 시작 시각 ±30분·같은 이름이면 [본]/[재] 표시를 가져온다", !!m1 && m1.isNew && !m1.isRerun && m1.episodeNumber === 4 && !!m2 && m2.isRerun && !m2.isNew);
+    check("편성표 보완: 시각이 30분 넘게 다르면 맞추지 않는다", matchPlanRow(plan, { programId: "p1", name: "니돈내산", startTime: "17:00:00" }) === null);
   }
   check("점유율: 값이 있는 방영만 평균(NULL은 0이 아님)", near(shareStat([air("2026-01-03", 0.1, { share: 2 }), air("2026-01-10", 0.1, { share: null }), air("2026-01-17", 0.1, { share: 0 })]).avg, 1));
   }
