@@ -56,7 +56,11 @@ const fmtTime = (t: string | null) => {
   return `${String(h < 2 ? h + 24 : h).padStart(2, "0")}:${t.slice(3, 5)}`;
 };
 
+/** 오리지널 드라마·예능(그리고 관리자 확인이 필요한 분류 충돌)만 배지를 단다 — 목록에 없는 작품은 아무 표시 없음(비오리지널로 단정하지 않음, 사용자 지정 2026-10-22) */
+const SHOW_CLASS: WorkClass[] = ["ORIGINAL_DRAMA", "ORIGINAL_VARIETY", "CONFLICT"];
+
 function ClassBadge({ cls }: { cls: WorkClass }) {
+  if (!SHOW_CLASS.includes(cls)) return null;
   return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${CLASS_BADGE[cls]}`}>{WORK_CLASS_LABEL[cls]}</span>;
 }
 
@@ -709,6 +713,9 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
       return { main: sorted.find(aired) ?? sorted[0], rows: sorted };
     });
   const comparable = entries.map((e) => e.main);
+  // 분류 안내 문구는 배지를 다는 경우(분류 충돌)에만 — 목록에 없는 작품의 '분류 미확인' 안내는 숨긴다
+  const cls = result?.classification;
+  const visibleNotes = result ? result.notes.filter((n) => !(cls && n === cls.note && !SHOW_CLASS.includes(cls.cls))) : [];
   const selectable = entries.flatMap((e) => e.rows.filter(aired));
   const selRow = selectable.find((r) => rowKey(r) === selKey) ?? comparable.find((r) => r.channelCode === focusChannel) ?? comparable[0] ?? null;
   const select = (r: ChannelRow) => {
@@ -856,9 +863,9 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
               {result.totals.channels}개 채널 · {formatInt(result.totals.airings)}회 방영
             </span>
           </div>
-          {result.notes.length > 0 && (
+          {visibleNotes.length > 0 && (
             <ul className="mt-1 space-y-0.5 text-[12px] text-amber-800">
-              {result.notes.map((n, i) => (
+              {visibleNotes.map((n, i) => (
                 <li key={i}>※ {n}</li>
               ))}
             </ul>
