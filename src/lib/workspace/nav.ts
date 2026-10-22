@@ -78,6 +78,4 @@ export const COMPAT_ROUTES: { route: string; file: string; navId: NavId | null }
   { route: "/ideal-schedule/purchase", file: "src/app/ideal-schedule/purchase/page.tsx", navId: "content" },
   { route: "/admin", file: "src/app/admin/page.tsx", navId: "admin" },
   { route: "/admin/schedule-grid", file: "src/app/admin/schedule-grid/page.tsx", navId: "admin" },
-  { route: "/admin/login-history", file: "src/app/admin/login-history/page.tsx", navId: "admin" },
-  { route: "/admin/ask-gaps", file: "src/app/admin/ask-gaps/page.tsx", navId: "admin" },
 ];

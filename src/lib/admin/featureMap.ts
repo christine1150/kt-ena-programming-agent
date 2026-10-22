@@ -36,8 +36,7 @@ export const ADMIN_FEATURES: AdminFeature[] = [
   { id: "avail", name: "Avail(콘텐츠·채널 권리) 관리", component: "AvailManager", page: null, apis: ["/api/admin/upload/avail", "/api/admin/avail", "/api/admin/avail/template", "/api/admin/avail/ledger"], group: "기준 정보", minRole: "rights_edit", disposition: "통합", destination: "기준 정보에 신설(단계 06). 표준 양식·열 매핑 미리보기·권리 반영·확인 대기(해석·메모·승인·중복)·보충 속성(1st window)을 한 카드에서 처리.", note: "Avail 업로드는 미리보기를 거친 뒤 확정해야 반영됩니다. 마이그레이션 적용 전에는 반영할 수 없습니다." },
   { id: "genre_map", name: "장르 분류 보완", component: "GenreMapManager", page: null, apis: ["/api/admin/program-genre", "/api/admin/program-genre/bulk"], group: "기준 정보", minRole: "approve", disposition: "유지", destination: "분류율 표시를 내림·미분류 건수 병기로 수정(단계 05)." },
   { id: "mail_ingestion", name: "Nielsen 메일 자동 수집", component: "MailIngestionManager", page: null, apis: ["/api/admin/mail-ingestion/run", "/api/admin/mail-ingestion/status"], group: "점검·이력", minRole: "upload", disposition: "유지", destination: "연결 상태·마지막 성공·오류만 표시, 설정 절차는 기술 문서로 이동(단계 05)." },
-  { id: "login_history", name: "로그인 이력", component: null, page: "/admin/login-history", apis: [], group: "점검·이력", minRole: "view", disposition: "유지", destination: "상단 링크 유지." },
-  { id: "ask_gaps", name: "질문하기 사각지대", component: null, page: "/admin/ask-gaps", apis: [], group: "점검·이력", minRole: "view", disposition: "유지", destination: "상단 링크 유지." },
+  { id: "login_history", name: "로그인 이력", component: "LoginHistoryPanel", page: null, apis: [], group: "점검·이력", minRole: "view", disposition: "이동", destination: "별도 페이지 없이 수신·반영 현황 바로 위에 접어서 둔다(2026-10-22). 질문하기 사각지대 화면은 삭제." },
   { id: "data_status", name: "자료 수신·반영 현황", component: "DataStatusPanel", page: null, apis: ["/api/admin/data-status"], group: "수신·반영 현황", minRole: "view", disposition: "통합", destination: "관리자 첫 화면 최상단 신설(단계 05). 업로드 카드의 결과를 채널×자료종류로 모아 보여 줌." },
 ];
 

@@ -66,8 +66,8 @@ async function main() {
       .filter((r) => !["/api/admin/login", "/api/admin/logout"].includes(r));
     const missingApi = apiRoutes.filter((r) => !F.featureApis().includes(r));
     check("모든 관리자 API(로그인·로그아웃 제외)가 위치표에 있다", missingApi.length === 0, missingApi.join());
-    const pages = ["login-history", "ask-gaps", "schedule-grid"].map((p) => `/admin/${p}`);
-    check("관리자 하위 페이지(로그인 이력·질문 사각지대·편성표)가 위치표에 있다", pages.every((p) => F.ADMIN_FEATURES.some((f) => f.page === p)));
+    const pages = ["schedule-grid"].map((p) => `/admin/${p}`);
+    check("관리자 하위 페이지(편성표)가 위치표에 있다", pages.every((p) => F.ADMIN_FEATURES.some((f) => f.page === p)));
     check("업로드 API마다 업로드 정책이 정의돼 있다", walk(path.join(ROOT, "src/app/api/admin/upload")).filter((p) => p.endsWith("route.ts")).every((p) => UP.UPLOAD_POLICIES.some((u) => u.api.includes("/" + rel(p).replace("src/app/", "").replace("/route.ts", "").split("/").slice(-1)[0]))));
   }
 

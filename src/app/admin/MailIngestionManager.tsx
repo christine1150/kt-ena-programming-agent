@@ -99,19 +99,18 @@ export default function MailIngestionManager() {
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-900">Nielsen 메일 자동 수집</h2>
-      <p className="mb-4 text-sm text-zinc-500">
-        제목에 <code>닐슨</code>과 <code>보고서</code>가 모두 들어간 메일(대부분{" "}
-        <code>[닐슨] KTENA 일일 보고서</code>)에서 <code>닐슨_채널시청률(YYMMDD)</code>(일간)
-        또는 <code>닐슨_채널시청률(YYMMDD-YYMMDD)</code>(주간·월간·연간) 형태의 엑셀
-        첨부파일을 매일 08:00(KST)에 자동으로 확인해 위 &ldquo;Nielsen 시청률 업로드&rdquo;와
-        같은 방식으로 반영합니다. 파일이 일간인지 기간(주간/월간)인지는 파일명이 아니라 시트
-        안의 실제 분석기간으로 자동 판정되며, 기간 파일은 주간/월간/연간 자료(주간 시장 순위
-        등)에 그대로 쓰입니다. 제목에 <code>EPG</code>가 들어간 메일에서{" "}
-        <code>일일운행표_YYYYMMDD</code> 형태의 첨부파일이 있으면 OLIFE 일일 EPG로도 자동
-        인식해 함께 반영합니다. 아래 두 경로 중 설정된 것만 동작하며, 둘 다 설정하면 둘 다
-        확인합니다.
-      </p>
+      {/* 사용자 지시(2026-10-22): 긴 설명 문단과 Gmail 미설정 안내를 없애고, 필요한 사람만 ⓘ에 마우스를 올려 보게 한다. */}
+      <h2 className="mb-3 text-lg font-semibold text-zinc-900">
+        Nielsen 메일 자동 수집
+        <span
+          className="ml-1.5 cursor-help align-middle text-sm font-normal text-zinc-400"
+          title={
+            "제목에 '닐슨'과 '보고서'가 모두 들어간 메일(대부분 [닐슨] KTENA 일일 보고서)의 닐슨_채널시청률(YYMMDD)(일간) 또는 닐슨_채널시청률(YYMMDD-YYMMDD)(주간·월간·연간) 엑셀 첨부파일을 매일 08:00(KST)에 자동 확인해 'Nielsen 시청률 업로드'와 같은 방식으로 반영합니다. 일간/기간 구분은 파일명이 아니라 시트 안의 실제 분석기간으로 판정합니다. 제목에 'EPG'가 들어간 메일의 일일운행표_YYYYMMDD 첨부파일은 OLIFE 일일 EPG로도 자동 반영합니다."
+          }
+        >
+          ⓘ
+        </span>
+      </h2>
 
       <div className="mb-4 space-y-2">
         <div
@@ -136,21 +135,12 @@ export default function MailIngestionManager() {
             </ol>
           )}
         </div>
-        <div
-          className={`rounded-lg p-3 text-sm ${gmailConfigured ? "bg-emerald-50 text-emerald-700" : "bg-zinc-50 text-zinc-700"}`}
-        >
-          <p className="font-medium">
-            {gmailConfigured ? "✅ Gmail 연동이 설정되어 있습니다." : "Gmail 연동(선택, 미설정)"}
-          </p>
-          {!gmailConfigured && (
-            <p className="mt-1 text-xs">
-              그룹웨어 2FA 때문에 Bizbox 메일을 직접 자동화하기 어려운 경우, Gmail로 전달(forward)받아
-              대신 쓰는 경로입니다 — 지금은 네이버 메일 직접 연동을 쓰므로 필수는 아닙니다.{" "}
-              <code>.env</code>에 <code>GMAIL_USER_EMAIL</code>/<code>GMAIL_CLIENT_ID</code>/
-              <code>GMAIL_CLIENT_SECRET</code>/<code>GMAIL_REFRESH_TOKEN</code>을 채우면 활성화됩니다.
-            </p>
-          )}
-        </div>
+        {/* Gmail은 선택 경로라 미설정 안내는 숨기고, 실제로 연결된 경우에만 한 줄 표시한다. */}
+        {gmailConfigured && (
+          <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">
+            <p className="font-medium">✅ Gmail 연동이 설정되어 있습니다.</p>
+          </div>
+        )}
       </div>
 
       <button

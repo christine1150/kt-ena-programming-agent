@@ -40,13 +40,14 @@ import LogoutButton from "./LogoutButton";
 // 단계 05(2026-10-06): 채널×자료종류 수신·반영 현황 — 사용자 지시(2026-10-07)로 관리자 화면 맨 아래에 둔다.
 import DataStatusPanel from "./DataStatusPanel";
 import AvailManager from "./AvailManager";
+import LoginHistoryPanel from "./LoginHistoryPanel";
 
 // 묶음 소제목 — 카드가 아니라 구분선 역할만 한다(첫 묶음은 위 여백을 주지 않아도 되게 mt로만 조정).
-function AdminSectionHeading({ title, description }: { title: string; description: string }) {
+function AdminSectionHeading({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mt-2 border-t border-zinc-200 pt-4">
       <h2 className="text-sm font-semibold tracking-wide text-zinc-700">{title}</h2>
-      <p className="text-xs text-zinc-400">{description}</p>
+      {description && <p className="text-xs text-zinc-400">{description}</p>}
     </div>
   );
 }
@@ -110,18 +111,6 @@ export default async function AdminPage() {
                 </Link>
               ))}
             </div>
-            <Link
-              href="/admin/login-history"
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-            >
-              로그인 이력
-            </Link>
-            <Link
-              href="/admin/ask-gaps"
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-            >
-              질문하기 사각지대
-            </Link>
             <LogoutButton />
           </div>
         </div>
@@ -137,7 +126,9 @@ export default async function AdminPage() {
             로그인이 이미 있어 더 이상 필요하지 않음). trash-can/anonymous-pd-share-link-2026-09-02/
             로 이동. */}
 
-        <AdminSectionHeading title="매일 올리는 자료" description="닐슨이 보내주는 파일을 그대로 올리는 곳입니다." />
+        {/* 사용자 지시(2026-10-22): 닐슨 메일 자동 수집을 닐슨 시청률 업로드 위로 올린다(설명 문구는 삭제, 상세는 마우스오버). */}
+        <AdminSectionHeading title="매일 올리는 자료" />
+        <MailIngestionManager />
         <NielsenUploader />
         <SkyUhdUploader />
         <OlifeEpgUploader />
@@ -159,8 +150,8 @@ export default async function AdminPage() {
         <AvailManager />
         <GenreMapManager />
 
-        <AdminSectionHeading title="점검" description="자동 수집이 제대로 돌고 있는지 확인합니다." />
-        <MailIngestionManager />
+        {/* 사용자 지시(2026-10-22): 로그인 이력은 별도 페이지 없이 여기(수신·반영 현황 바로 위)에 접어서 둔다. */}
+        <LoginHistoryPanel />
 
         {/* 사용자 지시(2026-10-07): 수신·반영 현황은 관리자 화면 맨 아래로 둔다. */}
         <AdminSectionHeading title="수신·반영 현황" description="어떤 채널의 어떤 자료가 언제까지 들어왔고, 분석에 반영됐는지 확인합니다." />

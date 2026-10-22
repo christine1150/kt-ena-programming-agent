@@ -119,7 +119,7 @@ async function main() {
 
     const active: [string, string | null][] = [
       ["/", "briefing"], ["/channel/ENA", "channel"], ["/audience-report/portfolio", "reports"], ["/audience-report/ENA", "reports"],
-      ["/schedule-grid", "compare"], ["/ideal-schedule", "ai"], ["/ideal-schedule/purchase", "content"], ["/admin/login-history", "admin"], ["/pd/login", null],
+      ["/schedule-grid", "compare"], ["/ideal-schedule", "ai"], ["/ideal-schedule/purchase", "content"], ["/admin", "admin"], ["/pd/login", null],
     ];
     check("경로별 활성 메뉴(구매 검토는 AI 편성이 아니라 콘텐츠·Avail, 포트폴리오는 보고서 메뉴로 표시)", active.every(([p, id]) => W.activeNavId(p) === id), active.filter(([p, id]) => W.activeNavId(p) !== id).map(([p]) => p).join(","));
 
