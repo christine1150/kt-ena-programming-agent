@@ -82,6 +82,6 @@ export interface ReviewMetrics {
   model: { n: number; mae: number | null; bias: number | null };
   /** 포함·제외 기준 — 건수와 편성 분 비율 */
   inclusion: Record<MatchState, { slots: number; minutes: number }>;
-  /** 계획 단계 예측 성적: 일별 편성시간 가중 예상 vs 공식 채널 하루 시청률(대표 지표: 일별 채널 MAE %p) */
+  /** 계획 단계 예측 성적: 일별 편성시간 가중 예상 vs 같은 날 실제 방영의 편성시간 가중 집계(같은 정의, 대표 지표: 일별 채널 MAE %p). 공식 하루 값 대비는 환산 승인 후 */
   planDaily: { n: number; mae: number | null; bias: number | null; partialDaysExcluded: number };
 }

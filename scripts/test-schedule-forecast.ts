@@ -3,6 +3,7 @@
 // 보증하지 못하는 것: 칸별 예측값의 정확도(기존 엔진 검증 범위, OPT02/OPT05 문서) — 실제 자료 검증은 미완료.
 import { aggregateDays, aggregatePeriod, canonicalJson, forecastKeys, matchSlots, reviewMetrics, type ForecastRunInput } from "../src/lib/scheduleForecast/core";
 import type { ActualAiring, ForecastSlot } from "../src/lib/scheduleForecast/types";
+import { alignDay, pairStats } from "../src/lib/scheduleForecast/dailyAlignment";
 
 let passed = 0;
 const failures: string[] = [];
@@ -80,6 +81,29 @@ const slot = (key: string, start: number, end: number | null, name: string, expe
   check("모델 성적은 MATCHED만(2건)", r.model.n === 2 && near(r.model.mae, (Math.abs(1.0 - 1.2) + Math.abs(0.3 - 0.3)) / 2));
   check("포함·제외 건수와 분을 함께 낸다", r.inclusion.CHANGED.slots === 1 && r.inclusion.NO_ACTUAL.slots === 3 && r.inclusion.CHANGED.minutes === 70);
   check("부분 예측일은 계획 단계 일별 MAE에서 빼고 따로 센다", r.planDaily.n === 0 && r.planDaily.partialDaysExcluded === 1);
+}
+
+// ── D-2 일 정렬(실적 시간가중 vs 공식 하루) ─────────────────────
+{
+  const a = alignDay([
+    { startTime: "02:00:00", endTime: "14:00:00", rating: 0.1 },
+    { startTime: "14:00:00", endTime: "01:00:00", rating: 0.3 }, // 자정 넘김 → 25:00까지
+    { startTime: "01:00:00", endTime: "02:00:00", rating: null }, // 25:00~26:00 NULL
+    { startTime: "10:00:00", endTime: null, rating: 0.9 }, // 종료 없음 — 구간 제외
+  ]);
+  check("일 정렬: 덮인 분·NULL 분·종료 없음 분리, 분 가중 평균", a.coveredMinutes === 1380 && a.nullRatedMinutes === 60 && a.noEndAirings === 1 && near(a.weighted, (0.1 * 720 + 0.3 * 660) / 1380), JSON.stringify(a));
+  check("일 정렬: 산술평균은 값 있는 방영 전부(비교용)", near(a.arithmetic, (0.1 + 0.3 + 0.9) / 3));
+  const o = alignDay([
+    { startTime: "20:00:00", endTime: "21:00:00", rating: 1 },
+    { startTime: "20:30:00", endTime: "21:00:00", rating: 3 },
+  ]);
+  check("일 정렬: 겹친 분은 평균, 겹침 분 수 보고", o.overlapMinutes === 30 && near(o.weighted, (30 * 1 + 30 * 2) / 60));
+  const ps = pairStats([
+    { est: 1, official: 1.1 },
+    { est: 2, official: 2.2 },
+    { est: 3, official: 3.3 },
+  ]);
+  check("쌍 통계: MAE·bias·배율 중앙값·상관", near(ps.mae, 0.2) && near(ps.bias, -0.2) && near(ps.medianRatio, 1.1) && near(ps.corr, 1));
 }
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

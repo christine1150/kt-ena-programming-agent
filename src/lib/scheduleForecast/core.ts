@@ -188,10 +188,11 @@ export function matchSlots(slots: ForecastSlot[], actuals: ActualAiring[]): Slot
 }
 
 /**
- * 리뷰 지표. ① 편성 유지 조건의 모델 성적(MATCHED만) ② 포함·제외 건수와 편성 분 비율 ③ 계획 단계 예측 성적(일별 편성시간 가중 예상 vs 공식 채널 하루 값,
+ * 리뷰 지표. ① 편성 유지 조건의 모델 성적(MATCHED만) ② 포함·제외 건수와 편성 분 비율 ③ 계획 단계 예측 성적(일별 편성시간 가중 예상 vs 같은 날 실제 방영의 편성시간 가중 집계 — 같은 정의끼리. D-2 점검에서 공식 채널 하루 값은
+ * 이 집계보다 약 6~9% 낮게 나와 직접 빼면 안 된다(docs/ena-features/D2_DAILY_ALIGNMENT.md). 공식 값 대비는 환산 승인 후 별도로,
  * 부분 예측일은 따로 센다). 변경 방송을 빼서 성적을 좋게 보이게 하지 않도록 제외 내역을 항상 함께 낸다.
  */
-export function reviewMetrics(slots: ForecastSlot[], matches: SlotMatch[], days: PeriodForecast[], officialDaily: Map<string, number | null>): ReviewMetrics {
+export function reviewMetrics(slots: ForecastSlot[], matches: SlotMatch[], days: PeriodForecast[], actualDaily: Map<string, number | null>): ReviewMetrics {
   const states: MatchState[] = ["MATCHED", "CHANGED", "AMBIGUOUS", "NO_ACTUAL"];
   const inclusion = Object.fromEntries(states.map((s) => [s, { slots: 0, minutes: 0 }])) as ReviewMetrics["inclusion"];
   const errs: number[] = [];
@@ -205,7 +206,7 @@ export function reviewMetrics(slots: ForecastSlot[], matches: SlotMatch[], days:
   const dErr: number[] = [];
   let partial = 0;
   for (const d of days) {
-    const off = officialDaily.get(d.from) ?? null;
+    const off = actualDaily.get(d.from) ?? null;
     if (off === null || d.value === null) continue;
     if (!d.complete) {
       partial++;
