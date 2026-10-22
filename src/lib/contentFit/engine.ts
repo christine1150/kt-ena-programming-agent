@@ -413,3 +413,87 @@ function betterDaypart(rs: Rec[], pid: string, Ur: Universe, m0: number, config:
   }
   return best ? best[0] : null;
 }
+
+// ───────────────────────── 작품 단위 슬롯 비교(프로그램 성과 화면용, 2026-10-22 추가) ─────────────────────────
+// 위 computeContentFit의 결과·산식은 바꾸지 않는다. 같은 Universe(같은 요일·시 → 요일·시간대 → 시간대 → 채널, "자기 자신 제외"
+// 기대치)와 같은 수축(m0 = κ × 채널 평균)을 "임의 조회 기간 + 여러 program_id를 한 작품으로 묶은 경우"에 쓰도록 열어 둔 것이다.
+// 한 작품이 채널 안에서 program_id 여러 개(표기 변형)로 나뉘어 있으면 그 전부를 한 묶음으로 보고 비교군(다른 프로그램)에서 함께 뺀다.
+
+const WORK_PID = "__WORK__";
+
+export interface SlotComparisonResult {
+  /** 비교에 쓴 작품 방영 수(시청률 값이 있고 기대치를 구한 것) */
+  airings: number;
+  /** 작품 방영 시청률 합 / 같은 칸 다른 프로그램 기대치 합 */
+  sumActual: number;
+  sumExpected: number;
+  /** 수축 전 배율 ΣR/ΣE. ΣE가 0이면 null(산출 불가) */
+  rawIndex: number | null;
+  /** 콘텐츠 적합도와 같은 수축 배율 (ΣR + m0)/(ΣE + m0) */
+  shrunkIndex: number | null;
+  /** 데이터 반영 비중 ΣE/(ΣE + m0) */
+  reliability: number;
+  m0: number;
+  /** 비교 창 전체 방영 1건당 평균(채널 방영평균, 채널 하루 시청률과 다름) */
+  channelAiringMean: number;
+  /** 기대치를 어느 수준에서 구했는지(건수) */
+  levels: Record<BaselineLevel, number>;
+  /** 비교군(작품이 아닌 방영) 건수 */
+  comparisonAirings: number;
+}
+
+/**
+ * 채널 KPI 타깃 방영 행(비교 창 전체, 모든 프로그램)에서 작품(workProgramIds)의 슬롯 대비 성과를 구한다.
+ * include로 작품 방영 중 일부(본방만·재방만)만 분자에 넣을 수 있다 — 비교군 기대치는 본재와 무관하게 같은 칸의 다른 프로그램 전체다(기존 엔진과 같음).
+ */
+export function computeSlotComparison(
+  airings: ContentFitAiring[],
+  workProgramIds: readonly string[],
+  include: (a: ContentFitAiring) => boolean = () => true,
+  config: ContentFitConfig = CONTENT_FIT_CONFIG
+): SlotComparisonResult {
+  const work = new Set(workProgramIds);
+  const recs: (Rec & { keep: boolean })[] = [];
+  for (const a of airings) {
+    if (!Number.isFinite(a.rating)) continue;
+    const hb = hourBlockOf(a.startTime);
+    const isWork = work.has(a.programId);
+    recs.push({
+      pid: isWork ? WORK_PID : a.programId,
+      date: a.date,
+      start: a.startTime ?? "",
+      dow: dowOf(a.date),
+      hb,
+      dp: daypartOf(hb),
+      rating: a.rating,
+      reach: null,
+      tss: null,
+      firstRun: a.firstRun,
+      keep: isWork && include(a),
+    });
+  }
+  recs.sort((x, y) => cmpStr(x.date, y.date) || cmpStr(x.start, y.start) || cmpStr(x.pid, y.pid) || x.rating - y.rating);
+  const U = new Universe(recs, "rating", config.minOtherAirings);
+  const m0 = config.kappa * U.channelMean;
+  const s = sumsOf(
+    recs.filter((r) => r.pid === WORK_PID),
+    WORK_PID,
+    U,
+    "rating",
+    (a) => (a as Rec & { keep: boolean }).keep
+  );
+  const comparisonAirings = recs.filter((r) => r.pid !== WORK_PID).length;
+  const den = s.E + m0;
+  return {
+    airings: s.n,
+    sumActual: s.R,
+    sumExpected: s.E,
+    rawIndex: s.n > 0 && s.E > 0 ? s.R / s.E : null,
+    shrunkIndex: s.n > 0 && den > 0 ? (s.R + m0) / den : null,
+    reliability: den > 0 ? s.E / den : 0,
+    m0,
+    channelAiringMean: U.channelMean,
+    levels: s.levels,
+    comparisonAirings,
+  };
+}

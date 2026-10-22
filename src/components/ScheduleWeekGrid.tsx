@@ -810,6 +810,7 @@ export function ScheduleWeekGrid({
           colorMode={colorMode}
           otherAvg={colorMode === "diff" && otherCells ? cellDiff({ dow: selected.dow, startMin: selected.startMin, endMin: selected.endMin, rating: selected.row.matched_rating }, otherCells) : null}
           annualAvg={channelAnnualAvgRating}
+          channelCode={channelCode}
           onClose={closePanel}
         />
       )}
@@ -827,6 +828,7 @@ function EvidencePanel({
   colorMode,
   otherAvg,
   annualAvg,
+  channelCode,
   onClose,
 }: {
   row: ScheduleGridRow;
@@ -837,6 +839,7 @@ function EvidencePanel({
   colorMode: ColorMode;
   otherAvg: { diff: number | null; other: number | null; coverage: number } | null;
   annualAvg: number | null;
+  channelCode: string;
   onClose: () => void;
 }) {
   const { title, subtitle } = splitProgramTitleSubtitle(row.program_name_raw);
@@ -901,6 +904,17 @@ function EvidencePanel({
         <dt className="text-zinc-400">자료 출처</dt>
         <dd>{source ? SOURCE_LABEL[source] : "미확인"}</dd>
       </dl>
+      {/* 2026-10-22: 이 칸의 작품을 프로그램 성과(채널별 비교) 화면에서 연다 — 편성표 선택·수정 동작은 그대로 두고 새 탭으로 연다. 경쟁 채널 칸은 자사 작품 비교 대상이 아니다. */}
+      {!channelCode.startsWith("COMPETITOR::") && (
+        <a
+          href={`/program-performance?q=${encodeURIComponent(title)}&channel=${encodeURIComponent(channelCode)}`}
+          target="_blank"
+          rel="noopener"
+          className="mt-2 inline-block rounded-lg border border-indigo-200 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-50"
+        >
+          프로그램 전체 성과(채널별 비교) 열기 ↗
+        </a>
+      )}
     </section>
   );
 }

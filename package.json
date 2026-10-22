@@ -48,6 +48,8 @@
     "test:stats": "tsx scripts/test-stats.ts",
     "test:ask-export": "tsx scripts/test-ask-export.ts",
     "test:content-fit": "tsx scripts/test-content-fit.ts",
+    "test:program-performance": "tsx scripts/test-program-performance.ts",
+    "test:schedule-forecast": "tsx scripts/test-schedule-forecast.ts",
     "test:weak-verdict": "tsx scripts/test-weak-verdict.ts",
     "test:cron-auth": "tsx scripts/test-cron-auth.ts",
     "check:client-boundary": "node scripts/check-client-boundary.mjs"

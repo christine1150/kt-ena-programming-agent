@@ -72,6 +72,8 @@ export const COMPAT_ROUTES: { route: string; file: string; navId: NavId | null }
   { route: "/audience-report/[channel]", file: "src/app/audience-report/[channel]/page.tsx", navId: "reports" },
   { route: "/audience-report/view/[id]", file: "src/app/audience-report/view/[id]/page.tsx", navId: "reports" },
   { route: "/schedule-grid", file: "src/app/schedule-grid/page.tsx", navId: "compare" },
+  // 2026-10-22 신규: 프로그램 성과(작품 × 채널 비교). 메뉴 항목이 아니라 채널별 분석 옆 보조 진입점이라 활성 메뉴는 없다.
+  { route: "/program-performance", file: "src/app/program-performance/page.tsx", navId: null },
   { route: "/ideal-schedule", file: "src/app/ideal-schedule/page.tsx", navId: "ai" },
   { route: "/ideal-schedule/purchase", file: "src/app/ideal-schedule/purchase/page.tsx", navId: "content" },
   { route: "/admin", file: "src/app/admin/page.tsx", navId: "admin" },

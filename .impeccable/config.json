@@ -14,6 +14,15 @@
         "value": "from-indigo-50 gradient",
         "createdAt": "2026-08-21T12:34:50.138Z",
         "reason": "사용자 확인: Page 1 배경 파스텔 그라디언트(indigo-50/sky-50/violet-50)는 참고 이미지 기반으로 이전 세션에서 의도적으로 선택, 2026-08-21 대화에서 배경 유지로 재확인"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "src/app/program-performance/ProgramPerformanceView.tsx"
+        ],
+        "createdAt": "2026-10-22T01:01:17.203Z",
+        "reason": "Claude 판단: 삼항식의 두 분기(색 배경=흰 글자, 흰 배경=회색 글자)를 한 줄로 읽은 오탐"
       }
     ]
   }

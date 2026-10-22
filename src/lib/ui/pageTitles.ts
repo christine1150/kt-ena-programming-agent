@@ -11,6 +11,7 @@ export const PAGE_TITLE = {
   ai: "AI 편성 · 시청률 자판기",
   purchase: "콘텐츠 구매 검토",
   compare: "편성 비교",
+  program: "프로그램 성과",
   admin: "관리",
   adminLogin: "관리자 로그인",
   pdLogin: "PD 로그인",

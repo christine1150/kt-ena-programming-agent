@@ -63,6 +63,19 @@ function NavInner({ role }: { role: Role | null }) {
                     </a>
                   </li>
                 )}
+                {/* 프로그램 성과(작품 × 채널 비교, 2026-10-22) — 메뉴 항목(NAV_ITEMS) 개편 없이 채널별 분석 옆 보조 진입점으로 둔다. */}
+                {item.id === "channel" && (
+                  <li className="shrink-0">
+                    <Link
+                      href="/program-performance"
+                      aria-current={pathname.startsWith("/program-performance") ? "page" : undefined}
+                      title="한 작품의 채널별 실적·채널 평균 대비·동슬롯 대비 비교"
+                      className={`block border-b-2 px-3 py-2.5 text-[13px] font-medium transition ${pathname.startsWith("/program-performance") ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"}`}
+                    >
+                      프로그램 성과
+                    </Link>
+                  </li>
+                )}
                 {visibleExtras(item, role).map((e) => (
                   <li key={`${item.id}-${e.label}`} className="shrink-0">
                     <Link href={hrefFor(e.dest, ctx)} className="block px-2 py-2.5 text-[12px] text-zinc-400 hover:text-zinc-700">
