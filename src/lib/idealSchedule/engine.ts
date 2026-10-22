@@ -258,7 +258,32 @@ function newCandidate(name: string, programId: string | null, runtime: number | 
   };
 }
 
-export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
+/** 예측 모델 준비에 필요한 입력 — 편성안 생성(runIdealScheduleEngine)과 편성표 예측(evaluatePlanOnly)이 함께 쓴다. */
+export type ModelPrepInput = Pick<
+  EngineRunInput,
+  "asOfDate" | "config" | "bundle" | "channelKpiLabel" | "genreOf" | "seriesPriors" | "competitorBundle" | "competitorTargetMode" | "residuals" | "strategyMode" | "benchmarkPlacement"
+>;
+
+/** 준비된 예측 모델: 특징·시리즈 기준·경쟁 특징·예상 범위 근거·평가기(Scorer)·후보 풀. 탐색(최적화)은 하지 않는다. */
+export interface PreparedModel {
+  channelCode: string;
+  customTarget: boolean;
+  opts: FeatureOptions;
+  fs: FeatureSet;
+  seriesPriors: Map<string, SeriesPrior>;
+  seriesNotes: string[];
+  competitorFeatures: CompetitorChannelFeature[];
+  uncertainty: UncertaintyModel | null;
+  scorer: Scorer;
+  placement: BenchmarkPlacement;
+  pool: EngineCandidate[];
+}
+
+/**
+ * 예측 모델 준비(2026-10-22, 단계 D-1에서 runIdealScheduleEngine 앞부분을 그대로 옮김 — 계산 순서·값 변경 없음,
+ * 전후 동일성은 scripts/golden-ideal-engine.ts 골든 비교로 확인). 같은 입력이면 같은 결과(순수 함수).
+ */
+export function prepareModel(input: ModelPrepInput): PreparedModel {
   const { config, bundle } = input;
   const channelCode = bundle.channelCode;
   const channelKpi = input.channelKpiLabel ?? bundle.kpiLabel;
@@ -301,6 +326,38 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
   const scorer = new Scorer(buildScoringContext(fs, config, input.strategyMode, strong, opts.composition !== null, uncertainty));
   const placement = input.benchmarkPlacement ?? config.strategy.benchmark_placement;
   const pool = buildCandidatePool(fs, strong ? { channels: competitorFeatures, strong, minN: config.expected_kpi.min_n, placeable: placement === "MIX", include: placement !== "NONE" } : null);
+  return { channelCode, customTarget, opts, fs, seriesPriors, seriesNotes, competitorFeatures, uncertainty, scorer, placement, pool };
+}
+
+/** 편성표 칸 → 자사 후보: 이름 정확 일치 1개 → 편성표 매칭 id → 부분 일치 1개 순. 방영 유형은 [재]면 재방, [본]·[초]면 본방 우선. 못 찾으면 null. */
+function planCandidateResolver(pool: EngineCandidate[]): (name: string, matched: string | null, isRerun: boolean, isNew: boolean) => EngineCandidate | null {
+  const own = pool.filter((c) => c.contentType === "OWN" && c.programId);
+  const pidFor = (name: string, matched: string | null): string | null => {
+    const n = planNameKey(name);
+    const ids = (score: 1 | 2) => [...new Set(own.filter((c) => namesCompatible(planNameKey(c.programName), n) === score).map((c) => c.programId as string))];
+    const exact = ids(2);
+    if (exact.length === 1) return exact[0];
+    if (matched && own.some((c) => c.programId === matched)) return matched;
+    const part = ids(1);
+    return part.length === 1 ? part[0] : null;
+  };
+  const candFor = (pid: string, rerun: boolean, fresh: boolean): EngineCandidate | null => {
+    const order = rerun ? ["RERUN", "UNTAGGED", "FIRST"] : fresh ? ["FIRST", "UNTAGGED", "RERUN"] : ["UNTAGGED", "FIRST", "RERUN"];
+    for (const t of order) {
+      const c = pool.find((p) => p.key === `${pid}|${t}`);
+      if (c) return c;
+    }
+    return null;
+  };
+  return (name, matched, isRerun, isNew) => {
+    const pid = pidFor(name, matched);
+    return pid ? candFor(pid, isRerun, isNew) : null;
+  };
+}
+
+export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
+  const { config, bundle } = input;
+  const { channelCode, customTarget, opts, fs, seriesPriors, seriesNotes, competitorFeatures, uncertainty, scorer, placement, pool } = prepareModel(input);
 
   // Hard 제약: 길이 미입력 항목은 ① 최근 12주 그 프로그램 실측 runtime 중앙값 → ② 12주 밖 과거 방영 길이(작년 편성 등)
   // → ③ 같은 채널 같은 장르(오리지널 드라마 등) 프로그램의 기존 길이 중앙값 순으로 채운다(사용자 지시 2026-09-30:
@@ -425,30 +482,12 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
   let incumbents = lastWeek;
   const planNewPrograms = new Set<string>();
   if (frameRows.length) {
-    const own = pool.filter((c) => c.contentType === "OWN" && c.programId);
-    const pidFor = (name: string, matched: string | null): string | null => {
-      const n = planNameKey(name);
-      const ids = (score: 1 | 2) => [...new Set(own.filter((c) => namesCompatible(planNameKey(c.programName), n) === score).map((c) => c.programId as string))];
-      const exact = ids(2);
-      if (exact.length === 1) return exact[0];
-      if (matched && own.some((c) => c.programId === matched)) return matched;
-      const part = ids(1);
-      return part.length === 1 ? part[0] : null;
-    };
-    const candFor = (pid: string, rerun: boolean, fresh: boolean): EngineCandidate | null => {
-      const order = rerun ? ["RERUN", "UNTAGGED", "FIRST"] : fresh ? ["FIRST", "UNTAGGED", "RERUN"] : ["UNTAGGED", "FIRST", "RERUN"];
-      for (const t of order) {
-        const c = pool.find((p) => p.key === `${pid}|${t}`);
-        if (c) return c;
-      }
-      return null;
-    };
+    const resolvePlan = planCandidateResolver(pool);
     const overlapsFixed = (w: number, s: number, e: number) => fixedBlocks.some((f) => f.weekday === w && f.startMin < e && s < f.endMin);
     const planSlots: SkeletonSlot[] = [];
     const planIncumbents: PlacedBlock[] = [];
     for (const r of frameRows) {
-      const pid = pidFor(r.name, r.programId);
-      const cand = pid ? candFor(pid, r.isRerun, r.isNew) : null;
+      const cand = resolvePlan(r.name, r.programId, r.isRerun, r.isNew);
       if (cand) {
         planSlots.push({ weekday: r.dow, startMin: r.startMin, endMin: r.endMin, weeksSeen: 1, weeksTotal: 1, occupants: [{ key: cand.key, programName: cand.programName, n: 1 }] });
         planIncumbents.push({ weekday: r.dow, startMin: r.startMin, endMin: r.endMin, candidate: cand, status: "AI", fixed: false });
@@ -723,6 +762,131 @@ export function runIdealScheduleEngine(input: EngineRunInput): EngineRunResult {
   } else summary.robustness = null;
 
   return { output, resolution, summary, skeleton, featureSet: fs, competitorFeatures, fingerprint: fp, evaluations };
+}
+
+// ───────────────────────── 편성표 예측 전용 경로(기능 2, 2026-10-22) ─────────────────────────
+// 편성안을 새로 만들지 않는다(최적화·유지 판단·대체 후보 없음). 업로드 편성표의 칸을 그대로 두고, 편성안 생성과 같은
+// 준비된 모델(prepareModel)·같은 평가기로 칸마다 기대 시청률·범위·근거를 낸다. 시청률 외 성분이 섞인 선택 점수(value)는
+// 예상 시청률로 내보내지 않는다(expected만 예측값).
+
+export interface PlanEvalInput extends ModelPrepInput {
+  weekStart: string;
+  /** normalizePlanRows로 정규화한 편성표 행(대상 주 행만 쓴다) */
+  planRows: PlanRow[];
+}
+
+export interface PlanSlotEval {
+  date: string;
+  weekday: number;
+  startMin: number;
+  endMin: number;
+  /** 편성표에 종료가 없어 끝을 정한 방법: 다음 칸 시작(NEXT_START) / 그날 마지막 칸이라 방송일 끝 26:00까지로 가정(DAY_END) */
+  endBasis: "NEXT_START" | "DAY_END";
+  name: string;
+  episodeNumber: number | null;
+  isRerunTag: boolean;
+  isNewTag: boolean;
+  /** 최근 학습 기간 자사 이력이 있는 후보로 찾았는가. false면 장르·채널 기준(근거 등급 C)으로만 계산 */
+  matched: boolean;
+  programId: string | null;
+  candidateKey: string;
+  expected: number | null;
+  range: { low: number; high: number } | null;
+  grade: "A" | "B" | "C";
+  fallbackLevel: number;
+  evidenceAirings: number;
+  confidence: number;
+}
+
+export interface PlanEvalResult {
+  weekStart: string;
+  asOfDate: string;
+  targetLabel: string;
+  slots: PlanSlotEval[];
+  versions: { model: string; features: string; genreDigest: string; configDigest: string; rangeBasis: "BACKTEST" | "TRAINING" | "NONE"; validated: boolean };
+  featureWindow: { from: string; to: string };
+  warnings: string[];
+  /** 입력 지문(같은 입력이면 같은 값) — 재현의 근거는 입력 스냅샷이며, 이 지문은 동일성 확인용이다 */
+  fingerprint: string;
+}
+
+/** 업로드 편성표 그대로 예측만 계산한다(편성 재생성 아님). 같은 입력이면 같은 결과. */
+export function evaluatePlanOnly(input: PlanEvalInput): PlanEvalResult {
+  const { config, bundle } = input;
+  const model = prepareModel(input);
+  const { channelCode, fs, scorer, pool, uncertainty, seriesPriors, opts } = model;
+  const frame = planWeekFrame(input.planRows, input.weekStart);
+  const resolvePlan = planCandidateResolver(pool);
+  const warnings = [...model.seriesNotes];
+  const meta = new Map<string, { row: (typeof frame)[number]; endBasis: PlanSlotEval["endBasis"]; matched: boolean }>();
+  const blocks: PlacedBlock[] = [];
+  for (let i = 0; i < frame.length; i++) {
+    const r = frame[i];
+    const next = frame[i + 1];
+    const endBasis: PlanSlotEval["endBasis"] = next && next.date === r.date && next.startMin === r.endMin ? "NEXT_START" : "DAY_END";
+    const found = resolvePlan(r.name, r.programId, r.isRerun, r.isNew);
+    // 이력 없는 칸: 편성안 생성의 '필수 편성'과 같은 규칙으로 신규 후보를 만든다(재방 칸에는 시리즈 첫 방송 기준을 쓰지 않음)
+    const cand = found ?? newCandidate(r.name, r.programId, r.endMin - r.startMin, channelCode, input.genreOf, r.isRerun ? undefined : seriesPriors);
+    if (!found && cand.seriesPrior) warnings.push(`[시리즈 기준] '${r.name}'은 방영 이력이 없어 ${cand.seriesPrior.basis}에서 출발한 값입니다. 검증된 예측이 아닙니다.`);
+    blocks.push({ weekday: r.dow, startMin: r.startMin, endMin: r.endMin, candidate: cand, status: "AI", fixed: false });
+    meta.set(`${r.dow}|${r.startMin}`, { row: r, endBasis, matched: !!found });
+  }
+  scorer.detail = true;
+  const ev = evaluateSchedule(scorer, blocks, config.structure.max_gap_min);
+  const slots: PlanSlotEval[] = ev.blocks
+    .map((b) => {
+      const m = meta.get(`${b.weekday}|${b.startMin}`)!;
+      return {
+        date: m.row.date,
+        weekday: b.weekday,
+        startMin: b.startMin,
+        endMin: b.endMin,
+        endBasis: m.endBasis,
+        name: m.row.name,
+        episodeNumber: m.row.episodeNumber,
+        isRerunTag: m.row.isRerun,
+        isNewTag: m.row.isNew,
+        matched: m.matched,
+        programId: b.candidate.programId,
+        candidateKey: b.candidate.key,
+        expected: b.eval.expected,
+        range: b.eval.range ? { low: b.eval.range.low, high: b.eval.range.high } : null,
+        grade: m.matched ? gradeOfLevel(b.eval.fallbackLevel) : "C",
+        fallbackLevel: b.eval.fallbackLevel,
+        evidenceAirings: b.eval.programSampleCount,
+        confidence: b.eval.confidence,
+      };
+    })
+    .sort((a, b) => a.weekday - b.weekday || a.startMin - b.startMin);
+  const unmatched = slots.filter((s) => !s.matched).map((s) => s.name);
+  if (unmatched.length) warnings.push(`최근 학습 기간 이력이 없는 칸 ${unmatched.length}개(${[...new Set(unmatched)].slice(0, 5).join(", ")}${new Set(unmatched).size > 5 ? " 외" : ""})는 장르·채널 기준으로만 계산했습니다(근거 C).`);
+  const genreDigest = fingerprint(JSON.stringify(fs.units.map((u) => [u.programId, u.genre]).sort()));
+  const fp = fingerprint(
+    JSON.stringify({
+      kind: "PLAN_ONLY",
+      weekStart: input.weekStart,
+      asOf: input.asOfDate,
+      config,
+      target: bundle.kpiLabel,
+      channelKpi: input.channelKpiLabel ?? bundle.kpiLabel,
+      plan: frame.map((r) => [r.date, r.startMin, r.endMin, r.norm, r.programId, r.isRerun, r.isNew]),
+      own: bundle.airings.filter((a) => a.date <= input.asOfDate),
+      mv: [MODEL_VERSION, FEATURE_VERSION],
+      gd: genreDigest,
+      unc: uncertainty ? [uncertainty.basis, uncertainty.all.n, uncertainty.all.qLow, uncertainty.all.qHigh, uncertainty.all.sd] : null,
+      ...(input.seriesPriors?.length ? { sp: input.seriesPriors } : {}),
+    })
+  );
+  return {
+    weekStart: input.weekStart,
+    asOfDate: input.asOfDate,
+    targetLabel: bundle.kpiLabel,
+    slots,
+    versions: { model: MODEL_VERSION, features: FEATURE_VERSION, genreDigest, configDigest: fingerprint(JSON.stringify(config)), rangeBasis: uncertainty ? uncertainty.basis : "NONE", validated: uncertainty?.basis === "BACKTEST" },
+    featureWindow: { from: addDays(input.asOfDate, -(opts.lookbackDays - 1)), to: input.asOfDate },
+    warnings,
+    fingerprint: fp,
+  };
 }
 
 /** 오차 배율 모델: 백테스트 잔차(충분할 때) → 학습 기간 변동. 둘 다 없으면 null(범위 없음, 판단은 최소 개선율만). */

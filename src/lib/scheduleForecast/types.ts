@@ -15,6 +15,8 @@ export interface ForecastSlot {
   endMin: number | null;
   /** 종료 시각을 다음 칸 시작으로 근사했는가(편성표 원본 규칙 보존) */
   endApproximated: boolean;
+  /** 그날 마지막 칸이라 방송일 끝(26:00)까지 이어진다고 가정한 칸 — 집계에서 가정 분으로 따로 센다 */
+  endAssumedDayEnd?: boolean;
   programName: string;
   programId: string | null;
   expected: number | null;
@@ -38,6 +40,8 @@ export interface PeriodForecast {
   unforecastMinutes: number;
   /** 편성표에 칸이 없는 분(빈칸·종료 미상) — 0으로 채우지 않는다 */
   uncoveredMinutes: number;
+  /** 예측 분 중 "마지막 칸이 방송일 끝까지 이어진다"는 가정에 기댄 분 — 실제 종료가 더 이르면 그만큼 비어 있을 수 있다 */
+  assumedEndMinutes: number;
   /** 하루(주) 전체가 예측으로 덮였는가 — 아니면 '부분 예측'이며 하루 전체 예측으로 표시하지 않는다 */
   complete: boolean;
   /** 집계 수준의 검증된 잔차가 없으면 범위를 만들지 않는다(칸별 상하한의 단순 평균 금지) */

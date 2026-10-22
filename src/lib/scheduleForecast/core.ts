@@ -31,6 +31,7 @@ export function aggregatePeriod(slots: ForecastSlot[], from: string, to: string)
   let num = 0;
   let forecastMinutes = 0;
   let unforecastMinutes = 0;
+  let assumedEndMinutes = 0;
   const covered = new Map<string, boolean[]>();
   for (const s of slots) {
     if (s.date < from || s.date > to) continue;
@@ -49,6 +50,7 @@ export function aggregatePeriod(slots: ForecastSlot[], from: string, to: string)
     if (s.expected !== null && Number.isFinite(s.expected)) {
       num += s.expected * fresh;
       forecastMinutes += fresh;
+      if (s.endAssumedDayEnd) assumedEndMinutes += fresh;
     } else {
       unforecastMinutes += fresh;
     }
@@ -63,6 +65,7 @@ export function aggregatePeriod(slots: ForecastSlot[], from: string, to: string)
     totalMinutes,
     unforecastMinutes,
     uncoveredMinutes,
+    assumedEndMinutes,
     complete: forecastMinutes === totalMinutes,
     range: null,
     rangeNote: "일·주 단위의 검증된 오차 자료가 없어 범위를 표시하지 않습니다(검증 전).",

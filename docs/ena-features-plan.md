@@ -102,7 +102,7 @@
 `docs/ena-features/migration-drafts/20261022010000_schedule_forecast_snapshots.sql` — 실행 중/완료 구분, 완료 후 수정·삭제 불가(트리거·TRUNCATE 포함), 멱등 키 유일, 입력 스냅샷 전체 저장, 리뷰·모델 이력 추가 전용, RLS+권한 회수. **로컬 DB가 없고 원격이 운영이라 `supabase/migrations`에 두지 않았다**(실수로 `db push`되지 않게). 승인 후 `supabase migration new`로 옮겨 적용.
 
 ### 5-4. 다음 구현 단계
-1. `engine.ts`에서 FeatureSet·불확실성·Scorer·후보 풀 준비를 공통 함수로 추출 → `evaluatePlanOnly`(최적화 없음). 추출 전후 `test:ideal`·`test:opt01~06` 동일 결과 확인 후 진행.
+1. **완료(2026-10-22)** `prepareModel` 추출 → `evaluatePlanOnly`(최적화 없음). 골든 9개 시나리오 바이트 동일, 기존 테스트 전후 동일(체크포인트 참조). 편성표에는 종료 시각이 없어 칸 끝 = 다음 칸 시작, 그날 마지막 칸 = 방송일 끝(26:00) 가정 — 기존 편성안 생성의 `planWeekFrame` 규칙 그대로이며 가정 분은 집계에서 따로 표시.
 2. 편성표 칸 → `normalizePlanRows` → 평가 블록 → `ForecastSlot[]` → 집계.
 3. 공식 채널 하루 값과 "실방영 칸 시간가중 집계"의 일치 점검(과거 주, 읽기 전용) — 보정 필요성 판단 자료.
 4. 저장 API(승인 후), 편성 비교 화면 탭(실적 비교 / 사전 예측 / 예측 리뷰).
