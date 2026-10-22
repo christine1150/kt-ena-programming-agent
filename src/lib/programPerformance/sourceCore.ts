@@ -133,16 +133,18 @@ const COMPETITOR_TARGETS: { sheet: string; label: string; channel: string }[] = 
  * <본>/<재> 태그로 방송 구분을 나누고(태그 없음은 본방 여부 미확인), 같은 방영(채널·타깃·방송일·시작 시각)은 한 번만 센다.
  * 자사 채널과 이름이 같은 경쟁채널 항목은 뺀다(자사 표에 이미 있음). 방영이 없으면 행을 만들지 않는다.
  */
-export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNames: Set<string>, from: string, to: string, airing: AiringFilter): Promise<CompetitorRow[]> {
+export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNames: Set<string>, from: string, to: string, airing: AiringFilter, nameVariants: string[] = []): Promise<CompetitorRow[]> {
   const keys = memberKeys.filter((k) => /^[가-힣A-Z0-9]+$/.test(k));
   if (!keys.length || !from || !to) return [];
   const memberSet = new Set(keys);
+  // norm_program_name(DB 생성 열, 대소문자 유지) 완전 일치로 찾는다 — 색인을 타서 빠르다(ilike는 색인을 못 타 수 초 걸림). 대소문자 변형은 자사 프로그램 표기에서 모은다.
+  const exact = [...new Set([...keys, ...keys.map((k) => k.toLowerCase()), ...nameVariants.map((n) => n.replace(/<본>|<재>/g, "").replace(/[^가-힣a-zA-Z0-9]/g, ""))])].filter(Boolean);
   const raw = await fetchAll<Record<string, unknown>>(
     (a, b) =>
       db
         .from("competitor_program_target_ratings")
         .select("competitor_name, target_label, broadcast_date, start_time, program_name, rating, share")
-        .or(keys.map((k) => `norm_program_name.ilike.${k}`).join(","))
+        .in("norm_program_name", exact)
         .in("target_label", COMPETITOR_TARGETS.map((t) => t.sheet))
         .gte("broadcast_date", from)
         .lte("broadcast_date", to)
@@ -255,30 +257,33 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   const [latest, dbFirst] = await Promise.all([latestDataDate(db), earliestDataDate(db)]);
   let workFirst: string | null = null;
   let workFirstFirstRun: string | null = null;
-  for (let i = 0; i < workIds.length; i += IN_CHUNK) {
-    const chunk = workIds.slice(i, i + IN_CHUNK);
-    const [{ data: a }, { data: b }] = await Promise.all([
-      db.from("ratings").select("broadcast_date").in("program_id", chunk).eq("source_type", "nielsen_daily").order("broadcast_date", { ascending: true }).limit(1).maybeSingle(),
-      db.from("ratings").select("broadcast_date").in("program_id", chunk).eq("source_type", "nielsen_daily").eq("is_first_run", true).order("broadcast_date", { ascending: true }).limit(1).maybeSingle(),
-    ]);
+  // 프로그램마다 따로(program_id, broadcast_date 색인) 동시에 묻는다 — 여러 id를 in()으로 묶어 날짜 정렬하면 색인을 못 타 수 초 걸렸다(2026-10-22 실측 4.9초)
+  const firsts = await Promise.all(
+    workIds.map((pid) =>
+      Promise.all([
+        db.from("ratings").select("broadcast_date").eq("program_id", pid).eq("source_type", "nielsen_daily").order("broadcast_date", { ascending: true }).limit(1).maybeSingle(),
+        db.from("ratings").select("broadcast_date").eq("program_id", pid).eq("source_type", "nielsen_daily").eq("is_first_run", true).order("broadcast_date", { ascending: true }).limit(1).maybeSingle(),
+      ])
+    )
+  );
+  for (const [{ data: a }, { data: b }] of firsts) {
     const da = (a?.broadcast_date as string | undefined) ?? null;
     const dbb = (b?.broadcast_date as string | undefined) ?? null;
     if (da && (!workFirst || da < workFirst)) workFirst = da;
     if (dbb && (!workFirstFirstRun || dbb < workFirstFirstRun)) workFirstFirstRun = dbb;
   }
   const to = latest ? (query.to && query.to < latest ? query.to : latest) : query.to ?? "";
-  const from = query.from ?? workFirst ?? to;
+  const presetDays = query.preset === "4w" ? 27 : query.preset === "12w" ? 83 : null;
+  const from = query.from ?? (presetDays !== null && to ? new Date(Date.parse(`${to}T00:00:00Z`) - presetDays * 86_400_000).toISOString().slice(0, 10) : null) ?? workFirst ?? to;
   const notes: string[] = [];
   if (query.to && latest && query.to > latest) notes.push(`조회 종료일이 최신 자료일(${latest})보다 늦어 ${latest}까지만 봅니다(미래·미수신일은 0으로 넣지 않음).`);
   if (work.candidateKeys.length) notes.push(`이름이 비슷한 '연결 확인 필요' 후보 ${work.candidateKeys.length}건은 합치지 않았습니다(관리자 승인 전).`);
   if (classification.note) notes.push(classification.note);
 
   const selected = query.channels && query.channels.length ? new Set(query.channels) : null;
-  const evidence: AiringEvidence[] = [];
-  const slotCells: SlotCell[] = [];
-  const rows: ChannelRow[] = [];
-  const allDays = new Set<string>();
-  const allEpisodes = new Set<number>();
+  // 채널 × 타깃 조회는 서로 독립이라 동시에 실행하고(조회 수십 건을 차례로 기다리던 것이 계산 시간의 대부분), 결과는 원래 순서대로 합친다.
+  type Bucket = { rows: ChannelRow[]; evidence: AiringEvidence[]; slotCells: SlotCell[]; allDays: Set<string>; allEpisodes: Set<number> };
+  const jobs: (() => Promise<Bucket>)[] = [];
 
   for (const ch of channels) {
     if (selected && !selected.has(ch.code)) continue;
@@ -290,7 +295,13 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     const kpiTarget = { program: resolveProgramLevelTargetLabel(primary), channel: resolveRankSheetTargetLabel(primary), group: primaryGroup, isPrimary: true };
     const otherTarget = { ...COMMON_TARGETS[primaryGroup === "2049" ? "commonHH" : "common2049"], isPrimary: false };
     const targets = mode === "kpi" ? [kpiTarget] : mode === "both" ? [kpiTarget, otherTarget] : [{ ...COMMON_TARGETS[mode], isPrimary: COMMON_TARGETS[mode].group === primaryGroup }];
-    for (const [ti, tgt] of targets.entries()) {
+    for (const [ti, tgt] of targets.entries()) jobs.push(async (): Promise<Bucket> => {
+    const rows: ChannelRow[] = [];
+    const evidence: AiringEvidence[] = [];
+    const slotCells: SlotCell[] = [];
+    const allDays = new Set<string>();
+    const allEpisodes = new Set<number>();
+    const done = (): Bucket => ({ rows, evidence, slotCells, allDays, allEpisodes });
     const programLabel = tgt.program;
     const channelLabel = tgt.channel;
     const kpiGroup = tgt.group;
@@ -327,16 +338,16 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     };
     if (ch.code === "SKYUHD") {
       if (ti === 0) rows.push({ ...base, status: "UNSUPPORTED", statusNote: "skyUHD는 프로그램 시청률이 별도 수기 파일(타깃 없음·초 단위)이라 이번 비교에서 계산하지 않습니다." });
-      continue;
+      return done();
     }
     if (!primary) {
       if (ti === 0) rows.push({ ...base, status: "UNSUPPORTED", statusNote: "채널 핵심 타깃이 등록되지 않았습니다." });
-      continue;
+      return done();
     }
     const [progTargetId, chTargetId] = await Promise.all([targetIdOf(db, programLabel), targetIdOf(db, channelLabel)]);
     if (!progTargetId) {
       rows.push({ ...base, status: "NO_TARGET", statusNote: `'${programLabel}' 타깃이 없습니다.` });
-      continue;
+      return done();
     }
 
     // 채널 하루 시청률(랭킹 시트 행, 공식 순위가 붙은 채널 단위 행) — 작품 방영 여부와 무관하게 조회 기간 전체
@@ -417,7 +428,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         status: noProgramData ? "NO_PROGRAM_DATA" : "NO_OBSERVATION",
         statusNote: noProgramData ? "이 기간 이 채널의 프로그램 단위 닐슨 자료가 없습니다(채널 하루 값만 있음)." : ids.length ? "이 기간에 이 작품의 방영 기록이 없습니다." : "이 채널에서 이 작품의 방영 기록을 찾지 못했습니다.",
       });
-      continue;
+      return done();
     }
 
     const filtered = workRows.filter((r) => matchesAiringFilter(r.firstRun, query.airing));
@@ -528,7 +539,8 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       const nonFirstRows = workRows.filter((r) => r.firstRun !== true);
       const nonFirst = query.airing === "all" && first.airings > 0 && nonFirstRows.length > 0 ? { vs: ratioOf(splitStat(nonFirstRows).avg, channelDaily.mean), days: splitStat(nonFirstRows).days } : null;
       const v = verdictOf({ vsChannel: vsChannel.direction, vsSlot: slot.ratio.direction, sampleState, days: fStat.days, slots, nonFirst });
-      analysis = { episodes: eps.length >= 2 ? eps : [], trendText: trendTextOf(eps, monthly, ch.code), extremes: ext, extremesText: extremesTextOf(ext), slots, slotText: slotTextOf(slots), verdict: v.verdict, reasons: v.reasons };
+      const firstRuns = filtered.filter((a) => a.firstRun === true && a.rating !== null).map((a) => ({ date: a.date, startTime: a.startTime, episode: a.episode, firstRun: true, rating: a.rating as number }));
+      analysis = { episodes: eps.length >= 2 ? eps : [], firstRuns, channelAvg: channelDaily.mean, trendText: trendTextOf(eps, monthly, ch.code, firstRuns), extremes: ext, extremesText: extremesTextOf(ext), slots, slotText: slotTextOf(slots), verdict: v.verdict, reasons: v.reasons };
     }
 
     rows.push({
@@ -555,23 +567,32 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       shareAirings: sh.airings,
       analysis,
     });
-    }
+    return done();
+    });
   }
+  // 경쟁 채널 조회도 자사 채널 조회와 함께 시작한다
+  const competitorsP = loadCompetitorRows(db, work.memberKeys, new Set(channels.map((c) => normalizeProgramKey(c.name))), from, to, query.airing, workPrograms.map((p) => p.canonical_name ?? ""));
+  const buckets = await Promise.all(jobs.map((j) => j()));
+  const rows = buckets.flatMap((b) => b.rows);
+  const evidence = buckets.flatMap((b) => b.evidence);
+  const slotCells = buckets.flatMap((b) => b.slotCells);
+  const allDays = new Set(buckets.flatMap((b) => [...b.allDays]));
+  const allEpisodes = new Set(buckets.flatMap((b) => [...b.allEpisodes]));
 
-  // 첫 줄 — 방영 기록이 있는 채널마다 한 줄(그 채널의 타깃 행을 KPI 타깃 먼저 묶어 2049·가구를 함께)
+  // 첫 줄 —방영 기록이 있는 채널마다 한 줄(그 채널의 타깃 행을 KPI 타깃 먼저 묶어 2049·가구를 함께)
   const airedRows = rows.filter((r) => r.status === "OBSERVED" && r.airings > 0);
   const lineCodes = [...new Set(airedRows.map((r) => r.channelCode))];
   const lines = lineCodes.map((code) => {
     const parts = airedRows.filter((r) => r.channelCode === code).sort((a, b) => Number(b.primary) - Number(a.primary));
-    return channelLineOf(code, parts[0].channelName, parts, from, to);
+    return channelLineOf(code, parts[0].channelName, parts);
   });
   // 경쟁 채널은 자사 작품이 가장 많이 방영된 채널의 KPI 그룹 타깃을 먼저 보인다
   const mainRow = airedRows.filter((r) => r.primary).sort((a, b) => b.airings - a.airings)[0];
-  const competitors = await loadCompetitorRows(db, work.memberKeys, new Set(channels.map((c) => normalizeProgramKey(c.name))), from, to, query.airing);
+  const competitors = await competitorsP;
   const firstGroup = mainRow?.kpiGroup === "HH" ? "전국 유료가구" : "수도권 2049";
   const competitorLines = [...new Set(competitors.filter((c) => c.airings > 0).map((c) => c.competitorName))].map((name) => {
     const parts = competitors.filter((c) => c.competitorName === name && c.airings > 0).sort((a, b) => Number(b.targetLabel === firstGroup) - Number(a.targetLabel === firstGroup));
-    return channelLineOf(name, name, parts, from, to);
+    return channelLineOf(name, name, parts);
   });
 
   evidence.sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? "").localeCompare(b.startTime ?? "") || a.channelCode.localeCompare(b.channelCode));

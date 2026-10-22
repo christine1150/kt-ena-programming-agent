@@ -5,7 +5,7 @@
 // 0/NULL/중복/정정/타깃 중복/소표본/산출 불가 처리, 분류 규칙(승인 메타데이터만), 다른 시즌 분리, 캐시 키 분리, 기존 엔진 무변경.
 // 보증하지 못하는 것: 운영 데이터에서의 값(합성 사례의 이름·수치는 실제 채널 성과가 아니다).
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
-import { channelDailyMean, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, shareStat, slotLinesOf, slotTextOf, trendTextOf, verdictOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
+import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, shareStat, slotLinesOf, slotTextOf, trendTextOf, verdictOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
 import { searchWorks } from "../src/lib/programPerformance/search";
 import { performanceCacheKey } from "../src/lib/programPerformance/cacheKey";
@@ -265,7 +265,7 @@ async function main() {
 
   // 검색: 식별 계층 재사용 + 분류 필터
   const base = new FakeDb();
-  for (const t of ["program_identity", "programs", "featured_content"]) base.seed(t, db.snapshot(t).map(({ id, ...rest }) => ({ ...rest, id })));
+  for (const t of ["program_identity", "programs", "featured_content", "channels", "targets", "ratings"]) base.seed(t, db.snapshot(t).map(({ id, ...rest }) => ({ ...rest, id })));
   const row = (key: string, name: string, chans: string[]) => ({ key, group_key: key, display_name: name, own_channels: chans, comp_channels: [], airings_total: 10, airings_91d: 5, first_date: START, last_date: END, is_special: false, is_exact: false, is_prefix: true, is_contains: true, jamo_sim: 0.8, jamo_wsim: 0.8, token_hits: 1 });
   const sdb = {
     from: (t: string) => base.from(t),
@@ -278,7 +278,7 @@ async function main() {
   const s3 = await searchWorks(sdb, "", "drama", END);
   check("빠른 진입: 검색어 없이 오리지널 드라마 목록", s3.length === 1 && s3[0].groupKey === "테스트드라마" && s3[0].classification === "ORIGINAL_DRAMA");
   const s4 = await searchWorks(sdb, "", "all", END);
-  check("첫 화면: 검색어 없이 '전체'면 오리지널 드라마·예능 목록", s4.length === 2 && s4.every((s) => s.classification === "ORIGINAL_DRAMA" || s.classification === "ORIGINAL_VARIETY"));
+  check("첫 화면: 검색어 없이 '전체'면 ENA 최근 2주 방영 오리지널(마지막 방영일 순)", s4.length === 2 && s4[0].groupKey === "테스트예능" && s4[0].lastDate === addDays(START, 82) && s4[1].lastDate === addDays(START, 79), JSON.stringify(s4.map((s) => [s.groupKey, s.lastDate])));
 
   // 월간 추이 — 같은 달·같은 구간의 채널 평균과 짝, 방영 없는 달은 0이 아니라 NULL
   const mEna = ena.monthly;
@@ -294,9 +294,10 @@ async function main() {
   // 채널별 첫 줄 — 서버 고정 템플릿(사용자 지정 형식), 방영 기록이 있는 채널만
   const lineOf = (res: typeof r, code: string) => res.lines.find((l) => l.channelCode === code)?.text ?? "";
   check("첫 줄: 방영 기록 있는 채널만(관측 없음·자료 없음·제외 채널 없음)", r.lines.length === 3 && r.lines.map((l) => l.channelCode).join() === "ENA,ENA_DRAMA,ENA_PLAY", r.lines.map((l) => l.channelCode).join());
-  check("첫 줄: 기간·채널·타깃·평균(방영 횟수)·대비·판단", lineOf(r, "ENA").startsWith(`${r.period.from} ~ ${r.period.to} 기간 동안 ENA(수도권 2049)에서 평균 시청률 `) && lineOf(r, "ENA").includes("(12회)로 채널 평균 대비 +140%.") && lineOf(r, "ENA").endsWith("도움이 되고 있습니다."), lineOf(r, "ENA"));
-  check("첫 줄: 채널 평균보다 낮으면 도움이 되지 못함", lineOf(r, "ENA_DRAMA").includes("도움이 되지 못하고 있습니다"), lineOf(r, "ENA_DRAMA"));
-  check("첫 줄: 방송일 3일 미만은 판단 보류(수치는 유지)", lineOf(r, "ENA_PLAY").includes("채널 평균 대비 +100%") && lineOf(r, "ENA_PLAY").includes("판단은 보류") && !lineOf(r, "ENA_PLAY").includes("도움"), lineOf(r, "ENA_PLAY"));
+  check("첫 줄: '채널: 값(타깃, 지수%)로 채널 평균 대비 차이 높음/낮음 (n회)' 형식", lineOf(r, "ENA") === "ENA: 1.200(2049, 240%)로 채널 평균 대비 140% 높음 (12회)", lineOf(r, "ENA"));
+  check("첫 줄: 낮으면 '낮음', 지수와 차이가 어긋나지 않음(49% ↔ 51%)", lineOf(r, "ENA_DRAMA").includes("(2049, 49%)로 채널 평균 대비 51% 낮음 (48회)"), lineOf(r, "ENA_DRAMA"));
+  check("첫 줄: 방송일 3일 미만은 표본 부족·판단 보류 표시(수치는 유지)", lineOf(r, "ENA_PLAY").includes("(2049, 200%)") && lineOf(r, "ENA_PLAY").endsWith("(2회, 실적 2일, 표본 부족·판단 보류)"), lineOf(r, "ENA_PLAY"));
+  check("첫 줄: 지수 조각은 서버 값(화면 색 입히기용)", r.lines.find((l) => l.channelCode === "ENA")!.pieces[0].index === 240 && r.lines.find((l) => l.channelCode === "ENA")!.pieces[0].direction === "HIGHER");
   check("첫 줄: 강화·교체 같은 편성 권고 문구 없음", r.lines.every((l) => !/(강화|교체|유지하세요|늘리)/.test(l.text)));
 
   // 두 타깃 모드 — 채널마다 수도권 2049·전국 유료가구 둘 다, KPI 타깃 먼저, 같은 방영을 두 번 세지 않음
@@ -311,8 +312,8 @@ async function main() {
 
   // 첫 줄 — 두 타깃 모드에서는 채널당 한 줄에 2049·가구 함께(KPI 타깃 먼저)
   const bLine = b.lines.find((l) => l.channelCode === "ENA")!.text;
-  check("첫 줄(두 타깃): 채널당 한 줄, 2049·가구 함께", b.lines.filter((l) => l.channelCode === "ENA").length === 1 && bLine.includes("평균 시청률 2049 1.200·가구 2.500(12회)") && bLine.includes("채널 평균 대비 2049 +140%·가구 산출 불가"), bLine);
-  check("첫 줄(두 타깃): 판단은 KPI 타깃 기준", bLine.includes("도움이 되고 있습니다"), bLine);
+  check("첫 줄(두 타깃): 채널당 한 줄, KPI(2049) 먼저 가구 함께", b.lines.filter((l) => l.channelCode === "ENA").length === 1 && bLine === "ENA: 1.200(2049, 240%)·2.500(가구, 산출 불가)로 채널 평균 대비 2049 140% 높음·가구 산출 불가 (12회)", bLine);
+  check("첫 줄(두 타깃): 방향이 같으면 '각각'", channelLineOf("X", "X", [{ targetLabel: "전국 유료가구", programAvg: 0.032, airings: 11, days: 9, vsChannel: ratioOf(0.032, 0.049), sampleState: "OK" }, { targetLabel: "수도권 2049", programAvg: 0, airings: 11, days: 9, vsChannel: ratioOf(0, 0.006), sampleState: "OK" }]).text === "X: 0.032(가구, 65%)·0(2049, 0%)로 채널 평균 대비 각각 35%·100% 낮음 (11회)");
 
   // 경쟁 채널 — 같은 작품 이름의 경쟁채널 방영만, 자사 이름 항목 제외, 같은 방영 한 번만, 채널 평균은 순위 있는 행
   const tvn = r.competitors.filter((c) => c.competitorName === "tvN");
@@ -323,7 +324,7 @@ async function main() {
   check("경쟁: 다른 작품·중복 행·기간 밖 제외(3회)", t2049.airings === 3 && near(t2049.programAvg, 0.3) && t2049.rerunAirings === 3, JSON.stringify(t2049));
   check("경쟁: 채널 평균은 순위 있는 경쟁채널 하루 행 일평균", near(t2049.channelDaily?.mean, 0.2) && near(t2049.vsChannel.pct, 50) && near(thh.vsChannel.pct, 20));
   check("경쟁: 3일은 자료 적음", t2049.sampleState === "SMALL");
-  check("경쟁: 첫 줄도 채널당 한 줄", r.competitorLines.length === 1 && r.competitorLines[0].text.includes("tvN에서 평균 시청률"), r.competitorLines[0]?.text);
+  check("경쟁: 첫 줄도 채널당 한 줄", r.competitorLines.length === 1 && r.competitorLines[0].text === "tvN: 0.300(2049, 150%)·0.600(가구, 120%)로 채널 평균 대비 각각 50%·20% 높음 (3회, 실적 3일, 표본 부족)", r.competitorLines[0]?.text);
   const rFirst = (await loadProgramPerformanceWith(db, Q({ airing: "first" }), { fitLookup }))!;
   check("경쟁: 본방만 보면 <재> 방영은 빠짐(행 없음)", rFirst.competitors.length === 0);
 
@@ -360,7 +361,7 @@ async function main() {
   {
     const cell = (dow: number, days: number, pct: number): SlotLine => ({ dow, hourBlock: 22, airings: days, days, avg: 1, compAvg: 1, compAirings: 20, basis: "DOW_HOUR", vs: ratioOf(1 + pct / 100, 1), sampleState: days >= 8 ? "OK" : days >= 3 ? "SMALL" : "NONE" });
     const t = slotTextOf([cell(1, 6, 50), cell(4, 3, 300), cell(0, 5, -20)]);
-    check("시간대 문구: 극단값이 아니라 방영 많은 구간을 대표로, 소표본이면 참고 표시", t.includes("월 22시대 +50%") && !t.includes("+300%") && t.includes("참고만"), t);
+    check("시간대 문구: 극단값이 아니라 방영 많은 구간을 대표로, 소표본이면 참고 표시", t.includes("월 22시대 150%") && !t.includes("400%") && t.includes("참고만"), t);
   }
   // 같은 요일·시가 부족하면 같은 시(모든 요일)로 넓힌다 — 2026-01-26(월) 20시 15건
   const wideOthers = Array.from({ length: 15 }, () => ({ date: "2026-01-26", startTime: "20:05:00", rating: 0.5 }));

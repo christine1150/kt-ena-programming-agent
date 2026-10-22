@@ -40,6 +40,61 @@ export async function loadWorkClassMap(db: PerfDb): Promise<Map<string, { cls: W
   return out;
 }
 
+const RECENT_DAYS = 14;
+
+/**
+ * 작품 묶음(group_key)별 ENA 마지막 방영일 — 최신 자료일 기준 최근 14일 안에 방영한 것만.
+ * 주요 콘텐츠 목록에 올라간 program_id만이 아니라, 작품 묶음에 속하는 이름의 ENA 프로그램 전부를 본다(표기가 다른 ENA 행 포함).
+ */
+async function recentEnaLastDates(db: PerfDb, groups: string[]): Promise<Map<string, string>> {
+  const byGroup = new Map<string, string>();
+  if (!groups.length) return byGroup;
+  const { data: ch } = await db.from("channels").select("id").eq("code", "ENA").maybeSingle();
+  const enaIdEarly = (ch?.id as string | undefined) ?? null;
+  if (!enaIdEarly) return byGroup;
+  const groupByKey = new Map<string, string>();
+  for (let i = 0; i < groups.length; i += IN_CHUNK) {
+    const { data } = await db.from("program_identity").select("key, group_key").in("group_key", groups.slice(i, i + IN_CHUNK));
+    for (const r of (data ?? []) as { key: string; group_key: string }[]) groupByKey.set(r.key, r.group_key);
+  }
+  const groupByPid = new Map<string, string>();
+  for (let off = 0; ; off += 1000) {
+    const { data } = await db.from("programs").select("id, canonical_name").eq("channel_id", enaIdEarly).order("id", { ascending: true }).range(off, off + 999);
+    const rows = (data ?? []) as { id: string; canonical_name: string | null }[];
+    for (const p of rows) {
+      const g = groupByKey.get(normalizeProgramKey(p.canonical_name ?? ""));
+      if (g) groupByPid.set(p.id, g);
+    }
+    if (rows.length < 1000) break;
+  }
+  const out = await recentByPid(db, enaIdEarly, [...groupByPid.keys()]);
+  for (const [pid, d] of out) {
+    const g = groupByPid.get(pid)!;
+    if ((byGroup.get(g) ?? "") < d) byGroup.set(g, d);
+  }
+  return byGroup;
+}
+
+async function recentByPid(db: PerfDb, enaId: string, programIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!programIds.length) return out;
+  const { data: lt } = await db.from("ratings").select("broadcast_date").eq("source_type", "nielsen_daily").order("broadcast_date", { ascending: false }).limit(1).maybeSingle();
+  // 방영 행은 타깃마다 한 줄씩이라 ENA KPI 타깃(수도권 2049) 행만 본다(행 수 제한 안에서 빠짐없이)
+  const { data: tg } = await db.from("targets").select("id").eq("label", "수도권 2049").maybeSingle();
+  const latest = (lt?.broadcast_date as string | undefined) ?? null;
+  const tid = (tg?.id as string | undefined) ?? null;
+  if (!latest || !tid) return out;
+  const since = new Date(Date.parse(`${latest}T00:00:00Z`) - (RECENT_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  await Promise.all(
+    Array.from({ length: Math.ceil(programIds.length / IN_CHUNK) }, (_, i) => programIds.slice(i * IN_CHUNK, (i + 1) * IN_CHUNK)).map(async (chunk) => {
+      const { data, error } = await db.from("ratings").select("program_id, broadcast_date").eq("channel_id", enaId).eq("target_id", tid).eq("source_type", "nielsen_daily").in("program_id", chunk).gte("broadcast_date", since).range(0, 999);
+      if (error) throw new Error(`최근 방영 조회 실패: ${error.message}`);
+      for (const r of (data ?? []) as { program_id: string; broadcast_date: string }[]) if ((out.get(r.program_id) ?? "") < r.broadcast_date) out.set(r.program_id, r.broadcast_date);
+    })
+  );
+  return out;
+}
+
 export type SearchClassFilter = "all" | "drama" | "variety";
 
 function passes(cls: WorkClass, f: SearchClassFilter): boolean {
@@ -51,9 +106,16 @@ export async function searchWorks(db: PerfDb & { rpc: (fn: string, args: Record<
   const classMap = await loadWorkClassMap(db);
   const query = q.trim();
   if (!query) {
-    return [...classMap.entries()]
-      .filter(([, v]) => passes(v.cls, f) && (v.cls === "ORIGINAL_DRAMA" || v.cls === "ORIGINAL_VARIETY"))
-      .map(([g, v]) => ({ groupKey: g, displayName: v.displayName, ownChannels: v.ownChannels, airingsTotal: v.airingsTotal, lastDate: v.lastDate, classification: v.cls }))
+    const originals = [...classMap.entries()].filter(([, v]) => passes(v.cls, f) && (v.cls === "ORIGINAL_DRAMA" || v.cls === "ORIGINAL_VARIETY"));
+    // 첫 화면('전체')은 ENA에서 최근 2주(최신 자료일 포함 14일) 안에 실제 방영한 오리지널만, 마지막 방영일 순(사용자 지정 2026-10-22).
+    // program_identity.last_date는 갱신이 멈출 수 있어(승인 A3 대기) 닐슨 방영 행에서 직접 확인한다.
+    const recent = f === "all" ? await recentEnaLastDates(db, originals.map(([g]) => g)) : null;
+    return originals
+      .map(([g, v]) => {
+        const last = recent ? (recent.get(g) ?? null) : v.lastDate;
+        return { groupKey: g, displayName: v.displayName, ownChannels: v.ownChannels, airingsTotal: v.airingsTotal, lastDate: last, classification: v.cls };
+      })
+      .filter((x) => !recent || x.lastDate !== null)
       .sort((a, b) => (b.lastDate ?? "").localeCompare(a.lastDate ?? "") || a.displayName.localeCompare(b.displayName));
   }
   const nq = normalizeProgramQuery(query);

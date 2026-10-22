@@ -6,7 +6,8 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 // v1.2(2026-10-22): 두 타깃 모드(both)·채널별 첫 줄(lines, 그룹 요약 headlines 대체) — 계산식 무변경, 캐시가 섞이지 않게 버전만 올림
 // v1.3(2026-10-22): 행마다 점유율 평균·분석(analysis: 회차 추이·최고/최저·시간대별 비교·종합 문구) 추가 — 기존 값의 계산식 무변경
 // v1.4(2026-10-22): 첫 줄을 채널당 한 줄(2049·가구 함께)로, 경쟁 채널 성과(competitors) 추가 — 자사 값 계산식 무변경
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.4";
+// v1.5(2026-10-22): 첫 줄 형식(지수 %)·pieces, 본방 추이(firstRuns), 기간 preset — 자사 값 계산식 무변경
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.5";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
@@ -29,6 +30,8 @@ export interface PerformanceQuery {
   channels: string[] | null; // null = 전체
   from: string | null; // null = 보유 자료 전체(작품 첫 관측일부터)
   to: string | null; // null = 최신 자료일
+  /** from이 없을 때 최신 자료일 기준 최근 4주(28일)·12주(84일) — 화면이 최신 자료일을 몰라도 첫 조회부터 기간을 맞춘다 */
+  preset?: "4w" | "12w" | null;
   airing: AiringFilter;
   targetMode: TargetMode;
 }
@@ -120,8 +123,16 @@ export interface MonthlyPoint {
 export interface ChannelLine {
   /** 자사는 채널 코드, 경쟁 채널은 채널명 */
   channelCode: string;
+  name: string;
   direction: Direction;
   sampleState: "OK" | "SMALL" | "NONE";
+  /** 타깃별 값과 지수(채널 평균=100) — 화면이 색을 입힐 때 쓴다(다시 계산하지 않음) */
+  pieces: { target: string; value: number | null; index: number | null; direction: Direction }[];
+  /** "각각 95%·84% 낮음" 같은 차이 요약 */
+  summary: string;
+  airings: number;
+  days: number;
+  /** 같은 내용의 평문 한 줄 */
   text: string;
 }
 
@@ -196,6 +207,10 @@ export interface SlotLine {
 export interface RowAnalysis {
   /** 회차별(본방·회차 확인분, 2회차 이상일 때만). 없으면 월별(row.monthly)만 */
   episodes: EpisodePoint[];
+  /** 본방(<본> 표시) 방영 — 방영 순서대로, 시청률 값이 있는 것만. 그래프 기본 축(회차 번호가 있으면 회차로 표기) */
+  firstRuns: AiringRef[];
+  /** 같은 기간·타깃의 채널 평균(그래프 기준선) */
+  channelAvg: number | null;
   /** 흐름 한 줄 — 전반/후반(회차 4개 이상) · 첫/최근 회차 · 첫/마지막 방영 달의 채널 평균 대비. 근거가 없으면 '추이 자료 부족' */
   trendText: string;
   extremes: { best: AiringRef; worst: AiringRef; recent: AiringRef } | null;

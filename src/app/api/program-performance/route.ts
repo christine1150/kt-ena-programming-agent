@@ -26,7 +26,9 @@ export async function GET(request: Request) {
   const t = sp.get("target");
   const targetMode: TargetMode = t === "common2049" || t === "commonHH" || t === "both" ? t : "kpi";
   try {
-    const result = await loadProgramPerformance({ groupKey, channels: channels.length ? channels : null, from: from || null, to: to || null, airing, targetMode });
+    const p = sp.get("preset");
+    const preset = p === "4w" || p === "12w" ? p : null;
+    const result = await loadProgramPerformance({ groupKey, channels: channels.length ? channels : null, from: from || null, to: to || null, preset: from ? null : preset, airing, targetMode });
     if (!result) return NextResponse.json({ ok: false, message: "작품을 찾지 못했습니다." }, { status: 404 });
     return NextResponse.json({ ok: true, result });
   } catch (e) {

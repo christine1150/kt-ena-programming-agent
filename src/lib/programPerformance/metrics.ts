@@ -5,8 +5,8 @@
 //  - 채널 일평균 대비 = 작품 평균 ÷ 채널 일평균(규모 참고 지표 — 시간대 효과를 뺀 효율이 아님)
 //  - 동슬롯 대비 = 콘텐츠 적합도 엔진과 같은 "같은 칸 다른 프로그램 기대치" 대비 수축 배율(편성 효율 지표, 인과 아님)
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
-import { formatRatingValue, formatSigned } from "@/lib/ui/metricFormat";
-import type { AiringFilter, AiringRef, ChannelDailyBase, ChannelLine, ChannelRow, Direction, EpisodePoint, MonthlyPoint, RatioValue, RowAnalysis, SlotLine, SplitStat, WorkClass, WorkClassification } from "./types";
+import { formatRatingValue } from "@/lib/ui/metricFormat";
+import type { AiringFilter, AiringRef, ChannelDailyBase, ChannelLine, Direction, EpisodePoint, MonthlyPoint, RatioValue, RowAnalysis, SlotLine, SplitStat, WorkClass, WorkClassification } from "./types";
 
 /** 방향은 화면 표시 자릿수(배율 소수 둘째 자리)로 반올림한 값으로만 정한다 — 임의의 "유의 차이" 임계값을 만들지 않는다. */
 const RATIO_DISPLAY_DIGITS = 2;
@@ -209,26 +209,14 @@ export function monthlySeries(airings: WorkAiring[], dayRows: ChannelDayRow[], f
   return out;
 }
 
-/**
- * 채널별 첫 줄 — "{기간} 기간 동안 {채널}({타깃})에서 평균 시청률 {값}({n}회)로 채널 평균 대비 {±%}. {판단}" (사용자 지정 형식, 2026-10-22).
- * 서버가 확정한 작품 평균·채널 평균 대비·표본 상태로만 만든다(LLM 없음). 판단은 채널 평균보다 높은지·낮은지의 서술이며,
- * 방송일 3일 미만은 판단하지 않고 8일 미만은 '자료 적음'을 붙인다(콘텐츠 적합도와 같은 표본 기준).
- */
-export function channelLine(r: Pick<ChannelRow, "channelCode" | "channelName" | "targetLabel" | "programAvg" | "airings" | "days" | "vsChannel" | "sampleState">, from: string, to: string): ChannelLine {
-  const head = `${from} ~ ${to} 기간 동안 ${r.channelName}(${r.targetLabel})에서 평균 시청률 ${formatRatingValue(r.programAvg, r.channelCode)}(${r.airings}회)로`;
-  const v = r.vsChannel;
-  let text: string;
-  if (v.ratio === null || v.pct === null) text = `${head} 채널 평균과 비교할 수 없습니다(${v.naReason ?? "기준값 없음"}).`;
-  else {
-    const vs = `${head} 채널 평균 대비 ${formatSigned(v.pct, 0)}%.`;
-    if (r.sampleState === "NONE") text = `${vs} 방송일 ${r.days}일뿐이라 판단은 보류합니다.`;
-    else {
-      const judge = v.direction === "HIGHER" ? "채널 평균보다 높아 채널 시청률에 도움이 되고 있습니다." : v.direction === "LOWER" ? "채널 평균보다 낮아 채널 시청률에 도움이 되지 못하고 있습니다." : "채널 평균과 비슷한 수준입니다.";
-      text = `${vs} ${judge}${r.sampleState === "SMALL" ? ` (자료 적음 · ${r.days}일)` : ""}`;
-    }
-  }
-  return { channelCode: r.channelCode, direction: v.direction, sampleState: r.sampleState, text };
+/** 채널 평균 = 100으로 본 지수(작품 ÷ 채널 평균 × 100, 정수). 사용자 지정 표기(2026-10-22): 100 미만 붉은색·초과 푸른색 */
+export function indexOf(ratio: number | null): number | null {
+  return ratio === null || !Number.isFinite(ratio) ? null : Math.round(ratio * 100);
 }
+export const indexText = (ratio: number | null) => {
+  const i = indexOf(ratio);
+  return i === null ? "산출 불가" : `${i}%`;
+};
 
 /** 첫 줄 한 타깃 몫 — 자사 행·경쟁 채널 행 공통 */
 export interface LinePart {
@@ -240,38 +228,39 @@ export interface LinePart {
   sampleState: "OK" | "SMALL" | "NONE";
 }
 
-const shortTarget = (label: string) => (label.includes("2049") ? "2049" : label.includes("유료가구") ? "가구" : label);
+export const shortTarget = (label: string) => (label.includes("2049") ? "2049" : label.includes("유료가구") ? "가구" : label);
 
 /**
- * 채널당 한 줄(사용자 지정 2026-10-22) — "{기간} 기간 동안 {채널}에서 평균 시청률 가구 0.200·2049 0.000(168회)로 채널 평균 대비 가구 +73%·2049 −100%. {판단}"
- * parts[0]이 판단 기준 타깃(자사는 채널 KPI 타깃). 타깃이 하나면 기존 형식(channelLine)과 같다.
- * 판단: 두 타깃 방향이 같으면 함께, 다르면 기준 타깃으로 도움 여부를 말하고 다른 타깃의 방향을 덧붙인다. 방송일 3일 미만은 보류.
+ * 채널당 한 줄(사용자 지정 형식, 2026-10-22):
+ *   "ENA Drama: 0.001(2049, 5%)·0.013(가구, 16%)로 채널 평균 대비 각각 95%·84% 낮음 (13회, 실적 5일, 표본 부족)"
+ * 괄호 안 %는 채널 평균을 100으로 본 지수, 뒤의 '낮음/높음' %는 그 차이(|지수 − 100|, 지수에서 구해 두 숫자가 어긋나지 않음).
+ * parts[0]은 자사의 채널 KPI 타깃. 방향은 배율 소수 둘째 자리 반올림(directionOfRatio)으로만 정한다.
+ * 표본: 방송일 8일 미만 '표본 부족', 3일 미만은 '판단 보류'를 덧붙인다(콘텐츠 적합도와 같은 기준). 서버 고정 문구(LLM 아님).
  */
-export function channelLineOf(code: string, name: string, parts: LinePart[], from: string, to: string, ratingCode = code): ChannelLine {
+export function channelLineOf(code: string, name: string, parts: LinePart[], ratingCode = code): ChannelLine {
   const main = parts[0];
-  if (parts.length === 1) {
-    const one = channelLine({ ...main, channelCode: ratingCode, channelName: name }, from, to);
-    return { ...one, channelCode: code };
-  }
-  const val = (p: LinePart) => `${shortTarget(p.targetLabel)} ${formatRatingValue(p.programAvg, ratingCode)}`;
-  const pct = (p: LinePart) => `${shortTarget(p.targetLabel)} ${p.vsChannel.pct === null ? "산출 불가" : `${formatSigned(p.vsChannel.pct, 0)}%`}`;
-  const head = `${from} ~ ${to} 기간 동안 ${name}에서 평균 시청률 ${parts.map(val).join("·")}(${main.airings}회)로 채널 평균 대비 ${parts.map(pct).join("·")}.`;
-  let judge: string;
-  if (main.vsChannel.ratio === null) judge = `${shortTarget(main.targetLabel)}는 채널 평균과 비교할 수 없습니다(${main.vsChannel.naReason ?? "기준값 없음"}).`;
-  else if (main.sampleState === "NONE") judge = `방송일 ${main.days}일뿐이라 판단은 보류합니다.`;
-  else {
-    const dirs = parts.map((p) => p.vsChannel.direction);
-    const d = main.vsChannel.direction;
-    const help = d === "HIGHER" ? "채널 평균보다 높아 채널 시청률에 도움이 되고 있습니다." : d === "LOWER" ? "채널 평균보다 낮아 채널 시청률에 도움이 되지 못하고 있습니다." : "채널 평균과 비슷한 수준입니다.";
-    if (dirs.every((x) => x === d)) judge = parts.length > 1 && d !== "SIMILAR" ? `두 타깃 모두 ${help}` : help;
-    else {
-      const others = parts.slice(1).filter((p) => p.vsChannel.direction !== d && p.vsChannel.direction !== "NA");
-      const tail = others.map((p) => `${shortTarget(p.targetLabel)}는 채널 평균보다 ${p.vsChannel.direction === "HIGHER" ? "높습니다" : p.vsChannel.direction === "LOWER" ? "낮습니다" : "비슷합니다"}`).join(", ");
-      judge = `${shortTarget(main.targetLabel)} 기준 ${help}${tail ? ` 다만 ${tail}.` : ""}`;
-    }
-    if (main.sampleState === "SMALL") judge += ` (자료 적음 · ${main.days}일)`;
-  }
-  return { channelCode: code, direction: main.vsChannel.direction, sampleState: main.sampleState, text: `${head} ${judge}` };
+  const pieces = parts.map((p) => ({ target: shortTarget(p.targetLabel), value: p.programAvg, index: indexOf(p.vsChannel.ratio), direction: p.vsChannel.direction }));
+  const gap = (i: number | null) => (i === null ? "산출 불가" : `${Math.abs(i - 100)}%`);
+  const word: Record<Direction, string> = { HIGHER: "높음", LOWER: "낮음", SIMILAR: "비슷", NA: "산출 불가" };
+  const dirs = [...new Set(pieces.map((p) => p.direction))];
+  let summary: string;
+  if (dirs.length === 1 && dirs[0] !== "NA" && dirs[0] !== "SIMILAR") summary = `${pieces.length > 1 ? "각각 " : ""}${pieces.map((p) => gap(p.index)).join("·")} ${word[dirs[0]]}`;
+  else if (dirs.length === 1) summary = word[dirs[0]];
+  else summary = pieces.map((p) => (p.direction === "SIMILAR" || p.direction === "NA" ? `${p.target} ${word[p.direction]}` : `${p.target} ${gap(p.index)} ${word[p.direction]}`)).join("·");
+  const sampleNote = main.sampleState === "OK" ? "" : `, 실적 ${main.days}일, 표본 부족${main.sampleState === "NONE" ? "·판단 보류" : ""}`;
+  const tail = `(${main.airings}회${sampleNote})`;
+  const valueText = pieces.map((p) => `${formatRatingValue(p.value, ratingCode)}(${p.target}, ${p.index === null ? "산출 불가" : `${p.index}%`})`).join("·");
+  return {
+    channelCode: code,
+    name,
+    direction: main.vsChannel.direction,
+    sampleState: main.sampleState,
+    pieces,
+    summary,
+    airings: main.airings,
+    days: main.days,
+    text: `${name}: ${valueText}로 채널 평균 대비 ${summary} ${tail}`,
+  };
 }
 
 const DIR_KO: Record<Direction, string> ={ HIGHER: "높음", SIMILAR: "비슷", LOWER: "낮음", NA: "산출 불가" };
@@ -338,31 +327,34 @@ const DIR_TREND: Record<Direction, string> = { HIGHER: "상승", LOWER: "하락"
  *  - 근거가 하나뿐이면 '추이 자료 부족'(증감 0을 안정으로 읽지 않음)
  * 방향은 표시 자릿수 반올림 배율로만 정한다(임의 임계값 없음).
  */
-export function trendTextOf(eps: EpisodePoint[], monthly: MonthlyPoint[], code: string): string {
-  const ev = eps.filter((e) => e.avg !== null);
+export function trendTextOf(eps: EpisodePoint[], monthly: MonthlyPoint[], code: string, firstRuns: AiringRef[] = []): string {
+  // 회차 번호가 확인된 본방이 2개 이상이면 회차 기준, 아니면 본방 방영 순서(방영일 표기, 회차로 부르지 않음)
+  const byEp = eps.filter((e) => e.avg !== null).map((e) => ({ avg: e.avg as number, label: `${e.episode}회` }));
+  const ev = byEp.length >= 2 ? byEp : firstRuns.map((a) => ({ avg: a.rating, label: `${Number(a.date.slice(5, 7))}/${Number(a.date.slice(8))} 본방` }));
+  const unit = byEp.length >= 2 ? "회차" : "본방";
   if (ev.length >= 4) {
     const n = Math.floor(ev.length / 2);
-    const a = meanOf(ev.slice(0, n).map((e) => e.avg as number));
-    const b = meanOf(ev.slice(ev.length - n).map((e) => e.avg as number));
+    const a = meanOf(ev.slice(0, n).map((e) => e.avg));
+    const b = meanOf(ev.slice(ev.length - n).map((e) => e.avg));
     const dir = a !== null && a > 0 && b !== null ? directionOfRatio(b / a) : "NA";
-    const head = dir === "NA" ? "전반·후반 회차 비교" : dir === "SIMILAR" ? "전반·후반 회차 평균 비슷" : `후반 회차 평균 ${DIR_TREND[dir]}`;
+    const head = dir === "NA" ? `전반·후반 ${unit} 비교` : dir === "SIMILAR" ? `전반·후반 ${unit} 평균 비슷` : `후반 ${unit} 평균 ${DIR_TREND[dir]}`;
     return `${head} · 전반 ${pctText(a, code)} → 후반 ${pctText(b, code)} (본방 ${n}회씩)`;
   }
   if (ev.length >= 2) {
     const f = ev[0];
     const l = ev[ev.length - 1];
-    const dir = (f.avg as number) > 0 ? directionOfRatio((l.avg as number) / (f.avg as number)) : "NA";
-    return `${dir === "NA" || dir === "SIMILAR" ? "첫 회차와 최근 회차 비슷" : `최근 회차 ${DIR_TREND[dir]}`} · ${f.episode}회 ${pctText(f.avg, code)} → ${l.episode}회 ${pctText(l.avg, code)}`;
+    const dir = f.avg > 0 ? directionOfRatio(l.avg / f.avg) : "NA";
+    return `${dir === "NA" || dir === "SIMILAR" ? `첫 ${unit}와 최근 ${unit} 비슷` : `최근 ${unit} ${DIR_TREND[dir]}`} · ${f.label} ${pctText(f.avg, code)} → ${l.label} ${pctText(l.avg, code)}`;
   }
   const ms = monthly.filter((m) => m.airings > 0 && m.vsChannel.pct !== null);
   if (ms.length >= 2) {
     const f = ms[0];
     const l = ms[ms.length - 1];
-    const fp = Math.round(f.vsChannel.pct as number);
-    const lp = Math.round(l.vsChannel.pct as number);
+    const fp = indexOf(f.vsChannel.ratio) as number;
+    const lp = indexOf(l.vsChannel.ratio) as number;
     const head = lp > fp ? "채널 평균 대비 높아짐" : lp < fp ? "채널 평균 대비 낮아짐" : "채널 평균 대비 비슷";
     const mt = (m: MonthlyPoint) => `${Number(m.month.slice(5))}월`;
-    return `${head} · ${mt(f)} ${formatSigned(fp, 0)}% → ${mt(l)} ${formatSigned(lp, 0)}%`;
+    return `${head} · ${mt(f)} ${fp}% → ${mt(l)} ${lp}% (채널 평균=100)`;
   }
   return "추이 자료 부족 — 비교할 회차·달이 하나뿐입니다.";
 }
@@ -461,7 +453,7 @@ export function slotTextOf(slots: SlotLine[]): string {
     const top = rep(hi);
     const bot = rep(lo);
     const small = top.sampleState !== "OK" || bot.sampleState !== "OK" ? " 구간별 방송일이 8일 미만이라 참고만 하세요." : "";
-    return `좋은 시간대(${slotLabel(top.dow, top.hourBlock)} ${formatSigned(top.vs.pct, 0)}%)와 낮은 시간대(${slotLabel(bot.dow, bot.hourBlock)} ${formatSigned(bot.vs.pct, 0)}%)가 나뉩니다.${small}`;
+    return `좋은 시간대(${slotLabel(top.dow, top.hourBlock)} ${indexText(top.vs.ratio)})와 낮은 시간대(${slotLabel(bot.dow, bot.hourBlock)} ${indexText(bot.vs.ratio)})가 나뉩니다.${small}`;
   }
   if (hi.length === j.length) return `방송일 3일 이상인 ${j.length}개 시간대 모두 같은 시간대 평균보다 높음`;
   if (lo.length === j.length) return `방송일 3일 이상인 ${j.length}개 시간대 모두 같은 시간대 평균보다 낮음`;
@@ -488,7 +480,7 @@ export function verdictOf(input: { vsChannel: Direction; vsSlot: Direction; samp
   const j = input.slots.filter(judgeable);
   if (j.some((x) => x.vs.direction === "HIGHER") && j.some((x) => x.vs.direction === "LOWER")) reasons.push("시간대에 따라 성과가 다릅니다.");
   const nf = input.nonFirst;
-  if (nf && c === "HIGHER" && nf.days >= CONTENT_FIT_CONFIG.minDays && nf.vs.direction === "LOWER") reasons.push(`전체 평균과 달리, 본방 외 방영은 채널 평균보다 낮습니다(${formatSigned(nf.vs.pct, 0)}%).`);
+  if (nf && c === "HIGHER" && nf.days >= CONTENT_FIT_CONFIG.minDays && nf.vs.direction === "LOWER") reasons.push(`전체 평균과 달리, 본방 외 방영은 채널 평균보다 낮습니다(채널 평균의 ${indexText(nf.vs.ratio)}).`);
   if (input.sampleState === "SMALL" && reasons.length < 2) reasons.push(`자료 적음 · ${input.days}일`);
   return { verdict, reasons: reasons.slice(0, 2) };
 }

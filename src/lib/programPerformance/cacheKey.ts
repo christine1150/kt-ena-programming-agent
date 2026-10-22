@@ -2,5 +2,5 @@
 import { PROGRAM_PERFORMANCE_VERSION, type PerformanceQuery } from "./types";
 
 export function performanceCacheKey(q: PerformanceQuery): string {
-  return [PROGRAM_PERFORMANCE_VERSION, q.groupKey, (q.channels ?? []).slice().sort().join(",") || "*", q.from ?? "-", q.to ?? "-", q.airing, q.targetMode].join("|");
+  return [PROGRAM_PERFORMANCE_VERSION, q.groupKey, (q.channels ?? []).slice().sort().join(",") || "*", q.from ?? "-", q.to ?? "-", q.preset ?? "-", q.airing, q.targetMode].join("|");
 }
