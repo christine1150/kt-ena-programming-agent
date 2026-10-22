@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
+import { getChannelMasterInfo } from "@/lib/audienceReport/masterData";
 
 type RunRow = {
   id: string;
@@ -68,6 +69,10 @@ export async function GET(request: Request) {
     if (!run) return NextResponse.json({ ok: true, runs: [], run: null, values: [], previous: null });
 
     const values = await loadValues(run.id);
+    // 채널기본정보의 연도별 목표 시청률(공식 하루 시청률과 같은 정의) — 없으면 null
+    const year = Number(run.week_start.slice(0, 4));
+    const master = await getChannelMasterInfo(channel, year).catch(() => null);
+    const target = { rating: master?.targetRating ?? null, year };
     // 앞 예측(편성표를 고친 경우)과 칸별 차이 — 같은 칸 키끼리만 뺀다
     const parent = run.parent_forecast_id ? list.find((r) => r.id === run.parent_forecast_id) ?? null : null;
     let previous: { id: string; createdAt: string; planRef: string; slots: Record<string, number | null> } | null = null;
@@ -75,7 +80,7 @@ export async function GET(request: Request) {
       const pv = await loadValues(parent.id);
       previous = { id: parent.id, createdAt: parent.created_at, planRef: parent.plan_ref, slots: Object.fromEntries(pv.map((v) => [v.slot_key, v.expected])) };
     }
-    return NextResponse.json({ ok: true, runs: list.map((r) => ({ id: r.id, purpose: r.purpose, createdAt: r.created_at, dataCutoff: r.data_cutoff, planRef: r.plan_ref })), run, values, previous });
+    return NextResponse.json({ ok: true, runs: list.map((r) => ({ id: r.id, purpose: r.purpose, createdAt: r.created_at, dataCutoff: r.data_cutoff, planRef: r.plan_ref })), run, values, previous, target });
   } catch (e) {
     return NextResponse.json({ ok: false, message: e instanceof Error ? e.message : "조회 중 오류가 발생했습니다." }, { status: 500 });
   }

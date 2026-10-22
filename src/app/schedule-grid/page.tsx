@@ -390,7 +390,7 @@ function ScheduleComparisonInner() {
               ) : (
                 <span className="text-zinc-400" role="status">{left.loaded || right.loaded ? "이 채널은 편성표 데이터가 없습니다." : "불러오는 중..."}</span>
               )}
-              <span className="text-xs text-zinc-500">방송 전에 저장해 둔 예측을 보여 줍니다. 편성표 업로드는 위 업로드 버튼을 쓰세요.</span>
+              <span className="cursor-help text-xs text-zinc-400" title="방송 전에 저장해 둔 예측을 보여 줍니다. 편성표 업로드는 위 업로드 버튼을 쓰세요." aria-label="안내">ⓘ</span>
             </section>
             <ScheduleForecastPanel channelCode={urlChannelCode} week={forecastWeekValue} />
           </>

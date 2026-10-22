@@ -1,11 +1,13 @@
 "use client";
 
-// 편성 비교 "사전 예측" 탭(2026-10-22, 사용자 요청) — 업로드 편성표에 대해 방송 전에 고정 저장해 둔 예측을 보여 준다.
-// 숫자는 저장 시점에 서버가 계산한 값 그대로이며 이 화면은 계산하지 않는다(앞 예측과의 차이만 같은 칸끼리 뺀다).
-import { useEffect, useState } from "react";
+// 편성 비교 "사전 예측" 탭(2026-10-22, 사용자 요청) — 방송 전에 고정 저장해 둔 예측을 요일별 열 하나에 하루 예상과 프로그램별 예측을 함께 보여 준다.
+// 숫자는 저장 시점에 서버가 계산한 값 그대로이며 이 화면은 계산하지 않는다. 하루·주 예상은 공식 채널 하루 시청률(02:00~25:59)과 같은 정의로 맞춘 값만 보여 준다.
+// 변경 제안은 목표에 못 미치는 날의 [제안]을 눌렀을 때만 서버가 다시 계산해 가져온다(/api/schedule-forecast/suggest).
+import { useEffect, useRef, useState } from "react";
+import type { Suggestion, SuggestResult } from "@/lib/scheduleForecast/suggest";
 
 type RunMeta = { id: string; purpose: string; createdAt: string; dataCutoff: string; planRef: string };
-type Period = { from: string; to: string; value: number | null; officialEstimate: number | null; forecastMinutes: number; totalMinutes: number; unforecastMinutes: number; uncoveredMinutes: number; complete: boolean };
+type Period = { from: string; to: string; value: number | null; officialEstimate: number | null; forecastMinutes: number; totalMinutes: number; complete: boolean };
 type RunDetail = {
   id: string;
   purpose: string;
@@ -14,28 +16,45 @@ type RunDetail = {
   data_cutoff: string;
   model_version: string;
   created_at: string;
-  aggregates: { daily?: Period[]; week?: Period; officialScale?: { ratio: number | null; days: number; note: string; from: string; to: string }; warnings?: string[] } | null;
+  aggregates: { daily?: Period[]; week?: Period; officialScale?: { ratio: number | null; days: number; from: string; to: string }; warnings?: string[] } | null;
 };
 type Value = { slot_key: string; broadcast_date: string; start_min: number; end_min: number | null; program_name: string; expected: number | null; low: number | null; high: number | null; grade: string | null; evidence_airings: number };
-type Resp = { ok: boolean; message?: string; runs: RunMeta[]; run: RunDetail | null; values: Value[]; previous: { id: string; createdAt: string; planRef: string; slots: Record<string, number | null> } | null };
+type Resp = {
+  ok: boolean;
+  message?: string;
+  runs: RunMeta[];
+  run: RunDetail | null;
+  values: Value[];
+  previous: { id: string; createdAt: string; planRef: string; slots: Record<string, number | null> } | null;
+  target?: { rating: number | null; year: number };
+};
+type Suggest = { runId: string; loading: boolean; data: SuggestResult | null; error: string | null };
 
-const DOW = ["월", "화", "수", "목", "금", "토", "일"];
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const fmt = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v >= 1 ? v.toFixed(2) : v.toFixed(3));
+const signed = (v: number) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const when = (iso: string) => new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+const dow = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay();
+const dayLabel = (d: string) => `${DOW[dow(d)]} ${d.slice(5).replace("-", "/")}`;
 // 토·일 요일 글자색(편성표 그리드와 같은 파랑·빨강)
-const dowColor = (i: number) => (i === 5 ? "text-blue-600" : i === 6 ? "text-rose-600" : "");
-const GRADE_TEXT:Record<string, { label: string; cls: string; title: string }> = {
-  A: { label: "A", cls: "bg-emerald-100 text-emerald-800", title: "근거 충분: 같은 작품의 방영 이력이 넉넉함" },
-  B: { label: "B", cls: "bg-sky-100 text-sky-800", title: "근거 보통: 방영 이력이 적거나 비슷한 작품·시간대로 보완" },
-  C: { label: "C", cls: "bg-amber-100 text-amber-800", title: "근거 약함: 방영 이력이 거의 없는 신작 등" },
-  ASSUMED: { label: "가정", cls: "bg-zinc-100 text-zinc-600", title: "가정값" },
+const dowColor = (d: string) => (dow(d) === 6 ? "text-blue-600" : dow(d) === 0 ? "text-rose-600" : "text-zinc-700");
+const GRADE: Record<string, { cls: string; title: string }> = {
+  A: { cls: "bg-emerald-100 text-emerald-800", title: "근거 충분 — 같은 작품의 방영 이력이 넉넉함" },
+  B: { cls: "bg-sky-100 text-sky-800", title: "근거 보통 — 방영 이력이 적어 비슷한 작품·시간대로 보완" },
+  C: { cls: "bg-amber-100 text-amber-800", title: "근거 약함 — 방영 이력이 거의 없는 신작 등, 참고만" },
+  ASSUMED: { cls: "bg-zinc-100 text-zinc-600", title: "가정값" },
 };
 
 export function ScheduleForecastPanel({ channelCode, week }: { channelCode: string; week: string }) {
   const [runId, setRunId] = useState("");
   const [state, setState] = useState<{ key: string; data: Resp | null; error: string | null }>({ key: "", data: null, error: null });
+  const [suggest, setSuggest] = useState<Suggest | null>(null);
+  const suggestSeq = useRef(0);
   const key = `${channelCode}|${week}|${runId}`;
+  // 제안을 펼친 날짜 또는 "week" — 채널·주·저장본이 바뀌면(key 불일치) 닫힌 것으로 본다
+  const [openState, setOpenState] = useState<{ key: string; scope: string } | null>(null);
+  const open = openState && openState.key === key ? openState.scope : null;
 
   useEffect(() => {
     if (!channelCode || !week) return;
@@ -57,179 +76,182 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
   const data = state.data;
   if (!data || !data.run) {
     return (
-      <div className="rounded-2xl bg-white p-4 text-sm text-zinc-600 shadow-sm ring-1 ring-zinc-100">
-        <p className="font-semibold text-zinc-800">이 주에는 저장된 사전 예측이 없습니다.</p>
-        <p className="mt-1 text-xs text-zinc-500">
-          자료 마감일 뒤에 시작하는 주의 편성표를 올리면 자동으로 저장됩니다(매일 낮 12시 30분에도 빠진 주를 채웁니다). 이미 방송이 시작됐거나 끝난 주는 &quot;사전&quot; 예측이 될 수 없어 저장하지 않습니다.
-        </p>
-      </div>
+      <p className="rounded-2xl bg-white p-4 text-sm text-zinc-600 shadow-sm ring-1 ring-zinc-100" title="자료 마감일 뒤에 시작하는 주의 편성표를 올리면 자동으로 저장됩니다. 이미 방송이 시작된 주는 사전 예측이 될 수 없어 저장하지 않습니다.">
+        이 주에는 저장된 사전 예측이 없습니다.
+      </p>
     );
   }
 
   const { run, values, previous, runs } = data;
   const agg = run.aggregates;
   const daily = agg?.daily ?? [];
-  const scale = agg?.officialScale;
+  const ratio = agg?.officialScale?.ratio ?? null;
+  const target = data.target?.rating ?? null;
   const byDate = new Map<string, Value[]>();
   for (const v of values) byDate.set(v.broadcast_date, [...(byDate.get(v.broadcast_date) ?? []), v]);
   const dates = daily.length ? daily.map((d) => d.from) : [...byDate.keys()].sort();
+  const weekEst = agg?.week?.officialEstimate ?? null;
+
+  const loadSuggest = (scope: string) => {
+    setOpenState(open === scope ? null : { key, scope });
+    if (suggest && suggest.runId === run.id) return;
+    const token = ++suggestSeq.current;
+    setSuggest({ runId: run.id, loading: true, data: null, error: null });
+    fetch(`/api/schedule-forecast/suggest?run=${encodeURIComponent(run.id)}`)
+      .then((r) => r.json())
+      .then((body: { ok: boolean; message?: string } & SuggestResult) => {
+        if (suggestSeq.current !== token) return;
+        setSuggest({ runId: run.id, loading: false, data: body.ok ? body : null, error: body.ok ? null : (body.message ?? "제안을 계산하지 못했습니다.") });
+      })
+      .catch(() => suggestSeq.current === token && setSuggest({ runId: run.id, loading: false, data: null, error: "제안을 계산하지 못했습니다." }));
+  };
+
+  const info = [
+    `저장 ${when(run.created_at)} · 자료 마감 ${run.data_cutoff} · 타깃 ${run.target_label} · 모델 ${run.model_version}`,
+    "방송 전에 저장한 값이라 나중에 모델이나 자료가 바뀌어도 그대로입니다. 편성표를 고치면 새 저장본이 추가되고 이전 저장본은 남습니다.",
+    ratio !== null && agg?.officialScale ? `하루·주 예상 = 공식 채널 하루 시청률(02:00~25:59)과 같은 정의로 맞춘 값(편성 칸 예측의 시간 가중 평균 × 직전 28일 환산 배율 ${ratio.toFixed(3)}, ${agg.officialScale.from}~${agg.officialScale.to} 중 ${agg.officialScale.days}일).` : "하루·주 예상은 환산 근거가 모자라 표시하지 않습니다.",
+    "하루 단위 예측은 오차가 큰 편이라 프로그램별 값을 함께 보세요. 근거 C(이력이 거의 없는 신작 등)와 '근거 없음' 칸은 참고만 하세요.",
+    ...(agg?.warnings ?? []),
+  ].join("\n");
+
+  const openSuggestions = open && suggest && suggest.runId === run.id ? suggest : null;
+  const shown: Suggestion[] = openSuggestions?.data ? openSuggestions.data.suggestions.filter((s) => (open === "week" ? s.scope === "WEEK" : s.scope === "DAY" && s.targetDate === open)) : [];
 
   return (
-    <div className="flex flex-col gap-3">
-      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-100">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <h2 className="text-base font-semibold text-zinc-900">사전 예측 · {run.week_start} 주</h2>
-          <span className="text-xs text-zinc-500">
-            저장 {when(run.created_at)} · 자료 마감 {run.data_cutoff} · 타깃 {run.target_label} · 모델 {run.model_version}
+    <section className="flex flex-col gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-zinc-100">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span className="font-semibold text-zinc-900">{run.week_start.slice(5).replace("-", "/")} 주</span>
+        <span className="tabular-nums" title="주 전체 예상(공식 하루 시청률 정의, 02:00~25:59의 일평균)">
+          주 예상 <b className="text-zinc-900">{fmt(weekEst)}</b>
+        </span>
+        {target !== null && weekEst !== null && (
+          <span className={`tabular-nums ${weekEst >= target ? "text-emerald-700" : "text-rose-700"}`} title={`${data.target?.year}년 목표 시청률 ${fmt(target)}`}>
+            목표 {fmt(target)} ({signed(weekEst - target)})
           </span>
-          {runs.length > 1 && (
-            <label className="flex items-center gap-1 text-xs text-zinc-500">
-              저장본
-              <select value={run.id} onChange={(e) => setRunId(e.target.value)} className="rounded border border-zinc-300 px-1.5 py-0.5 text-xs text-zinc-700">
-                {runs.map((r, i) => (
-                  <option key={r.id} value={r.id}>
-                    {when(r.createdAt)} · {r.purpose === "PLAN_UPDATE" ? "편성표 수정 후" : "최초"}
-                    {i === 0 ? " (최신)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
-        <p className="mt-1 text-xs text-zinc-500">
-          방송 전에 저장한 값이라 나중에 모델이나 자료가 바뀌어도 그대로입니다. 편성표를 고치면 새 저장본이 추가되고 이전 저장본은 남습니다.
-          {run.purpose === "PLAN_UPDATE" && previous ? ` 이 저장본은 ${when(previous.createdAt)} 예측을 편성표 수정 뒤 다시 계산한 것입니다(칸별 변화는 아래 표시).` : ""}
-        </p>
-
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead>
-              <tr className="text-xs text-zinc-500">
-                <th className="px-2 py-1 text-left font-medium"> </th>
-                {dates.map((d, i) => (
-                  <th key={d} className={`px-2 py-1 text-right font-medium ${dowColor(i)}`}>
-                    {DOW[i] ?? ""} {d.slice(5).replace("-", "/")}
-                    <span className="inline-block w-2" />
-                  </th>
-                ))}
-                <th className="px-2 py-1 text-right font-medium">
-                  주 전체
-                  <span className="inline-block w-2" />
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-t border-zinc-100">
-                <th className="px-2 py-1.5 text-left font-medium text-zinc-700" title="예측값이 있는 칸의 편성 분을 가중한 평균. 편성이 없는 시간은 0으로 채우지 않습니다.">
-                  하루 예상
-                </th>
-                {daily.map((d) => (
-                  <td key={d.from} className="px-2 py-1.5 text-right tabular-nums">
-                    {fmt(d.value)}
-                    <span className="inline-block w-2 text-left text-amber-600" title={d.complete ? undefined : "하루 전체가 예측으로 덮이지 않은 부분 예측"}>
-                      {d.complete ? "" : "*"}
-                    </span>
-                  </td>
-                ))}
-                <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
-                  {fmt(agg?.week?.value)}
-                  <span className="inline-block w-2" />
-                </td>
-              </tr>
-              <tr className="border-t border-zinc-100">
-                <th className="px-2 py-1.5 text-left font-medium text-zinc-700" title="공식 채널 하루 시청률과 정의를 맞추려고 직전 28일의 배율을 곱한 값">
-                  공식 하루 환산
-                </th>
-                {daily.map((d) => (
-                  <td key={d.from} className="px-2 py-1.5 text-right tabular-nums">
-                    {fmt(d.officialEstimate)}
-                    <span className="inline-block w-2" />
-                  </td>
-                ))}
-                <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
-                  {fmt(agg?.week?.officialEstimate)}
-                  <span className="inline-block w-2" />
-                </td>
-              </tr>
-              <tr className="border-t border-zinc-100 text-xs text-zinc-500">
-                <th className="px-2 py-1 text-left font-normal">예측 덮은 비율</th>
-                {daily.map((d) => (
-                  <td key={d.from} className="px-2 py-1 text-right tabular-nums">
-                    {d.totalMinutes ? `${Math.round((d.forecastMinutes / d.totalMinutes) * 100)}%` : "—"}
-                    <span className="inline-block w-2" />
-                  </td>
-                ))}
-                <td className="px-2 py-1 text-right tabular-nums">
-                  {agg?.week?.totalMinutes ? `${Math.round((agg.week.forecastMinutes / agg.week.totalMinutes) * 100)}%` : "—"}
-                  <span className="inline-block w-2" />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-2 text-[11px] text-zinc-500">
-          {scale?.ratio !== null && scale?.ratio !== undefined ? `공식 하루 환산 = 하루 예상 × ${scale.ratio.toFixed(3)} (${scale.from}~${scale.to} 중 ${scale.days}일 기준). ` : "공식 하루 환산은 근거가 모자라 계산하지 않았습니다. "}
-          * 표시는 하루 전체가 덮이지 않은 부분 예측입니다. 하루 단위 예측은 오차가 큰 편이라(과거 재구성 검증에서 같은 요일·시간 4주 평균과 비슷한 수준) 칸 단위 값을 함께 보세요.
-        </p>
-        {(agg?.warnings?.length ?? 0) > 0 && (
-          <ul className="mt-1 list-disc pl-4 text-[11px] text-amber-700">
-            {agg?.warnings?.map((w) => (
-              <li key={w}>{w}</li>
-            ))}
-          </ul>
         )}
-      </section>
+        {target !== null && (
+          <button type="button" onClick={() => loadSuggest("week")} aria-pressed={open === "week"} className={`rounded-full border px-2 py-0.5 text-xs ${open === "week" ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 text-zinc-600 hover:bg-zinc-50"}`} title="주 전체 예상이 가장 오르는 칸 맞바꿈 제안">
+            주 제안
+          </button>
+        )}
+        {runs.length > 1 && (
+          <select value={run.id} aria-label="저장본 선택" onChange={(e) => setRunId(e.target.value)} className="rounded border border-zinc-300 px-1.5 py-0.5 text-xs text-zinc-700">
+            {runs.map((r, i) => (
+              <option key={r.id} value={r.id}>
+                {when(r.createdAt)} · {r.purpose === "PLAN_UPDATE" ? "수정 후" : "최초"}
+                {i === 0 ? " (최신)" : ""}
+              </option>
+            ))}
+          </select>
+        )}
+        <span className="cursor-help text-xs text-zinc-400" title={info} aria-label="예측 설명">
+          ⓘ
+        </span>
+      </div>
 
-      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-100" aria-label="칸별 예측">
-        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-          <span className="font-semibold text-zinc-700">칸별 예측</span>
-          <span>숫자 = 기대 시청률(범위: 낮음~높음)</span>
-          {(["A", "B", "C"] as const).map((g) => (
-            <span key={g} title={GRADE_TEXT[g].title} className={`rounded px-1.5 py-0.5 ${GRADE_TEXT[g].cls}`}>
-              근거 {g}
-            </span>
-          ))}
-          <span>근거 C·값 없음은 신작처럼 비교할 이력이 없는 칸이라 참고만 하세요.</span>
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {dates.map((d, i) => (
-            <div key={d} className="min-w-0 rounded-xl ring-1 ring-zinc-100">
-              <p className={`border-b border-zinc-100 bg-zinc-50 px-2 py-1 text-xs font-semibold ${dowColor(i) || "text-zinc-700"}`}>
-                {DOW[i] ?? ""} {d.slice(5).replace("-", "/")}
-              </p>
-              <ul className="divide-y divide-zinc-50">
-                {(byDate.get(d) ?? []).map((v) => {
-                  const g = v.grade ? GRADE_TEXT[v.grade] : null;
-                  const prev = previous ? previous.slots[v.slot_key] : undefined;
-                  const delta = previous && v.expected !== null && prev !== undefined && prev !== null ? v.expected - prev : null;
-                  const isNew = previous && prev === undefined;
-                  return (
-                    <li key={v.slot_key} className="flex items-center gap-2 px-2 py-1 text-xs">
-                      <span className="w-[84px] shrink-0 tabular-nums text-zinc-500">
-                        {hm(v.start_min)}~{v.end_min === null ? "?" : hm(v.end_min)}
+      <div className="overflow-x-auto">
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(184px, 1fr))` }}>
+          {dates.map((d) => {
+            const dd = daily.find((x) => x.from === d);
+            const est = dd?.officialEstimate ?? null;
+            const gap = target !== null && est !== null ? est - target : null;
+            const cover = dd && dd.totalMinutes ? Math.round((dd.forecastMinutes / dd.totalMinutes) * 100) : null;
+            return (
+              <div key={d} className="min-w-0 rounded-xl ring-1 ring-zinc-100">
+                <div className="border-b border-zinc-100 bg-zinc-50 px-2 py-1.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className={`text-xs font-semibold ${dowColor(d)}`}>{dayLabel(d)}</span>
+                    <span className="text-sm font-semibold tabular-nums text-zinc-900" title={`하루 예상(02:00~25:59)${cover !== null ? ` · 편성 칸 예측이 하루의 ${cover}%를 덮음${dd?.complete ? "" : "(부분 예측)"}` : ""}`}>
+                      {fmt(est)}
+                    </span>
+                  </div>
+                  {gap !== null && (
+                    <div className="mt-0.5 flex items-center justify-between text-[11px]">
+                      <span className={`tabular-nums ${gap >= 0 ? "text-emerald-700" : "text-rose-700"}`} title={`목표 ${fmt(target)} 대비`}>
+                        {signed(gap)}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-zinc-800" title={v.program_name}>
-                        {v.program_name}
-                        {isNew && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-700">수정으로 추가</span>}
-                      </span>
-                      <span className="shrink-0 text-right tabular-nums" title={v.low !== null && v.high !== null ? `범위 ${fmt(v.low)} ~ ${fmt(v.high)}` : undefined}>
-                        {v.expected === null ? <span className="text-zinc-400">근거 없음</span> : <span className="font-semibold text-zinc-900">{fmt(v.expected)}</span>}
-                        {delta !== null && Math.abs(delta) >= 0.0005 && <span className={`ml-1 text-[10px] ${delta > 0 ? "text-blue-700" : "text-rose-700"}`}>{delta > 0 ? "▲" : "▼"}{fmt(Math.abs(delta))}</span>}
-                      </span>
-                      {g && (
-                        <span title={`${g.title} (방영 ${v.evidence_airings}회)`} className={`shrink-0 rounded px-1 text-[10px] ${g.cls}`}>
-                          {g.label}
-                        </span>
+                      {gap < 0 && (
+                        <button type="button" onClick={() => loadSuggest(d)} aria-pressed={open === d} className={`rounded-full border px-1.5 ${open === d ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 text-zinc-600 hover:bg-white"}`} title="목표에 가까워지는 칸 맞바꿈 제안 보기">
+                          제안
+                        </button>
                       )}
-                    </li>
-                  );
-                })}
-                {(byDate.get(d) ?? []).length === 0 && <li className="px-2 py-2 text-xs text-zinc-400">편성 칸 없음</li>}
-              </ul>
-            </div>
-          ))}
+                    </div>
+                  )}
+                </div>
+                <ul className="divide-y divide-zinc-50">
+                  {(byDate.get(d) ?? []).map((v) => {
+                    const g = v.grade ? GRADE[v.grade] : null;
+                    const prev = previous ? previous.slots[v.slot_key] : undefined;
+                    const delta = previous && v.expected !== null && prev !== undefined && prev !== null ? v.expected - prev : null;
+                    const isNew = previous && prev === undefined;
+                    const range = `${hm(v.start_min)}~${v.end_min === null ? "?" : hm(v.end_min)}`;
+                    return (
+                      <li key={v.slot_key} className="flex items-center gap-1.5 px-2 py-1 text-xs" title={`${v.program_name}\n${range}${v.low !== null && v.high !== null ? `\n범위 ${fmt(v.low)} ~ ${fmt(v.high)}` : ""}${g ? `\n${g.title} (방영 ${v.evidence_airings}회)` : ""}`}>
+                        <span className="w-9 shrink-0 tabular-nums text-zinc-400">{hm(v.start_min)}</span>
+                        <span className="min-w-0 flex-1 truncate text-zinc-800">
+                          {v.program_name}
+                          {isNew && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-700">추가</span>}
+                        </span>
+                        <span className="shrink-0 text-right tabular-nums">
+                          {v.expected === null ? <span className="text-zinc-400">—</span> : <span className="font-semibold text-zinc-900">{fmt(v.expected)}</span>}
+                          {delta !== null && Math.abs(delta) >= 0.0005 && (
+                            <span className={`ml-1 text-[10px] ${delta > 0 ? "text-blue-700" : "text-rose-700"}`}>
+                              {delta > 0 ? "▲" : "▼"}
+                              {fmt(Math.abs(delta))}
+                            </span>
+                          )}
+                        </span>
+                        {g && <span className={`shrink-0 rounded px-1 text-[10px] ${g.cls}`}>{v.grade === "ASSUMED" ? "가정" : v.grade}</span>}
+                      </li>
+                    );
+                  })}
+                  {(byDate.get(d) ?? []).length === 0 && <li className="px-2 py-2 text-xs text-zinc-400">편성 칸 없음</li>}
+                </ul>
+              </div>
+            );
+          })}
         </div>
-      </section>
-    </div>
+      </div>
+
+      {open && (
+        <div className="rounded-xl bg-zinc-50 p-3 text-xs ring-1 ring-zinc-200" aria-live="polite">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-semibold text-zinc-800">{open === "week" ? "주 전체" : dayLabel(open)} 변경 제안</span>
+            <button type="button" onClick={() => setOpenState(null)} className="text-zinc-500 hover:text-zinc-800" aria-label="제안 닫기">
+              닫기
+            </button>
+          </div>
+          {!openSuggestions || openSuggestions.loading ? (
+            <p className="text-zinc-500" role="status">같은 모델로 칸을 맞바꿔 다시 계산하는 중입니다(10초 안팎)...</p>
+          ) : openSuggestions.error ? (
+            <p className="text-rose-700">{openSuggestions.error}</p>
+          ) : shown.length === 0 ? (
+            <p className="text-zinc-500" title={openSuggestions.data?.notes.join("\n")}>
+              길이가 비슷한 두 칸을 한 번 맞바꾸는 것으로는 예상이 오르는 후보가 없었습니다.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {shown.map((s) => (
+                <li key={s.id} className="rounded-lg bg-white p-2 ring-1 ring-zinc-100" title={s.cautions.join("\n")}>
+                  <p className="text-zinc-800">
+                    <b>{s.a.name}</b> <span className="text-zinc-500">{dayLabel(s.a.date)} {hm(s.a.startMin)}</span> ↔ <b>{s.b.name}</b> <span className="text-zinc-500">{dayLabel(s.b.date)} {hm(s.b.startMin)}</span>
+                  </p>
+                  <p className="mt-0.5 tabular-nums text-zinc-600">
+                    {s.days.map((x) => (
+                      <span key={x.date} className="mr-3">
+                        {dayLabel(x.date)} {fmt(x.before)} → <b className={x.after !== null && x.before !== null && x.after < x.before ? "text-rose-700" : "text-emerald-700"}>{fmt(x.after)}</b>
+                      </span>
+                    ))}
+                    <span>주 {fmt(s.weekBefore)} → <b className={s.weekAfter !== null && s.weekBefore !== null && s.weekAfter < s.weekBefore ? "text-rose-700" : "text-emerald-700"}>{fmt(s.weekAfter)}</b></span>
+                    {s.reachesTarget && <span className="ml-2 rounded bg-emerald-100 px-1 text-emerald-800">목표 달성</span>}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {openSuggestions?.data && <p className="mt-2 text-[11px] text-zinc-400" title={openSuggestions.data.notes.join("\n")}>마우스를 올리면 확인 사항이 보입니다 ⓘ</p>}
+        </div>
+      )}
+    </section>
   );
 }
