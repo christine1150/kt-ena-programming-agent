@@ -56,7 +56,7 @@ export async function latestDataDate(): Promise<string | null> {
 }
 
 /** 직전 28일(마감 포함) 공식 채널 하루 값 ÷ 같은 날 실제 방영 편성시간 가중 집계 — D-2 스크립트와 같은 정의 */
-async function loadOfficialScale(channel: ChannelRef, cutoff: string): Promise<OfficialScale> {
+export async function loadOfficialScale(channel: ChannelRef, cutoff: string): Promise<OfficialScale> {
   const from = addDays(cutoff, -(OFFICIAL_SCALE_WINDOW_DAYS - 1));
   const empty = officialScaleOf([], from, cutoff);
   if (!channel.primaryTarget) return empty;

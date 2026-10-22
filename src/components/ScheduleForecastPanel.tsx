@@ -5,6 +5,7 @@
 // 변경 제안은 목표에 못 미치는 날의 [제안]을 눌렀을 때만 서버가 다시 계산해 가져온다(/api/schedule-forecast/suggest).
 import { useEffect, useRef, useState } from "react";
 import type { Suggestion, SuggestResult } from "@/lib/scheduleForecast/suggest";
+import type { LiveWeek } from "@/lib/scheduleForecast/inProgress";
 
 type RunMeta = { id: string; purpose: string; createdAt: string; dataCutoff: string; planRef: string };
 type Period = { from: string; to: string; value: number | null; officialEstimate: number | null; forecastMinutes: number; totalMinutes: number; complete: boolean };
@@ -27,6 +28,7 @@ type Resp = {
   values: Value[];
   previous: { id: string; createdAt: string; planRef: string; slots: Record<string, number | null> } | null;
   target?: { rating: number | null; year: number };
+  live?: LiveWeek | null;
 };
 type Suggest = { runId: string; loading: boolean; data: SuggestResult | null; error: string | null };
 
@@ -45,6 +47,83 @@ const GRADE: Record<string, { cls: string; title: string }> = {
   C: { cls: "bg-amber-100 text-amber-800", title: "근거 약함 — 방영 이력이 거의 없는 신작 등, 참고만" },
   ASSUMED: { cls: "bg-zinc-100 text-zinc-600", title: "가정값" },
 };
+
+/** 이미 시작한 주 — 자료 마감일까지는 관측(실제 방영·공식 하루 시청률), 그 뒤 날은 예측을 한 화면에 종합한다(저장하지 않는 즉석 계산). */
+function LiveWeekView({ live, target, year }: { live: LiveWeek; target: number | null; year: number | null }) {
+  const s = live.summary;
+  const info = [
+    `자료 마감 ${live.cutoff}까지는 관측값(실제 방영 시청률·공식 하루 시청률), 그 뒤 날은 같은 모델의 예측입니다.`,
+    "이 값은 저장하지 않고 열 때마다 최신 자료로 다시 계산합니다(저장된 사전 예측과 다릅니다).",
+    "주 종합 = 7일 공식 하루 시청률(02:00~25:59)의 단순 평균. 관측일은 공식 값, 예측일은 편성시간 가중 예상 × 직전 28일 환산 배율" + (live.ratio !== null ? ` ${live.ratio.toFixed(3)}` : "") + ".",
+    "하루 단위 예측은 오차가 큰 편이라 프로그램별 값을 함께 보세요. 근거 C와 '—' 칸은 참고만 하세요.",
+    ...live.warnings,
+  ].join("\n");
+  return (
+    <section className="flex flex-col gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-zinc-100">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span className="font-semibold text-zinc-900">{live.weekStart.slice(5).replace("-", "/")} 주</span>
+        <span className="tabular-nums" title={`관측 ${s.observedDays}일 평균 ${fmt(s.observedMean)} · 예측 ${s.forecastDays}일 평균 ${fmt(s.forecastMean)}`}>
+          주 종합 <b className="text-zinc-900">{fmt(s.official)}</b>
+          <span className="ml-1 text-xs text-zinc-500">
+            (관측 {s.observedDays}일{s.forecastDays > 0 ? ` + 예측 ${s.forecastDays}일` : ""})
+          </span>
+        </span>
+        {target !== null && s.official !== null && (
+          <span className={`tabular-nums ${s.official >= target ? "text-emerald-700" : "text-rose-700"}`} title={`${year}년 목표 시청률 ${fmt(target)}`}>
+            목표 {fmt(target)} ({signed(s.official - target)})
+          </span>
+        )}
+        <span className="cursor-help text-xs text-zinc-400" title={info} aria-label="설명">
+          ⓘ
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(7, minmax(184px, 1fr))" }}>
+          {live.days.map((d) => {
+            const gap = target !== null && d.official !== null ? d.official - target : null;
+            const observed = d.kind === "OBSERVED";
+            const cover = d.totalMinutes ? Math.round(((d.forecastMinutes ?? 0) / d.totalMinutes) * 100) : null;
+            return (
+              <div key={d.date} className="min-w-0 rounded-xl ring-1 ring-zinc-100">
+                <div className="border-b border-zinc-100 bg-zinc-50 px-2 py-1.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className={`text-xs font-semibold ${dowColor(d.date)}`}>
+                      {dayLabel(d.date)}
+                      <span className={`ml-1 rounded px-1 text-[10px] font-normal ${observed ? "bg-zinc-800 text-white" : "bg-indigo-100 text-indigo-800"}`}>{observed ? "관측" : "예측"}</span>
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums text-zinc-900" title={observed ? "공식 하루 시청률(02:00~25:59) 관측값" : `하루 예상(02:00~25:59)${cover !== null ? ` · 편성 칸 예측이 하루의 ${cover}%를 덮음` : ""}`}>
+                      {fmt(d.official)}
+                    </span>
+                  </div>
+                  {gap !== null && (
+                    <div className={`mt-0.5 text-[11px] tabular-nums ${gap >= 0 ? "text-emerald-700" : "text-rose-700"}`} title={`목표 ${fmt(target)} 대비`}>
+                      {signed(gap)}
+                    </div>
+                  )}
+                </div>
+                <ul className="divide-y divide-zinc-50">
+                  {d.slots.map((v) => {
+                    const g = v.grade ? GRADE[v.grade] : null;
+                    const range = `${hm(v.startMin)}~${v.endMin === null ? "?" : hm(v.endMin)}`;
+                    return (
+                      <li key={v.key} className="flex items-center gap-1.5 px-2 py-1 text-xs" title={`${v.name}\n${range}${v.low !== null && v.high !== null ? `\n범위 ${fmt(v.low)} ~ ${fmt(v.high)}` : ""}${g ? `\n${g.title} (방영 ${v.evidenceAirings}회)` : ""}`}>
+                        <span className="w-9 shrink-0 tabular-nums text-zinc-400">{hm(v.startMin)}</span>
+                        <span className="min-w-0 flex-1 truncate text-zinc-800">{v.name}</span>
+                        <span className="shrink-0 text-right tabular-nums">{v.value === null ? <span className="text-zinc-400">—</span> : <span className={`font-semibold ${observed ? "text-zinc-900" : "text-indigo-900"}`}>{fmt(v.value)}</span>}</span>
+                        {g && <span className={`shrink-0 rounded px-1 text-[10px] ${g.cls}`}>{v.grade === "ASSUMED" ? "가정" : v.grade}</span>}
+                      </li>
+                    );
+                  })}
+                  {d.slots.length === 0 && <li className="px-2 py-2 text-xs text-zinc-400">{observed ? "방영 자료 없음" : "편성 칸 없음"}</li>}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export function ScheduleForecastPanel({ channelCode, week }: { channelCode: string; week: string }) {
   const [runId, setRunId] = useState("");
@@ -74,9 +153,10 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
   if (state.key !== key) return <p className="p-4 text-sm text-zinc-400" role="status">불러오는 중...</p>;
   if (state.error) return <p className="rounded-2xl bg-white p-4 text-sm text-rose-700 shadow-sm ring-1 ring-zinc-100">{state.error}</p>;
   const data = state.data;
+  if (data && !data.run && data.live) return <LiveWeekView live={data.live} target={data.target?.rating ?? null} year={data.target?.year ?? null} />;
   if (!data || !data.run) {
     return (
-      <p className="rounded-2xl bg-white p-4 text-sm text-zinc-600 shadow-sm ring-1 ring-zinc-100" title="자료 마감일 뒤에 시작하는 주의 편성표를 올리면 자동으로 저장됩니다. 이미 방송이 시작된 주는 사전 예측이 될 수 없어 저장하지 않습니다.">
+      <p className="rounded-2xl bg-white p-4 text-sm text-zinc-600 shadow-sm ring-1 ring-zinc-100" title="자료 마감일 뒤에 시작하는 주의 편성표를 올리면 자동으로 저장됩니다. 이미 시작한 주는 저장하지 않고 관측+예측 종합으로 보여 줍니다.">
         이 주에는 저장된 사전 예측이 없습니다.
       </p>
     );

@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { getChannelMasterInfo } from "@/lib/audienceReport/masterData";
+import { buildLiveWeek } from "@/lib/scheduleForecast/inProgress";
 
 type RunRow = {
   id: string;
@@ -42,6 +43,8 @@ async function loadValues(forecastId: string) {
   return out as { slot_key: string; broadcast_date: string; start_min: number; end_min: number | null; program_name: string; expected: number | null; low: number | null; high: number | null; grade: string | null; evidence_airings: number }[];
 }
 
+export const maxDuration = 120;
+
 export async function GET(request: Request) {
   const session = await getCurrentSession();
   if (!session) return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
@@ -66,7 +69,13 @@ export async function GET(request: Request) {
     if (error) throw new Error(error.message);
     const list = (runs ?? []) as RunRow[];
     const run = (runId ? list.find((r) => r.id === runId) : null) ?? list[0] ?? null;
-    if (!run) return NextResponse.json({ ok: true, runs: [], run: null, values: [], previous: null });
+    if (!run) {
+      // 저장된 사전 예측이 없는 주 — 이미 시작했거나 끝난 주면 관측(자료 마감일까지) + 예측(그 뒤 날) 종합을 즉석 계산해 보여 준다(저장 안 함).
+      const year = Number(week.slice(0, 4));
+      const master = await getChannelMasterInfo(channel, year).catch(() => null);
+      const live = await buildLiveWeek(channel, week);
+      return NextResponse.json({ ok: true, runs: [], run: null, values: [], previous: null, live, target: { rating: master?.targetRating ?? null, year } });
+    }
 
     const values = await loadValues(run.id);
     // 채널기본정보의 연도별 목표 시청률(공식 하루 시청률과 같은 정의) — 없으면 null
