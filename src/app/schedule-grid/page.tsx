@@ -43,6 +43,7 @@ import {
 import { DOW_LABELS } from "@/lib/scheduleGridLayout";
 import { ScheduleWeekGrid, type GridMeta } from "@/components/ScheduleWeekGrid";
 import { ChannelLogo } from "@/components/ChannelLogo";
+import { ScheduleForecastPanel } from "@/components/ScheduleForecastPanel";
 import { ScheduleUploadSlot, type UploadedSchedule } from "@/components/ScheduleUploadSlot";
 
 type Week = { weekStart: string; weekEnd: string; hasUpload: boolean };
@@ -133,6 +134,9 @@ function ScheduleComparisonInner() {
   const [prefs, setPrefs] = useState<CompareViewPrefs>(() => parseCompareQuery((k) => searchParams.get(k)).prefs);
   const [leftMeta, setLeftMeta] = useState<GridMeta | null>(null);
   const [rightMeta, setRightMeta] = useState<GridMeta | null>(null);
+  // 사전 예측 탭(2026-10-22): 탭은 URL(tab=forecast)에 남기고, 예측을 볼 주는 이 탭에서만 따로 고른다("" = 가장 늦은 주)
+  const tab: "compare" | "forecast" = searchParams.get("tab") === "forecast" ? "forecast" : "compare";
+  const [forecastWeek, setForecastWeek] = useState("");
   // 좌우 각각 마지막 요청만 반영하기 위한 순번(A→B→A로 빠르게 바꿔도 먼저 온 응답이 덮지 않는다)
   const reqSeq = useRef({ left: 0, right: 0 });
   const paramsRef = useRef(searchParams);
@@ -281,6 +285,9 @@ function ScheduleComparisonInner() {
   // 채널 드롭다운 공용 옵션 — 우리 7개 채널 다음에 구분선 성격의 optgroup으로 등록 경쟁채널을 잇는다.
   const channelOptions = allChannels.length > 0 ? allChannels : [{ code: urlChannelCode, name: left.channelName || urlChannelCode }];
   const today = kstToday();
+  // 사전 예측 탭이 볼 주 목록 — 상단 채널(urlChannelCode)의 주 목록을 가진 쪽을 쓴다(최신 주가 먼저)
+  const forecastWeeks = (right.channelCode === urlChannelCode && right.weeks.length ? right.weeks : left.channelCode === urlChannelCode ? left.weeks : []) as Week[];
+  const forecastWeekValue = forecastWeeks.some((w) => w.weekStart === forecastWeek) ? forecastWeek : (forecastWeeks[0]?.weekStart ?? "");
   const setPref = <K extends keyof CompareViewPrefs>(k: K, v: CompareViewPrefs[K]) => setPrefs((p) => ({ ...p, [k]: v }));
 
   const seg = (active: boolean) =>
@@ -347,6 +354,50 @@ function ScheduleComparisonInner() {
           </div>
         </div>
 
+        <div role="tablist" aria-label="화면 선택" className="flex gap-1.5">
+          {([["compare", "주간 비교"], ["forecast", "사전 예측"]] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => {
+                const sp = new URLSearchParams(searchParams.toString());
+                if (id === "forecast") sp.set("tab", "forecast");
+                else sp.delete("tab");
+                router.replace(`/schedule-grid?${sp.toString()}`, { scroll: false });
+              }}
+              className={seg(tab === id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "forecast" && (
+          <>
+            <section aria-label="예측 주 선택" className="flex flex-wrap items-center gap-2 rounded-2xl bg-white p-3 text-sm shadow-sm ring-1 ring-zinc-100">
+              <span className="font-semibold text-zinc-700">{left.channelName || urlChannelCode}</span>
+              {forecastWeeks.length > 0 ? (
+                <select value={forecastWeekValue} aria-label="예측 주 선택" onChange={(e) => setForecastWeek(e.target.value)} className="rounded-lg border border-zinc-300 px-2 py-1 text-sm text-zinc-700">
+                  {forecastWeeks.map((w) => (
+                    <option key={w.weekStart} value={w.weekStart}>
+                      {weekLabel(w.weekStart, today, w.weekEnd)}
+                      {w.hasUpload ? " (업로드됨)" : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-zinc-400" role="status">{left.loaded || right.loaded ? "이 채널은 편성표 데이터가 없습니다." : "불러오는 중..."}</span>
+              )}
+              <span className="text-xs text-zinc-500">방송 전에 저장해 둔 예측을 보여 줍니다. 편성표 업로드는 위 업로드 버튼을 쓰세요.</span>
+            </section>
+            <ScheduleForecastPanel channelCode={urlChannelCode} week={forecastWeekValue} />
+          </>
+        )}
+
+        {tab === "compare" && (
+        <>
         {/* 단계 10: 지금 무엇을 비교하는지 — 모드와 좌우가 다른 점을 항상 보여 준다. */}
         <section aria-label="비교 모드" className="rounded-2xl bg-white p-3 text-sm shadow-sm ring-1 ring-zinc-100">
           {reading ? (
@@ -498,6 +549,8 @@ function ScheduleComparisonInner() {
             );
           })}
         </div>
+        </>
+        )}
       </div>
     </div>
   );
