@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Suggestion, SuggestResult } from "@/lib/scheduleForecast/suggest";
 import type { LiveWeek } from "@/lib/scheduleForecast/inProgress";
+import { shortProgramName } from "@/lib/programAlias"; // 제목 줄임 규칙(표시용 약칭, 마우스 오버에는 원래 제목)
 
 type RunMeta = { id: string; purpose: string; createdAt: string; dataCutoff: string; planRef: string };
 type Period = { from: string; to: string; value: number | null; officialEstimate: number | null; forecastMinutes: number; totalMinutes: number; complete: boolean };
@@ -108,7 +109,7 @@ function LiveWeekView({ live, target, year }: { live: LiveWeek; target: number |
                     return (
                       <li key={v.key} className="flex items-center gap-1.5 px-2 py-1 text-xs" title={`${v.name}\n${range}${v.low !== null && v.high !== null ? `\n범위 ${fmt(v.low)} ~ ${fmt(v.high)}` : ""}${g ? `\n${g.title} (방영 ${v.evidenceAirings}회)` : ""}`}>
                         <span className="w-9 shrink-0 tabular-nums text-zinc-400">{hm(v.startMin)}</span>
-                        <span className="min-w-0 flex-1 truncate text-zinc-800">{v.name}</span>
+                        <span className="min-w-0 flex-1 truncate text-zinc-800">{shortProgramName(v.name)}</span>
                         <span className="shrink-0 text-right tabular-nums">{v.value === null ? <span className="text-zinc-400">—</span> : <span className={`font-semibold ${observed ? "text-zinc-900" : "text-indigo-900"}`}>{fmt(v.value)}</span>}</span>
                         {g && <span className={`shrink-0 rounded px-1 text-[10px] ${g.cls}`}>{v.grade === "ASSUMED" ? "가정" : v.grade}</span>}
                       </li>
@@ -269,7 +270,7 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
                       <li key={v.slot_key} className="flex items-center gap-1.5 px-2 py-1 text-xs" title={`${v.program_name}\n${range}${v.low !== null && v.high !== null ? `\n범위 ${fmt(v.low)} ~ ${fmt(v.high)}` : ""}${g ? `\n${g.title} (방영 ${v.evidence_airings}회)` : ""}`}>
                         <span className="w-9 shrink-0 tabular-nums text-zinc-400">{hm(v.start_min)}</span>
                         <span className="min-w-0 flex-1 truncate text-zinc-800">
-                          {v.program_name}
+                          {shortProgramName(v.program_name)}
                           {isNew && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-700">추가</span>}
                         </span>
                         <span className="shrink-0 text-right tabular-nums">
@@ -314,7 +315,7 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
               {shown.map((s) => (
                 <li key={s.id} className="rounded-lg bg-white p-2 ring-1 ring-zinc-100" title={s.cautions.join("\n")}>
                   <p className="text-zinc-800">
-                    <b>{s.a.name}</b> <span className="text-zinc-500">{dayLabel(s.a.date)} {hm(s.a.startMin)}</span> ↔ <b>{s.b.name}</b> <span className="text-zinc-500">{dayLabel(s.b.date)} {hm(s.b.startMin)}</span>
+                    <b>{shortProgramName(s.a.name)}</b> <span className="text-zinc-500">{dayLabel(s.a.date)} {hm(s.a.startMin)}</span> ↔ <b>{shortProgramName(s.b.name)}</b> <span className="text-zinc-500">{dayLabel(s.b.date)} {hm(s.b.startMin)}</span>
                   </p>
                   <p className="mt-0.5 tabular-nums text-zinc-600">
                     {s.days.map((x) => (
