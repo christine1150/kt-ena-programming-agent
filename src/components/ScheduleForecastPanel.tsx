@@ -23,7 +23,9 @@ const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const fmt = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v >= 1 ? v.toFixed(2) : v.toFixed(3));
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const when = (iso: string) => new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
-const GRADE_TEXT: Record<string, { label: string; cls: string; title: string }> = {
+// 토·일 요일 글자색(편성표 그리드와 같은 파랑·빨강)
+const dowColor = (i: number) => (i === 5 ? "text-blue-600" : i === 6 ? "text-rose-600" : "");
+const GRADE_TEXT:Record<string, { label: string; cls: string; title: string }> = {
   A: { label: "A", cls: "bg-emerald-100 text-emerald-800", title: "근거 충분: 같은 작품의 방영 이력이 넉넉함" },
   B: { label: "B", cls: "bg-sky-100 text-sky-800", title: "근거 보통: 방영 이력이 적거나 비슷한 작품·시간대로 보완" },
   C: { label: "C", cls: "bg-amber-100 text-amber-800", title: "근거 약함: 방영 이력이 거의 없는 신작 등" },
@@ -105,11 +107,15 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
               <tr className="text-xs text-zinc-500">
                 <th className="px-2 py-1 text-left font-medium"> </th>
                 {dates.map((d, i) => (
-                  <th key={d} className="px-2 py-1 text-right font-medium">
+                  <th key={d} className={`px-2 py-1 text-right font-medium ${dowColor(i)}`}>
                     {DOW[i] ?? ""} {d.slice(5).replace("-", "/")}
+                    <span className="inline-block w-2" />
                   </th>
                 ))}
-                <th className="px-2 py-1 text-right font-medium">주 전체</th>
+                <th className="px-2 py-1 text-right font-medium">
+                  주 전체
+                  <span className="inline-block w-2" />
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -120,10 +126,15 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
                 {daily.map((d) => (
                   <td key={d.from} className="px-2 py-1.5 text-right tabular-nums">
                     {fmt(d.value)}
-                    {!d.complete && <span className="ml-0.5 text-amber-600" title="하루 전체가 예측으로 덮이지 않은 부분 예측">*</span>}
+                    <span className="inline-block w-2 text-left text-amber-600" title={d.complete ? undefined : "하루 전체가 예측으로 덮이지 않은 부분 예측"}>
+                      {d.complete ? "" : "*"}
+                    </span>
                   </td>
                 ))}
-                <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{fmt(agg?.week?.value)}</td>
+                <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
+                  {fmt(agg?.week?.value)}
+                  <span className="inline-block w-2" />
+                </td>
               </tr>
               <tr className="border-t border-zinc-100">
                 <th className="px-2 py-1.5 text-left font-medium text-zinc-700" title="공식 채널 하루 시청률과 정의를 맞추려고 직전 28일의 배율을 곱한 값">
@@ -132,18 +143,26 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
                 {daily.map((d) => (
                   <td key={d.from} className="px-2 py-1.5 text-right tabular-nums">
                     {fmt(d.officialEstimate)}
+                    <span className="inline-block w-2" />
                   </td>
                 ))}
-                <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{fmt(agg?.week?.officialEstimate)}</td>
+                <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
+                  {fmt(agg?.week?.officialEstimate)}
+                  <span className="inline-block w-2" />
+                </td>
               </tr>
               <tr className="border-t border-zinc-100 text-xs text-zinc-500">
                 <th className="px-2 py-1 text-left font-normal">예측 덮은 비율</th>
                 {daily.map((d) => (
                   <td key={d.from} className="px-2 py-1 text-right tabular-nums">
                     {d.totalMinutes ? `${Math.round((d.forecastMinutes / d.totalMinutes) * 100)}%` : "—"}
+                    <span className="inline-block w-2" />
                   </td>
                 ))}
-                <td className="px-2 py-1 text-right tabular-nums">{agg?.week?.totalMinutes ? `${Math.round((agg.week.forecastMinutes / agg.week.totalMinutes) * 100)}%` : "—"}</td>
+                <td className="px-2 py-1 text-right tabular-nums">
+                  {agg?.week?.totalMinutes ? `${Math.round((agg.week.forecastMinutes / agg.week.totalMinutes) * 100)}%` : "—"}
+                  <span className="inline-block w-2" />
+                </td>
               </tr>
             </tbody>
           </table>
@@ -175,7 +194,7 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {dates.map((d, i) => (
             <div key={d} className="min-w-0 rounded-xl ring-1 ring-zinc-100">
-              <p className="border-b border-zinc-100 bg-zinc-50 px-2 py-1 text-xs font-semibold text-zinc-700">
+              <p className={`border-b border-zinc-100 bg-zinc-50 px-2 py-1 text-xs font-semibold ${dowColor(i) || "text-zinc-700"}`}>
                 {DOW[i] ?? ""} {d.slice(5).replace("-", "/")}
               </p>
               <ul className="divide-y divide-zinc-50">
