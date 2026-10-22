@@ -35,6 +35,18 @@ function NavInner({ role }: { role: Role | null }) {
     <>
       <nav aria-label="전역 메뉴" className="border-b border-zinc-200 bg-white print:hidden" data-global-nav>
         <ul className="mx-auto flex max-w-screen-2xl items-center gap-0.5 overflow-x-auto px-3 sm:px-6">
+          {/* 오리지널 라인업(ENA 콘텐츠 편성센터, 별도 사이트) — 메뉴 맨 앞, 새 창으로 연다(사용자 요청 2026-10-22). */}
+          <li className="shrink-0">
+            <a
+              href="https://ktena.pages.dev/"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="ENA 콘텐츠 편성센터의 오리지널 라인업을 새 창으로 엽니다"
+              className="block border-b-2 border-transparent px-3 py-2.5 text-[13px] font-semibold text-indigo-600 transition hover:text-indigo-800"
+            >
+              라인업 ↗
+            </a>
+          </li>
           {items.map((item) => {
             const isActive = active === item.id;
             return (
