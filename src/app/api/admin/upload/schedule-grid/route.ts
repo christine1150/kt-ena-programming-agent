@@ -4,9 +4,14 @@
 // 원본 그리드를 저장하고, (3) 이미 적재된 ratings와 매칭해 실제 시청률을 채운다.
 // 실제 파싱·저장 로직은 scheduleGridSource.ts의 ingestScheduleGridFile로 옮겨 Page 2(PD 세션)용
 // 업로드 라우트(/api/schedule-grid/upload)와 공유한다(2026-09-20).
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/adminAuth";
 import { ingestScheduleGridFile } from "@/lib/scheduleGridSource";
+import { recordPlanForecast } from "@/lib/scheduleForecast/record";
+
+// 업로드 응답 뒤 사전 예측 저장(승인 A2, 2026-10-22) — 학습 자료를 읽어 몇 초 걸리므로 응답을 붙잡지 않는다.
+// 실패·누락은 매일 크론(/api/cron/forecast-maintenance)이 다시 채운다.
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   const admin = await getAdminSession();
@@ -21,5 +26,12 @@ export async function POST(request: Request) {
   }
 
   const result = await ingestScheduleGridFile(file);
+  if (result.ok) {
+    const actor = { role: admin.role, id: admin.adminId };
+    after(async () => {
+      const o = await recordPlanForecast(result.channelCode, result.weekStart, actor);
+      if (o.status === "FAILED") console.error(`[편성표 예측 저장 실패] ${o.channelCode} ${o.weekStart}: ${o.reason}`);
+    });
+  }
   return NextResponse.json(result, { status: result.ok ? 200 : 400 });
 }

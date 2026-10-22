@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/fetch-nielsen-mail",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/forecast-maintenance",
+      "schedule": "30 3 * * *"
     }
   ]
 }

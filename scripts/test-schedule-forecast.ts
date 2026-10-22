@@ -4,6 +4,7 @@
 import { aggregateDays, aggregatePeriod, canonicalJson, forecastKeys, matchSlots, reviewMetrics, type ForecastRunInput } from "../src/lib/scheduleForecast/core";
 import type { ActualAiring, ForecastSlot } from "../src/lib/scheduleForecast/types";
 import { alignDay, pairStats } from "../src/lib/scheduleForecast/dailyAlignment";
+import { OFFICIAL_SCALE_MIN_DAYS, officialScaleOf, toOfficialEstimate } from "../src/lib/scheduleForecast/officialScale";
 
 let passed = 0;
 const failures: string[] = [];
@@ -104,6 +105,18 @@ const slot = (key: string, start: number, end: number | null, name: string, expe
     { est: 3, official: 3.3 },
   ]);
   check("쌍 통계: MAE·bias·배율 중앙값·상관", near(ps.mae, 0.2) && near(ps.bias, -0.2) && near(ps.medianRatio, 1.1) && near(ps.corr, 1));
+}
+
+// ── 공식 하루 환산 배율 v1(승인 A6) ─────────────────────────
+{
+  const days = Array.from({ length: 20 }, (_, i) => ({ official: 0.9 * (1 + i / 10), weighted: 1 + i / 10 }));
+  const s = officialScaleOf([...days, { official: null, weighted: 1 }, { official: 0.5, weighted: null }], "2026-09-07", "2026-10-04");
+  check("배율: 공식·집계가 함께 있는 날만 써서 중앙값(0.9)", near(s.ratio, 0.9) && s.days === 20 && s.label.includes("공식 하루 환산 예상"));
+  const short = officialScaleOf(days.slice(0, OFFICIAL_SCALE_MIN_DAYS - 1), "a", "b");
+  check("배율: 근거가 14일 미만이면 환산하지 않음(null)", short.ratio === null && short.note.includes("미만"));
+  const d = aggregatePeriod([slot("a", 120, 1560, "A", 0.02)], D, D);
+  check("환산 값 = 편성시간 가중 예상 × 배율, 원래 값은 그대로", near(toOfficialEstimate(d, s), 0.018) && near(d.value, 0.02));
+  check("배율이 없으면 환산 값도 없음", toOfficialEstimate(d, short) === null);
 }
 
 console.log(`\n${passed} passed, ${failures.length} failed`);
