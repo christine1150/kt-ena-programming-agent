@@ -13,6 +13,7 @@
     "test:ideal": "tsx scripts/test-ideal-schedule.ts",
     "test:mailwatch": "tsx scripts/test-mail-watch.ts",
     "test:eligibility": "tsx scripts/test-channel-eligibility.ts",
+    "test:broadcast-pattern": "tsx scripts/test-broadcast-pattern.ts",
     "test:nielsen": "tsx scripts/test-nielsen-ingest.ts",
     "test:metrics": "tsx scripts/test-metrics.ts",
     "test:broadcast": "tsx scripts/test-broadcast-time.ts",

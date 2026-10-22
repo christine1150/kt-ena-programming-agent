@@ -9,7 +9,8 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 // v1.5(2026-10-22): 첫 줄 형식(지수 %)·pieces, 본방 추이(firstRuns), 기간 preset — 자사 값 계산식 무변경
 // v1.6(2026-10-22): 편성 비교 문구를 본방 시간 기준 한 문장(slotParts)으로, 종합 평가를 겹치지 않는 인사이트(insights)로 — 자사 값 계산식 무변경
 // v1.7(2026-10-22): 본방 여부·회차가 비어 있는 방영을 업로드 편성표([본]·[재])로 보완
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.7";
+// v1.8(2026-10-22): 그래도 비어 있는 방영을 본방 편성 패턴(관리자 등록 요일·시각, 네이버 방송 정보)으로 보완하고 닐슨으로 맞춘 실제 본방 시각(pattern)을 함께 돌려준다
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.8";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
@@ -291,6 +292,34 @@ export interface PerformanceResult {
   airingsTruncated: boolean;
   slotCells: SlotCell[];
   notes: string[];
+  /** 본방 편성 패턴(관리자 등록·네이버 방송 정보)과 닐슨으로 확인한 실제 본방 시각. 근거가 없으면 null */
+  pattern: BroadcastPatternInfo | null;
+}
+
+export interface BroadcastPatternSlot {
+  /** 근거 — 같은 슬롯이 둘 다에 있으면 둘 다 */
+  sources: ("registered" | "naver")[];
+  channelCode: string;
+  /** "수"·"월~금" 등 */
+  days: string;
+  /** 패턴에 적힌 시각 "22:30" */
+  nominal: string;
+  /** 닐슨 방영에서 확인한 실제 시작 시각 "22:31" */
+  actual: string;
+  /** 시각 확인에 쓴 닐슨 방영 수 */
+  observed: number;
+  /** 근거 이름(네이버가 찾은 제목 또는 등록 작품명) */
+  label: string;
+}
+
+export interface BroadcastPatternInfo {
+  slots: BroadcastPatternSlot[];
+  /** 네이버 방송 정보를 마지막으로 가져온 시각 */
+  naverFetchedAt: string | null;
+  /** 네이버에서 찾았지만 자사 채널이 본방이 아니라 쓰지 않은 작품 */
+  naverSkipped: string[];
+  /** 네이버 편성 저장소가 아직 준비되지 않은 환경 */
+  naverTableMissing: boolean;
 }
 
 export interface SearchItem {

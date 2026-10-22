@@ -23,6 +23,7 @@ import {
   EXTRA_TARGET_LABELS_BY_CHANNEL,
 } from "@/lib/targetResolution";
 import { findPlanFill, loadPlanDay } from "@/lib/planDayFill";
+import { patternRunsForDay } from "@/lib/broadcastPattern/dayFill";
 
 // page1/route.ts의 offsetDateStr와 동일한 패턴(로컬 타임존 안전 — toISOString 금지, 이 프로젝트가
 // 자정 근처 날짜 밀림 버그를 이미 겪은 함정).
@@ -167,19 +168,24 @@ export async function GET(request: Request) {
 
   // 업로드 편성표(없으면 빈 배열)로 닐슨에 비어 있는 회차·부제·본/재방을 채운다. 닐슨 값이 있으면 그대로 둔다.
   const plan = await loadPlanDay(channelRow.id, date);
+  // 닐슨·편성표 모두 본방 여부를 모르는 방영은 본방 편성 패턴(관리자 등록 요일·시각, 네이버 방송 정보)으로 보완한다(사용자 지시 2026-10-22).
+  const planFills = primaryProgramRows.map((r) => findPlanFill(plan, { programId: r.program_id, name: nameOf(r), startTime: r.start_time }));
+  const needPattern = primaryProgramRows.some((r, i) => (r.is_first_run ?? planFills[i]?.isFirstRun ?? null) === null || (r.episode_number === null && (planFills[i]?.episodeNumber ?? null) === null));
+  const patternRuns = needPattern ? await patternRunsForDay(supabase, { channelId: channelRow.id, channelCode: code, date, rows: primaryProgramRows.map((r) => ({ programId: r.program_id, name: nameOf(r), startTime: r.start_time })) }) : [];
   const rows: ChannelDailyDetailRow[] = primaryProgramRows
-    .map((r) => {
+    .map((r, i) => {
       const name = nameOf(r);
       const sec = secondaryByKey.get(`${r.start_time}__${name}`) ?? null;
-      const fill = findPlanFill(plan, { programId: r.program_id, name, startTime: r.start_time });
+      const fill = planFills[i];
+      const pat = patternRuns[i];
       const noEpisode = r.episode_number === null && r.episode_subtitle === null;
       return {
         start_time: r.start_time,
         end_time: r.end_time,
         canonical_name: name,
         episode_subtitle: noEpisode ? (fill?.subtitle ?? null) : r.episode_subtitle,
-        episode_number: noEpisode ? (fill?.episodeNumber ?? null) : r.episode_number,
-        is_first_run: r.is_first_run ?? fill?.isFirstRun ?? null,
+        episode_number: noEpisode ? (fill?.episodeNumber ?? (pat?.firstRun === true ? pat.episode : null)) : r.episode_number,
+        is_first_run: r.is_first_run ?? fill?.isFirstRun ?? pat?.firstRun ?? null,
         primary_rating: r.rating,
         primary_share: r.share,
         primary_time_spent_seconds: r.time_spent_seconds,

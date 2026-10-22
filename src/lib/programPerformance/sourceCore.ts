@@ -12,6 +12,8 @@ import type { ContentFitAiring } from "@/lib/contentFit/types";
 import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
 import { matchPlanRow, normalizePlanRows, type PlanRow, type PlanRowRaw } from "@/lib/idealSchedule/planEpisodes";
 import { addDays } from "@/lib/idealSchedule/time";
+import { describeLearned, hhmm, inferRuns, type LearnedSlot } from "@/lib/broadcastPattern/inferRuns";
+import { loadRunPatterns } from "@/lib/broadcastPattern/load";
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
 import {
   channelDailyMean,
@@ -43,6 +45,7 @@ import {
   PROGRAM_PERFORMANCE_VERSION,
   type AiringEvidence,
   type AiringFilter,
+  type BroadcastPatternSlot,
   type ChannelRow,
   type CompetitorRow,
   type FitTagInfo,
@@ -258,6 +261,23 @@ function hourBlockOf(t: string | null): number | null {
 const dowOf = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay();
 const NA_RATIO: RatioValue = { value: null, base: null, ratio: null, pct: null, diff: null, direction: "NA", naReason: "실적 없음" };
 
+/** 같은 채널·요일·실측 시각의 슬롯은 근거(관리자 등록·네이버)를 합쳐 한 줄로 */
+function mergeLearned(list: LearnedSlot[]): BroadcastPatternSlot[] {
+  const by = new Map<string, BroadcastPatternSlot>();
+  for (const l of list.sort((a, b) => a.source.localeCompare(b.source))) {
+    const days = describeLearned({ days: l.days, actualMinute: l.actualMinute }).split(" ")[0];
+    const key = `${l.channelCode}|${days}|${l.actualMinute}`;
+    const cur = by.get(key);
+    if (cur) {
+      if (!cur.sources.includes(l.source)) cur.sources.push(l.source);
+      cur.observed = Math.max(cur.observed, l.observed);
+      if (l.source === "naver") cur.label = l.label;
+    } else by.set(key, { sources: [l.source], channelCode: l.channelCode, days, nominal: hhmm(l.nominalMinute), actual: hhmm(l.actualMinute), observed: l.observed, label: l.label });
+  }
+  const ord = (c: string) => (CHANNEL_ORDER.includes(c) ? CHANNEL_ORDER.indexOf(c) : 99);
+  return [...by.values()].sort((a, b) => ord(a.channelCode) - ord(b.channelCode) || a.actual.localeCompare(b.actual));
+}
+
 export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQuery, opts: LoadOptions = {}): Promise<PerformanceResult | null> {
   const work = await resolveWork(db, query.groupKey);
   if (!work) return null;
@@ -281,6 +301,17 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     for (const r of (data ?? []) as { category: string | null }[]) if (r.category) categories.push(r.category);
   }
   const classification = classifyWork(categories);
+
+  // 본방 편성 패턴 — 관리자 등록(주요 콘텐츠 관리)·네이버 방송 정보. 닐슨·업로드 편성표로도 본방 여부를 못 정한 방영만 이 패턴으로 보완한다.
+  const runPatterns = await loadRunPatterns(db, { memberKeys: work.memberKeys, workPrograms, channelCodeById: new Map(channels.map((c) => [c.id, c.code])) });
+  const learnedSlots = new Map<string, LearnedSlot>();
+  // 채널별 보완 건수 — 타깃(2049·가구)마다 같은 방영을 읽으므로 합산하지 않고 값을 덮어써, 끝에 안내 한 줄로 합친다
+  const fillStats = new Map<string, { channelName: string; order: number; plan: number; registered: number; naver: number; episode: number }>();
+  const fillOf = (code: string, channelName: string) => {
+    const cur = fillStats.get(code) ?? { channelName, order: CHANNEL_ORDER.includes(code) ? CHANNEL_ORDER.indexOf(code) : 99, plan: 0, registered: 0, naver: 0, episode: 0 };
+    fillStats.set(code, cur);
+    return cur;
+  };
 
   // 날짜 범위 — DB 첫 관측일 / 작품 첫 관측일 / 확인된 첫 본방일 / 최신 자료일을 구분한다
   const [latest, dbFirst] = await Promise.all([latestDataDate(db), earliestDataDate(db)]);
@@ -451,9 +482,35 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
           if (r.firstRun === null && run !== null) filledRun++;
           return { ...r, firstRun: run, episode: r.episode ?? hit.episodeNumber };
         });
-        // 타깃(2049·가구)마다 같은 방영을 읽으므로 같은 안내가 겹쳐 쌓이지 않게 한다
-        const msg = `${base.channelName}: 본방 여부 ${filledRun}건은 업로드 편성표의 [본]·[재] 표시로 보완했습니다.`;
-        if (filledRun > 0 && !notes.includes(msg)) notes.push(msg);
+        if (filledRun > 0) fillOf(ch.code, base.channelName).plan = filledRun;
+      }
+    }
+    // 그래도 비어 있는 방영은 본방 편성 패턴(요일·시각·채널)으로 보완한다. 정확한 본방 시각은 이 방영 자료(닐슨)로 맞추고, 회차는 네이버가 알려 준 방송일과 일치할 때만 붙인다.
+    if (runPatterns.patterns.length > 0 && workRows.some((r) => r.firstRun === null || r.episode === null)) {
+      const inf = inferRuns(
+        workRows.map((r) => ({ channelCode: ch.code, date: r.date, startTime: r.startTime })),
+        runPatterns.patterns
+      );
+      let byRegistered = 0;
+      let byNaver = 0;
+      let epFilled = 0;
+      workRows = workRows.map((r, i) => {
+        const x = inf.results[i];
+        const run = r.firstRun ?? x.firstRun;
+        const episode = r.episode ?? (run === true && x.firstRun === true ? x.episode : null);
+        if (r.firstRun === null && run !== null) {
+          if (x.source === "registered") byRegistered++;
+          else byNaver++;
+        }
+        if (r.episode === null && episode !== null) epFilled++;
+        return run === r.firstRun && episode === r.episode ? r : { ...r, firstRun: run, episode };
+      });
+      for (const l of inf.learned) learnedSlots.set(`${l.source}|${l.channelCode}|${l.nominalMinute}|${l.days.join("")}`, l);
+      if (byRegistered || byNaver || epFilled) {
+        const f = fillOf(ch.code, base.channelName);
+        f.registered = byRegistered;
+        f.naver = byNaver;
+        f.episode = epFilled;
       }
     }
 
@@ -515,12 +572,15 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     const seen = new Set<string>();
     const chAirings: ContentFitAiring[] = [];
     const others: CompAiring[] = [];
+    // 이 작품 방영은 위에서 보완한 본방 여부를 쓴다(본방 조건 비교가 보완 전 값으로 어긋나지 않게)
+    const workRun = new Map(workRows.map((w) => [`${w.programId}|${w.date}|${w.startTime ?? ""}`, w.firstRun]));
     for (const r of chAirRows) {
       if (r.rating === null || r.rating === undefined) continue;
       const k = `${r.program_id}|${r.broadcast_date}|${r.start_time ?? ""}`;
       if (seen.has(k)) continue;
       seen.add(k);
-      chAirings.push({ programId: r.program_id as string, date: r.broadcast_date as string, startTime: (r.start_time as string | null) ?? null, rating: Number(r.rating), reach: null, timeSpentShare: null, firstRun: (r.is_first_run as boolean | null) ?? null });
+      const dbRun = (r.is_first_run as boolean | null) ?? null;
+      chAirings.push({ programId: r.program_id as string, date: r.broadcast_date as string, startTime: (r.start_time as string | null) ?? null, rating: Number(r.rating), reach: null, timeSpentShare: null, firstRun: dbRun ?? workRun.get(k) ?? null });
       if (!ids.includes(r.program_id as string)) others.push({ date: r.broadcast_date as string, startTime: (r.start_time as string | null) ?? null, rating: Number(r.rating) });
     }
     const sc = computeSlotComparison(chAirings, ids, (a) => matchesAiringFilter(a.firstRun, query.airing));
@@ -622,6 +682,12 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   // 경쟁 채널 조회도 자사 채널 조회와 함께 시작한다
   const competitorsP = loadCompetitorRows(db, work.memberKeys, new Set(channels.map((c) => normalizeProgramKey(c.name))), from, to, query.airing, workPrograms.map((p) => p.canonical_name ?? ""));
   const buckets = await Promise.all(jobs.map((j) => j()));
+  // 본방 여부·회차 보완 안내 — 채널마다 어떤 근거로 몇 건을 채웠는지 한 줄로
+  const fills = [...fillStats.values()].sort((a, b) => a.order - b.order);
+  if (fills.length) {
+    const label = (f: (typeof fills)[number]) => [f.plan ? `편성표 ${f.plan}` : "", f.registered ? `등록 ${f.registered}` : "", f.naver ? `네이버 ${f.naver}` : "", f.episode ? `회차 ${f.episode}` : ""].filter(Boolean).join("·");
+    notes.push(`닐슨에 본방·재방 표시가 없는 방영은 업로드 편성표·관리자 등록 본방 시각·네이버 방송 정보로 보완했습니다(건수) — ${fills.map((f) => `${f.channelName} ${label(f)}`).join(" / ")}`);
+  }
   const rows = buckets.flatMap((b) => b.rows);
   const evidence = buckets.flatMap((b) => b.evidence);
   const slotCells = buckets.flatMap((b) => b.slotCells);
@@ -663,5 +729,14 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     airingsTruncated: evidence.length > EVIDENCE_CAP,
     slotCells,
     notes,
+    pattern:
+      runPatterns.patterns.length > 0 || runPatterns.info.naverSkipped.length > 0
+        ? {
+            slots: mergeLearned([...learnedSlots.values()]),
+            naverFetchedAt: runPatterns.info.naverFetchedAt,
+            naverSkipped: [...new Set(runPatterns.info.naverSkipped)],
+            naverTableMissing: runPatterns.info.naverTableMissing,
+          }
+        : null,
   };
 }

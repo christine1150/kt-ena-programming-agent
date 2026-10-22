@@ -127,6 +127,28 @@ function TargetName({ label }: { label: string }) {
 const TARGET_ORDER = ["수도권 2049", "전국 유료가구"];
 const sampleNote = (s: "OK" | "SMALL" | "NONE", days: number) => (s === "OK" ? "" : `, 실적 ${days}일, 표본 부족${s === "NONE" ? "·판단 보류" : ""}`);
 
+const SOURCE_LABEL: Record<"registered" | "naver", string> = { registered: "관리자 등록(주요 콘텐츠 관리)", naver: "네이버 방송 정보" };
+
+/**
+ * 본방 편성 한 줄 — 관리자 등록·네이버 방송 정보로 알아낸 본방 요일·시각을 닐슨 방영으로 맞춘 실제 시작 시각으로 보여 준다(예: "ENA 수 22:30").
+ * 근거와 패턴 시각은 마우스를 올리면 보인다. 확인된 방영이 없는 슬롯은 나오지 않는다.
+ */
+function PatternLine({ pattern, result }: { pattern: NonNullable<PerformanceResult["pattern"]>; result: PerformanceResult }) {
+  if (pattern.slots.length === 0) return null;
+  const nameOf = (code: string) => result.groups.flatMap((g) => g.rows).find((r) => r.channelCode === code)?.channelName ?? code.replace(/_/g, " ");
+  const fetched = pattern.naverFetchedAt ? ` · 네이버 확인 ${pattern.naverFetchedAt.slice(0, 10)}` : "";
+  return (
+    <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px] text-zinc-700">
+      <span className="font-bold text-zinc-900">본방 편성</span>
+      {pattern.slots.map((s) => (
+        <span key={`${s.channelCode}|${s.days}|${s.actual}`} className="cursor-help underline decoration-zinc-300 decoration-dotted underline-offset-2" title={`${s.sources.map((x) => SOURCE_LABEL[x]).join(" · ")}에서 ${s.days} ${s.nominal}로 확인 → 닐슨 방영 ${s.observed}회로 맞춘 실제 시작 ${s.actual}${s.sources.includes("naver") ? `(${s.label})` : ""}${fetched}`}>
+          {nameOf(s.channelCode)} {s.days} {s.actual}
+        </span>
+      ))}
+    </p>
+  );
+}
+
 /**
  * 채널당 한 줄(사용자 지정 형식) — "ENA Drama: 0.001(2049, 5%)·0.013(가구, 16%)로 채널 평균 대비 각각 95%·84% 낮음 (13회, 실적 5일, 표본 부족)".
  * 괄호 안 %는 채널 평균=100 지수(서버 값), 100 초과 푸른색·미만 붉은색.
@@ -1019,6 +1041,7 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
               {result.totals.channels}개 채널 · {formatInt(result.totals.airings)}회 방영
             </span>
           </div>
+          {result.pattern && <PatternLine pattern={result.pattern} result={result} />}
           {visibleNotes.length > 0 && (
             <ul className="mt-1 space-y-0.5 text-[12px] text-amber-800">
               {visibleNotes.map((n, i) => (

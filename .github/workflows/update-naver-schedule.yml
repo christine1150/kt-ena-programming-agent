@@ -1,0 +1,28 @@
+name: 네이버 본방 편성 갱신
+
+# 2026-10-22: 네이버 방송 정보에서 자사 프로그램의 본방 채널·요일·시각과 최근 회차를 읽어 저장한다(사용자 지시).
+# Vercel Hobby는 크론이 2개까지라 update-program-genre.yml과 같은 방식으로 GitHub Actions가 호출한다.
+# 저장소 시크릿 CRON_SECRET(Vercel 환경변수와 같은 값)이 필요하다. 한 번에 240초 안에서 처리하고 남은 프로그램은 다음 날 이어서 한다.
+
+on:
+  schedule:
+    - cron: "23 20 * * *" # UTC 20:23 = KST 05:23(정각을 피해 GitHub 부하 지연을 줄인다)
+  workflow_dispatch: {}
+
+jobs:
+  update-naver-schedule:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: 본방 편성 갱신 엔드포인트 호출
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "::error::저장소 시크릿 CRON_SECRET이 비어 있습니다. Settings > Secrets and variables > Actions 에서 Vercel의 CRON_SECRET과 같은 값을 추가하세요."; exit 1; fi
+          http_code=$(curl -sS --max-time 290 -H "Authorization: Bearer $CRON_SECRET" -o response.json -w "%{http_code}" "https://kt-ena-programming-agent.vercel.app/api/cron/update-naver-schedule")
+          echo "HTTP $http_code"
+          cat response.json
+          if [ "$http_code" != "200" ]; then
+            echo "::error::엔드포인트가 실패 응답을 반환했습니다 (HTTP $http_code) — 위 응답 본문 참고."
+            exit 1
+          fi
