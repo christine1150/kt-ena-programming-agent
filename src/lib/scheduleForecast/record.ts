@@ -3,7 +3,7 @@
 // "공식 하루 환산 예상(배율 v1)"을 붙여 schedule_forecast_runs/values에 추가 전용으로 남긴다.
 // 원칙
 //  - 데이터 마감(그 시점 최신 닐슨 방송일)이 대상 주 시작보다 앞설 때만 저장한다 — 주가 시작된 뒤의 예측은 실적이 섞여 사전 예측이 아니다.
-//  - 같은 채널·주·편성표 내용이면 한 번만 저장한다(재시도·크론 중복 방지). 같은 주 편성표가 바뀌면 PLAN_UPDATE로 앞 예측에 잇는다.
+//  - 채널·주마다 처음 한 번만 저장한다(사용자 결정 2026-10-22). 이미 예측이 있는 주는 편성표가 바뀌어도 다시 저장하지 않는다(PLAN_UPDATE는 더 만들지 않음, 기존 기록은 유효).
 //  - 계산 방식은 D-3 재구성 검증과 같다(편성표 이름 연결 v2, 실적 매칭 id 미사용, 경쟁 자료 없음).
 import { supabase } from "@/lib/supabase";
 import { loadChannelRef, fetchOwnAirings, type ChannelRef } from "@/lib/idealSchedule/dataSource";
@@ -115,10 +115,11 @@ export async function recordPlanForecast(channelCode: string, weekStart: string,
 
     const { data: prior } = await supabase.from("schedule_forecast_runs").select("id, plan_ref, status, data_cutoff").eq("channel_code", channelCode).eq("week_start", weekStart).in("purpose", ["PLAN_FORECAST", "PLAN_UPDATE"]).order("created_at", { ascending: false }).limit(20);
     const priorRuns = (prior ?? []) as { id: string; plan_ref: string; status: string; data_cutoff: string }[];
+    // 사용자 결정(2026-10-22): 아직 예측이 없는 새 주의 편성표일 때만 저장한다 — 이미 예측이 있는 주는 편성표를 고쳐 다시 올려도 새로 저장하지 않는다.
     // 끝나지 못한 running 행(함수 중단)은 막지 않는다 — 같은 마감의 재시도는 멱등 키 충돌로 걸러진다
-    if (priorRuns.some((p) => p.plan_ref === planRef && p.status === "completed")) return { status: "SKIPPED", ...base, reason: "같은 편성표의 예측이 이미 저장돼 있습니다." };
-    const parent = priorRuns.find((p) => p.status === "completed") ?? null;
-    const purpose = parent ? "PLAN_UPDATE" : "PLAN_FORECAST";
+    if (priorRuns.some((p) => p.status === "completed")) return { status: "SKIPPED", ...base, reason: "이 주의 예측이 이미 저장돼 있어 새로 저장하지 않습니다." };
+    const parent = null as { id: string } | null;
+    const purpose = "PLAN_FORECAST" as "PLAN_FORECAST" | "PLAN_UPDATE";
 
     const config = await loadIdealScheduleConfig(channel.id);
     const [bundle, genreMap, scale] = await Promise.all([fetchOwnAirings(channel, cutoff, config, null), loadGenreMap(), loadOfficialScale(channel, cutoff)]);

@@ -108,7 +108,7 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
 
   const info = [
     `저장 ${when(run.created_at)} · 자료 마감 ${run.data_cutoff} · 타깃 ${run.target_label} · 모델 ${run.model_version}`,
-    "방송 전에 저장한 값이라 나중에 모델이나 자료가 바뀌어도 그대로입니다. 편성표를 고치면 새 저장본이 추가되고 이전 저장본은 남습니다.",
+    "방송 전에 저장한 값이라 나중에 모델이나 자료가 바뀌어도 그대로입니다. 예측은 주마다 처음 한 번만 저장하며, 편성표를 고쳐 다시 올려도 새로 저장하지 않습니다.",
     ratio !== null && agg?.officialScale ? `하루·주 예상 = 공식 채널 하루 시청률(02:00~25:59)과 같은 정의로 맞춘 값(편성 칸 예측의 시간 가중 평균 × 직전 28일 환산 배율 ${ratio.toFixed(3)}, ${agg.officialScale.from}~${agg.officialScale.to} 중 ${agg.officialScale.days}일).` : "하루·주 예상은 환산 근거가 모자라 표시하지 않습니다.",
     "하루 단위 예측은 오차가 큰 편이라 프로그램별 값을 함께 보세요. 근거 C(이력이 거의 없는 신작 등)와 '근거 없음' 칸은 참고만 하세요.",
     ...(agg?.warnings ?? []),
