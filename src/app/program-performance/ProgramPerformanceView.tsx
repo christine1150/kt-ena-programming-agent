@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatInt, formatPct, formatRatingValue, formatSigned, MISSING } from "@/lib/ui/metricFormat";
 import { WORK_CLASS_LABEL } from "@/lib/programPerformance/metrics";
-import type { AiringFilter, AiringRef, ChannelRow, Direction, MonthlyPoint, PerformanceResult, RatioValue, SearchItem, TargetMode, WorkClass } from "@/lib/programPerformance/types";
+import type { AiringFilter, AiringRef, ChannelLine, ChannelRow, CompetitorRow, Direction, MonthlyPoint, PerformanceResult, RatioValue, SearchItem, TargetMode, WorkClass } from "@/lib/programPerformance/types";
 
 type ClassFilter = "all" | "drama" | "variety";
 type PeriodPreset = "all" | "4w" | "12w" | "custom";
@@ -178,6 +178,74 @@ function ChannelTable({ entries, airing, selected, onSelect }: { entries: Channe
   );
 }
 
+
+/** 경쟁 채널 성과 — 선택해서 연다. 같은 작품이 등록 경쟁채널에서 방영된 기록만(닐슨 경쟁채널 시트), 채널 평균은 그 경쟁채널의 하루 시청률 일평균 */
+function CompetitorSection({ rows, lines }: { rows: CompetitorRow[]; lines: ChannelLine[] }) {
+  const names = [...new Set(rows.map((r) => r.competitorName))];
+  return (
+    <section className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50/50 p-3">
+      <div className="space-y-1 text-[13px] leading-relaxed text-zinc-800">
+        {lines.map((l) => (
+          <p key={l.channelCode}>{l.text}</p>
+        ))}
+      </div>
+      <div className="dense-grid mt-2 overflow-x-auto rounded-md border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="경쟁 채널 성과 표">
+        <table className="w-full text-[14px]">
+          <thead className="break-keep bg-zinc-50 text-[12px] text-zinc-500">
+            <tr>
+              <th className="px-1.5 py-2 text-left font-medium sm:px-3">경쟁 채널</th>
+              <th className="px-1.5 py-2 text-left font-medium sm:px-3">타깃</th>
+              <th className="px-1.5 py-2 text-right font-medium sm:px-3">시청률(%)</th>
+              <th className="px-1.5 py-2 text-right font-medium sm:px-3">점유율(%)</th>
+              <th className="px-1.5 py-2 text-right font-medium sm:px-3">
+                채널 평균<span className="hidden sm:inline"> 대비</span>
+              </th>
+            </tr>
+          </thead>
+          {names.map((name) => {
+            const rs = rows.filter((r) => r.competitorName === name);
+            const main = rs[0];
+            const sample = main.sampleState === "NONE" ? `자료 부족 · ${main.days}일` : main.sampleState === "SMALL" ? `자료 적음 · ${main.days}일` : null;
+            return (
+              <tbody key={name} className="border-t border-zinc-200">
+                {rs.map((r, i) => (
+                  <tr key={r.targetLabel} className={i > 0 ? "border-t border-zinc-100" : ""}>
+                    {i === 0 && (
+                      <td rowSpan={rs.length} className="px-1.5 py-2 align-top font-medium text-zinc-900 sm:px-3">
+                        {name}
+                        {sample && (
+                          <span className={`ml-1 whitespace-nowrap text-[11px] font-normal ${main.sampleState === "NONE" ? "text-rose-700" : "text-amber-700"}`} title={sample} aria-label={sample}>
+                            ({main.days}일)
+                          </span>
+                        )}
+                        <div className="text-[11px] font-normal text-zinc-500">
+                          {main.airings}회{main.rerunAirings ? ` · 재방 ${main.rerunAirings}` : ""}
+                          {main.firstRunAirings ? ` · 본방 ${main.firstRunAirings}` : ""}
+                        </div>
+                      </td>
+                    )}
+                    <td className="px-1.5 py-2 text-[12px] text-zinc-700 sm:px-3">
+                      <TargetName label={r.targetLabel} />
+                    </td>
+                    <td className="px-1.5 py-2 text-right sm:px-3">
+                      <span className="tabular-nums">{formatRatingValue(r.programAvg, name)}</span>
+                      <div className="text-[11px] tabular-nums text-zinc-400 sm:whitespace-nowrap">채널 평균 {formatRatingValue(r.channelDaily?.mean ?? null, name)}</div>
+                    </td>
+                    <td className="px-1.5 py-2 text-right tabular-nums sm:px-3">{r.shareAvg === null ? <span className="text-[12px] text-zinc-400">자료 없음</span> : formatPct(r.shareAvg)}</td>
+                    <td className="px-1.5 py-2 text-right sm:px-3">
+                      <DeltaText r={r.vsChannel} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            );
+          })}
+        </table>
+      </div>
+      <p className="mt-1 text-[11px] text-zinc-500">닐슨 일일 파일의 경쟁채널 시트(등록 경쟁채널만)에 같은 작품 이름으로 잡힌 방영입니다. 채널 평균은 그 경쟁채널의 하루 시청률 일평균(자사 채널 평균과 같은 정의). 같은 시간대 비교는 경쟁 채널 편성 전체가 없어 내지 않습니다.</p>
+    </section>
+  );
+}
 
 const monthTitle = (m: MonthlyPoint) => `${Number(m.month.slice(5))}월${m.partial ? ` ${Number(m.from.slice(8))}~${Number(m.to.slice(8))}일` : ""}`;
 const shortDate = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}(${DOW[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
@@ -538,6 +606,8 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
   const [latest, setLatest] = useState<string | null>(null);
   // 분석할 채널·타깃 행(채널코드|타깃). 응답에 없으면 진입 채널 → 첫 채널의 KPI 행으로 돌아간다(이전 선택이 남지 않게).
   const [selKey, setSelKey] = useState<string | null>(null);
+  // 경쟁 채널 성과는 기록이 있을 때 사용자가 열 때만 보인다
+  const [showComp, setShowComp] = useState(false);
   const analysisRef = useRef<HTMLDivElement>(null);
 
   // 검색·분류 선택은 작품 선택을 풀고 후보 목록만 보여 준다(이전 작품 상세와 새 후보가 섞이지 않게)
@@ -828,6 +898,14 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
                 </ul>
               </details>
             ))}
+          {result.competitors.length > 0 && (
+            <div className="mt-3">
+              <button type="button" aria-expanded={showComp} onClick={() => setShowComp((v) => !v)} className={chip(showComp)}>
+                경쟁 채널 성과 {showComp ? "닫기" : `보기 · ${new Set(result.competitors.map((c) => c.competitorName)).size}개 채널`}
+              </button>
+              {showComp && <CompetitorSection rows={result.competitors} lines={result.competitorLines} />}
+            </div>
+          )}
           <CalcBasis />
 
           <div ref={analysisRef} className="scroll-mt-4">

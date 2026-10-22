@@ -5,7 +5,8 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 // v1.1(2026-10-22): 계산식은 v1 그대로, 응답에 월간 추이(monthly) 추가
 // v1.2(2026-10-22): 두 타깃 모드(both)·채널별 첫 줄(lines, 그룹 요약 headlines 대체) — 계산식 무변경, 캐시가 섞이지 않게 버전만 올림
 // v1.3(2026-10-22): 행마다 점유율 평균·분석(analysis: 회차 추이·최고/최저·시간대별 비교·종합 문구) 추가 — 기존 값의 계산식 무변경
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.3";
+// v1.4(2026-10-22): 첫 줄을 채널당 한 줄(2049·가구 함께)로, 경쟁 채널 성과(competitors) 추가 — 자사 값 계산식 무변경
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.4";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
@@ -115,8 +116,9 @@ export interface MonthlyPoint {
   vsChannel: RatioValue;
 }
 
-/** 채널별 첫 줄 — 서버가 확정 수치·방향·표본 상태로만 만든 고정 템플릿 문장(LLM 아님). 채널 KPI 타깃 기준. */
+/** 채널별 첫 줄 — 서버가 확정 수치·방향·표본 상태로만 만든 고정 템플릿 문장(LLM 아님). 채널당 한 줄(2049·가구 함께, 판단은 KPI 타깃 기준). */
 export interface ChannelLine {
+  /** 자사는 채널 코드, 경쟁 채널은 채널명 */
   channelCode: string;
   direction: Direction;
   sampleState: "OK" | "SMALL" | "NONE";
@@ -225,6 +227,25 @@ export interface SlotCell {
   avg: number | null;
 }
 
+/**
+ * 경쟁 채널에서의 이 작품 성과 — 닐슨 일일 파일 'OOO경쟁채널시청률' 시트(등록 경쟁채널만, competitor_program_target_ratings)의 방영별 값.
+ * 시트 타깃 '개인2049'=수도권 2049, '유료방송가구'=전국 유료가구(자사 블록 실측으로 같은 지표 확인, nielsenDaily.ts).
+ * 채널 평균은 같은 경쟁채널의 랭킹 시트 채널 하루 시청률(competitor_ratings, 순위 있는 행) 일평균 — 자사 채널 평균과 같은 정의.
+ */
+export interface CompetitorRow {
+  competitorName: string;
+  targetLabel: string;
+  airings: number;
+  days: number;
+  firstRunAirings: number;
+  rerunAirings: number;
+  programAvg: number | null;
+  shareAvg: number | null;
+  channelDaily: ChannelDailyBase | null;
+  vsChannel: RatioValue;
+  sampleState: "OK" | "SMALL" | "NONE";
+}
+
 export interface PerformanceResult {
   version: string;
   query: PerformanceQuery;
@@ -234,6 +255,9 @@ export interface PerformanceResult {
   totals: { channels: number; airings: number; days: number; episodes: number };
   groups: { kpiGroup: "2049" | "HH"; rows: ChannelRow[] }[];
   lines: ChannelLine[];
+  /** 경쟁 채널 성과(방영 기록이 있는 경쟁채널만, 채널마다 2049·가구) — 화면에서 선택해 연다 */
+  competitors: CompetitorRow[];
+  competitorLines: ChannelLine[];
   airings: AiringEvidence[];
   airingsTruncated: boolean;
   slotCells: SlotCell[];

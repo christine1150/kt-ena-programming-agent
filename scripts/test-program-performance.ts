@@ -171,6 +171,27 @@ function buildDb() {
     ratings.push({ source_type: "nielsen_daily", channel_id: "c-olife", program_id: "p-va-olife", target_id: "t-phh", broadcast_date: addDays(START, w * 7 + 6), start_time: "10:30:00", rating: 0.9, is_first_run: false, episode_number: w + 1, created_at: "2026-01-01" });
   }
   db.seed("ratings", ratings);
+  // 경쟁 채널: tvN에서 테스트드라마 월 20시 <재> 4회(2049 0.3·가구 0.6), 같은 이름의 자사 채널 항목(ENA)은 빠져야 함, 다른 작품은 섞이지 않아야 함
+  const comp: Record<string, unknown>[] = [];
+  const compDay: Record<string, unknown>[] = [];
+  for (let w = 0; w < 4; w++) {
+    const mon = addDays(START, w * 7);
+    for (const [sheet, v] of [["개인2049", 0.3], ["유료방송가구", 0.6]] as const) {
+      comp.push({ broadcast_date: mon, competitor_name: "tvN", start_time: "20:00:00", program_name: "테스트 드라마<재>", norm_program_name: "테스트드라마", target_label: sheet, rating: v, share: 2 });
+      comp.push({ broadcast_date: mon, competitor_name: "ENA", start_time: "21:30:00", program_name: "테스트 드라마<본>", norm_program_name: "테스트드라마", target_label: sheet, rating: 9, share: 9 });
+      comp.push({ broadcast_date: mon, competitor_name: "tvN", start_time: "22:00:00", program_name: "다른드라마", norm_program_name: "다른드라마", target_label: sheet, rating: 5, share: 5 });
+    }
+    // 같은 방영 중복 행
+    comp.push({ broadcast_date: mon, competitor_name: "tvN", start_time: "20:00:00", program_name: "테스트 드라마<재>", norm_program_name: "테스트드라마", target_label: "개인2049", rating: 0.3, share: 2 });
+  }
+  for (let i = 0; i < WEEKS * 7; i++) {
+    const date = addDays(START, i);
+    compDay.push({ competitor_name: "tvN", target_id: "t-r2049", broadcast_date: date, rank: 1, rating: 0.2, created_at: "2026-01-01" });
+    compDay.push({ competitor_name: "tvN", target_id: "t-rhh", broadcast_date: date, rank: 1, rating: 0.5, created_at: "2026-01-01" });
+    compDay.push({ competitor_name: "tvN", target_id: "t-r2049", broadcast_date: date, rank: null, rating: 99, created_at: "2026-01-01" });
+  }
+  db.seed("competitor_program_target_ratings", comp);
+  db.seed("competitor_ratings", compDay);
   return db;
 }
 
@@ -287,6 +308,24 @@ async function main() {
   check("두 타깃: 총계·근거 방송·첫 줄은 KPI 타깃 기준(두 번 세지 않음)", b.totals.airings === r.totals.airings && b.airings.length === r.airings.length && b.lines.length === r.lines.length, `${b.totals.airings}/${r.totals.airings} ${b.airings.length}/${r.airings.length}`);
   check("두 타깃: 최근 12주 판정은 KPI 타깃 행에만", bEna.find((x) => x.primary)!.fit?.tag === "KEEP" && bEna.find((x) => !x.primary)!.fit === null);
   check("두 타깃: skyUHD 제외 행은 한 번만", bAll.filter((x) => x.channelCode === "SKYUHD").length === 1);
+
+  // 첫 줄 — 두 타깃 모드에서는 채널당 한 줄에 2049·가구 함께(KPI 타깃 먼저)
+  const bLine = b.lines.find((l) => l.channelCode === "ENA")!.text;
+  check("첫 줄(두 타깃): 채널당 한 줄, 2049·가구 함께", b.lines.filter((l) => l.channelCode === "ENA").length === 1 && bLine.includes("평균 시청률 2049 1.200·가구 2.500(12회)") && bLine.includes("채널 평균 대비 2049 +140%·가구 산출 불가"), bLine);
+  check("첫 줄(두 타깃): 판단은 KPI 타깃 기준", bLine.includes("도움이 되고 있습니다"), bLine);
+
+  // 경쟁 채널 — 같은 작품 이름의 경쟁채널 방영만, 자사 이름 항목 제외, 같은 방영 한 번만, 채널 평균은 순위 있는 행
+  const tvn = r.competitors.filter((c) => c.competitorName === "tvN");
+  const t2049 = tvn.find((c) => c.targetLabel === "수도권 2049")!;
+  const thh = tvn.find((c) => c.targetLabel === "전국 유료가구")!;
+  check("경쟁: tvN 2049·가구 두 행, 자사 이름(ENA) 항목 없음", tvn.length === 2 && !r.competitors.some((c) => c.competitorName === "ENA"));
+  // 첫 월요일(START)은 조회 시작일(작품 첫 관측 수요일)보다 앞이라 빠진다 → 3회
+  check("경쟁: 다른 작품·중복 행·기간 밖 제외(3회)", t2049.airings === 3 && near(t2049.programAvg, 0.3) && t2049.rerunAirings === 3, JSON.stringify(t2049));
+  check("경쟁: 채널 평균은 순위 있는 경쟁채널 하루 행 일평균", near(t2049.channelDaily?.mean, 0.2) && near(t2049.vsChannel.pct, 50) && near(thh.vsChannel.pct, 20));
+  check("경쟁: 3일은 자료 적음", t2049.sampleState === "SMALL");
+  check("경쟁: 첫 줄도 채널당 한 줄", r.competitorLines.length === 1 && r.competitorLines[0].text.includes("tvN에서 평균 시청률"), r.competitorLines[0]?.text);
+  const rFirst = (await loadProgramPerformanceWith(db, Q({ airing: "first" }), { fitLookup }))!;
+  check("경쟁: 본방만 보면 <재> 방영은 빠짐(행 없음)", rFirst.competitors.length === 0);
 
   // 선택 채널 분석(2×2) — 서버가 문구까지 확정, 방영 있는 행만
   const enaA = rowOf(r.groups.flatMap((g) => g.rows), "ENA");

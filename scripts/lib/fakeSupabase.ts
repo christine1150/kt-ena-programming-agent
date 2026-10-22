@@ -168,6 +168,8 @@ class Query implements PromiseLike<Result> {
               const cell = r[col];
               if (op === "is") return val === "null" ? cell === null || cell === undefined : String(cell) === val;
               if (op === "eq") return String(cell) === val;
+              // 와일드카드 없는 ilike(대소문자 무시 완전 일치)만 지원
+              if (op === "ilike") return cell !== null && cell !== undefined && String(cell).toUpperCase() === val.toUpperCase();
               return false;
             });
         case "gte":
