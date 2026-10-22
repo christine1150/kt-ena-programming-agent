@@ -57,7 +57,7 @@ async function main() {
     const ids = new Set(F.ADMIN_FEATURES.map((f) => f.id));
     check("요구된 관리자 기능(15종)이 위치표에 모두 있다", required.every((r) => ids.has(r)), required.filter((r) => !ids.has(r)).join());
     check("모든 기능에 유지/이동/통합 위치가 있다", F.ADMIN_FEATURES.every((f) => ["유지", "이동", "통합"].includes(f.disposition) && f.destination.length > 0));
-    const compFiles = fs.readdirSync(path.join(ROOT, "src/app/admin")).filter((n) => n.endsWith(".tsx") && !["page.tsx", "layout.tsx", "LogoutButton.tsx", "FileInputTrigger.tsx"].includes(n)).map((n) => n.replace(".tsx", ""));
+    const compFiles = fs.readdirSync(path.join(ROOT, "src/app/admin")).filter((n) => n.endsWith(".tsx") && !["page.tsx", "layout.tsx", "LogoutButton.tsx", "FileInputTrigger.tsx", "HelpTip.tsx"].includes(n)).map((n) => n.replace(".tsx", ""));
     const missingComp = compFiles.filter((c) => !F.featureComponents().includes(c));
     check("src/app/admin의 모든 화면 컴포넌트가 위치표에 있다", missingComp.length === 0, missingComp.join());
     const apiRoutes = walk(path.join(ROOT, "src/app/api/admin"))

@@ -4,6 +4,7 @@
 // 채널(자사 또는 경쟁채널)을 고르면 최근 12주 방영 프로그램을 편성 분이 많은 순으로 보여주고, 장르를 고르면
 // 즉시 관리자 값(MANUAL)으로 저장된다. MATCH/COUNTER·장르 적합도 계산에 쓰인다.
 import { useEffect, useState } from "react";
+import HelpTip from "./HelpTip";
 import { formatCoverage } from "@/lib/admin/genreCoverage";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 
@@ -101,8 +102,10 @@ export default function GenreMapManager() {
     <div className="rounded-xl border border-zinc-200 bg-white p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h3 className="text-base font-semibold text-zinc-900">장르 분류 보완(AI 스마트 편성용)</h3>
-          <p className="text-sm text-zinc-500">제목 규칙·네이버·다음 검색으로 1차 분류한 장르를 확인·보완합니다. 한 채널에서 고치면 같은 이름의 다른 채널에도 반영됩니다(자사 오리지널은 자사 채널끼리만). 네이버 검색은 매주 월요일 아침 7시에 자동으로 다시 돕니다.</p>
+          <h3 className="text-base font-semibold text-zinc-900">
+            장르 분류 보완(AI 스마트 편성용)
+            <HelpTip>제목 규칙·네이버·다음 검색으로 1차 분류한 장르를 확인·보완합니다. 한 채널에서 고치면 같은 이름의 다른 채널에도 반영됩니다(자사 오리지널은 자사 채널끼리만). 네이버 검색은 매주 월요일 아침 7시에 자동으로 다시 돕니다.</HelpTip>
+          </h3>
         </div>
         {rows && (
           <p className="text-sm text-zinc-600">

@@ -41,13 +41,16 @@ import LogoutButton from "./LogoutButton";
 import DataStatusPanel from "./DataStatusPanel";
 import AvailManager from "./AvailManager";
 import LoginHistoryPanel from "./LoginHistoryPanel";
+import HelpTip from "./HelpTip";
 
 // 묶음 소제목 — 카드가 아니라 구분선 역할만 한다(첫 묶음은 위 여백을 주지 않아도 되게 mt로만 조정).
 function AdminSectionHeading({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mt-2 border-t border-zinc-200 pt-4">
-      <h2 className="text-sm font-semibold tracking-wide text-zinc-700">{title}</h2>
-      {description && <p className="text-xs text-zinc-400">{description}</p>}
+      <h2 className="text-sm font-semibold tracking-wide text-zinc-700">
+        {title}
+        {description && <HelpTip>{description}</HelpTip>}
+      </h2>
     </div>
   );
 }

@@ -3,6 +3,7 @@
 // 관리자 화면에서 `채널기본정보.xlsx`를 업로드해 Channel Master / Competitor Master /
 // 목표 시청률을 DB에 반영하는 위젯.
 import { useRef, useState } from "react";
+import HelpTip from "./HelpTip";
 import { FileInputTrigger } from "./FileInputTrigger";
 
 type UploadResult = {
@@ -58,11 +59,10 @@ export default function ChannelMasterUploader() {
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-900">Channel Master 업로드</h2>
-      <p className="mb-4 text-sm text-zinc-500">
+      <h2 className="mb-3 text-lg font-semibold text-zinc-900">Channel Master 업로드<HelpTip>
         <code>채널기본정보.xlsx</code>의 &ldquo;채널 별 경쟁채널&rdquo; 시트를 읽어 채널·경쟁채널·목표
         시청률({new Date().getFullYear()}년 기준)을 반영합니다. 다시 업로드하면 기존 값을 덮어씁니다.
-      </p>
+      </HelpTip></h2>
 
       <div className="mb-4 flex items-center gap-3">
         <FileInputTrigger inputRef={fileInputRef} accept=".xlsx,.xls" />

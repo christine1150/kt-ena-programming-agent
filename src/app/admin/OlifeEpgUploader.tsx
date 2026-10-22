@@ -10,6 +10,7 @@
 // (api/admin/upload/olife-epg/route.ts)가 일일운행표 형식으로 먼저 시도하고 실패하면 주간
 // 편성표(2D 달력 그리드) 형식으로 재시도한다(자동 판별, 화면에서 형식을 고를 필요 없음).
 import { useRef, useState } from "react";
+import HelpTip from "./HelpTip";
 import { FileInputTrigger } from "./FileInputTrigger";
 
 type FileSummary = {
@@ -62,8 +63,7 @@ export default function OlifeEpgUploader() {
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
       {/* 사용자 지시(2026-09-02): 제목을 "OLIFE EPG 업로드"로. */}
-      <h2 className="mb-1 text-lg font-semibold text-zinc-900">OLIFE EPG 업로드</h2>
-      <p className="mb-4 text-sm text-zinc-500">
+      <h2 className="mb-3 text-lg font-semibold text-zinc-900">OLIFE EPG 업로드<HelpTip>
         <code>일일운행표_YYYYMMDD.xlsx</code> 파일을 올리면 그 날짜의 Nielsen 프로그램 데이터에
         회차·부제를 매칭해 채웁니다. <b>순서는 상관없습니다</b> — Nielsen 일일 데이터가 먼저 있으면
         즉시 매칭되고, EPG를 먼저 올려두면 일단 저장만 해뒀다가 그 날짜의 Nielsen 파일이 나중에
@@ -74,7 +74,7 @@ export default function OlifeEpgUploader() {
         수 있습니다</b> — 자동으로 형식을 구분해 처리하며, 같은 날짜에 일일운행표가 나중에
         올라오면 그쪽이 항상 우선 적용됩니다(주간 편성표는 사전 계획, 일일운행표는 실제 확정
         정보이므로).
-      </p>
+      </HelpTip></h2>
 
       <div className="mb-4 flex items-center gap-3">
         <FileInputTrigger inputRef={fileInputRef} accept=".xlsx" multiple />

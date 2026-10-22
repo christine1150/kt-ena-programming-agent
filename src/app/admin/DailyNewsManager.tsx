@@ -5,6 +5,7 @@
 // 사용자가 실제로 전달한 형식(카테고리 "[제목]" 줄 + 제목/URL 줄 반복)을 그대로 붙여넣으면
 // 파싱되어 전체 교체된다.
 import { useEffect, useState } from "react";
+import HelpTip from "./HelpTip";
 
 interface NewsItem {
   id: string;
@@ -145,12 +146,14 @@ export default function DailyNewsManager() {
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
       <div className="mb-1 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-zinc-900">주요 뉴스 관리 (베타)</h2>
+        <h2 className="text-lg font-semibold text-zinc-900">
+          주요 뉴스 관리 (베타)
+          <HelpTip>
+            1페이지 &quot;오늘의 빠른 요약&quot; 위에 표시됩니다. [카테고리] 줄 아래 제목·URL을 번갈아 붙여넣고 저장하면 기존 목록 전체를 교체합니다. 먼저 &ldquo;미리보기&rdquo;로 추가·삭제될 항목을 확인하세요.
+          </HelpTip>
+        </h2>
       </div>
-      <p className="mb-4 text-sm text-zinc-500">
-        1페이지 &quot;오늘의 빠른 요약&quot; 위에 표시됩니다. 아래 칸에 [카테고리] 줄 아래 제목·URL을
-        번갈아 붙여넣고 저장하면 기존 목록 전체를 교체합니다. <b>저장하면 검토 단계 없이 즉시 게시</b>되므로 먼저 &ldquo;미리보기&rdquo;로 추가·삭제될 항목을 확인하세요.
-      </p>
+      <p className="mb-4 text-xs font-medium text-amber-700">저장하면 검토 없이 즉시 게시됩니다.</p>
 
       <textarea
         value={rawText}

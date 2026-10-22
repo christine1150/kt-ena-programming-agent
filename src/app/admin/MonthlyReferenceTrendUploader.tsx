@@ -13,6 +13,7 @@
 // 직접 반영한다 — 원본 사내 자료가 실제로 쓰는 "행=장르/프로그램, 열=월" 표 형태를 그대로
 // 인식한다(src/lib/monthlyReferenceTrendParse.ts).
 import { useEffect, useRef, useState } from "react";
+import HelpTip from "./HelpTip";
 import { FileInputTrigger } from "./FileInputTrigger";
 
 type Channel = { id: string; code: string; name: string };
@@ -109,12 +110,11 @@ export default function MonthlyReferenceTrendUploader() {
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-900">월간 채널 추이 자료 업로드(장르별·프로그램별)</h2>
-      <p className="mb-3 text-sm text-zinc-500">
+      <h2 className="mb-3 text-lg font-semibold text-zinc-900">월간 채널 추이 자료 업로드(장르별·프로그램별)<HelpTip>
         사내 &ldquo;전체 채널 월간 추이&rdquo; 자료(원본과 같은 &ldquo;행=장르/프로그램, 열=월&rdquo; 표 형태)를 엑셀로 올리면 자동으로 읽어
         1페이지 &ldquo;월간 리뷰&rdquo; 하단 참고 자료에 <b>즉시 반영</b>됩니다 — 이 화면에서 따로 저장 버튼을 누를 필요가 없습니다. 같은
         채널·연도를 다시 올리면 최신 값으로 안전하게 덮어씁니다.
-      </p>
+      </HelpTip></h2>
       <details className="mb-4 rounded-lg bg-zinc-50 p-3 text-xs text-zinc-500">
         <summary className="cursor-pointer font-medium text-zinc-600">엑셀 파일 형식 안내(펼치기)</summary>
         <ul className="mt-2 list-disc space-y-1 pl-4">

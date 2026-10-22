@@ -2,6 +2,7 @@
 
 // 관리자 첫 화면 — 자료 수신·반영 현황(단계 05). 채널 × 자료 종류별로 "수집됨"과 "분석 반영 완료"를 분리해 보여 준다.
 import { useEffect, useState } from "react";
+import HelpTip from "./HelpTip";
 import { KIND_LABEL, type Health, type ReceiptRow, type ReceiptSummary } from "@/lib/admin/ingestStatus";
 
 interface StatusResponse {
@@ -56,10 +57,9 @@ export default function DataStatusPanel() {
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">자료 수신·반영 현황</h2>
-          <p className="text-sm text-zinc-500">
+          <h2 className="text-lg font-semibold text-zinc-900">자료 수신·반영 현황<HelpTip>
             <b>수집됨</b>은 파일이 들어온 것이고, <b>분석 반영 완료</b>는 시청률이 반영되고 화면용 사전 계산(마트)까지 끝난 것입니다. 둘은 다를 수 있습니다.
-          </p>
+          </HelpTip></h2>
         </div>
         {data && <p className="text-xs text-zinc-400">기준일 {data.today} · 최근 {data.window.from} ~ 어제</p>}
       </div>

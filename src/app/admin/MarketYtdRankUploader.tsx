@@ -4,6 +4,7 @@
 // 사용자 지시(2026-08-21): 등록된 경쟁채널뿐 아니라 시장 전체(200개 이상) 채널의 기간 누적
 // 순위·시청률을 담은 파일 — 같은 (타깃, 채널, 기간)으로 재업로드하면 덮어쓴다.
 import { useRef, useState } from "react";
+import HelpTip from "./HelpTip";
 import { FileInputTrigger } from "./FileInputTrigger";
 
 type UploadResult = {
@@ -47,12 +48,11 @@ export default function MarketYtdRankUploader() {
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-900">누적 채널 순위 업로드</h2>
-      <p className="mb-4 text-sm text-zinc-500">
+      <h2 className="mb-3 text-lg font-semibold text-zinc-900">누적 채널 순위 업로드<HelpTip>
         예: <code>26년 채널 누적 시청률.xlsx</code>. 등록된 경쟁채널뿐 아니라 시장 전체 채널의 기간
         누적 순위·시청률을 담은 파일입니다 — Page 1 히어로 카드의 &ldquo;누적 순위&rdquo;가 이
         시장 전체 기준 순위를 우선 사용합니다(같은 타깃·채널·기간으로 재업로드하면 덮어씀).
-      </p>
+      </HelpTip></h2>
 
       <div className="mb-4 flex items-center gap-3">
         <FileInputTrigger inputRef={fileInputRef} accept=".xlsx,.xls" />

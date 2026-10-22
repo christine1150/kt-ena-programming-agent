@@ -3,6 +3,7 @@
 // 주요 콘텐츠(featured_content) 관리 위젯 — 목록 확인, 수동 등록, 수정, 삭제.
 // `채널기본정보.xlsx` 업로드로 자동 반영된 항목도 여기서 함께 관리할 수 있다.
 import { useEffect, useMemo, useState } from "react";
+import HelpTip from "./HelpTip";
 // 사용자 지시(2026-09-02): "엑셀을 올린 내용과 겹쳐서인지 하나의 타이틀이 여러번 보이는 오류
 // (예: 제비탐정장성규) — 가장 많은 정보를 모아서 동일한 타이틀은 하나로 통합". 근본 원인은
 // programNameMatch.ts 헤더에 이미 기록돼 있다 — 관리자 수기 입력 표기("제비탐정 장성규")와
@@ -336,11 +337,10 @@ export default function FeaturedContentManager() {
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">주요 콘텐츠 관리 (요일별 리뷰 프로그램)</h2>
-          <p className="text-sm text-zinc-500">
+          <h2 className="text-lg font-semibold text-zinc-900">주요 콘텐츠 관리 (요일별 리뷰 프로그램)<HelpTip>
             채널기본정보.xlsx &quot;요일 별 리뷰 프로그램&quot; 시트 업로드로 자동 반영된 항목 + 직접 추가한 항목을 함께
             관리합니다. 여기에 등록된 프로그램이 매일 요일에 맞춰 1페이지 &quot;주요 콘텐츠 리뷰&quot;에 표시됩니다.
-          </p>
+          </HelpTip></h2>
         </div>
         <button
           onClick={() => (showForm ? resetForm() : setShowForm(true))}

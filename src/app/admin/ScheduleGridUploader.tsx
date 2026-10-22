@@ -6,6 +6,7 @@
 // (제목·파일명)에서 자동 인식한다 — 관리자가 고를 항목이 없다(자동 업로드 개선 방향 반영).
 // 여러 주(예: 2주치)를 한 번에 선택하면 파일마다 순서대로 업로드한다.
 import { useRef, useState } from "react";
+import HelpTip from "./HelpTip";
 import Link from "next/link";
 import { FileInputTrigger } from "./FileInputTrigger";
 
@@ -48,15 +49,15 @@ export default function ScheduleGridUploader() {
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-      <div className="mb-1 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-zinc-900">주간 편성표 업로드</h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-zinc-900">
+          주간 편성표 업로드
+          <HelpTip>방송사 주간 편성표 엑셀을 올리면 채널·주차를 자동 인식해 저장하고, 이미 적재된 시청률과 매칭합니다. 여러 주를 한 번에 선택할 수 있습니다.</HelpTip>
+        </h2>
         <Link href="/admin/schedule-grid" className="text-sm font-medium text-zinc-500 underline hover:text-zinc-700">
           업로드된 편성표 보기
         </Link>
       </div>
-      <p className="mb-3 text-sm text-zinc-500">
-        방송사 주간 편성표 엑셀을 올리면 채널·주차를 자동으로 인식해 저장하고, 이미 적재된 시청률과 매칭합니다. 여러 주를 한 번에 선택할 수 있습니다.
-      </p>
       <div className="flex items-center gap-3">
         <FileInputTrigger inputRef={fileInputRef} accept=".xlsx,.xls" multiple />
         <button

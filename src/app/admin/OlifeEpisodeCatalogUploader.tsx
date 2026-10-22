@@ -4,6 +4,7 @@
 // 극한직업/한국기행의 국가·부제 상세 메타데이터를 보완한다(EPG 업로드와 별개 — EPG는 방영
 // 시간·회차·부제만, 이 파일은 국가/테마까지 채운다).
 import { useRef, useState } from "react";
+import HelpTip from "./HelpTip";
 import { FileInputTrigger } from "./FileInputTrigger";
 
 type FileSummary =
@@ -45,13 +46,12 @@ export default function OlifeEpisodeCatalogUploader() {
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-900">OLIFE 회차 카탈로그(EBS 콘텐츠 리스트) 업로드</h2>
-      <p className="mb-4 text-sm text-zinc-500">
+      <h2 className="mb-3 text-lg font-semibold text-zinc-900">OLIFE 회차 카탈로그(EBS 콘텐츠 리스트) 업로드<HelpTip>
         세계테마기행/극한직업/한국기행 시트가 담긴 EBS 콘텐츠 리스트 엑셀을 올리면, 회차별 부제에서
         국가(사전 매칭 성공 시)·상세 조각·(극한직업만) 테마를 추출해 저장합니다. Nielsen/EPG 데이터의
         부제(episode_subtitle)와 텍스트가 일치하는 방영분에만 매칭되므로(부제 원문이 카탈로그에 없는
         회차는 매칭되지 않음), 카탈로그가 늘어날수록 매칭률도 함께 늘어납니다.
-      </p>
+      </HelpTip></h2>
 
       <div className="mb-4 flex items-center gap-3">
         <FileInputTrigger inputRef={fileInputRef} accept=".xls,.xlsx" multiple />

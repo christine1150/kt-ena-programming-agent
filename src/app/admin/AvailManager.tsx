@@ -4,6 +4,7 @@
 // 흐름: 파일 선택 → 열 매핑 미리보기(헤더가 맞지 않으면 거부) → 기존 권리와의 차이 확인 → 확정 반영.
 // 확인 대기(계약 해석·메모·승인·중복)와 보충 속성(1st window)도 여기서 처리한다. 확정하기 전에는 아무것도 저장하지 않는다.
 import { useCallback, useEffect, useRef, useState } from "react";
+import HelpTip from "./HelpTip";
 import { FileInputTrigger } from "./FileInputTrigger";
 
 interface OriginalEndItem {
@@ -176,11 +177,10 @@ export default function AvailManager() {
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-900">Avail(콘텐츠·채널 권리) 관리</h2>
-      <p className="mb-4 text-sm text-zinc-500">
+      <h2 className="mb-3 text-lg font-semibold text-zinc-900">Avail(콘텐츠·채널 권리) 관리<HelpTip>
         콘텐츠별·채널별 Avail를 같은 권리 모델로 받습니다. 권리는 &ldquo;가능 / 불가 / 조건부 / 미확인&rdquo; 네 가지로 판정하고 사유와 원본 행을 함께 보여 줍니다.
         Avail가 없어도 성과 분석과 편성 탐색은 그대로 동작하며, 실행 가능 여부만 &lsquo;보류&rsquo;로 표시됩니다.
-      </p>
+      </HelpTip></h2>
 
       {ov && !ov.tablesApplied && (
         <div className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">⚠️ Avail 테이블이 아직 적용되지 않았습니다(데이터베이스 변경 적용 대기). 미리보기와 열 매핑 확인은 할 수 있지만 반영·확인 기록은 적용 후에 가능합니다.</div>

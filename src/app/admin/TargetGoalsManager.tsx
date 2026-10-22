@@ -4,6 +4,7 @@
 // (아직 실제 "목표 시청률 업로드 파일" 형식이 없어서, 화면에서 직접 입력하는 방식으로 만들었다.
 //  2026년 값은 Channel Master 업로드로 이미 채워져 있고, 그다음 해부터는 이 화면에서 관리한다.)
 import { useEffect, useState } from "react";
+import HelpTip from "./HelpTip";
 
 type Row = {
   channelId: string;
@@ -103,8 +104,13 @@ export default function TargetGoalsManager() {
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-      <div className="mb-1 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-zinc-900">목표 시청률 관리</h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-zinc-900">
+          목표 시청률 관리
+          <HelpTip>
+            채널별 목표 시청률·목표 등위를 연도별로 직접 입력/수정합니다. 2026년 값은 Channel Master 업로드로 이미 채워져 있습니다.
+          </HelpTip>
+        </h2>
         <div className="flex items-center gap-2 text-sm">
           <button
             onClick={() => setYear((y) => y - 1)}
@@ -121,17 +127,7 @@ export default function TargetGoalsManager() {
           </button>
         </div>
       </div>
-      <p className="mb-4 text-sm text-zinc-500">
-        채널별 목표 시청률·목표 등위를 연도별로 직접 입력/수정합니다. 2026년 값은 Channel Master
-        업로드로 이미 채워져 있습니다.
-        {/* 사용자 지시(2026-09-01, 관리자 화면 중복 점검): 이 화면과 Channel Master 업로드가
-            같은 테이블(target_goals)에 쓴다 — 중복 기능은 아니지만(엑셀 일괄 반영 vs 개별 수정),
-            여기서 고친 값이 다음 Channel Master 업로드로 덮여 쓰인다는 점이 어디에도 안 적혀
-            있어 실수하기 쉬웠다. 그 관계를 한 줄로 명시한다. */}{" "}
-        <span className="text-amber-600">
-          여기서 고친 값은 다음 번 Channel Master 업로드 때 그 파일의 값으로 덮어써집니다(같은 목표 값을 씁니다).
-        </span>
-      </p>
+      <p className="mb-4 text-xs text-amber-700">여기서 고친 값은 다음 Channel Master 업로드 때 그 파일의 값으로 덮어써집니다.</p>
 
       {loading ? (
         <p className="text-sm text-zinc-400" role="status">불러오는 중...</p>

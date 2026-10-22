@@ -11,6 +11,7 @@
 // 양식으로 재시도한다(두 파서 모두 "이 양식이 아니다"를 명확히 거부하므로 잘못된 양식이 조용히 저장되지 않는다).
 // 저장 대상은 같은 테이블(program_manual_reports)이라 같은 컨텐츠를 다시 올리면 최신 내용으로 덮어쓴다.
 import { useEffect, useRef, useState } from "react";
+import HelpTip from "./HelpTip";
 import { FileInputTrigger } from "./FileInputTrigger";
 
 type Channel = { id: string; code: string; name: string };
@@ -130,11 +131,10 @@ export default function ManualReportUploader() {
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
-      <h2 className="mb-1 text-lg font-semibold text-zinc-900">PD 수동 회차 리포트 업로드</h2>
-      <p className="mb-4 text-sm text-zinc-500">
+      <h2 className="mb-3 text-lg font-semibold text-zinc-900">PD 수동 회차 리포트 업로드<HelpTip>
         엑셀 리포트를 올리면 채널·프로그램·회차를 자동으로 인식해 1페이지 주요 콘텐츠 리뷰에 반영합니다. 같은 회차를 다시 올리면 최신 내용으로
         덮어씁니다.
-      </p>
+      </HelpTip></h2>
 
       <FileInputTrigger inputRef={fileInputRef} accept=".xlsx" multiple onFiles={(files) => void uploadFiles(files)} />
       {uploading && <p className="mt-3 text-sm text-zinc-500">올리는 중...</p>}
