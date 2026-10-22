@@ -30,6 +30,16 @@ export interface DayAlignment {
 }
 
 export function alignDay(airings: DayAiring[]): DayAlignment {
+  return alignDayMinutes(
+    airings.map((a) => {
+      const sp = a.startTime ? airingSpan(a.startTime, a.endTime) : null;
+      return { startMin: sp?.startMin ?? null, endMin: sp?.endMin ?? null, rating: a.rating };
+    })
+  );
+}
+
+/** alignDay와 같은 계산을 방송일 분(120~1560) 구간으로 받는다 — AI 편성 엔진의 방영(OwnAiring)처럼 이미 분으로 바뀐 자료용. */
+export function alignDayMinutes(airings: { startMin: number | null; endMin: number | null; rating: number | null }[]): DayAlignment {
   const sum = new Float64Array(DAY);
   const cnt = new Uint16Array(DAY);
   const nul = new Uint8Array(DAY);
@@ -37,17 +47,12 @@ export function alignDay(airings: DayAiring[]): DayAlignment {
   const vals: number[] = [];
   for (const a of airings) {
     if (a.rating !== null && Number.isFinite(a.rating)) vals.push(a.rating);
-    if (!a.startTime) {
+    if (a.startMin === null || a.endMin === null) {
       noEnd++;
       continue;
     }
-    const sp = airingSpan(a.startTime, a.endTime);
-    if (!sp || sp.endMin === null) {
-      noEnd++;
-      continue;
-    }
-    const from = Math.max(Math.round(sp.startMin), BROADCAST_DAY_START_MIN) - BROADCAST_DAY_START_MIN;
-    const to = Math.min(Math.round(sp.endMin), BROADCAST_DAY_END_MIN) - BROADCAST_DAY_START_MIN;
+    const from = Math.max(Math.round(a.startMin), BROADCAST_DAY_START_MIN) - BROADCAST_DAY_START_MIN;
+    const to = Math.min(Math.round(a.endMin), BROADCAST_DAY_END_MIN) - BROADCAST_DAY_START_MIN;
     for (let m = from; m < to; m++) {
       if (a.rating === null || !Number.isFinite(a.rating)) nul[m] = 1;
       else {
