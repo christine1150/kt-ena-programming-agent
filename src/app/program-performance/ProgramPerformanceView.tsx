@@ -9,7 +9,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { shortProgramName } from "@/lib/programAlias";
 import { formatInt, formatPct, formatRatingValue, MISSING } from "@/lib/ui/metricFormat";
 import { WORK_CLASS_LABEL, indexOf } from "@/lib/programPerformance/metrics";
-import type { AiringFilter, AiringRef, ChannelLine, ChannelRow, CompetitorRow, Direction, MonthlyPoint, PerformanceResult, RatioValue, SearchItem, TargetMode, WorkClass } from "@/lib/programPerformance/types";
+import type { AiringFilter, AiringRef, TextPart, ChannelLine, ChannelRow, CompetitorRow, Direction, MonthlyPoint, PerformanceResult, RatioValue, SearchItem, TargetMode, WorkClass } from "@/lib/programPerformance/types";
 
 type ClassFilter = "all" | "drama" | "variety";
 type PeriodPreset = "all" | "4w" | "12w" | "custom";
@@ -289,12 +289,27 @@ const monthTitle = (m: MonthlyPoint) => `${Number(m.month.slice(5))}월${m.parti
 const shortDate = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}(${DOW[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
 const slotName = (dow: number, hb: number) => `${DOW[dow]} ${hb}시대`;
 
-function Card({ title, lead, children }: { title: string; lead: string; children?: ReactNode }) {
+/** 서버가 만든 문장 조각 — 방향이 있는 숫자는 높음 푸른색·낮음 붉은색(사용자 지정 2026-10-22) */
+function Parts({ parts }: { parts: TextPart[] }) {
+  return (
+    <>
+      {parts.map((p, i) => (p.d ? (
+        <span key={i} className={`font-bold tabular-nums ${DIR_CLASS[p.d]}`}>
+          {p.t}
+        </span>
+      ) : (
+        <span key={i}>{p.t}</span>
+      )))}
+    </>
+  );
+}
+
+function Card({ title, lead, children }: { title: string; lead?: ReactNode; children?: ReactNode }) {
   return (
     <div className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4">
       <h4 className="text-[12px] font-medium text-zinc-500">{title}</h4>
-      <p className="mt-0.5 text-[14px] font-semibold leading-snug text-zinc-900">{lead}</p>
-      {children && <div className="mt-2">{children}</div>}
+      {lead && <p className="mt-0.5 text-[14px] font-semibold leading-snug text-zinc-900">{lead}</p>}
+      {children && <div className={lead ? "mt-2" : "mt-1"}>{children}</div>}
     </div>
   );
 }
@@ -421,8 +436,8 @@ function TrendSection({ row }: { row: ChannelRow }) {
   );
   const refSub = (r: AiringRef) => `${r.episode !== null ? `${r.episode}회 · ` : ""}${shortDate(r.date)} ${fmtTime(r.startTime)}${r.firstRun === true ? " · 본방" : ""}`;
   return (
-    <>
-      <div className="rounded-xl border border-zinc-200 bg-white p-4">
+    <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(250px,310px)]">
+      <div className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <h4 className="text-[12px] font-medium text-zinc-500">시청률 흐름</h4>
@@ -446,13 +461,13 @@ function TrendSection({ row }: { row: ChannelRow }) {
           {unit === "first" && hasFirst ? `본방 ${a.firstRuns.length}회(회차 번호가 없으면 방영일 표기)` : "월별 방영 평균"} · 점선은 {unit === "first" && hasFirst ? "같은 기간" : "같은 달"} 채널 평균 · 점에 마우스를 올리면 값
         </p>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-1 lg:content-between">
         {stat("평균", row.programAvg, `${formatInt(row.airings)}회 · 채널 평균 ${formatRatingValue(row.channelDaily?.mean ?? null, code)}`, <DeltaText r={row.vsChannel} />)}
         {x ? stat("최고", x.best.rating, refSub(x.best)) : stat("최고", null, "방영 1건")}
         {x ? stat("최저", x.worst.rating, refSub(x.worst)) : stat("최저", null, "방영 1건")}
         {x ? stat("최근 방영", x.recent.rating, `${refSub(x.recent)} · ${a.extremesText}`) : stat("최근 방영", null, a.extremesText)}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -467,7 +482,7 @@ function SlotCard({ row }: { row: ChannelRow }) {
   const judged = a.slots.filter((s) => s.sampleState !== "NONE");
   const list = all ? a.slots : (judged.length ? judged : a.slots).slice(0, SLOT_SHOW);
   return (
-    <Card title="편성 비교" lead={a.slotText}>
+    <Card title="편성 비교" lead={a.slotParts ? <Parts parts={a.slotParts} /> : a.slotText}>
       {a.slots.length > 0 && (
         <div className="dense-grid overflow-x-auto">
           <table className="w-full text-[13px]">
@@ -526,8 +541,18 @@ function SlotCard({ row }: { row: ChannelRow }) {
 function VerdictCard({ row }: { row: ChannelRow }) {
   const a = row.analysis!;
   return (
-    <Card title="종합 평가" lead={a.verdict}>
-      {a.reasons.length > 0 && (
+    <Card title="종합 평가" lead={a.insights.length > 0 ? undefined : a.verdict}>
+      {/* 평균 카드·편성 비교에 이미 보이는 내용은 빼고, 그 둘로는 안 보이는 관계(본방 대비 재방 효율 등)만 보여 준다(사용자 지시 2026-10-22) */}
+      {a.insights.length > 0 && (
+        <ul className="space-y-1 text-[14px] font-medium leading-snug text-zinc-900">
+          {a.insights.map((parts, i) => (
+            <li key={i}>
+              · <Parts parts={parts} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {a.insights.length === 0 && a.reasons.length > 0 && (
         <ul className="space-y-0.5 text-[13px] text-zinc-700">
           {a.reasons.map((t) => (
             <li key={t}>· {t}</li>

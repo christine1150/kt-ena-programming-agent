@@ -27,10 +27,12 @@ import {
   sampleStateOf,
   shareStat,
   slotLinesOf,
+  slotPartsOf,
   slotTextOf,
   splitStat,
   trendTextOf,
   verdictOf,
+  insightsOf,
   type ChannelDayRow,
   type CompAiring,
   type WorkAiring,
@@ -540,7 +542,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       const nonFirst = query.airing === "all" && first.airings > 0 && nonFirstRows.length > 0 ? { vs: ratioOf(splitStat(nonFirstRows).avg, channelDaily.mean), days: splitStat(nonFirstRows).days } : null;
       const v = verdictOf({ vsChannel: vsChannel.direction, vsSlot: slot.ratio.direction, sampleState, days: fStat.days, slots, nonFirst });
       const firstRuns = filtered.filter((a) => a.firstRun === true && a.rating !== null).map((a) => ({ date: a.date, startTime: a.startTime, episode: a.episode, firstRun: true, rating: a.rating as number }));
-      analysis = { episodes: eps.length >= 2 ? eps : [], firstRuns, channelAvg: channelDaily.mean, trendText: trendTextOf(eps, monthly, ch.code, firstRuns), extremes: ext, extremesText: extremesTextOf(ext), slots, slotText: slotTextOf(slots), verdict: v.verdict, reasons: v.reasons };
+      analysis = { episodes: eps.length >= 2 ? eps : [], firstRuns, channelAvg: channelDaily.mean, trendText: trendTextOf(eps, monthly, ch.code, firstRuns), extremes: ext, extremesText: extremesTextOf(ext), slots, slotText: slotTextOf(slots), slotParts: slotPartsOf(slots, nonFirst ? { ...nonFirst, rerunMajor: rerun.airings >= unknown.airings } : null), verdict: v.verdict, reasons: v.reasons, insights: insightsOf({ all: query.airing === "all", first, rerun, unknown, channelAvg: channelDaily.mean, overallRatio: vsChannel.ratio, firstRuns }) };
     }
 
     rows.push({

@@ -7,7 +7,8 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 // v1.3(2026-10-22): 행마다 점유율 평균·분석(analysis: 회차 추이·최고/최저·시간대별 비교·종합 문구) 추가 — 기존 값의 계산식 무변경
 // v1.4(2026-10-22): 첫 줄을 채널당 한 줄(2049·가구 함께)로, 경쟁 채널 성과(competitors) 추가 — 자사 값 계산식 무변경
 // v1.5(2026-10-22): 첫 줄 형식(지수 %)·pieces, 본방 추이(firstRuns), 기간 preset — 자사 값 계산식 무변경
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.5";
+// v1.6(2026-10-22): 편성 비교 문구를 본방 시간 기준 한 문장(slotParts)으로, 종합 평가를 겹치지 않는 인사이트(insights)로 — 자사 값 계산식 무변경
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.6";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
@@ -202,6 +203,14 @@ export interface SlotLine {
   basis: "DOW_HOUR" | "HOUR" | "NONE";
   vs: RatioValue;
   sampleState: "OK" | "SMALL" | "NONE";
+  /** 이 구간 방영 중 본방(<본>)인 건수 — 본방 시간대 판정에 쓴다 */
+  firstRunAirings?: number;
+}
+
+/** 문장 조각 — d가 있으면 화면이 방향 색(높음 푸른색·낮음 붉은색)을 입힌다. 문장은 서버가 확정 수치로만 만든다. */
+export interface TextPart {
+  t: string;
+  d?: Direction;
 }
 
 export interface RowAnalysis {
@@ -217,9 +226,13 @@ export interface RowAnalysis {
   extremesText: string;
   slots: SlotLine[];
   slotText: string;
+  /** 편성 비교 한 문장(본방 시간 기준) — 비교 가능한 구간이 둘 이상일 때. 없으면 slotText를 그대로 쓴다 */
+  slotParts: TextPart[] | null;
   /** 종합 평가 — 검증된 지표(채널 평균 대비·같은 시간대 대비·구간·본방 외)의 관계를 고정 문구로. 새 점수·가중치 없음 */
   verdict: string;
   reasons: string[];
+  /** 종합 평가 — 다른 칸에 이미 보이는 내용과 겹치지 않는 인사이트 줄(최대 3). 없으면 verdict를 쓴다 */
+  insights: TextPart[][];
 }
 
 export interface AiringEvidence {

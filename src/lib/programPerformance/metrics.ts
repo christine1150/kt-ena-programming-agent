@@ -6,7 +6,7 @@
 //  - 동슬롯 대비 = 콘텐츠 적합도 엔진과 같은 "같은 칸 다른 프로그램 기대치" 대비 수축 배율(편성 효율 지표, 인과 아님)
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
 import { formatRatingValue } from "@/lib/ui/metricFormat";
-import type { AiringFilter, AiringRef, ChannelDailyBase, ChannelLine, Direction, EpisodePoint, MonthlyPoint, RatioValue, RowAnalysis, SlotLine, SplitStat, WorkClass, WorkClassification } from "./types";
+import type { AiringFilter, AiringRef, ChannelDailyBase, ChannelLine, Direction, EpisodePoint, MonthlyPoint, RatioValue, RowAnalysis, SlotLine, SplitStat, TextPart, WorkClass, WorkClassification } from "./types";
 
 /** 방향은 화면 표시 자릿수(배율 소수 둘째 자리)로 반올림한 값으로만 정한다 — 임의의 "유의 차이" 임계값을 만들지 않는다. */
 const RATIO_DISPLAY_DIGITS = 2;
@@ -429,7 +429,7 @@ export function slotLinesOf(work: WorkAiring[], others: CompAiring[], minOther: 
     const c = basis === "DOW_HOUR" ? exact : basis === "HOUR" ? wide : [];
     const compAvg = basis === "NONE" ? null : meanOf(c);
     const vs = basis === "NONE" ? { ...ratioOf(st.avg, null), naReason: `같은 시 비교 방송 ${wide.length}건(${minOther}건 미만)` } : ratioOf(st.avg, compAvg);
-    out.push({ dow, hourBlock: hb, airings: st.airings, days: st.days, avg: st.avg, compAvg, compAirings: c.length, basis, vs, sampleState: sampleStateOf(st.days) });
+    out.push({ dow, hourBlock: hb, airings: st.airings, days: st.days, avg: st.avg, compAvg, compAirings: c.length, basis, vs, sampleState: sampleStateOf(st.days), firstRunAirings: list.filter((r) => r.firstRun === true).length });
   }
   // 판단 가능한 구간(방송일 3일 이상) 먼저, 그다음 방영 많은 순
   return out.sort((a, b) => Number(b.sampleState !== "NONE") - Number(a.sampleState !== "NONE") || b.airings - a.airings || a.dow - b.dow || a.hourBlock - b.hourBlock);
@@ -458,6 +458,84 @@ export function slotTextOf(slots: SlotLine[]): string {
   if (hi.length === j.length) return `방송일 3일 이상인 ${j.length}개 시간대 모두 같은 시간대 평균보다 높음`;
   if (lo.length === j.length) return `방송일 3일 이상인 ${j.length}개 시간대 모두 같은 시간대 평균보다 낮음`;
   return "시간대별로 같은 시간대 평균과 비슷하거나 엇갈립니다.";
+}
+
+/** 구간 이름 — "목 22시" (slotLabel의 '시대'를 뺀 짧은 표기) */
+const slotShort = (s: SlotLine) => `${DOW_KO[s.dow]} ${s.hourBlock}시`;
+const pctPart = (ratio: number | null, d: Direction): TextPart => ({ t: indexText(ratio), d });
+
+/**
+ * 편성 비교 한 문장(사용자 지시 2026-10-22) — "본방송 시간인 목 22시는 동시간대 평균 대비 151%, 목 2시는 28% 수준. 본방 외 재방은 채널 평균의 69%."
+ * 판단 가능한 구간(방송일 3일 이상·비교 가능)이 둘 이상일 때만 만든다(그 밖에는 null → slotText 사용). 구간 대표는 방송일이 많은 순 최대 2개씩,
+ * 방영의 절반 이상이 본방인 구간을 본방 시간으로 본다. 숫자에는 방향(d)이 붙고 화면이 높음 푸른색·낮음 붉은색을 입힌다.
+ */
+export function slotPartsOf(slots: SlotLine[], nonFirst: { vs: RatioValue; days: number; rerunMajor?: boolean } | null): TextPart[] | null {
+  const j = slots.filter(judgeable);
+  if (j.length < 2) return null;
+  const rank = (xs: SlotLine[]) => [...xs].sort((a, b) => b.days - a.days || b.airings - a.airings || a.dow - b.dow || a.hourBlock - b.hourBlock).slice(0, 2);
+  const isFirstSlot = (s: SlotLine) => (s.firstRunAirings ?? 0) * 2 >= s.airings && (s.firstRunAirings ?? 0) > 0;
+  const fr = rank(j.filter(isFirstSlot));
+  const rr = rank(j.filter((s) => !isFirstSlot(s)));
+  const items = [...fr, ...rr];
+  const parts: TextPart[] = [];
+  items.forEach((s, i) => {
+    if (i > 0) parts.push({ t: ", " });
+    if (i === 0 && fr.length > 0) parts.push({ t: "본방송 시간인 " });
+    parts.push({ t: `${slotShort(s)}는 ` }); // "…시"로 끝나 항상 "는"
+    if (i === 0) parts.push({ t: "동시간대 평균 대비 " });
+    parts.push(pctPart(s.vs.ratio, s.vs.direction));
+    if (i === items.length - 1 && items.length > 1) parts.push({ t: " 수준" });
+  });
+  parts.push({ t: "." });
+  if (nonFirst && nonFirst.days >= CONTENT_FIT_CONFIG.minDays && nonFirst.vs.ratio !== null) {
+    parts.push({ t: nonFirst.rerunMajor === false ? " 본방 외 방영은 채널 평균의 " : " 본방 외 재방은 채널 평균의 " }, pctPart(nonFirst.vs.ratio, nonFirst.vs.direction), { t: "." });
+  }
+  return parts;
+}
+
+/** 본방 대비 재방 효율 등급(재방 평균 ÷ 본방 평균) */
+function rerunGrade(r: number): { word: string; d: Direction } {
+  if (r < 0.3) return { word: "매우 낮음", d: "LOWER" };
+  if (r < 0.6) return { word: "낮음", d: "LOWER" };
+  if (r < 0.85) return { word: "다소 낮음", d: "LOWER" };
+  if (r <= 1.15) return { word: "본방과 비슷", d: "SIMILAR" };
+  return { word: "본방보다 높음", d: "HIGHER" };
+}
+
+/**
+ * 종합 평가 인사이트(사용자 지시 2026-10-22) — 평균 카드(채널 평균 대비)·편성 비교(시간대)에 이미 보이는 내용은 쓰지 않고, 그 둘로는 보이지 않는 관계만 낸다.
+ *  ① 본방 대비 재방 효율(재방 비중 포함) ② 본방만의 채널 평균 대비(전체 평균과 20%p 이상 다를 때) ③ 최근 본방이 최고 본방보다 크게 떨어졌을 때 ④ 본방 여부 미확인 비중이 커서 본재 비교가 제한될 때.
+ * 새 점수·권고 태그는 없다. 본재 구분 없는 전체 조회(all)에서만 ①②④를 만든다. 최대 3줄.
+ */
+export function insightsOf(i: { all: boolean; first: SplitStat; rerun: SplitStat; unknown: SplitStat; channelAvg: number | null; overallRatio: number | null; firstRuns: AiringRef[] }): TextPart[][] {
+  const out: TextPart[][] = [];
+  const total = i.first.airings + i.rerun.airings + i.unknown.airings;
+  if (i.all && i.first.airings >= 2 && i.first.avg !== null && i.first.avg > 0 && i.rerun.airings >= 2 && i.rerun.avg !== null && i.rerun.days >= CONTENT_FIT_CONFIG.minDays) {
+    const r = i.rerun.avg / i.first.avg;
+    const g = rerunGrade(r);
+    const share = total > 0 ? Math.round((i.rerun.airings / total) * 100) : 0;
+    const line: TextPart[] = [{ t: g.d === "SIMILAR" ? "재방 효율이 본방과 비슷(" : "본방 대비 재방 효율은 " }, { t: `${Math.round(r * 100)}%`, d: g.d }];
+    line.push({ t: g.d === "SIMILAR" ? ")" : `로 ${g.word}` });
+    if (g.d === "LOWER" && share >= 50) line.push({ t: ` — 방영의 ${share}%가 재방` });
+    out.push(line);
+  }
+  const fr = i.channelAvg !== null && i.channelAvg > 0 && i.first.avg !== null ? i.first.avg / i.channelAvg : null;
+  if (i.all && fr !== null && i.first.airings >= 2 && (i.rerun.airings > 0 || i.unknown.airings > 0) && i.overallRatio !== null && Math.abs(fr - i.overallRatio) >= 0.2) {
+    out.push([{ t: "본방만 보면 채널 평균의 " }, pctPart(fr, directionOfRatio(fr))]);
+  }
+  const rated = i.firstRuns.filter((x) => Number.isFinite(x.rating));
+  if (rated.length >= 3) {
+    const best = rated.reduce((a, b) => (b.rating > a.rating ? b : a));
+    const last = rated[rated.length - 1];
+    if (best.rating > 0 && last !== best && last.rating / best.rating < 0.8) {
+      const lab = last.episode !== null ? `${last.episode}회` : `${Number(last.date.slice(5, 7))}/${Number(last.date.slice(8))}`;
+      out.push([{ t: `최근 본방(${lab})은 최고 본방의 ` }, pctPart(last.rating / best.rating, "LOWER"), { t: "로 하락" }]);
+    }
+  }
+  if (i.all && total >= 4 && i.unknown.airings / total >= 0.5) {
+    out.push([{ t: `본방 여부 미확인 방영이 ${Math.round((i.unknown.airings / total) * 100)}%라 본방·재방 효율 비교가 제한됩니다` }]);
+  }
+  return out.slice(0, 3);
 }
 
 /**

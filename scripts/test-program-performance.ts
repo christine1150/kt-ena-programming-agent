@@ -5,7 +5,7 @@
 // 0/NULL/중복/정정/타깃 중복/소표본/산출 불가 처리, 분류 규칙(승인 메타데이터만), 다른 시즌 분리, 캐시 키 분리, 기존 엔진 무변경.
 // 보증하지 못하는 것: 운영 데이터에서의 값(합성 사례의 이름·수치는 실제 채널 성과가 아니다).
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
-import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, shareStat, slotLinesOf, slotTextOf, trendTextOf, verdictOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
+import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
 import { searchWorks } from "../src/lib/programPerformance/search";
 import { performanceCacheKey } from "../src/lib/programPerformance/cacheKey";
@@ -373,6 +373,31 @@ async function main() {
   check("종합: 채널 평균은 높고 시간대 기준엔 못 미침 + 시간대 엇갈림 + 본방 외 낮음", v1.verdict.startsWith("채널 평균은 웃돌지만") && v1.reasons.length === 2 && v1.reasons[0].includes("시간대에 따라") && v1.reasons[1].includes("본방 외"), JSON.stringify(v1));
   check("종합: 비교 근거 부족", verdictOf({ vsChannel: "HIGHER", vsSlot: "NA", sampleState: "OK", days: 10, slots: [], nonFirst: null }).verdict.includes("같은 시간대 비교 근거가 부족"));
   check("종합: 소표본은 '자료 적음' 근거", verdictOf({ vsChannel: "HIGHER", vsSlot: "HIGHER", sampleState: "SMALL", days: 5, slots: [], nonFirst: null }).reasons.includes("자료 적음 · 5일"));
+  // 편성 비교 한 문장(2026-10-22) — 본방 시간 기준
+  {
+    const sl2 = (dow: number, hb: number, days: number, firstRun: number, pct: number): SlotLine => ({ dow, hourBlock: hb, airings: days, days, avg: 1, compAvg: 1, compAirings: 20, basis: "DOW_HOUR", vs: ratioOf(1 + pct / 100, 1), sampleState: days >= 8 ? "OK" : days >= 3 ? "SMALL" : "NONE", firstRunAirings: firstRun });
+    const parts = slotPartsOf([sl2(4, 22, 4, 4, 51), sl2(4, 2, 30, 0, -72)], { vs: ratioOf(0.69, 1), days: 20 });
+    const txt = (parts ?? []).map((x) => x.t).join("");
+    check("편성 비교 문장: 본방 시간·재방 시간·본방 외 한 문장", txt === "본방송 시간인 목 22시는 동시간대 평균 대비 151%, 목 2시는 28% 수준. 본방 외 재방은 채널 평균의 69%.", txt);
+    check("편성 비교 문장: 151%는 높음(푸른색)·28%는 낮음(붉은색) 방향이 붙는다", !!parts && parts.find((x) => x.t === "151%")?.d === "HIGHER" && parts.find((x) => x.t === "28%")?.d === "LOWER");
+    check("편성 비교 문장: 판단 가능한 구간이 하나뿐이면 만들지 않는다", slotPartsOf([sl2(4, 22, 4, 4, 51)], null) === null);
+    check("편성 비교 문장: 본방 시간이 없으면 '본방송 시간인'을 붙이지 않는다", !(slotPartsOf([sl2(1, 20, 5, 0, 30), sl2(2, 20, 4, 0, -40)], null) ?? []).map((x) => x.t).join("").includes("본방송"));
+  }
+  // 종합 평가 인사이트(2026-10-22) — 다른 칸과 겹치지 않는 관계만
+  {
+    const st = (airings: number, days: number, avg: number | null) => ({ airings, days, avg });
+    const fr = [0.58, 0.79, 0.9, 1.2].map((r, i) => ({ date: ["2026-09-24", "2026-10-01", "2026-10-08", "2026-10-15"][i], startTime: "22:30:00", episode: i + 1, firstRun: true, rating: r }));
+    const ins = insightsOf({ all: true, first: st(4, 4, 0.9), rerun: st(35, 20, 0.08), unknown: st(0, 0, null), channelAvg: 0.122, overallRatio: 1.35, firstRuns: fr });
+    const t0 = (ins[0] ?? []).map((x) => x.t).join("");
+    check("인사이트: 본방 대비 재방 효율(매우 낮음)·재방 비중", t0 === "본방 대비 재방 효율은 9%로 매우 낮음 — 방영의 90%가 재방" && ins[0].find((x) => x.t === "9%")?.d === "LOWER", t0);
+    check("인사이트: 본방만 보면 채널 평균 대비(전체 평균과 크게 다를 때)", (ins[1] ?? []).map((x) => x.t).join("") === "본방만 보면 채널 평균의 738%" && ins[1].find((x) => x.t === "738%")?.d === "HIGHER", JSON.stringify(ins[1]));
+    check("인사이트: 최고가 마지막이면 하락 문구 없음·최대 3줄", ins.length === 2 && ins.length <= 3);
+    const down = insightsOf({ all: true, first: st(4, 4, 0.5), rerun: st(0, 0, null), unknown: st(0, 0, null), channelAvg: 0.5, overallRatio: 1, firstRuns: [1, 0.9, 0.5].map((r, i) => ({ date: ["2026-10-01", "2026-10-02", "2026-10-03"][i], startTime: null, episode: i + 1, firstRun: true, rating: r })) });
+    check("인사이트: 최근 본방이 최고의 80% 미만이면 하락", down.length === 1 && down[0].map((x) => x.t).join("") === "최근 본방(3회)은 최고 본방의 50%로 하락", JSON.stringify(down));
+    check("인사이트: 재방이 본방과 비슷하면 '본방과 비슷'", (insightsOf({ all: true, first: st(5, 5, 1), rerun: st(5, 5, 0.95), unknown: st(0, 0, null), channelAvg: 1, overallRatio: 1, firstRuns: [] })[0] ?? []).map((x) => x.t).join("") === "재방 효율이 본방과 비슷(95%)");
+    check("인사이트: 본재 구분 없는 조회가 아니면 본재 비교는 만들지 않는다", insightsOf({ all: false, first: st(4, 4, 1), rerun: st(9, 9, 0.1), unknown: st(0, 0, null), channelAvg: 1, overallRatio: 1, firstRuns: [] }).length === 0);
+    check("인사이트: 본방 여부 미확인이 절반 이상이면 비교 제한을 알린다", (insightsOf({ all: true, first: st(1, 1, 1), rerun: st(0, 0, null), unknown: st(9, 9, 0.5), channelAvg: 1, overallRatio: 0.55, firstRuns: [] })[0] ?? []).map((x) => x.t).join("").includes("미확인"));
+  }
   check("점유율: 값이 있는 방영만 평균(NULL은 0이 아님)", near(shareStat([air("2026-01-03", 0.1, { share: 2 }), air("2026-01-10", 0.1, { share: null }), air("2026-01-17", 0.1, { share: 0 })]).avg, 1));
   }
 
