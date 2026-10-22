@@ -28,14 +28,15 @@ const CHANNELS: { code: string; label: string }[] = [
   { code: "ENA_STORY", label: "ENA STORY" },
   { code: "SKYUHD", label: "skyUHD" },
 ];
-const TARGET_LABEL: Record<TargetMode, string> = { kpi: "채널별 KPI", common2049: "공통: 수도권 2049", commonHH: "공통: 전국 유료가구" };
+const TARGET_LABEL: Record<TargetMode, string> = { both: "수도권 2049·전국 유료가구 모두", kpi: "채널별 KPI만", common2049: "공통: 수도권 2049", commonHH: "공통: 전국 유료가구" };
 const AIRING_LABEL: Record<AiringFilter, string> = { all: "전체 방송", first: "본방", rerun: "본방 외" };
 const AIRING_HELP: Record<AiringFilter, string> = {
   all: "",
   first: "본방: 원본 자료에 본방 표시가 있는 방영(현재 ENA만 표시)",
   rerun: "본방 외: 확인된 재방과 본방 여부가 확인되지 않은 기록을 함께 포함",
 };
-const DIR_CLASS: Record<Direction, string> = { HIGHER: "text-emerald-700", SIMILAR: "text-zinc-700", LOWER: "text-rose-700", NA: "text-zinc-400" };
+// 채널 평균보다 좋으면 푸른색, 나쁘면 붉은색(사용자 지정, 2026-10-22) — 부호(+/−)와 함께 써 색만으로 전달하지 않는다
+const DIR_CLASS: Record<Direction, string> = { HIGHER: "text-blue-700", SIMILAR: "text-zinc-700", LOWER: "text-rose-700", NA: "text-zinc-400" };
 const DIR_WORD: Record<Direction, string> = { HIGHER: "높음", SIMILAR: "비슷", LOWER: "낮음", NA: "" };
 const EXCLUDED: ChannelRow["status"][] = ["UNSUPPORTED", "NO_TARGET"];
 const CLASS_BADGE: Record<WorkClass, string> = {
@@ -80,20 +81,27 @@ function sampleText(r: ChannelRow): string | null {
 }
 
 function emptyText(r: ChannelRow, airing: AiringFilter): string {
-  if (r.status === "NO_PROGRAM_DATA") return "프로그램 자료 없음";
+  if (r.status === "NO_PROGRAM_DATA" || r.status === "NO_TARGET") return "자료 없음";
   if (r.status === "OBSERVED") return airing === "first" ? "본방 없음" : "본방 외 방영 없음";
-  return "이 기간 방영 없음";
+  return "자료 없음";
 }
 
-function ChannelTable({ rows, title, airing, focus, selected, onSelect }: { rows: ChannelRow[]; title: string; airing: AiringFilter; focus: string | null; selected: string | null; onSelect: (code: string) => void }) {
+/** 채널 하나 = 방영 기록이 있는 채널. rows는 그 채널의 타깃별 행(KPI 타깃 먼저). */
+interface ChannelEntry {
+  main: ChannelRow;
+  rows: ChannelRow[];
+}
+
+/** 채널별 비교표 — 방영 기록이 있는 채널만, 채널마다 수도권 2049·전국 유료가구 행(채널 KPI 타깃에 'KPI' 표시). 순서는 기존 채널 순서. */
+function ChannelTable({ entries, airing, focus, selected, onSelect }: { entries: ChannelEntry[]; airing: AiringFilter; focus: string | null; selected: string | null; onSelect: (code: string) => void }) {
   return (
     <section className="mt-4">
-      <h3 className="mb-1.5 text-[14px] font-semibold text-zinc-800">{title}</h3>
-      <div className="dense-grid overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label={`${title} 채널별 비교 표`}>
+      <div className="dense-grid overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="채널별 비교 표">
         <table className="w-full text-[14px]">
           <thead className="bg-zinc-50 text-[12px] text-zinc-500">
             <tr>
               <th className="px-2 py-2 text-left font-medium sm:px-3">채널</th>
+              <th className="px-2 py-2 text-left font-medium sm:px-3">타깃</th>
               <th className="px-2 py-2 text-right font-medium sm:px-3">
                 <span className="sm:hidden">작품(%)</span>
                 <span className="hidden sm:inline">작품 시청률(%)</span>
@@ -108,34 +116,41 @@ function ChannelTable({ rows, title, airing, focus, selected, onSelect }: { rows
               </th>
             </tr>
           </thead>
-          <tbody>
-            {rows.map((r) => {
-              const observed = r.status === "OBSERVED" && r.airings > 0;
-              const sample = observed ? sampleText(r) : null;
-              const isSel = selected === r.channelCode;
-              return (
-                <tr key={r.channelCode} className={`border-t border-zinc-100 ${isSel ? "bg-sky-50" : focus === r.channelCode ? "bg-sky-50/40" : ""}`}>
-                  <td className="px-2 py-2 sm:px-3">
-                    <button type="button" onClick={() => onSelect(r.channelCode)} aria-pressed={isSel} className="text-left font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-600" aria-label={`${r.channelName} 채널 상세 열기`}>
-                      {r.channelName}
-                    </button>
-                    {sample && (
-                      <span className={`ml-1 whitespace-nowrap text-[11px] ${r.sampleState === "NONE" ? "text-rose-700" : "text-amber-700"}`} title={`${sample} — 집계 방송일이 ${r.sampleState === "NONE" ? "3" : "8"}일 미만`} aria-label={sample}>
-                        ({r.days}일)
-                      </span>
-                    )}
-                  </td>
-                  {observed ? (
-                    <td className="px-2 py-2 sm:px-3 text-right font-semibold tabular-nums">{formatRatingValue(r.programAvg, r.channelCode)}</td>
-                  ) : (
-                    <td className="px-2 py-2 sm:px-3 text-right text-[12px] text-zinc-500">{emptyText(r, airing)}</td>
-                  )}
-                  <td className="px-2 py-2 sm:px-3 text-right tabular-nums">{formatRatingValue(r.channelDaily?.mean ?? null, r.channelCode)}</td>
-                  <td className="px-2 py-2 sm:px-3 text-right">{observed ? <DeltaText r={r.vsChannel} /> : <span className="text-zinc-300">{MISSING}</span>}</td>
-                </tr>
-              );
-            })}
-          </tbody>
+          {entries.map(({ main, rows }) => {
+            const code = main.channelCode;
+            const isSel = selected === code;
+            const sample = sampleText(main);
+            return (
+              <tbody key={code} className={`border-t border-zinc-200 ${isSel ? "bg-sky-50" : focus === code ? "bg-sky-50/40" : ""}`}>
+                {rows.map((r, i) => {
+                  const observed = r.status === "OBSERVED" && r.airings > 0;
+                  return (
+                    <tr key={r.targetLabel} className={i > 0 ? "border-t border-zinc-100" : ""}>
+                      {i === 0 && (
+                        <td rowSpan={rows.length} className="px-2 py-2 align-top sm:px-3">
+                          <button type="button" onClick={() => onSelect(code)} aria-pressed={isSel} className="text-left font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-600" aria-label={`${main.channelName} 채널 상세 열기`}>
+                            {main.channelName}
+                          </button>
+                          {sample && (
+                            <span className={`ml-1 whitespace-nowrap text-[11px] ${main.sampleState === "NONE" ? "text-rose-700" : "text-amber-700"}`} title={`${sample} — 집계 방송일이 ${main.sampleState === "NONE" ? "3" : "8"}일 미만`} aria-label={sample}>
+                              ({main.days}일)
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      <td className={`px-2 py-2 text-[12px] sm:px-3 ${r.primary ? "text-zinc-800" : "text-zinc-500"}`}>
+                        <span className="whitespace-nowrap">{r.targetLabel}</span>
+                        {r.primary && rows.length > 1 && <span className="ml-1 rounded bg-zinc-100 px-1 text-[10px] text-zinc-600">KPI</span>}
+                      </td>
+                      <td className={`px-2 py-2 text-right tabular-nums sm:px-3 ${r.primary ? "font-semibold" : ""}`}>{observed ? formatRatingValue(r.programAvg, code) : <span className="text-[12px] font-normal text-zinc-400">{emptyText(r, airing)}</span>}</td>
+                      <td className="px-2 py-2 text-right tabular-nums sm:px-3">{formatRatingValue(r.channelDaily?.mean ?? null, code)}</td>
+                      <td className="px-2 py-2 text-right sm:px-3">{observed ? <DeltaText r={r.vsChannel} /> : <span className="text-zinc-300">{MISSING}</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            );
+          })}
         </table>
       </div>
     </section>
@@ -484,7 +499,7 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
   const [from, setFrom] = useState<string | null>(initialFrom);
   const [to, setTo] = useState<string | null>(initialTo);
   const [channels, setChannels] = useState<string[]>([]); // 비면 전체
-  const [targetMode, setTargetMode] = useState<TargetMode>("kpi");
+  const [targetMode, setTargetMode] = useState<TargetMode>("both");
   const [airing, setAiring] = useState<AiringFilter>("all");
   const [fetched, setFetched] = useState<{ url: string; result: PerformanceResult | null; error: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -584,15 +599,22 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
 
   const toggleChannel = (code: string) => setChannels((cur) => (cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code]));
   const allRows = result ? result.groups.flatMap((g) => g.rows) : [];
-  const comparable = allRows.filter((r) => !EXCLUDED.includes(r.status));
   const excluded = allRows.filter((r) => EXCLUDED.includes(r.status));
+  const aired = (r: ChannelRow) => r.status === "OBSERVED" && r.airings > 0;
+  // 채널별 묶음(기존 채널 순서) — 방영 기록이 있는 채널만, 채널 KPI 타깃 행 먼저
+  const entries: ChannelEntry[] = CHANNELS.map((c) => allRows.filter((r) => r.channelCode === c.code && !EXCLUDED.includes(r.status)))
+    .filter((rs) => rs.some(aired))
+    .map((rs) => {
+      const sorted = [...rs].sort((a, b) => Number(b.primary) - Number(a.primary));
+      return { main: sorted.find(aired) ?? sorted[0], rows: sorted };
+    });
+  const comparable = entries.map((e) => e.main);
   const detailRow = comparable.find((r) => r.channelCode === detailChannel) ?? null;
   const openDetail = (code: string) => {
     setDetailChannel(code);
     setTrendChannel(code);
     requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
-  const groupTitle = (g: "2049" | "HH") => (targetMode === "kpi" ? (g === "2049" ? "수도권 2049" : "전국 유료가구") : g === "2049" ? "수도권 2049 (공통 타깃)" : "전국 유료가구 (공통 타깃)");
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-screen-xl px-4 py-5 sm:px-6">
@@ -685,7 +707,7 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
             </div>
             <details className="relative">
               <summary className="cursor-pointer list-none rounded-full px-2.5 py-1 text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-50">
-                비교 설정{channels.length || targetMode !== "kpi" ? " · 변경됨" : ""} ▾
+                비교 설정{channels.length || targetMode !== "both" ? " · 변경됨" : ""} ▾
               </summary>
               <div className="absolute left-0 z-20 mt-1 w-56 space-y-2 rounded-md border border-zinc-200 bg-white p-3 shadow-md">
                 <fieldset>
@@ -738,12 +760,21 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
             </ul>
           )}
 
-          {result.groups.map((g) => {
-            const rows = g.rows.filter((r) => !EXCLUDED.includes(r.status));
-            return rows.length ? <ChannelTable key={g.kpiGroup} rows={rows} title={groupTitle(g.kpiGroup)} airing={result.query.airing} focus={focusChannel} selected={detailChannel} onSelect={openDetail} /> : null;
-          })}
+          {result.lines.length > 0 && (
+            <div className="mt-3 space-y-1 text-[14px] leading-relaxed text-zinc-900">
+              {result.lines.map((l) => (
+                <p key={l.channelCode}>{l.text}</p>
+              ))}
+            </div>
+          )}
+
+          {entries.length > 0 ? (
+            <ChannelTable entries={entries} airing={result.query.airing} focus={focusChannel} selected={detailChannel} onSelect={openDetail} />
+          ) : (
+            <p className="mt-4 text-[13px] text-zinc-500">이 조건의 방영 기록이 없습니다.</p>
+          )}
           {excluded.length > 0 &&
-            (comparable.length === 0 ? (
+            (allRows.every((r) => EXCLUDED.includes(r.status)) ? (
               <div className="mt-4 rounded-md bg-zinc-50 px-3 py-2 text-[13px] text-zinc-700">
                 {excluded.map((r) => (
                   <p key={r.channelCode}>

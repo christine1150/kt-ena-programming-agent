@@ -2,8 +2,9 @@
 // 설계·지표 정의: docs/ena-features-plan.md §3·§4
 import type { BaselineLevel } from "@/lib/contentFit/types";
 
-// v1.1(2026-10-22): 계산식은 v1 그대로, 응답에 월간 추이(monthly)·핵심 한 줄(headlines) 추가 — 캐시가 섞이지 않게 버전만 올림
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.1";
+// v1.1(2026-10-22): 계산식은 v1 그대로, 응답에 월간 추이(monthly) 추가
+// v1.2(2026-10-22): 두 타깃 모드(both)·채널별 첫 줄(lines, 그룹 요약 headlines 대체) — 계산식 무변경, 캐시가 섞이지 않게 버전만 올림
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.2";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
@@ -18,7 +19,8 @@ export interface WorkClassification {
 
 /** all=전체, first=<본> 표시 방영, rerun=<본> 표시가 없는 방영(재방·태그 없음) */
 export type AiringFilter = "all" | "first" | "rerun";
-export type TargetMode = "kpi" | "common2049" | "commonHH";
+/** kpi=채널 KPI 타깃만, both=채널마다 KPI 타깃+다른 그룹 타깃(수도권 2049·전국 유료가구 둘 다), common*=전 채널 같은 타깃 */
+export type TargetMode = "kpi" | "both" | "common2049" | "commonHH";
 
 export interface PerformanceQuery {
   groupKey: string;
@@ -112,10 +114,11 @@ export interface MonthlyPoint {
   vsChannel: RatioValue;
 }
 
-/** KPI 그룹별 핵심 한 줄 — 서버가 상회/하회·표본 상태로만 만든 템플릿 문장(LLM 아님) */
-export interface GroupHeadline {
-  kpiGroup: "2049" | "HH";
-  targetLabel: string;
+/** 채널별 첫 줄 — 서버가 확정 수치·방향·표본 상태로만 만든 고정 템플릿 문장(LLM 아님). 채널 KPI 타깃 기준. */
+export interface ChannelLine {
+  channelCode: string;
+  direction: Direction;
+  sampleState: "OK" | "SMALL" | "NONE";
   text: string;
 }
 
@@ -146,6 +149,8 @@ export interface ChannelRow {
   summary: string;
   /** 선택한 본재 조건의 월별 작품 평균 vs 같은 달 채널 일평균 */
   monthly: MonthlyPoint[];
+  /** 채널 KPI 타깃 행이면 true(두 타깃 모드에서 다른 그룹 타깃 행은 false) */
+  primary: boolean;
 }
 
 export interface AiringEvidence {
@@ -176,7 +181,7 @@ export interface PerformanceResult {
   period: { from: string; to: string; dbFirstDate: string | null; latestDataDate: string | null; workFirstObserved: string | null; workFirstFirstRun: string | null };
   totals: { channels: number; airings: number; days: number; episodes: number };
   groups: { kpiGroup: "2049" | "HH"; rows: ChannelRow[] }[];
-  headlines: GroupHeadline[];
+  lines: ChannelLine[];
   airings: AiringEvidence[];
   airingsTruncated: boolean;
   slotCells: SlotCell[];

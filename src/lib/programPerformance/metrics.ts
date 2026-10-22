@@ -5,7 +5,8 @@
 //  - 채널 일평균 대비 = 작품 평균 ÷ 채널 일평균(규모 참고 지표 — 시간대 효과를 뺀 효율이 아님)
 //  - 동슬롯 대비 = 콘텐츠 적합도 엔진과 같은 "같은 칸 다른 프로그램 기대치" 대비 수축 배율(편성 효율 지표, 인과 아님)
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
-import type { AiringFilter, ChannelDailyBase, ChannelRow, Direction, GroupHeadline, MonthlyPoint, RatioValue, SplitStat, WorkClass, WorkClassification } from "./types";
+import { formatRatingValue, formatSigned } from "@/lib/ui/metricFormat";
+import type { AiringFilter, ChannelDailyBase, ChannelLine, ChannelRow, Direction, MonthlyPoint, RatioValue, SplitStat, WorkClass, WorkClassification } from "./types";
 
 /** 방향은 화면 표시 자릿수(배율 소수 둘째 자리)로 반올림한 값으로만 정한다 — 임의의 "유의 차이" 임계값을 만들지 않는다. */
 const RATIO_DISPLAY_DIGITS = 2;
@@ -206,26 +207,25 @@ export function monthlySeries(airings: WorkAiring[], dayRows: ChannelDayRow[], f
   return out;
 }
 
-const HEAD_DIR: Record<Direction, string> = { HIGHER: "상회", LOWER: "하회", SIMILAR: "비슷", NA: "산출 불가" };
-
 /**
- * KPI 그룹별 핵심 한 줄 — 서버가 확정한 채널 평균 대비 방향과 표본 상태만으로 만드는 템플릿(LLM 없음).
- * 관측 상태의 서술이지 편성 권고가 아니다. 표본이 8일 미만인 채널은 이름을 밝혀 '방향성 참고'로 붙인다.
+ * 채널별 첫 줄 — "{기간} 기간 동안 {채널}({타깃})에서 평균 시청률 {값}({n}회)로 채널 평균 대비 {±%}. {판단}" (사용자 지정 형식, 2026-10-22).
+ * 서버가 확정한 작품 평균·채널 평균 대비·표본 상태로만 만든다(LLM 없음). 판단은 채널 평균보다 높은지·낮은지의 서술이며,
+ * 방송일 3일 미만은 판단하지 않고 8일 미만은 '자료 적음'을 붙인다(콘텐츠 적합도와 같은 표본 기준).
  */
-export function headlineFor(kpiGroup: "2049" | "HH", targetLabel: string, rows: ChannelRow[]): GroupHeadline {
-  const obs = rows.filter((r) => r.status === "OBSERVED" && r.airings > 0);
-  if (obs.length === 0) return { kpiGroup, targetLabel, text: `${targetLabel}: 이 조건의 방영 관측 없음.` };
-  const order: Direction[] = ["HIGHER", "LOWER", "SIMILAR", "NA"];
-  const byDir = order.map((d) => ({ d, names: obs.filter((r) => r.vsChannel.direction === d).map((r) => r.channelName) })).filter((x) => x.names.length);
-  let body: string;
-  if (byDir.length === 1 && obs.length > 1 && byDir[0].d !== "NA") body = `${obs.length}개 채널 모두 채널 평균 ${HEAD_DIR[byDir[0].d]}`;
-  else if (byDir.length === 1 && byDir[0].d !== "NA") body = `${byDir[0].names[0]} 채널 평균 ${HEAD_DIR[byDir[0].d]}`;
-  else body = byDir.map((x) => `${x.names.join("·")} ${HEAD_DIR[x.d]}`).join(", ");
-  const small = obs.filter((r) => r.sampleState === "SMALL").map((r) => r.channelName);
-  const none = obs.filter((r) => r.sampleState === "NONE").map((r) => r.channelName);
-  const notes = [small.length ? `방송일 8일 미만 ${small.join("·")} — 방향성 참고` : "", none.length ? `방송일 3일 미만 ${none.join("·")} — 판단 유보` : ""].filter(Boolean);
-  const tail = notes.length ? ` (${notes.join("; ")})` : "";
-  return { kpiGroup, targetLabel, text: `${targetLabel}: ${body}${tail}.` };
+export function channelLine(r: ChannelRow, from: string, to: string): ChannelLine {
+  const head = `${from} ~ ${to} 기간 동안 ${r.channelName}(${r.targetLabel})에서 평균 시청률 ${formatRatingValue(r.programAvg, r.channelCode)}(${r.airings}회)로`;
+  const v = r.vsChannel;
+  let text: string;
+  if (v.ratio === null || v.pct === null) text = `${head} 채널 평균과 비교할 수 없습니다(${v.naReason ?? "기준값 없음"}).`;
+  else {
+    const vs = `${head} 채널 평균 대비 ${formatSigned(v.pct, 0)}%.`;
+    if (r.sampleState === "NONE") text = `${vs} 방송일 ${r.days}일뿐이라 판단은 보류합니다.`;
+    else {
+      const judge = v.direction === "HIGHER" ? "채널 평균보다 높아 채널 시청률에 도움이 되고 있습니다." : v.direction === "LOWER" ? "채널 평균보다 낮아 채널 시청률에 도움이 되지 못하고 있습니다." : "채널 평균과 비슷한 수준입니다.";
+      text = `${vs} ${judge}${r.sampleState === "SMALL" ? ` (자료 적음 · ${r.days}일)` : ""}`;
+    }
+  }
+  return { channelCode: r.channelCode, direction: v.direction, sampleState: r.sampleState, text };
 }
 
 const DIR_KO: Record<Direction, string> ={ HIGHER: "높음", SIMILAR: "비슷", LOWER: "낮음", NA: "산출 불가" };

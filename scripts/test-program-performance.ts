@@ -5,7 +5,7 @@
 // 0/NULL/중복/정정/타깃 중복/소표본/산출 불가 처리, 분류 규칙(승인 메타데이터만), 다른 시즌 분리, 캐시 키 분리, 기존 엔진 무변경.
 // 보증하지 못하는 것: 운영 데이터에서의 값(합성 사례의 이름·수치는 실제 채널 성과가 아니다).
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
-import { channelDailyMean, classifyWork, dedupeAirings, describeRow, directionOfRatio, headlineFor, matchesAiringFilter, ratioOf } from "../src/lib/programPerformance/metrics";
+import { channelDailyMean, classifyWork, dedupeAirings, describeRow, directionOfRatio, matchesAiringFilter, ratioOf } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
 import { searchWorks } from "../src/lib/programPerformance/search";
 import { performanceCacheKey } from "../src/lib/programPerformance/cacheKey";
@@ -270,13 +270,23 @@ async function main() {
   const rm = rowOf(all2, "ENA").monthly;
   check("월간: 본재 필터가 작품 쪽 관측만 바꿈(ENA 본방 외 → 방영 없음, 채널 평균 그대로)", rm.length === 0 || rm.every((m) => m.airings === 0 && near(m.channelAvg, 0.5)));
 
-  // 핵심 한 줄 — 서버 템플릿, 상회/하회·표본 상태만
-  const h2049 = r.headlines.find((h) => h.kpiGroup === "2049")!;
-  check("핵심 한 줄: 2049 그룹 상회·하회 채널과 소표본 채널을 이름으로", h2049.text.startsWith("수도권 2049:") && /ENA(·ENA PLAY)? 상회/.test(h2049.text) && h2049.text.includes("ENA DRAMA 하회") && h2049.text.includes("3일 미만 ENA PLAY — 판단 유보"), h2049.text);
-  check("핵심 한 줄: 권고 문구 없음", r.headlines.every((h) => !/(강화|교체|유지하세요|늘리|기여)/.test(h.text)));
-  const vh = v.headlines.find((h) => h.kpiGroup === "HH")!;
-  check("핵심 한 줄: 한 채널만 관측되면 그 채널 이름으로", vh.text === "전국 유료가구: OLIFE 채널 평균 상회.", vh.text);
-  check("핵심 한 줄: 관측 없는 그룹", headlineFor("HH", "전국 유료가구", rowOf(all, "OLIFE") ? [rowOf(all, "OLIFE")] : []).text.includes("관측 없음"));
+  // 채널별 첫 줄 — 서버 고정 템플릿(사용자 지정 형식), 방영 기록이 있는 채널만
+  const lineOf = (res: typeof r, code: string) => res.lines.find((l) => l.channelCode === code)?.text ?? "";
+  check("첫 줄: 방영 기록 있는 채널만(관측 없음·자료 없음·제외 채널 없음)", r.lines.length === 3 && r.lines.map((l) => l.channelCode).join() === "ENA,ENA_DRAMA,ENA_PLAY", r.lines.map((l) => l.channelCode).join());
+  check("첫 줄: 기간·채널·타깃·평균(방영 횟수)·대비·판단", lineOf(r, "ENA").startsWith(`${r.period.from} ~ ${r.period.to} 기간 동안 ENA(수도권 2049)에서 평균 시청률 `) && lineOf(r, "ENA").includes("(12회)로 채널 평균 대비 +140%.") && lineOf(r, "ENA").endsWith("도움이 되고 있습니다."), lineOf(r, "ENA"));
+  check("첫 줄: 채널 평균보다 낮으면 도움이 되지 못함", lineOf(r, "ENA_DRAMA").includes("도움이 되지 못하고 있습니다"), lineOf(r, "ENA_DRAMA"));
+  check("첫 줄: 방송일 3일 미만은 판단 보류(수치는 유지)", lineOf(r, "ENA_PLAY").includes("채널 평균 대비 +100%") && lineOf(r, "ENA_PLAY").includes("판단은 보류") && !lineOf(r, "ENA_PLAY").includes("도움"), lineOf(r, "ENA_PLAY"));
+  check("첫 줄: 강화·교체 같은 편성 권고 문구 없음", r.lines.every((l) => !/(강화|교체|유지하세요|늘리)/.test(l.text)));
+
+  // 두 타깃 모드 — 채널마다 수도권 2049·전국 유료가구 둘 다, KPI 타깃 먼저, 같은 방영을 두 번 세지 않음
+  const b = (await loadProgramPerformanceWith(db, Q({ targetMode: "both" }), { fitLookup }))!;
+  const bAll = b.groups.flatMap((g) => g.rows);
+  const bEna = bAll.filter((x) => x.channelCode === "ENA");
+  check("두 타깃: ENA는 KPI(수도권 2049)와 전국 유료가구 두 행", bEna.length === 2 && bEna.some((x) => x.primary && x.targetLabel === "수도권 2049" && near(x.programAvg, 1.2)) && bEna.some((x) => !x.primary && x.targetLabel === "전국 유료가구" && near(x.programAvg, 2.5)));
+  check("두 타깃: 채널 하루 자료가 없는 타깃은 대비 산출 불가(0으로 채우지 않음)", bEna.find((x) => !x.primary)!.vsChannel.ratio === null);
+  check("두 타깃: 총계·근거 방송·첫 줄은 KPI 타깃 기준(두 번 세지 않음)", b.totals.airings === r.totals.airings && b.airings.length === r.airings.length && b.lines.length === r.lines.length, `${b.totals.airings}/${r.totals.airings} ${b.airings.length}/${r.airings.length}`);
+  check("두 타깃: 최근 12주 판정은 KPI 타깃 행에만", bEna.find((x) => x.primary)!.fit?.tag === "KEEP" && bEna.find((x) => !x.primary)!.fit === null);
+  check("두 타깃: skyUHD 제외 행은 한 번만", bAll.filter((x) => x.channelCode === "SKYUHD").length === 1);
 
   console.log(`\n${passed} passed, ${failures.length} failed`);
   if (failures.length) {

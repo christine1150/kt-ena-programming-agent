@@ -10,7 +10,7 @@ import { resolveProgramLevelTargetLabel, resolveRankSheetTargetLabel } from "@/l
 import { computeSlotComparison } from "@/lib/contentFit/engine";
 import type { ContentFitAiring } from "@/lib/contentFit/types";
 import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
-import { channelDailyMean, classifyWork, directionOfRatio, dedupeAirings, describeRow, headlineFor, matchesAiringFilter, monthlySeries, ratioOf, sampleStateOf, splitStat, type ChannelDayRow, type WorkAiring } from "./metrics";
+import { channelDailyMean, classifyWork, directionOfRatio, dedupeAirings, channelLine, describeRow, matchesAiringFilter, monthlySeries, ratioOf, sampleStateOf, splitStat, type ChannelDayRow, type WorkAiring } from "./metrics";
 import {
   PROGRAM_PERFORMANCE_VERSION,
   type AiringEvidence,
@@ -34,7 +34,7 @@ const EVIDENCE_CAP = 1500;
 export const CHANNEL_ORDER = ["ENA", "ENA_DRAMA", "ENA_PLAY", "OLIFE", "ONCE", "ENA_STORY", "SKYUHD"];
 
 /** 공통 타깃 모드의 타깃 표기: [프로그램 행(타깃상세 시트), 채널 하루 행(랭킹 시트)] — targetResolution.ts와 같은 규칙 */
-const COMMON_TARGETS: Record<Exclude<TargetMode, "kpi">, { program: string; channel: string; group: "2049" | "HH" }> = {
+const COMMON_TARGETS: Record<Exclude<TargetMode, "kpi" | "both">, { program: string; channel: string; group: "2049" | "HH" }> = {
   common2049: { program: "수도권 2049", channel: "개인2049", group: "2049" },
   commonHH: { program: "전국 유료가구", channel: "National 유료방송가입가구", group: "HH" },
 };
@@ -163,9 +163,17 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     const ids = idsByChannel.get(ch.id) ?? [];
     const primary = ch.primary_target ?? "";
     const mode = query.targetMode;
-    const programLabel = mode === "kpi" ? resolveProgramLevelTargetLabel(primary) : COMMON_TARGETS[mode].program;
-    const channelLabel = mode === "kpi" ? resolveRankSheetTargetLabel(primary) : COMMON_TARGETS[mode].channel;
-    const kpiGroup: "2049" | "HH" = mode === "kpi" ? (primary.includes("유료방송가입가구") ? "HH" : "2049") : COMMON_TARGETS[mode].group;
+    const primaryGroup: "2049" | "HH" = primary.includes("유료방송가입가구") ? "HH" : "2049";
+    // 채널 KPI 타깃(isPrimary) / 공통 타깃. 'both'는 채널마다 KPI 타깃과 다른 그룹 타깃 둘 다(KPI 먼저).
+    const kpiTarget = { program: resolveProgramLevelTargetLabel(primary), channel: resolveRankSheetTargetLabel(primary), group: primaryGroup, isPrimary: true };
+    const otherTarget = { ...COMMON_TARGETS[primaryGroup === "2049" ? "commonHH" : "common2049"], isPrimary: false };
+    const targets = mode === "kpi" ? [kpiTarget] : mode === "both" ? [kpiTarget, otherTarget] : [{ ...COMMON_TARGETS[mode], isPrimary: COMMON_TARGETS[mode].group === primaryGroup }];
+    for (const [ti, tgt] of targets.entries()) {
+    const programLabel = tgt.program;
+    const channelLabel = tgt.channel;
+    const kpiGroup = tgt.group;
+    // 근거 방송·시간대 칸·총계는 채널당 한 타깃만(두 타깃이면 같은 방영이 두 번 세어지므로 KPI 타깃만)
+    const collect = targets.length === 1 || tgt.isPrimary;
     const base: ChannelRow = {
       channelCode: ch.code,
       channelName: ch.name,
@@ -190,13 +198,14 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       sampleState: "NONE",
       summary: "",
       monthly: [],
+      primary: tgt.isPrimary,
     };
     if (ch.code === "SKYUHD") {
-      rows.push({ ...base, status: "UNSUPPORTED", statusNote: "skyUHD는 프로그램 시청률이 별도 수기 파일(타깃 없음·초 단위)이라 이번 비교에서 계산하지 않습니다." });
+      if (ti === 0) rows.push({ ...base, status: "UNSUPPORTED", statusNote: "skyUHD는 프로그램 시청률이 별도 수기 파일(타깃 없음·초 단위)이라 이번 비교에서 계산하지 않습니다." });
       continue;
     }
     if (!primary) {
-      rows.push({ ...base, status: "UNSUPPORTED", statusNote: "채널 핵심 타깃이 등록되지 않았습니다." });
+      if (ti === 0) rows.push({ ...base, status: "UNSUPPORTED", statusNote: "채널 핵심 타깃이 등록되지 않았습니다." });
       continue;
     }
     const [progTargetId, chTargetId] = await Promise.all([targetIdOf(db, programLabel), targetIdOf(db, channelLabel)]);
@@ -293,10 +302,11 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     const observedFrom = workRows[0].date;
     const observedTo = workRows[workRows.length - 1].date;
     const episodes = new Set(filtered.flatMap((r) => (r.episode === null ? [] : [r.episode])));
-    for (const r of filtered) {
-      allDays.add(r.date);
-      if (r.episode !== null) allEpisodes.add(r.episode);
-    }
+    if (collect)
+      for (const r of filtered) {
+        allDays.add(r.date);
+        if (r.episode !== null) allEpisodes.add(r.episode);
+      }
     const vsChannel = ratioOf(fStat.avg, channelDaily.mean, chTargetId ? "채널 하루 시청률 자료 없음" : `채널 하루 시청률 타깃('${channelLabel}') 없음`);
 
     // 동슬롯 대비 — 비교 창 = 이 채널에서 작품이 관측된 첫~마지막 방송일(본재 전환에도 같은 창)
@@ -346,9 +356,9 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       note: "같은 채널·타깃·기간에서 같은 요일·시(부족하면 요일·시간대 → 시간대 → 채널)의 다른 프로그램 방영 평균 대비, 콘텐츠 적합도와 같은 수축(κ=2) 적용. 비교군은 본재 구분 없음.",
     };
 
-    // 현재 판정(콘텐츠 적합도, 최근 12주) — KPI 타깃 모드에서만(엔진이 KPI 타깃 기준)
+    // 현재 판정(콘텐츠 적합도, 최근 12주) — 채널 KPI 타깃 행에서만(엔진이 KPI 타깃 기준, 공통 타깃 모드 제외)
     let fit: FitTagInfo | null = null;
-    if (opts.fitLookup && mode === "kpi") {
+    if (opts.fitLookup && (mode === "kpi" || mode === "both") && tgt.isPrimary) {
       const fr = await opts.fitLookup(ch.code).catch(() => null);
       if (fr) {
         const mine = fr.items.filter((i) => ids.includes(i.programId)).sort((a, b) => b.airings - a.airings);
@@ -359,11 +369,11 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     }
 
     const sampleState = sampleStateOf(fStat.days);
-    for (const r of filtered.slice(0, EVIDENCE_CAP)) {
+    for (const r of collect ? filtered.slice(0, EVIDENCE_CAP) : []) {
       evidence.push({ channelCode: ch.code, date: r.date, startTime: r.startTime, endTime: r.endTime, programId: r.programId, name: nameById.get(r.programId) ?? "", firstRun: r.firstRun, episode: r.episode, rating: r.rating });
     }
     const cells = new Map<string, { n: number; s: number; v: number; dow: number; hb: number }>();
-    for (const r of filtered) {
+    for (const r of collect ? filtered : []) {
       const hb = hourBlockOf(r.startTime);
       if (hb === null) continue;
       const dow = dowOf(r.date);
@@ -399,11 +409,13 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       summary: filtered.length === 0 ? "선택한 본재 조건의 방영 없음." : describeRow(vsChannel.direction, slot.ratio.direction, sampleState),
       monthly: monthlySeries(filtered, dayList, from, to, channelLabel),
     });
+    }
   }
 
   evidence.sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? "").localeCompare(b.startTime ?? "") || a.channelCode.localeCompare(b.channelCode));
   const groups: PerformanceResult["groups"] = (["2049", "HH"] as const).map((g) => ({ kpiGroup: g, rows: rows.filter((r) => r.kpiGroup === g) })).filter((g) => g.rows.length > 0);
-  const observed = rows.filter((r) => r.status === "OBSERVED");
+  // 총계·첫 줄은 채널당 한 타깃(두 타깃 모드에서는 KPI 타깃)만 — 같은 방영을 두 번 세지 않는다
+  const observed = rows.filter((r) => r.status === "OBSERVED" && (query.targetMode !== "both" || r.primary));
   return {
     version: PROGRAM_PERFORMANCE_VERSION,
     query: { ...query, from, to },
@@ -412,7 +424,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     period: { from, to, dbFirstDate: dbFirst, latestDataDate: latest, workFirstObserved: workFirst, workFirstFirstRun },
     totals: { channels: observed.filter((r) => r.airings > 0).length, airings: observed.reduce((a, r) => a + r.airings, 0), days: allDays.size, episodes: allEpisodes.size },
     groups,
-    headlines: groups.map((g) => headlineFor(g.kpiGroup, g.rows.find((r) => r.status !== "UNSUPPORTED")?.targetLabel ?? (g.kpiGroup === "2049" ? "수도권 2049" : "전국 유료가구"), g.rows)),
+    lines: observed.filter((r) => r.airings > 0).map((r) => channelLine(r, from, to)),
     airings: evidence.slice(0, EVIDENCE_CAP),
     airingsTruncated: evidence.length > EVIDENCE_CAP,
     slotCells,
