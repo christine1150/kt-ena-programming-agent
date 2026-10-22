@@ -44,7 +44,7 @@ function NavInner({ role }: { role: Role | null }) {
               title="ENA 콘텐츠 편성센터의 오리지널 라인업을 새 창으로 엽니다"
               className="block border-b-2 border-transparent px-3 py-2.5 text-[13px] font-semibold text-indigo-600 transition hover:text-indigo-800"
             >
-              라인업 ↗
+              라인업
             </a>
           </li>
           {items.map((item) => {
