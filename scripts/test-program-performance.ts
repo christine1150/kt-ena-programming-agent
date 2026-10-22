@@ -5,11 +5,11 @@
 // 0/NULL/중복/정정/타깃 중복/소표본/산출 불가 처리, 분류 규칙(승인 메타데이터만), 다른 시즌 분리, 캐시 키 분리, 기존 엔진 무변경.
 // 보증하지 못하는 것: 운영 데이터에서의 값(합성 사례의 이름·수치는 실제 채널 성과가 아니다).
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
-import { channelDailyMean, classifyWork, dedupeAirings, describeRow, directionOfRatio, matchesAiringFilter, ratioOf } from "../src/lib/programPerformance/metrics";
+import { channelDailyMean, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, shareStat, slotLinesOf, slotTextOf, trendTextOf, verdictOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
 import { searchWorks } from "../src/lib/programPerformance/search";
 import { performanceCacheKey } from "../src/lib/programPerformance/cacheKey";
-import type { ChannelRow, PerformanceQuery } from "../src/lib/programPerformance/types";
+import type { ChannelRow, PerformanceQuery, SlotLine } from "../src/lib/programPerformance/types";
 import { FakeDb } from "./lib/fakeSupabase";
 
 let passed = 0;
@@ -287,6 +287,54 @@ async function main() {
   check("두 타깃: 총계·근거 방송·첫 줄은 KPI 타깃 기준(두 번 세지 않음)", b.totals.airings === r.totals.airings && b.airings.length === r.airings.length && b.lines.length === r.lines.length, `${b.totals.airings}/${r.totals.airings} ${b.airings.length}/${r.airings.length}`);
   check("두 타깃: 최근 12주 판정은 KPI 타깃 행에만", bEna.find((x) => x.primary)!.fit?.tag === "KEEP" && bEna.find((x) => !x.primary)!.fit === null);
   check("두 타깃: skyUHD 제외 행은 한 번만", bAll.filter((x) => x.channelCode === "SKYUHD").length === 1);
+
+  // 선택 채널 분석(2×2) — 서버가 문구까지 확정, 방영 있는 행만
+  const enaA = rowOf(r.groups.flatMap((g) => g.rows), "ENA");
+  check("분석: 방영이 있는 행에만 analysis", !!enaA.analysis && r.groups.flatMap((g) => g.rows).filter((x) => x.airings === 0).every((x) => x.analysis === null));
+  check("분석: 종합 평가는 태그·권고 없이 한 줄 + 근거 최대 2개", !!enaA.analysis && enaA.analysis.reasons.length <= 2 && !/(강화|교체|우상향|잠재력)/.test(enaA.analysis.verdict + enaA.analysis.reasons.join("")), enaA.analysis?.verdict);
+  check("분석: 소표본(3일 미만)은 종합 평가 보류", rowOf(r.groups.flatMap((g) => g.rows), "ENA_PLAY").analysis?.verdict.includes("판단하기 어렵습니다") === true);
+  check("분석: 실제 방영한 시간대만 비교(방영 없는 시간대 행 없음)", !!enaA.analysis && enaA.analysis.slots.every((s) => s.airings > 0));
+
+  // ── 분석 순수 함수 ─────────────────────────────────────────────
+  {
+  const air = (date: string, rating: number | null, over: Partial<WorkAiring> = {}): WorkAiring => ({ programId: "w", date, startTime: "20:00:00", endTime: null, rating, firstRun: true, episode: null, ...over });
+  // 회차: 본방만, 재방은 같은 회차라도 넣지 않음
+  const eps = episodeSeries([air("2026-01-03", 0.2, { episode: 1 }), air("2026-01-04", 0.9, { episode: 1, firstRun: null }), air("2026-01-10", 0.4, { episode: 2 }), air("2026-01-17", 0.6, { episode: 3 }), air("2026-01-24", 0.8, { episode: 4 })]);
+  check("회차 추이: 본방·회차 확인분만, 재방은 다음 회차로 잇지 않음", eps.length === 4 && near(eps[0].avg, 0.2) && eps[0].airings === 1);
+  const t4 = trendTextOf(eps, [], "ENA");
+  check("흐름: 회차 4개 이상은 전반·후반 평균", t4.startsWith("후반 회차 평균 상승") && t4.includes("전반 0.300%") && t4.includes("후반 0.700%"), t4);
+  const t2 = trendTextOf(eps.slice(0, 2), [], "ENA");
+  check("흐름: 회차 2~3개는 첫·최근 회차", t2.startsWith("최근 회차 상승") && t2.includes("1회") && t2.includes("2회"), t2);
+  check("흐름: 근거가 하나뿐이면 '추이 자료 부족'(0을 안정으로 읽지 않음)", trendTextOf(eps.slice(0, 1), [], "ENA").startsWith("추이 자료 부족"));
+  const ext = extremesOf([air("2026-01-03", 0.5), air("2026-01-10", 0.9), air("2026-01-17", 0.1), air("2026-01-24", 0.4)]);
+  check("최고·최저·최근", !!ext && ext.best.rating === 0.9 && ext.worst.rating === 0.1 && ext.recent.date === "2026-01-24" && extremesTextOf(ext).startsWith("최고는"));
+  check("최고·최저: 1건이면 나누지 않음", extremesOf([air("2026-01-03", 0.5)]) === null);
+  // 시간대 비교: 토 20시(2026-01-03은 토요일) 비교 방송 15건 이상만 산출
+  const others = Array.from({ length: 15 }, (_, i) => ({ date: "2026-01-31", startTime: "20:10:00", rating: 0.2 + (i === 0 ? 0.0 : 0) }));
+  const sl = slotLinesOf([air("2026-01-03", 0.4), air("2026-01-10", 0.4), air("2026-01-17", 0.4), air("2026-01-04", 0.3, { startTime: "14:00:00" })], others, 15);
+  const sat = sl.find((s) => s.dow === 6 && s.hourBlock === 20)!;
+  const sun = sl.find((s) => s.dow === 0)!;
+  check("시간대 비교: 같은 요일·시 다른 프로그램 단순 평균 대비", near(sat.compAvg, 0.2) && near(sat.vs.pct, 100) && sat.days === 3);
+  check("시간대 비교: 비교 방송 부족은 산출 불가(0 아님)", sun.vs.ratio === null && sun.compAvg === null && (sun.vs.naReason ?? "").includes("15건 미만"));
+  check("시간대 문구: 비교 가능한 구간이 하나면 한 줄", slotTextOf(sl).startsWith("토 20시대 같은 시간대 평균보다 높음"), slotTextOf(sl));
+  check("시간대 비교: 같은 요일·시 기준이면 basis=DOW_HOUR", sat.basis === "DOW_HOUR");
+  {
+    const cell = (dow: number, days: number, pct: number): SlotLine => ({ dow, hourBlock: 22, airings: days, days, avg: 1, compAvg: 1, compAirings: 20, basis: "DOW_HOUR", vs: ratioOf(1 + pct / 100, 1), sampleState: days >= 8 ? "OK" : days >= 3 ? "SMALL" : "NONE" });
+    const t = slotTextOf([cell(1, 6, 50), cell(4, 3, 300), cell(0, 5, -20)]);
+    check("시간대 문구: 극단값이 아니라 방영 많은 구간을 대표로, 소표본이면 참고 표시", t.includes("월 22시대 +50%") && !t.includes("+300%") && t.includes("참고만"), t);
+  }
+  // 같은 요일·시가 부족하면 같은 시(모든 요일)로 넓힌다 — 2026-01-26(월) 20시 15건
+  const wideOthers = Array.from({ length: 15 }, () => ({ date: "2026-01-26", startTime: "20:05:00", rating: 0.5 }));
+  const wl = slotLinesOf([air("2026-01-03", 0.25)], wideOthers, 15)[0];
+  check("시간대 비교: 요일·시 부족이면 같은 시·모든 요일 기준(basis=HOUR)", wl.basis === "HOUR" && near(wl.compAvg, 0.5) && near(wl.vs.pct, -50));
+  // 종합 평가
+  const mk = (dow: number, pct: number): SlotLine => ({ dow, hourBlock: 20, airings: 4, days: 4, avg: 1, compAvg: 1, compAirings: 20, basis: "DOW_HOUR", vs: ratioOf(1 + pct / 100, 1), sampleState: "SMALL" });
+  const v1 = verdictOf({ vsChannel: "HIGHER", vsSlot: "LOWER", sampleState: "OK", days: 10, slots: [mk(6, 50), mk(0, -30)], nonFirst: { vs: ratioOf(0.5, 1), days: 5 } });
+  check("종합: 채널 평균은 높고 시간대 기준엔 못 미침 + 시간대 엇갈림 + 본방 외 낮음", v1.verdict.startsWith("채널 평균은 웃돌지만") && v1.reasons.length === 2 && v1.reasons[0].includes("시간대에 따라") && v1.reasons[1].includes("본방 외"), JSON.stringify(v1));
+  check("종합: 비교 근거 부족", verdictOf({ vsChannel: "HIGHER", vsSlot: "NA", sampleState: "OK", days: 10, slots: [], nonFirst: null }).verdict.includes("같은 시간대 비교 근거가 부족"));
+  check("종합: 소표본은 '자료 적음' 근거", verdictOf({ vsChannel: "HIGHER", vsSlot: "HIGHER", sampleState: "SMALL", days: 5, slots: [], nonFirst: null }).reasons.includes("자료 적음 · 5일"));
+  check("점유율: 값이 있는 방영만 평균(NULL은 0이 아님)", near(shareStat([air("2026-01-03", 0.1, { share: 2 }), air("2026-01-10", 0.1, { share: null }), air("2026-01-17", 0.1, { share: 0 })]).avg, 1));
+  }
 
   console.log(`\n${passed} passed, ${failures.length} failed`);
   if (failures.length) {

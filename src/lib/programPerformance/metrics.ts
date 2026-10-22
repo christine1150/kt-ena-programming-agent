@@ -6,7 +6,7 @@
 //  - 동슬롯 대비 = 콘텐츠 적합도 엔진과 같은 "같은 칸 다른 프로그램 기대치" 대비 수축 배율(편성 효율 지표, 인과 아님)
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
 import { formatRatingValue, formatSigned } from "@/lib/ui/metricFormat";
-import type { AiringFilter, ChannelDailyBase, ChannelLine, ChannelRow, Direction, MonthlyPoint, RatioValue, SplitStat, WorkClass, WorkClassification } from "./types";
+import type { AiringFilter, AiringRef, ChannelDailyBase, ChannelLine, ChannelRow, Direction, EpisodePoint, MonthlyPoint, RatioValue, RowAnalysis, SlotLine, SplitStat, WorkClass, WorkClassification } from "./types";
 
 /** 방향은 화면 표시 자릿수(배율 소수 둘째 자리)로 반올림한 값으로만 정한다 — 임의의 "유의 차이" 임계값을 만들지 않는다. */
 const RATIO_DISPLAY_DIGITS = 2;
@@ -105,6 +105,8 @@ export interface WorkAiring {
   firstRun: boolean | null;
   episode: number | null;
   createdAt?: string | null;
+  /** 닐슨 방영별 점유율(%) — 시청시간 비율(time_spent_share)과 다른 열 */
+  share?: number | null;
 }
 
 /** 같은 방영(프로그램·방송일·시작 시각)의 중복 행은 한 번만 센다 — ratings 행 수를 방영 수로 쓰지 않는다. 값이 다르면 최근 적재 값. */
@@ -250,4 +252,199 @@ export function describeRow(vsChannel: Direction, vsSlot: Direction, sample: "OK
   else if (vsChannel === "LOWER" && vsSlot === "HIGHER") text = "채널 일평균보다 낮지만, 해당 슬롯에서는 기준을 웃돎.";
   else text = "채널 일평균과 슬롯 기준을 모두 밑돎. 교체 여부는 현재 판정·근거를 따로 확인.";
   return `${text}${suffix}`;
+}
+
+// ───────────────────────── 선택 채널 분석(2×2, 2026-10-22) ─────────────────────────
+// 화면은 이 결과를 표시만 한다. 새 점수·가중치·판정 알고리즘이 아니라 이미 있는 지표(방영별 시청률·채널 평균 대비·같은 시간대 대비)를
+// 짧은 고정 문구로 잇는 것이다. 같은 유형 평균·순위는 앱 자료로 검증되지 않아 쓰지 않는다(F1_SIMPLIFY.md §3).
+
+export const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
+export const slotLabel = (dow: number, hb: number) => `${DOW_KO[dow]} ${hb}시대`;
+
+function meanOf(vals: number[]): number | null {
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+}
+
+/** 방영별 점유율 산술평균(값이 있는 방영만). 기간 공식 점유율이 아니다. */
+export function shareStat(rows: WorkAiring[]): { avg: number | null; airings: number } {
+  const vals = rows.flatMap((r) => (r.share === null || r.share === undefined || !Number.isFinite(r.share) ? [] : [r.share]));
+  return { avg: meanOf(vals), airings: vals.length };
+}
+
+/** 회차별 추이 — <본> 표시가 있고 회차 번호가 있는 방영만. 재방·본방 여부 미확인 방영은 넣지 않는다(같은 회차 재방을 다음 회차처럼 잇지 않음). */
+export function episodeSeries(rows: WorkAiring[]): EpisodePoint[] {
+  const by = new Map<number, WorkAiring[]>();
+  for (const r of rows) {
+    if (r.firstRun !== true || r.episode === null) continue;
+    by.set(r.episode, [...(by.get(r.episode) ?? []), r]);
+  }
+  return [...by.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([episode, list]) => ({ episode, date: list[0].date, airings: list.length, avg: meanOf(list.flatMap((r) => (r.rating === null ? [] : [r.rating]))) }));
+}
+
+const pctText = (v: number | null, code: string) => formatRatingValue(v, code, { unit: true });
+const DIR_TREND: Record<Direction, string> = { HIGHER: "상승", LOWER: "하락", SIMILAR: "비슷", NA: "" };
+
+/**
+ * 흐름 한 줄. 정의(테스트로 고정):
+ *  - 본방 회차 4개 이상: 회차 번호 순 앞 절반 평균 vs 뒤 절반 평균(홀수면 가운데 회차 제외)
+ *  - 본방 회차 2~3개: 첫 회차 vs 마지막 회차
+ *  - 그 외: 방영이 있는 첫 달과 마지막 달의 채널 평균 대비(같은 달 채널 평균 기준이라 달마다 채널 수준이 달라도 비교 가능)
+ *  - 근거가 하나뿐이면 '추이 자료 부족'(증감 0을 안정으로 읽지 않음)
+ * 방향은 표시 자릿수 반올림 배율로만 정한다(임의 임계값 없음).
+ */
+export function trendTextOf(eps: EpisodePoint[], monthly: MonthlyPoint[], code: string): string {
+  const ev = eps.filter((e) => e.avg !== null);
+  if (ev.length >= 4) {
+    const n = Math.floor(ev.length / 2);
+    const a = meanOf(ev.slice(0, n).map((e) => e.avg as number));
+    const b = meanOf(ev.slice(ev.length - n).map((e) => e.avg as number));
+    const dir = a !== null && a > 0 && b !== null ? directionOfRatio(b / a) : "NA";
+    const head = dir === "NA" ? "전반·후반 회차 비교" : dir === "SIMILAR" ? "전반·후반 회차 평균 비슷" : `후반 회차 평균 ${DIR_TREND[dir]}`;
+    return `${head} · 전반 ${pctText(a, code)} → 후반 ${pctText(b, code)} (본방 ${n}회씩)`;
+  }
+  if (ev.length >= 2) {
+    const f = ev[0];
+    const l = ev[ev.length - 1];
+    const dir = (f.avg as number) > 0 ? directionOfRatio((l.avg as number) / (f.avg as number)) : "NA";
+    return `${dir === "NA" || dir === "SIMILAR" ? "첫 회차와 최근 회차 비슷" : `최근 회차 ${DIR_TREND[dir]}`} · ${f.episode}회 ${pctText(f.avg, code)} → ${l.episode}회 ${pctText(l.avg, code)}`;
+  }
+  const ms = monthly.filter((m) => m.airings > 0 && m.vsChannel.pct !== null);
+  if (ms.length >= 2) {
+    const f = ms[0];
+    const l = ms[ms.length - 1];
+    const fp = Math.round(f.vsChannel.pct as number);
+    const lp = Math.round(l.vsChannel.pct as number);
+    const head = lp > fp ? "채널 평균 대비 높아짐" : lp < fp ? "채널 평균 대비 낮아짐" : "채널 평균 대비 비슷";
+    const mt = (m: MonthlyPoint) => `${Number(m.month.slice(5))}월`;
+    return `${head} · ${mt(f)} ${formatSigned(fp, 0)}% → ${mt(l)} ${formatSigned(lp, 0)}%`;
+  }
+  return "추이 자료 부족 — 비교할 회차·달이 하나뿐입니다.";
+}
+
+/** 최고·최저·최근 방영(선택 기간·방송 구분 안). 시청률 값이 있는 방영이 2건 미만이면 null. 동률은 먼저 방영한 것. */
+export function extremesOf(rows: WorkAiring[]): RowAnalysis["extremes"] {
+  const vals = rows.filter((r) => r.rating !== null && Number.isFinite(r.rating));
+  if (vals.length < 2) return null;
+  const ref = (r: WorkAiring): AiringRef => ({ date: r.date, startTime: r.startTime, episode: r.episode, firstRun: r.firstRun, rating: r.rating as number });
+  let best = vals[0];
+  let worst = vals[0];
+  for (const r of vals) {
+    if ((r.rating as number) > (best.rating as number)) best = r;
+    if ((r.rating as number) < (worst.rating as number)) worst = r;
+  }
+  return { best: ref(best), worst: ref(worst), recent: ref(vals[vals.length - 1]) };
+}
+
+export function extremesTextOf(x: RowAnalysis["extremes"]): string {
+  if (!x) return "방영이 1건뿐이라 최고·최저를 나누지 않습니다.";
+  const same = (a: AiringRef, b: AiringRef) => a.date === b.date && a.startTime === b.startTime;
+  const label = (a: AiringRef) => (a.episode !== null ? `${a.episode}회` : `${Number(a.date.slice(5, 7))}/${Number(a.date.slice(8))} 방영`);
+  if (same(x.recent, x.best)) return "최근 방영이 선택 기간 최고";
+  if (same(x.recent, x.worst)) return "최근 방영이 선택 기간 최저";
+  return `최고는 ${label(x.best)}, 최근 방영은 그보다 낮음`;
+}
+
+export interface CompAiring {
+  date: string;
+  startTime: string | null;
+  rating: number;
+}
+
+function hourBlockOfTime(t: string | null): number | null {
+  if (!t || t.length < 2) return null;
+  const h = Number(t.slice(0, 2));
+  if (!Number.isFinite(h)) return null;
+  return h < 2 ? h + 24 : h;
+}
+const dowOfDate = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay();
+
+/**
+ * 실제 방영한 요일·시간대별 비교 — 작품 방영별 평균 vs 같은 채널·타깃·비교 창에서 같은 요일·시(시작 시각 기준)의 다른 프로그램 방영 단순 평균.
+ * 표의 '같은 시간대 대비'(콘텐츠 적합도 수축 배율)와 다른 지표다. 비교 방송이 minOther건 미만이면 산출하지 않는다(콘텐츠 적합도와 같은 최소 건수).
+ * 방영하지 않은 시간대는 만들지 않는다(미방영 시간대 예측은 기능 2).
+ */
+export function slotLinesOf(work: WorkAiring[], others: CompAiring[], minOther: number): SlotLine[] {
+  const comp = new Map<string, number[]>();
+  const compHour = new Map<number, number[]>();
+  for (const o of others) {
+    const hb = hourBlockOfTime(o.startTime);
+    if (hb === null || !Number.isFinite(o.rating)) continue;
+    const k = `${dowOfDate(o.date)}|${hb}`;
+    comp.set(k, [...(comp.get(k) ?? []), o.rating]);
+    compHour.set(hb, [...(compHour.get(hb) ?? []), o.rating]);
+  }
+  const cells = new Map<string, WorkAiring[]>();
+  for (const r of work) {
+    const hb = hourBlockOfTime(r.startTime);
+    if (hb === null) continue;
+    const k = `${dowOfDate(r.date)}|${hb}`;
+    cells.set(k, [...(cells.get(k) ?? []), r]);
+  }
+  const out: SlotLine[] = [];
+  for (const [k, list] of cells) {
+    const [dow, hb] = k.split("|").map(Number);
+    const st = splitStat(list);
+    // 같은 요일·시 비교 방송이 부족하면 같은 시(모든 요일)로 넓힌다 — 콘텐츠 적합도 기대치의 단계적 확장과 같은 취지, 어느 기준인지 함께 낸다
+    const exact = comp.get(k) ?? [];
+    const wide = compHour.get(hb) ?? [];
+    const basis: SlotLine["basis"] = exact.length >= minOther ? "DOW_HOUR" : wide.length >= minOther ? "HOUR" : "NONE";
+    const c = basis === "DOW_HOUR" ? exact : basis === "HOUR" ? wide : [];
+    const compAvg = basis === "NONE" ? null : meanOf(c);
+    const vs = basis === "NONE" ? { ...ratioOf(st.avg, null), naReason: `같은 시 비교 방송 ${wide.length}건(${minOther}건 미만)` } : ratioOf(st.avg, compAvg);
+    out.push({ dow, hourBlock: hb, airings: st.airings, days: st.days, avg: st.avg, compAvg, compAirings: c.length, basis, vs, sampleState: sampleStateOf(st.days) });
+  }
+  // 판단 가능한 구간(방송일 3일 이상) 먼저, 그다음 방영 많은 순
+  return out.sort((a, b) => Number(b.sampleState !== "NONE") - Number(a.sampleState !== "NONE") || b.airings - a.airings || a.dow - b.dow || a.hourBlock - b.hourBlock);
+}
+
+/** 판단에 쓸 구간 — 비교 가능하고 방송일 3일 이상 */
+const judgeable = (s: SlotLine) => s.vs.pct !== null && s.sampleState !== "NONE";
+const SLOT_WORD: Record<Direction, string> = { HIGHER: "높음", LOWER: "낮음", SIMILAR: "비슷", NA: "" };
+
+export function slotTextOf(slots: SlotLine[]): string {
+  const ok = slots.filter((s) => s.vs.pct !== null);
+  if (ok.length === 0) return "같은 시간대 비교 근거가 부족합니다.";
+  if (ok.length === 1) return `${slotLabel(ok[0].dow, ok[0].hourBlock)} 같은 시간대 평균보다 ${SLOT_WORD[ok[0].vs.direction]}${ok[0].sampleState !== "OK" ? ` (자료 적음 · ${ok[0].days}일)` : ""}`;
+  const j = ok.filter(judgeable);
+  if (j.length === 0) return "구간마다 방송일이 3일 미만이라 시간대 우열을 판단하기 어렵습니다.";
+  const hi = j.filter((s) => s.vs.direction === "HIGHER");
+  const lo = j.filter((s) => s.vs.direction === "LOWER");
+  if (hi.length && lo.length) {
+    // 극단값이 아니라 방영이 가장 많은 구간을 대표로 고른다(작은 표본의 최고 수치만 골라 강조하지 않음)
+    const rep = (xs: SlotLine[]) => [...xs].sort((a, b) => b.days - a.days || b.airings - a.airings || a.dow - b.dow || a.hourBlock - b.hourBlock)[0];
+    const top = rep(hi);
+    const bot = rep(lo);
+    const small = top.sampleState !== "OK" || bot.sampleState !== "OK" ? " 구간별 방송일이 8일 미만이라 참고만 하세요." : "";
+    return `좋은 시간대(${slotLabel(top.dow, top.hourBlock)} ${formatSigned(top.vs.pct, 0)}%)와 낮은 시간대(${slotLabel(bot.dow, bot.hourBlock)} ${formatSigned(bot.vs.pct, 0)}%)가 나뉩니다.${small}`;
+  }
+  if (hi.length === j.length) return `방송일 3일 이상인 ${j.length}개 시간대 모두 같은 시간대 평균보다 높음`;
+  if (lo.length === j.length) return `방송일 3일 이상인 ${j.length}개 시간대 모두 같은 시간대 평균보다 낮음`;
+  return "시간대별로 같은 시간대 평균과 비슷하거나 엇갈립니다.";
+}
+
+/**
+ * 종합 평가 — 결론 한 줄 + 근거 최대 두 개. 채널 평균 대비(vsChannel)와 같은 시간대 대비(slot, 수축 배율)의 방향만 잇는다.
+ * 태그·권고(강화·교체)는 붙이지 않는다. 방송일 3일 미만이면 판단하지 않는다.
+ */
+export function verdictOf(input: { vsChannel: Direction; vsSlot: Direction; sampleState: "OK" | "SMALL" | "NONE"; days: number; slots: SlotLine[]; nonFirst: { vs: RatioValue; days: number } | null }): { verdict: string; reasons: string[] } {
+  if (input.sampleState === "NONE") return { verdict: "현재 자료로는 편성 적합성을 판단하기 어렵습니다.", reasons: [`방송일 ${input.days}일(3일 미만)`] };
+  const c = input.vsChannel;
+  const s = input.vsSlot;
+  let verdict: string;
+  if (c === "NA") verdict = "채널 평균과 비교할 수 없어 편성 적합성을 판단하기 어렵습니다.";
+  else if (s === "NA") verdict = `채널 평균보다 ${c === "HIGHER" ? "높지만" : c === "LOWER" ? "낮고" : "비슷하지만"}, 같은 시간대 비교 근거가 부족합니다.`;
+  else if (c === "HIGHER" && s === "HIGHER") verdict = "채널 평균과 같은 시간대 기준을 모두 웃돌았습니다.";
+  else if (c === "HIGHER" && s === "LOWER") verdict = "채널 평균은 웃돌지만, 같은 시간대의 비교 프로그램보다 낮습니다.";
+  else if (c === "LOWER" && s === "HIGHER") verdict = "채널 평균보다 낮지만, 같은 시간대 기준은 웃돌았습니다.";
+  else if (c === "LOWER" && s === "LOWER") verdict = "채널 평균과 같은 시간대 기준을 모두 밑돌았습니다.";
+  else verdict = `채널 평균과 ${c === "SIMILAR" ? "비슷하고" : c === "HIGHER" ? "비교해 높고" : "비교해 낮고"}, 같은 시간대 기준과는 ${s === "SIMILAR" ? "비슷합니다" : s === "HIGHER" ? "비교해 높습니다" : "비교해 낮습니다"}.`;
+  const reasons: string[] = [];
+  const j = input.slots.filter(judgeable);
+  if (j.some((x) => x.vs.direction === "HIGHER") && j.some((x) => x.vs.direction === "LOWER")) reasons.push("시간대에 따라 성과가 다릅니다.");
+  const nf = input.nonFirst;
+  if (nf && c === "HIGHER" && nf.days >= CONTENT_FIT_CONFIG.minDays && nf.vs.direction === "LOWER") reasons.push(`전체 평균과 달리, 본방 외 방영은 채널 평균보다 낮습니다(${formatSigned(nf.vs.pct, 0)}%).`);
+  if (input.sampleState === "SMALL" && reasons.length < 2) reasons.push(`자료 적음 · ${input.days}일`);
+  return { verdict, reasons: reasons.slice(0, 2) };
 }

@@ -50,6 +50,7 @@
 2. (완료) D-2 — `npx tsx --env-file=.env scripts/d2-daily-alignment.mts 40 <결과 JSON>`(읽기 전용, 결과 파일 커밋 금지). 순수 함수 `src/lib/scheduleForecast/dailyAlignment.ts`, 테스트는 test:schedule-forecast(25).
 2-1. (완료) D-3 — `npx tsx --env-file=.env scripts/d3-plan-forecast-backtest.mts <결과 JSON>`(읽기 전용, 약 30초, 결과 파일 커밋 금지). 이름 연결 v2(예측 경로 전용, 대소문자 무시·부분 일치 동률 해소) 완료 — C 칸 403→379, 정확도 변화 미미, 남은 C는 대부분 진짜 신작. AI 편성은 v1 유지(골든 동일). 다음 후보: 신작 예측 방식, 사전 예측 표본 축적(A2 승인 후).
 2-2. (완료, 2026-10-22) 기능 1 첫 화면 간결화 — 핵심 한 줄·KPI 그룹별 4숫자 표·월간 추이(작품 vs 같은 달 채널 평균), 나머지는 접힘. 계산식 무변경, 응답 v1.1. 상세 `docs/ena-features/F1_SIMPLIFY.md`. 사용자 화면 확인 대기(A4 전).
+2-3. (완료, 2026-10-22, 로컬 커밋만) 기능 1 분석 구조 재배치 — 비교표(시청률·점유율·채널 평균 대비·같은 시간대 대비) → 행 선택 → 2×2(흐름·최고/최저·시간대별 편성 비교·종합 평가) → 상세. 기존 값 계산식 무변경, 응답 v1.3. 상세 `docs/ena-features/F1_SIMPLIFY.md` §2-3. 사용자 화면 확인 대기(A4 전).
 3. 승인 후: 스키마 적용(`supabase migration new schedule_forecast_snapshots` → 초안 내용 복사 → `supabase db push`), 저장 API·편성 비교 탭.
 4. 참고 화면 의심 문제 5건 조사.
 

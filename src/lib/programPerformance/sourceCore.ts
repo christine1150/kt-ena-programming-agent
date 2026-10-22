@@ -10,7 +10,31 @@ import { resolveProgramLevelTargetLabel, resolveRankSheetTargetLabel } from "@/l
 import { computeSlotComparison } from "@/lib/contentFit/engine";
 import type { ContentFitAiring } from "@/lib/contentFit/types";
 import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
-import { channelDailyMean, classifyWork, directionOfRatio, dedupeAirings, channelLine, describeRow, matchesAiringFilter, monthlySeries, ratioOf, sampleStateOf, splitStat, type ChannelDayRow, type WorkAiring } from "./metrics";
+import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
+import {
+  channelDailyMean,
+  classifyWork,
+  directionOfRatio,
+  dedupeAirings,
+  channelLine,
+  describeRow,
+  episodeSeries,
+  extremesOf,
+  extremesTextOf,
+  matchesAiringFilter,
+  monthlySeries,
+  ratioOf,
+  sampleStateOf,
+  shareStat,
+  slotLinesOf,
+  slotTextOf,
+  splitStat,
+  trendTextOf,
+  verdictOf,
+  type ChannelDayRow,
+  type CompAiring,
+  type WorkAiring,
+} from "./metrics";
 import {
   PROGRAM_PERFORMANCE_VERSION,
   type AiringEvidence,
@@ -199,6 +223,9 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       summary: "",
       monthly: [],
       primary: tgt.isPrimary,
+      shareAvg: null,
+      shareAirings: 0,
+      analysis: null,
     };
     if (ch.code === "SKYUHD") {
       if (ti === 0) rows.push({ ...base, status: "UNSUPPORTED", statusNote: "skyUHD는 프로그램 시청률이 별도 수기 파일(타깃 없음·초 단위)이라 이번 비교에서 계산하지 않습니다." });
@@ -245,7 +272,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         (a, b) =>
           db
             .from("ratings")
-            .select("program_id, broadcast_date, start_time, end_time, rating, is_first_run, episode_number, created_at")
+            .select("program_id, broadcast_date, start_time, end_time, rating, share, is_first_run, episode_number, created_at")
             .in("program_id", chunk)
             .eq("target_id", progTargetId)
             .eq("source_type", "nielsen_daily")
@@ -266,6 +293,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
           firstRun: (r.is_first_run as boolean | null) ?? null,
           episode: (r.episode_number as number | null) ?? null,
           createdAt: (r.created_at as string | null) ?? null,
+          share: r.share === null || r.share === undefined ? null : Number(r.share),
         }))
       );
     }
@@ -328,12 +356,14 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     );
     const seen = new Set<string>();
     const chAirings: ContentFitAiring[] = [];
+    const others: CompAiring[] = [];
     for (const r of chAirRows) {
       if (r.rating === null || r.rating === undefined) continue;
       const k = `${r.program_id}|${r.broadcast_date}|${r.start_time ?? ""}`;
       if (seen.has(k)) continue;
       seen.add(k);
       chAirings.push({ programId: r.program_id as string, date: r.broadcast_date as string, startTime: (r.start_time as string | null) ?? null, rating: Number(r.rating), reach: null, timeSpentShare: null, firstRun: (r.is_first_run as boolean | null) ?? null });
+      if (!ids.includes(r.program_id as string)) others.push({ date: r.broadcast_date as string, startTime: (r.start_time as string | null) ?? null, rating: Number(r.rating) });
     }
     const sc = computeSlotComparison(chAirings, ids, (a) => matchesAiringFilter(a.firstRun, query.airing));
     const slotRatio = sc.airings > 0 ? ratioOf(sc.shrunkIndex === null ? null : sc.sumActual / sc.airings, sc.shrunkIndex === null ? null : sc.sumExpected / sc.airings) : { ...NA_RATIO, naReason: "비교할 방영 없음" };
@@ -388,6 +418,21 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     }
     for (const c of cells.values()) slotCells.push({ channelCode: ch.code, dow: c.dow, hourBlock: c.hb, airings: c.n, avg: c.v ? c.s / c.v : null });
 
+    // 선택 채널 분석(2×2) — 이 행의 타깃·기간·본재 조건 그대로
+    const monthly = monthlySeries(filtered, dayList, from, to, channelLabel);
+    const sh = shareStat(filtered);
+    let analysis: ChannelRow["analysis"] = null;
+    if (filtered.length > 0) {
+      const eps = episodeSeries(filtered);
+      const ext = extremesOf(filtered);
+      const slots = slotLinesOf(filtered, others, CONTENT_FIT_CONFIG.minOtherAirings);
+      // 본방 외(확인된 재방 + 본방 여부 미확인) 성과 — 전체 방송 조회이고 본방이 섞여 있을 때만 근거로 쓴다
+      const nonFirstRows = workRows.filter((r) => r.firstRun !== true);
+      const nonFirst = query.airing === "all" && first.airings > 0 && nonFirstRows.length > 0 ? { vs: ratioOf(splitStat(nonFirstRows).avg, channelDaily.mean), days: splitStat(nonFirstRows).days } : null;
+      const v = verdictOf({ vsChannel: vsChannel.direction, vsSlot: slot.ratio.direction, sampleState, days: fStat.days, slots, nonFirst });
+      analysis = { episodes: eps.length >= 2 ? eps : [], trendText: trendTextOf(eps, monthly, ch.code), extremes: ext, extremesText: extremesTextOf(ext), slots, slotText: slotTextOf(slots), verdict: v.verdict, reasons: v.reasons };
+    }
+
     rows.push({
       ...base,
       status: "OBSERVED",
@@ -407,7 +452,10 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       fit,
       sampleState,
       summary: filtered.length === 0 ? "선택한 본재 조건의 방영 없음." : describeRow(vsChannel.direction, slot.ratio.direction, sampleState),
-      monthly: monthlySeries(filtered, dayList, from, to, channelLabel),
+      monthly,
+      shareAvg: sh.avg,
+      shareAirings: sh.airings,
+      analysis,
     });
     }
   }

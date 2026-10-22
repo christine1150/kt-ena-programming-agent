@@ -4,7 +4,8 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 
 // v1.1(2026-10-22): 계산식은 v1 그대로, 응답에 월간 추이(monthly) 추가
 // v1.2(2026-10-22): 두 타깃 모드(both)·채널별 첫 줄(lines, 그룹 요약 headlines 대체) — 계산식 무변경, 캐시가 섞이지 않게 버전만 올림
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.2";
+// v1.3(2026-10-22): 행마다 점유율 평균·분석(analysis: 회차 추이·최고/최저·시간대별 비교·종합 문구) 추가 — 기존 값의 계산식 무변경
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.3";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
@@ -151,6 +152,57 @@ export interface ChannelRow {
   monthly: MonthlyPoint[];
   /** 채널 KPI 타깃 행이면 true(두 타깃 모드에서 다른 그룹 타깃 행은 false) */
   primary: boolean;
+  /** 선택한 본재 조건의 방영별 닐슨 점유율 산술평균(채널 공식 기간 점유율 아님). 점유율 값이 있는 방영이 없으면 null */
+  shareAvg: number | null;
+  shareAirings: number;
+  /** 선택 채널 분석(2×2) — 방영이 있을 때만 */
+  analysis: RowAnalysis | null;
+}
+
+/** 회차별 추이 한 점 — <본> 표시가 있는 방영만, 회차 번호 기준(재방을 다음 회차처럼 잇지 않음). 같은 회차 본방이 여럿이면 평균. */
+export interface EpisodePoint {
+  episode: number;
+  date: string;
+  airings: number;
+  avg: number | null;
+}
+
+/** 개별 방영 하나(최고·최저·최근 표시용) */
+export interface AiringRef {
+  date: string;
+  startTime: string | null;
+  episode: number | null;
+  firstRun: boolean | null;
+  rating: number;
+}
+
+/** 실제 방영한 요일·시간대 한 칸 — 작품 평균 vs 같은 채널·타깃·기간·같은 요일·시의 다른 프로그램 단순 평균(수축 없음) */
+export interface SlotLine {
+  dow: number;
+  hourBlock: number;
+  airings: number;
+  days: number;
+  avg: number | null;
+  compAvg: number | null;
+  compAirings: number;
+  /** 비교 기준 — 같은 요일·시 / (부족하면) 같은 시·모든 요일 / 산출 불가 */
+  basis: "DOW_HOUR" | "HOUR" | "NONE";
+  vs: RatioValue;
+  sampleState: "OK" | "SMALL" | "NONE";
+}
+
+export interface RowAnalysis {
+  /** 회차별(본방·회차 확인분, 2회차 이상일 때만). 없으면 월별(row.monthly)만 */
+  episodes: EpisodePoint[];
+  /** 흐름 한 줄 — 전반/후반(회차 4개 이상) · 첫/최근 회차 · 첫/마지막 방영 달의 채널 평균 대비. 근거가 없으면 '추이 자료 부족' */
+  trendText: string;
+  extremes: { best: AiringRef; worst: AiringRef; recent: AiringRef } | null;
+  extremesText: string;
+  slots: SlotLine[];
+  slotText: string;
+  /** 종합 평가 — 검증된 지표(채널 평균 대비·같은 시간대 대비·구간·본방 외)의 관계를 고정 문구로. 새 점수·가중치 없음 */
+  verdict: string;
+  reasons: string[];
 }
 
 export interface AiringEvidence {
