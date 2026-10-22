@@ -73,6 +73,13 @@ function ClassBadge({ cls }: { cls: WorkClass }) {
   return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${CLASS_BADGE[cls]}`}>{WORK_CLASS_LABEL[cls]}</span>;
 }
 
+/** 목록 칩용 — 구분 글자 대신 색 점만 두고 이름은 마우스를 올리면 보인다(사용자 지시 2026-10-22: 한 줄에 깔끔하게) */
+const CLASS_DOT: Partial<Record<WorkClass, string>> = { ORIGINAL_DRAMA: "bg-blue-500", ORIGINAL_VARIETY: "bg-emerald-500", CONFLICT: "bg-rose-500" };
+function ClassDot({ cls }: { cls: WorkClass }) {
+  if (!SHOW_CLASS.includes(cls)) return null;
+  return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${CLASS_DOT[cls] ?? "bg-zinc-400"}`} title={WORK_CLASS_LABEL[cls]} role="img" aria-label={WORK_CLASS_LABEL[cls]} />;
+}
+
 /** 기준(채널 평균·같은 시간대 평균) 대비 — 기준을 100으로 본 지수 %(서버 배율 × 100 반올림, 표시 형식만). 100 초과 푸른색·미만 붉은색(사용자 지정 2026-10-22) */
 function DeltaText({ r }: { r: RatioValue }) {
   const i = indexOf(r.ratio);
@@ -865,19 +872,23 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
         {searching && <p className="mt-2 text-[12px] text-zinc-500">찾는 중…</p>}
         {!group && items && !searching && (
           <>
-            <p className="mt-2 text-[12px] text-zinc-500">{classFilter === "all" && !q.trim() ? "ENA에서 최근 2주 안에 방영한 오리지널(최근 방영 순)" : "검색 결과"}</p>
-            {/* 첫 화면 목록·검색 결과 모두 한 줄로 두고 넘치면 옆으로 넘긴다(사용자 지시 2026-10-22: 글자를 쓰면 두 줄로 바뀌던 문제) */}
-            <ul className="mt-1.5 flex flex-nowrap gap-1.5 overflow-x-auto pb-1">
-              {items.length === 0 && <li className="text-[12px] text-zinc-500">일치하는 자사 방영 작품이 없습니다.</li>}
-              {items.map((it) => (
-                <li key={it.groupKey}>
-                  <button type="button" onClick={() => setGroup(it.groupKey)} className="flex items-center gap-1.5 whitespace-nowrap rounded-md bg-white px-2.5 py-1 text-left text-[13px] ring-1 ring-zinc-200 hover:bg-zinc-50">
-                    <span className="font-medium">{shortProgramName(it.displayName)}</span>
-                    <ClassBadge cls={it.classification} />
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {/* 한 줄 정리(사용자 지시 2026-10-22): 안내 문구는 짧은 앞 라벨 하나로(자세한 설명은 마우스 오버), 작품 구분은 색 점으로(이름은 마우스 오버), 넘치면 옆으로 넘긴다 */}
+            <div className="mt-2 flex items-center gap-2">
+              <span className="shrink-0 text-[12px] text-zinc-500" title={classFilter === "all" && !q.trim() ? "ENA에서 최근 2주 안에 방영한 오리지널(최근 방영 순)" : "검색 결과"}>
+                {classFilter === "all" && !q.trim() ? "최근 2주 방영" : "검색 결과"}
+              </span>
+              <ul className="flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto pb-1" aria-label="작품 목록">
+                {items.length === 0 && <li className="text-[12px] text-zinc-500">일치하는 자사 방영 작품이 없습니다.</li>}
+                {items.map((it) => (
+                  <li key={it.groupKey} className="shrink-0">
+                    <button type="button" title={SHOW_CLASS.includes(it.classification) ? WORK_CLASS_LABEL[it.classification] : undefined} onClick={() => setGroup(it.groupKey)} className="flex items-center gap-1.5 whitespace-nowrap rounded-md bg-white px-2.5 py-1 text-left text-[13px] ring-1 ring-zinc-200 hover:bg-zinc-50">
+                      <span className="font-medium">{shortProgramName(it.displayName)}</span>
+                      <ClassDot cls={it.classification} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </>
         )}
       </section>
