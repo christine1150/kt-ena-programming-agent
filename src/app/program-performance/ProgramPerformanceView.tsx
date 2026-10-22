@@ -6,6 +6,7 @@
 //  - 문구(흐름·최고/최저·시간대·종합)는 서버 고정 템플릿. 최근 12주 편성 진단은 기간이 달라 이 화면에 섞지 않고 채널 화면으로 연결.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { shortProgramName } from "@/lib/programAlias";
 import { formatInt, formatPct, formatRatingValue, MISSING } from "@/lib/ui/metricFormat";
 import { WORK_CLASS_LABEL, indexOf } from "@/lib/programPerformance/metrics";
 import type { AiringFilter, AiringRef, ChannelLine, ChannelRow, CompetitorRow, Direction, MonthlyPoint, PerformanceResult, RatioValue, SearchItem, TargetMode, WorkClass } from "@/lib/programPerformance/types";
@@ -549,7 +550,7 @@ function Analysis({ row, result, siblings, onSelect }: { row: ChannelRow; result
     <section className="mt-6" aria-label={`${row.channelName} ${row.targetLabel} 분석`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[12px] font-semibold text-indigo-700">{row.channelName}</span>
-        <h3 className="text-[16px] font-bold text-zinc-900">{result.work.displayName}</h3>
+        <h3 className="text-[16px] font-bold text-zinc-900">{shortProgramName(result.work.displayName)}</h3>
         {siblings.length > 1 && (
           <div className="ml-auto flex gap-1 text-[12px]" role="group" aria-label="분석 타깃">
             {siblings.map((s) => (
@@ -865,13 +866,13 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
         {!group && items && !searching && (
           <>
             <p className="mt-2 text-[12px] text-zinc-500">{classFilter === "all" && !q.trim() ? "ENA에서 최근 2주 안에 방영한 오리지널(최근 방영 순)" : "검색 결과"}</p>
-            {/* 첫 화면 목록은 한 줄(넘치면 옆으로 넘김), 검색 결과는 여러 줄 */}
-            <ul className={`mt-1.5 flex gap-1.5 ${classFilter === "all" && !q.trim() ? "flex-nowrap overflow-x-auto pb-1" : "max-h-56 flex-wrap overflow-y-auto"}`}>
+            {/* 첫 화면 목록·검색 결과 모두 한 줄로 두고 넘치면 옆으로 넘긴다(사용자 지시 2026-10-22: 글자를 쓰면 두 줄로 바뀌던 문제) */}
+            <ul className="mt-1.5 flex flex-nowrap gap-1.5 overflow-x-auto pb-1">
               {items.length === 0 && <li className="text-[12px] text-zinc-500">일치하는 자사 방영 작품이 없습니다.</li>}
               {items.map((it) => (
                 <li key={it.groupKey}>
                   <button type="button" onClick={() => setGroup(it.groupKey)} className="flex items-center gap-1.5 whitespace-nowrap rounded-md bg-white px-2.5 py-1 text-left text-[13px] ring-1 ring-zinc-200 hover:bg-zinc-50">
-                    <span className="font-medium">{it.displayName}</span>
+                    <span className="font-medium">{shortProgramName(it.displayName)}</span>
                     <ClassBadge cls={it.classification} />
                   </button>
                 </li>
@@ -976,7 +977,7 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
       {result && (
         <section className={`mt-4 transition-opacity ${stale ? "pointer-events-none opacity-40" : ""}`} aria-live="polite" aria-busy={loading}>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <h2 className="min-w-0 break-words text-[18px] font-bold text-zinc-900">{result.work.displayName}</h2>
+            <h2 className="min-w-0 break-words text-[18px] font-bold text-zinc-900">{shortProgramName(result.work.displayName)}</h2>
             <ClassBadge cls={result.classification.cls} />
             <span className="text-[13px] text-zinc-500">
               {result.totals.channels}개 채널 · {formatInt(result.totals.airings)}회 방영
