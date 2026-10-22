@@ -330,16 +330,38 @@ export function prepareModel(input: ModelPrepInput): PreparedModel {
 }
 
 /** 편성표 칸 → 자사 후보: 이름 정확 일치 1개 → 편성표 매칭 id → 부분 일치 1개 순. 방영 유형은 [재]면 재방, [본]·[초]면 본방 우선. 못 찾으면 null. */
-function planCandidateResolver(pool: EngineCandidate[]): (name: string, matched: string | null, isRerun: boolean, isNew: boolean) => EngineCandidate | null {
+/**
+ * 편성표 이름 연결 규칙 버전. v1 = 편성안 생성(runIdealScheduleEngine)이 쓰는 기존 규칙(변경 없음).
+ * v2(2026-10-22, 편성표 예측 경로 전용) = v1에 두 가지를 더한다 — D-3 진단에서 실제 이름 차이로 연결을 놓친 칸의 원인:
+ *  ① 영문 대소문자 무시("스튜디오s" ↔ 닐슨 "스튜디오S…", "혜미리예채파.zip" ↔ "…ZIP…")
+ *  ② 부분 일치 후보가 여럿이면 ownCandidateFor와 같은 규칙으로 하나를 고른다 — 스페셜·특집 등을 빼고 이름 길이가 가장 가까운
+ *     하나(동률이면 모호하므로 연결하지 않음). 예: "트렌드 다큐 도시락" ↔ "락트렌드다큐도시락"·"…스페셜".
+ * 시즌 숫자는 그대로 비교한다(다른 시즌을 합치지 않음). 편성안 생성에 v2를 쓰려면 사용자 승인 후 바꾼다(결과가 달라짐).
+ */
+export type PlanNameMatching = "v1" | "v2";
+const SPECIAL_NAME = /스페셜|특집|몰아보기|하이라이트|베스트|미리보기/;
+
+function planCandidateResolver(pool: EngineCandidate[], matching: PlanNameMatching = "v1"): (name: string, matched: string | null, isRerun: boolean, isNew: boolean) => EngineCandidate | null {
   const own = pool.filter((c) => c.contentType === "OWN" && c.programId);
+  const keyOf = (s: string) => (matching === "v2" ? planNameKey(s).toUpperCase() : planNameKey(s));
   const pidFor = (name: string, matched: string | null): string | null => {
-    const n = planNameKey(name);
-    const ids = (score: 1 | 2) => [...new Set(own.filter((c) => namesCompatible(planNameKey(c.programName), n) === score).map((c) => c.programId as string))];
+    const n = keyOf(name);
+    const ids = (score: 1 | 2) => [...new Set(own.filter((c) => namesCompatible(keyOf(c.programName), n) === score).map((c) => c.programId as string))];
     const exact = ids(2);
     if (exact.length === 1) return exact[0];
     if (matched && own.some((c) => c.programId === matched)) return matched;
     const part = ids(1);
-    return part.length === 1 ? part[0] : null;
+    if (part.length === 1) return part[0];
+    if (matching === "v1" || part.length === 0) return null;
+    const wantsSpecial = SPECIAL_NAME.test(n);
+    const byPid = new Map<string, string>();
+    for (const c of own) if (part.includes(c.programId as string)) byPid.set(c.programId as string, keyOf(c.programName));
+    const ranked = [...byPid]
+      .filter(([, k]) => wantsSpecial || !SPECIAL_NAME.test(k))
+      .map(([pid, k]) => ({ pid, gap: Math.abs(k.length - n.length) }))
+      .sort((a, b) => a.gap - b.gap || (a.pid < b.pid ? -1 : 1));
+    if (ranked.length === 0 || (ranked.length > 1 && ranked[0].gap === ranked[1].gap)) return null;
+    return ranked[0].pid;
   };
   const candFor = (pid: string, rerun: boolean, fresh: boolean): EngineCandidate | null => {
     const order = rerun ? ["RERUN", "UNTAGGED", "FIRST"] : fresh ? ["FIRST", "UNTAGGED", "RERUN"] : ["UNTAGGED", "FIRST", "RERUN"];
@@ -773,6 +795,8 @@ export interface PlanEvalInput extends ModelPrepInput {
   weekStart: string;
   /** normalizePlanRows로 정규화한 편성표 행(대상 주 행만 쓴다) */
   planRows: PlanRow[];
+  /** 편성표 이름 → 이력 연결 규칙(기본 v2). v1은 편성안 생성과 같은 기존 규칙 — 전후 비교용 */
+  nameMatching?: PlanNameMatching;
 }
 
 export interface PlanSlotEval {
@@ -803,7 +827,7 @@ export interface PlanEvalResult {
   asOfDate: string;
   targetLabel: string;
   slots: PlanSlotEval[];
-  versions: { model: string; features: string; genreDigest: string; configDigest: string; rangeBasis: "BACKTEST" | "TRAINING" | "NONE"; validated: boolean };
+  versions: { model: string; features: string; genreDigest: string; configDigest: string; rangeBasis: "BACKTEST" | "TRAINING" | "NONE"; validated: boolean; nameMatching: PlanNameMatching };
   featureWindow: { from: string; to: string };
   warnings: string[];
   /** 입력 지문(같은 입력이면 같은 값) — 재현의 근거는 입력 스냅샷이며, 이 지문은 동일성 확인용이다 */
@@ -816,7 +840,8 @@ export function evaluatePlanOnly(input: PlanEvalInput): PlanEvalResult {
   const model = prepareModel(input);
   const { channelCode, fs, scorer, pool, uncertainty, seriesPriors, opts } = model;
   const frame = planWeekFrame(input.planRows, input.weekStart);
-  const resolvePlan = planCandidateResolver(pool);
+  const nameMatching = input.nameMatching ?? "v2";
+  const resolvePlan = planCandidateResolver(pool, nameMatching);
   const warnings = [...model.seriesNotes];
   const meta = new Map<string, { row: (typeof frame)[number]; endBasis: PlanSlotEval["endBasis"]; matched: boolean }>();
   const blocks: PlacedBlock[] = [];
@@ -864,6 +889,7 @@ export function evaluatePlanOnly(input: PlanEvalInput): PlanEvalResult {
   const fp = fingerprint(
     JSON.stringify({
       kind: "PLAN_ONLY",
+      nm: nameMatching,
       weekStart: input.weekStart,
       asOf: input.asOfDate,
       config,
@@ -882,7 +908,7 @@ export function evaluatePlanOnly(input: PlanEvalInput): PlanEvalResult {
     asOfDate: input.asOfDate,
     targetLabel: bundle.kpiLabel,
     slots,
-    versions: { model: MODEL_VERSION, features: FEATURE_VERSION, genreDigest, configDigest: fingerprint(JSON.stringify(config)), rangeBasis: uncertainty ? uncertainty.basis : "NONE", validated: uncertainty?.basis === "BACKTEST" },
+    versions: { model: MODEL_VERSION, features: FEATURE_VERSION, genreDigest, configDigest: fingerprint(JSON.stringify(config)), rangeBasis: uncertainty ? uncertainty.basis : "NONE", validated: uncertainty?.basis === "BACKTEST", nameMatching },
     featureWindow: { from: addDays(input.asOfDate, -(opts.lookbackDays - 1)), to: input.asOfDate },
     warnings,
     fingerprint: fp,

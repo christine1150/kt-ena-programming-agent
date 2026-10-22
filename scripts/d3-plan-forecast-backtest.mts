@@ -21,7 +21,9 @@ import { aggregatePeriod, matchSlots } from "../src/lib/scheduleForecast/core";
 import { alignDayMinutes, pairStats } from "../src/lib/scheduleForecast/dailyAlignment";
 import type { ActualAiring, ForecastSlot } from "../src/lib/scheduleForecast/types";
 
-const outPath = process.argv[2] ?? null;
+// 사용: [결과 JSON 경로] [--v1] — --v1이면 편성표 이름 연결을 기존 규칙(편성안 생성과 같은 v1)으로, 기본은 v2
+const nameMatching: "v1" | "v2" = process.argv.includes("--v1") ? "v1" : "v2";
+const outPath = process.argv.slice(2).find((a) => !a.startsWith("--")) ?? null;
 const LEADS = [7, 14];
 const r4 = (x: number | null) => (x === null ? "—" : x.toFixed(4));
 const pct = (a: number | null, b: number | null) => (a === null || b === null || b === 0 ? "—" : `${((100 * a) / b).toFixed(1)}%`);
@@ -88,6 +90,7 @@ for (const [key, rows] of [...weeks].sort()) {
       residuals,
       weekStart: week,
       planRows: plan,
+      nameMatching,
     });
     if (lead === 7) for (const s of res.slots.filter((x) => !x.matched)) { const m = unmatchedNames.get(code) ?? new Map<string, number>(); m.set(s.name, (m.get(s.name) ?? 0) + 1); unmatchedNames.set(code, m); }
     const fsl = toForecastSlots(res);
@@ -121,7 +124,7 @@ for (const [key, rows] of [...weeks].sort()) {
   }
 }
 
-console.log(`# D-3 편성표 기반 예측 재구성 검증(읽기 전용) — 최신 자료 ${latest}\n`);
+console.log(`# D-3 편성표 기반 예측 재구성 검증(읽기 전용) — 최신 자료 ${latest} · 이름 연결 ${nameMatching}\n`);
 console.log(weekNotes.map((n) => `- ${n}`).join("\n"));
 const dayTable = (label: string, filt: (d: DayRec) => boolean) => {
   console.log(`\n## 일별: ${label} (편성시간 가중 예상 vs 같은 정의의 실제 집계, %p)\n`);

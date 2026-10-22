@@ -104,6 +104,39 @@ const days = aggregateDays(fsl, W);
 check("방송일 끝까지로 가정한 마지막 칸의 분은 따로 센다(23:00~26:00 = 180분)", days.every((d) => d.assumedEndMinutes === 180) && fsl.filter((s) => s.endAssumedDayEnd).length === 7);
 check("편성표가 20시 이전을 비우면 그날은 부분 예측(0으로 채우지 않음)", days.every((d) => !d.complete && d.uncoveredMinutes > 0 && d.value !== null));
 
+// ── 이름 연결 v2(편성표 예측 전용): 대소문자 무시·부분 일치 동률 해소. 다른 시즌은 합치지 않는다 ──
+{
+  const names: [string, string, string][] = [
+    ["T1", "락트렌드다큐도시락", "10:00:00"],
+    ["T2", "락트렌드다큐도시락스페셜", "11:00:00"],
+    ["S1", "스튜디오S넘샤벽", "12:00:00"],
+    ["N3", "신병3", "13:00:00"],
+    ["N2", "신병2", "14:00:00"],
+  ];
+  const raw2 = { ...raw, airings: [...raw.airings] };
+  for (let i = 0; i < 42; i++) {
+    const date = addDays("2026-08-17", i);
+    for (const [id, name, start] of names) {
+      const end = `${String(Number(start.slice(0, 2)) + 1).padStart(2, "0")}:00:00`;
+      raw2.airings.push({ date, start, end, program_id: id, program_name: name, first_run: null, m: { [KPI]: { r: 0.2, s: 2, reach: null, ts: 600 } } });
+    }
+  }
+  const b2 = mapOwnAirings(raw2 as never);
+  const row = (start: string, name: string): PlanRowRaw => ({ week_start: W, broadcast_date: W, start_time: start, end_time: null, program_name_raw: name, episode_number: null, episode_subtitle: null, matched_program_id: null, tags: null });
+  const plan3 = normalizePlanRows([row("10:00", "트렌드 다큐 도시락"), row("11:00", "트렌드 다큐 도시락 스페셜"), row("12:00", "스튜디오s"), row("13:00", "신병4"), row("14:00", "신병")]);
+  const run = (nm: "v1" | "v2") => evaluatePlanOnly({ ...base, bundle: b2, weekStart: W, planRows: plan3, nameMatching: nm });
+  const v1 = run("v1");
+  const v2 = run("v2");
+  const at = (r: typeof v1, start: number) => r.slots.find((s) => s.startMin === start)!;
+  check("v1(기존 규칙): 부분 일치 후보가 둘이면·대소문자가 다르면 연결하지 않음(기존 동작 그대로)", !at(v1, 600).matched && !at(v1, 720).matched);
+  check("v2: 스페셜이 아닌 편성표 이름은 스페셜을 빼고 가장 가까운 이름으로 연결(트렌드 다큐 도시락 → 락트렌드다큐도시락)", at(v2, 600).matched && at(v2, 600).programId === "T1");
+  check("v2: 편성표 이름이 스페셜이면 스페셜로 연결", at(v2, 660).matched && at(v2, 660).programId === "T2");
+  check("v2: 영문 대소문자 무시(스튜디오s → 스튜디오S넘샤벽)", at(v2, 720).matched && at(v2, 720).programId === "S1");
+  check("v2: 다른 시즌은 합치지 않음(신병4 ↛ 신병3)", !at(v2, 780).matched);
+  check("v2: 시즌 없는 이름이 여러 시즌과 같은 거리로 걸리면 모호 — 연결하지 않음(신병 ↛ 신병2·신병3)", !at(v2, 840).matched);
+  check("규칙 버전이 결과 버전·지문에 기록됨", v1.versions.nameMatching === "v1" && v2.versions.nameMatching === "v2" && v1.fingerprint !== v2.fingerprint);
+}
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) {
   for (const f of failures) console.log(` - ${f}`);
