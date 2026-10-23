@@ -131,7 +131,7 @@ export default function MailIngestionManager() {
         <ol className="mb-4 list-decimal space-y-1 rounded-lg bg-amber-50 p-3 pl-7 text-xs text-amber-800">
           <li>네이버 메일 접속 → 환경설정 → POP3/IMAP 설정에서 &ldquo;IMAP 사용&rdquo;을 켭니다.</li>
           <li>
-            2단계 인증을 쓰고 있다면 네이버 계정 → 보안설정 → 2단계 인증에서 이 서비스 전용 <b>앱 비밀번호</b>를 새로 발급합니다(안 쓴다면 평소 비밀번호).
+            2단계 인증을 쓰고 있다면 네이버 계정 → 보안설정 → 2단계 인증에서 이 서비스 전용 <b>앱 비밀번호</b>를 새로 발급합니다(안 쓴다면 지금 쓰는 네이버 비밀번호).
           </li>
           <li>
             <code>.env</code>에 <code>NAVER_MAIL_USER</code>(네이버 메일 주소)와 <code>NAVER_MAIL_PASSWORD</code>(위 비밀번호)를 직접 추가합니다 — 이 값은 채팅으로 알려주지 마시고 파일에 바로 넣어주세요.

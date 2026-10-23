@@ -1698,7 +1698,7 @@ function ChannelStatusCard({
       {/* 사용자 지시(2026-10-21): skyUHD를 뺀 6개 채널(ENA·Play·Drama·Story·OLIFE·ONCE)을 가로로 나란히 — 각 칸은 채널명·시청률(순위)·평균 순위까지의 머리말 아래에 그날의 프로그램별 제목+KPI 시청률만 붙인다.
           칸 사이는 1px 격자선(gap-px + 배경색)만 쓰고, 칸이 좁아지는 화면에서는 3열→2열→1열로 접는다. */}
       {/* 모바일(2026-10-21): 휴대폰에서는 채널 칸을 세로로 쌓지 않고 옆으로 밀어 넘기는 카드(다음 카드가 살짝 보인다)로 둔다 — 페이지가 6배 길어지는 것을 막는다. */}
-      <div className="-mx-1 mt-4 flex snap-x snap-mandatory gap-px overflow-x-auto rounded-lg bg-zinc-100 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-hidden xl:grid-cols-3 min-[2150px]:grid-cols-6">
+      <div className="-mx-1 mt-4 flex snap-x snap-mandatory gap-px overflow-x-auto rounded-lg bg-zinc-100 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-hidden xl:grid-cols-3 min-[2150px]:grid-cols-6" tabIndex={0} role="region" aria-label="채널 현황 카드(가로 스크롤)">
         {[ena, ...rest.filter((c) => c.code !== "SKYUHD")].filter((c): c is ChannelSummary => !!c).map((c) => (
           <ChannelDailyColumn
             key={c.code}
@@ -5530,7 +5530,7 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
 function TimerIcon() {
   return (
     <span className="relative inline-block h-7 w-7 shrink-0" aria-hidden="true">
-      <svg viewBox="0 0 24 24" className="absolute inset-0 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="absolute inset-0 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
         <circle cx="12" cy="12" r="8" className="fill-indigo-50" />
         <path d="M10 2h4M12 2v2.4M19 5.2l1.3-1.3" />
         <path d="M9.6 14.2q2.4 2 4.8 0" strokeWidth="1.3" />
@@ -5799,7 +5799,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 h-8 w-8(로고 14px)에서 h-11 w-11(로고 22px)로 확대, 배경도 불투명 흰색+옅은
                 테두리로 새 무채색 배경 위에서 또렷하게 보이도록. */}
             {data && (
-              <div className="flex items-center gap-1.5 max-sm:w-full max-sm:overflow-x-auto max-sm:pb-1">
+              <div className="flex items-center gap-1.5 max-sm:w-full max-sm:overflow-x-auto max-sm:pb-1" tabIndex={0} role="region" aria-label="날짜 이동 버튼(가로 스크롤)">
                 {data.channels.map((c) => (
                   <Link
                     key={c.code}

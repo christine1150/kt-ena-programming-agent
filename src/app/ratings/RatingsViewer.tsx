@@ -126,7 +126,7 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1500px] px-3 pb-8 pt-3 sm:px-6">
+      <div className="mx-auto max-w-[1500px] px-3 pb-8 pt-3 sm:px-6">
         {/* 제목·기준일·선택 도구를 한 줄에 모아 표(시간~마지막 시청률)가 한 화면에 보이게 한다(사용자 지시 2026-10-19) */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
           <h1 className="text-xl font-bold leading-tight tracking-tight sm:text-[22px]">{title}</h1>
@@ -177,7 +177,7 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }
@@ -205,7 +205,7 @@ function DailyTable({ v }: { v: DailyView }) {
   const maxKpi = Math.max(0, ...v.rows.map((r) => r.values[0] ?? 0));
   return (
     <>
-      <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm" tabIndex={0} role="region" aria-label="시청률 표(가로 스크롤)">
         {/* 모바일(2026-10-21): 휴대폰에서는 가로 스크롤 없이 한 화면에 들어오게 시각은 시작만, 열 폭·여백을 줄이고 프로그램명은 단어 단위로 줄바꿈한다. */}
         <table className="w-full text-left text-[13px] md:min-w-[640px] md:text-[14px]">
           <thead className="bg-zinc-100/70 text-[13px] font-semibold text-zinc-500">
@@ -261,7 +261,7 @@ function DailyTable({ v }: { v: DailyView }) {
 
 function RankBoards({ boards }: { boards: RankBoard[] }) {
   return (
-    <div className="grid grid-flow-col auto-cols-[minmax(330px,1fr)] gap-6 overflow-x-auto pb-2 max-md:snap-x max-md:snap-mandatory max-md:auto-cols-[92%] max-md:gap-3">
+    <div className="grid grid-flow-col auto-cols-[minmax(330px,1fr)] gap-6 overflow-x-auto pb-2 max-md:snap-x max-md:snap-mandatory max-md:auto-cols-[92%] max-md:gap-3" tabIndex={0} role="region" aria-label="채널별 표(가로 스크롤)">
       {boards.map((b) => (
         <section key={b.key} aria-label={`${b.title} ${b.region}`} className="snap-start">
           <h2 className="text-[19px] font-bold leading-tight">{b.title}</h2>
@@ -309,7 +309,7 @@ function TrendBoards({ weeks }: { weeks: TrendWeek[] }) {
   if (cols.length === 0) return <p className="rounded-xl bg-white p-10 text-center text-sm text-zinc-400">주간 순위 자료가 없습니다.</p>;
   return (
     <>
-      <div className="grid gap-5 overflow-x-auto pb-2 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 overflow-x-auto pb-2 md:grid-cols-2 xl:grid-cols-4" tabIndex={0} role="region" aria-label="순위 표(가로 스크롤)">
         {cols.map((w) => (
           <section key={w.from} aria-label={w.label} className="min-w-[280px] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
             <div className="bg-zinc-500 py-3 text-center text-white">

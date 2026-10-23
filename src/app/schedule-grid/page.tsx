@@ -335,7 +335,7 @@ function ScheduleComparisonInner() {
           </div>
           {/* Page 1 상단과 동일한 원형 로고 링크 — 지금 보고 있는 채널도 포함해 7개 모두의
               Page 2로 바로 이동할 수 있게 한다. */}
-          <div className="flex items-center gap-1.5 max-sm:w-full max-sm:overflow-x-auto max-sm:pb-1">
+          <div className="flex items-center gap-1.5 max-sm:w-full max-sm:overflow-x-auto max-sm:pb-1" tabIndex={0} role="region" aria-label="날짜 이동 버튼(가로 스크롤)">
             {allChannels.map((c) => (
               <Link
                 key={c.code}

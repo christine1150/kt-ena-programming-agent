@@ -92,7 +92,7 @@ function LiveWeekView({ live, target, year, channelCode }: { live: LiveWeek; tar
           ⓘ
         </span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="예측 표(가로 스크롤)">
         <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(7, minmax(184px, 1fr))" }}>
           {live.days.map((d) => {
             const gap = target !== null && d.official !== null ? d.official - target : null;
@@ -245,7 +245,7 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
         </span>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="예측 표(가로 스크롤)">
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(184px, 1fr))` }}>
           {dates.map((d) => {
             const dd = daily.find((x) => x.from === d);
