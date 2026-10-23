@@ -307,11 +307,21 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
 
   // 분류(승인 메타데이터만)
   const categories: string[] = [];
+  // 종영일(오리지널 프로그램 정보의 broadcast_end_date) — 등록 행이 모두 종영일을 갖고 있을 때만 종영으로 본다(하나라도 비면 방영 중). 원 방송 채널은 등록 행의 채널
+  const endDates: (string | null)[] = [];
+  const originChannelIds = new Set<string>();
+  const channelIdOf = new Map(workPrograms.map((p) => [p.id, p.channel_id]));
   for (let i = 0; i < workIds.length; i += IN_CHUNK) {
-    const { data } = await db.from("featured_content").select("category").in("program_id", workIds.slice(i, i + IN_CHUNK));
-    for (const r of (data ?? []) as { category: string | null }[]) if (r.category) categories.push(r.category);
+    const { data } = await db.from("featured_content").select("program_id, category, broadcast_end_date").in("program_id", workIds.slice(i, i + IN_CHUNK));
+    for (const r of (data ?? []) as { program_id?: string; category: string | null; broadcast_end_date?: string | null }[]) {
+      if (r.category) categories.push(r.category);
+      endDates.push(r.broadcast_end_date ?? null);
+      const cid = r.program_id ? channelIdOf.get(r.program_id) : undefined;
+      if (cid) originChannelIds.add(cid);
+    }
   }
   const classification = classifyWork(categories);
+  const seriesEnd = endDates.length > 0 && endDates.every((d) => !!d) ? (endDates as string[]).sort().at(-1)! : null;
 
   // 본방 편성 패턴 — 관리자 등록(주요 콘텐츠 관리)·네이버 방송 정보. 닐슨·업로드 편성표로도 본방 여부를 못 정한 방영만 이 패턴으로 보완한다.
   const runPatterns = await loadRunPatterns(db, { memberKeys: work.memberKeys, workPrograms, channelCodeById: new Map(channels.map((c) => [c.id, c.code])) });
@@ -688,7 +698,8 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       analysis.slotLead = slotLeadOf(slots);
       analysis.slotBaseFrom = cmpFrom;
       analysis.slotBaseTo = to;
-      analysis.periodTrend = periodTrendOf(filtered, dayList, channelLabel);
+      // 종영이 확인된 오리지널(종영일 ≤ 최신 자료일)이면 종영일을 넘겨, 최근 구간이 대부분 종영 뒤인지 함께 본다
+      analysis.periodTrend = periodTrendOf(filtered, dayList, channelLabel, seriesEnd && latest && seriesEnd <= latest ? seriesEnd : null, originChannelIds.has(ch.id));
       analysis.runSplit = nonFirst && first.days > 0 ? { first: ratioOf(first.avg, channelDaily.mean), firstDays: first.days, rest: nonFirst.vs, restDays: nonFirst.days } : null;
     }
 
@@ -715,7 +726,12 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         shareNote: analysis ? shareLineOf(vsChannel, analysis.slots) : null,
         // 하락은 어느 기간이든 선택한 기간·조건의 방영 안에서 한 가지 규칙으로(방송일 마지막 1/3 vs 그 앞, 같은 방송일 채널 평균 대비) — 사용자 지시 2026-10-23.
         // 12주 진단의 하락(같은 시간대 기대치 대비)은 정의가 달라 같은 작품에서 반대로 나온 사례가 있어(쯔양몇끼 ENA Drama: 진단 하락, 채널 평균 대비 상승) 쓰지 않는다
-        trendNote: analysis?.periodTrend?.falling ? `최근 방송 ${analysis.periodTrend.recentDays}일(${analysis.periodTrend.recentFrom.slice(5).replace("-", "/")}~)은 그 앞보다 낮아졌습니다.` : null,
+        // 종영 뒤 구간의 하락은 작품 경쟁력 하락이 아니므로 그렇게 적는다(사용자 지시 2026-10-23, 니돈내산 4회 종영 사례). 재방은 원 방송 채널에서만 단정한다
+        trendNote: analysis?.periodTrend?.falling
+          ? `최근 방송 ${analysis.periodTrend.recentDays}일(${analysis.periodTrend.recentFrom.slice(5).replace("-", "/")}~)은 그 앞보다 낮아졌습니다.`
+          : analysis?.periodTrend?.afterEnd
+            ? `종영(${Number(analysis.periodTrend.afterEnd.slice(5, 7))}/${Number(analysis.periodTrend.afterEnd.slice(8))}) 후 ${analysis.periodTrend.origin ? "재방 " : ""}구간이라 최근 시청률이 낮아졌습니다.`
+            : null,
       };
     }
 

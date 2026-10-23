@@ -459,6 +459,11 @@ async function main() {
     check("기간 안 하락: 20% 하락은 하락으로 보지 않음(약 30% 선)", !!flat && !flat.falling, JSON.stringify(flat));
     check("기간 안 하락: 방송일 5일(앞쪽 3일 미만)이면 판단하지 않음", periodTrendOf(trAir([1, 1, 0.2, 0.2, 0.2]), trCh(5), "수도권 2049") === null);
     const chDown = periodTrendOf(trAir([1, 1, 1, 1, 1, 1, 0.5, 0.5, 0.5]), trCh(9).map((r, k) => ({ ...r, rating: k >= 6 ? 0.5 : 1 })), "수도권 2049");
+    // 종영이 확인된 오리지널 — 최근 구간 방송일의 과반이 종영일 뒤면 afterEnd(하락을 종영 뒤 구간 탓으로)
+    const ended = periodTrendOf(trAir([1, 1, 1, 1, 1, 1, 0.5, 0.5, 0.5]), trCh(9), "수도권 2049", addDays("2026-09-01", 15), true);
+    check("종영 확인: 방영 기간 안은 평평하고 종영 뒤에만 떨어지면 하락 아님, afterEnd = 종영일, 원 방송 채널 표시", !!ended && !ended.falling && ended.afterEnd === addDays("2026-09-01", 15) && ended.origin === true, JSON.stringify(ended));
+    const live = periodTrendOf(trAir([1, 1, 1, 1, 1, 1, 0.5, 0.5, 0.5]), trCh(9), "수도권 2049", addDays("2026-09-01", 30));
+    check("종영 확인: 종영일이 최근 구간 뒤면 afterEnd 없음(진짜 하락)", !!live && live.falling && !live.afterEnd, JSON.stringify(live));
     check("기간 안 하락: 채널 전체가 같이 떨어진 몫은 빼고 본다", !!chDown && !chDown.falling, JSON.stringify(chDown));
     // 종합 리뷰(제목 옆, 보유 채널 통합) — ENA 먼저·방영 많은 순, 1~3문장, 레이블·아이콘 어휘 없음, ENA가 없으면 방영 최다 채널부터(다른 채널도 계속 분석)
     const rv = r.review!;

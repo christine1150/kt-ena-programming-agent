@@ -343,7 +343,7 @@ export interface RowAnalysis {
    * 조회 기간 안의 흐름 — 기간 마지막 1/3(12주면 최근 4주)과 그 앞을, 같은 방송일의 채널 평균 대비로 견준다(본재 조건 그대로).
    * 하락 = 콘텐츠 적합도와 같은 선(log2 −0.5, 약 30% 하락). 양쪽 모두 방송일 3일 이상일 때만, 아니면 null
    */
-  periodTrend?: { recentFrom: string; recentPeriodDays: number; recentDays: number; priorDays: number; recentIndex: number; priorIndex: number; delta: number; falling: boolean } | null;
+  periodTrend?: { recentFrom: string; recentPeriodDays: number; recentDays: number; priorDays: number; recentIndex: number; priorIndex: number; delta: number; falling: boolean; /** 종영이 확인된 오리지널이고 방영 기간(종영일까지) 안에서는 하락이 아닌데 종영 뒤를 더해 떨어졌으면 그 종영일(이때 falling = false) */ afterEnd?: string | null; /** 이 채널이 오리지널 등록(원 방송) 채널인지 */ origin?: boolean } | null;
 }
 
 export interface AiringEvidence {

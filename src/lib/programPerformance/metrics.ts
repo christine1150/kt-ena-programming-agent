@@ -227,23 +227,37 @@ export function dailySeries(airings: WorkAiring[], dayRows: ChannelDayRow[], tar
  * 견준다(채널 전체가 오르내린 몫은 뺀다). 달력 일수로 자르면 4주 조회에서 최근 쪽 방송일이 모자라 판단을 못 해 방송일로 자른다.
  * 하락 선은 콘텐츠 적합도와 같은 log2 −0.5(약 30%). 앞쪽도 방송일 3일 이상일 때만. 기간·본재 조건은 넘겨받은 방영 그대로.
  */
-export function periodTrendOf(airings: WorkAiring[], dayRows: ChannelDayRow[], targetLabel: string): RowAnalysis["periodTrend"] {
+export function periodTrendOf(airings: WorkAiring[], dayRows: ChannelDayRow[], targetLabel: string, seriesEnd: string | null = null, origin = false): RowAnalysis["periodTrend"] {
+  const full = trendOn(airings, dayRows, targetLabel);
+  if (!full) return null;
+  const down = (t: { delta: number }) => t.delta <= CONTENT_FIT_CONFIG.trendDownDelta;
+  // 종영이 확인된 오리지널이고 종영 뒤 방영이 섞여 있으면, 하락은 방영 기간(종영일까지) 안에서만 판단한다.
+  // 방영 기간 안에서는 하락이 아닌데 종영 뒤를 더해 떨어졌다면 그 하락은 종영 뒤 구간 탓(afterEnd)이고 작품 하락(falling)으로 보지 않는다
+  if (seriesEnd && airings.some((a) => a.date > seriesEnd)) {
+    const run = trendOn(airings.filter((a) => a.date <= seriesEnd), dayRows, targetLabel);
+    if (run && down(run)) return { ...run, falling: true, afterEnd: null, origin };
+    return { ...full, falling: false, afterEnd: down(full) ? seriesEnd : null, origin };
+  }
+  return { ...full, falling: down(full), afterEnd: null, origin };
+}
+
+/** 방송일 마지막 1/3(최소 3일) vs 그 앞 — 같은 방송일 채널 평균 대비 지수와 log2 변화. 양쪽 방송일이 모자라면 null */
+function trendOn(airings: WorkAiring[], dayRows: ChannelDayRow[], targetLabel: string) {
   const dates = [...new Set(airings.filter((a) => a.rating !== null).map((a) => a.date))].sort();
   const recentN = Math.max(CONTENT_FIT_CONFIG.trendMinDays, Math.round((dates.length * CONTENT_FIT_CONFIG.trendRecentDays) / CONTENT_FIT_CONFIG.windowDays));
   if (dates.length - recentN < CONTENT_FIT_CONFIG.trendMinDays) return null;
   const cut = dates[dates.length - recentN];
   const recentPeriodDays = daysBetween(cut, dates[dates.length - 1]);
   const idx = (part: WorkAiring[]) => {
-    const dates = [...new Set(part.map((a) => a.date))];
+    const ds = [...new Set(part.map((a) => a.date))];
     const prog = splitStat(part).avg;
-    const ch = meanOf(dates.map((d) => channelDailyMean(dayRows, d, d, targetLabel).mean).filter((v): v is number => v !== null));
-    return { days: dates.length, index: prog !== null && ch !== null && ch > 0 ? prog / ch : null };
+    const ch = meanOf(ds.map((d) => channelDailyMean(dayRows, d, d, targetLabel).mean).filter((v): v is number => v !== null));
+    return { days: ds.length, index: prog !== null && ch !== null && ch > 0 ? prog / ch : null };
   };
   const r = idx(airings.filter((a) => a.date >= cut));
   const p = idx(airings.filter((a) => a.date < cut));
   if (r.days < CONTENT_FIT_CONFIG.trendMinDays || p.days < CONTENT_FIT_CONFIG.trendMinDays || r.index === null || p.index === null || r.index <= 0 || p.index <= 0) return null;
-  const delta = Math.log2(r.index / p.index);
-  return { recentFrom: cut, recentPeriodDays, recentDays: r.days, priorDays: p.days, recentIndex: r.index, priorIndex: p.index, delta, falling: delta <= CONTENT_FIT_CONFIG.trendDownDelta };
+  return { recentFrom: cut, recentPeriodDays, recentDays: r.days, priorDays: p.days, recentIndex: r.index, priorIndex: p.index, delta: Math.log2(r.index / p.index) };
 }
 
 /** 채널 평균 = 100으로 본 지수(작품 ÷ 채널 평균 × 100, 정수). 사용자 지정 표기(2026-10-22): 100 미만 붉은색·초과 푸른색 */
@@ -847,11 +861,18 @@ export function overallReviewOf(i: { rows: ChannelRow[]; oc: (OriginalCompare & 
   }
 
   // 최근 하락 — 선택한 조회 기간 안에서(마지막 1/3 vs 그 앞, 약 30% 이상 하락). 떨어진 채널 이름을 밝힌다
-  const falling = judged.filter((v) => v.kpi.assessment?.trendNote);
+  // 종영이 확인된 오리지널의 종영 뒤 구간 하락은 하락이라 쓰지 않고 '종영 후 (재방) 구간'으로(사용자 지시 2026-10-23). 재방은 원 방송 채널뿐일 때만
+  const falling = judged.filter((v) => v.kpi.assessment?.trendNote && v.kpi.analysis?.periodTrend?.falling);
+  const ended = judged.filter((v) => v.kpi.assessment?.trendNote && v.kpi.analysis?.periodTrend?.afterEnd);
   // 전체가 부진해도 하락은 알린다(강한 채널의 하락은 특히 중요, 2026-10-23 쯔양몇끼 12주: ENA Drama만 평균 이상인데 하락 중)
   if (falling.length) {
     const c = `최근 방송에서는 ${nm(falling)}의 시청률이 내려가는 흐름입니다`;
     ins.push({ kind: "trend", clause: c, sentence: `다만 ${c}.`, contrast: true });
+  } else if (ended.length) {
+    const end = ended[0].kpi.analysis!.periodTrend!.afterEnd!;
+    const rerun = ended.every((v) => v.kpi.analysis?.periodTrend?.origin) ? "재방 " : "";
+    const c = `최근 ${nm(ended)} 시청률이 낮아진 것은 종영(${Number(end.slice(5, 7))}/${Number(end.slice(8))}) 후 ${rerun}구간이기 때문입니다`;
+    ins.push({ kind: "trend", clause: c, sentence: `${c}.`, contrast: true });
   }
 
   // 타깃 — 높은 채널이 모두 한 타깃 채널(2049 채널·가구 채널)이고 낮은 채널은 모두 다른 타깃 채널일 때, 또는 채널 안에서 2049와 가구 반응이 한쪽으로 기울 때
