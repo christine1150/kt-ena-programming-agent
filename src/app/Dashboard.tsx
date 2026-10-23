@@ -1512,6 +1512,12 @@ function ChannelDailyColumn({
   // 사용자 지시(2026-10-23): ENA Drama 로고가 붉은색이라 순위가 목표를 상회해도 미달(붉은색)과 구분되지 않는다 — 상회 시에는 ENA 로고색으로 표시
   const goalAccent = code === "ENA_DRAMA" && logoReference ? brandText(logoReference.themeColor ?? UNBRANDED_CHANNEL_COLOR) : accent;
   const annualAvg = channel.ytdAvgRating;
+  const topIdx = state.rows
+    .map((r, i) => ({ v: r.primary_rating ?? 0, i }))
+    .filter((x) => x.v > 0)
+    .sort((a, b) => b.v - a.v || a.i - b.i)
+    .slice(0, 2)
+    .map((x) => x.i);
   const hasActionText = !!(resolved.line || resolved.copy || resolved.status);
 
   return (
@@ -1565,10 +1571,18 @@ function ChannelDailyColumn({
           <ul className="flex flex-col">
             {state.rows.map((r, i) => {
               const high = r.primary_rating !== null && annualAvg !== null && r.primary_rating >= annualAvg;
+              // 사용자 지시(2026-10-23): 채널별 일간 시청률 1·2위 프로그램을 시청률 표(/ratings)의 자사 행과 같은 음영+왼쪽 막대로 강조 — 1위가 더 진하게, 채널 로고색 사용
+              const topPlace = r.primary_rating ? (topIdx[0] === i ? 1 : topIdx[1] === i ? 2 : 0) : 0;
+              const topStyle =
+                topPlace === 1
+                  ? { backgroundColor: `color-mix(in srgb, ${accent} 13%, white)`, boxShadow: `inset 4px 0 0 ${accent}` }
+                  : topPlace === 2
+                    ? { backgroundColor: `color-mix(in srgb, ${accent} 6%, white)`, boxShadow: `inset 3px 0 0 color-mix(in srgb, ${accent} 45%, white)` }
+                    : undefined;
               const name = shortProgramName(r.canonical_name);
               const detail = [r.is_first_run ? "본방" : null, r.episode_number != null ? `${r.episode_number}회` : null, r.episode_subtitle?.trim() || null].filter(Boolean).join(" · ");
               return (
-                <li key={i} className="grid grid-cols-[2.7rem_minmax(0,1fr)_auto] items-baseline gap-x-2 border-t border-zinc-50 py-0.5 text-[12.5px] leading-snug first:border-t-0" title={`${fmtBroadcastClock(r.start_time)} ${name}${detail ? ` · ${detail}` : ""}`}>
+                <li key={i} className={`grid grid-cols-[2.7rem_minmax(0,1fr)_auto] items-baseline gap-x-2 border-t border-zinc-50 py-0.5 text-[12.5px] leading-snug first:border-t-0 ${topPlace ? "-mx-1.5 px-1.5" : ""}`} style={topStyle} title={`${fmtBroadcastClock(r.start_time)} ${name}${detail ? ` · ${detail}` : ""}`}>
                   <span className="text-[11px] tabular-nums text-zinc-400">{fmtBroadcastClock(r.start_time)}</span>
                   <span className="flex min-w-0 items-baseline gap-1">
                     <span className="min-w-0 truncate text-zinc-700" style={high ? { color: accent, fontWeight: 600 } : undefined}>{name}</span>
