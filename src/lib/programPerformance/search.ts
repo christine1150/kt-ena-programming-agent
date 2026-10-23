@@ -123,9 +123,11 @@ export async function searchWorks(db: PerfDb & { rpc: (fn: string, args: Record<
   const { data, error } = await db.rpc("search_program_identity", { p_q_key: nq.key, p_q_jamo: nq.jamo, p_tokens: nq.tokens, p_limit: 40 });
   if (error) throw new Error(`작품 검색 실패: ${error.message}`);
   const ranked = rankIdentityRows(nq, (data ?? []) as IdentityRow[], today);
-  return ranked
+  const items = ranked
     // 자사 방영 이력이 없어도 경쟁채널 자료가 있으면 결과에 넣는다(사용자 지시 2026-10-23) — 성과 화면이 경쟁채널 줄을 따로 보여 준다
     .filter((c) => c.ownChannels.length > 0 || c.compChannels.length > 0)
     .map((c) => ({ groupKey: c.groupKey, displayName: c.displayName, ownChannels: c.ownChannels, compChannels: c.compChannels, airingsTotal: c.airingsTotal, lastDate: c.lastDate, classification: classMap.get(c.groupKey)?.cls ?? ("UNCONFIRMED" as WorkClass) }))
     .filter((c) => passes(c.classification, f));
+  // 자사 방영 작품을 먼저(각 묶음 안은 검색 점수 순 그대로) — '지구'를 찾으면 타사 작품(지구에게묻다)이 지구마불보다 위에 오던 문제(2026-10-23)
+  return [...items.filter((c) => c.ownChannels.length > 0), ...items.filter((c) => c.ownChannels.length === 0)];
 }

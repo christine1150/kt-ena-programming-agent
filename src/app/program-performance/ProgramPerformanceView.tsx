@@ -4,8 +4,9 @@
 // 분석 구조 수정(2026-10-22): 채널별 성과 비교표 → 행(채널·타깃) 선택 → 2×2 분석(시청률 흐름·최고/최저·편성 비교·종합 평가) → 필요할 때 상세(방송 구분별 성과·방송 기록).
 //  - 비교표: 시청률(아래 작은 채널 평균)·점유율·채널 평균 대비·같은 시간대 대비. 표본이 적은 채널은 채널명 옆 (n일).
 //  - 문구(흐름·최고/최저·시간대·종합)는 서버 고정 템플릿. 최근 12주 편성 진단은 기간이 달라 이 화면에 섞지 않고 채널 화면으로 연결.
+//  - 검색·기간 흐름 정리(2026-10-23): 화면 상태는 주소 하나(새로고침·공유·뒤로 가기), 검색은 자동완성 목록, 직접 기간은 [적용]을 눌러야 조회.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { shortProgramName } from "@/lib/programAlias";
 import { formatInt, formatPct, formatRatingValue, MISSING } from "@/lib/ui/metricFormat";
 import { WORK_CLASS_LABEL, indexOf } from "@/lib/programPerformance/metrics";
@@ -750,73 +751,470 @@ function CalcBasis() {
   );
 }
 
-export default function ProgramPerformanceView({ initialQuery, initialGroup, focusChannel, initialFrom, initialTo }: { initialQuery: string; initialGroup: string | null; focusChannel: string | null; initialFrom: string | null; initialTo: string | null }) {
-  const router = useRouter();
-  const sp = useSearchParams();
-  const [q, setQ] = useState(initialQuery);
-  const [classFilter, setClassFilter] = useState<ClassFilter>("all");
-  const [items, setItems] = useState<SearchItem[] | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [group, setGroup] = useState<string | null>(initialGroup);
-  // 기본 기간은 최근 4주(사용자 지정 2026-10-22). 다른 화면에서 기간을 넘겨받으면 그 기간.
-  const [preset, setPreset] = useState<PeriodPreset>(initialFrom || initialTo ? "custom" : "4w");
-  const [from, setFrom] = useState<string | null>(initialFrom);
-  const [to, setTo] = useState<string | null>(initialTo);
-  const [channels, setChannels] = useState<string[]>([]); // 비면 전체
-  const [targetMode, setTargetMode] = useState<TargetMode>("both");
-  const [airing, setAiring] = useState<AiringFilter>("all");
-  const [fetched, setFetched] = useState<{ url: string; result: PerformanceResult | null; error: string | null } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // 분석할 채널·타깃 행(채널코드|타깃). 응답에 없으면 진입 채널 → 첫 채널의 KPI 행으로 돌아간다(이전 선택이 남지 않게).
-  const [selKey, setSelKey] = useState<string | null>(null);
-  // 경쟁 채널 성과는 기록이 있을 때 사용자가 열 때만 보인다
-  const [showComp, setShowComp] = useState(false);
-  const analysisRef = useRef<HTMLDivElement>(null);
+/**
+ * 화면 상태 = 주소 하나 — 새로고침·공유·뒤로 가기가 같은 화면을 연다. 기본값(최근 4주·전체 방송·두 타깃·전체 채널)은 주소에 쓰지 않는다.
+ * 예전에는 상태를 화면이 따로 들고 주소는 작품만 적어, 주소를 바꿀 때마다 첫 진입 처리가 다시 돌아 검색 결과를 기본 목록으로 덮어썼다(2026-10-23 재현).
+ * 다른 화면 링크(?q=이름&channel=채널코드, ?group=작품키&from&to)는 그대로 받는다.
+ */
+interface ViewState {
+  group: string | null;
+  /** 다른 화면에서 이름으로 넘어올 때만 — 작품을 정하면 지운다 */
+  q: string;
+  preset: PeriodPreset;
+  from: string | null;
+  to: string | null;
+  airing: AiringFilter;
+  target: TargetMode;
+  channels: string[];
+  /** 처음 분석할 채널(다른 화면에서 넘겨받은 채널) */
+  focus: string | null;
+}
 
-  // 검색·분류 선택은 작품 선택을 풀고 후보 목록만 보여 준다(이전 작품 상세와 새 후보가 섞이지 않게)
-  const search = useCallback(
-    async (text: string, f: ClassFilter) => {
-      setGroup(null);
-      setSelKey(null);
-      setSearching(true);
-      setError(null);
-      const next = new URLSearchParams(sp.toString());
-      next.delete("group");
-      next.delete("q");
-      router.replace(`/program-performance${next.size ? `?${next}` : ""}`, { scroll: false });
-      try {
-        const res = await fetch(`/api/program-performance/search?q=${encodeURIComponent(text)}&class=${f}`);
-        const j = await res.json();
-        setItems(j.ok ? (j.items as SearchItem[]) : []);
-        if (!j.ok) setError(j.message ?? "검색 실패");
-      } catch {
-        setItems([]);
-        setError("검색 중 오류가 났습니다.");
-      } finally {
-        setSearching(false);
-      }
-    },
-    [router, sp]
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function readState(sp: Pick<URLSearchParams, "get">): ViewState {
+  const iso = (k: string) => {
+    const v = sp.get(k);
+    return v && ISO_DATE.test(v) ? v : null;
+  };
+  const from = iso("from");
+  const to = iso("to");
+  const p = sp.get("period");
+  const a = sp.get("airing");
+  const t = sp.get("target");
+  const ch = sp.get("channel");
+  return {
+    group: (sp.get("group") ?? "").slice(0, 120) || null,
+    q: (sp.get("q") ?? "").slice(0, 60),
+    preset: from || to ? "custom" : p === "12w" || p === "all" ? p : "4w",
+    from,
+    to,
+    airing: a === "first" || a === "rerun" ? a : "all",
+    target: t === "kpi" || t === "common2049" || t === "commonHH" ? t : "both",
+    channels: (sp.get("channels") ?? "").split(",").filter((c) => CHANNELS.some((x) => x.code === c)),
+    focus: ch && /^[A-Z_]{2,12}$/.test(ch) ? ch : null,
+  };
+}
+
+function writeState(s: ViewState): string {
+  const p = new URLSearchParams();
+  if (s.group) p.set("group", s.group);
+  else if (s.q) p.set("q", s.q);
+  if (s.preset === "custom") {
+    if (s.from) p.set("from", s.from);
+    if (s.to) p.set("to", s.to);
+  } else if (s.preset !== "4w") p.set("period", s.preset);
+  if (s.airing !== "all") p.set("airing", s.airing);
+  if (s.target !== "both") p.set("target", s.target);
+  if (s.channels.length) p.set("channels", s.channels.join(","));
+  if (s.focus) p.set("channel", s.focus);
+  const qs = p.toString();
+  return `/program-performance${qs ? `?${qs}` : ""}`;
+}
+
+const SEARCH_SHOW = 40;
+/** 이름 비교용 — 공백·문장부호·대소문자 무시 */
+const looseName = (s: string) => s.replace(/[\s\p{P}\p{S}]/gu, "").toLowerCase();
+const chName = (code: string) => CHANNELS.find((c) => c.code === code)?.label ?? code.replace(/_/g, " ");
+
+/** 검색 목록 한 줄의 보조 정보 — 같은 이름의 다른 시즌·동명 작품을 고를 수 있게 방영 채널·마지막 방영일·방영 수 */
+function SearchMeta({ it }: { it: SearchItem }) {
+  const own = it.ownChannels.length > 0;
+  return (
+    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] tabular-nums text-zinc-500">
+      {own ? <span>{it.ownChannels.map(chName).join("·")}</span> : <span className="rounded bg-zinc-100 px-1 font-medium text-zinc-600">타사 {(it.compChannels ?? []).slice(0, 3).join("·")}</span>}
+      {it.lastDate && <span>· 마지막 방영 {it.lastDate}</span>}
+      {it.airingsTotal > 0 && <span>· {formatInt(it.airingsTotal)}회</span>}
+    </div>
+  );
+}
+
+/**
+ * 작품 찾기 — 입력하면 0.25초 뒤 자동으로 찾고(앞선 요청은 취소해 늦게 온 옛 결과가 덮어쓰지 않게) 입력창 아래에 목록을 펼친다.
+ * ↑↓로 고르고 Enter, Esc로 닫는다. 보던 작품은 다른 작품을 고를 때까지 그대로 둔다(검색만으로 화면이 비지 않게).
+ * 분류 버튼(오리지널 드라마·예능)은 그 분류 전체 목록을 같은 자리에 연다. 작품을 고르기 전에는 ENA 최근 2주 오리지널을 한 줄로 보여 준다.
+ */
+function ProgramSearch({ initialQuery, hasSelection, onPick }: { initialQuery: string; hasSelection: boolean; onPick: (it: SearchItem, auto: boolean) => void }) {
+  const [text, setText] = useState(initialQuery);
+  const [mode, setMode] = useState<ClassFilter>("all");
+  const [open, setOpen] = useState(Boolean(initialQuery));
+  const [recent, setRecent] = useState<SearchItem[] | null>(null);
+  const [res, setRes] = useState<{ key: string; items: SearchItem[]; error: string | null } | null>(null);
+  const [active, setActive] = useState(0);
+  // 다른 화면에서 이름으로 넘어온 첫 검색만, 후보가 하나면 바로 연다(여럿이면 사용자가 고른다 — 다른 시즌·동명 작품을 임의로 고르지 않음)
+  const autoPick = useRef(Boolean(initialQuery));
+  const boxRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const query = text.trim();
+  const cls: ClassFilter = query ? "all" : mode;
+  const key = `${query}|${cls}`;
+  const isRecent = key === "|all";
+  const showDrop = open && (query !== "" || mode !== "all" || hasSelection);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    fetch("/api/program-performance/search?q=&class=all", { signal: ac.signal })
+      .then((r) => r.json())
+      .then((j) => setRecent(j.ok ? (j.items as SearchItem[]) : []))
+      .catch(() => !ac.signal.aborted && setRecent([]));
+    return () => ac.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!open || isRecent) return;
+    const ac = new AbortController();
+    const timer = setTimeout(
+      () => {
+        fetch(`/api/program-performance/search?q=${encodeURIComponent(query)}&class=${cls}`, { signal: ac.signal })
+          .then((r) => r.json())
+          .then((j) => {
+            const list = j.ok ? (j.items as SearchItem[]) : [];
+            if (autoPick.current) {
+              autoPick.current = false;
+              // 후보가 하나이거나, 이름이 검색어와 똑같은 작품이 하나뿐일 때(편성표 링크의 '연애박사' → 연애박사몰아보기·연인 등이 함께 나와도 연애박사)
+              const exact = list.filter((it) => looseName(it.displayName) === looseName(query));
+              const only = list.length === 1 ? list[0] : exact.length === 1 ? exact[0] : null;
+              if (only) {
+                setOpen(false);
+                setText("");
+                onPick(only, true);
+                return;
+              }
+            }
+            setRes({ key, items: list, error: j.ok ? null : (j.message ?? "검색 실패") });
+            setActive(0);
+          })
+          .catch(() => !ac.signal.aborted && setRes({ key, items: [], error: "검색 중 오류가 났습니다." }));
+      },
+      query ? 250 : 0
+    );
+    return () => {
+      clearTimeout(timer);
+      ac.abort();
+    };
+  }, [open, isRecent, key, query, cls, onPick]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const list = isRecent ? recent : (res?.items ?? null);
+  const pending = isRecent ? recent === null : res?.key !== key;
+  const error = !isRecent && !pending ? (res?.error ?? null) : null;
+  const shown = (list ?? []).slice(0, SEARCH_SHOW);
+
+  useEffect(() => {
+    if (showDrop) document.getElementById(`pp-opt-${active}`)?.scrollIntoView({ block: "nearest" });
+  }, [active, showDrop]);
+
+  const choose = (it: SearchItem) => {
+    setOpen(false);
+    setText("");
+    setMode("all");
+    inputRef.current?.blur();
+    onPick(it, false);
+  };
+  const heading = query
+    ? pending
+      ? `‘${query}’ 찾는 중…`
+      : `‘${query}’ ${formatInt(list?.length ?? 0)}개${(list?.length ?? 0) > SEARCH_SHOW ? ` · 상위 ${SEARCH_SHOW}개 표시(더 입력하면 좁혀집니다)` : ""}`
+    : mode === "drama"
+      ? "오리지널 드라마 · 최근 방영 순"
+      : mode === "variety"
+        ? "오리지널 예능 · 최근 방영 순"
+        : "ENA 최근 2주 방영 오리지널 · 최근 방영 순";
+
+  return (
+    <div ref={boxRef} className="relative">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[200px] flex-1">
+          <svg className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+            <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <input
+            ref={inputRef}
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              setActive(0);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setOpen(true);
+                setActive((i) => Math.min(i + 1, Math.max(shown.length - 1, 0)));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActive((i) => Math.max(i - 1, 0));
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                // 찾는 중에는 흐리게 남아 있는 이전 목록에서 고르지 않는다
+                if (!pending && shown[active]) choose(shown[active]);
+                else setOpen(true);
+              } else if (e.key === "Escape") setOpen(false);
+            }}
+            role="combobox"
+            aria-label="프로그램 검색"
+            aria-autocomplete="list"
+            aria-expanded={showDrop}
+            aria-controls="pp-search-list"
+            aria-activedescendant={showDrop && shown[active] ? `pp-opt-${active}` : undefined}
+            autoComplete="off"
+            placeholder={hasSelection ? "다른 작품 검색 — 이름 일부·약칭 가능" : "작품명 검색 — 이름 일부·약칭 가능"}
+            className="w-full rounded-md border border-zinc-300 py-1.5 pl-8 pr-8 text-[16px] focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 sm:text-[14px]"
+          />
+          {text && (
+            <button
+              type="button"
+              aria-label="검색어 지우기"
+              onClick={() => {
+                setText("");
+                inputRef.current?.focus();
+              }}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded px-1.5 text-[16px] leading-none text-zinc-400 hover:text-zinc-700"
+            >
+              ×
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-1 text-[12px]" role="group" aria-label="오리지널 작품 목록">
+          {CLASS_FILTERS.map((c) => {
+            const on = showDrop && !query && mode === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => {
+                  setText("");
+                  setMode(on ? "all" : c.id);
+                  setActive(0);
+                  setOpen(!on);
+                }}
+                className={`rounded-full px-3 py-1 ring-1 ${on ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white text-zinc-600 ring-zinc-200 hover:bg-zinc-50"}`}
+              >
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {showDrop && (
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg">
+          <div className="flex items-center gap-2 border-b border-zinc-100 bg-zinc-50 px-3 py-1.5 text-[11px] text-zinc-500">
+            {pending && <Spinner />}
+            <span>{heading}</span>
+            <span className="ml-auto hidden sm:inline">↑↓ 이동 · Enter 선택 · Esc 닫기</span>
+          </div>
+          {error ? (
+            <p className="px-3 py-3 text-[13px] text-rose-700">{error}</p>
+          ) : !pending && shown.length === 0 ? (
+            <p className="px-3 py-3 text-[13px] text-zinc-500">일치하는 작품이 없습니다. 이름 일부(예: ‘지구마불’)나 약칭으로 찾아 보세요.</p>
+          ) : (
+            <ul id="pp-search-list" role="listbox" aria-label="작품 후보" className={`max-h-[min(60vh,420px)] overflow-y-auto py-1 ${pending ? "opacity-50" : ""}`}>
+              {shown.map((it, i) => (
+                <li
+                  key={it.groupKey}
+                  id={`pp-opt-${i}`}
+                  role="option"
+                  aria-selected={i === active}
+                  onMouseEnter={() => setActive(i)}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => !pending && choose(it)}
+                  className={`cursor-pointer px-3 py-1.5 ${i === active ? "bg-indigo-50" : ""}`}
+                >
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-[14px] font-medium text-zinc-900" title={it.displayName}>
+                      {shortProgramName(it.displayName)}
+                    </span>
+                    <ClassDot cls={it.classification} />
+                    {SHOW_CLASS.includes(it.classification) && <span className="shrink-0 text-[11px] text-zinc-500">{WORK_CLASS_LABEL[it.classification]}</span>}
+                  </div>
+                  <SearchMeta it={it} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {!hasSelection && (
+        // 한 줄 정리(사용자 지시 2026-10-22): 작품 구분은 색 점으로(이름은 마우스 오버), 넘치면 옆으로 넘긴다. "최근 2주 방영" 라벨은 두지 않음(2026-10-23)
+        <ul className="mt-2 flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto pb-1" aria-label="작품 목록" title="ENA에서 최근 2주 안에 방영한 오리지널(최근 방영 순)">
+          {recent === null && <li className="text-[12px] text-zinc-400">목록을 불러오는 중…</li>}
+          {recent?.length === 0 && <li className="text-[12px] text-zinc-500">최근 2주 안에 방영한 오리지널이 없습니다. 위에서 작품명을 검색하세요.</li>}
+          {recent?.map((it) => (
+            <li key={it.groupKey} className="shrink-0">
+              <button type="button" title={SHOW_CLASS.includes(it.classification) ? WORK_CLASS_LABEL[it.classification] : undefined} onClick={() => choose(it)} className="flex items-center gap-1.5 whitespace-nowrap rounded-md bg-white px-2.5 py-1 text-left text-[13px] ring-1 ring-zinc-200 hover:bg-zinc-50">
+                <span className="font-medium">{shortProgramName(it.displayName)}</span>
+                <ClassDot cls={it.classification} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const PRESETS: [Exclude<PeriodPreset, "custom">, string][] = [
+  ["4w", "최근 4주"],
+  ["12w", "최근 12주"],
+  ["all", "전체 기간"],
+];
+
+/**
+ * 기간 — 최근 4주·12주·전체는 누르는 즉시, '기간 선택'은 날짜 두 개를 고른 뒤 [적용]을 눌러야 조회한다
+ * (예전에는 날짜를 입력하는 도중 연도 한 자리마다 다시 계산을 요청하고 "시작일이 종료일보다 늦습니다"가 번쩍였다, 2026-10-23).
+ * 고를 수 있는 날짜는 자료 첫날~최신 자료일, 시작일이 종료일보다 늦으면 적용하지 않는다.
+ */
+function PeriodControl({ preset, from, to, period, dim, onPreset, onCustom }: { preset: PeriodPreset; from: string | null; to: string | null; period: PerformanceResult["period"] | null; dim: boolean; onPreset: (p: Exclude<PeriodPreset, "custom">) => void; onCustom: (from: string, to: string) => void }) {
+  const [draft, setDraft] = useState<{ from: string; to: string } | null>(null); // null = 닫힘
+  const isOpen = draft !== null;
+  const boxRef = useRef<HTMLDivElement>(null);
+  const min = period?.dbFirstDate ?? undefined;
+  const max = period?.latestDataDate ?? undefined;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const close = (e: MouseEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) setDraft(null);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setDraft(null);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [isOpen]);
+
+  const err = !draft
+    ? null
+    : !draft.from || !draft.to
+      ? "시작일과 종료일을 모두 고르세요."
+      : draft.from > draft.to
+        ? "시작일이 종료일보다 늦습니다."
+        : min && draft.to < min
+          ? `자료는 ${min}부터 있습니다.`
+          : max && draft.from > max
+            ? `최신 자료일은 ${max}입니다.`
+            : null;
+  const apply = () => {
+    if (!draft || err) return;
+    onCustom(draft.from, draft.to);
+    setDraft(null);
+  };
+  const dateInput = (k: "from" | "to", label: string) => (
+    <label className="block min-w-0">
+      <span className="mb-0.5 block text-[11px] font-medium text-zinc-600">{label}</span>
+      <input type="date" value={draft?.[k] ?? ""} min={min} max={max} onChange={(e) => setDraft((d) => d && { ...d, [k]: e.target.value })} className="w-full rounded border border-zinc-300 px-1.5 py-1 text-[16px] tabular-nums sm:text-[12px]" />
+    </label>
   );
 
-  // 첫 진입: 다른 화면에서 이름으로 넘어왔으면 그 이름으로 찾고, 아무것도 없으면 주요 오리지널 작품 목록을 보여 준다
-  useEffect(() => {
-    if (initialGroup) return;
-    let cancelled = false;
-    fetch(`/api/program-performance/search?q=${encodeURIComponent(initialQuery)}&class=all`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (cancelled) return;
-        const list = j.ok ? (j.items as SearchItem[]) : [];
-        // 이름으로 넘어왔고 후보가 하나뿐이면 바로 연다(여럿이면 사용자가 고른다 — 다른 시즌·동명 작품을 임의로 고르지 않음)
-        if (initialQuery && list.length === 1) setGroup(list[0].groupKey);
-        else setItems(list);
-      })
-      .catch(() => !cancelled && setItems([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [initialQuery, initialGroup]);
+  return (
+    <div ref={boxRef} className="relative flex flex-wrap items-center gap-1" role="group" aria-label="기간">
+      {PRESETS.map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          aria-pressed={preset === id}
+          onClick={() => {
+            setDraft(null);
+            onPreset(id);
+          }}
+          className={chip(preset === id)}
+        >
+          {label}
+        </button>
+      ))}
+      <button
+        type="button"
+        aria-pressed={preset === "custom"}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        // 지금 보고 있는 기간에서 시작
+        onClick={() => setDraft(isOpen ? null : { from: from ?? period?.from ?? "", to: to ?? period?.to ?? "" })}
+        className={chip(preset === "custom")}
+      >
+        기간 선택 ▾
+      </button>
+      {period && <span className={`ml-1 font-medium tabular-nums ${dim ? "text-zinc-400" : "text-zinc-800"}`}>{period.from} ~ {period.to}</span>}
+      {isOpen && (
+        <form
+          role="dialog"
+          aria-label="조회 기간 선택"
+          onSubmit={(e) => {
+            e.preventDefault();
+            apply();
+          }}
+          className="absolute left-0 top-full z-30 mt-1 w-[min(320px,calc(100vw-32px))] space-y-2 rounded-md border border-zinc-200 bg-white p-3 shadow-md"
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {dateInput("from", "시작일")}
+            {dateInput("to", "종료일")}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+            {period?.workFirstObserved && (
+              <button type="button" onClick={() => setDraft((d) => d && { ...d, from: period.workFirstObserved! })} className="text-indigo-700 underline underline-offset-2">
+                작품 첫 방영일({period.workFirstObserved})부터
+              </button>
+            )}
+            {max && (
+              <button type="button" onClick={() => setDraft((d) => d && { ...d, to: max })} className="text-indigo-700 underline underline-offset-2">
+                최신 자료일({max})까지
+              </button>
+            )}
+          </div>
+          {err ? <p className="text-[11px] text-rose-700">{err}</p> : <p className="text-[11px] text-zinc-500">{min && max ? `자료가 있는 기간: ${min} ~ ${max}` : "날짜를 고른 뒤 적용을 누르세요."}</p>}
+          <div className="flex justify-end gap-1.5">
+            <button type="button" onClick={() => setDraft(null)} className="rounded px-2.5 py-1 text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50">
+              취소
+            </button>
+            <button type="submit" disabled={Boolean(err)} className="rounded bg-zinc-900 px-3 py-1 font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+              적용
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/** 조건별 결과를 화면에 잠시 보관 — 뒤로 가기·조건 되돌리기가 다시 계산 없이 바로 보인다 */
+const RESULT_KEEP = 12;
+
+export default function ProgramPerformanceView() {
+  const sp = useSearchParams();
+  const view = useMemo(() => readState(sp), [sp]);
+  const { group, preset, from, to, airing, target: targetMode, channels, focus: focusChannel } = view;
+
+  // 주소 바꾸기 — 브라우저 기록 API(Next.js가 useSearchParams와 맞춰 준다, 서버 왕복 없음). 작품 선택은 기록을 쌓아 뒤로 가기로 돌아가고, 조건 변경은 바꿔 쓴다.
+  const nav = useCallback((patch: Partial<ViewState>, mode: "push" | "replace" = "replace") => {
+    const url = writeState({ ...readState(new URLSearchParams(window.location.search)), ...patch });
+    if (url === `${window.location.pathname}${window.location.search}`) return;
+    window.history[mode === "push" ? "pushState" : "replaceState"](null, "", url);
+  }, []);
+
+  // 고른 작품 이름 — 첫 결과가 오기 전 계산 중 문구에 쓴다
+  const [picked, setPicked] = useState<{ group: string; name: string } | null>(null);
+  const pick = useCallback(
+    (it: SearchItem, auto: boolean) => {
+      setPicked({ group: it.groupKey, name: it.displayName });
+      // 다른 화면에서 넘어온 이름으로 자동으로 연 경우만 넘겨받은 채널을 유지한다
+      nav(auto ? { group: it.groupKey, q: "" } : { group: it.groupKey, q: "", focus: null }, auto ? "replace" : "push");
+    },
+    [nav]
+  );
 
   // 최근 4주·12주는 서버가 최신 자료일 기준으로 정한다(첫 조회부터 같은 기간, 화면이 날짜를 계산하지 않음)
   const requestUrl = useMemo(() => {
@@ -830,35 +1228,60 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
     if (channels.length) params.set("channels", channels.join(","));
     return `/api/program-performance?${params}`;
   }, [group, airing, targetMode, preset, from, to, channels]);
-  const loading = requestUrl !== null && fetched?.url !== requestUrl;
-  // 조건을 바꿔 다시 계산하는 동안에는 같은 작품의 직전 결과를 흐리게 그대로 둔다(화면이 비어 검색 단계로 돌아간 것처럼 보이지 않게)
-  const current = fetched && fetched.url === requestUrl ? fetched.result : null;
-  const stale = !current && loading && fetched?.result && fetched.result.work.groupKey === group ? fetched.result : null;
-  const result = current ?? stale;
-  const fetchError = fetched && fetched.url === requestUrl ? fetched.error : null;
 
+  const [results, setResults] = useState<Record<string, { result: PerformanceResult | null; error: string | null }>>({});
+  const [last, setLast] = useState<PerformanceResult | null>(null);
+  const [retry, setRetry] = useState(0);
+  const kept = useRef<string[]>([]);
   useEffect(() => {
-    if (!requestUrl || !group) return;
-    let cancelled = false;
-    fetch(requestUrl)
+    if (!requestUrl || kept.current.includes(requestUrl)) return;
+    // 조건을 빨리 바꾸면 앞선 요청을 취소한다 — 늦게 도착한 옛 조건의 결과가 새 조건 화면을 덮지 않게
+    const ac = new AbortController();
+    fetch(requestUrl, { signal: ac.signal })
       .then((r) => r.json())
       .then((j) => {
-        if (cancelled) return;
-        setFetched({ url: requestUrl, result: j.ok ? (j.result as PerformanceResult) : null, error: j.ok ? null : (j.message ?? "조회 실패") });
+        const result = j.ok ? (j.result as PerformanceResult) : null;
+        let drop: string | null = null;
+        if (result) {
+          kept.current.push(requestUrl);
+          if (kept.current.length > RESULT_KEEP) drop = kept.current.shift() ?? null;
+          setLast(result);
+        }
+        setResults((cur) => {
+          const next = { ...cur, [requestUrl]: { result, error: j.ok ? null : (j.message ?? "조회 실패") } };
+          if (drop) delete next[drop];
+          return next;
+        });
       })
-      .catch(() => !cancelled && setFetched({ url: requestUrl, result: null, error: "조회 중 오류가 났습니다." }));
-    // 주소에 현재 작품을 남겨 새로고침·공유 시 같은 화면이 열리게 한다
-    const next = new URLSearchParams(sp.toString());
-    next.set("group", group);
-    next.delete("q");
-    router.replace(`/program-performance?${next}`, { scroll: false });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestUrl]);
+      .catch(() => !ac.signal.aborted && setResults((cur) => ({ ...cur, [requestUrl]: { result: null, error: "조회 중 오류가 났습니다." } })));
+    return () => ac.abort();
+  }, [requestUrl, retry]);
 
-  const toggleChannel = (code: string) => setChannels((cur) => (cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code]));
+  const entry = requestUrl ? results[requestUrl] : undefined;
+  const loading = requestUrl !== null && !entry;
+  const current = entry?.result ?? null;
+  // 조건을 바꿔 다시 계산하는 동안에는 같은 작품의 직전 결과를 흐리게 그대로 둔다(화면이 비어 검색 단계로 돌아간 것처럼 보이지 않게)
+  const stale = !current && loading && last && last.work.groupKey === group ? last : null;
+  const result = current ?? stale;
+  const fetchError = entry?.error ?? null;
+  const retryFetch = () => {
+    if (!requestUrl) return;
+    setResults((cur) => {
+      const next = { ...cur };
+      delete next[requestUrl];
+      return next;
+    });
+    setRetry((n) => n + 1);
+  };
+
+  // 분석할 채널·타깃 행(채널코드|타깃)·경쟁 채널 펼침은 작품별 — 작품을 바꾸면 처음 상태로(이전 선택이 남지 않게)
+  const [sel, setSel] = useState<{ group: string; key: string } | null>(null);
+  const selKey = sel && sel.group === group ? sel.key : null;
+  const [compFor, setCompFor] = useState<string | null>(null);
+  const showComp = compFor !== null && compFor === group;
+  const analysisRef = useRef<HTMLDivElement>(null);
+
+  const toggleChannel = (code: string) => nav({ channels: channels.includes(code) ? channels.filter((c) => c !== code) : [...channels, code] });
   const allRows = result ? result.groups.flatMap((g) => g.rows) : [];
   const excluded = allRows.filter((r) => EXCLUDED.includes(r.status));
   const aired = (r: ChannelRow) => r.status === "OBSERVED" && r.airings > 0;
@@ -874,119 +1297,33 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
   const cls = result?.classification;
   const visibleNotes = result ? result.notes.filter((n) => !(cls && n === cls.note && !SHOW_CLASS.includes(cls.cls))) : [];
   const selectable = entries.flatMap((e) => e.rows.filter(aired));
+  // 선택 행이 응답에 없으면 진입 채널 → 첫 채널의 KPI 행으로 돌아간다
   const selRow = selectable.find((r) => rowKey(r) === selKey) ?? comparable.find((r) => r.channelCode === focusChannel) ?? comparable[0] ?? null;
   const select = (r: ChannelRow) => {
-    setSelKey(rowKey(r));
+    if (group) setSel({ group, key: rowKey(r) });
     requestAnimationFrame(() => {
       const el = analysisRef.current;
       // 분석 영역이 화면 밖일 때만 내린다(표와 분석이 함께 보이는 넓은 화면에서는 움직이지 않음)
       if (el && el.getBoundingClientRect().top > window.innerHeight - 120) el.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
+  const loadingName = picked && picked.group === group ? shortProgramName(picked.name) : stale ? shortProgramName(stale.work.displayName) : null;
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-screen-xl px-4 py-5 sm:px-6">
       <h1 className="mb-3 text-[20px] font-bold text-zinc-900">프로그램 성과</h1>
 
       <section className="rounded-lg border border-zinc-200 bg-white p-3">
-        <form
-          className="flex flex-wrap items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setClassFilter("all");
-            void search(q, "all");
-          }}
-        >
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="작품명(일부·약칭 가능)" aria-label="프로그램 검색" className="min-w-[180px] flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-[16px] sm:text-[14px]" />
-          <button type="submit" className="rounded-md bg-zinc-900 px-3 py-1.5 text-[13px] font-medium text-white">
-            검색
-          </button>
-          <div className="flex flex-wrap gap-1 text-[12px]" role="group" aria-label="오리지널 작품 목록">
-            {CLASS_FILTERS.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                aria-pressed={classFilter === c.id}
-                onClick={() => {
-                  setClassFilter(c.id);
-                  void search("", c.id);
-                }}
-                className={`rounded-full px-3 py-1 ring-1 ${classFilter === c.id ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white text-zinc-600 ring-zinc-200 hover:bg-zinc-50"}`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        </form>
-        {searching && <p className="mt-2 text-[12px] text-zinc-500">찾는 중…</p>}
-        {!group && items && !searching && (
-          <>
-            {/* 한 줄 정리(사용자 지시 2026-10-22): 안내 문구는 짧은 앞 라벨 하나로(자세한 설명은 마우스 오버), 작품 구분은 색 점으로(이름은 마우스 오버), 넘치면 옆으로 넘긴다 */}
-            <div className="mt-2 flex items-center gap-2">
-              {/* 사용자 지시(2026-10-23): 기본 목록의 "최근 2주 방영" 라벨은 삭제 — 검색 중일 때만 "검색 결과" 표시 */}
-              {!(classFilter === "all" && !q.trim()) && <span className="shrink-0 text-[12px] text-zinc-500">검색 결과</span>}
-              <ul className="flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto pb-1" aria-label="작품 목록" title={classFilter === "all" && !q.trim() ? "ENA에서 최근 2주 안에 방영한 오리지널(최근 방영 순)" : undefined}>
-                {items.length === 0 && <li className="text-[12px] text-zinc-500">일치하는 작품이 없습니다.</li>}
-                {items.map((it) => (
-                  <li key={it.groupKey} className="shrink-0">
-                    <button type="button" title={SHOW_CLASS.includes(it.classification) ? WORK_CLASS_LABEL[it.classification] : undefined} onClick={() => setGroup(it.groupKey)} className="flex items-center gap-1.5 whitespace-nowrap rounded-md bg-white px-2.5 py-1 text-left text-[13px] ring-1 ring-zinc-200 hover:bg-zinc-50">
-                      <span className="font-medium">{shortProgramName(it.displayName)}</span>
-                      <ClassDot cls={it.classification} />
-                      {it.ownChannels.length === 0 && <span className="rounded bg-zinc-100 px-1 text-[10px] font-medium leading-4 text-zinc-500" title={`자사 방영 없음 — 경쟁채널 자료(${(it.compChannels ?? []).join(", ")})`}>타사</span>}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </>
-        )}
+        <ProgramSearch initialQuery={view.group ? "" : view.q} hasSelection={Boolean(group)} onPick={pick} />
       </section>
 
       {group && (
         <section className="mt-3 space-y-2 text-[12px]">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="기간">
-              {(
-                [
-                  ["4w", "최근 4주"],
-                  ["12w", "최근 12주"],
-                  ["all", "전체 기간"],
-                  ["custom", "기간 선택"],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={preset === id}
-                  onClick={() => {
-                    // 기간 선택은 지금 보고 있는 기간에서 시작
-                    if (id === "custom" && result && !from && !to) {
-                      setFrom(result.period.from);
-                      setTo(result.period.to);
-                    }
-                    setPreset(id);
-                  }}
-                  className={chip(preset === id)}
-                >
-                  {label}
-                </button>
-              ))}
-              {preset === "custom" && (
-                <>
-                  <input type="date" value={from ?? ""} onChange={(e) => setFrom(e.target.value || null)} aria-label="시작일" className="rounded border border-zinc-300 px-1.5 py-0.5 text-[16px] sm:text-[12px]" />
-                  <span>~</span>
-                  <input type="date" value={to ?? ""} onChange={(e) => setTo(e.target.value || null)} aria-label="종료일" className="rounded border border-zinc-300 px-1.5 py-0.5 text-[16px] sm:text-[12px]" />
-                </>
-              )}
-              {result && (
-                <span className="ml-1 font-medium tabular-nums text-zinc-800">
-                  {result.period.from} ~ {result.period.to}
-                </span>
-              )}
-            </div>
+            <PeriodControl preset={preset} from={from} to={to} period={result?.period ?? null} dim={Boolean(stale)} onPreset={(p) => nav({ preset: p, from: null, to: null })} onCustom={(f, t) => nav({ preset: "custom", from: f, to: t })} />
             <div className="flex flex-wrap items-center gap-1" role="group" aria-label="방송 구분">
               {(Object.keys(AIRING_LABEL) as AiringFilter[]).map((a) => (
-                <button key={a} type="button" aria-pressed={airing === a} onClick={() => setAiring(a)} className={chip(airing === a)}>
+                <button key={a} type="button" aria-pressed={airing === a} onClick={() => nav({ airing: a })} className={chip(airing === a)}>
                   {AIRING_LABEL[a]}
                 </button>
               ))}
@@ -999,7 +1336,7 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
                 <fieldset>
                   <legend className="mb-1 font-medium text-zinc-700">채널</legend>
                   <label className="flex items-center gap-2 py-0.5">
-                    <input type="checkbox" checked={channels.length === 0} onChange={() => setChannels([])} />
+                    <input type="checkbox" checked={channels.length === 0} onChange={() => nav({ channels: [] })} />
                     전체 채널
                   </label>
                   {CHANNELS.map((c) => (
@@ -1011,7 +1348,7 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
                 </fieldset>
                 <label className="block">
                   <span className="mb-1 block font-medium text-zinc-700">타깃</span>
-                  <select value={targetMode} onChange={(e) => setTargetMode(e.target.value as TargetMode)} className="w-full rounded border border-zinc-300 px-1.5 py-0.5 text-[16px] sm:text-[12px]">
+                  <select value={targetMode} onChange={(e) => nav({ target: e.target.value as TargetMode })} className="w-full rounded border border-zinc-300 px-1.5 py-0.5 text-[16px] sm:text-[12px]">
                     {(Object.keys(TARGET_LABEL) as TargetMode[]).map((t) => (
                       <option key={t} value={t}>
                         {TARGET_LABEL[t]}
@@ -1026,11 +1363,18 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
         </section>
       )}
 
-      {(error || fetchError) && <p className="mt-4 rounded-md bg-rose-50 px-3 py-2 text-[13px] text-rose-700">{fetchError ?? error}</p>}
+      {fetchError && (
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-md bg-rose-50 px-3 py-2 text-[13px] text-rose-700" role="alert">
+          <span>{fetchError}</span>
+          <button type="button" onClick={retryFetch} className="rounded px-2 py-0.5 font-medium ring-1 ring-rose-300 hover:bg-rose-100">
+            다시 시도
+          </button>
+        </div>
+      )}
       {loading && (
         <p className="mt-4 flex items-center gap-2 text-[13px] text-zinc-600" role="status">
           <Spinner />
-          채널별 성과를 계산하는 중…{stale ? " (아래는 직전 조건의 결과)" : ""}
+          {loadingName ? `‘${loadingName}’ ` : ""}채널별 성과를 계산하는 중…{stale ? " (아래는 직전 조건의 결과)" : ""}
         </p>
       )}
 
@@ -1057,7 +1401,7 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
           {entries.length > 0 ? (
             <ChannelTable entries={entries} airing={result.query.airing} selected={selRow ? rowKey(selRow) : null} onSelect={select} />
           ) : (
-            <p className="mt-4 text-[13px] text-zinc-500">{result.competitors.length > 0 ? "자사 방영 기록은 없습니다. 아래 경쟁 채널 성과를 확인하세요." : "이 조건의 방영 기록이 없습니다."}</p>
+            <p className="mt-4 text-[13px] text-zinc-500">{result.competitors.length > 0 ? "자사 방영 기록은 없습니다. 아래 경쟁 채널 성과를 확인하세요." : "이 조건의 방영 기록이 없습니다. 기간을 ‘전체 기간’으로 넓히거나 방송 구분을 ‘전체 방송’으로 바꿔 보세요."}</p>
           )}
           {excluded.length > 0 &&
             (allRows.every((r) => EXCLUDED.includes(r.status)) ? (
@@ -1084,7 +1428,7 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
             <div className="mt-3">
               {/* 자사 방영이 없는 작품은 경쟁 채널 성과가 유일한 내용이라 처음부터 펼쳐 둔다(사용자 지시 2026-10-23) */}
               {entries.length > 0 && (
-                <button type="button" aria-expanded={showComp} onClick={() => setShowComp((v) => !v)} className={chip(showComp)}>
+                <button type="button" aria-expanded={showComp} onClick={() => setCompFor(showComp ? null : group)} className={chip(showComp)}>
                   경쟁 채널 성과 {showComp ? "닫기" : `보기 · ${new Set(result.competitors.map((c) => c.competitorName)).size}개 채널`}
                 </button>
               )}
@@ -1094,7 +1438,7 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
           <CalcBasis />
 
           <div ref={analysisRef} className="scroll-mt-4">
-            {selRow && <Analysis key={`${requestUrl}|${rowKey(selRow)}`} row={selRow} result={result} siblings={selectable.filter((r) => r.channelCode === selRow.channelCode)} onSelect={(r) => setSelKey(rowKey(r))} />}
+            {selRow && <Analysis key={`${requestUrl}|${rowKey(selRow)}`} row={selRow} result={result} siblings={selectable.filter((r) => r.channelCode === selRow.channelCode)} onSelect={(r) => group && setSel({ group, key: rowKey(r) })} />}
           </div>
         </section>
       )}
