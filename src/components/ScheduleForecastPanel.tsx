@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Suggestion, SuggestResult } from "@/lib/scheduleForecast/suggest";
 import type { LiveWeek } from "@/lib/scheduleForecast/inProgress";
 import { shortProgramName } from "@/lib/programAlias"; // 제목 줄임 규칙(표시용 약칭, 마우스 오버에는 원래 제목)
-import { MEASURED_PERIOD_LABEL, MEASURED_REL_ERROR, NEW_PROGRAM_NOTE, ROUGH_REL_ERROR, isRough, relErrorFor, relErrorText, roughValue } from "@/lib/idealSchedule/accuracyProfile";
+import { MEASURED_PERIOD_LABEL, MEASURED_REL_ERROR, NEW_PROGRAM_NOTE, ROUGH_REL_ERROR, isRough, relErrorFor, relErrorText } from "@/lib/idealSchedule/accuracyProfile";
 
 type RunMeta = { id: string; purpose: string; createdAt: string; dataCutoff: string; planRef: string };
 type Period = { from: string; to: string; value: number | null; officialEstimate: number | null; forecastMinutes: number; totalMinutes: number; complete: boolean };
@@ -35,7 +35,7 @@ type Resp = {
 type Suggest = { runId: string; loading: boolean; data: SuggestResult | null; error: string | null };
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
-const fmt = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v >= 1 ? v.toFixed(2) : v.toFixed(3));
+const fmt = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toFixed(3));
 const signed = (v: number) => `${v >= 0 ? "+" : "−"}${fmt(Math.abs(v))}`;
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const when = (iso: string) => new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
@@ -50,7 +50,7 @@ const GRADE: Record<string, { cls: string; title: string }> = {
   ASSUMED: { cls: "bg-zinc-100 text-zinc-600", title: "가정값" },
 };
 // 칸 값의 실측 정확도(제안 2·3, 2026-10-23) — 상대 오차가 큰 등급은 대략값으로, 근거 C는 "그 자리의 평소 수준"이라고 밝힌다
-const slotValue = (v: number, grade: string | null, code: string) => (isRough(relErrorFor(code, grade)) ? roughValue(v, v >= 1 ? 2 : 3) : fmt(v));
+const slotValue = (v: number, _grade: string | null, _code: string) => fmt(v);
 const gradeTitle = (grade: string, evidenceAirings: number, code: string) => {
   const rel = relErrorFor(code, grade);
   return `\n${GRADE[grade].title} (방영 ${evidenceAirings}회)${rel !== null ? `\n${relErrorText(rel)}${isRough(rel) ? " — 칸 값은 대략으로 보세요" : ""}` : ""}${grade === "C" ? `\n${NEW_PROGRAM_NOTE}` : ""}`;
