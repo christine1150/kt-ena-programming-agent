@@ -38,6 +38,7 @@ export interface PatternLoad {
 
 const TIME = /^(\d{1,2}):(\d{2})/;
 const IN_CHUNK = 100;
+const KEY_CHUNK = 60;
 
 /** featured_content 한 행 → 패턴(요일·시각이 없으면 null) */
 export function registeredPattern(
@@ -53,9 +54,13 @@ export function registeredPattern(
   return { source: "registered", programKey: normalizeProgramKey(label), label, channelCodes: codes, slots: [{ days: days as Dow[], minute: Number(t[1]) * 60 + Number(t[2]) }], startDate: row.broadcast_start_date, endDate: row.broadcast_end_date, episodes: [] };
 }
 
-/** 네이버 저장 행 → 패턴. 찾지 못한 작품·자사 본방 채널이 없는 작품은 null(+이유) */
+// 몰아보기·스페셜 같은 편집본은 네이버가 본편 카드를 돌려준다 — 본편의 본방 시각을 편집본에 쓰면 편집본이 본방이 되므로 쓰지 않는다(2026-10-23 첫 채우기에서 확인: 연애박사몰아보기 → 연애박사)
+const VARIANT = /(몰아보기|스페셜|special|하이라이트|다시보기|감독판|요약|특집)/i;
+
+/** 네이버 저장 행 → 패턴. 찾지 못한 작품·자사 본방 채널이 없는 작품·본편 카드가 잡힌 편집본은 null(+이유) */
 export function naverPattern(row: NaverScheduleRow): { pattern: RunPattern | null; skipped: boolean } {
   if (row.status !== "found") return { pattern: null, skipped: false };
+  if (VARIANT.test(row.title_raw) && !VARIANT.test(row.matched_title ?? "")) return { pattern: null, skipped: false };
   const codes = [...new Set((row.channels ?? []).map(ownChannelCodeOf).filter((c): c is string => !!c))];
   if (codes.length === 0) return { pattern: null, skipped: true };
   return {
@@ -96,11 +101,18 @@ export async function loadRunPatterns(
 
   // ② 네이버 방송 정보
   try {
-    const { data, error } = await db.from("program_naver_schedule").select("program_key, title_raw, status, matched_title, channels, start_date, end_date, slots, episodes, fetched_at").in("program_key", args.memberKeys);
+    // 채널 몇 주치처럼 키가 수백 개면 주소가 길어지므로 나눠 읽는다
+    const rows: NaverScheduleRow[] = [];
+    let error: { code?: string; message?: string } | null = null;
+    for (let i = 0; i < args.memberKeys.length && !error; i += KEY_CHUNK) {
+      const res = await db.from("program_naver_schedule").select("program_key, title_raw, status, matched_title, channels, start_date, end_date, slots, episodes, fetched_at").in("program_key", args.memberKeys.slice(i, i + KEY_CHUNK));
+      if (res.error) error = res.error;
+      else rows.push(...((res.data ?? []) as NaverScheduleRow[]));
+    }
     if (error) {
       info.naverTableMissing = error.code === "42P01" || error.code === "PGRST205" || /does not exist|Could not find the table|schema cache/i.test(error.message ?? "");
     } else {
-      for (const row of (data ?? []) as NaverScheduleRow[]) {
+      for (const row of rows) {
         const { pattern, skipped } = naverPattern(row);
         if (skipped) info.naverSkipped.push(row.matched_title ?? row.title_raw);
         if (!pattern) continue;

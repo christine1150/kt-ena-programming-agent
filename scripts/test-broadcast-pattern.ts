@@ -75,6 +75,8 @@ const searchChecks = (async () => {
 const naverSolo = naverPattern({ program_key: "나는SOLO", title_raw: "나는솔로", status: "found", matched_title: "나는 SOLO", channels: ["SBS Plus", "ENA"], start_date: "2021-07-14", end_date: null, slots: solo!.slots, episodes: solo!.episodes, fetched_at: "2026-10-22T00:00:00Z" }).pattern!;
 check("패턴: 자사 채널만 본방 채널로(SBS Plus 제외)", JSON.stringify(naverSolo.channelCodes) === JSON.stringify(["ENA"]));
 check("패턴: 자사 채널이 없으면 쓰지 않음(타사 본방을 사 온 작품)", naverPattern({ program_key: "X", title_raw: "X", status: "found", matched_title: "X", channels: ["tvN"], start_date: null, end_date: null, slots: [], episodes: [], fetched_at: "" }).skipped === true);
+check("패턴: 몰아보기처럼 본편 카드가 잡힌 편집본은 쓰지 않음", naverPattern({ program_key: "연애박사몰아보기", title_raw: "연애박사몰아보기", status: "found", matched_title: "연애박사", channels: ["ENA"], start_date: "2026-10-05", end_date: null, slots: [{ days: [0, 1], minute: 1320 }], episodes: [], fetched_at: "" }).pattern === null);
+check("패턴: 제목 자체가 스페셜인 카드면 그대로 씀", naverPattern({ program_key: "S", title_raw: "음악 스페셜", status: "found", matched_title: "음악 스페셜", channels: ["ENA"], start_date: null, end_date: null, slots: [{ days: [5], minute: 600 }], episodes: [], fetched_at: "" }).pattern !== null);
 check("패턴: 못 찾은 작품은 패턴 없음", naverPattern({ program_key: "X", title_raw: "X", status: "not_found", matched_title: null, channels: [], start_date: null, end_date: null, slots: [], episodes: [], fetched_at: "" }).pattern === null);
 
 const air = (channelCode: string, date: string, startTime: string | null) => ({ channelCode, date, startTime });

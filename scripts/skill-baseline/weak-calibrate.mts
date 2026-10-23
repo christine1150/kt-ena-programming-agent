@@ -6,11 +6,13 @@
 // 평상시 = 판정에 쓴 방영(최근 N회 + 비교 회차)이 모두 같은 프로그램이고 정확히 7일 간격으로 이어진 경우(편성을 바꾸지 않은 자리).
 // 기준선은 보정 구간(2026-04-01 전)의 평상시 비율 10%선으로 고르고, 헛경보율은 검증 구간(그 이후)에서 따로 낸다.
 // 사용: npx tsx --env-file=.env scripts/skill-baseline/weak-calibrate.mts [calibrate|verify] [기준일=2026-10-21]
+// PATTERN_FILL=1 이면 weakSlotRemedy처럼 닐슨 본/재방 표시가 없는 방영을 업로드 편성표·본방 편성 패턴(관리자 등록·네이버)으로 보완한다(2026-10-23 연결 전후 비교용).
 import { supabase } from "../../src/lib/supabase";
 import { loadChannelRef } from "../../src/lib/idealSchedule/dataSource";
 import { isoDow } from "../../src/lib/idealSchedule/time";
 import { normalizeProgramCanonicalName } from "../../src/lib/programNameMatch";
 import { judgeWeakSlot, weakSlotRuleFor } from "../../src/lib/dashboard/weakSlotVerdict";
+import { fillChannelRuns } from "../../src/lib/broadcastPattern/channelFill";
 
 const mode = process.argv[2] ?? "verify";
 const AS_OF = process.argv[3] ?? "2026-10-21";
@@ -31,14 +33,23 @@ async function load(code: string): Promise<A[]> {
   const ch = await loadChannelRef(code);
   const { data: tg } = await supabase.from("targets").select("id").eq("code", ch.kpiLabel).maybeSingle();
   const out: A[] = [];
+  const raw: { programId: string; name: string; startTime: string; firstRun: boolean | null }[] = [];
   for (let page = 0; ; page++) {
-    const { data, error } = await supabase.from("ratings").select("broadcast_date, start_time, rating, is_first_run, programs(canonical_name)").eq("channel_id", ch.id).eq("target_id", tg!.id).eq("source_type", "nielsen_daily").gte("broadcast_date", FROM).lte("broadcast_date", AS_OF).not("program_id", "is", null).not("rating", "is", null).order("broadcast_date").order("start_time").order("id").range(page * 1000, page * 1000 + 999);
+    const { data, error } = await supabase.from("ratings").select("broadcast_date, start_time, rating, is_first_run, program_id, programs(canonical_name)").eq("channel_id", ch.id).eq("target_id", tg!.id).eq("source_type", "nielsen_daily").gte("broadcast_date", FROM).lte("broadcast_date", AS_OF).not("program_id", "is", null).not("rating", "is", null).order("broadcast_date").order("start_time").order("id").range(page * 1000, page * 1000 + 999);
     if (error) throw new Error(`${code}: ${error.message}`);
-    for (const r of (data ?? []) as unknown as { broadcast_date: string; start_time: string | null; rating: number; is_first_run: boolean | null; programs: { canonical_name: string } | null }[]) {
+    for (const r of (data ?? []) as unknown as { broadcast_date: string; start_time: string | null; rating: number; is_first_run: boolean | null; program_id: string; programs: { canonical_name: string } | null }[]) {
       if (!r.programs?.canonical_name || !r.start_time) continue;
       out.push({ date: r.broadcast_date, dow: isoDow(r.broadcast_date), startMin: broadcastMin(r.start_time), key: keyOf(r.programs.canonical_name), rating: Number(r.rating), rerun: r.is_first_run === false });
+      raw.push({ programId: r.program_id, name: r.programs.canonical_name, startTime: r.start_time, firstRun: r.is_first_run });
     }
     if ((data ?? []).length < 1000) break;
+  }
+  if (process.env.PATTERN_FILL === "1") {
+    const idx = raw.flatMap((r, i) => (r.firstRun === null ? [i] : []));
+    const runs = await fillChannelRuns(supabase, { channelId: ch.id, channelCode: code, rows: idx.map((i) => ({ ...raw[i], date: out[i].date })) });
+    let n = 0;
+    idx.forEach((i, j) => { if (runs[j].firstRun === false) { out[i].rerun = true; n++; } });
+    console.error(code + ": 표시 없는 방영 " + idx.length + "건 중 편성표·패턴으로 재방 판정 " + n + "건");
   }
   return out;
 }

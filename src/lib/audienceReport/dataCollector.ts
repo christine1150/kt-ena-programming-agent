@@ -12,6 +12,7 @@ import { addDaysStr } from "@/lib/contentFit";
 import { loadContentFit } from "@/lib/contentFit/source";
 import { PRIME_RPC_ARGS } from "./primeTime";
 import { fetchHourlyPattern } from "@/lib/broadcastTime/hourlyFetch";
+import { computeFirstRunEfficiency } from "./firstRunEfficiency";
 
 export interface DailyTrendPoint {
   date: string; // "주별"이면 week_start, "월별"이면 month_start를 그대로 date 필드에 담는다(호출부가 granularity로 구분)
@@ -175,12 +176,12 @@ export interface OriginalRerunProfileRow {
   amplificationRatio: number | null; // 1주일 창 합산 ÷ 본방 합산 — 재방 포함 확산 배수
 }
 
-// get_channel_first_run_efficiency 원본 — 본방 방영분 vs 그 외의 효율 비교.
-// 본방 판정은 `<본>` 태그와 주요 콘텐츠 등록 슬롯(요일+시각 ±10분, 동시방영 채널 포함)의
-// 합집합이다(2026-09-10 사용자 지시). 둘 다 없는 채널만 빈 배열로 온다.
+// 본방 방영분 vs 그 외의 효율 비교(firstRunEfficiency.ts — 2026-10-23부터 SQL get_channel_first_run_efficiency 대신).
+// 본방 판정은 프로그램 성과와 같은 순서: 닐슨 `<본>`·`<재>` > 업로드 편성표 > 관리자 등록 본방 요일·시각 > 네이버 방송 정보.
+// 본방을 하나도 확인하지 못한 채널만 빈 배열로 온다.
 export interface FirstRunEfficiencyRow {
   canonicalName: string;
-  /** 본방을 어느 경로로 찾았는지 — "<본> 태그" | "등록 슬롯" | "태그+등록 슬롯". */
+  /** 본방을 어느 근거로 찾았는지 — "<본> 태그" | "태그+편성표+등록 슬롯+네이버" 같은 조합 | "편성표" | "등록 슬롯" | "네이버". */
   firstRunSource: string;
   firstRunAirings: number;
   firstRunAvgRating: number | null;
@@ -669,16 +670,10 @@ export async function collectAudienceReportData(channelCode: string, period: Res
             p_date_to: dateTo,
             p_window_days: 7,
           }),
-      // 본방(`<본>`) vs 본방 외 효율 — 태그가 없는 채널은 자연히 빈 배열.
+      // 본방 vs 본방 외 효율 — 프로그램 성과와 같은 본방 판정 규칙(2026-10-23). 본방을 하나도 확인하지 못한 채널은 빈 배열.
       light || skyUhd
-        ? EMPTY
-        : supabase.rpc("get_channel_first_run_efficiency", {
-            p_channel_code: channelCode,
-            p_program_target_label: programTargetLabel,
-            p_date_from: dateFrom,
-            p_date_to: dateTo,
-            p_limit: 40,
-          }),
+        ? Promise.resolve([] as FirstRunEfficiencyRow[])
+        : computeFirstRunEfficiency({ channelCode, programTargetLabel, dateFrom, dateTo, limit: 40 }).catch(() => [] as FirstRunEfficiencyRow[]),
     ]);
 
   const rawTrend = (trendRes.data ?? []) as { broadcast_date?: string; week_start?: string; month_start?: string; avg_rating: number | null }[];
@@ -890,20 +885,7 @@ export async function collectAudienceReportData(channelCode: string, period: Res
     amplificationRatio: (r.amplification_ratio as number | null) ?? null,
   }));
 
-  const firstRunEfficiency: FirstRunEfficiencyRow[] = ((firstRunEfficiencyRes.data ?? []) as Record<string, unknown>[]).map((r) => ({
-    canonicalName: r.canonical_name as string,
-    firstRunSource: (r.first_run_source as string | null) ?? "등록 슬롯",
-    firstRunAirings: (r.first_run_airings as number) ?? 0,
-    firstRunAvgRating: (r.first_run_avg_rating as number | null) ?? null,
-    firstRunAvgReach: (r.first_run_avg_reach as number | null) ?? null,
-    firstRunAvgTimeSpentShare: (r.first_run_avg_time_spent_share as number | null) ?? null,
-    otherAirings: (r.other_airings as number) ?? 0,
-    otherAvgRating: (r.other_avg_rating as number | null) ?? null,
-    otherAvgReach: (r.other_avg_reach as number | null) ?? null,
-    otherAvgTimeSpentShare: (r.other_avg_time_spent_share as number | null) ?? null,
-    rerunRetentionPct: (r.rerun_retention_pct as number | null) ?? null,
-    totalAirtimeMin: (r.total_airtime_min as number | null) ?? null,
-  }));
+  const firstRunEfficiency: FirstRunEfficiencyRow[] = firstRunEfficiencyRes;
 
   const skyUhdProgramLog: SkyUhdProgramLogRow[] | null = isSkyUhd(channelCode)
     ? ((skyUhdLogRes.data ?? []) as { broadcast_date: string; start_time: string; canonical_name: string; rating: number | null }[]).map((r) => ({

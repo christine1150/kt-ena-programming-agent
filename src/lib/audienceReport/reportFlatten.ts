@@ -499,11 +499,11 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
   });
 
   sections.push({
-    key: "deep_firstrun", title: "심층 06 본방(태그·등록 슬롯) vs 본방 외 효율",
+    key: "deep_firstrun", title: "심층 06 본방 vs 본방 외 효율",
     blocks: fromMaybe(deep.firstRunEfficiency, (rows) => [
       {
         kind: "text",
-        text: "`<본>` 태그 또는 등록된 본방 슬롯(요일·시각 기준) 중 하나라도 해당하면 본방으로 판정한 값입니다. 태그와 슬롯 모두 없는 방영분은 재방으로 단정하지 않고 '본방 외'로 묶었습니다.",
+        text: "본방 여부는 닐슨 `<본>`·`<재>` 표시, 업로드 편성표, 관리자 등록 본방 요일·시각, 네이버 방송 정보 순으로 판정했습니다(프로그램 성과와 같은 규칙, 본방 시각은 닐슨 실제 방영 시각으로 맞춤). 본방으로 확인되지 않은 방영분은 재방으로 단정하지 않고 '본방 외'로 묶었습니다.",
       },
       {
         kind: "table",

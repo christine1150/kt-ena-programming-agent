@@ -90,7 +90,7 @@ export function DeepDiveView({ deep, channelCode }: { deep: DeepDiveSection; cha
         <WithMaybe maybe={deep.originalRerun} render={(rows) => <OriginalRerunView rows={rows} channelCode={channelCode} />} />
       </Section>
 
-      <Section title="심층 06 본방(<본>) vs 본방 외 효율">
+      <Section title="심층 06 본방 vs 본방 외 효율">
         <WithMaybe maybe={deep.firstRunEfficiency} render={(rows) => <FirstRunView rows={rows} channelCode={channelCode} />} />
       </Section>
     </>
@@ -758,9 +758,9 @@ function OriginalRerunView({ rows, channelCode }: { rows: OriginalRerunInsight[]
 // 판정 근거별로 색을 달리해 "왜 본방으로 봤는지"를 표에서 바로 구분할 수 있게 함.
 function FirstRunSourceBadge({ source }: { source: string }) {
   const cls =
-    source === "태그+등록 슬롯" ? "text-white" : source === "<본> 태그" ? "bg-indigo-50 text-indigo-600" : "bg-neutral-200 text-neutral-700";
+    source.startsWith("태그+") ? "text-white" : source === "<본> 태그" ? "bg-indigo-50 text-indigo-600" : "bg-neutral-200 text-neutral-700";
   return (
-    <span className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`} style={source === "태그+등록 슬롯" ? { backgroundColor: C_STRONG } : undefined}>
+    <span className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`} style={source.startsWith("태그+") ? { backgroundColor: C_STRONG } : undefined}>
       {source}
     </span>
   );
@@ -770,7 +770,7 @@ function FirstRunView({ rows, channelCode }: { rows: FirstRunInsight[]; channelC
   return (
     <div>
       <p className="mb-2 text-xs text-neutral-600">
-        &lsquo;&lt;본&gt;&rsquo; 태그 또는 등록된 본방 슬롯(요일·시각 기준)을 근거로 본방 여부를 판정한 값입니다. 두 근거 중 하나만 맞아도 본방으로 보며, 프로그램명 옆 배지로 어느 근거로 판정했는지 표시합니다.
+        본방 여부는 닐슨 &lsquo;&lt;본&gt;&rsquo;·&lsquo;&lt;재&gt;&rsquo; 표시, 업로드 편성표, 관리자 등록 본방 요일·시각, 네이버 방송 정보 순으로 판정했습니다(프로그램 성과와 같은 규칙). 프로그램명 옆 배지로 어느 근거로 판정했는지 표시합니다.
       </p>
       <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="w-full min-w-[560px] text-sm">

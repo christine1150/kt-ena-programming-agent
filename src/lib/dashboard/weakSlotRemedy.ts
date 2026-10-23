@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { loadChannelRef } from "@/lib/idealSchedule/dataSource";
 import { addDays, isoDow } from "@/lib/idealSchedule/time";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
+import { fillChannelRuns } from "@/lib/broadcastPattern/channelFill";
 
 import { retentionLeak } from "./leadInRetention";
 import { STATUS_KO, WEAK_VERDICT_CONFIG, basisLabel, judgeWeakSlot, levelLabel, lineNote, verdictCause, weakSlotRuleFor, type VerdictBasis, type WeakVerdict } from "./weakSlotVerdict";
@@ -61,12 +62,17 @@ interface Airing {
 const slotKey = (a: Airing) => `${a.dow}|${Math.floor(a.startMin / 60)}|${a.rerun ? "R" : "B"}`;
 const slotLabel = (dow: number, hour: number, rerun: boolean) => `${DOW_KO[dow - 1]} ${hour}시대${rerun ? " 재방" : ""}`;
 
-async function loadAirings(channelId: string, targetId: string, asOfDate: string, lookbackDays = LOOKBACK_DAYS, maxPages = 8): Promise<Airing[] | null> {
+/**
+ * pattern이 있으면 닐슨에 본/재방 표시가 없는 방영을 프로그램 성과와 같은 순서(업로드 편성표 > 관리자 등록 본방 요일·시각 > 네이버 방송 정보)로 보완한다(2026-10-23).
+ * 표시가 없던 채널은 재방도 본방 자리 비교에 섞여 들어가 같은 자리 평소가 흐려졌다. 닐슨 표시가 있으면 그대로 두고, 패턴으로도 모르면 지금처럼 본방 쪽으로 둔다.
+ */
+async function loadAirings(channelId: string, targetId: string, asOfDate: string, lookbackDays = LOOKBACK_DAYS, maxPages = 8, pattern: { channelCode: string } | null = null): Promise<Airing[] | null> {
   const out: Airing[] = [];
+  const raw: { programId: string; name: string; startTime: string; firstRun: boolean | null }[] = [];
   for (let page = 0; page < maxPages; page++) {
     const { data, error } = await supabase
       .from("ratings")
-      .select("broadcast_date, start_time, rating, is_first_run, programs(canonical_name)")
+      .select("broadcast_date, start_time, rating, is_first_run, program_id, programs(canonical_name)")
       .eq("channel_id", channelId)
       .eq("target_id", targetId)
       .eq("source_type", "nielsen_daily")
@@ -78,12 +84,19 @@ async function loadAirings(channelId: string, targetId: string, asOfDate: string
       .order("start_time", { ascending: true })
       .range(page * 1000, page * 1000 + 999);
     if (error) return null;
-    for (const r of (data ?? []) as unknown as { broadcast_date: string; start_time: string | null; rating: number | string; is_first_run: boolean | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
+    for (const r of (data ?? []) as unknown as { broadcast_date: string; start_time: string | null; rating: number | string; is_first_run: boolean | null; program_id: string; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
       const name = Array.isArray(r.programs) ? r.programs[0]?.canonical_name : r.programs?.canonical_name;
       if (!name || !r.start_time) continue;
       out.push({ date: r.broadcast_date, dow: isoDow(r.broadcast_date), startMin: broadcastMin(r.start_time), name, key: keyOf(name), rating: Number(r.rating), rerun: r.is_first_run === false });
+      raw.push({ programId: r.program_id, name, startTime: r.start_time, firstRun: r.is_first_run });
     }
     if ((data ?? []).length < 1000) break;
+  }
+  if (pattern) {
+    const runs = await fillChannelRuns(supabase, { channelId, channelCode: pattern.channelCode, rows: raw.map((r, i) => ({ ...r, date: out[i].date })) });
+    runs.forEach((x, i) => {
+      if (x.firstRun === false) out[i].rerun = true;
+    });
   }
   return out;
 }
@@ -194,7 +207,7 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   if (channelCode === "SKYUHD" || !ch.primaryTarget) return null; // skyUHD는 프로그램 단위 타깃 데이터가 없다
   const { data: tg } = await supabase.from("targets").select("id").eq("code", ch.kpiLabel).maybeSingle();
   if (!tg?.id) return null;
-  const all = await loadAirings(ch.id, tg.id as string, asOfDate);
+  const all = await loadAirings(ch.id, tg.id as string, asOfDate, LOOKBACK_DAYS, 8, { channelCode });
   if (!all) return null;
   let focus = focusIn;
   let hourHint = hourIn;

@@ -88,7 +88,7 @@ function buildDeepDiveSection(raw: AudienceReportRawData): DeepDiveSection {
       programProfiles: empty,
       scheduleCanvas: empty,
       originalRerun: { available: false, reason: isSkyUhd ? noProgramData : "이 채널·기간에는 주요 콘텐츠로 등록된 오리지널이 없습니다" },
-      firstRunEfficiency: { available: false, reason: "이 채널에는 본방(<본>) 태그가 없어 본방·재방을 구분할 수 없습니다" },
+      firstRunEfficiency: { available: false, reason: "이 채널·기간에는 닐슨 표시·편성표·등록 본방 시간·네이버 방송 정보로 확인된 본방이 없어 본방·재방을 구분할 수 없습니다" },
     };
   }
 
@@ -173,7 +173,7 @@ function buildDeepDiveSection(raw: AudienceReportRawData): DeepDiveSection {
     firstRunEfficiency:
       firstRun.length > 0
         ? { available: true, data: firstRun }
-        : { available: false, reason: "이 채널에는 본방(<본>) 태그가 없어 본방·재방을 구분할 수 없습니다" },
+        : { available: false, reason: "이 채널·기간에는 닐슨 표시·편성표·등록 본방 시간·네이버 방송 정보로 확인된 본방이 없어 본방·재방을 구분할 수 없습니다" },
   };
 }
 

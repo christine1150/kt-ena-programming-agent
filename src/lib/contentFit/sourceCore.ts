@@ -8,6 +8,7 @@ import { resolveProgramLevelTargetLabel } from "../targetResolution";
 import { CONTENT_FIT_CONFIG } from "./config";
 import { addDaysStr, computeContentFit } from "./engine";
 import type { ContentFitAiring, ContentFitResult } from "./types";
+import { fillChannelRuns } from "../broadcastPattern/channelFill";
 
 // supabase 클라이언트와 테스트용 가짜 DB가 공통으로 만족하는 최소 형태
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,6 +93,26 @@ async function fetchPrograms(db: ContentFitDb, ids: string[]): Promise<Map<strin
   return out;
 }
 
+/**
+ * 닐슨 본/재방 표시가 없는 방영을 프로그램 성과와 같은 순서(업로드 편성표 > 관리자 등록 본방 요일·시각 > 네이버 방송 정보)로 보완한다(2026-10-23).
+ * 엔진에서 본방 여부는 "주로 방영되는 시간대"(MOVE 판단의 현재 시간대)를 고를 때 재방을 빼는 데만 쓰인다 — 점수 산식은 그대로다.
+ * 표시가 없던 채널은 재방이 본방보다 훨씬 많아 주 시간대가 재방 시간대로 잡히던 것을 바로잡는다. 보완에 실패하면 원래 값 그대로.
+ */
+async function fillAiringRuns(db: ContentFitDb, channelId: string, channelCode: string, airings: ContentFitAiring[], programs: Map<string, ContentFitProgramMeta>): Promise<ContentFitAiring[]> {
+  const idx = airings.flatMap((a, i) => (a.firstRun === null && a.startTime && programs.has(a.programId) ? [i] : []));
+  if (idx.length === 0) return airings;
+  const runs = await fillChannelRuns(db, {
+    channelId,
+    channelCode,
+    rows: idx.map((i) => ({ programId: airings[i].programId, name: programs.get(airings[i].programId)!.canonicalName, date: airings[i].date, startTime: airings[i].startTime as string, firstRun: null })),
+  });
+  const out = [...airings];
+  idx.forEach((i, j) => {
+    if (runs[j].firstRun !== null) out[i] = { ...out[i], firstRun: runs[j].firstRun };
+  });
+  return out;
+}
+
 /** 채널 코드·기준일로 콘텐츠 적합도를 계산한다(DB 주입). 채널이 없거나 KPI 타깃이 없으면(skyUHD 포함) null. */
 export async function loadContentFitWith(db: ContentFitDb, channelCode: string, asOfArg: string | null): Promise<ContentFitLoad | null> {
   const { data: channel } = await db.from("channels").select("id, code, name, primary_target").eq("code", channelCode).maybeSingle();
@@ -101,9 +122,10 @@ export async function loadContentFitWith(db: ContentFitDb, channelCode: string, 
   if (!target) return null;
   const asOf = asOfArg ?? (await latestBroadcastDate(db, channel.id as string));
   if (!asOf) return null;
-  const airings = await fetchContentFitAirings(db, channel.id as string, target.id as string, asOf);
+  const fetched = await fetchContentFitAirings(db, channel.id as string, target.id as string, asOf);
+  const programs = await fetchPrograms(db, [...new Set(fetched.map((a) => a.programId))]);
+  const airings = await fillAiringRuns(db, channel.id as string, channel.code as string, fetched, programs);
   const result = computeContentFit(airings, asOf);
-  const programs = await fetchPrograms(db, result.items.map((i) => i.programId));
   return {
     channel: { id: channel.id as string, code: channel.code as string, name: channel.name as string, primaryTarget: channel.primary_target as string },
     kpiTargetLabel,
