@@ -119,6 +119,19 @@ function competitorIntensityColor(rating: number, pivot: number | null, maxRatin
   const intensity = Math.min(1, (rating - p) / Math.max(1e-9, maxRating - p));
   return intensityColor(COMPETITOR_POSITIVE_HUE, intensity);
 }
+// 사용자 지시(2026-10-23): 칸별 가로 막대 — 길이는 색 강도와 같은 기준(연간 평균의 2배 = 가득), 평균 이상은 채널 로고색(옅게→진하게), 평균 이하는 붉은색(평균에서 멀수록 진하게).
+function cellBarStyle(rating: number, pivot: number, avg: number | null, themeHex: string): { width: string; image: string } {
+  const width = `${Math.max(3, Math.min(100, pivot > 0 ? (rating / pivot) * 100 : 0))}%`;
+  const below = avg !== null && avg > 0 && rating < avg;
+  if (below) {
+    const severity = Math.min(1, 1 - rating / avg!); // 0=평균 근처, 1=0에 가까움
+    const from = rgbToHex(mixRgb([254, 202, 202], [239, 68, 68], Math.min(1, severity * 0.6)));
+    const to = rgbToHex(mixRgb([248, 113, 113], [185, 28, 28], severity));
+    return { width, image: `linear-gradient(to right, ${from}, ${to})` };
+  }
+  const t = Math.min(1, avg !== null && pivot > avg ? (rating - avg) / (pivot - avg) : 0.5);
+  return { width, image: `linear-gradient(to right, ${intensityColor(themeHex, 0.25 + 0.15 * t).bg}, ${intensityColor(themeHex, 0.5 + 0.4 * t).bg})` };
+}
 // 사용자 지시(2026-09-20): "다른 주로 이동할 수 있는 메뉴" — week prop 없이(Page 2 모달처럼
 // 서버가 "이번 주"를 알아서 고르는 자기관리 모드) 쓰일 때만 이전/다음 주 이동을 지원한다.
 // scheduleGridSource.ts의 addDaysStr과 같은 계산이지만, 이 파일은 클라이언트 컴포넌트라
@@ -136,6 +149,7 @@ export function ScheduleWeekGrid({
   dayFilter = null,
   density = "balanced",
   colorMode = "channel",
+  showBars = false,
   otherCells = null,
   diffMax = null,
   onMeta,
@@ -159,6 +173,8 @@ export function ScheduleWeekGrid({
   dayFilter?: number | null;
   density?: Density;
   colorMode?: ColorMode;
+  /** 칸마다 시청률 가로 막대(평균 이상=채널 로고색 그라데이션, 평균 이하=붉은 그라데이션). 차이 모드에서는 쓰지 않는다 */
+  showBars?: boolean;
   /** 차이 모드에서 비교할 반대편 칸들과 0 중심 색 척도의 한계 */
   otherCells?: GridCell[] | null;
   diffMax?: number | null;
@@ -645,7 +661,8 @@ export function ScheduleWeekGrid({
                       const diffRes = colorMode === "diff" && otherCells ? cellDiff({ dow, startMin: rawStart, endMin: rawEnd, rating }, otherCells) : null;
                       const diffValue = diffRes ? diffRes.diff : null;
                       const unobserved = colorMode === "diff" ? diffValue === null : rating === null;
-                      const { bg, isDark } =
+                      const barOn = showBars && colorMode !== "diff";
+                      const { bg: shadeBg, isDark: shadeDark } =
                         colorMode === "diff"
                           ? diffValue !== null && diffMax !== null
                             ? divergingColor(diffValue, Math.max(diffMax, 1e-9))
@@ -659,6 +676,11 @@ export function ScheduleWeekGrid({
                                 : isCompetitor
                                   ? competitorIntensityColor(rating, boldThreshold, maxRating)
                                   : intensityColor(themeColor, intensity);
+                      // 막대 모드: 칸 배경은 중립색으로 두고(글자가 항상 읽히게) 높낮이는 아래 막대로 보인다
+                      const bg = barOn ? (rating === null ? "#fafafa" : "#ffffff") : shadeBg;
+                      const isDark = barOn ? false : shadeDark;
+                      const bar = barOn && rating !== null && rating > 0 ? cellBarStyle(rating, intensityPivot, boldThreshold, isCompetitor ? COMPETITOR_POSITIVE_HUE : themeColor) : null;
+                      const barH = height >= 46 ? 9 : height >= 22 ? 6 : 4;
                       const mainText =
                         colorMode === "diff"
                           ? diffValue !== null
@@ -716,7 +738,7 @@ export function ScheduleWeekGrid({
                           title={`${label} ${r.start_time.slice(0, 5)}~${r.end_time ? r.end_time.slice(0, 5) : "?"} ${r.program_name_raw}${r.tags ? ` ${r.tags}` : ""} — ${rating !== null ? rating.toFixed(decimals) : "매칭 안 됨"}`}
                         >
                           {height >= 22 ? (
-                            <div className="flex h-full flex-col leading-tight">
+                            <div className="flex h-full flex-col leading-tight" style={bar ? { paddingBottom: barH } : undefined}>
                               {showTopRow && (
                                 <div className="flex shrink-0 items-start justify-between gap-0.5 pt-px leading-none">
                                   <span className="text-[8px] font-semibold tabular-nums" style={{ color: isDark ? "#bfdbfe" : "#2563eb" }}>
@@ -782,7 +804,7 @@ export function ScheduleWeekGrid({
                             // 사용자 지시(2026-09-22): "칸이 좁아서 시청률이 안 나오는 곳은 한줄로라도 나오게" — 30분 이하
                             // 짧은 프로그램은 이름+시청률을 한 줄에 이어 붙이고 넘치면 말줄임한다. 제목만 써서(부제 제외)
                             // 제목이 잘리지 않게 하고, 회차는 짧은 접두어로만 붙인다.
-                            <div className="flex h-full items-center justify-center overflow-hidden">
+                            <div className="flex h-full items-center justify-center overflow-hidden" style={bar ? { paddingBottom: barH } : undefined}>
                               <span className="w-full truncate text-center text-[8.5px] leading-none" style={{ color: nameColor }}>
                                 {episode && `${episode}회 `}
                                 {title}
@@ -790,6 +812,11 @@ export function ScheduleWeekGrid({
                               </span>
                             </div>
                           ) : null}
+                          {bar && (
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-zinc-100" style={{ height: barH }} aria-hidden>
+                              <div className="h-full" style={{ width: bar.width, backgroundImage: bar.image }} />
+                            </div>
+                          )}
                         </div>
                       );
                     })}

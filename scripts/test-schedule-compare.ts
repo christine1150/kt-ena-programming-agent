@@ -121,7 +121,7 @@ async function main() {
     check("빈 URL은 기본값", JSON.stringify(def.prefs) === JSON.stringify(C.DEFAULT_PREFS) && !def.left.channel && !def.right.week);
     check("기본값은 직렬화하지 않는다", C.serializeCompareQuery(def).toString() === "");
     const q: import("../src/lib/workspace/weekCompare").CompareQuery = {
-      prefs: { range: "prime", day: 5, density: "title", color: "diff" },
+      prefs: { range: "prime", day: 5, density: "title", color: "diff", bars: true },
       left: { channel: "ENA", week: "2026-09-14" },
       right: { channel: "COMPETITOR::tvN", week: "2026-09-21" },
     };
@@ -303,7 +303,7 @@ async function main() {
     check("URL 동기화: 상단 채널 전환 직후 이전 값을 쓰지 않는다(forChannel)", page.includes("left.forChannel !== urlChannelCode") && page.includes("right.forChannel !== urlChannelCode"));
     check("요청 순번: 마지막 요청만 반영(loadSide)하고 업로드 갱신도 채널 일치를 본다", page.includes("++reqSeq.current[seqKey]") && /\.then\(\(body\) => \{\n\s+if \(reqSeq\.current\[seqKey\] !== token\) return;/.test(page) && /\.catch\(\(\) => \{\n\s+if \(reqSeq\.current\[seqKey\] !== token\) return;/.test(page) && page.includes("prev.channelCode !== side.channelCode"));
     check("ChannelSelect는 렌더 밖에 있고 좌우 aria-label이 다르다", /\nfunction ChannelSelect\(/.test(page) && page.includes("${label} 채널 선택") && page.includes("${label} 주 선택"));
-    check("설정·범례 막대가 스크롤해도 보인다(sticky)", page.includes('aria-label="보기 설정" className="sticky top-0'));
+    check("설정·범례 막대가 스크롤해도 보인다(sticky)", page.includes('aria-label="보기 설정" className="md:sticky md:top-0'));
     check("범례 도움말이 한 번만 나온다", (page.match(/COLOR_MODE_HELP\[prefs\.color\]/g) ?? []).length === 1);
     check("차이 모드 범례에 거울 안내와 타깃 다름 경고", page.includes("서로의 거울") && page.includes("차이 값을 해석할 수 없습니다"));
     check("경쟁채널은 채널 기준 범례 문구가 다르다", page.includes("function sideScaleText") && page.includes("(경쟁채널): 기준선 이하 빨강"));

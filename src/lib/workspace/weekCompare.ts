@@ -301,9 +301,11 @@ export interface CompareViewPrefs {
   day: number | null;
   density: Density;
   color: ColorMode;
+  /** 칸마다 시청률 가로 막대를 그린다(사용자 지시 2026-10-23) — 켜면 칸 배경 그라데이션 대신 막대 길이·색으로 높낮이를 보인다 */
+  bars: boolean;
 }
 
-export const DEFAULT_PREFS: CompareViewPrefs = { range: "all", day: null, density: "balanced", color: "channel" };
+export const DEFAULT_PREFS: CompareViewPrefs = { range: "all", day: null, density: "balanced", color: "channel", bars: false };
 
 export interface CompareSideQuery {
   channel: string;
@@ -349,7 +351,7 @@ export function parseCompareQuery(get: (k: string) => string | null): CompareQue
   const c = get("clr");
   const color: ColorMode = c === "absolute" || c === "diff" ? c : "channel";
   return {
-    prefs: { range, day, density, color },
+    prefs: { range, day, density, color, bars: get("bar") === "1" },
     left: { channel: validChannel(get("lc")), week: validWeek(get("lw")) },
     right: { channel: validChannel(get("rc")), week: validWeek(get("rw")) },
   };
@@ -362,6 +364,7 @@ export function serializeCompareQuery(q: CompareQuery): URLSearchParams {
   if (q.prefs.day !== null) sp.set("day", String(q.prefs.day));
   if (q.prefs.density !== DEFAULT_PREFS.density) sp.set("dens", q.prefs.density);
   if (q.prefs.color !== DEFAULT_PREFS.color) sp.set("clr", q.prefs.color);
+  if (q.prefs.bars) sp.set("bar", "1");
   if (q.left.channel) sp.set("lc", q.left.channel);
   if (q.left.week) sp.set("lw", q.left.week);
   if (q.right.channel) sp.set("rc", q.right.channel);

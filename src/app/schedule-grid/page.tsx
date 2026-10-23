@@ -460,7 +460,12 @@ function ScheduleComparisonInner() {
                 </button>
               ))}
             </div>
-            {(prefs.range !== DEFAULT_PREFS.range || prefs.day !== null || prefs.density !== DEFAULT_PREFS.density || prefs.color !== DEFAULT_PREFS.color) && (
+            {/* 사용자 지시(2026-10-23): 칸별 시청률 가로 막대 보기 — 평균 이상은 채널 로고색, 평균 이하는 붉은색 그라데이션(차이 색에서는 쓰지 않음) */}
+            <label className={`flex items-center gap-1.5 ${prefs.color === "diff" ? "cursor-not-allowed text-zinc-300" : "cursor-pointer text-zinc-600"}`} title={prefs.color === "diff" ? "‘차이’ 색 기준에서는 막대를 쓰지 않습니다" : "칸마다 시청률 가로 막대 — 평균 이상은 채널 로고색, 평균 이하는 붉은색(칸 배경은 흰색)"}>
+              <input type="checkbox" checked={prefs.bars} disabled={prefs.color === "diff"} onChange={(e) => setPref("bars", e.target.checked)} className="h-3.5 w-3.5 rounded border-zinc-300" />
+              칸별 막대
+            </label>
+            {(prefs.range !== DEFAULT_PREFS.range || prefs.day !== null || prefs.density !== DEFAULT_PREFS.density || prefs.color !== DEFAULT_PREFS.color || prefs.bars) && (
               <button type="button" onClick={() => setPrefs(DEFAULT_PREFS)} className="text-zinc-500 underline hover:text-zinc-700">
                 기본 보기로
               </button>
@@ -539,6 +544,7 @@ function ScheduleComparisonInner() {
                     dayFilter={prefs.day}
                     density={prefs.density}
                     colorMode={prefs.color}
+                    showBars={prefs.bars}
                     otherCells={other?.cells ?? null}
                     diffMax={diffMax}
                     onMeta={setMeta}
