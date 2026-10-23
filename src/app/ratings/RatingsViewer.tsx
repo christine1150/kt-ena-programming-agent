@@ -230,7 +230,8 @@ function DailyTable({ v }: { v: DailyView }) {
                   {r.end && <span className="max-md:hidden">{`–${clock(r.end)}`}</span>}
                 </td>
                 <td className="break-keep px-2 py-1.5 md:px-4">
-                  <span className="font-semibold" style={r.firstRun ? { color: ACCENT } : undefined}>
+                  {/* 브리핑(오늘의 시청률)과 같이 평균(직전 30일 채널 평균) 이상인 방송은 프로그램명에도 강조색 — 사용자 지시 2026-10-23 */}
+                  <span className="font-semibold" style={r.firstRun || (r.values[0] != null && v.baseline !== null && r.values[0] >= v.baseline) ? { color: ACCENT } : undefined}>
                     {shortProgramName(r.name)}
                   </span>
                   {r.firstRun && <span className="ml-2 rounded-md px-1.5 py-0.5 text-[11px] font-bold text-white" style={{ backgroundColor: ACCENT }}>본방</span>}
