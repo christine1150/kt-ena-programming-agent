@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { DOW_LABELS, minToLabel } from "@/lib/scheduleGridLayout";
 import { NEW_PROGRAM_NOTE, isRough, relErrorFor, relErrorText, roughValue } from "@/lib/idealSchedule/accuracyProfile";
+import { NEW_SWAP_TEXT, dropWarningText, swapCallOf } from "@/lib/idealSchedule/swapEvidence";
 import { CERTAINTY_LABEL, COMPONENT_LABEL, LEVEL_LABEL, PENALTY_LABEL, RANGE_BASIS_LABEL, SMALL_GAIN_RATIO, STATUS_LABEL, evidenceGrade, num, pct, reasonText, signed, signedPct, type BlockRow, type CompareRow, type Reason } from "./model";
 
 export type Candidate = {
@@ -204,6 +205,13 @@ export function BlockDrawer({
     }
     return "이 자리 추천 편성입니다.";
   })();
+  // 이 칸이 지난주(기존 틀) 편성 대신 들어간 경우의 실측 근거 — 신규로 바꾼 교체는 시험 편성, 기대가 10% 이상 낮아진 교체는 하락 경고
+  const verdictCall = (() => {
+    if (block.status !== "AI" && block.status !== "MANUAL_OVERRIDE") return null;
+    if (dec?.kind === "CHANGE" && dec.incumbent && !dec.capBlocked) return swapCallOf(block.expected_kpi, dec.incumbent.expected, grade.grade);
+    if (!dec && compareRow?.changed && compareRow.current) return swapCallOf(block.expected_kpi, compareRow.current.expectedKpi ?? null, grade.grade);
+    return null;
+  })();
   const topReason = (block.reasons ?? [])
     .filter((r) => ["WEEKDAY_SLOT_FIT", "LEVEL_1_INDEX", "LEVEL_2_INDEX", "RECENT_4W_INDEX", "TARGET_FIT", "STRATEGY_MATCH", "STRATEGY_COUNTER"].includes(r.code))
     .map((r) => reasonText(r, decimals))
@@ -233,6 +241,8 @@ export function BlockDrawer({
       <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4 text-sm">
         <section className="space-y-2">
           <p className="rounded-xl bg-zinc-50 px-3 py-2 text-[13px] leading-snug text-zinc-800">{verdict}</p>
+          {isIdeal && verdictCall?.kind === "drop" && <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs leading-snug text-rose-800">{dropWarningText(verdictCall.rel)}</p>}
+          {isIdeal && verdictCall?.kind === "newTest" && <p className="rounded-xl bg-violet-50 px-3 py-2 text-xs leading-snug text-violet-800">{NEW_SWAP_TEXT}</p>}
           {topReason && isIdeal && <p className="px-1 text-xs text-zinc-500">근거: {topReason}</p>}
           <dl className="grid grid-cols-4 gap-2 pt-1 text-center">
             <div className="rounded-xl border border-zinc-100 px-1 py-2">
@@ -326,6 +336,8 @@ export function BlockDrawer({
                   const cHyp = c.candidate.contentType !== "OWN";
                   const vsPlaced = c.expected_kpi !== null && block.expected_kpi !== null ? c.expected_kpi - block.expected_kpi : null;
                   const cg = evidenceGrade(c);
+                  // 실측 근거(SWAP_CHECK): 10% 이상 낮은 교체는 하락 경고를 앞세우고, 신규(근거 C) 후보의 이득은 숫자 대신 시험 편성으로
+                  const call = isCurrent ? null : swapCallOf(c.expected_kpi, block.expected_kpi, cg.grade);
                   const previewing = previewCandidateId === c.id;
                   const lenMismatch = (c.penalties?.runtime_mismatch ?? 0) > 0.0005;
                   return (
@@ -338,8 +350,18 @@ export function BlockDrawer({
                           </p>
                           <p className="text-xs text-zinc-500">
                             기대 <span className="font-medium tabular-nums text-zinc-700">{fmt(c.expected_kpi)}</span>
-                            {!isCurrent && vsPlaced !== null && (
+                            {!isCurrent && vsPlaced !== null && call?.kind !== "newTest" && (
                               <span className={`ml-1 tabular-nums ${vsPlaced >= 0 ? "text-emerald-600" : "text-rose-600"}`}>({signed(vsPlaced, decimals)})</span>
+                            )}
+                            {call?.kind === "drop" && (
+                              <span className="ml-1 rounded bg-rose-50 px-1 text-[10px] font-semibold text-rose-700" title={dropWarningText(call.rel)}>
+                                떨어질 가능성 큼
+                              </span>
+                            )}
+                            {call?.kind === "newTest" && (
+                              <span className="ml-1 rounded bg-violet-50 px-1 text-[10px] font-semibold text-violet-700" title={NEW_SWAP_TEXT}>
+                                시험 편성 후보
+                              </span>
                             )}
                             {" · 근거 "}
                             <span className={`rounded px-1 text-[10px] font-semibold ${GRADE_STYLE[cg.grade]}`}>{cg.grade}</span>
@@ -382,6 +404,8 @@ export function BlockDrawer({
                       )}
                       {swappable && pendingSwap === c.id && (
                         <div className="mt-2 space-y-1.5 rounded-lg bg-zinc-50 p-2">
+                          {call?.kind === "drop" && <p className="text-[11px] font-medium text-rose-800">{dropWarningText(call.rel)}</p>}
+                          {call?.kind === "newTest" && <p className="text-[11px] text-violet-800">{NEW_SWAP_TEXT}</p>}
                           {c.swapVerdict?.reviewOnly && <p className="text-[11px] text-amber-800">이 교체는 &lsquo;검토안&rsquo;으로만 남습니다 — 권리가 확인되기 전에는 실행 가능으로 표시되지 않습니다.</p>}
                           <label className="block text-[11px] text-zinc-600" htmlFor={`swap-reason-${c.id}`}>
                             변경 이유(선택, 이력에 남습니다)

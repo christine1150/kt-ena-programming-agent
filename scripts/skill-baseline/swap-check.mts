@@ -70,7 +70,7 @@ async function loadBundle(code: string): Promise<OwnAiringsBundle> {
 }
 
 // cluster = 한 편성 결정(교체: X→Y 쌍, 이동: 프로그램+변경 주). 드라마처럼 여러 자리가 함께 바뀌면 사건이 여러 개로 잡히므로 구간은 결정 단위로 복원 추출한다.
-type Ev = { ch: string; cluster: string; kind: PastChange["kind"]; date: string; newY: boolean; model: number; r1: number | null; actual: number; actualMed: number; actualAdj: number; name: string };
+type Ev = { ch: string; cluster: string; kind: PastChange["kind"]; date: string; newY: boolean; model: number; r1: number | null; actual: number; actualMed: number; actualAdj: number; name: string; lvNew: number; lvKeep: number };
 
 function bootRatio(errA: number[], errB: number[], clusters: string[], iters = 1000): [number, number] {
   const ids = [...new Set(clusters)];
@@ -129,6 +129,9 @@ for (const code of CHANNELS) {
     const asOf = addDays(ev.date, -1 - LEAD);
     const fset = fsAt(asOf);
     const exp = (pid: string, a: A) => fset.rating.expected(pid, a.airingType, genreOf(a.programName), a.dow, hourBucket(a.startMin)).expected;
+    // 근거 단계(1~6) — 이동 예상이 작게 나오는 원인 조사용(새 자리에 그 프로그램 이력이 없으면 3단계 이하로 내려간다)
+    const lvl = (pid: string, a: A) => fset.rating.expected(pid, a.airingType, genreOf(a.programName), a.dow, hourBucket(a.startMin)).fallbackLevel;
+    let lvNew = 6, lvKeep = 6;
     // 전후 방영 행(실제 변화 계산용)
     let before: A[], after: A[];
     if (ev.kind === "replace") {
@@ -146,10 +149,12 @@ for (const code of CHANNELS) {
       const xType = before.at(-1)!;
       mNew = mean(after.map((a) => exp(d.key, a)).filter((x): x is number => x !== null));
       mKeep = mean(after.map((a) => exp(d.prevKey!, { ...a, airingType: xType.airingType, programName: xType.programName })).filter((x): x is number => x !== null));
+      lvNew = lvl(d.key, after[0]); lvKeep = lvl(d.prevKey!, { ...after[0], airingType: xType.airingType, programName: xType.programName });
     } else {
       const bRef = before.at(-1)!;
       mNew = mean(after.map((a) => exp(d.key, a)).filter((x): x is number => x !== null));
       mKeep = mean(after.map((a) => exp(d.key, { ...a, dow: bRef.dow, startMin: bRef.startMin })).filter((x): x is number => x !== null));
+      lvNew = lvl(d.key, after[0]); lvKeep = lvl(d.key, { ...after[0], dow: bRef.dow, startMin: bRef.startMin });
     }
     if (mNew === null || mKeep === null) continue;
     const train = airings.filter((a) => a.date <= asOf);
@@ -169,7 +174,7 @@ for (const code of CHANNELS) {
     all.push({
       ch: code, cluster: ev.kind === "replace" ? `${code}|${d.prevKey}>${d.key}` : `${code}|${d.key}|${ev.date}`, kind: ev.kind, date: ev.date, newY: ev.kind === "replace" && !train.some((a) => a.programId === d.key),
       model: (mNew + eps) / (mKeep + eps) - 1, r1, actual, actualMed: (medA + eps) / (medB + eps) - 1,
-      actualAdj: chB && chA ? (1 + actual) / (chA / chB) - 1 : actual,
+      actualAdj: chB && chA ? (1 + actual) / (chA / chB) - 1 : actual, lvNew, lvKeep,
       name: ev.kind === "replace" ? `${nameOf.get(d.prevKey!) ?? "?"} → ${nameOf.get(d.key) ?? "?"}` : `${nameOf.get(d.key) ?? "?"} ${d.from}→${d.to}`,
     });
     used++;
