@@ -454,7 +454,8 @@ async function main() {
     const rv = r.review!;
     const ppAired = r.groups.flatMap((g) => g.rows).filter((x) => x.status === "OBSERVED" && x.airings > 0);
     check("종합 리뷰: 방영 채널을 모두 담고 ENA 먼저", !!rv && rv.channelOrder[0] === "ENA" && new Set(ppAired.map((x) => x.channelCode)).size === rv.channelOrder.length, JSON.stringify(rv));
-    check("종합 리뷰: 1~3문장, 금지 레이블 없음", rv.sentences.length >= 1 && rv.sentences.length <= 3 && !/(종합 판독|채널별 성과|편성 자리 경쟁력|라인업 내 위치|편성 관점|강점 우세|약점 우세)/.test(rv.sentences.join(" ")), rv.sentences.join(" | "));
+    check("종합 리뷰: 1~2문장, 금지 레이블·수치 괄호·뭉뚱그린 표현 없음", rv.sentences.length >= 1 && rv.sentences.length <= 2 && !/(종합 판독|채널별 성과|편성 자리 경쟁력|라인업 내 위치|편성 관점|강점 우세|약점 우세|엇갈려|보유 채널 전반|일부 채널|\(\S*\d+%\)|곳 중)/.test(rv.sentences.join(" ")), rv.sentences.join(" | "));
+    check("종합 리뷰: 첫 문장에 판단 채널 이름을 그대로 쓴다", rv.judgedChannels.length === 0 || rv.sentences[0].includes(ppAired.find((x) => x.channelCode === rv.judgedChannels[0])!.channelName), rv.sentences[0]);
     const noEna = (await loadProgramPerformanceWith(db, Q({ channels: ppAired.map((x) => x.channelCode).filter((c) => c !== "ENA") })))!;
     const noEnaAired = noEna.groups.flatMap((g) => g.rows).filter((x) => x.status === "OBSERVED" && x.airings > 0 && x.primary).sort((a, b) => b.airings - a.airings);
     check("종합 리뷰: ENA가 없으면 방영 최다 채널부터", !noEna.review || noEna.review.channelOrder[0] === noEnaAired[0]?.channelCode, JSON.stringify(noEna.review));

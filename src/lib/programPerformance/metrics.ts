@@ -725,42 +725,21 @@ export function shareLineOf(vsChannel: RatioValue, slots: SlotLine[]): string | 
 }
 
 
-// ───────────────────────── 종합 리뷰(2026-10-23, 보유 채널 통합 분석) ─────────────────────────
-// 조회 기간에 방영 기록이 있는 자사 채널을 모두 보고 1~3문장으로 정리한다(제목 옆, 서버 고정 문구).
-//  - 채널마다 시청 규모가 달라 원시 시청률을 합치지 않는다. 각 채널의 '채널 평균 대비'(표 괄호와 같은 값)와 '같은 시간대 기대치 대비'
-//    (콘텐츠 적합도와 같은 표본 보정 배율, 조회 기간의 모든 방영)만 견준다.
-//  - 전체 결론은 채널 개수로 센 다수 — 방영이 많은 채널 하나가 결론을 좌우하지 않게. 방영일 8일 미만(표본 적음) 채널은 판단에서 뺀다.
-//  - 평균권 = 콘텐츠 적합도 KEEP 선(0.85배) ~ 그 역수(약 1.18배). 두드러진 예외 = STRENGTHEN 선(1.5배) 이상·WATCH 선(0.55배) 미만. 새 기준·가중치 없음.
-//  - 첫 문장은 전체 성과, 이후 문장은 결론을 보완하는 차이(라인업 대비 반전 → 채널 예외 → 본방/그 밖 → 타깃 차이 → 시간대 → 라인업 → 최근 추세) 중 앞의 두 개까지.
-//    차이가 평균권 안에서만 나면 문장을 만들지 않는다.
+// ───────────────────────── 종합 리뷰(2026-10-23, 보유 채널 통합 분석 → 핵심만 1~2문장) ─────────────────────────
+// 분석과 표현을 나눈다. 분석은 조회 기간에 방영 기록이 있는 자사 채널 전부(채널 평균 대비·같은 시간대·2049와 가구·본방과 재방·
+// 오리지널 라인업·최근 하락)를 보고, 화면에는 ① 전체 수준(좋음·평균 수준·부진) ② 그 결론을 뒤집거나 가장 잘 설명하는 사실 하나
+// ③ 꼭 필요할 때만 두 번째 문장 하나를 쓴다. 채널별 수치를 괄호로 늘어놓지 않는다(사용자 지시 2026-10-23).
+//  - 채널마다 시청 규모가 달라 시청률을 합치지 않고, 채널마다 채널 평균 대비(표 괄호와 같은 값)를 본다.
+//  - 전체 수준은 판단 채널(방영일 8일 이상) 개수의 과반 — 방영 많은 채널 하나가 결론을 좌우하지 않게. 과반이 없으면 '평균 수준'.
+//  - 평균권 = 콘텐츠 적합도 KEEP 선(0.85배) ~ 그 역수(약 1.18배). 새 점수·가중치 없음.
+//  - 같은 시간대는 아래 종합평가가 쓴 지수 그대로, 최근 하락은 그 종합평가가 12주 진단(조회 기간 = 최근 12주)일 때만.
 
 type Band = "high" | "avg" | "low";
+type Level = "good" | "avg" | "poor";
 const KEEP_CUT = CONTENT_FIT_CONFIG.cut.keep;
 const bandOf = (r: number | null | undefined): Band | null => (r === null || r === undefined || !Number.isFinite(r) ? null : r < KEEP_CUT ? "low" : r >= 1 / KEEP_CUT ? "high" : "avg");
 const BAND_RANK: Record<Band, number> = { low: 0, avg: 1, high: 2 };
 const tgtShort = (label: string) => (label.includes("2049") ? "2049" : label.includes("유료가구") ? "가구" : label);
-
-/** 채널 평균과의 관계 — [이어지는 꼴, 끝나는 꼴] */
-const VS_CH: Record<Band, [string, string]> = { high: ["채널 평균을 웃돌고", "채널 평균을 웃돕니다"], avg: ["채널 평균과 비슷하고", "채널 평균과 비슷합니다"], low: ["채널 평균에 못 미치고", "채널 평균에 못 미칩니다"] };
-
-/** 첫 문장 본문 — 규모(채널 평균 대비) × 같은 시간대 기대치 대비. 두 결과의 관계를 해석해 잇는다 */
-const COMBO: Record<Band, Record<Band, string>> = {
-  high: {
-    high: "시청률이 채널 평균과 같은 시간대 기대치를 모두 웃도는 강한 성과입니다",
-    avg: "시청률이 채널 평균을 웃돌고, 같은 시간대 기대치와는 비슷합니다",
-    low: "시청률이 채널 평균은 넘지만 같은 시간대 기대치에는 못 미쳐, 시청자가 많은 시간대 덕을 본 면이 있습니다",
-  },
-  avg: {
-    high: "시청률은 채널 평균 수준이지만 같은 시간대 기대치보다 높아, 편성된 시간대 안에서는 제 몫 이상을 합니다",
-    avg: "시청률이 채널 평균, 같은 시간대 기대치와 모두 비슷한 무난한 성과입니다",
-    low: "시청률은 채널 평균 수준이지만 같은 시간대 기대치에는 못 미칩니다",
-  },
-  low: {
-    high: "시청률은 채널 평균에 못 미치지만 같은 시간대 기대치보다는 높아, 시청 규모가 작은 시간대 안에서는 경쟁력이 있습니다",
-    avg: "시청률이 채널 평균에 못 미치고, 같은 시간대 기대치와는 비슷합니다",
-    low: "시청률이 채널 평균과 같은 시간대 기대치에 모두 못 미쳐 전반적으로 부진합니다",
-  },
-};
 
 interface ChView {
   code: string;
@@ -769,31 +748,37 @@ interface ChView {
   rows: ChannelRow[];
   scale: Band | null;
   slot: Band | null;
-  slotIdx: number | null;
 }
 
-function majorityBand(bs: Band[], prefer: Band | null): Band | null {
-  if (bs.length === 0) return null;
-  const n: Record<Band, number> = { high: 0, avg: 0, low: 0 };
-  for (const b of bs) n[b]++;
-  const max = Math.max(n.high, n.avg, n.low);
-  const top = (["high", "avg", "low"] as Band[]).filter((b) => n[b] === max);
-  return top.length === 1 ? top[0] : prefer && top.includes(prefer) ? prefer : top[0];
+/** 과반 구간 — 없으면 null */
+function strictMajority(bs: (Band | null)[]): Band | null {
+  const xs = bs.filter((b): b is Band => b !== null);
+  if (xs.length === 0) return null;
+  for (const b of ["high", "avg", "low"] as Band[]) if (xs.filter((x) => x === b).length * 2 > xs.length) return b;
+  return null;
 }
 
-const firstRunSlotOf = (r: ChannelRow) => byDaysDesc((r.analysis?.slots ?? []).filter((s) => judgeable(s) && isFirstSlot(s)))[0] ?? null;
+/** 후보 사실 — 전체 결론과 반대 방향(contrast)이면 첫 문장에 '~지만'으로 잇고, 아니면 둘째 문장 후보 */
+interface Insight {
+  kind: "lineup" | "trend" | "target" | "slot" | "lead" | "firstRun";
+  /** 첫 문장 뒤에 이어 붙일 절(끝은 '~니다') */
+  clause: string;
+  /** 따로 쓸 때의 문장 */
+  sentence: string;
+  contrast: boolean;
+}
 
 export function overallReviewOf(i: { rows: ChannelRow[]; oc: (OriginalCompare & { channelCode: string }) | null }): OverallReview | null {
   const aired = i.rows.filter((r) => r.status === "OBSERVED" && r.airings > 0);
   if (aired.length === 0) return null;
   const kpiOf = (code: string) => aired.find((r) => r.channelCode === code && r.primary) ?? aired.find((r) => r.channelCode === code)!;
-  // 채널 순서(사용자 지시 2026-10-23) — ENA 방영이 있으면 ENA부터, 없으면 방영 횟수가 많은 채널부터. 기준 채널이 바뀌어도 모든 채널을 분석한다
+  // 채널 순서(사용자 지시 2026-10-23) — ENA 방영이 있으면 ENA부터, 없으면 방영 횟수가 많은 채널부터. 순서는 서술용이고 분석은 모든 채널
   const order = [...new Set(aired.map((r) => r.channelCode))].sort((a, b) => Number(b === "ENA") - Number(a === "ENA") || kpiOf(b).airings - kpiOf(a).airings);
   const views: ChView[] = order.map((code) => {
     const kpi = kpiOf(code);
     // 같은 시간대는 아래 종합평가가 쓴 지수 그대로(조회 기간이 12주면 편성진단, 아니면 조회 기간 배율) — 두 곳의 결론이 갈리지 않게
     const slotIdx = kpi.assessment ? (kpi.assessment.slotIndex ?? null) : (kpi.slot?.ratio.ratio ?? null);
-    return { code, name: kpi.channelName, kpi, rows: aired.filter((r) => r.channelCode === code).sort((a, b) => Number(b.primary) - Number(a.primary)), scale: bandOf(kpi.vsChannel.ratio), slot: bandOf(slotIdx), slotIdx };
+    return { code, name: kpi.channelName, kpi, rows: aired.filter((r) => r.channelCode === code), scale: bandOf(kpi.vsChannel.ratio), slot: bandOf(slotIdx) };
   });
   const judged = views.filter((v) => v.kpi.sampleState === "OK" && v.scale !== null);
   const base = { channelOrder: order, judgedChannels: judged.map((v) => v.code) };
@@ -802,116 +787,113 @@ export function overallReviewOf(i: { rows: ChannelRow[]; oc: (OriginalCompare & 
     return { ...base, sentences: [`방영일이 가장 많은 ${most.name}도 ${most.kpi.days}일뿐이라, 아직 성과를 판단하기 이릅니다.`] };
   }
 
-  // ① 전체 결론 — 채널 다수의 규모 구간. 그 채널들의 같은 시간대 구간이 한쪽으로 모일 때만 함께 말한다
+  // ① 채널별 판단 — 채널마다 채널 평균 대비 구간(높음·평균 수준·못 미침). 문장에는 채널 이름을 그대로 쓴다(사용자 지시 2026-10-23:
+  //    '보유 채널 전반'·'일부 채널'처럼 뭉뚱그리지 말고 'ENA에서는 좋은데 ENA Drama에서는 안 좋다'처럼). 수치 괄호는 쓰지 않는다.
   const lead = judged[0];
-  const scaleMaj = majorityBand(judged.map((v) => v.scale as Band), lead.scale)!;
-  const agree = judged.filter((v) => v.scale === scaleMaj);
-  const agreeSlots = agree.map((v) => v.slot);
-  const slotMaj = agreeSlots.every((b) => b !== null && b === agreeSlots[0]) ? agreeSlots[0] : null;
-  const ref = agree[0];
-  // 채널 KPI 타깃이 섞이면(2049 채널·가구 채널) 수치 앞에 타깃을 붙인다
-  const mixedKpi = new Set(judged.map((v) => tgtShort(v.kpi.targetLabel))).size > 1;
-  const chip = (v: ChView) => `${v.name}(${mixedKpi ? `${tgtShort(v.kpi.targetLabel)} ` : ""}${indexText(v.kpi.vsChannel.ratio)})`;
-  /** 구간별 채널 묶음 문장 — 묶음 순서는 채널 순서(ENA 먼저)를 따르고, 둘째 묶음부터는 '채널 평균'을 빼고 짧게 */
-  const grouped = (vs: ChView[]) => {
-    const bands = [...new Set(vs.map((v) => v.scale as Band))];
-    return bands
-      .map((b, k) => {
-        const g = vs.filter((v) => v.scale === b).slice(0, 3);
-        const verb = VS_CH[b][k === bands.length - 1 ? 1 : 0];
-        return `${g.map(chip).join("·")}에서는 ${k === 0 ? verb : verb.replace(/^채널 평균(을|과|에) /, "")}`;
-      })
-      .join(", ");
+  const single = judged.length === 1;
+  const nHigh = judged.filter((v) => v.scale === "high").length;
+  const nLow = judged.filter((v) => v.scale === "low").length;
+  const scaleMaj = strictMajority(judged.map((v) => v.scale));
+  // 전체 방향(뒤 사실이 결론과 반대인지 가리는 데만 쓴다) — 과반, 없으면 높은 채널과 낮은 채널 수 비교
+  const level: Level = scaleMaj === "high" ? "good" : scaleMaj === "low" ? "poor" : scaleMaj === "avg" ? "avg" : nHigh > nLow ? "good" : nLow > nHigh ? "poor" : "avg";
+  const plus = level !== "good";
+  const minus = level !== "poor";
+  /** 채널 이름 묶음 — 정확한 이름으로(넷까지 모두, 다섯 이상이면 앞의 셋 + 'N개 채널') */
+  const nm = (vs: ChView[]) => (vs.length <= 4 ? vs.map((v) => v.name).join("·") : `${vs.slice(0, 3).map((v) => v.name).join("·")} 등 ${vs.length}개 채널`);
+  // 구간 표현 — [~고, ~지만, ~다]
+  const STATE: Record<Band, [string, string, string]> = {
+    high: ["평균보다 높고", "평균보다 높지만", "평균보다 높습니다"],
+    avg: ["평균 수준이고", "평균 수준이지만", "평균 수준입니다"],
+    low: ["평균에 못 미치고", "평균에 못 미치지만", "평균에 못 미칩니다"],
   };
-  const sentences: string[] = [];
-  const majority = judged.length === 1 || agree.length * 2 > judged.length;
-  if (majority) {
-    const subject = judged.length === 1 ? `${ref.name}에서는` : agree.length === judged.length ? `방영 채널 ${judged.length}곳 모두` : `방영 채널 ${judged.length}곳 중 ${agree.length}곳에서`;
-    const body = slotMaj ? COMBO[scaleMaj][slotMaj] : `시청률이 ${VS_CH[scaleMaj][1]}`;
-    const evidence = `${ref.name} ${tgtShort(ref.kpi.targetLabel)} 기준 채널 평균의 ${indexText(ref.kpi.vsChannel.ratio)}${slotMaj && ref.slotIdx !== null ? `, 같은 시간대 기대치의 ${indexText(ref.slotIdx)}` : ""}`;
-    sentences.push(`${subject} ${body}(${evidence}).`);
-  } else {
-    // 과반 구간이 없으면 하나의 결론으로 묶지 않고 엇갈린다고 쓴다
-    // 채널을 기계적으로 다 늘어놓지 않게 — 평균권 채널은 맨 앞 채널(ENA 또는 방영 최다)만 남긴다
-    // (빼고 나서 구간이 하나만 남으면 엇갈림이 안 보이므로 그때는 모두 남긴다)
-    const trimmed = judged.filter((v) => v.scale !== "avg" || v === lead);
-    sentences.push(`채널마다 성과가 엇갈려, ${grouped(new Set(trimmed.map((v) => v.scale)).size > 1 ? trimmed : judged)}.`);
+  const sameAll = judged.every((v) => v.scale === lead.scale);
+
+  // ② 후보 사실 — 우선순위 순(라인업 → 최근 하락 → 타깃 → 시간대 → 본방). 각 사실은 해당 채널 이름을 밝힌다
+  const ins: Insight[] = [];
+
+  // 오리지널 라인업 — 같은 채널·분류 오리지널 중 중간보다 위·아래(첫 k회 본방 기준)
+  const oc = i.oc && order.includes(i.oc.channelCode) && i.oc.rank !== null && i.oc.peers >= 3 ? i.oc : null;
+  if (oc) {
+    const ocName = views.find((v) => v.code === oc.channelCode)?.name ?? "";
+    const top = (oc.rank as number) * 2 <= oc.peers;
+    const bottom = (oc.rank as number) * 2 - 1 > oc.peers;
+    if (bottom && minus) ins.push({ kind: "lineup", clause: `${ocName}에서 방영한 다른 오리지널과 비교하면 성적이 아쉽습니다`, sentence: `다만 ${ocName}에서 방영한 다른 오리지널과 비교하면 성적이 아쉽습니다.`, contrast: true });
+    else if (top && plus) ins.push({ kind: "lineup", clause: `${ocName}에서 방영한 다른 오리지널 사이에서는 앞선 편입니다`, sentence: `${ocName}에서 방영한 다른 오리지널 사이에서는 앞선 편입니다.`, contrast: true });
   }
 
-  // ② 보완 후보 — 우선순위 순으로 모아 앞의 두 개
-  const extra: string[] = [];
-  const oc = i.oc && order.includes(i.oc.channelCode) && i.oc.rank !== null && i.oc.peers >= 2 ? i.oc : null;
-  const ocView = oc ? (views.find((v) => v.code === oc.channelCode) ?? null) : null;
-  const ocTop = oc ? (oc.rank as number) * 2 <= oc.peers : false;
-  const ocBottom = oc ? (oc.rank as number) * 2 - 1 > oc.peers : false;
-  const lineup = oc ? `같은 채널·분류 오리지널 ${oc.peers}편 중 ${oc.rank}위(첫 ${oc.k}회 본방 기준)` : "";
-  const ocScale = ocView?.kpi.sampleState === "OK" ? ocView.scale : scaleMaj;
-  const ocFlip = oc ? (ocTop && ocScale === "low") || (ocBottom && ocScale !== null && ocScale !== "low") : false;
-
-  // 라인업 대비 반전 — 채널 평균과 비슷한 오리지널 사이 순위가 반대 방향일 때
-  const ocName = ocView?.name ?? "";
-  if (oc && ocFlip) extra.push(ocTop ? `${ocName}에서는 채널 평균에 못 미쳐도 ${lineup}로, 비슷한 오리지널 사이에서는 선전했습니다.` : `${ocName}에서는 채널 평균${ocScale === "high" ? "은 넘지만" : " 수준이지만"} ${lineup}로, 비슷한 오리지널보다는 부진합니다.`);
-
-  // 채널 예외 — 다수와 다른 구간의 채널(방영 많은 순, 구간별 최대 3곳)
-  // 라인업 반전 문장에서 이미 다룬 채널은 빼서 같은 채널을 두 번 말하지 않는다
-  const outliers = judged.filter((v) => v.scale !== scaleMaj && !(ocFlip && v === ocView));
-  if (majority && outliers.length) extra.push(`다만 ${grouped(outliers)}.`);
-
-  // 본방과 그 밖의 방영 — 방영일 3일 이상씩이고 구간이 다를 때. 같은 채널 본방 시간대가 두드러지면 한 문장으로 묶는다
-  let runUsed: string | null = null;
-  for (const v of judged) {
-    const rs = v.kpi.analysis?.runSplit;
-    if (!rs || rs.firstDays < CONTENT_FIT_CONFIG.minDays || rs.restDays < CONTENT_FIT_CONFIG.minDays) continue;
-    const fb = bandOf(rs.first.ratio);
-    const rb = bandOf(rs.rest.ratio);
-    if (!fb || !rb || fb === rb) continue;
-    const fs = firstRunSlotOf(v.kpi);
-    const firstBetter = BAND_RANK[fb] > BAND_RANK[rb];
-    const slotNote = firstBetter && fs && fs.vs.ratio !== null && fs.vs.ratio >= CONTENT_FIT_CONFIG.cut.strengthen ? `, 본방 시간(${slotLabel(fs.dow, fs.hourBlock)})은 같은 시간대 평균의 ${indexText(fs.vs.ratio)}` : "";
-    extra.push(
-      firstBetter
-        ? `${v.name} 본방은 채널 평균의 ${indexText(rs.first.ratio)}${slotNote}로 강하지만, 재방 등 그 밖의 방영은 ${indexText(rs.rest.ratio)}에 그칩니다.`
-        : `${v.name}에서는 본방(채널 평균의 ${indexText(rs.first.ratio)})보다 재방 등 그 밖의 방영(${indexText(rs.rest.ratio)})이 더 낫습니다.`
-    );
-    if (slotNote) runUsed = v.code;
-    break;
+  // 최근 하락 — 종합평가가 12주 진단일 때 기존 하락 기준(최근 4주가 이전 8주보다 약 30% 이상 낮음). 떨어진 채널 이름을 밝힌다
+  const falling = judged.filter((v) => v.kpi.assessment?.trendNote);
+  // 전체가 부진해도 하락은 알린다(강한 채널의 하락은 특히 중요, 2026-10-23 쯔양몇끼 12주: ENA Drama만 평균 이상인데 하락 중)
+  if (falling.length) {
+    const c = `최근 방송에서는 ${nm(falling)}의 시청률이 내려가는 흐름입니다`;
+    ins.push({ kind: "trend", clause: c, sentence: `다만 ${c}.`, contrast: true });
   }
 
-  // 타깃 차이 — 2049와 가구의 구간이 다른 채널이 판단 채널의 과반이고 방향이 한쪽일 때
-  const both = judged
-    .map((v) => ({ v, a: v.rows.find((r) => tgtShort(r.targetLabel) === "2049"), h: v.rows.find((r) => tgtShort(r.targetLabel) === "가구") }))
-    .filter((x): x is { v: ChView; a: ChannelRow; h: ChannelRow } => !!x.a && !!x.h && bandOf(x.a.vsChannel.ratio) !== null && bandOf(x.h.vsChannel.ratio) !== null);
-  if (both.length) {
-    const diff = (x: (typeof both)[number]) => BAND_RANK[bandOf(x.a.vsChannel.ratio)!] - BAND_RANK[bandOf(x.h.vsChannel.ratio)!];
-    const young = both.filter((x) => diff(x) > 0);
-    const hh = both.filter((x) => diff(x) < 0);
-    const side = young.length * 2 > both.length && hh.length === 0 ? young : hh.length * 2 > both.length && young.length === 0 ? hh : null;
+  // 타깃 — 높은 채널이 모두 한 타깃 채널(2049 채널·가구 채널)이고 낮은 채널은 모두 다른 타깃 채널일 때, 또는 채널 안에서 2049와 가구 반응이 한쪽으로 기울 때
+  const highs = judged.filter((v) => v.scale === "high");
+  const lows = judged.filter((v) => v.scale === "low");
+  const tg = (v: ChView) => tgtShort(v.kpi.targetLabel);
+  for (const t of ["2049", "가구"] as const) {
+    const o = t === "2049" ? "가구" : "2049";
+    if (!single && highs.length && lows.length && highs.every((v) => tg(v) === t) && lows.every((v) => tg(v) === o)) {
+      const c = `${t} 시청층을 겨냥한 채널에서 반응이 좋고, ${o} 시청층 채널에서는 약한 편입니다`;
+      ins.push({ kind: "target", clause: c, sentence: `${c}.`, contrast: false });
+    }
+  }
+  if (!ins.some((x) => x.kind === "target")) {
+    const both = judged
+      .map((v) => ({ v, a: bandOf(v.rows.find((r) => tgtShort(r.targetLabel) === "2049")?.vsChannel.ratio), h: bandOf(v.rows.find((r) => tgtShort(r.targetLabel) === "가구")?.vsChannel.ratio) }))
+      .filter((x): x is { v: ChView; a: Band; h: Band } => x.a !== null && x.h !== null);
+    const young = both.filter((x) => BAND_RANK[x.a] > BAND_RANK[x.h]);
+    const old = both.filter((x) => BAND_RANK[x.a] < BAND_RANK[x.h]);
+    const side = both.length && young.length * 2 > both.length && old.length === 0 ? { vs: young, t: "2049", o: "가구" } : both.length && old.length * 2 > both.length && young.length === 0 ? { vs: old, t: "가구", o: "2049" } : null;
     if (side) {
-      const x = side[0];
-      const who = side.length === both.length && both.length > 1 ? "판단한 채널 모두" : side.length > 2 ? `채널 ${both.length}곳 중 ${side.length}곳에서` : side.length > 1 ? `${side.map((s) => s.v.name).join("·")}에서는` : `${x.v.name}에서는`;
-      extra.push(`${who} ${side === young ? "2049" : "가구"} 쪽 반응이 더 낫습니다(${x.v.name} 2049 채널 평균의 ${indexText(x.a.vsChannel.ratio)}, 가구 ${indexText(x.h.vsChannel.ratio)}).`);
+      const c = single ? `${side.t} 시청층 반응이 ${side.o}보다 좋습니다` : `${nm(side.vs.map((x) => x.v))}에서는 ${side.t} 시청층 반응이 ${side.o}보다 좋습니다`;
+      ins.push({ kind: "target", clause: c, sentence: `${c}.`, contrast: plus });
     }
   }
 
-  // 시간대 예외 — 본방 시간이 전체 흐름과 달리 두드러질 때(위 본방 문장에 이미 넣었으면 생략)
-  for (const v of judged) {
-    if (v.code === runUsed) continue;
-    const fs = firstRunSlotOf(v.kpi);
-    if (!fs || fs.vs.ratio === null) continue;
-    if (fs.vs.ratio >= CONTENT_FIT_CONFIG.cut.strengthen && v.slot !== "high") extra.push(`${v.name} 본방 시간(${slotLabel(fs.dow, fs.hourBlock)})은 같은 시간대 평균의 ${indexText(fs.vs.ratio)}로 두드러집니다.`);
-    else if (fs.vs.ratio < CONTENT_FIT_CONFIG.cut.watch && v.slot === "high") extra.push(`다만 ${v.name} 본방 시간(${slotLabel(fs.dow, fs.hourBlock)})은 같은 시간대 평균의 ${indexText(fs.vs.ratio)}로 약합니다.`);
-    else continue;
-    break;
+  // 같은 시간대 — 시청률은 높지 않은데 같은 시간대에서는 강한 채널, 또는 시청률은 높은데 같은 시간대에서는 약한 채널
+  const slotUp = judged.filter((v) => v.slot === "high" && v.scale !== "high");
+  const slotDown = judged.filter((v) => v.scale === "high" && v.slot === "low");
+  if (slotUp.length) {
+    const c = single ? "같은 시간대의 다른 프로그램보다는 강합니다" : `${nm(slotUp)}에서는 시청률이 높지 않아도 같은 시간대의 다른 프로그램보다는 강합니다`;
+    ins.push({ kind: "slot", clause: c, sentence: `${c}.`, contrast: true });
+  } else if (slotDown.length) {
+    const c = single ? "같은 시간대의 다른 프로그램보다는 약해, 시청자가 많은 시간대 덕을 본 면이 있습니다" : `${nm(slotDown)}에서는 같은 시간대의 다른 프로그램보다 약해, 시청자가 많은 시간대 덕을 본 면이 있습니다`;
+    ins.push({ kind: "slot", clause: c, sentence: `다만 ${c}.`, contrast: true });
   }
 
-  // 라인업(반전이 아닐 때) — 순위와 직전 같은 시간대 작품 대비
-  if (oc && !ocFlip) {
-    const pre = oc.predecessor && oc.predecessor.vs.ratio !== null ? `이고, 직전 같은 시간대 작품(${oc.predecessor.name})의 ${indexText(oc.predecessor.vs.ratio)} 수준입니다` : "입니다";
-    extra.push(`${lineup}${pre}.`);
+  // 본방 — 본방만 보면 그 채널의 판단이 바뀌는 경우(본방은 높은 구간인데 채널 전체는 높은 구간이 아님)
+  const fr = judged.find((v) => {
+    const rs = v.kpi.analysis?.runSplit;
+    return v.scale !== "high" && rs && rs.firstDays >= CONTENT_FIT_CONFIG.minDays && rs.restDays >= CONTENT_FIT_CONFIG.minDays && bandOf(rs.first.ratio) === "high" && BAND_RANK[bandOf(rs.rest.ratio) ?? "high"] < BAND_RANK.high;
+  });
+  // '재방송'이라 쓰지 않는다 — 본방 외에는 본방 여부 미확인 방영도 섞여 있다(본방·재방 정의, 2026-10-23)
+  if (fr) ins.push({ kind: "firstRun", clause: `${fr.name} 본방은 강하지만 본방 외 방송이 전체 성적을 끌어내립니다`, sentence: `${fr.name} 본방은 강하지만, 본방 외 방송이 전체 성적을 끌어내립니다.`, contrast: true });
+
+  // ③ 문장
+  const sentences: string[] = [];
+  if (single || sameAll) {
+    // 한 채널이거나 모든 채널이 같은 구간 — 채널 이름 + 구간, 결론과 반대인 사실 하나를 '~지만'으로. 둘째 문장은 라인업·최근 하락·본방만
+    const who = single ? `${lead.name}에서는` : `${nm(judged)} 모두`;
+    const b = lead.scale as Band;
+    const merge = ins.find((x) => x.contrast && x.kind !== "target") ?? ins.find((x) => x.contrast);
+    if (merge) sentences.push(`${who} ${STATE[b][1]}, ${merge.clause}.`);
+    else if (!single && b === "high") sentences.push(`${who} 평균보다 높아, 특정 채널에 치우치지 않고 고르게 경쟁력을 보입니다.`);
+    else sentences.push(`${who} ${b === "low" ? "평균에 못 미쳐 부진합니다" : b === "high" ? "평균보다 높은 성적을 냅니다" : "평균 수준의 성적입니다"}.`);
+    const second = ins.find((x) => x !== merge && (x.kind === "lineup" || x.kind === "trend" || x.kind === "firstRun"));
+    if (second) sentences.push(second.sentence);
+  } else {
+    // 채널마다 다름 — 맨 앞 채널(ENA 또는 방영 최다)의 구간부터, 다른 구간 채널을 이름으로. 높은 채널·낮은 채널이 함께 있으면
+    // 맨 앞 채널이 아닌 평균권 채널은 빼서(특징이 없음) 이름이 줄줄이 늘어나지 않게
+    const bands = [...new Set(judged.map((v) => v.scale as Band))];
+    const keep = (b: Band) => b !== "avg" || lead.scale === "avg" || !(bands.includes("high") && bands.includes("low"));
+    const groups = bands.filter(keep).map((b) => judged.filter((v) => v.scale === b));
+    const parts = groups.map((g, k) => `${nm(g)}에서는 ${STATE[g[0].scale as Band][k === groups.length - 1 ? 2 : k === groups.length - 2 ? 1 : 0]}`);
+    sentences.push(`${parts.join(", ")}.`);
+    // 둘째 문장 — 가장 앞선 사실 하나
+    if (ins.length) sentences.push(ins[0].sentence);
   }
-
-  // 최근 추세 — 기준 채널의 최근 4주가 이전 8주보다 약 30% 이상 낮을 때(기존 하락 기준)
-  if (lead.kpi.fit?.trendFalling) extra.push(`${lead.name}에서는 최근 4주가 그 이전 8주보다 낮아졌습니다.`);
-
-  return { ...base, sentences: [...sentences, ...extra.slice(0, 2)] };
+  return { ...base, sentences };
 }
