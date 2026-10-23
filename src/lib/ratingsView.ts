@@ -35,6 +35,9 @@ export interface DailyRow {
   episode: string | null;
   firstRun: boolean;
   values: (number | null)[];
+  /** 첫 열(KPI) 타깃의 점유율(%) · 1인당 시청시간(초) — 저장된 닐슨 값 그대로 */
+  share: number | null;
+  timeSpentSec: number | null;
 }
 export interface DailyView {
   date: string;
@@ -66,14 +69,14 @@ export async function loadDaily(channelCode: string, date: string): Promise<Dail
 
   let q = supabase
     .from("ratings")
-    .select("start_time,end_time,rating,target_id,program_id,episode_number,episode_subtitle,is_first_run,programs(canonical_name)")
+    .select("start_time,end_time,rating,share,time_spent_seconds,target_id,program_id,episode_number,episode_subtitle,is_first_run,programs(canonical_name)")
     .eq("channel_id", ch.id)
     .in("source_type", ["nielsen_daily", "skyuhd"])
     .eq("broadcast_date", date)
     .not("program_id", "is", null);
   if (!isSky) q = q.in("target_id", candidates.map((c) => idOf(c.label)!));
   const { data: raw } = await q;
-  type Raw = { start_time: string; end_time: string | null; rating: number | null; target_id: string | null; program_id: string; episode_number: number | null; episode_subtitle: string | null; is_first_run: boolean | null; programs: { canonical_name: string } | { canonical_name: string }[] | null };
+  type Raw = { start_time: string; end_time: string | null; rating: number | null; share: number | null; time_spent_seconds: number | null; target_id: string | null; program_id: string; episode_number: number | null; episode_subtitle: string | null; is_first_run: boolean | null; programs: { canonical_name: string } | { canonical_name: string }[] | null };
   const rowsRaw = (raw ?? []) as unknown as Raw[];
 
   // skyUHD 수기 시트는 타깃 구분이 없다(target_id 비움) → 한 열로
@@ -97,11 +100,17 @@ export async function loadDaily(channelCode: string, date: string): Promise<Dail
         episode: ep !== null || sub ? `${ep !== null ? `${ep}회` : ""}${ep !== null && sub ? " " : ""}${sub ?? ""}` : null,
         firstRun: (r.is_first_run ?? fill?.isFirstRun ?? false) === true,
         values: usedTargets.map(() => null),
+        share: null,
+        timeSpentSec: null,
       };
       byKey.set(key, row);
     }
     const idx = isSky ? 0 : usedTargets.findIndex((c) => idOf(c.label) === r.target_id);
     if (idx >= 0) row.values[idx] = r.rating;
+    if (idx === 0) {
+      row.share = r.share;
+      row.timeSpentSec = r.time_spent_seconds;
+    }
   }
   const rows = [...byKey.values()].sort((a, b) => orderKey(a.start) - orderKey(b.start));
 

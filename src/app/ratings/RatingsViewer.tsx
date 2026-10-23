@@ -182,8 +182,27 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
   );
 }
 
+/** 1인당 시청시간(초) → m:ss */
+const minSec = (s: number | null) => (s === null || !Number.isFinite(s) ? "—" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`);
+
+// 사용자 지시(2026-10-23): 맨 오른쪽에 KPI 시청률을 가로 막대로 — 직전 30일 채널 평균 이상은 파랑, 평균 이하는 붉은 계열(평균에 가까울수록 옅게). 세로 눈금은 평균 위치.
+function KpiBar({ value, max, baseline }: { value: number | null; max: number; baseline: number | null }) {
+  if (value === null || max <= 0) return <span className="text-zinc-300">—</span>;
+  const pct = Math.max(value > 0 ? 1.5 : 0, Math.min(100, (value / max) * 100));
+  const below = baseline !== null && value < baseline;
+  const color = below ? `color-mix(in srgb, #dc2626 ${Math.round(45 + 55 * (1 - value / baseline!))}%, #fecaca)` : ACCENT;
+  const basePct = baseline !== null ? Math.min(100, (baseline / max) * 100) : null;
+  return (
+    <div className="relative h-3.5 w-full min-w-[120px] rounded-sm bg-zinc-100" role="img" aria-label={`KPI 시청률 ${r3(value)}`}>
+      <div className="h-full rounded-sm" style={{ width: `${pct}%`, backgroundColor: color }} />
+      {basePct !== null && <div className="absolute inset-y-[-2px] w-px bg-zinc-400/70" style={{ left: `${basePct}%` }} title={`평균 ${r3(baseline)}`} />}
+    </div>
+  );
+}
+
 function DailyTable({ v }: { v: DailyView }) {
   if (v.rows.length === 0) return <p className="rounded-xl bg-white p-10 text-center text-sm text-zinc-400">이 날짜엔 프로그램 단위 시청률 자료가 없습니다.</p>;
+  const maxKpi = Math.max(0, ...v.rows.map((r) => r.values[0] ?? 0));
   return (
     <>
       <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm">
@@ -192,12 +211,15 @@ function DailyTable({ v }: { v: DailyView }) {
           <thead className="bg-zinc-100/70 text-[13px] font-semibold text-zinc-500">
             <tr>
               <th className="w-[50px] px-1.5 py-2 text-center md:w-[132px] md:px-4">시간</th>
-              <th className="px-2 py-2 md:px-4">프로그램</th>
+              <th className="px-2 py-2 md:w-[26rem] md:px-4">프로그램</th>
               {v.columns.map((c) => (
-                <th key={c} className="w-[58px] break-keep px-1.5 py-2 text-right text-[11px] leading-tight md:w-[120px] md:px-4 md:text-[13px]">
+                <th key={c} className="w-[58px] break-keep px-1.5 py-2 text-right text-[11px] leading-tight md:w-[96px] md:px-3 md:text-[13px]">
                   {c}
                 </th>
               ))}
+              <th className="w-[52px] px-1.5 py-2 text-right text-[11px] leading-tight md:w-[80px] md:px-3 md:text-[13px]">점유율(%)</th>
+              <th className="w-[84px] px-3 py-2 text-right text-[13px] max-md:hidden">시청시간</th>
+              <th className="px-4 py-2 text-[13px] max-md:hidden">KPI 시청률{v.baseline !== null ? ` (평균 ${r3(v.baseline)})` : ""}</th>
             </tr>
           </thead>
           <tbody>
@@ -215,17 +237,22 @@ function DailyTable({ v }: { v: DailyView }) {
                   {r.episode && <span className="ml-2 text-[12px] text-zinc-400">{r.episode}</span>}
                 </td>
                 {r.values.map((val, k) => (
-                  <td key={k} className="whitespace-nowrap px-1.5 py-1.5 text-right font-bold tabular-nums md:px-4" style={k === 0 && val !== null && v.baseline !== null && val >= v.baseline ? { color: ACCENT } : undefined}>
+                  <td key={k} className="whitespace-nowrap px-1.5 py-1.5 text-right font-bold tabular-nums md:px-3" style={k === 0 && val !== null && v.baseline !== null && val >= v.baseline ? { color: ACCENT } : undefined}>
                     {r3(val)}
                   </td>
                 ))}
+                <td className="whitespace-nowrap px-1.5 py-1.5 text-right tabular-nums text-zinc-600 md:px-3">{r2(r.share)}</td>
+                <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-zinc-600 max-md:hidden">{minSec(r.timeSpentSec)}</td>
+                <td className="px-4 py-1.5 max-md:hidden">
+                  <KpiBar value={r.values[0] ?? null} max={maxKpi} baseline={v.baseline} />
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <p className="mt-2 text-[12px] text-zinc-400">
-        {v.baseline !== null ? `파란 숫자는 첫 열이 직전 30일 채널 평균(${r3(v.baseline)}) 이상인 방송입니다. ` : ""}
+        {v.baseline !== null ? `파란 숫자는 첫 열이 직전 30일 채널 평균(${r3(v.baseline)}) 이상인 방송입니다(막대도 파랑, 평균 아래는 붉은 계열, 세로 눈금이 평균). 점유율·시청시간은 첫 열 타깃 기준입니다. ` : ""}
       </p>
     </>
   );
