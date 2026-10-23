@@ -46,6 +46,7 @@ import {
   pickExtremes,
   seriesTrendText,
   slotLeadOf,
+  overallReviewOf,
   type ChannelDayRow,
   type CompAiring,
   type WorkAiring,
@@ -771,6 +772,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   const groups: PerformanceResult["groups"] = (["2049", "HH"] as const).map((g) => ({ kpiGroup: g, rows: rows.filter((r) => r.kpiGroup === g) })).filter((g) => g.rows.length > 0);
   // 총계·첫 줄은 채널당 한 타깃(두 타깃 모드에서는 KPI 타깃)만 — 같은 방영을 두 번 세지 않는다
   const observed = rows.filter((r) => r.status === "OBSERVED" && (query.targetMode !== "both" || r.primary));
+  const originalCompare = await originalP;
   return {
     version: PROGRAM_PERFORMANCE_VERSION,
     query: { ...query, from, to },
@@ -787,7 +789,8 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     slotCells,
     notes,
     supplement,
-    originalCompare: await originalP,
+    originalCompare,
+    review: overallReviewOf({ rows, oc: originalCompare }),
     pattern:
       runPatterns.patterns.length > 0 || runPatterns.info.naverSkipped.length > 0
         ? {

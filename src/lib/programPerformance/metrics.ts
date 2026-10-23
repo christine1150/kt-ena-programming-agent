@@ -6,7 +6,8 @@
 //  - 동슬롯 대비 = 콘텐츠 적합도 엔진과 같은 "같은 칸 다른 프로그램 기대치" 대비 수축 배율(편성 효율 지표, 인과 아님)
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
 import { formatRatingValue } from "@/lib/ui/metricFormat";
-import type { AiringFilter, AiringRef, ChannelDailyBase, ChannelLine, DailyPoint, Direction, EpisodePoint, MonthlyPoint, RatioValue, RowAnalysis, SlotLine, SplitStat, TextPart, WorkClass, WorkClassification } from "./types";
+import { josaEunNeun, josaIga } from "@/lib/josa";
+import type { AiringFilter, AiringRef, ChannelDailyBase, ChannelLine, ChannelRow, DailyPoint, Direction, EpisodePoint, MonthlyPoint, OriginalCompare, OverallReview, RatioValue, ReviewItem, ReviewTone, RowAnalysis, SlotLine, SplitStat, TextPart, WorkClass, WorkClassification } from "./types";
 
 /** 방향은 화면 표시 자릿수(배율 소수 둘째 자리)로 반올림한 값으로만 정한다 — 임의의 "유의 차이" 임계값을 만들지 않는다. */
 const RATIO_DISPLAY_DIGITS = 2;
@@ -722,4 +723,105 @@ export function shareLineOf(vsChannel: RatioValue, slots: SlotLine[]): string | 
   const head = vsChannel.direction === "LOWER" && vsChannel.ratio !== null ? `시청률은 채널 평균의 ${indexText(vsChannel.ratio)}지만, ` : `${name} 시청률은 같은 시간대 평균의 ${indexText(x.vs.ratio)}지만, `;
   const more = strong.length > 1 ? ` (이런 시간대 ${strong.length}곳)` : "";
   return `${head}${name} 점유율은 ${(x.shareAvg as number).toFixed(2)}%로 같은 시간대 평균의 ${indexText(x.shareVs!.ratio)}입니다${more}.`;
+}
+
+// ───────────────────────── 종합 리뷰(2026-10-23) ─────────────────────────
+// 표 위에서 "이 작품이 괜찮은가"를 한눈에 — 방송 채널 하나의 강점·약점 칸 + 다른 자사 채널 한두 문장. 새 점수·가중치 없이
+// 이미 계산된 배율의 방향(표의 푸른색·붉은색과 같은 규칙)과 오리지널 같은 회차 순위(중간값 위·아래)만 읽는다.
+
+const TONE_OF: Record<Direction, ReviewTone> = { HIGHER: "good", SIMILAR: "even", LOWER: "weak", NA: "na" };
+const tgtShort = (label: string) => (label.includes("2049") ? "2049" : label.includes("유료가구") ? "가구" : label);
+
+/** 칸 이름 묶기 — 2049·가구 시청률이 함께 있으면 "2049·가구 시청률" 하나로 */
+function joinNouns(items: ReviewItem[], noun: (it: ReviewItem) => string): string {
+  const keys = new Set(items.map((x) => x.key));
+  const out: string[] = [];
+  if (keys.has("2049") && keys.has("HH")) out.push("2049·가구 시청률");
+  for (const it of items) if (!(keys.has("2049") && keys.has("HH") && (it.key === "2049" || it.key === "HH"))) out.push(noun(it));
+  return out.join(", ");
+}
+
+export function overallReviewOf(i: { rows: ChannelRow[]; oc: (OriginalCompare & { channelCode: string }) | null }): OverallReview | null {
+  const aired = i.rows.filter((r) => r.status === "OBSERVED" && r.airings > 0);
+  if (aired.length === 0) return null;
+  const codes = [...new Set(aired.map((r) => r.channelCode))];
+  const kpi = (code: string) => aired.find((r) => r.channelCode === code && r.primary) ?? aired.find((r) => r.channelCode === code)!;
+  // 채널 순서(사용자 지시 2026-10-23) — ENA 방영이 있으면 ENA부터, 없으면 방영 횟수가 많은 채널부터(예: 걸어서 세계속으로 → OLIFE). 다른 채널도 방영 많은 순
+  codes.sort((a, b) => Number(b === "ENA") - Number(a === "ENA") || kpi(b).airings - kpi(a).airings);
+  const mainCode = codes[0];
+  const main = kpi(mainCode);
+  const items: ReviewItem[] = [];
+
+  // 채널 KPI 타깃 칸을 먼저(가구 채널은 가구 → 2049)
+  const tgts = ([["2049", "2049 시청률"], ["HH", "가구 시청률"]] as const).map(([key, label]) => ({ key, label, r: aired.find((x) => x.channelCode === mainCode && tgtShort(x.targetLabel) === (key === "HH" ? "가구" : "2049")) }));
+  for (const { key, label, r } of tgts.sort((a, b) => Number(b.r?.primary ?? false) - Number(a.r?.primary ?? false))) {
+    if (!r) continue;
+    items.push({ key, label, tone: TONE_OF[r.vsChannel.direction], main: r.vsChannel.ratio === null ? "채널 평균과 비교 불가" : `채널 평균의 ${indexText(r.vsChannel.ratio)}`, sub: `${formatRatingValue(r.programAvg, mainCode, { unit: true })}${r.primary ? " · 채널 KPI" : ""}` });
+  }
+
+  // 같은 시간대·점유율 — 편성 비교와 같은 자료. 방송일이 가장 많은 본방 구간(없으면 방송일이 가장 많은 구간), 값으로 고르지 않는다
+  const judged = (main.analysis?.slots ?? []).filter(judgeable);
+  const s = byDaysDesc(judged.filter(isFirstSlot))[0] ?? byDaysDesc(judged)[0];
+  if (s) {
+    const where = `${slotLabel(s.dow, s.hourBlock)}${isFirstSlot(s) ? " 본방" : ""} · ${tgtShort(main.targetLabel)}`;
+    items.push({ key: "slot", label: "같은 시간대 경쟁", tone: TONE_OF[s.vs.direction], main: `시간대 평균의 ${indexText(s.vs.ratio)}`, sub: where });
+    if (s.shareAvg !== null && s.shareAvg !== undefined) {
+      const sv = s.shareVs && s.shareVs.ratio !== null ? s.shareVs : null;
+      items.push({ key: "share", label: "점유율", tone: sv ? TONE_OF[sv.direction] : "na", main: sv ? `시간대 평균의 ${indexText(sv.ratio)}` : "비교 기준 없음", sub: `${s.shareAvg.toFixed(2)}% · ${where}` });
+    }
+  }
+
+  // 장르 — 같은 채널·분류 오리지널 사이 같은 회차 본방 평균 순위. 중간보다 위면 강점, 가운데면 보통, 아래면 약점
+  const oc = i.oc && i.oc.channelCode === mainCode ? i.oc : null;
+  if (oc && oc.rank !== null && oc.peers >= 2) {
+    const tone: ReviewTone = oc.rank * 2 <= oc.peers ? "good" : oc.rank * 2 - 1 === oc.peers ? "even" : "weak";
+    items.push({ key: "genre", label: `${oc.classLabel} 중 순위`, tone, main: `${oc.peers}편 중 ${oc.rank}위`, sub: `첫 ${oc.k}회 본방 평균 · ${tgtShort(oc.targetLabel)}` });
+  }
+
+  const noun = (it: ReviewItem) => (it.key === "slot" ? "같은 시간대 경쟁력" : it.key === "genre" ? `${oc?.classLabel ?? "장르"} 중 순위` : it.label);
+  const good = items.filter((x) => x.tone === "good");
+  const weak = items.filter((x) => x.tone === "weak");
+  const even = items.filter((x) => x.tone === "even");
+  const g = joinNouns(good, noun);
+  const w = joinNouns(weak, noun);
+  const ch = main.channelName;
+  let headline: string;
+  if (good.length && weak.length) headline = `${ch}에서는 ${g}${josaIga(g)} 강점이고, ${w}${josaEunNeun(w)} 약점입니다.`;
+  else if (good.length) headline = `${ch}에서는 ${g}${josaIga(g)} ${good.length > 1 ? "모두 " : ""}강점입니다.`;
+  else if (weak.length) headline = `${ch}에서는 ${w}${josaIga(w)} ${weak.length > 1 ? "모두 " : ""}약점입니다.`;
+  else headline = even.length ? `${ch}에서는 비교한 지표가 모두 평균 수준입니다.` : `${ch}에서는 비교할 기준이 부족합니다.`;
+  if (even.length && (good.length || weak.length)) {
+    const e = joinNouns(even, noun);
+    // 순위의 가운데는 '평균'이 아니라 '중간'
+    headline += ` ${e}${josaEunNeun(e)} ${even.every((x) => x.key === "genre") ? "중간입니다" : "평균 수준입니다"}.`;
+  }
+  if (main.sampleState !== "OK") headline += ` 다만 방영일이 ${main.days}일이라 참고만 하세요.`;
+  const verdict: OverallReview["verdict"] = main.sampleState === "NONE" || (!good.length && !weak.length) ? "판단 보류" : good.length > weak.length ? "강점 우세" : weak.length > good.length ? "약점 우세" : "강약 엇갈림";
+
+  // 다른 자사 채널 — 방영일 8일 미만은 판단하지 않고, 나머지는 채널 평균보다 높은 타깃이 있는지로 묶는다(채널 이름 뒤 조사는 '에서는'으로 고정)
+  const others: string[] = [];
+  const rest = codes.filter((c) => c !== mainCode);
+  const few = rest.filter((c) => kpi(c).sampleState !== "OK");
+  const ups = new Map<string, { name: string; idx: string }[]>();
+  const downs: string[] = [];
+  const flats: string[] = [];
+  for (const c of rest.filter((x) => !few.includes(x))) {
+    const rs = aired.filter((r) => r.channelCode === c).sort((a, b) => Number(b.primary) - Number(a.primary));
+    const hi = rs.filter((r) => r.vsChannel.direction === "HIGHER");
+    if (hi.length) {
+      const k = hi.map((r) => tgtShort(r.targetLabel)).join("·");
+      ups.set(k, [...(ups.get(k) ?? []), { name: kpi(c).channelName, idx: hi.map((r) => indexText(r.vsChannel.ratio)).join("·") }]);
+    } else if (rs.every((r) => r.vsChannel.direction === "LOWER")) downs.push(kpi(c).channelName);
+    else flats.push(kpi(c).channelName);
+  }
+  for (const [k, list] of ups) others.push(`${list.map((x) => x.name).join("·")}에서는 ${k} 시청률이 채널 평균보다 높습니다(${list.map((x) => `${x.name} ${x.idx}`).join(", ")}).`);
+  if (downs.length) others.push(`${downs.join("·")}에서는 시청률이 채널 평균보다 낮습니다.`);
+  if (flats.length) others.push(`${flats.join("·")}에서는 시청률이 채널 평균과 비슷합니다.`);
+  if (few.length) {
+    const d = few.map((c) => kpi(c).days);
+    const lo = Math.min(...d);
+    const hiD = Math.max(...d);
+    others.push(`${few.map((c) => kpi(c).channelName).join("·")}에서는 방영일이 ${lo === hiD ? lo : `${lo}~${hiD}`}일로 적어 판단하지 않았습니다.`);
+  }
+  return { channelCode: mainCode, channelName: ch, verdict, headline, items, others };
 }

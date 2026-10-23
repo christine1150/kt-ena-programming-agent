@@ -9,7 +9,7 @@ import { useSearchParams } from "next/navigation";
 import { shortProgramName } from "@/lib/programAlias";
 import { formatInt, formatPct, formatRatingValue, MISSING } from "@/lib/ui/metricFormat";
 import { WORK_CLASS_LABEL, indexOf } from "@/lib/programPerformance/metrics";
-import type { AiringFilter, AiringRef, Assessment, OriginalCompare, ChannelRow, CompetitorRow, Direction, PerformanceResult, RatioValue, SearchItem, SupplementCount, TargetMode, WorkClass } from "@/lib/programPerformance/types";
+import type { AiringFilter, AiringRef, Assessment, OriginalCompare, ChannelRow, CompetitorRow, Direction, OverallReview, PerformanceResult, RatioValue, ReviewTone, SearchItem, SupplementCount, TargetMode, WorkClass } from "@/lib/programPerformance/types";
 
 type ClassFilter = "all" | "drama" | "variety" | "culture";
 type PeriodPreset = "all" | "4w" | "12w" | "custom";
@@ -130,7 +130,60 @@ function PatternLine({ pattern, result }: { pattern: NonNullable<PerformanceResu
   );
 }
 
-/** 표의 타깃 한 칸 — "0.134 (+9%)" 한 줄. 점유율·채널 평균 값·KPI 표식은 넣지 않는다(개편 2026-10-23). 결측은 —, 유효한 0은 0 */
+// 종합 리뷰 칸 색 — 표 괄호와 같은 규칙(높음 푸른색·낮음 붉은색), 글자 판정(강점·약점)을 함께 써 색만으로 전달하지 않는다
+const TONE_STYLE: Record<ReviewTone, { box: string; badge: string; word: string }> = {
+  good: { box: "border-blue-200 bg-blue-50/60", badge: "bg-blue-600 text-white", word: "강점" },
+  weak: { box: "border-rose-200 bg-rose-50/60", badge: "bg-rose-600 text-white", word: "약점" },
+  even: { box: "border-zinc-200 bg-zinc-50", badge: "bg-zinc-500 text-white", word: "보통" },
+  na: { box: "border-zinc-200 bg-white", badge: "bg-zinc-200 text-zinc-600", word: "비교 불가" },
+};
+const VERDICT_STYLE: Record<OverallReview["verdict"], string> = { "강점 우세": "bg-blue-600 text-white", "약점 우세": "bg-rose-600 text-white", "강약 엇갈림": "bg-amber-500 text-white", "판단 보류": "bg-zinc-200 text-zinc-700" };
+
+/**
+ * 종합 리뷰(2026-10-23) — 제목 옆에서 작품 성과를 한눈에. 기준 채널(ENA, 없으면 방영 많은 채널)의 2049·가구·같은 시간대·점유율·장르 순위를
+ * 강점·약점 칸으로, 다른 채널은 한두 문장으로. 문구·판정은 모두 서버(overallReviewOf) 고정 값이다.
+ */
+function ReviewCard({ review }: { review: OverallReview }) {
+  return (
+    <section className="min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm" aria-label="종합 리뷰">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-[12px] font-medium text-zinc-500">종합 리뷰 · {review.channelName} 기준 · 조회 기간</h3>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${VERDICT_STYLE[review.verdict]}`}>{review.verdict}</span>
+      </div>
+      <p className="mt-1 text-[15px] font-semibold leading-snug text-zinc-900">{review.headline}</p>
+      {review.items.length > 0 && (
+        <ul className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-5">
+          {review.items.map((it) => {
+            const st = TONE_STYLE[it.tone];
+            return (
+              <li key={it.key} className={`min-w-0 rounded-lg border px-2.5 py-1.5 ${st.box}`}>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="truncate text-[12px] font-medium text-zinc-600" title={it.label}>
+                    {it.label}
+                  </span>
+                  <span className={`shrink-0 rounded px-1.5 text-[11px] font-semibold ${st.badge}`}>{st.word}</span>
+                </div>
+                <p className="mt-0.5 text-[14px] font-semibold tabular-nums text-zinc-900">{it.main}</p>
+                <p className="truncate text-[11px] tabular-nums text-zinc-500" title={it.sub}>
+                  {it.sub}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {review.others.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-[13px] text-zinc-700">
+          {review.others.map((t) => (
+            <li key={t}>· {t}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** 표의 타깃 한 칸 —"0.134 (+9%)" 한 줄. 점유율·채널 평균 값·KPI 표식은 넣지 않는다(개편 2026-10-23). 결측은 —, 유효한 0은 0 */
 function TargetCell({ r, code, airing }: { r: ChannelRow | CompetitorRow | undefined; code: string; airing: AiringFilter }) {
   if (!r) return <span className="text-zinc-400">{MISSING}</span>;
   const observed = "status" in r ? r.status === "OBSERVED" && r.airings > 0 : r.airings > 0;
@@ -1320,21 +1373,27 @@ export default function ProgramPerformanceView() {
 
       {result && (
         <section className={`mt-4 transition-opacity ${stale ? "pointer-events-none opacity-40" : ""}`} aria-live="polite" aria-busy={loading}>
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <h2 className="min-w-0 break-words text-[18px] font-bold text-zinc-900">{shortProgramName(result.work.displayName)}</h2>
-            <ClassBadge cls={result.classification.cls} />
-            <span className="text-[13px] text-zinc-500">
-              {result.totals.channels}개 채널 · {formatInt(result.totals.airings)}회 방영
-            </span>
+          {/* 제목 | 종합 리뷰 — 넓은 화면은 나란히, 좁은 화면은 위아래(사용자 지시 2026-10-23: 표 위 빈 자리에서 한눈에) */}
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+            <div className="min-w-0 lg:max-w-[22rem] lg:shrink-0">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <h2 className="min-w-0 break-words text-[18px] font-bold text-zinc-900">{shortProgramName(result.work.displayName)}</h2>
+                <ClassBadge cls={result.classification.cls} />
+                <span className="text-[13px] text-zinc-500">
+                  {result.totals.channels}개 채널 · {formatInt(result.totals.airings)}회 방영
+                </span>
+              </div>
+              {result.pattern && <PatternLine pattern={result.pattern} result={result} />}
+              {visibleNotes.length > 0 && (
+                <ul className="mt-1 space-y-0.5 text-[12px] text-zinc-500">
+                  {visibleNotes.map((n, i) => (
+                    <li key={i}>※ {n}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {result.review && <ReviewCard review={result.review} />}
           </div>
-          {result.pattern && <PatternLine pattern={result.pattern} result={result} />}
-          {visibleNotes.length > 0 && (
-            <ul className="mt-1 space-y-0.5 text-[12px] text-zinc-500">
-              {visibleNotes.map((n, i) => (
-                <li key={i}>※ {n}</li>
-              ))}
-            </ul>
-          )}
 
           {entries.length > 0 ? (
             <ChannelTable entries={entries} airing={result.query.airing} selected={selRow ? rowKey(selRow) : null} onSelect={select} />

@@ -14,7 +14,8 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 // v2.0(2026-10-23): 성과 중심 화면 개편(docs/ena-features/F1_OUTCOME_REDESIGN_PLAN.md) — 종합평가(assessment, 최근 12주 편성진단 근거 재사용)·표시 단위별 흐름 문구·최고최저·편성 비교 결론·보완 건수(supplement, notes에서 이동) 추가. 기존 값의 계산식 무변경
 // v2.1(2026-10-23): 오리지널 비교(originalCompare — 같은 회차 순위·직전 동시간대·흐름) 추가, 기존 값 무변경
 // v2.2(2026-10-23): 편성 비교 비교군을 올해(최소 12주)로·점유율 비교·종합평가 세부 줄(where·shareNote·trendNote)·문구 명확화, 기존 값 무변경
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v2.2";
+// v2.3(2026-10-23): 채널 종합 리뷰(review — 방송 채널의 2049·가구·같은 시간대·점유율·장르 순위 강약 + 다른 채널 한 줄) 추가, 기존 값 무변경
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v2.3";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "ORIGINAL_CULTURE" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
@@ -397,6 +398,35 @@ export interface PerformanceResult {
   originalCompare?: (OriginalCompare & { channelCode: string }) | null;
   /** 본방 편성 패턴(관리자 등록·네이버 방송 정보)과 닐슨으로 확인한 실제 본방 시각. 근거가 없으면 null */
   pattern: BroadcastPatternInfo | null;
+  /** 종합 리뷰 — 표 위에서 한눈에 보는 강점·약점(서버 고정 문구). 자사 방영이 없으면 null */
+  review?: OverallReview | null;
+}
+
+/** 리뷰 한 칸의 판정 — 강점(기준보다 높음)·약점(낮음)·보통(같음)·비교 불가. 방향은 표의 푸른색·붉은색과 같은 규칙(배율 소수 둘째 자리) */
+export type ReviewTone = "good" | "even" | "weak" | "na";
+
+export interface ReviewItem {
+  key: "2049" | "HH" | "slot" | "share" | "genre";
+  /** 칸 제목("2049 시청률") */
+  label: string;
+  tone: ReviewTone;
+  /** 크게 보일 값("채널 평균의 78%", "9편 중 2위") */
+  main: string;
+  /** 작게 붙는 근거("0.093% · 최근 12주") */
+  sub: string;
+}
+
+export interface OverallReview {
+  /** 기준 채널 = 원 방송사(오리지널 등록·편성 패턴) 또는 본방이 가장 많은 채널 */
+  channelCode: string;
+  channelName: string;
+  /** 한 단어 결론 — 강점 칸이 더 많음·약점 칸이 더 많음·엇갈림(칸 개수만 센다, 가중치 없음) */
+  verdict: "강점 우세" | "약점 우세" | "강약 엇갈림" | "판단 보류";
+  /** 결론 한 문장 */
+  headline: string;
+  items: ReviewItem[];
+  /** 다른 자사 채널 요약(문장 여러 개) */
+  others: string[];
 }
 
 export interface BroadcastPatternSlot {
