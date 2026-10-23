@@ -119,18 +119,17 @@ function competitorIntensityColor(rating: number, pivot: number | null, maxRatin
   const intensity = Math.min(1, (rating - p) / Math.max(1e-9, maxRating - p));
   return intensityColor(COMPETITOR_POSITIVE_HUE, intensity);
 }
-// 사용자 지시(2026-10-23): 칸별 가로 막대 — 길이는 색 강도와 같은 기준(연간 평균의 2배 = 가득), 평균 이상은 채널 로고색(옅게→진하게), 평균 이하는 붉은색(평균에서 멀수록 진하게).
-function cellBarStyle(rating: number, pivot: number, avg: number | null, themeHex: string): { width: string; image: string } {
+// 사용자 지시(2026-10-23): 칸별 가로 막대 — 길이는 색 강도와 같은 기준(연간 평균의 2배 = 가득). 색은 칸 안이 아니라 이 주 편성표 안에서의 높낮이로 정한다:
+// 평균 이상은 채널 로고색(이 주 최고=진하게·평균 근처=옅게), 평균 이하는 붉은색(이 주 최저=진하게·평균 근처=옅게). 단색이며 막대 높이는 모두 같다.
+const BAR_H = 5;
+function cellBarStyle(rating: number, pivot: number, avg: number | null, themeHex: string, weekMax: number, weekMin: number): { width: string; color: string } {
   const width = `${Math.max(3, Math.min(100, pivot > 0 ? (rating / pivot) * 100 : 0))}%`;
-  const below = avg !== null && avg > 0 && rating < avg;
-  if (below) {
-    const severity = Math.min(1, 1 - rating / avg!); // 0=평균 근처, 1=0에 가까움
-    const from = rgbToHex(mixRgb([254, 202, 202], [239, 68, 68], Math.min(1, severity * 0.6)));
-    const to = rgbToHex(mixRgb([248, 113, 113], [185, 28, 28], severity));
-    return { width, image: `linear-gradient(to right, ${from}, ${to})` };
+  if (avg !== null && avg > 0 && rating < avg) {
+    const severity = avg > weekMin ? Math.min(1, (avg - rating) / (avg - weekMin)) : 1; // 0=평균 근처, 1=이 주 최저
+    return { width, color: rgbToHex(mixRgb([254, 205, 205], [185, 28, 28], severity)) };
   }
-  const t = Math.min(1, avg !== null && pivot > avg ? (rating - avg) / (pivot - avg) : 0.5);
-  return { width, image: `linear-gradient(to right, ${intensityColor(themeHex, 0.25 + 0.15 * t).bg}, ${intensityColor(themeHex, 0.5 + 0.4 * t).bg})` };
+  const t = avg !== null && weekMax > avg ? Math.min(1, (rating - avg) / (weekMax - avg)) : 0.5; // 0=평균 근처, 1=이 주 최고
+  return { width, color: intensityColor(themeHex, 0.2 + 0.7 * t).bg };
 }
 // 사용자 지시(2026-09-20): "다른 주로 이동할 수 있는 메뉴" — week prop 없이(Page 2 모달처럼
 // 서버가 "이번 주"를 알아서 고르는 자기관리 모드) 쓰일 때만 이전/다음 주 이동을 지원한다.
@@ -373,6 +372,7 @@ export function ScheduleWeekGrid({
   // 시청률(0 포함, 0도 실측값)의 평균을 기준선으로 쓴다(새 지표를 만들지 않고 이미 보이는
   // 값만으로 계산). 채널 연간 평균이 없을 때(타깃 매칭 실패 등)의 폴백으로 남겨둔다.
   const allRatings = rows.map((r) => r.matched_rating).filter((v): v is number => v !== null);
+  const minPositiveRating = Math.min(Infinity, ...allRatings.filter((v) => v > 0));
   const avgRating = allRatings.length > 0 ? allRatings.reduce((a, b) => a + b, 0) / allRatings.length : null;
   // 사용자 지시(2026-09-20): "모든 채널 그라데이션이 더욱 잘 비교되게... 연간 채널 평균보다
   // 높은 칸은 잘 보이게" — 채널 연간 평균을 구할 수 있으면 그것을 볼드·색 강도의 고정 기준선으로
@@ -679,8 +679,8 @@ export function ScheduleWeekGrid({
                       // 막대 모드: 칸 배경은 중립색으로 두고(글자가 항상 읽히게) 높낮이는 아래 막대로 보인다
                       const bg = barOn ? (rating === null ? "#fafafa" : "#ffffff") : shadeBg;
                       const isDark = barOn ? false : shadeDark;
-                      const bar = barOn && rating !== null && rating > 0 ? cellBarStyle(rating, intensityPivot, boldThreshold, isCompetitor ? COMPETITOR_POSITIVE_HUE : themeColor) : null;
-                      const barH = height >= 46 ? 9 : height >= 22 ? 6 : 4;
+                      const bar = barOn && rating !== null && rating > 0 ? cellBarStyle(rating, intensityPivot, boldThreshold, isCompetitor ? COMPETITOR_POSITIVE_HUE : themeColor, maxRating, minPositiveRating) : null;
+                      const barH = BAR_H;
                       const mainText =
                         colorMode === "diff"
                           ? diffValue !== null
@@ -814,7 +814,7 @@ export function ScheduleWeekGrid({
                           ) : null}
                           {bar && (
                             <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-zinc-100" style={{ height: barH }} aria-hidden>
-                              <div className="h-full" style={{ width: bar.width, backgroundImage: bar.image }} />
+                              <div className="h-full" style={{ width: bar.width, backgroundColor: bar.color }} />
                             </div>
                           )}
                         </div>
