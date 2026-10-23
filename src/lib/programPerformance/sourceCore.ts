@@ -47,6 +47,7 @@ import {
   seriesTrendText,
   slotLeadOf,
   overallReviewOf,
+  periodTrendOf,
   type ChannelDayRow,
   type CompAiring,
   type WorkAiring,
@@ -687,6 +688,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       analysis.slotLead = slotLeadOf(slots);
       analysis.slotBaseFrom = cmpFrom;
       analysis.slotBaseTo = to;
+      analysis.periodTrend = periodTrendOf(filtered, dayList, channelLabel);
       analysis.runSplit = nonFirst && first.days > 0 ? { first: ratioOf(first.avg, channelDaily.mean), firstDays: first.days, rest: nonFirst.vs, restDays: nonFirst.days } : null;
     }
 
@@ -711,6 +713,9 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         // 어디서 강하고 약한지·점유율 효율은 조회 기간 방영 vs 올해 비교군(편성 비교와 같은 자료)
         where: analysis ? whereLineOf(analysis.slots) : null,
         shareNote: analysis ? shareLineOf(vsChannel, analysis.slots) : null,
+        // 하락은 어느 기간이든 선택한 기간·조건의 방영 안에서 한 가지 규칙으로(방송일 마지막 1/3 vs 그 앞, 같은 방송일 채널 평균 대비) — 사용자 지시 2026-10-23.
+        // 12주 진단의 하락(같은 시간대 기대치 대비)은 정의가 달라 같은 작품에서 반대로 나온 사례가 있어(쯔양몇끼 ENA Drama: 진단 하락, 채널 평균 대비 상승) 쓰지 않는다
+        trendNote: analysis?.periodTrend?.falling ? `최근 방송 ${analysis.periodTrend.recentDays}일(${analysis.periodTrend.recentFrom.slice(5).replace("-", "/")}~)은 그 앞보다 낮아졌습니다.` : null,
       };
     }
 

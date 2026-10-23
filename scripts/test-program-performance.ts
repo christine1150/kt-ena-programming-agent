@@ -7,7 +7,7 @@
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
 import { matchPlanRow, normalizePlanRows } from "../src/lib/idealSchedule/planEpisodes";
 import { originalCompareOf, type OriginalSeries } from "../src/lib/programPerformance/originalCompare";
-import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, relText, assessmentOf, whereLineOf, shareLineOf, seriesTrendText, pickExtremes, slotLeadOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
+import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, relText, assessmentOf, whereLineOf, shareLineOf, seriesTrendText, pickExtremes, slotLeadOf, periodTrendOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
 import { searchWorks } from "../src/lib/programPerformance/search";
 import { performanceCacheKey } from "../src/lib/programPerformance/cacheKey";
@@ -450,6 +450,16 @@ async function main() {
     check("12주 진단: 지수가 없으면 조회 기간 평가로(범위를 표시)", rEna.assessment?.scope === "period" && rEna.assessment.from === r.period.from, JSON.stringify(rEna.assessment));
     const fFirst = (await loadProgramPerformanceWith(db, Q({ airing: "first", ...w12 }), { fitLookup: fit12 }))!;
     check("12주 진단: 본방 조회에서 전체 방송 진단을 쓰면 '전체 방송 기준' 표시", rowOf(fFirst.groups.flatMap((g) => g.rows), "ENA").assessment?.allAiringsBasis === true);
+    // 조회 기간 안의 하락(사용자 지시 2026-10-23) — 방송일 마지막 1/3(최소 3일) vs 그 앞, 같은 방송일 채널 평균 대비, log2 −0.5
+    const trAir = (vals: number[]): WorkAiring[] => vals.map((v, k) => ({ programId: "t", date: addDays("2026-09-01", k * 3), startTime: "20:00:00", endTime: null, rating: v, firstRun: true, episode: null }));
+    const trCh = (n: number) => Array.from({ length: n }, (_, k) => ({ date: addDays("2026-09-01", k * 3), rating: 1, createdAt: null }));
+    const down = periodTrendOf(trAir([1, 1, 1, 1, 1, 1, 0.5, 0.5, 0.5]), trCh(9), "수도권 2049");
+    check("기간 안 하락: 4주 분량(방송일 9일)도 최근 3일 vs 앞 6일로 판단해 약 50% 하락이면 하락", !!down && down.recentDays === 3 && down.priorDays === 6 && down.falling, JSON.stringify(down));
+    const flat = periodTrendOf(trAir([1, 1, 1, 1, 1, 1, 0.8, 0.8, 0.8]), trCh(9), "수도권 2049");
+    check("기간 안 하락: 20% 하락은 하락으로 보지 않음(약 30% 선)", !!flat && !flat.falling, JSON.stringify(flat));
+    check("기간 안 하락: 방송일 5일(앞쪽 3일 미만)이면 판단하지 않음", periodTrendOf(trAir([1, 1, 0.2, 0.2, 0.2]), trCh(5), "수도권 2049") === null);
+    const chDown = periodTrendOf(trAir([1, 1, 1, 1, 1, 1, 0.5, 0.5, 0.5]), trCh(9).map((r, k) => ({ ...r, rating: k >= 6 ? 0.5 : 1 })), "수도권 2049");
+    check("기간 안 하락: 채널 전체가 같이 떨어진 몫은 빼고 본다", !!chDown && !chDown.falling, JSON.stringify(chDown));
     // 종합 리뷰(제목 옆, 보유 채널 통합) — ENA 먼저·방영 많은 순, 1~3문장, 레이블·아이콘 어휘 없음, ENA가 없으면 방영 최다 채널부터(다른 채널도 계속 분석)
     const rv = r.review!;
     const ppAired = r.groups.flatMap((g) => g.rows).filter((x) => x.status === "OBSERVED" && x.airings > 0);

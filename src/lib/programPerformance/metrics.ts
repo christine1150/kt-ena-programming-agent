@@ -221,6 +221,31 @@ export function dailySeries(airings: WorkAiring[], dayRows: ChannelDayRow[], tar
   });
 }
 
+/**
+ * 조회 기간 안의 흐름(사용자 지시 2026-10-23: 4주든 직접 고른 기간이든 그 기간·조건의 방영 안에서 하락을 판단) — 이 작품 방송일의 마지막 1/3
+ * (콘텐츠 적합도 추세의 최근 28일 : 12주 창과 같은 비율, 최소 trendMinDays=3일)을 '최근'으로 잡고, 양쪽 각각 작품 평균 ÷ 같은 방송일 채널 하루 평균으로
+ * 견준다(채널 전체가 오르내린 몫은 뺀다). 달력 일수로 자르면 4주 조회에서 최근 쪽 방송일이 모자라 판단을 못 해 방송일로 자른다.
+ * 하락 선은 콘텐츠 적합도와 같은 log2 −0.5(약 30%). 앞쪽도 방송일 3일 이상일 때만. 기간·본재 조건은 넘겨받은 방영 그대로.
+ */
+export function periodTrendOf(airings: WorkAiring[], dayRows: ChannelDayRow[], targetLabel: string): RowAnalysis["periodTrend"] {
+  const dates = [...new Set(airings.filter((a) => a.rating !== null).map((a) => a.date))].sort();
+  const recentN = Math.max(CONTENT_FIT_CONFIG.trendMinDays, Math.round((dates.length * CONTENT_FIT_CONFIG.trendRecentDays) / CONTENT_FIT_CONFIG.windowDays));
+  if (dates.length - recentN < CONTENT_FIT_CONFIG.trendMinDays) return null;
+  const cut = dates[dates.length - recentN];
+  const recentPeriodDays = daysBetween(cut, dates[dates.length - 1]);
+  const idx = (part: WorkAiring[]) => {
+    const dates = [...new Set(part.map((a) => a.date))];
+    const prog = splitStat(part).avg;
+    const ch = meanOf(dates.map((d) => channelDailyMean(dayRows, d, d, targetLabel).mean).filter((v): v is number => v !== null));
+    return { days: dates.length, index: prog !== null && ch !== null && ch > 0 ? prog / ch : null };
+  };
+  const r = idx(airings.filter((a) => a.date >= cut));
+  const p = idx(airings.filter((a) => a.date < cut));
+  if (r.days < CONTENT_FIT_CONFIG.trendMinDays || p.days < CONTENT_FIT_CONFIG.trendMinDays || r.index === null || p.index === null || r.index <= 0 || p.index <= 0) return null;
+  const delta = Math.log2(r.index / p.index);
+  return { recentFrom: cut, recentPeriodDays, recentDays: r.days, priorDays: p.days, recentIndex: r.index, priorIndex: p.index, delta, falling: delta <= CONTENT_FIT_CONFIG.trendDownDelta };
+}
+
 /** 채널 평균 = 100으로 본 지수(작품 ÷ 채널 평균 × 100, 정수). 사용자 지정 표기(2026-10-22): 100 미만 붉은색·초과 푸른색 */
 export function indexOf(ratio: number | null): number | null {
   return ratio === null || !Number.isFinite(ratio) ? null : Math.round(ratio * 100);
@@ -732,7 +757,7 @@ export function shareLineOf(vsChannel: RatioValue, slots: SlotLine[]): string | 
 //  - 채널마다 시청 규모가 달라 시청률을 합치지 않고, 채널마다 채널 평균 대비(표 괄호와 같은 값)를 본다.
 //  - 전체 수준은 판단 채널(방영일 8일 이상) 개수의 과반 — 방영 많은 채널 하나가 결론을 좌우하지 않게. 과반이 없으면 '평균 수준'.
 //  - 평균권 = 콘텐츠 적합도 KEEP 선(0.85배) ~ 그 역수(약 1.18배). 새 점수·가중치 없음.
-//  - 같은 시간대는 아래 종합평가가 쓴 지수 그대로, 최근 하락은 그 종합평가가 12주 진단(조회 기간 = 최근 12주)일 때만.
+//  - 같은 시간대·최근 하락은 아래 종합평가가 쓴 값 그대로(조회 기간 = 최근 12주면 12주 진단, 아니면 조회 기간 안의 흐름 periodTrendOf).
 
 type Band = "high" | "avg" | "low";
 type Level = "good" | "avg" | "poor";
@@ -821,7 +846,7 @@ export function overallReviewOf(i: { rows: ChannelRow[]; oc: (OriginalCompare & 
     else if (top && plus) ins.push({ kind: "lineup", clause: `${ocName}에서 방영한 다른 오리지널 사이에서는 앞선 편입니다`, sentence: `${ocName}에서 방영한 다른 오리지널 사이에서는 앞선 편입니다.`, contrast: true });
   }
 
-  // 최근 하락 — 종합평가가 12주 진단일 때 기존 하락 기준(최근 4주가 이전 8주보다 약 30% 이상 낮음). 떨어진 채널 이름을 밝힌다
+  // 최근 하락 — 선택한 조회 기간 안에서(마지막 1/3 vs 그 앞, 약 30% 이상 하락). 떨어진 채널 이름을 밝힌다
   const falling = judged.filter((v) => v.kpi.assessment?.trendNote);
   // 전체가 부진해도 하락은 알린다(강한 채널의 하락은 특히 중요, 2026-10-23 쯔양몇끼 12주: ENA Drama만 평균 이상인데 하락 중)
   if (falling.length) {

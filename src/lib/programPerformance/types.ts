@@ -339,6 +339,11 @@ export interface RowAnalysis {
   slotBaseTo?: string;
   /** 본방과 그 밖의 방영(재방·미확인) 각각의 채널 평균 대비 — 전체 방송 조회이고 둘 다 있을 때만(종합 리뷰용) */
   runSplit?: { first: RatioValue; firstDays: number; rest: RatioValue; restDays: number } | null;
+  /**
+   * 조회 기간 안의 흐름 — 기간 마지막 1/3(12주면 최근 4주)과 그 앞을, 같은 방송일의 채널 평균 대비로 견준다(본재 조건 그대로).
+   * 하락 = 콘텐츠 적합도와 같은 선(log2 −0.5, 약 30% 하락). 양쪽 모두 방송일 3일 이상일 때만, 아니면 null
+   */
+  periodTrend?: { recentFrom: string; recentPeriodDays: number; recentDays: number; priorDays: number; recentIndex: number; priorIndex: number; delta: number; falling: boolean } | null;
 }
 
 export interface AiringEvidence {
