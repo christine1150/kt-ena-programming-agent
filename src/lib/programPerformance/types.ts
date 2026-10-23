@@ -326,6 +326,8 @@ export interface SearchItem {
   groupKey: string;
   displayName: string;
   ownChannels: string[];
+  /** 경쟁채널 자료가 있는 채널(검색 결과에서 자사 방영이 없는 작품을 구분하는 데 쓴다) */
+  compChannels?: string[];
   airingsTotal: number;
   lastDate: string | null;
   classification: WorkClass;

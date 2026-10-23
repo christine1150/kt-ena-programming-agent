@@ -924,12 +924,13 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
               {/* 사용자 지시(2026-10-23): 기본 목록의 "최근 2주 방영" 라벨은 삭제 — 검색 중일 때만 "검색 결과" 표시 */}
               {!(classFilter === "all" && !q.trim()) && <span className="shrink-0 text-[12px] text-zinc-500">검색 결과</span>}
               <ul className="flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto pb-1" aria-label="작품 목록" title={classFilter === "all" && !q.trim() ? "ENA에서 최근 2주 안에 방영한 오리지널(최근 방영 순)" : undefined}>
-                {items.length === 0 && <li className="text-[12px] text-zinc-500">일치하는 자사 방영 작품이 없습니다.</li>}
+                {items.length === 0 && <li className="text-[12px] text-zinc-500">일치하는 작품이 없습니다.</li>}
                 {items.map((it) => (
                   <li key={it.groupKey} className="shrink-0">
                     <button type="button" title={SHOW_CLASS.includes(it.classification) ? WORK_CLASS_LABEL[it.classification] : undefined} onClick={() => setGroup(it.groupKey)} className="flex items-center gap-1.5 whitespace-nowrap rounded-md bg-white px-2.5 py-1 text-left text-[13px] ring-1 ring-zinc-200 hover:bg-zinc-50">
                       <span className="font-medium">{shortProgramName(it.displayName)}</span>
                       <ClassDot cls={it.classification} />
+                      {it.ownChannels.length === 0 && <span className="rounded bg-zinc-100 px-1 text-[10px] font-medium leading-4 text-zinc-500" title={`자사 방영 없음 — 경쟁채널 자료(${(it.compChannels ?? []).join(", ")})`}>타사</span>}
                     </button>
                   </li>
                 ))}
@@ -1054,7 +1055,7 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
           {entries.length > 0 ? (
             <ChannelTable entries={entries} airing={result.query.airing} selected={selRow ? rowKey(selRow) : null} onSelect={select} />
           ) : (
-            <p className="mt-4 text-[13px] text-zinc-500">이 조건의 방영 기록이 없습니다.</p>
+            <p className="mt-4 text-[13px] text-zinc-500">{result.competitors.length > 0 ? "자사 방영 기록은 없습니다. 아래 경쟁 채널 성과를 확인하세요." : "이 조건의 방영 기록이 없습니다."}</p>
           )}
           {excluded.length > 0 &&
             (allRows.every((r) => EXCLUDED.includes(r.status)) ? (
@@ -1079,10 +1080,13 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
             ))}
           {result.competitors.length > 0 && (
             <div className="mt-3">
-              <button type="button" aria-expanded={showComp} onClick={() => setShowComp((v) => !v)} className={chip(showComp)}>
-                경쟁 채널 성과 {showComp ? "닫기" : `보기 · ${new Set(result.competitors.map((c) => c.competitorName)).size}개 채널`}
-              </button>
-              {showComp && <CompetitorSection rows={result.competitors} lines={result.competitorLines} />}
+              {/* 자사 방영이 없는 작품은 경쟁 채널 성과가 유일한 내용이라 처음부터 펼쳐 둔다(사용자 지시 2026-10-23) */}
+              {entries.length > 0 && (
+                <button type="button" aria-expanded={showComp} onClick={() => setShowComp((v) => !v)} className={chip(showComp)}>
+                  경쟁 채널 성과 {showComp ? "닫기" : `보기 · ${new Set(result.competitors.map((c) => c.competitorName)).size}개 채널`}
+                </button>
+              )}
+              {(showComp || entries.length === 0) && <CompetitorSection rows={result.competitors} lines={result.competitorLines} />}
             </div>
           )}
           <CalcBasis />
