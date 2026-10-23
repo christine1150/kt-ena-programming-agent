@@ -11,13 +11,13 @@ import { addDays, isoDow } from "@/lib/idealSchedule/time";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 
 import { retentionLeak } from "./leadInRetention";
-import { STATUS_KO, basisLabel, fmtRating, judgeWeakSlot, verdictCause, type VerdictBasis, type WeakVerdict } from "./weakSlotVerdict";
+import { STATUS_KO, WEAK_VERDICT_CONFIG, basisLabel, judgeWeakSlot, levelLabel, lineNote, verdictCause, weakSlotRuleFor, type VerdictBasis, type WeakVerdict } from "./weakSlotVerdict";
 import { detectPastChanges, evidenceLine, summarizeChanges, type ChangeEvidence, type ChangeKind } from "./changeHistory";
 import type { WeakSlotRemedyView } from "./weakSlotView";
 export type WeakSlotRemedy = WeakSlotRemedyView;
 
 const DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
-const LOOKBACK_DAYS = 70; // 10주 — 같은 요일 최대 8회 + 여유
+const LOOKBACK_DAYS = 98; // 14주 — 판정 창(최대 4회, 오늘 포함) 앞의 같은 요일 최대 8회 + 여유(2026-10-23, 4회 평균 채널 때문에 10주→14주)
 const HISTORY_DAYS = 400; // 과거 변경의 사후 실적을 세는 기간(약 1년 + 변경 전 비교분)
 const HISTORY_TTL_MS = 6 * 60 * 60 * 1000;
 interface HistoryEvidence {
@@ -107,40 +107,54 @@ function priorWithSlotFallback(all: Airing[], a: Airing, asOfDate: string): numb
   return priorBasisAirings(all, a, asOfDate).map((x) => x.rating);
 }
 
-/** 비교에 쓴 방영 목록(최신순) — 같은 프로그램의 같은 자리가 3회 이상이면 그것, 아니면 그 자리의 모든 프로그램 */
-function priorBasisAirings(all: Airing[], a: Airing, asOfDate: string): Airing[] {
-  const own = priorAirings(all, a, asOfDate, true);
-  return own.length >= 3 ? own : priorAirings(all, a, asOfDate, false);
+/**
+ * 판정에 넘길 직전 방영 목록(최신순) = [최근 창 몫(window−1회) + 비교 회차(최대 8회)].
+ * 최근 창은 언제나 이 프로그램 자신의 방영이다(다른 프로그램 방영을 "이 프로그램의 최근 평균"에 섞지 않는다, 2026-10-23).
+ * 비교 회차는 같은 프로그램의 같은 자리가 3회 이상이면 그것, 아니면 최근 창보다 앞선 그 자리의 모든 프로그램(자리의 평소).
+ * 자기 방영이 최근 창 몫보다 적으면 그대로 돌려 judgeWeakSlot이 표본 부족(판단 보류)으로 본다.
+ */
+function priorBasisAirings(all: Airing[], a: Airing, asOfDate: string, window = 1): Airing[] {
+  const k = window - 1;
+  const take = k + WEAK_VERDICT_CONFIG.baseTake;
+  const own = priorAirings(all, a, asOfDate, true, take);
+  if (own.length >= k + WEAK_VERDICT_CONFIG.minSample || own.length < k) return own;
+  const recent = own.slice(0, k);
+  const before = k > 0 ? recent[k - 1].date : asOfDate;
+  return [...recent, ...priorAirings(all, a, before, false, WEAK_VERDICT_CONFIG.baseTake)];
 }
 
 /** 같은 자리(요일·시·본/재방)의 asOf 이전 최근 8회 시청률 */
 function priorOf(all: Airing[], a: Airing, asOfDate: string, sameProgram: boolean): number[] {
   return priorAirings(all, a, asOfDate, sameProgram).map((x) => x.rating);
 }
-function priorAirings(all: Airing[], a: Airing, asOfDate: string, sameProgram: boolean): Airing[] {
+function priorAirings(all: Airing[], a: Airing, asOfDate: string, sameProgram: boolean, take = 8): Airing[] {
   const k = slotKey(a);
   return all
     .filter((x) => x.date < asOfDate && slotKey(x) === k && (!sameProgram || x.key === a.key))
     .sort((p, q) => (p.date < q.date ? 1 : -1))
-    .slice(0, 8);
+    .slice(0, take);
 }
 
-/** 서버 판정 → 화면용 구조화 값 */
+/** 서버 판정 → 화면용 구조화 값. ownCount는 비교 회차(최근 창 몫을 뺀 방영) 중 이 프로그램 방영 수 */
 function verdictView(v: WeakVerdict, list: Airing[], key: string): WeakSlotRemedy["verdict"] {
   return {
     status: v.status,
     statusKo: STATUS_KO[v.status],
     holdReason: v.holdReason,
     today: v.today,
+    window: v.window,
+    level: v.level,
     median: v.median,
     ratioPct: v.ratioPct,
     dropLine: v.dropLine,
-    sampleCount: v.sampleCount,
+    sampleCount: v.baseCount,
     lowCount: v.lowCount,
-    ownCount: list.filter((x) => x.key === key).length,
+    ownCount: baseOf(list, v.window).filter((x) => x.key === key).length,
     missingCount: v.missingCount,
   };
 }
+/** 판정의 비교 회차 = 최근 창 몫(window−1회) 뒤의 최대 8회 */
+const baseOf = (list: Airing[], window: number) => list.slice(window - 1, window - 1 + WEAK_VERDICT_CONFIG.baseTake);
 
 /** hour: 보려는 자리의 시각(0~23, 선택) — 같은 프로그램이 하루에 여러 번 나올 때 그 시각의 방영을 우선한다 */
 /** 방영 길이(분) — 같은 날 다음 방영 시작까지(15~180분, 다음이 없으면 60분) */
@@ -200,16 +214,18 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   const day = pool.map((a) => a.date).sort().pop();
   if (!day) return null;
   const todays = pool.filter((a) => a.date === day);
-  // 같은 자리 중앙값 대비 가장 낮은 오늘 방영을 약해진 자리로 본다(표본 3회 이상일 때만 비교)
+  // 채널별 판정 규칙(최근 N회 평균 vs 그 앞 비교 회차 중앙값 × 채널 기준선, 2026-10-23)
+  const rule = weakSlotRuleFor(channelCode);
+  // 같은 자리 비교 회차 중앙값 대비 최근 평균이 가장 낮은 오늘 방영을 약해진 자리로 본다(비교 회차 3회 이상일 때만)
   const scored = todays
     .map((a) => {
-      const list = priorBasisAirings(all, a, day);
+      const list = priorBasisAirings(all, a, day, rule.window);
       const prior = list.map((x) => x.rating);
-      const med = median(prior);
-      const dev = med !== null && med > 0 && prior.length >= 3 ? a.rating / med - 1 : null;
-      const verdict = judgeWeakSlot(a.rating, prior);
+      const verdict = judgeWeakSlot(a.rating, prior, rule);
+      const med = verdict.median !== null && verdict.median > 0 && verdict.level !== null ? verdict.median : null;
+      const dev = med !== null ? (verdict.level as number) / med - 1 : null;
       // 같은 프로그램이 하루에 여러 번 나오면 "평소보다 모자란 시청률 × 방영 분"이 가장 큰 방영을 약한 자리로 본다(새벽처럼 평소가 0에 가까운 자리가 비율만으로 뽑히지 않게)
-      return { a, prior, list, verdict, med, dev, loss: dev === null ? 0 : ((med as number) - a.rating) * durationOf(all, a) };
+      return { a, prior, list, verdict, med, dev, loss: dev === null ? 0 : ((med as number) - (verdict.level as number)) * durationOf(all, a) };
     })
     .sort((x, y) => Number(x.dev === null) - Number(y.dev === null) || y.loss - x.loss || y.prior.length - x.prior.length);
   const w = scored[0];
@@ -218,16 +234,19 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   if (w.dev === null || w.med === null) {
     // 문구 기준(2026-10-15): 제목은 카드 제목에 이미 있으므로 되풀이하지 않고(요일·시각은 유지), 오늘 시청률·직전 흐름 같은 현상을 앞에, 표본 상태와 "다음 방영 후 판단"을 뒤에 짧게 적는다(판단 기준은 그대로)
     const n = w.prior.length;
+    // 비교 회차가 모자란 경우(최근 창 몫을 빼면 3회 미만) — 판정에 필요한 회차 수를 밝힌다
+    const need = rule.window - 1 + WEAK_VERDICT_CONFIG.minSample;
+    const thin = w.verdict.holdReason === "thin_sample";
     const when = `${DOW_KO[w.a.dow - 1]}요일 ${hour % 24}시`;
     const fact =
       n === 0
         ? `${when} 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 비교 기록 없음`
-        : n < 3
+        : thin
           ? `${when} 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 직전 방영 ${w.prior.slice(0, 3).map(fmt).join("·")}`
           : w.a.rating > 0
             ? `${when} 편성은 오늘 시청률 ${fmt(w.a.rating)}, 같은 자리 최근 방영은 대체로 0이라 하락 폭을 계산할 수 없음`
             : `${when} 편성은 시청률이 오늘도 같은 자리 최근 방영도 대체로 0이라 하락 폭을 계산할 수 없음`;
-    const state = n === 0 ? "" : n < 3 ? `비교 ${n}회뿐, ` : `${n}회 방영, `;
+    const state = n === 0 ? "" : thin ? `비교 ${n}회뿐(판정에 ${need}회 필요), ` : `${n}회 방영, `;
     return {
       lines: [`${fact} - ${state}다음 방영 후 판단`],
       concrete: false,
@@ -238,7 +257,7 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
     };
   }
   const med = w.med;
-  const sample = w.prior.length;
+  const sample = w.verdict.baseCount;
 
   // ① 공휴일·연휴(전후 1일 포함) — 평소와 단순 비교가 어렵다
   const { data: hol } = await supabase.from("public_holidays").select("holiday_date, name").gte("holiday_date", addDays(day, -1)).lte("holiday_date", addDays(day, 1));
@@ -269,14 +288,16 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
     .filter((v): v is number => v !== null);
   const channelWide = otherDevs.length >= 4 && otherDevs.filter((d) => d <= -0.15).length / otherDevs.length > 0.5;
 
-  // ④ 단발 vs 연속 — 같은 자리 직전 방영들도 기준선 아래였나
-  const dropLine = med * 0.8;
-  // 판정은 weakSlotVerdict.judgeWeakSlot 한 곳에서 낸다(오늘+직전 방영이 연속으로 기준선 아래거나, 비교 8회 과반이 기준선 아래면 '이어지는 부진').
+  // ④ 판정 — weakSlotVerdict.judgeWeakSlot 한 곳에서 낸다(최근 N회 평균이 채널 기준선 아래면 '낮음', 한 회 앞 판정도 아래였으면 '지속').
   const verdict = w.verdict;
+  const dropLine = verdict.dropLine as number;
   const continuing = verdict.status === "short_persist" || verdict.status === "persistent";
-  const ownList = w.list.filter((x) => x.key === w.a.key);
+  const ownList = baseOf(w.list, rule.window).filter((x) => x.key === w.a.key);
   const vbasis: VerdictBasis = { n: sample, ownCount: ownList.length, ownLowCount: ownList.filter((x) => x.rating < dropLine).length };
-  const tailCause = verdict.status === "not_low" ? `오늘 ${fmt(w.a.rating)}은 ${basisLabel(vbasis, true)} 중앙값 ${fmt(med)}의 ${Math.round(verdict.ratioPct ?? 0)}%로 기준선(${fmt(dropLine)}) 위입니다` : (verdictCause(verdict, vbasis) ?? "").replace(/\.$/, "");
+  const tailCause = (verdictCause(verdict, vbasis) ?? "").replace(/\.$/, "");
+  // 다음 확인 기준 — 한 편이 아니라 판정과 같은 최근 N회 평균으로 본다
+  const avgN = `최근 ${rule.window}회 평균`;
+  const nextLow = `다음 방영을 넣은 ${avgN}이 ${fmt(dropLine)} 아래이면`;
 
   // ⑤ 같은 프로그램의 다른 자리(요일·시·본/재방)가 더 잘 나왔나 — 표본 3회 이상, 이 자리 중앙값의 1.25배 이상
   const mine = all.filter((x) => sameTitle(x.name, focus) && x.date < day).sort((p, q) => (p.date < q.date ? 1 : -1));
@@ -300,11 +321,11 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   // ── 문구 조립: 1줄 = 원인(설명 가능한 외부 요인 우선), 2줄 = 할 일 ──
   let cause: string;
   if (holiday) cause = `${holiday.name} 전후 방영${likelyRerun ? "인 재방 방송분" : ""}이라 다른 날 방영분과 단순 비교가 어렵습니다`;
-  else if (likelyRerun) cause = premium ? `${where} 자리는 이 프로그램의 본방 자리(${premium.label}, 보통 시청률 ${fmt(premium.med)})가 아닌 재방 자리로, 같은 자리 보통 시청률은 ${fmt(med)}입니다` : `${where} 재방 방송분으로, 같은 자리 재방 최근 ${sample}회 보통 시청률 ${fmt(med)} 대비 ${fmt(w.a.rating)}입니다`;
+  else if (likelyRerun) cause = premium ? `${where} 자리는 이 프로그램의 본방 자리(${premium.label}, 보통 시청률 ${fmt(premium.med)})가 아닌 재방 자리로, 같은 자리 보통 시청률은 ${fmt(med)}입니다` : `${where} 재방 방송분으로, 같은 자리 재방 그 앞 ${sample}회 보통 시청률 ${fmt(med)} 대비 ${levelLabel(verdict)}입니다`;
   else if (!likelyRerun && leadIn && leadIn.dev <= -0.2 && Math.abs(leadIn.dev) >= Math.abs(w.dev) * 0.5) cause = `앞 프로그램 '${leadIn.name}'도 기준선보다 ▼${pct(leadIn.dev)} 낮아 이어진 하락일 수 있습니다`;
   else if (channelWide) cause = `이 채널 다른 프로그램도 같은 날 대체로 낮아 이 프로그램만의 문제로 보기 어렵습니다`;
   else if (leak && prev) cause = `앞 프로그램 '${prev.name}'은 보통 수준(${fmt(prev.rating)})인데 그 시청자 중 이 프로그램으로 이어진 비율(유지율)이 ${pct(leak.retention)}로, 같은 자리 최근 ${leak.n}회 중앙값(${pct(leak.typical)})보다 낮습니다`;
-  else cause = `${where} 오늘 ${fmt(w.a.rating)}, ${basisLabel(vbasis)} 중앙값 ${fmt(med)} — ${tailCause}`;
+  else cause = `${where} 오늘 ${fmt(w.a.rating)}, ${levelLabel(verdict)}, ${basisLabel(vbasis)} 중앙값 ${fmt(med)}(평균은 중앙값의 ${Math.round(verdict.ratioPct ?? 0)}%) — ${tailCause}. ${lineNote(verdict)}`;
 
   let action: string;
   let concrete = false;
@@ -315,16 +336,16 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
     concrete = true;
     histKind = "move";
   } else if (likelyRerun && !holiday && !channelWide) {
-    action = `이 재방 자리가 계속 기준선 ${fmt(dropLine)} 아래이면 재방 시간대(요일·시각) 변경을 검토`;
+    action = `이 재방 자리의 ${avgN}이 계속 기준선 ${fmt(dropLine)} 아래이면 재방 시간대(요일·시각) 변경을 검토`;
     histKind = "move";
   } else if (holiday || channelWide) {
-    action = `다음 주 같은 자리(${DOW_KO[w.a.dow - 1]}요일) 방영이 기준선 ${fmt(dropLine)} 아래인지 확인한 뒤 판단`;
+    action = `다음 주 같은 자리(${DOW_KO[w.a.dow - 1]}요일) 방영을 넣은 ${avgN}이 기준선 ${fmt(dropLine)} 아래인지 확인한 뒤 판단`;
   } else if (better && continuing && !likelyRerun) {
     action = `같은 프로그램이 ${better.label}에는 보통 시청률 ${fmt(better.med)}(최근 ${better.n}회)로 ${vsSlot(better.med / med)}이었습니다 — 이 자리 방송분을 그 시간대로 옮기거나 합치는 안을 검토`;
     concrete = true;
     histKind = "move";
   } else if (leadIn && leadIn.dev <= -0.2) {
-    action = `앞 프로그램 보강(앞 편성 점검)이 먼저이며, 이 자리는 다음 방영이 ${fmt(dropLine)} 아래일 때 이동·교체 검토`;
+    action = `앞 프로그램 보강(앞 편성 점검)이 먼저이며, 이 자리는 ${nextLow} 이동·교체 검토`;
   } else if (leak) {
     action = `앞 프로그램의 시청자를 이 프로그램이 붙잡지 못하고 있어, 앞 프로그램과 시청층이 맞는 프로그램으로 바꾸거나 앞뒤 편성 순서 조정을 검토`;
     histKind = "replace";
@@ -332,9 +353,9 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
     action = `더 나은 자리가 없고 교체 후보도 못 찾아, 앞뒤 편성 조정이나 방영 시간 이동을 검토`;
     histKind = "move";
   } else if (verdict.status === "not_low") {
-    action = `오늘은 기준선(${fmt(dropLine)}) 위라 추가 관찰`;
+    action = `${avgN}이 평소 흔들림 범위(기준선 ${fmt(dropLine)}) 안이라 추가 관찰`;
   } else {
-    action = `다음 방영(${DOW_KO[w.a.dow - 1]}요일)이 기준선 ${fmt(dropLine)} 아래이면 이동·교체 검토`;
+    action = `${nextLow}(${DOW_KO[w.a.dow - 1]}요일) 이동·교체 검토`;
     histKind = "replace";
   }
   const hist = histKind ? await loadHistoryEvidence(ch.id, tg.id as string, asOfDate) : null;
@@ -350,13 +371,13 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   const times = (r: number) => (r >= 2 ? `${r.toFixed(1)}배` : `${pct(r - 1)} 높은 수준`);
   let actionBrief: string;
   if (better && likelyRerun) actionBrief = `재방을 ${better.label}로 옮기는 안 검토 — 같은 프로그램이 거기서는 이 자리의 ${times(better.med / med)}이었습니다`;
-  else if (likelyRerun && !holiday && !channelWide) actionBrief = `이 재방 자리 시청률이 ${fmt(dropLine)} 아래로 계속되면 재방 시간대(요일·시각) 변경 검토`;
-  else if (holiday || channelWide) actionBrief = `다음 주 ${DOW_KO[w.a.dow - 1]}요일 방영이 ${fmt(dropLine)} 아래인지 확인한 뒤 판단`;
+  else if (likelyRerun && !holiday && !channelWide) actionBrief = `이 재방 자리 ${avgN}이 ${fmt(dropLine)} 아래로 계속되면 재방 시간대(요일·시각) 변경 검토`;
+  else if (holiday || channelWide) actionBrief = `다음 주 ${DOW_KO[w.a.dow - 1]}요일 방영을 넣은 ${avgN}이 ${fmt(dropLine)} 아래인지 확인한 뒤 판단`;
   else if (better && continuing && !likelyRerun) actionBrief = `이 자리 방송분을 ${better.label}로 옮기거나 합치는 안 검토 — 같은 프로그램이 거기서는 이 자리의 ${times(better.med / med)}이었습니다`;
-  else if (leadIn && leadIn.dev <= -0.2) actionBrief = `앞 프로그램 점검이 먼저이며, 이 자리는 다음 방영이 ${fmt(dropLine)} 아래일 때 이동·교체 검토`;
+  else if (leadIn && leadIn.dev <= -0.2) actionBrief = `앞 프로그램 점검이 먼저이며, 이 자리는 ${nextLow} 이동·교체 검토`;
   else if (leak) actionBrief = "앞 프로그램 시청층과 맞는 프로그램으로 바꾸거나 앞뒤 편성 순서 조정 검토";
   else if (continuing) actionBrief = "더 나은 자리도 교체 후보도 못 찾아, 앞뒤 편성 조정이나 방영 시간 이동 검토";
-  else if (verdict.status === "not_low") actionBrief = `오늘은 기준선(${fmt(dropLine)}) 위라 추가 관찰`;
-  else actionBrief = `다음 방영(${DOW_KO[w.a.dow - 1]}요일)이 ${fmt(dropLine)} 아래이면 이동·교체 검토`;
-  return { lines: [cause, action], concrete, sample, brief: { cause: causeBrief, action: actionBrief }, hole: { program: w.a.name, hour, ratioPct: Math.round((w.a.rating / med) * 100) }, verdict: verdictView(verdict, w.list, w.a.key), history };
+  else if (verdict.status === "not_low") actionBrief = `${avgN}이 기준선 위(평소 흔들림 범위)라 추가 관찰`;
+  else actionBrief = `${nextLow}(${DOW_KO[w.a.dow - 1]}요일) 이동·교체 검토`;
+  return { lines: [cause, action], concrete, sample, brief: { cause: causeBrief, action: actionBrief }, hole: { program: w.a.name, hour, ratioPct: Math.round(verdict.ratioPct ?? (w.a.rating / med) * 100) }, verdict: verdictView(verdict, w.list, w.a.key), history };
 }

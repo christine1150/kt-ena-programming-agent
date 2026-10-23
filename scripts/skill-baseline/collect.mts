@@ -10,6 +10,7 @@ import { targetLabelsToFetch, mapOwnAirings } from "../../src/lib/idealSchedule/
 import { loadGenreMap } from "../../src/lib/idealSchedule/genreStore";
 import { resolveGenre } from "../../src/lib/idealSchedule/genreRules";
 import { addDays, hourBucket } from "../../src/lib/idealSchedule/time";
+import type { OwnAiring } from "../../src/lib/idealSchedule/types";
 import { buildFeatureSet } from "../../src/lib/idealSchedule/features";
 import * as V from "../../src/lib/idealSchedule/validation";
 
@@ -22,7 +23,7 @@ const N_ORIGINS = 30;
 fs.mkdirSync(outDir, { recursive: true });
 const genreMap = await loadGenreMap();
 
-type A = { date: string; dow: number; startMin: number; programId: string; programName: string; airingType: string; isHoliday: boolean; kpi: { r: number | null } };
+type A = OwnAiring;
 const val = (a: A) => (a.kpi.r === null || !Number.isFinite(a.kpi.r) ? null : a.kpi.r);
 const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
 const hourOf = (a: A) => hourBucket(a.startMin);

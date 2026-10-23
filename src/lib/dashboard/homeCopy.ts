@@ -101,9 +101,11 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
   const v = r?.verdict ?? null;
   if (r?.hole && !program && v && v.today !== null && v.median !== null) {
     // 표본 부족·중앙값 0이면 이 문장 없이 remedy.brief.cause(오늘 값과 직전 방영)가 현상을 말한다
-    const ratio = v.today > 0 && v.ratioPct !== null ? `, 중앙값의 ${Math.round(v.ratioPct)}%` : "";
+    // 판정은 최근 N회 평균으로 한다(2026-10-23) — 오늘 값과 그 평균을 함께 적고, 비율은 평균 기준
+    const avg = v.level !== null && v.window > 1 ? `(최근 ${v.window}회 평균 ${fmtRating(v.level)})` : "";
+    const ratio = v.level !== null && v.level > 0 && v.ratioPct !== null ? `, ${v.window > 1 ? "평균은 " : ""}중앙값의 ${Math.round(v.ratioPct)}%` : "";
     // 제목·시각은 바로 위 핵심 결과 줄에 이미 있어 되풀이하지 않는다(사용자 기준 2026-10-15)
-    causeParts.push(sentence(`오늘 ${fmtRating(v.today)}, 같은 요일·시간대 최근 ${v.sampleCount}회 중앙값 ${fmtRating(v.median)}${ratio}`));
+    causeParts.push(sentence(`오늘 ${fmtRating(v.today)}${avg}, 같은 요일·시간대 그 앞 ${v.sampleCount}회 중앙값 ${fmtRating(v.median)}${ratio}`));
   }
   if (r?.brief?.cause) causeParts.push(sentence(r.brief.cause));
   if (input.structural && input.priorPct !== null) causeParts.push(sentence(`채널 전체는 전주·전전주 같은 요일도 목표의 ${Math.round(input.priorPct)}% 이하여서 목표 미달이 오늘만의 일은 아닙니다`));
