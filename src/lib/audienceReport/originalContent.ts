@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { addDaysStr } from "./periodPresets";
 
-export type FeaturedContentCategory = "오리지널 드라마" | "오리지널 예능" | "독점 예능" | "사업형" | string;
+export type FeaturedContentCategory = "오리지널 드라마" | "오리지널 예능" | "오리지널 교양" | "독점 예능" | "사업형" | string;
 
 export interface FeaturedContentWork {
   canonicalName: string;

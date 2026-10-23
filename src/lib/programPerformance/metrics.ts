@@ -144,6 +144,7 @@ export function sampleStateOf(days: number): "OK" | "SMALL" | "NONE" {
 
 const ORIGINAL_DRAMA = "오리지널드라마";
 const ORIGINAL_VARIETY = "오리지널예능";
+const ORIGINAL_CULTURE = "오리지널교양"; // 오리지널 예능에서 분리(사용자 지시 2026-10-23)
 
 /**
  * 작품 분류 — 승인 메타데이터(featured_content.category, 관리자 업로드 "KT ENA 오리지널" 시트)만 쓴다.
@@ -158,12 +159,14 @@ export function classifyWork(categories: string[]): WorkClassification {
   const c = set[0];
   if (c === ORIGINAL_DRAMA) return { cls: "ORIGINAL_DRAMA", categories: set, source, note: "" };
   if (c === ORIGINAL_VARIETY) return { cls: "ORIGINAL_VARIETY", categories: set, source, note: "" };
+  if (c === ORIGINAL_CULTURE) return { cls: "ORIGINAL_CULTURE", categories: set, source, note: "" };
   return { cls: "OTHER_FEATURED", categories: set, source, note: `주요 콘텐츠 분류: ${c}(자사 오리지널 드라마·예능 분류가 아님)` };
 }
 
 export const WORK_CLASS_LABEL: Record<WorkClass, string> = {
   ORIGINAL_DRAMA: "오리지널 드라마",
   ORIGINAL_VARIETY: "오리지널 예능",
+  ORIGINAL_CULTURE: "오리지널 교양",
   OTHER_FEATURED: "주요 콘텐츠(오리지널 외)",
   UNCONFIRMED: "분류 미확인",
   CONFLICT: "분류 확인 필요",

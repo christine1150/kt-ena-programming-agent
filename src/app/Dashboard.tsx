@@ -483,6 +483,7 @@ const INSIGHT_CHANNEL_ORDER = ["ENA", "ENA_PLAY", "ENA_DRAMA", "OLIFE", "ONCE", 
 const DAILY_CARD_CATEGORY_PRIORITY: Record<string, number> = {
   "오리지널 드라마": 0,
   "오리지널 예능": 0,
+  "오리지널 교양": 0,
   "독점 예능": 1,
   "사업형": 2,
 };

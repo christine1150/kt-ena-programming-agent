@@ -9,7 +9,7 @@ import { ownCommonOverrides, pickOwnCommonGenre } from "./genreRules";
 // 같은 이름이 여러 채널에 있을 때 와일드카드 값은 출처 신뢰도 순으로 고른다(동률은 조회 순서 = id 순).
 const SOURCE_RANK: Record<string, number> = { MANUAL: 0, FEATURED_CATEGORY: 1, OWN_COMMON: 2, NAVER_SEARCH: 3, RULE_KEYWORD: 4, RULE_CHANNEL: 5 };
 
-const ORIGINAL_GENRES: Genre[] = ["오리지널 드라마", "오리지널 예능"];
+const ORIGINAL_GENRES: Genre[] = ["오리지널 드라마", "오리지널 예능", "오리지널 교양"];
 /** 자사 오리지널 행인가 — 주요 콘텐츠 분류 근거이거나 장르가 오리지널 드라마·예능. */
 export const isOwnOriginalRow = (r: { scope: string; source: string; genre: Genre }) =>
   r.scope === "OWN" && (r.source === "FEATURED_CATEGORY" || ORIGINAL_GENRES.includes(r.genre));

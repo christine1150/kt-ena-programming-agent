@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const q = (url.searchParams.get("q") ?? "").slice(0, 60);
   const c = url.searchParams.get("class");
-  const f = c === "drama" || c === "variety" ? c : "all";
+  const f = c === "drama" || c === "variety" || c === "culture" ? c : "all";
   try {
     const items = await searchProgramWorks(q, f, kstToday());
     return NextResponse.json({ ok: true, items });

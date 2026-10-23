@@ -65,6 +65,7 @@ export function normalizeProgramCategory(raw: string): string {
   const t = raw.trim();
   if (/드라마/.test(t)) return "오리지널 드라마";
   if (/예능/.test(t)) return "오리지널 예능";
+  if (/교양/.test(t)) return "오리지널 교양";
   return t;
 }
 

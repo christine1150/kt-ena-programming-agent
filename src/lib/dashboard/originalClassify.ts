@@ -3,7 +3,7 @@ import { addDays } from "@/lib/idealSchedule/time";
 
 /** 활용을 권유하는 채널(재방·편성 확대가 가능한 자매 채널) */
 export const LEVERAGE_CHANNELS = new Set(["ENA_PLAY", "ENA_DRAMA", "ENA_STORY"]);
-const ORIGINAL_CATEGORIES = new Set(["오리지널 드라마", "오리지널 예능"]);
+const ORIGINAL_CATEGORIES = new Set(["오리지널 드라마", "오리지널 예능", "오리지널 교양"]);
 /** 본방 종료 후에도 활용을 권하는 기간(일) — "본방송 +1주" */
 export const AFTER_END_DAYS = 7;
 /** 아직 시작 전인 작품을 "예정"으로 알리는 범위(일) */

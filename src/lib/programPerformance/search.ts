@@ -95,10 +95,10 @@ async function recentByPid(db: PerfDb, enaId: string, programIds: string[]): Pro
   return out;
 }
 
-export type SearchClassFilter = "all" | "drama" | "variety";
+export type SearchClassFilter = "all" | "drama" | "variety" | "culture";
 
 function passes(cls: WorkClass, f: SearchClassFilter): boolean {
-  return f === "all" || (f === "drama" && cls === "ORIGINAL_DRAMA") || (f === "variety" && cls === "ORIGINAL_VARIETY");
+  return f === "all" || (f === "drama" && cls === "ORIGINAL_DRAMA") || (f === "variety" && cls === "ORIGINAL_VARIETY") || (f === "culture" && cls === "ORIGINAL_CULTURE");
 }
 
 /** 검색어(부분명·별칭·오타) → 자사 방영 이력이 있는 작품 후보. 검색어가 비면 오리지널 목록(최근 방영 순) — 'all'이면 드라마·예능 둘 다(첫 화면 선택 목록). */
@@ -106,7 +106,7 @@ export async function searchWorks(db: PerfDb & { rpc: (fn: string, args: Record<
   const classMap = await loadWorkClassMap(db);
   const query = q.trim();
   if (!query) {
-    const originals = [...classMap.entries()].filter(([, v]) => passes(v.cls, f) && (v.cls === "ORIGINAL_DRAMA" || v.cls === "ORIGINAL_VARIETY"));
+    const originals = [...classMap.entries()].filter(([, v]) => passes(v.cls, f) && (v.cls === "ORIGINAL_DRAMA" || v.cls === "ORIGINAL_VARIETY" || v.cls === "ORIGINAL_CULTURE"));
     // 첫 화면('전체')은 ENA에서 최근 2주(최신 자료일 포함 14일) 안에 실제 방영한 오리지널만, 마지막 방영일 순(사용자 지정 2026-10-22).
     // program_identity.last_date는 갱신이 멈출 수 있어(승인 A3 대기) 닐슨 방영 행에서 직접 확인한다.
     const recent = f === "all" ? await recentEnaLastDates(db, originals.map(([g]) => g)) : null;

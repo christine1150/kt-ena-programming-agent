@@ -14,7 +14,7 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.9";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
-export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
+export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "ORIGINAL_CULTURE" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
 
 export interface WorkClassification {
   cls: WorkClass;

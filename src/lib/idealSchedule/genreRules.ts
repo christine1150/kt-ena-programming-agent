@@ -66,6 +66,8 @@ const FEATURED_CATEGORY_GENRE: Record<string, Genre> = {
   "독점예능": "예능",
   "오리지널 예능": "오리지널 예능",
   "오리지널예능": "오리지널 예능",
+  "오리지널 교양": "오리지널 교양",
+  "오리지널교양": "오리지널 교양",
   "구매예능": "예능",
   "사업형": "사업형",
   "구매 예능": "예능",
@@ -83,6 +85,7 @@ export function genreFromSkyUhdLabel(label: string): Genre {
   if (/미국 드라마|영국 드라마|영미 드라마/.test(label)) return "영미 드라마";
   if (/중국 드라마/.test(label)) return "중국 드라마";
   if (/오리지널 예능/.test(label)) return "오리지널 예능";
+  if (/오리지널 교양/.test(label)) return "오리지널 교양";
   if (/드라마/.test(label)) return "드라마";
   if (/예능/.test(label)) return "예능";
   if (/여행/.test(label)) return "여행";

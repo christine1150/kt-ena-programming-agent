@@ -12,12 +12,13 @@ import { formatInt, formatPct, formatRatingValue, MISSING } from "@/lib/ui/metri
 import { WORK_CLASS_LABEL, indexOf } from "@/lib/programPerformance/metrics";
 import type { AiringFilter, AiringRef, TextPart, ChannelLine, ChannelRow, CompetitorRow, Direction, MonthlyPoint, PerformanceResult, RatioValue, SearchItem, TargetMode, WorkClass } from "@/lib/programPerformance/types";
 
-type ClassFilter = "all" | "drama" | "variety";
+type ClassFilter = "all" | "drama" | "variety" | "culture";
 type PeriodPreset = "all" | "4w" | "12w" | "custom";
 
 const CLASS_FILTERS: { id: Exclude<ClassFilter, "all">; label: string }[] = [
   { id: "drama", label: "오리지널 드라마" },
   { id: "variety", label: "오리지널 예능" },
+  { id: "culture", label: "오리지널 교양" },
 ];
 const CHANNELS: { code: string; label: string }[] = [
   { code: "ENA", label: "ENA" },
@@ -43,6 +44,7 @@ const CLASS_BADGE: Record<WorkClass, string> = {
   // 드라마 파랑·예능 초록(사용자 지정 2026-10-22)
   ORIGINAL_DRAMA: "bg-blue-50 text-blue-700 ring-blue-200",
   ORIGINAL_VARIETY: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  ORIGINAL_CULTURE: "bg-amber-50 text-amber-700 ring-amber-200",
   OTHER_FEATURED: "bg-zinc-50 text-zinc-700 ring-zinc-200",
   UNCONFIRMED: "bg-white text-zinc-500 ring-zinc-200",
   CONFLICT: "bg-rose-50 text-rose-700 ring-rose-200",
@@ -57,7 +59,7 @@ const fmtTime = (t: string | null) => {
 };
 
 /** 오리지널 드라마·예능(그리고 관리자 확인이 필요한 분류 충돌)만 배지를 단다 — 목록에 없는 작품은 아무 표시 없음(비오리지널로 단정하지 않음, 사용자 지정 2026-10-22) */
-const SHOW_CLASS: WorkClass[] = ["ORIGINAL_DRAMA", "ORIGINAL_VARIETY", "CONFLICT"];
+const SHOW_CLASS: WorkClass[] = ["ORIGINAL_DRAMA", "ORIGINAL_VARIETY", "ORIGINAL_CULTURE", "CONFLICT"];
 
 /** 계산 중 돌아가는 아이콘 */
 function Spinner() {
@@ -75,7 +77,7 @@ function ClassBadge({ cls }: { cls: WorkClass }) {
 }
 
 /** 목록 칩용 — 구분 글자 대신 색 점만 두고 이름은 마우스를 올리면 보인다(사용자 지시 2026-10-22: 한 줄에 깔끔하게) */
-const CLASS_DOT: Partial<Record<WorkClass, string>> = { ORIGINAL_DRAMA: "bg-blue-500", ORIGINAL_VARIETY: "bg-emerald-500", CONFLICT: "bg-rose-500" };
+const CLASS_DOT: Partial<Record<WorkClass, string>> = { ORIGINAL_DRAMA: "bg-blue-500", ORIGINAL_VARIETY: "bg-emerald-500", ORIGINAL_CULTURE: "bg-amber-500", CONFLICT: "bg-rose-500" };
 function ClassDot({ cls }: { cls: WorkClass }) {
   if (!SHOW_CLASS.includes(cls)) return null;
   return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${CLASS_DOT[cls] ?? "bg-zinc-400"}`} title={WORK_CLASS_LABEL[cls]} role="img" aria-label={WORK_CLASS_LABEL[cls]} />;
