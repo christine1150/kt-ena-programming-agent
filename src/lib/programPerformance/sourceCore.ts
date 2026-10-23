@@ -28,6 +28,9 @@ import {
   extremesTextOf,
   matchesAiringFilter,
   dailySeries,
+  daysBetween,
+  whereLineOf,
+  shareLineOf,
   monthlySeries,
   ratioOf,
   sampleStateOf,
@@ -559,18 +562,22 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       }
     const vsChannel = ratioOf(fStat.avg, channelDaily.mean, chTargetId ? "채널 하루 시청률 자료 없음" : `채널 하루 시청률 타깃('${channelLabel}') 없음`);
 
-    // 동슬롯 대비 — 비교 창 = 이 채널에서 작품이 관측된 첫~마지막 방송일(본재 전환에도 같은 창)
+    // 동슬롯 대비 — 비교 창 = 이 채널에서 작품이 관측된 첫~마지막 방송일(본재 전환에도 같은 창, 수축 배율·기존 값 그대로)
+    // 편성 비교(시간대별 단순 평균)의 비교군은 조회 기간과 무관하게 "올해 1월 1일 ~ 최신 자료일"(최소 12주)의 같은 채널·타깃 다른 프로그램 — 4주 조회에서 비교 방송이 모자라 —만 나오던 문제(사용자 지시 2026-10-23)
+    const yearStart = `${to.slice(0, 4)}-01-01`;
+    const cmpFrom = daysBetween(yearStart, to) >= 84 ? yearStart : addDays(to, -83);
+    const fetchFrom = cmpFrom < observedFrom ? cmpFrom : observedFrom;
     const chAirRows = await fetchAll<Record<string, unknown>>(
       (a, b) =>
         db
           .from("ratings")
-          .select("program_id, broadcast_date, start_time, rating, is_first_run")
+          .select("program_id, broadcast_date, start_time, rating, share, is_first_run")
           .eq("channel_id", ch.id)
           .eq("target_id", progTargetId)
           .eq("source_type", "nielsen_daily")
           .not("program_id", "is", null)
-          .gte("broadcast_date", observedFrom)
-          .lte("broadcast_date", observedTo)
+          .gte("broadcast_date", fetchFrom)
+          .lte("broadcast_date", to)
           .order("broadcast_date", { ascending: true })
           .order("id", { ascending: true })
           .range(a, b),
@@ -586,9 +593,11 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       const k = `${r.program_id}|${r.broadcast_date}|${r.start_time ?? ""}`;
       if (seen.has(k)) continue;
       seen.add(k);
+      const d = r.broadcast_date as string;
       const dbRun = (r.is_first_run as boolean | null) ?? null;
+      if (!ids.includes(r.program_id as string) && d >= cmpFrom) others.push({ date: d, startTime: (r.start_time as string | null) ?? null, rating: Number(r.rating), share: r.share === null || r.share === undefined ? null : Number(r.share) });
+      if (d < observedFrom || d > observedTo) continue;
       chAirings.push({ programId: r.program_id as string, date: r.broadcast_date as string, startTime: (r.start_time as string | null) ?? null, rating: Number(r.rating), reach: null, timeSpentShare: null, firstRun: dbRun ?? workRun.get(k) ?? null });
-      if (!ids.includes(r.program_id as string)) others.push({ date: r.broadcast_date as string, startTime: (r.start_time as string | null) ?? null, rating: Number(r.rating) });
     }
     const sc = computeSlotComparison(chAirings, ids, (a) => matchesAiringFilter(a.firstRun, query.airing));
     const slotRatio = sc.airings > 0 ? ratioOf(sc.shrunkIndex === null ? null : sc.sumActual / sc.airings, sc.shrunkIndex === null ? null : sc.sumExpected / sc.airings) : { ...NA_RATIO, naReason: "비교할 방영 없음" };
@@ -675,6 +684,8 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       analysis.firstExtremes = firstRuns.length >= 2 ? pickExtremes(firstRuns, (x) => x.rating) : null;
       analysis.dayExtremes = pickExtremes(daily, (x) => x.programAvg);
       analysis.slotLead = slotLeadOf(slots);
+      analysis.slotBaseFrom = cmpFrom;
+      analysis.slotBaseTo = to;
     }
 
     // 종합평가 — 채널 KPI 타깃 행에서만. 최근 12주 편성진단(콘텐츠 적합도) 지수가 있으면 그것을, 없으면(12주 방영 없음·3일 미만·공통 타깃 모드) 조회 기간의 같은 두 지표를 쓴다.
@@ -692,6 +703,9 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         targetLabel: programLabel,
         allAiringsBasis: fromFit && query.airing !== "all",
         ...a,
+        // 어디서 강하고 약한지·점유율 효율은 조회 기간 방영 vs 올해 비교군(편성 비교와 같은 자료)
+        where: analysis ? whereLineOf(analysis.slots) : null,
+        shareNote: analysis ? shareLineOf(vsChannel, analysis.slots) : null,
       };
     }
 

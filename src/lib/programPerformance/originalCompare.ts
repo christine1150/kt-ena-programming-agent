@@ -3,7 +3,7 @@
 // 새 판정·합격선 없이 순위·상대 차이·중간값만 낸다. 범위는 조회 기간과 무관하게 '방영 시작 이후 본방', 방송 채널 KPI 타깃.
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import { formatRatingValue } from "@/lib/ui/metricFormat";
-import { dedupeAirings, ratioOf, relText, type WorkAiring } from "./metrics";
+import { dedupeAirings, indexText, ratioOf, relText, type WorkAiring } from "./metrics";
 import type { OriginalCompare, RatioValue, WorkClass } from "./types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,13 +44,14 @@ export function originalCompareOf(i: { classLabel: string; targetLabel: string; 
   const selfAvg = firstK(i.self);
   const lines: string[] = [];
   const year = i.dataFrom.slice(0, 4);
-  const kLabel = k === 1 ? "1회 본방" : `첫 ${k}회 본방 평균`;
+  // 분류·'본방'은 제목(오리지널 드라마 비교 · 방영 시작 이후 본방)에 있어 줄에서는 뺀다(사용자 지시 2026-10-23)
+  const kLabel = k === 1 ? "1회" : `첫 ${k}회 평균`;
 
   // ① 같은 회차 순위 — 본방이 k회 이상인 작품끼리(자기 포함), 동률은 같은 순위
   const eligible = i.peers.filter((p) => p.ratings.length >= k);
   const peerAvgs = eligible.map((p) => firstK(p) as number);
   const rank = selfAvg === null ? null : 1 + peerAvgs.filter((v) => v > selfAvg).length;
-  if (rank !== null && eligible.length > 0) lines.push(`${kLabel} ${pct(selfAvg)}로 ${year}년 이후 ${i.classLabel} ${eligible.length + 1}편 중 ${rank}위(같은 회차 기준)`);
+  if (rank !== null && eligible.length > 0) lines.push(`${kLabel} ${pct(selfAvg)} · ${year}년 이후 ${eligible.length + 1}편 중 ${rank}위(같은 회차 기준)`);
 
   // ② 직전 동시간대 — 직전 작품의 첫 k회(본방이 그보다 적으면 그만큼)
   let predecessor: OriginalCompare["predecessor"] = null;
@@ -59,7 +60,7 @@ export function originalCompareOf(i: { classLabel: string; targetLabel: string; 
     const pAvg = firstK(i.predecessor, kp);
     const vs: RatioValue = ratioOf(kp === k ? selfAvg : firstK(i.self, kp), pAvg);
     predecessor = { name: i.predecessor.name, slot: i.predecessor.slot, k: kp, avg: pAvg, vs };
-    lines.push(`직전 ${i.predecessor.slot} ${i.classLabel} ‘${i.predecessor.name}’ ${kp === 1 ? "1회 본방" : `첫 ${kp}회 평균`} ${pct(pAvg)} 대비 ${relText(vs.pct)}`);
+    lines.push(`직전 ${i.predecessor.slot} ‘${i.predecessor.name}’ ${kp === 1 ? "1회" : `첫 ${kp}회 평균`} ${pct(pAvg)}의 ${indexText(vs.ratio)}`);
   }
 
   // ③ 흐름 — k ≥ 4일 때만, 같은 시점까지 본방이 있는 작품들의 중간값과 나란히
@@ -70,7 +71,7 @@ export function originalCompareOf(i: { classLabel: string; targetLabel: string; 
     const med = median(others);
     if (self !== null) {
       momentum = { self, peerMedian: med, peers: others.length };
-      lines.push(`첫 2회 대비 ${k - 1}~${k}회 ${relText(self)}${med !== null ? ` · 같은 시점 다른 ${i.classLabel} 중간값 ${relText(med)}` : ""}`);
+      lines.push(`첫 2회 대비 ${k - 1}~${k}회 ${relText(self)}${med !== null ? ` · 같은 시점 다른 작품 중간값 ${relText(med)}` : ""}`);
     }
   }
 

@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useSearchParams } from "next/navigation";
 import { shortProgramName } from "@/lib/programAlias";
 import { formatInt, formatPct, formatRatingValue, MISSING } from "@/lib/ui/metricFormat";
-import { WORK_CLASS_LABEL, relText } from "@/lib/programPerformance/metrics";
+import { WORK_CLASS_LABEL, indexOf } from "@/lib/programPerformance/metrics";
 import type { AiringFilter, AiringRef, Assessment, OriginalCompare, ChannelRow, CompetitorRow, Direction, PerformanceResult, RatioValue, SearchItem, SupplementCount, TargetMode, WorkClass } from "@/lib/programPerformance/types";
 
 type ClassFilter = "all" | "drama" | "variety" | "culture";
@@ -76,11 +76,15 @@ function ClassDot({ cls }: { cls: WorkClass }) {
   return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${CLASS_DOT[cls] ?? "bg-zinc-400"}`} title={WORK_CLASS_LABEL[cls]} role="img" aria-label={WORK_CLASS_LABEL[cls]} />;
 }
 
-/** 채널 평균(또는 시간대 평균) 대비 상대 차이 — 서버 원정밀도 pct를 relText로 표기만("+9%", %p 아님). 높음 푸른색·낮음 붉은색(사용자 지정 2026-10-22), 폭을 고정해 행마다 자리가 맞게 */
-function RelText({ r }: { r: RatioValue }) {
+/**
+ * 기준(채널 평균·같은 시간대 평균) = 100%로 본 비율 — "95%"(붉은색)·"120%"(푸른색). 사용자 지시(2026-10-23): 부호 대신 100% 기준 비율로.
+ * 서버 배율 × 100 반올림(indexOf)이고 방향은 서버 값(배율 소수 둘째 자리) 그대로. 폭을 고정해 행마다 자리가 맞게.
+ */
+function IdxText({ r, paren = false }: { r: RatioValue; paren?: boolean }) {
+  const i = indexOf(r.ratio);
   return (
-    <span className={`inline-block min-w-[3.6rem] text-right tabular-nums ${r.pct === null ? "text-zinc-400" : DIR_CLASS[r.direction]}`} aria-label={r.pct === null ? "기준 대비 산출 불가" : `기준 대비 ${relText(r.pct)}`}>
-      {r.pct === null ? MISSING : `(${relText(r.pct)})`}
+    <span className={`inline-block min-w-[3.6rem] text-right tabular-nums ${i === null ? "text-zinc-400" : DIR_CLASS[r.direction]}`} aria-label={i === null ? "기준 대비 산출 불가" : `기준의 ${i}%`}>
+      {i === null ? MISSING : paren ? `(${i}%)` : `${i}%`}
     </span>
   );
 }
@@ -134,8 +138,45 @@ function TargetCell({ r, code, airing }: { r: ChannelRow | CompetitorRow | undef
   return (
     <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
       <span className="inline-block w-[3.75rem] text-right tabular-nums text-zinc-900">{formatRatingValue(r.programAvg, code)}</span>
-      <RelText r={r.vsChannel} />
+      <IdxText r={r.vsChannel} paren />
     </span>
+  );
+}
+
+/** 점유율 칸 — 방영별 점유율 평균(그 시간 TV를 본 같은 타깃 중 이 채널 비율, %). 값이 없으면 — */
+function ShareCell({ r }: { r: ChannelRow | CompetitorRow | undefined }) {
+  const observed = !!r && ("status" in r ? r.status === "OBSERVED" && r.airings > 0 : r.airings > 0);
+  return <span className="inline-block w-[3.5rem] text-right tabular-nums text-zinc-700">{observed && r!.shareAvg !== null ? formatPct(r!.shareAvg) : MISSING}</span>;
+}
+
+/** 두 단 머리 — 타깃마다 시청률(채널 평균=100% 비율)·점유율 */
+function TargetHead({ first, cols }: { first: string; cols: string[] }) {
+  return (
+    <thead className="bg-zinc-50 text-[12px] text-zinc-500">
+      <tr>
+        <th rowSpan={2} className="whitespace-nowrap px-3 py-2 text-left align-bottom font-medium">
+          {first}
+        </th>
+        {cols.map((c) => (
+          <th key={c} colSpan={2} className="whitespace-nowrap border-l border-zinc-200 px-3 pt-2 text-center font-medium text-zinc-700" title={c}>
+            {targetShort(c)}
+          </th>
+        ))}
+        <th rowSpan={2} className="whitespace-nowrap border-l border-zinc-200 px-3 py-2 text-center align-bottom font-medium">
+          방영횟수
+        </th>
+      </tr>
+      <tr>
+        {cols.map((c) => [
+          <th key={`${c}r`} className="whitespace-nowrap border-l border-zinc-200 px-3 pb-2 text-center font-normal">
+            시청률(채널 평균 대비)
+          </th>,
+          <th key={`${c}s`} className="whitespace-nowrap px-3 pb-2 text-center font-normal">
+            점유율
+          </th>,
+        ])}
+      </tr>
+    </thead>
   );
 }
 
@@ -151,7 +192,7 @@ function AirCount({ airings, days }: { airings: number; days: number }) {
     </span>
   );
 }
-const TABLE_NOTE = "시청률 단위 % · 시청률 옆 괄호는 채널 평균 대비";
+const TABLE_NOTE = "시청률·점유율 단위 % · 괄호는 같은 기간 채널 평균을 100%로 본 비율(100% 초과 푸른색, 미만 붉은색)";
 
 /**
  * 채널별 성과표 — 열 순서 고정(채널 → 수2049 → 가구 → 방영횟수), 채널당 한 줄. 방영횟수는 KPI 타깃 행의 고유 방영 건수(두 타깃을 보여도 두 배로 세지 않음).
@@ -161,19 +202,9 @@ function ChannelTable({ entries, airing, selected, onSelect }: { entries: Channe
   const cols = TARGET_ORDER.filter((t) => entries.some((e) => e.rows.some((r) => r.targetLabel === t)));
   return (
     <section className="mt-3">
-      <div className="dense-grid max-w-3xl overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="채널별 성과 표">
-        <table className="w-full min-w-[440px] text-[14px]">
-          <thead className="bg-zinc-50 text-[12px] text-zinc-500">
-            <tr>
-              <th className="whitespace-nowrap px-3 py-2 text-left font-medium">채널</th>
-              {cols.map((c) => (
-                <th key={c} className="whitespace-nowrap px-3 py-2 text-center font-medium" title={c}>
-                  {targetShort(c)}
-                </th>
-              ))}
-              <th className="whitespace-nowrap px-3 py-2 text-center font-medium">방영횟수</th>
-            </tr>
-          </thead>
+      <div className="dense-grid max-w-4xl overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="채널별 성과 표">
+        <table className="w-full min-w-[640px] text-[14px]">
+          <TargetHead first="채널" cols={cols} />
           <tbody>
             {entries.map(({ main, rows }) => {
               const code = main.channelCode;
@@ -185,12 +216,18 @@ function ChannelTable({ entries, airing, selected, onSelect }: { entries: Channe
                       {main.channelName}
                     </button>
                   </td>
-                  {cols.map((c) => (
-                    <td key={c} className="px-3 py-2 text-center">
-                      <TargetCell r={rows.find((x) => x.targetLabel === c)} code={code} airing={airing} />
-                    </td>
-                  ))}
-                  <td className="whitespace-nowrap px-3 py-2 text-center text-zinc-800">
+                  {cols.map((c) => {
+                    const r = rows.find((x) => x.targetLabel === c);
+                    return [
+                      <td key={`${c}r`} className="border-l border-zinc-100 px-3 py-2 text-center">
+                        <TargetCell r={r} code={code} airing={airing} />
+                      </td>,
+                      <td key={`${c}s`} className="px-3 py-2 text-center">
+                        <ShareCell r={r} />
+                      </td>,
+                    ];
+                  })}
+                  <td className="whitespace-nowrap border-l border-zinc-100 px-3 py-2 text-center text-zinc-800">
                     <AirCount airings={main.airings} days={main.days} />
                   </td>
                 </tr>
@@ -209,19 +246,9 @@ function CompetitorSection({ rows }: { rows: CompetitorRow[] }) {
   const names = [...new Set(rows.map((r) => r.competitorName))];
   return (
     <section className="mt-2">
-      <div className="dense-grid max-w-3xl overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="경쟁 채널 성과 표">
-        <table className="w-full min-w-[440px] text-[14px]">
-          <thead className="bg-zinc-50 text-[12px] text-zinc-500">
-            <tr>
-              <th className="whitespace-nowrap px-3 py-2 text-left font-medium">경쟁 채널</th>
-              {TARGET_ORDER.map((c) => (
-                <th key={c} className="whitespace-nowrap px-3 py-2 text-center font-medium" title={c}>
-                  {targetShort(c)}
-                </th>
-              ))}
-              <th className="whitespace-nowrap px-3 py-2 text-center font-medium">방영횟수</th>
-            </tr>
-          </thead>
+      <div className="dense-grid max-w-4xl overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="경쟁 채널 성과 표">
+        <table className="w-full min-w-[640px] text-[14px]">
+          <TargetHead first="경쟁 채널" cols={TARGET_ORDER} />
           <tbody>
             {names.map((name) => {
               const rs = rows.filter((r) => r.competitorName === name);
@@ -229,12 +256,18 @@ function CompetitorSection({ rows }: { rows: CompetitorRow[] }) {
               return (
                 <tr key={name} className="border-t border-zinc-100">
                   <td className="whitespace-nowrap px-3 py-2 font-medium text-zinc-900">{name}</td>
-                  {TARGET_ORDER.map((c) => (
-                    <td key={c} className="px-3 py-2 text-center">
-                      <TargetCell r={rs.find((x) => x.targetLabel === c)} code={name} airing="all" />
-                    </td>
-                  ))}
-                  <td className="whitespace-nowrap px-3 py-2 text-center text-zinc-800">
+                  {TARGET_ORDER.map((c) => {
+                    const r = rs.find((x) => x.targetLabel === c);
+                    return [
+                      <td key={`${c}r`} className="border-l border-zinc-100 px-3 py-2 text-center">
+                        <TargetCell r={r} code={name} airing="all" />
+                      </td>,
+                      <td key={`${c}s`} className="px-3 py-2 text-center">
+                        <ShareCell r={r} />
+                      </td>,
+                    ];
+                  })}
+                  <td className="whitespace-nowrap border-l border-zinc-100 px-3 py-2 text-center text-zinc-800">
                     <AirCount airings={main.airings} days={main.days} />
                   </td>
                 </tr>
@@ -426,6 +459,8 @@ function SlotSection({ row }: { row: ChannelRow }) {
                 <th className="whitespace-nowrap py-1 text-left font-medium">요일·시간대</th>
                 <th className="whitespace-nowrap py-1 text-right font-medium">시청률</th>
                 <th className="whitespace-nowrap py-1 text-right font-medium">시간대 평균 대비</th>
+                <th className="whitespace-nowrap py-1 pl-3 text-right font-medium">점유율</th>
+                <th className="whitespace-nowrap py-1 text-right font-medium">평균 대비</th>
               </tr>
             </thead>
             <tbody>
@@ -437,13 +472,20 @@ function SlotSection({ row }: { row: ChannelRow }) {
                   <td className="py-1.5 text-right tabular-nums">{formatRatingValue(s.avg, code)}</td>
                   <td className="whitespace-nowrap py-1.5 text-right">
                     {s.basis === "HOUR" && <span className="mr-1 text-[11px] text-zinc-400" title={`같은 요일·시 비교 방송이 적어 같은 시(모든 요일) ${s.compAirings}건과 비교`}>전 요일</span>}
-                    <RelText r={s.vs} />
+                    <IdxText r={s.vs} />
                   </td>
+                  <td className="py-1.5 pl-3 text-right tabular-nums text-zinc-700">{s.shareAvg === null || s.shareAvg === undefined ? MISSING : formatPct(s.shareAvg)}</td>
+                  <td className="whitespace-nowrap py-1.5 text-right">{s.shareVs ? <IdxText r={s.shareVs} /> : <span className="text-zinc-400">{MISSING}</span>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+      {a.slotBaseFrom && (
+        <p className="mt-1 text-[11px] text-zinc-500">
+          평균 = {a.slotBaseFrom} ~ {a.slotBaseTo} 같은 채널·요일·시간대의 다른 프로그램(100%)
+        </p>
       )}
       {a.slots.length > SLOT_SHOW && (
         <button type="button" onClick={() => setAll((v) => !v)} className="mt-1 text-[12px] text-zinc-600 underline underline-offset-2">
@@ -464,8 +506,17 @@ function AssessmentBlock({ a, oc }: { a: Assessment | null; oc: OriginalCompare 
         종합평가 · {scope} · {targetShort(a.targetLabel)}
         {a.allAiringsBasis ? " · 전체 방송 기준" : ""}
       </h4>
-      <p className="mt-0.5 text-[16px] font-semibold leading-snug text-zinc-900">{a.headline}</p>
-      {a.evidence && <p className="mt-0.5 text-[13px] text-zinc-600">{a.evidence}</p>}
+      <p className="mt-0.5 text-[16px] font-semibold leading-snug text-zinc-900" title={a.evidence ?? undefined}>
+        {a.headline}
+      </p>
+      {/* 어디서 강하고 약한지·점유율 효율·하락은 조회 기간 방영 기준(편성 비교와 같은 자료). 진단 지수(보정 배율)는 결론에 마우스를 올리면 */}
+      {(a.where || a.shareNote || a.trendNote) && (
+        <ul className="mt-1 space-y-0.5 text-[14px] text-zinc-800">
+          {a.where && <li>· {a.where}</li>}
+          {a.shareNote && <li>· {a.shareNote}</li>}
+          {a.trendNote && <li>· {a.trendNote}</li>}
+        </ul>
+      )}
       {oc && (
         <div className="mt-3 border-t border-zinc-100 pt-2">
           <OriginalLines oc={oc} />
@@ -617,13 +668,14 @@ function CalcBasis() {
   const items: [string, string][] = [
     ["타깃", "수2049 = 수도권 개인 2049, 가구 = 전국 유료방송가입가구. 두 타깃 값은 서로 합치거나 한 순위로 묶지 않습니다."],
     ["시청률", "선택한 기간·방송 구분에서 작품 방영 한 건마다의 닐슨 시청률(%)을 산술평균(방송시간 가중 아님). 같은 방영이 두 번 적재돼도 한 번만 셉니다. — 는 자료 없음, 0은 실제 0, <0.001은 0보다 크지만 표시 자릿수보다 작은 값입니다."],
-    ["채널 평균 대비(표 괄호)", "작품 시청률 ÷ 같은 기간 공식 채널 하루 시청률의 일평균 − 1. 상대 차이(%)이며 %p나 점유율이 아닙니다. 예전의 ‘채널 평균=100 지수 109%’는 +9%와 같은 뜻입니다. 채널 평균이 0이거나 없으면 —."],
+    ["채널 평균 대비(표 괄호)", "작품 시청률 ÷ 같은 기간 공식 채널 하루 시청률의 일평균 × 100. 채널 평균을 100%로 본 비율이라 109%는 채널 평균보다 9% 높다는 뜻이고 %p나 점유율이 아닙니다. 100% 초과 푸른색, 미만 붉은색. 채널 평균이 0이거나 없으면 —."],
+    ["점유율", "닐슨 방영별 점유율(그 시간 TV를 본 같은 타깃 중 이 채널 비율)의 산술평균입니다. 채널의 기간 공식 점유율이 아니며, 값이 없는 방영은 빼고 셉니다. 시청률이 낮아도 그 시간 TV 시청자가 적으면 점유율은 높을 수 있습니다."],
     ["방영횟수", "고유 방영 건수(채널 KPI 타깃 행 기준, 두 타깃을 함께 보여도 두 번 세지 않음)와 방송일 수."],
     ["종합평가", "최근 12주 편성진단(콘텐츠 적합도, 채널 KPI 타깃·전체 방송)의 ‘같은 시간대 기준’(같은 요일·시간대 다른 프로그램 기대치 대비)과 ‘채널 방영 평균’(채널 프로그램 방영 1건당 평균 대비) 지수의 방향을 고정 문구로 잇습니다. 두 지수는 표본이 적으면 1배 쪽으로 보정된 값입니다. 채널 방영 평균은 표의 채널 하루 평균과 분모가 달라 표의 %와 맞지 않을 수 있습니다. 최근 4주가 이전 8주보다 약 30% 이상 낮으면 그 사실을 근거로 씁니다. 최근 12주 방영이 3일 미만이거나 없으면 조회 기간의 채널 평균 대비·같은 시간대 기준으로 ‘조회 기간’ 평가를 냅니다. 점수·판정 태그·미래 예측은 쓰지 않습니다."],
     ["시청률 흐름", "본방별은 본방 방영(회차 번호가 있으면 회차로 표기), 일별은 방영이 있는 방송일의 평균. 최고·최저·최근은 그래프에 그린 점과 같은 자료입니다. 4점 이상이면 앞 절반·뒤 절반 평균, 2~3점이면 처음·최근을 비교합니다."],
-    ["편성 비교", "실제 방영한 요일·시(시작 시각)마다 작품 평균과 같은 채널·타깃·관측 기간의 다른 프로그램 단순 평균을 비교합니다. 같은 요일·시 비교 방송이 15건 미만이면 같은 시(전 요일)로 넓히고(‘전 요일’ 표시), 그래도 부족하면 —. 기본은 방송일 3일 이상 구간 먼저, 방영 많은 순 4개. 보정이 없는 값이라 종합평가의 같은 시간대 기준과 다를 수 있습니다. ‘집중’ 같은 우열 문장은 방송일 3일 이상 구간만 씁니다."],
+    ["편성 비교", "조회 기간에 실제 방영한 요일·시(시작 시각)마다 작품 평균을, 올해 1월 1일부터 최신 자료일까지(12주 미만이면 최근 12주) 같은 채널·타깃·요일·시에 방송한 다른 프로그램의 단순 평균(=100%)과 비교합니다. 비교군을 조회 기간과 떼어 최근 4주 조회에서도 비교 방송이 모자라지 않게 했습니다. 같은 요일·시 비교 방송이 15건 미만이면 같은 시(전 요일)로 넓히고(‘전 요일’ 표시), 그래도 부족하면 —. 점유율도 같은 비교군의 점유율 평균과 견줍니다. 기본은 방송일 3일 이상 구간 먼저, 방영 많은 순 4개. ‘집중’·‘몇 곳 중 몇 곳’ 같은 문장은 방송일 3일 이상 구간만 씁니다."],
+    ["종합평가의 세부 줄", "본방 시간은 방송일이 가장 많은 본방 구간의 같은 시간대 평균 대비 비율, 본방 외 시간대는 평균보다 높은 곳·낮은 곳의 개수입니다(편성 비교와 같은 자료). 시청률이 채널 평균보다 낮거나 그 시간대 시청률이 평균을 넘지 못해도 점유율이 같은 시간대 평균의 150%(콘텐츠 적합도 ‘강화’ 선과 같은 값) 이상인 시간대가 있으면 따로 적습니다."],
     ["본방 구분", "닐슨 <본>·<재> 표시를 먼저 쓰고, 없으면 업로드 편성표 → 관리자 등록 본방 요일·시각 → 네이버 방송 정보 순서로 보완합니다(보완 건수는 방송 기록에). 근거가 없으면 재방으로 단정하지 않고 ‘미확인’으로 둡니다. 본방 = 각 채널의 첫 방송."],
-    ["점유율", "닐슨 방영별 점유율의 산술평균(채널 공식 점유율 아님) — 방송 기록에서 확인합니다."],
   ];
   return (
     <details className="mt-4 text-[12px]">

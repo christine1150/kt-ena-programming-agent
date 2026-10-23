@@ -13,7 +13,8 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 // v1.9(2026-10-23): 용어 정의(본방 = 각 채널 첫 방송, 초방 = 원 방송사 첫 방송)에 맞춰 원 방송사가 아닌 자사 채널 방영을 패턴만으로 재방으로 보지 않는다(모름 — 그 채널 첫 방송이면 본방)
 // v2.0(2026-10-23): 성과 중심 화면 개편(docs/ena-features/F1_OUTCOME_REDESIGN_PLAN.md) — 종합평가(assessment, 최근 12주 편성진단 근거 재사용)·표시 단위별 흐름 문구·최고최저·편성 비교 결론·보완 건수(supplement, notes에서 이동) 추가. 기존 값의 계산식 무변경
 // v2.1(2026-10-23): 오리지널 비교(originalCompare — 같은 회차 순위·직전 동시간대·흐름) 추가, 기존 값 무변경
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v2.1";
+// v2.2(2026-10-23): 편성 비교 비교군을 올해(최소 12주)로·점유율 비교·종합평가 세부 줄(where·shareNote·trendNote)·문구 명확화, 기존 값 무변경
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v2.2";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "ORIGINAL_CULTURE" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
@@ -120,6 +121,12 @@ export interface Assessment {
   allAiringsBasis: boolean;
   headline: string;
   evidence: string | null;
+  /** 어디서 강하고 약한지 — 본방 시간·재방 시간대별 같은 시간대 평균 대비(조회 기간 방영 vs 올해 비교군) */
+  where?: string | null;
+  /** 시청률은 낮아도 점유율이 같은 시간대 평균보다 높은 구간이 있으면 그 사실 */
+  shareNote?: string | null;
+  /** 최근 4주가 이전 8주보다 기존 하락 기준 이상 낮을 때 */
+  trendNote?: string | null;
 }
 
 /** 최고·최저·최근 — 그래프에 표시 중인 점과 같은 자료에서 고른다 */
@@ -284,6 +291,10 @@ export interface SlotLine {
   sampleState: "OK" | "SMALL" | "NONE";
   /** 이 구간 방영 중 본방(<본>)인 건수 — 본방 시간대 판정에 쓴다 */
   firstRunAirings?: number;
+  /** 방영별 점유율 평균 vs 같은 비교군(같은 기준 단계)의 점유율 평균 */
+  shareAvg?: number | null;
+  compShareAvg?: number | null;
+  shareVs?: RatioValue;
 }
 
 /** 문장 조각 — d가 있으면 화면이 방향 색(높음 푸른색·낮음 붉은색)을 입힌다. 문장은 서버가 확정 수치로만 만든다. */
@@ -320,6 +331,9 @@ export interface RowAnalysis {
   dayExtremes?: Extremes<DailyPoint> | null;
   /** 편성 비교 결론 한 줄(표본 경고 문구 없음) */
   slotLead?: string;
+  /** 편성 비교 비교군 기간(올해 1월 1일 ~ 최신 자료일, 최소 12주) */
+  slotBaseFrom?: string;
+  slotBaseTo?: string;
 }
 
 export interface AiringEvidence {

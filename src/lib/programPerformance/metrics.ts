@@ -398,6 +398,8 @@ export interface CompAiring {
   date: string;
   startTime: string | null;
   rating: number;
+  /** 닐슨 방영별 점유율(%) — 없으면 null */
+  share?: number | null;
 }
 
 function hourBlockOfTime(t: string | null): number | null {
@@ -414,15 +416,16 @@ const dowOfDate = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay();
  * 방영하지 않은 시간대는 만들지 않는다(미방영 시간대 예측은 기능 2).
  */
 export function slotLinesOf(work: WorkAiring[], others: CompAiring[], minOther: number): SlotLine[] {
-  const comp = new Map<string, number[]>();
-  const compHour = new Map<number, number[]>();
+  const comp = new Map<string, CompAiring[]>();
+  const compHour = new Map<number, CompAiring[]>();
   for (const o of others) {
     const hb = hourBlockOfTime(o.startTime);
     if (hb === null || !Number.isFinite(o.rating)) continue;
     const k = `${dowOfDate(o.date)}|${hb}`;
-    comp.set(k, [...(comp.get(k) ?? []), o.rating]);
-    compHour.set(hb, [...(compHour.get(hb) ?? []), o.rating]);
+    comp.set(k, [...(comp.get(k) ?? []), o]);
+    compHour.set(hb, [...(compHour.get(hb) ?? []), o]);
   }
+  const shareOf = (xs: { share?: number | null }[]) => meanOf(xs.flatMap((x) => (x.share === null || x.share === undefined || !Number.isFinite(x.share) ? [] : [x.share])));
   const cells = new Map<string, WorkAiring[]>();
   for (const r of work) {
     const hb = hourBlockOfTime(r.startTime);
@@ -439,9 +442,12 @@ export function slotLinesOf(work: WorkAiring[], others: CompAiring[], minOther: 
     const wide = compHour.get(hb) ?? [];
     const basis: SlotLine["basis"] = exact.length >= minOther ? "DOW_HOUR" : wide.length >= minOther ? "HOUR" : "NONE";
     const c = basis === "DOW_HOUR" ? exact : basis === "HOUR" ? wide : [];
-    const compAvg = basis === "NONE" ? null : meanOf(c);
+    const compAvg = basis === "NONE" ? null : meanOf(c.map((x) => x.rating));
+    // 점유율도 같은 비교군(같은 기준 단계)에서 — 점유율 값이 있는 방영만
+    const shareAvg = shareOf(list);
+    const compShareAvg = basis === "NONE" ? null : shareOf(c);
     const vs = basis === "NONE" ? { ...ratioOf(st.avg, null), naReason: `같은 시 비교 방송 ${wide.length}건(${minOther}건 미만)` } : ratioOf(st.avg, compAvg);
-    out.push({ dow, hourBlock: hb, airings: st.airings, days: st.days, avg: st.avg, compAvg, compAirings: c.length, basis, vs, sampleState: sampleStateOf(st.days), firstRunAirings: list.filter((r) => r.firstRun === true).length });
+    out.push({ dow, hourBlock: hb, airings: st.airings, days: st.days, avg: st.avg, compAvg, compAirings: c.length, basis, vs, sampleState: sampleStateOf(st.days), firstRunAirings: list.filter((r) => r.firstRun === true).length, shareAvg, compShareAvg, shareVs: ratioOf(shareAvg, compShareAvg, "비교 점유율 없음") });
   }
   // 판단 가능한 구간(방송일 3일 이상) 먼저, 그다음 방영 많은 순
   return out.sort((a, b) => Number(b.sampleState !== "NONE") - Number(a.sampleState !== "NONE") || b.airings - a.airings || a.dow - b.dow || a.hourBlock - b.hourBlock);
@@ -638,7 +644,8 @@ export function slotLeadOf(slots: SlotLine[]): string {
   const j = ok.filter(judgeable);
   const hi = j.filter((s) => s.vs.direction === "HIGHER");
   const lo = j.filter((s) => s.vs.direction === "LOWER");
-  if (hi.length && lo.length) return `성과는 ${slotLabel(byDays(hi)[0].dow, byDays(hi)[0].hourBlock)}에 집중됩니다.`;
+  // 높고 낮은 곳이 섞이면 개수와 대표(방송일 많은 높은 구간)를 함께 — '집중'은 101%처럼 근소하게 높아도 과장돼 보여 쓰지 않는다(2026-10-23)
+  if (hi.length && lo.length) return `같은 시간대 평균보다 높은 곳은 ${slotLabel(byDays(hi)[0].dow, byDays(hi)[0].hourBlock)}${hi.length > 1 ? ` 등 ${hi.length}곳` : ""}, 낮은 곳은 ${lo.length}곳입니다.`;
   if (j.length >= 2 && hi.length === j.length) return "방영한 시간대 모두 시간대 평균보다 높습니다.";
   if (j.length >= 2 && lo.length === j.length) return "방영한 시간대 모두 시간대 평균보다 낮습니다.";
   if (j.length >= 2) return "시간대별로 시간대 평균과 비슷하거나 엇갈립니다.";
@@ -652,26 +659,67 @@ export function slotLeadOf(slots: SlotLine[]): string {
  * 권고(강화·교체·확대)·태그·점수·미래 예측을 쓰지 않는다. 근거 줄은 기존 하락 기준(최근 4주 vs 이전 8주)에 걸리면 그 사실, 아니면 같은 시간대 배율.
  * scope "12w"의 scale은 채널 '방영' 평균 대비(표의 채널 하루 평균과 다른 분모)라 근거 줄에서 이름을 구분한다.
  */
-export function assessmentOf(i: { scale: number | null; slot: number | null; trendFalling: boolean; scope: "12w" | "period" }): { headline: string; evidence: string | null } {
+export function assessmentOf(i: { scale: number | null; slot: number | null; trendFalling: boolean; scope: "12w" | "period" }): { headline: string; evidence: string | null; trendNote: string | null } {
   const c = directionOfRatio(i.scale);
   const s = directionOfRatio(i.slot);
+  // 비교 대상을 문장에 그대로 적는다(사용자 지시 2026-10-23: '배정된 시간대에서 약하다'가 무슨 뜻인지 모르겠다) — 무엇과 견줘 높고 낮은지
+  // 주어(기간·지표)는 제목(종합평가 · 최근 12주 · 수2049)에 이미 있어 문장에서 뺀다(사용자 지시 2026-10-23: 아는 말은 지워 읽기 쉽게)
+  const SLOT = "같은 시간대 다른 프로그램";
+  const vs = (d: Direction) => (d === "HIGHER" ? "보다 높습니다" : d === "LOWER" ? "보다 낮습니다" : "과 비슷합니다");
   let headline: string;
-  if (c === "NA" && s === "NA") headline = "채널 평균·같은 시간대 기준과 비교할 수 없습니다.";
-  else if (s === "NA") headline = c === "HIGHER" ? "채널 평균을 웃돌았습니다." : c === "LOWER" ? "채널 평균을 밑돌았습니다." : "채널 평균 수준입니다.";
-  else if (c === "NA") headline = s === "HIGHER" ? "같은 시간대 기준을 웃돌았습니다." : s === "LOWER" ? "같은 시간대 기준을 밑돌았습니다." : "같은 시간대 기준 수준입니다.";
-  else if (c === "HIGHER" && s === "HIGHER") headline = "현재 편성에서 성과가 좋습니다.";
-  else if (c === "HIGHER" && s === "LOWER") headline = "채널 평균은 넘지만, 배정된 시간대에서는 약합니다.";
-  else if (c === "LOWER" && s === "HIGHER") headline = "시청률은 낮아도, 해당 시간대에서는 제 역할을 합니다.";
-  else if (c === "LOWER" && s === "LOWER") headline = "현재 편성에서는 성과가 낮습니다.";
+  if (c === "NA" && s === "NA") headline = "채널 평균·같은 시간대 다른 프로그램과 비교할 수 없습니다.";
+  else if (s === "NA") headline = `채널 평균${vs(c)}.`;
+  else if (c === "NA") headline = `${SLOT}${vs(s)}.`;
+  else if (c === "HIGHER" && s === "HIGHER") headline = `채널 평균보다 높고, ${SLOT}보다도 높습니다.`;
+  else if (c === "HIGHER" && s === "LOWER") headline = `채널 평균보다 높지만, ${SLOT}보다는 낮습니다.`;
+  else if (c === "LOWER" && s === "HIGHER") headline = `채널 평균보다 낮지만, ${SLOT}보다는 높습니다.`;
+  else if (c === "LOWER" && s === "LOWER") headline = `채널 평균보다 낮고, ${SLOT}보다도 낮습니다.`;
   else {
-    const head = c === "HIGHER" ? "채널 평균은 넘고" : c === "LOWER" ? "시청률은 채널 평균보다 낮고" : "채널 평균 수준이고";
-    const tail = s === "HIGHER" ? "배정된 시간대에서는 더 잘합니다." : s === "LOWER" ? "배정된 시간대에서는 약합니다." : "배정된 시간대에서는 평균 수준입니다.";
-    headline = `${head}, ${tail}`;
+    const head = c === "HIGHER" ? "채널 평균보다 높고" : c === "LOWER" ? "채널 평균보다 낮고" : "채널 평균과 비슷하고";
+    headline = `${head}, ${SLOT}${vs(s)}.`;
   }
   let evidence: string | null = null;
-  if (i.trendFalling) evidence = "최근 4주는 이전 8주보다 낮아졌습니다.";
-  else if (i.slot !== null && Number.isFinite(i.slot)) {
+  if (i.slot !== null && Number.isFinite(i.slot)) {
     evidence = i.scope === "12w" && i.scale !== null && Number.isFinite(i.scale) ? `같은 시간대 기준 ${i.slot.toFixed(2)}배 · 채널 방영 평균의 ${i.scale.toFixed(2)}배(표본 보정 지수)` : `같은 시간대 기준 ${i.slot.toFixed(2)}배(표본 보정 지수)`;
   }
-  return { headline, evidence };
+  return { headline, evidence, trendNote: i.trendFalling ? "최근 4주는 이전 8주보다 낮아졌습니다." : null };
+}
+
+const isFirstSlot = (s: SlotLine) => (s.firstRunAirings ?? 0) > 0 && (s.firstRunAirings ?? 0) * 2 >= s.airings;
+const byDaysDesc = (xs: SlotLine[]) => [...xs].sort((a, b) => b.days - a.days || b.airings - a.airings || a.dow - b.dow || a.hourBlock - b.hourBlock);
+
+/**
+ * 어디서 강하고 약한지 한 문장 — 판단 가능 구간(방송일 3일 이상·비교 가능)만. 본방 시간은 방송일이 가장 많은 본방 구간의 같은 시간대 평균 대비 비율,
+ * 본방 외(본방 구분이 없으면 전체) 시간대는 평균보다 높은 곳·낮은 곳 개수. 값으로 구간을 고르지 않는다.
+ */
+export function whereLineOf(slots: SlotLine[]): string | null {
+  const j = slots.filter(judgeable);
+  if (j.length === 0) return null;
+  const fr = byDaysDesc(j.filter(isFirstSlot));
+  const rr = j.filter((x) => !isFirstSlot(x));
+  const parts: string[] = [];
+  if (fr.length) parts.push(`본방 시간(${slotLabel(fr[0].dow, fr[0].hourBlock)})은 같은 시간대 평균의 ${indexText(fr[0].vs.ratio)}`);
+  if (rr.length === 1) parts.push(`${fr.length ? "본방 외 " : ""}${slotLabel(rr[0].dow, rr[0].hourBlock)}는 같은 시간대 평균의 ${indexText(rr[0].vs.ratio)}`);
+  else if (rr.length > 1) {
+    const label = fr.length ? "본방 외 시간대" : "방영한 시간대";
+    const hi = rr.filter((x) => x.vs.direction === "HIGHER").length;
+    const lo = rr.filter((x) => x.vs.direction === "LOWER").length;
+    parts.push(lo >= hi ? `${label}는 ${rr.length}곳 중 ${lo}곳이 평균보다 낮습니다` : `${label}는 ${rr.length}곳 중 ${hi}곳이 평균보다 높습니다`);
+  }
+  const end = (t: string) => (t.endsWith("다") ? t : `${t}입니다`);
+  return parts.length === 2 ? `${parts[0]}이고, ${end(parts[1])}.` : `${end(parts[0])}.`;
+}
+
+/**
+ * 점유율 효율 — 시청률이 채널 평균보다 낮거나 그 구간 시청률이 같은 시간대 평균을 넘지 못해도, 점유율이 같은 시간대 평균의 1.5배
+ * (콘텐츠 적합도 STRENGTHEN 선과 같은 값) 이상인 판단 가능 구간이 있으면 그 사실을 한 줄로. 여러 곳이면 방송일이 많은 곳.
+ */
+export function shareLineOf(vsChannel: RatioValue, slots: SlotLine[]): string | null {
+  const strong = byDaysDesc(slots.filter((x) => judgeable(x) && x.shareVs?.ratio !== null && x.shareVs?.ratio !== undefined && x.shareVs.ratio >= CONTENT_FIT_CONFIG.cut.strengthen && (vsChannel.direction === "LOWER" || x.vs.direction !== "HIGHER")));
+  if (strong.length === 0) return null;
+  const x = strong[0];
+  const name = slotLabel(x.dow, x.hourBlock);
+  const head = vsChannel.direction === "LOWER" && vsChannel.ratio !== null ? `시청률은 채널 평균의 ${indexText(vsChannel.ratio)}지만, ` : `${name} 시청률은 같은 시간대 평균의 ${indexText(x.vs.ratio)}지만, `;
+  const more = strong.length > 1 ? ` (이런 시간대 ${strong.length}곳)` : "";
+  return `${head}${name} 점유율은 ${(x.shareAvg as number).toFixed(2)}%로 같은 시간대 평균의 ${indexText(x.shareVs!.ratio)}입니다${more}.`;
 }

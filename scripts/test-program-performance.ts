@@ -7,7 +7,7 @@
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
 import { matchPlanRow, normalizePlanRows } from "../src/lib/idealSchedule/planEpisodes";
 import { originalCompareOf, type OriginalSeries } from "../src/lib/programPerformance/originalCompare";
-import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, relText, assessmentOf, seriesTrendText, pickExtremes, slotLeadOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
+import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, relText, assessmentOf, whereLineOf, shareLineOf, seriesTrendText, pickExtremes, slotLeadOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
 import { searchWorks } from "../src/lib/programPerformance/search";
 import { performanceCacheKey } from "../src/lib/programPerformance/cacheKey";
@@ -424,13 +424,15 @@ async function main() {
 
     // 종합평가 문장 — 방향 조합별 고정 문구, 권고·태그·점수 없음
     const as = (scale: number | null, slot: number | null, trendFalling = false) => assessmentOf({ scale, slot, trendFalling, scope: "12w" });
-    check("종합평가: 둘 다 높음", as(1.57, 1.84).headline === "현재 편성에서 성과가 좋습니다.");
-    check("종합평가: 채널 평균은 높고 시간대는 낮음", as(1.3, 0.7).headline === "채널 평균은 넘지만, 배정된 시간대에서는 약합니다.");
-    check("종합평가: 규모는 낮고 시간대는 높음", as(0.4, 1.3).headline === "시청률은 낮아도, 해당 시간대에서는 제 역할을 합니다.");
-    check("종합평가: 둘 다 낮음", as(0.4, 0.5).headline === "현재 편성에서는 성과가 낮습니다.");
-    check("종합평가: 한 기준만 있으면 확인된 사실까지만", as(1.3, null).headline === "채널 평균을 웃돌았습니다." && as(null, 0.8).headline === "같은 시간대 기준을 밑돌았습니다.");
+    const SL = "같은 시간대 다른 프로그램";
+    check("종합평가: 둘 다 높음 — 비교 대상을 문장에 적는다", as(1.57, 1.84).headline === `채널 평균보다 높고, ${SL}보다도 높습니다.`, as(1.57, 1.84).headline);
+    check("종합평가: 채널 평균은 높고 시간대는 낮음", as(1.3, 0.7).headline === `채널 평균보다 높지만, ${SL}보다는 낮습니다.`);
+    check("종합평가: 규모는 낮고 시간대는 높음", as(0.4, 1.3).headline === `채널 평균보다 낮지만, ${SL}보다는 높습니다.`);
+    check("종합평가: 둘 다 낮음", as(0.4, 0.5).headline === `채널 평균보다 낮고, ${SL}보다도 낮습니다.`);
+    check("종합평가: 한 기준만 있으면 확인된 사실까지만", as(1.3, null).headline === "채널 평균보다 높습니다." && as(null, 0.8).headline === `${SL}보다 낮습니다.`);
+    check("종합평가: '배정된 시간대'처럼 모호한 표현 없음", ![as(1.3, 0.7), as(0.4, 1.3), as(1, 1)].some((x) => /배정된|제 역할/.test(x.headline)));
     check("종합평가: 근거 줄은 같은 시간대 배율(보정 지수 표기)", as(1.57, 1.84).evidence === "같은 시간대 기준 1.84배 · 채널 방영 평균의 1.57배(표본 보정 지수)", as(1.57, 1.84).evidence ?? "");
-    check("종합평가: 기존 하락 기준에 걸리면 근거 줄은 하락 사실", as(1.57, 1.84, true).evidence === "최근 4주는 이전 8주보다 낮아졌습니다.");
+    check("종합평가: 기존 하락 기준에 걸리면 하락 줄(근거 수치와 별도)", as(1.57, 1.84, true).trendNote === "최근 4주는 이전 8주보다 낮아졌습니다." && as(1.57, 1.84).trendNote === null);
     const allText = [as(1.57, 1.84), as(0.4, 0.5), as(1.3, 0.7), as(0.4, 1.3), as(1, 1)].map((x) => x.headline + (x.evidence ?? "")).join("");
     check("종합평가: 태그·점수·권고·상투어 없음, 최대 두 문장", !/(강화|교체|확대|유지하세요|적합도|몰입도|모니터링|우상향|신규유입)/.test(allText) && [as(1.57, 1.84)].every((x) => [x.headline, x.evidence].filter(Boolean).length <= 2), allText);
 
@@ -438,7 +440,7 @@ async function main() {
     const fit12 = async (code: string) => (code === "ENA" ? { asOf: END, windowFrom: addDays(END, -83), items: [{ programId: "p-dr-ena", tag: "KEEP", tier: "FORMAL", sampleDays: 12, airings: 12, slotIndex: 1.84, scaleIndex: 1.57, trendDelta: 0 }] } : null);
     const f = (await loadProgramPerformanceWith(db, Q(), { fitLookup: fit12 }))!;
     const fEna = rowOf(f.groups.flatMap((g) => g.rows), "ENA");
-    check("12주 진단: 지수가 있으면 scope=12w, 평가 기간은 진단 창", fEna.assessment?.scope === "12w" && fEna.assessment.from === addDays(END, -83) && fEna.assessment.headline === "현재 편성에서 성과가 좋습니다.", JSON.stringify(fEna.assessment));
+    check("12주 진단: 지수가 있으면 scope=12w, 평가 기간은 진단 창", fEna.assessment?.scope === "12w" && fEna.assessment.from === addDays(END, -83) && fEna.assessment.headline.startsWith("채널 평균보다 높고"), JSON.stringify(fEna.assessment));
     check("12주 진단: 진단의 1.57배를 표의 채널 평균 대비로 옮기지 않음", near(fEna.vsChannel.pct, 140) && fEna.assessment!.evidence!.includes("1.57배"));
     const rEna = rowOf(r.groups.flatMap((g) => g.rows), "ENA");
     check("12주 진단: 지수가 없으면 조회 기간 평가로(범위를 표시)", rEna.assessment?.scope === "period" && rEna.assessment.from === r.period.from, JSON.stringify(rEna.assessment));
@@ -468,18 +470,29 @@ async function main() {
 
     // 편성 비교 결론 — 표본 경고 없이, 우열은 판단 가능 구간(방송일 3일 이상)만
     const c = (dow: number, days: number, pct: number | null): SlotLine => ({ dow, hourBlock: 22, airings: days, days, avg: 1, compAvg: pct === null ? null : 1, compAirings: 20, basis: pct === null ? "NONE" : "DOW_HOUR", vs: pct === null ? ratioOf(1, null) : ratioOf(1 + pct / 100, 1), sampleState: days >= 8 ? "OK" : days >= 3 ? "SMALL" : "NONE" });
-    check("편성 비교 결론: 엇갈리면 방송일 많은 높은 구간에 집중", slotLeadOf([c(6, 5, 40), c(5, 9, 20), c(1, 6, -30)]) === "성과는 금 22시대에 집중됩니다.", slotLeadOf([c(6, 5, 40), c(5, 9, 20), c(1, 6, -30)]));
+    check("편성 비교 결론: 엇갈리면 높은 곳(방송일 많은 대표)·낮은 곳 개수", slotLeadOf([c(6, 5, 40), c(5, 9, 20), c(1, 6, -30)]) === "같은 시간대 평균보다 높은 곳은 금 22시대 등 2곳, 낮은 곳은 1곳입니다.", slotLeadOf([c(6, 5, 40), c(5, 9, 20), c(1, 6, -30)]));
     check("편성 비교 결론: 모두 높음", slotLeadOf([c(6, 5, 40), c(1, 6, 10)]) === "방영한 시간대 모두 시간대 평균보다 높습니다.");
     check("편성 비교 결론: 비교 기준 없음", slotLeadOf([c(6, 5, null)]) === "시간대 평균과 비교할 수 있는 구간이 없습니다.");
+    // 어디서 강하고 약한지·점유율 효율(2026-10-23 사용자 지시)
+    const W = (dow: number, hb: number, days: number, first: number, ratio: number, share?: [number, number]): SlotLine => ({ dow, hourBlock: hb, airings: days, days, avg: 1, compAvg: 1, compAirings: 40, basis: "DOW_HOUR", vs: ratioOf(ratio, 1), sampleState: days >= 8 ? "OK" : days >= 3 ? "SMALL" : "NONE", firstRunAirings: first, shareAvg: share?.[0] ?? null, compShareAvg: share?.[1] ?? null, shareVs: share ? ratioOf(share[0], share[1]) : undefined });
+    check("어디서: 본방 시간 비율 + 본방 외 시간대 높낮이 개수", whereLineOf([W(1, 22, 6, 6, 1.2), W(1, 24, 6, 0, 0.4), W(2, 12, 5, 0, 0.7), W(3, 18, 4, 0, 1.1)]) === "본방 시간(월 22시대)은 같은 시간대 평균의 120%이고, 본방 외 시간대는 3곳 중 2곳이 평균보다 낮습니다.", whereLineOf([W(1, 22, 6, 6, 1.2), W(1, 24, 6, 0, 0.4), W(2, 12, 5, 0, 0.7), W(3, 18, 4, 0, 1.1)]) ?? "");
+    check("어디서: 본방 구분이 없으면 '방영한 시간대'", whereLineOf([W(1, 24, 6, 0, 1.4), W(2, 12, 5, 0, 1.3)]) === "방영한 시간대는 2곳 중 2곳이 평균보다 높습니다.");
+    check("어디서: 판단 가능 구간(3일 이상)이 없으면 null", whereLineOf([W(1, 22, 2, 2, 1.2)]) === null);
+    check("점유율 효율: 시청률이 채널 평균 아래여도 점유율 1.5배 이상 구간을 알린다", shareLineOf(ratioOf(0.6, 1), [W(2, 12, 5, 0, 0.9, [3.1, 1.7])]) === "시청률은 채널 평균의 60%지만, 화 12시대 점유율은 3.10%로 같은 시간대 평균의 182%입니다.", shareLineOf(ratioOf(0.6, 1), [W(2, 12, 5, 0, 0.9, [3.1, 1.7])]) ?? "");
+    check("점유율 효율: 1.5배 미만이거나 시청률·점유율 모두 높으면 내지 않는다", shareLineOf(ratioOf(0.6, 1), [W(2, 12, 5, 0, 0.9, [2, 1.7])]) === null && shareLineOf(ratioOf(1.3, 1), [W(2, 12, 5, 0, 1.4, [4, 1.7])]) === null);
+    // 편성 비교 비교군은 올해 1월 1일 ~ 최신 자료일(조회 기간이 짧아도 비교 방송을 충분히)
+    const enaYear = rowOf(r.groups.flatMap((g) => g.rows), "ENA").analysis!;
+    check("편성 비교 비교군: 올해 1월 1일(12주 미만이면 최근 12주) ~ 최신 자료일", enaYear.slotBaseTo === END && (enaYear.slotBaseFrom === `${END.slice(0, 4)}-01-01` || enaYear.slotBaseFrom === addDays(END, -83)), `${enaYear.slotBaseFrom}~${enaYear.slotBaseTo}`);
+
     // 오리지널 비교(§7-1) — 같은 회차 순위·직전 동시간대·흐름, 새 판정 어휘 없음
     const S = (name: string, ratings: number[], slot = "월화 22:00"): OriginalSeries => ({ name, start: "2026-01-01", slot, ratings });
     const peersO = [S("가", [1, 1, 1, 1, 1, 1]), S("나", [0.5, 0.5, 0.5, 0.6, 0.6, 0.6]), S("다", [2, 2]), S("라", [0.2, 0.3, 0.4, 0.5])];
     const oc = originalCompareOf({ classLabel: "오리지널 드라마", targetLabel: "수도권 2049", dataFrom: "2025-01-01", code: "ENA", self: S("본작", [0.6, 0.6, 0.7, 0.9]), peers: peersO, predecessor: peersO[1] })!;
-    check("오리지널 비교: 같은 회차(첫 4회) 기준, 본방이 4회 이상인 작품끼리 순위(자기 포함)", oc.k === 4 && oc.peers === 4 && oc.rank === 2 && oc.lines[0] === "첫 4회 본방 평균 0.700%로 2025년 이후 오리지널 드라마 4편 중 2위(같은 회차 기준)", oc.lines[0]);
-    check("오리지널 비교: 직전 동시간대 첫 k회 평균 대비 상대 차이", !!oc.predecessor && oc.predecessor.k === 4 && near(oc.predecessor.vs.pct, (0.7 / 0.525 - 1) * 100) && oc.lines[1] === "직전 월화 22:00 오리지널 드라마 ‘나’ 첫 4회 평균 0.525% 대비 +33%", oc.lines[1]);
-    check("오리지널 비교: 흐름은 첫 2회 대비 3~4회, 다른 작품 중간값과 나란히", !!oc.momentum && near(oc.momentum.self, (0.8 / 0.6 - 1) * 100) && oc.lines[2].startsWith("첫 2회 대비 3~4회 +33% · 같은 시점 다른 오리지널 드라마 중간값"), oc.lines[2]);
+    check("오리지널 비교: 같은 회차(첫 4회) 기준, 본방이 4회 이상인 작품끼리 순위(자기 포함)", oc.k === 4 && oc.peers === 4 && oc.rank === 2 && oc.lines[0] === "첫 4회 평균 0.700% · 2025년 이후 4편 중 2위(같은 회차 기준)", oc.lines[0]);
+    check("오리지널 비교: 직전 동시간대 첫 k회 평균 대비 상대 차이", !!oc.predecessor && oc.predecessor.k === 4 && near(oc.predecessor.vs.pct, (0.7 / 0.525 - 1) * 100) && oc.lines[1] === "직전 월화 22:00 ‘나’ 첫 4회 평균 0.525%의 133%", oc.lines[1]);
+    check("오리지널 비교: 흐름은 첫 2회 대비 3~4회, 다른 작품 중간값과 나란히", !!oc.momentum && near(oc.momentum.self, (0.8 / 0.6 - 1) * 100) && oc.lines[2].startsWith("첫 2회 대비 3~4회 +33% · 같은 시점 다른 작품 중간값"), oc.lines[2]);
     const oc1 = originalCompareOf({ classLabel: "오리지널 예능", targetLabel: "수도권 2049", dataFrom: "2025-01-01", code: "ENA", self: S("새작", [0.392]), peers: peersO, predecessor: S("앞작", [0.5, 0.3, 0.2]) })!;
-    check("오리지널 비교: 1회뿐이면 '1회 본방', 직전 작품도 1회와 비교, 흐름 줄 없음", oc1.lines[0].startsWith("1회 본방 0.392%로") && oc1.lines[1].includes("‘앞작’ 1회 본방 0.500% 대비 −22%") && oc1.momentum === null && oc1.lines.length === 2, oc1.lines.join(" / "));
+    check("오리지널 비교: 1회뿐이면 '1회 본방', 직전 작품도 1회와 비교, 흐름 줄 없음", oc1.lines[0].startsWith("1회 0.392% · ") && oc1.lines[1].includes("‘앞작’ 1회 0.500%의 78%") && oc1.momentum === null && oc1.lines.length === 2, oc1.lines.join(" / "));
     check("오리지널 비교: 비교 대상이 없으면 null(빈 문구를 만들지 않음)", originalCompareOf({ classLabel: "오리지널 교양", targetLabel: "수도권 2049", dataFrom: "2025-01-01", code: "ENA", self: S("홀로", [0.1]), peers: [], predecessor: null }) === null);
     check("오리지널 비교: 평가 어휘·권고 없음", !/(좋|나쁘|우수|부진|강화|교체|확대)/.test(oc.lines.join("")));
     check("편성 비교 결론: 표본 경고 문구 없음(소표본 구간만 있어도)", ![slotLeadOf([c(6, 2, 40), c(1, 1, -30)]), slotLeadOf([c(6, 2, 40)])].some((t) => /(표본|판단|참고|3일 미만)/.test(t)));
