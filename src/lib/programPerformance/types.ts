@@ -11,7 +11,8 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 // v1.7(2026-10-22): 본방 여부·회차가 비어 있는 방영을 업로드 편성표([본]·[재])로 보완
 // v1.8(2026-10-22): 그래도 비어 있는 방영을 본방 편성 패턴(관리자 등록 요일·시각, 네이버 방송 정보)으로 보완하고 닐슨으로 맞춘 실제 본방 시각(pattern)을 함께 돌려준다
 // v1.9(2026-10-23): 용어 정의(본방 = 각 채널 첫 방송, 초방 = 원 방송사 첫 방송)에 맞춰 원 방송사가 아닌 자사 채널 방영을 패턴만으로 재방으로 보지 않는다(모름 — 그 채널 첫 방송이면 본방)
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.9";
+// v2.0(2026-10-23): 성과 중심 화면 개편(docs/ena-features/F1_OUTCOME_REDESIGN_PLAN.md) — 종합평가(assessment, 최근 12주 편성진단 근거 재사용)·표시 단위별 흐름 문구·최고최저·편성 비교 결론·보완 건수(supplement, notes에서 이동) 추가. 기존 값의 계산식 무변경
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v2.0";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "ORIGINAL_CULTURE" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
@@ -98,6 +99,45 @@ export interface FitTagInfo {
   sampleDays: number;
   /** 같은 채널에 이 작품의 program_id가 여러 개면 가장 방영 많은 것 기준 */
   note: string;
+  /** 엔진 값 그대로(재계산 없음): 같은 시간대 대비·채널 방영 평균 대비(둘 다 κ=2 수축 배율). 판단 보류(3일 미만)면 null */
+  slotIndex?: number | null;
+  scaleIndex?: number | null;
+  /** 최근 4주가 이전 8주보다 기존 하락 기준(trendDownDelta) 이상 낮아졌는지 */
+  trendFalling?: boolean;
+}
+
+/**
+ * 종합평가 — 결론 한 줄 + 근거 한 줄(서버 고정 문구, LLM 아님). 새 점수·가중치 없이 기존 지수의 방향만 읽는다.
+ * scope "12w" = 최근 12주 편성진단(콘텐츠 적합도, 채널 KPI 타깃·전체 방송), "period" = 12주 진단 근거가 없을 때 조회 기간의 같은 두 지표.
+ */
+export interface Assessment {
+  scope: "12w" | "period";
+  from: string;
+  to: string;
+  targetLabel: string;
+  /** 진단이 전체 방송 기준인데 조회는 본방/본방 외일 때 true(화면에 '전체 방송 기준') */
+  allAiringsBasis: boolean;
+  headline: string;
+  evidence: string | null;
+}
+
+/** 최고·최저·최근 — 그래프에 표시 중인 점과 같은 자료에서 고른다 */
+export interface Extremes<T> {
+  best: T;
+  worst: T;
+  recent: T;
+  /** 관측점 수(1이면 최고·최저를 나누지 않는다) */
+  count: number;
+}
+
+/** 본방 여부·회차 보완 건수(내부 이력 — 기본 화면에 띄우지 않고 방송 기록 접힘 안에만) */
+export interface SupplementCount {
+  channelCode: string;
+  channelName: string;
+  plan: number;
+  registered: number;
+  naver: number;
+  episode: number;
 }
 
 export interface SplitStat {
@@ -185,6 +225,8 @@ export interface ChannelRow {
   shareAirings: number;
   /** 선택 채널 분석(2×2) — 방영이 있을 때만 */
   analysis: RowAnalysis | null;
+  /** 종합평가 — 채널 KPI 타깃 행에서만(다른 그룹 타깃 행은 null) */
+  assessment?: Assessment | null;
 }
 
 /** 회차별 추이 한 점 — <본> 표시가 있는 방영만, 회차 번호 기준(재방을 다음 회차처럼 잇지 않음). 같은 회차 본방이 여럿이면 평균. */
@@ -247,6 +289,14 @@ export interface RowAnalysis {
   reasons: string[];
   /** 종합 평가 — 다른 칸에 이미 보이는 내용과 겹치지 않는 인사이트 줄(최대 3). 없으면 verdict를 쓴다 */
   insights: TextPart[][];
+  /** 흐름 한 줄 — 그래프 단위별(본방별은 본방 2회 이상일 때만, 일별은 방영이 있는 방송일) */
+  trendFirst?: string | null;
+  trendDaily?: string;
+  /** 최고·최저·최근 — 본방별 그래프와 같은 본방 방영 / 일별 그래프와 같은 방송일 평균 */
+  firstExtremes?: Extremes<AiringRef> | null;
+  dayExtremes?: Extremes<DailyPoint> | null;
+  /** 편성 비교 결론 한 줄(표본 경고 문구 없음) */
+  slotLead?: string;
 }
 
 export interface AiringEvidence {
@@ -304,6 +354,8 @@ export interface PerformanceResult {
   airingsTruncated: boolean;
   slotCells: SlotCell[];
   notes: string[];
+  /** 본방 여부·회차 보완 건수(채널별) — 화면은 방송 기록 접힘 안에서만 보여 준다 */
+  supplement?: SupplementCount[];
   /** 본방 편성 패턴(관리자 등록·네이버 방송 정보)과 닐슨으로 확인한 실제 본방 시각. 근거가 없으면 null */
   pattern: BroadcastPatternInfo | null;
 }

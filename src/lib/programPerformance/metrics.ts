@@ -574,3 +574,104 @@ export function verdictOf(input: { vsChannel: Direction; vsSlot: Direction; samp
   if (input.sampleState === "SMALL" && reasons.length < 2) reasons.push(`자료 적음 · ${input.days}일`);
   return { verdict, reasons: reasons.slice(0, 2) };
 }
+
+// ───────────────────────── 성과 중심 개편(2026-10-23, docs/ena-features/F1_OUTCOME_REDESIGN_PLAN.md) ─────────────────────────
+// 새 점수·가중치·합격선 없이, 이미 계산된 배율의 방향(directionOfRatio)과 기존 하락 기준만 읽어 짧은 문장을 고른다.
+
+/**
+ * 상대 차이 표기 — 서버 원정밀도 pct((배율 − 1) × 100)를 정수로 반올림해 부호와 함께. 100 기준 지수 109 → "+9%". %p가 아니다.
+ * 산출 불가(기준값 0·없음, 실적 없음)는 "—".
+ */
+export function relText(pct: number | null | undefined): string {
+  if (pct === null || pct === undefined || !Number.isFinite(pct)) return "—";
+  const n = Math.round(pct);
+  if (n === 0) return "0%";
+  return n > 0 ? `+${n}%` : `−${Math.abs(n)}%`;
+}
+
+/** 최고·최저·최근 — 넘겨받은 점(그래프에 그리는 점과 같은 자료)에서 고른다. 동률은 먼저 것. 점이 없으면 null. */
+export function pickExtremes<T>(items: T[], val: (x: T) => number | null): { best: T; worst: T; recent: T; count: number } | null {
+  const vs = items.filter((x) => {
+    const v = val(x);
+    return v !== null && Number.isFinite(v);
+  });
+  if (vs.length === 0) return null;
+  let best = vs[0];
+  let worst = vs[0];
+  for (const x of vs) {
+    if ((val(x) as number) > (val(best) as number)) best = x;
+    if ((val(x) as number) < (val(worst) as number)) worst = x;
+  }
+  return { best, worst, recent: vs[vs.length - 1], count: vs.length };
+}
+
+/**
+ * 표시 중인 시계열 단위로 만드는 흐름 한 줄(일별 그래프에 '비교할 회차가 하나뿐' 같은 엉뚱한 설명이 붙지 않게).
+ * 4점 이상: 앞 절반 vs 뒤 절반 평균(홀수면 가운데 제외), 2~3점: 처음 vs 최근, 1점: 그 값만. 방향은 표시 자릿수 반올림 배율로만.
+ */
+export function seriesTrendText(ev: { avg: number; label: string }[], unit: string, code: string): string {
+  if (ev.length === 0) return "표시할 시청률이 없습니다.";
+  if (ev.length === 1) return `${unit} 하나 · ${ev[0].label} ${pctText(ev[0].avg, code)}`;
+  if (ev.length >= 4) {
+    const n = Math.floor(ev.length / 2);
+    const a = meanOf(ev.slice(0, n).map((e) => e.avg));
+    const b = meanOf(ev.slice(ev.length - n).map((e) => e.avg));
+    const dir = a !== null && a > 0 && b !== null ? directionOfRatio(b / a) : "NA";
+    const head = dir === "NA" || dir === "SIMILAR" ? `전반·후반 ${unit} 평균 비슷` : `후반 ${unit} 평균 ${DIR_TREND[dir]}`;
+    return `${head} · 전반 ${pctText(a, code)} → 후반 ${pctText(b, code)}`;
+  }
+  const f = ev[0];
+  const l = ev[ev.length - 1];
+  const dir = f.avg > 0 ? directionOfRatio(l.avg / f.avg) : "NA";
+  return `${dir === "NA" || dir === "SIMILAR" ? `첫 ${unit}와 최근 ${unit} 비슷` : `최근 ${unit} ${DIR_TREND[dir]}`} · ${f.label} ${pctText(f.avg, code)} → ${l.label} ${pctText(l.avg, code)}`;
+}
+
+/**
+ * 편성 비교 결론 한 줄 — 표본 경고 문구 없이 관측된 관계만. 우열 주장(집중·모두 높음/낮음)은 기존 '판단 가능 구간'(방송일 3일 이상·비교 가능)만 쓴다.
+ * 집중 구간의 대표는 방송일이 가장 많은 높은 구간(극단값을 골라 강조하지 않음). 방영하지 않은 시간대는 다루지 않는다.
+ */
+export function slotLeadOf(slots: SlotLine[]): string {
+  const ok = slots.filter((s) => s.vs.pct !== null);
+  if (ok.length === 0) return "시간대 평균과 비교할 수 있는 구간이 없습니다.";
+  const byDays = (xs: SlotLine[]) => [...xs].sort((a, b) => b.days - a.days || b.airings - a.airings || a.dow - b.dow || a.hourBlock - b.hourBlock);
+  const one = (s: SlotLine) => `${slotLabel(s.dow, s.hourBlock)}는 시간대 평균${s.vs.direction === "HIGHER" ? "보다 높습니다" : s.vs.direction === "LOWER" ? "보다 낮습니다" : "과 비슷합니다"}.`;
+  const j = ok.filter(judgeable);
+  const hi = j.filter((s) => s.vs.direction === "HIGHER");
+  const lo = j.filter((s) => s.vs.direction === "LOWER");
+  if (hi.length && lo.length) return `성과는 ${slotLabel(byDays(hi)[0].dow, byDays(hi)[0].hourBlock)}에 집중됩니다.`;
+  if (j.length >= 2 && hi.length === j.length) return "방영한 시간대 모두 시간대 평균보다 높습니다.";
+  if (j.length >= 2 && lo.length === j.length) return "방영한 시간대 모두 시간대 평균보다 낮습니다.";
+  if (j.length >= 2) return "시간대별로 시간대 평균과 비슷하거나 엇갈립니다.";
+  if (j.length === 1) return one(j[0]);
+  // 판단 가능 구간이 없으면 주 방영 구간(서버 정렬 첫 행 — 값으로 고르지 않음)의 관측 사실만. 그 구간에 비교 기준이 없으면 그렇다고만 쓴다
+  return slots[0].vs.pct !== null ? one(slots[0]) : "주로 방영한 시간대는 같은 시간대 평균과 비교할 수 없습니다.";
+}
+
+/**
+ * 종합평가 문장 — 시청 규모(채널 평균 대비)와 같은 시간대 대비의 방향만 잇는다(문체 예시를 고정 문구로 옮긴 것, 새 판정 기준 아님).
+ * 권고(강화·교체·확대)·태그·점수·미래 예측을 쓰지 않는다. 근거 줄은 기존 하락 기준(최근 4주 vs 이전 8주)에 걸리면 그 사실, 아니면 같은 시간대 배율.
+ * scope "12w"의 scale은 채널 '방영' 평균 대비(표의 채널 하루 평균과 다른 분모)라 근거 줄에서 이름을 구분한다.
+ */
+export function assessmentOf(i: { scale: number | null; slot: number | null; trendFalling: boolean; scope: "12w" | "period" }): { headline: string; evidence: string | null } {
+  const c = directionOfRatio(i.scale);
+  const s = directionOfRatio(i.slot);
+  let headline: string;
+  if (c === "NA" && s === "NA") headline = "채널 평균·같은 시간대 기준과 비교할 수 없습니다.";
+  else if (s === "NA") headline = c === "HIGHER" ? "채널 평균을 웃돌았습니다." : c === "LOWER" ? "채널 평균을 밑돌았습니다." : "채널 평균 수준입니다.";
+  else if (c === "NA") headline = s === "HIGHER" ? "같은 시간대 기준을 웃돌았습니다." : s === "LOWER" ? "같은 시간대 기준을 밑돌았습니다." : "같은 시간대 기준 수준입니다.";
+  else if (c === "HIGHER" && s === "HIGHER") headline = "현재 편성에서 성과가 좋습니다.";
+  else if (c === "HIGHER" && s === "LOWER") headline = "채널 평균은 넘지만, 배정된 시간대에서는 약합니다.";
+  else if (c === "LOWER" && s === "HIGHER") headline = "시청률은 낮아도, 해당 시간대에서는 제 역할을 합니다.";
+  else if (c === "LOWER" && s === "LOWER") headline = "현재 편성에서는 성과가 낮습니다.";
+  else {
+    const head = c === "HIGHER" ? "채널 평균은 넘고" : c === "LOWER" ? "시청률은 채널 평균보다 낮고" : "채널 평균 수준이고";
+    const tail = s === "HIGHER" ? "배정된 시간대에서는 더 잘합니다." : s === "LOWER" ? "배정된 시간대에서는 약합니다." : "배정된 시간대에서는 평균 수준입니다.";
+    headline = `${head}, ${tail}`;
+  }
+  let evidence: string | null = null;
+  if (i.trendFalling) evidence = "최근 4주는 이전 8주보다 낮아졌습니다.";
+  else if (i.slot !== null && Number.isFinite(i.slot)) {
+    evidence = i.scope === "12w" && i.scale !== null && Number.isFinite(i.scale) ? `같은 시간대 기준 ${i.slot.toFixed(2)}배 · 채널 방영 평균의 ${i.scale.toFixed(2)}배(표본 보정 지수)` : `같은 시간대 기준 ${i.slot.toFixed(2)}배(표본 보정 지수)`;
+  }
+  return { headline, evidence };
+}

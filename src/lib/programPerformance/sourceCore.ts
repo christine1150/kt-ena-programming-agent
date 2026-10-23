@@ -38,6 +38,10 @@ import {
   trendTextOf,
   verdictOf,
   insightsOf,
+  assessmentOf,
+  pickExtremes,
+  seriesTrendText,
+  slotLeadOf,
   type ChannelDayRow,
   type CompAiring,
   type WorkAiring,
@@ -99,7 +103,7 @@ const COMMON_TARGETS: Record<Exclude<TargetMode, "kpi" | "both">, { program: str
 };
 
 export interface FitLookup {
-  (channelCode: string): Promise<{ asOf: string; windowFrom: string; items: { programId: string; tag: string | null; tier: string; sampleDays: number; airings: number }[] } | null>;
+  (channelCode: string): Promise<{ asOf: string; windowFrom: string; items: { programId: string; tag: string | null; tier: string; sampleDays: number; airings: number; slotIndex?: number | null; scaleIndex?: number | null; trendDelta?: number | null }[] } | null>;
 }
 
 export interface LoadOptions {
@@ -613,7 +617,17 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       if (fr) {
         const mine = fr.items.filter((i) => ids.includes(i.programId)).sort((a, b) => b.airings - a.airings);
         fit = mine.length
-          ? { tag: mine[0].tag, tier: mine[0].tier, asOf: fr.asOf, windowFrom: fr.windowFrom, sampleDays: mine[0].sampleDays, note: mine.length > 1 ? `이 채널에 표기가 다른 같은 작품 ${mine.length}개 중 방영이 가장 많은 것 기준` : "" }
+          ? {
+              tag: mine[0].tag,
+              tier: mine[0].tier,
+              asOf: fr.asOf,
+              windowFrom: fr.windowFrom,
+              sampleDays: mine[0].sampleDays,
+              note: mine.length > 1 ? `이 채널에 표기가 다른 같은 작품 ${mine.length}개 중 방영이 가장 많은 것 기준` : "",
+              slotIndex: mine[0].slotIndex ?? null,
+              scaleIndex: mine[0].scaleIndex ?? null,
+              trendFalling: mine[0].trendDelta !== null && mine[0].trendDelta !== undefined && mine[0].trendDelta <= CONTENT_FIT_CONFIG.trendDownDelta,
+            }
           : { tag: null, tier: "NONE", asOf: fr.asOf, windowFrom: fr.windowFrom, sampleDays: 0, note: "최근 12주 방영 없음" };
       }
     }
@@ -653,6 +667,31 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       const v = verdictOf({ vsChannel: vsChannel.direction, vsSlot: slot.ratio.direction, sampleState, days: fStat.days, slots, nonFirst });
       const firstRuns = filtered.filter((a) => a.firstRun === true && a.rating !== null).map((a) => ({ date: a.date, startTime: a.startTime, episode: a.episode, firstRun: true, rating: a.rating as number }));
       analysis = { episodes: eps.length >= 2 ? eps : [], firstRuns, channelAvg: channelDaily.mean, trendText: trendTextOf(eps, monthly, ch.code, firstRuns), extremes: ext, extremesText: extremesTextOf(ext), slots, slotText: slotTextOf(slots), slotParts: slotPartsOf(slots, nonFirst ? { ...nonFirst, rerunMajor: rerun.airings >= unknown.airings } : null), verdict: v.verdict, reasons: v.reasons, insights: insightsOf({ all: query.airing === "all", first, rerun, unknown, channelAvg: channelDaily.mean, overallRatio: vsChannel.ratio, firstRuns }) };
+      // 개편(2026-10-23): 흐름 문구·최고최저는 그래프 단위(본방별·일별)마다 그 그래프와 같은 자료로, 편성 비교 결론은 표본 경고 없이
+      const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
+      analysis.trendFirst = firstRuns.length >= 2 ? trendTextOf(eps, [], ch.code, firstRuns) : null;
+      analysis.trendDaily = seriesTrendText(daily.flatMap((d) => (d.programAvg === null ? [] : [{ avg: d.programAvg, label: md(d.date) }])), "방송일", ch.code);
+      analysis.firstExtremes = firstRuns.length >= 2 ? pickExtremes(firstRuns, (x) => x.rating) : null;
+      analysis.dayExtremes = pickExtremes(daily, (x) => x.programAvg);
+      analysis.slotLead = slotLeadOf(slots);
+    }
+
+    // 종합평가 — 채널 KPI 타깃 행에서만. 최근 12주 편성진단(콘텐츠 적합도) 지수가 있으면 그것을, 없으면(12주 방영 없음·3일 미만·공통 타깃 모드) 조회 기간의 같은 두 지표를 쓴다.
+    // 두 범위의 분모(채널 방영 평균 vs 채널 하루 평균)가 달라 섞지 않고 scope로 구분한다.
+    let assessment: ChannelRow["assessment"] = null;
+    if (tgt.isPrimary && filtered.length > 0) {
+      const fromFit = fit !== null && fit.slotIndex !== null && fit.slotIndex !== undefined;
+      const a = fromFit
+        ? assessmentOf({ scale: fit!.scaleIndex ?? null, slot: fit!.slotIndex ?? null, trendFalling: fit!.trendFalling === true, scope: "12w" })
+        : assessmentOf({ scale: vsChannel.ratio, slot: slot.ratio.ratio, trendFalling: false, scope: "period" });
+      assessment = {
+        scope: fromFit ? "12w" : "period",
+        from: fromFit ? fit!.windowFrom : from,
+        to: fromFit ? fit!.asOf : to,
+        targetLabel: programLabel,
+        allAiringsBasis: fromFit && query.airing !== "all",
+        ...a,
+      };
     }
 
     rows.push({
@@ -679,6 +718,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       shareAvg: sh.avg,
       shareAirings: sh.airings,
       analysis,
+      assessment,
     });
     return done();
     });
@@ -686,12 +726,8 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   // 경쟁 채널 조회도 자사 채널 조회와 함께 시작한다
   const competitorsP = loadCompetitorRows(db, work.memberKeys, new Set(channels.map((c) => normalizeProgramKey(c.name))), from, to, query.airing, workPrograms.map((p) => p.canonical_name ?? ""));
   const buckets = await Promise.all(jobs.map((j) => j()));
-  // 본방 여부·회차 보완 안내 — 채널마다 어떤 근거로 몇 건을 채웠는지 한 줄로
-  const fills = [...fillStats.values()].sort((a, b) => a.order - b.order);
-  if (fills.length) {
-    const label = (f: (typeof fills)[number]) => [f.plan ? `편성표 ${f.plan}` : "", f.registered ? `등록 ${f.registered}` : "", f.naver ? `네이버 ${f.naver}` : "", f.episode ? `회차 ${f.episode}` : ""].filter(Boolean).join("·");
-    notes.push(`닐슨에 본방·재방 표시가 없는 방영은 업로드 편성표·관리자 등록 본방 시각·네이버 방송 정보로 보완했습니다(건수) — ${fills.map((f) => `${f.channelName} ${label(f)}`).join(" / ")}`);
-  }
+  // 본방 여부·회차 보완 건수 — 기본 화면 배너(notes)가 아니라 별도 필드로 남겨 방송 기록 접힘 안에서만 보여 준다(개편 2026-10-23, 이력은 그대로)
+  const supplement = [...fillStats.entries()].sort((a, b) => a[1].order - b[1].order).map(([channelCode, f]) => ({ channelCode, channelName: f.channelName, plan: f.plan, registered: f.registered, naver: f.naver, episode: f.episode }));
   const rows = buckets.flatMap((b) => b.rows);
   const evidence = buckets.flatMap((b) => b.evidence);
   const slotCells = buckets.flatMap((b) => b.slotCells);
@@ -733,6 +769,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     airingsTruncated: evidence.length > EVIDENCE_CAP,
     slotCells,
     notes,
+    supplement,
     pattern:
       runPatterns.patterns.length > 0 || runPatterns.info.naverSkipped.length > 0
         ? {

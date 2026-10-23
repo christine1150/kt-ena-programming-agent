@@ -6,7 +6,7 @@
 // 보증하지 못하는 것: 운영 데이터에서의 값(합성 사례의 이름·수치는 실제 채널 성과가 아니다).
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
 import { matchPlanRow, normalizePlanRows } from "../src/lib/idealSchedule/planEpisodes";
-import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
+import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, relText, assessmentOf, seriesTrendText, pickExtremes, slotLeadOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
 import { searchWorks } from "../src/lib/programPerformance/search";
 import { performanceCacheKey } from "../src/lib/programPerformance/cacheKey";
@@ -411,6 +411,66 @@ async function main() {
     check("편성표 보완: 시각이 30분 넘게 다르면 맞추지 않는다", matchPlanRow(plan, { programId: "p1", name: "니돈내산", startTime: "17:00:00" }) === null);
   }
   check("점유율: 값이 있는 방영만 평균(NULL은 0이 아님)", near(shareStat([air("2026-01-03", 0.1, { share: 2 }), air("2026-01-10", 0.1, { share: null }), air("2026-01-17", 0.1, { share: 0 })]).avg, 1));
+  }
+
+  // ── 성과 중심 개편(2026-10-23, F1_OUTCOME_REDESIGN_PLAN.md) ─────────────────────────────
+  {
+    // 상대 차이 표기: 100 기준 지수 109 → +9%, 반올림된 화면 값이 아니라 원정밀도 pct에서
+    check("상대 차이: 지수 109%는 +9%", relText(ratioOf(1.09, 1).pct) === "+9%" && relText(ratioOf(0.84, 1).pct) === "−16%");
+    check("상대 차이: 원정밀도 값에서(1.2÷1.1 = +9.09% → +9%)", relText(ratioOf(1.2, 1.1).pct) === "+9%");
+    check("상대 차이: 기준값 0·없음·실적 없음은 —(무한대·임의 상수 없음)", relText(ratioOf(0.5, 0).pct) === "—" && relText(ratioOf(0.5, null).pct) === "—" && relText(ratioOf(null, 1).pct) === "—");
+    check("상대 차이: 유효한 0 실적은 −100%(결측과 구분)", relText(ratioOf(0, 0.5).pct) === "−100%");
+
+    // 종합평가 문장 — 방향 조합별 고정 문구, 권고·태그·점수 없음
+    const as = (scale: number | null, slot: number | null, trendFalling = false) => assessmentOf({ scale, slot, trendFalling, scope: "12w" });
+    check("종합평가: 둘 다 높음", as(1.57, 1.84).headline === "현재 편성에서 성과가 좋습니다.");
+    check("종합평가: 채널 평균은 높고 시간대는 낮음", as(1.3, 0.7).headline === "채널 평균은 넘지만, 배정된 시간대에서는 약합니다.");
+    check("종합평가: 규모는 낮고 시간대는 높음", as(0.4, 1.3).headline === "시청률은 낮아도, 해당 시간대에서는 제 역할을 합니다.");
+    check("종합평가: 둘 다 낮음", as(0.4, 0.5).headline === "현재 편성에서는 성과가 낮습니다.");
+    check("종합평가: 한 기준만 있으면 확인된 사실까지만", as(1.3, null).headline === "채널 평균을 웃돌았습니다." && as(null, 0.8).headline === "같은 시간대 기준을 밑돌았습니다.");
+    check("종합평가: 근거 줄은 같은 시간대 배율(보정 지수 표기)", as(1.57, 1.84).evidence === "같은 시간대 기준 1.84배 · 채널 방영 평균의 1.57배(표본 보정 지수)", as(1.57, 1.84).evidence ?? "");
+    check("종합평가: 기존 하락 기준에 걸리면 근거 줄은 하락 사실", as(1.57, 1.84, true).evidence === "최근 4주는 이전 8주보다 낮아졌습니다.");
+    const allText = [as(1.57, 1.84), as(0.4, 0.5), as(1.3, 0.7), as(0.4, 1.3), as(1, 1)].map((x) => x.headline + (x.evidence ?? "")).join("");
+    check("종합평가: 태그·점수·권고·상투어 없음, 최대 두 문장", !/(강화|교체|확대|유지하세요|적합도|몰입도|모니터링|우상향|신규유입)/.test(allText) && [as(1.57, 1.84)].every((x) => [x.headline, x.evidence].filter(Boolean).length <= 2), allText);
+
+    // 12주 진단 연결 — 진단 지수가 있으면 '최근 12주', 표의 채널 평균 대비(%)는 그대로(분모를 섞지 않음)
+    const fit12 = async (code: string) => (code === "ENA" ? { asOf: END, windowFrom: addDays(END, -83), items: [{ programId: "p-dr-ena", tag: "KEEP", tier: "FORMAL", sampleDays: 12, airings: 12, slotIndex: 1.84, scaleIndex: 1.57, trendDelta: 0 }] } : null);
+    const f = (await loadProgramPerformanceWith(db, Q(), { fitLookup: fit12 }))!;
+    const fEna = rowOf(f.groups.flatMap((g) => g.rows), "ENA");
+    check("12주 진단: 지수가 있으면 scope=12w, 평가 기간은 진단 창", fEna.assessment?.scope === "12w" && fEna.assessment.from === addDays(END, -83) && fEna.assessment.headline === "현재 편성에서 성과가 좋습니다.", JSON.stringify(fEna.assessment));
+    check("12주 진단: 진단의 1.57배를 표의 채널 평균 대비로 옮기지 않음", near(fEna.vsChannel.pct, 140) && fEna.assessment!.evidence!.includes("1.57배"));
+    const rEna = rowOf(r.groups.flatMap((g) => g.rows), "ENA");
+    check("12주 진단: 지수가 없으면 조회 기간 평가로(범위를 표시)", rEna.assessment?.scope === "period" && rEna.assessment.from === r.period.from, JSON.stringify(rEna.assessment));
+    const fFirst = (await loadProgramPerformanceWith(db, Q({ airing: "first" }), { fitLookup: fit12 }))!;
+    check("12주 진단: 본방 조회에서 전체 방송 진단을 쓰면 '전체 방송 기준' 표시", rowOf(fFirst.groups.flatMap((g) => g.rows), "ENA").assessment?.allAiringsBasis === true);
+    check("종합평가: 다른 그룹 타깃 행에는 붙이지 않음", bEna.find((x) => !x.primary)!.assessment == null && bEna.find((x) => x.primary)!.assessment != null);
+    check("소표본 채널도 관측 실적으로 평가(보류 문구 없음)", !!rowOf(r.groups.flatMap((g) => g.rows), "ENA_PLAY").assessment && !/(판단|보류|표본)/.test(rowOf(r.groups.flatMap((g) => g.rows), "ENA_PLAY").assessment!.headline));
+
+    // 방영횟수 — 두 타깃을 보여도 KPI 행의 고유 방영 건수(두 배로 세지 않음)
+    check("방영횟수: 두 타깃 모드에서도 같은 고유 방영 수", bEna.find((x) => x.primary)!.airings === rEna.airings && bEna.find((x) => !x.primary)!.airings === rEna.airings);
+    check("보완 건수는 기본 배너(notes)가 아니라 supplement로", !r.notes.some((n) => n.includes("보완했습니다")) && Array.isArray(r.supplement));
+
+    // 흐름 문구 — 표시 중인 단위 기준(일별 그래프에 '비교할 회차가 하나뿐' 같은 설명 없음)
+    const ev = (xs: number[]) => xs.map((v, i) => ({ avg: v, label: `10/${i + 1}` }));
+    check("일별 흐름: 4점 이상 전반·후반", seriesTrendText(ev([0.1, 0.1, 0.3, 0.3]), "방송일", "ENA").startsWith("후반 방송일 평균 상승"));
+    check("일별 흐름: 2점은 처음·최근", seriesTrendText(ev([0.3, 0.1]), "방송일", "ENA").startsWith("최근 방송일 하락"));
+    check("일별 흐름: 1점은 그 값만(추이를 만들지 않음)", seriesTrendText(ev([0.2]), "방송일", "ENA") === "방송일 하나 · 10/1 0.200%");
+    check("일별 흐름: 실제 서버 응답에도 회차·달 문구 없음", !!rEna.analysis?.trendDaily && !rEna.analysis.trendDaily.includes("하나뿐"), rEna.analysis?.trendDaily);
+    // 최고·최저·최근 — 그래프와 같은 자료
+    const px = pickExtremes([{ v: 0.2 }, { v: 0.5 }, { v: null }, { v: 0.1 }], (x) => x.v);
+    check("최고·최저·최근: 값 없는 점은 건너뛰고 최근은 마지막 유효 점", !!px && px.best.v === 0.5 && px.worst.v === 0.1 && px.recent.v === 0.1 && px.count === 3);
+    check("최고·최저·최근: 한 점이면 count=1", pickExtremes([{ v: 0.2 }], (x) => x.v)?.count === 1 && pickExtremes([], (x: { v: number }) => x.v) === null);
+    const fx = rEna.analysis?.firstExtremes;
+    check("본방별 최고·최저는 본방 방영에서만(재방 최저를 붙이지 않음)", !fx || [fx.best, fx.worst, fx.recent].every((x) => x.firstRun === true));
+    const dx = rEna.analysis?.dayExtremes;
+    check("일별 최고·최저는 일별 그래프 점에서", !!dx && rEna.daily.some((d) => d.date === dx.best.date && d.programAvg === dx.best.programAvg));
+
+    // 편성 비교 결론 — 표본 경고 없이, 우열은 판단 가능 구간(방송일 3일 이상)만
+    const c = (dow: number, days: number, pct: number | null): SlotLine => ({ dow, hourBlock: 22, airings: days, days, avg: 1, compAvg: pct === null ? null : 1, compAirings: 20, basis: pct === null ? "NONE" : "DOW_HOUR", vs: pct === null ? ratioOf(1, null) : ratioOf(1 + pct / 100, 1), sampleState: days >= 8 ? "OK" : days >= 3 ? "SMALL" : "NONE" });
+    check("편성 비교 결론: 엇갈리면 방송일 많은 높은 구간에 집중", slotLeadOf([c(6, 5, 40), c(5, 9, 20), c(1, 6, -30)]) === "성과는 금 22시대에 집중됩니다.", slotLeadOf([c(6, 5, 40), c(5, 9, 20), c(1, 6, -30)]));
+    check("편성 비교 결론: 모두 높음", slotLeadOf([c(6, 5, 40), c(1, 6, 10)]) === "방영한 시간대 모두 시간대 평균보다 높습니다.");
+    check("편성 비교 결론: 비교 기준 없음", slotLeadOf([c(6, 5, null)]) === "시간대 평균과 비교할 수 있는 구간이 없습니다.");
+    check("편성 비교 결론: 표본 경고 문구 없음(소표본 구간만 있어도)", ![slotLeadOf([c(6, 2, 40), c(1, 1, -30)]), slotLeadOf([c(6, 2, 40)])].some((t) => /(표본|판단|참고|3일 미만)/.test(t)));
   }
 
   console.log(`\n${passed} passed, ${failures.length} failed`);

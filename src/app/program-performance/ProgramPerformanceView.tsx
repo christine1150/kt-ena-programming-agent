@@ -1,16 +1,15 @@
 "use client";
 
 // 프로그램 성과 화면 — 검색·필터·표시만 한다. 모든 수치(평균·배율·증감·표본·상태·월간 추이)는 /api/program-performance가 서버에서 확정해 준 값이다.
-// 분석 구조 수정(2026-10-22): 채널별 성과 비교표 → 행(채널·타깃) 선택 → 2×2 분석(시청률 흐름·최고/최저·편성 비교·종합 평가) → 필요할 때 상세(방송 구분별 성과·방송 기록).
-//  - 비교표: 시청률(아래 작은 채널 평균)·점유율·채널 평균 대비·같은 시간대 대비. 표본이 적은 채널은 채널명 옆 (n일).
-//  - 문구(흐름·최고/최저·시간대·종합)는 서버 고정 템플릿. 최근 12주 편성 진단은 기간이 달라 이 화면에 섞지 않고 채널 화면으로 연결.
+// 성과 중심 개편(2026-10-23, docs/ena-features/F1_OUTCOME_REDESIGN_PLAN.md): 검색·필터 → 채널별 성과표(채널·수2049·가구·방영횟수, 채널당 한 줄) → 선택 채널 종합평가(최근 12주 편성진단 근거)
+//  → [시청률 흐름+최고·최저·최근 | 편성 비교] → 접힌 방송 기록 → 계산 기준. 문구는 모두 서버 고정 템플릿, 표본 경고·보완 건수 배너·요약문·평균 카드는 기본 화면에서 뺐다.
 //  - 검색·기간 흐름 정리(2026-10-23): 화면 상태는 주소 하나(새로고침·공유·뒤로 가기), 검색은 자동완성 목록, 직접 기간은 [적용]을 눌러야 조회.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { shortProgramName } from "@/lib/programAlias";
 import { formatInt, formatPct, formatRatingValue, MISSING } from "@/lib/ui/metricFormat";
-import { WORK_CLASS_LABEL, indexOf } from "@/lib/programPerformance/metrics";
-import type { AiringFilter, AiringRef, TextPart, ChannelLine, ChannelRow, CompetitorRow, Direction, MonthlyPoint, PerformanceResult, RatioValue, SearchItem, TargetMode, WorkClass } from "@/lib/programPerformance/types";
+import { WORK_CLASS_LABEL, relText } from "@/lib/programPerformance/metrics";
+import type { AiringFilter, AiringRef, Assessment, ChannelRow, CompetitorRow, Direction, PerformanceResult, RatioValue, SearchItem, SupplementCount, TargetMode, WorkClass } from "@/lib/programPerformance/types";
 
 type ClassFilter = "all" | "drama" | "variety" | "culture";
 type PeriodPreset = "all" | "4w" | "12w" | "custom";
@@ -31,14 +30,8 @@ const CHANNELS: { code: string; label: string }[] = [
 ];
 const TARGET_LABEL: Record<TargetMode, string> = { both: "수도권 2049·전국 유료가구 모두", kpi: "채널별 KPI만", common2049: "공통: 수도권 2049", commonHH: "공통: 전국 유료가구" };
 const AIRING_LABEL: Record<AiringFilter, string> = { all: "전체 방송", first: "본방", rerun: "본방 외" };
-const AIRING_HELP: Record<AiringFilter, string> = {
-  all: "",
-  first: "본방: 원본 자료에 본방 표시가 있는 방영(현재 ENA만 표시)",
-  rerun: "본방 외: 확인된 재방과 본방 여부가 확인되지 않은 기록을 함께 포함",
-};
 // 채널 평균보다 좋으면 푸른색, 나쁘면 붉은색(사용자 지정, 2026-10-22) — 부호(+/−)와 함께 써 색만으로 전달하지 않는다
 const DIR_CLASS: Record<Direction, string> = { HIGHER: "text-blue-700", SIMILAR: "text-zinc-700", LOWER: "text-rose-700", NA: "text-zinc-400" };
-const DIR_WORD: Record<Direction, string> = { HIGHER: "높음", SIMILAR: "비슷", LOWER: "낮음", NA: "" };
 const EXCLUDED: ChannelRow["status"][] = ["UNSUPPORTED", "NO_TARGET"];
 const CLASS_BADGE: Record<WorkClass, string> = {
   // 드라마 파랑·예능 초록(사용자 지정 2026-10-22)
@@ -83,29 +76,19 @@ function ClassDot({ cls }: { cls: WorkClass }) {
   return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${CLASS_DOT[cls] ?? "bg-zinc-400"}`} title={WORK_CLASS_LABEL[cls]} role="img" aria-label={WORK_CLASS_LABEL[cls]} />;
 }
 
-/** 기준(채널 평균·같은 시간대 평균) 대비 — 기준을 100으로 본 지수 %(서버 배율 × 100 반올림, 표시 형식만). 100 초과 푸른색·미만 붉은색(사용자 지정 2026-10-22) */
-function DeltaText({ r }: { r: RatioValue }) {
-  const i = indexOf(r.ratio);
-  if (i === null) return <span className="text-zinc-400">산출 불가</span>;
-  const label = `기준의 ${i}%${DIR_WORD[r.direction] ? `(${DIR_WORD[r.direction]})` : ""}`;
+/** 채널 평균(또는 시간대 평균) 대비 상대 차이 — 서버 원정밀도 pct를 relText로 표기만("+9%", %p 아님). 높음 푸른색·낮음 붉은색(사용자 지정 2026-10-22), 폭을 고정해 행마다 자리가 맞게 */
+function RelText({ r }: { r: RatioValue }) {
   return (
-    <span className={`font-semibold tabular-nums ${DIR_CLASS[r.direction]}`} aria-label={label}>
-      {i}%
+    <span className={`inline-block min-w-[3.6rem] text-right tabular-nums ${r.pct === null ? "text-zinc-400" : DIR_CLASS[r.direction]}`} aria-label={r.pct === null ? "기준 대비 산출 불가" : `기준 대비 ${relText(r.pct)}`}>
+      {r.pct === null ? MISSING : `(${relText(r.pct)})`}
     </span>
   );
 }
 
-/** 표본 기준(콘텐츠 적합도와 같음): 3일 미만 자료 부족, 8일 미만 자료 적음 — 실제 일수와 함께 */
-function sampleText(r: ChannelRow): string | null {
-  if (r.sampleState === "NONE") return `자료 부족 · ${r.days}일`;
-  if (r.sampleState === "SMALL") return `자료 적음 · ${r.days}일`;
-  return null;
-}
-
 function emptyText(r: ChannelRow, airing: AiringFilter): string {
   if (r.status === "NO_PROGRAM_DATA" || r.status === "NO_TARGET") return "자료 없음";
-  if (r.status === "OBSERVED") return airing === "first" ? "본방 없음" : "본방 외 방영 없음";
-  return "자료 없음";
+  if (r.status === "OBSERVED") return airing === "first" ? "본방 없음" : airing === "rerun" ? "본방 외 방영 없음" : "실적 없음";
+  return "실적 없음";
 }
 
 /** 채널 하나 = 방영 기록이 있는 채널. rows는 그 채널의 타깃별 행(KPI 타깃 먼저). */
@@ -116,19 +99,9 @@ interface ChannelEntry {
 
 const rowKey = (r: ChannelRow) => `${r.channelCode}|${r.targetLabel}`;
 
-/** 좁은 화면에서는 타깃을 짧게(2049·가구) — 표가 화면 폭 안에 들어오게 */
-function TargetName({ label }: { label: string }) {
-  const short = label.includes("2049") ? "2049" : label.includes("유료가구") ? "가구" : label;
-  return (
-    <>
-      <span className="whitespace-nowrap sm:hidden">{short}</span>
-      <span className="hidden whitespace-nowrap sm:inline">{label}</span>
-    </>
-  );
-}
-
 const TARGET_ORDER = ["수도권 2049", "전국 유료가구"];
-const sampleNote = (s: "OK" | "SMALL" | "NONE", days: number) => (s === "OK" ? "" : `, 실적 ${days}일, 표본 부족${s === "NONE" ? "·판단 보류" : ""}`);
+/** 표 열 이름 — 수2049 = 수도권 개인 2049, 가구 = 전국 유료가구(정식 명칭은 계산 기준) */
+const targetShort = (label: string) => (label.includes("2049") ? "수2049" : label.includes("유료가구") ? "가구" : label);
 
 const SOURCE_LABEL: Record<"registered" | "naver", string> = { registered: "관리자 등록(주요 콘텐츠 관리)", naver: "네이버 방송 정보" };
 
@@ -153,192 +126,131 @@ function PatternLine({ pattern, result }: { pattern: NonNullable<PerformanceResu
   );
 }
 
-/**
- * 채널당 한 줄(사용자 지정 형식) — "ENA Drama: 0.001(2049, 5%)·0.013(가구, 16%)로 채널 평균 대비 각각 95%·84% 낮음 (13회, 실적 5일, 표본 부족)".
- * 괄호 안 %는 채널 평균=100 지수(서버 값), 100 초과 푸른색·미만 붉은색.
- */
-function LineList({ lines, className = "" }: { lines: ChannelLine[]; className?: string }) {
-  return (
-    <div className={`space-y-1 text-[14px] leading-relaxed text-zinc-900 ${className}`}>
-      {lines.map((l) => (
-        <p key={l.channelCode} aria-label={l.text}>
-          <span className="font-semibold">{l.name}</span>:{" "}
-          {l.pieces.map((p, i) => (
-            <span key={p.target}>
-              {i > 0 && "·"}
-              <span className="tabular-nums">{formatRatingValue(p.value, l.channelCode)}</span>({p.target}, <span className={`font-semibold tabular-nums ${DIR_CLASS[p.direction]}`}>{p.index === null ? "산출 불가" : `${p.index}%`}</span>)
-            </span>
-          ))}
-          로 채널 평균 대비 <span className={`font-medium ${DIR_CLASS[l.direction]}`}>{l.summary}</span>{" "}
-          <span className={`text-[13px] ${l.sampleState === "OK" ? "text-zinc-500" : "text-amber-700"}`}>
-            ({l.airings}회{sampleNote(l.sampleState, l.days)})
-          </span>
-        </p>
-      ))}
-    </div>
-  );
-}
-
-/** 표의 타깃 한 칸 — 시청률 + 채널 평균 지수(%), 아래 작은 글씨로 채널 평균·점유율 */
-function TargetCell({ r, code, kpi, airing }: { r: ChannelRow | CompetitorRow | undefined; code: string; kpi?: boolean; airing: AiringFilter }) {
-  if (!r) return <span className="text-zinc-300">{MISSING}</span>;
+/** 표의 타깃 한 칸 — "0.134 (+9%)" 한 줄. 점유율·채널 평균 값·KPI 표식은 넣지 않는다(개편 2026-10-23). 결측은 —, 유효한 0은 0 */
+function TargetCell({ r, code, airing }: { r: ChannelRow | CompetitorRow | undefined; code: string; airing: AiringFilter }) {
+  if (!r) return <span className="text-zinc-400">{MISSING}</span>;
   const observed = "status" in r ? r.status === "OBSERVED" && r.airings > 0 : r.airings > 0;
-  if (!observed) return <span className="text-[12px] text-zinc-400">{"status" in r ? emptyText(r, airing) : "방영 없음"}</span>;
+  if (!observed) return <span className="whitespace-nowrap text-[12px] text-zinc-400">{"status" in r ? emptyText(r, airing) : "실적 없음"}</span>;
   return (
-    <div>
-      <div className="flex flex-wrap items-baseline justify-end gap-x-1.5">
-        <span className={`tabular-nums ${kpi ? "font-semibold text-zinc-900" : "text-zinc-800"}`}>{formatRatingValue(r.programAvg, code)}</span>
-        <DeltaText r={r.vsChannel} />
-      </div>
-      <div className="text-[11px] tabular-nums text-zinc-400">
-        {kpi && <span className="mr-1 rounded bg-zinc-100 px-1 text-[10px] text-zinc-600">KPI</span>}
-        채널 {formatRatingValue(r.channelDaily?.mean ?? null, code)}
-        <span className="hidden sm:inline"> · 점유 {r.shareAvg === null ? "없음" : formatPct(r.shareAvg)}</span>
-      </div>
-    </div>
+    <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+      <span className="inline-block w-[3.75rem] text-right tabular-nums text-zinc-900">{formatRatingValue(r.programAvg, code)}</span>
+      <RelText r={r.vsChannel} />
+    </span>
   );
 }
 
+const airCount = (airings: number, days: number) => `${formatInt(airings)}회 (${formatInt(days)}일)`;
+
+/** 표의 방영횟수 — "회"를 기준으로 줄을 맞춘다(횟수는 오른쪽, (n일)은 왼쪽 정렬, 고정 폭 · 사용자 지시 2026-10-23) */
+function AirCount({ airings, days }: { airings: number; days: number }) {
+  return (
+    <span className="inline-flex items-baseline whitespace-nowrap tabular-nums" aria-label={airCount(airings, days)}>
+      <span className="inline-block w-[2.75rem] text-right">{formatInt(airings)}</span>
+      <span>회</span>
+      <span className="inline-block w-[3.75rem] pl-1 text-left text-zinc-500">({formatInt(days)}일)</span>
+    </span>
+  );
+}
+const TABLE_NOTE = "시청률 단위 % · 시청률 옆 괄호는 채널 평균 대비";
+
 /**
- * 채널별 성과 — 채널당 한 줄: 방영 횟수, 수도권 2049·전국 유료가구 각각의 시청률과 채널 평균 지수(%), 같은 시간대 대비(KPI 타깃).
- * 행을 누르면 아래 분석이 그 채널(KPI 타깃)로 바뀐다. 순서는 기존 채널 순서.
+ * 채널별 성과표 — 열 순서 고정(채널 → 수2049 → 가구 → 방영횟수), 채널당 한 줄. 방영횟수는 KPI 타깃 행의 고유 방영 건수(두 타깃을 보여도 두 배로 세지 않음).
+ * 행을 누르면 아래 종합평가·흐름·편성 비교가 그 채널로 바뀐다. 순서는 기존 채널 순서.
  */
 function ChannelTable({ entries, airing, selected, onSelect }: { entries: ChannelEntry[]; airing: AiringFilter; selected: string | null; onSelect: (r: ChannelRow) => void }) {
   const cols = TARGET_ORDER.filter((t) => entries.some((e) => e.rows.some((r) => r.targetLabel === t)));
   return (
     <section className="mt-3">
-      <div className="dense-grid overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="채널별 성과 비교 표">
-        <table className="w-full text-[14px]">
-          <thead className="break-keep bg-zinc-50 text-[12px] text-zinc-500">
+      <div className="dense-grid max-w-3xl overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="채널별 성과 표">
+        <table className="w-full min-w-[440px] text-[14px]">
+          <thead className="bg-zinc-50 text-[12px] text-zinc-500">
             <tr>
-              <th className="px-1.5 py-2 text-left font-medium sm:px-3">채널</th>
-              <th className="px-1.5 py-2 text-right font-medium sm:px-3">방영</th>
+              <th className="whitespace-nowrap px-3 py-2 text-left font-medium">채널</th>
               {cols.map((c) => (
-                <th key={c} className="px-1.5 py-2 text-right font-medium sm:px-3">
-                  <TargetName label={c} />
+                <th key={c} className="whitespace-nowrap px-3 py-2 text-center font-medium" title={c}>
+                  {targetShort(c)}
                 </th>
               ))}
-              <th className="px-1.5 py-2 text-right font-medium sm:px-3">
-                같은 시간대<span className="hidden sm:inline">(KPI)</span>
-              </th>
+              <th className="whitespace-nowrap px-3 py-2 text-center font-medium">방영횟수</th>
             </tr>
           </thead>
           <tbody>
             {entries.map(({ main, rows }) => {
               const code = main.channelCode;
               const isSel = selected?.startsWith(`${code}|`) ?? false;
-              const sample = sampleText(main);
               return (
-                <tr key={code} onClick={() => onSelect(main)} className={`cursor-pointer border-t border-zinc-100 align-top ${isSel ? "bg-sky-50" : "hover:bg-zinc-50"}`}>
-                  <td className="px-1.5 py-2 sm:px-3">
-                    <button type="button" onClick={(e) => (e.stopPropagation(), onSelect(main))} aria-pressed={isSel} className="text-left font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-600" aria-label={`${main.channelName} 분석 보기`}>
+                <tr key={code} onClick={() => onSelect(main)} className={`cursor-pointer border-t border-zinc-100 ${isSel ? "bg-sky-50" : "hover:bg-zinc-50"}`}>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    <button type="button" onClick={(e) => (e.stopPropagation(), onSelect(main))} aria-pressed={isSel} className="text-left font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-600" aria-label={`${main.channelName} 평가 보기`}>
                       {main.channelName}
                     </button>
                   </td>
-                  <td className="px-1.5 py-2 text-right sm:px-3">
-                    <span className="whitespace-nowrap tabular-nums">{formatInt(main.airings)}회</span>
-                    <div className={`text-[11px] tabular-nums ${sample ? (main.sampleState === "NONE" ? "text-rose-700" : "text-amber-700") : "text-zinc-400"}`} title={sample ?? undefined}>
-                      {main.days}일{sample ? " · 표본 부족" : ""}
-                    </div>
+                  {cols.map((c) => (
+                    <td key={c} className="px-3 py-2 text-center">
+                      <TargetCell r={rows.find((x) => x.targetLabel === c)} code={code} airing={airing} />
+                    </td>
+                  ))}
+                  <td className="whitespace-nowrap px-3 py-2 text-center text-zinc-800">
+                    <AirCount airings={main.airings} days={main.days} />
                   </td>
-                  {cols.map((c) => {
-                    const r = rows.find((x) => x.targetLabel === c);
-                    return (
-                      <td key={c} className="px-1.5 py-2 text-right sm:px-3">
-                        <TargetCell r={r} code={code} kpi={r?.primary && rows.length > 1} airing={airing} />
-                      </td>
-                    );
-                  })}
-                  <td className="px-1.5 py-2 text-right sm:px-3">{main.slot && main.slot.airingsUsed > 0 ? <DeltaText r={main.slot.ratio} /> : <span className="text-zinc-300">{MISSING}</span>}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-[11px] text-zinc-500">%는 채널 평균(같은 시간대 열은 같은 시간대 평균)을 100으로 본 시청률 지수입니다. 100 초과 푸른색, 미만 붉은색. 행을 누르면 아래 분석이 바뀝니다.</p>
+      <p className="mt-1 text-[12px] text-zinc-500">{TABLE_NOTE}</p>
     </section>
   );
 }
 
-/** 경쟁 채널 성과 — 선택해서 연다. 같은 작품이 등록 경쟁채널에서 방영된 기록만(닐슨 경쟁채널 시트), 채널 평균은 그 경쟁채널의 하루 시청률 일평균 */
-function CompetitorSection({ rows, lines }: { rows: CompetitorRow[]; lines: ChannelLine[] }) {
+/** 경쟁 채널 성과 — 선택해서 연다. 같은 작품이 등록 경쟁채널에서 방영된 기록만(닐슨 경쟁채널 시트), 채널 평균은 그 경쟁채널의 하루 시청률 일평균. 자사 표와 같은 열 */
+function CompetitorSection({ rows }: { rows: CompetitorRow[] }) {
   const names = [...new Set(rows.map((r) => r.competitorName))];
   return (
-    <section className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50/50 p-3">
-      <LineList lines={lines} className="text-[13px]" />
-      <div className="dense-grid mt-2 overflow-x-auto rounded-md border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="경쟁 채널 성과 표">
-        <table className="w-full text-[14px]">
-          <thead className="break-keep bg-zinc-50 text-[12px] text-zinc-500">
+    <section className="mt-2">
+      <div className="dense-grid max-w-3xl overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="경쟁 채널 성과 표">
+        <table className="w-full min-w-[440px] text-[14px]">
+          <thead className="bg-zinc-50 text-[12px] text-zinc-500">
             <tr>
-              <th className="px-1.5 py-2 text-left font-medium sm:px-3">경쟁 채널</th>
-              <th className="px-1.5 py-2 text-right font-medium sm:px-3">방영</th>
+              <th className="whitespace-nowrap px-3 py-2 text-left font-medium">경쟁 채널</th>
               {TARGET_ORDER.map((c) => (
-                <th key={c} className="px-1.5 py-2 text-right font-medium sm:px-3">
-                  <TargetName label={c} />
+                <th key={c} className="whitespace-nowrap px-3 py-2 text-center font-medium" title={c}>
+                  {targetShort(c)}
                 </th>
               ))}
+              <th className="whitespace-nowrap px-3 py-2 text-center font-medium">방영횟수</th>
             </tr>
           </thead>
           <tbody>
             {names.map((name) => {
               const rs = rows.filter((r) => r.competitorName === name);
               const main = rs.reduce((a, b) => (b.airings > a.airings ? b : a));
-              const small = main.sampleState !== "OK";
               return (
-                <tr key={name} className="border-t border-zinc-100 align-top">
-                  <td className="px-1.5 py-2 font-medium text-zinc-900 sm:px-3">{name}</td>
-                  <td className="px-1.5 py-2 text-right sm:px-3">
-                    <span className="whitespace-nowrap tabular-nums">{main.airings}회</span>
-                    <div className={`text-[11px] ${small ? "text-amber-700" : "text-zinc-400"}`}>
-                      {main.days}일{main.rerunAirings ? ` · 재방 ${main.rerunAirings}` : ""}
-                      {small ? " · 표본 부족" : ""}
-                    </div>
-                  </td>
+                <tr key={name} className="border-t border-zinc-100">
+                  <td className="whitespace-nowrap px-3 py-2 font-medium text-zinc-900">{name}</td>
                   {TARGET_ORDER.map((c) => (
-                    <td key={c} className="px-1.5 py-2 text-right sm:px-3">
+                    <td key={c} className="px-3 py-2 text-center">
                       <TargetCell r={rs.find((x) => x.targetLabel === c)} code={name} airing="all" />
                     </td>
                   ))}
+                  <td className="whitespace-nowrap px-3 py-2 text-center text-zinc-800">
+                    <AirCount airings={main.airings} days={main.days} />
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-[11px] text-zinc-500">닐슨 일일 파일의 경쟁채널 시트(등록 경쟁채널만)에 같은 작품 이름으로 잡힌 방영입니다. 채널 평균은 그 경쟁채널의 하루 시청률 일평균(자사와 같은 정의). 같은 시간대 비교는 경쟁 채널 편성 전체가 없어 내지 않습니다.</p>
+      <p className="mt-1 text-[12px] text-zinc-500">{TABLE_NOTE}(그 경쟁 채널의 하루 시청률 평균) · 같은 시간대 비교는 내지 않습니다</p>
     </section>
   );
 }
 
-const monthTitle = (m: MonthlyPoint) => `${Number(m.month.slice(5))}월${m.partial ? ` ${Number(m.from.slice(8))}~${Number(m.to.slice(8))}일` : ""}`;
-const shortDate = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}(${DOW[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
+const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
+const shortDate = (d: string) => `${md(d)}(${DOW[new Date(`${d}T00:00:00Z`).getUTCDay()]})`;
 const slotName = (dow: number, hb: number) => `${DOW[dow]} ${hb}시대`;
-
-/** 서버가 만든 문장 조각 — 방향이 있는 숫자는 높음 푸른색·낮음 붉은색(사용자 지정 2026-10-22) */
-function Parts({ parts }: { parts: TextPart[] }) {
-  return (
-    <>
-      {parts.map((p, i) => (p.d ? (
-        <span key={i} className={`font-bold tabular-nums ${DIR_CLASS[p.d]}`}>
-          {p.t}
-        </span>
-      ) : (
-        <span key={i}>{p.t}</span>
-      )))}
-    </>
-  );
-}
-
-function Card({ title, lead, children }: { title: string; lead?: ReactNode; children?: ReactNode }) {
-  return (
-    <div className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4">
-      <h4 className="text-[12px] font-medium text-zinc-500">{title}</h4>
-      {lead && <p className="mt-0.5 text-[14px] font-semibold leading-snug text-zinc-900">{lead}</p>}
-      {children && <div className={lead ? "mt-2" : "mt-1"}>{children}</div>}
-    </div>
-  );
-}
 
 /** 눈금 간격 — 1·2·2.5·5 × 10^k 중 4칸 안팎(표시용) */
 function niceStep(max: number): number {
@@ -349,17 +261,17 @@ function niceStep(max: number): number {
 
 /**
  * 시청률 흐름 그래프(지구마불 세계여행 화면 참고) — 서버가 낸 점 값을 찍기만 한다. 가로축은 본방 방영(회차 번호가 있으면 'n회', 없으면 방영일)
- * 또는 월. 점선은 채널 평균(월별은 같은 달 채널 평균). 값이 없는 점은 끊는다(0으로 잇지 않음). 점에 마우스를 올리면 값.
+ * 또는 방송일. 점선은 채널 평균. 값이 없는 점은 끊는다(0으로 잇지 않음). 점이 하나면 점만. 점에 마우스를 올리면 값.
  */
 function TrendChart({ points, base, baseLabel, code }: { points: { label: string; sub: string; value: number | null }[]; base: (number | null)[]; baseLabel: string; code: string }) {
   const W = 800;
-  const H = 240;
+  const H = 220;
   const L = 44;
   const R = 12;
   const T = 14;
   const B = 34;
   const vals = [...points.map((p) => p.value), ...base].filter((v): v is number => v !== null);
-  if (vals.length === 0) return <p className="py-6 text-center text-[13px] text-zinc-500">그래프로 볼 값이 없습니다.</p>;
+  if (vals.length === 0) return <p className="py-6 text-center text-[13px] text-zinc-500">표시할 시청률이 없습니다.</p>;
   const step = niceStep(Math.max(...vals));
   const top = Math.ceil(Math.max(...vals) / step) * step || step;
   const ticks = Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i * step);
@@ -402,7 +314,7 @@ function TrendChart({ points, base, baseLabel, code }: { points: { label: string
         const nums = d.match(/[-\d.]+/g)!.map(Number);
         const x0 = nums[0];
         const x1 = nums[nums.length - 2];
-        return <path key={`a${i}`} d={`${d}L${x1},${y(0)}L${x0},${y(0)}Z`} fill="url(#pp-area)" stroke="none" />;
+        return x0 === x1 ? null : <path key={`a${i}`} d={`${d}L${x1},${y(0)}L${x0},${y(0)}Z`} fill="url(#pp-area)" stroke="none" />;
       })}
       {base.some((b) => b !== null) &&
         (baseFlat ? (
@@ -436,318 +348,269 @@ function TrendChart({ points, base, baseLabel, code }: { points: { label: string
   );
 }
 
-/** 시청률 흐름 — 본방별(기본, 본방 2회 이상일 때)·일별 전환, 큰 그래프 + 핵심 숫자 4칸(평균·최고·최저·최근 방영) */
+/** 최고·최저·최근 한 줄 — 그래프와 같은 자료(서버가 고른 점). 점이 하나면 최근만 */
+function ExtremesLine({ x, code }: { x: { best: { v: number; at: string }; worst: { v: number; at: string }; recent: { v: number; at: string }; count: number } | null; code: string }) {
+  if (!x) return null;
+  const item = (k: string, p: { v: number; at: string }) => (
+    <span key={k} className="whitespace-nowrap">
+      <span className="text-zinc-500">{k}</span> <span className="font-semibold tabular-nums text-zinc-900">{formatRatingValue(p.v, code)}</span> <span className="text-zinc-500">· {p.at}</span>
+    </span>
+  );
+  const items = x.count === 1 ? [item("최근", x.recent)] : [item("최고", x.best), item("최저", x.worst), item("최근", x.recent)];
+  return <p className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[13px]">{items}</p>;
+}
+
+/** 왼쪽: 시청률 흐름 — 그래프 하나 + 결론 한 줄 + 최고·최저·최근(본방별·일별 전환 시 셋 다 같은 자료로 바뀐다) */
 function TrendSection({ row }: { row: ChannelRow }) {
   const a = row.analysis!;
   const code = row.channelCode;
   const hasFirst = a.firstRuns.length >= 2;
   // 사용자 지시(2026-10-23): 월별 대신 일별 — 방영이 있는 방송일마다 그날 작품 평균과 그날 채널 하루 시청률
   const [unit, setUnit] = useState<"first" | "day">(hasFirst ? "first" : "day");
-  const epLabel = (r: AiringRef) => (r.episode !== null ? `${r.episode}회` : `${Number(r.date.slice(5, 7))}/${Number(r.date.slice(8))}`);
-  const points =
-    unit === "first" && hasFirst
-      ? a.firstRuns.map((r) => ({ label: epLabel(r), sub: `${shortDate(r.date)} ${fmtTime(r.startTime)}`, value: r.rating }))
-      : row.daily.map((d) => ({ label: `${Number(d.date.slice(5, 7))}/${Number(d.date.slice(8))}`, sub: `${d.airings}회`, value: d.programAvg }));
-  const base = unit === "first" && hasFirst ? points.map(() => a.channelAvg) : row.daily.map((d) => d.channelAvg);
-  const x = a.extremes;
-  const stat = (k: string, v: number | null, sub: ReactNode, extra?: ReactNode) => (
-    <div className="min-w-0 rounded-xl border border-zinc-200 bg-white p-3">
-      <div className="text-[12px] text-zinc-500">{k}</div>
-      <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
-        <span className="text-[22px] font-bold tabular-nums text-zinc-900">{formatRatingValue(v, code)}</span>
-        <span className="text-[12px] text-zinc-400">%</span>
-        {extra}
-      </div>
-      <div className="mt-0.5 text-[11px] text-zinc-500">{sub}</div>
-    </div>
-  );
-  const refSub = (r: AiringRef) => `${r.episode !== null ? `${r.episode}회 · ` : ""}${shortDate(r.date)} ${fmtTime(r.startTime)}${r.firstRun === true ? " · 본방" : ""}`;
+  const isFirst = unit === "first" && hasFirst;
+  const epLabel = (r: AiringRef) => (r.episode !== null ? `${r.episode}회` : md(r.date));
+  const points = isFirst
+    ? a.firstRuns.map((r) => ({ label: epLabel(r), sub: `${shortDate(r.date)} ${fmtTime(r.startTime)}`, value: r.rating }))
+    : row.daily.map((d) => ({ label: md(d.date), sub: `${d.airings}회`, value: d.programAvg }));
+  const base = isFirst ? points.map(() => a.channelAvg) : row.daily.map((d) => d.channelAvg);
+  const fx = a.firstExtremes;
+  const dx = a.dayExtremes;
+  const ext = isFirst
+    ? fx && { best: { v: fx.best.rating, at: epLabel(fx.best) }, worst: { v: fx.worst.rating, at: epLabel(fx.worst) }, recent: { v: fx.recent.rating, at: epLabel(fx.recent) }, count: fx.count }
+    : dx && { best: { v: dx.best.programAvg as number, at: md(dx.best.date) }, worst: { v: dx.worst.programAvg as number, at: md(dx.worst.date) }, recent: { v: dx.recent.programAvg as number, at: md(dx.recent.date) }, count: dx.count };
+  const text = isFirst ? (a.trendFirst ?? a.trendText) : (a.trendDaily ?? a.trendText);
   return (
-    <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(250px,310px)]">
-      <div className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h4 className="text-[12px] font-medium text-zinc-500">시청률 흐름</h4>
-            <p className="text-[15px] font-semibold leading-snug text-zinc-900">{a.trendText}</p>
-          </div>
-          <div className="flex items-center gap-1 text-[12px]" role="group" aria-label="그래프 단위">
-            {hasFirst && (
-              <button type="button" aria-pressed={unit === "first"} onClick={() => setUnit("first")} className={chip(unit === "first")}>
-                본방별
-              </button>
-            )}
-            <button type="button" aria-pressed={unit === "day"} onClick={() => setUnit("day")} className={chip(unit === "day")}>
-              일별
+    <section className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4" aria-label="시청률 흐름">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h4 className="text-[12px] font-medium text-zinc-500">시청률 흐름</h4>
+          <p className="text-[15px] font-semibold leading-snug text-zinc-900">{text}</p>
+        </div>
+        <div className="flex items-center gap-1 text-[12px]" role="group" aria-label="그래프 단위">
+          {hasFirst && (
+            <button type="button" aria-pressed={unit === "first"} onClick={() => setUnit("first")} className={chip(unit === "first")}>
+              본방별
             </button>
-          </div>
+          )}
+          <button type="button" aria-pressed={unit === "day"} onClick={() => setUnit("day")} className={chip(unit === "day")}>
+            일별
+          </button>
         </div>
-        <div className="mt-2">
-          <TrendChart points={points} base={base} baseLabel="채널 평균" code={code} />
-        </div>
-        <p className="text-[11px] text-zinc-500">
-          {unit === "first" && hasFirst ? `본방 ${a.firstRuns.length}회(회차 번호가 없으면 방영일 표기)` : "일별 방영 평균(방영이 있는 날만)"} · 점선은 {unit === "first" && hasFirst ? "같은 기간" : "그날"} 채널 평균 · 점에 마우스를 올리면 값
-        </p>
       </div>
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-1 lg:content-between">
-        {stat("평균", row.programAvg, `${formatInt(row.airings)}회 · 채널 평균 ${formatRatingValue(row.channelDaily?.mean ?? null, code)}`, <DeltaText r={row.vsChannel} />)}
-        {x ? stat("최고", x.best.rating, refSub(x.best)) : stat("최고", null, "방영 1건")}
-        {x ? stat("최저", x.worst.rating, refSub(x.worst)) : stat("최저", null, "방영 1건")}
-        {x ? stat("최근 방영", x.recent.rating, `${refSub(x.recent)} · ${a.extremesText}`) : stat("최근 방영", null, a.extremesText)}
+      <ExtremesLine x={ext ?? null} code={code} />
+      <div className="mt-2">
+        <TrendChart points={points} base={base} baseLabel="채널 평균" code={code} />
       </div>
-    </div>
+      <p className="text-[11px] text-zinc-500">{isFirst ? `본방 ${a.firstRuns.length}회 · 점선은 같은 기간 채널 평균` : `방송일 ${row.daily.length}일 · 점선은 그날 채널 평균`}</p>
+    </section>
   );
 }
 
 const SLOT_SHOW = 4;
 
-/** C. 편성 비교 — 실제 방영한 요일·시간대별, 같은 요일·시 다른 프로그램 단순 평균 대비 */
-function SlotCard({ row }: { row: ChannelRow }) {
+/** 오른쪽: 편성 비교 — 실제 방영한 요일·시간대별 시청률과 같은 채널·시간대 다른 프로그램 평균 대비. 기본 4행(서버 정렬: 방송일 3일 이상 먼저, 방영 많은 순) + 전체 시간대 */
+function SlotSection({ row }: { row: ChannelRow }) {
   const a = row.analysis!;
   const code = row.channelCode;
   const [all, setAll] = useState(false);
-  // 기본은 방송일 3일 이상 구간(서버가 앞에 정렬)만 최대 4개, 전체 목록은 따로 연다
-  const judged = a.slots.filter((s) => s.sampleState !== "NONE");
-  const list = all ? a.slots : (judged.length ? judged : a.slots).slice(0, SLOT_SHOW);
+  const list = all ? a.slots : a.slots.slice(0, SLOT_SHOW);
   return (
-    <Card title="편성 비교" lead={a.slotParts ? <Parts parts={a.slotParts} /> : a.slotText}>
+    <section className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4" aria-label="편성 비교">
+      <h4 className="text-[12px] font-medium text-zinc-500">편성 비교</h4>
+      <p className="text-[15px] font-semibold leading-snug text-zinc-900">{a.slotLead ?? a.slotText}</p>
       {a.slots.length > 0 && (
-        <div className="dense-grid overflow-x-auto">
+        <div className="dense-grid mt-2 overflow-x-auto">
           <table className="w-full text-[13px]">
-            <thead className="text-[11px] text-zinc-500">
+            <thead className="text-[12px] text-zinc-500">
               <tr>
-                <th className="py-1 text-left font-medium">요일·시간대</th>
-                <th className="py-1 text-right font-medium">시청률</th>
-                <th className="py-1 text-right font-medium">같은 시간대</th>
-                <th className="py-1 text-right font-medium">차이</th>
+                <th className="whitespace-nowrap py-1 text-left font-medium">요일·시간대</th>
+                <th className="whitespace-nowrap py-1 text-right font-medium">시청률</th>
+                <th className="whitespace-nowrap py-1 text-right font-medium">시간대 평균 대비</th>
               </tr>
             </thead>
             <tbody>
               {list.map((s) => (
                 <tr key={`${s.dow}-${s.hourBlock}`} className="border-t border-zinc-100">
-                  <td className="py-1">
+                  <td className="whitespace-nowrap py-1.5" title={`${s.airings}회 · 방송일 ${s.days}일`}>
                     {slotName(s.dow, s.hourBlock)}
-                    <span className={`ml-1 text-[11px] ${s.sampleState === "OK" ? "text-zinc-400" : s.sampleState === "NONE" ? "text-rose-700" : "text-amber-700"}`} title={sampleTitle(s.sampleState, s.days)}>
-                      {s.airings}회{s.sampleState !== "OK" ? `·${s.days}일` : ""}
-                    </span>
                   </td>
-                  <td className="py-1 text-right tabular-nums">{formatRatingValue(s.avg, code)}</td>
-                  <td className="py-1 text-right tabular-nums">
-                    {s.compAvg === null ? (
-                      <span className="text-[11px] text-zinc-400" title={s.vs.naReason ?? ""}>
-                        비교 부족
-                      </span>
-                    ) : (
-                      <>
-                        {formatRatingValue(s.compAvg, code)}
-                        {s.basis === "HOUR" && (
-                          <span className="ml-0.5 text-[10px] text-zinc-400" title={`같은 요일·시 비교 방송이 적어 같은 시(모든 요일) ${s.compAirings}건과 비교`}>
-                            전 요일
-                          </span>
-                        )}
-                      </>
-                    )}
+                  <td className="py-1.5 text-right tabular-nums">{formatRatingValue(s.avg, code)}</td>
+                  <td className="whitespace-nowrap py-1.5 text-right">
+                    {s.basis === "HOUR" && <span className="mr-1 text-[11px] text-zinc-400" title={`같은 요일·시 비교 방송이 적어 같은 시(모든 요일) ${s.compAirings}건과 비교`}>전 요일</span>}
+                    <RelText r={s.vs} />
                   </td>
-                  <td className="py-1 text-right">{s.vs.ratio === null ? <span className="text-zinc-300">{MISSING}</span> : <DeltaText r={s.vs} />}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      {a.slots.length > list.length || all ? (
+      {a.slots.length > SLOT_SHOW && (
         <button type="button" onClick={() => setAll((v) => !v)} className="mt-1 text-[12px] text-zinc-600 underline underline-offset-2">
-          {all ? "접기" : `전체 ${a.slots.length}개 시간대`}
+          {all ? "접기" : `전체 시간대 ${a.slots.length}개`}
         </button>
-      ) : null}
-      <p className="mt-1 text-[11px] text-zinc-500">같은 요일·시(적으면 같은 시·전 요일)에 방송한 다른 프로그램 단순 평균 대비, 시청률 기준 상대 차이. 방영하지 않은 시간대는 넣지 않습니다.</p>
-    </Card>
+      )}
+    </section>
   );
 }
 
-/** D. 종합 평가 — 서버 고정 문구(결론 한 줄 + 근거 최대 두 개). 판정 태그 없음 */
-function VerdictCard({ row }: { row: ChannelRow }) {
-  const a = row.analysis!;
+/** 종합평가 — 서버 고정 문구(결론 한 줄 + 근거 한 줄). 범위(최근 12주·조회 기간)·타깃·방송 구분 차이는 제목에 한 번만 */
+function AssessmentBlock({ a }: { a: Assessment }) {
+  const scope = a.scope === "12w" ? "최근 12주" : "조회 기간";
   return (
-    <Card title="종합 평가" lead={a.insights.length > 0 ? undefined : a.verdict}>
-      {/* 평균 카드·편성 비교에 이미 보이는 내용은 빼고, 그 둘로는 안 보이는 관계(본방 대비 재방 효율 등)만 보여 준다(사용자 지시 2026-10-22) */}
-      {a.insights.length > 0 && (
-        <ul className="space-y-1 text-[14px] font-medium leading-snug text-zinc-900">
-          {a.insights.map((parts, i) => (
-            <li key={i}>
-              · <Parts parts={parts} />
-            </li>
-          ))}
-        </ul>
-      )}
-      {a.insights.length === 0 && a.reasons.length > 0 && (
-        <ul className="space-y-0.5 text-[13px] text-zinc-700">
-          {a.reasons.map((t) => (
-            <li key={t}>· {t}</li>
-          ))}
-        </ul>
-      )}
-      <a href={`/channel/${row.channelCode}#content-fits`} className="mt-2 inline-block text-[12px] text-zinc-500 underline underline-offset-2 hover:text-zinc-800">
-        최근 12주 편성 진단은 채널 화면에서 보기
-      </a>
-    </Card>
+    <section className="rounded-xl border border-zinc-200 bg-white p-4" aria-label="종합평가">
+      <h4 className="text-[12px] font-medium text-zinc-500" title={`${a.from} ~ ${a.to} · ${a.targetLabel}`}>
+        종합평가 · {scope} · {targetShort(a.targetLabel)}
+        {a.allAiringsBasis ? " · 전체 방송 기준" : ""}
+      </h4>
+      <p className="mt-0.5 text-[16px] font-semibold leading-snug text-zinc-900">{a.headline}</p>
+      {a.evidence && <p className="mt-0.5 text-[13px] text-zinc-600">{a.evidence}</p>}
+    </section>
   );
 }
 
-const sampleTitle = (s: "OK" | "SMALL" | "NONE", days: number) => (s === "NONE" ? `자료 부족 · ${days}일(3일 미만)` : s === "SMALL" ? `자료 적음 · ${days}일(8일 미만)` : `${days}일`);
+/** 접힘 — 열 때만 내용을 그린다(클릭하지 않았는데 방송 수십 행이 페이지를 차지하지 않게) */
+function Fold({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="mt-2 rounded-md border border-zinc-200 bg-white" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium text-zinc-700">{title}</summary>
+      {open && <div className="dense-grid overflow-x-auto border-t border-zinc-100 px-3 py-2">{children}</div>}
+    </details>
+  );
+}
 
-/** 선택한 채널·타깃의 2×2 분석 + 상세(방송 구분별 성과·방송 기록) 한 곳 */
+const supplementText = (s: SupplementCount) => [s.plan ? `업로드 편성표 ${s.plan}` : "", s.registered ? `관리자 등록 본방 시각 ${s.registered}` : "", s.naver ? `네이버 방송 정보 ${s.naver}` : "", s.episode ? `회차 ${s.episode}` : ""].filter(Boolean).join(" · ");
+
+/** 선택한 채널 — 종합평가 → [흐름·최고최저 | 편성 비교] → 접힌 방송 기록 */
 function Analysis({ row, result, siblings, onSelect }: { row: ChannelRow; result: PerformanceResult; siblings: ChannelRow[]; onSelect: (r: ChannelRow) => void }) {
   const code = row.channelCode;
   const airings = result.airings.filter((a) => a.channelCode === code);
+  const assess = (siblings.find((s) => s.primary) ?? row).assessment ?? null;
   const splits = [
     { label: "본방", s: row.firstRun },
     { label: "확인된 재방", s: row.rerun },
     { label: "본방 여부 미확인", s: row.unknownRun },
   ].filter((x) => x.s.airings > 0);
   const cd = row.channelDaily;
+  const sup = (result.supplement ?? []).find((s) => s.channelCode === code);
   return (
-    <section className="mt-6" aria-label={`${row.channelName} ${row.targetLabel} 분석`}>
+    <section className="mt-5" aria-label={`${row.channelName} ${row.targetLabel} 평가`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[12px] font-semibold text-indigo-700">{row.channelName}</span>
         <h3 className="text-[16px] font-bold text-zinc-900">{shortProgramName(result.work.displayName)}</h3>
         {siblings.length > 1 && (
           <div className="ml-auto flex gap-1 text-[12px]" role="group" aria-label="분석 타깃">
             {siblings.map((s) => (
-              <button key={s.targetLabel} type="button" aria-pressed={s.targetLabel === row.targetLabel} onClick={() => onSelect(s)} className={chip(s.targetLabel === row.targetLabel)}>
-                {s.targetLabel}
-                {s.primary ? " · KPI" : ""}
+              <button key={s.targetLabel} type="button" aria-pressed={s.targetLabel === row.targetLabel} onClick={() => onSelect(s)} className={chip(s.targetLabel === row.targetLabel)} title={s.targetLabel}>
+                {targetShort(s.targetLabel)}
               </button>
             ))}
           </div>
         )}
       </div>
-      <p className="text-[12px] text-zinc-500">
-        {row.observedFrom} ~ {row.observedTo} 중 {formatInt(row.airings)}회 · 방송일 {row.days}일{row.episodes ? ` · 회차 ${row.episodes}개` : ""}
-        {cd && cd.validDays < cd.periodDays ? ` · 채널 평균 자료 ${cd.validDays}/${cd.periodDays}일` : ""}
-      </p>
       {!row.analysis ? (
         <p className="mt-2 text-[13px] text-zinc-600">{row.statusNote || "이 조건의 방영 기록이 없습니다."}</p>
       ) : (
-        <div className="mt-2">
-          <TrendSection key={`t-${code}-${row.targetLabel}`} row={row} />
-          <div className="mt-2 grid gap-2 md:grid-cols-2">
-            <SlotCard key={`s-${code}-${row.targetLabel}`} row={row} />
-            <VerdictCard row={row} />
+        <>
+          {assess && (
+            <div className="mt-2">
+              <AssessmentBlock a={assess} />
+            </div>
+          )}
+          <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+            <TrendSection key={`t-${code}-${row.targetLabel}`} row={row} />
+            <SlotSection key={`s-${code}-${row.targetLabel}`} row={row} />
           </div>
-        </div>
-      )}
-      {row.analysis && (
-        <Fold title={`상세 · 방송 구분별 성과와 방송 기록 ${airings.length}건`}>
-          {splits.length > 0 && (
-            <table className="mb-2 w-full max-w-md text-[12px]">
-              <thead className="text-zinc-500">
-                <tr>
-                  <th className="py-1 text-left font-medium">구분(조회 기간 전체)</th>
-                  <th className="py-1 text-right font-medium">방영</th>
-                  <th className="py-1 text-right font-medium">방송일</th>
-                  <th className="py-1 text-right font-medium">평균(%)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {splits.map((x) => (
-                  <tr key={x.label} className="border-t border-zinc-100">
-                    <td className="py-1">{x.label}</td>
-                    <td className="py-1 text-right tabular-nums">{x.s.airings}회</td>
-                    <td className="py-1 text-right tabular-nums">{x.s.days}일</td>
-                    <td className="py-1 text-right tabular-nums">{formatRatingValue(x.s.avg, code)}</td>
+          <Fold key={`f-${code}-${row.targetLabel}`} title={`방송 기록 · ${row.channelName} ${formatInt(airings.length)}건`}>
+            <p className="mb-2 text-[12px] text-zinc-600">
+              {row.observedFrom} ~ {row.observedTo} · {airCount(row.airings, row.days)}
+              {row.episodes ? ` · 회차 ${row.episodes}개` : ""} · 점유율(방영별 평균) {row.shareAvg === null ? MISSING : formatPct(row.shareAvg)}
+              {cd && cd.validDays < cd.periodDays ? ` · 채널 평균 자료 ${cd.validDays}/${cd.periodDays}일` : ""}
+            </p>
+            {sup && supplementText(sup) && <p className="mb-2 text-[12px] text-zinc-600">본방 여부·회차 보완(닐슨에 표시가 없는 방영): {supplementText(sup)}</p>}
+            {splits.length > 0 && (
+              <table className="mb-2 w-full max-w-md text-[12px]">
+                <thead className="text-zinc-500">
+                  <tr>
+                    <th className="py-1 text-left font-medium">방송 구분(조회 기간 전체)</th>
+                    <th className="py-1 text-right font-medium">방영횟수</th>
+                    <th className="py-1 text-right font-medium">평균</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {row.primary ? (
-            <table className="w-full min-w-[520px] text-[12px]">
-              <thead className="sticky top-0 bg-white text-zinc-500">
-                <tr>
-                  <th className="py-1 text-left font-medium">방송일</th>
-                  <th className="py-1 text-left font-medium">시각</th>
-                  <th className="py-1 text-left font-medium">원본 태그</th>
-                  <th className="py-1 text-left font-medium">회차</th>
-                  <th className="py-1 text-left font-medium">원본 표기</th>
-                  <th className="py-1 text-right font-medium">시청률(%)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {airings.map((a, i) => (
-                  <tr key={i} className="border-t border-zinc-100">
-                    <td className="py-1 tabular-nums">{a.date}</td>
-                    <td className="py-1 tabular-nums">
-                      {fmtTime(a.startTime)}
-                      {a.endTime ? `~${fmtTime(a.endTime)}` : ""}
-                    </td>
-                    <td className="py-1">{a.firstRun === true ? "<본>" : a.firstRun === false ? "<재>" : "없음"}</td>
-                    <td className="py-1">{a.episode ?? MISSING}</td>
-                    <td className="py-1 text-zinc-500">{a.name}</td>
-                    <td className="py-1 text-right tabular-nums">{formatRatingValue(a.rating, code)}</td>
+                </thead>
+                <tbody>
+                  {splits.map((x) => (
+                    <tr key={x.label} className="border-t border-zinc-100">
+                      <td className="py-1">{x.label}</td>
+                      <td className="py-1 text-right tabular-nums">{airCount(x.s.airings, x.s.days)}</td>
+                      <td className="py-1 text-right tabular-nums">{formatRatingValue(x.s.avg, code)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {row.primary ? (
+              <table className="w-full min-w-[520px] text-[12px]">
+                <thead className="sticky top-0 bg-white text-zinc-500">
+                  <tr>
+                    <th className="py-1 text-left font-medium">방송일</th>
+                    <th className="py-1 text-left font-medium">시각</th>
+                    <th className="py-1 text-left font-medium">본방 구분</th>
+                    <th className="py-1 text-left font-medium">회차</th>
+                    <th className="py-1 text-left font-medium">원본 표기</th>
+                    <th className="py-1 text-right font-medium">시청률</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-[12px] text-zinc-500">방송 기록 목록은 채널 KPI 타깃 기준으로만 제공합니다.</p>
-          )}
-          {row.primary && result.airingsTruncated && <p className="mt-1 text-[11px] text-zinc-500">기록이 많아 일부만 표시(평균 계산에는 전부 포함).</p>}
-        </Fold>
+                </thead>
+                <tbody>
+                  {airings.map((a, i) => (
+                    <tr key={i} className="border-t border-zinc-100">
+                      <td className="py-1 tabular-nums">{a.date}</td>
+                      <td className="py-1 tabular-nums">
+                        {fmtTime(a.startTime)}
+                        {a.endTime ? `~${fmtTime(a.endTime)}` : ""}
+                      </td>
+                      <td className="py-1">{a.firstRun === true ? "본방" : a.firstRun === false ? "재방" : "미확인"}</td>
+                      <td className="py-1">{a.episode ?? MISSING}</td>
+                      <td className="py-1 text-zinc-500">{a.name}</td>
+                      <td className="py-1 text-right tabular-nums">{formatRatingValue(a.rating, code)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-[12px] text-zinc-500">방송별 목록은 채널 KPI 타깃 기준으로만 제공합니다.</p>
+            )}
+            {row.primary && result.airingsTruncated && <p className="mt-1 text-[11px] text-zinc-500">기록이 많아 일부만 표시(평균 계산에는 전부 포함).</p>}
+          </Fold>
+        </>
       )}
     </section>
   );
 }
 
-function Fold({ title, children, defaultOpen }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
-  return (
-    <details className="mt-2 rounded-md border border-zinc-200 bg-white" open={defaultOpen}>
-      <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium text-zinc-700">{title}</summary>
-      <div className="dense-grid overflow-x-auto border-t border-zinc-100 px-3 py-2">{children}</div>
-    </details>
-  );
-}
-
+/** 계산 기준 — 정의·단위·기간을 한 곳에(화면 맨 아래, 접힘) */
 function CalcBasis() {
+  const items: [string, string][] = [
+    ["타깃", "수2049 = 수도권 개인 2049, 가구 = 전국 유료방송가입가구. 두 타깃 값은 서로 합치거나 한 순위로 묶지 않습니다."],
+    ["시청률", "선택한 기간·방송 구분에서 작품 방영 한 건마다의 닐슨 시청률(%)을 산술평균(방송시간 가중 아님). 같은 방영이 두 번 적재돼도 한 번만 셉니다. — 는 자료 없음, 0은 실제 0, <0.001은 0보다 크지만 표시 자릿수보다 작은 값입니다."],
+    ["채널 평균 대비(표 괄호)", "작품 시청률 ÷ 같은 기간 공식 채널 하루 시청률의 일평균 − 1. 상대 차이(%)이며 %p나 점유율이 아닙니다. 예전의 ‘채널 평균=100 지수 109%’는 +9%와 같은 뜻입니다. 채널 평균이 0이거나 없으면 —."],
+    ["방영횟수", "고유 방영 건수(채널 KPI 타깃 행 기준, 두 타깃을 함께 보여도 두 번 세지 않음)와 방송일 수."],
+    ["종합평가", "최근 12주 편성진단(콘텐츠 적합도, 채널 KPI 타깃·전체 방송)의 ‘같은 시간대 기준’(같은 요일·시간대 다른 프로그램 기대치 대비)과 ‘채널 방영 평균’(채널 프로그램 방영 1건당 평균 대비) 지수의 방향을 고정 문구로 잇습니다. 두 지수는 표본이 적으면 1배 쪽으로 보정된 값입니다. 채널 방영 평균은 표의 채널 하루 평균과 분모가 달라 표의 %와 맞지 않을 수 있습니다. 최근 4주가 이전 8주보다 약 30% 이상 낮으면 그 사실을 근거로 씁니다. 최근 12주 방영이 3일 미만이거나 없으면 조회 기간의 채널 평균 대비·같은 시간대 기준으로 ‘조회 기간’ 평가를 냅니다. 점수·판정 태그·미래 예측은 쓰지 않습니다."],
+    ["시청률 흐름", "본방별은 본방 방영(회차 번호가 있으면 회차로 표기), 일별은 방영이 있는 방송일의 평균. 최고·최저·최근은 그래프에 그린 점과 같은 자료입니다. 4점 이상이면 앞 절반·뒤 절반 평균, 2~3점이면 처음·최근을 비교합니다."],
+    ["편성 비교", "실제 방영한 요일·시(시작 시각)마다 작품 평균과 같은 채널·타깃·관측 기간의 다른 프로그램 단순 평균을 비교합니다. 같은 요일·시 비교 방송이 15건 미만이면 같은 시(전 요일)로 넓히고(‘전 요일’ 표시), 그래도 부족하면 —. 기본은 방송일 3일 이상 구간 먼저, 방영 많은 순 4개. 보정이 없는 값이라 종합평가의 같은 시간대 기준과 다를 수 있습니다. ‘집중’ 같은 우열 문장은 방송일 3일 이상 구간만 씁니다."],
+    ["본방 구분", "닐슨 <본>·<재> 표시를 먼저 쓰고, 없으면 업로드 편성표 → 관리자 등록 본방 요일·시각 → 네이버 방송 정보 순서로 보완합니다(보완 건수는 방송 기록에). 근거가 없으면 재방으로 단정하지 않고 ‘미확인’으로 둡니다. 본방 = 각 채널의 첫 방송."],
+    ["점유율", "닐슨 방영별 점유율의 산술평균(채널 공식 점유율 아님) — 방송 기록에서 확인합니다."],
+  ];
   return (
-    <details className="mt-2 text-[12px]">
+    <details className="mt-4 text-[12px]">
       <summary className="inline-block cursor-pointer rounded px-2 py-1 text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50">계산 기준</summary>
       <dl className="mt-2 space-y-1.5 rounded-md bg-zinc-50 p-3 text-zinc-700">
-        <div>
-          <dt className="font-medium">시청률</dt>
-          <dd>선택한 기간·방송 구분에서 작품 방영 한 건마다의 시청률을 산술평균(방송시간 가중 아님). 같은 방영이 두 번 적재돼도 한 번만 셉니다.</dd>
-        </div>
-        <div>
-          <dt className="font-medium">점유율</dt>
-          <dd>닐슨 방영별 점유율(그 시간 TV를 본 같은 타깃 중 이 채널 비율)을 방영마다 산술평균한 값입니다. 채널의 기간 공식 점유율이나 시청시간 비율과 다르며, 값이 없는 방영은 빼고 셉니다.</dd>
-        </div>
-        <div>
-          <dt className="font-medium">채널 평균</dt>
-          <dd>같은 기간 닐슨 채널 하루 시청률의 일평균(채널 KPI 타깃). 방송 구분을 바꿔도 그대로입니다.</dd>
-        </div>
-        <div>
-          <dt className="font-medium">채널 평균 대비</dt>
-          <dd>(작품 시청률 ÷ 채널 평균 − 1) × 100. 상대 차이(%)이며 %p 차이가 아닙니다. 채널 평균이 0이거나 없으면 산출 불가.</dd>
-        </div>
-        <div>
-          <dt className="font-medium">본방 구분</dt>
-          <dd>원본 자료의 본방 표시 기준이며 현재 ENA만 표시가 있습니다. 표시가 없는 기록은 재방으로 단정하지 않고 ‘본방 여부 미확인’으로 둡니다.</dd>
-        </div>
-        <div>
-          <dt className="font-medium">자료 적음·부족</dt>
-          <dd>채널명 옆 (n일)은 집계 방송일이 적다는 표시입니다. 3일 미만은 자료 부족(붉은색), 8일 미만은 자료 적음(주황색) — 콘텐츠 적합도와 같은 기준.</dd>
-        </div>
-        <div>
-          <dt className="font-medium">같은 시간대 대비</dt>
-          <dd>표: 같은 채널·기간에서 같은 요일·시간대 다른 프로그램 평균과 비교(표본이 적으면 1배 쪽으로 보정, 콘텐츠 적합도와 같은 기준). 편성 비교의 시간대별 값은 보정 없는 단순 평균 대비라 표 값과 다를 수 있습니다. 같은 요일·시 비교 방송이 15건 미만이면 같은 시(전 요일)로 넓히고, 그래도 부족하면 산출하지 않습니다.</dd>
-        </div>
-        <div>
-          <dt className="font-medium">시청률 흐름</dt>
-          <dd>회차별은 본방 표시와 회차 번호가 있는 방영만 씁니다(재방은 넣지 않음). 회차 4개 이상이면 앞 절반·뒤 절반 회차 평균, 2~3개면 첫·최근 회차, 그 외에는 방영이 있는 첫 달·마지막 달의 채널 평균 대비를 비교합니다. 최고·최저는 선택 기간 안의 개별 방영입니다.</dd>
-        </div>
-        <div>
-          <dt className="font-medium">종합 평가</dt>
-          <dd>채널 평균 대비와 같은 시간대 대비의 방향을 이은 고정 문구입니다(점수·판정 태그 없음). 같은 유형 평균·순위는 앱 자료로 검증되지 않아 쓰지 않습니다. 최근 12주 편성 진단은 기간이 달라 채널 화면에서 따로 봅니다.</dd>
-        </div>
+        {items.map(([k, v]) => (
+          <div key={k}>
+            <dt className="font-medium">{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
       </dl>
     </details>
   );
@@ -1361,7 +1224,6 @@ export default function ProgramPerformanceView() {
               </div>
             </details>
           </div>
-          {AIRING_HELP[airing] && <p className="text-zinc-500">{AIRING_HELP[airing]}</p>}
         </section>
       )}
 
@@ -1391,14 +1253,12 @@ export default function ProgramPerformanceView() {
           </div>
           {result.pattern && <PatternLine pattern={result.pattern} result={result} />}
           {visibleNotes.length > 0 && (
-            <ul className="mt-1 space-y-0.5 text-[12px] text-amber-800">
+            <ul className="mt-1 space-y-0.5 text-[12px] text-zinc-500">
               {visibleNotes.map((n, i) => (
                 <li key={i}>※ {n}</li>
               ))}
             </ul>
           )}
-
-          {result.lines.length > 0 && <LineList lines={result.lines} className="mt-3" />}
 
           {entries.length > 0 ? (
             <ChannelTable entries={entries} airing={result.query.airing} selected={selRow ? rowKey(selRow) : null} onSelect={select} />
@@ -1426,22 +1286,21 @@ export default function ProgramPerformanceView() {
                 </ul>
               </details>
             ))}
+          <div ref={analysisRef} className="scroll-mt-4">
+            {selRow && <Analysis key={`${requestUrl}|${rowKey(selRow)}`} row={selRow} result={result} siblings={selectable.filter((r) => r.channelCode === selRow.channelCode)} onSelect={(r) => group && setSel({ group, key: rowKey(r) })} />}
+          </div>
           {result.competitors.length > 0 && (
-            <div className="mt-3">
+            <div className="mt-4">
               {/* 자사 방영이 없는 작품은 경쟁 채널 성과가 유일한 내용이라 처음부터 펼쳐 둔다(사용자 지시 2026-10-23) */}
               {entries.length > 0 && (
                 <button type="button" aria-expanded={showComp} onClick={() => setCompFor(showComp ? null : group)} className={chip(showComp)}>
                   경쟁 채널 성과 {showComp ? "닫기" : `보기 · ${new Set(result.competitors.map((c) => c.competitorName)).size}개 채널`}
                 </button>
               )}
-              {(showComp || entries.length === 0) && <CompetitorSection rows={result.competitors} lines={result.competitorLines} />}
+              {(showComp || entries.length === 0) && <CompetitorSection rows={result.competitors} />}
             </div>
           )}
           <CalcBasis />
-
-          <div ref={analysisRef} className="scroll-mt-4">
-            {selRow && <Analysis key={`${requestUrl}|${rowKey(selRow)}`} row={selRow} result={result} siblings={selectable.filter((r) => r.channelCode === selRow.channelCode)} onSelect={(r) => group && setSel({ group, key: rowKey(r) })} />}
-          </div>
         </section>
       )}
     </div>
