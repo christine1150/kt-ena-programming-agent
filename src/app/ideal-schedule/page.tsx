@@ -1240,6 +1240,8 @@ function IdealSchedulePage() {
           runId={runId}
           block={selected}
           decimals={decimals}
+          channelCode={channelCode}
+          isChannelKpi={view?.run.optimize_target_is_channel_kpi ?? true}
           targetLabel={runKpi}
           compareRow={selectedCompare}
           previewCandidateId={preview?.block.id === selected.id ? preview.cand.id : null}

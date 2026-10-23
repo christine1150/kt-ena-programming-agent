@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Suggestion, SuggestResult } from "@/lib/scheduleForecast/suggest";
 import type { LiveWeek } from "@/lib/scheduleForecast/inProgress";
 import { shortProgramName } from "@/lib/programAlias"; // 제목 줄임 규칙(표시용 약칭, 마우스 오버에는 원래 제목)
+import { MEASURED_PERIOD_LABEL, MEASURED_REL_ERROR, NEW_PROGRAM_NOTE, ROUGH_REL_ERROR, isRough, relErrorFor, relErrorText, roughValue } from "@/lib/idealSchedule/accuracyProfile";
 
 type RunMeta = { id: string; purpose: string; createdAt: string; dataCutoff: string; planRef: string };
 type Period = { from: string; to: string; value: number | null; officialEstimate: number | null; forecastMinutes: number; totalMinutes: number; complete: boolean };
@@ -48,15 +49,28 @@ const GRADE: Record<string, { cls: string; title: string }> = {
   C: { cls: "bg-amber-100 text-amber-800", title: "근거 약함 — 방영 이력이 거의 없는 신작 등, 참고만" },
   ASSUMED: { cls: "bg-zinc-100 text-zinc-600", title: "가정값" },
 };
+// 칸 값의 실측 정확도(제안 2·3, 2026-10-23) — 상대 오차가 큰 등급은 대략값으로, 근거 C는 "그 자리의 평소 수준"이라고 밝힌다
+const slotValue = (v: number, grade: string | null, code: string) => (isRough(relErrorFor(code, grade)) ? roughValue(v, v >= 1 ? 2 : 3) : fmt(v));
+const gradeTitle = (grade: string, evidenceAirings: number, code: string) => {
+  const rel = relErrorFor(code, grade);
+  return `\n${GRADE[grade].title} (방영 ${evidenceAirings}회)${rel !== null ? `\n${relErrorText(rel)}${isRough(rel) ? " — 칸 값은 대략으로 보세요" : ""}` : ""}${grade === "C" ? `\n${NEW_PROGRAM_NOTE}` : ""}`;
+};
+const accuracyLine = (code: string) => {
+  const p = MEASURED_REL_ERROR[code];
+  if (!p) return "프로그램별 칸 값은 방영 한 편 예상이라 빗나가는 폭이 큽니다. 근거 C(이력이 거의 없는 신작 등)는 같은 요일·시간대의 최근 평균에 가까운 값이고, '근거 없음' 칸은 참고만 하세요.";
+  const pc = (x: number) => `${Math.round(x * 100)}%`;
+  return `프로그램별 칸 값은 방영 한 편 예상이라 실적과 평균 ${pc(p.A)}(근거 A)·${pc(p.B)}(B)·${pc(p.C)}(C) 차이 납니다(${MEASURED_PERIOD_LABEL}). ${Math.round(ROUGH_REL_ERROR * 100)}%를 넘는 등급의 칸은 대략값으로 보여 줍니다. 근거 C(이력이 거의 없는 신작 등)는 같은 요일·시간대의 최근 평균에 가까운 값이고, '근거 없음' 칸은 참고만 하세요.`;
+};
 
 /** 이미 시작한 주 — 자료 마감일까지는 관측(실제 방영·공식 하루 시청률), 그 뒤 날은 예측을 한 화면에 종합한다(저장하지 않는 즉석 계산). */
-function LiveWeekView({ live, target, year }: { live: LiveWeek; target: number | null; year: number | null }) {
+function LiveWeekView({ live, target, year, channelCode }: { live: LiveWeek; target: number | null; year: number | null; channelCode: string }) {
   const s = live.summary;
   const info = [
     `자료 마감 ${live.cutoff}까지는 관측값(실제 방영 시청률·공식 하루 시청률), 그 뒤 날은 같은 모델의 예측입니다.`,
     "이 값은 저장하지 않고 열 때마다 최신 자료로 다시 계산합니다(저장된 사전 예측과 다릅니다).",
     "주 종합 = 7일 공식 하루 시청률(02:00~25:59)의 단순 평균. 관측일은 공식 값, 예측일은 편성시간 가중 예상 × 직전 28일 환산 배율" + (live.ratio !== null ? ` ${live.ratio.toFixed(3)}` : "") + ".",
-    "하루 단위 예측은 오차가 큰 편이라 프로그램별 값을 함께 보세요. 근거 C와 '—' 칸은 참고만 하세요.",
+    "하루 단위 예측도 오차가 큰 편입니다.",
+    accuracyLine(channelCode),
     ...live.warnings,
   ].join("\n");
   return (
@@ -107,10 +121,10 @@ function LiveWeekView({ live, target, year }: { live: LiveWeek; target: number |
                     const g = v.grade ? GRADE[v.grade] : null;
                     const range = `${hm(v.startMin)}~${v.endMin === null ? "?" : hm(v.endMin)}`;
                     return (
-                      <li key={v.key} className="flex items-center gap-1.5 px-2 py-1 text-xs" title={`${v.name}\n${range}${v.low !== null && v.high !== null ? `\n범위 ${fmt(v.low)} ~ ${fmt(v.high)}` : ""}${g ? `\n${g.title} (방영 ${v.evidenceAirings}회)` : ""}`}>
+                      <li key={v.key} className="flex items-center gap-1.5 px-2 py-1 text-xs" title={`${v.name}\n${range}${v.low !== null && v.high !== null ? `\n범위 ${fmt(v.low)} ~ ${fmt(v.high)}` : ""}${g && v.grade ? (observed ? `\n${g.title} (방영 ${v.evidenceAirings}회)` : gradeTitle(v.grade, v.evidenceAirings, channelCode)) : ""}`}>
                         <span className="w-9 shrink-0 tabular-nums text-zinc-400">{hm(v.startMin)}</span>
                         <span className="min-w-0 flex-1 truncate text-zinc-800">{shortProgramName(v.name)}</span>
-                        <span className="shrink-0 text-right tabular-nums">{v.value === null ? <span className="text-zinc-400">—</span> : <span className={`font-semibold ${observed ? "text-zinc-900" : "text-indigo-900"}`}>{fmt(v.value)}</span>}</span>
+                        <span className="shrink-0 text-right tabular-nums">{v.value === null ? <span className="text-zinc-400">—</span> : <span className={`font-semibold ${observed ? "text-zinc-900" : "text-indigo-900"}`}>{observed ? fmt(v.value) : slotValue(v.value, v.grade, channelCode)}</span>}</span>
                         {g && <span className={`shrink-0 rounded px-1 text-[10px] ${g.cls}`}>{v.grade === "ASSUMED" ? "가정" : v.grade}</span>}
                       </li>
                     );
@@ -154,7 +168,7 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
   if (state.key !== key) return <p className="p-4 text-sm text-zinc-400" role="status">불러오는 중...</p>;
   if (state.error) return <p className="rounded-2xl bg-white p-4 text-sm text-rose-700 shadow-sm ring-1 ring-zinc-100">{state.error}</p>;
   const data = state.data;
-  if (data && !data.run && data.live) return <LiveWeekView live={data.live} target={data.target?.rating ?? null} year={data.target?.year ?? null} />;
+  if (data && !data.run && data.live) return <LiveWeekView live={data.live} target={data.target?.rating ?? null} year={data.target?.year ?? null} channelCode={channelCode} />;
   if (!data || !data.run) {
     return (
       <p className="rounded-2xl bg-white p-4 text-sm text-zinc-600 shadow-sm ring-1 ring-zinc-100" title="자료 마감일 뒤에 시작하는 주의 편성표를 올리면 자동으로 저장됩니다. 이미 시작한 주는 저장하지 않고 관측+예측 종합으로 보여 줍니다.">
@@ -191,7 +205,8 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
     `저장 ${when(run.created_at)} · 자료 마감 ${run.data_cutoff} · 타깃 ${run.target_label} · 모델 ${run.model_version}`,
     "방송 전에 저장한 값이라 나중에 모델이나 자료가 바뀌어도 그대로입니다. 예측은 주마다 처음 한 번만 저장하며, 편성표를 고쳐 다시 올려도 새로 저장하지 않습니다.",
     ratio !== null && agg?.officialScale ? `하루·주 예상 = 공식 채널 하루 시청률(02:00~25:59)과 같은 정의로 맞춘 값(편성 칸 예측의 시간 가중 평균 × 직전 28일 환산 배율 ${ratio.toFixed(3)}, ${agg.officialScale.from}~${agg.officialScale.to} 중 ${agg.officialScale.days}일).` : "하루·주 예상은 환산 근거가 모자라 표시하지 않습니다.",
-    "하루 단위 예측은 오차가 큰 편이라 프로그램별 값을 함께 보세요. 근거 C(이력이 거의 없는 신작 등)와 '근거 없음' 칸은 참고만 하세요.",
+    "하루 단위 예측도 오차가 큰 편입니다.",
+    accuracyLine(channelCode),
     ...(agg?.warnings ?? []),
   ].join("\n");
 
@@ -267,14 +282,14 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
                     const isNew = previous && prev === undefined;
                     const range = `${hm(v.start_min)}~${v.end_min === null ? "?" : hm(v.end_min)}`;
                     return (
-                      <li key={v.slot_key} className="flex items-center gap-1.5 px-2 py-1 text-xs" title={`${v.program_name}\n${range}${v.low !== null && v.high !== null ? `\n범위 ${fmt(v.low)} ~ ${fmt(v.high)}` : ""}${g ? `\n${g.title} (방영 ${v.evidence_airings}회)` : ""}`}>
+                      <li key={v.slot_key} className="flex items-center gap-1.5 px-2 py-1 text-xs" title={`${v.program_name}\n${range}${v.low !== null && v.high !== null ? `\n범위 ${fmt(v.low)} ~ ${fmt(v.high)}` : ""}${g && v.grade ? gradeTitle(v.grade, v.evidence_airings, channelCode) : ""}`}>
                         <span className="w-9 shrink-0 tabular-nums text-zinc-400">{hm(v.start_min)}</span>
                         <span className="min-w-0 flex-1 truncate text-zinc-800">
                           {shortProgramName(v.program_name)}
                           {isNew && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-700">추가</span>}
                         </span>
                         <span className="shrink-0 text-right tabular-nums">
-                          {v.expected === null ? <span className="text-zinc-400">—</span> : <span className="font-semibold text-zinc-900">{fmt(v.expected)}</span>}
+                          {v.expected === null ? <span className="text-zinc-400">—</span> : <span className="font-semibold text-zinc-900">{slotValue(v.expected, v.grade, channelCode)}</span>}
                           {delta !== null && Math.abs(delta) >= 0.0005 && (
                             <span className={`ml-1 text-[10px] ${delta > 0 ? "text-blue-700" : "text-rose-700"}`}>
                               {delta > 0 ? "▲" : "▼"}

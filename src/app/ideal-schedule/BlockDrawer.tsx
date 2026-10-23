@@ -6,6 +6,7 @@
 // 주간 기대 변화를 확인한 뒤 [교체]할 수 있다.
 import { useEffect, useState } from "react";
 import { DOW_LABELS, minToLabel } from "@/lib/scheduleGridLayout";
+import { NEW_PROGRAM_NOTE, isRough, relErrorFor, relErrorText, roughValue } from "@/lib/idealSchedule/accuracyProfile";
 import { CERTAINTY_LABEL, COMPONENT_LABEL, LEVEL_LABEL, PENALTY_LABEL, RANGE_BASIS_LABEL, SMALL_GAIN_RATIO, STATUS_LABEL, evidenceGrade, num, pct, reasonText, signed, signedPct, type BlockRow, type CompareRow, type Reason } from "./model";
 
 export type Candidate = {
@@ -61,7 +62,12 @@ export function BlockDrawer({
   editSeq = null,
   frameLabel = "지난주",
   refWord = "지난주",
+  channelCode = null,
+  isChannelKpi = true,
 }: {
+  /** 실측 정확도(accuracyProfile) 조회용 — 채널 주 타깃 편성안일 때만 값이 있다 */
+  channelCode?: string | null;
+  isChannelKpi?: boolean;
   /** 화면이 마지막으로 본 작업본 수정 번호 — 다른 화면에서 같은 작업본이 바뀌었으면 서버가 거부한다 */
   editSeq?: number | null;
   /** 기준 주 표기("지난주"는 실제 지난주일 때만, 아니면 기간 — 단계 10) */
@@ -154,6 +160,9 @@ export function BlockDrawer({
   };
   const hyp = block.content_type !== "OWN";
   const grade = evidenceGrade(block);
+  // 실측 상대 오차가 크면 한 편 기대값을 대략값으로 — 소수 셋째 자리까지 보여 주면 실제보다 정확해 보인다(제안 2)
+  const rel = block.layer === "CURRENT" ? null : relErrorFor(channelCode, grade.grade, isChannelKpi);
+  const rough = isRough(rel);
   const avg12 = (() => {
     const r = reasonValue(block.reasons, "AVG_12W");
     return r && typeof r.value === "number" ? r.value : null;
@@ -228,12 +237,14 @@ export function BlockDrawer({
           <dl className="grid grid-cols-4 gap-2 pt-1 text-center">
             <div className="rounded-xl border border-zinc-100 px-1 py-2">
               <dt className="text-[10px] text-zinc-500">{block.layer === "CURRENT" ? "실측" : "기대 시청률"}</dt>
-              <dd className="mt-0.5 text-base font-semibold tabular-nums text-zinc-900">{fmt(block.layer === "CURRENT" ? block.actual_kpi : block.expected_kpi)}</dd>
+              <dd className="mt-0.5 text-base font-semibold tabular-nums text-zinc-900" title={rough && block.expected_kpi !== null ? `계산값 ${fmt(block.expected_kpi)} — 한 편 오차가 커서 대략값으로 표시` : undefined}>
+                {block.layer === "CURRENT" ? fmt(block.actual_kpi) : rough && block.expected_kpi !== null ? `≈${roughValue(block.expected_kpi, decimals)}` : fmt(block.expected_kpi)}
+              </dd>
             </div>
             <div className="rounded-xl border border-zinc-100 px-1 py-2">
               <dt className="text-[10px] text-zinc-500">근거</dt>
               <dd className="mt-1">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${GRADE_STYLE[grade.grade]}`} title={grade.label}>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${GRADE_STYLE[grade.grade]}`} title={rel !== null ? `${grade.label} · ${relErrorText(rel)}` : grade.label}>
                   {grade.grade}
                 </span>
               </dd>
@@ -259,6 +270,12 @@ export function BlockDrawer({
               {dec.runnerUp ? <span className="text-zinc-400"> · 다음 후보 〈{dec.runnerUp.name}〉 {dec.runnerUp.expected !== null ? dec.runnerUp.expected.toFixed(decimals) : "-"}</span> : null}
             </p>
           )}
+          {rel !== null && (
+            <p className="px-1 text-xs text-zinc-600">
+              근거 {grade.grade} — {relErrorText(rel)}.{rough ? " 한 편 값은 대략으로 보고, 예상 범위를 함께 보세요." : ""}
+            </p>
+          )}
+          {grade.grade === "C" && block.layer !== "CURRENT" && <p className="px-1 text-xs text-zinc-600">{NEW_PROGRAM_NOTE}</p>}
           <p className="px-1 text-[11px] text-zinc-400">
             {grade.label} · {targetLabel} 기준 · 최근 3달 데이터 기반 기대값(미래 예측 아님)
           </p>
