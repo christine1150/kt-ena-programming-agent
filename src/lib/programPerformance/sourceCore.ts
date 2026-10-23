@@ -687,13 +687,16 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       analysis.slotLead = slotLeadOf(slots);
       analysis.slotBaseFrom = cmpFrom;
       analysis.slotBaseTo = to;
+      analysis.runSplit = nonFirst && first.days > 0 ? { first: ratioOf(first.avg, channelDaily.mean), firstDays: first.days, rest: nonFirst.vs, restDays: nonFirst.days } : null;
     }
 
     // 종합평가 — 채널 KPI 타깃 행에서만. 최근 12주 편성진단(콘텐츠 적합도) 지수가 있으면 그것을, 없으면(12주 방영 없음·3일 미만·공통 타깃 모드) 조회 기간의 같은 두 지표를 쓴다.
     // 두 범위의 분모(채널 방영 평균 vs 채널 하루 평균)가 달라 섞지 않고 scope로 구분한다.
     let assessment: ChannelRow["assessment"] = null;
     if (tgt.isPrimary && filtered.length > 0) {
-      const fromFit = fit !== null && fit.slotIndex !== null && fit.slotIndex !== undefined;
+      // 조회 기간이 12주 편성진단 창과 같을 때만 진단 지수를 쓴다 — 다르면(최근 4주·전체 기간 등) 결론은 12주, 세부 줄은 조회 기간이 되어
+      // 한 블록에 기간이 다른 두 결론이 섞였다(2026-10-23 쯔양몇끼 전체 기간: 표 100%인데 결론 '채널 평균보다 낮고'). 이때는 조회 기간 값으로 판단한다.
+      const fromFit = fit !== null && fit.slotIndex !== null && fit.slotIndex !== undefined && fit.windowFrom === from && fit.asOf === to;
       const a = fromFit
         ? assessmentOf({ scale: fit!.scaleIndex ?? null, slot: fit!.slotIndex ?? null, trendFalling: fit!.trendFalling === true, scope: "12w" })
         : assessmentOf({ scale: vsChannel.ratio, slot: slot.ratio.ratio, trendFalling: false, scope: "period" });
@@ -704,6 +707,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         targetLabel: programLabel,
         allAiringsBasis: fromFit && query.airing !== "all",
         ...a,
+        slotIndex: fromFit ? (fit!.slotIndex ?? null) : slot.ratio.ratio,
         // 어디서 강하고 약한지·점유율 효율은 조회 기간 방영 vs 올해 비교군(편성 비교와 같은 자료)
         where: analysis ? whereLineOf(analysis.slots) : null,
         shareNote: analysis ? shareLineOf(vsChannel, analysis.slots) : null,

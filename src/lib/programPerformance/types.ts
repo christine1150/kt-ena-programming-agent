@@ -122,6 +122,8 @@ export interface Assessment {
   allAiringsBasis: boolean;
   headline: string;
   evidence: string | null;
+  /** 결론에 쓴 같은 시간대 지수(12주 편성진단 또는 조회 기간 배율) — 종합 리뷰가 같은 값을 쓰게 넘긴다 */
+  slotIndex?: number | null;
   /** 어디서 강하고 약한지 — 본방 시간·재방 시간대별 같은 시간대 평균 대비(조회 기간 방영 vs 올해 비교군) */
   where?: string | null;
   /** 시청률은 낮아도 점유율이 같은 시간대 평균보다 높은 구간이 있으면 그 사실 */
@@ -335,6 +337,8 @@ export interface RowAnalysis {
   /** 편성 비교 비교군 기간(올해 1월 1일 ~ 최신 자료일, 최소 12주) */
   slotBaseFrom?: string;
   slotBaseTo?: string;
+  /** 본방과 그 밖의 방영(재방·미확인) 각각의 채널 평균 대비 — 전체 방송 조회이고 둘 다 있을 때만(종합 리뷰용) */
+  runSplit?: { first: RatioValue; firstDays: number; rest: RatioValue; restDays: number } | null;
 }
 
 export interface AiringEvidence {
@@ -402,31 +406,16 @@ export interface PerformanceResult {
   review?: OverallReview | null;
 }
 
-/** 리뷰 한 칸의 판정 — 강점(기준보다 높음)·약점(낮음)·보통(같음)·비교 불가. 방향은 표의 푸른색·붉은색과 같은 규칙(배율 소수 둘째 자리) */
-export type ReviewTone = "good" | "even" | "weak" | "na";
-
-export interface ReviewItem {
-  key: "2049" | "HH" | "slot" | "share" | "genre";
-  /** 칸 제목("2049 시청률") */
-  label: string;
-  tone: ReviewTone;
-  /** 크게 보일 값("채널 평균의 78%", "9편 중 2위") */
-  main: string;
-  /** 작게 붙는 근거("0.093% · 최근 12주") */
-  sub: string;
-}
-
+/**
+ * 종합 리뷰 — 조회 기간에 방영 기록이 있는 자사 채널 전부를 통합 분석한 1~3문장(서버 고정 문구, metrics.overallReviewOf).
+ * 첫 문장은 전체 성과, 이후 문장은 결론을 보완하는 채널 간 차이·타깃 차이·본방/시간대·라인업 대비 성적 중 의미 있는 것만.
+ */
 export interface OverallReview {
-  /** 기준 채널 = 원 방송사(오리지널 등록·편성 패턴) 또는 본방이 가장 많은 채널 */
-  channelCode: string;
-  channelName: string;
-  /** 한 단어 결론 — 강점 칸이 더 많음·약점 칸이 더 많음·엇갈림(칸 개수만 센다, 가중치 없음) */
-  verdict: "강점 우세" | "약점 우세" | "강약 엇갈림" | "판단 보류";
-  /** 결론 한 문장 */
-  headline: string;
-  items: ReviewItem[];
-  /** 다른 자사 채널 요약(문장 여러 개) */
-  others: string[];
+  sentences: string[];
+  /** 분석한 채널 순서(ENA 방영이 있으면 ENA 먼저, 이후 방영 많은 순) — 검증용 */
+  channelOrder: string[];
+  /** 판단에 쓴 채널(방영일 8일 이상) — 검증용 */
+  judgedChannels: string[];
 }
 
 export interface BroadcastPatternSlot {

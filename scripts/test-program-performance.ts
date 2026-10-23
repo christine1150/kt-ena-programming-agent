@@ -438,14 +438,26 @@ async function main() {
 
     // 12주 진단 연결 — 진단 지수가 있으면 '최근 12주', 표의 채널 평균 대비(%)는 그대로(분모를 섞지 않음)
     const fit12 = async (code: string) => (code === "ENA" ? { asOf: END, windowFrom: addDays(END, -83), items: [{ programId: "p-dr-ena", tag: "KEEP", tier: "FORMAL", sampleDays: 12, airings: 12, slotIndex: 1.84, scaleIndex: 1.57, trendDelta: 0 }] } : null);
-    const f = (await loadProgramPerformanceWith(db, Q(), { fitLookup: fit12 }))!;
+    // 조회 기간 = 진단 창(최근 12주)일 때만 진단 지수를 쓴다(2026-10-23: 결론과 세부 줄의 기간이 섞이지 않게)
+    const w12 = { from: addDays(END, -83), to: END };
+    const f = (await loadProgramPerformanceWith(db, Q(w12), { fitLookup: fit12 }))!;
     const fEna = rowOf(f.groups.flatMap((g) => g.rows), "ENA");
-    check("12주 진단: 지수가 있으면 scope=12w, 평가 기간은 진단 창", fEna.assessment?.scope === "12w" && fEna.assessment.from === addDays(END, -83) && fEna.assessment.headline.startsWith("채널 평균보다 높고"), JSON.stringify(fEna.assessment));
+    check("12주 진단: 조회 기간이 진단 창과 같으면 scope=12w, 평가 기간은 진단 창", fEna.assessment?.scope === "12w" && fEna.assessment.from === addDays(END, -83) && fEna.assessment.headline.startsWith("채널 평균보다 높고") && fEna.assessment.slotIndex === 1.84, JSON.stringify(fEna.assessment));
+    const fOther = rowOf((await loadProgramPerformanceWith(db, Q(), { fitLookup: fit12 }))!.groups.flatMap((g) => g.rows), "ENA");
+    check("12주 진단: 조회 기간이 다르면 진단 지수 대신 조회 기간 값(scope=period)", fOther.assessment?.scope === "period" && fOther.assessment.slotIndex === fOther.slot?.ratio.ratio, JSON.stringify(fOther.assessment));
     check("12주 진단: 진단의 1.57배를 표의 채널 평균 대비로 옮기지 않음", near(fEna.vsChannel.pct, 140) && fEna.assessment!.evidence!.includes("1.57배"));
     const rEna = rowOf(r.groups.flatMap((g) => g.rows), "ENA");
     check("12주 진단: 지수가 없으면 조회 기간 평가로(범위를 표시)", rEna.assessment?.scope === "period" && rEna.assessment.from === r.period.from, JSON.stringify(rEna.assessment));
-    const fFirst = (await loadProgramPerformanceWith(db, Q({ airing: "first" }), { fitLookup: fit12 }))!;
+    const fFirst = (await loadProgramPerformanceWith(db, Q({ airing: "first", ...w12 }), { fitLookup: fit12 }))!;
     check("12주 진단: 본방 조회에서 전체 방송 진단을 쓰면 '전체 방송 기준' 표시", rowOf(fFirst.groups.flatMap((g) => g.rows), "ENA").assessment?.allAiringsBasis === true);
+    // 종합 리뷰(제목 옆, 보유 채널 통합) — ENA 먼저·방영 많은 순, 1~3문장, 레이블·아이콘 어휘 없음, ENA가 없으면 방영 최다 채널부터(다른 채널도 계속 분석)
+    const rv = r.review!;
+    const ppAired = r.groups.flatMap((g) => g.rows).filter((x) => x.status === "OBSERVED" && x.airings > 0);
+    check("종합 리뷰: 방영 채널을 모두 담고 ENA 먼저", !!rv && rv.channelOrder[0] === "ENA" && new Set(ppAired.map((x) => x.channelCode)).size === rv.channelOrder.length, JSON.stringify(rv));
+    check("종합 리뷰: 1~3문장, 금지 레이블 없음", rv.sentences.length >= 1 && rv.sentences.length <= 3 && !/(종합 판독|채널별 성과|편성 자리 경쟁력|라인업 내 위치|편성 관점|강점 우세|약점 우세)/.test(rv.sentences.join(" ")), rv.sentences.join(" | "));
+    const noEna = (await loadProgramPerformanceWith(db, Q({ channels: ppAired.map((x) => x.channelCode).filter((c) => c !== "ENA") })))!;
+    const noEnaAired = noEna.groups.flatMap((g) => g.rows).filter((x) => x.status === "OBSERVED" && x.airings > 0 && x.primary).sort((a, b) => b.airings - a.airings);
+    check("종합 리뷰: ENA가 없으면 방영 최다 채널부터", !noEna.review || noEna.review.channelOrder[0] === noEnaAired[0]?.channelCode, JSON.stringify(noEna.review));
     check("종합평가: 다른 그룹 타깃 행에는 붙이지 않음", bEna.find((x) => !x.primary)!.assessment == null && bEna.find((x) => x.primary)!.assessment != null);
     check("소표본 채널도 관측 실적으로 평가(보류 문구 없음)", !!rowOf(r.groups.flatMap((g) => g.rows), "ENA_PLAY").assessment && !/(판단|보류|표본)/.test(rowOf(r.groups.flatMap((g) => g.rows), "ENA_PLAY").assessment!.headline));
 

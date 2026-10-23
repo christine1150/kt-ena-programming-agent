@@ -9,7 +9,7 @@ import { useSearchParams } from "next/navigation";
 import { shortProgramName } from "@/lib/programAlias";
 import { formatInt, formatPct, formatRatingValue, MISSING } from "@/lib/ui/metricFormat";
 import { WORK_CLASS_LABEL, indexOf } from "@/lib/programPerformance/metrics";
-import type { AiringFilter, AiringRef, Assessment, OriginalCompare, ChannelRow, CompetitorRow, Direction, OverallReview, PerformanceResult, RatioValue, ReviewTone, SearchItem, SupplementCount, TargetMode, WorkClass } from "@/lib/programPerformance/types";
+import type { AiringFilter, AiringRef, Assessment, OriginalCompare, ChannelRow, CompetitorRow, Direction, OverallReview, PerformanceResult, RatioValue, SearchItem, SupplementCount, TargetMode, WorkClass } from "@/lib/programPerformance/types";
 
 type ClassFilter = "all" | "drama" | "variety" | "culture";
 type PeriodPreset = "all" | "4w" | "12w" | "custom";
@@ -130,55 +130,16 @@ function PatternLine({ pattern, result }: { pattern: NonNullable<PerformanceResu
   );
 }
 
-// 종합 리뷰 칸 색 — 표 괄호와 같은 규칙(높음 푸른색·낮음 붉은색), 글자 판정(강점·약점)을 함께 써 색만으로 전달하지 않는다
-const TONE_STYLE: Record<ReviewTone, { box: string; badge: string; word: string }> = {
-  good: { box: "border-blue-200 bg-blue-50/60", badge: "bg-blue-600 text-white", word: "강점" },
-  weak: { box: "border-rose-200 bg-rose-50/60", badge: "bg-rose-600 text-white", word: "약점" },
-  even: { box: "border-zinc-200 bg-zinc-50", badge: "bg-zinc-500 text-white", word: "보통" },
-  na: { box: "border-zinc-200 bg-white", badge: "bg-zinc-200 text-zinc-600", word: "비교 불가" },
-};
-const VERDICT_STYLE: Record<OverallReview["verdict"], string> = { "강점 우세": "bg-blue-600 text-white", "약점 우세": "bg-rose-600 text-white", "강약 엇갈림": "bg-amber-500 text-white", "판단 보류": "bg-zinc-200 text-zinc-700" };
-
 /**
- * 종합 리뷰(2026-10-23) — 제목 옆에서 작품 성과를 한눈에. 기준 채널(ENA, 없으면 방영 많은 채널)의 2049·가구·같은 시간대·점유율·장르 순위를
- * 강점·약점 칸으로, 다른 채널은 한두 문장으로. 문구·판정은 모두 서버(overallReviewOf) 고정 값이다.
+ * 종합 리뷰(2026-10-23 개편) — 조회 기간에 방영한 자사 채널 전부를 통합 분석한 1~3문장. 제목·배지·칸 없이 문장만(사용자 지시).
+ * 첫 문장은 전체 성과, 이후 문장은 채널 간 차이·타깃 차이·본방/시간대·라인업 대비 성적 중 의미 있는 것만. 문장은 모두 서버(overallReviewOf) 고정 문구다.
  */
-function ReviewCard({ review }: { review: OverallReview }) {
+function ReviewText({ review }: { review: OverallReview }) {
+  const [head, ...rest] = review.sentences;
   return (
-    <section className="min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm" aria-label="종합 리뷰">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-[12px] font-medium text-zinc-500">종합 리뷰 · {review.channelName} 기준 · 조회 기간</h3>
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${VERDICT_STYLE[review.verdict]}`}>{review.verdict}</span>
-      </div>
-      <p className="mt-1 text-[15px] font-semibold leading-snug text-zinc-900">{review.headline}</p>
-      {review.items.length > 0 && (
-        <ul className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-5">
-          {review.items.map((it) => {
-            const st = TONE_STYLE[it.tone];
-            return (
-              <li key={it.key} className={`min-w-0 rounded-lg border px-2.5 py-1.5 ${st.box}`}>
-                <div className="flex items-center justify-between gap-1">
-                  <span className="truncate text-[12px] font-medium text-zinc-600" title={it.label}>
-                    {it.label}
-                  </span>
-                  <span className={`shrink-0 rounded px-1.5 text-[11px] font-semibold ${st.badge}`}>{st.word}</span>
-                </div>
-                <p className="mt-0.5 text-[14px] font-semibold tabular-nums text-zinc-900">{it.main}</p>
-                <p className="truncate text-[11px] tabular-nums text-zinc-500" title={it.sub}>
-                  {it.sub}
-                </p>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {review.others.length > 0 && (
-        <ul className="mt-2 space-y-0.5 text-[13px] text-zinc-700">
-          {review.others.map((t) => (
-            <li key={t}>· {t}</li>
-          ))}
-        </ul>
-      )}
+    <section className="min-w-0 flex-1 border-l-2 border-zinc-300 pl-3 text-[14px] leading-relaxed text-zinc-800" aria-label="종합 리뷰">
+      <p className="font-semibold text-zinc-900">{head}</p>
+      {rest.length > 0 && <p className="mt-0.5">{rest.join(" ")}</p>}
     </section>
   );
 }
@@ -724,7 +685,8 @@ function CalcBasis() {
     ["채널 평균 대비(표 괄호)", "작품 시청률 ÷ 같은 기간 공식 채널 하루 시청률의 일평균 × 100. 채널 평균을 100%로 본 비율이라 109%는 채널 평균보다 9% 높다는 뜻이고 %p나 점유율이 아닙니다. 100% 초과 푸른색, 미만 붉은색. 채널 평균이 0이거나 없으면 —."],
     ["점유율", "닐슨 방영별 점유율(그 시간 TV를 본 같은 타깃 중 이 채널 비율)의 산술평균입니다. 채널의 기간 공식 점유율이 아니며, 값이 없는 방영은 빼고 셉니다. 시청률이 낮아도 그 시간 TV 시청자가 적으면 점유율은 높을 수 있습니다."],
     ["방영횟수", "고유 방영 건수(채널 KPI 타깃 행 기준, 두 타깃을 함께 보여도 두 번 세지 않음)와 방송일 수."],
-    ["종합평가", "최근 12주 편성진단(콘텐츠 적합도, 채널 KPI 타깃·전체 방송)의 ‘같은 시간대 기준’(같은 요일·시간대 다른 프로그램 기대치 대비)과 ‘채널 방영 평균’(채널 프로그램 방영 1건당 평균 대비) 지수의 방향을 고정 문구로 잇습니다. 두 지수는 표본이 적으면 1배 쪽으로 보정된 값입니다. 채널 방영 평균은 표의 채널 하루 평균과 분모가 달라 표의 %와 맞지 않을 수 있습니다. 최근 4주가 이전 8주보다 약 30% 이상 낮으면 그 사실을 근거로 씁니다. 최근 12주 방영이 3일 미만이거나 없으면 조회 기간의 채널 평균 대비·같은 시간대 기준으로 ‘조회 기간’ 평가를 냅니다. 점수·판정 태그·미래 예측은 쓰지 않습니다."],
+    ["종합 리뷰(제목 옆)", "조회 기간에 방영 기록이 있는 자사 채널을 모두 봅니다. 채널마다 시청 규모가 달라 시청률을 합치지 않고, 채널마다 표의 ‘채널 평균 대비’와 같은 시간대 기대치 대비(콘텐츠 적합도와 같은 표본 보정 배율)를 0.85배 미만·0.85~1.18배·1.18배 이상으로 나눠 채널 개수로 다수를 셉니다(방영 많은 채널 하나가 결론을 좌우하지 않게). 방영일 8일 미만 채널은 판단에서 뺍니다. 이어지는 문장은 다수와 다른 채널, 본방과 그 밖의 방영, 2049와 가구, 본방 시간대(같은 시간대 평균의 1.5배 이상·0.55배 미만), 같은 채널·분류 오리지널 순위, 최근 4주 하락 중 의미 있는 것 두 개까지입니다. 채널 순서는 ENA가 먼저, 그다음 방영 많은 순."],
+    ["종합평가", "조회 기간이 최근 12주와 같으면 최근 12주 편성진단(콘텐츠 적합도, 채널 KPI 타깃·전체 방송)의 ‘같은 시간대 기준’(같은 요일·시간대 다른 프로그램 기대치 대비)과 ‘채널 방영 평균’(채널 프로그램 방영 1건당 평균 대비) 지수의 방향을 고정 문구로 잇습니다. 두 지수는 표본이 적으면 1배 쪽으로 보정된 값입니다. 채널 방영 평균은 표의 채널 하루 평균과 분모가 달라 표의 %와 맞지 않을 수 있습니다. 최근 4주가 이전 8주보다 약 30% 이상 낮으면 그 사실을 근거로 씁니다. 조회 기간이 최근 12주와 다르거나(결론과 세부 줄의 기간이 섞이지 않게), 최근 12주 방영이 3일 미만이거나 없으면 조회 기간의 채널 평균 대비·같은 시간대 기준으로 ‘조회 기간’ 평가를 냅니다. 점수·판정 태그·미래 예측은 쓰지 않습니다."],
     ["시청률 흐름", "본방별은 본방 방영(회차 번호가 있으면 회차로 표기), 일별은 방영이 있는 방송일의 평균. 최고·최저·최근은 그래프에 그린 점과 같은 자료입니다. 4점 이상이면 앞 절반·뒤 절반 평균, 2~3점이면 처음·최근을 비교합니다."],
     ["편성 비교", "조회 기간에 실제 방영한 요일·시(시작 시각)마다 작품 평균을, 올해 1월 1일부터 최신 자료일까지(12주 미만이면 최근 12주) 같은 채널·타깃·요일·시에 방송한 다른 프로그램의 단순 평균(=100%)과 비교합니다. 비교군을 조회 기간과 떼어 최근 4주 조회에서도 비교 방송이 모자라지 않게 했습니다. 같은 요일·시 비교 방송이 15건 미만이면 같은 시(전 요일)로 넓히고(‘전 요일’ 표시), 그래도 부족하면 —. 점유율도 같은 비교군의 점유율 평균과 견줍니다. 기본은 방송일 3일 이상 구간 먼저, 방영 많은 순 4개. ‘집중’·‘몇 곳 중 몇 곳’ 같은 문장은 방송일 3일 이상 구간만 씁니다."],
     ["종합평가의 세부 줄", "본방 시간은 방송일이 가장 많은 본방 구간의 같은 시간대 평균 대비 비율, 본방 외 시간대는 평균보다 높은 곳·낮은 곳의 개수입니다(편성 비교와 같은 자료). 시청률이 채널 평균보다 낮거나 그 시간대 시청률이 평균을 넘지 못해도 점유율이 같은 시간대 평균의 150%(콘텐츠 적합도 ‘강화’ 선과 같은 값) 이상인 시간대가 있으면 따로 적습니다."],
@@ -1392,7 +1354,7 @@ export default function ProgramPerformanceView() {
                 </ul>
               )}
             </div>
-            {result.review && <ReviewCard review={result.review} />}
+            {result.review && result.review.sentences.length > 0 && <ReviewText review={result.review} />}
           </div>
 
           {entries.length > 0 ? (
