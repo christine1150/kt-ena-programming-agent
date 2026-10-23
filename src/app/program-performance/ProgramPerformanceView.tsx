@@ -921,10 +921,9 @@ export default function ProgramPerformanceView({ initialQuery, initialGroup, foc
           <>
             {/* 한 줄 정리(사용자 지시 2026-10-22): 안내 문구는 짧은 앞 라벨 하나로(자세한 설명은 마우스 오버), 작품 구분은 색 점으로(이름은 마우스 오버), 넘치면 옆으로 넘긴다 */}
             <div className="mt-2 flex items-center gap-2">
-              <span className="shrink-0 text-[12px] text-zinc-500" title={classFilter === "all" && !q.trim() ? "ENA에서 최근 2주 안에 방영한 오리지널(최근 방영 순)" : "검색 결과"}>
-                {classFilter === "all" && !q.trim() ? "최근 2주 방영" : "검색 결과"}
-              </span>
-              <ul className="flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto pb-1" aria-label="작품 목록">
+              {/* 사용자 지시(2026-10-23): 기본 목록의 "최근 2주 방영" 라벨은 삭제 — 검색 중일 때만 "검색 결과" 표시 */}
+              {!(classFilter === "all" && !q.trim()) && <span className="shrink-0 text-[12px] text-zinc-500">검색 결과</span>}
+              <ul className="flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto pb-1" aria-label="작품 목록" title={classFilter === "all" && !q.trim() ? "ENA에서 최근 2주 안에 방영한 오리지널(최근 방영 순)" : undefined}>
                 {items.length === 0 && <li className="text-[12px] text-zinc-500">일치하는 자사 방영 작품이 없습니다.</li>}
                 {items.map((it) => (
                   <li key={it.groupKey} className="shrink-0">
