@@ -1509,6 +1509,8 @@ function ChannelDailyColumn({
 
   const targetRankNum = parseTargetRankNum(channel.targetRank);
   const accent = brandText(DAILY_DETAIL_READABLE_COLOR_OVERRIDE[code] ?? channel.themeColor ?? UNBRANDED_CHANNEL_COLOR);
+  // 사용자 지시(2026-10-23): ENA Drama 로고가 붉은색이라 순위가 목표를 상회해도 미달(붉은색)과 구분되지 않는다 — 상회 시에는 ENA 로고색으로 표시
+  const goalAccent = code === "ENA_DRAMA" && logoReference ? brandText(logoReference.themeColor ?? UNBRANDED_CHANNEL_COLOR) : accent;
   const annualAvg = channel.ytdAvgRating;
   const hasActionText = !!(resolved.line || resolved.copy || resolved.status);
 
@@ -1535,7 +1537,7 @@ function ChannelDailyColumn({
         </div>
         <div className="mt-2.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
           <span className="text-2xl font-bold leading-none tabular-nums tracking-[-0.02em] text-zinc-900">{formatRating(channel.currentRating, code)}</span>
-          <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-lg" targetScope={parseTargetRank(channel.targetRank).scope} goalAccent={accent} />
+          <RankPair todayRank={channel.currentRank} targetRankNum={targetRankNum} baselineAvgRank={baselineAvgRank} sizeClass="text-lg" targetScope={parseTargetRank(channel.targetRank).scope} goalAccent={goalAccent} />
           <span className="ml-auto">
             <RankChangeIndicator rankChangeDod={channel.rankChangeDod} />
           </span>
