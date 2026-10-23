@@ -9,7 +9,7 @@ import { useSearchParams } from "next/navigation";
 import { shortProgramName } from "@/lib/programAlias";
 import { formatInt, formatPct, formatRatingValue, MISSING } from "@/lib/ui/metricFormat";
 import { WORK_CLASS_LABEL, relText } from "@/lib/programPerformance/metrics";
-import type { AiringFilter, AiringRef, Assessment, ChannelRow, CompetitorRow, Direction, PerformanceResult, RatioValue, SearchItem, SupplementCount, TargetMode, WorkClass } from "@/lib/programPerformance/types";
+import type { AiringFilter, AiringRef, Assessment, OriginalCompare, ChannelRow, CompetitorRow, Direction, PerformanceResult, RatioValue, SearchItem, SupplementCount, TargetMode, WorkClass } from "@/lib/programPerformance/types";
 
 type ClassFilter = "all" | "drama" | "variety" | "culture";
 type PeriodPreset = "all" | "4w" | "12w" | "custom";
@@ -455,7 +455,8 @@ function SlotSection({ row }: { row: ChannelRow }) {
 }
 
 /** 종합평가 — 서버 고정 문구(결론 한 줄 + 근거 한 줄). 범위(최근 12주·조회 기간)·타깃·방송 구분 차이는 제목에 한 번만 */
-function AssessmentBlock({ a }: { a: Assessment }) {
+function AssessmentBlock({ a, oc }: { a: Assessment | null; oc: OriginalCompare | null }) {
+  if (!a) return oc ? <section className="rounded-xl border border-zinc-200 bg-white p-4" aria-label="오리지널 비교"><OriginalLines oc={oc} /></section> : null;
   const scope = a.scope === "12w" ? "최근 12주" : "조회 기간";
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-4" aria-label="종합평가">
@@ -465,7 +466,28 @@ function AssessmentBlock({ a }: { a: Assessment }) {
       </h4>
       <p className="mt-0.5 text-[16px] font-semibold leading-snug text-zinc-900">{a.headline}</p>
       {a.evidence && <p className="mt-0.5 text-[13px] text-zinc-600">{a.evidence}</p>}
+      {oc && (
+        <div className="mt-3 border-t border-zinc-100 pt-2">
+          <OriginalLines oc={oc} />
+        </div>
+      )}
     </section>
+  );
+}
+
+/** 오리지널 비교 — 같은 채널·분류 오리지널과 같은 회차 기준 순위, 직전 동시간대, 흐름(서버 고정 문구). 범위는 방영 시작 이후 본방이라 제목에 따로 적는다 */
+function OriginalLines({ oc }: { oc: OriginalCompare }) {
+  return (
+    <>
+      <h5 className="text-[12px] font-medium text-zinc-500" title={`${oc.dataFrom} 이후 자료 · ${oc.targetLabel}`}>
+        {oc.classLabel} 비교 · 방영 시작 이후 본방 · {targetShort(oc.targetLabel)}
+      </h5>
+      <ul className="mt-0.5 space-y-0.5 text-[14px] text-zinc-900">
+        {oc.lines.map((t) => (
+          <li key={t}>· {t}</li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -487,6 +509,8 @@ function Analysis({ row, result, siblings, onSelect }: { row: ChannelRow; result
   const code = row.channelCode;
   const airings = result.airings.filter((a) => a.channelCode === code);
   const assess = (siblings.find((s) => s.primary) ?? row).assessment ?? null;
+  // 오리지널 비교는 방송 채널(그 채널 KPI 타깃)에서만
+  const oc = result.originalCompare && result.originalCompare.channelCode === code ? result.originalCompare : null;
   const splits = [
     { label: "본방", s: row.firstRun },
     { label: "확인된 재방", s: row.rerun },
@@ -513,9 +537,9 @@ function Analysis({ row, result, siblings, onSelect }: { row: ChannelRow; result
         <p className="mt-2 text-[13px] text-zinc-600">{row.statusNote || "이 조건의 방영 기록이 없습니다."}</p>
       ) : (
         <>
-          {assess && (
+          {(assess || oc) && (
             <div className="mt-2">
-              <AssessmentBlock a={assess} />
+              <AssessmentBlock a={assess} oc={oc} />
             </div>
           )}
           <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

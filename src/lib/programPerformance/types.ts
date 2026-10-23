@@ -12,7 +12,8 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 // v1.8(2026-10-22): 그래도 비어 있는 방영을 본방 편성 패턴(관리자 등록 요일·시각, 네이버 방송 정보)으로 보완하고 닐슨으로 맞춘 실제 본방 시각(pattern)을 함께 돌려준다
 // v1.9(2026-10-23): 용어 정의(본방 = 각 채널 첫 방송, 초방 = 원 방송사 첫 방송)에 맞춰 원 방송사가 아닌 자사 채널 방영을 패턴만으로 재방으로 보지 않는다(모름 — 그 채널 첫 방송이면 본방)
 // v2.0(2026-10-23): 성과 중심 화면 개편(docs/ena-features/F1_OUTCOME_REDESIGN_PLAN.md) — 종합평가(assessment, 최근 12주 편성진단 근거 재사용)·표시 단위별 흐름 문구·최고최저·편성 비교 결론·보완 건수(supplement, notes에서 이동) 추가. 기존 값의 계산식 무변경
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v2.0";
+// v2.1(2026-10-23): 오리지널 비교(originalCompare — 같은 회차 순위·직전 동시간대·흐름) 추가, 기존 값 무변경
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v2.1";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "ORIGINAL_CULTURE" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";
@@ -128,6 +129,28 @@ export interface Extremes<T> {
   recent: T;
   /** 관측점 수(1이면 최고·최저를 나누지 않는다) */
   count: number;
+}
+
+/**
+ * 오리지널 비교(F1_OUTCOME_REDESIGN_PLAN.md §7-1) — 같은 채널·분류 오리지널과 같은 회차 기준 순위, 직전 동시간대 작품 대비, 첫 2회 대비 흐름.
+ * 범위는 조회 기간과 무관하게 '방영 시작 이후 본방'(방송 채널 KPI 타깃). 순위·상대 차이·중간값만 — 새 판정 없음.
+ */
+export interface OriginalCompare {
+  classLabel: string;
+  targetLabel: string;
+  /** 비교 자료 첫날(DB 첫 관측일) — 이보다 먼저 시작한 작품은 비교군에서 뺀다 */
+  dataFrom: string;
+  /** 이 작품 본방 수 = 비교 회차 */
+  k: number;
+  selfAvg: number | null;
+  rank: number | null;
+  /** 순위 대상 작품 수(자기 포함) */
+  peers: number;
+  peerMean: number | null;
+  predecessor: { name: string; slot: string; k: number; avg: number | null; vs: RatioValue } | null;
+  momentum: { self: number; peerMedian: number | null; peers: number } | null;
+  /** 서버 고정 문구(최대 3줄) */
+  lines: string[];
 }
 
 /** 본방 여부·회차 보완 건수(내부 이력 — 기본 화면에 띄우지 않고 방송 기록 접힘 안에만) */
@@ -356,6 +379,8 @@ export interface PerformanceResult {
   notes: string[];
   /** 본방 여부·회차 보완 건수(채널별) — 화면은 방송 기록 접힘 안에서만 보여 준다 */
   supplement?: SupplementCount[];
+  /** 오리지널 비교 — 오리지널 드라마·예능·교양이고 방송 채널에 본방 기록이 있을 때만(channelCode = 방송 채널) */
+  originalCompare?: (OriginalCompare & { channelCode: string }) | null;
   /** 본방 편성 패턴(관리자 등록·네이버 방송 정보)과 닐슨으로 확인한 실제 본방 시각. 근거가 없으면 null */
   pattern: BroadcastPatternInfo | null;
 }

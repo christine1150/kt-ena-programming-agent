@@ -6,6 +6,7 @@
 // 보증하지 못하는 것: 운영 데이터에서의 값(합성 사례의 이름·수치는 실제 채널 성과가 아니다).
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
 import { matchPlanRow, normalizePlanRows } from "../src/lib/idealSchedule/planEpisodes";
+import { originalCompareOf, type OriginalSeries } from "../src/lib/programPerformance/originalCompare";
 import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, relText, assessmentOf, seriesTrendText, pickExtremes, slotLeadOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
 import { searchWorks } from "../src/lib/programPerformance/search";
@@ -470,6 +471,17 @@ async function main() {
     check("편성 비교 결론: 엇갈리면 방송일 많은 높은 구간에 집중", slotLeadOf([c(6, 5, 40), c(5, 9, 20), c(1, 6, -30)]) === "성과는 금 22시대에 집중됩니다.", slotLeadOf([c(6, 5, 40), c(5, 9, 20), c(1, 6, -30)]));
     check("편성 비교 결론: 모두 높음", slotLeadOf([c(6, 5, 40), c(1, 6, 10)]) === "방영한 시간대 모두 시간대 평균보다 높습니다.");
     check("편성 비교 결론: 비교 기준 없음", slotLeadOf([c(6, 5, null)]) === "시간대 평균과 비교할 수 있는 구간이 없습니다.");
+    // 오리지널 비교(§7-1) — 같은 회차 순위·직전 동시간대·흐름, 새 판정 어휘 없음
+    const S = (name: string, ratings: number[], slot = "월화 22:00"): OriginalSeries => ({ name, start: "2026-01-01", slot, ratings });
+    const peersO = [S("가", [1, 1, 1, 1, 1, 1]), S("나", [0.5, 0.5, 0.5, 0.6, 0.6, 0.6]), S("다", [2, 2]), S("라", [0.2, 0.3, 0.4, 0.5])];
+    const oc = originalCompareOf({ classLabel: "오리지널 드라마", targetLabel: "수도권 2049", dataFrom: "2025-01-01", code: "ENA", self: S("본작", [0.6, 0.6, 0.7, 0.9]), peers: peersO, predecessor: peersO[1] })!;
+    check("오리지널 비교: 같은 회차(첫 4회) 기준, 본방이 4회 이상인 작품끼리 순위(자기 포함)", oc.k === 4 && oc.peers === 4 && oc.rank === 2 && oc.lines[0] === "첫 4회 본방 평균 0.700%로 2025년 이후 오리지널 드라마 4편 중 2위(같은 회차 기준)", oc.lines[0]);
+    check("오리지널 비교: 직전 동시간대 첫 k회 평균 대비 상대 차이", !!oc.predecessor && oc.predecessor.k === 4 && near(oc.predecessor.vs.pct, (0.7 / 0.525 - 1) * 100) && oc.lines[1] === "직전 월화 22:00 오리지널 드라마 ‘나’ 첫 4회 평균 0.525% 대비 +33%", oc.lines[1]);
+    check("오리지널 비교: 흐름은 첫 2회 대비 3~4회, 다른 작품 중간값과 나란히", !!oc.momentum && near(oc.momentum.self, (0.8 / 0.6 - 1) * 100) && oc.lines[2].startsWith("첫 2회 대비 3~4회 +33% · 같은 시점 다른 오리지널 드라마 중간값"), oc.lines[2]);
+    const oc1 = originalCompareOf({ classLabel: "오리지널 예능", targetLabel: "수도권 2049", dataFrom: "2025-01-01", code: "ENA", self: S("새작", [0.392]), peers: peersO, predecessor: S("앞작", [0.5, 0.3, 0.2]) })!;
+    check("오리지널 비교: 1회뿐이면 '1회 본방', 직전 작품도 1회와 비교, 흐름 줄 없음", oc1.lines[0].startsWith("1회 본방 0.392%로") && oc1.lines[1].includes("‘앞작’ 1회 본방 0.500% 대비 −22%") && oc1.momentum === null && oc1.lines.length === 2, oc1.lines.join(" / "));
+    check("오리지널 비교: 비교 대상이 없으면 null(빈 문구를 만들지 않음)", originalCompareOf({ classLabel: "오리지널 교양", targetLabel: "수도권 2049", dataFrom: "2025-01-01", code: "ENA", self: S("홀로", [0.1]), peers: [], predecessor: null }) === null);
+    check("오리지널 비교: 평가 어휘·권고 없음", !/(좋|나쁘|우수|부진|강화|교체|확대)/.test(oc.lines.join("")));
     check("편성 비교 결론: 표본 경고 문구 없음(소표본 구간만 있어도)", ![slotLeadOf([c(6, 2, 40), c(1, 1, -30)]), slotLeadOf([c(6, 2, 40)])].some((t) => /(표본|판단|참고|3일 미만)/.test(t)));
   }
 

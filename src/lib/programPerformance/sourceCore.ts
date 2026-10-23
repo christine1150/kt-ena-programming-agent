@@ -15,6 +15,7 @@ import { addDays } from "@/lib/idealSchedule/time";
 import { describeLearned, hhmm, inferRuns, type LearnedSlot } from "@/lib/broadcastPattern/inferRuns";
 import { loadRunPatterns } from "@/lib/broadcastPattern/load";
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
+import { loadOriginalCompare } from "./originalCompare";
 import {
   channelDailyMean,
   classifyWork,
@@ -724,6 +725,8 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     });
   }
   // 경쟁 채널 조회도 자사 채널 조회와 함께 시작한다
+  // 오리지널 비교(방영 시작 이후 본방, 조회 기간과 무관) — 실패해도 화면 전체를 막지 않는다
+  const originalP = loadOriginalCompare(db, { cls: classification.cls, workIds, dataFrom: dbFirst, channels }).catch(() => null);
   const competitorsP = loadCompetitorRows(db, work.memberKeys, new Set(channels.map((c) => normalizeProgramKey(c.name))), from, to, query.airing, workPrograms.map((p) => p.canonical_name ?? ""));
   const buckets = await Promise.all(jobs.map((j) => j()));
   // 본방 여부·회차 보완 건수 — 기본 화면 배너(notes)가 아니라 별도 필드로 남겨 방송 기록 접힘 안에서만 보여 준다(개편 2026-10-23, 이력은 그대로)
@@ -770,6 +773,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     slotCells,
     notes,
     supplement,
+    originalCompare: await originalP,
     pattern:
       runPatterns.patterns.length > 0 || runPatterns.info.naverSkipped.length > 0
         ? {
