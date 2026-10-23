@@ -503,15 +503,16 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     blocks: fromMaybe(deep.firstRunEfficiency, (rows) => [
       {
         kind: "text",
-        text: "본방 여부는 닐슨 `<본>`·`<재>` 표시, 업로드 편성표, 관리자 등록 본방 요일·시각, 네이버 방송 정보 순으로 판정했습니다(프로그램 성과와 같은 규칙, 본방 시각은 닐슨 실제 방영 시각으로 맞춤). 본방으로 확인되지 않은 방영분은 재방으로 단정하지 않고 '본방 외'로 묶었습니다.",
+        text: "본방은 각 채널에서의 첫 방송이며, 그중 원 방송사의 첫 방송을 초방으로 따로 셉니다. 본방 여부는 닐슨 `<본>`·`<재>` 표시, 업로드 편성표, 관리자 등록 본방 요일·시각, 네이버 방송 정보 순으로 판정했습니다(프로그램 성과와 같은 규칙, 본방 시각은 닐슨 실제 방영 시각으로 맞춤). 본방으로 확인되지 않은 방영분은 재방으로 단정하지 않고 '본방 외'로 묶었습니다.",
       },
       {
         kind: "table",
-        headers: ["프로그램", "판정 근거", "본방 편성", "본방 평균", "본방 외 편성", "본방 외 평균", "유지율"],
+        headers: ["프로그램", "판정 근거", "본방 편성", "그중 초방", "본방 평균", "본방 외 편성", "본방 외 평균", "유지율"],
         rows: cut(rows).rows.map((r) => [
           r.canonicalName,
-          r.firstRunSource,
+          r.firstRunSource || "—",
           `${r.firstRunAirings}회`,
+          r.premiereAirings > 0 ? `${r.premiereAirings}회` : "—",
           formatRating(r.firstRunAvgRating, code),
           `${r.otherAirings}회`,
           formatRating(r.otherAvgRating, code),

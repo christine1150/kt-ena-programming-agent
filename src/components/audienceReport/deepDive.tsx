@@ -756,7 +756,9 @@ function OriginalRerunView({ rows, channelCode }: { rows: OriginalRerunInsight[]
 
 // ── 심층 06 본방 vs 본방 외 효율 ──────────────────────────────────────────────
 // 판정 근거별로 색을 달리해 "왜 본방으로 봤는지"를 표에서 바로 구분할 수 있게 함.
+// 편성표·네이버로만 판정한 프로그램은 근거가 빈 문자열로 와서 배지를 달지 않는다(사용자 지시 2026-10-23).
 function FirstRunSourceBadge({ source }: { source: string }) {
+  if (!source) return null;
   const cls =
     source.startsWith("태그+") ? "text-white" : source === "<본> 태그" ? "bg-indigo-50 text-indigo-600" : "bg-neutral-200 text-neutral-700";
   return (
@@ -770,7 +772,7 @@ function FirstRunView({ rows, channelCode }: { rows: FirstRunInsight[]; channelC
   return (
     <div>
       <p className="mb-2 text-xs text-neutral-600">
-        본방 여부는 닐슨 &lsquo;&lt;본&gt;&rsquo;·&lsquo;&lt;재&gt;&rsquo; 표시, 업로드 편성표, 관리자 등록 본방 요일·시각, 네이버 방송 정보 순으로 판정했습니다(프로그램 성과와 같은 규칙). 프로그램명 옆 배지로 어느 근거로 판정했는지 표시합니다.
+        본방은 각 채널에서의 첫 방송이며, 그중 원 방송사의 첫 방송을 초방으로 따로 셉니다. 본방 여부는 닐슨 &lsquo;&lt;본&gt;&rsquo;·&lsquo;&lt;재&gt;&rsquo; 표시, 업로드 편성표, 관리자 등록 본방 요일·시각, 네이버 방송 정보 순으로 판정했습니다(프로그램 성과와 같은 규칙). 프로그램명 옆 배지는 닐슨 태그·등록 슬롯으로 판정한 경우에 표시합니다.
       </p>
       <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
         <table className="w-full min-w-[560px] text-sm">
@@ -778,6 +780,7 @@ function FirstRunView({ rows, channelCode }: { rows: FirstRunInsight[]; channelC
             <tr className="text-left text-xs text-neutral-500">
               <th className="py-1">프로그램</th>
               <th className="py-1 text-right">본방 편성</th>
+              <th className="py-1 text-right">그중 초방</th>
               <th className="py-1 text-right">본방 평균</th>
               <th className="py-1 text-right">본방 외 편성</th>
               <th className="py-1 text-right">본방 외 평균</th>
@@ -792,6 +795,7 @@ function FirstRunView({ rows, channelCode }: { rows: FirstRunInsight[]; channelC
                   <FirstRunSourceBadge source={r.firstRunSource} />
                 </td>
                 <td className="py-1 text-right tabular-nums">{r.firstRunAirings}회</td>
+                <td className="py-1 text-right tabular-nums">{r.premiereAirings > 0 ? `${r.premiereAirings}회` : "—"}</td>
                 <td className="py-1 text-right tabular-nums">{formatRating(r.firstRunAvgRating, channelCode)}</td>
                 <td className="py-1 text-right tabular-nums">{r.otherAirings}회</td>
                 <td className="py-1 text-right tabular-nums">{formatRating(r.otherAvgRating, channelCode)}</td>

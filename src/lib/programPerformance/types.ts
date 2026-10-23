@@ -10,7 +10,8 @@ import type { BaselineLevel } from "@/lib/contentFit/types";
 // v1.6(2026-10-22): 편성 비교 문구를 본방 시간 기준 한 문장(slotParts)으로, 종합 평가를 겹치지 않는 인사이트(insights)로 — 자사 값 계산식 무변경
 // v1.7(2026-10-22): 본방 여부·회차가 비어 있는 방영을 업로드 편성표([본]·[재])로 보완
 // v1.8(2026-10-22): 그래도 비어 있는 방영을 본방 편성 패턴(관리자 등록 요일·시각, 네이버 방송 정보)으로 보완하고 닐슨으로 맞춘 실제 본방 시각(pattern)을 함께 돌려준다
-export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.8";
+// v1.9(2026-10-23): 용어 정의(본방 = 각 채널 첫 방송, 초방 = 원 방송사 첫 방송)에 맞춰 원 방송사가 아닌 자사 채널 방영을 패턴만으로 재방으로 보지 않는다(모름 — 그 채널 첫 방송이면 본방)
+export const PROGRAM_PERFORMANCE_VERSION = "program-performance-v1.9";
 
 /** 작품 분류(승인 메타데이터 = 관리자 업로드 "KT ENA 오리지널" 시트 → featured_content). 미확인은 비오리지널로 확정하지 않는다. */
 export type WorkClass = "ORIGINAL_DRAMA" | "ORIGINAL_VARIETY" | "OTHER_FEATURED" | "UNCONFIRMED" | "CONFLICT";

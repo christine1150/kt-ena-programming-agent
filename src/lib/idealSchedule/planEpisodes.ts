@@ -37,6 +37,7 @@ export interface PlanRow {
   subtitle: string | null; // 의미 있는 부제만("7회" 같은 반복 표기는 버림)
   isNew: boolean; // 편성표 태그에 본방·초방 표시([본]·[초])
   isRerun: boolean; // 편성표 태그에 재방 표시([재])
+  isPremiere: boolean; // 편성표 태그에 초방 표시([초]) — 원 방송사 첫 방송(본방 중에서도 초방, 사용자 정의 2026-10-23)
 }
 
 export interface PlanEpisodeHint {
@@ -113,6 +114,7 @@ export function normalizePlanRows(raw: PlanRowRaw[]): PlanRow[] {
         subtitle: sub && !/^\d+회$|^최종회$/.test(sub) ? sub : null,
         isNew: /\[(본|초)\]/.test(r.tags ?? ""),
         isRerun: /\[재\]/.test(r.tags ?? ""),
+        isPremiere: /\[초\]/.test(r.tags ?? ""),
       });
     }
   }

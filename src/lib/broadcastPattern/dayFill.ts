@@ -21,7 +21,7 @@ export interface ChannelAiring extends DayAiring {
 
 /** rows와 같은 순서로 판정 결과를 돌려준다(패턴이 없거나 읽기에 실패하면 모두 null 판정). */
 export async function patternRunsForAirings(db: Db, args: { channelId: string; channelCode: string; rows: ChannelAiring[]; learn: boolean }): Promise<RunInference[]> {
-  const none: RunInference[] = args.rows.map(() => ({ firstRun: null, episode: null, source: null }));
+  const none: RunInference[] = args.rows.map(() => ({ firstRun: null, episode: null, source: null, premiere: null }));
   if (args.rows.length === 0) return none;
   try {
     const { data: ch } = await db.from("channels").select("id, code");

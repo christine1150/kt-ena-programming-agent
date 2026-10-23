@@ -130,7 +130,8 @@ const sampleNote = (s: "OK" | "SMALL" | "NONE", days: number) => (s === "OK" ? "
 const SOURCE_LABEL: Record<"registered" | "naver", string> = { registered: "관리자 등록(주요 콘텐츠 관리)", naver: "네이버 방송 정보" };
 
 /**
- * 본방 편성 한 줄 — 관리자 등록·네이버 방송 정보로 알아낸 본방 요일·시각을 닐슨 방영으로 맞춘 실제 시작 시각으로 보여 준다(예: "ENA 수 22:30").
+ * 초방 편성 한 줄 — 관리자 등록·네이버 방송 정보로 알아낸 원 방송사 첫 방송(초방) 요일·시각을 닐슨 방영으로 맞춘 실제 시작 시각으로 보여 준다(예: "ENA 수 22:30").
+ * 용어(사용자 정의 2026-10-23): 본방 = 각 채널에서의 첫 방송, 초방 = 본방 중 원 방송사의 첫 방송. 이 패턴의 채널은 원 방송사라 "초방"이다.
  * 근거와 패턴 시각은 마우스를 올리면 보인다. 확인된 방영이 없는 슬롯은 나오지 않는다.
  */
 function PatternLine({ pattern, result }: { pattern: NonNullable<PerformanceResult["pattern"]>; result: PerformanceResult }) {
@@ -139,7 +140,7 @@ function PatternLine({ pattern, result }: { pattern: NonNullable<PerformanceResu
   const fetched = pattern.naverFetchedAt ? ` · 네이버 확인 ${pattern.naverFetchedAt.slice(0, 10)}` : "";
   return (
     <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px] text-zinc-700">
-      <span className="font-bold text-zinc-900">본방 편성</span>
+      <span className="font-bold text-zinc-900">초방 편성</span>
       {pattern.slots.map((s) => (
         <span key={`${s.channelCode}|${s.days}|${s.actual}`} className="cursor-help underline decoration-zinc-300 decoration-dotted underline-offset-2" title={`${s.sources.map((x) => SOURCE_LABEL[x]).join(" · ")}에서 ${s.days} ${s.nominal}로 확인 → 닐슨 방영 ${s.observed}회로 맞춘 실제 시작 ${s.actual}${s.sources.includes("naver") ? `(${s.label})` : ""}${fetched}`}>
           {nameOf(s.channelCode)} {s.days} {s.actual}

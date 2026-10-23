@@ -181,9 +181,11 @@ export interface OriginalRerunProfileRow {
 // 본방을 하나도 확인하지 못한 채널만 빈 배열로 온다.
 export interface FirstRunEfficiencyRow {
   canonicalName: string;
-  /** 본방을 어느 근거로 찾았는지 — "<본> 태그" | "태그+편성표+등록 슬롯+네이버" 같은 조합 | "편성표" | "등록 슬롯" | "네이버". */
+  /** 본방 판정 근거 배지 — "<본> 태그" | "등록 슬롯" | "태그+등록 슬롯" | ""(편성표·네이버만으로 판정해 배지 없음, 사용자 지시 2026-10-23). */
   firstRunSource: string;
   firstRunAirings: number;
+  /** 본방 중 초방(원 방송사 첫 방송)으로 확인된 방영 수 — 편성표 [초] 또는 원 방송사 채널의 본방 슬롯 */
+  premiereAirings: number;
   firstRunAvgRating: number | null;
   firstRunAvgReach: number | null;
   firstRunAvgTimeSpentShare: number | null;

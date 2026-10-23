@@ -84,7 +84,7 @@ const airings = [
   air("ENA", "2026-10-21", "22:31:00"), // 0 수 본방(회차 276)
   air("ENA", "2026-10-14", "22:30:00"), // 1 수 본방(275)
   air("ENA", "2026-10-15", "10:00:00"), // 2 목 낮 — 본방 슬롯 밖, 슬롯 첫 관측 이후 → 재방
-  air("ENA_PLAY", "2026-10-16", "09:00:00"), // 3 다른 자사 채널 → 재방
+  air("ENA_PLAY", "2026-10-16", "09:00:00"), // 3 원 방송사가 아닌 자사 채널 → 모름(그 채널 첫 방송이면 본방이라 패턴만으로는 모름, 2026-10-23)
   air("ENA", "2026-09-02", "22:32:00"), // 4 수 본방(회차 목록 밖)
   air("ENA", "2026-08-25", "15:00:00"), // 5 화 낮 — 슬롯 첫 관측(9/2) 이전 → 모름
   air("ENA", "2026-10-07", "21:00:00"), // 6 수 21:00 — 시각이 바뀐 회차(274): 회차 방송일이고 패턴 시각과 90분 차
@@ -95,7 +95,8 @@ const r1 = inferRuns(airings, [naverSolo]);
 const run = (i: number) => r1.results[i].firstRun;
 check("판정: 본방 슬롯 방영은 본방", run(0) === true && run(1) === true && run(4) === true);
 check("판정: 본방 채널의 슬롯 밖 방영은 재방(슬롯 첫 관측 이후)", run(2) === false);
-check("판정: 본방 채널이 아닌 자사 채널은 재방", run(3) === false);
+check("판정: 원 방송사가 아닌 자사 채널은 모름(본방 = 각 채널 첫 방송)", run(3) === null);
+check("초방: 원 방송사 슬롯의 본방은 초방, 재방은 초방 아님, 모르면 모름", r1.results[0].premiere === true && r1.results[6].premiere === true && r1.results[2].premiere === false && r1.results[3].premiere === null);
 check("판정: 슬롯이 처음 관측되기 전 방영은 모름", run(5) === null);
 check("판정: 회차 방송일이면 시각이 바뀌어도 본방", run(6) === true);
 check("판정: 시작 시각이 없으면 모름", run(7) === null);
@@ -129,12 +130,14 @@ check("등록: 요일·시각·채널을 패턴으로", reg.source === "register
 check("등록: 시각이 없으면 패턴 없음", registeredPattern({ broadcast_day_of_week: ["수"], broadcast_time: null, broadcast_start_date: null, broadcast_end_date: null }, ["ENA"], "x") === null);
 const both = inferRuns([air("ENA", "2026-10-21", "22:31:00"), air("ENA", "2026-10-14", "22:30:00")], [reg, naverSolo]);
 check("우선순위: 등록 패턴이 먼저 판정하고 회차는 네이버가 채움", both.results[0].source === "registered" && both.results[0].firstRun === true && both.results[0].episode === 276);
-const conflict = inferRuns([air("ENA_PLAY", "2026-10-21", "22:31:00")], [reg, { ...naverSolo, channelCodes: ["ENA_PLAY"] }]);
-check("우선순위: 등록 패턴이 재방으로 본 방영은 네이버가 뒤집지 않음", conflict.results[0].firstRun === false && conflict.results[0].source === "registered");
+const conflict = inferRuns([air("ENA", "2026-10-21", "22:31:00"), air("ENA", "2026-10-21", "10:00:00")], [reg, { ...naverSolo, slots: [{ days: [2], minute: 600 }], episodes: [] }]);
+check("우선순위: 등록 패턴이 재방으로 본 방영은 네이버가 뒤집지 않음", conflict.results[1].firstRun === false && conflict.results[1].source === "registered");
+const handoff = inferRuns([air("ENA_PLAY", "2026-10-21", "22:31:00")], [reg, { ...naverSolo, channelCodes: ["ENA_PLAY"] }]);
+check("우선순위: 등록 패턴이 모르는 방영은 네이버가 판정", handoff.results[0].firstRun === true && handoff.results[0].source === "naver");
 
 // ── 6. 하루치(학습 없이 패턴 시각 ±20분) ─────────────────────
 const oneDay = inferRuns([air("ENA", "2026-10-21", "22:30:00"), air("ENA", "2026-10-21", "23:40:00"), air("ENA_PLAY", "2026-10-21", "10:00:00")], [naverSolo], { learn: false });
-check("하루치: 슬롯 방영은 본방, 같은 날 슬롯 밖 본방 채널 방영은 재방, 다른 자사 채널은 재방", oneDay.results[0].firstRun === true && oneDay.results[1].firstRun === false && oneDay.results[2].firstRun === false);
+check("하루치: 슬롯 방영은 본방, 같은 날 슬롯 밖 본방 채널 방영은 재방, 다른 자사 채널은 모름", oneDay.results[0].firstRun === true && oneDay.results[1].firstRun === false && oneDay.results[2].firstRun === null);
 check("하루치: 슬롯 방영이 없는 날의 본방 채널 방영은 모름", inferRuns([air("ENA", "2026-10-22", "23:40:00")], [naverSolo], { learn: false }).results[0].firstRun === null);
 check("하루치: 시각을 학습하지 않는다(패턴 22:30 그대로)", oneDay.learned.every((l) => l.actualMinute === l.nominalMinute));
 

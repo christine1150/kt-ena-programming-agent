@@ -6,7 +6,9 @@
 //
 // 판정 규칙(확인된 근거만 쓴다 — 모르면 null):
 //  · 본방 채널의 본방 슬롯 방영 → 본방(true)
-//  · 본방 채널이 아닌 자사 채널의 방영(예: 나는 솔로의 ENA PLAY) → 재방(false). 패턴의 시작일 이전이면 판단하지 않는다
+//  · 본방 채널이 아닌 자사 채널의 방영(예: 나는 솔로의 ENA PLAY) → 모름(null). 본방은 "각 채널에서의 첫 방송"이라(사용자 정의 2026-10-23) 그 채널의 첫 방송이면 본방이다 —
+//    패턴만으로는 어느 방영이 그 채널 첫 방송인지 알 수 없으므로 편성표 [본]·[재] 같은 다른 근거에 맡긴다
+//  · 패턴의 채널은 원 방송사(동시 방송 포함)라 그 슬롯의 본방은 초방(원 방송사 첫 방송, premiere=true)이다
 //  · 본방 채널의 슬롯 밖 방영 → 그 슬롯에서 처음 방영이 관측된 날부터는 재방(false), 그 전에는 모름(편성이 옮겨 오기 전일 수 있다)
 //  · 네이버가 알려 준 회차의 방송일(최신 몇 회)은 시각이 패턴과 2시간 안으로 가까우면 슬롯 밖이어도 본방(특집 시간 변경 대응)
 //  · 회차는 네이버 목록의 방송일과 일치하는 본방에만 붙인다(목록 밖 회차를 추정하지 않는다)
@@ -38,6 +40,8 @@ export interface AiringInput {
 
 export interface RunInference {
   firstRun: boolean | null;
+  /** 초방(원 방송사 첫 방송) 여부 — 본방 중에서도 원 방송사 채널의 첫 방송. 패턴 판정에서만 true, 재방이면 false, 모르면 null */
+  premiere: boolean | null;
   episode: number | null;
   source: PatternSource | null;
 }
@@ -100,7 +104,7 @@ interface Cal {
 }
 
 function inferWithPattern(airings: AiringInput[], p: RunPattern, learn: boolean): { out: RunInference[]; learned: LearnedSlot[] } {
-  const out: RunInference[] = airings.map(() => ({ firstRun: null, episode: null, source: null }));
+  const out: RunInference[] = airings.map(() => ({ firstRun: null, episode: null, source: null, premiere: null }));
   const learned: LearnedSlot[] = [];
   if (p.channelCodes.length === 0) return { out, learned };
   const main = new Set(p.channelCodes);
@@ -148,9 +152,8 @@ function inferWithPattern(airings: AiringInput[], p: RunPattern, learn: boolean)
     let run: boolean | null = null;
     if (inSlot.has(c.i) || nearNominal) run = true;
     else if (isMain) run = firstSlotDate !== null && c.a.date >= firstSlotDate ? false : null;
-    else run = !p.startDate || c.a.date >= p.startDate ? false : null;
     const epOnSlot = isMain && inSlot.has(c.i) ? (epByDate.get(c.a.date) ?? null) : null;
-    out[c.i] = { firstRun: run, episode: run === true ? (nearNominal ? (epNo ?? null) : epOnSlot) : null, source: run === null ? null : p.source };
+    out[c.i] = { firstRun: run, episode: run === true ? (nearNominal ? (epNo ?? null) : epOnSlot) : null, source: run === null ? null : p.source, premiere: run };
   }
   return { out, learned };
 }
@@ -161,14 +164,14 @@ function inferWithPattern(airings: AiringInput[], p: RunPattern, learn: boolean)
  */
 export function inferRuns(airings: AiringInput[], patterns: RunPattern[], opts: { learn?: boolean } = {}): { results: RunInference[]; learned: LearnedSlot[] } {
   const learn = opts.learn !== false;
-  const results: RunInference[] = airings.map(() => ({ firstRun: null, episode: null, source: null }));
+  const results: RunInference[] = airings.map(() => ({ firstRun: null, episode: null, source: null, premiere: null }));
   const learned: LearnedSlot[] = [];
   for (const p of patterns) {
     const r = inferWithPattern(airings, p, learn);
     learned.push(...r.learned);
     r.out.forEach((x, i) => {
       const cur = results[i];
-      if (cur.firstRun === null && x.firstRun !== null) results[i] = { firstRun: x.firstRun, episode: x.episode, source: x.source };
+      if (cur.firstRun === null && x.firstRun !== null) results[i] = { firstRun: x.firstRun, episode: x.episode, source: x.source, premiere: x.premiere };
       else if (cur.firstRun === true && cur.episode === null && x.firstRun === true && x.episode !== null) results[i] = { ...cur, episode: x.episode };
     });
   }

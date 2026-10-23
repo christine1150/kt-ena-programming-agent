@@ -173,6 +173,8 @@ export interface FirstRunInsight {
   firstRunSource: string;
   canonicalName: string;
   firstRunAirings: number;
+  /** 본방 중 초방(원 방송사 첫 방송)으로 확인된 방영 수 */
+  premiereAirings: number;
   firstRunAvgRating: number | null;
   otherAirings: number;
   otherAvgRating: number | null;
@@ -678,6 +680,7 @@ export function computeFirstRunInsights(rows: FirstRunEfficiencyRow[], limit = 8
       canonicalName: r.canonicalName,
       firstRunSource: r.firstRunSource,
       firstRunAirings: r.firstRunAirings,
+      premiereAirings: r.premiereAirings,
       firstRunAvgRating: r.firstRunAvgRating,
       otherAirings: r.otherAirings,
       otherAvgRating: r.otherAvgRating,
