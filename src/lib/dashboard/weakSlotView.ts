@@ -34,4 +34,6 @@ export interface WeakSlotRemedyView {
     missingCount: number;
   } | null;
   history?: { kind: "move" | "replace"; line: string } | null;
+  /** 목표 격차 기여 계산용(gapContribution.ts) — 이 방영의 날짜·시청률·평소(비교 중앙값)·방영 분·공식 하루 환산 배율. 배율이 없으면 없음 */
+  contribution?: { date: string; rating: number; usual: number | null; minutes: number; scale: number } | null;
 }

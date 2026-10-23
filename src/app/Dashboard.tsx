@@ -32,7 +32,7 @@ import { monthlyDriverCauseLabel, type MonthlyDriver } from "@/lib/causeClassifi
 import { TAG_LABEL_KO, TAG_DOT_COLOR, type ActionTag } from "@/lib/actionTags";
 import { programActionFor } from "@/lib/insight/actionCandidate";
 import { splitInsightFacts } from "@/lib/dashboard/insightFacts";
-import { buildCardCopy, upProgramHeadline, type AiSuggestionPayload, type CardCopy } from "@/lib/dashboard/homeCopy";
+import { buildCardCopy, structuralGapOf, upProgramHeadline, type AiSuggestionPayload, type CardCopy } from "@/lib/dashboard/homeCopy";
 import { formatArrowPct, formatDurationClock, formatDurationKo, formatRatingDelta } from "@/lib/metrics";
 // 단계 07: 전역 문맥(URL)·요청 상태·홈 모델. 계산은 src/lib/workspace, 화면은 components/home·workspace.
 import { DataStatusCard, DecisionCards, FollowupsCard, HomeViewTabs, PANEL, PanelHeader, type ReviewStoreState } from "@/components/home/HomePanels";
@@ -977,9 +977,9 @@ function buildChannelInsightSummary(
   actionProgramName: string | null;
   /** 약해진 곳(하락 프로그램·전략 재점검·근거 없음)이라 AI 대체 편성 제안을 붙여야 하는가 — 호조 프로그램은 제외 */
   wantsAi: boolean;
-  /** 평소(최근 같은 요일 전주들)도 목표의 85%에 못 미치고 오늘도 목표의 80% 미만 — 오늘 하락이 아니라 구조적 격차 */
+  /** 평소(전주·전전주 같은 요일 평균)도 목표의 85%에 못 미치고 오늘도 목표의 80% 미만 — 오늘 하락이 아니라 구조적 격차(structuralGapOf) */
   structuralGap: boolean;
-  /** 전주·전전주 같은 요일 중 높은 값이 목표의 몇 %인가(없으면 null) */
+  /** 전주·전전주 같은 요일 평균이 목표의 몇 %인가(없으면 null) */
   priorPct: number | null;
   /** 액션이 지목한 프로그램과 방영 시각(문구 조립용) */
   programFocus: { name: string; hour: number | null; down: boolean } | null;
@@ -1165,8 +1165,7 @@ function buildChannelInsightSummary(
   // 구조적 격차: 목표 시청률 = 오늘 ÷ 달성률 (화면의 달성 %와 같은 값). 전주·전전주 같은 요일 값이 있는 것만 평소로 본다.
   const targetRating = s.today_rating !== null && s.today_rating > 0 && target?.achievementPct ? s.today_rating / (target.achievementPct / 100) : null;
   const priors = [s.priorWeekRating, s.priorWeek2Rating].filter((v): v is number => v !== null);
-  const structuralGap = targetRating !== null && (target?.achievementPct ?? 100) < 80 && priors.length > 0 && priors.every((v) => v / targetRating < 0.85);
-  const priorPct = targetRating !== null && priors.length > 0 ? (Math.max(...priors) / targetRating) * 100 : null;
+  const { structural: structuralGap, priorPct } = structuralGapOf(target?.achievementPct ?? null, targetRating, priors);
   const focusSignalTime = actionProgramName === s.decline_program_name ? s.decline_program_start_time : actionProgramName === s.top_program_name ? s.top_program_start_time : null;
   const programFocus = actionProgramName ? { name: actionProgramName, hour: focusSignalTime ? extBroadcastHour(focusSignalTime) : null, down: actionDown } : null;
   return { situationLine, causeLine, actionLine, actionTag, actionKind, baselineAvgRank: s.baseline_avg_rank, needsAi, actionProgramName, wantsAi, structuralGap, priorPct, programFocus };

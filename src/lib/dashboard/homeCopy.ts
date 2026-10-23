@@ -12,6 +12,7 @@ import { heldLabel, type HeldRecommendation } from "./availHeld";
 import { fmtRating } from "./weakSlotVerdict";
 import type { OriginalLeverageView } from "./originalClassify";
 import type { WeakSlotRemedyView } from "./weakSlotView";
+import { gapShareOf } from "./gapContribution";
 
 /** /api/dashboard/ai-suggestions 응답 한 채널분(서버 AiSuggestion과 같은 모양 — 화면에서 쓰는 필드만) */
 export interface AiSuggestionPayload {
@@ -36,7 +37,7 @@ export interface CardCopyInput {
   achievementPct: number | null;
   rating: number | null;
   goalRating: number | null;
-  /** 전주·전전주 같은 요일 중 높은 값이 목표의 몇 %인가(없으면 null). 채널 전체 시청률 기준이며, 구조적 부진 판정이 참일 때만 문구에 쓴다 */
+  /** 전주·전전주 같은 요일 평균이 목표의 몇 %인가(없으면 null). 채널 전체 시청률 기준이며, 구조적 부진 판정이 참일 때만 문구에 쓴다 */
   priorPct: number | null;
   structural: boolean;
   /** 카드가 이미 지목한 약한 프로그램(위 줄이 그 프로그램을 설명한다) */
@@ -65,6 +66,22 @@ const stripEnd = (s: string) => s.replace(/[.\s]+$/, "");
 const sentence = (s: string) => `${stripEnd(s)}.`;
 
 /** 목표 달성률 숫자가 달성률 계산 재료(현재 시청률 ÷ 목표 시청률)와 맞는지 — 어긋나면 숫자를 보여 주지 않는다(검증 실패는 숫자 생략). */
+/** 구조적 격차의 평소 기준 — 이 미만이면 "목표 미달이 오늘만의 일이 아님" */
+export const STRUCTURAL_PRIOR_PCT = 85;
+/** 구조적 격차를 판정할 오늘 달성률 상한(%) */
+export const STRUCTURAL_TODAY_PCT = 80;
+
+/**
+ * 구조적 격차 — 오늘 달성률이 80% 미만이고, 전주·전전주 같은 요일(있는 것만)의 평균이 목표의 85% 미만.
+ * 2026-10-23 "두 주 모두 85% 미만" → "두 주 평균"으로 변경: 2026년 6개 채널 공식 하루 시청률 재계산에서
+ * 다음 주도 85% 미만인 비율은 78% 대 80%로 거의 같고, 놓친 날은 170 → 110으로 줄었다(docs/weak-slot-verdict/WEAK_SLOT_VERDICT.md §5).
+ */
+export function structuralGapOf(achievementPct: number | null, targetRating: number | null, priors: number[]): { structural: boolean; priorPct: number | null } {
+  if (targetRating === null || targetRating <= 0 || priors.length === 0) return { structural: false, priorPct: null };
+  const priorPct = (priors.reduce((s, v) => s + v, 0) / priors.length / targetRating) * 100;
+  return { structural: (achievementPct ?? 100) < STRUCTURAL_TODAY_PCT && priorPct < STRUCTURAL_PRIOR_PCT, priorPct };
+}
+
 export function achievementConsistent(pct: number | null, rating: number | null, goal: number | null): boolean {
   if (pct === null || !Number.isFinite(pct)) return false;
   if (rating === null || goal === null || goal <= 0) return true; // 재료가 없으면 화면의 달성률을 그대로 신뢰(이미 화면에 쓰이는 값)
@@ -107,8 +124,16 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
     // 제목·시각은 바로 위 핵심 결과 줄에 이미 있어 되풀이하지 않는다(사용자 기준 2026-10-15)
     causeParts.push(sentence(`오늘 ${fmtRating(v.today)}${avg}, 같은 요일·시간대 그 앞 ${v.sampleCount}회 중앙값 ${fmtRating(v.median)}${ratio}`));
   }
+  // 목표 격차 기여(분 가중, 확인 대기 3 — 2026-10-23): 화면의 달성률과 같은 공식 하루 값·목표로만 계산한다
+  const share = below && r?.contribution ? gapShareOf(r.contribution, input.rating, input.goalRating) : null;
+  if (share && share.share >= 0.05) {
+    const n = share.share > 1 ? "대부분을" : `${Math.round(share.share * 100)}%를`;
+    // 같은 자리 중앙값이 목표 이상이면(몫 0) "0%" 대신 격차를 줄였을 자리라고 쓴다
+    const usual = share.usualShare === null || share.share > 1 ? "" : share.usualShare === 0 ? ", 같은 자리 중앙값 수준이었다면 오히려 격차를 줄였을 자리" : `, 같은 자리 중앙값 수준이었다면 ${Math.round(share.usualShare * 100)}%`;
+    causeParts.push(sentence(`이 방영(약 ${Math.round(r!.contribution!.minutes)}분)이 오늘 채널 목표 격차의 ${n} 차지했습니다(편성 분 가중${usual})`));
+  }
   if (r?.brief?.cause) causeParts.push(sentence(r.brief.cause));
-  if (input.structural && input.priorPct !== null) causeParts.push(sentence(`채널 전체는 전주·전전주 같은 요일도 목표의 ${Math.round(input.priorPct)}% 이하여서 목표 미달이 오늘만의 일은 아닙니다`));
+  if (input.structural && input.priorPct !== null) causeParts.push(sentence(`채널 전체는 전주·전전주 같은 요일 평균도 목표의 ${Math.round(input.priorPct)}%여서 목표 미달이 오늘만의 일은 아닙니다`));
   const cause = causeParts.length > 0 ? causeParts.join(" ") : null;
 
   // ── 조치 후보(중요도 순) ──

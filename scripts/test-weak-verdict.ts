@@ -5,7 +5,9 @@
 // ⑥ 2026-10-15 재현 사례(ENA Play 수 9시 나는SOLO그후사랑은계속된다)가 더는 "이번 한 번만 낮은 일시적 하락"으로 나오지 않는다.
 // ⑦ 2026-10-23 채널별 규칙: 방영 한 편이 아니라 최근 N회 평균(저시청 2049는 4회)을 채널 기준선(평상시 헛경보 10% 선)과 견준다.
 // 보증하지 못하는 것: 기준선 값 자체의 타당성 — 실측 보정·검증 결과는 scripts/skill-baseline/weak-calibrate.mts와 docs/agent-improvement/SKILL_BASELINE.md에 있다.
-import { buildCardCopy, type AiSuggestionPayload } from "../src/lib/dashboard/homeCopy";
+import { buildCardCopy, structuralGapOf, type AiSuggestionPayload } from "../src/lib/dashboard/homeCopy";
+import { gapContribution, gapShareOf } from "../src/lib/dashboard/gapContribution";
+import { findLongLowSlots } from "../src/lib/dashboard/longLowSlots";
 import { DEFAULT_WEAK_SLOT_RULE, STATUS_KO, WEAK_SLOT_RULES, WEAK_VERDICT_CONFIG, basisLabel, judgeWeakSlot, verdictCause, weakSlotRuleFor, type VerdictBasis, type WeakVerdict } from "../src/lib/dashboard/weakSlotVerdict";
 import type { WeakSlotRemedyView } from "../src/lib/dashboard/weakSlotView";
 import { shortenProgramNames, shortProgramName } from "../src/lib/programAlias";
@@ -51,7 +53,7 @@ const PLAY = weakSlotRuleFor("ENA_PLAY");
   check("재현: 문구에 '이번 한 번만'·'일시적 하락' 단정이 없고, 한 편으로는 판단할 수 없다고 밝힌다", !t.includes("이번 한 번만") && !t.includes("일시적 하락") && t.includes("한 편만으로는 부진을 판단할 수 없어"), t);
   check("재현: 오늘 0.0000과 4회 평균·중앙값을 숫자로 밝히고 '0%'를 쓰지 않으며 제목을 되풀이하지 않는다", /오늘 0\.0000?[(, ]/.test(t) && t.includes("최근 4회 평균 0.020") && t.includes("중앙값 0.030") && !/(^|[^0-9])0%/.test(t) && !(c.cause ?? "").includes("나솔사계"), t);
   check("재현: 비교 회차 중 이 프로그램은 2회뿐임을 밝힌다", t.includes("이 프로그램 방영분은 2회"), t);
-  check("재현: 채널 전체 근거(73%)는 '채널 전체'로 범위를 밝히고 프로그램 판정과 섞이지 않는다", t.includes("채널 전체는 전주·전전주 같은 요일도 목표의 73% 이하"), t);
+  check("재현: 채널 전체 근거(73%)는 '채널 전체'로 범위를 밝히고 프로그램 판정과 섞이지 않는다", t.includes("채널 전체는 전주·전전주 같은 요일 평균도 목표의 73%여서"), t);
   check("재현: 옛 문구 '오늘만의 문제가 아닙니다'가 없다", !t.includes("오늘만의 문제가 아닙니다"), t);
   check("재현: 목표 46%와 프로그램을 인과로 잇지 않고 '평소 대비 하락이 가장 큰 자리'라고만 한다", c.headline === "목표의 46% 달성 — 같은 자리 중앙값 대비 하락이 가장 큰 곳은 9시 '나솔사계'", c.headline ?? "");
   check("재현: 긴 제목이 약칭으로 표시된다", !t.includes(LONG) && t.includes("나솔사계"), t);
@@ -144,6 +146,51 @@ const withPrev = (...recent: number[]) => [...recent, ...NORMAL];
   check("약칭: 띄어쓰기·쉼표가 달라도 같은 제목이면 '나솔사계'", shortProgramName("나는 SOLO, 그 후 사랑은 계속된다") === "나솔사계" && shortProgramName(LONG) === "나솔사계");
   check("약칭: 다른 프로그램('나는SOLO')은 바꾸지 않는다", shortProgramName("나는SOLO") === "나는SOLO" && shortenProgramNames("'나는SOLO' 방영") === "'나는SOLO' 방영");
   check("약칭: 문장 안의 제목만 바꾸고 나머지는 그대로", shortenProgramNames(`9시 '${LONG}'가 부진`) === "9시 '나솔사계'가 부진");
+}
+
+// ── 목표 격차 기여(분 가중, 2026-10-23 확인 대기 3) ──
+{
+  const c = { rating: 0.01, usual: 0.03, minutes: 60, scale: 0.93 };
+  const s = gapShareOf(c, 0.03, 0.0652);
+  check("기여: (시청률×배율−목표)×분÷1440 ÷ 격차", !!s && Math.abs(s.share - ((0.0093 - 0.0652) * 60) / 1440 / (0.03 - 0.0652)) < 1e-9 && Math.round(s.share * 100) === 7, JSON.stringify(s));
+  check("기여: 평소 수준이었다면의 몫은 더 작다", !!s && s.usualShare !== null && s.usualShare < s.share && Math.round(s.usualShare * 100) === 4, JSON.stringify(s));
+  check("기여: 목표 이상이면 말하지 않는다", gapShareOf(c, 0.07, 0.0652) === null);
+  check("기여: 방영이 목표 이상이면 말하지 않는다", gapShareOf({ ...c, rating: 0.2 }, 0.03, 0.0652) === null);
+  check("기여: 모든 방영 몫의 합 = 격차(하루 전체를 덮을 때)", (() => { const t = 0.05, sc = 1; const rs = [0.02, 0.04, 0.06]; const off = rs.reduce((a, r) => a + r * 480, 0) / 1440; const sum = rs.reduce((a, r) => a + gapContribution(r, 480, sc, t), 0); return Math.abs(sum - (off - t)) < 1e-12; })());
+  const v = { status: "persistent", statusKo: STATUS_KO.persistent, holdReason: null, today: 0.01, window: 2, level: 0.012, median: 0.03, ratioPct: 40, dropLine: 0.0135, sampleCount: 8, lowCount: 3, ownCount: 8, missingCount: 0 } as const;
+  const remedy = { lines: [], concrete: false, sample: 8, brief: { cause: "", action: "" }, hole: { program: "테스트", hour: 21, ratioPct: 40 }, verdict: v, contribution: { date: "2026-10-22", ...c } } as unknown as WeakSlotRemedyView;
+  const copy = buildCardCopy({ achievementPct: 46, rating: 0.03, goalRating: 0.0652, priorPct: null, structural: false, program: null, ai: aiOf(remedy) });
+  // 실제 사례(ENA Story 10/22 인간극장 74분, 달성 88.7%): 몫 34%, 같은 자리 중앙값은 목표 이상
+  const story = { ...remedy, contribution: { date: "2026-10-22", rating: 0.01165, usual: 0.07499, minutes: 74, scale: 0.9255 } } as WeakSlotRemedyView;
+  const sc = buildCardCopy({ achievementPct: 88.7, rating: 0.03898, goalRating: 0.04395, priorPct: null, structural: false, program: null, ai: aiOf(story) });
+  check("기여 문구: 같은 자리 중앙값이 목표 이상이면 0% 대신 격차를 줄였을 자리라고 쓴다", (sc.cause ?? "").includes("격차의 34%를 차지했습니다(편성 분 가중, 같은 자리 중앙값 수준이었다면 오히려 격차를 줄였을 자리)"), sc.cause ?? "");
+  check("기여 문구: 방영 분과 몫, 평소 수준 몫을 함께 적는다", (copy.cause ?? "").includes("이 방영(약 60분)이 오늘 채널 목표 격차의 7%를 차지했습니다(편성 분 가중, 같은 자리 중앙값 수준이었다면 4%)"), copy.cause ?? "");
+}
+
+// ── 오래 낮은 자리(2026-10-23 확인 대기 5) ──
+{
+  // 같은 20~23시 구간 다섯 자리(월~금 21시) — 월요일만 8주 내내 낮다. 새벽 3시 구간은 모두 0.
+  const air: { date: string; dow: number; startMin: number; name: string; rating: number }[] = [];
+  const day = (w: number, dow: number) => new Date(Date.parse("2026-08-31T00:00:00Z") + ((w * 7 + dow - 1) * 864e5)).toISOString().slice(0, 10);
+  for (let w = 0; w < 8; w++) {
+    for (const [dow, r] of [[1, 0.01], [2, 0.05], [3, 0.06], [4, 0.07], [5, 0.08]] as const) air.push({ date: day(w, dow), dow, startMin: 21 * 60, name: dow === 1 ? "낮은프로" : "보통프로", rating: r + (w % 2) * 0.001 });
+    for (const dow of [1, 2, 3, 4, 5]) air.push({ date: day(w, dow), dow, startMin: 27 * 60, name: "새벽", rating: 0 });
+  }
+  const res = findLongLowSlots(air, "2026-10-25");
+  check("오래 낮은 자리: 8주 내내 구간 하위 20%선 아래인 자리만 잡는다", res.length === 1 && res[0].dow === 1 && res[0].hour === 21 && res[0].program === "낮은프로", JSON.stringify(res));
+  check("오래 낮은 자리: 구간 전체가 0인 새벽은 측정 하한이라 잡지 않는다", !res.some((s) => s.hour === 27));
+  const once = air.map((a) => (a.dow === 1 && a.startMin === 21 * 60 && a.date === day(7, 1) ? { ...a, rating: 0.09 } : a));
+  check("오래 낮은 자리: 최근 8회 중 한 번이라도 선 위면 잡지 않는다", findLongLowSlots(once, "2026-10-25").length === 0);
+}
+
+// ── 구조적 격차: 전주·전전주 평균(2026-10-23 변경, 확인 대기 4) ──
+{
+  const g1 = structuralGapOf(70, 0.1, [0.09, 0.07]); // 각각 90%·70%, 평균 80%
+  check("구조적 격차: 한 주가 85% 이상이어도 두 주 평균이 85% 미만이면 구조적으로 본다", g1.structural && Math.round(g1.priorPct ?? 0) === 80, JSON.stringify(g1));
+  const g2 = structuralGapOf(70, 0.1, [0.09, 0.085]);
+  check("구조적 격차: 두 주 평균이 85% 이상이면 아니다", !g2.structural, JSON.stringify(g2));
+  check("구조적 격차: 오늘 달성률이 80% 이상이면 아니다", !structuralGapOf(82, 0.1, [0.05, 0.05]).structural);
+  check("구조적 격차: 지난 값이 없으면 판정하지 않는다", !structuralGapOf(50, 0.1, []).structural && structuralGapOf(50, 0.1, []).priorPct === null);
 }
 
 console.log(`\n통과 ${passed} / 실패 ${failures.length}`);

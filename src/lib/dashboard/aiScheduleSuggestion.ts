@@ -242,7 +242,7 @@ function pickDetail(details: ReplaceDetail[], weekday: number, focus: string | n
 // 같은 기준일·채널·입력이면 다른 사람·새로고침·다른 서버에서도 다시 계산하지 않고 저장해 둔 결과를 쓴다(기존 캐시 테이블, 마이그레이션 없음).
 // 키에는 결과를 바꿀 수 있는 입력의 지문(제외 편성·권리 상태·채널 설정·가장 최근 닐슨 업로드 시각·기능 끄개)이 들어가 입력이 바뀌면 자동으로 새로 계산한다.
 // 지문에 못 넣는 변화(예: 장르표 수정)는 6시간 TTL로 제한한다. 지문을 만들지 못하거나 저장소가 실패하면 평소처럼 계산한다.
-const SUGGESTION_CACHE_VERSION = "v8"; // v2: 최근 방영 확인 조회 오류 수정·근거 관문 추가(예전 "후보 없음" 결과를 재사용하지 않도록) / v6: 제목별 편성 가능 채널 규칙(나는솔로·지구마불) 적용 / v8: 약한 자리 판정을 채널별 최근 N회 평균 기준선으로(2026-10-23, 예전 문구·로컬 검토 중 저장분 재사용 방지)
+const SUGGESTION_CACHE_VERSION = "v9"; // v9: 약한 자리 목표 격차 기여·구조적 격차 2주 평균(2026-10-23) / v2: 최근 방영 확인 조회 오류 수정·근거 관문 추가(예전 "후보 없음" 결과를 재사용하지 않도록) / v6: 제목별 편성 가능 채널 규칙(나는솔로·지구마불) 적용 / v8: 약한 자리 판정을 채널별 최근 N회 평균 기준선으로(2026-10-23, 예전 문구·로컬 검토 중 저장분 재사용 방지)
 const SUGGESTION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 async function suggestionFingerprint(channelCode: string, asOfDate: string, focus: string | null): Promise<unknown> {

@@ -3799,6 +3799,49 @@ function WeakRemedyNote({ channel, date, program, hour }: { channel: string; dat
   if (!state.remedy) return <p className="pl-1.5 text-xs text-zinc-400">지금 실제 편성 기준으로 기대가 더 높은 교체 후보가 없고, 같은 자리 비교 자료도 부족해 다음 방영 추이를 먼저 확인합니다</p>;
   return <p className={`whitespace-pre-line pl-1.5 text-xs leading-relaxed ${state.remedy.concrete ? "font-medium text-zinc-700" : "text-zinc-500"}`}>{state.remedy.lines.join("\n")}</p>;
 }
+// 오래 낮은 자리(/api/dashboard/long-low-slots, 2026-10-23 약한 자리 확인 대기 5) — 약한 자리 경보와 별개인 주간 점검 목록. 걸린 자리가 없으면 그리지 않는다.
+type LongLowSlotView = { dow: number; hour: number; median: number; bandMedian: number; bandLine: number; airings: number; program: string };
+const longLowCache = new Map<string, Promise<LongLowSlotView[] | null>>();
+function LongLowSlots({ channel, date }: { channel: string; date: string }) {
+  const key = `${channel}|${date}`;
+  const [state, setState] = useState<{ key: string; slots: LongLowSlotView[] | null } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    let p = longLowCache.get(key);
+    if (!p) {
+      p = fetch(`/api/dashboard/long-low-slots?channel=${encodeURIComponent(channel)}&date=${encodeURIComponent(date)}`)
+        .then((r) => r.json())
+        .then((b) => (b.ok ? (b.slots as LongLowSlotView[] | null) : null))
+        .catch(() => null);
+      longLowCache.set(key, p);
+    }
+    p.then((slots) => alive && setState({ key, slots }));
+    return () => {
+      alive = false;
+    };
+  }, [key, channel, date]);
+  if (!state || state.key !== key || !state.slots || state.slots.length === 0) return null;
+  const band = (h: number) => {
+    const b = Math.floor((h - 2) / 3);
+    return `${String(2 + b * 3).padStart(2, "0")}~${String((5 + b * 3) % 24).padStart(2, "0")}시`;
+  };
+  return (
+    <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-zinc-100">
+      <p className="mb-1 text-[13px] font-semibold uppercase tracking-wide text-zinc-400">오래 낮은 자리(주간 점검)</p>
+      <p className="mb-2 text-xs text-zinc-500">최근 8주 동안 방영된 회(4회 이상)가 모두 같은 시간대(3시간 구간) 자리들의 하위 20%선 아래였던 자리입니다(시각은 방송일 기준, 25시 = 다음 날 새벽 1시). 약한 자리 경보(평소보다 낮아졌나)와 별개로, 교체·이동을 검토할 후보로 봅니다.</p>
+      <ul className="space-y-1">
+        {state.slots.map((s) => (
+          <li key={`${s.dow}|${s.hour}`} className="text-xs leading-relaxed text-zinc-700">
+            <b className="font-semibold text-zinc-900">
+              {REPLACE_DOW[s.dow - 1]} {s.hour}시대
+            </b>{" "}
+            &lsquo;{shortProgramName(s.program)}&rsquo; 등 — 최근 8주 중앙값 {s.median.toFixed(3)}, 같은 시간대({band(s.hour)}) 자리 중앙값 {s.bandMedian.toFixed(3)}의 {Math.round((s.median / s.bandMedian) * 100)}%, 최근 {Math.min(s.airings, 8)}회 모두 하위 20%선({s.bandLine.toFixed(3)}) 아래
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 const REPLACE_DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const normTitle = (s: string) => s.replace(/[\s\-_.,·'"()[\]<>]/g, "").toLowerCase();
 const clockOf = (min: number) => {
@@ -5756,6 +5799,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </div>
           );
         })()}
+
+        {/* 오래 낮은 자리(2026-10-23, 약한 자리 확인 대기 5 — 사용자 승인): 단일 일자 조회일 때만, 걸린 자리가 있을 때만 */}
+        {!showComparisonView && data?.asOfDate && <LongLowSlots channel={code} date={data.asOfDate} />}
 
         {/* Channel Intelligence Briefing(2026-08-27, "Channel Intelligence Report" 마스터 프롬프트
             §9~15 반영, Phase 1) — KPI 5카드 + Biggest Win/Weakness + Top/Weak Programs. 전부 이미

@@ -5,7 +5,7 @@
 //   · 새 규칙: 최근 N회 평균(오늘 포함, N=채널 설정) < 그 앞 최대 8회 중앙값 × 채널 기준선 이면 '낮음'
 // 평상시 = 판정에 쓴 방영(최근 N회 + 비교 회차)이 모두 같은 프로그램이고 정확히 7일 간격으로 이어진 경우(편성을 바꾸지 않은 자리).
 // 기준선은 보정 구간(2026-04-01 전)의 평상시 비율 10%선으로 고르고, 헛경보율은 검증 구간(그 이후)에서 따로 낸다.
-// 사용: npx tsx --env-file=.env scripts/skill-baseline/weak-calibrate.mts [calibrate|verify] [기준일=2026-10-21]
+// 사용: npx tsx --env-file=.env scripts/skill-baseline/weak-calibrate.mts [calibrate|verify|weekly] [기준일=2026-10-21]   (weekly: 기준일 앞 WEEKS=4주의 주별 경보 수 — 4주 재판단용)
 // PATTERN_FILL=1 이면 weakSlotRemedy처럼 닐슨 본/재방 표시가 없는 방영을 업로드 편성표·본방 편성 패턴(관리자 등록·네이버)으로 보완한다(2026-10-23 연결 전후 비교용).
 import { supabase } from "../../src/lib/supabase";
 import { loadChannelRef } from "../../src/lib/idealSchedule/dataSource";
@@ -97,6 +97,27 @@ for (const code of CHANNELS) {
     }
     continue;
   }
+  if (mode === "weekly") {
+    // 4주 재판단용(확인 대기 1, 2026-10-23 "헛경보 10% 유지 후 4주 실제 경보로 다시 판단") — 기준일 앞 WEEKS주의 주별 '낮음' 판정 수와 그 뒤 2회도 낮았던 수
+    const WEEKS = Number(process.env.WEEKS ?? 4);
+    const monday = (d: string) => { const n = dn(d); return new Date((n - ((((n + 3) % 7) + 7) % 7)) * 864e5).toISOString().slice(0, 10); };
+    const from = new Date((dn(monday(AS_OF)) - 7 * (WEEKS - 1)) * 864e5).toISOString().slice(0, 10);
+    const byWeek = new Map<string, { n: number; low: number; stay: number; judged: number }>();
+    for (const a of all) {
+      if (a.date < from || a.date > AS_OF) continue;
+      const v = judgeWeakSlot(a.rating, basisWindow(bySlot, a, rule.window).map((x) => x.rating), rule);
+      const w = byWeek.get(monday(a.date)) ?? { n: 0, low: 0, stay: 0, judged: 0 };
+      w.n++;
+      if (v.status === "short_persist" || v.status === "persistent") {
+        w.low++;
+        const next = (bySlot.get(slotKey(a)) ?? []).filter((x) => x.date > a.date && x.key === a.key).sort((p, r) => (p.date < r.date ? -1 : 1)).slice(0, 2);
+        if (next.length === 2 && v.median && v.median > 0) { w.judged++; if ((next[0].rating + next[1].rating) / 2 < v.median * rule.line) w.stay++; }
+      }
+      byWeek.set(monday(a.date), w);
+    }
+    for (const [wk, w] of [...byWeek].sort()) console.log(`| ${code} | ${wk} | ${w.n} | ${w.low} | ${w.judged ? `${w.stay}/${w.judged}` : "—"} |`);
+    continue;
+  }
   // verify — 기존 규칙과 새 규칙(weakSlotVerdict의 채널 설정)을 같은 방영에 적용
   const rows = { calm: { n: 0, old: 0, neu: 0 }, all: { n: 0, old: 0, neu: 0 }, oldKeep: { n: 0, k: 0 }, neuKeep: { n: 0, k: 0 } };
   const weeks = new Set<string>();
@@ -129,4 +150,5 @@ for (const code of CHANNELS) {
   const perWeek = (x: number) => (x / weeks.size).toFixed(1);
   console.log(`| ${code} | 최근 ${rule.window}회 평균 < 중앙값×${rule.line} | ${rows.calm.n} | ${pc(rows.calm.old / rows.calm.n)} | ${pc(rows.calm.neu / rows.calm.n)} | ${perWeek(rows.all.old)} → ${perWeek(rows.all.neu)} | ${pc(rows.oldKeep.k / rows.oldKeep.n)}(${rows.oldKeep.n}) → ${pc(rows.neuKeep.k / rows.neuKeep.n)}(${rows.neuKeep.n}) |`);
 }
-if (mode !== "calibrate") console.log(`\n(검증 구간 ${SPLIT}~${AS_OF}. 열: 채널 | 새 규칙 | 평상시 사례 | 평상시 헛경보율 기존 | 새 규칙 | 주당 '낮음' 판정 수 기존 → 새 | 경보 뒤 다음 2회도 낮았던 비율 기존(건) → 새(건))`);
+if (mode === "weekly") console.log(`\n(열: 채널 | 주 시작 | 판정한 방영 | 낮음(단기 부진·지속 부진) | 그 뒤 2회 평균도 기준선 아래 / 다음 2회가 있는 경보)`);
+else if (mode !== "calibrate") console.log(`\n(검증 구간 ${SPLIT}~${AS_OF}. 열: 채널 | 새 규칙 | 평상시 사례 | 평상시 헛경보율 기존 | 새 규칙 | 주당 '낮음' 판정 수 기존 → 새 | 경보 뒤 다음 2회도 낮았던 비율 기존(건) → 새(건))`);

@@ -15,6 +15,8 @@ import { retentionLeak } from "./leadInRetention";
 import { STATUS_KO, WEAK_VERDICT_CONFIG, basisLabel, judgeWeakSlot, levelLabel, lineNote, verdictCause, weakSlotRuleFor, type VerdictBasis, type WeakVerdict } from "./weakSlotVerdict";
 import { detectPastChanges, evidenceLine, summarizeChanges, type ChangeEvidence, type ChangeKind } from "./changeHistory";
 import type { WeakSlotRemedyView } from "./weakSlotView";
+import { loadOfficialScale } from "@/lib/scheduleForecast/record";
+import { LONG_LOW_DAYS, findLongLowSlots, type LongLowSlot } from "./longLowSlots";
 export type WeakSlotRemedy = WeakSlotRemedyView;
 
 const DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
@@ -392,5 +394,27 @@ async function compute(channelCode: string, asOfDate: string, focusIn: string | 
   else if (continuing) actionBrief = "더 나은 자리도 교체 후보도 못 찾아, 앞뒤 편성 조정이나 방영 시간 이동 검토";
   else if (verdict.status === "not_low") actionBrief = `${avgN}이 기준선 위(평소 흔들림 범위)라 추가 관찰`;
   else actionBrief = `${nextLow}(${DOW_KO[w.a.dow - 1]}요일) 이동·교체 검토`;
-  return { lines: [cause, action], concrete, sample, brief: { cause: causeBrief, action: actionBrief }, hole: { program: w.a.name, hour, ratioPct: Math.round(verdict.ratioPct ?? (w.a.rating / med) * 100) }, verdict: verdictView(verdict, w.list, w.a.key), history };
+  // 목표 격차 기여(확인 대기 3, 2026-10-23) — 기준일 방영이고 공식 하루 환산 배율이 있을 때만. 홈 문구가 그날 공식 하루 값·목표와 함께 계산한다
+  const scale = await loadOfficialScale(ch, day).catch(() => null);
+  const contribution = scale?.ratio && day === asOfDate ? { date: day, rating: w.a.rating, usual: med, minutes: durationOf(all, w.a), scale: scale.ratio } : null;
+  return { lines: [cause, action], concrete, sample, brief: { cause: causeBrief, action: actionBrief }, hole: { program: w.a.name, hour, ratioPct: Math.round(verdict.ratioPct ?? (w.a.rating / med) * 100) }, verdict: verdictView(verdict, w.list, w.a.key), history, contribution };
+}
+
+/** 오래 낮은 자리(확인 대기 5, 2026-10-23) — 최근 8주 방영(공휴일 제외)에서 longLowSlots.findLongLowSlots 정의로 찾는다. 1시간 캐시. */
+const longLowCache = new Map<string, { at: number; value: LongLowSlot[] | null }>();
+export async function computeLongLowSlots(channelCode: string, asOfDate: string): Promise<LongLowSlot[] | null> {
+  const cacheKey = `${channelCode}|${asOfDate}`;
+  const hit = longLowCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
+  const ch = await loadChannelRef(channelCode);
+  if (channelCode === "SKYUHD" || !ch.primaryTarget) return null;
+  const { data: tg } = await supabase.from("targets").select("id").eq("code", ch.kpiLabel).maybeSingle();
+  if (!tg?.id) return null;
+  const all = await loadAirings(ch.id, tg.id as string, asOfDate, LONG_LOW_DAYS, 8, null);
+  if (!all) return null;
+  const { data: hol } = await supabase.from("public_holidays").select("holiday_date").gte("holiday_date", addDays(asOfDate, -LONG_LOW_DAYS)).lte("holiday_date", asOfDate);
+  const holidays = new Set(((hol ?? []) as { holiday_date: string }[]).map((h) => h.holiday_date));
+  const value = findLongLowSlots(all.filter((a) => !holidays.has(a.date)), asOfDate);
+  longLowCache.set(cacheKey, { at: Date.now(), value });
+  return value;
 }
