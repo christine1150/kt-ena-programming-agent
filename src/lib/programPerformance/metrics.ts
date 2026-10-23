@@ -6,7 +6,7 @@
 //  - 동슬롯 대비 = 콘텐츠 적합도 엔진과 같은 "같은 칸 다른 프로그램 기대치" 대비 수축 배율(편성 효율 지표, 인과 아님)
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
 import { formatRatingValue } from "@/lib/ui/metricFormat";
-import type { AiringFilter, AiringRef, ChannelDailyBase, ChannelLine, Direction, EpisodePoint, MonthlyPoint, RatioValue, RowAnalysis, SlotLine, SplitStat, TextPart, WorkClass, WorkClassification } from "./types";
+import type { AiringFilter, AiringRef, ChannelDailyBase, ChannelLine, DailyPoint, Direction, EpisodePoint, MonthlyPoint, RatioValue, RowAnalysis, SlotLine, SplitStat, TextPart, WorkClass, WorkClassification } from "./types";
 
 /** 방향은 화면 표시 자릿수(배율 소수 둘째 자리)로 반올림한 값으로만 정한다 — 임의의 "유의 차이" 임계값을 만들지 않는다. */
 const RATIO_DISPLAY_DIGITS = 2;
@@ -207,6 +207,15 @@ export function monthlySeries(airings: WorkAiring[], dayRows: ChannelDayRow[], f
     });
   }
   return out;
+}
+
+/** 일별 추이 — 조회 기간 중 작품이 방영된 날마다 (그날 작품 방영 평균, 그날 채널 하루 시청률). 방영 없는 날은 넣지 않는다. */
+export function dailySeries(airings: WorkAiring[], dayRows: ChannelDayRow[], targetLabel: string): DailyPoint[] {
+  const dates = [...new Set(airings.map((a) => a.date))].sort();
+  return dates.map((date) => {
+    const st = splitStat(airings.filter((a) => a.date === date));
+    return { date, airings: st.airings, programAvg: st.avg, channelAvg: channelDailyMean(dayRows, date, date, targetLabel).mean };
+  });
 }
 
 /** 채널 평균 = 100으로 본 지수(작품 ÷ 채널 평균 × 100, 정수). 사용자 지정 표기(2026-10-22): 100 미만 붉은색·초과 푸른색 */

@@ -26,6 +26,7 @@ import {
   extremesOf,
   extremesTextOf,
   matchesAiringFilter,
+  dailySeries,
   monthlySeries,
   ratioOf,
   sampleStateOf,
@@ -391,6 +392,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       sampleState: "NONE",
       summary: "",
       monthly: [],
+      daily: [],
       primary: tgt.isPrimary,
       shareAvg: null,
       shareAirings: 0,
@@ -638,6 +640,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
 
     // 선택 채널 분석(2×2) — 이 행의 타깃·기간·본재 조건 그대로
     const monthly = monthlySeries(filtered, dayList, from, to, channelLabel);
+    const daily = dailySeries(filtered, dayList, channelLabel);
     const sh = shareStat(filtered);
     let analysis: ChannelRow["analysis"] = null;
     if (filtered.length > 0) {
@@ -672,6 +675,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       sampleState,
       summary: filtered.length === 0 ? "선택한 본재 조건의 방영 없음." : describeRow(vsChannel.direction, slot.ratio.direction, sampleState),
       monthly,
+      daily,
       shareAvg: sh.avg,
       shareAirings: sh.airings,
       analysis,

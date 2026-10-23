@@ -433,18 +433,19 @@ function TrendChart({ points, base, baseLabel, code }: { points: { label: string
   );
 }
 
-/** 시청률 흐름 — 본방별(기본, 본방 2회 이상일 때)·월별 전환, 큰 그래프 + 핵심 숫자 4칸(평균·최고·최저·최근 방영) */
+/** 시청률 흐름 — 본방별(기본, 본방 2회 이상일 때)·일별 전환, 큰 그래프 + 핵심 숫자 4칸(평균·최고·최저·최근 방영) */
 function TrendSection({ row }: { row: ChannelRow }) {
   const a = row.analysis!;
   const code = row.channelCode;
   const hasFirst = a.firstRuns.length >= 2;
-  const [unit, setUnit] = useState<"first" | "month">(hasFirst ? "first" : "month");
+  // 사용자 지시(2026-10-23): 월별 대신 일별 — 방영이 있는 방송일마다 그날 작품 평균과 그날 채널 하루 시청률
+  const [unit, setUnit] = useState<"first" | "day">(hasFirst ? "first" : "day");
   const epLabel = (r: AiringRef) => (r.episode !== null ? `${r.episode}회` : `${Number(r.date.slice(5, 7))}/${Number(r.date.slice(8))}`);
   const points =
     unit === "first" && hasFirst
       ? a.firstRuns.map((r) => ({ label: epLabel(r), sub: `${shortDate(r.date)} ${fmtTime(r.startTime)}`, value: r.rating }))
-      : row.monthly.map((m) => ({ label: monthTitle(m), sub: `${m.airings}회`, value: m.airings > 0 ? m.programAvg : null }));
-  const base = unit === "first" && hasFirst ? points.map(() => a.channelAvg) : row.monthly.map((m) => m.channelAvg);
+      : row.daily.map((d) => ({ label: `${Number(d.date.slice(5, 7))}/${Number(d.date.slice(8))}`, sub: `${d.airings}회`, value: d.programAvg }));
+  const base = unit === "first" && hasFirst ? points.map(() => a.channelAvg) : row.daily.map((d) => d.channelAvg);
   const x = a.extremes;
   const stat = (k: string, v: number | null, sub: ReactNode, extra?: ReactNode) => (
     <div className="min-w-0 rounded-xl border border-zinc-200 bg-white p-3">
@@ -472,8 +473,8 @@ function TrendSection({ row }: { row: ChannelRow }) {
                 본방별
               </button>
             )}
-            <button type="button" aria-pressed={unit === "month"} onClick={() => setUnit("month")} className={chip(unit === "month")}>
-              월별
+            <button type="button" aria-pressed={unit === "day"} onClick={() => setUnit("day")} className={chip(unit === "day")}>
+              일별
             </button>
           </div>
         </div>
@@ -481,7 +482,7 @@ function TrendSection({ row }: { row: ChannelRow }) {
           <TrendChart points={points} base={base} baseLabel="채널 평균" code={code} />
         </div>
         <p className="text-[11px] text-zinc-500">
-          {unit === "first" && hasFirst ? `본방 ${a.firstRuns.length}회(회차 번호가 없으면 방영일 표기)` : "월별 방영 평균"} · 점선은 {unit === "first" && hasFirst ? "같은 기간" : "같은 달"} 채널 평균 · 점에 마우스를 올리면 값
+          {unit === "first" && hasFirst ? `본방 ${a.firstRuns.length}회(회차 번호가 없으면 방영일 표기)` : "일별 방영 평균(방영이 있는 날만)"} · 점선은 {unit === "first" && hasFirst ? "같은 기간" : "그날"} 채널 평균 · 점에 마우스를 올리면 값
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-1 lg:content-between">

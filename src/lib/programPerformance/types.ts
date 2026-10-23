@@ -107,6 +107,15 @@ export interface SplitStat {
 }
 
 /** 월간 추이 한 칸 — 작품 평균과 같은 달(조회 기간 안)의 채널 일평균. 방영이 없는 달은 programAvg=null(0으로 잇지 않음). */
+/** 일별 추이 한 점 — 방송일 하나 */
+export interface DailyPoint {
+  date: string; // YYYY-MM-DD
+  airings: number;
+  programAvg: number | null;
+  /** 그날 채널 하루 시청률(같은 타깃). 자료 없으면 null */
+  channelAvg: number | null;
+}
+
 export interface MonthlyPoint {
   month: string; // YYYY-MM
   /** 이 달 중 조회 기간에 들어가는 구간(분자·분모 같은 구간) */
@@ -167,6 +176,8 @@ export interface ChannelRow {
   summary: string;
   /** 선택한 본재 조건의 월별 작품 평균 vs 같은 달 채널 일평균 */
   monthly: MonthlyPoint[];
+  /** 선택한 본재 조건의 일별 작품 평균 vs 그날 채널 하루 시청률 — 방영이 있는 방송일만(그래프 '일별') */
+  daily: DailyPoint[];
   /** 채널 KPI 타깃 행이면 true(두 타깃 모드에서 다른 그룹 타깃 행은 false) */
   primary: boolean;
   /** 선택한 본재 조건의 방영별 닐슨 점유율 산술평균(채널 공식 기간 점유율 아님). 점유율 값이 있는 방영이 없으면 null */
