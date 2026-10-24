@@ -4405,7 +4405,13 @@ function OriginalContentReportCard({
                     <div className="col-span-2 min-w-0 lg:col-span-1">
                       <p className={REPORT_EYEBROW}>시청률 · {primaryTargetLabel}</p>
                       <p className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                        <span className="text-[44px] font-bold leading-[0.95] tabular-nums tracking-[-0.03em]" style={{ color: accent }}>{formatRating(h.matched_rating, h.broadcast_channel_code)}</span>
+                        {/* 사용자 지시(2026-10-25): 2049 채널은 2049 시청률 옆에 괄호로 가구 시청률(검정, 소수 둘째 자리 반올림). 숫자와 괄호가 줄바꿈으로 갈라지지 않게 한 덩어리로 묶는다 */}
+                        <span className="whitespace-nowrap">
+                          <span className="text-[44px] font-bold leading-[0.95] tabular-nums tracking-[-0.03em]" style={{ color: accent }}>{formatRating(h.matched_rating, h.broadcast_channel_code)}</span>
+                          {is2049Channel && h.matched_household_rating !== null && (
+                            <span className="ml-1.5 text-[16px] font-semibold tabular-nums text-black" title="가구 시청률" aria-label={`가구 시청률 ${h.matched_household_rating.toFixed(2)}`}>({h.matched_household_rating.toFixed(2)})</span>
+                          )}
+                        </span>
                         {h.prior_rating_change_pct !== null && (
                           <span className="whitespace-nowrap text-[14px] font-semibold tabular-nums" style={{ color: changeColor(h.prior_rating_change_pct) }}>
                             {h.prior_rating_change_pct >= 0 ? "▲" : "▼"} {Math.abs(h.prior_rating_change_pct).toFixed(1)}%
