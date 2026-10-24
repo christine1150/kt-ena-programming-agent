@@ -25,6 +25,26 @@ async function todaysReportDone(nowMs: number): Promise<boolean> {
   return !error && (data?.length ?? 0) > 0;
 }
 
+const JOB = "watch-nielsen-mail";
+
+/** 실행 기록 — 실패해도 감시 본업에 영향 없게 삼킨다(기록 테이블이 없어도 동작) */
+async function logRunStart(hop: number): Promise<number | null> {
+  try {
+    const { data, error } = await supabase.from("cron_run_log").insert({ job: JOB, hop }).select("id").single();
+    return error ? null : (data?.id as number);
+  } catch {
+    return null;
+  }
+}
+async function logRunUpdate(id: number | null, patch: Record<string, unknown>) {
+  if (id === null) return;
+  try {
+    await supabase.from("cron_run_log").update(patch).eq("id", id);
+  } catch {
+    /* 기록 실패는 무시 */
+  }
+}
+
 export async function GET(request: Request) {
   const auth = checkCronAuth(request.headers.get("authorization"));
   if (!auth.ok) return NextResponse.json({ ok: false, message: auth.message }, { status: auth.status });
@@ -32,6 +52,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const hop = Math.max(0, Math.floor(Number(url.searchParams.get("hop") ?? 0)) || 0);
   const startedMs = Date.now();
+  const runId = await logRunStart(hop);
   // 이어 붙이기 점검용(인증 필요): test=1이면 "아직 반영 전"으로 보고 두 번째 호출(hop 1)까지만 이어 붙인다.
   const testMode = url.searchParams.get("test") === "1";
 
@@ -69,9 +90,13 @@ export async function GET(request: Request) {
     after(async () => {
       // 다음 호출은 끝날 때까지 한참 걸려 8초 안에는 응답이 없는 게 정상이다. 그 안에 오는 응답(302 배포 보호·401·5xx)은 이어 붙이기 실패이므로 로그에 남긴다.
       const res = await fetch(next, { headers: authorization ? { authorization } : {}, redirect: "manual", signal: AbortSignal.timeout(8_000) }).catch(() => null);
-      if (res && res.status !== 200) console.error(`[watch-nielsen-mail] 다음 호출(hop ${hop + 1}) 이어 붙이기 실패: HTTP ${res.status}`);
+      if (res && res.status !== 200) {
+        console.error(`[watch-nielsen-mail] 다음 호출(hop ${hop + 1}) 이어 붙이기 실패: HTTP ${res.status}`);
+        await logRunUpdate(runId, { chain_status: res.status });
+      }
     });
   }
+  await logRunUpdate(runId, { finished_at: new Date().toISOString(), done, checks, processed_count: processedCount, chained: chain, message: lastMessage ?? null });
 
   const nowKst = kstParts(Date.now());
   console.log(`[watch-nielsen-mail] hop=${hop} done=${done} checks=${checks} processed=${processedCount} chained=${chain} kstMin=${nowKst.minutes}`);
