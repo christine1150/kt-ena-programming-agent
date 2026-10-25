@@ -9,6 +9,7 @@ import { calendarOf, describeLearned, inferRuns, type RunPattern } from "../src/
 import { naverPattern, registeredPattern } from "../src/lib/broadcastPattern/load";
 import { lookupProgram, type Searcher } from "../src/lib/broadcastPattern/naverFetch";
 import { patternRunsForDay } from "../src/lib/broadcastPattern/dayFill";
+import { competitorChannelKey, competitorRuns, competitorSearchTitle, runTagOf } from "../src/lib/broadcastPattern/competitorRuns";
 
 let passed = 0;
 const failures: string[] = [];
@@ -173,6 +174,33 @@ const dayChecks = (async () => {
   const broken = await patternRunsForDay({ from: () => { throw new Error("DB 오류"); } }, { channelId: "c-ena", channelCode: "ENA", date: "2026-10-21", rows: [{ programId: "p1", name: "나는SOLO", startTime: "22:30:00" }] });
   check("하루치 보완: 읽기 실패는 보완 없음(예외를 던지지 않음)", broken[0].firstRun === null);
 })();
+
+// ── 경쟁채널 본방(2026-10-25) ──
+check("경쟁: 닐슨 표시(괄호 안 <재> 포함)", runTagOf("TVN특별기획100일의거짓말<본>") === true && runTagOf("SBS금토드라마(닥터X하얀마피아의시대<재>)") === false && runTagOf("놀면뭐하니") === null);
+check(
+  "경쟁: 검색 제목에서 채널명·편성 틀 제거",
+  competitorSearchTitle("SBS", "SBS금토드라마(닥터X하얀마피아의시대)") === "닥터X하얀마피아의시대" &&
+    competitorSearchTitle("tvN", "TVN특별기획100일의거짓말") === "100일의거짓말" &&
+    competitorSearchTitle("KBS2", "KBS2토일미니시리즈(너말고다른연애)") === "너말고다른연애" &&
+    competitorSearchTitle("MBC", "놀면뭐하니") === "놀면뭐하니",
+  [competitorSearchTitle("SBS", "SBS금토드라마(닥터X하얀마피아의시대)"), competitorSearchTitle("tvN", "TVN특별기획100일의거짓말"), competitorSearchTitle("KBS2", "KBS2토일미니시리즈(너말고다른연애)")].join(" / ")
+);
+check("경쟁: 편집본은 검색하지 않음", competitorSearchTitle("MBC", "나혼자산다스페셜") === null);
+check("경쟁: 채널 표기 맞춤", competitorChannelKey("TV CHOSUN") === competitorChannelKey("TV조선") && competitorChannelKey("KBS 2TV") === "KBS2" && competitorChannelKey("tvN") === "TVN");
+{
+  const row = { program_key: "놀면뭐하니", title_raw: "놀면뭐하니", status: "found" as const, matched_title: "놀면 뭐하니?", channels: ["MBC"], start_date: "2019-07-27", end_date: null, slots: [{ days: [5 as const], minute: 18 * 60 + 30 }], episodes: [], fetched_at: "2026-10-25T00:00:00Z" };
+  const runs = competitorRuns(
+    [
+      { channelName: "MBC", programName: "놀면뭐하니", date: "2026-10-24", startTime: "18:33:05" },
+      { channelName: "MBC", programName: "놀면뭐하니스페셜", date: "2026-10-24", startTime: "13:40:42" },
+      { channelName: "MBC every1", programName: "놀면뭐하니", date: "2026-10-24", startTime: "18:35:00" },
+      { channelName: "tvN", programName: "놀라운토요일<본>", date: "2026-10-24", startTime: "19:33:16" },
+      { channelName: "SBS", programName: "그것이알고싶다", date: "2026-10-24", startTime: "23:10:54" },
+    ],
+    new Map([["놀면뭐하니", row]])
+  );
+  check("경쟁: 네이버 본방 채널·요일·시각 안이면 본방, 편집본·다른 채널·자료 없음은 모름, 닐슨 표시는 그대로", JSON.stringify(runs) === JSON.stringify([true, null, null, true, null]), JSON.stringify(runs));
+}
 
 Promise.all([searchChecks, dayChecks]).then(() => {
   console.log(`\n${passed} passed, ${failures.length} failed`);

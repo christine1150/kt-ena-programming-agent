@@ -8,6 +8,7 @@ import { CHANNEL_RANK_LIMIT, classifyTargetLabel, pickTopPrograms, type ProgramG
 import { loadGenreMap } from "@/lib/idealSchedule/genreStore";
 import { resolveGenre } from "@/lib/idealSchedule/genreRules";
 import { genreFamily, type Genre } from "@/lib/idealSchedule/types";
+import { competitorRunsFromDb } from "@/lib/broadcastPattern/competitorRuns";
 
 export const dynamic = "force-dynamic";
 
@@ -113,12 +114,13 @@ export async function GET(request: Request) {
         .eq("broadcast_date", date)
         .not("rating", "is", null);
       if (e4) throw new Error(e4.message);
-      for (const r of (cpRows ?? []) as { competitor_name: string; start_time: string; program_name: string; target_label: string; rating: number }[]) {
-        const rank = compRank.get(r.competitor_name);
-        if (rank === undefined) continue;
+      const cps = ((cpRows ?? []) as { competitor_name: string; start_time: string; program_name: string; target_label: string; rating: number }[]).filter((r) => compRank.has(r.competitor_name));
+      // 본방 여부(사용자 지시 2026-10-25): 닐슨 이름의 <본>·<재> 표시, 없으면 네이버 방송 정보의 본방 요일·시각
+      const runs = await competitorRunsFromDb(supabase, cps.map((r) => ({ channelName: r.competitor_name, programName: r.program_name, date, startTime: r.start_time })));
+      cps.forEach((r, i) => {
         withData.add(r.competitor_name);
-        samples.push({ channelName: r.competitor_name, own: false, genre: familyOf(resolveGenre(genreMap, "COMPETITOR", r.competitor_name, r.program_name)), channelRank: rank, programName: r.program_name, startTime: r.start_time, target: classifyTargetLabel(r.target_label), rating: r.rating });
-      }
+        samples.push({ channelName: r.competitor_name, own: false, firstRun: runs[i], genre: familyOf(resolveGenre(genreMap, "COMPETITOR", r.competitor_name, r.program_name)), channelRank: compRank.get(r.competitor_name) as number, programName: r.program_name, startTime: r.start_time, target: classifyTargetLabel(r.target_label), rating: r.rating });
+      });
     }
 
     const rows = pickTopPrograms(samples);

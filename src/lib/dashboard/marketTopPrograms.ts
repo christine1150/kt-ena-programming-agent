@@ -72,7 +72,7 @@ export interface ProgramSample {
   rating: number | null;
   /** 장르 묶음(드라마 계열·예능 계열만 구분, 나머지·미분류는 null) — "드라마·예능만 보기" 필터용 */
   genre?: ProgramGenreFamily;
-  /** 본방(true)·재방(false) 여부 — 자사 프로그램에서 programs.first_run을 아는 경우만(모르면 null/undefined) */
+  /** 본방(true)·재방(false) 여부 — 자사는 닐슨 is_first_run, 경쟁채널은 닐슨 <본>·<재> 표시 또는 네이버 본방 편성(모르면 null/undefined) */
   firstRun?: boolean | null;
 }
 
