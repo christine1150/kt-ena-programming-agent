@@ -167,6 +167,8 @@ interface OriginalDailyItem {
   // 유료가구) 타깃 시청률·전회 대비 등락률(그 타깃 데이터가 없는 채널은 둘 다 null).
   matched_household_rating: number | null;
   household_rating_change_pct: number | null;
+  // 사용자 지시(2026-10-25): 직재방 시청률 옆 괄호 가구 시청률(API가 재방 슬롯에서 따로 찾음, 없으면 null)
+  rerun_household_rating?: number | null;
   // 사용자 지시(2026-08-25): [편성 인사이트]를 카니발라이제이션 단일 규칙 대신, 이미 검증된
   // 값들로 OpenAI가 종합한 문장으로 — API 키가 없거나 실패하면 null(route.ts에서 계산, 실패 시
   // Dashboard가 기존 규칙 기반 카니발라이제이션 문구로 대체).
@@ -4199,12 +4201,13 @@ function OriginalContentReportCard({
               // 직후재방도 같은 세션의 "직재방" 용어 통일 지시에 맞춰 라벨을 "직재방"으로 바꿨다.
               const secondKpi =
                 h.simulcast_rating !== null && h.simulcast_channel_code
-                  ? { labelPrefix: "동시방영", channelCode: h.simulcast_channel_code, rating: h.simulcast_rating, time: h.simulcast_start_time, note: null as string | null }
+                  ? { labelPrefix: "동시방영", channelCode: h.simulcast_channel_code, rating: h.simulcast_rating, householdRating: null as number | null, time: h.simulcast_start_time, note: null as string | null }
                   : h.rerun_rating !== null && h.rerun_channel_code
                     ? {
                         labelPrefix: h.rerun_type ?? "직재방",
                         channelCode: h.rerun_channel_code,
                         rating: h.rerun_rating,
+                        householdRating: PRIMARY_2049_CODES.has(h.broadcast_channel_code) ? (h.rerun_household_rating ?? null) : null,
                         time: h.rerun_start_time,
                         note: h.retention_pct !== null ? `본방 대비 ${h.retention_pct.toFixed(1)}%` : null,
                       }
@@ -4424,7 +4427,7 @@ function OriginalContentReportCard({
                           <span className="whitespace-nowrap font-medium">{secondKpi.labelPrefix}</span>
                           <span className="whitespace-nowrap font-medium">{CHANNEL_NAME_BY_CODE[secondKpi.channelCode] ?? secondKpi.channelCode}</span>
                           {secondKpi.time && <span className="whitespace-nowrap text-zinc-600">{fmtTimeKorean(secondKpi.time)}</span>}
-                          <b className="whitespace-nowrap text-[18px] tabular-nums">{formatRating(secondKpi.rating, h.broadcast_channel_code)}</b>
+                          <span className="whitespace-nowrap"><b className="text-[18px] tabular-nums">{formatRating(secondKpi.rating, h.broadcast_channel_code)}</b>{secondKpi.householdRating !== null && secondKpi.householdRating !== undefined && <span className="ml-1 text-[14px] font-semibold tabular-nums text-black" title="가구 시청률" aria-label={`가구 시청률 ${secondKpi.householdRating.toFixed(2)}`}>({secondKpi.householdRating.toFixed(2)})</span>}</span>
                           {secondKpi.note && <span className="whitespace-nowrap text-[12px] text-zinc-500">{secondKpi.note}</span>}
                         </p>
                       )}

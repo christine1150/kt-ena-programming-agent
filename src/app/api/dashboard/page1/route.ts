@@ -81,6 +81,8 @@ interface OriginalDailyRow {
   rerun_program_name: string | null;
   rerun_start_time: string | null;
   rerun_rating: number | null;
+  // 사용자 지시(2026-10-25): 직재방 시청률 옆에 괄호로 가구 시청률 — SQL을 바꾸지 않고 API가 재방 슬롯의 전국 유료가구 값을 따로 찾아 붙인다(없으면 null).
+  rerun_household_rating?: number | null;
   // 사용자 지시(2026-09-07): "직재방"(본방 종료~재방 사이 다른 프로그램 없이 곧바로) vs
   // "당일재방"(그 사이에 다른 프로그램이 끼어 있음)을 구분 — 추정이 아니라 그 사이 시간대에
   // 실제로 다른 프로그램이 방영됐는지를 DB에서 직접 확인해 SQL이 판정해 내려준다
@@ -868,6 +870,38 @@ export async function GET(request: Request) {
       })
     );
 
+    // 사용자 지시(2026-10-25): 직재방 시청률 옆 가구 시청률 — 재방 슬롯(같은 채널·같은 방송일·같은 시작 시각)의 전국 유료가구 시청률을 ratings에서 직접 읽는다.
+    // 방송일은 SQL의 effective_date와 같은 규칙(기대 편성시각이 02시 전이면 하루 전). 값이 없으면 null이라 화면은 괄호를 그리지 않는다.
+    const rerunHouseholdByKey = new Map<string, number | null>();
+    {
+      const rerunRows = daily.filter((r) => r.rerun_channel_code && r.rerun_start_time);
+      if (rerunRows.length > 0) {
+        const { data: hhTarget } = await supabase.from("targets").select("id").eq("label", HOUSEHOLD_TARGET_LABEL).limit(1).maybeSingle();
+        if (hhTarget) {
+          await Promise.all(
+            rerunRows.map(async (r) => {
+              const chId = channelByCode.get(r.rerun_channel_code!)?.id;
+              if (!chId) return;
+              const d = new Date(`${asOfDate}T00:00:00Z`);
+              if (r.expected_time < "02:00:00") d.setUTCDate(d.getUTCDate() - 1);
+              const { data } = await supabase
+                .from("ratings")
+                .select("rating")
+                .eq("channel_id", chId)
+                .eq("target_id", hhTarget.id)
+                .eq("source_type", "nielsen_daily")
+                .eq("broadcast_date", d.toISOString().slice(0, 10))
+                .eq("start_time", r.rerun_start_time!)
+                .not("program_id", "is", null)
+                .limit(1)
+                .maybeSingle();
+              rerunHouseholdByKey.set(`${r.broadcast_channel_code}__${r.matched_start_time}__${r.matched_program_name}`, data?.rating ?? null);
+            })
+          );
+        }
+      }
+    }
+
     const dailyWithOverlap = daily.map((row) => {
       const sameChannelOverlap = (overlapByChannel.get(row.broadcast_channel_code) ?? []).filter(
         (o) => o.our_start_time === row.matched_start_time && o.our_program_name === row.matched_program_name
@@ -897,6 +931,7 @@ export async function GET(request: Request) {
         ...row,
         competitorHighlights: sortedHighlights,
         householdRank,
+        rerun_household_rating: rerunHouseholdByKey.get(key) ?? null,
       };
     });
 
