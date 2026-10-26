@@ -7,8 +7,8 @@ export const metadata: Metadata = { title: "OLIFE 시청률 지도 (베타)" };
 export default function GeoMapBetaPage() {
   // 레이아웃이 flex 세로 배치라 mx-auto만 두면 내용 폭으로 줄어든다 — w-full로 가로를 꽉 채운다. 본문 랜드마크(<main>)는 layout.tsx에 이미 있어 div로 둔다.
   return (
-    <div className="mx-auto w-full max-w-screen-2xl px-3 py-3 sm:px-6">
-      <iframe src="/beta/geo-map/frame" title="OLIFE 시청률 지도" className="h-[calc(100vh-110px)] min-h-[680px] w-full rounded-2xl border border-zinc-200 bg-white" />
+    <div className="mx-auto w-full max-w-[2200px] px-3 py-2 sm:px-6">
+      <iframe src="/beta/geo-map/frame" title="OLIFE 시청률 지도" className="h-[calc(100vh-104px)] min-h-[520px] w-full rounded-2xl border border-zinc-200 bg-white" />
     </div>
   );
 }

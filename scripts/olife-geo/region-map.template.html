@@ -185,75 +185,103 @@ span.term { border-bottom: 1.5px dotted var(--purple); }
   .track { height: 12px; }
   #tip { font-size: 15px; max-width: 520px; }
 }
+
+/* ── 지도 우선 레이아웃(첫 화면에 지도가 크게): 한 줄 툴바 · 지도+우측 순위 · 아래 회차 목록 ── */
+.wrap { max-width: none; padding: 8px 10px 20px; }
+.top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 46px; padding: 5px 12px 5px 18px; margin-bottom: 8px; border-radius: 999px; }
+.top h1 { font-size: 18px; margin: 0; white-space: nowrap; }
+.top .badge { font-size: 10px; padding: 1px 7px; margin-left: 6px; vertical-align: 2px; }
+.top .seg button { padding: 5px 12px; font-size: 12.5px; }
+.top .target { margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 0; font-size: 12px; background: none; border: 0; box-shadow: none; }
+.top .target select { padding: 5px 26px 5px 12px; font-size: 12.5px; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 400px); gap: 8px; height: calc(100vh - 74px); min-height: 440px; }
+.mapcard { padding: 6px; min-height: 0; display: flex; }
+.mapbox { flex: 1; min-width: 0; min-height: 0; position: relative; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 18px; }
+.kpis { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); display: flex; flex-wrap: nowrap; gap: 6px; margin: 0; z-index: 2; max-width: calc(100% - 16px); }
+.kpi { padding: 3px 14px 3px 4px; gap: 8px; border-radius: 999px; }
+.kpi .ic { width: 26px; height: 26px; font-size: 11px; }
+.kpi .t { font-size: 10px; line-height: 1.2; }
+.kpi .v { font-size: 14px; max-width: 150px; line-height: 1.2; }
+.kpi .s { display: none; }
+.side { display: flex; flex-direction: column; min-height: 0; padding: 12px; gap: 8px; }
+.side .search { margin: 0; flex: none; }
+.side .chips { max-height: 84px; flex: none; }
+.side h2 { margin: 2px 0 0; font-size: 14px; flex: none; }
+.side .rank { flex: 1; min-height: 0; max-height: none; font-size: 12.5px; }
+.side .legend { flex: none; margin: 0; font-size: 11px; }
+.below { margin-top: 8px; }
+.below .eps { max-height: none; }
+@media (min-width: 1500px) { .top h1 { font-size: 20px; } .top .seg button, .top .target select { font-size: 13.5px; } .side .rank { font-size: 14px; } .side .legend { font-size: 12px; } .kpi .v { font-size: 16px; } }
+@media (max-width: 1000px) {
+  .stage { display: block; height: auto; }
+  .mapcard { height: 60vh; min-height: 320px; margin-bottom: 8px; }
+  .side .rank { max-height: 340px; }
+  .kpis { flex-wrap: wrap; justify-content: center; }
+}
+.lcol { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.lcol .mapcard { flex: none; }
+.lcol .below { flex: 1; min-height: 0; margin: 0; display: flex; flex-direction: column; padding: 10px 12px; }
+.lcol .below h2 { font-size: 14px; margin: 0 0 6px; flex: none; }
+.lcol .below .eps { flex: 1; min-height: 0; max-height: none; }
+.foot { padding: 6px 12px 0; }
+@media (max-width: 1000px) { .lcol { display: block; } .lcol .below { max-height: 420px; margin-bottom: 8px; } }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="head">
-    <div>
-      <h1>OLIFE 시청률 지도<span class="badge">BETA</span></h1>
-      <p class="sub" id="sub"></p>
-    </div>
-    <label class="target glass">타깃 <select id="target"></select></label>
-  </div>
-
-  <div class="bar glass">
-    <span>프로그램</span>
-    <span class="seg" role="group" aria-label="프로그램"><button data-prog="all" aria-pressed="true">전체</button><button data-prog="걸세" aria-pressed="false">걸어서 세계속으로</button><button data-prog="세테기" aria-pressed="false">세계테마기행</button></span>
-    <span>보기</span>
+  <div class="top glass">
+    <h1>OLIFE 시청률 지도<span class="badge">BETA</span></h1>
+    <span class="seg" role="group" aria-label="프로그램"><button data-prog="all" aria-pressed="true">전체</button><button data-prog="걸세" aria-pressed="false" title="걸어서 세계속으로">걸세</button><button data-prog="세테기" aria-pressed="false" title="세계테마기행">세테기</button></span>
     <span class="seg" role="group" aria-label="보기 단위"><button data-view="country" aria-pressed="true">국가</button><button data-view="region" aria-pressed="false">권역(파이)</button></span>
-    <span>기준</span>
     <span class="seg" role="group" aria-label="순위·색 기준"><button data-mode="r" aria-pressed="true" class="term" data-term="r">시청률</button><button data-mode="m" aria-pressed="false" class="term" data-term="m">월보정지수</button><button data-mode="i" aria-pressed="false" class="term" data-term="i">슬롯지수</button></span>
     <button id="themeOn" class="pill" hidden></button>
+    <label class="target">타깃 <select id="target"></select></label>
   </div>
 
-  <div class="kpis">
-    <div class="kpi glass"><span class="ic g-mint">%</span><div><div class="t">평균 시청률</div><div class="v" id="k1"></div><div class="s" id="k1s"></div></div></div>
-    <div class="kpi glass"><span class="ic g-sky">N</span><div><div class="t">집계 방송</div><div class="v" id="k2"></div><div class="s" id="k2s"></div></div></div>
-    <div class="kpi glass"><span class="ic g-purple">1</span><div><div class="t">시청률 1위 나라</div><div class="v" id="k3"></div><div class="s" id="k3s"></div></div></div>
-    <div class="kpi glass"><span class="ic g-pink">★</span><div><div class="t">시청률 1위 회차</div><div class="v" id="k4"></div><div class="s" id="k4s"></div></div></div>
+  <div class="stage">
+   <div class="lcol">
+    <div class="mapcard glass">
+      <div class="mapbox">
+        <svg id="map" role="img" aria-label="세계지도 위 국가별 시청률 원"></svg>
+        <div class="crumb glass" id="crumb" hidden><button id="crumbHome" title="세계지도로 돌아가기 (ESC)">← 세계지도</button><span id="crumbNow"></span></div>
+        <div class="mapctl glass" role="group" aria-label="지도 확대·축소">
+          <button id="zin" title="확대 (+)" aria-label="확대">+</button>
+          <button id="zout" title="축소 (−)" aria-label="축소">−</button>
+          <button id="zhome" title="세계지도로 돌아가기 (ESC)" aria-label="세계지도로 돌아가기" disabled>⌂</button>
+        </div>
+        <div class="kpis">
+          <div class="kpi glass"><span class="ic g-mint">%</span><div><div class="t">평균 시청률</div><div class="v" id="k1"></div><div class="s" id="k1s"></div></div></div>
+          <div class="kpi glass"><span class="ic g-sky">N</span><div><div class="t">집계 방송</div><div class="v" id="k2"></div><div class="s" id="k2s"></div></div></div>
+          <div class="kpi glass"><span class="ic g-purple">1</span><div><div class="t">1위 나라</div><div class="v" id="k3"></div><div class="s" id="k3s"></div></div></div>
+          <div class="kpi glass"><span class="ic g-pink">★</span><div><div class="t">1위 회차</div><div class="v" id="k4"></div><div class="s" id="k4s"></div></div></div>
+        </div>
+      </div>
+    </div>
+  <div class="card glass below">
+    <h2>잘 나온 회차 <span class="ref" id="epTitle"></span></h2>
+    <ul class="eps" id="eps"></ul>
   </div>
-
-  <div class="grid">
-    <div class="col">
-      <div class="card glass mapcard">
-        <p class="hint">원에 마우스를 올리면 그 나라에서 잘 나온 회차가 뜹니다. 국가 원을 누르면 도시·장소별로 확대 · <kbd>휠</kbd> 확대/축소 · 드래그로 이동 · <kbd>ESC</kbd> 또는 ⌂ 로 세계지도 복귀</p>
-        <div class="mapbox">
-          <svg id="map" role="img" aria-label="세계지도 위 국가별 시청률 원"></svg>
-          <div class="crumb glass" id="crumb" hidden><button id="crumbHome" title="세계지도로 돌아가기 (ESC)">← 세계지도</button><span id="crumbNow"></span></div>
-          <div class="mapctl glass" role="group" aria-label="지도 확대·축소">
-            <button id="zin" title="확대 (+)" aria-label="확대">+</button>
-            <button id="zout" title="축소 (−)" aria-label="축소">−</button>
-            <button id="zhome" title="세계지도로 돌아가기 (ESC)" aria-label="세계지도로 돌아가기" disabled>⌂</button>
-          </div>
-        </div>
-        <div class="legend">
-          <span>원 크기 = 방송 수</span>
-          <span>색: 낮음<span class="ramp"></span>높음 <span id="legMode"></span></span>
-          <span id="legPie"><i class="sw" style="background:var(--nat)"></i>자연 테마만 <i class="sw" style="background:var(--cul)"></i>문화 테마만 <i class="sw" style="background:var(--both)"></i>둘 다 <i class="sw" style="background:var(--none)"></i>분류 없음</span>
-          <span><span class="term" tabindex="0" data-term="s">점선·흐린 원 = 표본 적음(참고용)</span></span>
-          <span id="legApprox">점선 테두리 원(장소 위치 미확인) = 나라 중앙에 표시</span>
-        </div>
-      </div>
-      <div class="card glass">
-        <h2>잘 나온 회차 <span class="ref" id="epTitle"></span></h2>
-        <ul class="eps" id="eps"></ul>
-        <p class="note">같은 회차의 재방송은 한 줄로 묶어 평균했습니다. 회차에 마우스를 올리면 지도에서 그 회차의 나라만 밝게 보입니다.</p>
+   </div>
+    <div class="side glass">
+      <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="color:var(--sub)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="테마로 찾기 (예: 산, 음식, 축제)" autocomplete="off"></div>
+      <div class="chips" id="chips"></div>
+      <h2>순위 <span class="ref" id="rankTitle"></span></h2>
+      <ul class="rank" id="rank"></ul>
+      <div class="legend">
+        <span>원 크기 = 방송 수</span>
+        <span>색: 낮음<span class="ramp"></span>높음 <span id="legMode"></span></span>
+        <span id="legPie"><i class="sw" style="background:var(--nat)"></i>자연만 <i class="sw" style="background:var(--cul)"></i>문화만 <i class="sw" style="background:var(--both)"></i>둘 다 <i class="sw" style="background:var(--none)"></i>분류 없음</span>
+        <span><span class="term" tabindex="0" data-term="s">점선·흐린 원 = 표본 적음</span></span>
+        <span id="legApprox">점선 테두리 원 = 위치 미확인(나라 중앙)</span>
+        <span><i class="sw" style="background:var(--mint)"></i>자연 테마 <i class="sw" style="background:var(--purple)"></i>문화 테마</span>
+        <span>원에 마우스 = 잘 나온 회차 · 클릭 = 확대 · <kbd>휠</kbd> 확대/축소 · <kbd>ESC</kbd> 복귀</span>
       </div>
     </div>
-    <div class="col">
-      <div class="card glass">
-        <h2>테마로 찾기 <span class="ref">누르면 그 테마에서 시청률 좋은 나라·회차</span></h2>
-        <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="color:var(--sub)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="테마 검색 (예: 산, 음식, 축제)" autocomplete="off"></div>
-        <div class="chips" id="chips"></div>
-        <div class="legend"><span><i class="sw" style="background:var(--mint)"></i>자연 테마</span><span><i class="sw" style="background:var(--purple)"></i>문화 테마</span></div>
-      </div>
-      <div class="card glass">
-        <h2>순위 <span class="ref" id="rankTitle"></span></h2>
-        <ul class="rank" id="rank"></ul>
-        <p class="note">괄호 안은 <span class="term" tabindex="0" data-term="m">월보정지수</span>·<span class="term" tabindex="0" data-term="i">슬롯지수</span>입니다(용어에 마우스를 올리면 설명). 지수는 같은 프로그램·요일·시간대(월보정은 같은 달까지) 평균 대비 비율이라, 편성 자리 차이를 걷어낸 비교입니다. 2026-07 이후 부제가 분류와 맞은 방송만 집계했습니다.</p>
-      </div>
-    </div>
+  </div>
+  <div class="foot">
+    <p class="note">같은 회차의 재방송은 한 줄로 묶어 평균했습니다. 회차에 마우스를 올리면 지도에서 그 회차의 나라만 밝게 보입니다. 괄호 안은 <span class="term" tabindex="0" data-term="m">월보정지수</span>·<span class="term" tabindex="0" data-term="i">슬롯지수</span>로, 같은 프로그램·요일·시간대(월보정은 같은 달까지) 평균 대비 비율이라 편성 자리 차이를 걷어낸 비교입니다.</p>
+    <p class="note" id="sub"></p>
   </div>
 </div>
 <div id="tip"></div>
@@ -630,6 +658,12 @@ if (location.protocol.startsWith("http")) sel.onchange = () => { location.search
 else { sel.disabled = true; sel.title = "타깃 변경은 에이전트의 시청률 지도 화면에서만 됩니다"; }
 
 document.getElementById("sub").textContent = `<걸어서 세계속으로>·<세계테마기행> · ${DATA.period} · ${DATA.target} · 분류표와 맞은 방송 ${ALL.length}건`;
+function fitStage() {
+  const mc = document.querySelector(".mapcard"), st = document.querySelector(".stage");
+  if (innerWidth <= 1000) { mc.style.height = ""; return; }
+  mc.style.height = Math.round(Math.min((mc.clientWidth - 12) * H / W + 12, st.clientHeight - 150)) + "px";
+}
+fitStage(); addEventListener("resize", fitStage);
 refresh();
 </script>
 </body>
