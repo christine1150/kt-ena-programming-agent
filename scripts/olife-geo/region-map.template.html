@@ -110,8 +110,10 @@ h2 .ref { font-size: 11px; font-weight: 600; color: var(--sub); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 168px; overflow-y: auto; overflow-x: hidden; }
 .chip { border: 0; font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 999px; cursor: pointer; color: var(--ink); background: rgba(255, 255, 255, .8); box-shadow: 0 2px 6px rgba(150, 110, 220, .12); }
 .chip b { font-weight: 700; }
-.chip.N { border-left: 4px solid var(--mint); }
-.chip.C { border-left: 4px solid var(--purple); }
+.chip::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.chip.N::before { background: var(--mint); }
+.chip.C::before { background: var(--purple); }
+.chip[aria-pressed="true"]::before { background: #fff; }
 .chip[aria-pressed="true"] { color: #fff; background: linear-gradient(90deg, var(--purple), var(--pink)); }
 .chip small { color: inherit; opacity: .7; }
 
