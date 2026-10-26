@@ -31,6 +31,8 @@ import type { ActionTag } from "@/lib/actionTags";
 // (mart_daily_dashboard_cache / mart_llm_text_cache — 마이그레이션 20260917010000).
 import { loadDailyMartCache, cachedOrRpc, martFingerprint, MART_SLOT, MART_GLOBAL_CODE } from "@/lib/dailyMartCache";
 import { cachedLlmText } from "@/lib/llmTextCache";
+import { detectRankSlides, buildRankSlide } from "@/lib/rankSlide/load";
+import type { RankSlide } from "@/lib/rankSlide";
 import { createStageTimer } from "@/lib/perf/serverTiming";
 import { buildMetricContext, dataSnapshotId } from "@/lib/metrics";
 import { selectRepresentativeCompetitors } from "@/lib/broadcastTime/overlap";
@@ -2237,6 +2239,28 @@ export async function GET(request: Request) {
     }
   }
 
+  // 주간 순위 하락 배경(2026-10-26, 사용자 요청: ONCE 56위→94위 원인을 주간 보고 [이번 주 인사이트]와 ONCE 일일 보고서에 반영).
+  // 요일과 무관하게 기준일까지 끝난 닐슨 주간 순위가 12주 안 최고 순위보다 15계단 이상 내려가고 시청률이 20% 이상 줄어든 채널만 문장을 만든다
+  // (평소에는 주간 순위 조회 한 번으로 끝남). 문장은 입력이 같으면 캐시를 재사용한다. 실패해도 화면은 그대로 나온다.
+  let rankSlides: RankSlide[] = [];
+  try {
+    const slideChannels = channels.filter((c) => c.code !== "SKYUHD").map((c) => ({ id: c.id as string, code: c.code as string, name: c.name as string, primary_target: (c.primary_target as string | null) ?? null }));
+    const candidates = await detectRankSlides(supabase, { asOfDate, channels: slideChannels });
+    const ownNames = channels.map((c) => c.name as string);
+    const built = await Promise.all(
+      candidates.map(async (cand) => {
+        const text = await cachedLlmText(`rank_slide_v1:${cand.channel.code}`, cand.weeks[cand.weeks.length - 1].weekStart, { weeks: cand.weeks }, async () => {
+          const s = await buildRankSlide(supabase, cand, ownNames);
+          return s ? JSON.stringify(s) : null;
+        });
+        return text ? (JSON.parse(text) as RankSlide) : null;
+      })
+    );
+    rankSlides = built.filter((s): s is RankSlide => s !== null);
+  } catch (e) {
+    console.error("[page1] 주간 순위 하락 배경 계산 실패", e instanceof Error ? e.message : e);
+  }
+
   // 단계 02: 홈의 일간 KPI·순위가 어느 타깃·기간의 값인지 채널별로 고정하고, 화면 전체가 같은 data_snapshot_id를 공유한다.
   const metricContexts = Object.fromEntries(
     channels
@@ -2279,5 +2303,6 @@ export async function GET(request: Request) {
     weekendReport,
     monthlyReview,
     weeklyReview,
+    rankSlides,
   }, { headers: { "Server-Timing": timer.header() } });
 }

@@ -8,6 +8,7 @@ import { VendingMachineIcon } from "@/components/VendingIcons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
+import type { RankSlide } from "@/lib/rankSlide";
 import ReviewPanels, { type ReviewPanelItem } from "@/components/home/ReviewPanels";
 import { channelBrandSolid } from "@/lib/dashboard/channelBrandColors";
 import { highlightNarrativeText, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR } from "@/lib/highlightNarrative";
@@ -405,6 +406,8 @@ interface DashboardData {
   // 사용자 지시(2026-09-07): "주요 컨텐츠리뷰 아래, 주말 리포트 위" — route.ts가 매 요청마다
   // nielsen_period_rank의 최신 완료 주를 그대로 계산해 내려준다(날짜 게이팅 없음).
   weeklyReview: WeeklyReview | null;
+  // 주간 순위 하락 배경(2026-10-26) — 닐슨 주간 순위가 최근 12주 최고보다 크게 내려간 채널의 원인 문장. 요일과 무관하게 내려오고 없으면 빈 배열.
+  rankSlides?: RankSlide[];
 }
 // MonthlyDriver 타입은 src/lib/causeClassifier.ts로 이동(원인분해 로직과 함께 재사용하기 위함,
 // 2026-09-18) — 위에서 import한 타입을 그대로 쓴다(필드 변경 없음).
@@ -2418,7 +2421,7 @@ function WeeklyRankTrendChart({
 
 // 인사이트 문장 — buildMonthlyReviewInsights와 같은 원칙("DB 값 라벨링만", 새 수치 계산 없음),
 // "전월"을 "전주"로, "연초 대비"를 "최근 N주 동안"으로 바꿨을 뿐 로직은 동일하다.
-function buildWeeklyReviewInsights(review: WeeklyReview): string[] {
+function buildWeeklyReviewInsights(review: WeeklyReview, slides: RankSlide[] = []): string[] {
   const withRankChange = review.channels.filter((c) => c.rankChange !== null && c.rankChange !== 0);
   const lines: string[] = [];
   const risers = withRankChange.filter((c) => c.rankChange! > 0).sort((a, b) => b.rankChange! - a.rankChange!);
@@ -2450,6 +2453,8 @@ function buildWeeklyReviewInsights(review: WeeklyReview): string[] {
       `최근 흐름으로는 ${nameOf(t.code)}가 ${formatMonthDayDow(t.from.weekStart)} 주 #${t.from.rank}에서 이번 주 #${t.to.rank}까지 ${t.gain}계단 올라 가장 꾸준히 개선됐습니다.`
     );
   }
+  // 주간 순위가 최근 12주 최고보다 크게 내려간 채널은 전주 대비가 아니라 누적 하락이라 위 문장에 안 잡힌다 — 원인 문장을 그대로 이어 붙인다(2026-10-26).
+  for (const s of slides.filter((x) => x.toWeek === review.weekStart)) lines.push(...s.lines);
   if (lines.length === 0) lines.push("이번 주는 전주 대비 순위가 바뀐 채널이 없습니다.");
   return lines;
 }
@@ -2520,11 +2525,11 @@ function RecentPeriodCompare({
   );
 }
 
-function WeeklyReviewCard({ review, themeColorByCode }: { review: WeeklyReview; themeColorByCode: Map<string, string | null> }) {
+function WeeklyReviewCard({ review, themeColorByCode, rankSlides = [] }: { review: WeeklyReview; themeColorByCode: Map<string, string | null>; rankSlides?: RankSlide[] }) {
   const byCode = new Map(review.channels.map((c) => [c.channelCode, c]));
   const groupA = MONTHLY_GROUP_A.map((code) => byCode.get(code)).filter((c): c is WeeklyReviewChannel => !!c);
   const groupB = MONTHLY_GROUP_B.map((code) => byCode.get(code)).filter((c): c is WeeklyReviewChannel => !!c);
-  const insights = buildWeeklyReviewInsights(review);
+  const insights = buildWeeklyReviewInsights(review, rankSlides);
   const nameOf = (code: string) => CHANNEL_NAME_BY_CODE[code] ?? code;
   const orderedChannels = [...MONTHLY_GROUP_A, ...MONTHLY_GROUP_B].map((c) => byCode.get(c)).filter((c): c is WeeklyReviewChannel => !!c);
   return (
@@ -4657,11 +4662,14 @@ function ChannelNarrativeCard({
   themeColorByCode,
   targetRankByCode,
   enaOriginalDaily,
+  rankSlides,
   onOpenChannelDetail,
   selectedChannel,
   achievementPctByCode,
 }: {
   achievementPctByCode: Map<string, number | null>;
+  // 주간 순위 하락 배경(2026-10-26) — 해당 채널 줄 아래에 원인 문장을 붙인다
+  rankSlides: RankSlide[];
   signals: ChannelNarrativeSignal[];
   themeColorByCode: Map<string, string | null>;
   // 사용자 지시(2026-09-09): 안정/약세/주의 Health Score 배지 대신 "시청률 (오늘 등위/목표
@@ -4692,7 +4700,9 @@ function ChannelNarrativeCard({
     actionKind: "program" | "diagnosis" | null;
     needsAi: boolean;
     actionTag: ActionTag | null;
+    slideLines: string[];
   }[] = [];
+  const slideByCode = new Map(rankSlides.map((s) => [s.channelCode, s]));
   const enaLeadSentence = buildEnaOriginalHighlightSentence(enaOriginalDaily.filter((d) => d.broadcast_channel_code === "ENA"));
   for (const code of INSIGHT_CHANNEL_ORDER) {
     const s = byCode.get(code);
@@ -4714,6 +4724,7 @@ function ChannelNarrativeCard({
       todayRating: s.today_rating,
       todayRank: s.today_rank,
       ...buildChannelInsightSummary(s, { targetRankNum: parseTargetRankNum(targetRankByCode.get(code) ?? null), achievementPct: achievementPctByCode.get(code) ?? null }),
+      slideLines: slideByCode.get(code)?.lines ?? [],
     });
   }
   const skyuhdSignal = byCode.get("SKYUHD");
@@ -4732,6 +4743,7 @@ function ChannelNarrativeCard({
       todayRating: skyuhdSignal.today_rating ?? null,
       todayRank: skyuhdSignal.today_rank ?? null,
       ...buildChannelInsightSummary(skyuhdSignal),
+      slideLines: [],
     });
 
   return (
@@ -4803,6 +4815,20 @@ function ChannelNarrativeCard({
                     <p className="text-[13.5px] leading-snug text-zinc-400">{line.text ? "이 채널의 변화는 '오늘의 시청률' 카드에 있습니다." : "오늘은 눈에 띄는 변화가 없습니다."}</p>
                   );
                 })()}
+                {/* 주간 순위 하락 배경(2026-10-26, 사용자 요청): 최근 12주 최고 순위보다 크게 내려간 채널은 어제 하루 변화로는 설명되지 않아, 닐슨 주간 순위 기준 원인을 매일 함께 보여 준다. */}
+                {line.slideLines.length > 0 && (
+                  <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2">
+                    <p className="mb-1 text-[11px] font-semibold text-amber-700">[주간 순위 하락 배경]</p>
+                    <ul className="flex flex-col gap-1">
+                      {line.slideLines.map((t, k) => (
+                        <li key={k} className="text-[12.5px] leading-snug text-amber-800">
+                          ·{" "}
+                          {highlightNarrativeText(t, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR, 600)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           ))
@@ -6015,6 +6041,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                     themeColorByCode={themeByCode}
                     targetRankByCode={new Map(data.channels.map((c) => [c.code, c.targetRank]))}
                     enaOriginalDaily={data.originalContentReport.daily}
+                    rankSlides={data.rankSlides ?? []}
                     selectedChannel={selectedInsightChannel}
                     achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
                     onOpenChannelDetail={(code) => setSelectedInsightChannel((cur) => (cur === code ? null : code))}
@@ -6056,7 +6083,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 </div>
                 {data.weeklyReview ? (
                   <>
-                    <WeeklyReviewCard review={data.weeklyReview} themeColorByCode={themeByCode} />
+                    <WeeklyReviewCard review={data.weeklyReview} themeColorByCode={themeByCode} rankSlides={data.rankSlides ?? []} />
                     <RecentPeriodCompare
                       title="최근 4주 비교"
                       themeColorByCode={themeByCode}

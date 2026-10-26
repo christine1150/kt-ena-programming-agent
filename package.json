@@ -54,6 +54,7 @@
     "test:plan-forecast": "tsx scripts/test-plan-forecast.ts",
     "golden:ideal-engine": "tsx scripts/golden-ideal-engine.ts",
     "test:weak-verdict": "tsx scripts/test-weak-verdict.ts",
+    "test:rank-slide": "tsx scripts/test-rank-slide.ts",
     "test:cron-auth": "tsx scripts/test-cron-auth.ts",
     "check:client-boundary": "node scripts/check-client-boundary.mjs"
   },
