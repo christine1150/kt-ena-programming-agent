@@ -34,7 +34,7 @@ function NavInner({ role }: { role: Role | null }) {
   return (
     <>
       <nav aria-label="전역 메뉴" className="border-b border-zinc-200 bg-white print:hidden" data-global-nav>
-        <ul className="mx-auto flex max-w-screen-2xl items-center gap-0.5 overflow-x-auto px-3 sm:px-6">
+        <ul className="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-x-0.5 px-3 sm:px-6">
           {items.map((item) => {
             const isActive = active === item.id;
             return (
