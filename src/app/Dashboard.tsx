@@ -4468,6 +4468,7 @@ function OriginalContentReportCard({
                         points={chartPoints}
                         fmt={(v) => formatRating(v, h.broadcast_channel_code)}
                         primary={is2049Channel ? "p2049" : "household"}
+                        color2049={h.broadcast_channel_code === "ENA" ? undefined : accent}
                         caption={
                           chartPoints.length < 2 && recent.mode === "slot" && recent.deltaPctVs4 !== null && recent.prevAvg4 !== null
                             ? `동시간대 최근 ${recent.sampleCount}주 평균 ${formatRating(recent.prevAvg4, h.broadcast_channel_code)} 대비 ${recent.deltaPctVs4 >= 0 ? "▲" : "▼"} ${Math.abs(recent.deltaPctVs4).toFixed(1)}%`

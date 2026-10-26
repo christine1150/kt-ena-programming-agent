@@ -17,7 +17,7 @@ export interface EpisodeChartPoint {
   household: number | null;
 }
 
-const BLUE = "#3c32e1"; // 채널 로고색 R60 G50 B225(사용자 지시 2026-10-27)
+const ENA_BLUE = "#3c32e1"; // 채널 로고색 R60 G50 B225(사용자 지시 2026-10-27)
 const BLACK = "#18181b";
 const HEIGHT = 244; // 가구 값이 2049의 2~3배라 같은 축에서 2049 변화가 눌려 보이지 않도록 넉넉한 높이
 const PAD = { left: 36, right: 92, top: 30, bottom: 40 }; // right: 맨 오른쪽 "평균" 칸
@@ -40,6 +40,7 @@ export function ReviewEpisodeChart({
   fmt,
   primary,
   caption,
+  color2049 = ENA_BLUE,
 }: {
   points: EpisodeChartPoint[];
   /** 값 표기(채널별 자릿수 규칙은 호출한 쪽이 정한다) */
@@ -47,7 +48,10 @@ export function ReviewEpisodeChart({
   /** 주 타깃 — 굵게 그리는 쪽(2049 채널은 2049, 가구 채널은 가구) */
   primary: "p2049" | "household";
   caption?: string | null;
+  /** 2049 선 색 — ENA는 로고색, 다른 채널은 그 채널 색(사용자 지시 2026-10-27) */
+  color2049?: string;
 }) {
+  const blue = color2049;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   useEffect(() => {
@@ -82,7 +86,7 @@ export function ReviewEpisodeChart({
   };
   const avgs = [
     { id: "household" as const, color: BLACK, v: avgOf((p) => p.household) },
-    { id: "p2049" as const, color: BLUE, v: avgOf((p) => p.p2049) },
+    { id: "p2049" as const, color: blue, v: avgOf((p) => p.p2049) },
   ].filter((a): a is { id: "household" | "p2049"; color: string; v: number } => a.v !== null);
   const avgYs = avgs.map((a) => yOf(a.v));
   if (avgYs.length === 2 && Math.abs(avgYs[0] - avgYs[1]) < 30) {
@@ -119,7 +123,7 @@ export function ReviewEpisodeChart({
 
   const series: { id: "p2049" | "household"; color: string; label: string }[] = [
     { id: "household", color: BLACK, label: "가구" },
-    { id: "p2049", color: BLUE, label: "수도권 2049" },
+    { id: "p2049", color: blue, label: "수도권 2049" },
   ];
 
   return (
@@ -129,7 +133,7 @@ export function ReviewEpisodeChart({
         <p className="flex items-center gap-3 text-[11px] font-medium text-zinc-600">
           {has2049 && (
             <span className="inline-flex items-center gap-1">
-              <span className="inline-block h-[3px] w-4 rounded-full" style={{ backgroundColor: BLUE }} />
+              <span className="inline-block h-[3px] w-4 rounded-full" style={{ backgroundColor: blue }} />
               수도권 2049
             </span>
           )}
