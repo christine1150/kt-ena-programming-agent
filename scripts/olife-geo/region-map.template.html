@@ -40,6 +40,7 @@ h1 { font-size: 24px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 4px;
 @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
 .card { background: var(--glass); border: 1px solid var(--glass-line); border-radius: 22px; padding: 14px; box-shadow: var(--shadow); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 .ctrl { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; font-size: 13px; color: var(--sub); }
+.backbtn { border: 1px solid var(--line); background: rgba(255, 255, 255, .7); color: var(--accent); font: inherit; font-weight: 700; padding: 5px 12px; border-radius: 999px; cursor: pointer; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; padding: 2px; background: rgba(255, 255, 255, .5); }
 .seg button { border: 0; background: transparent; color: var(--ink); padding: 5px 12px; font: inherit; cursor: pointer; border-radius: 999px; }
 .seg button[aria-pressed="true"] { background: linear-gradient(90deg, var(--accent), #8b79f6); color: #fff; box-shadow: 0 3px 10px rgba(106, 88, 234, .35); }
@@ -66,6 +67,30 @@ h2 { font-size: 16px; font-weight: 800; margin: 0 0 8px; }
 .detail b { font-weight: 700; }
 .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; background: rgba(123, 105, 239, .13); margin: 1px 2px 1px 0; font-size: 11px; }
 .note { font-size: 11px; color: var(--sub); line-height: 1.55; margin-top: 12px; }
+
+/* 큰 화면(풀HD 1920×1080 등): 폭을 넓히고 글자·지도를 키워 시원하게 */
+@media (min-width: 1500px) {
+  .wrap { max-width: 1840px; padding: 28px 32px 40px; }
+  h1 { font-size: 32px; }
+  h2 { font-size: 20px; }
+  .badge { font-size: 13px; }
+  .sub { font-size: 16px; }
+  .grid { grid-template-columns: minmax(0, 1fr) 440px; gap: 22px; }
+  .card { padding: 20px; border-radius: 26px; }
+  .ctrl { font-size: 16px; gap: 12px; }
+  .seg button { padding: 7px 16px; }
+  .legend { font-size: 13px; gap: 18px; }
+  .ramp { width: 160px; }
+  .pie text { font-size: 13px; }
+  .rank { font-size: 16px; max-height: 520px; }
+  .rank li { grid-template-columns: 124px 1fr 56px; padding: 5px 8px; }
+  .rank .bar { height: 10px; }
+  .rank .ref { font-size: 13px; }
+  .detail { font-size: 15px; }
+  .chip { font-size: 13px; }
+  .note { font-size: 13px; }
+  #tip { font-size: 15px; }
+}
 </style>
 </head>
 <body>
@@ -80,12 +105,13 @@ h2 { font-size: 16px; font-weight: 800; margin: 0 0 8px; }
           <button id="vC" aria-pressed="true">국가</button>
           <button id="vR" aria-pressed="false">권역(파이)</button>
         </span>
+        <button id="back" class="backbtn" hidden>← 세계지도로</button>
         <span>색 기준</span>
         <span class="seg" role="group" aria-label="링 색 기준">
           <button id="mM" aria-pressed="true">월보정지수</button>
           <button id="mS" aria-pressed="false">슬롯지수</button>
         </span>
-        <span>· 원에 마우스를 올리면 도시·테마가 뜨고, 누르면 오른쪽에 상세가 나옵니다</span>
+        <span>· 원에 마우스를 올리면 도시·테마가 뜨고, 국가 원을 누르면 도시·장소별로 확대됩니다(ESC로 돌아가기)</span>
       </div>
       <svg id="map" viewBox="0 40 1200 520" role="img" aria-label="세계지도 위 권역별 원형 그래프"></svg>
       <div class="legend">
@@ -131,7 +157,7 @@ const CPOS = {
   "코스타리카": [-84, 9.9], "슬로바키아": [19.5, 48.7], "남아프리카공화국": [24.5, -29], "팔라우": [134.5, 7.5], "폴란드": [19.4, 52],
   "카타르": [51.2, 25.3], "사우디아라비아": [45, 24], "마카오": [113.55, 22.2], "포르투갈": [-8, 39.6], "체코": [15.5, 49.8], "아르메니아": [45, 40.2],
   "프랑스령 폴리네시아": [-149.4, -17.7], "자메이카": [-77.3, 18.1], "케냐": [37.9, 0.2], "알제리": [2.6, 28], "키르기스스탄": [74.6, 41.2],
-  "몬테네그로": [19.3, 42.7], "모리타니": [-10.9, 20.3], "파라과이": [-58, -23], "콜롬비아": [-74, 4], "멕시코": [-102, 23], "쿠바": [-79.5, 21.6]
+  "몬테네그로": [19.3, 42.7], "북마리아나 제도(미국령)": [145.7, 15.2], "과들루프(프랑스령)": [-61.55, 16.25], "모리타니": [-10.9, 20.3], "파라과이": [-58, -23], "콜롬비아": [-74, 4], "멕시코": [-102, 23], "쿠바": [-79.5, 21.6]
 };
 const regions = DATA.regions.filter(r => POS[r.name]);
 const countries = DATA.countries.filter(c => CPOS[c.name]);
@@ -145,29 +171,37 @@ const defs = svg.append("defs");
 const gl = defs.append("radialGradient").attr("id", "gloss").attr("cx", "30%").attr("cy", "25%").attr("r", "75%");
 gl.append("stop").attr("offset", "0%").attr("stop-color", "#fff").attr("stop-opacity", .5);
 gl.append("stop").attr("offset", "55%").attr("stop-color", "#fff").attr("stop-opacity", 0);
+const gWorld = svg.append("g").attr("class", "world");
 const proj = d3.geoNaturalEarth1().scale(210).translate([W / 2, H / 2 + 20]);
 const path = d3.geoPath(proj);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const color = d3.scaleLinear().domain([0.75, 1, 1.15]).clamp(true);
 function ringColor(v) { color.range([css("--down"), css("--mid"), css("--up")]); return color(v); }
+let zoom = null; // 국가를 눌러 확대한 상태 {name, k, cx, cy}
 const radR = r => 9 + 3.1 * Math.sqrt(r.n);
+const radP = p => 7 + 3.4 * Math.sqrt(p.n);
 const radC = c => 4.5 + 2.6 * Math.sqrt(c.n);
-const rad = e => view === "region" ? radR(e) : radC(e);
-const items = () => view === "region" ? regions : countries;
+const rad = e => zoom ? radP(e) : view === "region" ? radR(e) : radC(e);
+const placesOf = () => {
+  const c = countries.find(x => x.name === zoom.name);
+  return (c ? c.places : []).filter(p => p.lon != null).map(p => ({ ...p, sample: p.n >= 2, region: c.name }));
+};
+const items = () => zoom ? placesOf() : view === "region" ? regions : countries;
+const T = q => zoom ? [(q[0] - zoom.cx) * zoom.k + W / 2, (q[1] - zoom.cy) * zoom.k + H / 2] : q;
 const posOf = e => view === "region" ? POS[e.name] : CPOS[e.name];
 
 fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json").then(r => r.json()).then(topo => {
-  svg.append("path").datum(d3.geoGraticule10()).attr("d", path).attr("fill", "none").attr("stroke", "var(--grid)").attr("stroke-width", .8);
+  gWorld.append("path").datum(d3.geoGraticule10()).attr("d", path).attr("fill", "none").attr("stroke", "var(--grid)").attr("stroke-width", .8);
   const land = topojson.feature(topo, topo.objects.countries);
-  svg.append("g").selectAll("path").data(land.features.filter(f => f.id !== "010")).join("path").attr("d", path)
-    .attr("fill", "var(--land)").attr("stroke", "var(--land-line)").attr("stroke-width", .5);
+  gWorld.append("g").selectAll("path").data(land.features.filter(f => f.id !== "010")).join("path").attr("d", path)
+    .attr("fill", "var(--land)").attr("stroke", "var(--land-line)").attr("stroke-width", .5).attr("vector-effect", "non-scaling-stroke");
   refresh();
 }).catch(() => { refresh(); d3.select("#sub").append("span").text(" (지도 윤곽을 불러오지 못했습니다 — 인터넷 연결 확인)"); });
 
 // 충돌 회피 배치: 실제 위치(anchor)에서 시작해 서로 겹치지 않게 밀어낸다.
 let nodes = [];
 function layout() {
-  nodes = items().map(r => { const [x, y] = proj(posOf(r)); return { r, ax: x, ay: y, x, y, rad: rad(r) + (view === "region" ? 7 : 2) }; });
+  nodes = items().map(r => { const [x, y] = zoom ? T(proj([r.lon, r.lat])) : proj(posOf(r)); return { r, ax: x, ay: y, x, y, rad: rad(r) + (view === "region" && !zoom ? 7 : 2) }; });
   const sim = d3.forceSimulation(nodes)
     .force("x", d3.forceX(d => d.ax).strength(.12)).force("y", d3.forceY(d => d.ay).strength(.12))
     .force("c", d3.forceCollide(d => d.rad + 1.5).iterations(4)).stop();
@@ -190,7 +224,7 @@ function draw() {
   const arc = d3.arc(), pie = d3.pie().sort(null).value(d => d.v);
   p.each(function (d) {
     const r = d.r, ro = rad(r), gg = d3.select(this);
-    if (view === "region") {
+    if (view === "region" && !zoom) {
       const parts = [{ v: r.natureOnly, c: "--nat" }, { v: r.cultureOnly, c: "--cul" }, { v: r.both, c: "--both" }, { v: r.neither, c: "--none" }].filter(x => x.v > 0);
       gg.selectAll("path").data(pie(parts)).join("path").attr("d", a => arc.innerRadius(0).outerRadius(ro)(a)).attr("fill", a => `var(${a.data.c})`).attr("stroke", "var(--glass-line)").attr("stroke-width", 1);
       gg.append("circle").attr("r", ro).attr("fill", "url(#gloss)").attr("pointer-events", "none");
@@ -199,7 +233,7 @@ function draw() {
     } else {
       gg.append("circle").attr("r", ro).attr("fill", ringColor(r[mode])).attr("stroke", "#fff").attr("stroke-width", 1.5).attr("stroke-dasharray", r.sample ? null : "3 2");
       gg.append("circle").attr("r", ro).attr("fill", "url(#gloss)").attr("pointer-events", "none");
-      if (r.n >= 5 || selected === r.name) gg.append("text").attr("y", ro + 12).text(r.name);
+      if (zoom || r.n >= 5 || selected === r.name) gg.append("text").attr("y", ro + 12).text(r.name);
     }
   });
 }
@@ -209,14 +243,37 @@ function showTip(e, r) {
   const cs = (r.countries || []).slice(0, 5).map(c => `${c.name} ${c.n}건·${c.idxM.toFixed(2)}`).join("<br>");
   tip.innerHTML = `<b>${r.name}</b>${r.region ? ` <span style="opacity:.7">${r.region}</span>` : ""}<br>월보정지수 ${r.idxM.toFixed(2)} · 슬롯지수 ${r.idx.toFixed(2)}<br>방송 ${r.n}건 · 회차 ${r.episodes}편 · 평균 ${r.rating.toFixed(3)}%${r.sample ? "" : "<br>표본 적음(참고용)"}` +
     (places ? `<br><span style="opacity:.7">도시·장소(방송수·지수)</span><br>${places}` : "") +
+    (!zoom && view === "country" && (r.places || []).some(p => p.lon != null) ? `<br><span style="opacity:.7">누르면 도시별로 확대</span>` : "") +
     (cs ? `<br><span style="opacity:.7">주요 국가(방송수·지수)</span><br>${cs}` : "") +
     (r.themes && r.themes.length ? `<br><span style="opacity:.7">테마</span> ${chipsOf(r.themes)}` : "");
   tip.style.opacity = 1; tip.style.left = Math.min(innerWidth - 260, e.clientX + 14) + "px"; tip.style.top = Math.min(innerHeight - 220, e.clientY + 14) + "px";
 }
-function select(name) { selected = name; draw(); renderRank(); renderDetail(); }
+function select(name) {
+  if (view === "country" && !zoom) { zoomTo(name); return; }
+  selected = name; draw(); renderRank(); renderDetail();
+}
+function setBack(on) { document.getElementById("back").hidden = !on; }
+function zoomTo(name) {
+  const c = countries.find(x => x.name === name);
+  const pts = (c ? c.places.filter(p => p.lon != null) : []).map(p => proj([p.lon, p.lat]));
+  if (!pts.length) { selected = name; draw(); renderRank(); renderDetail(); return; }
+  pts.push(proj(CPOS[name]));
+  const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const k = Math.min(W * 0.78 / Math.max(x1 - x0, 60), H * 0.78 / Math.max(y1 - y0, 40), 14);
+  zoom = { name, k, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+  selected = null;
+  gWorld.transition().duration(650).attr("transform", `translate(${W / 2},${H / 2}) scale(${k}) translate(${-zoom.cx},${-zoom.cy})`);
+  setBack(true); layout(); draw(); renderRank(); renderDetail();
+}
+function zoomOut() {
+  zoom = null; selected = null;
+  gWorld.transition().duration(500).attr("transform", null);
+  setBack(false); refresh();
+}
 function renderRank() {
   const rs = [...items()].sort((a, b) => (b.sample - a.sample) || (b[mode] - a[mode])); // 표본 충분한 항목을 먼저, 참고용은 뒤로
-  document.getElementById("rankTitle").textContent = (view === "region" ? "권역" : "국가") + (mode === "idxM" ? " · 월보정지수" : " · 슬롯지수");
+  document.getElementById("rankTitle").textContent = (zoom ? zoom.name + " 도시·장소" : view === "region" ? "권역" : "국가") + (mode === "idxM" ? " · 월보정지수" : " · 슬롯지수");
   const ul = d3.select("#rank");
   ul.selectAll("li").remove();
   rs.forEach(r => {
@@ -228,8 +285,12 @@ function renderRank() {
 }
 function renderDetail() {
   const r = items().find(x => x.name === selected); const el = document.getElementById("detail");
-  if (!r) { el.textContent = "원이나 순위 항목을 누르세요."; return; }
+  if (!r) { el.textContent = zoom ? "도시·장소 원이나 순위 항목을 누르세요." : view === "country" ? "국가 원이나 순위 항목을 누르면 도시·장소별로 확대됩니다." : "원이나 순위 항목을 누르세요."; return; }
   const chip = (t) => `<span class="chip">${t}</span>`;
+  if (zoom) {
+    el.innerHTML = `<b>${r.name}</b> (${zoom.name}) — 방송 ${r.n}건, 회차 ${r.episodes}편, 평균 ${r.rating.toFixed(3)}%${r.sample ? "" : " (참고용)"}<br>월보정지수 <b>${r.idxM.toFixed(2)}</b> · 슬롯지수 <b>${r.idx.toFixed(2)}</b>`;
+    return;
+  }
   el.innerHTML = `<b>${r.name}</b> — 방송 ${r.n}건, 회차 ${r.episodes}편, 평균 ${r.rating.toFixed(3)}%${r.sample ? "" : " (참고용)"}<br>` +
     `월보정지수 <b>${r.idxM.toFixed(2)}</b> · 슬롯지수 <b>${r.idx.toFixed(2)}</b><br>` +
     (view === "region"
@@ -243,11 +304,13 @@ function setMode(m) {
   draw(); renderRank();
 }
 function setView(v) {
-  view = v; selected = null;
+  view = v; selected = null; zoom = null; setBack(false); gWorld.attr("transform", null);
   document.getElementById("vC").setAttribute("aria-pressed", v === "country"); document.getElementById("vR").setAttribute("aria-pressed", v === "region");
   document.getElementById("legPie").style.display = v === "region" ? "" : "none";
   refresh();
 }
+document.getElementById("back").onclick = zoomOut;
+addEventListener("keydown", e => { if (e.key === "Escape" && zoom) zoomOut(); });
 document.getElementById("mM").onclick = () => setMode("idxM");
 document.getElementById("mS").onclick = () => setMode("idx");
 document.getElementById("vC").onclick = () => setView("country");

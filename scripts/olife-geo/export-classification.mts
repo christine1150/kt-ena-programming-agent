@@ -30,3 +30,14 @@ for (let r = 3; r <= ws.rowCount; r++) {
 }
 writeFileSync("src/lib/beta/geoClassification.json", JSON.stringify(rows));
 console.log("내보냄:", rows.length, "편 → src/lib/beta/geoClassification.json");
+
+// 도시·장소 좌표표(places.txt: 이름|국가|경도|위도) → src/lib/beta/geoPlaces.json
+import { readFileSync } from "node:fs";
+const places: Record<string, [string, number, number][]> = {};
+for (const line of readFileSync("scripts/olife-geo/places.txt", "utf8").split(/\r?\n/)) {
+  if (!line.trim() || line.startsWith("#")) continue;
+  const [name, country, lon, lat] = line.split("|");
+  (places[name] ??= []).push([country, Number(lon), Number(lat)]);
+}
+writeFileSync("src/lib/beta/geoPlaces.json", JSON.stringify(places));
+console.log("내보냄: 장소", Object.keys(places).length, "곳 → src/lib/beta/geoPlaces.json");

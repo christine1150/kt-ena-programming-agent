@@ -7,6 +7,10 @@ import { supabase } from "@/lib/supabase";
 import { normalizeSubtitle } from "@/lib/olifeEpisodeParsing";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import classification from "./geoClassification.json";
+import geoPlaces from "./geoPlaces.json";
+
+// 도시·장소 좌표표(scripts/olife-geo/places.txt에서 내보냄): 이름 → [[나라, 경도, 위도], ...]
+const PLACES = geoPlaces as unknown as Record<string, [string, number, number][]>;
 
 type Cls = { no: number; ek: string; sk: string; region: string[]; countries: string[]; places: string[]; nature: string[]; culture: string[] };
 const CLS = classification as Cls[];
@@ -131,15 +135,30 @@ export async function buildGeoMapData(): Promise<GeoMapData> {
     };
   });
 
+  // 도시·장소를 나라에 귀속: 좌표표의 나라가 그 회차의 나라 목록에 있으면 그 나라, 없고 회차가 한 나라뿐이면 그 나라(좌표 없음),
+  // 여러 나라인데 못 정하면 버린다(예: 여러 나라를 도는 폭포 특집의 장소를 모든 나라에 붙이지 않는다).
+  const placeMap = new Map<string, { country: string; name: string; lon?: number; lat?: number; bcs: Bc[] }>();
+  for (const b of bcs) {
+    if (b.level !== "회차") continue;
+    const c = b.cls[0];
+    for (const pl of new Set(c.places)) {
+      const hit = PLACES[pl]?.find((e) => c.countries.includes(e[0]));
+      const country = hit ? hit[0] : c.countries.length === 1 ? c.countries[0] : null;
+      if (!country) continue;
+      const k = `${country}|${pl}`;
+      if (!placeMap.has(k)) placeMap.set(k, { country, name: pl, lon: hit?.[1], lat: hit?.[2], bcs: [] });
+      placeMap.get(k)!.bcs.push(b);
+    }
+  }
   const countries = [...countryGroups.entries()].map(([name, xs]) => {
-    const places = new Map<string, Bc[]>();
-    for (const b of xs) if (b.level === "회차") for (const pl of new Set(b.cls.flatMap((c) => (c.countries.includes(name) ? c.places : [])))) { if (!places.has(pl)) places.set(pl, []); places.get(pl)!.push(b); }
     const reg = new Map<string, number>();
     for (const b of xs) for (const c of b.cls) if (c.countries.includes(name)) for (const r of c.region) reg.set(r, (reg.get(r) ?? 0) + 1);
     return {
       ...base2(name, xs),
       region: [...reg.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? "",
-      places: [...places.entries()].map(([pn, pxs]) => ({ name: pn, n: pxs.length, idxM: mean(pxs.map((b) => b.idxM)) })).sort((x, y) => y.n - x.n).slice(0, 10),
+      places: [...placeMap.values()].filter((p) => p.country === name)
+        .map((p) => ({ name: p.name, n: p.bcs.length, idxM: mean(p.bcs.map((b) => b.idxM)), idx: mean(p.bcs.map((b) => b.idx)), rating: mean(p.bcs.map((b) => b.rating)), episodes: episodesOf(p.bcs), lon: p.lon, lat: p.lat }))
+        .sort((x, y) => y.n - x.n).slice(0, 40),
       themes: tally(xs, (c) => [...c.nature, ...c.culture]).slice(0, 4),
     };
   }).sort((x, y) => y.n - x.n);
