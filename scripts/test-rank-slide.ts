@@ -110,10 +110,7 @@ const competitors: CompetitorDay[] = [
   check("시간대별 변화 문장", /시간대별 시청률 변화는/.test(text));
   check("경쟁채널 변화 중앙값 문장(자사 채널 제외)", /등록 경쟁채널 6곳/.test(text) && !/ENA/.test(text.split("경쟁채널")[1] ?? ""));
   check("추월 채널이 있으면 이름과 시청률 변화 중앙값을 보임", /추월채널/.test(text) && /높은 곳이 1곳/.test(text));
-  check("추월 채널이 오르지 않았으면 자체 하락이 주된 이유로 보인다고 서술(단정 아님)", /주된 이유로 보입니다/.test(text));
-  check("스포츠 채널이 등록돼 있지 않으면 비교 못 했다고 알림", /스포츠\(야구\) 중계 채널은 등록 경쟁채널에 없어/.test(text));
-  const withSports = rankSlideOf({ channelCode: "ONCE", channelName: "ONCE", weeks: weeks2, airings, competitors, registeredCompetitorNames: ["SPOTV", "채널가"], ownChannelNames: ["ONCE"] });
-  check("스포츠 채널이 등록돼 있으면 그 안내를 쓰지 않음", !/스포츠\(야구\)/.test((withSports?.lines ?? []).join("\n")));
+  check("확정되지 않은 추정·미검증 안내 문구를 쓰지 않음(스포츠 채널 안내·원인 추정)", !/스포츠|야구|보입니다|것으로/.test(text));
 }
 
 // ── 3. 자료가 부족하면 있는 만큼만 ─────────────────────────

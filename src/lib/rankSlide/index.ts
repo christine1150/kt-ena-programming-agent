@@ -196,8 +196,6 @@ function competitorWeekMeans(rows: CompetitorDay[], weekStart: string): Map<stri
   return out;
 }
 
-const SPORTS_NAME = /SPOTV|SPORTS|스포츠|야구|골프|GOLF/i;
-
 export function rankSlideOf(i: {
   channelCode: string;
   channelName: string;
@@ -330,9 +328,7 @@ export function rankSlideOf(i: {
     if (passed.length > 0) {
       const medPassed = median(passed.map((n) => (cTo.get(n)! / cFrom.get(n)! - 1) * 100))!;
       parts.push(
-        `${name}보다 낮았다가 지금은 높은 곳이 ${passed.length}곳(${passed.slice(0, 3).join("·")}${passed.length > 3 ? " 등" : ""})인데 이들의 시청률 변화 중앙값은 ${fmtPct(medPassed)}입니다. ${
-          medPassed < 25 ? `주변 채널의 상승보다 ${name} 자신의 시청률 하락이 순위 하락의 주된 이유로 보입니다.` : `${name} 자신의 하락과 함께 주변 채널의 상승도 영향을 준 것으로 보입니다.`
-        }`
+        `${name}보다 낮았다가 지금은 높은 곳이 ${passed.length}곳(${passed.slice(0, 3).join("·")}${passed.length > 3 ? " 등" : ""})인데 이들의 시청률 변화 중앙값은 ${fmtPct(medPassed)}입니다.`
       );
     } else {
       parts.push(`${name}를 새로 앞선 등록 경쟁채널은 없습니다.`);
@@ -341,8 +337,6 @@ export function rankSlideOf(i: {
   const valid = i.weeks.filter((w) => w.rank !== null && w.rating !== null);
   const r = pearson(valid.map((w) => w.rating!), valid.map((w) => w.rank!));
   if (r !== null && r <= -0.8) parts.push(`최근 ${valid.length}주 동안 주간 순위는 자체 시청률과 거의 같이 움직였습니다(상관 ${r.toFixed(2).replace("-", "−")}).`);
-  // 경쟁채널 비교를 실제로 했을 때만 "스포츠 채널은 비교 대상이 아니었다"고 알린다
-  if (common.length >= 5 && !i.registeredCompetitorNames.some((n) => SPORTS_NAME.test(n))) parts.push("스포츠(야구) 중계 채널은 등록 경쟁채널에 없어 직접 비교하지 못했습니다.");
   if (parts.length > 0) lines.push(parts.join(" "));
 
   return { channelCode: code, channelName: name, fromWeek: from.weekStart, toWeek: to.weekStart, fromRank: from.rank!, toRank: to.rank!, drop, ratingPct, lines };
