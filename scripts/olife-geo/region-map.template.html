@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OLIFE 시청률 지도</title>
 <style>
+/* KT Flow 글꼴(앱의 public/ena-design/fonts). 앱 화면에서만 불러와지고, 내려받은 단독 HTML에서는 대체 글꼴로 보인다 */
+@font-face { font-family: "KT Flow"; src: url("/ena-design/fonts/KTFLOW-THIN.ttf") format("truetype"); font-weight: 100 399; font-display: swap; }
+@font-face { font-family: "KT Flow"; src: url("/ena-design/fonts/KTFLOW-MEDIUM.ttf") format("truetype"); font-weight: 400 599; font-display: swap; }
+@font-face { font-family: "KT Flow"; src: url("/ena-design/fonts/KTFLOW-BOLD.ttf") format("truetype"); font-weight: 600 749; font-display: swap; }
+@font-face { font-family: "KT Flow"; src: url("/ena-design/fonts/KTFLOW-BLACK.ttf") format("truetype"); font-weight: 750 900; font-display: swap; }
 :root {
   --bg1: #eaf5ff; --bg2: #f4edff; --bg3: #ffecf5;
   --card: rgba(255, 255, 255, .62); --card-line: rgba(255, 255, 255, .9);
@@ -27,7 +32,7 @@
 [hidden] { display: none !important; }
 html, body { overflow-x: clip; } /* 좌우 스크롤바 방지 */
 body {
-  margin: 0; color: var(--ink); font-family: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  margin: 0; color: var(--ink); font-family: "KT Flow", "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
   background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 48%, var(--bg3) 100%); min-height: 100vh;
 }
 .wrap { max-width: 1440px; margin: 0 auto; padding: 22px 16px 36px; }
