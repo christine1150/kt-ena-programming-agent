@@ -82,6 +82,31 @@ h2 .ref { font-size: 11px; font-weight: 600; color: var(--sub); }
 .ramp { width: 110px; height: 8px; border-radius: 999px; background: linear-gradient(90deg, var(--down), var(--mid), var(--up)); display: inline-block; vertical-align: middle; margin: 0 4px; }
 .hint { font-size: 11px; color: var(--sub); margin: 0 0 8px; }
 
+/* 지도 컨트롤(확대·축소·처음으로)과 현재 위치 표시 */
+.mapbox { position: relative; }
+#map { touch-action: pan-y; }
+#map.zoomed { cursor: grab; }
+#map.zoomed:active { cursor: grabbing; }
+.mapctl { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 4px; padding: 4px; border-radius: 16px; }
+.mapctl button { width: 40px; height: 40px; border: 0; border-radius: 12px; font: inherit; font-size: 20px; font-weight: 700; line-height: 1; color: var(--purple); background: rgba(255, 255, 255, .85); cursor: pointer; box-shadow: 0 2px 8px rgba(150, 110, 220, .18); }
+.mapctl button:hover:not(:disabled) { background: #fff; transform: translateY(-1px); }
+.mapctl button:disabled { opacity: .35; cursor: default; }
+.crumb { position: absolute; top: 12px; left: 12px; display: flex; align-items: center; gap: 10px; padding: 4px 14px 4px 4px; border-radius: 999px; font-weight: 700; }
+.crumb button { border: 0; font: inherit; font-weight: 700; color: #fff; padding: 7px 14px; border-radius: 999px; cursor: pointer; background: linear-gradient(90deg, var(--purple), var(--pink)); box-shadow: 0 4px 12px rgba(244, 103, 173, .3); }
+button:focus-visible, .term:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+kbd { font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--track); color: var(--ink); }
+@media (max-width: 700px) { .mapctl button { width: 44px; height: 44px; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mapctl button { background: rgba(120, 110, 200, .35); color: var(--ink); } }
+
+/* 용어 설명 */
+.term { cursor: help; }
+.seg button.term::after { content: "ⓘ"; font-size: 11px; margin-left: 4px; opacity: .55; }
+span.term { border-bottom: 1.5px dotted var(--purple); }
+#termTip { position: fixed; z-index: 6; pointer-events: none; max-width: 300px; opacity: 0; transition: opacity .1s; padding: 10px 14px; border-radius: 14px; font-size: 12.5px; line-height: 1.6; color: var(--ink);
+  background: rgba(255, 255, 255, .95); border: 1px solid rgba(255, 255, 255, .95); box-shadow: 0 14px 36px rgba(120, 80, 200, .25); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #termTip { background: rgba(40, 36, 80, .96); border-color: rgba(255, 255, 255, .15); } }
+@media (min-width: 1500px) { #termTip { font-size: 15px; max-width: 360px; } .mapctl button { width: 48px; height: 48px; font-size: 22px; } }
+
 /* 지도 위 유리 구슬 */
 .pie { cursor: pointer; transition: opacity .15s; }
 .pie.dim { opacity: .14 !important; }
@@ -91,7 +116,7 @@ h2 .ref { font-size: 11px; font-weight: 600; color: var(--sub); }
 .lead { stroke: var(--sub); stroke-width: 1; opacity: .4; }
 
 /* 툴팁: 밝은 유리 */
-#tip { position: fixed; pointer-events: none; max-width: 420px; background: rgba(255, 255, 255, .86); color: var(--ink); border: 1px solid rgba(255, 255, 255, .95); box-shadow: 0 14px 36px rgba(120, 80, 200, .25);
+#tip { position: fixed; pointer-events: none; max-width: 420px; background: rgba(255, 255, 255, .94); color: var(--ink); border: 1px solid rgba(255, 255, 255, .95); box-shadow: 0 14px 36px rgba(120, 80, 200, .25);
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); padding: 10px 14px; border-radius: 16px; font-size: 13px; line-height: 1.5; opacity: 0; transition: opacity .1s; z-index: 5; }
 #tip .h { font-size: 11px; color: var(--sub); margin-top: 6px; }
 #tip .e { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: baseline; }
@@ -178,9 +203,8 @@ h2 .ref { font-size: 11px; font-weight: 600; color: var(--sub); }
     <span>보기</span>
     <span class="seg" role="group" aria-label="보기 단위"><button data-view="country" aria-pressed="true">국가</button><button data-view="region" aria-pressed="false">권역(파이)</button></span>
     <span>기준</span>
-    <span class="seg" role="group" aria-label="순위·색 기준"><button data-mode="r" aria-pressed="true">시청률</button><button data-mode="m" aria-pressed="false">월보정지수</button><button data-mode="i" aria-pressed="false">슬롯지수</button></span>
+    <span class="seg" role="group" aria-label="순위·색 기준"><button data-mode="r" aria-pressed="true" class="term" data-term="r">시청률</button><button data-mode="m" aria-pressed="false" class="term" data-term="m">월보정지수</button><button data-mode="i" aria-pressed="false" class="term" data-term="i">슬롯지수</button></span>
     <button id="themeOn" class="pill" hidden></button>
-    <button id="back" class="pill ghost" hidden>← 세계지도로</button>
   </div>
 
   <div class="kpis">
@@ -192,14 +216,23 @@ h2 .ref { font-size: 11px; font-weight: 600; color: var(--sub); }
 
   <div class="grid">
     <div class="col">
-      <div class="card glass">
-        <p class="hint">원에 마우스를 올리면 그 나라에서 잘 나온 회차가 뜨고, 국가 원을 누르면 도시·장소별로 확대됩니다(ESC로 돌아가기).</p>
-        <svg id="map" role="img" aria-label="세계지도 위 국가별 시청률 원"></svg>
+      <div class="card glass mapcard">
+        <p class="hint">원에 마우스를 올리면 그 나라에서 잘 나온 회차가 뜹니다. 국가 원을 누르면 도시·장소별로 확대 · <kbd>휠</kbd> 확대/축소 · 드래그로 이동 · <kbd>ESC</kbd> 또는 ⌂ 로 세계지도 복귀</p>
+        <div class="mapbox">
+          <svg id="map" role="img" aria-label="세계지도 위 국가별 시청률 원"></svg>
+          <div class="crumb glass" id="crumb" hidden><button id="crumbHome" title="세계지도로 돌아가기 (ESC)">← 세계지도</button><span id="crumbNow"></span></div>
+          <div class="mapctl glass" role="group" aria-label="지도 확대·축소">
+            <button id="zin" title="확대 (+)" aria-label="확대">+</button>
+            <button id="zout" title="축소 (−)" aria-label="축소">−</button>
+            <button id="zhome" title="세계지도로 돌아가기 (ESC)" aria-label="세계지도로 돌아가기" disabled>⌂</button>
+          </div>
+        </div>
         <div class="legend">
           <span>원 크기 = 방송 수</span>
           <span>색: 낮음<span class="ramp"></span>높음 <span id="legMode"></span></span>
           <span id="legPie"><i class="sw" style="background:var(--nat)"></i>자연 테마만 <i class="sw" style="background:var(--cul)"></i>문화 테마만 <i class="sw" style="background:var(--both)"></i>둘 다 <i class="sw" style="background:var(--none)"></i>분류 없음</span>
-          <span>점선·흐린 원 = 표본 적음(참고용)</span>
+          <span><span class="term" tabindex="0" data-term="s">점선·흐린 원 = 표본 적음(참고용)</span></span>
+          <span id="legApprox">점선 테두리 원(장소 위치 미확인) = 나라 중앙에 표시</span>
         </div>
       </div>
       <div class="card glass">
@@ -218,12 +251,13 @@ h2 .ref { font-size: 11px; font-weight: 600; color: var(--sub); }
       <div class="card glass">
         <h2>순위 <span class="ref" id="rankTitle"></span></h2>
         <ul class="rank" id="rank"></ul>
-        <p class="note">괄호 안은 지수입니다. 지수는 같은 프로그램·요일·시간대(월보정은 같은 달까지) 평균 대비 비율이라, 편성 자리 차이를 걷어낸 비교입니다. 2026-07 이후 부제가 분류와 맞은 방송만 집계했습니다.</p>
+        <p class="note">괄호 안은 <span class="term" tabindex="0" data-term="m">월보정지수</span>·<span class="term" tabindex="0" data-term="i">슬롯지수</span>입니다(용어에 마우스를 올리면 설명). 지수는 같은 프로그램·요일·시간대(월보정은 같은 달까지) 평균 대비 비율이라, 편성 자리 차이를 걷어낸 비교입니다. 2026-07 이후 부제가 분류와 맞은 방송만 집계했습니다.</p>
       </div>
     </div>
   </div>
 </div>
 <div id="tip"></div>
+<div id="termTip" role="tooltip"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
 <script>
@@ -279,10 +313,19 @@ const regionsAgg = () => groupBy(filtered(), b => b.rg).filter(([n]) => POS[n]).
   const nat = l.filter(b => b.nat.length).length, cul = l.filter(b => b.cul.length).length, both = l.filter(b => b.nat.length && b.cul.length).length;
   return stat(n, l, { natureOnly: nat - both, cultureOnly: cul - both, both, neither: l.length - (nat + cul - both) });
 });
+// 도시·장소: 좌표를 모르는 장소는 나라 중앙에 두고(approx), 장소가 하나도 특정되지 않은 방송은 '(장소 미특정)' 한 덩어리로 묶는다.
+const NOPLACE = "(장소 미특정)";
+const placesOf = b => b.pl.filter(p => p[1] === zoom.name);
 function placesAgg() {
-  const m = new Map();
-  for (const b of filtered()) for (const [n, c, lon, lat] of b.pl) if (c === zoom.name && lon != null) { if (!m.has(n)) m.set(n, { lon, lat, l: [] }); m.get(n).l.push(b); }
-  return [...m].map(([n, o]) => ({ ...stat(n, o.l), lon: o.lon, lat: o.lat, sample: o.l.length >= 2 }));
+  const m = new Map(), none = [], c0 = CPOS[zoom.name];
+  for (const b of filtered()) {
+    if (!b.cs.includes(zoom.name)) continue;
+    const ps = placesOf(b);
+    if (!ps.length) { none.push(b); continue; }
+    for (const [n, , lon, lat] of ps) { if (!m.has(n)) m.set(n, { lon: lon ?? c0[0], lat: lat ?? c0[1], approx: lon == null, l: [] }); m.get(n).l.push(b); }
+  }
+  if (none.length) m.set(NOPLACE, { lon: c0[0], lat: c0[1], approx: true, l: none });
+  return [...m].map(([n, o]) => ({ ...stat(n, o.l), lon: o.lon, lat: o.lat, approx: o.approx, sample: o.l.length >= 2 }));
 }
 const themesAgg = () => groupBy(progList(), b => [...b.nat.map(t => "N|" + t), ...b.cul.map(t => "C|" + t)]).map(([k, l]) => stat(k.slice(2), l, { kind: k[0] }));
 function episodesAgg(list) {
@@ -295,7 +338,7 @@ function episodesAgg(list) {
 function focusList() {
   let l = filtered();
   if (zoom) l = l.filter(b => b.cs.includes(zoom.name));
-  if (focus && focus.type === "place") l = l.filter(b => b.pl.some(p => p[0] === focus.name && p[1] === zoom.name));
+  if (focus && focus.type === "place") l = l.filter(b => focus.name === NOPLACE ? !placesOf(b).length : b.pl.some(p => p[0] === focus.name && p[1] === zoom.name));
   if (focus && focus.type === "region") l = l.filter(b => b.rg.includes(focus.name));
   return l;
 }
@@ -341,7 +384,7 @@ const radR = r => 9 + 3.1 * Math.sqrt(r.n);
 const radP = p => 7 + 3.4 * Math.sqrt(p.n);
 const radC = c => 4.5 + 2.6 * Math.sqrt(c.n);
 const rad = e => zoom ? radP(e) : view === "region" ? radR(e) : radC(e);
-const T = q => zoom ? [(q[0] - zoom.cx) * zoom.k + W / 2, (q[1] - zoom.cy) * zoom.k + CY] : q;
+let tf = d3.zoomIdentity; // 지도 확대·이동 상태(휠·드래그·버튼·국가 확대 모두 이 하나로 합친다)
 const posOf = e => view === "region" ? POS[e.name] : CPOS[e.name];
 
 fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json").then(r => r.json()).then(topo => {
@@ -355,11 +398,12 @@ fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json").then
 // 충돌 회피 배치: 실제 위치(anchor)에서 시작해 서로 겹치지 않게 밀어낸다.
 let nodes = [];
 function layout() {
-  nodes = ITEMS.map(r => { const [x, y] = zoom ? T(proj([r.lon, r.lat])) : proj(posOf(r)); return { r, ax: x, ay: y, x, y, rad: rad(r) + (view === "region" && !zoom ? 7 : 2) }; });
+  nodes = ITEMS.map(r => { const [x, y] = tf.apply(proj(zoom ? [r.lon, r.lat] : posOf(r))); return { r, ax: x, ay: y, x, y, rad: rad(r) + (view === "region" && !zoom ? 7 : 2) }; })
+    .filter(n => n.ax > -30 && n.ax < W + 30 && n.ay > Y0 - 30 && n.ay < Y1 + 30); // 화면 밖 원은 그리지 않는다
   const sim = d3.forceSimulation(nodes)
     .force("x", d3.forceX(d => d.ax).strength(.12)).force("y", d3.forceY(d => d.ay).strength(.12))
     .force("c", d3.forceCollide(d => d.rad + 1.5).iterations(4)).stop();
-  for (let i = 0; i < 400; i++) sim.tick();
+  for (let i = 0; i < 300; i++) sim.tick();
   nodes.forEach(n => { n.x = Math.max(n.rad, Math.min(W - n.rad, n.x)); n.y = Math.max(Y0 + n.rad, Math.min(Y1 - n.rad, n.y)); });
 }
 
@@ -386,7 +430,7 @@ function draw() {
       gg.append("circle").attr("class", "ring").attr("r", ro + 3.5).attr("stroke", c).attr("stroke-dasharray", r.sample ? null : "3 3");
       gg.append("text").attr("y", ro + 18).text(`${r.name} ${pct(r.r)}`);
     } else {
-      gg.append("circle").attr("r", ro).attr("fill", c).attr("fill-opacity", .66).attr("stroke", "rgba(255,255,255,.95)").attr("stroke-width", 1.6).attr("stroke-dasharray", r.sample ? null : "3 2");
+      gg.append("circle").attr("r", ro).attr("fill", c).attr("fill-opacity", .66).attr("stroke", "rgba(255,255,255,.95)").attr("stroke-width", 1.6).attr("stroke-dasharray", r.sample && !r.approx ? null : "3 2");
       gg.append("circle").attr("r", ro).attr("fill", "url(#shine)").attr("pointer-events", "none");
       if (selName() === r.name) gg.append("circle").attr("class", "ring").attr("r", ro + 3).attr("stroke", css("--pink"));
       if (zoom || r.n >= 5 || selName() === r.name) gg.append("text").attr("y", ro + 12).text(r.name);
@@ -407,7 +451,8 @@ function showTip(e, r) {
     (view === "region" && !zoom ? `<br><span class="ref">자연만 ${r.natureOnly} · 문화만 ${r.cultureOnly} · 둘 다 ${r.both} · 분류 없음 ${r.neither}</span>` : "") +
     `<div class="h">잘 나온 회차 (${mode === "r" ? "시청률" : idxName() + "지수"} 순 · 괄호 ${idxName()}지수)</div>${epLines(r.list, 6)}` +
     (eps > 6 ? `<div class="h">외 ${eps - 6}편 — 누르면 아래 '잘 나온 회차'에 전부</div>` : "") +
-    (!zoom && view === "country" && r.list.some(b => b.pl.some(p => p[1] === r.name && p[2] != null)) ? `<div class="h">누르면 도시·장소별로 확대</div>` : "");
+    (zoom && r.approx ? `<div class="h">정확한 위치를 아직 모릅니다 — ${esc(zoom.name)} 중앙에 표시</div>` : "") +
+    (!zoom && view === "country" ? `<div class="h">누르면 도시·장소별로 확대</div>` : "");
   tip.style.opacity = 1;
   const w = tip.offsetWidth, h = tip.offsetHeight;
   tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, e.clientX + 16)) + "px";
@@ -417,26 +462,47 @@ function showTip(e, r) {
 function select(name) {
   if (view === "country" && !zoom) { zoomTo(name); return; }
   focus = focus && focus.name === name ? null : { type: zoom ? "place" : "region", name };
-  draw(); renderRank(); renderEpisodes();
+  draw(); renderRank(); renderEpisodes(); syncCtl();
+}
+// ── 확대·이동: d3.zoom 하나로 휠·드래그·버튼·국가 확대를 처리한다(원 크기는 화면 기준 그대로, 위치만 변환) ──
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const EXT = [[0, Y0], [W, Y1]];
+const zb = d3.zoom().scaleExtent([1, 14]).extent(EXT).translateExtent(EXT).clickDistance(4)
+  // 휠: 확대 중이거나 위로 굴릴 때(확대)만 지도가 가로챈다 — 세계 전체 보기에서 아래로 굴리면 페이지가 그대로 스크롤된다. Ctrl/⌘+휠·핀치는 항상 지도.
+  .filter(e => e.type === "wheel" ? (e.ctrlKey || e.metaKey || e.deltaY < 0 || tf.k > 1.01) : (!e.button && e.type !== "dblclick"))
+  .on("start", () => { tip.style.opacity = 0; })
+  .on("zoom", e => { tf = e.transform; gWorld.attr("transform", tf); syncCtl(); scheduleDraw(); })
+  .on("end", () => { // 휠로 충분히 축소하면 국가 확대 상태도 자연스럽게 풀린다
+    if (zoom && zoom.k0 > 1.3 && tf.k < zoom.k0 * 0.55) { zoom = null; focus = null; refresh(); }
+  });
+svg.call(zb).on("dblclick.zoom", null);
+let drawQ = 0;
+function scheduleDraw() { if (!drawQ) drawQ = requestAnimationFrame(() => { drawQ = 0; layout(); draw(); }); }
+const go = (t, ms = 650) => svg.transition().duration(reduceMotion ? 0 : ms).call(zb.transform, zb.constrain()(t, EXT, EXT));
+const fit = (k, cx, cy) => d3.zoomIdentity.translate(W / 2 - k * cx, CY - k * cy).scale(k);
+function syncCtl() {
+  const zoomed = !!zoom || tf.k > 1.01;
+  document.getElementById("crumb").hidden = !zoomed;
+  document.getElementById("crumbNow").textContent = zoom ? zoom.name + (focus ? " › " + focus.name : "") : "확대 중";
+  document.getElementById("zhome").disabled = !zoomed;
+  document.getElementById("zin").disabled = tf.k >= 13.9;
+  document.getElementById("zout").disabled = tf.k <= 1.01;
+  svg.classed("zoomed", tf.k > 1.01);
 }
 function zoomTo(name) {
-  zoom = { name, k: 1, cx: W / 2, cy: CY };
-  const pl = placesAgg();
-  const pts = pl.map(p => proj([p.lon, p.lat]));
+  zoom = { name, k0: 1 };
+  const pts = placesAgg().filter(p => !p.approx).map(p => proj([p.lon, p.lat]));
   pts.push(proj(CPOS[name]));
   const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-  zoom.k = Math.min(W * 0.78 / Math.max(x1 - x0, 60), H * 0.78 / Math.max(y1 - y0, 40), 14);
-  zoom.cx = (x0 + x1) / 2; zoom.cy = (y0 + y1) / 2;
-  focus = null;
-  gWorld.transition().duration(650).attr("transform", `translate(${W / 2},${CY}) scale(${zoom.k}) translate(${-zoom.cx},${-zoom.cy})`);
-  document.getElementById("back").hidden = false;
+  const k = Math.max(1, Math.min(W * 0.78 / Math.max(x1 - x0, 60), H * 0.78 / Math.max(y1 - y0, 40), 9));
+  zoom.k0 = k; focus = null;
+  go(fit(k, (x0 + x1) / 2, (y0 + y1) / 2));
   refresh();
 }
-function zoomOut() {
+function zoomOut() { // 세계지도로(국가 선택·확대·이동 모두 처음 상태로)
   zoom = null; focus = null;
-  gWorld.transition().duration(500).attr("transform", null);
-  document.getElementById("back").hidden = true;
+  go(d3.zoomIdentity, 500);
   refresh();
 }
 
@@ -463,7 +529,7 @@ function renderEpisodes() {
   const ul = d3.select("#eps"); ul.selectAll("li").remove();
   es.slice(0, 60).forEach((e, n) => {
     const li = ul.append("li")
-      .on("mouseenter", () => highlight(new Set(zoom ? e.list.flatMap(b => b.pl.filter(p => p[1] === zoom.name).map(p => p[0])) : view === "region" ? e.list.flatMap(b => b.rg) : e.cs)))
+      .on("mouseenter", () => highlight(new Set(zoom ? e.list.flatMap(b => { const ps = placesOf(b); return ps.length ? ps.map(p => p[0]) : [NOPLACE]; }) : view === "region" ? e.list.flatMap(b => b.rg) : e.cs)))
       .on("mouseleave", () => highlight(null));
     li.append("span").attr("class", "no").text(n + 1);
     li.append("span").html(`<span class="prog ${e.p}">${esc(epLabel(e))}</span>`);
@@ -505,7 +571,7 @@ function setTheme(t) {
 }
 function refresh() {
   ITEMS = items(); setScale(); maxR = Math.max(...ITEMS.map(x => x.r), 1e-9);
-  layout(); draw(); renderRank(); renderEpisodes(); renderKpis(); renderThemes();
+  layout(); draw(); renderRank(); renderEpisodes(); renderKpis(); renderThemes(); syncCtl();
   document.getElementById("legMode").textContent = mode === "r" ? "(시청률 상·하위 10% 기준)" : "(1.0 = 같은 자리 평균)";
   document.getElementById("legPie").style.display = view === "region" && !zoom ? "" : "none";
 }
@@ -515,9 +581,11 @@ function press(attr, v) { document.querySelectorAll(`[data-${attr}]`).forEach(b 
 document.querySelectorAll("[data-prog]").forEach(b => b.onclick = () => { prog = b.dataset.prog; press("prog", prog); focus = null; refresh(); });
 document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { mode = b.dataset.mode; press("mode", mode); refresh(); });
 document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => {
-  view = b.dataset.view; press("view", view); zoom = null; focus = null; gWorld.attr("transform", null); document.getElementById("back").hidden = true; refresh();
+  view = b.dataset.view; press("view", view); zoom = null; focus = null; svg.interrupt().call(zb.transform, d3.zoomIdentity); refresh();
 });
-document.getElementById("back").onclick = zoomOut;
+for (const [id, fn] of [["crumbHome", zoomOut], ["zhome", zoomOut],
+  ["zin", () => svg.transition().duration(reduceMotion ? 0 : 250).call(zb.scaleBy, 1.7)],
+  ["zout", () => svg.transition().duration(reduceMotion ? 0 : 250).call(zb.scaleBy, 1 / 1.7)]]) document.getElementById(id).onclick = fn;
 document.getElementById("themeOn").onclick = () => setTheme(null);
 document.getElementById("q").addEventListener("input", renderThemes);
 document.getElementById("q").addEventListener("keydown", e => {
@@ -525,7 +593,33 @@ document.getElementById("q").addEventListener("keydown", e => {
   const q = e.target.value.trim(); const t = themesAgg().filter(t => q && t.name.includes(q)).sort(byMode)[0];
   if (t) setTheme(t.name);
 });
-addEventListener("keydown", e => { if (e.key === "Escape" && zoom) zoomOut(); });
+addEventListener("keydown", e => {
+  if (e.target.closest && e.target.closest("input, select, textarea")) return; // 검색창 등에서 입력 중이면 지도 단축키를 쓰지 않는다
+  const zoomed = zoom || tf.k > 1.01;
+  if ((e.key === "Escape" || e.key === "Home" || e.key === "0") && zoomed) zoomOut();
+  else if (e.key === "+" || e.key === "=") document.getElementById("zin").click();
+  else if (e.key === "-" || e.key === "_") document.getElementById("zout").click();
+});
+
+// ── 용어 설명: 마우스를 올리거나 키보드로 포커스하면 뜬다 ──
+const TERMS = {
+  r: ["시청률", "선택한 타깃(가구·2049 등)의 닐슨 시청률. 편성 요일·시간대에 따라 크게 달라지므로, 자리 차이까지 걷어낸 비교는 아래 지수를 보세요."],
+  i: ["슬롯지수", "그 방송 시청률 ÷ 같은 프로그램·같은 요일·같은 시간대 방송들의 평균. 1.0 = 그 자리 평균, 1.15 = 평균보다 15% 높음."],
+  m: ["월보정지수", "슬롯지수와 같지만 비교 평균을 같은 달 방송으로 한정한 값. 계절·시기 영향까지 걷어내 '이 회차 자체가 잘 나왔는지' 보는 데 좋습니다. 1.0 = 평균."],
+  s: ["표본 적음", "방송이 3건 미만이거나 서로 다른 회차가 2편 미만(장소는 방송 2건 미만)이면 우연일 수 있어 흐리게 그리고 순위에서 뒤로 보냅니다."],
+};
+const tt = document.getElementById("termTip");
+function showTerm(el) {
+  const d = TERMS[el.dataset.term]; if (!d) return;
+  tt.innerHTML = `<b>${d[0]}</b><br>${d[1]}`; tt.style.opacity = 1;
+  const r = el.getBoundingClientRect(), w = tt.offsetWidth, h = tt.offsetHeight;
+  tt.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + "px";
+  tt.style.top = (r.bottom + 8 + h > innerHeight ? Math.max(8, r.top - h - 8) : r.bottom + 8) + "px";
+}
+const hideTerm = () => { tt.style.opacity = 0; };
+document.addEventListener("mouseover", e => { const el = e.target.closest && e.target.closest(".term"); el ? showTerm(el) : hideTerm(); });
+document.addEventListener("focusin", e => { const el = e.target.closest && e.target.closest(".term"); el ? showTerm(el) : hideTerm(); });
+document.addEventListener("focusout", hideTerm);
 addEventListener("scroll", () => { tip.style.opacity = 0; }, true);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", refresh);
 
