@@ -6,18 +6,18 @@
 <title>권역별 시청률 지도</title>
 <style>
 :root {
-  --bg1: #fbfbff; --bg2: #f3f1ff; --grid: rgba(60, 64, 110, .10);
+  --bg1: #ffffff; --bg2: #ffffff; --grid: rgba(60, 64, 110, .10);
   --glass: rgba(255, 255, 255, .42); --glass-line: rgba(255, 255, 255, .75); --shadow: 0 18px 50px rgba(120, 100, 200, .16), inset 0 1px 0 rgba(255, 255, 255, .9);
   --ink: #12142b; --sub: #5a5f7d; --line: rgba(110, 112, 170, .22);
   --land: rgba(255, 255, 255, .62); --land-line: rgba(160, 150, 230, .45);
-  --nat: #22b3c8; --cul: #7b69ef; --both: #4f8cf0; --none: #d3d8e8;
-  --up: #4536c8; --mid: #dde1f0; --down: #f08a63; --accent: #6a58ea; --accent2: #2bbcd0;
+  --nat: #2fd6b4; --cul: #8b6cf0; --both: #f472b6; --none: #d9dbea;
+  --up: #7a4fe8; --mid: #d9d3f3; --down: #f06cb2; --accent: #8b6cf0; --accent2: #2fd6b4;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg1: #0f1224; --bg2: #1a1740; --grid: rgba(180, 185, 255, .08);
     --glass: rgba(34, 38, 74, .45); --glass-line: rgba(255, 255, 255, .16); --shadow: 0 18px 50px rgba(0, 0, 0, .4), inset 0 1px 0 rgba(255, 255, 255, .12);
-    --ink: #eef0ff; --sub: #a3a8cc; --line: rgba(160, 165, 230, .22); --land: rgba(52, 58, 100, .9); --land-line: #1c2040; --none: #4a5074; --mid: #4a5074; --up: #8f84ff;
+    --ink: #eef0ff; --sub: #a3a8cc; --line: rgba(160, 165, 230, .22); --land: rgba(52, 58, 100, .9); --land-line: #1c2040; --none: #4a5074; --mid: #4a5074; --up: #a58bff; --down: #f27ab8;
   }
 }
 * { box-sizing: border-box; }
@@ -27,15 +27,6 @@ html, body { overflow-x: clip; } /* 좌우 스크롤바 방지 */
 body {
   margin: 0; color: var(--ink); font-family: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
   background: linear-gradient(160deg, var(--bg1), var(--bg2)); min-height: 100vh;
-}
-/* 글래스모피즘: 카드 뒤에 깔리는 흐린 색 덩이(분홍·하늘·보라). 카드의 backdrop-filter가 이를 비춰 유리처럼 보이게 한다 */
-body::before {
-  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background:
-    radial-gradient(closest-side, rgba(249, 108, 196, .55), transparent) -6vw 8vh / 46vw 46vw no-repeat,
-    radial-gradient(closest-side, rgba(34, 224, 245, .55), transparent) 78vw 38vh / 48vw 48vw no-repeat,
-    radial-gradient(closest-side, rgba(168, 133, 255, .55), transparent) 22vw 78vh / 44vw 44vw no-repeat;
-  filter: blur(28px);
 }
 .wrap { max-width: 1320px; margin: 0 auto; padding: 24px 16px 36px; }
 h1 { font-size: 24px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 4px; }
