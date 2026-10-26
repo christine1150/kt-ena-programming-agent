@@ -148,8 +148,8 @@ function entsOf(c: Cls[], level: "회차" | "기획"): Ent[] {
   const out = new Set<string>();
   const add = (dim: string, xs: string[]) => xs.forEach((x) => out.add(`${dim}\t${x}`));
   const uniq = (f: (c: Cls) => string[]) => [...new Set(c.flatMap(f))];
-  add("대륙", uniq((x) => [x.continent]));
-  add("권역", uniq((x) => [x.region]));
+  add("대륙", uniq((x) => split(x.continent)));
+  add("권역", uniq((x) => split(x.region)));
   add("국가", uniq((x) => x.countries));
   // 도시·장소는 회차 단위 매칭에서만 신뢰(기획 단위는 여러 장소가 섞임)
   if (level === "회차") add("도시·장소", uniq((x) => x.places));
@@ -277,3 +277,29 @@ const show = (dim: string, n = 6) => {
 console.log("\n[월]"); console.log(slotTable((b) => b.ym, MONTHS, "월"));
 console.log("\n[요일]"); console.log(slotTable((b) => b.wd, WD, "요일"));
 console.log("\n[시간대]"); console.log(slotTable((b) => b.band, BANDS, "시간대"));
+
+// ── 지도 HTML용 JSON (권역별 요약) ──
+const regionData = allAgg.filter((a) => a.dim === "권역").map((a) => {
+  const cnt = (f: (c: Cls) => string[]) => { const m = new Map<string, number>(); for (const b of a.bcs) for (const t of new Set(b.cls.flatMap(f))) m.set(t, (m.get(t) ?? 0) + 1); return [...m.entries()].sort((x, y) => y[1] - x[1]); };
+  const nat = a.bcs.filter((b) => b.cls.some((c) => c.nature.length)).length;
+  const cul = a.bcs.filter((b) => b.cls.some((c) => c.culture.length)).length;
+  const both = a.bcs.filter((b) => b.cls.some((c) => c.nature.length) && b.cls.some((c) => c.culture.length)).length;
+  const countries = allAgg.filter((x) => x.dim === "국가").filter((x) => x.bcs.some((b) => a.bcs.includes(b)))
+    .map((x) => { const inR = x.bcs.filter((b) => a.bcs.includes(b)); return { name: x.name, n: inR.length, idxM: mean(inR.map((b) => b.idxM)), rating: mean(inR.map((b) => b.rating)) }; })
+    .sort((x, y) => y.n - x.n).slice(0, 8);
+  return {
+    name: a.name, n: a.bcs.length, episodes: episodes(a), rating: mean(a.bcs.map((b) => b.rating)),
+    idx: mean(a.bcs.map((b) => b.idx)), idxM: mean(a.bcs.map((b) => b.idxM)), sample: a.bcs.length >= MIN_N && episodes(a) >= 2,
+    natureOnly: nat - both, cultureOnly: cul - both, both, neither: a.bcs.length - (nat + cul - both),
+    topNature: cnt((c) => c.nature).slice(0, 3), topCulture: cnt((c) => c.culture).slice(0, 3), countries,
+  };
+});
+const fsx = await import("node:fs");
+fsx.writeFileSync("docs/olife-geo/region-map-data.json", JSON.stringify({ period: `${START} ~ ${airs[airs.length - 1]?.date}`, target: label, overallRating, regions: regionData }));
+console.log("권역", regionData.map((r) => `${r.name}(${r.n})`).join(", "));
+
+// 지도 HTML 생성: 템플릿의 __DATA__ 자리에 위 JSON을 그대로 넣는다(단일 파일, 서버 불필요)
+const tpl = fsx.readFileSync("scripts/olife-geo/region-map.template.html", "utf8");
+const json = fsx.readFileSync("docs/olife-geo/region-map-data.json", "utf8").replace(/</g, "\u003c");
+fsx.writeFileSync("docs/olife-geo/권역별_시청률_지도.html", tpl.replace("__DATA__", () => json));
+console.log("지도 HTML: docs/olife-geo/권역별_시청률_지도.html");
