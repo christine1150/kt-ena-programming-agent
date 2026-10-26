@@ -24,7 +24,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
 .wrap { max-width: 1320px; margin: 0 auto; padding: 20px 16px 32px; }
-h1 { font-size: 20px; margin: 0 0 4px; }
+h1 { font-size: 24px; margin: 0 0 4px; }
 .sub { color: var(--sub); font-size: 13px; margin: 0 0 14px; line-height: 1.5; }
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; }
 @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
@@ -34,7 +34,7 @@ h1 { font-size: 20px; margin: 0 0 4px; }
 .seg button { border: 0; background: transparent; color: var(--ink); padding: 5px 10px; font: inherit; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--up); color: #fff; }
 #map { width: 100%; height: auto; display: block; }
-.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--sub); margin-top: 8px; align-items: center; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: var(--sub); margin-top: 8px; align-items: center; }
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .ramp { width: 120px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--down), var(--mid), var(--up)); display: inline-block; vertical-align: middle; }
 .pie { cursor: pointer; }
@@ -42,8 +42,8 @@ h1 { font-size: 20px; margin: 0 0 4px; }
 .pie.sel .ring { stroke-width: 7; }
 .pie text { font-size: 11px; fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; text-anchor: middle; pointer-events: none; }
 .lead { stroke: var(--sub); stroke-width: 1; opacity: .5; }
-#tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); padding: 6px 9px; border-radius: 6px; font-size: 12px; line-height: 1.45; opacity: 0; transition: opacity .1s; z-index: 5; }
-h2 { font-size: 15px; margin: 0 0 8px; }
+#tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); padding: 6px 9px; border-radius: 6px; font-size: 13px; line-height: 1.45; opacity: 0; transition: opacity .1s; z-index: 5; }
+h2 { font-size: 16px; margin: 0 0 8px; }
 .rank { list-style: none; margin: 0; padding: 0; font-size: 13px; }
 .rank li { display: grid; grid-template-columns: 96px 1fr 46px; gap: 6px; align-items: center; padding: 3px 0; cursor: pointer; }
 .rank li.sel { font-weight: 700; }
@@ -53,8 +53,8 @@ h2 { font-size: 15px; margin: 0 0 8px; }
 .rank .ref { color: var(--sub); font-size: 11px; }
 .detail { font-size: 13px; line-height: 1.6; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
 .detail b { font-weight: 700; }
-.chip { display: inline-block; padding: 1px 7px; border-radius: 10px; background: var(--line); margin: 1px 2px 1px 0; font-size: 12px; }
-.note { font-size: 12px; color: var(--sub); line-height: 1.55; margin-top: 12px; }
+.chip { display: inline-block; padding: 1px 7px; border-radius: 10px; background: var(--line); margin: 1px 2px 1px 0; font-size: 11px; }
+.note { font-size: 11px; color: var(--sub); line-height: 1.55; margin-top: 12px; }
 </style>
 </head>
 <body>
