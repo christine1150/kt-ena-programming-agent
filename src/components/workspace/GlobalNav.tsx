@@ -39,6 +39,19 @@ function NavInner({ role }: { role: Role | null }) {
             const isActive = active === item.id;
             return (
               <Fragment key={item.id}>
+                {/* 시청률 지도(베타) — 보고서와 라인업 사이(사용자 요청 2026-10-26). 시험 공개 화면이라 /beta 아래에 둔다. */}
+                {item.id === "admin" && (
+                  <li className="shrink-0">
+                    <Link
+                      href="/beta/geo-map"
+                      aria-current={pathname.startsWith("/beta") ? "page" : undefined}
+                      title="나라·도시·테마별 시청률 지도 (베타)"
+                      className={`block border-b-2 px-3 py-2.5 text-[13px] font-medium transition ${pathname.startsWith("/beta") ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"}`}
+                    >
+                      시청률 지도 <span className="ml-0.5 rounded-full bg-[#f1f0f9] px-1.5 py-0.5 text-[10px] font-semibold text-[#5b4bd0]">베타</span>
+                    </Link>
+                  </li>
+                )}
                 {/* 오리지널 라인업(ENA 콘텐츠 편성센터, 별도 사이트) — 보고서와 관리 사이, 새 창으로 연다(사용자 요청 2026-10-22). */}
                 {item.id === "admin" && (
                   <li className="shrink-0">
@@ -100,17 +113,6 @@ function NavInner({ role }: { role: Role | null }) {
               </Fragment>
             );
           })}
-          {/* 베타 카테고리(2026-10-26 사용자 요청) — 시험 공개 화면 모음. 지금은 권역별 시청률 지도 하나. */}
-          <li className="shrink-0">
-            <Link
-              href="/beta/geo-map"
-              aria-current={pathname.startsWith("/beta") ? "page" : undefined}
-              title="시험 공개 화면 — 권역별 시청률 지도"
-              className={`block border-b-2 px-3 py-2.5 text-[13px] font-medium transition ${pathname.startsWith("/beta") ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"}`}
-            >
-              베타 <span className="ml-0.5 rounded-full bg-[#f1f0f9] px-1.5 py-0.5 text-[10px] font-semibold text-[#5b4bd0]">NEW</span>
-            </Link>
-          </li>
         </ul>
       </nav>
       <ActionRibbon />
