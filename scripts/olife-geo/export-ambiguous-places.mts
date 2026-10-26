@@ -34,5 +34,6 @@ ws.getRow(1).font = { bold: true };
 [...rows].sort((a, b) => b[1].eps.length - a[1].eps.length).forEach(([name, r]) =>
   ws.addRow([name, [...r.countries].join(", "), [...r.why].join(" / "), r.eps.length, r.eps.slice(0, 3).join(" | "), "", "", ""]));
 ws.views = [{ state: "frozen", ySplit: 1 }];
-await wb.xlsx.writeFile("docs/olife-geo/장소_위치_확인_질문.xlsx");
-console.log(`장소 ${rows.size}곳 → docs/olife-geo/장소_위치_확인_질문.xlsx`);
+const OUT = process.argv[2] ?? "docs/olife-geo/장소_위치_확인_질문.xlsx";
+await wb.xlsx.writeFile(OUT);
+console.log(`장소 ${rows.size}곳 → ${OUT}`);
