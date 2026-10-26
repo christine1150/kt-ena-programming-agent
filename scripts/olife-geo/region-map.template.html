@@ -53,7 +53,7 @@ h1 { font-size: 24px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 4px;
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: var(--sub); margin-top: 8px; align-items: center; }
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
 .ramp { width: 120px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--down), var(--mid), var(--up)); display: inline-block; vertical-align: middle; }
-.pie { cursor: pointer; filter: drop-shadow(0 5px 7px rgba(90, 76, 200, .28)); }
+.pie { cursor: pointer; }
 .pie .ring { fill: none; stroke-width: 5; }
 .pie.sel .ring { stroke-width: 8; }
 .pie text { font-size: 11px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: rgba(255, 255, 255, .85); stroke-width: 3px; text-anchor: middle; pointer-events: none; }
@@ -64,8 +64,8 @@ h2 { font-size: 16px; font-weight: 800; margin: 0 0 8px; }
 .rank li { display: grid; grid-template-columns: 96px 1fr 46px; gap: 6px; align-items: center; padding: 3px 6px; margin: 0; border-radius: 10px; cursor: pointer; }
 .rank li:hover { background: rgba(123, 105, 239, .08); }
 .rank li.sel { font-weight: 700; background: rgba(123, 105, 239, .14); }
-.rank .bar { height: 8px; border-radius: 4px; background: var(--line); position: relative; }
-.rank .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+.rank .bar { height: 12px; border-radius: 999px; background: rgba(255, 255, 255, .45); border: 1px solid rgba(255, 255, 255, .8); box-shadow: inset 0 2px 4px rgba(110, 100, 190, .14); position: relative; }
+.rank .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; box-shadow: 0 2px 10px var(--glow, rgba(106, 88, 234, .35)), inset 0 1px 0 rgba(255, 255, 255, .6); border: 1px solid rgba(255, 255, 255, .7); }
 .rank .v { text-align: right; font-variant-numeric: tabular-nums; }
 .rank .ref { color: var(--sub); font-size: 11px; }
 .detail { font-size: 13px; line-height: 1.6; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
@@ -89,7 +89,7 @@ h2 { font-size: 16px; font-weight: 800; margin: 0 0 8px; }
   .pie text { font-size: 13px; }
   .rank { font-size: 16px; max-height: 520px; }
   .rank li { grid-template-columns: 124px 1fr 56px; padding: 5px 8px; }
-  .rank .bar { height: 10px; }
+  .rank .bar { height: 14px; }
   .rank .ref { font-size: 13px; }
   .detail { font-size: 15px; }
   .chip { font-size: 13px; }
@@ -176,6 +176,11 @@ const defs = svg.append("defs");
 const gl = defs.append("radialGradient").attr("id", "gloss").attr("cx", "30%").attr("cy", "25%").attr("r", "75%");
 gl.append("stop").attr("offset", "0%").attr("stop-color", "#fff").attr("stop-opacity", .5);
 gl.append("stop").attr("offset", "55%").attr("stop-color", "#fff").attr("stop-opacity", 0);
+const gf = defs.append("filter").attr("id", "glow").attr("x", "-60%").attr("y", "-60%").attr("width", "220%").attr("height", "220%");
+gf.append("feGaussianBlur").attr("stdDeviation", 6);
+const hl = defs.append("radialGradient").attr("id", "shine").attr("cx", "32%").attr("cy", "24%").attr("r", "60%");
+hl.append("stop").attr("offset", "0%").attr("stop-color", "#fff").attr("stop-opacity", .85);
+hl.append("stop").attr("offset", "100%").attr("stop-color", "#fff").attr("stop-opacity", 0);
 const gWorld = svg.append("g").attr("class", "world");
 const proj = d3.geoNaturalEarth1().scale(210).translate([W / 2, H / 2 + 20]);
 const path = d3.geoPath(proj);
@@ -231,13 +236,15 @@ function draw() {
     const r = d.r, ro = rad(r), gg = d3.select(this);
     if (view === "region" && !zoom) {
       const parts = [{ v: r.natureOnly, c: "--nat" }, { v: r.cultureOnly, c: "--cul" }, { v: r.both, c: "--both" }, { v: r.neither, c: "--none" }].filter(x => x.v > 0);
-      gg.selectAll("path").data(pie(parts)).join("path").attr("d", a => arc.innerRadius(0).outerRadius(ro)(a)).attr("fill", a => `var(${a.data.c})`).attr("stroke", "var(--glass-line)").attr("stroke-width", 1);
-      gg.append("circle").attr("r", ro).attr("fill", "url(#gloss)").attr("pointer-events", "none");
+      gg.append("circle").attr("r", ro * 1.05).attr("fill", ringColor(r[mode])).attr("opacity", .5).attr("filter", "url(#glow)").attr("pointer-events", "none");
+      gg.selectAll("path").data(pie(parts)).join("path").attr("d", a => arc.innerRadius(0).outerRadius(ro)(a)).attr("fill", a => `var(${a.data.c})`).attr("fill-opacity", .68).attr("stroke", "rgba(255,255,255,.9)").attr("stroke-width", 1.4);
+      gg.append("circle").attr("r", ro).attr("fill", "url(#shine)").attr("pointer-events", "none");
       gg.append("circle").attr("class", "ring").attr("r", ro + 3.5).attr("stroke", ringColor(r[mode])).attr("stroke-dasharray", r.sample ? null : "3 3");
       gg.append("text").attr("y", ro + 18).text(`${r.name} ${r[mode].toFixed(2)}`);
     } else {
-      gg.append("circle").attr("r", ro).attr("fill", ringColor(r[mode])).attr("stroke", "#fff").attr("stroke-width", 1.5).attr("stroke-dasharray", r.sample ? null : "3 2");
-      gg.append("circle").attr("r", ro).attr("fill", "url(#gloss)").attr("pointer-events", "none");
+      gg.append("circle").attr("r", ro * 1.05).attr("fill", ringColor(r[mode])).attr("opacity", .55).attr("filter", "url(#glow)").attr("pointer-events", "none");
+      gg.append("circle").attr("r", ro).attr("fill", ringColor(r[mode])).attr("fill-opacity", .62).attr("stroke", "rgba(255,255,255,.9)").attr("stroke-width", 1.6).attr("stroke-dasharray", r.sample ? null : "3 2");
+      gg.append("circle").attr("r", ro).attr("fill", "url(#shine)").attr("pointer-events", "none");
       if (zoom || r.n >= 5 || selected === r.name) gg.append("text").attr("y", ro + 12).text(r.name);
     }
   });
@@ -284,7 +291,7 @@ function renderRank() {
   rs.forEach(r => {
     const li = ul.append("li").attr("class", selected === r.name ? "sel" : "").on("click", () => select(r.name));
     li.append("span").text(r.name);
-    li.append("span").attr("class", "bar").append("i").style("width", Math.max(4, Math.min(100, (r[mode] - 0.6) / 0.7 * 100)) + "%").style("background", ringColor(r[mode])).style("opacity", r.sample ? 1 : .45);
+    li.append("span").attr("class", "bar").append("i").style("width", Math.max(4, Math.min(100, (r[mode] - 0.6) / 0.7 * 100)) + "%").style("background", "linear-gradient(180deg, rgba(255,255,255,.35), transparent 60%), " + ringColor(r[mode])).style("--glow", ringColor(r[mode])).style("opacity", r.sample ? .85 : .4);
     li.append("span").attr("class", "v").html(r[mode].toFixed(2) + (r.sample ? "" : '<span class="ref">*</span>'));
   });
 }
