@@ -39,19 +39,6 @@ function NavInner({ role }: { role: Role | null }) {
             const isActive = active === item.id;
             return (
               <Fragment key={item.id}>
-                {/* 시청률 지도(베타) — 보고서와 라인업 사이(사용자 요청 2026-10-26). 시험 공개 화면이라 /beta 아래에 둔다. */}
-                {item.id === "admin" && (
-                  <li className="shrink-0">
-                    <Link
-                      href="/beta/geo-map"
-                      aria-current={pathname.startsWith("/beta") ? "page" : undefined}
-                      title="나라·도시·테마별 시청률 지도 (베타)"
-                      className={`block border-b-2 px-3 py-2.5 text-[13px] font-medium transition ${pathname.startsWith("/beta") ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"}`}
-                    >
-                      시청률 지도 <span className="ml-0.5 rounded-full bg-[#f1f0f9] px-1.5 py-0.5 text-[10px] font-semibold text-[#5b4bd0]">베타</span>
-                    </Link>
-                  </li>
-                )}
                 {/* 오리지널 라인업(ENA 콘텐츠 편성센터, 별도 사이트) — 보고서와 관리 사이, 새 창으로 연다(사용자 요청 2026-10-22). */}
                 {item.id === "admin" && (
                   <li className="shrink-0">
@@ -76,6 +63,19 @@ function NavInner({ role }: { role: Role | null }) {
                     {item.label}
                   </Link>
                 </li>
+                {/* 시청률 지도(베타) — 보고서 바로 뒤(라인업 앞, 사용자 요청 2026-10-26). 보고서와 같은 권한(view)이라 PD 계정에도 보인다. 시험 공개 화면이라 /beta 아래에 둔다. */}
+                {item.id === "reports" && (
+                  <li className="shrink-0">
+                    <Link
+                      href="/beta/geo-map"
+                      aria-current={pathname.startsWith("/beta") ? "page" : undefined}
+                      title="나라·도시·테마별 시청률 지도 (베타)"
+                      className={`block border-b-2 px-3 py-2.5 text-[13px] font-medium transition ${pathname.startsWith("/beta") ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"}`}
+                    >
+                      시청률 지도 <span className="ml-0.5 rounded-full bg-[#f1f0f9] px-1.5 py-0.5 text-[10px] font-semibold text-[#5b4bd0]">베타</span>
+                    </Link>
+                  </li>
+                )}
                 {/* 숫자만 크게 읽는 별도 창(/ratings) — 브리핑과 채널별 분석 사이, 새 탭으로 열어 에이전트 화면과 나란히 본다(사용자 요청 2026-10-19). 지금 보는 기준일을 이어 준다. */}
                 {item.id === "briefing" && (
                   <li className="shrink-0">

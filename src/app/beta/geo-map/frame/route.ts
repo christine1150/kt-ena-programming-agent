@@ -1,9 +1,27 @@
-// 권역별 시청률 지도(베타) 본문 — 자체 완결 HTML을 그대로 내려 준다(로그인은 proxy.ts가 이미 확인).
-// 값은 분석 스크립트가 만든 정적 요약이며 화면에서 계산하지 않는다.
-import { GEO_MAP_HTML } from "@/lib/beta/geoMapHtml";
+// 시청률 지도(베타) 본문 — 서버가 DB의 닐슨 시청률과 분류표를 결합한 값을 자체 완결 HTML에 넣어 내려 준다.
+// 로그인은 proxy.ts가 확인한다(관리자·PD 모두 열람). 새 방송이 DB에 들어오면 캐시(1시간)가 지난 뒤 자동 반영된다.
+import { buildGeoMapData, type GeoMapData } from "@/lib/beta/geoMapData";
+import { GEO_MAP_TEMPLATE } from "@/lib/beta/geoMapTemplate";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
-export function GET() {
-  return new Response(GEO_MAP_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, max-age=300" } });
+const TTL_MS = 60 * 60 * 1000;
+let cache: { at: number; data: GeoMapData } | null = null;
+
+export async function GET() {
+  try {
+    if (!cache || Date.now() - cache.at > TTL_MS) cache = { at: Date.now(), data: await buildGeoMapData() };
+    const json = JSON.stringify(cache.data).replace(/</g, "\\u003c");
+    return new Response(GEO_MAP_TEMPLATE.replace("__DATA__", () => json), {
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store" },
+    });
+  } catch (e) {
+    // 계산 실패 시 직전 캐시가 있으면 그것을 쓰고, 없으면 안내만 낸다.
+    if (cache) {
+      const json = JSON.stringify(cache.data).replace(/</g, "\\u003c");
+      return new Response(GEO_MAP_TEMPLATE.replace("__DATA__", () => json), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store" } });
+    }
+    console.error("[geo-map] 데이터 계산 실패", e);
+    return new Response("<!doctype html><meta charset=utf-8><p style='font:14px sans-serif;padding:24px'>시청률 지도 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>", { status: 500, headers: { "content-type": "text/html; charset=utf-8" } });
+  }
 }
