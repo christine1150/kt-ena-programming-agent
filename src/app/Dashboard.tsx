@@ -8,6 +8,7 @@ import { VendingMachineIcon } from "@/components/VendingIcons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
+import { ReviewEpisodeChart, type EpisodeChartPoint } from "@/components/ReviewEpisodeChart";
 import type { RankSlide } from "@/lib/rankSlide";
 import ReviewPanels, { type ReviewPanelItem } from "@/components/home/ReviewPanels";
 import { channelBrandSolid } from "@/lib/dashboard/channelBrandColors";
@@ -3886,6 +3887,30 @@ function fillEpisodeNumbers(points: RatingHistoryPoint[]): (RatingHistoryPoint &
   );
 }
 
+// 사용자 지시(2026-10-27): 주요 콘텐츠 리뷰의 "최근 성적 대비" 자리에 회차별 본방 시청률 그래프 — 이미 받아 둔 본방 이력(ratingHistory)의
+// 수도권 2049·가구를 방영일로 맞춰 한 줄로 묶는다(회차는 위와 같은 역산 규칙). 새 계산 없음.
+function buildEpisodeChartPoints(history: RatingHistoryResult | null): EpisodeChartPoint[] {
+  if (!history) return [];
+  const by = (a: RatingHistoryPoint, b: RatingHistoryPoint) => a.broadcast_date.localeCompare(b.broadcast_date);
+  const own = fillEpisodeNumbers([...history.own2049].sort(by));
+  const hh = [...history.ownHousehold].sort(by);
+  const hhByDate = new Map(hh.map((p) => [p.broadcast_date, p.rating]));
+  const ownByDate = new Map(own.map((p) => [p.broadcast_date, p]));
+  const dates = [...new Set([...own.map((p) => p.broadcast_date), ...hh.map((p) => p.broadcast_date)])].sort();
+  return dates.map((d) => {
+    const [, m, day] = d.split("-");
+    const o = ownByDate.get(d);
+    return {
+      key: d,
+      episode: o?.episode_number ?? null,
+      dateLabel: `${m}.${day}.`,
+      fullDate: d,
+      p2049: o?.rating ?? null,
+      household: hhByDate.get(d) ?? null,
+    };
+  });
+}
+
 // 최고/최저 지점의 "언제" 라벨 — 회차(실측 또는 위 역산)를 우선하고, 기준점이 하나도 없어 회차를
 // 전혀 알 수 없을 때만 방영일로 대체한다.
 function fmtPointWhen(p: RatingHistoryPoint): string {
@@ -4237,6 +4262,7 @@ function OriginalContentReportCard({
                   const changeColor = (v: number) => (v >= 0 ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR);
                   const hasImmersion = h.matched_share !== null || h.matched_time_spent_seconds !== null || h.matched_time_spent_share !== null || h.matched_reach !== null;
                   const hasKeyMetrics = achievementPct !== null || h.pre_rerun_rating !== null || h.self_rerun_rating !== null;
+                  const chartPoints = buildEpisodeChartPoints(h.ratingHistory);
                   const timeNode = (t: string | null | undefined) => (t ? <span className="whitespace-nowrap">{fmtTimeKorean(t)}</span> : null);
                   const panelItems: ReviewPanelItem[] = [];
                   if (hasMinute) {
@@ -4408,9 +4434,9 @@ function OriginalContentReportCard({
                     {h.featured_category && <span className="shrink-0 rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] font-medium text-zinc-600">{h.featured_category}</span>}
                   </header>
 
-                  {/* ② KPI 띠 — 주 타깃(2049) 시청률이 가장 크게, 가구 등 다른 타깃은 "참고 타깃·비교" 패널로 */}
-                  <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 lg:grid-cols-[1.3fr_1fr_1fr_1.1fr]">
-                    <div className="col-span-2 min-w-0 lg:col-span-1">
+                  {/* ② 오늘 시청률(왼쪽) + 회차별 본방 시청률 그래프(오른쪽, 사용자 지시 2026-10-27: "그래프가 더 중요" — 기존 "최근 성적 대비" 자리). 몰입도·핵심 지표는 아래 한 줄로 줄였다 */}
+                  <div className={`mt-4 grid gap-x-8 gap-y-5 ${chartPoints.length > 0 ? "lg:grid-cols-[minmax(250px,0.75fr)_2.25fr]" : ""}`}>
+                    <div className="min-w-0">
                       <p className={REPORT_EYEBROW}>시청률 · {primaryTargetLabel}</p>
                       <p className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                         {/* 사용자 지시(2026-10-25): 2049 채널은 2049 시청률 옆에 괄호로 가구 시청률(검정, 소수 둘째 자리 반올림). 숫자와 괄호가 줄바꿈으로 갈라지지 않게 한 덩어리로 묶는다 */}
@@ -4437,74 +4463,53 @@ function OriginalContentReportCard({
                         </p>
                       )}
                     </div>
-                    <div className="min-w-0 lg:border-l lg:border-zinc-100 lg:pl-6">
-                      <p className={REPORT_EYEBROW}>최근 성적 대비</p>
-                      {recent.deltaPctVs4 !== null && recent.prevAvg4 !== null ? (
-                        <>
-                          <p className="mt-1.5 whitespace-nowrap text-[22px] font-semibold tabular-nums" style={{ color: changeColor(recent.deltaPctVs4) }}>
-                            {recent.deltaPctVs4 >= 0 ? "▲" : "▼"} {Math.abs(recent.deltaPctVs4).toFixed(1)}%
-                          </p>
-                          <p className="mt-1 text-[12px] tabular-nums text-zinc-600">
-                            {recent.mode === "slot" ? `동시간대 최근 ${recent.sampleCount}주 평균` : `직전 ${recent.sampleCount}회 평균`}{" "}
-                            <span className="whitespace-nowrap font-medium">{formatRating(recent.prevAvg4, h.broadcast_channel_code)}</span>
-                          </p>
-                        </>
-                      ) : (
-                        <p className="mt-1.5 text-[12px] text-zinc-500">비교할 이전 회차 없음</p>
+                    {chartPoints.length > 0 && (
+                      <ReviewEpisodeChart
+                        points={chartPoints}
+                        fmt={(v) => formatRating(v, h.broadcast_channel_code)}
+                        primary={is2049Channel ? "p2049" : "household"}
+                        caption={
+                          chartPoints.length < 2 && recent.mode === "slot" && recent.deltaPctVs4 !== null && recent.prevAvg4 !== null
+                            ? `동시간대 최근 ${recent.sampleCount}주 평균 ${formatRating(recent.prevAvg4, h.broadcast_channel_code)} 대비 ${recent.deltaPctVs4 >= 0 ? "▲" : "▼"} ${Math.abs(recent.deltaPctVs4).toFixed(1)}%`
+                            : null
+                        }
+                      />
+                    )}
+                  </div>
+
+                  {/* 몰입도·핵심 지표 — 한 줄로 작게(사용자 지시 2026-10-27). 값은 기존과 같고 배치만 바뀌었다 */}
+                  {(hasImmersion || hasKeyMetrics) && (
+                    <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1.5 border-t border-zinc-100 pt-3 text-[11.5px] text-zinc-500">
+                      {hasImmersion && (
+                        <p className="flex flex-wrap items-baseline gap-x-3.5 gap-y-0.5">
+                          <span className="text-[10.5px] font-semibold text-zinc-400">몰입도</span>
+                          {h.matched_share !== null && <span className="whitespace-nowrap">점유율 <b className="font-semibold tabular-nums text-zinc-800">{h.matched_share.toFixed(2)}%</b></span>}
+                          {h.matched_time_spent_seconds !== null && <span className="whitespace-nowrap">시청시간 <b className="font-semibold tabular-nums text-zinc-800">{fmtSecondsCompactKorean(h.matched_time_spent_seconds)}</b></span>}
+                          {h.matched_time_spent_share !== null && <span className="whitespace-nowrap">시청비율 <b className="font-semibold tabular-nums text-zinc-800">{h.matched_time_spent_share.toFixed(2)}%</b></span>}
+                          {h.matched_reach !== null && <span className="whitespace-nowrap">도달률 <b className="font-semibold tabular-nums text-zinc-800">{h.matched_reach.toFixed(2)}%</b></span>}
+                        </p>
                       )}
-                    </div>
-                    <div className="min-w-0 lg:border-l lg:border-zinc-100 lg:pl-6">
-                      <p className={REPORT_EYEBROW}>몰입도</p>
-                      {hasImmersion ? (
-                        <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-2">
-                          {h.matched_share !== null && (
-                            <div><p className="text-[11px] text-zinc-500">점유율</p><p className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-zinc-900">{h.matched_share.toFixed(2)}%</p></div>
-                          )}
-                          {h.matched_time_spent_seconds !== null && (
-                            <div><p className="text-[11px] text-zinc-500">시청시간</p><p className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-zinc-900">{fmtSecondsCompactKorean(h.matched_time_spent_seconds)}</p></div>
-                          )}
-                          {h.matched_time_spent_share !== null && (
-                            <div><p className="text-[11px] text-zinc-500">시청비율</p><p className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-zinc-900">{h.matched_time_spent_share.toFixed(2)}%</p></div>
-                          )}
-                          {h.matched_reach !== null && (
-                            <div><p className="text-[11px] text-zinc-500">도달률</p><p className="whitespace-nowrap text-[15px] font-semibold tabular-nums text-zinc-900">{h.matched_reach.toFixed(2)}%</p></div>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="mt-1.5 text-[12px] text-zinc-500">자료 없음</p>
-                      )}
-                    </div>
-                    <div className="col-span-2 min-w-0 lg:col-span-1 lg:border-l lg:border-zinc-100 lg:pl-6">
-                      <p className={REPORT_EYEBROW}>핵심 지표</p>
-                      {hasKeyMetrics ? (
-                        <div className="mt-1.5 space-y-1.5">
-                          {achievementPct !== null && (
-                            <p className="flex flex-wrap items-baseline gap-x-1.5 text-[12px] text-zinc-600">
-                              <b className="whitespace-nowrap text-[15px] tabular-nums text-zinc-900">{achievementPct.toFixed(1)}%</b>
-                              <span className="whitespace-nowrap">목표 달성(연간 누적)</span>
-                            </p>
-                          )}
+                      {hasKeyMetrics && (
+                        <p className="flex flex-wrap items-baseline gap-x-3.5 gap-y-0.5">
+                          <span className="text-[10.5px] font-semibold text-zinc-400">핵심 지표</span>
+                          {achievementPct !== null && <span className="whitespace-nowrap">목표 달성(연간 누적) <b className="font-semibold tabular-nums text-zinc-800">{achievementPct.toFixed(1)}%</b></span>}
                           {h.pre_rerun_rating !== null && (
-                            <p className="flex flex-wrap items-baseline gap-x-1.5 text-[12px] text-zinc-600" title="전회 재방">
-                              <b className="whitespace-nowrap text-[15px] tabular-nums text-zinc-900">{formatRating(h.pre_rerun_rating, h.broadcast_channel_code)}</b>
-                              <span className="whitespace-nowrap">리드인</span>
-                              {timeNode(h.pre_rerun_start_time)}
-                            </p>
+                            <span className="whitespace-nowrap" title="전회 재방">
+                              리드인 <b className="font-semibold tabular-nums text-zinc-800">{formatRating(h.pre_rerun_rating, h.broadcast_channel_code)}</b>
+                              {h.pre_rerun_start_time && <> {timeNode(h.pre_rerun_start_time)}</>}
+                            </span>
                           )}
                           {h.self_rerun_rating !== null && (
-                            <p className="flex flex-wrap items-baseline gap-x-1.5 text-[12px] text-zinc-600">
-                              <b className="whitespace-nowrap text-[15px] tabular-nums" style={{ color: accent }}>{formatRating(h.self_rerun_rating, h.broadcast_channel_code)}</b>
-                              <span className="whitespace-nowrap font-semibold" style={{ color: accent }}>{broadcastChannelName}</span>
-                              <span className="whitespace-nowrap">{h.self_rerun_type ?? "직재방"}</span>
-                              {timeNode(h.self_rerun_start_time)}
-                            </p>
+                            <span className="whitespace-nowrap">
+                              <span className="font-semibold" style={{ color: accent }}>{broadcastChannelName}</span> {h.self_rerun_type ?? "직재방"}{" "}
+                              <b className="font-semibold tabular-nums" style={{ color: accent }}>{formatRating(h.self_rerun_rating, h.broadcast_channel_code)}</b>
+                              {h.self_rerun_start_time && <> {timeNode(h.self_rerun_start_time)}</>}
+                            </span>
                           )}
-                        </div>
-                      ) : (
-                        <p className="mt-1.5 text-[12px] text-zinc-500">자료 없음</p>
+                        </p>
                       )}
                     </div>
-                  </div>
+                  )}
 
                   {/* ③ 인사이트 — 요약 한 줄 + 현황/원인/액션(각 2줄까지). 전문은 아래 "인사이트 전문" 칩 */}
                   {(summaryNode || insight.situationLine || insight.causeLine) && (
