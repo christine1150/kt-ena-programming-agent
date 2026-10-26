@@ -119,8 +119,12 @@ span.term { border-bottom: 1.5px dotted var(--purple); }
 #tip { position: fixed; pointer-events: none; max-width: 420px; background: rgba(255, 255, 255, .94); color: var(--ink); border: 1px solid rgba(255, 255, 255, .95); box-shadow: 0 14px 36px rgba(120, 80, 200, .25);
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); padding: 10px 14px; border-radius: 16px; font-size: 13px; line-height: 1.5; opacity: 0; transition: opacity .1s; z-index: 5; }
 #tip .h { font-size: 11px; color: var(--sub); margin-top: 6px; }
-#tip .e { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: baseline; }
-#tip .e span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 회차 줄: 전체를 한 격자로 두어 '○○ 123회'가 '회' 기준으로 오른쪽 정렬되고, 제목은 왼쪽 정렬 */
+#tip .eg { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 8px; align-items: baseline; }
+#tip .e { display: contents; }
+#tip .e b { text-align: right; white-space: nowrap; }
+#tip .e span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+#tip .e span:nth-child(3) { white-space: nowrap; text-align: right; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #tip { background: rgba(40, 36, 80, .9); border-color: rgba(255, 255, 255, .15); } }
 
 /* 순위 막대 */
@@ -232,6 +236,38 @@ span.term { border-bottom: 1.5px dotted var(--purple); }
 .kpi .t { font-size: 11px; }
 .kpi .v { font-size: 12px; font-weight: 800; color: var(--ink); max-width: none; display: inline; }
 .kpi .s, .kpi .ic { display: none; }
+/* ── 화면 전체 활용: 지도 왼쪽(넓게) + 오른쪽 패널(테마·순위·회차). 글자 크기를 통일 ── */
+.stage { grid-template-columns: minmax(0, 1fr) clamp(380px, 28vw, 520px); height: calc(100vh - 66px); }
+.lcol .mapcard { flex: none; }
+.mapfoot { flex: 1; min-height: 52px; overflow: hidden; padding: 8px 14px; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+.mapfoot .kpis { position: static; transform: none; }
+.mapfoot .legend { margin: 0; font-size: 11px; gap: 4px 14px; }
+.side { padding: 12px 12px 8px; }
+.side .chips { max-height: 118px; gap: 4px; }
+.side .chip { font-size: 11.5px; padding: 3px 9px; }
+.tleg { display: flex; gap: 12px; font-size: 11px; color: var(--sub); flex: none; margin-top: -2px; }
+.sec { display: flex; flex-direction: column; min-height: 0; }
+.sec h2 { font-size: 13px; margin: 0 0 4px; flex: none; }
+.sec.rk { flex: 4 1 0; }
+.sec.ep { flex: 5 1 0; }
+.side .rank, .side .eps { flex: 1; min-height: 0; max-height: none; font-size: 12.5px; }
+.side .rank li { grid-template-columns: 84px minmax(0, 1fr) auto; padding: 3px 6px; }
+.side .eps li { grid-template-columns: 22px auto minmax(0, 1fr) auto; gap: 8px; padding: 5px 6px; }
+.side .eps li .track { display: none; }
+.side .eps .tt .m, .side .prog, .side .val small, .side .ref { font-size: 11px; }
+.side .eps .tt div:first-child { font-size: 12.5px; }
+.side .search input { font-size: 12.5px; }
+.below { display: none; }
+#termTip, #tip { font-size: 13px; }
+@media (min-width: 1500px) {
+  .top h1 { font-size: 19px; } .top .seg button, .top .target select { font-size: 13px; }
+  .side .rank, .side .eps, .side .eps .tt div:first-child, .side .search input { font-size: 13px; }
+  .side .chip { font-size: 12px; } .side .chips { max-height: 124px; }
+  .side .eps .tt .m, .side .prog, .side .val small, .side .ref, .mapfoot .legend, .tleg { font-size: 11.5px; }
+  .kpi .v { font-size: 12.5px; }
+  #termTip, #tip { font-size: 13.5px; }
+}
+@media (max-width: 1000px) { .mapfoot { flex: none; } .side .rank, .side .eps { max-height: 340px; } .sec.rk, .sec.ep { flex: none; } }
 </style>
 </head>
 <body>
@@ -246,43 +282,41 @@ span.term { border-bottom: 1.5px dotted var(--purple); }
   </div>
 
   <div class="stage">
-   <div class="lcol">
-    <div class="mapcard glass">
-      <div class="mapbox">
-        <svg id="map" role="img" aria-label="세계지도 위 국가별 시청률 원"></svg>
-        <div class="crumb glass" id="crumb" hidden><button id="crumbHome" title="세계지도로 돌아가기 (ESC)">← 세계지도</button><span id="crumbNow"></span></div>
-        <div class="mapctl glass" role="group" aria-label="지도 확대·축소">
-          <button id="zin" title="확대 (+)" aria-label="확대">+</button>
-          <button id="zout" title="축소 (−)" aria-label="축소">−</button>
-          <button id="zhome" title="세계지도로 돌아가기 (ESC)" aria-label="세계지도로 돌아가기" disabled>⌂</button>
+    <div class="lcol">
+      <div class="mapcard glass">
+        <div class="mapbox">
+          <svg id="map" role="img" aria-label="세계지도 위 국가별 시청률 원"></svg>
+          <div class="crumb glass" id="crumb" hidden><button id="crumbHome" title="세계지도로 돌아가기 (ESC)">← 세계지도</button><span id="crumbNow"></span></div>
+          <div class="mapctl glass" role="group" aria-label="지도 확대·축소">
+            <button id="zin" title="확대 (+)" aria-label="확대">+</button>
+            <button id="zout" title="축소 (−)" aria-label="축소">−</button>
+            <button id="zhome" title="세계지도로 돌아가기 (ESC)" aria-label="세계지도로 돌아가기" disabled>⌂</button>
+          </div>
+        </div>
+      </div>
+      <div class="mapfoot glass">
+        <div class="kpis">
+          <span class="kpi"><span class="t">평균</span> <b class="v" id="k1"></b><i class="s" id="k1s"></i></span>
+          <span class="kpi"><span class="t">방송</span> <b class="v" id="k2"></b><i class="s" id="k2s"></i></span>
+          <span class="kpi"><span class="t">1위 나라</span> <b class="v" id="k3"></b><i class="s" id="k3s"></i></span>
+          <span class="kpi"><span class="t">1위 회차</span> <b class="v" id="k4"></b><i class="s" id="k4s"></i></span>
+        </div>
+        <div class="legend">
+          <span>원 크기 = 방송 수</span>
+          <span>색: 낮음<span class="ramp"></span>높음 <span id="legMode"></span></span>
+          <span id="legPie"><i class="sw" style="background:var(--nat)"></i>자연만 <i class="sw" style="background:var(--cul)"></i>문화만 <i class="sw" style="background:var(--both)"></i>둘 다 <i class="sw" style="background:var(--none)"></i>분류 없음</span>
+          <span><span class="term" tabindex="0" data-term="s">점선·흐린 원 = 표본 적음</span></span>
+          <span id="legApprox">점선 테두리 = 위치 미확인(나라 중앙)</span>
+          <span>마우스 = 잘 나온 회차 · 클릭 = 확대 · <kbd>휠</kbd> 확대/축소 · <kbd>ESC</kbd> 복귀</span>
         </div>
       </div>
     </div>
-  <div class="card glass below">
-    <h2>잘 나온 회차 <span class="ref" id="epTitle"></span></h2>
-    <ul class="eps" id="eps"></ul>
-  </div>
-   </div>
     <div class="side glass">
-      <div class="kpis">
-        <span class="kpi"><span class="t">평균</span> <b class="v" id="k1"></b><i class="s" id="k1s"></i></span>
-        <span class="kpi"><span class="t">방송</span> <b class="v" id="k2"></b><i class="s" id="k2s"></i></span>
-        <span class="kpi"><span class="t">1위 나라</span> <b class="v" id="k3"></b><i class="s" id="k3s"></i></span>
-        <span class="kpi"><span class="t">1위 회차</span> <b class="v" id="k4"></b><i class="s" id="k4s"></i></span>
-      </div>
       <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="color:var(--sub)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="테마로 찾기 (예: 산, 음식, 축제)" autocomplete="off"></div>
       <div class="chips" id="chips"></div>
-      <h2>순위 <span class="ref" id="rankTitle"></span></h2>
-      <ul class="rank" id="rank"></ul>
-      <div class="legend">
-        <span>원 크기 = 방송 수</span>
-        <span>색: 낮음<span class="ramp"></span>높음 <span id="legMode"></span></span>
-        <span id="legPie"><i class="sw" style="background:var(--nat)"></i>자연만 <i class="sw" style="background:var(--cul)"></i>문화만 <i class="sw" style="background:var(--both)"></i>둘 다 <i class="sw" style="background:var(--none)"></i>분류 없음</span>
-        <span><span class="term" tabindex="0" data-term="s">점선·흐린 원 = 표본 적음</span></span>
-        <span id="legApprox">점선 테두리 원 = 위치 미확인(나라 중앙)</span>
-        <span><i class="sw" style="background:var(--mint)"></i>자연 테마 <i class="sw" style="background:var(--purple)"></i>문화 테마</span>
-        <span>원에 마우스 = 잘 나온 회차 · 클릭 = 확대 · <kbd>휠</kbd> 확대/축소 · <kbd>ESC</kbd> 복귀</span>
-      </div>
+      <div class="tleg"><span><i class="sw" style="background:var(--mint)"></i>자연 테마</span><span><i class="sw" style="background:var(--purple)"></i>문화 테마</span></div>
+      <section class="sec rk"><h2>순위 <span class="ref" id="rankTitle"></span></h2><ul class="rank" id="rank"></ul></section>
+      <section class="sec ep"><h2>잘 나온 회차 <span class="ref" id="epTitle"></span></h2><ul class="eps" id="eps"></ul></section>
     </div>
   </div>
   <div class="foot">
@@ -404,7 +438,7 @@ const epLabel = e => `${e.p} ${e.ep != null ? e.ep + "회" : ""}`.trim();
 // ── 지도: 태평양 중심(동경 150°) 메르카토르 — 유럽·아프리카 왼쪽, 아시아 가운데, 아메리카 오른쪽. 좌우를 꽉 채운다 ──
 const W = 1200;
 const proj = d3.geoMercator().rotate([-150, 0]).scale(W / (2 * Math.PI)).translate([W / 2, 0]);
-const Y0 = proj([150, 76])[1], Y1 = proj([150, -56])[1], H = Y1 - Y0, CY = Y0 + H / 2;
+const Y0 = proj([150, 78])[1], Y1 = proj([150, -58])[1], H = Y1 - Y0, CY = Y0 + H / 2;
 const svg = d3.select("#map").attr("viewBox", `0 ${Y0} ${W} ${H}`);
 const path = d3.geoPath(proj);
 const defs = svg.append("defs");
@@ -422,7 +456,7 @@ let tf = d3.zoomIdentity; // 지도 확대·이동 상태(휠·드래그·버튼
 const posOf = e => view === "region" ? POS[e.name] : CPOS[e.name];
 
 fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json").then(r => r.json()).then(topo => {
-  gWorld.append("path").datum(d3.geoGraticule().extent([[-180, -56], [180, 76]]).step([30, 20])()).attr("d", path).attr("fill", "none").attr("stroke", "var(--grid)").attr("stroke-width", .8).attr("vector-effect", "non-scaling-stroke");
+  gWorld.append("path").datum(d3.geoGraticule().extent([[-180, -58], [180, 78]]).step([30, 20])()).attr("d", path).attr("fill", "none").attr("stroke", "var(--grid)").attr("stroke-width", .8).attr("vector-effect", "non-scaling-stroke");
   const land = topojson.feature(topo, topo.objects.countries);
   gWorld.append("g").selectAll("path").data(land.features.filter(f => f.id !== "010")).join("path").attr("d", path)
     .attr("fill", "var(--land)").attr("stroke", "var(--land-line)").attr("stroke-width", .6).attr("vector-effect", "non-scaling-stroke");
@@ -444,6 +478,7 @@ function layout() {
 const tip = document.getElementById("tip");
 const selName = () => focus ? focus.name : null;
 function draw() {
+  labelSlots = placeLabels();
   svg.selectAll(".layer").remove();
   const g = svg.append("g").attr("class", "layer");
   g.selectAll("line").data(nodes.filter(n => Math.hypot(n.x - n.ax, n.y - n.ay) > n.rad)).join("line").attr("class", "lead")
@@ -462,21 +497,48 @@ function draw() {
       gg.selectAll("path").data(pie(parts)).join("path").attr("d", a => arc.innerRadius(0).outerRadius(ro)(a)).attr("fill", a => `var(${a.data.c})`).attr("fill-opacity", .72).attr("stroke", "rgba(255,255,255,.95)").attr("stroke-width", 1.4);
       gg.append("circle").attr("r", ro).attr("fill", "url(#shine)").attr("pointer-events", "none");
       gg.append("circle").attr("class", "ring").attr("r", ro + 3.5).attr("stroke", c).attr("stroke-dasharray", r.sample ? null : "3 3");
-      gg.append("text").attr("y", ro + 18).text(`${r.name} ${pct(r.r)}`);
+      putLabel(gg, d, `${r.name} ${pct(r.r)}`);
     } else {
       gg.append("circle").attr("r", ro).attr("fill", c).attr("fill-opacity", .66).attr("stroke", "rgba(255,255,255,.95)").attr("stroke-width", 1.6).attr("stroke-dasharray", r.sample && !r.approx ? null : "3 2");
       gg.append("circle").attr("r", ro).attr("fill", "url(#shine)").attr("pointer-events", "none");
       if (selName() === r.name) gg.append("circle").attr("class", "ring").attr("r", ro + 3).attr("stroke", css("--pink"));
-      if (zoom || r.n >= 5 || selName() === r.name) gg.append("text").attr("y", ro + 12).text(r.name);
+      putLabel(gg, d, r.name);
     }
   });
+}
+// 이름표 배치: 큰 원부터 아래→위→오른쪽→왼쪽 순으로 다른 이름표·원과 겹치지 않는 자리를 찾는다(겹치면 생략, 마우스를 올리면 이름이 뜬다)
+let labelSlots = null;
+function placeLabels() {
+  const placed = [], out = new Map(), regionPie = view === "region" && !zoom;
+  const overlap = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+  const hitsCircle = (bx, o) => { const cx = Math.max(bx.x0, Math.min(o.x, bx.x1)), cy = Math.max(bx.y0, Math.min(o.y, bx.y1)); return Math.hypot(cx - o.x, cy - o.y) < rad(o.r) * 0.9; };
+  for (const d of [...nodes].sort((a, b) => b.r.n - a.r.n)) {
+    const r = d.r;
+    if (!(regionPie || zoom || r.n >= 5 || selName() === r.name)) continue;
+    const txt = regionPie ? `${r.name} ${pct(r.r)}` : r.name, w = txt.length * 10 + 4, h = 13, ro = rad(r) + (regionPie ? 4 : 0);
+    const cands = [
+      { dx: 0, dy: ro + 12, a: "middle", x0: -w / 2, y0: ro + 1 }, { dx: 0, dy: -ro - 4, a: "middle", x0: -w / 2, y0: -ro - 14 },
+      { dx: ro + 4, dy: 4, a: "start", x0: ro + 4, y0: -8 }, { dx: -ro - 4, dy: 4, a: "end", x0: -ro - 4 - w, y0: -8 },
+    ];
+    for (const c of cands) {
+      const bx = { x0: d.x + c.x0, x1: d.x + c.x0 + w, y0: d.y + c.y0, y1: d.y + c.y0 + h };
+      if (bx.x0 < 0 || bx.x1 > W || placed.some(p => overlap(p, bx)) || nodes.some(o => o !== d && hitsCircle(bx, o))) continue;
+      placed.push(bx); out.set(r.name, c); break;
+    }
+  }
+  return out;
+}
+function putLabel(gg, d, txt) {
+  const c = labelSlots && labelSlots.get(d.r.name);
+  if (c) gg.append("text").attr("x", c.dx).attr("y", c.dy).style("text-anchor", c.a).text(txt);
 }
 // 지도에서 회차의 나라(확대 중이면 장소)만 밝게
 function highlight(names) { svg.selectAll("g.pie").classed("dim", d => names != null && !names.has(d.r.name)); }
 
 function epLines(list, n) {
   return episodesAgg(list).sort((a, b) => b[mode] - a[mode]).slice(0, n)
-    .map(e => `<div class="e"><b>${esc(epLabel(e))}</b><span>${esc(e.sub)}</span><span>${valTxt(e)}</span></div>`).join("");
+    .map(e => `<div class="e"><b>${esc(epLabel(e))}</b><span>${esc(e.sub)}</span><span>${valTxt(e)}</span></div>`).join("")
+    .replace(/^/, '<div class="eg">') + "</div>";
 }
 function showTip(e, r) {
   const eps = new Set(r.list.map(b => b.k)).size;
@@ -652,7 +714,8 @@ function showTerm(el) {
 }
 const hideTerm = () => { tt.style.opacity = 0; };
 document.addEventListener("mouseover", e => { const el = e.target.closest && e.target.closest(".term"); el ? showTerm(el) : hideTerm(); });
-document.addEventListener("focusin", e => { const el = e.target.closest && e.target.closest(".term"); el ? showTerm(el) : hideTerm(); });
+document.addEventListener("focusin", e => { const el = e.target.closest && e.target.closest(".term"); if (el && el.matches(":focus-visible")) showTerm(el); else hideTerm(); });
+document.addEventListener("mouseout", e => { if (e.target.closest && e.target.closest(".term") && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest(".term"))) hideTerm(); });
 document.addEventListener("focusout", hideTerm);
 addEventListener("scroll", () => { tip.style.opacity = 0; }, true);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", refresh);
@@ -667,7 +730,8 @@ document.getElementById("sub").textContent = `<걸어서 세계속으로>·<세�
 function fitStage() {
   const mc = document.querySelector(".mapcard"), st = document.querySelector(".stage");
   if (innerWidth <= 1000) { mc.style.height = ""; return; }
-  mc.style.height = Math.round(Math.min((mc.clientWidth - 12) * H / W + 12, st.clientHeight - 150)) + "px";
+  const foot = 62;
+  mc.style.height = Math.round(Math.min((mc.clientWidth - 12) * H / W + 12, st.clientHeight - foot)) + "px";
 }
 fitStage(); addEventListener("resize", fitStage);
 refresh();
