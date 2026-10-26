@@ -6,84 +6,96 @@
 <title>권역별 시청률 지도</title>
 <style>
 :root {
-  --bg: #f6f7f9; --panel: #ffffff; --ink: #1c2330; --sub: #5d6778; --line: #dfe3ea;
-  --land: #e4e8ee; --land-line: #ffffff;
-  --nat: #4f9a68; --cul: #7a64b0; --both: #3fa7a7; --none: #c3c8d1;
-  --up: #1f6fb8; --mid: #cfd3da; --down: #e07b39;
+  --bg1: #f4f6fd; --bg2: #e9e6fb; --grid: rgba(60, 64, 110, .10);
+  --glass: rgba(255, 255, 255, .72); --glass-line: rgba(255, 255, 255, .9); --shadow: 0 10px 34px rgba(104, 88, 214, .13);
+  --ink: #12142b; --sub: #5a5f7d; --line: rgba(110, 112, 170, .22);
+  --land: rgba(232, 236, 250, .95); --land-line: #ffffff;
+  --nat: #22b3c8; --cul: #7b69ef; --both: #4f8cf0; --none: #d3d8e8;
+  --up: #4536c8; --mid: #dde1f0; --down: #f08a63; --accent: #6a58ea; --accent2: #2bbcd0;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #141922; --panel: #1c2330; --ink: #e8ebf1; --sub: #98a2b3; --line: #2c3545;
-    --land: #2a3342; --land-line: #1c2330; --none: #5b6474; --mid: #5b6474;
+    --bg1: #0f1224; --bg2: #1a1740; --grid: rgba(180, 185, 255, .08);
+    --glass: rgba(28, 32, 62, .72); --glass-line: rgba(255, 255, 255, .12); --shadow: 0 10px 34px rgba(0, 0, 0, .35);
+    --ink: #eef0ff; --sub: #a3a8cc; --line: rgba(160, 165, 230, .22); --land: rgba(52, 58, 100, .9); --land-line: #1c2040; --none: #4a5074; --mid: #4a5074; --up: #8f84ff;
   }
 }
-:root[data-theme="dark"] {
-  --bg: #141922; --panel: #1c2330; --ink: #e8ebf1; --sub: #98a2b3; --line: #2c3545;
-  --land: #2a3342; --land-line: #1c2330; --none: #5b6474; --mid: #5b6474;
-}
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
-.wrap { max-width: 1320px; margin: 0 auto; padding: 20px 16px 32px; }
-h1 { font-size: 24px; margin: 0 0 4px; }
-.sub { color: var(--sub); font-size: 13px; margin: 0 0 14px; line-height: 1.5; }
-.grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; }
+body {
+  margin: 0; color: var(--ink); font-family: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  background:
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 64px 64px,
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 64px 64px,
+    radial-gradient(1100px 520px at 8% -10%, rgba(43, 188, 208, .28), transparent 60%),
+    radial-gradient(900px 520px at 100% 0%, rgba(123, 105, 239, .26), transparent 60%),
+    linear-gradient(160deg, var(--bg1), var(--bg2));
+  background-attachment: fixed; min-height: 100vh;
+}
+.wrap { max-width: 1320px; margin: 0 auto; padding: 24px 16px 36px; }
+h1 { font-size: 24px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 4px; }
+.badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; color: #fff; vertical-align: 4px; margin-left: 8px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.sub { color: var(--sub); font-size: 13px; margin: 0 0 16px; line-height: 1.5; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; }
 @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.card { background: var(--glass); border: 1px solid var(--glass-line); border-radius: 22px; padding: 14px; box-shadow: var(--shadow); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 .ctrl { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; font-size: 13px; color: var(--sub); }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg button { border: 0; background: transparent; color: var(--ink); padding: 5px 10px; font: inherit; cursor: pointer; }
-.seg button[aria-pressed="true"] { background: var(--up); color: #fff; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; padding: 2px; background: rgba(255, 255, 255, .5); }
+.seg button { border: 0; background: transparent; color: var(--ink); padding: 5px 12px; font: inherit; cursor: pointer; border-radius: 999px; }
+.seg button[aria-pressed="true"] { background: linear-gradient(90deg, var(--accent), #8b79f6); color: #fff; box-shadow: 0 3px 10px rgba(106, 88, 234, .35); }
 #map { width: 100%; height: auto; display: block; }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: var(--sub); margin-top: 8px; align-items: center; }
-.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
 .ramp { width: 120px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--down), var(--mid), var(--up)); display: inline-block; vertical-align: middle; }
-.pie { cursor: pointer; }
+.pie { cursor: pointer; filter: drop-shadow(0 5px 7px rgba(90, 76, 200, .28)); }
 .pie .ring { fill: none; stroke-width: 5; }
-.pie.sel .ring { stroke-width: 7; }
-.pie text { font-size: 11px; fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; text-anchor: middle; pointer-events: none; }
+.pie.sel .ring { stroke-width: 8; }
+.pie text { font-size: 11px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: rgba(255, 255, 255, .85); stroke-width: 3px; text-anchor: middle; pointer-events: none; }
 .lead { stroke: var(--sub); stroke-width: 1; opacity: .5; }
-#tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); padding: 6px 9px; border-radius: 6px; font-size: 13px; line-height: 1.45; opacity: 0; transition: opacity .1s; z-index: 5; }
-h2 { font-size: 16px; margin: 0 0 8px; }
-.rank { list-style: none; margin: 0; padding: 0; font-size: 13px; }
-.rank li { display: grid; grid-template-columns: 96px 1fr 46px; gap: 6px; align-items: center; padding: 3px 0; cursor: pointer; }
-.rank li.sel { font-weight: 700; }
+#tip { position: fixed; pointer-events: none; background: rgba(18, 20, 43, .92); color: #fff; padding: 6px 10px; border-radius: 10px; font-size: 13px; line-height: 1.45; opacity: 0; transition: opacity .1s; z-index: 5; }
+h2 { font-size: 16px; font-weight: 800; margin: 0 0 8px; }
+.rank { max-height: 360px; overflow-y: auto; list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.rank li { display: grid; grid-template-columns: 96px 1fr 46px; gap: 6px; align-items: center; padding: 3px 6px; margin: 0 -6px; border-radius: 10px; cursor: pointer; }
+.rank li:hover { background: rgba(123, 105, 239, .08); }
+.rank li.sel { font-weight: 700; background: rgba(123, 105, 239, .14); }
 .rank .bar { height: 8px; border-radius: 4px; background: var(--line); position: relative; }
 .rank .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
 .rank .v { text-align: right; font-variant-numeric: tabular-nums; }
 .rank .ref { color: var(--sub); font-size: 11px; }
 .detail { font-size: 13px; line-height: 1.6; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
 .detail b { font-weight: 700; }
-.chip { display: inline-block; padding: 1px 7px; border-radius: 10px; background: var(--line); margin: 1px 2px 1px 0; font-size: 11px; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 999px; background: rgba(123, 105, 239, .13); margin: 1px 2px 1px 0; font-size: 11px; }
 .note { font-size: 11px; color: var(--sub); line-height: 1.55; margin-top: 12px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>권역별 시청률 성과 지도</h1>
+  <h1>권역별 시청률 성과 지도<span class="badge">BETA</span></h1>
   <p class="sub" id="sub"></p>
   <div class="grid">
     <div class="card">
       <div class="ctrl">
-        <span>링 색 기준</span>
+        <span>보기</span>
+        <span class="seg" role="group" aria-label="보기 단위">
+          <button id="vC" aria-pressed="true">국가</button>
+          <button id="vR" aria-pressed="false">권역(파이)</button>
+        </span>
+        <span>색 기준</span>
         <span class="seg" role="group" aria-label="링 색 기준">
           <button id="mM" aria-pressed="true">월보정지수</button>
           <button id="mS" aria-pressed="false">슬롯지수</button>
         </span>
-        <span>· 원을 누르면 오른쪽에 상세가 나옵니다</span>
+        <span>· 원에 마우스를 올리면 도시·테마가 뜨고, 누르면 오른쪽에 상세가 나옵니다</span>
       </div>
       <svg id="map" viewBox="0 40 1200 520" role="img" aria-label="세계지도 위 권역별 원형 그래프"></svg>
       <div class="legend">
-        <span>원 크기 = 방송수</span>
+        <span>원 크기 = 방송수(점선·흐린 원은 3건 미만)</span>
         <span>링 색: 낮음 <span class="ramp"></span> 높음 (1.0 = 같은 자리 평균)</span>
-        <span><i class="sw" style="background:var(--nat)"></i>자연 테마만</span>
-        <span><i class="sw" style="background:var(--cul)"></i>문화 테마만</span>
-        <span><i class="sw" style="background:var(--both)"></i>둘 다</span>
-        <span><i class="sw" style="background:var(--none)"></i>테마 분류 없음</span>
+        <span id="legPie"><i class="sw" style="background:var(--nat)"></i>자연 테마만 <i class="sw" style="background:var(--cul)"></i>문화 테마만 <i class="sw" style="background:var(--both)"></i>둘 다 <i class="sw" style="background:var(--none)"></i>테마 분류 없음</span>
         <span>점선·흐린 원 = 방송 3건 미만(참고용)</span>
       </div>
     </div>
     <div class="card">
-      <h2>권역 순위 <span class="ref" id="rankTitle"></span></h2>
+      <h2>순위 <span class="ref" id="rankTitle"></span></h2>
       <ul class="rank" id="rank"></ul>
       <div class="detail" id="detail">원이나 순위 항목을 누르세요.</div>
       <p class="note">지수는 같은 프로그램·요일·시간대(월보정은 같은 달까지) 평균 대비 비율입니다. 2026-07 이후 부제가 분류와 맞은 방송만 집계했고, 여름·가을 자료뿐이라 계절 결론은 이릅니다.</p>
@@ -102,34 +114,62 @@ const POS = {
   "북미": [-100, 45], "중미·카리브": [-80, 17], "남미": [-60, -14], "북아프리카": [10, 28], "서아프리카": [-3, 10],
   "동아프리카": [37, 2], "남부아프리카": [24, -21], "오세아니아": [134, -25], "태평양 섬": [-165, -10]
 };
+// 국가 대표 좌표(경도, 위도)
+const CPOS = {
+  "중국": [104, 35], "베트남": [106, 16], "태국": [101, 15], "라오스": [103, 19], "미얀마": [96, 21], "인도네시아": [113, -2], "노르웨이": [9, 62],
+  "스페인": [-3.7, 40], "러시아": [95, 60], "일본": [138, 36], "네팔": [84, 28], "몽골": [103, 46.8], "호주": [134, -25], "이탈리아": [12.5, 42.5],
+  "아이슬란드": [-19, 65], "미국": [-98, 39], "아르헨티나": [-64, -34], "필리핀": [122, 12], "튀르키예": [35, 39], "파키스탄": [69, 30],
+  "뉴질랜드": [172, -41], "모로코": [-6, 32], "카자흐스탄": [67, 48], "볼리비아": [-64, -17], "나미비아": [17, -22], "칠레": [-71, -33],
+  "브라질": [-52, -10], "오스트리아": [14.5, 47.5], "캄보디아": [105, 12.5], "스리랑카": [80.7, 7.8], "세네갈": [-14.5, 14.5], "타이완": [121, 23.7],
+  "페루": [-75, -10], "크로아티아": [16, 45.2], "짐바브웨": [30, -19], "영국": [-2, 54], "싱가포르": [103.8, 1.35], "그리스": [22, 39],
+  "튀니지": [9.5, 34], "가나": [-1.2, 7.9], "몰타": [14.4, 35.9], "슬로베니아": [14.8, 46.1], "에콰도르": [-78, -1.5], "캐나다": [-106, 56],
+  "핀란드": [26, 64], "말레이시아": [102, 4], "독일": [10.4, 51], "요르단": [36.5, 31], "부탄": [90.4, 27.4], "보츠와나": [24, -22],
+  "이스라엘": [35, 31.4], "타지키스탄": [71, 38.8], "덴마크": [10, 56], "프랑스": [2.3, 46.6], "잠비아": [27.8, -13.1], "오만": [57, 21],
+  "탄자니아": [35, -6.4], "에티오피아": [40, 9], "헝가리": [19.5, 47], "라트비아": [24.6, 56.9], "조지아": [43.5, 42.2], "우루과이": [-56, -33],
+  "홍콩": [114.2, 22.3], "말라위": [34, -13.5], "우간다": [32.4, 1.4], "베네수엘라": [-66, 7], "그린란드": [-42, 72], "이란": [53, 32.5],
+  "코스타리카": [-84, 9.9], "슬로바키아": [19.5, 48.7], "남아프리카공화국": [24.5, -29], "팔라우": [134.5, 7.5], "폴란드": [19.4, 52],
+  "카타르": [51.2, 25.3], "사우디아라비아": [45, 24], "마카오": [113.55, 22.2], "포르투갈": [-8, 39.6], "체코": [15.5, 49.8], "아르메니아": [45, 40.2],
+  "프랑스령 폴리네시아": [-149.4, -17.7], "자메이카": [-77.3, 18.1], "케냐": [37.9, 0.2], "알제리": [2.6, 28], "키르기스스탄": [74.6, 41.2],
+  "몬테네그로": [19.3, 42.7], "모리타니": [-10.9, 20.3], "파라과이": [-58, -23], "콜롬비아": [-74, 4], "멕시코": [-102, 23], "쿠바": [-79.5, 21.6]
+};
 const regions = DATA.regions.filter(r => POS[r.name]);
+const countries = DATA.countries.filter(c => CPOS[c.name]);
 document.getElementById("sub").textContent =
-  `OLIFE <걸어서 세계속으로>·<세계테마기행> · ${DATA.period} · ${DATA.target} · 방송 ${regions.reduce((a, r) => a + r.n, 0)}건(여러 권역 방송은 중복 집계)`;
+  `OLIFE <걸어서 세계속으로>·<세계테마기행> · ${DATA.period} · ${DATA.target} · 방송 ${regions.reduce((a, r) => a + r.n, 0)}건(여러 권역·국가 방송은 중복 집계)`;
 
-let mode = "idxM";
+let mode = "idxM", view = "country";
 const W = 1200, H = 600;
 const svg = d3.select("#map");
+const defs = svg.append("defs");
+const gl = defs.append("radialGradient").attr("id", "gloss").attr("cx", "30%").attr("cy", "25%").attr("r", "75%");
+gl.append("stop").attr("offset", "0%").attr("stop-color", "#fff").attr("stop-opacity", .5);
+gl.append("stop").attr("offset", "55%").attr("stop-color", "#fff").attr("stop-opacity", 0);
 const proj = d3.geoNaturalEarth1().scale(210).translate([W / 2, H / 2 + 20]);
 const path = d3.geoPath(proj);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const color = d3.scaleLinear().domain([0.75, 1, 1.15]).clamp(true);
 function ringColor(v) { color.range([css("--down"), css("--mid"), css("--up")]); return color(v); }
-const rad = r => 9 + 3.1 * Math.sqrt(r.n);
+const radR = r => 9 + 3.1 * Math.sqrt(r.n);
+const radC = c => 4.5 + 2.6 * Math.sqrt(c.n);
+const rad = e => view === "region" ? radR(e) : radC(e);
+const items = () => view === "region" ? regions : countries;
+const posOf = e => view === "region" ? POS[e.name] : CPOS[e.name];
 
 fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json").then(r => r.json()).then(topo => {
+  svg.append("path").datum(d3.geoGraticule10()).attr("d", path).attr("fill", "none").attr("stroke", "var(--grid)").attr("stroke-width", .8);
   const land = topojson.feature(topo, topo.objects.countries);
   svg.append("g").selectAll("path").data(land.features.filter(f => f.id !== "010")).join("path").attr("d", path)
     .attr("fill", "var(--land)").attr("stroke", "var(--land-line)").attr("stroke-width", .5);
-  layout(); draw();
-}).catch(() => { layout(); draw(); d3.select("#sub").append("span").text(" (지도 윤곽을 불러오지 못했습니다 — 인터넷 연결 확인)"); });
+  refresh();
+}).catch(() => { refresh(); d3.select("#sub").append("span").text(" (지도 윤곽을 불러오지 못했습니다 — 인터넷 연결 확인)"); });
 
 // 충돌 회피 배치: 실제 위치(anchor)에서 시작해 서로 겹치지 않게 밀어낸다.
 let nodes = [];
 function layout() {
-  nodes = regions.map(r => { const [x, y] = proj(POS[r.name]); return { r, ax: x, ay: y, x, y, rad: rad(r) + 7 }; });
+  nodes = items().map(r => { const [x, y] = proj(posOf(r)); return { r, ax: x, ay: y, x, y, rad: rad(r) + (view === "region" ? 7 : 2) }; });
   const sim = d3.forceSimulation(nodes)
     .force("x", d3.forceX(d => d.ax).strength(.12)).force("y", d3.forceY(d => d.ay).strength(.12))
-    .force("c", d3.forceCollide(d => d.rad + 3).iterations(4)).stop();
+    .force("c", d3.forceCollide(d => d.rad + 1.5).iterations(4)).stop();
   for (let i = 0; i < 400; i++) sim.tick();
   nodes.forEach(n => { n.x = Math.max(n.rad, Math.min(W - n.rad, n.x)); n.y = Math.max(n.rad, Math.min(H - n.rad, n.y)); });
 }
@@ -141,56 +181,78 @@ function draw() {
   const g = svg.append("g").attr("class", "layer");
   g.selectAll("line").data(nodes.filter(n => Math.hypot(n.x - n.ax, n.y - n.ay) > n.rad)).join("line").attr("class", "lead")
     .attr("x1", d => d.ax).attr("y1", d => d.ay).attr("x2", d => d.x).attr("y2", d => d.y);
-  g.selectAll("circle.anchor").data(nodes).join("circle").attr("class", "anchor").attr("r", 2.5).attr("cx", d => d.ax).attr("cy", d => d.ay).attr("fill", "var(--sub)");
+  g.selectAll("circle.anchor").data(nodes).join("circle").attr("class", "anchor").attr("r", 2).attr("cx", d => d.ax).attr("cy", d => d.ay).attr("fill", "var(--sub)");
   const p = g.selectAll("g.pie").data(nodes).join("g").attr("class", d => "pie" + (selected === d.r.name ? " sel" : ""))
     .attr("transform", d => `translate(${d.x},${d.y})`).style("opacity", d => d.r.sample ? 1 : .55)
     .on("click", (e, d) => select(d.r.name))
     .on("mousemove", (e, d) => showTip(e, d.r)).on("mouseleave", () => tip.style.opacity = 0);
   const arc = d3.arc(), pie = d3.pie().sort(null).value(d => d.v);
   p.each(function (d) {
-    const r = d.r, ro = rad(r);
-    const parts = [{ v: r.natureOnly, c: "--nat" }, { v: r.cultureOnly, c: "--cul" }, { v: r.both, c: "--both" }, { v: r.neither, c: "--none" }].filter(x => x.v > 0);
-    const gg = d3.select(this);
-    gg.selectAll("path").data(pie(parts)).join("path").attr("d", a => arc.innerRadius(0).outerRadius(ro)(a)).attr("fill", a => `var(${a.data.c})`).attr("stroke", "var(--panel)").attr("stroke-width", 1);
-    gg.append("circle").attr("class", "ring").attr("r", ro + 3.5).attr("stroke", ringColor(r[mode])).attr("stroke-dasharray", r.sample ? null : "3 3");
-    gg.append("text").attr("y", ro + 18).text(`${r.name} ${r[mode].toFixed(2)}`);
+    const r = d.r, ro = rad(r), gg = d3.select(this);
+    if (view === "region") {
+      const parts = [{ v: r.natureOnly, c: "--nat" }, { v: r.cultureOnly, c: "--cul" }, { v: r.both, c: "--both" }, { v: r.neither, c: "--none" }].filter(x => x.v > 0);
+      gg.selectAll("path").data(pie(parts)).join("path").attr("d", a => arc.innerRadius(0).outerRadius(ro)(a)).attr("fill", a => `var(${a.data.c})`).attr("stroke", "var(--glass-line)").attr("stroke-width", 1);
+      gg.append("circle").attr("r", ro).attr("fill", "url(#gloss)").attr("pointer-events", "none");
+      gg.append("circle").attr("class", "ring").attr("r", ro + 3.5).attr("stroke", ringColor(r[mode])).attr("stroke-dasharray", r.sample ? null : "3 3");
+      gg.append("text").attr("y", ro + 18).text(`${r.name} ${r[mode].toFixed(2)}`);
+    } else {
+      gg.append("circle").attr("r", ro).attr("fill", ringColor(r[mode])).attr("stroke", "#fff").attr("stroke-width", 1.5).attr("stroke-dasharray", r.sample ? null : "3 2");
+      gg.append("circle").attr("r", ro).attr("fill", "url(#gloss)").attr("pointer-events", "none");
+      if (r.n >= 5 || selected === r.name) gg.append("text").attr("y", ro + 12).text(r.name);
+    }
   });
 }
+const chipsOf = a => a.length ? a.map(([t, n]) => `${t} ${n}`).join(", ") : "-";
 function showTip(e, r) {
-  tip.innerHTML = `<b>${r.name}</b><br>월보정지수 ${r.idxM.toFixed(2)} · 슬롯지수 ${r.idx.toFixed(2)}<br>방송 ${r.n}건 · 회차 ${r.episodes}편 · 평균 ${r.rating.toFixed(3)}%${r.sample ? "" : "<br>표본 적음(참고용)"}`;
-  tip.style.opacity = 1; tip.style.left = Math.min(innerWidth - 230, e.clientX + 14) + "px"; tip.style.top = (e.clientY + 14) + "px";
+  const places = (r.places || []).slice(0, 6).map(p => `${p.name} ${p.n}건·${p.idxM.toFixed(2)}`).join("<br>");
+  const cs = (r.countries || []).slice(0, 5).map(c => `${c.name} ${c.n}건·${c.idxM.toFixed(2)}`).join("<br>");
+  tip.innerHTML = `<b>${r.name}</b>${r.region ? ` <span style="opacity:.7">${r.region}</span>` : ""}<br>월보정지수 ${r.idxM.toFixed(2)} · 슬롯지수 ${r.idx.toFixed(2)}<br>방송 ${r.n}건 · 회차 ${r.episodes}편 · 평균 ${r.rating.toFixed(3)}%${r.sample ? "" : "<br>표본 적음(참고용)"}` +
+    (places ? `<br><span style="opacity:.7">도시·장소(방송수·지수)</span><br>${places}` : "") +
+    (cs ? `<br><span style="opacity:.7">주요 국가(방송수·지수)</span><br>${cs}` : "") +
+    (r.themes && r.themes.length ? `<br><span style="opacity:.7">테마</span> ${chipsOf(r.themes)}` : "");
+  tip.style.opacity = 1; tip.style.left = Math.min(innerWidth - 260, e.clientX + 14) + "px"; tip.style.top = Math.min(innerHeight - 220, e.clientY + 14) + "px";
 }
 function select(name) { selected = name; draw(); renderRank(); renderDetail(); }
 function renderRank() {
-  const rs = [...regions].sort((a, b) => b[mode] - a[mode]);
-  document.getElementById("rankTitle").textContent = mode === "idxM" ? "(월보정지수)" : "(슬롯지수)";
+  const rs = [...items()].sort((a, b) => (b.sample - a.sample) || (b[mode] - a[mode])); // 표본 충분한 항목을 먼저, 참고용은 뒤로
+  document.getElementById("rankTitle").textContent = (view === "region" ? "권역" : "국가") + (mode === "idxM" ? " · 월보정지수" : " · 슬롯지수");
   const ul = d3.select("#rank");
   ul.selectAll("li").remove();
   rs.forEach(r => {
     const li = ul.append("li").attr("class", selected === r.name ? "sel" : "").on("click", () => select(r.name));
     li.append("span").text(r.name);
-    li.append("span").attr("class", "bar").append("i").style("width", Math.max(4, Math.min(100, (r[mode] - 0.6) / 0.6 * 100)) + "%").style("background", ringColor(r[mode])).style("opacity", r.sample ? 1 : .45);
+    li.append("span").attr("class", "bar").append("i").style("width", Math.max(4, Math.min(100, (r[mode] - 0.6) / 0.7 * 100)) + "%").style("background", ringColor(r[mode])).style("opacity", r.sample ? 1 : .45);
     li.append("span").attr("class", "v").html(r[mode].toFixed(2) + (r.sample ? "" : '<span class="ref">*</span>'));
   });
 }
 function renderDetail() {
-  const r = regions.find(x => x.name === selected); const el = document.getElementById("detail");
-  if (!r) return;
-  const chips = a => a.length ? a.map(([t, n]) => `<span class="chip">${t} ${n}</span>`).join("") : "-";
-  el.innerHTML = `<b>${r.name}</b> — 방송 ${r.n}건, 회차 ${r.episodes}편, 평균 시청률 ${r.rating.toFixed(3)}%${r.sample ? "" : " (참고용)"}<br>` +
+  const r = items().find(x => x.name === selected); const el = document.getElementById("detail");
+  if (!r) { el.textContent = "원이나 순위 항목을 누르세요."; return; }
+  const chip = (t) => `<span class="chip">${t}</span>`;
+  el.innerHTML = `<b>${r.name}</b> — 방송 ${r.n}건, 회차 ${r.episodes}편, 평균 ${r.rating.toFixed(3)}%${r.sample ? "" : " (참고용)"}<br>` +
     `월보정지수 <b>${r.idxM.toFixed(2)}</b> · 슬롯지수 <b>${r.idx.toFixed(2)}</b><br>` +
-    `자연 테마 ${chips(r.topNature)}<br>문화 테마 ${chips(r.topCulture)}<br>` +
-    `주요 국가 ${r.countries.map(c => `<span class="chip">${c.name} ${c.n}건·${c.idxM.toFixed(2)}</span>`).join("")}`;
+    (view === "region"
+      ? `자연 테마 ${r.topNature.map(([t, n]) => chip(t + " " + n)).join("") || "-"}<br>문화 테마 ${r.topCulture.map(([t, n]) => chip(t + " " + n)).join("") || "-"}<br>주요 국가 ${r.countries.map(c => chip(`${c.name} ${c.n}건·${c.idxM.toFixed(2)}`)).join("")}`
+      : `테마 ${r.themes.map(([t, n]) => chip(t + " " + n)).join("") || "-"}<br>도시·장소 ${r.places.length ? r.places.map(p => chip(`${p.name} ${p.n}건·${p.idxM.toFixed(2)}`)).join("") : "-"}`);
 }
+function refresh() { layout(); draw(); renderRank(); renderDetail(); }
 function setMode(m) {
   mode = m;
   document.getElementById("mM").setAttribute("aria-pressed", m === "idxM"); document.getElementById("mS").setAttribute("aria-pressed", m === "idx");
   draw(); renderRank();
 }
+function setView(v) {
+  view = v; selected = null;
+  document.getElementById("vC").setAttribute("aria-pressed", v === "country"); document.getElementById("vR").setAttribute("aria-pressed", v === "region");
+  document.getElementById("legPie").style.display = v === "region" ? "" : "none";
+  refresh();
+}
 document.getElementById("mM").onclick = () => setMode("idxM");
 document.getElementById("mS").onclick = () => setMode("idx");
+document.getElementById("vC").onclick = () => setView("country");
+document.getElementById("vR").onclick = () => setView("region");
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { draw(); renderRank(); });
-renderRank();
+document.getElementById("legPie").style.display = "none";
 </script>
 </body>
 </html>

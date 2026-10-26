@@ -100,6 +100,17 @@ function NavInner({ role }: { role: Role | null }) {
               </Fragment>
             );
           })}
+          {/* 베타 카테고리(2026-10-26 사용자 요청) — 시험 공개 화면 모음. 지금은 권역별 시청률 지도 하나. */}
+          <li className="shrink-0">
+            <Link
+              href="/beta/geo-map"
+              aria-current={pathname.startsWith("/beta") ? "page" : undefined}
+              title="시험 공개 화면 — 권역별 시청률 지도"
+              className={`block border-b-2 px-3 py-2.5 text-[13px] font-medium transition ${pathname.startsWith("/beta") ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"}`}
+            >
+              베타 <span className="ml-0.5 rounded-full bg-[#f1f0f9] px-1.5 py-0.5 text-[10px] font-semibold text-[#5b4bd0]">NEW</span>
+            </Link>
+          </li>
         </ul>
       </nav>
       <ActionRibbon />

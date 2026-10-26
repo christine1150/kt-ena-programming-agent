@@ -294,12 +294,22 @@ const regionData = allAgg.filter((a) => a.dim === "권역").map((a) => {
     topNature: cnt((c) => c.nature).slice(0, 3), topCulture: cnt((c) => c.culture).slice(0, 3), countries,
   };
 });
+// 국가별 요약(지도의 국가 원 + 마우스 오버용): 지수, 방문 도시·장소(회차 단위 매칭만), 주요 테마
+const countryData = allAgg.filter((a) => a.dim === "국가").map((a) => {
+  const places = new Map<string, Bc[]>();
+  for (const b of a.bcs) if (b.level === "회차") for (const pl of new Set(b.cls.flatMap((c) => (c.countries.includes(a.name) ? c.places : [])))) { if (!places.has(pl)) places.set(pl, []); places.get(pl)!.push(b); }
+  const themes = new Map<string, number>();
+  for (const b of a.bcs) for (const t of new Set(b.cls.flatMap((c) => [...c.nature, ...c.culture]))) themes.set(t, (themes.get(t) ?? 0) + 1);
+  const reg = new Map<string, number>();
+  for (const b of a.bcs) for (const c of b.cls) if (c.countries.includes(a.name)) for (const r of split(c.region)) reg.set(r, (reg.get(r) ?? 0) + 1);
+  return {
+    name: a.name, n: a.bcs.length, episodes: episodes(a), rating: mean(a.bcs.map((b) => b.rating)),
+    idx: mean(a.bcs.map((b) => b.idx)), idxM: mean(a.bcs.map((b) => b.idxM)), sample: a.bcs.length >= MIN_N && episodes(a) >= 2,
+    region: [...reg.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? "",
+    places: [...places.entries()].map(([name, xs]) => ({ name, n: xs.length, idxM: mean(xs.map((b) => b.idxM)) })).sort((x, y) => y.n - x.n).slice(0, 10),
+    themes: [...themes.entries()].sort((x, y) => y[1] - x[1]).slice(0, 4),
+  };
+}).sort((x, y) => y.n - x.n);
 const fsx = await import("node:fs");
-fsx.writeFileSync("docs/olife-geo/region-map-data.json", JSON.stringify({ period: `${START} ~ ${airs[airs.length - 1]?.date}`, target: label, overallRating, regions: regionData }));
+fsx.writeFileSync("docs/olife-geo/region-map-data.json", JSON.stringify({ period: `${START} ~ ${airs[airs.length - 1]?.date}`, target: label, overallRating, regions: regionData, countries: countryData }));
 console.log("권역", regionData.map((r) => `${r.name}(${r.n})`).join(", "));
-
-// 지도 HTML 생성: 템플릿의 __DATA__ 자리에 위 JSON을 그대로 넣는다(단일 파일, 서버 불필요)
-const tpl = fsx.readFileSync("scripts/olife-geo/region-map.template.html", "utf8");
-const json = fsx.readFileSync("docs/olife-geo/region-map-data.json", "utf8").replace(/</g, "\u003c");
-fsx.writeFileSync("docs/olife-geo/권역별_시청률_지도.html", tpl.replace("__DATA__", () => json));
-console.log("지도 HTML: docs/olife-geo/권역별_시청률_지도.html");
