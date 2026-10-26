@@ -226,6 +226,12 @@ span.term { border-bottom: 1.5px dotted var(--purple); }
 .lcol .below .eps { flex: 1; min-height: 0; max-height: none; }
 .foot { padding: 6px 12px 0; }
 @media (max-width: 1000px) { .lcol { display: block; } .lcol .below { max-height: 420px; margin-bottom: 8px; } }
+/* 요약은 지도를 가리지 않게 오른쪽 패널 맨 위 작은 글씨 한 줄로 */
+.kpis { position: static; transform: none; display: flex; flex-wrap: wrap; gap: 2px 12px; max-width: none; flex: none; font-size: 11px; color: var(--sub); }
+.kpi { display: inline; padding: 0; gap: 0; border-radius: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; white-space: nowrap; }
+.kpi .t { font-size: 11px; }
+.kpi .v { font-size: 12px; font-weight: 800; color: var(--ink); max-width: none; display: inline; }
+.kpi .s, .kpi .ic { display: none; }
 </style>
 </head>
 <body>
@@ -250,12 +256,6 @@ span.term { border-bottom: 1.5px dotted var(--purple); }
           <button id="zout" title="축소 (−)" aria-label="축소">−</button>
           <button id="zhome" title="세계지도로 돌아가기 (ESC)" aria-label="세계지도로 돌아가기" disabled>⌂</button>
         </div>
-        <div class="kpis">
-          <div class="kpi glass"><span class="ic g-mint">%</span><div><div class="t">평균 시청률</div><div class="v" id="k1"></div><div class="s" id="k1s"></div></div></div>
-          <div class="kpi glass"><span class="ic g-sky">N</span><div><div class="t">집계 방송</div><div class="v" id="k2"></div><div class="s" id="k2s"></div></div></div>
-          <div class="kpi glass"><span class="ic g-purple">1</span><div><div class="t">1위 나라</div><div class="v" id="k3"></div><div class="s" id="k3s"></div></div></div>
-          <div class="kpi glass"><span class="ic g-pink">★</span><div><div class="t">1위 회차</div><div class="v" id="k4"></div><div class="s" id="k4s"></div></div></div>
-        </div>
       </div>
     </div>
   <div class="card glass below">
@@ -264,6 +264,12 @@ span.term { border-bottom: 1.5px dotted var(--purple); }
   </div>
    </div>
     <div class="side glass">
+      <div class="kpis">
+        <span class="kpi"><span class="t">평균</span> <b class="v" id="k1"></b><i class="s" id="k1s"></i></span>
+        <span class="kpi"><span class="t">방송</span> <b class="v" id="k2"></b><i class="s" id="k2s"></i></span>
+        <span class="kpi"><span class="t">1위 나라</span> <b class="v" id="k3"></b><i class="s" id="k3s"></i></span>
+        <span class="kpi"><span class="t">1위 회차</span> <b class="v" id="k4"></b><i class="s" id="k4s"></i></span>
+      </div>
       <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="color:var(--sub)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="테마로 찾기 (예: 산, 음식, 축제)" autocomplete="off"></div>
       <div class="chips" id="chips"></div>
       <h2>순위 <span class="ref" id="rankTitle"></span></h2>
