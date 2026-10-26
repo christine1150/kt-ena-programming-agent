@@ -17,10 +17,10 @@ export interface EpisodeChartPoint {
   household: number | null;
 }
 
-const BLUE = "#3b5bdb";
+const BLUE = "#3c32e1"; // 채널 로고색 R60 G50 B225(사용자 지시 2026-10-27)
 const BLACK = "#18181b";
 const HEIGHT = 244; // 가구 값이 2049의 2~3배라 같은 축에서 2049 변화가 눌려 보이지 않도록 넉넉한 높이
-const PAD = { left: 36, right: 20, top: 30, bottom: 40 };
+const PAD = { left: 36, right: 92, top: 30, bottom: 40 }; // right: 맨 오른쪽 "평균" 칸
 const MAX_STEP = 96; // 회차가 적을 때 오른쪽으로 억지로 늘어나지 않게 한 칸 최대 폭(2026-09-01 사용자 지시와 같은 원칙)
 const NICE_STEPS = [0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10];
 
@@ -75,6 +75,22 @@ export function ReviewEpisodeChart({
   const xOf = (i: number) => x0 + step * i;
   const yOf = (v: number) => baseY - (v / top) * plotH;
   const lastIdx = n - 1;
+  // 지금까지 회차(그래프에 그린 점 전부)의 평균 — 오른쪽 칸에 적는다(사용자 지시 2026-10-27)
+  const avgOf = (pick: (p: EpisodeChartPoint) => number | null) => {
+    const v = points.map(pick).filter((x): x is number => x !== null && Number.isFinite(x));
+    return v.length > 0 ? v.reduce((a, b) => a + b, 0) / v.length : null;
+  };
+  const avgs = [
+    { id: "household" as const, color: BLACK, v: avgOf((p) => p.household) },
+    { id: "p2049" as const, color: BLUE, v: avgOf((p) => p.p2049) },
+  ].filter((a): a is { id: "household" | "p2049"; color: string; v: number } => a.v !== null);
+  const avgYs = avgs.map((a) => yOf(a.v));
+  if (avgYs.length === 2 && Math.abs(avgYs[0] - avgYs[1]) < 30) {
+    const mid = (avgYs[0] + avgYs[1]) / 2;
+    const hi = avgYs[0] <= avgYs[1] ? 0 : 1;
+    avgYs[hi] = mid - 15;
+    avgYs[1 - hi] = mid + 15;
+  }
   const hasHousehold = points.some((p) => p.household !== null);
   const has2049 = points.some((p) => p.p2049 !== null);
 
@@ -133,6 +149,17 @@ export function ReviewEpisodeChart({
               <text x={PAD.left - 7} y={yOf(t) + 3.5} textAnchor="end" fontSize={10} fill="#a1a1aa" className="tabular-nums">
                 {tickText(t, tickStep)}
               </text>
+            </g>
+          ))}
+          {/* 평균선(점선)과 맨 오른쪽 평균 칸 */}
+          {avgs.map((a) => (
+            <line key={`avg-${a.id}`} x1={PAD.left} x2={width - PAD.right + 8} y1={yOf(a.v)} y2={yOf(a.v)} stroke={a.color} strokeOpacity={0.35} strokeWidth={1} strokeDasharray="4 3" />
+          ))}
+          <line x1={width - PAD.right + 8} x2={width - PAD.right + 8} y1={PAD.top - 10} y2={baseY} stroke="#e4e4e7" />
+          <text x={width - PAD.right + 18} y={PAD.top - 14} fontSize={10} fill="#a1a1aa">평균</text>
+          {avgs.map((a, i) => (
+            <g key={`avgl-${a.id}`}>
+              <text x={width - PAD.right + 18} y={avgYs[i] + 4} fontSize={14} fontWeight={700} fill={a.color} className="tabular-nums">{fmt(a.v)}</text>
             </g>
           ))}
           {/* 주 타깃이 위에 그려지도록 보조 → 주 순서 */}
