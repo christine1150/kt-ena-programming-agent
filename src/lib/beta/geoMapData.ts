@@ -12,6 +12,7 @@ import geoPlaces from "./geoPlaces.json";
 import schedule from "./geoSchedule.json";
 import extra from "./geoExtra.json";
 import timeTags from "./geoTimeTags.json";
+import placeOverrides from "./geoPlaceOverrides.json";
 import { alignDay, type SchedBlock } from "./geoScheduleMatch";
 
 // 도시·장소 좌표표(scripts/olife-geo/places.txt에서 내보냄): 이름 → [[나라, 경도, 위도], ...]
@@ -21,6 +22,8 @@ type Cls = { no?: number; auto?: boolean; p: string; oe: number | null; ti: stri
 const CLS = [...(classification as Cls[]), ...(extra as unknown as Cls[])]; // 수기 분류표 + 제목 기반 자동 분류(schedule-classify.mts, 분류표에 없는 회차만)
 // 편성표 칸 조회표(scripts/olife-geo/schedule-parse.mts): "프로그램|달력날짜" → [[시작 분, 시작 회차, 끝 회차, 길이], ...]
 // 편성표 회차 제목에서 뽑은 시기 태그("프로그램|회차" → 태그): 수기 분류표에 이미 있는 회차에 보탠다
+// 사용자가 회차별로 지정한 장소(place-overrides.txt): "프로그램|회차" → [[이름, 나라, 경도, 위도], ...]
+const PO = placeOverrides as unknown as Record<string, [string, string, number, number][]>;
 const TT = timeTags as unknown as Record<string, string[]>;
 const SCHED = schedule as unknown as Record<string, SchedBlock[]>;
 
@@ -178,6 +181,8 @@ export async function buildGeoMapData(targetLabel?: string): Promise<GeoMapData>
           if (country) pl.push([name, country, e?.[1] ?? null, e?.[2] ?? null]);
         }
       }
+      const po = cd.ep != null ? PO[`${a.short}|${cd.ep}`] : undefined;
+      if (po) for (const [name, country, lon, lat] of po) if (!pl.some((x) => x[0] === name)) pl.push([name, country, lon, lat]);
       bcs.push({
         p: a.short, ep: cd.ep, sub: cd.sub, d: a.date, t: a.start.slice(0, 5), wd: sl.wd, band: sl.band,
         r: a.rating, m, i, k: cd.k, lv: cd.lv,

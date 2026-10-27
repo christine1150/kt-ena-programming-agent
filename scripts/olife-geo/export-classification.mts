@@ -50,3 +50,13 @@ for (const line of readFileSync("scripts/olife-geo/places.txt", "utf8").split(/\
 }
 writeFileSync("src/lib/beta/geoPlaces.json", JSON.stringify(places));
 console.log("내보냄: 장소", Object.keys(places).length, "곳 → src/lib/beta/geoPlaces.json");
+
+// 회차별 장소 지정(place-overrides.txt: 프로그램|회차|장소|나라|경도|위도) → src/lib/beta/geoPlaceOverrides.json
+const ov: Record<string, [string, string, number, number][]> = {};
+for (const line of readFileSync("scripts/olife-geo/place-overrides.txt", "utf8").split(/\r?\n/)) {
+  if (!line.trim() || line.startsWith("#")) continue;
+  const [p, oe, name, country, lon, lat] = line.split("|");
+  (ov[`${p}|${oe}`] ??= []).push([name, country, Number(lon), Number(lat)]);
+}
+writeFileSync("src/lib/beta/geoPlaceOverrides.json", JSON.stringify(ov));
+console.log("내보냄: 장소 지정", Object.keys(ov).length, "회차 → src/lib/beta/geoPlaceOverrides.json");
