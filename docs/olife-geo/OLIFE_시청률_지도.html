@@ -84,7 +84,8 @@ h2 .ref { font-size: 11px; font-weight: 600; color: var(--sub); }
 
 /* 지도 컨트롤(확대·축소·처음으로)과 현재 위치 표시 */
 .mapbox { position: relative; }
-#map { touch-action: pan-y; }
+#map { touch-action: none; overscroll-behavior: contain; }
+html, body { overscroll-behavior: none; }
 #map.zoomed { cursor: grab; }
 #map.zoomed:active { cursor: grabbing; }
 .mapctl { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 4px; padding: 4px; border-radius: 16px; }
@@ -302,7 +303,7 @@ span.term { border-bottom: 1.5px dotted var(--purple); }
           <span class="kpi"><span class="t">1위 회차</span> <b class="v" id="k4"></b><i class="s" id="k4s"></i></span>
         </div>
         <div class="legend">
-          <span>원 크기 = 방송 수</span>
+          <span>원 크기 = 회차 수</span>
           <span>색: 낮음<span class="ramp"></span>높음 <span id="legMode"></span></span>
           <span id="legPie"><i class="sw" style="background:var(--nat)"></i>자연만 <i class="sw" style="background:var(--cul)"></i>문화만 <i class="sw" style="background:var(--both)"></i>둘 다 <i class="sw" style="background:var(--none)"></i>분류 없음</span>
           <span><span class="term" tabindex="0" data-term="s">점선·흐린 원 = 표본 적음</span></span>
@@ -449,9 +450,12 @@ const hl = defs.append("radialGradient").attr("id", "shine").attr("cx", "32%").a
 hl.append("stop").attr("offset", "0%").attr("stop-color", "#fff").attr("stop-opacity", .9);
 hl.append("stop").attr("offset", "100%").attr("stop-color", "#fff").attr("stop-opacity", 0);
 const gWorld = svg.append("g").attr("class", "world");
-const radR = r => 9 + 3.1 * Math.sqrt(r.n);
-const radP = p => 7 + 3.4 * Math.sqrt(p.n);
-const radC = c => 4.5 + 2.6 * Math.sqrt(c.n);
+// 원 크기 = 회차 수(재방송은 한 회차로 센다). 가장 큰 원이 일정 크기를 넘지 않게 최대값 대비 비율(면적 비례)로 잡는다 — 방송 건수가 늘어도 지도가 가려지지 않는다.
+let maxE = 1;
+const sz = (e, lo, hi) => lo + (hi - lo) * Math.sqrt(Math.min(1, e.eps / maxE));
+const radR = r => sz(r, 9, 24);
+const radP = p => sz(p, 7, 20);
+const radC = c => sz(c, 4.5, 15);
 const rad = e => zoom ? radP(e) : view === "region" ? radR(e) : radC(e);
 let tf = d3.zoomIdentity; // 지도 확대·이동 상태(휠·드래그·버튼·국가 확대 모두 이 하나로 합친다)
 const posOf = e => view === "region" ? POS[e.name] : CPOS[e.name];
@@ -485,14 +489,14 @@ function draw() {
   g.selectAll("line").data(nodes.filter(n => Math.hypot(n.x - n.ax, n.y - n.ay) > n.rad)).join("line").attr("class", "lead")
     .attr("x1", d => d.ax).attr("y1", d => d.ay).attr("x2", d => d.x).attr("y2", d => d.y);
   g.selectAll("circle.anchor").data(nodes).join("circle").attr("class", "anchor").attr("r", 1.8).attr("cx", d => d.ax).attr("cy", d => d.ay).attr("fill", "var(--sub)").attr("opacity", .6);
-  const p = g.selectAll("g.pie").data([...nodes].sort((a, b) => b.r.n - a.r.n)).join("g").attr("class", d => "pie" + (selName() === d.r.name ? " sel" : ""))
+  const p = g.selectAll("g.pie").data([...nodes].sort((a, b) => b.r.eps - a.r.eps)).join("g").attr("class", d => "pie" + (selName() === d.r.name ? " sel" : ""))
     .attr("transform", d => `translate(${d.x},${d.y})`).style("opacity", d => d.r.sample ? 1 : .6)
     .on("click", (e, d) => select(d.r.name))
     .on("mousemove", (e, d) => showTip(e, d.r)).on("mouseleave", () => tip.style.opacity = 0);
   const arc = d3.arc(), pie = d3.pie().sort(null).value(d => d.v);
   p.each(function (d) {
     const r = d.r, ro = rad(r), gg = d3.select(this), c = colorOf(r);
-    gg.append("circle").attr("r", ro * 1.08).attr("fill", c).attr("opacity", .55).attr("filter", "url(#glow)").attr("pointer-events", "none");
+    gg.append("circle").attr("r", ro * 1.08).attr("fill", c).attr("opacity", .32).attr("filter", "url(#glow)").attr("pointer-events", "none");
     if (view === "region" && !zoom) {
       const parts = [{ v: r.natureOnly, c: "--nat" }, { v: r.cultureOnly, c: "--cul" }, { v: r.both, c: "--both" }, { v: r.neither, c: "--none" }].filter(x => x.v > 0);
       gg.selectAll("path").data(pie(parts)).join("path").attr("d", a => arc.innerRadius(0).outerRadius(ro)(a)).attr("fill", a => `var(${a.data.c})`).attr("fill-opacity", .72).attr("stroke", "rgba(255,255,255,.95)").attr("stroke-width", 1.4);
@@ -500,7 +504,7 @@ function draw() {
       gg.append("circle").attr("class", "ring").attr("r", ro + 3.5).attr("stroke", c).attr("stroke-dasharray", r.sample ? null : "3 3");
       putLabel(gg, d, `${r.name} ${pct(r.r)}`);
     } else {
-      gg.append("circle").attr("r", ro).attr("fill", c).attr("fill-opacity", .66).attr("stroke", "rgba(255,255,255,.95)").attr("stroke-width", 1.6).attr("stroke-dasharray", r.sample && !r.approx ? null : "3 2");
+      gg.append("circle").attr("r", ro).attr("fill", c).attr("fill-opacity", .66 - .26 * Math.min(1, r.eps / maxE)).attr("stroke", "rgba(255,255,255,.95)").attr("stroke-width", 1.4).attr("stroke-dasharray", r.sample && !r.approx ? null : "3 2");
       gg.append("circle").attr("r", ro).attr("fill", "url(#shine)").attr("pointer-events", "none");
       if (selName() === r.name) gg.append("circle").attr("class", "ring").attr("r", ro + 3).attr("stroke", css("--pink"));
       putLabel(gg, d, r.name);
@@ -513,9 +517,9 @@ function placeLabels() {
   const placed = [], out = new Map(), regionPie = view === "region" && !zoom;
   const overlap = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
   const hitsCircle = (bx, o) => { const cx = Math.max(bx.x0, Math.min(o.x, bx.x1)), cy = Math.max(bx.y0, Math.min(o.y, bx.y1)); return Math.hypot(cx - o.x, cy - o.y) < rad(o.r) * 0.9; };
-  for (const d of [...nodes].sort((a, b) => b.r.n - a.r.n)) {
+  for (const d of [...nodes].sort((a, b) => b.r.eps - a.r.eps)) {
     const r = d.r;
-    if (!(regionPie || zoom || r.n >= 5 || selName() === r.name)) continue;
+    if (!(regionPie || zoom || r.eps >= 4 || selName() === r.name)) continue;
     const txt = regionPie ? `${r.name} ${pct(r.r)}` : r.name, w = txt.length * 10 + 4, h = 13, ro = rad(r) + (regionPie ? 4 : 0);
     const cands = [
       { dx: 0, dy: ro + 12, a: "middle", x0: -w / 2, y0: ro + 1 }, { dx: 0, dy: -ro - 4, a: "middle", x0: -w / 2, y0: -ro - 14 },
@@ -565,14 +569,16 @@ function select(name) {
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const EXT = [[0, Y0], [W, Y1]];
 const zb = d3.zoom().scaleExtent([1, 14]).extent(EXT).translateExtent(EXT).clickDistance(4)
-  // 휠: 확대 중이거나 위로 굴릴 때(확대)만 지도가 가로챈다 — 세계 전체 보기에서 아래로 굴리면 페이지가 그대로 스크롤된다. Ctrl/⌘+휠·핀치는 항상 지도.
-  .filter(e => e.type === "wheel" ? (e.ctrlKey || e.metaKey || e.deltaY < 0 || tf.k > 1.01) : (!e.button && e.type !== "dblclick"))
+  // 휠: 지도 위에서는 항상 지도가 받는다(세계 전체 보기에서 축소해도 페이지가 위아래로 흔들리지 않게). 화면 한 장에 들어오므로 페이지 스크롤이 필요 없다.
+  .filter(e => e.type === "wheel" ? true : (!e.button && e.type !== "dblclick"))
   .on("start", () => { tip.style.opacity = 0; })
   .on("zoom", e => { tf = e.transform; gWorld.attr("transform", tf); syncCtl(); scheduleDraw(); })
   .on("end", () => { // 휠로 충분히 축소하면 국가 확대 상태도 자연스럽게 풀린다
     if (zoom && zoom.k0 > 1.3 && tf.k < zoom.k0 * 0.55) { zoom = null; focus = null; refresh(); }
   });
 svg.call(zb).on("dblclick.zoom", null);
+// d3.zoom은 더 줄일 수 없을 때(최소 배율) 휠 이벤트를 놓아 주므로 페이지가 위아래로 흔들린다 — 지도 위 휠은 항상 막는다.
+document.getElementById("map").addEventListener("wheel", e => e.preventDefault(), { passive: false });
 let drawQ = 0;
 function scheduleDraw() { if (!drawQ) drawQ = requestAnimationFrame(() => { drawQ = 0; layout(); draw(); }); }
 const go = (t, ms = 650) => svg.transition().duration(reduceMotion ? 0 : ms).call(zb.transform, zb.constrain()(t, EXT, EXT));
@@ -667,7 +673,7 @@ function setTheme(t) {
   if (zoom && !placesAgg().length && !filtered().some(x => x.cs.includes(zoom.name))) zoomOut(); else refresh();
 }
 function refresh() {
-  ITEMS = items(); setScale(); maxR = Math.max(...ITEMS.map(x => x.r), 1e-9);
+  ITEMS = items(); maxE = Math.max(...ITEMS.map(x => x.eps), 1); setScale(); maxR = Math.max(...ITEMS.map(x => x.r), 1e-9);
   layout(); draw(); renderRank(); renderEpisodes(); renderKpis(); renderThemes(); syncCtl();
   document.getElementById("legMode").textContent = mode === "r" ? "(시청률 상·하위 10% 기준)" : "(1.0 = 같은 자리 평균)";
   document.getElementById("legPie").style.display = view === "region" && !zoom ? "" : "none";
