@@ -9,6 +9,7 @@ import { calendarOf, describeLearned, inferRuns, type RunPattern } from "../src/
 import { naverPattern, registeredPattern } from "../src/lib/broadcastPattern/load";
 import { lookupProgram, type Searcher } from "../src/lib/broadcastPattern/naverFetch";
 import { patternRunsForDay } from "../src/lib/broadcastPattern/dayFill";
+import { FOLLOW_RULES, followRuleFor, followRunOf } from "../src/lib/broadcastPattern/followRule";
 import { competitorChannelKey, competitorRuns, competitorSearchTitle, runTagOf } from "../src/lib/broadcastPattern/competitorRuns";
 
 let passed = 0;
@@ -200,6 +201,20 @@ check("경쟁: 채널 표기 맞춤", competitorChannelKey("TV CHOSUN") === comp
     new Map([["놀면뭐하니", row]])
   );
   check("경쟁: 네이버 본방 채널·요일·시각 안이면 본방, 편집본·다른 채널·자료 없음은 모름, 닐슨 표시는 그대로", JSON.stringify(runs) === JSON.stringify([true, null, null, true, null]), JSON.stringify(runs));
+}
+
+// ── 후행 채널 본방 규칙(ENA Drama 지구마불 4: ENA 본방 후 2일 이내 시작 = 본방) ─────────────
+{
+  const src = [{ date: "2026-10-17", startTime: "19:50:00" }, { date: "2026-10-24", startTime: "19:49:00" }];
+  check("후행 규칙: 원 방송 다음 날·이틀째 방영은 본방", followRunOf("2026-10-18", "06:45:00", src, 2) === true && followRunOf("2026-10-19", "20:58:00", src, 2) === true);
+  check("후행 규칙: 2일이 지난 방영은 재방", followRunOf("2026-10-20", "02:00:00", src, 2) === false && followRunOf("2026-10-23", "05:04:00", src, 2) === false);
+  check("후행 규칙: 같은 날은 원 방송보다 늦게 시작한 것만 본방(이전 시각은 앞 회차 재방)", followRunOf("2026-10-24", "10:09:00", src, 2) === false && followRunOf("2026-10-24", "23:00:00", src, 2) === true);
+  check("후행 규칙: 다음 회차 원 방송 뒤 이틀도 본방", followRunOf("2026-10-25", "06:55:00", src, 2) === true && followRunOf("2026-10-26", "21:06:00", src, 2) === true);
+  check("후행 규칙: 원 방송 기록이 없거나 첫 원 방송보다 앞선 방영은 모름", followRunOf("2026-10-18", "06:45:00", [], 2) === null && followRunOf("2026-10-10", "09:00:00", src, 2) === null);
+  check(
+    "후행 규칙: ENA Drama의 지구마불 세계여행 4에만 적용(다른 시즌·채널은 해당 없음)",
+    followRuleFor("ENA_DRAMA", ["지구마불세계여행4"]) !== null && followRuleFor("ENA_DRAMA", ["지구마불세계여행3"]) === null && followRuleFor("ENA_PLAY", ["지구마불세계여행4"]) === null && FOLLOW_RULES.length === 1
+  );
 }
 
 Promise.all([searchChecks, dayChecks]).then(() => {

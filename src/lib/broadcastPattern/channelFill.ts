@@ -7,6 +7,8 @@
 import { addDays } from "@/lib/idealSchedule/time";
 import { matchPlanRow, normalizePlanRows, type PlanRow, type PlanRowRaw } from "@/lib/idealSchedule/planEpisodes";
 import { patternRunsForAirings } from "./dayFill";
+import { FOLLOW_RULES, followRunOf, loadFollowSourcesByName } from "./followRule";
+import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = { from: (table: string) => any };
@@ -75,6 +77,19 @@ export async function fillChannelRuns(db: Db, args: { channelId: string; channel
         const run = hit.isNew ? true : hit.isRerun ? false : null;
         if (run !== null) out[i] = { firstRun: run, source: "plan", premiere: run === false ? false : hit.isPremiere ? true : null };
       } else if (cur.firstRun === true && hit.isPremiere) out[i] = { ...cur, premiere: true };
+    }
+  }
+
+  // ①-2 후행 채널 본방 규칙(ENA Drama 지구마불 4 등) — 원 방송 채널 본방 후 N일 이내에 시작한 방영은 본방, 그 밖은 재방
+  for (const rule of FOLLOW_RULES) {
+    if (rule.followerChannel !== args.channelCode) continue;
+    const idx = open().filter((i) => out[i].firstRun === null && rule.programKeys.includes(normalizeProgramKey(args.rows[i].name)));
+    if (idx.length === 0) continue;
+    const ds = idx.map((i) => args.rows[i].date).sort();
+    const sources = await loadFollowSourcesByName(db, rule, ds[0], ds[ds.length - 1]);
+    for (const i of idx) {
+      const run = followRunOf(args.rows[i].date, args.rows[i].startTime, sources, rule.withinDays);
+      if (run !== null) out[i] = { firstRun: run, source: "registered", premiere: false };
     }
   }
 

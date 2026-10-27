@@ -14,6 +14,7 @@ import { matchPlanRow, normalizePlanRows, type PlanRow, type PlanRowRaw } from "
 import { addDays } from "@/lib/idealSchedule/time";
 import { describeLearned, hhmm, inferRuns, type LearnedSlot } from "@/lib/broadcastPattern/inferRuns";
 import { loadRunPatterns } from "@/lib/broadcastPattern/load";
+import { FOLLOW_RULES, followRunOf, loadFollowSources, type SourceAir } from "@/lib/broadcastPattern/followRule";
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
 import { loadOriginalCompare } from "./originalCompare";
 import {
@@ -400,6 +401,14 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   if (work.candidateKeys.length) notes.push(`이름이 비슷한 '연결 확인 필요' 후보 ${work.candidateKeys.length}건은 합치지 않았습니다(관리자 승인 전).`);
   if (classification.note) notes.push(classification.note);
 
+  // 후행 채널 본방 규칙(ENA 본방 후 N일 이내에 시작한 방영 = 후행 채널 본방) — 이 작품에 적용되는 규칙의 원 방송 본방 기록을 한 번만 읽는다
+  const followRules = FOLLOW_RULES.filter((r) => r.programKeys.some((k) => memberSet.has(k)));
+  const followSources = new Map<string, SourceAir[]>();
+  for (const r of followRules) {
+    const srcId = channels.find((c) => c.code === r.sourceChannel)?.id;
+    followSources.set(r.followerChannel, srcId ? await loadFollowSources(db, idsByChannel.get(srcId) ?? [], from, to, r.withinDays) : []);
+  }
+
   const selected = query.channels && query.channels.length ? new Set(query.channels) : null;
   // 채널 × 타깃 조회는 서로 독립이라 동시에 실행하고(조회 수십 건을 차례로 기다리던 것이 계산 시간의 대부분), 결과는 원래 순서대로 합친다.
   type Bucket = { rows: ChannelRow[]; evidence: AiringEvidence[]; slotCells: SlotCell[]; allDays: Set<string>; allEpisodes: Set<number>; ownAirs: OwnAir[] };
@@ -545,6 +554,25 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
           return { ...r, firstRun: run, episode: r.episode ?? hit.episodeNumber };
         });
         if (filledRun > 0) fillOf(ch.code, base.channelName).plan = filledRun;
+      }
+    }
+    // 후행 채널 본방 규칙 — 닐슨·편성표로도 정해지지 않은 방영만. 값은 타깃마다 같은 방영이라 마지막 타깃의 건수로 덮어쓴다.
+    const followRule = followRules.find((r) => r.followerChannel === ch.code);
+    if (followRule && workRows.some((r) => r.firstRun === null)) {
+      const sources = followSources.get(ch.code) ?? [];
+      let n = 0;
+      workRows = workRows.map((r) => {
+        if (r.firstRun !== null) return r;
+        const run = followRunOf(r.date, r.startTime, sources, followRule.withinDays);
+        if (run === null) return r;
+        n++;
+        return { ...r, firstRun: run };
+      });
+      if (n > 0) {
+        const msg = `${followRule.label}: ${followRule.sourceChannel} 본방 후 ${followRule.withinDays}일 이내에 시작한 방영은 본방, 그 밖은 재방으로 봤습니다(${n}건).`;
+        const at = notes.findIndex((x) => x.startsWith(`${followRule.label}:`));
+        if (at >= 0) notes[at] = msg;
+        else notes.push(msg);
       }
     }
     // 그래도 비어 있는 방영은 본방 편성 패턴(요일·시각·채널)으로 보완한다. 정확한 본방 시각은 이 방영 자료(닐슨)로 맞추고, 회차는 네이버가 알려 준 방송일과 일치할 때만 붙인다.
