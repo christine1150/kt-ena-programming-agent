@@ -176,7 +176,19 @@ const COMPETITOR_TARGETS: { sheet: string; label: string; channel: string }[] = 
  * <본>/<재> 태그로 방송 구분을 나누고(태그 없음은 본방 여부 미확인), 같은 방영(채널·타깃·방송일·시작 시각)은 한 번만 센다.
  * 자사 채널과 이름이 같은 경쟁채널 항목은 뺀다(자사 표에 이미 있음). 방영이 없으면 행을 만들지 않는다.
  */
-export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNames: Set<string>, from: string, to: string, airing: AiringFilter, nameVariants: string[] = [], openStart = false): Promise<CompetitorRow[]> {
+/** 자사 방영 한 건(동시방송 판정용) — 날짜와 시작 시각(분) */
+export interface OwnAir {
+  code: string;
+  date: string;
+  minute: number;
+}
+const minuteOfTime = (t: string | null): number | null => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t ?? "");
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+const SIMULCAST_TOLERANCE_MIN = 15;
+
+export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNames: Set<string>, from: string, to: string, airing: AiringFilter, nameVariants: string[] = [], openStart = false, ownAirsP?: Promise<OwnAir[]>): Promise<CompetitorRow[]> {
   const keys = memberKeys.filter((k) => /^[가-힣A-Z0-9]+$/.test(k));
   if (!keys.length || !from || !to) return [];
   const memberSet = new Set(keys);
@@ -198,6 +210,9 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
   );
   // 전체 기간(사용자 지시 2026-10-27, 결이 다른 전쟁사): 원 방송 경쟁채널(MBN)의 첫 방송이 자사 첫 방영보다 앞서도 빠지지 않게, 경쟁채널은 자기 첫 방영일부터 센다
   if (openStart) for (const r of raw) if (String(r.broadcast_date) < from) from = String(r.broadcast_date);
+  // 동시방송 판정(사용자 지시 2026-10-27): 같은 날 자사 채널 방영과 시작 시각 차이가 15분 이내인 경쟁채널 방영
+  const ownAirs = ownAirsP ? await ownAirsP : [];
+  const simWith = new Map<string, Map<string, number>>();
   const seen = new Set<string>();
   const by = new Map<string, WorkAiring[]>();
   for (const r of raw) {
@@ -209,7 +224,15 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
     seen.add(k);
     const firstRun = /<본>/.test(pname) ? true : /<재>/.test(pname) ? false : null;
     if (!matchesAiringFilter(firstRun, airing)) continue;
-    const gk = `${name}|${r.target_label}`;
+    const mi = minuteOfTime((r.start_time as string | null) ?? null);
+    const hits = mi === null ? [] : ownAirs.filter((o) => o.date === String(r.broadcast_date) && Math.abs(o.minute - mi) <= SIMULCAST_TOLERANCE_MIN);
+    const sim = firstRun !== false && hits.length > 0; // 동시방송은 생방송끼리 — 재방(<재>)은 우연히 시각이 겹쳐도 제외
+    if (sim) {
+      const cnt = simWith.get(name) ?? new Map<string, number>();
+      for (const code of new Set(hits.map((h) => h.code))) cnt.set(code, (cnt.get(code) ?? 0) + 1);
+      simWith.set(name, cnt);
+    }
+    const gk = `${name}|${r.target_label}|${sim ? "S" : "N"}`;
     by.set(gk, [
       ...(by.get(gk) ?? []),
       { programId: name, date: String(r.broadcast_date), startTime: (r.start_time as string | null) ?? null, endTime: null, rating: r.rating === null || r.rating === undefined ? null : Number(r.rating), share: r.share === null || r.share === undefined ? null : Number(r.share), firstRun, episode: null },
@@ -217,6 +240,7 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
   }
   if (by.size === 0) return [];
   const names = [...new Set([...by.keys()].map((k) => k.split("|")[0]))];
+  const simCodeOf = (name: string) => [...(simWith.get(name) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
   const out: CompetitorRow[] = [];
   for (const t of COMPETITOR_TARGETS) {
     const tid = await targetIdOf(db, t.channel);
@@ -238,7 +262,8 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
         )
       : [];
     for (const name of names) {
-      const list = by.get(`${name}|${t.sheet}`);
+      for (const sim of [true, false]) {
+      const list = by.get(`${name}|${t.sheet}|${sim ? "S" : "N"}`);
       if (!list?.length) continue;
       const days: ChannelDayRow[] = dayRows.filter((d) => d.competitor_name === name).map((d) => ({ date: String(d.broadcast_date), rating: d.rating === null || d.rating === undefined ? null : Number(d.rating), createdAt: (d.created_at as string | null) ?? null }));
       const cd = channelDailyMean(days, from, to, t.channel);
@@ -256,7 +281,9 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
         channelDaily: cd,
         vsChannel: ratioOf(st.avg, cd.mean, tid ? "경쟁 채널 하루 시청률 자료 없음" : `채널 하루 시청률 타깃('${t.channel}') 없음`),
         sampleState: sampleStateOf(st.days),
+        ...(sim ? { simulcast: true, simulcastWith: simCodeOf(name), points: [...list].sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? "").localeCompare(b.startTime ?? "")).map((x) => ({ date: x.date, startTime: x.startTime, rating: x.rating })) } : {}),
       });
+      }
     }
   }
   // 방영 많은 경쟁채널 먼저, 같은 채널의 두 타깃은 붙여 둔다
@@ -365,7 +392,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
 
   const selected = query.channels && query.channels.length ? new Set(query.channels) : null;
   // 채널 × 타깃 조회는 서로 독립이라 동시에 실행하고(조회 수십 건을 차례로 기다리던 것이 계산 시간의 대부분), 결과는 원래 순서대로 합친다.
-  type Bucket = { rows: ChannelRow[]; evidence: AiringEvidence[]; slotCells: SlotCell[]; allDays: Set<string>; allEpisodes: Set<number> };
+  type Bucket = { rows: ChannelRow[]; evidence: AiringEvidence[]; slotCells: SlotCell[]; allDays: Set<string>; allEpisodes: Set<number>; ownAirs: OwnAir[] };
   const jobs: (() => Promise<Bucket>)[] = [];
 
   for (const ch of channels) {
@@ -384,7 +411,8 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     const slotCells: SlotCell[] = [];
     const allDays = new Set<string>();
     const allEpisodes = new Set<number>();
-    const done = (): Bucket => ({ rows, evidence, slotCells, allDays, allEpisodes });
+    const ownAirs: OwnAir[] = [];
+    const done = (): Bucket => ({ rows, evidence, slotCells, allDays, allEpisodes, ownAirs });
     const programLabel = tgt.program;
     const channelLabel = tgt.channel;
     const kpiGroup = tgt.group;
@@ -537,6 +565,9 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         f.episode = epFilled;
       }
     }
+
+    // 동시방송 판정에 쓰는 자사 방영(채널당 한 타깃만, 재방 확인분은 제외)
+    if (collect) for (const r of workRows.filter((w) => w.firstRun !== false)) { const m = minuteOfTime(r.startTime); if (m !== null) ownAirs.push({ code: ch.code, date: r.date, minute: m }); }
 
     if (workRows.length === 0) {
       // 기록 없음 ≠ 미방영. 그 채널 프로그램 단위 자료가 아예 없는 기간이면 그렇게 표시한다(ENA Story 일부 기간 등).
@@ -769,8 +800,11 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   // 경쟁 채널 조회도 자사 채널 조회와 함께 시작한다
   // 오리지널 비교(방영 시작 이후 본방, 조회 기간과 무관) — 실패해도 화면 전체를 막지 않는다
   const originalP = loadOriginalCompare(db, { cls: classification.cls, workIds, dataFrom: dbFirst, channels }).catch(() => null);
-  const competitorsP = loadCompetitorRows(db, work.memberKeys, new Set(channels.map((c) => normalizeProgramKey(c.name))), from, to, query.airing, workPrograms.map((p) => p.canonical_name ?? ""), query.from == null && presetDays === null);
+  let resolveOwnAirs!: (v: OwnAir[]) => void;
+  const ownAirsP = new Promise<OwnAir[]>((res) => (resolveOwnAirs = res));
+  const competitorsP = loadCompetitorRows(db, work.memberKeys, new Set(channels.map((c) => normalizeProgramKey(c.name))), from, to, query.airing, workPrograms.map((p) => p.canonical_name ?? ""), query.from == null && presetDays === null, ownAirsP);
   const buckets = await Promise.all(jobs.map((j) => j()));
+  resolveOwnAirs(buckets.flatMap((b) => b.ownAirs));
   // 본방 여부·회차 보완 건수 — 기본 화면 배너(notes)가 아니라 별도 필드로 남겨 방송 기록 접힘 안에서만 보여 준다(개편 2026-10-23, 이력은 그대로)
   const supplement = [...fillStats.entries()].sort((a, b) => a[1].order - b[1].order).map(([channelCode, f]) => ({ channelCode, channelName: f.channelName, plan: f.plan, registered: f.registered, naver: f.naver, episode: f.episode }));
   const rows = buckets.flatMap((b) => b.rows);
@@ -788,7 +822,9 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   });
   // 경쟁 채널은 자사 작품이 가장 많이 방영된 채널의 KPI 그룹 타깃을 먼저 보인다
   const mainRow = airedRows.filter((r) => r.primary).sort((a, b) => b.airings - a.airings)[0];
-  const competitors = await competitorsP;
+  const competitorsAll = await competitorsP;
+  const competitors = competitorsAll.filter((c) => !c.simulcast);
+  const simulcast = competitorsAll.filter((c) => c.simulcast);
   const firstGroup = mainRow?.kpiGroup === "HH" ? "전국 유료가구" : "수도권 2049";
   const competitorLines = [...new Set(competitors.filter((c) => c.airings > 0).map((c) => c.competitorName))].map((name) => {
     const parts = competitors.filter((c) => c.competitorName === name && c.airings > 0).sort((a, b) => Number(b.targetLabel === firstGroup) - Number(a.targetLabel === firstGroup));
@@ -810,6 +846,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     groups,
     lines,
     competitors,
+    simulcast,
     competitorLines,
     airings: evidence.slice(0, EVIDENCE_CAP),
     airingsTruncated: evidence.length > EVIDENCE_CAP,

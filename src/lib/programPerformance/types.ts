@@ -383,6 +383,12 @@ export interface CompetitorRow {
   channelDaily: ChannelDailyBase | null;
   vsChannel: RatioValue;
   sampleState: "OK" | "SMALL" | "NONE";
+  /** 자사 채널과 같은 날·같은 시각(±15분)에 함께 방송한 동시방송분만 센 행(사용자 지시 2026-10-27). 아니면 false·null */
+  simulcast?: boolean;
+  /** 동시방송 상대 자사 채널 코드(그 채널 행 바로 아래에 보인다) */
+  simulcastWith?: string | null;
+  /** 동시방송 방영별 시청률(그래프 겹쳐 보기용, 날짜순) — 동시방송 행에만 */
+  points?: { date: string; startTime: string | null; rating: number | null }[];
 }
 
 export interface PerformanceResult {
@@ -396,6 +402,8 @@ export interface PerformanceResult {
   lines: ChannelLine[];
   /** 경쟁 채널 성과(방영 기록이 있는 경쟁채널만, 채널마다 2049·가구) — 화면에서 선택해 연다 */
   competitors: CompetitorRow[];
+  /** 자사 채널과 동시방송한 경쟁 채널 성과(자사 채널 행 바로 아래·그래프 겹쳐 보기용). 위 competitors에는 동시방송분이 들어 있지 않다 */
+  simulcast: CompetitorRow[];
   competitorLines: ChannelLine[];
   airings: AiringEvidence[];
   airingsTruncated: boolean;

@@ -4,7 +4,7 @@
 // 성과 중심 개편(2026-10-23, docs/ena-features/F1_OUTCOME_REDESIGN_PLAN.md): 검색·필터 → 채널별 성과표(채널·수2049·가구·방영횟수, 채널당 한 줄) → 선택 채널 종합평가(최근 12주 편성진단 근거)
 //  → [시청률 흐름+최고·최저·최근 | 편성 비교] → 접힌 방송 기록 → 계산 기준. 문구는 모두 서버 고정 템플릿, 표본 경고·보완 건수 배너·요약문·평균 카드는 기본 화면에서 뺐다.
 //  - 검색·기간 흐름 정리(2026-10-23): 화면 상태는 주소 하나(새로고침·공유·뒤로 가기), 검색은 자동완성 목록, 직접 기간은 [적용]을 눌러야 조회.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { shortProgramName } from "@/lib/programAlias";
 import { formatInt, formatPct, formatRatingValue, MISSING } from "@/lib/ui/metricFormat";
@@ -212,7 +212,7 @@ const TABLE_NOTE = "시청률·점유율 단위 % · 괄호는 같은 기간 채
  * 채널별 성과표 — 열 순서 고정(채널 → 수2049 → 가구 → 방영횟수), 채널당 한 줄. 방영횟수는 KPI 타깃 행의 고유 방영 건수(두 타깃을 보여도 두 배로 세지 않음).
  * 행을 누르면 아래 종합평가·흐름·편성 비교가 그 채널로 바뀐다. 순서는 기존 채널 순서.
  */
-function ChannelTable({ entries, airing, selected, onSelect }: { entries: ChannelEntry[]; airing: AiringFilter; selected: string | null; onSelect: (r: ChannelRow) => void }) {
+function ChannelTable({ entries, airing, selected, onSelect, simulcast }: { entries: ChannelEntry[]; airing: AiringFilter; selected: string | null; onSelect: (r: ChannelRow) => void; simulcast: CompetitorRow[] }) {
   const cols = TARGET_ORDER.filter((t) => entries.some((e) => e.rows.some((r) => r.targetLabel === t)));
   return (
     <section className="mt-3">
@@ -223,8 +223,11 @@ function ChannelTable({ entries, airing, selected, onSelect }: { entries: Channe
             {entries.map(({ main, rows }) => {
               const code = main.channelCode;
               const isSel = selected?.startsWith(`${code}|`) ?? false;
+              // 동시방송 채널(사용자 지시 2026-10-27) — 같은 시각에 함께 방송한 경쟁 채널은 그 자사 채널 행 바로 아래에 같은 열로
+              const simNames = [...new Set(simulcast.filter((c) => c.simulcastWith === code).map((c) => c.competitorName))];
               return (
-                <tr key={code} onClick={() => onSelect(main)} className={`cursor-pointer border-t border-zinc-100 ${isSel ? "bg-sky-50" : "hover:bg-zinc-50"}`}>
+                <Fragment key={code}>
+                <tr onClick={() => onSelect(main)} className={`cursor-pointer border-t border-zinc-100 ${isSel ? "bg-sky-50" : "hover:bg-zinc-50"}`}>
                   <td className="whitespace-nowrap px-3 py-2">
                     <button type="button" onClick={(e) => (e.stopPropagation(), onSelect(main))} aria-pressed={isSel} className="text-left font-medium text-zinc-900 underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-600" aria-label={`${main.channelName} 평가 보기`}>
                       {main.channelName}
@@ -245,12 +248,40 @@ function ChannelTable({ entries, airing, selected, onSelect }: { entries: Channe
                     <AirCount airings={main.airings} days={main.days} />
                   </td>
                 </tr>
+                {simNames.map((name) => {
+                  const rs = simulcast.filter((c) => c.competitorName === name && c.simulcastWith === code);
+                  const sMain = rs.reduce((a, b) => (b.airings > a.airings ? b : a));
+                  return (
+                    <tr key={`sim-${code}-${name}`} className="border-t border-zinc-100 bg-zinc-50/70">
+                      <td className="whitespace-nowrap py-2 pl-7 pr-3">
+                        <span className="mr-1 text-zinc-300" aria-hidden="true">└</span>
+                        <span className="font-medium text-zinc-800">{name}</span>
+                        <span className="ml-1.5 rounded bg-zinc-200/70 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">동시방송</span>
+                      </td>
+                      {cols.map((c) => {
+                        const r = rs.find((x) => x.targetLabel === c);
+                        return [
+                          <td key={`${c}r`} className="border-l border-zinc-100 px-3 py-2 text-center">
+                            <TargetCell r={r} code={name} airing="all" />
+                          </td>,
+                          <td key={`${c}s`} className="px-3 py-2 text-center">
+                            <ShareCell r={r} />
+                          </td>,
+                        ];
+                      })}
+                      <td className="whitespace-nowrap border-l border-zinc-100 px-3 py-2 text-center text-zinc-800">
+                        <AirCount airings={sMain.airings} days={sMain.days} />
+                      </td>
+                    </tr>
+                  );
+                })}
+                </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-[12px] text-zinc-500">{TABLE_NOTE}</p>
+      <p className="mt-1 text-[12px] text-zinc-500">{TABLE_NOTE}{simulcast.length > 0 ? " · 동시방송 행은 자사와 같은 날 같은 시각(±15분)에 함께 방송한 경쟁 채널의 그 방송분만 센 값(채널 평균은 그 채널의 하루 시청률 평균)" : ""}</p>
     </section>
   );
 }
@@ -310,14 +341,15 @@ function niceStep(max: number): number {
  * 시청률 흐름 그래프(지구마불 세계여행 화면 참고) — 서버가 낸 점 값을 찍기만 한다. 가로축은 본방 방영(회차 번호가 있으면 'n회', 없으면 방영일)
  * 또는 방송일. 점선은 채널 평균. 값이 없는 점은 끊는다(0으로 잇지 않음). 점이 하나면 점만. 점에 마우스를 올리면 값.
  */
-function TrendChart({ points, base, baseLabel, code }: { points: { label: string; sub: string; value: number | null }[]; base: (number | null)[]; baseLabel: string; code: string }) {
+type TrendOverlay = { name: string; color: string; values: (number | null)[] };
+function TrendChart({ points, base, baseLabel, code, overlays = [] }: { points: { label: string; sub: string; value: number | null }[]; base: (number | null)[]; baseLabel: string; code: string; overlays?: TrendOverlay[] }) {
   const W = 800;
   const H = 220;
   const L = 44;
   const R = 12;
   const T = 14;
   const B = 34;
-  const vals = [...points.map((p) => p.value), ...base].filter((v): v is number => v !== null);
+  const vals = [...points.map((p) => p.value), ...base, ...overlays.flatMap((o) => o.values)].filter((v): v is number => v !== null);
   if (vals.length === 0) return <p className="py-6 text-center text-[13px] text-zinc-500">표시할 시청률이 없습니다.</p>;
   const step = niceStep(Math.max(...vals));
   const top = Math.ceil(Math.max(...vals) / step) * step || step;
@@ -374,6 +406,20 @@ function TrendChart({ points, base, baseLabel, code }: { points: { label: string
         ) : (
           seg(base).map((d, i) => <path key={`b${i}`} d={d} fill="none" stroke="#a1a1aa" strokeWidth={1.4} strokeDasharray="5 4" />)
         ))}
+      {overlays.map((o) => (
+        <g key={`ov-${o.name}`}>
+          {seg(o.values).map((d, i) => (
+            <path key={i} d={d} fill="none" stroke={o.color} strokeWidth={2} strokeLinejoin="round" strokeDasharray="6 3" />
+          ))}
+          {o.values.map((v, i) =>
+            v === null ? null : (
+              <circle key={i} cx={x(i)} cy={y(v)} r={points.length > 40 ? 2 : 3.2} fill="#fff" stroke={o.color} strokeWidth={2}>
+                <title>{`${o.name} 동시방송 · ${points[i]?.label ?? ""} — ${formatRatingValue(v, code, { unit: true })}`}</title>
+              </circle>
+            )
+          )}
+        </g>
+      ))}
       {lines.map((d, i) => (
         <path key={`l${i}`} d={d} fill="none" stroke="#4f46e5" strokeWidth={2.4} strokeLinejoin="round" />
       ))}
@@ -408,7 +454,10 @@ function ExtremesLine({ x, code }: { x: { best: { v: number; at: string }; worst
 }
 
 /** 왼쪽: 시청률 흐름 — 그래프 하나 + 결론 한 줄 + 최고·최저·최근(본방별·일별 전환 시 셋 다 같은 자료로 바뀐다) */
-function TrendSection({ row }: { row: ChannelRow }) {
+const SIM_COLORS: Record<string, string> = { MBN: "#f26b0a", "SBS Plus": "#1b6fb5" };
+const simColor = (name: string, i: number) => SIM_COLORS[name] ?? ["#e11d48", "#0d9488", "#a21caf"][i % 3];
+
+function TrendSection({ row, simulcast = [] }: { row: ChannelRow; simulcast?: CompetitorRow[] }) {
   const a = row.analysis!;
   const code = row.channelCode;
   const hasFirst = a.firstRuns.length >= 2;
@@ -426,6 +475,22 @@ function TrendSection({ row }: { row: ChannelRow }) {
     ? fx && { best: { v: fx.best.rating, at: epLabel(fx.best) }, worst: { v: fx.worst.rating, at: epLabel(fx.worst) }, recent: { v: fx.recent.rating, at: epLabel(fx.recent) }, count: fx.count }
     : dx && { best: { v: dx.best.programAvg as number, at: md(dx.best.date) }, worst: { v: dx.worst.programAvg as number, at: md(dx.worst.date) }, recent: { v: dx.recent.programAvg as number, at: md(dx.recent.date) }, count: dx.count };
   const text = isFirst ? (a.trendFirst ?? a.trendText) : (a.trendDaily ?? a.trendText);
+  // 동시방송 채널 겹쳐 보기(사용자 지시 2026-10-27) — 같은 타깃의 동시방송 방영별 시청률을 이 그래프의 점(날짜)에 맞춰 얹는다. 켜고 끈다(기본 켬)
+  const [simOff, setSimOff] = useState<Record<string, boolean>>({});
+  const pointDates = isFirst ? a.firstRuns.map((r) => r.date) : row.daily.map((d) => d.date);
+  const simSeries = simulcast
+    .filter((c) => c.targetLabel === (row.kpiGroup === "HH" ? "전국 유료가구" : "수도권 2049") && c.points && c.points.length > 0)
+    .map((c, i) => {
+      const by = new Map<string, number[]>();
+      for (const p of c.points ?? []) if (p.rating !== null) by.set(p.date, [...(by.get(p.date) ?? []), p.rating]);
+      const values = pointDates.map((d) => {
+        const v = by.get(d);
+        return v ? v.reduce((x, y) => x + y, 0) / v.length : null;
+      });
+      return { name: c.competitorName, color: simColor(c.competitorName, i), values };
+    })
+    .filter((o) => o.values.some((v) => v !== null));
+  const overlays = simSeries.filter((o) => !simOff[o.name]);
   return (
     <section className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4" aria-label="시청률 흐름">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -445,8 +510,23 @@ function TrendSection({ row }: { row: ChannelRow }) {
         </div>
       </div>
       <ExtremesLine x={ext ?? null} code={code} />
+      {simSeries.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]" role="group" aria-label="동시방송 채널 겹쳐 보기">
+          <span className="inline-flex items-center gap-1 font-medium text-zinc-700">
+            <span className="inline-block h-[3px] w-4 rounded-full" style={{ backgroundColor: "#4f46e5" }} />
+            {row.channelName}
+          </span>
+          <span className="text-zinc-400">동시방송 겹쳐 보기</span>
+          {simSeries.map((o) => (
+            <button key={o.name} type="button" aria-pressed={!simOff[o.name]} onClick={() => setSimOff((cur) => ({ ...cur, [o.name]: !cur[o.name] }))} className={chip(!simOff[o.name])} title={`${o.name} 동시방송 시청률을 그래프에서 ${simOff[o.name] ? "켜기" : "끄기"}`}>
+              <span className="mr-1 inline-block h-[3px] w-3 rounded-full align-middle" style={{ backgroundColor: o.color }} />
+              {o.name}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="mt-2">
-        <TrendChart points={points} base={base} baseLabel="채널 평균" code={code} />
+        <TrendChart points={points} base={base} baseLabel="채널 평균" code={code} overlays={overlays} />
       </div>
       <p className="text-[11px] text-zinc-500">{isFirst ? `본방 ${a.firstRuns.length}회 · 점선은 같은 기간 채널 평균` : `방송일 ${row.daily.length}일 · 점선은 그날 채널 평균`}</p>
     </section>
@@ -608,7 +688,7 @@ function Analysis({ row, result, siblings, onSelect }: { row: ChannelRow; result
             </div>
           )}
           <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-            <TrendSection key={`t-${code}-${row.targetLabel}`} row={row} />
+            <TrendSection key={`t-${code}-${row.targetLabel}`} row={row} simulcast={(result.simulcast ?? []).filter((c) => c.simulcastWith === code)} />
             <SlotSection key={`s-${code}-${row.targetLabel}`} row={row} />
           </div>
           <Fold key={`f-${code}-${row.targetLabel}`} title={`방송 기록 · ${row.channelName} ${formatInt(airings.length)}건`}>
@@ -1249,6 +1329,11 @@ export default function ProgramPerformanceView() {
       return { main: sorted.find(aired) ?? sorted[0], rows: sorted };
     });
   const comparable = entries.map((e) => e.main);
+  // 동시방송 행 — 표에 있는 자사 채널 아래에 붙이고, 그 자사 채널이 표에 없으면(채널 선택으로 뺀 경우) 경쟁 채널 성과 쪽에 둔다
+  const entryCodes = new Set(entries.map((e) => e.main.channelCode));
+  const simAll = result?.simulcast ?? [];
+  const simShown = simAll.filter((c) => c.simulcastWith !== null && c.simulcastWith !== undefined && entryCodes.has(c.simulcastWith));
+  const competitorRows = result ? [...result.competitors, ...simAll.filter((c) => !simShown.includes(c))] : [];
   // 분류 안내 문구는 배지를 다는 경우(분류 충돌)에만 — 목록에 없는 작품의 '분류 미확인' 안내는 숨긴다
   const cls = result?.classification;
   const visibleNotes = result ? result.notes.filter((n) => !(cls && n === cls.note && !SHOW_CLASS.includes(cls.cls))) : [];
@@ -1358,9 +1443,9 @@ export default function ProgramPerformanceView() {
           </div>
 
           {entries.length > 0 ? (
-            <ChannelTable entries={entries} airing={result.query.airing} selected={selRow ? rowKey(selRow) : null} onSelect={select} />
+            <ChannelTable entries={entries} airing={result.query.airing} selected={selRow ? rowKey(selRow) : null} onSelect={select} simulcast={simShown} />
           ) : (
-            <p className="mt-4 text-[13px] text-zinc-500">{result.competitors.length > 0 ? "자사 방영 기록은 없습니다. 아래 경쟁 채널 성과를 확인하세요." : "이 조건의 방영 기록이 없습니다. 기간을 ‘전체 기간’으로 넓히거나 방송 구분을 ‘전체 방송’으로 바꿔 보세요."}</p>
+            <p className="mt-4 text-[13px] text-zinc-500">{competitorRows.length > 0 ? "자사 방영 기록은 없습니다. 아래 경쟁 채널 성과를 확인하세요." : "이 조건의 방영 기록이 없습니다. 기간을 ‘전체 기간’으로 넓히거나 방송 구분을 ‘전체 방송’으로 바꿔 보세요."}</p>
           )}
           {excluded.length > 0 &&
             (allRows.every((r) => EXCLUDED.includes(r.status)) ? (
@@ -1386,15 +1471,15 @@ export default function ProgramPerformanceView() {
           <div ref={analysisRef} className="scroll-mt-4">
             {selRow && <Analysis key={`${requestUrl}|${rowKey(selRow)}`} row={selRow} result={result} siblings={selectable.filter((r) => r.channelCode === selRow.channelCode)} onSelect={(r) => group && setSel({ group, key: rowKey(r) })} />}
           </div>
-          {result.competitors.length > 0 && (
+          {competitorRows.length > 0 && (
             <div className="mt-4">
               {/* 자사 방영이 없는 작품은 경쟁 채널 성과가 유일한 내용이라 처음부터 펼쳐 둔다(사용자 지시 2026-10-23) */}
               {entries.length > 0 && (
                 <button type="button" aria-expanded={showComp} onClick={() => setCompFor(showComp ? null : group)} className={chip(showComp)}>
-                  경쟁 채널 성과 {showComp ? "닫기" : `보기 · ${new Set(result.competitors.map((c) => c.competitorName)).size}개 채널`}
+                  경쟁 채널 성과 {showComp ? "닫기" : `보기 · ${new Set(competitorRows.map((c) => c.competitorName)).size}개 채널`}
                 </button>
               )}
-              {(showComp || entries.length === 0) && <CompetitorSection rows={result.competitors} />}
+              {(showComp || entries.length === 0) && <CompetitorSection rows={competitorRows} />}
             </div>
           )}
           <CalcBasis />
