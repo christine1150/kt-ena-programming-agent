@@ -176,7 +176,7 @@ const COMPETITOR_TARGETS: { sheet: string; label: string; channel: string }[] = 
  * <본>/<재> 태그로 방송 구분을 나누고(태그 없음은 본방 여부 미확인), 같은 방영(채널·타깃·방송일·시작 시각)은 한 번만 센다.
  * 자사 채널과 이름이 같은 경쟁채널 항목은 뺀다(자사 표에 이미 있음). 방영이 없으면 행을 만들지 않는다.
  */
-export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNames: Set<string>, from: string, to: string, airing: AiringFilter, nameVariants: string[] = []): Promise<CompetitorRow[]> {
+export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNames: Set<string>, from: string, to: string, airing: AiringFilter, nameVariants: string[] = [], openStart = false): Promise<CompetitorRow[]> {
   const keys = memberKeys.filter((k) => /^[가-힣A-Z0-9]+$/.test(k));
   if (!keys.length || !from || !to) return [];
   const memberSet = new Set(keys);
@@ -189,13 +189,15 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
         .select("competitor_name, target_label, broadcast_date, start_time, program_name, rating, share")
         .in("norm_program_name", exact)
         .in("target_label", COMPETITOR_TARGETS.map((t) => t.sheet))
-        .gte("broadcast_date", from)
+        .gte("broadcast_date", openStart ? "1900-01-01" : from)
         .lte("broadcast_date", to)
         .order("broadcast_date", { ascending: true })
         .order("start_time", { ascending: true })
         .range(a, b),
     "경쟁 채널 방영"
   );
+  // 전체 기간(사용자 지시 2026-10-27, 결이 다른 전쟁사): 원 방송 경쟁채널(MBN)의 첫 방송이 자사 첫 방영보다 앞서도 빠지지 않게, 경쟁채널은 자기 첫 방영일부터 센다
+  if (openStart) for (const r of raw) if (String(r.broadcast_date) < from) from = String(r.broadcast_date);
   const seen = new Set<string>();
   const by = new Map<string, WorkAiring[]>();
   for (const r of raw) {
@@ -767,7 +769,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   // 경쟁 채널 조회도 자사 채널 조회와 함께 시작한다
   // 오리지널 비교(방영 시작 이후 본방, 조회 기간과 무관) — 실패해도 화면 전체를 막지 않는다
   const originalP = loadOriginalCompare(db, { cls: classification.cls, workIds, dataFrom: dbFirst, channels }).catch(() => null);
-  const competitorsP = loadCompetitorRows(db, work.memberKeys, new Set(channels.map((c) => normalizeProgramKey(c.name))), from, to, query.airing, workPrograms.map((p) => p.canonical_name ?? ""));
+  const competitorsP = loadCompetitorRows(db, work.memberKeys, new Set(channels.map((c) => normalizeProgramKey(c.name))), from, to, query.airing, workPrograms.map((p) => p.canonical_name ?? ""), query.from == null && presetDays === null);
   const buckets = await Promise.all(jobs.map((j) => j()));
   // 본방 여부·회차 보완 건수 — 기본 화면 배너(notes)가 아니라 별도 필드로 남겨 방송 기록 접힘 안에서만 보여 준다(개편 2026-10-23, 이력은 그대로)
   const supplement = [...fillStats.entries()].sort((a, b) => a[1].order - b[1].order).map(([channelCode, f]) => ({ channelCode, channelName: f.channelName, plan: f.plan, registered: f.registered, naver: f.naver, episode: f.episode }));

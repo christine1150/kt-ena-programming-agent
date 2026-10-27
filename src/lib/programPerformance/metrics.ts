@@ -822,8 +822,8 @@ export function overallReviewOf(i: { rows: ChannelRow[]; oc: (OriginalCompare & 
   const judged = views.filter((v) => v.kpi.sampleState === "OK" && v.scale !== null);
   const base = { channelOrder: order, judgedChannels: judged.map((v) => v.code) };
   if (judged.length === 0) {
-    const most = [...views].sort((a, b) => b.kpi.days - a.kpi.days)[0];
-    return { ...base, sentences: [`방영일이 가장 많은 ${most.name}도 ${most.kpi.days}일뿐이라, 아직 성과를 판단하기 이릅니다.`] };
+    // 판단할 만큼 쌓인 채널이 없으면 문장을 만들지 않는다(사용자 지시 2026-10-27: 결과가 나온 것으로 성과만 본다 — "아직 판단하기 이릅니다" 류 문구 금지)
+    return { ...base, sentences: [] };
   }
 
   // ① 채널별 판단 — 채널마다 채널 평균 대비 구간(높음·평균 수준·못 미침). 문장에는 채널 이름을 그대로 쓴다(사용자 지시 2026-10-23:

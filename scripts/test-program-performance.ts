@@ -322,11 +322,11 @@ async function main() {
   const t2049 = tvn.find((c) => c.targetLabel === "수도권 2049")!;
   const thh = tvn.find((c) => c.targetLabel === "전국 유료가구")!;
   check("경쟁: tvN 2049·가구 두 행, 자사 이름(ENA) 항목 없음", tvn.length === 2 && !r.competitors.some((c) => c.competitorName === "ENA"));
-  // 첫 월요일(START)은 조회 시작일(작품 첫 관측 수요일)보다 앞이라 빠진다 → 3회
-  check("경쟁: 다른 작품·중복 행·기간 밖 제외(3회)", t2049.airings === 3 && near(t2049.programAvg, 0.3) && t2049.rerunAirings === 3, JSON.stringify(t2049));
+  // 전체 기간(조회 시작일 미지정)에서는 경쟁채널을 자기 첫 방영일부터 센다(2026-10-27, 결이 다른 전쟁사: 원 방송 MBN 첫 방송이 자사 첫 방영보다 앞섬) → 첫 월요일(START) 포함 4회
+  check("경쟁: 다른 작품·중복 행 제외, 전체 기간은 경쟁채널 첫 방영부터(4회)", t2049.airings === 4 && near(t2049.programAvg, 0.3) && t2049.rerunAirings === 4, JSON.stringify(t2049));
   check("경쟁: 채널 평균은 순위 있는 경쟁채널 하루 행 일평균", near(t2049.channelDaily?.mean, 0.2) && near(t2049.vsChannel.pct, 50) && near(thh.vsChannel.pct, 20));
   check("경쟁: 3일은 자료 적음", t2049.sampleState === "SMALL");
-  check("경쟁: 첫 줄도 채널당 한 줄", r.competitorLines.length === 1 && r.competitorLines[0].text === "tvN: 0.300(2049, 150%)·0.600(가구, 120%)로 채널 평균 대비 각각 50%·20% 높음 (3회, 실적 3일, 표본 부족)", r.competitorLines[0]?.text);
+  check("경쟁: 첫 줄도 채널당 한 줄", r.competitorLines.length === 1 && r.competitorLines[0].text === "tvN: 0.300(2049, 150%)·0.600(가구, 120%)로 채널 평균 대비 각각 50%·20% 높음 (4회, 실적 4일, 표본 부족)", r.competitorLines[0]?.text);
   const rFirst = (await loadProgramPerformanceWith(db, Q({ airing: "first" }), { fitLookup }))!;
   check("경쟁: 본방만 보면 <재> 방영은 빠짐(행 없음)", rFirst.competitors.length === 0);
 
