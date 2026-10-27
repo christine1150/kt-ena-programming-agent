@@ -9,18 +9,23 @@ import { normalizeSubtitle } from "@/lib/olifeEpisodeParsing";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import classification from "./geoClassification.json";
 import geoPlaces from "./geoPlaces.json";
+import schedule from "./geoSchedule.json";
+import extra from "./geoExtra.json";
+import { alignDay, type SchedBlock } from "./geoScheduleMatch";
 
 // 도시·장소 좌표표(scripts/olife-geo/places.txt에서 내보냄): 이름 → [[나라, 경도, 위도], ...]
 const PLACES = geoPlaces as unknown as Record<string, [string, number, number][]>;
 
-type Cls = { no: number; ek: string; sk: string; region: string[]; countries: string[]; places: string[]; nature: string[]; culture: string[] };
-const CLS = classification as Cls[];
+type Cls = { no?: number; auto?: boolean; p: string; oe: number | null; ti: string; ek: string; sk: string; region: string[]; countries: string[]; places: string[]; nature: string[]; culture: string[] };
+const CLS = [...(classification as Cls[]), ...(extra as unknown as Cls[])]; // 수기 분류표 + 제목 기반 자동 분류(schedule-classify.mts, 분류표에 없는 회차만)
+// 편성표 칸 조회표(scripts/olife-geo/schedule-parse.mts): "프로그램|달력날짜" → [[시작 분, 시작 회차, 끝 회차, 길이], ...]
+const SCHED = schedule as unknown as Record<string, SchedBlock[]>;
 
 const PROGRAMS = [
   { id: "13a8a251-d8dc-4313-98fa-18b126aaaf0a", name: "걸어서 세계속으로", short: "걸세" },
   { id: "137c7a67-8c35-4d3f-8f0b-a1bd7dd1f2c2", name: "세계테마기행", short: "세테기" },
 ];
-const START = "2026-07-01"; // 닐슨 부제(EPG 매칭)가 채워지는 시점
+const START = "2025-01-01"; // 편성표(2025-02~)로 회차를 잇는다. 닐슨 부제(EPG)는 2026-07부터 채워진다
 const BANDS = ["02-05", "05-08", "08-11", "11-14", "14-17", "17-20", "20-23", "23-02"];
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -62,11 +67,15 @@ export interface GeoBroadcast {
   pl: [string, string, number | null, number | null][]; // 도시·장소 [이름, 귀속 나라, 경도, 위도]
 }
 
+// 회차(k)마다 같은 값(부제·나라·테마·장소)은 한 번만 실어 JSON 크기를 줄인다. 화면이 방송 줄에 다시 합친다.
+export type GeoEpisodeInfo = Pick<GeoBroadcast, "sub" | "lv" | "rg" | "cs" | "nat" | "cul" | "pl">;
+export type GeoBroadcastSlim = Omit<GeoBroadcast, keyof GeoEpisodeInfo>;
 export interface GeoMapData {
   period: string;
   target: string;
   targets: string[];
-  bcs: GeoBroadcast[];
+  eps: Record<string, GeoEpisodeInfo>;
+  bcs: GeoBroadcastSlim[];
 }
 
 export async function buildGeoMapData(targetLabel?: string): Promise<GeoMapData> {
@@ -100,28 +109,33 @@ export async function buildGeoMapData(targetLabel?: string): Promise<GeoMapData>
     bump(baseM, `${a.program}|${sl.wd}|${sl.band}|${sl.ym}`, a.rating);
   }
 
-  // 매칭: 회차 키 → 기획 키(앞부분 일치, 4자 이상)
+  // 매칭 ① 편성표: 닐슨 행을 같은 날 편성표 '칸'(여러 회차 묶음 포함)과 짝지어 회차 번호를 얻고, 분류표의 OLIFE 회차로 잇는다(2025-02~).
+  //      닐슨 부제(2026-07~)는 칸의 마지막 회차만 담기므로 편성표가 있으면 편성표를 우선한다.
+  // 매칭 ② 닐슨 부제: 회차 키 → 기획 키(앞부분 일치, 4자 이상) — 편성표에 없는 날의 보완.
   const byEp = new Map<string, Cls>();
+  const byNo = new Map<string, Cls>();
   const bySeries = new Map<string, Cls[]>();
   for (const c of CLS) {
     if (c.ek && !byEp.has(c.ek)) byEp.set(c.ek, c);
+    if (c.oe != null && !byNo.has(`${c.p}|${c.oe}`)) byNo.set(`${c.p}|${c.oe}`, c);
     if (c.sk) { if (!bySeries.has(c.sk)) bySeries.set(c.sk, []); bySeries.get(c.sk)!.push(c); }
   }
   const seriesKeys = [...bySeries.keys()].sort((a, b) => b.length - a.length);
   const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))];
+
+  // 닐슨 행 ↔ 편성표 칸
+  const blockOf = new Map<Air, SchedBlock>();
+  const byDay = new Map<string, Air[]>();
+  for (const a of airs) { const k = `${a.short}|${a.date}`; if (!byDay.has(k)) byDay.set(k, []); byDay.get(k)!.push(a); }
+  for (const [k, rows] of byDay) {
+    const blocks = SCHED[k]; if (!blocks) continue;
+    rows.sort((x, y) => x.start.localeCompare(y.start));
+    const m = alignDay(rows.map((r) => Number(r.start.slice(0, 2)) * 60 + Number(r.start.slice(3, 5))), blocks);
+    rows.forEach((r, i) => { if (m[i]) blockOf.set(r, m[i]!); });
+  }
+
   const bcs: GeoBroadcast[] = [];
   for (const a of airs) {
-    if (!a.sub || a.sub === "(없음)") continue;
-    const norm = normalizeSubtitle(a.sub);
-    let cls: Cls[] | null = null;
-    let lv: "회차" | "기획" = "회차";
-    const hit = byEp.get(norm);
-    if (hit) cls = [hit];
-    else {
-      const sk = seriesKeys.find((k) => k.length >= 4 && norm.startsWith(k));
-      if (sk) { cls = bySeries.get(sk)!; lv = "기획"; }
-    }
-    if (!cls) continue;
     const sl = slotOf(a.date, a.start);
     const b = base.get(`${a.program}|${sl.wd}|${sl.band}`)!;
     const bm = baseM.get(`${a.program}|${sl.wd}|${sl.band}|${sl.ym}`)!;
@@ -129,24 +143,47 @@ export async function buildGeoMapData(targetLabel?: string): Promise<GeoMapData>
     const m = bm.s > 0 ? a.rating / (bm.s / bm.n) : NaN;
     if (!Number.isFinite(i) || !Number.isFinite(m)) continue;
 
-    // 도시·장소를 나라에 귀속(회차 단위 매칭만): 좌표표의 나라가 그 회차의 나라 목록에 있으면 그 나라,
-    // 없고 회차가 한 나라뿐이면 그 나라(좌표 없음), 여러 나라인데 못 정하면 버린다.
-    const pl: GeoBroadcast["pl"] = [];
-    if (lv === "회차") {
-      const c = cls[0];
-      for (const name of new Set(c.places)) {
-        const e = PLACES[name]?.find((x) => c.countries.includes(x[0]));
-        const country = e ? e[0] : c.countries.length === 1 ? c.countries[0] : null;
-        if (country) pl.push([name, country, e?.[1] ?? null, e?.[2] ?? null]);
+    // (분류, 회차 번호, 표시 부제, 회차 묶음 키) 후보
+    const cands: { cls: Cls[]; lv: "회차" | "기획"; ep: number | null; sub: string; k: string }[] = [];
+    const blk = blockOf.get(a);
+    if (blk) {
+      for (let ep = blk[1]; ep <= blk[2]; ep++) {
+        const c = byNo.get(`${a.short}|${ep}`);
+        if (c) cands.push({ cls: [c], lv: c.auto ? "기획" : "회차", ep, sub: c.ti || c.ek, k: `${a.short}|${c.ek}` });
       }
     }
-    bcs.push({
-      p: a.short, ep: a.ep, sub: a.sub, d: a.date, t: a.start.slice(0, 5), wd: sl.wd, band: sl.band,
-      r: a.rating, m, i, k: `${a.short}|${norm}`, lv,
-      rg: uniq(cls.flatMap((c) => c.region)), cs: uniq(cls.flatMap((c) => c.countries)),
-      nat: uniq(cls.flatMap((c) => c.nature)), cul: uniq(cls.flatMap((c) => c.culture)), pl,
-    });
+    if (!cands.length && a.sub && a.sub !== "(없음)") {
+      const norm = normalizeSubtitle(a.sub);
+      const hit = byEp.get(norm);
+      if (hit) cands.push({ cls: [hit], lv: "회차", ep: a.ep, sub: a.sub, k: `${a.short}|${norm}` });
+      else {
+        const sk = seriesKeys.find((k) => k.length >= 4 && norm.startsWith(k));
+        if (sk) cands.push({ cls: bySeries.get(sk)!, lv: "기획", ep: a.ep, sub: a.sub, k: `${a.short}|${norm}` });
+      }
+    }
+    for (const cd of cands) {
+      const cls = cd.cls;
+      // 도시·장소를 나라에 귀속(회차 단위 매칭만): 좌표표의 나라가 그 회차의 나라 목록에 있으면 그 나라,
+      // 없고 회차가 한 나라뿐이면 그 나라(좌표 없음), 여러 나라인데 못 정하면 버린다.
+      const pl: GeoBroadcast["pl"] = [];
+      if (cd.lv === "회차") {
+        const c = cls[0];
+        for (const name of new Set(c.places)) {
+          const e = PLACES[name]?.find((x) => c.countries.includes(x[0]));
+          const country = e ? e[0] : c.countries.length === 1 ? c.countries[0] : null;
+          if (country) pl.push([name, country, e?.[1] ?? null, e?.[2] ?? null]);
+        }
+      }
+      bcs.push({
+        p: a.short, ep: cd.ep, sub: cd.sub, d: a.date, t: a.start.slice(0, 5), wd: sl.wd, band: sl.band,
+        r: a.rating, m, i, k: cd.k, lv: cd.lv,
+        rg: uniq(cls.flatMap((c) => c.region)), cs: uniq(cls.flatMap((c) => c.countries)),
+        nat: uniq(cls.flatMap((c) => c.nature)), cul: uniq(cls.flatMap((c) => c.culture)), pl,
+      });
+    }
   }
 
-  return { period: `${START} ~ ${airs[airs.length - 1]?.date ?? START}`, target: label, targets: GEO_MAP_TARGETS, bcs };
+  const eps: Record<string, GeoEpisodeInfo> = {};
+  const slim: GeoBroadcastSlim[] = bcs.map(({ sub, lv, rg, cs, nat, cul, pl, ...rest }) => { eps[rest.k] ??= { sub, lv, rg, cs, nat, cul, pl }; return rest; });
+  return { period: `${START} ~ ${airs[airs.length - 1]?.date ?? START}`, target: label, targets: GEO_MAP_TARGETS, eps, bcs: slim };
 }

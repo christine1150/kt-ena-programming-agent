@@ -19,6 +19,10 @@ for (let r = 3; r <= ws.rowCount; r++) {
   const g = (n: string) => v[col(n)];
   rows.push({
     no: Number(g("번호")),
+    // 편성표(schedule-parse)와 잇는 키: 프로그램 약칭 + OLIFE 회차 번호, 화면 표시용 부제
+    p: String(g("프로그램")).includes("걸어서") ? "걸세" : "세테기",
+    oe: parseInt(String(g("OLIFE 회차")), 10) || null,
+    ti: [String(g("기획명") ?? ""), g("부") ? g("부") + "부" : "", String(g("부제") ?? "")].map((x) => x.trim()).filter(Boolean).join(" "),
     ek: String(g("시청률 매칭키(회차)") ?? ""),
     sk: String(g("시청률 매칭키(기획)") ?? ""),
     region: split(g("권역")),
