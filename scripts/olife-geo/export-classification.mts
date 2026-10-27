@@ -3,6 +3,7 @@
 // 실행: npx tsx scripts/olife-geo/export-classification.mts [분류.xlsx]
 import ExcelJS from "exceljs";
 import { writeFileSync } from "node:fs";
+import { SEASON_CUES, HOLIDAY_CUES } from "./dictionaries";
 
 const SRC = process.argv[2] ?? "docs/olife-geo/걸세_세테기_나라도시테마_분류.xlsx";
 const wb = new ExcelJS.Workbook();
@@ -12,6 +13,7 @@ const head = (ws.getRow(2).values as unknown[]).slice(1).map(String);
 const col = (n: string) => head.indexOf(n);
 const split = (v: unknown) => String(v ?? "").split(";").map((x) => x.trim()).filter(Boolean);
 
+const text = (g: (n: string) => unknown) => [g("기획명"), g("부제"), g("부제 원문")].map((x) => String(x ?? "")).join(" ");
 const rows: unknown[] = [];
 for (let r = 3; r <= ws.rowCount; r++) {
   const v = (ws.getRow(r).values as unknown[]).slice(1);
@@ -30,6 +32,9 @@ for (let r = 3; r <= ws.rowCount; r++) {
     places: split(g("도시·지역·장소")),
     nature: split(g("자연 테마")),
     culture: split(g("문화 테마")),
+    // 시기 태그(계절·명절): 분류표의 '부제 계절감'·'명절·시기 단서' + 사전(dictionaries.ts) 키워드를 기획명·부제에 적용한 결과의 합집합
+    tm: [...new Set([...split(g("부제 계절감")), ...split(g("명절·시기 단서")),
+      ...SEASON_CUES.filter(([, re]) => re.test(text(g))).map(([k]) => k), ...HOLIDAY_CUES.filter(([, re]) => re.test(text(g))).map(([k]) => k)])],
   });
 }
 writeFileSync("src/lib/beta/geoClassification.json", JSON.stringify(rows));

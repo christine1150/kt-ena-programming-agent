@@ -11,14 +11,17 @@ import classification from "./geoClassification.json";
 import geoPlaces from "./geoPlaces.json";
 import schedule from "./geoSchedule.json";
 import extra from "./geoExtra.json";
+import timeTags from "./geoTimeTags.json";
 import { alignDay, type SchedBlock } from "./geoScheduleMatch";
 
 // 도시·장소 좌표표(scripts/olife-geo/places.txt에서 내보냄): 이름 → [[나라, 경도, 위도], ...]
 const PLACES = geoPlaces as unknown as Record<string, [string, number, number][]>;
 
-type Cls = { no?: number; auto?: boolean; p: string; oe: number | null; ti: string; ek: string; sk: string; region: string[]; countries: string[]; places: string[]; nature: string[]; culture: string[] };
+type Cls = { no?: number; auto?: boolean; p: string; oe: number | null; ti: string; ek: string; sk: string; region: string[]; countries: string[]; places: string[]; nature: string[]; culture: string[]; tm?: string[] };
 const CLS = [...(classification as Cls[]), ...(extra as unknown as Cls[])]; // 수기 분류표 + 제목 기반 자동 분류(schedule-classify.mts, 분류표에 없는 회차만)
 // 편성표 칸 조회표(scripts/olife-geo/schedule-parse.mts): "프로그램|달력날짜" → [[시작 분, 시작 회차, 끝 회차, 길이], ...]
+// 편성표 회차 제목에서 뽑은 시기 태그("프로그램|회차" → 태그): 수기 분류표에 이미 있는 회차에 보탠다
+const TT = timeTags as unknown as Record<string, string[]>;
 const SCHED = schedule as unknown as Record<string, SchedBlock[]>;
 
 const PROGRAMS = [
@@ -64,11 +67,12 @@ export interface GeoBroadcast {
   cs: string[];     // 나라
   nat: string[];    // 자연 테마
   cul: string[];    // 문화 테마
+  tm: string[];     // 시기 태그(봄·여름·가을·겨울, 크리스마스·새해·부처님오신날 등 명절)
   pl: [string, string, number | null, number | null][]; // 도시·장소 [이름, 귀속 나라, 경도, 위도]
 }
 
 // 회차(k)마다 같은 값(부제·나라·테마·장소)은 한 번만 실어 JSON 크기를 줄인다. 화면이 방송 줄에 다시 합친다.
-export type GeoEpisodeInfo = Pick<GeoBroadcast, "sub" | "lv" | "rg" | "cs" | "nat" | "cul" | "pl">;
+export type GeoEpisodeInfo = Pick<GeoBroadcast, "sub" | "lv" | "rg" | "cs" | "nat" | "cul" | "tm" | "pl">;
 export type GeoBroadcastSlim = Omit<GeoBroadcast, keyof GeoEpisodeInfo>;
 export interface GeoMapData {
   period: string;
@@ -178,12 +182,12 @@ export async function buildGeoMapData(targetLabel?: string): Promise<GeoMapData>
         p: a.short, ep: cd.ep, sub: cd.sub, d: a.date, t: a.start.slice(0, 5), wd: sl.wd, band: sl.band,
         r: a.rating, m, i, k: cd.k, lv: cd.lv,
         rg: uniq(cls.flatMap((c) => c.region)), cs: uniq(cls.flatMap((c) => c.countries)),
-        nat: uniq(cls.flatMap((c) => c.nature)), cul: uniq(cls.flatMap((c) => c.culture)), pl,
+        nat: uniq(cls.flatMap((c) => c.nature)), cul: uniq(cls.flatMap((c) => c.culture)), tm: uniq([...cls.flatMap((c) => c.tm ?? []), ...(cd.ep != null ? TT[`${a.short}|${cd.ep}`] ?? [] : [])]), pl,
       });
     }
   }
 
   const eps: Record<string, GeoEpisodeInfo> = {};
-  const slim: GeoBroadcastSlim[] = bcs.map(({ sub, lv, rg, cs, nat, cul, pl, ...rest }) => { eps[rest.k] ??= { sub, lv, rg, cs, nat, cul, pl }; return rest; });
+  const slim: GeoBroadcastSlim[] = bcs.map(({ sub, lv, rg, cs, nat, cul, tm, pl, ...rest }) => { eps[rest.k] ??= { sub, lv, rg, cs, nat, cul, tm, pl }; return rest; });
   return { period: `${START} ~ ${airs[airs.length - 1]?.date ?? START}`, target: label, targets: GEO_MAP_TARGETS, eps, bcs: slim };
 }

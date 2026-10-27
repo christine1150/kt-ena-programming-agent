@@ -148,6 +148,7 @@ span.term { border-bottom: 1.5px dotted var(--purple); }
 .chip::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
 .chip.N::before { background: var(--mint); }
 .chip.C::before { background: var(--purple); }
+.chip.S::before { background: var(--pink); }
 .chip[aria-pressed="true"]::before { background: #fff; }
 .chip[aria-pressed="true"] { color: #fff; background: linear-gradient(90deg, var(--purple), var(--pink)); }
 .chip small { color: inherit; opacity: .7; }
@@ -315,7 +316,7 @@ span.term { border-bottom: 1.5px dotted var(--purple); }
     <div class="side glass">
       <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="color:var(--sub)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="테마로 찾기 (예: 산, 음식, 축제)" autocomplete="off"></div>
       <div class="chips" id="chips"></div>
-      <div class="tleg"><span><i class="sw" style="background:var(--mint)"></i>자연 테마</span><span><i class="sw" style="background:var(--purple)"></i>문화 테마</span></div>
+      <div class="tleg"><span><i class="sw" style="background:var(--mint)"></i>자연 테마</span><span><i class="sw" style="background:var(--purple)"></i>문화 테마</span><span><i class="sw" style="background:var(--pink)"></i>시기·명절</span></div>
       <section class="sec rk"><h2>순위 <span class="ref" id="rankTitle"></span></h2><ul class="rank" id="rank"></ul></section>
       <section class="sec ep"><h2>잘 나온 회차 <span class="ref" id="epTitle"></span></h2><ul class="eps" id="eps"></ul></section>
     </div>
@@ -376,7 +377,7 @@ function groupBy(list, keysOf) {
   return [...m];
 }
 const progList = () => ALL.filter(b => prog === "all" || b.p === prog);
-const hasTheme = (b, t) => b.nat.includes(t) || b.cul.includes(t);
+const hasTheme = (b, t) => b.nat.includes(t) || b.cul.includes(t) || b.tm.includes(t);
 const filtered = () => progList().filter(b => !theme || hasTheme(b, theme));
 const countriesAgg = () => groupBy(filtered(), b => b.cs).filter(([n]) => CPOS[n]).map(([n, l]) => stat(n, l));
 const regionsAgg = () => groupBy(filtered(), b => b.rg).filter(([n]) => POS[n]).map(([n, l]) => {
@@ -397,7 +398,7 @@ function placesAgg() {
   if (none.length) m.set(NOPLACE, { lon: c0[0], lat: c0[1], approx: true, l: none });
   return [...m].map(([n, o]) => ({ ...stat(n, o.l), lon: o.lon, lat: o.lat, approx: o.approx, sample: o.l.length >= 2 }));
 }
-const themesAgg = () => groupBy(progList(), b => [...b.nat.map(t => "N|" + t), ...b.cul.map(t => "C|" + t)]).map(([k, l]) => stat(k.slice(2), l, { kind: k[0] }));
+const themesAgg = () => groupBy(progList(), b => [...b.nat.map(t => "N|" + t), ...b.cul.map(t => "C|" + t), ...b.tm.map(t => "S|" + t)]).map(([k, l]) => stat(k.slice(2), l, { kind: k[0] }));
 function episodesAgg(list) {
   return groupBy(list, b => [b.k]).map(([k, l]) => {
     const f = l.find(b => b.ep != null) || l[0];

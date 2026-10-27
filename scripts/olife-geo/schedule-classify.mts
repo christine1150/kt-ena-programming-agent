@@ -3,7 +3,7 @@
 // 나라가 하나도 잡히지 않는 제목은 만들지 않는다(지도에 올릴 수 없음). 수기 분류표(geoClassification.json)가 있는 회차는 건드리지 않는다.
 // 실행: npx tsx scripts/olife-geo/schedule-classify.mts  (schedule-parse.mts 다음에)
 import { readFileSync, writeFileSync } from "node:fs";
-import { COUNTRY_REGION, THEME_RULES } from "./dictionaries";
+import { COUNTRY_REGION, THEME_RULES, SEASON_CUES, HOLIDAY_CUES } from "./dictionaries";
 import cls from "../../src/lib/beta/geoClassification.json";
 import places from "../../src/lib/beta/geoPlaces.json";
 
@@ -31,29 +31,36 @@ function countriesOf(title: string): string[] {
   return [...out];
 }
 
-const rows: unknown[] = [];
-const seen = new Set<string>();
-let none = 0;
+// 같은 회차 번호가 편성표에서 여러 제목으로 적힌 경우(재편성·표기 흔들림)를 모아, 나라는 나라가 잡히는 첫 제목으로, 시기 태그는 모든 제목의 합집합으로 정한다.
+const titles = new Map<string, { p: string; oe: number; ts: string[] }>();
 for (const a of air) {
   const p = a.name.includes("세계테마기행") ? "세테기" : a.name.includes("걸어서") ? "걸세" : null;
   const m = a.info.match(/^(\d+)(?:\s*[-~]\s*(\d+))?\s*\((.*)\)\s*$/);
   if (!p || !m) continue;
-  const title = m[3].trim();
   for (let e = +m[1]; e <= +(m[2] ?? m[1]); e++) {
     const key = `${p}|${e}`;
-    if (have.has(key) || seen.has(key)) continue;
-    seen.add(key);
-    const cs = countriesOf(title);
-    if (!cs.length) { none++; continue; }
-    const text = title;
-    rows.push({
-      p, oe: e, ti: title, ek: `자동${p}${e}`, auto: true,
-      region: [...new Set(cs.map((c) => COUNTRY_REGION[c][1]))], countries: cs, places: [],
-      nature: [...new Set(THEME_RULES.filter(([g, , re]) => g === "자연" && re.test(text)).map(([, t]) => t))],
-      culture: [...new Set(THEME_RULES.filter(([g, , re]) => g !== "자연" && re.test(text)).map(([, t]) => t))],
-    });
+    if (!titles.has(key)) titles.set(key, { p, oe: e, ts: [] });
+    const t = m[3].trim(); if (!titles.get(key)!.ts.includes(t)) titles.get(key)!.ts.push(t);
   }
 }
+const timeOf = (text: string) => [...new Set([...SEASON_CUES, ...HOLIDAY_CUES].filter(([, re]) => re.test(text)).map(([k]) => k))];
+const rows: unknown[] = [];
+const tmOnly: Record<string, string[]> = {}; // 수기 분류표에 이미 있는 회차에 편성표 제목의 시기 태그만 보태는 용도
+let none = 0;
+for (const [key, { p, oe, ts }] of titles) {
+  if (have.has(key)) { const t = timeOf(ts.join(" ")); if (t.length) tmOnly[key] = t; continue; }
+  const title = ts.find((t) => countriesOf(t).length);
+  if (!title) { none++; continue; }
+  const cs = countriesOf(title);
+  rows.push({
+    p, oe, ti: title, ek: `자동${p}${oe}`, auto: true,
+    region: [...new Set(cs.map((c) => COUNTRY_REGION[c][1]))], countries: cs, places: [],
+    nature: [...new Set(THEME_RULES.filter(([g, , re]) => g === "자연" && re.test(title)).map(([, t]) => t))],
+    culture: [...new Set(THEME_RULES.filter(([g, , re]) => g !== "자연" && re.test(title)).map(([, t]) => t))],
+    tm: timeOf(ts.join(" ")),
+  });
+}
+writeFileSync("src/lib/beta/geoTimeTags.json", JSON.stringify(tmOnly));
 writeFileSync("src/lib/beta/geoExtra.json", JSON.stringify(rows));
 console.log(`자동 분류 ${rows.length}편 (나라를 못 찾아 제외 ${none}편) → src/lib/beta/geoExtra.json`);
 console.log((rows as any[]).slice(0, 8).map((r) => `${r.p}${r.oe} ${r.ti} → ${r.countries.join("/")} [${r.nature.join(",")}|${r.culture.join(",")}]`).join("\n"));
