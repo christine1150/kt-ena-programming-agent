@@ -188,12 +188,22 @@ const minuteOfTime = (t: string | null): number | null => {
 };
 const SIMULCAST_TOLERANCE_MIN = 15;
 
+/**
+ * 경쟁채널 편성표는 작품명 앞에 방송사 편성 꼬리표를 붙여 적는 경우가 있다 — 'TVN특별기획 100일의 거짓말', 'TVN월화드라마(세이렌)', '채널A 토일드라마 …'.
+ * 이 꼬리표를 떼지 않으면 작품 묶음 키('100일의거짓말')와 달라 tvN 계열이 통째로 빠진다(사용자 지적 2026-10-27).
+ * 꼬리표 목록은 DB 실제 표기에서 확인한 것만 둔다 — 비밀문서·티벤터뷰처럼 '작품명이 뒤에 붙은 다른 프로그램'은 건드리지 않는다.
+ */
+const BROADCAST_SLOT_PREFIXES = ["TVN특별기획", "TVN월화드라마", "TVN수목드라마", "TVN토일드라마", "TVN금토드라마", "TVN에디션", "TVNXTVING오리지널드라마", "TVN드라마", "채널A토일드라마"];
+const SLOT_PREFIX_RE = new RegExp(`^(?:${BROADCAST_SLOT_PREFIXES.join("|")})(?=.)`);
+/** 정규화 키에서 방송사 편성 꼬리표를 뗀 키 (없으면 그대로) */
+const stripSlotPrefix = (key: string): string => key.replace(SLOT_PREFIX_RE, "");
+
 export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNames: Set<string>, from: string, to: string, airing: AiringFilter, nameVariants: string[] = [], openStart = false, ownAirsP?: Promise<OwnAir[]>): Promise<CompetitorRow[]> {
   const keys = memberKeys.filter((k) => /^[가-힣A-Z0-9]+$/.test(k));
   if (!keys.length || !from || !to) return [];
   const memberSet = new Set(keys);
   // norm_program_name(DB 생성 열, 대소문자 유지) 완전 일치로 찾는다 — 색인을 타서 빠르다(ilike는 색인을 못 타 수 초 걸림). 대소문자 변형은 자사 프로그램 표기에서 모은다.
-  const exact = [...new Set([...keys, ...keys.map((k) => k.toLowerCase()), ...nameVariants.map((n) => n.replace(/<본>|<재>/g, "").replace(/[^가-힣a-zA-Z0-9]/g, ""))])].filter(Boolean);
+  const exact = [...new Set([...keys, ...keys.map((k) => k.toLowerCase()), ...nameVariants.map((n) => n.replace(/<본>|<재>/g, "").replace(/[^가-힣a-zA-Z0-9]/g, "")), ...keys.flatMap((k) => BROADCAST_SLOT_PREFIXES.map((p) => p + k))])].filter(Boolean);
   const raw = await fetchAll<Record<string, unknown>>(
     (a, b) =>
       db
@@ -218,7 +228,7 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
   for (const r of raw) {
     const name = String(r.competitor_name ?? "");
     const pname = String(r.program_name ?? "");
-    if (!name || ownNames.has(normalizeProgramKey(name)) || !memberSet.has(normalizeProgramKey(pname))) continue;
+    if (!name || ownNames.has(normalizeProgramKey(name)) || !memberSet.has(stripSlotPrefix(normalizeProgramKey(pname)))) continue;
     const k = `${name}|${r.target_label}|${r.broadcast_date}|${r.start_time}`;
     if (seen.has(k)) continue;
     seen.add(k);
