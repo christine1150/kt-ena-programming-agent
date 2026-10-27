@@ -13,7 +13,7 @@ const air = JSON.parse(readFileSync("docs/olife-geo/schedule-airings.json", "utf
 const PL = places as unknown as Record<string, [string, number, number][]>;
 
 const ALIAS: [RegExp, string][] = [
-  [/스와질란드/, "에스와티니"], [/터키/, "튀르키예"], [/대만/, "타이완"], [/인도(?!네시아|양|차이나)/, "인도"], [/체코|체스키/, "체코"], [/남아공|남아프리카/, "남아프리카공화국"],
+  [/스와질란드/, "에스와티니"], [/우즈벡/, "우즈베키스탄"], [/터키/, "튀르키예"], [/대만/, "타이완"], [/인도(?!네시아|양|차이나)/, "인도"], [/체코|체스키/, "체코"], [/남아공|남아프리카/, "남아프리카공화국"],
   [/(?:^|[^가-힣])UAE|두바이|아부다비/, "아랍에미리트"], [/발트\s*3국/, "에스토니아"], [/미국|하와이|알래스카|뉴욕|캘리포니아|플로리다|텍사스|루이지애나|버지니아|워싱턴(?!주)|시카고|라스베이거스|옐로스톤|그랜드 캐니언/, "미국"],
   [/영국|스코틀랜드|웨일스|잉글랜드|런던/, "영국"], [/바티칸|로마(?!니아)/, "이탈리아"], [/파리|프로방스|노르망디|알자스|오베르뉴|코르시카/, "프랑스"],
   [/발리|자바|수마트라|보르네오|술라웨시/, "인도네시아"], [/북경|베이징|상하이|티베트|윈난|쓰촨|신장|내몽골/, "중국"],
@@ -21,7 +21,7 @@ const ALIAS: [RegExp, string][] = [
 const names = Object.keys(COUNTRY_REGION).filter((n) => !n.startsWith("다국가"));
 // 걸세 제목은 "나라 - 부제" 꼴이라 앞부분의 나라를 우선한다("스와질란드 - 아프리카의 스위스"의 스위스는 부제의 수식어)
 function countriesOf(title: string): string[] {
-  const head = title.split(/s*[-–]s*/)[0];
+  const head = title.split(/\s*[-–]\s*/)[0];
   if (head !== title) { const h = countriesOfRaw(head); if (h.length) return h; }
   return countriesOfRaw(title);
 }
@@ -49,15 +49,19 @@ for (const a of air) {
     const t = m[3].trim(); if (!titles.get(key)!.ts.includes(t)) titles.get(key)!.ts.push(t);
   }
 }
+// 사용자가 나라를 알려 준 회차(manual-countries.txt: 프로그램|회차|나라;나라) — 제목에서 못 찾을 때 쓴다
+const MANUAL: Record<string, string[]> = {};
+for (const l of readFileSync("scripts/olife-geo/manual-countries.txt", "utf8").split(/\r?\n/)) { if (!l.trim() || l.startsWith("#")) continue; const [p, oe, cs] = l.split("|"); MANUAL[`${p}|${oe}`] = cs.split(";").map((x) => x.trim()); }
 const timeOf = (text: string) => [...new Set([...SEASON_CUES, ...HOLIDAY_CUES].filter(([, re]) => re.test(text)).map(([k]) => k))];
 const rows: unknown[] = [];
 const tmOnly: Record<string, string[]> = {}; // 수기 분류표에 이미 있는 회차에 편성표 제목의 시기 태그만 보태는 용도
 let none = 0;
 for (const [key, { p, oe, ts }] of titles) {
   if (have.has(key)) { const t = timeOf(ts.join(" ")); if (t.length) tmOnly[key] = t; continue; }
-  const title = ts.find((t) => countriesOf(t).length);
+  const manualCs = MANUAL[key];
+  const title = manualCs ? ts[0] : ts.find((t) => countriesOf(t).length);
   if (!title) { none++; continue; }
-  const cs = countriesOf(title);
+  const cs = manualCs ?? countriesOf(title);
   rows.push({
     p, oe, ti: title, ek: `자동${p}${oe}`, auto: true,
     region: [...new Set(cs.map((c) => COUNTRY_REGION[c][1]))], countries: cs, places: [],

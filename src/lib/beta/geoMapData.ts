@@ -24,7 +24,7 @@ const CLS = [...(classification as Cls[]), ...(extra as unknown as Cls[])]; // �
 // 편성표 회차 제목에서 뽑은 시기 태그("프로그램|회차" → 태그): 수기 분류표에 이미 있는 회차에 보탠다
 // 사용자가 회차별로 지정한 장소(place-overrides.txt): "프로그램|회차" → [[이름, 나라, 경도, 위도], ...]
 const PO = placeOverrides as unknown as Record<string, [string, string, number, number][]>;
-const COUNTRY_REGION_APP: Record<string, string> = { 캐나다: "북미", 미국: "북미", 호주: "오세아니아", 마셜제도: "태평양 섬", 사모아: "태평양 섬", "도미니카 공화국": "중미·카리브" };
+const COUNTRY_REGION_APP: Record<string, string> = { 캐나다: "북미", 미국: "북미", 호주: "오세아니아", 마셜제도: "태평양 섬", 사모아: "태평양 섬", "도미니카 공화국": "중미·카리브", 마다가스카르: "남부아프리카", 오스트리아: "서유럽", 이탈리아: "남유럽", 일본: "동아시아", 탄자니아: "동아프리카" };
 const TT = timeTags as unknown as Record<string, string[]>;
 const SCHED = schedule as unknown as Record<string, SchedBlock[]>;
 
