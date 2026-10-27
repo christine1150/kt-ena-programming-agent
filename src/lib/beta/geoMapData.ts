@@ -24,6 +24,7 @@ const CLS = [...(classification as Cls[]), ...(extra as unknown as Cls[])]; // �
 // 편성표 회차 제목에서 뽑은 시기 태그("프로그램|회차" → 태그): 수기 분류표에 이미 있는 회차에 보탠다
 // 사용자가 회차별로 지정한 장소(place-overrides.txt): "프로그램|회차" → [[이름, 나라, 경도, 위도], ...]
 const PO = placeOverrides as unknown as Record<string, [string, string, number, number][]>;
+const COUNTRY_REGION_APP: Record<string, string> = { 캐나다: "북미", 미국: "북미", 호주: "오세아니아" };
 const TT = timeTags as unknown as Record<string, string[]>;
 const SCHED = schedule as unknown as Record<string, SchedBlock[]>;
 
@@ -183,10 +184,13 @@ export async function buildGeoMapData(targetLabel?: string): Promise<GeoMapData>
       }
       const po = cd.ep != null ? PO[`${a.short}|${cd.ep}`] : undefined;
       if (po) for (const [name, country, lon, lat] of po) if (!pl.some((x) => x[0] === name)) pl.push([name, country, lon, lat]);
+      // 지정한 장소의 나라가 회차의 나라 목록에 없으면(예: 제목에 알래스카만 있는 로키 회차의 캐나다) 나라에도 보탠다
+      const cs = uniq(cls.flatMap((c) => c.countries)), rg = uniq(cls.flatMap((c) => c.region));
+      if (po) for (const [, country] of po) if (!cs.includes(country)) { cs.push(country); const r = COUNTRY_REGION_APP[country]; if (r && !rg.includes(r)) rg.push(r); }
       bcs.push({
         p: a.short, ep: cd.ep, sub: cd.sub, d: a.date, t: a.start.slice(0, 5), wd: sl.wd, band: sl.band,
         r: a.rating, m, i, k: cd.k, lv: cd.lv,
-        rg: uniq(cls.flatMap((c) => c.region)), cs: uniq(cls.flatMap((c) => c.countries)),
+        rg, cs,
         nat: uniq(cls.flatMap((c) => c.nature)), cul: uniq(cls.flatMap((c) => c.culture)), tm: uniq([...cls.flatMap((c) => c.tm ?? []), ...(cd.ep != null ? TT[`${a.short}|${cd.ep}`] ?? [] : [])]), pl,
       });
     }
