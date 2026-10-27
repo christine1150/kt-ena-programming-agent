@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 import { buildGeoMapData } from "../../src/lib/beta/geoMapData";
 import cls from "../../src/lib/beta/geoClassification.json";
 import extra from "../../src/lib/beta/geoExtra.json";
+import { epInfo } from "./epInfo";
+const E = (p: string, ep: number | null) => { const i = epInfo(p, ep); return [i.kind, i.orig, i.od]; }; // [번호 구분, 원방송 회차(KBS/EBS), 원방송일]
 
 const d = await buildGeoMapData();
 const C = [...(cls as any[]), ...(extra as any[])] as { p: string; oe: number | null; ti: string; countries: string[]; auto?: boolean }[];
@@ -21,8 +23,8 @@ const sheet = (name: string, cols: [string, number][], rows: unknown[][]) => {
 const by = new Map<string, { p: string; ep: number | null; sub: string; cs: string[]; rs: number[]; auto: boolean }>();
 for (const b of d.bcs) { const e = d.eps[b.k]; if (e.pl.length) continue; const x = by.get(b.k) ?? { p: b.p, ep: b.ep, sub: e.sub, cs: e.cs, rs: [], auto: b.k.includes("|자동") }; x.rs.push(b.r); by.set(b.k, x); }
 const q1 = [...by.values()].map((x) => ({ ...x, n: x.rs.length, r: x.rs.reduce((a, b) => a + b, 0) / x.rs.length })).sort((a, b) => b.n * b.r - a.n * a.r);
-sheet("① 장소 질문(전체)", [["프로그램", 9], ["OLIFE 회차", 10], ["회차 제목", 54], ["지금 분류된 나라", 18], ["방송 횟수", 9], ["평균 시청률(%)", 12], ["분류 방식", 12], ["나라 (답: 다르면)", 16], ["세부 장소 (답, 쉼표로 여러 곳)", 46]],
-  q1.map((r) => [r.p, r.ep, r.sub, r.cs.join(", "), r.n, Math.round(r.r * 1000) / 1000, r.auto ? "자동" : "수기", "", ""]));
+sheet("① 장소 질문(전체)", [["프로그램", 9], ["OLIFE 회차", 10], ["번호 구분", 20], ["원방송 회차(KBS·EBS)", 14], ["원방송일", 12], ["회차 제목", 54], ["지금 분류된 나라", 18], ["방송 횟수", 9], ["평균 시청률(%)", 12], ["분류 방식", 12], ["나라 (답: 다르면)", 16], ["세부 장소 (답, 쉼표로 여러 곳)", 46]],
+  q1.map((r) => [r.p, r.ep, ...E(r.p, r.ep), r.sub, r.cs.join(", "), r.n, Math.round(r.r * 1000) / 1000, r.auto ? "자동" : "수기", "", ""]));
 
 // ② 확인 필요
 const q2: unknown[][] = [];
@@ -47,17 +49,18 @@ const manual: [string, number | null, string, string, string][] = [
   ["걸세", 471, "도미니카-카리브 해의 중심 / 모로코", "제목 섞임", "471은 도미니카 공화국 편이 맞나요? (465 모로코와 제목이 섞여 있었습니다)"],
 ];
 manual.forEach(([p, e, t, a, q]) => q2.push([p, e, t, a, q, "", ""]));
-sheet("② 확인 필요", [["프로그램", 9], ["OLIFE 회차", 10], ["회차 제목", 50], ["이상한 점", 36], ["질문", 70], ["답", 40], ["비고", 20]], q2);
+sheet("② 확인 필요", [["프로그램", 9], ["OLIFE 회차", 10], ["번호 구분", 20], ["원방송 회차(KBS·EBS)", 14], ["원방송일", 12], ["회차 제목", 50], ["이상한 점", 36], ["질문", 70], ["답", 40], ["비고", 20]], q2.map((r) => [r[0], r[1], ...E(r[0] as string, r[1] as number | null), ...r.slice(2)]));
 
 // ③ 나라를 못 잡아 지도에서 빠진 회차(편성표에는 있음)
 const have = new Set(C.map((c) => `${c.p}|${c.oe}`)); const cnt = new Map<string, number>();
 for (const a of air) { const p = a.name.includes("세계테마기행") ? "세테기" : a.name.includes("걸어서") ? "걸세" : null; const m = a.info.match(/^(\d+)(?:\s*[-~]\s*(\d+))?\s*\((.*)\)\s*$/); if (!p || !m) continue; for (let e = +m[1]; e <= +(m[2] ?? m[1]); e++) { const k = `${p}|${e}`; if (!have.has(k)) cnt.set(k, (cnt.get(k) ?? 0) + 1); } }
-const q3 = [...cnt].map(([k, n]) => { const [p, e] = k.split("|"); return [p, Number(e), [...(titles.get(k) ?? [])][0] ?? "", n, "", ""]; }).sort((a, b) => (b[3] as number) - (a[3] as number));
-sheet("③ 나라 미분류 회차", [["프로그램", 9], ["OLIFE 회차", 10], ["회차 제목(편성표)", 54], ["편성표 방송 횟수", 12], ["나라 (답)", 18], ["세부 장소 (답)", 46]], q3);
+const q3 = [...cnt].map(([k, n]) => { const [p, e] = k.split("|"); const i = epInfo(p, Number(e)); return [p, Number(e), i.kind, i.orig, [...(titles.get(k) ?? [])][0] ?? "", n, "", ""]; }).sort((a, b) => (b[3] as number) - (a[3] as number));
+sheet("③ 나라 미분류 회차", [["프로그램", 9], ["OLIFE 회차", 10], ["번호 구분", 20], ["원방송 회차(KBS·EBS)", 14], ["회차 제목(편성표)", 54], ["편성표 방송 횟수", 12], ["나라 (답)", 18], ["세부 장소 (답)", 46]], q3);
 
 const ws = wb.addWorksheet("읽는 법"); ws.getColumn(1).width = 110;
 ["장소·나라 확인 질문 — 이 파일 하나에 답해 주시면 한 번에 반영합니다.", "", "① 장소 질문(전체): 지도에서 장소가 아직 없는 모든 회차입니다. 오른쪽 '나라 답'(다르면)과 '세부 장소'에 적어 주세요. 모르는 회차는 비워도 됩니다.",
   "② 확인 필요: 제가 보기에 이상하거나 틀렸을 수 있는 항목입니다(제목 섞임, 번호 중복, 나라 여러 곳 자동 분류 등). '답' 칸에 맞는 내용을 적어 주세요.",
+  "번호 구분: 걸세의 OLIFE 회차 = KBS 원방송 회차입니다. 세테기는 1000 미만이면 'OLIFE 자체 회차'(EBS 번호와 다름), 1000 이상이면 EBS 번호와 같습니다. 수기 분류된 회차는 원방송 회차·방송일을 채웠고, 자동 분류 회차는 EBS 번호를 모르면 비어 있습니다.",
   "③ 나라 미분류 회차: 제목에서 나라를 못 찾아 지도·엑셀에서 빠진 회차입니다. 나라(와 장소)를 알려 주시면 새로 들어갑니다.",
   "※ 시트 머리글 ▼로 정렬·필터가 됩니다. ①은 방송 횟수×시청률이 큰 회차(지도에 영향이 큰 회차)부터 정렬돼 있습니다."].forEach((t) => ws.addRow([t]));
 wb.worksheets.unshift(wb.worksheets.pop()!); wb.worksheets.forEach((w, i) => { (w as unknown as { orderNo: number }).orderNo = i; });
