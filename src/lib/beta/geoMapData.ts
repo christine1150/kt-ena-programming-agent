@@ -184,9 +184,9 @@ export async function buildGeoMapData(targetLabel?: string): Promise<GeoMapData>
       }
       const po = cd.ep != null ? PO[`${a.short}|${cd.ep}`] : undefined;
       if (po) for (const [name, country, lon, lat] of po) if (!pl.some((x) => x[0] === name)) pl.push([name, country, lon, lat]);
-      // 지정한 장소의 나라가 회차의 나라 목록에 없으면(예: 제목에 알래스카만 있는 로키 회차의 캐나다) 나라에도 보탠다
-      const cs = uniq(cls.flatMap((c) => c.countries)), rg = uniq(cls.flatMap((c) => c.region));
-      if (po) for (const [, country] of po) if (!cs.includes(country)) { cs.push(country); const r = COUNTRY_REGION_APP[country]; if (r && !rg.includes(r)) rg.push(r); }
+      // 장소를 지정한 회차는 나라도 지정한 장소의 나라로 정한다(제목만으로는 나라가 틀릴 수 있다: 로키는 캐나다, 알래스카는 미국)
+      const cs = po ? uniq(po.map((x) => x[1])) : uniq(cls.flatMap((c) => c.countries));
+      const rg = po ? uniq(cs.map((c) => COUNTRY_REGION_APP[c] ?? "")).concat(cs.every((c) => COUNTRY_REGION_APP[c]) ? [] : uniq(cls.flatMap((c) => c.region))) : uniq(cls.flatMap((c) => c.region));
       bcs.push({
         p: a.short, ep: cd.ep, sub: cd.sub, d: a.date, t: a.start.slice(0, 5), wd: sl.wd, band: sl.band,
         r: a.rating, m, i, k: cd.k, lv: cd.lv,
