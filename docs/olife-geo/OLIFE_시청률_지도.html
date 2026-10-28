@@ -114,8 +114,8 @@ button:focus-visible, .term:focus-visible, input:focus-visible, select:focus-vis
 .side { display: flex; flex-direction: column; min-height: 0; padding: 10px 12px; gap: 10px; overflow: hidden; }
 .search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line2); border-radius: 8px; padding: 5px 10px; flex: none; background: var(--surface); }
 .search input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 12.5px; color: var(--ink); width: 100%; }
-/* 테마 칩: 여러 줄로 감싸고 위아래로 스크롤(3줄 남짓 보이게) */
-.chips { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; max-height: 96px; overflow-y: auto; overflow-x: hidden; flex: none; margin-top: -4px; padding-right: 2px; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+/* 테마 칩: 여러 줄로 감싸고 위아래로 스크롤. 2줄 반(줄 간격 27px × 2 + 칩 절반)만 보여 아래에 더 있다는 게 드러나게 */
+.chips { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; max-height: 66px; overflow-y: auto; overflow-x: hidden; flex: none; margin-top: -4px; padding-right: 2px; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
 .chip { flex: none; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; cursor: pointer; color: var(--ink); white-space: nowrap; }
 .chip:hover { border-color: var(--line2); background: var(--hover); }
 .chip b { font-weight: 700; }
