@@ -3,7 +3,7 @@
 // Page 1 종합 대시보드 (DESIGN.md 1.2 참고 — 참고 이미지의 파스텔 블루·라벤더 그라디언트 +
 // 글래스모피즘 화이트 카드 톤을 따른다). 숫자는 전부 /api/dashboard/page1이 SQL로 계산해
 // 내려준 값을 그대로 표시하고, 여기서는 문장 조립(줄글 인사이트)만 한다.
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { VendingMachineIcon } from "@/components/VendingIcons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -3554,11 +3554,18 @@ function ManualMinuteRatingChart({
   broadcastStartTime,
   broadcastEndTime,
   cmBreaks,
+  ownProgramName,
+  ownRatingText,
+  ownHouseholdText,
 }: {
   minuteRatings: ManualMinuteRating[];
   competitorPrograms: ManualCompetitorProgramRow[] | null;
   accentColor: string;
   ownChannelName: string;
+  // 사용자 지시(2026-10-28): 선 끝 라벨에 자사도 "채널명·프로그램명·2049(가구)"를 같은 형식으로 적는다.
+  ownProgramName?: string | null;
+  ownRatingText?: string | null;
+  ownHouseholdText?: string | null;
   // 사용자 지시(2026-08-26, 재재재수정): "첨부 파일 붉은색 표시 정보(시작시간·종료시간 등)가
   // 다 보이게" — Nielsen 실측 본방 시작/종료 시각(get_original_content_daily가 이미 계산해
   // 둔 matched_start_time/matched_end_time). PD가 뽑은 분당 시청률 시트는 리드인·리드아웃을
@@ -3582,10 +3589,25 @@ function ManualMinuteRatingChart({
   // "그래프에 그라데이션도 없앨 것" — (1) 영역 그라데이션 채우기를 걷어내 선 하나만 남기고,
   // (2) 왼쪽에 y축 시청률 눈금(0/중간/최고)을 넣어 격자선이 무엇을 뜻하는지 읽히게 하고,
   // (3) 세로 여백을 넓혀 최고 시청률 칩·마커 라벨이 선과 겹치지 않게 한다.
+  // 사용자 지시(2026-10-28): "분당 시청률 보는 것이 불편" — 각 선 끝에 로고·프로그램명·2049(가구)를 바로 붙이려면
+  // 글자 크기가 화면 폭에 따라 늘고 줄면 안 되므로, 차트 폭을 실제 픽셀로 재어 viewBox와 1:1로 맞춘다.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(640);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const apply = () => {
+      const w = Math.round(el.getBoundingClientRect().width);
+      if (w >= 200) setW(w);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   if (minuteRatings.length < 2) return null;
-  const W = 640;
-  // 사용자 지시(2026-10-07): "분당 시청률이 하단에 너무 길게" — 높이 200→132, 눈금 2개, 범례 한 줄 칩(디자인 전문가 설계안). 접힘 패널 안에서 열었을 때의 규격.
-  const H = 132;
+  // 라벨이 선 높이마다 한 줄(24px)씩 서므로 채널이 5개여도 겹치지 않을 높이로 둔다.
+  const H = 176;
   const PAD_L = 40; // y축 눈금 자리
   // 사용자 지시(2026-09-03): "분당 시청률 그래프의 로고 위치도 깨지고, 가독률도 좋지 않아서
   // 보기가 안좋아 — 다시 디자인하여 네가 제시하는 모양으로" — 원인은 경쟁 구간 선의 "시작점
@@ -3594,7 +3616,10 @@ function ManualMinuteRatingChart({
   // 데이터 영역 위에 라벨을 얹는 방식 자체를 버리고, 오른쪽에 라벨 전용 여백(gutter)을 만들어
   // 각 구간선의 높이에 채널명을 적는다 — 이 프로젝트가 이미 쓰는 방식(슬로프 차트: y좌표순
   // 정렬 후 최소 간격 미달분만 밀어내고, 어긋나면 leader line으로 잇기)을 그대로 따른다.
-  const PAD_R = 96; // 오른쪽 채널명 라벨 자리
+  // 오른쪽 라벨 자리 — 넓은 화면은 "로고 + 프로그램명 + 2049(가구)", 좁은 화면은 프로그램명을 빼고 "로고 + 2049(가구)"만.
+  const PAD_R = W >= 720 ? 270 : W >= 520 ? 232 : W >= 420 ? 150 : 112;
+  const SHOW_PROGRAM = PAD_R >= 230;
+  const SHOW_HOUSEHOLD = PAD_R >= 150;
   const PAD_Y = 22; // 최고 시청률 칩이 앉을 여유 + 격자선과 상하 여백(위쪽 우측 자사 채널명 라벨이 잘리지 않을 높이)
   const toMinutesRaw = (hhmm: string) => {
     const [h, m] = hhmm.split(":").map(Number);
@@ -3642,23 +3667,67 @@ function ManualMinuteRatingChart({
   // 오른쪽 gutter 라벨의 y좌표 — 시청률이 비슷한 구간끼리 글자가 겹치지 않게, y좌표 오름차순으로
   // 훑으며 최소 간격(11px)에 못 미치는 것만 아래로 밀어낸다(1패스). 밀려서 선과 어긋난 라벨은
   // 아래 렌더링에서 가는 leader line으로 이어 준다.
-  const LABEL_MIN_GAP = 11;
-  const bandLabels: { y: number; labelY: number; name: string; color: string }[] = [];
+  // 사용자 지시(2026-10-28): 라벨이 한 줄 24px짜리(로고·프로그램명·수치)로 커졌으므로 간격을 24px로 하고, 자사 선 끝(마지막 분)도 같은 줄에 넣어 함께 정렬한다.
+  // 아래로 밀다 차트 밖으로 나가면 맨 아래를 바닥에 고정하고 위로 되밀어 전부 차트 안에 들어오게 한다.
+  const LABEL_MIN_GAP = 24;
   const bandColors = assignBandColors(bands.map((c) => c.channel_name), accentColor);
-  for (const entry of bands
-    .map((c, i) => ({ y: yOf(c.target_rating!), name: c.channel_name, color: bandColors[i] }))
-    .sort((a, b) => a.y - b.y)) {
-    const prev = bandLabels[bandLabels.length - 1];
-    const labelY = prev && entry.y - prev.labelY < LABEL_MIN_GAP ? prev.labelY + LABEL_MIN_GAP : entry.y;
-    bandLabels.push({ ...entry, labelY });
+  const lastRating = minuteRatings[minuteRatings.length - 1].rating;
+  const endLabels: {
+    y: number;
+    labelY: number;
+    color: string;
+    own: boolean;
+    channel: string;
+    program: string;
+    rating: string;
+    household: string | null;
+    title: string;
+  }[] = [
+    {
+      y: yOf(lastRating),
+      labelY: 0,
+      color: accentColor,
+      own: true,
+      channel: ownChannelName,
+      program: ownProgramName ? shortProgramName(ownProgramName) : "",
+      rating: ownRatingText ?? lastRating.toFixed(2),
+      household: ownHouseholdText ?? null,
+      title: `${ownChannelName}${ownProgramName ? ` '${ownProgramName}'` : ""} 2049 ${ownRatingText ?? lastRating.toFixed(2)}%${ownHouseholdText ? ` (가구 ${ownHouseholdText}%)` : ""}`,
+    },
+    ...bands.map((c, i) => {
+      const program = shortProgramName(cleanCompetitorProgramName(c.program_name));
+      return {
+        y: yOf(c.target_rating!),
+        labelY: 0,
+        color: bandColors[i],
+        own: false,
+        channel: c.channel_name,
+        program,
+        rating: c.target_rating!.toFixed(2),
+        household: c.household_rating !== null && Number.isFinite(c.household_rating) ? c.household_rating.toFixed(2) : null,
+        title: `${c.channel_name} '${program}' ${(c.start_time ?? "").slice(0, 5)} 2049 ${c.target_rating!.toFixed(2)}%${c.household_rating !== null ? ` (가구 ${c.household_rating.toFixed(2)}%)` : ""}`,
+      };
+    }),
+  ].sort((a, b) => a.y - b.y);
+  endLabels.forEach((l, i) => {
+    l.labelY = i > 0 ? Math.max(l.y, endLabels[i - 1].labelY + LABEL_MIN_GAP) : l.y;
+  });
+  const labelMaxY = H - 14;
+  for (let i = endLabels.length - 1; i >= 0; i--) {
+    const cap = i === endLabels.length - 1 ? labelMaxY : endLabels[i + 1].labelY - LABEL_MIN_GAP;
+    if (endLabels[i].labelY > cap) endLabels[i].labelY = cap;
   }
+  const labelMinY = 12;
+  endLabels.forEach((l, i) => {
+    if (i === 0 && l.labelY < labelMinY) l.labelY = labelMinY;
+    else if (i > 0 && l.labelY < endLabels[i - 1].labelY + LABEL_MIN_GAP) l.labelY = endLabels[i - 1].labelY + LABEL_MIN_GAP;
+  });
   return (
-    <div className="max-w-[900px]">
+    <div className="max-w-[1000px]">
       {/* 사용자 지시(2026-10-14): "분당 시청률 — 굵은 선 ENA, 흐린 선 …" 안내 문구는 삭제. */}
-      <div className="relative">
-        {/* preserveAspectRatio="none"이면 <text> 눈금이 가로로 늘어나 찌그러지므로, y축 눈금을
-            넣으면서 기본값(비율 유지)으로 바꾼다 — 세로 높이는 style로 고정. */}
-        <svg viewBox={`0 0 ${W} ${H}`} className="h-auto min-h-[120px] w-full" role="img" aria-label={`분당 시청률, 최고 ${peak.time} ${peak.rating.toFixed(3)}%`}>
+      <div className="relative" ref={wrapRef}>
+        {/* viewBox를 실제 픽셀 폭(W)과 1:1로 맞춰 글자·눈금이 늘어나지 않는다. */}
+        <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block max-w-full" role="img" aria-label={`분당 시청률, 최고 ${peak.time} ${peak.rating.toFixed(3)}%`}>
           {gridTicks.map((v) => (
             <g key={v}>
               <line x1={PAD_L} y1={yOf(v)} x2={W - PAD_R} y2={yOf(v)} stroke="#e4e4e7" strokeWidth={1} />
@@ -3706,20 +3775,19 @@ function ManualMinuteRatingChart({
           <path d={path} fill="none" stroke={accentColor} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
           {/* 오른쪽 gutter의 채널명 라벨 + (밀려난 경우) leader line. 데이터 영역 위에 아무것도
               얹지 않으므로 선끼리도, 라벨끼리도 겹치지 않는다. */}
-          {bandLabels.map((b) => (
-            <g key={`label-${b.name}-${b.labelY}`}>
-              {Math.abs(b.labelY - b.y) > 1 && (
-                <line x1={W - PAD_R - 2} y1={b.y} x2={W - PAD_R + 4} y2={b.labelY} stroke={b.color} strokeWidth={0.8} strokeOpacity={0.5} />
-              )}
-              <text x={W - PAD_R + 7} y={b.labelY + 3} fontSize={9.5} fontWeight={600} fill={b.color} fillOpacity={0.9}>
-                {b.name}
-              </text>
+          {/* 사용자 지시(2026-10-28): 선 끝에서 라벨 줄까지 가는 선으로 이어(선 높이와 라벨 높이가 달라도 어느 선인지 바로 보이게) 하고, 끝점에 작은 점을 찍는다. */}
+          {endLabels.map((b) => (
+            <g key={`end-${b.channel}-${b.own ? "own" : b.program}`}>
+              <circle cx={W - PAD_R} cy={b.y} r={b.own ? 3 : 2.2} fill={b.color} fillOpacity={b.own ? 1 : 0.7} />
+              <polyline
+                points={`${W - PAD_R + 3},${b.y} ${W - PAD_R + 10},${b.y} ${W - PAD_R + 14},${b.labelY} ${W - PAD_R + 18},${b.labelY}`}
+                fill="none"
+                stroke={b.color}
+                strokeWidth={b.own ? 1.2 : 0.9}
+                strokeOpacity={b.own ? 0.9 : 0.55}
+              />
             </g>
           ))}
-          {/* 자사 선은 가장 굵고 진하므로 라벨도 gutter 맨 위에 진하게(범례와 색 일치). */}
-          <text x={W - PAD_R + 7} y={PAD_Y - 10} fontSize={9.5} fontWeight={700} fill={accentColor}>
-            {ownChannelName}
-          </text>
         </svg>
         <div className="pointer-events-none absolute inset-0">
           {/* 사용자 지시(2026-08-26, 전면 재정리): 최고 시청률 라벨을 배경 없는 텍스트에서
@@ -3732,6 +3800,30 @@ function ManualMinuteRatingChart({
           >
             {peak.time} {peak.rating.toFixed(3)}%
           </span>
+          {/* 사용자 지시(2026-10-28): 선이 끝나는 높이마다 "로고(자사는 채널명) · 프로그램명 · 2049 (가구)" 한 줄을 오른쪽에 붙인다.
+              예전 아래 범례 칩과 같은 정보라 범례는 걷어냈다 — 선과 이름을 눈으로 오가며 맞추던 불편을 없애는 것이 목적. */}
+          {endLabels.map((b) => (
+            <div
+              key={`row-${b.channel}-${b.own ? "own" : b.program}`}
+              className={`pointer-events-auto absolute flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 text-[11px] ${b.own ? "bg-zinc-50 ring-1 ring-zinc-200" : ""}`}
+              style={{ left: W - PAD_R + 20, top: b.labelY - 11, width: PAD_R - 22 }}
+              title={b.title}
+            >
+              <span className="h-3 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: b.color }} />
+              {b.own ? (
+                <span className="shrink-0 text-[12px] font-extrabold" style={{ color: brandText(b.color) }}>
+                  {b.channel}
+                </span>
+              ) : (
+                <CompetitorLogoBadge channelName={b.channel} color={b.color} heightPx={12} />
+              )}
+              {SHOW_PROGRAM && <span className="min-w-0 flex-1 truncate text-zinc-600">{b.program}</span>}
+              <span className={`${SHOW_PROGRAM ? "" : "ml-auto"} shrink-0 font-bold tabular-nums`} style={{ color: brandText(b.color) }}>
+                {b.rating}%
+              </span>
+              {SHOW_HOUSEHOLD && b.household && <span className="shrink-0 tabular-nums text-zinc-400">({b.household})</span>}
+            </div>
+          ))}
           {/* 사용자 지시(2026-09-03): 2026-09-01에 "점선 좌측 상단"에 넣었던 차트 내 로고 배지는
               제거했다 — 그래프 시작 전부터 방영 중이던 프로그램은 시작점이 전부 왼쪽 끝으로
               잘려(clamp) 로고가 데이터 없는 빈 공간에 서로 겹쳐 쌓이는 문제가 있었다(사용자
@@ -3760,40 +3852,14 @@ function ManualMinuteRatingChart({
           있는 데이터 그대로, 새 계산 없음) — 시트 처음/끝이 아니라 실측 방송 시각 기준. */}
       <div className="relative mt-0.5 h-[18px] text-[10.5px] text-zinc-500">
         <span className="absolute -translate-x-1/2 whitespace-nowrap rounded-full bg-zinc-100 px-1.5 py-0.5" style={{ left: `${(xOfMin(startMarkerMin) / W) * 100}%` }}>
-          {fmtHHMM(startMarkerMin)} 방송 시작
+          {fmtHHMM(startMarkerMin)} {W < 420 ? "시작" : "방송 시작"}
         </span>
         <span className="absolute -translate-x-1/2 whitespace-nowrap rounded-full bg-zinc-100 px-1.5 py-0.5" style={{ left: `${(xOfMin(endMarkerMin) / W) * 100}%` }}>
-          {fmtHHMM(endMarkerMin)} 방송 종료
+          {fmtHHMM(endMarkerMin)} {W < 420 ? "종료" : "방송 종료"}
         </span>
       </div>
-      {/* 사용자 지시(2026-08-26, 재재수정): "로고가 있으면 로고가 채널명을 대체 — 채널명과
-          로고 둘 다 하지 말고 로고로만" + "한 줄에 3개 채널까지 보이도록 같은 너비로 정렬,
-          글자는 작아져도 됨" — 채널명 텍스트를 없애고(로고/이니셜 배지가 그 역할을 대신),
-          3열 grid로 폭을 고정한다. 이제 이 카드가 경쟁 프로그램 정보의 유일한 출처다(차트
-          위 로고 배지는 제거) — 카드 톤도 살짝 다듬어 각 항목이 더 뚜렷이 구분되게 한다. */}
-      {bands.length > 0 && (
-        // 사용자 지시(2026-10-14): 좌우 스크롤바 없이 한눈에 — 2열 격자로 맞추고 프로그램명은 칸 폭에서 줄임표로 자른다(전체 이름은 마우스 오버).
-        <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          {bands.map((c, i) => {
-            const color = bandColors[i];
-            const programName = shortProgramName(cleanCompetitorProgramName(c.program_name));
-            return (
-              <div
-                key={`${c.channel_name}-${c.program_name}`}
-                className="flex h-6 min-w-0 items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 text-[11px]"
-                title={`${c.channel_name} '${programName}' ${c.start_time!.slice(0, 5)} ${c.target_rating!.toFixed(3)}%`}
-              >
-                <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-                <CompetitorLogoBadge channelName={c.channel_name} color={color} heightPx={12} />
-                <span className="min-w-0 flex-1 truncate text-zinc-600">{programName}</span>
-                <span className="shrink-0 font-semibold tabular-nums" style={{ color: brandText(color) }}>
-                  {c.target_rating!.toFixed(2)}%
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* 사용자 지시(2026-10-28): 채널 로고·프로그램명·2049(가구) 범례 칩은 선 끝 라벨로 옮겼다(위 차트 오른쪽). */}
+      {bands.length > 0 && <p className="mt-1.5 text-[10.5px] text-zinc-400">오른쪽 라벨: 2049 시청률 (가구 시청률) · 흐린 선은 동시간대 경쟁 프로그램 평균</p>}
     </div>
   );
 }
@@ -4279,6 +4345,9 @@ function OriginalContentReportCard({
                           broadcastStartTime={h.matched_start_time}
                           broadcastEndTime={h.matched_end_time}
                           cmBreaks={h.manualReport!.cm_breaks}
+                          ownProgramName={h.matched_program_name}
+                          ownRatingText={h.matched_rating !== null ? formatRating(h.matched_rating, h.broadcast_channel_code) : null}
+                          ownHouseholdText={PRIMARY_2049_CODES.has(h.broadcast_channel_code) && h.matched_household_rating !== null ? formatRating(h.matched_household_rating, h.broadcast_channel_code) : null}
                         />
                       ),
                     });
