@@ -114,8 +114,9 @@ button:focus-visible, .term:focus-visible, input:focus-visible, select:focus-vis
 .side { display: flex; flex-direction: column; min-height: 0; padding: 10px 12px; gap: 10px; overflow: hidden; }
 .search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line2); border-radius: 8px; padding: 5px 10px; flex: none; background: var(--surface); }
 .search input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 12.5px; color: var(--ink); width: 100%; }
-.chips { display: flex; flex-wrap: nowrap; gap: 4px; overflow-x: auto; overflow-y: hidden; flex: none; padding-bottom: 4px; margin-top: -4px; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
-.chip { flex: none; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 11.5px; padding: 3px 9px; border-radius: 999px; cursor: pointer; color: var(--ink); white-space: nowrap; }
+/* 테마 칩: 여러 줄로 감싸고 위아래로 스크롤(3줄 남짓 보이게) */
+.chips { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; max-height: 96px; overflow-y: auto; overflow-x: hidden; flex: none; margin-top: -4px; padding-right: 2px; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+.chip { flex: none; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; cursor: pointer; color: var(--ink); white-space: nowrap; }
 .chip:hover { border-color: var(--line2); background: var(--hover); }
 .chip b { font-weight: 700; }
 .chip small { color: var(--muted); }
@@ -694,8 +695,8 @@ function renderThemes() {
   const ts = themesAgg().filter(t => !q || t.name.includes(q)).sort(byMode);
   const box = d3.select("#chips"); box.selectAll("*").remove();
   ts.forEach(t => box.append("button").attr("class", "chip " + t.kind).attr("aria-pressed", theme === t.name)
-    .attr("title", t.kind === "N" ? "자연 테마" : t.kind === "C" ? "문화 테마" : "시기·명절")
-    .html(`<b>${esc(t.name)}</b> <small>${mode === "r" ? pct(t.r) : t[mode].toFixed(2)} · ${t.n}건</small>`)
+    .attr("title", `${t.kind === "N" ? "자연 테마" : t.kind === "C" ? "문화 테마" : "시기·명절"} · 방송 ${t.n}건 · 회차 ${t.eps}편`) // 건수는 마우스오버로(칩을 좁혀 한 줄에 여러 개)
+    .html(`<b>${esc(t.name)}</b> <small>${mode === "r" ? pct(t.r) : t[mode].toFixed(2)}</small>`)
     .on("click", () => setTheme(theme === t.name ? null : t.name)));
   if (!ts.length) box.append("span").attr("class", "ref").text("맞는 테마가 없습니다.");
 }
