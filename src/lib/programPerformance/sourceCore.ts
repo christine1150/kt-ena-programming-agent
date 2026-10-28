@@ -621,11 +621,13 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         .limit(1)
         .maybeSingle();
       const noProgramData = !any1;
+      // 보유 자료 첫날(DB 용량 정책으로 2025-01-01부터) 이전 방송은 자료에 없다 — '방영 안 함'으로 읽히지 않게 안내를 붙인다(〈크래시〉 ENA 2024-05~06 본방이 안 보인 사례, 2026-10-29)
+      const beforeCoverage = dbFirst && from <= dbFirst ? ` 보유 자료는 ${dbFirst}부터라 그 이전에 방송된 회차는 포함되지 않습니다.` : "";
       rows.push({
         ...base,
         channelDaily,
         status: noProgramData ? "NO_PROGRAM_DATA" : "NO_OBSERVATION",
-        statusNote: noProgramData ? "이 기간 이 채널의 프로그램 단위 닐슨 자료가 없습니다(채널 하루 값만 있음)." : ids.length ? "이 기간에 이 작품의 방영 기록이 없습니다." : "이 채널에서 이 작품의 방영 기록을 찾지 못했습니다.",
+        statusNote: noProgramData ? "이 기간 이 채널의 프로그램 단위 닐슨 자료가 없습니다(채널 하루 값만 있음)." : ids.length ? `이 기간에 이 작품의 방영 기록이 없습니다.${beforeCoverage}` : `이 채널에서 이 작품의 방영 기록을 찾지 못했습니다.${dbFirst ? ` 보유 자료는 ${dbFirst}부터라 그 이전에 방송된 회차는 포함되지 않습니다.` : ""}`,
       });
       return done();
     }
