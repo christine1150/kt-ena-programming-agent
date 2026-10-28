@@ -788,7 +788,7 @@ function CalcBasis() {
 }
 
 /**
- * 화면 상태 = 주소 하나 — 새로고침·공유·뒤로 가기가 같은 화면을 연다. 기본값(최근 4주·전체 방송·두 타깃·전체 채널)은 주소에 쓰지 않는다.
+ * 화면 상태 = 주소 하나 — 새로고침·공유·뒤로 가기가 같은 화면을 연다. 기본값(최근 12주·전체 방송·두 타깃·전체 채널)은 주소에 쓰지 않는다.
  * 예전에는 상태를 화면이 따로 들고 주소는 작품만 적어, 주소를 바꿀 때마다 첫 진입 처리가 다시 돌아 검색 결과를 기본 목록으로 덮어썼다(2026-10-23 재현).
  * 다른 화면 링크(?q=이름&channel=채널코드, ?group=작품키&from&to)는 그대로 받는다.
  */
@@ -822,7 +822,7 @@ function readState(sp: Pick<URLSearchParams, "get">): ViewState {
   return {
     group: (sp.get("group") ?? "").slice(0, 120) || null,
     q: (sp.get("q") ?? "").slice(0, 60),
-    preset: from || to ? "custom" : p === "12w" || p === "all" ? p : "4w",
+    preset: from || to ? "custom" : p === "4w" || p === "all" ? p : "12w",
     from,
     to,
     airing: a === "first" || a === "rerun" ? a : "all",
@@ -839,7 +839,7 @@ function writeState(s: ViewState): string {
   if (s.preset === "custom") {
     if (s.from) p.set("from", s.from);
     if (s.to) p.set("to", s.to);
-  } else if (s.preset !== "4w") p.set("period", s.preset);
+  } else if (s.preset !== "12w") p.set("period", s.preset);
   if (s.airing !== "all") p.set("airing", s.airing);
   if (s.target !== "both") p.set("target", s.target);
   if (s.channels.length) p.set("channels", s.channels.join(","));
@@ -1103,10 +1103,10 @@ function ProgramSearch({ initialQuery, hasSelection, onPick }: { initialQuery: s
 }
 
 const PRESETS: [Exclude<PeriodPreset, "custom">, string][] = [
-  ["4w", "최근 4주"],
   ["12w", "최근 12주"],
   ["all", "전체 기간"],
 ];
+  ["4w", "최근 4주"],
 
 /**
  * 기간 — 최근 4주·12주·전체는 누르는 즉시, '기간 선택'은 날짜 두 개를 고른 뒤 [적용]을 눌러야 조회한다
