@@ -3041,11 +3041,25 @@ function buildOriginalInsight(
     causeLine = `${rerunChannelName} 재방 유지율 ${crossRetentionPct.toFixed(1)}%로 과거 평균(${historicalAvgRetention.toFixed(1)}%)보다 낮음`;
   } else if (rank !== null && rank > 1 && beatenBy.length > 0) {
     // 사용자 지시(2026-10-28): "더 높게 집계됨(순위 관측, 원인 아님)"은 빼고 동시간대 상위 콘텐츠를 시청률과 함께 나열한다(최대 3개).
-    const topNamed = beatenBy
+    // 추가 지시(2026-10-28): "상위 콘텐츠:" 문구 삭제, 시청률은 소수 둘째 자리 반올림, 채널명이 프로그램명 앞에 또 붙은 경우(JTBC JTBC뉴스룸) 한 번만,
+    // 많이 밀린 경우 뉴스·스포츠보다 드라마·예능 같은 콘텐츠를 먼저 보여준다(장르 열이 없어 이름으로 뉴스·스포츠를 가려낸다).
+    const NON_CONTENT_RE = /뉴스|news|특보|날씨|KBO|리그|프로야구|야구|축구|농구|배구|골프|중계|스포츠|경기/i;
+    const ordered = [
+      ...beatenBy.filter((c) => !NON_CONTENT_RE.test(c.competitor_program_name)),
+      ...beatenBy.filter((c) => NON_CONTENT_RE.test(c.competitor_program_name)),
+    ];
+    const compact = (s: string) => s.replace(/\s/g, "").toLowerCase();
+    const topNamed = ordered
       .slice(0, 3)
-      .map((c) => `${c.competitor_name} ${shortProgramName(c.competitor_program_name)}(${formatRating(c.competitor_rating)}%)`)
+      .map((c) => {
+        const pname = shortProgramName(c.competitor_program_name);
+        const bare = compact(pname).startsWith(compact(c.competitor_name))
+          ? pname.replace(new RegExp(`^\\s*${c.competitor_name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").split("").join("\\s*")}\\s*`, "i"), "").trim() || pname
+          : pname;
+        return `${c.competitor_name} ${bare}(${c.competitor_rating === null ? "-" : c.competitor_rating.toFixed(2)}%)`;
+      })
       .join(", ");
-    causeLine = `동시간대 ${rank}위 — 상위 콘텐츠: ${topNamed}${beatenBy.length > 3 ? ` 외 ${beatenBy.length - 3}개` : ""}`;
+    causeLine = `동시간대 ${rank}위 — ${topNamed}${ordered.length > 3 ? ` 외 ${ordered.length - 3}개` : ""}`;
   } else if (rank === 1) {
     causeLine = "동시간대 타깃 1위 — 경쟁 프로그램 대비 우위 유지";
   }
