@@ -17,6 +17,8 @@ const ALIASES: { pattern: RegExp; short: string }[] = [
   { pattern: loose("한블리한문철의블랙박스리뷰"), short: "한문철의블랙박스리뷰" },
   { pattern: loose("인생2막세상의벽을향해한방을날려라리얼도전스토리하이킥2"), short: "리얼도전스토리하이킥2" },
   { pattern: loose("목요일퇴근푸드현무카세"), short: "현무카세" },
+  // 사용자 지시(2026-10-28): 채널명(KBS2)과 'KBS'가 겹치므로 KBO 리그로만 적는다.
+  { pattern: loose("KBS스포츠KBO리그"), short: "KBO 리그" },
   { pattern: loose("캐리어하나로떠나는주문짐쌀라비움"), short: "짐쌀라비움" },
 ];
 

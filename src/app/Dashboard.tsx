@@ -2971,7 +2971,7 @@ function buildOriginalInsight(
         `동시간대 1위 달성: 경쟁사인 ${top.competitor_name} ${top.competitor_program_name}(${formatRating(top.competitor_rating)}%) 대비 ${ratio.toFixed(1)}배 높은 시청률로 동시간대 타깃 1위 사수`
       );
     } else if (rank !== null && rank > 1 && beatenBy.length > 0) {
-      const named = beatenBy.slice(0, 3).map((c) => `${c.competitor_name} ${c.competitor_program_name}(${formatRating(c.competitor_rating)}%)`).join(", ");
+      const named = beatenBy.slice(0, 3).map((c) => `${c.competitor_name} ${shortProgramName(c.competitor_program_name)}(${formatRating(c.competitor_rating)}%)`).join(", ");
       const extra = beatenBy.length > 3 ? ` 외 ${beatenBy.length - 3}개` : "";
       secondaryBullets.push(`동시간대 ${rank}위 기록: ${named}${extra}보다 낮았음`);
     }
@@ -3040,7 +3040,12 @@ function buildOriginalInsight(
   if (historicalAvgRetention !== null && crossRetentionPct !== null && crossRetentionPct < historicalAvgRetention && rerunChannelName) {
     causeLine = `${rerunChannelName} 재방 유지율 ${crossRetentionPct.toFixed(1)}%로 과거 평균(${historicalAvgRetention.toFixed(1)}%)보다 낮음`;
   } else if (rank !== null && rank > 1 && beatenBy.length > 0) {
-    causeLine = `동시간대 ${rank}위 — ${beatenBy[0].competitor_name} '${beatenBy[0].competitor_program_name}'이(가) 더 높게 집계됨(순위 관측, 원인 아님)`;
+    // 사용자 지시(2026-10-28): "더 높게 집계됨(순위 관측, 원인 아님)"은 빼고 동시간대 상위 콘텐츠를 시청률과 함께 나열한다(최대 3개).
+    const topNamed = beatenBy
+      .slice(0, 3)
+      .map((c) => `${c.competitor_name} ${shortProgramName(c.competitor_program_name)}(${formatRating(c.competitor_rating)}%)`)
+      .join(", ");
+    causeLine = `동시간대 ${rank}위 — 상위 콘텐츠: ${topNamed}${beatenBy.length > 3 ? ` 외 ${beatenBy.length - 3}개` : ""}`;
   } else if (rank === 1) {
     causeLine = "동시간대 타깃 1위 — 경쟁 프로그램 대비 우위 유지";
   }
