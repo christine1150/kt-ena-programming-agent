@@ -546,7 +546,7 @@ function SlotSection({ row }: { row: ChannelRow }) {
       <h4 className="text-[12px] font-medium text-zinc-500">편성 비교</h4>
       <p className="text-[15px] font-semibold leading-snug text-zinc-900">{a.slotLead ?? a.slotText}</p>
       {a.slots.length > 0 && (
-        <div className="dense-grid mt-2 overflow-x-auto">
+        <div className="dense-grid mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="표(가로 스크롤)">
           <table className="w-full text-[13px]">
             <thead className="text-[12px] text-zinc-500">
               <tr>
@@ -642,7 +642,7 @@ function Fold({ title, children }: { title: string; children: ReactNode }) {
   return (
     <details className="mt-2 rounded-md border border-zinc-200 bg-white" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
       <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium text-zinc-700">{title}</summary>
-      {open && <div className="dense-grid overflow-x-auto border-t border-zinc-100 px-3 py-2">{children}</div>}
+      {open && <div className="dense-grid overflow-x-auto border-t border-zinc-100 px-3 py-2" tabIndex={0} role="region" aria-label="펼친 표(가로 스크롤)">{children}</div>}
     </details>
   );
 }
@@ -963,7 +963,9 @@ function ProgramSearch({ initialQuery, hasSelection, onPick }: { initialQuery: s
       ? "오리지널 드라마 · 최근 방영 순"
       : mode === "variety"
         ? "오리지널 예능 · 최근 방영 순"
-        : "ENA 최근 2주 방영 오리지널 · 최근 방영 순";
+        : mode === "culture"
+          ? "오리지널 교양 · 최근 방영 순"
+          : "ENA 최근 2주 방영 오리지널 · 최근 방영 순";
 
   return (
     <div ref={boxRef} className="relative">
@@ -1104,9 +1106,9 @@ function ProgramSearch({ initialQuery, hasSelection, onPick }: { initialQuery: s
 
 const PRESETS: [Exclude<PeriodPreset, "custom">, string][] = [
   ["12w", "최근 12주"],
+  ["4w", "최근 4주"],
   ["all", "전체 기간"],
 ];
-  ["4w", "최근 4주"],
 
 /**
  * 기간 — 최근 4주·12주·전체는 누르는 즉시, '기간 선택'은 날짜 두 개를 고른 뒤 [적용]을 눌러야 조회한다
