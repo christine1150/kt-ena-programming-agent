@@ -3,7 +3,7 @@
 // 실행: npx tsx scripts/olife-geo/export-classification.mts [분류.xlsx]
 import ExcelJS from "exceljs";
 import { writeFileSync } from "node:fs";
-import { SEASON_CUES, HOLIDAY_CUES } from "./dictionaries";
+import { SEASON_CUES, HOLIDAY_CUES, COUNTRY_REGION } from "./dictionaries";
 
 const SRC = process.argv[2] ?? "docs/olife-geo/걸세_세테기_나라도시테마_분류.xlsx";
 const wb = new ExcelJS.Workbook();
@@ -63,3 +63,6 @@ for (const line of readFileSync("scripts/olife-geo/place-overrides.txt", "utf8")
 }
 writeFileSync("src/lib/beta/geoPlaceOverrides.json", JSON.stringify(ov));
 console.log("내보냄: 장소 지정", Object.keys(ov).length, "회차 → src/lib/beta/geoPlaceOverrides.json");
+
+// 나라 → 권역(장소를 지정한 회차는 나라가 바뀌므로 권역도 사전에서 다시 찾는다) → src/lib/beta/geoCountryRegion.json
+writeFileSync("src/lib/beta/geoCountryRegion.json", JSON.stringify(Object.fromEntries(Object.entries(COUNTRY_REGION).map(([c, [, rg]]) => [c, rg]))));
