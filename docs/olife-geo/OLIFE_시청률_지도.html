@@ -10,319 +10,278 @@
 @font-face { font-family: "KT Flow"; src: url("/ena-design/fonts/KTFLOW-MEDIUM.ttf") format("truetype"); font-weight: 400 599; font-display: swap; }
 @font-face { font-family: "KT Flow"; src: url("/ena-design/fonts/KTFLOW-BOLD.ttf") format("truetype"); font-weight: 600 749; font-display: swap; }
 @font-face { font-family: "KT Flow"; src: url("/ena-design/fonts/KTFLOW-BLACK.ttf") format("truetype"); font-weight: 750 900; font-display: swap; }
+/* 색 원칙: 바탕·땅은 무채색, 색은 '평균 대비 성과' 한 가지에만 쓴다.
+   높음=남색·낮음=장미색은 앱 증감색(src/lib/ui/tokens.ts up/down)과 같은 방향. 가운데(평균 수준)는 회색.
+   테마(자연·문화·시기) 색은 성과색(파랑·빨강)과 겹치지 않는 밝은 초록·노랑·하늘 계열. */
 :root {
-  --bg1: #eaf5ff; --bg2: #f4edff; --bg3: #ffecf5;
-  --card: rgba(255, 255, 255, .62); --card-line: rgba(255, 255, 255, .9);
-  --shadow: 0 14px 40px rgba(160, 120, 210, .16), inset 0 1px 0 rgba(255, 255, 255, .9);
-  --ink: #2a2350; --sub: #7b7699; --line: rgba(150, 130, 200, .2); --track: rgba(160, 145, 210, .14);
-  --mint: #33d6c4; --purple: #9a6cf5; --pink: #f467ad; --sky: #6cc6f5;
-  --land: rgba(255, 255, 255, .8); --land-line: rgba(170, 150, 230, .55); --grid: rgba(150, 130, 210, .13);
-  --down: #f467ad; --mid: #d3c4f6; --up: #7446ee;
-  --nat: #33d6c4; --cul: #9a6cf5; --both: #f467ad; --none: #dcd8ea;
+  --bg: #f3f4f6; --surface: #ffffff; --line: #e4e7ec; --line2: #cfd4dc;
+  --ink: #111827; --sub: #4b5563; --muted: #8a919c;
+  --ocean: #f8f9fb; --land: #e3e7ed; --land-line: #ffffff;
+  --c-vh: #281fc7; --c-h: #8a8cf2; --c-n: #b8bdc7; --c-l: #ee7f96; --c-vl: #9f1239;
+  --up: #281fc7; --down: #be123c; --top: #2563eb;
+  --t-nat: #34d399; --t-cul: #facc15; --t-both: #a3e635; --t-sea: #22d3ee; --none: #e5e7eb;
+  --hover: #f3f4f6; --sel: #eef0ff; --shadow: 0 6px 24px rgba(17, 24, 39, .10);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg1: #141633; --bg2: #1d1740; --bg3: #2a1736;
-    --card: rgba(40, 38, 80, .55); --card-line: rgba(255, 255, 255, .14); --shadow: 0 14px 40px rgba(0, 0, 0, .4), inset 0 1px 0 rgba(255, 255, 255, .08);
-    --ink: #f1eeff; --sub: #aaa5cc; --line: rgba(190, 175, 255, .2); --track: rgba(190, 175, 255, .14);
-    --land: rgba(70, 66, 120, .8); --land-line: rgba(30, 28, 60, .9); --grid: rgba(190, 175, 255, .1); --mid: #6a5f9e; --none: #5a5680;
+    --bg: #0d0f13; --surface: #171a21; --line: #272c36; --line2: #363c48;
+    --ink: #f1f3f6; --sub: #b4bac5; --muted: #7f8794;
+    --ocean: #12151b; --land: #262b35; --land-line: #12151b;
+    --c-vh: #a5a8ff; --c-h: #5a56d6; --c-n: #5c6370; --c-l: #a3405a; --c-vl: #fb7185;
+    --up: #a5a8ff; --down: #fb7185; --top: #3b82f6;
+    --t-nat: #34d399; --t-cul: #fde047; --t-both: #bef264; --t-sea: #67e8f9; --none: #3a404b;
+    --hover: #1f232c; --sel: #23264a; --shadow: 0 8px 28px rgba(0, 0, 0, .5);
   }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0f13; --surface: #171a21; --line: #272c36; --line2: #363c48;
+  --ink: #f1f3f6; --sub: #b4bac5; --muted: #7f8794;
+  --ocean: #12151b; --land: #262b35; --land-line: #12151b;
+  --c-vh: #a5a8ff; --c-h: #5a56d6; --c-n: #5c6370; --c-l: #a3405a; --c-vl: #fb7185;
+  --up: #a5a8ff; --down: #fb7185; --top: #3b82f6;
+  --t-nat: #34d399; --t-cul: #fde047; --t-both: #bef264; --t-sea: #67e8f9; --none: #3a404b;
+  --hover: #1f232c; --sel: #23264a; --shadow: 0 8px 28px rgba(0, 0, 0, .5);
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { overflow-x: clip; } /* 좌우 스크롤바 방지 */
-body {
-  margin: 0; color: var(--ink); font-family: "KT Flow", "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
-  background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 48%, var(--bg3) 100%); min-height: 100vh;
-}
-.wrap { max-width: 1440px; margin: 0 auto; padding: 22px 16px 36px; }
-.glass { background: var(--card); border: 1px solid var(--card-line); border-radius: 24px; box-shadow: var(--shadow); backdrop-filter: blur(22px) saturate(1.4); -webkit-backdrop-filter: blur(22px) saturate(1.4); }
+html, body { overflow-x: clip; overscroll-behavior: none; }
+body { margin: 0; color: var(--ink); background: var(--bg); font-family: "KT Flow", "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; font-size: 13px; }
+.num { font-variant-numeric: tabular-nums; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.wrap { padding: 8px 10px 20px; }
 
-/* 머리: 제목 왼쪽, 타깃 선택 오른쪽 */
-.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-h1 { font-size: 26px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; }
-.badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; color: #fff; vertical-align: 5px; margin-left: 8px; background: linear-gradient(90deg, var(--purple), var(--pink)); }
-.sub { color: var(--sub); font-size: 13px; margin: 0; line-height: 1.5; }
-.target { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sub); padding: 6px 6px 6px 14px; border-radius: 999px; }
-.target select { font: inherit; font-weight: 700; color: var(--ink); border: 0; border-radius: 999px; padding: 7px 30px 7px 14px; cursor: pointer; appearance: none;
-  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239a6cf5' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center; box-shadow: 0 3px 10px rgba(150, 110, 220, .18); }
+/* 머리: 1줄 = 제목·보기 방식, 2줄 = 편성 조건(기간·요일·시간대·최소 방송·권역) */
+.top { padding: 6px 12px 6px 16px; margin-bottom: 8px; }
+.row { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-height: 36px; }
+.row + .row { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 6px; }
+.top h1 { font-size: 17px; font-weight: 800; letter-spacing: -.02em; margin: 0; white-space: nowrap; }
+.badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; color: var(--sub); border: 1px solid var(--line2); margin-left: 6px; vertical-align: 2px; letter-spacing: .04em; }
+.fl { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.rowlab { font-size: 11.5px; font-weight: 800; color: var(--sub); }
+.seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--hover); border: 1px solid var(--line); }
+.seg button { border: 0; background: transparent; color: var(--sub); font: inherit; font-size: 12.5px; padding: 4px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(17, 24, 39, .12), 0 0 0 1px var(--line); }
+.seg button.term::after { content: "ⓘ"; font-size: 10px; margin-left: 3px; opacity: .5; }
+select.sl { font: inherit; font-size: 12.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--line2); border-radius: 8px; padding: 4px 8px; cursor: pointer; }
+.target { margin-left: auto; }
+.target select { font-weight: 700; }
+.pill { border: 1px solid var(--ink); background: var(--ink); color: var(--surface); font: inherit; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; cursor: pointer; }
+.reset { border: 0; background: none; font: inherit; font-size: 12px; color: var(--c-vh); cursor: pointer; padding: 4px 2px; text-decoration: underline; text-underline-offset: 2px; }
+.cond { font-size: 11.5px; color: var(--muted); margin-left: auto; }
 
-/* 필터 줄: 알약형 탭(선택된 칸만 흰 알약) */
-.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; color: var(--sub); }
-.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--track); }
-.seg button { border: 0; background: transparent; color: var(--sub); font: inherit; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
-.seg button[aria-pressed="true"] { background: #fff; color: var(--ink); font-weight: 700; box-shadow: 0 3px 10px rgba(150, 110, 220, .2); }
-.pill { display: inline-flex; align-items: center; gap: 6px; border: 0; font: inherit; font-weight: 700; color: #fff; padding: 6px 12px; border-radius: 999px; cursor: pointer; background: linear-gradient(90deg, var(--purple), var(--pink)); box-shadow: 0 4px 12px rgba(244, 103, 173, .3); }
-.pill.ghost { background: #fff; color: var(--purple); box-shadow: 0 3px 10px rgba(150, 110, 220, .18); }
-
-/* 요약 카드 4개 */
-.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
-@media (max-width: 960px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.kpi { padding: 14px 16px; display: flex; gap: 12px; align-items: center; min-width: 0; }
-.kpi .ic { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 13px; }
-.kpi .t { font-size: 11px; color: var(--sub); }
-.kpi .v { font-size: 20px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.kpi .s { font-size: 11px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.kpi > div { min-width: 0; }
-.g-mint { background: linear-gradient(135deg, #6ee7d8, var(--mint)); }
-.g-purple { background: linear-gradient(135deg, #c3a6ff, var(--purple)); }
-.g-pink { background: linear-gradient(135deg, #ffa3cd, var(--pink)); }
-.g-sky { background: linear-gradient(135deg, #a6defc, var(--sky)); }
-
-.grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 14px; align-items: start; }
-@media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
-.grid > * { min-width: 0; }
-.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.card { padding: 16px; }
-h2 { font-size: 16px; font-weight: 800; margin: 0 0 10px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-h2 .ref { font-size: 11px; font-weight: 600; color: var(--sub); }
-#map { width: 100%; height: auto; display: block; border-radius: 16px; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 11px; color: var(--sub); margin-top: 10px; align-items: center; }
-.sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
-.ramp { width: 110px; height: 8px; border-radius: 999px; background: linear-gradient(90deg, var(--down), var(--mid), var(--up)); display: inline-block; vertical-align: middle; margin: 0 4px; }
-.hint { font-size: 11px; color: var(--sub); margin: 0 0 8px; }
-
-/* 지도 컨트롤(확대·축소·처음으로)과 현재 위치 표시 */
-.mapbox { position: relative; }
-#map { touch-action: none; overscroll-behavior: contain; }
-html, body { overscroll-behavior: none; }
+/* 본문: 지도 왼쪽(최대한 크게) + 오른쪽 패널. 지도 칸 높이는 지도 비율에 맞춰 fitStage()가 정한다 */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 25vw, 470px); gap: 8px; align-items: start; }
+.lcol { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mapcard { position: relative; overflow: hidden; background: var(--ocean); }
+.mapbox { position: absolute; inset: 0; }
+#map { width: 100%; height: 100%; display: block; touch-action: none; overscroll-behavior: contain; }
 #map.zoomed { cursor: grab; }
 #map.zoomed:active { cursor: grabbing; }
-.mapctl { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 4px; padding: 4px; border-radius: 16px; }
-.mapctl button { width: 40px; height: 40px; border: 0; border-radius: 12px; font: inherit; font-size: 20px; font-weight: 700; line-height: 1; color: var(--purple); background: rgba(255, 255, 255, .85); cursor: pointer; box-shadow: 0 2px 8px rgba(150, 110, 220, .18); }
-.mapctl button:hover:not(:disabled) { background: #fff; transform: translateY(-1px); }
-.mapctl button:disabled { opacity: .35; cursor: default; }
-.crumb { position: absolute; top: 12px; left: 12px; display: flex; align-items: center; gap: 10px; padding: 4px 14px 4px 4px; border-radius: 999px; font-weight: 700; }
-.crumb button { border: 0; font: inherit; font-weight: 700; color: #fff; padding: 7px 14px; border-radius: 999px; cursor: pointer; background: linear-gradient(90deg, var(--purple), var(--pink)); box-shadow: 0 4px 12px rgba(244, 103, 173, .3); }
-button:focus-visible, .term:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
-kbd { font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--track); color: var(--ink); }
-@media (max-width: 700px) { .mapctl button { width: 44px; height: 44px; } }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mapctl button { background: rgba(120, 110, 200, .35); color: var(--ink); } }
+kbd { font: inherit; font-size: 10.5px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--line2); background: var(--surface); color: var(--sub); }
 
-/* 용어 설명 */
-.term { cursor: help; }
-.seg button.term::after { content: "ⓘ"; font-size: 11px; margin-left: 4px; opacity: .55; }
-span.term { border-bottom: 1.5px dotted var(--purple); }
-#termTip { position: fixed; z-index: 6; pointer-events: none; max-width: 300px; opacity: 0; transition: opacity .1s; padding: 10px 14px; border-radius: 14px; font-size: 12.5px; line-height: 1.6; color: var(--ink);
-  background: rgba(255, 255, 255, .95); border: 1px solid rgba(255, 255, 255, .95); box-shadow: 0 14px 36px rgba(120, 80, 200, .25); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #termTip { background: rgba(40, 36, 80, .96); border-color: rgba(255, 255, 255, .15); } }
-@media (min-width: 1500px) { #termTip { font-size: 15px; max-width: 360px; } .mapctl button { width: 48px; height: 48px; font-size: 22px; } }
+/* 범례: 지도 아래 한 줄. 색 단계는 눌러서 그 단계만 볼 수 있다. 나머지 설명은 ⓘ에 */
+.mleg { display: flex; align-items: center; gap: 4px 6px; flex-wrap: wrap; padding: 4px 8px; font-size: 11.5px; color: var(--sub); }
+.mleg .lt { font-weight: 700; color: var(--ink); margin-right: 4px; white-space: nowrap; }
+.lrow { display: inline-flex; align-items: center; gap: 5px; border: 1px solid transparent; background: none; font: inherit; font-size: 11.5px; color: var(--ink); padding: 2px 8px 2px 6px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.lrow:hover { background: var(--hover); }
+.lrow[aria-pressed="true"] { border-color: var(--ink); font-weight: 700; }
+.lrow .sw { width: 10px; height: 10px; border-radius: 50%; }
+.lrow .cnt { color: var(--muted); }
+.lhelp { margin-left: auto; white-space: nowrap; color: var(--muted); }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
 
-/* 지도 위 유리 구슬 */
+/* 지도 컨트롤·현재 위치 */
+.mapctl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow); }
+.mapctl button { width: 34px; height: 34px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 18px; font-weight: 700; line-height: 1; cursor: pointer; }
+.mapctl button:last-child { border-bottom: 0; }
+.mapctl button:hover:not(:disabled) { background: var(--hover); }
+.mapctl button:disabled { color: var(--line2); cursor: default; }
+.crumb { position: absolute; top: 10px; left: 10px; display: flex; align-items: center; gap: 10px; padding: 4px 14px 4px 4px; font-weight: 700; box-shadow: var(--shadow); }
+.crumb button { border: 0; font: inherit; font-weight: 700; color: var(--surface); background: var(--ink); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+button:focus-visible, .term:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--c-vh); outline-offset: 2px; }
+
+/* 지도 표식 */
 .pie { cursor: pointer; transition: opacity .15s; }
-.pie.dim { opacity: .14 !important; }
-.pie .ring { fill: none; stroke-width: 4; }
-.pie.sel .ring { stroke-width: 7; }
-.pie text { font-size: 11px; font-weight: 700; fill: var(--ink); paint-order: stroke; stroke: rgba(255, 255, 255, .9); stroke-width: 3px; text-anchor: middle; pointer-events: none; }
-.lead { stroke: var(--sub); stroke-width: 1; opacity: .4; }
+.pie.dim { opacity: .12; }
+.pie text { font-size: 11px; font-weight: 700; fill: var(--ink); paint-order: stroke; stroke: var(--ocean); stroke-width: 3px; stroke-linejoin: round; text-anchor: middle; pointer-events: none; }
+.pie .rk circle { fill: var(--top); stroke: var(--surface); stroke-width: 2; }
+.pie .rk text { fill: #fff; stroke: none; font-size: 10.5px; font-weight: 800; dominant-baseline: central; }
+.lead { stroke: var(--muted); stroke-width: 1; opacity: .5; }
 
-/* 툴팁: 밝은 유리 */
-#tip { position: fixed; pointer-events: none; max-width: 420px; background: rgba(255, 255, 255, .94); color: var(--ink); border: 1px solid rgba(255, 255, 255, .95); box-shadow: 0 14px 36px rgba(120, 80, 200, .25);
-  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); padding: 10px 14px; border-radius: 16px; font-size: 13px; line-height: 1.5; opacity: 0; transition: opacity .1s; z-index: 5; }
-#tip .h { font-size: 11px; color: var(--sub); margin-top: 6px; }
-/* 회차 줄: 전체를 한 격자로 두어 '○○ 123회'가 '회' 기준으로 오른쪽 정렬되고, 제목은 왼쪽 정렬 */
-#tip .eg { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 8px; align-items: baseline; }
-#tip .e { display: contents; }
-#tip .e b { text-align: right; white-space: nowrap; }
-#tip .e span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-#tip .e span:nth-child(3) { white-space: nowrap; text-align: right; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #tip { background: rgba(40, 36, 80, .9); border-color: rgba(255, 255, 255, .15); } }
-
-/* 순위 막대 */
-.rank { max-height: 380px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; list-style: none; margin: 0; padding: 0; font-size: 13px; }
-.rank li { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 12px; cursor: pointer; }
-.rank li > span { min-width: 0; overflow-wrap: anywhere; }
-.rank li:hover { background: rgba(154, 108, 245, .08); }
-.rank li.sel { font-weight: 700; background: rgba(154, 108, 245, .14); }
-.track { height: 10px; border-radius: 999px; background: var(--track); position: relative; overflow: hidden; }
-.track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
-.val { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.val small, .ref { color: var(--sub); font-size: 11px; font-weight: 500; }
-
-/* 테마 찾기 */
-.search { display: flex; align-items: center; gap: 8px; background: rgba(255, 255, 255, .75); border-radius: 999px; padding: 8px 14px; box-shadow: inset 0 1px 3px rgba(150, 110, 220, .12); margin-bottom: 10px; }
-.search input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; color: var(--ink); width: 100%; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 168px; overflow-y: auto; overflow-x: hidden; }
-.chip { border: 0; font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 999px; cursor: pointer; color: var(--ink); background: rgba(255, 255, 255, .8); box-shadow: 0 2px 6px rgba(150, 110, 220, .12); }
+/* 오른쪽 패널 */
+.side { display: flex; flex-direction: column; min-height: 0; padding: 10px 12px; gap: 10px; overflow: hidden; }
+.search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line2); border-radius: 8px; padding: 5px 10px; flex: none; background: var(--surface); }
+.search input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 12.5px; color: var(--ink); width: 100%; }
+.chips { display: flex; flex-wrap: nowrap; gap: 4px; overflow-x: auto; overflow-y: hidden; flex: none; padding-bottom: 4px; margin-top: -4px; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+.chip { flex: none; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 11.5px; padding: 3px 9px; border-radius: 999px; cursor: pointer; color: var(--ink); white-space: nowrap; }
+.chip:hover { border-color: var(--line2); background: var(--hover); }
 .chip b { font-weight: 700; }
-.chip::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
-.chip.N::before { background: var(--mint); }
-.chip.C::before { background: var(--purple); }
-.chip.S::before { background: var(--pink); }
-.chip[aria-pressed="true"]::before { background: #fff; }
-.chip[aria-pressed="true"] { color: #fff; background: linear-gradient(90deg, var(--purple), var(--pink)); }
-.chip small { color: inherit; opacity: .7; }
+.chip small { color: var(--muted); }
+.chip::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
+.chip.N::before { background: var(--t-nat); }
+.chip.C::before { background: var(--t-cul); }
+.chip.S::before { background: var(--t-sea); }
+.chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.chip[aria-pressed="true"] small { color: inherit; opacity: .7; }
 
-/* 잘 나온 회차 */
-.eps { list-style: none; margin: 0; padding: 0; max-height: 460px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; font-size: 13px; }
-.eps li { display: grid; grid-template-columns: 26px 92px minmax(0, 1fr) 140px auto; gap: 10px; align-items: center; padding: 7px 8px; border-radius: 14px; }
-.eps li:hover { background: rgba(154, 108, 245, .08); }
-.eps .no { color: var(--sub); font-variant-numeric: tabular-nums; text-align: right; }
+.kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; flex: none; }
+.kpi { border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; min-width: 0; }
+.kpi .t { font-size: 10.5px; color: var(--muted); }
+.kpi .v { font-size: 16px; font-weight: 800; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .s { font-size: 10.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.sec { display: flex; flex-direction: column; min-height: 0; }
+.sec.rk { flex: 5 1 0; }
+.sec.ep { flex: 4 1 0; }
+.sec h2 { font-size: 13px; font-weight: 800; margin: 0 0 6px; flex: none; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sec h2 .ref { flex: 1 1 auto; min-width: 0; }
+.ref { font-size: 11px; font-weight: 500; color: var(--muted); }
+.mini { font: inherit; font-size: 11.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--line2); border-radius: 6px; padding: 2px 6px; cursor: pointer; }
+.mini:hover { background: var(--hover); }
+.axis { display: grid; grid-template-columns: 22px 86px minmax(0, 1fr) 58px 46px; gap: 8px; font-size: 10px; color: var(--muted); padding: 0 6px 4px; border-bottom: 1px solid var(--line); flex: none; }
+.axis .ax { display: flex; justify-content: space-between; }
+.rank, .eps { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
+.rank li { display: grid; grid-template-columns: 22px 86px minmax(0, 1fr) 58px 46px; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
+.rank li:hover { background: var(--hover); }
+.rank li.sel { background: var(--sel); font-weight: 700; }
+.rank li.dim { opacity: .3; }
+.rank li.few { color: var(--muted); }
+.rank li.sep { display: block; cursor: default; padding: 8px 6px 2px; font-size: 10.5px; color: var(--muted); border-top: 1px dashed var(--line2); margin-top: 4px; }
+.rank li.sep:hover { background: none; }
+.rank li.empty { display: block; cursor: default; color: var(--muted); padding: 12px 6px; }
+.rank .no { color: var(--muted); text-align: right; font-size: 11px; }
+.rank .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank .nm small { color: var(--muted); font-size: 10.5px; margin-left: 3px; }
+.dbar { display: block; position: relative; height: 12px; }
+.dbar::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line2); }
+.dbar i { position: absolute; top: 0; bottom: 0; }
+.dbar i.pos { border-radius: 0 3px 3px 0; }
+.dbar i.neg { border-radius: 3px 0 0 3px; }
+.val { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dl { font-size: 11px; font-weight: 700; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dl.u { color: var(--up); }
+.dl.d { color: var(--down); }
+.dl.z { color: var(--muted); font-weight: 500; }
+
+.eps li { display: grid; grid-template-columns: 20px auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 6px; font-size: 12.5px; }
+.eps li:hover { background: var(--hover); }
+.eps .no { color: var(--muted); text-align: right; font-size: 11px; }
 .eps .tt { min-width: 0; }
 .eps .tt div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.eps .tt .m { font-size: 11px; color: var(--sub); }
-.prog { display: inline-block; font-size: 11px; font-weight: 700; color: #fff; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
-.prog.걸세 { background: linear-gradient(90deg, #5fe0d2, var(--mint)); }
-.prog.세테기 { background: linear-gradient(90deg, var(--purple), var(--pink)); }
-@media (max-width: 700px) { .eps li { grid-template-columns: 22px 80px minmax(0, 1fr) auto; } .eps li .track { display: none; } }
-.note { font-size: 11px; color: var(--sub); line-height: 1.55; margin: 10px 0 0; }
+.eps .tt .m { font-size: 11px; color: var(--muted); }
+.eps .vv { text-align: right; }
+.eps .vv .dl { display: block; }
+.prog { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 4px; white-space: nowrap; border: 1px solid var(--ink); }
+.prog.걸세 { background: var(--ink); color: var(--surface); }
+.prog.세테기 { background: transparent; color: var(--ink); }
 
-/* 큰 화면(풀HD 1920×1080 등): 폭을 넓히고 글자를 키운다 */
+/* 툴팁 */
+#tip, #termTip { position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s; z-index: 6; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.55; }
+#tip { max-width: 440px; padding: 10px 14px; }
+#termTip { max-width: 320px; padding: 10px 12px; }
+#termTip .hl { display: block; margin-top: 4px; }
+#tip .hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+#tip .hd b { font-size: 15px; }
+.cchip { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; padding: 1px 8px 1px 6px; border-radius: 999px; border: 1px solid var(--line); }
+.cchip i { width: 9px; height: 9px; border-radius: 50%; }
+#tip .st { color: var(--sub); }
+#tip .h { font-size: 11px; color: var(--muted); margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+#tip .eg { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 2px 8px; align-items: baseline; }
+#tip .e { display: contents; }
+#tip .e b { text-align: right; white-space: nowrap; }
+#tip .e span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tip .e span:nth-child(3) { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+span.term { border-bottom: 1px dotted var(--muted); cursor: help; }
+.term { cursor: help; }
+
+.foot { padding: 10px 4px 0; }
+.note { font-size: 11px; color: var(--muted); line-height: 1.6; margin: 0 0 4px; max-width: 1100px; }
+
 @media (min-width: 1500px) {
-  .wrap { max-width: 1860px; padding: 26px 32px 40px; }
-  h1 { font-size: 32px; }
-  h2 { font-size: 20px; }
-  .sub, .target, .bar { font-size: 15px; }
-  .grid { grid-template-columns: minmax(0, 1fr) 480px; gap: 18px; }
-  .kpis { gap: 18px; }
-  .kpi .v { font-size: 26px; }
-  .kpi .t, .kpi .s { font-size: 13px; }
-  .kpi .ic { width: 46px; height: 46px; font-size: 15px; }
-  .card { padding: 22px; }
-  .legend, .hint, .note, h2 .ref, .val small, .ref { font-size: 13px; }
-  .pie text { font-size: 13px; }
-  .rank, .eps, .search input { font-size: 16px; }
-  .rank { max-height: 480px; }
-  .rank li { grid-template-columns: 120px minmax(0, 1fr) auto; }
-  .eps li { grid-template-columns: 30px 110px minmax(0, 1fr) 180px auto; }
-  .eps .tt .m, .prog { font-size: 13px; }
-  .chip { font-size: 14px; }
-  .chips { max-height: 220px; }
-  .track { height: 12px; }
-  #tip { font-size: 15px; max-width: 520px; }
+  body, .rank li, .eps li, .search input { font-size: 13.5px; }
+  .top h1 { font-size: 19px; }
+  .seg button, select.sl { font-size: 13px; }
+  .kpi .v { font-size: 18px; }
+  .mleg, .lrow { font-size: 12px; }
+  .pie text { font-size: 12.5px; }
 }
-
-/* ── 지도 우선 레이아웃(첫 화면에 지도가 크게): 한 줄 툴바 · 지도+우측 순위 · 아래 회차 목록 ── */
-.wrap { max-width: none; padding: 8px 10px 20px; }
-.top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 46px; padding: 5px 12px 5px 18px; margin-bottom: 8px; border-radius: 999px; }
-.top h1 { font-size: 18px; margin: 0; white-space: nowrap; }
-.top .badge { font-size: 10px; padding: 1px 7px; margin-left: 6px; vertical-align: 2px; }
-.top .seg button { padding: 5px 12px; font-size: 12.5px; }
-.top .target { margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 0; font-size: 12px; background: none; border: 0; box-shadow: none; }
-.top .target select { padding: 5px 26px 5px 12px; font-size: 12.5px; }
-.stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 400px); gap: 8px; height: calc(100vh - 74px); min-height: 440px; }
-.mapcard { padding: 6px; min-height: 0; display: flex; }
-.mapbox { flex: 1; min-width: 0; min-height: 0; position: relative; }
-#map { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 18px; }
-.kpis { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); display: flex; flex-wrap: nowrap; gap: 6px; margin: 0; z-index: 2; max-width: calc(100% - 16px); }
-.kpi { padding: 3px 14px 3px 4px; gap: 8px; border-radius: 999px; }
-.kpi .ic { width: 26px; height: 26px; font-size: 11px; }
-.kpi .t { font-size: 10px; line-height: 1.2; }
-.kpi .v { font-size: 14px; max-width: 150px; line-height: 1.2; }
-.kpi .s { display: none; }
-.side { display: flex; flex-direction: column; min-height: 0; padding: 12px; gap: 8px; }
-.side .search { margin: 0; flex: none; }
-.side .chips { max-height: 84px; flex: none; }
-.side h2 { margin: 2px 0 0; font-size: 14px; flex: none; }
-.side .rank { flex: 1; min-height: 0; max-height: none; font-size: 12.5px; }
-.side .legend { flex: none; margin: 0; font-size: 11px; }
-.below { margin-top: 8px; }
-.below .eps { max-height: none; }
-@media (min-width: 1500px) { .top h1 { font-size: 20px; } .top .seg button, .top .target select { font-size: 13.5px; } .side .rank { font-size: 14px; } .side .legend { font-size: 12px; } .kpi .v { font-size: 16px; } }
+/* 좁은 화면: 한 줄로 쌓는다 */
 @media (max-width: 1000px) {
-  .stage { display: block; height: auto; }
-  .mapcard { height: 60vh; min-height: 320px; margin-bottom: 8px; }
-  .side .rank { max-height: 340px; }
-  .kpis { flex-wrap: wrap; justify-content: center; }
+  .stage { display: block; }
+  .mapcard { height: 60vh !important; min-height: 300px; }
+  .side { height: auto !important; margin-top: 8px; }
+  .side .rank, .side .eps { max-height: 360px; }
+  .sec.rk, .sec.ep { flex: none; }
+  .cond { margin-left: 0; }
 }
-.lcol { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
-.lcol .mapcard { flex: none; }
-.lcol .below { flex: 1; min-height: 0; margin: 0; display: flex; flex-direction: column; padding: 10px 12px; }
-.lcol .below h2 { font-size: 14px; margin: 0 0 6px; flex: none; }
-.lcol .below .eps { flex: 1; min-height: 0; max-height: none; }
-.foot { padding: 6px 12px 0; }
-@media (max-width: 1000px) { .lcol { display: block; } .lcol .below { max-height: 420px; margin-bottom: 8px; } }
-/* 요약은 지도를 가리지 않게 오른쪽 패널 맨 위 작은 글씨 한 줄로 */
-.kpis { position: static; transform: none; display: flex; flex-wrap: wrap; gap: 2px 12px; max-width: none; flex: none; font-size: 11px; color: var(--sub); }
-.kpi { display: inline; padding: 0; gap: 0; border-radius: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; white-space: nowrap; }
-.kpi .t { font-size: 11px; }
-.kpi .v { font-size: 12px; font-weight: 800; color: var(--ink); max-width: none; display: inline; }
-.kpi .s, .kpi .ic { display: none; }
-/* ── 화면 전체 활용: 지도 왼쪽(넓게) + 오른쪽 패널(테마·순위·회차). 글자 크기를 통일 ── */
-.stage { grid-template-columns: minmax(0, 1fr) clamp(380px, 28vw, 520px); height: calc(100vh - 66px); }
-.lcol .mapcard { flex: none; }
-.mapfoot { flex: 1; min-height: 52px; overflow: hidden; padding: 8px 14px; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
-.mapfoot .kpis { position: static; transform: none; }
-.mapfoot .legend { margin: 0; font-size: 11px; gap: 4px 14px; }
-.side { padding: 12px 12px 8px; }
-.side .chips { max-height: 118px; gap: 4px; }
-.side .chip { font-size: 11.5px; padding: 3px 9px; }
-.tleg { display: flex; gap: 12px; font-size: 11px; color: var(--sub); flex: none; margin-top: -2px; }
-.sec { display: flex; flex-direction: column; min-height: 0; }
-.sec h2 { font-size: 13px; margin: 0 0 4px; flex: none; }
-.sec.rk { flex: 4 1 0; }
-.sec.ep { flex: 5 1 0; }
-.side .rank, .side .eps { flex: 1; min-height: 0; max-height: none; font-size: 12.5px; }
-.side .rank li { grid-template-columns: 84px minmax(0, 1fr) auto; padding: 3px 6px; }
-.side .eps li { grid-template-columns: 22px auto minmax(0, 1fr) auto; gap: 8px; padding: 5px 6px; }
-.side .eps li .track { display: none; }
-.side .eps .tt .m, .side .prog, .side .val small, .side .ref { font-size: 11px; }
-.side .eps .tt div:first-child { font-size: 12.5px; }
-.side .search input { font-size: 12.5px; }
-.below { display: none; }
-#termTip, #tip { font-size: 13px; }
-@media (min-width: 1500px) {
-  .top h1 { font-size: 19px; } .top .seg button, .top .target select { font-size: 13px; }
-  .side .rank, .side .eps, .side .eps .tt div:first-child, .side .search input { font-size: 13px; }
-  .side .chip { font-size: 12px; } .side .chips { max-height: 124px; }
-  .side .eps .tt .m, .side .prog, .side .val small, .side .ref, .mapfoot .legend, .tleg { font-size: 11.5px; }
-  .kpi .v { font-size: 12.5px; }
-  #termTip, #tip { font-size: 13.5px; }
+@media (max-width: 560px) {
+  .kpis { grid-template-columns: 1fr 1fr; }
+  .rank li, .axis { grid-template-columns: 20px 72px minmax(0, 1fr) 54px 42px; gap: 6px; }
+  .target { margin-left: 0; }
 }
-@media (max-width: 1000px) { .mapfoot { flex: none; } .side .rank, .side .eps { max-height: 340px; } .sec.rk, .sec.ep { flex: none; } }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top glass">
-    <h1>OLIFE 시청률 지도<span class="badge">BETA</span></h1>
-    <span class="seg" role="group" aria-label="프로그램"><button data-prog="all" aria-pressed="true">전체</button><button data-prog="걸세" aria-pressed="false" title="걸어서 세계속으로">걸세</button><button data-prog="세테기" aria-pressed="false" title="세계테마기행">세테기</button></span>
-    <span class="seg" role="group" aria-label="보기 단위"><button data-view="country" aria-pressed="true">국가</button><button data-view="region" aria-pressed="false">권역(파이)</button></span>
-    <span class="seg" role="group" aria-label="순위·색 기준"><button data-mode="r" aria-pressed="true" class="term" data-term="r">시청률</button><button data-mode="m" aria-pressed="false" class="term" data-term="m">월보정지수</button><button data-mode="i" aria-pressed="false" class="term" data-term="i">슬롯지수</button></span>
-    <button id="themeOn" class="pill" hidden></button>
-    <label class="target">타깃 <select id="target"></select></label>
+  <div class="top card">
+    <div class="row">
+      <h1>OLIFE 시청률 지도<span class="badge">BETA</span></h1>
+      <span class="fl">프로그램 <span class="seg" role="group" aria-label="프로그램"><button data-prog="all" aria-pressed="true">전체</button><button data-prog="걸세" aria-pressed="false" title="걸어서 세계속으로">걸세</button><button data-prog="세테기" aria-pressed="false" title="세계테마기행">세테기</button></span></span>
+      <span class="fl">단위 <span class="seg" role="group" aria-label="보기 단위"><button data-view="country" aria-pressed="true">국가</button><button data-view="region" aria-pressed="false">권역</button></span></span>
+      <span class="fl">기준 <span class="seg" role="group" aria-label="순위·색 기준"><button data-mode="r" aria-pressed="true" class="term" data-term="r">시청률</button><button data-mode="m" aria-pressed="false" class="term" data-term="m">월보정지수</button><button data-mode="i" aria-pressed="false" class="term" data-term="i">슬롯지수</button></span></span>
+      <button id="themeOn" class="pill" hidden></button>
+      <label class="fl target">타깃 <select id="target" class="sl"></select></label>
+    </div>
+    <div class="row">
+      <span class="rowlab">편성 조건</span>
+      <span class="fl">기간 <span class="seg" role="group" aria-label="기간"><button data-per="all" aria-pressed="true">전체</button><button data-per="12" aria-pressed="false">최근 1년</button><button data-per="6" aria-pressed="false">최근 6개월</button></span></span>
+      <span class="fl">요일 <span class="seg" role="group" aria-label="요일"><button data-day="all" aria-pressed="true">전체</button><button data-day="wk" aria-pressed="false">평일</button><button data-day="we" aria-pressed="false">주말</button></span></span>
+      <label class="fl">시간대 <select id="band" class="sl"><option value="">전체</option></select></label>
+      <span class="fl">방송 <span class="seg" role="group" aria-label="최소 방송 횟수"><button data-min="0" aria-pressed="true">전체</button><button data-min="5" aria-pressed="false">5회+</button><button data-min="10" aria-pressed="false">10회+</button><button data-min="20" aria-pressed="false">20회+</button></span></span>
+      <label class="fl" id="regWrap">권역 <select id="reg" class="sl"><option value="">전체</option></select></label>
+      <button class="reset" id="reset" hidden>조건 초기화</button>
+      <span class="cond num" id="cond"></span>
+    </div>
   </div>
 
   <div class="stage">
     <div class="lcol">
-      <div class="mapcard glass">
+      <div class="mapcard card">
         <div class="mapbox">
           <svg id="map" role="img" aria-label="세계지도 위 국가별 시청률 원"></svg>
-          <div class="crumb glass" id="crumb" hidden><button id="crumbHome" title="세계지도로 돌아가기 (ESC)">← 세계지도</button><span id="crumbNow"></span></div>
-          <div class="mapctl glass" role="group" aria-label="지도 확대·축소">
+          <div class="crumb card" id="crumb" hidden><button id="crumbHome" title="세계지도로 돌아가기 (ESC)">← 세계지도</button><span id="crumbNow"></span></div>
+          <div class="mapctl card" role="group" aria-label="지도 확대·축소">
             <button id="zin" title="확대 (+)" aria-label="확대">+</button>
             <button id="zout" title="축소 (−)" aria-label="축소">−</button>
             <button id="zhome" title="세계지도로 돌아가기 (ESC)" aria-label="세계지도로 돌아가기" disabled>⌂</button>
           </div>
         </div>
       </div>
-      <div class="mapfoot glass">
-        <div class="kpis">
-          <span class="kpi"><span class="t">평균</span> <b class="v" id="k1"></b><i class="s" id="k1s"></i></span>
-          <span class="kpi"><span class="t">방송</span> <b class="v" id="k2"></b><i class="s" id="k2s"></i></span>
-          <span class="kpi"><span class="t">1위 나라</span> <b class="v" id="k3"></b><i class="s" id="k3s"></i></span>
-          <span class="kpi"><span class="t">1위 회차</span> <b class="v" id="k4"></b><i class="s" id="k4s"></i></span>
-        </div>
-        <div class="legend">
-          <span>원 크기 = 회차 수</span>
-          <span>색: 낮음<span class="ramp"></span>높음 <span id="legMode"></span></span>
-          <span id="legPie"><i class="sw" style="background:var(--nat)"></i>자연만 <i class="sw" style="background:var(--cul)"></i>문화만 <i class="sw" style="background:var(--both)"></i>둘 다 <i class="sw" style="background:var(--none)"></i>분류 없음</span>
-          <span><span class="term" tabindex="0" data-term="s">점선·흐린 원 = 표본 적음</span></span>
-          <span id="legApprox">점선 테두리 = 위치 미확인(나라 중앙)</span>
-          <span>마우스 = 잘 나온 회차 · 클릭 = 확대 · <kbd>휠</kbd> 확대/축소 · <kbd>ESC</kbd> 복귀</span>
-        </div>
+      <div class="mleg" aria-label="범례">
+        <span class="lt num" id="legTitle"></span>
+        <span id="legRows" style="display:contents"></span>
+        <span class="lhelp"><span class="term" tabindex="0" data-term="legend">보는 법</span></span>
       </div>
     </div>
-    <div class="side glass">
-      <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="color:var(--sub)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="테마로 찾기 (예: 산, 음식, 축제)" autocomplete="off"></div>
+    <div class="side card">
+      <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="color:var(--muted)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="테마로 좁히기 (예: 산, 음식, 축제)" autocomplete="off"></div>
       <div class="chips" id="chips"></div>
-      <div class="tleg"><span><i class="sw" style="background:var(--mint)"></i>자연 테마</span><span><i class="sw" style="background:var(--purple)"></i>문화 테마</span><span><i class="sw" style="background:var(--pink)"></i>시기·명절</span></div>
-      <section class="sec rk"><h2>순위 <span class="ref" id="rankTitle"></span></h2><ul class="rank" id="rank"></ul></section>
+      <div class="kpis">
+        <div class="kpi"><div class="t">평균 시청률</div><div class="v num" id="k1"></div><div class="s num" id="k1s"></div></div>
+        <div class="kpi"><div class="t">방송</div><div class="v num" id="k2"></div><div class="s" id="k2s"></div></div>
+        <div class="kpi"><div class="t" id="k3t">1위 나라</div><div class="v" id="k3"></div><div class="s num" id="k3s"></div></div>
+      </div>
+      <section class="sec rk"><h2>순위 <span class="ref" id="rankTitle"></span>
+          <select id="sort" class="mini" aria-label="정렬"><option value="top">잘 나온 순</option><option value="low">낮은 순</option><option value="air">방송 많은 순</option><option value="name">가나다순</option></select>
+          <button class="mini" id="csv" title="지금 보이는 순위를 엑셀에서 열 수 있는 CSV로 내려받기">CSV</button></h2>
+        <div class="axis num"><span></span><span></span><span class="ax"><span>−30%</span><span>평균</span><span>+30%</span></span><span style="text-align:right" id="axVal">시청률</span><span style="text-align:right">대비</span></div>
+        <ul class="rank" id="rank"></ul></section>
       <section class="sec ep"><h2>잘 나온 회차 <span class="ref" id="epTitle"></span></h2><ul class="eps" id="eps"></ul></section>
     </div>
   </div>
   <div class="foot">
-    <p class="note">같은 회차의 재방송은 한 줄로 묶어 평균했습니다. 회차에 마우스를 올리면 지도에서 그 회차의 나라만 밝게 보입니다. 괄호 안은 <span class="term" tabindex="0" data-term="m">월보정지수</span>·<span class="term" tabindex="0" data-term="i">슬롯지수</span>로, 같은 프로그램·요일·시간대(월보정은 같은 달까지) 평균 대비 비율이라 편성 자리 차이를 걷어낸 비교입니다. 2025-02 이후 방송은 편성표로 회차를 이었고, 수기 분류표에 없는 회차는 회차 제목의 나라·테마로 자동 분류했습니다(장소·세부 테마는 부정확할 수 있음). 여러 회차를 묶어 방송한 칸은 묶음 전체의 시청률을 각 회차에 같이 적용했습니다.</p>
+    <p class="note">색은 '평균 대비'입니다. 시청률 기준이면 지금 보고 있는 범위(세계 = 지금 조건의 전체, 나라 확대 = 그 나라)의 평균 시청률과 비교하고, 지수 기준이면 1.00(같은 자리 평균)과 비교합니다. 편성 조건(기간·요일·시간대)은 방송 한 건 한 건을 걸러 다시 평균합니다. 같은 회차의 재방송은 한 줄로 묶어 평균했습니다. 회차에 마우스를 올리면 지도에서 그 회차의 나라만 밝게 보입니다. <span class="term" tabindex="0" data-term="m">월보정지수</span>·<span class="term" tabindex="0" data-term="i">슬롯지수</span>는 같은 프로그램·요일·시간대(월보정은 같은 달까지) 평균 대비 비율이라 편성 자리 차이를 걷어낸 비교입니다. 2025-02 이후 방송은 편성표로 회차를 이었고, 수기 분류표에 없는 회차는 회차 제목의 나라·테마로 자동 분류했습니다(장소·세부 테마는 부정확할 수 있음). 여러 회차를 묶어 방송한 칸은 묶음 전체의 시청률을 각 회차에 같이 적용했습니다.</p>
     <p class="note" id="sub"></p>
   </div>
 </div>
@@ -364,12 +323,24 @@ const CPOS = {
 };
 const ALL = DATA.bcs.map(b => ({ ...b, ...DATA.eps[b.k] })); // 회차별 공통 정보(부제·나라·테마·장소)를 방송 줄에 합친다
 const PROG_NAME = { "걸세": "걸어서 세계속으로", "세테기": "세계테마기행" };
+const BANDS = ["02-05", "05-08", "08-11", "11-14", "14-17", "17-20", "20-23", "23-02"]; // 앱 시간대 8칸(geoMapData.ts와 같다)
+const LAST = ALL.reduce((a, b) => b.d > a ? b.d : a, ""); // 데이터의 마지막 방송일 — '최근 N개월'의 기준
+const monthsBack = n => { const [y, m, d] = LAST.split("-").map(Number); const t = new Date(Date.UTC(y, m - 1 - n, d)); return t.toISOString().slice(0, 10); };
+// 나라 → 권역: 한 나라만 다룬 방송에서 가장 많이 붙은 권역(권역 고르기에 쓴다)
+const CREG = (() => {
+  const c = new Map();
+  for (const b of ALL) if (b.cs.length === 1) for (const r of b.rg) { const k = b.cs[0] + "|" + r; c.set(k, (c.get(k) || 0) + 1); }
+  const best = new Map();
+  for (const [k, n] of c) { const [cn, r] = k.split("|"); if (!best.has(cn) || best.get(cn)[1] < n) best.set(cn, [r, n]); }
+  return new Map([...best].map(([k, v]) => [k, v[0]]));
+})();
 
 // ── 상태 ──
-let prog = "all", theme = null, mode = "r", view = "country", zoom = null, focus = null;
+let prog = "all", theme = null, mode = "r", view = "country", zoom = null, focus = null, pick = null;
+let per = "all", day = "all", band = "", minN = 0, reg = "", sortBy = "top";
 let ITEMS = [];
 
-// ── 집계(화면에서 방송 목록을 필터에 맞게 다시 묶는다) ──
+// ── 집계(화면에서 방송 목록을 조건에 맞게 다시 묶는다) ──
 const mean = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN;
 function stat(name, list, extra) {
   const eps = new Set(list.map(b => b.k)).size;
@@ -380,10 +351,15 @@ function groupBy(list, keysOf) {
   for (const b of list) for (const k of new Set(keysOf(b))) { if (!m.has(k)) m.set(k, []); m.get(k).push(b); }
   return [...m];
 }
-const progList = () => ALL.filter(b => prog === "all" || b.p === prog);
+// 편성 조건(프로그램·기간·요일·시간대·권역)만 건 방송 — 테마 목록은 이것으로 센다
+const since = () => per === "all" ? "" : monthsBack(+per);
+function condList() {
+  const s = since();
+  return ALL.filter(b => (prog === "all" || b.p === prog) && (!s || b.d > s) && (day === "all" || (day === "we") === (b.wd === "토" || b.wd === "일")) && (!band || b.band === band) && (!reg || view === "region" || b.rg.includes(reg)));
+}
 const hasTheme = (b, t) => b.nat.includes(t) || b.cul.includes(t) || b.tm.includes(t);
-const filtered = () => progList().filter(b => !theme || hasTheme(b, theme));
-const countriesAgg = () => groupBy(filtered(), b => b.cs).filter(([n]) => CPOS[n]).map(([n, l]) => stat(n, l));
+const filtered = () => condList().filter(b => !theme || hasTheme(b, theme));
+const countriesAgg = () => groupBy(filtered(), b => b.cs).filter(([n]) => CPOS[n] && (!reg || CREG.get(n) === reg)).map(([n, l]) => stat(n, l));
 const regionsAgg = () => groupBy(filtered(), b => b.rg).filter(([n]) => POS[n]).map(([n, l]) => {
   const nat = l.filter(b => b.nat.length).length, cul = l.filter(b => b.cul.length).length, both = l.filter(b => b.nat.length && b.cul.length).length;
   return stat(n, l, { natureOnly: nat - both, cultureOnly: cul - both, both, neither: l.length - (nat + cul - both) });
@@ -402,14 +378,13 @@ function placesAgg() {
   if (none.length) m.set(NOPLACE, { lon: c0[0], lat: c0[1], approx: true, l: none });
   return [...m].map(([n, o]) => ({ ...stat(n, o.l), lon: o.lon, lat: o.lat, approx: o.approx, sample: o.l.length >= 2 }));
 }
-const themesAgg = () => groupBy(progList(), b => [...b.nat.map(t => "N|" + t), ...b.cul.map(t => "C|" + t), ...b.tm.map(t => "S|" + t)]).map(([k, l]) => stat(k.slice(2), l, { kind: k[0] }));
+const themesAgg = () => groupBy(condList(), b => [...b.nat.map(t => "N|" + t), ...b.cul.map(t => "C|" + t), ...b.tm.map(t => "S|" + t)]).map(([k, l]) => stat(k.slice(2), l, { kind: k[0] }));
 function episodesAgg(list) {
   return groupBy(list, b => [b.k]).map(([k, l]) => {
     const f = l.find(b => b.ep != null) || l[0];
     return { ...stat(k, l), p: l[0].p, ep: f.ep, sub: l[0].sub, cs: l[0].cs, sample: true };
   });
 }
-// 지금 선택(확대 나라·장소·권역)에 해당하는 방송
 function focusList() {
   let l = filtered();
   if (zoom) l = l.filter(b => b.cs.includes(zoom.name));
@@ -417,67 +392,81 @@ function focusList() {
   if (focus && focus.type === "region") l = l.filter(b => b.rg.includes(focus.name));
   return l;
 }
-const items = () => zoom ? placesAgg() : view === "region" ? regionsAgg() : countriesAgg();
+// 최소 방송 횟수(5회+ 등)를 넘는 항목만 지도·순위에 남긴다
+const items = () => (zoom ? placesAgg() : view === "region" ? regionsAgg() : countriesAgg()).filter(x => x.n >= minN);
+
+// ── 성과 단계: 평균 대비 5단계. 시청률은 지금 범위의 평균 시청률, 지수는 1.00(같은 자리 평균)과 비교한다 ──
+const CLS = [
+  { k: "vh", t: "매우 높음", d: "+12% 이상", min: 1.12 },
+  { k: "h", t: "높음", d: "+4~12%", min: 1.04 },
+  { k: "n", t: "평균 수준", d: "±4% 안", min: 0.96 },
+  { k: "l", t: "낮음", d: "−4~12%", min: 0.88 },
+  { k: "vl", t: "매우 낮음", d: "−12% 이상", min: -Infinity },
+];
+let BASE = 1;
+function setBase() { BASE = mean((zoom ? filtered().filter(b => b.cs.includes(zoom.name)) : filtered()).map(b => b.r)) || 1; }
+const rel = x => mode === "r" ? x.r / BASE : x[mode];
+const clsOf = x => CLS.find(c => rel(x) >= c.min);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const colorOf = x => css("--c-" + clsOf(x).k);
 
 // ── 표시 ──
 const pct = v => v.toFixed(3) + "%";
 const idxName = () => mode === "i" ? "슬롯" : "월보정";
-const idxOf = x => mode === "i" ? x.i : x.m;
-const valTxt = x => `${pct(x.r)} <small>(${idxOf(x).toFixed(2)})</small>`;
-const byMode = (a, b) => (b.sample - a.sample) || (b[mode] - a[mode]); // 표본 충분한 항목 먼저, 참고용은 뒤로
-const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const scale = d3.scaleLinear().clamp(true);
-function setScale() {
-  if (mode === "r") {
-    const rs = ITEMS.filter(x => x.sample).map(x => x.r).sort(d3.ascending);
-    const q = rs.length ? [d3.quantile(rs, .1), d3.quantile(rs, .5), d3.quantile(rs, .9)] : [0, 0.5, 1];
-    scale.domain(q[0] === q[2] ? [q[0] - 1e-6, q[1], q[2] + 1e-6] : q);
-  } else scale.domain([0.75, 1, 1.15]);
-  scale.range([css("--down"), css("--mid"), css("--up")]);
+const modeName = () => mode === "r" ? "시청률" : idxName() + "지수";
+const mainVal = x => mode === "r" ? pct(x.r) : x[mode].toFixed(2);
+const dPct = x => Math.round((rel(x) - 1) * 100);
+function dTxt(x) {
+  const p = dPct(x);
+  if (!p) return '<span class="dl z">±0%</span>';
+  return `<span class="dl ${p > 0 ? "u" : "d"}">${p > 0 ? "▲" : "▼"}${Math.abs(p)}%</span>`;
 }
-const colorOf = x => scale(x[mode]);
-let maxR = 1;
-const barW = x => mode === "r" ? Math.max(3, x.r / maxR * 100) : Math.max(3, Math.min(100, (x[mode] - 0.6) / 0.7 * 100));
-const barBg = x => `linear-gradient(90deg, ${css("--mint")}, ${colorOf(x)})`;
+const byMode = (a, b) => (b.sample - a.sample) || (b[mode] - a[mode]); // 표본 충분한 항목 먼저, 참고용은 뒤로
+const SORTS = {
+  top: byMode,
+  low: (a, b) => (b.sample - a.sample) || (a[mode] - b[mode]),
+  air: (a, b) => (b.n - a.n) || (b[mode] - a[mode]),
+  name: (a, b) => a.name.localeCompare(b.name, "ko"),
+};
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const epLabel = e => `${e.p} ${e.ep != null ? e.ep + "회" : ""}`.trim();
+function dbar(x) {
+  const d = rel(x) - 1, w = Math.min(1, Math.abs(d) / 0.3) * 50;
+  return `<span class="dbar"><i class="${d >= 0 ? "pos" : "neg"}" style="left:${d >= 0 ? 50 : 50 - w}%;width:${Math.max(w, 0.8)}%;background:${colorOf(x)}"></i></span>`;
+}
+// 지금 걸린 조건을 한 줄로(제목·CSV에 쓴다)
+function condText() {
+  return [prog === "all" ? "" : PROG_NAME[prog], per === "all" ? "" : `최근 ${per === "12" ? "1년" : "6개월"}`, day === "all" ? "" : day === "we" ? "주말" : "평일",
+    band ? band + "시" : "", reg && view !== "region" ? reg : "", minN ? `방송 ${minN}회+` : "", theme ? "#" + theme : ""].filter(Boolean).join(" · ");
+}
 
-// ── 지도: 태평양 중심(동경 150°) 메르카토르 — 유럽·아프리카 왼쪽, 아시아 가운데, 아메리카 오른쪽. 좌우를 꽉 채운다 ──
+// ── 지도: 태평양 중심(동경 150°) 메르카토르 — 유럽·아프리카 왼쪽, 아시아 가운데, 아메리카 오른쪽 ──
 const W = 1200;
 const proj = d3.geoMercator().rotate([-150, 0]).scale(W / (2 * Math.PI)).translate([W / 2, 0]);
 const Y0 = proj([150, 78])[1], Y1 = proj([150, -58])[1], H = Y1 - Y0, CY = Y0 + H / 2;
-const svg = d3.select("#map").attr("viewBox", `0 ${Y0} ${W} ${H}`);
+const svg = d3.select("#map").attr("viewBox", `0 ${Y0} ${W} ${H}`).attr("preserveAspectRatio", "xMidYMid meet");
 const path = d3.geoPath(proj);
-const defs = svg.append("defs");
-const gf = defs.append("filter").attr("id", "glow").attr("x", "-60%").attr("y", "-60%").attr("width", "220%").attr("height", "220%");
-gf.append("feGaussianBlur").attr("stdDeviation", 5);
-const hl = defs.append("radialGradient").attr("id", "shine").attr("cx", "32%").attr("cy", "24%").attr("r", "62%");
-hl.append("stop").attr("offset", "0%").attr("stop-color", "#fff").attr("stop-opacity", .9);
-hl.append("stop").attr("offset", "100%").attr("stop-color", "#fff").attr("stop-opacity", 0);
 const gWorld = svg.append("g").attr("class", "world");
-// 원 크기 = 회차 수(재방송은 한 회차로 센다). 가장 큰 원이 일정 크기를 넘지 않게 최대값 대비 비율(면적 비례)로 잡는다 — 방송 건수가 늘어도 지도가 가려지지 않는다.
 let maxE = 1;
 const sz = (e, lo, hi) => lo + (hi - lo) * Math.sqrt(Math.min(1, e.eps / maxE));
-const radR = r => sz(r, 9, 24);
+const radR = r => sz(r, 10, 26);
 const radP = p => sz(p, 7, 20);
-const radC = c => sz(c, 4.5, 15);
+const radC = c => sz(c, 4.5, 16);
 const rad = e => zoom ? radP(e) : view === "region" ? radR(e) : radC(e);
-let tf = d3.zoomIdentity; // 지도 확대·이동 상태(휠·드래그·버튼·국가 확대 모두 이 하나로 합친다)
+let tf = d3.zoomIdentity;
 const posOf = e => view === "region" ? POS[e.name] : CPOS[e.name];
 
 fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json").then(r => r.json()).then(topo => {
-  gWorld.append("path").datum(d3.geoGraticule().extent([[-180, -58], [180, 78]]).step([30, 20])()).attr("d", path).attr("fill", "none").attr("stroke", "var(--grid)").attr("stroke-width", .8).attr("vector-effect", "non-scaling-stroke");
   const land = topojson.feature(topo, topo.objects.countries);
   gWorld.append("g").selectAll("path").data(land.features.filter(f => f.id !== "010")).join("path").attr("d", path)
-    .attr("fill", "var(--land)").attr("stroke", "var(--land-line)").attr("stroke-width", .6).attr("vector-effect", "non-scaling-stroke");
+    .attr("fill", "var(--land)").attr("stroke", "var(--land-line)").attr("stroke-width", .7).attr("vector-effect", "non-scaling-stroke");
   gWorld.lower();
 }).catch(() => d3.select("#sub").append("span").text(" (지도 윤곽을 불러오지 못했습니다 — 인터넷 연결 확인)"));
 
-// 충돌 회피 배치: 실제 위치(anchor)에서 시작해 서로 겹치지 않게 밀어낸다.
 let nodes = [];
 function layout() {
-  nodes = ITEMS.map(r => { const [x, y] = tf.apply(proj(zoom ? [r.lon, r.lat] : posOf(r))); return { r, ax: x, ay: y, x, y, rad: rad(r) + (view === "region" && !zoom ? 7 : 2) }; })
-    .filter(n => n.ax > -30 && n.ax < W + 30 && n.ay > Y0 - 30 && n.ay < Y1 + 30); // 화면 밖 원은 그리지 않는다
+  nodes = ITEMS.map(r => { const [x, y] = tf.apply(proj(zoom ? [r.lon, r.lat] : posOf(r))); return { r, ax: x, ay: y, x, y, rad: rad(r) + (view === "region" && !zoom ? 6 : 2) }; })
+    .filter(n => n.ax > -30 && n.ax < W + 30 && n.ay > Y0 - 30 && n.ay < Y1 + 30);
   const sim = d3.forceSimulation(nodes)
     .force("x", d3.forceX(d => d.ax).strength(.12)).force("y", d3.forceY(d => d.ay).strength(.12))
     .force("c", d3.forceCollide(d => d.rad + 1.5).iterations(4)).stop();
@@ -487,45 +476,53 @@ function layout() {
 
 const tip = document.getElementById("tip");
 const selName = () => focus ? focus.name : null;
+let TOP = new Map(); // 상위 5위(표본 충분한 항목만) — 이름 → 순위
 function draw() {
+  TOP = new Map(ITEMS.filter(x => x.sample).sort(byMode).slice(0, 5).map((x, i) => [x.name, i + 1]));
   labelSlots = placeLabels();
   svg.selectAll(".layer").remove();
   const g = svg.append("g").attr("class", "layer");
   g.selectAll("line").data(nodes.filter(n => Math.hypot(n.x - n.ax, n.y - n.ay) > n.rad)).join("line").attr("class", "lead")
     .attr("x1", d => d.ax).attr("y1", d => d.ay).attr("x2", d => d.x).attr("y2", d => d.y);
-  g.selectAll("circle.anchor").data(nodes).join("circle").attr("class", "anchor").attr("r", 1.8).attr("cx", d => d.ax).attr("cy", d => d.ay).attr("fill", "var(--sub)").attr("opacity", .6);
-  const p = g.selectAll("g.pie").data([...nodes].sort((a, b) => b.r.eps - a.r.eps)).join("g").attr("class", d => "pie" + (selName() === d.r.name ? " sel" : ""))
-    .attr("transform", d => `translate(${d.x},${d.y})`).style("opacity", d => d.r.sample ? 1 : .6)
+  // 큰 원부터 그리고, 상위 5위는 맨 위에(번호가 다른 원에 가리지 않게)
+  const order = [...nodes].sort((a, b) => (TOP.has(a.r.name) - TOP.has(b.r.name)) || (b.r.eps - a.r.eps));
+  const p = g.selectAll("g.pie").data(order).join("g").attr("class", "pie")
+    .attr("transform", d => `translate(${d.x},${d.y})`)
     .on("click", (e, d) => select(d.r.name))
     .on("mousemove", (e, d) => showTip(e, d.r)).on("mouseleave", () => tip.style.opacity = 0);
   const arc = d3.arc(), pie = d3.pie().sort(null).value(d => d.v);
   p.each(function (d) {
-    const r = d.r, ro = rad(r), gg = d3.select(this), c = colorOf(r);
-    gg.append("circle").attr("r", ro * 1.08).attr("fill", c).attr("opacity", .32).attr("filter", "url(#glow)").attr("pointer-events", "none");
+    const r = d.r, ro = rad(r), gg = d3.select(this), c = colorOf(r), faint = !r.sample;
     if (view === "region" && !zoom) {
-      const parts = [{ v: r.natureOnly, c: "--nat" }, { v: r.cultureOnly, c: "--cul" }, { v: r.both, c: "--both" }, { v: r.neither, c: "--none" }].filter(x => x.v > 0);
-      gg.selectAll("path").data(pie(parts)).join("path").attr("d", a => arc.innerRadius(0).outerRadius(ro)(a)).attr("fill", a => `var(${a.data.c})`).attr("fill-opacity", .72).attr("stroke", "rgba(255,255,255,.95)").attr("stroke-width", 1.4);
-      gg.append("circle").attr("r", ro).attr("fill", "url(#shine)").attr("pointer-events", "none");
-      gg.append("circle").attr("class", "ring").attr("r", ro + 3.5).attr("stroke", c).attr("stroke-dasharray", r.sample ? null : "3 3");
-      putLabel(gg, d, `${r.name} ${pct(r.r)}`);
+      const parts = [{ v: r.natureOnly, c: "--t-nat" }, { v: r.cultureOnly, c: "--t-cul" }, { v: r.both, c: "--t-both" }, { v: r.neither, c: "--none" }].filter(x => x.v > 0);
+      gg.append("circle").attr("r", ro + 4).attr("fill", "none").attr("stroke", c).attr("stroke-width", selName() === r.name ? 8 : 5).attr("stroke-dasharray", faint ? "3 3" : null);
+      gg.selectAll("path").data(pie(parts)).join("path").attr("d", a => arc.innerRadius(0).outerRadius(ro)(a)).attr("fill", a => `var(${a.data.c})`).attr("stroke", "var(--surface)").attr("stroke-width", 1.2);
+      putLabel(gg, d, `${r.name} ${mainVal(r)}`);
     } else {
-      gg.append("circle").attr("r", ro).attr("fill", c).attr("fill-opacity", .66 - .26 * Math.min(1, r.eps / maxE)).attr("stroke", "rgba(255,255,255,.95)").attr("stroke-width", 1.4).attr("stroke-dasharray", r.sample && !r.approx ? null : "3 2");
-      gg.append("circle").attr("r", ro).attr("fill", "url(#shine)").attr("pointer-events", "none");
-      if (selName() === r.name) gg.append("circle").attr("class", "ring").attr("r", ro + 3).attr("stroke", css("--pink"));
+      gg.append("circle").attr("r", ro).attr("fill", c).attr("fill-opacity", faint ? .38 : 1).attr("stroke", "var(--surface)").attr("stroke-width", 1.5);
+      if (faint || r.approx) gg.append("circle").attr("r", ro + .5).attr("fill", "none").attr("stroke", "var(--muted)").attr("stroke-width", 1).attr("stroke-dasharray", "2 2");
+      if (selName() === r.name) gg.append("circle").attr("r", ro + 3.5).attr("fill", "none").attr("stroke", "var(--ink)").attr("stroke-width", 2.5);
       putLabel(gg, d, r.name);
     }
+    const rk = TOP.get(r.name);
+    if (rk) { // 상위 5위: 파란 원 안에 순위 숫자(원 오른쪽 위)
+      const o = (ro + (view === "region" && !zoom ? 4 : 0)) * .72, b = gg.append("g").attr("class", "rk").attr("transform", `translate(${o + 2},${-o - 2})`);
+      b.append("circle").attr("r", 9);
+      b.append("text").attr("y", .5).text(rk);
+    }
   });
+  applyDim(null);
 }
-// 이름표 배치: 큰 원부터 아래→위→오른쪽→왼쪽 순으로 다른 이름표·원과 겹치지 않는 자리를 찾는다(겹치면 생략, 마우스를 올리면 이름이 뜬다)
+// 이름표 배치: 상위 5위·큰 원부터 아래→위→오른쪽→왼쪽 순으로 다른 이름표·원과 겹치지 않는 자리를 찾는다(겹치면 생략, 마우스를 올리면 이름이 뜬다)
 let labelSlots = null;
 function placeLabels() {
   const placed = [], out = new Map(), regionPie = view === "region" && !zoom;
   const overlap = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
   const hitsCircle = (bx, o) => { const cx = Math.max(bx.x0, Math.min(o.x, bx.x1)), cy = Math.max(bx.y0, Math.min(o.y, bx.y1)); return Math.hypot(cx - o.x, cy - o.y) < rad(o.r) * 0.9; };
-  for (const d of [...nodes].sort((a, b) => b.r.eps - a.r.eps)) {
+  for (const d of [...nodes].sort((a, b) => (TOP.has(b.r.name) - TOP.has(a.r.name)) || (b.r.eps - a.r.eps))) {
     const r = d.r;
-    if (!(regionPie || zoom || r.eps >= 4 || selName() === r.name)) continue;
-    const txt = regionPie ? `${r.name} ${pct(r.r)}` : r.name, w = txt.length * 10 + 4, h = 13, ro = rad(r) + (regionPie ? 4 : 0);
+    if (!(regionPie || zoom || r.eps >= 4 || TOP.has(r.name) || selName() === r.name)) continue;
+    const txt = regionPie ? `${r.name} ${mainVal(r)}` : r.name, w = txt.length * 10 + 4, h = 13, ro = rad(r) + (regionPie ? 6 : 0);
     const cands = [
       { dx: 0, dy: ro + 12, a: "middle", x0: -w / 2, y0: ro + 1 }, { dx: 0, dy: -ro - 4, a: "middle", x0: -w / 2, y0: -ro - 14 },
       { dx: ro + 4, dy: 4, a: "start", x0: ro + 4, y0: -8 }, { dx: -ro - 4, dy: 4, a: "end", x0: -ro - 4 - w, y0: -8 },
@@ -542,21 +539,22 @@ function putLabel(gg, d, txt) {
   const c = labelSlots && labelSlots.get(d.r.name);
   if (c) gg.append("text").attr("x", c.dx).attr("y", c.dy).style("text-anchor", c.a).text(txt);
 }
-// 지도에서 회차의 나라(확대 중이면 장소)만 밝게
-function highlight(names) { svg.selectAll("g.pie").classed("dim", d => names != null && !names.has(d.r.name)); }
+// 흐리게: 회차에 마우스를 올리면 그 회차의 나라(장소)만, 아니면 범례에서 고른 단계만 남긴다
+function applyDim(names) {
+  svg.selectAll("g.pie").classed("dim", d => names ? !names.has(d.r.name) : !!pick && clsOf(d.r).k !== pick);
+}
 
 function epLines(list, n) {
-  return episodesAgg(list).sort((a, b) => b[mode] - a[mode]).slice(0, n)
-    .map(e => `<div class="e"><b>${esc(epLabel(e))}</b><span>${esc(e.sub)}</span><span>${valTxt(e)}</span></div>`).join("")
-    .replace(/^/, '<div class="eg">') + "</div>";
+  return '<div class="eg">' + episodesAgg(list).sort((a, b) => b[mode] - a[mode]).slice(0, n)
+    .map(e => `<div class="e"><b>${esc(epLabel(e))}</b><span>${esc(e.sub)}</span><span>${mainVal(e)}</span>${dTxt(e)}</div>`).join("") + "</div>";
 }
 function showTip(e, r) {
-  const eps = new Set(r.list.map(b => b.k)).size;
-  tip.innerHTML = `<b style="font-size:1.1em">${esc(r.name)}</b>${zoom ? ` <span class="ref">${esc(zoom.name)}</span>` : ""}<br>` +
-    `평균 ${valTxt(r)} · 방송 ${r.n}건 · 회차 ${eps}편${r.sample ? "" : " · 표본 적음"}` +
-    (view === "region" && !zoom ? `<br><span class="ref">자연만 ${r.natureOnly} · 문화만 ${r.cultureOnly} · 둘 다 ${r.both} · 분류 없음 ${r.neither}</span>` : "") +
-    `<div class="h">잘 나온 회차 (${mode === "r" ? "시청률" : idxName() + "지수"} 순 · 괄호 ${idxName()}지수)</div>${epLines(r.list, 6)}` +
-    (eps > 6 ? `<div class="h">외 ${eps - 6}편 — 누르면 아래 '잘 나온 회차'에 전부</div>` : "") +
+  const c = clsOf(r), rk = TOP.get(r.name);
+  tip.innerHTML = `<div class="hd"><b>${rk ? rk + "위 · " : ""}${esc(r.name)}</b>${zoom ? `<span class="ref">${esc(zoom.name)}</span>` : ""}<span class="cchip"><i style="background:${colorOf(r)}"></i>${c.t} ${dTxt(r)}</span></div>` +
+    `<div class="st num">시청률 <b>${pct(r.r)}</b> · 월보정 ${r.m.toFixed(2)} · 슬롯 ${r.i.toFixed(2)}<br>방송 ${r.n}건 · 회차 ${r.eps}편${r.sample ? "" : " · <b>표본 적음</b>"}</div>` +
+    (view === "region" && !zoom ? `<div class="st">자연만 ${r.natureOnly} · 문화만 ${r.cultureOnly} · 둘 다 ${r.both} · 분류 없음 ${r.neither}</div>` : "") +
+    `<div class="h">잘 나온 회차 (${modeName()} 순)</div>${epLines(r.list, 6)}` +
+    (r.eps > 6 ? `<div class="h">외 ${r.eps - 6}편 — 누르면 오른쪽 '잘 나온 회차'에 전부</div>` : "") +
     (zoom && r.approx ? `<div class="h">정확한 위치를 아직 모릅니다 — ${esc(zoom.name)} 중앙에 표시</div>` : "") +
     (!zoom && view === "country" ? `<div class="h">누르면 도시·장소별로 확대</div>` : "");
   tip.style.opacity = 1;
@@ -570,19 +568,15 @@ function select(name) {
   focus = focus && focus.name === name ? null : { type: zoom ? "place" : "region", name };
   draw(); renderRank(); renderEpisodes(); syncCtl();
 }
-// ── 확대·이동: d3.zoom 하나로 휠·드래그·버튼·국가 확대를 처리한다(원 크기는 화면 기준 그대로, 위치만 변환) ──
+// ── 확대·이동: d3.zoom 하나로 휠·드래그·버튼·국가 확대를 처리한다 ──
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const EXT = [[0, Y0], [W, Y1]];
 const zb = d3.zoom().scaleExtent([1, 14]).extent(EXT).translateExtent(EXT).clickDistance(4)
-  // 휠: 지도 위에서는 항상 지도가 받는다(세계 전체 보기에서 축소해도 페이지가 위아래로 흔들리지 않게). 화면 한 장에 들어오므로 페이지 스크롤이 필요 없다.
   .filter(e => e.type === "wheel" ? true : (!e.button && e.type !== "dblclick"))
   .on("start", () => { tip.style.opacity = 0; })
   .on("zoom", e => { tf = e.transform; gWorld.attr("transform", tf); syncCtl(); scheduleDraw(); })
-  .on("end", () => { // 휠로 충분히 축소하면 국가 확대 상태도 자연스럽게 풀린다
-    if (zoom && zoom.k0 > 1.3 && tf.k < zoom.k0 * 0.55) { zoom = null; focus = null; refresh(); }
-  });
+  .on("end", () => { if (zoom && zoom.k0 > 1.3 && tf.k < zoom.k0 * 0.55) { zoom = null; focus = null; refresh(); } });
 svg.call(zb).on("dblclick.zoom", null);
-// d3.zoom은 더 줄일 수 없을 때(최소 배율) 휠 이벤트를 놓아 주므로 페이지가 위아래로 흔들린다 — 지도 위 휠은 항상 막는다.
 document.getElementById("map").addEventListener("wheel", e => e.preventDefault(), { passive: false });
 let drawQ = 0;
 function scheduleDraw() { if (!drawQ) drawQ = requestAnimationFrame(() => { drawQ = 0; layout(); draw(); }); }
@@ -604,47 +598,65 @@ function zoomTo(name) {
   const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
   const k = Math.max(1, Math.min(W * 0.78 / Math.max(x1 - x0, 60), H * 0.78 / Math.max(y1 - y0, 40), 9));
-  zoom.k0 = k; focus = null;
+  zoom.k0 = k; focus = null; pick = null;
   go(fit(k, (x0 + x1) / 2, (y0 + y1) / 2));
   refresh();
 }
-function zoomOut() { // 세계지도로(국가 선택·확대·이동 모두 처음 상태로)
-  zoom = null; focus = null;
+function zoomOut() {
+  zoom = null; focus = null; pick = null;
   go(d3.zoomIdentity, 500);
   refresh();
 }
 
+let RANKED = []; // 지금 순위표(CSV 내려받기에 쓴다)
 function renderRank() {
-  const rs = [...ITEMS].sort(byMode);
-  maxR = Math.max(...ITEMS.map(x => x.r), 1e-9);
-  document.getElementById("rankTitle").textContent =
-    (zoom ? zoom.name + " 도시·장소" : view === "region" ? "권역" : "국가") + (theme ? ` · #${theme}` : "") + ` · ${mode === "r" ? "시청률" : idxName() + "지수"} 순 (괄호 ${idxName()}지수)`;
+  const rs = [...ITEMS].sort(SORTS[sortBy]);
+  RANKED = rs;
+  const unit = zoom ? zoom.name + " 도시·장소" : view === "region" ? "권역" : "국가";
+  document.getElementById("rankTitle").textContent = `${unit} ${rs.length}곳 · ${modeName()}`;
+  document.getElementById("axVal").textContent = mode === "r" ? "시청률" : "지수";
   const ul = d3.select("#rank"); ul.selectAll("li").remove();
+  const split = sortBy === "top" || sortBy === "low"; // 성과순일 때만 표본 적은 항목을 아래로 떼어 번호를 매기지 않는다
+  let n = 0, sepDone = false;
   rs.forEach(r => {
-    const li = ul.append("li").attr("class", selName() === r.name ? "sel" : "").on("click", () => select(r.name))
-      .on("mousemove", e => showTip(e, r)).on("mouseleave", () => tip.style.opacity = 0);
-    li.append("span").text(r.name);
-    li.append("span").attr("class", "track").append("i").style("width", barW(r) + "%").style("background", barBg(r)).style("opacity", r.sample ? 1 : .4);
-    li.append("span").attr("class", "val").html(valTxt(r) + (r.sample ? "" : '<small>*</small>'));
+    if (split && !r.sample && !sepDone) { sepDone = true; ul.append("li").attr("class", "sep").html(`<span class="term" data-term="s">표본 적음</span> — 참고용, 순위에서 제외`); }
+    const li = ul.append("li").attr("class", [selName() === r.name ? "sel" : "", r.sample ? "" : "few", pick && clsOf(r).k !== pick ? "dim" : ""].join(" "))
+      .on("click", () => select(r.name)).on("mousemove", e => showTip(e, r)).on("mouseleave", () => tip.style.opacity = 0);
+    li.append("span").attr("class", "no num").text(!split || r.sample ? ++n : "");
+    li.append("span").attr("class", "nm").attr("title", `${r.name} · 방송 ${r.n}건`).html(`${esc(r.name)}${sortBy === "air" ? `<small>${r.n}회</small>` : ""}`);
+    li.append("span").html(dbar(r));
+    li.append("span").attr("class", "val").text(mainVal(r));
+    li.append("span").html(dTxt(r));
   });
+  if (!rs.length) ul.append("li").attr("class", "empty").text(minN ? `방송 ${minN}회 이상인 곳이 없습니다 — '방송' 조건을 낮춰 보세요.` : "해당하는 방송이 없습니다.");
+}
+function downloadCsv() {
+  const q = s => `"${String(s).replace(/"/g, '""')}"`;
+  const head = ["순위", zoom ? "장소" : view === "region" ? "권역" : "국가", "방송 수", "회차 수", "평균 시청률(%)", "월보정지수", "슬롯지수", `평균 대비(%)`, "단계", "표본"];
+  const split = sortBy === "top" || sortBy === "low";
+  let k = 0;
+  const rows = RANKED.map(r => [!split || r.sample ? ++k : "", r.name, r.n, r.eps, r.r.toFixed(4), r.m.toFixed(3), r.i.toFixed(3), dPct(r), clsOf(r).t, r.sample ? "충분" : "적음"]);
+  const meta = [`# OLIFE 시청률 지도 · ${DATA.target} · ${DATA.period} · 기준 ${modeName()} · 조건: ${condText() || "전체"}${zoom ? " · " + zoom.name : ""}`];
+  const blob = new Blob(["﻿" + [...meta, head.map(q).join(","), ...rows.map(r => r.map(q).join(","))].join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `OLIFE_시청률지도_${zoom ? zoom.name : view === "region" ? "권역" : "국가"}_순위.csv`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 function renderEpisodes() {
   const list = focusList();
   const es = episodesAgg(list).sort((a, b) => b[mode] - a[mode]);
-  const scope = [prog === "all" ? "" : PROG_NAME[prog], zoom ? zoom.name : "", focus ? focus.name : "", theme ? "#" + theme : ""].filter(Boolean).join(" · ");
-  document.getElementById("epTitle").textContent = `${scope || "전체"} · ${es.length}편 · ${mode === "r" ? "시청률" : idxName() + "지수"} 순 (괄호 ${idxName()}지수)`;
-  const mx = Math.max(...es.map(e => e.r), 1e-9);
+  const scope = [condText(), zoom ? zoom.name : "", focus ? focus.name : ""].filter(Boolean).join(" · ");
+  document.getElementById("epTitle").textContent = `${scope || "전체"} · ${es.length}편`;
   const ul = d3.select("#eps"); ul.selectAll("li").remove();
   es.slice(0, 60).forEach((e, n) => {
     const li = ul.append("li")
-      .on("mouseenter", () => highlight(new Set(zoom ? e.list.flatMap(b => { const ps = placesOf(b); return ps.length ? ps.map(p => p[0]) : [NOPLACE]; }) : view === "region" ? e.list.flatMap(b => b.rg) : e.cs)))
-      .on("mouseleave", () => highlight(null));
-    li.append("span").attr("class", "no").text(n + 1);
+      .on("mouseenter", () => applyDim(new Set(zoom ? e.list.flatMap(b => { const ps = placesOf(b); return ps.length ? ps.map(p => p[0]) : [NOPLACE]; }) : view === "region" ? e.list.flatMap(b => b.rg) : e.cs)))
+      .on("mouseleave", () => applyDim(null));
+    li.append("span").attr("class", "no num").text(n + 1);
     li.append("span").html(`<span class="prog ${e.p}">${esc(epLabel(e))}</span>`);
     const airs = e.list.map(b => `${+b.d.slice(5, 7)}/${+b.d.slice(8)}(${b.wd}) ${b.t}`).join(", ");
     li.append("span").attr("class", "tt").html(`<div title="${esc(e.sub)}">${esc(e.sub)}</div><div class="m">${esc(e.cs.join("·"))} · 방송 ${e.n}회: ${esc(airs)}</div>`);
-    li.append("span").attr("class", "track").append("i").style("width", (mode === "r" ? Math.max(3, e.r / mx * 100) : barW(e)) + "%").style("background", barBg(e));
-    li.append("span").attr("class", "val").html(valTxt(e));
+    li.append("span").attr("class", "vv").html(`<span class="val">${mainVal(e)}</span>${dTxt(e)}`);
   });
   if (!es.length) ul.append("li").html('<span></span><span></span><span class="ref">해당하는 방송이 없습니다.</span>');
 }
@@ -653,44 +665,70 @@ function renderKpis() {
   const byP = p => mean(l.filter(b => b.p === p).map(b => b.r));
   document.getElementById("k1").textContent = l.length ? pct(mean(l.map(b => b.r))) : "-";
   document.getElementById("k1s").textContent = ["걸세", "세테기"].filter(p => prog === "all" || prog === p).map(p => `${p} ${isNaN(byP(p)) ? "-" : pct(byP(p))}`).join(" · ");
-  document.getElementById("k2").textContent = `${l.length}건`;
-  document.getElementById("k2s").textContent = `회차 ${eps}편 · 나라 ${new Set(l.flatMap(b => b.cs)).size}곳`;
-  const top = countriesAgg().filter(x => x.sample).sort(byMode)[0];
+  document.getElementById("k2").textContent = `${l.length.toLocaleString()}건`;
+  document.getElementById("k2s").textContent = `회차 ${eps.toLocaleString()}편 · 나라 ${new Set(l.flatMap(b => b.cs)).size}곳`;
+  const top = ITEMS.filter(x => x.sample).sort(byMode)[0];
+  document.getElementById("k3t").textContent = zoom ? "1위 장소" : view === "region" ? "1위 권역" : "1위 나라";
   document.getElementById("k3").textContent = top ? top.name : "-";
-  document.getElementById("k3s").innerHTML = top ? `${valTxt(top)} · 방송 ${top.n}건` : "표본 충분한 나라 없음";
-  const te = episodesAgg(l).sort((a, b) => b[mode] - a[mode])[0];
-  document.getElementById("k4").textContent = te ? epLabel(te) : "-";
-  document.getElementById("k4s").innerHTML = te ? `${valTxt(te)} · ${esc(te.sub)}` : "";
-  document.getElementById("k4s").title = te ? te.sub : "";
+  document.getElementById("k3").title = top ? top.name : "";
+  document.getElementById("k3s").textContent = top ? `${mainVal(top)} · 방송 ${top.n}건` : "표본 충분한 곳 없음";
+  const c = condText();
+  document.getElementById("cond").textContent = c ? `조건: ${c} · 방송 ${l.length.toLocaleString()}건` : "";
+  document.getElementById("reset").hidden = !(per !== "all" || day !== "all" || band || minN || reg);
+}
+function renderLegend() {
+  document.getElementById("legTitle").textContent = mode === "r" ? `색 = 평균 ${pct(BASE)} 대비` : "색 = 1.00(같은 자리 평균) 대비";
+  const cnt = k => ITEMS.filter(x => clsOf(x).k === k).length;
+  const box = d3.select("#legRows"); box.selectAll("*").remove();
+  CLS.forEach(c => box.append("button").attr("class", "lrow").attr("aria-pressed", pick === c.k)
+    .attr("title", `${c.t}: ${c.d}${pick === c.k ? " — 다시 누르면 모두 표시" : " — 누르면 이 단계만 표시"}`)
+    .html(`<i class="sw" style="background:var(--c-${c.k})"></i>${c.t}<span class="cnt num">${cnt(c.k)}</span>`)
+    .on("click", () => { pick = pick === c.k ? null : c.k; renderLegend(); applyDim(null); renderRank(); }));
 }
 function renderThemes() {
   const q = document.getElementById("q").value.trim();
   const ts = themesAgg().filter(t => !q || t.name.includes(q)).sort(byMode);
   const box = d3.select("#chips"); box.selectAll("*").remove();
   ts.forEach(t => box.append("button").attr("class", "chip " + t.kind).attr("aria-pressed", theme === t.name)
+    .attr("title", t.kind === "N" ? "자연 테마" : t.kind === "C" ? "문화 테마" : "시기·명절")
     .html(`<b>${esc(t.name)}</b> <small>${mode === "r" ? pct(t.r) : t[mode].toFixed(2)} · ${t.n}건</small>`)
     .on("click", () => setTheme(theme === t.name ? null : t.name)));
   if (!ts.length) box.append("span").attr("class", "ref").text("맞는 테마가 없습니다.");
 }
 function setTheme(t) {
-  theme = t; focus = null;
+  theme = t; focus = null; pick = null;
   const b = document.getElementById("themeOn"); b.hidden = !t; b.textContent = t ? `#${t} ✕` : "";
-  if (zoom && !placesAgg().length && !filtered().some(x => x.cs.includes(zoom.name))) zoomOut(); else refresh();
+  if (zoom && !filtered().some(x => x.cs.includes(zoom.name))) zoomOut(); else refresh();
 }
 function refresh() {
-  ITEMS = items(); maxE = Math.max(...ITEMS.map(x => x.eps), 1); setScale(); maxR = Math.max(...ITEMS.map(x => x.r), 1e-9);
-  layout(); draw(); renderRank(); renderEpisodes(); renderKpis(); renderThemes(); syncCtl();
-  document.getElementById("legMode").textContent = mode === "r" ? "(시청률 상·하위 10% 기준)" : "(1.0 = 같은 자리 평균)";
-  document.getElementById("legPie").style.display = view === "region" && !zoom ? "" : "none";
+  ITEMS = items(); maxE = Math.max(...ITEMS.map(x => x.eps), 1); setBase();
+  document.getElementById("regWrap").hidden = view === "region";
+  layout(); draw(); renderRank(); renderEpisodes(); renderKpis(); renderThemes(); renderLegend(); syncCtl();
 }
 function press(attr, v) { document.querySelectorAll(`[data-${attr}]`).forEach(b => b.setAttribute("aria-pressed", b.dataset[attr] === v)); }
 
 // ── 조작 ──
-document.querySelectorAll("[data-prog]").forEach(b => b.onclick = () => { prog = b.dataset.prog; press("prog", prog); focus = null; refresh(); });
-document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { mode = b.dataset.mode; press("mode", mode); refresh(); });
+document.querySelectorAll("[data-prog]").forEach(b => b.onclick = () => { prog = b.dataset.prog; press("prog", prog); focus = null; pick = null; refresh(); });
+document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { mode = b.dataset.mode; press("mode", mode); pick = null; refresh(); });
 document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => {
-  view = b.dataset.view; press("view", view); zoom = null; focus = null; svg.interrupt().call(zb.transform, d3.zoomIdentity); refresh();
+  view = b.dataset.view; press("view", view); zoom = null; focus = null; pick = null; svg.interrupt().call(zb.transform, d3.zoomIdentity); refresh();
 });
+// 편성 조건: 바뀌면 확대 중인 나라에 방송이 남는지 보고, 없으면 세계지도로 돌아간다
+function condChanged() { focus = null; pick = null; if (zoom && !filtered().some(x => x.cs.includes(zoom.name))) zoomOut(); else refresh(); }
+document.querySelectorAll("[data-per]").forEach(b => b.onclick = () => { per = b.dataset.per; press("per", per); condChanged(); });
+document.querySelectorAll("[data-day]").forEach(b => b.onclick = () => { day = b.dataset.day; press("day", day); condChanged(); });
+document.querySelectorAll("[data-min]").forEach(b => b.onclick = () => { minN = +b.dataset.min; press("min", b.dataset.min); condChanged(); });
+const bandSel = document.getElementById("band"), regSel = document.getElementById("reg");
+for (const x of BANDS) bandSel.add(new Option(x + "시", x));
+for (const x of Object.keys(POS)) if ([...CREG.values()].includes(x)) regSel.add(new Option(x, x));
+bandSel.onchange = () => { band = bandSel.value; condChanged(); };
+regSel.onchange = () => { reg = regSel.value; if (zoom) zoomOut(); else condChanged(); };
+document.getElementById("reset").onclick = () => {
+  per = "all"; day = "all"; band = ""; minN = 0; reg = ""; bandSel.value = ""; regSel.value = "";
+  press("per", "all"); press("day", "all"); press("min", "0"); condChanged();
+};
+document.getElementById("sort").onchange = e => { sortBy = e.target.value; renderRank(); };
+document.getElementById("csv").onclick = downloadCsv;
 for (const [id, fn] of [["crumbHome", zoomOut], ["zhome", zoomOut],
   ["zin", () => svg.transition().duration(reduceMotion ? 0 : 250).call(zb.scaleBy, 1.7)],
   ["zout", () => svg.transition().duration(reduceMotion ? 0 : 250).call(zb.scaleBy, 1 / 1.7)]]) document.getElementById(id).onclick = fn;
@@ -702,24 +740,28 @@ document.getElementById("q").addEventListener("keydown", e => {
   if (t) setTheme(t.name);
 });
 addEventListener("keydown", e => {
-  if (e.target.closest && e.target.closest("input, select, textarea")) return; // 검색창 등에서 입력 중이면 지도 단축키를 쓰지 않는다
+  if (e.target.closest && e.target.closest("input, select, textarea")) return;
   const zoomed = zoom || tf.k > 1.01;
   if ((e.key === "Escape" || e.key === "Home" || e.key === "0") && zoomed) zoomOut();
   else if (e.key === "+" || e.key === "=") document.getElementById("zin").click();
   else if (e.key === "-" || e.key === "_") document.getElementById("zout").click();
 });
 
-// ── 용어 설명: 마우스를 올리거나 키보드로 포커스하면 뜬다 ──
+// ── 용어 설명 ──
 const TERMS = {
-  r: ["시청률", "선택한 타깃(가구·2049 등)의 닐슨 시청률. 편성 요일·시간대에 따라 크게 달라지므로, 자리 차이까지 걷어낸 비교는 아래 지수를 보세요."],
-  i: ["슬롯지수", "그 방송 시청률 ÷ 같은 프로그램·같은 요일·같은 시간대 방송들의 평균. 1.0 = 그 자리 평균, 1.15 = 평균보다 15% 높음."],
-  m: ["월보정지수", "슬롯지수와 같지만 비교 평균을 같은 달 방송으로 한정한 값. 계절·시기 영향까지 걷어내 '이 회차 자체가 잘 나왔는지' 보는 데 좋습니다. 1.0 = 평균."],
-  s: ["표본 적음", "방송이 3건 미만이거나 서로 다른 회차가 2편 미만(장소는 방송 2건 미만)이면 우연일 수 있어 흐리게 그리고 순위에서 뒤로 보냅니다."],
+  r: ["시청률", "선택한 타깃(가구·2049 등)의 닐슨 시청률. 색은 지금 범위의 평균 시청률 대비입니다. 편성 요일·시간대 차이까지 걷어낸 비교는 지수를 보세요."],
+  i: ["슬롯지수", "그 방송 시청률 ÷ 같은 프로그램·같은 요일·같은 시간대 방송들의 평균. 1.00 = 그 자리 평균, 1.15 = 평균보다 15% 높음."],
+  m: ["월보정지수", "슬롯지수와 같지만 비교 평균을 같은 달 방송으로 한정한 값. 계절·시기 영향까지 걷어내 '이 회차 자체가 잘 나왔는지' 보는 데 좋습니다. 1.00 = 평균."],
+  s: ["표본 적음", "방송이 3건 미만이거나 서로 다른 회차가 2편 미만(장소는 방송 2건 미만)이면 우연일 수 있어 흐리게 그리고 순위 번호를 매기지 않습니다."],
+  legend: ["보는 법", () => `<span class="hl">색 단계: 매우 높음 +12% 이상 · 높음 +4~12% · 평균 수준 ±4% 안 · 낮음 −4~12% · 매우 낮음 −12% 이상 (색 단계를 누르면 그 단계만 표시)</span>` +
+    `<span class="hl">원 크기 = 회차 수 · <b style="color:var(--top)">파란 숫자</b> = 상위 5위</span><span class="hl">흐린 원 = 표본 적음 · 점선 = 위치 미확인(나라 중앙에 표시)</span>` +
+    (view === "region" && !zoom ? `<span class="hl">권역 원그래프: <i class="dot" style="background:var(--t-nat)"></i>자연만 <i class="dot" style="background:var(--t-cul)"></i>문화만 <i class="dot" style="background:var(--t-both)"></i>둘 다 <i class="dot" style="background:var(--none)"></i>분류 없음 · 바깥 테두리 색 = 성과</span>` : "") +
+    `<span class="hl">마우스 = 잘 나온 회차 · 클릭 = 도시·장소로 확대 · 휠 = 확대/축소 · ESC = 복귀</span>`],
 };
 const tt = document.getElementById("termTip");
 function showTerm(el) {
   const d = TERMS[el.dataset.term]; if (!d) return;
-  tt.innerHTML = `<b>${d[0]}</b><br>${d[1]}`; tt.style.opacity = 1;
+  tt.innerHTML = `<b>${d[0]}</b><br>${typeof d[1] === "function" ? d[1]() : d[1]}`; tt.style.opacity = 1;
   const r = el.getBoundingClientRect(), w = tt.offsetWidth, h = tt.offsetHeight;
   tt.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + "px";
   tt.style.top = (r.bottom + 8 + h > innerHeight ? Math.max(8, r.top - h - 8) : r.bottom + 8) + "px";
@@ -739,14 +781,17 @@ if (location.protocol.startsWith("http")) sel.onchange = () => { location.search
 else { sel.disabled = true; sel.title = "타깃 변경은 에이전트의 시청률 지도 화면에서만 됩니다"; }
 
 document.getElementById("sub").textContent = `<걸어서 세계속으로>·<세계테마기행> · ${DATA.period} · ${DATA.target} · 분류표와 맞은 방송 ${ALL.length}건`;
+// 지도 칸 높이: 지도 비율(가로 꽉 채움)대로 하되 한 화면에 들어오게 줄이고, 오른쪽 패널은 왼쪽 열과 같은 높이로 맞춘다
 function fitStage() {
-  const mc = document.querySelector(".mapcard"), st = document.querySelector(".stage");
-  if (innerWidth <= 1000) { mc.style.height = ""; return; }
-  const foot = 62;
-  mc.style.height = Math.round(Math.min((mc.clientWidth - 12) * H / W + 12, st.clientHeight - foot)) + "px";
+  const mc = document.querySelector(".mapcard"), side = document.querySelector(".side"), lcol = document.querySelector(".lcol");
+  if (innerWidth <= 1000) { mc.style.height = ""; side.style.height = ""; return; }
+  const room = innerHeight - mc.getBoundingClientRect().top - document.querySelector(".mleg").offsetHeight - 16;
+  mc.style.height = Math.round(Math.max(320, Math.min(mc.clientWidth * H / W, room))) + "px";
+  side.style.height = Math.max(lcol.offsetHeight, 520) + "px";
 }
 fitStage(); addEventListener("resize", fitStage);
 refresh();
+fitStage(); // 범례 줄이 그려진 뒤 높이를 다시 맞춘다
 </script>
 </body>
 </html>
