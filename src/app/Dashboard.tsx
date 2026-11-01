@@ -10,6 +10,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { ReviewEpisodeChart, type EpisodeChartPoint } from "@/components/ReviewEpisodeChart";
 import type { RankSlide } from "@/lib/rankSlide";
+import type { DemoRetention, LineupShift, LineupShiftResult } from "@/lib/lineupHandoff";
 import ReviewPanels, { type ReviewPanelItem } from "@/components/home/ReviewPanels";
 import { channelBrandSolid } from "@/lib/dashboard/channelBrandColors";
 import { highlightNarrativeText, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR } from "@/lib/highlightNarrative";
@@ -39,6 +40,8 @@ import { formatArrowPct, formatDurationClock, formatDurationKo, formatRatingDelt
 // 단계 07: 전역 문맥(URL)·요청 상태·홈 모델. 계산은 src/lib/workspace, 화면은 components/home·workspace.
 import { DataStatusCard, DecisionCards, FollowupsCard, HomeViewTabs, PANEL, PanelHeader, type ReviewStoreState } from "@/components/home/HomePanels";
 import MarketTopPrograms from "@/components/home/MarketTopPrograms";
+import YtdGoalCard from "@/components/home/YtdGoalCard";
+import type { YtdGoalBriefing } from "@/lib/ytdGoalBriefing";
 import { MonthlyPlanningPanels, NextWeekPanel, type MonthlyChannelItem, type NextWeekItem } from "@/components/home/PeriodPanels";
 import { pendingFollowups, type ReviewEvent } from "@/lib/workspace/actionReview";
 import { buildContextBar } from "@/lib/workspace/contextBar";
@@ -409,6 +412,8 @@ interface DashboardData {
   weeklyReview: WeeklyReview | null;
   // 주간 순위 하락 배경(2026-10-26) — 닐슨 주간 순위가 최근 12주 최고보다 크게 내려간 채널의 원인 문장. 요일과 무관하게 내려오고 없으면 빈 배열.
   rankSlides?: RankSlide[];
+  // 연간 목표 대비 누적(2026-11-02) — 누적 순위 파일의 끝 날짜가 조회일과 같은 날에만 내려온다.
+  ytdGoalBriefing?: YtdGoalBriefing | null;
 }
 // MonthlyDriver 타입은 src/lib/causeClassifier.ts로 이동(원인분해 로직과 함께 재사용하기 위함,
 // 2026-09-18) — 위에서 import한 타입을 그대로 쓴다(필드 변경 없음).
@@ -435,6 +440,9 @@ interface MonthlyReviewChannel {
   weaknessDriver: MonthlyDriver | null;
   // 프라임(평일 19~23시 · 토·일·공휴일 18~23시) 주요 등락 — 채널 전체 기여도 순위와 별개 축(상승·하락 각 최대 1건).
   primeMovers: MonthlyPrimeMover[];
+  // 사용자 지시(2026-11-02): 자리 이어받기 기준 상승·하락·프라임 등락(src/lib/lineupHandoff.ts). 있으면 위 세
+  // 필드 대신 이것으로 그린다. skyUHD·1월(전월 없음)·조회 실패면 null → 기존 표시로 남는다.
+  lineup?: LineupShiftResult | null;
 }
 // 사용자 지시(2026-09-02 최초, 2026-09-03 재지시): 사내 "전체 채널 월간 추이" 자료를 월간 리뷰
 // 하단에 함께 정리. 닐슨 원자료가 아니라 사내에서 월 단위로 이미 집계해 둔 2차 가공치라, 위
@@ -2155,6 +2163,106 @@ function MonthlyDriverCell({
   );
 }
 
+// 사용자 지시(2026-11-02): "신병4 사보타주가 본방을 끝내고 재방으로 돈 것이 아니라, 그 자리를 이어받은
+// 연애박사가 제몫을 못 한 것" — 프로그램이 아니라 자리(요일×시각) 기준으로 무엇이 무엇을 이어받았고 어떤
+// 성·연령층이 빠졌는지 보여주는 셀. 수치는 route.ts가 lineupHandoff.ts로 계산해 내려준 값을 옮기기만 한다.
+function formatSlotWhen(dows: number[], hours: number[]): string {
+  const dayText = dows.length === 7 ? "매일" : dows.map((d) => DOW_LABELS[d]).join("·");
+  const contiguous = hours.every((h, i) => i === 0 || h === hours[i - 1] + 1);
+  const hourText =
+    hours.length === 1
+      ? `${hours[0]}시`
+      : contiguous
+        ? `${hours[0]}~${hours[hours.length - 1]}시`
+        : hours.length <= 3
+          ? `${hours.join("·")}시`
+          : `${hours.length}개 시각`;
+  return `${dayText} ${hourText}`;
+}
+
+// 성·연령 요약 — 하락은 많이 빠진 층(유지율 70% 미만)과 지켜낸 층(90% 이상), 상승은 늘어난 층과 줄어든 층.
+// 유지율을 못 내는(직전 값이 노이즈 바닥 미만) 층은 하락 쪽에서는 빼고, 상승 쪽에서는 증가폭으로만 쓴다.
+function summarizeDemos(demos: DemoRetention[], sign: 1 | -1, channelCode: string): { lost: string[]; kept: string[] } {
+  const pct = (d: DemoRetention) => `${d.label} ${Math.round(d.retentionPct!)}%`;
+  const withPct = demos.filter((d) => d.retentionPct !== null);
+  if (sign < 0) {
+    return {
+      lost: withPct.filter((d) => d.retentionPct! < 70).sort((a, b) => a.retentionPct! - b.retentionPct!).slice(0, 3).map(pct),
+      kept: withPct.filter((d) => d.retentionPct! >= 90).sort((a, b) => b.retentionPct! - a.retentionPct!).slice(0, 2).map(pct),
+    };
+  }
+  const gained = demos
+    .filter((d) => d.delta > 0 && (d.retentionPct === null || d.retentionPct >= 110))
+    .sort((a, b) => b.delta - a.delta)
+    .slice(0, 3)
+    .map((d) => (d.retentionPct !== null ? pct(d) : `${d.label} +${formatRating(d.delta, channelCode)}`));
+  const lost = withPct.filter((d) => d.retentionPct! < 70).sort((a, b) => a.retentionPct! - b.retentionPct!).slice(0, 2).map(pct);
+  return { lost, kept: gained };
+}
+
+const LINEUP_TAG: Record<string, { label: string; color: string }> = {
+  "decline-handoff": { label: "후속작 부진", color: "#dc2626" },
+  "decline-self": { label: "자체 부진", color: "#dc2626" },
+  "decline-vacated": { label: "편성 공백", color: "#dc2626" },
+  "rise-handoff": { label: "자리 교체 효과", color: "#16a34a" },
+  "rise-self": { label: "자체 상승", color: "#16a34a" },
+  "rise-vacated": { label: "자체 상승", color: "#16a34a" },
+};
+
+function LineupShiftCell({ shift, sign, channelCode }: { shift: LineupShift | null; sign: 1 | -1; channelCode: string }) {
+  if (!shift) return <span className="text-zinc-300">—</span>;
+  const k = shift.keySlot;
+  const tag = LINEUP_TAG[`${sign < 0 ? "decline" : "rise"}-${shift.mode}`];
+  // 하락+이어받기면 실제 요인은 후속작 — 그 이름을 앞에 세우고 "누구의 후속인지"를 붙인다.
+  const successor = k.dispersed ? (k.counterparts[0] ?? k.currentProgram) : k.currentProgram;
+  const headline = sign < 0 && shift.mode === "handoff" && successor ? successor : shift.anchorProgram;
+  const relation =
+    shift.mode !== "handoff"
+      ? null
+      : sign < 0
+        ? `${shortProgramName(shift.anchorProgram)} 자리 이어받음`
+        : `${shortProgramName((k.dispersed ? k.counterparts[0] : k.priorProgram) ?? "")} 자리 이어받음`;
+  const runLabel = (firstRun: boolean) => (firstRun ? "본방" : "재방");
+  const where = k.dispersed ? `${k.slotCount}개 시간대` : formatSlotWhen(k.dows, k.hours);
+  const runText =
+    k.dispersed ? "" : k.priorFirstRun === k.currentFirstRun ? ` ${runLabel(k.priorFirstRun)}` : ` ${runLabel(k.priorFirstRun)}→${runLabel(k.currentFirstRun)}`;
+  const retention = k.priorAvg && k.priorAvg > 0 && k.currentAvg !== null ? Math.round((k.currentAvg / k.priorAvg) * 100) : null;
+  const demo = summarizeDemos(shift.demos, sign, channelCode);
+  const up = shift.contributionDelta >= 0;
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="flex flex-wrap items-baseline gap-1">
+        <b className="font-semibold text-zinc-700">{shortProgramName(headline)}</b>
+        <span className="tabular-nums font-semibold" style={{ color: up ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR }}>
+          {up ? "▲" : "▼"}
+          {Math.abs(shift.contributionDelta).toFixed(3)}%p
+        </span>
+      </span>
+      <span className="text-[10px] text-zinc-400">
+        <span className="mr-1 rounded px-1 py-px font-medium" style={{ color: tag.color, backgroundColor: `${tag.color}14` }}>
+          {tag.label}
+        </span>
+        {relation}
+      </span>
+      <span className="text-[10px] text-zinc-400">
+        {where}
+        {runText} {k.priorAvg !== null ? formatRating(k.priorAvg, channelCode) : "—"} → {k.currentAvg !== null ? formatRating(k.currentAvg, channelCode) : "—"}
+        {retention !== null && (sign < 0 ? ` (유지 ${retention}%)` : ` (전월의 ${retention}%)`)}
+      </span>
+      {demo.lost.length > 0 && (
+        <span className="text-[10px]" style={{ color: MONTHLY_DOWN_COLOR }}>
+          {sign < 0 ? "이탈" : "감소"} {demo.lost.join("·")}
+        </span>
+      )}
+      {demo.kept.length > 0 && (
+        <span className="text-[10px]" style={{ color: sign < 0 ? MONTHLY_FLAT_COLOR : MONTHLY_UP_COLOR }}>
+          {sign < 0 ? "유지" : "증가"} {demo.kept.join("·")}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // classifyDeclineCause/monthlyDriverCauseLabel(등락 원인 항등 분해 판정)은 src/lib/causeClassifier.ts로
 // 이동(2026-09-18, 로직 무변경) — Page 2 WHY? 진단에서도 재사용하기 위함. 위에서 import한
 // 함수를 그대로 호출한다.
@@ -2304,18 +2412,37 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
                       실제 변화량과 일치하는 값이라, 이 숫자만으로 "이 프로그램이 채널 수치를
                       얼마나 움직였는가"가 검증 가능하게 읽힌다. 그 아래 줄에 실제 이유(편성량
                       변화인지 성과 변화인지)와 전월 동시간대 대비 성적을 함께 붙인다. */}
-                  <td className="py-1.5 pl-3 text-zinc-500">
-                    <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta >= 0)} channelCode={c.channelCode} />
-                  </td>
-                  <td className="py-1.5 pl-3 text-zinc-500">
-                    <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta < 0)} channelCode={c.channelCode} />
-                  </td>
-                  <td className="py-1.5 pl-3 text-zinc-500">
-                    <MonthlyDriverCell driver={c.growthDriver} channelCode={c.channelCode} />
-                  </td>
-                  <td className="py-1.5 pl-3 text-zinc-500">
-                    <MonthlyDriverCell driver={c.weaknessDriver} channelCode={c.channelCode} />
-                  </td>
+                  {c.lineup ? (
+                    <>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <LineupShiftCell shift={c.lineup.primeUp} sign={1} channelCode={c.channelCode} />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <LineupShiftCell shift={c.lineup.primeDown} sign={-1} channelCode={c.channelCode} />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <LineupShiftCell shift={c.lineup.rise} sign={1} channelCode={c.channelCode} />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <LineupShiftCell shift={c.lineup.decline} sign={-1} channelCode={c.channelCode} />
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta >= 0)} channelCode={c.channelCode} />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta < 0)} channelCode={c.channelCode} />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <MonthlyDriverCell driver={c.growthDriver} channelCode={c.channelCode} />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <MonthlyDriverCell driver={c.weaknessDriver} channelCode={c.channelCode} />
+                      </td>
+                    </>
+                  )}
                 </tr>
               );
             })}
@@ -6116,6 +6243,9 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 )}
                 {/* 사용자 지시(2026-10-06): "오늘의 시청률" 아랫줄에 해당일 채널 순위 1~20위 안의 상위 프로그램 9개(수2049, 괄호 안 가구)를 3단으로 */}
                 <ChannelStatusCard channels={byCode} narrativeSignals={data.narrativeSignals} kpiRows={kpiGroups.flatMap((g) => g.rows)} aiByCode={aiByCode} viewTabs={<HomeViewTabs view={view} onChange={goView} />} ratingsHref={`/ratings?tab=daily&date=${data.asOfDate}`} asOfDate={data.asOfDate} footer={<MarketTopPrograms date={data.asOfDate} />} />
+
+                {/* 사용자 지시(2026-11-02): 오늘만 특별히 연간 목표 대비 누적 달성·초과·미달 — 서버가 누적 파일 기준일이 조회일과 같을 때만 내려준다. */}
+                {data.ytdGoalBriefing && <YtdGoalCard briefing={data.ytdGoalBriefing} themeColorByCode={themeByCode} />}
 
                 {/* 사용자 지시(2026-08-26): 월요일엔 주말 리포트(토·일) — 일간 보기의 변화 근거에 붙인다. */}
                 {data.weekendReport && <WeekendReportCard weekendReport={data.weekendReport} byCode={byCode} />}

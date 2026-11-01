@@ -36,6 +36,8 @@ import type { RankSlide } from "@/lib/rankSlide";
 import { createStageTimer } from "@/lib/perf/serverTiming";
 import { buildMetricContext, dataSnapshotId } from "@/lib/metrics";
 import { selectRepresentativeCompetitors } from "@/lib/broadcastTime/overlap";
+import { loadLineupShifts, type LineupShiftResult } from "@/lib/lineupHandoff";
+import { buildYtdGoalBriefing, type YtdGoalBriefing } from "@/lib/ytdGoalBriefing";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 
@@ -1961,6 +1963,7 @@ export async function GET(request: Request) {
       growthDriver: MonthlyDriver | null;
       weaknessDriver: MonthlyDriver | null;
       primeMovers: MonthlyPrimeMover[];
+      lineup: LineupShiftResult | null;
     }[];
     // 사용자 지시(2026-09-03): 사내 월간 추이 자료(장르별·오리지널 프로그램별) — 참고 자료 전용.
     referenceTrends: {
@@ -2021,7 +2024,25 @@ export async function GET(request: Request) {
         hasPriorMonth && priorMonthStart
           ? await computeChannelPeriodDrivers(code, ch, monthStart, asOfDate, priorMonthStart, priorMonthEnd, MIN_MONTHLY_AIR_COUNT)
           : { growthDriver: null, weaknessDriver: null, primeMovers: [] };
-      return { channelCode: code, targetLabel, months, rankChange, ratingChangePct, growthDriver, weaknessDriver, primeMovers };
+      // 사용자 지시(2026-11-02): 상승 견인·하락 요인·프라임 등락을 "자리 이어받기" 기준으로 다시 본다 —
+      // 본방을 끝낸 프로그램 자체가 아니라 그 자리를 이어받은 후속작의 성과, 그리고 어떤 성·연령층이 빠졌는지.
+      // 실패해도 월간 리뷰 전체를 막지 않고 기존 프로그램 기여도 표시로 남는다(lineup=null).
+      let lineup: LineupShiftResult | null = null;
+      if (hasPriorMonth && code !== "SKYUHD" && ch.primary_target) {
+        try {
+          lineup = await loadLineupShifts({
+            channelId: ch.id,
+            kpiLabel: resolveProgramLevelTargetLabel(ch.primary_target),
+            dateFrom: monthStart,
+            dateTo: asOfDate,
+            priorDateFrom: priorMonthStart,
+            priorDateTo: priorMonthEnd,
+          });
+        } catch (e) {
+          console.error("[monthlyReview] lineup", code, e);
+        }
+      }
+      return { channelCode: code, targetLabel, months, rankChange, ratingChangePct, growthDriver, weaknessDriver, primeMovers, lineup };
     });
 
     const resolvedMonthlyChannels = monthlyChannels.filter((c): c is NonNullable<typeof c> => c !== null);
@@ -2284,6 +2305,38 @@ export async function GET(request: Request) {
     buildMetricContext({ channelCode: "ALL", targetLabel: "(채널별 KPI 타깃)", metric: "rating", grain: "channel_daily", period: { from: asOfDate, to: asOfDate, kind: "day", label: asOfDate }, aggregation: "single_day", knowledgeCutoff: latestAvailableDate })
   );
 
+  // 사용자 지시(2026-11-02): 오늘만 특별히 연간 목표 대비 누적 달성 여부를 브리핑에 싣는다. 누적 순위 스냅샷의
+  // 끝 날짜가 조회 기준일과 같은 날에만 채워져, 다음 누적 파일이 올라오기 전까지는 자동으로 사라진다.
+  let ytdGoalBriefing: YtdGoalBriefing | null = null;
+  try {
+    const snapshotRange = summaries.find((s) => s.ytdRankSource === "market_snapshot")?.ytdRankDateRange ?? null;
+    if (snapshotRange && snapshotRange.to === asOfDate) {
+      const skyuhd = summaries.find((s) => s.code === "SKYUHD");
+      const peerRes = skyuhd?.primaryTarget
+        ? await supabase.rpc("get_channel_market_ytd_competitor_snapshot", { p_channel_code: "SKYUHD", p_target_label: resolveMarketYtdTargetLabel(skyuhd.primaryTarget) })
+        : null;
+      const peers = ((peerRes?.data ?? []) as { channel_name: string; rating: number | null; is_self: boolean }[])
+        .filter((p) => p.rating !== null)
+        .map((p) => ({ channelName: p.channel_name, rating: p.rating as number, isSelf: p.is_self }));
+      ytdGoalBriefing = buildYtdGoalBriefing(
+        summaries.map((s) => ({
+          code: s.code,
+          name: s.name,
+          targetRating: s.targetRating,
+          targetRank: s.targetRank,
+          ytdRating: s.ytdAvgRating,
+          ytdRank: s.ytdAvgRank,
+          fromMarketSnapshot: s.ytdRankSource === "market_snapshot",
+          targetLabel: s.primaryTarget.includes("2049") ? "수도권 2049" : "전국 유료가구",
+        })),
+        peers,
+        snapshotRange
+      );
+    }
+  } catch (e) {
+    console.error("[ytdGoalBriefing]", e);
+  }
+
   timer.mark("weekend_monthly_weekly_news_misc");
   return NextResponse.json({
     ok: true,
@@ -2304,5 +2357,6 @@ export async function GET(request: Request) {
     monthlyReview,
     weeklyReview,
     rankSlides,
+    ytdGoalBriefing,
   }, { headers: { "Server-Timing": timer.header() } });
 }
