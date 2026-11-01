@@ -49,13 +49,17 @@ export function parseMarketYtdRankWorkbook(buffer: Buffer): MarketYtdRankRow[] {
   // 헤더 행 — "OO시청률"로 끝나는 셀을 찾아 각 블록의 위치(순위=j-2, 채널=j-1, 시청률=j)를 정한다.
   let headerRowIdx = -1;
   const blocks: { targetLabel: string; rankCol: number; nameCol: number; ratingCol: number }[] = [];
-  for (let r = 0; r < Math.min(rows.length, 6); r++) {
+  // 2026-11-02: 닐슨 원본 내보내기("누적시청률.xlsx")는 조건 설명이 길어 헤더가 20번째 행 부근이라
+  // 탐색 범위를 6→30행으로 넓혔고, 타깃 표기가 "2049"/"가구"라 기존 라벨("수도권2049"/"유료방송가구")로 맞춘다.
+  for (let r = 0; r < Math.min(rows.length, 30); r++) {
     const row = rows[r];
     const found: typeof blocks = [];
     for (let j = 0; j < row.length; j++) {
       const s = cellStr(row[j]);
       if (s.endsWith("시청률") && s.length > "시청률".length) {
-        found.push({ targetLabel: s.replace(/시청률\s*$/, "").trim(), rankCol: j - 2, nameCol: j - 1, ratingCol: j });
+        const raw = s.replace(/시청률\s*$/, "").trim();
+        const targetLabel = raw === "2049" ? "수도권2049" : raw === "가구" ? "유료방송가구" : raw;
+        found.push({ targetLabel, rankCol: j - 2, nameCol: j - 1, ratingCol: j });
       }
     }
     if (found.length > 0) {
