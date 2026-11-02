@@ -14,7 +14,7 @@ import { matchPlanRow, normalizePlanRows, type PlanRow, type PlanRowRaw } from "
 import { addDays } from "@/lib/idealSchedule/time";
 import { describeLearned, hhmm, inferRuns, type LearnedSlot } from "@/lib/broadcastPattern/inferRuns";
 import { loadRunPatterns } from "@/lib/broadcastPattern/load";
-import { FOLLOW_RULES, followRunOf, loadFollowSources, type SourceAir } from "@/lib/broadcastPattern/followRule";
+import { FOLLOW_RULES, followRunsOf, loadFollowSources, type SourceAir } from "@/lib/broadcastPattern/followRule";
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
 import { loadOriginalCompare } from "./originalCompare";
 import {
@@ -182,6 +182,8 @@ export interface OwnAir {
   code: string;
   date: string;
   minute: number;
+  /** 자사 방영의 본방 여부(true=본방, null=미확인) — 경쟁채널 방영이 자사 본방과 같은 시각이면 그 경쟁채널 방영도 본방으로 본다 */
+  firstRun: boolean | null;
 }
 const minuteOfTime = (t: string | null): number | null => {
   const m = /^(\d{1,2}):(\d{2})/.exec(t ?? "");
@@ -233,10 +235,12 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
     const k = `${name}|${r.target_label}|${r.broadcast_date}|${r.start_time}`;
     if (seen.has(k)) continue;
     seen.add(k);
-    const firstRun = /<본>/.test(pname) ? true : /<재>/.test(pname) ? false : null;
-    if (!matchesAiringFilter(firstRun, airing)) continue;
+    const tagged = /<본>/.test(pname) ? true : /<재>/.test(pname) ? false : null;
     const mi = minuteOfTime((r.start_time as string | null) ?? null);
     const hits = mi === null ? [] : ownAirs.filter((o) => o.date === String(r.broadcast_date) && Math.abs(o.minute - mi) <= SIMULCAST_TOLERANCE_MIN);
+    // 사용자 지시(2026-10-28, 결이 다른 전쟁사): 표시 없는 MBN 방영이 ENA 본방과 비슷한 시각(15분 이내)이면 MBN 본방으로 본다. 표시(<본>·<재>)가 있으면 그대로 둔다.
+    const firstRun = tagged ?? (hits.some((h) => h.firstRun === true) ? true : null);
+    if (!matchesAiringFilter(firstRun, airing)) continue;
     const sim = firstRun !== false && hits.length > 0; // 동시방송은 생방송끼리 — 재방(<재>)은 우연히 시각이 겹쳐도 제외
     if (sim) {
       const cnt = simWith.get(name) ?? new Map<string, number>();
@@ -561,15 +565,19 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     if (followRule && workRows.some((r) => r.firstRun === null)) {
       const sources = followSources.get(ch.code) ?? [];
       let n = 0;
+      const open = workRows.filter((r) => r.firstRun === null);
+      const openRuns = followRunsOf(open, sources, followRule);
+      const runs = new Map(open.map((r, i) => [r, openRuns[i]] as const));
       workRows = workRows.map((r) => {
-        if (r.firstRun !== null) return r;
-        const run = followRunOf(r.date, r.startTime, sources, followRule.withinDays);
-        if (run === null) return r;
+        const run = runs.get(r);
+        if (run === undefined || run === null) return r;
         n++;
         return { ...r, firstRun: run };
       });
       if (n > 0) {
-        const msg = `${followRule.label}: ${followRule.sourceChannel} 본방 후 ${followRule.withinDays}일 이내에 시작한 방영은 본방, 그 밖은 재방으로 봤습니다(${n}건).`;
+        const msg = followRule.mode === "first"
+          ? `${followRule.label}: ${followRule.sourceChannel} 본방 뒤 처음 시작한 방영만 본방, 그 밖은 재방으로 봤습니다(${n}건).`
+          : `${followRule.label}: ${followRule.sourceChannel} 본방 후 ${followRule.withinDays}일 이내에 시작한 방영은 본방, 그 밖은 재방으로 봤습니다(${n}건).`;
         const at = notes.findIndex((x) => x.startsWith(`${followRule.label}:`));
         if (at >= 0) notes[at] = msg;
         else notes.push(msg);
@@ -605,7 +613,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     }
 
     // 동시방송 판정에 쓰는 자사 방영(채널당 한 타깃만, 재방 확인분은 제외)
-    if (collect) for (const r of workRows.filter((w) => w.firstRun !== false)) { const m = minuteOfTime(r.startTime); if (m !== null) ownAirs.push({ code: ch.code, date: r.date, minute: m }); }
+    if (collect) for (const r of workRows.filter((w) => w.firstRun !== false)) { const m = minuteOfTime(r.startTime); if (m !== null) ownAirs.push({ code: ch.code, date: r.date, minute: m, firstRun: r.firstRun }); }
 
     if (workRows.length === 0) {
       // 기록 없음 ≠ 미방영. 그 채널 프로그램 단위 자료가 아예 없는 기간이면 그렇게 표시한다(ENA Story 일부 기간 등).

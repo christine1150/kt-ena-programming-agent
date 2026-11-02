@@ -9,7 +9,7 @@ import { calendarOf, describeLearned, inferRuns, type RunPattern } from "../src/
 import { naverPattern, registeredPattern } from "../src/lib/broadcastPattern/load";
 import { lookupProgram, type Searcher } from "../src/lib/broadcastPattern/naverFetch";
 import { patternRunsForDay } from "../src/lib/broadcastPattern/dayFill";
-import { FOLLOW_RULES, followRuleFor, followRunOf } from "../src/lib/broadcastPattern/followRule";
+import { followRuleFor, followRunOf, followRunsOf } from "../src/lib/broadcastPattern/followRule";
 import { competitorChannelKey, competitorRuns, competitorSearchTitle, runTagOf } from "../src/lib/broadcastPattern/competitorRuns";
 
 let passed = 0;
@@ -213,8 +213,23 @@ check("경쟁: 채널 표기 맞춤", competitorChannelKey("TV CHOSUN") === comp
   check("후행 규칙: 원 방송 기록이 없거나 첫 원 방송보다 앞선 방영은 모름", followRunOf("2026-10-18", "06:45:00", [], 2) === null && followRunOf("2026-10-10", "09:00:00", src, 2) === null);
   check(
     "후행 규칙: ENA Drama의 지구마불 세계여행 4에만 적용(다른 시즌·채널은 해당 없음)",
-    followRuleFor("ENA_DRAMA", ["지구마불세계여행4"]) !== null && followRuleFor("ENA_DRAMA", ["지구마불세계여행3"]) === null && followRuleFor("ENA_PLAY", ["지구마불세계여행4"]) === null && FOLLOW_RULES.length === 1
+    followRuleFor("ENA_DRAMA", ["지구마불세계여행4"]) !== null && followRuleFor("ENA_DRAMA", ["지구마불세계여행3"]) === null && followRuleFor("ENA_PLAY", ["지구마불세계여행4"]) === null && followRuleFor("ENA_DRAMA", ["지구마불세계여행4"])?.mode === undefined
   );
+  // 결이 다른 전쟁사(ENA Drama): ENA 본방 뒤 처음 시작한 방영 한 건만 본방(실제 자료 모양: ENA 금 22:50, ENA Drama 3일 뒤)
+  const war = followRuleFor("ENA_DRAMA", ["결이다른전쟁사"]);
+  check("첫 방영 규칙: 결이 다른 전쟁사는 ENA Drama에만, first 모드", war?.mode === "first" && followRuleFor("ENA_PLAY", ["결이다른전쟁사"]) === null);
+  const ws = [{ date: "2026-10-23", startTime: "22:50:00" }, { date: "2026-10-30", startTime: "22:50:00" }];
+  const wr = [
+    { date: "2026-10-26", startTime: "00:25:00" },
+    { date: "2026-10-27", startTime: "08:15:00" },
+    { date: "2026-10-29", startTime: "12:15:00" },
+    { date: "2026-11-02", startTime: "08:05:00" },
+    { date: "2026-11-04", startTime: "18:40:00" },
+  ];
+  const wo = followRunsOf(wr, ws, { withinDays: 5, mode: "first" });
+  check("첫 방영 규칙: ENA 본방마다 뒤 첫 방영만 본방(2건), 나머지는 재방", JSON.stringify(wo) === JSON.stringify([true, false, false, true, false]));
+  check("첫 방영 규칙: 어느 원 방송보다 앞선 방영은 모름·원 방송 기록이 없으면 모름", followRunsOf([{ date: "2026-10-20", startTime: "10:00:00" }], ws, { withinDays: 5, mode: "first" })[0] === null && followRunsOf(wr, [], { withinDays: 5, mode: "first" }).every((x) => x === null));
+  check("첫 방영 규칙: 기간(5일)을 넘긴 방영은 재방", followRunsOf([{ date: "2026-11-05", startTime: "10:00:00" }], ws, { withinDays: 5, mode: "first" })[0] === false);
 }
 
 Promise.all([searchChecks, dayChecks]).then(() => {

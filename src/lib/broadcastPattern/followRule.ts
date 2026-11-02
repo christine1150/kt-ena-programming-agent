@@ -20,10 +20,14 @@ export interface FollowRule {
   withinDays: number;
   /** 화면 안내 문구용 */
   label: string;
+  /** "first" — 원 방송 본방마다 그 뒤 withinDays일 이내 첫 방영 한 건만 본방(나머지는 재방). 없으면 기간 안 모든 방영이 본방 */
+  mode?: "first";
 }
 
 export const FOLLOW_RULES: FollowRule[] = [
   { programKeys: [normalizeProgramKey("지구마불 세계여행 4")], followerChannel: "ENA_DRAMA", sourceChannel: "ENA", withinDays: 2, label: "ENA Drama '지구마불 세계여행 4'" },
+  // 사용자 지시(2026-11-02): ENA Drama는 ENA 본방 뒤 처음 방송되는 방영이 본방. 자료상 간격이 하루를 넘어(ENA 금 22:50 → ENA Drama 3일 뒤) 기간은 넉넉히 두고 '첫 방영'만 본방으로 센다.
+  { programKeys: [normalizeProgramKey("결이 다른 전쟁사")], followerChannel: "ENA_DRAMA", sourceChannel: "ENA", withinDays: 5, label: "ENA Drama '결이 다른 전쟁사'", mode: "first" },
 ];
 
 /** 이 채널·작품에 적용되는 규칙(없으면 null). memberKeys는 작품 묶음의 정규화 키들. */
@@ -61,6 +65,33 @@ export function followRunOf(date: string, startTime: string | null, sources: Sou
     if (m !== null && sm !== null && m > sm) return true;
   }
   return day < earliest ? null : false;
+}
+
+/**
+ * 규칙에 따른 후행 채널 방영들의 본방 여부(rows와 같은 순서). mode가 "first"가 아니면 followRunOf와 같다.
+ * "first" — 원 방송 본방 시각 이후 withinDays일 이내 방영 중 가장 이른 한 건만 본방, 같은 구간의 나머지는 재방.
+ * 어느 원 방송 본방보다도 앞선 방영은 판정할 수 없어 null.
+ */
+export function followRunsOf(rows: { date: string; startTime: string | null }[], sources: SourceAir[], rule: Pick<FollowRule, "withinDays" | "mode">): (boolean | null)[] {
+  if (rule.mode !== "first") return rows.map((r) => followRunOf(r.date, r.startTime, sources, rule.withinDays));
+  if (sources.length === 0) return rows.map(() => null);
+  const at = (date: string, t: string | null) => dayNumber(date) * 1440 + (minutesOf(t) ?? 0);
+  const srcAt = sources.map((s) => at(s.date, s.startTime)).sort((a, b) => a - b);
+  const out: (boolean | null)[] = rows.map(() => null);
+  // 원 방송 본방마다 그 뒤 첫 방영 — 가장 가까운 앞선 본방에 묶는다
+  const firstOf = new Map<number, { idx: number; t: number }>();
+  rows.forEach((r, i) => {
+    const t = at(r.date, r.startTime);
+    let src = -1;
+    for (const s of srcAt) if (s < t) src = s;
+    if (src < 0) return; // 첫 원 방송보다 앞 — 판정 불가
+    if (t - src > rule.withinDays * 1440) { out[i] = false; return; }
+    out[i] = false;
+    const cur = firstOf.get(src);
+    if (!cur || t < cur.t) firstOf.set(src, { idx: i, t });
+  });
+  for (const { idx } of firstOf.values()) out[idx] = true;
+  return out;
 }
 
 /** 원 방송 채널 프로그램(programIds)의 본방(is_first_run=true) 방송일·시각 — from의 withinDays일 전부터 to까지 */
