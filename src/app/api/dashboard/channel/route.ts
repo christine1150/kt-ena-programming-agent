@@ -2,6 +2,7 @@
 // 계산은 전부 SQL 함수가 하고, 여기서는 결과를 모아서 돌려주기만 한다.
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { BOUNDARY_NEIGHBOR_OR, mergeSplitForDay, neighborDates } from "@/lib/broadcastTime/boundarySplit";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL, resolveMarketYtdTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
 import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence, buildRerunCauseAndStrategy } from "@/lib/enaOriginalHighlight";
@@ -1153,29 +1154,15 @@ export async function GET(request: Request) {
       // 새벽 시간대 프로그램만 반복 노출되는 경향이 있었다. 그날 전체 후보를 가져와 (시청률
       // 오름차순 → 동률이면 daypart 우선순위) 순으로 정렬한 뒤 상위 3개만 취한다 — TOP은
       // 최댓값 동률이 드물고 이 요청도 WEAK만 지목해 그대로 둔다.
-      const [{ data: top3Rows }, { data: weakAllRows }] = await Promise.all([
-        supabase
-          .from("ratings")
-          .select("rating, start_time, programs(canonical_name)")
-          .eq("channel_id", channel.id)
-          .eq("target_id", targetRow.id)
-          .in("source_type", ["nielsen_daily", "skyuhd"])
-          .eq("broadcast_date", dateTo)
-          .not("program_id", "is", null)
-          .not("rating", "is", null)
-          .order("rating", { ascending: false })
-          .limit(3),
-        supabase
-          .from("ratings")
-          .select("rating, start_time, programs(canonical_name)")
-          .eq("channel_id", channel.id)
-          .eq("target_id", targetRow.id)
-          .in("source_type", ["nielsen_daily", "skyuhd"])
-          .eq("broadcast_date", dateTo)
-          .not("program_id", "is", null)
-          .not("rating", "is", null)
-          .order("rating", { ascending: true }),
+      // 26:00 경계에서 닐슨이 둘로 나눈 한 방영은 한 방영으로 합친 뒤 TOP·WEAK를 고른다(2026-11-02, broadcastTime/boundarySplit.ts)
+      const dayCols = "rating, program_id, broadcast_date, start_time, end_time, programs(canonical_name)";
+      const [{ data: dayRows }, { data: nbRows }] = await Promise.all([
+        supabase.from("ratings").select(dayCols).eq("channel_id", channel.id).eq("target_id", targetRow.id).in("source_type", ["nielsen_daily", "skyuhd"]).eq("broadcast_date", dateTo).not("program_id", "is", null).not("rating", "is", null),
+        supabase.from("ratings").select(dayCols).eq("channel_id", channel.id).eq("target_id", targetRow.id).eq("source_type", "nielsen_daily").in("broadcast_date", neighborDates(dateTo)).not("program_id", "is", null).not("rating", "is", null).or(BOUNDARY_NEIGHBOR_OR),
       ]);
+      const merged = mergeSplitForDay(dateTo, (dayRows ?? []) as Record<string, unknown>[], (nbRows ?? []) as Record<string, unknown>[]) as unknown as { rating: number; start_time: string; programs: { canonical_name: string } | { canonical_name: string }[] | null }[];
+      const top3Rows = [...merged].sort((a, b) => Number(b.rating) - Number(a.rating)).slice(0, 3);
+      const weakAllRows = [...merged].sort((a, b) => Number(a.rating) - Number(b.rating));
       // 사용자 지시(2026-09-02): "TOP/WEAK 프로그램을 당일거 보여줄 경우 편성 시작 시간도 함께
       // 표시" — 같은 프로그램명이 하루에 여러 번(재방 등) 방영되면 시간 없이는 어느 방영분인지
       // 구분이 안 됐다(예: 나는SOLO가 본방·재방으로 두 번 상위권에 오르는 경우).

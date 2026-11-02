@@ -115,7 +115,28 @@ export function mergeBoundarySplits<T>(rows: T[], view: (r: T) => SplitView, mer
   return out;
 }
 
-const numOrNull = (x: unknown): number | null => (x === null || x === undefined || x === "" ? null : Number.isFinite(Number(x)) ? Number(x) : null);
+/**
+ * 하루 목록(홈 상위 프로그램·채널 하루 상세 등)용 이웃 행 조건 — 앞뒤 방송일 중 분할 조각이 될 수 있는 행만(02:00:00 시작 또는 01:59~02:00 종료).
+ * supabase `.in("broadcast_date", [전날, 다음날]).or(BOUNDARY_NEIGHBOR_OR)`로 읽어 mergeSplitForDay에 넘긴다.
+ */
+export const BOUNDARY_NEIGHBOR_OR = "start_time.eq.02:00:00,and(end_time.gte.01:59:00,end_time.lte.02:00:00)";
+
+/** 하루 목록의 앞뒤 방송일 */
+export function neighborDates(day: string): [string, string] {
+  const t = Date.parse(`${day}T00:00:00Z`);
+  return [new Date(t - DAY * 1000).toISOString().slice(0, 10), new Date(t + DAY * 1000).toISOString().slice(0, 10)];
+}
+
+/**
+ * 하루 목록 합치기 — 그날 01:59에 끝난 앞 조각은 다음 날 02:00 뒤 조각과 합쳐 그날 방영으로 남고,
+ * 그날 02:00에 시작한 뒤 조각은 전날 방영에 합쳐져 그날 목록에서 빠진다. 다음 날 자료가 아직 없으면 앞 조각 값 그대로.
+ * 행에는 program_id·broadcast_date·start_time·end_time(여러 채널·타깃이면 channel_id·target_id)이 있어야 한다.
+ */
+export function mergeSplitForDay<T extends Record<string, unknown>>(day: string, dayRows: T[], neighbors: T[]): T[] {
+  return mergeSplitRatingRows([...neighbors, ...dayRows]).filter((r) => r.broadcast_date === day);
+}
+
+const numOrNull =(x: unknown): number | null => (x === null || x === undefined || x === "" ? null : Number.isFinite(Number(x)) ? Number(x) : null);
 
 /**
  * ratings 원본 행(supabase 응답 그대로) 합치기 — 같은 프로그램·타깃·채널의 분할 짝을 한 행으로.
@@ -141,6 +162,12 @@ export function mergeSplitRatingRows<T extends Record<string, unknown>>(rows: T[
         const a = numOrNull(t.reach);
         const b = numOrNull(h.reach);
         out.reach = a === null ? b : b === null ? a : Math.max(a, b);
+      }
+      // 시청자 1인당 시청시간(초)은 두 조각을 이어 본 시간이므로 더한다
+      if ("time_spent_seconds" in t) {
+        const a = numOrNull(t.time_spent_seconds);
+        const b = numOrNull(h.time_spent_seconds);
+        out.time_spent_seconds = a === null ? b : b === null ? a : a + b;
       }
       if ("is_first_run" in t) out.is_first_run = t.is_first_run ?? h.is_first_run ?? null;
       if ("episode_number" in t) out.episode_number = t.episode_number ?? h.episode_number ?? null;

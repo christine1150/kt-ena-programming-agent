@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { supabase } from "@/lib/supabase";
+import { BOUNDARY_NEIGHBOR_OR, mergeSplitForDay, neighborDates } from "@/lib/broadcastTime/boundarySplit";
 import { CHANNEL_RANK_LIMIT, classifyTargetLabel, pickTopPrograms, type ProgramGenreFamily, type ProgramSample } from "@/lib/dashboard/marketTopPrograms";
 import { loadGenreMap } from "@/lib/idealSchedule/genreStore";
 import { resolveGenre } from "@/lib/idealSchedule/genreRules";
@@ -82,17 +83,14 @@ export async function GET(request: Request) {
       const targetIds = (tgtRows ?? []).map((t) => t.id as string);
       const kindByTarget = new Map((tgtRows ?? []).map((t) => [t.id as string, classifyTargetLabel(t.label as string)]));
       if (targetIds.length > 0) {
-        const { data: progRows, error: e3 } = await supabase
-          .from("ratings")
-          .select("channel_id, target_id, rating, start_time, is_first_run, programs(canonical_name)")
-          .in("channel_id", ownIds)
-          .in("target_id", targetIds)
-          .in("source_type", ["nielsen_daily", "skyuhd"])
-          .eq("broadcast_date", date)
-          .not("program_id", "is", null)
-          .not("rating", "is", null);
+        const cols = "channel_id, target_id, program_id, broadcast_date, rating, start_time, end_time, is_first_run, programs(canonical_name)";
+        const [{ data: progRows, error: e3 }, { data: nbRows }] = await Promise.all([
+          supabase.from("ratings").select(cols).in("channel_id", ownIds).in("target_id", targetIds).in("source_type", ["nielsen_daily", "skyuhd"]).eq("broadcast_date", date).not("program_id", "is", null).not("rating", "is", null),
+          // 26:00 경계 분할 조각(앞뒤 방송일) — 한 방영으로 합치는 데만 쓴다(broadcastTime/boundarySplit.ts)
+          supabase.from("ratings").select(cols).in("channel_id", ownIds).in("target_id", targetIds).eq("source_type", "nielsen_daily").in("broadcast_date", neighborDates(date)).not("program_id", "is", null).not("rating", "is", null).or(BOUNDARY_NEIGHBOR_OR),
+        ]);
         if (e3) throw new Error(e3.message);
-        for (const r of (progRows ?? []) as unknown as { channel_id: string; target_id: string; rating: number; start_time: string | null; is_first_run: boolean | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
+        for (const r of mergeSplitForDay(date, (progRows ?? []) as Record<string, unknown>[], (nbRows ?? []) as Record<string, unknown>[]) as unknown as { channel_id: string; target_id: string; rating: number; start_time: string | null; is_first_run: boolean | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
           const prog = Array.isArray(r.programs) ? r.programs[0] : r.programs;
           const name = prog?.canonical_name;
           const channelName = ownNames.get(r.channel_id);

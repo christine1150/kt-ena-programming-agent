@@ -19,6 +19,7 @@
 // 수치는 전부 DB 원본 방영 행(닐슨 일일)에서 결정적으로 계산한다 — LLM·화면은 계산하지 않는다.
 // (원본 행을 서버 순수 함수로 읽는 방식은 콘텐츠 적합도(src/lib/contentFit)와 같은 예외 패턴.)
 import { supabase } from "@/lib/supabase";
+import { mergeSplitRatingRows } from "@/lib/broadcastTime/boundarySplit";
 import { isWeekendIsoDow, PRIME } from "@/lib/audienceReport/primeTime";
 
 export interface HandoffAiring {
@@ -423,7 +424,8 @@ export async function loadLineupShifts(params: {
   };
   const prior: HandoffAiring[] = [];
   const current: HandoffAiring[] = [];
-  for (const r of rows) {
+  // 26:00 경계에서 닐슨이 둘로 나눈 한 방영은 한 방영으로(broadcastTime/boundarySplit.ts)
+  for (const r of mergeSplitRatingRows(rows)) {
     const a = toAiring(r);
     if (!a) continue;
     if (a.date >= dateFrom && a.date <= dateTo) current.push(a);
@@ -492,7 +494,7 @@ async function loadBaseline(p: {
   if (ranges.length === 0 || p.priorAvg === null || p.currentAvg === null) return null;
   const from = ranges[ranges.length - 1].from;
   const to = ranges[0].to;
-  const rows: HandoffAiring[] = [];
+  const raw: RawRating[] = [];
   for (let off = 0; ; off += PAGE) {
     const { data, error } = await supabase
       .from("ratings")
@@ -507,12 +509,10 @@ async function loadBaseline(p: {
       .range(off, off + PAGE - 1);
     if (error) throw new Error(error.message);
     const page = (data ?? []) as RawRating[];
-    for (const r of page) {
-      const a = p.toAiring(r);
-      if (a) rows.push(a);
-    }
+    raw.push(...page);
     if (page.length < PAGE) break;
   }
+  const rows = mergeSplitRatingRows(raw).flatMap((r) => p.toAiring(r) ?? []);
   const avgs = ranges
     .map((r) => weightedAvg(rows.filter((a) => a.date >= r.from && a.date <= r.to)))
     .filter((v): v is number => v !== null);

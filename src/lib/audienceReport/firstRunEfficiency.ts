@@ -7,6 +7,7 @@
 // 달라진 점: 닐슨 `<재>` 표시가 있는 방영은 등록 시각과 겹쳐도 본방으로 세지 않는다(닐슨 표시가 최우선).
 // 용어(사용자 정의 2026-10-23): 본방 = 각 채널에서의 첫 방송, 초방 = 본방 중 원 방송사의 첫 방송. 본방 중 초방 수를 함께 센다.
 import { supabase } from "@/lib/supabase";
+import { mergeSplitRatingRows } from "@/lib/broadcastTime/boundarySplit";
 import { fillChannelRuns, type RunSource } from "@/lib/broadcastPattern/channelFill";
 import type { FirstRunEfficiencyRow } from "./dataCollector";
 
@@ -46,6 +47,7 @@ export async function computeFirstRunEfficiency(args: { channelCode: string; pro
   ]);
   if (!ch?.id || !tg?.id) return [];
   const rows: Row[] = [];
+  const fetched: Record<string, unknown>[] = [];
   for (let page = 0; page < 40; page++) {
     const { data, error } = await supabase
       .from("ratings")
@@ -64,23 +66,25 @@ export async function computeFirstRunEfficiency(args: { channelCode: string; pro
       .order("id", { ascending: true })
       .range(page * 1000, page * 1000 + 999);
     if (error) return [];
-    for (const r of (data ?? []) as unknown as { program_id: string; broadcast_date: string; start_time: string; end_time: string; rating: number | string; reach: number | string | null; time_spent_share: number | string | null; is_first_run: boolean | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
-      const name = Array.isArray(r.programs) ? r.programs[0]?.canonical_name : r.programs?.canonical_name;
-      if (!name) continue;
-      const diff = toMin(r.end_time) - toMin(r.start_time);
-      rows.push({
-        programId: r.program_id,
-        name,
-        date: r.broadcast_date,
-        startTime: r.start_time,
-        dur: diff > 0 ? diff : diff + 1440,
-        rating: Number(r.rating),
-        reach: r.reach === null ? null : Number(r.reach),
-        tss: r.time_spent_share === null ? null : Number(r.time_spent_share),
-        firstRun: r.is_first_run,
-      });
-    }
+    fetched.push(...((data ?? []) as Record<string, unknown>[]));
     if ((data ?? []).length < 1000) break;
+  }
+  // 26:00 경계에서 닐슨이 둘로 나눈 한 방영은 한 방영으로(broadcastTime/boundarySplit.ts) — 길이도 합친 방영 기준
+  for (const r of mergeSplitRatingRows(fetched) as unknown as { program_id: string; broadcast_date: string; start_time: string; end_time: string; rating: number | string; reach: number | string | null; time_spent_share: number | string | null; is_first_run: boolean | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
+    const name = Array.isArray(r.programs) ? r.programs[0]?.canonical_name : r.programs?.canonical_name;
+    if (!name) continue;
+    const diff = toMin(r.end_time) - toMin(r.start_time);
+    rows.push({
+      programId: r.program_id,
+      name,
+      date: r.broadcast_date,
+      startTime: r.start_time,
+      dur: diff > 0 ? diff : diff + 1440,
+      rating: Number(r.rating),
+      reach: r.reach === null ? null : Number(r.reach),
+      tss: r.time_spent_share === null ? null : Number(r.time_spent_share),
+      firstRun: r.is_first_run,
+    });
   }
   if (rows.length === 0) return [];
 

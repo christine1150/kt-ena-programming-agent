@@ -5,6 +5,7 @@
 // (CLAUDE.md 원칙: Claude/서버 코드가 암산하지 않음).
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { BOUNDARY_NEIGHBOR_OR, mergeSplitForDay, neighborDates } from "@/lib/broadcastTime/boundarySplit";
 import { getCurrentSession } from "@/lib/adminAuth";
 import {
   resolveProgramLevelTargetLabel,
@@ -1517,20 +1518,17 @@ export async function GET(request: Request) {
     const programTargetLabel = resolveProgramLevelTargetLabel(ch.primary_target);
     const { data: targetRow } = await supabase.from("targets").select("id").eq("label", programTargetLabel).maybeSingle();
     if (!targetRow) return [] as TodayTopProgramRow[];
-    const { data } = await supabase
-      .from("ratings")
-      .select("rating, start_time, is_first_run, episode_number, episode_subtitle, program_id, programs(canonical_name)")
-      .eq("channel_id", ch.id)
-      .eq("target_id", targetRow.id)
-      .in("source_type", ["nielsen_daily", "skyuhd"])
-      .eq("broadcast_date", asOfDate)
-      .not("program_id", "is", null)
-      .not("rating", "is", null)
-      .order("rating", { ascending: false })
-      .limit(15);
+    // 26:00 경계에서 닐슨이 둘로 나눈 한 방영은 한 방영으로 합친 뒤 순위를 매긴다(2026-11-02, broadcastTime/boundarySplit.ts) —
+    // 그날 행 전체와 앞뒤 방송일의 분할 조각을 읽어 합치고, 그날 방영만 남긴다.
+    const dayCols = "rating, broadcast_date, start_time, end_time, is_first_run, episode_number, episode_subtitle, program_id, programs(canonical_name)";
+    const [{ data: dayData }, { data: nbData }] = await Promise.all([
+      supabase.from("ratings").select(dayCols).eq("channel_id", ch.id).eq("target_id", targetRow.id).in("source_type", ["nielsen_daily", "skyuhd"]).eq("broadcast_date", asOfDate).not("program_id", "is", null).not("rating", "is", null),
+      supabase.from("ratings").select(dayCols).eq("channel_id", ch.id).eq("target_id", targetRow.id).eq("source_type", "nielsen_daily").in("broadcast_date", neighborDates(asOfDate)).not("program_id", "is", null).not("rating", "is", null).or(BOUNDARY_NEIGHBOR_OR),
+    ]);
+    const data = mergeSplitForDay(asOfDate, (dayData ?? []) as Record<string, unknown>[], (nbData ?? []) as Record<string, unknown>[]).sort((a, b) => Number(b.rating) - Number(a.rating));
     // 같은 날 같은 방송(프로그램·시작 시각)이 두 행으로 적재된 경우를 방어한다 — 상위 5칸이 같은 방송으로 채워지지 않게 중복을 접고 5개만 쓴다(2026-10-16).
     const seenAiring = new Set<string>();
-    const rows = ((data ?? []) as {
+    const rows = (data as unknown as {
       rating: number;
       start_time: string;
       is_first_run: boolean | null;
@@ -1604,15 +1602,13 @@ export async function GET(request: Request) {
     if (comparisonLabel && rows.length > 0) {
       const { data: comparisonTargetRow } = await supabase.from("targets").select("id").eq("label", comparisonLabel).maybeSingle();
       if (comparisonTargetRow) {
-        const { data: comparisonRows } = await supabase
-          .from("ratings")
-          .select("rating, start_time, programs(canonical_name)")
-          .eq("channel_id", ch.id)
-          .eq("target_id", comparisonTargetRow.id)
-          .in("source_type", ["nielsen_daily", "skyuhd"])
-          .eq("broadcast_date", asOfDate)
-          .not("program_id", "is", null);
-        for (const cr of (comparisonRows ?? []) as { rating: number; start_time: string; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
+        const cmpCols = "rating, program_id, broadcast_date, start_time, end_time, programs(canonical_name)";
+        const [{ data: cmpDay }, { data: cmpNb }] = await Promise.all([
+          supabase.from("ratings").select(cmpCols).eq("channel_id", ch.id).eq("target_id", comparisonTargetRow.id).in("source_type", ["nielsen_daily", "skyuhd"]).eq("broadcast_date", asOfDate).not("program_id", "is", null),
+          supabase.from("ratings").select(cmpCols).eq("channel_id", ch.id).eq("target_id", comparisonTargetRow.id).eq("source_type", "nielsen_daily").in("broadcast_date", neighborDates(asOfDate)).not("program_id", "is", null).or(BOUNDARY_NEIGHBOR_OR),
+        ]);
+        const comparisonRows = mergeSplitForDay(asOfDate, (cmpDay ?? []) as Record<string, unknown>[], (cmpNb ?? []) as Record<string, unknown>[]);
+        for (const cr of comparisonRows as unknown as { rating: number; start_time: string; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
           const name = Array.isArray(cr.programs) ? cr.programs[0]?.canonical_name : cr.programs?.canonical_name;
           comparisonByKey.set(`${cr.start_time}__${name}`, cr.rating);
         }

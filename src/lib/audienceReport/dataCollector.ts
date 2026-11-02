@@ -3,6 +3,7 @@
 // 콘텐츠 엔진/skyUHD 교차 엔진)의 몫 — 이 파일은 새 계산을 하지 않고 이미 검증된 RPC를 그대로
 // 호출해 원본 행을 모아 반환한다(CLAUDE.md: DB가 계산, 이 계층은 조합만).
 import { supabase } from "@/lib/supabase";
+import { mergeSplitRatingRows } from "@/lib/broadcastTime/boundarySplit";
 import { resolveProgramLevelTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { groupForChannel, isSkyUhd, type AudienceGroup } from "./targetGroups";
@@ -300,7 +301,7 @@ async function collectDailyHealthInputs(
     const recentStart = offsetDateStr(MOMENTUM_RECENT_WINDOW_DAYS - 1);
     const { data: momentumRows } = await supabase
       .from("ratings")
-      .select("program_id, broadcast_date, rating")
+      .select("program_id, broadcast_date, start_time, end_time, rating")
       .eq("channel_id", channelId)
       .eq("target_id", targetRow.id)
       .in("source_type", ["nielsen_daily", "skyuhd"])
@@ -309,7 +310,8 @@ async function collectDailyHealthInputs(
       .gte("broadcast_date", fourWeekStart)
       .lte("broadcast_date", dateTo);
     const byProgram = new Map<string, { broadcast_date: string; rating: number }[]>();
-    for (const r of (momentumRows ?? []) as { program_id: string; broadcast_date: string; rating: number }[]) {
+    // 26:00 경계에서 닐슨이 둘로 나눈 한 방영은 한 방영으로(broadcastTime/boundarySplit.ts)
+    for (const r of mergeSplitRatingRows((momentumRows ?? []) as Record<string, unknown>[]) as unknown as { program_id: string; broadcast_date: string; rating: number }[]) {
       const list = byProgram.get(r.program_id) ?? [];
       list.push({ broadcast_date: r.broadcast_date, rating: r.rating });
       byProgram.set(r.program_id, list);

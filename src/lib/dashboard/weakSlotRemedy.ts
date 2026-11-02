@@ -10,6 +10,7 @@ import { loadChannelRef } from "@/lib/idealSchedule/dataSource";
 import { addDays, isoDow } from "@/lib/idealSchedule/time";
 import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { fillChannelRuns } from "@/lib/broadcastPattern/channelFill";
+import { mergeSplitRatingRows } from "@/lib/broadcastTime/boundarySplit";
 
 import { retentionLeak } from "./leadInRetention";
 import { STATUS_KO, WEAK_VERDICT_CONFIG, basisLabel, judgeWeakSlot, levelLabel, lineNote, verdictCause, weakSlotRuleFor, type VerdictBasis, type WeakVerdict } from "./weakSlotVerdict";
@@ -71,10 +72,11 @@ const slotLabel = (dow: number, hour: number, rerun: boolean) => `${DOW_KO[dow -
 async function loadAirings(channelId: string, targetId: string, asOfDate: string, lookbackDays = LOOKBACK_DAYS, maxPages = 8, pattern: { channelCode: string } | null = null): Promise<Airing[] | null> {
   const out: Airing[] = [];
   const raw: { programId: string; name: string; startTime: string; firstRun: boolean | null }[] = [];
+  const fetched: Record<string, unknown>[] = [];
   for (let page = 0; page < maxPages; page++) {
     const { data, error } = await supabase
       .from("ratings")
-      .select("broadcast_date, start_time, rating, is_first_run, program_id, programs(canonical_name)")
+      .select("broadcast_date, start_time, end_time, rating, is_first_run, program_id, programs(canonical_name)")
       .eq("channel_id", channelId)
       .eq("target_id", targetId)
       .eq("source_type", "nielsen_daily")
@@ -86,13 +88,15 @@ async function loadAirings(channelId: string, targetId: string, asOfDate: string
       .order("start_time", { ascending: true })
       .range(page * 1000, page * 1000 + 999);
     if (error) return null;
-    for (const r of (data ?? []) as unknown as { broadcast_date: string; start_time: string | null; rating: number | string; is_first_run: boolean | null; program_id: string; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
-      const name = Array.isArray(r.programs) ? r.programs[0]?.canonical_name : r.programs?.canonical_name;
-      if (!name || !r.start_time) continue;
-      out.push({ date: r.broadcast_date, dow: isoDow(r.broadcast_date), startMin: broadcastMin(r.start_time), name, key: keyOf(name), rating: Number(r.rating), rerun: r.is_first_run === false });
-      raw.push({ programId: r.program_id, name, startTime: r.start_time, firstRun: r.is_first_run });
-    }
+    fetched.push(...((data ?? []) as Record<string, unknown>[]));
     if ((data ?? []).length < 1000) break;
+  }
+  // 26:00 경계에서 닐슨이 둘로 나눈 한 방영은 한 방영으로(broadcastTime/boundarySplit.ts)
+  for (const r of mergeSplitRatingRows(fetched) as unknown as { broadcast_date: string; start_time: string | null; rating: number | string; is_first_run: boolean | null; program_id: string; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]) {
+    const name = Array.isArray(r.programs) ? r.programs[0]?.canonical_name : r.programs?.canonical_name;
+    if (!name || !r.start_time) continue;
+    out.push({ date: r.broadcast_date, dow: isoDow(r.broadcast_date), startMin: broadcastMin(r.start_time), name, key: keyOf(name), rating: Number(r.rating), rerun: r.is_first_run === false });
+    raw.push({ programId: r.program_id, name, startTime: r.start_time, firstRun: r.is_first_run });
   }
   if (pattern) {
     const runs = await fillChannelRuns(supabase, { channelId, channelCode: pattern.channelCode, rows: raw.map((r, i) => ({ ...r, date: out[i].date })) });

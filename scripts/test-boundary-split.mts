@@ -1,5 +1,5 @@
 // 26:00 경계 분할 방영 합치기 점검 — npx tsx scripts/test-boundary-split.mts
-import { findBoundarySplits, mergedShare, mergeSplitRatingRows, weightedValue } from "../src/lib/broadcastTime/boundarySplit";
+import { findBoundarySplits, mergedShare, mergeSplitForDay, mergeSplitRatingRows, neighborDates, weightedValue } from "../src/lib/broadcastTime/boundarySplit";
 import { mergeSplitAirings, splitStat, type WorkAiring } from "../src/lib/programPerformance/metrics";
 import { mapOwnAirings, type RawOwn } from "../src/lib/idealSchedule/mapping";
 
@@ -59,6 +59,23 @@ const mr = mergeSplitRatingRows(rows as Record<string, unknown>[]);
 ok(mr.length === 3, `원본 행 5→${mr.length}`);
 ok(mr[0].reach === 3 && mr[1].reach === 2 && mr[0].end_time === "02:45:43", "도달은 큰 값, 종료는 뒤 조각");
 ok(!("share" in mr[0]), "없는 열은 만들지 않음");
+
+// 5-2) 하루 목록 — 그날 앞 조각은 다음 날 뒤 조각과 합쳐 남고, 그날 02:00 뒤 조각은 전날 방영으로 빠진다
+const dayRows = [
+  { program_id: "A", broadcast_date: "2026-11-01", start_time: "02:00:00", end_time: "02:45:43", rating: 0.13 },
+  { program_id: "B", broadcast_date: "2026-11-01", start_time: "01:30:00", end_time: "01:59:59", rating: 0.2 },
+  { program_id: "C", broadcast_date: "2026-11-01", start_time: "21:00:00", end_time: "22:00:00", rating: 0.5 },
+];
+const nb = [
+  { program_id: "A", broadcast_date: "2026-10-31", start_time: "01:42:16", end_time: "01:59:59", rating: 0.15 },
+  { program_id: "B", broadcast_date: "2026-11-02", start_time: "02:00:00", end_time: "03:00:00", rating: 0.1 },
+];
+const day = mergeSplitForDay("2026-11-01", dayRows, nb);
+ok(day.length === 2 && !day.some((r) => r.program_id === "A"), "전날 시작한 뒤 조각은 그날 목록에서 빠짐");
+const bRow = day.find((r) => r.program_id === "B")!;
+ok(bRow.end_time === "03:00:00" && near(bRow.rating as number, (0.2 * 1800 + 0.1 * 3600) / 5400), `그날 앞 조각은 다음 날 뒤 조각과 합침 ${bRow.rating}`);
+ok(mergeSplitForDay("2026-11-01", dayRows, []).length === 3, "이웃 자료가 없으면 그대로");
+ok(neighborDates("2026-11-01").join() === "2026-10-31,2026-11-02", "앞뒤 방송일");
 
 // 6) AI 편성·예측 엔진 입력 — 한 방영(1542~1605분), 타깃별 가중
 const raw: RawOwn = {

@@ -6,6 +6,7 @@
 // (CLAUDE.md 원칙: 계산은 서버/DB, 화면은 결과만).
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { mergeSplitRatingRows } from "@/lib/broadcastTime/boundarySplit";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
 
   const { data: rows, error } = await supabase
     .from("ratings")
-    .select("program_id, broadcast_date, rating")
+    .select("program_id, broadcast_date, start_time, end_time, rating")
     .eq("channel_id", channel.id)
     .eq("target_id", targetRow.id)
     .in("source_type", ["nielsen_daily", "skyuhd"])
@@ -106,7 +107,8 @@ export async function GET(request: Request) {
   }
 
   const byProgram = new Map<string, { broadcast_date: string; rating: number }[]>();
-  for (const r of (rows ?? []) as { program_id: string; broadcast_date: string; rating: number }[]) {
+  // 26:00 경계에서 닐슨이 둘로 나눈 한 방영은 한 방영으로(broadcastTime/boundarySplit.ts)
+  for (const r of mergeSplitRatingRows((rows ?? []) as Record<string, unknown>[]) as unknown as { program_id: string; broadcast_date: string; rating: number }[]) {
     const list = byProgram.get(r.program_id) ?? [];
     list.push({ broadcast_date: r.broadcast_date, rating: r.rating });
     byProgram.set(r.program_id, list);

@@ -1,6 +1,7 @@
 // 시리즈 연결 입력 수집(서버 전용, 읽기 전용) — 지난 시즌 본방 회차별 시청률과 채널 수준 보정 비율을 DB에서 읽어 엔진 입력(SeriesPriorInput)으로 만든다.
 // DB에는 SELECT만 한다. 계산은 seriesLink.ts(순수)가 한다. 본방 회차 = ratings.is_first_run=true를 같은 방송일·시작시각으로 묶은 방영(재방 제외).
 import { supabase } from "@/lib/supabase";
+import { mergeSplitRatingRows } from "@/lib/broadcastTime/boundarySplit";
 import { isFeatureOn } from "@/lib/featureFlags";
 import { memoTtl } from "./memo";
 import { addDays, hourBucket, isoDow } from "./time";
@@ -55,11 +56,11 @@ export async function loadOneSeriesPrior(args: { channelId: string; link: Series
   const { data: progs, error: pe } = await supabase.from("programs").select("id").eq("channel_id", channelId).eq("canonical_name", normSeriesName(link.base));
   if (pe || !progs?.length) return { input: null, reason: `〈${link.base}〉 방영 기록을 찾지 못했습니다.` };
 
-  const rows: { broadcast_date: string; start_time: string; rating: number | null }[] = [];
+  const fetched: Record<string, unknown>[] = [];
   for (let off = 0; ; off += page) {
     const { data, error } = await supabase
       .from("ratings")
-      .select("broadcast_date, start_time, rating")
+      .select("program_id, broadcast_date, start_time, end_time, rating")
       .in("program_id", progs.map((p) => p.id as string))
       .eq("target_id", targetId)
       .eq("is_first_run", true)
@@ -67,9 +68,11 @@ export async function loadOneSeriesPrior(args: { channelId: string; link: Series
       .order("broadcast_date", { ascending: true })
       .range(off, off + page - 1);
     if (error) return { input: null, reason: "지난 시즌 회차 시청률을 읽지 못했습니다." };
-    rows.push(...((data ?? []) as typeof rows));
+    fetched.push(...((data ?? []) as Record<string, unknown>[]));
     if ((data ?? []).length < page) break;
   }
+  // 26:00 경계에서 닐슨이 둘로 나눈 한 회차는 한 회차로(broadcastTime/boundarySplit.ts)
+  const rows = mergeSplitRatingRows(fetched) as unknown as { broadcast_date: string; start_time: string; rating: number | null }[];
   const byKey = new Map<string, { date: string; start: string; rating: number | null }>();
   for (const r of rows) byKey.set(`${r.broadcast_date} ${r.start_time}`, { date: r.broadcast_date, start: r.start_time, rating: r.rating === null ? null : Number(r.rating) });
   const eps = [...byKey.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.start < b.start ? -1 : 1));
