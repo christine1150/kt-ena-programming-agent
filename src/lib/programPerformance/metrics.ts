@@ -6,6 +6,7 @@
 //  - 동슬롯 대비 = 콘텐츠 적합도 엔진과 같은 "같은 칸 다른 프로그램 기대치" 대비 수축 배율(편성 효율 지표, 인과 아님)
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
 import { formatRatingValue } from "@/lib/ui/metricFormat";
+import { mergeBoundarySplits, mergedShare, weightedValue } from "@/lib/broadcastTime/boundarySplit";
 import type { AiringFilter, AiringRef, ChannelDailyBase, ChannelLine, ChannelRow, DailyPoint, Direction, EpisodePoint, MonthlyPoint, OriginalCompare, OverallReview, RatioValue, RowAnalysis, SlotLine, SplitStat, TextPart, WorkClass, WorkClassification } from "./types";
 
 /** 방향은 화면 표시 자릿수(배율 소수 둘째 자리)로 반올림한 값으로만 정한다 — 임의의 "유의 차이" 임계값을 만들지 않는다. */
@@ -118,6 +119,25 @@ export function dedupeAirings(rows: WorkAiring[]): WorkAiring[] {
     if (!prev || (r.createdAt ?? "") > (prev.createdAt ?? "")) map.set(k, r);
   }
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? "").localeCompare(b.startTime ?? "") || a.programId.localeCompare(b.programId));
+}
+
+/**
+ * 방송일 경계(26:00)에서 닐슨이 둘로 나눈 한 방영(D 01:42~01:59:59 + D+1 02:00~02:45)을 한 방영으로 합친다 — 방영 횟수·방송일을 한 번만 세고,
+ * 시청률은 조각 길이 가중 평균(broadcastTime/boundarySplit.ts). dedupeAirings 뒤에 쓴다(정렬 유지).
+ */
+export function mergeSplitAirings(rows: WorkAiring[]): WorkAiring[] {
+  return mergeBoundarySplits(
+    rows,
+    (r) => ({ key: r.programId, date: r.date, startTime: r.startTime, endTime: r.endTime, episode: r.episode, firstRun: r.firstRun }),
+    (t, h, p) => ({
+      ...t,
+      endTime: h.endTime,
+      rating: weightedValue(t.rating, p.tailSec, h.rating, p.headSec),
+      share: mergedShare(t.rating, t.share, p.tailSec, h.rating, h.share, p.headSec),
+      firstRun: t.firstRun ?? h.firstRun,
+      episode: t.episode ?? h.episode,
+    })
+  );
 }
 
 /**

@@ -70,7 +70,9 @@ async function reviewOne(run: RunRow): Promise<{ forecastId: string; channelCode
 
   // 같은 정의의 실제 하루 값(실제 방영 편성시간 가중 집계)과 공식 채널 하루 값
   const actualDaily = new Map<string, number | null>();
-  for (let d = week; d <= weekEnd; d = addDays(d, 1)) actualDaily.set(d, alignDayMinutes(airings.filter((a) => a.date === d).map((a) => ({ startMin: a.startMin, endMin: a.endMin, rating: a.kpi.r }))).weighted);
+  // 26:00을 넘긴 방영(경계 분할을 합친 한 편)은 넘친 부분을 다음 방송일 02:00부터의 분으로 넣는다 — 공식 하루 값(02:00~25:59)과 같은 정의 유지
+  const spill = (d: string) => airings.filter((a) => a.date === addDays(d, -1) && a.endMin !== null && a.endMin > 1560).map((a) => ({ startMin: 120, endMin: (a.endMin as number) - 1440, rating: a.kpi.r }));
+  for (let d = week; d <= weekEnd; d = addDays(d, 1)) actualDaily.set(d, alignDayMinutes([...airings.filter((a) => a.date === d).map((a) => ({ startMin: a.startMin, endMin: a.endMin, rating: a.kpi.r })), ...spill(d)]).weighted);
   const official = new Map<string, number>();
   if (channel.primaryTarget) {
     const { data: t } = await supabase.from("targets").select("id").eq("label", resolveRankSheetTargetLabel(channel.primaryTarget)).maybeSingle();

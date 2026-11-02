@@ -1,6 +1,7 @@
 // RPC 원본 → 엔진 입력 변환(순수 함수, DB 접근 없음 — 테스트 대상).
 import { airingSpan, isoDow } from "./time";
 import { targetKindOfLabel } from "./competitorTarget";
+import { mergeBoundarySplits, mergedShare, weightedValue } from "../broadcastTime/boundarySplit";
 import { targetGroupForKpiLabel, type IdealScheduleConfig } from "./config";
 import type { AiringMetric, AiringType, CompetitorAiring, CompetitorBundle, OwnAiring, OwnAiringsBundle } from "./types";
 
@@ -36,10 +37,32 @@ export type RawOwn = {
 
 const EMPTY_METRIC: AiringMetric = { r: null, s: null, reach: null, ts: null };
 
+/** 방송일 경계(26:00)에서 닐슨이 둘로 나눈 한 방영을 다시 한 방영으로(broadcastTime/boundarySplit.ts). 타깃별 값은 조각 길이로 가중한다. */
+function mergeSplitOwn(list: RawOwn["airings"]): RawOwn["airings"] {
+  return mergeBoundarySplits(
+    list,
+    (a) => ({ key: a.program_id, date: a.date, startTime: a.start, endTime: a.end, episode: a.ep ?? null, firstRun: a.first_run }),
+    (t, h, p) => {
+      const m: Record<string, RawMetric> = {};
+      for (const label of new Set([...Object.keys(t.m ?? {}), ...Object.keys(h.m ?? {})])) {
+        const x = t.m?.[label];
+        const y = h.m?.[label];
+        m[label] = {
+          r: weightedValue(x?.r, p.tailSec, y?.r, p.headSec),
+          s: mergedShare(x?.r, x?.s, p.tailSec, y?.r, y?.s, p.headSec),
+          reach: x?.reach == null ? (y?.reach ?? null) : y?.reach == null ? x.reach : Math.max(x.reach, y.reach),
+          ts: weightedValue(x?.ts, p.tailSec, y?.ts, p.headSec),
+        };
+      }
+      return { ...t, end: h.end, first_run: t.first_run ?? h.first_run, ep: t.ep ?? h.ep ?? null, sub: t.sub ?? h.sub ?? null, m };
+    }
+  );
+}
+
 export function mapOwnAirings(raw: RawOwn): OwnAiringsBundle {
   const holidaySet = new Set(raw.holidays);
   const airings: OwnAiring[] = [];
-  for (const a of raw.airings) {
+  for (const a of mergeSplitOwn(raw.airings)) {
     const span = airingSpan(a.start, a.end);
     if (!span) continue;
     const airingType: AiringType = a.first_run === true ? "FIRST" : a.first_run === false ? "RERUN" : "UNTAGGED";

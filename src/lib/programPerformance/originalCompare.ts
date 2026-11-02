@@ -3,7 +3,7 @@
 // 새 판정·합격선 없이 순위·상대 차이·중간값만 낸다. 범위는 조회 기간과 무관하게 '방영 시작 이후 본방', 방송 채널 KPI 타깃.
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 import { formatRatingValue } from "@/lib/ui/metricFormat";
-import { dedupeAirings, indexText, ratioOf, relText, type WorkAiring } from "./metrics";
+import { dedupeAirings, mergeSplitAirings, indexText, ratioOf, relText, type WorkAiring } from "./metrics";
 import type { OriginalCompare, RatioValue, WorkClass } from "./types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -139,7 +139,7 @@ export async function loadOriginalCompare(db: Db, i: { cls: WorkClass; workIds: 
   for (let off = 0; ; off += 1000) {
     const { data: got, error: e2 } = await db
       .from("ratings")
-      .select("program_id, broadcast_date, start_time, rating, created_at")
+      .select("program_id, broadcast_date, start_time, end_time, rating, created_at")
       .in("program_id", ids)
       .eq("target_id", t.id)
       .eq("source_type", "nielsen_daily")
@@ -151,8 +151,11 @@ export async function loadOriginalCompare(db: Db, i: { cls: WorkClass; workIds: 
     raw.push(...((got ?? []) as Record<string, unknown>[]));
     if ((got ?? []).length < 1000) break;
   }
-  const airs = dedupeAirings(
-    raw.map((r): WorkAiring => ({ programId: r.program_id as string, date: r.broadcast_date as string, startTime: (r.start_time as string | null) ?? null, endTime: null, rating: r.rating === null || r.rating === undefined ? null : Number(r.rating), firstRun: true, episode: null, createdAt: (r.created_at as string | null) ?? null }))
+  // 26:00 경계에서 둘로 나뉜 본방은 한 회로 합친다(boundarySplit)
+  const airs = mergeSplitAirings(
+    dedupeAirings(
+      raw.map((r): WorkAiring => ({ programId: r.program_id as string, date: r.broadcast_date as string, startTime: (r.start_time as string | null) ?? null, endTime: (r.end_time as string | null) ?? null, rating: r.rating === null || r.rating === undefined ? null : Number(r.rating), firstRun: true, episode: null, createdAt: (r.created_at as string | null) ?? null }))
+    )
   );
   const ratingsOf = (pids: Set<string>) => airs.filter((a) => pids.has(a.programId) && a.rating !== null && Number.isFinite(a.rating)).map((a) => a.rating as number);
   const days = (r: FcRow) => [...(r.broadcast_day_of_week ?? [])].sort((a, b) => DOW_ORDER.indexOf(a) - DOW_ORDER.indexOf(b));

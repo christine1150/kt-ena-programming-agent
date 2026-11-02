@@ -9,6 +9,7 @@ import { CONTENT_FIT_CONFIG } from "./config";
 import { addDaysStr, computeContentFit } from "./engine";
 import type { ContentFitAiring, ContentFitResult } from "./types";
 import { fillChannelRuns } from "../broadcastPattern/channelFill";
+import { mergeSplitRatingRows } from "../broadcastTime/boundarySplit";
 
 // supabase 클라이언트와 테스트용 가짜 DB가 공통으로 만족하는 최소 형태
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,11 +47,11 @@ export async function latestBroadcastDate(db: ContentFitDb, channelId: string): 
 /** 채널 KPI 타깃의 프로그램 단위 방영 행 전체(페이지네이션, 정렬 고정). */
 export async function fetchContentFitAirings(db: ContentFitDb, channelId: string, kpiTargetId: string, asOf: string, windowDays = CONTENT_FIT_CONFIG.windowDays): Promise<ContentFitAiring[]> {
   const from = addDaysStr(asOf, -(windowDays - 1));
-  const out: ContentFitAiring[] = [];
+  const raw: Record<string, unknown>[] = [];
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const { data, error } = await db
       .from("ratings")
-      .select("program_id, broadcast_date, start_time, rating, reach, time_spent_share, is_first_run")
+      .select("program_id, broadcast_date, start_time, end_time, rating, reach, time_spent_share, is_first_run")
       .eq("channel_id", channelId)
       .eq("source_type", "nielsen_daily")
       .eq("target_id", kpiTargetId)
@@ -63,19 +64,21 @@ export async function fetchContentFitAirings(db: ContentFitDb, channelId: string
       .range(offset, offset + PAGE_SIZE - 1);
     if (error) throw new Error(`방영 행 조회 실패: ${error.message}`);
     const rows = (data ?? []) as Record<string, unknown>[];
-    for (const r of rows) {
-      if (r.rating === null || r.rating === undefined) continue;
-      out.push({
-        programId: r.program_id as string,
-        date: r.broadcast_date as string,
-        startTime: (r.start_time as string | null) ?? null,
-        rating: Number(r.rating),
-        reach: r.reach === null || r.reach === undefined ? null : Number(r.reach),
-        timeSpentShare: r.time_spent_share === null || r.time_spent_share === undefined ? null : Number(r.time_spent_share),
-        firstRun: (r.is_first_run as boolean | null) ?? null,
-      });
-    }
+    raw.push(...rows);
     if (rows.length < PAGE_SIZE) break;
+  }
+  // 26:00 경계에서 닐슨이 둘로 나눈 한 방영은 한 방영으로 합친다(방영 수·방송일 이중 계산 방지, broadcastTime/boundarySplit.ts)
+  const out: ContentFitAiring[] = [];
+  for (const r of mergeSplitRatingRows(raw.filter((x) => x.rating !== null && x.rating !== undefined))) {
+    out.push({
+      programId: r.program_id as string,
+      date: r.broadcast_date as string,
+      startTime: (r.start_time as string | null) ?? null,
+      rating: Number(r.rating),
+      reach: r.reach === null || r.reach === undefined ? null : Number(r.reach),
+      timeSpentShare: r.time_spent_share === null || r.time_spent_share === undefined ? null : Number(r.time_spent_share),
+      firstRun: (r.is_first_run as boolean | null) ?? null,
+    });
   }
   return out;
 }

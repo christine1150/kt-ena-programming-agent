@@ -16,12 +16,14 @@ import { describeLearned, hhmm, inferRuns, type LearnedSlot } from "@/lib/broadc
 import { loadRunPatterns } from "@/lib/broadcastPattern/load";
 import { FOLLOW_RULES, followRunsOf, loadFollowSources, type SourceAir } from "@/lib/broadcastPattern/followRule";
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
+import { mergeSplitRatingRows } from "@/lib/broadcastTime/boundarySplit";
 import { loadOriginalCompare } from "./originalCompare";
 import {
   channelDailyMean,
   classifyWork,
   directionOfRatio,
   dedupeAirings,
+  mergeSplitAirings,
   channelLineOf,
   describeRow,
   episodeSeries,
@@ -541,7 +543,8 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         }))
       );
     }
-    workRows = dedupeAirings(workRows);
+    // 26:00 경계에서 둘로 나뉜 한 방영은 한 방영으로(방영 횟수·방송일 이중 계산 방지, 2026-11-02)
+    workRows = mergeSplitAirings(dedupeAirings(workRows));
     // 본방 여부·회차가 비어 있는 방영은 업로드 편성표의 표시로 보완한다(닐슨 값이 있으면 그대로 둔다). 편성표가 없는 기간은 그대로 '미확인'이다.
     if (workRows.some((r) => r.firstRun === null || r.episode === null)) {
       const plan = await loadPlanRange(db, ch.id, from, to);
@@ -660,11 +663,11 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     const yearStart = `${to.slice(0, 4)}-01-01`;
     const cmpFrom = daysBetween(yearStart, to) >= 84 ? yearStart : addDays(to, -83);
     const fetchFrom = cmpFrom < observedFrom ? cmpFrom : observedFrom;
-    const chAirRows = await fetchAll<Record<string, unknown>>(
+    const chAirRaw = await fetchAll<Record<string, unknown>>(
       (a, b) =>
         db
           .from("ratings")
-          .select("program_id, broadcast_date, start_time, rating, share, is_first_run")
+          .select("program_id, broadcast_date, start_time, end_time, rating, share, is_first_run")
           .eq("channel_id", ch.id)
           .eq("target_id", progTargetId)
           .eq("source_type", "nielsen_daily")
@@ -675,6 +678,17 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
           .order("id", { ascending: true })
           .range(a, b),
       "슬롯 비교 방영"
+    );
+    // 같은 방영 중복 행은 처음 것만 남긴 뒤, 26:00 경계 분할 짝을 한 방영으로 합친다(비교군 방영 수·평균도 작품 쪽과 같은 단위)
+    const firstSeen = new Set<string>();
+    const chAirRows = mergeSplitRatingRows(
+      chAirRaw.filter((r) => {
+        if (r.rating === null || r.rating === undefined) return false;
+        const k = `${r.program_id}|${r.broadcast_date}|${r.start_time ?? ""}`;
+        if (firstSeen.has(k)) return false;
+        firstSeen.add(k);
+        return true;
+      })
     );
     const seen = new Set<string>();
     const chAirings: ContentFitAiring[] = [];
