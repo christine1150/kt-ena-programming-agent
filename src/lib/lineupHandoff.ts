@@ -69,11 +69,22 @@ export interface LineupShift {
   demos: DemoRetention[];
 }
 
+// 비교 기간(직전)이 평소 수준에서 얼마나 벗어났는지 — 직전 기간이 이례적으로 높았다가 평소로 돌아온 것을
+// "자체 부진"으로 읽지 않게 하는 근거(실측: ENA Play 10/19주 0.041은 직전 4주 평균 0.022의 1.8배였고
+// 10/26주 0.024는 평소 수준 복귀였다). 평소 = 직전 기간 앞쪽 N개 같은 길이 기간(주간 4주, 월간 3개월)의 평균.
+export interface LineupBaseline {
+  periods: number; // 평소 평균에 쓴 기간 수
+  refAvg: number; // 평소 평균(기간별 가중 평균의 평균)
+  priorVsRefPct: number; // 직전 기간이 평소 대비 몇 % 높/낮았는지
+  currentVsRefPct: number; // 이번 기간이 평소 대비 몇 %
+}
+
 export interface LineupShiftResult {
   decline: LineupShift | null;
   rise: LineupShift | null;
   primeUp: LineupShift | null;
   primeDown: LineupShift | null;
+  baseline: LineupBaseline | null;
 }
 
 // 수도권 2049 채널의 성·연령 세부 타깃(DB targets.label 그대로). 가구 KPI 채널은 세부 타깃 행이 없어 쓰지 않는다.
@@ -196,7 +207,7 @@ export function analyzeLineupShifts(
     totals.current += s.current.minutes * perWeek("current", s);
     priorRatingMinutes += s.prior.ratingMinutes * perWeek("prior", s);
   }
-  if (totals.prior === 0 || totals.current === 0) return { decline: null, rise: null, primeUp: null, primeDown: null };
+  if (totals.prior === 0 || totals.current === 0) return { decline: null, rise: null, primeUp: null, primeDown: null, baseline: null };
 
   for (const s of slots.values()) {
     s.contribution = (s.current.ratingMinutes * perWeek("current", s)) / totals.current - (s.prior.ratingMinutes * perWeek("prior", s)) / totals.prior;
@@ -226,7 +237,7 @@ export function analyzeLineupShifts(
   const pairKey = (s: Slot) => [`${s.priorMain}→${s.currentMain}`];
   const primeDown = pickGroup(primeSlots, pairKey, null, -1, materiality, demoLabels);
   const primeUp = pickGroup(primeSlots, pairKey, null, 1, materiality, demoLabels);
-  return { decline, rise, primeUp, primeDown };
+  return { decline, rise, primeUp, primeDown, baseline: null };
 }
 
 function pickGroup(
@@ -362,6 +373,7 @@ function demoRetention(key: Slot[], demoLabels: readonly string[]): DemoRetentio
 }
 
 const PAGE = 1000;
+type RawRating = { program_id: string; target_id: string; broadcast_date: string; start_time: string | null; end_time: string | null; rating: number | null; is_first_run: boolean | null };
 
 /** DB에서 두 기간의 프로그램 방영 행(KPI 타깃 + 세부 타깃)을 읽어 분석한다. 읽기 전용. */
 export async function loadLineupShifts(params: {
@@ -384,7 +396,7 @@ export async function loadLineupShifts(params: {
   if (![...labelById.values()].includes(kpiLabel)) return null;
   const nameById = new Map(((programRows ?? []) as { id: string; canonical_name: string }[]).map((p) => [p.id, p.canonical_name]));
 
-  type Raw = { program_id: string; target_id: string; broadcast_date: string; start_time: string | null; end_time: string | null; rating: number | null; is_first_run: boolean | null };
+  type Raw = RawRating;
   const rows: Raw[] = [];
   for (let off = 0; ; off += PAGE) {
     const { data, error } = await supabase
@@ -417,5 +429,100 @@ export async function loadLineupShifts(params: {
     if (a.date >= dateFrom && a.date <= dateTo) current.push(a);
     else if (a.date >= priorDateFrom && a.date <= priorDateTo) prior.push(a);
   }
-  return analyzeLineupShifts(prior, current, kpiLabel, demoLabels, minPrimeSlotAirings);
+  const result = analyzeLineupShifts(prior, current, kpiLabel, demoLabels, minPrimeSlotAirings);
+  const kpiId = [...labelById.entries()].find(([, l]) => l === kpiLabel)?.[0];
+  if (kpiId) {
+    try {
+      result.baseline = await loadBaseline({
+        channelId, kpiId, priorDateFrom, priorDateTo,
+        priorAvg: weightedAvg(prior.filter((a) => a.targetLabel === kpiLabel)),
+        currentAvg: weightedAvg(current.filter((a) => a.targetLabel === kpiLabel)),
+        toAiring,
+      });
+    } catch (e) {
+      // 평소 대비 참고 정보일 뿐이라 실패해도 이어받기 분석 자체는 그대로 내보낸다.
+      console.error("[lineupHandoff] baseline", e);
+    }
+  }
+  return result;
+}
+
+const weightedAvg = (rows: HandoffAiring[]): number | null => {
+  let m = 0, rm = 0;
+  for (const a of rows) {
+    const d = durationOf(a);
+    m += d;
+    rm += a.rating * d;
+  }
+  return m > 0 ? rm / m : null;
+};
+const addDays = (date: string, n: number) => {
+  const x = new Date(`${date}T00:00:00Z`);
+  x.setUTCDate(x.getUTCDate() + n);
+  return x.toISOString().slice(0, 10);
+};
+
+/** 직전 기간 앞쪽 같은 길이 기간들(주간 4주·월간 3개월)을 최신순으로. 주간·월간 모양이 아니면 빈 배열. */
+function baselineRanges(priorFrom: string, priorTo: string): { from: string; to: string }[] {
+  const span = Math.round((Date.parse(`${priorTo}T00:00:00Z`) - Date.parse(`${priorFrom}T00:00:00Z`)) / 86400000) + 1;
+  if (span <= 7) {
+    return [1, 2, 3, 4].map((i) => ({ from: addDays(priorFrom, -7 * i), to: addDays(priorFrom, -7 * (i - 1) - 1) }));
+  }
+  if (priorFrom.endsWith("-01") && span >= 28) {
+    const y = Number(priorFrom.slice(0, 4));
+    const m = Number(priorFrom.slice(5, 7)) - 1;
+    return [1, 2, 3].map((i) => ({
+      from: new Date(Date.UTC(y, m - i, 1)).toISOString().slice(0, 10),
+      to: new Date(Date.UTC(y, m - i + 1, 0)).toISOString().slice(0, 10),
+    }));
+  }
+  return [];
+}
+
+async function loadBaseline(p: {
+  channelId: string;
+  kpiId: string;
+  priorDateFrom: string;
+  priorDateTo: string;
+  priorAvg: number | null;
+  currentAvg: number | null;
+  toAiring: (r: RawRating) => HandoffAiring | null;
+}): Promise<LineupBaseline | null> {
+  const ranges = baselineRanges(p.priorDateFrom, p.priorDateTo);
+  if (ranges.length === 0 || p.priorAvg === null || p.currentAvg === null) return null;
+  const from = ranges[ranges.length - 1].from;
+  const to = ranges[0].to;
+  const rows: HandoffAiring[] = [];
+  for (let off = 0; ; off += PAGE) {
+    const { data, error } = await supabase
+      .from("ratings")
+      .select("program_id, target_id, broadcast_date, start_time, end_time, rating, is_first_run")
+      .eq("channel_id", p.channelId)
+      .eq("source_type", "nielsen_daily")
+      .not("program_id", "is", null)
+      .eq("target_id", p.kpiId)
+      .gte("broadcast_date", from)
+      .lte("broadcast_date", to)
+      .order("id")
+      .range(off, off + PAGE - 1);
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as RawRating[];
+    for (const r of page) {
+      const a = p.toAiring(r);
+      if (a) rows.push(a);
+    }
+    if (page.length < PAGE) break;
+  }
+  const avgs = ranges
+    .map((r) => weightedAvg(rows.filter((a) => a.date >= r.from && a.date <= r.to)))
+    .filter((v): v is number => v !== null);
+  if (avgs.length < 2) return null;
+  const refAvg = avgs.reduce((a, b) => a + b, 0) / avgs.length;
+  if (refAvg <= 0) return null;
+  return {
+    periods: avgs.length,
+    refAvg,
+    priorVsRefPct: (p.priorAvg / refAvg - 1) * 100,
+    currentVsRefPct: (p.currentAvg / refAvg - 1) * 100,
+  };
 }

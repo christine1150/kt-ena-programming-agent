@@ -10,7 +10,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { ReviewEpisodeChart, type EpisodeChartPoint } from "@/components/ReviewEpisodeChart";
 import type { RankSlide } from "@/lib/rankSlide";
-import type { DemoRetention, LineupShift, LineupShiftResult } from "@/lib/lineupHandoff";
+import type { DemoRetention, LineupBaseline, LineupShift, LineupShiftResult } from "@/lib/lineupHandoff";
 import ReviewPanels, { type ReviewPanelItem } from "@/components/home/ReviewPanels";
 import { channelBrandSolid } from "@/lib/dashboard/channelBrandColors";
 import { highlightNarrativeText, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR } from "@/lib/highlightNarrative";
@@ -2218,12 +2218,15 @@ function LineupShiftCell({
   sign,
   channelCode,
   periodLabel = "전월",
+  baseline,
 }: {
   shift: LineupShift | null;
   sign: 1 | -1;
   channelCode: string;
   periodLabel?: string;
+  baseline?: LineupBaseline | null;
 }) {
+  const baselineNote = baselineNoteFor(baseline, sign, periodLabel, channelCode);
   if (!shift) return <span className="text-zinc-300">—</span>;
   const k = shift.keySlot;
   const tag = LINEUP_TAG[`${sign < 0 ? "decline" : "rise"}-${shift.mode}`];
@@ -2274,8 +2277,21 @@ function LineupShiftCell({
           {sign < 0 ? "유지" : "증가"} {demo.kept.join("·")}
         </span>
       )}
+      {baselineNote && <span className="text-[10px] text-amber-600">{baselineNote}</span>}
     </span>
   );
+}
+
+// 비교 기간(전월·전주)이 평소에서 크게 벗어났으면 그 사실을 붙인다 — 하락은 비교 기간이 평소보다 20% 이상
+// 높았을 때(평소 수준으로 되돌아온 몫이 섞임), 상승은 20% 이상 낮았을 때(평소 수준 복귀가 섞임)만.
+function baselineNoteFor(baseline: LineupBaseline | null | undefined, sign: 1 | -1, periodLabel: string, channelCode: string): string | null {
+  if (!baseline) return null;
+  const { priorVsRefPct: p, currentVsRefPct: c, refAvg, periods } = baseline;
+  if (sign < 0 ? p < 20 : p > -20) return null;
+  const unit = periodLabel === "전주" ? `${periods}주` : `${periods}개월`;
+  const now = periodLabel === "전주" ? "이번 주" : "이번 달";
+  const sgn = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(Math.round(v))}%`;
+  return `${periodLabel}이 평소(직전 ${unit} 평균 ${formatRating(refAvg, channelCode)})보다 ${Math.abs(Math.round(p))}% ${p >= 0 ? "높았음" : "낮았음"} · ${now} 평소 대비 ${sgn(c)}`;
 }
 
 // classifyDeclineCause/monthlyDriverCauseLabel(등락 원인 항등 분해 판정)은 src/lib/causeClassifier.ts로
@@ -2430,16 +2446,16 @@ function MonthlyReviewCard({ review, themeColorByCode }: { review: MonthlyReview
                   {c.lineup ? (
                     <>
                       <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.primeUp} sign={1} channelCode={c.channelCode} />
+                        <LineupShiftCell shift={c.lineup.primeUp} sign={1} channelCode={c.channelCode} baseline={c.lineup.baseline} />
                       </td>
                       <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.primeDown} sign={-1} channelCode={c.channelCode} />
+                        <LineupShiftCell shift={c.lineup.primeDown} sign={-1} channelCode={c.channelCode} baseline={c.lineup.baseline} />
                       </td>
                       <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.rise} sign={1} channelCode={c.channelCode} />
+                        <LineupShiftCell shift={c.lineup.rise} sign={1} channelCode={c.channelCode} baseline={c.lineup.baseline} />
                       </td>
                       <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.decline} sign={-1} channelCode={c.channelCode} />
+                        <LineupShiftCell shift={c.lineup.decline} sign={-1} channelCode={c.channelCode} baseline={c.lineup.baseline} />
                       </td>
                     </>
                   ) : (
@@ -2758,16 +2774,16 @@ function WeeklyReviewCard({ review, themeColorByCode, rankSlides = [] }: { revie
                   {c.lineup ? (
                     <>
                       <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.primeUp} sign={1} channelCode={c.channelCode} periodLabel="전주" />
+                        <LineupShiftCell shift={c.lineup.primeUp} sign={1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} />
                       </td>
                       <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.primeDown} sign={-1} channelCode={c.channelCode} periodLabel="전주" />
+                        <LineupShiftCell shift={c.lineup.primeDown} sign={-1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} />
                       </td>
                       <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.rise} sign={1} channelCode={c.channelCode} periodLabel="전주" />
+                        <LineupShiftCell shift={c.lineup.rise} sign={1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} />
                       </td>
                       <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.decline} sign={-1} channelCode={c.channelCode} periodLabel="전주" />
+                        <LineupShiftCell shift={c.lineup.decline} sign={-1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} />
                       </td>
                     </>
                   ) : (
