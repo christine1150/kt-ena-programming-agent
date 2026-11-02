@@ -479,6 +479,8 @@ interface WeeklyReviewChannel {
   growthDriver: MonthlyDriver | null;
   weaknessDriver: MonthlyDriver | null;
   primeMovers: MonthlyPrimeMover[];
+  // 월간과 같은 자리 이어받기 분석(2026-11-02). null이면 기존 표시.
+  lineup?: LineupShiftResult | null;
 }
 interface WeeklyReview {
   weekStart: string;
@@ -2207,9 +2209,21 @@ const LINEUP_TAG: Record<string, { label: string; color: string }> = {
   "rise-handoff": { label: "자리 교체 효과", color: "#16a34a" },
   "rise-self": { label: "자체 상승", color: "#16a34a" },
   "rise-vacated": { label: "자체 상승", color: "#16a34a" },
+  "rise-added": { label: "편성 추가", color: "#16a34a" },
+  "decline-added": { label: "자체 부진", color: "#dc2626" },
 };
 
-function LineupShiftCell({ shift, sign, channelCode }: { shift: LineupShift | null; sign: 1 | -1; channelCode: string }) {
+function LineupShiftCell({
+  shift,
+  sign,
+  channelCode,
+  periodLabel = "전월",
+}: {
+  shift: LineupShift | null;
+  sign: 1 | -1;
+  channelCode: string;
+  periodLabel?: string;
+}) {
   if (!shift) return <span className="text-zinc-300">—</span>;
   const k = shift.keySlot;
   const tag = LINEUP_TAG[`${sign < 0 ? "decline" : "rise"}-${shift.mode}`];
@@ -2226,7 +2240,8 @@ function LineupShiftCell({ shift, sign, channelCode }: { shift: LineupShift | nu
   const where = k.dispersed ? `${k.slotCount}개 시간대` : formatSlotWhen(k.dows, k.hours);
   const runText =
     k.dispersed ? "" : k.priorFirstRun === k.currentFirstRun ? ` ${runLabel(k.priorFirstRun)}` : ` ${runLabel(k.priorFirstRun)}→${runLabel(k.currentFirstRun)}`;
-  const retention = k.priorAvg && k.priorAvg > 0 && k.currentAvg !== null ? Math.round((k.currentAvg / k.priorAvg) * 100) : null;
+  // 직전 값이 노이즈 바닥(0.05) 미만이면 비율이 12112%처럼 튀어 의미가 없다 — 그때는 값만 보여준다.
+  const retention = k.priorAvg !== null && k.priorAvg >= 0.05 && k.currentAvg !== null ? Math.round((k.currentAvg / k.priorAvg) * 100) : null;
   const demo = summarizeDemos(shift.demos, sign, channelCode);
   const up = shift.contributionDelta >= 0;
   return (
@@ -2247,7 +2262,7 @@ function LineupShiftCell({ shift, sign, channelCode }: { shift: LineupShift | nu
       <span className="text-[10px] text-zinc-400">
         {where}
         {runText} {k.priorAvg !== null ? formatRating(k.priorAvg, channelCode) : "—"} → {k.currentAvg !== null ? formatRating(k.currentAvg, channelCode) : "—"}
-        {retention !== null && (sign < 0 ? ` (유지 ${retention}%)` : ` (전월의 ${retention}%)`)}
+        {retention !== null && (sign < 0 ? ` (유지 ${retention}%)` : ` (${periodLabel}의 ${retention}%)`)}
       </span>
       {demo.lost.length > 0 && (
         <span className="text-[10px]" style={{ color: MONTHLY_DOWN_COLOR }}>
@@ -2740,18 +2755,37 @@ function WeeklyReviewCard({ review, themeColorByCode, rankSlides = [] }: { revie
                         ? "유지"
                         : formatArrowPct(c.ratingChangePct)}
                   </td>
-                  <td className="py-1.5 pl-3 text-zinc-500">
-                    <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta >= 0)} channelCode={c.channelCode} periodLabel="전주" />
-                  </td>
-                  <td className="py-1.5 pl-3 text-zinc-500">
-                    <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta < 0)} channelCode={c.channelCode} periodLabel="전주" />
-                  </td>
-                  <td className="py-1.5 pl-3 text-zinc-500">
-                    <MonthlyDriverCell driver={c.growthDriver} channelCode={c.channelCode} periodLabel="전주" />
-                  </td>
-                  <td className="py-1.5 pl-3 text-zinc-500">
-                    <MonthlyDriverCell driver={c.weaknessDriver} channelCode={c.channelCode} periodLabel="전주" />
-                  </td>
+                  {c.lineup ? (
+                    <>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <LineupShiftCell shift={c.lineup.primeUp} sign={1} channelCode={c.channelCode} periodLabel="전주" />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <LineupShiftCell shift={c.lineup.primeDown} sign={-1} channelCode={c.channelCode} periodLabel="전주" />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <LineupShiftCell shift={c.lineup.rise} sign={1} channelCode={c.channelCode} periodLabel="전주" />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <LineupShiftCell shift={c.lineup.decline} sign={-1} channelCode={c.channelCode} periodLabel="전주" />
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta >= 0)} channelCode={c.channelCode} periodLabel="전주" />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta < 0)} channelCode={c.channelCode} periodLabel="전주" />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <MonthlyDriverCell driver={c.growthDriver} channelCode={c.channelCode} periodLabel="전주" />
+                      </td>
+                      <td className="py-1.5 pl-3 text-zinc-500">
+                        <MonthlyDriverCell driver={c.weaknessDriver} channelCode={c.channelCode} periodLabel="전주" />
+                      </td>
+                    </>
+                  )}
                 </tr>
               );
             })}

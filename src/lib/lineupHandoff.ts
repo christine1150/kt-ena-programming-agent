@@ -61,8 +61,9 @@ export interface KeySlot {
 export interface LineupShift {
   // 하락: 직전 점유 프로그램(그 자리를 지키던 프로그램) / 상승: 이번 점유 프로그램(끌어올린 프로그램)
   anchorProgram: string;
-  // 이어받기 성격 — handoff: 다른 프로그램이 자리를 이어받음, self: 같은 프로그램 자체 등락, vacated: 자리가 비거나 편성 축소
-  mode: "handoff" | "self" | "vacated";
+  // 이어받기 성격 — handoff: 다른 프로그램이 자리를 이어받음, self: 같은 프로그램 자체 등락,
+  // vacated: 자리가 비거나 편성 축소, added: 직전 기간엔 비어 있던 자리에 새로 편성
+  mode: "handoff" | "self" | "vacated" | "added";
   contributionDelta: number;
   keySlot: KeySlot;
   demos: DemoRetention[];
@@ -82,7 +83,8 @@ const DEMO_RETENTION_FLOOR = 0.05;
 // 핵심 슬롯: 묶음 안 최대 슬롯 몫의 30% 이상인 같은 짝 슬롯만 함께 묶는다(작은 자투리 슬롯이 평균을 흐리지 않게).
 const KEY_SLOT_SHARE = 0.3;
 const DISPERSED_SHARE = 0.4;
-// 프라임 등락 후보 — 직전·이번 기간 모두 그 자리에 최소 이만큼 편성됐어야 한다.
+// 프라임 등락 후보 — 직전·이번 기간 모두 그 자리에 최소 이만큼 편성됐어야 한다(월간 기본값).
+// 주간은 한 자리가 주 1회뿐이라 호출부가 1을 넘긴다(그래도 양쪽 주 모두 편성 + 채널 평균 2% 문턱은 유지).
 const MIN_PRIME_SLOT_AIRINGS = 2;
 // 채널 가중 평균 대비 이 비율 미만의 움직임은 "주요 등락"으로 올리지 않는다.
 const MATERIALITY_RATIO = 0.02;
@@ -142,7 +144,8 @@ export function analyzeLineupShifts(
   prior: HandoffAiring[],
   current: HandoffAiring[],
   kpiLabel: string,
-  demoLabels: readonly string[]
+  demoLabels: readonly string[],
+  minPrimeSlotAirings: number = MIN_PRIME_SLOT_AIRINGS
 ): LineupShiftResult {
   const slots = new Map<string, Slot>();
   // 요일별 실제 방송 날짜 수 — 9월은 수요일 5번, 10월은 4번처럼 달력 차이가 있어 그대로 합하면 같은 자리가
@@ -203,8 +206,13 @@ export function analyzeLineupShifts(
   const materiality = (priorRatingMinutes / totals.prior) * MATERIALITY_RATIO;
   const all = [...slots.values()];
 
-  const decline = pickGroup(all, (s) => s.priorMain, -1, materiality, demoLabels);
-  const rise = pickGroup(all, (s) => s.currentMain, 1, materiality, demoLabels);
+  // 프로그램 묶음은 "그 프로그램이 떠난 자리 + 새로 들어간 자리"를 함께 합한 순변화로 고른다 — 재방이 매주
+  // 시간대를 옮겨 다니면 떠난 자리만 보면 하락, 새 자리만 보면 상승으로 같은 프로그램이 양쪽에 잡힌다(실측:
+  // 10/26주 OLIFE 세계테마기행이 하락 −0.009·상승 +0.017로 동시에 뽑힘). 대표 슬롯은 하락이면 그 프로그램이
+  // 지키던 자리, 상승이면 그 프로그램이 들어간 자리에서만 고른다.
+  const family = (s: Slot) => [...new Set([s.priorMain, s.currentMain].filter((x): x is string => !!x))];
+  const decline = pickGroup(all, family, "priorMain", -1, materiality, demoLabels);
+  const rise = pickGroup(all, family, "currentMain", 1, materiality, demoLabels);
 
   // 프라임 등락 — 같은 (직전→현재) 짝의 프라임 슬롯을 묶는다. 양쪽 모두 그 자리에 2회 이상 편성된 슬롯만.
   // 이미 상승 견인/하락 요인으로 짚은 짝은 같은 말을 두 번 하지 않도록 뺀다.
@@ -213,36 +221,39 @@ export function analyzeLineupShifts(
     if (!isPrimeSlot(s.dow, s.hour) || !s.priorMain || !s.currentMain) return false;
     const pa = s.prior.progs.get(s.priorMain)?.airings ?? 0;
     const ca = s.current.progs.get(s.currentMain)?.airings ?? 0;
-    return pa >= MIN_PRIME_SLOT_AIRINGS && ca >= MIN_PRIME_SLOT_AIRINGS && !used.has(`${s.priorMain}→${s.currentMain}`);
+    return pa >= minPrimeSlotAirings && ca >= minPrimeSlotAirings && !used.has(`${s.priorMain}→${s.currentMain}`);
   });
-  const pairKey = (s: Slot) => `${s.priorMain}→${s.currentMain}`;
-  const primeDown = pickGroup(primeSlots, pairKey, -1, materiality, demoLabels);
-  const primeUp = pickGroup(primeSlots, pairKey, 1, materiality, demoLabels);
+  const pairKey = (s: Slot) => [`${s.priorMain}→${s.currentMain}`];
+  const primeDown = pickGroup(primeSlots, pairKey, null, -1, materiality, demoLabels);
+  const primeUp = pickGroup(primeSlots, pairKey, null, 1, materiality, demoLabels);
   return { decline, rise, primeUp, primeDown };
 }
 
 function pickGroup(
   slots: Slot[],
-  keyOf: (s: Slot) => string | null,
+  keysOf: (s: Slot) => string[],
+  anchorSide: "priorMain" | "currentMain" | null,
   sign: 1 | -1,
   materiality: number,
   demoLabels: readonly string[]
 ): LineupShift | null {
   const groups = new Map<string, Slot[]>();
   for (const s of slots) {
-    const k = keyOf(s);
-    if (!k) continue;
-    const arr = groups.get(k) ?? [];
-    arr.push(s);
-    groups.set(k, arr);
+    for (const k of keysOf(s)) {
+      const arr = groups.get(k) ?? [];
+      arr.push(s);
+      groups.set(k, arr);
+    }
   }
-  let best: { slots: Slot[]; sum: number } | null = null;
-  for (const arr of groups.values()) {
+  let best: { name: string; slots: Slot[]; sum: number } | null = null;
+  for (const [name, arr] of groups) {
+    if (anchorSide && !arr.some((s) => s[anchorSide] === name)) continue;
     const sum = arr.reduce((a, s) => a + s.contribution, 0);
     if (sum * sign <= 0) continue;
-    if (!best || sum * sign > best.sum * sign) best = { slots: arr, sum };
+    if (!best || sum * sign > best.sum * sign) best = { name, slots: arr, sum };
   }
   if (!best || Math.abs(best.sum) < materiality) return null;
+  const bestName = best.name;
 
   // 핵심 슬롯 — 방향이 같은 가장 큰 슬롯과 같은 (직전→현재) 짝이면서 그 몫의 30% 이상인 슬롯들.
   // 그 자리 시청률 자체가 같은 방향으로 움직인 슬롯만(편성 분량만 바뀌고 시청률은 반대로 간 슬롯은 제외).
@@ -251,7 +262,11 @@ function pickGroup(
     const ca = s.current.minutes > 0 ? s.current.ratingMinutes / s.current.minutes : 0;
     return (ca - pa) * sign > 0;
   };
-  const ordered = [...best.slots].filter(avgMovedWith).sort((a, b) => (b.contribution - a.contribution) * sign);
+  // 시작 시각이 10분만 밀려도 다른 시각 슬롯이 되어 한쪽이 빈 자리가 생긴다 — 대표 슬롯은 양쪽 기간 모두
+  // 편성이 있는 자리를 먼저 쓰고, 그런 자리가 없을 때만 한쪽이 빈 자리를 쓴다.
+  const anchored = [...best.slots].filter((s) => !anchorSide || s[anchorSide] === bestName).filter(avgMovedWith);
+  const bothSided = anchored.filter((s) => s.priorMain && s.currentMain);
+  const ordered = (bothSided.length > 0 ? bothSided : anchored).sort((a, b) => (b.contribution - a.contribution) * sign);
   const top = ordered[0];
   if (!top || top.contribution * sign <= 0) return null;
   const key = ordered.filter(
@@ -271,13 +286,15 @@ function pickGroup(
   }
   const keySlot = summarizeKeySlot(key, dispersed, sign < 0 ? "current" : "prior");
   const demoBase = sign < 0 ? keySlot.priorAvg : Math.max(keySlot.priorAvg ?? 0, keySlot.currentAvg ?? 0);
-  const anchorProgram = sign < 0 ? (top.priorMain as string) : (top.currentMain as string);
+  const anchorProgram = anchorSide ? bestName : sign < 0 ? (top.priorMain as string) : (top.currentMain as string);
   const mode: LineupShift["mode"] =
     !keySlot.currentProgram || keySlot.currentAirings === 0
       ? "vacated"
-      : keySlot.priorProgram === keySlot.currentProgram
-        ? "self"
-        : "handoff";
+      : !keySlot.priorProgram || keySlot.priorAirings === 0
+        ? "added"
+        : keySlot.priorProgram === keySlot.currentProgram
+          ? "self"
+          : "handoff";
   const demos = demoBase !== null && demoBase >= DEMO_SLOT_FLOOR ? demoRetention(key, demoLabels) : [];
   return { anchorProgram, mode, contributionDelta: best.sum, keySlot, demos };
 }
@@ -354,8 +371,9 @@ export async function loadLineupShifts(params: {
   dateTo: string;
   priorDateFrom: string;
   priorDateTo: string;
+  minPrimeSlotAirings?: number;
 }): Promise<LineupShiftResult | null> {
-  const { channelId, kpiLabel, dateFrom, dateTo, priorDateFrom, priorDateTo } = params;
+  const { channelId, kpiLabel, dateFrom, dateTo, priorDateFrom, priorDateTo, minPrimeSlotAirings } = params;
   const demoLabels = kpiLabel.startsWith("수도권") ? METRO_DEMO_LABELS : [];
   const labels = [kpiLabel, ...demoLabels];
   const [{ data: targetRows }, { data: programRows }] = await Promise.all([
@@ -399,5 +417,5 @@ export async function loadLineupShifts(params: {
     if (a.date >= dateFrom && a.date <= dateTo) current.push(a);
     else if (a.date >= priorDateFrom && a.date <= priorDateTo) prior.push(a);
   }
-  return analyzeLineupShifts(prior, current, kpiLabel, demoLabels);
+  return analyzeLineupShifts(prior, current, kpiLabel, demoLabels, minPrimeSlotAirings);
 }

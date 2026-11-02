@@ -2174,6 +2174,7 @@ export async function GET(request: Request) {
       growthDriver: MonthlyDriver | null;
       weaknessDriver: MonthlyDriver | null;
       primeMovers: MonthlyPrimeMover[];
+      lineup: LineupShiftResult | null;
     }[];
   } | null = null;
   if (asOfDateIsoDow === 7) {
@@ -2250,7 +2251,26 @@ export async function GET(request: Request) {
             ? await computeChannelPeriodDrivers(code, ch, weekStart, weekEnd, priorWeekStart, priorWeekEnd, MIN_WEEKLY_AIR_COUNT)
             : { growthDriver: null, weaknessDriver: null, primeMovers: [] };
 
-        return { channelCode: code, targetLabel, weeks, rankChange, ratingChangePct, growthDriver, weaknessDriver, primeMovers };
+        // 사용자 지시(2026-11-02, "주간도 적용"): 월간과 같은 자리 이어받기 분석. 주간은 한 자리가 주 1회라
+        // 프라임 등락 최소 편성을 1회로 낮춘다(양쪽 주 모두 편성 + 채널 평균 2% 문턱은 그대로).
+        let lineup: LineupShiftResult | null = null;
+        if (priorWeekStart && priorWeekEnd && code !== "SKYUHD" && ch.primary_target) {
+          try {
+            lineup = await loadLineupShifts({
+              channelId: ch.id,
+              kpiLabel: resolveProgramLevelTargetLabel(ch.primary_target),
+              dateFrom: weekStart,
+              dateTo: weekEnd,
+              priorDateFrom: priorWeekStart,
+              priorDateTo: priorWeekEnd,
+              minPrimeSlotAirings: 1,
+            });
+          } catch (e) {
+            console.error("[weeklyReview] lineup", code, e);
+          }
+        }
+
+        return { channelCode: code, targetLabel, weeks, rankChange, ratingChangePct, growthDriver, weaknessDriver, primeMovers, lineup };
       });
 
       const resolvedWeeklyChannels = weeklyChannels.filter((c): c is NonNullable<typeof c> => c !== null);
