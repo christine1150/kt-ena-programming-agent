@@ -16,7 +16,7 @@ import { describeLearned, hhmm, inferRuns, type LearnedSlot } from "@/lib/broadc
 import { loadRunPatterns } from "@/lib/broadcastPattern/load";
 import { FOLLOW_RULES, followRunsOf, loadFollowSources, type SourceAir } from "@/lib/broadcastPattern/followRule";
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
-import { mergeSplitRatingRows } from "@/lib/broadcastTime/boundarySplit";
+import { mergeBoundarySplits, mergedShare, mergeSplitRatingRows, weightedValue } from "@/lib/broadcastTime/boundarySplit";
 import { loadOriginalCompare } from "./originalCompare";
 import {
   channelDailyMean,
@@ -203,17 +203,44 @@ const SLOT_PREFIX_RE = new RegExp(`^(?:${BROADCAST_SLOT_PREFIXES.join("|")})(?=.
 /** 정규화 키에서 방송사 편성 꼬리표를 뗀 키 (없으면 그대로) */
 const stripSlotPrefix = (key: string): string => key.replace(SLOT_PREFIX_RE, "");
 
+/**
+ * 경쟁채널 방영 행도 닐슨이 26:00 경계에서 둘로 나눈다(실측 10/19~11/01 2049 타깃 334쌍). 같은 방영(채널·타깃·방송일·시작) 중복 행을 먼저 접고,
+ * 같은 채널·타깃·작품(<본>·<재> 표시 뗀 이름)의 분할 짝을 한 방영으로 합친다. 표시가 한쪽에만 있으면 그 이름을 쓴다(broadcastTime/boundarySplit.ts).
+ */
+function mergeSplitCompetitorRows(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  const seen = new Set<string>();
+  const uniq = rows.filter((r) => {
+    const k = `${r.competitor_name}|${r.target_label}|${r.broadcast_date}|${r.start_time}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const tagOf = (n: string) => (/<본>/.test(n) ? true : /<재>/.test(n) ? false : null);
+  const num = (x: unknown) => (x === null || x === undefined ? null : Number(x));
+  return mergeBoundarySplits(
+    uniq,
+    (r) => ({ key: `${r.competitor_name}|${r.target_label}|${String(r.program_name ?? "").replace(/<본>|<재>/g, "")}`, date: String(r.broadcast_date), startTime: (r.start_time as string | null) ?? null, endTime: (r.end_time as string | null) ?? null, firstRun: tagOf(String(r.program_name ?? "")) }),
+    (t, h, p) => ({
+      ...t,
+      end_time: h.end_time,
+      program_name: tagOf(String(t.program_name ?? "")) === null ? h.program_name : t.program_name,
+      rating: weightedValue(num(t.rating), p.tailSec, num(h.rating), p.headSec),
+      share: mergedShare(num(t.rating), num(t.share), p.tailSec, num(h.rating), num(h.share), p.headSec),
+    })
+  );
+}
+
 export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNames: Set<string>, from: string, to: string, airing: AiringFilter, nameVariants: string[] = [], openStart = false, ownAirsP?: Promise<OwnAir[]>): Promise<CompetitorRow[]> {
   const keys = memberKeys.filter((k) => /^[가-힣A-Z0-9]+$/.test(k));
   if (!keys.length || !from || !to) return [];
   const memberSet = new Set(keys);
   // norm_program_name(DB 생성 열, 대소문자 유지) 완전 일치로 찾는다 — 색인을 타서 빠르다(ilike는 색인을 못 타 수 초 걸림). 대소문자 변형은 자사 프로그램 표기에서 모은다.
   const exact = [...new Set([...keys, ...keys.map((k) => k.toLowerCase()), ...nameVariants.map((n) => n.replace(/<본>|<재>/g, "").replace(/[^가-힣a-zA-Z0-9]/g, "")), ...keys.flatMap((k) => BROADCAST_SLOT_PREFIXES.map((p) => p + k))])].filter(Boolean);
-  const raw = await fetchAll<Record<string, unknown>>(
+  const fetched = await fetchAll<Record<string, unknown>>(
     (a, b) =>
       db
         .from("competitor_program_target_ratings")
-        .select("competitor_name, target_label, broadcast_date, start_time, program_name, rating, share")
+        .select("competitor_name, target_label, broadcast_date, start_time, end_time, program_name, rating, share")
         .in("norm_program_name", exact)
         .in("target_label", COMPETITOR_TARGETS.map((t) => t.sheet))
         .gte("broadcast_date", openStart ? "1900-01-01" : from)
@@ -223,6 +250,7 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
         .range(a, b),
     "경쟁 채널 방영"
   );
+  const raw = mergeSplitCompetitorRows(fetched);
   // 전체 기간(사용자 지시 2026-10-27, 결이 다른 전쟁사): 원 방송 경쟁채널(MBN)의 첫 방송이 자사 첫 방영보다 앞서도 빠지지 않게, 경쟁채널은 자기 첫 방영일부터 센다
   if (openStart) for (const r of raw) if (String(r.broadcast_date) < from) from = String(r.broadcast_date);
   // 동시방송 판정(사용자 지시 2026-10-27): 같은 날 자사 채널 방영과 시작 시각 차이가 15분 이내인 경쟁채널 방영
