@@ -4934,14 +4934,11 @@ function ChannelNarrativeCard({
   themeColorByCode,
   targetRankByCode,
   enaOriginalDaily,
-  rankSlides,
   onOpenChannelDetail,
   selectedChannel,
   achievementPctByCode,
 }: {
   achievementPctByCode: Map<string, number | null>;
-  // 주간 순위 하락 배경(2026-10-26) — 해당 채널 줄 아래에 원인 문장을 붙인다
-  rankSlides: RankSlide[];
   signals: ChannelNarrativeSignal[];
   themeColorByCode: Map<string, string | null>;
   // 사용자 지시(2026-09-09): 안정/약세/주의 Health Score 배지 대신 "시청률 (오늘 등위/목표
@@ -4972,9 +4969,7 @@ function ChannelNarrativeCard({
     actionKind: "program" | "diagnosis" | null;
     needsAi: boolean;
     actionTag: ActionTag | null;
-    slideLines: string[];
   }[] = [];
-  const slideByCode = new Map(rankSlides.map((s) => [s.channelCode, s]));
   const enaLeadSentence = buildEnaOriginalHighlightSentence(enaOriginalDaily.filter((d) => d.broadcast_channel_code === "ENA"));
   for (const code of INSIGHT_CHANNEL_ORDER) {
     const s = byCode.get(code);
@@ -4996,7 +4991,6 @@ function ChannelNarrativeCard({
       todayRating: s.today_rating,
       todayRank: s.today_rank,
       ...buildChannelInsightSummary(s, { targetRankNum: parseTargetRankNum(targetRankByCode.get(code) ?? null), achievementPct: achievementPctByCode.get(code) ?? null }),
-      slideLines: slideByCode.get(code)?.lines ?? [],
     });
   }
   const skyuhdSignal = byCode.get("SKYUHD");
@@ -5015,7 +5009,6 @@ function ChannelNarrativeCard({
       todayRating: skyuhdSignal.today_rating ?? null,
       todayRank: skyuhdSignal.today_rank ?? null,
       ...buildChannelInsightSummary(skyuhdSignal),
-      slideLines: [],
     });
 
   return (
@@ -5087,20 +5080,6 @@ function ChannelNarrativeCard({
                     <p className="text-[13.5px] leading-snug text-zinc-400">{line.text ? "이 채널의 변화는 '오늘의 시청률' 카드에 있습니다." : "오늘은 눈에 띄는 변화가 없습니다."}</p>
                   );
                 })()}
-                {/* 주간 순위 하락 배경(2026-10-26, 사용자 요청): 최근 12주 최고 순위보다 크게 내려간 채널은 어제 하루 변화로는 설명되지 않아, 닐슨 주간 순위 기준 원인을 매일 함께 보여 준다. */}
-                {line.slideLines.length > 0 && (
-                  <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2">
-                    <p className="mb-1 text-[11px] font-semibold text-amber-700">[주간 순위 하락 배경]</p>
-                    <ul className="flex flex-col gap-1">
-                      {line.slideLines.map((t, k) => (
-                        <li key={k} className="text-[12.5px] leading-snug text-amber-800">
-                          ·{" "}
-                          {highlightNarrativeText(t, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR, 600)}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
             </div>
           ))
@@ -6316,7 +6295,6 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                     themeColorByCode={themeByCode}
                     targetRankByCode={new Map(data.channels.map((c) => [c.code, c.targetRank]))}
                     enaOriginalDaily={data.originalContentReport.daily}
-                    rankSlides={data.rankSlides ?? []}
                     selectedChannel={selectedInsightChannel}
                     achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
                     onOpenChannelDetail={(code) => setSelectedInsightChannel((cur) => (cur === code ? null : code))}
