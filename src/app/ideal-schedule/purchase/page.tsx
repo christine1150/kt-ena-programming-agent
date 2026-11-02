@@ -546,6 +546,7 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
   const targetName = items?.[0] ? TARGET_NAME[items[0].target] : "";
   const label = WINDOW_OPTS.find((w) => w.days === windowDays)?.label.replace(" (기본)", "") ?? "";
   const stale = !!alignment && !alignment.aligned;
+  const otherWarnings = alignment ? alignment.messages.slice(alignment.asOfLagDays > 0 ? 1 : 0) : [];
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -553,7 +554,7 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
           className="text-base font-semibold text-zinc-900"
           title="아직 Avail에 없는 신규 구매 검토 후보(보유 예정·권리 획득 가정)입니다. 우리 채널에서 방영한 적 없다는 사실이 구매 가능하다는 뜻은 아닙니다. 타 채널 재방 실적으로 이 채널 연평균 이상(1.0배 이상)이 기대되는 후보를 연평균 대비 배수 순으로 보여 주며, 방영 횟수가 적으면 배수를 1.0 쪽으로 당겨 비교합니다. 모든 항목은 구매 권고가 아니라 검토 후보입니다. 순위는 이 배수 순서일 뿐 근거의 강도와는 별개라서, 근거 강도가 약하거나 예상 범위가 넓은 후보는 순위가 높아도 참고용으로 읽어 주세요. 항목을 누르면 위에서 바로 시뮬레이션합니다."
         >
-          구매 검토 후보 <span className="text-xs font-normal text-zinc-500">· {CHANNEL_OPTS.find((c) => c.code === channel)?.name} · {label}{targetName ? ` · ${targetName}` : ""}</span>
+          구매 검토 후보 <span className="text-xs font-normal text-zinc-500">· {CHANNEL_OPTS.find((c) => c.code === channel)?.name} · {label}{targetName ? ` · ${targetName}` : ""}{items?.[0]?.as_of ? ` · ${items[0].as_of.slice(0, 10)} 기준` : ""}</span>
         </h2>
         {items && items.length > 0 && (
           <select value={genre} onChange={(e) => setGenre(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700" aria-label="장르">
@@ -567,7 +568,8 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
       {items && items.length === 0 && <p className="mt-2 text-sm text-zinc-500">이 채널·기간의 구매 검토 후보는 아직 준비되지 않았습니다.</p>}
       {items && items.length > 0 && (
         <>
-          {stale && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">오래된 추천 — {alignment!.messages.join(" ")}</p>}
+          {/* 기준일 차이 안내는 제목 옆 "○○ 기준"으로 대신하고, 모델 불일치·갱신 지연 경고만 남긴다(기준일 메시지는 항상 첫 번째) */}
+          {otherWarnings.length > 0 && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{otherWarnings.join(" ")}</p>}
           <div className={`mt-3 hidden gap-x-4 px-2 pb-1.5 text-xs text-zinc-400 ${RECO_GRID} md:grid`} aria-hidden>
             <span>프로그램</span>
             <span className="text-right">예상 시청률</span>
