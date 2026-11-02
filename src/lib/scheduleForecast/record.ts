@@ -20,8 +20,11 @@ import { alignDay } from "./dailyAlignment";
 import { toForecastSlots } from "./fromEngine";
 import { OFFICIAL_SCALE_WINDOW_DAYS, officialScaleOf, toOfficialEstimate, type OfficialScale } from "./officialScale";
 import { FORECAST_SNAPSHOT_VERSION } from "./types";
+import { applyCalibration, type CalibrationFactor } from "./calibration";
+import { loadApprovedCalibration } from "./review";
 
 const PAGE = 1000;
+const pick = (o: Record<string, CalibrationFactor>, keep: (k: string) => boolean) => Object.fromEntries(Object.entries(o).filter(([k]) => keep(k)));
 const NAME_MATCHING = "v2" as const;
 /** 수기 누적 자료라 같은 정의의 실적 대조가 없는 채널 */
 const SKIP_CHANNELS = new Set(["SKYUHD"]);
@@ -138,7 +141,10 @@ export async function recordPlanForecast(channelCode: string, weekStart: string,
       planRows: normalizePlanRows(rows.map((r) => ({ ...r, episode_subtitle: null, matched_program_id: null }))),
       nameMatching: NAME_MATCHING,
     });
-    const slots = toForecastSlots(res);
+    // 관리자가 승인한 주간 보정 배율(calib-v1)이 있으면 칸별 예상·범위에 곱한다 — 쓴 배율은 기록에 남겨 대조 때 엔진 원값으로 되돌려 학습한다
+    const approved = await loadApprovedCalibration();
+    const calUsed = approved ? { modelVersion: approved.modelVersion, channels: pick(approved.calibration.channels, (k) => k === channelCode), groups: pick(approved.calibration.groups, (k) => k.startsWith(`${channelCode}|`)) } : null;
+    const slots = applyCalibration(toForecastSlots(res), calUsed, channelCode);
     const days = aggregateDays(slots, weekStart);
     const week = aggregatePeriod(slots, weekStart, addDays(weekStart, 6));
     const aggregates = {
@@ -147,7 +153,7 @@ export async function recordPlanForecast(channelCode: string, weekStart: string,
       officialScale: scale,
       warnings: res.warnings,
     };
-    const modelParams = { nameMatching: NAME_MATCHING, features: res.versions.features, configDigest: res.versions.configDigest, genreDigest: res.versions.genreDigest, rangeBasis: res.versions.rangeBasis, officialScale: scale.version };
+    const modelParams = { nameMatching: NAME_MATCHING, features: res.versions.features, configDigest: res.versions.configDigest, genreDigest: res.versions.genreDigest, rangeBasis: res.versions.rangeBasis, officialScale: scale.version, ...(calUsed ? { calibration: calUsed } : {}) };
     const codeVersion = `${FORECAST_SNAPSHOT_VERSION}@${(process.env.VERCEL_GIT_COMMIT_SHA ?? "local").slice(0, 12)}`;
     const inputSnapshot = { planRows, planVersionId, engineFingerprint: res.fingerprint, featureWindow: res.featureWindow, versions: res.versions, targetLabel: res.targetLabel, officialScale: scale };
     const keys = forecastKeys({ channelCode, targetLabel: res.targetLabel, weekStart, dataCutoff: cutoff, modelVersion: res.versions.model, modelParams, codeVersion, purpose, planVersionId, inputSnapshot });
