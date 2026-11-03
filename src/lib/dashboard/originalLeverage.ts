@@ -5,6 +5,7 @@
 // 분류는 순수 함수(classifyOriginals), DB 조회는 computeOriginalLeverage가 한다.
 import { loadOriginalSpecs } from "@/lib/idealSchedule/constraintStore";
 import { loadChannelRef } from "@/lib/idealSchedule/dataSource";
+import { titleAllowedOnChannel } from "@/lib/idealSchedule/channelEligibility";
 import { addDays } from "@/lib/idealSchedule/time";
 import { AFTER_END_DAYS, LEVERAGE_CHANNELS, classifyOriginals, pickForChannel, type OriginalLeverage } from "./originalClassify";
 export { LEVERAGE_CHANNELS, classifyOriginals, pickForChannel } from "./originalClassify";
@@ -69,9 +70,10 @@ export async function computeOriginalLeverage(channelCode: string, asOf: string)
   let weak: { name: string; slotIndex: number | null }[] = [];
   if (cls.weak.length > 0) {
     const titles = await recentTitles(channelCode, asOf).catch(() => []);
-    weak = cls.weak.filter((w) => titles.some((t) => sameTitle(t, w.name)));
+    weak = cls.weak.filter((w) => titleAllowedOnChannel(channelCode, w.name) && titles.some((t) => sameTitle(t, w.name)));
   }
-  const value = cls.use.length === 0 && weak.length === 0 ? null : { use: pickForChannel(cls.use, channelCode), weak: weak.slice(0, 2) };
+  const picked = pickForChannel(cls.use, channelCode);
+  const value = picked.length === 0 && weak.length === 0 ? null : { use: picked, weak: weak.slice(0, 2) };
   cache.set(key, { at: Date.now(), value });
   return value;
 }

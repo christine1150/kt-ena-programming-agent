@@ -6,6 +6,7 @@
 import { runIdealSchedule } from "@/lib/idealSchedule/engineRunner";
 import { addDays, isoDow } from "@/lib/idealSchedule/time";
 import { loadChannelRef } from "@/lib/idealSchedule/dataSource";
+import { titleAllowedOnChannel } from "@/lib/idealSchedule/channelEligibility";
 import { exclusionFingerprint, loadActiveExclusions } from "@/lib/idealSchedule/exclusions";
 import { supabase } from "@/lib/supabase";
 import { isFeatureOn } from "@/lib/featureFlags";
@@ -274,7 +275,7 @@ export async function computeAiSuggestion(channelCode: string, asOfDate: string,
   } catch {
     return computeAiSuggestionUncached(channelCode, asOfDate, focus);
   }
-  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v11", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
+  const r = await cachedJson<AiSuggestion>(supabase as unknown as CacheDb, "ai_suggestion:v12", asOfDate, fp, SUGGESTION_CACHE_TTL_MS, () => computeAiSuggestionUncached(channelCode, asOfDate, focus));
   return r.value;
 }
 
@@ -290,7 +291,7 @@ async function loadExternalCandidates(channelCode: string, limit = 2): Promise<{
   if (error) return [];
   // 진입 기준(비교 1곳·20회·연평균 1.0배 이상)을 다시 확인하고, 방영 횟수로 보정한 배수 순으로 상위만 쓴다(저장된 순서는 갱신 시점의 기준이라 옛 값이 섞일 수 있다)
   return ((data ?? []) as { display_name: string; vs_annual_avg: number | string | null; peer_count: number | string | null; peer_airings: number | string | null; as_of: string | null }[])
-    .filter((r) => !!r.display_name)
+    .filter((r) => !!r.display_name && titleAllowedOnChannel(channelCode, r.display_name))
     .map((r) => ({ name: r.display_name, vsAvg: r.vs_annual_avg === null ? null : Number(r.vs_annual_avg), peers: r.peer_count === null ? null : Number(r.peer_count), airings: r.peer_airings === null ? null : Number(r.peer_airings), asOf: r.as_of ?? null }))
     .filter((r) => r.vsAvg !== null && r.vsAvg >= RECO_MIN_VS_AVG && recoEvidence(r.peers, r.airings) !== null)
     .sort(byShrunkDesc)

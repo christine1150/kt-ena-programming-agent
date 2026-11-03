@@ -994,7 +994,10 @@ check("홈 문구: 호조 프로그램이 있어도 채널이 목표 미달이�
   const fit = (id: string, tier: "FORMAL" | "REFERENCE" | "HOLD", tag: string | null, L: number, A: number, score: number) => ({ programId: id, tier, tag, slotIndex: L, scaleIndex: A, score });
   const fits = [fit("a", "FORMAL", "KEEP", 1.43, 1.81, 69), fit("b", "REFERENCE", "TEST", 0.87, 1.22, 51), fit("c", "FORMAL", "STRENGTHEN", 2.38, 1.96, 79), fit("e", "FORMAL", "REPLACE", 0.36, 0.52, 16), fit("f", "FORMAL", "KEEP", 1.5, 1.5, 70)];
   const r = classifyOriginals(specs, fits, "2026-10-13");
-  check("오리지널 활용: 진행 중 정식 판정 우수작은 fit, 방영 초반(표본 적음)은 test, 시작 전은 upcoming", r.use.map((u) => u.name + ":" + u.verdict).join(",") === "나는SOLO:fit,연애박사:test,지구마불 세계여행 4:upcoming", r.use.map((u) => u.name + ":" + u.verdict).join(","));
+  check("오리지널 활용: 진행 중 정식 판정 우수작은 fit, 방영 초반(표본 적음)은 test, 시작 전 작품은 권하지 않는다(사용자 지시 2026-11-04)", r.use.map((u) => u.name + ":" + u.verdict).join(",") === "나는SOLO:fit,연애박사:test", r.use.map((u) => u.name + ":" + u.verdict).join(","));
+  const sol = [{ name: "나는 솔로 사랑은 계속된다", category: "오리지널 예능", verdict: "fit" as const, status: "진행" as const, start: null, slotIndex: 1.4, scaleIndex: 1.8 }, ...r.use];
+  check("오리지널 활용: 나는솔로·나는솔로 사랑은 계속된다는 ENA·ENA Play에만 권한다(Drama·Story에는 권하지 않음)",
+    !pickForChannel(sol, "ENA_DRAMA").some((u) => u.name.includes("솔로") || u.name.includes("SOLO")) && !pickForChannel(sol, "ENA_STORY").some((u) => u.name.includes("솔로") || u.name.includes("SOLO")) && pickForChannel(sol, "ENA_PLAY").some((u) => u.name === "나는 솔로 사랑은 계속된다"));
   check("오리지널 활용: 종영 +1주를 넘긴 작품·사업형 분류는 제외", !r.use.some((u) => u.name === "신병4사보타주" || u.name === "케이팝업차트쇼"));
   check("오리지널 활용: ENA 본방 효율이 낮은 진행 중 작품은 활용이 아니라 재방 축소 대상(슬롯 대비 배수 포함)", r.weak.map((w) => w.name).join() === "왕자와 거지" && r.weak[0].slotIndex === 0.36 && !r.use.some((u) => u.name === "왕자와 거지"));
   const r2 = classifyOriginals(specs, fits, "2026-10-05");

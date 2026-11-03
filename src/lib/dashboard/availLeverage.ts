@@ -7,6 +7,7 @@ import { buildEvalContext } from "@/lib/avail/context";
 import { loadAvailState } from "@/lib/avail/store";
 import { rightsFingerprint } from "@/lib/avail/engineGate";
 import { cachedJson } from "@/lib/idealSchedule/suggestionCacheCore";
+import { titleAllowedOnChannel } from "@/lib/idealSchedule/channelEligibility";
 import type { CacheDb } from "@/lib/llmTextCacheCore";
 import { computeRecommendations, RECO_CONFIGS } from "@/lib/purchaseSim/recommend";
 import { supabase } from "@/lib/supabase";
@@ -32,7 +33,8 @@ async function compute(channelCode: string, today: string): Promise<AvailLeverag
   if (held.length === 0) return { heldCount: 0, items: [] };
   const keys = new Set(held.flatMap((h) => (h.altKey ? [h.key, h.altKey] : [h.key])));
   const reco = await computeRecommendations(supabase, { channel: channelCode, target: cfg.target, window: WINDOW_DAYS, top: 60, onlyKeys: keys });
-  const preds = reco.rows.map((r) => {
+  // 방영권상 이 채널에 편성할 수 없는 제목(나는솔로 등)은 보유 목록에 있어도 권하지 않는다(사용자 지시 2026-11-04)
+  const preds = reco.rows.filter((r) => titleAllowedOnChannel(channelCode, r.display_name)).map((r) => {
     // 별칭 그룹이면 대표 키가 보유 제목 키와 다를 수 있어 대표·그룹 키 중 보유 목록에 있는 쪽으로 잇는다
     const key = [r.rep_key, r.group_key].map((k) => k.toUpperCase()).find((k) => keys.has(k)) ?? r.rep_key.toUpperCase();
     return { key, displayName: r.display_name, vsAvg: r.vsAvg, peers: r.peers, airings: r.airings };
@@ -41,7 +43,7 @@ async function compute(channelCode: string, today: string): Promise<AvailLeverag
 }
 
 export async function computeAvailLeverage(channelCode: string, today: string): Promise<AvailLeverage | null> {
-  const fp = { v: "v6", channelCode, today, rights: await rightsFingerprint() };
-  const r = await cachedJson<AvailLeverage | { none: true }>(supabase as unknown as CacheDb, "avail_leverage:v6", today, fp, TTL_MS, async () => (await compute(channelCode, today)) ?? { none: true });
+  const fp = { v: "v7", channelCode, today, rights: await rightsFingerprint() };
+  const r = await cachedJson<AvailLeverage | { none: true }>(supabase as unknown as CacheDb, "avail_leverage:v7", today, fp, TTL_MS, async () => (await compute(channelCode, today)) ?? { none: true });
   return "none" in r.value ? null : r.value;
 }

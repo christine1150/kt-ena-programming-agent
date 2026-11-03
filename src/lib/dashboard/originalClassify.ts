@@ -1,5 +1,6 @@
 // ENA 오리지널 본방 활용 권유의 순수 분류(DB·네트워크 없음) — 조회는 originalLeverage.ts. 설명은 그 파일 머리말 참고.
 import { addDays } from "@/lib/idealSchedule/time";
+import { titleAllowedOnChannel } from "@/lib/idealSchedule/channelEligibility";
 
 /** 활용을 권유하는 채널(재방·편성 확대가 가능한 자매 채널) */
 export const LEVERAGE_CHANNELS = new Set(["ENA_PLAY", "ENA_DRAMA", "ENA_STORY"]);
@@ -55,15 +56,11 @@ export function classifyOriginals(specs: OriginalSpecLite[], fits: OriginalFitLi
     const ended = s.activeTo !== null && s.activeTo < asOf;
     const withinAfter = s.activeTo === null || addDays(s.activeTo, AFTER_END_DAYS) >= asOf;
     if (started && !withinAfter) continue; // 종영 +1주를 넘김
-    const upcoming = !started && s.activeFrom <= addDays(asOf, UPCOMING_DAYS);
-    if (!started && !upcoming) continue;
+    // 사용자 지시(2026-11-04): 아직 시작하지 않은 작품(예: 크래시2)은 틀 수 있는 재방이 없어 권유 대상에서 뺀다.
+    if (!started) continue;
     seen.add(s.programId);
-    const status: OriginalUse["status"] = upcoming ? "예정" : ended ? "종영 직후" : "진행";
+    const status: OriginalUse["status"] = ended ? "종영 직후" : "진행";
     const f = fitOf.get(s.programId);
-    if (upcoming) {
-      use.push({ name: s.programName, category: s.category, verdict: "upcoming", status, start: s.activeFrom, slotIndex: null, scaleIndex: null, rank: -1 });
-      continue;
-    }
     if (!f || f.tier === "HOLD") continue; // 판단 보류 — 권유도 부진 코멘트도 하지 않는다
     const L = f.slotIndex ?? 0;
     const A = f.scaleIndex ?? 0;
@@ -83,7 +80,9 @@ export function classifyOriginals(specs: OriginalSpecLite[], fits: OriginalFitLi
  * 채널 성격에 맞춰 권유 순서를 정한다 — ENA Drama는 오리지널 드라마, 그 밖(Play·Story)은 오리지널 예능을 먼저 보되,
  * 두 분류에서 각각 가장 효율 좋은 작품 하나씩을 앞에 두고 나머지는 효율 순으로 채운다(같은 분류가 줄줄이 나오지 않게). 최대 3개.
  */
-export function pickForChannel(use: OriginalUse[], channelCode: string): OriginalUse[] {
+export function pickForChannel(allUse: OriginalUse[], channelCode: string): OriginalUse[] {
+  // 사용자 지시(2026-11-04): 방영권상 이 채널에 편성할 수 없는 제목(예: 나는솔로 → ENA·ENA Play만)은 권하지 않는다.
+  const use = allUse.filter((u) => titleAllowedOnChannel(channelCode, u.name));
   const first = channelCode === "ENA_DRAMA" ? "오리지널 드라마" : "오리지널 예능";
   const second = first === "오리지널 드라마" ? "오리지널 예능" : "오리지널 드라마";
   const head = [use.find((u) => u.category === first), use.find((u) => u.category === second)].filter((u): u is OriginalUse => !!u);

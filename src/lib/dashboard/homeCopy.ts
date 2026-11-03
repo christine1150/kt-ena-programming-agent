@@ -148,15 +148,11 @@ export function buildCardCopy(input: CardCopyInput): CardCopy {
   }
   const o = ai?.originals ?? null;
   if (o && o.use.length > 0) {
-    const mmdd = (d: string | null) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "");
+    // 시작 전 작품은 권유 대상이 아니다(originalClassify, 2026-11-04) — 본방 중이거나 종영 직후인 작품만 온다.
     const names = o.use.slice(0, 2).map((u) =>
-      u.verdict === "upcoming" ? `'${u.name}'(${mmdd(u.start)} 시작 예정)` : u.verdict === "test" ? `'${u.name}'(방영 초반이라 시험 편성)` : `'${u.name}'(ENA 본방이 같은 시간대 평균의 ${u.slotIndex?.toFixed(1) ?? "-"}배)`
+      u.verdict === "test" ? `'${u.name}'(방영 초반이라 시험 편성)` : `'${u.name}'(ENA 본방이 같은 시간대 평균의 ${u.slotIndex?.toFixed(1) ?? "-"}배)`
     );
-    levers.push(
-      o.use.every((u) => u.verdict === "upcoming")
-        ? { text: sentence(`ENA에서 곧 시작하는 ${names.join(", ")} — 본방 시작 후 이 채널 재방 편성 검토`), positive: false }
-        : { text: sentence(`재방 편성 확대 검토 — ENA에서 본방 중인 ${names.join(", ")}`), positive: o.use.some((u) => u.verdict === "fit") }
-    );
+    levers.push({ text: sentence(`재방 편성 확대 검토 — ENA에서 본방 중인 ${names.join(", ")}`), positive: o.use.some((u) => u.verdict === "fit") });
   }
   const heldAll = ai?.availHeld ?? [];
   const held = heldAll.filter((h) => h.tier !== "test").slice(0, 2);
