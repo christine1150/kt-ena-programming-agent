@@ -31,6 +31,23 @@ function NavInner({ role }: { role: Role | null }) {
   const actionExtra = { from: sp.get("from"), ft: sp.get("ft"), sj: sp.get("sj"), hour: sp.get("hour"), cut: cutParam };
   const carry = actionExtra.from && actionExtra.ft ? actionExtra : {};
 
+  // 오리지널 라인업(ENA 콘텐츠 편성센터, 별도 사이트) — 보고서와 관리 사이, 새 창으로 연다(사용자 요청 2026-10-22).
+  // 관리 메뉴가 없는 PD 계정에서도 보이도록, 관리가 없으면 맨 끝에 붙인다(사용자 요청 2026-11-04).
+  const lineupLink = (
+    <li className="shrink-0">
+      <a
+        href="https://ktena.pages.dev/"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="ENA 콘텐츠 편성센터의 오리지널 라인업을 새 창으로 엽니다"
+        className="block border-b-2 border-transparent px-3 py-2.5 text-[13px] font-medium text-zinc-500 transition hover:text-zinc-800"
+      >
+        라인업
+      </a>
+    </li>
+  );
+  const hasAdmin = items.some((i) => i.id === "admin");
+
   return (
     <>
       <nav aria-label="전역 메뉴" className="border-b border-zinc-200 bg-white print:hidden" data-global-nav>
@@ -39,20 +56,7 @@ function NavInner({ role }: { role: Role | null }) {
             const isActive = active === item.id;
             return (
               <Fragment key={item.id}>
-                {/* 오리지널 라인업(ENA 콘텐츠 편성센터, 별도 사이트) — 보고서와 관리 사이, 새 창으로 연다(사용자 요청 2026-10-22). */}
-                {item.id === "admin" && (
-                  <li className="shrink-0">
-                    <a
-                      href="https://ktena.pages.dev/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="ENA 콘텐츠 편성센터의 오리지널 라인업을 새 창으로 엽니다"
-                      className="block border-b-2 border-transparent px-3 py-2.5 text-[13px] font-medium text-zinc-500 transition hover:text-zinc-800"
-                    >
-                      라인업
-                    </a>
-                  </li>
-                )}
+                {item.id === "admin" && lineupLink}
                 <li className="shrink-0">
                   <Link
                     href={navHref(item, ctx, resolvedTo, carry)}
@@ -113,6 +117,7 @@ function NavInner({ role }: { role: Role | null }) {
               </Fragment>
             );
           })}
+          {!hasAdmin && lineupLink}
         </ul>
       </nav>
       <ActionRibbon />
