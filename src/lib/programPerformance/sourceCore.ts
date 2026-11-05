@@ -198,7 +198,8 @@ const SIMULCAST_TOLERANCE_MIN = 15;
  * 이 꼬리표를 떼지 않으면 작품 묶음 키('100일의거짓말')와 달라 tvN 계열이 통째로 빠진다(사용자 지적 2026-10-27).
  * 꼬리표 목록은 DB 실제 표기에서 확인한 것만 둔다 — 비밀문서·티벤터뷰처럼 '작품명이 뒤에 붙은 다른 프로그램'은 건드리지 않는다.
  */
-const BROADCAST_SLOT_PREFIXES = ["TVN특별기획", "TVN월화드라마", "TVN수목드라마", "TVN토일드라마", "TVN금토드라마", "TVN에디션", "TVNXTVING오리지널드라마", "TVN드라마", "채널A토일드라마"];
+// 2026-11-06: 원 방송사(SBS·MBC·KBS)의 편성 꼬리표와 '미리보기' 표기를 추가 — 닥터X 사례에서 SBS 본방 31회가 통째로 빠졌다
+const BROADCAST_SLOT_PREFIXES = ["SBS금토드라마", "SBS월화드라마", "SBS수목드라마", "SBS토일드라마", "SBS일일드라마", "SBS특별기획", "MBC금토드라마", "MBC월화드라마", "MBC수목드라마", "MBC일일드라마", "KBS금토드라마", "KBS월화드라마", "KBS수목드라마", "KBS토일드라마", "KBS일일드라마", "미리보기", "TVN특별기획", "TVN월화드라마", "TVN수목드라마", "TVN토일드라마", "TVN금토드라마", "TVN에디션", "TVNXTVING오리지널드라마", "TVN드라마", "채널A토일드라마"];
 const SLOT_PREFIX_RE = new RegExp(`^(?:${BROADCAST_SLOT_PREFIXES.join("|")})(?=.)`);
 /** 정규화 키에서 방송사 편성 꼬리표를 뗀 키 (없으면 그대로) */
 const stripSlotPrefix = (key: string): string => key.replace(SLOT_PREFIX_RE, "");
@@ -250,7 +251,59 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
         .range(a, b),
     "경쟁 채널 방영"
   );
-  const raw = mergeSplitCompetitorRows(fetched);
+  // 회차 부제가 붙은 표기("닥터X하얀마피아의시대오늘부터집도시작합니다", "…미리보기")는 작품명으로 시작하는 이름을 따로 찾아 같은 작품으로 센다(2026-11-06).
+  // 시즌·속편("…2", "…시즌2")과 자사에 따로 있는 다른 작품(program_identity 키)은 제외한다.
+  const prefixFetched = await fetchAll<Record<string, unknown>>(
+    (a, b) =>
+      db
+        .from("competitor_program_target_ratings")
+        .select("competitor_name, target_label, broadcast_date, start_time, end_time, program_name, rating, share")
+        .or(keys.map((k) => `norm_program_name.like.${k}*`).join(","))
+        .in("target_label", COMPETITOR_TARGETS.map((t) => t.sheet))
+        .gte("broadcast_date", openStart ? "1900-01-01" : from)
+        .lte("broadcast_date", to)
+        .order("broadcast_date", { ascending: true })
+        .order("start_time", { ascending: true })
+        .range(a, b),
+    "경쟁 채널 방영(부제 표기)"
+  );
+  const subtitled = prefixFetched.filter((r) => {
+    const n = stripSlotPrefix(normalizeProgramKey(String(r.program_name ?? "")));
+    return !memberSet.has(n) && keys.some((k) => n.startsWith(k) && !/^(\d|시즌|SEASON|파트|PART|스페셜|특집|SP)/.test(n.slice(k.length)));
+  });
+  const siblingKeys = new Set<string>();
+  if (subtitled.length) {
+    const cand = [...new Set(subtitled.map((r) => stripSlotPrefix(normalizeProgramKey(String(r.program_name ?? "")))))];
+    for (let i = 0; i < cand.length; i += 100) {
+      const { data } = await db.from("program_identity").select("key, own_channels").in("key", cand.slice(i, i + 100));
+      // 자사 채널이 따로 편성한 작품만 '다른 작품'으로 본다(부제 표기는 경쟁 채널에만 있고, '미리보기'는 같은 작품의 예고)
+      for (const x of (data ?? []) as { key: string; own_channels: string[] | null }[]) if ((x.own_channels ?? []).length > 0 && !/미리보기$/.test(x.key)) siblingKeys.add(x.key);
+    }
+  }
+  // 별개 작품(스핀오프·시리즈, 예: 니돈내산 → 독박투어4)을 부제로 잘못 합치지 않게: 부제 표기는 방영 수가 적고(회차 하나의 재방 수준),
+  // 같은 작품의 일반 표기 방영 기간(앞뒤 7일) 안에서만 나온 것만 받는다.
+  const plainDates = fetched.map((r) => String(r.broadcast_date)).sort();
+  const winFrom = plainDates.length ? addDays(plainDates[0], -7) : "9999-12-31";
+  const winTo = plainDates.length ? addDays(plainDates[plainDates.length - 1], 7) : "0000-01-01";
+  const variantStat = new Map<string, { n: number; min: string; max: string }>();
+  for (const r of subtitled) {
+    const vn = stripSlotPrefix(normalizeProgramKey(String(r.program_name ?? "")));
+    const d = String(r.broadcast_date);
+    const s = variantStat.get(vn) ?? { n: 0, min: d, max: d };
+    s.n++; if (d < s.min) s.min = d; if (d > s.max) s.max = d;
+    variantStat.set(vn, s);
+  }
+  const subtitledOk = subtitled.filter((r) => {
+    const vn = stripSlotPrefix(normalizeProgramKey(String(r.program_name ?? "")));
+    const s = variantStat.get(vn)!;
+    return !siblingKeys.has(vn) && s.n <= 60 * COMPETITOR_TARGETS.length && s.min >= winFrom && s.max <= winTo;
+  });
+  const subtitleNames = new Set(subtitledOk.map((r) => stripSlotPrefix(normalizeProgramKey(String(r.program_name ?? "")))));
+  const isWorkName = (pname: string) => {
+    const n = stripSlotPrefix(normalizeProgramKey(pname));
+    return memberSet.has(n) || subtitleNames.has(n);
+  };
+  const raw = mergeSplitCompetitorRows([...fetched, ...subtitledOk]);
   // 전체 기간(사용자 지시 2026-10-27, 결이 다른 전쟁사): 원 방송 경쟁채널(MBN)의 첫 방송이 자사 첫 방영보다 앞서도 빠지지 않게, 경쟁채널은 자기 첫 방영일부터 센다
   if (openStart) for (const r of raw) if (String(r.broadcast_date) < from) from = String(r.broadcast_date);
   // 동시방송 판정(사용자 지시 2026-10-27): 같은 날 자사 채널 방영과 시작 시각 차이가 15분 이내인 경쟁채널 방영
@@ -261,7 +314,7 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
   for (const r of raw) {
     const name = String(r.competitor_name ?? "");
     const pname = String(r.program_name ?? "");
-    if (!name || ownNames.has(normalizeProgramKey(name)) || !memberSet.has(stripSlotPrefix(normalizeProgramKey(pname)))) continue;
+    if (!name || ownNames.has(normalizeProgramKey(name)) || !isWorkName(pname)) continue;
     const k = `${name}|${r.target_label}|${r.broadcast_date}|${r.start_time}`;
     if (seen.has(k)) continue;
     seen.add(k);

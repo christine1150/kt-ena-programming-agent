@@ -212,7 +212,7 @@ const TABLE_NOTE = "시청률·점유율 단위 % · 괄호는 같은 기간 채
  * 채널별 성과표 — 열 순서 고정(채널 → 수2049 → 가구 → 방영횟수), 채널당 한 줄. 방영횟수는 KPI 타깃 행의 고유 방영 건수(두 타깃을 보여도 두 배로 세지 않음).
  * 행을 누르면 아래 종합평가·흐름·편성 비교가 그 채널로 바뀐다. 순서는 기존 채널 순서.
  */
-function ChannelTable({ entries, airing, selected, onSelect, simulcast }: { entries: ChannelEntry[]; airing: AiringFilter; selected: string | null; onSelect: (r: ChannelRow) => void; simulcast: CompetitorRow[] }) {
+function ChannelTable({ entries, airing, selected, onSelect, simulcast, otherAirings = [] }: { entries: ChannelEntry[]; airing: AiringFilter; selected: string | null; onSelect: (r: ChannelRow) => void; simulcast: CompetitorRow[]; otherAirings?: CompetitorRow[] }) {
   const cols = TARGET_ORDER.filter((t) => entries.some((e) => e.rows.some((r) => r.targetLabel === t)));
   return (
     <section className="mt-3">
@@ -257,6 +257,11 @@ function ChannelTable({ entries, airing, selected, onSelect, simulcast }: { entr
                         <span className="mr-1 text-zinc-300" aria-hidden="true">└</span>
                         <span className="font-medium text-zinc-800">{name}</span>
                         <span className="ml-1.5 rounded bg-zinc-200/70 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">동시방송</span>
+                        {/* 같은 채널의 나머지 방송(재방 등)은 아래 '경쟁 채널 성과'에 따로 있어, 이 행의 횟수가 전체로 읽히지 않게 채널 전체 횟수를 함께 보인다(2026-11-06) */}
+                        {(() => {
+                          const rest = otherAirings.filter((c) => c.competitorName === name).reduce((m, c) => Math.max(m, c.airings), 0);
+                          return rest > 0 ? <span className="ml-1.5 text-[11px] text-zinc-500">이 채널 전체 {formatInt(sMain.airings + rest)}회 (나머지는 경쟁 채널 성과)</span> : null;
+                        })()}
                       </td>
                       {cols.map((c) => {
                         const r = rs.find((x) => x.targetLabel === c);
@@ -1445,7 +1450,7 @@ export default function ProgramPerformanceView() {
           </div>
 
           {entries.length > 0 ? (
-            <ChannelTable entries={entries} airing={result.query.airing} selected={selRow ? rowKey(selRow) : null} onSelect={select} simulcast={simShown} />
+            <ChannelTable entries={entries} airing={result.query.airing} selected={selRow ? rowKey(selRow) : null} onSelect={select} simulcast={simShown} otherAirings={result.competitors} />
           ) : (
             <p className="mt-4 text-[13px] text-zinc-500">{competitorRows.length > 0 ? "자사 방영 기록은 없습니다. 아래 경쟁 채널 성과를 확인하세요." : "이 조건의 방영 기록이 없습니다. 기간을 ‘전체 기간’으로 넓히거나 방송 구분을 ‘전체 방송’으로 바꿔 보세요."}</p>
           )}
