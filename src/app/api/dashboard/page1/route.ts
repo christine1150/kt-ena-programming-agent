@@ -39,8 +39,11 @@ import { buildMetricContext, dataSnapshotId } from "@/lib/metrics";
 import { selectRepresentativeCompetitors } from "@/lib/broadcastTime/overlap";
 import { loadLineupShifts, type LineupShiftResult } from "@/lib/lineupHandoff";
 import { buildYtdGoalBriefing, type YtdGoalBriefing } from "@/lib/ytdGoalBriefing";
+import { buildAutoMinute, type MinuteRatingRow } from "@/lib/minuteRatings";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
+// 분당 시청률 그래프는 수도권 2049 값으로 그리므로 2049가 주 타깃인 채널만 자동 구성한다(가구 채널은 가구 분당 값을 쓸 때 따로 추가).
+const PRIMARY_2049_CHANNEL_CODES = new Set(["ENA", "ENA_DRAMA", "ENA_PLAY"]);
 
 // 사용자 지시(2026-08-21, Page 1 매거진 개편): "전일 대비 순위 증감"·"전주/전전주 동일 요일"
 // 비교에 쓸 날짜 계산 — 로컬 타임존 안전(getFullYear/getMonth/getDate로 직접 조립, toISOString
@@ -1215,9 +1218,39 @@ export async function GET(request: Request) {
         .map((k) => [k.rowKey, manualReportByKey.get(`${k.channelId}__${k.canonicalNameNormalized}__${k.effectiveDateStr}`) ?? null] as const)
         .filter((entry): entry is [string, NonNullable<(typeof entry)[1]>] => entry[1] !== null)
     );
+    // 사용자 지시(2026-11-05): "나는 솔로 분당 시청률 그래프 반영" — 사용자가 따로 뽑아 준 분당 시청률(program_minute_ratings)이 그날 있으면,
+    // PD 수기 리포트가 없는 방영분에도 같은 "분당 시청률" 그래프를 자동으로 보여 준다(PD 리포트가 있으면 그쪽이 우선, 화면에서 정한다).
+    // 값은 DB 그대로 시간 창으로 자르기만 한다(minuteRatings.ts). 테이블이 비었거나 읽기에 실패하면 이 기능만 조용히 빠진다.
+    const minuteRows: MinuteRatingRow[] = [];
+    try {
+      for (let from = 0; from < 20000; from += 1000) {
+        const { data, error } = await supabase
+          .from("program_minute_ratings")
+          .select("channel_name, minute_of_day, p2049_capital")
+          .eq("broadcast_date", asOfDate)
+          .range(from, from + 999);
+        if (error || !data) break;
+        minuteRows.push(...(data as MinuteRatingRow[]));
+        if (data.length < 1000) break;
+      }
+    } catch {
+      minuteRows.length = 0;
+    }
     const dailyWithManualReport = dailyWithTimeSpent.map((row) => ({
       ...row,
       manualReport: manualReportByRowKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
+      autoMinute:
+        minuteRows.length > 0 && row.matched_start_time && PRIMARY_2049_CHANNEL_CODES.has(row.broadcast_channel_code)
+          ? buildAutoMinute(minuteRows, {
+              channelCode: row.broadcast_channel_code,
+              startTime: row.matched_start_time,
+              endTime: row.matched_end_time,
+              simulcastChannel: row.simulcast_channel_code,
+              simulcastProgram: row.simulcast_program_name,
+              simulcastStart: row.simulcast_start_time,
+              simulcastRating: row.simulcast_rating,
+            })
+          : null,
     }));
 
     // 사용자 지시(2026-09-28): "<니돈내산>처럼 1회인 타이틀은 최근 성적 대비에서 최근 동시간

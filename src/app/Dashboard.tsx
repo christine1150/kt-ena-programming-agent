@@ -182,6 +182,9 @@ interface OriginalDailyItem {
   // 덮어써서 반영" — 관리자가 올린 회차별 수동 리포트(manual-drama-report 업로드)가 있으면
   // 함께 내려온다. 없으면 null(기존 자동 계산 그대로 표시).
   manualReport: ManualDramaReportData | null;
+  // 사용자 지시(2026-11-05): "나는 솔로 분당 시청률 그래프 반영" — 사용자가 따로 준 분당 시청률로 서버가 자동 구성한 그래프 데이터.
+  // PD 수동 리포트의 분당 값이 있으면 그쪽을 쓰고, 없을 때만 이 값을 쓴다. 분당 자료가 없는 날은 null.
+  autoMinute?: { minute_ratings: ManualMinuteRating[]; competitor_programs: ManualCompetitorProgramRow[] } | null;
   // 사용자 지시(2026-09-28): "<니돈내산>처럼 1회인 타이틀은 최근 성적 대비에서 최근 동시간
   // 지난 4주 평균 성적과 비교" — ratingHistory.own2049가 2건 미만(직전 회차 비교 불가)일 때만
   // route.ts가 채워준다. 같은 채널·같은 요일+시간대(본방 슬롯)에서 최근 4주간 방영된
@@ -206,6 +209,8 @@ interface ManualCompetitorProgramRow {
   target_rating: number | null;
   target_share: number | null;
   household_rating: number | null;
+  // 분당 값이 있으면(자동 분당 시청률) 평균 가로선 대신 이 점들을 이어 실제 선으로 그린다. PD 리포트의 경쟁 프로그램에는 없다.
+  minutes?: ManualMinuteRating[] | null;
 }
 // PD 리포트 회차 시트에 적힌 이 프로그램의 동시간대 성적(시청률·점유율은 % 단위, 순위는 동시간대 순위).
 interface ManualOwnStats {
@@ -3840,7 +3845,8 @@ function ManualMinuteRatingChart({
     .filter((c) => toMinutes(c.start_time!) < endMin && toMinutes(c.end_time!) > startMin)
     .sort((a, b) => (b.target_rating ?? 0) - (a.target_rating ?? 0))
     .slice(0, 4);
-  const maxRating = Math.max(...minuteRatings.map((p) => p.rating), ...bands.map((c) => c.target_rating ?? 0), 0.0001);
+  // 경쟁 채널의 분당 선(minutes)이 있으면 그 최댓값까지 y축에 포함한다(평균 가로선만 있는 경우는 평균값).
+  const maxRating = Math.max(...minuteRatings.map((p) => p.rating), ...bands.flatMap((c) => (c.minutes?.length ? c.minutes.map((m) => m.rating) : [c.target_rating ?? 0])), 0.0001);
   const yOf = (v: number) => PAD_Y + (1 - v / maxRating) * (H - PAD_Y * 2);
   const path = minuteRatings.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.time).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(" ");
   const baselineY = H - PAD_Y;
@@ -3894,7 +3900,8 @@ function ManualMinuteRatingChart({
     ...bands.map((c, i) => {
       const program = shortProgramName(cleanCompetitorProgramName(c.program_name));
       return {
-        y: yOf(c.target_rating!),
+        // 분당 선이 있으면 라벨 연결점도 그 선의 끝(마지막 분) 높이에 맞춘다.
+        y: yOf(c.minutes?.length ? c.minutes[c.minutes.length - 1].rating : c.target_rating!),
         labelY: 0,
         color: bandColors[i],
         own: false,
@@ -3943,6 +3950,18 @@ function ManualMinuteRatingChart({
             const y = yOf(c.target_rating!);
             const color = bandColors[i];
             const title = `${c.channel_name} '${cleanCompetitorProgramName(c.program_name)}' — ${c.target_rating!.toFixed(3)}%`;
+            // 분당 값이 있는 경쟁채널은 자사처럼 실제 분당 선으로(자사보다 가늘고 옅게), 없으면 기존처럼 평균 가로선.
+            if (c.minutes && c.minutes.length >= 2) {
+              const minutePath = c.minutes.map((p, k) => `${k === 0 ? "M" : "L"}${xOf(p.time).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(" ");
+              return (
+                <g key={`${c.channel_name}-${c.program_name}`}>
+                  <path d={minutePath} fill="none" stroke={color} strokeWidth={1.8} strokeOpacity={0.75} strokeLinecap="round" strokeLinejoin="round" />
+                  <path d={minutePath} fill="none" stroke="transparent" strokeWidth={10}>
+                    <title>{title}</title>
+                  </path>
+                </g>
+              );
+            }
             return (
               <g key={`${c.channel_name}-${c.program_name}`}>
                 {/* 사용자 지시(2026-09-02): "경쟁 채널의 시청률은 점선 말고 흐린 실선으로" — dasharray 제거. */}
@@ -4056,7 +4075,11 @@ function ManualMinuteRatingChart({
         </span>
       </div>
       {/* 사용자 지시(2026-10-28): 채널 로고·프로그램명·2049(가구) 범례 칩은 선 끝 라벨로 옮겼다(위 차트 오른쪽). */}
-      {bands.length > 0 && <p className="mt-1.5 text-[10.5px] text-zinc-400">오른쪽 라벨: 2049 시청률 (가구 시청률) · 흐린 선은 동시간대 경쟁 프로그램 평균</p>}
+      {bands.length > 0 && (
+        <p className="mt-1.5 text-[10.5px] text-zinc-400">
+          오른쪽 라벨: 2049 시청률 (가구 시청률) · {bands.some((c) => c.minutes && c.minutes.length >= 2) ? "얇은 선은 경쟁 채널의 분당 시청률(라벨의 %는 그 프로그램 평균)" : "흐린 선은 동시간대 경쟁 프로그램 평균"}
+        </p>
+      )}
     </div>
   );
 }
@@ -4512,7 +4535,14 @@ function OriginalContentReportCard({
                   // 새 계산은 없고 이미 있던 값의 위치만 바꾼다. 카드 루트 break-keep으로 "8시 27분"의 '분'이 홀로 줄바꿈되지 않게 하고, 시각은 whitespace-nowrap으로 묶는다.
                   const is2049Channel = PRIMARY_2049_CODES.has(h.broadcast_channel_code);
                   const primaryTargetLabel = is2049Channel ? "수도권 2049" : "유료방송가구";
-                  const minuteList = h.manualReport?.minute_ratings ?? [];
+                  // 분당 시청률: PD 수동 리포트 값이 있으면 그것, 없으면 사용자가 따로 준 분당 자료로 서버가 구성한 값(autoMinute).
+                  const manualMinute = (h.manualReport?.minute_ratings?.length ?? 0) >= 2 ? h.manualReport : null;
+                  const minuteSource = manualMinute
+                    ? { minute_ratings: manualMinute.minute_ratings!, competitor_programs: manualMinute.competitor_programs, cm_breaks: manualMinute.cm_breaks }
+                    : h.autoMinute
+                      ? { minute_ratings: h.autoMinute.minute_ratings, competitor_programs: h.autoMinute.competitor_programs, cm_breaks: null }
+                      : null;
+                  const minuteList = minuteSource?.minute_ratings ?? [];
                   const hasMinute = minuteList.length >= 2;
                   const minutePeak = hasMinute ? minuteList.reduce((a, b) => (b.rating > a.rating ? b : a)) : null;
                   const pdSummary = manualHeadline?.find((b) => b.label === null)?.text ?? null;
@@ -4535,13 +4565,13 @@ function OriginalContentReportCard({
                       teaser: minutePeak ? `최고 ${minutePeak.time} ${minutePeak.rating.toFixed(3)}%` : undefined,
                       body: (
                         <ManualMinuteRatingChart
-                          minuteRatings={h.manualReport!.minute_ratings!}
-                          competitorPrograms={h.manualReport!.competitor_programs}
+                          minuteRatings={minuteSource!.minute_ratings}
+                          competitorPrograms={minuteSource!.competitor_programs}
                           accentColor={accent}
                           ownChannelName={broadcastChannelName}
                           broadcastStartTime={h.matched_start_time}
                           broadcastEndTime={h.matched_end_time}
-                          cmBreaks={h.manualReport!.cm_breaks}
+                          cmBreaks={minuteSource!.cm_breaks}
                           ownProgramName={h.matched_program_name}
                           ownRatingText={h.matched_rating !== null ? formatRating(h.matched_rating, h.broadcast_channel_code) : null}
                           ownHouseholdText={PRIMARY_2049_CODES.has(h.broadcast_channel_code) && h.matched_household_rating !== null ? formatRating(h.matched_household_rating, h.broadcast_channel_code) : null}
