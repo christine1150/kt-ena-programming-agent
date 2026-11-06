@@ -5423,6 +5423,9 @@ interface ChannelDailyDetailApiRow {
   secondary_share: number | null;
   secondary_time_spent_seconds: number | null;
   secondary_time_spent_share: number | null;
+  // IPTV 셋톱 시청률(자료를 받은 날만 값이 내려온다, 2026-11-06). 바닥값("<0.0001")은 rating null + below_floor
+  iptv_rating?: number | null;
+  iptv_below_floor?: boolean;
 }
 // 사용자 지시(2026-09-03): "시청률, 점유율 오른쪽에 시청시간과 시청시간 비율도" — 표 칸이
 // 좁아 ChannelDeepDive.tsx의 fmtSeconds("M분 S초")는 폭이 너무 크다. 이 표 전용으로 "M:SS"
@@ -5472,13 +5475,20 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
     error: string | null;
   }>({ loading: true, rows: [], dayTotal: null, primaryLabel: null, secondaryLabel: null, primaryMonthAvg: null, secondaryMonthAvg: null, error: null });
 
+  // IPTV 셋톱 시청률 열(사용자 지시 2026-11-06) — 그 날짜의 IPTV 자료를 받았을 때만 나타난다. 머리글을 눌러 어느 쪽 기준으로 상위 프로그램을 강조할지 고른다.
+  const [iptv, setIptv] = useState<{ has: boolean; avg: number | null }>({ has: false, avg: null });
+  const [basis, setBasis] = useState<"nielsen" | "iptv">("nielsen");
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setState({ loading: true, rows: [], dayTotal: null, primaryLabel: null, secondaryLabel: null, primaryMonthAvg: null, secondaryMonthAvg: null, error: null });
+      setIptv({ has: false, avg: null });
+      setBasis("nielsen");
       const res = await fetch(`/api/dashboard/channel-daily-detail?code=${channelCode}&date=${asOfDate}`);
       const body = await res.json().catch(() => ({ ok: false }));
       if (cancelled) return;
+      if (body.ok) setIptv({ has: body.hasIptv === true, avg: typeof body.iptvDayAvg === "number" ? body.iptvDayAvg : null });
       if (!res.ok || !body.ok) {
         setState({
           loading: false,
@@ -5531,6 +5541,15 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
   const avgPrimaryShare = avg(state.rows.map((r) => r.primary_share));
   const avgSecondaryShare = avg(state.rows.map((r) => r.secondary_share));
   const hasSecondary = !!state.secondaryLabel;
+  // IPTV 열: skyUHD 패널에서 자료가 있을 때만. 강조 기준 평균은 하루 평균(없으면 값 있는 줄의 단순 평균)
+  const showIptv = channelCode === "SKYUHD" && iptv.has;
+  const iptvRange = rangeOf(state.rows.map((r) => r.iptv_rating ?? null));
+  const iptvAvgBase = iptv.avg ?? avg(state.rows.map((r) => r.iptv_rating ?? null));
+  const iptvBasis = showIptv && basis === "iptv";
+  function formatIptv(r: ChannelDailyDetailApiRow): string {
+    if (r.iptv_rating !== null && r.iptv_rating !== undefined) return formatRating(r.iptv_rating, channelCode);
+    return r.iptv_below_floor ? "<0.0001" : "";
+  }
   // skyUHD 수기 시트에는 점유율·시청시간·시청비율이 없어 그 열들이 항상 "—"였다. 사용자 지시
   // (2026-09-18)대로 이 채널만 시작·끝·프로그램명(회차 포함)·시청률 4열로 줄인다.
   const isSkyUhdPanel = channelCode === "SKYUHD";
@@ -5620,6 +5639,7 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                 <col className="w-11" />
                 <col />
                 <col className="w-16" />
+                {showIptv && <col className="w-16" />}
               </>
             ) : (
               <>
@@ -5641,10 +5661,25 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                 <th className="pb-1 text-center">끝</th>
                 <th className="pb-1 pl-3 text-left">프로그램명</th>
                 <th className="pb-1 text-center">
-                  시청률
+                  {showIptv ? (
+                    <button type="button" aria-pressed={!iptvBasis} onClick={() => setBasis("nielsen")} title="닐슨 시청률 기준으로 상위 프로그램 강조" className={`rounded px-1 ${!iptvBasis ? "font-semibold text-zinc-700 underline decoration-zinc-300 underline-offset-2" : "hover:text-zinc-600"}`}>
+                      시청률
+                    </button>
+                  ) : (
+                    "시청률"
+                  )}
                   <br />
                   <span className="font-normal text-zinc-300">{shortTargetLabel(state.primaryLabel ?? "주")}</span>
                 </th>
+                {showIptv && (
+                  <th className="pb-1 text-center">
+                    <button type="button" aria-pressed={iptvBasis} onClick={() => setBasis("iptv")} title="IPTV 셋톱 시청률 기준으로 상위 프로그램 강조" className={`rounded px-1 ${iptvBasis ? "font-semibold text-zinc-700 underline decoration-zinc-300 underline-offset-2" : "hover:text-zinc-600"}`}>
+                      IPTV
+                    </button>
+                    <br />
+                    <span className="font-normal text-zinc-300">셋톱</span>
+                  </th>
+                )}
               </tr>
             ) : (
             <>
@@ -5692,8 +5727,10 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
               // "부제와 프로그램명을 두 줄 말고 한 줄로" — 회차를 아랫줄로 내리지 않고 프로그램명
               // 뒤에 이어 붙인다. 이름이 길면 이름 쪽만 줄고 회차는 끝까지 남도록 shrink-0을 준다.
               if (isSkyUhdPanel) {
-                const highlight =
-                  r.primary_rating !== null && annualAvgRating !== null && r.primary_rating >= annualAvgRating;
+                // 강조 기준: 기본은 닐슨(연간 평균 이상), IPTV를 고르면 IPTV 하루 평균 이상인 방영(값 있는 줄만)
+                const highlight = iptvBasis
+                  ? r.iptv_rating !== null && r.iptv_rating !== undefined && iptvAvgBase !== null && r.iptv_rating >= iptvAvgBase
+                  : r.primary_rating !== null && annualAvgRating !== null && r.primary_rating >= annualAvgRating;
                 return (
                   <tr key={i} className="border-t border-zinc-50">
                     <td className="py-1 text-center tabular-nums text-zinc-400">{fmtTime(r.start_time)}</td>
@@ -5703,10 +5740,15 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                     </td>
                     <td
                       className="py-1 text-center tabular-nums"
-                      style={ratingCellStyle(r.primary_rating, primaryRange, state.primaryMonthAvg)}
+                      style={ratingCellStyle(r.primary_rating, primaryRange, iptvBasis ? null : state.primaryMonthAvg)}
                     >
                       {formatDetailRating(r.primary_rating)}
                     </td>
+                    {showIptv && (
+                      <td className="py-1 text-center tabular-nums" style={ratingCellStyle(r.iptv_rating ?? null, iptvRange, iptvBasis ? iptvAvgBase : null)}>
+                        {formatIptv(r)}
+                      </td>
+                    )}
                   </tr>
                 );
               }
@@ -5757,6 +5799,11 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
                 <td className="py-1.5 text-center">—</td>
                 <td className="py-1.5 pl-3">하루 전체</td>
                 <td className="py-1.5 text-center tabular-nums">{formatRating(state.dayTotal.primary_rating, channelCode)}</td>
+                {showIptv && (
+                  <td className="py-1.5 text-center tabular-nums" title="방영 시간으로 가중한 평균(바닥값은 0으로 계산)">
+                    {iptv.avg !== null ? formatRating(iptv.avg, channelCode) : "—"}
+                  </td>
+                )}
               </tr>
             )}
             {state.dayTotal && !isSkyUhdPanel && (

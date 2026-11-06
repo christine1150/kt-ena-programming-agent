@@ -1,0 +1,28 @@
+{
+  "calendarDate": "2026-11-05",
+  "channel": "SKYUHD",
+  "source": "IPTV 3사 셋톱 시청률 화면 캡처(2026-11-06 전달)",
+  "rows": [
+    { "start": "00:45", "end": "02:01", "name": "ENA 케이팝업 차트쇼", "belowFloor": true },
+    { "start": "02:01", "end": "03:25", "name": "천일야사", "rating": 0.0027 },
+    { "start": "03:25", "end": "04:13", "name": "골든 아워 시즌 4", "rating": 0.0012 },
+    { "start": "04:13", "end": "05:22", "name": "금의야행", "belowFloor": true },
+    { "start": "05:22", "end": "06:34", "name": "리틀 빅 씬", "rating": 0.0004 },
+    { "start": "06:34", "end": "07:25", "name": "리틀 빅 씬", "rating": 0.0003 },
+    { "start": "07:25", "end": "08:00", "name": "세계테마기행", "rating": 0.0004 },
+    { "start": "08:00", "end": "08:34", "name": "세계테마기행", "belowFloor": true },
+    { "start": "08:34", "end": "09:20", "name": "세계테마기행", "belowFloor": true },
+    { "start": "09:20", "end": "10:33", "name": "천일야사", "rating": 0.0040 },
+    { "start": "10:33", "end": "11:47", "name": "천일야사", "rating": 0.0074 },
+    { "start": "11:47", "end": "12:58", "name": "이상한 변호사 우영우", "rating": 0.0085 },
+    { "start": "12:58", "end": "14:08", "name": "이상한 변호사 우영우", "rating": 0.0102 },
+    { "start": "14:08", "end": "15:30", "name": "내 아이의 사생활", "rating": 0.0035 },
+    { "start": "15:30", "end": "16:54", "name": "내 아이의 사생활", "rating": 0.0062 },
+    { "start": "16:54", "end": "18:14", "name": "길치라도 괜찮아", "rating": 0.0114 },
+    { "start": "18:14", "end": "19:25", "name": "이상한 변호사 우영우", "rating": 0.0075 },
+    { "start": "19:25", "end": "20:35", "name": "이상한 변호사 우영우", "rating": 0.0070 },
+    { "start": "20:35", "end": "21:56", "name": "내 아이의 사생활", "rating": 0.0051 },
+    { "start": "21:56", "end": "23:21", "name": "내 아이의 사생활", "rating": 0.0081 },
+    { "start": "23:21", "end": "00:40", "name": "길치라도 괜찮아", "rating": 0.0022 }
+  ]
+}

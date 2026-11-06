@@ -62,6 +62,9 @@ export interface ChannelDailyDetailRow {
   secondary_share: number | null;
   secondary_time_spent_seconds: number | null;
   secondary_time_spent_share: number | null;
+  /** IPTV 셋톱(STB) 시청률 — 자료를 받은 날(iptv_stb_ratings)에만 값이 있고, 방영 구간이 겹치는 줄에 붙인다(2026-11-06). 바닥값("<0.0001")은 null + iptv_below_floor */
+  iptv_rating?: number | null;
+  iptv_below_floor?: boolean;
 }
 
 interface RatingRow {
@@ -202,6 +205,50 @@ export async function GET(request: Request) {
     // 02시 이전 시각에 24시간을 더해 정렬 키로 쓰면 편성 순서대로 놓인다(표시는 00:37 그대로).
     .sort((a, b) => broadcastOrderKey(a.start_time) - broadcastOrderKey(b.start_time));
 
+  // IPTV 셋톱 시청률(사용자가 자료를 준 날만) — 닐슨 방영 구간과 가장 많이 겹치는 STB 구간을 그 줄에 붙인다.
+  // 절반 이상(짧은 쪽 기준) 겹쳐야 같은 방영으로 본다. 자료가 없으면 iptv 필드를 아예 내리지 않아 화면에 열이 생기지 않는다.
+  let hasIptv = false;
+  let iptvDayAvg: number | null = null;
+  if (isSkyUhd) {
+    const { data: stb } = await supabase
+      .from("iptv_stb_ratings")
+      .select("start_minute, end_minute, rating, below_floor")
+      .eq("channel_code", code)
+      .eq("broadcast_date", date);
+    const stbRows = (stb ?? []) as { start_minute: number; end_minute: number; rating: number | null; below_floor: boolean }[];
+    if (stbRows.length > 0) {
+      hasIptv = true;
+      const span = (r: ChannelDailyDetailRow): [number, number] | null => {
+        const s = broadcastOrderKey(r.start_time) / 60;
+        if (!r.end_time) return null;
+        let e = broadcastOrderKey(r.end_time) / 60;
+        if (e <= s) e += 1440;
+        return [s, e];
+      };
+      let coveredMin = 0;
+      let airedMin = 0;
+      let weighted = 0;
+      for (const r of rows) {
+        const sp = span(r);
+        if (!sp) continue;
+        airedMin += sp[1] - sp[0];
+        let best: { s: (typeof stbRows)[number]; ov: number } | null = null;
+        for (const s of stbRows) {
+          const ov = Math.min(sp[1], s.end_minute) - Math.max(sp[0], s.start_minute);
+          if (ov > 0 && (!best || ov > best.ov)) best = { s, ov };
+        }
+        if (best && best.ov >= 0.5 * Math.min(sp[1] - sp[0], best.s.end_minute - best.s.start_minute)) {
+          r.iptv_rating = best.s.rating;
+          r.iptv_below_floor = best.s.below_floor;
+          coveredMin += sp[1] - sp[0];
+          weighted += (best.s.rating ?? 0) * (sp[1] - sp[0]); // 바닥값은 0으로 본다
+        }
+      }
+      // 하루 평균은 방영 시간의 80% 이상에 STB 값이 있을 때만(전날 끝자락 한 줄만 있는 날 등은 내지 않는다)
+      iptvDayAvg = airedMin > 0 && coveredMin / airedMin >= 0.8 ? weighted / coveredMin : null;
+    }
+  }
+
   const dayTotal = {
     primary_rating: primaryDayRows[0]?.rating ?? null,
     primary_share: primaryDayRows[0]?.share ?? null,
@@ -224,5 +271,7 @@ export async function GET(request: Request) {
     dayTotal,
     primaryMonthAvg,
     secondaryMonthAvg,
+    hasIptv,
+    iptvDayAvg,
   });
 }
