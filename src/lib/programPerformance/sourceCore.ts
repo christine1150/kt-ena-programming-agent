@@ -379,7 +379,9 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
         channelDaily: cd,
         vsChannel: ratioOf(st.avg, cd.mean, tid ? "경쟁 채널 하루 시청률 자료 없음" : `채널 하루 시청률 타깃('${t.channel}') 없음`),
         sampleState: sampleStateOf(st.days),
-        ...(sim ? { simulcast: true, simulcastWith: simCodeOf(name), points: [...list].sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? "").localeCompare(b.startTime ?? "")).map((x) => ({ date: x.date, startTime: x.startTime, rating: x.rating })) } : {}),
+        // 방영별 목록은 동시방송 행뿐 아니라 모든 경쟁채널 행에 담는다(화면에서 채널을 눌러 편성 세부를 볼 때 쓴다, 2026-11-06)
+        points: [...list].sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? "").localeCompare(b.startTime ?? "")).map((x) => ({ date: x.date, startTime: x.startTime, rating: x.rating, share: x.share, firstRun: x.firstRun })),
+        ...(sim ? { simulcast: true, simulcastWith: simCodeOf(name) } : {}),
       });
       }
     }

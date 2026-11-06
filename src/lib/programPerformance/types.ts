@@ -387,8 +387,8 @@ export interface CompetitorRow {
   simulcast?: boolean;
   /** 동시방송 상대 자사 채널 코드(그 채널 행 바로 아래에 보인다) */
   simulcastWith?: string | null;
-  /** 동시방송 방영별 시청률(그래프 겹쳐 보기용, 날짜순) — 동시방송 행에만 */
-  points?: { date: string; startTime: string | null; rating: number | null }[];
+  /** 방영별 시청률·점유율·본재방 표시(날짜순) — 그래프 겹쳐 보기와 경쟁채널 편성 세부(클릭해서 열기)에 쓴다 */
+  points?: { date: string; startTime: string | null; rating: number | null; share?: number | null; firstRun?: boolean | null }[];
 }
 
 export interface PerformanceResult {

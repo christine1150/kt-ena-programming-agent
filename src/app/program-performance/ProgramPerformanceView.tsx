@@ -295,18 +295,41 @@ function ChannelTable({ entries, airing, selected, onSelect, simulcast, otherAir
 /** 경쟁 채널 성과 — 선택해서 연다. 같은 작품이 등록 경쟁채널에서 방영된 기록만(닐슨 경쟁채널 시트), 채널 평균은 그 경쟁채널의 하루 시청률 일평균. 자사 표와 같은 열 */
 function CompetitorSection({ rows }: { rows: CompetitorRow[] }) {
   const names = [...new Set(rows.map((r) => r.competitorName))];
+  // 채널 이름을 누르면 그 채널의 편성(방영일·시각·본/재방·시청률) 세부가 펼쳐진다(사용자 지시 2026-11-06)
+  const [openName, setOpenName] = useState<string | null>(null);
+  const fmtRt = (v: number | null | undefined) => (v === null || v === undefined ? "–" : v < 0.001 ? "<0.001" : v.toFixed(3));
   return (
     <section className="mt-2">
-      <div className="dense-grid max-w-4xl overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="경쟁 채널 성과 표">
+      <div className="dense-grid max-w-5xl overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="경쟁 채널 성과 표">
         <table className="w-full min-w-[640px] text-[14px]">
           <TargetHead first="경쟁 채널" cols={TARGET_ORDER} />
           <tbody>
             {names.map((name) => {
               const rs = rows.filter((r) => r.competitorName === name);
               const main = rs.reduce((a, b) => (b.airings > a.airings ? b : a));
+              const isOpen = openName === name;
+              // 타깃별 방영 목록을 날짜·시각으로 합쳐 한 줄에 2049·가구 시청률을 나란히
+              const merged = new Map<string, { date: string; startTime: string | null; firstRun: boolean | null | undefined; v: Record<string, number | null> }>();
+              if (isOpen) {
+                for (const r of rs) {
+                  for (const p of r.points ?? []) {
+                    const k = `${p.date}|${p.startTime ?? ""}`;
+                    const cur = merged.get(k) ?? { date: p.date, startTime: p.startTime, firstRun: p.firstRun, v: {} };
+                    cur.v[r.targetLabel] = p.rating;
+                    merged.set(k, cur);
+                  }
+                }
+              }
+              const list = [...merged.values()].sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? "").localeCompare(b.startTime ?? ""));
               return (
-                <tr key={name} className="border-t border-zinc-100">
-                  <td className="whitespace-nowrap px-3 py-2 font-medium text-zinc-900">{name}</td>
+                <Fragment key={name}>
+                <tr className="border-t border-zinc-100">
+                  <td className="whitespace-nowrap px-3 py-2 font-medium text-zinc-900">
+                    <button type="button" aria-expanded={isOpen} onClick={() => setOpenName(isOpen ? null : name)} className="text-left underline decoration-zinc-300 underline-offset-2 hover:decoration-zinc-600" title="눌러서 편성 세부 보기">
+                      <span className="mr-1 text-[11px] text-zinc-400" aria-hidden="true">{isOpen ? "▼" : "▶"}</span>
+                      {name}
+                    </button>
+                  </td>
                   {TARGET_ORDER.map((c) => {
                     const r = rs.find((x) => x.targetLabel === c);
                     return [
@@ -322,12 +345,49 @@ function CompetitorSection({ rows }: { rows: CompetitorRow[] }) {
                     <AirCount airings={main.airings} days={main.days} />
                   </td>
                 </tr>
+                {isOpen && (
+                  <tr className="border-t border-zinc-100 bg-zinc-50/70">
+                    <td colSpan={2 + TARGET_ORDER.length * 2} className="px-3 py-2">
+                      {list.length === 0 ? (
+                        <p className="text-[12px] text-zinc-500">방영 목록이 없습니다.</p>
+                      ) : (
+                        <div className="max-h-72 overflow-y-auto">
+                          <table className="w-full max-w-xl text-[12px]">
+                            <thead>
+                              <tr className="text-left text-zinc-500">
+                                <th className="py-1 pr-3 font-normal">방영일</th>
+                                <th className="py-1 pr-3 font-normal">시작</th>
+                                <th className="py-1 pr-3 font-normal">구분</th>
+                                {TARGET_ORDER.map((c) => (
+                                  <th key={c} className="py-1 pr-3 text-right font-normal">{c} 시청률</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {list.map((x) => (
+                                <tr key={`${x.date}|${x.startTime}`} className="border-t border-zinc-100">
+                                  <td className="whitespace-nowrap py-1 pr-3 tabular-nums">{shortDate(x.date)}</td>
+                                  <td className="whitespace-nowrap py-1 pr-3 tabular-nums">{x.startTime ? x.startTime.slice(0, 5) : "–"}</td>
+                                  <td className="whitespace-nowrap py-1 pr-3">{x.firstRun === true ? "본방" : x.firstRun === false ? "재방" : "미확인"}</td>
+                                  {TARGET_ORDER.map((c) => (
+                                    <td key={c} className="py-1 pr-3 text-right tabular-nums">{fmtRt(x.v[c])}</td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-[12px] text-zinc-500">{TABLE_NOTE}(그 경쟁 채널의 하루 시청률 평균) · 같은 시간대 비교는 내지 않습니다</p>
+      <p className="mt-1 text-[12px] text-zinc-500">{TABLE_NOTE}(그 경쟁 채널의 하루 시청률 평균) · 같은 시간대 비교는 내지 않습니다 · 채널 이름을 누르면 편성(방영일·시각·본/재방) 세부가 열립니다</p>
     </section>
   );
 }
@@ -1322,7 +1382,8 @@ export default function ProgramPerformanceView() {
   const [sel, setSel] = useState<{ group: string; key: string } | null>(null);
   const selKey = sel && sel.group === group ? sel.key : null;
   const [compFor, setCompFor] = useState<string | null>(null);
-  const showComp = compFor !== null && compFor === group;
+  // compFor = 사용자가 접어 둔 작품(기본은 모든 작품에서 펼침)
+  const compClosed = compFor !== null && compFor === group;
   const analysisRef = useRef<HTMLDivElement>(null);
 
   const toggleChannel = (code: string) => nav({ channels: channels.includes(code) ? channels.filter((c) => c !== code) : [...channels, code] });
@@ -1481,13 +1542,13 @@ export default function ProgramPerformanceView() {
           </div>
           {competitorRows.length > 0 && (
             <div className="mt-4">
-              {/* 자사 방영이 없는 작품은 경쟁 채널 성과가 유일한 내용이라 처음부터 펼쳐 둔다(사용자 지시 2026-10-23) */}
+              {/* 경쟁 채널 성과는 기본으로 하단에 펼쳐 보인다(사용자 지시 2026-11-06). 접고 싶으면 버튼으로 닫는다 */}
               {entries.length > 0 && (
-                <button type="button" aria-expanded={showComp} onClick={() => setCompFor(showComp ? null : group)} className={chip(showComp)}>
-                  경쟁 채널 성과 {showComp ? "닫기" : `보기 · ${new Set(competitorRows.map((c) => c.competitorName)).size}개 채널`}
+                <button type="button" aria-expanded={!compClosed} onClick={() => setCompFor(compClosed ? null : group)} className={chip(!compClosed)}>
+                  경쟁 채널 성과 {compClosed ? `보기 · ${new Set(competitorRows.map((c) => c.competitorName)).size}개 채널` : "닫기"}
                 </button>
               )}
-              {(showComp || entries.length === 0) && <CompetitorSection rows={competitorRows} />}
+              {(!compClosed || entries.length === 0) && <CompetitorSection rows={competitorRows} />}
             </div>
           )}
           <CalcBasis />
