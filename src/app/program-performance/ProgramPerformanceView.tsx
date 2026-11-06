@@ -216,7 +216,7 @@ function ChannelTable({ entries, airing, selected, onSelect, simulcast, otherAir
   const cols = TARGET_ORDER.filter((t) => entries.some((e) => e.rows.some((r) => r.targetLabel === t)));
   return (
     <section className="mt-3">
-      <div className="dense-grid max-w-4xl overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="채널별 성과 표">
+      <div className="dense-grid max-w-5xl overflow-x-auto rounded-lg border border-zinc-200 bg-white" tabIndex={0} role="region" aria-label="채널별 성과 표">
         <table className="w-full min-w-[640px] text-[14px]">
           <TargetHead first="채널" cols={cols} />
           <tbody>
@@ -260,7 +260,8 @@ function ChannelTable({ entries, airing, selected, onSelect, simulcast, otherAir
                         {/* 같은 채널의 나머지 방송(재방 등)은 아래 '경쟁 채널 성과'에 따로 있어, 이 행의 횟수가 전체로 읽히지 않게 채널 전체 횟수를 함께 보인다(2026-11-06) */}
                         {(() => {
                           const rest = otherAirings.filter((c) => c.competitorName === name).reduce((m, c) => Math.max(m, c.airings), 0);
-                          return rest > 0 ? <span className="ml-1.5 text-[11px] text-zinc-500">이 채널 전체 {formatInt(sMain.airings + rest)}회 (나머지는 경쟁 채널 성과)</span> : null;
+                          // 한 줄로 이어 붙이면 첫 칸이 넓어져 표 오른쪽(방영횟수)이 잘리므로 아랫줄로 내린다
+                          return rest > 0 ? <span className="mt-0.5 block pl-4 text-[11px] text-zinc-500">이 채널 전체 {formatInt(sMain.airings + rest)}회 (나머지는 경쟁 채널 성과)</span> : null;
                         })()}
                       </td>
                       {cols.map((c) => {
