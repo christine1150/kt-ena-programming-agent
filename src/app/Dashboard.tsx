@@ -168,6 +168,8 @@ interface OriginalDailyItem {
   prev_drama_change_pct: number | null;
   // 사용자 지시(2026-08-22): 연령대별 미니바 대신 최근 12주 본방송 시청률 추이 꺾은선 그래프용.
   ratingHistory: RatingHistoryResult | null;
+  // 부(1부·2부)로 나눠 방송한 행사(KGMA 등)의 부별 시청률 — 있으면 회차별 본방 그래프를 이 점들(Day 1-1부 …)로 그린다(2026-11-09)
+  partSeries?: { label: string; date: string; p2049: number | null; household: number | null }[] | null;
   // 사용자 지시(2026-08-25): 제목에 "타깃 및 가구 하락/상승"을 함께 보여주기 위한 가구(전국
   // 유료가구) 타깃 시청률·전회 대비 등락률(그 타깃 데이터가 없는 채널은 둘 다 null).
   matched_household_rating: number | null;
@@ -4555,7 +4557,10 @@ function OriginalContentReportCard({
                   const changeColor = (v: number) => (v >= 0 ? NARRATIVE_UP_COLOR : NARRATIVE_DOWN_COLOR);
                   const hasImmersion = h.matched_share !== null || h.matched_time_spent_seconds !== null || h.matched_time_spent_share !== null || h.matched_reach !== null;
                   const hasKeyMetrics = achievementPct !== null || h.pre_rerun_rating !== null || h.self_rerun_rating !== null;
-                  const chartPoints = buildEpisodeChartPoints(h.ratingHistory);
+                  const chartPoints: EpisodeChartPoint[] =
+                    h.partSeries && h.partSeries.length >= 2
+                      ? h.partSeries.map((p) => ({ key: `${p.date}|${p.label}`, episode: null, label: p.label, dateLabel: `${p.date.slice(5, 7)}.${p.date.slice(8)}.`, fullDate: p.date, p2049: p.p2049, household: p.household }))
+                      : buildEpisodeChartPoints(h.ratingHistory);
                   const timeNode = (t: string | null | undefined) => (t ? <span className="whitespace-nowrap">{fmtTimeKorean(t)}</span> : null);
                   const panelItems: ReviewPanelItem[] = [];
                   if (hasMinute) {

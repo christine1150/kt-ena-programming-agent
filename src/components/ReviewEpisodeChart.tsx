@@ -9,6 +9,8 @@ export interface EpisodeChartPoint {
   key: string;
   /** 회차(모르면 null — 그러면 방영일만 표기) */
   episode: number | null;
+  /** 회차 대신 쓰는 x축 이름 — 하루에 부로 나눠 방송한 행사(KGMA "Day 1-1부")용(2026-11-09) */
+  label?: string;
   /** x축 표기용 "10.26." */
   dateLabel: string;
   /** 툴팁용 "2026-10-26" */
@@ -211,11 +213,11 @@ export function ReviewEpisodeChart({
           {points.map((p, i) => {
             const cx = xOf(i);
             const isLast = i === lastIdx;
-            const hasEp = p.episode !== null;
+            const hasEp = p.episode !== null || !!p.label;
             return (
               <g key={`x-${p.key}`}>
                 <text x={cx} y={baseY + 16} textAnchor="middle" fontSize={11} fontWeight={isLast ? 700 : 500} fill={isLast ? "#18181b" : "#52525b"} className="tabular-nums">
-                  {hasEp ? `${p.episode}회` : p.dateLabel}
+                  {p.label ?? (hasEp ? `${p.episode}회` : p.dateLabel)}
                 </text>
                 {hasEp && (
                   <text x={cx} y={baseY + 30} textAnchor="middle" fontSize={10} fill="#a1a1aa" className="tabular-nums">

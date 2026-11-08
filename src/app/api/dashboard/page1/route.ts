@@ -720,6 +720,8 @@ export async function GET(request: Request) {
       competitorHighlights: CompetitorOverlapRow[];
       householdRank: number | null;
       ratingHistory: RatingHistoryResult | null;
+      /** 부(1부·2부)로 나눠 방송한 행사(KGMA 등)의 부별 시청률 — 회차별 그래프 대신 쓴다(2026-11-09) */
+      partSeries?: { label: string; date: string; p2049: number | null; household: number | null }[] | null;
       schedulingInsight: string | null;
       // 사용자 지시(2026-09-03): 리뷰에 시청시간·시청시간 비율 추가(ratings에 이미 있는 값 조회만).
       matched_time_spent_seconds: number | null;
@@ -1137,9 +1139,48 @@ export async function GET(request: Request) {
         })
     );
 
+    // 사용자 지시(2026-11-09): KGMA처럼 하루에 부(1부·2부)로 나눠 방송하는 행사는 "…DAY1-1부"·"…DAY2-2부"가 서로 다른 프로그램이라 회차별 그래프에 점이 하나뿐이다.
+    // 같은 행사(이름 앞부분 동일)의 모든 부를 방영 순서대로 모아 "Day 1-1부 … Day 2-2부" 4개 점으로 내려준다(수도권 2049·가구, 기준일까지). 다른 계산에는 쓰지 않는다.
+    const partSeriesByKey = new Map<string, { label: string; date: string; p2049: number | null; household: number | null }[]>();
+    await Promise.all(
+      dailyWithInsight.map(async (row) => {
+        const m = /^(.+DAY)(\d)-(\d)부$/.exec(row.matched_program_name ?? "");
+        const ch = channels.find((c) => c.code === row.broadcast_channel_code);
+        if (!m || !ch) return;
+        const key = `${row.broadcast_channel_code}__${row.matched_program_name}`;
+        if (partSeriesByKey.has(key)) return;
+        const { data: progs } = await supabase.from("programs").select("id, canonical_name").eq("channel_id", ch.id).like("canonical_name", `${m[1]}%부`);
+        const nameById = new Map((progs ?? []).filter((p) => new RegExp(`^${m[1]}\\d-\\d부$`).test(p.canonical_name)).map((p) => [p.id as string, p.canonical_name as string]));
+        if (nameById.size < 2) return;
+        const { data: tgs } = await supabase.from("targets").select("id, label").in("label", ["수도권 2049", "전국 유료가구"]);
+        const labelById = new Map((tgs ?? []).map((t) => [t.id as string, t.label as string]));
+        const { data: rs } = await supabase
+          .from("ratings")
+          .select("program_id, target_id, broadcast_date, start_time, rating")
+          .eq("channel_id", ch.id)
+          .in("program_id", [...nameById.keys()])
+          .in("target_id", [...labelById.keys()])
+          .lte("broadcast_date", asOfDate);
+        const parts = new Map<string, { label: string; date: string; start: string; p2049: number | null; household: number | null }>();
+        for (const r of rs ?? []) {
+          const pm = /DAY(\d)-(\d)부$/.exec(nameById.get(r.program_id as string) ?? "");
+          if (!pm) continue;
+          const k = `${r.broadcast_date}__${pm[1]}-${pm[2]}`;
+          const cur = parts.get(k) ?? { label: `Day ${pm[1]}-${pm[2]}부`, date: r.broadcast_date as string, start: r.start_time as string, p2049: null, household: null };
+          const lab = labelById.get(r.target_id as string);
+          if (lab === "수도권 2049") cur.p2049 = r.rating as number | null;
+          else cur.household = r.rating as number | null;
+          parts.set(k, cur);
+        }
+        const list = [...parts.values()].sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+        if (list.length >= 2) partSeriesByKey.set(key, list.map(({ label, date, p2049, household }) => ({ label, date, p2049, household })));
+      })
+    );
+
     const dailyWithHistory = dailyWithInsight.map((row) => ({
       ...row,
       ratingHistory: ratingHistoryByKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
+      partSeries: partSeriesByKey.get(`${row.broadcast_channel_code}__${row.matched_program_name}`) ?? null,
     }));
 
     // 사용자 지시(2026-09-03): "주요 컨텐츠 리뷰에 시청시간, 시청시간 비율... 입체적인 내용이
