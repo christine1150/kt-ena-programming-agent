@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { DailyView, RankBoard, TrendWeek } from "@/lib/ratingsView";
 import { shortProgramName } from "@/lib/programAlias";
+import { formatRating } from "@/lib/audienceReport/format";
 
 type Tab = "daily" | "ranks" | "trend";
 const TABS: { id: Tab; label: string }[] = [
@@ -30,6 +31,8 @@ const OWN_FILL: Record<string, { bg: string; fg: string }> = {
   OLIFE: { bg: "#A5CB38", fg: "#27272a" },
 };
 const ACCENT = "#3C32E1";
+// skyUHD IPTV 셋톱 막대는 초록 계열(사용자 지시 2026-11-11) — 닐슨 유료방송가구 막대(파랑)와 나란히 비교한다
+const IPTV_GREEN = "#16A34A";
 const OWN_ROW_BG = "#ECEBFD";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -200,11 +203,60 @@ function KpiBar({ value, max, baseline }: { value: number | null; max: number; b
   );
 }
 
+type BarMode = "both" | "nielsen" | "iptv";
+
+// 닐슨(유료방송가구, 파랑)과 IPTV 셋톱(초록)을 한 칸에서 반씩 나눠 그린다. 한쪽만 고르면 그 막대 하나가 칸 전체 높이를 쓴다. 두 막대는 같은 눈금(max)을 쓴다.
+function DualBar({ nielsen, iptv, iptvFloor, max, mode }: { nielsen: number | null; iptv: number | null; iptvFloor: boolean; max: number; mode: BarMode }) {
+  const bar = (value: number | null, color: string, label: string, floor = false) => {
+    if (value === null && !floor) return <div className="h-full rounded-sm bg-zinc-100/60" title={`${label} 값 없음`} />;
+    const pct = value === null || max <= 0 ? 0 : Math.max(value > 0 ? 1.5 : 0, Math.min(100, (value / max) * 100));
+    return (
+      <div className="relative h-full rounded-sm bg-zinc-100" title={floor ? `${label} <0.0001` : `${label} ${formatRating(value, "SKYUHD")}`}>
+        <div className="h-full rounded-sm" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+    );
+  };
+  const both = mode === "both";
+  return (
+    <div className={`flex w-full min-w-[120px] flex-col ${both ? "h-[22px] gap-[2px]" : "h-3.5"}`} role="img" aria-label={`유료방송가구 닐슨 ${formatRating(nielsen, "SKYUHD")}, IPTV 셋톱 ${iptvFloor ? "<0.0001" : formatRating(iptv, "SKYUHD")}`}>
+      {mode !== "iptv" && <div className="min-h-0 flex-1">{bar(nielsen, ACCENT, "닐슨 유료방송가구")}</div>}
+      {mode !== "nielsen" && <div className="min-h-0 flex-1">{bar(iptv, IPTV_GREEN, "IPTV 셋톱", iptvFloor)}</div>}
+    </div>
+  );
+}
+
 function DailyTable({ v }: { v: DailyView }) {
+  // IPTV 자료가 있는 날(skyUHD)만 IPTV 열과 막대 선택이 나타난다 — 훅은 빈 표 판정보다 앞에 둔다
+  const [mode, setMode] = useState<BarMode>("both");
+  const showIptv = v.hasIptv === true;
   if (v.rows.length === 0) return <p className="rounded-xl bg-white p-10 text-center text-sm text-zinc-400">이 날짜엔 프로그램 단위 시청률 자료가 없습니다.</p>;
-  const maxKpi = Math.max(0, ...v.rows.map((r) => r.values[0] ?? 0));
+  const maxNielsen = Math.max(0, ...v.rows.map((r) => r.values[0] ?? 0));
+  const maxIptv = Math.max(0, ...v.rows.map((r) => r.iptv ?? 0));
+  const effMode: BarMode = showIptv ? mode : "nielsen";
+  // 두 막대를 비교할 땐 같은 눈금, 하나만 볼 땐 그 막대의 최대값에 맞춘다
+  const maxKpi = !showIptv ? maxNielsen : effMode === "both" ? Math.max(maxNielsen, maxIptv) : effMode === "iptv" ? maxIptv : maxNielsen;
+  const MODES: { id: BarMode; label: string }[] = [
+    { id: "both", label: "둘 다" },
+    { id: "nielsen", label: "유료방송(닐슨)" },
+    { id: "iptv", label: "IPTV 셋톱" },
+  ];
+  const sky = v.channelCode === "SKYUHD";
   return (
     <>
+      {showIptv && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-[13px]" role="group" aria-label="막대 보기 선택">
+          <span className="font-medium text-zinc-500">막대</span>
+          <div className="inline-flex overflow-hidden rounded-lg border border-zinc-200 bg-white">
+            {MODES.map((m) => (
+              <button key={m.id} type="button" aria-pressed={mode === m.id} onClick={() => setMode(m.id)} className={`px-3 py-1 font-semibold max-md:min-h-10 ${mode === m.id ? "bg-[#ECEBFD] text-[#3C32E1]" : "text-zinc-500 hover:bg-zinc-50"}`}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <span className="inline-flex items-center gap-1 text-[12px] text-zinc-500"><i className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: ACCENT }} />닐슨 유료방송가구</span>
+          <span className="inline-flex items-center gap-1 text-[12px] text-zinc-500"><i className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: IPTV_GREEN }} />IPTV 셋톱</span>
+        </div>
+      )}
       <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm" tabIndex={0} role="region" aria-label="시청률 표(가로 스크롤)">
         {/* 모바일(2026-10-21): 휴대폰에서는 가로 스크롤 없이 한 화면에 들어오게 시각은 시작만, 열 폭·여백을 줄이고 프로그램명은 단어 단위로 줄바꿈한다. */}
         <table className="w-full text-left text-[13px] md:min-w-[640px] md:text-[14px]">
@@ -217,9 +269,14 @@ function DailyTable({ v }: { v: DailyView }) {
                   {c}
                 </th>
               ))}
+              {showIptv && (
+                <th className="w-[66px] break-keep px-1.5 py-2 text-right text-[11px] leading-tight md:w-[96px] md:px-3 md:text-[13px]" style={{ color: IPTV_GREEN }}>
+                  IPTV 셋톱
+                </th>
+              )}
               <th className="w-[52px] px-1.5 py-2 text-right text-[11px] leading-tight md:w-[80px] md:px-3 md:text-[13px]">점유율(%)</th>
               <th className="w-[84px] px-3 py-2 text-right text-[13px] max-md:hidden">시청시간</th>
-              <th className="px-4 py-2 text-[13px] max-md:hidden">KPI 시청률{v.baseline !== null ? ` (평균 ${r3(v.baseline)})` : ""}</th>
+              <th className="px-4 py-2 text-[13px] max-md:hidden">{showIptv ? "유료방송가구 시청률 (닐슨·IPTV)" : `KPI 시청률${v.baseline !== null ? ` (평균 ${r3(v.baseline)})` : ""}`}</th>
             </tr>
           </thead>
           <tbody>
@@ -239,13 +296,18 @@ function DailyTable({ v }: { v: DailyView }) {
                 </td>
                 {r.values.map((val, k) => (
                   <td key={k} className="whitespace-nowrap px-1.5 py-1.5 text-right font-bold tabular-nums md:px-3" style={k === 0 && val !== null && v.baseline !== null && val >= v.baseline ? { color: ACCENT } : undefined}>
-                    {r3(val)}
+                    {sky ? formatRating(val, "SKYUHD") : r3(val)}
                   </td>
                 ))}
+                {showIptv && (
+                  <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-bold tabular-nums md:px-3" style={{ color: IPTV_GREEN }}>
+                    {r.iptv !== null && r.iptv !== undefined ? formatRating(r.iptv, "SKYUHD") : r.iptvBelowFloor ? "<0.0001" : "—"}
+                  </td>
+                )}
                 <td className="whitespace-nowrap px-1.5 py-1.5 text-right tabular-nums text-zinc-600 md:px-3">{r2(r.share)}</td>
                 <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-zinc-600 max-md:hidden">{minSec(r.timeSpentSec)}</td>
                 <td className="px-4 py-1.5 max-md:hidden">
-                  <KpiBar value={r.values[0] ?? null} max={maxKpi} baseline={v.baseline} />
+                  {showIptv ? <DualBar nielsen={r.values[0] ?? null} iptv={r.iptv ?? null} iptvFloor={r.iptvBelowFloor === true} max={maxKpi} mode={effMode} /> : <KpiBar value={r.values[0] ?? null} max={maxKpi} baseline={v.baseline} />}
                 </td>
               </tr>
             ))}
@@ -253,6 +315,7 @@ function DailyTable({ v }: { v: DailyView }) {
         </table>
       </div>
       <p className="mt-2 text-[12px] text-zinc-400">
+        {showIptv ? "막대는 파랑이 닐슨 유료방송가구, 초록이 IPTV 셋톱(두 막대는 같은 눈금)입니다. IPTV는 방영 구간과 절반 이상 겹치는 셋톱 구간 값이며, 가입 가구 기반 보조 자료라 닐슨과 규모가 다릅니다. " : ""}
         {v.baseline !== null ? `파란 숫자는 첫 열이 직전 30일 채널 평균(${r3(v.baseline)}) 이상인 방송입니다(막대도 파랑, 평균 아래는 붉은 계열, 세로 눈금이 평균). 점유율·시청시간은 첫 열 타깃 기준입니다. ` : ""}
       </p>
     </>

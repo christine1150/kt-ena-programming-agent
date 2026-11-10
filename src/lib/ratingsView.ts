@@ -38,6 +38,9 @@ export interface DailyRow {
   /** 첫 열(KPI) 타깃의 점유율(%) · 1인당 시청시간(초) — 저장된 닐슨 값 그대로 */
   share: number | null;
   timeSpentSec: number | null;
+  /** IPTV 셋톱 시청률(skyUHD, 자료를 받은 날만) — 방영 구간과 가장 많이 겹친 STB 구간 값. 바닥값은 null + iptvBelowFloor */
+  iptv?: number | null;
+  iptvBelowFloor?: boolean;
 }
 export interface DailyView {
   date: string;
@@ -47,6 +50,10 @@ export interface DailyView {
   columns: string[];
   /** 첫 열 강조 기준(직전 30일 채널 평균) */
   baseline: number | null;
+  /** 그 날짜의 IPTV 셋톱 자료가 있는지(있을 때만 화면에 IPTV 열·막대·선택이 나타난다) */
+  hasIptv?: boolean;
+  /** IPTV 하루 평균 — 방영 시간의 80% 이상에 STB 값이 있을 때만 */
+  iptvDayAvg?: number | null;
   rows: DailyRow[];
 }
 
@@ -114,6 +121,39 @@ export async function loadDaily(channelCode: string, date: string): Promise<Dail
   }
   const rows = [...byKey.values()].sort((a, b) => orderKey(a.start) - orderKey(b.start));
 
+  // IPTV 셋톱 시청률(skyUHD, 사용자가 자료를 준 날만) — 닐슨 방영 구간과 가장 많이 겹치는 STB 구간을 그 줄에 붙인다(일간 세부 내역 API와 같은 규칙: 짧은 쪽 기준 절반 이상 겹쳐야 같은 방영).
+  let hasIptv = false;
+  let iptvDayAvg: number | null = null;
+  if (isSky) {
+    const { data: stb } = await supabase.from("iptv_stb_ratings").select("start_minute, end_minute, rating, below_floor").eq("channel_code", channelCode).eq("broadcast_date", date);
+    const stbRows = (stb ?? []) as { start_minute: number; end_minute: number; rating: number | null; below_floor: boolean }[];
+    if (stbRows.length > 0) {
+      hasIptv = true;
+      let coveredMin = 0;
+      let airedMin = 0;
+      let weighted = 0;
+      for (const r of rows) {
+        if (!r.end) continue;
+        const s0 = orderKey(r.start) / 60;
+        let e0 = orderKey(r.end) / 60;
+        if (e0 <= s0) e0 += 1440;
+        airedMin += e0 - s0;
+        let best: { s: (typeof stbRows)[number]; ov: number } | null = null;
+        for (const s of stbRows) {
+          const ov = Math.min(e0, s.end_minute) - Math.max(s0, s.start_minute);
+          if (ov > 0 && (!best || ov > best.ov)) best = { s, ov };
+        }
+        if (best && best.ov >= 0.5 * Math.min(e0 - s0, best.s.end_minute - best.s.start_minute)) {
+          r.iptv = best.s.rating;
+          r.iptvBelowFloor = best.s.below_floor;
+          coveredMin += e0 - s0;
+          weighted += (best.s.rating ?? 0) * (e0 - s0); // 바닥값은 0으로 본다
+        }
+      }
+      iptvDayAvg = airedMin > 0 && coveredMin / airedMin >= 0.8 ? weighted / coveredMin : null;
+    }
+  }
+
   // 강조 기준: 직전 30일 채널 평균(첫 열 타깃)
   let baseline: number | null = null;
   const firstId = usedTargets[0] && !isSky ? idOf(usedTargets[0].label) : undefined;
@@ -131,6 +171,7 @@ export async function loadDaily(channelCode: string, date: string): Promise<Dail
     themeColor: (ch.theme_color as string | null) ?? null,
     columns: usedTargets.map((c) => c.head),
     baseline,
+    ...(hasIptv ? { hasIptv, iptvDayAvg } : {}),
     rows,
   };
 }
