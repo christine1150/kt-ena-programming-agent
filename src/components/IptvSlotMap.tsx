@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { bandLabel, DOW_GROUPS, rankText, rankTier, rowsOfGroup, vsTopRivalPct, type DowGroup, type SlotRivalMap } from "@/lib/iptvSlotMapText";
 
-const KIND_LABEL = { household: "가구", p2049: "수도권 2049(추정)" } as const;
+const KIND_LABEL = { household: "가구", p2049: "수도권 2049" } as const;
 const md = (d: string | null) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "—");
 const fmtR = (v: number | null) => (v === null ? "—" : v < 0.01 ? v.toFixed(4) : v < 1 ? v.toFixed(3) : v.toFixed(2));
 const TIER_TEXT = { top: "상위", mid: "중간", low: "하위" } as const;

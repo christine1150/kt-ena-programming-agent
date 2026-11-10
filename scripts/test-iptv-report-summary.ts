@@ -31,7 +31,7 @@ check("프로그램 표(IPTV 본방)", txt.includes("프로그램(IPTV 본방)")
 check("보조 자료·닐슨 비교 금지 문구", txt.includes("청약·공식 KPI 기준은 닐슨") && txt.includes(IPTV_SUMMARY_NOTE.slice(0, 12)));
 check("문서는 개조식(습니다 없음)", !txt.includes("습니다"));
 
-check("2049 타깃은 추정 표기", JSON.stringify(iptvSummarySection({ ...base, targetKind: "p2049" }, "ENA")).includes("수도권 2049(추정)"));
+check("2049 타깃은 IPTV 이름으로 표기", JSON.stringify(iptvSummarySection({ ...base, targetKind: "p2049" }, "ENA")).includes("수도권 2049"));
 check("skyUHD 는 시청률 5자리", JSON.stringify(iptvSummarySection({ ...base, channelName: "skyUHD", avgRating: 0.002564 }, "SKYUHD")).includes("0.00256"));
 check("프로그램이 없으면 표 없음", !iptvSummarySection({ ...base, topPrograms: [] }, "ONCE")?.blocks.some((b) => b.kind === "table"));
 check("순위 자료 없으면 순위 문장 없음", !JSON.stringify(iptvSummarySection({ ...base, ratingRank: null }, "ONCE")).includes("위("));

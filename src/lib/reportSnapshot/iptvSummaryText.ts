@@ -7,7 +7,7 @@ import type { DocSection } from "@/lib/audienceReport/reportFlatten";
 import type { IptvReportSummary } from "./types";
 
 export const IPTV_SUMMARY_NOTE = "IPTV 3사 셋톱(TV INDEX) 값으로 보조 자료임. 청약·공식 KPI 기준은 닐슨이며 위 닐슨 표와 비교·합산하지 않음. 수도권 2049는 셋톱에서 추정한 값임.";
-const TARGET_LABEL = { household: "가구", p2049: "수도권 2049(추정)" } as const;
+const TARGET_LABEL = { household: "가구", p2049: "수도권 2049" } as const;
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 
 /** 직전 기간 대비 변화율(%) — 직전 값이 없거나 0이면 null */
