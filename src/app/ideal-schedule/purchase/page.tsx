@@ -21,6 +21,8 @@ import { RECO_EVIDENCE_KO, recoEvidence } from "@/lib/purchaseSim/recoEvidence";
 import { buildReviewSnapshot } from "@/lib/purchaseReview/snapshot";
 import { VENDING } from "@/lib/ui/pageTitles";
 import { isRegionalHousehold } from "@/lib/competitorRegion";
+import { IptvPeerRecord } from "@/components/IptvPeerRecord";
+import { peerTargetKind, type IptvTargetKind } from "@/lib/iptvPeerRecordText";
 
 const CHANNEL_OPTS: { code: string; name: string }[] = [
   { code: "ENA", name: "ENA" },
@@ -485,6 +487,13 @@ function PurchaseSimulator() {
               ))}
             </div>
             <ReviewPanel review={review} err={reviewErr} alts={alts} res={result} onAlts={() => void loadReview(result, true, seq.current)} />
+            {result.resolved && (
+              <IptvPeerRecord
+                names={[result.resolved.displayName, ...result.resolved.memberKeys]}
+                to={result.asOf}
+                targets={result.results.map((t) => peerTargetKind(t.target)).filter((k): k is IptvTargetKind => k !== null)}
+              />
+            )}
             {result.warnings.length > 0 && <p className="text-xs text-amber-700">{result.warnings.join(" · ")}</p>}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-zinc-500">
               <span title={`예측은 과거 실적에서 계산한 기대값이며 확정 시청률이 아닙니다. 범위는 같은 방식으로 과거에 예측해 본 오차에서 정했고, 예측 근거 강도는 근거 방영 수와 그 오차를 함께 봅니다(제목 일치 점수와 별개). 가격·광고 수익 정보가 없어 ROI·최대 구매가는 만들지 않습니다. 이 화면의 조회는 구매 요청·권리 예약·편성 저장을 하지 않습니다.`}>
