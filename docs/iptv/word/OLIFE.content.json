@@ -45,19 +45,35 @@
   },
   {
    "type": "subhead",
-   "text": "두 자료의 엇갈림"
+   "text": "IPTV에서는 경쟁 채널보다 낮거나 같은 수준"
   },
   {
    "type": "bullet",
-   "text": "IPTV는 OLIFE를 닐슨보다 적게 잡음(닐슨÷IPTV 1.75, CMC TV 1.26)"
+   "text": "IPTV 가구 0.069로 CMC TV(0.070)와 동률, EBS(0.237)의 약 3분의 1, 2049는 4개 중 4위"
   },
   {
    "type": "bullet",
-   "text": "나라별 순위는 두 자료가 대체로 같음(상관 0.67, 중국·베트남·라오스 상위)"
+   "text": "닐슨은 CMC TV의 1.5배인데 IPTV는 닐슨÷IPTV 1.75(CMC TV 1.26)로 가장 낮게 반영"
+  },
+  {
+   "type": "bullet",
+   "text": "수·목·금 새벽 02~05시는 채널 평균의 0.42~0.44로 가장 약한 칸"
+  },
+  {
+   "type": "subhead",
+   "text": "IPTV 시청률을 올리면 전체 경쟁력에 도움이 될 수 있음"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 CMC TV 수준(1.26)으로만 반영돼도 현재 닐슨 기준 IPTV 가구는 0.094 안팎으로 계산됨"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV·닐슨 모두 높은 일 17~20시(세계테마기행) 노출 강화가 두 자료를 함께 올릴 가능성이 큼"
   },
   {
    "type": "takeaway",
-   "text": "채널 간 비교는 닐슨 값으로, IPTV는 채널 안 상대 비교에만 쓴다"
+   "text": "닐슨 우위에도 IPTV 가구는 경쟁 채널과 동률이라 IPTV 노출 개선 여지가 큼"
   },
   {
    "type": "section",
@@ -65,11 +81,15 @@
   },
   {
    "type": "insight",
-   "text": "여행·기행 외 장르(드라마·예능) 확장 효과 재점검"
+   "text": "IPTV 3사 채널 번호·패키지 노출 조건 확인(IPTV에서 낮게 잡히는 원인 후보)"
   },
   {
    "type": "insight",
    "text": "TV INDEX에 OLIFE·CMC TV 플랫폼별 표본 구성 문의"
+  },
+  {
+   "type": "insight",
+   "text": "여행·기행 외 장르 확장 효과 재점검, 채널 간 비교는 닐슨 값으로 유지"
   },
   {
    "type": "note",
