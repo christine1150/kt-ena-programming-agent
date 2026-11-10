@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
 import { computeExpectedEndDate } from "@/lib/featuredContentSchedule";
+import { invalidateOriginalContentDailyMart } from "@/lib/dailyMartCache";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = await getAdminSession();
@@ -54,6 +55,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (error) {
     return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
   }
+  await invalidateOriginalContentDailyMart(); // 편성이 바뀌면 사전 계산된 요일별 리뷰 결과를 버린다
   return NextResponse.json({ ok: true });
 }
 
@@ -68,5 +70,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (error) {
     return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
   }
+  await invalidateOriginalContentDailyMart(); // 편성이 바뀌면 사전 계산된 요일별 리뷰 결과를 버린다
   return NextResponse.json({ ok: true });
 }

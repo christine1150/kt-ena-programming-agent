@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { getAdminSession } from "@/lib/adminAuth";
 import { computeExpectedEndDate } from "@/lib/featuredContentSchedule";
 import { findOrCreateProgramByNormalizedName } from "@/lib/programNameMatch";
+import { invalidateOriginalContentDailyMart } from "@/lib/dailyMartCache";
 
 export async function GET() {
   const admin = await getAdminSession();
@@ -106,5 +107,6 @@ export async function POST(request: Request) {
     );
   }
 
+  await invalidateOriginalContentDailyMart(); // 편성이 바뀌면 사전 계산된 요일별 리뷰 결과를 버린다
   return NextResponse.json({ ok: true });
 }

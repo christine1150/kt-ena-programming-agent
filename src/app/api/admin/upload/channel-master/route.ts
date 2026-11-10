@@ -19,6 +19,7 @@ import { parseOriginalReviewScheduleWorkbook } from "@/lib/originalReviewSchedul
 import { checkChannelCoverage, checkPercentValue } from "@/lib/dataQuality";
 import { findOrCreateProgramByNormalizedName, normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { invalidateReferenceDataCache } from "@/lib/intent/referenceData";
+import { invalidateOriginalContentDailyMart } from "@/lib/dailyMartCache";
 import { decideGoalFromFile, logChange } from "@/lib/admin/lockStore";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
@@ -362,6 +363,8 @@ export async function POST(request: Request) {
       if (!seedError) episodeCountersSeeded += 1;
     }
   }
+
+  await invalidateOriginalContentDailyMart(); // 편성이 바뀌었을 수 있어 사전 계산된 요일별 리뷰 결과를 버린다
 
   await supabase.from("file_uploads").insert({
     file_name: fileName,

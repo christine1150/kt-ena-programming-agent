@@ -154,6 +154,26 @@ export async function refreshDailyDashboardMart(asOfDate: string): Promise<void>
   }
 }
 
+/**
+ * 주요 콘텐츠(featured_content) 편성이 바뀌면 사전 계산된 "요일별 리뷰 프로그램" 결과를 지운다(2026-11-11).
+ * 11/10 미스틱 첫 방송일을 고친 뒤에도 사전 계산 캐시(original_content_daily)에 옛 결과가 남아 홈 리뷰에
+ * 미스틱이 계속 나왔다 — 캐시 행이 없으면 호출부가 실시간 RPC로 폴백하므로(위 규칙 2) 지우기만 하면 된다.
+ * 최근 14일 + 앞으로의 날짜만 지우고, 실패해도 throw하지 않는다(편성 저장 자체를 막으면 안 된다).
+ */
+export async function invalidateOriginalContentDailyMart(): Promise<void> {
+  try {
+    const from = new Date(Date.now() + 9 * 3600 * 1000 - 14 * 86400 * 1000).toISOString().slice(0, 10); // KST 기준 14일 전
+    const { error } = await supabase
+      .from("mart_daily_dashboard_cache")
+      .delete()
+      .eq("cache_slot", MART_SLOT.originalContentDaily)
+      .gte("as_of_date", from);
+    if (error) console.error(`[mart] original_content_daily 캐시 삭제 실패: ${error.message}`);
+  } catch (e) {
+    console.error(`[mart] original_content_daily 캐시 삭제 예외: ${String(e)}`);
+  }
+}
+
 export interface MartResult<T> {
   data: T[] | null;
   error: { message: string } | null;
