@@ -4588,7 +4588,7 @@ function OriginalContentReportCard({
                     key: "text",
                     label: "인사이트 전문",
                     body: (
-                      <div className="grid gap-6 lg:grid-cols-2 lg:gap-10">
+                      <div className="grid gap-6">
                         <div className="min-w-0 space-y-3">
                           {(insight.situationLine || insight.causeLine || insight.actionLine) && (
                             <div className="space-y-1.5 text-[13.5px] leading-relaxed text-zinc-700">
@@ -4613,7 +4613,6 @@ function OriginalContentReportCard({
                               </div>
                             )
                           )}
-                          {h.manualReport && <p className="text-[11px] font-semibold text-zinc-500">PD 수동 리포트{h.manualReport.episode_number !== null && h.manualReport.episode_number !== undefined ? ` · ${h.manualReport.episode_number}회` : ""}</p>}
                         </div>
                         <div className="min-w-0 space-y-3">
                           {insight.bullets.length > 0 && (
@@ -4816,24 +4815,24 @@ function OriginalContentReportCard({
                   {/* ③ 인사이트 — 요약 한 줄 + 현황/원인/액션(각 2줄까지). 전문은 아래 "인사이트 전문" 칩 */}
                   {(summaryNode || insight.situationLine || insight.causeLine) && (
                     <div className="mt-4">
-                      {summaryNode && <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-zinc-900">{summaryNode}</p>}
+                      {summaryNode && <p className="text-[15px] font-semibold leading-snug text-zinc-900">{summaryNode}</p>}
                       {(insight.situationLine || insight.causeLine) && (
                         <div className={`${summaryNode ? "mt-3" : ""} grid gap-x-5 gap-y-2 sm:grid-cols-3`}>
                           {insight.situationLine && (
                             <div className="min-w-0 border-l-2 border-zinc-200 pl-3">
                               <p className="text-[10.5px] font-medium text-zinc-500">현황</p>
-                              <p className="line-clamp-2 text-[13px] leading-snug text-zinc-700">{highlightChannelNames(insight.situationLine, channelColors)}</p>
+                              <p className="text-[13px] leading-snug text-zinc-700">{highlightChannelNames(insight.situationLine, channelColors)}</p>
                             </div>
                           )}
                           {insight.causeLine && (
                             <div className="hidden min-w-0 border-l-2 border-zinc-200 pl-3 sm:block">
                               <p className="text-[10.5px] font-medium text-zinc-500">원인</p>
-                              <p className="line-clamp-2 text-[13px] leading-snug text-zinc-700">{highlightChannelNames(insight.causeLine, channelColors)}</p>
+                              <p className="text-[13px] leading-snug text-zinc-700">{highlightChannelNames(insight.causeLine, channelColors)}</p>
                             </div>
                           )}
                           <div className="min-w-0 border-l-2 pl-3" style={{ borderColor: accent }}>
                             <p className="text-[10.5px] font-semibold" style={{ color: accent }}>액션</p>
-                            <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-zinc-900">{insight.actionLine ?? "현재 편성 유지"}</p>
+                            <p className="text-[13px] font-semibold leading-snug text-zinc-900">{insight.actionLine ?? "현재 편성 유지"}</p>
                           </div>
                         </div>
                       )}
