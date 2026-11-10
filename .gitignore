@@ -33,3 +33,6 @@ yarn-error.log*
 
 # OPT02: 실제 방영 내보내기 파일(원자료) — 커밋·외부 전송 금지
 own-airings-*.json
+
+# IPTV 셋톱 TV INDEX 내려받기 원본(대외비·대용량) — DB 적재 후 저장소에 올리지 않는다
+ipTV Data/
