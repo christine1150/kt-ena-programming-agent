@@ -55,6 +55,7 @@
     "test:iptv-lifecycle": "tsx scripts/test-iptv-lifecycle.ts",
     "test:iptv-peer-record": "tsx scripts/test-iptv-peer-record.ts",
     "test:iptv-slot-map": "tsx scripts/test-iptv-slot-map.ts",
+    "test:iptv-report-summary": "tsx scripts/test-iptv-report-summary.ts",
     "test:program-performance": "tsx scripts/test-program-performance.ts",
     "test:schedule-forecast": "tsx scripts/test-schedule-forecast.ts",
     "test:plan-forecast": "tsx scripts/test-plan-forecast.ts",

@@ -14,6 +14,7 @@ import { kstToday } from "@/lib/workspace/dates";
 import { buildChannelSnapshot, buildPortfolioSnapshot } from "./build";
 import { cadenceOf } from "./cadence";
 import { buildPurchaseBrief, type RecoRow } from "./purchaseBrief";
+import { loadIptvReportSummary, type IptvSummaryPeriod } from "./iptvSummary";
 import { createSupabaseStore } from "./storeSupabase";
 import { SNAPSHOT_ID_RE, type SnapshotStore } from "./store";
 import { requestKey, type SnapshotRequest } from "./requestKey";
@@ -58,8 +59,11 @@ async function loadRecoRows(codes: string[]): Promise<RecoRow[]> {
   return out;
 }
 
-/** 월간 보고서만 쓰는 추가 자료 — 권리·운영정책·구매 검토. 읽기만 하고 읽지 못하면 null(문제 없음으로 바꾸지 않는다). */
-async function loadExtras(subject: "channel" | "portfolio", channelCode: string | null, cadence: ReportCadence, analysisTo: string): Promise<SnapshotExtras> {
+/** 월간 보고서의 추가 자료(권리·운영정책·구매 검토)와 주간·월간 채널 보고서의 IPTV 셋톱 요약(보조). 읽기만 하고 읽지 못하면 null(문제 없음으로 바꾸지 않는다). */
+async function loadExtras(subject: "channel" | "portfolio", channelCode: string | null, cadence: ReportCadence, analysisTo: string, period?: IptvSummaryPeriod): Promise<SnapshotExtras> {
+  if (cadence === "weekly" && subject === "channel" && channelCode && period) {
+    return { iptvSummary: await loadIptvReportSummary(supabase, { channelCode, period }).catch(() => null) };
+  }
   if (cadence !== "monthly") return {};
   const names = await channelNames().catch(() => ({} as Record<string, string>));
   const extras: SnapshotExtras = {};
@@ -68,6 +72,9 @@ async function loadExtras(subject: "channel" | "portfolio", channelCode: string 
     extras.purchaseReview = buildPurchaseBrief(await loadRecoRows(codes), { analysisTo, names, perChannel: subject === "channel" ? 3 : 2 });
   } catch {
     extras.purchaseReview = null;
+  }
+  if (subject === "channel" && channelCode && period) {
+    extras.iptvSummary = await loadIptvReportSummary(supabase, { channelCode, period }).catch(() => null);
   }
   if (subject === "channel" && channelCode) {
     const p = buildChannelPolicyViews(analysisTo, names).find((v) => v.channelCode === channelCode);
@@ -91,7 +98,7 @@ async function buildFresh(r: SnapshotRequest): Promise<ReportSnapshot> {
   if (r.subject === "channel") {
     if (!r.channelCode) throw new Error("채널 코드가 필요합니다.");
     const doc = await buildAudienceReport(r.channelCode, r.request);
-    const extras = await loadExtras("channel", r.channelCode, cadence, doc.period.dateTo);
+    const extras = await loadExtras("channel", r.channelCode, cadence, doc.period.dateTo, doc.period);
     return buildChannelSnapshot(doc, { generatedAt, extras, preset });
   }
   const doc = await buildPortfolioReport(r.request);

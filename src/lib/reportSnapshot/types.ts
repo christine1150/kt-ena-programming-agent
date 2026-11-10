@@ -86,6 +86,31 @@ export interface PurchaseReviewBrief {
   note: string;
 }
 
+/** 주간·월간 채널 보고서의 "IPTV 셋톱 요약"(보조 자료) — 스냅샷 생성 시점에 DB 함수 iptv_report_summary 값을 한 번 읽어 저장한다. */
+export interface IptvReportSummary {
+  channelName: string;
+  /** household = 전국 유료가구 대응(IPTV 가구), p2049 = 수도권 2049(셋톱 추정) */
+  targetKind: "household" | "p2049";
+  from: string;
+  /** IPTV 자료가 분석 종료일보다 일찍 끝났으면 실제 집계 종료일 */
+  to: string;
+  prevFrom: string;
+  prevTo: string;
+  /** 이 채널 IPTV 자료의 마지막 방송일 */
+  lastDate: string | null;
+  /** 분석 종료일보다 IPTV 자료가 먼저 끝나 일부 기간만 집계했는가 */
+  partial: boolean;
+  airings: number;
+  avgRating: number | null;
+  prevAirings: number;
+  prevAvgRating: number | null;
+  avgReachRate: number | null;
+  minutesPerReacher: number | null;
+  observedChannels: number;
+  ratingRank: number | null;
+  topPrograms: { name: string; airings: number; rating: number | null; minutesPerReacher: number | null }[];
+}
+
 /** 월간 템플릿이 쓰는 추가 자료. 스냅샷 생성 시점에 한 번 읽어 저장한다(형식마다 다시 읽지 않는다). */
 export interface SnapshotExtras {
   /** 채널 보고서: 해당 채널의 권리 현황 / 종합: 전체. null = 읽지 못함(문제 없음이 아님) */
@@ -93,6 +118,8 @@ export interface SnapshotExtras {
   /** 월간 채널 보고서: 해당 채널의 운영정책 한 줄 */
   channelPolicy?: { channelName: string; coreTarget: string; state: string; role: string | null; goal: string | null; direction: string | null; validText: string } | null;
   purchaseReview?: PurchaseReviewBrief | null;
+  /** 주간·월간 채널 보고서: IPTV 셋톱 요약(보조). null/없음 = 자료가 없거나 기간이 IPTV 자료 밖 */
+  iptvSummary?: IptvReportSummary | null;
 }
 
 export interface SnapshotMeta {

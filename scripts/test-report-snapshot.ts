@@ -244,6 +244,19 @@ async function main() {
     check("모델은 같은 스냅샷에서 항상 같다(결정적)", JSON.stringify(m2) === JSON.stringify(mWeekly));
   }
 
+  // IPTV 셋톱 요약(보조, 2026-11-11): 주간·월간 채널 보고서에만, 자료가 있을 때만 본문에 들어간다
+  {
+    const iptv = { channelName: "ENA", targetKind: "p2049" as const, from: "2026-09-28", to: "2026-10-04", prevFrom: "2026-09-21", prevTo: "2026-09-27", lastDate: "2026-11-05", partial: false, airings: 120, avgRating: 0.27, prevAirings: 118, prevAvgRating: 0.25, avgReachRate: 1.02, minutesPerReacher: 22.2, observedChannels: 22, ratingRank: 6, topPrograms: [{ name: "테스트작", airings: 5, rating: 0.5, minutesPerReacher: 20 }] };
+    const wI = TPL.buildReportModel(BUILD.buildChannelSnapshot(weeklyDoc, { generatedAt: T0, extras: { iptvSummary: iptv } }));
+    const mI = TPL.buildReportModel(BUILD.buildChannelSnapshot(monthlyDoc, { generatedAt: T0, extras: { iptvSummary: iptv } }));
+    const dI = TPL.buildReportModel(BUILD.buildChannelSnapshot(dailyDoc, { generatedAt: T0, extras: { iptvSummary: iptv } }));
+    check("IPTV 요약은 주간·월간 본문 제언 바로 앞에 들어간다", keys(wI, "body").join().includes("iptv_summary,rec_summary") && keys(mI, "body").join().includes("iptv_summary,rec_summary"), keys(wI, "body").join());
+    check("일간 본문에는 IPTV 요약이 없다(자료가 있어도 — 서비스는 주간·월간에만 읽어 둔다)", !keys(dI, "body").includes("iptv_summary" as never));
+    check("자료가 없으면 IPTV 요약 섹션 자체를 두지 않는다", !keys(mWeekly, "body").includes("iptv_summary" as never) && !keys(mMonthly, "body").includes("iptv_summary" as never));
+    const t = JSON.stringify(wI.body.find((x) => x.key === "iptv_summary"));
+    check("IPTV 요약은 보조 표기·닐슨과 섞지 않는다는 문구·출처 메타를 담는다", t.includes("보조") && t.includes("청약·공식 KPI 기준은 닐슨") && t.includes("테스트작") && t.includes("IPTV 3사 셋톱"), t.slice(0, 200));
+  }
+
   // 월간 구매 검토·권리·역할
   {
     const pr = mMonthly.body.find((s) => s.key === "purchase_review")!;
