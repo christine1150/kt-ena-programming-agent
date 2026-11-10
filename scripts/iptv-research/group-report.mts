@@ -68,5 +68,9 @@ for (const ch of own) {
     sheet(`성적표 ${ch} ${label}`.slice(0, 31), await rpc("iptv_group_scorecard", { p_group: group, p_target: "household", p_channel: ch, p_from: f, p_to: t, p_min_airings: 8 }));
   }
 }
+for (const ch of own) {
+  // 숨은 작품·재방 내성(닐슨 짝 표본 기준, 닐슨 자료가 있는 자사 채널)
+  sheet(`숨은작품 ${ch} 2026`.slice(0, 31), await rpc("iptv_group_hidden_titles", { p_group: group, p_target: "household", p_channel: ch, p_from: "2026-01-01", p_to: TO, p_min_pairs: 8 }));
+}
 await wb.xlsx.writeFile(out);
 console.log("saved", out, "own:", own.join(","));
