@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { isRerunOnlyPeer, isWideBandRatio, isThinPeerSample, selectPeerRows, type IptvPeerRecord, type IptvPeerRow, type IptvTargetKind } from "@/lib/iptvPeerRecordText";
 
-const TARGET_LABEL: Record<IptvTargetKind, string> = { household: "가구", p2049: "수2049(추정)" };
+const TARGET_LABEL: Record<IptvTargetKind, string> = { household: "가구", p2049: "수2049" };
 const TARGET_ORDER: IptvTargetKind[] = ["p2049", "household"];
 const MISSING = "—";
 // 52주 창이라 월/일만 쓰면 11/11~11/9 처럼 해가 헷갈린다 → 연도 두 자리를 붙인다

@@ -8,7 +8,7 @@ import { summarizeIptvBlockRow, type IptvProgramBlock, type IptvProgramBlockRow 
 const CHANNEL_LABEL: Record<string, string> = { ENA: "ENA", "ENA Drama": "ENA DRAMA", "ENA Play": "ENA PLAY", "ENA Story": "ENA STORY", OLIFE: "OLIFE", ONCE: "ONCE", skyUHD: "skyUHD" };
 type Kind = "household" | "p2049";
 const KIND_ORDER: Kind[] = ["p2049", "household"];
-const TARGET_LABEL: Record<Kind, string> = { household: "가구", p2049: "수2049(추정)" };
+const TARGET_LABEL: Record<Kind, string> = { household: "가구", p2049: "수2049" };
 const MISSING = "—";
 const bandText = (b: string | null) => (b ? `${Number(b.slice(0, 2))}~${Number(b.slice(3, 5))}시` : MISSING);
 const md =(d: string | null) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "—");
