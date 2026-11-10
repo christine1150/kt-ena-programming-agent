@@ -40,6 +40,8 @@ import { selectRepresentativeCompetitors } from "@/lib/broadcastTime/overlap";
 import { loadLineupShifts, type LineupShiftResult } from "@/lib/lineupHandoff";
 import { buildYtdGoalBriefing, type YtdGoalBriefing } from "@/lib/ytdGoalBriefing";
 import { buildAutoMinute, type MinuteRatingRow } from "@/lib/minuteRatings";
+import { episodeChangeNoise, loadEpisodeNoise, twoEpisodeLevel } from "@/lib/iptvNoise";
+import { iptvTargetKindOf } from "@/lib/contentFit/iptvCrossCheck";
 
 const ALL_CHANNEL_CODES = ["ENA", "ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "OLIFE", "ONCE", "SKYUHD"];
 // 분당 시청률 그래프는 수도권 2049 값으로 그리므로 2049가 주 타깃인 채널만 자동 구성한다(가구 채널은 가구 분당 값을 쓸 때 따로 추가).
@@ -953,8 +955,23 @@ export async function GET(request: Request) {
     const channelNameByCode = new Map(summaries.map((s) => [s.code, s.name]));
     const channelIdByCode2 = new Map(channels.map((c) => [c.code, c.id]));
     const achievementPctByCode2 = new Map(summaries.map((s) => [s.code, s.achievementPct]));
+    // IPTV 활용 3단계 2순위(2026-11-11): 전회 대비 등락이 이 채널·타깃의 닐슨 회차 간 잡음 폭(iptv_calibration) 안인지 붙인다.
+    // 값·판정은 그대로이고 표시·LLM 해석 힌트로만 쓴다. 보정표가 없거나 읽기 실패면 null(표시 없음).
+    // 잡음 폭은 시청률 수준에 따라 다르므로 두 회 평균 시청률 구간으로 고른다(iptv_noise_by_level).
+    const noiseTable = await loadEpisodeNoise(supabase).catch(() => null);
+    const dailyWithNoise = dailyWithOverlap.map((row) => {
+      const ch = channelByCode.get(row.broadcast_channel_code);
+      const primaryKind = ch?.primary_target ? iptvTargetKindOf(resolveProgramLevelTargetLabel(ch.primary_target)) : null;
+      const primaryLevel =
+        row.matched_rating !== null && row.prior_occurrence_rating !== null ? (row.matched_rating + row.prior_occurrence_rating) / 2 : twoEpisodeLevel(row.matched_rating, row.prior_rating_change_pct);
+      return {
+        ...row,
+        prior_change_noise: episodeChangeNoise(row.prior_rating_change_pct, primaryLevel, noiseTable, primaryKind),
+        household_change_noise: episodeChangeNoise(row.household_rating_change_pct, twoEpisodeLevel(row.matched_household_rating, row.household_rating_change_pct), noiseTable, "household"),
+      };
+    });
     const dailyWithInsight = await Promise.all(
-      dailyWithOverlap.map(async (row) => {
+      dailyWithNoise.map(async (row) => {
         // buildOriginalHeadline(Dashboard.tsx)와 완전히 동일한 방식으로 순위 산출(새 계산 방식 도입 없음).
         const beatenBy = row.matched_rating !== null
           ? row.competitorHighlights
@@ -986,8 +1003,10 @@ export async function GET(request: Request) {
           channelCode: row.broadcast_channel_code,
           matchedRating: ratingFmt(row.matched_rating),
           priorRatingChangePct: pctFmt(row.prior_rating_change_pct),
+          priorChangeWithinNoise: row.prior_change_noise?.withinNoise ?? null,
           matchedHouseholdRating: ratingFmt(row.matched_household_rating),
           householdRatingChangePct: pctFmt(row.household_rating_change_pct),
+          householdChangeWithinNoise: row.household_change_noise?.withinNoise ?? null,
           achievementPct: pctFmt(achievementPctByCode2.get(row.broadcast_channel_code) ?? null),
           matchedReach: roundPercentForDisplay(row.matched_reach, 2),
           targetRank,

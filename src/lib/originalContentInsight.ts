@@ -25,6 +25,9 @@ export interface OriginalInsightInput {
   channelCode: string;
   matchedRating: number | null;
   priorRatingChangePct: number | null;
+  // 전회 대비 등락이 이 채널·타깃의 닐슨 회차 간 잡음 폭 안이면 true(IPTV 셋톱 대조로 구한 보정표, src/lib/iptvNoise.ts). 없으면 null.
+  priorChangeWithinNoise?: boolean | null;
+  householdChangeWithinNoise?: boolean | null;
   matchedHouseholdRating: number | null;
   householdRatingChangePct: number | null;
   achievementPct: number | null;
@@ -52,6 +55,7 @@ function buildSystemPrompt(): string {
     "절대 규칙: 아래 JSON으로 주어진 값 외의 숫자를 스스로 계산하거나 추정하지 마라. 준 값을 그대로 인용만 해라. 원인을 단정하지 말고(예: 'A 때문에 B가 하락했다' 금지) '동시에 관찰됨/~로 보임/~일 가능성' 같은 헤지 표현을 써라.",
     "본방·리드인·직후재방·목표 달성률 각각의 원 수치는 이미 화면 다른 곳(핵심 요약 4개 불렛)에 나와 있으니 그대로 반복하지 말고, 그 신호들을 엮은 '패턴 해석'과 '편성 시사점'에 집중해라(예: 가구 대비 타깃 성과 괴리, 경쟁 구도 속 상대적 위치, 연령대 구성이 시사하는 것, 리드인/재방 흐름이 시사하는 것 등 — 실제로 데이터에 나타난 패턴만).",
     "카니발라이제이션(같은 채널의 자체 재방이 타 채널 재방 유입을 잠식하는 것)은 데이터가 뚜렷이 그 패턴을 보일 때만 아주 짧게라도 언급 가능하되, 그것이 유일한 소재가 되지 않게 하고 가능하면 다른 신호를 우선해라 — cannibalizationSuspected가 false면 언급하지 마라.",
+    "priorChangeWithinNoise(타깃)·householdChangeWithinNoise(가구)가 true이면 그 전회 대비 등락은 이 채널 닐슨 회차 간 흔들림 범위 안이다 — '상승/하락했다'로 성과 변화를 단정하지 말고 '회차 변동 범위 안'으로만 짧게 다루거나 언급하지 마라.",
     "출력은 반드시 JSON 스키마를 따르고, insight가 빈 문자열이면 '의미 있게 종합할 신호가 부족하다'는 뜻이다 — 억지로 만들지 마라.",
   ].join("\n");
 }

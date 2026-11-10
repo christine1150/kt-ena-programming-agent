@@ -54,6 +54,7 @@ import { brandText } from "@/lib/ui/contrast";
 import { BasisNote } from "@/components/ui/BasisNote";
 import { HOME_DAILY_BASIS_NOTE } from "@/lib/ui/baselines";
 import { dataKey, hrefFor, parseViewContext, serializeContext, type HomeView, type ViewContext } from "@/lib/workspace/viewContext";
+import { describeEpisodeNoise, type EpisodeChangeNoise } from "@/lib/iptvNoise";
 
 interface ChannelSummary {
   code: string;
@@ -174,6 +175,9 @@ interface OriginalDailyItem {
   // 유료가구) 타깃 시청률·전회 대비 등락률(그 타깃 데이터가 없는 채널은 둘 다 null).
   matched_household_rating: number | null;
   household_rating_change_pct: number | null;
+  // IPTV 활용 3단계 2순위(2026-11-11): 전회 대비 등락이 닐슨 회차 간 잡음 폭 안인지(API가 iptv_calibration으로 판정, 없으면 null)
+  prior_change_noise?: EpisodeChangeNoise | null;
+  household_change_noise?: EpisodeChangeNoise | null;
   // 사용자 지시(2026-10-25): 직재방 시청률 옆 괄호 가구 시청률(API가 재방 슬롯에서 따로 찾음, 없으면 null)
   rerun_household_rating?: number | null;
   // 사용자 지시(2026-08-25): [편성 인사이트]를 카니발라이제이션 단일 규칙 대신, 이미 검증된
@@ -4124,10 +4128,14 @@ function buildOriginalDailyBriefing(daily: OriginalDailyItem[]): OriginalDailyBr
     const name = mostMovedItem.matched_program_name;
     // 사용자 지시(2026-09-06): 시청률이 0%까지 떨어진 경우 "▼100%로 가장 뚜렷하게 움직였다"는
     // 표현은 마치 유의미한 변화처럼 들려 오해를 줄 수 있다 — 객관적 사실 위주 문장으로 대체.
+    // IPTV 활용 3단계 2순위(2026-11-11): 그 등락이 채널 닐슨 회차 간 흔들림 안이면 "뚜렷하게 움직였다"고 하지 않는다.
+    const changeText = `${mostMovedItem.prior_rating_change_pct >= 0 ? "▲" : "▼"} ${Math.abs(mostMovedItem.prior_rating_change_pct).toFixed(1)}%`;
     const sentence =
       mostMovedItem.matched_rating === 0
         ? `'${name}'${josaEunNeun(name)} 타깃 시청률 0%로 유의미한 시청 지표를 확보하지 못했습니다.`
-        : `'${name}'${josaIga(name)} 전회 대비 ${mostMovedItem.prior_rating_change_pct >= 0 ? "▲" : "▼"} ${Math.abs(mostMovedItem.prior_rating_change_pct).toFixed(1)}%로 가장 뚜렷하게 움직였습니다.`;
+        : mostMovedItem.prior_change_noise?.withinNoise
+          ? `'${name}'${josaEunNeun(name)} 전회 대비 ${changeText}였지만 이 채널의 회차 변동 범위 안이라, 한 회 등락보다 여러 회 평균을 함께 보는 것이 좋습니다.`
+          : `'${name}'${josaIga(name)} 전회 대비 ${changeText}로 가장 뚜렷하게 움직였습니다.`;
     mostMoved = { rowKey: `${mostMovedItem.broadcast_channel_code}-${mostMovedItem.matched_start_time}`, sentence };
   }
   const withRerun = withRating.filter((d) => d.self_rerun_rating !== null && d.matched_rating! > 0);
@@ -4752,6 +4760,15 @@ function OriginalContentReportCard({
                             <span className="ml-1 text-[12px] font-normal text-zinc-500">전회 대비</span>
                           </span>
                         )}
+                        {(() => {
+                          // IPTV 활용 3단계 2순위(2026-11-11): 등락이 이 채널 닐슨 회차 간 흔들림 안이면 작게 표시(마우스를 올리면 근거)
+                          const nz = describeEpisodeNoise(h.prior_change_noise);
+                          return nz ? (
+                            <span className="whitespace-nowrap rounded-full border border-zinc-200 px-2 py-0.5 text-[11.5px] font-normal text-zinc-500" title={nz.title}>
+                              {nz.badge}
+                            </span>
+                          ) : null;
+                        })()}
                       </p>
                       {secondKpi && (
                         <p className="mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[13px]" style={{ color: brandText(themeColorByCode.get(secondKpi.channelCode) ?? UNBRANDED_CHANNEL_COLOR) }}>
