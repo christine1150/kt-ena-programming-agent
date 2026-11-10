@@ -1,0 +1,158 @@
+// 자사 6개 채널 비교군 분석 Word 1쪽 보고서 생성 — 내용 JSON 을 만들고 scripts/ena-word-report.cjs 로 .docx 를 낸다.
+// 실행: node scripts/iptv-research/make-channel-reports.cjs   (출력: docs/iptv/word/*.docx)
+// 수치는 docs/iptv 의 결과 문서(ALL_CHANNELS_SUMMARY 등)에서 옮긴 것이며 여기서 계산하지 않는다(원칙 1).
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+
+const outDir = path.join("docs", "iptv", "word");
+fs.mkdirSync(outDir, { recursive: true });
+
+const reports = {
+  ENA: {
+    title: "ENA 비교군 성과 분석 (드라마군·지상파/종편)",
+    table: [
+      ["기준", "수도권 2049(닐슨 공식), IPTV는 보조 · 2026.1~11"],
+      ["드라마군", "닐슨 9개 중 1위(1위 칸 40/56), IPTV 12개 중 1위"],
+      ["지상파·종편", "닐슨 10개 중 7위(MBC·SBS의 약 1/3, 종편 3개의 2배 이상)"],
+    ],
+    main: [
+      ["sub1", "드라마 전문 채널 안에서는 압도적 1위"],
+      ["bullet", "2위 SBS Plus의 약 1.4~1.7배이며 월~목 20~23시에 강함"],
+      ["bullet", "허수아비·닥터 섬보이·신병4는 닐슨·IPTV 모두 평균의 1.4~2.0배"],
+      ["sub1", "지상파·종편 프라임과는 규모 차가 큼"],
+      ["bullet", "20~23시 2049는 화요일이 3위로 가장 가깝고 금·토·일은 8~10위"],
+    ],
+    take: "군 안에서는 1위이나 지상파 프라임 대비로는 금·토·일이 약점",
+    future: [
+      "금·토·일 20~23시 경쟁 구도(지상파·종편 정면 대결 칸) 점검",
+      "본방 드라마는 재방에서 약해지므로 재방 비중·시간대 점검",
+      "자사 채널 간 같은 작품 겹침 정리는 효과가 작아 우선순위 낮음",
+    ],
+  },
+  "ENA Drama": {
+    title: "ENA Drama 비교군 성과 분석 (드라마군)",
+    table: [
+      ["기준", "수도권 2049(닐슨 공식), IPTV는 보조 · 2026.1~11"],
+      ["닐슨 위치", "드라마군 9개 중 7위(0.023), MBC드라마넷의 약 1/3"],
+      ["IPTV 위치", "가구 12개 중 11위, 2049 6개 중 4위 · 1위 칸 없음"],
+    ],
+    main: [
+      ["sub1", "강한 칸과 작품"],
+      ["bullet", "수 20~23시(신병4 재방), 화·목·일 17~23시(벌거벗은 세계사)가 강함"],
+      ["bullet", "벌거벗은 세계사·모범택시 3·김부장은 두 자료 모두 높고 재방 내성 있음"],
+      ["sub1", "약한 칸과 작품"],
+      ["bullet", "월요일 05~11시 등 아침 칸은 11~12위"],
+      ["bullet", "더 스카웃·디렉터스 아레나·놀라운 토요일은 평균 대비 0.5~0.6배"],
+    ],
+    take: "오리지널 드라마(1.20배)가 평균을 올리고 오리지널 예능(0.73배)이 낮춤",
+    future: [
+      "재방 내성이 확인된 작품의 노출 확대 검토",
+      "재방에서 약한 본방 드라마(허수아비·신병4)의 재방 비중 점검",
+      "오리지널 예능의 편성 시간대·비중 재검토",
+    ],
+  },
+  ONCE: {
+    title: "ONCE 비교군 성과 분석 (드라마군·가구)",
+    table: [
+      ["기준", "유료방송가구(닐슨 공식), IPTV는 보조 · 2026.1~11"],
+      ["닐슨 위치", "드라마군 가구 비교 8개 중 최하위(0.038~0.066)"],
+      ["IPTV 위치", "가구 12개 중 12위 · 시청률은 0.045→0.054로 상승"],
+    ],
+    main: [
+      ["sub1", "대하·가족극 재방이 강한 채널"],
+      ["bullet", "일 14~20시 옥중화, 금 17~20시 왔다! 장보리, 목 20~23시 야인시대"],
+      ["bullet", "야인시대·왕가네 식구들은 재방 내성이 확인됨"],
+      ["sub1", "분량 대비 효율"],
+      ["bullet", "옥중화·야인시대·제빵왕 김탁구는 방영이 많아 평균 근처(1.0~1.16배)"],
+      ["bullet", "예능은 방영 13%인데 평균 대비 0.65배로 채널 평균을 낮춤"],
+    ],
+    take: "규모는 가장 작지만 드라마 재방 중심으로 완만히 상승 중",
+    future: [
+      "재방 내성이 확인된 작품의 평일 저녁 편성 확대 가능성 점검",
+      "예능 편성의 시간대·비중 재검토",
+    ],
+  },
+  "ENA Play": {
+    title: "ENA Play 비교군 성과 분석 (예능·오락군)",
+    table: [
+      ["기준", "수도권 2049(닐슨 공식), IPTV는 보조 · 2026.1~11"],
+      ["닐슨 위치", "예능군 14개 중 10위(0.028) · E채널과 같은 구간"],
+      ["IPTV 위치", "2049 11개 중 7위, 가구 12개 중 10위 · 1위 칸 없음"],
+    ],
+    main: [
+      ["sub1", "강한 칸과 작품"],
+      ["bullet", "목 17~20시 나는 SOLO 재방, 일요일 낮 유 퀴즈 재방"],
+      ["bullet", "유 퀴즈·나 혼자 산다는 재방 내성이 있고 신병4·풍향고2는 재방에서 약함"],
+      ["sub1", "하락"],
+      ["bullet", "2024년 대비 2049 −31%, 가구 −9%로 젊은층 낙폭이 큼"],
+      ["bullet", "일반 예능(1.10배)이 오리지널 예능(0.90배)보다 강함"],
+    ],
+    take: "인기 예능 재방은 안정적이나 2049 하락이 크다",
+    future: [
+      "2049 하락 원인 확인(작품 교체 시점 대 노출 변화)",
+      "평균 대비 0.65 이하 작품(놀라운 토요일 등)의 시간대 점검",
+    ],
+  },
+  "ENA Story": {
+    title: "ENA Story 비교군 성과 분석 (예능·오락군)",
+    table: [
+      ["기준", "유료방송가구(닐슨 공식), IPTV는 보조 · 2026.1~11"],
+      ["닐슨 위치", "가구 7개 중 7위(9월 이후), 2049 14개 중 14위"],
+      ["IPTV 위치", "가구 12개 중 12위 · 1위 칸 없음"],
+    ],
+    main: [
+      ["sub1", "교양·실화형이 득점원"],
+      ["bullet", "인간극장이 두 자료 모두 평균의 1.5~1.7배이며 규모 1위"],
+      ["bullet", "기막힌 이야기 실제상황·애로부부·극한 직업은 재방 내성이 있음"],
+      ["sub1", "약한 작품과 하락"],
+      ["bullet", "스튜디오S·착한 콘서트5·크레이지 투어는 평균 대비 0.4~0.5배"],
+      ["bullet", "2024년 대비 IPTV 가구 −21%, 2049 −33%"],
+    ],
+    take: "예능군 순위는 최하위이나 낮 시간 교양 채널로 읽어야 한다",
+    future: [
+      "인간극장 계열의 요일·시간대 다변화 효과 점검",
+      "평균 대비 0.5 이하 작품의 편성 재검토",
+    ],
+  },
+  OLIFE: {
+    title: "OLIFE 비교군 성과 분석 (취미·레저군)",
+    table: [
+      ["기준", "유료방송가구(닐슨 공식), IPTV는 보조 · 2026.1~11"],
+      ["닐슨 위치", "ONT(0.035)·CMC TV(0.077)보다 높음(0.101~0.115, 1위 칸 50~56/56)"],
+      ["IPTV 위치", "6개 중 4위, CMC TV와 거의 동률 · 가구 2024→2026 +41%"],
+    ],
+    main: [
+      ["sub1", "득점 구조"],
+      ["bullet", "세계테마기행 중심의 일 17~20시, 평일 17~20시, 토요일 낮"],
+      ["bullet", "작품 수가 30개로 적고 극한 직업은 2025 1.13배에서 2026 1.00배로 수렴"],
+      ["sub1", "두 자료의 엇갈림"],
+      ["bullet", "IPTV는 OLIFE를 닐슨보다 적게 잡음(닐슨÷IPTV 1.75, CMC TV 1.26)"],
+      ["bullet", "나라별 순위는 두 자료가 대체로 같음(상관 0.67, 중국·베트남·라오스 상위)"],
+    ],
+    take: "채널 간 비교는 닐슨 값으로, IPTV는 채널 안 상대 비교에만 쓴다",
+    future: [
+      "여행·기행 외 장르(드라마·예능) 확장 효과 재점검",
+      "TV INDEX에 OLIFE·CMC TV 플랫폼별 표본 구성 문의",
+    ],
+  },
+};
+
+for (const [name, r] of Object.entries(reports)) {
+  const blocks = [
+    { type: "section", text: "Ⅰ. 개요" },
+    { type: "table", head: ["구분", "내용"], rows: r.table, boldLastRow: false },
+    { type: "section", text: "Ⅱ. 주요 성과" },
+  ];
+  for (const [t, text] of r.main) blocks.push({ type: t === "sub1" ? "subhead" : t, text });
+  blocks.push({ type: "takeaway", text: r.take });
+  blocks.push({ type: "section", text: "Ⅲ. 향후 과제" });
+  for (const text of r.future) blocks.push({ type: "insight", text });
+  blocks.push({ type: "note", text: "IPTV는 보조 자료이며 닐슨과 값을 섞지 않음. 근거: docs/iptv/ALL_CHANNELS_SUMMARY.md" });
+  const slug = name.replace(/\s+/g, "_");
+  const json = path.join(outDir, `${slug}.content.json`);
+  fs.writeFileSync(json, JSON.stringify({ docTitle: r.title, blocks }, null, 1), "utf8");
+  const docx = path.join(outDir, `${slug}_비교군_성과분석.docx`);
+  const res = spawnSync(process.execPath, ["scripts/ena-word-report.cjs", json, docx, ...(process.argv.includes("--audit") ? ["--audit"] : [])], { encoding: "utf8" });
+  console.log(`== ${name}\n${res.stdout}${res.stderr}`);
+}

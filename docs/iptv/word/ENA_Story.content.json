@@ -1,0 +1,79 @@
+{
+ "docTitle": "ENA Story 비교군 성과 분석 (예능·오락군)",
+ "blocks": [
+  {
+   "type": "section",
+   "text": "Ⅰ. 개요"
+  },
+  {
+   "type": "table",
+   "head": [
+    "구분",
+    "내용"
+   ],
+   "rows": [
+    [
+     "기준",
+     "유료방송가구(닐슨 공식), IPTV는 보조 · 2026.1~11"
+    ],
+    [
+     "닐슨 위치",
+     "가구 7개 중 7위(9월 이후), 2049 14개 중 14위"
+    ],
+    [
+     "IPTV 위치",
+     "가구 12개 중 12위 · 1위 칸 없음"
+    ]
+   ],
+   "boldLastRow": false
+  },
+  {
+   "type": "section",
+   "text": "Ⅱ. 주요 성과"
+  },
+  {
+   "type": "subhead",
+   "text": "교양·실화형이 득점원"
+  },
+  {
+   "type": "bullet",
+   "text": "인간극장이 두 자료 모두 평균의 1.5~1.7배이며 규모 1위"
+  },
+  {
+   "type": "bullet",
+   "text": "기막힌 이야기 실제상황·애로부부·극한 직업은 재방 내성이 있음"
+  },
+  {
+   "type": "subhead",
+   "text": "약한 작품과 하락"
+  },
+  {
+   "type": "bullet",
+   "text": "스튜디오S·착한 콘서트5·크레이지 투어는 평균 대비 0.4~0.5배"
+  },
+  {
+   "type": "bullet",
+   "text": "2024년 대비 IPTV 가구 −21%, 2049 −33%"
+  },
+  {
+   "type": "takeaway",
+   "text": "예능군 순위는 최하위이나 낮 시간 교양 채널로 읽어야 한다"
+  },
+  {
+   "type": "section",
+   "text": "Ⅲ. 향후 과제"
+  },
+  {
+   "type": "insight",
+   "text": "인간극장 계열의 요일·시간대 다변화 효과 점검"
+  },
+  {
+   "type": "insight",
+   "text": "평균 대비 0.5 이하 작품의 편성 재검토"
+  },
+  {
+   "type": "note",
+   "text": "IPTV는 보조 자료이며 닐슨과 값을 섞지 않음. 근거: docs/iptv/ALL_CHANNELS_SUMMARY.md"
+  }
+ ]
+}

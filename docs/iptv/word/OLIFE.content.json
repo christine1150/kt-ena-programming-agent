@@ -1,0 +1,79 @@
+{
+ "docTitle": "OLIFE 비교군 성과 분석 (취미·레저군)",
+ "blocks": [
+  {
+   "type": "section",
+   "text": "Ⅰ. 개요"
+  },
+  {
+   "type": "table",
+   "head": [
+    "구분",
+    "내용"
+   ],
+   "rows": [
+    [
+     "기준",
+     "유료방송가구(닐슨 공식), IPTV는 보조 · 2026.1~11"
+    ],
+    [
+     "닐슨 위치",
+     "ONT(0.035)·CMC TV(0.077)보다 높음(0.101~0.115, 1위 칸 50~56/56)"
+    ],
+    [
+     "IPTV 위치",
+     "6개 중 4위, CMC TV와 거의 동률 · 가구 2024→2026 +41%"
+    ]
+   ],
+   "boldLastRow": false
+  },
+  {
+   "type": "section",
+   "text": "Ⅱ. 주요 성과"
+  },
+  {
+   "type": "subhead",
+   "text": "득점 구조"
+  },
+  {
+   "type": "bullet",
+   "text": "세계테마기행 중심의 일 17~20시, 평일 17~20시, 토요일 낮"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 수가 30개로 적고 극한 직업은 2025 1.13배에서 2026 1.00배로 수렴"
+  },
+  {
+   "type": "subhead",
+   "text": "두 자료의 엇갈림"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV는 OLIFE를 닐슨보다 적게 잡음(닐슨÷IPTV 1.75, CMC TV 1.26)"
+  },
+  {
+   "type": "bullet",
+   "text": "나라별 순위는 두 자료가 대체로 같음(상관 0.67, 중국·베트남·라오스 상위)"
+  },
+  {
+   "type": "takeaway",
+   "text": "채널 간 비교는 닐슨 값으로, IPTV는 채널 안 상대 비교에만 쓴다"
+  },
+  {
+   "type": "section",
+   "text": "Ⅲ. 향후 과제"
+  },
+  {
+   "type": "insight",
+   "text": "여행·기행 외 장르(드라마·예능) 확장 효과 재점검"
+  },
+  {
+   "type": "insight",
+   "text": "TV INDEX에 OLIFE·CMC TV 플랫폼별 표본 구성 문의"
+  },
+  {
+   "type": "note",
+   "text": "IPTV는 보조 자료이며 닐슨과 값을 섞지 않음. 근거: docs/iptv/ALL_CHANNELS_SUMMARY.md"
+  }
+ ]
+}
