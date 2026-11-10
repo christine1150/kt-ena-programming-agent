@@ -6,6 +6,14 @@
   - 판정과 점수는 바꾸지 않는다.
   - 서버 `src/lib/contentFit/iptvCrossCheck.ts`, 문구 `iptvCrossCheckText.ts`, 테스트 `npm run test:iptv-cross-check`, 운영 점검 `scripts/iptv-research/xcheck-probe.mts`.
   - IPTV 마지막 날짜가 기준일보다 14일 넘게 이르면 자동으로 표시하지 않는다.
+- **3단계 2순위 반영(2026-11-11)**: 1페이지 주요 콘텐츠 리뷰의 "전회 대비"가 닐슨 회차 간 잡음 폭 안이면 "회차 변동 범위 안" 배지를 붙이고, 오리지널 브리핑 문장도 그에 맞게 바꾼다.
+  - 잡음 폭은 `iptv_noise_by_level`(타깃 × 시청률 구간)에서 가져온다.
+  - 계산은 `src/lib/iptvNoise.ts`, 테스트는 `npm run test:iptv-noise`.
+- **3단계 3순위 반영(2026-11-11)**: IPTV 셋톱 보조 지표를 두 곳에 붙였다.
+  - 프로그램 성과 화면: 채널별 분석 아래 표. 채널 × 타깃별 시청률·도달률, 도달자 1인당 시청 분과 같은 시간대 평소 값, 동시간대 경쟁작 중 순위, 가장 높은 경쟁작.
+  - 1페이지 주요 콘텐츠 리뷰: 방송 채널·KPI 타깃 한 줄.
+  - 계산은 DB 함수 `iptv_program_block`이 하고, API는 `/api/iptv/program-block`, 화면은 `src/components/IptvProgramBlock.tsx`다. 테스트는 `npm run test:iptv-program-block`.
+  - 자료가 끝난 뒤에는 IPTV 마지막 날 기준의 이력으로 보인다.
 - 11/10 추가 자료로 경쟁 6개 채널이 늘었다: TV CHOSUN, MBN, 채널A, JTBC2, tvN SHOW, 채널S(가구만). ENA Play 채널 단위 자료도 받았다. §2.1 표는 처음 적재했을 때 기준이다.
 - **자료의 위상(사용자 지시, 2026-11-11)**: 광고주는 닐슨 수도권 2049를 더 신뢰하고 그 값으로 청약한다. IPTV 셋톱은 보조 자료이자 근거 논리를 보강하는 자료다(원칙 P1과 같은 방향). 제공사 브로슈어의 "닐슨보다 낫다"는 주장은 그대로 받아들이지 않는다. 한계는 `IPTV_RESEARCH_RESULTS.md`의 "해석 원칙"에 정리했다.
 - **정정**: TV INDEX에는 시청 점유율, 시청시간 점유율, 1분 단위 다운로드 메뉴가 있다. §2.2·§5.2의 "점유율 없음"은 **우리가 받은 메뉴에 없다**는 뜻이다. 필요하면 요청할 수 있다.

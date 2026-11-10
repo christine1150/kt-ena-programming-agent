@@ -55,6 +55,7 @@ import { BasisNote } from "@/components/ui/BasisNote";
 import { HOME_DAILY_BASIS_NOTE } from "@/lib/ui/baselines";
 import { dataKey, hrefFor, parseViewContext, serializeContext, type HomeView, type ViewContext } from "@/lib/workspace/viewContext";
 import { describeEpisodeNoise, type EpisodeChangeNoise } from "@/lib/iptvNoise";
+import { IptvProgramBlock } from "@/components/IptvProgramBlock";
 
 interface ChannelSummary {
   code: string;
@@ -4446,12 +4447,18 @@ function ChuseokSpecialReportCard() {
   );
 }
 
+// 닐슨 채널 코드 → IPTV(TV INDEX) 채널명(iptv_channel_map 과 같은 대응) — IPTV 보조 지표 한 줄에서 방송 채널 행을 고를 때만 쓴다
+const IPTV_CHANNEL_NAME_BY_CODE: Record<string, string> = { ENA: "ENA", ENA_DRAMA: "ENA Drama", ENA_PLAY: "ENA Play", ENA_STORY: "ENA Story", OLIFE: "OLIFE", ONCE: "ONCE", SKYUHD: "skyUHD" };
+
 function OriginalContentReportCard({
   report,
   enaAccentColor,
   achievementPctByCode,
   themeColorByCode,
+  asOfDate,
 }: {
+  // IPTV 보조 지표 한 줄의 기준일(화면 기준일 이후 IPTV 값이 섞이지 않게)
+  asOfDate?: string | null;
   report: OriginalContentSummary;
   enaAccentColor: string;
   // 사용자 지시(2026-08-21, 179회 리뷰 재학습): 핵심 요약 문장의 "목표 대비 누적 N% 달성"용.
@@ -4827,6 +4834,10 @@ function OriginalContentReportCard({
                         </p>
                       )}
                     </div>
+                  )}
+                  {/* IPTV 셋톱 보조 지표 한 줄(IPTV 활용 3단계 3순위, 2026-11-11) — 방송 채널·KPI 타깃, 최근 12주 본방(IPTV 자료 마지막 날까지). 자료가 없으면 아무것도 안 그린다 */}
+                  {h.matched_program_name && IPTV_CHANNEL_NAME_BY_CODE[h.broadcast_channel_code] && (
+                    <IptvProgramBlock variant="line" names={[h.matched_program_name]} to={asOfDate} channelName={IPTV_CHANNEL_NAME_BY_CODE[h.broadcast_channel_code]} targetKind={is2049Channel ? "p2049" : "household"} />
                   )}
 
                   {/* ③ 인사이트 — 요약 한 줄 + 현황/원인/액션(각 2줄까지). 전문은 아래 "인사이트 전문" 칩 */}
@@ -6384,6 +6395,7 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                   enaAccentColor={byCode.get("ENA")?.themeColor ?? "#6366f1"}
                   achievementPctByCode={new Map(data.channels.map((c) => [c.code, c.achievementPct]))}
                   themeColorByCode={themeByCode}
+                  asOfDate={data.asOfDate}
                 />
 
                 {/* 변화 근거: 채널별 인사이트와 오늘의 상위 프로그램(또는 선택 채널의 일간 세부 내역) */}

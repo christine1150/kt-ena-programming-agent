@@ -9,6 +9,7 @@ import { useSearchParams } from "next/navigation";
 import { shortProgramName } from "@/lib/programAlias";
 import { formatInt, formatPct, formatRatingValue, MISSING } from "@/lib/ui/metricFormat";
 import { WORK_CLASS_LABEL, indexOf } from "@/lib/programPerformance/metrics";
+import { IptvProgramBlock } from "@/components/IptvProgramBlock";
 import type { AiringFilter, AiringRef, Assessment, OriginalCompare, ChannelRow, CompetitorRow, Direction, OverallReview, PerformanceResult, RatioValue, SearchItem, SupplementCount, TargetMode, WorkClass } from "@/lib/programPerformance/types";
 
 type ClassFilter = "all" | "drama" | "variety" | "culture";
@@ -1540,6 +1541,8 @@ export default function ProgramPerformanceView() {
           <div ref={analysisRef} className="scroll-mt-4">
             {selRow && <Analysis key={`${requestUrl}|${rowKey(selRow)}`} row={selRow} result={result} siblings={selectable.filter((r) => r.channelCode === selRow.channelCode)} onSelect={(r) => group && setSel({ group, key: rowKey(r) })} />}
           </div>
+          {/* IPTV 셋톱 보조 지표(IPTV 활용 3단계 3순위, 2026-11-11) — 닐슨 표와 분리된 보조 블록. 자사 방영이 있을 때만 */}
+          {entries.length > 0 && <IptvProgramBlock names={[result.work.displayName, ...result.work.memberKeys]} to={result.period.to} />}
           {competitorRows.length > 0 && (
             <div className="mt-4">
               {/* 경쟁 채널 성과는 기본으로 하단에 펼쳐 보인다(사용자 지시 2026-11-06). 접고 싶으면 버튼으로 닫는다 */}
