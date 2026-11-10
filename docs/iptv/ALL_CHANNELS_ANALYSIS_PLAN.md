@@ -151,3 +151,8 @@
 - `iptv_peer_groups` 비교군 정의표: drama(12) · ena_slot(10) · variety(12) · hobby(6, ONT·CMC TV 지정) · uhd(6). 역할은 own / peer / registered.
 - `iptv_group_benchmark(군, 타깃, 기준일, 주수)`: 기존 `iptv_uhd_benchmark`를 군·타깃을 받도록 일반화. uhd군·가구 결과가 기존 함수와 54행 모두 일치함을 확인했고, drama군 2049로도 동작 확인.
 - 남은 일반화: 시간대 경쟁(`iptv_slot_rivals`), 재방 내성·숨은 작품, 최적 편성 — 해당 군 분석 단계에서 같은 방식으로 군 정의표를 받도록 확장.
+
+
+### 진행 현황(2026-11-11 새벽 갱신)
+
+0단계(비교군 정의표·군 단위 함수), 드라마군, 예능군, 취미·레저군(OLIFE), P6 자사 겹침, 숨은 작품·재방 내성, 닐슨 B단계(닐슨 전용 비교 채널)까지 완료. 종합은 `ALL_CHANNELS_SUMMARY.md`. 남은 일: 1단계 장르·국가 세분류, 시간대 통제 겹침 효과, OLIFE 나라·도시 연결, 채널별 Word 1쪽 보고서·사이트 반영 결정(사용자 판단 대기).
