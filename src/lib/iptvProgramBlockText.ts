@@ -35,7 +35,7 @@ export interface IptvProgramBlock {
 /** 화면 한 줄 요약(순수 함수) — 주요 콘텐츠 리뷰 카드용. */
 export function summarizeIptvBlockRow(r: Pick<IptvProgramBlockRow, "minutesPerReacher" | "channelBaseMinutes" | "peerN" | "ratingRank" | "minutesRank">): string | null {
   const parts: string[] = [];
-  if (r.minutesPerReacher !== null) parts.push(`도달자 1인당 ${r.minutesPerReacher.toFixed(0)}분${r.channelBaseMinutes !== null ? `(채널 같은 시간대 평소 ${r.channelBaseMinutes.toFixed(0)}분)` : ""}`);
+  if (r.minutesPerReacher !== null) parts.push(`도달자 1인당 ${r.minutesPerReacher.toFixed(0)}분${r.channelBaseMinutes !== null ? `(채널 같은 시간대 평균 ${r.channelBaseMinutes.toFixed(0)}분)` : ""}`);
   if (r.peerN > 0 && r.ratingRank !== null) parts.push(`동시간대 경쟁작 ${r.peerN}편 중 시청률 ${r.ratingRank}위${r.minutesRank !== null ? `·1인당 시청 ${r.minutesRank}위` : ""}`);
   return parts.length ? parts.join(" · ") : null;
 }

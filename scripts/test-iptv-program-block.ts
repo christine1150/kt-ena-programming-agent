@@ -18,7 +18,7 @@ check("이름 대응(중복 제거·짧은 제목)", JSON.stringify(matchIptvKey
 check("대응 없으면 빈 배열", matchIptvKeys(["금쪽같은내스타"], ["나는SOLO"]).length === 0);
 
 const s = summarizeIptvBlockRow({ minutesPerReacher: 56.4, channelBaseMinutes: 32.2, peerN: 93, ratingRank: 4, minutesRank: 1 });
-check("한 줄 요약", s === "도달자 1인당 56분(채널 같은 시간대 평소 32분) · 동시간대 경쟁작 93편 중 시청률 4위·1인당 시청 1위", s ?? "");
+check("한 줄 요약", s === "도달자 1인당 56분(채널 같은 시간대 평균 32분) · 동시간대 경쟁작 93편 중 시청률 4위·1인당 시청 1위", s ?? "");
 check("경쟁작 없으면 순위 생략", summarizeIptvBlockRow({ minutesPerReacher: 20, channelBaseMinutes: null, peerN: 0, ratingRank: null, minutesRank: null }) === "도달자 1인당 20분");
 check("값이 없으면 null", summarizeIptvBlockRow({ minutesPerReacher: null, channelBaseMinutes: null, peerN: 0, ratingRank: null, minutesRank: null }) === null);
 

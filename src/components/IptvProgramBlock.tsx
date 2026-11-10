@@ -142,14 +142,14 @@ export function IptvProgramBlock({ names, to, variant = "full", channelName, tar
       </div>
       <p className="mt-1 text-[12px] text-zinc-500">IPTV 셋톱 값 · 닐슨과 비교·합산하지 않음 · 수2049는 셋톱 추정 · 1인당 시청 = 도달자 1명이 본 분</p>
       <details className="mt-2 max-w-5xl rounded-md border border-zinc-200 bg-white">
-        <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium text-zinc-700">자세히 보기 · 평소 대비 시청 시간·동시간대 경쟁작 순위</summary>
+        <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium text-zinc-700">자세히 보기 · 채널 평균 대비 시청 시간·동시간대 경쟁작 순위</summary>
         <div className="dense-grid overflow-x-auto border-t border-zinc-100 px-3 py-2" tabIndex={0} role="region" aria-label="IPTV 셋톱 자세히 보기 표">
           <table className="w-full min-w-[640px] text-[12px]">
             <thead className="text-zinc-500">
               <tr>
                 <th className="py-1 pr-3 text-left font-medium">채널·타깃</th>
                 <th className="py-1 pr-3 text-left font-medium">주 시간대</th>
-                <th className="py-1 pr-3 text-right font-medium">1인당 시청(채널 평소)</th>
+                <th className="py-1 pr-3 text-right font-medium">1인당 시청(채널 평균)</th>
                 <th className="py-1 pr-3 text-left font-medium">동시간대 경쟁작 중</th>
                 <th className="py-1 text-left font-medium">경쟁작 최고</th>
               </tr>
