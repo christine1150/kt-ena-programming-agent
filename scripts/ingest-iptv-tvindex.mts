@@ -111,7 +111,11 @@ const demos = new Map<string, Demo>();
 const DAILY_METRIC: Record<string, string> = {
   "총 시청시간": "total_viewing_time", "인당 시청시간(분)": "viewing_minutes_per_viewer",
   "지니TV": "rating_genie_tv", "Btv": "rating_btv", "U+tv": "rating_uplus_tv",
+  "시청률(%)": "rating", "1분 시청자수": "avg_minute_viewers", "도달률(%)": "reach_rate", "시청자수(도달자)": "reach_viewers",
 };
+type Region = { channel_name: string; target_kind: string; period_from: string; period_to: string; region: string; metric: string; value: number | null; rank: number | null; source_file: string };
+const regions = new Map<string, Region>();
+const REGION_METRIC: Record<string, string> = { "시청률(%)": "rating", "도달률(%)": "reach_rate" };
 const GRID_METRIC: Record<string, string> = { "시청률(%)": "rating", "1분 시청자수": "avg_minute_viewers", "시청자수(도달자)": "reach_viewers", "도달률(%)": "reach_rate" };
 let collisions = 0;
 let skipped = 0;
@@ -142,6 +146,24 @@ for (const f of walk(root).sort()) {
     perFile.push(`데모그래픽 ${ch} ${region} ${n}칸`);
     continue;
   }
+  if (menu === "지역별 시청") {
+    const meta = rows[2]?.[0] ?? "";
+    const tk = /IPTV STB/.test(meta) ? "household" : /개인 2049/.test(meta) && /지역 : 수도권/.test(meta) ? "p2049" : null;
+    const per = /(\d{4}\/\d{1,2}\/\d{1,2}) \([^)]\) ~ (\d{4}\/\d{1,2}\/\d{1,2})/.exec(meta);
+    const h = rows.findIndex((r) => r[0] === "순위" && r[1] === "지역");
+    const metric = h >= 0 ? REGION_METRIC[(rows[h][2] ?? "").trim()] : undefined;
+    if (!tk || !per || !metric) { perFile.push(`건너뜀(지역별 해석 실패): ${base}`); continue; }
+    const ch = canonChannel(menuChannel);
+    let n = 0;
+    for (const r of rows.slice(h + 1)) {
+      if (!r[1]) continue;
+      const g: Region = { channel_name: ch, target_kind: tk, period_from: parseDate(per[1])!, period_to: parseDate(per[2])!, region: r[1].trim(), metric, value: num(r[2]), rank: num(r[0]), source_file: base };
+      regions.set([g.channel_name, g.target_kind, g.period_from, g.period_to, g.region, g.metric].join("|"), g);
+      n++;
+    }
+    perFile.push(`지역별 ${ch} ${tk} ${metric} ${n}곳`);
+    continue;
+  }
   if (menu === "시청 추이" || menu === "플랫폼별 시청" || menu === "시간대별 시청") {
     const meta = rows[2]?.[0] ?? "";
     const tk = /IPTV STB/.test(meta) ? "household" : /개인 2049/.test(meta) && /지역 : 수도권/.test(meta) ? "p2049" : null;
@@ -165,13 +187,15 @@ for (const f of walk(root).sort()) {
       }
       perFile.push(`시간대별 ${ch} ${tk} ${metric} ${n}칸`);
     } else {
-      const cols = rows[h].slice(1).map((c) => DAILY_METRIC[c.trim()]);
+      // 주간 집계(기간 : 주간 - …)는 같은 표에 weekly_ 접두어로 담고 날짜는 그 주 첫날(월)로 둔다(일별 값과 섞이지 않게)
+      const weeklyPrefix = /기간 : 주간/.test(meta) ? "weekly_" : "";
+      const cols = rows[h].slice(1).map((c) => (DAILY_METRIC[c.trim()] ? weeklyPrefix + DAILY_METRIC[c.trim()] : undefined));
       if (cols.some((c) => !c)) { perFile.push(`건너뜀(모르는 열 ${rows[h].join("/")}): ${base}`); continue; }
       for (const r of rows.slice(h + 1)) {
         const d = parseDate(r[0] ?? "");
         if (!d) continue;
         cols.forEach((metric, i) => {
-          channelDaily.set([ch, tk, d, metric].join("|"), { channel_name: ch, target_kind: tk, stat_date: d, metric, value: num(r[1 + i]), source_file: base });
+          channelDaily.set([ch, tk, d, metric].join("|"), { channel_name: ch, target_kind: tk, stat_date: d, metric: metric as string, value: num(r[1 + i]), source_file: base });
           n++;
         });
       }
@@ -189,9 +213,11 @@ for (const f of walk(root).sort()) {
 
   if (rows[header][0] === "프로그램") {
     // 프로그램 방영 성과
+    // 채널은 파일명에서 읽고(기존 적재와 같은 이름), 파일명에 채널이 없으면(예: TVINDEX_프로그램_방영_성과_2026111015000.csv) 2행 머리 채널로 정한다
     const m = /^TVINDEX_프로그램_방영_성과_(.+?)\s*(?:가구|수2049|2049)?_\d+(?: \(\d+\))?\.csv$/.exec(base);
-    if (!m) { perFile.push(`건너뜀(파일명 해석 실패): ${base}`); continue; }
-    const channel = NAME_FIX[m[1].trim()] ?? m[1].trim();
+    const fromName = m ? m[1].trim() : null;
+    if (!fromName && !menuChannel) { perFile.push(`건너뜀(채널 해석 실패): ${base}`); continue; }
+    const channel = fromName ? (NAME_FIX[fromName] ?? fromName) : canonChannel(menuChannel);
     const group = OWN.has(channel) ? "own" : UHD.has(channel) ? "uhd" : "comp";
     let n = 0;
     for (const r of rows.slice(header + 1)) {
@@ -257,7 +283,7 @@ const aList = [...airings.values()];
 const wList = [...weekly.values()];
 console.log(`\n방영 성과 ${aList.length}행 (키 충돌로 덮어쓴 ${collisions}건, 건너뛴 ${skipped}행)`);
 console.log(`주간 편성표 ${wList.length}행, 요일×시간대 ${dayparts.length}칸`);
-console.log(`채널 일별 ${channelDaily.size}값, 시간대별 격자 ${hourlyGrid.size}칸, 데모그래픽 ${demos.size}칸`);
+console.log(`채널 일별 ${channelDaily.size}값, 시간대별 격자 ${hourlyGrid.size}칸, 데모그래픽 ${demos.size}칸, 지역별 ${regions.size}값`);
 const byGroup = new Map<string, number>();
 for (const a of aList) byGroup.set(`${a.channel_group}/${a.target_kind}`, (byGroup.get(`${a.channel_group}/${a.target_kind}`) ?? 0) + 1);
 console.log([...byGroup].map(([k, v]) => `${k}=${v}`).join("  "));
@@ -291,4 +317,5 @@ await load("iptv_tvindex_daypart_avg", dayparts, "channel_name,target_kind,perio
 await load("iptv_tvindex_channel_daily", [...channelDaily.values()], "channel_name,target_kind,stat_date,metric");
 await load("iptv_tvindex_hourly_grid", [...hourlyGrid.values()], "channel_name,target_kind,period_from,period_to,dow,hour_of_day,metric");
 await load("iptv_tvindex_demographic", [...demos.values()], "channel_name,region,period_from,period_to,age_band,sex");
+await load("iptv_tvindex_region", [...regions.values()], "channel_name,target_kind,period_from,period_to,region,metric");
 console.log("적재 완료");
