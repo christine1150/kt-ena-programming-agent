@@ -8,6 +8,26 @@ import type { Suggestion, SuggestResult } from "@/lib/scheduleForecast/suggest";
 import type { LiveWeek } from "@/lib/scheduleForecast/inProgress";
 import { shortProgramName } from "@/lib/programAlias"; // 제목 줄임 규칙(표시용 약칭, 마우스 오버에는 원래 제목)
 import { MEASURED_PERIOD_LABEL, MEASURED_REL_ERROR, NEW_PROGRAM_NOTE, ROUGH_REL_ERROR, isRough, relErrorFor, relErrorText } from "@/lib/idealSchedule/accuracyProfile";
+import { lifecycleLine, type LifecycleTable } from "@/lib/iptvLifecycleText";
+
+// IPTV 셋톱 회차 흐름 분포(IPTV 활용 3단계 4순위, 2026-11-11) — ⓘ 설명에 "이 정도 차이는 작품 자체 흐름"이라는 보조 근거를 붙인다.
+// 화면 전체에서 한 번만 불러 쓴다(값은 버전별로 고정돼 자주 바뀌지 않음). 실패하면 문장을 붙이지 않는다.
+let lifecyclePromise: Promise<LifecycleTable | null> | null = null;
+function useLifecycle(): LifecycleTable | null {
+  const [table, setTable] = useState<LifecycleTable | null>(null);
+  useEffect(() => {
+    let alive = true;
+    lifecyclePromise ??= fetch("/api/iptv/lifecycle")
+      .then((r) => r.json())
+      .then((j) => (j.ok ? (j.table as LifecycleTable | null) : null))
+      .catch(() => null);
+    lifecyclePromise.then((t) => alive && setTable(t));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return table;
+}
 
 type RunMeta = { id: string; purpose: string; createdAt: string; dataCutoff: string; planRef: string };
 type Period = { from: string; to: string; value: number | null; officialEstimate: number | null; forecastMinutes: number; totalMinutes: number; complete: boolean };
@@ -64,6 +84,7 @@ const accuracyLine = (code: string) => {
 
 /** 이미 시작한 주 — 자료 마감일까지는 관측(실제 방영·공식 하루 시청률), 그 뒤 날은 예측을 한 화면에 종합한다(저장하지 않는 즉석 계산). */
 function LiveWeekView({ live, target, year, channelCode }: { live: LiveWeek; target: number | null; year: number | null; channelCode: string }) {
+  const lifecycle = useLifecycle();
   const s = live.summary;
   const info = [
     `자료 마감 ${live.cutoff}까지는 관측값(실제 방영 시청률·공식 하루 시청률), 그 뒤 날은 같은 모델의 예측입니다.`,
@@ -71,6 +92,7 @@ function LiveWeekView({ live, target, year, channelCode }: { live: LiveWeek; tar
     "주 종합 = 7일 공식 하루 시청률(02:00~25:59)의 단순 평균. 관측일은 공식 값, 예측일은 편성시간 가중 예상 × 직전 28일 환산 배율" + (live.ratio !== null ? ` ${live.ratio.toFixed(3)}` : "") + ".",
     "하루 단위 예측도 오차가 큰 편입니다.",
     accuracyLine(channelCode),
+    ...(lifecycleLine(lifecycle, channelCode) ? [lifecycleLine(lifecycle, channelCode) as string] : []),
     ...live.warnings,
   ].join("\n");
   return (
@@ -145,6 +167,7 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
   const [state, setState] = useState<{ key: string; data: Resp | null; error: string | null }>({ key: "", data: null, error: null });
   const [suggest, setSuggest] = useState<Suggest | null>(null);
   const suggestSeq = useRef(0);
+  const lifecycle = useLifecycle();
   const key = `${channelCode}|${week}|${runId}`;
   // 제안을 펼친 날짜 또는 "week" — 채널·주·저장본이 바뀌면(key 불일치) 닫힌 것으로 본다
   const [openState, setOpenState] = useState<{ key: string; scope: string } | null>(null);
@@ -207,6 +230,7 @@ export function ScheduleForecastPanel({ channelCode, week }: { channelCode: stri
     ratio !== null && agg?.officialScale ? `하루·주 예상 = 공식 채널 하루 시청률(02:00~25:59)과 같은 정의로 맞춘 값(편성 칸 예측의 시간 가중 평균 × 직전 28일 환산 배율 ${ratio.toFixed(3)}, ${agg.officialScale.from}~${agg.officialScale.to} 중 ${agg.officialScale.days}일).` : "하루·주 예상은 환산 근거가 모자라 표시하지 않습니다.",
     "하루 단위 예측도 오차가 큰 편입니다.",
     accuracyLine(channelCode),
+    ...(lifecycleLine(lifecycle, channelCode) ? [lifecycleLine(lifecycle, channelCode) as string] : []),
     ...(agg?.warnings ?? []),
   ].join("\n");
 

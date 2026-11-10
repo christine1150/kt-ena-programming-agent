@@ -52,6 +52,7 @@
     "test:iptv-cross-check": "tsx scripts/test-iptv-cross-check.ts",
     "test:iptv-noise": "tsx scripts/test-iptv-noise.ts",
     "test:iptv-program-block": "tsx scripts/test-iptv-program-block.ts",
+    "test:iptv-lifecycle": "tsx scripts/test-iptv-lifecycle.ts",
     "test:program-performance": "tsx scripts/test-program-performance.ts",
     "test:schedule-forecast": "tsx scripts/test-schedule-forecast.ts",
     "test:plan-forecast": "tsx scripts/test-plan-forecast.ts",
