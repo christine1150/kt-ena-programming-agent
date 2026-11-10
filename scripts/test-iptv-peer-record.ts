@@ -15,7 +15,7 @@ function check(name: string, cond: boolean, detail = "") {
 
 const row = (o: Partial<IptvPeerRow>): IptvPeerRow => ({
   channelName: "tvN", channelGroup: "comp", targetKind: "household", windowFrom: "2025-11-11", windowTo: "2026-11-09", firstDate: "2025-11-11", lastDate: "2026-11-08",
-  airings: 10, firstRunAirings: 10, mainSlotBand: "20-23", avgRating: 0.1, avgReachRate: 1, minutesPerReacher: 30, baseRating: 0.08, baseN: 100, ratio: 1.25, ...o,
+  airings: 10, firstRunAirings: 10, mainSlotBand: "20-23", avgRating: 0.1, avgReachRate: 1, minutesPerReacher: 30, baseRating: 0.08, baseN: 100, ratio: 1.25, channelAvgRating: 0.09, vsChannel: 1.11, ...o,
 });
 
 check("타깃 대응", peerTargetKind("A2049") === "p2049" && peerTargetKind("HH") === "household" && peerTargetKind("X") === null);

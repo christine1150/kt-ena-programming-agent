@@ -20,6 +20,10 @@ export interface IptvPeerRow {
   baseRating: number | null;
   baseN: number;
   ratio: number | null;
+  /** 그 채널·타깃이 이 작품 방영 기간에 낸 전체 방영 시청률(방영 길이 가중 평균) */
+  channelAvgRating: number | null;
+  /** 작품 평균 시청률 ÷ 채널 평균(1 = 같음) */
+  vsChannel: number | null;
 }
 
 export interface IptvPeerRecord {

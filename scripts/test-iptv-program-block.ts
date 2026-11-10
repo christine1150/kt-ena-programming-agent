@@ -3,7 +3,7 @@
 // 보증: 이름 → IPTV 키 대응, 자료 종료 뒤 기준일 당기기(P2), 키가 없으면 빈 블록, 행 정렬, 한 줄 요약 문구.
 // 보증하지 못함: DB 함수 iptv_program_block 의 계산(운영 DB 에서 직접 확인 — docs/iptv/IPTV_RESEARCH_RESULTS.md).
 import { loadIptvProgramBlock, matchIptvKeys } from "../src/lib/iptvProgramBlock";
-import { summarizeIptvBlockRow } from "../src/lib/iptvProgramBlockText";
+import { iptvVsChannel, summarizeIptvBlockRow } from "../src/lib/iptvProgramBlockText";
 import { FakeDb } from "./lib/fakeSupabase";
 
 let passed = 0;
@@ -21,6 +21,13 @@ const s = summarizeIptvBlockRow({ minutesPerReacher: 56.4, channelBaseMinutes: 3
 check("한 줄 요약", s === "도달자 1인당 56분(채널 같은 시간대 평균 32분) · 동시간대 경쟁작 93편 중 시청률 4위·1인당 시청 1위", s ?? "");
 check("경쟁작 없으면 순위 생략", summarizeIptvBlockRow({ minutesPerReacher: 20, channelBaseMinutes: null, peerN: 0, ratingRank: null, minutesRank: null }) === "도달자 1인당 20분");
 check("값이 없으면 null", summarizeIptvBlockRow({ minutesPerReacher: null, channelBaseMinutes: null, peerN: 0, ratingRank: null, minutesRank: null }) === null);
+
+const vLow = iptvVsChannel(0.451);
+const vHigh = iptvVsChannel(1.188);
+check("채널 평균 대비 %·색(낮음 붉은색)", vLow.pct === 45 && vLow.cls.includes("rose"));
+check("채널 평균 대비 %·색(높음 푸른색)", vHigh.pct === 119 && vHigh.cls.includes("blue"));
+check("채널 평균과 같으면 100%·중립", iptvVsChannel(1).pct === 100 && iptvVsChannel(1.001).cls.includes("zinc-700"));
+check("값 없으면 null", iptvVsChannel(null).pct === null);
 
 // 가짜 DB: rpc 를 흉내 낸다(FakeDb 는 from 만 있으므로 rpc 를 덧붙임)
 function db(lastDate: string) {

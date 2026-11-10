@@ -64,6 +64,8 @@ export async function loadIptvPeerRecord(db: Db, args: { names: string[]; to?: s
     baseRating: num(r.base_rating),
     baseN: Number(r.base_n ?? 0),
     ratio: num(r.ratio),
+    channelAvgRating: num(r.channel_avg_rating),
+    vsChannel: num(r.vs_channel),
   }));
   return { keys, asOf, shifted, weeks: IPTV_PEER_WEEKS, rows };
 }

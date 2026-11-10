@@ -1,5 +1,7 @@
 // 프로그램 "IPTV 셋톱 보조 지표" 블록의 타입·표시 문구(순수, 화면·테스트 공용). 계산·조회는 iptvProgramBlock.ts(서버)와 DB 함수 iptv_program_block.
 // IPTV 는 보조 자료다 — 청약·공식 KPI 기준은 닐슨이고 이 값은 따로 표기한다.
+import { directionOfRatio, indexOf } from "./programPerformance/metrics";
+import type { Direction } from "./programPerformance/types";
 
 export interface IptvProgramBlockRow {
   channelName: string;
@@ -22,6 +24,10 @@ export interface IptvProgramBlockRow {
   topPeerChannel: string | null;
   topPeerProgram: string | null;
   topPeerRating: number | null;
+  /** 같은 기간 그 채널·타깃 전체 방영의 시청률(방영 길이 가중 평균) */
+  channelAvgRating: number | null;
+  /** 작품 평균 시청률 ÷ 채널 평균(1 = 같음) */
+  vsChannel: number | null;
 }
 export interface IptvProgramBlock {
   /** 대응한 IPTV 프로그램 키(없으면 빈 배열 → 블록 없음) */
@@ -30,6 +36,15 @@ export interface IptvProgramBlock {
   /** 요청 기준일보다 IPTV 자료가 끝나 기준일을 당겼으면 true */
   shifted: boolean;
   rows: IptvProgramBlockRow[];
+}
+
+/**
+ * 채널 평균 대비 표시 — 프로그램 성과 표 괄호와 같은 규칙: 배율×100 반올림 %, 100% 초과 푸른색·미만 붉은색(방향은 배율 소수 둘째 자리 기준).
+ * 값이 없으면 pct null.
+ */
+const DIR_CLASS: Record<Direction, string> = { HIGHER: "text-blue-700", SIMILAR: "text-zinc-700", LOWER: "text-rose-700", NA: "text-zinc-400" };
+export function iptvVsChannel(ratio: number | null): { pct: number | null; cls: string } {
+  return { pct: indexOf(ratio), cls: DIR_CLASS[directionOfRatio(ratio)] };
 }
 
 /** 화면 한 줄 요약(순수 함수) — 주요 콘텐츠 리뷰 카드용. */

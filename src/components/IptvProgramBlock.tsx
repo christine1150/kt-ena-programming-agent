@@ -3,7 +3,7 @@
 // variant="full": 프로그램 성과 화면용 표 / variant="line": 주요 콘텐츠 리뷰 카드용 한 줄(방송 채널·KPI 타깃 한 줄만).
 // IPTV 는 보조 자료다 — 닐슨 값과 같은 표에 섞지 않고, 타깃 이름에 항상 "IPTV"를 붙인다.
 import { useEffect, useState } from "react";
-import { summarizeIptvBlockRow, type IptvProgramBlock, type IptvProgramBlockRow } from "@/lib/iptvProgramBlockText";
+import { iptvVsChannel, summarizeIptvBlockRow, type IptvProgramBlock, type IptvProgramBlockRow } from "@/lib/iptvProgramBlockText";
 
 const CHANNEL_LABEL: Record<string, string> = { ENA: "ENA", "ENA Drama": "ENA DRAMA", "ENA Play": "ENA PLAY", "ENA Story": "ENA STORY", OLIFE: "OLIFE", ONCE: "ONCE", skyUHD: "skyUHD" };
 type Kind = "household" | "p2049";
@@ -14,7 +14,7 @@ const bandText = (b: string | null) => (b ? `${Number(b.slice(0, 2))}~${Number(b
 const md =(d: string | null) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "—");
 const fmtR = (v: number | null) => (v === null ? "—" : v < 0.01 ? v.toFixed(4) : v.toFixed(3));
 const NOTE =
-  "IPTV 3사 셋톱(TV INDEX) 값으로 보조 자료입니다. 닐슨 값과 비교·합산하지 않습니다. 도달자 1인당 시청 = 1분 시청자 × 방영 분 ÷ 도달자(본방 방영 중앙값). 순위는 이 작품 본방과 30분 이상 겹친 경쟁·UHD 채널 본방 프로그램 가운데 순위입니다.";
+  "IPTV 3사 셋톱(TV INDEX) 값으로 보조 자료입니다. 닐슨 값과 비교·합산하지 않습니다. 채널 평균 = 같은 기간 그 채널·타깃 전체 방영(본방·재방, 모든 프로그램)의 시청률을 방영 길이로 가중한 평균입니다. 도달자 1인당 시청 = 1분 시청자 × 방영 분 ÷ 도달자(본방 방영 중앙값). 순위는 이 작품 본방과 30분 이상 겹친 경쟁·UHD 채널 본방 프로그램 가운데 순위입니다.";
 
 function useIptvBlock(names: string[], to: string | null | undefined) {
   const key = `${names.join("|")}@${to ?? ""}`;
@@ -34,6 +34,20 @@ function useIptvBlock(names: string[], to: string | null | undefined) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return state?.key === key ? state : null;
+}
+
+/** 시청률 한 칸 — "0.100 (45%)": 괄호는 채널 평균을 100%로 본 비율(100% 초과 푸른색·미만 붉은색, 프로그램 성과 표와 같은 규칙) */
+function RatingCell({ r }: { r: IptvProgramBlockRow | undefined }) {
+  if (!r) return <span className="text-zinc-400">{MISSING}</span>;
+  const v = iptvVsChannel(r.vsChannel);
+  return (
+    <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+      <span className="inline-block w-[3.75rem] text-right tabular-nums text-zinc-900">{fmtR(r.avgRating)}</span>
+      <span className={`inline-block min-w-[3.6rem] text-right tabular-nums ${v.pct === null ? "text-zinc-400" : v.cls}`} aria-label={v.pct === null ? "채널 평균 대비 산출 불가" : `채널 평균의 ${v.pct}%`}>
+        {v.pct === null ? MISSING : `(${v.pct}%)`}
+      </span>
+    </span>
+  );
 }
 
 function RankCell({ r }: { r: IptvProgramBlockRow }) {
@@ -98,7 +112,7 @@ export function IptvProgramBlock({ names, to, variant = "full", channelName, tar
             <tr>
               {kinds.map((k) => [
                 <th key={`${k}r`} className="whitespace-nowrap border-l border-zinc-200 px-3 pb-2 text-center font-normal">
-                  시청률
+                  시청률(채널 평균 대비)
                 </th>,
                 <th key={`${k}a`} className="whitespace-nowrap px-3 pb-2 text-center font-normal">
                   도달률
@@ -122,8 +136,8 @@ export function IptvProgramBlock({ names, to, variant = "full", channelName, tar
                   {kinds.map((k) => {
                     const r = cell(ch, k);
                     return [
-                      <td key={`${k}r`} className="border-l border-zinc-100 px-3 py-2 text-center tabular-nums text-zinc-900">
-                        {r ? fmtR(r.avgRating) : MISSING}
+                      <td key={`${k}r`} className="border-l border-zinc-100 px-3 py-2 text-center">
+                        <RatingCell r={r} />
                       </td>,
                       <td key={`${k}a`} className="px-3 py-2 text-center tabular-nums text-zinc-700">
                         {r?.avgReachRate == null ? MISSING : `${r.avgReachRate.toFixed(2)}%`}
@@ -140,7 +154,7 @@ export function IptvProgramBlock({ names, to, variant = "full", channelName, tar
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-[12px] text-zinc-500">IPTV 셋톱 값 · 닐슨과 비교·합산하지 않음 · 1인당 시청 = 도달자 1명이 본 분</p>
+      <p className="mt-1 text-[12px] text-zinc-500">IPTV 셋톱 값 · 닐슨과 비교·합산하지 않음 · 괄호는 같은 기간 채널 평균을 100%로 본 비율(100% 초과 푸른색, 미만 붉은색) · 1인당 시청 = 도달자 1명이 본 분</p>
       <details className="mt-2 max-w-5xl rounded-md border border-zinc-200 bg-white">
         <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium text-zinc-700">자세히 보기 · 채널 평균 대비 시청 시간·동시간대 경쟁작 순위</summary>
         <div className="dense-grid overflow-x-auto border-t border-zinc-100 px-3 py-2" tabIndex={0} role="region" aria-label="IPTV 셋톱 자세히 보기 표">
@@ -149,6 +163,7 @@ export function IptvProgramBlock({ names, to, variant = "full", channelName, tar
               <tr>
                 <th className="py-1 pr-3 text-left font-medium">채널·타깃</th>
                 <th className="py-1 pr-3 text-left font-medium">주 시간대</th>
+                <th className="py-1 pr-3 text-right font-medium">채널 평균 시청률</th>
                 <th className="py-1 pr-3 text-right font-medium">1인당 시청(채널 평균)</th>
                 <th className="py-1 pr-3 text-left font-medium">동시간대 경쟁작 중</th>
                 <th className="py-1 text-left font-medium">경쟁작 최고</th>
@@ -161,6 +176,7 @@ export function IptvProgramBlock({ names, to, variant = "full", channelName, tar
                     {CHANNEL_LABEL[r.channelName] ?? r.channelName} · {TARGET_LABEL[r.targetKind]}
                   </td>
                   <td className="whitespace-nowrap py-1 pr-3 tabular-nums">{bandText(r.mainSlotBand)}</td>
+                  <td className="py-1 pr-3 text-right tabular-nums">{fmtR(r.channelAvgRating)}</td>
                   <td className="whitespace-nowrap py-1 pr-3 text-right tabular-nums">
                     {r.minutesPerReacher === null ? MISSING : `${r.minutesPerReacher.toFixed(0)}분`}
                     {r.channelBaseMinutes !== null && <span className="text-zinc-500"> ({r.channelBaseMinutes.toFixed(0)}분)</span>}

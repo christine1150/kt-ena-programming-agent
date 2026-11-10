@@ -67,6 +67,8 @@ export async function loadIptvProgramBlock(db: Db, args: { names: string[]; to?:
     topPeerChannel: (r.top_peer_channel as string | null) ?? null,
     topPeerProgram: (r.top_peer_program as string | null) ?? null,
     topPeerRating: num(r.top_peer_rating),
+    channelAvgRating: num(r.channel_avg_rating),
+    vsChannel: num(r.vs_channel),
   }));
   const ord = (c: string | null) => (c ? OWN_ORDER.indexOf(c) : 99);
   rows.sort((a, b) => ord(a.channelCode) - ord(b.channelCode) || (a.targetKind === b.targetKind ? 0 : a.targetKind === "p2049" ? -1 : 1));

@@ -4,6 +4,7 @@
 // 모양은 프로그램 성과 '채널별 성과 표'와 같다(채널당 한 줄·타깃별 칸 묶음). 설명·보조 값은 아래 '자세히 보기'로 뺀다(2026-11-11 사용자 지시).
 import { useEffect, useState } from "react";
 import { isRerunOnlyPeer, isWideBandRatio, isThinPeerSample, selectPeerRows, type IptvPeerRecord, type IptvPeerRow, type IptvTargetKind } from "@/lib/iptvPeerRecordText";
+import { iptvVsChannel } from "@/lib/iptvProgramBlockText";
 
 const TARGET_LABEL: Record<IptvTargetKind, string> = { household: "가구", p2049: "수2049" };
 const TARGET_ORDER: IptvTargetKind[] = ["p2049", "household"];
@@ -13,7 +14,7 @@ const md = (d: string | null) => (d ? `${d.slice(2, 4)}.${Number(d.slice(5, 7))}
 const fmtR = (v: number | null) => (v === null ? MISSING : v < 0.01 ? v.toFixed(4) : v.toFixed(3));
 const bandText = (b: string | null) => (b ? `${Number(b.slice(0, 2))}~${Number(b.slice(3, 5))}시` : MISSING);
 const NOTE =
-  "IPTV 3사 셋톱(TV INDEX) 값으로 보조 자료입니다. 위 닐슨 예측과 비교·합산하지 않습니다. ‘평균 대비’는 같은 채널·같은 시간대(8대 구간)에서 다른 프로그램 본방의 평균 시청률과 견준 배수이며, 시간대 구간이 넓어 참고로만 봅니다. 본방 태그가 없는 작품은 전체 방영으로 요약합니다.";
+  "IPTV 3사 셋톱(TV INDEX) 값으로 보조 자료입니다. 위 닐슨 예측과 비교·합산하지 않습니다. ‘채널 평균 대비’는 이 작품이 그 채널에 방영된 기간의 채널 전체 방영(본방·재방, 모든 프로그램) 평균 시청률(방영 길이 가중)을 100%로 본 비율입니다. ‘같은 시간대 평균 대비’는 같은 채널·같은 시간대(8대 구간)에서 다른 프로그램 본방의 평균 시청률과 견준 배수이며, 시간대 구간이 넓어 참고로만 봅니다. 본방 태그가 없는 작품은 전체 방영으로 요약합니다.";
 
 function usePeerRecord(names: string[], to: string | null | undefined) {
   const key = `${names.join("|")}@${to ?? ""}`;
@@ -35,16 +36,28 @@ function usePeerRecord(names: string[], to: string | null | undefined) {
   return state?.key === key ? state : null;
 }
 
-/** 표 한 칸 — "0.0034 · 1.58배"(평균 대비는 표본 적음·구간 편차 큼 표시를 옆에) */
+/** 표 한 칸 — "0.0034 (123%)": 괄호는 채널 평균을 100%로 본 비율(100% 초과 푸른색·미만 붉은색, 프로그램 성과 표와 같은 규칙) */
 function RatingCell({ r }: { r: IptvPeerRow | undefined }) {
   if (!r) return <span className="text-zinc-400">{MISSING}</span>;
+  const v = iptvVsChannel(r.vsChannel);
+  return (
+    <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+      <span className="inline-block w-[3.75rem] text-right tabular-nums text-zinc-900">{fmtR(r.avgRating)}</span>
+      <span className={`inline-block min-w-[3.6rem] text-right tabular-nums ${v.pct === null ? "text-zinc-400" : v.cls}`} aria-label={v.pct === null ? "채널 평균 대비 산출 불가" : `채널 평균의 ${v.pct}%`}>
+        {v.pct === null ? MISSING : `(${v.pct}%)`}
+      </span>
+    </span>
+  );
+}
+
+/** 같은 시간대 평균 대비 배수 + 표본 적음·구간 편차 큼 표시(자세히 보기용) */
+function SlotRatioText({ r }: { r: IptvPeerRow }) {
   const flag = isThinPeerSample(r) ? "표본 적음" : isWideBandRatio(r) ? "구간 편차 큼" : null;
   return (
-    <span className="inline-flex flex-wrap items-baseline justify-center gap-x-1.5 whitespace-nowrap tabular-nums">
-      <span className="text-zinc-900">{fmtR(r.avgRating)}</span>
-      {r.ratio !== null && <span className="text-zinc-600">({r.ratio.toFixed(2)}배)</span>}
-      {flag && <span className="text-[11.5px] text-amber-700">{flag}</span>}
-    </span>
+    <>
+      {r.ratio === null ? MISSING : `${r.ratio.toFixed(2)}배`}
+      {flag && <span className="ml-1 text-[11.5px] text-amber-700">{flag}</span>}
+    </>
   );
 }
 
@@ -99,7 +112,7 @@ export function IptvPeerRecord({ names, to, targets }: { names: string[]; to?: s
                 <tr>
                   {kinds.map((k) => [
                     <th key={`${k}r`} className="whitespace-nowrap border-l border-zinc-200 px-3 pb-2 text-center font-normal">
-                      시청률(평균 대비)
+                      시청률(채널 평균 대비)
                     </th>,
                     <th key={`${k}m`} className="whitespace-nowrap px-3 pb-2 text-center font-normal">
                       1인당 시청
@@ -133,9 +146,9 @@ export function IptvPeerRecord({ names, to, targets }: { names: string[]; to?: s
               </tbody>
             </table>
           </div>
-          <p className="mt-1 text-[12px] text-zinc-500">IPTV 셋톱 값 · 닐슨 예측과 비교·합산하지 않음 · 괄호는 같은 채널·시간대 다른 프로그램 본방 평균 대비</p>
+          <p className="mt-1 text-[12px] text-zinc-500">IPTV 셋톱 값 · 닐슨 예측과 비교·합산하지 않음 · 괄호는 이 작품 방영 기간의 채널 평균을 100%로 본 비율(100% 초과 푸른색, 미만 붉은색)</p>
           <details className="mt-2 max-w-5xl rounded-md border border-zinc-200 bg-white">
-            <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium text-zinc-700">자세히 보기 · 시간대·도달률·평균 시청률·방영 기간</summary>
+            <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium text-zinc-700">자세히 보기 · 시간대·도달률·채널 평균·같은 시간대 평균·방영 기간</summary>
             <div className="dense-grid overflow-x-auto border-t border-zinc-100 px-3 py-2" tabIndex={0} role="region" aria-label="다른 채널 IPTV 성적 자세히 보기 표">
               <table className="w-full min-w-[560px] text-[12px]">
                 <thead className="text-zinc-500">
@@ -143,7 +156,9 @@ export function IptvPeerRecord({ names, to, targets }: { names: string[]; to?: s
                     <th className="py-1 pr-3 text-left font-medium">채널·타깃</th>
                     <th className="py-1 pr-3 text-left font-medium">주 편성 시간대</th>
                     <th className="py-1 pr-3 text-right font-medium">도달률</th>
-                    <th className="py-1 pr-3 text-right font-medium">평균 시청률</th>
+                    <th className="py-1 pr-3 text-right font-medium">채널 평균 시청률</th>
+                    <th className="py-1 pr-3 text-right font-medium">같은 시간대 평균 시청률</th>
+                    <th className="py-1 pr-3 text-right font-medium">같은 시간대 평균 대비</th>
                     <th className="py-1 text-left font-medium">방영 기간</th>
                   </tr>
                 </thead>
@@ -156,7 +171,11 @@ export function IptvPeerRecord({ names, to, targets }: { names: string[]; to?: s
                         </td>
                         <td className="whitespace-nowrap py-1 pr-3 tabular-nums">{bandText(r.mainSlotBand)}</td>
                         <td className="py-1 pr-3 text-right tabular-nums">{r.avgReachRate === null ? MISSING : `${r.avgReachRate.toFixed(2)}%`}</td>
+                        <td className="py-1 pr-3 text-right tabular-nums">{fmtR(r.channelAvgRating)}</td>
                         <td className="py-1 pr-3 text-right tabular-nums">{fmtR(r.baseRating)}</td>
+                        <td className="whitespace-nowrap py-1 pr-3 text-right tabular-nums">
+                          <SlotRatioText r={r} />
+                        </td>
                         <td className="whitespace-nowrap py-1 tabular-nums">
                           {md(r.firstDate)}~{md(r.lastDate)}
                         </td>
