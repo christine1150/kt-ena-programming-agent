@@ -9,7 +9,7 @@ const md = (d: string | null) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice
 const fmtR = (v: number | null) => (v === null ? "—" : v < 0.01 ? v.toFixed(4) : v < 1 ? v.toFixed(3) : v.toFixed(2));
 const TIER_TEXT = { top: "상위", mid: "중간", low: "하위" } as const;
 const NOTE =
-  "IPTV 3사 셋톱(TV INDEX) 값으로 보조 자료입니다. 순위는 IPTV에 관측되는 경쟁·UHD 채널과 우리 채널만 센 것이고(다른 자사 채널은 경쟁에서 뺌), 비중은 그 관측 채널 시청률 합계 대비라 시청 점유율이 아닙니다. 방영은 시작 시각이 속한 시간대에 넣었고 한 칸에 3회 미만 방영이면 뺐습니다. 수도권 2049는 셋톱에서 추정한 값입니다.";
+  "IPTV 3사 셋톱(TV INDEX) 값으로 보조 자료입니다. 순위는 IPTV에 관측되는 경쟁·UHD 채널과 우리 채널만 센 것이고(다른 자사 채널은 경쟁에서 뺌), 비중은 그 관측 채널 시청률 합계 대비라 시청 점유율이 아닙니다. 방영은 시작 시각이 속한 시간대에 넣었고 한 칸에 3회 미만 방영이면 뺐습니다.";
 
 function useSlotMap(channelCode: string, to: string | null | undefined) {
   const key = `${channelCode}@${to ?? ""}`;

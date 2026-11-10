@@ -14,7 +14,7 @@ const bandText = (b: string | null) => (b ? `${Number(b.slice(0, 2))}~${Number(b
 const md =(d: string | null) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "—");
 const fmtR = (v: number | null) => (v === null ? "—" : v < 0.01 ? v.toFixed(4) : v.toFixed(3));
 const NOTE =
-  "IPTV 3사 셋톱(TV INDEX) 값으로 보조 자료입니다. 가입 가구만 재고 수도권 2049는 셋톱에서 추정한 값이라 닐슨 값과 비교·합산하지 않습니다. 도달자 1인당 시청 = 1분 시청자 × 방영 분 ÷ 도달자(본방 방영 중앙값). 순위는 이 작품 본방과 30분 이상 겹친 경쟁·UHD 채널 본방 프로그램 가운데 순위입니다.";
+  "IPTV 3사 셋톱(TV INDEX) 값으로 보조 자료입니다. 닐슨 값과 비교·합산하지 않습니다. 도달자 1인당 시청 = 1분 시청자 × 방영 분 ÷ 도달자(본방 방영 중앙값). 순위는 이 작품 본방과 30분 이상 겹친 경쟁·UHD 채널 본방 프로그램 가운데 순위입니다.";
 
 function useIptvBlock(names: string[], to: string | null | undefined) {
   const key = `${names.join("|")}@${to ?? ""}`;
@@ -140,7 +140,7 @@ export function IptvProgramBlock({ names, to, variant = "full", channelName, tar
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-[12px] text-zinc-500">IPTV 셋톱 값 · 닐슨과 비교·합산하지 않음 · 수2049는 셋톱 추정 · 1인당 시청 = 도달자 1명이 본 분</p>
+      <p className="mt-1 text-[12px] text-zinc-500">IPTV 셋톱 값 · 닐슨과 비교·합산하지 않음 · 1인당 시청 = 도달자 1명이 본 분</p>
       <details className="mt-2 max-w-5xl rounded-md border border-zinc-200 bg-white">
         <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium text-zinc-700">자세히 보기 · 채널 평균 대비 시청 시간·동시간대 경쟁작 순위</summary>
         <div className="dense-grid overflow-x-auto border-t border-zinc-100 px-3 py-2" tabIndex={0} role="region" aria-label="IPTV 셋톱 자세히 보기 표">

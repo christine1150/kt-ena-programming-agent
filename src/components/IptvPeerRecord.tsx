@@ -13,7 +13,7 @@ const md = (d: string | null) => (d ? `${d.slice(2, 4)}.${Number(d.slice(5, 7))}
 const fmtR = (v: number | null) => (v === null ? MISSING : v < 0.01 ? v.toFixed(4) : v.toFixed(3));
 const bandText = (b: string | null) => (b ? `${Number(b.slice(0, 2))}~${Number(b.slice(3, 5))}시` : MISSING);
 const NOTE =
-  "IPTV 3사 셋톱(TV INDEX) 값으로 보조 자료입니다. 가입 가구만 재고 수도권 2049는 셋톱에서 추정한 값이라 위 닐슨 예측과 비교·합산하지 않습니다. ‘평균 대비’는 같은 채널·같은 시간대(8대 구간)에서 다른 프로그램 본방의 평균 시청률과 견준 배수이며, 시간대 구간이 넓어 참고로만 봅니다. 본방 태그가 없는 작품은 전체 방영으로 요약합니다.";
+  "IPTV 3사 셋톱(TV INDEX) 값으로 보조 자료입니다. 위 닐슨 예측과 비교·합산하지 않습니다. ‘평균 대비’는 같은 채널·같은 시간대(8대 구간)에서 다른 프로그램 본방의 평균 시청률과 견준 배수이며, 시간대 구간이 넓어 참고로만 봅니다. 본방 태그가 없는 작품은 전체 방영으로 요약합니다.";
 
 function usePeerRecord(names: string[], to: string | null | undefined) {
   const key = `${names.join("|")}@${to ?? ""}`;
@@ -133,7 +133,7 @@ export function IptvPeerRecord({ names, to, targets }: { names: string[]; to?: s
               </tbody>
             </table>
           </div>
-          <p className="mt-1 text-[12px] text-zinc-500">IPTV 셋톱 값 · 닐슨 예측과 비교·합산하지 않음 · 수2049는 셋톱 추정 · 괄호는 같은 채널·시간대 다른 프로그램 본방 평균 대비</p>
+          <p className="mt-1 text-[12px] text-zinc-500">IPTV 셋톱 값 · 닐슨 예측과 비교·합산하지 않음 · 괄호는 같은 채널·시간대 다른 프로그램 본방 평균 대비</p>
           <details className="mt-2 max-w-5xl rounded-md border border-zinc-200 bg-white">
             <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium text-zinc-700">자세히 보기 · 시간대·도달률·평균 시청률·방영 기간</summary>
             <div className="dense-grid overflow-x-auto border-t border-zinc-100 px-3 py-2" tabIndex={0} role="region" aria-label="다른 채널 IPTV 성적 자세히 보기 표">
