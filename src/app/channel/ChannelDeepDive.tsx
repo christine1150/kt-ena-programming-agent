@@ -39,6 +39,7 @@ import { PRIME_UNION_LABEL } from "@/lib/audienceReport/primeTime";
 // 5대 편성 액션 태그 색상·한글 라벨 — Page 1(Dashboard.tsx)도 재사용할 수 있도록 공용 lib로
 // 분리했다(2026-09-18, 순수 이동, 값 변경 없음).
 import { TAG_DOT_COLOR, TAG_LABEL_KO, type ActionTag } from "@/lib/actionTags";
+import { describeIptvCrossCheck, IPTV_CROSS_CHECK_NOTE, type IptvCrossCheckMetaView, type IptvCrossCheckView } from "@/lib/contentFit/iptvCrossCheckText";
 // 사용자 지시(2026-09-18): WHY? 진단의 "Program 자체 성과"/"Day/Time Slot" 후보에 Page 1
 // 월간 리뷰가 쓰는 편성량(volumeEffect)/성과(performanceEffect) 항등 분해 판정을 그대로 재사용.
 import { classifyDeclineCause } from "@/lib/causeClassifier";
@@ -290,6 +291,24 @@ interface FitScoreItem {
     transferability: "SLOT_SPECIFIC" | "FLEXIBLE" | "PRIME_DEPENDENT" | null;
     slotSampleCount: number;
   } | null;
+  // IPTV 셋톱 교차 확인(2026-11-11): 닐슨 정식 판정이 교체·이동일 때만 붙는다(그 외·자료 종료 시 null). 판정·점수는 바꾸지 않는 보조 표시.
+  iptvCrossCheck?: IptvCrossCheckView | null;
+}
+
+// IPTV 교차 확인 한 줄 — 문구는 src/lib/contentFit/iptvCrossCheckText.ts 한 곳에서 만든다. 색은 앱 판정 색(TAG_DOT_COLOR)을 그대로 쓴다.
+function IptvCrossLine({ item, meta, className = "" }: { item: FitScoreItem; meta: IptvCrossCheckMetaView | null; className?: string }) {
+  const d = describeIptvCrossCheck(item.iptvCrossCheck, meta);
+  if (!d) return null;
+  const color = d.tone === "none" ? "#a1a1aa" : TAG_DOT_COLOR[item.iptvCrossCheck?.iptvTag ?? "WATCH"];
+  return (
+    <p className={`flex items-start gap-1.5 text-[12.5px] leading-snug text-zinc-500 ${className}`}>
+      <span className="mt-[5px] inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden />
+      <span>
+        <span className="font-medium text-zinc-600">{d.label}</span>
+        {d.detail ? ` — ${d.detail}` : ""}
+      </span>
+    </p>
+  );
 }
 
 // skyUHD 전용 CONTENT FITS?/WHAT TO SCHEDULE? 대체 지표 — get_skyuhd_program_scorecard() 반환값
@@ -4413,6 +4432,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
   // 꺼짐 — 채널 고유 타깃 시청률이 디폴트로 먼저 보이고, 이건 opt-in으로 추가되는 참고 지표.
   const [selectedExtraTargets, setSelectedExtraTargets] = useState<Set<string>>(new Set());
   const [fitScoreItems, setFitScoreItems] = useState<FitScoreItem[] | null>(null);
+  const [iptvCrossMeta, setIptvCrossMeta] = useState<IptvCrossCheckMetaView | null>(null);
   const [fitScoreLoading, setFitScoreLoading] = useState(true);
   // 편성 제안(사용자 지시 2026-10-07): 교체 프로그램의 요일·시각과 어떤 제목으로 바꿀지를 시청률 자판기 엔진(읽기 전용)으로 계산해 보여 준다.
   const [replacePlanState, setReplacePlanState] = useState<{ key: string; plan: ReplacePlanView | "error" } | null>(null);
@@ -4670,6 +4690,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
       if (cancelled) return;
       if (res.ok && body.ok) {
         setFitScoreItems(body.items ?? []);
+        setIptvCrossMeta(body.meta?.iptvCrossCheck ?? null);
       }
       setFitScoreLoading(false);
     })();
@@ -6693,7 +6714,10 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                 )}
                               </div>
                             </td>
-                            <td className="py-2.5 pr-3 leading-snug text-zinc-700">{note}</td>
+                            <td className="py-2.5 pr-3 leading-snug text-zinc-700">
+                              {note}
+                              <IptvCrossLine item={item} meta={iptvCrossMeta} className="mt-1" />
+                            </td>
                             <td className="py-2.5 leading-snug text-zinc-500">{scheduleCheck(item.content_fit)}</td>
                           </tr>
                         );
@@ -6705,6 +6729,9 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             </div>
           )}
           {/* 2026-10-15: 산식·판정선 설명과 판정 경계 산점도는 "이 콘텐츠, 적합한가요?"·Program Portfolio와 겹쳐 이 섹션에서 뺐다. */}
+          {(fitScoreItems ?? []).some((i) => describeIptvCrossCheck(i.iptvCrossCheck, iptvCrossMeta)) && (
+            <p className="mt-3 text-[12.5px] leading-relaxed text-zinc-400">{IPTV_CROSS_CHECK_NOTE}</p>
+          )}
           <p className="mb-1 mt-4 text-sm text-zinc-400">
             근거 수치(슬롯 대비 성과·시청 규모 등)와 적합도 산식은 아래 <a href="#content-fits" className="underline underline-offset-2 hover:text-zinc-600">‘이 콘텐츠, 적합한가요?’</a>에 있습니다. 이 표는 그 판정을 편성 조치로 옮긴 것이며, 경쟁채널 대비 기회 시간대(OPPORTUNITY?)에 ‘강화’·‘테스트’ 프로그램을 배치하는 것을 우선 검토하세요.
           </p>
@@ -6914,6 +6941,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                                         {fi.trendNote && <p className="mt-1 text-zinc-500">{fi.trendNote}</p>}
                                         {describeBaseline(cf) && <p className="mt-1 text-[13px] text-zinc-400">{describeBaseline(cf)}</p>}
                                         {fi.sampleNote && <p className="mt-1 text-amber-600">{fi.sampleNote}</p>}
+                                        <IptvCrossLine item={item} meta={iptvCrossMeta} className="mt-2" />
                                         {llm && <p className="mt-2 text-zinc-600">{llm}</p>}
                                         {/* 원 명세 13번(Audience Role) — Reach/Time Spent Share 둘 다 뚜렷할 때만 표시. */}
                                         {fi.audienceRole && (

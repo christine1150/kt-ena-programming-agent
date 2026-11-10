@@ -12,6 +12,7 @@ import { PRIME_HOURS_UNION } from "@/lib/audienceReport/primeTime";
 import { addDaysStr } from "@/lib/contentFit";
 import { latestBroadcastDate } from "@/lib/contentFit/sourceCore";
 import { loadContentFit } from "@/lib/contentFit/source";
+import { IPTV_CROSS_CHECK_TAGS, loadIptvCrossCheck, type IptvCrossCheck, type IptvCrossCheckMeta } from "@/lib/contentFit/iptvCrossCheck";
 
 // 사용자 지시(2026-08-21): "재방이 많은 컨텐츠(예: 나는SOLO)를 통째로 이동 검토하라는 건 부적절
 // 하다 — 그 중 효율이 안 좋은 특정 시간대만 짚어서 의견을 달라." 하루에도 여러 시간대에 걸쳐
@@ -105,6 +106,22 @@ export async function GET(request: Request) {
     .filter((it) => it.lastAiredDate >= liveFrom)
     .filter((it) => !isTitleExcluded(exclusionRows, loaded.programs.get(it.programId)?.canonicalName));
 
+  // IPTV 교차 확인(2026-11-11, IPTV 활용 계획 3단계 1순위): 닐슨 정식 판정이 교체·이동인 프로그램에만 IPTV 셋톱 판정 방향을 붙인다.
+  // 닐슨 판정·점수는 바꾸지 않는 보조 표시이며, 실패해도 적합도 응답은 그대로 낸다(자료 종료·오류 시 표시 없음).
+  const crossTargets = items.filter((it) => it.tier === "FORMAL" && it.tag !== null && IPTV_CROSS_CHECK_TAGS.includes(it.tag));
+  let iptvCross: { meta: IptvCrossCheckMeta; byProgramId: Map<string, IptvCrossCheck> } | null = null;
+  if (crossTargets.length > 0) {
+    iptvCross = await loadIptvCrossCheck(supabase, {
+      channelCode: channel.code,
+      kpiTargetLabel: loaded.kpiTargetLabel,
+      asOf: asOfDate,
+      programNames: new Map(crossTargets.map((it) => [it.programId, loaded.programs.get(it.programId)?.canonicalName ?? ""])),
+    }).catch((e) => {
+      console.error("[fit-score] IPTV 교차 확인 실패", e);
+      return null;
+    });
+  }
+
   // 사용자 지시(2026-08-21): 교체·이동으로 판정된 프로그램 중 여러 시간대에 반복 편성된
   // ("재방 많은") 것은 프로그램 전체가 아니라 특정 시간대만 짚어 의견을 낸다.
   const programTargetLabel = loaded.kpiTargetLabel;
@@ -139,6 +156,7 @@ export async function GET(request: Request) {
         programs: meta ? { canonical_name: meta.canonicalName, raw_name: meta.rawName ?? meta.canonicalName, first_run: meta.firstRun } : null,
         content_fit: it,
         slotEfficiency,
+        iptvCrossCheck: iptvCross?.byProgramId.get(it.programId) ?? null,
       };
     })
   );
@@ -154,6 +172,7 @@ export async function GET(request: Request) {
       channelMeanRating: loaded.result.channelMeanRating,
       airingCount: loaded.result.airingCount,
       kpiTargetLabel: loaded.kpiTargetLabel,
+      iptvCrossCheck: iptvCross?.meta ?? null,
     },
   });
 }

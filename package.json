@@ -49,6 +49,7 @@
     "test:stats": "tsx scripts/test-stats.ts",
     "test:ask-export": "tsx scripts/test-ask-export.ts",
     "test:content-fit": "tsx scripts/test-content-fit.ts",
+    "test:iptv-cross-check": "tsx scripts/test-iptv-cross-check.ts",
     "test:program-performance": "tsx scripts/test-program-performance.ts",
     "test:schedule-forecast": "tsx scripts/test-schedule-forecast.ts",
     "test:plan-forecast": "tsx scripts/test-plan-forecast.ts",
