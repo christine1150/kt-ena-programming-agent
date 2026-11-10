@@ -40,6 +40,8 @@ import { PRIME_UNION_LABEL } from "@/lib/audienceReport/primeTime";
 // 분리했다(2026-09-18, 순수 이동, 값 변경 없음).
 import { TAG_DOT_COLOR, TAG_LABEL_KO, type ActionTag } from "@/lib/actionTags";
 import { describeIptvCrossCheck, IPTV_CROSS_CHECK_NOTE, type IptvCrossCheckMetaView, type IptvCrossCheckView } from "@/lib/contentFit/iptvCrossCheckText";
+import { IptvSlotMap } from "@/components/IptvSlotMap";
+import { IptvUhdBenchmark } from "@/components/IptvUhdBenchmark";
 // 사용자 지시(2026-09-18): WHY? 진단의 "Program 자체 성과"/"Day/Time Slot" 후보에 Page 1
 // 월간 리뷰가 쓰는 편성량(volumeEffect)/성과(performanceEffect) 항등 분해 판정을 그대로 재사용.
 import { classifyDeclineCause } from "@/lib/causeClassifier";
@@ -7404,6 +7406,14 @@ export default function ChannelDeepDive({ code }: { code: string }) {
             )}
           </div>
           )
+          )}
+
+          {/* IPTV 활용 3단계 6순위(2026-11-11): 시간대 경쟁 지도(D1)·skyUHD UHD 벤치마크(D3) — 보조 자료, 닐슨 표와 분리. 기준일 이후 IPTV 값이 섞이지 않게 화면 기준일을 넘긴다 */}
+          {!showComparisonView && !showSdowDualView && (data.asOfDate ?? data.dateTo) && (
+            <>
+              <IptvSlotMap channelCode={code} to={data.asOfDate ?? data.dateTo} />
+              {code === "SKYUHD" && <IptvUhdBenchmark to={data.asOfDate ?? data.dateTo} />}
+            </>
           )}
         </div>
 
