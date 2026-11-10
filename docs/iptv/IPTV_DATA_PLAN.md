@@ -1,7 +1,8 @@
 # IPTV 셋톱(TV INDEX) 자료 활용 계획
 
 - 작성: 2026-11-10
-- 상태: **계획 단계**. 화면·판정 로직은 아직 바꾸지 않는다.
+- 상태(2026-11-11): **0~2단계 완료**. 결과는 `IPTV_RESEARCH_RESULTS.md`에 있다. 3단계(화면)는 사용자 결정을 기다린다.
+- 11/10 추가 자료로 경쟁 6개 채널이 늘었다: TV CHOSUN, MBN, 채널A, JTBC2, tvN SHOW, 채널S(가구만). ENA Play 채널 단위 자료도 받았다. §2.1 표는 처음 적재했을 때 기준이다.
 - 근거 자료: `iptv_tvindex_airings`(약 98만 행), `iptv_stb_ratings`(skyUHD), `iptv_tvindex_daypart_avg`
 
 ---
