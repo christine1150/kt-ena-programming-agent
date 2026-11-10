@@ -50,3 +50,11 @@
 - IPTV는 지니TV/KT 비중으로 ENA 계열에 유리하게 기울 수 있고 12월 말까지만 보장된다. 닐슨 비교 채널의 자료 기간이 채널마다 달라(KBS드라마·tvN DRAMA 8/23까지 등) 같은 기간끼리만 비교했다.
 - 재방 내성·숨은 작품은 시간대 미통제의 짝 표본 기준이며 확정이 아니다. 시간대를 통제한 겹침 효과, 장르·국가 세분류, 나라·도시 분류는 아직 하지 않았다.
 - 본방·재방 구분은 TV INDEX 표기이며 채널 첫 방송과 다를 수 있다.
+
+
+## 추가 문서(2026-11-11 새벽)
+
+- 장르 구성·장르별 성과: [GENRE_MIX_RESULTS.md](GENRE_MIX_RESULTS.md)
+- OLIFE IPTV·닐슨 엇갈림 점검: [IPTV_VS_NIELSEN_OLIFE.md](IPTV_VS_NIELSEN_OLIFE.md) (OLIFE 채널 간 비교는 닐슨만 사용)
+- OLIFE 나라별 시청률 IPTV 교차 점검: [OLIFE_GEO_IPTV_CHECK.md](OLIFE_GEO_IPTV_CHECK.md)
+- 채널별 Word 1쪽 보고서: `word/` 폴더(6개)
