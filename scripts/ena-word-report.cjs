@@ -24,7 +24,9 @@ const FILL_HEADER = "F2F2F4", RULE = "C3C5CF";
 const LINE = 0.85, GLOSS = 8;
 const STEP = 15.0, HANG = 12.0, SAFE = 5.0, TAKE_BASE = 2 * STEP;
 const ONE_LINE = 14.0, TITLE_GAP = 5.0, APP_GAP = 1.0;
-const TABLE_FS = 11.0, CELL_TB = 1.0, CELL_PARA = 0.0, CELL_LINE = 0.85;
+let TABLE_FS = 11.0; // 내용 JSON 의 bodyPt 로 바꿀 수 있다(2026-11-11: 본문 10pt 요청)
+const CELL_TB = 1.0, CELL_PARA = 0.0, CELL_LINE = 0.85;
+let BULLET_FS = 11, SUB_FS = 10;
 
 const W = (7560000 - 2 * 597600) / 12700;                 // 인쇄 폭 ≈501.2pt (A4 21cm − 좌우 1.66cm)
 const TABLE_L = T.textWidth("Ⅰ. ", F_BOLD, 13);            // ≈10.4pt — 섹션 제목 첫 한글 위치
@@ -351,6 +353,8 @@ async function build(data, out, auditOnly) {
   const body = [];
   const items = [];
   let n1 = 0, firstSection = true;
+  // bodyPt: ○·- 본문과 표 글자 크기를 한 값으로 맞춘다(소제목·제목 크기는 그대로)
+  if (data.bodyPt) { TABLE_FS = data.bodyPt; BULLET_FS = data.bodyPt; SUB_FS = data.bodyPt; }
 
   body.push(...docTitleBlocks(data.docTitle));
   for (const b of data.blocks) {
@@ -373,13 +377,13 @@ async function build(data, out, auditOnly) {
         break;
       }
       case "bullet":
-        items.push([2 * STEP, "○ ", b.text, 11, F_THIN, false]);
-        body.push(lineBlock("○ ", b.text, 11, F_THIN, 2 * STEP, { allowLabel: false, emph: false }));
+        items.push([2 * STEP, "○ ", b.text, BULLET_FS, F_THIN, false]);
+        body.push(lineBlock("○ ", b.text, BULLET_FS, F_THIN, 2 * STEP, { allowLabel: false, emph: false }));
         break;
       case "sub":
       case "mid":
-        items.push([3 * STEP, "- ", b.text, 10, F_THIN, false]);
-        body.push(lineBlock("- ", b.text, 10, F_THIN, 3 * STEP, { allowLabel: false, emph: false }));
+        items.push([3 * STEP, "- ", b.text, SUB_FS, F_THIN, false]);
+        body.push(lineBlock("- ", b.text, SUB_FS, F_THIN, 3 * STEP, { allowLabel: false, emph: false }));
         break;
       case "takeaway":
         items.push([TAKE_BASE, "→ ", b.text, 12, F_MED, false]);
