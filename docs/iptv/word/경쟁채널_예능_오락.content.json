@@ -72,11 +72,18 @@
       "color": "FFFFFF"
      }
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -137,7 +144,7 @@
     ],
     [
      "2",
-     "어서와한국은처음이지진도편",
+     "어서와 한국은",
      {
       "t": "0.133",
       "fill": "9BB0D3",
@@ -175,7 +182,7 @@
     ],
     [
      "4",
-     "놀면 뭐하니?",
+     "놀면 뭐하니",
      {
       "t": "0.132",
       "fill": "A1B4D5",
@@ -196,7 +203,7 @@
     ],
     [
      "5",
-     "어서와",
+     "어서와 한국은",
      {
       "t": "0.120",
       "fill": "CCD6E8",
@@ -217,7 +224,7 @@
     ],
     [
      "6",
-     "연애기숙학교돌싱N모솔",
+     "돌싱N모솔",
      {
       "t": "0.119",
       "fill": "D0DAEA",
@@ -316,6 +323,16 @@
      "75",
      "월·화 20~23시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -363,7 +380,7 @@
      },
      {
       "t": "0.023",
-      "t2": "어서와",
+      "t2": "어서와 한국은",
       "fill": "FCFDFE",
       "color": "0D0D12",
       "center": true
@@ -384,14 +401,14 @@
      },
      {
       "t": "0.033",
-      "t2": "어서와",
+      "t2": "어서와 한국은",
       "fill": "F4F6FA",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.056",
-      "t2": "구해줘!홈즈",
+      "t2": "구해줘홈즈",
       "fill": "DFE6F1",
       "color": "0D0D12",
       "center": true
@@ -436,7 +453,7 @@
      },
      {
       "t": "0.073",
-      "t2": "어서와",
+      "t2": "어서와 한국은",
       "fill": "D0DAEA",
       "color": "0D0D12",
       "center": true
@@ -526,7 +543,7 @@
      },
      {
       "t": "0.081",
-      "t2": "놀면뭐하니?",
+      "t2": "놀면뭐하니",
       "fill": "C9D5E7",
       "color": "0D0D12",
       "center": true
@@ -540,7 +557,7 @@
      },
      {
       "t": "0.083",
-      "t2": "어서와",
+      "t2": "어서와 한국은",
       "fill": "C7D3E6",
       "color": "0D0D12",
       "center": true
@@ -578,7 +595,7 @@
      },
      {
       "t": "0.106",
-      "t2": "놀면뭐하니?",
+      "t2": "놀면뭐하니",
       "fill": "B4C4DE",
       "color": "0D0D12",
       "center": true
@@ -637,14 +654,14 @@
      },
      {
       "t": "0.277",
-      "t2": "어서와",
+      "t2": "어서와 한국은",
       "fill": "1F4E9C",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.118",
-      "t2": "어서와",
+      "t2": "어서와 한국은",
       "fill": "A9BBD9",
       "color": "0D0D12",
       "center": true
@@ -689,14 +706,14 @@
      },
      {
       "t": "0.069",
-      "t2": "놀면뭐하니?",
+      "t2": "놀면뭐하니",
       "fill": "D4DDEC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.071",
-      "t2": "어서와",
+      "t2": "어서와 한국은",
       "fill": "D2DBEB",
       "color": "0D0D12",
       "center": true
@@ -710,7 +727,7 @@
      },
      {
       "t": "0.142",
-      "t2": "놀면뭐하니?",
+      "t2": "놀면뭐하니",
       "fill": "94ABD0",
       "color": "0D0D12",
       "center": true
@@ -720,14 +737,14 @@
      "02~05시",
      {
       "t": "0.031",
-      "t2": "어서와",
+      "t2": "어서와 한국은",
       "fill": "F5F7FB",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.031",
-      "t2": "놀면뭐하니?",
+      "t2": "놀면뭐하니",
       "fill": "F5F7FB",
       "color": "0D0D12",
       "center": true
@@ -741,7 +758,7 @@
      },
      {
       "t": "0.023",
-      "t2": "어서와",
+      "t2": "어서와 한국은",
       "fill": "FCFDFE",
       "color": "0D0D12",
       "center": true
@@ -769,7 +786,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "caption",
@@ -1205,7 +1226,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -1237,7 +1262,7 @@
   },
   {
    "type": "takeaway",
-   "text": "**MBC every1**: 목 20~23시 어서와 중심, 상위 5편 72%로 소수 작품 의존"
+   "text": "**MBC every1**: 목 20~23시 어서와 한국은 중심, 상위 5편 72%로 소수 작품 의존"
   },
   {
    "type": "apptitle",
@@ -1309,11 +1334,18 @@
       "color": "FFFFFF"
      }
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -1429,7 +1461,7 @@
     ],
     [
      "5",
-     "이호선상담소관계VS전쟁",
+     "이호선상담소",
      {
       "t": "0.111",
       "fill": "E4EAF3",
@@ -1537,6 +1569,16 @@
      "60",
      "월 14~17시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -1545,7 +1587,7 @@
   },
   {
    "type": "bullet",
-   "text": "시청 규모(시청률×방영 분) 1위 이호선상담소관계VS전쟁 22%, 상위 5편 합계 50%"
+   "text": "시청 규모(시청률×방영 분) 1위 이호선상담소 22%, 상위 5편 합계 50%"
   },
   {
    "type": "bullet",
@@ -1990,7 +2032,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "caption",
@@ -2426,7 +2472,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -2534,11 +2584,18 @@
       "color": "FFFFFF"
      }
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -2578,7 +2635,7 @@
    "rows": [
     [
      "1",
-     "니돈내산 독박투어4",
+     "독박투어4",
      {
       "t": "0.094",
       "fill": "6283BA",
@@ -2637,7 +2694,7 @@
     ],
     [
      "4",
-     "끝까지 간다 독박투어",
+     "독박투어",
      {
       "t": "0.082",
       "fill": "ACBEDA",
@@ -2658,7 +2715,7 @@
     ],
     [
      "5",
-     "니돈내산 독박투어3",
+     "독박투어3",
      {
       "t": "0.077",
       "fill": "C7D3E6",
@@ -2700,7 +2757,7 @@
     ],
     [
      "7",
-     "니돈내산 독박투어 2",
+     "독박투어2",
      {
       "t": "0.075",
       "fill": "D8E0EE",
@@ -2770,6 +2827,16 @@
      "44",
      "목·일 14~17시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -2778,7 +2845,7 @@
   },
   {
    "type": "bullet",
-   "text": "시청 규모(시청률×방영 분) 1위 니돈내산 독박투어4 15%, 상위 5편 합계 56%"
+   "text": "시청 규모(시청률×방영 분) 1위 독박투어4 15%, 상위 5편 합계 56%"
   },
   {
    "type": "bullet",
@@ -3223,7 +3290,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "caption",
@@ -3659,7 +3730,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -3763,11 +3838,18 @@
       "color": "0D0D12"
      }
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -3938,7 +4020,7 @@
     ],
     [
      "8",
-     "차트를달리는남자",
+     "차달남",
      {
       "t": "0.070",
       "fill": "F8FAFC",
@@ -3959,7 +4041,7 @@
     ],
     [
      "9",
-     "차트를달리는남자다크에디션",
+     "차트를달리는남자",
      {
       "t": "0.070",
       "fill": "FCFDFE",
@@ -3995,6 +4077,16 @@
      "69",
      "월·화 23~02시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -4448,7 +4540,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "caption",
@@ -4884,7 +4980,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -4992,11 +5092,18 @@
       "color": "0D0D12"
      }
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -5179,7 +5286,7 @@
     ],
     [
      "8",
-     "아니 근데 진짜!",
+     "아니 근데 진짜",
      {
       "t": "0.051",
       "fill": "F1F4F9",
@@ -5236,6 +5343,16 @@
      "19",
      "화·일 11~14시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -5387,7 +5504,7 @@
      },
      {
       "t": "0.046",
-      "t2": "아니근데진짜!",
+      "t2": "아니근데진짜",
       "fill": "BBCAE1",
       "color": "0D0D12",
       "center": true
@@ -5526,7 +5643,7 @@
      },
      {
       "t": "0.052",
-      "t2": "접속!무비월드",
+      "t2": "접속무비월드",
       "fill": "B2C2DD",
       "color": "0D0D12",
       "center": true
@@ -5578,7 +5695,7 @@
      },
      {
       "t": "0.047",
-      "t2": "접속!무비월드",
+      "t2": "접속무비월드",
       "fill": "BAC8E0",
       "color": "0D0D12",
       "center": true
@@ -5689,7 +5806,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "caption",
@@ -6125,7 +6246,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -6233,11 +6358,18 @@
       "color": "0D0D12"
      }
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -6457,6 +6589,16 @@
      "18",
      "수·목·금 02~05시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -6910,7 +7052,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "caption",
@@ -7346,7 +7492,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -7454,11 +7604,18 @@
       "color": "0D0D12"
      }
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -7650,7 +7807,7 @@
     ],
     [
      "9",
-     "한블리한문철의블랙박스리뷰",
+     "한블리",
      {
       "t": "0.047",
       "fill": "FFFFFF",
@@ -7686,6 +7843,16 @@
      "201",
      "월·화·일 17~20시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -8139,7 +8306,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "caption",
@@ -8575,7 +8746,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -8683,11 +8858,18 @@
       "color": "0D0D12"
      }
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -8845,7 +9027,7 @@
     ],
     [
      "7",
-     "놀면 뭐하니?",
+     "놀면 뭐하니",
      {
       "t": "0.047",
       "fill": "D8E0EE",
@@ -8919,6 +9101,16 @@
      "63",
      "수 20~23시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -9018,7 +9210,7 @@
      },
      {
       "t": "0.019",
-      "t2": "놀면뭐하니?",
+      "t2": "놀면뭐하니",
       "fill": "DFE6F1",
       "color": "0D0D12",
       "center": true
@@ -9039,7 +9231,7 @@
      },
      {
       "t": "0.030",
-      "t2": "놀면뭐하니?",
+      "t2": "놀면뭐하니",
       "fill": "B8C7DF",
       "color": "0D0D12",
       "center": true
@@ -9143,7 +9335,7 @@
      },
      {
       "t": "0.039",
-      "t2": "놀면뭐하니?",
+      "t2": "놀면뭐하니",
       "fill": "98AED1",
       "color": "0D0D12",
       "center": true
@@ -9219,7 +9411,7 @@
      "20~23시",
      {
       "t": "0.057",
-      "t2": "놀면뭐하니?",
+      "t2": "놀면뭐하니",
       "fill": "5579B4",
       "color": "FFFFFF",
       "center": true
@@ -9372,7 +9564,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "caption",
@@ -9808,7 +10004,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -9904,11 +10104,18 @@
      "-",
      "-"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -10019,7 +10226,7 @@
     ],
     [
      "6",
-     "스트릿월드파이터디렉터스워",
+     "스월파",
      {
       "t": "0.082",
       "fill": "D4DDEC",
@@ -10097,6 +10304,15 @@
      "39",
      "월 20~23시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -10105,7 +10321,7 @@
   },
   {
    "type": "bullet",
-   "text": "시청 규모(시청률×방영 분) 1위 SHOWMETHEMONEY12 23%, 상위 5편 합계 48%"
+   "text": "시청 규모(시청률×방영 분) 1위 쇼미더머니12 23%, 상위 5편 합계 48%"
   },
   {
    "type": "bullet",
@@ -10550,7 +10766,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -10646,11 +10866,18 @@
      "-",
      "-"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -10825,7 +11052,7 @@
     ],
     [
      "10",
-     "THE맛있는녀석들",
+     "맛있는녀석들",
      {
       "t": "0.030",
       "fill": "FFFFFF",
@@ -10839,6 +11066,15 @@
      "139",
      "금 20~23시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -11292,7 +11528,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -11388,11 +11628,18 @@
      "-",
      "-"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -11503,7 +11750,7 @@
     ],
     [
      "6",
-     "내겐너무까칠한매니저비서진",
+     "비서진",
      {
       "t": "0.029",
       "fill": "E1E7F2",
@@ -11519,7 +11766,7 @@
     ],
     [
      "7",
-     "가라치코2호점윤식당",
+     "윤식당",
      {
       "t": "0.028",
       "fill": "EDF1F7",
@@ -11581,6 +11828,15 @@
      "172",
      "목·일 20~23시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -11589,7 +11845,7 @@
   },
   {
    "type": "bullet",
-   "text": "시청 규모(시청률×방영 분) 1위 미운우리새끼다시쓰는육아일기 21%, 상위 5편 합계 57%"
+   "text": "시청 규모(시청률×방영 분) 1위 미운우리새끼 21%, 상위 5편 합계 57%"
   },
   {
    "type": "bullet",
@@ -12034,7 +12290,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -12142,11 +12402,18 @@
       "color": "0D0D12"
      }
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -12287,7 +12554,7 @@
     ],
     [
      "6",
-     "이호선상담소관계VS전쟁",
+     "이호선상담소",
      {
       "t": "0.025",
       "fill": "D9E1EE",
@@ -12378,6 +12645,16 @@
      "183",
      "월·수·목·금·일 11~14시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -12831,7 +13108,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "caption",
@@ -13267,7 +13548,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -13363,11 +13648,18 @@
      "-",
      "-"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -13446,7 +13738,7 @@
     ],
     [
      "4",
-     "순간포착세상에이런일이",
+     "순간포착",
      {
       "t": "0.0078",
       "fill": "DEE5F0",
@@ -13556,6 +13848,15 @@
      "17",
      "토 02~05시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -14009,7 +14310,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -14105,11 +14410,18 @@
      "-",
      "-"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -14172,7 +14484,7 @@
     ],
     [
      "3",
-     "꼬리에꼬리를무는그날이야기",
+     "꼬꼬무",
      {
       "t": "0.017",
       "fill": "B1C1DC",
@@ -14188,7 +14500,7 @@
     ],
     [
      "4",
-     "이호선상담소관계VS전쟁",
+     "이호선상담소",
      {
       "t": "0.017",
       "fill": "B2C2DD",
@@ -14298,6 +14610,15 @@
      "10",
      "화 08~11시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -14751,7 +15072,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -14847,11 +15172,18 @@
      "-",
      "-"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -15010,7 +15342,7 @@
     ],
     [
      "9",
-     "현역가왕3프로들의정글",
+     "현역가왕3",
      {
       "t": "0.0023",
       "fill": "FDFDFE",
@@ -15040,6 +15372,15 @@
      "41",
      "수 08~11시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -15493,7 +15834,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",

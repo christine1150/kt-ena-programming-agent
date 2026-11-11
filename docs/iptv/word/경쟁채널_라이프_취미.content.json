@@ -72,11 +72,18 @@
      },
      "-"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -137,7 +144,7 @@
     ],
     [
      "2",
-     "순간포착 세상에 이런일이",
+     "순간포착",
      "-",
      "-",
      {
@@ -284,6 +291,16 @@
      "178",
      "매일 23~02시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -737,7 +754,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "caption",
@@ -1173,7 +1194,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",
@@ -1277,11 +1302,18 @@
      "-",
      "-"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "right",
+    "center",
+    "center"
    ]
   },
   {
    "type": "note",
-   "text": "순위 칸은 1위에 가까울수록 진함. 닐슨은 시장 216개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 45·2049 32개) 방영 분 가중 평균 순위"
+   "text": "순위 칸은 1위일수록 진함, 닐슨은 시장 216개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 45·2049 32개) 순위"
   },
   {
    "type": "bullet",
@@ -1473,6 +1505,16 @@
      "331",
      "매일 23~02시"
     ]
+   ],
+   "fit": true,
+   "align": [
+    "center",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "center"
    ]
   },
   {
@@ -1926,7 +1968,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "caption",
@@ -2362,7 +2408,11 @@
      }
     ]
    ],
-   "equalCols": true
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
   },
   {
    "type": "note",

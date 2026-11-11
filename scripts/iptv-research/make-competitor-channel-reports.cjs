@@ -36,7 +36,10 @@ function baseTitle(s) {
   return t.replace(/[\s-]*\d부$/, "").replace(/^다시보는\s*/, "").replace(/^하이라이트\s*/, "").replace(/\s*(스페셜|특별판|하이라이트)$/, "").trim();
 }
 // 띄어쓰기를 뺀 이름이 8자 이하면 줄이지 않고 그대로(2026-11-11 사용자 "붙여쓰기로 8자까지는 그대로, 너무 크면 폰트 크기를 줄여줘")
-function abbr(s) {
+// 제목의 ? ! ~ 같은 문장부호는 뺀다(2026-11-12 사용자 "제목에 ? ! 같은 문장부호는 삭제")
+const dePunct = (s) => (s == null ? s : String(s).replace(/[?!？！~～]/g, "").replace(/\s{2,}/g, " ").trim());
+function abbr(s) { return dePunct(abbr0(dePunct(s))); }
+function abbr0(s) {
   if (!s) return s;
   // 원본 자료에서 글자가 빠진 이름 바로잡기(닐슨 경쟁 자료 '2뉴스외전' = MBC '2시 뉴스외전')
   const FIX = { "2뉴스외전": "2시뉴스외전" };
@@ -48,7 +51,8 @@ function abbr(s) {
   return hit ? AB[hit] : sp;
 }
 // 표·본문: 채널명 떼고, 붙여 써서 8자 넘는 이름은 사전 줄임말(예 황금어장라디오스타 → 라디오스타), 사전에 없으면 원래대로
-const nameFit = (s, n = 16) => {
+const nameFit = (s, n = 16) => dePunct(nameFit0(dePunct(s), n));
+const nameFit0 = (s, n) => {
   if (!s) return s;
   const m = String(s).match(/^[^()]*?(드라마|미니시리즈|스페셜|다큐)\s*\(([^)]+)\)$/), t = stripCh(m ? m[2] : s);
   if ([...t.replace(/\s+/g, "")].length <= 8) return t;
@@ -79,7 +83,7 @@ function heatTable(grid, prog) {
     const pn = prog && prog[b] && prog[b][d] ? abbr(prog[b][d].replace(/\s+/g, " ")) : null;
     return { t: f(v), t2: pn, fill: hex(LO.map((l, i) => l + (HI[i] - l) * t)), color: t > 0.55 ? "FFFFFF" : "0D0D12", center: true };
   })]);
-  return { type: "table", head: ["시간대", ...DOW], rows, equalCols: true };
+  return { type: "table", head: ["시간대", ...DOW], rows, equalCols: true, fit: true, align: ["center"] };
 }
 
 function channelBlocks(c0, idx, nCh) {
@@ -101,8 +105,10 @@ function channelBlocks(c0, idx, nCh) {
   const rows1 = [...order.map((t) => row(`닐슨 ${t === "p2049" ? "수도권 2049" : "유료방송가구"}`, "n", t)), ...order.map((t) => row(`IPTV ${TK[t]}`, "i", t))];
   // 누적 순위 원본에 점유율이 비어 있으면 점유율 열을 뺀다
   const hasShare = rows1.some((r) => r[3] !== "-");
+  // 정렬: 구분 가운데, 시청률·점유율 숫자 오른쪽, 순위(n위 / N) 가운데 — 칸에 안 들어가면 글자 축소(fit)
   B.push({ type: "table", head: ["구분", "누적 시청률", "전체 순위", ...(hasShare ? ["점유율"] : []), "장르군 순위(가구)"],
-    rows: rows1.map((r) => (hasShare ? r : [r[0], r[1], r[2], r[4]])) });
+    rows: rows1.map((r) => (hasShare ? r : [r[0], r[1], r[2], r[4]])), fit: true,
+    align: ["center", "right", "center", ...(hasShare ? ["right"] : []), "center"] });
   B.push({ type: "note", text: `순위 칸은 1위일수록 진함, 닐슨은 시장 ${c.ytd[tk]?.of ?? 216}개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 ${P.iptvChannels.household}·2049 ${P.iptvChannels.p2049}개) 순위` });
   const gn = c.genre.nielsen, gi = c.genre.iptv;
   if (gn) B.push({ type: "bullet", text: `${c.groupLabel} 가구 ${gn.of}개 중 ${gn.rank}위(${f(gn.self)})${gn.above ? `, 위 ${gn.above.n} ${f(gn.above.v)}` : ""}${gn.below ? `, 아래 ${gn.below.n} ${f(gn.below.v)}` : ""}` });
@@ -124,7 +130,9 @@ function channelBlocks(c0, idx, nCh) {
   ].filter(([, g]) => c.top.some((p) => g(p) != null));
   B.push({ type: "caption", text: `${c.primaryLabel} 평균 시청률 상위 ${c.top.length}편(2026, 8회 이상 방영, 본·재방 합산)` });
   B.push({ type: "table", head: ["순위", "프로그램", ...cols.map(([h]) => h), "방영", "주력 시간대"],
-    rows: (() => { const sc = cols.map(([, g]) => shadeCol(c.top.map(g))); return c.top.map((p, i) => [String(i + 1), short(nameFit(p.name, 13), 20), ...sc.map((col) => col[i]), String(p.n), p.slot]); })() });
+    rows: (() => { const sc = cols.map(([, g]) => shadeCol(c.top.map(g))); return c.top.map((p, i) => [String(i + 1), nameFit(p.name, 13), ...sc.map((col) => col[i]), String(p.n), p.slot]); })(),
+    // 정렬: 순위 가운데, 프로그램 왼쪽, 시청률·방영 수 오른쪽, 시간대 가운데 — 긴 이름·시간대는 글자 축소(fit)
+    fit: true, align: ["center", "left", ...cols.map(() => "right"), "right", "center"] });
   B.push({ type: "note", text: `${isN ? "닐슨 프로그램 단위 자료 기준" : "닐슨 프로그램 단위 자료가 없거나 짧아 IPTV 기준"}${c.nielsenPeriod && isN && c.nielsenPeriod[0] > "2026-01-31" ? `(닐슨 ${c.nielsenPeriod[0].slice(5).replace("-", "/")}~ 자료)` : ""}${cols.length > 1 ? `, 2049·가구 열은 닐슨, IPTV 열은 IPTV ${c.iptvTarget === "p2049" ? "수도권 2049" : "가구"}(같은 이름 프로그램 평균)` : ""}` });
   if (c.volLeader) B.push({ type: "bullet", text: `시청 규모(시청률×방영 분) 1위 ${short(nameFit(c.volLeader.name), 18)} ${pc(c.volLeader.share)}, 상위 5편 합계 ${pc(c.top5Vol)}` });
   // 재방 표기가 거의 없으면(원본에 <재> 태그 없음) 본·재방 비교를 하지 않는다

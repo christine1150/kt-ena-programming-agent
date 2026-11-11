@@ -240,10 +240,19 @@ function tableBlocks(head, rows, opts = {}) {
     const obj = txt != null && typeof txt === "object" ? txt : null;
     const fill = header ? FILL_HEADER : obj && obj.fill ? obj.fill : null;
     // obj.t2: 칸 안 둘째 줄(작은 글씨, 히트맵 대표 프로그램용 2026-11-11)
-    const al = obj && obj.center ? AlignmentType.CENTER : align;
+    // opts.align: 본문 열별 정렬("left"|"center"|"right"), 머리글은 늘 가운데(2026-11-11 사용자 "특성에 맞는 정렬")
+    const AL = { left: AlignmentType.LEFT, center: AlignmentType.CENTER, right: AlignmentType.RIGHT };
+    const al = obj && obj.center ? AlignmentType.CENTER : !header && opts.align && AL[opts.align[i]] ? AL[opts.align[i]] : align;
+    // opts.fit: 칸에 한 줄로 안 들어가면 글자를 0.5pt씩 줄여 맞춘다(최소 본문-2pt), 그래도 넘치면 줄바꿈
+    let fs = TABLE_FS;
+    const raw = obj ? obj.t : txt;
+    if (opts.fit && raw != null && String(raw) !== "" && !String(raw).includes("\n")) {
+      const room = widths[i] - 2 * CELL_IND - 1;
+      while (fs > TABLE_FS - 2 && measureLine(String(raw), fam, fs) > room) fs -= 0.5;
+    }
     // ENA_LOG_TRUNC: 표 본문 칸에서 두 줄 이상으로 넘치는 글을 알려 준다(줄임말 사전 만들기용)
-    if (process.env.ENA_LOG_TRUNC && !header && !obj && txt && measureLine(String(txt), fam, TABLE_FS) > widths[i] - 2 * CELL_IND) console.log("줄넘김\t" + txt);
-    const kids = cellParas(obj ? obj.t : txt, fam, TABLE_FS, al, (obj && obj.color) || color, keep);
+    if (process.env.ENA_LOG_TRUNC && raw != null && String(raw) !== "" && measureLine(String(raw), fam, fs) > widths[i] - 2 * CELL_IND) console.log("줄넘김\t" + (header ? "[머리글] " : "") + raw + `\t${fs}pt/${widths[i].toFixed(0)}`);
+    const kids = cellParas(obj ? obj.t : txt, fam, fs, al, (obj && obj.color) || color, keep);
     if (obj && obj.t2) {
       // 실제 글리프 폭으로 칸 폭에 한 줄로 맞춰 자른다(넘치면 … 붙임)
       // 넘치면 먼저 글자 크기를 0.5pt씩 줄이고(최소 4.5pt, 2026-11-11 사용자 "너무 크면 폰트 크기를 줄여줘"), 그래도 넘칠 때만 자른다
