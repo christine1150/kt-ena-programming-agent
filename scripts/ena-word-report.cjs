@@ -131,9 +131,11 @@ function chsubBlock(n, name, verdict) {
   });
 }
 
-const sectionBlock = (text, first) => new Paragraph({
+// pageBreak: 이 섹션을 새 쪽에서 시작(채널별 2쪽 보고서의 둘째 쪽, 2026-11-11)
+const sectionBlock = (text, first, pageBreak = false) => new Paragraph({
   children: [run(text, F_BOLD, 13, INK)],
   keepNext: true,
+  pageBreakBefore: pageBreak,
   spacing: { before: tw(first ? TITLE_GAP : ONE_LINE), after: tw(4), ...LN },
 });
 
@@ -172,9 +174,10 @@ const docTitleBlocks = (text) => [
   tiny(TITLE_GAP),
 ];
 
-const appTitleBlocks = (text) => [
+const appTitleBlocks = (text, noBreak = false) => [
   // 쪽 나누기를 별도 단락에 두면 앞 쪽이 꽉 찼을 때 그 단락이 다음 쪽으로 밀려 빈 쪽이 생긴다 → 제목 단락의 pageBreakBefore를 쓴다
-  new Paragraph({ children: [run(text, F_BLACK, 15, INK)], pageBreakBefore: true, spacing: { before: tw(2), after: tw(4), ...LN } }),
+  // noBreak: 문서 첫 채널처럼 문서 제목 바로 아래에서 시작할 때(2026-11-11)
+  new Paragraph({ children: [run(text, F_BLACK, 15, INK)], pageBreakBefore: !noBreak, keepNext: true, spacing: { before: tw(2), after: tw(4), ...LN } }),
   hrule(3, 0, 1.0),
   tiny(APP_GAP),
 ];
@@ -201,7 +204,10 @@ function cellParas(text, fam, size, alignment, color, keepNext = false) {
 
 function tableBlocks(head, rows, opts = {}) {
   const ncol = head.length, CAP = 165.0, PAD = 12.0, MINW = 34.0;
+  // 셀은 문자열 또는 {t, fill, color, center} 객체(히트맵 칸 색, 2026-11-11)
+  const txtOf = (x) => (x != null && typeof x === "object" ? x.t : x);
   const cw = (txt, header) => {
+    txt = txtOf(txt);
     const fam = header ? F_MED : F_THIN;
     const parts = String(txt).split("\n").map((l) => measureLine(l, fam, TABLE_FS));
     return Math.min(CAP, parts.length ? Math.max(...parts) : 0);
@@ -224,16 +230,32 @@ function tableBlocks(head, rows, opts = {}) {
   }
   const s = widths.reduce((a, b) => a + b, 0);
   widths = widths.map((w) => (w * TABLE_W) / s);
+  // equalCols: 히트맵처럼 0열(구분)만 내용 폭, 나머지 열은 같은 폭(2026-11-11)
+  if (opts.equalCols && ncol > 1) { const w0 = Math.min(widths[0], colmax[0] + 6); const rest = (TABLE_W - w0) / (ncol - 1); widths = [w0, ...Array(ncol - 1).fill(rest)]; }
 
   const margins = { top: tw(CELL_TB), bottom: tw(CELL_TB), left: tw(CELL_IND), right: tw(CELL_IND) };
   // 12행 이하 표는 통째로 한 쪽에 두고(마지막 행 빼고 keepNext), 더 긴 표는 머리글과 첫 행만 붙인다
   const keepAll = rows.length <= 12;
-  const mkCell = (txt, fam, align, i, header, color, keep = false) => new TableCell({
-    children: cellParas(txt, fam, TABLE_FS, align, color, keep),
-    width: { size: tw(widths[i]), type: WidthType.DXA },
-    margins, verticalAlign: VerticalAlign.CENTER,
-    ...(header ? { shading: { fill: FILL_HEADER } } : {}),
-  });
+  const mkCell = (txt, fam, align, i, header, color, keep = false) => {
+    const obj = txt != null && typeof txt === "object" ? txt : null;
+    const fill = header ? FILL_HEADER : obj && obj.fill ? obj.fill : null;
+    // obj.t2: 칸 안 둘째 줄(작은 글씨, 히트맵 대표 프로그램용 2026-11-11)
+    const al = obj && obj.center ? AlignmentType.CENTER : align;
+    const kids = cellParas(obj ? obj.t : txt, fam, TABLE_FS, al, (obj && obj.color) || color, keep);
+    if (obj && obj.t2) {
+      // 실제 글리프 폭으로 칸 폭에 한 줄로 맞춰 자른다(넘치면 … 붙임)
+      const pt = obj.t2Pt || 7, room = widths[i] - 2 * CELL_IND - 2;
+      let s = String(obj.t2);
+      if (T.textWidth(s, F_THIN, pt) > room) { while (s.length > 1 && T.textWidth(s + "…", F_THIN, pt) > room) s = s.slice(0, -1); s = s.trimEnd() + "…"; }
+      kids.push(...cellParas(s, F_THIN, pt, al, obj.color || color, keep));
+    }
+    return new TableCell({
+      children: kids,
+      width: { size: tw(widths[i]), type: WidthType.DXA },
+      margins, verticalAlign: VerticalAlign.CENTER,
+      ...(fill ? { shading: { fill } } : {}),
+    });
+  };
 
   // 머리글 행은 쪽이 넘어가도 반복하고, 행은 쪽 경계에서 쪼개지지 않게 한다(서식·행 높이는 그대로)
   const trs = [new TableRow({ tableHeader: true, cantSplit: true, children: head.map((h, i) => mkCell(h, F_MED, AlignmentType.CENTER, i, true, null, rows.length > 0)) })];
@@ -360,9 +382,9 @@ async function build(data, out, auditOnly) {
   for (const b of data.blocks) {
     switch (b.type) {
       case "apptitle":
-        body.push(...appTitleBlocks(b.text)); n1 = 0; firstSection = true; break;
+        body.push(...appTitleBlocks(b.text, b.noBreak)); n1 = 0; firstSection = true; break;
       case "section":
-        body.push(sectionBlock(b.text, firstSection)); n1 = 0; firstSection = false; break;
+        body.push(sectionBlock(b.text, firstSection, b.pageBreak)); n1 = 0; firstSection = false; break;
       case "subhead": {
         n1++;
         items.push([STEP, `${n1}. `, b.text, 12, F_MED, true]);
