@@ -23,7 +23,7 @@ const FROM = "2024-08-01", TO = "2026-11-10", RECENT = "2025-08-01";
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const BANDS = ["05-08", "08-11", "11-14", "14-17", "17-20", "20-23", "23-02", "02-05"];
 
-type A = { ch: string; d: string; s: number; e: number; pn: string; pk: string; rerun: boolean; r: number; reach: number | null; amv: number | null; dur: number; dow: number; band: string; n?: number };
+type A = { ch: string; d: string; s: number; e: number; pn: string; pk: string; rerun: boolean; r: number; reach: number | null; amv: number | null; dur: number; dow: number; band: string; n?: number; ns?: number };
 const clean = (s: string) => s.replace(/\s*<[^>]+>/g, "").trim();
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 const wmean = (xs: A[], v: (a: A) => number = (a) => a.r) => { const w = xs.reduce((s, a) => s + a.dur, 0); return w ? xs.reduce((s, a) => s + v(a) * a.dur, 0) / w : null; };
@@ -55,16 +55,16 @@ console.log(`${OWN}(${TK}) 비교군:`, CH.map((c) => `${c} ${data.get(c)!.lengt
 
 // 자사 닐슨(같은 방영 건)
 {
-  const m = new Map<string, number>();
+  const m = new Map<string, number>(), ms = new Map<string, number>();
   for (let f = 0; ; f += 1000) {
-    const { data: rows, error } = await sb.from("iptv_nielsen_match").select("broadcast_date,start_minute,program_key,nielsen_rating")
+    const { data: rows, error } = await sb.from("iptv_nielsen_match").select("broadcast_date,start_minute,program_key,nielsen_rating,nielsen_share")
       .eq("channel_name", OWN).eq("target_kind", TK).gte("broadcast_date", FROM).not("nielsen_rating", "is", null)
       .order("broadcast_date").order("start_minute").order("program_key").range(f, f + 999);
     if (error) throw error;
-    for (const x of rows ?? []) m.set(`${x.broadcast_date}|${x.start_minute}|${x.program_key}`, Number(x.nielsen_rating));
+    for (const x of rows ?? []) { m.set(`${x.broadcast_date}|${x.start_minute}|${x.program_key}`, Number(x.nielsen_rating)); if (x.nielsen_share != null) ms.set(`${x.broadcast_date}|${x.start_minute}|${x.program_key}`, Number(x.nielsen_share)); }
     if (!rows || rows.length < 1000) break;
   }
-  for (const a of data.get(OWN)!) { const v = m.get(`${a.d}|${a.s}|${a.pk}`); if (v != null) a.n = v; }
+  for (const a of data.get(OWN)!) { const k = `${a.d}|${a.s}|${a.pk}`; const v = m.get(k); if (v != null) a.n = v; const sh = ms.get(k); if (sh != null) a.ns = sh; }
   console.log("닐슨 짝", data.get(OWN)!.filter((a) => a.n != null).length);
 }
 const genre = new Map<string, string>();
@@ -296,7 +296,49 @@ for (const label of ["유료방송가구", "수도권2049"]) {
   });
 }
 
-const out = { own: OWN, target: TK, channels: CH, dramaPosition, progWhen, origAcross: origAcross.slice(0, 40), yearly, monthly, topYear, topMonth, weeklyTop, dailyTop, genreMix, peerGenre, dowBand, cellRank, nvi, zeroByBand, titleRows, spearman, spearmanN: both.length, dynI, dynN, mapRows, genreBand, peerHits, shared, buyCands: buyCands.slice(0, 40) };
+// ── G. 절대 수치(2026-11-11 사용자 지시 "시청률·점유율 절대 수치가 기본, 평균=1 지수는 괄호 참고") ──
+// i = IPTV 평균 시청률, n = 같은 방영 건 닐슨 평균 시청률, s = 닐슨 평균 점유율(%). 모두 방영 분 가중 평균.
+const W = (xs: A[]) => { const wn = xs.filter((a) => a.n != null), ws = xs.filter((a) => a.ns != null); return { i: r4(wmean(xs), 4), n: wn.length ? r4(wmean(wn, (a) => a.n!), 4) : null, s: ws.length ? r4(wmean(ws, (a) => a.ns!), 2) : null, 방영: xs.length }; };
+const absolute: Record<string, unknown> = {};
+{
+  const own = recent(OWN);
+  const by = new Map<string, A[]>(); own.forEach((a) => (by.get(a.pk) ?? by.set(a.pk, []).get(a.pk)!).push(a));
+  const prog: Record<string, unknown>[] = [];
+  for (const as of by.values()) {
+    if (as.length < 30) continue;
+    const bands = BANDS.map((b) => { const v = as.filter((a) => a.band === b); return { b, v, i: mean(nums(v.map(idxI))) }; }).filter((x) => x.v.length >= 5 && x.i != null);
+    if (!bands.length) continue;
+    const best = [...bands].sort((p, q) => q.i! - p.i!)[0], worst = [...bands].sort((p, q) => p.i! - q.i!)[0];
+    prog.push({ 작품: as[0].pn, 전체: W(as), 지수: r4(mean(nums(as.map(idxI))), 2), 닐슨지수: r4(mean(nums(as.map(idxN))), 2), 최고: { 시간대: best.b, ...W(best.v), 지수: r4(best.i, 2) }, 최저: { 시간대: worst.b, ...W(worst.v), 지수: r4(worst.i, 2) }, 평일: W(as.filter((a) => a.dow < 5)), 주말: W(as.filter((a) => a.dow >= 5)),
+      시간대별: Object.fromEntries(BANDS.map((b) => { const v = as.filter((a) => a.band === b); return [b, v.length >= 4 ? { ...W(v), 지수: r4(mean(nums(v.map(idxI))), 2) } : null]; })) });
+  }
+  absolute.prog = prog;
+  absolute.genre = [...new Set(own.map(gOf))].map((g) => ({ 장르: g, ...W(own.filter((a) => gOf(a) === g)) }));
+  absolute.genreBand = [...new Set(own.map(gOf))].flatMap((g) => BANDS.map((b) => { const v = own.filter((a) => gOf(a) === g && a.band === b); return v.length >= 15 ? { 장르: g, 시간대: b, ...W(v) } : null; }).filter(Boolean));
+  // 재방송 경과일·블록 위치별 평균 시청률
+  const rows = data.get(OWN)!; const B = ["1일 이내", "2~7일", "8~30일", "31~90일", "91일 이상"];
+  const last = new Map<string, string>(); const rb: Record<string, A[]> = Object.fromEntries(B.map((b) => [b, []]));
+  for (const a of rows) { if (!a.rerun) { last.set(a.pk, a.d); continue; } if (a.d < RECENT) continue; const lf = last.get(a.pk); if (!lf) continue; const d = Math.round((Date.parse(a.d) - Date.parse(lf)) / 864e5); rb[d <= 1 ? B[0] : d <= 7 ? B[1] : d <= 30 ? B[2] : d <= 90 ? B[3] : B[4]].push(a); }
+  const pos: Record<number, A[]> = { 1: [], 2: [], 3: [], 4: [] };
+  const byDay = new Map<string, A[]>(); own.forEach((a) => (byDay.get(a.d) ?? byDay.set(a.d, []).get(a.d)!).push(a));
+  for (const day of byDay.values()) { day.sort((p, q) => p.s - q.s); let cur: A[] = []; const flush = () => { if (cur.length >= 2) cur.slice(0, 4).forEach((a, k) => pos[k + 1].push(a)); cur = []; }; for (const a of day) { const p = cur[cur.length - 1]; if (p && p.pk === a.pk && a.s - p.e <= 10) cur.push(a); else { flush(); cur = [a]; } } flush(); }
+  absolute.dyn = { 본방송: W(own.filter((a) => !a.rerun)), 재방: B.map((b) => ({ 경과일: b, ...W(rb[b]) })), 블록: [1, 2, 3, 4].map((k) => ({ 위치: k, ...W(pos[k]) })) };
+  // 편성 지도: 칸별 잘된 작품(지수 기준 선택)의 절대 수치
+  absolute.map = BANDS.flatMap((b) => DOW.map((dn, d) => {
+    const cell = own.filter((a) => a.dow === d && a.band === b);
+    const byT = new Map<string, A[]>(); cell.forEach((a) => (byT.get(a.pn) ?? byT.set(a.pn, []).get(a.pn)!).push(a));
+    const best = [...byT].filter(([, v]) => v.length >= 4).map(([t, v]) => [t, v, mean(nums(v.map(idxI)))!] as const).sort((p, q) => q[2] - p[2])[0];
+    return { 요일: dn, 시간대: b, 칸: W(cell), 작품: best ? { 이름: best[0], ...W(best[1] as A[]), 지수: r4(best[2], 2) } : null };
+  }));
+  // 연도별 자사 닐슨 평균 시청률·점유율
+  absolute.yearN = [["2025", "2025-01-01", "2025-12-31"], ["2026(~11/10)", "2026-01-01", TO]].map(([y, a, b]) => ({ 연도: y, ...W(rows.filter((x) => x.d >= a && x.d <= b)) }));
+  // 경쟁 간판·같은 작품의 평균 시청률
+  absolute.peerHits = peerHits.map((p) => { const as = recent(p.채널 as string).filter((a) => a.pn === p.작품); return { 채널: p.채널, 작품: p.작품, 평균시청률: r4(wmean(as), 4), 지수: p.칸대비 }; });
+  absolute.shared = shared.map((x) => { const os = own.filter((a) => a.pn === x.작품), cs = recent(x.경쟁채널 as string).filter((a) => a.pn === x.작품); return { 작품: x.작품, 자사: r4(wmean(os), 4), 자사지수: x.자사칸대비, 경쟁채널: x.경쟁채널, 경쟁: r4(wmean(cs), 4), 경쟁지수: x.경쟁칸대비 }; });
+  absolute.buy = buyCands.slice(0, 40);
+}
+
+const out = { absolute, own: OWN, target: TK, channels: CH, dramaPosition, progWhen, origAcross: origAcross.slice(0, 40), yearly, monthly, topYear, topMonth, weeklyTop, dailyTop, genreMix, peerGenre, dowBand, cellRank, nvi, zeroByBand, titleRows, spearman, spearmanN: both.length, dynI, dynN, mapRows, genreBand, peerHits, shared, buyCands: buyCands.slice(0, 40) };
 const slug = OWN.replace(/\s+/g, "_");
 fs.writeFileSync(`docs/iptv/programming_report_${slug}.json`, JSON.stringify(out, null, 1));
 const wb = new ExcelJS.Workbook();
