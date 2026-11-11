@@ -3,6 +3,7 @@
 //  · ranks  : 그날 전 채널 시청률 순위 TOP40 — 타깃 5종 비교(닐슨이 매긴 순위 그대로)
 //  · trend  : 최근 4주 채널 순위 추이 — 자사 채널은 닐슨 주간 순위, 타사는 일별 평균으로 순위를 맞춘다
 import { supabase } from "@/lib/supabase";
+import { loadIptvDayRows } from "@/lib/iptvDayRatings";
 import { findPlanFill, loadPlanDay } from "@/lib/planDayFill";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 
@@ -125,8 +126,7 @@ export async function loadDaily(channelCode: string, date: string): Promise<Dail
   let hasIptv = false;
   let iptvDayAvg: number | null = null;
   if (isSky) {
-    const { data: stb } = await supabase.from("iptv_stb_ratings").select("start_minute, end_minute, rating, below_floor").eq("channel_code", channelCode).eq("broadcast_date", date);
-    const stbRows = (stb ?? []) as { start_minute: number; end_minute: number; rating: number | null; below_floor: boolean }[];
+    const stbRows = await loadIptvDayRows(channelCode, date);
     if (stbRows.length > 0) {
       hasIptv = true;
       let coveredMin = 0;

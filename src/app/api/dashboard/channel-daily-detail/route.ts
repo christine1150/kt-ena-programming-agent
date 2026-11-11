@@ -16,6 +16,7 @@
 // 저장해두고 있었다(새 파싱 불필요) — select에 두 컬럼만 추가해 그대로 내려준다.
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { loadIptvDayRows } from "@/lib/iptvDayRatings";
 import { getCurrentSession } from "@/lib/adminAuth";
 import {
   resolveProgramLevelTargetLabel,
@@ -210,12 +211,7 @@ export async function GET(request: Request) {
   let hasIptv = false;
   let iptvDayAvg: number | null = null;
   if (isSkyUhd) {
-    const { data: stb } = await supabase
-      .from("iptv_stb_ratings")
-      .select("start_minute, end_minute, rating, below_floor")
-      .eq("channel_code", code)
-      .eq("broadcast_date", date);
-    const stbRows = (stb ?? []) as { start_minute: number; end_minute: number; rating: number | null; below_floor: boolean }[];
+    const stbRows = await loadIptvDayRows(code, date);
     if (stbRows.length > 0) {
       hasIptv = true;
       const span = (r: ChannelDailyDetailRow): [number, number] | null => {
