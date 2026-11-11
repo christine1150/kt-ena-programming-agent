@@ -22,10 +22,17 @@ const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const AB = require("../../docs/iptv/program_abbrev.json").abbrev;
 const nk = (s) => s.replace(/<[^>]*>/g, "").replace(/[^가-힣a-zA-Z0-9]/g, "").toLowerCase();
 const AB_KEYS = Object.keys(AB).sort((a, b) => b.length - a.length);
+// 앞에 붙은 채널명 떼기(2026-11-11 사용자 "SBS스포츠KBO리그, MBC 뉴스데스크처럼 채널명이 붙는 건 'SBS스포츠', 'MBC' 제거")
+const CH_PREFIX = /^(SBS\s*스포츠|KBS\s*스포츠|MBC\s*스포츠|SBS\s*PLUS|TV\s*CHOSUN|TV\s*조선|채널\s*A|KBS\s*[12]?|MBC|SBS|JTBC|MBN|tvN|EBS|UHD)\s*(특집\s*|특별기획\s*)?/i;
+function stripCh(s) {
+  const t = String(s).trim(), r = t.replace(CH_PREFIX, "").trim();
+  return r && !/^[\d\s]*$/.test(r) && !/^\(/.test(r) ? r : t;
+}
 function baseTitle(s) {
   let t = String(s).trim();
   const m = t.match(/^[^()]*?(드라마|미니시리즈|스페셜|다큐)\s*\(([^)]+)\)$/);
   if (m) t = m[2];
+  t = stripCh(t);
   return t.replace(/[\s-]*\d부$/, "").replace(/^다시보는\s*/, "").replace(/^하이라이트\s*/, "").replace(/\s*(스페셜|특별판|하이라이트)$/, "").trim();
 }
 // 띄어쓰기를 뺀 이름이 8자 이하면 줄이지 않고 그대로(2026-11-11 사용자 "붙여쓰기로 8자까지는 그대로, 너무 크면 폰트 크기를 줄여줘")
@@ -40,7 +47,7 @@ function abbr(s) {
   const hit = AB_KEYS.find((x) => x.length >= 6 && k.includes(x));   // 부제가 붙은 변형(… 2부·시즌 등)
   return hit ? AB[hit] : sp;
 }
-const nameFit = (s, n = 16) => (s && s.length > n ? abbr(s) : s);   // 표·본문: 길 때만 줄임말
+const nameFit = (s, n = 16) => { if (!s) return s; const m = String(s).match(/^[^()]*?(드라마|미니시리즈|스페셜|다큐)\s*\(([^)]+)\)$/); const t = stripCh(m ? m[2] : s); return t.length > n ? abbr(t) : t; };   // 표·본문: 채널명 떼고, 길 때만 줄임말
 const BANDS = ["05-08", "08-11", "11-14", "14-17", "17-20", "20-23", "23-02", "02-05"];
 
 // 히트맵 색: 채널 안 최소→최대를 흰색→진한 파랑으로(값이 클수록 진함)
