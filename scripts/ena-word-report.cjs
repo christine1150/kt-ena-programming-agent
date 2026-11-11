@@ -188,10 +188,11 @@ function measureLine(text, fam, size) {
   return w;
 }
 
-function cellParas(text, fam, size, alignment, color) {
+function cellParas(text, fam, size, alignment, color, keepNext = false) {
   return String(text).split("\n").map((ln) => new Paragraph({
     children: emit(ln, fam, size, color || INK, color || INK, fam),   // 표 안에서는 **강조**도 굵어지지 않음
     alignment,
+    keepNext,   // 짧은 표는 행끼리 붙여 머리글만 쪽 끝에 홀로 남지 않게 한다(2026-11-11)
     spacing: { before: tw(CELL_PARA), after: tw(CELL_PARA), line: Math.round(CELL_LINE * 240), lineRule: LineRuleType.AUTO },
   }));
 }
@@ -223,24 +224,27 @@ function tableBlocks(head, rows, opts = {}) {
   widths = widths.map((w) => (w * TABLE_W) / s);
 
   const margins = { top: tw(CELL_TB), bottom: tw(CELL_TB), left: tw(CELL_IND), right: tw(CELL_IND) };
-  const mkCell = (txt, fam, align, i, header, color) => new TableCell({
-    children: cellParas(txt, fam, TABLE_FS, align, color),
+  // 12행 이하 표는 통째로 한 쪽에 두고(마지막 행 빼고 keepNext), 더 긴 표는 머리글과 첫 행만 붙인다
+  const keepAll = rows.length <= 12;
+  const mkCell = (txt, fam, align, i, header, color, keep = false) => new TableCell({
+    children: cellParas(txt, fam, TABLE_FS, align, color, keep),
     width: { size: tw(widths[i]), type: WidthType.DXA },
     margins, verticalAlign: VerticalAlign.CENTER,
     ...(header ? { shading: { fill: FILL_HEADER } } : {}),
   });
 
   // 머리글 행은 쪽이 넘어가도 반복하고, 행은 쪽 경계에서 쪼개지지 않게 한다(서식·행 높이는 그대로)
-  const trs = [new TableRow({ tableHeader: true, cantSplit: true, children: head.map((h, i) => mkCell(h, F_MED, AlignmentType.CENTER, i, true)) })];
-  for (const r of rows) {
+  const trs = [new TableRow({ tableHeader: true, cantSplit: true, children: head.map((h, i) => mkCell(h, F_MED, AlignmentType.CENTER, i, true, null, rows.length > 0)) })];
+  rows.forEach((r, ri) => {
     // chCol0 = 0열이 채널명인 표 → 그 채널 색으로 칠해 채널을 눈으로 구분한다
     const cc = opts.chCol0 ? chColor(r[0]) : null;
+    const keep = keepAll ? ri < rows.length - 1 : false;
     trs.push(new TableRow({
       cantSplit: true,
       children: widths.map((_, i) => mkCell(i < r.length ? r[i] : "", i === 0 && cc ? F_MED : F_THIN,
-        i === 0 ? AlignmentType.CENTER : AlignmentType.LEFT, i, false, i === 0 ? cc : null)),
+        i === 0 ? AlignmentType.CENTER : AlignmentType.LEFT, i, false, i === 0 ? cc : null, keep)),
     }));
-  }
+  });
   const bd = { style: BorderStyle.SINGLE, size: 4, color: RULE };
   return [
     new Table({
