@@ -279,7 +279,9 @@ const origAcross: Record<string, unknown>[] = [];
 
 // ── E. 드라마군 전체 위치(닐슨 누적 순위 파일, 시장 전체 216개 채널 기준) ─────────
 // 드라마군 전체 = 우리 IPTV 자료가 있는 드라마군 15개 + 자료가 없는 드라마 채널(Channel J·채널차이나). IPTV 이름 ↔ 닐슨 파일 이름 대응.
-const DRAMA_FULL: [string, string | null][] = [["ENA", "ENA"], ["SBS Plus", "SBS Plus"], ["KBS드라마", "KBS drama"], ["MBC드라마넷", "MBC 드라마넷"], ["D-ONE", "D-ONE"], ["하이라이트TV", "하이라이트 TV"], ["EDGETV", "EDGE TV"], ["DRAMAcube", "Dramacube"], ["CNTV", "CNTV"], ["MBC ON", "MBC ON"], ["tvN DRAMA", "tvN DRAMA"], ["Dramax", "Dramax"], ["ENA DRAMA", "ENA Drama"], ["ONCE", "ONCE"], ["KBS Story", "KBS Story"], ["Channel J", null], ["채널차이나", null]];
+// ENA는 지상파·종편·tvN 동시간대 경쟁군으로 위치를 본다(2026-11-11 사용자 지시 "tvN 및 지상파 포함")
+const SLOT_FULL: [string, string | null][] = [["MBC", "MBC"], ["SBS", "SBS"], ["tvN", "tvN"], ["KBS2", "KBS2"], ["JTBC", "JTBC"], ["KBS1", "KBS1"], ["ENA", "ENA"], ["채널A", "채널A"], ["TV CHOSUN", "TV CHOSUN"], ["MBN", "MBN"]];
+const DRAMA_FULL: [string, string | null][] = OWN === "ENA" ? SLOT_FULL : [["ENA", "ENA"], ["SBS Plus", "SBS Plus"], ["KBS드라마", "KBS drama"], ["MBC드라마넷", "MBC 드라마넷"], ["D-ONE", "D-ONE"], ["하이라이트TV", "하이라이트 TV"], ["EDGETV", "EDGE TV"], ["DRAMAcube", "Dramacube"], ["CNTV", "CNTV"], ["MBC ON", "MBC ON"], ["tvN DRAMA", "tvN DRAMA"], ["Dramax", "Dramax"], ["ENA DRAMA", "ENA Drama"], ["ONCE", "ONCE"], ["KBS Story", "KBS Story"], ["Channel J", null], ["채널차이나", null]];
 const dramaPosition: Record<string, unknown>[] = [];
 for (const label of ["유료방송가구", "수도권2049"]) {
   const { data: snap } = await sb.from("market_ytd_rank_snapshot").select("channel_name,rank,rating,date_to").eq("target_label", label).in("channel_name", DRAMA_FULL.map(([n]) => n)).order("date_to", { ascending: false });
