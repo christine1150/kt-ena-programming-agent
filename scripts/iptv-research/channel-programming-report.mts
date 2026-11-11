@@ -46,7 +46,9 @@ async function load(ch: string): Promise<A[]> {
 
 const { data: members } = await sb.from("iptv_peer_groups").select("iptv_channel_name, role").eq("group_key", GROUP);
 const data = new Map<string, A[]>();
-const names = [...new Set([OWN, ...(members ?? []).map((m) => m.iptv_channel_name as string)])];
+// 3번째 인자로 비교 채널을 쉼표로 주면 그 채널들만 비교한다(2026-11-11: ONCE는 가구 강한 채널, ENA Drama는 2049 강한 채널 위주)
+const PEERS = process.argv[3]?.split(",").map((s) => s.trim()).filter(Boolean);
+const names = [...new Set([OWN, ...(PEERS ?? (members ?? []).map((m) => m.iptv_channel_name as string))])];
 for (let i = 0; i < names.length; i += 6) await Promise.all(names.slice(i, i + 6).map(async (c) => { const rows = await load(c); if (rows.filter((a) => a.d >= "2026-01-01").length >= 1000) data.set(c, rows); }));
 const CH = [OWN, ...[...data.keys()].filter((c) => c !== OWN)];
 console.log(`${OWN}(${TK}) 비교군:`, CH.map((c) => `${c} ${data.get(c)!.length}`).join(" · "));
@@ -233,7 +235,64 @@ const buyCands: Record<string, unknown>[] = [];
   buyCands.sort((p, q) => (q.칸대비 as number) - (p.칸대비 as number));
 }
 
-const out = { own: OWN, target: TK, channels: CH, yearly, monthly, topYear, topMonth, weeklyTop, dailyTop, genreMix, peerGenre, dowBand, cellRank, nvi, zeroByBand, titleRows, spearman, spearmanN: both.length, dynI, dynN, mapRows, genreBand, peerHits, shared, buyCands: buyCands.slice(0, 40) };
+// ── F. 작품별 강한 시간대·확대 후보·오리지널 활용(2026-11-11 사용자 지시 "어떤 프로그램이 언제 강한지") ──
+const BAND_LABEL = (b: string) => b;
+const progWhen: Record<string, unknown>[] = [];
+{
+  const by = new Map<string, A[]>(); recent(OWN).forEach((a) => (by.get(a.pk) ?? by.set(a.pk, []).get(a.pk)!).push(a));
+  const totMin = recent(OWN).reduce((s, a) => s + a.dur, 0);
+  for (const as of by.values()) {
+    if (as.length < 30) continue;
+    const bands = BANDS.map((b) => { const v = as.filter((a) => a.band === b); return { b, n: v.length, i: mean(nums(v.map(idxI))), nn: mean(nums(v.map(idxN))) }; }).filter((x) => x.n >= 5 && x.i != null);
+    if (!bands.length) continue;
+    const best = [...bands].sort((p, q) => q.i! - p.i!)[0], worst = [...bands].sort((p, q) => p.i! - q.i!)[0];
+    const wd = mean(nums(as.filter((a) => a.dow < 5).map(idxI))), we = mean(nums(as.filter((a) => a.dow >= 5).map(idxI)));
+    const ws = as.filter((a) => !a.rerun), rs = as.filter((a) => a.rerun);
+    progWhen.push({ 작품: as[0].pn, 장르: gOf(as[0]), 방영횟수: as.length, 편성비중: r4(as.reduce((s, a) => s + a.dur, 0) / totMin, 3), IPTV: r4(mean(nums(as.map(idxI))), 2), 닐슨: r4(mean(nums(as.map(idxN))), 2),
+      최고시간대: `${BAND_LABEL(best.b)} ${best.i!.toFixed(2)}${best.nn != null ? "/" + best.nn.toFixed(2) : ""}(${best.n})`, 최저시간대: `${worst.b} ${worst.i!.toFixed(2)}(${worst.n})`,
+      평일: r4(wd, 2), 주말: r4(we, 2), 본방송: ws.length ? r4(mean(nums(ws.map(idxI))), 2) : null, 재방송: rs.length ? r4(mean(nums(rs.map(idxI))), 2) : null, 마지막방영: as[as.length - 1].d });
+  }
+  progWhen.sort((p, q) => (q.IPTV as number) - (p.IPTV as number));
+}
+// 다른 자사 채널에서 강한 오리지널(같은 타깃): 이 채널에서 덜 나간 작품
+const OWN_FAMILY = ["ENA", "ENA Drama", "ENA Play", "ENA Story", "ONCE", "OLIFE", "skyUHD"].filter((c) => c !== OWN);
+const origAcross: Record<string, unknown>[] = [];
+{
+  const ownBy = new Map<string, A[]>(); data.get(OWN)!.forEach((a) => (ownBy.get(a.pk) ?? ownBy.set(a.pk, []).get(a.pk)!).push(a));
+  for (const c of OWN_FAMILY) {
+    const rows = data.get(c) ?? (await load(c));
+    if (!rows.length) continue;
+    const cm = cellMeans(rows.filter((a) => a.d >= RECENT));
+    const missing = [...new Set(rows.map((a) => a.pk))].filter((k) => !genre.has(k));
+    for (let i = 0; i < missing.length; i += 80) { const { data: g } = await sb.from("iptv_program_genre").select("program_key,genre").in("program_key", missing.slice(i, i + 80)); for (const x of g ?? []) genre.set(x.program_key, x.genre); }
+    const by = new Map<string, A[]>(); rows.filter((a) => a.d >= RECENT && /오리지널/.test(gOf(a))).forEach((a) => (by.get(a.pk) ?? by.set(a.pk, []).get(a.pk)!).push(a));
+    for (const [pk, as] of by) {
+      if (as.length < 20) continue;
+      const ix = mean(nums(as.map((a) => { const m = cm.get(`${a.dow}|${a.band}`); return m && m > 0 ? a.r / m : null; })));
+      if (ix == null || ix < 1.15) continue;
+      const mine = (ownBy.get(pk) ?? []).filter((a) => a.d >= RECENT);
+      origAcross.push({ 채널: c, 작품: as[0].pn, 장르: genre.get(pk) ?? "미분류", 방영횟수: as.length, 시간대평균대비: r4(ix, 2), 주력: slots(as, 2), 자사채널방영: mine.length, 자사채널지수: mine.length ? r4(mean(nums(mine.map(idxI))), 2) : null });
+    }
+  }
+  origAcross.sort((p, q) => (q.시간대평균대비 as number) - (p.시간대평균대비 as number));
+}
+
+// ── E. 드라마군 전체 위치(닐슨 누적 순위 파일, 시장 전체 216개 채널 기준) ─────────
+// 드라마군 전체 = 우리 IPTV 자료가 있는 드라마군 15개 + 자료가 없는 드라마 채널(Channel J·채널차이나). IPTV 이름 ↔ 닐슨 파일 이름 대응.
+const DRAMA_FULL: [string, string | null][] = [["ENA", "ENA"], ["SBS Plus", "SBS Plus"], ["KBS드라마", "KBS drama"], ["MBC드라마넷", "MBC 드라마넷"], ["D-ONE", "D-ONE"], ["하이라이트TV", "하이라이트 TV"], ["EDGETV", "EDGE TV"], ["DRAMAcube", "Dramacube"], ["CNTV", "CNTV"], ["MBC ON", "MBC ON"], ["tvN DRAMA", "tvN DRAMA"], ["Dramax", "Dramax"], ["ENA DRAMA", "ENA Drama"], ["ONCE", "ONCE"], ["KBS Story", "KBS Story"], ["Channel J", null], ["채널차이나", null]];
+const dramaPosition: Record<string, unknown>[] = [];
+for (const label of ["유료방송가구", "수도권2049"]) {
+  const { data: snap } = await sb.from("market_ytd_rank_snapshot").select("channel_name,rank,rating,date_to").eq("target_label", label).in("channel_name", DRAMA_FULL.map(([n]) => n)).order("date_to", { ascending: false });
+  const latest = snap?.[0]?.date_to;
+  const rows = (snap ?? []).filter((r) => r.date_to === latest).sort((p, q) => Number(q.rating) - Number(p.rating));
+  const iptvSet = rows.filter((r) => DRAMA_FULL.find(([n]) => n === r.channel_name)?.[1]);
+  rows.forEach((r, i) => {
+    const iptvName = DRAMA_FULL.find(([n]) => n === r.channel_name)?.[1] ?? null;
+    dramaPosition.push({ 타깃: label, 기준일: latest, 채널: r.channel_name, 시장순위: r.rank, 누적시청률: Number(r.rating), 드라마군순위: `${i + 1}/${rows.length}`, 자료군순위: iptvName ? `${iptvSet.findIndex((x) => x.channel_name === r.channel_name) + 1}/${iptvSet.length}` : "자료 없음" });
+  });
+}
+
+const out = { own: OWN, target: TK, channels: CH, dramaPosition, progWhen, origAcross: origAcross.slice(0, 40), yearly, monthly, topYear, topMonth, weeklyTop, dailyTop, genreMix, peerGenre, dowBand, cellRank, nvi, zeroByBand, titleRows, spearman, spearmanN: both.length, dynI, dynN, mapRows, genreBand, peerHits, shared, buyCands: buyCands.slice(0, 40) };
 const slug = OWN.replace(/\s+/g, "_");
 fs.writeFileSync(`docs/iptv/programming_report_${slug}.json`, JSON.stringify(out, null, 1));
 const wb = new ExcelJS.Workbook();
