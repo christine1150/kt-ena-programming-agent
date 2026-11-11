@@ -1755,6 +1755,12 @@ function ChannelStatusCard({
           <RankChangeIndicator rankChangeDod={skyUhd.rankChangeDod} />
         </Link>
       )}
+      {/* 사용자 지시(2026-11-11): skyUHD 한 줄 요약 아래에도 다른 채널 카드와 같은 "표로 크게 보기"를 둔다(같은 채널·날짜의 시청률 표, 새 탭). */}
+      {skyUhd && (
+        <a href={`/ratings?tab=daily&code=${skyUhd.code}&date=${asOfDate}`} target="_blank" rel="noopener" className="flex min-h-9 items-center px-1 text-[12px] font-medium text-indigo-700 hover:underline">
+          표로 크게 보기
+        </a>
+      )}
       {/* 사용자 결정(2026-10-13): 홈 전체의 비교 기준 기간은 아주 작고 흐리게, 공통이면 이 한 줄에 모아 적는다 */}
       <BasisNote className="mt-3 text-right">{HOME_DAILY_BASIS_NOTE}</BasisNote>
       {/* 사용자 지시(2026-10-06): 카드 맨 아래에 제목 없이 정보만 자연스럽게 이어 붙인다(해당일 상위 프로그램 9개) */}
