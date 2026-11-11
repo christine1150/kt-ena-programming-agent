@@ -241,12 +241,14 @@ function tableBlocks(head, rows, opts = {}) {
     const fill = header ? FILL_HEADER : obj && obj.fill ? obj.fill : null;
     // obj.t2: 칸 안 둘째 줄(작은 글씨, 히트맵 대표 프로그램용 2026-11-11)
     const al = obj && obj.center ? AlignmentType.CENTER : align;
+    // ENA_LOG_TRUNC: 표 본문 칸에서 두 줄 이상으로 넘치는 글을 알려 준다(줄임말 사전 만들기용)
+    if (process.env.ENA_LOG_TRUNC && !header && !obj && txt && measureLine(String(txt), fam, TABLE_FS) > widths[i] - 2 * CELL_IND) console.log("줄넘김\t" + txt);
     const kids = cellParas(obj ? obj.t : txt, fam, TABLE_FS, al, (obj && obj.color) || color, keep);
     if (obj && obj.t2) {
       // 실제 글리프 폭으로 칸 폭에 한 줄로 맞춰 자른다(넘치면 … 붙임)
       const pt = obj.t2Pt || 7, room = widths[i] - 2 * CELL_IND - 2;
       let s = String(obj.t2);
-      if (T.textWidth(s, F_THIN, pt) > room) { while (s.length > 1 && T.textWidth(s + "…", F_THIN, pt) > room) s = s.slice(0, -1); s = s.trimEnd() + "…"; }
+      if (T.textWidth(s, F_THIN, pt) > room) { if (process.env.ENA_LOG_TRUNC) console.log("잘림\t" + s); while (s.length > 1 && T.textWidth(s + "…", F_THIN, pt) > room) s = s.slice(0, -1); s = s.trimEnd() + "…"; }
       kids.push(...cellParas(s, F_THIN, pt, al, obj.color || color, keep));
     }
     return new TableCell({

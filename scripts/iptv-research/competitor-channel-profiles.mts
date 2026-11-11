@@ -137,7 +137,20 @@ function mainSlot(as: Row[]) {
   const ds = days.length === 0 ? DOWN[[...dc].sort((p, q) => q[1] - p[1])[0][0]] : days.length === 7 ? "매일" : days.join() === "0,1,2,3,4" ? "월~금" : days.join() === "5,6" ? "토·일" : days.map((d) => DOWN[d]).join("·");
   return `${ds} ${BAND_TXT(b)}`;
 }
-function topCellProg(xs: Row[]) { const by = new Map<string, Row[]>(); xs.forEach((a) => (by.get(a.key) ?? by.set(a.key, []).get(a.key)!).push(a)); const t = [...by.values()].sort((p, q) => vol(q) - vol(p))[0]; return t ? t[0].pn : null; }
+// 칸 대표 프로그램(2026-11-11 사용자 "요일별 시간대별 가장 대표적인 프로그램이 맞는지 확인"):
+// 한두 번 나간 특집(선거 개표 등)이 시청 규모만으로 대표가 되지 않게, 그 칸 방송일의 15% 이상(최소 3회) 나간 정규 편성 작품 중
+// 시청 규모(시청률×방영 분) 1위. 해당 작품이 없으면 가장 자주 나간 작품.
+function cellRep(xs: Row[]) {
+  const by = new Map<string, Row[]>(); xs.forEach((a) => (by.get(a.key) ?? by.set(a.key, []).get(a.key)!).push(a));
+  const days = new Set(xs.map((a) => a.d)).size, need = Math.max(3, Math.ceil(days * 0.15)), tot = vol(xs);
+  const freq = (as: Row[]) => new Set(as.map((a) => a.d)).size;
+  const all = [...by.values()].sort((p, q) => vol(q) - vol(p));
+  const reg = all.filter((as) => freq(as) >= need);
+  const pick = reg[0] ?? [...by.values()].sort((p, q) => freq(q) - freq(p))[0];
+  if (!pick) return null;
+  return { name: pick[0].pn, days: freq(pick), cellDays: days, volShare: r4(vol(pick) / tot, 3), volTop: all[0][0].pn, volTopDays: freq(all[0]), regular: !!reg[0] };
+}
+function topCellProg(xs: Row[]) { return cellRep(xs)?.name ?? null; }
 
 // ── 채널별 ─────────────────────────────────────────
 const out: Record<string, unknown>[] = [];
@@ -205,7 +218,9 @@ for (const g of GROUPS) {
     const hP = cells(P);
     // 칸 대표 프로그램 = 그 칸 시청 규모(시청률×방영 분) 1위(2026-11-11 사용자 "히트맵 시청률 아랫줄에 대표 프로그램")
     const progGrid = Object.fromEntries(BANDS.map((b) => [b, DOWN.map((_, d) => (hP.grid[b][d] == null ? null : topCellProg(hP.rows.get(`${d}|${b}`) ?? [])))]));
-    heat.push({ label: srcLabel(primary, pTk), grid: hP.grid, prog: progGrid });
+    // 검증용: 칸마다 대표 작품의 방영일 수·시청 규모 비중, 규모만으로 고르면 달라졌을 작품
+    const repCheck = BANDS.flatMap((b) => DOWN.map((dn, d) => { if (hP.grid[b][d] == null) return null; const r = cellRep(hP.rows.get(`${d}|${b}`) ?? []); return r ? { cell: `${dn} ${b}`, ...r } : null; })).filter(Boolean);
+    heat.push({ label: srcLabel(primary, pTk), grid: hP.grid, prog: progGrid, repCheck });
     const alt = primary === "nielsen" ? (iRows.length ? { rows: iRows, label: srcLabel("iptv", iTk!) } : null) : (nRows.length ? { rows: nRows, label: srcLabel("nielsen", tk) + `(${nRows[0].d.slice(5).replace("-", "/")}~)` } : null);
     if (alt) heat.push({ label: alt.label, grid: cells(alt.rows).grid });
 

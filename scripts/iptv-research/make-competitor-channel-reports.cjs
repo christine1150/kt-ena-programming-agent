@@ -17,6 +17,26 @@ const sgn = (v) => (v == null ? "-" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`);
 const TK = { p2049: "수도권 2049", household: "가구" };
 const short = (s, n = 16) => (s && s.length > n ? s.slice(0, n - 1) + "…" : s || "-");
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
+// 넘치는 프로그램명은 줄임말로(2026-11-11 사용자 "두 줄로 넘치는 제목은 줄임말로, 나솔사계처럼")
+// 먼저 편성 껍데기(XX드라마(작품)·채널A스페셜(작품))·회차(1부)·꼬리(스페셜·특별판·하이라이트)를 벗기고, 사전(docs/iptv/program_abbrev.json)에서 찾는다.
+const AB = require("../../docs/iptv/program_abbrev.json").abbrev;
+const nk = (s) => s.replace(/<[^>]*>/g, "").replace(/[^가-힣a-zA-Z0-9]/g, "").toLowerCase();
+const AB_KEYS = Object.keys(AB).sort((a, b) => b.length - a.length);
+function baseTitle(s) {
+  let t = String(s).trim();
+  const m = t.match(/^[^()]*?(드라마|미니시리즈|스페셜|다큐)\s*\(([^)]+)\)$/);
+  if (m) t = m[2];
+  return t.replace(/[\s-]*\d부$/, "").replace(/^다시보는\s*/, "").replace(/^하이라이트\s*/, "").replace(/\s*(스페셜|특별판|하이라이트)$/, "").trim();
+}
+function abbr(s) {
+  if (!s) return s;
+  const b = baseTitle(s), k = nk(b);
+  if (AB[k]) return AB[k];
+  if (AB[nk(s)]) return AB[nk(s)];
+  const hit = AB_KEYS.find((x) => x.length >= 6 && k.includes(x));   // 부제가 붙은 변형(… 2부·시즌 등)
+  return hit ? AB[hit] : b;
+}
+const nameFit = (s, n = 16) => (s && s.length > n ? abbr(s) : s);   // 표·본문: 길 때만 줄임말
 const BANDS = ["05-08", "08-11", "11-14", "14-17", "17-20", "20-23", "23-02", "02-05"];
 
 // 히트맵 색: 채널 안 최소→최대를 흰색→진한 파랑으로(값이 클수록 진함)
@@ -29,7 +49,7 @@ function heatTable(grid, prog) {
     if (v == null) return { t: "-", fill: "F7F7F9", color: "8A8C9A", center: true };
     const t = hi > lo ? (v - lo) / (hi - lo) : 0.5;
     // 칸 폭에 맞춘 자르기는 생성기가 실제 글리프 폭으로 한다
-    const pn = prog && prog[b] && prog[b][d] ? prog[b][d].replace(/\s+/g, " ") : null;
+    const pn = prog && prog[b] && prog[b][d] ? abbr(prog[b][d].replace(/\s+/g, " ")) : null;
     return { t: f(v), t2: pn, fill: hex(LO.map((l, i) => l + (HI[i] - l) * t)), color: t > 0.55 ? "FFFFFF" : "0D0D12", center: true };
   })]);
   return { type: "table", head: ["시간대", ...DOW], rows, equalCols: true };
@@ -77,9 +97,9 @@ function channelBlocks(c0, idx, nCh) {
   ].filter(([, g]) => c.top.some((p) => g(p) != null));
   B.push({ type: "caption", text: `${c.primaryLabel} 평균 시청률 상위 ${c.top.length}편(2026, 8회 이상 방영, 본·재방 합산)` });
   B.push({ type: "table", head: ["순위", "프로그램", ...cols.map(([h]) => h), "방영", "주력 시간대"],
-    rows: c.top.map((p, i) => [String(i + 1), short(p.name, 20),...cols.map(([, g]) => f(g(p))), String(p.n), p.slot]) });
+    rows: c.top.map((p, i) => [String(i + 1), short(nameFit(p.name, 13), 20),...cols.map(([, g]) => f(g(p))), String(p.n), p.slot]) });
   B.push({ type: "note", text: `${isN ? "닐슨 프로그램 단위 자료 기준" : "닐슨 프로그램 단위 자료가 없거나 짧아 IPTV 기준"}${c.nielsenPeriod && isN && c.nielsenPeriod[0] > "2026-01-31" ? `(닐슨 ${c.nielsenPeriod[0].slice(5).replace("-", "/")}~ 자료)` : ""}${cols.length > 1 ? `, 2049·가구 열은 닐슨, IPTV 열은 IPTV ${c.iptvTarget === "p2049" ? "수도권 2049" : "가구"}(같은 이름 프로그램 평균)` : ""}` });
-  if (c.volLeader) B.push({ type: "bullet", text: `시청 규모(시청률×방영 분) 1위 ${short(c.volLeader.name, 18)} ${pc(c.volLeader.share)}, 상위 5편 합계 ${pc(c.top5Vol)}` });
+  if (c.volLeader) B.push({ type: "bullet", text: `시청 규모(시청률×방영 분) 1위 ${short(nameFit(c.volLeader.name), 18)} ${pc(c.volLeader.share)}, 상위 5편 합계 ${pc(c.top5Vol)}` });
   // 재방 표기가 거의 없으면(원본에 <재> 태그 없음) 본·재방 비교를 하지 않는다
   B.push({ type: "bullet", text: c.rerunShare < 0.02 ? `편성 작품 ${c.progCount}편, 원본에 재방 표기가 없어 본·재방 구분 불가` : `편성 작품 ${c.progCount}편, 재방 표기 방영 시간 ${pc(c.rerunShare)}, 본방 ${f(c.firstAvg)} vs 재방 ${f(c.rerunAvg)}` });
 
@@ -107,7 +127,7 @@ function channelBlocks(c0, idx, nCh) {
     o.biggestGap.slice(0, 1).forEach((x) => B.push({ type: "bullet", text: `격차가 가장 큰 칸 ${x.dow} ${x.band}: ${c.channel} ${f(x.c)} vs ${o.own} ${f(x.o)}` }));
     o.ownBest.slice(0, 1).forEach((x) => B.push({ type: "sub", text: `${o.own}가 가장 앞선 칸 ${x.dow} ${x.band}: ${f(x.o)} vs ${f(x.c)}` }));
   }
-  const lead = pk[0] ? `${pk[0].dow} ${pk[0].band} ${short(pk[0].prog, 12)}` : "-";
+  const lead = pk[0] ? `${pk[0].dow} ${pk[0].band} ${short(abbr(pk[0].prog), 12)}` : "-";
   const conc = c.top5Vol >= 0.5 ? "소수 작품 의존" : c.top5Vol >= 0.3 ? "중간 집중" : "분산 편성";
   B.push({ type: "takeaway", text: `**${c.channel}**: ${lead} 중심, 상위 5편 ${pc(c.top5Vol)}로 ${conc}` });
   return B;
