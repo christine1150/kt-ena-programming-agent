@@ -121,8 +121,10 @@ let collisions = 0;
 let skipped = 0;
 const perFile: string[] = [];
 
+const ONLY = process.argv.find((a) => a.startsWith("--only="))?.slice(7); // 파일명에 이 글자가 든 것만 읽는다(일부만 다시 넣을 때)
 for (const f of walk(root).sort()) {
   const base = path.basename(f);
+  if (ONLY && !base.includes(ONLY)) continue;
   const rows = readCsv(f);
   const [menuChannel, , menu] = (rows[1]?.[0] ?? "").split(">").map((s) => s.trim());
 
@@ -189,7 +191,10 @@ for (const f of walk(root).sort()) {
     } else {
       // 주간 집계(기간 : 주간 - …)는 같은 표에 weekly_ 접두어로 담고 날짜는 그 주 첫날(월)로 둔다(일별 값과 섞이지 않게)
       const weeklyPrefix = /기간 : 주간/.test(meta) ? "weekly_" : "";
-      const cols = rows[h].slice(1).map((c) => (DAILY_METRIC[c.trim()] ? weeklyPrefix + DAILY_METRIC[c.trim()] : undefined));
+      // 플랫폼별 시청은 같은 표를 시청률·시청 점유율·도달률 세 가지로 따로 내려받는다 — 키가 같아 서로 덮어쓰지 않게 시청률 외에는 접두어를 붙인다(2026-11-11).
+      const dataKind = /데이터 : (.+)$/.exec(meta)?.[1].trim() ?? "";
+      const platPrefix = menu === "플랫폼별 시청" && dataKind.startsWith("시청 점유율") ? "share_" : menu === "플랫폼별 시청" && dataKind.startsWith("도달률") ? "reach_" : "";
+      const cols = rows[h].slice(1).map((c) => (DAILY_METRIC[c.trim()] ? weeklyPrefix + platPrefix + DAILY_METRIC[c.trim()] : undefined));
       if (cols.some((c) => !c)) { perFile.push(`건너뜀(모르는 열 ${rows[h].join("/")}): ${base}`); continue; }
       for (const r of rows.slice(h + 1)) {
         const d = parseDate(r[0] ?? "");

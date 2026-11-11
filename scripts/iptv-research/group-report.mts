@@ -6,7 +6,7 @@ import ExcelJS from "exceljs";
 const group = process.argv[2] ?? "drama";
 const out = process.argv[3] ?? `docs/iptv/${group}_group_analysis.xlsx`;
 const FROM = "2024-07-31";
-const TO = "2026-11-09";
+const TO = "2026-11-10";
 const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
 
 async function rpc<T = Record<string, unknown>>(fn: string, args: Record<string, unknown>): Promise<T[]> {
