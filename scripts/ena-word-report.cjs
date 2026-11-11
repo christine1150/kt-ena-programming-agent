@@ -246,8 +246,11 @@ function tableBlocks(head, rows, opts = {}) {
     const kids = cellParas(obj ? obj.t : txt, fam, TABLE_FS, al, (obj && obj.color) || color, keep);
     if (obj && obj.t2) {
       // 실제 글리프 폭으로 칸 폭에 한 줄로 맞춰 자른다(넘치면 … 붙임)
-      const pt = obj.t2Pt || 7, room = widths[i] - 2 * CELL_IND - 2;
+      // 넘치면 먼저 글자 크기를 0.5pt씩 줄이고(최소 4.5pt, 2026-11-11 사용자 "너무 크면 폰트 크기를 줄여줘"), 그래도 넘칠 때만 자른다
+      let pt = obj.t2Pt || 7;
+      const room = widths[i] - 2 * CELL_IND - 2;
       let s = String(obj.t2);
+      while (pt > 4.5 && T.textWidth(s, F_THIN, pt) > room) pt -= 0.5;
       if (T.textWidth(s, F_THIN, pt) > room) { if (process.env.ENA_LOG_TRUNC) console.log("잘림\t" + s); while (s.length > 1 && T.textWidth(s + "…", F_THIN, pt) > room) s = s.slice(0, -1); s = s.trimEnd() + "…"; }
       kids.push(...cellParas(s, F_THIN, pt, al, obj.color || color, keep));
     }

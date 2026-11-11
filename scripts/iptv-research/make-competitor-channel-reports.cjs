@@ -28,13 +28,17 @@ function baseTitle(s) {
   if (m) t = m[2];
   return t.replace(/[\s-]*\d부$/, "").replace(/^다시보는\s*/, "").replace(/^하이라이트\s*/, "").replace(/\s*(스페셜|특별판|하이라이트)$/, "").trim();
 }
+// 띄어쓰기를 뺀 이름이 8자 이하면 줄이지 않고 그대로(2026-11-11 사용자 "붙여쓰기로 8자까지는 그대로, 너무 크면 폰트 크기를 줄여줘")
 function abbr(s) {
   if (!s) return s;
-  const b = baseTitle(s), k = nk(b);
+  // 원본 자료에서 글자가 빠진 이름 바로잡기(닐슨 경쟁 자료 '2뉴스외전' = MBC '2시 뉴스외전')
+  const FIX = { "2뉴스외전": "2시뉴스외전" };
+  const b0 = baseTitle(s), b = FIX[b0.replace(/\s+/g, "")] ?? b0, k = nk(b), sp = b.replace(/\s+/g, "");
+  if ([...sp].length <= 8) return sp;
   if (AB[k]) return AB[k];
   if (AB[nk(s)]) return AB[nk(s)];
   const hit = AB_KEYS.find((x) => x.length >= 6 && k.includes(x));   // 부제가 붙은 변형(… 2부·시즌 등)
-  return hit ? AB[hit] : b;
+  return hit ? AB[hit] : sp;
 }
 const nameFit = (s, n = 16) => (s && s.length > n ? abbr(s) : s);   // 표·본문: 길 때만 줄임말
 const BANDS = ["05-08", "08-11", "11-14", "14-17", "17-20", "20-23", "23-02", "02-05"];
