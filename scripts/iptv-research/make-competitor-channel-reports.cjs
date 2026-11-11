@@ -47,12 +47,28 @@ function abbr(s) {
   const hit = AB_KEYS.find((x) => x.length >= 6 && k.includes(x));   // 부제가 붙은 변형(… 2부·시즌 등)
   return hit ? AB[hit] : sp;
 }
-const nameFit = (s, n = 16) => { if (!s) return s; const m = String(s).match(/^[^()]*?(드라마|미니시리즈|스페셜|다큐)\s*\(([^)]+)\)$/); const t = stripCh(m ? m[2] : s); return t.length > n ? abbr(t) : t; };   // 표·본문: 채널명 떼고, 길 때만 줄임말
+// 표·본문: 채널명 떼고, 붙여 써서 8자 넘는 이름은 사전 줄임말(예 황금어장라디오스타 → 라디오스타), 사전에 없으면 원래대로
+const nameFit = (s, n = 16) => {
+  if (!s) return s;
+  const m = String(s).match(/^[^()]*?(드라마|미니시리즈|스페셜|다큐)\s*\(([^)]+)\)$/), t = stripCh(m ? m[2] : s);
+  if ([...t.replace(/\s+/g, "")].length <= 8) return t;
+  const k = nk(t), hit = AB[k] ?? AB_KEYS.find((x) => x.length >= 6 && k.includes(x) && AB[x]);
+  return hit ? (AB[k] ?? AB[hit]) : t.length > n ? abbr(t) : t;
+};
 const BANDS = ["05-08", "08-11", "11-14", "14-17", "17-20", "20-23", "23-02", "02-05"];
 
 // 히트맵 색: 채널 안 최소→최대를 흰색→진한 파랑으로(값이 클수록 진함)
 const LO = [255, 255, 255], HI = [31, 78, 156];
 const hex = (rgb) => rgb.map((x) => Math.round(x).toString(16).padStart(2, "0")).join("").toUpperCase();
+// 표 칸 색칠(2026-11-11 사용자 "알아보기 좋은 것은 색상을 넣어주세요"): t=0~1 세기, 진하면 흰 글자
+const shade = (text, t, cap = 0.8) => { const k = Math.max(0, Math.min(1, t)) * cap; return { t: text, fill: hex(LO.map((l, i) => l + (HI[i] - l) * k)), color: k > 0.55 ? "FFFFFF" : "0D0D12" }; };
+// 순위 칸: 1위에 가까울수록 진하게
+const rankCell = (rank, of) => (rank == null ? "-" : shade(`${rank}위 / ${of}`, of > 1 ? 1 - (rank - 1) / (of - 1) : 1, 0.75));
+// 열 안에서 값이 클수록 진하게(상위 프로그램 표 시청률 열)
+function shadeCol(vals) {
+  const vs = vals.filter((v) => v != null), lo = Math.min(...vs), hi = Math.max(...vs);
+  return vals.map((v) => (v == null ? "-" : shade(f(v), hi > lo ? (v - lo) / (hi - lo) : 0.5, 0.7)));
+}
 function heatTable(grid, prog) {
   const vs = BANDS.flatMap((b) => grid[b]).filter((v) => v != null);
   const lo = Math.min(...vs), hi = Math.max(...vs);
@@ -78,7 +94,7 @@ function channelBlocks(c0, idx, nCh) {
   const row = (label, src, t) => {
     const y = src === "n" ? c.ytd[t] : c.iptvYtd[t];
     const g = t === "household" ? (src === "n" ? c.genre.nielsen : c.genre.iptv) : null;
-    return [label, y ? f(y.rating) : "자료 없음", y ? `${y.rank}위 / ${y.of}` : "-", src === "n" && y && y.share != null ? `${Number(y.share).toFixed(2)}%` : "-", g ? `${g.rank}위 / ${g.of}` : "-"];
+    return [label, y ? f(y.rating) : "자료 없음", y ? rankCell(y.rank, y.of) : "-", src === "n" && y && y.share != null ? `${Number(y.share).toFixed(2)}%` : "-", g ? rankCell(g.rank, g.of) : "-"];
   };
   const order = [tk, other];
   B.push({ type: "caption", text: "2026년 1/1~11/10 누적 시청률·순위" });
@@ -87,7 +103,7 @@ function channelBlocks(c0, idx, nCh) {
   const hasShare = rows1.some((r) => r[3] !== "-");
   B.push({ type: "table", head: ["구분", "누적 시청률", "전체 순위", ...(hasShare ? ["점유율"] : []), "장르군 순위(가구)"],
     rows: rows1.map((r) => (hasShare ? r : [r[0], r[1], r[2], r[4]])) });
-  B.push({ type: "note", text: `닐슨은 시장 ${c.ytd[tk]?.of ?? 216}개 채널 누적 순위 원본, IPTV는 셋톱 자료가 있는 채널끼리(가구 ${P.iptvChannels.household}·2049 ${P.iptvChannels.p2049}개) 방영 분 가중 평균 순위` });
+  B.push({ type: "note", text: `순위 칸은 1위일수록 진함, 닐슨은 시장 ${c.ytd[tk]?.of ?? 216}개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 ${P.iptvChannels.household}·2049 ${P.iptvChannels.p2049}개) 순위` });
   const gn = c.genre.nielsen, gi = c.genre.iptv;
   if (gn) B.push({ type: "bullet", text: `${c.groupLabel} 가구 ${gn.of}개 중 ${gn.rank}위(${f(gn.self)})${gn.above ? `, 위 ${gn.above.n} ${f(gn.above.v)}` : ""}${gn.below ? `, 아래 ${gn.below.n} ${f(gn.below.v)}` : ""}` });
   if (gi) B.push({ type: "sub", text: `IPTV 가구로는 ${gi.of}개 중 ${gi.rank}위${gi.above ? `(위 ${gi.above.n} ${f(gi.above.v)})` : "(군 1위)"}` });
@@ -108,7 +124,7 @@ function channelBlocks(c0, idx, nCh) {
   ].filter(([, g]) => c.top.some((p) => g(p) != null));
   B.push({ type: "caption", text: `${c.primaryLabel} 평균 시청률 상위 ${c.top.length}편(2026, 8회 이상 방영, 본·재방 합산)` });
   B.push({ type: "table", head: ["순위", "프로그램", ...cols.map(([h]) => h), "방영", "주력 시간대"],
-    rows: c.top.map((p, i) => [String(i + 1), short(nameFit(p.name, 13), 20),...cols.map(([, g]) => f(g(p))), String(p.n), p.slot]) });
+    rows: (() => { const sc = cols.map(([, g]) => shadeCol(c.top.map(g))); return c.top.map((p, i) => [String(i + 1), short(nameFit(p.name, 13), 20), ...sc.map((col) => col[i]), String(p.n), p.slot]); })() });
   B.push({ type: "note", text: `${isN ? "닐슨 프로그램 단위 자료 기준" : "닐슨 프로그램 단위 자료가 없거나 짧아 IPTV 기준"}${c.nielsenPeriod && isN && c.nielsenPeriod[0] > "2026-01-31" ? `(닐슨 ${c.nielsenPeriod[0].slice(5).replace("-", "/")}~ 자료)` : ""}${cols.length > 1 ? `, 2049·가구 열은 닐슨, IPTV 열은 IPTV ${c.iptvTarget === "p2049" ? "수도권 2049" : "가구"}(같은 이름 프로그램 평균)` : ""}` });
   if (c.volLeader) B.push({ type: "bullet", text: `시청 규모(시청률×방영 분) 1위 ${short(nameFit(c.volLeader.name), 18)} ${pc(c.volLeader.share)}, 상위 5편 합계 ${pc(c.top5Vol)}` });
   // 재방 표기가 거의 없으면(원본에 <재> 태그 없음) 본·재방 비교를 하지 않는다
