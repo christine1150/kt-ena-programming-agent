@@ -3336,9 +3336,11 @@ function ProgramRatingHistoryChart({
   if (own2049.length < 2 && allDates.length < 2) return null; // 표본 부족(그릴 수 없음)
 
   const W = 380;
-  const H = 72;
+  // 사용자 지시(2026-11-12): "SBS Plus와의 회차별 그래프는 높이가 좀 잘 보이게" — 72px에서는 가구 선이 위쪽 기준이 되면서
+  // 2049 선들(ENA·SBS Plus)이 아래쪽 30px 안에 몰려 역전·격차가 안 보였다. 높이를 키워 같은 공통 축에서 차이가 읽히게 한다.
+  const H = 168;
   const PAD_X = 6;
-  const PAD_Y = 6;
+  const PAD_Y = 10;
   // 사용자 지시(2026-09-01): "3, 4회 등 회차가 많지 않을 경우에 우측까지 끌지 말고 좌측쯤에서
   // 마무리... 1, 2회 간격에 비해서 3회 간격이 너무 벌어져있음" — 기존엔 실제 방영 날짜 간격에
   // 비례해 x좌표를 잡아서(반주 편성처럼 회차 사이 실제 날짜 간격이 들쭉날쭉하면) 회차 간
@@ -3448,6 +3450,10 @@ function ProgramRatingHistoryChart({
   // 9px)를 감안한 최소 여백을 두고 clamp한다.
   const LABEL_Y_MARGIN = 9;
   const clampLabelY = (y: number) => Math.min(Math.max(y, LABEL_Y_MARGIN), H - LABEL_Y_MARGIN);
+  // 당일에 자사보다 높은 비교 선(예: SBS Plus 동시방송)이 있으면, 그 숫자가 점 위에 붙으므로 자사 당일 숫자는 점 아래로 내려 겹치지 않게 한다(2026-11-12)
+  const ownTodayBelow =
+    todayPoint !== null &&
+    [...otherSeries, ...competitorSeries].some((s) => s.points.some((p) => nearestIndex(p.broadcast_date) === nearestIndex(todayPoint.broadcast_date) && p.rating > todayPoint.rating));
   return (
     <div className="mt-2 rounded-xl bg-zinc-50 p-3">
       <div className="relative">
@@ -3528,12 +3534,33 @@ function ProgramRatingHistoryChart({
           )}
           {todayPoint && (
             <span
-              className="absolute -translate-x-1/2 -translate-y-full whitespace-nowrap text-[9px] font-bold tabular-nums text-zinc-800"
-              style={{ left: `${(xOf(todayPoint.broadcast_date) / W) * 100}%`, top: clampLabelY(y2049(todayPoint.rating) - 3) }}
+              className={`absolute -translate-x-1/2 whitespace-nowrap text-[9px] font-bold tabular-nums text-zinc-800 ${ownTodayBelow ? "translate-y-1" : "-translate-y-full"}`}
+              style={{ left: `${(xOf(todayPoint.broadcast_date) / W) * 100}%`, top: clampLabelY(y2049(todayPoint.rating) + (ownTodayBelow ? 3 : -3)) }}
             >
               {formatRating(todayPoint.rating)}
             </span>
           )}
+          {/* 동시방영·직후재방 채널(예: SBS Plus)도 당일 값을 숫자로 — 자사 당일 값과 나란히 읽혀 역전 여부가 바로 보이게(2026-11-12).
+              자사 당일 점과 위아래로 겹치지 않게, 상대 값이 더 낮으면 점 아래에, 높으면 위에 둔다. */}
+          {todayPoint &&
+            [
+              ...otherSeries.map((s) => ({ s, color: themeColorByCode.get(s.seriesName) ?? channelBrandSolid(s.seriesName) ?? UNBRANDED_CHANNEL_COLOR })),
+              ...competitorSeries.map((s, si) => ({ s, color: COMPETITOR_LINE_COLORS[si % COMPETITOR_LINE_COLORS.length] })),
+            ].map(({ s, color }) => {
+              const last = s.points.find((p) => nearestIndex(p.broadcast_date) === nearestIndex(todayPoint.broadcast_date));
+              // 자사 당일 값의 절반도 안 되는 선(예: 심야 재방)은 비교 대상이 아니라 숫자를 달지 않는다 — 아래 회차 번호와 겹치는 것도 막는다
+              if (!last || last.rating < todayPoint.rating * 0.5) return null;
+              const below = last.rating < todayPoint.rating;
+              return (
+                <span
+                  key={`today-${s.seriesName}`}
+                  className={`absolute -translate-x-1/2 whitespace-nowrap text-[9px] font-bold tabular-nums ${below ? "translate-y-1" : "-translate-y-full"}`}
+                  style={{ left: `${(xOf(last.broadcast_date) / W) * 100}%`, top: clampLabelY(y2049(last.rating) + (below ? 3 : -3)), color: brandText(color) }}
+                >
+                  {formatRating(last.rating)}
+                </span>
+              );
+            })}
           {troughPoint && !troughIsShown && (
             <span
               className="absolute -translate-x-1/2 translate-y-1 whitespace-nowrap text-[9px] font-bold tabular-nums text-zinc-400"
