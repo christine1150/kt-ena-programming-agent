@@ -36,7 +36,7 @@ const GROUPS: Group[] = [
     channels: [c("UXN", "UXN", null, "UXN"), c("Asia UHD", "Asia UHD", null, "Asia UHD"), c("UMAX", "UMAX", null, "UMAX"), c("UHD Dream", "UHD Dream TV", null, "UHD Dream"), c("SBS NEX", "SBS NEX", null, "SBS NEX")] },
 ];
 
-type Row = { d: string; dow: number; band: string; dur: number; r: number; pn: string; key: string; rerun: boolean };
+type Row = { d: string; dow: number; band: string; dur: number; r: number; pn: string; key: string; rerun: boolean; s?: number };
 const norm = (s: string) => s.replace(/<[^>]*>/g, "").replace(/[^가-힣a-zA-Z0-9]/g, "").toLowerCase();
 const clean = (s: string) => s.replace(/\s*<[^>]*>/g, "").trim();
 const r4 = (v: number | null | undefined, d = 4) => (v == null || !Number.isFinite(v) ? null : Number(v.toFixed(d)));
@@ -67,7 +67,7 @@ async function loadComp(name: string, tk: TK): Promise<Row[]> {
     let sm = mins(x.start_time), em = mins(x.end_time);
     if (sm < 120) sm += 1440;
     if (em < 120 || em < sm) em += 1440;
-    return { d: x.broadcast_date, dow: isoDow(x.broadcast_date), band: bandOf(sm), dur: em - sm, r: Number(x.rating), pn: clean(x.program_name), key: norm(x.program_name), rerun: /<재>/.test(x.program_name) };
+    return { d: x.broadcast_date, dow: isoDow(x.broadcast_date), band: bandOf(sm), dur: em - sm, r: Number(x.rating), pn: clean(x.program_name), key: norm(x.program_name), rerun: /<재>/.test(x.program_name), s: sm };
   }).filter((x) => x.dur > 0 && x.dur < 600);
 }
 // 닐슨 자사 프로그램 행(자사 대비 칸 비교용)
@@ -90,7 +90,7 @@ async function loadOwnNielsen(code: string, tk: TK): Promise<Row[]> {
 async function loadIptv(name: string, tk: TK): Promise<Row[]> {
   const xs = await pages<any>(() => sb.from("iptv_airing_metrics").select("broadcast_date,start_minute,program_key,program_name,is_rerun_tag,rating,duration_min,dow,slot_band")
     .eq("channel_name", name).eq("target_kind", tk).gte("broadcast_date", FROM).lte("broadcast_date", TO).order("broadcast_date").order("start_minute").order("program_key"));
-  return xs.filter((x) => x.rating != null && Number(x.duration_min) > 0).map((x) => ({ d: x.broadcast_date, dow: x.dow, band: x.slot_band, dur: Number(x.duration_min), r: Number(x.rating), pn: clean(x.program_name), key: norm(x.program_name), rerun: !!x.is_rerun_tag }));
+  return xs.filter((x) => x.rating != null && Number(x.duration_min) > 0).map((x) => ({ d: x.broadcast_date, dow: x.dow, band: x.slot_band, dur: Number(x.duration_min), r: Number(x.rating), pn: clean(x.program_name), key: norm(x.program_name), rerun: !!x.is_rerun_tag, s: Number(x.start_minute) }));
 }
 
 // ── 적재 ────────────────────────────────────────────
@@ -151,6 +151,50 @@ function cellRep(xs: Row[]) {
   return { name: pick[0].pn, days: freq(pick), cellDays: days, volShare: r4(vol(pick) / tot, 3), volTop: all[0][0].pn, volTopDays: freq(all[0]), regular: !!reg[0] };
 }
 function topCellProg(xs: Row[]) { return cellRep(xs)?.name ?? null; }
+
+// 편성 패턴(2026-11-12 사용자 "상대사·자사의 편성 패턴도 읽어서 편성 전략이 드러나게"): 시청률이 아니라 편성표 구조를 본다.
+//  작품 수, 상위 5편 시청량 비중, 재방 표기 비중, 같은 작품 3회 이상 연속 편성 비중, 평일 띠 편성, 대표작 반복 운용, 20~23시 평일·주말 대표작
+function pattern(rows: Row[]) {
+  if (!rows.length) return null;
+  const totMin = rows.reduce((s, a) => s + a.dur, 0), totVol = vol(rows);
+  const byT = new Map<string, Row[]>(); rows.forEach((a) => (byT.get(a.key) ?? byT.set(a.key, []).get(a.key)!).push(a));
+  const weeks = new Set(rows.map((a) => { const t = new Date(a.d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); })).size;
+  // 연속 편성: 같은 날 같은 작품이 10분 안쪽으로 이어진 묶음
+  let blockMin = 0, runs = 0, runAir = 0;
+  const byDay = new Map<string, Row[]>(); rows.forEach((a) => (byDay.get(a.d) ?? byDay.set(a.d, []).get(a.d)!).push(a));
+  for (const day of byDay.values()) {
+    day.sort((p, q) => (p.s ?? 0) - (q.s ?? 0));
+    let cur: Row[] = [];
+    const flush = () => { if (cur.length) { runs++; runAir += cur.length; if (cur.length >= 3) blockMin += cur.reduce((s, a) => s + a.dur, 0); } cur = []; };
+    for (const a of day) { const p = cur[cur.length - 1]; if (p && p.key === a.key && (a.s ?? 0) - ((p.s ?? 0) + p.dur) <= 10) cur.push(a); else { flush(); cur = [a]; } }
+    flush();
+  }
+  // 평일 띠: 같은 작품이 같은 시간대에 평일 4개 요일 이상, 요일마다 4회 이상
+  const strips: { name: string; band: string; vol: number }[] = [];
+  for (const as of byT.values()) for (const b of BANDS) {
+    const wd = as.filter((a) => a.band === b && a.dow < 5);
+    const dc = new Map<number, number>(); wd.forEach((a) => dc.set(a.dow, (dc.get(a.dow) ?? 0) + 1));
+    if ([...dc.values()].filter((n) => n >= 4).length >= 4) strips.push({ name: as[0].pn, band: BAND_TXT(b), vol: vol(wd) });
+  }
+  strips.sort((p, q) => q.vol - p.vol);
+  const ranked = [...byT.values()].sort((p, q) => vol(q) - vol(p));
+  // 대표작은 정규 편성(8주 이상 나간 작품) 중 시청량 1위 — 월드컵 같은 단발 중계 제외
+  const wk = (as: Row[]) => new Set(as.map((a) => { const t = new Date(a.d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); })).size;
+  const lead = ranked.find((as) => wk(as) >= 8) ?? ranked[0];
+  const hasTag = rows.filter((a) => a.rerun).reduce((s, a) => s + a.dur, 0) / totMin >= 0.02;
+  const first = lead.filter((a) => !a.rerun), re = lead.filter((a) => a.rerun);
+  const prime = (f: (a: Row) => boolean) => { const xs = rows.filter((a) => a.band === "20-23" && f(a)); const t = cellRep(xs); return t?.name ?? null; };
+  return {
+    titles: byT.size, weeks,
+    top5: r4(ranked.slice(0, 5).reduce((s, as) => s + vol(as), 0) / totVol, 3),
+    rerunShare: hasTag ? r4(rows.filter((a) => a.rerun).reduce((s, a) => s + a.dur, 0) / totMin, 3) : null,
+    blockShare: r4(blockMin / totMin, 3), avgRun: r4(runAir / Math.max(1, runs), 2),
+    strips: strips.length, stripTop: strips.slice(0, 2).map((x) => ({ name: x.name, band: x.band })),
+    lead: { name: lead[0].pn, perWeek: r4(lead.length / Math.max(1, weeks), 1), slots: new Set(lead.map((a) => `${a.dow}|${a.band}`)).size, share: r4(vol(lead) / totVol, 3),
+      firstSlot: hasTag && first.length >= 3 ? mainSlot(first) : null, rerunSlot: hasTag && re.length >= 3 ? mainSlot(re) : null },
+    primeWeekday: prime((a) => a.dow < 5), primeWeekend: prime((a) => a.dow >= 5),
+  };
+}
 
 // ── 채널별 ─────────────────────────────────────────
 const out: Record<string, unknown>[] = [];
@@ -258,6 +302,10 @@ for (const g of GROUPS) {
       top, progCount: titles, top5Vol, volLeader: volLeader ? { name: volLeader[0].pn, share: r4(vol(volLeader) / totVol, 3) } : null,
       heat, peaks, bandVol: bandVol.slice(0, 3), weekdayPrime: r4(weekdayPrime, 4), weekendPrime: r4(weekendPrime, 4),
       rerunShare, firstAvg, rerunAvg, trend, ownCmp,
+      // 편성 패턴: 경쟁 채널은 기준 자료 행, 자사는 IPTV 행(편성표 구조라 시청률 출처와 무관)
+      // 닐슨 경쟁 자료는 이어 붙은 회차를 한 행으로 묶는 경우가 많아 연속 편성이 안 보이므로 IPTV(회차 단위)가 있으면 IPTV로, 없으면 닐슨으로 하되 연속 편성 지표는 비운다
+      pattern: iRows.length ? pattern(iRows.map((a) => ({ ...a, pn: dispName.get(a.key) ?? a.pn }))) : (() => { const p = pattern(P); return p ? { ...p, blockShare: null, avgRun: null } : null; })(),
+      patternSrc: iRows.length ? "iptv" : "nielsen", ownPattern: pattern(iptv.get(`${g.ownRef.iptv}|${pTk}`) ?? iptv.get(`${g.ownRef.iptv}|household`) ?? []), ownName: g.ownRef.name,
     });
     console.log(`${g.file} ${ch.name}: 기준 ${primary}(${P.length}) 닐슨누적 ${ytd[tk]?.rank ?? "-"} IPTV ${iy[tk]?.rank ?? iy.household?.rank ?? "-"}`);
   }

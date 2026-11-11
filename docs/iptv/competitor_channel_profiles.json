@@ -1104,7 +1104,67 @@
     ],
     "avgC": 0.189,
     "avgO": 0.131
-   }
+   },
+   "pattern": {
+    "titles": 259,
+    "weeks": 46,
+    "top5": 0.385,
+    "rerunShare": 0.232,
+    "blockShare": 0.001,
+    "avgRun": 1,
+    "strips": 23,
+    "stripTop": [
+     {
+      "name": "KBS 뉴스광장",
+      "band": "05~08시"
+     },
+     {
+      "name": "KBS 뉴스 9",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "KBS 뉴스광장",
+     "perWeek": 5.9,
+     "slots": 6,
+     "share": 0.1,
+     "firstSlot": "월·화·수·목·금·토 05~08시",
+     "rerunSlot": null
+    },
+    "primeWeekday": "KBS 뉴스 9",
+    "primeWeekend": "KBS 뉴스 9"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 74,
+    "weeks": 46,
+    "top5": 0.414,
+    "rerunShare": 0.912,
+    "blockShare": 0.096,
+    "avgRun": 1.29,
+    "strips": 12,
+    "stripTop": [
+     {
+      "name": "허수아비",
+      "band": "11~14시"
+     },
+     {
+      "name": "닥터 섬보이",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 SOLO",
+     "perWeek": 9.9,
+     "slots": 48,
+     "share": 0.18,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "수 23~02시"
+    },
+    "primeWeekday": "나는 SOLO",
+    "primeWeekend": "풍향고2"
+   },
+   "ownName": "ENA"
   },
   {
    "group": "terrestrial",
@@ -2207,7 +2267,67 @@
     ],
     "avgC": 0.2728,
     "avgO": 0.131
-   }
+   },
+   "pattern": {
+    "titles": 143,
+    "weeks": 46,
+    "top5": 0.325,
+    "rerunShare": 0.313,
+    "blockShare": 0.039,
+    "avgRun": 1.03,
+    "strips": 33,
+    "stripTop": [
+     {
+      "name": "2TV 생생정보",
+      "band": "17~20시"
+     },
+     {
+      "name": "붉은 진주",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "2TV 생생정보",
+     "perWeek": 10.1,
+     "slots": 19,
+     "share": 0.087,
+     "firstSlot": "월~금 17~20시",
+     "rerunSlot": "금 05~08시"
+    },
+    "primeWeekday": "신상출시 편스토랑",
+    "primeWeekend": "사랑을 처방해 드립니다"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 74,
+    "weeks": 46,
+    "top5": 0.414,
+    "rerunShare": 0.912,
+    "blockShare": 0.096,
+    "avgRun": 1.29,
+    "strips": 12,
+    "stripTop": [
+     {
+      "name": "허수아비",
+      "band": "11~14시"
+     },
+     {
+      "name": "닥터 섬보이",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 SOLO",
+     "perWeek": 9.9,
+     "slots": 48,
+     "share": 0.18,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "수 23~02시"
+    },
+    "primeWeekday": "나는 SOLO",
+    "primeWeekend": "풍향고2"
+   },
+   "ownName": "ENA"
   },
   {
    "group": "terrestrial",
@@ -3310,7 +3430,67 @@
     ],
     "avgC": 0.4817,
     "avgO": 0.131
-   }
+   },
+   "pattern": {
+    "titles": 196,
+    "weeks": 46,
+    "top5": 0.332,
+    "rerunShare": 0.194,
+    "blockShare": 0.019,
+    "avgRun": 1.05,
+    "strips": 21,
+    "stripTop": [
+     {
+      "name": "MBC 뉴스데스크",
+      "band": "17~20시"
+     },
+     {
+      "name": "MBC 뉴스투데이",
+      "band": "05~08시"
+     }
+    ],
+    "lead": {
+     "name": "MBC 뉴스데스크",
+     "perWeek": 6.8,
+     "slots": 14,
+     "share": 0.123,
+     "firstSlot": "월·화·수·목·금·토 17~20시",
+     "rerunSlot": null
+    },
+    "primeWeekday": "구해줘! 홈즈",
+    "primeWeekend": "탐사기획 스트레이트"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 74,
+    "weeks": 46,
+    "top5": 0.414,
+    "rerunShare": 0.912,
+    "blockShare": 0.096,
+    "avgRun": 1.29,
+    "strips": 12,
+    "stripTop": [
+     {
+      "name": "허수아비",
+      "band": "11~14시"
+     },
+     {
+      "name": "닥터 섬보이",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 SOLO",
+     "perWeek": 9.9,
+     "slots": 48,
+     "share": 0.18,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "수 23~02시"
+    },
+    "primeWeekday": "나는 SOLO",
+    "primeWeekend": "풍향고2"
+   },
+   "ownName": "ENA"
   },
   {
    "group": "terrestrial",
@@ -4413,7 +4593,67 @@
     ],
     "avgC": 0.4395,
     "avgO": 0.131
-   }
+   },
+   "pattern": {
+    "titles": 206,
+    "weeks": 46,
+    "top5": 0.356,
+    "rerunShare": 0.253,
+    "blockShare": 0.1,
+    "avgRun": 1.09,
+    "strips": 13,
+    "stripTop": [
+     {
+      "name": "모닝와이드",
+      "band": "05~08시"
+     },
+     {
+      "name": "SBS 8 뉴스",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "모닝와이드",
+     "perWeek": 16.2,
+     "slots": 7,
+     "share": 0.109,
+     "firstSlot": "월~금 05~08시",
+     "rerunSlot": null
+    },
+    "primeWeekday": "동상이몽 2 너는 내 운명",
+    "primeWeekend": "다시 쓰는 육아일기 미운 우리 새끼"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 74,
+    "weeks": 46,
+    "top5": 0.414,
+    "rerunShare": 0.912,
+    "blockShare": 0.096,
+    "avgRun": 1.29,
+    "strips": 12,
+    "stripTop": [
+     {
+      "name": "허수아비",
+      "band": "11~14시"
+     },
+     {
+      "name": "닥터 섬보이",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 SOLO",
+     "perWeek": 9.9,
+     "slots": 48,
+     "share": 0.18,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "수 23~02시"
+    },
+    "primeWeekday": "나는 SOLO",
+    "primeWeekend": "풍향고2"
+   },
+   "ownName": "ENA"
   },
   {
    "group": "terrestrial",
@@ -5430,7 +5670,67 @@
     ],
     "avgC": 0.1171,
     "avgO": 0.2644
-   }
+   },
+   "pattern": {
+    "titles": 225,
+    "weeks": 46,
+    "top5": 0.446,
+    "rerunShare": 0.283,
+    "blockShare": 0.023,
+    "avgRun": 1.12,
+    "strips": 38,
+    "stripTop": [
+     {
+      "name": "세계테마기행",
+      "band": "20~23시"
+     },
+     {
+      "name": "세계테마기행",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "세계테마기행",
+     "perWeek": 17.2,
+     "slots": 17,
+     "share": 0.23,
+     "firstSlot": "월~금 20~23시",
+     "rerunSlot": "월~금 05~08시"
+    },
+    "primeWeekday": "세계테마기행",
+    "primeWeekend": "극한 직업"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 74,
+    "weeks": 46,
+    "top5": 0.414,
+    "rerunShare": 0.912,
+    "blockShare": 0.096,
+    "avgRun": 1.29,
+    "strips": 12,
+    "stripTop": [
+     {
+      "name": "허수아비",
+      "band": "11~14시"
+     },
+     {
+      "name": "닥터 섬보이",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 SOLO",
+     "perWeek": 9.9,
+     "slots": 48,
+     "share": 0.18,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "수 23~02시"
+    },
+    "primeWeekday": "나는 SOLO",
+    "primeWeekend": "풍향고2"
+   },
+   "ownName": "ENA"
   },
   {
    "group": "terrestrial",
@@ -6533,7 +6833,67 @@
     ],
     "avgC": 0.2415,
     "avgO": 0.131
-   }
+   },
+   "pattern": {
+    "titles": 143,
+    "weeks": 46,
+    "top5": 0.442,
+    "rerunShare": 0.486,
+    "blockShare": 0.01,
+    "avgRun": 1.08,
+    "strips": 21,
+    "stripTop": [
+     {
+      "name": "JTBC 뉴스룸",
+      "band": "17~20시"
+     },
+     {
+      "name": "사건반장",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "냉장고를 부탁해 since 2014",
+     "perWeek": 8.7,
+     "slots": 41,
+     "share": 0.096,
+     "firstSlot": "일 20~23시",
+     "rerunSlot": "일 23~02시"
+    },
+    "primeWeekday": "이혼숙려캠프",
+    "primeWeekend": "냉장고를 부탁해 since 2014"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 74,
+    "weeks": 46,
+    "top5": 0.414,
+    "rerunShare": 0.912,
+    "blockShare": 0.096,
+    "avgRun": 1.29,
+    "strips": 12,
+    "stripTop": [
+     {
+      "name": "허수아비",
+      "band": "11~14시"
+     },
+     {
+      "name": "닥터 섬보이",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 SOLO",
+     "perWeek": 9.9,
+     "slots": 48,
+     "share": 0.18,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "수 23~02시"
+    },
+    "primeWeekday": "나는 SOLO",
+    "primeWeekend": "풍향고2"
+   },
+   "ownName": "ENA"
   },
   {
    "group": "terrestrial",
@@ -7636,7 +7996,67 @@
     ],
     "avgC": 0.0626,
     "avgO": 0.131
-   }
+   },
+   "pattern": {
+    "titles": 188,
+    "weeks": 46,
+    "top5": 0.364,
+    "rerunShare": 0.361,
+    "blockShare": 0.054,
+    "avgRun": 1.07,
+    "strips": 19,
+    "stripTop": [
+     {
+      "name": "보도본부 핫라인",
+      "band": "11~14시"
+     },
+     {
+      "name": "TV조선 뉴스 9",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "금타는 금요일",
+     "perWeek": 6.6,
+     "slots": 23,
+     "share": 0.092,
+     "firstSlot": "금 20~23시",
+     "rerunSlot": "월·토·일 14~17시"
+    },
+    "primeWeekday": "TV조선 뉴스 9",
+    "primeWeekend": "강적들"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 74,
+    "weeks": 46,
+    "top5": 0.414,
+    "rerunShare": 0.912,
+    "blockShare": 0.096,
+    "avgRun": 1.29,
+    "strips": 12,
+    "stripTop": [
+     {
+      "name": "허수아비",
+      "band": "11~14시"
+     },
+     {
+      "name": "닥터 섬보이",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 SOLO",
+     "perWeek": 9.9,
+     "slots": 48,
+     "share": 0.18,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "수 23~02시"
+    },
+    "primeWeekday": "나는 SOLO",
+    "primeWeekend": "풍향고2"
+   },
+   "ownName": "ENA"
   },
   {
    "group": "terrestrial",
@@ -8733,7 +9153,67 @@
     ],
     "avgC": 0.3127,
     "avgO": 0.131
-   }
+   },
+   "pattern": {
+    "titles": 141,
+    "weeks": 46,
+    "top5": 0.302,
+    "rerunShare": 0.801,
+    "blockShare": 0.007,
+    "avgRun": 1.1,
+    "strips": 11,
+    "stripTop": [
+     {
+      "name": "유 퀴즈 온 더 블럭",
+      "band": "20~23시"
+     },
+     {
+      "name": "유 퀴즈 온 더 블럭",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "유 퀴즈 온 더 블럭",
+     "perWeek": 11.3,
+     "slots": 51,
+     "share": 0.146,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "목·토 14~17시"
+    },
+    "primeWeekday": "유 퀴즈 온 더 블럭",
+    "primeWeekend": "언더커버 미쓰홍"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 74,
+    "weeks": 46,
+    "top5": 0.414,
+    "rerunShare": 0.912,
+    "blockShare": 0.096,
+    "avgRun": 1.29,
+    "strips": 12,
+    "stripTop": [
+     {
+      "name": "허수아비",
+      "band": "11~14시"
+     },
+     {
+      "name": "닥터 섬보이",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 SOLO",
+     "perWeek": 9.9,
+     "slots": 48,
+     "share": 0.18,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "수 23~02시"
+    },
+    "primeWeekday": "나는 SOLO",
+    "primeWeekend": "풍향고2"
+   },
+   "ownName": "ENA"
   },
   {
    "group": "terrestrial",
@@ -9836,7 +10316,67 @@
     ],
     "avgC": 0.0596,
     "avgO": 0.131
-   }
+   },
+   "pattern": {
+    "titles": 264,
+    "weeks": 45,
+    "top5": 0.336,
+    "rerunShare": 0.335,
+    "blockShare": 0.026,
+    "avgRun": 1.09,
+    "strips": 18,
+    "stripTop": [
+     {
+      "name": "MBN 뉴스와이드",
+      "band": "14~17시"
+     },
+     {
+      "name": "MBN 뉴스 7",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "무명전설",
+     "perWeek": 4,
+     "slots": 19,
+     "share": 0.079,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "월 20~23시"
+    },
+    "primeWeekday": "무명전설",
+    "primeWeekend": "휴먼다큐 사노라면"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 74,
+    "weeks": 46,
+    "top5": 0.414,
+    "rerunShare": 0.912,
+    "blockShare": 0.096,
+    "avgRun": 1.29,
+    "strips": 12,
+    "stripTop": [
+     {
+      "name": "허수아비",
+      "band": "11~14시"
+     },
+     {
+      "name": "닥터 섬보이",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 SOLO",
+     "perWeek": 9.9,
+     "slots": 48,
+     "share": 0.18,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "수 23~02시"
+    },
+    "primeWeekday": "나는 SOLO",
+    "primeWeekend": "풍향고2"
+   },
+   "ownName": "ENA"
   },
   {
    "group": "terrestrial",
@@ -10939,7 +11479,67 @@
     ],
     "avgC": 0.0692,
     "avgO": 0.131
-   }
+   },
+   "pattern": {
+    "titles": 218,
+    "weeks": 45,
+    "top5": 0.509,
+    "rerunShare": 0.408,
+    "blockShare": 0.003,
+    "avgRun": 1.04,
+    "strips": 29,
+    "stripTop": [
+     {
+      "name": "뉴스 TOP10",
+      "band": "17~20시"
+     },
+     {
+      "name": "김진의 돌직구 쇼",
+      "band": "08~11시"
+     }
+    ],
+    "lead": {
+     "name": "뉴스 TOP10",
+     "perWeek": 6.9,
+     "slots": 8,
+     "share": 0.14,
+     "firstSlot": "매일 17~20시",
+     "rerunSlot": null
+    },
+    "primeWeekday": "탐정들의 영업비밀",
+    "primeWeekend": "이산가족감동프로젝트 이제 만나러 갑니다"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 74,
+    "weeks": 46,
+    "top5": 0.414,
+    "rerunShare": 0.912,
+    "blockShare": 0.096,
+    "avgRun": 1.29,
+    "strips": 12,
+    "stripTop": [
+     {
+      "name": "허수아비",
+      "band": "11~14시"
+     },
+     {
+      "name": "닥터 섬보이",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 SOLO",
+     "perWeek": 9.9,
+     "slots": 48,
+     "share": 0.18,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "수 23~02시"
+    },
+    "primeWeekday": "나는 SOLO",
+    "primeWeekend": "풍향고2"
+   },
+   "ownName": "ENA"
   },
   {
    "group": "drama",
@@ -12023,7 +12623,67 @@
     "ownBest": [],
     "avgC": 0.0759,
     "avgO": 0.0247
-   }
+   },
+   "pattern": {
+    "titles": 69,
+    "weeks": 46,
+    "top5": 0.489,
+    "rerunShare": 0.844,
+    "blockShare": 0.105,
+    "avgRun": 1.23,
+    "strips": 13,
+    "stripTop": [
+     {
+      "name": "다시 쓰는 육아일기 미운 우리 새끼",
+      "band": "14~17시"
+     },
+     {
+      "name": "다시 쓰는 육아일기 미운 우리 새끼",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 SOLO",
+     "perWeek": 11.4,
+     "slots": 33,
+     "share": 0.187,
+     "firstSlot": "수 20~23시",
+     "rerunSlot": "수 23~02시"
+    },
+    "primeWeekday": "나는 SOLO",
+    "primeWeekend": "이호선의 사이다"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.092,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "drama",
@@ -13040,7 +13700,67 @@
     ],
     "avgC": 0.119,
     "avgO": 0.054
-   }
+   },
+   "pattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.336,
+    "rerunShare": 0.771,
+    "blockShare": 0.211,
+    "avgRun": 1.53,
+    "strips": 17,
+    "stripTop": [
+     {
+      "name": "붉은 진주",
+      "band": "08~11시"
+     },
+     {
+      "name": "기쁜 우리 좋은 날",
+      "band": "05~08시"
+     }
+    ],
+    "lead": {
+     "name": "사랑을 처방해 드립니다",
+     "perWeek": 8.6,
+     "slots": 15,
+     "share": 0.084,
+     "firstSlot": "월·일 11~14시",
+     "rerunSlot": "화·수·목·금·일 11~14시"
+    },
+    "primeWeekday": "무엇이든 물어보살",
+    "primeWeekend": "살림하는 남자들 2"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.092,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "drama",
@@ -14131,7 +14851,67 @@
     ],
     "avgC": 0.0733,
     "avgO": 0.0247
-   }
+   },
+   "pattern": {
+    "titles": 93,
+    "weeks": 46,
+    "top5": 0.547,
+    "rerunShare": 0.852,
+    "blockShare": 0.105,
+    "avgRun": 1.24,
+    "strips": 39,
+    "stripTop": [
+     {
+      "name": "첫 번째 남자",
+      "band": "05~08시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 19,
+     "slots": 52,
+     "share": 0.219,
+     "firstSlot": "토 17~20시",
+     "rerunSlot": "토·일 11~14시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.092,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "drama",
@@ -15228,7 +16008,67 @@
     ],
     "avgC": 0.0078,
     "avgO": 0.0247
-   }
+   },
+   "pattern": {
+    "titles": 117,
+    "weeks": 45,
+    "top5": 0.609,
+    "rerunShare": 0.202,
+    "blockShare": 0.072,
+    "avgRun": 1.26,
+    "strips": 75,
+    "stripTop": [
+     {
+      "name": "나는 자연인이다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나는 자연인이다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나는 자연인이다",
+     "perWeek": 33.5,
+     "slots": 32,
+     "share": 0.407,
+     "firstSlot": "매일 20~23시",
+     "rerunSlot": null
+    },
+    "primeWeekday": "나는 자연인이다",
+    "primeWeekend": "나는 자연인이다"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.092,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "drama",
@@ -16239,7 +17079,67 @@
     ],
     "avgC": 0.1486,
     "avgO": 0.0792
-   }
+   },
+   "pattern": {
+    "titles": 46,
+    "weeks": 46,
+    "top5": 0.288,
+    "rerunShare": 0.618,
+    "blockShare": 0.214,
+    "avgRun": 1.84,
+    "strips": 97,
+    "stripTop": [
+     {
+      "name": "소문난 칠공주",
+      "band": "14~17시"
+     },
+     {
+      "name": "수상한 삼형제",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "황금물고기",
+     "perWeek": 5.9,
+     "slots": 38,
+     "share": 0.064,
+     "firstSlot": "월~금 05~08시",
+     "rerunSlot": "월·수·목·금·토·일 14~17시"
+    },
+    "primeWeekday": "나쁜여자 착한여자",
+    "primeWeekend": "내 딸 꽃님이"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.371,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.1,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "수·일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "drama",
@@ -17336,7 +18236,67 @@
     ],
     "avgC": 0.0122,
     "avgO": 0.0247
-   }
+   },
+   "pattern": {
+    "titles": 63,
+    "weeks": 46,
+    "top5": 0.493,
+    "rerunShare": 0.347,
+    "blockShare": 0.401,
+    "avgRun": 2.43,
+    "strips": 66,
+    "stripTop": [
+     {
+      "name": "인간극장",
+      "band": "14~17시"
+     },
+     {
+      "name": "인간극장",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "인간극장",
+     "perWeek": 44.5,
+     "slots": 35,
+     "share": 0.203,
+     "firstSlot": "매일 14~17시",
+     "rerunSlot": "매일 05~08시"
+    },
+    "primeWeekday": "조강지처 클럽",
+    "primeWeekend": "사랑과 야망"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.092,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "drama",
@@ -18439,7 +19399,67 @@
     ],
     "avgC": 0.032,
     "avgO": 0.0247
-   }
+   },
+   "pattern": {
+    "titles": 122,
+    "weeks": 46,
+    "top5": 0.291,
+    "rerunShare": null,
+    "blockShare": 0.254,
+    "avgRun": 1.47,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "토요일은 밥이 좋아",
+      "band": "02~05시"
+     },
+     {
+      "name": "이호선 상담소",
+      "band": "08~11시"
+     }
+    ],
+    "lead": {
+     "name": "이호선 상담소",
+     "perWeek": 7,
+     "slots": 45,
+     "share": 0.078,
+     "firstSlot": null,
+     "rerunSlot": null
+    },
+    "primeWeekday": "이호선 상담소",
+    "primeWeekend": "라디오스타"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.092,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "drama",
@@ -19536,7 +20556,67 @@
     ],
     "avgC": 0.0079,
     "avgO": 0.0247
-   }
+   },
+   "pattern": {
+    "titles": 140,
+    "weeks": 46,
+    "top5": 0.413,
+    "rerunShare": 0.275,
+    "blockShare": 0.013,
+    "avgRun": 1.37,
+    "strips": 74,
+    "stripTop": [
+     {
+      "name": "나는 자연인이다",
+      "band": "11~14시"
+     },
+     {
+      "name": "나는 자연인이다",
+      "band": "23~02시"
+     }
+    ],
+    "lead": {
+     "name": "나는 자연인이다",
+     "perWeek": 19.8,
+     "slots": 49,
+     "share": 0.208,
+     "firstSlot": "월~금 11~14시",
+     "rerunSlot": "월~금 23~02시"
+    },
+    "primeWeekday": "나는 자연인이다",
+    "primeWeekend": "허준"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.092,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "drama",
@@ -20633,7 +21713,67 @@
     ],
     "avgC": 0.0208,
     "avgO": 0.0247
-   }
+   },
+   "pattern": {
+    "titles": 146,
+    "weeks": 46,
+    "top5": 0.53,
+    "rerunShare": 0.827,
+    "blockShare": 0.537,
+    "avgRun": 2.49,
+    "strips": 70,
+    "stripTop": [
+     {
+      "name": "전원일기",
+      "band": "20~23시"
+     },
+     {
+      "name": "전원일기",
+      "band": "23~02시"
+     }
+    ],
+    "lead": {
+     "name": "전원일기",
+     "perWeek": 39.8,
+     "slots": 56,
+     "share": 0.37,
+     "firstSlot": null,
+     "rerunSlot": "월~금 20~23시"
+    },
+    "primeWeekday": "전원일기",
+    "primeWeekend": "전원일기"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.092,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "drama",
@@ -21656,7 +22796,67 @@
     ],
     "avgC": 0.063,
     "avgO": 0.054
-   }
+   },
+   "pattern": {
+    "titles": 203,
+    "weeks": 46,
+    "top5": 0.185,
+    "rerunShare": 0.961,
+    "blockShare": 0.366,
+    "avgRun": 1.81,
+    "strips": 14,
+    "stripTop": [
+     {
+      "name": "언더커버 미쓰홍",
+      "band": "20~23시"
+     },
+     {
+      "name": "응답하라 1988",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "언더커버 미쓰홍",
+     "perWeek": 4.1,
+     "slots": 34,
+     "share": 0.05,
+     "firstSlot": null,
+     "rerunSlot": "수·목 20~23시"
+    },
+    "primeWeekday": "언더커버 미쓰홍",
+    "primeWeekend": "프리한19"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.092,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "drama",
@@ -22759,7 +23959,67 @@
     ],
     "avgC": 0.0251,
     "avgO": 0.0247
-   }
+   },
+   "pattern": {
+    "titles": 141,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.803,
+    "blockShare": 0.11,
+    "avgRun": 1.3,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "벌거벗은 세계사",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 6.9,
+     "slots": 51,
+     "share": 0.106,
+     "firstSlot": "목·토 20~23시",
+     "rerunSlot": "월·목·금·토·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.092,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "drama",
@@ -23859,7 +25119,67 @@
     ],
     "avgC": 0.0267,
     "avgO": 0.054
-   }
+   },
+   "pattern": {
+    "titles": 101,
+    "weeks": 46,
+    "top5": 0.634,
+    "rerunShare": 0.607,
+    "blockShare": 0.368,
+    "avgRun": 1.81,
+    "strips": 44,
+    "stripTop": [
+     {
+      "name": "부부클리닉 사랑과 전쟁",
+      "band": "11~14시"
+     },
+     {
+      "name": "부부클리닉 사랑과 전쟁",
+      "band": "14~17시"
+     }
+    ],
+    "lead": {
+     "name": "부부클리닉 사랑과 전쟁",
+     "perWeek": 34.8,
+     "slots": 30,
+     "share": 0.395,
+     "firstSlot": null,
+     "rerunSlot": "월·화·수·목·금·일 11~14시"
+    },
+    "primeWeekday": "부부클리닉 사랑과 전쟁",
+    "primeWeekend": "부부클리닉 사랑과 전쟁"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 119,
+    "weeks": 46,
+    "top5": 0.379,
+    "rerunShare": 0.89,
+    "blockShare": 0.119,
+    "avgRun": 1.34,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "무한도전",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 6.8,
+     "slots": 45,
+     "share": 0.092,
+     "firstSlot": "화·목 17~20시",
+     "rerunSlot": "일 17~20시"
+    },
+    "primeWeekday": "무한도전",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "ownName": "ENA Drama"
   },
   {
    "group": "variety",
@@ -24943,7 +26263,67 @@
     "ownBest": [],
     "avgC": 0.1014,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 67,
+    "weeks": 46,
+    "top5": 0.735,
+    "rerunShare": 0.864,
+    "blockShare": 0.021,
+    "avgRun": 1.07,
+    "strips": 28,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "14~17시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 22.6,
+     "slots": 56,
+     "share": 0.302,
+     "firstSlot": "토 17~20시",
+     "rerunSlot": "월·일 17~20시"
+    },
+    "primeWeekday": "히든 아이",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -26046,7 +27426,67 @@
     ],
     "avgC": 0.0667,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 108,
+    "weeks": 46,
+    "top5": 0.535,
+    "rerunShare": 0.968,
+    "blockShare": 0.034,
+    "avgRun": 1.17,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "남겨서 뭐하게",
+      "band": "20~23시"
+     },
+     {
+      "name": "이호선 상담소",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "이호선 상담소",
+     "perWeek": 19.3,
+     "slots": 53,
+     "share": 0.23,
+     "firstSlot": "화 20~23시",
+     "rerunSlot": "목·금·일 20~23시"
+    },
+    "primeWeekday": "이호선 상담소",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -27137,7 +28577,67 @@
     ],
     "avgC": 0.0562,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 62,
+    "weeks": 46,
+    "top5": 0.481,
+    "rerunShare": 0.79,
+    "blockShare": 0.015,
+    "avgRun": 1.08,
+    "strips": 17,
+    "stripTop": [
+     {
+      "name": "차트를 달리는 남자",
+      "band": "17~20시"
+     },
+     {
+      "name": "이십세기 힛-트쏭",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "차트를 달리는 남자",
+     "perWeek": 15.2,
+     "slots": 38,
+     "share": 0.195,
+     "firstSlot": "토 14~17시",
+     "rerunSlot": "목·금·토·일 17~20시"
+    },
+    "primeWeekday": "이십세기 힛-트쏭",
+    "primeWeekend": "1박 2일 시즌4"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -28240,7 +29740,67 @@
     ],
     "avgC": 0.0612,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 44,
+    "weeks": 46,
+    "top5": 0.505,
+    "rerunShare": 0.888,
+    "blockShare": 0.038,
+    "avgRun": 1.19,
+    "strips": 34,
+    "stripTop": [
+     {
+      "name": "전현무계획 3",
+      "band": "20~23시"
+     },
+     {
+      "name": "전현무계획 4",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "전현무계획 3",
+     "perWeek": 9.6,
+     "slots": 52,
+     "share": 0.12,
+     "firstSlot": "금 20~23시",
+     "rerunSlot": "월·목·금 20~23시"
+    },
+    "primeWeekday": "전현무계획 3",
+    "primeWeekend": "니돈내산 독박투어4"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -29343,7 +30903,67 @@
     ],
     "avgC": 0.0452,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 58,
+    "weeks": 46,
+    "top5": 0.623,
+    "rerunShare": 0.839,
+    "blockShare": 0.045,
+    "avgRun": 1.1,
+    "strips": 25,
+    "stripTop": [
+     {
+      "name": "런닝맨",
+      "band": "20~23시"
+     },
+     {
+      "name": "런닝맨",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "런닝맨",
+     "perWeek": 19.9,
+     "slots": 54,
+     "share": 0.236,
+     "firstSlot": "월 11~14시",
+     "rerunSlot": "토·일 11~14시"
+    },
+    "primeWeekday": "런닝맨",
+    "primeWeekend": "런닝맨"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -30446,7 +32066,67 @@
     ],
     "avgC": 0.0413,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 100,
+    "weeks": 46,
+    "top5": 0.584,
+    "rerunShare": 0.868,
+    "blockShare": 0.074,
+    "avgRun": 1.25,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "냉장고를 부탁해 since 2014",
+      "band": "20~23시"
+     },
+     {
+      "name": "냉장고를 부탁해 since 2014",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "냉장고를 부탁해 since 2014",
+     "perWeek": 17.6,
+     "slots": 53,
+     "share": 0.202,
+     "firstSlot": "일 20~23시",
+     "rerunSlot": "월·화·수·일 17~20시"
+    },
+    "primeWeekday": "냉장고를 부탁해 since 2014",
+    "primeWeekend": "냉장고를 부탁해 since 2014"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -31443,7 +33123,67 @@
     ],
     "avgC": 0.0118,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 15,
+    "weeks": 9,
+    "top5": 0.911,
+    "rerunShare": 0.361,
+    "blockShare": null,
+    "avgRun": null,
+    "strips": 12,
+    "stripTop": [
+     {
+      "name": "벌거벗은세계사",
+      "band": "17~20시"
+     },
+     {
+      "name": "TV동물농장",
+      "band": "23~02시"
+     }
+    ],
+    "lead": {
+     "name": "TV동물농장",
+     "perWeek": 19.6,
+     "slots": 19,
+     "share": 0.367,
+     "firstSlot": "월·수·금·일 05~08시",
+     "rerunSlot": "화·수·목·금·토·일 23~02시"
+    },
+    "primeWeekday": "순간포착세상에이런일이",
+    "primeWeekend": "TV동물농장"
+   },
+   "patternSrc": "nielsen",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -32546,7 +34286,67 @@
     ],
     "avgC": 0.0436,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 157,
+    "weeks": 45,
+    "top5": 0.328,
+    "rerunShare": 0.976,
+    "blockShare": 0.26,
+    "avgRun": 1.41,
+    "strips": 20,
+    "stripTop": [
+     {
+      "name": "유 퀴즈 온 더 블럭",
+      "band": "20~23시"
+     },
+     {
+      "name": "벌거벗은 세계사",
+      "band": "08~11시"
+     }
+    ],
+    "lead": {
+     "name": "유 퀴즈 온 더 블럭",
+     "perWeek": 6.8,
+     "slots": 50,
+     "share": 0.092,
+     "firstSlot": null,
+     "rerunSlot": "목 20~23시"
+    },
+    "primeWeekday": "유 퀴즈 온 더 블럭",
+    "primeWeekend": "유 퀴즈 온 더 블럭"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -33649,7 +35449,67 @@
     ],
     "avgC": 0.0359,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 78,
+    "weeks": 46,
+    "top5": 0.455,
+    "rerunShare": 0.85,
+    "blockShare": 0.027,
+    "avgRun": 1.06,
+    "strips": 22,
+    "stripTop": [
+     {
+      "name": "냉장고를 부탁해 since 2014",
+      "band": "17~20시"
+     },
+     {
+      "name": "전지적 참견 시점",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "전지적 참견 시점",
+     "perWeek": 8.5,
+     "slots": 48,
+     "share": 0.126,
+     "firstSlot": "일 17~20시",
+     "rerunSlot": "월·화·목·토 14~17시"
+    },
+    "primeWeekday": "전지적 참견 시점",
+    "primeWeekend": "끝까지 간다 독박투어"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -34646,7 +36506,58 @@
     ],
     "avgC": 0.0027,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 45,
+    "weeks": 9,
+    "top5": 0.727,
+    "rerunShare": null,
+    "blockShare": null,
+    "avgRun": null,
+    "strips": 0,
+    "stripTop": [],
+    "lead": {
+     "name": "신청곡을불러드립니다사랑의콜센타",
+     "perWeek": 10.8,
+     "slots": 44,
+     "share": 0.169,
+     "firstSlot": null,
+     "rerunSlot": null
+    },
+    "primeWeekday": "전설의사내",
+    "primeWeekend": "전설의사내"
+   },
+   "patternSrc": "nielsen",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -35746,7 +37657,67 @@
     ],
     "avgC": 0.0131,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 138,
+    "weeks": 46,
+    "top5": 0.561,
+    "rerunShare": 0.818,
+    "blockShare": 0,
+    "avgRun": 1.1,
+    "strips": 49,
+    "stripTop": [
+     {
+      "name": "벌거벗은 세계사",
+      "band": "20~23시"
+     },
+     {
+      "name": "벌거벗은 세계사",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 16.1,
+     "slots": 40,
+     "share": 0.208,
+     "firstSlot": "월~금 20~23시",
+     "rerunSlot": "화·수·목·금·토·일 20~23시"
+    },
+    "primeWeekday": "벌거벗은 세계사",
+    "primeWeekend": "벌거벗은 세계사"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -36743,7 +38714,67 @@
     ],
     "avgC": 0.0208,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 119,
+    "weeks": 45,
+    "top5": 0.573,
+    "rerunShare": null,
+    "blockShare": null,
+    "avgRun": null,
+    "strips": 23,
+    "stripTop": [
+     {
+      "name": "미운우리새끼다시쓰는육아일기",
+      "band": "20~23시"
+     },
+     {
+      "name": "틈만나면",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "미운우리새끼다시쓰는육아일기",
+     "perWeek": 10.2,
+     "slots": 47,
+     "share": 0.213,
+     "firstSlot": null,
+     "rerunSlot": null
+    },
+    "primeWeekday": "미운우리새끼다시쓰는육아일기",
+    "primeWeekend": "틈만나면"
+   },
+   "patternSrc": "nielsen",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -37740,7 +39771,67 @@
     ],
     "avgC": 0.0075,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 149,
+    "weeks": 45,
+    "top5": 0.637,
+    "rerunShare": null,
+    "blockShare": null,
+    "avgRun": null,
+    "strips": 37,
+    "stripTop": [
+     {
+      "name": "이제만나러갑니다",
+      "band": "20~23시"
+     },
+     {
+      "name": "이호선상담소관계VS전쟁",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "이제만나러갑니다",
+     "perWeek": 26.6,
+     "slots": 51,
+     "share": 0.206,
+     "firstSlot": null,
+     "rerunSlot": null
+    },
+    "primeWeekday": "이제만나러갑니다",
+    "primeWeekend": "이제만나러갑니다"
+   },
+   "patternSrc": "nielsen",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -38737,7 +40828,67 @@
     ],
     "avgC": 0.022,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 117,
+    "weeks": 45,
+    "top5": 0.563,
+    "rerunShare": 0.636,
+    "blockShare": null,
+    "avgRun": null,
+    "strips": 26,
+    "stripTop": [
+     {
+      "name": "런닝맨",
+      "band": "20~23시"
+     },
+     {
+      "name": "틈만나면",
+      "band": "20~23시"
+     }
+    ],
+    "lead": {
+     "name": "맛있는녀석들",
+     "perWeek": 10.7,
+     "slots": 50,
+     "share": 0.203,
+     "firstSlot": "금 20~23시",
+     "rerunSlot": "금 17~20시"
+    },
+    "primeWeekday": "맛있는녀석들",
+    "primeWeekend": "이십세기힛트쏭"
+   },
+   "patternSrc": "nielsen",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "variety",
@@ -39734,7 +41885,67 @@
     ],
     "avgC": 0.0265,
     "avgO": 0.0291
-   }
+   },
+   "pattern": {
+    "titles": 181,
+    "weeks": 45,
+    "top5": 0.479,
+    "rerunShare": null,
+    "blockShare": null,
+    "avgRun": null,
+    "strips": 22,
+    "stripTop": [
+     {
+      "name": "SHOWMETHEMONEY12",
+      "band": "20~23시"
+     },
+     {
+      "name": "데뮤톡",
+      "band": "14~17시"
+     }
+    ],
+    "lead": {
+     "name": "SHOWMETHEMONEY12",
+     "perWeek": 6,
+     "slots": 48,
+     "share": 0.229,
+     "firstSlot": null,
+     "rerunSlot": null
+    },
+    "primeWeekday": "SHOWMETHEMONEY12",
+    "primeWeekend": "SHOWMETHEMONEY12"
+   },
+   "patternSrc": "nielsen",
+   "ownPattern": {
+    "titles": 76,
+    "weeks": 46,
+    "top5": 0.601,
+    "rerunShare": 0.909,
+    "blockShare": 0.004,
+    "avgRun": 1.06,
+    "strips": 30,
+    "stripTop": [
+     {
+      "name": "나 혼자 산다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나 혼자 산다",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "나 혼자 산다",
+     "perWeek": 11.1,
+     "slots": 44,
+     "share": 0.171,
+     "firstSlot": "목·금 20~23시",
+     "rerunSlot": "월·화·수·금·일 20~23시"
+    },
+    "primeWeekday": "나 혼자 산다",
+    "primeWeekend": "나 혼자 산다"
+   },
+   "ownName": "ENA Play"
   },
   {
    "group": "life",
@@ -40834,7 +43045,67 @@
     ],
     "avgC": 0.0696,
     "avgO": 0.0685
-   }
+   },
+   "pattern": {
+    "titles": 37,
+    "weeks": 46,
+    "top5": 0.769,
+    "rerunShare": 0.37,
+    "blockShare": 0.28,
+    "avgRun": 1.89,
+    "strips": 45,
+    "stripTop": [
+     {
+      "name": "나는 자연인이다",
+      "band": "20~23시"
+     },
+     {
+      "name": "나는 자연인이다",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "나는 자연인이다",
+     "perWeek": 40.8,
+     "slots": 35,
+     "share": 0.334,
+     "firstSlot": "매일 20~23시",
+     "rerunSlot": "매일 11~14시"
+    },
+    "primeWeekday": "나는 자연인이다",
+    "primeWeekend": "나는 자연인이다"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 50,
+    "weeks": 46,
+    "top5": 0.931,
+    "rerunShare": 0.907,
+    "blockShare": 0.265,
+    "avgRun": 1.55,
+    "strips": 29,
+    "stripTop": [
+     {
+      "name": "세계테마기행",
+      "band": "11~14시"
+     },
+     {
+      "name": "세계테마기행",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "세계테마기행",
+     "perWeek": 43.7,
+     "slots": 56,
+     "share": 0.496,
+     "firstSlot": "월·화 14~17시",
+     "rerunSlot": "매일 11~14시"
+    },
+    "primeWeekday": "극한 직업",
+    "primeWeekend": "극한 직업"
+   },
+   "ownName": "OLIFE"
   },
   {
    "group": "life",
@@ -41925,7 +44196,67 @@
     ],
     "avgC": 0.0146,
     "avgO": 0.0685
-   }
+   },
+   "pattern": {
+    "titles": 36,
+    "weeks": 46,
+    "top5": 0.859,
+    "rerunShare": 0.349,
+    "blockShare": 0.384,
+    "avgRun": 2.09,
+    "strips": 38,
+    "stripTop": [
+     {
+      "name": "한국기행",
+      "band": "11~14시"
+     },
+     {
+      "name": "세계테마기행",
+      "band": "14~17시"
+     }
+    ],
+    "lead": {
+     "name": "세계테마기행",
+     "perWeek": 59.2,
+     "slots": 49,
+     "share": 0.307,
+     "firstSlot": "매일 14~17시",
+     "rerunSlot": "매일 08~11시"
+    },
+    "primeWeekday": "아시아 헌터",
+    "primeWeekend": "아시아 헌터"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 50,
+    "weeks": 46,
+    "top5": 0.931,
+    "rerunShare": 0.907,
+    "blockShare": 0.265,
+    "avgRun": 1.55,
+    "strips": 29,
+    "stripTop": [
+     {
+      "name": "세계테마기행",
+      "band": "11~14시"
+     },
+     {
+      "name": "세계테마기행",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "세계테마기행",
+     "perWeek": 43.7,
+     "slots": 56,
+     "share": 0.496,
+     "firstSlot": "월·화 14~17시",
+     "rerunSlot": "매일 11~14시"
+    },
+    "primeWeekday": "극한 직업",
+    "primeWeekend": "극한 직업"
+   },
+   "ownName": "OLIFE"
   },
   {
    "group": "uhd",
@@ -42923,7 +45254,67 @@
     "ownBest": [],
     "avgC": 0.0148,
     "avgO": 0.0022
-   }
+   },
+   "pattern": {
+    "titles": 348,
+    "weeks": 46,
+    "top5": 0.134,
+    "rerunShare": null,
+    "blockShare": 0.397,
+    "avgRun": 1.82,
+    "strips": 40,
+    "stripTop": [
+     {
+      "name": "폭군의 셰프",
+      "band": "17~20시"
+     },
+     {
+      "name": "벌거벗은 세계사",
+      "band": "14~17시"
+     }
+    ],
+    "lead": {
+     "name": "벌거벗은 세계사",
+     "perWeek": 2.7,
+     "slots": 19,
+     "share": 0.035,
+     "firstSlot": null,
+     "rerunSlot": null
+    },
+    "primeWeekday": "놀라운 토요일",
+    "primeWeekend": "유 퀴즈 온 더 블럭"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 247,
+    "weeks": 46,
+    "top5": 0.476,
+    "rerunShare": 0.597,
+    "blockShare": 0.357,
+    "avgRun": 2.01,
+    "strips": 66,
+    "stripTop": [
+     {
+      "name": "걸어서 세계속으로",
+      "band": "14~17시"
+     },
+     {
+      "name": "내 아이의 사생활",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "내 아이의 사생활",
+     "perWeek": 16.5,
+     "slots": 44,
+     "share": 0.189,
+     "firstSlot": "일 17~20시",
+     "rerunSlot": "매일 17~20시"
+    },
+    "primeWeekday": "내 아이의 사생활",
+    "primeWeekend": "강철부대 2"
+   },
+   "ownName": "skyUHD"
   },
   {
    "group": "uhd",
@@ -43927,7 +46318,67 @@
     "ownBest": [],
     "avgC": 0.0068,
     "avgO": 0.0022
-   }
+   },
+   "pattern": {
+    "titles": 369,
+    "weeks": 46,
+    "top5": 0.267,
+    "rerunShare": 0.304,
+    "blockShare": 0.423,
+    "avgRun": 2.3,
+    "strips": 80,
+    "stripTop": [
+     {
+      "name": "NEW 코리아 헌터",
+      "band": "20~23시"
+     },
+     {
+      "name": "NEW 코리아 헌터",
+      "band": "23~02시"
+     }
+    ],
+    "lead": {
+     "name": "NEW 코리아 헌터",
+     "perWeek": 16.1,
+     "slots": 26,
+     "share": 0.14,
+     "firstSlot": "금·토·일 20~23시",
+     "rerunSlot": "매일 20~23시"
+    },
+    "primeWeekday": "NEW 코리아 헌터",
+    "primeWeekend": "NEW 코리아 헌터"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 247,
+    "weeks": 46,
+    "top5": 0.476,
+    "rerunShare": 0.597,
+    "blockShare": 0.357,
+    "avgRun": 2.01,
+    "strips": 66,
+    "stripTop": [
+     {
+      "name": "걸어서 세계속으로",
+      "band": "14~17시"
+     },
+     {
+      "name": "내 아이의 사생활",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "내 아이의 사생활",
+     "perWeek": 16.5,
+     "slots": 44,
+     "share": 0.189,
+     "firstSlot": "일 17~20시",
+     "rerunSlot": "매일 17~20시"
+    },
+    "primeWeekday": "내 아이의 사생활",
+    "primeWeekend": "강철부대 2"
+   },
+   "ownName": "skyUHD"
   },
   {
    "group": "uhd",
@@ -44931,7 +47382,67 @@
     "ownBest": [],
     "avgC": 0.0074,
     "avgO": 0.0022
-   }
+   },
+   "pattern": {
+    "titles": 224,
+    "weeks": 46,
+    "top5": 0.383,
+    "rerunShare": 0.527,
+    "blockShare": 0.181,
+    "avgRun": 1.28,
+    "strips": 60,
+    "stripTop": [
+     {
+      "name": "이것은 실화다",
+      "band": "20~23시"
+     },
+     {
+      "name": "니돈내산 독박투어3",
+      "band": "11~14시"
+     }
+    ],
+    "lead": {
+     "name": "니돈내산 독박투어3",
+     "perWeek": 10.2,
+     "slots": 34,
+     "share": 0.12,
+     "firstSlot": "월 11~14시",
+     "rerunSlot": "매일 11~14시"
+    },
+    "primeWeekday": "이것은 실화다",
+    "primeWeekend": "이것은 실화다"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 247,
+    "weeks": 46,
+    "top5": 0.476,
+    "rerunShare": 0.597,
+    "blockShare": 0.357,
+    "avgRun": 2.01,
+    "strips": 66,
+    "stripTop": [
+     {
+      "name": "걸어서 세계속으로",
+      "band": "14~17시"
+     },
+     {
+      "name": "내 아이의 사생활",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "내 아이의 사생활",
+     "perWeek": 16.5,
+     "slots": 44,
+     "share": 0.189,
+     "firstSlot": "일 17~20시",
+     "rerunSlot": "매일 17~20시"
+    },
+    "primeWeekday": "내 아이의 사생활",
+    "primeWeekend": "강철부대 2"
+   },
+   "ownName": "skyUHD"
   },
   {
    "group": "uhd",
@@ -45935,7 +48446,67 @@
     "ownBest": [],
     "avgC": 0.0039,
     "avgO": 0.0022
-   }
+   },
+   "pattern": {
+    "titles": 260,
+    "weeks": 46,
+    "top5": 0.433,
+    "rerunShare": 0.167,
+    "blockShare": 0.09,
+    "avgRun": 1.3,
+    "strips": 90,
+    "stripTop": [
+     {
+      "name": "세계테마기행",
+      "band": "14~17시"
+     },
+     {
+      "name": "세계테마기행",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "세계테마기행",
+     "perWeek": 29.1,
+     "slots": 35,
+     "share": 0.235,
+     "firstSlot": "월·화·수·목·금·일 17~20시",
+     "rerunSlot": "화·수·목·금 14~17시"
+    },
+    "primeWeekday": "세계테마기행",
+    "primeWeekend": "태군노래자랑 2"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 247,
+    "weeks": 46,
+    "top5": 0.476,
+    "rerunShare": 0.597,
+    "blockShare": 0.357,
+    "avgRun": 2.01,
+    "strips": 66,
+    "stripTop": [
+     {
+      "name": "걸어서 세계속으로",
+      "band": "14~17시"
+     },
+     {
+      "name": "내 아이의 사생활",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "내 아이의 사생활",
+     "perWeek": 16.5,
+     "slots": 44,
+     "share": 0.189,
+     "firstSlot": "일 17~20시",
+     "rerunSlot": "매일 17~20시"
+    },
+    "primeWeekday": "내 아이의 사생활",
+    "primeWeekend": "강철부대 2"
+   },
+   "ownName": "skyUHD"
   },
   {
    "group": "uhd",
@@ -46949,7 +49520,67 @@
     ],
     "avgC": 0.0029,
     "avgO": 0.0022
-   }
+   },
+   "pattern": {
+    "titles": 258,
+    "weeks": 46,
+    "top5": 0.292,
+    "rerunShare": 0.633,
+    "blockShare": 0.248,
+    "avgRun": 1.69,
+    "strips": 47,
+    "stripTop": [
+     {
+      "name": "생방송 투데이",
+      "band": "05~08시"
+     },
+     {
+      "name": "신빨 토크쇼 귀묘한 이야기",
+      "band": "08~11시"
+     }
+    ],
+    "lead": {
+     "name": "더 트롯 쇼",
+     "perWeek": 5.7,
+     "slots": 48,
+     "share": 0.103,
+     "firstSlot": null,
+     "rerunSlot": "매일 14~17시"
+    },
+    "primeWeekday": "장해전",
+    "primeWeekend": "더 쇼"
+   },
+   "patternSrc": "iptv",
+   "ownPattern": {
+    "titles": 247,
+    "weeks": 46,
+    "top5": 0.476,
+    "rerunShare": 0.597,
+    "blockShare": 0.357,
+    "avgRun": 2.01,
+    "strips": 66,
+    "stripTop": [
+     {
+      "name": "걸어서 세계속으로",
+      "band": "14~17시"
+     },
+     {
+      "name": "내 아이의 사생활",
+      "band": "17~20시"
+     }
+    ],
+    "lead": {
+     "name": "내 아이의 사생활",
+     "perWeek": 16.5,
+     "slots": 44,
+     "share": 0.189,
+     "firstSlot": "일 17~20시",
+     "rerunSlot": "매일 17~20시"
+    },
+    "primeWeekday": "내 아이의 사생활",
+    "primeWeekend": "강철부대 2"
+   },
+   "ownName": "skyUHD"
   }
  ]
 }

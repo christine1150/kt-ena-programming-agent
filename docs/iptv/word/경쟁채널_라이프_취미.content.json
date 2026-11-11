@@ -1,6 +1,7 @@
 {
  "docTitle": "라이프·취미군 경쟁 채널 분석(2026.1~11.10)",
  "bodyPt": 10,
+ "bulletMark": "·",
  "blocks": [
   {
    "type": "apptitle",
@@ -29,12 +30,12 @@
      "0.087",
      {
       "t": "47위 / 216",
-      "fill": "7B97C5",
+      "fill": "8C86ED",
       "color": "FFFFFF"
      },
      {
       "t": "2위 / 3",
-      "fill": "ABBDDA",
+      "fill": "B6B2F4",
       "color": "0D0D12"
      }
     ],
@@ -43,7 +44,7 @@
      "0.0055",
      {
       "t": "80위 / 216",
-      "fill": "95ABD0",
+      "fill": "A29EF1",
       "color": "0D0D12"
      },
      "-"
@@ -53,12 +54,12 @@
      "0.070",
      {
       "t": "33위 / 45",
-      "fill": "D1DBEB",
+      "fill": "D7D5F9",
       "color": "0D0D12"
      },
      {
       "t": "1위 / 3",
-      "fill": "577AB5",
+      "fill": "6D65E9",
       "color": "FFFFFF"
      }
     ],
@@ -67,13 +68,19 @@
      "0.035",
      {
       "t": "27위 / 32",
-      "fill": "E4EAF3",
+      "fill": "E7E6FB",
       "color": "0D0D12"
      },
      "-"
     ]
    ],
    "fit": true,
+   "sameWidth": [
+    [
+     2,
+     3
+    ]
+   ],
    "align": [
     "center",
     "right",
@@ -88,10 +95,6 @@
   {
    "type": "bullet",
    "text": "라이프·취미군 가구 3개 중 2위(0.087), 위 OLIFE 0.108, 아래 ONT 0.033"
-  },
-  {
-   "type": "sub",
-   "text": "IPTV 가구로는 3개 중 1위(군 1위)"
   },
   {
    "type": "bullet",
@@ -126,17 +129,17 @@
      "나는 자연인이다",
      {
       "t": "0.114",
-      "fill": "6283BA",
+      "fill": "7770EA",
       "color": "FFFFFF"
      },
      {
       "t": "0.0097",
-      "fill": "6283BA",
+      "fill": "7770EA",
       "color": "FFFFFF"
      },
      {
       "t": "0.088",
-      "fill": "6283BA",
+      "fill": "7770EA",
       "color": "FFFFFF"
      },
      "1876",
@@ -149,7 +152,7 @@
      "-",
      {
       "t": "0.074",
-      "fill": "B0C1DC",
+      "fill": "BBB7F4",
       "color": "0D0D12"
      },
      "608",
@@ -160,17 +163,17 @@
      "내일은 미스터트롯",
      {
       "t": "0.097",
-      "fill": "94ABD0",
+      "fill": "A29DF1",
       "color": "0D0D12"
      },
      {
       "t": "0.0035",
-      "fill": "EFF2F8",
+      "fill": "F1F0FD",
       "color": "0D0D12"
      },
      {
       "t": "0.074",
-      "fill": "B4C4DE",
+      "fill": "BEBBF5",
       "color": "0D0D12"
      },
      "255",
@@ -183,7 +186,7 @@
      "-",
      {
       "t": "0.073",
-      "fill": "B8C7DF",
+      "fill": "C1BEF5",
       "color": "0D0D12"
      },
      "270",
@@ -194,7 +197,7 @@
      "극한 직업",
      {
       "t": "0.074",
-      "fill": "D8E1EE",
+      "fill": "DDDCFA",
       "color": "0D0D12"
      },
      {
@@ -204,7 +207,7 @@
      },
      {
       "t": "0.068",
-      "fill": "D4DDEC",
+      "fill": "DAD8F9",
       "color": "0D0D12"
      },
      "1188",
@@ -220,12 +223,12 @@
      },
      {
       "t": "0.0046",
-      "fill": "D6DFED",
+      "fill": "DBDAFA",
       "color": "0D0D12"
      },
      {
       "t": "0.066",
-      "fill": "DEE5F1",
+      "fill": "E3E1FB",
       "color": "0D0D12"
      },
      "1252",
@@ -236,17 +239,17 @@
      "NEW 코리아 헌터",
      {
       "t": "0.064",
-      "fill": "F8F9FC",
+      "fill": "F9F8FE",
       "color": "0D0D12"
      },
      {
       "t": "0.0061",
-      "fill": "B4C4DE",
+      "fill": "BEBAF5",
       "color": "0D0D12"
      },
      {
       "t": "0.063",
-      "fill": "F0F3F9",
+      "fill": "F2F2FD",
       "color": "0D0D12"
      },
      "218",
@@ -259,7 +262,7 @@
      "-",
      {
       "t": "0.063",
-      "fill": "F3F5FA",
+      "fill": "F4F4FD",
       "color": "0D0D12"
      },
      "52",
@@ -272,7 +275,7 @@
      "-",
      {
       "t": "0.061",
-      "fill": "FBFCFD",
+      "fill": "FCFBFE",
       "color": "0D0D12"
      },
      "49",
@@ -293,6 +296,13 @@
     ]
    ],
    "fit": true,
+   "sameWidth": [
+    [
+     2,
+     3,
+     4
+    ]
+   ],
    "align": [
     "center",
     "left",
@@ -308,16 +318,64 @@
    "text": "닐슨 프로그램 단위 자료가 없거나 짧아 IPTV 기준, 2049·가구 열은 닐슨, IPTV 열은 IPTV 가구(같은 이름 프로그램 평균)"
   },
   {
-   "type": "bullet",
-   "text": "시청 규모(시청률×방영 분) 1위 나는 자연인이다 33%, 상위 5편 합계 77%"
+   "type": "section",
+   "text": "Ⅲ. 편성 패턴 비교(CMC TV vs OLIFE)"
   },
   {
-   "type": "bullet",
-   "text": "편성 작품 37편, 재방 표기 방영 시간 37%, 본방 0.070 vs 재방 0.069"
+   "type": "table",
+   "head": [
+    "편성 지표(2026)",
+    "CMC TV",
+    "OLIFE"
+   ],
+   "fit": true,
+   "sameWidth": [
+    [
+     1,
+     2
+    ]
+   ],
+   "align": [
+    "center",
+    "center",
+    "center"
+   ],
+   "rows": [
+    [
+     "편성 작품 수",
+     "37편",
+     "50편"
+    ],
+    [
+     "상위 5편 시청량(시청률×분) 비중",
+     "77%",
+     "93%"
+    ],
+    [
+     "재방 비중(방영 시간)",
+     "37%",
+     "91%"
+    ],
+    [
+     "같은 작품 3회 이상 연속 편성",
+     "28%",
+     "27%"
+    ],
+    [
+     "평일 띠 편성(같은 시간대 주 4일+)",
+     "45개",
+     "29개"
+    ],
+    [
+     "대표작 반복(노출 시간대)",
+     "나는 자연인이다 주 40.8회(35개)",
+     "세계테마기행 주 43.7회(56개)"
+    ]
+   ]
   },
   {
    "type": "section",
-   "text": "Ⅲ. 요일·시간대 히트맵",
+   "text": "Ⅳ. 요일·시간대 히트맵",
    "pageBreak": true
   },
   {
@@ -342,14 +400,14 @@
      {
       "t": "0.040",
       "t2": "현장르포특종세상",
-      "fill": "FCFDFE",
+      "fill": "FDFDFF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.041",
       "t2": "현장르포특종세상",
-      "fill": "FBFBFD",
+      "fill": "FBFBFE",
       "color": "0D0D12",
       "center": true
      },
@@ -363,28 +421,28 @@
      {
       "t": "0.041",
       "t2": "현장르포특종세상",
-      "fill": "FBFCFD",
+      "fill": "FCFCFE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.040",
       "t2": "현장르포특종세상",
-      "fill": "FEFEFE",
+      "fill": "FEFEFF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.053",
       "t2": "현장르포특종세상",
-      "fill": "CCD6E8",
+      "fill": "D2D0F8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.057",
       "t2": "현장르포특종세상",
-      "fill": "B9C8E0",
+      "fill": "C2BFF6",
       "color": "0D0D12",
       "center": true
      }
@@ -394,49 +452,49 @@
      {
       "t": "0.053",
       "t2": "나는자연인이다",
-      "fill": "CAD5E7",
+      "fill": "D1CEF8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.053",
       "t2": "나는자연인이다",
-      "fill": "C9D4E7",
+      "fill": "D0CEF8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.051",
       "t2": "나는자연인이다",
-      "fill": "D3DCEB",
+      "fill": "D8D6F9",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.054",
       "t2": "나는자연인이다",
-      "fill": "C5D1E5",
+      "fill": "CDCAF7",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.053",
       "t2": "나는자연인이다",
-      "fill": "CAD5E8",
+      "fill": "D1CEF8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.076",
       "t2": "나는자연인이다",
-      "fill": "6D8CBE",
+      "fill": "8079EB",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.077",
       "t2": "나는자연인이다",
-      "fill": "6B8ABD",
+      "fill": "7E77EB",
       "color": "FFFFFF",
       "center": true
      }
@@ -446,49 +504,49 @@
      {
       "t": "0.072",
       "t2": "나는자연인이다",
-      "fill": "7F99C6",
+      "fill": "8F89EE",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.070",
       "t2": "나는자연인이다",
-      "fill": "88A1CA",
+      "fill": "9792EF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.069",
       "t2": "나는자연인이다",
-      "fill": "89A2CB",
+      "fill": "9893EF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.068",
       "t2": "나는자연인이다",
-      "fill": "8DA5CD",
+      "fill": "9C97F0",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.069",
       "t2": "나는자연인이다",
-      "fill": "89A2CB",
+      "fill": "9993EF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.082",
       "t2": "나는자연인이다",
-      "fill": "577AB5",
+      "fill": "6D65E8",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.065",
       "t2": "나는자연인이다",
-      "fill": "9BB0D3",
+      "fill": "A8A4F2",
       "color": "0D0D12",
       "center": true
      }
@@ -498,49 +556,49 @@
      {
       "t": "0.084",
       "t2": "극한직업",
-      "fill": "4E73B1",
+      "fill": "655DE7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.078",
       "t2": "극한직업",
-      "fill": "6485BB",
+      "fill": "7871EA",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.081",
       "t2": "극한직업",
-      "fill": "5C7EB7",
+      "fill": "716AE9",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.078",
       "t2": "극한직업",
-      "fill": "6787BC",
+      "fill": "7B74EB",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.077",
       "t2": "극한직업",
-      "fill": "6A89BD",
+      "fill": "7D77EB",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.087",
       "t2": "극한직업",
-      "fill": "4169AB",
+      "fill": "5A51E6",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.096",
       "t2": "극한직업",
-      "fill": "1F4E9C",
+      "fill": "3C32E1",
       "color": "FFFFFF",
       "center": true
      }
@@ -550,49 +608,49 @@
      {
       "t": "0.074",
       "t2": "다문화고부열전",
-      "fill": "7894C3",
+      "fill": "8983ED",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.071",
       "t2": "다문화고부열전",
-      "fill": "839DC8",
+      "fill": "938EEE",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.071",
       "t2": "다문화고부열전",
-      "fill": "809BC7",
+      "fill": "918BEE",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.074",
       "t2": "다문화고부열전",
-      "fill": "7794C3",
+      "fill": "8983ED",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.074",
       "t2": "다문화고부열전",
-      "fill": "7693C3",
+      "fill": "8882ED",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.075",
       "t2": "다문화고부열전",
-      "fill": "728FC1",
+      "fill": "847EEC",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.084",
       "t2": "다문화고부열전",
-      "fill": "4E73B1",
+      "fill": "655DE7",
       "color": "FFFFFF",
       "center": true
      }
@@ -602,49 +660,49 @@
      {
       "t": "0.085",
       "t2": "나는자연인이다",
-      "fill": "4A70AF",
+      "fill": "625AE7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.094",
       "t2": "나는자연인이다",
-      "fill": "26549F",
+      "fill": "4238E2",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.090",
       "t2": "나는자연인이다",
-      "fill": "3761A7",
+      "fill": "5148E4",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.087",
       "t2": "나는자연인이다",
-      "fill": "4068AB",
+      "fill": "5951E5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.091",
       "t2": "나는자연인이다",
-      "fill": "305CA4",
+      "fill": "4B42E3",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.086",
       "t2": "나는자연인이다",
-      "fill": "476DAD",
+      "fill": "5E56E6",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.088",
       "t2": "나는자연인이다",
-      "fill": "3D66A9",
+      "fill": "564DE5",
       "color": "FFFFFF",
       "center": true
      }
@@ -654,49 +712,49 @@
      {
       "t": "0.084",
       "t2": "나는자연인이다",
-      "fill": "4F74B1",
+      "fill": "665EE7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.087",
       "t2": "나는자연인이다",
-      "fill": "426AAC",
+      "fill": "5B52E6",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.084",
       "t2": "나는자연인이다",
-      "fill": "4D72B0",
+      "fill": "645CE7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.082",
       "t2": "나는자연인이다",
-      "fill": "5478B4",
+      "fill": "6A63E8",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.088",
       "t2": "나는자연인이다",
-      "fill": "3E66AA",
+      "fill": "574EE5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.088",
       "t2": "나는자연인이다",
-      "fill": "3F68AA",
+      "fill": "5850E5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.089",
       "t2": "나는자연인이다",
-      "fill": "3B64A8",
+      "fill": "544CE5",
       "color": "FFFFFF",
       "center": true
      }
@@ -706,489 +764,49 @@
      {
       "t": "0.052",
       "t2": "극한직업",
-      "fill": "D0DAEA",
+      "fill": "D6D4F9",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.052",
       "t2": "극한직업",
-      "fill": "D0DAEA",
+      "fill": "D6D4F9",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.051",
       "t2": "극한직업",
-      "fill": "D1DBEB",
+      "fill": "D7D5F9",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.051",
       "t2": "극한직업",
-      "fill": "D3DCEB",
+      "fill": "D8D6F9",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.049",
       "t2": "극한직업",
-      "fill": "DAE2EF",
+      "fill": "DFDDFA",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.053",
       "t2": "극한직업",
-      "fill": "CAD5E8",
+      "fill": "D1CFF8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.054",
       "t2": "극한직업",
-      "fill": "C5D1E5",
-      "color": "0D0D12",
-      "center": true
-     }
-    ]
-   ],
-   "equalCols": true,
-   "fit": true,
-   "align": [
-    "center"
-   ]
-  },
-  {
-   "type": "caption",
-   "text": "닐슨 유료방송가구(09/13~) 요일×시간대 평균 시청률(2026)"
-  },
-  {
-   "type": "table",
-   "head": [
-    "시간대",
-    "월",
-    "화",
-    "수",
-    "목",
-    "금",
-    "토",
-    "일"
-   ],
-   "rows": [
-    [
-     "05~08시",
-     {
-      "t": "0.031",
-      "t2": null,
-      "fill": "F7F8FB",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.044",
-      "t2": null,
-      "fill": "E2E8F2",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.026",
-      "t2": null,
-      "fill": "FFFFFF",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.034",
-      "t2": null,
-      "fill": "F2F4F9",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.035",
-      "t2": null,
-      "fill": "F0F3F8",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.043",
-      "t2": null,
-      "fill": "E4E9F3",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.057",
-      "t2": null,
-      "fill": "CDD7E9",
-      "color": "0D0D12",
-      "center": true
-     }
-    ],
-    [
-     "08~11시",
-     {
-      "t": "0.089",
-      "t2": null,
-      "fill": "99AED2",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.039",
-      "t2": null,
-      "fill": "EBEFF6",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.035",
-      "t2": null,
-      "fill": "F1F4F9",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.046",
-      "t2": null,
-      "fill": "DFE6F1",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.074",
-      "t2": null,
-      "fill": "B1C2DD",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.066",
-      "t2": null,
-      "fill": "BECCE2",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.072",
-      "t2": null,
-      "fill": "B5C4DE",
-      "color": "0D0D12",
-      "center": true
-     }
-    ],
-    [
-     "11~14시",
-     {
-      "t": "0.082",
-      "t2": null,
-      "fill": "A4B7D7",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.062",
-      "t2": null,
-      "fill": "C4D0E5",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.070",
-      "t2": null,
-      "fill": "B8C7DF",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.054",
-      "t2": null,
-      "fill": "D1DBEB",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.070",
-      "t2": null,
-      "fill": "B8C7E0",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.102",
-      "t2": null,
-      "fill": "839DC8",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.071",
-      "t2": null,
-      "fill": "B5C5DE",
-      "color": "0D0D12",
-      "center": true
-     }
-    ],
-    [
-     "14~17시",
-     {
-      "t": "0.091",
-      "t2": null,
-      "fill": "96ACD0",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.107",
-      "t2": null,
-      "fill": "7B97C5",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.087",
-      "t2": null,
-      "fill": "9CB1D3",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.083",
-      "t2": null,
-      "fill": "A3B6D6",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.089",
-      "t2": null,
-      "fill": "99AFD2",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.104",
-      "t2": null,
-      "fill": "809BC7",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.128",
-      "t2": null,
-      "fill": "597BB5",
-      "color": "FFFFFF",
-      "center": true
-     }
-    ],
-    [
-     "17~20시",
-     {
-      "t": "0.065",
-      "t2": null,
-      "fill": "C0CDE3",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.085",
-      "t2": null,
-      "fill": "9EB3D4",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.087",
-      "t2": null,
-      "fill": "9CB0D3",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.095",
-      "t2": null,
-      "fill": "8FA6CD",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.092",
-      "t2": null,
-      "fill": "94ABD0",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.067",
-      "t2": null,
-      "fill": "BCCAE2",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.122",
-      "t2": null,
-      "fill": "6384BA",
-      "color": "FFFFFF",
-      "center": true
-     }
-    ],
-    [
-     "20~23시",
-     {
-      "t": "0.066",
-      "t2": null,
-      "fill": "BECCE2",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.110",
-      "t2": null,
-      "fill": "7693C3",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.105",
-      "t2": null,
-      "fill": "7E99C6",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.099",
-      "t2": null,
-      "fill": "87A1CA",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.077",
-      "t2": null,
-      "fill": "ADBEDB",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.087",
-      "t2": null,
-      "fill": "9CB1D3",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.130",
-      "t2": null,
-      "fill": "5679B4",
-      "color": "FFFFFF",
-      "center": true
-     }
-    ],
-    [
-     "23~02시",
-     {
-      "t": "0.115",
-      "t2": null,
-      "fill": "6F8DBF",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.099",
-      "t2": null,
-      "fill": "89A2CB",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.112",
-      "t2": null,
-      "fill": "7491C1",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.088",
-      "t2": null,
-      "fill": "9BB0D3",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.114",
-      "t2": null,
-      "fill": "708EC0",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.105",
-      "t2": null,
-      "fill": "7F9AC6",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.164",
-      "t2": null,
-      "fill": "1F4E9C",
-      "color": "FFFFFF",
-      "center": true
-     }
-    ],
-    [
-     "02~05시",
-     {
-      "t": "0.044",
-      "t2": null,
-      "fill": "E3E9F2",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.044",
-      "t2": null,
-      "fill": "E2E8F2",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.037",
-      "t2": null,
-      "fill": "EEF2F8",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.045",
-      "t2": null,
-      "fill": "E1E7F2",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.046",
-      "t2": null,
-      "fill": "DEE5F1",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.047",
-      "t2": null,
-      "fill": "DDE4F0",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.033",
-      "t2": null,
-      "fill": "F3F6FA",
+      "fill": "CDCAF7",
       "color": "0D0D12",
       "center": true
      }
@@ -1202,39 +820,56 @@
   },
   {
    "type": "note",
-   "text": "첫 표 아랫줄은 그 칸 시청 규모 1위 프로그램, 3회 미만 칸은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
-   "text": "Ⅳ. 주요 편성 인사이트"
+   "text": "Ⅴ. 주요 편성 인사이트"
   },
   {
    "type": "subhead",
-   "text": "강한 시간대 : **일 14~17시**"
+   "text": "CMC TV 편성 전략 : **대표작 반복 편성·평일 띠 편성**"
   },
   {
    "type": "bullet",
-   "text": "시청률 상위 칸 일 14~17시 0.096, 화 20~23시 0.094, 금 20~23시 0.091"
-  },
-  {
-   "type": "bullet",
-   "text": "저녁(17~23시) 평일 0.080 vs 주말 0.083, 평일·주말 비슷"
-  },
-  {
-   "type": "subhead",
-   "text": "OLIFE 대비 : **평균 0.070 vs 0.069, 56칸 중 OLIFE 우위 30칸**"
-  },
-  {
-   "type": "bullet",
-   "text": "격차가 가장 큰 칸 일 23~02시: CMC TV 0.089 vs OLIFE 0.050"
+   "text": "대표작 '나는자연인이다'를 주 40.8회, 요일·시간대 35곳에 반복 편성"
   },
   {
    "type": "sub",
-   "text": "OLIFE가 가장 앞선 칸 월 17~20시: 0.100 vs 0.074"
+   "text": "본방은 매일 20~23시, 재방은 주로 매일 11~14시"
+  },
+  {
+   "type": "bullet",
+   "text": "밤 20~23시 승부작은 평일 '나는자연인이다', 주말 '나는자연인이다'"
+  },
+  {
+   "type": "bullet",
+   "text": "평일 같은 시간대 띠 편성 45개(예 20~23시 '나는자연인이다', 11~14시 '나는자연인이다')"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 잘 나오는 시간대는 일요일 14~17시(0.096), 저녁 시청률은 평일·주말 비슷"
+  },
+  {
+   "type": "subhead",
+   "text": "OLIFE 대비 : **평균 0.070 vs 0.069, OLIFE가 앞서는 시간대 30개**"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 크게 뒤지는 곳은 일요일 23~02시(0.089 vs OLIFE 0.050)"
+  },
+  {
+   "type": "sub",
+   "text": "OLIFE가 가장 앞서는 곳은 월요일 17~20시(0.100 vs 0.074)"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 수 37편 vs 50편, 상위 5편 시청량 77% vs 93% → OLIFE가 대표작 의존이 더 큼"
   },
   {
    "type": "takeaway",
-   "text": "**CMC TV**: 일 14~17시 극한직업 중심, 상위 5편 77%로 소수 작품 의존"
+   "text": "**CMC TV**는 일요일 14~17시 '극한직업'이 가장 강함",
+   "note": "시청량의 77%를 상위 5편이 만드는 대표작 반복 편성·평일 띠 편성 채널"
   },
   {
    "type": "apptitle",
@@ -1263,7 +898,7 @@
      "0.033",
      {
       "t": "94위 / 216",
-      "fill": "A0B4D5",
+      "fill": "ACA8F2",
       "color": "0D0D12"
      },
      {
@@ -1277,7 +912,7 @@
      "0.0006",
      {
       "t": "178위 / 216",
-      "fill": "E1E8F2",
+      "fill": "E5E4FB",
       "color": "0D0D12"
      },
      "-"
@@ -1287,7 +922,7 @@
      "0.015",
      {
       "t": "40위 / 45",
-      "fill": "ECF0F7",
+      "fill": "EEEEFC",
       "color": "0D0D12"
      },
      {
@@ -1304,6 +939,12 @@
     ]
    ],
    "fit": true,
+   "sameWidth": [
+    [
+     2,
+     3
+    ]
+   ],
    "align": [
     "center",
     "right",
@@ -1318,10 +959,6 @@
   {
    "type": "bullet",
    "text": "라이프·취미군 가구 3개 중 3위(0.033), 위 CMC TV 0.087"
-  },
-  {
-   "type": "sub",
-   "text": "IPTV 가구로는 3개 중 3위(위 OLIFE 0.069)"
   },
   {
    "type": "bullet",
@@ -1358,7 +995,7 @@
      "-",
      {
       "t": "0.020",
-      "fill": "6283BA",
+      "fill": "7770EA",
       "color": "FFFFFF"
      },
      "15",
@@ -1371,7 +1008,7 @@
      "-",
      {
       "t": "0.019",
-      "fill": "7995C4",
+      "fill": "8A84ED",
       "color": "FFFFFF"
      },
      "352",
@@ -1384,7 +1021,7 @@
      "-",
      {
       "t": "0.017",
-      "fill": "98AED1",
+      "fill": "A5A1F1",
       "color": "0D0D12"
      },
      "1153",
@@ -1395,17 +1032,17 @@
      "한국기행",
      {
       "t": "0.053",
-      "fill": "6283BA",
+      "fill": "7770EA",
       "color": "FFFFFF"
      },
      {
       "t": "0.0009",
-      "fill": "96ACD1",
+      "fill": "A49FF1",
       "color": "0D0D12"
      },
      {
       "t": "0.017",
-      "fill": "A1B5D5",
+      "fill": "ADA9F2",
       "color": "0D0D12"
      },
      "1053",
@@ -1418,7 +1055,7 @@
      "-",
      {
       "t": "0.016",
-      "fill": "BCCAE1",
+      "fill": "C5C2F6",
       "color": "0D0D12"
      },
      "14",
@@ -1431,7 +1068,7 @@
      "-",
      {
       "t": "0.016",
-      "fill": "BECCE2",
+      "fill": "C6C4F6",
       "color": "0D0D12"
      },
      "26",
@@ -1444,7 +1081,7 @@
      "-",
      {
       "t": "0.015",
-      "fill": "C5D1E5",
+      "fill": "CCCAF7",
       "color": "0D0D12"
      },
      "273",
@@ -1455,17 +1092,17 @@
      "세계테마기행",
      {
       "t": "0.048",
-      "fill": "7F9AC7",
+      "fill": "908AEE",
       "color": "FFFFFF"
      },
      {
       "t": "0.0012",
-      "fill": "6283BA",
+      "fill": "7770EA",
       "color": "FFFFFF"
      },
      {
       "t": "0.015",
-      "fill": "CED8E9",
+      "fill": "D4D2F8",
       "color": "0D0D12"
      },
      "2723",
@@ -1478,7 +1115,7 @@
      "-",
      {
       "t": "0.015",
-      "fill": "D2DCEB",
+      "fill": "D8D6F9",
       "color": "0D0D12"
      },
      "27",
@@ -1507,6 +1144,13 @@
     ]
    ],
    "fit": true,
+   "sameWidth": [
+    [
+     2,
+     3,
+     4
+    ]
+   ],
    "align": [
     "center",
     "left",
@@ -1522,16 +1166,64 @@
    "text": "닐슨 프로그램 단위 자료가 없거나 짧아 IPTV 기준, 2049·가구 열은 닐슨, IPTV 열은 IPTV 가구(같은 이름 프로그램 평균)"
   },
   {
-   "type": "bullet",
-   "text": "시청 규모(시청률×방영 분) 1위 세계테마기행 31%, 상위 5편 합계 86%"
+   "type": "section",
+   "text": "Ⅲ. 편성 패턴 비교(ONT vs OLIFE)"
   },
   {
-   "type": "bullet",
-   "text": "편성 작품 36편, 재방 표기 방영 시간 35%, 본방 0.015 vs 재방 0.014"
+   "type": "table",
+   "head": [
+    "편성 지표(2026)",
+    "ONT",
+    "OLIFE"
+   ],
+   "fit": true,
+   "sameWidth": [
+    [
+     1,
+     2
+    ]
+   ],
+   "align": [
+    "center",
+    "center",
+    "center"
+   ],
+   "rows": [
+    [
+     "편성 작품 수",
+     "36편",
+     "50편"
+    ],
+    [
+     "상위 5편 시청량(시청률×분) 비중",
+     "86%",
+     "93%"
+    ],
+    [
+     "재방 비중(방영 시간)",
+     "35%",
+     "91%"
+    ],
+    [
+     "같은 작품 3회 이상 연속 편성",
+     "38%",
+     "27%"
+    ],
+    [
+     "평일 띠 편성(같은 시간대 주 4일+)",
+     "38개",
+     "29개"
+    ],
+    [
+     "대표작 반복(노출 시간대)",
+     "세계테마기행 주 59.2회(49개)",
+     "세계테마기행 주 43.7회(56개)"
+    ]
+   ]
   },
   {
    "type": "section",
-   "text": "Ⅲ. 요일·시간대 히트맵",
+   "text": "Ⅳ. 요일·시간대 히트맵",
    "pageBreak": true
   },
   {
@@ -1563,42 +1255,42 @@
      {
       "t": "0.0070",
       "t2": "아시아헌터",
-      "fill": "FAFBFD",
+      "fill": "FAFAFE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.0069",
       "t2": "아시아헌터",
-      "fill": "FBFBFD",
+      "fill": "FBFBFE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.0070",
       "t2": "아시아헌터",
-      "fill": "FAFBFD",
+      "fill": "FBFAFE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.0071",
       "t2": "아시아헌터",
-      "fill": "F8F9FC",
+      "fill": "F9F8FE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.0086",
       "t2": "아시아헌터",
-      "fill": "E2E8F2",
+      "fill": "E6E5FB",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.0084",
       "t2": "아시아헌터",
-      "fill": "E5EAF3",
+      "fill": "E8E7FB",
       "color": "0D0D12",
       "center": true
      }
@@ -1608,49 +1300,49 @@
      {
       "t": "0.014",
       "t2": "세계테마기행",
-      "fill": "98AED2",
+      "fill": "A6A1F1",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.014",
       "t2": "세계테마기행",
-      "fill": "98AED2",
+      "fill": "A6A1F1",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.013",
       "t2": "세계테마기행",
-      "fill": "9FB3D4",
+      "fill": "ABA7F2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.014",
       "t2": "세계테마기행",
-      "fill": "95ABD0",
+      "fill": "A29EF1",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.014",
       "t2": "세계테마기행",
-      "fill": "92A9CF",
+      "fill": "A09BF0",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.018",
       "t2": "세계테마기행",
-      "fill": "5D7FB7",
+      "fill": "726AE9",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.019",
       "t2": "세계테마기행",
-      "fill": "486EAE",
+      "fill": "5F57E6",
       "color": "FFFFFF",
       "center": true
      }
@@ -1660,49 +1352,49 @@
      {
       "t": "0.017",
       "t2": "한국기행",
-      "fill": "5F81B8",
+      "fill": "746DEA",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.017",
       "t2": "한국기행",
-      "fill": "5F80B8",
+      "fill": "736CEA",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.017",
       "t2": "한국기행",
-      "fill": "5F81B8",
+      "fill": "746DEA",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.018",
       "t2": "한국기행",
-      "fill": "5B7EB7",
+      "fill": "7069E9",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.017",
       "t2": "한국기행",
-      "fill": "6484BA",
+      "fill": "7871EA",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.021",
       "t2": "한국기행",
-      "fill": "2F5AA3",
+      "fill": "4A40E3",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.019",
       "t2": "한국기행",
-      "fill": "4970AF",
+      "fill": "6159E7",
       "color": "FFFFFF",
       "center": true
      }
@@ -1712,49 +1404,49 @@
      {
       "t": "0.019",
       "t2": "세계테마기행",
-      "fill": "446BAC",
+      "fill": "5C53E6",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.019",
       "t2": "세계테마기행",
-      "fill": "4F74B1",
+      "fill": "665EE7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.019",
       "t2": "세계테마기행",
-      "fill": "476EAE",
+      "fill": "5F57E6",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.019",
       "t2": "세계테마기행",
-      "fill": "4E73B1",
+      "fill": "655DE7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.018",
       "t2": "세계테마기행",
-      "fill": "5377B3",
+      "fill": "6961E8",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.021",
       "t2": "세계테마기행",
-      "fill": "2956A0",
+      "fill": "443BE2",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.022",
       "t2": "세계테마기행",
-      "fill": "23519E",
+      "fill": "3F35E1",
       "color": "FFFFFF",
       "center": true
      }
@@ -1764,49 +1456,49 @@
      {
       "t": "0.020",
       "t2": "세계테마기행",
-      "fill": "3560A6",
+      "fill": "4F46E4",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.019",
       "t2": "세계테마기행",
-      "fill": "4B71AF",
+      "fill": "625AE7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.019",
       "t2": "세계테마기행",
-      "fill": "4B71AF",
+      "fill": "625AE7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.019",
       "t2": "세계테마기행",
-      "fill": "4C72B0",
+      "fill": "635BE7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.019",
       "t2": "세계테마기행",
-      "fill": "4E73B1",
+      "fill": "655DE7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.020",
       "t2": "세계테마기행",
-      "fill": "4068AB",
+      "fill": "5950E5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.022",
       "t2": "세계테마기행",
-      "fill": "1F4E9C",
+      "fill": "3C32E1",
       "color": "FFFFFF",
       "center": true
      }
@@ -1816,49 +1508,49 @@
      {
       "t": "0.019",
       "t2": "아시아헌터",
-      "fill": "436BAC",
+      "fill": "5C53E6",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.018",
       "t2": "아시아헌터",
-      "fill": "587BB5",
+      "fill": "6D66E9",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.018",
       "t2": "아시아헌터",
-      "fill": "5478B4",
+      "fill": "6A63E8",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.018",
       "t2": "아시아헌터",
-      "fill": "5176B2",
+      "fill": "6860E8",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.019",
       "t2": "아시아헌터",
-      "fill": "4B71AF",
+      "fill": "625AE7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.018",
       "t2": "아시아헌터",
-      "fill": "5276B2",
+      "fill": "6860E8",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.019",
       "t2": "아시아헌터",
-      "fill": "4C72B0",
+      "fill": "635BE7",
       "color": "FFFFFF",
       "center": true
      }
@@ -1868,49 +1560,49 @@
      {
       "t": "0.011",
       "t2": "한국기행",
-      "fill": "BCCAE1",
+      "fill": "C5C2F6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.011",
       "t2": "한국기행",
-      "fill": "BBC9E1",
+      "fill": "C4C1F6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.011",
       "t2": "한국기행",
-      "fill": "B9C8E0",
+      "fill": "C2BFF6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.011",
       "t2": "한국기행",
-      "fill": "C0CDE3",
+      "fill": "C8C6F7",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.012",
       "t2": "한국기행",
-      "fill": "B5C5DE",
+      "fill": "BFBCF5",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.011",
       "t2": "한국기행",
-      "fill": "B9C7E0",
+      "fill": "C2BFF6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.011",
       "t2": "한국기행",
-      "fill": "BCCAE1",
+      "fill": "C4C1F6",
       "color": "0D0D12",
       "center": true
      }
@@ -1920,489 +1612,49 @@
      {
       "t": "0.0068",
       "t2": "세계테마기행",
-      "fill": "FCFDFE",
+      "fill": "FDFDFF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.0072",
       "t2": "세계테마기행",
-      "fill": "F8F9FC",
+      "fill": "F9F8FE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.0071",
       "t2": "세계테마기행",
-      "fill": "F8FAFC",
+      "fill": "F9F9FE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.0071",
       "t2": "세계테마기행",
-      "fill": "F8FAFC",
+      "fill": "F9F9FE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.0069",
       "t2": "세계테마기행",
-      "fill": "FBFCFD",
+      "fill": "FBFBFE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.0074",
       "t2": "세계테마기행",
-      "fill": "F3F6FA",
+      "fill": "F5F4FD",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.0073",
       "t2": "세계테마기행",
-      "fill": "F5F7FB",
-      "color": "0D0D12",
-      "center": true
-     }
-    ]
-   ],
-   "equalCols": true,
-   "fit": true,
-   "align": [
-    "center"
-   ]
-  },
-  {
-   "type": "caption",
-   "text": "닐슨 유료방송가구(01/01~) 요일×시간대 평균 시청률(2026)"
-  },
-  {
-   "type": "table",
-   "head": [
-    "시간대",
-    "월",
-    "화",
-    "수",
-    "목",
-    "금",
-    "토",
-    "일"
-   ],
-   "rows": [
-    [
-     "05~08시",
-     {
-      "t": "0.012",
-      "t2": null,
-      "fill": "EDF1F7",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.0094",
-      "t2": null,
-      "fill": "F4F6FA",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.0060",
-      "t2": null,
-      "fill": "FFFFFF",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.011",
-      "t2": null,
-      "fill": "EFF2F8",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.011",
-      "t2": null,
-      "fill": "EFF2F8",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.013",
-      "t2": null,
-      "fill": "E9EDF5",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.0070",
-      "t2": null,
-      "fill": "FCFDFE",
-      "color": "0D0D12",
-      "center": true
-     }
-    ],
-    [
-     "08~11시",
-     {
-      "t": "0.039",
-      "t2": null,
-      "fill": "93AACF",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.035",
-      "t2": null,
-      "fill": "A2B6D6",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.031",
-      "t2": null,
-      "fill": "ACBEDA",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.026",
-      "t2": null,
-      "fill": "BDCBE2",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.036",
-      "t2": null,
-      "fill": "9DB1D4",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.044",
-      "t2": null,
-      "fill": "849EC9",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.044",
-      "t2": null,
-      "fill": "849EC9",
-      "color": "0D0D12",
-      "center": true
-     }
-    ],
-    [
-     "11~14시",
-     {
-      "t": "0.073",
-      "t2": null,
-      "fill": "25539F",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.038",
-      "t2": null,
-      "fill": "96ACD1",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.058",
-      "t2": null,
-      "fill": "567AB4",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.045",
-      "t2": null,
-      "fill": "7F9AC6",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.065",
-      "t2": null,
-      "fill": "3F67AA",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.075",
-      "t2": null,
-      "fill": "1F4E9C",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.062",
-      "t2": null,
-      "fill": "4A70AF",
-      "color": "FFFFFF",
-      "center": true
-     }
-    ],
-    [
-     "14~17시",
-     {
-      "t": "0.049",
-      "t2": null,
-      "fill": "7491C2",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.056",
-      "t2": null,
-      "fill": "5D7FB7",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.075",
-      "t2": null,
-      "fill": "204F9C",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.057",
-      "t2": null,
-      "fill": "587BB5",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.041",
-      "t2": null,
-      "fill": "8FA6CD",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.048",
-      "t2": null,
-      "fill": "7794C3",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.066",
-      "t2": null,
-      "fill": "3A64A8",
-      "color": "FFFFFF",
-      "center": true
-     }
-    ],
-    [
-     "17~20시",
-     {
-      "t": "0.047",
-      "t2": null,
-      "fill": "7895C4",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.051",
-      "t2": null,
-      "fill": "6D8CBF",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.055",
-      "t2": null,
-      "fill": "6081B9",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.046",
-      "t2": null,
-      "fill": "7C97C5",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.048",
-      "t2": null,
-      "fill": "7794C3",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.052",
-      "t2": null,
-      "fill": "6989BD",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.039",
-      "t2": null,
-      "fill": "95ACD0",
-      "color": "0D0D12",
-      "center": true
-     }
-    ],
-    [
-     "20~23시",
-     {
-      "t": "0.040",
-      "t2": null,
-      "fill": "8FA7CE",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.039",
-      "t2": null,
-      "fill": "94AAD0",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.044",
-      "t2": null,
-      "fill": "839DC8",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.042",
-      "t2": null,
-      "fill": "8BA3CC",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.047",
-      "t2": null,
-      "fill": "7B96C5",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.045",
-      "t2": null,
-      "fill": "829CC8",
-      "color": "FFFFFF",
-      "center": true
-     },
-     {
-      "t": "0.044",
-      "t2": null,
-      "fill": "859FC9",
-      "color": "0D0D12",
-      "center": true
-     }
-    ],
-    [
-     "23~02시",
-     {
-      "t": "0.021",
-      "t2": null,
-      "fill": "CFD9EA",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.022",
-      "t2": null,
-      "fill": "CCD7E8",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.018",
-      "t2": null,
-      "fill": "D8E1EE",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.012",
-      "t2": null,
-      "fill": "ECF0F7",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.024",
-      "t2": null,
-      "fill": "C6D2E6",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.021",
-      "t2": null,
-      "fill": "CFD9EA",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.022",
-      "t2": null,
-      "fill": "CAD5E7",
-      "color": "0D0D12",
-      "center": true
-     }
-    ],
-    [
-     "02~05시",
-     {
-      "t": "0.015",
-      "t2": null,
-      "fill": "E3E9F2",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.024",
-      "t2": null,
-      "fill": "C4D0E5",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.0089",
-      "t2": null,
-      "fill": "F6F8FB",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.014",
-      "t2": null,
-      "fill": "E6EBF4",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.011",
-      "t2": null,
-      "fill": "EEF2F7",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.014",
-      "t2": null,
-      "fill": "E5EBF4",
-      "color": "0D0D12",
-      "center": true
-     },
-     {
-      "t": "0.016",
-      "t2": null,
-      "fill": "DEE5F1",
+      "fill": "F6F6FE",
       "color": "0D0D12",
       "center": true
      }
@@ -2416,39 +1668,56 @@
   },
   {
    "type": "note",
-   "text": "첫 표 아랫줄은 그 칸 시청 규모 1위 프로그램, 3회 미만 칸은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
-   "text": "Ⅳ. 주요 편성 인사이트"
+   "text": "Ⅴ. 주요 편성 인사이트"
   },
   {
    "type": "subhead",
-   "text": "강한 시간대 : **일 17~20시**"
+   "text": "ONT 편성 전략 : **대표작 반복 편성·평일 띠 편성**"
   },
   {
    "type": "bullet",
-   "text": "시청률 상위 칸 일 17~20시 0.022, 일 14~17시 0.022, 토 14~17시 0.021"
-  },
-  {
-   "type": "bullet",
-   "text": "저녁(17~23시) 평일 0.019 vs 주말 0.019, 평일·주말 비슷"
-  },
-  {
-   "type": "subhead",
-   "text": "OLIFE 대비 : **평균 0.015 vs 0.069, 56칸 중 OLIFE 우위 56칸**"
-  },
-  {
-   "type": "bullet",
-   "text": "격차가 가장 큰 칸 금 02~05시: ONT 0.0069 vs OLIFE 0.029"
+   "text": "대표작 '세계테마기행'을 주 59.2회, 요일·시간대 49곳에 반복 편성"
   },
   {
    "type": "sub",
-   "text": "OLIFE가 가장 앞선 칸 일 17~20시: 0.109 vs 0.022"
+   "text": "본방은 매일 14~17시, 재방은 주로 매일 08~11시"
+  },
+  {
+   "type": "bullet",
+   "text": "밤 20~23시 승부작은 평일 '아시아헌터', 주말 '아시아헌터'"
+  },
+  {
+   "type": "bullet",
+   "text": "평일 같은 시간대 띠 편성 38개(예 11~14시 '한국기행', 14~17시 '세계테마기행')"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 잘 나오는 시간대는 일요일 17~20시(0.022), 저녁 시청률은 평일·주말 비슷"
+  },
+  {
+   "type": "subhead",
+   "text": "OLIFE 대비 : **평균 0.015 vs 0.069, OLIFE가 앞서는 시간대 56개**"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 크게 뒤지는 곳은 금요일 02~05시(0.0069 vs OLIFE 0.029)"
+  },
+  {
+   "type": "sub",
+   "text": "OLIFE가 가장 앞서는 곳은 일요일 17~20시(0.109 vs 0.022)"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 수 36편 vs 50편, 상위 5편 시청량 86% vs 93% → 대표작 의존 정도는 비슷"
   },
   {
    "type": "takeaway",
-   "text": "**ONT**: 일 17~20시 세계테마기행 중심, 상위 5편 86%로 소수 작품 의존"
+   "text": "**ONT**는 일요일 17~20시 '세계테마기행'이 가장 강함",
+   "note": "시청량의 86%를 상위 5편이 만드는 대표작 반복 편성·평일 띠 편성 채널"
   }
  ]
 }

@@ -232,6 +232,8 @@ function tableBlocks(head, rows, opts = {}) {
   widths = widths.map((w) => (w * TABLE_W) / s);
   // equalCols: 히트맵처럼 0열(구분)만 내용 폭, 나머지 열은 같은 폭(2026-11-11)
   if (opts.equalCols && ncol > 1) { const w0 = Math.min(widths[0], colmax[0] + 6); const rest = (TABLE_W - w0) / (ncol - 1); widths = [w0, ...Array(ncol - 1).fill(rest)]; }
+  // sameWidth: [[열번호…], …] 묶음마다 같은 폭(평균)으로 — 2049·가구처럼 나란히 비교하는 열(2026-11-12)
+  for (const g of opts.sameWidth || []) { const avg = g.reduce((a, i) => a + widths[i], 0) / g.length; g.forEach((i) => (widths[i] = avg)); }
 
   const margins = { top: tw(CELL_TB), bottom: tw(CELL_TB), left: tw(CELL_IND), right: tw(CELL_IND) };
   // 12행 이하 표는 통째로 한 쪽에 두고(마지막 행 빼고 keepNext), 더 긴 표는 머리글과 첫 행만 붙인다
@@ -413,8 +415,9 @@ async function build(data, out, auditOnly) {
         break;
       }
       case "bullet":
-        items.push([2 * STEP, "○ ", b.text, BULLET_FS, F_THIN, false]);
-        body.push(lineBlock("○ ", b.text, BULLET_FS, F_THIN, 2 * STEP, { allowLabel: false, emph: false }));
+        // data.bulletMark: ○ 대신 쓸 글머리(예 "·", 2026-11-12 사용자 "작은 글머리 점으로")
+        items.push([2 * STEP, (data.bulletMark || "○") + " ", b.text, BULLET_FS, F_THIN, false]);
+        body.push(lineBlock((data.bulletMark || "○") + " ", b.text, BULLET_FS, F_THIN, 2 * STEP, { allowLabel: false, emph: false }));
         break;
       case "sub":
       case "mid":
