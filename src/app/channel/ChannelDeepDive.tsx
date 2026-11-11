@@ -9,6 +9,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 // 단계 07: 기간·채널 문맥은 URL이 단일 출처이고, 요청 상태(loading/stale/ready/error)·오래된 응답 무시는 useContextData가 맡는다.
 import ContextBar from "@/components/workspace/ContextBar";
+import type { YtdGoalRow } from "@/lib/ytdGoalBriefing";
 import { deriveChannelPeriod, type ChannelPeriod } from "@/lib/workspace/channelQuery";
 import { parseTargetRank } from "@/lib/workspace/kpi";
 import { buildContextBar } from "@/lib/workspace/contextBar";
@@ -654,6 +655,9 @@ interface ChannelData {
   // 보였다 — 관리자가 업로드한 연간 누적(1/1~오늘) "누적 채널 순위" 파일로 skyUHD와 등록
   // UHD 경쟁채널 5개(총 6개) 사이 위치를 대신 보여준다(skyUHD 채널에서만 값이 채워짐).
   marketYtdCompetitorSnapshot: { channel_name: string; rank: number; rating: number; is_self: boolean; date_from: string; date_to: string }[];
+  // 사용자 지시(2026-11-11): skyUHD 누적 순위 요약 — 같은 스냅샷의 전체 채널 수와 올해 목표 대비 판정(서버 계산)
+  marketYtdTotalChannels?: number | null;
+  skyuhdYtdGoal?: YtdGoalRow | null;
   competitorProgramOverlap: CompetitorOverlapRow[];
   stableSlotPatterns: StableSlotPatternRow[];
   // 사용자 지시(2026-09-02): "동요일 평균 분석(SDoW)" — 선택한 요일의 최근 N주 평균(요청했을
@@ -4977,6 +4981,8 @@ export default function ChannelDeepDive({ code }: { code: string }) {
     hourlyProgramTitles,
     competitorInsightReport,
     marketYtdCompetitorSnapshot,
+    marketYtdTotalChannels,
+    skyuhdYtdGoal,
     competitorProgramOverlap,
     competitorTopPrograms,
     daypartOpportunity,
@@ -7023,6 +7029,48 @@ export default function ChannelDeepDive({ code }: { code: string }) {
           </h2>
           {/* 사용자 지시(2026-08-21): skyUHD는 일별 비교가 아니라 연간 누적 순위를 쓰므로, 이
               안내 문구도 그 경우엔 아래 skyUHD 전용 문단으로 대체한다(중복 안내 방지). */}
+          {/* 사용자 지시(2026-11-11): skyUHD는 선택 기간 표(9/17 지시)와 별개로 올해 닐슨 누적 순위·목표 대비를 늘 요약해 둔다.
+              일별 경쟁 자료가 생긴 뒤 누적 순위표가 통째로 숨겨져 있었다. 판정·달성률은 서버(buildYtdGoalBriefing) 값 그대로. */}
+          {code === "SKYUHD" && !useSkyuhdYtdCompetitorFallback && marketYtdCompetitorSnapshot.length > 0 && (() => {
+            const selfIdx = marketYtdCompetitorSnapshot.findIndex((r) => r.is_self);
+            if (selfIdx < 0) return null;
+            const self = marketYtdCompetitorSnapshot[selfIdx];
+            const g = skyuhdYtdGoal;
+            const verdictCls = (v: string | null | undefined) =>
+              v === "초과" ? "bg-emerald-50 text-emerald-700" : v === "달성" ? "bg-sky-50 text-sky-700" : "bg-rose-50 text-rose-700";
+            const md = (d: string) => `${parseInt(d.slice(5, 7), 10)}/${parseInt(d.slice(8, 10), 10)}`;
+            return (
+              <div className="mb-4 rounded-2xl bg-zinc-50 px-4 py-3">
+                <p className="text-[12px] text-zinc-400">
+                  올해 누적 순위 · 닐슨 전국 유료가구 · {md(self.date_from)}~{md(self.date_to)} (관리자 업로드 누적 순위 파일)
+                </p>
+                <p className="mt-1 text-sm text-zinc-800">
+                  UHD {marketYtdCompetitorSnapshot.length}개 중 <b>{selfIdx + 1}위</b>
+                  {marketYtdTotalChannels ? ` · 전체 ${marketYtdTotalChannels}개 채널 중 ${self.rank}위` : ` · 전체 ${self.rank}위`}
+                  {g?.peer && (
+                    <span className={`ml-1.5 rounded px-1.5 text-[11px] font-semibold leading-5 ${verdictCls(g.peerVerdict)}`}>
+                      목표 {g.peer.targetRank}위 {g.peerVerdict}
+                    </span>
+                  )}
+                </p>
+                {g && (
+                  <p className="mt-0.5 text-sm text-zinc-800 tabular-nums">
+                    누적 시청률 {fmt(g.ytdRating, 5)} / 목표 {fmt(g.targetRating, 5)}
+                    <span className="ml-1 text-zinc-500">({g.achievementPct.toFixed(1)}%)</span>
+                    <span className={`ml-1.5 rounded px-1.5 text-[11px] font-semibold leading-5 ${verdictCls(g.verdict)}`}>{g.verdict}</span>
+                  </p>
+                )}
+                <p className="mt-1.5 text-[12px] text-zinc-500">
+                  {marketYtdCompetitorSnapshot.map((r, i) => (
+                    <span key={r.channel_name} className={r.is_self ? "font-bold" : undefined} style={r.is_self ? { color: accentForegroundColor(accentColor) } : undefined}>
+                      {i > 0 && " > "}
+                      {r.channel_name} {fmt(r.rating, 5)}
+                    </span>
+                  ))}
+                </p>
+              </div>
+            );
+          })()}
           {!useSkyuhdYtdCompetitorFallback && (
             <p className="mb-3 text-sm text-zinc-400">
               시간대별(전일/전주/전월/전분기/전년) 비교는 위 WHAT HAPPENED?를 참고하세요. 아래는 등록 경쟁채널을
@@ -7072,7 +7120,7 @@ export default function ChannelDeepDive({ code }: { code: string }) {
                         >
                           {r.channel_name}
                         </td>
-                        <td className="py-1.5 pr-2 text-zinc-600">{r.rank}위 (전체 217개 채널 중)</td>
+                        <td className="py-1.5 pr-2 text-zinc-600">{r.rank}위{marketYtdTotalChannels ? ` (전체 ${marketYtdTotalChannels}개 채널 중)` : ""}</td>
                         <td className="py-1.5 text-zinc-600">{fmt(r.rating, 5)}</td>
                       </tr>
                     ))}

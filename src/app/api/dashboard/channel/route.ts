@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { BOUNDARY_NEIGHBOR_OR, mergeSplitForDay, neighborDates } from "@/lib/broadcastTime/boundarySplit";
 import { getCurrentSession } from "@/lib/adminAuth";
+import { buildYtdGoalBriefing, type YtdGoalRow } from "@/lib/ytdGoalBriefing";
 import { resolveProgramLevelTargetLabel, EXTRA_TARGET_LABELS_BY_CHANNEL, resolveMarketYtdTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
 import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence, buildRerunCauseAndStrategy } from "@/lib/enaOriginalHighlight";
 import { buildBriefingReportViaLlm, type BriefingReport } from "@/lib/briefingReportLlm";
@@ -977,6 +978,46 @@ export async function GET(request: Request) {
     });
     marketYtdCompetitorSnapshot = snapshotData ?? [];
   }
+  // 사용자 지시(2026-11-11): skyUHD 화면에 닐슨 누적 순위를 늘 보이게 — 일별 경쟁 자료가 생기면서 위 누적표가
+  // 숨겨졌던 문제를 고치며, 같은 스냅샷의 전체 채널 수(하드코딩 217 대신)와 올해 목표("경쟁채널 중 N위"·목표 시청률)
+  // 대비 판정을 함께 내려준다. 판정은 홈 카드와 같은 buildYtdGoalBriefing(서버 결정적 함수)으로 한다.
+  let marketYtdTotalChannels: number | null = null;
+  let skyuhdYtdGoal: YtdGoalRow | null = null;
+  const ytdSelf = marketYtdCompetitorSnapshot.find((r) => r.is_self);
+  if (channel.code === "SKYUHD" && ytdSelf) {
+    const [{ count }, { data: goal }] = await Promise.all([
+      supabase
+        .from("market_ytd_rank_snapshot")
+        .select("id", { count: "exact", head: true })
+        .eq("target_label", marketYtdTargetLabel)
+        .eq("date_from", ytdSelf.date_from)
+        .eq("date_to", ytdSelf.date_to),
+      supabase
+        .from("target_goals")
+        .select("target_rank, target_rating")
+        .eq("channel_id", channel.id)
+        .eq("year", Number(ytdSelf.date_to.slice(0, 4)))
+        .maybeSingle(),
+    ]);
+    marketYtdTotalChannels = count ?? null;
+    const built = buildYtdGoalBriefing(
+      [
+        {
+          code: channel.code,
+          name: channel.name,
+          targetRating: goal?.target_rating != null ? Number(goal.target_rating) : null,
+          targetRank: goal?.target_rank ?? null,
+          ytdRating: Number(ytdSelf.rating),
+          ytdRank: ytdSelf.rank,
+          fromMarketSnapshot: true,
+          targetLabel: "전국 유료가구",
+        },
+      ],
+      marketYtdCompetitorSnapshot.map((r) => ({ channelName: r.channel_name, rating: Number(r.rating), isSelf: r.is_self })),
+      { from: ytdSelf.date_from, to: ytdSelf.date_to }
+    );
+    skyuhdYtdGoal = built?.rows[0] ?? null;
+  }
   // 사용자 지시(2026-09-02): "동시간대 경쟁 상황"에서 2049가 목표인 채널(ENA/ENA Play/ENA Drama)은
   // 자사 값 옆 괄호에 유료가구 시청률도 함께 표기 — 같은 RPC를 유료가구 타깃으로 한 번 더 불러
   // (our_start_time, our_program_name) 키로 매칭한다(경쟁채널 값은 이미 우리 타깃 기준이라 그대로 둠 —
@@ -1587,6 +1628,8 @@ export async function GET(request: Request) {
     demographicHighlights,
     competitorInsightReport: competitorInsightReport ?? [],
     marketYtdCompetitorSnapshot,
+    marketYtdTotalChannels,
+    skyuhdYtdGoal,
     competitorProgramOverlap: overlapData ?? [],
     stableSlotPatterns: stableSlotPatternsRaw ?? [],
     sameWeekdayReport,

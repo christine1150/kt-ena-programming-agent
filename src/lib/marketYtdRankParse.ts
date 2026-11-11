@@ -21,16 +21,56 @@ function cellStr(v: unknown): string {
 
 export function parseMarketYtdRankWorkbook(buffer: Buffer): MarketYtdRankRow[] {
   const wb = XLSX.read(buffer, { type: "buffer" });
-  const sheetName = wb.SheetNames[0];
-  if (!sheetName) throw new Error("시트를 찾을 수 없습니다.");
-  const ws = wb.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }) as unknown[][];
+  if (!wb.SheetNames[0]) throw new Error("시트를 찾을 수 없습니다.");
+  // 2026-11-11: 닐슨 내보내기 "닐슨 누적시청률 -MMDD.xlsx"는 타깃별 시트(가구시청률 / 수2049 시청률)로 나뉘고
+  // 머리글이 "순위/채널/기타"(타깃 이름은 윗줄)라 기존 방식으로는 첫 시트도 못 읽었다 — 모든 시트를 보고,
+  // 기존 형식이 아니면 그 형식으로 읽는다. 기존 한 시트 파일은 결과가 같다.
+  const all: MarketYtdRankRow[] = [];
+  const errors: string[] = [];
+  for (const sheetName of wb.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, raw: false, defval: "" }) as unknown[][];
+    try {
+      all.push(...parseSheet(rows, sheetName));
+    } catch (e) {
+      errors.push(`${sheetName}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  if (all.length === 0) throw new Error(errors.join(" / ") || "파싱된 데이터가 없습니다 — 파일 구조를 확인해주세요.");
+  return all;
+}
+
+/** 닐슨 내보내기 시트 형식 — A열 "순위", B열 "채널", C열 "기타" 머리글 바로 윗줄 C열이 타깃 이름. 첫 번째 타깃 열(C)만 읽는다. */
+function parseNielsenExportSheet(rows: unknown[][], sheetName: string, dateFrom: string, dateTo: string): MarketYtdRankRow[] {
+  const h = rows.findIndex((r, i) => i < 60 && cellStr(r[0]) === "순위" && cellStr(r[1]) === "채널");
+  if (h < 1) return [];
+  const label = cellStr(rows[h - 1]?.[2]);
+  const region = rows.slice(0, h).map((r) => r.map(cellStr).join(" ")).join(" ");
+  const targetLabel =
+    label === "유료방송가구"
+      ? "유료방송가구"
+      : /2049/.test(sheetName) || (/연령\(20 - 24/.test(label) && /연령\(40 - 44, 45 - 49\)/.test(label) && /수도권/.test(region))
+        ? "수도권2049"
+        : null;
+  if (!targetLabel) throw new Error(`타깃을 알 수 없습니다(${label.slice(0, 30)})`);
+  const out: MarketYtdRankRow[] = [];
+  for (const r of rows.slice(h + 1)) {
+    const rank = parseInt(cellStr(r[0]), 10);
+    const name = cellStr(r[1]);
+    const rating = parseFloat(cellStr(r[2]));
+    if (!name || Number.isNaN(rank)) break;
+    if (Number.isNaN(rating)) continue;
+    out.push({ targetLabel, channelName: name, rank, rating, dateFrom, dateTo });
+  }
+  return out;
+}
+
+function parseSheet(rows: unknown[][], sheetName: string): MarketYtdRankRow[] {
   if (rows.length < 4) throw new Error("파일 구조를 인식할 수 없습니다(행이 너무 적음).");
 
   // 기간 추출 — "선택일자:" 행에서 "YYYY-MM-DD - YYYY-MM-DD" 패턴을 찾는다.
   let dateFrom: string | null = null;
   let dateTo: string | null = null;
-  for (const row of rows.slice(0, 3)) {
+  for (const row of rows.slice(0, 6)) {
     for (const cell of row) {
       const s = cellStr(cell);
       const m = s.match(/(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})/);
@@ -69,6 +109,8 @@ export function parseMarketYtdRankWorkbook(buffer: Buffer): MarketYtdRankRow[] {
     }
   }
   if (headerRowIdx === -1 || blocks.length === 0) {
+    const exported = parseNielsenExportSheet(rows, sheetName, dateFrom, dateTo);
+    if (exported.length > 0) return exported;
     throw new Error("헤더(순위/채널/OO시청률)를 찾을 수 없습니다.");
   }
 
