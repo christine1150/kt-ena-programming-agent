@@ -2989,7 +2989,22 @@ function buildOriginalHeadline(item: OriginalDailyItem): OriginalHeadline | null
   // 덮어쓴다(예: PD 리포트 "동시간대 각 8위, 6위"인데 제목은 DB 비교 순위 "타깃 10위, 가구 1위"로 남던 문제).
   const pdOwn = item.manualReport?.competitor_rank_snapshot?.own ?? null;
   if (item.matched_rating !== null) {
-    beatenBy = item.competitorHighlights
+    // 사용자 지시(2026-11-12): 동시방송 채널(예: SBS Plus 나는 SOLO)이 더 높게 나온 날에도 "동시간대 1위"로 나오던 문제 —
+    // competitorHighlights 에는 같은 프로그램을 동시에 트는 채널이 빠져 있어, 동시방송 값을 순위 비교에 함께 넣는다(이미 목록에 있으면 넣지 않음).
+    const simulcastName = item.simulcast_channel_code ? (CHANNEL_NAME_BY_CODE[item.simulcast_channel_code] ?? item.simulcast_channel_code) : null;
+    const simulcastEntry: OriginalCompetitorHighlight[] =
+      simulcastName && item.simulcast_rating !== null && !item.competitorHighlights.some((c) => c.competitor_name === simulcastName)
+        ? [
+            {
+              competitor_name: simulcastName,
+              competitor_program_name: item.simulcast_program_name ?? item.matched_program_name,
+              competitor_start_time: item.simulcast_start_time ?? item.matched_start_time ?? "",
+              competitor_rating: item.simulcast_rating,
+              rating_gap: item.simulcast_rating - item.matched_rating,
+            },
+          ]
+        : [];
+    beatenBy = [...item.competitorHighlights, ...simulcastEntry]
       .filter((c) => c.competitor_rating !== null && c.competitor_rating > item.matched_rating!)
       .sort((a, b) => (b.competitor_rating ?? 0) - (a.competitor_rating ?? 0));
     rank = pdOwn?.targetRank != null ? pdOwn.targetRank : 1 + beatenBy.length;
