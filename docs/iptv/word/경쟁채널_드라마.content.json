@@ -54,7 +54,7 @@
      "0.169",
      {
       "t": "12위 / 32",
-      "fill": "A19CF0",
+      "fill": "84CFC0",
       "color": "0D0D12"
      },
      "-"
@@ -63,13 +63,13 @@
      "IPTV 가구",
      "0.256",
      {
-      "t": "12위 / 45",
-      "fill": "918CEE",
-      "color": "FFFFFF"
+      "t": "13위 / 45",
+      "fill": "74C8B8",
+      "color": "0D0D12"
      },
      {
       "t": "1위 / 13",
-      "fill": "6D65E9",
+      "fill": "40B49E",
       "color": "FFFFFF"
      }
     ]
@@ -156,7 +156,7 @@
      },
      {
       "t": "0.232",
-      "fill": "7F78EB",
+      "fill": "58BDAA",
       "color": "FFFFFF"
      },
      "555",
@@ -177,7 +177,7 @@
      },
      {
       "t": "0.237",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "287",
@@ -198,7 +198,7 @@
      },
      {
       "t": "0.169",
-      "fill": "E7E5FB",
+      "fill": "DFF2EF",
       "color": "0D0D12"
      },
      "88",
@@ -219,7 +219,7 @@
      },
      {
       "t": "0.208",
-      "fill": "A6A2F1",
+      "fill": "8BD1C4",
       "color": "0D0D12"
      },
      "163",
@@ -240,7 +240,7 @@
      },
      {
       "t": "0.168",
-      "fill": "E8E7FB",
+      "fill": "E1F3F0",
       "color": "0D0D12"
      },
      "14",
@@ -261,7 +261,7 @@
      },
      {
       "t": "0.220",
-      "fill": "928DEE",
+      "fill": "71C7B7",
       "color": "FFFFFF"
      },
      "81",
@@ -282,7 +282,7 @@
      },
      {
       "t": "0.161",
-      "fill": "F3F3FD",
+      "fill": "F0F9F7",
       "color": "0D0D12"
      },
      "43",
@@ -852,7 +852,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 보라가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -880,6 +880,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 20~23시 30%, 17~20시 14%, 11~14시 13%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 수요일 20~23시(0.442), 저녁 시청률은 평일이 주말의 1.7배"
   },
   {
@@ -892,12 +896,534 @@
   },
   {
    "type": "bullet",
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.055)에 SBS Plus는 '나는SOLO' 0.442, 상대가 더 높음"
+  },
+  {
+   "type": "bullet",
    "text": "작품 수 69편 vs 119편, 상위 5편 시청량 49% vs 38% → SBS Plus가 대표작에 더 몰아줌"
   },
   {
    "type": "takeaway",
    "text": "**SBS Plus**는 수요일 20~23시 '나는SOLO'가 가장 강함",
    "note": "시청량의 49%를 상위 5편이 만드는 대표작 반복 편성 채널"
+  },
+  {
+   "type": "section",
+   "text": "Ⅵ. IPTV 요일·시간대 히트맵",
+   "pageBreak": true
+  },
+  {
+   "type": "caption",
+   "text": "IPTV 수도권 2049 요일×시간대 평균 시청률(2026)"
+  },
+  {
+   "type": "table",
+   "head": [
+    "시간대",
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일"
+   ],
+   "rows": [
+    [
+     "05~08시",
+     {
+      "t": "0.091",
+      "t2": "미우새",
+      "fill": "F0F9F7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.070",
+      "t2": "TV동물농장",
+      "fill": "F9FDFC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.071",
+      "t2": "미우새",
+      "fill": "F9FCFC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.080",
+      "t2": "동상이몽2",
+      "fill": "F5FBFA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.071",
+      "t2": "미우새",
+      "fill": "F9FCFC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.108",
+      "t2": "동상이몽2",
+      "fill": "E9F6F4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.120",
+      "t2": "미우새",
+      "fill": "E3F4F1",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "08~11시",
+     {
+      "t": "0.173",
+      "t2": "미우새",
+      "fill": "CCEBE5",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.142",
+      "t2": "아니근데진짜",
+      "fill": "DAF0EC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.174",
+      "t2": "동상이몽2",
+      "fill": "CCEBE5",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.153",
+      "t2": "나는SOLO",
+      "fill": "D5EFEA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.133",
+      "t2": "꼬꼬무",
+      "fill": "DEF2EE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.178",
+      "t2": "이호선의사이다",
+      "fill": "CBEAE4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.219",
+      "t2": "접속무비월드",
+      "fill": "B9E3DB",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "11~14시",
+     {
+      "t": "0.198",
+      "t2": "미우새",
+      "fill": "C2E7E0",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.170",
+      "t2": "미우새",
+      "fill": "CEECE6",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.182",
+      "t2": "동상이몽2",
+      "fill": "C9EAE3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.161",
+      "t2": "나는SOLO",
+      "fill": "D2EDE8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.132",
+      "t2": "나는SOLO",
+      "fill": "DEF2EE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.189",
+      "t2": "나는SOLO",
+      "fill": "C6E8E2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.197",
+      "t2": "접속무비월드",
+      "fill": "C2E7E0",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "14~17시",
+     {
+      "t": "0.228",
+      "t2": "미우새",
+      "fill": "B5E2D9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.186",
+      "t2": "미우새",
+      "fill": "C7E9E2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.164",
+      "t2": "동상이몽2",
+      "fill": "D0EDE7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.164",
+      "t2": "동상이몽2",
+      "fill": "D0EDE7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.133",
+      "t2": "나는SOLO",
+      "fill": "DEF2EE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.191",
+      "t2": "나는SOLO",
+      "fill": "C5E8E1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.230",
+      "t2": "신이랑법률사무소",
+      "fill": "B4E2D9",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "17~20시",
+     {
+      "t": "0.214",
+      "t2": "미우새",
+      "fill": "BBE4DC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.194",
+      "t2": "미우새",
+      "fill": "C3E8E1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.203",
+      "t2": "나솔사계",
+      "fill": "C0E6DF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.202",
+      "t2": "나는SOLO",
+      "fill": "C0E6DF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.168",
+      "t2": "독박투어3",
+      "fill": "CFECE6",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.155",
+      "t2": "왕관을쓰려는자,그무게를견뎌라-상속자들",
+      "fill": "D4EEE9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.193",
+      "t2": "지니비서진",
+      "fill": "C4E8E1",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "20~23시",
+     {
+      "t": "0.237",
+      "t2": "미우새",
+      "fill": "B1E0D7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.191",
+      "t2": "상남자의여행법",
+      "fill": "C5E8E1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.647",
+      "t2": "나는SOLO",
+      "fill": "009B7D",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.409",
+      "t2": "나솔사계",
+      "fill": "67C3B2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.174",
+      "t2": "나솔사계",
+      "fill": "CCEBE5",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.172",
+      "t2": "지니비서진",
+      "fill": "CDEBE6",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.177",
+      "t2": "신이랑법률사무소",
+      "fill": "CBEBE4",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "23~02시",
+     {
+      "t": "0.156",
+      "t2": "귀묘한이야기2",
+      "fill": "D4EEE9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.126",
+      "t2": "귀묘한이야기2",
+      "fill": "E1F3F0",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.332",
+      "t2": "나는SOLO",
+      "fill": "88D0C2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.182",
+      "t2": "나솔사계",
+      "fill": "C8EAE3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.120",
+      "t2": "귀묘한이야기2",
+      "fill": "E4F4F1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.177",
+      "t2": "귀묘한이야기2",
+      "fill": "CBEBE5",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.163",
+      "t2": "미우새",
+      "fill": "D1EDE8",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "02~05시",
+     {
+      "t": "0.082",
+      "t2": "미우새",
+      "fill": "F4FBF9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.059",
+      "t2": "나는SOLO",
+      "fill": "FEFEFE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.056",
+      "t2": "나는SOLO",
+      "fill": "FFFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.080",
+      "t2": "귀묘한이야기2",
+      "fill": "F5FBFA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.058",
+      "t2": "나는SOLO",
+      "fill": "FEFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.084",
+      "t2": "꼬꼬무",
+      "fill": "F3FAF9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.086",
+      "t2": "재벌X형사2",
+      "fill": "F2FAF8",
+      "color": "0D0D12",
+      "center": true
+     }
+    ]
+   ],
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
+  },
+  {
+   "type": "note",
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
+  },
+  {
+   "type": "section",
+   "text": "Ⅶ. 닐슨·IPTV 비교 인사이트(수도권 2049)",
+   "pageBreak": false
+  },
+  {
+   "type": "subhead",
+   "text": "두 자료의 시간대 강약 순서 일치도 : **0.83(높음)**"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 강한 시간대는 두 자료 모두 수 20~23시로 같음"
+  },
+  {
+   "type": "bullet",
+   "text": "채널 평균 대비로 보면 IPTV가 닐슨보다 심야 1.17배·아침 1.42배 크게, 저녁 0.83배 작게 잡음"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 상대적으로 더 강한 시간대 수 23~02시('나는SOLO'): 지수 닐슨 1.33 → IPTV 1.96"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 상대적으로 더 강한 시간대 화 23~02시('귀묘한이야기2'): 지수 닐슨 1.43 → IPTV 0.75"
+  },
+  {
+   "type": "subhead",
+   "text": "작품별 강약 순서 일치도 : **0.87(두 자료 8회 이상 32편)**"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '꼬꼬무': 지수 닐슨 0.43 → IPTV 0.73"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '재벌X형사': 지수 닐슨 0.75 → IPTV 1.23"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '지니비서진': 지수 닐슨 1.37 → IPTV 1"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '상남자여행법': 지수 닐슨 1.34 → IPTV 0.99"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨 방영 중 시청률 0 기록이 12%, 표본이 얇은 시간대는 IPTV로 함께 확인 필요"
+  },
+  {
+   "type": "subhead",
+   "text": "편성 판단 시사점 : **두 자료를 함께 볼 지점**"
+  },
+  {
+   "type": "bullet",
+   "text": "낮·아침 성과는 닐슨만 보면 낮게 보여, 재방·구매 판단 때 IPTV도 확인"
+  },
+  {
+   "type": "bullet",
+   "text": "심야 시청은 IPTV에서 더 크게 잡혀, 심야 재방 효과는 IPTV로 보완"
+  },
+  {
+   "type": "bullet",
+   "text": "저녁 강세는 닐슨에서 더 크게 잡혀, 저녁 대표작 평가는 닐슨이 더 후함"
+  },
+  {
+   "type": "note",
+   "text": "지수 = 각 자료 안에서 채널 평균을 1로 본 값, 두 자료는 표본·가중치가 달라 절대 시청률끼리는 비교하지 않음"
   },
   {
    "type": "apptitle",
@@ -956,12 +1482,12 @@
      "0.227",
      {
       "t": "14위 / 45",
-      "fill": "9893EF",
+      "fill": "78CABA",
       "color": "0D0D12"
      },
      {
       "t": "2위 / 13",
-      "fill": "7972EA",
+      "fill": "50BAA6",
       "color": "FFFFFF"
      }
     ]
@@ -994,7 +1520,7 @@
   },
   {
    "type": "bullet",
-   "text": "IPTV 가구 1~6월 0.231 → 7~11월 0.220(-4.8%, 군 중앙값 -2.1%)"
+   "text": "IPTV 가구 1~6월 0.231 → 7~11월 0.221(-4.7%, 군 중앙값 -2.1%)"
   },
   {
    "type": "section",
@@ -1031,7 +1557,7 @@
      },
      {
       "t": "0.288",
-      "fill": "817BEC",
+      "fill": "5BBFAB",
       "color": "FFFFFF"
      },
      "338",
@@ -1052,7 +1578,7 @@
      },
      {
       "t": "0.294",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "832",
@@ -1073,7 +1599,7 @@
      },
      {
       "t": "0.227",
-      "fill": "EAE9FC",
+      "fill": "E4F4F1",
       "color": "0D0D12"
      },
      "14",
@@ -1094,7 +1620,7 @@
      },
      {
       "t": "0.244",
-      "fill": "CDCBF7",
+      "fill": "BEE5DE",
       "color": "0D0D12"
      },
      "396",
@@ -1136,7 +1662,7 @@
      },
      {
       "t": "0.264",
-      "fill": "ABA7F2",
+      "fill": "91D4C7",
       "color": "0D0D12"
      },
      "461",
@@ -1157,7 +1683,7 @@
      },
      {
       "t": "0.234",
-      "fill": "DEDDFA",
+      "fill": "D4EEE9",
       "color": "0D0D12"
      },
      "21",
@@ -1178,7 +1704,7 @@
      },
      {
       "t": "0.282",
-      "fill": "8B85ED",
+      "fill": "68C4B2",
       "color": "FFFFFF"
      },
      "318",
@@ -1267,7 +1793,7 @@
    "rows": [
     [
      "편성 작품 수",
-     "93편",
+     "92편",
      "119편"
     ],
     [
@@ -1744,7 +2270,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 보라가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -1772,6 +2298,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 17~20시 21%, 20~23시 18%, 11~14시 15%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 토요일 23~02시(0.209), 저녁 시청률은 주말이 평일의 1.5배"
   },
   {
@@ -1784,16 +2314,522 @@
   },
   {
    "type": "sub",
-   "text": "ENA Drama가 가장 앞서는 곳은 수요일 23~02시(0.032 vs 0.032)"
+   "text": "ENA Drama가 앞서는 곳(격차 큰 순): 수 23~02시"
   },
   {
    "type": "bullet",
-   "text": "작품 수 93편 vs 119편, 상위 5편 시청량 55% vs 38% → MBC드라마넷가 대표작에 더 몰아줌"
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.055)에 MBC드라마넷은 '나혼자산다' 0.082, 상대가 더 높음"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 수 92편 vs 119편, 상위 5편 시청량 55% vs 38% → MBC드라마넷가 대표작에 더 몰아줌"
   },
   {
    "type": "takeaway",
    "text": "**MBC드라마넷**은 토요일 23~02시 '유부녀킬러'가 가장 강함",
    "note": "시청량의 55%를 상위 5편이 만드는 대표작 반복 편성·평일 띠 편성 채널"
+  },
+  {
+   "type": "section",
+   "text": "Ⅵ. IPTV 요일·시간대 히트맵",
+   "pageBreak": true
+  },
+  {
+   "type": "caption",
+   "text": "IPTV 가구 요일×시간대 평균 시청률(2026)"
+  },
+  {
+   "type": "table",
+   "head": [
+    "시간대",
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일"
+   ],
+   "rows": [
+    [
+     "05~08시",
+     {
+      "t": "0.138",
+      "t2": "첫번째남자",
+      "fill": "CFECE6",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.157",
+      "t2": "첫번째남자",
+      "fill": "C0E6DF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.147",
+      "t2": "첫번째남자",
+      "fill": "C7E9E3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.143",
+      "t2": "첫번째남자",
+      "fill": "CAEAE4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.138",
+      "t2": "첫번째남자",
+      "fill": "CFECE6",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.170",
+      "t2": "라디오스타",
+      "fill": "B6E2DA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.174",
+      "t2": "나혼자산다",
+      "fill": "B2E1D8",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "08~11시",
+     {
+      "t": "0.223",
+      "t2": "나혼자산다",
+      "fill": "8CD2C5",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.195",
+      "t2": "나혼자산다",
+      "fill": "A3DBD0",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.189",
+      "t2": "전지적참견시점",
+      "fill": "A7DDD2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.177",
+      "t2": "나혼자산다",
+      "fill": "B1E0D7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.168",
+      "t2": "라디오스타",
+      "fill": "B7E3DB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.297",
+      "t2": "나혼자산다",
+      "fill": "53BCA8",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.318",
+      "t2": "판사이한영",
+      "fill": "43B59F",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "11~14시",
+     {
+      "t": "0.250",
+      "t2": "나혼자산다",
+      "fill": "78CABA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.227",
+      "t2": "나혼자산다",
+      "fill": "8AD1C3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.200",
+      "t2": "나혼자산다",
+      "fill": "9ED9CE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.200",
+      "t2": "라디오스타",
+      "fill": "9FD9CE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.197",
+      "t2": "구해줘홈즈",
+      "fill": "A1DACF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.337",
+      "t2": "나혼자산다",
+      "fill": "35B098",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.391",
+      "t2": "나혼자산다",
+      "fill": "0B9F82",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "14~17시",
+     {
+      "t": "0.243",
+      "t2": "전지적참견시점",
+      "fill": "7DCCBD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.242",
+      "t2": "결혼지옥",
+      "fill": "7ECDBD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.223",
+      "t2": "놀면뭐하니",
+      "fill": "8DD2C5",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.202",
+      "t2": "라디오스타",
+      "fill": "9DD9CD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.200",
+      "t2": "전지적참견시점",
+      "fill": "9ED9CE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.289",
+      "t2": "어서와 한국은",
+      "fill": "5ABEAB",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.405",
+      "t2": "나혼자산다",
+      "fill": "009B7D",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "17~20시",
+     {
+      "t": "0.322",
+      "t2": "놀면뭐하니",
+      "fill": "40B49E",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.262",
+      "t2": "나혼자산다",
+      "fill": "6EC6B5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.254",
+      "t2": "나혼자산다",
+      "fill": "75C9B9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.248",
+      "t2": "라디오스타",
+      "fill": "7ACBBB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.240",
+      "t2": "놀면뭐하니",
+      "fill": "80CDBE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.388",
+      "t2": "나혼자산다",
+      "fill": "0DA084",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.370",
+      "t2": "나혼자산다",
+      "fill": "1BA58B",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "20~23시",
+     {
+      "t": "0.308",
+      "t2": "나혼자산다",
+      "fill": "4BB8A3",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.262",
+      "t2": "전지적참견시점",
+      "fill": "6EC6B5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.242",
+      "t2": "나혼자산다",
+      "fill": "7ECDBD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.247",
+      "t2": "라디오스타",
+      "fill": "7ACBBB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.215",
+      "t2": "라디오스타",
+      "fill": "93D5C8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.312",
+      "t2": "나혼자산다",
+      "fill": "48B7A2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.294",
+      "t2": "나혼자산다",
+      "fill": "56BDA9",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "23~02시",
+     {
+      "t": "0.234",
+      "t2": "히든아이",
+      "fill": "84CFC1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.175",
+      "t2": "위대한가이드3",
+      "fill": "B2E1D8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.119",
+      "t2": "심야괴담회6",
+      "fill": "DEF2EE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.159",
+      "t2": "어서와 한국은",
+      "fill": "BFE6DE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.313",
+      "t2": "판사이한영",
+      "fill": "47B7A1",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.350",
+      "t2": "판사이한영",
+      "fill": "2BAC93",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.219",
+      "t2": "나혼자산다",
+      "fill": "90D4C7",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "02~05시",
+     {
+      "t": "0.116",
+      "t2": "전지적참견시점",
+      "fill": "DFF3EF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.148",
+      "t2": "히든아이",
+      "fill": "C7E9E2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.090",
+      "t2": "히든아이",
+      "fill": "F3FAF9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.075",
+      "t2": "히든아이",
+      "fill": "FFFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.092",
+      "t2": "어서와 한국은",
+      "fill": "F2FAF8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.155",
+      "t2": "히든아이",
+      "fill": "C2E7E0",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.163",
+      "t2": "나혼자산다",
+      "fill": "BBE5DD",
+      "color": "0D0D12",
+      "center": true
+     }
+    ]
+   ],
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
+  },
+  {
+   "type": "note",
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
+  },
+  {
+   "type": "section",
+   "text": "Ⅶ. 닐슨·IPTV 비교 인사이트(가구)",
+   "pageBreak": false
+  },
+  {
+   "type": "subhead",
+   "text": "두 자료의 시간대 강약 순서 일치도 : **0.95(높음)**"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 강한 시간대가 닐슨 토 23~02시, IPTV 일 14~17시로 갈림"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 상대적으로 더 강한 시간대 수 08~11시('전지적참견시점'): 지수 닐슨 0.66 → IPTV 0.83"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 상대적으로 더 강한 시간대 금 23~02시('판사이한영'): 지수 닐슨 2.34 → IPTV 1.38"
+  },
+  {
+   "type": "subhead",
+   "text": "작품별 강약 순서 일치도 : **0.95(두 자료 8회 이상 42편)**"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '호텔도깨비': 지수 닐슨 0.32 → IPTV 0.47"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '이강에는달이흐른다': 지수 닐슨 0.33 → IPTV 0.47"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '고민순삭:있었는데요없…': 지수 닐슨 0.41 → IPTV 0.33"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '21세기대군부인': 지수 닐슨 1.58 → IPTV 1.27"
+  },
+  {
+   "type": "subhead",
+   "text": "편성 판단 시사점 : **두 자료를 함께 볼 지점**"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 강약은 두 자료가 대체로 같아, 작품 평가는 어느 자료로 봐도 비슷"
+  },
+  {
+   "type": "note",
+   "text": "지수 = 각 자료 안에서 채널 평균을 1로 본 값, 두 자료는 표본·가중치가 달라 절대 시청률끼리는 비교하지 않음"
   },
   {
    "type": "apptitle",
@@ -1845,8 +2881,8 @@
      "IPTV 수도권 2049",
      "0.119",
      {
-      "t": "14위 / 32",
-      "fill": "AAA6F2",
+      "t": "15위 / 32",
+      "fill": "96D6CA",
       "color": "0D0D12"
      },
      "-"
@@ -1856,12 +2892,12 @@
      "0.218",
      {
       "t": "17위 / 45",
-      "fill": "A29DF1",
+      "fill": "85CFC1",
       "color": "0D0D12"
      },
      {
       "t": "3위 / 13",
-      "fill": "857FEC",
+      "fill": "60C1AE",
       "color": "FFFFFF"
      }
     ]
@@ -1919,7 +2955,7 @@
      "화려한 날들",
      {
       "t": "0.185",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "64",
@@ -1930,7 +2966,7 @@
      "결혼의 완성",
      {
       "t": "0.178",
-      "fill": "8B85ED",
+      "fill": "68C4B2",
       "color": "FFFFFF"
      },
      "117",
@@ -1941,7 +2977,7 @@
      "사랑이 온다",
      {
       "t": "0.177",
-      "fill": "918BEE",
+      "fill": "6FC6B5",
       "color": "FFFFFF"
      },
      "282",
@@ -1952,7 +2988,7 @@
      "친밀한 리플리",
      {
       "t": "0.161",
-      "fill": "C4C1F6",
+      "fill": "B1E1D7",
       "color": "0D0D12"
      },
      "222",
@@ -1963,7 +2999,7 @@
      "살림하는 남자들 2",
      {
       "t": "0.159",
-      "fill": "CDCAF7",
+      "fill": "BEE5DE",
       "color": "0D0D12"
      },
      "252",
@@ -1974,7 +3010,7 @@
      "슈퍼맨이돌아왔다",
      {
       "t": "0.157",
-      "fill": "D1CEF8",
+      "fill": "C2E7E0",
       "color": "0D0D12"
      },
      "177",
@@ -1985,7 +3021,7 @@
      "욕망의 덫",
      {
       "t": "0.154",
-      "fill": "DCDAFA",
+      "fill": "D2EDE8",
       "color": "0D0D12"
      },
      "306",
@@ -1996,7 +3032,7 @@
      "은애하는 도적님아",
      {
       "t": "0.151",
-      "fill": "E7E6FB",
+      "fill": "DFF3EF",
       "color": "0D0D12"
      },
      "204",
@@ -2007,7 +3043,7 @@
      "붉은 진주",
      {
       "t": "0.148",
-      "fill": "F0EFFD",
+      "fill": "EBF7F5",
       "color": "0D0D12"
      },
      "672",
@@ -2122,49 +3158,49 @@
      {
       "t": "0.094",
       "t2": "기쁜우리좋은날",
-      "fill": "BFBCF5",
+      "fill": "ABDED4",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.097",
       "t2": "기쁜우리좋은날",
-      "fill": "BBB7F5",
+      "fill": "A6DCD2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.100",
       "t2": "기쁜우리좋은날",
-      "fill": "B7B4F4",
+      "fill": "A1DACF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.106",
       "t2": "기쁜우리좋은날",
-      "fill": "AFABF3",
+      "fill": "96D6CA",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.106",
       "t2": "기쁜우리좋은날",
-      "fill": "AFABF3",
+      "fill": "96D6CA",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.118",
       "t2": "기쁜우리좋은날",
-      "fill": "9F9AF0",
+      "fill": "82CEBF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.101",
       "t2": "붉은진주",
-      "fill": "B6B2F4",
+      "fill": "9FD9CE",
       "color": "0D0D12",
       "center": true
      }
@@ -2174,49 +3210,49 @@
      {
       "t": "0.165",
       "t2": "붉은진주",
-      "fill": "6159E7",
+      "fill": "30AE96",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.142",
       "t2": "사당귀",
-      "fill": "807AEB",
+      "fill": "59BEAA",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.151",
       "t2": "붉은진주",
-      "fill": "736CE9",
+      "fill": "48B7A2",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.147",
       "t2": "붉은진주",
-      "fill": "7972EA",
+      "fill": "50BAA6",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.158",
       "t2": "붉은진주",
-      "fill": "6A63E8",
+      "fill": "3DB39C",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.156",
       "t2": "붉은진주",
-      "fill": "6D66E9",
+      "fill": "40B49E",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.129",
       "t2": "기쁜우리좋은날",
-      "fill": "918BEE",
+      "fill": "6FC6B5",
       "color": "FFFFFF",
       "center": true
      }
@@ -2226,49 +3262,49 @@
      {
       "t": "0.178",
       "t2": "살림하는남자들2",
-      "fill": "5047E4",
+      "fill": "1AA58A",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.118",
       "t2": "슈퍼맨이돌아왔다",
-      "fill": "9F9AF0",
+      "fill": "81CEBF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.119",
       "t2": "사랑을처방",
-      "fill": "9E99F0",
+      "fill": "80CDBE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.101",
       "t2": "옥탑방의문제아들",
-      "fill": "B6B2F4",
+      "fill": "A0DACE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.118",
       "t2": "사랑을처방",
-      "fill": "9E9AF0",
+      "fill": "81CDBF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.123",
       "t2": "옥탑방의문제아들",
-      "fill": "9893EF",
+      "fill": "79CABA",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.163",
       "t2": "사랑을처방",
-      "fill": "645CE7",
+      "fill": "34AF98",
       "color": "FFFFFF",
       "center": true
      }
@@ -2278,49 +3314,49 @@
      {
       "t": "0.147",
       "t2": "사랑이온다",
-      "fill": "7972EA",
+      "fill": "50BAA6",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.143",
       "t2": "1박2일시즌4",
-      "fill": "7E78EB",
+      "fill": "57BDA9",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.112",
       "t2": "개콘",
-      "fill": "A7A2F1",
+      "fill": "8BD2C4",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.138",
       "t2": "사랑을처방",
-      "fill": "857EEC",
+      "fill": "5FC0AD",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.115",
       "t2": "말자쇼",
-      "fill": "A39FF1",
+      "fill": "87D0C2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.158",
       "t2": "신상출시편스토랑",
-      "fill": "6B63E8",
+      "fill": "3DB39C",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.193",
       "t2": "슈퍼맨이돌아왔다",
-      "fill": "3C32E1",
+      "fill": "009B7D",
       "color": "FFFFFF",
       "center": true
      }
@@ -2330,49 +3366,49 @@
      {
       "t": "0.129",
       "t2": "이십세기힛-트쏭",
-      "fill": "918BEE",
+      "fill": "6FC6B5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.126",
       "t2": "차트를달리는남자",
-      "fill": "958FEF",
+      "fill": "74C9B8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.114",
       "t2": "더시즌즈",
-      "fill": "A5A0F1",
+      "fill": "89D1C3",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.130",
       "t2": "신상출시편스토랑",
-      "fill": "908AEE",
+      "fill": "6EC6B5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.131",
       "t2": "옥탑방의문제아들",
-      "fill": "8D88EE",
+      "fill": "6AC5B3",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.130",
       "t2": "차트를달리는남자",
-      "fill": "8F89EE",
+      "fill": "6DC6B4",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.186",
       "t2": "사랑을처방",
-      "fill": "453CE2",
+      "fill": "0CA083",
       "color": "FFFFFF",
       "center": true
      }
@@ -2382,49 +3418,49 @@
      {
       "t": "0.096",
       "t2": "차트를달리는남자",
-      "fill": "BCB8F5",
+      "fill": "A7DDD2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.178",
       "t2": "무엇이든물어보살",
-      "fill": "5047E4",
+      "fill": "1AA58B",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.129",
       "t2": "무엇이든물어보살",
-      "fill": "908BEE",
+      "fill": "6EC6B5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.129",
       "t2": "무엇이든물어보살",
-      "fill": "908BEE",
+      "fill": "6EC6B5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.150",
       "t2": "슈퍼맨이돌아왔다",
-      "fill": "756EEA",
+      "fill": "4BB8A3",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.136",
       "t2": "더시즌즈",
-      "fill": "8781ED",
+      "fill": "63C2AF",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.163",
       "t2": "살림하는남자들2",
-      "fill": "645CE7",
+      "fill": "34AF98",
       "color": "FFFFFF",
       "center": true
      }
@@ -2434,49 +3470,49 @@
      {
       "t": "0.082",
       "t2": "은애하는도적님아",
-      "fill": "CECCF7",
+      "fill": "BFE6DE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.103",
       "t2": "개콘",
-      "fill": "B3AFF3",
+      "fill": "9CD8CC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.103",
       "t2": "말자쇼",
-      "fill": "B3AFF3",
+      "fill": "9CD8CC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.087",
       "t2": "개콘",
-      "fill": "C8C5F7",
+      "fill": "B7E3DA",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.089",
       "t2": "영화가좋다",
-      "fill": "C5C2F6",
+      "fill": "B3E1D8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.099",
       "t2": "이십세기힛-트쏭",
-      "fill": "B8B4F4",
+      "fill": "A2DACF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.107",
       "t2": "은애하는도적님아",
-      "fill": "ADA9F2",
+      "fill": "94D5C9",
       "color": "0D0D12",
       "center": true
      }
@@ -2493,42 +3529,42 @@
      {
       "t": "0.049",
       "t2": "신상출시편스토랑",
-      "fill": "FAFAFE",
+      "fill": "F9FDFC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.047",
       "t2": "불후의명곡",
-      "fill": "FCFCFF",
+      "fill": "FBFEFD",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.056",
       "t2": "신상출시편스토랑",
-      "fill": "F1F0FD",
+      "fill": "EDF8F6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.047",
       "t2": "불후의명곡",
-      "fill": "FCFCFF",
+      "fill": "FCFEFD",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.053",
       "t2": "1박2일시즌4",
-      "fill": "F4F4FD",
+      "fill": "F1F9F8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.053",
       "t2": "사당귀",
-      "fill": "F5F5FE",
+      "fill": "F2FAF9",
       "color": "0D0D12",
       "center": true
      }
@@ -2542,7 +3578,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -2570,6 +3606,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 14~17시 16%, 11~14시 15%, 20~23시 15%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 일요일 14~17시(0.193), 저녁 시청률은 주말이 평일의 1.2배"
   },
   {
@@ -2582,7 +3622,11 @@
   },
   {
    "type": "sub",
-   "text": "ENA Drama가 가장 앞서는 곳은 월요일 20~23시(0.096 vs 0.096)"
+   "text": "ENA Drama가 앞서는 곳(격차 큰 순): 월 20~23시"
+  },
+  {
+   "type": "bullet",
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.098)에 KBS드라마는 '무엇이든물어보살' 0.129, 상대가 더 높음"
   },
   {
    "type": "bullet",
@@ -2644,7 +3688,7 @@
      "0.063",
      {
       "t": "23위 / 32",
-      "fill": "D5D2F8",
+      "fill": "C7E9E3",
       "color": "0D0D12"
      },
      "-"
@@ -2654,12 +3698,12 @@
      "0.108",
      {
       "t": "25위 / 45",
-      "fill": "BDB9F5",
+      "fill": "A8DDD3",
       "color": "0D0D12"
      },
      {
       "t": "8위 / 13",
-      "fill": "C2BFF6",
+      "fill": "AFE0D6",
       "color": "0D0D12"
      }
     ]
@@ -2729,7 +3773,7 @@
      },
      {
       "t": "0.087",
-      "fill": "E9E8FC",
+      "fill": "E2F4F0",
       "color": "0D0D12"
      },
      "43",
@@ -2767,7 +3811,7 @@
      },
      {
       "t": "0.075",
-      "fill": "FAFAFE",
+      "fill": "F9FDFC",
       "color": "0D0D12"
      },
      "17",
@@ -2822,7 +3866,7 @@
      },
      {
       "t": "0.161",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "111",
@@ -2843,7 +3887,7 @@
      },
      {
       "t": "0.084",
-      "fill": "EDECFC",
+      "fill": "E8F6F3",
       "color": "0D0D12"
      },
      "31",
@@ -2864,7 +3908,7 @@
      },
      {
       "t": "0.111",
-      "fill": "C4C1F6",
+      "fill": "B1E1D7",
       "color": "0D0D12"
      },
      "111",
@@ -2906,7 +3950,7 @@
      },
      {
       "t": "0.072",
-      "fill": "FFFFFF",
+      "fill": "FEFFFF",
       "color": "0D0D12"
      },
      "28",
@@ -3438,7 +4482,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 보라가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -3462,6 +4506,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 20~23시 20%, 17~20시 19%, 11~14시 15%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 일요일 17~20시(0.062), 저녁 시청률은 평일·주말 비슷"
   },
   {
@@ -3474,7 +4522,11 @@
   },
   {
    "type": "sub",
-   "text": "ENA Drama가 가장 앞서는 곳은 월요일 23~02시(0.041 vs 0.031)"
+   "text": "ENA Drama가 앞서는 곳(격차 큰 순): 화 02~05시, 금 02~05시, 수 02~05시"
+  },
+  {
+   "type": "bullet",
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.055)에 DRAMAcube는 '하나부터열까지' 0.061, 상대가 더 높음"
   },
   {
    "type": "bullet",
@@ -3484,6 +4536,520 @@
    "type": "takeaway",
    "text": "**DRAMAcube**는 일요일 17~20시 '신이랑법률사무소'가 가장 강함",
    "note": "시청량의 29%를 상위 5편이 만드는 대표작 반복 편성·평일 띠 편성 채널"
+  },
+  {
+   "type": "section",
+   "text": "Ⅵ. IPTV 요일·시간대 히트맵",
+   "pageBreak": true
+  },
+  {
+   "type": "caption",
+   "text": "IPTV 수도권 2049 요일×시간대 평균 시청률(2026)"
+  },
+  {
+   "type": "table",
+   "head": [
+    "시간대",
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일"
+   ],
+   "rows": [
+    [
+     "05~08시",
+     {
+      "t": "0.030",
+      "t2": "용감한형사들4",
+      "fill": "EDF8F6",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.029",
+      "t2": "용감한형사들4",
+      "fill": "EFF9F7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.030",
+      "t2": "용감한형사들4",
+      "fill": "ECF7F5",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.029",
+      "t2": "용감한형사들4",
+      "fill": "F1F9F8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.031",
+      "t2": "용감한형사들4",
+      "fill": "EAF7F4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.044",
+      "t2": "나혼자산다",
+      "fill": "C3E7E0",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.043",
+      "t2": "용감한형사들4",
+      "fill": "C3E8E1",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "08~11시",
+     {
+      "t": "0.057",
+      "t2": "이호선상담소",
+      "fill": "99D7CB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.049",
+      "t2": "이호선상담소",
+      "fill": "B3E1D8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.049",
+      "t2": "이호선상담소",
+      "fill": "B3E1D8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.050",
+      "t2": "말자쇼",
+      "fill": "B0E0D7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.055",
+      "t2": "이호선상담소",
+      "fill": "A1DACF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.080",
+      "t2": "이호선상담소",
+      "fill": "54BCA8",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.087",
+      "t2": "이호선상담소",
+      "fill": "3DB39C",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "11~14시",
+     {
+      "t": "0.072",
+      "t2": "유부녀킬러",
+      "fill": "6AC5B3",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.059",
+      "t2": "삼시세끼어촌편시즌3",
+      "fill": "94D5C8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.056",
+      "t2": "유퀴즈온더블럭",
+      "fill": "9DD8CD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.064",
+      "t2": "말자쇼",
+      "fill": "85CFC1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.072",
+      "t2": "나혼자산다",
+      "fill": "6AC5B3",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.091",
+      "t2": "이호선상담소",
+      "fill": "31AE96",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.092",
+      "t2": "라디오스타",
+      "fill": "2EAD94",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "14~17시",
+     {
+      "t": "0.068",
+      "t2": "유퀴즈온더블럭",
+      "fill": "77CABA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.063",
+      "t2": "아니근데진짜",
+      "fill": "88D0C3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.064",
+      "t2": "나혼자산다",
+      "fill": "85CFC1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.064",
+      "t2": "유부녀킬러",
+      "fill": "83CEC0",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.071",
+      "t2": "이호선상담소",
+      "fill": "6EC6B5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.091",
+      "t2": "나혼자산다",
+      "fill": "31AE96",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.102",
+      "t2": "유부녀킬러",
+      "fill": "0FA185",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "17~20시",
+     {
+      "t": "0.084",
+      "t2": "신이랑법률사무소",
+      "fill": "47B7A1",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.083",
+      "t2": "신이랑법률사무소",
+      "fill": "49B8A2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.083",
+      "t2": "은밀한감사",
+      "fill": "4BB8A3",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.090",
+      "t2": "신이랑법률사무소",
+      "fill": "34AF98",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.092",
+      "t2": "삼시세끼정선편",
+      "fill": "2DAD94",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.087",
+      "t2": "이호선상담소",
+      "fill": "3DB39C",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.107",
+      "t2": "신이랑법률사무소",
+      "fill": "009B7D",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "20~23시",
+     {
+      "t": "0.089",
+      "t2": "은밀한감사",
+      "fill": "37B099",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.085",
+      "t2": "톡파원25시",
+      "fill": "43B59F",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.082",
+      "t2": "하나부터열까지",
+      "fill": "4DB9A4",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.093",
+      "t2": "용감한형사들5",
+      "fill": "2AAB92",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.090",
+      "t2": "이호선상담소",
+      "fill": "33AF97",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.077",
+      "t2": "라디오스타",
+      "fill": "5CBFAC",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.092",
+      "t2": "라디오스타",
+      "fill": "2FAE95",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "23~02시",
+     {
+      "t": "0.058",
+      "t2": "용감한형사들4",
+      "fill": "96D6C9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.055",
+      "t2": "라디오스타",
+      "fill": "A1DACF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.047",
+      "t2": "돌싱N모솔",
+      "fill": "B8E3DB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.064",
+      "t2": "나혼자산다",
+      "fill": "85CFC1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.063",
+      "t2": "이호선상담소",
+      "fill": "87D0C2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.058",
+      "t2": "유부녀킬러",
+      "fill": "97D6CA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.069",
+      "t2": "용감한형사들4",
+      "fill": "74C8B8",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "02~05시",
+     {
+      "t": "0.027",
+      "t2": "토요일은밥이좋아",
+      "fill": "F7FCFB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.025",
+      "t2": "토요일은밥이좋아",
+      "fill": "FBFEFD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.024",
+      "t2": "토요일은밥이좋아",
+      "fill": "FFFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.025",
+      "t2": "토요일은밥이좋아",
+      "fill": "FAFDFD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.027",
+      "t2": "토요일은밥이좋아",
+      "fill": "F4FBFA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.027",
+      "t2": "토요일은밥이좋아",
+      "fill": "F5FBFA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.029",
+      "t2": "토요일은밥이좋아",
+      "fill": "F0F9F7",
+      "color": "0D0D12",
+      "center": true
+     }
+    ]
+   ],
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
+  },
+  {
+   "type": "note",
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
+  },
+  {
+   "type": "section",
+   "text": "Ⅶ. 닐슨·IPTV 비교 인사이트(수도권 2049)",
+   "pageBreak": false
+  },
+  {
+   "type": "subhead",
+   "text": "두 자료의 시간대 강약 순서 일치도 : **0.91(높음)**"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 강한 시간대는 두 자료 모두 일 17~20시로 같음"
+  },
+  {
+   "type": "bullet",
+   "text": "채널 평균 대비로 보면 IPTV가 닐슨보다 심야 1.19배·아침 1.62배 크게 잡음"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 상대적으로 더 강한 시간대 일 05~08시('용감한형사들4'): 지수 닐슨 0.35 → IPTV 0.7"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 상대적으로 더 강한 시간대 수 23~02시('돌싱N모솔'): 지수 닐슨 1.13 → IPTV 0.75"
+  },
+  {
+   "type": "subhead",
+   "text": "작품별 강약 순서 일치도 : **0.62(두 자료 8회 이상 48편)**"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '용감한형사들': 지수 닐슨 0.42 → IPTV 1.08"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '옥탑방의문제아들': 지수 닐슨 0.37 → IPTV 0.7"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '비밀의숲': 지수 닐슨 1.78 → IPTV 0.9"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '류학생어남선': 지수 닐슨 0.43 → IPTV 0.22"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨 방영 중 시청률 0 기록이 31%, 표본이 얇은 시간대는 IPTV로 함께 확인 필요"
+  },
+  {
+   "type": "subhead",
+   "text": "편성 판단 시사점 : **두 자료를 함께 볼 지점**"
+  },
+  {
+   "type": "bullet",
+   "text": "낮·아침 성과는 닐슨만 보면 낮게 보여, 재방·구매 판단 때 IPTV도 확인"
+  },
+  {
+   "type": "bullet",
+   "text": "심야 시청은 IPTV에서 더 크게 잡혀, 심야 재방 효과는 IPTV로 보완"
+  },
+  {
+   "type": "note",
+   "text": "지수 = 각 자료 안에서 채널 평균을 1로 본 값, 두 자료는 표본·가중치가 달라 절대 시청률끼리는 비교하지 않음"
   },
   {
    "type": "apptitle",
@@ -3536,7 +5102,7 @@
      "0.048",
      {
       "t": "25위 / 32",
-      "fill": "DEDCFA",
+      "fill": "D4EEE9",
       "color": "0D0D12"
      },
      "-"
@@ -3546,12 +5112,12 @@
      "0.085",
      {
       "t": "29위 / 45",
-      "fill": "CAC7F7",
+      "fill": "B9E4DC",
       "color": "0D0D12"
      },
      {
       "t": "10위 / 13",
-      "fill": "DAD9F9",
+      "fill": "CFECE7",
       "color": "0D0D12"
      }
     ]
@@ -3621,7 +5187,7 @@
      },
      {
       "t": "0.107",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "58",
@@ -3659,7 +5225,7 @@
      },
      {
       "t": "0.032",
-      "fill": "F5F4FD",
+      "fill": "F1FAF8",
       "color": "0D0D12"
      },
      "25",
@@ -3680,7 +5246,7 @@
      },
      {
       "t": "0.044",
-      "fill": "E0DFFA",
+      "fill": "D7EFEA",
       "color": "0D0D12"
      },
      "62",
@@ -3722,7 +5288,7 @@
      },
      {
       "t": "0.050",
-      "fill": "D6D4F9",
+      "fill": "C9EAE4",
       "color": "0D0D12"
      },
      "64",
@@ -3743,7 +5309,7 @@
      },
      {
       "t": "0.075",
-      "fill": "ACA8F2",
+      "fill": "92D4C8",
       "color": "0D0D12"
      },
      "46",
@@ -3798,7 +5364,7 @@
      },
      {
       "t": "0.066",
-      "fill": "BAB7F4",
+      "fill": "A5DCD1",
       "color": "0D0D12"
      },
      "16",
@@ -4330,7 +5896,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 보라가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -4358,6 +5924,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 20~23시 23%, 11~14시 15%, 17~20시 15%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 수요일 20~23시(0.052), 저녁 시청률은 주말이 평일의 1.1배"
   },
   {
@@ -4370,7 +5940,11 @@
   },
   {
    "type": "sub",
-   "text": "ENA Drama가 가장 앞서는 곳은 화요일 23~02시(0.045 vs 0.023)"
+   "text": "ENA Drama가 앞서는 곳(격차 큰 순): 월 02~05시, 화 23~02시, 목 05~08시"
+  },
+  {
+   "type": "bullet",
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.055)에 Dramax는 '멋진신세계' 0.052, 자사 우위"
   },
   {
    "type": "bullet",
@@ -4380,6 +5954,520 @@
    "type": "takeaway",
    "text": "**Dramax**는 수요일 20~23시 '멋진신세계'가 가장 강함",
    "note": "시청량의 38%를 상위 5편이 만드는 대표작 반복 편성·평일 띠 편성 채널"
+  },
+  {
+   "type": "section",
+   "text": "Ⅵ. IPTV 요일·시간대 히트맵",
+   "pageBreak": true
+  },
+  {
+   "type": "caption",
+   "text": "IPTV 수도권 2049 요일×시간대 평균 시청률(2026)"
+  },
+  {
+   "type": "table",
+   "head": [
+    "시간대",
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일"
+   ],
+   "rows": [
+    [
+     "05~08시",
+     {
+      "t": "0.013",
+      "t2": "쇼33트로트",
+      "fill": "FFFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.013",
+      "t2": "대식좌의밥상",
+      "fill": "FEFEFE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.014",
+      "t2": "맛있는녀석들",
+      "fill": "FAFDFD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.015",
+      "t2": "히트가요쇼",
+      "fill": "F6FBFA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.014",
+      "t2": "맛있는녀석들",
+      "fill": "FAFDFD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.023",
+      "t2": "맛있는녀석들",
+      "fill": "D9F0EB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.024",
+      "t2": "맛있는녀석들",
+      "fill": "D3EEE8",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "08~11시",
+     {
+      "t": "0.037",
+      "t2": "벌거벗은세계사",
+      "fill": "A2DBD0",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.037",
+      "t2": "나혼자산다",
+      "fill": "A2DACF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.036",
+      "t2": "이혼숙려캠프",
+      "fill": "A7DDD2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.039",
+      "t2": "나혼자산다",
+      "fill": "9BD8CC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.038",
+      "t2": "나혼자산다",
+      "fill": "9DD8CD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.062",
+      "t2": "유퀴즈온더블럭",
+      "fill": "3FB49D",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.067",
+      "t2": "판사이한영",
+      "fill": "2BAC93",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "11~14시",
+     {
+      "t": "0.051",
+      "t2": "멋진신세계",
+      "fill": "6BC5B3",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.050",
+      "t2": "나혼자산다",
+      "fill": "6DC6B5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.047",
+      "t2": "이혼숙려캠프",
+      "fill": "7ACBBB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.047",
+      "t2": "벌거벗은세계사",
+      "fill": "7ACBBB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.048",
+      "t2": "나혼자산다",
+      "fill": "79CABB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.069",
+      "t2": "맛있는녀석들",
+      "fill": "26AA90",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.077",
+      "t2": "벌거벗은세계사",
+      "fill": "069D80",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "14~17시",
+     {
+      "t": "0.051",
+      "t2": "나혼자산다",
+      "fill": "6AC5B3",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.053",
+      "t2": "금쪽같은내새끼",
+      "fill": "62C1AF",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.052",
+      "t2": "벌거벗은세계사",
+      "fill": "69C4B2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.052",
+      "t2": "나혼자산다",
+      "fill": "66C3B1",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.056",
+      "t2": "나혼자산다",
+      "fill": "57BDA9",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.075",
+      "t2": "나혼자산다",
+      "fill": "0EA084",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.079",
+      "t2": "판사이한영",
+      "fill": "009B7D",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "17~20시",
+     {
+      "t": "0.060",
+      "t2": "벌거벗은세계사",
+      "fill": "46B7A1",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.057",
+      "t2": "냉장고를부탁해",
+      "fill": "52BBA7",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.065",
+      "t2": "냉장고를부탁해",
+      "fill": "33AF97",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.067",
+      "t2": "나혼자산다",
+      "fill": "2EAD95",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.060",
+      "t2": "나혼자산다",
+      "fill": "47B7A1",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.061",
+      "t2": "벌거벗은세계사",
+      "fill": "42B59F",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.078",
+      "t2": "나혼자산다",
+      "fill": "009B7D",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "20~23시",
+     {
+      "t": "0.075",
+      "t2": "나혼자산다",
+      "fill": "0FA185",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.076",
+      "t2": "벌거벗은세계사",
+      "fill": "099F82",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.078",
+      "t2": "이혼숙려캠프",
+      "fill": "019B7D",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.075",
+      "t2": "나혼자산다",
+      "fill": "0CA083",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.063",
+      "t2": "벌거벗은세계사",
+      "fill": "3CB29B",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.064",
+      "t2": "나혼자산다",
+      "fill": "38B19A",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.064",
+      "t2": "벌거벗은세계사",
+      "fill": "39B19A",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "23~02시",
+     {
+      "t": "0.050",
+      "t2": "판사이한영",
+      "fill": "6DC6B5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.052",
+      "t2": "맛있는녀석들",
+      "fill": "67C3B2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.047",
+      "t2": "이혼숙려캠프",
+      "fill": "7ACBBB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.051",
+      "t2": "나혼자산다",
+      "fill": "6BC5B4",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.046",
+      "t2": "판사이한영",
+      "fill": "7ECCBD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.052",
+      "t2": "벌거벗은세계사",
+      "fill": "68C4B2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.051",
+      "t2": "멋진신세계",
+      "fill": "6DC6B5",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "02~05시",
+     {
+      "t": "0.020",
+      "t2": "맛있는녀석들",
+      "fill": "E3F4F1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.019",
+      "t2": "위대한가이드",
+      "fill": "E8F6F4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.021",
+      "t2": "맛있는녀석들",
+      "fill": "DFF3EF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.021",
+      "t2": "맛있는녀석들",
+      "fill": "E2F3F0",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.022",
+      "t2": "뮤직앤조이",
+      "fill": "DCF1ED",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.022",
+      "t2": "맛있는녀석들",
+      "fill": "DCF1ED",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.022",
+      "t2": "맛있는녀석들",
+      "fill": "DBF1ED",
+      "color": "0D0D12",
+      "center": true
+     }
+    ]
+   ],
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
+  },
+  {
+   "type": "note",
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
+  },
+  {
+   "type": "section",
+   "text": "Ⅶ. 닐슨·IPTV 비교 인사이트(수도권 2049)",
+   "pageBreak": false
+  },
+  {
+   "type": "subhead",
+   "text": "두 자료의 시간대 강약 순서 일치도 : **0.89(높음)**"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 강한 시간대가 닐슨 수 20~23시, IPTV 일 14~17시로 갈림"
+  },
+  {
+   "type": "bullet",
+   "text": "채널 평균 대비로 보면 IPTV가 닐슨보다 아침 1.27배 크게 잡음"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 상대적으로 더 강한 시간대 일 05~08시('맛있는녀석들'): 지수 닐슨 0.32 → IPTV 0.51"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 상대적으로 더 강한 시간대 토 23~02시('벌거벗은세계사'): 지수 닐슨 1.69 → IPTV 1.08"
+  },
+  {
+   "type": "subhead",
+   "text": "작품별 강약 순서 일치도 : **0.47(두 자료 8회 이상 45편)**"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '히든아이': 지수 닐슨 0.37 → IPTV 0.87"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '지옥에서온판사': 지수 닐슨 0.91 → IPTV 1.8"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '닥터슬럼프': 지수 닐슨 1.85 → IPTV 0.53"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '별에서온그대': 지수 닐슨 2.06 → IPTV 0.66"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨 방영 중 시청률 0 기록이 33%, 표본이 얇은 시간대는 IPTV로 함께 확인 필요"
+  },
+  {
+   "type": "subhead",
+   "text": "편성 판단 시사점 : **두 자료를 함께 볼 지점**"
+  },
+  {
+   "type": "bullet",
+   "text": "낮·아침 성과는 닐슨만 보면 낮게 보여, 재방·구매 판단 때 IPTV도 확인"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 강약이 두 자료에서 엇갈려, 교체·연장 판단 전 두 자료를 함께 볼 것"
+  },
+  {
+   "type": "note",
+   "text": "지수 = 각 자료 안에서 채널 평균을 1로 본 값, 두 자료는 표본·가중치가 달라 절대 시청률끼리는 비교하지 않음"
   },
   {
    "type": "apptitle",
@@ -4432,7 +6520,7 @@
      "0.063",
      {
       "t": "22위 / 32",
-      "fill": "D0CDF8",
+      "fill": "C1E7E0",
       "color": "0D0D12"
      },
      "-"
@@ -4442,12 +6530,12 @@
      "0.083",
      {
       "t": "30위 / 45",
-      "fill": "CDCBF7",
+      "fill": "BEE5DE",
       "color": "0D0D12"
      },
      {
       "t": "11위 / 13",
-      "fill": "E7E5FB",
+      "fill": "DFF3EF",
       "color": "0D0D12"
      }
     ]
@@ -4505,7 +6593,7 @@
      "도깨비",
      {
       "t": "0.188",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "16",
@@ -4516,7 +6604,7 @@
      "슬기로운의사생활2",
      {
       "t": "0.155",
-      "fill": "B1ADF3",
+      "fill": "99D7CB",
       "color": "0D0D12"
      },
      "29",
@@ -4527,7 +6615,7 @@
      "사랑의 불시착",
      {
       "t": "0.154",
-      "fill": "B3AFF3",
+      "fill": "9CD8CC",
       "color": "0D0D12"
      },
      "25",
@@ -4538,7 +6626,7 @@
      "미스터 션샤인",
      {
       "t": "0.134",
-      "fill": "D9D7F9",
+      "fill": "CDEBE6",
       "color": "0D0D12"
      },
      "39",
@@ -4549,7 +6637,7 @@
      "응답하라 1988",
      {
       "t": "0.129",
-      "fill": "E1DFFA",
+      "fill": "D7EFEB",
       "color": "0D0D12"
      },
      "80",
@@ -4560,7 +6648,7 @@
      "눈물의 여왕",
      {
       "t": "0.127",
-      "fill": "E4E3FB",
+      "fill": "DCF1ED",
       "color": "0D0D12"
      },
      "48",
@@ -4571,7 +6659,7 @@
      "폭군의 셰프",
      {
       "t": "0.122",
-      "fill": "EFEEFD",
+      "fill": "EAF7F4",
       "color": "0D0D12"
      },
      "36",
@@ -4582,7 +6670,7 @@
      "철인왕후",
      {
       "t": "0.119",
-      "fill": "F4F4FD",
+      "fill": "F1F9F8",
       "color": "0D0D12"
      },
      "40",
@@ -4708,21 +6796,21 @@
      {
       "t": "0.025",
       "t2": "태풍상사",
-      "fill": "FEFEFF",
+      "fill": "FEFFFF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.027",
       "t2": "언니네산지직송2",
-      "fill": "FBFAFE",
+      "fill": "F9FDFC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.026",
       "t2": "보검매직컬",
-      "fill": "FCFCFF",
+      "fill": "FBFEFD",
       "color": "0D0D12",
       "center": true
      },
@@ -4736,21 +6824,21 @@
      {
       "t": "0.027",
       "t2": "바퀴달린집",
-      "fill": "F9F9FE",
+      "fill": "F8FCFB",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.027",
       "t2": "웰컴투불로촌",
-      "fill": "FBFAFE",
+      "fill": "F9FDFC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.032",
       "t2": "언니네산지직송2",
-      "fill": "F1F0FD",
+      "fill": "EDF8F6",
       "color": "0D0D12",
       "center": true
      }
@@ -4760,49 +6848,49 @@
      {
       "t": "0.040",
       "t2": "세이렌",
-      "fill": "DFDEFA",
+      "fill": "D6EFEA",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.052",
       "t2": "언더커버미쓰홍",
-      "fill": "C8C5F6",
+      "fill": "B7E3DA",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.058",
       "t2": "세이렌",
-      "fill": "BEBAF5",
+      "fill": "A9DDD3",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.038",
       "t2": "70억의선택",
-      "fill": "E3E2FB",
+      "fill": "DBF1ED",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.038",
       "t2": "나비효과",
-      "fill": "E4E2FB",
+      "fill": "DBF1ED",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.061",
       "t2": "언더커버미쓰홍",
-      "fill": "B7B4F4",
+      "fill": "A1DACF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.041",
       "t2": "너의몸소리가들려",
-      "fill": "DFDDFA",
+      "fill": "D5EFEA",
       "color": "0D0D12",
       "center": true
      }
@@ -4812,49 +6900,49 @@
      {
       "t": "0.068",
       "t2": "스프링피버",
-      "fill": "A9A4F2",
+      "fill": "8ED3C6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.063",
       "t2": "내일도출근",
-      "fill": "B3AFF3",
+      "fill": "9CD8CD",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.074",
       "t2": "스프링피버",
-      "fill": "9D98F0",
+      "fill": "7FCDBE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.068",
       "t2": "언더커버미쓰홍",
-      "fill": "A9A5F2",
+      "fill": "8FD3C6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.072",
       "t2": "스프링피버",
-      "fill": "A29DF1",
+      "fill": "85CFC1",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.087",
       "t2": "언더커버미쓰홍",
-      "fill": "847DEC",
+      "fill": "5EC0AD",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.087",
       "t2": "내일도출근",
-      "fill": "837DEC",
+      "fill": "5DBFAC",
       "color": "FFFFFF",
       "center": true
      }
@@ -4864,49 +6952,49 @@
      {
       "t": "0.079",
       "t2": "디어마이프렌즈",
-      "fill": "948EEF",
+      "fill": "73C8B8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.074",
       "t2": "디어마이프렌즈",
-      "fill": "9E99F0",
+      "fill": "80CDBE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.071",
       "t2": "호텔델루나",
-      "fill": "A29EF1",
+      "fill": "86D0C1",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.082",
       "t2": "슬기로운의사생활2",
-      "fill": "8E88EE",
+      "fill": "6BC5B4",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.093",
       "t2": "슬기로운의사생활2",
-      "fill": "7871EA",
+      "fill": "4EBAA5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.118",
       "t2": "슬전생",
-      "fill": "463CE2",
+      "fill": "0DA083",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.123",
       "t2": "슬전생",
-      "fill": "3C32E1",
+      "fill": "009B7D",
       "color": "FFFFFF",
       "center": true
      }
@@ -4916,49 +7004,49 @@
      {
       "t": "0.078",
       "t2": "원더픽",
-      "fill": "948FEF",
+      "fill": "73C8B8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.064",
       "t2": "히든에이지",
-      "fill": "B0ACF3",
+      "fill": "98D7CB",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.068",
       "t2": "잡학자들",
-      "fill": "A8A4F2",
+      "fill": "8DD2C5",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.083",
       "t2": "적과의동거",
-      "fill": "8C86ED",
+      "fill": "68C4B2",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.094",
       "t2": "100일의거짓말",
-      "fill": "766FEA",
+      "fill": "4CB9A4",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.090",
       "t2": "건물주되는법",
-      "fill": "7D76EB",
+      "fill": "55BCA8",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.121",
       "t2": "프리한19",
-      "fill": "4137E2",
+      "fill": "069D80",
       "color": "FFFFFF",
       "center": true
      }
@@ -4968,49 +7056,49 @@
      {
       "t": "0.077",
       "t2": "구미호뎐1938",
-      "fill": "9791EF",
+      "fill": "77CAB9",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.082",
       "t2": "언더커버미쓰홍",
-      "fill": "8D87ED",
+      "fill": "6AC5B3",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.091",
       "t2": "언더커버미쓰홍",
-      "fill": "7B75EB",
+      "fill": "53BBA7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.090",
       "t2": "언더커버미쓰홍",
-      "fill": "7E77EB",
+      "fill": "56BDA9",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.071",
       "t2": "우주를줄게",
-      "fill": "A39EF1",
+      "fill": "87D0C2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.069",
       "t2": "슬기로운산촌생활",
-      "fill": "A6A2F1",
+      "fill": "8BD2C4",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.077",
       "t2": "프리한19",
-      "fill": "9892EF",
+      "fill": "78CABA",
       "color": "0D0D12",
       "center": true
      }
@@ -5020,49 +7108,49 @@
      {
       "t": "0.065",
       "t2": "언더커버미쓰홍",
-      "fill": "AFABF3",
+      "fill": "97D6CA",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.072",
       "t2": "언더커버미쓰홍",
-      "fill": "A29DF1",
+      "fill": "85CFC1",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.063",
       "t2": "친애하는X",
-      "fill": "B3AFF3",
+      "fill": "9CD8CC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.069",
       "t2": "우주를줄게",
-      "fill": "A7A3F1",
+      "fill": "8CD2C4",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.051",
       "t2": "언더커버미쓰홍",
-      "fill": "CBC8F7",
+      "fill": "BBE4DC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.064",
       "t2": "우주를줄게",
-      "fill": "B1ADF3",
+      "fill": "99D7CB",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.067",
       "t2": "언더커버미쓰홍",
-      "fill": "ACA7F2",
+      "fill": "92D4C7",
       "color": "0D0D12",
       "center": true
      }
@@ -5072,49 +7160,49 @@
      {
       "t": "0.032",
       "t2": "세이렌",
-      "fill": "F0EFFD",
+      "fill": "EBF7F5",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.038",
       "t2": "언더커버미쓰홍",
-      "fill": "E3E2FB",
+      "fill": "DBF1ED",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.039",
       "t2": "스프링피버",
-      "fill": "E2E0FB",
+      "fill": "D9F0EC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.037",
       "t2": "포핸즈",
-      "fill": "E5E4FB",
+      "fill": "DEF2EE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.034",
       "t2": "내일도출근",
-      "fill": "EDECFC",
+      "fill": "E8F6F3",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.034",
       "t2": "오싹한연애",
-      "fill": "ECEBFC",
+      "fill": "E6F5F2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.035",
       "t2": "건물주되는법",
-      "fill": "E9E8FC",
+      "fill": "E2F4F0",
       "color": "0D0D12",
       "center": true
      }
@@ -5128,7 +7216,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -5152,6 +7240,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 14~17시 18%, 17~20시 16%, 20~23시 16%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 일요일 14~17시(0.123), 저녁 시청률은 주말이 평일의 1.1배"
   },
   {
@@ -5164,7 +7256,11 @@
   },
   {
    "type": "sub",
-   "text": "ENA Drama가 가장 앞서는 곳은 일요일 08~11시(0.078 vs 0.041)"
+   "text": "ENA Drama가 앞서는 곳(격차 큰 순): 일 08~11시, 화 17~20시, 월 20~23시"
+  },
+  {
+   "type": "bullet",
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.098)에 tvN DRAMA는 '언더커버미쓰홍' 0.091, 자사 우위"
   },
   {
    "type": "bullet",
@@ -5232,12 +7328,12 @@
      "0.122",
      {
       "t": "22위 / 45",
-      "fill": "B3AFF3",
+      "fill": "9BD8CC",
       "color": "0D0D12"
      },
      {
       "t": "5위 / 13",
-      "fill": "9E99F0",
+      "fill": "80CDBE",
       "color": "0D0D12"
      }
     ]
@@ -5270,7 +7366,7 @@
   },
   {
    "type": "bullet",
-   "text": "IPTV 가구 1~6월 0.112 → 7~11월 0.135(+21.3%, 군 중앙값 -2.1%)"
+   "text": "IPTV 가구 1~6월 0.112 → 7~11월 0.135(+21.4%, 군 중앙값 -2.1%)"
   },
   {
    "type": "section",
@@ -5307,7 +7403,7 @@
      },
      {
       "t": "0.093",
-      "fill": "D1CFF8",
+      "fill": "C3E7E0",
       "color": "0D0D12"
      },
      "26",
@@ -5328,7 +7424,7 @@
      },
      {
       "t": "0.138",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "13",
@@ -5349,7 +7445,7 @@
      },
      {
       "t": "0.098",
-      "fill": "C7C4F6",
+      "fill": "B6E2DA",
       "color": "0D0D12"
      },
      "23",
@@ -5370,7 +7466,7 @@
      },
      {
       "t": "0.093",
-      "fill": "D2CFF8",
+      "fill": "C4E8E1",
       "color": "0D0D12"
      },
      "103",
@@ -5412,7 +7508,7 @@
      },
      {
       "t": "0.111",
-      "fill": "ADA9F2",
+      "fill": "94D5C8",
       "color": "0D0D12"
      },
      "25",
@@ -5433,7 +7529,7 @@
      },
      {
       "t": "0.126",
-      "fill": "908AEE",
+      "fill": "6EC6B5",
       "color": "FFFFFF"
      },
      "16",
@@ -5454,7 +7550,7 @@
      },
      {
       "t": "0.089",
-      "fill": "D9D7F9",
+      "fill": "CDEBE5",
       "color": "0D0D12"
      },
      "34",
@@ -5475,7 +7571,7 @@
      },
      {
       "t": "0.097",
-      "fill": "CAC7F7",
+      "fill": "B9E4DB",
       "color": "0D0D12"
      },
      "19",
@@ -5496,7 +7592,7 @@
      },
      {
       "t": "0.087",
-      "fill": "DCDAFA",
+      "fill": "D1EDE8",
       "color": "0D0D12"
      },
      "50",
@@ -5551,7 +7647,7 @@
    "rows": [
     [
      "편성 작품 수",
-     "146편",
+     "145편",
      "119편"
     ],
     [
@@ -6028,7 +8124,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 보라가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -6052,6 +8148,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 20~23시 25%, 08~11시 19%, 11~14시 13%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 수요일 20~23시(0.057), 저녁 시청률은 평일이 주말의 1.5배"
   },
   {
@@ -6064,16 +8164,522 @@
   },
   {
    "type": "sub",
-   "text": "ENA Drama가 가장 앞서는 곳은 월요일 23~02시(0.041 vs 0.0096)"
+   "text": "ENA Drama가 앞서는 곳(격차 큰 순): 월 23~02시, 월 02~05시, 수 14~17시"
   },
   {
    "type": "bullet",
-   "text": "작품 수 146편 vs 119편, 상위 5편 시청량 53% vs 38% → MBC ON가 대표작에 더 몰아줌"
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.055)에 MBC ON은 '전원일기' 0.057, 상대가 더 높음"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 수 145편 vs 119편, 상위 5편 시청량 53% vs 38% → MBC ON가 대표작에 더 몰아줌"
   },
   {
    "type": "takeaway",
    "text": "**MBC ON**은 수요일 20~23시 '전원일기'가 가장 강함",
    "note": "시청량의 53%를 상위 5편이 만드는 대표작 반복 편성·평일 띠 편성 채널"
+  },
+  {
+   "type": "section",
+   "text": "Ⅵ. IPTV 요일·시간대 히트맵",
+   "pageBreak": true
+  },
+  {
+   "type": "caption",
+   "text": "IPTV 가구 요일×시간대 평균 시청률(2026)"
+  },
+  {
+   "type": "table",
+   "head": [
+    "시간대",
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일"
+   ],
+   "rows": [
+    [
+     "05~08시",
+     {
+      "t": "0.070",
+      "t2": "장터사람들",
+      "fill": "ECF8F5",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.071",
+      "t2": "장터사람들",
+      "fill": "EBF7F5",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.074",
+      "t2": "장터사람들",
+      "fill": "E6F5F2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.074",
+      "t2": "전원일기",
+      "fill": "E7F5F3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.076",
+      "t2": "전원일기",
+      "fill": "E3F4F1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.097",
+      "t2": "장터사람들",
+      "fill": "C5E8E1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.100",
+      "t2": "장터사람들",
+      "fill": "C0E6DF",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "08~11시",
+     {
+      "t": "0.099",
+      "t2": "전원일기",
+      "fill": "C1E7E0",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.104",
+      "t2": "전원일기",
+      "fill": "BAE4DC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.106",
+      "t2": "전원일기",
+      "fill": "B7E3DA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.112",
+      "t2": "전원일기",
+      "fill": "AFDFD6",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.109",
+      "t2": "전원일기",
+      "fill": "B4E1D9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.171",
+      "t2": "장터사람들",
+      "fill": "59BEAA",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.171",
+      "t2": "장터사람들",
+      "fill": "59BEAA",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "11~14시",
+     {
+      "t": "0.108",
+      "t2": "전원일기",
+      "fill": "B4E2D9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.107",
+      "t2": "전원일기",
+      "fill": "B6E2DA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.110",
+      "t2": "전원일기",
+      "fill": "B2E1D8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.111",
+      "t2": "전원일기",
+      "fill": "B0E0D7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.108",
+      "t2": "전원일기",
+      "fill": "B5E2D9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.131",
+      "t2": "실화탐사대",
+      "fill": "93D5C8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.121",
+      "t2": "장터사람들",
+      "fill": "A2DBD0",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "14~17시",
+     {
+      "t": "0.116",
+      "t2": "오로라공주",
+      "fill": "A9DDD3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.116",
+      "t2": "오로라공주",
+      "fill": "A9DDD3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.123",
+      "t2": "오로라공주",
+      "fill": "A0DACE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.120",
+      "t2": "오로라공주",
+      "fill": "A4DBD1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.118",
+      "t2": "오로라공주",
+      "fill": "A7DCD2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.138",
+      "t2": "여자를울려",
+      "fill": "8AD1C3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.143",
+      "t2": "여자를울려",
+      "fill": "82CEC0",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "17~20시",
+     {
+      "t": "0.147",
+      "t2": "장터사람들",
+      "fill": "7CCCBC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.146",
+      "t2": "장터사람들",
+      "fill": "7DCCBD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.144",
+      "t2": "장터사람들",
+      "fill": "81CEBF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.145",
+      "t2": "장터사람들",
+      "fill": "7FCDBE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.139",
+      "t2": "장터사람들",
+      "fill": "88D0C2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.132",
+      "t2": "전원일기",
+      "fill": "92D4C8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.154",
+      "t2": "전원일기",
+      "fill": "72C8B7",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "20~23시",
+     {
+      "t": "0.217",
+      "t2": "전원일기",
+      "fill": "16A488",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.232",
+      "t2": "전원일기",
+      "fill": "009B7D",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.230",
+      "t2": "전원일기",
+      "fill": "039C7F",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.221",
+      "t2": "전원일기",
+      "fill": "10A185",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.219",
+      "t2": "전원일기",
+      "fill": "13A387",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.145",
+      "t2": "전원일기",
+      "fill": "80CDBE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.156",
+      "t2": "전원일기",
+      "fill": "6FC6B6",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "23~02시",
+     {
+      "t": "0.105",
+      "t2": "전원일기",
+      "fill": "B9E4DB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.141",
+      "t2": "전원일기",
+      "fill": "85CFC1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.109",
+      "t2": "전원일기",
+      "fill": "B4E2D9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.143",
+      "t2": "전원일기",
+      "fill": "82CEBF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.087",
+      "t2": "어서와 한국은",
+      "fill": "D4EEE9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.113",
+      "t2": "전원일기",
+      "fill": "AEDFD6",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.110",
+      "t2": "전원일기",
+      "fill": "B2E1D8",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "02~05시",
+     {
+      "t": "0.064",
+      "t2": "첫번째남자",
+      "fill": "F4FBFA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.057",
+      "t2": "히든아이",
+      "fill": "FFFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.067",
+      "t2": "서프라이즈",
+      "fill": "F1FAF8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.060",
+      "t2": "히든아이",
+      "fill": "FBFEFD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.072",
+      "t2": "결혼지옥",
+      "fill": "E9F6F4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.065",
+      "t2": "히든아이",
+      "fill": "F4FBF9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.069",
+      "t2": "첫번째남자",
+      "fill": "EDF8F6",
+      "color": "0D0D12",
+      "center": true
+     }
+    ]
+   ],
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
+  },
+  {
+   "type": "note",
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
+  },
+  {
+   "type": "section",
+   "text": "Ⅶ. 닐슨·IPTV 비교 인사이트(가구)",
+   "pageBreak": false
+  },
+  {
+   "type": "subhead",
+   "text": "두 자료의 시간대 강약 순서 일치도 : **0.98(높음)**"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 강한 시간대는 두 자료 모두 화 20~23시로 같음"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 상대적으로 더 강한 시간대 월 02~05시('첫번째남자'): 지수 닐슨 0.39 → IPTV 0.53"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 상대적으로 더 강한 시간대 일 17~20시('전원일기'): 지수 닐슨 1.57 → IPTV 1.26"
+  },
+  {
+   "type": "subhead",
+   "text": "작품별 강약 순서 일치도 : **0.82(두 자료 8회 이상 89편)**"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '그래도좋아': 지수 닐슨 0.42 → IPTV 0.72"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '출발비디오여행': 지수 닐슨 0.32 → IPTV 0.53"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '21세기대군부인': 지수 닐슨 2.01 → IPTV 1.14"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '쇼핑왕루이': 지수 닐슨 1.64 → IPTV 1"
+  },
+  {
+   "type": "subhead",
+   "text": "편성 판단 시사점 : **두 자료를 함께 볼 지점**"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 강약은 두 자료가 대체로 같아, 작품 평가는 어느 자료로 봐도 비슷"
+  },
+  {
+   "type": "note",
+   "text": "지수 = 각 자료 안에서 채널 평균을 1로 본 값, 두 자료는 표본·가중치가 달라 절대 시청률끼리는 비교하지 않음"
   },
   {
    "type": "apptitle",
@@ -6132,12 +8738,12 @@
      "0.149",
      {
       "t": "19위 / 45",
-      "fill": "A9A4F2",
+      "fill": "8ED3C5",
       "color": "0D0D12"
      },
      {
       "t": "4위 / 13",
-      "fill": "918CEE",
+      "fill": "70C7B6",
       "color": "FFFFFF"
      }
     ]
@@ -6195,7 +8801,7 @@
      "하얀 거짓말",
      {
       "t": "0.224",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "178",
@@ -6206,7 +8812,7 @@
      "아내의 유혹",
      {
       "t": "0.210",
-      "fill": "9E99F0",
+      "fill": "80CDBE",
       "color": "0D0D12"
      },
      "132",
@@ -6217,7 +8823,7 @@
      "황금물고기",
      {
       "t": "0.194",
-      "fill": "CCCAF7",
+      "fill": "BDE5DD",
       "color": "0D0D12"
      },
      "271",
@@ -6228,7 +8834,7 @@
      "위대한 조강지처",
      {
       "t": "0.192",
-      "fill": "D0CEF8",
+      "fill": "C2E7E0",
       "color": "0D0D12"
      },
      "245",
@@ -6239,7 +8845,7 @@
      "수상한 삼형제",
      {
       "t": "0.189",
-      "fill": "DBD9F9",
+      "fill": "D0ECE7",
       "color": "0D0D12"
      },
      "157",
@@ -6250,7 +8856,7 @@
      "밥 줘",
      {
       "t": "0.187",
-      "fill": "E1DFFA",
+      "fill": "D7EFEB",
       "color": "0D0D12"
      },
      "216",
@@ -6261,7 +8867,7 @@
      "소문난 칠공주",
      {
       "t": "0.182",
-      "fill": "EFEEFD",
+      "fill": "EAF7F4",
       "color": "0D0D12"
      },
      "239",
@@ -6272,7 +8878,7 @@
      "금 나와라 뚝딱",
      {
       "t": "0.181",
-      "fill": "F0EFFD",
+      "fill": "EBF7F5",
       "color": "0D0D12"
      },
      "178",
@@ -6283,7 +8889,7 @@
      "나쁜여자 착한여자",
      {
       "t": "0.179",
-      "fill": "F7F7FE",
+      "fill": "F4FBFA",
       "color": "0D0D12"
      },
      "287",
@@ -6398,35 +9004,35 @@
      {
       "t": "0.185",
       "t2": "황금물고기",
-      "fill": "6058E7",
+      "fill": "2FAD95",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.189",
       "t2": "황금물고기",
-      "fill": "5A51E6",
+      "fill": "27AA91",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.195",
       "t2": "황금물고기",
-      "fill": "5148E4",
+      "fill": "1CA68B",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.197",
       "t2": "날마다행복해",
-      "fill": "5047E4",
+      "fill": "1AA58A",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.194",
       "t2": "황금물고기",
-      "fill": "534AE4",
+      "fill": "1EA78C",
       "color": "FFFFFF",
       "center": true
      },
@@ -6440,7 +9046,7 @@
      {
       "t": "0.085",
       "t2": "당신만이내사랑",
-      "fill": "E9E8FC",
+      "fill": "E2F4F0",
       "color": "0D0D12",
       "center": true
      }
@@ -6450,49 +9056,49 @@
      {
       "t": "0.176",
       "t2": "수상한삼형제",
-      "fill": "6C65E8",
+      "fill": "3FB49D",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.180",
       "t2": "수상한삼형제",
-      "fill": "665EE7",
+      "fill": "37B199",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.181",
       "t2": "아내의유혹",
-      "fill": "655DE7",
+      "fill": "35B098",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.182",
       "t2": "소문난칠공주",
-      "fill": "645CE7",
+      "fill": "34AF98",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.180",
       "t2": "소문난칠공주",
-      "fill": "675FE8",
+      "fill": "38B19A",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.143",
       "t2": "당신만이내사랑",
-      "fill": "9994EF",
+      "fill": "79CBBB",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.149",
       "t2": "당신만이내사랑",
-      "fill": "918BEE",
+      "fill": "6FC7B6",
       "color": "FFFFFF",
       "center": true
      }
@@ -6502,49 +9108,49 @@
      {
       "t": "0.164",
       "t2": "나쁜여자착한여자",
-      "fill": "7C75EB",
+      "fill": "54BCA8",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.172",
       "t2": "나쁜여자착한여자",
-      "fill": "716AE9",
+      "fill": "45B6A0",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.172",
       "t2": "나쁜여자착한여자",
-      "fill": "716AE9",
+      "fill": "46B6A1",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.170",
       "t2": "나쁜여자착한여자",
-      "fill": "736CEA",
+      "fill": "48B7A2",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.164",
       "t2": "나쁜여자착한여자",
-      "fill": "7C75EB",
+      "fill": "53BCA8",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.138",
       "t2": "황금물고기",
-      "fill": "A09CF0",
+      "fill": "83CEC0",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.129",
       "t2": "황금물고기",
-      "fill": "ACA8F2",
+      "fill": "93D5C8",
       "color": "0D0D12",
       "center": true
      }
@@ -6554,49 +9160,49 @@
      {
       "t": "0.211",
       "t2": "소문난칠공주",
-      "fill": "3C32E1",
+      "fill": "009B7D",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.204",
       "t2": "소문난칠공주",
-      "fill": "453CE2",
+      "fill": "0CA083",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.210",
       "t2": "소문난칠공주",
-      "fill": "3D34E1",
+      "fill": "029C7E",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.209",
       "t2": "소문난칠공주",
-      "fill": "3F35E1",
+      "fill": "049D7F",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.203",
       "t2": "소문난칠공주",
-      "fill": "463DE3",
+      "fill": "0EA084",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.181",
       "t2": "위대한조강지처",
-      "fill": "645CE7",
+      "fill": "35B098",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.203",
       "t2": "황금물고기",
-      "fill": "463DE3",
+      "fill": "0EA084",
       "color": "FFFFFF",
       "center": true
      }
@@ -6606,49 +9212,49 @@
      {
       "t": "0.166",
       "t2": "수상한삼형제",
-      "fill": "7A73EB",
+      "fill": "51BBA6",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.165",
       "t2": "수상한삼형제",
-      "fill": "7B74EB",
+      "fill": "53BBA7",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.170",
       "t2": "내딸꽃님이",
-      "fill": "746DEA",
+      "fill": "4AB8A2",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.167",
       "t2": "수상한삼형제",
-      "fill": "7871EA",
+      "fill": "4EBAA5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.162",
       "t2": "수상한삼형제",
-      "fill": "7E78EB",
+      "fill": "57BDA9",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.130",
       "t2": "내딸꽃님이",
-      "fill": "ABA6F2",
+      "fill": "91D4C7",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.145",
       "t2": "내딸꽃님이",
-      "fill": "9690EF",
+      "fill": "75C9B9",
       "color": "0D0D12",
       "center": true
      }
@@ -6658,49 +9264,49 @@
      {
       "t": "0.123",
       "t2": "나쁜여자착한여자",
-      "fill": "B5B1F4",
+      "fill": "9ED9CE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.128",
       "t2": "나쁜여자착한여자",
-      "fill": "AEAAF3",
+      "fill": "95D5C9",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.129",
       "t2": "나쁜여자착한여자",
-      "fill": "ABA7F2",
+      "fill": "92D4C7",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.121",
       "t2": "나쁜여자착한여자",
-      "fill": "B6B3F4",
+      "fill": "A0DACF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.123",
       "t2": "나쁜여자착한여자",
-      "fill": "B4B0F3",
+      "fill": "9DD9CD",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.138",
       "t2": "내딸꽃님이",
-      "fill": "A09BF0",
+      "fill": "82CEBF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.151",
       "t2": "내딸꽃님이",
-      "fill": "8E88EE",
+      "fill": "6BC5B3",
       "color": "FFFFFF",
       "center": true
      }
@@ -6710,49 +9316,49 @@
      {
       "t": "0.132",
       "t2": "소문난칠공주",
-      "fill": "A8A4F2",
+      "fill": "8ED3C5",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.119",
       "t2": "기묘한이야기",
-      "fill": "BAB7F4",
+      "fill": "A5DCD1",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.135",
       "t2": "소문난칠공주",
-      "fill": "A49FF1",
+      "fill": "88D0C2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.120",
       "t2": "기묘한이야기",
-      "fill": "B9B5F4",
+      "fill": "A3DBD0",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.123",
       "t2": "소문난칠공주",
-      "fill": "B5B1F4",
+      "fill": "9ED9CE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.108",
       "t2": "내딸꽃님이",
-      "fill": "C9C6F7",
+      "fill": "B8E3DB",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.126",
       "t2": "내딸꽃님이",
-      "fill": "B1ADF3",
+      "fill": "99D7CB",
       "color": "0D0D12",
       "center": true
      }
@@ -6762,49 +9368,49 @@
      {
       "t": "0.095",
       "t2": "차차차",
-      "fill": "DBD9F9",
+      "fill": "D0EDE7",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.100",
       "t2": "차차차",
-      "fill": "D3D1F8",
+      "fill": "C6E9E2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.096",
       "t2": "차차차",
-      "fill": "D9D7F9",
+      "fill": "CEECE6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.100",
       "t2": "차차차",
-      "fill": "D3D1F8",
+      "fill": "C6E9E2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.096",
       "t2": "차차차",
-      "fill": "DAD8F9",
+      "fill": "CEECE6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.072",
       "t2": "메이퀸",
-      "fill": "FAFAFE",
+      "fill": "F9FDFC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.072",
       "t2": "당신만이내사랑",
-      "fill": "FBFBFE",
+      "fill": "FAFDFC",
       "color": "0D0D12",
       "center": true
      }
@@ -6818,7 +9424,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -6846,6 +9452,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 14~17시 17%, 17~20시 14%, 11~14시 14%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 월요일 14~17시(0.211), 저녁 시청률은 평일·주말 비슷"
   },
   {
@@ -6858,7 +9468,11 @@
   },
   {
    "type": "sub",
-   "text": "ENA Drama가 가장 앞서는 곳은 수요일 20~23시(0.147 vs 0.130)"
+   "text": "ENA Drama가 앞서는 곳(격차 큰 순): 수 20~23시"
+  },
+  {
+   "type": "bullet",
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.147)에 하이라이트TV는 '나쁜여자착한여자' 0.130, 자사 우위"
   },
   {
    "type": "bullet",
@@ -6926,12 +9540,12 @@
      "0.120",
      {
       "t": "23위 / 45",
-      "fill": "B6B2F4",
+      "fill": "9FDACE",
       "color": "0D0D12"
      },
      {
       "t": "6위 / 13",
-      "fill": "AAA5F2",
+      "fill": "8FD3C6",
       "color": "0D0D12"
      }
     ]
@@ -7001,7 +9615,7 @@
      },
      {
       "t": "0.103",
-      "fill": "DCDBFA",
+      "fill": "D2EDE8",
       "color": "0D0D12"
      },
      "600",
@@ -7022,7 +9636,7 @@
      },
      {
       "t": "0.164",
-      "fill": "8A84ED",
+      "fill": "66C3B1",
       "color": "FFFFFF"
      },
      "132",
@@ -7043,7 +9657,7 @@
      },
      {
       "t": "0.110",
-      "fill": "D3D1F8",
+      "fill": "C5E8E2",
       "color": "0D0D12"
      },
      "649",
@@ -7064,7 +9678,7 @@
      },
      {
       "t": "0.135",
-      "fill": "B1ADF3",
+      "fill": "99D7CB",
       "color": "0D0D12"
      },
      "126",
@@ -7085,7 +9699,7 @@
      },
      {
       "t": "0.137",
-      "fill": "AFABF3",
+      "fill": "96D6CA",
       "color": "0D0D12"
      },
      "604",
@@ -7106,7 +9720,7 @@
      },
      {
       "t": "0.178",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "294",
@@ -7127,7 +9741,7 @@
      },
      {
       "t": "0.149",
-      "fill": "9E99F0",
+      "fill": "80CDBE",
       "color": "0D0D12"
      },
      "288",
@@ -7148,7 +9762,7 @@
      },
      {
       "t": "0.101",
-      "fill": "DFDEFA",
+      "fill": "D5EFEA",
       "color": "0D0D12"
      },
      "12",
@@ -7190,7 +9804,7 @@
      },
      {
       "t": "0.082",
-      "fill": "F9F9FE",
+      "fill": "F7FCFB",
       "color": "0D0D12"
      },
      "48",
@@ -7722,7 +10336,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 보라가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -7750,6 +10364,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 08~11시 21%, 17~20시 16%, 11~14시 14%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 일요일 08~11시(0.023), 저녁 시청률은 평일이 주말의 1.4배"
   },
   {
@@ -7762,7 +10380,11 @@
   },
   {
    "type": "sub",
-   "text": "ENA Drama가 가장 앞서는 곳은 수요일 20~23시(0.055 vs 0.011)"
+   "text": "ENA Drama가 앞서는 곳(격차 큰 순): 월 23~02시, 토 23~02시, 월 02~05시"
+  },
+  {
+   "type": "bullet",
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.055)에 EDGE TV는 '인어아가씨' 0.011, 자사 우위"
   },
   {
    "type": "bullet",
@@ -7772,6 +10394,516 @@
    "type": "takeaway",
    "text": "**EDGE TV**는 일요일 08~11시 '한국인의밥상'이 가장 강함",
    "note": "시청량의 49%를 상위 5편이 만드는 대표작 반복 편성·평일 띠 편성 채널"
+  },
+  {
+   "type": "section",
+   "text": "Ⅵ. IPTV 요일·시간대 히트맵",
+   "pageBreak": true
+  },
+  {
+   "type": "caption",
+   "text": "IPTV 가구 요일×시간대 평균 시청률(2026)"
+  },
+  {
+   "type": "table",
+   "head": [
+    "시간대",
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일"
+   ],
+   "rows": [
+    [
+     "05~08시",
+     {
+      "t": "0.080",
+      "t2": "한국인의밥상",
+      "fill": "D1EDE8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.085",
+      "t2": "한국인의밥상",
+      "fill": "C7E9E3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.084",
+      "t2": "한국인의밥상",
+      "fill": "CAEAE4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.085",
+      "t2": "한국인의밥상",
+      "fill": "C8E9E3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.084",
+      "t2": "한국인의밥상",
+      "fill": "CAEAE4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.105",
+      "t2": "한국인의밥상",
+      "fill": "9FD9CE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.099",
+      "t2": "한국인의밥상",
+      "fill": "AADED4",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "08~11시",
+     {
+      "t": "0.110",
+      "t2": "한국인의밥상",
+      "fill": "93D5C8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.113",
+      "t2": "한국인의밥상",
+      "fill": "8DD2C5",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.106",
+      "t2": "한국인의밥상",
+      "fill": "9BD8CC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.114",
+      "t2": "한국인의밥상",
+      "fill": "8AD1C4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.115",
+      "t2": "한국인의밥상",
+      "fill": "88D0C2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.138",
+      "t2": "한국인의밥상",
+      "fill": "59BEAB",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.136",
+      "t2": "한국인의밥상",
+      "fill": "5CBFAC",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "11~14시",
+     {
+      "t": "0.133",
+      "t2": "조강지처클럽",
+      "fill": "62C2AF",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.135",
+      "t2": "조강지처클럽",
+      "fill": "5FC0AE",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.135",
+      "t2": "조강지처클럽",
+      "fill": "5FC0AD",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.136",
+      "t2": "조강지처클럽",
+      "fill": "5CBFAC",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.131",
+      "t2": "조강지처클럽",
+      "fill": "68C4B2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.137",
+      "t2": "하늘이시여",
+      "fill": "5BBFAC",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.128",
+      "t2": "하늘이시여",
+      "fill": "6DC6B5",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "14~17시",
+     {
+      "t": "0.156",
+      "t2": "인간극장",
+      "fill": "33AF97",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.149",
+      "t2": "인간극장",
+      "fill": "41B59E",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.152",
+      "t2": "인간극장",
+      "fill": "3CB29B",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.152",
+      "t2": "인간극장",
+      "fill": "3DB39C",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.150",
+      "t2": "인간극장",
+      "fill": "3FB49D",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.164",
+      "t2": "인간극장",
+      "fill": "22A88F",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.180",
+      "t2": "인간극장",
+      "fill": "009B7D",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "17~20시",
+     {
+      "t": "0.167",
+      "t2": "인간극장",
+      "fill": "1CA68B",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.168",
+      "t2": "인간극장",
+      "fill": "19A58A",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.162",
+      "t2": "인간극장",
+      "fill": "26AA90",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.167",
+      "t2": "인간극장",
+      "fill": "1CA68B",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.165",
+      "t2": "인간극장",
+      "fill": "21A88E",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.155",
+      "t2": "나는자연인이다",
+      "fill": "35B098",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.171",
+      "t2": "나는자연인이다",
+      "fill": "13A287",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "20~23시",
+     {
+      "t": "0.150",
+      "t2": "조강지처클럽",
+      "fill": "3FB49D",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.148",
+      "t2": "조강지처클럽",
+      "fill": "43B59F",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.146",
+      "t2": "조강지처클럽",
+      "fill": "48B7A2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.152",
+      "t2": "조강지처클럽",
+      "fill": "3CB39C",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.146",
+      "t2": "조강지처클럽",
+      "fill": "48B7A2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.131",
+      "t2": "사랑과야망",
+      "fill": "67C3B2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.145",
+      "t2": "사랑과야망",
+      "fill": "4AB8A3",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "23~02시",
+     {
+      "t": "0.091",
+      "t2": "주몽",
+      "fill": "BCE5DD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.093",
+      "t2": "주몽",
+      "fill": "B7E3DA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.090",
+      "t2": "주몽",
+      "fill": "BDE5DE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.090",
+      "t2": "나는자연인이다",
+      "fill": "BDE5DD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.093",
+      "t2": "나는자연인이다",
+      "fill": "B7E3DA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.084",
+      "t2": "주몽",
+      "fill": "C9EAE3",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.091",
+      "t2": "나는자연인이다",
+      "fill": "BBE4DC",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "02~05시",
+     {
+      "t": "0.058",
+      "t2": "현장르포특종세상",
+      "fill": "FFFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.065",
+      "t2": "현장르포특종세상",
+      "fill": "F2FAF8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.066",
+      "t2": "현장르포특종세상",
+      "fill": "EFF9F7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.065",
+      "t2": "현장르포특종세상",
+      "fill": "F1FAF8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.065",
+      "t2": "현장르포특종세상",
+      "fill": "F1FAF8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.069",
+      "t2": "현장르포특종세상",
+      "fill": "E9F7F4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.060",
+      "t2": "현장르포특종세상",
+      "fill": "FCFEFD",
+      "color": "0D0D12",
+      "center": true
+     }
+    ]
+   ],
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
+  },
+  {
+   "type": "note",
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
+  },
+  {
+   "type": "section",
+   "text": "Ⅶ. 닐슨·IPTV 비교 인사이트(가구)",
+   "pageBreak": false
+  },
+  {
+   "type": "subhead",
+   "text": "두 자료의 시간대 강약 순서 일치도 : **0.96(높음)**"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 강한 시간대는 두 자료 모두 일 14~17시로 같음"
+  },
+  {
+   "type": "bullet",
+   "text": "채널 평균 대비로 보면 IPTV가 닐슨보다 심야 1.24배 크게 잡음"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 상대적으로 더 강한 시간대 일 02~05시('현장르포특종세상'): 지수 닐슨 0.36 → IPTV 0.5"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 상대적으로 더 강한 시간대 월 05~08시('한국인의밥상'): 지수 닐슨 0.83 → IPTV 0.67"
+  },
+  {
+   "type": "subhead",
+   "text": "작품별 강약 순서 일치도 : **0.86(두 자료 8회 이상 39편)**"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '주몽': 지수 닐슨 0.6 → IPTV 1.05"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '웃어라동해야': 지수 닐슨 0.34 → IPTV 0.57"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '한국인의밥상': 지수 닐슨 1.33 → IPTV 0.86"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '가을동화': 지수 닐슨 1.01 → IPTV 0.72"
+  },
+  {
+   "type": "subhead",
+   "text": "편성 판단 시사점 : **두 자료를 함께 볼 지점**"
+  },
+  {
+   "type": "bullet",
+   "text": "심야 시청은 IPTV에서 더 크게 잡혀, 심야 재방 효과는 IPTV로 보완"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 강약은 두 자료가 대체로 같아, 작품 평가는 어느 자료로 봐도 비슷"
+  },
+  {
+   "type": "note",
+   "text": "지수 = 각 자료 안에서 채널 평균을 1로 본 값, 두 자료는 표본·가중치가 달라 절대 시청률끼리는 비교하지 않음"
   },
   {
    "type": "apptitle",
@@ -7830,12 +10962,12 @@
      "0.088",
      {
       "t": "27위 / 45",
-      "fill": "C3C0F6",
+      "fill": "B1E0D7",
       "color": "0D0D12"
      },
      {
       "t": "9위 / 13",
-      "fill": "CECCF8",
+      "fill": "BFE6DF",
       "color": "0D0D12"
      }
     ]
@@ -7905,7 +11037,7 @@
      },
      {
       "t": "0.159",
-      "fill": "9994EF",
+      "fill": "7ACBBB",
       "color": "0D0D12"
      },
      "16",
@@ -7964,7 +11096,7 @@
      },
      {
       "t": "0.134",
-      "fill": "B1ADF3",
+      "fill": "99D7CB",
       "color": "0D0D12"
      },
      "40",
@@ -7985,7 +11117,7 @@
      },
      {
       "t": "0.196",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "44",
@@ -8057,7 +11189,7 @@
      },
      {
       "t": "0.071",
-      "fill": "EBEAFC",
+      "fill": "E5F5F2",
       "color": "0D0D12"
      },
      "54",
@@ -8078,7 +11210,7 @@
      },
      {
       "t": "0.098",
-      "fill": "D2D0F8",
+      "fill": "C4E8E1",
       "color": "0D0D12"
      },
      "60",
@@ -8610,7 +11742,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 보라가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -8638,6 +11770,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 23~02시 21%, 20~23시 21%, 08~11시 14%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 수요일 20~23시(0.021), 저녁 시청률은 평일이 주말의 1.3배"
   },
   {
@@ -8650,7 +11786,11 @@
   },
   {
    "type": "sub",
-   "text": "ENA Drama가 가장 앞서는 곳은 일요일 17~20시(0.047 vs 0.011)"
+   "text": "ENA Drama가 앞서는 곳(격차 큰 순): 일 05~08시, 토 08~11시, 토 05~08시"
+  },
+  {
+   "type": "bullet",
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.055)에 CNTV는 '나는자연인이다' 0.021, 자사 우위"
   },
   {
    "type": "bullet",
@@ -8660,6 +11800,520 @@
    "type": "takeaway",
    "text": "**CNTV**는 수요일 20~23시 '나는자연인이다'가 가장 강함",
    "note": "시청량의 41%를 상위 5편이 만드는 대표작 반복 편성·평일 띠 편성 채널"
+  },
+  {
+   "type": "section",
+   "text": "Ⅵ. IPTV 요일·시간대 히트맵",
+   "pageBreak": true
+  },
+  {
+   "type": "caption",
+   "text": "IPTV 가구 요일×시간대 평균 시청률(2026)"
+  },
+  {
+   "type": "table",
+   "head": [
+    "시간대",
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일"
+   ],
+   "rows": [
+    [
+     "05~08시",
+     {
+      "t": "0.028",
+      "t2": "전설의고향",
+      "fill": "FDFEFE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.031",
+      "t2": "전설의고향",
+      "fill": "F8FCFB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.031",
+      "t2": "전설의고향",
+      "fill": "F8FCFB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.031",
+      "t2": "전설의고향",
+      "fill": "F6FCFB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.031",
+      "t2": "전설의고향",
+      "fill": "F6FCFB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.027",
+      "t2": "사랑이뭐길래",
+      "fill": "FEFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.027",
+      "t2": "사랑이뭐길래",
+      "fill": "FFFFFF",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "08~11시",
+     {
+      "t": "0.070",
+      "t2": "주몽",
+      "fill": "A5DCD1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.073",
+      "t2": "주몽",
+      "fill": "9ED9CE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.075",
+      "t2": "주몽",
+      "fill": "99D7CB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.073",
+      "t2": "대장금",
+      "fill": "9ED9CD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.077",
+      "t2": "주몽",
+      "fill": "96D6CA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.045",
+      "t2": "주몽",
+      "fill": "DAF1EC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.054",
+      "t2": "실제상황",
+      "fill": "C7E9E3",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "11~14시",
+     {
+      "t": "0.105",
+      "t2": "나는자연인이다",
+      "fill": "5ABEAB",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.107",
+      "t2": "나는자연인이다",
+      "fill": "57BDAA",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.103",
+      "t2": "나는자연인이다",
+      "fill": "60C1AE",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.103",
+      "t2": "나는자연인이다",
+      "fill": "5FC0AD",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.107",
+      "t2": "나는자연인이다",
+      "fill": "57BDAA",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.118",
+      "t2": "허준",
+      "fill": "40B49D",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.109",
+      "t2": "허준",
+      "fill": "53BCA7",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "14~17시",
+     {
+      "t": "0.104",
+      "t2": "야인시대",
+      "fill": "5CBFAC",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.104",
+      "t2": "야인시대",
+      "fill": "5EC0AD",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.107",
+      "t2": "야인시대",
+      "fill": "56BDA9",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.103",
+      "t2": "야인시대",
+      "fill": "5FC0AD",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.109",
+      "t2": "나는자연인이다",
+      "fill": "52BBA7",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.124",
+      "t2": "나는자연인이다",
+      "fill": "33AF97",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.129",
+      "t2": "나는자연인이다",
+      "fill": "29AB92",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "17~20시",
+     {
+      "t": "0.112",
+      "t2": "인간극장",
+      "fill": "4BB9A3",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.111",
+      "t2": "인간극장",
+      "fill": "4EB9A5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.110",
+      "t2": "인간극장",
+      "fill": "51BBA6",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.109",
+      "t2": "인간극장",
+      "fill": "52BBA7",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.096",
+      "t2": "인간극장",
+      "fill": "6DC6B5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.129",
+      "t2": "자이언트",
+      "fill": "28AB91",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.144",
+      "t2": "자이언트",
+      "fill": "099F82",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "20~23시",
+     {
+      "t": "0.140",
+      "t2": "나는자연인이다",
+      "fill": "11A286",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.148",
+      "t2": "나는자연인이다",
+      "fill": "009B7D",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.145",
+      "t2": "나는자연인이다",
+      "fill": "079E81",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.142",
+      "t2": "나는자연인이다",
+      "fill": "0CA083",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.139",
+      "t2": "나는자연인이다",
+      "fill": "13A287",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.124",
+      "t2": "옥중화",
+      "fill": "32AF97",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.132",
+      "t2": "허준",
+      "fill": "22A88E",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "23~02시",
+     {
+      "t": "0.104",
+      "t2": "나는자연인이다",
+      "fill": "5DC0AD",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.111",
+      "t2": "나는자연인이다",
+      "fill": "4EB9A5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.117",
+      "t2": "나는자연인이다",
+      "fill": "41B49E",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.110",
+      "t2": "나는자연인이다",
+      "fill": "51BBA6",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.108",
+      "t2": "나는자연인이다",
+      "fill": "55BCA8",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.090",
+      "t2": "왔다장보리",
+      "fill": "7BCBBC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.091",
+      "t2": "왔다장보리",
+      "fill": "78CABA",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "02~05시",
+     {
+      "t": "0.029",
+      "t2": "낙화시절우봉군",
+      "fill": "FBFDFD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.038",
+      "t2": "TV소설인생화보",
+      "fill": "E9F6F4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.040",
+      "t2": "TV소설인생화보",
+      "fill": "E3F4F1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.043",
+      "t2": "TV소설인생화보",
+      "fill": "DEF2EE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.040",
+      "t2": "TV소설인생화보",
+      "fill": "E5F5F2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.040",
+      "t2": "TV소설인생화보",
+      "fill": "E4F4F1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.029",
+      "t2": "낙화시절우봉군",
+      "fill": "FBFDFD",
+      "color": "0D0D12",
+      "center": true
+     }
+    ]
+   ],
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
+  },
+  {
+   "type": "note",
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
+  },
+  {
+   "type": "section",
+   "text": "Ⅶ. 닐슨·IPTV 비교 인사이트(가구)",
+   "pageBreak": false
+  },
+  {
+   "type": "subhead",
+   "text": "두 자료의 시간대 강약 순서 일치도 : **0.9(높음)**"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 강한 시간대가 닐슨 일 17~20시, IPTV 화 20~23시로 갈림"
+  },
+  {
+   "type": "bullet",
+   "text": "채널 평균 대비로 보면 IPTV가 닐슨보다 심야 1.39배 크게 잡음"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 상대적으로 더 강한 시간대 목 02~05시('TV소설인생화보'): 지수 닐슨 0.31 → IPTV 0.48"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 상대적으로 더 강한 시간대 목 05~08시('전설의고향'): 지수 닐슨 0.47 → IPTV 0.36"
+  },
+  {
+   "type": "subhead",
+   "text": "작품별 강약 순서 일치도 : **0.8(두 자료 8회 이상 42편)**"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '정년이': 지수 닐슨 0.42 → IPTV 0.84"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '설록:네가지시선': 지수 닐슨 0.39 → IPTV 0.78"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '조전화개': 지수 닐슨 0.45 → IPTV 0.17"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '용의눈물': 지수 닐슨 1.47 → IPTV 0.88"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨 방영 중 시청률 0 기록이 5%, 표본이 얇은 시간대는 IPTV로 함께 확인 필요"
+  },
+  {
+   "type": "subhead",
+   "text": "편성 판단 시사점 : **두 자료를 함께 볼 지점**"
+  },
+  {
+   "type": "bullet",
+   "text": "심야 시청은 IPTV에서 더 크게 잡혀, 심야 재방 효과는 IPTV로 보완"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 강약은 두 자료가 대체로 같아, 작품 평가는 어느 자료로 봐도 비슷"
+  },
+  {
+   "type": "note",
+   "text": "지수 = 각 자료 안에서 채널 평균을 1로 본 값, 두 자료는 표본·가중치가 달라 절대 시청률끼리는 비교하지 않음"
   },
   {
    "type": "apptitle",
@@ -8718,12 +12372,12 @@
      "0.108",
      {
       "t": "24위 / 45",
-      "fill": "B9B6F4",
+      "fill": "A4DBD0",
       "color": "0D0D12"
      },
      {
       "t": "7위 / 13",
-      "fill": "B6B2F4",
+      "fill": "9FDACE",
       "color": "0D0D12"
      }
     ]
@@ -8810,7 +12464,7 @@
      },
      {
       "t": "0.127",
-      "fill": "C0BDF5",
+      "fill": "ADDFD5",
       "color": "0D0D12"
      },
      "30",
@@ -8852,7 +12506,7 @@
      },
      {
       "t": "0.116",
-      "fill": "CFCCF8",
+      "fill": "C0E6DF",
       "color": "0D0D12"
      },
      "72",
@@ -8873,7 +12527,7 @@
      },
      {
       "t": "0.107",
-      "fill": "DAD8F9",
+      "fill": "CFECE6",
       "color": "0D0D12"
      },
      "30",
@@ -8928,7 +12582,7 @@
      },
      {
       "t": "0.080",
-      "fill": "FCFCFF",
+      "fill": "FBFEFD",
       "color": "0D0D12"
      },
      "38",
@@ -8949,7 +12603,7 @@
      },
      {
       "t": "0.091",
-      "fill": "EEEDFC",
+      "fill": "E9F6F4",
       "color": "0D0D12"
      },
      "28",
@@ -8970,7 +12624,7 @@
      },
      {
       "t": "0.185",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "1444",
@@ -9502,7 +13156,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 보라가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -9530,6 +13184,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 20~23시 23%, 17~20시 21%, 14~17시 16%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 토요일 17~20시(0.021), 저녁 시청률은 주말이 평일의 1.7배"
   },
   {
@@ -9542,7 +13200,11 @@
   },
   {
    "type": "sub",
-   "text": "ENA Drama가 가장 앞서는 곳은 수요일 20~23시(0.055 vs 0.011)"
+   "text": "ENA Drama가 앞서는 곳(격차 큰 순): 월 02~05시, 수 02~05시, 화 23~02시"
+  },
+  {
+   "type": "bullet",
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.055)에 D-ONE는 '나는자연인이다' 0.011, 자사 우위"
   },
   {
    "type": "bullet",
@@ -9552,6 +13214,520 @@
    "type": "takeaway",
    "text": "**D-ONE**는 토요일 17~20시 '벌거벗은세계사'가 가장 강함",
    "note": "시청량의 61%를 상위 5편이 만드는 대표작 반복 편성·평일 띠 편성 채널"
+  },
+  {
+   "type": "section",
+   "text": "Ⅵ. IPTV 요일·시간대 히트맵",
+   "pageBreak": true
+  },
+  {
+   "type": "caption",
+   "text": "IPTV 가구 요일×시간대 평균 시청률(2026)"
+  },
+  {
+   "type": "table",
+   "head": [
+    "시간대",
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일"
+   ],
+   "rows": [
+    [
+     "05~08시",
+     {
+      "t": "0.039",
+      "t2": "부모님전상서",
+      "fill": "F2FAF8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.042",
+      "t2": "부모님전상서",
+      "fill": "EFF9F7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.042",
+      "t2": "기황후",
+      "fill": "EFF9F7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.043",
+      "t2": "부모님전상서",
+      "fill": "EDF8F6",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.044",
+      "t2": "부모님전상서",
+      "fill": "EBF7F5",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.052",
+      "t2": "천개의비밀",
+      "fill": "E2F3F0",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.052",
+      "t2": "천개의비밀",
+      "fill": "E2F4F0",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "08~11시",
+     {
+      "t": "0.099",
+      "t2": "나는자연인이다",
+      "fill": "A7DCD2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.102",
+      "t2": "나는자연인이다",
+      "fill": "A3DBD0",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.099",
+      "t2": "나는자연인이다",
+      "fill": "A7DCD2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.104",
+      "t2": "나는자연인이다",
+      "fill": "A1DACF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.103",
+      "t2": "나는자연인이다",
+      "fill": "A1DACF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.096",
+      "t2": "벌거벗은한국사",
+      "fill": "AADED4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.098",
+      "t2": "벌거벗은한국사",
+      "fill": "A8DDD2",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "11~14시",
+     {
+      "t": "0.144",
+      "t2": "나는자연인이다",
+      "fill": "6EC6B5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.145",
+      "t2": "나는자연인이다",
+      "fill": "6DC6B5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.142",
+      "t2": "나는자연인이다",
+      "fill": "70C7B6",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.142",
+      "t2": "나는자연인이다",
+      "fill": "70C7B6",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.142",
+      "t2": "나는자연인이다",
+      "fill": "70C7B6",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.175",
+      "t2": "나는자연인이다",
+      "fill": "46B7A1",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.156",
+      "t2": "나는자연인이다",
+      "fill": "5FC0AD",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "14~17시",
+     {
+      "t": "0.124",
+      "t2": "야인시대",
+      "fill": "87D0C2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.124",
+      "t2": "야인시대",
+      "fill": "87D0C2",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.126",
+      "t2": "야인시대",
+      "fill": "85CFC1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.129",
+      "t2": "야인시대",
+      "fill": "81CEBF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.125",
+      "t2": "야인시대",
+      "fill": "85CFC1",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.221",
+      "t2": "나는자연인이다",
+      "fill": "0CA083",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.231",
+      "t2": "나는자연인이다",
+      "fill": "009B7D",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "17~20시",
+     {
+      "t": "0.148",
+      "t2": "나는자연인이다",
+      "fill": "68C4B2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.142",
+      "t2": "나는자연인이다",
+      "fill": "71C7B6",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.142",
+      "t2": "나는자연인이다",
+      "fill": "70C7B6",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.144",
+      "t2": "나는자연인이다",
+      "fill": "6EC6B5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.143",
+      "t2": "나는자연인이다",
+      "fill": "6EC6B5",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.134",
+      "t2": "벌거벗은한국사",
+      "fill": "7ACBBB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.154",
+      "t2": "벌거벗은한국사",
+      "fill": "61C1AF",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "20~23시",
+     {
+      "t": "0.165",
+      "t2": "나는자연인이다",
+      "fill": "54BCA8",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.164",
+      "t2": "나는자연인이다",
+      "fill": "55BCA8",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.165",
+      "t2": "나는자연인이다",
+      "fill": "54BCA8",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.173",
+      "t2": "나는자연인이다",
+      "fill": "49B8A2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.170",
+      "t2": "나는자연인이다",
+      "fill": "4DB9A4",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.152",
+      "t2": "나는자연인이다",
+      "fill": "64C2B0",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.160",
+      "t2": "나는자연인이다",
+      "fill": "5ABEAB",
+      "color": "FFFFFF",
+      "center": true
+     }
+    ],
+    [
+     "23~02시",
+     {
+      "t": "0.082",
+      "t2": "야인시대",
+      "fill": "BCE5DD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.083",
+      "t2": "야인시대",
+      "fill": "BAE4DC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.084",
+      "t2": "야인시대",
+      "fill": "BAE4DC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.086",
+      "t2": "야인시대",
+      "fill": "B7E3DA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.088",
+      "t2": "야인시대",
+      "fill": "B5E2D9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.064",
+      "t2": "모란봉클럽",
+      "fill": "D3EEE8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.066",
+      "t2": "모란봉클럽",
+      "fill": "CFECE7",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "02~05시",
+     {
+      "t": "0.029",
+      "t2": "특종세상",
+      "fill": "FFFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.036",
+      "t2": "특종세상",
+      "fill": "F5FBFA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.037",
+      "t2": "천개의비밀",
+      "fill": "F4FBFA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.037",
+      "t2": "특종세상",
+      "fill": "F4FBF9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.037",
+      "t2": "특종세상",
+      "fill": "F4FBF9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.041",
+      "t2": "특종세상",
+      "fill": "F0F9F7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.032",
+      "t2": "특종세상",
+      "fill": "FBFEFD",
+      "color": "0D0D12",
+      "center": true
+     }
+    ]
+   ],
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
+  },
+  {
+   "type": "note",
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
+  },
+  {
+   "type": "section",
+   "text": "Ⅶ. 닐슨·IPTV 비교 인사이트(가구)",
+   "pageBreak": false
+  },
+  {
+   "type": "subhead",
+   "text": "두 자료의 시간대 강약 순서 일치도 : **0.94(높음)**"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 강한 시간대가 닐슨 토 14~17시, IPTV 일 14~17시로 갈림"
+  },
+  {
+   "type": "bullet",
+   "text": "채널 평균 대비로 보면 IPTV가 닐슨보다 심야 1.17배·아침 1.36배 크게 잡음"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 상대적으로 더 강한 시간대 일 05~08시('천개의비밀'): 지수 닐슨 0.32 → IPTV 0.48"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 상대적으로 더 강한 시간대 수 14~17시('야인시대'): 지수 닐슨 1.44 → IPTV 1.16"
+  },
+  {
+   "type": "subhead",
+   "text": "작품별 강약 순서 일치도 : **0.87(두 자료 8회 이상 40편)**"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '낭만닥터김사부2': 지수 닐슨 0.66 → IPTV 1.02"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '돈쭐내러왔습니다': 지수 닐슨 0.36 → IPTV 0.54"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '상도': 지수 닐슨 1.34 → IPTV 0.92"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '옥중화': 지수 닐슨 1.17 → IPTV 0.83"
+  },
+  {
+   "type": "subhead",
+   "text": "편성 판단 시사점 : **두 자료를 함께 볼 지점**"
+  },
+  {
+   "type": "bullet",
+   "text": "낮·아침 성과는 닐슨만 보면 낮게 보여, 재방·구매 판단 때 IPTV도 확인"
+  },
+  {
+   "type": "bullet",
+   "text": "심야 시청은 IPTV에서 더 크게 잡혀, 심야 재방 효과는 IPTV로 보완"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 강약은 두 자료가 대체로 같아, 작품 평가는 어느 자료로 봐도 비슷"
+  },
+  {
+   "type": "note",
+   "text": "지수 = 각 자료 안에서 채널 평균을 1로 본 값, 두 자료는 표본·가중치가 달라 절대 시청률끼리는 비교하지 않음"
   },
   {
    "type": "apptitle",
@@ -9604,7 +13780,7 @@
      "0.027",
      {
       "t": "30위 / 32",
-      "fill": "F6F5FE",
+      "fill": "F3FAF9",
       "color": "0D0D12"
      },
      "-"
@@ -9614,7 +13790,7 @@
      "0.051",
      {
       "t": "37위 / 45",
-      "fill": "E4E3FB",
+      "fill": "DCF1ED",
       "color": "0D0D12"
      },
      {
@@ -9681,7 +13857,7 @@
      "-",
      {
       "t": "0.052",
-      "fill": "7770EA",
+      "fill": "4DB9A4",
       "color": "FFFFFF"
      },
      "16",
@@ -9702,7 +13878,7 @@
      },
      {
       "t": "0.043",
-      "fill": "B4B0F3",
+      "fill": "9CD8CD",
       "color": "0D0D12"
      },
      "75",
@@ -9723,7 +13899,7 @@
      },
      {
       "t": "0.041",
-      "fill": "C0BDF5",
+      "fill": "ADDFD5",
       "color": "0D0D12"
      },
      "1599",
@@ -9736,7 +13912,7 @@
      "-",
      {
       "t": "0.038",
-      "fill": "D7D5F9",
+      "fill": "CBEBE5",
       "color": "0D0D12"
      },
      "28",
@@ -9757,7 +13933,7 @@
      },
      {
       "t": "0.037",
-      "fill": "DDDBFA",
+      "fill": "D3EEE8",
       "color": "0D0D12"
      },
      "264",
@@ -9770,7 +13946,7 @@
      "-",
      {
       "t": "0.036",
-      "fill": "E0DFFA",
+      "fill": "D7EFEB",
       "color": "0D0D12"
      },
      "576",
@@ -9791,7 +13967,7 @@
      },
      {
       "t": "0.035",
-      "fill": "E7E6FB",
+      "fill": "E0F3EF",
       "color": "0D0D12"
      },
      "297",
@@ -9804,7 +13980,7 @@
      "-",
      {
       "t": "0.033",
-      "fill": "F5F4FD",
+      "fill": "F1FAF8",
       "color": "0D0D12"
      },
      "41",
@@ -9817,7 +13993,7 @@
      "-",
      {
       "t": "0.033",
-      "fill": "F6F5FE",
+      "fill": "F3FAF9",
       "color": "0D0D12"
      },
      "8",
@@ -9942,14 +14118,14 @@
      {
       "t": "0.010",
       "t2": "산너머남촌에는",
-      "fill": "FEFEFF",
+      "fill": "FEFFFE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.010",
       "t2": "산너머남촌에는",
-      "fill": "FDFDFF",
+      "fill": "FCFEFE",
       "color": "0D0D12",
       "center": true
      },
@@ -9963,28 +14139,28 @@
      {
       "t": "0.010",
       "t2": "산너머남촌에는",
-      "fill": "FEFEFF",
+      "fill": "FEFFFE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.011",
       "t2": "산너머남촌에는",
-      "fill": "FBFBFE",
+      "fill": "FAFDFD",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.012",
       "t2": "동네한바퀴",
-      "fill": "F2F1FD",
+      "fill": "EEF8F6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.015",
       "t2": "생활의발견",
-      "fill": "E4E2FB",
+      "fill": "DBF1ED",
       "color": "0D0D12",
       "center": true
      }
@@ -9994,49 +14170,49 @@
      {
       "t": "0.023",
       "t2": "인간극장",
-      "fill": "BBB7F5",
+      "fill": "A6DCD2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.022",
       "t2": "인간극장",
-      "fill": "BCB9F5",
+      "fill": "A7DDD2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.023",
       "t2": "인간극장",
-      "fill": "B9B5F4",
+      "fill": "A3DBD0",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.021",
       "t2": "인간극장",
-      "fill": "C4C1F6",
+      "fill": "B2E1D8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.023",
       "t2": "인간극장",
-      "fill": "B6B3F4",
+      "fill": "A0DACF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.035",
       "t2": "사랑과전쟁",
-      "fill": "7972EA",
+      "fill": "4FBAA5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.036",
       "t2": "사랑과전쟁",
-      "fill": "736CE9",
+      "fill": "48B7A2",
       "color": "FFFFFF",
       "center": true
      }
@@ -10046,49 +14222,49 @@
      {
       "t": "0.043",
       "t2": "사랑과전쟁",
-      "fill": "4A41E3",
+      "fill": "12A286",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.043",
       "t2": "사랑과전쟁",
-      "fill": "4D44E4",
+      "fill": "17A489",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.042",
       "t2": "사랑과전쟁",
-      "fill": "5249E4",
+      "fill": "1DA68C",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.041",
       "t2": "사랑과전쟁",
-      "fill": "554CE5",
+      "fill": "21A88E",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.040",
       "t2": "사랑과전쟁",
-      "fill": "5A51E6",
+      "fill": "27AA91",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.029",
       "t2": "사랑과전쟁",
-      "fill": "9791EF",
+      "fill": "76C9B9",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.030",
       "t2": "사랑과전쟁",
-      "fill": "918CEE",
+      "fill": "70C7B6",
       "color": "FFFFFF",
       "center": true
      }
@@ -10098,49 +14274,49 @@
      {
       "t": "0.046",
       "t2": "사랑과전쟁",
-      "fill": "3C32E1",
+      "fill": "009B7D",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.044",
       "t2": "사랑과전쟁",
-      "fill": "453BE2",
+      "fill": "0B9F83",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.045",
       "t2": "사랑과전쟁",
-      "fill": "3F36E2",
+      "fill": "059D7F",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.044",
       "t2": "사랑과전쟁",
-      "fill": "453CE2",
+      "fill": "0CA083",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.044",
       "t2": "사랑과전쟁",
-      "fill": "433AE2",
+      "fill": "099F82",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.024",
       "t2": "사랑을처방",
-      "fill": "B2AEF3",
+      "fill": "9BD8CC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.024",
       "t2": "최고다이순신",
-      "fill": "B5B1F4",
+      "fill": "9ED9CD",
       "color": "0D0D12",
       "center": true
      }
@@ -10150,49 +14326,49 @@
      {
       "t": "0.031",
       "t2": "붉은진주",
-      "fill": "8E88EE",
+      "fill": "6CC5B4",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.035",
       "t2": "붉은진주",
-      "fill": "7973EA",
+      "fill": "50BAA6",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.035",
       "t2": "붉은진주",
-      "fill": "7972EA",
+      "fill": "4FBAA5",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.033",
       "t2": "붉은진주",
-      "fill": "807AEB",
+      "fill": "59BEAA",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.034",
       "t2": "붉은진주",
-      "fill": "7C75EB",
+      "fill": "54BCA8",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.015",
       "t2": "진짜가나타났다",
-      "fill": "E1E0FA",
+      "fill": "D8F0EB",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.015",
       "t2": "진짜가나타났다",
-      "fill": "E1E0FA",
+      "fill": "D8F0EB",
       "color": "0D0D12",
       "center": true
      }
@@ -10202,49 +14378,49 @@
      {
       "t": "0.026",
       "t2": "사랑과전쟁",
-      "fill": "AAA5F2",
+      "fill": "8FD3C6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.028",
       "t2": "사랑과전쟁",
-      "fill": "9E99F0",
+      "fill": "81CDBF",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.028",
       "t2": "사랑과전쟁",
-      "fill": "9B96F0",
+      "fill": "7CCCBC",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.027",
       "t2": "사랑과전쟁",
-      "fill": "A09BF0",
+      "fill": "83CEC0",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.026",
       "t2": "사랑과전쟁",
-      "fill": "A9A5F2",
+      "fill": "8FD3C6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.034",
       "t2": "사랑과전쟁",
-      "fill": "7E78EB",
+      "fill": "57BDA9",
       "color": "FFFFFF",
       "center": true
      },
      {
       "t": "0.038",
       "t2": "사랑과전쟁",
-      "fill": "675FE8",
+      "fill": "38B19A",
       "color": "FFFFFF",
       "center": true
      }
@@ -10254,49 +14430,49 @@
      {
       "t": "0.022",
       "t2": "사랑과전쟁",
-      "fill": "BBB8F5",
+      "fill": "A7DCD2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.026",
       "t2": "사랑과전쟁",
-      "fill": "A6A1F1",
+      "fill": "8AD1C4",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.026",
       "t2": "사랑과전쟁",
-      "fill": "AAA6F2",
+      "fill": "90D3C6",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.025",
       "t2": "사랑과전쟁",
-      "fill": "ABA6F2",
+      "fill": "91D4C7",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.025",
       "t2": "사랑과전쟁",
-      "fill": "ADA9F2",
+      "fill": "94D5C8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.028",
       "t2": "살림하는남자들2",
-      "fill": "9B96F0",
+      "fill": "7DCCBD",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.031",
       "t2": "사랑과전쟁2",
-      "fill": "8C86ED",
+      "fill": "69C4B2",
       "color": "FFFFFF",
       "center": true
      }
@@ -10306,49 +14482,49 @@
      {
       "t": "0.016",
       "t2": "안녕하세요",
-      "fill": "DCDAFA",
+      "fill": "D2EDE8",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.013",
       "t2": "걸어서세계속으로",
-      "fill": "EEEDFC",
+      "fill": "E9F6F4",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.014",
       "t2": "걸어서세계속으로",
-      "fill": "E8E7FB",
+      "fill": "E1F3F0",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.014",
       "t2": "걸어서세계속으로",
-      "fill": "EBEAFC",
+      "fill": "E5F5F2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.015",
       "t2": "걸어서세계속으로",
-      "fill": "E5E4FB",
+      "fill": "DDF2EE",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.014",
       "t2": "걸어서세계속으로",
-      "fill": "ECEBFC",
+      "fill": "E6F5F2",
       "color": "0D0D12",
       "center": true
      },
      {
       "t": "0.016",
       "t2": "안녕하세요",
-      "fill": "DCDAFA",
+      "fill": "D1EDE8",
       "color": "0D0D12",
       "center": true
      }
@@ -10362,7 +14538,7 @@
   },
   {
    "type": "note",
-   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날"
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 민트가 진할수록 높음, 02시 이전은 전날"
   },
   {
    "type": "section",
@@ -10386,6 +14562,10 @@
   },
   {
    "type": "bullet",
+   "text": "시청량이 몰린 시간대는 11~14시 19%, 14~17시 17%, 20~23시 14%"
+  },
+  {
+   "type": "bullet",
    "text": "가장 잘 나오는 시간대는 월요일 14~17시(0.046), 저녁 시청률은 평일이 주말의 1.2배"
   },
   {
@@ -10398,7 +14578,11 @@
   },
   {
    "type": "sub",
-   "text": "ENA Drama가 가장 앞서는 곳은 월요일 20~23시(0.096 vs 0.026)"
+   "text": "ENA Drama가 앞서는 곳(격차 큰 순): 일 17~20시, 토 17~20시, 월 20~23시"
+  },
+  {
+   "type": "bullet",
+   "text": "ENA Drama 최강 시간대 수요일 20~23시(0.098)에 KBS Story는 '사랑과전쟁' 0.028, 자사 우위"
   },
   {
    "type": "bullet",
@@ -10408,6 +14592,524 @@
    "type": "takeaway",
    "text": "**KBS Story**는 월요일 14~17시 '사랑과전쟁'이 가장 강함",
    "note": "시청량의 63%를 상위 5편이 만드는 대표작 반복 편성·평일 띠 편성 채널"
+  },
+  {
+   "type": "section",
+   "text": "Ⅵ. 닐슨 요일·시간대 히트맵",
+   "pageBreak": true
+  },
+  {
+   "type": "caption",
+   "text": "닐슨 수도권 2049(09/13~) 요일×시간대 평균 시청률(2026)"
+  },
+  {
+   "type": "table",
+   "head": [
+    "시간대",
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일"
+   ],
+   "rows": [
+    [
+     "05~08시",
+     {
+      "t": "0.0002",
+      "t2": "용의눈물",
+      "fill": "FEFEFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0006",
+      "t2": "용의눈물",
+      "fill": "FDFDFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0009",
+      "t2": "용의눈물",
+      "fill": "FCFCFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0004",
+      "t2": "용의눈물",
+      "fill": "FEFEFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0000",
+      "t2": "산너머남촌에는",
+      "fill": "FFFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0018",
+      "t2": "한국인의밥상",
+      "fill": "FAF9FE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0052",
+      "t2": "생활의발견",
+      "fill": "F0EFFD",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "08~11시",
+     {
+      "t": "0.0024",
+      "t2": "인간극장",
+      "fill": "F8F8FE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0034",
+      "t2": "인간극장",
+      "fill": "F5F4FD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0072",
+      "t2": "인간극장",
+      "fill": "EAE9FC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0045",
+      "t2": "인간극장",
+      "fill": "F2F1FD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0010",
+      "t2": "엄마가미쳤어요",
+      "fill": "FCFCFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0013",
+      "t2": "엄마가미쳤어요",
+      "fill": "FBFBFE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0045",
+      "t2": "사랑과전쟁",
+      "fill": "F2F1FD",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "11~14시",
+     {
+      "t": "0.024",
+      "t2": "사랑과전쟁",
+      "fill": "B9B6F4",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0064",
+      "t2": "사랑과전쟁",
+      "fill": "ECEBFC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0099",
+      "t2": "사랑과전쟁",
+      "fill": "E2E0FB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.013",
+      "t2": "사랑과전쟁",
+      "fill": "D9D7F9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.019",
+      "t2": "사랑과전쟁",
+      "fill": "C6C3F6",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.015",
+      "t2": "사랑과전쟁",
+      "fill": "D3D1F8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.012",
+      "t2": "사랑과전쟁",
+      "fill": "DBD9F9",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "14~17시",
+     {
+      "t": "0.018",
+      "t2": "사랑과전쟁",
+      "fill": "CBC8F7",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.011",
+      "t2": "사랑과전쟁",
+      "fill": "E0DEFA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0098",
+      "t2": "사랑과전쟁",
+      "fill": "E2E1FB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0068",
+      "t2": "사랑과전쟁",
+      "fill": "EBEAFC",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.017",
+      "t2": "사랑과전쟁",
+      "fill": "CECCF8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.038",
+      "t2": "은애하는도적님아",
+      "fill": "8F8AEE",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.014",
+      "t2": "연모",
+      "fill": "D5D2F8",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "17~20시",
+     {
+      "t": "0.0006",
+      "t2": "친밀한리플리",
+      "fill": "FDFDFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0037",
+      "t2": "욕망의덫",
+      "fill": "F4F4FD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0002",
+      "t2": "친밀한리플리",
+      "fill": "FEFEFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0010",
+      "t2": "친밀한리플리",
+      "fill": "FCFCFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0039",
+      "t2": "욕망의덫",
+      "fill": "F4F3FD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0008",
+      "t2": "독수리5형제를부탁해",
+      "fill": "FDFCFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0056",
+      "t2": "무엇이든물어보세요",
+      "fill": "EFEEFC",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "20~23시",
+     {
+      "t": "0.0041",
+      "t2": "사랑과전쟁",
+      "fill": "F3F2FD",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0004",
+      "t2": "사랑과전쟁",
+      "fill": "FEFEFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.065",
+      "t2": "사랑과전쟁",
+      "fill": "4137E2",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.010",
+      "t2": "사랑과전쟁",
+      "fill": "E0DFFA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.012",
+      "t2": "사랑과전쟁",
+      "fill": "DBD9F9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.010",
+      "t2": "사랑과전쟁",
+      "fill": "E1DFFA",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0055",
+      "t2": "사랑과전쟁",
+      "fill": "EFEEFD",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "23~02시",
+     {
+      "t": "0.0027",
+      "t2": "불후의명곡",
+      "fill": "F7F7FE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0013",
+      "t2": "사랑과전쟁",
+      "fill": "FBFBFE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.066",
+      "t2": "사랑과전쟁",
+      "fill": "3C32E1",
+      "color": "FFFFFF",
+      "center": true
+     },
+     {
+      "t": "0.016",
+      "t2": "사랑과전쟁",
+      "fill": "D0CEF8",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0027",
+      "t2": "사랑과전쟁",
+      "fill": "F7F7FE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.013",
+      "t2": "사랑과전쟁",
+      "fill": "D9D7F9",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0023",
+      "t2": "신상출시편스토랑",
+      "fill": "F8F8FE",
+      "color": "0D0D12",
+      "center": true
+     }
+    ],
+    [
+     "02~05시",
+     {
+      "t": "0.0012",
+      "t2": "산너머남촌에는",
+      "fill": "FBFBFE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0015",
+      "t2": "옥탑방의문제아들",
+      "fill": "FBFAFE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0001",
+      "t2": "서울1945",
+      "fill": "FFFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0083",
+      "t2": "영화가좋다",
+      "fill": "E7E5FB",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0016",
+      "t2": "걸어서세계속으로",
+      "fill": "FAFAFE",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0001",
+      "t2": "서울1945",
+      "fill": "FFFFFF",
+      "color": "0D0D12",
+      "center": true
+     },
+     {
+      "t": "0.0024",
+      "t2": "살림남2",
+      "fill": "F8F7FE",
+      "color": "0D0D12",
+      "center": true
+     }
+    ]
+   ],
+   "equalCols": true,
+   "fit": true,
+   "align": [
+    "center"
+   ]
+  },
+  {
+   "type": "note",
+   "text": "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 보라가 진할수록 높음, 02시 이전은 전날"
+  },
+  {
+   "type": "section",
+   "text": "Ⅶ. 닐슨·IPTV 비교 인사이트(수도권 2049)",
+   "pageBreak": false
+  },
+  {
+   "type": "subhead",
+   "text": "두 자료의 시간대 강약 순서 일치도 : **0.5(낮음)**"
+  },
+  {
+   "type": "bullet",
+   "text": "가장 강한 시간대가 닐슨 수 23~02시, IPTV 월 14~17시로 갈림"
+  },
+  {
+   "type": "bullet",
+   "text": "채널 평균 대비로 보면 IPTV가 닐슨보다 아침 2.48배 크게 잡음"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 상대적으로 더 강한 시간대 화 17~20시('붉은진주'): 지수 닐슨 0.44 → IPTV 1.29"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 상대적으로 더 강한 시간대 수 23~02시('사랑과전쟁'): 지수 닐슨 7.92 → IPTV 0.96"
+  },
+  {
+   "type": "subhead",
+   "text": "작품별 강약 순서 일치도 : **0.2(두 자료 8회 이상 9편)**"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '욕망의덫': 지수 닐슨 0.44 → IPTV 1.37"
+  },
+  {
+   "type": "bullet",
+   "text": "IPTV에서 더 강한 작품 '친밀한리플리': 지수 닐슨 0.46 → IPTV 1.32"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '은애하는도적님아': 지수 닐슨 4.91 → IPTV 0.89"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨에서 더 강한 작품 '연모': 지수 닐슨 1.64 → IPTV 0.68"
+  },
+  {
+   "type": "bullet",
+   "text": "닐슨 방영 중 시청률 0 기록이 67%, 표본이 얇은 시간대는 IPTV로 함께 확인 필요"
+  },
+  {
+   "type": "subhead",
+   "text": "편성 판단 시사점 : **두 자료를 함께 볼 지점**"
+  },
+  {
+   "type": "bullet",
+   "text": "낮·아침 성과는 닐슨만 보면 낮게 보여, 재방·구매 판단 때 IPTV도 확인"
+  },
+  {
+   "type": "bullet",
+   "text": "두 자료의 시간대 순서가 크게 달라, 한 자료만으로 시간대 이동 판단은 위험"
+  },
+  {
+   "type": "bullet",
+   "text": "작품 강약이 두 자료에서 엇갈려, 교체·연장 판단 전 두 자료를 함께 볼 것"
+  },
+  {
+   "type": "note",
+   "text": "지수 = 각 자료 안에서 채널 평균을 1로 본 값, 두 자료는 표본·가중치가 달라 절대 시청률끼리는 비교하지 않음"
   }
  ]
 }

@@ -58,6 +58,8 @@ async function pages<T>(build: () => any): Promise<T[]> {
 }
 async function pool<T>(items: T[], n: number, f: (x: T) => Promise<void>) { let i = 0; await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) await f(items[i++]); })); }
 
+// 프로그램이 아닌 방송 휴지(정파·방송 종료)는 대표 작품·비교에서 뺀다
+const NOT_PROG = /^(정파|방송\s*종료|휴지|화면조정)/;
 // 닐슨 경쟁 프로그램 행
 const COMP_LABEL: Record<TK, string> = { p2049: "개인2049", household: "유료방송가구" };
 async function loadComp(name: string, tk: TK): Promise<Row[]> {
@@ -68,7 +70,7 @@ async function loadComp(name: string, tk: TK): Promise<Row[]> {
     if (sm < 120) sm += 1440;
     if (em < 120 || em < sm) em += 1440;
     return { d: x.broadcast_date, dow: isoDow(x.broadcast_date), band: bandOf(sm), dur: em - sm, r: Number(x.rating), pn: clean(x.program_name), key: norm(x.program_name), rerun: /<재>/.test(x.program_name), s: sm };
-  }).filter((x) => x.dur > 0 && x.dur < 600);
+  }).filter((x) => x.dur > 0 && x.dur < 600 && !NOT_PROG.test(x.pn));
 }
 // 닐슨 자사 프로그램 행(자사 대비 칸 비교용)
 const { data: chRows } = await sb.from("channels").select("id,code");
@@ -90,7 +92,7 @@ async function loadOwnNielsen(code: string, tk: TK): Promise<Row[]> {
 async function loadIptv(name: string, tk: TK): Promise<Row[]> {
   const xs = await pages<any>(() => sb.from("iptv_airing_metrics").select("broadcast_date,start_minute,program_key,program_name,is_rerun_tag,rating,duration_min,dow,slot_band")
     .eq("channel_name", name).eq("target_kind", tk).gte("broadcast_date", FROM).lte("broadcast_date", TO).order("broadcast_date").order("start_minute").order("program_key"));
-  return xs.filter((x) => x.rating != null && Number(x.duration_min) > 0).map((x) => ({ d: x.broadcast_date, dow: x.dow, band: x.slot_band, dur: Number(x.duration_min), r: Number(x.rating), pn: clean(x.program_name), key: norm(x.program_name), rerun: !!x.is_rerun_tag, s: Number(x.start_minute) }));
+  return xs.filter((x) => x.rating != null && Number(x.duration_min) > 0 && !NOT_PROG.test(clean(String(x.program_name)))).map((x) => ({ d: x.broadcast_date, dow: x.dow, band: x.slot_band, dur: Number(x.duration_min), r: Number(x.rating), pn: clean(x.program_name), key: norm(x.program_name), rerun: !!x.is_rerun_tag, s: Number(x.start_minute) }));
 }
 
 // ── 적재 ────────────────────────────────────────────
@@ -151,6 +153,37 @@ function cellRep(xs: Row[]) {
   return { name: pick[0].pn, days: freq(pick), cellDays: days, volShare: r4(vol(pick) / tot, 3), volTop: all[0][0].pn, volTopDays: freq(all[0]), regular: !!reg[0] };
 }
 function topCellProg(xs: Row[]) { return cellRep(xs)?.name ?? null; }
+
+// 닐슨 vs IPTV 비교(2026-11-12 사용자 "IPTV와 닐슨 데이터를 비교했을 때 얻을 수 있는 인사이트"). 같은 채널·같은 타깃.
+// 두 자료는 표본·가중치가 달라 절대값을 섞지 않고, 각 자료 안에서 "채널 평균=1" 지수로 바꿔 시간대·작품의 상대적 강약만 비교한다.
+function compareSrc(nR: Row[], iR: Row[], t: TK) {
+  const nAvg = wmean(nR)!, iAvg = wmean(iR)!;
+  const cn = cells(nR), ci = cells(iR);
+  const pairs = BANDS.flatMap((b) => DOWN.map((dn, d) => ({ cell: `${dn} ${BAND_TXT(b)}`, b, d, n: cn.grid[b][d], i: ci.grid[b][d] }))).filter((x) => x.n != null && x.i != null && x.n > 0);
+  const rank = (xs: number[]) => { const s = xs.map((v, k) => [v, k] as const).sort((p, q) => p[0] - q[0]); const r = new Array(xs.length); s.forEach(([, k], j) => (r[k] = j + 1)); return r as number[]; };
+  const rn = rank(pairs.map((x) => x.n!)), ri = rank(pairs.map((x) => x.i!)), m = (pairs.length + 1) / 2;
+  const spear = pairs.length > 5 ? rn.reduce((s, v, k) => s + (v - m) * (ri[k] - m), 0) / Math.sqrt(rn.reduce((s, v) => s + (v - m) ** 2, 0) * ri.reduce((s, v) => s + (v - m) ** 2, 0)) : null;
+  // 시간대: IPTV 지수 ÷ 닐슨 지수 — 1보다 크면 IPTV(셋톱)에서 상대적으로 더 강함. 표본이 얇은 닐슨 극소값 칸은 제외(닐슨 지수 0.3 이상)
+  const cellsR = pairs.map((x) => ({ cell: x.cell, ni: x.n! / nAvg, ii: x.i! / iAvg, prog: topCellProg(ci.rows.get(`${x.d}|${x.b}`) ?? []) })).filter((x) => x.ni >= 0.3).map((x) => ({ ...x, r: x.ii / x.ni }));
+  const fmtC = (x: typeof cellsR[number]) => ({ cell: x.cell, nIdx: r4(x.ni, 2), iIdx: r4(x.ii, 2), prog: x.prog });
+  // 작품: 두 자료 모두 8회 이상, 채널 평균 대비 지수
+  const by = (rows: Row[]) => { const mm = new Map<string, Row[]>(); rows.forEach((a) => (mm.get(a.key) ?? mm.set(a.key, []).get(a.key)!).push(a)); return mm; };
+  const bn = by(nR), bi = by(iR);
+  const progs = [...bn].filter(([k, v]) => v.length >= 8 && (bi.get(k)?.length ?? 0) >= 8).map(([k, v]) => { const ni = wmean(v)! / nAvg, ii = wmean(bi.get(k)!)! / iAvg; return { name: bi.get(k)![0].pn, ni, ii, r: ii / Math.max(ni, 0.05), vol: vol(v) }; }).filter((x) => x.ni >= 0.3);
+  const fmtP = (x: typeof progs[number]) => ({ name: x.name, nIdx: r4(x.ni, 2), iIdx: r4(x.ii, 2) });
+  const peakN = [...pairs].sort((p, q) => q.n! - p.n!)[0], peakI = [...pairs].sort((p, q) => q.i! - p.i!)[0];
+  // 평일 낮(08~17시)·저녁(17~23시)·심야(23~05시) 묶음별 지수 차 — 셋톱 가구는 낮·심야 시청이 상대적으로 크게 잡히는지
+  const grp = (bs: string[]) => { const a = wmean(nR.filter((x) => bs.includes(x.band))), b = wmean(iR.filter((x) => bs.includes(x.band))); return a && b ? r4((b / iAvg) / (a / nAvg), 2) : null; };
+  return {
+    target: t, cells: pairs.length, spearman: r4(spear, 2),
+    nZero: r4(nR.filter((a) => a.r === 0).length / nR.length, 3),
+    iptvFav: [...cellsR].sort((p, q) => q.r - p.r).slice(0, 2).map(fmtC), nielsenFav: [...cellsR].sort((p, q) => p.r - q.r).slice(0, 2).map(fmtC),
+    progIptvFav: [...progs].sort((p, q) => q.r - p.r).slice(0, 2).map(fmtP), progNielsenFav: [...progs].sort((p, q) => p.r - q.r).slice(0, 2).map(fmtP), progN: progs.length,
+    progAgree: progs.length >= 5 ? r4((() => { const a = rank(progs.map((x) => x.ni)), b = rank(progs.map((x) => x.ii)), mm = (progs.length + 1) / 2; return a.reduce((s, v, k) => s + (v - mm) * (b[k] - mm), 0) / Math.sqrt(a.reduce((s, v) => s + (v - mm) ** 2, 0) * b.reduce((s, v) => s + (v - mm) ** 2, 0)); })(), 2) : null,
+    peakN: peakN ? peakN.cell : null, peakI: peakI ? peakI.cell : null,
+    dayparts: { 낮: grp(["08-11", "11-14", "14-17"]), 저녁: grp(["17-20", "20-23"]), 심야: grp(["23-02", "02-05"]), 아침: grp(["05-08"]) },
+  };
+}
 
 // 편성 패턴(2026-11-12 사용자 "상대사·자사의 편성 패턴도 읽어서 편성 전략이 드러나게"): 시청률이 아니라 편성표 구조를 본다.
 //  작품 수, 상위 5편 시청량 비중, 재방 표기 비중, 같은 작품 3회 이상 연속 편성 비중, 평일 띠 편성, 대표작 반복 운용, 20~23시 평일·주말 대표작
@@ -264,9 +297,16 @@ for (const g of GROUPS) {
     const progGrid = Object.fromEntries(BANDS.map((b) => [b, DOWN.map((_, d) => (hP.grid[b][d] == null ? null : topCellProg(hP.rows.get(`${d}|${b}`) ?? [])))]));
     // 검증용: 칸마다 대표 작품의 방영일 수·시청 규모 비중, 규모만으로 고르면 달라졌을 작품
     const repCheck = BANDS.flatMap((b) => DOWN.map((dn, d) => { if (hP.grid[b][d] == null) return null; const r = cellRep(hP.rows.get(`${d}|${b}`) ?? []); return r ? { cell: `${dn} ${b}`, ...r } : null; })).filter(Boolean);
-    heat.push({ label: srcLabel(primary, pTk), grid: hP.grid, prog: progGrid, repCheck });
-    const alt = primary === "nielsen" ? (iRows.length ? { rows: iRows, label: srcLabel("iptv", iTk!) } : null) : (nRows.length ? { rows: nRows, label: srcLabel("nielsen", tk) + `(${nRows[0].d.slice(5).replace("-", "/")}~)` } : null);
-    if (alt) heat.push({ label: alt.label, grid: cells(alt.rows).grid });
+    heat.push({ src: primary, label: srcLabel(primary, pTk), grid: hP.grid, prog: progGrid, repCheck });
+    // 다른 자료 히트맵도 칸 대표 프로그램과 함께(2026-11-12 사용자 "IPTV 히트맵도 다시 넣어줘")
+    const alt = primary === "nielsen" ? (iRows.length ? { src: "iptv", rows: iRows, label: srcLabel("iptv", iTk!) } : null) : (nRows.length ? { src: "nielsen", rows: nRows, label: srcLabel("nielsen", tk) + (nRows[0].d > "2026-01-31" ? `(${nRows[0].d.slice(5).replace("-", "/")}~)` : "") } : null);
+    if (alt) {
+      const ar = alt.rows.map((a) => ({ ...a, pn: dispName.get(a.key) ?? a.pn })), hA = cells(ar);
+      heat.push({ src: alt.src, label: alt.label, grid: hA.grid, prog: Object.fromEntries(BANDS.map((b) => [b, DOWN.map((_, d) => (hA.grid[b][d] == null ? null : topCellProg(hA.rows.get(`${d}|${b}`) ?? [])))])) });
+    }
+    // 닐슨 vs IPTV 비교(같은 타깃끼리): 시간대·작품별로 "채널 평균 대비" 지수를 두 자료에서 각각 구해 어느 쪽에서 더 강한지 본다
+    const cmpT: TK | null = iTk && nComp.get(`${ch.comp}|${iTk}`)?.length ? iTk : null;
+    const srcCmp = cmpT ? compareSrc((nComp.get(`${ch.comp}|${cmpT}`) ?? []).map((a) => ({ ...a, pn: dispName.get(a.key) ?? a.pn })), iptv.get(`${ch.iptv}|${cmpT}`)!.map((a) => ({ ...a, pn: dispName.get(a.key) ?? a.pn })), cmpT) : null;
 
     // Ⅳ. 인사이트 재료(기준 자료)
     const cellList = BANDS.flatMap((b) => DOWN.map((_, d) => ({ d, b, v: hP.grid[b][d], xs: hP.rows.get(`${d}|${b}`) ?? [] }))).filter((x) => x.v != null);
@@ -293,6 +333,9 @@ for (const g of GROUPS) {
         biggestGap: [...pairs].sort((p, q) => (q.c! - q.o!) - (p.c! - p.o!)).slice(0, 2).map((x) => ({ ...x, c: r4(x.c, 4), o: r4(x.o, 4) })),
         ownBest: [...ahead].sort((p, q) => (q.o! - q.c!) - (p.o! - p.c!)).slice(0, 2).map((x) => ({ ...x, c: r4(x.c, 4), o: r4(x.o, 4) })),
         avgC: r4(wmean(P), 4), avgO: r4(wmean(ownRows), 4),
+        // 자사가 가장 강한 시간대에 이 채널은 무엇을 틀고 얼마나 나오는가(맞대결 지점)
+        ownPeak: (() => { const x = [...pairs].sort((p, q) => q.o! - p.o!)[0]; if (!x) return null; const b = BANDS.find((bb) => BAND_TXT(bb) === x.band)!, d = DOWN.indexOf(x.dow); return { ...x, c: r4(x.c, 4), o: r4(x.o, 4), prog: topCellProg(hP.rows.get(`${d}|${b}`) ?? []) }; })(),
+        ownAheadList: [...ahead].sort((p, q) => (q.o! / q.c!) - (p.o! / p.c!)).slice(0, 3).map((x) => `${x.dow} ${x.band}`),
       };
     }
     out.push({
@@ -301,7 +344,7 @@ for (const g of GROUPS) {
       ytd, iptvYtd: iy, genre, skew, skewMed: r4(skewMed, 3),
       top, progCount: titles, top5Vol, volLeader: volLeader ? { name: volLeader[0].pn, share: r4(vol(volLeader) / totVol, 3) } : null,
       heat, peaks, bandVol: bandVol.slice(0, 3), weekdayPrime: r4(weekdayPrime, 4), weekendPrime: r4(weekendPrime, 4),
-      rerunShare, firstAvg, rerunAvg, trend, ownCmp,
+      rerunShare, firstAvg, rerunAvg, trend, ownCmp, srcCmp,
       // 편성 패턴: 경쟁 채널은 기준 자료 행, 자사는 IPTV 행(편성표 구조라 시청률 출처와 무관)
       // 닐슨 경쟁 자료는 이어 붙은 회차를 한 행으로 묶는 경우가 많아 연속 편성이 안 보이므로 IPTV(회차 단위)가 있으면 IPTV로, 없으면 닐슨으로 하되 연속 편성 지표는 비운다
       pattern: iRows.length ? pattern(iRows.map((a) => ({ ...a, pn: dispName.get(a.key) ?? a.pn }))) : (() => { const p = pattern(P); return p ? { ...p, blockShare: null, avgRun: null } : null; })(),

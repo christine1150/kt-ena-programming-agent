@@ -63,17 +63,19 @@ const BANDS = ["05-08", "08-11", "11-14", "14-17", "17-20", "20-23", "23-02", "0
 
 // 히트맵·표 색: 흰색 → 가장 진한 색 R60 G50 B225(2026-11-12 사용자 지정, ENA 로고 색) 그라데이션
 const LO = [255, 255, 255], HI = [60, 50, 225];
+// IPTV는 민트·초록 계열로 구분(2026-11-12 사용자 "IPTV 히트맵은 다른 색, 민트나 초록 계열")
+const HI_I = [0, 155, 125];
 const hex = (rgb) => rgb.map((x) => Math.round(x).toString(16).padStart(2, "0")).join("").toUpperCase();
 // 표 칸 색칠(2026-11-11 사용자 "알아보기 좋은 것은 색상을 넣어주세요"): t=0~1 세기, 진하면 흰 글자
-const shade = (text, t, cap = 0.8) => { const k = Math.max(0, Math.min(1, t)) * cap; return { t: text, fill: hex(LO.map((l, i) => l + (HI[i] - l) * k)), color: k > 0.55 ? "FFFFFF" : "0D0D12" }; };
+const shade = (text, t, cap = 0.8, hi = HI) => { const k = Math.max(0, Math.min(1, t)) * cap; return { t: text, fill: hex(LO.map((l, i) => l + (hi[i] - l) * k)), color: k > 0.55 ? "FFFFFF" : "0D0D12" }; };
 // 순위 칸: 1위에 가까울수록 진하게
-const rankCell = (rank, of) => (rank == null ? "-" : shade(`${rank}위 / ${of}`, of > 1 ? 1 - (rank - 1) / (of - 1) : 1, 0.75));
+const rankCell = (rank, of, hi = HI) => (rank == null ? "-" : shade(`${rank}위 / ${of}`, of > 1 ? 1 - (rank - 1) / (of - 1) : 1, 0.75, hi));
 // 열 안에서 값이 클수록 진하게(상위 프로그램 표 시청률 열)
-function shadeCol(vals) {
-  const vs = vals.filter((v) => v != null), lo = Math.min(...vs), hi = Math.max(...vs);
-  return vals.map((v) => (v == null ? "-" : shade(f(v), hi > lo ? (v - lo) / (hi - lo) : 0.5, 0.7)));
+function shadeCol(vals, hi = HI) {
+  const vs = vals.filter((v) => v != null), lo = Math.min(...vs), mx = Math.max(...vs);
+  return vals.map((v) => (v == null ? "-" : shade(f(v), mx > lo ? (v - lo) / (mx - lo) : 0.5, 0.7, hi)));
 }
-function heatTable(grid, prog) {
+function heatTable(grid, prog, hiC = HI) {
   const vs = BANDS.flatMap((b) => grid[b]).filter((v) => v != null);
   const lo = Math.min(...vs), hi = Math.max(...vs);
   const rows = BANDS.map((b) => [`${b.slice(0, 2)}~${b.slice(3)}시`, ...grid[b].map((v, d) => {
@@ -81,7 +83,7 @@ function heatTable(grid, prog) {
     const t = hi > lo ? (v - lo) / (hi - lo) : 0.5;
     // 칸 폭에 맞춘 자르기는 생성기가 실제 글리프 폭으로 한다
     const pn = prog && prog[b] && prog[b][d] ? abbr(prog[b][d].replace(/\s+/g, " ")) : null;
-    return { t: f(v), t2: pn, fill: hex(LO.map((l, i) => l + (HI[i] - l) * t)), color: t > 0.55 ? "FFFFFF" : "0D0D12", center: true };
+    return { t: f(v), t2: pn, fill: hex(LO.map((l, i) => l + (hiC[i] - l) * t)), color: t > 0.55 ? "FFFFFF" : "0D0D12", center: true };
   })]);
   return { type: "table", head: ["시간대", ...DOW], rows, equalCols: true, fit: true, align: ["center"] };
 }
@@ -98,7 +100,8 @@ function channelBlocks(c0, idx, nCh) {
   const row = (label, src, t) => {
     const y = src === "n" ? c.ytd[t] : c.iptvYtd[t];
     const g = t === "household" ? (src === "n" ? c.genre.nielsen : c.genre.iptv) : null;
-    return [label, y ? f(y.rating) : "자료 없음", y ? rankCell(y.rank, y.of) : "-", src === "n" && y && y.share != null ? `${Number(y.share).toFixed(2)}%` : "-", g ? rankCell(g.rank, g.of) : "-"];
+    const hi = src === "n" ? HI : HI_I;   // 닐슨은 보라, IPTV는 민트
+    return [label, y ? f(y.rating) : "자료 없음", y ? rankCell(y.rank, y.of, hi) : "-", src === "n" && y && y.share != null ? `${Number(y.share).toFixed(2)}%` : "-", g ? rankCell(g.rank, g.of, hi) : "-"];
   };
   const order = [tk, other];
   B.push({ type: "caption", text: "2026년 1/1~11/10 누적 시청률·순위" });
@@ -129,7 +132,7 @@ function channelBlocks(c0, idx, nCh) {
   ].filter(([, g]) => c.top.some((p) => g(p) != null));
   B.push({ type: "caption", text: `${c.primaryLabel} 평균 시청률 상위 ${c.top.length}편(2026, 8회 이상 방영, 본·재방 합산)` });
   B.push({ type: "table", head: ["순위", "프로그램", ...cols.map(([h]) => h), "방영", "주력 시간대"],
-    rows: (() => { const sc = cols.map(([, g]) => shadeCol(c.top.map(g))); return c.top.map((p, i) => [String(i + 1), nameFit(p.name, 13), ...sc.map((col) => col[i]), String(p.n), p.slot]); })(),
+    rows: (() => { const sc = cols.map(([h, g]) => shadeCol(c.top.map(g), h === "IPTV" ? HI_I : HI)); return c.top.map((p, i) => [String(i + 1), nameFit(p.name, 13), ...sc.map((col) => col[i]), String(p.n), p.slot]); })(),
     // 정렬: 순위 가운데, 프로그램 왼쪽, 시청률·방영 수 오른쪽, 시간대 가운데 — 긴 이름·시간대는 글자 축소(fit)
     // 시청률 열(2049·가구·IPTV)은 같은 폭(사용자 "2049와 가구 등이 한 표에 있을 때 셀 너비 동일")
     fit: true, sameWidth: cols.length > 1 ? [cols.map((_, i) => 2 + i)] : [], align: ["center", "left", ...cols.map(() => "right"), "right", "center"] });
@@ -152,12 +155,12 @@ function channelBlocks(c0, idx, nCh) {
   // Ⅳ. 히트맵(새 쪽)
   B.push({ type: "section", text: "Ⅳ. 요일·시간대 히트맵", pageBreak: true });
   // 편성 전략 인사이트 자리를 위해 기준 자료 히트맵 하나만 싣는다(2026-11-12, 다른 자료 히트맵은 프로필 JSON에 남음)
-  {
-    const h = c.heat[0];
+  const heatBlock = (h) => {
     B.push({ type: "caption", text: `${h.label} 요일×시간대 평균 시청률(2026)` });
-    B.push(heatTable(h.grid, h.prog));
-    B.push({ type: "note", text: "칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', 색이 진할수록 높음, 02시 이전은 전날" });
-  }
+    B.push(heatTable(h.grid, h.prog, h.src === "iptv" ? HI_I : HI));
+    B.push({ type: "note", text: `칸 아랫줄은 그 시간대 정규 편성 중 시청량 1위 작품, 3회 미만은 '-', ${h.src === "iptv" ? "민트" : "보라"}가 진할수록 높음, 02시 이전은 전날` });
+  };
+  heatBlock(c.heat[0]);
 
   // Ⅴ. 편성 인사이트 — 편성 PD가 바로 읽을 수 있는 말로(2026-11-12 사용자 지시), 수치는 프로필 JSON 값 그대로
   B.push({ type: "section", text: "Ⅴ. 주요 편성 인사이트" });
@@ -184,6 +187,7 @@ function channelBlocks(c0, idx, nCh) {
     if (pt.primeWeekday || pt.primeWeekend) B.push({ type: "bullet", text: `밤 20~23시 승부작은 평일 ${pt.primeWeekday ? q(pt.primeWeekday) : "-"}, 주말 ${pt.primeWeekend ? q(pt.primeWeekend) : "-"}` });
     if (pt.strips) B.push({ type: "bullet", text: `평일 같은 시간대 띠 편성 ${pt.strips}개(예 ${pt.stripTop.map((x) => `${x.band} ${q(x.name)}`).join(", ")})` });
   }
+  if (c.bandVol?.length) B.push({ type: "bullet", text: `시청량이 몰린 시간대는 ${c.bandVol.map((b) => `${b.b} ${pc(b.share)}`).join(", ")}` });
   if (pk[0] && c.weekdayPrime != null && c.weekendPrime != null) {
     const r = c.weekendPrime / c.weekdayPrime;
     B.push({ type: "bullet", text: `가장 잘 나오는 시간대는 ${pk[0].dow}요일 ${pk[0].band}(${f(pk[0].v)}), 저녁 시청률은 ${r >= 1.1 ? `주말이 평일의 ${r.toFixed(1)}배` : r <= 0.9 ? `평일이 주말의 ${(1 / r).toFixed(1)}배` : "평일·주말 비슷"}` });
@@ -193,7 +197,9 @@ function channelBlocks(c0, idx, nCh) {
     const ahead = o.ownAhead === 0 ? `${o.own}가 앞서는 시간대 없음` : `${o.own}가 앞서는 시간대 ${o.ownAhead}개`;
     B.push({ type: "subhead", text: `${o.own} 대비 : **평균 ${f(o.avgC)} vs ${f(o.avgO)}, ${ahead}**` });
     o.biggestGap.slice(0, 1).forEach((x) => B.push({ type: "bullet", text: `가장 크게 뒤지는 곳은 ${x.dow}요일 ${x.band}(${f(x.c)} vs ${o.own} ${f(x.o)})` }));
-    o.ownBest.slice(0, 1).forEach((x) => B.push({ type: "sub", text: `${o.own}가 가장 앞서는 곳은 ${x.dow}요일 ${x.band}(${f(x.o)} vs ${f(x.c)})` }));
+    if (o.ownAheadList?.length) B.push({ type: "sub", text: `${o.own}${josa(o.own, "이", "가")} 앞서는 곳(격차 큰 순): ${o.ownAheadList.join(", ")}` });
+    // 맞대결 지점: 자사가 가장 강한 시간대에 상대는 무엇으로 얼마나 나오는가
+    if (o.ownPeak) { const p = o.ownPeak, w = p.c > p.o ? "상대가 더 높음" : "자사 우위"; B.push({ type: "bullet", text: `${o.own} 최강 시간대 ${p.dow}요일 ${p.band}(${f(p.o)})에 ${c.channel}${josa(c.channel, "은", "는")} ${p.prog ? q(p.prog) : "-"} ${f(p.c)}, ${w}` }); }
     if (pt && op) {
       const diff = pt.top5 - op.top5 >= 0.1 ? `${c.channel}가 대표작에 더 몰아줌` : op.top5 - pt.top5 >= 0.1 ? `${own}가 대표작 의존이 더 큼` : "대표작 의존 정도는 비슷";
       B.push({ type: "bullet", text: `작품 수 ${pt.titles}편 vs ${op.titles}편, 상위 5편 시청량 ${pc(pt.top5)} vs ${pc(op.top5)} → ${diff}` });
@@ -203,6 +209,42 @@ function channelBlocks(c0, idx, nCh) {
   if (pk[0]) B.push({ type: "takeaway", text: `**${c.channel}**${josa(c.channel, "은", "는")} ${pk[0].dow}요일 ${pk[0].band} ${q(pk[0].prog)}${josa(q(pk[0].prog), "이", "가")} 가장 강함`,
     // 비중은 Ⅲ 편성 패턴 표와 같은 값(pattern.top5)을 써서 숫자가 어긋나지 않게
     note: `시청량의 ${pc(pt ? pt.top5 : c.top5Vol)}를 상위 5편이 만드는 ${c._type ?? "개별 편성"} 채널` });
+
+  // Ⅵ·Ⅶ. 다른 자료 히트맵 + 닐슨·IPTV 비교(셋째 쪽, 2026-11-12 사용자 "IPTV 히트맵도 다시, 닐슨과 비교한 인사이트도")
+  if (c.heat[1]) {
+    B.push({ type: "section", text: `Ⅵ. ${c.heat[1].src === "iptv" ? "IPTV" : "닐슨"} 요일·시간대 히트맵`, pageBreak: true });
+    heatBlock(c.heat[1]);
+  }
+  const s = c.srcCmp;
+  if (s) {
+    B.push({ type: "section", text: `${c.heat[1] ? "Ⅶ" : "Ⅵ"}. 닐슨·IPTV 비교 인사이트(${TK[s.target]})`, pageBreak: !c.heat[1] });
+    const lvl = s.spearman == null ? "-" : s.spearman >= 0.8 ? "높음" : s.spearman >= 0.6 ? "보통" : "낮음";
+    B.push({ type: "subhead", text: `두 자료의 시간대 강약 순서 일치도 : **${s.spearman ?? "-"}(${lvl})**` });
+    B.push({ type: "bullet", text: s.peakN === s.peakI ? `가장 강한 시간대는 두 자료 모두 ${s.peakN}로 같음` : `가장 강한 시간대가 닐슨 ${s.peakN}, IPTV ${s.peakI}로 갈림` });
+    const dp = s.dayparts, dpTxt = Object.entries(dp).filter(([, v]) => v != null);
+    const up = dpTxt.filter(([, v]) => v >= 1.15).map(([k, v]) => `${k} ${v}배`), dn = dpTxt.filter(([, v]) => v <= 0.87).map(([k, v]) => `${k} ${v}배`);
+    if (up.length || dn.length) B.push({ type: "bullet", text: `채널 평균 대비로 보면 IPTV가 닐슨보다 ${up.length ? `${up.join("·")} 크게` : ""}${up.length && dn.length ? ", " : ""}${dn.length ? `${dn.join("·")} 작게` : ""} 잡음` });
+    s.iptvFav.slice(0, 1).forEach((x) => B.push({ type: "bullet", text: `IPTV에서 상대적으로 더 강한 시간대 ${x.cell}${x.prog ? `(${q(x.prog)})` : ""}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}` }));
+    s.nielsenFav.slice(0, 1).forEach((x) => B.push({ type: "bullet", text: `닐슨에서 상대적으로 더 강한 시간대 ${x.cell}${x.prog ? `(${q(x.prog)})` : ""}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}` }));
+    if (s.progN >= 5) {
+      B.push({ type: "subhead", text: `작품별 강약 순서 일치도 : **${s.progAgree ?? "-"}(두 자료 8회 이상 ${s.progN}편)**` });
+      s.progIptvFav.forEach((x) => B.push({ type: "bullet", text: `IPTV에서 더 강한 작품 ${q(x.name)}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}` }));
+      s.progNielsenFav.forEach((x) => B.push({ type: "bullet", text: `닐슨에서 더 강한 작품 ${q(x.name)}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}` }));
+    }
+    if (s.nZero >= 0.03) B.push({ type: "bullet", text: `닐슨 방영 중 시청률 0 기록이 ${pc(s.nZero)}, 표본이 얇은 시간대는 IPTV로 함께 확인 필요` });
+    // 편성 판단에 주는 시사점(규칙 기반)
+    const imp = [];
+    if (up.some((t) => /낮|아침/.test(t))) imp.push("낮·아침 성과는 닐슨만 보면 낮게 보여, 재방·구매 판단 때 IPTV도 확인");
+    if (up.some((t) => /심야/.test(t))) imp.push("심야 시청은 IPTV에서 더 크게 잡혀, 심야 재방 효과는 IPTV로 보완");
+    if (dn.some((t) => /심야/.test(t))) imp.push("심야는 IPTV에서 약하게 잡혀, 심야 재방 효과는 닐슨 기준이 더 후함");
+    if (dn.some((t) => /저녁/.test(t))) imp.push("저녁 강세는 닐슨에서 더 크게 잡혀, 저녁 대표작 평가는 닐슨이 더 후함");
+    if (s.spearman != null && s.spearman < 0.6) imp.push("두 자료의 시간대 순서가 크게 달라, 한 자료만으로 시간대 이동 판단은 위험");
+    if (s.progAgree != null && s.progAgree >= 0.8) imp.push("작품 강약은 두 자료가 대체로 같아, 작품 평가는 어느 자료로 봐도 비슷");
+    if (s.progAgree != null && s.progAgree < 0.6) imp.push("작품 강약이 두 자료에서 엇갈려, 교체·연장 판단 전 두 자료를 함께 볼 것");
+    // 시사점은 줄넘침 검사를 받는 글머리로(요약선 괄호 주석은 두 줄로 넘쳐서, 2026-11-12)
+    if (imp.length) { B.push({ type: "subhead", text: "편성 판단 시사점 : **두 자료를 함께 볼 지점**" }); imp.slice(0, 3).forEach((t) => B.push({ type: "bullet", text: t })); }
+    B.push({ type: "note", text: "지수 = 각 자료 안에서 채널 평균을 1로 본 값, 두 자료는 표본·가중치가 달라 절대 시청률끼리는 비교하지 않음" });
+  }
   return B;
 }
 
