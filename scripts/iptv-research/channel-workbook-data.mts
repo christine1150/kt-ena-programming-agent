@@ -133,11 +133,11 @@ async function loadOwn(code: string): Promise<Map<string, Air[]>> {
   const progs = await pages<any>(() => sb.from("programs").select("id,canonical_name").eq("channel_id", cid(code)).order("id"));
   const pm = new Map(progs.map((p) => [p.id as string, p.canonical_name as string]));
   const out = new Map<string, Air[]>();
-  // skyUHD는 닐슨 공식 파일이 없어 수기 업로드 파일(source_type=skyuhd, 가구 시청률, target_id 없음)을 가구 값으로 쓴다 — 시청률이 입력된(null 아닌) 행만
+  // skyUHD는 닐슨 공식 파일이 없어 수기 업로드 파일(source_type=skyuhd, 가구 시청률, target_id 없음)을 가구 값으로 쓴다 — 시청률이 입력된 행만(원본 엑셀은 입력한 칸만 값이 있고 빈 칸은 DB에 0으로 들어가 있어, 0은 "입력 없음"으로 보고 뺀다 — 2026-11-12 원본 대조: 입력 2,013건 중 0은 1건)
   if (code === "SKYUHD") {
     const xs = await pages<any>(() => sb.from("ratings").select("id,broadcast_date,start_time,end_time,rating,share,program_id,target_id,channel_id,is_first_run,episode_number").eq("channel_id", cid(code)).eq("source_type", "skyuhd")
       .not("rating", "is", null).not("program_id", "is", null).gte("broadcast_date", FROM).lte("broadcast_date", TO).order("broadcast_date").order("start_time").order("id"));
-    out.set("household", mergeSplitRatingRows(xs).filter((x) => x.end_time && pm.has(x.program_id)).map((x) => toAir(x.broadcast_date, x.start_time, x.end_time, Number(x.rating), null, pm.get(x.program_id)!, null)).filter((a): a is Air => !!a));
+    out.set("household", mergeSplitRatingRows(xs).filter((x) => x.end_time && pm.has(x.program_id) && Number(x.rating) > 0).map((x) => toAir(x.broadcast_date, x.start_time, x.end_time, Number(x.rating), null, pm.get(x.program_id)!, null)).filter((a): a is Air => !!a));
     return out;
   }
   for (const [label, tl] of [["수도권 2049", "p2049"], ["전국 유료가구", "household"]] as const) {
