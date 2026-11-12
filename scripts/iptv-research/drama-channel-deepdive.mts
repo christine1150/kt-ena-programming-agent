@@ -22,6 +22,8 @@ const ORIGIN_FIX: Record<string, { ch: string; start: string; type: string }> = 
   내일은미스터트롯: { ch: "TV조선", start: "2020-01-02", type: "주간" },
   백년의유산: { ch: "MBC", start: "2013-01-05", type: "주말" },
   파하최불암입니다: { ch: "MBC", start: "2026-05-05", type: "다큐" },
+  // D-ONE <허준>은 1999년 MBC판(2026-11-12 사용자 확인, 2013 <구암 허준> 아님)
+  허준: { ch: "MBC", start: "1999-11-29", type: "월화" },
 };
 // 첫 방송 요일·기간으로는 일일극처럼 보이는 장기 월화극
 const LONG_MINI: Record<string, string> = { 자이언트: "월화", 동이: "월화", 주몽: "월화", 허준: "월화", 구가의서: "월화" };

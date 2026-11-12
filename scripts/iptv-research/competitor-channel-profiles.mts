@@ -405,7 +405,8 @@ for (const g of GROUPS) {
       nielsen: mN.get(as[0].key) ?? null, nielsenOther: mNo.get(as[0].key) ?? null, iptv: mI.get(as[0].key) ?? null,
       first: as.filter((a) => !a.rerun).length, slot: mainSlot(as), last: as[as.length - 1].d,
     })).sort((a, b) => b.v - a.v);
-    const top = progs.slice(0, 12);
+    // 상위 15편(2026-11-12 사용자 "워드 파일에서 상위 프로그램 15개까지 늘려줘")
+    const top = progs.slice(0, 15);
     const top5Vol = r4([...byP.values()].map(vol).sort((a, b) => b - a).slice(0, 5).reduce((s, v) => s + v, 0) / totVol, 3);
     const volLeader = [...byP.values()].sort((a, b) => vol(b) - vol(a))[0];
 

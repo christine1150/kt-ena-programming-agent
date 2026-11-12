@@ -33,9 +33,9 @@
   "groups": [
    {
     "g": "기타·미확인",
-    "share": 0.27,
-    "idx": 1.12,
-    "n": 2234
+    "share": 0.25,
+    "idx": 1.13,
+    "n": 2170
    },
    {
     "g": "MBC 평일 일일",
@@ -51,9 +51,9 @@
    },
    {
     "g": "MBC 월화",
-    "share": 0.07,
-    "idx": 0.88,
-    "n": 382
+    "share": 0.08,
+    "idx": 0.85,
+    "n": 446
    },
    {
     "g": "MBC every1 예능",
@@ -1304,10 +1304,11 @@
    "terr": false
   },
   "허준": {
-   "ch": null,
-   "year": null,
-   "type": null,
-   "peak": null
+   "ch": "MBC",
+   "year": 1999,
+   "type": "월화",
+   "peak": null,
+   "terr": true
   },
   "용감한 형사들 5": {
    "ch": "E채널",

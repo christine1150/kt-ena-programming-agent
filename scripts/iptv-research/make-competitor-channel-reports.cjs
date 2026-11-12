@@ -1,4 +1,4 @@
-﻿// 경쟁(자사 7개 제외) 채널 장르군별 Word 보고서 — 채널마다 2쪽(1쪽: 누적 시청률·순위·상위 프로그램, 2쪽: 히트맵·편성 인사이트).
+// 경쟁(자사 7개 제외) 채널 장르군별 Word 보고서 — 채널마다 2쪽(1쪽: 누적 시청률·순위·상위 프로그램, 2쪽: 히트맵·편성 인사이트).
 // 수치는 docs/iptv/competitor_channel_profiles.json(competitor-channel-profiles.mts 출력)을 옮기기만 한다(원칙 1, 여기서 새로 계산하지 않음 — 서식·색만).
 // 2049 중심 군(지상파·종편, 드라마, 예능·오락)은 수도권 2049 를 앞에, 가구 중심 군(라이프·취미, UHD)은 가구를 앞에 둔다. 장르군 순위는 언제나 가구.
 // 실행: node scripts/iptv-research/make-competitor-channel-reports.cjs [--audit]  → docs/iptv/word/경쟁채널_<군>.docx
@@ -91,6 +91,8 @@ const median = (xs) => { const v = xs.filter((x) => x != null).sort((a, b) => a 
 const GCOL = { "오리지널 예능": "CFC8FF", "예능": "FFD9A8", "여행": "BFE9D6", "중국 드라마": "FFC6CF", "영미 드라마": "FFE9A0", "오리지널 드라마": "B5C7FF", "드라마": "F5B5E1", "다큐·교양": "DCE5BE", "영화": "C9D6E8", "스포츠": "BDE6F5", "음악": "F7D0EA", "뉴스·시사": "D8D8E0", "애니·키즈": "FFD0B5", "기타": "E6E6EC" };
 // 시간대가 12행이라 히트맵 표만 칸 글자(9pt)·줄 간격·위아래 여백을 줄여 한 쪽에 맞춘다
 const HEAT_TIGHT = { fs: 9, line: 0.75, tb: 0.3 };
+// 1쪽 표(Ⅰ 누적·Ⅱ 상위 15편·Ⅲ 편성 패턴)는 행 여백을 줄여 한 쪽에 맞춘다(상위 15편으로 늘린 뒤 Ⅲ이 다음 쪽에 혼자 남던 문제, 2026-11-12)
+const P1_TIGHT = { line: 0.78, tb: 0 };
 const blend = (hx, k) => hex([0, 2, 4].map((i) => { const v = parseInt(hx.slice(i, i + 2), 16); return v + (255 - v) * k; }));
 
 // 히트맵·표 색: 흰색 → 가장 진한 색 R60 G50 B225(2026-11-12 사용자 지정, ENA 로고 색) 그라데이션
@@ -133,8 +135,8 @@ function heatTable(grid, prog, hiC = HI) {
 }
 
 function channelBlocks(c0, idx, nCh) {
-  // 채널마다 2쪽에 맞추려고 상위 프로그램은 10편(사용자 요청 범위 10~15편)
-  const c = { ...c0, top: c0.top.slice(0, 10) };
+  // 상위 프로그램 15편(2026-11-12 사용자 "상위 프로그램 15개까지 늘려줘", 이전 10편)
+  const c = { ...c0, top: c0.top.slice(0, 15) };
   const tk = c.focus, other = tk === "p2049" ? "household" : "p2049";
   const B = [];
   const isUhd = c.group === "uhd";
@@ -156,7 +158,7 @@ function channelBlocks(c0, idx, nCh) {
   const hasShare = rows1.some((r) => r[3] !== "-");
   // 정렬: 구분 가운데, 시청률·점유율 숫자 오른쪽, 순위(n위 / N) 가운데 — 칸에 안 들어가면 글자 축소(fit)
   B.push({ type: "table", head: ["구분", "누적 시청률", "전체 순위", ...(hasShare ? ["점유율"] : []), "장르군 순위(가구)"],
-    rows: rows1.map((r) => (hasShare ? r : [r[0], r[1], r[2], r[4]])), fit: true, sameWidth: [hasShare ? [2, 4] : [2, 3]],
+    rows: rows1.map((r) => (hasShare ? r : [r[0], r[1], r[2], r[4]])), fit: true, ...P1_TIGHT, sameWidth: [hasShare ? [2, 4] : [2, 3]],
     align: ["center", "right", "center", ...(hasShare ? ["right"] : []), "center"] });
   B.push({ type: "note", text: `순위 셀은 1위일수록 진함, 닐슨은 시장 ${c.ytd[tk]?.of ?? 216}개 채널 원본, IPTV는 셋톱 자료 채널끼리(가구 ${P.iptvChannels.household}${isUhd ? "" : `·2049 ${P.iptvChannels.p2049}`}개) 순위` });
   const gn = c.genre.nielsen, gi = c.genre.iptv;
@@ -182,7 +184,7 @@ function channelBlocks(c0, idx, nCh) {
     rows: (() => { const sc = cols.map(([h, g]) => shadeCol(c.top.map(g), h === "IPTV" ? HI_I : HI)); return c.top.map((p, i) => [String(i + 1), { t: full(p.name), alt: nameFit(p.name, 13) }, ...sc.map((col) => col[i]), String(p.n), p.slot]); })(),
     // 정렬: 순위 가운데, 프로그램 왼쪽, 시청률·방영 수 오른쪽, 시간대 가운데 — 긴 이름·시간대는 글자 축소(fit)
     // 시청률 열(2049·가구·IPTV)은 같은 폭(사용자 "2049와 가구 등이 한 표에 있을 때 셀 너비 동일")
-    fit: true, sameWidth: cols.length > 1 ? [cols.map((_, i) => 2 + i)] : [], align: ["center", "left", ...cols.map(() => "right"), "right", "center"] });
+    fit: true, ...P1_TIGHT, sameWidth: cols.length > 1 ? [cols.map((_, i) => 2 + i)] : [], align: ["center", "left", ...cols.map(() => "right"), "right", "center"] });
   B.push({ type: "note", text: `${isN ? "닐슨 프로그램 단위 자료 기준" : "닐슨 프로그램 단위 자료가 없거나 짧아 IPTV 기준"}${c.nielsenPeriod && isN && c.nielsenPeriod[0] > "2026-01-31" ? `(닐슨 ${c.nielsenPeriod[0].slice(5).replace("-", "/")}~ 자료)` : ""}${cols.length > 1 ? `, 2049·가구 열은 닐슨, IPTV 열은 IPTV ${c.iptvTarget === "p2049" ? "수도권 2049" : "가구"}(같은 이름 프로그램 평균)` : ""}` });
   // Ⅲ. 편성 패턴 비교(경쟁 vs 자사) — 시청률이 아니라 편성표 구조(2026-11-12 사용자 "상대사·자사 편성 패턴")
   const pt = c.pattern, op = c.ownPattern, own = c.ownName;
@@ -190,7 +192,7 @@ function channelBlocks(c0, idx, nCh) {
     B.push({ type: "section", text: `Ⅲ. 편성 패턴 비교(${c.channel} vs ${own})` });
     const nm = (p) => ({ t: `${full(p.lead.name)} 주 ${p.lead.perWeek}회(${p.lead.slots}개)`, alt: `${short(nameFit(p.lead.name, 10), 11)} 주 ${p.lead.perWeek}회(${p.lead.slots}개)` });
     const pcN = (v) => (v == null ? "-" : pc(v));
-    B.push({ type: "table", head: ["편성 지표(2026)", c.channel, own], fit: true, sameWidth: [[1, 2]], align: ["center", "center", "center"], rows: [
+    B.push({ type: "table", head: ["편성 지표(2026)", c.channel, own], fit: true, ...P1_TIGHT, sameWidth: [[1, 2]], align: ["center", "center", "center"], rows: [
       // 에피소드 수(종합 엑셀, 본방 기준)는 행을 늘리지 않고 같은 줄 괄호로(행을 늘리면 첫 채널 1쪽이 넘침)
       ["편성 작품 수(에피소드)", `${pt.titles}편${wb ? `(${wb.summary.episodes.toLocaleString("en-US")})` : ""}`, `${op.titles}편${WB.get(own) ? `(${WB.get(own).summary.episodes.toLocaleString("en-US")})` : ""}`],
       ["상위 5편 시청량(시청률×분) 비중", pc(pt.top5), pc(op.top5)],
