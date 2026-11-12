@@ -282,7 +282,7 @@ function ChannelTable({ entries, airing, selected, onSelect, simulcast, otherAir
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-[12px] text-zinc-500">{TABLE_NOTE}{simulcast.length > 0 ? " · 동시방송 행은 자사와 같은 날 같은 시각(±15분)에 함께 방송한 적이 있는 채널의 본방·재방 전체 성과이며, 위 방송 구분(전체·본방·본방 외) 선택이 그대로 적용됩니다(채널 평균은 그 채널의 하루 시청률 평균)" : ""}</p>
+      <p className="mt-1 text-[12px] text-zinc-500">{TABLE_NOTE}{simulcast.length > 0 ? " · 동시방송 행의 채널 평균은 그 채널의 하루 시청률 평균" : ""}</p>
     </section>
   );
 }
