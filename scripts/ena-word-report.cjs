@@ -250,20 +250,24 @@ function tableBlocks(head, rows, opts = {}) {
     const al = obj && obj.center ? AlignmentType.CENTER : !header && opts.align && AL[opts.align[i]] ? AL[opts.align[i]] : align;
     // opts.fit: 칸에 한 줄로 안 들어가면 글자를 0.5pt씩 줄여 맞춘다(최소 본문-2pt), 그래도 넘치면 줄바꿈
     let fs = BASE_FS;
-    const raw = obj ? obj.t : txt;
+    let raw = obj ? obj.t : txt;
     if (opts.fit && raw != null && String(raw) !== "" && !String(raw).includes("\n")) {
       const room = (widths[i] - 2 * CELL_IND - 1) * 0.92;   // 8% 여유: 다른 기기·글꼴 렌더 차이로 줄이 넘치지 않게(2026-11-12)
+      // obj.alt: 풀네임(t)이 최소 글자 크기로도 안 들어갈 때만 쓰는 줄임말(2026-11-12 사용자 "풀네임 쓸 자리가 되면 풀네임")
+      if (obj && obj.alt && measureLine(String(raw), fam, BASE_FS - 2) > room) raw = obj.alt;
       while (fs > BASE_FS - 2 && measureLine(String(raw), fam, fs) > room) fs -= 0.5;
     }
     // ENA_LOG_TRUNC: 표 본문 칸에서 두 줄 이상으로 넘치는 글을 알려 준다(줄임말 사전 만들기용)
     if (process.env.ENA_LOG_TRUNC && raw != null && String(raw) !== "" && measureLine(String(raw), fam, fs) > widths[i] - 2 * CELL_IND) console.log("줄넘김\t" + (header ? "[머리글] " : "") + raw + `\t${fs}pt/${widths[i].toFixed(0)}`);
-    const kids = cellParas(obj ? obj.t : txt, fam, fs, al, (obj && obj.color) || color, keep, LINE_X);
+    const kids = cellParas(raw, fam, fs, al, (obj && obj.color) || color, keep, LINE_X);
     if (obj && obj.t2) {
       // 실제 글리프 폭으로 칸 폭에 한 줄로 맞춰 자른다(넘치면 … 붙임)
       // 넘치면 먼저 글자 크기를 0.5pt씩 줄이고(최소 4.5pt, 2026-11-11 사용자 "너무 크면 폰트 크기를 줄여줘"), 그래도 넘칠 때만 자른다
       let pt = obj.t2Pt || 7;
       const room = (widths[i] - 2 * CELL_IND - 2) * 0.92;
       let s = String(obj.t2);
+      // obj.t2alt: 풀네임이 4.5pt(기존 최소)까지 줄여도 안 들어가면 줄임말로 바꾼 뒤 다시 줄인다
+      if (obj.t2alt) { let p2 = pt; while (p2 > 4.5 && T.textWidth(s, F_THIN, p2) > room) p2 -= 0.5; if (T.textWidth(s, F_THIN, p2) > room) s = String(obj.t2alt); else pt = p2; }
       while (pt > 4.5 && T.textWidth(s, F_THIN, pt) > room) pt -= 0.5;
       if (T.textWidth(s, F_THIN, pt) > room) { if (process.env.ENA_LOG_TRUNC) console.log("잘림\t" + s); while (s.length > 1 && T.textWidth(s + "…", F_THIN, pt) > room) s = s.slice(0, -1); s = s.trimEnd() + "…"; }
       kids.push(...cellParas(s, F_THIN, pt, al, obj.color || color, keep, LINE_X));
@@ -389,6 +393,14 @@ function audit(items) {
   return bad.sort((a, b) => b[0] - a[0]);
 }
 
+// 글줄 대안 문구: b.alts = [줄인 문구, …] — 풀네임 문구(b.text)가 한 줄에 들어가면 그대로, 넘칠 때만 다음 대안을 쓴다
+// (2026-11-12 사용자 "타이틀 풀네임 쓸 자리가 되면 풀네임", 줄임말은 넘칠 때만)
+function pickText(b, base, prefix, size, fam, allowLabel) {
+  const cands = [b.text, ...(b.alts || [])];
+  for (const t of cands) if (!audit([[base, prefix, t, size, fam, allowLabel]]).length) return t;
+  return cands[cands.length - 1];
+}
+
 // ── 빌드 ──────────────────────────────────────────────────────────────────────
 async function build(data, out, auditOnly) {
   const body = [];
@@ -416,31 +428,39 @@ async function build(data, out, auditOnly) {
         body.push(sectionBlock(b.text, firstSection, b.pageBreak)); n1 = 0; firstSection = false; break;
       case "subhead": {
         n1++;
-        items.push([STEP, `${n1}. `, b.text, 12, F_MED, true]);
-        body.push(lineBlock(`${n1}. `, b.text, 12, F_MED, STEP, { before: n1 > 1 ? ONE_LINE : 1.5, keepNext: true }));
+        const t = pickText(b, STEP, `${n1}. `, 12, F_MED, true);
+        items.push([STEP, `${n1}. `, t, 12, F_MED, true]);
+        body.push(lineBlock(`${n1}. `, t, 12, F_MED, STEP, { before: n1 > 1 ? ONE_LINE : 1.5, keepNext: true }));
         break;
       }
       case "insight": {
         n1++;
-        items.push([STEP, `${n1}. `, b.text, 12, F_MED, false]);
+        const t = pickText(b, STEP, `${n1}. `, 12, F_MED, false);
+        items.push([STEP, `${n1}. `, t, 12, F_MED, false]);
         // 인사이트는 KT Flow Medium 그대로 — 강조·라벨 볼드 없음, 앞뒤 간격 0으로 촘촘히
-        body.push(lineBlock(`${n1}. `, b.text, 12, F_MED, STEP, { before: 0, after: 0, allowLabel: false, emph: false }));
+        body.push(lineBlock(`${n1}. `, t, 12, F_MED, STEP, { before: 0, after: 0, allowLabel: false, emph: false }));
         break;
       }
-      case "bullet":
+      case "bullet": {
         // data.bulletMark: ○ 대신 쓸 글머리(예 "·", 2026-11-12 사용자 "작은 글머리 점으로")
-        items.push([2 * STEP, (data.bulletMark || "○") + " ", b.text, BULLET_FS, F_THIN, false]);
-        body.push(lineBlock((data.bulletMark || "○") + " ", b.text, BULLET_FS, F_THIN, 2 * STEP, { allowLabel: false, emph: false }));
+        const tb = pickText(b, 2 * STEP, (data.bulletMark || "○") + " ", BULLET_FS, F_THIN, false);
+        items.push([2 * STEP, (data.bulletMark || "○") + " ", tb, BULLET_FS, F_THIN, false]);
+        body.push(lineBlock((data.bulletMark || "○") + " ", tb, BULLET_FS, F_THIN, 2 * STEP, { allowLabel: false, emph: false }));
         break;
+      }
       case "sub":
-      case "mid":
-        items.push([3 * STEP, "- ", b.text, SUB_FS, F_THIN, false]);
-        body.push(lineBlock("- ", b.text, SUB_FS, F_THIN, 3 * STEP, { allowLabel: false, emph: false }));
+      case "mid": {
+        const ts = pickText(b, 3 * STEP, "- ", SUB_FS, F_THIN, false);
+        items.push([3 * STEP, "- ", ts, SUB_FS, F_THIN, false]);
+        body.push(lineBlock("- ", ts, SUB_FS, F_THIN, 3 * STEP, { allowLabel: false, emph: false }));
         break;
-      case "takeaway":
-        items.push([TAKE_BASE, "→ ", b.text, 12, F_MED, false]);
-        body.push(...takeawayBlocks(b.text, b.note));
+      }
+      case "takeaway": {
+        const tt = pickText(b, TAKE_BASE, "→ ", 12, F_MED, false);
+        items.push([TAKE_BASE, "→ ", tt, 12, F_MED, false]);
+        body.push(...takeawayBlocks(tt, b.note));
         break;
+      }
       case "caption": body.push(captionBlock(b.text)); break;
       case "note": body.push(noteBlock(b.text)); break;
       case "table": body.push(...tableBlocks(b.head, b.rows, b)); break;

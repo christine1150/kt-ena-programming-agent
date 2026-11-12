@@ -61,6 +61,24 @@ const nameFit0 = (s, n) => {
   const k = nk(t), hit = AB[k] ?? AB_KEYS.find((x) => x.length >= 6 && k.includes(x) && AB[x]);
   return hit ? (AB[k] ?? AB[hit]) : t.length > n ? abbr(t) : t;
 };
+// 풀네임(2026-11-12 사용자 "타이틀 풀네임 쓸 자리가 되면 풀네임") — 채널 접두어·문장부호만 떼고, 붙여 쓴 닐슨 이름은 종합 엑셀의 띄어 쓴 이름으로
+const FULL = new Map();
+for (const w of WB.values()) for (const p of w.programs) { const k = nk(p.name), v = dePunct(p.name); if (!FULL.has(k) || v.split(" ").length > FULL.get(k).split(" ").length) FULL.set(k, v); }
+function full(s) {
+  if (!s) return s;
+  const m = String(s).match(/^[^()]*?(드라마|미니시리즈|스페셜|다큐)\s*\(([^)]+)\)$/);
+  let t = dePunct(stripCh(m ? m[2] : String(s)));
+  if (nk(t) === "2뉴스외전") t = "2시 뉴스외전";
+  const hit = FULL.get(nk(t));
+  if (hit && !/\s/.test(t)) t = hit;
+  return t;
+}
+// 문장 대안: 풀네임 문장(text)이 한 줄에 안 들어가면 생성기가 줄임말 문장(alts)을 쓴다
+const qF = (s) => `'${full(s)}'`, qA = (s) => `'${short(nameFit(s, 12), 12)}'`;
+const nF = (s) => full(s), nA = (s) => short(nameFit(s, 9), 9);
+// 중간 대안: 풀네임이 12자 이하인 작품은 풀네임 그대로, 긴 작품만 줄임말
+const qM = (s) => ([...full(s)].length <= 12 ? qF(s) : qA(s)), nM = (s) => ([...full(s)].length <= 12 ? nF(s) : nA(s));
+const L = (fn) => { const a = fn(qF, nF), m = fn(qM, nM), b = fn(qA, nA); const alts = [...new Set([m, b])].filter((x) => x !== a); return alts.length ? { text: a, alts } : { text: a }; };
 // 시간대는 2시간 단위(2026-11-12 사용자 "히트맵 모두 2시간 단위로"), 00~02시 시작은 전날 24~26시, 02~06시는 맨 아래
 const BANDS = ["06-08", "08-10", "10-12", "12-14", "14-16", "16-18", "18-20", "20-22", "22-24", "24-26", "02-04", "04-06"];
 const RM = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ", "Ⅶ", "Ⅷ", "Ⅸ", "Ⅹ"];
@@ -104,8 +122,8 @@ function heatTable(grid, prog, hiC = HI) {
     if (v == null) return { t: "-", fill: "F7F7F9", color: "8A8C9A", center: true };
     const t = hi > lo ? (v - lo) / (hi - lo) : 0.5;
     // 칸 폭에 맞춘 자르기는 생성기가 실제 글리프 폭으로 한다
-    const pn = prog && prog[b] && prog[b][d] ? abbr(prog[b][d].replace(/\s+/g, " ")) : null;
-    return { t: f(v), t2: pn, fill: hex(LO.map((l, i) => l + (hiC[i] - l) * t)), color: t > 0.55 ? "FFFFFF" : "0D0D12", center: true };
+    const pr = prog && prog[b] && prog[b][d] ? prog[b][d].replace(/\s+/g, " ") : null;
+    return { t: f(v), t2: pr ? full(pr) : null, t2alt: pr ? abbr(pr) : null, fill: hex(LO.map((l, i) => l + (hiC[i] - l) * t)), color: t > 0.55 ? "FFFFFF" : "0D0D12", center: true };
   })]);
   return { type: "table", head: ["시간대", ...DOW], rows, equalCols: true, fit: true, align: ["center"], ...HEAT_TIGHT };
 }
@@ -157,7 +175,7 @@ function channelBlocks(c0, idx, nCh) {
   ].filter(([, g]) => c.top.some((p) => g(p) != null));
   B.push({ type: "caption", text: `${c.primaryLabel} 평균 시청률 상위 ${c.top.length}편(2026, 8회 이상 방영, 본·재방 합산)` });
   B.push({ type: "table", head: ["순위", "프로그램", ...cols.map(([h]) => h), "방영", "주력 시간대"],
-    rows: (() => { const sc = cols.map(([h, g]) => shadeCol(c.top.map(g), h === "IPTV" ? HI_I : HI)); return c.top.map((p, i) => [String(i + 1), nameFit(p.name, 13), ...sc.map((col) => col[i]), String(p.n), p.slot]); })(),
+    rows: (() => { const sc = cols.map(([h, g]) => shadeCol(c.top.map(g), h === "IPTV" ? HI_I : HI)); return c.top.map((p, i) => [String(i + 1), { t: full(p.name), alt: nameFit(p.name, 13) }, ...sc.map((col) => col[i]), String(p.n), p.slot]); })(),
     // 정렬: 순위 가운데, 프로그램 왼쪽, 시청률·방영 수 오른쪽, 시간대 가운데 — 긴 이름·시간대는 글자 축소(fit)
     // 시청률 열(2049·가구·IPTV)은 같은 폭(사용자 "2049와 가구 등이 한 표에 있을 때 셀 너비 동일")
     fit: true, sameWidth: cols.length > 1 ? [cols.map((_, i) => 2 + i)] : [], align: ["center", "left", ...cols.map(() => "right"), "right", "center"] });
@@ -166,7 +184,7 @@ function channelBlocks(c0, idx, nCh) {
   const pt = c.pattern, op = c.ownPattern, own = c.ownName;
   if (pt && op) {
     B.push({ type: "section", text: `Ⅲ. 편성 패턴 비교(${c.channel} vs ${own})` });
-    const nm = (p) => `${short(nameFit(p.lead.name, 10), 11)} 주 ${p.lead.perWeek}회`;
+    const nm = (p) => ({ t: `${full(p.lead.name)} 주 ${p.lead.perWeek}회(${p.lead.slots}개)`, alt: `${short(nameFit(p.lead.name, 10), 11)} 주 ${p.lead.perWeek}회(${p.lead.slots}개)` });
     const pcN = (v) => (v == null ? "-" : pc(v));
     B.push({ type: "table", head: ["편성 지표(2026)", c.channel, own], fit: true, sameWidth: [[1, 2]], align: ["center", "center", "center"], rows: [
       // 에피소드 수(종합 엑셀, 본방 기준)는 행을 늘리지 않고 같은 줄 괄호로(행을 늘리면 첫 채널 1쪽이 넘침)
@@ -175,7 +193,7 @@ function channelBlocks(c0, idx, nCh) {
       ["재방 비중(방영 시간)", pt.rerunShare == null ? "표기 없음" : pc(pt.rerunShare), op.rerunShare == null ? "표기 없음" : pc(op.rerunShare)],
       ["같은 작품 3회 이상 연속 편성", c.patternSrc === "nielsen" ? "닐슨 자료로 구분 불가" : pcN(pt.blockShare), pcN(op.blockShare)],
       ["평일 띠 편성(같은 시간대 주 4일+)", `${pt.strips}개`, `${op.strips}개`],
-      ["대표작 반복(노출 시간대)", `${nm(pt)}(${pt.lead.slots}개)`, `${nm(op)}(${op.lead.slots}개)`]] });
+      ["대표작 반복(노출 시간대)", nm(pt), nm(op)]] });
   }
 
   // Ⅳ. 히트맵(새 쪽)
@@ -190,7 +208,7 @@ function channelBlocks(c0, idx, nCh) {
 
   // Ⅴ. 편성 인사이트 — 편성 PD가 바로 읽을 수 있는 말로(2026-11-12 사용자 지시), 수치는 프로필 JSON 값 그대로
   B.push({ type: "section", text: "Ⅴ. 주요 편성 인사이트" });
-  const pk = c.peaks, q = (s) => `'${short(abbr(s), 12)}'`;
+  const pk = c.peaks;
   // 조사: 마지막 한글에 받침이 있으면 앞 것(을·이), 없으면 뒤 것(를·가) — 따옴표·괄호는 건너뜀
   // 숫자·영문 끝은 읽는 소리로(1 일·3 삼·6 육·7 칠·8 팔·0 영, L 엘·M 엠·N 엔·R 알 → 받침 있음)
   const josa = (w, a, b) => { const m = String(w).replace(/['")\s]+$/, ""); const last = m[m.length - 1] ?? ""; const ch = last.charCodeAt(0);
@@ -207,17 +225,16 @@ function channelBlocks(c0, idx, nCh) {
     if (!types.length) types.push("요일별 개별 편성");
     c._type = types.slice(0, 2).join("·");
     B.push({ type: "subhead", text: `${c.channel} 편성 전략 : **${c._type}**` });
-    const ln = q(pt.lead.name);
-    B.push({ type: "bullet", text: `대표작 ${ln}${josa(ln, "을", "를")} 주 ${pt.lead.perWeek}회, 요일·시간대 ${pt.lead.slots}곳에 반복 편성` });
+    B.push({ type: "bullet", ...L((q, n) => `대표작 ${q(pt.lead.name)}${josa(q(pt.lead.name), "을", "를")} 주 ${pt.lead.perWeek}회, 요일·시간대 ${pt.lead.slots}곳에 반복 편성`) });
     if (pt.lead.firstSlot) B.push({ type: "sub", text: `본방은 ${pt.lead.firstSlot}${pt.lead.rerunSlot ? `, 재방은 주로 ${pt.lead.rerunSlot}` : ""}` });
-    if (pt.primeWeekday || pt.primeWeekend) B.push({ type: "bullet", text: `밤 20~23시 승부작은 평일 ${pt.primeWeekday ? q(pt.primeWeekday) : "-"}, 주말 ${pt.primeWeekend ? q(pt.primeWeekend) : "-"}` });
-    if (pt.strips) B.push({ type: "bullet", text: `평일 같은 시간대 띠 편성 ${pt.strips}개(예 ${pt.stripTop.map((x) => `${x.band} ${q(x.name)}`).join(", ")})` });
+    if (pt.primeWeekday || pt.primeWeekend) B.push({ type: "bullet", ...L((q, n) => `밤 20~23시 승부작은 평일 ${pt.primeWeekday ? q(pt.primeWeekday) : "-"}, 주말 ${pt.primeWeekend ? q(pt.primeWeekend) : "-"}`) });
+    if (pt.strips) B.push({ type: "bullet", ...L((q, n) => `평일 같은 시간대 띠 편성 ${pt.strips}개(예 ${pt.stripTop.map((x) => `${x.band} ${q(x.name)}`).join(", ")})`) });
   }
   // 누적 시청률(방영 1회 시청률의 합)으로 본 채널 득점원 — 평균 상위(위 표)와 달리 많이 튼 작품의 기여까지 본다
   if (wb && wb.programs.length) {
     const tot = wb.programs.reduce((a, p) => a + (p.kpiCum || 0), 0);
     const tp = [...wb.programs].sort((a, b) => (b.kpiCum || 0) - (a.kpiCum || 0));
-    if (tot > 0) B.push({ type: "bullet", text: `누적 시청률(${wb.kpiSrc === "nielsen" ? "닐슨" : "IPTV"}) 기여 ${tp.slice(0, 3).map((p) => `${short(abbr(p.name), 9)} ${pc(p.kpiCum / tot)}`).join(" · ")}, 상위 5편 ${pc(tp.slice(0, 5).reduce((a, p) => a + p.kpiCum, 0) / tot)}` });
+    if (tot > 0) B.push({ type: "bullet", ...L((q, n) => `누적 시청률(${wb.kpiSrc === "nielsen" ? "닐슨" : "IPTV"}) 기여 ${tp.slice(0, 3).map((p) => `${n(p.name)} ${pc(p.kpiCum / tot)}`).join(" · ")}, 상위 5편 ${pc(tp.slice(0, 5).reduce((a, p) => a + p.kpiCum, 0) / tot)}`) });
   }
   if (c.bandVol?.length) B.push({ type: "bullet", text: `시청량이 몰린 시간대는 ${c.bandVol.map((b) => `${b.b} ${pc(b.share)}`).join(", ")}` });
   if (pk[0] && c.weekdayPrime != null && c.weekendPrime != null) {
@@ -231,14 +248,14 @@ function channelBlocks(c0, idx, nCh) {
     o.biggestGap.slice(0, 1).forEach((x) => B.push({ type: "bullet", text: `가장 크게 뒤지는 곳은 ${x.dow}요일 ${x.band}(${f(x.c)} vs ${o.own} ${f(x.o)})` }));
     if (o.ownAheadList?.length) B.push({ type: "sub", text: `${o.own}${josa(o.own, "이", "가")} 앞서는 곳(격차 큰 순): ${o.ownAheadList.join(", ")}` });
     // 맞대결 지점: 자사가 가장 강한 시간대에 상대는 무엇으로 얼마나 나오는가
-    if (o.ownPeak) { const p = o.ownPeak, w = p.c > p.o ? "상대가 더 높음" : "자사 우위"; B.push({ type: "bullet", text: `${o.own} 최강 시간대 ${p.dow}요일 ${p.band}(${f(p.o)})에 ${c.channel}${josa(c.channel, "은", "는")} ${p.prog ? q(p.prog) : "-"} ${f(p.c)}, ${w}` }); }
+    if (o.ownPeak) { const p = o.ownPeak, w = p.c > p.o ? "상대가 더 높음" : "자사 우위"; B.push({ type: "bullet", ...L((q, n) => `${o.own} 최강 시간대 ${p.dow}요일 ${p.band}(${f(p.o)})에 ${c.channel}${josa(c.channel, "은", "는")} ${p.prog ? q(p.prog) : "-"} ${f(p.c)}, ${w}`) }); }
     if (pt && op) {
       const diff = pt.top5 - op.top5 >= 0.1 ? `${c.channel}가 대표작에 더 몰아줌` : op.top5 - pt.top5 >= 0.1 ? `${own}가 대표작 의존이 더 큼` : "대표작 의존 정도는 비슷";
       B.push({ type: "bullet", text: `작품 수 ${pt.titles}편 vs ${op.titles}편, 상위 5편 시청량 ${pc(pt.top5)} vs ${pc(op.top5)} → ${diff}` });
     }
   }
   // 요약선: "어느 요일·시간대에 어떤 작품으로 강한 채널인지" + 편성 유형을 쉬운 말로
-  if (pk[0]) B.push({ type: "takeaway", text: `**${c.channel}**${josa(c.channel, "은", "는")} ${pk[0].dow}요일 ${pk[0].band} ${q(pk[0].prog)}${josa(q(pk[0].prog), "이", "가")} 가장 강함`,
+  if (pk[0]) B.push({ type: "takeaway", ...L((q, n) => `**${c.channel}**${josa(c.channel, "은", "는")} ${pk[0].dow}요일 ${pk[0].band} ${q(pk[0].prog)}${josa(q(pk[0].prog), "이", "가")} 가장 강함`),
     // 비중은 Ⅲ 편성 패턴 표와 같은 값(pattern.top5)을 써서 숫자가 어긋나지 않게
     note: `시청량의 ${pc(pt ? pt.top5 : c.top5Vol)}를 상위 5편이 만드는 ${c._type ?? "개별 편성"} 채널` });
 
@@ -258,12 +275,12 @@ function channelBlocks(c0, idx, nCh) {
     const dp = s.dayparts, dpTxt = Object.entries(dp).filter(([, v]) => v != null);
     const up = dpTxt.filter(([, v]) => v >= 1.15).map(([k, v]) => `${k} ${v}배`), dn = dpTxt.filter(([, v]) => v <= 0.87).map(([k, v]) => `${k} ${v}배`);
     if (up.length || dn.length) B.push({ type: "bullet", text: `채널 평균 대비로 보면 IPTV가 닐슨보다 ${up.length ? `${up.join("·")} 크게` : ""}${up.length && dn.length ? ", " : ""}${dn.length ? `${dn.join("·")} 작게` : ""} 잡음` });
-    s.iptvFav.slice(0, 1).forEach((x) => B.push({ type: "bullet", text: `IPTV에서 상대적으로 더 강한 시간대 ${x.cell}${x.prog ? `(${q(x.prog)})` : ""}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}` }));
-    s.nielsenFav.slice(0, 1).forEach((x) => B.push({ type: "bullet", text: `닐슨에서 상대적으로 더 강한 시간대 ${x.cell}${x.prog ? `(${q(x.prog)})` : ""}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}` }));
+    s.iptvFav.slice(0, 1).forEach((x) => B.push({ type: "bullet", ...L((q, n) => `IPTV에서 상대적으로 더 강한 시간대 ${x.cell}${x.prog ? `(${q(x.prog)})` : ""}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}`) }));
+    s.nielsenFav.slice(0, 1).forEach((x) => B.push({ type: "bullet", ...L((q, n) => `닐슨에서 상대적으로 더 강한 시간대 ${x.cell}${x.prog ? `(${q(x.prog)})` : ""}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}`) }));
     if (s.progN >= 5) {
       B.push({ type: "subhead", text: `작품별 강약 순서 일치도 : **${s.progAgree ?? "-"}(두 자료 8회 이상 ${s.progN}편)**` });
-      s.progIptvFav.forEach((x) => B.push({ type: "bullet", text: `IPTV에서 더 강한 작품 ${q(x.name)}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}` }));
-      s.progNielsenFav.forEach((x) => B.push({ type: "bullet", text: `닐슨에서 더 강한 작품 ${q(x.name)}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}` }));
+      s.progIptvFav.forEach((x) => B.push({ type: "bullet", ...L((q, n) => `IPTV에서 더 강한 작품 ${q(x.name)}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}`) }));
+      s.progNielsenFav.forEach((x) => B.push({ type: "bullet", ...L((q, n) => `닐슨에서 더 강한 작품 ${q(x.name)}: 지수 닐슨 ${x.nIdx} → IPTV ${x.iIdx}`) }));
     }
     if (s.nZero >= 0.03) B.push({ type: "bullet", text: `닐슨 방영 중 시청률 0 기록이 ${pc(s.nZero)}, 표본이 얇은 시간대는 IPTV로 함께 확인 필요` });
     // 편성 판단에 주는 시사점(규칙 기반)
@@ -287,18 +304,17 @@ function channelBlocks(c0, idx, nCh) {
     B.push({ type: "caption", text: `${c.channel}에서 가구 시청률이 높았던 작품 ${r.list.length}편(IPTV 가구, 2026, 8회 이상 방영)` });
     const col = shadeCol(r.list.map((x) => x.avg), HI_I);
     B.push({ type: "table", head: ["순위", "프로그램", "장르", "가구", "채널 평균 대비", "ONCE 대비", "ONCE 편성", "주력 시간대"],
-      rows: r.list.map((x, i) => [String(i + 1), nameFit(x.name, 13), x.genre, col[i], `${x.idxCh.toFixed(2)}배`, `${x.vsOnce.toFixed(1)}배`, x.once ? `${x.once.n}회·${f(x.once.avg)}` : "미편성", x.slot]),
+      rows: r.list.map((x, i) => [String(i + 1), { t: full(x.name), alt: nameFit(x.name, 13) }, x.genre, col[i], `${x.idxCh.toFixed(2)}배`, `${x.vsOnce.toFixed(1)}배`, x.once ? `${x.once.n}회·${f(x.once.avg)}` : "미편성", x.slot]),
       fit: true, sameWidth: [[4, 5, 6]], align: ["center", "left", "center", "right", "right", "right", "center", "center"] });
     B.push({ type: "note", text: `IPTV 가구 2026 평균: ${c.channel} ${f(r.chAvg)}, ONCE ${f(r.onceAvg)}, ONCE 대비 = 작품 평균÷ONCE 평균, ONCE 편성 = ONCE 방영 횟수·평균` });
     const notOn = r.list.filter((x) => !x.once), on = r.list.filter((x) => x.once);
-    const q2 = (s) => `'${short(abbr(s), 12)}'`;
     B.push({ type: "subhead", text: `ONCE가 참고할 점 : **${notOn.length ? `미편성 ${notOn.length}편, 편성 중 ${on.length}편` : "상위 작품 대부분 ONCE에도 편성"}**` });
-    if (notOn.length) B.push({ type: "bullet", text: `ONCE에 없는 작품 ${notOn.slice(0, 3).map((x) => q2(x.name)).join("·")} 등, ONCE 평균의 ${notOn[notOn.length - 1].vsOnce.toFixed(1)}~${notOn[0].vsOnce.toFixed(1)}배` });
+    if (notOn.length) B.push({ type: "bullet", ...L((q, n) => `ONCE에 없는 작품 ${notOn.slice(0, 3).map((x) => q(x.name)).join("·")} 등, ONCE 평균의 ${notOn[notOn.length - 1].vsOnce.toFixed(1)}~${notOn[0].vsOnce.toFixed(1)}배`) });
     const gm = new Map(); r.list.forEach((x) => gm.set(x.genre, (gm.get(x.genre) ?? 0) + 1));
     B.push({ type: "bullet", text: `상위 ${r.list.length}편 장르는 ${[...gm].sort((a, b) => b[1] - a[1]).map(([g, n]) => `${g} ${n}편`).join(", ")}` });
-    on.slice(0, 2).forEach((x) => B.push({ type: "bullet", text: `${q2(x.name)}: ONCE ${f(x.once.avg)}(${x.once.slot}) vs ${c.channel} ${f(x.avg)}(${x.slot}), ${x.avg > x.once.avg ? `${(x.avg / x.once.avg).toFixed(1)}배 → 시간대 재검토 여지` : "ONCE가 더 높음"}` }));
+    on.slice(0, 2).forEach((x) => B.push({ type: "bullet", ...L((q, n) => `${q(x.name)}: ONCE ${f(x.once.avg)}(${x.once.slot}) vs ${c.channel} ${f(x.avg)}(${x.slot}), ${x.avg > x.once.avg ? `${(x.avg / x.once.avg).toFixed(1)}배 → 시간대 재검토 여지` : "ONCE가 더 높음"}`) }));
     const heavy = r.list.filter((x) => x.n >= 100);
-    if (heavy.length) B.push({ type: "bullet", text: `${heavy.slice(0, 2).map((x) => `${q2(x.name)} ${x.n}회`).join(", ")}는 장기 반복 편성이라 시간대·반복 효과가 섞여 있음` });
+    if (heavy.length) B.push({ type: "bullet", ...L((q, n) => `${heavy.slice(0, 2).map((x) => `${q(x.name)} ${x.n}회`).join(", ")}는 장기 반복 편성이라 시간대·반복 효과가 섞여 있음`) });
     B.push({ type: "note", text: "참고용 비교: 채널 규모·시청 환경이 달라 그대로 옮겨 오면 같은 성과가 나온다고 보기는 어려움, 구매 검토 때 ONCE 시간대·타깃 적합도와 함께 확인" });
   }
 
@@ -350,16 +366,15 @@ function channelBlocks(c0, idx, nCh) {
       ["12주 이상 장기 편성 비중", pc(m.longShare, 1), pc(med("longShare"), 1), cmp(m.longShare, med("longShare"), false)],
       ["월평균 신작 수(2~10월)", m.newPerMonth == null ? "-" : `${m.newPerMonth}편`, med("newPerMonth") == null ? "-" : `${med("newPerMonth").toFixed(1)}편`, "-"]] });
     B.push({ type: "note", text: "시간대 규칙성 = 시간대마다 1위 작품이 나간 방송일 비중(방영 분 가중), 주의 = 중앙값보다 15% 이상 불리, 재방은 <재> 표기 기준" });
-    const q3 = (s) => `'${short(abbr(s), 12)}'`;
     const jos = (w, a, b) => { const mm = String(w).replace(/['")\s]+$/, ""), last = mm[mm.length - 1] ?? "", ch = last.charCodeAt(0); if (ch >= 0xac00 && ch <= 0xd7a3) return (ch - 0xac00) % 28 ? a : b; return /[013678LMNRlmnr]/.test(last) ? a : b; };
     B.push({ type: "subhead", text: "지적 : **자료로 확인된 점**" });
     const t1 = m.top[0], heavyRe = m.top.filter((x) => x.rerun >= 0.9);
-    if (m.top5 >= (med("top5") ?? 1) * 1.15) B.push({ type: "bullet", text: `소수 작품 반복: 상위 5편이 편성 시간의 ${pc(m.top5)}(다른 채널 중앙값 ${pc(med("top5"))}), 1위 ${q3(t1.name)}${jos(q3(t1.name), "은", "는")} ${pc(t1.minShare)}` });
+    if (m.top5 >= (med("top5") ?? 1) * 1.15) B.push({ type: "bullet", ...L((q, n) => `소수 작품 반복: 상위 5편이 편성 시간의 ${pc(m.top5)}(다른 채널 중앙값 ${pc(med("top5"))}), 1위 ${q(t1.name)}${jos(q(t1.name), "은", "는")} ${pc(t1.minShare)}`) });
     else B.push({ type: "bullet", text: `상위 5편 비중은 ${pc(m.top5)}로 다른 채널 중앙값 ${pc(med("top5"))}과 비슷한 수준(소수 작품 쏠림은 뚜렷하지 않음)` });
-    if (t1) B.push({ type: "bullet", text: `${q3(t1.name)}${jos(q3(t1.name), "은", "는")} 2026년 ${t1.weeks}주 동안 ${t1.airings}회(주 ${(t1.airings / t1.weeks).toFixed(0)}회), 재방 표기 ${pc(t1.rerun)}` });
+    if (t1) B.push({ type: "bullet", ...L((q, n) => `${q(t1.name)}${jos(q(t1.name), "은", "는")} 2026년 ${t1.weeks}주 동안 ${t1.airings}회(주 ${(t1.airings / t1.weeks).toFixed(0)}회), 재방 표기 ${pc(t1.rerun)}`) });
     if (heavyRe.length >= 2) B.push({ type: "bullet", text: `상위 5편 중 ${heavyRe.length}편이 방영의 90% 이상 재방 표기, 채널 전체 재방 ${pc(m.rerun)}` });
     const low = m.top.filter((x) => m.avg && x.avg < m.avg * 0.9);
-    if (low.length) B.push({ type: "bullet", text: `반복 상위 작품 중 ${low.slice(0, 3).map((x) => q3(x.name)).join("·")}${jos(q3(low[0].name), "은", "는")} 평균 시청률이 채널 평균(${f(m.avg)})보다 낮아, 반복이 시청 습관으로 이어졌는지 확인 필요` });
+    if (low.length) B.push({ type: "bullet", ...L((q, n) => `반복 상위 작품 중 ${low.slice(0, 3).map((x) => q(x.name)).join("·")}${jos(q(low[0].name), "은", "는")} 평균 시청률이 채널 평균(${f(m.avg)})보다 낮아, 반복이 시청 습관으로 이어졌는지 확인 필요`) });
     if (m.fixedCells === 0 || m.fixedCells < (med("fixedCells") ?? 0) * 0.85) B.push({ type: "bullet", text: `같은 요일·시간에 같은 작품이 절반 이상 방송일에 나가는 시간대가 ${pc(m.fixedCells)}(다른 채널 중앙값 ${pc(med("fixedCells"))}), 고정 편성 시간대가 부족` });
     if (gi.regular < (pg ?? 0) * 0.95) B.push({ type: "bullet", text: `시간대 안 1위 장르 비중 ${pc(gi.regular)}로 다른 채널 중앙값 ${pc(pg)}보다 낮아, 같은 시간에 같은 장르를 두는 규칙이 약함` });
     if (m.shortShare >= (med("shortShare") ?? 1) * 1.15) B.push({ type: "bullet", text: `3주 이하로 지나가는 단기 편성이 ${pc(m.shortShare)}(중앙값 ${pc(med("shortShare"))}), 시청 습관이 쌓이기 전에 교체` });
