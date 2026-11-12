@@ -56,7 +56,7 @@ const colsFor = (c: any): Col[] => {
     { key: "rank", head: "순위", band: "프로그램", w: [5, 6], align: "center", get: (p) => p.rank, fill: GRAY },
     { key: "name", head: "프로그램명", band: "프로그램", w: [14, 44], align: "left", get: (p) => p.name, fill: GRAY },
     { key: "n2049", head: "수도권 2049 평균", band: "닐슨(공식)", w: [15, 17], align: "right", fmt: "0.000", get: (p) => p.n2049.avg, fill: NAVY },
-    { key: "nHh", head: "가구 평균", band: "닐슨(공식)", w: [9, 11], align: "right", fmt: "0.000", get: (p) => p.nHh.avg, fill: NAVY },
+    { key: "nHh", head: "가구 평균", band: "닐슨(공식)", w: [9, 11], align: "right", fmt: c.group === "uhd" ? "0.0000" : "0.000", get: (p) => p.nHh.avg, fill: NAVY },
     { key: "s2049", head: "2049 점유율", band: "닐슨(공식)", w: [11, 13], align: "right", fmt: "0.0", get: (p) => p.n2049.share, fill: NAVY, optional: true },
     { key: "sHh", head: "가구 점유율", band: "닐슨(공식)", w: [11, 13], align: "right", fmt: "0.0", get: (p) => p.nHh.share, fill: NAVY, optional: true },
     ...(third ? [{ key: "n3", head: `${third} 평균`, band: "닐슨(공식)", w: [12, 18], align: "right" as const, fmt: "0.000", get: (p: any) => p.n3.avg, fill: NAVY, optional: true }] : []),
@@ -97,13 +97,13 @@ function channelSheet(c: any) {
   const cols = all.filter((k) => !k.optional || progs.some((p) => { const v = k.get(p); return v != null && v !== ""; }));
   const nC = cols.length;
   const H = c.head, S = c.summary;
-  const R = (t: any) => (t ? `${fmt(t.rating)}(${t.rank}위/${t.of})` : null);
+  const R = (t: any, d = 3) => (t ? `${fmt(t.rating, d)}(${t.rank}위/${t.of})` : null);
   // 행 1 — 채널명
   ws.mergeCells(1, 1, 1, nC);
   setCell(ws.getCell(1, 1), c.name, { bold: true, size: 16, color: "FFFFFFFF", fill: TAB_COLOR[c.sec] ?? GRAY });
   ws.getRow(1).height = 28;
   // 행 2 — 누적 시청률·순위(아는 것만)
-  const nl = [H.ytd.p2049 ? `수도권 2049 ${R(H.ytd.p2049)}` : null, H.ytd.household ? `유료방송가구 ${R(H.ytd.household)}` : null].filter(Boolean).join(" · ");
+  const nl = [H.ytd.p2049 ? `수도권 2049 ${R(H.ytd.p2049)}` : null, H.ytd.household ? `유료방송가구 ${R(H.ytd.household, c.group === "uhd" ? 4 : 3)}` : null].filter(Boolean).join(" · ");
   const ip = [H.iptvYtd.p2049 ? `2049 ${R(H.iptvYtd.p2049)}` : null, H.iptvYtd.household ? `가구 ${R(H.iptvYtd.household)}` : null].filter(Boolean).join(" · ");
   const kg = ktRank(c.snap); const gr = kg ? `닐슨 가구 ${kg.rank}위/${kg.of}` : "";
   const line2 = [nl ? `닐슨 연간 누적 ${nl}` : "닐슨 연간 누적 자료 없음", ip ? `IPTV 누적 ${ip}` : null, gr ? `채널군(${kg!.group}) 안 순위 ${gr}` : null].filter(Boolean).join("   |   ");
@@ -251,7 +251,7 @@ function summarySheet() {
       ];
       row.forEach((v, i) => {
         const cell = ws.getCell(r, i + 1);
-        setCell(cell, v === null ? "" : v, { align: i === 1 ? "left" : i === 0 || i === 3 || i === 5 ? "center" : "right", bold: !!c?.own, fmt: i === 2 || i === 4 ? "0.000" : i === 8 ? "0.0%" : i >= 6 ? "#,##0" : undefined });
+        setCell(cell, v === null ? "" : v, { align: i === 1 ? "left" : i === 0 || i === 3 || i === 5 ? "center" : "right", bold: !!c?.own, fmt: i === 2 ? (g.name.startsWith("기타(UHD)") ? "0.0000" : "0.000") : i === 4 ? "0.000" : i === 8 ? "0.0%" : i >= 6 ? "#,##0" : undefined });
         if (i === 1 && c) cell.font = { name: FONT, size: 10, bold: !!c.own, color: { argb: "FF1D4ED8" }, underline: true };
         if (c?.own) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEF2FF" } };
         cell.border = { bottom: { style: "hair", color: { argb: "FFD1D5DB" } } };
