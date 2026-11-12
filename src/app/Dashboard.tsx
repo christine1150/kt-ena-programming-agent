@@ -137,6 +137,7 @@ interface OriginalDailyItem {
   simulcast_program_name: string | null;
   simulcast_start_time: string | null;
   simulcast_rating: number | null;
+  simulcast_household_rating?: number | null;
   rerun_channel_code: string | null;
   rerun_program_name: string | null;
   rerun_start_time: string | null;
@@ -3962,8 +3963,9 @@ function ManualMinuteRatingChart({
         own: false,
         channel: c.channel_name,
         program,
-        rating: c.target_rating!.toFixed(2),
-        household: c.household_rating !== null && Number.isFinite(c.household_rating) ? c.household_rating.toFixed(2) : null,
+        // 자사 줄(1.155% (2.009))과 같은 자릿수로 맞춘다(2026-11-12 사용자 지시: SBS Plus도 ENA처럼 괄호 안에 가구 시청률)
+        rating: c.target_rating!.toFixed(3),
+        household: c.household_rating !== null && c.household_rating !== undefined && Number.isFinite(c.household_rating) ? c.household_rating.toFixed(3) : null,
         title: `${c.channel_name} '${program}' ${(c.start_time ?? "").slice(0, 5)} 2049 ${c.target_rating!.toFixed(2)}%${c.household_rating !== null ? ` (가구 ${c.household_rating.toFixed(2)}%)` : ""}`,
       };
     }),
@@ -4132,7 +4134,7 @@ function ManualMinuteRatingChart({
       {/* 사용자 지시(2026-10-28): 채널 로고·프로그램명·2049(가구) 범례 칩은 선 끝 라벨로 옮겼다(위 차트 오른쪽). */}
       {bands.length > 0 && (
         <p className="mt-1.5 text-[10.5px] text-zinc-400">
-          오른쪽 라벨: 2049 시청률 (가구 시청률) · {bands.some((c) => c.minutes && c.minutes.length >= 2) ? "얇은 선은 경쟁 채널의 분당 시청률(라벨의 %는 그 프로그램 평균)" : "흐린 선은 동시간대 경쟁 프로그램 평균"}
+          오른쪽 라벨: 2049 시청률 (가구 시청률, 타사는 방영 구간 분당 평균 기준) ·{bands.some((c) => c.minutes && c.minutes.length >= 2) ? "얇은 선은 경쟁 채널의 분당 시청률(라벨의 %는 그 프로그램 평균)" : "흐린 선은 동시간대 경쟁 프로그램 평균"}
         </p>
       )}
     </div>
@@ -4582,7 +4584,7 @@ function OriginalContentReportCard({
               // 직후재방도 같은 세션의 "직재방" 용어 통일 지시에 맞춰 라벨을 "직재방"으로 바꿨다.
               const secondKpi =
                 h.simulcast_rating !== null && h.simulcast_channel_code
-                  ? { labelPrefix: "동시방영", channelCode: h.simulcast_channel_code, rating: h.simulcast_rating, householdRating: null as number | null, time: h.simulcast_start_time, note: null as string | null }
+                  ? { labelPrefix: "동시방영", channelCode: h.simulcast_channel_code, rating: h.simulcast_rating, householdRating: (h.simulcast_household_rating ?? null) as number | null, time: h.simulcast_start_time, note: null as string | null }
                   : h.rerun_rating !== null && h.rerun_channel_code
                     ? {
                         labelPrefix: h.rerun_type ?? "직재방",
@@ -4653,7 +4655,8 @@ function OriginalContentReportCard({
                     body: (
                       <div className="grid gap-6">
                         <div className="min-w-0 space-y-3">
-                          {(insight.situationLine || insight.causeLine || insight.actionLine) && (
+                          {/* 정리된 리뷰 본문(pdDetails)이 있으면 같은 내용의 자동 현황·원인·액션은 카드 위에만 두고 여기서는 생략한다(중복 방지, 2026-11-12) */}
+                          {pdDetails.length === 0 && (insight.situationLine || insight.causeLine || insight.actionLine) && (
                             <div className="space-y-1.5 text-[13.5px] leading-relaxed text-zinc-700">
                               {insight.situationLine && <p><b className="mr-1.5 text-[11px] text-zinc-500">현황</b>{highlightChannelNames(insight.situationLine, channelColors)}</p>}
                               {insight.causeLine && <p><b className="mr-1.5 text-[11px] text-zinc-500">원인</b>{highlightChannelNames(insight.causeLine, channelColors)}</p>}
@@ -4663,8 +4666,29 @@ function OriginalContentReportCard({
                           {pdDetails.length > 0 ? (
                             pdDetails.map((block, i) => (
                               <div key={i} className="border-t border-zinc-200/70 pt-3">
-                                <p className="text-[11px] font-medium text-zinc-500">{block.label}</p>
-                                <p className="mt-0.5 text-[13.5px] leading-relaxed text-zinc-700">{highlightChannelNames(block.text, channelColors)}</p>
+                                {/* 사용자 지시(2026-11-12): "보기 쉽게" — 본문이 여러 줄("- " 불릿)이면 섹션 제목 + 불릿 목록으로, 한 줄이면 기존처럼 문단으로 그린다 */}
+                                {block.text.includes("\n") ? (
+                                  <>
+                                    <p className="text-[13px] font-semibold text-zinc-800">{block.label}</p>
+                                    <ul className="mt-1.5 space-y-1">
+                                      {block.text
+                                        .split("\n")
+                                        .map((line) => line.trim())
+                                        .filter(Boolean)
+                                        .map((line, li) => (
+                                          <li key={li} className="flex gap-2 text-[13.5px] leading-relaxed text-zinc-700">
+                                            <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-zinc-400" />
+                                            <span>{highlightChannelNames(line.replace(/^[-*·•]\s*/, ""), channelColors)}</span>
+                                          </li>
+                                        ))}
+                                    </ul>
+                                  </>
+                                ) : (
+                                  <>
+                                    <p className="text-[11px] font-medium text-zinc-500">{block.label}</p>
+                                    <p className="mt-0.5 text-[13.5px] leading-relaxed text-zinc-700">{highlightChannelNames(block.text, channelColors)}</p>
+                                  </>
+                                )}
                               </div>
                             ))
                           ) : (

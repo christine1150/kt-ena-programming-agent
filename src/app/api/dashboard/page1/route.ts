@@ -914,6 +914,37 @@ export async function GET(request: Request) {
       }
     }
 
+    // 사용자 지시(2026-11-12): 동시방송 채널(SBS Plus 등)도 자사처럼 2049 옆 괄호에 가구 시청률을 보인다 — 동시방송 프로그램의 같은 방송일·시작 시각 전국 유료가구 시청률을 ratings에서 그대로 읽는다(없으면 null).
+    const simulcastHouseholdByKey = new Map<string, number | null>();
+    {
+      const simRows = daily.filter((r) => r.simulcast_channel_code && r.simulcast_start_time);
+      if (simRows.length > 0) {
+        const { data: hhTarget } = await supabase.from("targets").select("id").eq("label", HOUSEHOLD_TARGET_LABEL).limit(1).maybeSingle();
+        if (hhTarget) {
+          await Promise.all(
+            simRows.map(async (r) => {
+              const chId = channelByCode.get(r.simulcast_channel_code!)?.id;
+              if (!chId) return;
+              const d = new Date(`${asOfDate}T00:00:00Z`);
+              if (r.expected_time < "02:00:00") d.setUTCDate(d.getUTCDate() - 1);
+              const { data } = await supabase
+                .from("ratings")
+                .select("rating")
+                .eq("channel_id", chId)
+                .eq("target_id", hhTarget.id)
+                .eq("source_type", "nielsen_daily")
+                .eq("broadcast_date", d.toISOString().slice(0, 10))
+                .eq("start_time", r.simulcast_start_time!)
+                .not("program_id", "is", null)
+                .limit(1)
+                .maybeSingle();
+              simulcastHouseholdByKey.set(`${r.broadcast_channel_code}__${r.matched_start_time}__${r.matched_program_name}`, data?.rating ?? null);
+            })
+          );
+        }
+      }
+    }
+
     const dailyWithOverlap = daily.map((row) => {
       const sameChannelOverlap = (overlapByChannel.get(row.broadcast_channel_code) ?? []).filter(
         (o) => o.our_start_time === row.matched_start_time && o.our_program_name === row.matched_program_name
@@ -925,6 +956,7 @@ export async function GET(request: Request) {
         competitor_name: c.competitor_name,
         competitor_program_name: c.program_name,
         competitor_start_time: c.start_time,
+        competitor_end_time: c.end_time,
         competitor_rating: c.rating,
         rating_gap: c.rating !== null && row.matched_rating !== null ? Math.round((c.rating - row.matched_rating) * 100000) / 100000 : null,
       }));
@@ -944,6 +976,9 @@ export async function GET(request: Request) {
         competitorHighlights: sortedHighlights,
         householdRank,
         rerun_household_rating: rerunHouseholdByKey.get(key) ?? null,
+        simulcast_household_rating: simulcastHouseholdByKey.get(key) ?? null,
+        // 같은 시간대 타사 프로그램의 가구 시청률(겹침 RPC의 전국 유료가구 값 그대로) — 분당 그래프 라벨의 괄호용
+        competitorHouseholds: householdOverlap.map((o) => ({ competitor_name: o.competitor_name, program_name: o.competitor_program_name, start_time: o.competitor_start_time, rating: o.competitor_rating })),
       };
     });
 
@@ -1286,7 +1321,7 @@ export async function GET(request: Request) {
       for (let from = 0; from < 20000; from += 1000) {
         const { data, error } = await supabase
           .from("program_minute_ratings")
-          .select("channel_name, minute_of_day, p2049_capital")
+          .select("channel_name, minute_of_day, p2049_capital, household_national")
           .eq("broadcast_date", asOfDate)
           .range(from, from + 999);
         if (error || !data) break;
@@ -1309,6 +1344,19 @@ export async function GET(request: Request) {
               simulcastProgram: row.simulcast_program_name,
               simulcastStart: row.simulcast_start_time,
               simulcastRating: row.simulcast_rating,
+              simulcastHouseholdRating: row.simulcast_household_rating,
+              otherCompetitors: row.competitorHighlights
+                .filter((o) => o.competitor_rating !== null)
+                .slice(0, 4)
+                .map((o) => ({
+                  channel_name: o.competitor_name,
+                  program_name: o.competitor_program_name,
+                  start_time: o.competitor_start_time,
+                  end_time: o.competitor_end_time ?? null,
+                  target_rating: o.competitor_rating,
+                  household_rating:
+                    row.competitorHouseholds.find((h) => h.competitor_name === o.competitor_name && h.program_name === o.competitor_program_name)?.rating ?? null,
+                })),
             })
           : null,
     }));
