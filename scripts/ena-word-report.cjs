@@ -14,7 +14,8 @@ const {
 } = require("docx");
 
 const SKILL = "C:/Users/sky tv/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/f9202597-b6b7-43cc-8152-f50de5910f85/b0046a59-6512-4a04-89c8-8c606a404801/skills/ena-word-report";
-const LOGO = path.join(SKILL, "assets", "ena-logo.jpg");
+// 머리글 로고는 kt ENA CI(검) — 2026-11-12 사용자 "ENA 로고 대신 이걸로 작게(높이 1cm 이하)"
+const LOGO = path.join(__dirname, "..", "채널 로고", "kt ENA CI (검).png");
 
 // ── 디자인 토큰 (tokens/*.css 및 파이썬 상수와 동일) ──────────────────────────
 const F_BLACK = "KT Flow Black", F_BOLD = "KT Flow Bold", F_MED = "KT Flow Medium", F_THIN = "KT Flow Thin";
@@ -30,8 +31,10 @@ let BULLET_FS = 11, SUB_FS = 10;
 
 let W = (7560000 - 2 * 597600) / 12700;                   // 인쇄 폭 ≈501.2pt (A4 21cm − 좌우 1.66cm), marginCm 이면 다시 계산
 const TABLE_L = T.textWidth("Ⅰ. ", F_BOLD, 13);            // ≈10.4pt — 섹션 제목 첫 한글 위치
-const LOGO_H = 20.0, LOGO_W = (138 / 60) * LOGO_H;         // 로고 실측 138×60 → 폭 46pt
-let TABLE_R = W - LOGO_W + 2.0 * (LOGO_H / 60);            // 로고 'E' 잉크 시작점
+const LOGO_H = 20.0, LOGO_W = (4066 / 1189) * LOGO_H;       // kt ENA CI 4066×1189 → 높이 20pt(0.7cm)·폭 68pt
+// 표 오른쪽 끝은 옛 ENA 로고(46pt) 기준 그대로 둔다 — 로고만 바꾸고 표 폭·줄바꿈은 바뀌지 않게
+const OLD_LOGO_INSET = (138 / 60) * 20.0 - 2.0 * (20.0 / 60);
+let TABLE_R = W - OLD_LOGO_INSET;
 let TABLE_W = TABLE_R - TABLE_L;                           // ≈445pt
 let PAGE_MARGIN = { left: 941, right: 941, top: 907, bottom: 941, header: 454, footer: 454 };
 const CELL_IND = 5.0;
@@ -413,7 +416,7 @@ async function build(data, out, auditOnly) {
     const m = Math.round(data.marginCm * 567);
     PAGE_MARGIN = { left: m, right: m, top: m, bottom: m, header: Math.min(227, m), footer: Math.min(227, m) };
     W = (11906 - 2 * m) / 20;
-    TABLE_R = W - LOGO_W + 2.0 * (LOGO_H / 60);
+    TABLE_R = W - OLD_LOGO_INSET;
     TABLE_W = TABLE_R - TABLE_L;
   }
   // lineSpacing: 본문·표 줄 간격 배수(기본 0.85, 사용자 "덜 빽빽하게")
@@ -504,7 +507,7 @@ async function build(data, out, auditOnly) {
             alignment: AlignmentType.RIGHT,
             spacing: { before: 0, after: 0, ...LN },
             // 로고도 같은 이유로 px 환산(스킬 원본은 폭 46pt·높이 20pt — 표 오른쪽 끝이 로고 'E'에 맞는다)
-            children: [new ImageRun({ data: logo, type: "jpg", transformation: { width: LOGO_W / 0.75, height: LOGO_H / 0.75 } })],
+            children: [new ImageRun({ data: logo, type: "png", transformation: { width: LOGO_W / 0.75, height: LOGO_H / 0.75 } })],
           })],
         }),
       },
