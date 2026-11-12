@@ -148,6 +148,20 @@ async function loadOwn(code: string): Promise<Map<string, Air[]>> {
   return out;
 }
 
+// skyUHD 수기 파일 회차(원본 프로그램명 "내 아이의 사생활 24회" → ratings.episode_subtitle "24회") — 작품별 방영한 서로 다른 회차 번호와 최신 번호
+const skyEp = new Map<string, { eps: Set<number>; max: number }>();
+{
+  const progs = await pages<any>(() => sb.from("programs").select("id,canonical_name").eq("channel_id", cid("SKYUHD")).order("id"));
+  const pn = new Map(progs.map((p) => [p.id as string, normalizeProgramKey(p.canonical_name as string)]));
+  const xs = await pages<any>(() => sb.from("ratings").select("program_id,episode_subtitle").eq("channel_id", cid("SKYUHD")).eq("source_type", "skyuhd").gte("broadcast_date", FROM).lte("broadcast_date", TO).not("episode_subtitle", "is", null).order("broadcast_date").order("start_time").order("id"));
+  for (const x of xs) {
+    const m = /(\d+)\s*회/.exec(String(x.episode_subtitle)); const k = pn.get(x.program_id);
+    if (!m || !k) continue;
+    const e = skyEp.get(k) ?? { eps: new Set<number>(), max: 0 }; e.eps.add(Number(m[1])); e.max = Math.max(e.max, Number(m[1])); skyEp.set(k, e);
+  }
+  console.log("skyUHD 회차 작품", skyEp.size);
+}
+
 console.log("IPTV 적재…");
 const ALL: Def[] = [...OWN, ...COMP];
 const iptv = new Map<string, Air[]>();
@@ -251,6 +265,10 @@ for (const d of ALL) {
       eps = bonDates.size; basis = "DB 본방";
       if (nvTotal && nv!.end && eps > nvTotal) { eps = nvTotal; basis = "DB 본방(네이버 총 회차로 상한)"; }
     }
+    // skyUHD: 수기 파일의 회차 번호가 있으면 그것으로(에피소드 = 방영한 서로 다른 회차 수, 최신 회차 = 가장 큰 번호)
+    let skyHit: { eps: Set<number>; max: number } | undefined;
+    if (d.own === "SKYUHD") { skyHit = skyEp.get(k); if (!skyHit) for (const [rk, v] of skyEp) if (remap.get(rk) === k) skyHit = v; }
+    if (skyHit) { eps = skyHit.eps.size; basis = "수기 파일 회차"; }
     const cnt = counters.get(k);
     const cum = cnt && tagged && bonDates.size ? cnt.seed + [...bonDates].filter((x) => x > cnt.date).length : null;
     const kpi = stat(KP.get(k) ?? []);
@@ -264,7 +282,7 @@ for (const d of ALL) {
     }
     programs.push({
       key: k, name, genre: genreMap.get(k) ?? "미분류", first: dates[0] ?? null, last: lastD ?? null,
-      episodes: eps, epBasis: basis, naverTotal: nvTotal, naverEnd: nv?.end ?? null, naverStatus: nv?.status ?? null, cumEpisode: cum,
+      episodes: eps, epBasis: basis, naverTotal: skyHit ? skyHit.max : nvTotal, naverEnd: nv?.end ?? null, naverStatus: nv?.status ?? null, cumEpisode: cum,
       slot: tagged ? slots(bon, 5, 2).join(" / ") : "",
       nAll: base.length, nBon: tagged ? base.length - re.length : null, nRe: tagged ? re.length : null, minutes: totalMin,
       n2049: stat(N2049.get(k) ?? []), nHh: stat(NHH.get(k) ?? []), n3: stat(N3.get(k) ?? []),
