@@ -4665,7 +4665,7 @@ function OriginalContentReportCard({
                           )}
                           {pdDetails.length > 0 ? (
                             pdDetails.map((block, i) => (
-                              <div key={i} className="border-t border-zinc-200/70 pt-3">
+                              <div key={i} className="border-t border-zinc-200/70 pt-3 first:border-t-0 first:pt-0">
                                 {/* 사용자 지시(2026-11-12): "보기 쉽게" — 본문이 여러 줄("- " 불릿)이면 섹션 제목 + 불릿 목록으로, 한 줄이면 기존처럼 문단으로 그린다 */}
                                 {block.text.includes("\n") ? (
                                   <>
