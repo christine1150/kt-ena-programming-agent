@@ -258,12 +258,6 @@ function ChannelTable({ entries, airing, selected, onSelect, simulcast, otherAir
                         <span className="mr-1 text-zinc-300" aria-hidden="true">└</span>
                         <span className="font-medium text-zinc-800">{name}</span>
                         <span className="ml-1.5 rounded bg-zinc-200/70 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">동시방송</span>
-                        {/* 같은 채널의 나머지 방송(재방 등)은 아래 '경쟁 채널 성과'에 따로 있어, 이 행의 횟수가 전체로 읽히지 않게 채널 전체 횟수를 함께 보인다(2026-11-06) */}
-                        {(() => {
-                          const rest = otherAirings.filter((c) => c.competitorName === name).reduce((m, c) => Math.max(m, c.airings), 0);
-                          // 한 줄로 이어 붙이면 첫 칸이 넓어져 표 오른쪽(방영횟수)이 잘리므로 아랫줄로 내린다
-                          return rest > 0 ? <span className="mt-0.5 block pl-4 text-[11px] text-zinc-500">이 채널 전체 {formatInt(sMain.airings + rest)}회 (나머지는 경쟁 채널 성과)</span> : null;
-                        })()}
                       </td>
                       {cols.map((c) => {
                         const r = rs.find((x) => x.targetLabel === c);
@@ -288,7 +282,7 @@ function ChannelTable({ entries, airing, selected, onSelect, simulcast, otherAir
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-[12px] text-zinc-500">{TABLE_NOTE}{simulcast.length > 0 ? " · 동시방송 행은 자사와 같은 날 같은 시각(±15분)에 함께 방송한 경쟁 채널의 그 방송분만 센 값(채널 평균은 그 채널의 하루 시청률 평균)" : ""}</p>
+      <p className="mt-1 text-[12px] text-zinc-500">{TABLE_NOTE}{simulcast.length > 0 ? " · 동시방송 행은 자사와 같은 날 같은 시각(±15분)에 함께 방송한 적이 있는 채널의 본방·재방 전체 성과이며, 위 방송 구분(전체·본방·본방 외) 선택이 그대로 적용됩니다(채널 평균은 그 채널의 하루 시청률 평균)" : ""}</p>
     </section>
   );
 }
@@ -549,7 +543,7 @@ function TrendSection({ row, simulcast = [] }: { row: ChannelRow; simulcast?: Co
     .filter((c) => c.targetLabel === (row.kpiGroup === "HH" ? "전국 유료가구" : "수도권 2049") && c.points && c.points.length > 0)
     .map((c, i) => {
       const by = new Map<string, number[]>();
-      for (const p of c.points ?? []) if (p.rating !== null) by.set(p.date, [...(by.get(p.date) ?? []), p.rating]);
+      for (const p of c.points ?? []) if (p.rating !== null && p.firstRun !== false) by.set(p.date, [...(by.get(p.date) ?? []), p.rating]);
       const values = pointDates.map((d) => {
         const v = by.get(d);
         return v ? v.reduce((x, y) => x + y, 0) / v.length : null;

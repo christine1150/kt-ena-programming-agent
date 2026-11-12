@@ -311,6 +311,7 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
   const simWith = new Map<string, Map<string, number>>();
   const seen = new Set<string>();
   const by = new Map<string, WorkAiring[]>();
+  const kept: { name: string; target: string; w: WorkAiring }[] = [];
   for (const r of raw) {
     const name = String(r.competitor_name ?? "");
     const pname = String(r.program_name ?? "");
@@ -323,18 +324,20 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
     const hits = mi === null ? [] : ownAirs.filter((o) => o.date === String(r.broadcast_date) && Math.abs(o.minute - mi) <= SIMULCAST_TOLERANCE_MIN);
     // 사용자 지시(2026-10-28, 결이 다른 전쟁사): 표시 없는 MBN 방영이 ENA 본방과 비슷한 시각(15분 이내)이면 MBN 본방으로 본다. 표시(<본>·<재>)가 있으면 그대로 둔다.
     const firstRun = tagged ?? (hits.some((h) => h.firstRun === true) ? true : null);
-    if (!matchesAiringFilter(firstRun, airing)) continue;
+    // 동시방송 채널 판정은 방송 구분 필터와 무관하게 한다(본방 외를 골라도 같은 채널이 자사 표 안에 머물도록, 사용자 지시 2026-11-12)
     const sim = firstRun !== false && hits.length > 0; // 동시방송은 생방송끼리 — 재방(<재>)은 우연히 시각이 겹쳐도 제외
     if (sim) {
       const cnt = simWith.get(name) ?? new Map<string, number>();
       for (const code of new Set(hits.map((h) => h.code))) cnt.set(code, (cnt.get(code) ?? 0) + 1);
       simWith.set(name, cnt);
     }
-    const gk = `${name}|${r.target_label}|${sim ? "S" : "N"}`;
-    by.set(gk, [
-      ...(by.get(gk) ?? []),
-      { programId: name, date: String(r.broadcast_date), startTime: (r.start_time as string | null) ?? null, endTime: null, rating: r.rating === null || r.rating === undefined ? null : Number(r.rating), share: r.share === null || r.share === undefined ? null : Number(r.share), firstRun, episode: null },
-    ]);
+    if (!matchesAiringFilter(firstRun, airing)) continue;
+    kept.push({ name, target: String(r.target_label), w: { programId: name, date: String(r.broadcast_date), startTime: (r.start_time as string | null) ?? null, endTime: null, rating: r.rating === null || r.rating === undefined ? null : Number(r.rating), share: r.share === null || r.share === undefined ? null : Number(r.share), firstRun, episode: null } });
+  }
+  // 동시방송 채널은 본방·재방을 합쳐 한 행으로(자사 표 안에서 채널 전체 성과) — 동시방송이 한 번도 없는 채널만 경쟁 채널 성과로 간다(사용자 지시 2026-11-12)
+  for (const k of kept) {
+    const gk = `${k.name}|${k.target}|${simWith.has(k.name) ? "S" : "N"}`;
+    by.set(gk, [...(by.get(gk) ?? []), k.w]);
   }
   if (by.size === 0) return [];
   const names = [...new Set([...by.keys()].map((k) => k.split("|")[0]))];
