@@ -945,6 +945,40 @@ export async function GET(request: Request) {
       }
     }
 
+    // 사용자 지시(2026-11-12): 외부 경쟁채널(SBS Plus 등)의 가구 시청률은 닐슨 경쟁채널시청률 시트의 '유료방송가구' 열에 있고,
+    // competitor_program_target_ratings(3개 타깃 전체 저장)에서 읽는다. competitor_program_ratings는 2049만 있어 가구가 비어 보였다.
+    // 키: 경쟁채널명|방송일|시작시각. 방송일은 SQL의 effective_date와 같은 규칙(기대 편성시각이 02시 전이면 하루 전).
+    const extHouseholdByKey = new Map<string, number>();
+    {
+      const prevDay = new Date(`${asOfDate}T00:00:00Z`);
+      prevDay.setUTCDate(prevDay.getUTCDate() - 1);
+      const dates = [asOfDate, prevDay.toISOString().slice(0, 10)];
+      try {
+        for (const date of dates) {
+          for (let from = 0; from < 20000; from += 1000) {
+            const { data, error } = await supabase
+              .from("competitor_program_target_ratings")
+              .select("competitor_name, broadcast_date, start_time, rating")
+              .eq("broadcast_date", date)
+              .eq("target_label", "유료방송가구")
+              .range(from, from + 999);
+            if (error || !data) break;
+            for (const r of data as { competitor_name: string; broadcast_date: string; start_time: string; rating: number | null }[]) {
+              if (r.rating !== null) extHouseholdByKey.set(`${r.competitor_name}|${r.broadcast_date}|${r.start_time}`, r.rating);
+            }
+            if (data.length < 1000) break;
+          }
+        }
+      } catch {
+        extHouseholdByKey.clear();
+      }
+    }
+    const effectiveDateOf = (expectedTime: string) => {
+      const d = new Date(`${asOfDate}T00:00:00Z`);
+      if (expectedTime < "02:00:00") d.setUTCDate(d.getUTCDate() - 1);
+      return d.toISOString().slice(0, 10);
+    };
+
     const dailyWithOverlap = daily.map((row) => {
       const sameChannelOverlap = (overlapByChannel.get(row.broadcast_channel_code) ?? []).filter(
         (o) => o.our_start_time === row.matched_start_time && o.our_program_name === row.matched_program_name
@@ -976,11 +1010,17 @@ export async function GET(request: Request) {
         competitorHighlights: sortedHighlights,
         householdRank,
         rerun_household_rating: rerunHouseholdByKey.get(key) ?? null,
-        // 임시(사용자 지시 2026-11-12 "그냥 오늘만 써"): 11/11 SBS Plus 나는SOLO 공식 가구 시청률 1.87846 — DB에 없어 이 날짜만 직접 지정한다. 입력 칸이 생기면 제거.
+        // 동시방송 채널 가구: 내부 채널은 ratings, 외부 경쟁채널(SBS Plus 등)은 경쟁채널 시트의 유료방송가구 열(위 extHouseholdByKey)
         simulcast_household_rating:
-          simulcastHouseholdByKey.get(key) ?? (asOfDate === "2026-11-11" && row.simulcast_channel_code === "SBS Plus" ? 1.87846 : null),
-        // 같은 시간대 타사 프로그램의 가구 시청률(겹침 RPC의 전국 유료가구 값 그대로) — 분당 그래프 라벨의 괄호용
-        competitorHouseholds: householdOverlap.map((o) => ({ competitor_name: o.competitor_name, program_name: o.competitor_program_name, start_time: o.competitor_start_time, rating: o.competitor_rating })),
+          simulcastHouseholdByKey.get(key) ??
+          (row.simulcast_channel_code && row.simulcast_start_time ? (extHouseholdByKey.get(`${row.simulcast_channel_code}|${effectiveDateOf(row.expected_time)}|${row.simulcast_start_time}`) ?? null) : null),
+        // 같은 시간대 타사 프로그램의 가구 시청률 — 경쟁채널 시트 값 우선, 없으면 겹침 RPC의 전국 유료가구 값(분당 그래프 라벨의 괄호용)
+        competitorHouseholds: [...sortedHighlights].flatMap((o) => {
+          const fromSheet = extHouseholdByKey.get(`${o.competitor_name}|${effectiveDateOf(row.expected_time)}|${o.competitor_start_time}`);
+          const fromOverlap = householdOverlap.find((h) => h.competitor_name === o.competitor_name && h.competitor_program_name === o.competitor_program_name)?.competitor_rating ?? null;
+          const rating = fromSheet ?? fromOverlap;
+          return rating === null ? [] : [{ competitor_name: o.competitor_name, program_name: o.competitor_program_name, start_time: o.competitor_start_time, rating }];
+        }),
       };
     });
 
