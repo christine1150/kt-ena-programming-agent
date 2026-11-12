@@ -976,7 +976,9 @@ export async function GET(request: Request) {
         competitorHighlights: sortedHighlights,
         householdRank,
         rerun_household_rating: rerunHouseholdByKey.get(key) ?? null,
-        simulcast_household_rating: simulcastHouseholdByKey.get(key) ?? null,
+        // 임시(사용자 지시 2026-11-12 "그냥 오늘만 써"): 11/11 SBS Plus 나는SOLO 공식 가구 시청률 1.87846 — DB에 없어 이 날짜만 직접 지정한다. 입력 칸이 생기면 제거.
+        simulcast_household_rating:
+          simulcastHouseholdByKey.get(key) ?? (asOfDate === "2026-11-11" && row.simulcast_channel_code === "SBS Plus" ? 1.87846 : null),
         // 같은 시간대 타사 프로그램의 가구 시청률(겹침 RPC의 전국 유료가구 값 그대로) — 분당 그래프 라벨의 괄호용
         competitorHouseholds: householdOverlap.map((o) => ({ competitor_name: o.competitor_name, program_name: o.competitor_program_name, start_time: o.competitor_start_time, rating: o.competitor_rating })),
       };
