@@ -55,7 +55,7 @@ const colsFor = (c: any): Col[] => {
   return [
     { key: "rank", head: "순위", band: "프로그램", w: [5, 6], align: "center", get: (p) => p.rank, fill: GRAY },
     { key: "name", head: "프로그램명", band: "프로그램", w: [14, 44], align: "left", get: (p) => p.name, fill: GRAY },
-    { key: "n2049", head: "수도권 2049 평균", band: "닐슨(공식)", w: [15, 17], align: "right", fmt: "0.000", get: (p) => p.n2049.avg, fill: NAVY },
+    { key: "n2049", head: "수2049 평균", band: "닐슨(공식)", w: [11, 13], align: "right", fmt: "0.000", get: (p) => p.n2049.avg, fill: NAVY },
     { key: "nHh", head: "가구 평균", band: "닐슨(공식)", w: [9, 11], align: "right", fmt: c.group === "uhd" ? "0.0000" : "0.000", get: (p) => p.nHh.avg, fill: NAVY },
     { key: "s2049", head: "2049 점유율", band: "닐슨(공식)", w: [11, 13], align: "right", fmt: "0.0", get: (p) => p.n2049.share, fill: NAVY, optional: true },
     { key: "sHh", head: "가구 점유율", band: "닐슨(공식)", w: [11, 13], align: "right", fmt: "0.0", get: (p) => p.nHh.share, fill: NAVY, optional: true },
@@ -64,7 +64,7 @@ const colsFor = (c: any): Col[] => {
     { key: "nAll", head: "방영 횟수", band: "방영", w: [9, 10], align: "right", fmt: "#,##0", get: (p) => p.nAll, fill: GRAY },
     { key: "nBon", head: "본방", band: "방영", w: [6, 8], align: "right", fmt: "#,##0", get: (p) => p.nBon, fill: GRAY },
     { key: "nRe", head: "재방", band: "방영", w: [6, 8], align: "right", fmt: "#,##0", get: (p) => p.nRe, fill: GRAY },
-    { key: "i2049", head: "수도권 2049 평균", band: "IPTV(보조)", w: [15, 17], align: "right", fmt: "0.000", get: (p) => p.i2049.avg, fill: MINT },
+    { key: "i2049", head: "수2049 평균", band: "IPTV(보조)", w: [11, 13], align: "right", fmt: "0.000", get: (p) => p.i2049.avg, fill: MINT },
     { key: "iHh", head: "가구 평균", band: "IPTV(보조)", w: [9, 11], align: "right", fmt: "0.000", get: (p) => p.iHh.avg, fill: MINT },
     { key: "reach", head: "평균 도달률(%)", band: "IPTV(보조)", w: [14, 15], align: "right", fmt: "0.00", get: (p) => p.reach, fill: MINT, optional: true },
     { key: "eps", head: "올해 에피소드", band: "회차", w: [12, 13], align: "right", fmt: "#,##0", get: (p) => p.episodes, fill: GRAY },
@@ -111,7 +111,7 @@ function channelSheet(c: any) {
   setCell(ws.getCell(2, 1), line2, { size: 11, fill: LIGHT });
   // 행 3 — 방영 요약
   const bon = S.bonMinShare == null ? "본방 구분 불가(재방 표기 없음)" : `본방 비율 ${pct(S.bonMinShare)}`;
-  const line3 = [`2026-01-01~11-10 방영 타이틀 ${S.titles}개${S.titlesBon != null ? `(본방 ${S.titlesBon}개)` : ""}`, `에피소드 ${S.episodes.toLocaleString()}회`, S.bonSlots.length ? `주요 본방 시간 ${S.bonSlots.join(" / ")}` : null, bon].filter(Boolean).join("   |   ");
+  const line3 = [`2026-01-01~11-10 방영 타이틀 ${S.titles}개${S.titlesBon != null ? `(본방 ${S.titlesBon}개)` : ""}`, `에피소드 ${S.episodes.toLocaleString()}회`, S.bonSlots.length ? `주요 본방 시간 ${S.bonSlots.join(" / ")}` : null, bon].filter(Boolean).join("   |   ") + (c.manualNielsen ? "   |   닐슨 공식 파일 없음 — 수기 업로드 파일의 가구 시청률 기준(닐슨 열)" : "");
   ws.mergeCells(3, 1, 3, nC);
   setCell(ws.getCell(3, 1), line3, { size: 11, fill: LIGHT });
   // 행 5~ — 장르별 요약(프로그램명 열부터)

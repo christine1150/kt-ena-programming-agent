@@ -133,6 +133,13 @@ async function loadOwn(code: string): Promise<Map<string, Air[]>> {
   const progs = await pages<any>(() => sb.from("programs").select("id,canonical_name").eq("channel_id", cid(code)).order("id"));
   const pm = new Map(progs.map((p) => [p.id as string, p.canonical_name as string]));
   const out = new Map<string, Air[]>();
+  // skyUHD는 닐슨 공식 파일이 없어 수기 업로드 파일(source_type=skyuhd, 가구 시청률, target_id 없음)을 가구 값으로 쓴다 — 시청률이 입력된(null 아닌) 행만
+  if (code === "SKYUHD") {
+    const xs = await pages<any>(() => sb.from("ratings").select("id,broadcast_date,start_time,end_time,rating,share,program_id,target_id,channel_id,is_first_run,episode_number").eq("channel_id", cid(code)).eq("source_type", "skyuhd")
+      .not("rating", "is", null).not("program_id", "is", null).gte("broadcast_date", FROM).lte("broadcast_date", TO).order("broadcast_date").order("start_time").order("id"));
+    out.set("household", mergeSplitRatingRows(xs).filter((x) => x.end_time && pm.has(x.program_id)).map((x) => toAir(x.broadcast_date, x.start_time, x.end_time, Number(x.rating), null, pm.get(x.program_id)!, null)).filter((a): a is Air => !!a));
+    return out;
+  }
   for (const [label, tl] of [["수도권 2049", "p2049"], ["전국 유료가구", "household"]] as const) {
     const xs = await pages<any>(() => sb.from("ratings").select("id,broadcast_date,start_time,end_time,rating,share,program_id,target_id,channel_id,is_first_run,episode_number").eq("channel_id", cid(code)).eq("target_id", tid(label)).eq("source_type", "nielsen_daily")
       .not("program_id", "is", null).not("start_time", "is", null).gte("broadcast_date", FROM).lte("broadcast_date", TO).order("broadcast_date").order("start_time").order("id"));
@@ -153,7 +160,7 @@ console.log("닐슨 적재…");
 const nielsen = new Map<string, Map<string, Air[]>>();
 {
   let done = 0;
-  await pool(ALL.filter((d) => d.own || d.comp), 4, async (d) => { nielsen.set(d.name, d.own ? (d.own === "SKYUHD" ? new Map() : await loadOwn(d.own)) : await loadComp(d.comp!)); if (++done % 8 === 0) console.log(` 닐슨 ${done}`); });
+  await pool(ALL.filter((d) => d.own || d.comp), 4, async (d) => { nielsen.set(d.name, d.own ? await loadOwn(d.own) : await loadComp(d.comp!)); if (++done % 8 === 0) console.log(` 닐슨 ${done}`); });
 }
 const genreMap = new Map<string, string>();
 for (const r of await pages<{ program_key: string; genre: string }>(() => sb.from("iptv_program_genre").select("program_key,genre").order("program_key"))) genreMap.set(normalizeProgramKey(r.program_key), r.genre);
@@ -286,7 +293,7 @@ for (const d of ALL) {
   const genreSummary = [...gs].map(([genre, g]) => ({ genre, titles: g.titles, episodes: g.eps, minShare: r4(g.min / Math.max(1, baseTotMin), 4) })).sort((a, b) => (b.minShare ?? 0) - (a.minShare ?? 0));
   const cov = (rows: Air[]) => rows.length ? { rows: rows.length, months: months(rows), from: rows.reduce((m, a) => (a.d < m ? a.d : m), "9"), to: rows.reduce((m, a) => (a.d > m ? a.d : m), "0") } : null;
   result.push({
-    name: d.name, snap: d.snap, sec: d.sec, group: d.group, own: !!d.own, focus: d.focus, kpiSrc, kpiLabel: `${kpiSrc === "nielsen" ? "닐슨" : "IPTV"} ${d.focus === "p2049" ? "수도권 2049" : kpiSrc === "nielsen" ? "유료방송가구" : "가구"}`,
+    name: d.name, snap: d.snap, manualNielsen: d.own === "SKYUHD", sec: d.sec, group: d.group, own: !!d.own, focus: d.focus, kpiSrc, kpiLabel: `${kpiSrc === "nielsen" ? "닐슨" : "IPTV"} ${d.focus === "p2049" ? "수도권 2049" : kpiSrc === "nielsen" ? "유료방송가구" : "가구"}`,
     thirdLabel: third, tagged, baseSrc,
     head: { ytd, iptvYtd: iy, genreRank, snapRank: ytd[d.focus]?.rank ?? null },
     summary: { titles, titlesBon, episodes: epsTotal, bonMinShare: tagged ? r4(bonMin / Math.max(1, baseTotMin), 4) : null, bonSlots: tagged ? slots(bonRows, 30, 3) : [], totalMin: baseTotMin, bonMin: tagged ? bonMin : null },
