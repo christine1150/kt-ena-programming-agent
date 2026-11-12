@@ -194,12 +194,12 @@ function measureLine(text, fam, size) {
   return w;
 }
 
-function cellParas(text, fam, size, alignment, color, keepNext = false) {
+function cellParas(text, fam, size, alignment, color, keepNext = false, line = CELL_LINE) {
   return String(text).split("\n").map((ln) => new Paragraph({
     children: emit(ln, fam, size, color || INK, color || INK, fam),   // 표 안에서는 **강조**도 굵어지지 않음
     alignment,
     keepNext,   // 짧은 표는 행끼리 붙여 머리글만 쪽 끝에 홀로 남지 않게 한다(2026-11-11)
-    spacing: { before: tw(CELL_PARA), after: tw(CELL_PARA), line: Math.round(CELL_LINE * 240), lineRule: LineRuleType.AUTO },
+    spacing: { before: tw(CELL_PARA), after: tw(CELL_PARA), line: Math.round(line * 240), lineRule: LineRuleType.AUTO },
   }));
 }
 
@@ -236,7 +236,9 @@ function tableBlocks(head, rows, opts = {}) {
   // sameWidth: [[열번호…], …] 묶음마다 같은 폭(평균)으로 — 2049·가구처럼 나란히 비교하는 열(2026-11-12)
   for (const g of opts.sameWidth || []) { const avg = g.reduce((a, i) => a + widths[i], 0) / g.length; g.forEach((i) => (widths[i] = avg)); }
 
-  const margins = { top: tw(CELL_TB), bottom: tw(CELL_TB), left: tw(CELL_IND), right: tw(CELL_IND) };
+  // opts.fs/line/tb: 12행 히트맵처럼 촘촘해야 하는 표만 칸 글자 크기·줄 간격·위아래 여백을 따로(2026-11-12 시간대 2시간 단위)
+  const BASE_FS = opts.fs || TABLE_FS, LINE_X = opts.line || CELL_LINE, TB_X = opts.tb != null ? opts.tb : CELL_TB;
+  const margins = { top: tw(TB_X), bottom: tw(TB_X), left: tw(CELL_IND), right: tw(CELL_IND) };
   // 12행 이하 표는 통째로 한 쪽에 두고(마지막 행 빼고 keepNext), 더 긴 표는 머리글과 첫 행만 붙인다
   const keepAll = rows.length <= 12;
   const mkCell = (txt, fam, align, i, header, color, keep = false) => {
@@ -247,15 +249,15 @@ function tableBlocks(head, rows, opts = {}) {
     const AL = { left: AlignmentType.LEFT, center: AlignmentType.CENTER, right: AlignmentType.RIGHT };
     const al = obj && obj.center ? AlignmentType.CENTER : !header && opts.align && AL[opts.align[i]] ? AL[opts.align[i]] : align;
     // opts.fit: 칸에 한 줄로 안 들어가면 글자를 0.5pt씩 줄여 맞춘다(최소 본문-2pt), 그래도 넘치면 줄바꿈
-    let fs = TABLE_FS;
+    let fs = BASE_FS;
     const raw = obj ? obj.t : txt;
     if (opts.fit && raw != null && String(raw) !== "" && !String(raw).includes("\n")) {
       const room = (widths[i] - 2 * CELL_IND - 1) * 0.92;   // 8% 여유: 다른 기기·글꼴 렌더 차이로 줄이 넘치지 않게(2026-11-12)
-      while (fs > TABLE_FS - 2 && measureLine(String(raw), fam, fs) > room) fs -= 0.5;
+      while (fs > BASE_FS - 2 && measureLine(String(raw), fam, fs) > room) fs -= 0.5;
     }
     // ENA_LOG_TRUNC: 표 본문 칸에서 두 줄 이상으로 넘치는 글을 알려 준다(줄임말 사전 만들기용)
     if (process.env.ENA_LOG_TRUNC && raw != null && String(raw) !== "" && measureLine(String(raw), fam, fs) > widths[i] - 2 * CELL_IND) console.log("줄넘김\t" + (header ? "[머리글] " : "") + raw + `\t${fs}pt/${widths[i].toFixed(0)}`);
-    const kids = cellParas(obj ? obj.t : txt, fam, fs, al, (obj && obj.color) || color, keep);
+    const kids = cellParas(obj ? obj.t : txt, fam, fs, al, (obj && obj.color) || color, keep, LINE_X);
     if (obj && obj.t2) {
       // 실제 글리프 폭으로 칸 폭에 한 줄로 맞춰 자른다(넘치면 … 붙임)
       // 넘치면 먼저 글자 크기를 0.5pt씩 줄이고(최소 4.5pt, 2026-11-11 사용자 "너무 크면 폰트 크기를 줄여줘"), 그래도 넘칠 때만 자른다
@@ -264,7 +266,7 @@ function tableBlocks(head, rows, opts = {}) {
       let s = String(obj.t2);
       while (pt > 4.5 && T.textWidth(s, F_THIN, pt) > room) pt -= 0.5;
       if (T.textWidth(s, F_THIN, pt) > room) { if (process.env.ENA_LOG_TRUNC) console.log("잘림\t" + s); while (s.length > 1 && T.textWidth(s + "…", F_THIN, pt) > room) s = s.slice(0, -1); s = s.trimEnd() + "…"; }
-      kids.push(...cellParas(s, F_THIN, pt, al, obj.color || color, keep));
+      kids.push(...cellParas(s, F_THIN, pt, al, obj.color || color, keep, LINE_X));
     }
     return new TableCell({
       children: kids,

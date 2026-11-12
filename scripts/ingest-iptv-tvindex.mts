@@ -20,7 +20,7 @@ if (!root) {
 
 const OWN = new Set(["ENA", "ENA Drama", "ENA Play", "ENA Story", "OLIFE", "ONCE", "skyUHD"]);
 const UHD = new Set(["Asia UHD", "SBS NEX", "UHD Dream", "UMAX", "UXN"]);
-const NAME_FIX: Record<string, string> = { "E 채널": "E채널", "ㅡMBC every1": "MBC every1", "TV조선": "TV CHOSUN" };
+const NAME_FIX: Record<string, string> = { "E 채널": "E채널", "ㅡMBC every1": "MBC every1", "TV조선": "TV CHOSUN", "더라이프": "theLIFE", "MBC드라마넷": "MBC 드라마넷", "하이라이트TV": "하이라이트 TV" };
 // 채널 단위 "시청 분석" 메뉴는 2행 머리("ENA PLAY > 시청 분석 > …")의 채널 표기를 알려진 이름으로 맞춘다
 const KNOWN = [...OWN, ...UHD];
 const canonChannel = (s: string) => KNOWN.find((k) => k.toUpperCase() === s.trim().toUpperCase()) ?? NAME_FIX[s.trim()] ?? s.trim();
