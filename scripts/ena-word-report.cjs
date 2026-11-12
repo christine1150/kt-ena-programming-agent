@@ -21,18 +21,19 @@ const F_BLACK = "KT Flow Black", F_BOLD = "KT Flow Bold", F_MED = "KT Flow Mediu
 const INK = "0D0D12", INK2 = "54566A", INK3 = "8A8C9A";
 const ACCENT = "00B0F0";          // 요약선(takeaway) 전용 강조색
 const FILL_HEADER = "F2F2F4", RULE = "C3C5CF";
-const LINE = 0.85, GLOSS = 8;
+let LINE = 0.85; const GLOSS = 8;   // 내용 JSON 의 lineSpacing 으로 바꿀 수 있다(2026-11-12)
 const STEP = 15.0, HANG = 12.0, SAFE = 5.0, TAKE_BASE = 2 * STEP;
 const ONE_LINE = 14.0, TITLE_GAP = 5.0, APP_GAP = 1.0;
 let TABLE_FS = 11.0; // 내용 JSON 의 bodyPt 로 바꿀 수 있다(2026-11-11: 본문 10pt 요청)
-const CELL_TB = 1.0, CELL_PARA = 0.0, CELL_LINE = 0.85;
+const CELL_TB = 1.0, CELL_PARA = 0.0; let CELL_LINE = 0.85;
 let BULLET_FS = 11, SUB_FS = 10;
 
-const W = (7560000 - 2 * 597600) / 12700;                 // 인쇄 폭 ≈501.2pt (A4 21cm − 좌우 1.66cm)
+let W = (7560000 - 2 * 597600) / 12700;                   // 인쇄 폭 ≈501.2pt (A4 21cm − 좌우 1.66cm), marginCm 이면 다시 계산
 const TABLE_L = T.textWidth("Ⅰ. ", F_BOLD, 13);            // ≈10.4pt — 섹션 제목 첫 한글 위치
 const LOGO_H = 20.0, LOGO_W = (138 / 60) * LOGO_H;         // 로고 실측 138×60 → 폭 46pt
-const TABLE_R = W - LOGO_W + 2.0 * (LOGO_H / 60);          // 로고 'E' 잉크 시작점
-const TABLE_W = TABLE_R - TABLE_L;                         // ≈445pt
+let TABLE_R = W - LOGO_W + 2.0 * (LOGO_H / 60);            // 로고 'E' 잉크 시작점
+let TABLE_W = TABLE_R - TABLE_L;                           // ≈445pt
+let PAGE_MARGIN = { left: 941, right: 941, top: 907, bottom: 941, header: 454, footer: 454 };
 const CELL_IND = 5.0;
 
 // 채널 로고 색상(사용자 제공 RGB) — 채널을 식별하는 자리에만 쓴다.
@@ -249,7 +250,7 @@ function tableBlocks(head, rows, opts = {}) {
     let fs = TABLE_FS;
     const raw = obj ? obj.t : txt;
     if (opts.fit && raw != null && String(raw) !== "" && !String(raw).includes("\n")) {
-      const room = widths[i] - 2 * CELL_IND - 1;
+      const room = (widths[i] - 2 * CELL_IND - 1) * 0.92;   // 8% 여유: 다른 기기·글꼴 렌더 차이로 줄이 넘치지 않게(2026-11-12)
       while (fs > TABLE_FS - 2 && measureLine(String(raw), fam, fs) > room) fs -= 0.5;
     }
     // ENA_LOG_TRUNC: 표 본문 칸에서 두 줄 이상으로 넘치는 글을 알려 준다(줄임말 사전 만들기용)
@@ -259,7 +260,7 @@ function tableBlocks(head, rows, opts = {}) {
       // 실제 글리프 폭으로 칸 폭에 한 줄로 맞춰 자른다(넘치면 … 붙임)
       // 넘치면 먼저 글자 크기를 0.5pt씩 줄이고(최소 4.5pt, 2026-11-11 사용자 "너무 크면 폰트 크기를 줄여줘"), 그래도 넘칠 때만 자른다
       let pt = obj.t2Pt || 7;
-      const room = widths[i] - 2 * CELL_IND - 2;
+      const room = (widths[i] - 2 * CELL_IND - 2) * 0.92;
       let s = String(obj.t2);
       while (pt > 4.5 && T.textWidth(s, F_THIN, pt) > room) pt -= 0.5;
       if (T.textWidth(s, F_THIN, pt) > room) { if (process.env.ENA_LOG_TRUNC) console.log("잘림\t" + s); while (s.length > 1 && T.textWidth(s + "…", F_THIN, pt) > room) s = s.slice(0, -1); s = s.trimEnd() + "…"; }
@@ -393,6 +394,16 @@ async function build(data, out, auditOnly) {
   let n1 = 0, firstSection = true;
   // bodyPt: ○·- 본문과 표 글자 크기를 한 값으로 맞춘다(소제목·제목 크기는 그대로)
   if (data.bodyPt) { TABLE_FS = data.bodyPt; BULLET_FS = data.bodyPt; SUB_FS = data.bodyPt; }
+  // marginCm: 상하좌우 여백(cm) — 인쇄 폭·표 폭을 다시 계산한다. 머리글(로고)은 위 여백 안쪽 0.4cm 에서 시작(2026-11-12 사용자 "여백 상하좌우 1cm")
+  if (data.marginCm) {
+    const m = Math.round(data.marginCm * 567);
+    PAGE_MARGIN = { left: m, right: m, top: m, bottom: m, header: Math.min(227, m), footer: Math.min(227, m) };
+    W = (11906 - 2 * m) / 20;
+    TABLE_R = W - LOGO_W + 2.0 * (LOGO_H / 60);
+    TABLE_W = TABLE_R - TABLE_L;
+  }
+  // lineSpacing: 본문·표 줄 간격 배수(기본 0.85, 사용자 "덜 빽빽하게")
+  if (data.lineSpacing) { LINE = data.lineSpacing; LN.line = Math.round(LINE * 240); CELL_LINE = data.cellLineSpacing || data.lineSpacing; }
 
   body.push(...docTitleBlocks(data.docTitle));
   for (const b of data.blocks) {
@@ -462,7 +473,7 @@ async function build(data, out, auditOnly) {
       properties: {
         page: {
           size: { width: 11906, height: 16838 },                     // A4 21 × 29.7cm
-          margin: { left: 941, right: 941, top: 907, bottom: 941, header: 454, footer: 454 },
+          margin: PAGE_MARGIN,
         },
       },
       headers: {

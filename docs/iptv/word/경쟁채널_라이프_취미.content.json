@@ -2,6 +2,9 @@
  "docTitle": "라이프·취미군 경쟁 채널 분석(2026.1~11.10)",
  "bodyPt": 10,
  "bulletMark": "·",
+ "marginCm": 1,
+ "lineSpacing": 1,
+ "cellLineSpacing": 0.85,
  "blocks": [
   {
    "type": "apptitle",

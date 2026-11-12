@@ -1,4 +1,4 @@
-// 경쟁(자사 7개 제외) 채널 장르군별 Word 보고서 — 채널마다 2쪽(1쪽: 누적 시청률·순위·상위 프로그램, 2쪽: 히트맵·편성 인사이트).
+﻿// 경쟁(자사 7개 제외) 채널 장르군별 Word 보고서 — 채널마다 2쪽(1쪽: 누적 시청률·순위·상위 프로그램, 2쪽: 히트맵·편성 인사이트).
 // 수치는 docs/iptv/competitor_channel_profiles.json(competitor-channel-profiles.mts 출력)을 옮기기만 한다(원칙 1, 여기서 새로 계산하지 않음 — 서식·색만).
 // 2049 중심 군(지상파·종편, 드라마, 예능·오락)은 수도권 2049 를 앞에, 가구 중심 군(라이프·취미, UHD)은 가구를 앞에 둔다. 장르군 순위는 언제나 가구.
 // 실행: node scripts/iptv-research/make-competitor-channel-reports.cjs [--audit]  → docs/iptv/word/경쟁채널_<군>.docx
@@ -260,7 +260,8 @@ for (const gf of groups) {
   const json = path.join(outDir, `경쟁채널_${slug}.content.json`);
   // 채널마다 2쪽에 맞추려고 본문·표를 10pt로(생성기 bodyPt)
   // 글머리는 작은 가운뎃점(2026-11-12 사용자 "글머리 ○는 가운뎃점처럼 작은 점으로")
-  fs.writeFileSync(json, JSON.stringify({ docTitle: title, bodyPt: 10, bulletMark: "·", blocks }, null, 1), "utf8");
+  // 여백 상하좌우 1cm, 줄 간격 0.85 → 1.0(2026-11-12 사용자 "여백 1cm, 행간 덜 빽빽하게")
+  fs.writeFileSync(json, JSON.stringify({ docTitle: title, bodyPt: 10, bulletMark: "·", marginCm: 1, lineSpacing: 1.0, cellLineSpacing: 0.85, blocks }, null, 1), "utf8");
   const docx = path.join(outDir, `경쟁채널_${slug}.docx`);
   const res = spawnSync(process.execPath, ["scripts/ena-word-report.cjs", json, docx, ...(AUDIT ? ["--audit"] : [])], { encoding: "utf8" });
   console.log(`== ${gf} (${chs.map((c) => c.channel).join(", ")})\n${res.stdout}${res.stderr}`);

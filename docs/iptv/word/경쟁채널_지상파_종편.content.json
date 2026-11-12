@@ -2,6 +2,9 @@
  "docTitle": "지상파·종편·tvN군 경쟁 채널 분석(2026.1~11.10)",
  "bodyPt": 10,
  "bulletMark": "·",
+ "marginCm": 1,
+ "lineSpacing": 1,
+ "cellLineSpacing": 0.85,
  "blocks": [
   {
    "type": "apptitle",
@@ -9405,7 +9408,7 @@
      },
      {
       "t": "0.023",
-      "t2": "몸으로보는세상아모르바디",
+      "t2": "아모르바디",
       "fill": "FEFFFF",
       "color": "0D0D12",
       "center": true
@@ -10897,7 +10900,7 @@
      },
      {
       "t": "0.156",
-      "t2": "방방곡곡낭만로드유랑닥터",
+      "t2": "유랑닥터",
       "fill": "DFF2EF",
       "color": "0D0D12",
       "center": true

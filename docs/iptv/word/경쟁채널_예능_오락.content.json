@@ -2,6 +2,9 @@
  "docTitle": "예능·오락군 경쟁 채널 분석(2026.1~11.10)",
  "bodyPt": 10,
  "bulletMark": "·",
+ "marginCm": 1,
+ "lineSpacing": 1,
+ "cellLineSpacing": 0.85,
  "blocks": [
   {
    "type": "apptitle",
@@ -8366,7 +8369,7 @@
      },
      {
       "t": "0.052",
-      "t2": "알아두면쓸데없는신비한인간잡학사전",
+      "t2": "알쓸인잡",
       "fill": "F7FCFB",
       "color": "0D0D12",
       "center": true
