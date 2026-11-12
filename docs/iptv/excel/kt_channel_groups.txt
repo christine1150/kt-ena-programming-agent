@@ -1,0 +1,25 @@
+# KT 채널군 분류(붙임3, 2025년도 지니TV 채널평가) — "KT 표기=닐슨 누적 순위 파일 표기". 파일에 없는 채널은 = 뒤를 비움.
+[국내드라마]
+CNTV=CNTV|Dramax=Dramax|EDGE TV=EDGETV|ENA=ENA|ENA DRAMA=ENA DRAMA|KBS Drama=KBS드라마|KBS Story=KBS Story|MBC ON=MBC ON|MBC 드라마넷=MBC드라마넷|ONCE=ONCE|SBS 플러스=SBS Plus|tvN DRAMA=tvN DRAMA|드라마큐브=DRAMAcube|디원=D-ONE|하이라이트TV=하이라이트TV
+[예능·오락]
+CH.WIDE=|CMCTV=CMCTV|ENA PLAY=ENA PLAY|ENA STORY=ENA STORY|E채널=E채널|FUN TV=FUN TV|GTV=GTV|HQ+=HQplus|JTBC2=JTBC2|JTBC4=JTBC4|K STAR=K STAR|KBS joy=KBS JOY|Lifetime=라이프타임|MBC M=MBC M|MBC 에브리원=MBC every1|MBN플러스=MBN플러스|SBS LIFE=SBS Life|SBS funE=SBS funE|SmileTV Plus=Smile TV Plus|SPOTV K=|STORY TV=StoryTV|tvN=tvN|tvN SHOW=tvN SHOW|tvN STORY=tvN STORY|다문화티브이=다문화TV|동아TV=동아TV|붐TV=|엔터TV=엔터TV|채널A플러스=채널A플러스|채널S=채널S|채널뷰=CH view|채널이엠=채널이엠|EDGE ON=EDGE ON|코미디TV=코미디TV|티브이조선2=TV CHOSUN2|TV조선3=TV CHOSUN3|더라이프=theLIFE
+[취미·레저]
+SOOP=SOOP|FTV=FTV|K-NET TV=|K바둑=K바둑|OLIFE=OLIFE|STN=|마운틴TV=마운틴TV|바둑TV=바둑TV|브레인TV=브레인TV(BrainTV)|빌리어즈티비=빌리어즈TV|생활체육TV=생활체육TV|스크린골프존=스크린골프존|폴라리스TV=폴라리스TV|한국낚시방송=|BALL TV=Ball TV|ONT=ONT
+[기타(UHD)]
+UXN=UXN|Asia UHD=Asia UHD|Sky UHD=SkyUHD|UMAX=UMAX|UHD Dream TV=UHD Dream TV|SBS F!L UHD=SBS NEX
+[음악]
+Mnet=Mnet|아이넷TV=아이넷방송|THE M=THE M|오르페오=|한경arteTV=|GMTV=GMTV|가요TV=|이벤트TV=이벤트TV|아이넷라이프=아이넷라이프
+[해외드라마]
+Asia N=Asia N|NXT=NXT|CH.U=채널유|TVasiaPlus=TV asia Plus|WeLike=위라이크(WeLike)|에이플드라마=Aple Drama|중화TV=중화TV|채널J=Channel J|채널W=채널W|채널나우=채널나우|채널차이나=채널차이나|텔레노벨라=텔레노벨라
+[영화]
+OCN=OCN|OCN Movies=OCN Movies|시네마천국=시네마천국|OCN Movies2=OCN Movies2|AsiaM=Asia M|월드클래식무비=월드클래식무비|스크린=SCREEN|엠플렉스=엠플렉스|THE MOVIE=THE MOVIE|CINETREE=씨네트리|씨네프=cineF
+[스포츠]
+GOLF&PBA=GOLF & PBA|IB Sports=IB SPORTS|JTBC Golf=JTBC GOLF|JTBC GOLF&SPORTS=JTBC SPORTS|KBS N Sports=KBSN스포츠|MAXPORTS=MAXPORTS|MBC SPORTS+=MBC SPORTS+|SBS Golf2=SBS Golf2|SBS Sports=SBS Sports|SBS골프=SBS Golf|Sky SPORTS=|SPOTV=SPOTV|SPOTV Golf & Health=SPOTV Golf+|SPOTV2=SPOTV2|tvN SPORTS=tvN SPORTS
+[시사·경제]
+SBS Biz=SBS Biz|한국경제TV=한국경제TV|MTN 머니투데이방송=MTN 머니투데이방송|매일경제TV=매일경제TV|이데일리TV=이데일리TV|서울경제TV=서울경제TV|토마토증권통=토마토TV|팍스경제TV=|연합뉴스경제TV=연합뉴스경제TV|토마토집통=
+[교양·생활정보]
+9colors=|History=히스토리|KBS LIFE=KBS LIFE|MBCNET=MBC NET|MGTV=|NBS=NBS한국농업방송|Now 제주TV=|OBS W=OBS W|Real TV=리얼TV|TBS TV=|YTN2=|뉴트로TV=뉴트로TV|대교 뉴이프Plus=대교 뉴이프Plus|디마티비=|메디컬TV=메디컬TV|법률방송=법률방송|사이언스TV=|소상공인시장tv=|시니어TV=시니어TV|실버아이TV=|아리랑TV=|엑스원=엑스원|육아방송=|지방자치TV=|채널i=채널i|쿠키건강TV=쿠키건강TV|헬스메디TV=헬스메디TV|연합뉴스TV JOB=|KFN=KFN
+[종교]
+가톨릭평화방송=가톨릭평화방송|BBS불교방송=BBS불교방송|BTN불교TV=BTN불교TV|GOODTV=GOODTV|C채널=C채널|CTS기독교TV=CTS|CGN=CGN|CBS=CBS|원음방송=WBS원음방송|YCN유림방송=|STB상생방송=STB 상생방송|유교TV방송=
+[어린이·교육]
+에듀TV=|EBS+2=EBS2|EBS+1=|EBS English=|플레이런TV=플레이런TV|JEI EnglishTV=JEI English TV|뽀요TV=뽀요TV|브라보키즈=bravokids|EBS키즈=EBS Kids|KBS키즈=KBS Kids|캐리TV=캐리TV|JEI재능TV=JEI재능TV|대교어린이TV=어린이TV|핑크퐁 채널=|카투니토=|애니플러스=애니플러스|카툰네트워크=카툰네트워크|애니박스=Anibox|애니원=애니원|애니맥스=Animax|투니버스=Tooniverse
