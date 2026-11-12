@@ -5,6 +5,7 @@
   { "type": "table", "head": ["구분", "내용"], "rows": [
    ["비교 범위", "UHD 6개 채널(skyUHD·UXN·Asia UHD·UMAX·UHD Dream·SBS NEX)"],
    ["닐슨 누적", "1/1~11/10 유료가구 누적 평균 0.00156, 216개 중 203위, UHD 6개 중 4위"],
+   ["닐슨 득점원", "수기 파일 누적 시청률 기여 내 아이의 사생활 24.5%·강철부대 16.7%·걸어서 세계속으로 12.9%, 상위 5편 70%"],
    ["UHD 순서", "UXN 0.0116 > Asia UHD 0.00561 > UMAX 0.00385 > skyUHD"],
    ["목표 대비", "목표 0.0019의 82.1% 미달 · 목표 순위 경쟁채널 중 2위 미달"],
    ["경쟁 거리", "2위 Asia UHD는 skyUHD의 3.6배, 3위 UMAX는 2.5배"]
@@ -52,6 +53,7 @@
   { "type": "sub", "text": "열린성인가요콘서트·고생 끝에 밥이 온다·아이돌아이·스위치 마이홈도 0.1~0.6배" },
   { "type": "bullet", "text": "중국 드라마는 새벽·아침 시간대에서 다수가 IPTV 시간대 평균 이상(최고 1.7배), 리틀 빅 씬보다 나음" },
   { "type": "sub", "text": "이 시간대는 닐슨이 대부분 0이라 판단 불가, 새벽·아침 채움용 근거만 있고 프라임 근거는 없음" },
+  { "type": "sub", "text": "닐슨 누적 시청률로도 중국 드라마는 방영 시간의 19%를 쓰고 기여는 7.8%에 그침" },
   { "type": "sub", "text": "금의야행은 채널 평균 대비로는 낮지만 새벽 시간대 평균 수준(0.97/0.80)이라 문제 작품 아님" },
 
   { "type": "subhead", "text": "편성 방식 : **연속 블록은 오르고, 다음 날 재방송은 약하다**" },
@@ -156,6 +158,6 @@
   { "type": "bullet", "text": "블록·재방송 효과는 좋은 작품을 블록으로 트는 선택 효과가 일부 섞일 수 있음" },
   { "type": "bullet", "text": "본방송 표기는 TV INDEX 기준이라 채널 첫 방송과 다를 수 있음" },
   { "type": "bullet", "text": "분당 시청률·채널 이동 자료가 없어 시청자의 유입 경로는 직접 보지 못함" },
-  { "type": "note", "text": "근거: docs/iptv/SKYUHD_PROGRAMMING_INSIGHTS.md, programming_insights_skyUHD.xlsx, skyuhd_nielsen_xcheck.json" }
+  { "type": "note", "text": "근거: docs/iptv/SKYUHD_PROGRAMMING_INSIGHTS.md, programming_insights_skyUHD.xlsx, skyuhd_nielsen_xcheck.json, excel/채널별_종합_2026.xlsx" }
  ]
 }
