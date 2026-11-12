@@ -8,6 +8,10 @@ const { spawnSync } = require("node:child_process");
 
 const P = require("../../docs/iptv/competitor_channel_profiles.json");
 // 채널별 종합 엑셀 중간 자료(channel-workbook-data.mts 출력) — 올해 에피소드 수·작품별 누적 시청률(2026-11-12 추가, 여기서는 비중만 나눔)
+// 드라마군 심층(drama-channel-deepdive.mts 출력) — MBC ON 전원일기 이벤트 분리, 하이라이트TV 지상파 드라마 활용, 작품별 원 방송사·편성
+const DD = require("../../docs/iptv/drama_channel_deepdive.json");
+// 원 방송사·편성 표기: "MBC 평일 일일(2008)", 교양·예능은 "MBN 교양(2012)", 모르면 "확인 필요"
+const originLabel = (o) => (!o || !o.ch ? "확인 필요" : `${o.ch} ${o.type ?? ""}${o.year ? `(${o.year})` : ""}`.replace(/\s+\(/, "("));
 const WB = new Map(require("../../docs/iptv/excel/channel_workbook_data.json").channels.map((c) => [c.name, c]));
 const AUDIT = process.argv.includes("--audit");
 const outDir = path.join("docs", "iptv", "word");
@@ -303,19 +307,74 @@ function channelBlocks(c0, idx, nCh) {
     B.push({ type: "section", text: `${nx()} ONCE 참고 작품(가구 기준)`, pageBreak: true });
     B.push({ type: "caption", text: `${c.channel}에서 가구 시청률이 높았던 작품 ${r.list.length}편(IPTV 가구, 2026, 8회 이상 방영)` });
     const col = shadeCol(r.list.map((x) => x.avg), HI_I);
-    B.push({ type: "table", head: ["순위", "프로그램", "장르", "가구", "채널 평균 대비", "ONCE 대비", "ONCE 편성", "주력 시간대"],
-      rows: r.list.map((x, i) => [String(i + 1), { t: full(x.name), alt: nameFit(x.name, 13) }, x.genre, col[i], `${x.idxCh.toFixed(2)}배`, `${x.vsOnce.toFixed(1)}배`, x.once ? `${x.once.n}회·${f(x.once.avg)}` : "미편성", x.slot]),
+    // 장르 대신 원 방송사·편성(일일·주말·월화 등)과 첫 방송 연도(2026-11-12 사용자 요청)
+    B.push({ type: "table", head: ["순위", "프로그램", "원 방송사·편성", "가구", "채널 평균 대비", "ONCE 대비", "ONCE 편성", "주력 시간대"],
+      rows: r.list.map((x, i) => [String(i + 1), { t: full(x.name), alt: nameFit(x.name, 13) }, originLabel(DD.origins[x.name]), col[i], `${x.idxCh.toFixed(2)}배`, `${x.vsOnce.toFixed(1)}배`, x.once ? `${x.once.n}회·${f(x.once.avg)}` : "미편성", x.slot]),
       fit: true, sameWidth: [[4, 5, 6]], align: ["center", "left", "center", "right", "right", "right", "center", "center"] });
     B.push({ type: "note", text: `IPTV 가구 2026 평균: ${c.channel} ${f(r.chAvg)}, ONCE ${f(r.onceAvg)}, ONCE 대비 = 작품 평균÷ONCE 평균, ONCE 편성 = ONCE 방영 횟수·평균` });
     const notOn = r.list.filter((x) => !x.once), on = r.list.filter((x) => x.once);
     B.push({ type: "subhead", text: `ONCE가 참고할 점 : **${notOn.length ? `미편성 ${notOn.length}편, 편성 중 ${on.length}편` : "상위 작품 대부분 ONCE에도 편성"}**` });
     if (notOn.length) B.push({ type: "bullet", ...L((q, n) => `ONCE에 없는 작품 ${notOn.slice(0, 3).map((x) => q(x.name)).join("·")} 등, ONCE 평균의 ${notOn[notOn.length - 1].vsOnce.toFixed(1)}~${notOn[0].vsOnce.toFixed(1)}배`) });
-    const gm = new Map(); r.list.forEach((x) => gm.set(x.genre, (gm.get(x.genre) ?? 0) + 1));
-    B.push({ type: "bullet", text: `상위 ${r.list.length}편 장르는 ${[...gm].sort((a, b) => b[1] - a[1]).map(([g, n]) => `${g} ${n}편`).join(", ")}` });
+    // 원 방송사·편성 유형을 따로 세어 한 줄에(예 "원 방송사 MBC 5·SBS 2, 편성 주말 3·평일 일일 2")
+    const cnt = (keyOf) => { const m = new Map(); r.list.forEach((x) => { const k = keyOf(DD.origins[x.name]); if (k) m.set(k, (m.get(k) ?? 0) + 1); }); return [...m].sort((p, q) => q[1] - p[1]).map(([k, v]) => `${k} ${v}`).join("·"); };
+    B.push({ type: "bullet", text: `상위 ${r.list.length}편 원 방송사 ${cnt((o) => o && o.ch)}, 편성 ${cnt((o) => o && o.type)}` });
     on.slice(0, 2).forEach((x) => B.push({ type: "bullet", ...L((q, n) => `${q(x.name)}: ONCE ${f(x.once.avg)}(${x.once.slot}) vs ${c.channel} ${f(x.avg)}(${x.slot}), ${x.avg > x.once.avg ? `${(x.avg / x.once.avg).toFixed(1)}배 → 시간대 재검토 여지` : "ONCE가 더 높음"}`) }));
     const heavy = r.list.filter((x) => x.n >= 100);
     if (heavy.length) B.push({ type: "bullet", ...L((q, n) => `${heavy.slice(0, 2).map((x) => `${q(x.name)} ${x.n}회`).join(", ")}는 장기 반복 편성이라 시간대·반복 효과가 섞여 있음`) });
     B.push({ type: "note", text: "참고용 비교: 채널 규모·시청 환경이 달라 그대로 옮겨 오면 같은 성과가 나온다고 보기는 어려움, 구매 검토 때 ONCE 시간대·타깃 적합도와 함께 확인" });
+  }
+
+  // MBC ON: 전원일기 집중 편성은 일시 이벤트로 떼어 보고, 전원일기 제외 시사점(2026-11-12 사용자 요청)
+  if (c.channel === "MBC ON" && DD["MBC ON"]) {
+    const m = DD["MBC ON"], p = m.period;
+    B.push({ type: "section", text: `${nx()} <전원일기> 집중 편성(일시 이벤트)과 그 외 편성`, pageBreak: true });
+    B.push({ type: "subhead", text: "전원일기 집중 편성 : **46주년 24시간 특별 편성에 최불암 별세 추모가 겹친 일시 이벤트**" });
+    B.push({ type: "bullet", text: `10/12~11/1 3주 동안 방영 시간의 ${pc(p["집중편성"].jwShare)}를 전원일기로 채움(평소 1/1~10/11은 ${pc(p["평소"].jwShare)})` });
+    B.push({ type: "bullet", text: `채널 평균 ${f(p["평소"].chAvg)} → ${f(p["집중편성"].chAvg)}(${(p["집중편성"].chAvg / p["평소"].chAvg).toFixed(1)}배), 끝난 뒤 11/2~11/10은 ${f(p["이후"].chAvg)}` });
+    B.push({ type: "sub", text: "10/12 시작한 46주년 특별 편성(10/25 종료 예정)이 11/1까지 연장되던 중 10/29 최불암 별세" });
+    B.push({ type: "sub", text: "10/31 다큐 '파하, 최불암입니다' 4회(0.24~0.29), 11/1 '수사반장'으로 추모 편성을 이어 감" });
+    B.push({ type: "bullet", text: `끝난 뒤의 상승은 전원일기 자체(${f(p["평소"].jwAvg)} → ${f(p["이후"].jwAvg)}) 덕이고, 다른 작품 평균은 ${f(p["평소"].nonJwAvg)} → ${f(p["이후"].nonJwAvg)}(오르지 않음)` });
+    B.push({ type: "note", text: "날짜·비중·시청률은 IPTV 가구, 46주년 특별 편성·연장은 나무위키, 별세(10/29)·추모 편성은 일간스포츠·TV리포트(10/30~31) 보도로 확인(네이버 뉴스는 이 환경에서 열리지 않음)" });
+    B.push({ type: "subhead", text: `전원일기 제외 시사점 : **평소 전원일기 빼면 채널 평균 ${f(m.nonJwAvg)}, MBC 주말극이 가장 강함**` });
+    const gs = m.groups.filter((g) => g.g !== "기타·미확인" && g.share >= 0.03).slice(0, 6);
+    B.push({ type: "caption", text: "원 방송사·편성 유형별 방영 시간 비중과 성과(전원일기 제외, 2026.1.1~10.11)" });
+    B.push({ type: "table", head: ["원 방송사·편성", "방영 시간 비중", "전원일기 제외 평균 대비"], fit: true, sameWidth: [[1, 2]], align: ["center", "right", "right"],
+      rows: gs.map((g) => [g.g, pc(g.share), shade(`${g.idx.toFixed(2)}배`, Math.min(1, Math.max(0, (g.idx - 0.6) / 0.8)), 0.7, HI_I)]) });
+    B.push({ type: "note", text: "원 방송사·편성 = 네이버 편성 정보의 첫 방송 채널·요일, 미확인 작품(방영 시간 27%)은 표에서 뺌, 평균 대비 = 그 묶음 평균 ÷ 전원일기 제외 채널 평균" });
+    const ps = [...m.programs].filter((x) => x.airings >= 50);
+    const top = [...ps].sort((a, b) => b.idx - a.idx).slice(0, 4), low = [...ps].sort((a, b) => a.idx - b.idx).slice(0, 4);
+    B.push({ type: "bullet", ...L((q) => `강한 작품: ${top.map((x) => `${q(x.name)} ${x.idx.toFixed(2)}배`).join(", ")}`) });
+    B.push({ type: "bullet", ...L((q) => `약한 작품: ${low.map((x) => `${q(x.name)} ${x.idx.toFixed(2)}배`).join(", ")}`) });
+    B.push({ type: "bullet", text: "MBC 주말 가족극과 장기 일일극은 평균 이상, 사극(대장금·마의·주몽)과 예능 재방은 평균 아래" });
+    B.push({ type: "bullet", text: "생활 교양 '임현식의 장터사람들'은 1,159회 반복에도 1.40배로 전원일기 다음 버팀목" });
+    B.push({ type: "note", text: "IPTV 가구, 2026.1.1~10.11, 50회 이상 방영 작품, 평균 대비 = 작품 평균 ÷ 전원일기 제외 채널 평균" });
+  }
+
+  // 하이라이트TV: 지상파 일일·주말·미니 드라마를 어떻게 쓰는가(2026-11-12 사용자 요청)
+  if (c.channel === "하이라이트TV" && DD["하이라이트 TV"]) {
+    const h = DD["하이라이트 TV"];
+    B.push({ type: "section", text: `${nx()} 지상파 드라마 활용 방식`, pageBreak: true });
+    const o = (k) => h.byOrigin.find((x) => x.k === k), t = (k) => h.byType.find((x) => x.k === k);
+    B.push({ type: "subhead", text: "편성 특성 : **2005~2014년 지상파 일일·주말극을 하루 4~6회 몰아 편성**" });
+    B.push({ type: "bullet", text: `올해 ${h.titles}개 작품, 하루 평균 ${h.concurrentPerDay.toFixed(1)}개 작품을 돌리고 한 작품을 하루 ${h.perDayMedian.toFixed(1)}회(중앙값) 연달아 방송` });
+    B.push({ type: "bullet", text: `원 방송사는 MBC ${pc(o("MBC").share)}, KBS2 ${pc(o("KBS2").share)}, SBS ${pc(o("SBS").share)}(방영 시간), 자체 제작은 ${pc(o("하이라이트TV")?.share ?? 0)}` });
+    B.push({ type: "caption", text: "편성 유형·제작 연도별 방영 시간 비중과 성과(IPTV 가구, 2026)" });
+    const row = (label, x) => [label, x ? pc(x.share) : "-", x ? `${x.titles}편` : "-", x ? shade(`${x.idx.toFixed(2)}배`, Math.min(1, Math.max(0, (x.idx - 0.4) / 1.0)), 0.7, HI_I) : "-"];
+    const dd = (k) => h.byDecade.find((x) => x.k === k);
+    B.push({ type: "table", head: ["구분", "방영 시간 비중", "작품 수", "채널 평균 대비"], fit: true, sameWidth: [[1, 2, 3]], align: ["center", "right", "right", "right"], rows: [
+      row("평일 일일극", t("평일 일일")), row("주말극", t("주말")), row("미니(월화·수목·금토)", ["월화", "수목", "금토"].map(t).filter(Boolean).reduce((a, x) => (a ? { share: a.share + x.share, titles: a.titles + x.titles, idx: (a.idx * a.share + x.idx * x.share) / (a.share + x.share) } : x), null)),
+      row("2004년 이전 작품", dd("~2004")), row("2005~2009년 작품", dd("2005~09")), row("2010~2014년 작품", dd("2010~14")), row("2015~2019년 작품", dd("2015~19")), row("2020년 이후(자체 제작 포함)", dd("2020~"))] });
+    B.push({ type: "note", text: "원 방송사·첫 방송일은 네이버 편성 정보, 편성 유형은 첫 방송 요일·방영 기간으로 분류, 미확인 작품(방영 시간 12%)은 표에서 뺌" });
+    const ps = h.programs.filter((x) => x.ch && x.terr !== false && x.airings >= 100).slice(0, 12);
+    B.push({ type: "caption", text: "방영 시간 상위 지상파 드라마(2026)" });
+    B.push({ type: "table", head: ["프로그램", "원 방송사·편성", "본방 최고 시청률", "방영", "채널 평균 대비"], fit: true, align: ["left", "center", "center", "right", "right"],
+      rows: ps.map((x) => [{ t: full(x.name), alt: nameFit(x.name, 13) }, originLabel(x), x.peak ?? "-", `${x.airings}회`, shade(`${x.idx.toFixed(2)}배`, Math.min(1, Math.max(0, (x.idx - 0.6) / 1.0)), 0.7, HI_I)]) });
+    B.push({ type: "note", text: "본방 최고 시청률은 기사·위키 확인값(조사기관·권역이 서로 달라 참고용), '-'는 확인하지 못한 작품" });
+    B.push({ type: "subhead", text: "시사점 : **본방 시청률보다 '평일 일일극·2000년대 후반 작품'이 재방 성과를 가름**" });
+    B.push({ type: "bullet", text: `평일 일일극은 채널 평균의 ${t("평일 일일").idx.toFixed(2)}배로 주말극(${t("주말").idx.toFixed(2)}배)보다 강하고, 2005~2009년 작품이 ${dd("2005~09").idx.toFixed(2)}배로 가장 좋음` });
+    B.push({ type: "bullet", text: "본방 최고 시청률 20%대 '하얀 거짓말'이 1.58배, 38.8% '같이 살래요'는 1.10배로 본방 순위와 재방 성과가 다름" });
+    B.push({ type: "bullet", text: `2020년 이후 작품(자체 제작 포함)은 ${dd("2020~").idx.toFixed(2)}배로 낮아 새벽 채움용에 머묾` });
+    B.push({ type: "bullet", text: "ONCE 참고: 회차가 많은 2000년대 후반~2010년대 초반 평일 일일극을 하루 4~6회 몰아 트는 방식이 이 채널의 기본형" });
   }
 
   // UHD군: 장르 히트맵·장르 편성 인사이트(2026-11-12 사용자 "UHD 장르군은 히트맵을 장르명으로도, 어떤 장르를 어떻게 배치하는지 규칙성 코멘트")

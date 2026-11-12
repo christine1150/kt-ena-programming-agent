@@ -1,0 +1,1516 @@
+{
+ "MBC ON": {
+  "period": {
+   "평소": {
+    "from": "2026-01-01",
+    "to": "2026-10-11",
+    "chAvg": 0.1127,
+    "jwShare": 0.17,
+    "jwAvg": 0.1792,
+    "nonJwAvg": 0.1004
+   },
+   "집중편성": {
+    "from": "2026-10-12",
+    "to": "2026-11-01",
+    "chAvg": 0.2307,
+    "jwShare": 0.95,
+    "jwAvg": 0.2323,
+    "nonJwAvg": 0.1969
+   },
+   "이후": {
+    "from": "2026-11-02",
+    "to": "2026-11-10",
+    "chAvg": 0.1553,
+    "jwShare": 0.37,
+    "jwAvg": 0.2685,
+    "nonJwAvg": 0.0926
+   }
+  },
+  "nonJwAvg": 0.1004,
+  "baseAll": 0.1127,
+  "jwBaseShare": 0.17,
+  "jwBaseIdx": 1.59,
+  "groups": [
+   {
+    "g": "기타·미확인",
+    "share": 0.27,
+    "idx": 1.12,
+    "n": 2234
+   },
+   {
+    "g": "MBC 평일 일일",
+    "share": 0.24,
+    "idx": 0.91,
+    "n": 1932
+   },
+   {
+    "g": "MBC 주말",
+    "share": 0.15,
+    "idx": 1.19,
+    "n": 678
+   },
+   {
+    "g": "MBC 월화",
+    "share": 0.07,
+    "idx": 0.88,
+    "n": 382
+   },
+   {
+    "g": "MBC every1 예능",
+    "share": 0.05,
+    "idx": 0.66,
+    "n": 291
+   },
+   {
+    "g": "MBC 금토",
+    "share": 0.05,
+    "idx": 1,
+    "n": 218
+   },
+   {
+    "g": "MBC 수목",
+    "share": 0.05,
+    "idx": 1.1,
+    "n": 258
+   },
+   {
+    "g": "MBC 예능",
+    "share": 0.04,
+    "idx": 0.82,
+    "n": 187
+   },
+   {
+    "g": "MBC 교양",
+    "share": 0.03,
+    "idx": 1.07,
+    "n": 160
+   },
+   {
+    "g": "MBC Drama 주말",
+    "share": 0.01,
+    "idx": 0.52,
+    "n": 59
+   },
+   {
+    "g": "MBC ON 예능",
+    "share": 0.01,
+    "idx": 1.03,
+    "n": 26
+   },
+   {
+    "g": "KBS1 월화",
+    "share": 0.01,
+    "idx": 0.77,
+    "n": 81
+   },
+   {
+    "g": "MBC every1 교양",
+    "share": 0,
+    "idx": 0.52,
+    "n": 17
+   },
+   {
+    "g": "채널A 주말",
+    "share": 0,
+    "idx": 0.88,
+    "n": 10
+   },
+   {
+    "g": "MBC 여행",
+    "share": 0,
+    "idx": 0.64,
+    "n": 18
+   },
+   {
+    "g": "MBC 다큐",
+    "share": 0,
+    "idx": 0.99,
+    "n": 8
+   },
+   {
+    "g": "KFN 평일 일일",
+    "share": 0,
+    "idx": 0.84,
+    "n": 24
+   },
+   {
+    "g": "KBS2 주말",
+    "share": 0,
+    "idx": 0.82,
+    "n": 16
+   },
+   {
+    "g": "JTBC 예능",
+    "share": 0,
+    "idx": 1.01,
+    "n": 16
+   }
+  ],
+  "programs": [
+   {
+    "name": "임현식의 장터사람들",
+    "airings": 1159,
+    "minutes": 35487,
+    "avg": 0.1406,
+    "idx": 1.4,
+    "days": 269,
+    "perDay": 4.31,
+    "topBands": [
+     "08~10시",
+     "18~20시"
+    ],
+    "ch": null,
+    "year": 2009,
+    "type": null,
+    "peak": null
+   },
+   {
+    "name": "히든 아이",
+    "airings": 231,
+    "minutes": 13008,
+    "avg": 0.0714,
+    "idx": 0.71,
+    "days": 168,
+    "perDay": 1.38,
+    "topBands": [
+     "04~06시",
+     "24~26시"
+    ],
+    "ch": "MBC every1",
+    "year": 2024,
+    "type": "예능",
+    "peak": null,
+    "terr": false
+   },
+   {
+    "name": "휴먼다큐 시장 사람들",
+    "airings": 388,
+    "minutes": 12601,
+    "avg": 0.1017,
+    "idx": 1.01,
+    "days": 69,
+    "perDay": 5.62,
+    "topBands": [
+     "18~20시",
+     "14~16시"
+    ],
+    "ch": null,
+    "year": null,
+    "type": null,
+    "peak": null
+   },
+   {
+    "name": "압구정 백야",
+    "airings": 253,
+    "minutes": 8833,
+    "avg": 0.1239,
+    "idx": 1.23,
+    "days": 51,
+    "perDay": 4.96,
+    "topBands": [
+     "18~20시",
+     "08~10시"
+    ],
+    "ch": "MBC",
+    "year": 2014,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "여자를 울려",
+    "airings": 107,
+    "minutes": 8160,
+    "avg": 0.1438,
+    "idx": 1.43,
+    "days": 32,
+    "perDay": 3.34,
+    "topBands": [
+     "14~16시",
+     "12~14시"
+    ],
+    "ch": "MBC",
+    "year": 2015,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "실화탐사대",
+    "airings": 141,
+    "minutes": 8066,
+    "avg": 0.1083,
+    "idx": 1.08,
+    "days": 106,
+    "perDay": 1.33,
+    "topBands": [
+     "24~26시",
+     "10~12시"
+    ],
+    "ch": "MBC",
+    "year": 2018,
+    "type": "교양",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "백년의 유산",
+    "airings": 96,
+    "minutes": 7456,
+    "avg": 0.1159,
+    "idx": 1.15,
+    "days": 26,
+    "perDay": 3.69,
+    "topBands": [
+     "08~10시",
+     "10~12시"
+    ],
+    "ch": "MBC",
+    "year": 2013,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "첫 번째 남자",
+    "airings": 227,
+    "minutes": 7413,
+    "avg": 0.0701,
+    "idx": 0.7,
+    "days": 87,
+    "perDay": 2.61,
+    "topBands": [
+     "02~04시",
+     "10~12시"
+    ],
+    "ch": "MBC",
+    "year": 2025,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "오로라 공주",
+    "airings": 164,
+    "minutes": 6555,
+    "avg": 0.123,
+    "idx": 1.23,
+    "days": 42,
+    "perDay": 3.9,
+    "topBands": [
+     "14~16시",
+     "16~18시"
+    ],
+    "ch": "MBC",
+    "year": 2013,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "왕꽃선녀님",
+    "airings": 181,
+    "minutes": 6503,
+    "avg": 0.0925,
+    "idx": 0.92,
+    "days": 49,
+    "perDay": 3.69,
+    "topBands": [
+     "10~12시",
+     "08~10시"
+    ],
+    "ch": "MBC",
+    "year": 2004,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "마의",
+    "airings": 78,
+    "minutes": 5796,
+    "avg": 0.0804,
+    "idx": 0.8,
+    "days": 28,
+    "perDay": 2.79,
+    "topBands": [
+     "14~16시",
+     "04~06시"
+    ],
+    "ch": "MBC",
+    "year": 2012,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "어서와 한국은 처음이지",
+    "airings": 55,
+    "minutes": 5748,
+    "avg": 0.068,
+    "idx": 0.68,
+    "days": 54,
+    "perDay": 1.02,
+    "topBands": [
+     "24~26시",
+     "02~04시"
+    ],
+    "ch": null,
+    "year": null,
+    "type": null,
+    "peak": null
+   },
+   {
+    "name": "대장금",
+    "airings": 83,
+    "minutes": 5712,
+    "avg": 0.0832,
+    "idx": 0.83,
+    "days": 32,
+    "perDay": 2.59,
+    "topBands": [
+     "06~08시",
+     "04~06시"
+    ],
+    "ch": "MBC",
+    "year": 2003,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "장미빛 연인들",
+    "airings": 74,
+    "minutes": 5688,
+    "avg": 0.1115,
+    "idx": 1.11,
+    "days": 30,
+    "perDay": 2.47,
+    "topBands": [
+     "10~12시",
+     "08~10시"
+    ],
+    "ch": "MBC",
+    "year": 2014,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "밥 줘",
+    "airings": 142,
+    "minutes": 5522,
+    "avg": 0.0735,
+    "idx": 0.73,
+    "days": 40,
+    "perDay": 3.55,
+    "topBands": [
+     "12~14시",
+     "24~26시"
+    ],
+    "ch": "MBC",
+    "year": 2009,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "사랑했나봐",
+    "airings": 140,
+    "minutes": 5448,
+    "avg": 0.0922,
+    "idx": 0.92,
+    "days": 42,
+    "perDay": 3.33,
+    "topBands": [
+     "08~10시",
+     "12~14시"
+    ],
+    "ch": "MBC",
+    "year": 2012,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "그래도 좋아",
+    "airings": 142,
+    "minutes": 5448,
+    "avg": 0.0876,
+    "idx": 0.87,
+    "days": 52,
+    "perDay": 2.73,
+    "topBands": [
+     "08~10시",
+     "06~08시"
+    ],
+    "ch": "MBC",
+    "year": 2007,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "아들과 딸",
+    "airings": 89,
+    "minutes": 5446,
+    "avg": 0.1092,
+    "idx": 1.09,
+    "days": 41,
+    "perDay": 2.17,
+    "topBands": [
+     "12~14시",
+     "20~22시"
+    ],
+    "ch": "MBC",
+    "year": 1992,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "보석 비빔밥",
+    "airings": 72,
+    "minutes": 5305,
+    "avg": 0.1009,
+    "idx": 1.01,
+    "days": 33,
+    "perDay": 2.18,
+    "topBands": [
+     "12~14시",
+     "10~12시"
+    ],
+    "ch": "MBC",
+    "year": 2009,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "주몽",
+    "airings": 65,
+    "minutes": 4981,
+    "avg": 0.0989,
+    "idx": 0.98,
+    "days": 32,
+    "perDay": 2.03,
+    "topBands": [
+     "06~08시",
+     "04~06시"
+    ],
+    "ch": "MBC",
+    "year": 2006,
+    "type": "월화",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "엄마의 바다",
+    "airings": 81,
+    "minutes": 4804,
+    "avg": 0.077,
+    "idx": 0.77,
+    "days": 48,
+    "perDay": 1.69,
+    "topBands": [
+     "18~20시",
+     "20~22시"
+    ],
+    "ch": "KBS1",
+    "year": 2013,
+    "type": "월화",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "동이",
+    "airings": 64,
+    "minutes": 4736,
+    "avg": 0.0859,
+    "idx": 0.86,
+    "days": 32,
+    "perDay": 2,
+    "topBands": [
+     "04~06시",
+     "06~08시"
+    ],
+    "ch": "MBC",
+    "year": 2010,
+    "type": "월화",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "기황후",
+    "airings": 67,
+    "minutes": 4654,
+    "avg": 0.0829,
+    "idx": 0.83,
+    "days": 27,
+    "perDay": 2.48,
+    "topBands": [
+     "16~18시",
+     "04~06시"
+    ],
+    "ch": "MBC",
+    "year": 2013,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "내 딸, 금사월",
+    "airings": 58,
+    "minutes": 4498,
+    "avg": 0.1335,
+    "idx": 1.33,
+    "days": 27,
+    "perDay": 2.15,
+    "topBands": [
+     "14~16시",
+     "16~18시"
+    ],
+    "ch": "MBC",
+    "year": 2015,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "해를 품은 달",
+    "airings": 58,
+    "minutes": 4392,
+    "avg": 0.115,
+    "idx": 1.15,
+    "days": 16,
+    "perDay": 3.63,
+    "topBands": [
+     "16~18시",
+     "04~06시"
+    ],
+    "ch": "MBC",
+    "year": 2012,
+    "type": "수목",
+    "peak": null,
+    "terr": true
+   }
+  ]
+ },
+ "하이라이트 TV": {
+  "chAvg": 0.141,
+  "titles": 46,
+  "concurrentPerDay": 6.27,
+  "perDayMedian": 4.38,
+  "byOrigin": [
+   {
+    "k": "MBC",
+    "share": 0.49,
+    "idx": 1.22,
+    "titles": 18
+   },
+   {
+    "k": "KBS2",
+    "share": 0.16,
+    "idx": 1.11,
+    "titles": 8
+   },
+   {
+    "k": "SBS",
+    "share": 0.12,
+    "idx": 1.16,
+    "titles": 5
+   },
+   {
+    "k": "미확인",
+    "share": 0.12,
+    "idx": 0.7,
+    "titles": 9
+   },
+   {
+    "k": "하이라이트TV",
+    "share": 0.07,
+    "idx": 0.47,
+    "titles": 3
+   },
+   {
+    "k": "MBN",
+    "share": 0.02,
+    "idx": 0.31,
+    "titles": 1
+   },
+   {
+    "k": "KBS1",
+    "share": 0.02,
+    "idx": 0.78,
+    "titles": 1
+   },
+   {
+    "k": "SBS Plus",
+    "share": 0.01,
+    "idx": 0.72,
+    "titles": 1
+   }
+  ],
+  "byType": [
+   {
+    "k": "주말",
+    "share": 0.4,
+    "idx": 1.05,
+    "titles": 18
+   },
+   {
+    "k": "평일 일일",
+    "share": 0.38,
+    "idx": 1.23,
+    "titles": 12
+   },
+   {
+    "k": "미확인",
+    "share": 0.12,
+    "idx": 0.7,
+    "titles": 9
+   },
+   {
+    "k": "월화",
+    "share": 0.05,
+    "idx": 0.92,
+    "titles": 3
+   },
+   {
+    "k": "수목",
+    "share": 0.03,
+    "idx": 0.5,
+    "titles": 2
+   },
+   {
+    "k": "금토",
+    "share": 0.02,
+    "idx": 1.05,
+    "titles": 2
+   }
+  ],
+  "byDecade": [
+   {
+    "k": "2010~14",
+    "share": 0.29,
+    "idx": 1.13,
+    "titles": 13
+   },
+   {
+    "k": "2005~09",
+    "share": 0.29,
+    "idx": 1.27,
+    "titles": 10
+   },
+   {
+    "k": "2015~19",
+    "share": 0.17,
+    "idx": 1.07,
+    "titles": 7
+   },
+   {
+    "k": "미확인",
+    "share": 0.12,
+    "idx": 0.7,
+    "titles": 9
+   },
+   {
+    "k": "2020~",
+    "share": 0.07,
+    "idx": 0.49,
+    "titles": 4
+   },
+   {
+    "k": "~2004",
+    "share": 0.05,
+    "idx": 0.95,
+    "titles": 3
+   }
+  ],
+  "programs": [
+   {
+    "name": "분홍 립스틱",
+    "airings": 310,
+    "minutes": 24444,
+    "avg": 0.1555,
+    "idx": 1.1,
+    "days": 54,
+    "perDay": 5.74,
+    "topBands": [
+     "22~24시",
+     "14~16시"
+    ],
+    "ch": "MBC",
+    "year": 2010,
+    "type": "평일 일일",
+    "peak": "23.6%(AGB 수도권)",
+    "terr": true
+   },
+   {
+    "name": "황금물고기",
+    "airings": 271,
+    "minutes": 22161,
+    "avg": 0.1929,
+    "idx": 1.37,
+    "days": 49,
+    "perDay": 5.53,
+    "topBands": [
+     "12~14시",
+     "14~16시"
+    ],
+    "ch": "MBC",
+    "year": 2010,
+    "type": "평일 일일",
+    "peak": "16.0%(AGB 수도권)",
+    "terr": true
+   },
+   {
+    "name": "내 딸 꽃님이",
+    "airings": 244,
+    "minutes": 21398,
+    "avg": 0.1774,
+    "idx": 1.26,
+    "days": 48,
+    "perDay": 5.08,
+    "topBands": [
+     "18~20시",
+     "10~12시"
+    ],
+    "ch": "SBS",
+    "year": 2011,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "위대한 조강지처",
+    "airings": 245,
+    "minutes": 20248,
+    "avg": 0.1916,
+    "idx": 1.36,
+    "days": 44,
+    "perDay": 5.57,
+    "topBands": [
+     "04~06시",
+     "12~14시"
+    ],
+    "ch": "MBC",
+    "year": 2015,
+    "type": "평일 일일",
+    "peak": "15.5%(TNmS 수도권)",
+    "terr": true
+   },
+   {
+    "name": "나쁜여자 착한여자",
+    "airings": 287,
+    "minutes": 19782,
+    "avg": 0.1795,
+    "idx": 1.27,
+    "days": 50,
+    "perDay": 5.74,
+    "topBands": [
+     "12~14시",
+     "20~22시"
+    ],
+    "ch": "MBC",
+    "year": 2007,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "Days of Delight-날마다 행복해",
+    "airings": 270,
+    "minutes": 18552,
+    "avg": 0.1391,
+    "idx": 0.99,
+    "days": 48,
+    "perDay": 5.63,
+    "topBands": [
+     "12~14시",
+     "14~16시"
+    ],
+    "ch": null,
+    "year": null,
+    "type": null,
+    "peak": null
+   },
+   {
+    "name": "밥 줘",
+    "airings": 216,
+    "minutes": 17658,
+    "avg": 0.1866,
+    "idx": 1.32,
+    "days": 40,
+    "perDay": 5.4,
+    "topBands": [
+     "12~14시",
+     "04~06시"
+    ],
+    "ch": "MBC",
+    "year": 2009,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "소문난 칠공주",
+    "airings": 239,
+    "minutes": 15892,
+    "avg": 0.1814,
+    "idx": 1.29,
+    "days": 42,
+    "perDay": 5.69,
+    "topBands": [
+     "14~16시",
+     "24~26시"
+    ],
+    "ch": "KBS2",
+    "year": 2006,
+    "type": "주말",
+    "peak": "43.8%(TNS)",
+    "terr": true
+   },
+   {
+    "name": "유리의 성",
+    "airings": 202,
+    "minutes": 15484,
+    "avg": 0.1356,
+    "idx": 0.96,
+    "days": 38,
+    "perDay": 5.32,
+    "topBands": [
+     "18~20시",
+     "24~26시"
+    ],
+    "ch": "SBS",
+    "year": 2008,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "같이 살래요",
+    "airings": 175,
+    "minutes": 14853,
+    "avg": 0.1545,
+    "idx": 1.1,
+    "days": 37,
+    "perDay": 4.73,
+    "topBands": [
+     "18~20시",
+     "20~22시"
+    ],
+    "ch": "KBS2",
+    "year": 2018,
+    "type": "주말",
+    "peak": "38.8%(TNmS 전국)",
+    "terr": true
+   },
+   {
+    "name": "미스터리시리즈 기묘한 이야기",
+    "airings": 491,
+    "minutes": 14769,
+    "avg": 0.0849,
+    "idx": 0.6,
+    "days": 313,
+    "perDay": 1.57,
+    "topBands": [
+     "12~14시",
+     "10~12시"
+    ],
+    "ch": null,
+    "year": null,
+    "type": null,
+    "peak": null
+   },
+   {
+    "name": "하얀 거짓말",
+    "airings": 178,
+    "minutes": 14296,
+    "avg": 0.2233,
+    "idx": 1.58,
+    "days": 32,
+    "perDay": 5.56,
+    "topBands": [
+     "12~14시",
+     "04~06시"
+    ],
+    "ch": "MBC",
+    "year": 2008,
+    "type": "평일 일일",
+    "peak": "20% 이상(기사)",
+    "terr": true
+   },
+   {
+    "name": "금 나와라 뚝딱",
+    "airings": 178,
+    "minutes": 14096,
+    "avg": 0.181,
+    "idx": 1.28,
+    "days": 37,
+    "perDay": 4.81,
+    "topBands": [
+     "24~26시",
+     "16~18시"
+    ],
+    "ch": "MBC",
+    "year": 2013,
+    "type": "주말",
+    "peak": "17% 안팎",
+    "terr": true
+   },
+   {
+    "name": "가화만사성",
+    "airings": 162,
+    "minutes": 13028,
+    "avg": 0.1517,
+    "idx": 1.08,
+    "days": 37,
+    "perDay": 4.38,
+    "topBands": [
+     "08~10시",
+     "16~18시"
+    ],
+    "ch": "MBC",
+    "year": 2016,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "전설의 마녀",
+    "airings": 163,
+    "minutes": 12975,
+    "avg": 0.1754,
+    "idx": 1.24,
+    "days": 30,
+    "perDay": 5.43,
+    "topBands": [
+     "22~24시",
+     "24~26시"
+    ],
+    "ch": "MBC",
+    "year": 2014,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "에덴의 동쪽",
+    "airings": 158,
+    "minutes": 12615,
+    "avg": 0.1729,
+    "idx": 1.23,
+    "days": 34,
+    "perDay": 4.65,
+    "topBands": [
+     "06~08시",
+     "14~16시"
+    ],
+    "ch": "MBC",
+    "year": 2008,
+    "type": "월화",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "수상한 삼형제",
+    "airings": 157,
+    "minutes": 12164,
+    "avg": 0.1887,
+    "idx": 1.34,
+    "days": 39,
+    "perDay": 4.03,
+    "topBands": [
+     "18~20시",
+     "10~12시"
+    ],
+    "ch": "KBS2",
+    "year": 2009,
+    "type": "주말",
+    "peak": "32.1%(AGB 전국, 최종회)",
+    "terr": true
+   },
+   {
+    "name": "특별한 이야기 차차차",
+    "airings": 242,
+    "minutes": 11128,
+    "avg": 0.0649,
+    "idx": 0.46,
+    "days": 121,
+    "perDay": 2,
+    "topBands": [
+     "02~04시",
+     "04~06시"
+    ],
+    "ch": "하이라이트TV",
+    "year": 2026,
+    "type": "주말",
+    "peak": null,
+    "terr": false
+   },
+   {
+    "name": "여자를 울려",
+    "airings": 142,
+    "minutes": 11043,
+    "avg": 0.1627,
+    "idx": 1.15,
+    "days": 29,
+    "perDay": 4.9,
+    "topBands": [
+     "10~12시",
+     "18~20시"
+    ],
+    "ch": "MBC",
+    "year": 2015,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "아내의 유혹",
+    "airings": 132,
+    "minutes": 10922,
+    "avg": 0.2103,
+    "idx": 1.49,
+    "days": 34,
+    "perDay": 3.88,
+    "topBands": [
+     "16~18시",
+     "06~08시"
+    ],
+    "ch": "SBS",
+    "year": 2008,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "회전목마",
+    "airings": 174,
+    "minutes": 10761,
+    "avg": 0.1327,
+    "idx": 0.94,
+    "days": 36,
+    "perDay": 4.83,
+    "topBands": [
+     "24~26시",
+     "10~12시"
+    ],
+    "ch": "MBC",
+    "year": 2003,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "기상천외 세상속으로",
+    "airings": 200,
+    "minutes": 9836,
+    "avg": 0.0663,
+    "idx": 0.47,
+    "days": 100,
+    "perDay": 2,
+    "topBands": [
+     "02~04시",
+     "04~06시"
+    ],
+    "ch": "하이라이트TV",
+    "year": 2026,
+    "type": "수목",
+    "peak": null,
+    "terr": false
+   },
+   {
+    "name": "세상만사 으라차차",
+    "airings": 183,
+    "minutes": 8886,
+    "avg": 0.068,
+    "idx": 0.48,
+    "days": 92,
+    "perDay": 1.99,
+    "topBands": [
+     "04~06시",
+     "02~04시"
+    ],
+    "ch": "하이라이트TV",
+    "year": 2026,
+    "type": "월화",
+    "peak": null,
+    "terr": false
+   },
+   {
+    "name": "오작교 형제들",
+    "airings": 112,
+    "minutes": 8748,
+    "avg": 0.1085,
+    "idx": 0.77,
+    "days": 30,
+    "perDay": 3.73,
+    "topBands": [
+     "18~20시",
+     "10~12시"
+    ],
+    "ch": "KBS2",
+    "year": 2011,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "내사랑 금지옥엽",
+    "airings": 110,
+    "minutes": 8544,
+    "avg": 0.1426,
+    "idx": 1.01,
+    "days": 28,
+    "perDay": 3.93,
+    "topBands": [
+     "16~18시",
+     "06~08시"
+    ],
+    "ch": "KBS2",
+    "year": 2008,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "행복이 꽃피는 나무",
+    "airings": 134,
+    "minutes": 8246,
+    "avg": 0.0476,
+    "idx": 0.34,
+    "days": 134,
+    "perDay": 1,
+    "topBands": [
+     "20~22시",
+     "18~20시"
+    ],
+    "ch": null,
+    "year": null,
+    "type": null,
+    "peak": null
+   },
+   {
+    "name": "생생 정보마당",
+    "airings": 134,
+    "minutes": 8234,
+    "avg": 0.0431,
+    "idx": 0.31,
+    "days": 134,
+    "perDay": 1,
+    "topBands": [
+     "20~22시",
+     "06~08시"
+    ],
+    "ch": "MBN",
+    "year": 2017,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "당신만이 내사랑",
+    "airings": 92,
+    "minutes": 7422,
+    "avg": 0.1092,
+    "idx": 0.78,
+    "days": 26,
+    "perDay": 3.54,
+    "topBands": [
+     "06~08시",
+     "08~10시"
+    ],
+    "ch": "KBS1",
+    "year": 2014,
+    "type": "평일 일일",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "사랑과 성공",
+    "airings": 121,
+    "minutes": 7315,
+    "avg": 0.1397,
+    "idx": 0.99,
+    "days": 26,
+    "perDay": 4.65,
+    "topBands": [
+     "08~10시",
+     "16~18시"
+    ],
+    "ch": "MBC",
+    "year": 1998,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   },
+   {
+    "name": "장미빛 연인들",
+    "airings": 78,
+    "minutes": 6120,
+    "avg": 0.1064,
+    "idx": 0.75,
+    "days": 31,
+    "perDay": 2.52,
+    "topBands": [
+     "24~26시",
+     "02~04시"
+    ],
+    "ch": "MBC",
+    "year": 2014,
+    "type": "주말",
+    "peak": null,
+    "terr": true
+   }
+  ]
+ },
+ "origins": {
+  "나는 자연인이다": {
+   "ch": "MBN",
+   "year": 2012,
+   "type": "교양",
+   "peak": null,
+   "terr": true
+  },
+  "히든 아이": {
+   "ch": "MBC every1",
+   "year": 2024,
+   "type": "예능",
+   "peak": null,
+   "terr": false
+  },
+  "인간극장": {
+   "ch": "KBS1",
+   "year": 2000,
+   "type": "교양",
+   "peak": null,
+   "terr": true
+  },
+  "용감한 형사들 4": {
+   "ch": "E채널",
+   "year": 2024,
+   "type": "예능",
+   "peak": null,
+   "terr": false
+  },
+  "신빨 토크쇼 귀묘한 이야기": {
+   "ch": "SBS Plus",
+   "year": 2026,
+   "type": "예능",
+   "peak": null,
+   "terr": false
+  },
+  "허준": {
+   "ch": null,
+   "year": null,
+   "type": null,
+   "peak": null
+  },
+  "용감한 형사들 5": {
+   "ch": "E채널",
+   "year": 2026,
+   "type": "예능",
+   "peak": null,
+   "terr": false
+  },
+  "낭만닥터 김사부": {
+   "ch": "SBS",
+   "year": 2016,
+   "type": "월화",
+   "peak": "27%(전국, 기사)",
+   "terr": true
+  },
+  "하얀 거짓말": {
+   "ch": "MBC",
+   "year": 2008,
+   "type": "평일 일일",
+   "peak": "20% 이상(기사)",
+   "terr": true
+  },
+  "아내의 유혹": {
+   "ch": "SBS",
+   "year": 2008,
+   "type": "평일 일일",
+   "peak": null,
+   "terr": true
+  },
+  "황금물고기": {
+   "ch": "MBC",
+   "year": 2010,
+   "type": "평일 일일",
+   "peak": "16.0%(AGB 수도권)",
+   "terr": true
+  },
+  "위대한 조강지처": {
+   "ch": "MBC",
+   "year": 2015,
+   "type": "평일 일일",
+   "peak": "15.5%(TNmS 수도권)",
+   "terr": true
+  },
+  "수상한 삼형제": {
+   "ch": "KBS2",
+   "year": 2009,
+   "type": "주말",
+   "peak": "32.1%(AGB 전국, 최종회)",
+   "terr": true
+  },
+  "밥 줘": {
+   "ch": "MBC",
+   "year": 2009,
+   "type": "평일 일일",
+   "peak": null,
+   "terr": true
+  },
+  "소문난 칠공주": {
+   "ch": "KBS2",
+   "year": 2006,
+   "type": "주말",
+   "peak": "43.8%(TNS)",
+   "terr": true
+  },
+  "금 나와라 뚝딱!": {
+   "ch": "MBC",
+   "year": 2013,
+   "type": "주말",
+   "peak": "17% 안팎",
+   "terr": true
+  },
+  "자이언트": {
+   "ch": "SBS",
+   "year": 2010,
+   "type": "월화",
+   "peak": null,
+   "terr": true
+  },
+  "조강지처 클럽": {
+   "ch": "SBS",
+   "year": 2007,
+   "type": "주말",
+   "peak": "30% 안팎(기사)",
+   "terr": true
+  },
+  "신기생뎐": {
+   "ch": "SBS",
+   "year": 2011,
+   "type": "주말",
+   "peak": null,
+   "terr": true
+  },
+  "하늘이시여": {
+   "ch": "SBS",
+   "year": 2005,
+   "type": "주말",
+   "peak": null,
+   "terr": true
+  },
+  "사랑과 야망": {
+   "ch": "SBS",
+   "year": 2006,
+   "type": "주말",
+   "peak": null,
+   "terr": true
+  },
+  "전원일기": {
+   "ch": "MBC",
+   "year": 1980,
+   "type": "주간",
+   "peak": null,
+   "terr": true
+  },
+  "모범택시": {
+   "ch": "SBS",
+   "year": 2021,
+   "type": "금토",
+   "peak": null,
+   "terr": true
+  },
+  "모범택시 3": {
+   "ch": "SBS",
+   "year": 2025,
+   "type": "금토",
+   "peak": null,
+   "terr": true
+  },
+  "모범택시 2": {
+   "ch": "SBS",
+   "year": 2023,
+   "type": "금토",
+   "peak": "21.0%(닐슨 전국)",
+   "terr": true
+  },
+  "낭만닥터 김사부 2": {
+   "ch": "SBS",
+   "year": 2020,
+   "type": "월화",
+   "peak": null,
+   "terr": true
+  },
+  "동이": {
+   "ch": "MBC",
+   "year": 2010,
+   "type": "월화",
+   "peak": null,
+   "terr": true
+  },
+  "주몽": {
+   "ch": "MBC",
+   "year": 2006,
+   "type": "월화",
+   "peak": null,
+   "terr": true
+  },
+  "내일은 미스터트롯": {
+   "ch": "TV조선",
+   "year": 2020,
+   "type": "주간",
+   "peak": null,
+   "terr": true
+  },
+  "밤에 피는 꽃": {
+   "ch": "MBC",
+   "year": 2024,
+   "type": "금토",
+   "peak": null,
+   "terr": true
+  },
+  "구가의 서": {
+   "ch": "MBC",
+   "year": 2013,
+   "type": "월화",
+   "peak": null,
+   "terr": true
+  },
+  "연인": {
+   "ch": "MBC",
+   "year": 2023,
+   "type": "금토",
+   "peak": null,
+   "terr": true
+  },
+  "파하 최불암입니다": {
+   "ch": "MBC",
+   "year": 2026,
+   "type": "다큐",
+   "peak": null,
+   "terr": true
+  },
+  "내 뒤에 테리우스": {
+   "ch": "MBC",
+   "year": 2018,
+   "type": "수목",
+   "peak": null,
+   "terr": true
+  },
+  "다큐플렉스": {
+   "ch": "MBC",
+   "year": 2020,
+   "type": "교양",
+   "peak": null,
+   "terr": true
+  }
+ }
+}
