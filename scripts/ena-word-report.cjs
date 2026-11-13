@@ -507,7 +507,10 @@ async function build(data, out, auditOnly) {
   }
   // lineSpacing: 본문·표 줄 간격 배수(기본 0.85, 사용자 "덜 빽빽하게")
   if (data.lineSpacing) { LINE = data.lineSpacing; LN.line = Math.round(LINE * 240); CELL_LINE = data.cellLineSpacing || data.lineSpacing; }
-  STYLE = data.style || {};
+  // 2026-11-13 사용자 "전체 적용" — style 이 없는 문서도 ENA 편성 분석과 같은 서식(표 전체 폭·여유 행 높이·내용별 정렬·증감 색·자사 강조)
+  STYLE = data.style || { tableFull: true, cellTb: 2.5, cellLine: 1.0, autoAlign: true, fit: true, signColor: true,
+    ownChannels: ["ENA", "ENA Drama", "ENA Play", "ENA Story", "ONCE", "OLIFE", "skyUHD"] };
+  if (!data.bulletMark || data.bulletMark === "·") data.bulletMark = "•";
   // tableFull: 표를 인쇄 폭 전체(왼쪽 여백~오른쪽 여백)로 — Word '창에 맞춤'과 같은 폭
   if (STYLE.tableFull) { TABLE_L = 0; TABLE_R = W; TABLE_W = W; }
 

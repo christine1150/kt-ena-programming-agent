@@ -320,7 +320,14 @@ function channelBlocks(c0, idx, nCh) {
     // 원 방송사·편성 유형을 따로 세어 한 줄에(예 "원 방송사 MBC 5·SBS 2, 편성 주말 3·평일 일일 2")
     const cnt = (keyOf) => { const m = new Map(); r.list.forEach((x) => { const k = keyOf(DD.origins[x.name]); if (k) m.set(k, (m.get(k) ?? 0) + 1); }); return [...m].sort((p, q) => q[1] - p[1]).map(([k, v]) => `${k} ${v}`).join("·"); };
     B.push({ type: "bullet", text: `상위 ${r.list.length}편 원 방송사 ${cnt((o) => o && o.ch)}, 편성 ${cnt((o) => o && o.type)}` });
-    on.slice(0, 2).forEach((x) => B.push({ type: "bullet", ...L((q, n) => `${q(x.name)}: ONCE ${f(x.once.avg)}(${x.once.slot}) vs ${c.channel} ${f(x.avg)}(${x.slot}), ${x.avg > x.once.avg ? `${(x.avg / x.once.avg).toFixed(1)}배 → 시간대 재검토 여지` : "ONCE가 더 높음"}`) }));
+    // 요일 나열은 3일 이상 이어지면 "수~일"로 줄인다(글머리 •로 한 줄이 넘친 사례, 2026-11-13)
+    const DOW = "월화수목금토일";
+    const dz = (s) => String(s).replace(/[월화수목금토일](?:·[월화수목금토일])+/g, (m) => {
+      const d = m.split("·"), out = [];
+      for (let i = 0; i < d.length;) { let j = i; while (j + 1 < d.length && DOW.indexOf(d[j + 1]) === DOW.indexOf(d[j]) + 1) j++; out.push(j - i >= 2 ? `${d[i]}~${d[j]}` : d.slice(i, j + 1).join("·")); i = j + 1; }
+      return out.join("·");
+    });
+    on.slice(0, 2).forEach((x) => B.push({ type: "bullet", ...L((q, n) => `${q(x.name)}: ONCE ${f(x.once.avg)}(${dz(x.once.slot)}) vs ${c.channel} ${f(x.avg)}(${dz(x.slot)}), ${x.avg > x.once.avg ? `${(x.avg / x.once.avg).toFixed(1)}배 → 시간대 재검토 여지` : "ONCE가 더 높음"}`) }));
     const heavy = r.list.filter((x) => x.n >= 100);
     if (heavy.length) B.push({ type: "bullet", ...L((q, n) => `${heavy.slice(0, 2).map((x) => `${q(x.name)} ${x.n}회`).join(", ")}는 장기 반복 편성이라 시간대·반복 효과가 섞여 있음`) });
     B.push({ type: "note", text: "참고용 비교: 채널 규모·시청 환경이 달라 그대로 옮겨 오면 같은 성과가 나온다고 보기는 어려움, 구매 검토 때 ONCE 시간대·타깃 적합도와 함께 확인" });
@@ -467,7 +474,7 @@ for (const gf of groups) {
   // 채널마다 2쪽에 맞추려고 본문·표를 10pt로(생성기 bodyPt)
   // 글머리는 작은 가운뎃점(2026-11-12 사용자 "글머리 ○는 가운뎃점처럼 작은 점으로")
   // 여백 상하좌우 1cm, 줄 간격 0.85 → 1.0(2026-11-12 사용자 "여백 1cm, 행간 덜 빽빽하게")
-  fs.writeFileSync(json, JSON.stringify({ docTitle: title, bodyPt: 10, bulletMark: "·", marginCm: 1, lineSpacing: 1.0, cellLineSpacing: 0.85, blocks }, null, 1), "utf8");
+  fs.writeFileSync(json, JSON.stringify({ docTitle: title, bodyPt: 10, bulletMark: "•", marginCm: 1, lineSpacing: 1.0, cellLineSpacing: 0.85, blocks }, null, 1), "utf8");
   const docx = path.join(outDir, `경쟁채널_${slug}.docx`);
   const res = spawnSync(process.execPath, ["scripts/ena-word-report.cjs", json, docx, ...(AUDIT ? ["--audit"] : [])], { encoding: "utf8" });
   console.log(`== ${gf} (${chs.map((c) => c.channel).join(", ")})\n${res.stdout}${res.stderr}`);
