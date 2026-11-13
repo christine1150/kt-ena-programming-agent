@@ -141,7 +141,7 @@
 - **채택 기준**: 자사 이동 73건 결과(상승 37·비슷 9·하락 27)와 자동 추출 결과가 ±10% 안에서 맞아야 한다(검증 테스트로 고정).
 - **구현 지시**: 마이그레이션 `schedule_change_events` + 함수 `compute_schedule_change_events(source, from, to)`·`schedule_change_effect(type, group, daypart)` → 주 1회 크론(`/api/cron/forecast-maintenance`에 묶지 말고 별도 라우트) → `src/lib/dashboard/changeEffect.ts`(읽기) → `homeCopy.ts` 문구 교체(판정 로직은 건드리지 않음) → 제안 캐시 버전 올림. 테스트 `test:change-events`(자사 73건 회귀 포함).
 
-#### B2. 비교군 우수 사례 라이브러리 — "벤치마크 처방" (L, 2단계)
+#### B2. 비교군 우수 사례 라이브러리 — "벤치마크 처방" (L, 2단계) — **F-5 결과(2026-11-13, `B2_BENCHMARK_PATTERNS.md`)**: 패턴 4종·격차 자리 정의 확정, 채널별 격차 자리 1~7개, 재방 리듬은 벤치마크만 산출(자사는 본방 패턴 채움 뒤), 장르 채움 미달 4채널(EDGETV·JTBC2·CNTV·MBC ON)은 F2 뒤.
 
 - **왜**: 사용자 요청의 핵심("타사의 우수 사례를 가져와 편성 제언"). 지금 처방 라이브러리는 자사 풀 안의 교체·이동·재방 위치·보유작·구매 검토뿐이다. 군 1위 채널이 **같은 자리에서 무엇을 어떻게 트는지**는 연구 문서에만 있고 화면 제언에는 없다.
 - **무엇을**: 군(드라마·예능·라이프·지상파종편·UHD)별로 다음 패턴을 자동 추출해 `benchmark_patterns`에 저장한다.
