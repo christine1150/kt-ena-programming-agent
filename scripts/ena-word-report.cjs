@@ -30,7 +30,7 @@ const CELL_TB = 1.0, CELL_PARA = 0.0; let CELL_LINE = 0.85;
 let BULLET_FS = 11, SUB_FS = 10;
 
 let W = (7560000 - 2 * 597600) / 12700;                   // 인쇄 폭 ≈501.2pt (A4 21cm − 좌우 1.66cm), marginCm 이면 다시 계산
-const TABLE_L = T.textWidth("Ⅰ. ", F_BOLD, 13);            // ≈10.4pt — 섹션 제목 첫 한글 위치
+let TABLE_L = T.textWidth("Ⅰ. ", F_BOLD, 13);            // ≈10.4pt — 섹션 제목 첫 한글 위치
 const LOGO_H = 20.0, LOGO_W = (4066 / 1189) * LOGO_H;       // kt ENA CI 4066×1189 → 높이 20pt(0.7cm)·폭 68pt
 // 표 오른쪽 끝은 옛 ENA 로고(46pt) 기준 그대로 둔다 — 로고만 바꾸고 표 폭·줄바꿈은 바뀌지 않게
 const OLD_LOGO_INSET = (138 / 60) * 20.0 - 2.0 * (20.0 / 60);
@@ -72,6 +72,27 @@ const run = (text, fam, size, color = INK, extra = {}) =>
 const TOKEN = /(\*\*.+?\*\*|__.+?__|\(\(.+?\)\))/;
 const splitTokens = (s) => String(s).split(TOKEN).filter((x) => x !== undefined && x !== "");
 
+// 문서 단위 표·글줄 서식(내용 JSON 의 style) — 2026-11-13 사용자 "표 창에 맞춤·여유 있는 높이·내용에 맞는 정렬·증감 색·자사 강조"
+//   tableFull: 표를 인쇄 폭 전체로 / cellTb·cellLine: 칸 위아래 여백·줄 간격 / autoAlign: 열 내용에 따라 가운데·왼쪽
+//   fit: 칸 폭을 내용 실측으로 잡고 넘치면 글자 축소 / signColor: +는 파랑, −는 빨강 / ownChannels: 자사 채널 칸은 채널 색 굵게
+let STYLE = {};
+const UP = "0B63CE", DOWN = "D7263D";
+// 앞이 숫자·글자가 아닌 자리의 +숫자 / -숫자 (시간대 "20-23"·이름 "해피선데이-슈퍼맨"은 제외)
+const SIGN = /(^|[^0-9A-Za-z가-힣.])([+\-−][0-9][0-9.,]*%?p?)/g;
+function signSplit(text, fam, size, color) {
+  if (!STYLE.signColor) return [run(text, fam, size, color)];
+  const out = []; let last = 0; let m;
+  SIGN.lastIndex = 0;
+  while ((m = SIGN.exec(text))) {
+    const s = m.index + m[1].length;
+    if (s > last) out.push(run(text.slice(last, s), fam, size, color));
+    out.push(run(m[2], fam, size, m[2][0] === "+" ? UP : DOWN));
+    last = s + m[2].length;
+  }
+  if (last < text.length) out.push(run(text.slice(last), fam, size, color));
+  return out;
+}
+
 /** 마크업 문자열 → 런 배열. emphFam이 fam과 같으면 **강조**도 굵어지지 않는다. */
 function emit(text, fam, size, color = INK, emphColor = INK, emphFam = F_BOLD) {
   const out = [];
@@ -81,7 +102,7 @@ function emit(text, fam, size, color = INK, emphColor = INK, emphFam = F_BOLD) {
     } else if (tok.startsWith("((") && tok.endsWith("))")) {
       out.push(run("(" + tok.slice(2, -2) + ")", F_THIN, GLOSS, INK3));
     } else {
-      out.push(run(tok, fam, size, color));
+      out.push(...signSplit(tok, fam, size, color));
     }
   }
   return out;
@@ -105,8 +126,8 @@ const tiny = (pt) => new Paragraph({
   spacing: { before: 0, after: 0, line: tw(pt), lineRule: LineRuleType.EXACT },
 });
 
-function lineBlock(prefix, text, size, fam, base, { before = 1.5, after = 1.5, allowLabel = true, emph = true, keepNext = false } = {}) {
-  const kids = [run(prefix, fam, size, INK)];
+function lineBlock(prefix, text, size, fam, base, { before = 1.5, after = 1.5, allowLabel = true, emph = true, keepNext = false, markFam = null } = {}) {
+  const kids = [run(prefix, markFam || fam, size, INK)];   // markFam: 글머리만 굵은 글꼴(진한 가운뎃점, 2026-11-13)
   const emphFam = emph ? F_BOLD : fam;
   const m = allowLabel && emph ? LABEL.exec(text) : null;
   if (m) {
@@ -224,6 +245,22 @@ function tableBlocks(head, rows, opts = {}) {
   }
   const total = colmax.reduce((a, b) => a + b, 0) || 1;
   let widths = colmax.map((cm) => (TABLE_W * cm) / total);
+  if (STYLE.fit) {
+    // 실측 폭(상한 없음)으로 잡고 남는 폭은 비례로 나눈다 — 모자라면 넓은 열(60pt 넘는 부분)에서 비례로 덜어 낸다
+    const nat = [];
+    for (let c = 0; c < ncol; c++) {
+      const one = (txt, header) => { const fam = header ? F_MED : F_THIN; return Math.max(0, ...String(txtOf(txt)).split("\n").map((l) => measureLine(l, fam, TABLE_FS))); };
+      let m = one(head[c], true);
+      for (const r of rows) m = Math.max(m, one(c < r.length ? r[c] : "", false));
+      nat.push(m + 2 * CELL_IND + 8);
+    }
+    const sum = nat.reduce((a, b) => a + b, 0);
+    if (sum <= TABLE_W) widths = nat.map((w) => w + ((TABLE_W - sum) * w) / sum);
+    else {
+      const over = sum - TABLE_W, room = nat.map((w) => Math.max(0, w - 60)), rs = room.reduce((a, b) => a + b, 0) || 1;
+      widths = nat.map((w, i) => w - (over * room[i]) / rs);
+    }
+  }
   for (let k = 0; k < 4; k++) {
     const deficit = widths.filter((w) => w < MINW).reduce((a, w) => a + (MINW - w), 0);
     const free = widths.map((w, i) => (w > MINW ? i : -1)).filter((i) => i >= 0);
@@ -240,11 +277,32 @@ function tableBlocks(head, rows, opts = {}) {
   for (const g of opts.sameWidth || []) { const avg = g.reduce((a, i) => a + widths[i], 0) / g.length; g.forEach((i) => (widths[i] = avg)); }
 
   // opts.fs/line/tb: 12행 히트맵처럼 촘촘해야 하는 표만 칸 글자 크기·줄 간격·위아래 여백을 따로(2026-11-12 시간대 2시간 단위)
-  const BASE_FS = opts.fs || TABLE_FS, LINE_X = opts.line || CELL_LINE, TB_X = opts.tb != null ? opts.tb : CELL_TB;
+  const BASE_FS = opts.fs || TABLE_FS, LINE_X = opts.line || STYLE.cellLine || CELL_LINE, TB_X = opts.tb != null ? opts.tb : STYLE.cellTb != null ? STYLE.cellTb : CELL_TB;
+  if (STYLE.fit && opts.fit == null) opts = { ...opts, fit: true };
+  // autoAlign: 0열·숫자 열·짧은 글 열은 가운데, 문장 열만 왼쪽(opts.align 이 있으면 그것을 따름)
+  if (STYLE.autoAlign && !opts.align) {
+    const NUMISH = /^[\s0-9.,%~+\-−·/()위배회개편분시pP|]*$/;
+    const align = [];
+    for (let c = 0; c < ncol; c++) {
+      const cells = rows.map((r) => String(txtOf(c < r.length ? r[c] : ""))).filter((x) => x !== "" && x !== "-");
+      const longest = Math.max(0, ...cells.map((x) => measureLine(x, F_THIN, TABLE_FS)));
+      align.push(c === 0 || cells.every((x) => NUMISH.test(x)) || longest <= 95 ? "center" : "left");
+    }
+    opts = { ...opts, align };
+  }
   const margins = { top: tw(TB_X), bottom: tw(TB_X), left: tw(CELL_IND), right: tw(CELL_IND) };
   // 12행 이하 표는 통째로 한 쪽에 두고(마지막 행 빼고 keepNext), 더 긴 표는 머리글과 첫 행만 붙인다
   const keepAll = rows.length <= 12;
-  const mkCell = (txt, fam, align, i, header, color, keep = false) => {
+  // STYLE.fit: 열마다 모든 본문 칸이 한 줄에 드는 가장 큰 글자 크기(본문-2pt까지) 하나로 — 칸마다 크기가 달라 보이지 않게(2026-11-13)
+  const colFs = STYLE.fit ? widths.map((w, i) => {
+    const room = (w - 2 * CELL_IND - 1) * 0.92;
+    const cells = rows.map((r) => String(txtOf(i < r.length ? r[i] : ""))).filter((x) => x && !x.includes("\n"));
+    let f = BASE_FS;
+    while (f > BASE_FS - 1.5 && cells.some((x) => measureLine(x, (STYLE.ownChannels || []).includes(x.trim()) ? F_BOLD : F_THIN, f) > room)) f -= 0.5;
+    return f;
+  }) : null;
+  const mkCell = (txt, fam, align, i, header, color, keep = false, span = null) => {
+    const wPt = span && span.cols ? span.cols.reduce((a, k) => a + widths[k], 0) : widths[i];
     const obj = txt != null && typeof txt === "object" ? txt : null;
     const fill = header ? FILL_HEADER : obj && obj.fill ? obj.fill : null;
     // obj.t2: 칸 안 둘째 줄(작은 글씨, 히트맵 대표 프로그램용 2026-11-11)
@@ -254,8 +312,9 @@ function tableBlocks(head, rows, opts = {}) {
     // opts.fit: 칸에 한 줄로 안 들어가면 글자를 0.5pt씩 줄여 맞춘다(최소 본문-2pt), 그래도 넘치면 줄바꿈
     let fs = BASE_FS;
     let raw = obj ? obj.t : txt;
-    if (opts.fit && raw != null && String(raw) !== "" && !String(raw).includes("\n")) {
-      const room = (widths[i] - 2 * CELL_IND - 1) * 0.92;   // 8% 여유: 다른 기기·글꼴 렌더 차이로 줄이 넘치지 않게(2026-11-12)
+    if (colFs && !header && !(obj && obj.alt)) fs = colFs[i];
+    else if (opts.fit && raw != null && String(raw) !== "" && !String(raw).includes("\n")) {
+      const room = (wPt - 2 * CELL_IND - 1) * 0.92;   // 8% 여유: 다른 기기·글꼴 렌더 차이로 줄이 넘치지 않게(2026-11-12)
       // obj.alt: 풀네임(t)이 최소 글자 크기로도 안 들어갈 때만 쓰는 줄임말(2026-11-12 사용자 "풀네임 쓸 자리가 되면 풀네임")
       if (obj && obj.alt && measureLine(String(raw), fam, BASE_FS - 2) > room) raw = obj.alt;
       while (fs > BASE_FS - 2 && measureLine(String(raw), fam, fs) > room) fs -= 0.5;
@@ -277,22 +336,49 @@ function tableBlocks(head, rows, opts = {}) {
     }
     return new TableCell({
       children: kids,
-      width: { size: tw(widths[i]), type: WidthType.DXA },
+      width: { size: tw(wPt), type: WidthType.DXA },
       margins, verticalAlign: VerticalAlign.CENTER,
+      ...(span && span.cols && span.cols.length > 1 ? { columnSpan: span.cols.length } : {}),
+      ...(span && span.rowSpan ? { rowSpan: span.rowSpan } : {}),
       ...(fill ? { shading: { fill } } : {}),
     });
   };
 
   // 머리글 행은 쪽이 넘어가도 반복하고, 행은 쪽 경계에서 쪼개지지 않게 한다(서식·행 높이는 그대로)
-  const trs = [new TableRow({ tableHeader: true, cantSplit: true, children: head.map((h, i) => mkCell(h, F_MED, AlignmentType.CENTER, i, true, null, rows.length > 0)) })];
+  // headGroups: [["2049 순위", 2], ["채널", 1] …] → 두 줄 머리글(묶음은 가로 병합, 단독 열은 세로 병합) — 2026-11-13 "순위 표 모양 수정"
+  const trs = [];
+  if (opts.headGroups) {
+    const top = [], sub = [];
+    let c = 0;
+    for (const [label, n] of opts.headGroups) {
+      const cols = Array.from({ length: n }, (_, k) => c + k);
+      if (n === 1) top.push(mkCell(label, F_MED, AlignmentType.CENTER, c, true, null, true, { cols, rowSpan: 2 }));
+      else {
+        top.push(mkCell(label, F_MED, AlignmentType.CENTER, c, true, null, true, { cols }));
+        for (const k of cols) sub.push(mkCell(head[k], F_MED, AlignmentType.CENTER, k, true, null, true));
+      }
+      c += n;
+    }
+    trs.push(new TableRow({ tableHeader: true, cantSplit: true, children: top }));
+    trs.push(new TableRow({ tableHeader: true, cantSplit: true, children: sub }));
+  } else {
+    trs.push(new TableRow({ tableHeader: true, cantSplit: true, children: head.map((h, i) => mkCell(h, F_MED, AlignmentType.CENTER, i, true, null, rows.length > 0)) }));
+  }
+  const own = new Set(STYLE.ownChannels || []);
   rows.forEach((r, ri) => {
     // chCol0 = 0열이 채널명인 표 → 그 채널 색으로 칠해 채널을 눈으로 구분한다
     const cc = opts.chCol0 ? chColor(r[0]) : null;
     const keep = keepAll ? ri < rows.length - 1 : false;
     trs.push(new TableRow({
       cantSplit: true,
-      children: widths.map((_, i) => mkCell(i < r.length ? r[i] : "", i === 0 && cc ? F_MED : F_THIN,
-        i === 0 ? AlignmentType.CENTER : AlignmentType.LEFT, i, false, i === 0 ? cc : null, keep)),
+      children: widths.map((_, i) => {
+        const v = i < r.length ? r[i] : "";
+        // 자사 채널명 칸은 채널 로고색 굵게(위치를 바로 찾게)
+        const isOwn = own.has(String(txtOf(v)).trim());
+        const fam = isOwn ? F_BOLD : i === 0 && cc ? F_MED : F_THIN;
+        const col = isOwn ? chColor(String(txtOf(v)).trim()) : i === 0 ? cc : null;
+        return mkCell(v, fam, i === 0 ? AlignmentType.CENTER : AlignmentType.LEFT, i, false, col, keep);
+      }),
     }));
   });
   const bd = { style: BorderStyle.SINGLE, size: 4, color: RULE };
@@ -421,6 +507,9 @@ async function build(data, out, auditOnly) {
   }
   // lineSpacing: 본문·표 줄 간격 배수(기본 0.85, 사용자 "덜 빽빽하게")
   if (data.lineSpacing) { LINE = data.lineSpacing; LN.line = Math.round(LINE * 240); CELL_LINE = data.cellLineSpacing || data.lineSpacing; }
+  STYLE = data.style || {};
+  // tableFull: 표를 인쇄 폭 전체(왼쪽 여백~오른쪽 여백)로 — Word '창에 맞춤'과 같은 폭
+  if (STYLE.tableFull) { TABLE_L = 0; TABLE_R = W; TABLE_W = W; }
 
   body.push(...docTitleBlocks(data.docTitle));
   for (const b of data.blocks) {
@@ -448,7 +537,7 @@ async function build(data, out, auditOnly) {
         // data.bulletMark: ○ 대신 쓸 글머리(예 "·", 2026-11-12 사용자 "작은 글머리 점으로")
         const tb = pickText(b, 2 * STEP, (data.bulletMark || "○") + " ", BULLET_FS, F_THIN, false);
         items.push([2 * STEP, (data.bulletMark || "○") + " ", tb, BULLET_FS, F_THIN, false]);
-        body.push(lineBlock((data.bulletMark || "○") + " ", tb, BULLET_FS, F_THIN, 2 * STEP, { allowLabel: false, emph: false }));
+        body.push(lineBlock((data.bulletMark || "○") + " ", tb, BULLET_FS, F_THIN, 2 * STEP, { allowLabel: false, emph: false, markFam: data.bulletMark === "•" ? F_BOLD : null }));
         break;
       }
       case "sub":
