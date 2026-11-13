@@ -1,0 +1,10327 @@
+{
+ "report": [
+  {
+   "tab": "ENA",
+   "program": "나는 SOLO",
+   "before": "오리지널 예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 공동 (SBS Plus·ENA)(변경 없음)"
+  },
+  {
+   "tab": "ENA",
+   "program": "나는 SOLO, 그 후 사랑은 계속된다",
+   "before": "오리지널 예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 공동 (SBS Plus·ENA)(변경 없음)"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "나는 SOLO, 그 후 사랑은 계속된다",
+   "before": "오리지널 예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널(변경 없음)"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "나는 SOLO",
+   "before": "오리지널 예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널(변경 없음)"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "무엇이든 해줄 지니 비서진",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "닥터X : 하얀 마피아의 시대",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "상남자의 여행법 in 마나도",
+   "before": "여행",
+   "after": "오리지널 예능",
+   "how": "부분·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "상남자의 여행법 in 대만",
+   "before": "여행",
+   "after": "오리지널 예능",
+   "how": "부분·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "상남자의 여행법",
+   "before": "여행",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "우리들의 발라드 2",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "틈만나면",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "거장항준",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "리얼연애실험실독사과2",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "재벌X형사 2",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "동상이몽 2 너는 내 운명",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "미운우리새끼다시쓰는육아일기",
+   "before": "미분류",
+   "after": "본사 예능",
+   "how": "부분·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "신빨 토크쇼 귀묘한 이야기 2",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "내가 만난 사이코패스",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "이호선의 사이다",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "재벌X형사",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "부분·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "런닝맨",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "지구마불 세계여행 2",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "재벌X형사2재벌플렉스수사기",
+   "before": "미분류",
+   "after": "본사 드라마",
+   "how": "부분·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "시간추적자 설록",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "당신의 결혼은 안녕하십니까",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "꼬리에 꼬리를 무는 그날 이야기",
+   "before": "예능",
+   "after": "본사 교양",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "틈만 나면의 틈",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "TV 동물농장",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "먹고 보는 형제들",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "솔로라서",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "맨 인 블랙박스",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "생활의 달인",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "재벌X형사2미리보기",
+   "before": "미분류",
+   "after": "본사 드라마",
+   "how": "부분·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "내 남은 연애",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "리뷰액츄얼리",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "골 때리는 그녀들",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "틈만나면 시즌4",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "틈만나면 시즌5",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "굿파트너",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "리얼 연애실험실 독사과 시즌2",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널"
+  },
+  {
+   "tab": "SBS Plus",
+   "program": "신드롬",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 오리지널"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "21세기 대군부인",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "신인감독 김연경2 프리퀄: 원더독스의 시작",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "오은영리포트",
+   "before": "미분류",
+   "after": "본사 교양",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "놀면 뭐하니",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "나 혼자 산다",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "전지적 참견 시점",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "태어난 김에 세계일주 4",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "신인감독 김연경 2",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "유부녀 킬러",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "극한84",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "라디오스타",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "구해줘 홈즈",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "21세기 대군부인 프리미어",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "라이어",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "오십프로",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "판사 이한영",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "최우수산",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "오은영 리포트 결혼지옥",
+   "before": "예능",
+   "after": "본사 교양",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "찬란한 너의 계절에",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "출발 비디오 여행",
+   "before": "여행",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "오십프로 프리미어",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "마니또 클럽",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "실화탐사대",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "유부녀 킬러 프리미어",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "찬란한 너의 계절에 프리미어",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "신인감독 김연경",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "최애데뷔",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "판사 이한영 프리미어",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "첫 번째 남자",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "가족관계증명서",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "21세기 대군부인 제작기",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC드라마넷",
+   "program": "이 강에는 달이 흐른다",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "화려한 날들",
+   "before": "다큐·교양",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "사랑이 온다",
+   "before": "다큐·교양",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "은애하는 도적님아",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "욕망의 덫",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "붉은 진주",
+   "before": "다큐·교양",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "사랑을 처방해 드립니다",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "신상출시 편스토랑",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "옥탑방의 문제아들",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "스모킹 건",
+   "before": "다큐·교양",
+   "after": "본사 시사",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "해피투게더 - 혼자가 아니어서 좋아",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "사장님 귀는 당나귀 귀",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "더 시즌즈-성시경의 고막남친",
+   "before": "음악",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "엄마가 미쳤어요",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "문무",
+   "before": "다큐·교양",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "1박 2일 시즌4",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "무엇이든 물어보세요",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS드라마",
+   "program": "불후의 명곡 전설을 노래하다",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "DRAMAcube",
+   "program": "나의 해리에게",
+   "before": "오리지널 드라마",
+   "after": "드라마",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "DRAMAcube",
+   "program": "시골에 간 도시 Z",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "Dramax",
+   "program": "지구마불 세계여행",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "욕망의 덫",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "붉은 진주",
+   "before": "다큐·교양",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "스모킹 건",
+   "before": "다큐·교양",
+   "after": "본사 시사",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "신상출시 편스토랑",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "은애하는 도적님아",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "불후의 명곡2",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "옥탑방의 문제아들",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "2TV 생생정보",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "팔도밥상 스페셜",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "엄마가 미쳤어요",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "생활의 발견",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "동네 한 바퀴",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "사랑을 처방해 드립니다",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "무엇이든 물어보세요",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "불후의명곡전설을노래하다",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS Story",
+   "program": "팔도밥상",
+   "before": "미분류",
+   "after": "본사 교양",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "21세기 대군부인",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "판사 이한영",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "오십프로",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "유부녀 킬러",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "실화탐사대",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "오은영 리포트 결혼지옥",
+   "before": "예능",
+   "after": "본사 교양",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "구해줘 홈즈",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "놀면 뭐하니",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "이강에는 달이 흐른다",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "오은영리포트",
+   "before": "미분류",
+   "after": "본사 교양",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "첫 번째 남자",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "서프라이즈 미스터리 살롱",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "출발 비디오 여행",
+   "before": "여행",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "가족관계증명서",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC ON",
+   "program": "유부녀 킬러 킬링 타임",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "신인감독 김연경2 프리퀄: 원더독스의 시작",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "나 혼자 산다",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "놀면 뭐하니",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "어서와~ 한국은 처음이지",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC Plus 오리지널"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "돌싱N모솔",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC Plus 오리지널"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "판사 이한영",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "위대한 가이드 3",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC Plus 오리지널"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "계약 결혼",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC Plus 오리지널"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "전지적 참견 시점",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "라디오스타",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "극한84",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "유부녀 킬러",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "구해줘 홈즈",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "21세기 대군부인",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "신인감독 김연경 2",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "오은영리포트",
+   "before": "미분류",
+   "after": "본사 교양",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "호텔 도깨비",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC Plus 오리지널"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "히든 아이",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC Plus 오리지널"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "마니또 클럽",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "라이어",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "오은영 리포트 결혼지옥",
+   "before": "예능",
+   "after": "본사 교양",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "21세기 대군부인 프리미어",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "찬란한 너의 계절에",
+   "before": "예능",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "출발 비디오 여행",
+   "before": "여행",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "오십프로",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "최우수산",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "실화탐사대",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "신인감독 김연경",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "MBC every1",
+   "program": "유부녀 킬러 킬링 타임",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "부분·MBC 본사 프로그램"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "내새끼의연애2은별재혁서윤의삼각관계",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "이호선 상담소",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "동네의 명장들",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "정확·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "내 새끼의 연애 2",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "김창옥쇼 4",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "남겨서 뭐하게",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "벌거벗은 한국사 3",
+   "before": "예능",
+   "after": "오리지널 교양",
+   "how": "정확·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "육아인턴",
+   "before": "영화",
+   "after": "오리지널 예능",
+   "how": "정확·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "내 새끼의 연애",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "어쩌다 어른",
+   "before": "영화",
+   "after": "오리지널 교양",
+   "how": "부분·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "벌거벗은 한국사",
+   "before": "예능",
+   "after": "오리지널 교양",
+   "how": "부분·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "슈퍼푸드의 힘",
+   "before": "예능",
+   "after": "오리지널 교양",
+   "how": "정확·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "씨름의 여왕",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "화성인이지만 괜찮아",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN STORY 오리지널"
+  },
+  {
+   "tab": "tvN STORY",
+   "program": "어쩌다 어른 10주년",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "부분·tvN STORY 오리지널"
+  },
+  {
+   "tab": "채널S",
+   "program": "끝까지 간다 독박투어",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 공동 (채널S·E채널)"
+  },
+  {
+   "tab": "채널S",
+   "program": "전현무계획 3",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·채널S 오리지널"
+  },
+  {
+   "tab": "채널S",
+   "program": "전현무계획 4",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBN 공동 (MBN·채널S)"
+  },
+  {
+   "tab": "채널S",
+   "program": "지구마불 세계여행 4",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "채널S",
+   "program": "박장대소 - 부르면 언제든 콜",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·채널S 오리지널"
+  },
+  {
+   "tab": "채널S",
+   "program": "밥 플레이스",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·채널S 오리지널"
+  },
+  {
+   "tab": "채널S",
+   "program": "티키타카로드 in 시드니",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·채널S 오리지널"
+  },
+  {
+   "tab": "채널S",
+   "program": "다시 갈 지도",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·채널S 오리지널"
+  },
+  {
+   "tab": "채널S",
+   "program": "티키타카 로드",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·채널S 오리지널"
+  },
+  {
+   "tab": "채널S",
+   "program": "내 아이의 사생활",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "채널S",
+   "program": "뚜벅이 맛총사",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·채널S 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "차트를달리는남자스페셜광기의끝",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "차트를달리는남자스페셜여름특집",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "차트를달리는남자스페셜막돼먹은인간들",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "차트를달리는남자스페셜SNS의노예들",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "차트를달리는남자스페셜미스터리X",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "이십세기 힛-트쏭",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "차트를달리는남자스페셜쇼킹카메라",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "무엇이든 물어보살",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "계약결혼",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC Plus 공동 (MBC every1·KBS Joy)"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "차트를 달리는 남자",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "뷰티체크인",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "차트를달리는남자스페셜X파일",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "차트를 달리는 남자 스페셜",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "은애하는 도적님아",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "해피투게더 - 혼자가 아니어서 좋아",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "그래, 이혼하자",
+   "before": "드라마",
+   "after": "오리지널 예능",
+   "how": "정확·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "사장님 귀는 당나귀 귀",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "옥탑방의 문제아들",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "신상출시 편스토랑",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "1박 2일 시즌4",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "시집 가는길",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "정확·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "인연과 악연",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "스모킹 건",
+   "before": "다큐·교양",
+   "after": "본사 시사",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "불후의명곡",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "운명네컷",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "무엇이든 물어보세요",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "더 시즌즈-성시경의 고막남친",
+   "before": "음악",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "불후의 명곡 전설을 노래하다",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "더 시즌즈-10CM의 쓰담쓰담",
+   "before": "음악",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "위기탈출 넘버원 : 비상구를 열어라",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·KBS N 오리지널"
+  },
+  {
+   "tab": "KBS JOY",
+   "program": "불후의 명곡2",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "부분·KBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "무엇이든 해줄 지니 비서진",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "신발 벗고 돌싱포맨",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "런닝맨",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "틈만나면",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "미운우리새끼다시쓰는육아일기",
+   "before": "미분류",
+   "after": "본사 예능",
+   "how": "부분·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "동상이몽 2 너는 내 운명",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "우리들의 발라드 2",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "재벌X형사 2",
+   "before": "드라마",
+   "after": "본사 드라마",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "거장항준",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "꼬리에 꼬리를 무는 그날 이야기",
+   "before": "예능",
+   "after": "본사 교양",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "나는 SOLO, 그 후 사랑은 계속된다",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "TV 동물농장",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "나는 SOLO",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "내 남은 연애",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "생활의 달인",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "골 때리는 그녀들",
+   "before": "예능",
+   "after": "본사 예능",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "2026 ABC 투어 in 냐짱",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS funE 오리지널"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "맨 인 블랙박스",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS funE",
+   "program": "2026 K-EXPO USA K-POP CONCERT",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "정확·SBS funE 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "내 새끼의 연애 2",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "내새끼의연애2직진플러팅모음집",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "서울언니",
+   "before": "사업형",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "맛도사211",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "쯔양몇끼",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "E채널",
+   "program": "끝까지 간다 독박투어",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "돌싱N모솔",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "용감한 형사들 5",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "한국탐구여행",
+   "before": "여행",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "연애기숙학교2기 돌싱N모솔",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "하나부터 열까지",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "크레이지 투어",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "E채널",
+   "program": "내새끼의연애2엇갈린사각관계",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "서인영의 유행꼰대",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "내새끼의연애2연애기록편",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "형수다 3",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "형,수다",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "놀던언니",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·채널S 공동 (E채널·채널S)"
+  },
+  {
+   "tab": "E채널",
+   "program": "내 새끼의 연애",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "지구마불 세계여행 3",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "E채널",
+   "program": "솔로라서",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 공동 (SBS Plus·E채널)"
+  },
+  {
+   "tab": "E채널",
+   "program": "시골에 간 도시 Z",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "E채널",
+   "program": "귀신 잡는 해병대",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "놀던언니2하이라이트",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·채널S 공동 (E채널·채널S)"
+  },
+  {
+   "tab": "E채널",
+   "program": "먹고 보는 형제들 2",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS Plus 공동 (SBS Plus·E채널)"
+  },
+  {
+   "tab": "E채널",
+   "program": "서인영의 유행꼰대 미리보기",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·E채널 오리지널"
+  },
+  {
+   "tab": "E채널",
+   "program": "놀던언니 2",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·채널S 공동 (E채널·채널S)"
+  },
+  {
+   "tab": "K STAR",
+   "program": "쯔양몇끼",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "K STAR",
+   "program": "크레이지 투어",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "K STAR",
+   "program": "맡겨만 주십숏",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "K STAR",
+   "program": "하하버스",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "K STAR",
+   "program": "살롱드홈즈",
+   "before": "오리지널 드라마",
+   "after": "드라마",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "K STAR",
+   "program": "아이쇼핑",
+   "before": "오리지널 드라마",
+   "after": "드라마",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "CH view",
+   "program": "쯔양몇끼",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "CH view",
+   "program": "시골에 간 도시 Z",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "ONT",
+   "program": "내 아이의 사생활",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "ONT",
+   "program": "신병캠프",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "ONT",
+   "program": "최화정 김호영의 보고싶었어",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "ONT",
+   "program": "현무카세",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "ONT",
+   "program": "길치라도 괜찮아",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "ONT",
+   "program": "오은영 게임",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "UMAX",
+   "program": "길치라도 괜찮아",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "UMAX",
+   "program": "쯔양몇끼",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "UMAX",
+   "program": "하하버스",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "UMAX",
+   "program": "최화정 김호영의 보고싶었어",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "UMAX",
+   "program": "입 터지는 실험실",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "UHD Dream",
+   "program": "강철부대 3",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "UHD Dream",
+   "program": "강철부대",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "UHD Dream",
+   "program": "강철부대 2",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "SBS NEX",
+   "program": "생방송 투데이",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "SBS NEX",
+   "program": "좋은 아침",
+   "before": "다큐·교양",
+   "after": "본사 교양",
+   "how": "정확·SBS 본사 프로그램"
+  },
+  {
+   "tab": "MBC",
+   "program": "나 혼자 산다",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "신인감독 김연경2",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "놀면 뭐하니",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "21세기 대군부인",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "탐사기획 스트레이트",
+   "before": "다큐·교양",
+   "after": "오리지널 시사",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "전지적 참견 시점",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "판사 이한영",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "나 혼자 산다 스페셜",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "신인감독김연경2복수혈전",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "극한84",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "유부녀 킬러",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "라디오스타",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "구해줘 홈즈",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "신인감독김연경2프리퀄원더독스의시작스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "오은영 리포트 결혼지옥",
+   "before": "예능",
+   "after": "오리지널 교양",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "신인감독 김연경2 프리퀄: 원더독스의 시작",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "서프라이즈 미스터리 살롱",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "최우수산 미리보기",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "마니또 클럽",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "오십프로",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "출발 비디오 여행",
+   "before": "여행",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "실화탐사대",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "찬란한 너의 계절에",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "PD수첩",
+   "before": "다큐·교양",
+   "after": "오리지널 시사",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "신인감독김연경2스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "가족관계증명서",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "첫 번째 남자",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "최우수산",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "쇼 음악중심",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "신인감독김연경2-1몰아보기",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "다 따져봅시다",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "오늘N",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "엄마를 부탁해",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "기분 좋은 날",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "인생도 각본이 필요해",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "뽀뽀뽀 좋아좋아",
+   "before": "애니·키즈",
+   "after": "오리지널 어린이",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "라이어",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "신인감독 김연경",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "21세기 대군부인 프리미어",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "유부녀 킬러 프리미어",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "찬란한 너의 계절에 프리미어",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "오십프로 프리미어",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "오십프로 하이라이트",
+   "before": "다큐·교양",
+   "after": "오리지널 드라마",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "유부녀 킬러 킬링 타임",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "21세기 대군부인 제작기",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "유부녀 킬러 하이라이트",
+   "before": "다큐·교양",
+   "after": "오리지널 드라마",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "MBC",
+   "program": "판사 이한영 프리미어",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "부분·MBC 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "닥터X : 하얀 마피아의 시대",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "그것이 알고 싶다",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "미운우리새끼다시쓰는육아일기",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "재벌X형사 2",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "런닝맨",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "우리들의 발라드 2",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "무엇이든 해줄 지니 비서진",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "미운우리새끼다시쓰는육아일기설스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "틈만나면",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "궁금한 이야기 Y",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "미운우리새끼다시쓰는육아일기설특집",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "골때리는그녀들리부트",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "TV 동물농장",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "틈만나면설스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "동상이몽 2 너는 내 운명",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "골 때리는 그녀들",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "생활의 달인",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "틈만 나면의 틈",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "꼬리에 꼬리를 무는 그날 이야기",
+   "before": "예능",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "맨 인 블랙박스",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "거장항준",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "모닝와이드",
+   "before": "뉴스·시사",
+   "after": "오리지널 교양",
+   "how": "부분·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "내 남은 연애",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "틈만나면스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "생방송 투데이",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "좋은아침",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "세 개의 시선",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "세상에서 가장 아름다운 여행",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "지구는 생명이다",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "열린TV 시청자 세상",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "틈만나면 시즌4",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "틈만나면 시즌5",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·SBS 오리지널"
+  },
+  {
+   "tab": "SBS",
+   "program": "골 때리는 그녀들:리부트 G리그",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "부분·SBS 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "취사병 전설이 되다",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "언더커버 미쓰홍",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "언더커버 셰프 : 멀리서 찾아온 벗",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "100일의 거짓말",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "은밀한 감사",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "내일도 출근",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "놀라운 토요일",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "나의 유죄인간",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "언더커버 셰프",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "포핸즈",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "오싹한 연애",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "스프링 피버",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "프로보노",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "유 퀴즈 온 더 블럭",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "맛따라 길따라 대명이따라",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "보검 매직컬",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "식스센스: B사이드",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "100일의 거짓말 : 비밀 문서",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "부분·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "최애의 사원",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "언더커버셰프멀리서찾아온벗스페셜매력만점선배님들ZIP",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "우주를 줄게",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "웰컴 투 불로촌 in 시칠리아",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "웰컴 투 불로촌 in 유럽",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "무쇠소녀단",
+   "before": "스포츠",
+   "after": "오리지널 예능",
+   "how": "부분·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "잡학자들 스프링에디션",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "히든에이지",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "잡학자들",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "70억의 선택",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "나만의 시크릿 나비효과",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "신사장 프로젝트",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "웰컴 투 불로촌",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "너의 몸소리가 들려",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "폭군의 셰프",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "tvN",
+   "program": "세이렌",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·tvN 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "1박 2일 시즌4",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "화려한 날들",
+   "before": "다큐·교양",
+   "after": "오리지널 드라마",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "사랑이 온다",
+   "before": "다큐·교양",
+   "after": "오리지널 드라마",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "사랑을 처방해 드립니다",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "불후의 명곡 전설을 노래하다",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "2TV 생생정보",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "불후의명곡광복절기획",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "사장님 귀는 당나귀 귀",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "은애하는 도적님아",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "욕망의 덫",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "신상출시 편스토랑",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "해피투게더 - 혼자가 아니어서 좋아",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "옥탑방의 문제아들",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "스모킹 건",
+   "before": "다큐·교양",
+   "after": "오리지널 시사",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "붉은 진주",
+   "before": "다큐·교양",
+   "after": "오리지널 드라마",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "뮤직뱅크",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "누가누가 잘하나",
+   "before": "애니·키즈",
+   "after": "오리지널 어린이",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "다큐 인사이트",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "생활의 발견",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "불후의명곡스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "동네 한 바퀴",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "엄마가 미쳤어요",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "무엇이든 물어보세요",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "TV 유치원",
+   "before": "애니·키즈",
+   "after": "오리지널 어린이",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "더 시즌즈-성시경의 고막남친",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "부분·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "더 시즌즈-10CM의 쓰담쓰담",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "부분·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "뮤직뱅크 인 바르셀로나",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "부분·KBS 오리지널"
+  },
+  {
+   "tab": "KBS2",
+   "program": "문무",
+   "before": "다큐·교양",
+   "after": "오리지널 드라마",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "백상예술대상WITHGUCCI2부",
+   "before": "미분류",
+   "after": "오리지널 특집",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "신입사원 강회장",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "사건반장",
+   "before": "다큐·교양",
+   "after": "오리지널 시사",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "백상예술대상WITHGUCCI1부",
+   "before": "미분류",
+   "after": "오리지널 특집",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "아는 형님",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "경도를 기다리며",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "모두가 자신의 무가치함과 싸우고 있다",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "냉장고를 부탁해 since 2014",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "미혼남녀의 효율적 만남",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "이혼숙려캠프",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "히든싱어 8",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "뭉쳐야 찬다 4",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "날아올라라 나비",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "연애전쟁",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "혼자는 못 해",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "파이널 테이블",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "당일배송 우리집",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "톡파원 25시",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "이가혁 라이브",
+   "before": "뉴스·시사",
+   "after": "오리지널 보도",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q스페셜(중년다이어트살빠지는몸의비밀)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q특별판",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "할루시네이션: 해고전쟁",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(혈관속에쌓이는위협시한폭탄이되다)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "논/쟁",
+   "before": "예능",
+   "after": "오리지널 시사",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q특별판(중년다이어트지방을태워라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(지방을태우는골든타임식후30분)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "트렌드 픽",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q스페셜(중년다이어트의핵심지방연소버튼의비밀)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(내몸을살리는천연비타민C)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(죽음을부르는염증비염의경고)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(비만의주범당독소를제거하라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "건강 1120",
+   "before": "사업형",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(중년다이어트지방을태우는힘을키워라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(올해도소원은다이어트)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q특별판(살찌는몸의경고몸속지방을태워라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q스페셜(살찌는몸의비밀소화불량)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q스페셜(탈모에맞서는법두피속콜라겐을채워라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "날아라 병아리",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "장르가 머니",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "내 몸을 부탁해",
+   "before": "예능",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "인생의 갈림길 위대한 선택",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "중독자들 어벤져스",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "중독자들어벤져스스페셜",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "지킬박사와 가이드",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐 플러스",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "장인과 아이돌: 짱돌",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q스페셜(갱년기골든타임여성호르몬을지켜라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(암을이기는생존전략)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "중독자들",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다시 쓰는 건강노트",
+   "before": "사업형",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "입만 살았네",
+   "before": "예능",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "이토록 위대한 몸",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(급감량시대의경고요요를막아라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(풍요의종말내몸안에진화오작동)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q스페셜",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(Q다이어트에절대공식이존재하는가)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(혈관의경고HDL를높여라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(다이어트를방해하는보이지않는적소화불량)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(갱년기골든타임여성호르몬을지켜라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(함께살이찐다가족비만잔혹사)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(Q무너진면역의비밀나는왜암에걸렸을까)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(살찌는몸의비밀소화불량)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(죽음을부르는피로세포노화를막아라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(살찌는몸의경고몸속지방을태워라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(잇몸병이틔운죽음의싹구강파괴균을잡아라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q스페셜(지방을태우는골든타임식후30분)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(탈모에맞서는법두피속콜라겐을채워라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(Q올여름은다를까3050다이어트잔혹사)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(겨울철골절주의보뼈의균형을지켜라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(비만의덫갈증이부른혈당폭주)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(폭염후생활습관부터바꿔라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(다이어트새로운장을열다)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(중년다이어트지방을태워라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(Q특별한합숙빠지는자VS찌는자의룰)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(젊음을지키는열쇠몸속부터채워라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(식욕의폭주죽음을부르는비만의경고)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(건강한체중관리로지방을역공하는방법은)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q(요요의계절몸은기억한다)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q스페셜(살찌는몸의경고몸속지방을태워라)",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "아파트",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "아침&",
+   "before": "예능",
+   "after": "오리지널 보도",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "다큐플러스Q",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "바디멘터리 몸이 답이다",
+   "before": "예능",
+   "after": "오리지널 교양",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "예스맨",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "샤이닝",
+   "before": "예능",
+   "after": "오리지널 드라마",
+   "how": "정확·JTBC 오리지널"
+  },
+  {
+   "tab": "JTBC",
+   "program": "최강야구 2025",
+   "before": "스포츠",
+   "after": "오리지널 예능",
+   "how": "부분·JTBC 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "엄마가 미쳤어요",
+   "before": "드라마",
+   "after": "오리지널 드라마",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "추적 60분",
+   "before": "다큐·교양",
+   "after": "오리지널 시사",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "6시 내고향",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "열린음악회",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "다큐 인사이트",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "동네 한 바퀴",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "시사기획 창",
+   "before": "뉴스·시사",
+   "after": "오리지널 시사",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "특파원 보고 세계는 지금",
+   "before": "다큐·교양",
+   "after": "오리지널 시사",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "동물의 왕국",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "아침마당",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "팔도밥상스페셜",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "부분·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "KBS 네트워크 기획",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "사사건건",
+   "before": "다큐·교양",
+   "after": "오리지널 시사",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "무엇이든 물어보세요",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "TV비평 시청자 데스크",
+   "before": "다큐·교양",
+   "after": "오리지널 시사",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "누가누가 잘하나",
+   "before": "애니·키즈",
+   "after": "오리지널 어린이",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "생활의 발견",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "KBS1",
+   "program": "방과 후 초능력",
+   "before": "애니·키즈",
+   "after": "오리지널 어린이",
+   "how": "정확·KBS 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "개와늑대의시간2특별판",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "탐정들의 영업비밀",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "김진의 돌직구 쇼",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "아기가 생겼어요",
+   "before": "다큐·교양",
+   "after": "오리지널 드라마",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "개와 늑대의 시간 2",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "개와늑대의시간2스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "신랑수업 2",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "티처스3: 재수전쟁",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "언니만 따라와",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "이제만나러갑니다스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "개와 늑대의 시간",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "부분·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "걸리버 여행기",
+   "before": "여행",
+   "after": "오리지널 예능",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "아기가 생겼어요 하이라이트",
+   "before": "다큐·교양",
+   "after": "오리지널 드라마",
+   "how": "부분·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "키드냅게임",
+   "before": "다큐·교양",
+   "after": "오리지널 드라마",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "너에게 다이브",
+   "before": "다큐·교양",
+   "after": "오리지널 드라마",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "메디컬 다이어리",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "뷰티 클리닉 터치미",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "행복한 아침",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "강철지구",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "아름다운 건강수업 The 바디 지니어스",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "생존의 비밀",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "스타건강랭킹 넘버원",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "잘 살면 좋잖아",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "아이엠닥터",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "건강스페셜한양촌",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "생존의 단서 블랙박스",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "대한민국의 힘 기업의 시간들",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "알아야산다",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "몸으로 보는 세상 아모르바디",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "건강스페셜한양촌스페셜",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·채널A 오리지널"
+  },
+  {
+   "tab": "채널A",
+   "program": "우리동네 셀럽 1%의 비밀",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·채널A 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯 4",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4갈라쇼3부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4갈라쇼2부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4갈라쇼1부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4토크콘서트3부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4토크콘서트2부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4토크콘서트1부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "조선의 사랑꾼",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4미공개스페셜1부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "X의 사생활",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "아빠하고나하고특별판2부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "천만기인쇼",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "아빠하고 나하고",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "금타는 금요일",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4미공개스페셜2부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "강적들",
+   "before": "다큐·교양",
+   "after": "오리지널 시사",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "아빠하고 나하고 특별판",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯 4 미공개 스페셜",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "아빠하고나하고특별판1부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4 서울콘서트",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4서울콘서트2부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯 포유",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4서울콘서트3부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "식객 허영만의 백반기행",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯 4 올하트 스페셜",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "트롯 키친 달리는 디너쇼",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4서울콘서트1부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4트롯여왕연대기2부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4올하트스페셜2부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯 4 토크콘서트",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4갈라쇼베스트",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "조선의 사랑꾼 베스트",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "식객 허영만의 백반기행 특별판",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "K-트롯 진선미 환상의 무대",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯 포유 특별판",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4트롯여왕연대기1부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "조선의 사랑꾼 특별판",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4 트롯여왕 연대기",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4트롯여왕연대기3부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "메디컬다큐 명의보감",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯 4 갈라쇼",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "신 성공시대 마이웨이",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "메디컬다큐 명의보감 특별판",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4토크콘서트베스트",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "나이야가라",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "엄마의 봄날",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "열린비평 TV를 말하다",
+   "before": "다큐·교양",
+   "after": "오리지널 시사",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "질병의 법칙",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "건강한 집 2",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "건강한 아침 해뜰날",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4올하트스페셜1부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "어떻게 살 것인가",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "건강한 집 2 특별판",
+   "before": "사업형",
+   "after": "오리지널 교양",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "어떻게 살 것인가 특별판",
+   "before": "사업형",
+   "after": "오리지널 교양",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "질병의 법칙 특별판",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4트롯여왕연대기베스트",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "트롯랭킹쇼 찐이야",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "나누는 행복 희망플러스",
+   "before": "사업형",
+   "after": "오리지널 특집",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "공간다큐 만남",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "금타는 금요일 특별판",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "닥터신",
+   "before": "사업형",
+   "after": "오리지널 드라마",
+   "how": "정확·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "미스트롯4 스페셜 우리 듀엣할까요",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "나이야가라 특별판",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "TV CHOSUN",
+   "program": "천만기인쇼 특별판",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "부분·TV조선 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "극한 직업",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "세계테마기행",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "건축탐구-집",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "명의",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "한국기행",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "추성훈의 밥값은 해야지",
+   "before": "오리지널 예능",
+   "after": "예능",
+   "how": "통합본에 없음→일반"
+  },
+  {
+   "tab": "EBS",
+   "program": "다큐 프라임",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "부모의 첫 성교육 아기는 어떻게 생겨요",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "부분·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "귀하신 몸",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "부모의 첫 성교육",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "자이언트 펭TV",
+   "before": "여행",
+   "after": "오리지널 어린이",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "위대한 수업, 그레이트 마인즈",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "부분·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "고향민국",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "딩동댕 유치원",
+   "before": "여행",
+   "after": "오리지널 어린이",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "EBS",
+   "program": "지식채널 e",
+   "before": "여행",
+   "after": "오리지널 교양",
+   "how": "정확·EBS 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "무명전설디너쇼2부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "무명전설디너쇼3부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "무명전설",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "무명전설디너쇼1부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "전현무계획 3",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·채널S 공동 (MBN·채널S)"
+  },
+  {
+   "tab": "MBN",
+   "program": "상남자의 여행법 in 마나도",
+   "before": "여행",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "무명전설콘서트1부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "무명전설콘서트2부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "전현무계획 4",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "언포게터블듀엣2-2부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "디스이즈 현무로드",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "휴먼다큐",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "무명전설 못다 한 이야기",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "언포게터블듀엣2스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "속풀이쇼 동치미",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "나는 자연인이다",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "언포게터블듀엣2-1부",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "휴먼다큐 사노라면",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "상남자의 여행법 in 대만",
+   "before": "여행",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "무명전설 디너쇼",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "결이 다른 전쟁사",
+   "before": "오리지널 예능",
+   "after": "오리지널 교양",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "특종세상스페셜",
+   "before": "미분류",
+   "after": "오리지널 교양",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "무명전설디너쇼스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "무명전설 콘서트",
+   "before": "음악",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "상남자의여행법IN대만스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "언포게터블 듀엣 2",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "상남자의여행법IN마나도스페셜",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "천기누설",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "빈칸채우기",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "엄지의 제왕",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "상남자의여행법IN대만베스트",
+   "before": "미분류",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "언포게터블 듀엣",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "부분·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "알토란",
+   "before": "예능",
+   "after": "오리지널 예능",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "메디컬 리포트 완벽한 몸",
+   "before": "다큐·교양",
+   "after": "오리지널 교양",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "상남자의 여행법",
+   "before": "여행",
+   "after": "오리지널 예능",
+   "how": "정확·MBN 오리지널"
+  },
+  {
+   "tab": "MBN",
+   "program": "전현무계획-미식 한 상",
+   "before": "다큐·교양",
+   "after": "오리지널 예능",
+   "how": "부분·채널S 공동 (MBN·채널S)"
+  }
+ ],
+ "unmatched": [
+  {
+   "key": "채널S|독박투어",
+   "program": "독박투어",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "E채널|독박투어",
+   "program": "독박투어",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|심사숙소",
+   "program": "심사숙소",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|s클래스",
+   "program": "S클래스",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|미식전파사",
+   "program": "미식전파사",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|올어바웃k밥",
+   "program": "올어바웃K밥",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|우리지금만나",
+   "program": "우리지금만나",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|놀던언니",
+   "program": "놀던언니",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|위장취업",
+   "program": "위장취업",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS JOY|위장취업",
+   "program": "위장취업",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|오피스빌런",
+   "program": "오피스빌런",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBN|오피스빌런",
+   "program": "오피스빌런",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|진격의언니들",
+   "program": "진격의언니들",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|신과함께",
+   "program": "신과함께",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|진격의할매",
+   "program": "진격의할매",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|나대지마심장아",
+   "program": "나대지마심장아",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "K STAR|나대지마심장아",
+   "program": "나대지마심장아",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|후엠아이",
+   "program": "후엠아이",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|힐링산장",
+   "program": "힐링산장",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|위대한집쿡연구소",
+   "program": "위대한집쿡연구소",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|연애도사",
+   "program": "연애도사",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|연애도사",
+   "program": "연애도사",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|잡동산",
+   "program": "잡동산",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|솔로라서2",
+   "program": "솔로라서2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "E채널|솔로라서2",
+   "program": "솔로라서2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|그레이르네상스",
+   "program": "그레이 르네상스",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|뱀파이어프로젝트",
+   "program": "뱀파이어 프로젝트",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|상남자의여행법in규슈",
+   "program": "상남자의 여행법 in 규슈",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|지지고볶는여행",
+   "program": "지지고 볶는 여행",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "ENA|지지고볶는여행",
+   "program": "지지고 볶는 여행",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|사장은아무나하나",
+   "program": "사장은 아무나 하나",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|대환장한국체험기패밀리가왔다",
+   "program": "대환장 한국 체험기 <패밀리가 왔다>",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|먹고보는형제들2",
+   "program": "먹고 보는 형제들 2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|리얼law맨스고소한남녀",
+   "program": "리얼 Law맨스 고소한 남녀",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "ENA|리얼law맨스고소한남녀",
+   "program": "리얼 Law맨스 고소한 남녀",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|우리아이가달라졌어요리턴즈",
+   "program": "우리 아이가 달라졌어요 리턴즈",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|오픈런",
+   "program": "오픈런",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|세상의모든사건지구in",
+   "program": "세상의 모든 사건 지구 in",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|비상한가족",
+   "program": "비상한 가족",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|트렌드레코드시즌4",
+   "program": "트렌드 레코드 시즌4",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|연애도사시즌2",
+   "program": "연애도사 시즌2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널S|연애도사시즌2",
+   "program": "연애도사 시즌2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|돈되지",
+   "program": "돈되지",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|트렌드레코드시즌3",
+   "program": "트렌드 레코드 시즌3",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|톡쏘다",
+   "program": "톡쏘다",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|트렌드레코드시즌2",
+   "program": "트렌드 레코드 시즌2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|트렌드레코드",
+   "program": "트렌드 레코드",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|강호동의밥심",
+   "program": "강호동의 밥심",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|언니한텐말해도돼",
+   "program": "언니한텐 말해도 돼",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|러브샷",
+   "program": "러브샷",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|아무도모르게김호중의파트너",
+   "program": "아무도 모르게 김호중의 파트너",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|쩐당포",
+   "program": "쩐당포",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|내게on트롯",
+   "program": "내게 ON 트롯",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|와이낫시즌3",
+   "program": "와이낫 시즌3",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|이철희의타짜",
+   "program": "이철희의 타짜",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|와이낫시즌2",
+   "program": "와이낫 시즌2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|맨땅에한국말",
+   "program": "맨땅에 한국말",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|내기맨",
+   "program": "내기맨",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|와이낫",
+   "program": "와이낫",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|다함께차차차",
+   "program": "다함께 차차차",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|밥은먹고다니냐",
+   "program": "밥은 먹고 다니냐?",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|좋은친구들",
+   "program": "좋은 친구들",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS Plus|똥강아지들",
+   "program": "똥강아지들",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS funE|더쇼",
+   "program": "더 쇼 (THE SHOW)",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS funE|올댓뮤즈4",
+   "program": "올 댓 뮤즈 4",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS funE|올댓뮤즈3",
+   "program": "올 댓 뮤즈 3",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS funE|올댓뮤즈2",
+   "program": "올 댓 뮤즈 2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS funE|올댓뮤즈",
+   "program": "올 댓 뮤즈",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS funE|왈가닥뷰티",
+   "program": "왈가닥뷰티",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "tvN|기프트",
+   "program": "기프트",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "tvN|그냥사람친구",
+   "program": "그냥사람친구",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "tvN|어린이를지키는약속블루닷",
+   "program": "어린이를 지키는 약속 블루닷",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "tvN|뜨거운안녕",
+   "program": "뜨거운 안녕",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "tvN|대담민국에서건물주되는법",
+   "program": "대담민국에서 건물주 되는 법",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "tvN|얄미운사랑",
+   "program": "얄미운 사랑",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "tvN|태풍상사",
+   "program": "태풍상사",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "tvN|버터플라이",
+   "program": "버터플라이",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "tvN|첫사랑을위하여",
+   "program": "첫, 사랑을 위하여",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "tvN|서초동",
+   "program": "서초동",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "tvN STORY|내새끼의연애3",
+   "program": "내 새끼의 연애3",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "E채널|내새끼의연애3",
+   "program": "내 새끼의 연애3",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "tvN STORY|갑절부부",
+   "program": "갑절부부",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "tvN STORY|밀담",
+   "program": "밀담",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "E채널|허경환의유행쇼",
+   "program": "허경환의 유행쇼",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "E채널|띵동택배",
+   "program": "띵동택배",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "E채널|인생때려잡기정승제하숙집",
+   "program": "인생 때려잡기 : 정승제 하숙집",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC every1|쇼챔피언",
+   "program": "쇼챔피언",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC every1|트롯챔피언",
+   "program": "트롯챔피언",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC every1|오프에어",
+   "program": "오프에어",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC every1|뒤너쇼",
+   "program": "뒤너쇼",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC every1|2026mbc대학가요제",
+   "program": "2026 MBC 대학가요제",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC every1|위대한가이드2",
+   "program": "위대한 가이드2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC every1|위대한가이드25대단난가이드",
+   "program": "위대한 가이드2.5 - 대단난 가이드",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC every1|주간아이돌",
+   "program": "주간아이돌",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC every1|최애티비",
+   "program": "최애티비",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC every1|맛집공식",
+   "program": "맛집공식",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS JOY|리뷰it스페셜시즌4",
+   "program": "리뷰 it! 스페셜 시즌4",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS JOY|한국인의세끼",
+   "program": "한국인의 세끼",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS JOY|vj특공대리턴즈",
+   "program": "VJ특공대 리턴즈",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "JTBC|백번의추억",
+   "program": "백번의 추억",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "JTBC|서울자가에대기업다니는김부장이야기",
+   "program": "서울 자가에 대기업 다니는 김 부장 이야기",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "JTBC|샤인온인서울",
+   "program": "샤인 온 인 서울",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "JTBC|한블리",
+   "program": "한블리 (한문철의 블랙박스 리뷰)",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "JTBC|헬로마이닥터친절한진료실",
+   "program": "헬로 마이 닥터 친절한 진료실",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "JTBC|jtbc뉴스룸",
+   "program": "JTBC 뉴스룸",
+   "kind": "오리지널 보도"
+  },
+  {
+   "key": "JTBC|골든디스크어워즈",
+   "program": "골든디스크어워즈",
+   "kind": "오리지널 특집"
+  },
+  {
+   "key": "KBS2|kbs드라마스페셜2026",
+   "program": "KBS 드라마스페셜 2026",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|kbs드라마스페셜2026",
+   "program": "KBS 드라마스페셜 2026",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS2|기묘우리동물원",
+   "program": "기묘 우리 동물원",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|기묘우리동물원",
+   "program": "기묘 우리 동물원",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS2|내겐너무매운연애",
+   "program": "내겐 너무 매운 연애",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|내겐너무매운연애",
+   "program": "내겐 너무 매운 연애",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|문무",
+   "program": "문무",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS2|미워할수없는아버님",
+   "program": "미워할 수 없는 아버님",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|미워할수없는아버님",
+   "program": "미워할 수 없는 아버님",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|붉은진주",
+   "program": "붉은 진주",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|사랑을처방해드립니다",
+   "program": "사랑을 처방해 드립니다",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|사랑이온다",
+   "program": "사랑이 온다",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS2|삼무면연쇄극",
+   "program": "삼무면 연쇄극",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|삼무면연쇄극",
+   "program": "삼무면 연쇄극",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS2|완벽한패밀리",
+   "program": "완벽한 패밀리",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|완벽한패밀리",
+   "program": "완벽한 패밀리",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|욕망의덫",
+   "program": "욕망의 덫",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|은애하는도적님아",
+   "program": "은애하는 도적님아",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS2|조립식가족",
+   "program": "조립식 가족",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|조립식가족",
+   "program": "조립식 가족",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|화려한날들",
+   "program": "화려한 날들",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "KBS1|1박2일시즌4",
+   "program": "1박 2일 시즌4",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS1|더시즌즈",
+   "program": "더 시즌즈",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS1|뮤직뱅크",
+   "program": "뮤직뱅크",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS1|불후의명곡",
+   "program": "불후의 명곡",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS1|사장님귀는당나귀귀",
+   "program": "사장님 귀는 당나귀 귀",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS1|신상출시편스토랑",
+   "program": "신상출시 편스토랑",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS2|열린음악회",
+   "program": "열린음악회",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS1|옥탑방의문제아들2",
+   "program": "옥탑방의 문제아들 2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS1|해피투게더",
+   "program": "해피투게더",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "KBS1|2tv생생정보",
+   "program": "2TV 생생정보",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "KBS2|6시내고향",
+   "program": "6시 내고향",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "KBS2|kbs네트워크기획",
+   "program": "KBS 네트워크 기획",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "KBS2|동물의왕국",
+   "program": "동물의 왕국",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "KBS2|아침마당",
+   "program": "아침마당",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "KBS2|역사저널그날",
+   "program": "역사저널 그날",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "KBS1|역사저널그날",
+   "program": "역사저널 그날",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "KBS2|팔도밥상",
+   "program": "팔도밥상",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "KBS2|tv비평시청자데스크",
+   "program": "TV비평 시청자데스크",
+   "kind": "오리지널 시사"
+  },
+  {
+   "key": "KBS2|사사건건",
+   "program": "사사건건",
+   "kind": "오리지널 시사"
+  },
+  {
+   "key": "KBS1|스모킹건",
+   "program": "스모킹 건",
+   "kind": "오리지널 시사"
+  },
+  {
+   "key": "KBS2|시사기획창",
+   "program": "시사기획 창",
+   "kind": "오리지널 시사"
+  },
+  {
+   "key": "KBS2|추적60분",
+   "program": "추적 60분",
+   "kind": "오리지널 시사"
+  },
+  {
+   "key": "KBS2|특파원보고세계는지금",
+   "program": "특파원 보고 세계는 지금",
+   "kind": "오리지널 시사"
+  },
+  {
+   "key": "KBS1|tv유치원",
+   "program": "TV 유치원",
+   "kind": "오리지널 어린이"
+  },
+  {
+   "key": "KBS2|방과후초능력",
+   "program": "방과후 초능력",
+   "kind": "오리지널 어린이"
+  },
+  {
+   "key": "MBC|이강에는달이흐른다",
+   "program": "이강에는 달이 흐른다",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "MBC|최애데뷔",
+   "program": "최애 데뷔",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "MBC|1등들",
+   "program": "1등들",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC|전지적절친시점",
+   "program": "전지적 절친 시점",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC|태어난김에세계일주4",
+   "program": "태어난 김에 세계일주4",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "MBC|심야괴담회시즌6",
+   "program": "심야괴담회 시즌6",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "MBC|mbc100분토론",
+   "program": "MBC 100분 토론",
+   "kind": "오리지널 시사"
+  },
+  {
+   "key": "SBS|각성",
+   "program": "각성",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|굿파트너",
+   "program": "굿파트너",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|굿파트너2",
+   "program": "굿파트너2",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|귀궁",
+   "program": "귀궁",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|나인투식스",
+   "program": "나인 투 식스",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|보물섬",
+   "program": "보물섬",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|사계의봄",
+   "program": "사계의 봄",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|악몽",
+   "program": "악몽",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|연어가돌아올때",
+   "program": "연어가 돌아올때",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|우리영화",
+   "program": "우리영화",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|우주메리미",
+   "program": "우주메리미",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|지옥에서온판사",
+   "program": "지옥에서 온 판사",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|커넥션",
+   "program": "커넥션",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|키스는괜히해서",
+   "program": "키스는 괜히 해서!",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|트라이우리는기적이된다",
+   "program": "트라이: 우리는 기적이 된다",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|풀카운트",
+   "program": "풀카운트",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "SBS|2026sbs런앤뮤직페스티벌in안동",
+   "program": "2026 SBS 런앤뮤직 페스티벌 in 안동",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|sbs인기가요",
+   "program": "SBS 인기가요",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|나의이방인",
+   "program": "나의 이방인",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|런닝맨팬미팅특집",
+   "program": "런닝맨 팬미팅/특집",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|마이턴",
+   "program": "마이턴",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|신발벗고돌싱포맨",
+   "program": "신발 벗고 돌싱포맨",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|쓰리셰프",
+   "program": "쓰리셰프",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|언베일team",
+   "program": "언베일 &TEAM",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|연애대전",
+   "program": "연애대전",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|유니버스리그",
+   "program": "유니버스 리그",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|육각형프로젝트2",
+   "program": "육각형 프로젝트2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|정글밥",
+   "program": "정글밥",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|정글밥2",
+   "program": "정글밥2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "SBS|네트워크현장고향이보인다",
+   "program": "네트워크 현장! 고향이 보인다",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "SBS|랭킹송건강한가요",
+   "program": "랭킹송: 건강한가요",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "SBS|2026베이스볼s",
+   "program": "2026 베이스볼S",
+   "kind": "오리지널 스포츠"
+  },
+  {
+   "key": "SBS|sbs프로볼링",
+   "program": "SBS 프로볼링",
+   "kind": "오리지널 스포츠"
+  },
+  {
+   "key": "EBS|경이로운자연의세계",
+   "program": "경이로운 자연의 세계",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "채널A|가면의여왕",
+   "program": "가면의 여왕",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|가시리잇고",
+   "program": "가시리잇고",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|거짓말의거짓말",
+   "program": "거짓말의 거짓말",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|결혼해you",
+   "program": "결혼해YOU",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|나쁜아이들",
+   "program": "나쁜 아이들",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|남과여",
+   "program": "남과여",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|마녀",
+   "program": "마녀",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|며느라기",
+   "program": "며느라기",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|새벽2시의신데렐라",
+   "program": "새벽 2시의 신데렐라",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|쇼윈도여왕의집",
+   "program": "쇼윈도: 여왕의 집",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|에이틴어게인",
+   "program": "에이틴 어게인",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|여행을대신해드립니다",
+   "program": "여행을 대신해 드립니다",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|유별나문셰프",
+   "program": "유별나! 문셰프",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|체크인한양",
+   "program": "체크인 한양",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "채널A|2026볼빅파크골프챔피언십",
+   "program": "2026 볼빅 파크골프 챔피언십",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널A|강철부대4",
+   "program": "강철부대4",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널A|무쇠의탄생",
+   "program": "무쇠의 탄생",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널A|우리동네플레이리스트",
+   "program": "우리동네 플레이리스트",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "채널A|건강한식탁",
+   "program": "건강한 식탁",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "채널A|브랜드코리아",
+   "program": "브랜드 코리아",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "채널A|채널a시청자마당",
+   "program": "채널A 시청자마당",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "MBN|보스의노골적취향",
+   "program": "보스의 노골적 취향",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "TV CHOSUN|dna러버",
+   "program": "DNA러버",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "TV CHOSUN|다음생은없으니까",
+   "program": "다음생은 없으니까",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "TV CHOSUN|대군왕이되려는남자",
+   "program": "대군: 왕이 되려는 남자",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "TV CHOSUN|시고르아모르",
+   "program": "시고르아모르",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "TV CHOSUN|컨피던스맨kr",
+   "program": "컨피던스맨KR",
+   "kind": "오리지널 드라마"
+  },
+  {
+   "key": "TV CHOSUN|미스쓰리랑",
+   "program": "미스쓰리랑",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|미스터로또",
+   "program": "미스터 로또",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|미스터트롯",
+   "program": "미스터트롯",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|미스터트롯2",
+   "program": "미스터트롯2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|미스터트롯3",
+   "program": "미스터트롯3",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|미스터트롯4",
+   "program": "미스터트롯4",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|미스트롯2",
+   "program": "미스트롯2",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|미스트롯3",
+   "program": "미스트롯3",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|사랑의콜센타세븐스타즈",
+   "program": "사랑의 콜센타 세븐스타즈",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|스피드퀸",
+   "program": "스피드퀸",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|자랑할개있습니다",
+   "program": "자랑할 개 있습니다",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|트랄랄라유랑단",
+   "program": "트랄랄라 유랑단",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|화요일은밤이좋아",
+   "program": "화요일은 밤이 좋아",
+   "kind": "오리지널 예능"
+  },
+  {
+   "key": "TV CHOSUN|tvchosun건강다큐",
+   "program": "TV CHOSUN 건강다큐",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "TV CHOSUN|고향을응원해",
+   "program": "고향을 응원해",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "TV CHOSUN|직장인대호",
+   "program": "직장인대호",
+   "kind": "오리지널 교양"
+  },
+  {
+   "key": "TV CHOSUN|세대를이어가는기업가정신",
+   "program": "[특집다큐] 세대를 이어가는 기업가 정신",
+   "kind": "오리지널 특집"
+  },
+  {
+   "key": "TV CHOSUN|농산어촌희망프로젝트",
+   "program": "농산어촌 희망 프로젝트",
+   "kind": "오리지널 특집"
+  },
+  {
+   "key": "TV CHOSUN|별들의고향",
+   "program": "별들의 고향",
+   "kind": "오리지널 특집"
+  },
+  {
+   "key": "TV CHOSUN|사람과도시를it다",
+   "program": "사람과 도시를 IT다",
+   "kind": "오리지널 특집"
+  },
+  {
+   "key": "TV CHOSUN|우리가몰랐던진짜625",
+   "program": "우리가 몰랐던, 진짜 6.25",
+   "kind": "오리지널 특집"
+  },
+  {
+   "key": "TV CHOSUN|컬처노믹스창조도시피어나라남원",
+   "program": "컬처노믹스 창조도시 피어나라! 남원",
+   "kind": "오리지널 특집"
+  },
+  {
+   "key": "TV CHOSUN|tvchosun특집다큐",
+   "program": "TV CHOSUN 특집다큐",
+   "kind": "오리지널 교양/특집"
+  },
+  {
+   "key": "KBS JOY|kbs드라마스페셜2026",
+   "program": "KBS 드라마스페셜 2026",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS드라마|kbs드라마스페셜2026",
+   "program": "KBS 드라마스페셜 2026",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS Story|kbs드라마스페셜2026",
+   "program": "KBS 드라마스페셜 2026",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|기묘우리동물원",
+   "program": "기묘 우리 동물원",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS드라마|기묘우리동물원",
+   "program": "기묘 우리 동물원",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS Story|기묘우리동물원",
+   "program": "기묘 우리 동물원",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|내겐너무매운연애",
+   "program": "내겐 너무 매운 연애",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS드라마|내겐너무매운연애",
+   "program": "내겐 너무 매운 연애",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS Story|내겐너무매운연애",
+   "program": "내겐 너무 매운 연애",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|문무",
+   "program": "문무",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS Story|문무",
+   "program": "문무",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|미워할수없는아버님",
+   "program": "미워할 수 없는 아버님",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS드라마|미워할수없는아버님",
+   "program": "미워할 수 없는 아버님",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS Story|미워할수없는아버님",
+   "program": "미워할 수 없는 아버님",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|붉은진주",
+   "program": "붉은 진주",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|사랑을처방해드립니다",
+   "program": "사랑을 처방해 드립니다",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|사랑이온다",
+   "program": "사랑이 온다",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS Story|사랑이온다",
+   "program": "사랑이 온다",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|삼무면연쇄극",
+   "program": "삼무면 연쇄극",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS드라마|삼무면연쇄극",
+   "program": "삼무면 연쇄극",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS Story|삼무면연쇄극",
+   "program": "삼무면 연쇄극",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|엄마가미쳤어요",
+   "program": "엄마가 미쳤어요",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|완벽한패밀리",
+   "program": "완벽한 패밀리",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS드라마|완벽한패밀리",
+   "program": "완벽한 패밀리",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS Story|완벽한패밀리",
+   "program": "완벽한 패밀리",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|욕망의덫",
+   "program": "욕망의 덫",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|조립식가족",
+   "program": "조립식 가족",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS드라마|조립식가족",
+   "program": "조립식 가족",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS Story|조립식가족",
+   "program": "조립식 가족",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS JOY|화려한날들",
+   "program": "화려한 날들",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS Story|화려한날들",
+   "program": "화려한 날들",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "KBS Story|1박2일시즌4",
+   "program": "1박 2일 시즌4",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "KBS Story|더시즌즈",
+   "program": "더 시즌즈",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "KBS JOY|뮤직뱅크",
+   "program": "뮤직뱅크",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "KBS드라마|뮤직뱅크",
+   "program": "뮤직뱅크",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "KBS Story|뮤직뱅크",
+   "program": "뮤직뱅크",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "KBS Story|사장님귀는당나귀귀",
+   "program": "사장님 귀는 당나귀 귀",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "KBS JOY|열린음악회",
+   "program": "열린음악회",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "KBS드라마|열린음악회",
+   "program": "열린음악회",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "KBS Story|열린음악회",
+   "program": "열린음악회",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "KBS Story|해피투게더",
+   "program": "해피투게더",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "KBS JOY|2tv생생정보",
+   "program": "2TV 생생정보",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS드라마|2tv생생정보",
+   "program": "2TV 생생정보",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS JOY|6시내고향",
+   "program": "6시 내고향",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS드라마|6시내고향",
+   "program": "6시 내고향",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS Story|6시내고향",
+   "program": "6시 내고향",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS JOY|kbs네트워크기획",
+   "program": "KBS 네트워크 기획",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS드라마|kbs네트워크기획",
+   "program": "KBS 네트워크 기획",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS Story|kbs네트워크기획",
+   "program": "KBS 네트워크 기획",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS JOY|다큐인사이트",
+   "program": "다큐 인사이트",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS드라마|다큐인사이트",
+   "program": "다큐 인사이트",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS Story|다큐인사이트",
+   "program": "다큐 인사이트",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS JOY|동네한바퀴",
+   "program": "동네 한 바퀴",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS드라마|동네한바퀴",
+   "program": "동네 한 바퀴",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS JOY|동물의왕국",
+   "program": "동물의 왕국",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS드라마|동물의왕국",
+   "program": "동물의 왕국",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS Story|동물의왕국",
+   "program": "동물의 왕국",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS JOY|생활의발견",
+   "program": "생활의 발견",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS드라마|생활의발견",
+   "program": "생활의 발견",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS JOY|아침마당",
+   "program": "아침마당",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS드라마|아침마당",
+   "program": "아침마당",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS Story|아침마당",
+   "program": "아침마당",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS JOY|역사저널그날",
+   "program": "역사저널 그날",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS드라마|역사저널그날",
+   "program": "역사저널 그날",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS Story|역사저널그날",
+   "program": "역사저널 그날",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS JOY|팔도밥상",
+   "program": "팔도밥상",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS드라마|팔도밥상",
+   "program": "팔도밥상",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "KBS JOY|tv비평시청자데스크",
+   "program": "TV비평 시청자데스크",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS드라마|tv비평시청자데스크",
+   "program": "TV비평 시청자데스크",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS Story|tv비평시청자데스크",
+   "program": "TV비평 시청자데스크",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS JOY|사사건건",
+   "program": "사사건건",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS드라마|사사건건",
+   "program": "사사건건",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS Story|사사건건",
+   "program": "사사건건",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS JOY|시사기획창",
+   "program": "시사기획 창",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS드라마|시사기획창",
+   "program": "시사기획 창",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS Story|시사기획창",
+   "program": "시사기획 창",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS JOY|추적60분",
+   "program": "추적 60분",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS드라마|추적60분",
+   "program": "추적 60분",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS Story|추적60분",
+   "program": "추적 60분",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS JOY|특파원보고세계는지금",
+   "program": "특파원 보고 세계는 지금",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS드라마|특파원보고세계는지금",
+   "program": "특파원 보고 세계는 지금",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS Story|특파원보고세계는지금",
+   "program": "특파원 보고 세계는 지금",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "KBS JOY|tv유치원",
+   "program": "TV 유치원",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "KBS드라마|tv유치원",
+   "program": "TV 유치원",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "KBS Story|tv유치원",
+   "program": "TV 유치원",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "KBS JOY|누가누가잘하나",
+   "program": "누가 누가 잘하나",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "KBS드라마|누가누가잘하나",
+   "program": "누가 누가 잘하나",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "KBS Story|누가누가잘하나",
+   "program": "누가 누가 잘하나",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "KBS JOY|방과후초능력",
+   "program": "방과후 초능력",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "KBS드라마|방과후초능력",
+   "program": "방과후 초능력",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "KBS Story|방과후초능력",
+   "program": "방과후 초능력",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "MBC every1|가족관계증명서",
+   "program": "가족관계증명서",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "MBC ON|라이어",
+   "program": "라이어",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "MBC every1|이강에는달이흐른다",
+   "program": "이강에는 달이 흐른다",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "MBC ON|찬란한너의계절에",
+   "program": "찬란한 너의 계절에",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "MBC every1|첫번째남자",
+   "program": "첫 번째 남자",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "MBC every1|최애데뷔",
+   "program": "최애 데뷔",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "MBC ON|최애데뷔",
+   "program": "최애 데뷔",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "MBC every1|1등들",
+   "program": "1등들",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC드라마넷|1등들",
+   "program": "1등들",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC ON|1등들",
+   "program": "1등들",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC ON|극한84",
+   "program": "극한84",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC ON|나혼자산다",
+   "program": "나 혼자 산다",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC ON|라디오스타",
+   "program": "라디오스타",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC ON|마니또클럽",
+   "program": "마니또 클럽",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC every1|서프라이즈미스터리살롱",
+   "program": "서프라이즈: 미스터리 살롱",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC드라마넷|서프라이즈미스터리살롱",
+   "program": "서프라이즈: 미스터리 살롱",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC every1|쇼음악중심",
+   "program": "쇼! 음악중심",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC드라마넷|쇼음악중심",
+   "program": "쇼! 음악중심",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC ON|쇼음악중심",
+   "program": "쇼! 음악중심",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC ON|신인감독김연경2",
+   "program": "신인감독 김연경2",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC every1|전지적절친시점",
+   "program": "전지적 절친 시점",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC드라마넷|전지적절친시점",
+   "program": "전지적 절친 시점",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC ON|전지적절친시점",
+   "program": "전지적 절친 시점",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC ON|전지적참견시점",
+   "program": "전지적 참견 시점",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC ON|최우수산",
+   "program": "최우수산",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC every1|태어난김에세계일주4",
+   "program": "태어난 김에 세계일주4",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC ON|태어난김에세계일주4",
+   "program": "태어난 김에 세계일주4",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "MBC every1|기분좋은날",
+   "program": "기분 좋은 날",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC드라마넷|기분좋은날",
+   "program": "기분 좋은 날",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC ON|기분좋은날",
+   "program": "기분 좋은 날",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC every1|다따져봅시다",
+   "program": "다 따져 봅시다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC드라마넷|다따져봅시다",
+   "program": "다 따져 봅시다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC ON|다따져봅시다",
+   "program": "다 따져 봅시다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC every1|심야괴담회시즌6",
+   "program": "심야괴담회 시즌6",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC드라마넷|심야괴담회시즌6",
+   "program": "심야괴담회 시즌6",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC ON|심야괴담회시즌6",
+   "program": "심야괴담회 시즌6",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC every1|엄마를부탁해",
+   "program": "엄마를 부탁해",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC드라마넷|엄마를부탁해",
+   "program": "엄마를 부탁해",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC ON|엄마를부탁해",
+   "program": "엄마를 부탁해",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC every1|오늘n",
+   "program": "오늘N",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC드라마넷|오늘n",
+   "program": "오늘N",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC ON|오늘n",
+   "program": "오늘N",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC every1|인생도각본이필요해",
+   "program": "인생도 각본이 필요해",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC드라마넷|인생도각본이필요해",
+   "program": "인생도 각본이 필요해",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC ON|인생도각본이필요해",
+   "program": "인생도 각본이 필요해",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "MBC every1|mbc100분토론",
+   "program": "MBC 100분 토론",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "MBC드라마넷|mbc100분토론",
+   "program": "MBC 100분 토론",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "MBC ON|mbc100분토론",
+   "program": "MBC 100분 토론",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "MBC every1|pd수첩",
+   "program": "PD수첩",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "MBC드라마넷|pd수첩",
+   "program": "PD수첩",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "MBC ON|pd수첩",
+   "program": "PD수첩",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "MBC every1|탐사기획스트레이트",
+   "program": "탐사기획 스트레이트",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "MBC드라마넷|탐사기획스트레이트",
+   "program": "탐사기획 스트레이트",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "MBC ON|탐사기획스트레이트",
+   "program": "탐사기획 스트레이트",
+   "kind": "본사 시사"
+  },
+  {
+   "key": "MBC every1|뽀뽀뽀좋아좋아",
+   "program": "뽀뽀뽀 좋아좋아",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "MBC드라마넷|뽀뽀뽀좋아좋아",
+   "program": "뽀뽀뽀 좋아좋아",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "MBC ON|뽀뽀뽀좋아좋아",
+   "program": "뽀뽀뽀 좋아좋아",
+   "kind": "본사 어린이"
+  },
+  {
+   "key": "SBS Plus|각성",
+   "program": "각성",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|각성",
+   "program": "각성",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|각성",
+   "program": "각성",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|굿파트너",
+   "program": "굿파트너",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|굿파트너",
+   "program": "굿파트너",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|굿파트너2",
+   "program": "굿파트너2",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|굿파트너2",
+   "program": "굿파트너2",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|굿파트너2",
+   "program": "굿파트너2",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|귀궁",
+   "program": "귀궁",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|귀궁",
+   "program": "귀궁",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|귀궁",
+   "program": "귀궁",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|나인투식스",
+   "program": "나인 투 식스",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|나인투식스",
+   "program": "나인 투 식스",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|나인투식스",
+   "program": "나인 투 식스",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|닥터x하얀마피아의시대",
+   "program": "닥터X : 하얀 마피아의 시대",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|닥터x하얀마피아의시대",
+   "program": "닥터X : 하얀 마피아의 시대",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|보물섬",
+   "program": "보물섬",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|보물섬",
+   "program": "보물섬",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|보물섬",
+   "program": "보물섬",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|사계의봄",
+   "program": "사계의 봄",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|사계의봄",
+   "program": "사계의 봄",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|사계의봄",
+   "program": "사계의 봄",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|악몽",
+   "program": "악몽",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|악몽",
+   "program": "악몽",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|악몽",
+   "program": "악몽",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|연어가돌아올때",
+   "program": "연어가 돌아올때",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|연어가돌아올때",
+   "program": "연어가 돌아올때",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|연어가돌아올때",
+   "program": "연어가 돌아올때",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|우리영화",
+   "program": "우리영화",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|우리영화",
+   "program": "우리영화",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|우리영화",
+   "program": "우리영화",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|우주메리미",
+   "program": "우주메리미",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|우주메리미",
+   "program": "우주메리미",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|우주메리미",
+   "program": "우주메리미",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|재벌x형사2",
+   "program": "재벌X형사2",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|지옥에서온판사",
+   "program": "지옥에서 온 판사",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|지옥에서온판사",
+   "program": "지옥에서 온 판사",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|지옥에서온판사",
+   "program": "지옥에서 온 판사",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|커넥션",
+   "program": "커넥션",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|커넥션",
+   "program": "커넥션",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|커넥션",
+   "program": "커넥션",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|키스는괜히해서",
+   "program": "키스는 괜히 해서!",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|키스는괜히해서",
+   "program": "키스는 괜히 해서!",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|키스는괜히해서",
+   "program": "키스는 괜히 해서!",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|트라이우리는기적이된다",
+   "program": "트라이: 우리는 기적이 된다",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|트라이우리는기적이된다",
+   "program": "트라이: 우리는 기적이 된다",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|트라이우리는기적이된다",
+   "program": "트라이: 우리는 기적이 된다",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|풀카운트",
+   "program": "풀카운트",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS funE|풀카운트",
+   "program": "풀카운트",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS NEX|풀카운트",
+   "program": "풀카운트",
+   "kind": "본사 드라마"
+  },
+  {
+   "key": "SBS Plus|2026sbs런앤뮤직페스티벌in안동",
+   "program": "2026 SBS 런앤뮤직 페스티벌 in 안동",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|2026sbs런앤뮤직페스티벌in안동",
+   "program": "2026 SBS 런앤뮤직 페스티벌 in 안동",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|2026sbs런앤뮤직페스티벌in안동",
+   "program": "2026 SBS 런앤뮤직 페스티벌 in 안동",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|sbs인기가요",
+   "program": "SBS 인기가요",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|sbs인기가요",
+   "program": "SBS 인기가요",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|sbs인기가요",
+   "program": "SBS 인기가요",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|거장항준",
+   "program": "거장항준",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|골때리는그녀들",
+   "program": "골 때리는 그녀들",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|나의이방인",
+   "program": "나의 이방인",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|나의이방인",
+   "program": "나의 이방인",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|나의이방인",
+   "program": "나의 이방인",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|내남은연애",
+   "program": "내 남은 연애",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|동상이몽2너는내운명",
+   "program": "동상이몽2_너는 내 운명",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|런닝맨",
+   "program": "런닝맨",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|런닝맨팬미팅특집",
+   "program": "런닝맨 팬미팅/특집",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|런닝맨팬미팅특집",
+   "program": "런닝맨 팬미팅/특집",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|런닝맨팬미팅특집",
+   "program": "런닝맨 팬미팅/특집",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|마이턴",
+   "program": "마이턴",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|마이턴",
+   "program": "마이턴",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|마이턴",
+   "program": "마이턴",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|무엇이든해줄지니비서진",
+   "program": "무엇이든 해줄지니 - 비서진",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|미운우리새끼",
+   "program": "미운 우리 새끼",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|신발벗고돌싱포맨",
+   "program": "신발 벗고 돌싱포맨",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|신발벗고돌싱포맨",
+   "program": "신발 벗고 돌싱포맨",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|쓰리셰프",
+   "program": "쓰리셰프",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|쓰리셰프",
+   "program": "쓰리셰프",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|쓰리셰프",
+   "program": "쓰리셰프",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|언베일team",
+   "program": "언베일 &TEAM",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|언베일team",
+   "program": "언베일 &TEAM",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|언베일team",
+   "program": "언베일 &TEAM",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|연애대전",
+   "program": "연애대전",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|연애대전",
+   "program": "연애대전",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|연애대전",
+   "program": "연애대전",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|우리들의발라드2",
+   "program": "우리들의 발라드 2",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|유니버스리그",
+   "program": "유니버스 리그",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|유니버스리그",
+   "program": "유니버스 리그",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|유니버스리그",
+   "program": "유니버스 리그",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|육각형프로젝트2",
+   "program": "육각형 프로젝트2",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|육각형프로젝트2",
+   "program": "육각형 프로젝트2",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|육각형프로젝트2",
+   "program": "육각형 프로젝트2",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|정글밥",
+   "program": "정글밥",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|정글밥",
+   "program": "정글밥",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|정글밥",
+   "program": "정글밥",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS Plus|정글밥2",
+   "program": "정글밥2",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS funE|정글밥2",
+   "program": "정글밥2",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|정글밥2",
+   "program": "정글밥2",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|틈만나면",
+   "program": "틈만나면,",
+   "kind": "본사 예능"
+  },
+  {
+   "key": "SBS NEX|tv동물농장",
+   "program": "TV 동물농장",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|궁금한이야기y",
+   "program": "궁금한 이야기 Y",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS funE|궁금한이야기y",
+   "program": "궁금한 이야기 Y",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|궁금한이야기y",
+   "program": "궁금한 이야기 Y",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|그것이알고싶다",
+   "program": "그것이 알고싶다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS funE|그것이알고싶다",
+   "program": "그것이 알고싶다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|그것이알고싶다",
+   "program": "그것이 알고싶다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|꼬리에꼬리를무는그날이야기",
+   "program": "꼬리에 꼬리를 무는 그날 이야기",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|네트워크현장고향이보인다",
+   "program": "네트워크 현장! 고향이 보인다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS funE|네트워크현장고향이보인다",
+   "program": "네트워크 현장! 고향이 보인다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|네트워크현장고향이보인다",
+   "program": "네트워크 현장! 고향이 보인다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|랭킹송건강한가요",
+   "program": "랭킹송: 건강한가요",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS funE|랭킹송건강한가요",
+   "program": "랭킹송: 건강한가요",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|랭킹송건강한가요",
+   "program": "랭킹송: 건강한가요",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|맨인블랙박스",
+   "program": "맨 인 블랙박스",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|모닝와이드3부",
+   "program": "모닝와이드 3부",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS funE|모닝와이드3부",
+   "program": "모닝와이드 3부",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|모닝와이드3부",
+   "program": "모닝와이드 3부",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|생방송투데이",
+   "program": "생방송 투데이",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS funE|생방송투데이",
+   "program": "생방송 투데이",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|생활의달인",
+   "program": "생활의 달인",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|세개의시선",
+   "program": "세 개의 시선",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS funE|세개의시선",
+   "program": "세 개의 시선",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|세개의시선",
+   "program": "세 개의 시선",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|세상에서가장아름다운여행",
+   "program": "세상에서 가장 아름다운 여행",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS funE|세상에서가장아름다운여행",
+   "program": "세상에서 가장 아름다운 여행",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|세상에서가장아름다운여행",
+   "program": "세상에서 가장 아름다운 여행",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|열린tv시청자세상",
+   "program": "열린TV 시청자 세상",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS funE|열린tv시청자세상",
+   "program": "열린TV 시청자 세상",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|열린tv시청자세상",
+   "program": "열린TV 시청자 세상",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|좋은아침",
+   "program": "좋은아침",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS funE|좋은아침",
+   "program": "좋은아침",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|지구는생명이다",
+   "program": "지구는 생명이다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS funE|지구는생명이다",
+   "program": "지구는 생명이다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS NEX|지구는생명이다",
+   "program": "지구는 생명이다",
+   "kind": "본사 교양"
+  },
+  {
+   "key": "SBS Plus|2026베이스볼s",
+   "program": "2026 베이스볼S",
+   "kind": "본사 스포츠"
+  },
+  {
+   "key": "SBS funE|2026베이스볼s",
+   "program": "2026 베이스볼S",
+   "kind": "본사 스포츠"
+  },
+  {
+   "key": "SBS NEX|2026베이스볼s",
+   "program": "2026 베이스볼S",
+   "kind": "본사 스포츠"
+  },
+  {
+   "key": "SBS Plus|sbs프로볼링",
+   "program": "SBS 프로볼링",
+   "kind": "본사 스포츠"
+  },
+  {
+   "key": "SBS funE|sbs프로볼링",
+   "program": "SBS 프로볼링",
+   "kind": "본사 스포츠"
+  },
+  {
+   "key": "SBS NEX|sbs프로볼링",
+   "program": "SBS 프로볼링",
+   "kind": "본사 스포츠"
+  }
+ ],
+ "originals": [
+  {
+   "channel": "채널S",
+   "program": "독박투어",
+   "kind": "오리지널 예능",
+   "co": "채널S·E채널"
+  },
+  {
+   "channel": "채널S",
+   "program": "심사숙소",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "S클래스",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "티키타카로드",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "전현무계획",
+   "kind": "오리지널 예능",
+   "co": "MBN·채널S"
+  },
+  {
+   "channel": "채널S",
+   "program": "밥플레이스",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "박장대소",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "뚜벅이맛총사",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "미식전파사",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "올어바웃K밥",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "우리지금만나",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "놀던언니",
+   "kind": "오리지널 예능",
+   "co": "E채널·채널S"
+  },
+  {
+   "channel": "채널S",
+   "program": "위장취업",
+   "kind": "오리지널 예능",
+   "co": "채널S·KBS Joy"
+  },
+  {
+   "channel": "채널S",
+   "program": "오피스빌런",
+   "kind": "오리지널 예능",
+   "co": "채널S·MBN"
+  },
+  {
+   "channel": "채널S",
+   "program": "진격의언니들",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "신과함께",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "진격의할매",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "다시갈지도",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "나대지마심장아",
+   "kind": "오리지널 예능",
+   "co": "채널S·K-STAR"
+  },
+  {
+   "channel": "채널S",
+   "program": "후엠아이",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "힐링산장",
+   "kind": "오리지널 예능",
+   "co": "B tv 케이블·채널S"
+  },
+  {
+   "channel": "채널S",
+   "program": "위대한집쿡연구소",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널S",
+   "program": "연애도사",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·채널S"
+  },
+  {
+   "channel": "채널S",
+   "program": "잡동산",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "솔로라서2",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·E채널"
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "그레이 르네상스",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "리뷰 액츄얼리",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "상남자의 여행법",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "신빨토크쇼 귀묘한 이야기 2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "나는 SOLO, 그 후 사랑은 계속된다",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·ENA"
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "나는 SOLO",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·ENA"
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "뱀파이어 프로젝트",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "시간추적자 설록",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "내가 만난 사이코패스",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "신드롬",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "상남자의 여행법 in 규슈",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "이호선의 사이다",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "리얼 연애실험실 독사과 시즌2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "지지고 볶는 여행",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·ENA"
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "사장은 아무나 하나",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "솔로라서",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·E채널"
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "대환장 한국 체험기 <패밀리가 왔다>",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "리얼 연애실험실 독사과",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "먹고 보는 형제들 2",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·E채널"
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "먹고 보는 형제들",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "리얼 Law맨스 고소한 남녀",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·ENA"
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "당신의 결혼은 안녕하십니까",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·SmileTV Plus"
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "우리 아이가 달라졌어요 리턴즈",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "오픈런",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "세상의 모든 사건 지구 in",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "비상한 가족",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "트렌드 레코드 시즌4",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "연애도사 시즌2",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·채널S"
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "돈되지",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "연애도사",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·채널S"
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "트렌드 레코드 시즌3",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "톡쏘다",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "트렌드 레코드 시즌2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "트렌드 레코드",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "강호동의 밥심",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "언니한텐 말해도 돼",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "러브샷",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "아무도 모르게 김호중의 파트너",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "쩐당포",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "내게 ON 트롯",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "와이낫 시즌3",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "이철희의 타짜",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "와이낫 시즌2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "맨땅에 한국말",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "내기맨",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "와이낫",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "다함께 차차차",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "밥은 먹고 다니냐?",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "좋은 친구들",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS Plus",
+   "program": "똥강아지들",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS funE",
+   "program": "더 쇼 (THE SHOW)",
+   "kind": "오리지널 예능",
+   "co": "SBS M·SBS funE"
+  },
+  {
+   "channel": "SBS funE",
+   "program": "2026 ABC 투어 in 냐짱",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS funE",
+   "program": "2026 K-EXPO USA K-POP CONCERT",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS funE",
+   "program": "올 댓 뮤즈 4",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS funE",
+   "program": "올 댓 뮤즈 3",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS funE",
+   "program": "올 댓 뮤즈 2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS funE",
+   "program": "올 댓 뮤즈",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS funE",
+   "program": "왈가닥뷰티",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "기프트",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "보검 매직컬2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "그냥사람친구",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "무쇠소녀단3",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "어린이를 지키는 약속 블루닷",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "뜨거운 안녕",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "언더커버 셰프 : 멀리서 찾아온 벗",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "맛따라 길따라 대명이따라",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "나의 유죄인간",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "100일의 거짓말",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "식스센스: B사이드",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "히든에이지",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "나만의 시크릿 나비효과",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "잡학자들",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "너의 몸소리가 들려",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "웰컴투불로촌",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "70억의 선택",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "유 퀴즈 온 더 블럭",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "놀라운 토요일",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "포핸즈",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "최애의 사원",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "오싹한 연애",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "내일도 출근!",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "취사병 전설이 되다",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "은밀한 감사",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "대담민국에서 건물주 되는 법",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "세이렌",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "우주를 줄게",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "언더커버 미쓰홍",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "스프링 피버",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "프로보노",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "얄미운 사랑",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "태풍상사",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "신사장 프로젝트",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "폭군의 셰프",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "버터플라이",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "첫, 사랑을 위하여",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN",
+   "program": "서초동",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "내 새끼의 연애3",
+   "kind": "오리지널 예능",
+   "co": "tvN STORY·E채널"
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "이호선 상담소",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "남겨서 뭐하게",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "벌거벗은 한국사3",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "슈퍼푸드의 힘",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "동네의 명장들",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "육아인턴",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "김창옥쇼4",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "화성인이지만 괜찮아",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "갑절부부",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "내 새끼의 연애",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "어쩌다 어른 10주년 특집",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "tvN STORY",
+   "program": "밀담",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "솔로라서2",
+   "kind": "오리지널 예능",
+   "co": "SBS Plus·E채널"
+  },
+  {
+   "channel": "E채널",
+   "program": "내 새끼의 연애3",
+   "kind": "오리지널 예능",
+   "co": "tvN STORY·E채널"
+  },
+  {
+   "channel": "E채널",
+   "program": "연애기숙학교2기 돌싱N모솔",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "형수다3",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "서인영의 유행꼰대",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "허경환의 유행쇼",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "용감한 형사들5",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "맛도사 211",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "서울언니",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "귀신 잡는 해병대",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "끝까지 간다! 독박투어",
+   "kind": "오리지널 예능",
+   "co": "채널S·E채널"
+  },
+  {
+   "channel": "E채널",
+   "program": "한국탐구여행",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "돌싱N모솔",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "내 새끼의 연애2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "띵동택배",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "하나부터 열까지",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "인생 때려잡기 : 정승제 하숙집",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "내 새끼의 연애",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "E채널",
+   "program": "형, 수다",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "계약결혼",
+   "kind": "오리지널 예능",
+   "co": "MBC every1·KBS Joy"
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "돌싱N모솔",
+   "kind": "오리지널 예능",
+   "co": "MBC every1·E채널"
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "히든아이",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "쇼챔피언",
+   "kind": "오리지널 예능",
+   "co": "MBC every1·MBC M"
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "트롯챔피언",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "오프에어",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "뒤너쇼",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "2026 MBC 대학가요제",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "위대한 가이드 3",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "어서와 한국은 처음이지",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "위대한 가이드2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "위대한 가이드2.5 - 대단난 가이드",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "주간아이돌",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "최애티비",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "호텔 도깨비",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC Plus",
+   "program": "맛집공식",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "리뷰 it! 스페셜 시즌4",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "한국인의 세끼",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "계약결혼",
+   "kind": "오리지널 예능",
+   "co": "MBC every1·KBS Joy"
+  },
+  {
+   "channel": "KBS N",
+   "program": "운명네컷",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "뷰티체크인",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "VJ특공대 리턴즈",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "이십세기 힛-트쏭",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "무엇이든 물어보살",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "차트를 달리는 남자",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "인연과 악연",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "그래, 이혼하자",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "위기탈출 넘버원 비상구를 열어라",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS N",
+   "program": "시집 가는 길",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "경도를 기다리며",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "날아올라라 나비",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "모두가 자신의 무가치함과 싸우고 있다",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "미혼남녀의 효율적 만남",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "백번의 추억",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "샤이닝",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "서울 자가에 대기업 다니는 김 부장 이야기",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "신입사원 강회장",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "아파트",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "파이널 테이블",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "날아라 병아리",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "냉장고를 부탁해 since 2014",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "당일배송 우리집",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "뭉쳐야 찬다4",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "샤인 온 인 서울",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "아는 형님",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "연애전쟁",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "예스맨",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "이혼숙려캠프",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "장인과 아이돌 : 짱돌",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "최강야구",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "톡파원 25시",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "한블리 (한문철의 블랙박스 리뷰)",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "할루시네이션 : 해고 전쟁",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "혼자는 못 해",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "히든싱어8",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "건강 1120",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "내 몸을 부탁해",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "다시 쓰는 건강노트",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "다큐플러스Q",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "바디멘터리 몸이 답이다",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "이토록 위대한 몸",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "인생의 갈림길 위대한 선택",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "입만 살았네",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "장르가 머니",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "중독자들 어벤져스",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "지킬박사와 가이드",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "트렌드 픽",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "헬로 마이 닥터 친절한 진료실",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "논/쟁",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "사건반장",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "JTBC 뉴스룸",
+   "kind": "오리지널 보도",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "아침&",
+   "kind": "오리지널 보도",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "이가혁 라이브",
+   "kind": "오리지널 보도",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "골든디스크어워즈",
+   "kind": "오리지널 특집",
+   "co": ""
+  },
+  {
+   "channel": "JTBC",
+   "program": "백상예술대상",
+   "kind": "오리지널 특집",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "KBS 드라마스페셜 2026",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "기묘 우리 동물원",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "내겐 너무 매운 연애",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "문무",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "미워할 수 없는 아버님",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "붉은 진주",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "사랑을 처방해 드립니다",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "사랑이 온다",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "삼무면 연쇄극",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "엄마가 미쳤어요",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "완벽한 패밀리",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "욕망의 덫",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "은애하는 도적님아",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "조립식 가족",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "화려한 날들",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "1박 2일 시즌4",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "더 시즌즈",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "뮤직뱅크",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "불후의 명곡",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "사장님 귀는 당나귀 귀",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "신상출시 편스토랑",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "열린음악회",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "옥탑방의 문제아들 2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "해피투게더",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "2TV 생생정보",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "6시 내고향",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "KBS 네트워크 기획",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "다큐 인사이트",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "동네 한 바퀴",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "동물의 왕국",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "무엇이든 물어보세요",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "생활의 발견",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "아침마당",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "역사저널 그날",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "팔도밥상",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "TV비평 시청자데스크",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "사사건건",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "스모킹 건",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "시사기획 창",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "추적 60분",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "특파원 보고 세계는 지금",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "TV 유치원",
+   "kind": "오리지널 어린이",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "누가 누가 잘하나",
+   "kind": "오리지널 어린이",
+   "co": ""
+  },
+  {
+   "channel": "KBS",
+   "program": "방과후 초능력",
+   "kind": "오리지널 어린이",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "21세기 대군부인",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "가족관계증명서",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "라이어",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "오십프로",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "유부녀 킬러",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "이강에는 달이 흐른다",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "찬란한 너의 계절에",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "첫 번째 남자",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "최애 데뷔",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "판사 이한영",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "1등들",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "구해줘! 홈즈",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "극한84",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "나 혼자 산다",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "놀면 뭐하니?",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "라디오스타",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "마니또 클럽",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "서프라이즈: 미스터리 살롱",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "쇼! 음악중심",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "신인감독 김연경2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "전지적 절친 시점",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "전지적 참견 시점",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "최우수산",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "출발! 비디오 여행",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "태어난 김에 세계일주4",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "기분 좋은 날",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "다 따져 봅시다",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "실화탐사대",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "심야괴담회 시즌6",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "엄마를 부탁해",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "오늘N",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "오은영 리포트-결혼 지옥",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "인생도 각본이 필요해",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "MBC 100분 토론",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "PD수첩",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "탐사기획 스트레이트",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "MBC",
+   "program": "뽀뽀뽀 좋아좋아",
+   "kind": "오리지널 어린이",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "각성",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "굿파트너",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "굿파트너2",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "귀궁",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "나인 투 식스",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "닥터X : 하얀 마피아의 시대",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "보물섬",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "사계의 봄",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "악몽",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "연어가 돌아올때",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "우리영화",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "우주메리미",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "재벌X형사2",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "지옥에서 온 판사",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "커넥션",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "키스는 괜히 해서!",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "트라이: 우리는 기적이 된다",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "풀카운트",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "2026 SBS 런앤뮤직 페스티벌 in 안동",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "SBS 인기가요",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "거장항준",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "골 때리는 그녀들",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "나의 이방인",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "내 남은 연애",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "동상이몽2_너는 내 운명",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "런닝맨",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "런닝맨 팬미팅/특집",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "마이턴",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "무엇이든 해줄지니 - 비서진",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "미운 우리 새끼",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "신발 벗고 돌싱포맨",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "쓰리셰프",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "언베일 &TEAM",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "연애대전",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "우리들의 발라드 2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "유니버스 리그",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "육각형 프로젝트2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "정글밥",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "정글밥2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "틈만나면,",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "TV 동물농장",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "궁금한 이야기 Y",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "그것이 알고싶다",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "꼬리에 꼬리를 무는 그날 이야기",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "네트워크 현장! 고향이 보인다",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "랭킹송: 건강한가요",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "맨 인 블랙박스",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "모닝와이드 3부",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "생방송 투데이",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "생활의 달인",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "세 개의 시선",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "세상에서 가장 아름다운 여행",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "열린TV 시청자 세상",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "좋은아침",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "지구는 생명이다",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "2026 베이스볼S",
+   "kind": "오리지널 스포츠",
+   "co": ""
+  },
+  {
+   "channel": "SBS",
+   "program": "SBS 프로볼링",
+   "kind": "오리지널 스포츠",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "건축탐구-집",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "경이로운 자연의 세계",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "고향민국",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "귀하신 몸",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "극한직업",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "다큐프라임",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "명의",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "부모의 첫 성교육",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "세계테마기행",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "위대한 수업",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "지식채널e",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "한국기행",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "딩동댕 유치원",
+   "kind": "오리지널 어린이",
+   "co": ""
+  },
+  {
+   "channel": "EBS",
+   "program": "자이언트 펭TV",
+   "kind": "오리지널 어린이",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "가면의 여왕",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "가시리잇고",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "거짓말의 거짓말",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "결혼해YOU",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "나쁜 아이들",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "남과여",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "너에게 다이브",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "마녀",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "며느라기",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "새벽 2시의 신데렐라",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "쇼윈도: 여왕의 집",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "아기가 생겼어요",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "에이틴 어게인",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "여행을 대신해 드립니다",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "유별나! 문셰프",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "체크인 한양",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "키드냅 게임",
+   "kind": "오리지널 드라마",
+   "co": "채널A·후지TV·MakerVille·SIMSTORY"
+  },
+  {
+   "channel": "채널A",
+   "program": "2026 볼빅 파크골프 챔피언십",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "강철부대4",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "개와 늑대의 시간2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "걸리버 여행기",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "무쇠의 탄생",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "뷰티 클리닉 터치미",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "신랑수업2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "언니만 따라와",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "우리동네 플레이리스트",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "이제 만나러 갑니다",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "탐정들의 영업비밀",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "티처스3: 재수전쟁",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "강철지구",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "건강 스페셜 한양촌",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "건강한 식탁",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "김진의 돌직구쇼",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "대한민국의 힘 기업의 시간들",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "메디컬 다이어리",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "몸으로 보는 세상 아모르바디",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "브랜드 코리아",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "생존의 단서 블랙박스",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "생존의 비밀",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "스타건강랭킹 넘버원",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "아름다운 건강수업 The 바디 지니어스",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "아이엠닥터",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "알아야산다",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "우리동네 셀럽 1%의 비밀",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "잘 살면 좋잖아",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "채널A 시청자마당",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "채널A",
+   "program": "행복한 아침",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "보스의 노골적 취향",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "디스이즈 현무로드",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "무명전설",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "빈칸 채우기",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "상남자의 여행법",
+   "kind": "오리지널 예능",
+   "co": "MBN·SBS Plus"
+  },
+  {
+   "channel": "MBN",
+   "program": "속풀이쇼 동치미",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "알토란",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "언포게터블 듀엣2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "엄지의 제왕",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "전현무계획4",
+   "kind": "오리지널 예능",
+   "co": "MBN·채널S"
+  },
+  {
+   "channel": "MBN",
+   "program": "결이 다른 전쟁사",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "나는 자연인이다",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "메디컬 리포트 완벽한 몸",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "천기누설",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "특종세상",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "MBN",
+   "program": "휴먼다큐 사노라면",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "DNA러버",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "다음생은 없으니까",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "닥터신",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "대군: 왕이 되려는 남자",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "시고르아모르",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "컨피던스맨KR",
+   "kind": "오리지널 드라마",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "K트롯 진선미 환상의 무대",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "X의 사생활",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "금타는 금요일",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "미스쓰리랑",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "미스터 로또",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "미스터트롯",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "미스터트롯2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "미스터트롯3",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "미스터트롯4",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "미스트롯 포유",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "미스트롯2",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "미스트롯3",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "미스트롯4",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "사랑의 콜센타 세븐스타즈",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "스피드퀸",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "신 성공시대 마이웨이",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "아빠하고 나하고",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "자랑할 개 있습니다",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "조선의 사랑꾼",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "천만기인쇼",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "트랄랄라 유랑단",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "트롯 키친 달리는 디너쇼",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "트롯랭킹쇼 찐이야",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "화요일은 밤이 좋아",
+   "kind": "오리지널 예능",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "TV CHOSUN 건강다큐",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "건강한 아침 해뜰날",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "건강한 집2",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "고향을 응원해",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "공간다큐 만남",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "나이야가라",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "메디컬다큐 명의보감",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "식객 허영만의 백반기행",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "어떻게 살 것인가?",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "엄마의 봄날",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "직장인대호",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "질병의 법칙",
+   "kind": "오리지널 교양",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "강적들",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "열린비평 TV를 말하다",
+   "kind": "오리지널 시사",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "[특집다큐] 세대를 이어가는 기업가 정신",
+   "kind": "오리지널 특집",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "나누는 행복 희망플러스",
+   "kind": "오리지널 특집",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "농산어촌 희망 프로젝트",
+   "kind": "오리지널 특집",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "별들의 고향",
+   "kind": "오리지널 특집",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "사람과 도시를 IT다",
+   "kind": "오리지널 특집",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "우리가 몰랐던, 진짜 6.25",
+   "kind": "오리지널 특집",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "컬처노믹스 창조도시 피어나라! 남원",
+   "kind": "오리지널 특집",
+   "co": ""
+  },
+  {
+   "channel": "TV조선",
+   "program": "TV CHOSUN 특집다큐",
+   "kind": "오리지널 교양/특집",
+   "co": ""
+  }
+ ]
+}
