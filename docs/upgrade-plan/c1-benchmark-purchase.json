@@ -1,0 +1,3455 @@
+{
+ "generatedAt": "2026-11-13T04:06:58.534Z",
+ "asOf": "2026-11-09",
+ "snapDate": "2026-11-10",
+ "rankBand": 15,
+ "benchmark": {
+  "ENA": {
+   "ownRank": 7,
+   "ownRating": 0.12162,
+   "rule_rank15": [
+    "SBS Plus",
+    "MBC드라마넷"
+   ],
+   "rule_ratio": [
+    "SBS Plus",
+    "MBC드라마넷"
+   ],
+   "rule_widen4": [
+    "SBS Plus",
+    "MBC드라마넷",
+    "DRAMAcube",
+    "Dramax"
+   ],
+   "all": [
+    {
+     "snap": "MBC",
+     "comp": "MBC",
+     "group": "terrestrial",
+     "rank": 1,
+     "rating": 0.39145,
+     "hub": true,
+     "byRank": true,
+     "byRatio": false
+    },
+    {
+     "snap": "SBS",
+     "comp": "SBS",
+     "group": "terrestrial",
+     "rank": 2,
+     "rating": 0.36938,
+     "hub": true,
+     "byRank": true,
+     "byRatio": false
+    },
+    {
+     "snap": "tvN",
+     "comp": "tvN",
+     "group": "terrestrial",
+     "rank": 3,
+     "rating": 0.28403,
+     "hub": true,
+     "byRank": true,
+     "byRatio": false
+    },
+    {
+     "snap": "KBS2",
+     "comp": "KBS2",
+     "group": "terrestrial",
+     "rank": 4,
+     "rating": 0.21792,
+     "hub": true,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "JTBC",
+     "comp": "JTBC",
+     "group": "terrestrial",
+     "rank": 5,
+     "rating": 0.21305,
+     "hub": true,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "KBS1",
+     "comp": "KBS1",
+     "group": "terrestrial",
+     "rank": 6,
+     "rating": 0.18544,
+     "hub": true,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "SBS Plus",
+     "comp": "SBS Plus",
+     "group": "drama",
+     "rank": 10,
+     "rating": 0.07007,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "MBC드라마넷",
+     "comp": "MBC드라마넷",
+     "group": "drama",
+     "rank": 11,
+     "rating": 0.06733,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "채널A",
+     "comp": "채널A",
+     "group": "terrestrial",
+     "rank": 13,
+     "rating": 0.06061,
+     "hub": true,
+     "byRank": true,
+     "byRatio": false
+    },
+    {
+     "snap": "TV CHOSUN",
+     "comp": "TV CHOSUN",
+     "group": "terrestrial",
+     "rank": 16,
+     "rating": 0.05479,
+     "hub": true,
+     "byRank": true,
+     "byRatio": false
+    },
+    {
+     "snap": "EBS",
+     "comp": null,
+     "group": "terrestrial",
+     "rank": 17,
+     "rating": 0.05282,
+     "hub": false,
+     "byRank": true,
+     "byRatio": false
+    },
+    {
+     "snap": "MBN",
+     "comp": "MBN",
+     "group": "terrestrial",
+     "rank": 18,
+     "rating": 0.05236,
+     "hub": true,
+     "byRank": true,
+     "byRatio": false
+    },
+    {
+     "snap": "KBS드라마",
+     "comp": null,
+     "group": "drama",
+     "rank": 26,
+     "rating": 0.04022,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "DRAMAcube",
+     "comp": "DRAMAcube",
+     "group": "drama",
+     "rank": 31,
+     "rating": 0.02875,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "Dramax",
+     "comp": "Dramax",
+     "group": "drama",
+     "rank": 36,
+     "rating": 0.02297,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "tvN DRAMA",
+     "comp": null,
+     "group": "drama",
+     "rank": 39,
+     "rating": 0.02139,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "MBC ON",
+     "comp": "MBC ON",
+     "group": "drama",
+     "rank": 43,
+     "rating": 0.01956,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "하이라이트TV",
+     "comp": null,
+     "group": "drama",
+     "rank": 49,
+     "rating": 0.01248,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "EDGETV",
+     "comp": "EDGETV",
+     "group": "drama",
+     "rank": 51,
+     "rating": 0.01147,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "CNTV",
+     "comp": "CNTV",
+     "group": "drama",
+     "rank": 66,
+     "rating": 0.00721,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "D-ONE",
+     "comp": "D-ONE",
+     "group": "drama",
+     "rank": 67,
+     "rating": 0.00715,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "KBS Story",
+     "comp": "KBS Story",
+     "group": "drama",
+     "rank": 71,
+     "rating": 0.00638,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    }
+   ]
+  },
+  "ENA_DRAMA": {
+   "ownRank": 37,
+   "ownRating": 0.02284,
+   "rule_rank15": [
+    "DRAMAcube",
+    "Dramax",
+    "MBC ON",
+    "EDGETV"
+   ],
+   "rule_ratio": [
+    "DRAMAcube",
+    "Dramax",
+    "MBC ON",
+    "EDGETV"
+   ],
+   "rule_widen4": [
+    "DRAMAcube",
+    "Dramax",
+    "MBC ON",
+    "EDGETV"
+   ],
+   "all": [
+    {
+     "snap": "SBS Plus",
+     "comp": "SBS Plus",
+     "group": "drama",
+     "rank": 10,
+     "rating": 0.07007,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "MBC드라마넷",
+     "comp": "MBC드라마넷",
+     "group": "drama",
+     "rank": 11,
+     "rating": 0.06733,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "KBS드라마",
+     "comp": null,
+     "group": "drama",
+     "rank": 26,
+     "rating": 0.04022,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "DRAMAcube",
+     "comp": "DRAMAcube",
+     "group": "drama",
+     "rank": 31,
+     "rating": 0.02875,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "Dramax",
+     "comp": "Dramax",
+     "group": "drama",
+     "rank": 36,
+     "rating": 0.02297,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "tvN DRAMA",
+     "comp": null,
+     "group": "drama",
+     "rank": 39,
+     "rating": 0.02139,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "MBC ON",
+     "comp": "MBC ON",
+     "group": "drama",
+     "rank": 43,
+     "rating": 0.01956,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "하이라이트TV",
+     "comp": null,
+     "group": "drama",
+     "rank": 49,
+     "rating": 0.01248,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "EDGETV",
+     "comp": "EDGETV",
+     "group": "drama",
+     "rank": 51,
+     "rating": 0.01147,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "CNTV",
+     "comp": "CNTV",
+     "group": "drama",
+     "rank": 66,
+     "rating": 0.00721,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "D-ONE",
+     "comp": "D-ONE",
+     "group": "drama",
+     "rank": 67,
+     "rating": 0.00715,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "KBS Story",
+     "comp": "KBS Story",
+     "group": "drama",
+     "rank": 71,
+     "rating": 0.00638,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    }
+   ]
+  },
+  "ENA_PLAY": {
+   "ownRank": 33,
+   "ownRating": 0.02716,
+   "rule_rank15": [
+    "KBS JOY",
+    "SBS funE",
+    "tvN SHOW",
+    "JTBC2",
+    "E채널",
+    "Mnet",
+    "코미디TV",
+    "theLIFE"
+   ],
+   "rule_ratio": [
+    "KBS JOY",
+    "SBS funE",
+    "tvN SHOW",
+    "JTBC2",
+    "E채널",
+    "Mnet",
+    "코미디TV",
+    "theLIFE"
+   ],
+   "rule_widen4": [
+    "KBS JOY",
+    "SBS funE",
+    "tvN SHOW",
+    "JTBC2",
+    "E채널",
+    "Mnet",
+    "코미디TV",
+    "theLIFE"
+   ],
+   "all": [
+    {
+     "snap": "MBC every1",
+     "comp": "MBC every1",
+     "group": "variety",
+     "rank": 8,
+     "rating": 0.0942,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "tvN STORY",
+     "comp": "tvN STORY",
+     "group": "variety",
+     "rank": 12,
+     "rating": 0.0615,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "채널S",
+     "comp": "채널S",
+     "group": "variety",
+     "rank": 15,
+     "rating": 0.05574,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "KBS JOY",
+     "comp": "KBS JOY",
+     "group": "variety",
+     "rank": 19,
+     "rating": 0.05159,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "SBS funE",
+     "comp": "SBS funE",
+     "group": "variety",
+     "rank": 20,
+     "rating": 0.04183,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "tvN SHOW",
+     "comp": "tvN SHOW",
+     "group": "variety",
+     "rank": 25,
+     "rating": 0.04052,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "JTBC2",
+     "comp": "JTBC2",
+     "group": "variety",
+     "rank": 28,
+     "rating": 0.03755,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "E채널",
+     "comp": "E채널",
+     "group": "variety",
+     "rank": 30,
+     "rating": 0.03217,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "Mnet",
+     "comp": "Mnet",
+     "group": "variety",
+     "rank": 34,
+     "rating": 0.02612,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "코미디TV",
+     "comp": "코미디TV",
+     "group": "variety",
+     "rank": 41,
+     "rating": 0.01982,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "theLIFE",
+     "comp": "theLIFE",
+     "group": "variety",
+     "rank": 44,
+     "rating": 0.01874,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "K STAR",
+     "comp": "K STAR",
+     "group": "variety",
+     "rank": 50,
+     "rating": 0.01179,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "FUN TV",
+     "comp": "FUN TV",
+     "group": "variety",
+     "rank": 54,
+     "rating": 0.0103,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "CH view",
+     "comp": "CH view",
+     "group": "variety",
+     "rank": 70,
+     "rating": 0.00687,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "GTV",
+     "comp": "GTV",
+     "group": "variety",
+     "rank": 104,
+     "rating": 0.00344,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    }
+   ]
+  },
+  "OLIFE": {
+   "ownRank": 35,
+   "ownRating": 0.10839,
+   "rule_rank15": [
+    "CMCTV"
+   ],
+   "rule_ratio": [
+    "CMCTV"
+   ],
+   "rule_widen4": [
+    "CMCTV",
+    "ONT"
+   ],
+   "all": [
+    {
+     "snap": "CMCTV",
+     "comp": "CMCTV",
+     "group": "life",
+     "rank": 47,
+     "rating": 0.08671,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "ONT",
+     "comp": "ONT",
+     "group": "life",
+     "rank": 94,
+     "rating": 0.03339,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    }
+   ]
+  },
+  "ONCE": {
+   "ownRank": 63,
+   "ownRating": 0.05891,
+   "rule_rank15": [
+    "KBS Story"
+   ],
+   "rule_ratio": [
+    "EDGETV",
+    "DRAMAcube",
+    "CNTV",
+    "MBC ON",
+    "Dramax",
+    "KBS Story"
+   ],
+   "rule_widen4": [
+    "CNTV",
+    "MBC ON",
+    "Dramax",
+    "KBS Story"
+   ],
+   "all": [
+    {
+     "snap": "SBS Plus",
+     "comp": "SBS Plus",
+     "group": "drama",
+     "rank": 16,
+     "rating": 0.26166,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "KBS드라마",
+     "comp": null,
+     "group": "drama",
+     "rank": 17,
+     "rating": 0.22674,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "MBC드라마넷",
+     "comp": "MBC드라마넷",
+     "group": "drama",
+     "rank": 18,
+     "rating": 0.22544,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "D-ONE",
+     "comp": "D-ONE",
+     "group": "drama",
+     "rank": 30,
+     "rating": 0.12324,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "하이라이트TV",
+     "comp": null,
+     "group": "drama",
+     "rank": 31,
+     "rating": 0.11855,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "EDGETV",
+     "comp": "EDGETV",
+     "group": "drama",
+     "rank": 32,
+     "rating": 0.11628,
+     "hub": false,
+     "byRank": false,
+     "byRatio": true
+    },
+    {
+     "snap": "DRAMAcube",
+     "comp": "DRAMAcube",
+     "group": "drama",
+     "rank": 33,
+     "rating": 0.11035,
+     "hub": false,
+     "byRank": false,
+     "byRatio": true
+    },
+    {
+     "snap": "CNTV",
+     "comp": "CNTV",
+     "group": "drama",
+     "rank": 40,
+     "rating": 0.09625,
+     "hub": false,
+     "byRank": false,
+     "byRatio": true
+    },
+    {
+     "snap": "MBC ON",
+     "comp": "MBC ON",
+     "group": "drama",
+     "rank": 42,
+     "rating": 0.09448,
+     "hub": false,
+     "byRank": false,
+     "byRatio": true
+    },
+    {
+     "snap": "tvN DRAMA",
+     "comp": null,
+     "group": "drama",
+     "rank": 43,
+     "rating": 0.09441,
+     "hub": false,
+     "byRank": false,
+     "byRatio": true
+    },
+    {
+     "snap": "Dramax",
+     "comp": "Dramax",
+     "group": "drama",
+     "rank": 45,
+     "rating": 0.09107,
+     "hub": false,
+     "byRank": false,
+     "byRatio": true
+    },
+    {
+     "snap": "KBS Story",
+     "comp": "KBS Story",
+     "group": "drama",
+     "rank": 71,
+     "rating": 0.04873,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    }
+   ]
+  },
+  "ENA_STORY": {
+   "ownRank": 78,
+   "ownRating": 0.044,
+   "rule_rank15": [
+    "코미디TV",
+    "Mnet"
+   ],
+   "rule_ratio": [
+    "theLIFE",
+    "CH view",
+    "코미디TV",
+    "Mnet"
+   ],
+   "rule_widen4": [
+    "theLIFE",
+    "CH view",
+    "코미디TV",
+    "Mnet"
+   ],
+   "all": [
+    {
+     "snap": "MBC every1",
+     "comp": "MBC every1",
+     "group": "variety",
+     "rank": 14,
+     "rating": 0.29036,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "tvN STORY",
+     "comp": "tvN STORY",
+     "group": "variety",
+     "rank": 15,
+     "rating": 0.26392,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "KBS JOY",
+     "comp": "KBS JOY",
+     "group": "variety",
+     "rank": 19,
+     "rating": 0.18764,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "채널S",
+     "comp": "채널S",
+     "group": "variety",
+     "rank": 22,
+     "rating": 0.15919,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "SBS funE",
+     "comp": "SBS funE",
+     "group": "variety",
+     "rank": 27,
+     "rating": 0.13323,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "JTBC2",
+     "comp": "JTBC2",
+     "group": "variety",
+     "rank": 28,
+     "rating": 0.12478,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "FUN TV",
+     "comp": "FUN TV",
+     "group": "variety",
+     "rank": 37,
+     "rating": 0.09961,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "tvN SHOW",
+     "comp": "tvN SHOW",
+     "group": "variety",
+     "rank": 38,
+     "rating": 0.09831,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "E채널",
+     "comp": "E채널",
+     "group": "variety",
+     "rank": 39,
+     "rating": 0.09704,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "GTV",
+     "comp": "GTV",
+     "group": "variety",
+     "rank": 44,
+     "rating": 0.09258,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "K STAR",
+     "comp": "K STAR",
+     "group": "variety",
+     "rank": 46,
+     "rating": 0.09006,
+     "hub": false,
+     "byRank": false,
+     "byRatio": false
+    },
+    {
+     "snap": "theLIFE",
+     "comp": "theLIFE",
+     "group": "variety",
+     "rank": 51,
+     "rating": 0.07169,
+     "hub": false,
+     "byRank": false,
+     "byRatio": true
+    },
+    {
+     "snap": "CH view",
+     "comp": "CH view",
+     "group": "variety",
+     "rank": 57,
+     "rating": 0.06378,
+     "hub": false,
+     "byRank": false,
+     "byRatio": true
+    },
+    {
+     "snap": "코미디TV",
+     "comp": "코미디TV",
+     "group": "variety",
+     "rank": 69,
+     "rating": 0.04995,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    },
+    {
+     "snap": "Mnet",
+     "comp": "Mnet",
+     "group": "variety",
+     "rank": 77,
+     "rating": 0.04476,
+     "hub": false,
+     "byRank": true,
+     "byRatio": true
+    }
+   ]
+  }
+ },
+ "candidates": {
+  "ENA": {
+   "all": 42,
+   "benchOnly": 17,
+   "both": 15,
+   "otherOwnCount": 2,
+   "top": [
+    {
+     "key": "내겐너무까칠한매니저비서진",
+     "name": "내겐너무까칠한매니저비서진",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 1.76,
+       "n": 213,
+       "bench": true
+      }
+     ],
+     "multAll": 1.76,
+     "multBench": 1.76,
+     "nAll": 213,
+     "nBench": 213,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "무엇이든해줄지니비서진",
+     "name": "무엇이든해줄지니비서진",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 2.187,
+       "n": 87,
+       "bench": true
+      }
+     ],
+     "multAll": 2.187,
+     "multBench": 2.187,
+     "nAll": 87,
+     "nBench": 87,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "놀면뭐하니",
+     "name": "놀면뭐하니",
+     "peers": [
+      {
+       "ch": "MBC드라마넷",
+       "mult": 1.539,
+       "n": 378,
+       "bench": true
+      }
+     ],
+     "multAll": 1.539,
+     "multBench": 1.539,
+     "nAll": 378,
+     "nBench": 378,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "나혼자산다",
+     "name": "나혼자산다",
+     "peers": [
+      {
+       "ch": "MBC드라마넷",
+       "mult": 1.405,
+       "n": 845,
+       "bench": true
+      },
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.017,
+       "n": 195,
+       "bench": false
+      },
+      {
+       "ch": "Dramax",
+       "mult": 1.247,
+       "n": 330,
+       "bench": false
+      }
+     ],
+     "multAll": 1.247,
+     "multBench": 1.405,
+     "nAll": 1370,
+     "nBench": 845,
+     "peersAll": 3,
+     "peersBench": 1,
+     "otherOwn": [
+      "ENA_DRAMA",
+      "ENA_PLAY"
+     ]
+    },
+    {
+     "key": "미운우리새끼다시쓰는육아일기",
+     "name": "미운우리새끼다시쓰는육아일기",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 1.421,
+       "n": 359,
+       "bench": true
+      },
+      {
+       "ch": "Dramax",
+       "mult": 1.054,
+       "n": 58,
+       "bench": false
+      }
+     ],
+     "multAll": 1.238,
+     "multBench": 1.421,
+     "nAll": 417,
+     "nBench": 359,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "동상이몽2너는내운명",
+     "name": "동상이몽2너는내운명",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 1.358,
+       "n": 220,
+       "bench": true
+      }
+     ],
+     "multAll": 1.358,
+     "multBench": 1.358,
+     "nAll": 220,
+     "nBench": 220,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "아니근데진짜",
+     "name": "아니근데진짜",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 1.412,
+       "n": 164,
+       "bench": true
+      },
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.177,
+       "n": 67,
+       "bench": false
+      }
+     ],
+     "multAll": 1.294,
+     "multBench": 1.412,
+     "nAll": 231,
+     "nBench": 164,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "신이랑법률사무소",
+     "name": "신이랑법률사무소",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 1.333,
+       "n": 191,
+       "bench": true
+      },
+      {
+       "ch": "DRAMAcube",
+       "mult": 0.836,
+       "n": 214,
+       "bench": false
+      }
+     ],
+     "multAll": 1.085,
+     "multBench": 1.333,
+     "nAll": 405,
+     "nBench": 191,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "전지적참견시점",
+     "name": "전지적참견시점",
+     "peers": [
+      {
+       "ch": "MBC드라마넷",
+       "mult": 1.166,
+       "n": 481,
+       "bench": true
+      },
+      {
+       "ch": "DRAMAcube",
+       "mult": 0.767,
+       "n": 66,
+       "bench": false
+      }
+     ],
+     "multAll": 0.967,
+     "multBench": 1.166,
+     "nAll": 547,
+     "nBench": 481,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "틈만나면",
+     "name": "틈만나면",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 1.299,
+       "n": 194,
+       "bench": true
+      },
+      {
+       "ch": "Dramax",
+       "mult": 0.989,
+       "n": 33,
+       "bench": false
+      }
+     ],
+     "multAll": 1.144,
+     "multBench": 1.299,
+     "nAll": 227,
+     "nBench": 194,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "황금어장라디오스타",
+     "name": "황금어장라디오스타",
+     "peers": [
+      {
+       "ch": "MBC드라마넷",
+       "mult": 1.113,
+       "n": 264,
+       "bench": true
+      },
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.408,
+       "n": 181,
+       "bench": false
+      }
+     ],
+     "multAll": 1.261,
+     "multBench": 1.113,
+     "nAll": 445,
+     "nBench": 264,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": [
+      "ENA_PLAY"
+     ]
+    },
+    {
+     "key": "산골총각영웅",
+     "name": "산골총각영웅",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 1.464,
+       "n": 38,
+       "bench": true
+      }
+     ],
+     "multAll": 1.464,
+     "multBench": 1.464,
+     "nAll": 38,
+     "nBench": 38,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "구해줘홈즈",
+     "name": "구해줘홈즈",
+     "peers": [
+      {
+       "ch": "MBC드라마넷",
+       "mult": 1.197,
+       "n": 48,
+       "bench": true
+      }
+     ],
+     "multAll": 1.197,
+     "multBench": 1.197,
+     "nAll": 48,
+     "nBench": 48,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "상남자의여행법in대만",
+     "name": "상남자의여행법IN대만",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 1.217,
+       "n": 43,
+       "bench": true
+      }
+     ],
+     "multAll": 1.217,
+     "multBench": 1.217,
+     "nAll": 43,
+     "nBench": 43,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "21세기대군부인프리미어",
+     "name": "21세기대군부인프리미어",
+     "peers": [
+      {
+       "ch": "MBC드라마넷",
+       "mult": 1.204,
+       "n": 29,
+       "bench": true
+      }
+     ],
+     "multAll": 1.204,
+     "multBench": 1.204,
+     "nAll": 29,
+     "nBench": 29,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    }
+   ]
+  },
+  "ENA_DRAMA": {
+   "all": 42,
+   "benchOnly": 30,
+   "both": 29,
+   "otherOwnCount": 4,
+   "top": [
+    {
+     "key": "전원일기",
+     "name": "전원일기",
+     "peers": [
+      {
+       "ch": "MBC ON",
+       "mult": 2.704,
+       "n": 726,
+       "bench": true
+      }
+     ],
+     "multAll": 2.704,
+     "multBench": 2.704,
+     "nAll": 726,
+     "nBench": 726,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "응답하라1988",
+     "name": "응답하라1988",
+     "peers": [
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.935,
+       "n": 103,
+       "bench": true
+      },
+      {
+       "ch": "Dramax",
+       "mult": 3.059,
+       "n": 80,
+       "bench": true
+      }
+     ],
+     "multAll": 2.497,
+     "multBench": 2.497,
+     "nAll": 183,
+     "nBench": 183,
+     "peersAll": 2,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "쓸쓸하고찬란하신도깨비",
+     "name": "쓸쓸하고찬란하신도깨비",
+     "peers": [
+      {
+       "ch": "DRAMAcube",
+       "mult": 2.184,
+       "n": 79,
+       "bench": true
+      },
+      {
+       "ch": "Dramax",
+       "mult": 1.72,
+       "n": 64,
+       "bench": true
+      }
+     ],
+     "multAll": 1.952,
+     "multBench": 1.952,
+     "nAll": 143,
+     "nBench": 143,
+     "peersAll": 2,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "다음생은없으니까",
+     "name": "다음생은없으니까",
+     "peers": [
+      {
+       "ch": "Dramax",
+       "mult": 1.724,
+       "n": 203,
+       "bench": true
+      }
+     ],
+     "multAll": 1.724,
+     "multBench": 1.724,
+     "nAll": 203,
+     "nBench": 203,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "태양의후예",
+     "name": "태양의후예",
+     "peers": [
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.482,
+       "n": 97,
+       "bench": true
+      },
+      {
+       "ch": "Dramax",
+       "mult": 1.979,
+       "n": 69,
+       "bench": true
+      }
+     ],
+     "multAll": 1.731,
+     "multBench": 1.731,
+     "nAll": 166,
+     "nBench": 166,
+     "peersAll": 2,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "이호선상담소관계vs전쟁",
+     "name": "이호선상담소관계VS전쟁",
+     "peers": [
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.617,
+       "n": 284,
+       "bench": true
+      },
+      {
+       "ch": "Dramax",
+       "mult": 1.404,
+       "n": 87,
+       "bench": true
+      }
+     ],
+     "multAll": 1.511,
+     "multBench": 1.511,
+     "nAll": 371,
+     "nBench": 371,
+     "peersAll": 2,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "아들과딸",
+     "name": "아들과딸",
+     "peers": [
+      {
+       "ch": "MBC ON",
+       "mult": 3.128,
+       "n": 35,
+       "bench": true
+      }
+     ],
+     "multAll": 3.128,
+     "multBench": 3.128,
+     "nAll": 35,
+     "nBench": 35,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "나의아저씨",
+     "name": "나의아저씨",
+     "peers": [
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.327,
+       "n": 69,
+       "bench": true
+      },
+      {
+       "ch": "Dramax",
+       "mult": 2.146,
+       "n": 62,
+       "bench": true
+      }
+     ],
+     "multAll": 1.737,
+     "multBench": 1.737,
+     "nAll": 131,
+     "nBench": 131,
+     "peersAll": 2,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "멋진신세계",
+     "name": "멋진신세계",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 1.085,
+       "n": 199,
+       "bench": false
+      },
+      {
+       "ch": "Dramax",
+       "mult": 1.452,
+       "n": 240,
+       "bench": true
+      }
+     ],
+     "multAll": 1.268,
+     "multBench": 1.452,
+     "nAll": 439,
+     "nBench": 240,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": [
+      "ENA"
+     ]
+    },
+    {
+     "key": "커피프린스1호점",
+     "name": "커피프린스1호점",
+     "peers": [
+      {
+       "ch": "DRAMAcube",
+       "mult": 2.176,
+       "n": 60,
+       "bench": true
+      }
+     ],
+     "multAll": 2.176,
+     "multBench": 2.176,
+     "nAll": 60,
+     "nBench": 60,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "상속자들",
+     "name": "상속자들",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 0.77,
+       "n": 64,
+       "bench": false
+      },
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.838,
+       "n": 81,
+       "bench": true
+      }
+     ],
+     "multAll": 1.304,
+     "multBench": 1.838,
+     "nAll": 145,
+     "nBench": 81,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "황금어장라디오스타",
+     "name": "황금어장라디오스타",
+     "peers": [
+      {
+       "ch": "MBC드라마넷",
+       "mult": 1.113,
+       "n": 264,
+       "bench": false
+      },
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.408,
+       "n": 181,
+       "bench": true
+      }
+     ],
+     "multAll": 1.261,
+     "multBench": 1.408,
+     "nAll": 445,
+     "nBench": 181,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": [
+      "ENA_PLAY"
+     ]
+    },
+    {
+     "key": "디어마이프렌즈",
+     "name": "디어마이프렌즈",
+     "peers": [
+      {
+       "ch": "Dramax",
+       "mult": 1.936,
+       "n": 61,
+       "bench": true
+      }
+     ],
+     "multAll": 1.936,
+     "multBench": 1.936,
+     "nAll": 61,
+     "nBench": 61,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "은밀한감사",
+     "name": "은밀한감사",
+     "peers": [
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.338,
+       "n": 178,
+       "bench": true
+      }
+     ],
+     "multAll": 1.338,
+     "multBench": 1.338,
+     "nAll": 178,
+     "nBench": 178,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "이십세기힛트쏭",
+     "name": "이십세기힛트쏭",
+     "peers": [
+      {
+       "ch": "Dramax",
+       "mult": 1.453,
+       "n": 88,
+       "bench": true
+      }
+     ],
+     "multAll": 1.453,
+     "multBench": 1.453,
+     "nAll": 88,
+     "nBench": 88,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    }
+   ]
+  },
+  "ENA_PLAY": {
+   "all": 84,
+   "benchOnly": 66,
+   "both": 63,
+   "otherOwnCount": 5,
+   "top": [
+    {
+     "key": "스트릿월드파이터디렉터스워",
+     "name": "스트릿월드파이터디렉터스워",
+     "peers": [
+      {
+       "ch": "Mnet",
+       "mult": 4.844,
+       "n": 82,
+       "bench": true
+      }
+     ],
+     "multAll": 4.844,
+     "multBench": 4.844,
+     "nAll": 82,
+     "nBench": 82,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "showmethemoney12",
+     "name": "SHOWMETHEMONEY12",
+     "peers": [
+      {
+       "ch": "Mnet",
+       "mult": 3.537,
+       "n": 171,
+       "bench": true
+      }
+     ],
+     "multAll": 3.537,
+     "multBench": 3.537,
+     "nAll": 171,
+     "nBench": 171,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "자급자족어부라이프삼시세끼어촌편5",
+     "name": "자급자족어부라이프삼시세끼어촌편5",
+     "peers": [
+      {
+       "ch": "tvN SHOW",
+       "mult": 1.479,
+       "n": 41,
+       "bench": true
+      },
+      {
+       "ch": "E채널",
+       "mult": 3.324,
+       "n": 20,
+       "bench": true
+      },
+      {
+       "ch": "코미디TV",
+       "mult": 4.942,
+       "n": 47,
+       "bench": true
+      },
+      {
+       "ch": "K STAR",
+       "mult": 3.801,
+       "n": 20,
+       "bench": false
+      }
+     ],
+     "multAll": 3.563,
+     "multBench": 3.324,
+     "nAll": 128,
+     "nBench": 108,
+     "peersAll": 4,
+     "peersBench": 3,
+     "otherOwn": []
+    },
+    {
+     "key": "맛있는녀석들",
+     "name": "맛있는녀석들",
+     "peers": [
+      {
+       "ch": "코미디TV",
+       "mult": 2.664,
+       "n": 301,
+       "bench": true
+      }
+     ],
+     "multAll": 2.664,
+     "multBench": 2.664,
+     "nAll": 301,
+     "nBench": 301,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "신입사원강회장",
+     "name": "신입사원강회장",
+     "peers": [
+      {
+       "ch": "채널S",
+       "mult": 1.163,
+       "n": 175,
+       "bench": false
+      },
+      {
+       "ch": "JTBC2",
+       "mult": 1.925,
+       "n": 245,
+       "bench": true
+      }
+     ],
+     "multAll": 1.544,
+     "multBench": 1.925,
+     "nAll": 420,
+     "nBench": 245,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "스트릿월드파이터디렉터스워special",
+     "name": "스트릿월드파이터디렉터스워SPECIAL",
+     "peers": [
+      {
+       "ch": "Mnet",
+       "mult": 4.284,
+       "n": 27,
+       "bench": true
+      }
+     ],
+     "multAll": 4.284,
+     "multBench": 4.284,
+     "nAll": 27,
+     "nBench": 27,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "차트를달리는남자다크에디션",
+     "name": "차트를달리는남자다크에디션",
+     "peers": [
+      {
+       "ch": "KBS JOY",
+       "mult": 2.169,
+       "n": 118,
+       "bench": true
+      }
+     ],
+     "multAll": 2.169,
+     "multBench": 2.169,
+     "nAll": 118,
+     "nBench": 118,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "놀라운토요일세대초월음악예능",
+     "name": "놀라운토요일세대초월음악예능",
+     "peers": [
+      {
+       "ch": "tvN SHOW",
+       "mult": 1.201,
+       "n": 36,
+       "bench": true
+      },
+      {
+       "ch": "Mnet",
+       "mult": 3.825,
+       "n": 36,
+       "bench": true
+      }
+     ],
+     "multAll": 2.513,
+     "multBench": 2.513,
+     "nAll": 72,
+     "nBench": 72,
+     "peersAll": 2,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "미운우리새끼다시쓰는육아일기",
+     "name": "미운우리새끼다시쓰는육아일기",
+     "peers": [
+      {
+       "ch": "채널S",
+       "mult": 1.07,
+       "n": 85,
+       "bench": false
+      },
+      {
+       "ch": "SBS funE",
+       "mult": 1.685,
+       "n": 323,
+       "bench": true
+      },
+      {
+       "ch": "theLIFE",
+       "mult": 1.453,
+       "n": 411,
+       "bench": true
+      }
+     ],
+     "multAll": 1.453,
+     "multBench": 1.569,
+     "nAll": 819,
+     "nBench": 734,
+     "peersAll": 3,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "보검매직컬",
+     "name": "보검매직컬",
+     "peers": [
+      {
+       "ch": "tvN STORY",
+       "mult": 1.676,
+       "n": 24,
+       "bench": false
+      },
+      {
+       "ch": "tvN SHOW",
+       "mult": 1.329,
+       "n": 94,
+       "bench": true
+      },
+      {
+       "ch": "Mnet",
+       "mult": 2.232,
+       "n": 25,
+       "bench": true
+      }
+     ],
+     "multAll": 1.676,
+     "multBench": 1.781,
+     "nAll": 143,
+     "nBench": 119,
+     "peersAll": 3,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "전무후무한특종랭킹프리한19",
+     "name": "전무후무한특종랭킹프리한19",
+     "peers": [
+      {
+       "ch": "tvN STORY",
+       "mult": 1.261,
+       "n": 82,
+       "bench": false
+      },
+      {
+       "ch": "tvN SHOW",
+       "mult": 1.772,
+       "n": 112,
+       "bench": true
+      }
+     ],
+     "multAll": 1.517,
+     "multBench": 1.772,
+     "nAll": 194,
+     "nBench": 112,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "exo의사다리타고세계여행5",
+     "name": "EXO의사다리타고세계여행5",
+     "peers": [
+      {
+       "ch": "Mnet",
+       "mult": 2.302,
+       "n": 53,
+       "bench": true
+      }
+     ],
+     "multAll": 2.302,
+     "multBench": 2.302,
+     "nAll": 53,
+     "nBench": 53,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "뿅뿅지구오락실3",
+     "name": "뿅뿅지구오락실3",
+     "peers": [
+      {
+       "ch": "채널S",
+       "mult": 1.138,
+       "n": 42,
+       "bench": false
+      },
+      {
+       "ch": "tvN SHOW",
+       "mult": 1.038,
+       "n": 48,
+       "bench": true
+      },
+      {
+       "ch": "Mnet",
+       "mult": 8.46,
+       "n": 27,
+       "bench": true
+      },
+      {
+       "ch": "코미디TV",
+       "mult": 1.741,
+       "n": 31,
+       "bench": true
+      }
+     ],
+     "multAll": 1.44,
+     "multBench": 1.741,
+     "nAll": 148,
+     "nBench": 106,
+     "peersAll": 4,
+     "peersBench": 3,
+     "otherOwn": []
+    },
+    {
+     "key": "전지적참견시점",
+     "name": "전지적참견시점",
+     "peers": [
+      {
+       "ch": "MBC every1",
+       "mult": 1.028,
+       "n": 597,
+       "bench": false
+      },
+      {
+       "ch": "채널S",
+       "mult": 1.499,
+       "n": 240,
+       "bench": false
+      },
+      {
+       "ch": "E채널",
+       "mult": 1.323,
+       "n": 359,
+       "bench": true
+      }
+     ],
+     "multAll": 1.323,
+     "multBench": 1.323,
+     "nAll": 1196,
+     "nBench": 359,
+     "peersAll": 3,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "콩심은데콩나서웃음팡행복팡해외탐방",
+     "name": "콩심은데콩나서웃음팡행복팡해외탐방",
+     "peers": [
+      {
+       "ch": "tvN SHOW",
+       "mult": 1.486,
+       "n": 131,
+       "bench": true
+      },
+      {
+       "ch": "E채널",
+       "mult": 1.514,
+       "n": 30,
+       "bench": true
+      }
+     ],
+     "multAll": 1.5,
+     "multBench": 1.5,
+     "nAll": 161,
+     "nBench": 161,
+     "peersAll": 2,
+     "peersBench": 2,
+     "otherOwn": []
+    }
+   ]
+  },
+  "OLIFE": {
+   "all": 3,
+   "benchOnly": 3,
+   "both": 3,
+   "otherOwnCount": 0,
+   "top": [
+    {
+     "key": "나는자연인이다",
+     "name": "나는자연인이다",
+     "peers": [
+      {
+       "ch": "CMCTV",
+       "mult": 1.625,
+       "n": 194,
+       "bench": true
+      }
+     ],
+     "multAll": 1.625,
+     "multBench": 1.625,
+     "nAll": 194,
+     "nBench": 194,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "현장르포특종세상",
+     "name": "현장르포특종세상",
+     "peers": [
+      {
+       "ch": "CMCTV",
+       "mult": 1.277,
+       "n": 87,
+       "bench": true
+      }
+     ],
+     "multAll": 1.277,
+     "multBench": 1.277,
+     "nAll": 87,
+     "nBench": 87,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "내일은미스터트롯",
+     "name": "내일은미스터트롯",
+     "peers": [
+      {
+       "ch": "CMCTV",
+       "mult": 1.175,
+       "n": 27,
+       "bench": true
+      }
+     ],
+     "multAll": 1.175,
+     "multBench": 1.175,
+     "nAll": 27,
+     "nBench": 27,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    }
+   ]
+  },
+  "ONCE": {
+   "all": 93,
+   "benchOnly": 72,
+   "both": 69,
+   "otherOwnCount": 10,
+   "top": [
+    {
+     "key": "사랑이뭐길래",
+     "name": "사랑이뭐길래",
+     "peers": [
+      {
+       "ch": "CNTV",
+       "mult": 7.289,
+       "n": 73,
+       "bench": true
+      }
+     ],
+     "multAll": 7.289,
+     "multBench": 7.289,
+     "nAll": 73,
+     "nBench": 73,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "복희누나",
+     "name": "복희누나",
+     "peers": [
+      {
+       "ch": "CNTV",
+       "mult": 6.653,
+       "n": 56,
+       "bench": true
+      }
+     ],
+     "multAll": 6.653,
+     "multBench": 6.653,
+     "nAll": 56,
+     "nBench": 56,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "철인왕후",
+     "name": "철인왕후",
+     "peers": [
+      {
+       "ch": "CNTV",
+       "mult": 3.994,
+       "n": 43,
+       "bench": true
+      }
+     ],
+     "multAll": 3.994,
+     "multBench": 3.994,
+     "nAll": 43,
+     "nBench": 43,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "한국인의밥상",
+     "name": "한국인의밥상",
+     "peers": [
+      {
+       "ch": "EDGETV",
+       "mult": 1.915,
+       "n": 702,
+       "bench": true
+      }
+     ],
+     "multAll": 1.915,
+     "multBench": 1.915,
+     "nAll": 702,
+     "nBench": 702,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": [
+      "OLIFE"
+     ]
+    },
+    {
+     "key": "이호선상담소관계vs전쟁",
+     "name": "이호선상담소관계VS전쟁",
+     "peers": [
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.852,
+       "n": 313,
+       "bench": true
+      },
+      {
+       "ch": "Dramax",
+       "mult": 1.675,
+       "n": 90,
+       "bench": true
+      }
+     ],
+     "multAll": 1.763,
+     "multBench": 1.763,
+     "nAll": 403,
+     "nBench": 403,
+     "peersAll": 2,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "인생화보",
+     "name": "인생화보",
+     "peers": [
+      {
+       "ch": "CNTV",
+       "mult": 2.177,
+       "n": 110,
+       "bench": true
+      }
+     ],
+     "multAll": 2.177,
+     "multBench": 2.177,
+     "nAll": 110,
+     "nBench": 110,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "용감한형사들3",
+     "name": "용감한형사들3",
+     "peers": [
+      {
+       "ch": "DRAMAcube",
+       "mult": 2.243,
+       "n": 88,
+       "bench": true
+      }
+     ],
+     "multAll": 2.243,
+     "multBench": 2.243,
+     "nAll": 88,
+     "nBench": 88,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "멋진신세계",
+     "name": "멋진신세계",
+     "peers": [
+      {
+       "ch": "SBS Plus",
+       "mult": 1.181,
+       "n": 199,
+       "bench": false
+      },
+      {
+       "ch": "Dramax",
+       "mult": 1.65,
+       "n": 269,
+       "bench": true
+      }
+     ],
+     "multAll": 1.415,
+     "multBench": 1.65,
+     "nAll": 468,
+     "nBench": 269,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": [
+      "ENA"
+     ]
+    },
+    {
+     "key": "천개의비밀어메이징스토리",
+     "name": "천개의비밀어메이징스토리",
+     "peers": [
+      {
+       "ch": "D-ONE",
+       "mult": 1.33,
+       "n": 323,
+       "bench": false
+      },
+      {
+       "ch": "CNTV",
+       "mult": 4.239,
+       "n": 22,
+       "bench": true
+      }
+     ],
+     "multAll": 2.785,
+     "multBench": 4.239,
+     "nAll": 345,
+     "nBench": 22,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "용감한형사들4스페셜",
+     "name": "용감한형사들4스페셜",
+     "peers": [
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.633,
+       "n": 203,
+       "bench": true
+      }
+     ],
+     "multAll": 1.633,
+     "multBench": 1.633,
+     "nAll": 203,
+     "nBench": 203,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "주몽",
+     "name": "주몽",
+     "peers": [
+      {
+       "ch": "EDGETV",
+       "mult": 0.648,
+       "n": 262,
+       "bench": true
+      },
+      {
+       "ch": "CNTV",
+       "mult": 2.106,
+       "n": 227,
+       "bench": true
+      },
+      {
+       "ch": "MBC ON",
+       "mult": 1.415,
+       "n": 81,
+       "bench": true
+      }
+     ],
+     "multAll": 1.415,
+     "multBench": 1.415,
+     "nAll": 570,
+     "nBench": 570,
+     "peersAll": 3,
+     "peersBench": 3,
+     "otherOwn": []
+    },
+    {
+     "key": "현장르포특종세상",
+     "name": "현장르포특종세상",
+     "peers": [
+      {
+       "ch": "EDGETV",
+       "mult": 1.494,
+       "n": 318,
+       "bench": true
+      }
+     ],
+     "multAll": 1.494,
+     "multBench": 1.494,
+     "nAll": 318,
+     "nBench": 318,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "전원일기",
+     "name": "전원일기",
+     "peers": [
+      {
+       "ch": "EDGETV",
+       "mult": 0.727,
+       "n": 124,
+       "bench": true
+      },
+      {
+       "ch": "MBC ON",
+       "mult": 1.885,
+       "n": 1722,
+       "bench": true
+      }
+     ],
+     "multAll": 1.306,
+     "multBench": 1.306,
+     "nAll": 1846,
+     "nBench": 1846,
+     "peersAll": 2,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "다음생은없으니까",
+     "name": "다음생은없으니까",
+     "peers": [
+      {
+       "ch": "Dramax",
+       "mult": 1.553,
+       "n": 218,
+       "bench": true
+      }
+     ],
+     "multAll": 1.553,
+     "multBench": 1.553,
+     "nAll": 218,
+     "nBench": 218,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "용감한형사들4",
+     "name": "용감한형사들4",
+     "peers": [
+      {
+       "ch": "DRAMAcube",
+       "mult": 1.567,
+       "n": 199,
+       "bench": true
+      }
+     ],
+     "multAll": 1.567,
+     "multBench": 1.567,
+     "nAll": 199,
+     "nBench": 199,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    }
+   ]
+  },
+  "ENA_STORY": {
+   "all": 135,
+   "benchOnly": 59,
+   "both": 51,
+   "otherOwnCount": 8,
+   "top": [
+    {
+     "key": "스트릿월드파이터디렉터스워",
+     "name": "스트릿월드파이터디렉터스워",
+     "peers": [
+      {
+       "ch": "Mnet",
+       "mult": 2.833,
+       "n": 117,
+       "bench": true
+      }
+     ],
+     "multAll": 2.833,
+     "multBench": 2.833,
+     "nAll": 117,
+     "nBench": 117,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "showmethemoney12",
+     "name": "SHOWMETHEMONEY12",
+     "peers": [
+      {
+       "ch": "Mnet",
+       "mult": 2.024,
+       "n": 248,
+       "bench": true
+      }
+     ],
+     "multAll": 2.024,
+     "multBench": 2.024,
+     "nAll": 248,
+     "nBench": 248,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "바다로간사나이",
+     "name": "바다로간사나이",
+     "peers": [
+      {
+       "ch": "CH view",
+       "mult": 2.36,
+       "n": 96,
+       "bench": true
+      }
+     ],
+     "multAll": 2.36,
+     "multBench": 2.36,
+     "nAll": 96,
+     "nBench": 96,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "내새끼의연애2",
+     "name": "내새끼의연애2",
+     "peers": [
+      {
+       "ch": "tvN STORY",
+       "mult": 0.805,
+       "n": 82,
+       "bench": false
+      },
+      {
+       "ch": "E채널",
+       "mult": 1.087,
+       "n": 106,
+       "bench": false
+      },
+      {
+       "ch": "Mnet",
+       "mult": 5.32,
+       "n": 20,
+       "bench": true
+      }
+     ],
+     "multAll": 1.087,
+     "multBench": 5.32,
+     "nAll": 208,
+     "nBench": 20,
+     "peersAll": 3,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "히든아이",
+     "name": "히든아이",
+     "peers": [
+      {
+       "ch": "MBC every1",
+       "mult": 1.167,
+       "n": 679,
+       "bench": false
+      },
+      {
+       "ch": "K STAR",
+       "mult": 1.246,
+       "n": 334,
+       "bench": false
+      },
+      {
+       "ch": "theLIFE",
+       "mult": 1.851,
+       "n": 25,
+       "bench": true
+      },
+      {
+       "ch": "CH view",
+       "mult": 1.026,
+       "n": 124,
+       "bench": true
+      },
+      {
+       "ch": "코미디TV",
+       "mult": 1.853,
+       "n": 69,
+       "bench": true
+      }
+     ],
+     "multAll": 1.246,
+     "multBench": 1.851,
+     "nAll": 1231,
+     "nBench": 218,
+     "peersAll": 5,
+     "peersBench": 3,
+     "otherOwn": []
+    },
+    {
+     "key": "미운우리새끼다시쓰는육아일기",
+     "name": "미운우리새끼다시쓰는육아일기",
+     "peers": [
+      {
+       "ch": "채널S",
+       "mult": 1.468,
+       "n": 123,
+       "bench": false
+      },
+      {
+       "ch": "SBS funE",
+       "mult": 1.747,
+       "n": 460,
+       "bench": false
+      },
+      {
+       "ch": "K STAR",
+       "mult": 1.138,
+       "n": 203,
+       "bench": false
+      },
+      {
+       "ch": "theLIFE",
+       "mult": 1.589,
+       "n": 517,
+       "bench": true
+      }
+     ],
+     "multAll": 1.529,
+     "multBench": 1.589,
+     "nAll": 1303,
+     "nBench": 517,
+     "peersAll": 4,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "이제만나러갑니다",
+     "name": "이제만나러갑니다",
+     "peers": [
+      {
+       "ch": "CH view",
+       "mult": 1.462,
+       "n": 1349,
+       "bench": true
+      }
+     ],
+     "multAll": 1.462,
+     "multBench": 1.462,
+     "nAll": 1349,
+     "nBench": 1349,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "뿅뿅지구오락실",
+     "name": "뿅뿅지구오락실",
+     "peers": [
+      {
+       "ch": "E채널",
+       "mult": 0.63,
+       "n": 26,
+       "bench": false
+      },
+      {
+       "ch": "코미디TV",
+       "mult": 0.925,
+       "n": 73,
+       "bench": true
+      },
+      {
+       "ch": "Mnet",
+       "mult": 2.646,
+       "n": 39,
+       "bench": true
+      }
+     ],
+     "multAll": 0.925,
+     "multBench": 1.786,
+     "nAll": 138,
+     "nBench": 112,
+     "peersAll": 3,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "틈만나면",
+     "name": "틈만나면",
+     "peers": [
+      {
+       "ch": "SBS funE",
+       "mult": 1.009,
+       "n": 335,
+       "bench": false
+      },
+      {
+       "ch": "E채널",
+       "mult": 1.188,
+       "n": 304,
+       "bench": false
+      },
+      {
+       "ch": "theLIFE",
+       "mult": 1.274,
+       "n": 429,
+       "bench": true
+      },
+      {
+       "ch": "코미디TV",
+       "mult": 1.389,
+       "n": 154,
+       "bench": true
+      }
+     ],
+     "multAll": 1.231,
+     "multBench": 1.331,
+     "nAll": 1222,
+     "nBench": 583,
+     "peersAll": 4,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "식객허영만의백반기행",
+     "name": "식객허영만의백반기행",
+     "peers": [
+      {
+       "ch": "theLIFE",
+       "mult": 1.44,
+       "n": 212,
+       "bench": true
+      }
+     ],
+     "multAll": 1.44,
+     "multBench": 1.44,
+     "nAll": 212,
+     "nBench": 212,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "자급자족어부라이프삼시세끼어촌편5",
+     "name": "자급자족어부라이프삼시세끼어촌편5",
+     "peers": [
+      {
+       "ch": "tvN SHOW",
+       "mult": 1.469,
+       "n": 74,
+       "bench": false
+      },
+      {
+       "ch": "E채널",
+       "mult": 1.417,
+       "n": 23,
+       "bench": false
+      },
+      {
+       "ch": "K STAR",
+       "mult": 0.971,
+       "n": 44,
+       "bench": false
+      },
+      {
+       "ch": "theLIFE",
+       "mult": 1.237,
+       "n": 22,
+       "bench": true
+      },
+      {
+       "ch": "코미디TV",
+       "mult": 2.324,
+       "n": 61,
+       "bench": true
+      }
+     ],
+     "multAll": 1.417,
+     "multBench": 1.78,
+     "nAll": 224,
+     "nBench": 83,
+     "peersAll": 5,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "용감한형사들4",
+     "name": "용감한형사들4",
+     "peers": [
+      {
+       "ch": "E채널",
+       "mult": 2.058,
+       "n": 188,
+       "bench": false
+      },
+      {
+       "ch": "K STAR",
+       "mult": 1.31,
+       "n": 330,
+       "bench": false
+      },
+      {
+       "ch": "CH view",
+       "mult": 1.281,
+       "n": 345,
+       "bench": true
+      }
+     ],
+     "multAll": 1.31,
+     "multBench": 1.281,
+     "nAll": 863,
+     "nBench": 345,
+     "peersAll": 3,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "놀라운토요일세대초월음악예능",
+     "name": "놀라운토요일세대초월음악예능",
+     "peers": [
+      {
+       "ch": "tvN SHOW",
+       "mult": 0.841,
+       "n": 37,
+       "bench": false
+      },
+      {
+       "ch": "Mnet",
+       "mult": 2.583,
+       "n": 37,
+       "bench": true
+      }
+     ],
+     "multAll": 1.712,
+     "multBench": 2.583,
+     "nAll": 74,
+     "nBench": 37,
+     "peersAll": 2,
+     "peersBench": 1,
+     "otherOwn": []
+    },
+    {
+     "key": "뿅뿅지구오락실3",
+     "name": "뿅뿅지구오락실3",
+     "peers": [
+      {
+       "ch": "채널S",
+       "mult": 0.807,
+       "n": 55,
+       "bench": false
+      },
+      {
+       "ch": "tvN SHOW",
+       "mult": 0.817,
+       "n": 48,
+       "bench": false
+      },
+      {
+       "ch": "코미디TV",
+       "mult": 0.868,
+       "n": 39,
+       "bench": true
+      },
+      {
+       "ch": "Mnet",
+       "mult": 2.972,
+       "n": 27,
+       "bench": true
+      }
+     ],
+     "multAll": 0.843,
+     "multBench": 1.92,
+     "nAll": 169,
+     "nBench": 66,
+     "peersAll": 4,
+     "peersBench": 2,
+     "otherOwn": []
+    },
+    {
+     "key": "지옥에서온판사",
+     "name": "지옥에서온판사",
+     "peers": [
+      {
+       "ch": "코미디TV",
+       "mult": 2.264,
+       "n": 46,
+       "bench": true
+      }
+     ],
+     "multAll": 2.264,
+     "multBench": 2.264,
+     "nAll": 46,
+     "nBench": 46,
+     "peersAll": 1,
+     "peersBench": 1,
+     "otherOwn": []
+    }
+   ]
+  }
+ },
+ "backtest": {
+  "summary": {
+   "ENA": {
+    "n": 0,
+    "all": {
+     "n": 0,
+     "mae_log": null,
+     "hit11": null
+    },
+    "benchRatio": {
+     "n": 0,
+     "mae_log": null,
+     "hit11": null
+    },
+    "benchWiden": {
+     "n": 0,
+     "mae_log": null,
+     "hit11": null
+    },
+    "paired": {
+     "n": 0,
+     "all": {
+      "n": 0,
+      "mae_log": null,
+      "hit11": null
+     },
+     "bench": {
+      "n": 0,
+      "mae_log": null,
+      "hit11": null
+     }
+    },
+    "naive1": {
+     "n": 0,
+     "mae_log": null,
+     "hit11": null
+    }
+   },
+   "ENA_DRAMA": {
+    "n": 10,
+    "all": {
+     "n": 10,
+     "mae_log": 0.862,
+     "hit11": 0.8
+    },
+    "benchRatio": {
+     "n": 4,
+     "mae_log": 0.443,
+     "hit11": 1
+    },
+    "benchWiden": {
+     "n": 4,
+     "mae_log": 0.443,
+     "hit11": 1
+    },
+    "paired": {
+     "n": 4,
+     "all": {
+      "n": 4,
+      "mae_log": 0.4,
+      "hit11": 1
+     },
+     "bench": {
+      "n": 4,
+      "mae_log": 0.443,
+      "hit11": 1
+     }
+    },
+    "naive1": {
+     "n": 10,
+     "mae_log": 0.393,
+     "hit11": 0.6
+    }
+   },
+   "ENA_PLAY": {
+    "n": 0,
+    "all": {
+     "n": 0,
+     "mae_log": null,
+     "hit11": null
+    },
+    "benchRatio": {
+     "n": 0,
+     "mae_log": null,
+     "hit11": null
+    },
+    "benchWiden": {
+     "n": 0,
+     "mae_log": null,
+     "hit11": null
+    },
+    "paired": {
+     "n": 0,
+     "all": {
+      "n": 0,
+      "mae_log": null,
+      "hit11": null
+     },
+     "bench": {
+      "n": 0,
+      "mae_log": null,
+      "hit11": null
+     }
+    },
+    "naive1": {
+     "n": 0,
+     "mae_log": null,
+     "hit11": null
+    }
+   },
+   "OLIFE": {
+    "n": 2,
+    "all": {
+     "n": 2,
+     "mae_log": 1.333,
+     "hit11": 0.5
+    },
+    "benchRatio": {
+     "n": 0,
+     "mae_log": null,
+     "hit11": null
+    },
+    "benchWiden": {
+     "n": 2,
+     "mae_log": 1.333,
+     "hit11": 0.5
+    },
+    "paired": {
+     "n": 0,
+     "all": {
+      "n": 0,
+      "mae_log": null,
+      "hit11": null
+     },
+     "bench": {
+      "n": 0,
+      "mae_log": null,
+      "hit11": null
+     }
+    },
+    "naive1": {
+     "n": 2,
+     "mae_log": 0.235,
+     "hit11": 1
+    }
+   },
+   "ONCE": {
+    "n": 6,
+    "all": {
+     "n": 6,
+     "mae_log": 0.667,
+     "hit11": 0.333
+    },
+    "benchRatio": {
+     "n": 5,
+     "mae_log": 0.545,
+     "hit11": 0.4
+    },
+    "benchWiden": {
+     "n": 5,
+     "mae_log": 0.56,
+     "hit11": 0.4
+    },
+    "paired": {
+     "n": 5,
+     "all": {
+      "n": 5,
+      "mae_log": 0.531,
+      "hit11": 0.4
+     },
+     "bench": {
+      "n": 5,
+      "mae_log": 0.545,
+      "hit11": 0.4
+     }
+    },
+    "naive1": {
+     "n": 6,
+     "mae_log": 0.531,
+     "hit11": 0.833
+    }
+   },
+   "ENA_STORY": {
+    "n": 9,
+    "all": {
+     "n": 9,
+     "mae_log": 0.162,
+     "hit11": 0.889
+    },
+    "benchRatio": {
+     "n": 2,
+     "mae_log": 0.455,
+     "hit11": 0.5
+    },
+    "benchWiden": {
+     "n": 2,
+     "mae_log": 0.455,
+     "hit11": 0.5
+    },
+    "paired": {
+     "n": 2,
+     "all": {
+      "n": 2,
+      "mae_log": 0.495,
+      "hit11": 0.5
+     },
+     "bench": {
+      "n": 2,
+      "mae_log": 0.455,
+      "hit11": 0.5
+     }
+    },
+    "naive1": {
+     "n": 9,
+     "mae_log": 0.249,
+     "hit11": 0.889
+    }
+   },
+   "ALL": {
+    "n": 27,
+    "all": {
+     "n": 27,
+     "mae_log": 0.468,
+     "hit11": 0.704
+    },
+    "benchRatio": {
+     "n": 11,
+     "mae_log": 0.503,
+     "hit11": 0.636
+    },
+    "benchWiden": {
+     "n": 13,
+     "mae_log": 0.503,
+     "hit11": 0.615
+    },
+    "paired": {
+     "n": 11,
+     "all": {
+      "n": 11,
+      "mae_log": 0.503,
+      "hit11": 0.636
+     },
+     "bench": {
+      "n": 11,
+      "mae_log": 0.503,
+      "hit11": 0.636
+     }
+    },
+    "naive1": {
+     "n": 27,
+     "mae_log": 0.359,
+     "hit11": 0.778
+    }
+   }
+  },
+  "rows": [
+   {
+    "channel": "ENA_DRAMA",
+    "key": "굿파트너",
+    "name": "굿파트너",
+    "firstOwn": "2025-07-07",
+    "ownMult": 0.606,
+    "ownN": 27,
+    "predAll": 0.702,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_DRAMA",
+    "key": "톡파원25시",
+    "name": "톡파원25시",
+    "firstOwn": "2025-07-23",
+    "ownMult": 1.152,
+    "ownN": 435,
+    "predAll": 1.837,
+    "predBench": 1.837,
+    "predBenchWiden": 1.837,
+    "peersAll": 1,
+    "peersBench": 1
+   },
+   {
+    "channel": "ENA_DRAMA",
+    "key": "밤에피는꽃",
+    "name": "밤에피는꽃",
+    "firstOwn": "2025-11-10",
+    "ownMult": 0.767,
+    "ownN": 22,
+    "predAll": 0.218,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_DRAMA",
+    "key": "스토브리그",
+    "name": "스토브리그",
+    "firstOwn": "2025-11-12",
+    "ownMult": 1.126,
+    "ownN": 92,
+    "predAll": 7.341,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_DRAMA",
+    "key": "벌거벗은세계사",
+    "name": "벌거벗은세계사",
+    "firstOwn": "2025-12-26",
+    "ownMult": 1.264,
+    "ownN": 299,
+    "predAll": 1.763,
+    "predBench": 1.921,
+    "predBenchWiden": 1.921,
+    "peersAll": 3,
+    "peersBench": 2
+   },
+   {
+    "channel": "ENA_DRAMA",
+    "key": "복수대행써비스모범택시3",
+    "name": "복수대행써비스모범택시3",
+    "firstOwn": "2026-01-17",
+    "ownMult": 0.652,
+    "ownN": 44,
+    "predAll": 0.89,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_DRAMA",
+    "key": "판사이한영",
+    "name": "판사이한영",
+    "firstOwn": "2026-02-28",
+    "ownMult": 0.168,
+    "ownN": 31,
+    "predAll": 0.755,
+    "predBench": 0.667,
+    "predBenchWiden": 0.667,
+    "peersAll": 2,
+    "peersBench": 1
+   },
+   {
+    "channel": "ENA_DRAMA",
+    "key": "벌거벗은한국사",
+    "name": "벌거벗은한국사",
+    "firstOwn": "2026-06-17",
+    "ownMult": 0.501,
+    "ownN": 39,
+    "predAll": 2.238,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_DRAMA",
+    "key": "김부장",
+    "name": "김부장",
+    "firstOwn": "2026-08-01",
+    "ownMult": 0.262,
+    "ownN": 32,
+    "predAll": 1.186,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_DRAMA",
+    "key": "나혼자산다",
+    "name": "나혼자산다",
+    "firstOwn": "2026-08-19",
+    "ownMult": 1.431,
+    "ownN": 67,
+    "predAll": 1.234,
+    "predBench": 1.19,
+    "predBenchWiden": 1.19,
+    "peersAll": 3,
+    "peersBench": 2
+   },
+   {
+    "channel": "OLIFE",
+    "key": "지지고볶는여행",
+    "name": "지지고볶는여행",
+    "firstOwn": "2025-07-19",
+    "ownMult": 0.729,
+    "ownN": 30,
+    "predAll": 0.073,
+    "predBench": null,
+    "predBenchWiden": 0.073,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "OLIFE",
+    "key": "new코리아헌터",
+    "name": "NEW코리아헌터",
+    "firstOwn": "2025-10-04",
+    "ownMult": 0.857,
+    "ownN": 567,
+    "predAll": 1.243,
+    "predBench": null,
+    "predBenchWiden": 1.243,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ONCE",
+    "key": "왔다장보리",
+    "name": "왔다장보리",
+    "firstOwn": "2025-11-10",
+    "ownMult": 0.961,
+    "ownN": 429,
+    "predAll": 1.222,
+    "predBench": 1.222,
+    "predBenchWiden": 1.222,
+    "peersAll": 1,
+    "peersBench": 1
+   },
+   {
+    "channel": "ONCE",
+    "key": "제빵왕김탁구",
+    "name": "제빵왕김탁구",
+    "firstOwn": "2025-11-24",
+    "ownMult": 1.685,
+    "ownN": 439,
+    "predAll": 0.754,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ONCE",
+    "key": "인생2막세상의벽을향해한방을날려라리얼도전스토리하이킥",
+    "name": "인생2막세상의벽을향해한방을날려라리얼도전스토리하이킥",
+    "firstOwn": "2025-11-29",
+    "ownMult": 0.146,
+    "ownN": 34,
+    "predAll": 0.73,
+    "predBench": 0.73,
+    "predBenchWiden": 0.73,
+    "peersAll": 1,
+    "peersBench": 1
+   },
+   {
+    "channel": "ONCE",
+    "key": "내딸금사월",
+    "name": "내딸금사월",
+    "firstOwn": "2025-12-15",
+    "ownMult": 0.583,
+    "ownN": 130,
+    "predAll": 0.964,
+    "predBench": 0.964,
+    "predBenchWiden": 0.964,
+    "peersAll": 1,
+    "peersBench": 1
+   },
+   {
+    "channel": "ONCE",
+    "key": "벌거벗은세계사",
+    "name": "벌거벗은세계사",
+    "firstOwn": "2026-06-22",
+    "ownMult": 0.932,
+    "ownN": 234,
+    "predAll": 1.585,
+    "predBench": 1.608,
+    "predBenchWiden": 1.631,
+    "peersAll": 3,
+    "peersBench": 2
+   },
+   {
+    "channel": "ONCE",
+    "key": "자이언트",
+    "name": "자이언트",
+    "firstOwn": "2026-10-05",
+    "ownMult": 0.333,
+    "ownN": 167,
+    "predAll": 1.168,
+    "predBench": 1.19,
+    "predBenchWiden": 1.168,
+    "peersAll": 3,
+    "peersBench": 2
+   },
+   {
+    "channel": "ENA_STORY",
+    "key": "내아이의사생활",
+    "name": "내아이의사생활",
+    "firstOwn": "2026-01-14",
+    "ownMult": 0.523,
+    "ownN": 36,
+    "predAll": 1.197,
+    "predBench": 1.175,
+    "predBenchWiden": 1.175,
+    "peersAll": 2,
+    "peersBench": 1
+   },
+   {
+    "channel": "ENA_STORY",
+    "key": "수사반장1958",
+    "name": "수사반장1958",
+    "firstOwn": "2026-03-27",
+    "ownMult": 0.882,
+    "ownN": 60,
+    "predAll": 0.879,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_STORY",
+    "key": "크레이지투어",
+    "name": "크레이지투어",
+    "firstOwn": "2026-03-29",
+    "ownMult": 0.314,
+    "ownN": 28,
+    "predAll": 0.319,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_STORY",
+    "key": "지지고볶는여행",
+    "name": "지지고볶는여행",
+    "firstOwn": "2026-04-06",
+    "ownMult": 0.246,
+    "ownN": 34,
+    "predAll": 0.664,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_STORY",
+    "key": "놀아주는여자",
+    "name": "놀아주는여자",
+    "firstOwn": "2026-04-20",
+    "ownMult": 0.305,
+    "ownN": 20,
+    "predAll": 0.28,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_STORY",
+    "key": "생고생먹바라지투어쯔양몇끼",
+    "name": "생고생먹바라지투어쯔양몇끼",
+    "firstOwn": "2026-07-02",
+    "ownMult": 0.853,
+    "ownN": 21,
+    "predAll": 0.534,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 2,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_STORY",
+    "key": "벌거벗은한국사",
+    "name": "벌거벗은한국사",
+    "firstOwn": "2026-07-17",
+    "ownMult": 0.935,
+    "ownN": 102,
+    "predAll": 1.099,
+    "predBench": 1.034,
+    "predBenchWiden": 1.034,
+    "peersAll": 4,
+    "peersBench": 1
+   },
+   {
+    "channel": "ENA_STORY",
+    "key": "한블리한문철의블랙박스리뷰",
+    "name": "한블리한문철의블랙박스리뷰",
+    "firstOwn": "2026-09-14",
+    "ownMult": 1.217,
+    "ownN": 185,
+    "predAll": 1.168,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   },
+   {
+    "channel": "ENA_STORY",
+    "key": "아는형님",
+    "name": "아는형님",
+    "firstOwn": "2026-09-17",
+    "ownMult": 0.779,
+    "ownN": 42,
+    "predAll": 0.92,
+    "predBench": null,
+    "predBenchWiden": null,
+    "peersAll": 1,
+    "peersBench": 0
+   }
+  ]
+ }
+}
