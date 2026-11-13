@@ -12,14 +12,10 @@ const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPAB
 const MAIN = "풍향GO2바람따라가는여행";
 const PRE = "풍향GO2사전모임";
 
-async function code(id: string) {
-  const { data } = await sb.from("channels").select("code").eq("id", id).single();
-  return data?.code as string;
-}
-async function must<T>(p: PromiseLike<{ data: T; error: { message: string } | null }>, what: string): Promise<T> {
+async function must<T>(p: PromiseLike<{ data: T; error: { message: string } | null }>, what: string): Promise<NonNullable<T>> {
   const { data, error } = await p;
-  if (error) throw new Error(`${what}: ${error.message}`);
-  return data;
+  if (error || data == null) throw new Error(`${what}: ${error?.message ?? "결과 없음"}`);
+  return data as NonNullable<T>;
 }
 
 const { data: progs } = await sb.from("programs").select("id, channel_id, canonical_name, raw_name").or("canonical_name.ilike.%풍향%");
@@ -91,4 +87,3 @@ if (enaEmpty) {
 const since = new Date(Date.now() + 9 * 3600e3 - 14 * 86400e3).toISOString().slice(0, 10);
 await sb.from("mart_daily_dashboard_cache").delete().eq("cache_slot", "original_content_daily").gte("as_of_date", since);
 console.log("적용 완료");
-void code;
