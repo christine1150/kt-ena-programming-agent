@@ -178,6 +178,29 @@ export function inferRuns(airings: AiringInput[], patterns: RunPattern[], opts: 
   return { results, learned };
 }
 
+const CONFIRM_MINUTE_GAP = 30; // 관리자 등록 시각과 네이버 시각이 이 안이면 '정확히 일치'로 본다
+
+/**
+ * 본방이 확실한 기간 — 관리자 등록(주요 콘텐츠 관리)과 네이버가 같은 요일·같은 자사 채널·같은 시각(±30분)을 가리키는 패턴 쌍이 있을 때만 값이 나온다(사용자 지시 2026-11-13).
+ * 이 기간 안의 방영 중 본방으로 확인되지 않은 것은 '미확인'이 아니라 재방으로 본다. 두 쪽 중 하나라도 없거나 어긋나면 null(기존처럼 모르면 모름).
+ * 기간 = 두 패턴 기간의 교집합(시작은 늦은 쪽, 끝은 이른 쪽, 끝이 없으면 열린 끝).
+ */
+export function confirmedWindow(patterns: RunPattern[]): { from: string | null; to: string | null } | null {
+  let best: { from: string | null; to: string | null } | null = null;
+  for (const r of patterns.filter((p) => p.source === "registered")) {
+    for (const n of patterns.filter((p) => p.source === "naver")) {
+      if (!r.channelCodes.some((c) => n.channelCodes.includes(c))) continue;
+      const agree = r.slots.some((rs) => n.slots.some((ns) => rs.days.some((d) => ns.days.includes(d)) && Math.abs(rs.minute - ns.minute) <= CONFIRM_MINUTE_GAP));
+      if (!agree) continue;
+      const from = r.startDate && n.startDate ? (r.startDate > n.startDate ? r.startDate : n.startDate) : (r.startDate ?? n.startDate);
+      const to = r.endDate && n.endDate ? (r.endDate < n.endDate ? r.endDate : n.endDate) : (r.endDate ?? n.endDate);
+      if (from && to && from > to) continue;
+      if (!best || (from ?? "") > (best.from ?? "")) best = { from, to };
+    }
+  }
+  return best;
+}
+
 const DOW_LABEL = ["월", "화", "수", "목", "금", "토", "일"];
 export const hhmm = (minute: number) => `${String(Math.floor(minute / 60) % 24).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
 

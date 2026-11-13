@@ -714,6 +714,9 @@ const supplementText = (s: SupplementCount) => [s.plan ? `업로드 편성표 ${
 function Analysis({ row, result, siblings, onSelect }: { row: ChannelRow; result: PerformanceResult; siblings: ChannelRow[]; onSelect: (r: ChannelRow) => void }) {
   const code = row.channelCode;
   const airings = result.airings.filter((a) => a.channelCode === code);
+  // 방송 기록 표의 평균 — 표에 나온 방영 중 이 채널 KPI 타깃 값이 있는 것의 산술평균(본방 글자색의 기준)
+  const logVals = airings.map((a) => (row.kpiGroup === "HH" ? a.ratingHH : a.rating2049)).filter((x): x is number => typeof x === "number");
+  const logAvg = logVals.length ? logVals.reduce((s, x) => s + x, 0) / logVals.length : null;
   const assess = (siblings.find((s) => s.primary) ?? row).assessment ?? null;
   // 오리지널 비교는 방송 채널(그 채널 KPI 타깃)에서만
   const oc = result.originalCompare && result.originalCompare.channelCode === code ? result.originalCompare : null;
@@ -787,24 +790,32 @@ function Analysis({ row, result, siblings, onSelect }: { row: ChannelRow; result
                     <th className="py-1 text-left font-medium">시각</th>
                     <th className="py-1 text-left font-medium">본방 구분</th>
                     <th className="py-1 text-left font-medium">회차</th>
-                    <th className="py-1 text-left font-medium">원본 표기</th>
-                    <th className="py-1 text-right font-medium">시청률</th>
+                    <th className="py-1 text-right font-medium">수2049</th>
+                    <th className="py-1 text-right font-medium">가구</th>
+                    <th className="py-1 pl-4 text-left font-medium">원본 표기</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {airings.map((a, i) => (
-                    <tr key={i} className="border-t border-zinc-100">
-                      <td className="py-1 tabular-nums">{a.date}</td>
-                      <td className="py-1 tabular-nums">
-                        {fmtTime(a.startTime)}
-                        {a.endTime ? `~${fmtTime(a.endTime)}` : ""}
-                      </td>
-                      <td className="py-1">{a.firstRun === true ? "본방" : a.firstRun === false ? "재방" : "미확인"}</td>
-                      <td className="py-1">{a.episode ?? MISSING}</td>
-                      <td className="py-1 text-zinc-500">{a.name}</td>
-                      <td className="py-1 text-right tabular-nums">{formatRatingValue(a.rating, code)}</td>
-                    </tr>
-                  ))}
+                  {airings.map((a, i) => {
+                    // 본방 표시색: 이 채널 KPI 타깃 시청률이 이 표 방영 평균보다 높으면 푸른색, 낮으면 붉은색
+                    const mine = (x: typeof a) => (row.kpiGroup === "HH" ? x.ratingHH : x.rating2049) ?? null;
+                    const v = mine(a);
+                    const color = v === null || logAvg === null ? "text-zinc-900" : v > logAvg ? "text-blue-700" : v < logAvg ? "text-rose-700" : "text-zinc-900";
+                    return (
+                      <tr key={i} className="border-t border-zinc-100">
+                        <td className="py-1 tabular-nums">{a.date}</td>
+                        <td className="py-1 tabular-nums">
+                          {fmtTime(a.startTime)}
+                          {a.endTime ? `~${fmtTime(a.endTime)}` : ""}
+                        </td>
+                        <td className={`py-1 ${a.firstRun === true ? `font-bold ${color}` : ""}`}>{a.firstRun === true ? "본방" : a.firstRun === false ? "재방" : "미확인"}</td>
+                        <td className="py-1">{a.episode ?? MISSING}</td>
+                        <td className="py-1 text-right tabular-nums">{a.rating2049 === null || a.rating2049 === undefined ? MISSING : formatRatingValue(a.rating2049, code)}</td>
+                        <td className="py-1 text-right tabular-nums">{a.ratingHH === null || a.ratingHH === undefined ? MISSING : formatRatingValue(a.ratingHH, code)}</td>
+                        <td className="py-1 pl-4 text-zinc-500">{a.name}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
@@ -831,7 +842,7 @@ function CalcBasis() {
     ["시청률 흐름", "본방별은 본방 방영(회차 번호가 있으면 회차로 표기), 일별은 방영이 있는 방송일의 평균. 최고·최저·최근은 그래프에 그린 점과 같은 자료입니다. 4점 이상이면 앞 절반·뒤 절반 평균, 2~3점이면 처음·최근을 비교합니다."],
     ["편성 비교", "조회 기간에 실제 방영한 요일·시(시작 시각)마다 작품 평균을, 올해 1월 1일부터 최신 자료일까지(12주 미만이면 최근 12주) 같은 채널·타깃·요일·시에 방송한 다른 프로그램의 단순 평균(=100%)과 비교합니다. 비교군을 조회 기간과 떼어 최근 4주 조회에서도 비교 방송이 모자라지 않게 했습니다. 같은 요일·시 비교 방송이 15건 미만이면 같은 시(전 요일)로 넓히고(‘전 요일’ 표시), 그래도 부족하면 —. 점유율도 같은 비교군의 점유율 평균과 견줍니다. 기본은 방송일 3일 이상 구간 먼저, 방영 많은 순 4개. ‘집중’·‘몇 곳 중 몇 곳’ 같은 문장은 방송일 3일 이상 구간만 씁니다."],
     ["종합평가의 세부 줄", "본방 시간은 방송일이 가장 많은 본방 구간의 같은 시간대 평균 대비 비율, 본방 외 시간대는 평균보다 높은 곳·낮은 곳의 개수입니다(편성 비교와 같은 자료). 시청률이 채널 평균보다 낮거나 그 시간대 시청률이 평균을 넘지 못해도 점유율이 같은 시간대 평균의 150%(콘텐츠 적합도 ‘강화’ 선과 같은 값) 이상인 시간대가 있으면 따로 적습니다."],
-    ["본방 구분", "닐슨 <본>·<재> 표시를 먼저 쓰고, 없으면 업로드 편성표 → 관리자 등록 본방 요일·시각 → 네이버 방송 정보 순서로 보완합니다(보완 건수는 방송 기록에). 근거가 없으면 재방으로 단정하지 않고 ‘미확인’으로 둡니다. 본방 = 각 채널의 첫 방송."],
+    ["본방 구분", "닐슨 <본>·<재> 표시를 먼저 쓰고, 없으면 업로드 편성표 → 관리자 등록 본방 요일·시각 → 네이버 방송 정보 순서로 보완합니다(보완 건수는 방송 기록에). 관리자 등록 본방 시각과 네이버 방송 시각이 같은 요일·같은 시각(±30분)이면 그 기간의 본방은 확실하므로, 본방으로 확인되지 않은 나머지 방영은 ‘미확인’ 대신 재방으로 표시합니다. 그 밖에 근거가 없으면 재방으로 단정하지 않고 ‘미확인’으로 둡니다. 본방 = 각 채널의 첫 방송. 방송 기록의 ‘본방’은 굵게, 이 표 방영 평균(채널 KPI 타깃)보다 시청률이 높으면 푸른색·낮으면 붉은색입니다."],
   ];
   return (
     <details className="mt-4 text-[12px]">

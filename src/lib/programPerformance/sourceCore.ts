@@ -12,7 +12,7 @@ import type { ContentFitAiring } from "@/lib/contentFit/types";
 import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
 import { matchPlanRow, normalizePlanRows, type PlanRow, type PlanRowRaw } from "@/lib/idealSchedule/planEpisodes";
 import { addDays } from "@/lib/idealSchedule/time";
-import { describeLearned, hhmm, inferRuns, type LearnedSlot } from "@/lib/broadcastPattern/inferRuns";
+import { confirmedWindow, describeLearned, hhmm, inferRuns, type LearnedSlot } from "@/lib/broadcastPattern/inferRuns";
 import { loadRunPatterns } from "@/lib/broadcastPattern/load";
 import { FOLLOW_RULES, followRunsOf, loadFollowSources, type SourceAir } from "@/lib/broadcastPattern/followRule";
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
@@ -503,7 +503,9 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
 
   const selected = query.channels && query.channels.length ? new Set(query.channels) : null;
   // 채널 × 타깃 조회는 서로 독립이라 동시에 실행하고(조회 수십 건을 차례로 기다리던 것이 계산 시간의 대부분), 결과는 원래 순서대로 합친다.
-  type Bucket = { rows: ChannelRow[]; evidence: AiringEvidence[]; slotCells: SlotCell[]; allDays: Set<string>; allEpisodes: Set<number>; ownAirs: OwnAir[] };
+  // groupEv: 방송 기록 표에 두 타깃 시청률을 함께 보이기 위한 타깃별 방영 값(조회 타깃과 무관, 키 = 채널|작품|방송일|시각)
+  type GroupEv = { key: string; group: "2049" | "HH"; rating: number | null };
+  type Bucket = { rows: ChannelRow[]; evidence: AiringEvidence[]; slotCells: SlotCell[]; allDays: Set<string>; allEpisodes: Set<number>; ownAirs: OwnAir[]; groupEv: GroupEv[] };
   const jobs: (() => Promise<Bucket>)[] = [];
 
   for (const ch of channels) {
@@ -516,19 +518,24 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     const kpiTarget = { program: resolveProgramLevelTargetLabel(primary), channel: resolveRankSheetTargetLabel(primary), group: primaryGroup, isPrimary: true };
     const otherTarget = { ...COMMON_TARGETS[primaryGroup === "2049" ? "commonHH" : "common2049"], isPrimary: false };
     const targets = mode === "kpi" ? [kpiTarget] : mode === "both" ? [kpiTarget, otherTarget] : [{ ...COMMON_TARGETS[mode], isPrimary: COMMON_TARGETS[mode].group === primaryGroup }];
-    for (const [ti, tgt] of targets.entries()) jobs.push(async (): Promise<Bucket> => {
+    // 조회 타깃이 한쪽뿐이어도 방송 기록 표는 두 타깃을 함께 보이므로, 빠진 쪽 타깃은 방영 값만 읽는 보조 작업(evOnly)으로 더한다(행·총계·평균에는 영향 없음)
+    const baseTargets = targets.map((t) => ({ ...t, evOnly: false }));
+    const extraTarget = mode === "both" ? null : { ...COMMON_TARGETS[baseTargets[0].group === "2049" ? "commonHH" : "common2049"], isPrimary: false, evOnly: true };
+    for (const [ti, tgt] of (extraTarget ? [...baseTargets, extraTarget] : baseTargets).entries()) jobs.push(async (): Promise<Bucket> => {
     const rows: ChannelRow[] = [];
     const evidence: AiringEvidence[] = [];
     const slotCells: SlotCell[] = [];
     const allDays = new Set<string>();
     const allEpisodes = new Set<number>();
     const ownAirs: OwnAir[] = [];
-    const done = (): Bucket => ({ rows, evidence, slotCells, allDays, allEpisodes, ownAirs });
+    const groupEv: GroupEv[] = [];
+    const evOnly = tgt.evOnly;
+    const done = (): Bucket => ({ rows, evidence, slotCells, allDays, allEpisodes, ownAirs, groupEv });
     const programLabel = tgt.program;
     const channelLabel = tgt.channel;
     const kpiGroup = tgt.group;
     // 근거 방송·시간대 칸·총계는 채널당 한 타깃만(두 타깃이면 같은 방영이 두 번 세어지므로 KPI 타깃만)
-    const collect = targets.length === 1 || tgt.isPrimary;
+    const collect = !evOnly && (targets.length === 1 || tgt.isPrimary);
     const base: ChannelRow = {
       channelCode: ch.code,
       channelName: ch.name,
@@ -569,12 +576,12 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
     }
     const [progTargetId, chTargetId] = await Promise.all([targetIdOf(db, programLabel), targetIdOf(db, channelLabel)]);
     if (!progTargetId) {
-      rows.push({ ...base, status: "NO_TARGET", statusNote: `'${programLabel}' 타깃이 없습니다.` });
+      if (!evOnly) rows.push({ ...base, status: "NO_TARGET", statusNote: `'${programLabel}' 타깃이 없습니다.` });
       return done();
     }
 
     // 채널 하루 시청률(랭킹 시트 행, 공식 순위가 붙은 채널 단위 행) — 작품 방영 여부와 무관하게 조회 기간 전체
-    const dayRows = chTargetId
+    const dayRows = chTargetId && !evOnly
       ? await fetchAll<Record<string, unknown>>(
           (a, b) =>
             db
@@ -692,6 +699,15 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         if (r.episode === null && episode !== null) epFilled++;
         return run === r.firstRun && episode === r.episode ? r : { ...r, firstRun: run, episode };
       });
+      // 관리자 등록과 네이버가 같은 본방 시각을 가리키면 그 기간의 본방은 확실하다 — 본방으로 확인되지 않은 방영은 '미확인'이 아니라 재방(사용자 지시 2026-11-13)
+      const sure = confirmedWindow(runPatterns.patterns);
+      if (sure) {
+        workRows = workRows.map((r) => {
+          if (r.firstRun !== null || (sure.from && r.date < sure.from) || (sure.to && r.date > sure.to)) return r;
+          byRegistered++;
+          return { ...r, firstRun: false };
+        });
+      }
       for (const l of inf.learned) learnedSlots.set(`${l.source}|${l.channelCode}|${l.nominalMinute}|${l.days.join("")}`, l);
       if (byRegistered || byNaver || epFilled) {
         const f = fillOf(ch.code, base.channelName);
@@ -703,6 +719,14 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
 
     // 동시방송 판정에 쓰는 자사 방영(채널당 한 타깃만, 재방 확인분은 제외)
     if (collect) for (const r of workRows.filter((w) => w.firstRun !== false)) { const m = minuteOfTime(r.startTime); if (m !== null) ownAirs.push({ code: ch.code, date: r.date, minute: m, firstRun: r.firstRun }); }
+
+    // 보조 작업(evOnly)은 두 타깃 표시용 방영 값만 남기고 끝낸다
+    const groupEvOf = (list: WorkAiring[]) => list.map((r): GroupEv => ({ key: `${ch.code}|${r.programId}|${r.date}|${r.startTime ?? ""}`, group: kpiGroup, rating: r.rating }));
+    if (evOnly) {
+      groupEv.push(...groupEvOf(workRows.filter((r) => matchesAiringFilter(r.firstRun, query.airing))));
+      return done();
+    }
+    groupEv.push(...groupEvOf(workRows.filter((r) => matchesAiringFilter(r.firstRun, query.airing))));
 
     if (workRows.length === 0) {
       // 기록 없음 ≠ 미방영. 그 채널 프로그램 단위 자료가 아예 없는 기간이면 그렇게 표시한다(ENA Story 일부 기간 등).
@@ -956,7 +980,19 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   // 본방 여부·회차 보완 건수 — 기본 화면 배너(notes)가 아니라 별도 필드로 남겨 방송 기록 접힘 안에서만 보여 준다(개편 2026-10-23, 이력은 그대로)
   const supplement = [...fillStats.entries()].sort((a, b) => a[1].order - b[1].order).map(([channelCode, f]) => ({ channelCode, channelName: f.channelName, plan: f.plan, registered: f.registered, naver: f.naver, episode: f.episode }));
   const rows = buckets.flatMap((b) => b.rows);
-  const evidence = buckets.flatMap((b) => b.evidence);
+  const groupVals = new Map<string, { r2049?: number | null; rHH?: number | null }>();
+  for (const g of buckets.flatMap((b) => b.groupEv)) {
+    const cur = groupVals.get(g.key) ?? {};
+    if (g.group === "2049") cur.r2049 = g.rating;
+    else cur.rHH = g.rating;
+    groupVals.set(g.key, cur);
+  }
+  const evidence = buckets
+    .flatMap((b) => b.evidence)
+    .map((e) => {
+      const g = groupVals.get(`${e.channelCode}|${e.programId}|${e.date}|${e.startTime ?? ""}`);
+      return { ...e, rating2049: g?.r2049 ?? null, ratingHH: g?.rHH ?? null };
+    });
   const slotCells = buckets.flatMap((b) => b.slotCells);
   const allDays = new Set(buckets.flatMap((b) => [...b.allDays]));
   const allEpisodes = new Set(buckets.flatMap((b) => [...b.allEpisodes]));

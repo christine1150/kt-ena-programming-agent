@@ -356,6 +356,9 @@ export interface AiringEvidence {
   firstRun: boolean | null;
   episode: number | null;
   rating: number | null;
+  /** 방송 기록 표에 두 타깃을 함께 보이기 위한 값 — 위 조회 타깃과 상관없이 수도권 2049·전국 유료가구 둘 다(없으면 null) */
+  rating2049?: number | null;
+  ratingHH?: number | null;
 }
 
 export interface SlotCell {
