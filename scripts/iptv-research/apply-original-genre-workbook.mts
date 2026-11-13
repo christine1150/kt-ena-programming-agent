@@ -23,7 +23,7 @@ const CO_TAB: Record<string, string> = {
   "KBS Joy": "KBS JOY", "K-STAR": "K STAR", "MBC every1": "MBC every1",
 };
 // 지상파 본사 → 계열 채널 탭
-const AFFILIATE: Record<string, string[]> = { SBS: ["SBS Plus", "SBS funE", "SBS NEX"], MBC: ["MBC every1", "MBC드라마넷", "MBC ON"], KBS: ["KBS JOY", "KBS드라마", "KBS Story"] };
+const AFFILIATE: Record<string, string[]> = { SBS: ["SBS Plus", "SBS funE", "SBS NEX"], MBC: ["MBC every1", "MBC드라마넷", "MBC ON"], KBS: ["KBS JOY", "KBS드라마", "KBS Story"], JTBC: ["JTBC2"] };
 const OWN = new Set(["ENA", "ENA Play", "ENA Drama", "ENA Story", "OLIFE", "ONCE", "skyUHD"]);
 
 type Orig = { channel: string; program: string; kind: string; sheet: string; row: any };
@@ -49,7 +49,7 @@ for (const o of originals) {
   for (const c of String(o.row.coChannels).split(/[·,]/).map((s) => s.trim()).filter(Boolean)) if (CO_TAB[c]) put(CO_TAB[c], o, o.kind, `${o.channel} 공동 (${o.row.coChannels})`);
 }
 // 본사 프로그램(지상파 3사)
-const hq = originals.filter((o) => ["KBS", "MBC", "SBS"].includes(o.channel));
+const hq = originals.filter((o) => ["KBS", "MBC", "SBS", "JTBC"].includes(o.channel));
 for (const o of hq) for (const t of AFFILIATE[o.channel]) put(t, o, o.kind.replace("오리지널", "본사"), `${o.channel} 본사 프로그램`);
 
 // --db: 채널별 오리지널·본사 라벨과 방영 내역을 channel_original_programs 에 upsert (사용법: npx tsx --env-file=.env --env-file=.env.local ... --db)
