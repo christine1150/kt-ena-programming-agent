@@ -17,12 +17,12 @@ const AUDIT = process.argv.includes("--audit");
 const outDir = path.join("docs", "iptv", "word");
 fs.mkdirSync(outDir, { recursive: true });
 
-// 시청률 자릿수: 수도권 2049 는 소수 셋째 자리, 가구는 둘째 자리(2026-11-13 사용자 지시)
+// 시청률 자릿수: 수도권 2049·가구 모두 소수 셋째 자리, 단 지상파·종편 경쟁군 보고서의 가구만 둘째 자리(2026-11-13 사용자 지시)
 // UHD군은 가구 시청률이 0.001~0.005라 예전 표기(0.01 미만 넷째 자리) 유지(2026-11-13 사용자 선택)
-let UHD_MODE = false;
+let UHD_MODE = false, HH_D = 3;
 // 반올림(0.045 → 0.05): toFixed는 이진 오차로 0.04가 될 수 있어 보정
 const rnd = (v, d) => (Math.round(v * 10 ** d + 1e-9) / 10 ** d).toFixed(d);
-const fd = (v, t) => (v == null ? "-" : UHD_MODE ? (v >= 0.01 ? v.toFixed(3) : v.toFixed(4)) : rnd(v, t === "household" ? 2 : 3));
+const fd = (v, t) => (v == null ? "-" : UHD_MODE ? (v >= 0.01 ? v.toFixed(3) : v.toFixed(4)) : rnd(v, t === "household" ? HH_D : 3));
 let TGT = "p2049";   // 채널마다 기준 타깃(c.focus) — 히트맵·인사이트 수치는 이 타깃
 const f = (v) => fd(v, TGT);
 const fH = (v) => fd(v, "household");
@@ -146,7 +146,7 @@ function channelBlocks(c0, idx, nCh) {
   // 상위 프로그램 15편(2026-11-12 사용자 "상위 프로그램 15개까지 늘려줘", 이전 10편)
   const c = { ...c0, top: c0.top.slice(0, 15) };
   const tk = c.focus, other = tk === "p2049" ? "household" : "p2049";
-  TGT = tk; UHD_MODE = c.group === "uhd";
+  TGT = tk; UHD_MODE = c.group === "uhd"; HH_D = c.group === "terrestrial" ? 2 : 3;
   const B = [];
   const isUhd = c.group === "uhd";
   B.push({ type: "apptitle", text: `${idx}. ${c.channel}${c.self ? "(자사)" : ""}  |  ${TK[tk]} 중심`, noBreak: idx === 1 });
