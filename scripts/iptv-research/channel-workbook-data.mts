@@ -7,7 +7,21 @@
 import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { mergeBoundarySplits, mergeSplitRatingRows, weightedValue, mergedShare } from "../../src/lib/broadcastTime/boundarySplit";
-import { normalizeProgramKey } from "../../src/lib/purchaseSim/normalize";
+import { normalizeProgramKey as rawProgramKey } from "../../src/lib/purchaseSim/normalize";
+
+// 같은 작품의 이름 변형(사용자 확정 2026-11-13: "풍향GO/풍향고2/풍향GO2바람따라가는여행은 모두 같은 프로그램, 사전모임은 프리퀄이라 별도").
+// IPTV(TV INDEX)·수기 파일은 "풍향고2", 닐슨은 "풍향GO2바람따라가는여행"으로 적는다 — 키를 닐슨 표기로 합치고 표시 이름도 닐슨 표기를 쓴다.
+const KEY_ALIAS_NAMES: [string, string][] = [
+  ["풍향고2", "풍향GO2바람따라가는여행"],
+  ["풍향고2 사전모임", "풍향GO2사전모임"],
+  ["풍향GO2바람나라가는여행", "풍향GO2바람따라가는여행"], // 닐슨 OLIFE 2026-02-02 오타
+];
+const KEY_ALIAS = new Map(KEY_ALIAS_NAMES.map(([a, b]) => [rawProgramKey(a), rawProgramKey(b)]));
+const ALIAS_DISPLAY = new Map(KEY_ALIAS_NAMES.map(([, b]) => [rawProgramKey(b), b]));
+const normalizeProgramKey = (s: string): string => {
+  const k = rawProgramKey(s);
+  return KEY_ALIAS.get(k) ?? k;
+};
 
 const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
 const FROM = "2026-01-01", TO = "2026-11-10", SNAP_TO = "2026-11-10";
@@ -102,7 +116,8 @@ async function loadIptv(name: string, tk: TK): Promise<Air[]> {
   const xs = await pages<any>(() => sb.from("iptv_airing_metrics").select("broadcast_date,start_minute,program_key,program_name,is_rerun_tag,rating,reach_rate,duration_min")
     .eq("channel_name", name).eq("target_kind", tk).gte("broadcast_date", FROM).lte("broadcast_date", TO).order("broadcast_date").order("start_minute").order("program_key"));
   return xs.filter((x) => Number(x.duration_min) > 0 && !NOT_PROG.test(clean(String(x.program_name)))).map((x) => ({
-    d: x.broadcast_date, s: Number(x.start_minute), dur: Number(x.duration_min), r: x.rating == null ? null : Number(x.rating), sh: null, name: String(x.program_name), key: normalizeProgramKey(String(x.program_key || x.program_name)),
+    d: x.broadcast_date, s: Number(x.start_minute), dur: Number(x.duration_min), r: x.rating == null ? null : Number(x.rating), sh: null,
+    name: ALIAS_DISPLAY.get(normalizeProgramKey(String(x.program_key || x.program_name))) ?? String(x.program_name), key: normalizeProgramKey(String(x.program_key || x.program_name)),
     rerun: !!x.is_rerun_tag, reach: x.reach_rate == null ? null : Number(x.reach_rate),
   }));
 }
@@ -179,7 +194,7 @@ const nielsen = new Map<string, Map<string, Air[]>>();
 const genreMap = new Map<string, string>();
 for (const r of await pages<{ program_key: string; genre: string }>(() => sb.from("iptv_program_genre").select("program_key,genre").order("program_key"))) genreMap.set(normalizeProgramKey(r.program_key), r.genre);
 const naver = new Map<string, any>();
-for (const r of await pages<any>(() => sb.from("program_naver_schedule").select("program_key,status,matched_title,channels,start_date,end_date,episodes").order("program_key"))) naver.set(normalizeProgramKey(r.program_key), r);
+for (const r of await pages<any>(() => sb.from("program_naver_schedule").select("program_key,status,matched_title,channels,start_date,end_date,episodes").order("program_key"))) { const k = normalizeProgramKey(r.program_key); if (naver.get(k)?.status !== "found") naver.set(k, r); } // 이름 변형이 합쳐져 같은 키가 겹치면 네이버 확인(found) 쪽을 남긴다
 const counters = new Map<string, { seed: number; date: string }>();
 for (const r of await pages<any>(() => sb.from("program_episode_counters").select("canonical_name,seed_episode_number,seed_broadcast_date").order("canonical_name"))) counters.set(normalizeProgramKey(r.canonical_name), { seed: Number(r.seed_episode_number), date: r.seed_broadcast_date });
 const snap = await pages<any>(() => sb.from("market_ytd_rank_snapshot").select("target_label,channel_name,rank,rating,share").eq("date_to", SNAP_TO).order("target_label").order("rank"));
