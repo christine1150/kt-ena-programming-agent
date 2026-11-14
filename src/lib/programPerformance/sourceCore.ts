@@ -736,6 +736,24 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       }
     }
 
+    // 재방 회차 — 회차가 비어 있는 재방은 그 앞에서 가장 최근에 방송된 본방의 회차(다음 본방 전까지는 직전 본방 회차의 재방, 사용자 지시 2026-11-14)
+    if (workRows.some((r) => r.firstRun === false && r.episode === null) && workRows.some((r) => r.firstRun === true && r.episode !== null)) {
+      const at = (r: WorkAiring) => `${r.date}|${r.startTime ?? ""}`;
+      const firstsByTime = workRows.filter((r) => r.firstRun === true && r.episode !== null).sort((a, b) => at(a).localeCompare(at(b)));
+      let filled = 0;
+      workRows = workRows.map((r) => {
+        if (r.firstRun !== false || r.episode !== null) return r;
+        let ep: number | null = null;
+        for (const f of firstsByTime) {
+          if (at(f) < at(r)) ep = f.episode;
+          else break;
+        }
+        if (ep === null) return r;
+        filled++;
+        return { ...r, episode: ep };
+      });
+      if (filled > 0) fillOf(ch.code, base.channelName).episode += filled;
+    }
     // 동시방송 판정에 쓰는 자사 방영(채널당 한 타깃만, 재방 확인분은 제외)
     if (collect) for (const r of workRows.filter((w) => w.firstRun !== false)) { const m = minuteOfTime(r.startTime); if (m !== null) ownAirs.push({ code: ch.code, date: r.date, minute: m, firstRun: r.firstRun }); }
 
