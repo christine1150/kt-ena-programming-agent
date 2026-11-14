@@ -14,7 +14,7 @@ import { applyOlifeEpgForDate } from "@/lib/olifeEpgStaging";
 // 성능 개선(2026-09-17): 적재 직후 Page 1/Page 2 당일 화면용 집계를 미리 계산해 둔다.
 import { refreshDailyDashboardMart } from "@/lib/dailyMartCache";
 import { toChannelCode, canonicalChannelName } from "@/lib/channelMaster";
-import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
+import { programMatchKey, canonicalizeProgramName } from "@/lib/programNameMatch";
 import {
   checkChannelCoverage,
   checkRegisteredCompetitorCoverage,
@@ -493,12 +493,12 @@ export async function ingestNielsenDailyFile(
       const { data } = await supabase.from("programs").select("id, canonical_name").eq("channel_id", channelId);
       index = new Map<string, string>();
       for (const p of data ?? []) {
-        const key = normalizeProgramCanonicalName(p.canonical_name as string);
+        const key = programMatchKey(p.canonical_name as string); // 별칭 반영(풍향고2 → 풍향GO2바람따라가는여행)
         if (key && !index.has(key)) index.set(key, p.id as string);
       }
       normalizedIndexByChannel.set(channelId, index);
     }
-    return index.get(normalizeProgramCanonicalName(canonical)) ?? null;
+    return index.get(programMatchKey(canonical)) ?? null;
   }
   for (const row of parsed.programRows as ProgramTargetRow[]) {
     const channelId = ctx.channelIdByCode.get(row.channelCode);
@@ -517,7 +517,7 @@ export async function ingestNielsenDailyFile(
     if (!row.isDailyAggregate) {
       const { canonical, firstRun } = splitProgramName(row.rawProgramName);
       rowFirstRun = firstRun;
-      const cacheKey = `${channelId}:${normalizeProgramCanonicalName(canonical)}`;
+      const cacheKey = `${channelId}:${programMatchKey(canonical)}`;
       programId = programIdCache.get(cacheKey) ?? null;
       if (!programId) {
         // 표기만 다른 같은 프로그램이 이미 있으면 그 행을 재사용한다(새로 만들지 않음).
@@ -533,7 +533,7 @@ export async function ingestNielsenDailyFile(
           .upsert(
             {
               channel_id: channelId,
-              canonical_name: canonical,
+              canonical_name: canonicalizeProgramName(canonical), // 별칭 변형이면 대표 표기로 만든다
               raw_name: row.rawProgramName,
               first_run: firstRun,
             },

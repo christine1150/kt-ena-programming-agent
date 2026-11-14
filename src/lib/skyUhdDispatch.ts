@@ -15,7 +15,7 @@
 import { supabase } from "@/lib/supabase";
 import { parseSkyUhdWorkbook } from "@/lib/skyUhd";
 import { checkPercentValue } from "@/lib/dataQuality";
-import { normalizeProgramCanonicalName, findOrCreateProgramByNormalizedName } from "@/lib/programNameMatch";
+import { programMatchKey, findOrCreateProgramByNormalizedName } from "@/lib/programNameMatch";
 
 // "skyUHD"(대소문자 무관) + "시청률"이 모두 포함된 엑셀 — 실제 수신 파일명 예:
 // "26 skyUHD 시청률 (0916).xlsx". 순서·공백·중간 문구는 자유(둘 다 있으면 매치).
@@ -60,7 +60,7 @@ export async function ingestSkyUhdRatingFile(buffer: Buffer, fileName: string): 
   for (const row of parsed.rows) {
     // 프로그램 식별은 정규화 매칭(findOrCreateProgramByNormalizedName)으로 — 수기 시트라 같은
     // 프로그램인데도 회차·태그 표기가 방영분마다 달라지면 매번 새 programs 행이 생기는 걸 막는다.
-    const cacheKey = normalizeProgramCanonicalName(row.canonicalName);
+    const cacheKey = programMatchKey(row.canonicalName);
     let programId = programIdCache.get(cacheKey);
     if (!programId) {
       const program = await findOrCreateProgramByNormalizedName(supabase, channel.id, row.canonicalName, {

@@ -49,6 +49,7 @@
     "test:stats": "tsx scripts/test-stats.ts",
     "test:ask-export": "tsx scripts/test-ask-export.ts",
     "test:content-fit": "tsx scripts/test-content-fit.ts",
+    "test:program-alias": "tsx scripts/test-program-alias.ts",
     "test:iptv-cross-check": "tsx scripts/test-iptv-cross-check.ts",
     "test:iptv-noise": "tsx scripts/test-iptv-noise.ts",
     "test:iptv-program-block": "tsx scripts/test-iptv-program-block.ts",

@@ -44,6 +44,38 @@ export function normalizeProgramCanonicalName(name: string): string {
 }
 
 /**
+ * 같은 프로그램인데 자료마다 이름이 다르게 적히는 경우의 별칭 등록(2026-11-14 사용자 확정:
+ * "풍향GO / 풍향고2 / 풍향GO2바람따라가는여행은 모두 같은 프로그램, 사전모임은 프리퀄이라 별도").
+ * [변형 표기, 대표 표기(닐슨 표기)] — 적재할 때 이 변형이 들어오면 대표 표기 프로그램에 붙이고,
+ * 새로 만들어야 하면 대표 표기로 만든다. 정규화 후(공백·문장부호 제거) 대소문자 무시로 비교한다.
+ * 시즌 번호를 지우는 규칙이 아니라 "이름 통일"이므로, 새 별칭은 사용자가 같은 프로그램이라고
+ * 확정한 것만 추가한다(임의 포함 관계로 합치지 않는다). 엑셀 생성 스크립트의 KEY_ALIAS_NAMES와 같은 목록.
+ */
+export const PROGRAM_NAME_ALIASES: ReadonlyArray<readonly [string, string]> = [
+  ["풍향고2", "풍향GO2바람따라가는여행"],
+  ["풍향GO2바람나라가는여행", "풍향GO2바람따라가는여행"], // 닐슨 파일 오타(OLIFE 2026-02-02 06:24)
+  ["풍향고2사전모임", "풍향GO2사전모임"],
+];
+
+const ALIAS_TARGET = new Map<string, { key: string; display: string }>();
+for (const [variant, canon] of PROGRAM_NAME_ALIASES) {
+  const target = { key: normalizeProgramCanonicalName(canon), display: canon };
+  ALIAS_TARGET.set(target.key.toLowerCase(), target); // 대표 표기의 대소문자 변형도 같은 키로
+  ALIAS_TARGET.set(normalizeProgramCanonicalName(variant).toLowerCase(), target);
+}
+
+/** 프로그램 이름 매칭에 쓰는 키 — 정규화 키에 별칭(같은 프로그램 다른 표기)을 반영한다. */
+export function programMatchKey(name: string): string {
+  const k = normalizeProgramCanonicalName(name);
+  return ALIAS_TARGET.get(k.toLowerCase())?.key ?? k;
+}
+
+/** 새 programs 행을 만들 때 쓸 이름 — 별칭 변형이면 대표 표기, 아니면 입력 그대로. */
+export function canonicalizeProgramName(name: string): string {
+  return ALIAS_TARGET.get(normalizeProgramCanonicalName(name).toLowerCase())?.display ?? name;
+}
+
+/**
  * 관리자가 입력한 title이 같은 채널에 이미 등록된(주로 Nielsen ingest로 생긴) programs 행과
  * 정규화 기준으로 같은 프로그램인지 먼저 찾는다 — 찾으면 그 id를 재사용하고 canonical_name은
  * 절대 덮어쓰지 않는다(Nielsen 원본 표기를 유지해야 ratings.program_id 조인이 계속 맞음).
@@ -63,14 +95,14 @@ export async function findOrCreateProgramByNormalizedName(
   title: string,
   extra: { rawName?: string; episodeNumber?: number | null } = {}
 ): Promise<{ id: string; canonicalName: string } | null> {
-  const target = normalizeProgramCanonicalName(title);
+  const target = programMatchKey(title);
   const { data: existing } = await supabase.from("programs").select("id, canonical_name").eq("channel_id", channelId);
   const rows = existing ?? [];
-  let matched = rows.find((p) => normalizeProgramCanonicalName(p.canonical_name) === target);
+  let matched = rows.find((p) => programMatchKey(p.canonical_name) === target);
 
   if (!matched && target.length >= 2) {
     const containmentCandidates = rows.filter((p) => {
-      const norm = normalizeProgramCanonicalName(p.canonical_name);
+      const norm = programMatchKey(p.canonical_name);
       return norm.length >= 2 && (norm.includes(target) || target.includes(norm));
     });
     if (containmentCandidates.length === 1) matched = containmentCandidates[0];
@@ -87,7 +119,7 @@ export async function findOrCreateProgramByNormalizedName(
   const { data: created, error } = await supabase
     .from("programs")
     .upsert(
-      { channel_id: channelId, canonical_name: title, raw_name: extra.rawName ?? title, episode_number: extra.episodeNumber ?? null },
+      { channel_id: channelId, canonical_name: canonicalizeProgramName(title), raw_name: extra.rawName ?? title, episode_number: extra.episodeNumber ?? null },
       { onConflict: "channel_id,canonical_name" }
     )
     .select("id, canonical_name")
