@@ -111,6 +111,29 @@ export interface IptvReportSummary {
   topPrograms: { name: string; airings: number; rating: number | null; minutesPerReacher: number | null }[];
 }
 
+/** 같은 군 다른 채널의 편성 변경 분포 한 칸(schedule_change_effect, 사례 20건 이상일 때만) */
+export interface ChangeEffectPeerCell {
+  n: number;
+  up: number;
+  flat: number;
+  down: number;
+  basis: "noise" | "band10";
+  medianChange: number | null;
+  /** 이동만: 새 자리·비운 자리 변화율 중앙값 */
+  toSlotMedian: number | null;
+  fromSlotMedian: number | null;
+  periodFrom: string | null;
+  periodTo: string | null;
+}
+
+/** 같은 군(·같은 KPI 타깃) 다른 채널의 분포 — 닐슨 경쟁 자료와 IPTV 셋톱(보조)을 섞지 않고 따로 둔다. 사례 20건 미만 칸은 null */
+export interface ChangeEffectPeers {
+  /** EventGroup: terrestrial·drama·variety·life·uhd */
+  group: string;
+  comp: { replace: ChangeEffectPeerCell | null; move: ChangeEffectPeerCell | null };
+  iptv: { replace: ChangeEffectPeerCell | null; move: ChangeEffectPeerCell | null };
+}
+
 /** 주간·월간 채널 보고서의 "편성 변경 사후 효과" 근거(고도화 B1) — 이 채널의 과거 변경(이동·교체)이 그 자리 시청률을 올렸는지 센 분포. 기대 효과 수치는 담지 않는다. */
 export interface ChangeEffectSummary {
   /** 기준 기간(분석 종료일 앞 약 1년) */
@@ -122,6 +145,8 @@ export interface ChangeEffectSummary {
   replace: { n: number; up: number; flat: number; down: number; endedN: number };
   /** 프로그램 시간대 이동 — 옮긴 프로그램 기준 분포와 자리 기준(새 자리·비운 자리, ±10% 띠) 분포 */
   move: { n: number; up: number; flat: number; down: number; toSlot: { n: number; up: number; down: number }; fromSlot: { n: number; up: number; down: number } };
+  /** 같은 군 다른 채널의 분포(schedule_change_events). 옛 스냅샷·적재 전·읽기 실패는 없음/null */
+  peers?: ChangeEffectPeers | null;
   /** 최근 12주 안에 일어난 변경(최대 5건) */
   recent: { kind: "move" | "replace"; date: string; program: string; prev: string | null; from: string; to: string; before: number; after: number; verdict: "up" | "flat" | "down"; swap: boolean | null }[];
 }

@@ -3,7 +3,8 @@
 import { holidayTypeOf } from "../src/lib/holiday/dayType";
 import { changeEffectSection, forecastAccuracySection, holidayEffectSection, REPORT_MIN_N, CHANGE_EFFECT_NOTE, HOLIDAY_EFFECT_NOTE, HOLIDAY_REFERENCE } from "../src/lib/reportSnapshot/evidenceText";
 import { earliestPerWeek, summarizeForecastAccuracy, type ReviewedSlot, type SlotValue, type WeekReview } from "../src/lib/reportSnapshot/forecastAccuracyCore";
-import type { ChangeEffectSummary, HolidayEffectSummary } from "../src/lib/reportSnapshot/types";
+import { toPeerCell } from "../src/lib/reportSnapshot/peerCell";
+import type { ChangeEffectPeerCell, ChangeEffectPeers, ChangeEffectSummary, HolidayEffectSummary } from "../src/lib/reportSnapshot/types";
 
 let pass = 0;
 let fail = 0;
@@ -84,6 +85,49 @@ const band10 = changeEffectSection({ ...base, basis: "band10" }, "ENA_PLAY");
 ok("±10% 띠 안내", JSON.stringify(band10).includes("±10% 띠"));
 const thinSlots = changeEffectSection({ ...base, move: { ...base.move, toSlot: { n: 3, up: 1, down: 1 }, fromSlot: { n: 2, up: 1, down: 0 } } }, "ENA_PLAY");
 ok("자리 기준 표본이 5건 미만이면 자리 문장 생략", !JSON.stringify(thinSlots).includes("비운 자리"));
+
+// ── 비교군 분포 병기(고도화 B1) ──
+const cellOf = (n: number, up: number, flat: number, down: number, extra: Partial<ChangeEffectPeerCell> = {}): ChangeEffectPeerCell => ({ n, up, flat, down, basis: "noise", medianChange: null, toSlotMedian: null, fromSlotMedian: null, periodFrom: "2025-09-01", periodTo: "2026-10-26", ...extra });
+const peersFull: ChangeEffectPeers = {
+  group: "drama",
+  comp: { replace: cellOf(733, 148, 345, 240, { medianChange: -0.132 }), move: cellOf(577, 105, 324, 148, { medianChange: -0.162, toSlotMedian: -0.036, fromSlotMedian: -0.059 }) },
+  iptv: { replace: cellOf(1852, 164, 1433, 255, { medianChange: -0.069 }), move: null },
+};
+const cePeers = changeEffectSection({ ...base, peers: peersFull }, "ENA_PLAY");
+const peerBullets = (cePeers?.blocks.find((b) => b.kind === "bullets") as { items: string[] } | undefined)?.items ?? [];
+ok("닐슨 경쟁 교체 줄(건수·비중)", peerBullets.some((t) => t.includes("비교군(드라마군 닐슨 경쟁 채널)") && t.includes("편성상의 교체 733건") && t.includes("오른 건 148건(20%)") && t.includes("내린 건 240건(33%)") && t.includes("잡음 범위 안 345건(47%)")));
+ok("교체 변화율 중앙값(부호 포함)", peerBullets.some((t) => t.includes("편성상의 교체 733건") && t.includes("−13%")));
+ok("이동 줄에 자리 기준 중앙값", peerBullets.some((t) => t.includes("시간대 이동 577건") && t.includes("새 자리 −4%") && t.includes("비운 자리 −6%")));
+ok("IPTV는 따로 한 줄(보조)", peerBullets.some((t) => t.startsWith("IPTV 셋톱 보조(드라마군)") && t.includes("1852건")));
+ok("닐슨 줄에 IPTV 수치가 섞이지 않음", peerBullets.filter((t) => t.startsWith("비교군")).every((t) => !t.includes("1852")));
+ok("IPTV 이동 칸이 null이면 그 줄 없음", !peerBullets.some((t) => t.startsWith("IPTV") && t.includes("시간대 이동")));
+ok("섞지 않는다는 주석", JSON.stringify(cePeers).includes("섞지 않고"));
+ok("자사 문장은 그대로 유지", peerBullets.some((t) => t.includes("42건") && t.includes("12건")));
+// 반올림하면 0인 변화율은 부호 없이 0%로(−0%·+0% 금지)
+const zeroPeers: ChangeEffectPeers = { group: "variety", comp: { replace: null, move: null }, iptv: { replace: cellOf(500, 20, 460, 20, { medianChange: -0.004 }), move: cellOf(400, 10, 380, 10, { medianChange: 0.003, toSlotMedian: -0.002, fromSlotMedian: 0.004 }) } };
+const zeroText = JSON.stringify(changeEffectSection({ ...base, peers: zeroPeers }, "ENA_PLAY"));
+ok("−0%·+0% 없음", !zeroText.includes("−0%") && !zeroText.includes("+0%"));
+ok("0%로 표기", zeroText.includes("변화율 중앙값 0%") && zeroText.includes("새 자리 0%, 비운 자리 0%"));
+// 자사 사례가 부족해도 비교군이 있으면 비교군 줄만으로 단락을 낸다(자사 문장·잡음 기준 줄은 없음)
+const peerOnly = changeEffectSection({ ...base, replace: { n: 2, up: 1, flat: 1, down: 0, endedN: 0 }, move: { ...base.move, n: 3 }, recent: [], peers: peersFull }, "ENA");
+const peerOnlyBullets = (peerOnly?.blocks.find((b) => b.kind === "bullets") as { items: string[] } | undefined)?.items ?? [];
+ok("자사 부족+비교군 있음 → 단락 생성", peerOnly !== null);
+ok("비교군 줄만 있고 자사 문장·잡음 기준 줄은 없음", peerOnlyBullets.length > 0 && peerOnlyBullets.every((t) => t.startsWith("비교군") || t.startsWith("IPTV")));
+eq("최근 변경이 없으면 표도 없음", peerOnly?.blocks.some((b) => b.kind === "table"), false);
+// 비교군이 모두 null이면 기존 규칙(자사 사례 부족이면 null)
+eq("비교군 칸이 모두 null이면 생략", changeEffectSection({ ...base, replace: { n: 2, up: 1, flat: 1, down: 0, endedN: 0 }, move: { ...base.move, n: 3 }, peers: { group: "life", comp: { replace: null, move: null }, iptv: { replace: null, move: null } } }, "OLIFE"), null);
+ok("군 이름 한글(라이프·취미)", JSON.stringify(changeEffectSection({ ...base, peers: { group: "life", comp: { replace: cellOf(30, 5, 20, 5), move: null }, iptv: { replace: null, move: null } } }, "OLIFE")).includes("라이프·취미군"));
+ok("옛 스냅샷(peers 없음)도 정상 동작", changeEffectSection(base, "ENA_PLAY") !== null);
+ok("기대 효과 약속 문구 없음", !/기대 효과|보장|예상 효과/.test(JSON.stringify(cePeers)));
+// 집계 함수 한 행 → 칸(순수)
+const rpcRow = { n: 733, up: 148, flat: 345, down: 240, basis: "noise", change_median: -0.132, to_slot_median: null, from_slot_median: null, period_from: "2025-09-08", period_to: "2026-10-25" };
+eq("행 → 칸", toPeerCell(rpcRow), { n: 733, up: 148, flat: 345, down: 240, basis: "noise", medianChange: -0.132, toSlotMedian: null, fromSlotMedian: null, periodFrom: "2025-09-08", periodTo: "2026-10-25" });
+eq("n이 문자열이어도 처리", toPeerCell({ ...rpcRow, n: "733" })?.n, 733);
+eq("20건 미만(분포 열 null)이면 null", toPeerCell({ n: 19, up: null, flat: null, down: null, basis: "band10", change_median: null }), null);
+eq("n이 20이면 칸 생성", toPeerCell({ ...rpcRow, n: 20 })?.n, 20);
+eq("행이 없으면 null", toPeerCell(undefined), null);
+eq("분포가 유한하지 않으면 null", toPeerCell({ ...rpcRow, up: "x" }), null);
+eq("basis가 noise가 아니면 band10", toPeerCell({ ...rpcRow, basis: "other" })?.basis, "band10");
 
 // ── 공휴일 영향 단락 ──
 const hs: HolidayEffectSummary = {

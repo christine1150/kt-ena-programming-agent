@@ -12,7 +12,9 @@ import { loadEpisodeNoise } from "@/lib/iptvNoise";
 import { CHANGE_BAND, detectPastChanges, measureChanges, summarizeEffect, type HistAiring } from "@/lib/dashboard/changeHistory";
 import { holidayTypeOf } from "@/lib/holiday/dayType";
 import { summarizeForecastAccuracy, type ReviewedSlot, type SlotValue, type WeekReview } from "./forecastAccuracyCore";
-import type { ChangeEffectSummary, ForecastAccuracySummary, HolidayEffectSummary } from "./types";
+import { OWN_EVENT_CHANNELS } from "@/lib/changeEvents/channels";
+import { toPeerCell } from "./peerCell";
+import type { ChangeEffectPeerCell, ChangeEffectPeers, ChangeEffectSummary, ForecastAccuracySummary, HolidayEffectSummary } from "./types";
 
 /** 사후 효과를 세는 기간(일) — 분석 종료일 앞 약 1년 + 변경 전 비교분 */
 export const CHANGE_EFFECT_LOOKBACK_DAYS = 400;
@@ -78,6 +80,23 @@ async function loadHolidayMap(): Promise<Map<string, string>> {
   return new Map(((data ?? []) as { holiday_date: string; name: string }[]).map((h) => [h.holiday_date, h.name]));
 }
 
+/**
+ * 같은 군(·같은 KPI 타깃) 다른 채널의 편성 변경 분포를 schedule_change_events 집계 함수로 읽는다(주 1회 적재분).
+ * 자사 채널의 군·타깃은 changeEvents/channels의 표를 따른다. 읽지 못하거나 표에 없으면 null — 닐슨과 IPTV는 섞지 않는다.
+ */
+export async function loadChangeEffectPeers(channelCode: string): Promise<ChangeEffectPeers | null> {
+  const me = OWN_EVENT_CHANNELS.find((c) => c.key === channelCode);
+  if (!me) return null;
+  const cell = async (source: "comp" | "iptv", kind: "replace" | "move"): Promise<ChangeEffectPeerCell | null> => {
+    const { data, error } = await supabase.rpc("schedule_change_effect", { p_source: [source], p_group: me.group, p_kind: kind, p_target_kind: me.tk });
+    if (error) throw new Error(error.message);
+    return toPeerCell((data as Record<string, unknown>[] | null)?.[0]);
+  };
+  const [cr, cm, ir, im] = await Promise.all([cell("comp", "replace"), cell("comp", "move"), cell("iptv", "replace"), cell("iptv", "move")]);
+  if (!cr && !cm && !ir && !im) return null;
+  return { group: me.group, comp: { replace: cr, move: cm }, iptv: { replace: ir, move: im } };
+}
+
 /** 이 채널의 과거 1년 편성 변경(이동·교체) 사후 효과 분포. SKYUHD(수기 자료·타깃 없음)·읽기 실패는 null. */
 export async function loadChangeEffect(args: { channelCode: string; analysisTo: string }): Promise<ChangeEffectSummary | null> {
   if (args.channelCode === "SKYUHD") return null;
@@ -124,10 +143,13 @@ export async function loadChangeEffect(args: { channelCode: string; analysisTo: 
       verdict: m.verdictNoise ?? m.verdictBand10,
       swap: m.kind === "replace" ? m.prevContinues : null,
     }));
+  // 같은 군 다른 채널 분포(적재 전·읽기 실패는 null — 자사 분포만 남는다)
+  const peers = await loadChangeEffectPeers(args.channelCode).catch(() => null);
   return {
     from,
     to: args.analysisTo,
     basis,
+    peers,
     replace: { n: repCell.n, up: repCell.up, flat: repCell.flat, down: repCell.down, endedN: rep.filter((m) => m.prevContinues !== true).length },
     move: { n: movCell.n, up: movCell.up, flat: movCell.flat, down: movCell.down, toSlot: slotCount(mov.map((m) => m.toSlotChange)), fromSlot: slotCount(mov.map((m) => m.fromSlotChange)) },
     recent,

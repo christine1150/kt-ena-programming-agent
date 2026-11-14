@@ -8,7 +8,7 @@ import type { DocSection } from "@/lib/audienceReport/reportFlatten";
 import { HOLIDAY_TYPE_LABEL, type HolidayDayType } from "@/lib/holiday/dayType";
 import { broadcastMinToLabel } from "@/lib/idealSchedule/time";
 import { MIN_ACCURACY_SLOTS, MIN_GRADE_SLOTS, MIN_OFFICIAL_DAYS } from "./forecastAccuracyCore";
-import type { ChangeEffectSummary, ForecastAccuracySummary, HolidayEffectSummary } from "./types";
+import type { ChangeEffectPeerCell, ChangeEffectPeers, ChangeEffectSummary, ForecastAccuracySummary, HolidayEffectSummary } from "./types";
 
 /** 분포 문장을 내는 최소 사례 수(명세 B1: MIN_EVIDENCE_N 3 → 10) */
 export const REPORT_MIN_N = 10;
@@ -24,13 +24,45 @@ const slotLabel = (slot: string) => {
 const VERDICT_KO = { up: "상승", flat: "잡음 범위 안", down: "하락" } as const;
 
 export const CHANGE_EFFECT_NOTE = "같은 채널의 과거 변경을 원인(시즌·공휴일·경쟁)과 가리지 않고 단순 비교한 분포이며 앞으로의 효과를 약속하지 않음. 작품 종료 뒤 교체는 편성 결정이 아니라 집계에서 뺌.";
+export const CHANGE_EFFECT_PEER_NOTE = "비교군은 같은 군·같은 KPI 타깃 다른 채널(자사 제외)의 같은 방식 분포이며 사례 20건 이상일 때만 적음. 닐슨 경쟁 자료와 IPTV 셋톱(보조 자료)은 섞지 않고 따로 적음.";
+const GROUP_LABEL: Record<string, string> = { terrestrial: "지상파·종편", drama: "드라마", variety: "예능·오락", life: "라이프·취미", uhd: "UHD" };
+/** 부호 있는 퍼센트. 반올림하면 0인 값은 부호 없이 "0%"(−0%·+0%가 찍히지 않게) */
+const signedPct = (v: number) => {
+  const r = Math.round(Math.abs(v) * 100);
+  return `${r === 0 ? "" : v > 0 ? "+" : "−"}${r}%`;
+};
+const shareOf = (k: number, n: number) => `${Math.round((k / n) * 100)}%`;
 
-/** 보고서에 넣을 섹션. 이동·교체 모두 사례가 REPORT_MIN_N 미만이면 null(없는 근거를 만들어 채우지 않는다). */
+/** 같은 군 다른 채널 분포 한 칸을 한 줄로 — 사례 수·오른/내린/잡음 범위 안 비중·변화율 중앙값. 이동은 자리 기준 중앙값을 덧붙인다. */
+function peerLine(label: string, what: string, c: ChangeEffectPeerCell, move: boolean): string {
+  const base = `${label} ${what} ${c.n}건 중 오른 건 ${c.up}건(${shareOf(c.up, c.n)}), 내린 건 ${c.down}건(${shareOf(c.down, c.n)}), 잡음 범위 안 ${c.flat}건(${shareOf(c.flat, c.n)})`;
+  const med = c.medianChange !== null ? ` · 변화율 중앙값 ${signedPct(c.medianChange)}` : "";
+  const slot = move && c.toSlotMedian !== null && c.fromSlotMedian !== null ? ` · 자리 기준 중앙값 새 자리 ${signedPct(c.toSlotMedian)}, 비운 자리 ${signedPct(c.fromSlotMedian)}` : "";
+  return `${base}${med}${slot}`;
+}
+
+/** 비교군 줄들(없으면 빈 배열). 닐슨 경쟁은 "비교군(군 이름 경쟁 채널)", IPTV는 "IPTV 셋톱(보조)"로 따로 쓴다. */
+function peerLines(p: ChangeEffectPeers | null | undefined): string[] {
+  if (!p) return [];
+  const g = GROUP_LABEL[p.group] ?? p.group;
+  const out: string[] = [];
+  if (p.comp.replace) out.push(peerLine(`비교군(${g}군 닐슨 경쟁 채널)`, "편성상의 교체", p.comp.replace, false));
+  if (p.comp.move) out.push(peerLine(`비교군(${g}군 닐슨 경쟁 채널)`, "시간대 이동", p.comp.move, true));
+  if (p.iptv.replace) out.push(peerLine(`IPTV 셋톱 보조(${g}군)`, "편성상의 교체", p.iptv.replace, false));
+  if (p.iptv.move) out.push(peerLine(`IPTV 셋톱 보조(${g}군)`, "시간대 이동", p.iptv.move, true));
+  return out;
+}
+
+/**
+ * 보고서에 넣을 섹션. 자사 이동·교체 사례가 REPORT_MIN_N 미만이어도 비교군 분포(20건 이상)가 있으면 비교군 줄만으로 낸다.
+ * 둘 다 없으면 null(없는 근거를 만들어 채우지 않는다).
+ */
 export function changeEffectSection(s: ChangeEffectSummary | null | undefined, channelCode: string): DocSection | null {
   if (!s) return null;
   const showReplace = s.replace.n >= REPORT_MIN_N;
   const showMove = s.move.n >= REPORT_MIN_N;
-  if (!showReplace && !showMove) return null;
+  const peers = peerLines(s.peers);
+  if (!showReplace && !showMove && peers.length === 0) return null;
   const fmt = (v: number) => formatRating(v, channelCode);
   const period = `${ymd(s.from)}~${ymd(s.to)}`;
   const basis = s.basis === "noise" ? "비슷 판정은 시청률 수준별 회차 변동 폭(닐슨 잡음 폭) 기준" : "잡음 폭 자료가 없어 ±10% 띠로 판정";
@@ -49,7 +81,8 @@ export function changeEffectSection(s: ChangeEffectSummary | null | undefined, c
       items.push(`자리 기준으로 보면 ${parts.join(", ")} — 옮긴 프로그램이 아니라 자리가 어떻게 됐는지의 분포`);
     }
   }
-  items.push(basis);
+  if (showReplace || showMove) items.push(basis);
+  items.push(...peers);
   const blocks: DocSection["blocks"] = [{ kind: "bullets", items: items.map(toGaejosik) }];
   if (s.recent.length > 0) {
     blocks.push({
@@ -65,7 +98,7 @@ export function changeEffectSection(s: ChangeEffectSummary | null | undefined, c
       ]),
     });
   }
-  blocks.push({ kind: "text", text: toGaejosik(CHANGE_EFFECT_NOTE) });
+  blocks.push({ kind: "text", text: toGaejosik(peers.length > 0 ? `${CHANGE_EFFECT_NOTE} ${CHANGE_EFFECT_PEER_NOTE}` : CHANGE_EFFECT_NOTE) });
   return { key: "change_effect", title: "편성 변경 사후 효과(과거 1년)", blocks };
 }
 
