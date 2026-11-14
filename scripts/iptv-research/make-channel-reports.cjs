@@ -95,7 +95,7 @@ const reports = {
     main: [
       ["sub1", "강한 시간대와 작품"],
       ["bullet", "목 17~20시 나는 SOLO 재방, 일요일 낮 유 퀴즈 온 더 블럭 재방"],
-      ["bullet", "유 퀴즈 온 더 블럭·나 혼자 산다는 재방 내성이 있고 신병4 : 사보타주·풍향고2는 재방에서 약함"],
+      ["bullet", "유 퀴즈 온 더 블럭·나 혼자 산다는 재방 내성이 있고 신병4 : 사보타주·풍향GO2바람따라가는여행은 재방에서 약함", "유 퀴즈 온 더 블럭·나 혼자 산다는 재방 내성이 있고 신병4 : 사보타주·풍향GO2는 재방에서 약함"],
       ["bullet", "나 혼자 산다·유 퀴즈 온 더 블럭·라디오스타 재방 3개가 누적 시청률의 41%"],
       ["sub1", "하락"],
       ["bullet", "2024년 대비 2049 −31%, 가구 −9%로 젊은층 낙폭이 큼"],
@@ -166,7 +166,8 @@ for (const [name, r] of Object.entries(reports)) {
     { type: "table", head: ["구분", "내용"], rows: r.table, boldLastRow: false },
     { type: "section", text: "Ⅱ. 주요 성과" },
   ];
-  for (const [t, text] of r.main) blocks.push({ type: t === "sub1" ? "subhead" : t, text });
+  // 셋째 값은 풀네임이 한 줄에 안 들어갈 때 쓰는 줄임 문구(alts)
+  for (const [t, text, alt] of r.main) blocks.push({ type: t === "sub1" ? "subhead" : t, text, ...(alt ? { alts: [alt] } : {}) });
   blocks.push({ type: "takeaway", text: r.take });
   blocks.push({ type: "section", text: "Ⅲ. 향후 과제" });
   for (const text of r.future) blocks.push({ type: "insight", text });

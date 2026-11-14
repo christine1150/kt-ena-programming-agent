@@ -318,6 +318,8 @@ function tableBlocks(head, rows, opts = {}) {
       // obj.alt: 풀네임(t)이 최소 글자 크기로도 안 들어갈 때만 쓰는 줄임말(2026-11-12 사용자 "풀네임 쓸 자리가 되면 풀네임")
       if (obj && obj.alt && measureLine(String(raw), fam, BASE_FS - 2) > room) raw = obj.alt;
       while (fs > BASE_FS - 2 && measureLine(String(raw), fam, fs) > room) fs -= 0.5;
+      // 줄임말 칸도 열 공통 글자 크기를 넘지 않게(같은 열에서 한 칸만 커 보이는 것 방지, 2026-11-14)
+      if (colFs && !header && obj && obj.alt) fs = Math.min(fs, colFs[i]);
     }
     // ENA_LOG_TRUNC: 표 본문 칸에서 두 줄 이상으로 넘치는 글을 알려 준다(줄임말 사전 만들기용)
     if (process.env.ENA_LOG_TRUNC && raw != null && String(raw) !== "" && measureLine(String(raw), fam, fs) > widths[i] - 2 * CELL_IND) console.log("줄넘김\t" + (header ? "[머리글] " : "") + raw + `\t${fs}pt/${widths[i].toFixed(0)}`);
