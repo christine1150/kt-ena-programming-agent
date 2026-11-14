@@ -23,6 +23,15 @@ const normalizeProgramKey = (s: string): string => {
   return KEY_ALIAS.get(k) ?? k;
 };
 
+// IPTV 방영 기록 오기재 보정(2026-11-14 사용자 승인) — 닐슨과 방영 단위(날짜·시작 시각)로 대조해 어긋난 2건.
+//  · ENA Play 2026-06-17 12:51 72분: IPTV는 "풍향고2 <재>"(본편)인데 닐슨은 풍향GO2사전모임, 길이도 사전모임(70~77분, 본편은 118~145분)과 같다 → 사전모임으로 본다.
+//  · ENA Play 2026-02-04 04:50 50분: IPTV는 "풍향고2 <재>"인데 닐슨은 같은 시간(04:41~05:29)에 곽준빈의세계기사식당2, 본편 중 50분짜리는 이 1건뿐 → 뺀다.
+// start = 시작 분(IPTV start_minute), to = 바꿀 이름(null이면 제외). 원본 DB(iptv_airing_metrics)는 건드리지 않고 엑셀 생성 때만 보정한다.
+const IPTV_FIX: { ch: string; d: string; start: number; to: string | null }[] = [
+  { ch: "ENA Play", d: "2026-06-17", start: 771, to: "풍향고2 사전모임" },
+  { ch: "ENA Play", d: "2026-02-04", start: 290, to: null },
+];
+
 const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
 const FROM = "2026-01-01", TO = "2026-11-10", SNAP_TO = "2026-11-10";
 type TK = "p2049" | "household";
@@ -115,7 +124,9 @@ const tid = (label: string) => tgRows!.find((x) => x.label === label)!.id as str
 async function loadIptv(name: string, tk: TK): Promise<Air[]> {
   const xs = await pages<any>(() => sb.from("iptv_airing_metrics").select("broadcast_date,start_minute,program_key,program_name,is_rerun_tag,rating,reach_rate,duration_min")
     .eq("channel_name", name).eq("target_kind", tk).gte("broadcast_date", FROM).lte("broadcast_date", TO).order("broadcast_date").order("start_minute").order("program_key"));
-  return xs.filter((x) => Number(x.duration_min) > 0 && !NOT_PROG.test(clean(String(x.program_name)))).map((x) => ({
+  return xs.filter((x) => !IPTV_FIX.some((f) => f.ch === name && f.d === x.broadcast_date && f.start === Number(x.start_minute) && f.to === null))
+    .map((x) => { const f = IPTV_FIX.find((g) => g.ch === name && g.d === x.broadcast_date && g.start === Number(x.start_minute) && g.to !== null); return f ? { ...x, program_key: f.to, program_name: f.to } : x; })
+    .filter((x) => Number(x.duration_min) > 0 && !NOT_PROG.test(clean(String(x.program_name)))).map((x) => ({
     d: x.broadcast_date, s: Number(x.start_minute), dur: Number(x.duration_min), r: x.rating == null ? null : Number(x.rating), sh: null,
     name: ALIAS_DISPLAY.get(normalizeProgramKey(String(x.program_key || x.program_name))) ?? String(x.program_name), key: normalizeProgramKey(String(x.program_key || x.program_name)),
     rerun: !!x.is_rerun_tag, reach: x.reach_rate == null ? null : Number(x.reach_rate),
