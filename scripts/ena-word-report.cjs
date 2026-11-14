@@ -28,6 +28,8 @@ const ONE_LINE = 14.0, TITLE_GAP = 5.0, APP_GAP = 1.0;
 let TABLE_FS = 11.0; // 내용 JSON 의 bodyPt 로 바꿀 수 있다(2026-11-11: 본문 10pt 요청)
 const CELL_TB = 1.0, CELL_PARA = 0.0; let CELL_LINE = 0.85;
 let BULLET_FS = 11, SUB_FS = 10;
+// ○ 글머리의 점 크기 배율(굵은 가운뎃점 •). 내용 JSON 의 bulletMarkScale 로 문서마다 바꿀 수 있다(1 = 이전 크기).
+const BULLET_MARK_SCALE = 0.7;
 
 let W = (7560000 - 2 * 597600) / 12700;                   // 인쇄 폭 ≈501.2pt (A4 21cm − 좌우 1.66cm), marginCm 이면 다시 계산
 let TABLE_L = T.textWidth("Ⅰ. ", F_BOLD, 13);            // ≈10.4pt — 섹션 제목 첫 한글 위치
@@ -126,8 +128,20 @@ const tiny = (pt) => new Paragraph({
   spacing: { before: 0, after: 0, line: tw(pt), lineRule: LineRuleType.EXACT },
 });
 
-function lineBlock(prefix, text, size, fam, base, { before = 1.5, after = 1.5, allowLabel = true, emph = true, keepNext = false, markFam = null } = {}) {
-  const kids = [run(prefix, markFam || fam, size, INK)];   // markFam: 글머리만 굵은 글꼴(진한 가운뎃점, 2026-11-13)
+function lineBlock(prefix, text, size, fam, base, { before = 1.5, after = 1.5, allowLabel = true, emph = true, keepNext = false, markFam = null, markScale = 1 } = {}) {
+  // markFam: 글머리만 굵은 글꼴(진한 가운뎃점, 2026-11-13)
+  // markScale: 글머리 점만 작은 크기로(2026-11-15 사용자 "머릿말 가운뎃점 좀 더 작은 점으로") — 점은 줄어든 크기만큼 아래로 내려앉으므로 position 으로 위로 올려
+  //            세로 가운데를 맞추고, 뒤의 공백은 본문 크기 그대로 둬서 글자 시작 위치가 거의 변하지 않게 한다(줄바꿈 감사는 큰 점 기준 폭이라 더 보수적).
+  let kids;
+  if (markScale > 0 && markScale < 1) {
+    const mark = prefix.replace(/\s+$/, "");
+    const gap = prefix.slice(mark.length);
+    const raise = Math.max(1, Math.round(0.38 * size * (1 - markScale) * 2));   // half-point 정수(점 중심은 글자 크기의 약 0.38em 높이)
+    kids = [run(mark, markFam || fam, size * markScale, INK, { position: raise })];
+    if (gap) kids.push(run(gap, fam, size, INK));
+  } else {
+    kids = [run(prefix, markFam || fam, size, INK)];
+  }
   const emphFam = emph ? F_BOLD : fam;
   const m = allowLabel && emph ? LABEL.exec(text) : null;
   if (m) {
@@ -542,7 +556,7 @@ async function build(data, out, auditOnly) {
         // data.bulletMark: ○ 대신 쓸 글머리(예 "·", 2026-11-12 사용자 "작은 글머리 점으로")
         const tb = pickText(b, 2 * STEP, (data.bulletMark || "○") + " ", BULLET_FS, F_THIN, false);
         items.push([2 * STEP, (data.bulletMark || "○") + " ", tb, BULLET_FS, F_THIN, false]);
-        body.push(lineBlock((data.bulletMark || "○") + " ", tb, BULLET_FS, F_THIN, 2 * STEP, { allowLabel: false, emph: false, markFam: data.bulletMark === "•" ? F_BOLD : null }));
+        body.push(lineBlock((data.bulletMark || "○") + " ", tb, BULLET_FS, F_THIN, 2 * STEP, { allowLabel: false, emph: false, markFam: data.bulletMark === "•" ? F_BOLD : null, markScale: data.bulletMark === "•" ? (typeof data.bulletMarkScale === "number" ? data.bulletMarkScale : BULLET_MARK_SCALE) : 1 }));
         break;
       }
       case "sub":
