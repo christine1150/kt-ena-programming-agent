@@ -1,7 +1,8 @@
 // 보고서 근거 단락(편성 변경 사후 효과·공휴일 영향) 순수 함수 테스트 — 고도화 B1·A2. DB·네트워크 없음.
 // 실행: npm run test:evidence-sections
 import { holidayTypeOf } from "../src/lib/holiday/dayType";
-import { changeEffectSection, holidayEffectSection, REPORT_MIN_N, CHANGE_EFFECT_NOTE, HOLIDAY_EFFECT_NOTE, HOLIDAY_REFERENCE } from "../src/lib/reportSnapshot/evidenceText";
+import { changeEffectSection, forecastAccuracySection, holidayEffectSection, REPORT_MIN_N, CHANGE_EFFECT_NOTE, HOLIDAY_EFFECT_NOTE, HOLIDAY_REFERENCE } from "../src/lib/reportSnapshot/evidenceText";
+import { earliestPerWeek, summarizeForecastAccuracy, type ReviewedSlot, type SlotValue, type WeekReview } from "../src/lib/reportSnapshot/forecastAccuracyCore";
 import type { ChangeEffectSummary, HolidayEffectSummary } from "../src/lib/reportSnapshot/types";
 
 let pass = 0;
@@ -16,6 +17,7 @@ function eq(name: string, actual: unknown, expected: unknown) {
   }
 }
 const ok = (name: string, cond: boolean) => eq(name, cond, true);
+const near = (name: string, actual: number | null | undefined, expected: number, tol = 1e-9) => ok(`${name} (기대 ${expected}, 실제 ${actual})`, actual !== null && actual !== undefined && Math.abs(actual - expected) <= tol);
 
 // ── 공휴일 유형(2026년 시드 일부) ──
 const H = new Map<string, string>([
@@ -105,6 +107,66 @@ ok("과거 참고 문장 포함", hAll.includes("참고") && HOLIDAY_REFERENCE.i
 eq("모든 날이 배수 없음 → null", holidayEffectSection({ ...hs, days: [{ date: "2026-05-06", name: null, type: "after", day: null, evening: null, all: null }] }), null);
 eq("날짜 없음 → null", holidayEffectSection({ ...hs, days: [] }), null);
 eq("null 입력", holidayEffectSection(null), null);
+
+// ── 예측 적중 집계(순수) ──
+const slotsOf = (weekStart: string, rows: { k: string; s?: string; a: number | null; e: number | null; g: string | null }[]): ReviewedSlot[] => rows.map((r) => ({ k: `${weekStart}|${r.k}`, s: r.s ?? "MATCHED", a: r.a, e: r.e, g: r.g }));
+const valuesOf = (weekStart: string, keys: string[], low = 0.01, high = 0.05): Map<string, SlotValue> => new Map(keys.map((k, i) => [`${weekStart}|${k}`, { date: weekStart, startMin: 300 + i * 60, program: `프로그램 ${k}\n(특집)`, low, high }]));
+// 25칸: 예상 0.04, 실적 0.03(범위 안, +0.01 오차), 다섯 칸은 실적 0.10(범위 밖, −0.06 오차)
+const keys25 = Array.from({ length: 25 }, (_, i) => `s${i}`);
+const mkWeek = (weekStart: string, createdAt: string, bias = 0): WeekReview => ({
+  weekStart, createdAt,
+  matches: slotsOf(weekStart, keys25.map((k, i) => ({ k, a: i < 5 ? 0.1 : 0.03, e: 0.04 + bias, g: i % 2 === 0 ? "A" : "C" }))),
+  officialDaily: { n: 7, mae: 0.01, bias: -0.002, actualMean: 0.05 },
+  values: valuesOf(weekStart, keys25),
+});
+const acc = summarizeForecastAccuracy([mkWeek("2026-10-26", "2026-10-20T00:00:00Z")]);
+ok("집계 생성", acc !== null);
+eq("주 수", acc?.weeks, 1);
+eq("MATCHED 칸", acc?.slots.matched, 25);
+eq("범위 안 칸: 20/25", [acc?.withinRange.hit, acc?.withinRange.n], [20, 25]);
+// Σ|e−a| = 20×0.01 + 5×0.06 = 0.5, Σa = 20×0.03 + 5×0.10 = 1.1
+near("상대 평균 오차", acc?.relMae, 0.5 / 1.1, 1e-9);
+near("범위 폭 중앙값((0.05−0.01) ÷ 0.04 = 1.0)", acc?.rangeWidthRel, 1.0, 1e-9);
+// Σ(e−a) = 20×0.01 − 5×0.06 = −0.1
+near("편향(낮게 예측)", acc?.relBias, -0.1 / 1.1, 1e-9);
+eq("가장 크게 빗나간 5칸이 모두 범위 밖", acc?.worst.map((w) => w.inRange), [false, false, false, false, false]);
+eq("가장 크게 빗나간 칸 개수", acc?.worst.length, 5);
+near("공식 하루 상대 오차", acc?.officialDaily.relMae, 0.01 / 0.05, 1e-9);
+eq("등급 A·C만 있음", acc?.byGrade.map((g) => g.grade), ["A", "C"]);
+eq("표본 20칸 미만이면 null", summarizeForecastAccuracy([{ ...mkWeek("2026-10-26", "2026-10-20T00:00:00Z"), matches: slotsOf("2026-10-26", keys25.slice(0, 19).map((k) => ({ k, a: 0.03, e: 0.04, g: "A" }))) }]), null);
+eq("빈 입력 null", summarizeForecastAccuracy([]), null);
+// 한 주에 여러 예측이면 가장 이른 것만(방송에 가까운 수정 예측으로 성적을 좋게 보이게 하지 않음)
+const early = mkWeek("2026-10-26", "2026-10-20T00:00:00Z", 0);
+const late = mkWeek("2026-10-26", "2026-10-25T00:00:00Z", 0.5); // 편향이 훨씬 큰 예측
+eq("가장 이른 사전 예측 하나만", earliestPerWeek([late, early]).length, 1);
+eq("가장 이른 것 선택", earliestPerWeek([late, early])[0].createdAt, "2026-10-20T00:00:00Z");
+eq("두 주면 칸이 두 배", summarizeForecastAccuracy([early, mkWeek("2026-11-02", "2026-10-27T00:00:00Z")])?.slots.matched, 50);
+// 대조 상태: MATCHED만 오차에 쓰고 나머지는 제외 건수로만
+const withExcluded = summarizeForecastAccuracy([{ ...early, matches: [...early.matches, ...slotsOf("2026-10-26", [{ k: "x1", s: "CHANGED", a: null, e: 0.9, g: "A" }, { k: "x2", s: "AMBIGUOUS", a: null, e: 0.9, g: "A" }, { k: "x3", s: "NO_ACTUAL", a: null, e: 0.9, g: "A" }])] }]);
+eq("제외 칸 수", [withExcluded?.slots.changed, withExcluded?.slots.ambiguous, withExcluded?.slots.noActual], [1, 1, 1]);
+near("제외 칸은 오차에 영향 없음", withExcluded?.relMae, 0.5 / 1.1, 1e-9);
+
+// ── 예측 적중 단락 ──
+const fa = forecastAccuracySection(acc, "ENA_PLAY");
+eq("섹션 키", fa?.key, "forecast_accuracy");
+const faBullets = (fa?.blocks.find((b) => b.kind === "bullets") as { items: string[] } | undefined)?.items ?? [];
+ok("대조 칸 문장", faBullets.some((t) => t.includes("25칸")));
+ok("범위 안 비율 문장(80%)", faBullets.some((t) => t.includes("20/25") && t.includes("80%")));
+ok("오차·편향 문장(낮게 예측)", faBullets.some((t) => t.includes("낮게 예측")));
+ok("범위 폭 안내", faBullets.some((t) => t.includes("범위 폭") && t.includes("100%")));
+ok("표본 적음 안내(1주)", faBullets.some((t) => t.includes("1주뿐") && t.includes("표본 적음")));
+ok("등급 라벨", faBullets.some((t) => t.includes("A 같은 자리 이력") && t.includes("C 이력 없음")));
+ok("공식 하루 문장", faBullets.some((t) => t.includes("공식 채널 하루 값")));
+const faTbl = fa?.blocks.find((b) => b.kind === "table") as { rows: string[][] } | undefined;
+eq("표 5행", faTbl?.rows.length, 5);
+ok("프로그램명 줄바꿈 정리", faTbl?.rows.every((r) => !r[1].includes("\n")) ?? false);
+eq("범위 밖 표시", faTbl?.rows[0][5], "범위 밖");
+eq("표본 부족이면 null", forecastAccuracySection({ ...acc!, slots: { ...acc!.slots, matched: 19 } }, "ENA_PLAY"), null);
+eq("null 입력", forecastAccuracySection(null, "ENA_PLAY"), null);
+const faAll = JSON.stringify(fa);
+ok("한계 주석(가장 이른 예측만 셈)", faAll.includes("가장 이른"));
+const manyWeeks = forecastAccuracySection({ ...acc!, weeks: 8 }, "ENA_PLAY");
+ok("4주 이상이면 표본 적음 안내 없음", !JSON.stringify(manyWeeks).includes("표본 적음"));
 
 console.log(`\n${pass}건 통과${fail ? `, ${fail}건 실패` : ""}`);
 if (fail) process.exit(1);

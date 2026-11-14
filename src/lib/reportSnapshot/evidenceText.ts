@@ -6,7 +6,9 @@ import { formatRating } from "@/lib/audienceReport/format";
 import { toGaejosik } from "@/lib/audienceReport/gaejosik";
 import type { DocSection } from "@/lib/audienceReport/reportFlatten";
 import { HOLIDAY_TYPE_LABEL, type HolidayDayType } from "@/lib/holiday/dayType";
-import type { ChangeEffectSummary, HolidayEffectSummary } from "./types";
+import { broadcastMinToLabel } from "@/lib/idealSchedule/time";
+import { MIN_ACCURACY_SLOTS, MIN_GRADE_SLOTS, MIN_OFFICIAL_DAYS } from "./forecastAccuracyCore";
+import type { ChangeEffectSummary, ForecastAccuracySummary, HolidayEffectSummary } from "./types";
 
 /** 분포 문장을 내는 최소 사례 수(명세 B1: MIN_EVIDENCE_N 3 → 10) */
 export const REPORT_MIN_N = 10;
@@ -70,6 +72,47 @@ export function changeEffectSection(s: ChangeEffectSummary | null | undefined, c
 export const HOLIDAY_EFFECT_NOTE = "같은 요일 앞뒤 4주(공휴일·연휴 전후 제외)의 같은 시간대 평균 대비 배수이며 상관 참고 정보임. 공휴일 특집·재방 편성의 영향이 섞여 있어 원인으로 단정하지 않음.";
 /** 과거 분석 요약(참고): 사례 수가 적고 편성에 따라 크게 달라 한 줄 참고로만 쓴다. 출처 — 자사 6채널 2025-01~2026-11 분석. */
 export const HOLIDAY_REFERENCE = "참고: 2025~2026년 자사 6채널 평균으로 평일 하루 공휴일·설추석 연휴 평일은 낮(08~17시) 평소의 약 1.4~1.7배, 저녁(20~23시)은 평소 수준이었고 연휴 전날·다음 날은 평소와 비슷했음(사례 14일 안팎, 채널·편성에 따라 큰 편차)";
+
+export const FORECAST_ACCURACY_NOTE = "방송 전에 저장한 사전 예측을 방송 후 같은 방영끼리 대조함(편성 변경·실적 없는 칸은 제외). 한 주에 예측이 여럿이면 가장 이른 것만 셈. 방영 한 편의 예상은 실제와 차이가 큰 편이라 개별 칸보다 평균 흐름을 봄.";
+const GRADE_LABEL = { A: "A 같은 자리 이력", B: "B 프로그램 이력", C: "C 이력 없음" } as const;
+const pct0 = (v: number) => `${Math.round(Math.abs(v) * 100)}%`;
+/** 프로그램명에 섞인 줄바꿈·연속 공백을 정리한다 */
+const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/** 대조한 칸이 MIN_ACCURACY_SLOTS 미만이면 null(표본이 작아 적중을 말할 수 없음). */
+export function forecastAccuracySection(s: ForecastAccuracySummary | null | undefined, channelCode: string): DocSection | null {
+  if (!s || s.slots.matched < MIN_ACCURACY_SLOTS) return null;
+  const fmt = (v: number) => formatRating(v, channelCode);
+  const items: string[] = [];
+  const excluded = [s.slots.changed > 0 ? `편성 변경 ${s.slots.changed}` : null, s.slots.ambiguous > 0 ? `판단 불가 ${s.slots.ambiguous}` : null, s.slots.noActual > 0 ? `실적 없음 ${s.slots.noActual}` : null].filter(Boolean);
+  items.push(`사전 예측 ${s.weeks}주(주 시작 ${md(s.from)}~${md(s.to)}) 대조 — 실적과 짝지어진 ${s.slots.matched}칸${excluded.length > 0 ? ` · 제외: ${excluded.join("·")}칸` : ""}`);
+  if (s.withinRange.n >= MIN_ACCURACY_SLOTS) {
+    const width = s.rangeWidthRel !== null ? ` · 범위 폭은 예상값의 중앙값 ${pct0(s.rangeWidthRel)} — 범위가 넓을수록 범위 안 비율은 높게 나옴` : "";
+    items.push(`실적이 예측 범위 안에 든 칸 ${s.withinRange.hit}/${s.withinRange.n}(${Math.round((s.withinRange.hit / s.withinRange.n) * 100)}%)${width}`);
+  }
+  if (s.relMae !== null) {
+    const bias = s.relBias ?? 0;
+    const lean = Math.abs(bias) < 0.03 ? "한쪽으로 치우치지 않음" : `평균적으로 ${bias > 0 ? "높게" : "낮게"} 예측(${pct0(bias)})`;
+    items.push(`칸 단위 평균 오차 실적의 ${pct0(s.relMae)} · ${lean}`);
+  }
+  const grades = s.byGrade.filter((g) => g.n >= MIN_GRADE_SLOTS && g.relMae !== null);
+  if (grades.length > 0) items.push(`근거 등급별 평균 오차: ${grades.map((g) => `${GRADE_LABEL[g.grade]} ${pct0(g.relMae as number)}(${g.n}칸)`).join(" · ")}`);
+  const od = s.officialDaily;
+  if (od.n >= MIN_OFFICIAL_DAYS && od.mae !== null && od.actualMean !== null) {
+    items.push(`일 단위 환산 예상은 공식 채널 하루 값과 평균 ${fmt(od.mae)}%p 차이(평균 ${fmt(od.actualMean)}%${od.relMae !== null ? `의 ${pct0(od.relMae)}` : ""}, ${od.n}일)`);
+  }
+  if (s.weeks < 4) items.push(`대조가 ${s.weeks}주뿐이라 참고용(표본 적음)`);
+  const blocks: DocSection["blocks"] = [{ kind: "bullets", items: items.map(toGaejosik) }];
+  if (s.worst.length > 0) {
+    blocks.push({
+      kind: "table",
+      headers: ["방영", "프로그램", "예상", "실적", "근거", "예측 범위"],
+      rows: s.worst.map((w) => [`${md(w.date)}(${dowOfDate(w.date)}) ${broadcastMinToLabel(w.startMin)}`, oneLine(w.program), fmt(w.expected), fmt(w.actual), w.grade ?? "—", w.inRange === null ? "—" : w.inRange ? "범위 안" : "범위 밖"]),
+    });
+  }
+  blocks.push({ kind: "text", text: toGaejosik(FORECAST_ACCURACY_NOTE) });
+  return { key: "forecast_accuracy", title: "예측 적중(사전 예측 대조)", blocks };
+}
 
 const mult = (v: number | null) => (v === null ? "—" : `${v.toFixed(2)}배`);
 

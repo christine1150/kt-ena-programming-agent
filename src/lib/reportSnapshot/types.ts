@@ -143,6 +143,30 @@ export interface HolidayEffectSummary {
   }[];
 }
 
+/** 주간·월간 채널 보고서의 "예측 적중" 근거(고도화 A3) — 방송 전에 저장한 사전 예측과 방송 후 실적을 같은 방영끼리 대조한 결과(최근 12주). */
+export interface ForecastAccuracySummary {
+  /** 대조한 주의 시작일 범위 */
+  from: string;
+  to: string;
+  /** 대조한 주 수(한 주에 예측이 여럿이면 가장 이른 사전 예측 하나만) */
+  weeks: number;
+  /** 편성 칸 대조 상태별 합 — MATCHED만 오차 계산에 쓰고 나머지는 제외 내역으로 함께 알린다 */
+  slots: { matched: number; changed: number; ambiguous: number; noActual: number };
+  /** 실적이 예측 범위(low~high) 안인 칸: 범위가 있는 MATCHED 칸 중 */
+  withinRange: { n: number; hit: number };
+  /** 예측 범위 폭((high−low) ÷ 예상)의 중앙값 — 범위가 넓을수록 범위 안 비율이 높게 나오므로 함께 알린다. 범위가 없으면 null */
+  rangeWidthRel: number | null;
+  /** Σ|예상−실적| ÷ Σ실적, Σ(예상−실적) ÷ Σ실적 (MATCHED 칸) — 양수 편향 = 높게 예측 */
+  relMae: number | null;
+  relBias: number | null;
+  /** 근거 등급별(A 같은 자리 이력, B 프로그램 이력, C 이력 없음) */
+  byGrade: { grade: "A" | "B" | "C"; n: number; relMae: number | null; withinN: number; withinHit: number }[];
+  /** 일 단위 환산 예상 vs 공식 채널 하루 값(주별 값을 일수로 가중 합산) */
+  officialDaily: { n: number; mae: number | null; relMae: number | null; bias: number | null; actualMean: number | null };
+  /** 절대 오차가 가장 큰 칸(최대 5) */
+  worst: { date: string; startMin: number; program: string; expected: number; actual: number; grade: string | null; inRange: boolean | null }[];
+}
+
 /** 월간 템플릿이 쓰는 추가 자료. 스냅샷 생성 시점에 한 번 읽어 저장한다(형식마다 다시 읽지 않는다). */
 export interface SnapshotExtras {
   /** 채널 보고서: 해당 채널의 권리 현황 / 종합: 전체. null = 읽지 못함(문제 없음이 아님) */
@@ -156,6 +180,8 @@ export interface SnapshotExtras {
   changeEffect?: ChangeEffectSummary | null;
   /** 주간·월간 채널 보고서: 분석 기간 안 공휴일 영향. null/없음 = 기간에 해당 날짜가 없거나 읽지 못함 */
   holidayEffect?: HolidayEffectSummary | null;
+  /** 주간·월간 채널 보고서: 사전 예측 적중(최근 12주). null/없음 = 대조 표본이 부족하거나 읽지 못함 */
+  forecastAccuracy?: ForecastAccuracySummary | null;
 }
 
 export interface SnapshotMeta {

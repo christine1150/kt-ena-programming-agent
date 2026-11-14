@@ -11,7 +11,8 @@ import { normalizeProgramCanonicalName } from "@/lib/programNameMatch";
 import { loadEpisodeNoise } from "@/lib/iptvNoise";
 import { CHANGE_BAND, detectPastChanges, measureChanges, summarizeEffect, type HistAiring } from "@/lib/dashboard/changeHistory";
 import { holidayTypeOf } from "@/lib/holiday/dayType";
-import type { ChangeEffectSummary, HolidayEffectSummary } from "./types";
+import { summarizeForecastAccuracy, type ReviewedSlot, type SlotValue, type WeekReview } from "./forecastAccuracyCore";
+import type { ChangeEffectSummary, ForecastAccuracySummary, HolidayEffectSummary } from "./types";
 
 /** 사후 효과를 세는 기간(일) — 분석 종료일 앞 약 1년 + 변경 전 비교분 */
 export const CHANGE_EFFECT_LOOKBACK_DAYS = 400;
@@ -130,6 +131,70 @@ export async function loadChangeEffect(args: { channelCode: string; analysisTo: 
     move: { n: movCell.n, up: movCell.up, flat: movCell.flat, down: movCell.down, toSlot: slotCount(mov.map((m) => m.toSlotChange)), fromSlot: slotCount(mov.map((m) => m.fromSlotChange)) },
     recent,
   };
+}
+
+/** 예측 적중을 세는 기간(주) — 분석 종료일 앞 최근 12주에 시작한 주 */
+export const FORECAST_ACCURACY_WEEKS = 12;
+
+async function pagedAll<T>(build: (a: number, b: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let off = 0; ; off += 1000) {
+    const { data, error } = await build(off, off + 999);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < 1000) break;
+  }
+  return out;
+}
+
+/**
+ * 최근 12주의 저장된 사전 예측과 방송 후 대조 결과(schedule_forecast_reviews)를 읽어 적중을 요약한다. 읽기 전용.
+ * 주가 끝난 예측만 본다(주 시작 + 6일 ≤ 분석 종료일). 대조가 아직 없는 예측은 건너뛰고, MATCHED 칸이 너무 적으면 null.
+ */
+export async function loadForecastAccuracy(args: { channelCode: string; analysisTo: string }): Promise<ForecastAccuracySummary | null> {
+  const lo = addDays(args.analysisTo, -(FORECAST_ACCURACY_WEEKS * 7 - 1));
+  const hi = addDays(args.analysisTo, -6);
+  const runs = await pagedAll<{ id: string; week_start: string; created_at: string }>((a, b) =>
+    supabase
+      .from("schedule_forecast_runs")
+      .select("id, week_start, created_at")
+      .eq("channel_code", args.channelCode)
+      .eq("status", "completed")
+      .in("purpose", ["PLAN_FORECAST", "PLAN_UPDATE"])
+      .gte("week_start", lo)
+      .lte("week_start", hi)
+      .order("id")
+      .range(a, b)
+  );
+  if (runs.length === 0) return null;
+  const ids = runs.map((r) => r.id);
+  // 예측 하나에 대조가 여럿이면(실적 정정) 가장 최근 것을 쓴다
+  const reviewRows = await pagedAll<{ id: string; forecast_id: string; created_at: string; matches: ReviewedSlot[]; metrics: { officialDaily?: { n: number; mae: number | null; bias: number | null; actualMean: number | null } } | null }>((a, b) =>
+    supabase.from("schedule_forecast_reviews").select("id, forecast_id, created_at, matches, metrics").in("forecast_id", ids).order("id").range(a, b)
+  );
+  const latest = new Map<string, (typeof reviewRows)[number]>();
+  for (const r of reviewRows) {
+    const cur = latest.get(r.forecast_id);
+    if (!cur || r.created_at > cur.created_at) latest.set(r.forecast_id, r);
+  }
+  if (latest.size === 0) return null;
+  const reviewedIds = [...latest.keys()];
+  const valueRows = await pagedAll<{ forecast_id: string; slot_key: string; broadcast_date: string; start_min: number; program_name: string; low: number | null; high: number | null }>((a, b) =>
+    supabase.from("schedule_forecast_values").select("forecast_id, slot_key, broadcast_date, start_min, program_name, low, high").in("forecast_id", reviewedIds).order("id").range(a, b)
+  );
+  const valuesBy = new Map<string, Map<string, SlotValue>>();
+  for (const v of valueRows) {
+    const m = valuesBy.get(v.forecast_id) ?? valuesBy.set(v.forecast_id, new Map()).get(v.forecast_id)!;
+    m.set(v.slot_key, { date: v.broadcast_date, startMin: v.start_min, program: v.program_name, low: v.low === null ? null : Number(v.low), high: v.high === null ? null : Number(v.high) });
+  }
+  const weeks: WeekReview[] = runs
+    .filter((r) => latest.has(r.id))
+    .map((r) => {
+      const rv = latest.get(r.id)!;
+      return { weekStart: r.week_start, createdAt: r.created_at, matches: rv.matches ?? [], officialDaily: rv.metrics?.officialDaily ?? null, values: valuesBy.get(r.id) ?? new Map() };
+    });
+  return summarizeForecastAccuracy(weeks);
 }
 
 /** 분석 기간 안 공휴일·연휴 평일·전날·다음 날의 같은 요일 ±4주 평소 대비 배수. 해당 날짜가 없으면 null. */

@@ -62,7 +62,7 @@ export type SectionKey =
   | "common_pattern" | "opportunities" | "slot_overlap" | "skyuhd" | "rights" | "top_actions"
   // 템플릿 단계에서 만드는 섹션(flatten이 만들지 않음)
   | "assumptions" | "method_notes" | "channel_policy" | "channel_rights" | "purchase_review" | "iptv_summary"
-  | "change_effect" | "holiday_effect";
+  | "change_effect" | "holiday_effect" | "forecast_accuracy";
 
 export interface DocSection {
   key: SectionKey;

@@ -15,7 +15,7 @@ import { buildChannelSnapshot, buildPortfolioSnapshot } from "./build";
 import { cadenceOf } from "./cadence";
 import { buildPurchaseBrief, type RecoRow } from "./purchaseBrief";
 import { loadIptvReportSummary, type IptvSummaryPeriod } from "./iptvSummary";
-import { loadChangeEffect, loadHolidayEffect } from "./evidenceLoaders";
+import { loadChangeEffect, loadForecastAccuracy, loadHolidayEffect } from "./evidenceLoaders";
 import { createSupabaseStore } from "./storeSupabase";
 import { SNAPSHOT_ID_RE, type SnapshotStore } from "./store";
 import { requestKey, type SnapshotRequest } from "./requestKey";
@@ -62,12 +62,13 @@ async function loadRecoRows(codes: string[]): Promise<RecoRow[]> {
 
 /** 월간 보고서의 추가 자료(권리·운영정책·구매 검토)와 주간·월간 채널 보고서의 IPTV 셋톱 요약(보조). 읽기만 하고 읽지 못하면 null(문제 없음으로 바꾸지 않는다). */
 /** 주간·월간 채널 보고서의 근거 단락(편성 변경 사후 효과·공휴일 영향) — 서로 독립이라 하나가 실패해도 다른 하나는 남기고, 실패는 null(근거만 빠짐). */
-async function loadEvidenceExtras(channelCode: string, period: IptvSummaryPeriod): Promise<Pick<SnapshotExtras, "changeEffect" | "holidayEffect">> {
-  const [changeEffect, holidayEffect] = await Promise.all([
+async function loadEvidenceExtras(channelCode: string, period: IptvSummaryPeriod): Promise<Pick<SnapshotExtras, "changeEffect" | "holidayEffect" | "forecastAccuracy">> {
+  const [changeEffect, holidayEffect, forecastAccuracy] = await Promise.all([
     loadChangeEffect({ channelCode, analysisTo: period.dateTo }).catch(() => null),
     loadHolidayEffect({ channelCode, from: period.dateFrom, to: period.dateTo }).catch(() => null),
+    loadForecastAccuracy({ channelCode, analysisTo: period.dateTo }).catch(() => null),
   ]);
-  return { changeEffect, holidayEffect };
+  return { changeEffect, holidayEffect, forecastAccuracy };
 }
 
 async function loadExtras(subject: "channel" | "portfolio", channelCode: string | null, cadence: ReportCadence, analysisTo: string, period?: IptvSummaryPeriod): Promise<SnapshotExtras> {

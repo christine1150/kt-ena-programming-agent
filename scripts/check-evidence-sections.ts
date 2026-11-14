@@ -2,8 +2,8 @@
 // 사용법: npx tsx --env-file=.env scripts/check-evidence-sections.ts <채널코드> <분석 시작일> <분석 종료일>
 //   예) npx tsx --env-file=.env scripts/check-evidence-sections.ts ENA_PLAY 2026-05-01 2026-05-10
 // 스냅샷을 만들거나 저장하지 않는다(select만). 결과 문장·표를 그대로 출력해 문구·수치를 눈으로 확인한다.
-import { changeEffectSection, holidayEffectSection } from "../src/lib/reportSnapshot/evidenceText";
-import { loadChangeEffect, loadHolidayEffect } from "../src/lib/reportSnapshot/evidenceLoaders";
+import { changeEffectSection, forecastAccuracySection, holidayEffectSection } from "../src/lib/reportSnapshot/evidenceText";
+import { loadChangeEffect, loadForecastAccuracy, loadHolidayEffect } from "../src/lib/reportSnapshot/evidenceLoaders";
 
 const [channelCode, from, to] = process.argv.slice(2);
 if (!channelCode || !from || !to) {
@@ -37,6 +37,10 @@ async function main() {
   const he = await loadHolidayEffect({ channelCode, from, to });
   console.log(`\n공휴일 영향 로드 ${Date.now() - t1}ms`, he ? `(날짜 ${he.days.length}개)` : "(null)");
   print("공휴일 영향", holidayEffectSection(he));
+  const t2 = Date.now();
+  const fa = await loadForecastAccuracy({ channelCode, analysisTo: to });
+  console.log(`\n예측 적중 로드 ${Date.now() - t2}ms`, fa ? `(${fa.weeks}주, MATCHED ${fa.slots.matched}칸)` : "(null)");
+  print("예측 적중", forecastAccuracySection(fa, channelCode));
 }
 main().catch((e) => {
   console.error(e);
