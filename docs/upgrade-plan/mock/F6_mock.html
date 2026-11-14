@@ -1,0 +1,334 @@
+<title>편성비서 결정 큐·채널 심층 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* 레이아웃: 앱의 실제 1·2페이지 구조(흰 카드·zinc 테두리·indigo 알약 버튼)를 따르고, 시안 요소만 점선으로 표시 */
+:root{
+  --bg:#ffffff;--surface:#ffffff;--subtle:#fafafa;--muted:#f4f4f5;--line:#e4e4e7;--line2:#d4d4d8;
+  --fg:#18181b;--fg2:#3f3f46;--fg3:#52525b;--fg4:#696971;
+  --accent:#4338ca;--accent-bg:#eef2ff;--accent-bg2:#e0e7ff;
+  --strengthen:#047857;--keep:#0369a1;--watch:#6d28d9;--move:#b45309;--replace:#be123c;--test:#52525b;
+  --dot-strengthen:#059669;--dot-keep:#0284c7;--dot-watch:#7c3aed;--dot-move:#d97706;--dot-replace:#e11d48;--dot-test:#71717a;
+  --mock:#c026d3;--mock-bg:#fdf4ff;
+  --font:"Noto Sans KR",-apple-system,"Segoe UI",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0a0a0a;--surface:#141416;--subtle:#111113;--muted:#1c1c20;--line:#2a2a30;--line2:#3a3a42;--fg:#ededed;--fg2:#d4d4d8;--fg3:#a1a1aa;--fg4:#8b8b94;--accent:#a5b4fc;--accent-bg:#1e1b4b;--accent-bg2:#312e81;--strengthen:#34d399;--keep:#38bdf8;--watch:#a78bfa;--move:#fbbf24;--replace:#fb7185;--test:#a1a1aa;--mock:#e879f9;--mock-bg:#2a1033;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0a0a0a;--surface:#141416;--subtle:#111113;--muted:#1c1c20;--line:#2a2a30;--line2:#3a3a42;--fg:#ededed;--fg2:#d4d4d8;--fg3:#a1a1aa;--fg4:#8b8b94;--accent:#a5b4fc;--accent-bg:#1e1b4b;--accent-bg2:#312e81;--strengthen:#34d399;--keep:#38bdf8;--watch:#a78bfa;--move:#fbbf24;--replace:#fb7185;--test:#a1a1aa;--mock:#e879f9;--mock-bg:#2a1033;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.5;padding-block:0 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1040px;margin:0 auto}
+h1,h2,h3{margin:0;text-wrap:balance}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.brand{font-weight:700;font-size:15px}
+.brand small{font-weight:400;color:var(--fg4);margin-left:8px;font-size:12px}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:999px;padding:3px;gap:2px;background:var(--surface)}
+.seg button{border:0;background:transparent;color:var(--fg3);font:inherit;font-size:13px;font-weight:600;padding:6px 14px;border-radius:999px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent-bg2);color:var(--accent)}
+.seg button:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}
+.note{margin:14px 0 18px;padding:10px 14px;border:1px dashed var(--mock);background:var(--mock-bg);border-radius:10px;font-size:12.5px;color:var(--fg2)}
+.note b{color:var(--mock)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 22px}
+.stack{display:grid;gap:14px}
+.eyebrow{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg4);font-weight:600}
+.h2{font-size:17px;font-weight:700;margin-top:2px}
+.sub{color:var(--fg4);font-size:12.5px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:11.5px;color:var(--fg3);background:var(--surface);white-space:nowrap}
+.chip .dot{width:7px;height:7px;border-radius:50%}
+.tag{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:11.5px;border-radius:999px;padding:2px 8px;border:1px solid var(--line)}
+.tag .dot{width:7px;height:7px;border-radius:50%}
+.pill{border:0;border-radius:999px;background:var(--accent-bg);color:var(--accent);font:inherit;font-size:12.5px;font-weight:600;padding:6px 13px;cursor:pointer}
+.pill.ghost{background:transparent;border:1px solid var(--line2);color:var(--fg3)}
+.pill.danger{background:transparent;border:1px solid var(--line2);color:var(--replace)}
+.pill:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+/* 결정 큐 */
+.q{display:grid;gap:10px}
+.item{display:grid;grid-template-columns:auto 1fr;gap:12px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--surface)}
+.item.done{opacity:.55}
+.stripe{width:4px;border-radius:4px;background:var(--line2);align-self:stretch}
+.item[data-kind="weak"] .stripe{background:var(--dot-replace)}
+.item[data-kind="suggest"] .stripe{background:var(--dot-move)}
+.item[data-kind="new"] .stripe{background:var(--dot-keep)}
+.item[data-kind="rights"] .stripe{background:var(--dot-watch)}
+.item[data-kind="data"] .stripe{background:var(--dot-test)}
+.item[data-kind="forecast"] .stripe{background:var(--dot-strengthen)}
+.it-head{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between}
+.it-title{font-weight:700;font-size:14px}
+.lines{margin:6px 0 8px;display:grid;gap:3px;font-size:13px;color:var(--fg2)}
+.lines .k{display:inline-block;min-width:34px;color:var(--fg4);font-size:11.5px;font-weight:600}
+.act{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.reason{display:none;flex-wrap:wrap;gap:6px;margin-top:8px}
+.reason.show{display:flex}
+.reason .chip{cursor:pointer}
+.reason .chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
+.state{font-size:12px;color:var(--fg4)}
+details.more summary{cursor:pointer;color:var(--accent);font-size:12.5px;list-style:none}
+details.more summary::-webkit-details-marker{display:none}
+details.more[open] summary{margin-bottom:6px}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kv .b{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--subtle)}
+.kv .b .l{font-size:11.5px;color:var(--fg4)}
+.kv .b .v{font-size:20px;font-weight:700;margin-top:2px}
+/* 채널 심층 */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tabs button{border:0;background:transparent;font:inherit;font-size:13.5px;font-weight:600;color:var(--fg4);padding:10px 14px;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.tabs button .n{font-weight:500;color:var(--fg4);margin-left:5px;font-size:11.5px}
+.panel{display:none;padding-top:16px}
+.panel.on{display:grid;gap:14px}
+.sec{border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.sec>summary{list-style:none;cursor:pointer;padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;font-weight:700}
+.sec>summary::-webkit-details-marker{display:none}
+.sec>summary .sum{font-weight:400;color:var(--fg4);font-size:12.5px}
+.sec>summary .arrow{color:var(--fg4);font-size:12px}
+.sec[open]>summary .arrow{transform:rotate(90deg);display:inline-block}
+.sec .body{padding:0 16px 14px;display:grid;gap:10px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--fg4);font-weight:600;font-size:11.5px;background:var(--subtle)}
+td.r,th.r{text-align:right}
+.tbl{overflow-x:auto}
+.skeleton{height:120px;border-radius:10px;background:repeating-linear-gradient(90deg,var(--muted),var(--muted) 10px,var(--subtle) 10px,var(--subtle) 20px);display:flex;align-items:center;justify-content:center;color:var(--fg4);font-size:12.5px}
+.gap-ex{display:grid;gap:4px;font-size:12.5px;color:var(--fg2)}
+.load{font-size:11.5px;color:var(--fg4);display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.load span{border:1px solid var(--line);border-radius:6px;padding:1px 7px}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.cmp .card h3{font-size:14px;margin-bottom:6px}
+.cmp ul{margin:0;padding-left:18px;font-size:12.5px;color:var(--fg2)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.hidden{display:none!important}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand">ENA AI 편성비서 <small>F-6 실물 시안 · 2026-11-13 · 수치는 연구 결과에서 가져온 예시</small></div>
+    <div class="seg" role="tablist" aria-label="화면">
+      <button id="sw-home" aria-pressed="true" onclick="go('home')">① 홈 결정 큐</button>
+      <button id="sw-deep" aria-pressed="false" onclick="go('deep')">② 채널 심층</button>
+    </div>
+  </div>
+
+  <!-- ===================== ① 홈 결정 큐 ===================== -->
+  <section id="v-home">
+    <div class="note"><b>시안 설명</b> — 홈 상단에 "오늘 결정할 것" 목록을 하나 둡니다. 기존 타일은 그대로 두고 그 위에 추가합니다. 항목은 채널별로 모이고, 처리한 항목은 접힙니다. 버튼을 눌러 보세요(저장되지 않는 시안입니다). 오른쪽 위에서 <b>버튼 2개 / 3개</b>를 바꿔 비교할 수 있습니다.</div>
+
+    <div class="card">
+      <div class="it-head">
+        <div>
+          <div class="eyebrow">2026-11-13(목) · 데이터 11/12까지 반영</div>
+          <div class="h2">오늘 결정할 것 <span class="sub num" id="cnt">6건</span></div>
+        </div>
+        <div class="row">
+          <span class="sub">담당 채널</span>
+          <span class="chip">ENA Play</span><span class="chip">ENA Story</span><span class="chip" style="opacity:.6">+ 설정</span>
+          <span class="seg" style="margin-left:6px"><button id="b3" aria-pressed="true" onclick="btnMode(3)">버튼 3개</button><button id="b2" aria-pressed="false" onclick="btnMode(2)">버튼 2개</button></span>
+        </div>
+      </div>
+
+      <div class="q" id="queue" style="margin-top:14px">
+
+        <div class="item" data-kind="weak" id="i1">
+          <div class="stripe"></div>
+          <div>
+            <div class="it-head">
+              <div class="row"><span class="tag" style="color:var(--replace)"><span class="dot" style="background:var(--dot-replace)"></span>약한 자리</span><span class="it-title">ENA Play · 화 23:24 <b>냉장고를 부탁해</b></span></div>
+              <span class="state">4주 평균 기준 · 채널 흔들림 범위 밖</span>
+            </div>
+            <div class="lines">
+              <div><span class="k">현황</span>최근 4주 0.012% (같은 자리 보통 0.019%, 목표 대비 56%)</div>
+              <div><span class="k">원인</span>앞 프로그램(유 퀴즈 재방)은 보통인데 이 자리만 낮음 · 재방 4주째</div>
+              <div><span class="k">조치</span>같은 유형 교체 42건 중 잡음 범위를 넘어 오른 건 12건·내린 건 9건 — 시험 편성 후보: <b>맛있는 녀석들</b>(비교군 코미디TV 2.7배·301회, 근거 보통)</div>
+            </div>
+            <details class="more"><summary>비슷한 사례 3건 · 비교군 사례 보기</summary>
+              <div class="gap-ex">
+                <div>· 2026-06 ENA Play 수 23시 <b>라디오스타 → 나 혼자 산다</b>: 0.010 → 0.017 (잡음 범위 밖 상승)</div>
+                <div>· 2026-03 ENA Play 화 23시 <b>놀라운 토요일 → 유 퀴즈</b>: 0.011 → 0.012 (잡음 범위 안)</div>
+                <div>· 비교군: 코미디TV 평일 23시는 런닝맨·맛있는 녀석들 재방으로 자리 지수 1.56(우리 1.28)</div>
+              </div>
+            </details>
+            <div class="act" style="margin-top:8px">
+              <button class="pill" onclick="decide('i1','채택')">채택</button>
+              <button class="pill ghost b3only" onclick="decide('i1','보류')">보류</button>
+              <button class="pill danger" onclick="decide('i1','기각')">기각</button>
+              <span class="state" id="s-i1"></span>
+            </div>
+            <div class="reason" id="r-i1"><span class="sub">사유</span><span class="chip" aria-pressed="false" onclick="pick(this)">근거 약함</span><span class="chip" aria-pressed="false" onclick="pick(this)">편성 제약(판권·계약)</span><span class="chip" aria-pressed="false" onclick="pick(this)">이미 조치함</span><span class="chip" aria-pressed="false" onclick="pick(this)">다음 주 다시</span><span class="chip" aria-pressed="false" onclick="pick(this)">기타</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-kind="suggest" id="i2">
+          <div class="stripe"></div>
+          <div>
+            <div class="it-head">
+              <div class="row"><span class="tag" style="color:var(--move)"><span class="dot" style="background:var(--dot-move)"></span>이동 제언</span><span class="it-title">ENA Story · 토 14~17시 자리</span></div>
+              <span class="state">격차 자리 · 비교군 4곳 공통</span>
+            </div>
+            <div class="lines">
+              <div><span class="k">현황</span>자리 지수 1.39 (비교군 중앙값 1.60) · 인간극장·이것은 실화다 재방</div>
+              <div><span class="k">원인</span>주말 낮에 비교군은 예능 재방(런닝맨·나 혼자 산다·틈만 나면)을 몰아 넣음</div>
+              <div><span class="k">조치</span>비교군 사례로만 제시 · 자사 이동 사례 37건 중 새 자리 상승 20건·비운 자리 하락 17건 — 비운 자리 채울 안을 함께 검토</div>
+            </div>
+            <div class="act" style="margin-top:8px">
+              <button class="pill" onclick="decide('i2','채택')">채택</button>
+              <button class="pill ghost b3only" onclick="decide('i2','보류')">보류</button>
+              <button class="pill danger" onclick="decide('i2','기각')">기각</button>
+              <span class="state" id="s-i2"></span>
+            </div>
+            <div class="reason" id="r-i2"><span class="sub">사유</span><span class="chip" aria-pressed="false" onclick="pick(this)">근거 약함</span><span class="chip" aria-pressed="false" onclick="pick(this)">편성 제약(판권·계약)</span><span class="chip" aria-pressed="false" onclick="pick(this)">이미 조치함</span><span class="chip" aria-pressed="false" onclick="pick(this)">다음 주 다시</span><span class="chip" aria-pressed="false" onclick="pick(this)">기타</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-kind="new" id="i3">
+          <div class="stripe"></div>
+          <div>
+            <div class="it-head">
+              <div class="row"><span class="tag" style="color:var(--keep)"><span class="dot" style="background:var(--dot-keep)"></span>신작 첫 주</span><span class="it-title">ENA · <b>니돈내산 독립만세 2</b> 1~2회</span></div>
+              <span class="state">참고 신호</span>
+            </div>
+            <div class="lines">
+              <div><span class="k">현황</span>1회 0.221% · 2회 0.198% (자리 보통 0.187%) · 도달 대비 시청 상위 1/3</div>
+              <div><span class="k">해석</span>초반 체류가 좋은 유형 — 3~10회는 1~2회의 0.70~1.41배 범위가 보통</div>
+              <div><span class="k">조치</span>첫 회 반영으로 재방 편성 기대값 다시 계산됨 · 결정 필요 없음</div>
+            </div>
+            <div class="act" style="margin-top:8px"><button class="pill ghost" onclick="decide('i3','확인')">확인</button><span class="state" id="s-i3"></span></div>
+          </div>
+        </div>
+
+        <div class="item" data-kind="rights" id="i4">
+          <div class="stripe"></div>
+          <div>
+            <div class="it-head">
+              <div class="row"><span class="tag" style="color:var(--watch)"><span class="dot" style="background:var(--dot-watch)"></span>권리 만료</span><span class="it-title">ENA Drama · <b>모범택시 3</b> 2027-01-31 종료</span></div>
+              <span class="state">79일 남음 · 방수 소진 61%</span>
+            </div>
+            <div class="lines">
+              <div><span class="k">현황</span>최근 12주 재방 평균 자리 보통 대비 1.95배(재방 내성 있음)</div>
+              <div><span class="k">조치</span>만료 전 노출 확대 검토 — 남은 방수 기준 주 2회 추가 가능</div>
+            </div>
+            <div class="act" style="margin-top:8px">
+              <button class="pill" onclick="decide('i4','채택')">채택</button>
+              <button class="pill ghost b3only" onclick="decide('i4','보류')">보류</button>
+              <button class="pill danger" onclick="decide('i4','기각')">기각</button>
+              <span class="state" id="s-i4"></span>
+            </div>
+            <div class="reason" id="r-i4"><span class="sub">사유</span><span class="chip" aria-pressed="false" onclick="pick(this)">근거 약함</span><span class="chip" aria-pressed="false" onclick="pick(this)">편성 제약(판권·계약)</span><span class="chip" aria-pressed="false" onclick="pick(this)">이미 조치함</span><span class="chip" aria-pressed="false" onclick="pick(this)">다음 주 다시</span><span class="chip" aria-pressed="false" onclick="pick(this)">기타</span></div>
+          </div>
+        </div>
+
+        <div class="item" data-kind="forecast" id="i5">
+          <div class="stripe"></div>
+          <div>
+            <div class="it-head">
+              <div class="row"><span class="tag" style="color:var(--strengthen)"><span class="dot" style="background:var(--dot-strengthen)"></span>예측 적중</span><span class="it-title">지난 4주 예측 범위 안 비율</span></div>
+              <span class="state">자동 집계</span>
+            </div>
+            <div class="kv" style="margin:6px 0 2px">
+              <div class="b"><div class="l">ENA Play</div><div class="v num">81%</div></div>
+              <div class="b"><div class="l">ENA Story</div><div class="v num">74%</div></div>
+              <div class="b"><div class="l">가장 크게 빗나감</div><div class="v" style="font-size:13px">11/08 토 20시 <b>신병4</b> 특집 (신작·공휴일 아님)</div></div>
+            </div>
+            <div class="act" style="margin-top:8px"><button class="pill ghost" onclick="decide('i5','확인')">확인</button><span class="state" id="s-i5"></span></div>
+          </div>
+        </div>
+
+        <div class="item" data-kind="data" id="i6">
+          <div class="stripe"></div>
+          <div>
+            <div class="it-head">
+              <div class="row"><span class="tag" style="color:var(--test)"><span class="dot" style="background:var(--dot-test)"></span>데이터 상태</span><span class="it-title">ENA Story 프로그램 단위 11/12 없음</span></div>
+              <span class="state">채널 단위만 반영</span>
+            </div>
+            <div class="lines"><div><span class="k">조치</span>닐슨 파일 재확인 요청 · 오늘 ENA Story 판정은 11/11 기준</div></div>
+            <div class="act" style="margin-top:8px"><button class="pill ghost" onclick="decide('i6','확인')">확인</button><span class="state" id="s-i6"></span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="cmp" style="margin-top:16px">
+      <div class="card"><h3>버튼 3개(채택 / 보류 / 기각)</h3><ul><li>기각·보류에 사유 선택지(근거 약함·편성 제약·이미 조치·다음 주 다시·기타)</li><li>보류는 다음 주 같은 항목이 다시 올라옴</li><li>제언 성적표(B3)에서 "기각 후 실적"·"보류 후 실적"을 따로 셈</li></ul></div>
+      <div class="card"><h3>버튼 2개(채택 / 기각)</h3><ul><li>가장 단순 · 미처리 항목은 그대로 남음</li><li>"다음 주 다시"는 기각 사유로 흡수</li><li>성적표에서 보류를 구분하지 못함</li></ul></div>
+      <div class="card"><h3>공통</h3><ul><li>항목마다 현황·원인·조치 3줄(홈 문구 기준 유지)</li><li>기대 효과 수치는 쓰지 않고 사례 건수로</li><li>결정은 action_reviews에 기록 → 4주 뒤 결과 대조</li><li>처리한 항목은 접힘, 담당 채널은 로그인별 기억</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== ② 채널 심층 ===================== -->
+  <section id="v-deep" class="hidden">
+    <div class="note"><b>시안 설명</b> — 같은 채널 심층(ENA Play 예시)을 <b>A안: 5탭</b>과 <b>B안: 지금 구조 + 섹션 접기</b>로 번갈아 볼 수 있습니다. 두 안 모두 첫 화면에는 진단만 먼저 그리고 나머지는 열 때 불러옵니다(속도). 회색 빗금은 "열 때 불러오는 블록"입니다.</div>
+
+    <div class="card">
+      <div class="it-head">
+        <div><div class="eyebrow">채널별 분석</div><div class="h2">ENA Play <span class="sub">수도권 2049 · 2026-11-12 기준</span></div></div>
+        <div class="seg"><button id="dA" aria-pressed="true" onclick="deepMode('A')">A안 · 5탭</button><button id="dB" aria-pressed="false" onclick="deepMode('B')">B안 · 섹션 접기</button></div>
+      </div>
+
+      <!-- A안 -->
+      <div id="deepA" style="margin-top:14px">
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected="true" onclick="tab(0)">진단<span class="n">첫 화면</span></button>
+          <button role="tab" aria-selected="false" onclick="tab(1)">콘텐츠<span class="n">적합도·TOP20</span></button>
+          <button role="tab" aria-selected="false" onclick="tab(2)">편성<span class="n">무엇을 편성할까요</span></button>
+          <button role="tab" aria-selected="false" onclick="tab(3)">경쟁·비교군<span class="n">격차 자리</span></button>
+          <button role="tab" aria-selected="false" onclick="tab(4)">IPTV 보조<span class="n">12월까지</span></button>
+        </div>
+        <div class="panel on" id="p0">
+          <div class="kv">
+            <div class="b"><div class="l">어제 2049</div><div class="v num">0.027%</div><div class="sub">최근 4주 평균 0.029% · 순위 33위</div></div>
+            <div class="b"><div class="l">목표 대비</div><div class="v num">56%</div><div class="sub">구조적 격차(평소도 85% 미만)</div></div>
+            <div class="b"><div class="l">약한 자리</div><div class="v num">2곳</div><div class="sub">화 23시 · 목 05시</div></div>
+            <div class="b"><div class="l">예측 적중(4주)</div><div class="v num">81%</div><div class="sub">범위 안 비율</div></div>
+          </div>
+          <div class="sec" style="padding:12px 16px"><b>오늘의 진단</b><div class="sub" style="margin-top:4px">나 혼자 산다·유 퀴즈·라디오스타 재방 3개가 누적 시청률의 41%. 화 23시 냉장고를 부탁해가 4주째 같은 자리 보통의 63%. 비교군(8곳) 대비 주말 20~23시 자리 지수가 0.27 낮음.</div></div>
+          <div class="load"><span>첫 화면 요청 2개</span><span>목표 2초</span></div>
+        </div>
+        <div class="panel" id="p1"><div class="skeleton">열 때 불러옴 — 콘텐츠 적합도 표(유형 배지·행 상세), 시청률 상위 콘텐츠 TOP 20, 스코어 카드</div><div class="load"><span>요청 3개</span><span>목표 1초</span></div></div>
+        <div class="panel" id="p2"><div class="skeleton">열 때 불러옴 — 무엇을 편성할까요?(결정 순 묶음 · 조치 · 확인 기준), 편성표 위 예측·판정(D3), 요일×시간대 열지도</div></div>
+        <div class="panel" id="p3">
+          <div class="row"><span class="sub">벤치마크</span><span class="chip">KBS JOY</span><span class="chip">SBS funE</span><span class="chip">tvN SHOW</span><span class="chip">JTBC2</span><span class="chip">E채널</span><span class="chip">Mnet</span><span class="chip">코미디TV</span><span class="chip">theLIFE</span><span class="chip" style="opacity:.6">예능군 · 2049 0.5~2배</span></div>
+          <div class="tbl"><table>
+            <tr><th>격차 자리</th><th class="r">우리 지수</th><th>우리 상위</th><th class="r">비교군 중앙값</th><th>비교군 사례</th></tr>
+            <tr><td>주말 20~23시</td><td class="r num">1.36</td><td>나 혼자 산다, 유 퀴즈</td><td class="r num">1.63</td><td>Mnet 2.4 쇼미더머니 · 코미디TV 1.6 런닝맨·맛있는 녀석들(재방 41%) · theLIFE 1.5 미운 우리 새끼</td></tr>
+          </table></div>
+          <div class="sub">자리 지수 = 그 자리 시청률 ÷ 채널 평균(모양 비교). 효과 수치는 쓰지 않습니다. 접힌 상세: 전체 자리 열지도 · 재방 리듬 표 · 신작 투입 자리 · 집중도.</div>
+          <div class="skeleton" style="height:70px">열 때 불러옴 — 경쟁채널 카드(기존), 시간대 경쟁 지도(IPTV D1)</div>
+        </div>
+        <div class="panel" id="p4"><div class="skeleton">열 때 불러옴 — IPTV 셋톱 보조 블록(교차 확인·프로그램 블록·UHD 벤치마크). 자료 마지막 날 이후에는 탭 자체를 숨김</div></div>
+      </div>
+
+      <!-- B안 -->
+      <div id="deepB" class="hidden" style="margin-top:14px;display:grid;gap:10px">
+        <div class="kv">
+          <div class="b"><div class="l">어제 2049</div><div class="v num">0.027%</div><div class="sub">최근 4주 평균 0.029% · 순위 33위</div></div>
+          <div class="b"><div class="l">목표 대비</div><div class="v num">56%</div><div class="sub">구조적 격차</div></div>
+          <div class="b"><div class="l">약한 자리</div><div class="v num">2곳</div><div class="sub">화 23시 · 목 05시</div></div>
+          <div class="b"><div class="l">예측 적중(4주)</div><div class="v num">81%</div><div class="sub">범위 안 비율</div></div>
+        </div>
+        <details class="sec" open><summary><span><span class="arrow">▶</span> 진단 · 오늘의 진단</span><span class="sum">첫 화면</span></summary><div class="body"><div class="sub">나 혼자 산다·유 퀴즈·라디오스타 재방 3개가 누적 시청률의 41%. 화 23시 냉장고를 부탁해가 4주째 같은 자리 보통의 63%.</div></div></details>
+        <details class="sec"><summary><span><span class="arrow">▶</span> 콘텐츠 · 적합도 · TOP 20 · 스코어 카드</span><span class="sum">정식 판정 31편 · 교체 검토 4</span></summary><div class="body"><div class="skeleton">열 때 불러옴</div></div></details>
+        <details class="sec"><summary><span><span class="arrow">▶</span> 편성 · 무엇을 편성할까요? · 편성표 위 예측</span><span class="sum">먼저 결정 2 · 더 지켜볼 5</span></summary><div class="body"><div class="skeleton">열 때 불러옴</div></div></details>
+        <details class="sec"><summary><span><span class="arrow">▶</span> 경쟁·비교군 · 격차 자리</span><span class="sum">격차 1곳 · 벤치마크 8곳</span></summary><div class="body"><div class="skeleton" style="height:80px">열 때 불러옴 — 격차 자리 표 · 경쟁채널 카드 · 시간대 경쟁 지도</div></div></details>
+        <details class="sec"><summary><span><span class="arrow">▶</span> IPTV 셋톱 보조</span><span class="sum">자료 11/09까지</span></summary><div class="body"><div class="skeleton" style="height:60px">열 때 불러옴</div></div></details>
+        <details class="sec"><summary><span><span class="arrow">▶</span> 보고서 · 심층 분석</span><span class="sum">Word · PPT</span></summary><div class="body"><div class="skeleton" style="height:60px">열 때 불러옴</div></div></details>
+        <div class="load"><span>첫 화면 요청 2개</span><span>접힌 섹션은 열 때 요청</span><span>접힘 상태는 브라우저가 기억</span></div>
+      </div>
+    </div>
+
+    <div class="cmp" style="margin-top:16px">
+      <div class="card"><h3>A안 · 5탭</h3><ul><li>한 번에 한 주제만 보여 화면이 짧음 · 공유 링크가 탭을 가리킴(#tab)</li><li>탭 사이를 오가며 비교하기는 불편</li><li>IPTV 종료 후 탭 하나를 통째로 숨기기 쉬움</li><li>구현: 섹션을 컴포넌트 5개로 분리 + 탭별 지연 로딩</li></ul></div>
+      <div class="card"><h3>B안 · 섹션 접기</h3><ul><li>지금 구조 그대로 · 한 페이지에서 위아래로 훑기 좋음</li><li>요약 한 줄(접힌 상태에서 건수)로 열지 말지 판단</li><li>모두 펼치면 지금처럼 길어짐</li><li>구현: 섹션 분리 + 접힘 상태별 지연 로딩(탭보다 변경 적음)</li></ul></div>
+    </div>
+  </section>
+</div>
+
+<script>
+function go(v){document.getElementById('v-home').classList.toggle('hidden',v!=='home');document.getElementById('v-deep').classList.toggle('hidden',v!=='deep');document.getElementById('sw-home').setAttribute('aria-pressed',v==='home');document.getElementById('sw-deep').setAttribute('aria-pressed',v==='deep');try{localStorage.setItem('f6view',v)}catch(e){}}
+function btnMode(n){document.querySelectorAll('.b3only').forEach(b=>b.classList.toggle('hidden',n===2));document.getElementById('b3').setAttribute('aria-pressed',n===3);document.getElementById('b2').setAttribute('aria-pressed',n===2);}
+function decide(id,what){const it=document.getElementById(id);const s=document.getElementById('s-'+id);const r=document.getElementById('r-'+id);if(what==='채택'||what==='확인'){it.classList.add('done');s.textContent=what+'됨 · 4주 뒤 결과와 대조';if(r)r.classList.remove('show');}else{it.classList.remove('done');s.textContent=what+' — 사유를 고르세요';if(r){r.classList.add('show');r.dataset.what=what;}}updCnt();}
+function pick(el){const r=el.parentElement;r.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed','false'));el.setAttribute('aria-pressed','true');const id=r.id.slice(2);const it=document.getElementById(id);it.classList.add('done');document.getElementById('s-'+id).textContent=r.dataset.what+'됨('+el.textContent+')'+(r.dataset.what==='보류'?' · 다음 주 다시 올라옴':' · 4주 뒤 실적 대조');updCnt();}
+function updCnt(){const n=document.querySelectorAll('#queue .item:not(.done)').length;document.getElementById('cnt').textContent=n+'건';}
+function deepMode(m){document.getElementById('deepA').classList.toggle('hidden',m!=='A');document.getElementById('deepB').classList.toggle('hidden',m!=='B');document.getElementById('dA').setAttribute('aria-pressed',m==='A');document.getElementById('dB').setAttribute('aria-pressed',m==='B');}
+function tab(i){document.querySelectorAll('.tabs [role=tab]').forEach((b,k)=>b.setAttribute('aria-selected',k===i));document.querySelectorAll('.panel').forEach((p,k)=>p.classList.toggle('on',k===i));}
+try{const v=localStorage.getItem('f6view');if(v)go(v);}catch(e){}
+</script>
