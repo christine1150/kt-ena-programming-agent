@@ -9,6 +9,7 @@ import { HOLIDAY_TYPE_LABEL, type HolidayDayType } from "@/lib/holiday/dayType";
 import { broadcastMinToLabel } from "@/lib/idealSchedule/time";
 import { MIN_ACCURACY_SLOTS, MIN_GRADE_SLOTS, MIN_OFFICIAL_DAYS } from "./forecastAccuracyCore";
 import type { ChangeEffectPeerCell, ChangeEffectPeers, ChangeEffectSummary, ForecastAccuracySummary, HolidayEffectSummary } from "./types";
+import { slotLabel as slotLabel2, type BenchmarkGapsSummary } from "@/lib/benchmark/slotGaps";
 
 /** 분포 문장을 내는 최소 사례 수(명세 B1: MIN_EVIDENCE_N 3 → 10) */
 export const REPORT_MIN_N = 10;
@@ -162,4 +163,29 @@ export function holidayEffectSection(s: HolidayEffectSummary | null | undefined)
     { kind: "text", text: toGaejosik(HOLIDAY_EFFECT_NOTE) },
   ];
   return { key: "holiday_effect", title: "공휴일 영향(평소 대비)", blocks };
+}
+
+export const BENCHMARK_GAPS_NOTE = "자리 지수는 각 채널 평균 대비라 채널 안에서 그 자리가 얼마나 강한가의 모양 비교이며 절대 시청률 비교가 아님. 비교군은 같은 군·같은 KPI 타깃·시청률 0.5~2배 채널(2곳 이상일 때만 적음). 판권·보유 여부와 별개이며 이 자리를 따라 하면 오른다는 뜻이 아님.";
+const idx = (v: number) => v.toFixed(2);
+const titles = (xs: string[]) => xs.slice(0, 3).map(oneLine).join("·") || "—";
+
+/** 격차 자리마다 "우리 vs 비교군 채널" 표. 격차 자리가 없거나 적재 전이면 null(섹션 자체를 두지 않음). */
+export function benchmarkGapsSection(s: BenchmarkGapsSummary | null | undefined): DocSection | null {
+  if (!s || s.gaps.length === 0 || s.benchmarks.length < 2) return null;
+  const rows = s.gaps.map((g) => [
+    slotLabel2(g.slot),
+    `${idx(g.ownIndex)} · ${titles(g.ownTop)}`,
+    g.benches.map((b) => `${b.snap} ${idx(b.index)} · ${titles(b.topTitles)}${b.rerunShare !== null ? `(재방 ${Math.round(b.rerunShare * 100)}%)` : ""}`).join(" / "),
+  ]);
+  const common = s.gaps.filter((g) => g.benchN >= 2 && g.benchHigherN === g.benchN).length;
+  const bullets = [
+    `비교군 ${s.benchmarks.length}곳(${s.benchmarks.join("·")})보다 자리 지수가 0.2 이상 낮은 자리 ${s.gaps.length}개(${ymd(s.asOf)} 기준 최근 ${Math.round(s.windowDays / 7)}주)`,
+    ...(common > 0 ? [`그중 ${common}개는 비교한 채널 모두가 우리보다 0.2 이상 높음(비교군 공통)`] : []),
+  ];
+  const blocks: DocSection["blocks"] = [
+    { kind: "bullets", items: bullets.map((b) => toGaejosik(b)) },
+    { kind: "table", headers: ["자리", "우리(지수·상위 작품)", "비교군(지수·상위 작품)"], rows },
+    { kind: "text", text: toGaejosik(BENCHMARK_GAPS_NOTE) },
+  ];
+  return { key: "benchmark_gaps", title: "비교군 우수 사례(격차 자리)", blocks };
 }

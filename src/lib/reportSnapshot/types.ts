@@ -7,6 +7,7 @@
 //
 // 이 파일은 순수 타입·상수만 가진다(클라이언트 화면에서도 import 가능).
 import type { AudienceReportDocument } from "@/lib/audienceReport/reportModel";
+import type { BenchmarkGapsSummary } from "@/lib/benchmark/slotGaps";
 import type { PortfolioReportDocument } from "@/lib/audienceReport/portfolioModel";
 import type { RightsHomeSummary } from "@/lib/avail/homeSummary";
 
@@ -207,6 +208,8 @@ export interface SnapshotExtras {
   holidayEffect?: HolidayEffectSummary | null;
   /** 주간·월간 채널 보고서: 사전 예측 적중(최근 12주). null/없음 = 대조 표본이 부족하거나 읽지 못함 */
   forecastAccuracy?: ForecastAccuracySummary | null;
+  /** 주간·월간 채널 보고서: 비교군 우수 사례(격차 자리, 주 1회 적재분). null/없음 = 적재 전·격차 자리 없음·읽지 못함 */
+  benchmarkGaps?: BenchmarkGapsSummary | null;
 }
 
 export interface SnapshotMeta {

@@ -14,6 +14,7 @@ import { holidayTypeOf } from "@/lib/holiday/dayType";
 import { summarizeForecastAccuracy, type ReviewedSlot, type SlotValue, type WeekReview } from "./forecastAccuracyCore";
 import { OWN_EVENT_CHANNELS } from "@/lib/changeEvents/channels";
 import { toPeerCell } from "./peerCell";
+import type { BenchmarkGapsSummary } from "@/lib/benchmark/slotGaps";
 import type { ChangeEffectPeerCell, ChangeEffectPeers, ChangeEffectSummary, ForecastAccuracySummary, HolidayEffectSummary } from "./types";
 
 /** 사후 효과를 세는 기간(일) — 분석 종료일 앞 약 1년 + 변경 전 비교분 */
@@ -260,4 +261,12 @@ export async function loadHolidayEffect(args: { channelCode: string; from: strin
     days.push({ date, name: holidays.get(date) ?? null, type: holidayTypeOf(date, holidays) as string, day: ratio(groups.day), evening: ratio(groups.evening), all: ratio(groups.all) });
   }
   return days.length > 0 ? { from: args.from, to: args.to, days } : null;
+}
+
+/** 주 1회 적재된 비교군 격차 자리(benchmark_slot_gaps)를 읽는다. 표가 없거나 행이 없으면 null(근거만 빠짐). */
+export async function loadBenchmarkGaps(channelCode: string): Promise<BenchmarkGapsSummary | null> {
+  const { data, error } = await supabase.from("benchmark_slot_gaps").select("payload").eq("own_channel_code", channelCode).maybeSingle();
+  if (error || !data) return null;
+  const p = (data as { payload: BenchmarkGapsSummary | null }).payload;
+  return p && Array.isArray(p.gaps) ? p : null;
 }

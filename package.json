@@ -68,6 +68,7 @@
     "test:page-timing": "tsx scripts/test-page-timing.ts",
     "test:change-events": "tsx scripts/test-change-events.ts",
     "test:benchmark": "tsx scripts/test-benchmark.ts",
+    "test:benchmark-gaps": "tsx scripts/test-benchmark-gaps.ts",
     "test:evidence-sections": "tsx scripts/test-evidence-sections.ts",
     "report:page-timing": "tsx --env-file=.env scripts/page-timing-report.ts"
   },

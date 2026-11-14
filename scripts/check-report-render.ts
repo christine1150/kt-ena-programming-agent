@@ -19,6 +19,7 @@ const EVIDENCE: { key: string; title: string; needle: string }[] = [
   { key: "change_effect", title: "편성 변경 사후 효과", needle: "편성 변경 사후 효과" },
   { key: "holiday_effect", title: "공휴일 영향", needle: "공휴일 영향" },
   { key: "forecast_accuracy", title: "예측 적중", needle: "예측 적중" },
+  { key: "benchmark_gaps", title: "비교군 우수 사례", needle: "비교군 우수 사례" },
   { key: "iptv_summary", title: "IPTV 셋톱 요약", needle: "IPTV 셋톱 요약" },
 ];
 const BAD = [/undefined/, /NaN/, /\[object/, /Infinity/, /null%/];
