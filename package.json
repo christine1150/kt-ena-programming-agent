@@ -7,6 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "test:auto-news": "tsx scripts/test-auto-news.ts",
     "test:intent": "tsx --env-file=.env scripts/test-intent-router.ts",
     "smoke": "tsx --env-file=.env scripts/smoke-rpc.mts",
     "mint-review-session": "tsx --env-file=.env.local scripts/mint-local-review-session.mts",
