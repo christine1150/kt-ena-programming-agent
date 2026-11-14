@@ -67,6 +67,7 @@
     "check:client-boundary": "node scripts/check-client-boundary.mjs",
     "test:page-timing": "tsx scripts/test-page-timing.ts",
     "test:change-events": "tsx scripts/test-change-events.ts",
+    "test:evidence-sections": "tsx scripts/test-evidence-sections.ts",
     "report:page-timing": "tsx --env-file=.env scripts/page-timing-report.ts"
   },
   "dependencies": {

@@ -61,7 +61,8 @@ export type SectionKey =
   | "exec_decisions" | "one_liner" | "policies" | "concentration" | "prime_compare" | "peer_a" | "peer_b" | "pipeline"
   | "common_pattern" | "opportunities" | "slot_overlap" | "skyuhd" | "rights" | "top_actions"
   // 템플릿 단계에서 만드는 섹션(flatten이 만들지 않음)
-  | "assumptions" | "method_notes" | "channel_policy" | "channel_rights" | "purchase_review" | "iptv_summary";
+  | "assumptions" | "method_notes" | "channel_policy" | "channel_rights" | "purchase_review" | "iptv_summary"
+  | "change_effect" | "holiday_effect";
 
 export interface DocSection {
   key: SectionKey;

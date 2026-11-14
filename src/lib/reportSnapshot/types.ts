@@ -111,6 +111,38 @@ export interface IptvReportSummary {
   topPrograms: { name: string; airings: number; rating: number | null; minutesPerReacher: number | null }[];
 }
 
+/** 주간·월간 채널 보고서의 "편성 변경 사후 효과" 근거(고도화 B1) — 이 채널의 과거 변경(이동·교체)이 그 자리 시청률을 올렸는지 센 분포. 기대 효과 수치는 담지 않는다. */
+export interface ChangeEffectSummary {
+  /** 기준 기간(분석 종료일 앞 약 1년) */
+  from: string;
+  to: string;
+  /** 어느 띠로 판정했나: noise=시청률 수준별 닐슨 잡음 폭, band10=±10% 띠(잡음 표가 없을 때) */
+  basis: "noise" | "band10";
+  /** 편성상의 교체(이전 프로그램이 28일 안에 다른 자리에서 계속 방영된 교체)만 센 분포. endedN = 작품 종료 뒤 교체(집계 제외) 건수 */
+  replace: { n: number; up: number; flat: number; down: number; endedN: number };
+  /** 프로그램 시간대 이동 — 옮긴 프로그램 기준 분포와 자리 기준(새 자리·비운 자리, ±10% 띠) 분포 */
+  move: { n: number; up: number; flat: number; down: number; toSlot: { n: number; up: number; down: number }; fromSlot: { n: number; up: number; down: number } };
+  /** 최근 12주 안에 일어난 변경(최대 5건) */
+  recent: { kind: "move" | "replace"; date: string; program: string; prev: string | null; from: string; to: string; before: number; after: number; verdict: "up" | "flat" | "down"; swap: boolean | null }[];
+}
+
+/** 주간·월간 채널 보고서의 "공휴일 영향" 근거(고도화 A2) — 분석 기간 안의 공휴일·연휴 평일·전날·다음 날이 같은 요일 ±4주 평소 대비 어땠는지(상관 참고, 인과 아님). */
+export interface HolidayEffectSummary {
+  from: string;
+  to: string;
+  days: {
+    date: string;
+    /** 공휴일 이름(공휴일 당일만) */
+    name: string | null;
+    /** HolidayDayType */
+    type: string;
+    /** 방영 시작 08~17시 / 20~23시 / 종일의 같은 요일 ±4주 평소 대비 배수. 평소 표본이 3주 미만이면 null */
+    day: number | null;
+    evening: number | null;
+    all: number | null;
+  }[];
+}
+
 /** 월간 템플릿이 쓰는 추가 자료. 스냅샷 생성 시점에 한 번 읽어 저장한다(형식마다 다시 읽지 않는다). */
 export interface SnapshotExtras {
   /** 채널 보고서: 해당 채널의 권리 현황 / 종합: 전체. null = 읽지 못함(문제 없음이 아님) */
@@ -120,6 +152,10 @@ export interface SnapshotExtras {
   purchaseReview?: PurchaseReviewBrief | null;
   /** 주간·월간 채널 보고서: IPTV 셋톱 요약(보조). null/없음 = 자료가 없거나 기간이 IPTV 자료 밖 */
   iptvSummary?: IptvReportSummary | null;
+  /** 주간·월간 채널 보고서: 이 채널의 과거 편성 변경 사후 효과 분포. null/없음 = 사례가 부족하거나 읽지 못함 */
+  changeEffect?: ChangeEffectSummary | null;
+  /** 주간·월간 채널 보고서: 분석 기간 안 공휴일 영향. null/없음 = 기간에 해당 날짜가 없거나 읽지 못함 */
+  holidayEffect?: HolidayEffectSummary | null;
 }
 
 export interface SnapshotMeta {

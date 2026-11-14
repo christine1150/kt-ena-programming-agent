@@ -14,6 +14,7 @@ import { toGaejosik } from "@/lib/audienceReport/gaejosik";
 import { portfolioActionId } from "@/lib/audienceReport/portfolioDecisions";
 import { kstStamp } from "./cadence";
 import { iptvSummarySection } from "./iptvSummaryText";
+import { changeEffectSection, holidayEffectSection } from "./evidenceText";
 import { omitEmptyBlocks } from "@/lib/audienceReport/pptSlidePlan";
 import { CADENCE_LABEL, metaOf, type ReportCadence, type ReportSnapshot, type SnapshotAction, type SnapshotMeta } from "./types";
 
@@ -44,9 +45,9 @@ const CHANNEL_BODY: Record<ReportCadence, SectionKey[]> = {
   // 일간 1~2쪽 브리핑: 한 줄 판정 → 오늘의 숫자 → 결정 요청 → 평소 대비 → 경쟁 → 확인할 것
   daily: ["ai_summary", "verdict", "kpi", "range_summary", "position", "change_summary", "rec_summary", "slot_dev", "competitor", "verify", "assumptions"],
   // 주간 핵심 회의자료: 성과 → 변화 근거(기여 프로그램) → 흐름 → 결정 요청
-  weekly: ["ai_summary", "range_summary", "position", "change_summary", "kpi", "kpi_compare", "structural", "matrix", "contribution", "top_contrib", "change_breakdown", "trend", "best_worst", "daypart", "hour_shift", "iptv_summary", "rec_summary", "assumptions"],
+  weekly: ["ai_summary", "range_summary", "position", "change_summary", "kpi", "kpi_compare", "structural", "matrix", "contribution", "top_contrib", "change_breakdown", "trend", "best_worst", "daypart", "hour_shift", "holiday_effect", "iptv_summary", "change_effect", "rec_summary", "assumptions"],
   // 월간: 성과 → 역할(운영정책) → 라인업 → 권리 → 구매 검토 → 결정 요청
-  monthly: ["ai_summary", "range_summary", "position", "change_summary", "kpi", "kpi_compare", "strategic", "structural", "channel_policy", "original", "contribution", "top_contrib", "deep_prime", "channel_rights", "purchase_review", "daypart", "fit_portfolio", "iptv_summary", "rec_summary", "assumptions"],
+  monthly: ["ai_summary", "range_summary", "position", "change_summary", "kpi", "kpi_compare", "strategic", "structural", "channel_policy", "original", "contribution", "top_contrib", "deep_prime", "channel_rights", "purchase_review", "daypart", "fit_portfolio", "holiday_effect", "iptv_summary", "change_effect", "rec_summary", "assumptions"],
   period: ["ai_summary", "range_summary", "position", "change_summary", "kpi", "kpi_compare", "structural", "matrix", "contribution", "top_contrib", "change_breakdown", "trend", "best_worst", "daypart", "hour_shift", "rec_summary", "assumptions"],
 };
 
@@ -108,6 +109,8 @@ const SECTION_META: Partial<Record<SectionKey, { unit: string; source: string; c
   purchase_review: { unit: "예상 시청률 %", source: "구매 시뮬레이터 사전 계산(구매 추천)" },
   policies: { unit: "—", source: "운영정책(운영자 입력)" },
   iptv_summary: { unit: "시청률 %, 도달률 %, 1인당 시청 분", source: "IPTV 3사 셋톱(TV INDEX) · 보조 자료" },
+  change_effect: { unit: "시청률 %, 건수", source: NIELSEN },
+  holiday_effect: { unit: "같은 요일 ±4주 평소 대비 배", source: NIELSEN },
 };
 
 // ───────────── 보조 ─────────────
@@ -305,6 +308,11 @@ export function buildReportModel(s: ReportSnapshot): ReportModel {
     if (rights) generated.push(rights);
     const iptv = iptvSummarySection(s.extras.iptvSummary, s.channelCode ?? "");
     if (iptv) generated.push(iptv);
+    // 고도화 B1·A2: 편성 변경 사후 효과·공휴일 영향(없으면 섹션 자체를 두지 않는다)
+    const changeEffect = changeEffectSection(s.extras.changeEffect, s.channelCode ?? "");
+    if (changeEffect) generated.push(changeEffect);
+    const holidayEffect = holidayEffectSection(s.extras.holidayEffect);
+    if (holidayEffect) generated.push(holidayEffect);
   }
   const pr = purchaseReviewSection(s);
   if (pr) generated.push(pr);
