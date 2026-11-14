@@ -159,7 +159,7 @@ export function contentIndex(chan: SlotMap, prog: SlotMap, minBase: number, jae:
   return { idx: sumR / sumB, nBase, nAll, meanRating: nAll > 0 ? sumAll / nAll : 0, jaeShare: jae && nAll > 0 ? nJae / nAll : null };
 }
 
-function median(a: number[]): number {
+export function median(a: number[]): number {
   const v = [...a].sort((x, y) => x - y);
   const n = v.length;
   return n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;

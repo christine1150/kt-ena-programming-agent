@@ -524,7 +524,11 @@ function PurchaseSimulator() {
   );
 }
 
-type RecoItem = { rank: number; group_key: string; rep_key: string; display_name: string; genre: string | null; prediction: number; prediction_low: number | null; prediction_high: number | null; peer_count: number; peer_airings: number; channel_annual_avg: number | null; vs_annual_avg: number | null; confidence: string | null; as_of: string; target: string; model_version?: string | null; computed_at?: string | null };
+type RecoItem = { rank: number; group_key: string; rep_key: string; display_name: string; genre: string | null; prediction: number; prediction_low: number | null; prediction_high: number | null; peer_count: number; peer_airings: number; channel_annual_avg: number | null; vs_annual_avg: number | null; confidence: string | null; as_of: string; target: string; model_version?: string | null; computed_at?: string | null;
+  /** 벤치마크 채널별 이 작품의 자리 평소 대비 배수·비교 방영 수(근거 표시용 — 예측·순위에는 쓰지 않음). 사전 계산 전 행은 없음 */
+  benchmark_peers?: { ch: string; mult: number; airings: number }[] | null; benchmark_mult?: number | null; benchmark_peer_count?: number | null; other_own_channels?: string[] | null };
+type BenchChannel = { snap: string; competitor: string; rank: number; rating: number; ratio: number; rule: "ratio" | "widen" | "manual"; reason: string };
+type BenchState = { channels: BenchChannel[]; isAdmin: boolean; addable: { snap: string; group: string; isHub: boolean }[] };
 type RecoAlignment = { aligned: boolean; asOfLagDays: number; messages: string[] };
 
 // 구매 추천: 해당 채널에서 방영한 적 없는 프로그램 중 타 채널(케이블 재방 1곳 이상·20회 이상) 실적으로 연평균 이상이 기대되는 후보를, 연평균 대비 배수(방영 횟수로 보정) 순으로 보여 준다. 사전 계산 결과를 읽는다.
@@ -534,6 +538,34 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
   const [alignment, setAlignment] = useState<RecoAlignment | null>(null);
   const [genre, setGenre] = useState("전체");
   const [loadedKey, setLoadedKey] = useState("");
+  const [bench, setBench] = useState<BenchState | null>(null);
+  const [benchKey, setBenchKey] = useState("");
+  const [benchFirst, setBenchFirst] = useState(false);
+  const [benchMsg, setBenchMsg] = useState("");
+  // 벤치마크 채널(비슷한 규모의 채널) — 채널이 바뀔 때만 읽는다. 읽지 못해도 추천 목록은 그대로 보인다.
+  if (benchKey !== channel) {
+    setBenchKey(channel);
+    setBench(null);
+    fetch(`/api/scheduling/purchase-sim/benchmark?channel=${channel}`)
+      .then((r) => r.json())
+      .then((j) => setBench(j.ok ? { channels: j.selection.channels as BenchChannel[], isAdmin: !!j.isAdmin, addable: (j.addable ?? []) as BenchState["addable"] } : null))
+      .catch(() => setBench(null));
+  }
+  // 관리자만: 벤치마크 채널 추가·제외. 이미 계산된 후보의 근거 열은 다음 사전 계산(주 1회)부터 바뀐다.
+  const editBench = (snap: string, action: "add" | "remove") => {
+    setBenchMsg("");
+    fetch("/api/scheduling/purchase-sim/benchmark", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channel, snap, action }) })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j.ok) {
+          setBenchMsg(j.message ?? "저장하지 못했습니다.");
+          return;
+        }
+        setBenchMsg("저장했습니다. 후보의 근거 열은 다음 사전 계산부터 반영됩니다.");
+        setBenchKey(""); // 선정·추가 가능 목록을 다시 읽는다
+      })
+      .catch(() => setBenchMsg("저장하지 못했습니다."));
+  };
   const key = `${channel}|${windowDays}`;
   if (loadedKey !== key) {
     setLoadedKey(key);
@@ -548,7 +580,11 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
       .catch(() => setItems([]));
   }
   const genres = ["전체", ...Array.from(new Set((items ?? []).map((i) => i.genre ?? "미분류")))];
-  const filtered = (items ?? []).filter((i) => genre === "전체" || (i.genre ?? "미분류") === genre).slice(0, 10);
+  const byGenre = (items ?? []).filter((i) => genre === "전체" || (i.genre ?? "미분류") === genre);
+  // 기본은 저장된 순서 그대로. "벤치마크 실적 있는 작품 먼저"를 켜면 같은 순서를 유지한 채 실적 있는 작품을 앞으로 묶는다(안정 정렬)
+  const ordered = benchFirst ? [...byGenre.filter((i) => (i.benchmark_peer_count ?? 0) > 0), ...byGenre.filter((i) => (i.benchmark_peer_count ?? 0) === 0)] : byGenre;
+  const filtered = ordered.slice(0, 10);
+  const nameOf = (code: string) => CHANNEL_OPTS.find((c) => c.code === code)?.name ?? code;
   // 저장된 순서(연평균 대비 배수를 방영 횟수로 보정한 순)를 그대로 쓴다 — 예상 시청률 순으로 다시 정렬하지 않는다
   const shown = filtered.map((item, idx) => ({ item, rank: idx + 1 }));
   const avg = items?.[0]?.channel_annual_avg ?? null;
@@ -566,13 +602,43 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
           구매 검토 후보 <span className="text-xs font-normal text-zinc-500">· {CHANNEL_OPTS.find((c) => c.code === channel)?.name} · {label}{targetName ? ` · ${targetName}` : ""}{items?.[0]?.as_of ? ` · ${items[0].as_of.slice(0, 10)} 기준` : ""}</span>
         </h2>
         {items && items.length > 0 && (
-          <select value={genre} onChange={(e) => setGenre(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700" aria-label="장르">
-            {genres.map((g) => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-          </select>
+          <div className="flex flex-wrap items-center gap-3">
+            {items.some((i) => (i.benchmark_peer_count ?? 0) > 0) && (
+              <label className="flex items-center gap-1.5 text-xs text-zinc-600" title="비슷한 규모의 벤치마크 채널에서 방영 실적이 있는 작품을 같은 순서로 앞에 묶어 보여 줍니다.">
+                <input type="checkbox" checked={benchFirst} onChange={(e) => setBenchFirst(e.target.checked)} />
+                벤치마크 실적 있는 작품 먼저
+              </label>
+            )}
+            <select value={genre} onChange={(e) => setGenre(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700" aria-label="장르">
+              {genres.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
         )}
       </div>
+      {bench && bench.channels.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-zinc-600">
+          <span className="font-medium text-zinc-700" title="비슷한 규모의 채널(같은 군·같은 타깃·닐슨 연간 시청률 0.5~2배)입니다. 후보마다 이 채널들의 실적을 근거로 덧붙여 보여 줄 뿐 예상 시청률과 순위에는 쓰지 않습니다.">벤치마크 채널</span>
+          {bench.channels.map((c) => (
+            <span key={c.snap} title={c.reason} className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-700">
+              {c.competitor}
+              {bench.isAdmin && (
+                <button type="button" aria-label={`${c.competitor} 벤치마크에서 제외`} onClick={() => editBench(c.snap, "remove")} className="ml-1 text-zinc-400 hover:text-zinc-700">×</button>
+              )}
+            </span>
+          ))}
+          {bench.isAdmin && bench.addable.length > 0 && (
+            <select aria-label="벤치마크 채널 추가" value="" onChange={(e) => e.target.value && editBench(e.target.value, "add")} className="rounded-lg border border-zinc-300 bg-white px-1.5 py-0.5 text-xs text-zinc-600">
+              <option value="">+ 채널 추가</option>
+              {bench.addable.map((a) => (
+                <option key={a.snap} value={a.snap}>{a.snap}{a.isHub ? " (허브)" : ""}</option>
+              ))}
+            </select>
+          )}
+          {benchMsg && <span className="text-zinc-500" role="status">{benchMsg}</span>}
+        </div>
+      )}
       {items === null && <p className="mt-2 text-sm text-zinc-500" role="status">불러오는 중…</p>}
       {items && items.length === 0 && <p className="mt-2 text-sm text-zinc-500">이 채널·기간의 구매 검토 후보는 아직 준비되지 않았습니다.</p>}
       {items && items.length > 0 && (
@@ -613,6 +679,30 @@ function RecoSection({ channel, windowDays, onPick }: { channel: string; windowD
                       {i.confidence ? (CONF_LABEL[i.confidence] ?? i.confidence).replace("근거 ", "") : "-"}
                     </span>
                   </button>
+                  {/* 벤치마크 근거(고도화 C1): 예측·순위와 무관한 참고 한 줄 — 비슷한 규모 채널이 이 작품을 같은 시간대 다른 프로그램 평균의 몇 배로 소화했나 */}
+                  {(() => {
+                    const peers = i.benchmark_peers ?? [];
+                    const others = (i.other_own_channels ?? []).filter((c) => c !== channel);
+                    if (peers.length === 0 && others.length === 0 && !(bench && bench.channels.length > 0 && i.benchmark_peer_count === 0)) return null;
+                    return (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 pb-2 text-xs">
+                        {peers.length > 0 ? (
+                          <span className="text-zinc-600" title="벤치마크 채널에서 이 작품이 같은 시간대 다른 프로그램 평균의 몇 배였는지(비교 방영 수). 근거 표시용이며 예측값에는 반영하지 않습니다.">
+                            비슷한 규모 채널: {peers.slice(0, 3).map((p) => `${p.ch} ${fmt(p.mult, 2)}배·${p.airings}회`).join(" · ")}
+                            {peers.length > 3 ? ` 외 ${peers.length - 3}곳` : ""}
+                            {i.benchmark_mult !== null && i.benchmark_mult !== undefined && peers.length > 1 ? ` (중앙값 ${fmt(i.benchmark_mult, 2)}배)` : ""}
+                          </span>
+                        ) : peers.length === 0 && i.benchmark_peer_count === 0 ? (
+                          <span className="text-zinc-400">비슷한 규모 채널에서는 방영 실적 없음</span>
+                        ) : null}
+                        {others.length > 0 && (
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-800 ring-1 ring-amber-200" title="판권은 대부분 채널 단위라 다른 자사 채널이 틀고 있어도 이 채널에서 방영하려면 추가 구매가 필요합니다.">
+                            다른 자사 채널({others.map(nameOf).join("·")}) 방영 중 · 추가 구매 필요
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </li>
               );
             })}

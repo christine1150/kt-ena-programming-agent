@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   try {
     const { data, error } = await supabase
       .from("purchase_recommendations")
-      .select("rank,group_key,rep_key,display_name,genre,prediction,prediction_low,prediction_high,peer_count,peer_airings,channel_annual_avg,vs_annual_avg,confidence,as_of,target,computed_at,model_version")
+      .select("rank,group_key,rep_key,display_name,genre,prediction,prediction_low,prediction_high,peer_count,peer_airings,channel_annual_avg,vs_annual_avg,confidence,as_of,target,computed_at,model_version,benchmark_peers,benchmark_mult,benchmark_peer_count,other_own_channels")
       .eq("own_channel_code", channel)
       .eq("window_days", windowDays)
       .order("rank", { ascending: true })

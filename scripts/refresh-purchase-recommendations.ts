@@ -5,6 +5,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { MODEL_VERSION } from "../src/lib/purchaseSim/engine";
 import { RECO_CONFIGS, RECO_WINDOWS, computeRecommendations } from "../src/lib/purchaseSim/recommend";
+import { loadBenchmark } from "../src/lib/purchaseSim/benchmarkLoader";
 
 const MAX_ATTEMPTS = 3;
 const errText = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : JSON.stringify(e));
@@ -12,7 +13,10 @@ const errText = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` 
 async function refreshOne(client: SupabaseClient, cfg: { channel: string; target: "A2049" | "HH" }, w: number) {
   const t0 = Date.now();
   // 계산이 끝난 뒤에만 기존 행을 지운다 — 계산이 실패하면 이전 추천이 그대로 남는다.
-  const r = await computeRecommendations(client, { channel: cfg.channel, target: cfg.target, window: w });
+  // 벤치마크 채널(비슷한 규모)을 정해 후보마다 근거 열을 채운다 — 예측·진입·정렬은 그대로(고도화 C1)
+  const bench = await loadBenchmark(client, cfg.channel);
+  const benchNames = new Set(bench.channels.map((c) => c.competitor));
+  const r = await computeRecommendations(client, { channel: cfg.channel, target: cfg.target, window: w, benchmarkChannels: benchNames.size > 0 ? benchNames : undefined });
   const rows = r.rows.map((x, i) => ({
     model_version: MODEL_VERSION,
     as_of: r.asOf,
@@ -33,6 +37,10 @@ async function refreshOne(client: SupabaseClient, cfg: { channel: string; target
     channel_annual_avg: r.annualAvg,
     vs_annual_avg: x.vsAvg,
     confidence: x.confidence,
+    benchmark_peers: x.benchmarkPeers,
+    benchmark_mult: x.benchmarkMult,
+    benchmark_peer_count: x.benchmarkPeerCount,
+    other_own_channels: x.otherOwnChannels,
   }));
   const del = await client.from("purchase_recommendations").delete().eq("own_channel_code", cfg.channel).eq("target", cfg.target).eq("window_days", w);
   if (del.error) throw new Error(`기존 추천 삭제 실패: ${del.error.message}`);

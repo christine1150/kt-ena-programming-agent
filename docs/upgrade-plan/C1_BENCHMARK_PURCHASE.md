@@ -121,11 +121,11 @@
 
 ### 3.5 순서(한 커밋에 하나)
 
-1. `channel_groups`·`benchmark_overrides`·`benchmark_channels` 마이그레이션 + `benchmark.ts` + 테스트 ①②③
-2. `purchase_recommendations` 열 추가 + `computeRecommendations` 벤치마크 열 + 테스트 ④⑤⑥
-3. 갱신 스크립트 + 첫 갱신(91·182·364일) + 728일 분할 실행
-4. API + 화면 탭 + 관리자 칩
-5. 홈 "풀 밖 대안" 연결
+1. `channel_groups`·`benchmark_overrides` 마이그레이션 + `benchmark.ts`(선정은 SQL 함수 대신 순수 함수) + 테스트 — **완료(2026-11-14~15)**: 마이그레이션 `20261114030000` 운영 적용(시드 45행, 새 열 4개), `test:benchmark` 33건(6채널 기대 결과·덮어쓰기·SQL 시드와 TS 시드 일치). 실제 DB 기준 선정이 §1.1 표와 같다.
+2. `purchase_recommendations` 열 추가 + `computeRecommendations` 벤치마크 열 — **완료**: `benchmarkChannels`를 주면 후보마다 `benchmark_peers`·`benchmark_mult`·`benchmark_peer_count`·`other_own_channels`를 채운다. **예측값·진입 기준·정렬은 바꾸지 않았다**(§0-2).
+3. 갱신 스크립트 + 첫 갱신 — 스크립트 **완료**(벤치마크를 읽어 새 열을 저장), 주 1회 GitHub Actions 갱신에 자동 포함. 728일 분할 실행은 미착수.
+4. API + 화면 — **완료(탭 대신 후보 목록 안에 덧붙임)**: `/api/scheduling/purchase-sim/benchmark`(조회·관리자 추가/제외), 구매 검토 후보 목록에 벤치마크 채널 칩(관리자는 ×·추가), 행별 "비슷한 규모 채널: X 1.76배·213회 (중앙값)" 한 줄, "다른 자사 채널 방영 중 · 추가 구매 필요" 표시, "벤치마크 실적 있는 작품 먼저" 정렬 선택. 기존 열·순서는 그대로. 구매 시뮬레이터는 PD 일일 루틴 화면이 아니라 적용했다.
+5. 홈 "풀 밖 대안" 연결 — **보류**(PD 일일 루틴 화면 변경 보류).
 
 ---
 

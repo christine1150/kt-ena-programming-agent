@@ -2,7 +2,7 @@
 // 신규 구매 시나리오(타 채널 실적만 사용)이며 가격·판권은 반영하지 않는다. 결과는 purchase_recommendations 에 저장된다.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchChannelAnnualAvg, fetchSimInputsMulti, latestCompetitorDate, loadCalibration } from "./dataSource";
-import { MODEL_VERSION, PARAMS, monthlyAverage, peerIndexes } from "./engine";
+import { MODEL_VERSION, PARAMS, median, monthlyAverage, peerIndexes } from "./engine";
 import { normalizeProgramKey } from "./normalize";
 import { RECO_MIN_AIRINGS, RECO_MIN_PEERS, RECO_MIN_VS_AVG, byShrunkDesc, recoEvidence, type RecoEvidence } from "./recoEvidence";
 
@@ -21,6 +21,13 @@ export interface RecoRow {
   confidence: string;
   /** 근거 수준(충분·보통·약함) — 저장하지 않고 peers·airings로 읽는 쪽에서 다시 계산할 수 있다 */
   evidence: RecoEvidence;
+  /** 벤치마크 채널(비슷한 규모)별 이 작품의 자리 평소 대비 배수·비교 방영 수 — 근거 열이며 예측·정렬에는 쓰지 않는다(고도화 C1). 벤치마크를 주지 않으면 null */
+  benchmarkPeers: { ch: string; mult: number; airings: number }[] | null;
+  /** 벤치마크 채널 배수의 중앙값(이 작품 실적이 있는 벤치마크 채널이 없으면 null) */
+  benchmarkMult: number | null;
+  benchmarkPeerCount: number | null;
+  /** 이 작품을 이미 트는 다른 자사 채널(판권은 채널 단위라 이 채널에서 틀려면 추가 구매가 필요하다) */
+  otherOwnChannels: string[];
 }
 
 export const RECO_CONFIGS: { channel: string; target: "A2049" | "HH" }[] = [
@@ -44,14 +51,14 @@ async function pageAll<T>(q: (from: number, to: number) => PromiseLike<{ data: T
   return out;
 }
 
-export async function computeRecommendations(client: SupabaseClient, args: { channel: string; target: "A2049" | "HH"; window: number; top?: number; /** 지정하면 이 정규화 키(대문자)에 해당하는 프로그램만 계산한다 — Avail 보유 콘텐츠처럼 후보를 미리 좁힌 경우(전체 계산은 수 분 걸린다) */ onlyKeys?: Set<string>; /** 비교 케이블 채널 수 하한(기본 RECO_MIN_PEERS) */ minPeers?: number; /** 비교 방영 횟수 하한(기본 RECO_MIN_AIRINGS) */ minAirings?: number }): Promise<{ asOf: string; annualAvg: number | null; rows: RecoRow[] }> {
+export async function computeRecommendations(client: SupabaseClient, args: { channel: string; target: "A2049" | "HH"; window: number; top?: number; /** 지정하면 이 정규화 키(대문자)에 해당하는 프로그램만 계산한다 — Avail 보유 콘텐츠처럼 후보를 미리 좁힌 경우(전체 계산은 수 분 걸린다) */ onlyKeys?: Set<string>; /** 비교 케이블 채널 수 하한(기본 RECO_MIN_PEERS) */ minPeers?: number; /** 비교 방영 횟수 하한(기본 RECO_MIN_AIRINGS) */ minAirings?: number; /** 벤치마크 채널(닐슨 경쟁 자료의 채널 이름) — 주면 후보마다 벤치마크 근거 열을 채운다(예측·진입·정렬은 그대로) */ benchmarkChannels?: ReadonlySet<string> }): Promise<{ asOf: string; annualAvg: number | null; rows: RecoRow[] }> {
   const { channel, target, window } = args;
   const minPeers = args.minPeers ?? RECO_MIN_PEERS;
   const minAirings = args.minAirings ?? RECO_MIN_AIRINGS;
   const asOf = await latestCompetitorDate(client);
   const from = new Date(Date.parse(asOf) - window * 86400000).toISOString().slice(0, 10);
-  const ident = await pageAll<{ key: string; group_key: string; display_name: string; comp_channels: string[] }>((a, b) =>
-    client.from("program_identity").select("key,group_key,display_name,comp_channels").eq("is_special", false).gte("last_date", from).gte("airings_total", 30).range(a, b)
+  const ident = await pageAll<{ key: string; group_key: string; display_name: string; comp_channels: string[]; own_channels: string[] | null }>((a, b) =>
+    client.from("program_identity").select("key,group_key,display_name,comp_channels,own_channels").eq("is_special", false).gte("last_date", from).gte("airings_total", 30).range(a, b)
   );
   const genreRows = await pageAll<{ canonical_name: string; genre: string }>((a, b) => client.from("program_genre_map").select("canonical_name,genre").range(a, b));
   const genres = new Map<string, Map<string, number>>();
@@ -67,15 +74,16 @@ export async function computeRecommendations(client: SupabaseClient, args: { cha
     return [...t.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? "미분류";
   };
   const hub = PARAMS.hubChannels as readonly string[];
-  const groups = new Map<string, { display: string; rep: string; members: string[] }>();
+  const groups = new Map<string, { display: string; rep: string; members: string[]; own: Set<string> }>();
   for (const r of ident) {
     if (r.comp_channels.filter((c) => !hub.includes(c)).length < minPeers) continue; // 비교 채널은 케이블 1곳 이상(기본)
     if (args.onlyKeys && !args.onlyKeys.has(r.key.toUpperCase())) continue;
-    const g = groups.get(r.group_key) ?? { display: r.display_name, rep: r.key, members: [] };
+    const g = groups.get(r.group_key) ?? { display: r.display_name, rep: r.key, members: [], own: new Set<string>() };
     g.members.push(r.key.toUpperCase());
+    for (const o of r.own_channels ?? []) g.own.add(o);
     groups.set(r.group_key, g);
   }
-  const list = [...groups.entries()].map(([gk, g]) => ({ group_key: gk, rep: g.rep, display: g.display, members: g.members, genre: genreOf(g.members) }));
+  const list = [...groups.entries()].map(([gk, g]) => ({ group_key: gk, rep: g.rep, display: g.display, members: g.members, genre: genreOf(g.members), own: [...g.own] }));
   const [annualAvg, calibration] = await Promise.all([fetchChannelAnnualAvg(client, { ownChannel: channel, target, asOf }), loadCalibration(client, MODEL_VERSION, target)]);
   const rows: RecoRow[] = [];
   for (let i = 0; i < list.length; i += 25) {
@@ -91,7 +99,16 @@ export async function computeRecommendations(client: SupabaseClient, args: { cha
       if (p.prediction === null) continue;
       const vsAvg = annualAvg ? p.prediction / annualAvg : null;
       if (vsAvg !== null && vsAvg < RECO_MIN_VS_AVG) continue; // 진입: 이 채널 연평균 이상으로 추정되는 후보만
-      rows.push({ group_key: g.group_key, rep_key: g.rep, display_name: g.display, genre: g.genre, prediction: p.prediction, low: p.low, high: p.high, idx: p.contentIdx ?? 0, peers: peers.length, airings: nP, vsAvg, confidence: p.confidence, evidence: recoEvidence(peers.length, nP) ?? "weak" });
+      // 벤치마크 근거: 벤치마크 채널 중 이 작품 실적이 있는 곳의 자리 평소 대비 배수(예측·진입·정렬에는 쓰지 않는다)
+      const bench = args.benchmarkChannels ? peers.filter((q) => args.benchmarkChannels!.has(q.channel)) : null;
+      const benchPeers = bench ? bench.map((q) => ({ ch: q.channel, mult: q.idx, airings: q.nBase })).sort((x, y) => y.mult - x.mult) : null;
+      rows.push({
+        group_key: g.group_key, rep_key: g.rep, display_name: g.display, genre: g.genre, prediction: p.prediction, low: p.low, high: p.high, idx: p.contentIdx ?? 0, peers: peers.length, airings: nP, vsAvg, confidence: p.confidence, evidence: recoEvidence(peers.length, nP) ?? "weak",
+        benchmarkPeers: benchPeers && benchPeers.length > 0 ? benchPeers : null,
+        benchmarkMult: benchPeers && benchPeers.length > 0 ? median(benchPeers.map((x) => x.mult)) : null,
+        benchmarkPeerCount: benchPeers ? benchPeers.length : null,
+        otherOwnChannels: g.own.filter((c) => c !== channel),
+      });
     }
   }
   // 우선순위: 연평균 대비 배수를 방영 횟수로 보정한 값 순(횟수도 많고 배수도 높은 후보가 위) — 배수를 모르는 행은 예상 시청률 순으로 뒤에
