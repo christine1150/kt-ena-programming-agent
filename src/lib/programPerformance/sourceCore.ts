@@ -487,7 +487,9 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   }
   const to = latest ? (query.to && query.to < latest ? query.to : latest) : query.to ?? "";
   const presetDays = query.preset === "4w" ? 27 : query.preset === "12w" ? 83 : null;
-  const from = query.from ?? (presetDays !== null && to ? new Date(Date.parse(`${to}T00:00:00Z`) - presetDays * 86_400_000).toISOString().slice(0, 10) : null) ?? workFirst ?? to;
+  // 올해(ytd) = 최신 자료일이 속한 해의 1월 1일부터 최신 자료일까지(사용자 지시 2026-11-14)
+  const ytdFrom = query.preset === "ytd" && to ? `${to.slice(0, 4)}-01-01` : null;
+  const from = query.from ?? ytdFrom ?? (presetDays !== null && to ? new Date(Date.parse(`${to}T00:00:00Z`) - presetDays * 86_400_000).toISOString().slice(0, 10) : null) ?? workFirst ?? to;
   const notes: string[] = [];
   if (query.to && latest && query.to > latest) notes.push(`조회 종료일이 최신 자료일(${latest})보다 늦어 ${latest}까지만 봅니다(미래·미수신일은 0으로 넣지 않음).`);
   if (work.candidateKeys.length) notes.push(`이름이 비슷한 '연결 확인 필요' 후보 ${work.candidateKeys.length}건은 합치지 않았습니다(관리자 승인 전).`);
@@ -974,7 +976,7 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   const originalP = loadOriginalCompare(db, { cls: classification.cls, workIds, dataFrom: dbFirst, channels }).catch(() => null);
   let resolveOwnAirs!: (v: OwnAir[]) => void;
   const ownAirsP = new Promise<OwnAir[]>((res) => (resolveOwnAirs = res));
-  const competitorsP = loadCompetitorRows(db, work.memberKeys, new Set(channels.map((c) => normalizeProgramKey(c.name))), from, to, query.airing, workPrograms.map((p) => p.canonical_name ?? ""), query.from == null && presetDays === null, ownAirsP);
+  const competitorsP = loadCompetitorRows(db, work.memberKeys, new Set(channels.map((c) => normalizeProgramKey(c.name))), from, to, query.airing, workPrograms.map((p) => p.canonical_name ?? ""), query.from == null && presetDays === null && ytdFrom === null, ownAirsP);
   const buckets = await Promise.all(jobs.map((j) => j()));
   resolveOwnAirs(buckets.flatMap((b) => b.ownAirs));
   // 본방 여부·회차 보완 건수 — 기본 화면 배너(notes)가 아니라 별도 필드로 남겨 방송 기록 접힘 안에서만 보여 준다(개편 2026-10-23, 이력은 그대로)

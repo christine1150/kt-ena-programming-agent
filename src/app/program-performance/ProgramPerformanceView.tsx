@@ -13,7 +13,7 @@ import { IptvProgramBlock } from "@/components/IptvProgramBlock";
 import type { AiringFilter, AiringRef, Assessment, OriginalCompare, ChannelRow, CompetitorRow, Direction, OverallReview, PerformanceResult, RatioValue, SearchItem, SupplementCount, TargetMode, WorkClass } from "@/lib/programPerformance/types";
 
 type ClassFilter = "all" | "drama" | "variety" | "culture";
-type PeriodPreset = "all" | "4w" | "12w" | "custom";
+type PeriodPreset = "all" | "4w" | "12w" | "ytd" | "custom";
 
 const CLASS_FILTERS: { id: Exclude<ClassFilter, "all">; label: string }[] = [
   { id: "drama", label: "오리지널 드라마" },
@@ -894,7 +894,7 @@ function readState(sp: Pick<URLSearchParams, "get">): ViewState {
   return {
     group: (sp.get("group") ?? "").slice(0, 120) || null,
     q: (sp.get("q") ?? "").slice(0, 60),
-    preset: from || to ? "custom" : p === "4w" || p === "all" ? p : "12w",
+    preset: from || to ? "custom" : p === "4w" || p === "all" || p === "ytd" ? p : "12w",
     from,
     to,
     airing: a === "first" || a === "rerun" ? a : "all",
@@ -1179,6 +1179,7 @@ function ProgramSearch({ initialQuery, hasSelection, onPick }: { initialQuery: s
 const PRESETS: [Exclude<PeriodPreset, "custom">, string][] = [
   ["12w", "최근 12주"],
   ["4w", "최근 4주"],
+  ["ytd", "올해"], // 라벨은 화면에서 '2026년'처럼 최신 자료일의 해로 바꿔 보인다 — 그 해 1월 1일부터 최신 자료일까지
   ["all", "전체 기간"],
 ];
 
@@ -1244,7 +1245,7 @@ function PeriodControl({ preset, from, to, period, dim, onPreset, onCustom }: { 
           }}
           className={chip(preset === id)}
         >
-          {label}
+          {id === "ytd" ? `${(period?.to ?? new Date().toISOString()).slice(0, 4)}년` : label}
         </button>
       ))}
       <button
@@ -1330,7 +1331,7 @@ export default function ProgramPerformanceView() {
   const requestUrl = useMemo(() => {
     if (!group) return null;
     const params = new URLSearchParams({ group, airing, target: targetMode });
-    if (preset === "4w" || preset === "12w") params.set("preset", preset);
+    if (preset === "4w" || preset === "12w" || preset === "ytd") params.set("preset", preset);
     if (preset === "custom") {
       if (from) params.set("from", from);
       if (to) params.set("to", to);

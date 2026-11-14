@@ -39,7 +39,7 @@ export interface PerformanceQuery {
   from: string | null; // null = 보유 자료 전체(작품 첫 관측일부터)
   to: string | null; // null = 최신 자료일
   /** from이 없을 때 최신 자료일 기준 최근 4주(28일)·12주(84일) — 화면이 최신 자료일을 몰라도 첫 조회부터 기간을 맞춘다 */
-  preset?: "4w" | "12w" | null;
+  preset?: "4w" | "12w" | "ytd" | null;
   airing: AiringFilter;
   targetMode: TargetMode;
 }
