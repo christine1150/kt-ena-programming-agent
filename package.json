@@ -64,7 +64,9 @@
     "test:weak-verdict": "tsx scripts/test-weak-verdict.ts",
     "test:rank-slide": "tsx scripts/test-rank-slide.ts",
     "test:cron-auth": "tsx scripts/test-cron-auth.ts",
-    "check:client-boundary": "node scripts/check-client-boundary.mjs"
+    "check:client-boundary": "node scripts/check-client-boundary.mjs",
+    "test:page-timing": "tsx scripts/test-page-timing.ts",
+    "report:page-timing": "tsx --env-file=.env scripts/page-timing-report.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
