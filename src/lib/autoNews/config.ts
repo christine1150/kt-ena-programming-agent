@@ -22,8 +22,8 @@ export const GLOBAL_EXCLUDE = /\[포토\]|\[사진\]|포토뉴스|화보|\[부�
 export const CATEGORIES: CategoryConfig[] = [
   {
     category: "KT 및 계열사 소식",
-    queries: ["KT스카이라이프", "KT ENA", "KT 지니TV", "KT스튜디오지니", "KT알파", "KT나스미디어", "KT지니뮤직", "KT 실적 통신", "kt HCN", "밀리의서재"],
-    quota: 3,
+    queries: ["KT스카이라이프", "KT ENA", "KT 지니TV", "KT스튜디오지니", "KT알파", "KT나스미디어", "KT지니뮤직", "KT 실적 통신", "kt HCN", "밀리의서재", "KT 김영섭", "KT 조직개편 인사", "KT 요금제 서비스", "KT클라우드", "KT 에이닷 AI"],
+    quota: 4,
     require: /KT|케이티|스카이라이프|지니 ?TV|지니뮤직|나스미디어|밀리의서재|HCN|ENA/i,
     boost: [[/스카이라이프|ENA|지니 ?TV|스튜디오지니|HCN/i, 3], [/영업익|영업이익|실적|매출|인사|대표|사장/, 2], [/유료방송|IPTV|미디어|콘텐츠/, 2]],
     exclude: /위즈|wiz|소닉붐|롤스터|KT&G|KTX|프로야구|프로농구|선발|타자|투수|KT ?위즈/i,
@@ -53,10 +53,10 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     category: "업계동향",
-    queries: ["케이블TV", "유료방송", "CJ ENM", "콘텐츠 사용료", "FAST 채널", "스튜디오드래곤", "IPTV", "K콘텐츠 IP", "방송 광고 시장", "LG헬로비전"],
-    quota: 5,
-    require: /케이블|유료방송|SO|PP|CJ ?ENM|사용료|FAST|스튜디오|IPTV|콘텐츠|미디어|방송|광고|헬로비전|딜라이브|제작사/,
-    boost: [[/유료방송|케이블|SO|PP|사용료|IPTV/, 3], [/CJ ?ENM|스튜디오드래곤|헬로비전|딜라이브|SLL|콘텐트리/, 2], [/영업익|영업이익|실적|매각|인수|합병|송출 중단|갈등|수출|FAST/, 2]],
+    queries: ["케이블TV", "유료방송", "CJ ENM", "콘텐츠 사용료", "FAST 채널", "스튜디오드래곤", "IPTV", "K콘텐츠 IP", "방송 광고 시장", "LG헬로비전", "CJ ENM 실적 tvN", "SBS 실적 미디어", "JTBC 스튜디오", "MBC 사장 경영", "KBS 수신료 재원", "종편 재승인", "SK브로드밴드 LG유플러스 미디어"],
+    quota: 6,
+    require: /케이블|유료방송|SO|PP|CJ ?ENM|사용료|FAST|스튜디오|IPTV|콘텐츠|미디어|방송|광고|헬로비전|딜라이브|제작사|tvN|SBS|JTBC|MBC|KBS|종편|SK브로드밴드|LG유플러스|티빙/,
+    boost: [[/유료방송|케이블|SO|PP|사용료|IPTV/, 3], [/CJ ?ENM|tvN|스튜디오드래곤|헬로비전|딜라이브|SLL|콘텐트리|JTBC|SBS|MBC|KBS/, 3], [/영업익|영업이익|실적|매각|인수|합병|송출 중단|갈등|수출|FAST|사장|구조조정|재승인/, 2]],
     exclude: /스포|줄거리|몇부작|결말/,
   },
 ];
