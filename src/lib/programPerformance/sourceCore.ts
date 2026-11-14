@@ -681,6 +681,23 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         else notes.push(msg);
       }
     }
+    // 본방 회차 빈틈 메우기 — 앞뒤 본방의 회차가 정확히 하나 건너뛰면(1회·3회 사이) 가운데 본방은 그 사이 회차(2회)다
+    if (workRows.some((r) => r.firstRun === true && r.episode === null)) {
+      const firsts = workRows.map((r, i) => ({ r, i })).filter((x) => x.r.firstRun === true).sort((a, b) => a.r.date.localeCompare(b.r.date) || (a.r.startTime ?? "").localeCompare(b.r.startTime ?? ""));
+      let gapFilled = 0;
+      const epAt = new Map<number, number>();
+      firsts.forEach((x, k) => {
+        if (x.r.episode !== null) return;
+        const prev = firsts[k - 1]?.r.episode;
+        const next = firsts[k + 1]?.r.episode;
+        if (prev != null && next != null && next - prev === 2) epAt.set(x.i, prev + 1);
+      });
+      if (epAt.size > 0) {
+        workRows = workRows.map((r, i) => (epAt.has(i) ? { ...r, episode: epAt.get(i) as number } : r));
+        gapFilled = epAt.size;
+        fillOf(ch.code, base.channelName).episode += gapFilled;
+      }
+    }
     // 그래도 비어 있는 방영은 본방 편성 패턴(요일·시각·채널)으로 보완한다. 정확한 본방 시각은 이 방영 자료(닐슨)로 맞추고, 회차는 네이버가 알려 준 방송일과 일치할 때만 붙인다.
     if (runPatterns.patterns.length > 0 && workRows.some((r) => r.firstRun === null || r.episode === null)) {
       const inf = inferRuns(

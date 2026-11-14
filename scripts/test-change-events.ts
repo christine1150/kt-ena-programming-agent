@@ -4,6 +4,8 @@
 //   ④ 잡음 표가 없을 때 ±10% 띠 폴백. (① 회귀 77건은 크론 첫 적재 뒤 별도 점검, ⑤ 홈 문구는 3단계)
 import { CHANGE_BAND, detectPastChanges, eightDaypart, measureChanges, noiseBandPct, summarizeEffect, MIN_EFFECT_CELL_N, type HistAiring, type MeasuredChange } from "../src/lib/dashboard/changeHistory";
 import type { NoiseTable } from "../src/lib/iptvNoise";
+import { EVENT_GROUPS, channelsOf } from "../src/lib/changeEvents/channels";
+import { CHANGE_EVENT_VERSION, computeChannelEvents, eventKeyOf, toEventRow } from "../src/lib/changeEvents/rows";
 
 let pass = 0;
 let fail = 0;
@@ -16,6 +18,7 @@ function eq(name: string, actual: unknown, expected: unknown) {
     console.error(`✗ ${name}\n   기대 ${e}\n   실제 ${a}`);
   }
 }
+const ok = (name: string, cond: boolean) => eq(name, cond, true);
 const near = (name: string, actual: number | null | undefined, expected: number, tol = 1e-9) => {
   if (actual !== null && actual !== undefined && Math.abs(actual - expected) <= tol) pass++;
   else {
@@ -146,6 +149,53 @@ eq("일부 행에 잡음 띠 없음 → ±10% 띠", summarizeEffect(partial).bas
 // ── 잡음 띠 → 전회 대비 % 범위 ──
 eq("null 잡음 띠", noiseBandPct(null), null);
 near("잡음 띠 0.5 하한 %", noiseBandPct(0.5)?.downPct, (-2 * 0.5 / 2.5) * 100, 1e-9);
+
+// ── 적재: 채널 표(고도화 B1 크론) ──
+const own = channelsOf("own");
+const comp = channelsOf("comp");
+const iptv = channelsOf("iptv");
+eq("자사 6채널(skyUHD 제외)", own.map((c) => c.key), ["ENA", "ENA_DRAMA", "ENA_PLAY", "OLIFE", "ONCE", "ENA_STORY"]);
+ok("경쟁 닐슨 30채널 이상", comp.length >= 30);
+ok("IPTV 40채널 이상", iptv.length >= 40);
+for (const [name, list] of [["own", own], ["comp", comp], ["iptv", iptv]] as const) {
+  eq(`${name}: 채널 키 중복 없음`, new Set(list.map((c) => c.key)).size, list.length);
+  ok(`${name}: 군·타깃 값이 유효`, list.every((c) => EVENT_GROUPS.includes(c.group) && (c.tk === "p2049" || c.tk === "household") && c.source === name));
+}
+ok("IPTV 이름 표기 차이(MBC 드라마넷·KBS Joy)", iptv.some((c) => c.key === "MBC 드라마넷") && iptv.some((c) => c.key === "KBS Joy") && comp.some((c) => c.key === "MBC드라마넷") && comp.some((c) => c.key === "KBS JOY"));
+ok("자료가 한쪽에만 있는 채널(tvN DRAMA는 IPTV만, UXN은 IPTV만)", iptv.some((c) => c.key === "tvN DRAMA") && !comp.some((c) => c.key === "tvN DRAMA") && iptv.some((c) => c.key === "UXN") && !comp.some((c) => c.key === "UXN"));
+eq("ENA Play는 variety·2049", [own[2].group, own[2].tk], ["variety", "p2049"]);
+eq("OLIFE는 life·가구", [own[3].group, own[3].tk], ["life", "household"]);
+
+// ── 적재: 행 변환 ──
+const olife = own[3];
+const rowsRep = computeChannelEvents(olife, base, "2026-04-01", { holidays: noHoliday, noise: noiseTable(0.5), targetKind: "household" }).filter((r) => r.kind === "replace");
+eq("교체 행 1건", rowsRep.length, 1);
+const r0 = rowsRep[0];
+eq("행 식별", [r0.source, r0.channel_key, r0.channel_group, r0.target_kind], ["own", "OLIFE", "life", "household"]);
+eq("교체 행 내용", [r0.event_date, r0.program_key, r0.prev_program_key, r0.from_slot, r0.to_slot, r0.daypart, r0.verdict_band10, r0.verdict_noise, r0.prev_continues, r0.version], ["2026-02-16", "프로그램비", "프로그램에이", "1|20", "1|20", "20-23", "up", "up", false, CHANGE_EVENT_VERSION]);
+near("교체 행 변화율", r0.change, 0.5);
+near("교체 행 4주 창 변화율", r0.w4_change, 0.5);
+eq("교체 행은 자리 기준 변화 없음", [r0.to_slot_change, r0.from_slot_change], [null, null]);
+const rowsMv = computeChannelEvents(olife, mv, "2026-04-01", { holidays: noHoliday, noise: null, targetKind: null });
+const mvRow = rowsMv.find((r) => r.kind === "move");
+eq("이동 행 존재", mvRow !== undefined, true);
+eq("이동 행은 이전 프로그램·prev_continues 없음", [mvRow?.prev_program_key, mvRow?.prev_continues], [null, null]);
+near("이동 행 새 자리 변화율", mvRow?.to_slot_change, 1.0);
+eq("잡음 표 없으면 verdict_noise null", mvRow?.verdict_noise, null);
+eq("행 키가 모두 유일", new Set(rowsMv.map(eventKeyOf)).size, rowsMv.length);
+// DB 컬럼과 행 키가 정확히 일치(오타·누락 방지) — computed_at은 적재 때 붙인다
+const COLUMNS = ["source", "channel_key", "channel_group", "target_kind", "kind", "event_date", "program_key", "prev_program_key", "from_slot", "to_slot", "daypart", "before_median", "after_median", "before_n", "after_n", "change", "w4_before", "w4_after", "w4_before_n", "w4_after_n", "w4_change", "to_slot_change", "from_slot_change", "prev_continues", "noise_step", "verdict_noise", "verdict_band10", "version"].sort();
+eq("행 키 = 테이블 컬럼", Object.keys(r0).sort(), COLUMNS);
+ok("시간대가 허용 값", ["02-05", "05-08", "08-11", "11-14", "14-17", "17-20", "20-23", "23-02"].includes(r0.daypart));
+// 값이 유한하지 않거나 내역이 없는 변경은 행으로 만들지 않는다
+const goodMeasured = measureChanges(base, detectPastChanges(base, "2026-04-01").filter((c) => c.kind === "replace"), { holidays: noHoliday, noise: null, targetKind: null })[0];
+eq("정상 변경은 행이 됨", toEventRow(olife, goodMeasured) !== null, true);
+eq("변화율이 NaN이면 null", toEventRow(olife, { ...goodMeasured, change: Number.NaN }), null);
+eq("변화율이 Infinity면 null", toEventRow(olife, { ...goodMeasured, change: Number.POSITIVE_INFINITY }), null);
+eq("내역(detail)이 없으면 null", toEventRow(olife, { ...goodMeasured, detail: undefined }), null);
+eq("방영이 없으면 행도 없음", computeChannelEvents(olife, [], "2026-04-01", { holidays: noHoliday, noise: null, targetKind: null }), []);
+const nanW4 = toEventRow(olife, { ...goodMeasured, w4: { before: Number.NaN, after: 1, beforeN: 3, afterN: 3, change: Number.NaN } });
+eq("4주 창 값이 비정상이면 그 열만 null", [nanW4?.w4_before, nanW4?.w4_change], [null, null]);
 
 console.log(`\n${pass}건 통과${fail ? `, ${fail}건 실패` : ""}`);
 if (fail) process.exit(1);

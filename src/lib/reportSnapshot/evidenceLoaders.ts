@@ -19,7 +19,8 @@ export const CHANGE_EFFECT_LOOKBACK_DAYS = 400;
 /** "최근 변경" 표에 올리는 기간(일) */
 const RECENT_DAYS = 84;
 
-const keyOf = (s: string) => normalizeProgramCanonicalName(s).replace(/[\s\-_.,·'"()[\]<>]/g, "").toLowerCase();
+/** 프로그램 이름 → 비교용 키(weakSlotRemedy·연구 스크립트와 같은 규칙) */
+export const keyOf = (s: string) => normalizeProgramCanonicalName(s).replace(/[\s\-_.,·'"()[\]<>]/g, "").toLowerCase();
 const broadcastMin = (t: string) => {
   const [h, m] = t.split(":").map((v) => Number.parseInt(v, 10));
   return (h < 2 ? h + 24 : h) * 60 + (m || 0);
@@ -30,7 +31,7 @@ const median = (v: number[]): number | null => {
   return n === 0 ? null : n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
 };
 
-interface RatingRow {
+export interface RatingRow {
   date: string;
   startMin: number;
   endMin: number | null;
@@ -39,7 +40,7 @@ interface RatingRow {
 }
 
 /** 채널 KPI 타깃의 닐슨 일별 프로그램 방영(26시 경계 분할 합침). 읽지 못하면 null. */
-async function loadChannelAirings(channelCode: string, from: string, to: string): Promise<RatingRow[] | null> {
+export async function loadChannelAirings(channelCode: string, from: string, to: string): Promise<RatingRow[] | null> {
   const channel = await loadChannelRef(channelCode);
   const { data: tg } = await supabase.from("targets").select("id").eq("label", channel.kpiLabel).maybeSingle();
   if (!tg) return null;

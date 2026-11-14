@@ -150,11 +150,11 @@ primary key (source, channel_key, target_kind, kind, event_date, program_key, fr
 
 ### 3.5 순서(한 커밋에 하나)
 
-1. 마이그레이션 1·2 + `measureChange` 순수 함수 + 테스트 ②③④
-2. 크론 + 첫 적재 + 테스트 ①
-3. `changeEffect.ts` + 홈 문구 교체 + 제안 캐시 버전 + 테스트 ⑤·문구 테스트
-4. 제언 상세 "비슷한 사례 3건"
-5. 보고서 단락(스냅샷 extras)
+1. 마이그레이션 1·2 + `measureChange` 순수 함수 + 테스트 ②③④ — **완료(2026-11-14, 11e4d1f, 운영 적용 완료)**
+2. 크론 + 첫 적재 + 테스트 ① — **완료(2026-11-14)**: `src/lib/changeEvents/`(채널 표·행 변환·로더·적재), `/api/cron/change-events?source=own|comp|iptv`(vercel.json 일요일 19:00·19:10·19:20 UTC = 월요일 04:00 KST), 수동 `scripts/run-change-events.ts`, 회귀 점검 `... regression`(자사 이동 73건·기대 73~81 통과). 첫 적재: 자사 356·경쟁 닐슨 2,307·IPTV 5,563건, 재적재 시 건수 불변. 읽기 실패·자료 없음 채널은 기존 이벤트를 지우지 않는다.
+3. `changeEffect.ts` + 홈 문구 교체 + 제안 캐시 버전 + 테스트 ⑤·문구 테스트 — **홈 문구는 보류**(PD 일일 루틴 화면 변경 보류, 2026-11-14)
+4. 제언 상세 "비슷한 사례 3건" — **보류**(같은 이유)
+5. 보고서 단락(스냅샷 extras) — 자사 단독 분포는 완료(REPORT_EVIDENCE_SECTIONS.md), **비교군(경쟁·IPTV) 분포 병기는 이 테이블 읽기로 다음 단계**
 
 ---
 

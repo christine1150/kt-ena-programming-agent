@@ -28,6 +28,8 @@ export const FOLLOW_RULES: FollowRule[] = [
   { programKeys: [normalizeProgramKey("지구마불 세계여행 4")], followerChannel: "ENA_DRAMA", sourceChannel: "ENA", withinDays: 2, label: "ENA Drama '지구마불 세계여행 4'" },
   // 사용자 지시(2026-11-02): ENA Drama는 ENA 본방 뒤 처음 방송되는 방영이 본방. 자료상 간격이 하루를 넘어(ENA 금 22:50 → ENA Drama 3일 뒤) 기간은 넉넉히 두고 '첫 방영'만 본방으로 센다.
   { programKeys: [normalizeProgramKey("결이 다른 전쟁사")], followerChannel: "ENA_DRAMA", sourceChannel: "ENA", withinDays: 5, label: "ENA Drama '결이 다른 전쟁사'", mode: "first" },
+  // 사용자 지시(2026-11-14): ENA Play 니돈내산은 ENA 일요일 본방 직후 심야(24~25시대)에 처음 방송되는 한 건이 본방, 그 밖은 재방(10/04 24:25 = 2회 본방이 '미확인'으로 나오던 문제)
+  { programKeys: [normalizeProgramKey("니돈내산")], followerChannel: "ENA_PLAY", sourceChannel: "ENA", withinDays: 1, label: "ENA Play '니돈내산'", mode: "first" },
 ];
 
 /** 이 채널·작품에 적용되는 규칙(없으면 null). memberKeys는 작품 묶음의 정규화 키들. */
@@ -75,7 +77,11 @@ export function followRunOf(date: string, startTime: string | null, sources: Sou
 export function followRunsOf(rows: { date: string; startTime: string | null }[], sources: SourceAir[], rule: Pick<FollowRule, "withinDays" | "mode">): (boolean | null)[] {
   if (rule.mode !== "first") return rows.map((r) => followRunOf(r.date, r.startTime, sources, rule.withinDays));
   if (sources.length === 0) return rows.map(() => null);
-  const at = (date: string, t: string | null) => dayNumber(date) * 1440 + (minutesOf(t) ?? 0);
+  // 00~01시 시작은 방송일(편성일)의 다음 날 새벽이라 하루(1440분)를 더한다 — 닐슨 방송일은 02시 기준 편성일이다
+  const at = (date: string, t: string | null) => {
+    const m = minutesOf(t) ?? 0;
+    return dayNumber(date) * 1440 + m + (m < 120 ? 1440 : 0);
+  };
   const srcAt = sources.map((s) => at(s.date, s.startTime)).sort((a, b) => a - b);
   const out: (boolean | null)[] = rows.map(() => null);
   // 원 방송 본방마다 그 뒤 첫 방영 — 가장 가까운 앞선 본방에 묶는다
