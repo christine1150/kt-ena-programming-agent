@@ -45,9 +45,9 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     category: "OTT",
-    queries: ["넷플릭스", "티빙", "웨이브 OTT", "쿠팡플레이", "디즈니플러스", "OTT 시장"],
+    queries: ["넷플릭스", "티빙", "웨이브 OTT", "쿠팡플레이", "디즈니플러스", "OTT 시장", "워너브러더스 디스커버리", "파라마운트 스카이댄스"],
     quota: 3,
-    require: /OTT|넷플릭스|티빙|웨이브|쿠팡플레이|디즈니|왓챠|스트리밍/,
+    require: /OTT|넷플릭스|티빙|웨이브|쿠팡플레이|디즈니|왓챠|스트리밍|워너|파라마운트|스카이댄스|HBO/,
     boost: [[/OTT/, 2], [/합병|이용자|구독|광고|요금|출시|독점|중계|실적|제휴|글로벌/, 2], [/티빙|웨이브|쿠팡플레이|넷플릭스/, 1]],
     exclude: /스포|줄거리|몇부작|결말|후기|리뷰|추천작|이번 주 신작|볼만한/,
   },
@@ -58,6 +58,15 @@ export const CATEGORIES: CategoryConfig[] = [
     require: /케이블|유료방송|SO|PP|CJ ?ENM|사용료|FAST|스튜디오|IPTV|콘텐츠|미디어|방송|광고|헬로비전|딜라이브|제작사|tvN|SBS|JTBC|MBC|KBS|종편|SK브로드밴드|LG유플러스|티빙/,
     boost: [[/유료방송|케이블|SO|PP|사용료|IPTV/, 3], [/CJ ?ENM|tvN|스튜디오드래곤|헬로비전|딜라이브|SLL|콘텐트리|JTBC|SBS|MBC|KBS/, 3], [/영업익|영업이익|실적|매각|인수|합병|송출 중단|갈등|수출|FAST|사장|구조조정|재승인/, 2]],
     exclude: /스포|줄거리|몇부작|결말/,
+  },
+  {
+    // 국제 방송 마켓·페어(MIPCOM·BCWW·ATF·홍콩 필마트 등) — 열리는 시기에만 후보가 생긴다(require)
+    category: "해외 마켓·페어",
+    queries: ["MIPCOM 미프컴", "BCWW 방송영상산업전", "ATF 아시아TV포럼", "홍콩 필마트 FILMART", "MIPTV 칸 방송 마켓", "TV 콘텐츠 마켓 한국 수출 상담"],
+    quota: 2,
+    require: /MIPCOM|MIPTV|미프컴|미프TV|BCWW|방송영상산업전|ATF|아시아TV|필마트|FILMART|콘텐츠 ?마켓/i,
+    boost: [[/MIPCOM|미프컴|BCWW|ATF|필마트|FILMART/i, 3], [/수출|계약|상담|참가|공개|쇼케이스|K-?콘텐츠|한국/, 2]],
+    exclude: /포스터|관람객 후기/,
   },
 ];
 
@@ -79,6 +88,8 @@ export const OVERSEAS_MAX_AGE_HOURS = 72;
 /** 해외 기사 가산 — 산업·거래·플랫폼·한국 관련을 앞에 둔다(가십·시상식 패션은 뒤로) */
 export const OVERSEAS_BOOST: [RegExp, number][] = [
   [/\bKorea|K-drama|K-pop|CJ ENM|Squid Game/i, 5],
+  [/Warner|WBD|Paramount|Skydance/i, 5],
+  [/MIPCOM|MIPTV|BCWW|Asia TV Forum|\bATF\b|FilMart|Hong Kong/i, 4],
   [/Netflix|Disney|Warner|Paramount|Skydance|Comcast|Amazon|Apple TV|HBO|Peacock|YouTube|Sony/i, 3],
   [/merger|acquisition|acquire|deal|layoff|earnings|revenue|subscriber|streaming|box office|ratings|strike|AI\b|licens|ad tier|bundle|CEO/i, 3],
   [/renew|cancel|greenlit|orders|series order|format|adaptation|remake/i, 2],
