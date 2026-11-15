@@ -136,3 +136,9 @@ export const CAST_RISK_TERMS = /논란|의혹|혐의|입건|송치|기소|구속
 export const TRUSTED_HOSTS =
   /(?:^|\.)(?:yna\.co\.kr|news1\.kr|newsis\.com|etnews\.com|zdnet\.co\.kr|ddaily\.co\.kr|digitaltoday\.co\.kr|mt\.co\.kr|mk\.co\.kr|hankyung\.com|sedaily\.com|fnnews\.com|asiae\.co\.kr|edaily\.co\.kr|donga\.com|joongang\.co\.kr|chosun\.com|khan\.co\.kr|hani\.co\.kr|hankookilbo\.com|thebell\.co\.kr|inews24\.com|joynews24\.com|isplus\.com|sportschosun\.com|xportsnews\.com|mydaily\.co\.kr|tf\.co\.kr|etoday\.co\.kr|heraldcorp\.com|mediatoday\.co\.kr|pdjournal\.com|sportsseoul\.com|starnewskorea\.com|osen\.co\.kr|tenasia\.co\.kr|newspim\.com|dailian\.co\.kr|bloter\.net|sbs\.co\.kr|kbs\.co\.kr|imbc\.com|jtbc\.co\.kr|ytn\.co\.kr|mbn\.co\.kr|businesspost\.co\.kr|techm\.kr|dt\.co\.kr|ajunews\.com|nocutnews\.co\.kr|seoul\.co\.kr|munhwa\.com|segye\.com|kmib\.co\.kr|mediaus\.co\.kr|journalist\.or\.kr|newstomato\.com)$/i;
 export const TRUSTED_PUBLISHERS =/연합뉴스|뉴스1|뉴시스|전자신문|지디넷|ZDNet|디지털데일리|디지털투데이|머니투데이|매일경제|한국경제|서울경제|파이낸셜뉴스|아시아경제|이데일리|동아일보|중앙일보|조선일보|경향신문|한겨레|한국일보|더벨|아이뉴스24|조이뉴스24|일간스포츠|스포츠조선|엑스포츠뉴스|마이데일리|더팩트|이투데이|헤럴드경제|미디어오늘|PD저널|스포츠서울|스타뉴스|OSEN|텐아시아|뉴스핌|데일리안|블로터|IT조선|조선비즈/i;
+
+/** 오늘(KST) 0시의 UTC 시각 */
+export function kstDayStartIso(now: number): string {
+  const KST = 9 * 3_600_000;
+  return new Date(Math.floor((now + KST) / 86_400_000) * 86_400_000 - KST).toISOString();
+}
