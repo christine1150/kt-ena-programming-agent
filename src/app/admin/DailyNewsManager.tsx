@@ -30,6 +30,20 @@ interface NewsVersion {
   reason: string;
 }
 
+/** 등록된 목록을 붙여넣기 형식([카테고리] / 제목 / URL)으로 되돌린다 — parseDailyNewsText와 짝. 순서는 display_order 그대로. */
+function toRawText(list: NewsItem[]): string {
+  const out: string[] = [];
+  let cat: string | null = null;
+  for (const it of [...list].sort((a, b) => a.display_order - b.display_order)) {
+    if (it.category !== cat) {
+      cat = it.category;
+      out.push(`[${cat}]`, "");
+    }
+    out.push(it.title, it.url, "");
+  }
+  return out.join("\n").trim() + "\n";
+}
+
 export default function DailyNewsManager() {
   const [preview, setPreview] = useState<NewsPreview | null>(null);
   const [versions, setVersions] = useState<NewsVersion[]>([]);
@@ -115,6 +129,36 @@ export default function DailyNewsManager() {
     loadVersions();
   }
 
+  // 사용자 지시(2026-11-15): 자동 게시된 목록도 관리자가 고칠 수 있게 — 현재 목록을 붙여넣기 형식으로 입력칸에 불러와 고친 뒤 "전체 교체 저장".
+  function handleLoadCurrent() {
+    setRawText(toRawText(items));
+    setPreview(null);
+    setMessage("현재 목록을 입력칸에 불러왔습니다. 고친 뒤 저장하세요.");
+  }
+
+  // 기사 한 건 삭제 — 그 기사만 뺀 목록으로 전체 교체(이전 목록은 버전으로 보관되므로 복구 가능).
+  async function handleDeleteItem(target: NewsItem) {
+    if (!window.confirm(`이 기사를 목록에서 뺍니다.\n\n${target.title}\n\n지금 목록은 이전 버전으로 보관됩니다. 진행할까요?`)) return;
+    const rest = items.filter((i) => i.id !== target.id);
+    if (rest.length === 0) {
+      setErrorMessage("마지막 한 건은 뺄 수 없습니다. 새 목록을 붙여넣어 교체하세요.");
+      return;
+    }
+    setSaving(true);
+    setMessage(null);
+    setErrorMessage(null);
+    const res = await fetch("/api/admin/news", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rawText: toRawText(rest) }) });
+    const body = await res.json().catch(() => ({ ok: false }));
+    setSaving(false);
+    if (!res.ok || !body.ok) {
+      setErrorMessage(body.message ?? "삭제하지 못했습니다.");
+      return;
+    }
+    setMessage(`1건을 뺐습니다(현재 ${body.count}건, 즉시 게시됨).`);
+    load();
+    loadVersions();
+  }
+
   async function handleSave() {
     setSaving(true);
     setMessage(null);
@@ -149,11 +193,13 @@ export default function DailyNewsManager() {
         <h2 className="text-lg font-semibold text-zinc-900">
           주요 뉴스 관리 (베타)
           <HelpTip>
-            1페이지 &quot;오늘의 빠른 요약&quot; 위에 표시됩니다. [카테고리] 줄 아래 제목·URL을 번갈아 붙여넣고 저장하면 기존 목록 전체를 교체합니다. 먼저 &ldquo;미리보기&rdquo;로 추가·삭제될 항목을 확인하세요.
+            1페이지 &quot;주요 콘텐츠 리뷰&quot; 아래에 표시됩니다. 매일 07:30 무렵 자동으로 그날 기사로 바뀌며(그날 0시 이후 여기서 직접 올린 목록이 있으면 자동 교체는 건너뜀), [카테고리] 줄 아래 제목·URL을 번갈아 붙여넣고 저장하면 기존 목록 전체를 교체합니다. 먼저 &ldquo;미리보기&rdquo;로 추가·삭제될 항목을 확인하세요.
           </HelpTip>
         </h2>
       </div>
-      <p className="mb-4 text-xs font-medium text-amber-700">저장하면 검토 없이 즉시 게시됩니다.</p>
+      <p className="mb-4 text-xs font-medium text-amber-700">
+        저장하면 검토 없이 즉시 게시됩니다. 자동 게시된 기사를 고치려면 아래 &ldquo;현재 목록 불러오기&rdquo;로 입력칸에 불러와 고치거나, 목록에서 기사별 &ldquo;빼기&rdquo;를 누르세요.
+      </p>
 
       <textarea
         value={rawText}
@@ -162,7 +208,14 @@ export default function DailyNewsManager() {
         rows={8}
         className="w-full rounded-lg border border-zinc-200 p-3 font-mono text-xs"
       />
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          onClick={handleLoadCurrent}
+          disabled={saving || items.length === 0}
+          className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-40"
+        >
+          현재 목록 불러오기
+        </button>
         <button
           onClick={handlePreview}
           disabled={saving || !rawText.trim()}
@@ -219,8 +272,18 @@ export default function DailyNewsManager() {
                 <p className="mb-1 text-xs font-semibold text-zinc-500">{category}</p>
                 <ul className="flex flex-col gap-0.5">
                   {list.map((item) => (
-                    <li key={item.id} className="truncate text-xs text-zinc-600">
-                      {item.title}
+                    <li key={item.id} className="flex items-center gap-2 text-xs text-zinc-600">
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate hover:underline" title={item.title}>
+                        {item.title}
+                      </a>
+                      <button
+                        onClick={() => handleDeleteItem(item)}
+                        disabled={saving}
+                        className="shrink-0 rounded border border-zinc-300 px-2 py-0.5 text-zinc-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+                        aria-label={`기사 빼기: ${item.title}`}
+                      >
+                        빼기
+                      </button>
                     </li>
                   ))}
                 </ul>

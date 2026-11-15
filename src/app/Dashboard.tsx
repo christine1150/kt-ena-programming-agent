@@ -5949,47 +5949,121 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
 // 카테고리 구분은 색이 아니라 굵기/여백만으로 하도록 단순화했다(색상 일관성 원칙 재확인) — 카테고리
 // 이름별로 색을 고를 필요가 없어져 함수 자체를 없애고 ACCENT_HEADING을 바로 쓴다.
 
-// 주요 뉴스(베타) 카드 — R2.5(사용자 지시: "오늘의 빠른 요약 위에"). 링크 주소는 화면에 노출하지
-// 않고 제목만 하이퍼링크로 연결한다.
+// 주요 뉴스 카드 — R2.5(사용자 지시: "오늘의 빠른 요약 위에"). 링크 주소는 화면에 노출하지
+// 않고 제목만 하이퍼링크로 연결한다(출처는 도메인만 작게).
+// 사용자 지시(2026-11-15) 디자인 개편: 매일 아침 10초 안에 훑도록 — 베타 배지 제거(매일 자동 게시),
+// 제목 옆 건수, 카테고리는 단일 강조색 라벨+건수, 다단(columns) 배치로 길이가 다른 카테고리도 빈칸 없이
+// 채움, 제목 한 줄(휴대폰은 두 줄) 말줄임+전체 제목은 title 속성, 출처 도메인, 카테고리당 3건 후 더 보기.
+
+/** 기사 주소에서 출처 도메인만 뽑는다(www. 제거). 주소가 깨졌으면 빈 문자열. */
+function newsSourceDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+// 접힌 상태에서 카테고리당 보여 줄 기사 수 — 카드가 세로로 길어지지 않게 하는 상한.
+const NEWS_PER_CATEGORY_COLLAPSED = 3;
+
 function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (items.length === 0) return null;
+
+  // 받은 순서를 그대로 지키며 카테고리별로 묶는다(카테고리 이름은 관리자 자유 입력이라 고정 목록·색 매핑 없음).
   const byCategory = new Map<string, DailyNewsItem[]>();
   for (const item of items) {
-    if (!byCategory.has(item.category)) byCategory.set(item.category, []);
-    byCategory.get(item.category)!.push(item);
+    const key = item.category?.trim() || "기타";
+    if (!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key)!.push(item);
   }
-  if (items.length === 0) return null;
+  const groups = [...byCategory.entries()];
+  const hiddenCount = groups.reduce((sum, [, list]) => sum + Math.max(0, list.length - NEWS_PER_CATEGORY_COLLAPSED), 0);
+  const listId = "daily-news-list";
+
   return (
-    <div className={`${CARD} lg:col-span-2`}>
-      <div className="mb-1 flex items-center gap-2">
-        <h2 className={`font-heading text-xl font-bold tracking-tight ${ACCENT_HEADING}`}>주요 뉴스</h2>
-        <span className={`rounded-full ${ACCENT_BADGE_BG} px-2 py-0.5 text-[12px] font-medium ${ACCENT_BADGE_TEXT}`}>베타</span>
+    <section className={`${CARD} lg:col-span-2`} aria-labelledby="daily-news-heading">
+      {/* 머리줄: 제목 + 전체 건수 · 오른쪽에 더 보기/접기 */}
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <h2 id="daily-news-heading" className={`font-heading text-xl font-bold tracking-tight ${ACCENT_HEADING}`}>
+            주요 뉴스
+          </h2>
+          <span className="text-[13px] tabular-nums text-zinc-500">오늘 {items.length}건</span>
+        </div>
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-controls={listId}
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full ${ACCENT_BADGE_BG} px-3 py-1 text-[12.5px] font-medium ${ACCENT_BADGE_TEXT} transition-colors hover:bg-[#e6e4f6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#281fc7]`}
+          >
+            {expanded ? "접기" : `${hiddenCount}건 더 보기`}
+            <svg
+              className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              aria-hidden="true"
+            >
+              <path d="M3 4.5 6 7.5 9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
       </div>
-      <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-        {[...byCategory.entries()].map(([category, list]) => (
-          <div key={category}>
-            <p className={`mb-1 text-sm font-medium ${ACCENT_HEADING}`}>{category}</p>
-            <ul className="flex flex-col gap-0.5">
-              {list.map((item, i) => (
-                <li key={i} className="flex items-baseline gap-1.5">
-                  {/* 사용자 지시: 기사 제목 앞에 눈에 잘 보이는 색의 가운뎃점 표시. */}
-                  <span className="shrink-0 text-emerald-500" aria-hidden="true">
-                    ·
-                  </span>
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`text-base leading-relaxed text-zinc-700 ${ACCENT_HOVER} hover:underline`}
-                  >
-                    {item.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+
+      {/* 다단 배치: 짧은 카테고리와 긴 카테고리가 빈칸 없이 채워지도록 columns + break-inside-avoid */}
+      <div id={listId} className="-mb-4 columns-1 gap-x-8 md:columns-2 xl:columns-3">
+        {groups.map(([category, list]) => {
+          const visible = expanded ? list : list.slice(0, NEWS_PER_CATEGORY_COLLAPSED);
+          return (
+            <div key={category} className="mb-4 break-inside-avoid">
+              {/* 카테고리 라벨 — 페이지 공통 단일 강조색만 사용(카테고리별 색 없음) */}
+              <div className="mb-1 flex items-baseline gap-1.5 border-b border-zinc-100 pb-1.5">
+                <h3 className={`text-[13px] font-semibold tracking-tight ${ACCENT_HEADING}`}>{category}</h3>
+                <span className="text-[12px] tabular-nums text-zinc-500">{list.length}</span>
+              </div>
+              <ul className="flex flex-col">
+                {visible.map((item, i) => {
+                  const domain = newsSourceDomain(item.url);
+                  return (
+                    <li key={`${item.url}-${i}`}>
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={item.title}
+                        className="group -mx-2 flex items-baseline gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[#281fc7]"
+                      >
+                        <span className={`min-w-0 flex-1 line-clamp-2 text-[14.5px] leading-snug text-zinc-800 md:line-clamp-1 ${ACCENT_HOVER} group-hover:text-[#281fc7]`}>
+                          {item.title}
+                        </span>
+                        {domain && <span className="shrink-0 text-[11.5px] text-zinc-500">{domain}</span>}
+                        {/* 새 창으로 열린다는 표시 — 마우스를 올리거나 키보드로 초점이 올 때만 보인다 */}
+                        <svg
+                          className="h-3 w-3 shrink-0 self-center text-[#281fc7] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                          viewBox="0 0 12 12"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          aria-hidden="true"
+                        >
+                          <path d="M4.5 2.5h5v5M9.5 2.5 3 9" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span className="sr-only">(새 창에서 열림)</span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -6423,8 +6497,8 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
 
         {data && dataStatus && (
           <div className={`flex flex-col gap-6 transition-opacity ${notCurrent ? "opacity-60" : ""}`} aria-busy={notCurrent}>
-            {/* 홈 순서(일간, 사용자 지시 2026-10-07): 데이터 상태 → 오늘의 시청률(채널 KPI 포함) → 주요 콘텐츠 리뷰 → 채널별 인사이트·상위 프로그램
-                → 오늘 결정할 사항 → 채널별 킬러 콘텐츠 → 후속 액션 → 주요 뉴스. 기존 카드는 지우지 않고 위치만 옮겼다. */}
+            {/* 홈 순서(일간, 사용자 지시 2026-10-07): 데이터 상태 → 오늘의 시청률(채널 KPI 포함) → 주요 콘텐츠 리뷰 → 주요 뉴스(2026-11-15 이동) → 채널별 인사이트·상위 프로그램
+                → 오늘 결정할 사항 → 채널별 킬러 콘텐츠 → 후속 액션. 기존 카드는 지우지 않고 위치만 옮겼다. */}
             {/* 사용자 지시(2026-10-07): 데이터 상태 박스는 삭제. 다만 수신 누락 같은 경고(warn)일 때는 알려야 해서 그때만 보인다. */}
             {dataStatus.level === "warn" && <DataStatusCard status={dataStatus} />}
 
@@ -6470,6 +6544,9 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                   asOfDate={data.asOfDate}
                 />
 
+                {/* 사용자 지시(2026-11-15): 주요 뉴스는 주요 콘텐츠 리뷰 아래, 채널별 인사이트 위로 옮긴다(맨 아래에서 이동). */}
+                <DailyNewsCard items={data.dailyNews} />
+
                 {/* 변화 근거: 채널별 인사이트와 오늘의 상위 프로그램(또는 선택 채널의 일간 세부 내역) */}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                   <ChannelNarrativeCard
@@ -6506,8 +6583,6 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                 <KillerContentCard rows={data.killerContentDaypart} themeColorByCode={themeByCode} ytdAvgByCode={new Map(data.channels.map((c) => [c.code, c.ytdAvgRating]))} />
 
                 <FollowupsCard followups={followups} reviewStore={reviewStore} />
-
-                <DailyNewsCard items={data.dailyNews} />
               </>
             )}
 
