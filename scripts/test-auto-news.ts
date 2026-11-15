@@ -2,6 +2,8 @@
 import { CATEGORIES, OVERSEAS_CATEGORY, kstDayStartIso } from "../src/lib/autoNews/config";
 import { buildCastQueries, castDisplayTitle, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
 import { fullTitleFromHtml, insertCastIssues } from "../src/lib/autoNews/collect";
+import { CAST_ROSTER } from "../src/lib/autoNews/roster";
+import { parseRosterText, rosterToText } from "../src/lib/autoNews/rosterText";
 import { decodeEntities, parseRssItems, pickByRules, rankAll, rankCategory, sameStory, stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "../src/lib/autoNews/select";
 
 let pass = 0;
@@ -110,16 +112,16 @@ const roster: CastEntry[] = [
   { name: "", program: "나는 SOLO", scope: "solo" },
 ];
 const cc = (title: string) => c("출연자 이슈", title, "연합뉴스");
-ok("자사 예정작 출연자 위험 기사", classifyCast("김가나, 음주운전 혐의 입건", roster)?.signal === "risk");
+ok("자사 예정작 출연자 위험 기사", classifyCast("배우 김가나, 음주운전 혐의 입건", roster)?.signal === "risk");
 ok("자사 출연자 흥행 기사", classifyCast("이다라 주연 예능 시청률 자체 최고 경신", roster)?.signal === "rise");
-ok("타사 출연자 위험 기사는 포함", classifyCast("박마바 폭행 논란", roster)?.signal === "risk");
+ok("타사 출연자 위험 기사는 포함", classifyCast("배우 박마바 폭행 논란", roster)?.signal === "risk");
 ok("명단 밖 타사 배우 중대 사안(방송 맥락 있음)", classifyCast("인기 드라마 주연 배우 음주운전 입건", roster)?.entry.scope === "other");
 ok("명단 밖 인물 가벼운 논란은 제외", classifyCast("홍길동 SNS 논란", roster) === null);
 ok("명단 밖 방송 맥락 없는 사건 제외", classifyCast("회사원 음주운전 입건", roster) === null);
 ok("타사 작품 역대 최고 시청률 기사", classifyCast("타사 드라마 역대 최고 시청률 경신", roster)?.signal === "rise");
 ok("타사 일반 흥행 표현만으로는 제외", classifyCast("타사 드라마 시청률 상승", roster) === null);
 ok("나는 SOLO 일반인 기사(프로그램명 매칭)", classifyCast("'나는 SOLO' 출연자 논란 확산…제작진 입장", roster)?.signal === "risk");
-const issues = pickCastIssues([cc("박마바 폭행 논란"), cc("김가나, 음주운전 혐의 입건"), cc("김가나 음주운전 혐의로 입건")], roster, 5);
+const issues = pickCastIssues([cc("배우 박마바 폭행 논란"), cc("배우 김가나, 음주운전 혐의 입건"), cc("배우 김가나 음주운전 혐의로 입건")], roster, 5);
 ok("같은 소식 묶고 자사 예정작이 앞", issues.length === 2 && issues[0].entry.name === "김가나");
 ok("위험 기사 표시 문구", castDisplayTitle(issues[0]).endsWith("(확인 필요)"));
 ok("검색어 생성(솔로는 프로그램 단위)", buildCastQueries(roster).filter((q) => q.entry.scope === "solo").every((q) => q.query.startsWith("나는 SOLO")));
@@ -133,11 +135,24 @@ const base = [
   { category: "방송가 소식", title: "크래시2 첫 방송", url: "u2" },
   { category: OVERSEAS_CATEGORY, title: "Netflix deal", url: "u3" },
 ];
-const ins = insertCastIssues(base, { candidates: [], castCandidates: [cc("김가나, 음주운전 혐의 입건"), c("방송가 소식", "크래시2 첫 방송", "연합뉴스", "u2")] }, roster);
+const ins = insertCastIssues(base, { candidates: [], castCandidates: [cc("배우 김가나, 음주운전 혐의 입건"), c("방송가 소식", "크래시2 첫 방송", "연합뉴스", "u2")] }, roster);
 ok("출연자 이슈는 방송가 소식 바로 뒤", ins.items[2]?.category === "출연자 이슈" && ins.items[3]?.category === OVERSEAS_CATEGORY);
 ok("이미 실린 기사는 출연자 이슈로 중복 게시하지 않음", ins.castCount === 1);
 ok("위험 기사는 확인 필요 표시 대상", ins.riskUrls.size === 1);
 ok("출연자 기사 없으면 목록 그대로", insertCastIssues(base, { candidates: [], castCandidates: [] }, roster).items === base);
+
+// 동명이인: 정치 기사(연예 맥락 없음)는 명단 이름이 맞아도 제외
+const polRoster: CastEntry[] = [{ name: "김민석", program: "연애박사", scope: "own_past" }];
+ok("동명이인 정치 기사 제외", classifyCast("최민희 논란에 칼 빼든 김민석... 친명 \"중징계 불가피\"", polRoster) === null);
+ok("연예 맥락 있으면 명단 일치", classifyCast("배우 김민석, 음주 논란 사과", polRoster)?.entry.program === "연애박사");
+
+ok("승하차 교통 기사 제외", classifyCast("수도권~세종 통근버스 재추진⋯승하차지점 분산 과제 방송", polRoster) === null);
+
+// 관리자 명단 글 형식
+const pr = parseRosterText("# 주석\n예정 | 크래시2 | 이민기, 곽선영\n지난 | 연애박사 | 추영우\n솔로 | 나는 SOLO\n\n예정 | 크래시2 | 이민기");
+ok("명단 글 읽기(중복 이름 한 번만)", pr.errors.length === 0 && pr.entries.length === 4 && pr.entries[3].scope === "solo" && pr.entries[3].name === "");
+ok("잘못된 구분·한 글자 이름은 오류", parseRosterText("방송중 | 크래시2 | 이민기\n예정 | 크레이지투어 | 비").errors.length === 2);
+ok("명단 → 글 → 명단 왕복", JSON.stringify(parseRosterText(rosterToText(CAST_ROSTER)).entries) === JSON.stringify(CAST_ROSTER));
 
 console.log(`${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

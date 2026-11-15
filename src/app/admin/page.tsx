@@ -33,6 +33,8 @@ import MonthlyReferenceTrendUploader from "./MonthlyReferenceTrendUploader";
 import ScheduleGridUploader from "./ScheduleGridUploader";
 import OlifeEpisodeCatalogUploader from "./OlifeEpisodeCatalogUploader";
 import DailyNewsManager from "./DailyNewsManager";
+// 사용자 지시(2026-11-15): 주요 뉴스 출연자 이슈 감시 명단(news_cast_roster) 관리
+import CastRosterManager from "./CastRosterManager";
 import MarketYtdRankUploader from "./MarketYtdRankUploader";
 // 사용자 결정(2026-09-30): 이상적 1주일 편성의 장르 분류는 규칙으로 1차 분류 후 관리자가 보완
 import GenreMapManager from "./GenreMapManager";
@@ -138,6 +140,7 @@ export default async function AdminPage() {
 
         <AdminSectionHeading title="1페이지에 바로 반영되는 내용" description="PD가 수시로 올리거나 고치는 항목 — 올리는 즉시 대시보드 화면이 바뀝니다." />
         <DailyNewsManager />
+        <CastRosterManager />
         <FeaturedContentManager />
         <ManualReportUploader />
         <MonthlyReferenceTrendUploader />

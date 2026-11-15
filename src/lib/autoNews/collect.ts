@@ -81,7 +81,7 @@ export interface CollectResult {
 const CAST_SEARCH_CONCURRENCY = 8;
 
 /** 후보 수집 + 분류별 순위. allowTrial이 false면 네이버 키가 없을 때 국내 후보를 받지 않는다(운영 크론용) */
-export async function collectNews(opts: { now?: number; allowTrial?: boolean; withCast?: boolean } = {}): Promise<CollectResult> {
+export async function collectNews(opts: { now?: number; allowTrial?: boolean; withCast?: boolean; roster?: CastEntry[] } = {}): Promise<CollectResult> {
   const now = opts.now ?? Date.now();
   const id = process.env.NAVER_SEARCH_CLIENT_ID;
   const secret = process.env.NAVER_SEARCH_CLIENT_SECRET;
@@ -93,7 +93,7 @@ export async function collectNews(opts: { now?: number; allowTrial?: boolean; wi
   }
   // 출연자 이슈(사용자 지시 2026-11-15) — 네이버 키가 있을 때만(시험 피드로 100건 넘게 부르지 않는다)
   const castJob: Promise<NewsCandidate[][]> =
-    useNaver && opts.withCast !== false ? mapWithConcurrency(buildCastQueries(CAST_ROSTER), CAST_SEARCH_CONCURRENCY, (q) => search(q.query, CAST_RISK_CATEGORY)) : Promise.resolve([]);
+    useNaver && opts.withCast !== false ? mapWithConcurrency(buildCastQueries(opts.roster ?? CAST_ROSTER), CAST_SEARCH_CONCURRENCY, (q) => search(q.query, CAST_RISK_CATEGORY)) : Promise.resolve([]);
   const [cands, castRaw] = await Promise.all([Promise.all(jobs).then((r) => r.flat()), castJob.then((r) => r.flat())]);
   // 하루 안 기사만 — 검색 API는 오래된 기사도 돌려준다(해외 피드는 OVERSEAS_MAX_AGE_HOURS까지)
   const isFresh = (c: NewsCandidate) => !c.publishedAt || now - Date.parse(c.publishedAt) <= (c.category === OVERSEAS_CATEGORY ? OVERSEAS_MAX_AGE_HOURS : 26) * 3_600_000;
@@ -213,10 +213,12 @@ async function completeTitles(items: PublishItem[]): Promise<PublishItem[]> {
  * 수집 → 규칙 선정 → 잘린 제목 복원 → 해외 제목 번역.
  * LLM은 번역에만 하루 한 번 쓰고, AUTO_NEWS_USE_LLM=0이면 아예 부르지 않는다(해외 제목은 원문으로 게시).
  */
-export async function buildDailyNews(opts: { now?: number; allowTrial?: boolean; useLlm?: boolean; withCast?: boolean } = {}): Promise<CollectResult & { items: PublishItem[]; translated: number; castCount: number }> {
+export async function buildDailyNews(
+  opts: { now?: number; allowTrial?: boolean; useLlm?: boolean; withCast?: boolean; roster?: CastEntry[] } = {}
+): Promise<CollectResult & { items: PublishItem[]; translated: number; castCount: number }> {
   const collected = await collectNews(opts);
-  // 출연자 이슈는 규칙 선정 뒤에 끼운다(분류 상한·점수와 무관한 별도 기준 — cast.ts)
-  const withCast = insertCastIssues(pickByRules(collected.pools), collected);
+  // 출연자 이슈는 규칙 선정 뒤에 끼운다(분류 상한·점수와 무관한 별도 기준 — cast.ts). 명단은 호출부가 DB에서 읽어 넘긴다(없으면 roster.ts)
+  const withCast = insertCastIssues(pickByRules(collected.pools), collected, opts.roster ?? CAST_ROSTER);
   // 위험 기사 표시("확인 필요")는 잘린 제목을 되살린 뒤에 붙인다
   const picked = (await completeTitles(withCast.items)).map((it) =>
     it.category === CAST_RISK_CATEGORY && withCast.riskUrls.has(it.url) ? { ...it, title: `${it.title} (확인 필요)` } : it

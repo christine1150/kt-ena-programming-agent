@@ -4,6 +4,7 @@
 import { supabase } from "@/lib/supabase";
 import { buildDailyNews } from "./collect";
 import { kstDayStartIso } from "./config";
+import { loadCastRoster } from "./rosterStore";
 
 type NewsRow = { category: string; title: string; url: string; display_order: number };
 
@@ -33,7 +34,9 @@ export async function runAutoNews(opts: { now?: number; force?: boolean; dryRun?
   }
 
   // ② 수집·선정(운영에서는 네이버 키가 없으면 국내 기사를 받지 않으므로 게시하지 않는다)
-  const built = await buildDailyNews({ now });
+  // 출연자 이슈 명단은 관리자 화면에서 고치는 DB 표가 우선(비었거나 못 읽으면 코드 명단)
+  const { roster } = await loadCastRoster();
+  const built = await buildDailyNews({ now, roster });
   if (built.source !== "naver") return { ok: true, published: false, reason: "no_naver_key", detail: "네이버 검색 키(NAVER_SEARCH_CLIENT_ID·NAVER_SEARCH_CLIENT_SECRET)가 없어 전날 목록을 유지합니다." };
   if (built.items.length < MIN_ITEMS_TO_PUBLISH) return { ok: true, published: false, reason: "too_few", detail: `선정 ${built.items.length}건(후보 ${built.candidateCount}건) — 수집이 부실해 전날 목록을 유지합니다.` };
 

@@ -24,6 +24,8 @@ export const RISE_TERMS = /시청률 (?:상승|급등|자체 최고|돌파)|역�
 const OTHER_SEVERE = /혐의|입건|송치|기소|구속|음주운전|마약|학폭|폭행|사기|탈세|하차|활동 중단|피소|성추행|성희롱|도박|갑질/;
 const OTHER_RECORD = /역대 최고|최고 시청률|자체 최고|최고 화제성|화제성 1위|신드롬|역주행/;
 const BROADCAST_CONTEXT = /드라마|예능|출연|하차|방송|배우|MC|주연|시청률|화제성/;
+/** 명단 이름이 걸렸을 때 연예인 기사로 볼 근거 낱말(정치·스포츠 동명이인 거르기) */
+const ENT_CONTEXT = /드라마|예능|영화|출연|방송|배우|가수|아이돌|그룹|MC|주연|조연|시청률|화제성|연예|소속사|팬|컴백|앨범|유튜버|크리에이터|활동 중단|자숙|하차|촬영|작품|캐스팅|공연|무대|뮤지컬|래퍼|댄서|개그맨|코미디언|방송인|셰프|프로게이머|마술사/;
 /** 명단에 없는 타사 작품 출연자 기사를 모으는 공통 항목 */
 export const OTHER_ENTRY: CastEntry = { name: "", program: "타사 작품", scope: "other" };
 
@@ -64,13 +66,17 @@ export function nameInTitle(title: string, name: string): boolean {
 }
 
 /** 제목이 위험·흥행 신호를 가지는지, 그리고 명단의 누구와 연결되는지 판단. 신호가 없거나 명단과 무관하면 null */
-export function classifyCast(title: string, roster: CastEntry[]): { signal: CastSignal; entry: CastEntry } | null {
+export function classifyCast(rawTitle: string, roster: CastEntry[]): { signal: CastSignal; entry: CastEntry } | null {
+  // '승하차'(교통 기사)가 출연자 '하차'로 잡히지 않게(2026-11-15 시험에서 발견)
+  const title = rawTitle.replace(/승하차/g, "승차");
   const risk = RISK_TERMS.test(title);
   const rise = RISE_TERMS.test(title);
   if (!risk && !rise) return null;
-  const byName = roster.filter((e) => e.scope !== "solo" && nameInTitle(title, e.name));
-  // 같은 이름이 여러 작품에 걸리면 자사 작품·방영 예정을 우선
   const compact = title.replace(/\s/g, "");
+  // 동명이인(예: 출연자 김민석 ↔ 정치인 김민석) — 이름이 맞아도 연예·방송 맥락 낱말이나 작품명이 제목에 있어야 한다(2026-11-15 시험에서 발견)
+  const entContext = ENT_CONTEXT.test(title);
+  const byName = roster.filter((e) => e.scope !== "solo" && nameInTitle(title, e.name) && (entContext || compact.includes(e.program.replace(/\s/g, ""))));
+  // 같은 이름이 여러 작품에 걸리면 자사 작품·방영 예정을 우선
   const hit = byName.sort((a, b) => SCOPE_WEIGHT[b.scope] - SCOPE_WEIGHT[a.scope])[0] ?? roster.find((e) => e.scope === "solo" && compact.includes(e.program.replace(/\s/g, "")));
   if (hit) return { signal: risk ? "risk" : "rise", entry: hit };
   // 명단 밖 — 타사 작품 출연자 일반 규칙(엄격한 조건)
