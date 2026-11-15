@@ -13,7 +13,7 @@ export const AUTO_NEWS_ACTOR = "auto-news";
 export const MIN_ITEMS_TO_PUBLISH = 8;
 
 export type AutoNewsResult =
-  | { ok: true; published: true; count: number; translated: number; candidateCount: number; categories: Record<string, number> }
+  | { ok: true; published: true; count: number; translated: number; candidateCount: number; castCount: number; categories: Record<string, number> }
   | { ok: true; published: false; reason: "manual_today" | "already_today" | "too_few" | "no_naver_key" | "dry_run"; detail: string; preview?: string[] }
   | { ok: false; message: string };
 
@@ -42,7 +42,7 @@ export async function runAutoNews(opts: { now?: number; force?: boolean; dryRun?
   if (prevErr) return { ok: false, message: `현재 목록 조회 실패: ${prevErr.message}` };
   const prev = (prevData ?? []) as NewsRow[];
 
-  if (opts.dryRun) return { ok: true, published: false, reason: "dry_run", detail: `게시하지 않음 — 선정 ${next.length}건(후보 ${built.candidateCount}건, 해외 제목 번역 ${built.translated}건), 현재 목록 ${prev.length}건`, preview: next.map((r) => `[${r.category}] ${r.title}`) };
+  if (opts.dryRun) return { ok: true, published: false, reason: "dry_run", detail: `게시하지 않음 — 선정 ${next.length}건(후보 ${built.candidateCount}건, 출연자 이슈 ${built.castCount}건, 해외 제목 번역 ${built.translated}건), 현재 목록 ${prev.length}건`, preview: next.map((r) => `[${r.category}] ${r.title}`) };
 
   // ③ 보관 → 삭제 → 삽입. 보관이 안 되면 되돌릴 길이 없으므로 교체하지 않는다
   if (prev.length > 0) {
@@ -59,5 +59,5 @@ export async function runAutoNews(opts: { now?: number; force?: boolean; dryRun?
 
   const categories: Record<string, number> = {};
   for (const r of next) categories[r.category] = (categories[r.category] ?? 0) + 1;
-  return { ok: true, published: true, count: next.length, translated: built.translated, candidateCount: built.candidateCount, categories };
+  return { ok: true, published: true, count: next.length, translated: built.translated, candidateCount: built.candidateCount, castCount: built.castCount, categories };
 }

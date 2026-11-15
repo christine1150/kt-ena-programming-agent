@@ -3,7 +3,10 @@
 // LLM이 실패하면 해외 제목만 원문으로 나간다.
 import { callOpenAiJsonSynthesis } from "@/lib/llmSynthesis";
 import { CATEGORIES, OVERSEAS_CATEGORY, OVERSEAS_FEEDS, OVERSEAS_MAX_AGE_HOURS } from "./config";
-import { decodeEntities, parseRssItems, pickByRules, rankAll, stripPublisherSuffix, type NewsCandidate, type PublishItem, type RankedPool } from "./select";
+import { mapWithConcurrency } from "@/lib/concurrency";
+import { CAST_RISK_CATEGORY, buildCastQueries, castDisplayTitle, pickCastIssues, type CastEntry } from "./cast";
+import { CAST_ROSTER } from "./roster";
+import { decodeEntities, parseRssItems, pickByRules, rankAll, sameStory, stripPublisherSuffix, type NewsCandidate, type PublishItem, type RankedPool } from "./select";
 
 const UA = "Mozilla/5.0 (compatible; news-reader)";
 
@@ -70,22 +73,59 @@ export interface CollectResult {
   pools: RankedPool[];
   /** 걸러내기 전 후보 전체(시험 실행에서 규칙을 다듬을 때 쓴다) */
   candidates: NewsCandidate[];
+  /** 출연자 이슈 검색으로 받은 후보(분류 순위와 따로 고른다) */
+  castCandidates: NewsCandidate[];
 }
 
+/** 출연자 이슈 검색어가 100건을 넘으므로 동시에 몇 건씩만 보낸다(검색 API 초당 한도 보호) */
+const CAST_SEARCH_CONCURRENCY = 8;
+
 /** 후보 수집 + 분류별 순위. allowTrial이 false면 네이버 키가 없을 때 국내 후보를 받지 않는다(운영 크론용) */
-export async function collectNews(opts: { now?: number; allowTrial?: boolean } = {}): Promise<CollectResult> {
+export async function collectNews(opts: { now?: number; allowTrial?: boolean; withCast?: boolean } = {}): Promise<CollectResult> {
   const now = opts.now ?? Date.now();
   const id = process.env.NAVER_SEARCH_CLIENT_ID;
   const secret = process.env.NAVER_SEARCH_CLIENT_SECRET;
   const useNaver = !!id && !!secret;
+  const search = (q: string, category: string) => (useNaver ? searchNaver(q, category, id!, secret!) : searchTrialFeed(q, category));
   const jobs: Promise<NewsCandidate[]>[] = [fetchOverseas()];
   if (useNaver || opts.allowTrial) {
-    for (const cfg of CATEGORIES) for (const q of cfg.queries) jobs.push(useNaver ? searchNaver(q, cfg.category, id!, secret!) : searchTrialFeed(q, cfg.category));
+    for (const cfg of CATEGORIES) for (const q of cfg.queries) jobs.push(search(q, cfg.category));
   }
-  const cands = (await Promise.all(jobs)).flat();
+  // 출연자 이슈(사용자 지시 2026-11-15) — 네이버 키가 있을 때만(시험 피드로 100건 넘게 부르지 않는다)
+  const castJob: Promise<NewsCandidate[][]> =
+    useNaver && opts.withCast !== false ? mapWithConcurrency(buildCastQueries(CAST_ROSTER), CAST_SEARCH_CONCURRENCY, (q) => search(q.query, CAST_RISK_CATEGORY)) : Promise.resolve([]);
+  const [cands, castRaw] = await Promise.all([Promise.all(jobs).then((r) => r.flat()), castJob.then((r) => r.flat())]);
   // 하루 안 기사만 — 검색 API는 오래된 기사도 돌려준다(해외 피드는 OVERSEAS_MAX_AGE_HOURS까지)
-  const fresh = cands.filter((c) => !c.publishedAt || now - Date.parse(c.publishedAt) <= (c.category === OVERSEAS_CATEGORY ? OVERSEAS_MAX_AGE_HOURS : 26) * 3_600_000);
-  return { source: useNaver ? "naver" : "trial", candidateCount: fresh.length, pools: rankAll(fresh, now), candidates: fresh };
+  const isFresh = (c: NewsCandidate) => !c.publishedAt || now - Date.parse(c.publishedAt) <= (c.category === OVERSEAS_CATEGORY ? OVERSEAS_MAX_AGE_HOURS : 26) * 3_600_000;
+  const fresh = cands.filter(isFresh);
+  return { source: useNaver ? "naver" : "trial", candidateCount: fresh.length, pools: rankAll(fresh, now), candidates: fresh, castCandidates: castRaw.filter(isFresh) };
+}
+
+/** 출연자 이슈 게시 상한 — 위험 기사가 먼저 온다 */
+export const CAST_QUOTA = 4;
+/** 출연자 이슈를 넣을 자리: 이 분류 바로 뒤(없으면 해외 기사 앞) */
+const CAST_AFTER_CATEGORY = "방송가 소식";
+
+/** 국내 후보 전체 + 출연자 검색 후보에서 출연자 이슈를 골라, 이미 실린 기사와 같은 소식은 빼고 방송가 소식 뒤에 끼운다 */
+export function insertCastIssues(
+  items: PublishItem[],
+  collected: Pick<CollectResult, "candidates" | "castCandidates">,
+  roster: CastEntry[] = CAST_ROSTER
+): { items: PublishItem[]; castCount: number; riskUrls: Set<string> } {
+  const domestic = collected.candidates.filter((c) => c.category !== OVERSEAS_CATEGORY);
+  const hits = pickCastIssues([...collected.castCandidates, ...domestic], roster, CAST_QUOTA + items.length)
+    .filter((h) => !items.some((it) => it.url === h.url || sameStory(it.title, h.title)))
+    .slice(0, CAST_QUOTA);
+  if (hits.length === 0) return { items, castCount: 0, riskUrls: new Set() };
+  const rows: PublishItem[] = hits.map((h) => ({ category: CAST_RISK_CATEGORY, title: h.title, url: h.url }));
+  const riskUrls = new Set(hits.filter((h) => castDisplayTitle(h) !== h.title).map((h) => h.url));
+  let at = -1;
+  items.forEach((it, i) => {
+    if (it.category === CAST_AFTER_CATEGORY) at = i + 1;
+  });
+  if (at < 0) at = items.findIndex((it) => it.category === OVERSEAS_CATEGORY);
+  if (at < 0) at = items.length;
+  return { items: [...items.slice(0, at), ...rows, ...items.slice(at)], castCount: rows.length, riskUrls };
 }
 
 const TRANSLATE_SCHEMA = {
@@ -173,10 +213,15 @@ async function completeTitles(items: PublishItem[]): Promise<PublishItem[]> {
  * 수집 → 규칙 선정 → 잘린 제목 복원 → 해외 제목 번역.
  * LLM은 번역에만 하루 한 번 쓰고, AUTO_NEWS_USE_LLM=0이면 아예 부르지 않는다(해외 제목은 원문으로 게시).
  */
-export async function buildDailyNews(opts: { now?: number; allowTrial?: boolean; useLlm?: boolean } = {}): Promise<CollectResult & { items: PublishItem[]; translated: number }> {
+export async function buildDailyNews(opts: { now?: number; allowTrial?: boolean; useLlm?: boolean; withCast?: boolean } = {}): Promise<CollectResult & { items: PublishItem[]; translated: number; castCount: number }> {
   const collected = await collectNews(opts);
-  const picked = await completeTitles(pickByRules(collected.pools));
+  // 출연자 이슈는 규칙 선정 뒤에 끼운다(분류 상한·점수와 무관한 별도 기준 — cast.ts)
+  const withCast = insertCastIssues(pickByRules(collected.pools), collected);
+  // 위험 기사 표시("확인 필요")는 잘린 제목을 되살린 뒤에 붙인다
+  const picked = (await completeTitles(withCast.items)).map((it) =>
+    it.category === CAST_RISK_CATEGORY && withCast.riskUrls.has(it.url) ? { ...it, title: `${it.title} (확인 필요)` } : it
+  );
   const useLlm = opts.useLlm ?? process.env.AUTO_NEWS_USE_LLM !== "0";
   const done = useLlm ? await translateOverseasTitles(picked) : { items: picked, translated: 0 };
-  return { ...collected, ...done };
+  return { ...collected, ...done, castCount: withCast.castCount };
 }

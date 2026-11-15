@@ -1,7 +1,7 @@
 // 주요 뉴스 자동 선정 순수 함수 검사 — 실행: npm run test:auto-news
 import { CATEGORIES, OVERSEAS_CATEGORY, kstDayStartIso } from "../src/lib/autoNews/config";
-import { buildCastQueries, castDisplayTitle, classifyCast, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
-import { fullTitleFromHtml } from "../src/lib/autoNews/collect";
+import { buildCastQueries, castDisplayTitle, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
+import { fullTitleFromHtml, insertCastIssues } from "../src/lib/autoNews/collect";
 import { decodeEntities, parseRssItems, pickByRules, rankAll, rankCategory, sameStory, stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "../src/lib/autoNews/select";
 
 let pass = 0;
@@ -123,6 +123,21 @@ const issues = pickCastIssues([cc("박마바 폭행 논란"), cc("김가나, 음
 ok("같은 소식 묶고 자사 예정작이 앞", issues.length === 2 && issues[0].entry.name === "김가나");
 ok("위험 기사 표시 문구", castDisplayTitle(issues[0]).endsWith("(확인 필요)"));
 ok("검색어 생성(솔로는 프로그램 단위)", buildCastQueries(roster).filter((q) => q.entry.scope === "solo").every((q) => q.query.startsWith("나는 SOLO")));
+
+// 이름 경계(동명·부분 일치 오탐 방지)
+ok("이름 + 조사는 일치", nameInTitle("이준이 하차 논란", "이준") && nameInTitle("이준, 음주운전", "이준"));
+ok("다른 이름의 일부는 불일치", !nameInTitle("이준석 대표 논란", "이준") && !nameInTitle("김이준 논란", "이준"));
+// 출연자 이슈 끼워 넣기: 방송가 소식 뒤, 이미 실린 소식 제외, 상한
+const base = [
+  { category: "KT 및 계열사 소식", title: "KT 실적 발표", url: "u1" },
+  { category: "방송가 소식", title: "크래시2 첫 방송", url: "u2" },
+  { category: OVERSEAS_CATEGORY, title: "Netflix deal", url: "u3" },
+];
+const ins = insertCastIssues(base, { candidates: [], castCandidates: [cc("김가나, 음주운전 혐의 입건"), c("방송가 소식", "크래시2 첫 방송", "연합뉴스", "u2")] }, roster);
+ok("출연자 이슈는 방송가 소식 바로 뒤", ins.items[2]?.category === "출연자 이슈" && ins.items[3]?.category === OVERSEAS_CATEGORY);
+ok("이미 실린 기사는 출연자 이슈로 중복 게시하지 않음", ins.castCount === 1);
+ok("위험 기사는 확인 필요 표시 대상", ins.riskUrls.size === 1);
+ok("출연자 기사 없으면 목록 그대로", insertCastIssues(base, { candidates: [], castCandidates: [] }, roster).items === base);
 
 console.log(`${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

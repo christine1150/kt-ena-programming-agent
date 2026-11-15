@@ -56,12 +56,19 @@ export function buildCastQueries(roster: CastEntry[]): { query: string; entry: C
   return out;
 }
 
+/** 제목에 이름이 '한 사람 이름으로' 들어 있는지 — 앞뒤가 다른 한글이면 다른 이름의 일부로 본다(이준 ≠ 이준석). 뒤에 붙는 조사 한 글자는 허용 */
+export function nameInTitle(title: string, name: string): boolean {
+  if (!name) return false;
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![가-힣])${esc}(?:[이가은는을를의과와도만에]?(?![가-힣]))`).test(title);
+}
+
 /** 제목이 위험·흥행 신호를 가지는지, 그리고 명단의 누구와 연결되는지 판단. 신호가 없거나 명단과 무관하면 null */
 export function classifyCast(title: string, roster: CastEntry[]): { signal: CastSignal; entry: CastEntry } | null {
   const risk = RISK_TERMS.test(title);
   const rise = RISE_TERMS.test(title);
   if (!risk && !rise) return null;
-  const byName = roster.filter((e) => e.scope !== "solo" && title.includes(e.name));
+  const byName = roster.filter((e) => e.scope !== "solo" && nameInTitle(title, e.name));
   // 같은 이름이 여러 작품에 걸리면 자사 작품·방영 예정을 우선
   const compact = title.replace(/\s/g, "");
   const hit = byName.sort((a, b) => SCOPE_WEIGHT[b.scope] - SCOPE_WEIGHT[a.scope])[0] ?? roster.find((e) => e.scope === "solo" && compact.includes(e.program.replace(/\s/g, "")));
