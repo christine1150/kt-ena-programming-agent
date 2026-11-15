@@ -25,7 +25,6 @@ export default function PageTimingBeacon() {
     const reportPath = pathname; // 이동 중 cleanup에서 보낼 때 window.location이 이미 새 경로일 수 있어 효과 시작 시점 값으로 고정
     const entries: Entry[] = [];
     let lcp = 0;
-    let sent = false;
     const startedAt = performance.now();
 
     const observers: PerformanceObserver[] = [];
@@ -57,13 +56,24 @@ export default function PageTimingBeacon() {
         if (reportedApi.has(key)) continue;
         reportedApi.add(key);
         entries.push({ metric: "api", apiPath: u.pathname, durationMs: Math.round(e.duration) });
+        // 운영 진단(2026-11-15): 1초 이상 걸린 API는 서버가 보낸 단계별 시간(Server-Timing)도 함께 남긴다 —
+        // 홈 브리핑 API가 로컬 2.3초·운영 5~18초로 달라 운영에서 어느 단계가 느린지 볼 수단이 없었다.
+        // 별도 지표 없이 기존 'api' 행에 `<API 경로>/_st/<단계명>`으로 남긴다(마이그레이션 불필요, 단계명엔 사용자 데이터 없음).
+        if (e.duration >= 1000 && Array.isArray(e.serverTiming)) {
+          for (const st of e.serverTiming.slice(0, 20)) {
+            if (!st.name || !Number.isFinite(st.duration)) continue;
+            entries.push({ metric: "api", apiPath: `${u.pathname}/_st/${st.name}`, durationMs: Math.round(st.duration) });
+          }
+        }
       }
     });
 
+    // 운영 진단(2026-11-15): 전에는 첫 전송(로드 후 12초 등) 뒤로 끝난 API를 버렸다 — 정작 느린 요청(12초 넘는
+    // 브리핑 API)이 기록에서 빠졌다. 이제는 아직 보내지 않은 항목만 이어서 보낸다(같은 항목을 두 번 보내지 않음).
+    let sentCount = 0;
     const flush = () => {
-      if (sent) return;
-      sent = true;
-      const out: Entry[] = [...entries];
+      const out: Entry[] = entries.slice(sentCount);
+      sentCount = entries.length;
       const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
       // 문서 지표는 최초 1회(첫 문서 로드)만 낸다 — 앱 내 이동 화면은 API 소요만 남는다.
       // load 이벤트가 아직 끝나지 않았으면(loadEventEnd = 0) 다음 flush로 미룬다.

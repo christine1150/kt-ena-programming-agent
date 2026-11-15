@@ -48,6 +48,9 @@ eq("본문이 객체가 아님", sanitizeBeacon("x"), null);
 eq("null 본문", sanitizeBeacon(null), null);
 const many = sanitizeBeacon({ path: "/", entries: Array.from({ length: MAX_ENTRIES_PER_BEACON + 50 }, () => ({ metric: "lcp", durationMs: 1 })) });
 eq("항목 상한", many?.entries.length, MAX_ENTRIES_PER_BEACON);
+// 운영 진단(2026-11-15): 비콘이 느린 API의 Server-Timing 단계를 `<API>/_st/<단계명>`으로 보낸다 — 정규화 후에도 그대로 남아야 한다.
+eq("서버 단계 경로 유지", normalizeApiPath("/api/dashboard/page1/_st/channel_kpi"), "/api/dashboard/page1/_st/channel_kpi");
+eq("서버 단계 항목 저장", sanitizeBeacon({ path: "/", entries: [{ metric: "api", apiPath: "/api/dashboard/page1/_st/narrative_signals_and_llm", durationMs: 1234.4 }] })?.entries, [{ metric: "api", apiPath: "/api/dashboard/page1/_st/narrative_signals_and_llm", durationMs: 1234 }]);
 eq("항목이 객체가 아니면 건너뜀", sanitizeBeacon({ path: "/", entries: [null, 3, { metric: "lcp", durationMs: 9 }] })?.entries.length, 1);
 
 // ── 백분위(percentile_cont와 같은 선형 보간) ──
