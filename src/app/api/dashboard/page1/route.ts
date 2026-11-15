@@ -380,6 +380,20 @@ interface TrendSummaryRow {
   rating_change_pct: number | null;
 }
 
+// 채널별 인사이트 AI 문장 생성 여부 — 기본 꺼짐(아래 fetchNarrativeSignal 주석 참고), "on"일 때만 켠다.
+const CHANNEL_NARRATIVE_LLM_ENABLED = (process.env.CHANNEL_NARRATIVE_LLM ?? "").trim().toLowerCase() === "on";
+
+// 속도 개선(2026-11-15): narrative_28 사전 계산(마이그레이션 20260917010000의 refresh_daily_dashboard_mart)은
+// get_channel_daily_narrative를 p_decline_noise_floor 없이, 즉 SQL 기본값 0.05로 계산해 지문 끝에 이 값을
+// 붙이지 않고 저장한다. 그런데 2026-09-22부터 이 화면은 같은 0.05를 명시해 넘기면서 지문 끝에 "|0.05"가
+// 붙어 6개 채널 모두 저장본을 못 쓰고 매번 실시간 계산을 했다(실측: 7채널 전부 불일치). 기본값과 같은
+// 0.05일 때는 저장본과 같은 지문을 만들고(같은 함수·같은 인자라 값이 같다), skyUHD처럼 다른 값(0.0005)은
+// 그대로 붙여 계속 실시간 계산되게 한다.
+const NARRATIVE_SQL_DEFAULT_NOISE_FLOOR = 0.05;
+function narrativeNoiseFloorFp(floor: number): number[] {
+  return floor === NARRATIVE_SQL_DEFAULT_NOISE_FLOOR ? [] : [floor];
+}
+
 export async function GET(request: Request) {
   const timer = createStageTimer(); // 단계 15: 요청 단계별 시간(Server-Timing 헤더)
   const session = await getCurrentSession();
@@ -1499,7 +1513,7 @@ export async function GET(request: Request) {
         asOfDate,
         MART_SLOT.narrative28,
         code,
-        martFingerprint([code, rankTargetLabel, programTargetLabel, demographicLabels, asOfDate, 28, 8, null, declineNoiseFloor]),
+        martFingerprint([code, rankTargetLabel, programTargetLabel, demographicLabels, asOfDate, 28, 8, null, ...narrativeNoiseFloorFp(declineNoiseFloor)]),
         () =>
           supabase.rpc("get_channel_daily_narrative", {
             p_channel_code: code,
@@ -1603,9 +1617,16 @@ export async function GET(request: Request) {
           }
         : null,
     };
-    signal.llmNarrative = await cachedLlmText(`channel_narrative_v2:${code}`, asOfDate, narrativeLlmInput, () =>
-      buildChannelNarrativeViaLlm(narrativeLlmInput)
-    );
+    // 속도 개선(2026-11-15, 사용자 지시 — "인사이트 문장을 규칙으로 운영, OpenAI를 쓰지 않는 효율적인 방법"):
+    // 실측 결과 AI 문장은 6개 채널 모두 생성되지만 AI 문장 검증(guardForInput)에서 매번 탈락했고
+    // (주로 baseline_mismatch), 탈락분은 캐시되지 않아 요청마다 OpenAI 6건(약 6초)을 헛되이 기다렸다.
+    // 화면은 이미 규칙 기반 문장(Dashboard.tsx buildChannelNarrative)을 보여주고 있었으므로 호출을 끈다.
+    // 다시 켜려면 환경 변수 CHANNEL_NARRATIVE_LLM=on.
+    if (CHANNEL_NARRATIVE_LLM_ENABLED) {
+      signal.llmNarrative = await cachedLlmText(`channel_narrative_v2:${code}`, asOfDate, narrativeLlmInput, () =>
+        buildChannelNarrativeViaLlm(narrativeLlmInput)
+      );
+    }
     return signal;
   }
 
@@ -1879,7 +1900,7 @@ export async function GET(request: Request) {
           dateStr,
           MART_SLOT.narrative28,
           code,
-          martFingerprint([code, targetLabel, programTargetLabel, demographicLabels, dateStr, 28, 8, null, declineNoiseFloor]),
+          martFingerprint([code, targetLabel, programTargetLabel, demographicLabels, dateStr, 28, 8, null, ...narrativeNoiseFloorFp(declineNoiseFloor)]),
           () =>
             supabase.rpc("get_channel_daily_narrative", {
               p_channel_code: code,
