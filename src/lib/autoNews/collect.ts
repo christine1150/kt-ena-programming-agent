@@ -4,7 +4,7 @@
 import { callOpenAiJsonSynthesis } from "@/lib/llmSynthesis";
 import { CATEGORIES, OVERSEAS_CATEGORY, OVERSEAS_FEEDS, OVERSEAS_MAX_AGE_HOURS } from "./config";
 import { mapWithConcurrency } from "@/lib/concurrency";
-import { CAST_RISK_CATEGORY, buildCastQueries, castDisplayTitle, pickCastIssues, type CastEntry } from "./cast";
+import { CAST_RISK_CATEGORY, buildCastQueries, castLabel, pickCastIssues, type CastEntry } from "./cast";
 import { CAST_ROSTER } from "./roster";
 import { decodeEntities, parseRssItems, pickByRules, rankAll, sameStory, stripPublisherSuffix, type NewsCandidate, type PublishItem, type RankedPool } from "./select";
 
@@ -111,21 +111,22 @@ export function insertCastIssues(
   items: PublishItem[],
   collected: Pick<CollectResult, "candidates" | "castCandidates">,
   roster: CastEntry[] = CAST_ROSTER
-): { items: PublishItem[]; castCount: number; riskUrls: Set<string> } {
+): { items: PublishItem[]; castCount: number; labels: Map<string, string> } {
   const domestic = collected.candidates.filter((c) => c.category !== OVERSEAS_CATEGORY);
   const hits = pickCastIssues([...collected.castCandidates, ...domestic], roster, CAST_QUOTA + items.length)
     .filter((h) => !items.some((it) => it.url === h.url || sameStory(it.title, h.title)))
     .slice(0, CAST_QUOTA);
-  if (hits.length === 0) return { items, castCount: 0, riskUrls: new Set() };
+  if (hits.length === 0) return { items, castCount: 0, labels: new Map() };
   const rows: PublishItem[] = hits.map((h) => ({ category: CAST_RISK_CATEGORY, title: h.title, url: h.url }));
-  const riskUrls = new Set(hits.filter((h) => castDisplayTitle(h) !== h.title).map((h) => h.url));
+  // 중대 범죄는 pickCastIssues가 이미 맨 앞에 둔다(사용자 지시 2026-11-15). 표시는 잘린 제목을 되살린 뒤 붙인다
+  const labels = new Map(hits.flatMap((h) => { const l = castLabel(h); return l ? [[h.url, l] as [string, string]] : []; }));
   let at = -1;
   items.forEach((it, i) => {
     if (it.category === CAST_AFTER_CATEGORY) at = i + 1;
   });
   if (at < 0) at = items.findIndex((it) => it.category === OVERSEAS_CATEGORY);
   if (at < 0) at = items.length;
-  return { items: [...items.slice(0, at), ...rows, ...items.slice(at)], castCount: rows.length, riskUrls };
+  return { items: [...items.slice(0, at), ...rows, ...items.slice(at)], castCount: rows.length, labels };
 }
 
 const TRANSLATE_SCHEMA = {
@@ -219,9 +220,9 @@ export async function buildDailyNews(
   const collected = await collectNews(opts);
   // 출연자 이슈는 규칙 선정 뒤에 끼운다(분류 상한·점수와 무관한 별도 기준 — cast.ts). 명단은 호출부가 DB에서 읽어 넘긴다(없으면 roster.ts)
   const withCast = insertCastIssues(pickByRules(collected.pools), collected, opts.roster ?? CAST_ROSTER);
-  // 위험 기사 표시("확인 필요")는 잘린 제목을 되살린 뒤에 붙인다
+  // 위험 기사 표시("확인 필요"·"중대 사안 · 편성 제외 검토")는 잘린 제목을 되살린 뒤에 붙인다
   const picked = (await completeTitles(withCast.items)).map((it) =>
-    it.category === CAST_RISK_CATEGORY && withCast.riskUrls.has(it.url) ? { ...it, title: `${it.title} (확인 필요)` } : it
+    it.category === CAST_RISK_CATEGORY && withCast.labels.has(it.url) ? { ...it, title: `${it.title} (${withCast.labels.get(it.url)})` } : it
   );
   const useLlm = opts.useLlm ?? process.env.AUTO_NEWS_USE_LLM !== "0";
   const done = useLlm ? await translateOverseasTitles(picked) : { items: picked, translated: 0 };

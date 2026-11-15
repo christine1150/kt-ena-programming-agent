@@ -14,8 +14,10 @@ export interface CastEntry {
   scope: CastScope;
 }
 
-/** 편성을 줄이거나 빼야 할 근거가 되는 표현(범죄·논란) */
-export const RISK_TERMS = CAST_RISK_TERMS;
+/** 지금 건강에 문제가 생긴 경우(출연·방송 일정에 바로 영향) — 사용자 지시(2026-11-15) */
+const HEALTH_TERMS = /건강 이상|건강 악화|응급실|입원|수술|투병|쓰러져|쓰러진|활동 중단|휴식기|촬영 중단/;
+/** 편성을 줄이거나 빼야 할 근거가 되는 표현(범죄·논란·건강 문제) */
+export const RISK_TERMS = new RegExp(`${CAST_RISK_TERMS.source}|${HEALTH_TERMS.source}`);
 /** 편성을 늘리거나 후속을 검토할 근거가 되는 표현(흥행·화제·후속) */
 export const RISE_TERMS = /시청률 (?:상승|급등|자체 최고|돌파)|역대 최고|최고 시청률|최고 화제성|화제성 1위|신드롬|흥행|역주행|시즌 ?2|후속 편성|스핀오프|차기작 확정|캐스팅 확정|주연 확정/;
 
@@ -32,6 +34,25 @@ export const OTHER_ENTRY: CastEntry = { name: "", program: "타사 작품", scop
 const SCOPE_WEIGHT: Record<CastScope, number> = { own_upcoming: 6, own_past: 4, solo: 4, other: 1 };
 /** 위험 신호는 기사 하나가 편성 판단을 바꾸므로 흥행 신호보다 앞에 둔다 */
 const RISK_BONUS = 3;
+/**
+ * 중대 범죄 — 사용자 지시(2026-11-15): "음주운전 같은 중대한 범죄는 편성에서 바로 제외해야 하므로 출연자 이슈 맨 위로".
+ * 자사·타사 구분보다 앞선다(타사 출연자라도 자사 채널 재방·구매 편성에 걸릴 수 있다).
+ */
+export const SEVERE_CRIME = /음주운전|음주 ?사고|뺑소니|마약|투약|대마|성추행|성폭행|성범죄|불법 ?촬영|폭행|상해|학폭|학교폭력|도박|사기|횡령|탈세|입건|송치|기소|구속|체포|실형|징역/;
+const SEVERE_BONUS = 100;
+/**
+ * 클릭용 짜깁기 출연자 기사 — 사용자 지시(2026-11-15): 낚시성 제목에 비해 내용이 별것 없는 기사(여러 스타의 지난 일을 묶은 ★들·[종합] 류,
+ * 예: "활동 중단→대인기피증까지…이정재·이수경·이유비, 피부 질환에 발목 잡힌 ★들 [종합]")는 고르지 않는다.
+ * 건강 기사 자체는 거르지 않는다(지금 건강에 문제가 생긴 한 사람의 기사는 싣는다). 기자 의견 꼬리표([TEN피플] 등)도 거르지 않는다.
+ * 중대 범죄 기사는 이 거르기보다 앞선다(묶음 기사라도 범죄 사실이면 싣는다).
+ */
+export const CAST_LOW_VALUE = /\[종합\]|★|스타들|들의 (?:공통점|비밀|과거)|연예계 .{0,6}(?:모음|총정리)|충격 근황/;
+/** 이름이 셋 이상 나열된 묶음 기사(A·B·C) */
+const ROUNDUP_NAMES = /[가-힣]{2,4}[·,][가-힣]{2,4}[·,][가-힣]{2,4}/;
+export function isLowValueCastTitle(title: string): boolean {
+  if (SEVERE_CRIME.test(title)) return false;
+  return CAST_LOW_VALUE.test(title) || ROUNDUP_NAMES.test(title);
+}
 
 export type CastSignal = "risk" | "rise";
 
@@ -39,6 +60,19 @@ export interface CastHit extends NewsCandidate {
   signal: CastSignal;
   entry: CastEntry;
   score: number;
+  /** 중대 범죄 기사(맨 위, '편성 제외 검토' 표시) */
+  severe: boolean;
+}
+
+// 같은 사건 다른 기사 묶기용 — 제목 공통 낱말 중 사람 이름일 수 있는 것(3~4자, 흔한 업계 낱말 제외)
+const NAME_STOP = new Set(["방송가", "드라마", "소속사", "예능에서", "예능서", "출연자", "시청자", "제작진", "음주운전", "초비상", "통편집", "사과문", "기자회견"]);
+const nameTokens = (t: string) => new Set((t.match(/[가-힣]{3,4}/g) ?? []).filter((w) => !NAME_STOP.has(w) && !SEVERE_CRIME.test(w)));
+/** 둘 다 중대 범죄 기사이고 같은 이름(3~4자 낱말)을 공유하면 같은 사건으로 본다 */
+function sameIncident(a: CastHit, b: CastHit): boolean {
+  if (!a.severe || !b.severe) return false;
+  const ta = nameTokens(a.title);
+  for (const w of nameTokens(b.title)) if (ta.has(w)) return true;
+  return false;
 }
 
 /** 검색어: 자사 작품은 출연자 이름별(위험·흥행 두 갈래), 나는 SOLO는 프로그램 단위(일반인 이름을 따로 수집하지 않는다), 타사는 위험만 */
@@ -92,23 +126,32 @@ export function pickCastIssues(cands: NewsCandidate[], roster: CastEntry[], quot
   const hits: CastHit[] = [];
   for (const c of cands) {
     const title = stripPublisherSuffix(c.title, c.publisher);
+    if (isLowValueCastTitle(title)) continue;
     const cls = classifyCast(title, roster);
     if (!cls) continue;
-    hits.push({ ...c, title, signal: cls.signal, entry: cls.entry, score: SCOPE_WEIGHT[cls.entry.scope] + (cls.signal === "risk" ? RISK_BONUS : 0) });
+    const severe = cls.signal === "risk" && SEVERE_CRIME.test(title);
+    hits.push({ ...c, title, signal: cls.signal, entry: cls.entry, severe, score: (severe ? SEVERE_BONUS : 0) + SCOPE_WEIGHT[cls.entry.scope] + (cls.signal === "risk" ? RISK_BONUS : 0) });
   }
   hits.sort((a, b) => b.score - a.score || (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
   const out: CastHit[] = [];
   for (const h of hits) {
-    if (out.some((o) => o.url === h.url || sameStory(o.title, h.title))) continue;
+    if (out.some((o) => o.url === h.url || sameStory(o.title, h.title) || sameIncident(o, h))) continue;
     out.push(h);
     if (out.length >= quota) break;
   }
   return out;
 }
 
-/** 화면에 나가는 제목 — 위험 기사는 사실 확정이 아님을 표시한다(헤드라인 그대로 + 확인 필요) */
+/** 제목 뒤 표시 — 중대 범죄는 편성 제외 검토, 그 밖의 위험 기사는 사실 확정이 아님을 알린다 */
+export function castLabel(h: Pick<CastHit, "signal" | "severe">): string | null {
+  if (h.severe) return "중대 사안 · 편성 제외 검토";
+  return h.signal === "risk" ? "확인 필요" : null;
+}
+
+/** 화면에 나가는 제목 */
 export function castDisplayTitle(h: CastHit): string {
-  return h.signal === "risk" ? `${h.title} (확인 필요)` : h.title;
+  const label = castLabel(h);
+  return label ? `${h.title} (${label})` : h.title;
 }
 
 export { CAST_RISK_CATEGORY };

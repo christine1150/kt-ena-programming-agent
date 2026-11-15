@@ -1,6 +1,6 @@
 // 주요 뉴스 자동 선정 순수 함수 검사 — 실행: npm run test:auto-news
 import { CATEGORIES, OVERSEAS_CATEGORY, kstDayStartIso } from "../src/lib/autoNews/config";
-import { buildCastQueries, castDisplayTitle, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
+import { buildCastQueries, castDisplayTitle, castLabel, isLowValueCastTitle, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
 import { fullTitleFromHtml, insertCastIssues } from "../src/lib/autoNews/collect";
 import { CAST_ROSTER } from "../src/lib/autoNews/roster";
 import { parseRosterText, rosterToText } from "../src/lib/autoNews/rosterText";
@@ -123,7 +123,11 @@ ok("타사 일반 흥행 표현만으로는 제외", classifyCast("타사 드라
 ok("나는 SOLO 일반인 기사(프로그램명 매칭)", classifyCast("'나는 SOLO' 출연자 논란 확산…제작진 입장", roster)?.signal === "risk");
 const issues = pickCastIssues([cc("배우 박마바 폭행 논란"), cc("배우 김가나, 음주운전 혐의 입건"), cc("배우 김가나 음주운전 혐의로 입건")], roster, 5);
 ok("같은 소식 묶고 자사 예정작이 앞", issues.length === 2 && issues[0].entry.name === "김가나");
-ok("위험 기사 표시 문구", castDisplayTitle(issues[0]).endsWith("(확인 필요)"));
+ok("중대 범죄 표시 문구", castDisplayTitle(issues[0]).endsWith("(중대 사안 · 편성 제외 검토)"));
+const sev = pickCastIssues([cc("배우 김가나 SNS 논란"), cc("배우 박마바 폭행 혐의 입건"), cc("\"음주운전 안 된다\" 외치던 박마바 배신에 방송가 초비상"), cc("이다라 주연 예능 시청률 자체 최고 경신")], roster, 5);
+ok("중대 범죄는 자사·타사 구분보다 먼저(맨 위)", sev[0].entry.name === "박마바" && sev[0].severe);
+ok("같은 사람 같은 사건 기사는 하나로", sev.filter((h) => h.severe).length === 1);
+ok("가벼운 논란은 확인 필요 표시", castLabel(sev.find((h) => h.entry.name === "김가나")!) === "확인 필요");
 ok("검색어 생성(솔로는 프로그램 단위)", buildCastQueries(roster).filter((q) => q.entry.scope === "solo").every((q) => q.query.startsWith("나는 SOLO")));
 
 // 이름 경계(동명·부분 일치 오탐 방지)
@@ -138,7 +142,7 @@ const base = [
 const ins = insertCastIssues(base, { candidates: [], castCandidates: [cc("배우 김가나, 음주운전 혐의 입건"), c("방송가 소식", "크래시2 첫 방송", "연합뉴스", "u2")] }, roster);
 ok("출연자 이슈는 방송가 소식 바로 뒤", ins.items[2]?.category === "출연자 이슈" && ins.items[3]?.category === OVERSEAS_CATEGORY);
 ok("이미 실린 기사는 출연자 이슈로 중복 게시하지 않음", ins.castCount === 1);
-ok("위험 기사는 확인 필요 표시 대상", ins.riskUrls.size === 1);
+ok("위험 기사는 확인 필요 표시 대상", ins.labels.get(ins.items[2].url) === "중대 사안 · 편성 제외 검토");
 ok("출연자 기사 없으면 목록 그대로", insertCastIssues(base, { candidates: [], castCandidates: [] }, roster).items === base);
 
 // 동명이인: 정치 기사(연예 맥락 없음)는 명단 이름이 맞아도 제외
@@ -147,6 +151,12 @@ ok("동명이인 정치 기사 제외", classifyCast("최민희 논란에 칼 �
 ok("연예 맥락 있으면 명단 일치", classifyCast("배우 김민석, 음주 논란 사과", polRoster)?.entry.program === "연애박사");
 
 ok("승하차 교통 기사 제외", classifyCast("수도권~세종 통근버스 재추진⋯승하차지점 분산 과제 방송", polRoster) === null);
+
+// 짜깁기(여러 스타 묶음) 제외, 지금 건강 문제·기자 의견 기사는 통과(사용자 지시 2026-11-15)
+ok("질환 묶음 짜깁기 기사 제외", isLowValueCastTitle("활동 중단→대인기피증까지…이정재·이수경·이유비, 피부 질환에 발목 잡힌 ★들 [종합]"));
+ok("기자 의견 꼬리표만으로는 제외하지 않음", !isLowValueCastTitle("황정음 하차 빈자리 채웠다…'싱글맘' 조윤희, 계속되는 이혼 셀링에 쏠린 우려 [TEN피플]"));
+ok("중대 범죄는 거르지 않음", !isLowValueCastTitle("고경표 음주운전 사고… 예능에서 ‘통편집’"));
+ok("지금 건강 문제 기사는 위험 신호로 선정", !isLowValueCastTitle("배우 김가나, 촬영 중 쓰러져 입원") && classifyCast("배우 김가나, 촬영 중 쓰러져 입원", roster)?.signal === "risk");
 
 // 관리자 명단 글 형식
 const pr = parseRosterText("# 주석\n예정 | 크래시2 | 이민기, 곽선영\n지난 | 연애박사 | 추영우\n솔로 | 나는 SOLO\n\n예정 | 크래시2 | 이민기");
