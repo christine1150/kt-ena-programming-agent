@@ -199,6 +199,15 @@ export function fullTitleFromHtml(html: string, truncated: string): string | nul
   return full.length <= 120 ? full : null;
 }
 
+/** 제목 앞뒤의 [진단]·[단독]·[문화연예 플러스]·[TEN피플] 같은 말머리/꼬리표를 뗀다(뗀 뒤 6자 미만이면 원래 제목 유지) */
+export function stripTitleTags(title: string): string {
+  const s = title
+    .replace(/^\s*(?:[[【<][^\]】>]{1,20}[\]】>]\s*)+/, "")
+    .replace(/(?:\s*[[【][^\]】]{1,20}[\]】])+\s*$/, "")
+    .trim();
+  return s.length >= 6 ? s : title;
+}
+
 async function completeTitles(items: PublishItem[]): Promise<PublishItem[]> {
   return Promise.all(
     items.map(async (it) => {
@@ -221,7 +230,8 @@ export async function buildDailyNews(
   // 출연자 이슈는 규칙 선정 뒤에 끼운다(분류 상한·점수와 무관한 별도 기준 — cast.ts). 명단은 호출부가 DB에서 읽어 넘긴다(없으면 roster.ts)
   const withCast = insertCastIssues(pickByRules(collected.pools), collected, opts.roster ?? CAST_ROSTER);
   // 위험 기사 표시("확인 필요"·"중대 사안 · 편성 제외 검토")는 잘린 제목을 되살린 뒤에 붙인다
-  const picked = (await completeTitles(withCast.items)).map((it) =>
+  // 사용자 지시(2026-11-16): 말머리([진단]·[단독] 등)는 빼고 제목 내용이 잘 보이게
+  const picked = (await completeTitles(withCast.items)).map((it) => ({ ...it, title: stripTitleTags(it.title) })).map((it) =>
     it.category === CAST_RISK_CATEGORY && withCast.labels.has(it.url) ? { ...it, title: `${it.title} (${withCast.labels.get(it.url)})` } : it
   );
   const useLlm = opts.useLlm ?? process.env.AUTO_NEWS_USE_LLM !== "0";

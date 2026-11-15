@@ -1,7 +1,7 @@
 // 주요 뉴스 자동 선정 순수 함수 검사 — 실행: npm run test:auto-news
 import { CATEGORIES, OVERSEAS_CATEGORY, kstDayStartIso } from "../src/lib/autoNews/config";
 import { buildCastQueries, castDisplayTitle, castLabel, isLowValueCastTitle, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
-import { fullTitleFromHtml, insertCastIssues } from "../src/lib/autoNews/collect";
+import { fullTitleFromHtml, insertCastIssues, stripTitleTags } from "../src/lib/autoNews/collect";
 import { CAST_ROSTER } from "../src/lib/autoNews/roster";
 import { parseRosterText, rosterToText } from "../src/lib/autoNews/rosterText";
 import { decodeEntities, parseRssItems, pickByRules, rankAll, rankCategory, sameStory, stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "../src/lib/autoNews/select";
@@ -99,6 +99,7 @@ ok("해외: 타 업종·소속사 계약 제외, 경영진 교체는 포함", q2
 const html = `<html><head><meta property="og:title" content="KT텔레캅, 창립 20주년 비전 선포…“AI·돌봄 결합한 AX 보안기업 도약” - 전자신문"></head></html>`;
 ok("잘린 제목 복원(매체 꼬리표 제거)", fullTitleFromHtml(html, "KT텔레캅, 창립 20주년 비전 선포…“AI·돌봄 결합한 AX 보안기업 도약...") === "KT텔레캅, 창립 20주년 비전 선포…“AI·돌봄 결합한 AX 보안기업 도약”");
 ok("다른 기사 제목이면 복원하지 않음", fullTitleFromHtml(html, "넷플릭스 광고 요금제 개편 발표...") === null);
+ok("말머리 제거", stripTitleTags("[단독] 고경표 소속사 입장 발표") === "고경표 소속사 입장 발표" && stripTitleTags("[문화연예 플러스] [진단] 방송가 개편 흐름") === "방송가 개편 흐름" && stripTitleTags("조윤희 이혼 셀링 우려 [TEN피플]") === "조윤희 이혼 셀링 우려" && stripTitleTags("[단독] 짧음") === "[단독] 짧음");
 
 // 자동 게시 — "오늘"은 KST 기준
 ok("KST 하루 시작(07:30 KST 실행)", kstDayStartIso(Date.parse("2026-11-15T22:30:00Z")) === "2026-11-15T15:00:00.000Z");
