@@ -1,7 +1,8 @@
 // 주요 뉴스 자동 선정 순수 함수 검사 — 실행: npm run test:auto-news
 import { CATEGORIES, OVERSEAS_CATEGORY } from "../src/lib/autoNews/config";
 import { buildCastQueries, castDisplayTitle, classifyCast, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
-import { decodeEntities, parseRssItems, pickByRules, rankAll, rankCategory, stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "../src/lib/autoNews/select";
+import { fullTitleFromHtml } from "../src/lib/autoNews/collect";
+import { decodeEntities, parseRssItems, pickByRules, rankAll, rankCategory, sameStory, stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "../src/lib/autoNews/select";
 
 let pass = 0;
 let fail = 0;
@@ -54,8 +55,48 @@ const picked = pickByRules(pools);
 ok("분류 간 같은 기사는 앞 분류에만", picked.filter((p) => p.title.startsWith("방미통위")).length === 1 && picked.find((p) => p.title.startsWith("방미통위"))?.category === "정책");
 ok("해외 가십 제외", picked.filter((p) => p.category === OVERSEAS_CATEGORY).length === 1);
 ok("분류 순서 유지", picked.map((p) => p.category).join(">") === `정책>OTT>${OVERSEAS_CATEGORY}`);
-const many = Array.from({ length: 10 }, (_, i) => c("OTT", `넷플릭스 ${["광고", "요금", "구독", "합병", "출시", "독점", "중계", "실적", "제휴", "글로벌"][i]} 관련 새 소식 ${"가나다라마바사아자차"[i].repeat(8)}`));
+const many = Array.from({ length: 10 }, (_, i) => c("OTT", `${"가나다라마바사아자차"[i].repeat(4)} 넷플릭스 ${["광고", "요금", "구독", "합병", "출시", "독점", "중계", "실적", "제휴", "글로벌"][i]} ${"가나다라마바사아자차"[i].repeat(8)}`));
 ok("분류 상한 지킴", pickByRules(rankAll(many, NOW)).length === CATEGORIES.find((x) => x.category === "OTT")!.quota);
+
+// 선정 품질 보강(2026-11-15 시험 실행에서 본 잡음)
+ok("같은 작품 종영 기사는 표현이 달라도 같은 소식", sameStory("김지원 '닥터X', 15.2%로 종영…최고 시청률은 19.5%", "‘닥터X’ 정석용, 훈훈한 종영 소감"));
+ok("부제가 붙은 작품명도 같은 소식", sameStory("ENA ‘크래시2’ 16일 첫 방송", "'크래시2 : 분노의 도로' 제작발표회 현장"));
+ok("주어가 양쪽에 있고 단어가 겹치면 같은 소식", sameStory("LG헬로비전 이어 딜라이브도…CJ ENM 채널 송출 갈등 확산", "CJ ENM 채널 끊기나…케이블TV '사용료 전쟁' 확산"));
+ok("회사가 다른 실적 기사는 다른 소식", !sameStory("LG헬로비전 3분기 영업이익 흑자 전환", "KT스카이라이프 3분기 영업이익 흑자 전환 성공"));
+ok("같은 회사의 다른 소식은 묶지 않음", !sameStory("CJ ENM 채널 송출 갈등 확산…딜라이브도 계약 종료", "CJENM 피프스시즌 넷플릭스 1위 작품에도 적자 여전"));
+ok("소유격 따옴표는 작품명으로 보지 않음", !sameStory("Hollywood’s Next Big Deal: Will Netflix Buy NBCU?", "Disney’s Next Big Deal With Sony Explained"));
+const bc = CATEGORIES.find((x) => x.category === "방송가 소식")!;
+const rb = rankCategory(
+  [
+    c(bc.category, "천재 의사로 변신… '강하늘' 출연 확정 지어 난리 난 한국 드라마", "wikitree.co.kr"),
+    c(bc.category, "'100일의 거짓말' 김유정, 서로의 진짜 이름 불렀다⋯8%대 시청률", "joynews24.com"),
+    c(bc.category, "대하드라마 '문무', 시청률 4.7%로 출발", "yna.co.kr"),
+  ],
+  bc,
+  NOW
+);
+ok("기록·출발 시청률 기사가 회차 기사·낚시 제목보다 앞", rb[0]?.title.includes("문무") && rb[rb.length - 1]?.title.includes("난리"));
+ok("주소로 온 매체도 신뢰 매체 가산", rankCategory([c("OTT", "넷플릭스 광고 요금제 개편", "yna.co.kr")], CATEGORIES.find((x) => x.category === "OTT")!, NOW)[0].score > rankCategory([c("OTT", "넷플릭스 광고 요금제 개편", "example.kr")], CATEGORIES.find((x) => x.category === "OTT")!, NOW)[0].score);
+const q2 = pickByRules(
+  rankAll(
+    [
+      c("업계동향", "안효섭 ‘파이널 테이블’ JTBC 구하지 못했다‥1%대 시청률 하락", "newsen.com"),
+      c("업계동향", "[이내찬교수의 광고로 보는 통신역사]〈70〉한국 초고속인터넷", "etnews.com"),
+      c("KT 및 계열사 소식", "[통신] KT 품질만족지수 1위, LG유플러스 액체냉각 표준 개발", "webeconomy.co.kr"),
+      c("OTT", "'2026 멜론뮤직어워드' 2일차 라인업…웨이브 중계", "etoday.co.kr"),
+      c(OVERSEAS_CATEGORY, "Nvidia CEO Jensen Huang Resigns After Multiple Scandals", "Variety"),
+      c(OVERSEAS_CATEGORY, "Penn Badgley Signs With WME & Range Media Partners", "Deadline"),
+      c(OVERSEAS_CATEGORY, "Paramount Skydance Names New Streaming Chief", "Deadline"),
+    ],
+    NOW
+  )
+);
+ok("시청률 기사는 업계동향이 아니라 방송가 소식으로", q2.find((p) => p.title.includes("파이널 테이블"))?.category === "방송가 소식");
+ok("연재 칼럼·묶음 시황·시상식 중계 제외", !q2.some((p) => /이내찬|\[통신\]|멜론/.test(p.title)));
+ok("해외: 타 업종·소속사 계약 제외, 경영진 교체는 포함", q2.filter((p) => p.category === OVERSEAS_CATEGORY).map((p) => p.title).join("|") === "Paramount Skydance Names New Streaming Chief");
+const html = `<html><head><meta property="og:title" content="KT텔레캅, 창립 20주년 비전 선포…“AI·돌봄 결합한 AX 보안기업 도약” - 전자신문"></head></html>`;
+ok("잘린 제목 복원(매체 꼬리표 제거)", fullTitleFromHtml(html, "KT텔레캅, 창립 20주년 비전 선포…“AI·돌봄 결합한 AX 보안기업 도약...") === "KT텔레캅, 창립 20주년 비전 선포…“AI·돌봄 결합한 AX 보안기업 도약”");
+ok("다른 기사 제목이면 복원하지 않음", fullTitleFromHtml(html, "넷플릭스 광고 요금제 개편 발표...") === null);
 
 // 출연자 이슈
 const roster: CastEntry[] = [

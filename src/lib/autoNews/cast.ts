@@ -2,7 +2,7 @@
 // 사용자 지시 2026-11-15: 자사 오리지널 드라마·예능(지난 작품+방영 예정작) 출연자의 주요 기사는 반드시, 타사 작품 출연자도 일부,
 // '나는 SOLO' 일반인 출연자 포함. 편성을 늘릴 근거(흥행·화제)와 빼야 할 근거(범죄·논란) 둘 다 대상이다.
 import { CAST_RISK_CATEGORY, CAST_RISK_TERMS } from "./config";
-import { stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "./select";
+import { sameStory, stripPublisherSuffix, type NewsCandidate } from "./select";
 
 export type CastScope = "own_upcoming" | "own_past" | "solo" | "other";
 
@@ -86,7 +86,7 @@ export function pickCastIssues(cands: NewsCandidate[], roster: CastEntry[], quot
   hits.sort((a, b) => b.score - a.score || (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
   const out: CastHit[] = [];
   for (const h of hits) {
-    if (out.some((o) => o.url === h.url || titleSimilarity(o.title, h.title) >= SAME_STORY)) continue;
+    if (out.some((o) => o.url === h.url || sameStory(o.title, h.title))) continue;
     out.push(h);
     if (out.length >= quota) break;
   }

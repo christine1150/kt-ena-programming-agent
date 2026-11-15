@@ -1,6 +1,23 @@
 // 주요 뉴스 자동 선정 — 순수 함수(네트워크·DB 없음). 수집한 후보에서 같은 소식을 묶고, 규칙 점수로 분류별 상위 기사를 고른다.
-// LLM 선정(llmPick)이 실패하거나 한도가 소진되면 이 규칙 결과가 그대로 게시된다.
-import { CATEGORIES, GLOBAL_EXCLUDE, OVERSEAS_BOOST, OVERSEAS_CATEGORY, OVERSEAS_EXCLUDE, OVERSEAS_QUOTA, TRUSTED_PUBLISHERS, type CategoryConfig } from "./config";
+// 게시 목록은 이 규칙 결과로 정해진다(LLM은 해외 제목 번역에만 쓴다 — collect.ts).
+import {
+  CATEGORIES,
+  CLICKBAIT,
+  CLICKBAIT_PENALTY,
+  GLOBAL_EXCLUDE,
+  OVERSEAS_BOOST,
+  OVERSEAS_CATEGORY,
+  OVERSEAS_EXCLUDE,
+  OVERSEAS_QUOTA,
+  OVERSEAS_REQUIRE,
+  PROGRAM_NEWS,
+  PROGRAM_NEWS_CATEGORY,
+  ROUNDUP,
+  ROUNDUP_PENALTY,
+  TRUSTED_HOSTS,
+  TRUSTED_PUBLISHERS,
+  type CategoryConfig,
+} from "./config";
 
 export interface NewsCandidate {
   category: string;
@@ -74,10 +91,65 @@ export function titleSimilarity(a: string, b: string): number {
 }
 export const SAME_STORY = 0.45;
 
+// 같은 소식 판정용 특징 — 제목마다 한 번만 계산한다
+interface TitleFeatures {
+  /** 조사를 뗀 단어 집합(회사명 띄어쓰기 통일) */
+  words: Set<string>;
+  /** 제목 첫 단어(주어) */
+  head: string;
+  /** 따옴표·꺾쇠 안의 이름(작품명 등, 부제는 뗀다) */
+  quoted: Set<string>;
+}
+const PARTICLE = /(?:으로|에서|에도|까지|부터|은|는|이|가|을|를|도|의|에|로|와|과|서)$/;
+/** 따옴표 안에 흔히 들어가지만 작품명이 아닌 말 — 이것만 같다고 같은 소식으로 보지 않는다 */
+const QUOTED_STOP = new Set(["ai", "ax", "ott", "ip", "k콘텐츠", "1위", "논란", "단독"]);
+const featureCache = new Map<string, TitleFeatures>();
+function featuresOf(title: string): TitleFeatures {
+  const hit = featureCache.get(title);
+  if (hit) return hit;
+  const quoted = new Set<string>();
+  // 여는 따옴표 앞이 글자면 소유격·줄임표(Hollywood’s)라 건너뛴다
+  for (const m of title.matchAll(/(?<![0-9A-Za-z가-힣])['‘’"“”<《〈「『]([^'‘’"“”<>《》〈〉「」『』]{2,30})['‘’"“”>》〉」』]/g)) {
+    const key = m[1].split(/[:：\-–—]/)[0].toLowerCase().replace(/[^0-9a-z가-힣]/g, "");
+    if (key.length >= 2 && !QUOTED_STOP.has(key)) quoted.add(key);
+  }
+  const list = title
+    .toLowerCase()
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/(cj|lg|sk|kt)\s+(?=[a-z가-힣])/g, "$1")
+    .split(/[^0-9a-z가-힣%.]+/)
+    .map((w) => w.replace(/^\.+|\.+$/g, ""))
+    .map((w) => (w.length >= 3 ? w.replace(PARTICLE, "") : w))
+    .filter((w) => w.length >= 2);
+  const f = { words: new Set(list), head: list[0] ?? "", quoted };
+  featureCache.set(title, f);
+  return f;
+}
+
+/**
+ * 같은 소식인지 — ① 제목 글자 유사도 ② 같은 작품명(따옴표 안)을 다룸 ③ 주어가 양쪽에 나오고 단어가 3개·40% 이상 겹침.
+ * ②③은 매체마다 제목을 다르게 써서 ①로 묶이지 않던 기사(같은 드라마 종영 기사 10여 건 등)를 묶으려고 넣었다(2026-11-15).
+ */
+export function sameStory(a: string, b: string): boolean {
+  if (titleSimilarity(a, b) >= SAME_STORY) return true;
+  const A = featuresOf(a);
+  const B = featuresOf(b);
+  for (const q of A.quoted) if (B.quoted.has(q)) return true;
+  // 한쪽 제목의 주어가 다른 쪽에도 나올 때만 단어 겹침을 본다("A사 3분기 영업이익"과 "B사 3분기 영업이익"을 묶지 않으려고)
+  if ((A.head && B.words.has(A.head)) || (B.head && A.words.has(B.head))) {
+    let shared = 0;
+    for (const w of A.words) if (B.words.has(w)) shared++;
+    if (shared >= 3 && shared / Math.min(A.words.size, B.words.size) >= 0.4) return true;
+  }
+  return false;
+}
+
 function baseScore(c: NewsCandidate, boost: [RegExp, number][], now: number): number {
   let s = 0;
   for (const [re, w] of boost) if (re.test(c.title)) s += w;
-  if (TRUSTED_PUBLISHERS.test(c.publisher)) s += 2;
+  if (TRUSTED_PUBLISHERS.test(c.publisher) || TRUSTED_HOSTS.test(c.publisher)) s += 2;
+  if (CLICKBAIT.test(c.title)) s -= CLICKBAIT_PENALTY;
+  if (ROUNDUP.test(c.title)) s -= ROUNDUP_PENALTY;
   if (c.publishedAt) {
     const h = (now - Date.parse(c.publishedAt)) / 3_600_000;
     if (h <= 12) s += 2;
@@ -92,7 +164,7 @@ export function clusterStories(items: ScoredCandidate[]): ScoredCandidate[] {
   const sorted = [...items].sort((a, b) => b.score - a.score);
   const reps: ScoredCandidate[] = [];
   for (const it of sorted) {
-    const rep = reps.find((r) => r.url === it.url || titleSimilarity(r.title, it.title) >= SAME_STORY);
+    const rep = reps.find((r) => r.url === it.url || sameStory(r.title, it.title));
     if (rep) rep.coverage += 1;
     else reps.push({ ...it, coverage: 1 });
   }
@@ -119,12 +191,15 @@ export function rankAll(cands: NewsCandidate[], now: number): RankedPool[] {
   const taken: ScoredCandidate[] = [];
   const pools: RankedPool[] = [];
   const push = (category: string, quota: number, ranked: ScoredCandidate[]) => {
-    const fresh = ranked.filter((r) => !taken.some((t) => t.url === r.url || titleSimilarity(t.title, r.title) >= SAME_STORY));
+    const fresh = ranked.filter((r) => !taken.some((t) => t.url === r.url || sameStory(t.title, r.title)));
     taken.push(...fresh.slice(0, quota * 3));
     pools.push({ category, quota, ranked: fresh });
   };
-  for (const cfg of CATEGORIES) push(cfg.category, cfg.quota, rankCategory(cands.filter((c) => c.category === cfg.category), cfg, now));
-  push(OVERSEAS_CATEGORY, OVERSEAS_QUOTA, rankCategory(cands.filter((c) => c.category === OVERSEAS_CATEGORY), { boost: OVERSEAS_BOOST, exclude: OVERSEAS_EXCLUDE }, now));
+  // 프로그램 성과·편성 기사는 걸린 검색어와 상관없이 '방송가 소식'에서 겨룬다(정책·마켓·해외 분류는 그대로)
+  const movable = new Set(["KT 및 계열사 소식", "OTT", "업계동향"]);
+  const placed = cands.map((c) => (movable.has(c.category) && PROGRAM_NEWS.test(c.title) ? { ...c, category: PROGRAM_NEWS_CATEGORY } : c));
+  for (const cfg of CATEGORIES) push(cfg.category, cfg.quota, rankCategory(placed.filter((c) => c.category === cfg.category), cfg, now));
+  push(OVERSEAS_CATEGORY, OVERSEAS_QUOTA, rankCategory(placed.filter((c) => c.category === OVERSEAS_CATEGORY), { boost: OVERSEAS_BOOST, exclude: OVERSEAS_EXCLUDE, require: OVERSEAS_REQUIRE }, now));
   return pools;
 }
 

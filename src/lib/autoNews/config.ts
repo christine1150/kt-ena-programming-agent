@@ -17,7 +17,19 @@ export interface CategoryConfig {
 }
 
 /** 모든 분류에서 빼는 기사(사진·부고·인사·주가 단신·운세 등) */
-export const GLOBAL_EXCLUDE = /\[포토\]|\[사진\]|포토뉴스|화보|\[부고\]|부음|운세|특징주|\[표\]|급등주|상한가|\[날씨\]|로또|\[게시판\]|보도자료|\[영상\]|포토엔|포토S|증시|주식정보|하락 마감|상승 마감|\.gif/;
+export const GLOBAL_EXCLUDE =
+  /\[포토\]|\[사진\]|포토뉴스|화보|\[부고\]|부음|운세|특징주|\[표\]|급등주|상한가|\[날씨\]|로또|\[게시판\]|보도자료|\[영상\]|포토엔|포토S|증시|주식정보|하락 마감|상승 마감|\.gif|\[[^\]]*(?:칼럼|기고|사설|기자수첩|시론|데스크|연재|위클리|금주|주간)[^\]]*\]|교수의|[〈<(]\d{1,3}[〉>)]|소식_|주말n|\[오늘의|\[주말/;
+
+/** 낚시성 제목 — 주어를 숨기거나 감탄으로 끄는 기사는 정보가 적어 뒤로 민다(2026-11-15 시험 실행에서 방송가 상위에 섞임) */
+export const CLICKBAIT = /난리 ?난|일냈다|초호화|경악|소름|발칵|술렁|뭐길래|알고 ?보니|떴다|터졌다|깜짝|화들짝|눈길|시선 ?집중|이유는\??$|누구\??$|정체는/;
+export const CLICKBAIT_PENALTY = 4;
+/** 여러 소식을 한 제목에 묶은 시황 기사("[통신] A, B·…") — 한 건의 소식이 아니라 뒤로 민다 */
+export const ROUNDUP = /^\[(?:통신|이통|KT|SKT|LG유플러스|IT|ICT|산업|유통|방송|미디어|재계|기업)[^\]]*\]/;
+export const ROUNDUP_PENALTY = 3;
+
+/** 프로그램 성과·편성 기사 — 어느 검색어로 걸렸든 '방송가 소식'으로 옮겨 그 분류 기준으로 겨룬다(업계동향·OTT에 시청률 기사가 섞이지 않게) */
+export const PROGRAM_NEWS = /시청률|종영|첫방|첫 방송|캐스팅|출연 확정|제작발표회|편성 확정|최종화|최종회/;
+export const PROGRAM_NEWS_CATEGORY = "방송가 소식";
 
 export const CATEGORIES: CategoryConfig[] = [
   {
@@ -40,16 +52,23 @@ export const CATEGORIES: CategoryConfig[] = [
     queries: ["ENA 예능", "ENA 드라마", "첫방송 편성 확정", "드라마 캐스팅 확정", "예능 MC 확정", "시청률 종영", "방송사 사장", "화제성 1위 예능", "나는 SOLO"],
     quota: 5,
     require: /ENA|첫방|첫 방송|편성|캐스팅|출연 확정|시청률|종영|MC|예능|드라마|방송사|지상파|종편|tvN|JTBC|MBC|SBS|KBS|화제성|제작발표회|PD/,
-    boost: [[/ENA/, 5], [/나는 ?SOLO|나솔|지구마불|니돈내산/i, 3], [/편성|첫방|첫 방송|캐스팅|확정|시청률|화제성|종영/, 2], [/tvN|JTBC|MBC|SBS|KBS|채널A|MBN|TV ?조선/, 1]],
-    exclude: /스포|줄거리|몇부작|재방송 시간|인물관계도|결말|\[종합\]|눈물|충격|근황|오열|열애|결혼|임신|이혼|셀카|SNS|인스타/,
+    boost: [
+      [/ENA/, 5],
+      [/나는 ?SOLO|나솔|지구마불|니돈내산/i, 3],
+      [/편성|첫방|첫 방송|캐스팅|확정|시청률|화제성|종영/, 2], [/tvN|JTBC|MBC|SBS|KBS|채널A|MBN|TV ?조선/, 1],
+      // 시청률 기사는 종영·첫방·기록처럼 편성 판단에 쓰이는 것만 — 줄거리 끝에 시청률만 붙인 회차 기사는 뒤로
+      [/^(?!.*(?:종영|첫방|첫 방송|출발|자체 최고|최고|돌파|경신|1위|하락|급락|상승|급등)).*시청률/, -3],
+    ],
+    exclude: /몰아보기|스포|줄거리|몇부작|재방송 시간|인물관계도|결말|\[종합\]|눈물|충격|근황|오열|열애|결혼|임신|이혼|셀카|SNS|인스타|소감|비하인드|스틸|포스터|예고편|티저|관전 ?포인트|일문일답|연기대상|연예대상|명장면|패션|공항/,
   },
   {
     category: "OTT",
     queries: ["넷플릭스", "티빙", "웨이브 OTT", "쿠팡플레이", "디즈니플러스", "OTT 시장", "워너브러더스 디스커버리", "파라마운트 스카이댄스", "디즈니 구조조정 경영진", "컴캐스트 NBC유니버설", "소니픽쳐스 BBC HBO", "글로벌 미디어 인수합병 할리우드"],
     quota: 3,
-    require: /OTT|넷플릭스|티빙|웨이브|쿠팡플레이|디즈니|왓챠|스트리밍|워너|파라마운트|스카이댄스|HBO|디즈니|NBC|유니버설|컴캐스트|소니|BBC|할리우드|CBS/,
-    boost: [[/OTT/, 2], [/합병|이용자|구독|광고|요금|출시|독점|중계|실적|제휴|글로벌/, 2], [/티빙|웨이브|쿠팡플레이|넷플릭스/, 1]],
-    exclude: /스포|줄거리|몇부작|결말|후기|리뷰|추천작|이번 주 신작|볼만한/,
+    require: /OTT|넷플릭스|티빙|웨이브|쿠팡플레이|디즈니|왓챠|스트리밍|워너|파라마운트|스카이댄스|HBO|디즈니|NBC|유니버설|컴캐스트|소니|BBC|CBS/,
+    boost: [[/OTT/, 2], [/합병|이용자|구독|광고|요금|출시|독점|중계|실적|제휴|글로벌/, 2], [/티빙|웨이브|쿠팡플레이|넷플릭스/, 1], [/적자|흑자|매출|인수|투자|계약|파트너십|동맹|맞손|손 ?잡|점유율|가입자|규제|망 ?사용료|지상파|유료방송/, 3]],
+    // 공연·시상식 중계 안내와 주간 신작 모음은 사업 소식이 아니다
+    exclude: /스포|줄거리|몇부작|결말|후기|리뷰|추천작|이번 주 신작|볼만한|어워드|시상식|콘서트|팬미팅|신작\]|\d편$|명화|정주행/,
   },
   {
     category: "업계동향",
@@ -96,12 +115,24 @@ export const OVERSEAS_BOOST: [RegExp, number][] = [
   [/Netflix|Disney|Warner|Paramount|Skydance|Comcast|Amazon|Apple TV|HBO|Peacock|YouTube|Sony/i, 3],
   [/merger|acquisition|acquire|deal|layoff|earnings|revenue|subscriber|streaming|box office|ratings|strike|AI\b|licens|ad tier|bundle|CEO/i, 3],
   [/renew|cancel|greenlit|orders|series order|format|adaptation|remake/i, 2],
+  // 업계 전체에 걸리는 정책·규제
+  [/tax incentive|tax credit|tariff|regulat|\bFCC\b|antitrust|Congress|\bDOJ\b|quota/i, 3],
+  // 영화제 상영작·공로상·펠로십 소식은 판도 소식이 아니라 뒤로 민다
+  [/festival|award|honou?r|tribute|fellowship|legend/i, -3],
 ];
-export const OVERSEAS_EXCLUDE = /red carpet|dies at|obituar|trailer|first look|review:|recap|photos|best dressed|how to watch|where to watch|deal alert|shop|sale/i;
+// 개인 범죄·추문, 소속사 계약, 홍보 영상 공개는 업계 판도 소식이 아니다(2026-11-15 시험 실행에서 섞임)
+export const OVERSEAS_EXCLUDE =
+  /red carpet|\bdies\b|obituar|trailer|first look|review:|recap|photos|best dressed|how to watch|where to watch|deal alert|shop|\bsale\b|signs with|\bclip\b|teaser|sneak peek|poster|\brape|raped|sexual|assault|accuser|affairs?\b|arrest|sentenc|murder|abuse|to host|hosts? ['‘]?saturday night live/i;
+/** 해외 기사는 방송·영화 업계 표현이나 주요 미디어 그룹이 제목에 있어야 한다(업계지에 실린 타 업종 기사 제외) */
+export const OVERSEAS_REQUIRE =
+  /\bTV\b|television|film|movie|cinema|stream|studio|series|box office|broadcast|network|Hollywood|content|drama|animation|anime|Warner|WBD|Paramount|Skydance|Disney|NBCU|Universal|Comcast|Sony|CBS|BBC|ITV|Channel 4|Sky\b|HBO|Netflix|Amazon|MGM|Apple|Lionsgate|Fox\b|AMC|A24|Canal\+|Banijay|Fremantle|YouTube|Peacock|SAG-AFTRA|WGA|guild|MIPCOM|MIPTV|FilMart|Korea/i;
 
 /** 출연자 이슈 분류(4단계에서 명단과 함께 사용) — 제목에 이 표현이 있을 때만 후보가 된다 */
 export const CAST_RISK_CATEGORY = "출연자 이슈";
 export const CAST_RISK_TERMS = /논란|의혹|혐의|입건|송치|기소|구속|음주운전|마약|학폭|폭행|사기|탈세|하차|사과문|자숙|활동 중단|고소|피소|성추행|성희롱|도박|갑질/;
 
 /** 통신사·일간지·경제지·IT 전문지 — 같은 소식이면 이쪽 기사를 대표로 고른다(사용자가 실제로 올린 매체 위주) */
-export const TRUSTED_PUBLISHERS = /연합뉴스|뉴스1|뉴시스|전자신문|지디넷|ZDNet|디지털데일리|디지털투데이|머니투데이|매일경제|한국경제|서울경제|파이낸셜뉴스|아시아경제|이데일리|동아일보|중앙일보|조선일보|경향신문|한겨레|한국일보|더벨|아이뉴스24|조이뉴스24|일간스포츠|스포츠조선|엑스포츠뉴스|마이데일리|더팩트|이투데이|헤럴드경제|미디어오늘|PD저널|스포츠서울|스타뉴스|OSEN|텐아시아|뉴스핌|데일리안|블로터|IT조선|조선비즈/i;
+/** 네이버 검색은 매체명이 아니라 원문 주소를 주므로 같은 매체를 주소로도 알아본다(주소로 오면 위 이름 목록이 한 번도 맞지 않았다 — 2026-11-15) */
+export const TRUSTED_HOSTS =
+  /(?:^|\.)(?:yna\.co\.kr|news1\.kr|newsis\.com|etnews\.com|zdnet\.co\.kr|ddaily\.co\.kr|digitaltoday\.co\.kr|mt\.co\.kr|mk\.co\.kr|hankyung\.com|sedaily\.com|fnnews\.com|asiae\.co\.kr|edaily\.co\.kr|donga\.com|joongang\.co\.kr|chosun\.com|khan\.co\.kr|hani\.co\.kr|hankookilbo\.com|thebell\.co\.kr|inews24\.com|joynews24\.com|isplus\.com|sportschosun\.com|xportsnews\.com|mydaily\.co\.kr|tf\.co\.kr|etoday\.co\.kr|heraldcorp\.com|mediatoday\.co\.kr|pdjournal\.com|sportsseoul\.com|starnewskorea\.com|osen\.co\.kr|tenasia\.co\.kr|newspim\.com|dailian\.co\.kr|bloter\.net|sbs\.co\.kr|kbs\.co\.kr|imbc\.com|jtbc\.co\.kr|ytn\.co\.kr|mbn\.co\.kr|businesspost\.co\.kr|techm\.kr|dt\.co\.kr|ajunews\.com|nocutnews\.co\.kr|seoul\.co\.kr|munhwa\.com|segye\.com|kmib\.co\.kr|mediaus\.co\.kr|journalist\.or\.kr|newstomato\.com)$/i;
+export const TRUSTED_PUBLISHERS =/연합뉴스|뉴스1|뉴시스|전자신문|지디넷|ZDNet|디지털데일리|디지털투데이|머니투데이|매일경제|한국경제|서울경제|파이낸셜뉴스|아시아경제|이데일리|동아일보|중앙일보|조선일보|경향신문|한겨레|한국일보|더벨|아이뉴스24|조이뉴스24|일간스포츠|스포츠조선|엑스포츠뉴스|마이데일리|더팩트|이투데이|헤럴드경제|미디어오늘|PD저널|스포츠서울|스타뉴스|OSEN|텐아시아|뉴스핌|데일리안|블로터|IT조선|조선비즈/i;

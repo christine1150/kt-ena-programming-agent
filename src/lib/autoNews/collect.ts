@@ -1,6 +1,6 @@
 // 주요 뉴스 자동 수집 실행부 — 국내는 뉴스 검색(네이버 검색 API, 키가 없으면 시험용 공개 검색 피드), 해외는 업계지 공개 피드.
-// 선정은 규칙 점수(select.ts)로 후보를 좁힌 뒤 LLM을 하루 한 번만 불러 최종 선택·해외 제목 번역을 맡긴다(OpenAI 한도가 작다 — 사용자 2026-11-15).
-// LLM이 실패하면 규칙 결과를 그대로 쓴다(해외 제목은 원문).
+// 선정은 규칙 점수(select.ts)가 전담하고, LLM은 고른 해외 기사 제목 번역에만 하루 한 번 쓴다(OpenAI 한도가 작다 — 사용자 2026-11-15).
+// LLM이 실패하면 해외 제목만 원문으로 나간다.
 import { callOpenAiJsonSynthesis } from "@/lib/llmSynthesis";
 import { CATEGORIES, OVERSEAS_CATEGORY, OVERSEAS_FEEDS, OVERSEAS_MAX_AGE_HOURS } from "./config";
 import { decodeEntities, parseRssItems, pickByRules, rankAll, stripPublisherSuffix, type NewsCandidate, type PublishItem, type RankedPool } from "./select";
@@ -68,6 +68,8 @@ export interface CollectResult {
   source: "naver" | "trial";
   candidateCount: number;
   pools: RankedPool[];
+  /** 걸러내기 전 후보 전체(시험 실행에서 규칙을 다듬을 때 쓴다) */
+  candidates: NewsCandidate[];
 }
 
 /** 후보 수집 + 분류별 순위. allowTrial이 false면 네이버 키가 없을 때 국내 후보를 받지 않는다(운영 크론용) */
@@ -83,78 +85,98 @@ export async function collectNews(opts: { now?: number; allowTrial?: boolean } =
   const cands = (await Promise.all(jobs)).flat();
   // 하루 안 기사만 — 검색 API는 오래된 기사도 돌려준다(해외 피드는 OVERSEAS_MAX_AGE_HOURS까지)
   const fresh = cands.filter((c) => !c.publishedAt || now - Date.parse(c.publishedAt) <= (c.category === OVERSEAS_CATEGORY ? OVERSEAS_MAX_AGE_HOURS : 26) * 3_600_000);
-  return { source: useNaver ? "naver" : "trial", candidateCount: fresh.length, pools: rankAll(fresh, now) };
+  return { source: useNaver ? "naver" : "trial", candidateCount: fresh.length, pools: rankAll(fresh, now), candidates: fresh };
 }
 
-const PICK_SCHEMA = {
+const TRANSLATE_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["picks"],
+  required: ["titles"],
   properties: {
-    picks: {
+    titles: {
       type: "array",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "titleKo"],
-        properties: { id: { type: "integer" }, titleKo: { type: "string" } },
+        required: ["id", "ko"],
+        properties: { id: { type: "integer" }, ko: { type: "string" } },
       },
     },
   },
 };
 
-const PICK_PROMPT = [
-  "너는 KT ENA(방송 채널 사업자) 편성·전략 담당자가 아침에 읽는 '주요 뉴스' 편집자다.",
-  "분류별 후보 기사 제목 목록을 받아, 분류마다 quota 건수 이하로 가장 읽을 가치가 큰 기사를 고른다.",
-  "고르는 기준: ① KT·KT스카이라이프·ENA에 직접 관련 ② 유료방송·채널·콘텐츠 산업의 거래·실적·정책·갈등 ③ 방송사 편성·신작·캐스팅·시청률 ④ OTT 사업 동향.",
-  "제외: 줄거리·리뷰·사진 기사, 연예인 사생활 가십, 스포츠 경기 결과, 같은 소식의 중복(가장 정보가 많은 한 건만), 방송·미디어와 무관한 기사.",
-  "마땅한 기사가 없으면 quota를 채우지 말고 적게 골라라.",
-  "해외 대형 미디어 그룹(워너브러더스 디스커버리·파라마운트 스카이댄스·디즈니·NBC유니버설·컴캐스트·소니·CBS·BBC·HBO·넷플릭스·아마존 등 어느 한 곳에 치우치지 말 것)의 경영진 교체, 구조조정, M&A, 신작 라인업 발표처럼 전 세계 방송·영화·드라마 업계 판도를 바꿀 소식을 우선 고른다.",
-  "국내 방송·미디어·콘텐츠 업계의 대표·임원 승진·취임·선임 소식도 '업계동향'에서 놓치지 말고 고른다(인사 목록 기사는 방송·미디어 관련 인물이 있을 때만).",
-  "'해외 마켓·페어' 분류(MIPCOM·BCWW·ATF·홍콩 필마트)에 후보가 있으면 마켓별로 한 건씩 고른다.",
-  `'${OVERSEAS_CATEGORY}' 분류는 영어 제목이다. 산업·거래·플랫폼·편성 소식을 우선한다.`,
-  `titleKo 규칙: '${OVERSEAS_CATEGORY}' 분류에서 고른 기사는 titleKo에 한국어로 번역한 제목을 반드시 써라(과장 없이 원문 뜻 그대로, 고유명사는 통용 표기, 예: "Netflix Strikes Deal With Paramount" → "넷플릭스, 파라마운트와 계약 체결"). 그 밖의 분류는 titleKo를 빈 문자열로 둬라.`,
-  "id는 반드시 주어진 후보의 id만 써라.",
+const TRANSLATE_PROMPT = [
+  "방송·영화 업계지의 영어 기사 제목을 한국어 제목으로 옮긴다.",
+  "과장 없이 원문 뜻 그대로, 한 줄로 쓴다. 회사·작품·인물 이름은 한국에서 통용되는 표기를 쓰고, 통용 표기가 없으면 원문 철자를 그대로 둔다.",
+  "한국 신문 제목 문체로 쓴다: 주어 뒤에 쉼표를 두고 명사형으로 끝낸다(…체결, …추진, …제기). '~하다', '~에 의해 ~받다' 같은 직역투·수동태는 쓰지 않는다. 뜻이 불확실하면 꾸미지 말고 원문 낱말을 살려 짧게 쓴다.",
+  '예: "Netflix Strikes Deal With Paramount" → "넷플릭스, 파라마운트와 계약 체결"',
+  '예: "HBO Max-Paramount+ Bundle Targeted by Subscribers in Lawsuit Challenging Megamerger" → "구독자들, HBO 맥스·파라마운트+ 묶음 상품 겨냥해 초대형 합병 반대 소송 제기"',
+  '예: "SAG-AFTRA Boss Says AI Takedowns Matter More Than Damages To Performers" → "SAG-AFTRA 위원장 \\"배우들에겐 손해배상보다 AI 게시물 삭제가 더 중요\\""',
+  "(EXCLUSIVE) 같은 꼬리표는 뺀다.",
+  "받은 id마다 하나씩, id를 바꾸지 말고 돌려준다.",
 ].join("\n");
 
-/** LLM 최종 선택(한 번 호출). 실패하면 null — 호출부가 규칙 결과를 쓴다 */
-export async function pickWithLlm(pools: RankedPool[]): Promise<PublishItem[] | null> {
-  const flat: { id: number; category: string; title: string; url: string }[] = [];
-  const input = pools.map((p) => ({
-    category: p.category,
-    quota: p.quota,
-    candidates: p.ranked.slice(0, p.quota * 5).map((r) => {
-      const id = flat.length;
-      flat.push({ id, category: p.category, title: r.title, url: r.url });
-      return { id, title: r.title, publisher: r.publisher, coverage: r.coverage };
-    }),
-  }));
-  if (flat.length === 0) return null;
-  const res = await callOpenAiJsonSynthesis<{ picks: { id: number; titleKo: string }[] }>(PICK_PROMPT, input, "news_picks", PICK_SCHEMA, { temperature: 0.1, timeoutMs: 40_000 });
-  if (!res?.picks?.length) return null;
-  const seen = new Set<number>();
-  const count = new Map<string, number>();
-  const quota = new Map(pools.map((p) => [p.category, p.quota]));
-  const out: PublishItem[] = [];
-  for (const p of res.picks) {
-    const c = flat[p.id];
-    if (!c || seen.has(p.id)) continue;
-    const n = count.get(c.category) ?? 0;
-    if (n >= (quota.get(c.category) ?? 0)) continue;
-    seen.add(p.id);
-    count.set(c.category, n + 1);
-    const ko = c.category === OVERSEAS_CATEGORY ? p.titleKo.trim() : "";
-    out.push({ category: c.category, title: ko || c.title, url: c.url });
+/**
+ * 해외 기사 제목 번역 — LLM을 쓰는 유일한 곳(하루 한 번, 제목 6건 이하).
+ * 선정은 규칙이 전담한다: 2026-11-15 시험에서 LLM에 선정까지 맡기자 규칙이 고른 21건 중 7건만 남기고 자사 첫 방송 기사까지 뺐고,
+ * 후보 60~150건을 매번 보내야 해 한도도 많이 썼다(사용자 지시: LLM 한도는 최대한 아낀다).
+ * 실패하거나 일부만 돌아오면 해당 제목은 원문 그대로 둔다.
+ */
+export async function translateOverseasTitles(items: PublishItem[]): Promise<{ items: PublishItem[]; translated: number }> {
+  const targets = items.map((it, id) => ({ id, it })).filter((x) => x.it.category === OVERSEAS_CATEGORY);
+  if (targets.length === 0) return { items, translated: 0 };
+  const res = await callOpenAiJsonSynthesis<{ titles: { id: number; ko: string }[] }>(
+    TRANSLATE_PROMPT,
+    targets.map((x) => ({ id: x.id, title: x.it.title })),
+    "news_title_translation",
+    TRANSLATE_SCHEMA,
+    { temperature: 0.1, timeoutMs: 30_000 }
+  );
+  const ko = new Map<number, string>();
+  for (const t of res?.titles ?? []) {
+    const s = t.ko.trim();
+    // 한글이 없는 응답(번역 안 됨)이나 지나치게 긴 응답은 버린다
+    if (targets.some((x) => x.id === t.id) && /[가-힣]/.test(s) && s.length <= 120) ko.set(t.id, s);
   }
-  if (out.length === 0) return null;
-  // 화면 순서는 분류 설정 순서
-  const order = new Map(pools.map((p, i) => [p.category, i]));
-  return out.sort((a, b) => (order.get(a.category) ?? 0) - (order.get(b.category) ?? 0));
+  return { items: items.map((it, id) => (ko.has(id) ? { ...it, title: ko.get(id)! } : it)), translated: ko.size };
 }
 
-/** 수집 → 선정. method는 실제로 쓰인 선정 방식 */
-export async function buildDailyNews(opts: { now?: number; allowTrial?: boolean; useLlm?: boolean } = {}): Promise<CollectResult & { items: PublishItem[]; method: "llm" | "rules" }> {
+const TRUNCATED = /\.{3}$/;
+const loose = (s: string) => s.toLowerCase().replace(/[^0-9a-z가-힣]/g, "");
+
+/** 검색 API가 40자쯤에서 자른 제목("…...")을 원문 페이지의 제목으로 되돌린다. 확인되지 않으면 null(LLM 없이 처리) */
+export function fullTitleFromHtml(html: string, truncated: string): string | null {
+  const m = /<meta[^>]+(?:property|name)=["']og:title["'][^>]*content=["']([^"']+)["']/i.exec(html) ?? /<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']og:title["']/i.exec(html);
+  if (!m) return null;
+  const stem = loose(truncated.replace(TRUNCATED, ""));
+  let full = decodeEntities(m[1]);
+  // 글자가 깨졌거나(다른 문자 인코딩) 다른 기사 제목이면 쓰지 않는다
+  if (stem.length < 6 || full.includes("�") || !loose(full).startsWith(stem)) return null;
+  // 제목 뒤 " | 매체명"·" - 매체명" 꼬리표는 잘린 제목 길이를 넘는 위치에 있을 때만 뗀다
+  const cut = Math.max(full.lastIndexOf(" | "), full.lastIndexOf(" - "), full.lastIndexOf(" < "));
+  if (cut > 0 && loose(full.slice(0, cut)).length >= stem.length) full = full.slice(0, cut).trim();
+  return full.length <= 120 ? full : null;
+}
+
+async function completeTitles(items: PublishItem[]): Promise<PublishItem[]> {
+  return Promise.all(
+    items.map(async (it) => {
+      if (!TRUNCATED.test(it.title)) return it;
+      const html = await fetchText(it.url, {}, 6_000);
+      const full = html ? fullTitleFromHtml(html, it.title) : null;
+      return { ...it, title: full ?? it.title.replace(TRUNCATED, "…") };
+    })
+  );
+}
+
+/**
+ * 수집 → 규칙 선정 → 잘린 제목 복원 → 해외 제목 번역.
+ * LLM은 번역에만 하루 한 번 쓰고, AUTO_NEWS_USE_LLM=0이면 아예 부르지 않는다(해외 제목은 원문으로 게시).
+ */
+export async function buildDailyNews(opts: { now?: number; allowTrial?: boolean; useLlm?: boolean } = {}): Promise<CollectResult & { items: PublishItem[]; translated: number }> {
   const collected = await collectNews(opts);
-  const llm = opts.useLlm === false ? null : await pickWithLlm(collected.pools);
-  return { ...collected, items: llm ?? pickByRules(collected.pools), method: llm ? "llm" : "rules" };
+  const picked = await completeTitles(pickByRules(collected.pools));
+  const useLlm = opts.useLlm ?? process.env.AUTO_NEWS_USE_LLM !== "0";
+  const done = useLlm ? await translateOverseasTitles(picked) : { items: picked, translated: 0 };
+  return { ...collected, ...done };
 }
