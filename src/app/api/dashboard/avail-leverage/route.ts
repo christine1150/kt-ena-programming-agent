@@ -2,6 +2,7 @@
 // 예측에 20초 안팎이 걸려 홈 제안(/api/dashboard/ai-suggestions)과 따로 부른다 — 이 줄만 늦게 채워져도 나머지 문구는 먼저 보인다.
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/adminAuth";
+import { isWarmupAuthorized } from "@/lib/cronAuth";
 import { computeAvailLeverage } from "@/lib/dashboard/availLeverage";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,8 @@ const CODES = new Set(["ENA_PLAY", "ENA_DRAMA", "ENA_STORY"]);
 
 export async function GET(request: Request) {
   const session = await getCurrentSession();
-  if (!session) return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
+  // 2026-11-16: 닐슨 적재 직후 미리 열기(briefingWarmup.ts)만 세션 대신 CRON_SECRET으로 통과 — 첫 접속 26초를 저장본 조회로
+  if (!session && !isWarmupAuthorized(request.headers.get("authorization"))) return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
   const params = new URL(request.url).searchParams;
   const channel = params.get("channel") ?? "";
   const date = params.get("date") ?? "";

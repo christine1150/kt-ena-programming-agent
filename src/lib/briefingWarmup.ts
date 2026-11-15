@@ -21,22 +21,35 @@ export function scheduleBriefingWarmup(reason: string): void {
   const now = Date.now();
   if (now - lastScheduledAt < MIN_INTERVAL_MS) return;
   lastScheduledAt = now;
+  const call = async (path: string): Promise<unknown> => {
+    const t0 = Date.now();
+    const res = await fetch(`https://${prodHost}${path}`, {
+      headers: { authorization: `Bearer ${secret}` },
+      redirect: "manual",
+      cache: "no-store",
+      signal: AbortSignal.timeout(120_000),
+    }).catch((e: unknown) => {
+      console.error(`[briefing-warmup] ${reason} ${path} 호출 실패: ${e instanceof Error ? e.message : String(e)}`);
+      return null;
+    });
+    if (!res) return null;
+    // 응답을 끝까지 받아 서버 계산·캐시 저장이 마무리되게 한다
+    const body = await res.json().catch(() => null);
+    console.log(`[briefing-warmup] ${reason} ${path} HTTP ${res.status} ${Date.now() - t0}ms`);
+    return body;
+  };
   try {
     after(async () => {
-      const t0 = Date.now();
-      const res = await fetch(`https://${prodHost}/api/dashboard/page1`, {
-        headers: { authorization: `Bearer ${secret}` },
-        redirect: "manual",
-        cache: "no-store",
-        signal: AbortSignal.timeout(120_000),
-      }).catch((e: unknown) => {
-        console.error(`[briefing-warmup] ${reason} 호출 실패: ${e instanceof Error ? e.message : String(e)}`);
-        return null;
-      });
-      if (res) {
-        await res.arrayBuffer().catch(() => null); // 응답을 끝까지 받아 서버 계산이 마무리되게 한다
-        console.log(`[briefing-warmup] ${reason} HTTP ${res.status} ${Date.now() - t0}ms`);
-      }
+      // 1) 브리핑 본문 — 응답의 기준일(asOfDate)을 아래 호출이 그대로 쓴다(화면도 같은 값으로 부른다)
+      const page1 = (await call("/api/dashboard/page1")) as { ok?: boolean; asOfDate?: string } | null;
+      const asOfDate = page1?.ok && typeof page1.asOfDate === "string" ? page1.asOfDate : null;
+      if (!asOfDate) return;
+      // 2) 채널 타일의 'Avail 보유 콘텐츠 활용'(첫 접속 실측 26초, 같은 날·같은 권리 상태면 DB 저장본 사용) — 인자가 채널·날짜뿐이라
+      //    화면 요청과 저장 열쇠가 정확히 같다. AI 대체 편성(ai-suggestions)은 요청 인자(focus)를 화면 함수가 브리핑 데이터로 정해
+      //    서버에서 같은 값을 만들 수 없어 넣지 않았다.
+      await Promise.all(
+        ["ENA_PLAY", "ENA_DRAMA", "ENA_STORY"].map((code) => call(`/api/dashboard/avail-leverage?channel=${code}&date=${asOfDate}`))
+      );
     });
   } catch {
     // 요청 밖(스크립트 실행 등)에서는 after를 쓸 수 없다 — 미리 열기 없이 지나간다

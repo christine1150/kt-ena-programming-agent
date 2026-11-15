@@ -12,6 +12,16 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * 미리 열기(briefingWarmup.ts) 호출인가 — 로그인 세션 대신 CRON_SECRET으로 화면용 API를 통과시킬 때만 쓴다(2026-11-16).
+ * checkCronAuth와 달리 개발 환경에서도 비밀 값이 없으면 거부한다(세션이 필요한 API를 로컬에서 헤더만으로 열지 않도록).
+ */
+export function isWarmupAuthorized(authorization: string | null, env: Record<string, string | undefined> = process.env): boolean {
+  const secret = env.CRON_SECRET;
+  if (!secret || !authorization) return false;
+  return safeEqual(authorization, `Bearer ${secret}`);
+}
+
 export function checkCronAuth(authorization: string | null, env: Record<string, string | undefined> = process.env): CronAuthResult {
   const secret = env.CRON_SECRET;
   if (!secret) {
