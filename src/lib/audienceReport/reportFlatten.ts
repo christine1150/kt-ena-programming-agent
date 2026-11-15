@@ -12,7 +12,7 @@
 //
 // 차트는 문서에 이미지로 넣는 파이프라인이 이 프로젝트에 없다(구 시스템도 동일한 한계였다) —
 // 차트 대신 같은 값을 표로 내보낸다. 값을 잃지 않으면서 문서에서 바로 읽을 수 있는 형태다.
-import type { AudienceReportDocument, Maybe, KpiCard, RecommendationSection } from "./reportModel";
+import type { AudienceReportDocument, Maybe, KpiCard, RecommendationSection, ModeCSection } from "./reportModel";
 import { formatRating, formatPercent } from "./format";
 import { toGaejosik } from "./gaejosik";
 
@@ -88,6 +88,33 @@ function dirOf(v: number | null | undefined): "up" | "down" | "flat" {
 }
 function num(v: number | null | undefined, digits = 3): string {
   return v === null || v === undefined ? "—" : v.toFixed(digits);
+}
+
+/**
+ * 01 변화 요약 — 보고서 첫 쪽의 한 줄 판정(값은 이미 계산된 KPI 대조표·변화 분해에서 옮길 뿐 새로 계산하지 않는다).
+ * 한 줄: 시청률 {기간 A}로 직전 기간({기간 B}) 대비 ▲x% 상승 / 이어서 오른 주역·내린 주역(변화량이 가장 큰 프로그램)과 순위 변화.
+ * KPI 대조표에 Rating 행이 없으면 예전 문장(방향·크게 움직인 프로그램)으로 되돌린다.
+ */
+export function changeVerdictBlocks(s: ModeCSection, code: string): DocBlock[] {
+  const cs = s.changeSummary;
+  const word = cs.direction === "up" ? "상승" : cs.direction === "down" ? "하락" : "변화 없음";
+  const rating = s.kpiCompareTable.rows.find((r) => r.label === "Rating");
+  const rank = s.kpiCompareTable.rows.find((r) => r.label.includes("순위"));
+  if (!rating || cs.magnitude === null) {
+    return [{ kind: "text", text: `방향: ${word} ${cs.magnitude !== null ? `(${pct(cs.magnitude)})` : ""}${cs.topContributor ? ` · 가장 크게 움직인 프로그램: ${cs.topContributor}` : ""}` }];
+  }
+  const out: DocBlock[] = [{ kind: "text", text: `시청률 ${rating.formattedA}로 직전 기간(${rating.formattedB}) 대비 ${pct(cs.magnitude)} ${word}` }];
+  const signed = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(4)}`;
+  const withDelta = s.changeBreakdown.filter((r) => r.ratingDelta !== null && r.ratingDelta !== 0);
+  const up = [...withDelta].sort((p, q) => q.ratingDelta! - p.ratingDelta!)[0];
+  const down = [...withDelta].sort((p, q) => p.ratingDelta! - q.ratingDelta!)[0];
+  const items: string[] = [];
+  const line = (label: string, r: (typeof withDelta)[number]) => `${label}: ${r.canonicalName}${r.kind === "유지" ? "" : `(${r.kind})`} ${signed(r.ratingDelta!)} (${formatRating(r.priorAvgRating, code)} → ${formatRating(r.periodAvgRating, code)})`;
+  if (up && up.ratingDelta! > 0) items.push(line("오른 주역", up));
+  if (down && down.ratingDelta! < 0) items.push(line("내린 주역", down));
+  if (rank) items.push(`${rank.label}: ${rank.formattedA} (직전 ${rank.formattedB})`);
+  if (items.length > 0) out.push({ kind: "bullets", items });
+  return out;
 }
 
 function kpiBlock(cards: KpiCard[]): DocBlock {
@@ -252,7 +279,7 @@ export function flattenAudienceReport(doc: AudienceReportDocument): FlatReport {
     sections.push({
       key: "change_summary", title: "01 변화 요약",
       blocks: [
-        { kind: "text", text: `방향: ${s.changeSummary.direction === "up" ? "상승" : s.changeSummary.direction === "down" ? "하락" : "변화 없음"} ${s.changeSummary.magnitude !== null ? `(${pct(s.changeSummary.magnitude)})` : ""}${s.changeSummary.topContributor ? ` · 가장 크게 움직인 프로그램: ${s.changeSummary.topContributor}` : ""}` },
+        ...changeVerdictBlocks(s, code),
         ...(s.changeSummary.lengthMismatchNote ? ([{ kind: "note", text: s.changeSummary.lengthMismatchNote }] as DocBlock[]) : []),
       ],
     });

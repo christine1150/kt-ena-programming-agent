@@ -1,5 +1,7 @@
 // 보고서 근거 단락(편성 변경 사후 효과·공휴일 영향) 순수 함수 테스트 — 고도화 B1·A2. DB·네트워크 없음.
 // 실행: npm run test:evidence-sections
+import { changeVerdictBlocks } from "../src/lib/audienceReport/reportFlatten";
+import type { ModeCSection } from "../src/lib/audienceReport/reportModel";
 import { holidayTypeOf } from "../src/lib/holiday/dayType";
 import { changeEffectSection, forecastAccuracySection, holidayEffectSection, REPORT_MIN_N, CHANGE_EFFECT_NOTE, HOLIDAY_EFFECT_NOTE, HOLIDAY_REFERENCE } from "../src/lib/reportSnapshot/evidenceText";
 import { earliestPerWeek, summarizeForecastAccuracy, type ReviewedSlot, type SlotValue, type WeekReview } from "../src/lib/reportSnapshot/forecastAccuracyCore";
@@ -211,6 +213,30 @@ const faAll = JSON.stringify(fa);
 ok("한계 주석(가장 이른 예측만 셈)", faAll.includes("가장 이른"));
 const manyWeeks = forecastAccuracySection({ ...acc!, weeks: 8 }, "ENA_PLAY");
 ok("4주 이상이면 표본 적음 안내 없음", !JSON.stringify(manyWeeks).includes("표본 적음"));
+
+// ───────── 01 변화 요약(첫 쪽 한 줄 판정) ─────────
+{
+  const mk = (over: Record<string, unknown> = {}) =>
+    ({
+      changeSummary: { direction: "up", magnitude: 20.4, topContributor: "니돈내산", lengthMismatchNote: null },
+      kpiCompareTable: { rows: [{ label: "Rating", formattedA: "0.049", formattedB: "0.041", pctChange: 20.4 }, { label: "일별 평균 순위", formattedA: "66위", formattedB: "74위", pctChange: -11.2 }] },
+      changeBreakdown: [
+        { canonicalName: "니돈내산", kind: "유지", periodAvgRating: 0.049, priorAvgRating: 0.013, ratingDelta: 0.0362 },
+        { canonicalName: "천일야사", kind: "유지", periodAvgRating: 0.017, priorAvgRating: 0.024, ratingDelta: -0.0073 },
+        { canonicalName: "지구마불", kind: "신규", periodAvgRating: 0.01, priorAvgRating: null, ratingDelta: 0.0101 },
+      ],
+      ...over,
+    }) as unknown as ModeCSection;
+  const v = changeVerdictBlocks(mk(), "ENA_STORY");
+  eq("판정: 첫 줄은 시청률·직전·방향", (v[0] as { text: string }).text, "시청률 0.049로 직전 기간(0.041) 대비 ▲ 20.4% 상승");
+  const items = (v[1] as { items: string[] }).items;
+  ok("판정: 오른 주역은 변화량이 가장 큰 프로그램", items[0].startsWith("오른 주역: 니돈내산 +0.0362"));
+  ok("판정: 내린 주역과 순위 줄", items[1].startsWith("내린 주역: 천일야사 −0.0073") && items[2].includes("66위") && items[2].includes("직전 74위"));
+  const noRating = changeVerdictBlocks(mk({ kpiCompareTable: { rows: [] } }), "ENA_STORY");
+  ok("판정: Rating 행이 없으면 예전 문장", noRating.length === 1 && (noRating[0] as { text: string }).text.startsWith("방향: 상승"));
+  const onlyUp = changeVerdictBlocks(mk({ changeBreakdown: [{ canonicalName: "가", kind: "유지", periodAvgRating: 0.02, priorAvgRating: 0.01, ratingDelta: 0.01 }] }), "ENA_STORY");
+  ok("판정: 내린 프로그램이 없으면 내린 주역 줄 없음", !(onlyUp[1] as { items: string[] }).items.some((i) => i.startsWith("내린 주역")));
+}
 
 console.log(`\n${pass}건 통과${fail ? `, ${fail}건 실패` : ""}`);
 if (fail) process.exit(1);
