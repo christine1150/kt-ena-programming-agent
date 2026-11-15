@@ -60,7 +60,7 @@ function cell(text: string, width: number, o?: { header?: boolean; align?: "left
     verticalAlign: VerticalAlign.CENTER,
     shading: o?.header || o?.fill ? { type: ShadingType.CLEAR, color: "auto", fill: o.fill ?? HEAD_FILL } : undefined,
     margins: { top: 50, bottom: 50, left: 90, right: 90 },
-    children: [new Paragraph({ alignment: align, spacing: { after: 0, line: 260 }, children: [run(text, { bold: o?.header, size: 18 })] })],
+    children: [new Paragraph({ alignment: align, keepNext: o?.header ? true : undefined, spacing: { after: 0, line: 260 }, children: [run(text, { bold: o?.header, size: 18 })] })], // 머리행은 다음 행과 같은 쪽에 둔다(머리행만 쪽 끝에 남는 일 방지)
   });
 }
 
