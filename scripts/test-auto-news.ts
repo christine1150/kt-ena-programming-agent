@@ -1,5 +1,6 @@
 // 주요 뉴스 자동 선정 순수 함수 검사 — 실행: npm run test:auto-news
 import { CATEGORIES, OVERSEAS_CATEGORY } from "../src/lib/autoNews/config";
+import { buildCastQueries, castDisplayTitle, classifyCast, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
 import { decodeEntities, parseRssItems, pickByRules, rankAll, rankCategory, stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "../src/lib/autoNews/select";
 
 let pass = 0;
@@ -55,6 +56,25 @@ ok("해외 가십 제외", picked.filter((p) => p.category === OVERSEAS_CATEGORY
 ok("분류 순서 유지", picked.map((p) => p.category).join(">") === `정책>OTT>${OVERSEAS_CATEGORY}`);
 const many = Array.from({ length: 10 }, (_, i) => c("OTT", `넷플릭스 ${["광고", "요금", "구독", "합병", "출시", "독점", "중계", "실적", "제휴", "글로벌"][i]} 관련 새 소식 ${"가나다라마바사아자차"[i].repeat(8)}`));
 ok("분류 상한 지킴", pickByRules(rankAll(many, NOW)).length === CATEGORIES.find((x) => x.category === "OTT")!.quota);
+
+// 출연자 이슈
+const roster: CastEntry[] = [
+  { name: "김가나", program: "자사 신작 드라마", scope: "own_upcoming" },
+  { name: "이다라", program: "자사 지난 예능", scope: "own_past" },
+  { name: "박마바", program: "타사 드라마", scope: "other" },
+  { name: "", program: "나는 SOLO", scope: "solo" },
+];
+const cc = (title: string) => c("출연자 이슈", title, "연합뉴스");
+ok("자사 예정작 출연자 위험 기사", classifyCast("김가나, 음주운전 혐의 입건", roster)?.signal === "risk");
+ok("자사 출연자 흥행 기사", classifyCast("이다라 주연 예능 시청률 자체 최고 경신", roster)?.signal === "rise");
+ok("타사 출연자는 흥행 기사 제외", classifyCast("박마바 주연 드라마 시청률 급등", roster) === null);
+ok("타사 출연자 위험 기사는 포함", classifyCast("박마바 폭행 논란", roster)?.signal === "risk");
+ok("명단 밖 인물 제외", classifyCast("홍길동 음주운전 입건", roster) === null);
+ok("나는 SOLO 일반인 기사(프로그램명 매칭)", classifyCast("'나는 SOLO' 출연자 논란 확산…제작진 입장", roster)?.signal === "risk");
+const issues = pickCastIssues([cc("박마바 폭행 논란"), cc("김가나, 음주운전 혐의 입건"), cc("김가나 음주운전 혐의로 입건")], roster, 5);
+ok("같은 소식 묶고 자사 예정작이 앞", issues.length === 2 && issues[0].entry.name === "김가나");
+ok("위험 기사 표시 문구", castDisplayTitle(issues[0]).endsWith("(확인 필요)"));
+ok("검색어 생성(솔로는 프로그램 단위)", buildCastQueries(roster).filter((q) => q.entry.scope === "solo").every((q) => q.query.startsWith("나는 SOLO")));
 
 console.log(`${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

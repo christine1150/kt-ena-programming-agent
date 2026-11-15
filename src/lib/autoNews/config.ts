@@ -17,7 +17,7 @@ export interface CategoryConfig {
 }
 
 /** 모든 분류에서 빼는 기사(사진·부고·인사·주가 단신·운세 등) */
-export const GLOBAL_EXCLUDE = /\[포토\]|\[사진\]|포토뉴스|화보|\[부고\]|\[인사\]|부음|운세|특징주|\[표\]|급등주|상한가|\[날씨\]|로또|\[게시판\]|보도자료|\[영상\]|포토엔|포토S|증시|주식정보|하락 마감|상승 마감|\.gif/;
+export const GLOBAL_EXCLUDE = /\[포토\]|\[사진\]|포토뉴스|화보|\[부고\]|부음|운세|특징주|\[표\]|급등주|상한가|\[날씨\]|로또|\[게시판\]|보도자료|\[영상\]|포토엔|포토S|증시|주식정보|하락 마감|상승 마감|\.gif/;
 
 export const CATEGORIES: CategoryConfig[] = [
   {
@@ -45,18 +45,18 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     category: "OTT",
-    queries: ["넷플릭스", "티빙", "웨이브 OTT", "쿠팡플레이", "디즈니플러스", "OTT 시장", "워너브러더스 디스커버리", "파라마운트 스카이댄스"],
+    queries: ["넷플릭스", "티빙", "웨이브 OTT", "쿠팡플레이", "디즈니플러스", "OTT 시장", "워너브러더스 디스커버리", "파라마운트 스카이댄스", "디즈니 구조조정 경영진", "컴캐스트 NBC유니버설", "소니픽쳐스 BBC HBO", "글로벌 미디어 인수합병 할리우드"],
     quota: 3,
-    require: /OTT|넷플릭스|티빙|웨이브|쿠팡플레이|디즈니|왓챠|스트리밍|워너|파라마운트|스카이댄스|HBO/,
+    require: /OTT|넷플릭스|티빙|웨이브|쿠팡플레이|디즈니|왓챠|스트리밍|워너|파라마운트|스카이댄스|HBO|디즈니|NBC|유니버설|컴캐스트|소니|BBC|할리우드|CBS/,
     boost: [[/OTT/, 2], [/합병|이용자|구독|광고|요금|출시|독점|중계|실적|제휴|글로벌/, 2], [/티빙|웨이브|쿠팡플레이|넷플릭스/, 1]],
     exclude: /스포|줄거리|몇부작|결말|후기|리뷰|추천작|이번 주 신작|볼만한/,
   },
   {
     category: "업계동향",
-    queries: ["케이블TV", "유료방송", "CJ ENM", "콘텐츠 사용료", "FAST 채널", "스튜디오드래곤", "IPTV", "K콘텐츠 IP", "방송 광고 시장", "LG헬로비전", "CJ ENM 실적 tvN", "SBS 실적 미디어", "JTBC 스튜디오", "MBC 사장 경영", "KBS 수신료 재원", "종편 재승인", "SK브로드밴드 LG유플러스 미디어"],
-    quota: 6,
+    queries: ["케이블TV", "유료방송", "CJ ENM", "콘텐츠 사용료", "FAST 채널", "스튜디오드래곤", "IPTV", "K콘텐츠 IP", "방송 광고 시장", "LG헬로비전", "CJ ENM 실적 tvN", "SBS 실적 미디어", "JTBC 스튜디오", "MBC 사장 경영", "KBS 수신료 재원", "종편 재승인", "SK브로드밴드 LG유플러스 미디어", "방송사 대표 선임 취임", "미디어 콘텐츠 임원 인사 승진", "CJ ENM 대표 인사", "신임 사장 방송 OTT"],
+    quota: 7,
     require: /케이블|유료방송|SO|PP|CJ ?ENM|사용료|FAST|스튜디오|IPTV|콘텐츠|미디어|방송|광고|헬로비전|딜라이브|제작사|tvN|SBS|JTBC|MBC|KBS|종편|SK브로드밴드|LG유플러스|티빙/,
-    boost: [[/유료방송|케이블|SO|PP|사용료|IPTV/, 3], [/CJ ?ENM|tvN|스튜디오드래곤|헬로비전|딜라이브|SLL|콘텐트리|JTBC|SBS|MBC|KBS/, 3], [/영업익|영업이익|실적|매각|인수|합병|송출 중단|갈등|수출|FAST|사장|구조조정|재승인/, 2]],
+    boost: [[/유료방송|케이블|SO|PP|사용료|IPTV/, 3], [/CJ ?ENM|tvN|스튜디오드래곤|헬로비전|딜라이브|SLL|콘텐트리|JTBC|SBS|MBC|KBS/, 3], [/영업익|영업이익|실적|매각|인수|합병|송출 중단|갈등|수출|FAST|사장|구조조정|재승인/, 2], [/취임|선임|승진|내정|영입|신임|임명|대표이사|부사장|본부장|국장/, 3]],
     exclude: /스포|줄거리|몇부작|결말/,
   },
   {
@@ -72,7 +72,7 @@ export const CATEGORIES: CategoryConfig[] = [
 
 /** 해외 방송·영화 업계지 공개 피드(제목은 한국어로 옮겨 싣고 링크는 원문) */
 export const OVERSEAS_CATEGORY = "해외 방송·영화";
-export const OVERSEAS_QUOTA = 4;
+export const OVERSEAS_QUOTA = 6;
 export const OVERSEAS_FEEDS: { name: string; url: string }[] = [
   // 전체 피드는 가십·시상식 기사가 많아 산업·TV·국제 부문 피드만 받는다(2026-11-15 접속 확인)
   { name: "Variety", url: "https://variety.com/v/biz/feed/" },
@@ -88,7 +88,10 @@ export const OVERSEAS_MAX_AGE_HOURS = 72;
 /** 해외 기사 가산 — 산업·거래·플랫폼·한국 관련을 앞에 둔다(가십·시상식 패션은 뒤로) */
 export const OVERSEAS_BOOST: [RegExp, number][] = [
   [/\bKorea|K-drama|K-pop|CJ ENM|Squid Game/i, 5],
-  [/Warner|WBD|Paramount|Skydance/i, 5],
+  // 세계 방송·영화 업계에 영향을 주는 대형 그룹 전체(특정 회사 편중 없이 같은 가산)
+  [/Warner|WBD|Paramount|Skydance|Disney|ESPN|Pixar|Lucasfilm|NBCUniversal|NBCU|Universal|Comcast|Versant|Sony|CBS|BBC|ITV|Channel 4|Sky\b|HBO|Netflix|Amazon|MGM|Apple|Lionsgate|Fox\b|AMC|A24|Canal\+|RTL|ProSieben|Banijay|Fremantle|Endeavor|WME|CAA|Tencent|iQiyi|Toho|Studio Ghibli|TF1|Mediaset|Globo|Televisa|JioStar|Reliance/i, 4],
+  // 경영진 교체·구조조정·M&A·신작 라인업 발표 — 업계 판도를 바꾸는 소식
+  [/CEO|chief|chairman|president|exits?|steps down|appoint|names? new|promot|succeed|ousted|hires?|taps?|restructur|layoffs?|reorg|spin-?off|merge|acquir|acquisition|takeover|buyout|bid|sells?|sale of|upfront|slate|lineup|greenlights? slate|unveils?/i, 3],
   [/MIPCOM|MIPTV|BCWW|Asia TV Forum|\bATF\b|FilMart|Hong Kong/i, 4],
   [/Netflix|Disney|Warner|Paramount|Skydance|Comcast|Amazon|Apple TV|HBO|Peacock|YouTube|Sony/i, 3],
   [/merger|acquisition|acquire|deal|layoff|earnings|revenue|subscriber|streaming|box office|ratings|strike|AI\b|licens|ad tier|bundle|CEO/i, 3],
