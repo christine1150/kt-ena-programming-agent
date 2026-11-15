@@ -67,9 +67,12 @@ const roster: CastEntry[] = [
 const cc = (title: string) => c("출연자 이슈", title, "연합뉴스");
 ok("자사 예정작 출연자 위험 기사", classifyCast("김가나, 음주운전 혐의 입건", roster)?.signal === "risk");
 ok("자사 출연자 흥행 기사", classifyCast("이다라 주연 예능 시청률 자체 최고 경신", roster)?.signal === "rise");
-ok("타사 출연자는 흥행 기사 제외", classifyCast("박마바 주연 드라마 시청률 급등", roster) === null);
 ok("타사 출연자 위험 기사는 포함", classifyCast("박마바 폭행 논란", roster)?.signal === "risk");
-ok("명단 밖 인물 제외", classifyCast("홍길동 음주운전 입건", roster) === null);
+ok("명단 밖 타사 배우 중대 사안(방송 맥락 있음)", classifyCast("인기 드라마 주연 배우 음주운전 입건", roster)?.entry.scope === "other");
+ok("명단 밖 인물 가벼운 논란은 제외", classifyCast("홍길동 SNS 논란", roster) === null);
+ok("명단 밖 방송 맥락 없는 사건 제외", classifyCast("회사원 음주운전 입건", roster) === null);
+ok("타사 작품 역대 최고 시청률 기사", classifyCast("타사 드라마 역대 최고 시청률 경신", roster)?.signal === "rise");
+ok("타사 일반 흥행 표현만으로는 제외", classifyCast("타사 드라마 시청률 상승", roster) === null);
 ok("나는 SOLO 일반인 기사(프로그램명 매칭)", classifyCast("'나는 SOLO' 출연자 논란 확산…제작진 입장", roster)?.signal === "risk");
 const issues = pickCastIssues([cc("박마바 폭행 논란"), cc("김가나, 음주운전 혐의 입건"), cc("김가나 음주운전 혐의로 입건")], roster, 5);
 ok("같은 소식 묶고 자사 예정작이 앞", issues.length === 2 && issues[0].entry.name === "김가나");

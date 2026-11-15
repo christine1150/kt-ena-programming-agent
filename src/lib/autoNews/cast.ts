@@ -17,7 +17,15 @@ export interface CastEntry {
 /** 편성을 줄이거나 빼야 할 근거가 되는 표현(범죄·논란) */
 export const RISK_TERMS = CAST_RISK_TERMS;
 /** 편성을 늘리거나 후속을 검토할 근거가 되는 표현(흥행·화제·후속) */
-export const RISE_TERMS = /시청률 (?:상승|급등|자체 최고|돌파)|화제성 1위|신드롬|흥행|역주행|시즌 ?2|후속 편성|스핀오프|차기작 확정|캐스팅 확정|주연 확정/;
+export const RISE_TERMS = /시청률 (?:상승|급등|자체 최고|돌파)|역대 최고|최고 시청률|최고 화제성|화제성 1위|신드롬|흥행|역주행|시즌 ?2|후속 편성|스핀오프|차기작 확정|캐스팅 확정|주연 확정/;
+
+// 타사 작품 출연자는 이름 명단 없이 본다(사용자 결정 2026-11-15) — 논란 기사는 너무 많아 중대 사안 표현 + 방송 맥락이 함께 있을 때만,
+// 흥행 기사는 '역대·자체 최고' 같은 기록 표현 + 방송 맥락이 함께 있을 때만 싣는다.
+const OTHER_SEVERE = /혐의|입건|송치|기소|구속|음주운전|마약|학폭|폭행|사기|탈세|하차|활동 중단|피소|성추행|성희롱|도박|갑질/;
+const OTHER_RECORD = /역대 최고|최고 시청률|자체 최고|최고 화제성|화제성 1위|신드롬|역주행/;
+const BROADCAST_CONTEXT = /드라마|예능|출연|하차|방송|배우|MC|주연|시청률|화제성/;
+/** 명단에 없는 타사 작품 출연자 기사를 모으는 공통 항목 */
+export const OTHER_ENTRY: CastEntry = { name: "", program: "타사 작품", scope: "other" };
 
 const SCOPE_WEIGHT: Record<CastScope, number> = { own_upcoming: 6, own_past: 4, solo: 4, other: 1 };
 /** 위험 신호는 기사 하나가 편성 판단을 바꾸므로 흥행 신호보다 앞에 둔다 */
@@ -43,6 +51,8 @@ export function buildCastQueries(roster: CastEntry[]): { query: string; entry: C
       out.push({ query: `${e.name} 논란 의혹`, entry: e }, { query: `${e.name} ${e.program}`, entry: e });
     }
   }
+  // 타사 작품 일반 검색(이름 명단 없음) — 중대 사안과 기록 경신 두 갈래
+  for (const q of ["드라마 배우 입건 혐의", "예능 출연자 하차 논란", "방송인 음주운전 마약 혐의", "드라마 역대 최고 시청률 경신", "예능 최고 화제성 1위"]) out.push({ query: q, entry: OTHER_ENTRY });
   return out;
 }
 
@@ -55,10 +65,13 @@ export function classifyCast(title: string, roster: CastEntry[]): { signal: Cast
   // 같은 이름이 여러 작품에 걸리면 자사 작품·방영 예정을 우선
   const compact = title.replace(/\s/g, "");
   const hit = byName.sort((a, b) => SCOPE_WEIGHT[b.scope] - SCOPE_WEIGHT[a.scope])[0] ?? roster.find((e) => e.scope === "solo" && compact.includes(e.program.replace(/\s/g, "")));
-  if (!hit) return null;
-  // 타사 출연자는 흥행 기사까지는 싣지 않는다(위험 신호만)
-  if (hit.scope === "other" && !risk) return null;
-  return { signal: risk ? "risk" : "rise", entry: hit };
+  if (hit) return { signal: risk ? "risk" : "rise", entry: hit };
+  // 명단 밖 — 타사 작품 출연자 일반 규칙(엄격한 조건)
+  if (BROADCAST_CONTEXT.test(title)) {
+    if (risk && OTHER_SEVERE.test(title)) return { signal: "risk", entry: OTHER_ENTRY };
+    if (rise && OTHER_RECORD.test(title)) return { signal: "rise", entry: OTHER_ENTRY };
+  }
+  return null;
 }
 
 /** 후보 기사 → 출연자 이슈 목록(같은 소식 묶기, 점수순, 상한) */
