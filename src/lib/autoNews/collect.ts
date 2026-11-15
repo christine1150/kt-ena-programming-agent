@@ -28,10 +28,11 @@ const hostOf = (u: string) => {
   }
 };
 
-/** 네이버 뉴스 검색 API(운영용) — 원문 링크를 준다. 키: NAVER_SEARCH_CLIENT_ID / NAVER_SEARCH_CLIENT_SECRET */
+/** 네이버 API HUB 뉴스 검색(운영용) — 원문 링크를 준다. 키: NAVER_SEARCH_CLIENT_ID / NAVER_SEARCH_CLIENT_SECRET */
 async function searchNaver(query: string, category: string, id: string, secret: string): Promise<NewsCandidate[]> {
-  const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=30&sort=date`;
-  const text = await fetchText(url, { "X-Naver-Client-Id": id, "X-Naver-Client-Secret": secret });
+  // 2026년 신규 발급은 NAVER API HUB(네이버 클라우드)로 이관 — 주소·헤더 이름이 옛 개발자센터와 다르고 응답 형식은 같다
+  const url = `https://naverapihub.apigw.ntruss.com/search/v1/news?query=${encodeURIComponent(query)}&display=30&sort=date`;
+  const text = await fetchText(url, { "X-NCP-APIGW-API-KEY-ID": id, "X-NCP-APIGW-API-KEY": secret });
   if (!text) return [];
   try {
     const items = (JSON.parse(text).items ?? []) as { title: string; originallink?: string; link: string; pubDate?: string }[];
