@@ -13,6 +13,7 @@ import { extractFullYearFromFileName, parseNielsenAnnualWorkbook } from "@/lib/n
 import { applyOlifeEpgForDate } from "@/lib/olifeEpgStaging";
 // 성능 개선(2026-09-17): 적재 직후 Page 1/Page 2 당일 화면용 집계를 미리 계산해 둔다.
 import { refreshDailyDashboardMart } from "@/lib/dailyMartCache";
+import { scheduleBriefingWarmup } from "@/lib/briefingWarmup";
 import { toChannelCode, canonicalChannelName } from "@/lib/channelMaster";
 import { programMatchKey, canonicalizeProgramName } from "@/lib/programNameMatch";
 import {
@@ -720,6 +721,8 @@ export async function ingestNielsenDailyFile(
   // 처리한다 — 사전 계산이 없으면 화면이 기존 실시간 계산 경로로 돌 뿐이다.
   if (!insertError) {
     await refreshDailyDashboardMart(parsed.reportDate).catch(() => null);
+    // 2026-11-16: 사전 계산 직후 홈 브리핑을 한 번 미리 열어 그날 AI 문장·계산 결과를 캐시에 채운다(첫 접속 12초→4초, briefingWarmup.ts).
+    scheduleBriefingWarmup(`nielsen_daily ${parsed.reportDate}`);
   }
 
   const failMessage = insertError ? `${insertError} — ${rollbackNote}` : null;

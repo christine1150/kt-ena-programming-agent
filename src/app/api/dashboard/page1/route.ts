@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { BOUNDARY_NEIGHBOR_OR, mergeSplitForDay, neighborDates } from "@/lib/broadcastTime/boundarySplit";
 import { getCurrentSession } from "@/lib/adminAuth";
+import { checkCronAuth } from "@/lib/cronAuth";
 import {
   resolveProgramLevelTargetLabel,
   EXTRA_TARGET_LABELS_BY_CHANNEL,
@@ -397,7 +398,11 @@ function narrativeNoiseFloorFp(floor: number): number[] {
 export async function GET(request: Request) {
   const timer = createStageTimer(); // 단계 15: 요청 단계별 시간(Server-Timing 헤더)
   const session = await getCurrentSession();
-  if (!session) {
+  // 2026-11-16: 닐슨 적재 직후 서버가 이 API를 한 번 미리 불러 캐시를 채운다(briefingWarmup.ts). 그 호출만 세션 대신
+  // CRON_SECRET(Bearer)으로 통과시킨다 — 비밀 값이 설정돼 있고 헤더가 정확히 맞을 때만이며, 헤더가 없으면 지금처럼 401이다.
+  const authorization = request.headers.get("authorization");
+  const warmupCall = !session && !!process.env.CRON_SECRET && !!authorization && checkCronAuth(authorization).ok;
+  if (!session && !warmupCall) {
     return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
   }
 
