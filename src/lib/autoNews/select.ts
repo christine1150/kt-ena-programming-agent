@@ -136,10 +136,15 @@ export function sameStory(a: string, b: string): boolean {
   const B = featuresOf(b);
   for (const q of A.quoted) if (B.quoted.has(q)) return true;
   // 한쪽 제목의 주어가 다른 쪽에도 나올 때만 단어 겹침을 본다("A사 3분기 영업이익"과 "B사 3분기 영업이익"을 묶지 않으려고)
-  if ((A.head && B.words.has(A.head)) || (B.head && A.words.has(B.head))) {
+  // 주어가 "방미통위"/"방미통위원장"처럼 앞부분만 다른 경우도 같은 주어로 본다(2026-11-16 같은 면담 기사 2건이 함께 게시됨)
+  const headAlike = A.head.length >= 3 && B.head.length >= 3 && (A.head.startsWith(B.head) || B.head.startsWith(A.head));
+  if (headAlike || (A.head && B.words.has(A.head)) || (B.head && A.words.has(B.head))) {
     let shared = 0;
-    for (const w of A.words) if (B.words.has(w)) shared++;
-    if (shared >= 3 && shared / Math.min(A.words.size, B.words.size) >= 0.4) return true;
+    let longest = 0;
+    for (const w of A.words) if (B.words.has(w)) { shared++; longest = Math.max(longest, w.length); }
+    // 겹친 단어가 2개여도 그중 하나가 긴 고유명(국경없는기자회 등)이면 같은 소식으로 본다
+    const ratio = shared / Math.min(A.words.size, B.words.size);
+    if ((shared >= 3 && ratio >= 0.4) || (shared >= 2 && longest >= 6 && ratio >= 0.25)) return true;
   }
   return false;
 }
