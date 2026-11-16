@@ -1,6 +1,9 @@
 // 주요 뉴스 자동 선정 — 순수 함수(네트워크·DB 없음). 수집한 후보에서 같은 소식을 묶고, 규칙 점수로 분류별 상위 기사를 고른다.
 // 게시 목록은 이 규칙 결과로 정해진다(LLM은 해외 제목 번역에만 쓴다 — collect.ts).
 import {
+  ENA_DAILY_MAX,
+  ENA_MAIN_PROGRAMS,
+  ENA_RELATED,
   CATEGORIES,
   CLICKBAIT,
   CLICKBAIT_PENALTY,
@@ -216,5 +219,14 @@ export interface PublishItem {
 
 /** 규칙만으로 고른 게시 목록(분류별 상한까지, 점수 0 이하는 싣지 않는다) */
 export function pickByRules(pools: RankedPool[]): PublishItem[] {
-  return pools.flatMap((p) => p.ranked.filter((r) => r.score > 0).slice(0, p.quota).map((r) => ({ category: p.category, title: r.title, url: r.url })));
+  // 사용자 지시(2026-11-16): ENA 관련 기사는 하루 최대 2건 — 전 분류 통틀어 점수 높은 2건만 남기고 나머지는 다음 순위 기사로 채운다
+  const isEna = (t: string) => ENA_RELATED.test(t) || ENA_MAIN_PROGRAMS.test(t);
+  const enaPicks = pools.flatMap((p) => p.ranked.filter((r) => r.score > 0).slice(0, p.quota).filter((r) => isEna(r.title)));
+  const allowed = new Set(enaPicks.sort((a, b) => b.score - a.score).slice(0, ENA_DAILY_MAX).map((r) => r.url));
+  return pools.flatMap((p) =>
+    p.ranked
+      .filter((r) => r.score > 0 && (!isEna(r.title) || allowed.has(r.url)))
+      .slice(0, p.quota)
+      .map((r) => ({ category: p.category, title: r.title, url: r.url }))
+  );
 }

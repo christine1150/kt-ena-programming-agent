@@ -34,10 +34,14 @@ export const PROGRAM_NEWS_CATEGORY = "방송가 소식";
 /** ENA 본방 주요 프로그램(방영 중·예정) — 편성이 바뀌면 여기를 고친다 */
 export const ENA_MAIN_PROGRAMS = /크래시 ?2|혹하는 ?로맨스|홍말금|조련의 ?여왕|나의 ?트로이카|사짜 ?변호사|지구마불|니돈내산|카드 한 장에 우정|나는 ?SOLO|나솔사계|미스틱/i;
 
+/** ENA 관련 기사 하루 게시 상한(사용자 지시 2026-11-16) — 'ENA'라는 이름 또는 본방 작품명이 제목에 있는 기사, 출연자 이슈는 별도 */
+export const ENA_DAILY_MAX = 2;
+export const ENA_RELATED = /(?<![A-Za-z])ENA(?![a-z])/;
+
 export const CATEGORIES: CategoryConfig[] = [
   {
     category: "KT 및 계열사 소식",
-    queries: ["KT스카이라이프", "KT ENA", "KT 지니TV", "KT스튜디오지니", "KT알파", "KT나스미디어", "KT지니뮤직", "KT 실적 통신", "kt HCN", "밀리의서재", "KT 김영섭", "KT 조직개편 인사", "KT 요금제 서비스", "KT클라우드", "KT 에이닷 AI", "KT PASS 패스", "KT 가입자 AI 사업", "KT 신사업 전망"],
+    queries: ["KT스카이라이프", "KT ENA", "KT 지니TV", "KT스튜디오지니", "KT알파", "KT나스미디어", "KT지니뮤직", "KT 실적 통신", "kt HCN", "밀리의서재", "KT 김영섭", "KT 조직개편 인사", "KT 요금제 서비스", "KT클라우드", "KT 에이닷 AI", "ENA 채널", "ENA 방송", "스튜디오지니", "KT ENA 드라마", "KT PASS 패스", "KT 가입자 AI 사업", "KT 신사업 전망"],
     quota: 4,
     // 사용자 수동 목록 대조(2026-11-16): SKT 등 타사 기사가 KT로 섞이지 않게 영문자 바로 뒤의 KT는 제외
     require: /(?<![A-Za-z])KT|케이티|스카이라이프|지니 ?TV|지니뮤직|나스미디어|밀리의서재|HCN|ENA/i,
