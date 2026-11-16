@@ -5955,15 +5955,6 @@ function ChannelDailyDetailPanel({ channelCode, channelName, themeColor, asOfDat
 // 제목 옆 건수, 카테고리는 단일 강조색 라벨+건수, 다단(columns) 배치로 길이가 다른 카테고리도 빈칸 없이
 // 채움, 제목 한 줄(휴대폰은 두 줄) 말줄임+전체 제목은 title 속성, 출처 도메인, 카테고리당 3건 후 더 보기.
 
-/** 기사 주소에서 출처 도메인만 뽑는다(www. 제거). 주소가 깨졌으면 빈 문자열. */
-function newsSourceDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-}
-
 // 접힌 상태에서 카테고리당 보여 줄 기사 수 — 카드가 세로로 길어지지 않게 하는 상한.
 const NEWS_PER_CATEGORY_COLLAPSED = 3;
 
@@ -6028,7 +6019,6 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
               </div>
               <ul className="flex flex-col">
                 {visible.map((item, i) => {
-                  const domain = newsSourceDomain(item.url);
                   return (
                     <li key={`${item.url}-${i}`}>
                       <a
@@ -6038,10 +6028,10 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
                         title={item.title}
                         className="group -mx-2 flex items-baseline gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[#281fc7]"
                       >
-                        <span className={`min-w-0 flex-1 line-clamp-2 text-[14.5px] leading-snug text-zinc-800 md:line-clamp-1 ${ACCENT_HOVER} group-hover:text-[#281fc7]`}>
+                        {/* 사용자 지시(2026-11-16): 제목 오른쪽 출처(도메인) 표시는 빼고 제목이 잘 보이게 — 두 줄까지 보여 준다 */}
+                        <span className={`min-w-0 flex-1 line-clamp-2 text-[14.5px] leading-snug text-zinc-800 ${ACCENT_HOVER} group-hover:text-[#281fc7]`}>
                           {item.title}
                         </span>
-                        {domain && <span className="shrink-0 text-[11.5px] text-zinc-500">{domain}</span>}
                         {/* 새 창으로 열린다는 표시 — 마우스를 올리거나 키보드로 초점이 올 때만 보인다 */}
                         <svg
                           className="h-3 w-3 shrink-0 self-center text-[#281fc7] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
