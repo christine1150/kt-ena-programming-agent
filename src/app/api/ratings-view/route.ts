@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const date = dateParam ?? latest;
     if (!date) return NextResponse.json({ ok: true, latest, date: null, data: null });
     if (kind === "ranks") return NextResponse.json({ ok: true, latest, date, data: await loadRanks(date) });
-    if (kind === "trend") return NextResponse.json({ ok: true, latest, date, data: await loadTrend(date) });
+    if (kind === "trend") return NextResponse.json({ ok: true, latest, date, data: await loadTrend(date, 4, 35, sp.get("target") === "hh" ? "hh" : "p2049") });
     const code = sp.get("code") ?? "ENA";
     const data = await loadDaily(code, date);
     if (!data) return NextResponse.json({ ok: false, message: "채널을 찾을 수 없습니다." }, { status: 404 });

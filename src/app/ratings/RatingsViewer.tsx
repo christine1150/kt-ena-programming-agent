@@ -8,6 +8,12 @@ import { shortProgramName } from "@/lib/programAlias";
 import { formatRating } from "@/lib/audienceReport/format";
 
 type Tab = "daily" | "ranks" | "trend";
+type TrendTarget = "p2049" | "hh";
+// 채널 순위 추이는 2049(수도권 개인)와 가구(전국 유료방송가구) 두 타깃으로 나눠 본다(사용자 지시 2026-11-16)
+const TREND_TARGETS: { id: TrendTarget; label: string; title: string }[] = [
+  { id: "p2049", label: "수도권 2049", title: "주요 채널 수도권 2049 개인 타깃" },
+  { id: "hh", label: "전국 유료방송가구", title: "주요 채널 전국 유료방송가구 타깃" },
+];
 const TABS: { id: Tab; label: string }[] = [
   { id: "daily", label: "일일 시청률" },
   { id: "ranks", label: "전 채널 순위" },
@@ -60,15 +66,16 @@ interface Loaded<T> {
   data: T | null;
 }
 
-function useView<T>(kind: Tab, date: string | null, code: string) {
+function useView<T>(kind: Tab, date: string | null, code: string, trendTarget: TrendTarget) {
   // 요청 키(보기·날짜·채널)별로 결과를 담는다 — 효과 안에서 "불러오는 중" 상태를 따로 세우지 않고 키가 다르면 로딩으로 본다.
-  const key = `${kind}|${date ?? ""}|${kind === "daily" ? code : ""}`;
+  const key = `${kind}|${date ?? ""}|${kind === "daily" ? code : ""}|${kind === "trend" ? trendTarget : ""}`;
   const [state, setState] = useState<{ key: string; kind: Tab; res: Loaded<T> | null; message: string | null } | null>(null);
   useEffect(() => {
     const ctl = new AbortController();
     const qs = new URLSearchParams({ kind });
     if (date) qs.set("date", date);
     if (kind === "daily") qs.set("code", code);
+    if (kind === "trend") qs.set("target", trendTarget);
     fetch(`/api/ratings-view?${qs.toString()}`, { signal: ctl.signal })
       .then(async (r) => ({ ok: r.ok, body: await r.json().catch(() => ({ ok: false })) }))
       .then(({ ok, body }) => {
@@ -79,7 +86,7 @@ function useView<T>(kind: Tab, date: string | null, code: string) {
         if ((e as Error).name !== "AbortError") setState({ key, kind, res: null, message: "불러오지 못했습니다." });
       });
     return () => ctl.abort();
-  }, [key, kind, date, code]);
+  }, [key, kind, date, code, trendTarget]);
   const current = state?.key === key;
   return {
     status: (current ? (state.message ? "error" : "ok") : "loading") as "loading" | "ok" | "error",
@@ -102,17 +109,18 @@ function Pill({ children, active, onClick }: { children: React.ReactNode; active
   );
 }
 
-export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA", initialDate = null }: { initialTab?: Tab; initialCode?: string; initialDate?: string | null }) {
+export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA", initialDate = null, initialTrendTarget = "p2049" }: { initialTab?: Tab; initialCode?: string; initialDate?: string | null; initialTrendTarget?: TrendTarget }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [code, setCode] = useState(initialCode);
   const [date, setDate] = useState<string | null>(initialDate);
-  const view = useView<DailyView | RankBoard[] | TrendWeek[]>(tab, date, code);
+  const [trendTarget, setTrendTarget] = useState<TrendTarget>(initialTrendTarget);
+  const view = useView<DailyView | RankBoard[] | TrendWeek[]>(tab, date, code, trendTarget);
   const latest = view.res?.latest ?? null;
   // 날짜를 고르지 않았으면 서버가 정한 최신 날짜를 그대로 보여 준다
   const shown = date ?? view.res?.date ?? null;
 
   const channelName = CHANNELS.find((c) => c.code === code)?.name ?? code;
-  const title = tab === "daily" ? `${channelName} 일일 시청률` : tab === "ranks" ? "전 채널 시청률 순위 · 타깃별 비교" : "주요 채널 수도권 2049 개인 타깃";
+  const title = tab === "daily" ? `${channelName} 일일 시청률` : tab === "ranks" ? "전 채널 시청률 순위 · 타깃별 비교" : (TREND_TARGETS.find((t) => t.id === trendTarget)?.title ?? "");
   const hint = tab === "ranks" ? "타깃별 상위 40개 채널 · 시청률 순" : tab === "trend" ? "최근 4주 · 기준일이 속한 주까지(7일이 끝난 주만)" : null;
 
   return (
@@ -134,6 +142,15 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
           <h1 className="text-xl font-bold leading-tight tracking-tight sm:text-[22px]">{title}</h1>
           {tab !== "trend" && shown && <span className="font-medium text-zinc-400">{longDate(shown)}</span>}
+          {tab === "trend" && (
+            <div className="inline-flex overflow-hidden rounded-lg border border-zinc-200 bg-white" role="group" aria-label="순위 추이 타깃">
+              {TREND_TARGETS.map((t) => (
+                <button key={t.id} type="button" aria-pressed={trendTarget === t.id} onClick={() => setTrendTarget(t.id)} className={`px-3 py-1 font-semibold max-md:min-h-10 ${trendTarget === t.id ? "bg-[#ECEBFD] text-[#3C32E1]" : "text-zinc-500 hover:bg-zinc-50"}`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
           {tab === "daily" && (
             <select aria-label="채널" value={code} onChange={(e) => setCode(e.target.value)} className="rounded-lg border border-zinc-200 bg-white px-3 py-1 font-semibold max-md:min-h-10">
               {CHANNELS.map((c) => (

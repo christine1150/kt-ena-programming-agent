@@ -247,11 +247,15 @@ export function weekLabel(from: string): string {
 }
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 
-export async function loadTrend(date: string, weeks = 4, showTop = 35): Promise<TrendWeek[]> {
+/** 순위 추이 타깃 — 2049(수도권 개인2049) / 가구(전국 유료방송가입가구, 2026-11-16 사용자 요청). 일별 목록·닐슨 주간 순위 모두 같은 타깃 라벨로 읽는다. */
+export type TrendTarget = "p2049" | "hh";
+const TREND_TARGET_LABEL: Record<TrendTarget, string> = { p2049: "개인2049", hh: "National 유료방송가입가구" };
+
+export async function loadTrend(date: string, weeks = 4, showTop = 35, target: TrendTarget = "p2049"): Promise<TrendWeek[]> {
   // 7일이 모두 끝난 마지막 주(일요일 끝)를 기준으로 거슬러 올라간다
   const lastSunday = offsetDate(date, -(dow(date) === 6 ? 0 : dow(date) + 1));
   const { data: targets } = await supabase.from("targets").select("id,label");
-  const t2049 = (targets ?? []).find((t) => t.label === "개인2049")?.id as string | undefined;
+  const t2049 = (targets ?? []).find((t) => t.label === TREND_TARGET_LABEL[target])?.id as string | undefined;
   if (!t2049) return [];
   const { data: chs } = await supabase.from("channels").select("id,code,name");
   const result: TrendWeek[] = [];
