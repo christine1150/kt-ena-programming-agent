@@ -1,6 +1,7 @@
 // 주요 뉴스 자동 선정 순수 함수 검사 — 실행: npm run test:auto-news
 import { CATEGORIES, OVERSEAS_CATEGORY, kstDayStartIso } from "../src/lib/autoNews/config";
-import { buildCastQueries, castDisplayTitle, castLabel, isLowValueCastTitle, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
+import { isCleanTranslation } from "../src/lib/autoNews/collect";
+import { buildCastQueries, castDisplayTitle, castLabel, isLowValueCastTitle, isShowRecapRisk, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
 import { fullTitleFromHtml, insertCastIssues, stripTitleTags } from "../src/lib/autoNews/collect";
 import { CAST_ROSTER } from "../src/lib/autoNews/roster";
 import { parseRosterText, rosterToText } from "../src/lib/autoNews/rosterText";
@@ -157,6 +158,25 @@ ok("승하차 교통 기사 제외", classifyCast("수도권~세종 통근버스
 ok("질환 묶음 짜깁기 기사 제외", isLowValueCastTitle("활동 중단→대인기피증까지…이정재·이수경·이유비, 피부 질환에 발목 잡힌 ★들 [종합]"));
 ok("기자 의견 꼬리표만으로는 제외하지 않음", !isLowValueCastTitle("황정음 하차 빈자리 채웠다…'싱글맘' 조윤희, 계속되는 이혼 셀링에 쏠린 우려 [TEN피플]"));
 ok("중대 범죄는 거르지 않음", !isLowValueCastTitle("고경표 음주운전 사고… 예능에서 ‘통편집’"));
+// 사용자 지적(2026-11-17): 회차 줄거리를 자극적으로 옮긴 리뷰 기사는 실제 논란이 아니다
+ok("방송 리뷰형 '의혹' 기사 제외", isShowRecapRisk("34기 광수, 진정성 의혹 터졌다…\"방송쟁이 싫어져\" 분량 욕심 일침 ('나솔')"));
+ok("리뷰 꼬리표 '논란' 기사 제외", isShowRecapRisk("영숙, 데이트 중 돌직구 논란 [어제TV]"));
+ok("실제 사건(하차·사과문)은 리뷰 꼬리표가 있어도 유지", !isShowRecapRisk("34기 광수, 과거 논란에 사과문…방송 하차 ('나솔')"));
+ok("꼬리표 없는 실제 논란 기사는 유지", !isShowRecapRisk("'나는 SOLO' 출연자 논란 확산…제작진 입장"));
+{
+  const r: CastEntry[] = [{ name: "김가나", program: "자사극", scope: "own_upcoming" }];
+  const c = (title: string) => ({ category: "x", title, url: title, publisher: "", publishedAt: null });
+  const [comeback] = pickCastIssues([c("배우 김가나, 음주운전 논란 딛고 2년 만에 예능 복귀")], r, 4);
+  ok("지난 범죄 뒤 복귀 기사는 '편성 제외 검토'가 아님", !!comeback && !comeback.severe && comeback.signal === "risk");
+  const [past] = pickCastIssues([c("배우 김가나, '뮤직뱅크' 하차 설움 씻는다…연기대상 MC 발탁")], r, 4);
+  ok("지난 하차를 넘어선 기사는 흥행·화제로", past?.signal === "rise");
+}
+// 사용자 지적(2026-11-17): "하arlan 코벤의 '더 이노센트'…" 같은 섞인 표기는 버린다
+ok("한글·로마자 섞인 번역 거부", !isCleanTranslation("하arlan 코벤의 ‘더 이노센트’, 넷플릭스에서 제작 승인"));
+ok("영어 기능어 남은 반쪽 번역 거부", !isCleanTranslation("넷플릭스, deal with 파라마운트"));
+ok("같은 시리즈(제임스 본드) 해외 기사는 한 소식", sameStory("Robert Pattinson James Bond Casting Reactions From Industry", "James Bond Casting Shows Challenge of the Social Media Era"));
+ok("다른 소식 영문 기사는 묶지 않음", !sameStory("Amazon Developing 'Terminal List' Prequel", "CAA Signs Hybe to Represent Korean Artists"));
+ok("정상 번역 통과(원제·HBO맥스 표기)", isCleanTranslation("넷플릭스, 할런 코벤 원작 'The Innocent' 제작 확정…HBO맥스와 경쟁"));
 ok("지금 건강 문제 기사는 위험 신호로 선정", !isLowValueCastTitle("배우 김가나, 촬영 중 쓰러져 입원") && classifyCast("배우 김가나, 촬영 중 쓰러져 입원", roster)?.signal === "risk");
 
 // 관리자 명단 글 형식

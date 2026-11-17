@@ -6034,28 +6034,31 @@ function DailyNewsCard({ items }: { items: DailyNewsItem[] }) {
                       >
                         {/* 사용자 지시(2026-11-16): 제목 오른쪽 출처(도메인) 표시는 빼고 제목이 잘 보이게 — 두 줄까지 보여 준다 */}
                         <span className={`min-w-0 flex-1 line-clamp-2 text-[14.5px] leading-snug text-zinc-800 ${ACCENT_HOVER} group-hover:text-[#281fc7]`}>
+                          {/* 사용자 지시(2026-11-17): 경고 아이콘 때문에 제목이 두 줄로 밀리지 않게 — 아이콘을 따로 칸을 두지 않고 제목 앞에 글자처럼 붙인다 */}
+                          {flag && (
+                            <span
+                              className={`mr-1 inline-flex h-3.5 w-3.5 -translate-y-px items-center justify-center rounded-full align-middle text-[9px] font-bold leading-none text-white ${severe ? "bg-red-600" : "bg-amber-500"}`}
+                              title={flag[1]}
+                            >
+                              <span aria-hidden="true">!</span>
+                              <span className="sr-only">{flag[1]}</span>
+                            </span>
+                          )}
                           {shownTitle}
                         </span>
-                        {flag && (
-                          <span
-                            className={`inline-flex h-4 w-4 shrink-0 items-center justify-center self-center rounded-full text-[10px] font-bold leading-none text-white ${severe ? "bg-red-600" : "bg-amber-500"}`}
-                            title={flag[1]}
+                        {/* 새 창으로 열린다는 표시 — 마우스를 올리거나 키보드로 초점이 올 때만 보인다. 경고 표시 기사는 제목 폭을 위해 생략(새 창 안내는 아래 sr-only로 유지) */}
+                        {!flag && (
+                          <svg
+                            className="h-3 w-3 shrink-0 self-center text-[#281fc7] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.4"
+                            aria-hidden="true"
                           >
-                            <span aria-hidden="true">!</span>
-                            <span className="sr-only">{flag[1]}</span>
-                          </span>
+                            <path d="M4.5 2.5h5v5M9.5 2.5 3 9" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
                         )}
-                        {/* 새 창으로 열린다는 표시 — 마우스를 올리거나 키보드로 초점이 올 때만 보인다 */}
-                        <svg
-                          className="h-3 w-3 shrink-0 self-center text-[#281fc7] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
-                          viewBox="0 0 12 12"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.4"
-                          aria-hidden="true"
-                        >
-                          <path d="M4.5 2.5h5v5M9.5 2.5 3 9" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
                         <span className="sr-only">(새 창에서 열림)</span>
                       </a>
                     </li>

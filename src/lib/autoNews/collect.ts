@@ -153,6 +153,10 @@ const TRANSLATE_PROMPT = [
   '예: "Netflix Strikes Deal With Paramount" → "넷플릭스, 파라마운트와 계약 체결"',
   '예: "HBO Max-Paramount+ Bundle Targeted by Subscribers in Lawsuit Challenging Megamerger" → "구독자들, HBO 맥스·파라마운트+ 묶음 상품 겨냥해 초대형 합병 반대 소송 제기"',
   '예: "SAG-AFTRA Boss Says AI Takedowns Matter More Than Damages To Performers" → "SAG-AFTRA 위원장 \\"배우들에겐 손해배상보다 AI 게시물 삭제가 더 중요\\""',
+  "인물 이름은 통용 한글 표기로 모두 옮기거나 원문 철자 그대로 둔다. 한 낱말 안에 한글과 로마자를 섞지 않는다('하arlan' 같은 표기 금지).",
+  "업계 용어: greenlight → 제작 확정, overall deal → 포괄 계약, first-look deal → 우선 협상 계약, renewed → 시즌 연장, canceled → 제작 취소, signs/represent(에이전시) → 에이전시 계약·대행. '및'으로 잇지 말고 쉼표나 '…'로 나눈다.",
+  '예: "Harlan Coben\'s \'The Innocent\' Greenlit At Netflix; Storymath Signs Overall Deal" → "넷플릭스, 할런 코벤 원작 \'더 이노센트\' 제작 확정…스토리매스와 포괄 계약"',
+  "45자 안팎으로 짧게 쓴다. 인터뷰 기사는 '~에 대해 이야기하며 ~ 언급' 같은 직역 대신 '인물, \"핵심 발언 요약\"' 꼴로 줄인다.",
   "(EXCLUSIVE) 같은 꼬리표는 뺀다.",
   "받은 id마다 하나씩, id를 바꾸지 말고 돌려준다.",
 ].join("\n");
@@ -163,21 +167,40 @@ const TRANSLATE_PROMPT = [
  * 후보 60~150건을 매번 보내야 해 한도도 많이 썼다(사용자 지시: LLM 한도는 최대한 아낀다).
  * 실패하거나 일부만 돌아오면 해당 제목은 원문 그대로 둔다.
  */
+/**
+ * 번역 결과를 써도 되는지 — 한글이 없거나(번역 안 됨) 지나치게 길거나, 한 낱말에 한글과 로마자 소문자가 붙은 표기
+ * (사용자 지적 2026-11-17: "하arlan 코벤의…")나 영어 접속사·전치사가 남은 반쪽 번역이면 버린다.
+ */
+export function isCleanTranslation(s: string): boolean {
+  if (!/[가-힣]/.test(s) || s.length > 120) return false;
+  // 한글 바로 뒤 로마자 소문자('하arlan'). 'HBO맥스'·'애플TV+'처럼 로마자 뒤 한글, 한글 뒤 대문자는 통용 표기라 허용
+  if (/[가-힣][a-z]/.test(s)) return false;
+  // 따옴표 안(원제)을 뺀 나머지에 영어 기능어가 남아 있으면 반쪽 번역
+  const outside = s.replace(/(['‘"“])[^'’"”]*['’"”]/g, "");
+  if (/\b(?:the|and|of|for|with|to|in|at|on)\b/.test(outside)) return false;
+  return true;
+}
+
 export async function translateOverseasTitles(items: PublishItem[]): Promise<{ items: PublishItem[]; translated: number }> {
   const targets = items.map((it, id) => ({ id, it })).filter((x) => x.it.category === OVERSEAS_CATEGORY);
   if (targets.length === 0) return { items, translated: 0 };
-  const res = await callOpenAiJsonSynthesis<{ titles: { id: number; ko: string }[] }>(
-    TRANSLATE_PROMPT,
-    targets.map((x) => ({ id: x.id, title: x.it.title })),
-    "news_title_translation",
-    TRANSLATE_SCHEMA,
-    { temperature: 0.1, timeoutMs: 30_000 }
-  );
   const ko = new Map<number, string>();
-  for (const t of res?.titles ?? []) {
-    const s = t.ko.trim();
-    // 한글이 없는 응답(번역 안 됨)이나 지나치게 긴 응답은 버린다
-    if (targets.some((x) => x.id === t.id) && /[가-힣]/.test(s) && s.length <= 120) ko.set(t.id, s);
+  // 불량 번역은 한 번만 다시 묻는다(그래도 불량이면 원문 제목 그대로)
+  for (let round = 0; round < 2; round++) {
+    const ask = targets.filter((x) => !ko.has(x.id));
+    if (ask.length === 0) break;
+    const res = await callOpenAiJsonSynthesis<{ titles: { id: number; ko: string }[] }>(
+      round === 0 ? TRANSLATE_PROMPT : `${TRANSLATE_PROMPT}\n앞선 번역에 한글·로마자가 섞인 낱말이나 덜 옮긴 영어가 있었다. 자연스러운 한국어 제목으로 다시 쓴다.`,
+      ask.map((x) => ({ id: x.id, title: x.it.title })),
+      "news_title_translation",
+      TRANSLATE_SCHEMA,
+      { temperature: 0.1, timeoutMs: 30_000 }
+    );
+    for (const t of res?.titles ?? []) {
+      const s = t.ko.trim();
+      // 제목에 어색한 '및'은 가운뎃점으로(업계 및 미디어 → 업계·미디어)
+      if (ask.some((x) => x.id === t.id) && isCleanTranslation(s)) ko.set(t.id, s.replace(/\s+및\s+/g, "·"));
+    }
   }
   return { items: items.map((it, id) => (ko.has(id) ? { ...it, title: ko.get(id)! } : it)), translated: ko.size };
 }

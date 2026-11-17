@@ -135,6 +135,8 @@ function featuresOf(title: string): TitleFeatures {
  */
 /** 영문 제목의 고유명(대문자로 시작하는 4자 이상 단어) — 회사명·매체명은 서로 다른 기사에도 흔해 뺀다 */
 const NAME_STOP = new Set(["netflix", "amazon", "disney", "warner", "paramount", "variety", "deadline", "hollywood", "apple", "peacock", "sony", "universal", "streaming", "series", "studio", "studios", "media", "global", "first", "season", "movie", "film", "with", "from", "that", "this", "will", "after", "about"]);
+/** 대형 시리즈 이름(영문·한글) — 같은 날 같은 시리즈 기사는 같은 소식으로 묶는다 */
+const FRANCHISE_KEYS = [/James Bond|\b007\b|제임스 본드/i, /Batman|배트맨/i, /Superman|슈퍼맨/i, /Spider-Man|스파이더맨/i, /Star Wars|스타워즈/i, /Harry Potter|해리 포터/i, /Avengers|어벤져스/i, /Indiana Jones|인디아나 존스/i, /Mission: Impossible|미션 임파서블/i];
 function latinNames(title: string): Set<string> {
   const out = new Set<string>();
   if (/[가-힣]/.test(title)) return out;
@@ -156,6 +158,8 @@ export function sameStory(a: string, b: string): boolean {
     // 흔한 제목 단어(Next·Deal 등)만 겹치는 경우를 피하려고 6자 이상 고유명이 하나는 있어야 한다
     if (shared >= 2 && longest >= 6) return true;
   }
+  // 같은 대형 시리즈(제임스 본드 등)를 다룬 해외 기사는 한 소식으로 — 캐스팅 반응·캐스팅 과정 기사 2건이 함께 오른 사례(사용자 지시 2026-11-17 "같은 소식은 1건만")
+  for (const re of FRANCHISE_KEYS) if (re.test(a) && re.test(b)) return true;
   const A = featuresOf(a);
   const B = featuresOf(b);
   for (const q of A.quoted) if (B.quoted.has(q)) return true;

@@ -40,6 +40,8 @@ const RISK_BONUS = 3;
  */
 export const SEVERE_CRIME = /음주운전|음주 ?사고|뺑소니|마약|투약|대마|성추행|성폭행|성범죄|불법 ?촬영|폭행|상해|학폭|학교폭력|도박|사기|횡령|탈세|입건|송치|기소|구속|체포|실형|징역/;
 const SEVERE_BONUS = 100;
+/** 지난 사건 이후 활동 재개 표현 */
+const COMEBACK = /딛고|씻(?:는다|고|어)|만에 (?:복귀|컴백)|자숙 (?:끝|후|딛)|(?:복귀|컴백)(?:한다|했다|작|무대)?\s*$/;
 /**
  * 클릭용 짜깁기 출연자 기사 — 사용자 지시(2026-11-15): 낚시성 제목에 비해 내용이 별것 없는 기사(여러 스타의 지난 일을 묶은 ★들·[종합] 류,
  * 예: "활동 중단→대인기피증까지…이정재·이수경·이유비, 피부 질환에 발목 잡힌 ★들 [종합]")는 고르지 않는다.
@@ -52,6 +54,21 @@ const ROUNDUP_NAMES = /[가-힣]{2,4}[·,][가-힣]{2,4}[·,][가-힣]{2,4}/;
 export function isLowValueCastTitle(title: string): boolean {
   if (SEVERE_CRIME.test(title)) return false;
   return CAST_LOW_VALUE.test(title) || ROUNDUP_NAMES.test(title);
+}
+
+/**
+ * 방송 내용 리뷰 기사 — 사용자 지시(2026-11-17): "34기 광수, 진정성 의혹 터졌다…'방송쟁이 싫어져' 분량 욕심 일침 ('나솔')"처럼
+ * 제목만 자극적이고 내용은 그 회차 줄거리를 정리한 기사는 실제 논란이 아니므로 출연자 이슈에서 뺀다.
+ * 위험 낱말이 '논란·의혹'뿐이고(범죄·건강·하차·사과문 같은 실제 사건 낱말 없음) 회차 리뷰 표시나 방송 속 장면 낱말이 있을 때만 해당한다.
+ */
+const REAL_RISK = new RegExp(RISK_TERMS.source.split("|").filter((t) => t !== "논란" && t !== "의혹").join("|"));
+/** 제목 끝 프로그램 꼬리표('나솔')·('나는 솔로')나 리뷰 꼬리표([어제TV]·[SC리뷰] 등) */
+const RECAP_TAG = /\(\s*['‘’"“”][^)]{1,15}['‘’"“”]\s*\)\s*$|\[(?:어제\s?TV|TV\s?리뷰|SC\s?리뷰|TV\s?북마크|夜TV|TV\s?종합|리뷰)[^\]]*\]/;
+/** 방송 속 장면을 옮길 때 쓰는 낱말(데이트·선택·분량·일침 등) */
+const IN_SHOW = /진정성 의혹|분량|일침|데이트|최종 선택|선택(?:했|받|하)|플러팅|돌직구|직진|러브라인|삼각관계|신경전|기싸움|폭로전|방송쟁이|촬영 중 (?:갈등|언쟁)/;
+export function isShowRecapRisk(title: string): boolean {
+  if (REAL_RISK.test(title)) return false;
+  return RECAP_TAG.test(title) || IN_SHOW.test(title);
 }
 
 export type CastSignal = "risk" | "rise";
@@ -67,9 +84,9 @@ export interface CastHit extends NewsCandidate {
 // 같은 사건 다른 기사 묶기용 — 제목 공통 낱말 중 사람 이름일 수 있는 것(3~4자, 흔한 업계 낱말 제외)
 const NAME_STOP = new Set(["방송가", "드라마", "소속사", "예능에서", "예능서", "출연자", "시청자", "제작진", "음주운전", "초비상", "통편집", "사과문", "기자회견"]);
 const nameTokens = (t: string) => new Set((t.match(/[가-힣]{3,4}/g) ?? []).filter((w) => !NAME_STOP.has(w) && !SEVERE_CRIME.test(w)));
-/** 둘 다 중대 범죄 기사이고 같은 이름(3~4자 낱말)을 공유하면 같은 사건으로 본다 */
+/** 둘 다 위험 기사이고 같은 이름(3~4자 낱말)을 공유하면 같은 사건으로 본다 — 최예나 표절 의혹·해명 기사 2건이 함께 오른 사례(2026-11-17)로 중대 범죄 밖으로 넓힘 */
 function sameIncident(a: CastHit, b: CastHit): boolean {
-  if (!a.severe || !b.severe) return false;
+  if (a.signal !== "risk" || b.signal !== "risk") return false;
   const ta = nameTokens(a.title);
   for (const w of nameTokens(b.title)) if (ta.has(w)) return true;
   return false;
@@ -129,8 +146,13 @@ export function pickCastIssues(cands: NewsCandidate[], roster: CastEntry[], quot
     if (isLowValueCastTitle(title)) continue;
     const cls = classifyCast(title, roster);
     if (!cls) continue;
-    const severe = cls.signal === "risk" && SEVERE_CRIME.test(title);
-    hits.push({ ...c, title, signal: cls.signal, entry: cls.entry, severe, score: (severe ? SEVERE_BONUS : 0) + SCOPE_WEIGHT[cls.entry.scope] + (cls.signal === "risk" ? RISK_BONUS : 0) });
+    if (cls.signal === "risk" && isShowRecapRisk(title)) continue;
+    // 지난 사건 뒤 복귀 기사("음주운전 논란 딛고 2년 만에 예능 복귀")는 새 범죄가 아니므로 '편성 제외 검토'가 아니라 '확인 필요',
+    // 범죄가 아닌 지난 일을 넘어선 기사("하차 설움 씻는다…MC 발탁")는 흥행·화제 기사로 본다(표시 없음)
+    const comeback = cls.signal === "risk" && COMEBACK.test(title);
+    const signal: CastSignal = comeback && !SEVERE_CRIME.test(title) ? "rise" : cls.signal;
+    const severe = signal === "risk" && SEVERE_CRIME.test(title) && !comeback;
+    hits.push({ ...c, title, signal, entry: cls.entry, severe, score: (severe ? SEVERE_BONUS : 0) + SCOPE_WEIGHT[cls.entry.scope] + (signal === "risk" ? RISK_BONUS : 0) });
   }
   hits.sort((a, b) => b.score - a.score || (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
   const out: CastHit[] = [];
