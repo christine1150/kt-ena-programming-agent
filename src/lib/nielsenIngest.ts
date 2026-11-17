@@ -15,7 +15,7 @@ import { applyOlifeEpgForDate } from "@/lib/olifeEpgStaging";
 import { refreshDailyDashboardMart } from "@/lib/dailyMartCache";
 import { scheduleBriefingWarmup } from "@/lib/briefingWarmup";
 import { toChannelCode, canonicalChannelName } from "@/lib/channelMaster";
-import { programMatchKey, canonicalizeProgramName } from "@/lib/programNameMatch";
+import { programMatchKey, canonicalizeProgramName, applySeasonDateRule } from "@/lib/programNameMatch";
 import {
   checkChannelCoverage,
   checkRegisteredCompetitorCoverage,
@@ -516,7 +516,8 @@ export async function ingestNielsenDailyFile(
     // 있었다). 태그가 없는 대다수 프로그램은 null(구분 없음)로 저장돼 기존 동작에 영향 없다.
     let rowFirstRun: boolean | null = null;
     if (!row.isDailyAggregate) {
-      const { canonical, firstRun } = splitProgramName(row.rawProgramName);
+      const { canonical: canonicalRaw, firstRun } = splitProgramName(row.rawProgramName);
+      const canonical = applySeasonDateRule(row.channelCode, parsed.reportDate, canonicalRaw); // 11월 이후 엘리전스 → 시즌2
       rowFirstRun = firstRun;
       const cacheKey = `${channelId}:${programMatchKey(canonical)}`;
       programId = programIdCache.get(cacheKey) ?? null;

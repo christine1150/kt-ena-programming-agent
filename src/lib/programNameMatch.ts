@@ -133,3 +133,12 @@ export async function findOrCreateProgramByNormalizedName(
   if (error || !created) return null;
   return { id: created.id, canonicalName: created.canonical_name };
 }
+
+/**
+ * 날짜 규칙(사용자 지시 2026-11-17): 2026-11-01 이후 skyUHD·ONCE에서 시즌 표기 없이 들어오는 "엘리전스"는 시즌2다.
+ * 시즌1이 다시 방영되면 사용자가 알려 주기로 했으므로 그때 이 규칙에 예외를 둔다. 이미 시즌 표기가 있으면 그대로 둔다.
+ */
+export function applySeasonDateRule(channelCode: string, broadcastDate: string, name: string): string {
+  if (!/^(SKYUHD|ONCE)$/i.test(channelCode) || broadcastDate < "2026-11-01") return name;
+  return normalizeProgramCanonicalName(name) === "엘리전스" ? "엘리전스 시즌2" : name;
+}

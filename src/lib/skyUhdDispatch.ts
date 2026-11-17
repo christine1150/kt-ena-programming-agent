@@ -15,7 +15,7 @@
 import { supabase } from "@/lib/supabase";
 import { parseSkyUhdWorkbook } from "@/lib/skyUhd";
 import { checkPercentValue } from "@/lib/dataQuality";
-import { programMatchKey, findOrCreateProgramByNormalizedName } from "@/lib/programNameMatch";
+import { programMatchKey, findOrCreateProgramByNormalizedName, applySeasonDateRule } from "@/lib/programNameMatch";
 
 // "skyUHD"(대소문자 무관) + "시청률"이 모두 포함된 엑셀 — 실제 수신 파일명 예:
 // "26 skyUHD 시청률 (0916).xlsx". 순서·공백·중간 문구는 자유(둘 다 있으면 매치).
@@ -58,6 +58,8 @@ export async function ingestSkyUhdRatingFile(buffer: Buffer, fileName: string): 
   const rowsToInsert: Record<string, unknown>[] = [];
 
   for (const row of parsed.rows) {
+    const origCanonical = row.canonicalName;
+    row.canonicalName = applySeasonDateRule("SKYUHD", row.broadcastDate, row.canonicalName); // 11월 이후 엘리전스 → 시즌2
     // 프로그램 식별은 정규화 매칭(findOrCreateProgramByNormalizedName)으로 — 수기 시트라 같은
     // 프로그램인데도 회차·태그 표기가 방영분마다 달라지면 매번 새 programs 행이 생기는 걸 막는다.
     const cacheKey = programMatchKey(row.canonicalName);
@@ -80,7 +82,7 @@ export async function ingestSkyUhdRatingFile(buffer: Buffer, fileName: string): 
 
     // 회차·부제 표시 — programs.canonical_name은 회차를 떼어낸 이름이라, 원본 표기에서
     // 프로그램명을 뺀 나머지("20회", "7회 A" 등)를 episode_subtitle에 그대로 적어 둔다.
-    const episodeLabel = row.rawProgramName.startsWith(row.canonicalName) ? row.rawProgramName.slice(row.canonicalName.length).trim() : null;
+    const episodeLabel = row.rawProgramName.startsWith(origCanonical) ? row.rawProgramName.slice(origCanonical.length).trim() : null;
 
     rowsToInsert.push({
       source_type: "skyuhd",
