@@ -100,11 +100,14 @@ export default function SkyUhdUploader() {
         <br />
         <b>IPTV 셋톱 시청률 그림</b>(png·jpg·webp): 방영 시간대·프로그램·시청률(%) 표를 캡처한 그림을 올리면 표를 읽어
         미리 보여 줍니다. 날짜를 확인하고 &ldquo;이 내용으로 반영&rdquo;을 누르면 1페이지 skyUHD 일간 세부 내역의 IPTV 열에 쓰입니다.
+        <br />
+        <b>프로그램 방영 성과 CSV</b>(TV INDEX, IPTV STB 가구·전국): 올리면 바로 IPTV 열에 반영됩니다. 이미 캡처 등으로 들어 있는 시간대와 겹치는 구간은 기존 값을 유지합니다.
+        <br />
         [재] 배지가 없는 줄은 &lt;본&gt;으로 저장됩니다. 그림은 글자 인식을 위해 OpenAI로 전송되므로 읽은 값은 꼭 눈으로 확인해 주세요.
       </HelpTip></h2>
 
       <div className="mb-4 flex items-center gap-3">
-        <FileInputTrigger inputRef={fileInputRef} accept=".xlsx,.xls,.png,.jpg,.jpeg,.webp" />
+        <FileInputTrigger inputRef={fileInputRef} accept=".xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp" />
         <button
           onClick={handleUpload}
           disabled={uploading}

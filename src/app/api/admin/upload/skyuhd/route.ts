@@ -15,6 +15,7 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/adminAuth";
 import { ingestSkyUhdRatingFile } from "@/lib/skyUhdDispatch";
 import { supabase } from "@/lib/supabase";
+import { applySkyUhdStbCsv, isCsvName } from "@/lib/skyUhdStbCsv";
 import {
   buildStbDbRows,
   extractStbRowsFromImage,
@@ -165,6 +166,22 @@ export async function POST(request: Request) {
   if (imageMime) return handleImagePreview(file, fileName, imageMime);
 
   const buffer = Buffer.from(await file.arrayBuffer());
+
+  // 프로그램 방영 성과 CSV(TV INDEX, IPTV STB 가구) — 닐슨 엑셀 경로가 아니라 IPTV 셋톱표에 반영한다(2026-11-17)
+  if (isCsvName(fileName)) {
+    const r = await applySkyUhdStbCsv(buffer, fileName);
+    if (!r.ok) return NextResponse.json({ ok: false, message: r.message }, { status: 422 });
+    const warnings: string[] = [];
+    if (r.overlapped > 0) warnings.push(`기존 캡처·자료와 시간이 겹치는 ${r.overlapped}구간은 기존 값을 유지했습니다.`);
+    if (r.skipped > 0) warnings.push(`해석하지 못해 건너뛴 줄 ${r.skipped}개(머리글 포함).`);
+    return NextResponse.json({
+      ok: true,
+      mode: "iptv_csv_applied",
+      message: `IPTV 셋톱 시청률 CSV ${r.saved}구간 반영됨 (방송일 ${r.dateRange.from} ~ ${r.dateRange.to}, CSV 전체 ${r.parsed}구간)`,
+      warnings,
+    });
+  }
+
   const result = await ingestSkyUhdRatingFile(buffer, fileName);
 
   if (!result.ok) {
