@@ -115,6 +115,10 @@ export const OVERSEAS_FEEDS: { name: string; url: string }[] = [
   { name: "Deadline", url: "https://deadline.com/v/international/feed/" },
   { name: "Deadline", url: "https://deadline.com/v/tv/feed/" },
   { name: "The Hollywood Reporter", url: "https://www.hollywoodreporter.com/c/business/feed/" },
+  // 사용자 지시(2026-11-17): 007 주연 확정 같은 대형 프랜차이즈 캐스팅은 놓치면 안 되므로 영화 부문 피드도 받는다
+  { name: "Variety", url: "https://variety.com/v/film/feed/" },
+  { name: "Deadline", url: "https://deadline.com/v/film/feed/" },
+  { name: "The Hollywood Reporter", url: "https://www.hollywoodreporter.com/c/movies/feed/" },
 ];
 /** 해외 기사는 이 시간 안의 것만(부문 피드는 하루 몇 건뿐이고 주말엔 비어 넉넉히 둔다) */
 export const OVERSEAS_MAX_AGE_HOURS = 72;
@@ -131,15 +135,20 @@ export const OVERSEAS_BOOST: [RegExp, number][] = [
   [/renew|cancel|greenlit|orders|series order|format|adaptation|remake/i, 2],
   // 업계 전체에 걸리는 정책·규제
   [/tax incentive|tax credit|tariff|regulat|\bFCC\b|antitrust|Congress|\bDOJ\b|quota/i, 3],
+  // 대형 프랜차이즈 주연·감독 확정(007·배트맨·스타워즈 등)은 업계 최대 화제 — 확정·발탁 표현과 함께 있을 때 크게 가산
+  // 007 등 최상위 프랜차이즈 이름만 제목에 있어도 업계 대형 소식으로 본다(추측·반응 기사까지 함께 올라오므로 대표 1건만 남는다)
+  [/James Bond|\b007\b/i, 8],
+  [/(?:casting|cast(?:s|ed)?|chosen|choosing|named|picked|tapped|officially|confirm\w*).*(?:Bond|007)|(?:Bond|007).*(?:casting|chosen|officially|confirm\w*|announce\w*)/i, 4],
+  [/(?:James Bond|\b007\b|Batman|Superman|Spider-Man|Star Wars|Harry Potter|Marvel|Avengers|Indiana Jones|Mission: Impossible).*(?:cast(?:s|ed)?\b|to play|to star|named|tapped|lead|new Bond|officially|confirm)|(?:cast(?:s|ed)?\b|named|tapped|confirm).*(?:James Bond|\b007\b|Batman|Superman|Spider-Man)/i, 8],
   // 영화제 상영작·공로상·펠로십 소식은 판도 소식이 아니라 뒤로 민다
   [/festival|award|honou?r|tribute|fellowship|legend/i, -3],
 ];
 // 개인 범죄·추문, 소속사 계약, 홍보 영상 공개는 업계 판도 소식이 아니다(2026-11-15 시험 실행에서 섞임)
 export const OVERSEAS_EXCLUDE =
-  /red carpet|\bdies\b|obituar|trailer|first look|review:|recap|photos|best dressed|how to watch|where to watch|deal alert|shop|\bsale\b|signs with|\bclip\b|teaser|sneak peek|poster|\brape|raped|sexual|assault|accuser|affairs?\b|arrest|sentenc|murder|abuse|to host|hosts? ['‘]?saturday night live/i;
+  /in order\b|filmography|who could join|manifested|predicted|\(opinion\)|fans (?:already )?complain|red carpet|\bdies\b|obituar|trailer|first look|review:|recap|photos|best dressed|how to watch|where to watch|deal alert|shop|\bsale\b|signs with|\bclip\b|teaser|sneak peek|poster|\brape|raped|sexual|assault|accuser|affairs?\b|arrest|sentenc|murder|abuse|to host|hosts? ['‘]?saturday night live/i;
 /** 해외 기사는 방송·영화 업계 표현이나 주요 미디어 그룹이 제목에 있어야 한다(업계지에 실린 타 업종 기사 제외) */
 export const OVERSEAS_REQUIRE =
-  /\bTV\b|television|film|movie|cinema|stream|studio|series|box office|broadcast|network|Hollywood|content|drama|animation|anime|Warner|WBD|Paramount|Skydance|Disney|NBCU|Universal|Comcast|Sony|CBS|BBC|ITV|Channel 4|Sky\b|HBO|Netflix|Amazon|MGM|Apple|Lionsgate|Fox\b|AMC|A24|Canal\+|Banijay|Fremantle|YouTube|Peacock|SAG-AFTRA|WGA|guild|MIPCOM|MIPTV|FilMart|Korea/i;
+  /\bJames Bond|\b007\b|Batman|Superman|Spider-Man|Star Wars|Marvel|\bTV\b|television|film|movie|cinema|stream|studio|series|box office|broadcast|network|Hollywood|content|drama|animation|anime|Warner|WBD|Paramount|Skydance|Disney|NBCU|Universal|Comcast|Sony|CBS|BBC|ITV|Channel 4|Sky\b|HBO|Netflix|Amazon|MGM|Apple|Lionsgate|Fox\b|AMC|A24|Canal\+|Banijay|Fremantle|YouTube|Peacock|SAG-AFTRA|WGA|guild|MIPCOM|MIPTV|FilMart|Korea/i;
 
 /** 출연자 이슈 분류(4단계에서 명단과 함께 사용) — 제목에 이 표현이 있을 때만 후보가 된다 */
 export const CAST_RISK_CATEGORY = "출연자 이슈";
