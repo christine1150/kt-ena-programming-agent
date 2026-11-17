@@ -133,8 +133,29 @@ function featuresOf(title: string): TitleFeatures {
  * 같은 소식인지 — ① 제목 글자 유사도 ② 같은 작품명(따옴표 안)을 다룸 ③ 주어가 양쪽에 나오고 단어가 3개·40% 이상 겹침.
  * ②③은 매체마다 제목을 다르게 써서 ①로 묶이지 않던 기사(같은 드라마 종영 기사 10여 건 등)를 묶으려고 넣었다(2026-11-15).
  */
+/** 영문 제목의 고유명(대문자로 시작하는 4자 이상 단어) — 회사명·매체명은 서로 다른 기사에도 흔해 뺀다 */
+const NAME_STOP = new Set(["netflix", "amazon", "disney", "warner", "paramount", "variety", "deadline", "hollywood", "apple", "peacock", "sony", "universal", "streaming", "series", "studio", "studios", "media", "global", "first", "season", "movie", "film", "with", "from", "that", "this", "will", "after", "about"]);
+function latinNames(title: string): Set<string> {
+  const out = new Set<string>();
+  if (/[가-힣]/.test(title)) return out;
+  for (const m of title.matchAll(/\b[A-Z][a-z]{3,}\b/g)) {
+    const w = m[0].toLowerCase();
+    if (!NAME_STOP.has(w)) out.add(w);
+  }
+  return out;
+}
+
 export function sameStory(a: string, b: string): boolean {
   if (titleSimilarity(a, b) >= SAME_STORY) return true;
+  // 영문 기사(해외 피드)는 같은 인물·작품 고유명이 2개 이상 겹치면 같은 소식 — 007 패틴슨 기사 3건이 한꺼번에 오른 사례(2026-11-17)
+  const na = latinNames(a);
+  if (na.size >= 2) {
+    let shared = 0;
+    let longest = 0;
+    for (const w of latinNames(b)) if (na.has(w)) { shared++; longest = Math.max(longest, w.length); }
+    // 흔한 제목 단어(Next·Deal 등)만 겹치는 경우를 피하려고 6자 이상 고유명이 하나는 있어야 한다
+    if (shared >= 2 && longest >= 6) return true;
+  }
   const A = featuresOf(a);
   const B = featuresOf(b);
   for (const q of A.quoted) if (B.quoted.has(q)) return true;
