@@ -1521,7 +1521,7 @@ export default function ProgramPerformanceView() {
           {entries.length > 0 ? (
             <ChannelTable entries={entries} airing={result.query.airing} selected={selRow ? rowKey(selRow) : null} onSelect={select} simulcast={simShown} otherAirings={result.competitors} />
           ) : (
-            <p className="mt-4 text-[13px] text-zinc-500">{competitorRows.length > 0 ? "자사 방영 기록은 없습니다. 아래 경쟁 채널 성과를 확인하세요." : "이 조건의 방영 기록이 없습니다. 기간을 ‘전체 기간’으로 넓히거나 방송 구분을 ‘전체 방송’으로 바꿔 보세요."}</p>
+            <p className="mt-4 text-[13px] text-zinc-500">{competitorRows.length > 0 ? "자사 닐슨 방영 기록은 없습니다. 아래 경쟁 채널 성과를 확인하세요." : "이 조건의 닐슨 방영 기록이 없습니다(IPTV 셋톱 자료가 있으면 아래 IPTV 블록에 표시됩니다). 기간을 ‘전체 기간’으로 넓히거나 방송 구분을 ‘전체 방송’으로 바꿔 보세요."}</p>
           )}
           {excluded.length > 0 &&
             (allRows.every((r) => EXCLUDED.includes(r.status)) ? (
@@ -1548,7 +1548,7 @@ export default function ProgramPerformanceView() {
             {selRow && <Analysis key={`${requestUrl}|${rowKey(selRow)}`} row={selRow} result={result} siblings={selectable.filter((r) => r.channelCode === selRow.channelCode)} onSelect={(r) => group && setSel({ group, key: rowKey(r) })} />}
           </div>
           {/* IPTV 셋톱 보조 지표(IPTV 활용 3단계 3순위, 2026-11-11) — 닐슨 표와 분리된 보조 블록. 자사 방영이 있을 때만 */}
-          {entries.length > 0 && <IptvProgramBlock names={[result.work.displayName, ...result.work.memberKeys]} to={result.period.to} />}
+          <IptvProgramBlock names={[result.work.displayName, ...result.work.memberKeys]} to={result.period.to} />
           {competitorRows.length > 0 && (
             <div className="mt-4">
               {/* 경쟁 채널 성과는 기본으로 하단에 펼쳐 보인다(사용자 지시 2026-11-06). 접고 싶으면 버튼으로 닫는다 */}
