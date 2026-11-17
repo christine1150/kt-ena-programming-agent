@@ -48,6 +48,12 @@ function prevDate(d: string): string {
   x.setUTCDate(x.getUTCDate() - 1);
   return x.toISOString().slice(0, 10);
 }
+/** 사용자 지정 표기(2026-11-17): TV INDEX의 긴 이름·오기를 자사 표기로 맞춘다. */
+export function normalizeProgramTitle(raw: string): string {
+  return raw
+    .replace(/로\s*앤\s*오더\s*토론토\s*:?\s*(?:크리미널\s*인텐트\s*)?시즌\s*(\d+)/g, "로앤오더 토론토 시즌$1")
+    .replace(/앨리전스/g, "엘리전스");
+}
 function toMin(t: string): number | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(t.trim());
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
@@ -105,7 +111,8 @@ export function parseSkyUhdStbCsv(buf: Buffer, fileName: string): StbCsvParse {
       continue;
     }
     const bd = early ? prevDate(cal) : cal;
-    const name = /<[본재]>/.test(r[0]) ? r[0] : `${r[0]} <본>`;
+    const title = normalizeProgramTitle(r[0]);
+    const name = /<[본재]>/.test(title) ? title : `${title} <본>`;
     map.set(`${bd}|${start}`, { broadcast_date: bd, channel_code: "SKYUHD", start_minute: start, end_minute: end, program_name: name, rating: v, below_floor: false, source_file: src });
   }
   const rows = [...map.values()];
