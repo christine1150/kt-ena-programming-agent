@@ -11,7 +11,7 @@ import { FileInputTrigger } from "./FileInputTrigger";
 
 type FileSummary = {
   fileName: string;
-  kind: "daily" | "period";
+  kind: "daily" | "period" | "iptv";
   ok: boolean;
   message?: string;
   // daily
@@ -34,12 +34,13 @@ type FileSummary = {
 };
 
 function kindLabel(r: FileSummary): string {
+  if (r.kind === "iptv") return "IPTV(skyUHD)";
   if (r.kind === "period") return r.periodType === "weekly" ? "주간" : "월간";
   return r.annual ? "연간(YoY)" : "일간";
 }
 
 function dateOrPeriodLabel(r: FileSummary): string {
-  if (r.kind === "period") return r.dateFrom && r.dateTo ? `${r.dateFrom} ~ ${r.dateTo}` : "—";
+  if (r.kind === "period" || r.kind === "iptv") return r.dateFrom && r.dateTo ? `${r.dateFrom} ~ ${r.dateTo}` : "—";
   return r.reportDate ?? "—";
 }
 
@@ -94,7 +95,7 @@ export default function NielsenUploader() {
       </HelpTip></h2>
 
       <div className="mb-4 flex items-center gap-3">
-        <FileInputTrigger inputRef={fileInputRef} accept=".xls,.xlsx" multiple />
+        <FileInputTrigger inputRef={fileInputRef} accept=".xls,.xlsx,.csv" multiple />
         <button
           onClick={handleUpload}
           disabled={uploading}
@@ -133,7 +134,7 @@ export default function NielsenUploader() {
                         <span className="text-zinc-600">변경 없음(이미 반영된 동일 파일)</span>
                       ) : r.ok ? (
                         <span className="text-zinc-600">
-                          {r.kind === "period" ? r.inserted : r.ratingsInserted}건 저장
+                          {r.kind === "period" || r.kind === "iptv" ? r.inserted : r.ratingsInserted}건 저장{r.kind === "iptv" && r.message ? ` · ${r.message}` : ""}
                           {r.revision && r.revision > 1 ? ` · 개정 ${r.revision}` : ""}
                           {r.partial ? " · 일부 항목 실패(아래 경고)" : ""}
                         </span>

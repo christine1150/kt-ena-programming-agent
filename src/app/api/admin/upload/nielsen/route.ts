@@ -6,6 +6,7 @@
 // 공유한다(2026-09-06) — 두 경로가 각자 판정 로직을 따로 갖고 있다가 갈라지는 사고를 막기 위함.
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/adminAuth";
+import { applySkyUhdStbCsv, isCsvName } from "@/lib/skyUhdStbCsv";
 import { ingestAnyNielsenFile, loadNielsenFileDispatchContext, type NielsenFileSummary } from "@/lib/nielsenFileDispatch";
 
 export async function POST(request: Request) {
@@ -25,9 +26,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: dispatchCtx.error }, { status: 400 });
   }
 
-  const summaries: NielsenFileSummary[] = [];
+  const summaries: (NielsenFileSummary | Record<string, unknown>)[] = [];
   for (const file of files) {
     const buffer = Buffer.from(await file.arrayBuffer());
+    // skyUHD 프로그램 방영 성과 CSV(TV INDEX, IPTV STB 가구)는 닐슨 파일이 아니라 IPTV 셋톱표에 반영한다(2026-11-17)
+    if (isCsvName(file.name)) {
+      const r = await applySkyUhdStbCsv(buffer, file.name);
+      summaries.push(
+        r.ok
+          ? { fileName: file.name, kind: "iptv", ok: true, dateFrom: r.dateRange.from, dateTo: r.dateRange.to, inserted: r.saved, message: r.overlapped > 0 ? `기존 값과 겹친 ${r.overlapped}구간은 유지` : undefined }
+          : { fileName: file.name, kind: "iptv", ok: false, message: r.message }
+      );
+      continue;
+    }
     summaries.push(await ingestAnyNielsenFile(buffer, file.name, dispatchCtx));
   }
 
