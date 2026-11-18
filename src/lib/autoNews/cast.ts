@@ -70,6 +70,8 @@ export function isShowRecapRisk(title: string): boolean {
   // 토크쇼 발언 속 지난 하차 언급("남지현 하차 후 김혜윤 캐스팅 원했다 ('살롱드립')")은 새 사건이 아니다(2026-11-18)
   // 검색 결과 제목은 잘려 꼬리표가 없을 수 있어, 하차 뒤 후임 캐스팅을 다룬 문장이면 꼬리표 없이도 해당한다
   if (/하차 (?:후|이후)\s?\S+\s?(?:캐스팅|합류|발탁|투입)|하차한 뒤/.test(title) || (/하차 (?:후|이후)/.test(title) && RECAP_TAG.test(title))) return true;
+  // 전임 하차·구설을 배경으로 후임의 활약을 칭찬하는 기사("윤보미 하차 후 '리액션 구설'…정혜성 MC 존재감")는 위험 기사가 아니다
+  if (/하차 (?:후|이후)/.test(title) && /존재감|활약|호평|극찬|빛났|안착|맹활약|눈도장/.test(title)) return true;
   if (REAL_RISK.test(title)) return false;
   return RECAP_TAG.test(title) || IN_SHOW.test(title);
 }

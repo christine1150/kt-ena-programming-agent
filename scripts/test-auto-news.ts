@@ -172,6 +172,7 @@ ok("시즌 번호 표기가 달라도 같은 작품(데블스플랜) 기사는 �
   const picked = pickCastIssues([cc("고경표 음주운전 ‘민폐 6연타’…박보검·유재석 예능 줄편집"), cc("“짧은 자숙 후 복귀?…음주운전 벌금형 연예인 출연 제한해야” 국회 청원 등장")], r, 4);
   ok("같은 범죄 낱말의 위험 기사는 1건만", picked.length === 1);
 }
+ok("전임 하차를 배경으로 후임 활약을 칭찬하는 기사는 위험 아님", isShowRecapRisk("윤보미 하차 후 '리액션 구설' 휩싸였는데…정혜성, 7개월 차에 보여준 '나솔사계' MC 존재감"));
 ok("꼬리표 없는 실제 논란 기사는 유지", !isShowRecapRisk("'나는 SOLO' 출연자 논란 확산…제작진 입장"));
 {
   const r: CastEntry[] = [{ name: "김가나", program: "자사극", scope: "own_upcoming" }];
