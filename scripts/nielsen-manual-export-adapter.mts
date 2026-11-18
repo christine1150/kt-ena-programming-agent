@@ -15,7 +15,19 @@ import { parseNielsenDailyWorkbook } from "../src/lib/nielsenDaily";
 type Cell = string | number | null;
 type Metric = { rating: number | null; share: number | null; reach: number | null };
 
-const [, , xlsxPath, reportDate] = process.argv.filter((a) => a !== "--apply");
+const [, , xlsxPath, reportDate] = process.argv.filter((a) => !a.startsWith("--"));
+// 단순형 입력(2026-11-18 추가): "일일시청률"·"채널별" 시트 없이 프로그램별 시트 한 장(Sheet1) + 순위 시트 한 장(--rank=경로)만 있을 때 쓴다.
+// 순위 파일은 National 값(수2049·유료방송가구)이라 "National 유료방송가입가구" 순위·하루전체만 채우고, 수도권 순위는 비워 둔다(공식 파일이 오면 채워진다).
+// 사용자가 닐슨 화면에서 직접 읽어 준 수도권 2049 순위·시청률("채널:순위:시청률" 쉼표 구분). 예: --manual2049="ENA:5:0.16,ENA PLAY:33:0.02145"
+const MANUAL_2049 = (process.argv.find((a) => a.startsWith("--manual2049="))?.slice("--manual2049=".length) ?? "")
+  .split(",")
+  .filter(Boolean)
+  .map((s) => {
+    const [name, rank, rating] = s.split(":");
+    return { name: name.trim(), rank: Number(rank), rating: Number(rating) };
+  });
+const manualRank = new Map<string, number>();
+const RANK_PATH =process.argv.find((a) => a.startsWith("--rank="))?.slice("--rank=".length);
 const APPLY = process.argv.includes("--apply");
 if (!xlsxPath || !/^\d{4}-\d{2}-\d{2}$/.test(reportDate ?? "")) {
   console.error('사용법: npx tsx ... scripts/nielsen-manual-export-adapter.mts "<엑셀 경로>" YYYY-MM-DD [--apply]');
@@ -55,14 +67,45 @@ const aoa = (name: string): unknown[][] => {
 };
 
 // ── 채널별 시트: 채널 × (지역|타깃) → 시청률·도달율·점유율 ──
-const chanRows = aoa("채널별");
+const simpleMode = !wbIn.Sheets["채널별"];
+const chanRows = simpleMode ? [] : aoa("채널별");
 const chanHeadIdx = chanRows.findIndex((r) => text(r[0]) === "번호");
-if (chanHeadIdx < 3) throw new Error("채널별 시트의 머리글(번호 행)을 찾지 못했습니다.");
-const regionRow = chanRows[chanHeadIdx - 2];
-const targetRow = chanRows[chanHeadIdx - 1];
-const metricRow = chanRows[chanHeadIdx];
+if (!simpleMode && chanHeadIdx < 3) throw new Error("채널별 시트의 머리글(번호 행)을 찾지 못했습니다.");
+const regionRow = chanRows[chanHeadIdx - 2] ?? [];
+const targetRow = chanRows[chanHeadIdx - 1] ?? [];
+const metricRow = chanRows[chanHeadIdx] ?? [];
 const chanMetrics = new Map<string, Map<string, Metric>>();
 const chanOrder: string[] = [];
+if (simpleMode) {
+  if (!RANK_PATH) console.log("순위 파일(--rank=)이 없어 채널 순위·하루전체는 비워 둡니다.");
+  else {
+    const rk = XLSX.utils.sheet_to_json<unknown[]>(XLSX.read(fs.readFileSync(RANK_PATH), { type: "buffer" }).Sheets.Sheet1, { header: 1, defval: null });
+    const dateLine = rk.find((r) => text(r[0]) === "선택일자:");
+    if (!text(dateLine?.[1]).startsWith(reportDate)) throw new Error(`순위 파일의 선택일자(${text(dateLine?.[1])})가 요청한 날짜(${reportDate})와 다릅니다.`);
+    const regionLine = rk.find((r) => text(r[0]) === "시청률");
+    if (text(regionLine?.[1]) !== "National") throw new Error(`순위 파일의 지역이 National이 아닙니다(${text(regionLine?.[1])}). 확인이 필요합니다.`);
+    const th = rk.findIndex((r) => text(r[1]).startsWith("타겟"));
+    const headRow = rk[th];
+    const hhCol = headRow.findIndex((v) => text(v) === "유료방송가구");
+    if (th < 0 || hhCol < 0) throw new Error("순위 파일에서 유료방송가구 열을 찾지 못했습니다.");
+    for (const r of rk.slice(th + 2)) {
+      const name = text(r[1]);
+      const v = num(r[hhCol]);
+      if (!name || v === null) continue; // "평균 행" 등은 채널명이 비어 있다
+      chanMetrics.set(name, new Map([["National|유료방송가구", { rating: v, share: null, reach: null }]]));
+      chanOrder.push(name);
+    }
+    console.log(`순위 파일: National 유료방송가구 ${chanOrder.length}개 채널`);
+  }
+  for (const m of MANUAL_2049) {
+    if (!Number.isFinite(m.rank) || !Number.isFinite(m.rating)) throw new Error(`--manual2049 값이 잘못됐습니다: ${JSON.stringify(m)}`);
+    const byKey = chanMetrics.get(m.name) ?? new Map<string, Metric>();
+    byKey.set("수도권|(P) - P2049", { rating: m.rating, share: null, reach: null });
+    chanMetrics.set(m.name, byKey);
+    if (!chanOrder.includes(m.name)) chanOrder.push(m.name);
+    manualRank.set(m.name, m.rank);
+  }
+}
 for (const r of chanRows.slice(chanHeadIdx + 1)) {
   const name = text(r[1]);
   if (!name || num(r[0]) === null) continue;
@@ -81,7 +124,7 @@ for (const r of chanRows.slice(chanHeadIdx + 1)) {
 }
 
 // ── 일일시청률 시트: 프로그램 방영 한 건 = 한 행, 값은 (지역|타깃)별 시청률 ──
-const dayRows = aoa("일일시청률");
+const dayRows = simpleMode ? aoa(wbIn.SheetNames[0]) : aoa("일일시청률");
 const dayHeadIdx = dayRows.findIndex((r) => text(r[0]) === "채널" && text(r[1]) === "프로그램");
 if (dayHeadIdx < 2) throw new Error("일일시청률 시트의 머리글(채널·프로그램 행)을 찾지 못했습니다.");
 const dayRegion = dayRows[dayHeadIdx - 1];
@@ -92,7 +135,11 @@ for (const r of dayRows.slice(dayHeadIdx + 1)) {
   const channel = text(r[0]);
   if (!channel || num(r[3]) === null || num(r[4]) === null) continue;
   const values = new Map<string, number | null>();
-  for (let c = 5; c < dayTarget.length; c++) values.set(`${text(dayRegion[c])}|${text(dayTarget[c])}`, num(r[c]));
+  for (let c = 5; c < dayTarget.length; c++) {
+    const key = `${text(dayRegion[c])}|${text(dayTarget[c])}`;
+    values.set(key, num(r[c]));
+    values.set(key.replace("(P) - 개인2039", "(P) - P2039"), num(r[c])); // 표기 차이(개인2039 = P2039)
+  }
   airings.push({ channel, program: text(r[1]), start: r[3] as number, end: r[4] as number, values });
 }
 
@@ -135,7 +182,8 @@ function rankSheet(sheet: "유료방송가입가구" | "개인"): Cell[][] {
     sorted.forEach((s, bi) => {
       const x = s[i];
       if (!x) return;
-      row[bi * 7] = i + 1;
+      // 수도권 2049은 일부 채널만 있어 정렬 위치가 순위가 아니므로, 사용자가 준 순위를 그대로 쓴다.
+      row[bi * 7] = blocks[bi].key === "수도권|(P) - P2049" && manualRank.has(x.name) ? (manualRank.get(x.name) as number) : i + 1;
       row[bi * 7 + 1] = x.name;
       row[bi * 7 + 2] = x.m.rating;
       row[bi * 7 + 3] = x.m.share;
@@ -277,7 +325,12 @@ if (!APPLY) {
   console.log(JSON.stringify(result, null, 1));
 
   // 일일 적재가 같은 날짜의 경쟁채널 표를 지운 뒤라, 그 위에 이 엑셀의 경쟁채널 프로그램을 채운다(공식 파일이 오면 같은 방식으로 다시 지우고 채운다).
-  if (result.ok) {
+  if (result.ok && competitorAirings.length === 0) {
+    console.log("경쟁채널 프로그램 자료가 없어 해당 표는 건드리지 않습니다.");
+    const { refreshDailyDashboardMart } = await import("../src/lib/dailyMartCache");
+    await refreshDailyDashboardMart(reportDate);
+    console.log("사전 계산(mart) 갱신 완료");
+  } else if (result.ok) {
     // 다시 실행해도 겹치지 않게 이 날짜의 경쟁채널 프로그램 표를 먼저 비운다.
     await supabase.from("competitor_program_ratings").delete().eq("broadcast_date", reportDate);
     await supabase.from("competitor_program_target_ratings").delete().eq("broadcast_date", reportDate);

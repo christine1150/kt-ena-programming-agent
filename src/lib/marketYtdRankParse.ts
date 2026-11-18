@@ -41,12 +41,16 @@ export function parseMarketYtdRankWorkbook(buffer: Buffer): MarketYtdRankRow[] {
 
 /** 닐슨 내보내기 시트 형식 — A열 "순위", B열 "채널", C열 "기타" 머리글 바로 윗줄 C열이 타깃 이름. 첫 번째 타깃 열(C)만 읽는다. */
 function parseNielsenExportSheet(rows: unknown[][], sheetName: string, dateFrom: string, dateTo: string): MarketYtdRankRow[] {
-  const h = rows.findIndex((r, i) => i < 60 && cellStr(r[0]) === "순위" && cellStr(r[1]) === "채널");
+  let h = rows.findIndex((r, i) => i < 60 && cellStr(r[0]) === "순위" && cellStr(r[1]) === "채널");
+  // 2026-11-19: 순위 머리글이 없는 내보내기("누적순위.xlsx" — "시간대 그룹 | 채널\그룹 일자 | 기타" 줄 아래로 순위·채널·시청률)도 읽는다.
+  const altHeader = h < 0;
+  if (altHeader) h = rows.findIndex((r, i) => i < 60 && cellStr(r[0]) === "시간대 그룹" && cellStr(r[1]).startsWith("채널"));
   if (h < 1) return [];
-  const label = cellStr(rows[h - 1]?.[2]);
   const region = rows.slice(0, h).map((r) => r.map(cellStr).join(" ")).join(" ");
+  // 대안 형식은 타깃 정의가 윗부분 설명 줄(B열)에 있다. 연령 조건이 없고 "유료방송가구"로 시작하면 가구, 2049 연령 구성이면 수도권2049.
+  const label = altHeader ? cellStr(rows.slice(0, h).map((r) => cellStr(r[1])).find((s) => s.startsWith("유료방송가구") || /연령\(20 - 24/.test(s))) : cellStr(rows[h - 1]?.[2]);
   const targetLabel =
-    label === "유료방송가구"
+    label === "유료방송가구" || (altHeader && label.startsWith("유료방송가구"))
       ? "유료방송가구"
       : /2049/.test(sheetName) || (/연령\(20 - 24/.test(label) && /연령\(40 - 44, 45 - 49\)/.test(label) && /수도권/.test(region))
         ? "수도권2049"
