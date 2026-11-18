@@ -72,6 +72,8 @@ export function isShowRecapRisk(title: string): boolean {
   if (/하차 (?:후|이후)\s?\S+\s?(?:캐스팅|합류|발탁|투입)|하차한 뒤/.test(title) || (/하차 (?:후|이후)/.test(title) && RECAP_TAG.test(title))) return true;
   // 전임 하차·구설을 배경으로 후임의 활약을 칭찬하는 기사("윤보미 하차 후 '리액션 구설'…정혜성 MC 존재감")는 위험 기사가 아니다
   if (/하차 (?:후|이후)/.test(title) && /존재감|활약|호평|극찬|빛났|안착|맹활약|눈도장/.test(title)) return true;
+  // 검색 결과 제목은 뒤가 잘려 칭찬 낱말이 안 보일 수 있다 — "A 하차 후 구설 휩싸였는데…B, …"처럼 앞 절이 배경이고 새 주어(B)가 이어지는 형태
+  if (/하차 (?:후|이후)[^…]{0,25}는데…\s?[가-힣]{2,4},/.test(title)) return true;
   if (REAL_RISK.test(title)) return false;
   return RECAP_TAG.test(title) || IN_SHOW.test(title);
 }
