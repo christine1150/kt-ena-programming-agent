@@ -147,8 +147,27 @@ function latinNames(title: string): Set<string> {
   return out;
 }
 
+/** 한 분류 안에서 같은 주제를 싣는 최대 건수 */
+const TOPIC_CAPS: { re: RegExp; max: number }[] = [{ re: /케이블 ?TV|(?<![A-Za-z])SO(?![A-Za-z])/, max: 2 }, { re: /K-OTT|토종 OTT/, max: 1 }];
+/** 제목 속 큰 금액·수치("7609억") — 같은 조사·발표를 다룬 기사는 매체마다 제목이 달라도 이 수치가 같다 */
+function bigFigures(title: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of title.matchAll(/(\d[\d,.]{3,})\s?(억|조)/g)) out.add(m[1].replace(/[,.]/g, "") + m[2]);
+  return out;
+}
+
 export function sameStory(a: string, b: string): boolean {
   if (titleSimilarity(a, b) >= SAME_STORY) return true;
+  // 같은 큰 수치(7609억 등)를 쓰고 주제어가 하나라도 겹치면 같은 소식 — 케이블TV 가계 부담 기사 3건이 따로 오른 사례(2026-11-18)
+  const fa = bigFigures(a);
+  if (fa.size > 0) {
+    for (const f of bigFigures(b)) {
+      if (fa.has(f)) {
+        const wa = featuresOf(a).words;
+        for (const w of featuresOf(b).words) if (w.length >= 3 && wa.has(w) && !/^\d/.test(w)) return true;
+      }
+    }
+  }
   // 영문 기사(해외 피드)는 같은 인물·작품 고유명이 2개 이상 겹치면 같은 소식 — 007 패틴슨 기사 3건이 한꺼번에 오른 사례(2026-11-17)
   const na = latinNames(a);
   if (na.size >= 2) {
@@ -165,6 +184,12 @@ export function sameStory(a: string, b: string): boolean {
   for (const q of A.quoted) if (B.quoted.has(q)) return true;
   // 한쪽 제목의 주어가 다른 쪽에도 나올 때만 단어 겹침을 본다("A사 3분기 영업이익"과 "B사 3분기 영업이익"을 묶지 않으려고)
   // 주어가 "방미통위"/"방미통위원장"처럼 앞부분만 다른 경우도 같은 주어로 본다(2026-11-16 같은 면담 기사 2건이 함께 게시됨)
+  // 주어가 달라도("아이와 놀고…" vs "어린이 환자와 놀고…") 단어가 5개 이상·60% 이상 겹치면 같은 소식 — KT·서울대병원 AI 로봇 실증 기사 2건이 함께 오른 사례(2026-11-18)
+  {
+    let shared = 0;
+    for (const w of A.words) if (B.words.has(w)) shared++;
+    if (shared >= 5 && shared / Math.min(A.words.size, B.words.size) >= 0.6) return true;
+  }
   const headAlike = A.head.length >= 3 && B.head.length >= 3 && (A.head.startsWith(B.head) || B.head.startsWith(A.head));
   if (headAlike || (A.head && B.words.has(A.head)) || (B.head && A.words.has(B.head))) {
     let shared = 0;
@@ -248,10 +273,21 @@ export function pickByRules(pools: RankedPool[]): PublishItem[] {
   const isEna = (t: string) => ENA_RELATED.test(t) || ENA_MAIN_PROGRAMS.test(t);
   const enaPicks = pools.flatMap((p) => p.ranked.filter((r) => r.score > 0).slice(0, p.quota).filter((r) => isEna(r.title)));
   const allowed = new Set(enaPicks.sort((a, b) => b.score - a.score).slice(0, ENA_DAILY_MAX).map((r) => r.url));
-  return pools.flatMap((p) =>
-    p.ranked
-      .filter((r) => r.score > 0 && (!isEna(r.title) || allowed.has(r.url)))
-      .slice(0, p.quota)
-      .map((r) => ({ category: p.category, title: r.title, url: r.url }))
-  );
+  return pools.flatMap((p) => {
+    // 같은 주제가 한 분류를 채우지 않게 — 케이블TV 위기 기사가 하루 7건 중 6건을 차지한 사례(수동 목록 11/18은 1건)
+    const topicCount = new Map<RegExp, number>();
+    const picked: ScoredCandidate[] = [];
+    for (const r of p.ranked) {
+      if (picked.length >= p.quota) break;
+      if (r.score <= 0 || (isEna(r.title) && !allowed.has(r.url))) continue;
+      const cap = TOPIC_CAPS.find((t) => t.re.test(r.title));
+      if (cap) {
+        const n = topicCount.get(cap.re) ?? 0;
+        if (n >= cap.max) continue;
+        topicCount.set(cap.re, n + 1);
+      }
+      picked.push(r);
+    }
+    return picked.map((r) => ({ category: p.category, title: r.title, url: r.url }));
+  });
 }

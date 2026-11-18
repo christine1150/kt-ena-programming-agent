@@ -162,6 +162,8 @@ ok("중대 범죄는 거르지 않음", !isLowValueCastTitle("고경표 음주�
 ok("방송 리뷰형 '의혹' 기사 제외", isShowRecapRisk("34기 광수, 진정성 의혹 터졌다…\"방송쟁이 싫어져\" 분량 욕심 일침 ('나솔')"));
 ok("리뷰 꼬리표 '논란' 기사 제외", isShowRecapRisk("영숙, 데이트 중 돌직구 논란 [어제TV]"));
 ok("실제 사건(하차·사과문)은 리뷰 꼬리표가 있어도 유지", !isShowRecapRisk("34기 광수, 과거 논란에 사과문…방송 하차 ('나솔')"));
+ok("토크쇼 발언 속 지난 하차 언급은 새 사건 아님", isShowRecapRisk("장나라, 남지현 하차 후 김혜윤 캐스팅 간절히 원했다…\"물 떠 놓고 기도하자고\" ('살롱드립')"));
+ok("제목이 잘려 꼬리표가 없어도 후임 캐스팅 언급은 새 사건 아님", isShowRecapRisk("장나라, 남지현 하차 후 김혜윤 캐스팅 간절히 원했다…\"물 떠 놓고 기도..."));
 ok("꼬리표 없는 실제 논란 기사는 유지", !isShowRecapRisk("'나는 SOLO' 출연자 논란 확산…제작진 입장"));
 {
   const r: CastEntry[] = [{ name: "김가나", program: "자사극", scope: "own_upcoming" }];
@@ -176,6 +178,22 @@ ok("한글·로마자 섞인 번역 거부", !isCleanTranslation("하arlan 코�
 ok("영어 기능어 남은 반쪽 번역 거부", !isCleanTranslation("넷플릭스, deal with 파라마운트"));
 ok("같은 시리즈(제임스 본드) 해외 기사는 한 소식", sameStory("Robert Pattinson James Bond Casting Reactions From Industry", "James Bond Casting Shows Challenge of the Social Media Era"));
 ok("다른 소식 영문 기사는 묶지 않음", !sameStory("Amazon Developing 'Terminal List' Prequel", "CAA Signs Hybe to Represent Korean Artists"));
+// 사용자 수동 목록 대조(2026-11-18)
+ok("같은 큰 수치(7609억)를 쓴 케이블TV 기사는 한 소식", sameStory("“케이블TV 퇴출 땐 가계 통신비 최대 7609억 증가”…지역 공공성도 흔들", "\"케이블TV 소멸 시 가계 부담 최대 7609억원…저가방송 대체 난항\""));
+ok("수치만 같고 주제어 없으면 다른 소식", !sameStory("A사 매출 1,500억 돌파", "B연구원 보고서 1,500억 규모 전망"));
+ok("주어가 달라도 단어가 대부분 겹치면 같은 소식", sameStory("아이와 놀고 검사 절차 설명…KT·서울대병원, AI 로봇 실증", "어린이 환자와 놀고 검사 안내까지…KT, 병원 AI 로봇 실증"));
+ok("한경협 K-OTT 제언은 정책으로 선정", rankCategory([c("정책", "한경협, K-OTT 해외 진출 지원 촉구…문화산업 투자 과제 20개 제시")], CATEGORIES.find((x) => x.category === "정책")!, NOW).length === 1);
+{
+  const cfg = CATEGORIES.find((x) => x.category === "방송가 소식")!;
+  const r = rankCategory([c("방송가 소식", "'복면가왕: 황금마스크' 12월 6일 첫 방송 확정…메인 포스터 공개"), c("방송가 소식", "'부부의 세계' 후 7년… 더 치명적인 '어른 멜로'가 온다"), c("방송가 소식", "4개 방송사 수목극 부활시켰다…편성은 살아났는데, 시청률 회복은 '숙제'")], cfg, NOW);
+  ok("새 시즌 방송일 확정·편성 판도 기사 선정", r.length === 3 && r.every((x) => x.score >= 4));
+}
+{
+  const cfg = CATEGORIES.find((x) => x.category === "업계동향")!;
+  const cands = ["'갑질'인가 '생존'인가 벼랑 끝 케이블TV CJ ENM 송출 중단", "KCTA 케이블TV 없어지면 저가 방송 이용자 부담 확대", "SO 위기는 지역정보 위기 케이블TV 공적 책무 지원", "케이블TV 위기에 고령·저소득층 직격 대체 서비스 없다", "LG헬로비전 외국인 전용 알뜰폰 요금제 출시"].map((t) => c("업계동향", t));
+  const picked = pickByRules([{ category: "업계동향", quota: 7, ranked: rankCategory(cands, cfg, NOW) }]);
+  ok("같은 주제(케이블TV)는 한 분류에 2건까지", picked.filter((p) => /케이블/.test(p.title)).length === 2 && picked.length === 3);
+}
 ok("정상 번역 통과(원제·HBO맥스 표기)", isCleanTranslation("넷플릭스, 할런 코벤 원작 'The Innocent' 제작 확정…HBO맥스와 경쟁"));
 ok("지금 건강 문제 기사는 위험 신호로 선정", !isLowValueCastTitle("배우 김가나, 촬영 중 쓰러져 입원") && classifyCast("배우 김가나, 촬영 중 쓰러져 입원", roster)?.signal === "risk");
 

@@ -67,6 +67,9 @@ const RECAP_TAG = /\(\s*['‘’"“”][^)]{1,15}['‘’"“”]\s*\)\s*$|\[(?
 /** 방송 속 장면을 옮길 때 쓰는 낱말(데이트·선택·분량·일침 등) */
 const IN_SHOW = /진정성 의혹|분량|일침|데이트|최종 선택|선택(?:했|받|하)|플러팅|돌직구|직진|러브라인|삼각관계|신경전|기싸움|폭로전|방송쟁이|촬영 중 (?:갈등|언쟁)/;
 export function isShowRecapRisk(title: string): boolean {
+  // 토크쇼 발언 속 지난 하차 언급("남지현 하차 후 김혜윤 캐스팅 원했다 ('살롱드립')")은 새 사건이 아니다(2026-11-18)
+  // 검색 결과 제목은 잘려 꼬리표가 없을 수 있어, 하차 뒤 후임 캐스팅을 다룬 문장이면 꼬리표 없이도 해당한다
+  if (/하차 (?:후|이후)\s?\S+\s?(?:캐스팅|합류|발탁|투입)|하차한 뒤/.test(title) || (/하차 (?:후|이후)/.test(title) && RECAP_TAG.test(title))) return true;
   if (REAL_RISK.test(title)) return false;
   return RECAP_TAG.test(title) || IN_SHOW.test(title);
 }
