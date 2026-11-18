@@ -113,7 +113,9 @@ function featuresOf(title: string): TitleFeatures {
   const quoted = new Set<string>();
   // 여는 따옴표 앞이 글자면 소유격·줄임표(Hollywood’s)라 건너뛴다
   for (const m of title.matchAll(/(?<![0-9A-Za-z가-힣])['‘’"“”<《〈「『]([^'‘’"“”<>《》〈〉「」『』]{2,30})['‘’"“”>》〉」』]/g)) {
-    const key = m[1].split(/[:：\-–—]/)[0].toLowerCase().replace(/[^0-9a-z가-힣]/g, "");
+    // 시즌 번호는 뗀다 — '데블스플랜'과 '데블스 플랜3'은 같은 작품(2026-11-18 출연자 이슈에 같은 사건 2건)
+    let key = m[1].split(/[:：\-–—]/)[0].toLowerCase().replace(/[^0-9a-z가-힣]/g, "");
+    if (/[가-힣]{4,}\d$/.test(key)) key = key.slice(0, -1);
     if (key.length >= 2 && !QUOTED_STOP.has(key)) quoted.add(key);
   }
   const list = title

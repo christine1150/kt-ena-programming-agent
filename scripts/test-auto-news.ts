@@ -164,6 +164,14 @@ ok("리뷰 꼬리표 '논란' 기사 제외", isShowRecapRisk("영숙, 데이트
 ok("실제 사건(하차·사과문)은 리뷰 꼬리표가 있어도 유지", !isShowRecapRisk("34기 광수, 과거 논란에 사과문…방송 하차 ('나솔')"));
 ok("토크쇼 발언 속 지난 하차 언급은 새 사건 아님", isShowRecapRisk("장나라, 남지현 하차 후 김혜윤 캐스팅 간절히 원했다…\"물 떠 놓고 기도하자고\" ('살롱드립')"));
 ok("제목이 잘려 꼬리표가 없어도 후임 캐스팅 언급은 새 사건 아님", isShowRecapRisk("장나라, 남지현 하차 후 김혜윤 캐스팅 간절히 원했다…\"물 떠 놓고 기도..."));
+// 사용자 지적(2026-11-18): 출연자 이슈에 같은 사건 기사가 두 건씩 올라옴
+ok("시즌 번호 표기가 달라도 같은 작품(데블스플랜) 기사는 같은 소식", sameStory("정현규, '데블스플랜' 촬영 중 공황 증상으로 주저앉아... 결국 하차", "“게임 도중 현장 의료진 조치”…결국 ‘데블스 플랜3’ 중도 하차한 출연자"));
+{
+  const r: CastEntry[] = [{ name: "", program: "타사 작품", scope: "other" }];
+  const cc = (title: string) => ({ category: "x", title, url: title, publisher: "", publishedAt: null });
+  const picked = pickCastIssues([cc("고경표 음주운전 ‘민폐 6연타’…박보검·유재석 예능 줄편집"), cc("“짧은 자숙 후 복귀?…음주운전 벌금형 연예인 출연 제한해야” 국회 청원 등장")], r, 4);
+  ok("같은 범죄 낱말의 위험 기사는 1건만", picked.length === 1);
+}
 ok("꼬리표 없는 실제 논란 기사는 유지", !isShowRecapRisk("'나는 SOLO' 출연자 논란 확산…제작진 입장"));
 {
   const r: CastEntry[] = [{ name: "김가나", program: "자사극", scope: "own_upcoming" }];

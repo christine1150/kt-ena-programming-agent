@@ -90,6 +90,9 @@ const nameTokens = (t: string) => new Set((t.match(/[가-힣]{3,4}/g) ?? []).fil
 /** 둘 다 위험 기사이고 같은 이름(3~4자 낱말)을 공유하면 같은 사건으로 본다 — 최예나 표절 의혹·해명 기사 2건이 함께 오른 사례(2026-11-17)로 중대 범죄 밖으로 넓힘 */
 function sameIncident(a: CastHit, b: CastHit): boolean {
   if (a.signal !== "risk" || b.signal !== "risk") return false;
+  // 같은 범죄 낱말(음주운전 등)을 다룬 위험 기사는 한 사건으로 — 제목에 이름이 없는 "음주운전 연예인 출연 제한 국회 청원" 기사가 고경표 기사와 함께 오른 사례(2026-11-18)
+  const ca = a.title.match(SEVERE_CRIME)?.[0];
+  if (ca && ca === b.title.match(SEVERE_CRIME)?.[0]) return true;
   const ta = nameTokens(a.title);
   for (const w of nameTokens(b.title)) if (ta.has(w)) return true;
   return false;
