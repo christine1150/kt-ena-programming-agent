@@ -129,6 +129,7 @@ function buildDb() {
     { id: "p-va-ena", channel_id: "c-ena", canonical_name: "테스트 예능" },
     { id: "p-va-olife", channel_id: "c-olife", canonical_name: "테스트예능" },
     { id: "p-dr-play", channel_id: "c-play", canonical_name: "테스트드라마" },
+    { id: "p-dr-sky", channel_id: "c-sky", canonical_name: "테스트 드라마" },
     ...["ena", "drama", "play", "olife"].flatMap((c) => [0, 1, 2].flatMap((k) => [10, 21].map((h) => ({ id: `f-${c}-${h}-${k}`, channel_id: `c-${c}`, canonical_name: `필러${c}${h}${k}` })))),
   ]);
   // 승인 메타데이터: 드라마는 ENA 행에만, 예능은 OLIFE 행에만 분류가 있다(다른 채널 재방에도 작품 속성 유지 확인)
@@ -164,6 +165,8 @@ function buildDb() {
   // 첫 방영 중복 적재(같은 방영 두 벌)
   ratings.push({ source_type: "nielsen_daily", channel_id: "c-ena", program_id: "p-dr-ena", target_id: "t-p2049", broadcast_date: addDays(START, 2), start_time: "21:30:00", rating: 1.2, is_first_run: true, episode_number: 1, created_at: "2026-01-02" });
   // ENA PLAY: 2일만 방영(소표본)
+  // skyUHD 수기 파일(source_type=skyuhd, 타깃 없음): 값 3건 + 0(측정 안 됨) 1건
+  [0.02, 0.03, 0.04, 0].forEach((v, k) => ratings.push({ source_type: "skyuhd", channel_id: "c-sky", program_id: "p-dr-sky", target_id: null, broadcast_date: addDays(START, 8 + k), start_time: "10:40:00", end_time: "11:50:00", rating: v, created_at: "2026-01-01" }));
   for (const d of [5, 12]) ratings.push({ source_type: "nielsen_daily", channel_id: "c-play", program_id: "p-dr-play", target_id: "t-p2049", broadcast_date: addDays(START, d), start_time: "21:30:00", rating: 0.4, is_first_run: false, episode_number: 1, created_at: "2026-01-01" });
   // 다른 시즌(합쳐지면 안 됨)
   ratings.push({ source_type: "nielsen_daily", channel_id: "c-ena", program_id: "p-dr2-ena", target_id: "t-p2049", broadcast_date: END, start_time: "21:30:00", rating: 3.0, is_first_run: true, episode_number: 1, created_at: "2026-01-01" });
@@ -221,13 +224,15 @@ async function main() {
   check("ENA_PLAY: 소표본(2일)은 판단 보류", rowOf(all, "ENA_PLAY").sampleState === "NONE" && rowOf(all, "ENA_PLAY").summary.includes("판단 보류"));
   check("ENA_STORY: 프로그램 자료 없음 상태(미방영·0으로 확정 안 함)", (() => { const s = rowOf(all, "ENA_STORY"); return s.status === "NO_PROGRAM_DATA" && s.programAvg === null && s.vsChannel.ratio === null; })());
   check("OLIFE: 이 작품 방영 기록 없음 → 관측 없음", rowOf(all, "OLIFE").status === "NO_OBSERVATION");
-  check("skyUHD: 이번 범위 밖 상태 유지", rowOf(all, "SKYUHD").status === "UNSUPPORTED");
+  { const sky = rowOf(all, "SKYUHD");
+  check("skyUHD: 수기 파일 방영을 적음(4회·가구 그룹, 0 은 평균에서 제외 → 0.03)", sky.status === "OBSERVED" && sky.kpiGroup === "HH" && sky.airings === 4 && sky.days === 4 && near(sky.programAvg, 0.03), JSON.stringify([sky.status, sky.airings, sky.programAvg]));
+  check("skyUHD: 채널 평균·슬롯 대비는 계산하지 않음, 방송 기록에는 오름(0 은 값 없음)", sky.vsChannel.ratio === null && sky.slot === null && r.airings.filter((a) => a.channelCode === "SKYUHD").length === 4 && r.airings.filter((a) => a.channelCode === "SKYUHD" && a.rating === null).length === 1); }
   check("2049·가구 KPI 그룹 분리", r.groups.length === 2 && r.groups.every((g) => g.rows.every((x) => x.kpiGroup === g.kpiGroup)));
   check("다른 시즌(테스트드라마2)이 합쳐지지 않음", !ena.programIds.includes("p-dr2-ena") && !r.airings.some((a) => a.rating === 3));
   check("연결 확인 필요 후보는 합치지 않고 안내만", r.work.candidateKeys.includes("테스트드라마스페셜") && r.notes.some((n) => n.includes("연결 확인 필요")));
   check("현재 판정은 최근 12주 기준과 평가 기간을 함께 반환", ena.fit?.tag === "KEEP" && ena.fit.windowFrom === addDays(END, -83));
   check("기간: 작품 첫 관측일·첫 본방일·최신 자료일 구분", r.period.workFirstObserved === addDays(START, 2) && r.period.workFirstFirstRun === addDays(START, 2) && r.period.latestDataDate === END && r.period.dbFirstDate === START);
-  check("총계: 방영 채널 3·고유 회차 12", r.totals.channels === 3 && r.totals.episodes === WEEKS, JSON.stringify(r.totals));
+  check("총계: 방영 채널 4(skyUHD 수기 포함)·고유 회차 12", r.totals.channels === 4 && r.totals.episodes === WEEKS, JSON.stringify(r.totals));
 
   const rr = (await loadProgramPerformanceWith(db, Q({ airing: "rerun" }), { fitLookup }))!;
   const all2 = rr.groups.flatMap((g) => g.rows);
@@ -295,7 +300,7 @@ async function main() {
 
   // 채널별 첫 줄 — 서버 고정 템플릿(사용자 지정 형식), 방영 기록이 있는 채널만
   const lineOf = (res: typeof r, code: string) => res.lines.find((l) => l.channelCode === code)?.text ?? "";
-  check("첫 줄: 방영 기록 있는 채널만(관측 없음·자료 없음·제외 채널 없음)", r.lines.length === 3 && r.lines.map((l) => l.channelCode).join() === "ENA,ENA_DRAMA,ENA_PLAY", r.lines.map((l) => l.channelCode).join());
+  check("첫 줄: 방영 기록 있는 채널만(관측 없음·자료 없음·제외 채널 없음)", r.lines.length === 4 && r.lines.map((l) => l.channelCode).join() === "ENA,ENA_DRAMA,ENA_PLAY,SKYUHD", r.lines.map((l) => l.channelCode).join());
   check("첫 줄: '채널: 값(타깃, 지수%)로 채널 평균 대비 차이 높음/낮음 (n회)' 형식", lineOf(r, "ENA") === "ENA: 1.200(2049, 240%)로 채널 평균 대비 140% 높음 (12회)", lineOf(r, "ENA"));
   check("첫 줄: 낮으면 '낮음', 지수와 차이가 어긋나지 않음(49% ↔ 51%)", lineOf(r, "ENA_DRAMA").includes("(2049, 49%)로 채널 평균 대비 51% 낮음 (48회)"), lineOf(r, "ENA_DRAMA"));
   check("첫 줄: 방송일 3일 미만은 표본 부족·판단 보류 표시(수치는 유지)", lineOf(r, "ENA_PLAY").includes("(2049, 200%)") && lineOf(r, "ENA_PLAY").endsWith("(2회, 실적 2일, 표본 부족·판단 보류)"), lineOf(r, "ENA_PLAY"));

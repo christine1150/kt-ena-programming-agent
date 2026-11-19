@@ -569,7 +569,71 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
       analysis: null,
     };
     if (ch.code === "SKYUHD") {
-      if (ti === 0) rows.push({ ...base, status: "UNSUPPORTED", statusNote: "skyUHD는 프로그램 시청률이 별도 수기 파일(타깃 없음·초 단위)이라 이번 비교에서 계산하지 않습니다." });
+      // skyUHD 프로그램 시청률은 별도 수기 파일(source_type='skyuhd', 타깃 없음, 가구 기준)이다. 가구 타깃 조회에서만 방영 기록을 적는다 —
+      // 채널 평균·슬롯 대비·종합평가는 닐슨 채널 하루 시청률이 없어 계산하지 않는다(2026-11-19, 행동과학자의 사건파일이 비어 보이던 문제).
+      if (evOnly || ti !== 0) return done();
+      if (kpiGroup !== "HH") {
+        rows.push({ ...base, status: "UNSUPPORTED", statusNote: "skyUHD는 프로그램 시청률이 별도 수기 파일(타깃 없음·가구 기준)이라 수도권 2049 비교에서는 계산하지 않습니다." });
+        return done();
+      }
+      let manual: WorkAiring[] = [];
+      for (let i = 0; i < ids.length; i += IN_CHUNK) {
+        const chunk = ids.slice(i, i + IN_CHUNK);
+        const got = await fetchAll<Record<string, unknown>>(
+          (a, b) =>
+            db
+              .from("ratings")
+              .select("program_id, broadcast_date, start_time, end_time, rating, created_at")
+              .in("program_id", chunk)
+              .eq("source_type", "skyuhd")
+              .gte("broadcast_date", from)
+              .lte("broadcast_date", to)
+              .order("broadcast_date", { ascending: true })
+              .order("id", { ascending: true })
+              .range(a, b),
+          "skyUHD 수기 방영"
+        );
+        manual.push(
+          ...got.map((r) => ({
+            programId: r.program_id as string,
+            date: r.broadcast_date as string,
+            startTime: (r.start_time as string | null) ?? null,
+            endTime: (r.end_time as string | null) ?? null,
+            // 수기 파일은 0 이 "측정 안 됨/바닥값"인 경우가 대부분이라 0 은 값이 아닌 것으로 둔다(평균을 눌러 내리지 않게)
+            rating: r.rating === null || r.rating === undefined || Number(r.rating) === 0 ? null : Number(r.rating),
+            firstRun: null,
+            episode: null,
+            createdAt: (r.created_at as string | null) ?? null,
+            share: null,
+          }))
+        );
+      }
+      manual = mergeSplitAirings(dedupeAirings(manual)).filter((r) => matchesAiringFilter(r.firstRun, query.airing));
+      if (manual.length === 0) {
+        rows.push({ ...base, status: "NO_OBSERVATION", statusNote: "이 기간 skyUHD 수기 파일에 이 작품의 방영 기록이 없습니다." });
+        return done();
+      }
+      const vals = manual.map((r) => r.rating).filter((v): v is number => v !== null);
+      // 시청률 값이 있는 방영이 절반 미만이면(수기 파일은 0 이 대부분) 몇 건 안 되는 값으로 평균을 내면 오해를 부르므로 평균은 비운다
+      const avg = vals.length > 0 && vals.length * 2 >= manual.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+      const dates = [...new Set(manual.map((r) => r.date))].sort();
+      rows.push({
+        ...base,
+        status: "OBSERVED",
+        statusNote: `skyUHD 수기 파일 값(가구 기준) — 시청률이 0 으로 적힌 ${manual.length - vals.length}건은 측정값이 아니라 평균에서 뺐고, 값이 있는 방영이 절반 미만이면 평균을 내지 않습니다. 본·재방 표시와 채널 평균 대비는 계산하지 않습니다.`,
+        airings: manual.length,
+        days: dates.length,
+        unknownRun: { airings: manual.length, days: dates.length, avg },
+        programAvg: avg,
+        observedFrom: dates[0],
+        observedTo: dates[dates.length - 1],
+        sampleState: manual.length >= 8 ? "OK" : "SMALL",
+        summary: avg === null ? `skyUHD 수기 방영 ${manual.length}회(시청률 값이 있는 방영 ${vals.length}회라 평균은 내지 않음)` : `skyUHD 수기 방영 ${manual.length}회, 평균 ${avg.toFixed(4)}`,
+      });
+      for (const r of manual) {
+        allDays.add(r.date);
+        evidence.push({ channelCode: ch.code, date: r.date, startTime: r.startTime, endTime: r.endTime, programId: r.programId, name: nameById.get(r.programId) ?? "", firstRun: r.firstRun, episode: r.episode, rating: r.rating, ratingHH: r.rating });
+      }
       return done();
     }
     if (!primary) {
