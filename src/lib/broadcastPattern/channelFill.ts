@@ -7,7 +7,7 @@
 import { addDays } from "@/lib/idealSchedule/time";
 import { matchPlanRow, normalizePlanRows, type PlanRow, type PlanRowRaw } from "@/lib/idealSchedule/planEpisodes";
 import { patternRunsForAirings } from "./dayFill";
-import { FOLLOW_RULES, followRunsOf, loadFollowSourcesByName } from "./followRule";
+import { FOLLOW_RULES, allFirstRunRuleFor, followRunsOf, loadFollowSourcesByName } from "./followRule";
 import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,6 +92,12 @@ export async function fillChannelRuns(db: Db, args: { channelId: string; channel
       const run = runs[j];
       if (run !== null) out[i] = { firstRun: run, source: "registered", premiere: false };
     });
+  }
+
+  // ①-3 전부 본방 규칙(재방 없이 회차 순서대로 본방만 내보내는 채널·작품, 사용자 확인)
+  for (const i of open()) {
+    if (out[i].firstRun !== null) continue;
+    if (allFirstRunRuleFor(args.channelCode, [normalizeProgramKey(args.rows[i].name)], args.rows[i].date)) out[i] = { firstRun: true, source: "registered", premiere: null };
   }
 
   // ② 본방 편성 패턴(관리자 등록 > 네이버) — 본방 여부가 정해진 방영에는 초방 여부만 더한다

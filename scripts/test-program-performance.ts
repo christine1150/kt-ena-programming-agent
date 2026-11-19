@@ -5,7 +5,9 @@
 // 0/NULL/중복/정정/타깃 중복/소표본/산출 불가 처리, 분류 규칙(승인 메타데이터만), 다른 시즌 분리, 캐시 키 분리, 기존 엔진 무변경.
 // 보증하지 못하는 것: 운영 데이터에서의 값(합성 사례의 이름·수치는 실제 채널 성과가 아니다).
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
-import { matchPlanRow, normalizePlanRows } from "../src/lib/idealSchedule/planEpisodes";
+import { matchPlanRow, namesCompatible, normalizePlanRows, planNameKey } from "../src/lib/idealSchedule/planEpisodes";
+import { cleanDisplayName, workDisplayName } from "../src/lib/purchaseSim/displayName";
+import { allFirstRunRuleFor } from "../src/lib/broadcastPattern/followRule";
 import { originalCompareOf, type OriginalSeries } from "../src/lib/programPerformance/originalCompare";
 import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, relText, assessmentOf, whereLineOf, shareLineOf, seriesTrendText, pickExtremes, slotLeadOf, periodTrendOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
@@ -529,6 +531,25 @@ async function main() {
     check("오리지널 비교: 비교 대상이 없으면 null(빈 문구를 만들지 않음)", originalCompareOf({ classLabel: "오리지널 교양", targetLabel: "수도권 2049", dataFrom: "2025-01-01", code: "ENA", self: S("홀로", [0.1]), peers: [], predecessor: null }) === null);
     check("오리지널 비교: 평가 어휘·권고 없음", !/(좋|나쁘|우수|부진|강화|교체|확대)/.test(oc.lines.join("")));
     check("편성 비교 결론: 표본 경고 문구 없음(소표본 구간만 있어도)", ![slotLeadOf([c(6, 2, 40), c(1, 1, -30)]), slotLeadOf([c(6, 2, 40)])].some((t) => /(표본|판단|참고|3일 미만)/.test(t)));
+  }
+
+  // ── 시즌 표기·표시 이름·전부 본방 규칙(2026-11-20 사용자 지시) ──
+  {
+    check("편성표 매칭: '사건 파일 시즌1'(편성표) ↔ '사건파일1'(닐슨)은 같은 작품", namesCompatible(planNameKey("행동과학자의 사건 파일 \n시즌1"), planNameKey("행동과학자의사건파일1")) === 2);
+    check("편성표 매칭: 시즌1 ↔ 시즌2 는 다른 작품", namesCompatible(planNameKey("행동과학자의 사건 파일 시즌2"), planNameKey("행동과학자의사건파일1")) === 0);
+    const plan = normalizePlanRows([
+      { week_start: "2026-11-09", broadcast_date: "2026-11-13", start_time: "23:00", end_time: "03:20", program_name_raw: "앞 프로그램", episode_number: null, episode_subtitle: null, matched_program_id: null, tags: "" },
+      { week_start: "2026-11-09", broadcast_date: "2026-11-13", start_time: "03:20", end_time: "04:10", program_name_raw: "행동과학자의 사건 파일 \n시즌1", episode_number: 1, episode_subtitle: null, matched_program_id: null, tags: "[초][본]" },
+    ]);
+    const hit = matchPlanRow(plan.filter((p) => p.date === "2026-11-14"), { programId: "x", name: "행동과학자의사건파일1", startTime: "03:16:56" });
+    check("편성표 매칭: 자정 넘긴 편성표 칸(11/13 03:20)이 닐슨 방송일(11/14 03:16) 방영에 1회로 붙는다", hit?.episodeNumber === 1, JSON.stringify(hit));
+    check("표시 이름: <재> 태그를 뗀다", cleanDisplayName("아마데우스 <재>") === "아마데우스" && cleanDisplayName("암자 <재>") === "암자");
+    check("표시 이름: '시즌 4' → '시즌4', ' S2' → ' 시즌2'", cleanDisplayName("골든 아워 시즌 4") === "골든 아워 시즌4" && cleanDisplayName("지혜의 숲 S2") === "지혜의 숲 시즌2");
+    check("표시 이름: 사용자 지정(골든아워·대멸종)", workDisplayName("골든아워시즌4", [{ key: "골든아워4", display_name: "골든아워4" }]) === "골든아워 시즌4 (트랜스플랜트)" && workDisplayName("대멸종최후의생존자들", [{ key: "대멸종최후의생존자들", display_name: "대멸종최후의생존자들" }]) === "대멸종: 최후의 생존자들 (서바이빙 어스)");
+    check("표시 이름: 시즌 묶음은 검색에 맞은 행과 무관하게 '…시즌1'", workDisplayName("행동과학자의사건파일시즌1", [{ key: "행동과학자의사건파일1", display_name: "행동과학자의사건파일1", airings_total: 25 }, { key: "행동과학자의사건파일시즌1", display_name: "행동과학자의 사건파일 시즌1", airings_total: 24 }]) === "행동과학자의 사건파일 시즌1");
+    check("표시 이름: 대표 키가 '…시즌N'인데 이름에 시즌이 없으면 꼬리 숫자를 시즌으로", workDisplayName("돌싱글즈시즌3", [{ key: "돌싱글즈시즌3", display_name: "돌싱글즈 3" }]) === "돌싱글즈 시즌3");
+    check("표시 이름: 띄어쓰기 없는 대표 표기는 같은 키의 띄어 쓴 표기로", workDisplayName("현무카세", [{ key: "현무카세", display_name: "현무카세" }, { key: "현무카세", display_name: "현무 카세 <재>" }]) === "현무 카세");
+    check("전부 본방 규칙: OLIFE·ENA Drama 행동과학자(11월 이후)만", !!allFirstRunRuleFor("OLIFE", ["행동과학자의사건파일1"], "2026-11-14") && !!allFirstRunRuleFor("ENA_DRAMA", ["행동과학자의사건파일시즌1"], "2026-11-16") && !allFirstRunRuleFor("ENA_STORY", ["행동과학자의사건파일1"], "2026-11-14") && !allFirstRunRuleFor("OLIFE", ["행동과학자의사건파일1"], "2026-09-01"));
   }
 
   console.log(`\n${passed} passed, ${failures.length} failed`);

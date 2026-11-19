@@ -32,6 +32,33 @@ export const FOLLOW_RULES: FollowRule[] = [
   { programKeys: [normalizeProgramKey("니돈내산")], followerChannel: "ENA_PLAY", sourceChannel: "ENA", withinDays: 1, label: "ENA Play '니돈내산'", mode: "first" },
 ];
 
+/**
+ * 전부 본방 규칙 — 이 채널에서는 재방 없이 회차 순서대로 본방만 내보낸다(사용자 확인). 닐슨·편성표 표시가 없는 방영을 본방으로 보고,
+ * 회차가 빈 본방은 앞뒤 본방 회차에서 순서대로 이어 붙인다(프로그램 성과). from 이후 방영에만 적용한다.
+ */
+export interface AllFirstRunRule {
+  programKeys: string[];
+  channels: string[];
+  from: string;
+  label: string;
+}
+
+export const ALL_FIRST_RUN_RULES: AllFirstRunRule[] = [
+  // 사용자 지시(2026-11-20): OLIFE·ENA Drama 행동과학자의 사건파일은 재방 없이 에피소드 순서대로 본방(OLIFE 11/14~, ENA Drama 11/16~)
+  {
+    programKeys: ["행동과학자의 사건파일 1", "행동과학자의 사건파일 2", "행동과학자의 사건파일 시즌1", "행동과학자의 사건파일 시즌2"].map(normalizeProgramKey),
+    channels: ["OLIFE", "ENA_DRAMA"],
+    from: "2026-11-01",
+    label: "행동과학자의 사건파일(OLIFE·ENA Drama)",
+  },
+];
+
+/** 이 채널·작품 키·방송일에 적용되는 전부 본방 규칙(없으면 null). */
+export function allFirstRunRuleFor(channelCode: string, keys: Iterable<string>, date: string): AllFirstRunRule | null {
+  const ks = [...keys];
+  return ALL_FIRST_RUN_RULES.find((r) => r.channels.includes(channelCode) && date >= r.from && r.programKeys.some((k) => ks.includes(k))) ?? null;
+}
+
 /** 이 채널·작품에 적용되는 규칙(없으면 null). memberKeys는 작품 묶음의 정규화 키들. */
 export function followRuleFor(channelCode: string, memberKeys: Iterable<string>): FollowRule | null {
   const keys = new Set(memberKeys);

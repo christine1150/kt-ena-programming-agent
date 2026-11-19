@@ -10,11 +10,12 @@ import { resolveProgramLevelTargetLabel, resolveRankSheetTargetLabel } from "@/l
 import { computeSlotComparison } from "@/lib/contentFit/engine";
 import type { ContentFitAiring } from "@/lib/contentFit/types";
 import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
+import { workDisplayName } from "@/lib/purchaseSim/displayName";
 import { matchPlanRow, normalizePlanRows, type PlanRow, type PlanRowRaw } from "@/lib/idealSchedule/planEpisodes";
 import { addDays } from "@/lib/idealSchedule/time";
 import { confirmedWindow, describeLearned, hhmm, inferRuns, type LearnedSlot } from "@/lib/broadcastPattern/inferRuns";
 import { loadRunPatterns } from "@/lib/broadcastPattern/load";
-import { FOLLOW_RULES, followRunsOf, loadFollowSources, type SourceAir } from "@/lib/broadcastPattern/followRule";
+import { FOLLOW_RULES, allFirstRunRuleFor, followRunsOf, loadFollowSources, type SourceAir } from "@/lib/broadcastPattern/followRule";
 import { CONTENT_FIT_CONFIG } from "@/lib/contentFit/config";
 import { mergeBoundarySplits, mergedShare, mergeSplitRatingRows, weightedValue } from "@/lib/broadcastTime/boundarySplit";
 import { loadOriginalCompare } from "./originalCompare";
@@ -159,10 +160,10 @@ export async function resolveWork(db: PerfDb, groupKey: string): Promise<{ displ
   if (error) throw new Error(`작품 식별 조회 실패: ${error.message}`);
   const rows = (members ?? []) as { key: string; display_name: string; own_channels: string[] | null; airings_total: number | null }[];
   if (rows.length === 0) return null;
-  const rep = rows.find((r) => r.key === groupKey) ?? [...rows].sort((a, b) => (b.airings_total ?? 0) - (a.airings_total ?? 0))[0];
   const { data: cands } = await db.from("program_alias").select("alias_key, status").eq("group_key", groupKey).eq("status", "candidate");
   return {
-    displayName: rep.display_name,
+    // 표시 이름은 묶음 단위로 하나(태그 제거·시즌 표기 통일·사용자 지정 이름, 2026-11-20)
+    displayName: workDisplayName(groupKey, rows),
     memberKeys: [...new Set(rows.map((r) => r.key))].sort(),
     candidateKeys: [...new Set(((cands ?? []) as { alias_key: string }[]).map((c) => c.alias_key))].sort(),
   };
@@ -743,6 +744,31 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
         const at = notes.findIndex((x) => x.startsWith(`${followRule.label}:`));
         if (at >= 0) notes[at] = msg;
         else notes.push(msg);
+      }
+    }
+    // 전부 본방 규칙(재방 없이 회차 순서대로 본방만, 사용자 확인 2026-11-20 행동과학자의 사건파일 OLIFE·ENA Drama) — 표시 없는 방영은 본방,
+    // 회차가 빈 본방은 바로 앞 본방 회차 + 1(앞이 없으면 바로 뒤 본방 회차 − 1)로 순서대로 잇는다.
+    if (workRows.some((r) => allFirstRunRuleFor(ch.code, work.memberKeys, r.date))) {
+      let seqRun = 0;
+      let seqEp = 0;
+      workRows = workRows.map((r) => {
+        if (r.firstRun !== null || !allFirstRunRuleFor(ch.code, work.memberKeys, r.date)) return r;
+        seqRun++;
+        return { ...r, firstRun: true };
+      });
+      const order = workRows.map((r, i) => ({ r, i })).filter((x) => x.r.firstRun === true && allFirstRunRuleFor(ch.code, work.memberKeys, x.r.date)).sort((a, b) => a.r.date.localeCompare(b.r.date) || (a.r.startTime ?? "").localeCompare(b.r.startTime ?? ""));
+      const eps = order.map((x) => x.r.episode);
+      for (let k = 1; k < eps.length; k++) if (eps[k] === null && eps[k - 1] !== null) { eps[k] = (eps[k - 1] as number) + 1; seqEp++; }
+      for (let k = eps.length - 2; k >= 0; k--) if (eps[k] === null && eps[k + 1] !== null && (eps[k + 1] as number) > 1) { eps[k] = (eps[k + 1] as number) - 1; seqEp++; }
+      if (seqEp > 0) {
+        const epAt = new Map(order.map((x, k) => [x.i, eps[k]] as const));
+        workRows = workRows.map((r, i) => (epAt.has(i) && r.episode === null ? { ...r, episode: epAt.get(i) ?? null } : r));
+        fillOf(ch.code, base.channelName).episode = seqEp;
+      }
+      const rule = workRows.map((r) => allFirstRunRuleFor(ch.code, work.memberKeys, r.date)).find(Boolean);
+      if (rule && (seqRun > 0 || seqEp > 0)) {
+        const msg = `${rule.label}: 재방 없이 회차 순서대로 본방만 방송하는 편성이라 표시 없는 방영을 본방으로 보고 빈 회차를 순서대로 이었습니다.`;
+        if (!notes.includes(msg)) notes.push(msg);
       }
     }
     // 본방 회차 빈틈 메우기 — 앞뒤 본방의 회차가 정확히 하나 건너뛰면(1회·3회 사이) 가운데 본방은 그 사이 회차(2회)다

@@ -57,11 +57,22 @@ export function planNameKey(name: string): string {
   return normalizeProgramCanonicalName(name.replace(/\([^)]*\)/g, "").replace(/<[^>]*>/g, "").replace(/[①-⓿]/g, ""));
 }
 
-/** 두 정규화 이름이 같은 프로그램으로 볼 만한가(같음 또는 한쪽이 다른 쪽을 포함, 두 글자 이상). */
+/**
+ * 시즌 표기를 접은 키 — "…시즌1"·"…SEASON1"·"…S1"과 "…1"을 같게 본다(숫자는 그대로라 시즌1↔시즌2는 계속 다르다).
+ * 편성표는 "행동과학자의 사건 파일 시즌1", 닐슨은 "행동과학자의사건파일1"로 적어 회차를 못 붙이던 문제(사용자 지적 2026-11-20).
+ */
+export function seasonFoldKey(k: string): string {
+  return k.replace(/(?:시즌|SEASON|Season|season)\s*(\d+)/g, "$1").replace(/(?<=[가-힣])S(\d{1,2})$/, "$1");
+}
+
+/** 두 정규화 이름이 같은 프로그램으로 볼 만한가(같음 또는 한쪽이 다른 쪽을 포함, 두 글자 이상). 시즌 표기 차이(시즌N ↔ N)는 같음으로 본다. */
 export function namesCompatible(a: string, b: string): 0 | 1 | 2 {
   if (!a || !b) return 0;
   if (a === b) return 2;
-  if (a.length >= 2 && b.length >= 2 && (a.includes(b) || b.includes(a))) return 1;
+  const fa = seasonFoldKey(a);
+  const fb = seasonFoldKey(b);
+  if (fa === fb) return 2;
+  if (fa.length >= 2 && fb.length >= 2 && (fa.includes(fb) || fb.includes(fa))) return 1;
   return 0;
 }
 

@@ -1,0 +1,94 @@
+// 프로그램 성과 작품 묶음 정리(2026-11-20 사용자 지시 "비슷한 이름의 같은 프로그램이 다르게 인식되지 않게") — 데이터만 바꾼다(스키마 변경 없음).
+// 실행: npx tsx --env-file=.env scripts/fix-program-identity-1120.mts [--dry]
+//
+// 1) 행동과학자의 사건파일: 닐슨 표기("행동과학자의사건파일1")를 띄어 쓴 표기("행동과학자의 사건파일 1")로 — 정규화 키는 그대로라 적재 매칭·작품 묶음에 영향 없음.
+//    새 시즌 행도 같은 표기로 만들어지도록 programNameMatch.ts PROGRAM_NAME_ALIASES 에 같은 항목을 둔다.
+// 2) 이름만 다르게 적힌 같은 작품 별칭(program_alias, confirmed) — 판정 근거: 두 이름의 방영(닐슨·skyUHD 수기·IPTV)을
+//    같은 채널·같은 방송일·시작 ±5분으로 대조해 적은 쪽 방영의 50% 이상이 같은 시각(대부분 80~100%)이거나, 명백한 오타.
+//    번호만 다른 이름(크래시↔크래시2, 지구마불세계여행↔2·3·4 등)은 같은 시각 방영이 0건이라 별개 시즌으로 두었다.
+import { supabase } from "../src/lib/supabase";
+
+const DRY = process.argv.includes("--dry");
+
+const RENAMES: [string, string][] = [
+  ["행동과학자의사건파일1", "행동과학자의 사건파일 1"],
+  ["행동과학자의사건파일2", "행동과학자의 사건파일 2"],
+];
+
+// [별칭 키, 대표 키, 근거]
+const ALIASES: [string, string, string][] = [
+  ["레지던트에어리언3", "레지던트에이리언3", "오타(같은 시각 82%)"],
+  ["제임스마틴의미식어드벤쳐인스페인", "제임스마틴의미식어드벤처인스페인", "오타(같은 시각 100%)"],
+  ["히스토리아", "히스토리야", "오타(ONCE 1건)"],
+  ["풍향고2사전모임", "풍향GO2사전모임", "표기 차이(같은 시각 91%, 적재 별칭과 같은 묶음)"],
+  ["락트렌드다큐도시락", "트렌드다큐도시락", "앞 글자 오기(같은 시각 98%)"],
+  ["착한콘서트5", "착한콘서트", "IPTV 회차 묶음 번호(같은 시각 100%)"],
+  ["착한콘서트6", "착한콘서트", "IPTV 회차 묶음 번호(같은 시각 100%)"],
+  ["착한콘서트7", "착한콘서트", "IPTV 회차 묶음 번호(같은 시각 100%)"],
+  ["착한콘서트8", "착한콘서트", "IPTV 회차 묶음 번호(같은 시각 91%)"],
+  ["착한콘서트9", "착한콘서트", "IPTV 회차 묶음 번호(같은 시각 67%)"],
+  ["집중단속신건강프로젝트건문검색", "건문검색", "부제(같은 시각 98%)"],
+  ["눈떠보니", "눈떠보니OOO", "닐슨 줄임 표기(같은 시각 87%)"],
+  ["매화홍도미스터앤미세스첸", "매화홍도", "부제(같은 시각 82%)"],
+  ["군예능대통합프로젝트신병캠프", "신병캠프", "부제(같은 시각 73%)"],
+  ["언더커버", "커버인플루언서서바이벌언더커버", "줄임 표기(같은 시각 75%, 에센셜과는 0~4%)"],
+  ["커버인플루언서서바이벌언더커버에센셜", "언더커버에센셜", "부제(같은 시각 80%)"],
+  ["지혜의숲프리미엄인문학강연토크쇼", "지혜의숲", "부제(같은 시각 100%)"],
+  ["청춘밥상산지직송집밥레시피", "청춘밥상", "부제(같은 시각 100%)"],
+  ["청춘학교청춘은바로지금", "청춘학교", "부제(같은 시각 100%)"],
+  ["풍미로그FISHSAUCE", "풍미로그", "부제(같은 시각 57%)"],
+  ["하하버스논스톱", "하하버스", "부제(같은 시각 98%)"],
+  ["목요일퇴근푸드현무카세", "현무카세", "부제(같은 시각 92%)"],
+  ["롱리브더독반려견장수의비밀", "롱리브더독", "부제(같은 시각 100%)"],
+  ["스튜디오S넘샤벽S대생들의공부스토리", "스튜디오S", "부제(같은 시각 92%)"],
+  ["에스콰이어변호사를꿈꾸는변호사들", "에스콰이어", "부제(같은 시각 87%)"],
+  ["캐리어하나로떠나는주문짐쌀라비움", "짐쌀라비움", "부제(같은 시각 79%, 사용자 지정 2026-09-28 짐쌀라비움 표기)"],
+  ["맡겨만주십숏주문하신영상나왔습니다", "맡겨만주십숏", "부제(같은 시각 86%)"],
+  ["나만의색을찾아떠난청춘들의알록달록힐링로맨스스피릿핑거스", "스피릿핑거스", "부제(같은 시각 95%)"],
+  ["길바닥무먹큐멘터리전현무계획2", "전현무계획2", "부제(같은 시각 72%)"],
+  ["인생2막세상의벽을향해한방을날려라리얼도전스토리하이킥2", "리얼도전스토리하이킥2", "부제(같은 시각 81%)"],
+  ["사진작가김홍희의모터사이클다이어리", "김홍희의모터사이클다이어리", "부제(같은 시각 100%)"],
+  ["2026아시아배드민턴팀선수권대회", "2026아시아배드민턴팀선수권", "표기 차이(같은 시각 100%)"],
+  ["나혼자간다여행MOROCCO", "나혼자간다여행", "회차 부제(같은 시각 100%)"],
+  ["찐팬구역이글스라행복합니다", "찐팬구역", "부제(같은 시각 50%)"],
+];
+
+// 1) 이름 띄어쓰기
+for (const [from, to] of RENAMES) {
+  const { data } = await supabase.from("programs").select("id, channel_id, canonical_name").eq("canonical_name", from);
+  for (const p of data ?? []) {
+    console.log(`이름 ${p.canonical_name} → ${to} (${p.id})`);
+    if (!DRY) {
+      const { error } = await supabase.from("programs").update({ canonical_name: to }).eq("id", p.id);
+      if (error) throw new Error(`이름 변경 실패: ${error.message}`);
+    }
+  }
+}
+
+// 2) 별칭
+const { data: existing } = await supabase.from("program_alias").select("alias_key, group_key, status");
+const aliasOf = new Map(((existing ?? []) as { alias_key: string; group_key: string; status: string }[]).filter((a) => a.status === "confirmed").map((a) => [a.alias_key, a.group_key]));
+const keys = [...new Set(ALIASES.flatMap(([a, g]) => [a, g]))];
+const { data: idRows } = await supabase.from("program_identity").select("key").in("key", keys);
+const have = new Set(((idRows ?? []) as { key: string }[]).map((r) => r.key));
+const rows: { alias_key: string; group_key: string; rule: string; status: string; source: string; note: string }[] = [];
+for (const [alias, group0, why] of ALIASES) {
+  const group = aliasOf.get(group0) ?? group0; // 대표 키가 이미 다른 묶음의 별칭이면 그 묶음으로(체인 없음)
+  if (!have.has(alias) || !have.has(group0)) { console.log(`건너뜀(식별 행 없음): ${alias} → ${group0}`); continue; }
+  if (aliasOf.has(alias)) { console.log(`건너뜀(이미 별칭): ${alias} → ${aliasOf.get(alias)}`); continue; }
+  rows.push({ alias_key: alias, group_key: group, rule: /오타|오기/.test(why) ? "typo" : "subtitle", status: "confirmed", source: "MANUAL", note: `${why} — 같은 채널·같은 방송일·시작 ±5분 방영 대조(2026-11-20)` });
+}
+console.log(`별칭 ${rows.length}건`);
+for (const r of rows) console.log(`  ${r.alias_key} → ${r.group_key}`);
+if (!DRY && rows.length) {
+  const { error } = await supabase.from("program_alias").upsert(rows, { onConflict: "alias_key", ignoreDuplicates: true });
+  if (error) throw new Error(`별칭 저장 실패: ${error.message}`);
+  // 별칭으로 묶인 키를 대표로 쓰던 다른 별칭(체인)이 있으면 새 대표로 옮긴다
+  for (const r of rows) {
+    const { error: e2 } = await supabase.from("program_alias").update({ group_key: r.group_key }).eq("group_key", r.alias_key);
+    if (e2) throw new Error(`체인 정리 실패: ${e2.message}`);
+  }
+  const { data: n, error: e3 } = await supabase.rpc("apply_program_aliases");
+  if (e3) throw new Error(`별칭 반영 실패: ${e3.message}`);
+  console.log(`작품 묶음 반영 ${n}행`);
+}

@@ -4,6 +4,7 @@
 // LLM은 영문·음차 입력을 한글 검색어로 바꾸는 보조(llmExpand)로만 쓰고, 그 결과도 반드시 DB 후보로 검증한다.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeProgramQuery, type NormalizedQuery } from "./normalize";
+import { cleanDisplayName } from "./displayName";
 
 export interface IdentityRow {
   key: string;
@@ -115,7 +116,7 @@ export function rankIdentityRows(q: NormalizedQuery, rows: IdentityRow[], today:
       byGroup.set(r.group_key, {
         groupKey: r.group_key,
         repKey: r.key,
-        displayName: r.display_name,
+        displayName: cleanDisplayName(r.display_name), // IPTV 표기의 <재>·<본> 태그는 이름이 아니다(2026-11-20)
         ownChannels: r.own_channels,
         compChannels: r.comp_channels,
         airings91d: r.airings_91d,
