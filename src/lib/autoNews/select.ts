@@ -150,7 +150,12 @@ function latinNames(title: string): Set<string> {
 }
 
 /** 한 분류 안에서 같은 주제를 싣는 최대 건수 */
-const TOPIC_CAPS: { re: RegExp; max: number }[] = [{ re: /케이블 ?TV|(?<![A-Za-z])SO(?![A-Za-z])/, max: 2 }, { re: /K-OTT|토종 OTT/, max: 1 }];
+const TOPIC_CAPS: { re: RegExp; max: number }[] = [{ re: /케이블 ?TV|(?<![A-Za-z])SO(?![A-Za-z])/, max: 2 }, { re: /K-OTT|토종 OTT/, max: 1 }, { re: /한한령/, max: 1 }, { re: /디즈니\+|디즈니플러스/, max: 2 }];
+/**
+ * 하루 지나면 같은 주제로 다시 싣지 않는 소식 — 매체마다 제목이 달라 같은 소식 판정으로 못 거르는 것들(한경협 K-OTT 제언, 케이블TV 가계 부담 조사).
+ * 어제 게시 목록에 이 표현이 있었다면 오늘 후보 중 같은 표현은 뺀다(2026-11-19: 이틀 연속 올라온 사례)
+ */
+export const ONE_DAY_TOPICS: RegExp[] = [/한경협|한국경제인협회|K-OTT|토종 OTT/, /케이블 ?TV (?:사라|없어|소멸|퇴출)|SO 무너|7[56]\d\d억/];
 /** 제목 속 큰 금액·수치("7609억") — 같은 조사·발표를 다룬 기사는 매체마다 제목이 달라도 이 수치가 같다 */
 function bigFigures(title: string): Set<string> {
   const out = new Set<string>();
@@ -223,10 +228,17 @@ function baseScore(c: NewsCandidate, boost: [RegExp, number][], now: number): nu
 export function clusterStories(items: ScoredCandidate[]): ScoredCandidate[] {
   const sorted = [...items].sort((a, b) => b.score - a.score);
   const reps: ScoredCandidate[] = [];
+  // 묶음에 든 모든 제목과 비교한다 — 대표 제목과만 비교하면 매체마다 표현이 다른 같은 소식(팩트체크 방송평가 가점 8건)이 여러 묶음으로 갈라진다(2026-11-19)
+  const titles: string[][] = [];
   for (const it of sorted) {
-    const rep = reps.find((r) => r.url === it.url || sameStory(r.title, it.title));
-    if (rep) rep.coverage += 1;
-    else reps.push({ ...it, coverage: 1 });
+    const k = reps.findIndex((r, i) => r.url === it.url || titles[i].some((t) => sameStory(t, it.title)));
+    if (k >= 0) {
+      reps[k].coverage += 1;
+      titles[k].push(it.title);
+    } else {
+      reps.push({ ...it, coverage: 1 });
+      titles.push([it.title]);
+    }
   }
   return reps;
 }

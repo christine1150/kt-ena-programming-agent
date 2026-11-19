@@ -18,6 +18,18 @@ export type AutoNewsResult =
   | { ok: true; published: false; reason: "manual_today" | "already_today" | "too_few" | "no_naver_key" | "dry_run"; detail: string; preview?: string[] }
   | { ok: false; message: string };
 
+/**
+ * 어제 최종 게시 목록 — 오늘 처음 교체될 때 보관되는 이전 목록이 어제 목록이고, 오늘 교체한 적이 없으면 지금 목록이 어제 목록이다.
+ * (오늘 다시 게시해도 어제 기준을 유지해야 하므로 '지금 목록'을 그대로 쓰지 않는다)
+ */
+export async function loadYesterdayList(now: number): Promise<{ title: string; url: string }[]> {
+  const { data: vers } = await supabase.from("daily_news_versions").select("items, saved_at").gte("saved_at", kstDayStartIso(now)).order("saved_at", { ascending: true }).limit(1);
+  const first = vers?.[0]?.items as { title: string; url: string }[] | undefined;
+  if (first && first.length > 0) return first;
+  const { data } = await supabase.from("daily_news_items").select("title, url");
+  return (data ?? []) as { title: string; url: string }[];
+}
+
 /** force: 오늘 이미 바뀌었어도 다시 게시. dryRun: 수집·선정까지만 하고 아무것도 바꾸지 않는다(확인용) */
 export async function runAutoNews(opts: { now?: number; force?: boolean; dryRun?: boolean } = {}): Promise<AutoNewsResult> {
   const now = opts.now ?? Date.now();
@@ -36,7 +48,8 @@ export async function runAutoNews(opts: { now?: number; force?: boolean; dryRun?
   // ② 수집·선정(운영에서는 네이버 키가 없으면 국내 기사를 받지 않으므로 게시하지 않는다)
   // 출연자 이슈 명단은 관리자 화면에서 고치는 DB 표가 우선(비었거나 못 읽으면 코드 명단)
   const { roster } = await loadCastRoster();
-  const built = await buildDailyNews({ now, roster });
+  const recent = await loadYesterdayList(now);
+  const built = await buildDailyNews({ now, roster, recent });
   if (built.source !== "naver") return { ok: true, published: false, reason: "no_naver_key", detail: "네이버 검색 키(NAVER_SEARCH_CLIENT_ID·NAVER_SEARCH_CLIENT_SECRET)가 없어 전날 목록을 유지합니다." };
   if (built.items.length < MIN_ITEMS_TO_PUBLISH) return { ok: true, published: false, reason: "too_few", detail: `선정 ${built.items.length}건(후보 ${built.candidateCount}건) — 수집이 부실해 전날 목록을 유지합니다.` };
 

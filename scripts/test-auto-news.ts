@@ -5,7 +5,7 @@ import { buildCastQueries, castDisplayTitle, castLabel, isLowValueCastTitle, isS
 import { fullTitleFromHtml, insertCastIssues, stripTitleTags } from "../src/lib/autoNews/collect";
 import { CAST_ROSTER } from "../src/lib/autoNews/roster";
 import { parseRosterText, rosterToText } from "../src/lib/autoNews/rosterText";
-import { decodeEntities, parseRssItems, pickByRules, rankAll, rankCategory, sameStory, stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "../src/lib/autoNews/select";
+import { ONE_DAY_TOPICS, decodeEntities, parseRssItems, pickByRules, rankAll, rankCategory, sameStory, stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "../src/lib/autoNews/select";
 
 let pass = 0;
 let fail = 0;
@@ -205,6 +205,23 @@ ok("한경협 K-OTT 제언은 정책으로 선정", rankCategory([c("정책", "�
   const picked = pickByRules([{ category: "업계동향", quota: 7, ranked: rankCategory(cands, cfg, NOW) }]);
   ok("같은 주제(케이블TV)는 한 분류에 2건까지", picked.filter((p) => /케이블/.test(p.title)).length === 2 && picked.length === 3);
 }
+// 수동 클리핑 대조(2026-11-19)
+{
+  const cfg = CATEGORIES.find((x) => x.category === "정책")!;
+  const ts = ["방송사 '팩트체크 노력'에 최대 10점 가점…27년부터 방송평가 바뀐다", "방미통위, 방송평가에 '팩트체크 노력' 10점 가점 신설", "방송평가에 팩트체크 노력 반영…방미통위, 규칙 개정안 의결", "방미통위, 방송사 팩트체크 노력에 최대 10점 가점 준다"];
+  ok("같은 정책 소식은 표현이 달라도 한 묶음(이어 붙은 제목까지 비교)", rankCategory(ts.map((t) => c("정책", t)), cfg, NOW).length === 1);
+}
+{
+  const kt = CATEGORIES.find((x) => x.category === "KT 및 계열사 소식")!;
+  const r = rankCategory([c("KT 및 계열사 소식", "영화 이어 드라마까지…정근욱·김원국 협업 논란 KT 투자심사 도마에"), c("KT 및 계열사 소식", "\"수능 끝난 수험생 모여라\"…KT, AI·쇼핑·여행 혜택 쏜다")], kt, NOW);
+  ok("KT 투자심사 논란은 혜택 홍보보다 앞", r[0].title.includes("투자심사"));
+}
+{
+  const bs = CATEGORIES.find((x) => x.category === "방송가 소식")!;
+  const r = rankCategory(["[단독] 전현무·황광희, ‘엑스더리그’ 시즌2 MC 확정…글로벌 서바이벌 이끈다", "이번에는 한일 밴드 오디션이다… SBS '밴드왕' 론칭", "JTBC, IOC와 계약해지했지만..배상 부담은 미확정", "박지영, ‘크래시2’서 공과 사 구분하는 ‘신본부장’ 활약ing", "'나솔' 16기 상철, 코털 이어 방귀 사고까지⋯\"레전드로 남을 것\""].map((t) => c("방송가 소식", t)), bs, NOW);
+  ok("MC 확정·론칭·중계권 이슈가 출연자 소개·일상 단신보다 앞", r.slice(0, 3).every((x) => /MC 확정|론칭|IOC/.test(x.title)));
+}
+ok("하루 지나면 다시 싣지 않는 주제(한경협 K-OTT·케이블TV 가계 부담)", ONE_DAY_TOPICS.some((re) => re.test("한경협, K-OTT 해외 진출 지원 촉구") && re.test("“K-콘텐츠 흥행에도 영화·방송은 역성장…K-OTT 키워야”")) && ONE_DAY_TOPICS.some((re) => re.test("“케이블TV 퇴출 땐 가계 통신비 최대 7609억 증가”") && re.test("\"케이블TV 사라지면 지역 일자리도 위기\"")));
 ok("정상 번역 통과(원제·HBO맥스 표기)", isCleanTranslation("넷플릭스, 할런 코벤 원작 'The Innocent' 제작 확정…HBO맥스와 경쟁"));
 ok("지금 건강 문제 기사는 위험 신호로 선정", !isLowValueCastTitle("배우 김가나, 촬영 중 쓰러져 입원") && classifyCast("배우 김가나, 촬영 중 쓰러져 입원", roster)?.signal === "risk");
 
