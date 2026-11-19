@@ -69,13 +69,20 @@ const cls = (await import("../../src/lib/beta/geoClassification.json")).default 
 const bySk = new Map<string, string[]>();
 for (const c of cls) if (c.p === "세테기" && c.sk && c.countries?.length) bySk.set(c.sk, [...new Set([...(bySk.get(c.sk) ?? []), ...c.countries])]);
 const skKeys = [...bySk.keys()].sort((x, y) => y.length - x.length);
+// 회차 단위 검증값(다른 LLM 검증 결과, 순서 기준) — 자동·시리즈 분류보다 우선
+const OVR = new Map<number, { cs: string[]; conf: string; pl: string }>();
+for (const l of (await readFile("scripts/olife-geo/ebs-episode-overrides.txt", "utf8")).split(/\r?\n/).filter((x) => x.trim() && !x.startsWith("#"))) {
+  const [no, cs, conf, pl] = l.split("|"); OVR.set(Number(no), { cs: cs.split(";").map((x) => x.trim()).filter((c) => COUNTRY_REGION[c]), conf: conf.trim(), pl: (pl ?? "").trim() });
+}
 const outRows = rows.map((r) => {
   const sp = split(r.sub);
   const head = r.sub.replace(/\s*\d+\s*부.*$/, "");
   let cs = countriesOf(head).length ? countriesOf(head) : countriesOf(r.sub);
   let status = cs.length ? "자동" : "확인 필요";
   let placeHint = "";
-  if (!cs.length) {
+  const ov = OVR.get(r.no);
+  if (ov && ov.cs.length) { cs = ov.cs; status = `검증(${ov.conf})`; placeHint = ov.pl; }
+  else if (!cs.length) {
     const m = MANUAL.find((x) => strip(r.sub).includes(x.k));
     if (m) { cs = m.cs.filter((c) => COUNTRY_REGION[c]); status = `수기(${m.conf})`; placeHint = m.pl; }
     else { const n = normalizeSubtitle(sp.series); const k = skKeys.find((k) => k.length >= 4 && (n.startsWith(k) || k.startsWith(n))); if (k) { cs = bySk.get(k)!; status = "기존 시리즈 계승(추정)"; } }
