@@ -102,7 +102,7 @@ export async function loadStrategyReview(supabase: SupabaseClient, plan: Strateg
             .eq("target_label", "개인2049")
             .gte("broadcast_date", rivalFrom)
             .lte("broadcast_date", asOfDate)
-            .ilike("program_name", `%${rv.programPattern}%`)
+            .or(rv.programPatterns.map((p) => `program_name.ilike.%${p}%`).join(","))
             .ilike("program_name", "%<본>%")
             .gte("start_time", `${rv.startFrom}:00`)
             .lte("start_time", `${rv.startTo}:00`);

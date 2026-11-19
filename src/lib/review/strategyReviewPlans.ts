@@ -14,8 +14,8 @@ export interface StrategyRival {
   label: string;
   /** competitor_program_ratings.competitor_name */
   competitorName: string;
-  /** program_name에 들어 있어야 하는 글자(공백 없이) */
-  programPattern: string;
+  /** program_name에 들어 있어야 하는 글자 — 여러 표기 중 하나만 맞아도 된다(경쟁 시트는 보통 공백 없이 적힌다) */
+  programPatterns: string[];
   /** 리뷰에서의 역할 — lead: 우리 직전 시간대의 강한 드라마, head: 정면 맞대결 */
   role: "lead" | "head";
   /** 본방 시작 시각 범위(HH:MM) — 같은 이름의 특집·스페셜(예: 티벤터뷰)을 걸러낸다 */
@@ -74,14 +74,15 @@ export const STRATEGY_REVIEW_PLANS: StrategyReviewPlan[] = [
     slotTo: "22:30",
     weekdays: [1, 2],
     context: [
-      "4주차(12/7)부터 tvN <시그널2>와 정면승부 — 채널 접근성 3배 이상·IP 파워가 강한 상대라 자존심보다 실리를 택해 본방을 5분 앞당긴다(22:00 → 21:55).",
+      "4주차(12/7)부터 tvN <두번째 시그널>(시그널2, 12/7~ 월·화 22:00, 8부작)과 정면승부 — 채널 접근성 3배 이상·IP 파워가 강한 상대라 자존심보다 실리를 택해 본방을 5분 앞당긴다(22:00 → 21:55, 상대보다 5분 먼저 시작).",
       "앞당기는 변경이라 시청자에게 제대로 전달되지 않으면 초반부 손해 가능성이 있다(채널 판단, 2026-11-19).",
       "tvN 월화드라마 <나의 유죄인간>(20:50 시작)이 11/24 12회로 종영한다.",
     ],
     rivals: [
-      { key: "guilty", label: "tvN <나의 유죄인간>", competitorName: "tvN", programPattern: "나의유죄인간", role: "lead", startFrom: "20:30", startTo: "21:30" },
-      // 시그널2의 정확한 편성 시각은 아직 자료가 없어 저녁 전체(20:00~23:30)에서 찾고, 실제 겹친 시간은 회차마다 계산한다
-      { key: "signal2", label: "tvN <시그널2>", competitorName: "tvN", programPattern: "시그널2", role: "head", startFrom: "20:00", startTo: "23:30" },
+      { key: "guilty", label: "tvN <나의 유죄인간>", competitorName: "tvN", programPatterns: ["나의유죄인간"], role: "lead", startFrom: "20:30", startTo: "21:30" },
+      // 사용자 확인(2026-11-19): 정식 제목은 <두번째 시그널>, 2026.12.07.~ 8부작 (월, 화) 오후 10:00 tvN.
+      // 경쟁 시트 표기를 아직 몰라 공백 유무·옛 통칭(시그널2)을 모두 받는다. 22시 편성이 밀리거나 당겨져도 잡히게 21:30~22:30에서 찾는다.
+      { key: "signal2", label: "tvN <두번째 시그널>", competitorName: "tvN", programPatterns: ["두번째시그널", "두번째 시그널", "시그널2"], role: "head", startFrom: "21:30", startTo: "22:30" },
     ],
     phases: [
       {
@@ -104,14 +105,14 @@ export const STRATEGY_REVIEW_PLANS: StrategyReviewPlan[] = [
         key: "C",
         from: "2026-12-07",
         to: "2026-12-22",
-        title: "7~12회 · 21:55 조기 시작 · <시그널2> 맞대결",
+        title: "7~12회 · 21:55 조기 시작 · <두번째 시그널> 맞대결",
         plannedStart: "21:55",
         focus: "앞당긴 시각이 실제로 반영됐는지, 맞대결 속 시청률 유지(1~6회 평균 대비), 겹친 시간과 상대 성적",
       },
     ],
     events: [
       { date: "2026-11-24", label: "tvN <나의 유죄인간> 12회 종영" },
-      { date: "2026-12-07", label: "<크래시2> 21:55 시작 · tvN <시그널2> 맞대결 시작" },
+      { date: "2026-12-07", label: "<크래시2> 21:55 시작 · tvN <두번째 시그널> 1회(22:00) 맞대결 시작" },
       { date: "2026-12-22", label: "<크래시2> 12회 종영 — 구간별 결산" },
     ],
   },
@@ -301,7 +302,7 @@ export function buildStrategyReview(input: StrategyReviewInput): StrategyReviewO
     if (h) {
       const ov = overlapMinutes(latest.start, latest.end, h.start, h.end);
       findings.push(
-        `${headLabel} ${md(h.date)} 본방 ${hm(h.start)}~${hm(h.end)} 2049 ${r3(h.rating)} — 크래시2 ${r3(latest.p2049)}${h.rating && latest.p2049 !== null ? `(상대의 ${((latest.p2049 / h.rating) * 100).toFixed(0)}%)` : ""}${ov !== null ? `, 겹친 시간 ${ov}분` : ""}${h.start && toMinutes(h.start) > toMinutes(latest.start) ? `, 상대보다 ${toMinutes(h.start) - toMinutes(latest.start)}분 먼저 시작` : ""}.`
+        `${headLabel} ${head.indexOf(h) + 1}회(${md(h.date)}) 본방 ${hm(h.start)}~${hm(h.end)} 2049 ${r3(h.rating)} — 크래시2 ${r3(latest.p2049)}${h.rating && latest.p2049 !== null ? `(상대의 ${((latest.p2049 / h.rating) * 100).toFixed(0)}%)` : ""}${ov !== null ? `, 겹친 시간 ${ov}분` : ""}${h.start && toMinutes(h.start) > toMinutes(latest.start) ? `, 상대보다 ${toMinutes(h.start) - toMinutes(latest.start)}분 먼저 시작` : ""}.`
       );
     } else {
       findings.push(`${headLabel} 본방 기록을 ${md(latest.date)} 경쟁채널 자료에서 아직 찾지 못했다(프로그램명·편성 확인 필요).`);

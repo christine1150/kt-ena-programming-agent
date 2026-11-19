@@ -60,11 +60,11 @@ check("B: tvN 저녁 편성 줄", !!b && b.findings.some((f) => f.includes("벌�
 // 구간 C(12/7)
 const c = buildStrategyReview({ plan, asOfDate: "2026-12-07", ours, predecessor, rivals: { guilty, signal2: signal }, rivalChannelSlot: [] });
 check("C: 21:55 시작 반영 확인", !!c && c.findings.some((f) => f.includes("계획(21:55) 대로")), c?.findings.join(" | "));
-check("C: 시그널2 겹친 시간 48분·15분 먼저 시작", !!c && c.findings.some((f) => f.includes("겹친 시간 48분") && f.includes("15분 먼저 시작")), c?.findings.join(" | "));
+check("C: 두번째 시그널 1회·겹친 시간 48분·15분 먼저 시작", !!c && c.findings.some((f) => f.includes("<두번째 시그널> 1회(12/7)") && f.includes("겹친 시간 48분") && f.includes("15분 먼저 시작")), c?.findings.join(" | "));
 check("C: 시각 변경 첫 회 하락 경고(직전 2회 평균 0.92 대비 -23.9%)", !!c && c.findings.some((f) => f.includes("▼ 23.9%") && f.includes("변경 고지")), c?.findings.join(" | "));
 const cLate = buildStrategyReview({ plan, asOfDate: "2026-12-07", ours: ours.map((o) => (o.date === "2026-12-07" ? { ...o, start: "22:00:00" } : o)), predecessor, rivals: { guilty, signal2: [] }, rivalChannelSlot: [] });
 check("C: 실제 시작이 22:00이면 차이 경고", !!cLate && cLate.findings.some((f) => f.includes("5분 차이")));
-check("C: 시그널2 자료가 없으면 확인 필요 문구", !!cLate && cLate.findings.some((f) => f.includes("<시그널2> 본방 기록을")));
+check("C: 시그널2 자료가 없으면 확인 필요 문구", !!cLate && cLate.findings.some((f) => f.includes("<두번째 시그널> 본방 기록을")));
 
 check("방영 기간 밖이면 null", buildStrategyReview({ plan, asOfDate: "2026-12-30", ours, predecessor, rivals: {}, rivalChannelSlot: [] }) === null);
 
