@@ -10,6 +10,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { ReviewEpisodeChart, type EpisodeChartPoint } from "@/components/ReviewEpisodeChart";
 import type { RankSlide } from "@/lib/rankSlide";
+import type { StrategyReviewOutput } from "@/lib/review/strategyReviewPlans";
 import type { DemoRetention, LineupBaseline, LineupShift, LineupShiftResult } from "@/lib/lineupHandoff";
 import ReviewPanels, { type ReviewPanelItem } from "@/components/home/ReviewPanels";
 import { channelBrandSolid } from "@/lib/dashboard/channelBrandColors";
@@ -186,6 +187,8 @@ interface OriginalDailyItem {
   // 값들로 OpenAI가 종합한 문장으로 — API 키가 없거나 실패하면 null(route.ts에서 계산, 실패 시
   // Dashboard가 기존 규칙 기반 카니발라이제이션 문구로 대체).
   schedulingInsight: string | null;
+  // 사용자 지시(2026-11-19): 채널이 밝힌 편성 전략(크래시2 21:55 조기 시작·tvN 시그널2 맞대결 등)의 기간별 점검(route.ts, 계획 있는 작품만)
+  strategyReview?: StrategyReviewOutput | null;
   // 사용자 지시(2026-08-26): "1페이지 <주요 컨텐츠 리뷰>는 PD가 직접 작성한 보고서 내용으로
   // 덮어써서 반영" — 관리자가 올린 회차별 수동 리포트(manual-drama-report 업로드)가 있으면
   // 함께 내려온다. 없으면 null(기존 자동 계산 그대로 표시).
@@ -4934,6 +4937,33 @@ function OriginalContentReportCard({
                             <p className="text-[10.5px] font-semibold" style={{ color: accent }}>액션</p>
                             <p className="text-[13px] font-semibold leading-snug text-zinc-900">{insight.actionLine ?? "현재 편성 유지"}</p>
                           </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 편성 전략 점검(사용자 지시 2026-11-19) — 채널이 밝힌 전략이 있는 작품만, 기간(구간)에 맞는 관점과 DB 회차 값 비교를 보여 준다 */}
+                  {h.strategyReview && h.strategyReview.findings.length > 0 && (
+                    <div className="mt-5 rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-3.5">
+                      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                        <span className="text-[11px] font-semibold" style={{ color: accent }}>편성 전략 점검</span>
+                        <span className="text-[13px] font-semibold text-zinc-900">{h.strategyReview.phaseTitle}</span>
+                      </p>
+                      <p className="mt-1 text-[12px] leading-snug text-zinc-500">{h.strategyReview.focus}</p>
+                      <ul className="mt-2.5 space-y-1.5">
+                        {h.strategyReview.findings.map((f, i) => (
+                          <li key={i} className="flex gap-2 text-[13px] leading-relaxed text-zinc-700">
+                            <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-zinc-400" />
+                            <span>{highlightNarrativeText(f, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR, 600)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {(h.strategyReview.context.length > 0 || h.strategyReview.upcoming.length > 0) && (
+                        <div className="mt-3 space-y-1 border-t border-zinc-200/70 pt-2.5 text-[11.5px] leading-snug text-zinc-500">
+                          {h.strategyReview.context.map((c, i) => (
+                            <p key={`c${i}`}>{c}</p>
+                          ))}
+                          {h.strategyReview.upcoming.length > 0 && <p className="font-medium text-zinc-600">다음 점검: {h.strategyReview.upcoming.join(" · ")}</p>}
                         </div>
                       )}
                     </div>

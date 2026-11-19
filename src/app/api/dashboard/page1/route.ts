@@ -18,6 +18,8 @@ import {
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { loadContentFitTagMaps } from "@/lib/contentFit/tagCache";
 import { buildOriginalProgrammingInsightViaLlm, type OriginalInsightInput } from "@/lib/originalContentInsight";
+import { findStrategyPlan, type StrategyReviewOutput, type StrategyReviewPlan } from "@/lib/review/strategyReviewPlans";
+import { loadStrategyReview } from "@/lib/review/strategyReviewFetch";
 import { roundRatingForDisplay, roundPercentForDisplay } from "@/lib/ratingRounding";
 import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
 import { buildChannelNarrativeViaLlm } from "@/lib/channelNarrativeLlm";
@@ -745,6 +747,8 @@ export async function GET(request: Request) {
       // 사용자 지시(2026-09-03): 리뷰에 시청시간·시청시간 비율 추가(ratings에 이미 있는 값 조회만).
       matched_time_spent_seconds: number | null;
       matched_time_spent_share: number | null;
+      /** 편성 전략 점검(사용자 지시 2026-11-19) — 계획이 있는 작품만 */
+      strategyReview?: StrategyReviewOutput | null;
     })[];
     weekly: OriginalWeeklyRow[];
   };
@@ -1443,9 +1447,18 @@ export async function GET(request: Request) {
           slotBaselineByRowKey.set(key, { avgRating: r?.avg_rating ?? null, sampleCount: r?.sample_count ?? 0 });
         })
     );
+    // 사용자 지시(2026-11-19): 크래시2처럼 채널이 밝힌 편성 전략(시각 변경·경쟁작 맞대결)이 있는 작품은 기간별 리뷰 계획에 맞춰
+    // "편성 전략 점검"을 붙인다(strategyReviewPlans.ts — DB 회차 값의 구간 평균·증감·시각 차이만, LLM 없음). 계획이 없으면 null.
+    const strategyReviewByProgram = new Map<string, StrategyReviewOutput | null>();
+    await Promise.all(
+      [...new Set(dailyWithManualReport.map((row) => findStrategyPlan(row.broadcast_channel_code, row.matched_program_name, asOfDate)).filter((p): p is StrategyReviewPlan => p !== null))].map(
+        async (plan) => strategyReviewByProgram.set(plan.id, await loadStrategyReview(supabase, plan, asOfDate))
+      )
+    );
     const dailyWithSlotBaseline = dailyWithManualReport.map((row) => ({
       ...row,
       slotBaseline: slotBaselineByRowKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
+      strategyReview: strategyReviewByProgram.get(findStrategyPlan(row.broadcast_channel_code, row.matched_program_name, asOfDate)?.id ?? "") ?? null,
     }));
 
     // 사용자 지시(2026-09-20): whitelistCount>0(화이트리스트 항목이 아직 "활성"으로 잡혀 있음)
