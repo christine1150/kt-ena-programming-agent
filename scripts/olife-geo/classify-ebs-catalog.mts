@@ -57,25 +57,50 @@ const split = (t: string) => {
   const m = t.match(/^(.*?)\s*-?\s*(\d+)\s*부\s*[-:]?\s*(.*)$/);
   return m ? { series: m[1].replace(/[,\s-]+$/, "").trim(), part: Number(m[2]) } : { series: t, part: null as number | null };
 };
+// 수기 시리즈 분류(제목 일부 → 나라·확신): 자동으로 나라를 못 잡은 회차에만 적용
+const strip = (s: string) => s.replace(/\s+/g, "");
+const MANUAL = (await readFile("scripts/olife-geo/ebs-series-countries.txt", "utf8")).split(/\r?\n/).filter((l) => l.trim() && !l.startsWith("#")).map((l) => {
+  const [k, cs, conf, pl] = l.split("|"); return { k: strip(k), cs: cs.split(";").map((x) => x.trim()).filter(Boolean), conf: conf.trim(), pl: (pl ?? "").trim() };
+});
+for (const m of MANUAL) for (const c of m.cs) if (!COUNTRY_REGION[c]) console.log("사전에 없는 나라:", c, "←", m.k);
+// 기존 분류표(OLIFE 보유 회차)의 시리즈 키로 계승
+const { normalizeSubtitle } = await import("../../src/lib/olifeEpisodeParsing");
+const cls = (await import("../../src/lib/beta/geoClassification.json")).default as { p: string; sk: string; countries: string[] }[];
+const bySk = new Map<string, string[]>();
+for (const c of cls) if (c.p === "세테기" && c.sk && c.countries?.length) bySk.set(c.sk, [...new Set([...(bySk.get(c.sk) ?? []), ...c.countries])]);
+const skKeys = [...bySk.keys()].sort((x, y) => y.length - x.length);
 const outRows = rows.map((r) => {
   const sp = split(r.sub);
   const head = r.sub.replace(/\s*\d+\s*부.*$/, "");
-  const cs = countriesOf(head).length ? countriesOf(head) : countriesOf(r.sub);
+  let cs = countriesOf(head).length ? countriesOf(head) : countriesOf(r.sub);
+  let status = cs.length ? "자동" : "확인 필요";
+  let placeHint = "";
+  if (!cs.length) {
+    const m = MANUAL.find((x) => strip(r.sub).includes(x.k));
+    if (m) { cs = m.cs.filter((c) => COUNTRY_REGION[c]); status = `수기(${m.conf})`; placeHint = m.pl; }
+    else { const n = normalizeSubtitle(sp.series); const k = skKeys.find((k) => k.length >= 4 && (n.startsWith(k) || k.startsWith(n))); if (k) { cs = bySk.get(k)!; status = "기존 시리즈 계승(추정)"; } }
+  }
   const nature = [...new Set(THEME_RULES.filter(([g, , re]) => g === "자연" && re.test(r.sub)).map(([, t]) => t))];
   const culture = [...new Set(THEME_RULES.filter(([g, , re]) => g !== "자연" && re.test(r.sub)).map(([, t]) => t))];
   const month = Number(r.date.slice(5, 7)); const south = cs.some((c) => SOUTHERN.has(c));
-  return { ...r, series: sp.series, part: sp.part, countries: cs, regions: [...new Set(cs.map((c) => COUNTRY_REGION[c][1]))], continents: [...new Set(cs.map((c) => COUNTRY_REGION[c][0]))], nature, culture, tm: timeOf(r.sub), season: seasonOf(month, south), rating: honbang(r.date) };
+  return { ...r, series: sp.series, part: sp.part, countries: cs, regions: [...new Set(cs.map((c) => COUNTRY_REGION[c][1]))], continents: [...new Set(cs.map((c) => COUNTRY_REGION[c][0]))], nature, culture, tm: timeOf(r.sub), season: seasonOf(month, south), rating: honbang(r.date), status, placeHint };
 });
 const ok = outRows.filter((r) => r.countries.length).length;
+const stat: Record<string, number> = {}; for (const r of outRows) stat[r.status] = (stat[r.status] ?? 0) + 1; console.log("분류 상태:", stat);
 console.log(`전체 ${outRows.length}편, 나라 자동 분류 ${ok}편(${((ok / outRows.length) * 100).toFixed(0)}%), 시청률 매칭 ${outRows.filter((r) => r.rating != null).length}편`);
 
 const book = new ExcelJS.Workbook();
 const ws = book.addWorksheet("회차_자동분류", { views: [{ state: "frozen", ySplit: 2, xSplit: 3 }] });
 ws.addRow(["EBS 세계테마기행 구매 가능 전체 리스트(2026-11 수령) 자동 분류 — 제목 기반이라 도시·장소는 비어 있음. '확인 필요'는 나라를 못 잡은 회차(수기 확정 대기). EBS 본방 시청률은 유료방송가구·전국(%)."]);
-const head = ["순서", "방송일자", "부제목", "기획명", "부", "대륙", "권역", "국가", "자연 테마", "문화 테마", "시기·명절 단서", "방송 계절(현지)", "EBS 본방 시청률(%)", "러닝타임(분)", "공급단가", "분류 상태"];
+const head = ["순서", "방송일자", "부제목", "기획명", "부", "대륙", "권역", "국가", "자연 테마", "문화 테마", "시기·명절 단서", "방송 계절(현지)", "EBS 본방 시청률(%)", "러닝타임(분)", "공급단가", "분류 상태", "도시·장소 단서"];
 ws.addRow(head).font = { bold: true };
-for (const r of outRows) ws.addRow([r.no, r.date, r.sub, r.series, r.part, r.continents.join(";"), r.regions.join(";"), r.countries.join(";"), r.nature.join(";"), r.culture.join(";"), r.tm.join(";"), r.season, r.rating == null ? null : +r.rating.toFixed(3), r.mins, r.price, r.countries.length ? "자동" : "확인 필요"]);
-[8, 11, 60, 36, 5, 9, 14, 18, 22, 22, 18, 10, 12, 8, 12, 10].forEach((w, i) => (ws.getColumn(i + 1).width = w));
+for (const r of outRows) ws.addRow([r.no, r.date, r.sub, r.series, r.part, r.continents.join(";"), r.regions.join(";"), r.countries.join(";"), r.nature.join(";"), r.culture.join(";"), r.tm.join(";"), r.season, r.rating == null ? null : +r.rating.toFixed(3), r.mins, r.price, r.status, r.placeHint]);
+[8, 11, 60, 36, 5, 9, 14, 18, 22, 22, 18, 10, 12, 8, 12, 18, 24].forEach((w, i) => (ws.getColumn(i + 1).width = w));
 ws.autoFilter = { from: { row: 2, column: 1 }, to: { row: 2, column: head.length } };
+const qs = book.addWorksheet("질문(확인 필요)"); qs.addRow(["나라를 못 잡은 시리즈 — 어느 나라(도시)인지 알려 주세요."]); qs.addRow(["기획명", "편수", "예시 부제목", "방송일(첫)", "답: 국가", "답: 도시·장소"]).font = { bold: true };
+const qg = new Map<string, typeof outRows>(); for (const r of outRows.filter((x) => x.status === "확인 필요")) { if (!qg.has(r.series)) qg.set(r.series, []); qg.get(r.series)!.push(r); }
+for (const [k, v] of qg) qs.addRow([k, v.length, v[0].sub, v[0].date, "", ""]);
+[40, 6, 60, 12, 24, 24].forEach((w, i) => (qs.getColumn(i + 1).width = w));
+console.log("질문 시리즈", qg.size);
 await book.xlsx.writeFile(out);
 console.log("저장:", out);
