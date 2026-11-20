@@ -51,7 +51,14 @@ export function isOrangeRgb(rgb: string): boolean {
   return h >= 15 && h <= 48 && sat >= 0.45;
 }
 
-const same = (a: StyleSig | undefined, b: StyleSig) => !!a && a.fill === b.fill && a.bold === b.bold;
+/** 같은 음영인지 — 테마 색은 같은 색 계열이면 농도(tint) 차이 0.25 이내까지 같게 본다(범례 칸과 제목 칸의 농도가 다른 표가 있다: ENA Drama 범례 0.6·제목 0.4) */
+export function sameFill(a: string, b: string): boolean {
+  if (a === b) return true;
+  const ma = /^t(\d+)\/(-?[\d.]+)$/.exec(a);
+  const mb = /^t(\d+)\/(-?[\d.]+)$/.exec(b);
+  return !!ma && !!mb && ma[1] === mb[1] && Math.abs(Number(ma[2]) - Number(mb[2])) <= 0.25;
+}
+const same = (a: StyleSig | undefined, b: StyleSig) => !!a && sameFill(a.fill, b.fill) && a.bold === b.bold;
 
 /** 칸 서식 → 초방·본방·모름. 순수 함수. */
 export function classifyStyle(sig: StyleSig, legend: StyleLegend): RunMark | null {
@@ -60,13 +67,13 @@ export function classifyStyle(sig: StyleSig, legend: StyleLegend): RunMark | nul
   const p = legend.premiere;
   if (p) {
     // 초방: 음영이 있으면 음영이 같아야 하고, 음영이 없으면(굵게만) 굵게 + 음영 없음이 같아야 한다
-    if (p.fill !== "none" ? sig.fill === p.fill : sig.fill === "none" && sig.bold === p.bold && p.bold) return "premiere";
+    if (p.fill !== "none" ? sameFill(sig.fill, p.fill) : sig.fill === "none" && sig.bold === p.bold && p.bold) return "premiere";
   } else if (sig.fill !== "none" && /^[0-9A-F]{6}$/.test(sig.fill) && isOrangeRgb(sig.fill)) {
     return "premiere";
   }
   const m = legend.main;
   if (m) {
-    if (m.fill !== "none") return sig.fill === m.fill ? "main" : null;
+    if (m.fill !== "none") return sameFill(sig.fill, m.fill) ? "main" : null;
     // 본방 범례가 음영 없이 굵게뿐이면: 굵고 음영 없는 칸 = 본방(제목이 모두 굵은 표는 범례에서 굵게가 구별되지 않으므로 쓰지 않는다)
     if (m.bold && !(legend.rerun && legend.rerun.bold)) return sig.fill === "none" && sig.bold ? "main" : null;
   }
@@ -111,7 +118,8 @@ export async function readStyleMarks(buffer: Buffer): Promise<{ marks: Map<strin
       if (r > 8) return;
       row.eachCell((c) => {
         const t = textOf(c.value).trim();
-        if (t === "초방") legend.premiere = sigOf(c);
+        // ENA Drama 편성표 범례는 "초방" 대신 "신규"(주황 음영)로 적혀 있다 — 같은 뜻으로 읽는다
+        if (t === "초방" || t === "신규") legend.premiere = sigOf(c);
         else if (t === "본방") legend.main = sigOf(c);
         else if (t === "재방") legend.rerun = sigOf(c);
       });
@@ -119,7 +127,7 @@ export async function readStyleMarks(buffer: Buffer): Promise<{ marks: Map<strin
     ws.eachRow((row, r) => {
       row.eachCell((c) => {
         const t = textOf(c.value).trim();
-        if (t === "" || t === "초방" || t === "본방" || t === "재방") return; // 범례 칸 자체는 판정하지 않는다(조회는 제목 칸에서만 한다)
+        if (t === "" || t === "초방" || t === "신규" || t === "본방" || t === "재방") return; // 범례 칸 자체는 판정하지 않는다(조회는 제목 칸에서만 한다)
         const mk = classifyStyle(sigOf(c), legend);
         if (mk) marks.set(`${r - 1 - range.s.r},${Number(c.col) - 1 - range.s.c}`, mk);
       });

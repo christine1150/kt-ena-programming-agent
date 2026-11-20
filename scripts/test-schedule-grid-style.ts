@@ -1,5 +1,5 @@
 // 편성표 서식(굵게·음영) 판정 단위 시험 — 사용자 지시(2026-11-20) ENA Drama 표기: 본방 = 굵게, 초방 = 주황 음영(초방은 본방에 포함)
-import { classifyStyle, fillKey, isOrangeRgb, withRunTag, type StyleLegend } from "../src/lib/scheduleGridStyle";
+import { classifyStyle, fillKey, sameFill, isOrangeRgb, withRunTag, type StyleLegend } from "../src/lib/scheduleGridStyle";
 
 let pass = 0;
 let fail = 0;
@@ -38,6 +38,15 @@ const play: StyleLegend = { premiere: { fill: "t4/0.40", bold: true }, main: { f
 eq("play 초방 음영", classifyStyle({ fill: "t4/0.40", bold: true }, play), "premiere");
 eq("play 본방 음영", classifyStyle({ fill: "t8/0.40", bold: true }, play), "main");
 eq("play 굵게만 = 모름", classifyStyle({ fill: "none", bold: true }, play), null);
+
+// ENA Drama 실제 파일: 범례 "신규" = 테마 9 농도 0.6, 제목 칸은 농도 0.4(같은 색 계열)
+const real: StyleLegend = { main: { fill: "none", bold: true }, premiere: { fill: "t9/0.60", bold: true } };
+eq("같은 계열 농도 차", sameFill("t9/0.40", "t9/0.60"), true);
+eq("다른 계열", sameFill("t5/0.40", "t9/0.60"), false);
+eq("농도 크게 다름", sameFill("t9/0.00", "t9/0.60"), false);
+eq("real 신규 음영(농도 0.4) = 초방", classifyStyle({ fill: "t9/0.40", bold: false }, real), "premiere");
+eq("real 흰 바탕 굵게 = 본방", classifyStyle({ fill: "none", bold: true }, real), "main");
+eq("real 머리글 음영(t5) = 모름", classifyStyle({ fill: "t5/0.40", bold: true }, real), null);
 
 // 글자 표시와 합치기: 글자가 우선, 없으면 서식, [본]+초방 서식은 [초]
 eq("태그 없음+본방", withRunTag(null, "main"), "[본]");
