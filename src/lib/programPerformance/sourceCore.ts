@@ -10,7 +10,7 @@ import { resolveProgramLevelTargetLabel, resolveRankSheetTargetLabel } from "@/l
 import { computeSlotComparison } from "@/lib/contentFit/engine";
 import type { ContentFitAiring } from "@/lib/contentFit/types";
 import { normalizeProgramKey } from "@/lib/purchaseSim/normalize";
-import { workDisplayName } from "@/lib/purchaseSim/displayName";
+import { hasSeasonSibling, trailingSeasonOf, workDisplayName } from "@/lib/purchaseSim/displayName";
 import { matchPlanRow, normalizePlanRows, type PlanRow, type PlanRowRaw } from "@/lib/idealSchedule/planEpisodes";
 import { addDays } from "@/lib/idealSchedule/time";
 import { confirmedWindow, describeLearned, hhmm, inferRuns, type LearnedSlot } from "@/lib/broadcastPattern/inferRuns";
@@ -154,6 +154,24 @@ async function earliestDataDate(db: PerfDb): Promise<string | null> {
   return (data?.broadcast_date as string | undefined) ?? null;
 }
 
+/** 꼬리 번호가 붙은 묶음 키 중 같은 작품의 다른 시즌 키가 식별 표에 따로 있는 것(표시 이름을 "… 시즌N"으로 쓸 묶음). */
+export async function seasonNumberedGroups(db: PerfDb, groupKeys: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  const byBase = new Map<string, string[]>();
+  for (const g of new Set(groupKeys)) {
+    const t = trailingSeasonOf(g);
+    if (t) byBase.set(t.base, [...(byBase.get(t.base) ?? []), g]);
+  }
+  await Promise.all(
+    [...byBase].map(async ([base, groups]) => {
+      const { data } = await db.from("program_identity").select("key").like("key", `${base}%`).limit(300);
+      const keys = ((data ?? []) as { key: string }[]).map((r) => r.key);
+      for (const g of groups) if (hasSeasonSibling(g, keys)) out.add(g);
+    })
+  );
+  return out;
+}
+
 /** 작품 묶음: group_key가 같은 정규화 키 전부(확정 별칭 반영) + 사람 승인 대기 후보(합치지 않음, 안내만) */
 export async function resolveWork(db: PerfDb, groupKey: string): Promise<{ displayName: string; memberKeys: string[]; candidateKeys: string[] } | null> {
   const { data: members, error } = await db.from("program_identity").select("key, display_name, own_channels, airings_total").eq("group_key", groupKey);
@@ -163,7 +181,7 @@ export async function resolveWork(db: PerfDb, groupKey: string): Promise<{ displ
   const { data: cands } = await db.from("program_alias").select("alias_key, status").eq("group_key", groupKey).eq("status", "candidate");
   return {
     // 표시 이름은 묶음 단위로 하나(태그 제거·시즌 표기 통일·사용자 지정 이름, 2026-11-20)
-    displayName: workDisplayName(groupKey, rows),
+    displayName: workDisplayName(groupKey, rows, { numberedSeason: (await seasonNumberedGroups(db, [groupKey])).has(groupKey) }),
     memberKeys: [...new Set(rows.map((r) => r.key))].sort(),
     candidateKeys: [...new Set(((cands ?? []) as { alias_key: string }[]).map((c) => c.alias_key))].sort(),
   };

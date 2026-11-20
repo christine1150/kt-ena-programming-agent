@@ -4,7 +4,7 @@ import { normalizeProgramKey, normalizeProgramQuery } from "@/lib/purchaseSim/no
 import { rankIdentityRows, type IdentityRow } from "@/lib/purchaseSim/identity";
 import { classifyWork } from "./metrics";
 import { WORK_DISPLAY_OVERRIDES, workDisplayName } from "@/lib/purchaseSim/displayName";
-import type { PerfDb } from "./sourceCore";
+import { seasonNumberedGroups, type PerfDb } from "./sourceCore";
 import type { SearchItem, WorkClass } from "./types";
 
 const IN_CHUNK = 100;
@@ -106,11 +106,12 @@ async function loadGroupSummaries(db: PerfDb, groups: string[]): Promise<Map<str
     rows.push(...((data ?? []) as R[]));
   }
   const out = new Map<string, { displayName: string; ownChannels: string[]; compChannels: string[]; airingsTotal: number; lastDate: string | null }>();
+  const numbered = await seasonNumberedGroups(db, uniq);
   for (const g of uniq) {
     const list = rows.filter((r) => r.group_key === g);
     if (!list.length) continue;
     out.set(g, {
-      displayName: workDisplayName(g, list),
+      displayName: workDisplayName(g, list, { numberedSeason: numbered.has(g) }),
       ownChannels: [...new Set(list.flatMap((r) => r.own_channels ?? []))],
       compChannels: [...new Set(list.flatMap((r) => r.comp_channels ?? []))],
       airingsTotal: list.reduce((s, r) => s + (r.airings_total ?? 0), 0),

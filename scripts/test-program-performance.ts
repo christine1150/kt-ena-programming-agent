@@ -6,7 +6,7 @@
 // 보증하지 못하는 것: 운영 데이터에서의 값(합성 사례의 이름·수치는 실제 채널 성과가 아니다).
 import { computeContentFit, computeSlotComparison, type ContentFitAiring } from "../src/lib/contentFit";
 import { matchPlanRow, namesCompatible, normalizePlanRows, planNameKey } from "../src/lib/idealSchedule/planEpisodes";
-import { cleanDisplayName, workDisplayName } from "../src/lib/purchaseSim/displayName";
+import { cleanDisplayName, hasSeasonSibling, trailingSeasonOf, workDisplayName } from "../src/lib/purchaseSim/displayName";
 import { allFirstRunRuleFor } from "../src/lib/broadcastPattern/followRule";
 import { originalCompareOf, type OriginalSeries } from "../src/lib/programPerformance/originalCompare";
 import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, relText, assessmentOf, whereLineOf, shareLineOf, seriesTrendText, pickExtremes, slotLeadOf, periodTrendOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
@@ -549,6 +549,8 @@ async function main() {
     check("표시 이름: 시즌 묶음은 검색에 맞은 행과 무관하게 '…시즌1'", workDisplayName("행동과학자의사건파일시즌1", [{ key: "행동과학자의사건파일1", display_name: "행동과학자의사건파일1", airings_total: 25 }, { key: "행동과학자의사건파일시즌1", display_name: "행동과학자의 사건파일 시즌1", airings_total: 24 }]) === "행동과학자의 사건파일 시즌1");
     check("표시 이름: 대표 키가 '…시즌N'인데 이름에 시즌이 없으면 꼬리 숫자를 시즌으로", workDisplayName("돌싱글즈시즌3", [{ key: "돌싱글즈시즌3", display_name: "돌싱글즈 3" }]) === "돌싱글즈 시즌3");
     check("표시 이름: 띄어쓰기 없는 대표 표기는 같은 키의 띄어 쓴 표기로", workDisplayName("현무카세", [{ key: "현무카세", display_name: "현무카세" }, { key: "현무카세", display_name: "현무 카세 <재>" }]) === "현무 카세");
+    check("시즌 번호 표시: 다른 시즌이 따로 있는 '크래시2'는 '크래시 시즌2', 번호 없는 '크래시'는 지정대로 '크래시 시즌1'", workDisplayName("크래시2", [{ key: "크래시2", display_name: "크래시2" }], { numberedSeason: hasSeasonSibling("크래시2", ["크래시", "크래시2"]) }) === "크래시 시즌2" && workDisplayName("크래시", [{ key: "크래시", display_name: "크래시" }]) === "크래시 시즌1");
+    check("시즌 번호 표시: 형제 시즌이 없거나(서치9) 일차 번호(DAY1)·편 번호 묶음이면 그대로", !hasSeasonSibling("서치9", ["서치9"]) && trailingSeasonOf("2025KGMAWITHIMBANKDAY1") === null && trailingSeasonOf("싱싱장터라이브바른상회2") === null && trailingSeasonOf("심장이뛴다385") === null);
     check("전부 본방 규칙: OLIFE·ENA Drama 행동과학자(11월 이후)만", !!allFirstRunRuleFor("OLIFE", ["행동과학자의사건파일1"], "2026-11-14") && !!allFirstRunRuleFor("ENA_DRAMA", ["행동과학자의사건파일시즌1"], "2026-11-16") && !allFirstRunRuleFor("ENA_STORY", ["행동과학자의사건파일1"], "2026-11-14") && !allFirstRunRuleFor("OLIFE", ["행동과학자의사건파일1"], "2026-09-01"));
   }
 
