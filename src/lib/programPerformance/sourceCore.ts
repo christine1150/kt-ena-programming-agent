@@ -256,20 +256,28 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
   const memberSet = new Set(keys);
   // norm_program_name(DB 생성 열, 대소문자 유지) 완전 일치로 찾는다 — 색인을 타서 빠르다(ilike는 색인을 못 타 수 초 걸림). 대소문자 변형은 자사 프로그램 표기에서 모은다.
   const exact = [...new Set([...keys, ...keys.map((k) => k.toLowerCase()), ...nameVariants.map((n) => n.replace(/<본>|<재>/g, "").replace(/[^가-힣a-zA-Z0-9]/g, "")), ...keys.flatMap((k) => BROADCAST_SLOT_PREFIXES.map((p) => p + k))])].filter(Boolean);
-  const fetched = await fetchAll<Record<string, unknown>>(
-    (a, b) =>
-      db
-        .from("competitor_program_target_ratings")
-        .select("competitor_name, target_label, broadcast_date, start_time, end_time, program_name, rating, share")
-        .in("norm_program_name", exact)
-        .in("target_label", COMPETITOR_TARGETS.map((t) => t.sheet))
-        .gte("broadcast_date", openStart ? "1900-01-01" : from)
-        .lte("broadcast_date", to)
-        .order("broadcast_date", { ascending: true })
-        .order("start_time", { ascending: true })
-        .range(a, b),
-    "경쟁 채널 방영"
-  );
+  // 이름 변형이 많으면(묶음 키 여러 개 × 방송사 꼬리표) 요청 주소가 길어져 실패하므로 나눠 묻는다(2026-11-20, 로앤오더 토론토 시즌1)
+  const fetched: Record<string, unknown>[] = [];
+  for (let i = 0; i < exact.length; i += 40) {
+    const part = exact.slice(i, i + 40);
+    fetched.push(
+      ...(await fetchAll<Record<string, unknown>>(
+        (a, b) =>
+          db
+            .from("competitor_program_target_ratings")
+            .select("competitor_name, target_label, broadcast_date, start_time, end_time, program_name, rating, share")
+            .in("norm_program_name", part)
+            .in("target_label", COMPETITOR_TARGETS.map((t) => t.sheet))
+            .gte("broadcast_date", openStart ? "1900-01-01" : from)
+            .lte("broadcast_date", to)
+            .order("broadcast_date", { ascending: true })
+            .order("start_time", { ascending: true })
+            .range(a, b),
+        "경쟁 채널 방영"
+      ))
+    );
+  }
+  fetched.sort((x, y) => String(x.broadcast_date).localeCompare(String(y.broadcast_date)) || String(x.start_time ?? "").localeCompare(String(y.start_time ?? "")));
   // 회차 부제가 붙은 표기("닥터X하얀마피아의시대오늘부터집도시작합니다", "…미리보기")는 작품명으로 시작하는 이름을 따로 찾아 같은 작품으로 센다(2026-11-06).
   // 시즌·속편("…2", "…시즌2")과 자사에 따로 있는 다른 작품(program_identity 키)은 제외한다.
   const prefixFetched = await fetchAll<Record<string, unknown>>(
@@ -493,7 +501,8 @@ export async function loadProgramPerformanceWith(db: PerfDb, query: PerformanceQ
   const firsts = await Promise.all(
     workIds.map((pid) =>
       Promise.all([
-        db.from("ratings").select("broadcast_date").eq("program_id", pid).eq("source_type", "nielsen_daily").order("broadcast_date", { ascending: true }).limit(1).maybeSingle(),
+        // 작품 첫 관측일은 skyUHD 수기 방영도 센다(skyUHD 에만 있는 작품의 '전체 기간'이 최신 하루로 줄던 문제, 2026-11-20)
+        db.from("ratings").select("broadcast_date").eq("program_id", pid).in("source_type", ["nielsen_daily", "skyuhd"]).order("broadcast_date", { ascending: true }).limit(1).maybeSingle(),
         db.from("ratings").select("broadcast_date").eq("program_id", pid).eq("source_type", "nielsen_daily").eq("is_first_run", true).order("broadcast_date", { ascending: true }).limit(1).maybeSingle(),
       ])
     )
