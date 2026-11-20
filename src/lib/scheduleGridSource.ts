@@ -7,6 +7,7 @@
 import { supabase } from "@/lib/supabase";
 import { resolveProgramLevelTargetLabel, resolveRankSheetTargetLabel } from "@/lib/targetResolution";
 import { parseScheduleGridWorkbook } from "@/lib/scheduleGridParse";
+import { readStyleMarks } from "@/lib/scheduleGridStyle";
 
 // 사용자 지시(2026-09-20): "1페이지 또는 2페이지에... 이번 주 실제 편성표 보기" — 주차 선택
 // UI 없이 항상 "이번 주"를 기본값으로 쓰기 위한 도우미(관리자 화면 weeks 라우트의 계산과 동일).
@@ -366,7 +367,9 @@ export type ScheduleGridUploadResult = {
 // 채널과 다른 채널의 파일이 올라와도 그대로 저장한다(파일이 말하는 채널이 항상 우선).
 export async function ingestScheduleGridFile(file: File): Promise<ScheduleGridUploadResult> {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const parsed = parseScheduleGridWorkbook(buffer, file.name);
+  // 서식(굵게·음영)으로 본방·초방을 읽어 글자 표시가 없는 칸을 보완한다(읽기 실패 시 빈 표 — 글자 표시만으로 계속)
+  const { marks } = await readStyleMarks(buffer);
+  const parsed = parseScheduleGridWorkbook(buffer, file.name, marks);
   if (!parsed.ok) {
     return { ok: false, message: parsed.message };
   }

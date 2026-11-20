@@ -10,6 +10,10 @@
 // 고치면 이미 운영 중인 OLIFE 파이프라인에 영향을 줄 위험이 있어(Delta-Only) 같은 파싱
 // 알고리즘을 이 기능 전용으로 새로 옮겨 적는다.
 import * as XLSX from "xlsx";
+import { withRunTag, type RunMark } from "./scheduleGridStyle";
+
+/** 서식(굵게·음영)으로 읽은 칸별 본방·초방 표시 — 키 "행,열"(parse 가 읽는 행·열 번호). 없으면 글자 표시만 쓴다. */
+export type StyleMarks = Map<string, RunMark>;
 
 const DATE_HEADER_RE = /^(\d{2})\/(\d{2})\(.\)$/;
 // ENA 편성표 헤더는 "9/28/26"(월/일/연도 2자리) 형식이고 시 열 이름도 "HR"·"KR"이다(2026-10-01 확인)
@@ -83,7 +87,7 @@ function isoDow(dateStr: string): number {
 const GRID_DATE_RE = /(\d{1,2})월\s*(\d{1,2})일/;
 const GRID_TITLE_RE = /^(.*?)\s*(\d+)회(?:\s*\(최종회\))?\s*(.*)$/;
 
-function parseMergedGrid(rows: (string | null)[][], channelCode: string, baseYear: number): ScheduleGridParseResult | null {
+function parseMergedGrid(rows: (string | null)[][], channelCode: string, baseYear: number, marks?: StyleMarks): ScheduleGridParseResult | null {
   const cell = (r: number, c: number) => (rows[r]?.[c] === null || rows[r]?.[c] === undefined ? "" : String(rows[r][c]).replace(/\s+/g, " ").trim());
   let hi = -1;
   for (let r = 0; r < Math.min(rows.length, 10); r++) {
@@ -121,11 +125,11 @@ function parseMergedGrid(rows: (string | null)[][], channelCode: string, baseYea
 
   const result: ScheduleGridRow[] = [];
   for (const { col, date } of dateCols) {
-    const segs: { min: number; text: string }[] = [];
+    const segs: { min: number; text: string; row: number }[] = [];
     for (let r = hi + 1; r < rows.length; r++) {
       const v = cell(r, col);
       if (!v || rowMin[r] === null) continue;
-      segs.push({ min: rowMin[r] as number, text: v });
+      segs.push({ min: rowMin[r] as number, text: v, row: r });
     }
     for (let i = 0; i < segs.length; i++) {
       const m = segs[i].text.match(GRID_TITLE_RE);
@@ -138,7 +142,7 @@ function parseMergedGrid(rows: (string | null)[][], channelCode: string, baseYea
         startTime: hhmm(segs[i].min),
         endTime: i + 1 < segs.length ? hhmm(segs[i + 1].min) : null,
         programNameRaw: m ? m[1].trim() : segs[i].text,
-        tags: null,
+        tags: withRunTag(null, marks?.get(`${segs[i].row},${col}`)),
         episodeNumber: m ? Number(m[2]) : null,
         episodeSubtitle: subtitle,
       });
@@ -149,7 +153,7 @@ function parseMergedGrid(rows: (string | null)[][], channelCode: string, baseYea
   return { ok: true, channelCode, weekStart: dates[0], weekEnd: dates[dates.length - 1], rows: result };
 }
 
-export function parseScheduleGridWorkbook(buffer: Buffer, fileName: string): ScheduleGridParseResult | ScheduleGridParseError {
+export function parseScheduleGridWorkbook(buffer: Buffer, fileName: string, marks?: StyleMarks): ScheduleGridParseResult | ScheduleGridParseError {
   let workbook: XLSX.WorkBook;
   try {
     workbook = XLSX.read(buffer, { type: "buffer" });
@@ -197,7 +201,7 @@ export function parseScheduleGridWorkbook(buffer: Buffer, fileName: string): Sch
   }
   if (headerRowIdx === -1 || dateCols.length === 0) {
     // 요일×10분 칸 병합 셀 형식(ENA STORY·skyUHD 주간편성표, 헤더 "9월 28일"·"10월5일(月)")
-    const grid = parseMergedGrid(rows, channelCode, baseYear);
+    const grid = parseMergedGrid(rows, channelCode, baseYear, marks);
     if (grid) return grid;
     return { ok: false, message: `${fileName}: 날짜 헤더("MM/DD(요일)")를 찾을 수 없습니다 — 주간 편성표 형식이 맞는지 확인해주세요.` };
   }
@@ -234,11 +238,12 @@ export function parseScheduleGridWorkbook(buffer: Buffer, fileName: string): Sch
       const seg = segStarts[i];
       const nextRow = i + 1 < segStarts.length ? segStarts[i + 1].row : rows.length;
       let titleText: string | null = null;
+      let titleRow = -1;
       let episodeText: string | null = null;
       for (let r = seg.row + 1; r < nextRow; r++) {
         const v = rows[r]?.[minCol];
         if (v === null || v === undefined || String(v).trim() === "") continue;
-        if (titleText === null) titleText = String(v).trim();
+        if (titleText === null) { titleText = String(v).trim(); titleRow = r; }
         else episodeText = String(v).trim(); // 계속 갱신 — 마지막 값이 회차/부제(제목 다음 값들 중 최후, olifeWeeklySchedule.ts와 같은 규칙)
       }
       if (!titleText) continue; // 제목을 못 찾으면 신뢰할 수 없는 세그먼트라 건너뜀(추정하지 않음)
@@ -250,7 +255,8 @@ export function parseScheduleGridWorkbook(buffer: Buffer, fileName: string): Sch
         startTime: seg.time,
         endTime,
         programNameRaw: titleText,
-        tags: seg.tag || null,
+        // 글자 표시([본]·[초]·[재])가 우선, 없으면 제목 칸(없으면 시작 칸·태그 칸)의 서식(굵게·음영)으로 보완
+        tags: withRunTag(seg.tag || null, marks?.get(`${titleRow},${minCol}`) ?? marks?.get(`${seg.row},${minCol}`) ?? marks?.get(`${seg.row},${tagCol}`)),
         episodeNumber,
         episodeSubtitle: subtitle,
       });
