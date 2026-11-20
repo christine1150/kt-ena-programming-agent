@@ -80,6 +80,17 @@ export interface CollectResult {
 /** 출연자 이슈 검색어가 100건을 넘으므로 동시에 몇 건씩만 보낸다(검색 API 초당 한도 보호) */
 const CAST_SEARCH_CONCURRENCY = 8;
 
+/** KST 날짜 "YYYYMMDD" */
+export function kstYmd(ms: number): string {
+  return new Date(ms + 9 * 3_600_000).toISOString().slice(0, 10).replace(/-/g, "");
+}
+/** 기사 주소에 박힌 작성일(국내 매체 다수가 "2026111835344"처럼 날짜로 시작하는 번호를 쓴다). 없으면 null */
+export function urlYmd(url: string): string | null {
+  const path = url.replace(/^https?:\/\/[^/]+/, "");
+  const m = path.match(/(?<!\d)(202[5-9])(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/);
+  return m ? m[1] + m[2] + m[3] : null;
+}
+
 /** 후보 수집 + 분류별 순위. allowTrial이 false면 네이버 키가 없을 때 국내 후보를 받지 않는다(운영 크론용) */
 export async function collectNews(opts: { now?: number; allowTrial?: boolean; withCast?: boolean; roster?: CastEntry[]; recent?: { title: string; url: string }[] } = {}): Promise<CollectResult> {
   const now = opts.now ?? Date.now();
@@ -96,7 +107,15 @@ export async function collectNews(opts: { now?: number; allowTrial?: boolean; wi
     useNaver && opts.withCast !== false ? mapWithConcurrency(buildCastQueries(opts.roster ?? CAST_ROSTER), CAST_SEARCH_CONCURRENCY, (q) => search(q.query, CAST_RISK_CATEGORY)) : Promise.resolve([]);
   const [cands, castRaw] = await Promise.all([Promise.all(jobs).then((r) => r.flat()), castJob.then((r) => r.flat())]);
   // 하루 안 기사만 — 검색 API는 오래된 기사도 돌려준다(해외 피드는 OVERSEAS_MAX_AGE_HOURS까지)
-  const isFresh = (c: NewsCandidate) => !c.publishedAt || now - Date.parse(c.publishedAt) <= (c.category === OVERSEAS_CATEGORY ? OVERSEAS_MAX_AGE_HOURS : 26) * 3_600_000;
+  // 국내 기사는 주소 속 작성일(…/2026111835344)이 그제 이전이면 뺀다 — 검색 API 발행 시각이 갱신돼 이틀 전 복면가왕 기사가 다시 실린 사례(2026-11-20)
+  const yesterday = kstYmd(now - 86_400_000);
+  const isFresh = (c: NewsCandidate) => {
+    if (c.category !== OVERSEAS_CATEGORY) {
+      const d = urlYmd(c.url);
+      if (d && d < yesterday) return false;
+    }
+    return !c.publishedAt || now - Date.parse(c.publishedAt) <= (c.category === OVERSEAS_CATEGORY ? OVERSEAS_MAX_AGE_HOURS : 26) * 3_600_000;
+  };
   // 어제 게시한 목록과 같은 소식은 다시 싣지 않는다 — 한경협 K-OTT·케이블TV 7609억·복면가왕 일정이 이틀 연속 올라온 사례(2026-11-19).
   // 해외 기사는 제목이 번역돼 있어 주소로만 비교한다
   const recent = (opts.recent ?? []).map((r) => ({ url: r.url, title: r.title.replace(/\s*\((?:확인 필요|중대 사안 · 편성 제외 검토)\)\s*$/, "") }));

@@ -106,6 +106,8 @@ interface TitleFeatures {
 const PARTICLE = /(?:으로|에서|에도|까지|부터|은|는|이|가|을|를|도|의|에|로|와|과|서)$/;
 /** 따옴표 안에 흔히 들어가지만 작품명이 아닌 말 — 이것만 같다고 같은 소식으로 보지 않는다 */
 const QUOTED_STOP = new Set(["ai", "ax", "ott", "ip", "k콘텐츠", "1위", "논란", "단독"]);
+/** 서로 다른 소식에도 흔히 같이 나오는 말 — 주어가 같을 때 이 말만 겹쳐서는 같은 소식으로 보지 않는다 */
+const COMMON_WORDS = new Set(["콘텐츠", "드라마", "글로벌", "플랫폼", "서비스", "시청률", "미디어", "유료방송", "케이블tv", "영업이익", "영업익", "3분기", "4분기", "오리지널", "신규", "본격", "강화", "확대", "출시", "공개", "선보", "나선다", "추진", "시장", "사업", "전략", "올해", "내년", "투자", "공략", "협력", "체결", "최대", "최초", "역대", "예능", "방송", "채널"]);
 const featureCache = new Map<string, TitleFeatures>();
 function featuresOf(title: string): TitleFeatures {
   const hit = featureCache.get(title);
@@ -150,12 +152,18 @@ function latinNames(title: string): Set<string> {
 }
 
 /** 한 분류 안에서 같은 주제를 싣는 최대 건수 */
-const TOPIC_CAPS: { re: RegExp; max: number }[] = [{ re: /케이블 ?TV|(?<![A-Za-z])SO(?![A-Za-z])/, max: 2 }, { re: /K-OTT|토종 OTT/, max: 1 }, { re: /한한령/, max: 1 }, { re: /디즈니\+|디즈니플러스/, max: 2 }];
+const TOPIC_CAPS: { re: RegExp; max: number }[] = [{ re: /케이블 ?TV|(?<![A-Za-z])SO(?![A-Za-z])/, max: 2 }, { re: /K-OTT|토종 OTT/, max: 1 }, { re: /한한령/, max: 1 }, { re: /디즈니\+|디즈니플러스/, max: 2 },
+  // 같은 날 화제성 순위 기사는 작품만 달리 여러 건 나온다(데블스 플랜·장동민 '화제성 1위' 2건, 2026-11-20)
+  { re: /화제성 ?1위/, max: 1 },
+  // 같은 국회 토론회를 다른 제목으로 쓴 K-FAST 기사 2건(2026-11-20) — 'K-FAST'는 따옴표 안 하이픈에서 잘려 작품명 비교로 못 묶는다
+  { re: /K-?FAST/i, max: 1 }];
 /**
  * 하루 지나면 같은 주제로 다시 싣지 않는 소식 — 매체마다 제목이 달라 같은 소식 판정으로 못 거르는 것들(한경협 K-OTT 제언, 케이블TV 가계 부담 조사).
  * 어제 게시 목록에 이 표현이 있었다면 오늘 후보 중 같은 표현은 뺀다(2026-11-19: 이틀 연속 올라온 사례)
  */
-export const ONE_DAY_TOPICS: RegExp[] = [/한경협|한국경제인협회|K-OTT|토종 OTT/, /케이블 ?TV (?:사라|없어|소멸|퇴출)|SO 무너|7[56]\d\d억/];
+export const ONE_DAY_TOPICS: RegExp[] = [/한경협|한국경제인협회|K-OTT|토종 OTT/, /케이블 ?TV (?:사라|없어|소멸|퇴출)|SO 무너|7[56]\d\d억/,
+  // 한한령 해제 기대 시황은 11/19·11/20 이틀 연속 실렸다(수동 클리핑 11/20에는 없음)
+  /한한령|한중 (?:FTA|콘텐츠 교류)/];
 /** 제목 속 큰 금액·수치("7609억") — 같은 조사·발표를 다룬 기사는 매체마다 제목이 달라도 이 수치가 같다 */
 function bigFigures(title: string): Set<string> {
   const out = new Set<string>();
@@ -205,6 +213,11 @@ export function sameStory(a: string, b: string): boolean {
     // 겹친 단어가 2개여도 그중 하나가 긴 고유명(국경없는기자회 등)이면 같은 소식으로 본다
     const ratio = shared / Math.min(A.words.size, B.words.size);
     if ((shared >= 3 && ratio >= 0.4) || (shared >= 2 && longest >= 6 && ratio >= 0.25)) return true;
+    // 주어가 같고 주어 말고도 흔하지 않은 3자 이상 단어(제휴사 이름 등)가 겹치면 같은 소식 —
+    // "CJ ENM K팝 채널, 샤오미 TV+ 타고…"와 "CJ ENM, 샤오미 스마트TV에 K-콘텐츠…"가 함께 오른 사례(2026-11-20)
+    if (headAlike && ratio >= 0.25) {
+      for (const w of A.words) if (w !== A.head && w !== B.head && w.length >= 3 && !/^\d/.test(w) && !COMMON_WORDS.has(w) && B.words.has(w)) return true;
+    }
   }
   return false;
 }

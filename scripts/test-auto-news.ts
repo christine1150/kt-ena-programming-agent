@@ -1,6 +1,6 @@
 // 주요 뉴스 자동 선정 순수 함수 검사 — 실행: npm run test:auto-news
 import { CATEGORIES, OVERSEAS_CATEGORY, kstDayStartIso } from "../src/lib/autoNews/config";
-import { isCleanTranslation } from "../src/lib/autoNews/collect";
+import { isCleanTranslation, kstYmd, urlYmd } from "../src/lib/autoNews/collect";
 import { buildCastQueries, castDisplayTitle, castLabel, isLowValueCastTitle, isShowRecapRisk, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
 import { fullTitleFromHtml, insertCastIssues, stripTitleTags } from "../src/lib/autoNews/collect";
 import { CAST_ROSTER } from "../src/lib/autoNews/roster";
@@ -222,6 +222,37 @@ ok("한경협 K-OTT 제언은 정책으로 선정", rankCategory([c("정책", "�
   ok("MC 확정·론칭·중계권 이슈가 출연자 소개·일상 단신보다 앞", r.slice(0, 3).every((x) => /MC 확정|론칭|IOC/.test(x.title)));
 }
 ok("하루 지나면 다시 싣지 않는 주제(한경협 K-OTT·케이블TV 가계 부담)", ONE_DAY_TOPICS.some((re) => re.test("한경협, K-OTT 해외 진출 지원 촉구") && re.test("“K-콘텐츠 흥행에도 영화·방송은 역성장…K-OTT 키워야”")) && ONE_DAY_TOPICS.some((re) => re.test("“케이블TV 퇴출 땐 가계 통신비 최대 7609억 증가”") && re.test("\"케이블TV 사라지면 지역 일자리도 위기\"")));
+// 수동 클리핑 대조(2026-11-20)
+{
+  const kt = CATEGORIES.find((x) => x.category === "KT 및 계열사 소식")!;
+  const r = rankCategory(["KT노조 위원장 선거 돌연 ‘중단’···KT 임원인사·조직개편 지연 되나", "롯데하이마트-KT '하이마트 수능패스' 진행...'Y수능 페스타' 이벤트 개최", "카카오·네이버·SKT·KT, AI 에이전트 시장 쟁탈전…예약·결제 넘어 수익화 승부", "KB證 “삼성SDS·KT 약세, AI 수요 훼손 아니다”"].map((t) => c(kt.category, t)), kt, NOW);
+  ok("KT 노조·임원인사 소식이 맨 앞, 증권사 시황은 제외", r[0].title.includes("노조") && !r.some((x) => x.title.includes("약세")));
+}
+{
+  const pol = CATEGORIES.find((x) => x.category === "정책")!;
+  const r = rankCategory(["K콘텐츠 해외 플랫폼 의존 줄일까…국회서 'K-FAST' 활성화 논의", "\"시청률이 시대 반영 못해\"…\"정부 주도 新 시청데이터 집계 방식 개발해야\"", "인제스피디움, MICE 대상 유니크 베뉴 부문 문체부 장관상", "송파구, 석촌호수 일대 문화예술 공간 조성 성과로 문체부장관 표창"].map((t) => c("정책", t)), pol, NOW);
+  ok("K-FAST 국회 논의·시청데이터 집계는 정책, 지역 수상 소식은 제외", r.length === 2 && r.every((x) => /K-FAST|시청데이터/.test(x.title)));
+  const two = pickByRules([{ category: "정책", quota: 3, ranked: rankCategory(["K콘텐츠 해외 플랫폼 의존 줄일까…국회서 'K-FAST' 활성화 논의", "민주 이주희, 'K-FAST 글로벌 경쟁력 강화 위한 토론회' 개최"].map((t) => c("정책", t)), pol, NOW) }]);
+  ok("같은 K-FAST 토론회 기사는 하루 1건", two.length === 1);
+}
+{
+  const bs = CATEGORIES.find((x) => x.category === "방송가 소식")!;
+  const r = rankCategory(["'나솔' 29기 옥순, 삼청동서 포착됐다…미술관에서도 빛난 청순 미모", "7기 영식, 주사위 신이 도왔다…“이건 운명” (나솔사계)", "‘나솔사계’ 작약, 탕웨이 후배 맞네…1기 영호 “한예종 출신 실감 안 났는데”"].map((t) => c(bs.category, t)), bs, NOW);
+  ok("나솔 출연자 일상·외모 단신은 0점 이하", r.every((x) => x.score <= 0));
+  const picked = pickByRules([{ category: bs.category, quota: 5, ranked: rankCategory(["넷플릭스 '데블스 플랜: 데드 어게인' 비드라마 화제성 1위", "\"천재의 귀환\"...장동민 활약으로 공개되자마자 '화제성 1위'"].map((t) => c(bs.category, t)), bs, NOW) }]);
+  ok("화제성 1위 기사는 하루 1건", picked.length === 1);
+}
+{
+  const ott = CATEGORIES.find((x) => x.category === "OTT")!;
+  ok("웨이브 정주행 채널 확대는 OTT로 선정, 몰아보기 추천은 제외", rankCategory([c("OTT", "웨이브, CJ ENM 인기작 정주행 채널 20개 추가…무료 채널 143개로 확대"), c("OTT", "주말에 정주행할 넷플릭스 시리즈")], ott, NOW).length === 1);
+}
+ok("주어가 같고 제휴사 이름이 겹치면 같은 소식(CJ ENM·샤오미)", sameStory("CJ ENM K팝 채널, 샤오미 TV+ 타고 55개국으로", "CJ ENM, 샤오미 스마트TV에 K-콘텐츠 심었다...글로벌 공략 강화"));
+ok("주어만 같고 흔한 말만 겹치면 다른 소식", !sameStory("CJ ENM, 티빙 오리지널 글로벌 공개", "CJ ENM, 3분기 영업이익 흑자 전환…글로벌 판매 호조"));
+ok("기수 뒤가 가명이 아닌 나솔 기사는 감점 없음", rankCategory([c("방송가 소식", "'나는 SOLO' 29기 시청률 자체 최고 경신")], CATEGORIES.find((x) => x.category === "방송가 소식")!, NOW)[0].score > 0);
+ok("한한령 시황은 하루 지나면 다시 싣지 않음", ONE_DAY_TOPICS.some((re) => re.test("中 한한령 해제 기대감에…콘텐츠·엔터 관련주 '강세'") && re.test("한한령 해빙 기대감, 코스닥 녹일까")));
+ok("주소 속 작성일 읽기", urlYmd("https://www.tenasia.co.kr/article/2026111835344") === "20261118" && urlYmd("https://www.newsis.com/view/NISX20261119_0003875521") === "20261119" && urlYmd("http://www.inews24.com/view/2028387") === null && urlYmd("https://deadline.com/2026/11/x-1237229307/") === null);
+ok("KST 날짜", kstYmd(Date.parse("2026-11-19T22:30:00Z")) === "20261120");
+
 ok("정상 번역 통과(원제·HBO맥스 표기)", isCleanTranslation("넷플릭스, 할런 코벤 원작 'The Innocent' 제작 확정…HBO맥스와 경쟁"));
 ok("지금 건강 문제 기사는 위험 신호로 선정", !isLowValueCastTitle("배우 김가나, 촬영 중 쓰러져 입원") && classifyCast("배우 김가나, 촬영 중 쓰러져 입원", roster)?.signal === "risk");
 
