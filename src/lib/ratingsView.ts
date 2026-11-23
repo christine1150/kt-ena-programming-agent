@@ -263,6 +263,8 @@ const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 export type TrendTarget = "p2049" | "hh";
 const TREND_TARGET_LABEL: Record<TrendTarget, string> = { p2049: "개인2049", hh: "National 유료방송가입가구" };
 
+const UHD_PEER_KEYS = new Set(["uxn", "asiauhd", "umax", "sbsnex", "uhddreamtv"]);
+
 export async function loadTrend(date: string, weeks = 4, showTop = 35, target: TrendTarget = "p2049"): Promise<TrendWeek[]> {
   // 7일이 모두 끝난 마지막 주(일요일 끝)를 기준으로 거슬러 올라간다
   const lastSunday = offsetDate(date, -(dow(date) === 6 ? 0 : dow(date) + 1));
@@ -313,8 +315,10 @@ export async function loadTrend(date: string, weeks = 4, showTop = 35, target: T
     const { data: pr } = await supabase.from("nielsen_period_rank").select("channel_id,rank,rating").eq("period_type", "weekly").eq("date_from", from).eq("date_to", to).eq("target_id", t2049);
     for (const p of (pr ?? []) as { channel_id: string; rank: number | null; rating: number | null }[]) {
       const c = (chs ?? []).find((x) => x.id === p.channel_id);
-      if (!c || p.rating === null || !isOwnChannelName(c.name as string)) continue;
-      list.push({ name: OWN_CHANNEL_NAMES[normName(c.name as string)], rating: p.rating, own: true, nielsenRank: p.rank, offset: 0, inDaily: sum.has(normName(c.name as string)) });
+      // 가구 추이에는 skyUHD(자사 UHD)도 닐슨 주간 순위 그대로 넣는다(사용자 지시 2026-11-23)
+      const isSky = target === "hh" && normName((c?.name as string) ?? "") === "skyuhd";
+      if (!c || p.rating === null || !(isOwnChannelName(c.name as string) || isSky)) continue;
+      list.push({ name: OWN_CHANNEL_NAMES[normName(c.name as string)] ?? (c.name as string), rating: p.rating, own: true, nielsenRank: p.rank, offset: 0, inDaily: sum.has(normName(c.name as string)) });
     }
     list.sort((a, b) => b.rating - a.rating);
     // 순위 보정은 일별 목록에 들어 있던 채널만 센다(일별 40위 밖인 자사 채널은 목록 순서에 포함되지 않았다)
@@ -334,7 +338,8 @@ export async function loadTrend(date: string, weeks = 4, showTop = 35, target: T
         prev = rank;
         return { rank, name: x.name, rating: x.rating, own: x.own, est };
       })
-      .filter((x) => x.own || x.rank <= showTop);
+      // 가구 추이: UHD 채널 6개(skyUHD·UXN·ASIA UHD·UMAX·SBS NEX·UHD Dream TV)는 순위가 낮아도 남긴다
+      .filter((x) => x.own || x.rank <= showTop || (target === "hh" && UHD_PEER_KEYS.has(normName(x.name))));
     result.push({ label: weekLabel(from), range: `${md(from)}~${md(to)}`, from, to, rows });
   }
   return result;

@@ -35,8 +35,17 @@ const OWN_FILL: Record<string, { bg: string; fg: string }> = {
   "ENA STORY": { bg: "#7826DC", fg: "#fff" },
   ONCE: { bg: "#FFB9B9", fg: "#3f3f46" },
   OLIFE: { bg: "#A5CB38", fg: "#27272a" },
+  skyUHD: { bg: "#475569", fg: "#fff" },
 };
+// 가구 순위 추이에서 함께 보여 주는 UHD 채널(skyUHD 제외 5개) — 옅은 회청색으로 구분
+const UHD_PEERS = new Set(["UXN", "ASIA UHD", "UMAX", "SBS NEX", "UHD Dream TV"]);
 const ACCENT = "#3C32E1";
+// 전 채널 순위 표의 자사 행: 채널 로고색을 옅게 깔고 왼쪽에 로고색 띠(사용자 지시 2026-11-23: OLIFE·ENA Play·ENA Drama도 로고색 음영). ENA 는 기존 파랑 유지
+function ownRowStyle(name: string): React.CSSProperties {
+  const f = OWN_FILL[name];
+  if (!f || name === "ENA") return { backgroundColor: "#ECEBFD", color: ACCENT, fontWeight: 700, boxShadow: `inset 3px 0 0 ${ACCENT}` };
+  return { backgroundColor: `color-mix(in srgb, ${f.bg} 22%, white)`, color: "#18181b", fontWeight: 700, boxShadow: `inset 4px 0 0 ${f.bg}` };
+}
 // skyUHD IPTV 셋톱 막대는 초록 계열(사용자 지시 2026-11-11) — 닐슨 유료방송가구 막대(파랑)와 나란히 비교한다
 const IPTV_GREEN = "#16A34A";
 const OWN_ROW_BG = "#ECEBFD";
@@ -392,7 +401,7 @@ function RankBoards({ boards }: { boards: RankBoard[] }) {
                   </tr>
                 ) : (
                   b.rows.map((r) => (
-                    <tr key={`${r.rank}-${r.name}`} className="border-t border-zinc-100" style={r.own ? { backgroundColor: OWN_ROW_BG, color: ACCENT, fontWeight: 700, boxShadow: `inset 3px 0 0 ${ACCENT}` } : undefined}>
+                    <tr key={`${r.rank}-${r.name}`} className="border-t border-zinc-100" style={r.own ? ownRowStyle(r.name) : undefined}>
                       <td className={`px-2 py-1.5 text-center tabular-nums ${r.own ? "" : "text-zinc-400"}`}>{r.rank}</td>
                       <td className="px-2 py-1.5 font-semibold">{r.name}</td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right font-bold tabular-nums">{r3(r.rating)}</td>
@@ -434,8 +443,9 @@ function TrendBoards({ weeks }: { weeks: TrendWeek[] }) {
               <tbody>
                 {w.rows.map((r) => {
                   const fill = r.own ? OWN_FILL[r.name] : undefined;
+                  const uhd = !fill && UHD_PEERS.has(r.name);
                   return (
-                    <tr key={`${r.rank}-${r.name}`} className="border-t border-zinc-100" style={fill ? { backgroundColor: fill.bg, color: fill.fg, fontWeight: 700 } : undefined}>
+                    <tr key={`${r.rank}-${r.name}`} className="border-t border-zinc-100" style={fill ? { backgroundColor: fill.bg, color: fill.fg, fontWeight: 700 } : uhd ? { backgroundColor: "#E2E8F0", fontWeight: 600 } : undefined}>
                       <td className={`py-1.5 text-center tabular-nums ${fill ? "" : "text-zinc-400"}`} title={r.est ? "타사 순위는 추정치입니다" : undefined}>
                         {r.est ? `~${r.rank}` : r.rank}
                       </td>
@@ -449,7 +459,7 @@ function TrendBoards({ weeks }: { weeks: TrendWeek[] }) {
           </section>
         ))}
       </div>
-      <p className="mt-2 text-[12px] text-zinc-400">자사 채널은 닐슨 주간 순위를 그대로, 타사는 일별 시청률의 7일 평균으로 매기고 뉴스·교육 채널이 빠진 만큼을 일별 닐슨 순위로 보정한 추정치입니다(7일 모두 상위권에 든 채널만 표시).</p>
+      <p className="mt-2 text-[12px] text-zinc-400">자사 채널은 닐슨 주간 순위를 그대로, 타사는 일별 시청률의 7일 평균으로 매기고 뉴스·교육 채널이 빠진 만큼을 일별 닐슨 순위로 보정한 추정치입니다(7일 모두 상위권에 든 채널만 표시). 전국 유료방송가구 기준에서는 UHD 채널 6개(skyUHD·UXN·ASIA UHD·UMAX·SBS NEX·UHD Dream TV)도 순위가 낮아도 함께 표시합니다.</p>
     </>
   );
 }
