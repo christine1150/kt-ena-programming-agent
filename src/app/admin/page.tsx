@@ -135,6 +135,7 @@ export default async function AdminPage() {
         <AdminSectionHeading title="매일 올리는 자료" />
         <MailIngestionManager />
         <RatingsUploader />
+        <ScheduleUploader />
 
         <AdminSectionHeading title="1페이지에 바로 반영되는 내용" description="PD가 수시로 올리거나 고치는 항목 — 올리는 즉시 대시보드 화면이 바뀝니다." />
         <DailyNewsManager />
@@ -142,9 +143,6 @@ export default async function AdminPage() {
         <FeaturedContentManager />
         <ManualReportUploader />
         <MonthlyReferenceTrendUploader />
-
-        <AdminSectionHeading title="편성표 검토" description="주간 편성표를 올리면 실제 시청률을 매칭해 히트맵·엑셀로 확인할 수 있습니다." />
-        <ScheduleUploader />
 
         <AdminSectionHeading title="기준 정보(가끔 바뀜)" description="채널·목표·경쟁채널처럼 한 번 정하면 오래 쓰는 값입니다." />
         <ChannelMasterUploader />
