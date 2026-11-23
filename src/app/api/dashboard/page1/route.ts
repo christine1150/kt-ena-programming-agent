@@ -2392,7 +2392,9 @@ export async function GET(request: Request) {
       primeMovers: MonthlyPrimeMover[];
       lineup: LineupShiftResult | null;
     }[];
+    availableWeeks?: { weekStart: string; weekEnd: string }[];
   } | null = null;
+  let weeklyAvailableWeeks: { weekStart: string; weekEnd: string }[] = [];
   if (asOfDateIsoDow === 7) {
     // 채널×타깃 조합마다 여러 행이 있는 작은 테이블이라(현재 총 몇백 행 수준) 제한 없이 전부
     // 가져와 distinct 처리 — 페이지네이션 걱정할 규모가 아니다.
@@ -2408,9 +2410,15 @@ export async function GET(request: Request) {
       .eq("period_type", "weekly")
       .order("date_from", { ascending: false })
       .limit(500);
+    // 2026-11-23(주간 리뷰 개편): 다른 주를 골라 볼 수 있게 조회일(일요일)에 끝난 주까지만 본다 — 전에는 조회일과 무관하게
+    // DB의 가장 최근 주를 썼다(최신 일요일을 고르면 결과는 같다).
     const distinctWeeksDesc = Array.from(new Map((weeklyPeriodsRaw ?? []).map((r) => [r.date_from as string, r.date_to as string])).entries())
       .map(([date_from, date_to]) => ({ date_from, date_to }))
+      .filter((w) => w.date_to <= asOfDate)
       .sort((a, b) => (a.date_from < b.date_from ? 1 : -1)); // 최신 주 먼저
+    weeklyAvailableWeeks = Array.from(new Map((weeklyPeriodsRaw ?? []).map((r) => [r.date_from as string, r.date_to as string])).entries())
+      .map(([weekStart, weekEnd]) => ({ weekStart, weekEnd }))
+      .sort((a, b) => (a.weekStart < b.weekStart ? 1 : -1));
     const WEEKLY_TREND_WINDOW = 12; // 이 프로젝트 전역의 "최근 12주" 관례(Fit Score 등)와 동일.
     const trendWeeksDesc = distinctWeeksDesc.slice(0, WEEKLY_TREND_WINDOW);
     const latestWeek = trendWeeksDesc[0] ?? null;
@@ -2491,7 +2499,7 @@ export async function GET(request: Request) {
 
       const resolvedWeeklyChannels = weeklyChannels.filter((c): c is NonNullable<typeof c> => c !== null);
       if (resolvedWeeklyChannels.length > 0) {
-        weeklyReview = { weekStart, weekEnd, priorWeekStart, channels: resolvedWeeklyChannels };
+        weeklyReview = { weekStart, weekEnd, priorWeekStart, channels: resolvedWeeklyChannels, availableWeeks: weeklyAvailableWeeks };
       }
     }
   }

@@ -42,6 +42,7 @@ import { formatArrowPct, formatDurationClock, formatDurationKo, formatRatingDelt
 import { DataStatusCard, DecisionCards, FollowupsCard, HomeViewTabs, PANEL, PanelHeader, type ReviewStoreState } from "@/components/home/HomePanels";
 import MarketTopPrograms from "@/components/home/MarketTopPrograms";
 import YtdGoalCard from "@/components/home/YtdGoalCard";
+import WeeklyChannelReview from "@/components/home/WeeklyChannelReview";
 import type { YtdGoalBriefing } from "@/lib/ytdGoalBriefing";
 import { MonthlyPlanningPanels, NextWeekPanel, type MonthlyChannelItem, type NextWeekItem } from "@/components/home/PeriodPanels";
 import { pendingFollowups, type ReviewEvent } from "@/lib/workspace/actionReview";
@@ -503,6 +504,8 @@ interface WeeklyReview {
   weekEnd: string;
   priorWeekStart: string | null;
   channels: WeeklyReviewChannel[];
+  // 2026-11-23: 주 선택용 — 닐슨 주간 순위가 있는 주 목록(최신 먼저).
+  availableWeeks?: { weekStart: string; weekEnd: string }[];
 }
 
 // 사용자 지시: 인사이트·킬러콘텐츠는 이 순서로 언급 (ENA → ENA Play → ENA Drama → OLIFE → ONCE → ENA Story)
@@ -2600,46 +2603,6 @@ function WeeklyRankTrendChart({
   );
 }
 
-// 인사이트 문장 — buildMonthlyReviewInsights와 같은 원칙("DB 값 라벨링만", 새 수치 계산 없음),
-// "전월"을 "전주"로, "연초 대비"를 "최근 N주 동안"으로 바꿨을 뿐 로직은 동일하다.
-function buildWeeklyReviewInsights(review: WeeklyReview, slides: RankSlide[] = []): string[] {
-  const withRankChange = review.channels.filter((c) => c.rankChange !== null && c.rankChange !== 0);
-  const lines: string[] = [];
-  const risers = withRankChange.filter((c) => c.rankChange! > 0).sort((a, b) => b.rankChange! - a.rankChange!);
-  const fallers = withRankChange.filter((c) => c.rankChange! < 0).sort((a, b) => a.rankChange! - b.rankChange!);
-  const nameOf = (code: string) => CHANNEL_NAME_BY_CODE[code] ?? code;
-  if (risers[0]) {
-    const c = risers[0];
-    const cur = c.weeks[c.weeks.length - 1];
-    lines.push(`순위가 가장 많이 오른 채널은 ${nameOf(c.channelCode)}입니다 — 전주 #${cur.rank! + c.rankChange!} → #${cur.rank} (▲${c.rankChange}).`);
-  }
-  if (fallers[0]) {
-    const c = fallers[0];
-    const cur = c.weeks[c.weeks.length - 1];
-    lines.push(`가장 많이 내려간 채널은 ${nameOf(c.channelCode)}입니다 — 전주 #${cur.rank! + c.rankChange!} → #${cur.rank} (▼${Math.abs(c.rankChange!)}).`);
-  }
-  // 최근 N주(route.ts가 내려주는 최대 12주 창) 동안의 흐름 — 그 창의 첫 주와 이번 주가 둘 다
-  // 있는 채널만.
-  const trend = review.channels
-    .map((c) => {
-      const first = c.weeks.find((w) => w.rank !== null);
-      const last = [...c.weeks].reverse().find((w) => w.rank !== null);
-      return first && last && first.weekStart !== last.weekStart ? { code: c.channelCode, from: first, to: last, gain: first.rank! - last.rank! } : null;
-    })
-    .filter((x): x is NonNullable<typeof x> => x !== null)
-    .sort((a, b) => b.gain - a.gain);
-  if (trend[0] && trend[0].gain > 0) {
-    const t = trend[0];
-    lines.push(
-      `최근 흐름으로는 ${nameOf(t.code)}가 ${formatMonthDayDow(t.from.weekStart)} 주 #${t.from.rank}에서 이번 주 #${t.to.rank}까지 ${t.gain}계단 올라 가장 꾸준히 개선됐습니다.`
-    );
-  }
-  // 주간 순위가 최근 12주 최고보다 크게 내려간 채널은 전주 대비가 아니라 누적 하락이라 위 문장에 안 잡힌다 — 원인 문장을 그대로 이어 붙인다(2026-10-26).
-  for (const s of slides.filter((x) => x.toWeek === review.weekStart)) lines.push(...s.lines);
-  if (lines.length === 0) lines.push("이번 주는 전주 대비 순위가 바뀐 채널이 없습니다.");
-  return lines;
-}
-
 // 사용자 지시(2026-10-07): "가지고 있는 가장 최근 4개까지 비교해서 볼 수 있도록" — 리뷰가 이미 내려주는 주별·월별 순위·시청률(채널×기간)에서 최근 4개를 나란히 놓고 앞 기간 대비 증감을 보인다(새 계산 없음).
 interface ComparePoint {
   label: string;
@@ -2706,130 +2669,47 @@ function RecentPeriodCompare({
   );
 }
 
-function WeeklyReviewCard({ review, themeColorByCode, rankSlides = [] }: { review: WeeklyReview; themeColorByCode: Map<string, string | null>; rankSlides?: RankSlide[] }) {
-  const byCode = new Map(review.channels.map((c) => [c.channelCode, c]));
+// 주간 리뷰 상세 근거(2026-11-23 개편) — 옛 주간 표의 네 칸(프라임 상승·하락, 상승 견인·하락 요인)을 같은 셀 컴포넌트로 그대로 보여준다.
+function WeeklyEvidence({ channel: c }: { channel: WeeklyReviewChannel }) {
+  const cells: { label: string; node: ReactNode }[] = c.lineup
+    ? [
+        { label: "프라임 시간대 상승", node: <LineupShiftCell shift={c.lineup.primeUp} sign={1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} /> },
+        { label: "프라임 시간대 하락", node: <LineupShiftCell shift={c.lineup.primeDown} sign={-1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} /> },
+        { label: "상승 견인", node: <LineupShiftCell shift={c.lineup.rise} sign={1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} /> },
+        { label: "하락 요인", node: <LineupShiftCell shift={c.lineup.decline} sign={-1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} /> },
+      ]
+    : [
+        { label: "프라임 시간대 상승", node: <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta >= 0)} channelCode={c.channelCode} periodLabel="전주" /> },
+        { label: "프라임 시간대 하락", node: <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta < 0)} channelCode={c.channelCode} periodLabel="전주" /> },
+        { label: "상승 견인", node: <MonthlyDriverCell driver={c.growthDriver} channelCode={c.channelCode} periodLabel="전주" /> },
+        { label: "하락 요인", node: <MonthlyDriverCell driver={c.weaknessDriver} channelCode={c.channelCode} periodLabel="전주" /> },
+      ];
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {cells.map((x) => (
+        <div key={x.label} className="rounded-md bg-white px-3 py-2 ring-1 ring-zinc-200">
+          <p className="mb-1 text-[11px] font-semibold text-zinc-500">{x.label}</p>
+          {x.node}
+        </div>
+      ))}
+      {c.lineup && (
+        <p className="text-[11px] leading-relaxed text-zinc-400 sm:col-span-2">
+          태그(자리 교체 효과·후속작 부진 등)는 같은 자리의 지난주·이번 주 시청률 비교에서 붙인 이름이며, 원인을 검증한 결과는 아닙니다.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// 여러 채널 비교(2026-11-23) — 옛 주간 카드의 그룹별 순위 그래프 두 개를 그대로 쓴다.
+function WeeklyCompareCharts({ channels, themeColorByCode }: { channels: WeeklyReviewChannel[]; themeColorByCode: Map<string, string | null> }) {
+  const byCode = new Map(channels.map((c) => [c.channelCode, c]));
   const groupA = MONTHLY_GROUP_A.map((code) => byCode.get(code)).filter((c): c is WeeklyReviewChannel => !!c);
   const groupB = MONTHLY_GROUP_B.map((code) => byCode.get(code)).filter((c): c is WeeklyReviewChannel => !!c);
-  const insights = buildWeeklyReviewInsights(review, rankSlides);
-  const nameOf = (code: string) => CHANNEL_NAME_BY_CODE[code] ?? code;
-  const orderedChannels = [...MONTHLY_GROUP_A, ...MONTHLY_GROUP_B].map((c) => byCode.get(c)).filter((c): c is WeeklyReviewChannel => !!c);
   return (
-    <div className={CARD}>
-      <h2 className={`font-heading mb-1 text-xl font-bold tracking-tight ${ACCENT_HEADING}`}>
-        {formatMonthDayDow(review.weekStart)} ~ {formatMonthDayDow(review.weekEnd)} 주간 리뷰
-      </h2>
-      <p className="mb-4 text-sm text-zinc-400">
-        해당 기간 전체를 닐슨이 기간 단위로 매긴 시장 순위입니다(일별 순위의 평균이 아닙니다). 아래 그래프는 최근 몇 주간의 흐름입니다.
-      </p>
-
-      <div className="mb-4 rounded-xl bg-amber-50 p-3">
-        <p className="mb-1 text-[12px] font-semibold text-amber-700">[이번 주 인사이트]</p>
-        <ul className="space-y-1">
-          {insights.map((line, i) => (
-            <li key={i} className="text-[13px] leading-relaxed text-amber-800">
-              ·{" "}
-              {colorizeChannelNamesInNodes(highlightNarrativeText(line, NARRATIVE_UP_COLOR, NARRATIVE_DOWN_COLOR, 600), themeColorByCode)}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <WeeklyRankTrendChart
-          groupLabel="ENA · ENA Play · ENA Drama"
-          targetLabel={groupA[0]?.targetLabel ?? "개인2049"}
-          channels={groupA}
-          themeColorByCode={themeColorByCode}
-        />
-        <WeeklyRankTrendChart
-          groupLabel="OLIFE · ONCE · ENA Story · skyUHD"
-          targetLabel={groupB[0]?.targetLabel ?? "National 유료방송가입가구"}
-          channels={groupB}
-          themeColorByCode={themeColorByCode}
-        />
-      </div>
-
-      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="가로로 스크롤되는 표">
-        <table className="w-full text-left text-[12px]">
-          <thead>
-            {/* 사용자 지시(2026-09-07): 월간 리뷰와 동일하게 프라임 성과 헤더를 단일 행으로
-                합치고 "프라임 시간대 상승"/"프라임 시간대 하락"으로 명시, "채널 전체 기여도와
-                별개" 문구 삭제. */}
-            <tr className="text-zinc-400">
-              <th className="pb-1 pr-3 font-medium">채널</th>
-              <th className="pb-1 pr-1 text-right font-medium">순위</th>
-              <th className="pb-1 pl-3 text-left font-medium">전주 대비</th>
-              <th className="pb-1 pr-1 text-right font-medium">시청률</th>
-              <th className="pb-1 pl-3 text-left font-medium">전주 대비</th>
-              <th className="pb-1 pl-3 text-left font-medium">프라임 시간대 상승</th>
-              <th className="pb-1 pl-3 text-left font-medium">프라임 시간대 하락</th>
-              <th className="pb-1 pl-3 text-left font-medium">상승 견인</th>
-              <th className="pb-1 pl-3 text-left font-medium">하락 요인</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orderedChannels.map((c) => {
-              const cur = c.weeks[c.weeks.length - 1];
-              const color = themeColorByCode.get(c.channelCode) ?? "#3f3f46";
-              const rankDeltaColor = c.rankChange === null || c.rankChange === 0 ? MONTHLY_FLAT_COLOR : c.rankChange > 0 ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR;
-              const ratingDeltaColor =
-                c.ratingChangePct === null || c.ratingChangePct === 0 ? MONTHLY_FLAT_COLOR : c.ratingChangePct > 0 ? MONTHLY_UP_COLOR : MONTHLY_DOWN_COLOR;
-              return (
-                <tr key={c.channelCode} className="border-t border-zinc-100 align-top">
-                  <td className="py-1.5 pr-3 font-semibold" style={{ color: brandText(color) }}>
-                    {nameOf(c.channelCode)}
-                  </td>
-                  <td className="py-1.5 pr-1 text-right font-bold tabular-nums text-zinc-900">
-                    {cur.rank !== null ? `#${cur.rank}` : "—"}
-                  </td>
-                  <td className="py-1.5 pl-3 text-left tabular-nums" style={{ color: rankDeltaColor }}>
-                    {c.rankChange === null ? "" : c.rankChange === 0 ? "유지" : `${c.rankChange > 0 ? "▲" : "▼"}${Math.abs(c.rankChange)}`}
-                  </td>
-                  <td className="py-1.5 pr-1 text-right tabular-nums text-zinc-700">{cur.rating !== null ? formatRating(cur.rating, c.channelCode) : "—"}</td>
-                  <td className="py-1.5 pl-3 text-left tabular-nums" style={{ color: ratingDeltaColor }}>
-                    {c.ratingChangePct === null
-                      ? ""
-                      : c.ratingChangePct === 0
-                        ? "유지"
-                        : formatArrowPct(c.ratingChangePct)}
-                  </td>
-                  {c.lineup ? (
-                    <>
-                      <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.primeUp} sign={1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} />
-                      </td>
-                      <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.primeDown} sign={-1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} />
-                      </td>
-                      <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.rise} sign={1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} />
-                      </td>
-                      <td className="py-1.5 pl-3 text-zinc-500">
-                        <LineupShiftCell shift={c.lineup.decline} sign={-1} channelCode={c.channelCode} periodLabel="전주" baseline={c.lineup.baseline} />
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="py-1.5 pl-3 text-zinc-500">
-                        <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta >= 0)} channelCode={c.channelCode} periodLabel="전주" />
-                      </td>
-                      <td className="py-1.5 pl-3 text-zinc-500">
-                        <PrimeMoverSingleCell mover={(c.primeMovers ?? []).find((m) => m.primeDelta < 0)} channelCode={c.channelCode} periodLabel="전주" />
-                      </td>
-                      <td className="py-1.5 pl-3 text-zinc-500">
-                        <MonthlyDriverCell driver={c.growthDriver} channelCode={c.channelCode} periodLabel="전주" />
-                      </td>
-                      <td className="py-1.5 pl-3 text-zinc-500">
-                        <MonthlyDriverCell driver={c.weaknessDriver} channelCode={c.channelCode} periodLabel="전주" />
-                      </td>
-                    </>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <WeeklyRankTrendChart groupLabel="ENA · ENA Play · ENA Drama" targetLabel={groupA[0]?.targetLabel ?? "개인2049"} channels={groupA} themeColorByCode={themeColorByCode} />
+      <WeeklyRankTrendChart groupLabel="OLIFE · ONCE · ENA Story · skyUHD" targetLabel={groupB[0]?.targetLabel ?? "National 유료방송가입가구"} channels={groupB} themeColorByCode={themeColorByCode} />
     </div>
   );
 }
@@ -6628,17 +6508,16 @@ export default function Dashboard({ isAdmin }: { isAdmin?: boolean }) {
                   <HomeViewTabs view={view} onChange={goView} />
                 </div>
                 {data.weeklyReview ? (
-                  <>
-                    <WeeklyReviewCard review={data.weeklyReview} themeColorByCode={themeByCode} rankSlides={data.rankSlides ?? []} />
-                    <RecentPeriodCompare
-                      title="최근 4주 비교"
-                      themeColorByCode={themeByCode}
-                      rows={data.weeklyReview.channels.map((c) => ({
-                        code: c.channelCode,
-                        points: c.weeks.slice(-4).map((w) => ({ label: `${shortDateKo(w.weekStart).replace(/\(.\)/, "")}~`, rank: w.rank, rating: w.rating })),
-                      }))}
-                    />
-                  </>
+                  // 2026-11-23 개편: 한눈에 보기 → 성적표 → 선택 채널의 변화와 이유 → 추이. 옛 표의 셀은 '상세 근거 보기'로, 그룹 순위 그래프는 '여러 채널 비교'로 옮겼다.
+                  <WeeklyChannelReview
+                    key={data.weeklyReview.weekStart}
+                    review={data.weeklyReview}
+                    slides={data.rankSlides ?? []}
+                    colorByCode={themeByCode}
+                    onSelectWeek={(weekEnd) => updateUrl({ view: "weekly", date: weekEnd })}
+                    renderEvidence={(c) => <WeeklyEvidence channel={c as WeeklyReviewChannel} />}
+                    compareView={<WeeklyCompareCharts channels={data.weeklyReview.channels} themeColorByCode={themeByCode} />}
+                  />
                 ) : (
                   <section className={PANEL} data-section="week_review">
                     <PanelHeader title="주간 성적과 기여 분해" />

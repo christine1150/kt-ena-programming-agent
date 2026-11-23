@@ -1,0 +1,1555 @@
+{
+ "weeklyReview": {
+  "weekStart": "2026-11-16",
+  "weekEnd": "2026-11-22",
+  "priorWeekStart": "2026-11-09",
+  "channels": [
+   {
+    "channelCode": "ENA",
+    "targetLabel": "개인2049",
+    "weeks": [
+     {
+      "weekStart": "2026-09-21",
+      "rank": 7,
+      "rating": 0.13494
+     },
+     {
+      "weekStart": "2026-09-28",
+      "rank": 7,
+      "rating": 0.11358
+     },
+     {
+      "weekStart": "2026-10-05",
+      "rank": 7,
+      "rating": 0.11169
+     },
+     {
+      "weekStart": "2026-10-12",
+      "rank": 6,
+      "rating": 0.1353
+     },
+     {
+      "weekStart": "2026-10-19",
+      "rank": 7,
+      "rating": 0.13633
+     },
+     {
+      "weekStart": "2026-10-26",
+      "rank": 7,
+      "rating": 0.14136
+     },
+     {
+      "weekStart": "2026-11-02",
+      "rank": 7,
+      "rating": 0.11653
+     },
+     {
+      "weekStart": "2026-11-09",
+      "rank": 7,
+      "rating": 0.12233
+     },
+     {
+      "weekStart": "2026-11-16",
+      "rank": 7,
+      "rating": 0.11765
+     }
+    ],
+    "rankChange": 0,
+    "ratingChangePct": -3.8257173219978666,
+    "growthDriver": {
+     "programName": "굿파트너2",
+     "contributionDelta": 0.017397,
+     "volumeEffect": 0.017397,
+     "performanceEffect": 0,
+     "airCount": 17,
+     "priorAirCount": 0,
+     "avgRating": 0.14367,
+     "priorAvgRating": null,
+     "slotLift": 0.04438,
+     "primeAirCount": 2,
+     "primeDow": 7,
+     "primeRatingDelta": 0.20941,
+     "priorPrimeAirCount": 0,
+     "mainSlotDow": 7,
+     "mainSlotHourBlock": 17
+    },
+    "weaknessDriver": {
+     "programName": "닥터X하얀마피아의시대",
+     "contributionDelta": -0.018673,
+     "volumeEffect": -0.017396,
+     "performanceEffect": -0.001277,
+     "airCount": 6,
+     "priorAirCount": 26,
+     "avgRating": 0.08709,
+     "priorAvgRating": 0.11382,
+     "slotLift": -0.03608,
+     "primeAirCount": 0,
+     "primeDow": 1,
+     "primeRatingDelta": -0.2995,
+     "priorPrimeAirCount": 3,
+     "mainSlotDow": 1,
+     "mainSlotHourBlock": 17
+    },
+    "primeMovers": [
+     {
+      "programName": "크래시2",
+      "dow": 2,
+      "primeDelta": 0.42251,
+      "primeAvgRating": 0.42251,
+      "priorPrimeAvgRating": null,
+      "primeAirCount": 5,
+      "priorPrimeAirCount": 0
+     },
+     {
+      "programName": "지구마불 세계여행 4",
+      "dow": 6,
+      "primeDelta": -0.1482,
+      "primeAvgRating": 0.28998,
+      "priorPrimeAvgRating": 0.43817,
+      "primeAirCount": 5,
+      "priorPrimeAirCount": 3
+     }
+    ],
+    "lineup": {
+     "decline": {
+      "anchorProgram": "연애박사",
+      "mode": "handoff",
+      "contributionDelta": -0.010018111179072796,
+      "keySlot": {
+       "dows": [
+        2
+       ],
+       "hours": [
+        22
+       ],
+       "dispersed": false,
+       "slotCount": 1,
+       "counterparts": [
+        "크래시2"
+       ],
+       "priorProgram": "연애박사",
+       "currentProgram": "크래시2",
+       "priorAvg": 1.6999399999999998,
+       "currentAvg": 0.85827,
+       "priorFirstRun": true,
+       "currentFirstRun": true,
+       "priorAirings": 1,
+       "currentAirings": 1
+      },
+      "demos": [
+       {
+        "label": "남20대",
+        "prior": 0,
+        "current": 0,
+        "retentionPct": null,
+        "delta": 0
+       },
+       {
+        "label": "남30대",
+        "prior": 1.48554,
+        "current": 1.24865,
+        "retentionPct": 84.05361013503507,
+        "delta": -0.23689000000000004
+       },
+       {
+        "label": "남40대",
+        "prior": 1.76749,
+        "current": 1.38872,
+        "retentionPct": 78.57017578600161,
+        "delta": -0.37877000000000005
+       },
+       {
+        "label": "여20대",
+        "prior": 1.65009,
+        "current": 0.97062,
+        "retentionPct": 58.82224605930586,
+        "delta": -0.67947
+       },
+       {
+        "label": "여30대",
+        "prior": 1.41016,
+        "current": 0.46738,
+        "retentionPct": 33.14375673682419,
+        "delta": -0.9427800000000001
+       },
+       {
+        "label": "여40대",
+        "prior": 3.52932,
+        "current": 0.9014,
+        "retentionPct": 25.540330715265263,
+        "delta": -2.6279199999999996
+       }
+      ]
+     },
+     "rise": {
+      "anchorProgram": "굿파트너2",
+      "mode": "handoff",
+      "contributionDelta": 0.010865974946733397,
+      "keySlot": {
+       "dows": [
+        5,
+        6,
+        7
+       ],
+       "hours": [
+        5,
+        9,
+        16,
+        19,
+        24
+       ],
+       "dispersed": true,
+       "slotCount": 6,
+       "counterparts": [
+        "닥터X하얀마피아의시대",
+        "2026VOYAGEFESTIVAL"
+       ],
+       "priorProgram": "내아이의사생활도아스페셜",
+       "currentProgram": "굿파트너2",
+       "priorAvg": 0.06468329577464789,
+       "currentAvg": 0.20611272727272725,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 1,
+       "currentAirings": 6
+      },
+      "demos": [
+       {
+        "label": "남20대",
+        "prior": 0.016899042253521127,
+        "current": 0,
+        "retentionPct": null,
+        "delta": -0.016899042253521127
+       },
+       {
+        "label": "남30대",
+        "prior": 0.02967605633802817,
+        "current": 0.0027232535885167463,
+        "retentionPct": null,
+        "delta": -0.026952802749511423
+       },
+       {
+        "label": "남40대",
+        "prior": 0.07814712676056337,
+        "current": 0.2775503588516746,
+        "retentionPct": 355.1638689187729,
+        "delta": 0.19940323209111124
+       },
+       {
+        "label": "여20대",
+        "prior": 0.009261070422535211,
+        "current": 0.03685014354066986,
+        "retentionPct": null,
+        "delta": 0.027589073118134647
+       },
+       {
+        "label": "여30대",
+        "prior": 0.12653577464788732,
+        "current": 0.37730956937799043,
+        "retentionPct": 298.18410676975304,
+        "delta": 0.2507737947301031
+       },
+       {
+        "label": "여40대",
+        "prior": 0.11267895774647887,
+        "current": 0.4798704784688996,
+        "retentionPct": 425.8740833835012,
+        "delta": 0.3671915207224207
+       }
+      ]
+     },
+     "primeUp": null,
+     "primeDown": {
+      "anchorProgram": "지구마불 세계여행 4",
+      "mode": "self",
+      "contributionDelta": -0.002720967388331119,
+      "keySlot": {
+       "dows": [
+        5,
+        6,
+        7
+       ],
+       "hours": [
+        19,
+        20,
+        21
+       ],
+       "dispersed": false,
+       "slotCount": 3,
+       "counterparts": [],
+       "priorProgram": "지구마불 세계여행 4",
+       "currentProgram": "지구마불 세계여행 4",
+       "priorAvg": 0.4380869938650306,
+       "currentAvg": 0.39440430420711975,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 3,
+       "currentAirings": 3
+      },
+      "demos": [
+       {
+        "label": "남20대",
+        "prior": 0.018693987730061354,
+        "current": 0.002201165048543689,
+        "retentionPct": null,
+        "delta": -0.016492822681517666
+       },
+       {
+        "label": "남30대",
+        "prior": 0.11171723926380368,
+        "current": 0.14924411003236243,
+        "retentionPct": 133.5909399622243,
+        "delta": 0.03752687076855875
+       },
+       {
+        "label": "남40대",
+        "prior": 0.8532433128834357,
+        "current": 0.5162446278317152,
+        "retentionPct": 60.50380003414584,
+        "delta": -0.3369986850517205
+       },
+       {
+        "label": "여20대",
+        "prior": 0.12986515337423313,
+        "current": 0.06374692556634305,
+        "retentionPct": 49.087013652263735,
+        "delta": -0.06611822780789008
+       },
+       {
+        "label": "여30대",
+        "prior": 0.1951222699386503,
+        "current": 0.1886215210355987,
+        "retentionPct": 96.66837162918638,
+        "delta": -0.006500748903051606
+       },
+       {
+        "label": "여40대",
+        "prior": 1.1388215950920246,
+        "current": 1.2799011003236247,
+        "retentionPct": 112.38820073658682,
+        "delta": 0.14107950523160007
+       }
+      ]
+     },
+     "baseline": {
+      "periods": 4,
+      "refAvg": 0.13945750829407524,
+      "priorVsRefPct": -3.7564346847602015,
+      "currentVsRefPct": -9.160525848788403
+     }
+    }
+   },
+   {
+    "channelCode": "ENA_DRAMA",
+    "targetLabel": "개인2049",
+    "weeks": [
+     {
+      "weekStart": "2026-09-21",
+      "rank": 38,
+      "rating": 0.0236
+     },
+     {
+      "weekStart": "2026-09-28",
+      "rank": 31,
+      "rating": 0.03683
+     },
+     {
+      "weekStart": "2026-10-05",
+      "rank": 39,
+      "rating": 0.01962
+     },
+     {
+      "weekStart": "2026-10-12",
+      "rank": 28,
+      "rating": 0.03094
+     },
+     {
+      "weekStart": "2026-10-19",
+      "rank": 28,
+      "rating": 0.0321
+     },
+     {
+      "weekStart": "2026-10-26",
+      "rank": 42,
+      "rating": 0.0167
+     },
+     {
+      "weekStart": "2026-11-02",
+      "rank": 44,
+      "rating": 0.0138
+     },
+     {
+      "weekStart": "2026-11-09",
+      "rank": 32,
+      "rating": 0.02487
+     },
+     {
+      "weekStart": "2026-11-16",
+      "rank": 27,
+      "rating": 0.03388
+     }
+    ],
+    "rankChange": 5,
+    "ratingChangePct": 36.22838761560113,
+    "growthDriver": {
+     "programName": "결이다른전쟁사",
+     "contributionDelta": 0.000962,
+     "volumeEffect": -0.000013,
+     "performanceEffect": 0.000975,
+     "airCount": 1,
+     "priorAirCount": 2,
+     "avgRating": 0.13317,
+     "priorAvgRating": 0.00178,
+     "slotLift": 0.12436,
+     "primeAirCount": 0,
+     "primeDow": null,
+     "primeRatingDelta": 0,
+     "priorPrimeAirCount": 0,
+     "mainSlotDow": 1,
+     "mainSlotHourBlock": 8
+    },
+    "weaknessDriver": {
+     "programName": "연애박사",
+     "contributionDelta": -0.005309,
+     "volumeEffect": -0.005048,
+     "performanceEffect": -0.000261,
+     "airCount": 1,
+     "priorAirCount": 22,
+     "avgRating": 0,
+     "priorAvgRating": 0.02915,
+     "slotLift": -0.00621,
+     "primeAirCount": 0,
+     "primeDow": null,
+     "primeRatingDelta": 0,
+     "priorPrimeAirCount": 0,
+     "mainSlotDow": 1,
+     "mainSlotHourBlock": 8,
+     "replacedByName": "결이다른전쟁사",
+     "replacedByRating": 0.13317,
+     "replacedByAirCount": 1
+    },
+    "primeMovers": [
+     {
+      "programName": "크래시2",
+      "dow": 3,
+      "primeDelta": 0.02588,
+      "primeAvgRating": 0.02588,
+      "priorPrimeAvgRating": null,
+      "primeAirCount": 5,
+      "priorPrimeAirCount": 0
+     },
+     {
+      "programName": "벌거벗은세계사",
+      "dow": 1,
+      "primeDelta": -0.06393,
+      "primeAvgRating": 0.04004,
+      "priorPrimeAvgRating": 0.10397,
+      "primeAirCount": 4,
+      "priorPrimeAirCount": 3
+     }
+    ],
+    "lineup": {
+     "decline": {
+      "anchorProgram": "생고생먹바라지투어쯔양몇끼",
+      "mode": "handoff",
+      "contributionDelta": -0.0007687305393067008,
+      "keySlot": {
+       "dows": [
+        2
+       ],
+       "hours": [
+        24
+       ],
+       "dispersed": false,
+       "slotCount": 1,
+       "counterparts": [
+        "지구마불세계여행4"
+       ],
+       "priorProgram": "생고생먹바라지투어쯔양몇끼",
+       "currentProgram": "지구마불세계여행4",
+       "priorAvg": 0.05013312111468382,
+       "currentAvg": 0,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 1,
+       "currentAirings": 1
+      },
+      "demos": []
+     },
+     "rise": {
+      "anchorProgram": "크래시2",
+      "mode": "handoff",
+      "contributionDelta": 0.006773521635513272,
+      "keySlot": {
+       "dows": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+       ],
+       "hours": [
+        5,
+        9,
+        10,
+        11,
+        12,
+        14,
+        15,
+        16,
+        18,
+        23,
+        24
+       ],
+       "dispersed": true,
+       "slotCount": 13,
+       "counterparts": [
+        "연애박사",
+        "뿅뿅지구오락실2"
+       ],
+       "priorProgram": "벌거벗은세계사",
+       "currentProgram": "크래시2",
+       "priorAvg": 0.00926748230535895,
+       "currentAvg": 0.0681345731707317,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 2,
+       "currentAirings": 13
+      },
+      "demos": []
+     },
+     "primeUp": {
+      "anchorProgram": "지구마불세계여행4",
+      "mode": "handoff",
+      "contributionDelta": 0.0024451254005556605,
+      "keySlot": {
+       "dows": [
+        3
+       ],
+       "hours": [
+        22
+       ],
+       "dispersed": false,
+       "slotCount": 1,
+       "counterparts": [
+        "크래시"
+       ],
+       "priorProgram": "크래시",
+       "currentProgram": "지구마불세계여행4",
+       "priorAvg": 0.00614,
+       "currentAvg": 0.20384,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 1,
+       "currentAirings": 1
+      },
+      "demos": [
+       {
+        "label": "남20대",
+        "prior": 0,
+        "current": 0,
+        "retentionPct": null,
+        "delta": 0
+       },
+       {
+        "label": "남30대",
+        "prior": 0,
+        "current": 0.01112,
+        "retentionPct": null,
+        "delta": 0.01112
+       },
+       {
+        "label": "남40대",
+        "prior": 0,
+        "current": 0.47635,
+        "retentionPct": null,
+        "delta": 0.47635
+       },
+       {
+        "label": "여20대",
+        "prior": 0,
+        "current": 0.012289999999999999,
+        "retentionPct": null,
+        "delta": 0.012289999999999999
+       },
+       {
+        "label": "여30대",
+        "prior": 0,
+        "current": 0.475,
+        "retentionPct": null,
+        "delta": 0.475
+       },
+       {
+        "label": "여40대",
+        "prior": 0.03388,
+        "current": 0.18698,
+        "retentionPct": null,
+        "delta": 0.1531
+       }
+      ]
+     },
+     "primeDown": {
+      "anchorProgram": "벌거벗은세계사",
+      "mode": "self",
+      "contributionDelta": -0.002247734419442823,
+      "keySlot": {
+       "dows": [
+        1,
+        7
+       ],
+       "hours": [
+        19
+       ],
+       "dispersed": false,
+       "slotCount": 2,
+       "counterparts": [],
+       "priorProgram": "벌거벗은세계사",
+       "currentProgram": "벌거벗은세계사",
+       "priorAvg": 0.12245412087912089,
+       "currentAvg": 0.018589467455621303,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 2,
+       "currentAirings": 2
+      },
+      "demos": [
+       {
+        "label": "남20대",
+        "prior": 0,
+        "current": 0,
+        "retentionPct": null,
+        "delta": 0
+       },
+       {
+        "label": "남30대",
+        "prior": 0.3365067032967033,
+        "current": 0.009256449704142012,
+        "retentionPct": 2.750747492830909,
+        "delta": -0.32725025359256127
+       },
+       {
+        "label": "남40대",
+        "prior": 0.030044835164835165,
+        "current": 0.05761674556213018,
+        "retentionPct": null,
+        "delta": 0.027571910397295014
+       },
+       {
+        "label": "여20대",
+        "prior": 0,
+        "current": 0,
+        "retentionPct": null,
+        "delta": 0
+       },
+       {
+        "label": "여30대",
+        "prior": 0.2574545054945055,
+        "current": 0.006401656804733728,
+        "retentionPct": 2.486519625064534,
+        "delta": -0.2510528486897718
+       },
+       {
+        "label": "여40대",
+        "prior": 0.08784791208791208,
+        "current": 0.028817633136094676,
+        "retentionPct": 32.804004615677144,
+        "delta": -0.05903027895181741
+       }
+      ]
+     },
+     "baseline": {
+      "periods": 4,
+      "refAvg": 0.024028461033666834,
+      "priorVsRefPct": 15.23585418910236,
+      "currentVsRefPct": 48.04109853376188
+     }
+    }
+   },
+   {
+    "channelCode": "ENA_PLAY",
+    "targetLabel": "개인2049",
+    "weeks": [
+     {
+      "weekStart": "2026-09-21",
+      "rank": 43,
+      "rating": 0.01967
+     },
+     {
+      "weekStart": "2026-09-28",
+      "rank": 41,
+      "rating": 0.01911
+     },
+     {
+      "weekStart": "2026-10-05",
+      "rank": 43,
+      "rating": 0.0165
+     },
+     {
+      "weekStart": "2026-10-12",
+      "rank": 30,
+      "rating": 0.02675
+     },
+     {
+      "weekStart": "2026-10-19",
+      "rank": 25,
+      "rating": 0.03812
+     },
+     {
+      "weekStart": "2026-10-26",
+      "rank": 32,
+      "rating": 0.02315
+     },
+     {
+      "weekStart": "2026-11-02",
+      "rank": 34,
+      "rating": 0.01888
+     },
+     {
+      "weekStart": "2026-11-09",
+      "rank": 35,
+      "rating": 0.02377
+     },
+     {
+      "weekStart": "2026-11-16",
+      "rank": 32,
+      "rating": 0.02855
+     }
+    ],
+    "rankChange": 3,
+    "ratingChangePct": 20.10938157341186,
+    "growthDriver": null,
+    "weaknessDriver": {
+     "programName": "나혼자산다",
+     "contributionDelta": -0.00169,
+     "volumeEffect": -0.001531,
+     "performanceEffect": -0.000159,
+     "airCount": 3,
+     "priorAirCount": 9,
+     "avgRating": 0.02049,
+     "priorAvgRating": 0.02551,
+     "slotLift": -0.01079,
+     "primeAirCount": 1,
+     "primeDow": 6,
+     "primeRatingDelta": -0.01505,
+     "priorPrimeAirCount": 3,
+     "mainSlotDow": 5,
+     "mainSlotHourBlock": 17,
+     "replacedByName": "크래시2",
+     "replacedByRating": 0.0437,
+     "replacedByAirCount": 1
+    },
+    "primeMovers": [
+     {
+      "programName": "지구마불세계여행4",
+      "dow": 1,
+      "primeDelta": 0.08039,
+      "primeAvgRating": 0.12371,
+      "priorPrimeAvgRating": 0.04331,
+      "primeAirCount": 5,
+      "priorPrimeAirCount": 3
+     }
+    ],
+    "lineup": {
+     "decline": {
+      "anchorProgram": "놀라운토요일예능신대륙발견",
+      "mode": "handoff",
+      "contributionDelta": -0.0013983186154666052,
+      "keySlot": {
+       "dows": [
+        6
+       ],
+       "hours": [
+        25
+       ],
+       "dispersed": false,
+       "slotCount": 1,
+       "counterparts": [
+        "내아이의사생활"
+       ],
+       "priorProgram": "놀라운토요일예능신대륙발견",
+       "currentProgram": "내아이의사생활",
+       "priorAvg": 0.13185633579126488,
+       "currentAvg": 0.004990201238390093,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 1,
+       "currentAirings": 1
+      },
+      "demos": [
+       {
+        "label": "남20대",
+        "prior": 0,
+        "current": 0,
+        "retentionPct": null,
+        "delta": 0
+       },
+       {
+        "label": "남30대",
+        "prior": 0,
+        "current": 0,
+        "retentionPct": null,
+        "delta": 0
+       },
+       {
+        "label": "남40대",
+        "prior": 0.3025075439591605,
+        "current": 0,
+        "retentionPct": 0,
+        "delta": -0.3025075439591605
+       },
+       {
+        "label": "여20대",
+        "prior": 0,
+        "current": 0,
+        "retentionPct": null,
+        "delta": 0
+       },
+       {
+        "label": "여30대",
+        "prior": 0.4623691605218378,
+        "current": 0,
+        "retentionPct": 0,
+        "delta": -0.4623691605218378
+       },
+       {
+        "label": "여40대",
+        "prior": 0,
+        "current": 0.0275425,
+        "retentionPct": null,
+        "delta": 0.0275425
+       }
+      ]
+     },
+     "rise": {
+      "anchorProgram": "내아이의사생활도아스페셜",
+      "mode": "handoff",
+      "contributionDelta": 0.011240664027515371,
+      "keySlot": {
+       "dows": [
+        6
+       ],
+       "hours": [
+        2
+       ],
+       "dispersed": true,
+       "slotCount": 1,
+       "counterparts": [
+        "생고생먹바라지투어쯔양몇끼"
+       ],
+       "priorProgram": "생고생먹바라지투어쯔양몇끼",
+       "currentProgram": "내아이의사생활도아스페셜",
+       "priorAvg": 0.0018399999999999998,
+       "currentAvg": 0.063,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 1,
+       "currentAirings": 1
+      },
+      "demos": []
+     },
+     "primeUp": {
+      "anchorProgram": "지구마불세계여행4",
+      "mode": "self",
+      "contributionDelta": 0.0016176421048657796,
+      "keySlot": {
+       "dows": [
+        6,
+        7
+       ],
+       "hours": [
+        20,
+        21
+       ],
+       "dispersed": false,
+       "slotCount": 2,
+       "counterparts": [],
+       "priorProgram": "지구마불세계여행4",
+       "currentProgram": "지구마불세계여행4",
+       "priorAvg": 0.052135,
+       "currentAvg": 0.14089746341463413,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 2,
+       "currentAirings": 2
+      },
+      "demos": [
+       {
+        "label": "남20대",
+        "prior": 0,
+        "current": 0.11217014634146341,
+        "retentionPct": null,
+        "delta": 0.11217014634146341
+       },
+       {
+        "label": "남30대",
+        "prior": 0,
+        "current": 0.0062201951219512195,
+        "retentionPct": null,
+        "delta": 0.0062201951219512195
+       },
+       {
+        "label": "남40대",
+        "prior": 0.027059999999999997,
+        "current": 0.03558678048780488,
+        "retentionPct": null,
+        "delta": 0.008526780487804881
+       },
+       {
+        "label": "여20대",
+        "prior": 0,
+        "current": 0.41875780487804876,
+        "retentionPct": null,
+        "delta": 0.41875780487804876
+       },
+       {
+        "label": "여30대",
+        "prior": 0.01942,
+        "current": 0.008370634146341463,
+        "retentionPct": null,
+        "delta": -0.011049365853658536
+       },
+       {
+        "label": "여40대",
+        "prior": 0.24248999999999998,
+        "current": 0.29736799999999997,
+        "retentionPct": 122.6310363313951,
+        "delta": 0.05487799999999998
+       }
+      ]
+     },
+     "primeDown": null,
+     "baseline": {
+      "periods": 4,
+      "refAvg": 0.028768750298025836,
+      "priorVsRefPct": -11.168042453828896,
+      "currentVsRefPct": 28.291172295434762
+     }
+    }
+   },
+   {
+    "channelCode": "ENA_STORY",
+    "targetLabel": "National 유료방송가입가구",
+    "weeks": [
+     {
+      "weekStart": "2026-09-21",
+      "rank": 62,
+      "rating": 0.05304
+     },
+     {
+      "weekStart": "2026-09-28",
+      "rank": 66,
+      "rating": 0.04863
+     },
+     {
+      "weekStart": "2026-10-05",
+      "rank": 72,
+      "rating": 0.04619
+     },
+     {
+      "weekStart": "2026-10-12",
+      "rank": 80,
+      "rating": 0.03742
+     },
+     {
+      "weekStart": "2026-10-19",
+      "rank": 74,
+      "rating": 0.04375
+     },
+     {
+      "weekStart": "2026-10-26",
+      "rank": 70,
+      "rating": 0.04071
+     },
+     {
+      "weekStart": "2026-11-02",
+      "rank": 66,
+      "rating": 0.049
+     },
+     {
+      "weekStart": "2026-11-09",
+      "rank": 71,
+      "rating": 0.0427
+     },
+     {
+      "weekStart": "2026-11-16",
+      "rank": 68,
+      "rating": 0.04653
+     }
+    ],
+    "rankChange": 3,
+    "ratingChangePct": 8.969555035128804,
+    "growthDriver": {
+     "programName": "지구마불세계여행4",
+     "contributionDelta": 0.000979,
+     "volumeEffect": 0.001161,
+     "performanceEffect": -0.000182,
+     "airCount": 4,
+     "priorAirCount": 1,
+     "avgRating": 0.02585,
+     "priorAvgRating": 0.02937,
+     "slotLift": -0.03455,
+     "primeAirCount": 2,
+     "primeDow": 6,
+     "primeRatingDelta": 0.02623,
+     "priorPrimeAirCount": 0,
+     "mainSlotDow": 6,
+     "mainSlotHourBlock": 5
+    },
+    "weaknessDriver": {
+     "programName": "인간극장",
+     "contributionDelta": -0.006428,
+     "volumeEffect": -0.005615,
+     "performanceEffect": -0.000813,
+     "airCount": 30,
+     "priorAirCount": 42,
+     "avgRating": 0.06926,
+     "priorAvgRating": 0.07365,
+     "slotLift": -0.00083,
+     "primeAirCount": 9,
+     "primeDow": 1,
+     "primeRatingDelta": 0.00139,
+     "priorPrimeAirCount": 13,
+     "mainSlotDow": 1,
+     "mainSlotHourBlock": 8
+    },
+    "primeMovers": [
+     {
+      "programName": "크래시2",
+      "dow": 3,
+      "primeDelta": 0.10059,
+      "primeAvgRating": 0.10059,
+      "priorPrimeAvgRating": null,
+      "primeAirCount": 2,
+      "priorPrimeAirCount": 0
+     },
+     {
+      "programName": "기막힌이야기실제상황베스트",
+      "dow": 2,
+      "primeDelta": -0.00171,
+      "primeAvgRating": 0.03331,
+      "priorPrimeAvgRating": 0.03502,
+      "primeAirCount": 1,
+      "priorPrimeAirCount": 2
+     }
+    ],
+    "lineup": {
+     "decline": {
+      "anchorProgram": "인간극장",
+      "mode": "handoff",
+      "contributionDelta": -0.0035656727394137574,
+      "keySlot": {
+       "dows": [
+        1,
+        2,
+        3,
+        5,
+        6,
+        7
+       ],
+       "hours": [
+        8,
+        9,
+        10,
+        11,
+        18,
+        19,
+        20
+       ],
+       "dispersed": true,
+       "slotCount": 14,
+       "counterparts": [
+        "지구마불세계여행4",
+        "한블리한문철의블랙박스리뷰"
+       ],
+       "priorProgram": "인간극장",
+       "currentProgram": "극한직업",
+       "priorAvg": 0.10144610619469027,
+       "currentAvg": 0.041017192982456145,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 14,
+       "currentAirings": 1
+      },
+      "demos": []
+     },
+     "rise": {
+      "anchorProgram": "다시뜨거워지고싶은애로부부",
+      "mode": "self",
+      "contributionDelta": 0.0019874780532789715,
+      "keySlot": {
+       "dows": [
+        2,
+        4
+       ],
+       "hours": [
+        2,
+        15
+       ],
+       "dispersed": false,
+       "slotCount": 2,
+       "counterparts": [],
+       "priorProgram": "다시뜨거워지고싶은애로부부",
+       "currentProgram": "다시뜨거워지고싶은애로부부",
+       "priorAvg": 0.027421428571428572,
+       "currentAvg": 0.10769367346938777,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 2,
+       "currentAirings": 2
+      },
+      "demos": []
+     },
+     "primeUp": null,
+     "primeDown": null,
+     "baseline": {
+      "periods": 4,
+      "refAvg": 0.04632102577546336,
+      "priorVsRefPct": 0.21396736025178775,
+      "currentVsRefPct": 9.828173271954688
+     }
+    }
+   },
+   {
+    "channelCode": "OLIFE",
+    "targetLabel": "National 유료방송가입가구",
+    "weeks": [
+     {
+      "weekStart": "2026-09-21",
+      "rank": 36,
+      "rating": 0.09963
+     },
+     {
+      "weekStart": "2026-09-28",
+      "rank": 34,
+      "rating": 0.09658
+     },
+     {
+      "weekStart": "2026-10-05",
+      "rank": 28,
+      "rating": 0.11764
+     },
+     {
+      "weekStart": "2026-10-12",
+      "rank": 27,
+      "rating": 0.11673
+     },
+     {
+      "weekStart": "2026-10-19",
+      "rank": 29,
+      "rating": 0.10896
+     },
+     {
+      "weekStart": "2026-10-26",
+      "rank": 31,
+      "rating": 0.10226
+     },
+     {
+      "weekStart": "2026-11-02",
+      "rank": 26,
+      "rating": 0.11511
+     },
+     {
+      "weekStart": "2026-11-09",
+      "rank": 30,
+      "rating": 0.11473
+     },
+     {
+      "weekStart": "2026-11-16",
+      "rank": 33,
+      "rating": 0.10164
+     }
+    ],
+    "rankChange": -3,
+    "ratingChangePct": -11.409395973154366,
+    "growthDriver": {
+     "programName": "한국기행",
+     "contributionDelta": 0.00229,
+     "volumeEffect": -0.000168,
+     "performanceEffect": 0.002458,
+     "airCount": 23,
+     "priorAirCount": 22,
+     "avgRating": 0.08257,
+     "priorAvgRating": 0.06201,
+     "slotLift": 0.02608,
+     "primeAirCount": 0,
+     "primeDow": null,
+     "primeRatingDelta": 0,
+     "priorPrimeAirCount": 0,
+     "mainSlotDow": 1,
+     "mainSlotHourBlock": 5
+    },
+    "weaknessDriver": {
+     "programName": "세계테마기행",
+     "contributionDelta": -0.007804,
+     "volumeEffect": -0.000526,
+     "performanceEffect": -0.007278,
+     "airCount": 42,
+     "priorAirCount": 42,
+     "avgRating": 0.14312,
+     "priorAvgRating": 0.16074,
+     "slotLift": -0.02084,
+     "primeAirCount": 2,
+     "primeDow": 5,
+     "primeRatingDelta": -0.06245,
+     "priorPrimeAirCount": 3,
+     "mainSlotDow": 2,
+     "mainSlotHourBlock": 11
+    },
+    "primeMovers": [
+     {
+      "programName": "걸어서세계속으로",
+      "dow": 1,
+      "primeDelta": -0.0721,
+      "primeAvgRating": 0.17064,
+      "priorPrimeAvgRating": 0.24274,
+      "primeAirCount": 10,
+      "priorPrimeAirCount": 12
+     }
+    ],
+    "lineup": {
+     "decline": {
+      "anchorProgram": "걸어서세계속으로",
+      "mode": "self",
+      "contributionDelta": -0.0072638661217341825,
+      "keySlot": {
+       "dows": [
+        1,
+        2,
+        3,
+        5,
+        6
+       ],
+       "hours": [
+        19,
+        20
+       ],
+       "dispersed": false,
+       "slotCount": 5,
+       "counterparts": [],
+       "priorProgram": "걸어서세계속으로",
+       "currentProgram": "걸어서세계속으로",
+       "priorAvg": 0.27171416666666665,
+       "currentAvg": 0.1598935950413223,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 5,
+       "currentAirings": 5
+      },
+      "demos": []
+     },
+     "rise": null,
+     "primeUp": null,
+     "primeDown": {
+      "anchorProgram": "세계테마기행",
+      "mode": "handoff",
+      "contributionDelta": -0.0026921209658678437,
+      "keySlot": {
+       "dows": [
+        7
+       ],
+       "hours": [
+        22
+       ],
+       "dispersed": false,
+       "slotCount": 1,
+       "counterparts": [
+        "극한직업"
+       ],
+       "priorProgram": "세계테마기행",
+       "currentProgram": "극한직업",
+       "priorAvg": 0.26566,
+       "currentAvg": 0.03852,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 1,
+       "currentAirings": 1
+      },
+      "demos": []
+     },
+     "baseline": {
+      "periods": 4,
+      "refAvg": 0.11852993694410685,
+      "priorVsRefPct": 3.05605084098699,
+      "currentVsRefPct": -7.550889728248766
+     }
+    }
+   },
+   {
+    "channelCode": "ONCE",
+    "targetLabel": "National 유료방송가입가구",
+    "weeks": [
+     {
+      "weekStart": "2026-09-21",
+      "rank": 69,
+      "rating": 0.04585
+     },
+     {
+      "weekStart": "2026-09-28",
+      "rank": 77,
+      "rating": 0.03864
+     },
+     {
+      "weekStart": "2026-10-05",
+      "rank": 84,
+      "rating": 0.03724
+     },
+     {
+      "weekStart": "2026-10-12",
+      "rank": 92,
+      "rating": 0.03134
+     },
+     {
+      "weekStart": "2026-10-19",
+      "rank": 94,
+      "rating": 0.02917
+     },
+     {
+      "weekStart": "2026-10-26",
+      "rank": 85,
+      "rating": 0.03419
+     },
+     {
+      "weekStart": "2026-11-02",
+      "rank": 77,
+      "rating": 0.04195
+     },
+     {
+      "weekStart": "2026-11-09",
+      "rank": 86,
+      "rating": 0.03154
+     },
+     {
+      "weekStart": "2026-11-16",
+      "rank": 84,
+      "rating": 0.03432
+     }
+    ],
+    "rankChange": 2,
+    "ratingChangePct": 8.814204185161714,
+    "growthDriver": null,
+    "weaknessDriver": {
+     "programName": "벌거벗은세계사",
+     "contributionDelta": -0.001212,
+     "volumeEffect": -0.003,
+     "performanceEffect": 0.001788,
+     "airCount": 7,
+     "priorAirCount": 14,
+     "avgRating": 0.06926,
+     "priorAvgRating": 0.04599,
+     "slotLift": 0.00004,
+     "primeAirCount": 0,
+     "primeDow": null,
+     "primeRatingDelta": 0,
+     "priorPrimeAirCount": 0,
+     "mainSlotDow": 1,
+     "mainSlotHourBlock": 14,
+     "replacedByName": "야인시대",
+     "replacedByRating": 0.01172,
+     "replacedByAirCount": 1
+    },
+    "primeMovers": [
+     {
+      "programName": "야인시대",
+      "dow": 3,
+      "primeDelta": 0.03918,
+      "primeAvgRating": 0.03918,
+      "priorPrimeAvgRating": null,
+      "primeAirCount": 15,
+      "priorPrimeAirCount": 0
+     }
+    ],
+    "lineup": {
+     "decline": {
+      "anchorProgram": "자이언트",
+      "mode": "handoff",
+      "contributionDelta": -0.005651589101748592,
+      "keySlot": {
+       "dows": [
+        1,
+        2,
+        3,
+        5,
+        7
+       ],
+       "hours": [
+        12,
+        13,
+        14,
+        15,
+        22,
+        23
+       ],
+       "dispersed": false,
+       "slotCount": 9,
+       "counterparts": [
+        "야인시대"
+       ],
+       "priorProgram": "자이언트",
+       "currentProgram": "야인시대",
+       "priorAvg": 0.09270404326123129,
+       "currentAvg": 0.02956169039145907,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 9,
+       "currentAirings": 9
+      },
+      "demos": []
+     },
+     "rise": {
+      "anchorProgram": "야인시대",
+      "mode": "handoff",
+      "contributionDelta": 0.003990716355150505,
+      "keySlot": {
+       "dows": [
+        1,
+        2,
+        4,
+        5,
+        6,
+        7
+       ],
+       "hours": [
+        12,
+        13,
+        14,
+        15,
+        20,
+        22,
+        23
+       ],
+       "dispersed": true,
+       "slotCount": 13,
+       "counterparts": [
+        "자이언트",
+        "하나뿐인내편"
+       ],
+       "priorProgram": "맡겨만주십숏주문하신영상나왔습니다",
+       "currentProgram": "야인시대",
+       "priorAvg": 0.026862794457274825,
+       "currentAvg": 0.09104210206561361,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 1,
+       "currentAirings": 13
+      },
+      "demos": []
+     },
+     "primeUp": {
+      "anchorProgram": "하나뿐인내편",
+      "mode": "self",
+      "contributionDelta": 0.001516608017953237,
+      "keySlot": {
+       "dows": [
+        1,
+        5,
+        6,
+        7
+       ],
+       "hours": [
+        19,
+        20
+       ],
+       "dispersed": false,
+       "slotCount": 4,
+       "counterparts": [],
+       "priorProgram": "하나뿐인내편",
+       "currentProgram": "하나뿐인내편",
+       "priorAvg": 0.024229927272727273,
+       "currentAvg": 0.07912056737588652,
+       "priorFirstRun": false,
+       "currentFirstRun": false,
+       "priorAirings": 4,
+       "currentAirings": 4
+      },
+      "demos": []
+     },
+     "primeDown": null,
+     "baseline": {
+      "periods": 4,
+      "refAvg": 0.03684662448109869,
+      "priorVsRefPct": -6.657078292689434,
+      "currentVsRefPct": 1.659505422294738
+     }
+    }
+   },
+   {
+    "channelCode": "SKYUHD",
+    "targetLabel": "National 유료방송가입가구",
+    "weeks": [
+     {
+      "weekStart": "2026-09-21",
+      "rank": 191,
+      "rating": 0.00282
+     },
+     {
+      "weekStart": "2026-09-28",
+      "rank": 194,
+      "rating": 0.00212
+     },
+     {
+      "weekStart": "2026-10-05",
+      "rank": 196,
+      "rating": 0.00229
+     },
+     {
+      "weekStart": "2026-10-12",
+      "rank": 197,
+      "rating": 0.00199
+     },
+     {
+      "weekStart": "2026-10-19",
+      "rank": 213,
+      "rating": 0.00048
+     },
+     {
+      "weekStart": "2026-10-26",
+      "rank": 198,
+      "rating": 0.00186
+     },
+     {
+      "weekStart": "2026-11-02",
+      "rank": 202,
+      "rating": 0.00138
+     },
+     {
+      "weekStart": "2026-11-09",
+      "rank": 203,
+      "rating": 0.00139
+     },
+     {
+      "weekStart": "2026-11-16",
+      "rank": 202,
+      "rating": 0.00141
+     }
+    ],
+    "rankChange": 1,
+    "ratingChangePct": 1.4388489208633133,
+    "growthDriver": null,
+    "weaknessDriver": null,
+    "primeMovers": [],
+    "lineup": null
+   }
+  ]
+ },
+ "rankSlides": [
+  {
+   "channelCode": "ONCE",
+   "channelName": "ONCE",
+   "fromWeek": "2026-09-21",
+   "toWeek": "2026-11-16",
+   "fromRank": 69,
+   "toRank": 84,
+   "drop": 15,
+   "ratingPct": -25.14721919302072,
+   "lines": [
+    "ONCE 주간 순위가 9/21주 69위(시청률 0.046)에서 이번 주 84위(0.034)로 15계단 내려갔고, 같은 기간 시청률은 ▼25%입니다.",
+    "편성 구성이 바뀌었습니다. 빠진 ‘옥중화’·‘왕가네식구들’·‘제빵왕김탁구’(9/21주 편성 시간의 49%, 평균 0.069) 자리를 새로 들어온 ‘야인시대’·‘하나뿐인내편’·‘인생2막세상의벽을향해한방을날려라리얼도전스토리하이킥’(이번 주 62%, 평균 0.044)가 채우면서 평균 시청률이 ▼36% 낮아졌습니다.",
+    "특히 ‘인생2막세상의벽을향해한방을날려라리얼도전스토리하이킥’이 이번 주 편성 시간의 10%를 차지하는데 평균 시청률은 0.010로, 함께 들어온 다른 신규 편성 평균(0.051)의 20% 수준입니다. 이전 주력 ‘옥중화’는 9/21주에 26%를 차지하며 평균 시청률은 0.074이었습니다.",
+    "한 주 낙폭이 가장 컸던 때는 11/9주(77위→86위) — ‘제빵왕김탁구’가 빠진 주입니다. ‘인생2막세상의벽을향해한방을날려라리얼도전스토리하이킥’ 편성이 시작된 11/16주부터는 86위 → 84위로 이어졌습니다.",
+    "시간대별 시청률 변화는 심야 24~29시 ▼43%, 밤 21~24시 ▼43%에서 가장 컸고, 낮 12~18시는 ▼4%로 가장 작았습니다.",
+    "같은 기간 등록 경쟁채널 40곳의 시청률 변화 중앙값은 ▼5%로 큰 변화가 없었는데 ONCE는 ▼25%입니다. ONCE보다 낮았다가 지금은 높은 곳이 2곳(KBS Story·ONT)인데 이들의 시청률 변화 중앙값은 ▲23%입니다. 최근 9주 동안 주간 순위는 자체 시청률과 거의 같이 움직였습니다(상관 −0.96)."
+   ]
+  }
+ ]
+}
