@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/adminAuth";
 import { applySkyUhdStbCsv, isCsvName } from "@/lib/skyUhdStbCsv";
+import { applyTvIndexAiringsCsv } from "@/lib/tvIndexAiringsCsv";
 import { ingestAnyNielsenFile, loadNielsenFileDispatchContext, type NielsenFileSummary } from "@/lib/nielsenFileDispatch";
 
 export async function POST(request: Request) {
@@ -29,14 +30,19 @@ export async function POST(request: Request) {
   const summaries: (NielsenFileSummary | Record<string, unknown>)[] = [];
   for (const file of files) {
     const buffer = Buffer.from(await file.arrayBuffer());
-    // skyUHD 프로그램 방영 성과 CSV(TV INDEX, IPTV STB 가구)는 닐슨 파일이 아니라 IPTV 셋톱표에 반영한다(2026-11-17)
+    // TV INDEX 프로그램 방영 성과 CSV는 닐슨 파일이 아니라 IPTV 셋톱 표에 반영한다.
+    //  · 모든 채널: 파일 안의 채널·타깃(가구/수도권 2049)을 읽어 iptv_tvindex_airings 에 적재(2026-11-24) — 일일 시청률 표·일간 세부 내역의 IPTV 셋톱 열이 읽는다
+    //  · skyUHD 가구 파일은 기존대로 iptv_stb_ratings 에도 반영(2026-11-17, 캡처 값과 겹치는 구간은 유지)
     if (isCsvName(file.name)) {
-      const r = await applySkyUhdStbCsv(buffer, file.name);
-      summaries.push(
-        r.ok
-          ? { fileName: file.name, kind: "iptv", ok: true, dateFrom: r.dateRange.from, dateTo: r.dateRange.to, inserted: r.saved, message: r.overlapped > 0 ? `기존 값과 겹친 ${r.overlapped}구간은 유지` : undefined }
-          : { fileName: file.name, kind: "iptv", ok: false, message: r.message }
-      );
+      const a = await applyTvIndexAiringsCsv(buffer, file.name);
+      const isSky = a.ok && a.channel === "skyUHD" && a.targetKind === "household";
+      const s = isSky ? await applySkyUhdStbCsv(buffer, file.name) : null;
+      if (!a.ok) {
+        summaries.push({ fileName: file.name, kind: "iptv", ok: false, message: a.message });
+      } else {
+        const note = [`${a.channel} ${a.targetKind === "household" ? "가구" : "수도권 2049"}`, s && !s.ok ? `skyUHD 셋톱표 반영 실패 — ${s.message}` : s && s.ok && s.overlapped > 0 ? `셋톱표는 기존 값과 겹친 ${s.overlapped}구간 유지` : null].filter(Boolean).join(" · ");
+        summaries.push({ fileName: file.name, kind: "iptv", ok: true, dateFrom: a.dateRange.from, dateTo: a.dateRange.to, inserted: a.saved, message: note });
+      }
       continue;
     }
     summaries.push(await ingestAnyNielsenFile(buffer, file.name, dispatchCtx));

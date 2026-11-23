@@ -60,7 +60,7 @@ function toMin(t: string): number | null {
 }
 
 /** 버퍼를 글자로 — UTF-8이 기본, 머리말이 깨졌으면(엑셀 저장본) CP949로 다시 읽는다. */
-function decode(buf: Buffer): string {
+export function decode(buf: Buffer): string {
   const u8 = buf.toString("utf8").replace(/^﻿/, "");
   if (/IPTV STB/.test(u8.slice(0, 600))) return u8;
   try {

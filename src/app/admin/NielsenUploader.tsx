@@ -34,7 +34,7 @@ type FileSummary = {
 };
 
 function kindLabel(r: FileSummary): string {
-  if (r.kind === "iptv") return "IPTV(skyUHD)";
+  if (r.kind === "iptv") return "IPTV 셋톱(TV INDEX)";
   if (r.kind === "period") return r.periodType === "weekly" ? "주간" : "월간";
   return r.annual ? "연간(YoY)" : "일간";
 }
@@ -91,7 +91,9 @@ export default function NielsenUploader() {
         &ldquo;주간 순위 변화&rdquo;용)에, 연간 파일은 YoY(전년 대비) 비교용 기준값에 반영됩니다.
         여러 파일을 한 번에 선택할 수 있습니다. 같은 파일을 다시 올리면 변경 없이 건너뛰고, 같은 날짜(또는
         같은 기간·연도)의 수정본을 올리면 그 데이터를 덮어쓰면서 이전 반영본과 달라진 건수를 알려줍니다.
-        (skyUHD는 별도 카드에서 처리)
+        TV INDEX <b>&ldquo;프로그램 방영 성과&rdquo; CSV</b>도 같이 올릴 수 있습니다 — 파일 안의 채널·타깃(가구 또는
+        수도권 개인 2049)을 읽어 일일 시청률 표·일간 세부 내역의 <b>IPTV 셋톱 열</b>에 자동 반영합니다(채널당 파일 1개, 여러 채널 동시 선택 가능).
+        (skyUHD 닐슨 수기 파일은 별도 카드에서 처리)
       </HelpTip></h2>
 
       <div className="mb-4 flex items-center gap-3">
