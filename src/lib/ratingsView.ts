@@ -219,16 +219,23 @@ export async function loadRanks(date: string, limit = 40): Promise<RankBoard[]> 
     }
     const { data } = await supabase.from("competitor_ratings").select("competitor_name,rank,rating,reach,share").eq("broadcast_date", date).eq("target_id", id).not("rank", "is", null).order("rank");
     // 상위 limit 위까지 + ENA·ENA Play·ENA Drama 는 limit 밖이어도 끝에 붙인다(사용자 지시 2026-11-23)
-    const rows: RankRow[] = ((data ?? []) as { competitor_name: string; rank: number; rating: number | null; reach: number | null; share: number | null }[])
+    // 자사 채널의 일별 닐슨 순위는 ratings(프로그램 없는 채널 행)에 저장된다 — 경쟁채널 표(competitor_ratings)에는 ENA Drama 등이 없다(닐슨 일보 원본에는 있음)
+    const { data: own } = await supabase.from("ratings").select("rank,rating,reach,share,channels(name)").eq("broadcast_date", date).eq("target_id", id).is("program_id", null).not("rank", "is", null);
+    const ownRows = ((own ?? []) as unknown as { rank: number; rating: number | null; reach: number | null; share: number | null; channels: { name: string } | null }[])
+      .filter((x) => x.channels && isOwnChannelName(x.channels.name))
+      .map((x) => ({ competitor_name: x.channels!.name, rank: x.rank, rating: x.rating, reach: x.reach, share: x.share }));
+    const ownKeys = new Set(ownRows.map((x) => normName(x.competitor_name)));
+    const merged = [...((data ?? []) as { competitor_name: string; rank: number; rating: number | null; reach: number | null; share: number | null }[]).filter((x) => !ownKeys.has(normName(x.competitor_name))), ...ownRows].sort((a, b) => a.rank - b.rank);
+    const rows: RankRow[] = merged
       .filter((x) => x.rank <= limit || ["ena", "enaplay", "enadrama"].includes(normName(x.competitor_name)))
       .map((x) => ({
-      rank: x.rank,
-      name: OWN_CHANNEL_NAMES[normName(x.competitor_name)] ?? x.competitor_name,
-      rating: x.rating,
-      reach: x.reach,
-      share: x.share,
-      own: isOwnChannelName(x.competitor_name),
-    }));
+        rank: x.rank,
+        name: OWN_CHANNEL_NAMES[normName(x.competitor_name)] ?? x.competitor_name,
+        rating: x.rating,
+        reach: x.reach,
+        share: x.share,
+        own: isOwnChannelName(x.competitor_name),
+      }));
     boards.push({ key: b.key, title: b.title, region: b.region, rows });
   }
   return boards;
