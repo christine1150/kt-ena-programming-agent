@@ -6,7 +6,9 @@ import {
   checkPoints,
   coreChangeLabel,
   fmtPct,
+  groupShifts,
   josa,
+  slotWhen,
   performanceSentences,
   rankStreak,
   shiftItems,
@@ -84,6 +86,10 @@ eq("±1% 미만 = 비슷", coreChangeLabel(flat, { ...wr, channels: wr.channels.
 
 // 정렬
 eq("반대 방향 둘 다 크면 모두 표시(ONCE 야인시대)", shiftItems(ch("ONCE")).map((x) => [x.program, x.direction]), [["야인시대", "up"], ["야인시대", "down"], ["하나뿐인내편", "up"]]);
+const onceGroups = groupShifts(shiftItems(ch("ONCE")));
+eq("ONCE 야인시대 한 묶음(좋아진 13곳·나빠진 9곳)", [onceGroups[0].program, onceGroups[0].mixed, onceGroups[0].upCount, onceGroups[0].downCount], ["야인시대", true, 13, 9]);
+eq("ONCE 묶음 요약", onceGroups[0].summary, "야인시대는 시간대에 따라 결과가 갈렸습니다. 좋아진 시간대 13곳, 나빠진 시간대 9곳입니다.");
+eq("시각 범위 표기", slotWhen([1, 2, 3, 5, 7], [12, 13, 14, 15, 22, 23]), "월·화·수·금·일 12~15·22~23시");
 eq("정렬 기본 순서", sortChannels(wr.channels, "default", slides, wr.weekStart).map((c) => c.channelCode), ["ENA", "ENA_PLAY", "ENA_DRAMA", "OLIFE", "ONCE", "ENA_STORY", "SKYUHD"]);
 eq("편성 변화 중복 제거(지구마불은 영향 큰 프라임 상승만)", shiftItems(ch("ENA_DRAMA")).map((x) => [x.program, x.direction]), [["크래시2", "up"], ["지구마불세계여행4", "up"], ["벌거벗은세계사", "down"]]);
 eq("정렬 순위 상승순", sortChannels(wr.channels, "rankUp", slides, wr.weekStart).map((c) => c.channelCode), ["ENA_DRAMA", "ENA_PLAY", "ENA_STORY", "ONCE", "SKYUHD", "ENA", "OLIFE"]);

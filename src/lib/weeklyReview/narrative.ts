@@ -2,7 +2,7 @@
 // 새 수치를 만들지 않는다: page1 route가 내려준 닐슨 주간 순위·시청률(nielsen_period_rank), 자리 이어받기 분석
 // (lineupHandoff), 주간 순위 하락 배경(rankSlide)만 골라 정해진 문장 틀에 넣는다(LLM 없음, 입력이 같으면 결과도 같다).
 // 원칙: 결론부터, 한 문장에 한 가지, 전주 대비·장기 추세·편성 변화를 섞지 않는다, 교체 전후 차이를 원인으로 단정하지 않는다.
-import type { LineupShift, LineupShiftResult } from "@/lib/lineupHandoff";
+import type { KeySlotCell, LineupShift, LineupShiftResult } from "@/lib/lineupHandoff";
 import type { MonthlyDriver } from "@/lib/causeClassifier";
 import type { RankSlide } from "@/lib/rankSlide";
 
@@ -385,10 +385,15 @@ export function sortChannels(channels: WeeklyChannelInput[], key: SortKey, slide
 const DOW = ["", "월", "화", "수", "목", "금", "토", "일"];
 export function slotWhen(dows: number[], hours: number[]): string {
   const dayText = dows.length === 7 ? "매일" : dows.map((d) => DOW[d]).join("·");
-  const contiguous = hours.every((h, i) => i === 0 || h === hours[i - 1] + 1);
-  const hourText =
-    hours.length === 1 ? `${hours[0]}시` : contiguous ? `${hours[0]}~${hours[hours.length - 1]}시` : hours.length <= 3 ? `${hours.join("·")}시` : `${hours.length}개 시각`;
-  return `${dayText} ${hourText}`;
+  // 이어지는 시각은 범위로 묶는다: [12,13,14,15,20,22,23] → "12~15·20·22~23시"
+  const runs: string[] = [];
+  for (let i = 0; i < hours.length; ) {
+    let j = i;
+    while (j + 1 < hours.length && hours[j + 1] === hours[j] + 1) j++;
+    runs.push(j > i ? `${hours[i]}~${hours[j]}` : `${hours[i]}`);
+    i = j + 1;
+  }
+  return `${dayText} ${runs.join("·")}시`;
 }
 
 export interface ShiftItem {
@@ -404,6 +409,44 @@ export interface ShiftItem {
   currentAvg: number | null;
   contributionDelta: number; // 채널 주간 평균 시청률에 준 영향(%p)
   mode: LineupShift["mode"];
+  slots: KeySlotCell[]; // 요일·시각별 값(옛 응답에는 없을 수 있어 빈 배열)
+}
+
+/** 같은 프로그램의 편성 변화 묶음 — 한 프로그램이 오른 자리와 내린 자리를 함께 가지면 mixed. */
+export interface ShiftGroup {
+  program: string;
+  items: ShiftItem[];
+  mixed: boolean;
+  prime: boolean;
+  summary: string | null; // mixed일 때만: "시간대에 따라 결과가 갈렸습니다 …"
+  upCount: number;
+  downCount: number;
+}
+
+export function groupShifts(items: ShiftItem[]): ShiftGroup[] {
+  const order: string[] = [];
+  const byProg = new Map<string, ShiftItem[]>();
+  for (const it of items) {
+    if (!byProg.has(it.program)) {
+      order.push(it.program);
+      byProg.set(it.program, []);
+    }
+    byProg.get(it.program)!.push(it);
+  }
+  return order.map((program) => {
+    const its = byProg.get(program)!;
+    const ups = its.filter((x) => x.direction === "up");
+    const downs = its.filter((x) => x.direction === "down");
+    const upCount = ups.reduce((a, x) => a + x.slots.length, 0);
+    const downCount = downs.reduce((a, x) => a + x.slots.length, 0);
+    const mixed = ups.length > 0 && downs.length > 0;
+    let summary: string | null = null;
+    if (mixed) {
+      const counts = upCount > 0 && downCount > 0 ? ` 좋아진 시간대 ${upCount}곳, 나빠진 시간대 ${downCount}곳입니다.` : "";
+      summary = `${josa(program, "은/는")} 시간대에 따라 결과가 갈렸습니다.${counts}`;
+    }
+    return { program, items: its, mixed, prime: its.some((x) => x.prime), summary, upCount, downCount };
+  });
 }
 
 function shiftItem(key: string, s: LineupShift, sign: 1 | -1, prime: boolean): ShiftItem {
@@ -412,8 +455,7 @@ function shiftItem(key: string, s: LineupShift, sign: 1 | -1, prime: boolean): S
   const other = (fallback: string | null) => (k.dispersed && k.counterparts.length > 0 ? k.counterparts.slice(0, 2).join("·") : fallback);
   const successor = other(k.currentProgram);
   const predecessor = other(k.priorProgram);
-  const where = k.dispersed && k.slotCount > 1 ? `${k.slotCount}개 시간대` : slotWhen(k.dows, k.hours);
-  let program = s.anchorProgram;
+  const where = k.dispersed && k.slotCount > 1 ? `${k.slotCount}개 시간대` : slotWhen(k.dows, k.hours);  let program = s.anchorProgram;
   let sentence: string;
   if (sign > 0) {
     if (s.mode === "handoff" && predecessor) sentence = `${josa(predecessor, "이/가")} 있던 시간대를 이어받아 이전 편성보다 높은 시청률이 나왔습니다.`;
@@ -439,6 +481,7 @@ function shiftItem(key: string, s: LineupShift, sign: 1 | -1, prime: boolean): S
     currentAvg: k.currentAvg,
     contributionDelta: s.contributionDelta,
     mode: s.mode,
+    slots: k.slots ?? [],
   };
 }
 

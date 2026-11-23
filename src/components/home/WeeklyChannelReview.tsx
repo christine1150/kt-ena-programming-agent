@@ -19,8 +19,12 @@ import {
   shiftItems,
   shiftSummary,
   sortChannels,
+  groupShifts,
+  slotWhen,
   trendSentences,
   type InsightCard,
+  type ShiftGroup,
+  type ShiftItem,
   type WeeklyChannelInput,
   type WeeklyInput,
 } from "@/lib/weeklyReview/narrative";
@@ -117,7 +121,15 @@ export default function WeeklyChannelReview({ review, slides, colorByCode, rende
           )}
         </div>
 
-        <p className="mt-5 text-[17px] font-semibold leading-snug text-zinc-900 sm:text-[19px]">{headline.sentence}</p>
+        {/* 사용자 지시(2026-11-23 3차): 전체 채널 추이를 맨 위로 — 기존 그룹별 순위 그래프 그대로 */}
+        <p className={`${EYEBROW} mt-4 mb-1.5`}>전체 채널 최근 {review.channels[0]?.weeks.length ?? 0}주 순위 추이</p>
+        {compareView}
+        <p className="mt-1.5 text-[11px] text-zinc-400">그룹마다 순위 범위(세로축)가 달라 두 그래프의 기울기를 서로 비교하면 변화가 과장돼 보일 수 있습니다.</p>
+      </section>
+
+      {/* 이번 주 한눈에 보기 — 대표 문장 + 핵심 카드(낮은 높이) */}
+      <section className={SECTION} aria-label="이번 주 한눈에 보기">
+        <p className="text-[17px] font-semibold leading-snug text-zinc-900 sm:text-[18px]">{headline.sentence}</p>
         <p className={`mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-zinc-500 ${headline.noData === headline.total ? "hidden" : ""}`}>
           <span>
             순위 상승 <b className="tabular-nums" style={{ color: UP }}>{headline.up}</b>
@@ -132,13 +144,13 @@ export default function WeeklyChannelReview({ review, slides, colorByCode, rende
         </p>
 
         {cards.length > 0 && (
-          <div className={`mt-5 grid grid-cols-1 gap-3 ${cards.length >= 3 ? "md:grid-cols-3" : cards.length === 2 ? "md:grid-cols-2" : ""}`}>
+          <div className={`mt-3 grid grid-cols-1 gap-2 ${cards.length >= 3 ? "lg:grid-cols-3" : cards.length === 2 ? "lg:grid-cols-2" : ""}`}>
             {cards.map((card) => (
               <InsightCardView key={card.kind} card={card} color={color(card.channelCode)} active={card.channelCode === open} onClick={() => openFromCard(card.channelCode)} />
             ))}
           </div>
         )}
-        <p className="mt-4 text-[11.5px] leading-relaxed text-zinc-400">
+        <p className="mt-3 text-[11px] leading-relaxed text-zinc-400">
           닐슨이 한 주 전체를 기준으로 매긴 주간 시장 순위입니다(일별 순위의 평균이 아닙니다). 순위는 숫자가 작을수록 좋습니다. ENA·ENA Play·ENA Drama는 수도권 개인2049, 나머지는 전국
           유료방송가구 기준입니다.
         </p>
@@ -210,14 +222,6 @@ export default function WeeklyChannelReview({ review, slides, colorByCode, rende
         <p className="mt-2 text-[11.5px] text-zinc-400">시청률 변화는 지난주 대비 상대 변화율(%)입니다.</p>
       </section>
 
-      {/* SECTION 3 · 전체 채널 추이(기존 그룹별 순위 그래프, 항상 보임) */}
-      <section className={SECTION} aria-labelledby="weekly-all-trend">
-        <h2 id="weekly-all-trend" className={`${H2} mb-3`}>
-          전체 채널 최근 {review.channels[0]?.weeks.length ?? 0}주 추이
-        </h2>
-        {compareView}
-        <p className="mt-2 text-[11.5px] text-zinc-400">그룹마다 순위 범위(세로축)가 달라 두 그래프의 기울기를 서로 비교하면 변화가 과장돼 보일 수 있습니다.</p>
-      </section>
     </div>
   );
 }
@@ -229,27 +233,29 @@ function InsightCardView({ card, color, active, onClick }: { card: InsightCard; 
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex flex-col rounded-lg px-4 py-3.5 text-left ring-1 transition ${active ? "bg-zinc-50 ring-zinc-300" : "bg-white ring-zinc-200 hover:ring-zinc-300"}`}
+      className={`flex flex-col rounded-lg border-l-[3px] px-3 py-2 text-left ring-1 transition ${active ? "bg-zinc-50 ring-zinc-300" : "bg-white ring-zinc-200 hover:ring-zinc-300"}`}
+      style={{ borderLeftColor: color }}
     >
-      <span className={EYEBROW}>{card.title}</span>
-      <span className="mt-1 text-[15px] font-bold" style={{ color }}>
-        {nameOf(card.channelCode)}
+      {/* 낮은 카드(2026-11-23 3차): 1줄 제목·채널·순위, 2줄 사실, 3줄 해석 */}
+      <span className="flex items-baseline gap-2">
+        <span className="text-[11px] font-semibold text-zinc-400">{card.title}</span>
+        <span className="text-[13.5px] font-bold" style={{ color }}>
+          {nameOf(card.channelCode)}
+        </span>
+        <span className="ml-auto text-[16px] font-bold tabular-nums text-zinc-900">{lead.replace(/^이번 주 /, "")}</span>
       </span>
-      <span className="mt-1.5 text-[20px] font-bold leading-tight tabular-nums text-zinc-900">{lead}</span>
-      <ul className="mt-1 space-y-0.5 text-[12.5px] tabular-nums text-zinc-600">
-        {rest.map((f) => (
-          <li key={f}>{f}</li>
-        ))}
-      </ul>
-      <span className="mt-2.5 border-t border-zinc-100 pt-2 text-[12.5px] leading-snug text-zinc-700">{card.note}</span>
+      <span className="mt-0.5 text-[12px] leading-snug tabular-nums text-zinc-600">{rest.join(" · ")}</span>
+      <span className="mt-0.5 text-[12px] leading-snug text-zinc-800">{card.note}</span>
     </button>
   );
 }
 
 function ChannelDetailBody({ c, review, slides, evidence }: { c: WeeklyChannelInput; review: WeeklyInput; slides: RankSlide[]; evidence: ReactNode }) {
   const items = shiftItems(c);
-  const shown = items.slice(0, 3);
-  const more = items.slice(3);
+  // 같은 프로그램은 한 묶음으로(오른 자리·내린 자리를 함께) 보여 준다.
+  const groups = groupShifts(items);
+  const shown = groups.slice(0, 3);
+  const more = groups.slice(3);
   const checks = checkPoints(c, items, slides, review.weekStart);
   const slide = slides.find((s) => s.channelCode === c.channelCode && s.toWeek === review.weekStart) ?? null;
   return (
@@ -282,18 +288,18 @@ function ChannelDetailBody({ c, review, slides, evidence }: { c: WeeklyChannelIn
           <p className={EYEBROW}>② 눈에 띄는 편성 변화</p>
           <p className="mt-1.5 text-[14px] leading-relaxed text-zinc-800">{shiftSummary(c, items)}</p>
           {shown.length > 0 && (
-            <ul className="mt-2.5 divide-y divide-zinc-100 rounded-lg ring-1 ring-zinc-200">
-              {shown.map((it) => (
-                <ShiftRow key={it.key} it={it} code={c.channelCode} />
+            <ul className="mt-2.5 divide-y divide-zinc-100 rounded-lg bg-white ring-1 ring-zinc-200">
+              {shown.map((g) => (
+                <ShiftGroupView key={g.program} g={g} code={c.channelCode} />
               ))}
             </ul>
           )}
           {more.length > 0 && (
             <details className="mt-2 text-[12.5px] text-zinc-600">
               <summary className="cursor-pointer text-zinc-500">기타 편성 변화 {more.length}건</summary>
-              <ul className="mt-2 divide-y divide-zinc-100 rounded-lg ring-1 ring-zinc-200">
-                {more.map((it) => (
-                  <ShiftRow key={it.key} it={it} code={c.channelCode} />
+              <ul className="mt-2 divide-y divide-zinc-100 rounded-lg bg-white ring-1 ring-zinc-200">
+                {more.map((g) => (
+                  <ShiftGroupView key={g.program} g={g} code={c.channelCode} />
                 ))}
               </ul>
             </details>
@@ -332,25 +338,109 @@ function ChannelDetailBody({ c, review, slides, evidence }: { c: WeeklyChannelIn
   );
 }
 
-function ShiftRow({ it, code }: { it: ReturnType<typeof shiftItems>[number]; code: string }) {
-  const up = it.direction === "up";
+// 프로그램 하나의 편성 변화 — 오른 자리·내린 자리를 한 묶음으로, 요일×시각 칸으로 어디가 좋아지고 나빠졌는지 보여 준다.
+function ShiftGroupView({ g, code }: { g: ShiftGroup; code: string }) {
+  const allSlots = g.items.flatMap((it) => it.slots.map((s) => ({ ...s, dir: it.direction })));
+  const showGrid = allSlots.length >= 2;
+  const single = g.items.length === 1 ? g.items[0] : null;
   return (
     <li className="px-3 py-2.5">
       <div className="flex min-w-0 items-baseline gap-2">
-        <span className="shrink-0 text-[11.5px] font-semibold" style={{ color: up ? UP : DOWN }}>
-          {up ? "▲ 상승" : "▼ 하락"}
+        {single ? (
+          <span className="shrink-0 text-[11.5px] font-semibold" style={{ color: single.direction === "up" ? UP : DOWN }}>
+            {single.direction === "up" ? "▲ 상승" : "▼ 하락"}
+          </span>
+        ) : (
+          <span className="shrink-0 text-[11.5px] font-semibold text-zinc-600">▲▼ 엇갈림</span>
+        )}
+        <span className="min-w-0 truncate text-[13.5px] font-semibold text-zinc-900" title={g.program}>
+          {g.program}
         </span>
-        <span className="min-w-0 truncate text-[13.5px] font-semibold text-zinc-900" title={it.program}>
-          {it.program}
-        </span>
-        {it.prime && <span className="shrink-0 rounded bg-zinc-100 px-1.5 text-[10.5px] text-zinc-500">프라임</span>}
+        {g.prime && <span className="shrink-0 rounded bg-zinc-100 px-1.5 text-[10.5px] text-zinc-500">프라임</span>}
       </div>
-      <p className="mt-0.5 text-[12.5px] leading-snug text-zinc-600">{it.sentence}</p>
-      <p className="mt-0.5 truncate text-[11.5px] tabular-nums text-zinc-400" title={`${it.priorProgram ?? "—"} → ${it.currentProgram ?? "—"}`}>
-        {it.where}
-        {it.where.endsWith("시간대") ? " 평균" : ""} · 지난주 {fmtRating(it.priorAvg, code)} → 이번 주 {fmtRating(it.currentAvg, code)}
-      </p>
+      {g.summary && <p className="mt-0.5 text-[12.5px] leading-snug text-zinc-700">{g.summary}</p>}
+      <ul className="mt-1 space-y-1">
+        {g.items.map((it) => (
+          <li key={it.key} className="text-[12.5px] leading-snug text-zinc-600">
+            {!single && (
+              <b className="mr-1 font-semibold" style={{ color: it.direction === "up" ? UP : DOWN }}>
+                {it.direction === "up" ? "▲" : "▼"}
+              </b>
+            )}
+            {it.sentence}
+            <span className="block truncate text-[11.5px] tabular-nums text-zinc-400" title={it.slots.length > 0 ? slotWhen([...new Set(it.slots.map((s) => s.dow))], [...new Set(it.slots.map((s) => s.hour))].sort((a, b) => a - b)) : it.where}>
+              {it.where}
+              {it.slots.length > 1 ? " 평균" : ""} · 지난주 {fmtRating(it.priorAvg, code)} → 이번 주 {fmtRating(it.currentAvg, code)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {showGrid && <SlotGrid slots={allSlots} code={code} />}
     </li>
+  );
+}
+
+const DOW_SHORT = ["", "월", "화", "수", "목", "금", "토", "일"];
+function SlotGrid({ slots, code }: { slots: (ShiftItem["slots"][number] & { dir: "up" | "down" })[]; code: string }) {
+  const dows = [...new Set(slots.map((s) => s.dow))].sort((a, b) => a - b);
+  const hours = [...new Set(slots.map((s) => s.hour))].sort((a, b) => a - b);
+  const at = new Map(slots.map((s) => [`${s.dow}|${s.hour}`, s]));
+  const hasUp = slots.some((s) => s.dir === "up");
+  const hasDown = slots.some((s) => s.dir === "down");
+  return (
+    <div className="mt-2">
+      {/* 전역 규칙(가로 스크롤 영역 안 표 = 너비 100%)에서 빼야 칸이 늘어나지 않는다 — 시간 격자 예외 클래스 dense-grid */}
+      <div className="dense-grid overflow-x-auto">
+        <table className="border-separate border-spacing-[3px] text-[10.5px] tabular-nums" style={{ width: "max-content" }}>
+          <thead>
+            <tr>
+              <th className="w-[20px]" />
+              {hours.map((h) => (
+                <th key={h} className="w-[32px] px-0 text-center font-normal text-zinc-400">
+                  {h}시
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {dows.map((d) => (
+              <tr key={d}>
+                <th className="pr-1 text-right font-normal text-zinc-500">{DOW_SHORT[d]}</th>
+                {hours.map((h) => {
+                  const s = at.get(`${d}|${h}`);
+                  if (!s) return <td key={h} className="h-[20px] rounded-[3px] bg-zinc-50" />;
+                  const up = s.dir === "up";
+                  const title = `${DOW_SHORT[d]} ${h}시 · ${s.priorProgram ?? "—"} ${fmtRating(s.priorAvg, code)} → ${s.currentProgram ?? "—"} ${fmtRating(s.currentAvg, code)}`;
+                  return (
+                    <td
+                      key={h}
+                      title={title}
+                      className="h-[20px] rounded-[3px] text-center font-semibold text-white"
+                      style={{ backgroundColor: up ? UP : DOWN }}
+                    >
+                      {up ? "▲" : "▼"}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1 text-[11px] text-zinc-400">
+        {hasUp && (
+          <>
+            <span style={{ color: UP }}>■</span> 지난주보다 좋아진 시간대{" "}
+          </>
+        )}
+        {hasDown && (
+          <>
+            <span style={{ color: DOWN }}>■</span> 나빠진 시간대{" "}
+          </>
+        )}
+        · 칸에 마우스를 올리면 지난주·이번 주 값이 나옵니다
+      </p>
+    </div>
   );
 }
 

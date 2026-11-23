@@ -57,6 +57,17 @@ export interface KeySlot {
   currentFirstRun: boolean;
   priorAirings: number;
   currentAirings: number;
+  // 2026-11-23(주간 리뷰): 핵심 슬롯 하나하나의 값 — 화면이 "어느 요일·시각이 좋아지고 나빠졌는지"를 칸으로 그린다. 위 합계와 같은 슬롯들이다.
+  slots?: KeySlotCell[];
+}
+
+export interface KeySlotCell {
+  dow: number;
+  hour: number;
+  priorProgram: string | null;
+  currentProgram: string | null;
+  priorAvg: number | null;
+  currentAvg: number | null;
 }
 
 export interface LineupShift {
@@ -346,6 +357,16 @@ function summarizeKeySlot(key: Slot[], dispersed: boolean, counterSide: "prior" 
     currentFirstRun: cm > 0 && cfr / cm >= 0.5,
     priorAirings: pa,
     currentAirings: ca,
+    slots: key
+      .map((s) => ({
+        dow: s.dow,
+        hour: s.hour,
+        priorProgram: s.priorMain,
+        currentProgram: s.currentMain,
+        priorAvg: s.prior.minutes > 0 ? s.prior.ratingMinutes / s.prior.minutes : null,
+        currentAvg: s.current.minutes > 0 ? s.current.ratingMinutes / s.current.minutes : null,
+      }))
+      .sort((a, b) => a.dow - b.dow || a.hour - b.hour),
   };
 }
 

@@ -134,7 +134,17 @@
        "priorFirstRun": true,
        "currentFirstRun": true,
        "priorAirings": 1,
-       "currentAirings": 1
+       "currentAirings": 1,
+       "slots": [
+        {
+         "dow": 2,
+         "hour": 22,
+         "priorProgram": "연애박사",
+         "currentProgram": "크래시2",
+         "priorAvg": 1.6999399999999998,
+         "currentAvg": 0.85827
+        }
+       ]
       },
       "demos": [
        {
@@ -211,7 +221,57 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 1,
-       "currentAirings": 6
+       "currentAirings": 6,
+       "slots": [
+        {
+         "dow": 5,
+         "hour": 24,
+         "priorProgram": "닥터X하얀마피아의시대",
+         "currentProgram": "굿파트너2",
+         "priorAvg": 0.030999999999999996,
+         "currentAvg": 0.126405
+        },
+        {
+         "dow": 6,
+         "hour": 9,
+         "priorProgram": "크래시",
+         "currentProgram": "굿파트너2",
+         "priorAvg": 0.09241,
+         "currentAvg": 0.25779
+        },
+        {
+         "dow": 6,
+         "hour": 16,
+         "priorProgram": "내아이의사생활도아스페셜",
+         "currentProgram": "굿파트너2",
+         "priorAvg": 0.03404,
+         "currentAvg": 0.24771
+        },
+        {
+         "dow": 7,
+         "hour": 5,
+         "priorProgram": "추성훈의밥값은해야지세계극한직업",
+         "currentProgram": "굿파트너2",
+         "priorAvg": 0,
+         "currentAvg": 0.10317
+        },
+        {
+         "dow": 7,
+         "hour": 9,
+         "priorProgram": "닥터X하얀마피아의시대",
+         "currentProgram": "굿파트너2",
+         "priorAvg": 0.10794,
+         "currentAvg": 0.21448
+        },
+        {
+         "dow": 7,
+         "hour": 19,
+         "priorProgram": "2026VOYAGEFESTIVAL",
+         "currentProgram": "굿파트너2",
+         "priorAvg": 0.10171,
+         "currentAvg": 0.30107
+        }
+       ]
       },
       "demos": [
        {
@@ -284,7 +344,33 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 3,
-       "currentAirings": 3
+       "currentAirings": 3,
+       "slots": [
+        {
+         "dow": 5,
+         "hour": 20,
+         "priorProgram": "지구마불 세계여행 4",
+         "currentProgram": "지구마불 세계여행 4",
+         "priorAvg": 0.20246,
+         "currentAvg": 0.17818000000000003
+        },
+        {
+         "dow": 6,
+         "hour": 19,
+         "priorProgram": "지구마불 세계여행 4",
+         "currentProgram": "지구마불 세계여행 4",
+         "priorAvg": 0.8291199999999999,
+         "currentAvg": 0.79145
+        },
+        {
+         "dow": 7,
+         "hour": 21,
+         "priorProgram": "지구마불 세계여행 4",
+         "currentProgram": "지구마불 세계여행 4",
+         "priorAvg": 0.3144,
+         "currentAvg": 0.21393
+        }
+       ]
       },
       "demos": [
        {
@@ -472,7 +558,17 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 1,
-       "currentAirings": 1
+       "currentAirings": 1,
+       "slots": [
+        {
+         "dow": 2,
+         "hour": 24,
+         "priorProgram": "생고생먹바라지투어쯔양몇끼",
+         "currentProgram": "지구마불세계여행4",
+         "priorAvg": 0.05013312111468382,
+         "currentAvg": 0
+        }
+       ]
       },
       "demos": []
      },
@@ -515,7 +611,113 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 2,
-       "currentAirings": 13
+       "currentAirings": 13,
+       "slots": [
+        {
+         "dow": 2,
+         "hour": 11,
+         "priorProgram": "무한도전",
+         "currentProgram": "크래시2",
+         "priorAvg": 0.02392,
+         "currentAvg": 0.0574
+        },
+        {
+         "dow": 3,
+         "hour": 15,
+         "priorProgram": "연애박사",
+         "currentProgram": "크래시2",
+         "priorAvg": 0.00834,
+         "currentAvg": 0.01432
+        },
+        {
+         "dow": 4,
+         "hour": 5,
+         "priorProgram": "곽준빈의세계기사식당2",
+         "currentProgram": "크래시2",
+         "priorAvg": 0,
+         "currentAvg": 0.04746
+        },
+        {
+         "dow": 4,
+         "hour": 12,
+         "priorProgram": "결이다른전쟁사",
+         "currentProgram": "크래시2",
+         "priorAvg": 0.00356,
+         "currentAvg": 0.09766
+        },
+        {
+         "dow": 4,
+         "hour": 15,
+         "priorProgram": "연애박사",
+         "currentProgram": "크래시2",
+         "priorAvg": 0.00266,
+         "currentAvg": 0.03743
+        },
+        {
+         "dow": 4,
+         "hour": 23,
+         "priorProgram": "크래시",
+         "currentProgram": "크래시2",
+         "priorAvg": 0,
+         "currentAvg": 0.10935
+        },
+        {
+         "dow": 5,
+         "hour": 9,
+         "priorProgram": "벌거벗은세계사",
+         "currentProgram": "크래시2",
+         "priorAvg": 0.00259,
+         "currentAvg": 0.03634
+        },
+        {
+         "dow": 5,
+         "hour": 11,
+         "priorProgram": "뿅뿅지구오락실2",
+         "currentProgram": "크래시2",
+         "priorAvg": 0.0019,
+         "currentAvg": 0.03631
+        },
+        {
+         "dow": 5,
+         "hour": 18,
+         "priorProgram": "뿅뿅지구오락실2",
+         "currentProgram": "크래시2",
+         "priorAvg": 0.00202,
+         "currentAvg": 0.02601
+        },
+        {
+         "dow": 6,
+         "hour": 16,
+         "priorProgram": "연애박사",
+         "currentProgram": "크래시2",
+         "priorAvg": 0.00106,
+         "currentAvg": 0.03744
+        },
+        {
+         "dow": 6,
+         "hour": 24,
+         "priorProgram": "금쪽같은내스타",
+         "currentProgram": "크래시2",
+         "priorAvg": 0,
+         "currentAvg": 0.10855
+        },
+        {
+         "dow": 7,
+         "hour": 10,
+         "priorProgram": "벌거벗은세계사",
+         "currentProgram": "크래시2",
+         "priorAvg": 0.058530000000000006,
+         "currentAvg": 0.20347
+        },
+        {
+         "dow": 7,
+         "hour": 14,
+         "priorProgram": "연애박사",
+         "currentProgram": "크래시2",
+         "priorAvg": 0.00542,
+         "currentAvg": 0.07086
+        }
+       ]
       },
       "demos": []
      },
@@ -542,7 +744,17 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 1,
-       "currentAirings": 1
+       "currentAirings": 1,
+       "slots": [
+        {
+         "dow": 3,
+         "hour": 22,
+         "priorProgram": "크래시",
+         "currentProgram": "지구마불세계여행4",
+         "priorAvg": 0.00614,
+         "currentAvg": 0.20384
+        }
+       ]
       },
       "demos": [
        {
@@ -611,7 +823,25 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 2,
-       "currentAirings": 2
+       "currentAirings": 2,
+       "slots": [
+        {
+         "dow": 1,
+         "hour": 19,
+         "priorProgram": "벌거벗은세계사",
+         "currentProgram": "벌거벗은세계사",
+         "priorAvg": 0.12998,
+         "currentAvg": 0.01862
+        },
+        {
+         "dow": 7,
+         "hour": 19,
+         "priorProgram": "벌거벗은세계사",
+         "currentProgram": "벌거벗은세계사",
+         "priorAvg": 0.11459000000000001,
+         "currentAvg": 0.01856
+        }
+       ]
       },
       "demos": [
        {
@@ -774,7 +1004,17 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 1,
-       "currentAirings": 1
+       "currentAirings": 1,
+       "slots": [
+        {
+         "dow": 6,
+         "hour": 25,
+         "priorProgram": "놀라운토요일예능신대륙발견",
+         "currentProgram": "내아이의사생활",
+         "priorAvg": 0.13185633579126488,
+         "currentAvg": 0.004990201238390093
+        }
+       ]
       },
       "demos": [
        {
@@ -844,7 +1084,17 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 1,
-       "currentAirings": 1
+       "currentAirings": 1,
+       "slots": [
+        {
+         "dow": 6,
+         "hour": 2,
+         "priorProgram": "생고생먹바라지투어쯔양몇끼",
+         "currentProgram": "내아이의사생활도아스페셜",
+         "priorAvg": 0.0018399999999999998,
+         "currentAvg": 0.063
+        }
+       ]
       },
       "demos": []
      },
@@ -871,7 +1121,25 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 2,
-       "currentAirings": 2
+       "currentAirings": 2,
+       "slots": [
+        {
+         "dow": 6,
+         "hour": 21,
+         "priorProgram": "지구마불세계여행4",
+         "currentProgram": "지구마불세계여행4",
+         "priorAvg": 0.07729,
+         "currentAvg": 0.16179999999999997
+        },
+        {
+         "dow": 7,
+         "hour": 20,
+         "priorProgram": "지구마불세계여행4",
+         "currentProgram": "지구마불세계여행4",
+         "priorAvg": 0.02698,
+         "currentAvg": 0.11979
+        }
+       ]
       },
       "demos": [
        {
@@ -1069,7 +1337,121 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 14,
-       "currentAirings": 1
+       "currentAirings": 1,
+       "slots": [
+        {
+         "dow": 1,
+         "hour": 9,
+         "priorProgram": "인간극장",
+         "currentProgram": "인간극장",
+         "priorAvg": 0.08143,
+         "currentAvg": 0.04737
+        },
+        {
+         "dow": 1,
+         "hour": 10,
+         "priorProgram": "인간극장",
+         "currentProgram": "인간극장",
+         "priorAvg": 0.07860000000000002,
+         "currentAvg": 0.03904
+        },
+        {
+         "dow": 1,
+         "hour": 18,
+         "priorProgram": "인간극장",
+         "currentProgram": "인간극장",
+         "priorAvg": 0.14729,
+         "currentAvg": 0.12654
+        },
+        {
+         "dow": 2,
+         "hour": 10,
+         "priorProgram": "인간극장",
+         "currentProgram": "인간극장",
+         "priorAvg": 0.04532,
+         "currentAvg": 0.02508
+        },
+        {
+         "dow": 3,
+         "hour": 9,
+         "priorProgram": "인간극장",
+         "currentProgram": "인간극장",
+         "priorAvg": 0.1094,
+         "currentAvg": 0.02453
+        },
+        {
+         "dow": 3,
+         "hour": 10,
+         "priorProgram": "인간극장",
+         "currentProgram": "인간극장",
+         "priorAvg": 0.08157,
+         "currentAvg": 0.02747
+        },
+        {
+         "dow": 3,
+         "hour": 11,
+         "priorProgram": "인간극장",
+         "currentProgram": "인간극장",
+         "priorAvg": 0.10006,
+         "currentAvg": 0.0921
+        },
+        {
+         "dow": 5,
+         "hour": 19,
+         "priorProgram": "인간극장",
+         "currentProgram": "인간극장",
+         "priorAvg": 0.11726,
+         "currentAvg": 0.03055
+        },
+        {
+         "dow": 5,
+         "hour": 20,
+         "priorProgram": "인간극장",
+         "currentProgram": "인간극장",
+         "priorAvg": 0.1438,
+         "currentAvg": 0.08182
+        },
+        {
+         "dow": 6,
+         "hour": 8,
+         "priorProgram": "인간극장",
+         "currentProgram": "한블리한문철의블랙박스리뷰",
+         "priorAvg": 0.1121,
+         "currentAvg": 0.0392
+        },
+        {
+         "dow": 6,
+         "hour": 10,
+         "priorProgram": "인간극장",
+         "currentProgram": "극한직업",
+         "priorAvg": 0.13333,
+         "currentAvg": 0.05845
+        },
+        {
+         "dow": 6,
+         "hour": 11,
+         "priorProgram": "인간극장",
+         "currentProgram": "크래시2",
+         "priorAvg": 0.1394,
+         "currentAvg": 0.0018
+        },
+        {
+         "dow": 6,
+         "hour": 19,
+         "priorProgram": "인간극장",
+         "currentProgram": "지구마불세계여행4",
+         "priorAvg": 0.12382,
+         "currentAvg": 0.027
+        },
+        {
+         "dow": 7,
+         "hour": 19,
+         "priorProgram": "인간극장",
+         "currentProgram": "지구마불세계여행4",
+         "priorAvg": 0.04651,
+         "currentAvg": 0.02534
+        }
+       ]
       },
       "demos": []
      },
@@ -1096,7 +1478,25 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 2,
-       "currentAirings": 2
+       "currentAirings": 2,
+       "slots": [
+        {
+         "dow": 2,
+         "hour": 15,
+         "priorProgram": "다시뜨거워지고싶은애로부부",
+         "currentProgram": "다시뜨거워지고싶은애로부부",
+         "priorAvg": 0.01993,
+         "currentAvg": 0.13627
+        },
+        {
+         "dow": 4,
+         "hour": 2,
+         "priorProgram": "다시뜨거워지고싶은애로부부",
+         "currentProgram": "다시뜨거워지고싶은애로부부",
+         "priorAvg": 0.03475,
+         "currentAvg": 0.07539
+        }
+       ]
       },
       "demos": []
      },
@@ -1234,7 +1634,49 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 5,
-       "currentAirings": 5
+       "currentAirings": 5,
+       "slots": [
+        {
+         "dow": 1,
+         "hour": 19,
+         "priorProgram": "걸어서세계속으로",
+         "currentProgram": "걸어서세계속으로",
+         "priorAvg": 0.33131,
+         "currentAvg": 0.13362
+        },
+        {
+         "dow": 2,
+         "hour": 20,
+         "priorProgram": "걸어서세계속으로",
+         "currentProgram": "걸어서세계속으로",
+         "priorAvg": 0.21992,
+         "currentAvg": 0.14312
+        },
+        {
+         "dow": 3,
+         "hour": 20,
+         "priorProgram": "걸어서세계속으로",
+         "currentProgram": "걸어서세계속으로",
+         "priorAvg": 0.34503,
+         "currentAvg": 0.18273
+        },
+        {
+         "dow": 5,
+         "hour": 19,
+         "priorProgram": "걸어서세계속으로",
+         "currentProgram": "걸어서세계속으로",
+         "priorAvg": 0.26081,
+         "currentAvg": 0.1964
+        },
+        {
+         "dow": 6,
+         "hour": 19,
+         "priorProgram": "걸어서세계속으로",
+         "currentProgram": "걸어서세계속으로",
+         "priorAvg": 0.20415,
+         "currentAvg": 0.14421
+        }
+       ]
       },
       "demos": []
      },
@@ -1263,7 +1705,17 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 1,
-       "currentAirings": 1
+       "currentAirings": 1,
+       "slots": [
+        {
+         "dow": 7,
+         "hour": 22,
+         "priorProgram": "세계테마기행",
+         "currentProgram": "극한직업",
+         "priorAvg": 0.26566,
+         "currentAvg": 0.03852
+        }
+       ]
       },
       "demos": []
      },
@@ -1392,7 +1844,81 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 9,
-       "currentAirings": 9
+       "currentAirings": 9,
+       "slots": [
+        {
+         "dow": 1,
+         "hour": 13,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.09608,
+         "currentAvg": 0.02046
+        },
+        {
+         "dow": 2,
+         "hour": 14,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.05719,
+         "currentAvg": 0.01669
+        },
+        {
+         "dow": 2,
+         "hour": 23,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.07246,
+         "currentAvg": 0.02333
+        },
+        {
+         "dow": 3,
+         "hour": 12,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.06727,
+         "currentAvg": 0.01716
+        },
+        {
+         "dow": 3,
+         "hour": 13,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.07206,
+         "currentAvg": 0.02055
+        },
+        {
+         "dow": 3,
+         "hour": 14,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.12986,
+         "currentAvg": 0.04011
+        },
+        {
+         "dow": 5,
+         "hour": 22,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.05767,
+         "currentAvg": 0.01535
+        },
+        {
+         "dow": 5,
+         "hour": 23,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.13747,
+         "currentAvg": 0.01718
+        },
+        {
+         "dow": 7,
+         "hour": 15,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.13888,
+         "currentAvg": 0.09653
+        }
+       ]
       },
       "demos": []
      },
@@ -1431,7 +1957,113 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 1,
-       "currentAirings": 13
+       "currentAirings": 13,
+       "slots": [
+        {
+         "dow": 1,
+         "hour": 20,
+         "priorProgram": "하나뿐인내편",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.0206,
+         "currentAvg": 0.06112
+        },
+        {
+         "dow": 2,
+         "hour": 12,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.01089,
+         "currentAvg": 0.04397
+        },
+        {
+         "dow": 2,
+         "hour": 13,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.03496,
+         "currentAvg": 0.04228
+        },
+        {
+         "dow": 4,
+         "hour": 12,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.01045,
+         "currentAvg": 0.0691
+        },
+        {
+         "dow": 4,
+         "hour": 13,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.0188,
+         "currentAvg": 0.09142
+        },
+        {
+         "dow": 4,
+         "hour": 14,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.01327,
+         "currentAvg": 0.11134
+        },
+        {
+         "dow": 5,
+         "hour": 12,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.02963,
+         "currentAvg": 0.11017
+        },
+        {
+         "dow": 5,
+         "hour": 13,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.05488,
+         "currentAvg": 0.08436
+        },
+        {
+         "dow": 6,
+         "hour": 12,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.0145,
+         "currentAvg": 0.05167
+        },
+        {
+         "dow": 6,
+         "hour": 15,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.04856,
+         "currentAvg": 0.14513
+        },
+        {
+         "dow": 6,
+         "hour": 22,
+         "priorProgram": "하나뿐인내편",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.02384,
+         "currentAvg": 0.11084
+        },
+        {
+         "dow": 6,
+         "hour": 23,
+         "priorProgram": "맡겨만주십숏주문하신영상나왔습니다",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.01577,
+         "currentAvg": 0.16474
+        },
+        {
+         "dow": 7,
+         "hour": 13,
+         "priorProgram": "자이언트",
+         "currentProgram": "야인시대",
+         "priorAvg": 0.05358,
+         "currentAvg": 0.10155
+        }
+       ]
       },
       "demos": []
      },
@@ -1460,7 +2092,41 @@
        "priorFirstRun": false,
        "currentFirstRun": false,
        "priorAirings": 4,
-       "currentAirings": 4
+       "currentAirings": 4,
+       "slots": [
+        {
+         "dow": 1,
+         "hour": 19,
+         "priorProgram": "하나뿐인내편",
+         "currentProgram": "하나뿐인내편",
+         "priorAvg": 0.028920000000000005,
+         "currentAvg": 0.05974999999999999
+        },
+        {
+         "dow": 5,
+         "hour": 19,
+         "priorProgram": "하나뿐인내편",
+         "currentProgram": "하나뿐인내편",
+         "priorAvg": 0.03124,
+         "currentAvg": 0.11949999999999998
+        },
+        {
+         "dow": 6,
+         "hour": 19,
+         "priorProgram": "하나뿐인내편",
+         "currentProgram": "하나뿐인내편",
+         "priorAvg": 0.00997,
+         "currentAvg": 0.06839
+        },
+        {
+         "dow": 7,
+         "hour": 20,
+         "priorProgram": "하나뿐인내편",
+         "currentProgram": "하나뿐인내편",
+         "priorAvg": 0.02627,
+         "currentAvg": 0.06854
+        }
+       ]
       },
       "demos": []
      },
@@ -1529,6 +2195,44 @@
     "weaknessDriver": null,
     "primeMovers": [],
     "lineup": null
+   }
+  ],
+  "availableWeeks": [
+   {
+    "weekStart": "2026-11-16",
+    "weekEnd": "2026-11-22"
+   },
+   {
+    "weekStart": "2026-11-09",
+    "weekEnd": "2026-11-15"
+   },
+   {
+    "weekStart": "2026-11-02",
+    "weekEnd": "2026-11-08"
+   },
+   {
+    "weekStart": "2026-10-26",
+    "weekEnd": "2026-11-01"
+   },
+   {
+    "weekStart": "2026-10-19",
+    "weekEnd": "2026-10-25"
+   },
+   {
+    "weekStart": "2026-10-12",
+    "weekEnd": "2026-10-18"
+   },
+   {
+    "weekStart": "2026-10-05",
+    "weekEnd": "2026-10-11"
+   },
+   {
+    "weekStart": "2026-09-28",
+    "weekEnd": "2026-10-04"
+   },
+   {
+    "weekStart": "2026-09-21",
+    "weekEnd": "2026-09-27"
    }
   ]
  },
