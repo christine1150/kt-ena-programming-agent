@@ -1,5 +1,5 @@
 // 주요 뉴스 자동 선정 순수 함수 검사 — 실행: npm run test:auto-news
-import { CATEGORIES, OVERSEAS_CATEGORY, kstDayStartIso } from "../src/lib/autoNews/config";
+import { CATEGORIES, KEY_PEOPLE, OVERSEAS_CATEGORY, kstDayStartIso } from "../src/lib/autoNews/config";
 import { isCleanTranslation, kstYmd, urlYmd } from "../src/lib/autoNews/collect";
 import { buildCastQueries, castDisplayTitle, castLabel, isLowValueCastTitle, isShowRecapRisk, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
 import { fullTitleFromHtml, insertCastIssues, stripTitleTags } from "../src/lib/autoNews/collect";
@@ -252,6 +252,16 @@ ok("기수 뒤가 가명이 아닌 나솔 기사는 감점 없음", rankCategory
 ok("한한령 시황은 하루 지나면 다시 싣지 않음", ONE_DAY_TOPICS.some((re) => re.test("中 한한령 해제 기대감에…콘텐츠·엔터 관련주 '강세'") && re.test("한한령 해빙 기대감, 코스닥 녹일까")));
 ok("주소 속 작성일 읽기", urlYmd("https://www.tenasia.co.kr/article/2026111835344") === "20261118" && urlYmd("https://www.newsis.com/view/NISX20261119_0003875521") === "20261119" && urlYmd("http://www.inews24.com/view/2028387") === null && urlYmd("https://deadline.com/2026/11/x-1237229307/") === null);
 ok("KST 날짜", kstYmd(Date.parse("2026-11-19T22:30:00Z")) === "20261120");
+
+// 꼭 보는 거래처 인물(사용자 지시 2026-11-24)
+{
+  const ott = CATEGORIES.find((x) => x.category === "OTT")!;
+  const r = rankCategory([c("OTT", "넷플릭스, 광고형 요금제 가입자 확대"), c("OTT", "장재호 파라마운트 스카이댄스 APAC 라이선싱 총괄 \"K드라마 판권 늘린다\""), c("OTT", "장재호, 신작 영화 후기 공개")], ott, NOW);
+  ok("장재호(회사명과 함께) 기사는 OTT 맨 앞, 이름만 같은 기사는 해당 없음", r[0].title.startsWith("장재호 파라마운트") && r.length === 2);
+  const ov = rankCategory([c(OVERSEAS_CATEGORY, "Netflix Renews Hit Drama for Season 3", "Variety"), c(OVERSEAS_CATEGORY, "Paramount's Jonathan Greenberg on International Licensing Push in Asia", "Variety"), c(OVERSEAS_CATEGORY, "Warner Bros. Discovery Taps Jae Chang to Lead APAC Content Licensing", "Deadline"), c(OVERSEAS_CATEGORY, "Paramount Promotes June Choi in North Asia TV Distribution", "Deadline")], { boost: [], exclude: /Promotes/, require: /Netflix/ }, NOW);
+  ok("해외 기사에서 세 사람(그린버그·Jae Chang·June Choi)은 분류 제외·필수어와 상관없이 선정", ov.length === 4 && ov.slice(0, 3).every((x) => /Greenberg|Jae Chang|June Choi/.test(x.title)));
+  ok("다른 조나단 그린버그(회사·라이선싱 표현 없음)는 해당 없음", !KEY_PEOPLE.test("Jonathan Greenberg's New Book on Politics"));
+}
 
 ok("정상 번역 통과(원제·HBO맥스 표기)", isCleanTranslation("넷플릭스, 할런 코벤 원작 'The Innocent' 제작 확정…HBO맥스와 경쟁"));
 ok("지금 건강 문제 기사는 위험 신호로 선정", !isLowValueCastTitle("배우 김가나, 촬영 중 쓰러져 입원") && classifyCast("배우 김가나, 촬영 중 쓰러져 입원", roster)?.signal === "risk");

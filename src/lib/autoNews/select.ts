@@ -8,6 +8,9 @@ import {
   CLICKBAIT,
   CLICKBAIT_PENALTY,
   GLOBAL_EXCLUDE,
+  KEY_PEOPLE,
+  KEY_PEOPLE_BOOST,
+  keyPersonOf,
   OVERSEAS_BOOST,
   OVERSEAS_CATEGORY,
   OVERSEAS_EXCLUDE,
@@ -172,6 +175,10 @@ function bigFigures(title: string): Set<string> {
 }
 
 export function sameStory(a: string, b: string): boolean {
+  // 같은 회사의 서로 다른 거래처 인물 기사는 따로 싣는다(파라마운트 그린버그·최준이 기사가 한 묶음이 된 시험 사례, 2026-11-24)
+  const pa = keyPersonOf(a);
+  const pb = keyPersonOf(b);
+  if (pa && pb && pa !== pb) return false;
   if (titleSimilarity(a, b) >= SAME_STORY) return true;
   // 같은 큰 수치(7609억 등)를 쓰고 주제어가 하나라도 겹치면 같은 소식 — 케이블TV 가계 부담 기사 3건이 따로 오른 사례(2026-11-18)
   const fa = bigFigures(a);
@@ -225,6 +232,8 @@ export function sameStory(a: string, b: string): boolean {
 function baseScore(c: NewsCandidate, boost: [RegExp, number][], now: number): number {
   let s = 0;
   for (const [re, w] of boost) if (re.test(c.title)) s += w;
+  // 꼭 보는 거래처 인물 기사는 어느 분류든 맨 앞으로(사용자 지시 2026-11-24)
+  if (KEY_PEOPLE.test(c.title)) s += KEY_PEOPLE_BOOST;
   if (TRUSTED_PUBLISHERS.test(c.publisher) || TRUSTED_HOSTS.test(c.publisher)) s += 2;
   if (CLICKBAIT.test(c.title)) s -= CLICKBAIT_PENALTY;
   if (ROUNDUP.test(c.title)) s -= ROUNDUP_PENALTY;
@@ -258,7 +267,8 @@ export function clusterStories(items: ScoredCandidate[]): ScoredCandidate[] {
 
 /** 분류 하나의 후보를 걸러 점수순으로 정렬한다(대표 기사만) */
 export function rankCategory(cands: NewsCandidate[], cfg: Pick<CategoryConfig, "boost" | "exclude" | "require">, now: number, globalExclude: RegExp = GLOBAL_EXCLUDE): ScoredCandidate[] {
-  const kept = cands.filter((c) => !globalExclude.test(c.title) && !(cfg.exclude?.test(c.title)) && (!cfg.require || cfg.require.test(c.title)));
+  // 꼭 보는 거래처 인물 기사는 분류별 제외·필수어 규칙을 건너뛴다(사진·부고 같은 전체 제외는 그대로)
+  const kept = cands.filter((c) => !globalExclude.test(c.title) && (KEY_PEOPLE.test(c.title) || (!(cfg.exclude?.test(c.title)) && (!cfg.require || cfg.require.test(c.title)))));
   const scored = kept.map((c) => ({ ...c, score: baseScore(c, cfg.boost, now), coverage: 1 }));
   return clusterStories(scored)
     .map((c) => ({ ...c, score: c.score + Math.min(4, c.coverage - 1) }))

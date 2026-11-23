@@ -111,7 +111,7 @@ export const CATEGORIES: CategoryConfig[] = [
   },
   {
     category: "OTT",
-    queries: ["넷플릭스", "티빙", "웨이브 OTT", "쿠팡플레이", "디즈니플러스", "OTT 시장", "워너브러더스 디스커버리", "파라마운트 스카이댄스", "디즈니 구조조정 경영진", "컴캐스트 NBC유니버설", "소니픽쳐스 BBC HBO", "글로벌 미디어 인수합병 할리우드", "OTT 통합 검색 추천", "OTT 기내 서비스", "OTT 구독 요금 인상", "애플TV 팟캐스트", "티빙 오리지널 캐스팅 주연", "OTT 구독료 지출 AI 구독 비중", "티빙 스마트TV 지원 종료", "웨이브 무료 채널 FAST", "OTT 광고형 요금제 출시"],
+    queries: ["넷플릭스", "티빙", "웨이브 OTT", "쿠팡플레이", "디즈니플러스", "OTT 시장", "워너브러더스 디스커버리", "파라마운트 스카이댄스", "디즈니 구조조정 경영진", "컴캐스트 NBC유니버설", "소니픽쳐스 BBC HBO", "글로벌 미디어 인수합병 할리우드", "OTT 통합 검색 추천", "OTT 기내 서비스", "OTT 구독 요금 인상", "애플TV 팟캐스트", "티빙 오리지널 캐스팅 주연", "OTT 구독료 지출 AI 구독 비중", "티빙 스마트TV 지원 종료", "웨이브 무료 채널 FAST", "OTT 광고형 요금제 출시", "장재호 워너브러더스", "장재호 파라마운트 스카이댄스", "최준이 파라마운트", "조나단 그린버그 파라마운트"],
     quota: 3,
     require: /OTT|넷플릭스|티빙|웨이브|쿠팡플레이|디즈니|왓챠|스트리밍|워너|파라마운트|스카이댄스|HBO|디즈니|NBC|유니버설|컴캐스트|소니|BBC|CBS/,
     boost: [[/OTT/, 2], [/합병|이용자|구독|광고|요금|출시|독점|중계|실적|제휴|글로벌/, 2], [/티빙|웨이브|쿠팡플레이|넷플릭스/, 1], [/반토막|지출 비중|구독료 비중/, 3], [/장기전|체력전|롱게임/, 3], [/시즌\s?\d.*(?:제작|공개|확정)|(?:제작|공개|확정).*시즌\s?\d/, 2], [/적자|흑자|매출|인수|투자|계약|파트너십|동맹|맞손|손 ?잡|점유율|가입자|규제|망 ?사용료|지상파|유료방송/, 3],
@@ -142,6 +142,25 @@ export const CATEGORIES: CategoryConfig[] = [
     exclude: /포스터|관람객 후기/,
   },
 ];
+
+/**
+ * 꼭 보는 거래처 인물(사용자 지시 2026-11-24) — 이름이 제목에 나오면 분류·제외 규칙과 상관없이 크게 가산해 싣는다.
+ * - 장재호(Jae Chang) — 워너브러더스 디스커버리 APAC 콘텐츠 라이선싱 총괄·한국 대표(소속이 바뀌었을 수 있어 회사는 워너·파라마운트·스카이댄스 모두 본다)
+ * - 최준이(June Choi) — 파라마운트 픽처스 북아시아 지역 세일즈 VP(월드와이드 TV 라이선싱·배급)
+ * - 조나단 그린버그(Jonathan Greenberg) — 파라마운트 인터내셔널 콘텐츠 라이선싱 EVP
+ * 흔한 이름이라 같은 제목에 회사명이나 라이선싱·배급 표현이 함께 있을 때만 해당한다.
+ */
+const KEY_PEOPLE_NAME = String.raw`장재호|최준이|조나단 ?그린버그|조너선 ?그린버그|Jae Change?\b|June Choi\b|Jonathan Greenberg\b`;
+const KEY_PEOPLE_CONTEXT = String.raw`워너|파라마운트|스카이댄스|WBD|라이선싱|라이센싱|판권|배급|Warner|WBD|Paramount|Skydance|licens|distribut`;
+export const KEY_PEOPLE = new RegExp(`^(?=.*(?:${KEY_PEOPLE_NAME}))(?=.*(?:${KEY_PEOPLE_CONTEXT}))`, "i");
+export const KEY_PEOPLE_BOOST = 15;
+/** 제목 속 거래처 인물이 누구인지(같은 회사의 다른 인물 기사를 같은 소식으로 묶지 않으려고) */
+export function keyPersonOf(title: string): string | null {
+  if (!KEY_PEOPLE.test(title)) return null;
+  if (/장재호|Jae Change?\b/i.test(title)) return "jae";
+  if (/최준이|June Choi\b/i.test(title)) return "june";
+  return "greenberg";
+}
 
 /** 해외 방송·영화 업계지 공개 피드(제목은 한국어로 옮겨 싣고 링크는 원문) */
 export const OVERSEAS_CATEGORY = "해외 방송·영화";
