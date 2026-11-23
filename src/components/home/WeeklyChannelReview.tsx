@@ -18,16 +18,16 @@ import {
   rankChangeText,
   shiftItems,
   shiftSummary,
-  SORT_LABELS,
   sortChannels,
   trendSentences,
   type InsightCard,
-  type SortKey,
   type WeeklyChannelInput,
   type WeeklyInput,
 } from "@/lib/weeklyReview/narrative";
 
 const READABLE_TEXT_COLOR: Record<string, string> = { OLIFE: "#22c55e" };
+// 성적표 한 줄: 채널 | 순위 | 지난주 대비 | 시청률 | 시청률 변화 | 핵심 변화 | 펼침 표시
+const ROW_GRID = "grid-cols-[1.1fr_0.7fr_1fr_0.7fr_0.8fr_1.8fr_24px] gap-x-3";
 const UP = NARRATIVE_UP_COLOR;
 const DOWN = NARRATIVE_DOWN_COLOR;
 const SECTION = "rounded-xl bg-white px-4 py-5 ring-1 ring-zinc-200/80 sm:px-8 sm:py-7";
@@ -72,16 +72,18 @@ export interface WeeklyChannelReviewProps {
 export default function WeeklyChannelReview({ review, slides, colorByCode, renderEvidence, compareView, onSelectWeek }: WeeklyChannelReviewProps) {
   const headline = useMemo(() => buildHeadline(review), [review]);
   const cards = useMemo(() => buildInsightCards(review, slides), [review, slides]);
-  const [selected, setSelected] = useState<string>(() => cards[0]?.channelCode ?? review.channels[0]?.channelCode ?? "");
-  const [sortKey, setSortKey] = useState<SortKey>("default");
-  const sorted = useMemo(() => sortChannels(review.channels, sortKey, slides, review.weekStart), [review, sortKey, slides]);
-  const sel = review.channels.find((c) => c.channelCode === selected) ?? review.channels[0];
+  // 사용자 지시(2026-11-23 2차): 정렬 버튼 없이 기존 채널 순서 고정, 채널을 누르면 그 행 바로 아래에 펼친다(아래로 멀리 내려가지 않게).
+  const [open, setOpen] = useState<string | null>(null);
+  const ordered = useMemo(() => sortChannels(review.channels, "default", slides, review.weekStart), [review, slides]);
   // OLIFE 브랜드색(연두)은 흰 바탕 글자로 읽기 어려워 홈 일간 세부 내역과 같은 보정색을 쓴다.
   const color = (code: string) => READABLE_TEXT_COLOR[code] ?? colorByCode.get(code) ?? "#3f3f46";
 
-  const select = (code: string) => {
-    setSelected(code);
-    if (typeof document !== "undefined") document.getElementById("weekly-channel-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const toggle = (code: string) => setOpen((cur) => (cur === code ? null : code));
+  // 위 카드에서 누르면 성적표의 그 채널 행을 펼치고 그 행으로 이동한다.
+  const openFromCard = (code: string) => {
+    setOpen(code);
+    if (typeof window !== "undefined")
+      window.requestAnimationFrame(() => document.getElementById(`weekly-row-${code}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   return (
@@ -132,7 +134,7 @@ export default function WeeklyChannelReview({ review, slides, colorByCode, rende
         {cards.length > 0 && (
           <div className={`mt-5 grid grid-cols-1 gap-3 ${cards.length >= 3 ? "md:grid-cols-3" : cards.length === 2 ? "md:grid-cols-2" : ""}`}>
             {cards.map((card) => (
-              <InsightCardView key={card.kind} card={card} color={color(card.channelCode)} active={card.channelCode === sel?.channelCode} onClick={() => select(card.channelCode)} />
+              <InsightCardView key={card.kind} card={card} color={color(card.channelCode)} active={card.channelCode === open} onClick={() => openFromCard(card.channelCode)} />
             ))}
           </div>
         )}
@@ -142,77 +144,80 @@ export default function WeeklyChannelReview({ review, slides, colorByCode, rende
         </p>
       </section>
 
-      {/* SECTION 2 · 채널별 성적표 */}
+      {/* SECTION 2 · 채널별 성적표 — 기존 채널 순서 고정, 누르면 그 행 바로 아래에 변화와 이유·추이가 펼쳐진다 */}
       <section className={SECTION} aria-labelledby="weekly-scorecard">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="weekly-scorecard" className={H2}>
             채널별 성적표
           </h2>
-          <div role="group" aria-label="정렬" className="inline-flex flex-wrap rounded-full bg-zinc-100 p-0.5">
-            {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                title={SORT_LABELS[k].hint}
-                aria-pressed={sortKey === k}
-                onClick={() => setSortKey(k)}
-                className={`rounded-full px-3 py-1 text-[12px] font-medium transition ${sortKey === k ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800"}`}
-              >
-                {SORT_LABELS[k].label}
-              </button>
-            ))}
-          </div>
+          <p className="text-[11.5px] text-zinc-400">채널을 누르면 바로 아래에 변화와 이유가 펼쳐집니다</p>
         </div>
-        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="채널별 성적표(가로 스크롤)">
-          <table className="w-full min-w-[560px] text-left text-[13.5px]">
-            <thead>
-              <tr className="border-b border-zinc-200 text-[12px] text-zinc-500">
-                <th className="py-2 pr-3 font-medium">채널</th>
-                <th className="py-2 pr-3 text-right font-medium">이번 주 순위</th>
-                <th className="py-2 pr-3 font-medium">지난주 대비</th>
-                <th className="py-2 pr-3 text-right font-medium">시청률</th>
-                <th className="py-2 pr-3 text-right font-medium">시청률 변화</th>
-                <th className="py-2 font-medium">핵심 변화</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((c) => {
-                const cur = c.weeks[c.weeks.length - 1];
-                const active = c.channelCode === sel?.channelCode;
-                return (
-                  <tr
-                    key={c.channelCode}
-                    onClick={() => select(c.channelCode)}
-                    className={`cursor-pointer border-b border-zinc-100 transition ${active ? "bg-zinc-50" : "hover:bg-zinc-50/60"}`}
-                    aria-selected={active}
-                  >
-                    <td className="py-2.5 pr-3">
-                      <button type="button" className="text-left font-semibold" style={{ color: color(c.channelCode) }} onClick={(e) => (e.stopPropagation(), select(c.channelCode))}>
-                        {active && <span className="mr-1 text-zinc-400" aria-hidden>›</span>}
-                        {nameOf(c.channelCode)}
+        {/* 머리글(태블릿 이상) */}
+        <div className={`${ROW_GRID} hidden border-b border-zinc-200 pb-2 text-[12px] text-zinc-500 sm:grid`}>
+          <span>채널</span>
+          <span className="text-right">이번 주 순위</span>
+          <span>지난주 대비</span>
+          <span className="text-right">시청률</span>
+          <span className="text-right">시청률 변화</span>
+          <span>핵심 변화</span>
+          <span />
+        </div>
+        <ul>
+          {ordered.map((c) => {
+            const cur = c.weeks[c.weeks.length - 1];
+            const isOpen = open === c.channelCode;
+            const panelId = `weekly-panel-${c.channelCode}`;
+            return (
+              <li key={c.channelCode} id={`weekly-row-${c.channelCode}`} className={`scroll-mt-4 border-b border-zinc-100 ${isOpen ? "rounded-lg bg-zinc-50/70 ring-1 ring-zinc-200" : ""}`}>
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  aria-controls={panelId}
+                  onClick={() => toggle(c.channelCode)}
+                  className={`${ROW_GRID} grid w-full items-center py-3 text-left text-[13.5px] transition ${isOpen ? "" : "hover:bg-zinc-50"} max-sm:grid-cols-[1fr_auto_auto] max-sm:gap-y-1`}
+                >
+                  <span className="pl-2 font-semibold" style={{ color: color(c.channelCode) }}>
+                    {nameOf(c.channelCode)}
+                  </span>
+                  <span className="text-right font-bold tabular-nums text-zinc-900">{cur?.rank != null ? `${cur.rank}위` : "—"}</span>
+                  <span className="tabular-nums max-sm:text-right">{rankDeltaNode(c.rankChange)}</span>
+                  <span className="text-right tabular-nums text-zinc-600 max-sm:hidden">{fmtRating(cur?.rating, c.channelCode)}</span>
+                  <span className="text-right font-medium tabular-nums max-sm:col-start-3 max-sm:row-start-2" style={{ color: signColor(c.ratingChangePct) }}>
+                    {fmtPct(c.ratingChangePct)}
+                  </span>
+                  <span className="text-zinc-700 max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-2 max-sm:pl-2 max-sm:text-[12.5px] max-sm:text-zinc-500">
+                    {coreChangeLabel(c, review, slides)}
+                  </span>
+                  <span className={`pr-2 text-right text-zinc-400 transition-transform max-sm:hidden ${isOpen ? "rotate-90" : ""}`} aria-hidden>
+                    ›
+                  </span>
+                </button>
+                {isOpen && (
+                  <div id={panelId} className="border-t border-zinc-200 px-3 pb-5 pt-4 sm:px-5">
+                    <ChannelDetailBody c={c} review={review} slides={slides} evidence={renderEvidence(c)} />
+                    <TrendBody c={c} color={color(c.channelCode)} />
+                    <div className="mt-4 text-right">
+                      <button type="button" onClick={() => setOpen(null)} className="text-[12px] text-zinc-500 underline-offset-2 hover:underline">
+                        접기
                       </button>
-                    </td>
-                    <td className="py-2.5 pr-3 text-right font-bold tabular-nums text-zinc-900">{cur?.rank != null ? `${cur.rank}위` : "—"}</td>
-                    <td className="py-2.5 pr-3 tabular-nums">{rankDeltaNode(c.rankChange)}</td>
-                    <td className="py-2.5 pr-3 text-right tabular-nums text-zinc-600">{fmtRating(cur?.rating, c.channelCode)}</td>
-                    <td className="py-2.5 pr-3 text-right font-medium tabular-nums" style={{ color: signColor(c.ratingChangePct) }}>
-                      {fmtPct(c.ratingChangePct)}
-                    </td>
-                    <td className="py-2.5 text-zinc-700">{coreChangeLabel(c, review, slides)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-2 text-[11.5px] text-zinc-400">채널을 누르면 아래에 변화와 이유가 나옵니다. 시청률 변화는 지난주 대비 상대 변화율(%)입니다.</p>
+                    </div>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-2 text-[11.5px] text-zinc-400">시청률 변화는 지난주 대비 상대 변화율(%)입니다.</p>
       </section>
 
-      {/* SECTION 3 · 선택 채널의 변화와 이유 */}
-      {sel && <ChannelDetail key={sel.channelCode} c={sel} review={review} slides={slides} color={color(sel.channelCode)} evidence={renderEvidence(sel)} />}
-
-      {/* SECTION 4 · 최근 추이 */}
-      {sel && <TrendSection key={`t-${sel.channelCode}`} c={sel} color={color(sel.channelCode)} compareView={compareView} />}
+      {/* SECTION 3 · 전체 채널 추이(기존 그룹별 순위 그래프, 항상 보임) */}
+      <section className={SECTION} aria-labelledby="weekly-all-trend">
+        <h2 id="weekly-all-trend" className={`${H2} mb-3`}>
+          전체 채널 최근 {review.channels[0]?.weeks.length ?? 0}주 추이
+        </h2>
+        {compareView}
+        <p className="mt-2 text-[11.5px] text-zinc-400">그룹마다 순위 범위(세로축)가 달라 두 그래프의 기울기를 서로 비교하면 변화가 과장돼 보일 수 있습니다.</p>
+      </section>
     </div>
   );
 }
@@ -241,19 +246,15 @@ function InsightCardView({ card, color, active, onClick }: { card: InsightCard; 
   );
 }
 
-function ChannelDetail({ c, review, slides, color, evidence }: { c: WeeklyChannelInput; review: WeeklyInput; slides: RankSlide[]; color: string; evidence: ReactNode }) {
+function ChannelDetailBody({ c, review, slides, evidence }: { c: WeeklyChannelInput; review: WeeklyInput; slides: RankSlide[]; evidence: ReactNode }) {
   const items = shiftItems(c);
   const shown = items.slice(0, 3);
   const more = items.slice(3);
   const checks = checkPoints(c, items, slides, review.weekStart);
   const slide = slides.find((s) => s.channelCode === c.channelCode && s.toWeek === review.weekStart) ?? null;
   return (
-    <section id="weekly-channel-detail" className={`${SECTION} scroll-mt-4`} aria-labelledby="weekly-detail-title">
-      <h2 id="weekly-detail-title" className={H2}>
-        <span style={{ color }}>{nameOf(c.channelCode)}</span> · 변화와 이유
-      </h2>
-
-      <div className="mt-4 grid gap-5 lg:grid-cols-[1fr_1.4fr]">
+    <div>
+      <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
         <div>
           <p className={EYEBROW}>① 이번 주 성과</p>
           <div className="mt-1.5 space-y-1 text-[14.5px] leading-relaxed text-zinc-800">
@@ -306,7 +307,7 @@ function ChannelDetail({ c, review, slides, color, evidence }: { c: WeeklyChanne
         </div>
       </div>
 
-      <details className="mt-5 rounded-lg bg-zinc-50 px-4 py-3">
+      <details className="mt-5 rounded-lg bg-white px-4 py-3 ring-1 ring-zinc-200">
         <summary className="cursor-pointer text-[13px] font-medium text-zinc-700">④ 상세 근거 보기</summary>
         <div className="mt-3 space-y-3 text-[12px] text-zinc-600">
           <p className="text-[11.5px] text-zinc-500">
@@ -327,7 +328,7 @@ function ChannelDetail({ c, review, slides, color, evidence }: { c: WeeklyChanne
           )}
         </div>
       </details>
-    </section>
+    </div>
   );
 }
 
@@ -354,42 +355,21 @@ function ShiftRow({ it, code }: { it: ReturnType<typeof shiftItems>[number]; cod
 }
 
 // ── 추이 ──
-function TrendSection({ c, color, compareView }: { c: WeeklyChannelInput; color: string; compareView: ReactNode }) {
-  const [mode, setMode] = useState<"single" | "compare">("single");
+function TrendBody({ c, color }: { c: WeeklyChannelInput; color: string }) {
   const [hover, setHover] = useState<number | null>(null);
   const lines = trendSentences(c);
   const weeks = c.weeks;
   return (
-    <section className={SECTION} aria-labelledby="weekly-trend-title">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="weekly-trend-title" className={H2}>
-          최근 {weeks.length}주 추이 {mode === "single" && <span style={{ color }}>· {nameOf(c.channelCode)}</span>}
-        </h2>
-        <div role="group" aria-label="보기" className="inline-flex rounded-full bg-zinc-100 p-0.5">
-          {(["single", "compare"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              aria-pressed={mode === m}
-              onClick={() => setMode(m)}
-              className={`rounded-full px-3 py-1 text-[12px] font-medium ${mode === m ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-800"}`}
-            >
-              {m === "single" ? "선택 채널" : "여러 채널 비교"}
-            </button>
-          ))}
-        </div>
-      </div>
-      {mode === "compare" ? (
-        <div>
-          {compareView}
-          <p className="mt-2 text-[11.5px] text-zinc-400">그룹마다 순위 범위(세로축)가 달라 두 그래프의 기울기를 서로 비교하면 변화가 과장돼 보일 수 있습니다.</p>
-        </div>
-      ) : weeks.filter((w) => w.rank !== null).length < 2 ? (
-        <p className="text-[13px] text-zinc-400">추이를 그릴 주간 순위가 2주 이상 쌓이지 않았습니다.</p>
+    <div className="mt-6 border-t border-zinc-200 pt-4">
+      <p className={EYEBROW}>
+        최근 {weeks.length}주 추이 · <span style={{ color }}>{nameOf(c.channelCode)}</span>
+      </p>
+      {weeks.filter((w) => w.rank !== null).length < 2 ? (
+        <p className="mt-1.5 text-[13px] text-zinc-400">추이를 그릴 주간 순위가 2주 이상 쌓이지 않았습니다.</p>
       ) : (
         <>
           {lines.length > 0 && (
-            <div className="mb-4 space-y-0.5 text-[14px] leading-relaxed text-zinc-800">
+            <div className="mb-4 mt-1.5 space-y-0.5 text-[14px] leading-relaxed text-zinc-800">
               {lines.map((l) => (
                 <p key={l}>{l}</p>
               ))}
@@ -455,7 +435,7 @@ function TrendSection({ c, color, compareView }: { c: WeeklyChannelInput; color:
           </details>
         </>
       )}
-    </section>
+    </div>
   );
 }
 

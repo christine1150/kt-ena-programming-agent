@@ -75,6 +75,7 @@ const allText = [
   ...cards.flatMap((c) => [...c.facts, c.note]),
 ].join("\n");
 for (const banned of ["때문", "덕분", "견인", "대성공", "실패", "판단됩니다", "살펴보면"]) eq(`E 금지 표현 없음: ${banned}`, allText.includes(banned), false);
+eq("확인할 점(ONCE) 장기 하락 먼저", checkPoints(ch("ONCE"), shiftItems(ch("ONCE")), slides, wr.weekStart)[0], "이번 주 회복이 다음 주에도 이어지는지 주간 순위로 확인할 필요가 있습니다.");
 eq("E 확인할 점(ENA Drama)", checkPoints(ch("ENA_DRAMA"), dramaItems, slides, wr.weekStart).length > 0, true);
 
 // 시청률이 거의 그대로면 방향을 붙이지 않는다

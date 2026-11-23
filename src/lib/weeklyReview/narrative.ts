@@ -511,6 +511,9 @@ export function checkPoints(c: WeeklyChannelInput, items: ShiftItem[], slides: R
   const slide = slideFor(c.channelCode, slides, weekStart);
   const streak = rankStreak(c.weeks);
   const slot = (w: string) => (w.endsWith("시간대") ? w : `${w} 시간대`);
+  // 장기 하락·연속 하락은 편성 항목보다 먼저 둔다(자리를 뺏기지 않게).
+  if (slide) out.push((c.rankChange ?? 0) > 0 ? "이번 주 회복이 다음 주에도 이어지는지 주간 순위로 확인할 필요가 있습니다." : "장기 하락이 멈추는지 다음 주 순위로 확인할 필요가 있습니다.");
+  else if (streak <= -3) out.push(`${-streak}주 연속 순위가 내려가고 있어 원인 확인이 필요합니다.`);
   for (const it of items) {
     if (out.length >= 2) break;
     if (it.direction === "up" && (it.mode === "handoff" || it.mode === "added"))
@@ -518,8 +521,6 @@ export function checkPoints(c: WeeklyChannelInput, items: ShiftItem[], slides: R
     else if (it.direction === "down" && it.mode === "handoff") out.push(`${josa(it.program, "이/가")} 이어받은 ${slot(it.where)}의 시청률이 회복되는지 확인할 필요가 있습니다.`);
     else if (it.direction === "down" && it.mode === "self") out.push(`${it.program}의 시청률 하락이 다음 주에도 이어지는지 확인할 필요가 있습니다.`);
   }
-  if (slide && out.length < 2) out.unshift((c.rankChange ?? 0) > 0 ? "이번 주 회복이 다음 주에도 이어지는지 주간 순위로 확인할 필요가 있습니다." : "장기 하락이 멈추는지 다음 주 순위로 확인할 필요가 있습니다.");
-  else if (streak <= -3 && out.length < 2) out.unshift(`${-streak}주 연속 순위가 내려가고 있어 원인 확인이 필요합니다.`);
   return out.slice(0, 2);
 }
 
