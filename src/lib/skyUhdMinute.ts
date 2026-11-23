@@ -6,6 +6,8 @@
 //  · 이미 값이 있는 행(rating not null)은 건드리지 않는다. 같은 시작 시각 중복 행은 같은 값으로 함께 채운다.
 //  · 방송일 02:00~26:00 기준 — 분(minute_of_day)은 방송일 0시부터(24:30 = 1470).
 import { supabase } from "@/lib/supabase";
+import { applySeasonDateRule, findOrCreateProgramByNormalizedName, programMatchKey } from "@/lib/programNameMatch";
+import { normalizeProgramTitle } from "@/lib/skyUhdStbCsv";
 
 export type MinuteRow = { broadcast_date: string; minute_of_day: number; value: number };
 export type MinuteParse = { ok: true; dates: string[]; rows: MinuteRow[] } | { ok: false; message: string };
@@ -87,8 +89,37 @@ export function looksLikeMinuteMatrix(matrix: unknown[][]): boolean {
   return matrix.some((r) => r.some((c) => typeof c === "string" && TIME_RE.test(c.trim())));
 }
 
+/** 줄 구분이 깨진 붙여넣기(한 줄에 이어 붙은 표 등)용 — 글 전체에서 "시간대 + 값" 쌍을 직접 찾는다. */
+function scanMinutePairs(raw: string): MinuteParse {
+  const re = /(\d{1,2}):(\d{2}):\d{2}\s*-\s*\d{1,2}:\d{2}:\d{2}[\s\t]+(-?\d+(?:[.,]\d+)*)(?=\s|$)/g;
+  const found: { minute: number; value: number; at: number }[] = [];
+  for (let m = re.exec(raw); m; m = re.exec(raw)) {
+    found.push({ minute: Number(m[1]) * 60 + Number(m[2]), value: Number(m[3].replace(/,/g, "")), at: m.index });
+  }
+  const data = found.filter((x) => x.minute >= 120 && x.minute < 1560);
+  if (data.length === 0) return { ok: false, message: "분당 시청률 표(\"02:00:00 - 02:00:59  0.00000\" 형식의 줄)를 찾지 못했습니다. 닐슨 분당 시청률 표를 머리말(분석조건)부터 그대로 복사해 붙여 넣어 주세요." };
+  const head = raw.slice(0, data[0].at);
+  if (!/SkyUHD/i.test(head)) return { ok: false, message: "채널이 SkyUHD 인지 확인하지 못했습니다. 머리말(분석채널: SkyUHD)까지 같이 붙여 넣어 주세요." };
+  if (/Capital|수도권/.test(head) && !/National/.test(head)) return { ok: false, message: "지역이 National(전국)이 아닙니다 — 전국 유료방송가구 기준만 받습니다." };
+  if (/개인|2049/.test(head) && !/유료방송가구/.test(head)) return { ok: false, message: "타깃이 유료방송가구가 아닙니다." };
+  const sel = /선택일자:?\s*([^\n]*)/.exec(head)?.[1] ?? head;
+  const dates = [...new Set(sel.match(/\d{4}-\d{2}-\d{2}/g) ?? [])];
+  if (dates.length !== 1) return { ok: false, message: `날짜를 정할 수 없습니다(선택일자: ${dates.join(", ") || "없음"}). 하루치만, 머리말의 선택일자와 함께 붙여 넣어 주세요.` };
+  const byMin = new Map<number, MinuteRow>();
+  for (const x of data) {
+    if (x.value < 0 || x.value > 100) return { ok: false, message: `시청률 값이 범위(0~100)를 벗어났습니다: ${x.minute} → ${x.value}` };
+    byMin.set(x.minute, { broadcast_date: dates[0], minute_of_day: x.minute, value: x.value });
+  }
+  if (byMin.size !== 1440) return { ok: false, message: `${dates[0]} 분당 행이 1440개(02:00~25:59)가 아니라 ${byMin.size}개입니다 — 표를 중간에서 자르지 말고 끝(25:59:00)까지 모두 붙여 넣어 주세요.` };
+  return { ok: true, dates, rows: [...byMin.values()] };
+}
+
 export function parseSkyUhdMinuteText(raw: string): MinuteParse {
-  return parseSkyUhdMinuteMatrix(textToMatrix(raw));
+  const r = parseSkyUhdMinuteMatrix(textToMatrix(raw));
+  if (r.ok) return r;
+  // 표 모양(탭·줄바꿈)으로 읽지 못하면 글 전체에서 직접 찾아 한 번 더 시도한다
+  const s = scanMinutePairs(raw);
+  return s.ok ? s : r;
 }
 
 const toMin = (t: string) => {
@@ -99,11 +130,11 @@ const toMin = (t: string) => {
 const hhmm = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(Math.round(m % 60)).padStart(2, "0")}`;
 
 export type FillItem = { start: string; end: string; name: string; rating: number; basis: string };
-export type FillResult = { date: string; empty: number; filled: FillItem[] };
+export type FillResult = { date: string; empty: number; filled: FillItem[]; created: FillItem[] };
 
 /** 그 날짜의 분당 시청률(DB)로 skyUHD 의 비어 있는 프로그램 행을 채운다. 분당 자료가 없거나 비어 있는 행이 없으면 아무것도 하지 않는다. */
 export async function fillSkyUhdProgramRatings(date: string): Promise<FillResult> {
-  const result: FillResult = { date, empty: 0, filled: [] };
+  const result: FillResult = { date, empty: 0, filled: [], created: [] };
   const minute = new Array<number>(1440).fill(0);
   let have = 0;
   for (let off = 0; ; off += 1000) {
@@ -138,16 +169,16 @@ export async function fillSkyUhdProgramRatings(date: string): Promise<FillResult
     .not("start_time", "is", null)
     .order("start_time");
   if (dbErr) throw new Error(`프로그램 행을 읽지 못했습니다 — ${dbErr.message}`);
-  const targets = ((db ?? []) as unknown as Row[]).filter((r) => r.rating === null);
+  const allRows = (db ?? []) as unknown as Row[];
+  const targets = allRows.filter((r) => r.rating === null);
   result.empty = targets.length;
-  if (targets.length === 0) return result;
 
-  // 실제 방영 구간 후보: IPTV 셋톱표 → 없으면 TV INDEX 방영 성과(skyUHD 가구)
-  let ip: { start_minute: number; end_minute: number }[] = [];
-  const { data: stb } = await supabase.from("iptv_stb_ratings").select("start_minute, end_minute").eq("channel_code", "SKYUHD").eq("broadcast_date", date);
+  // 실제 방영 구간(프로그램 인·아웃 시각): IPTV 셋톱표 → 없으면 TV INDEX 방영 성과(skyUHD 가구)
+  let ip: { start_minute: number; end_minute: number; program_name?: string }[] = [];
+  const { data: stb } = await supabase.from("iptv_stb_ratings").select("start_minute, end_minute, program_name").eq("channel_code", "SKYUHD").eq("broadcast_date", date);
   ip = (stb ?? []) as typeof ip;
   if (ip.length === 0) {
-    const { data: tv } = await supabase.from("iptv_tvindex_airings").select("start_minute, end_minute").eq("channel_name", "skyUHD").eq("target_kind", "household").eq("broadcast_date", date);
+    const { data: tv } = await supabase.from("iptv_tvindex_airings").select("start_minute, end_minute, program_name").eq("channel_name", "skyUHD").eq("target_kind", "household").eq("broadcast_date", date);
     ip = (tv ?? []) as typeof ip;
   }
 
@@ -163,6 +194,7 @@ export async function fillSkyUhdProgramRatings(date: string): Promise<FillResult
     return len > 0 ? sum / len : null;
   };
 
+  // ① 닐슨 쪽 프로그램 행은 있는데 시청률이 비어 있는 경우 — 분당 평균으로 채운다
   const groups = new Map<string, Row[]>();
   for (const r of targets) groups.set(r.start_time, [...(groups.get(r.start_time) ?? []), r]);
   for (const [, list] of groups) {
@@ -195,6 +227,50 @@ export async function fillSkyUhdProgramRatings(date: string): Promise<FillResult
       rating,
       basis: best ? `IPTV 실제 ${hhmm(from)}~${hhmm(to)}` : "닐슨 행 구간",
     });
+  }
+
+  // ② IPTV 에는 방영이 있는데 DB 에 프로그램 행이 아예 없는 구간 — IPTV 의 정확한 인·아웃 시각으로 프로그램 행을 만들고 분당 평균을 붙인다
+  //    (닐슨 일일 파일에 그 방영분이 없거나 아직 오지 않은 날). 같은 시간대에 이미 행이 있으면(값이 0이어도) 건드리지 않는다.
+  const spans = allRows.map((r) => {
+    const s = toMin(r.start_time);
+    let e = toMin(r.end_time);
+    if (e <= s) e += 1440;
+    return { s, e };
+  });
+  const hms = (m: number) => `${String(Math.floor((m >= 1440 ? m - 1440 : m) / 60)).padStart(2, "0")}:${String(Math.round(m) % 60).padStart(2, "0")}:00`;
+  const cache = new Map<string, string>();
+  for (const x of [...ip].sort((a, b) => a.start_minute - b.start_minute)) {
+    if (!(x.end_minute > x.start_minute) || x.end_minute > 1560) continue;
+    const covered = spans.some((sp) => Math.min(sp.e, x.end_minute) - Math.max(sp.s, x.start_minute) >= 0.5 * Math.min(sp.e - sp.s, x.end_minute - x.start_minute));
+    if (covered) continue;
+    const raw = (x.program_name ?? "").trim();
+    if (!raw) continue;
+    const name = applySeasonDateRule("SKYUHD", date, normalizeProgramTitle(raw).replace(/\s*<[본재]>\s*/g, " ").replace(/\s+/g, " ").trim());
+    const key = programMatchKey(name);
+    let programId = cache.get(key);
+    if (!programId) {
+      const p = await findOrCreateProgramByNormalizedName(supabase, ch.id, name, { rawName: raw, episodeNumber: null });
+      if (!p) continue;
+      programId = p.id;
+      cache.set(key, p.id);
+    }
+    const v = mean(x.start_minute, x.end_minute);
+    if (v === null) continue;
+    const rating = Math.round(v * 1e5) / 1e5;
+    const { error } = await supabase.from("ratings").insert({
+      source_type: "skyuhd",
+      channel_id: ch.id,
+      program_id: programId,
+      episode_subtitle: null,
+      target_id: null,
+      broadcast_date: date,
+      start_time: hms(x.start_minute),
+      end_time: hms(x.end_minute),
+      rating,
+    });
+    if (error) throw new Error(`프로그램 행 추가 실패 — ${error.message}`);
+    spans.push({ s: x.start_minute, e: x.end_minute });
+    result.created.push({ start: hms(x.start_minute).slice(0, 5), end: hms(x.end_minute).slice(0, 5), name, rating, basis: `IPTV 실제 ${hhmm(x.start_minute)}~${hhmm(x.end_minute)}` });
   }
   return result;
 }

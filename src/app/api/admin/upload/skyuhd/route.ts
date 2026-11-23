@@ -145,16 +145,16 @@ async function handleImageApply(body: { calendarDate?: unknown; rows?: unknown; 
 function minuteResponse(r: Awaited<ReturnType<typeof applySkyUhdMinute>>) {
   if (!r.ok) return NextResponse.json({ ok: false, message: r.message }, { status: 500 });
   const filled = r.fills.reduce((s, f) => s + f.filled.length, 0);
-  const empty = r.fills.reduce((s, f) => s + f.empty, 0);
+  const created = r.fills.reduce((s, f) => s + f.created.length, 0);
   const warnings: string[] = [];
   for (const f of r.fills) {
-    if (f.empty === 0) warnings.push(`${f.date}: 채울 프로그램 행이 없습니다 — 닐슨 일일 파일이 아직 없거나 이미 시청률이 있는 날입니다(닐슨 파일이 나중에 올라오면 자동으로 채웁니다).`);
-    else if (f.filled.length < f.empty) warnings.push(`${f.date}: 비어 있는 ${f.empty}행 중 ${f.filled.length}개 방영만 채웠습니다.`);
+    if (f.filled.length + f.created.length === 0) warnings.push(`${f.date}: 새로 매칭할 프로그램이 없습니다 — 모든 방영 구간에 이미 프로그램 행(시청률 포함)이 있거나, IPTV 방영 자료(셋톱·TV INDEX)가 아직 없는 날입니다(IPTV 자료를 올리면 다시 분당 값을 붙여 넣어 주세요).`);
+    else if (f.created.length > 0) warnings.push(`${f.date}: DB에 없던 방영 ${f.created.length}개를 IPTV 실제 인·아웃 시각으로 만들었습니다(${f.created.slice(0, 3).map((c) => `${c.start} ${c.name}`).join(", ")}${f.created.length > 3 ? " 등" : ""}).`);
   }
   return NextResponse.json({
     ok: true,
     mode: "minute_applied",
-    message: `분당 시청률 ${r.saved}행 저장(${r.dates.join(", ")}) · 프로그램 ${filled}개 매칭${empty > filled ? ` (비어 있던 ${empty}행 중)` : ""}`,
+    message: `분당 시청률 ${r.saved}행 저장(${r.dates.join(", ")}) · 프로그램 ${filled + created}개 매칭(시청률 빈 행 ${filled}개 채움, IPTV 방영 기준 새 행 ${created}개 추가)`,
     fills: r.fills,
     warnings,
   });
