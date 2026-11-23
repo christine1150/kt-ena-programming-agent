@@ -62,7 +62,8 @@ function toMin(t: string): number | null {
 /** 버퍼를 글자로 — UTF-8이 기본, 머리말이 깨졌으면(엑셀 저장본) CP949로 다시 읽는다. */
 export function decode(buf: Buffer): string {
   const u8 = buf.toString("utf8").replace(/^﻿/, "");
-  if (/IPTV STB/.test(u8.slice(0, 600))) return u8;
+  // UTF-8 로 정상이면(깨짐 표시 � 가 없고 머리말·머리글이 읽히면) 그대로 — 개인 2049 파일은 "IPTV STB" 글자가 없어 예전엔 CP949 로 잘못 읽혔다(2026-11-24)
+  if (/IPTV STB/.test(u8.slice(0, 600)) || (!u8.includes("�") && /TV INDEX|"프로그램"/.test(u8.slice(0, 800)))) return u8;
   try {
     return new TextDecoder("euc-kr").decode(buf).replace(/^﻿/, "");
   } catch {
