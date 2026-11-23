@@ -217,8 +217,11 @@ export async function loadRanks(date: string, limit = 40): Promise<RankBoard[]> 
       boards.push({ key: b.key, title: b.title, region: b.region, rows: [] });
       continue;
     }
-    const { data } = await supabase.from("competitor_ratings").select("competitor_name,rank,rating,reach,share").eq("broadcast_date", date).eq("target_id", id).not("rank", "is", null).lte("rank", limit).order("rank");
-    const rows: RankRow[] = ((data ?? []) as { competitor_name: string; rank: number; rating: number | null; reach: number | null; share: number | null }[]).map((x) => ({
+    const { data } = await supabase.from("competitor_ratings").select("competitor_name,rank,rating,reach,share").eq("broadcast_date", date).eq("target_id", id).not("rank", "is", null).order("rank");
+    // 상위 limit 위까지 + ENA·ENA Play·ENA Drama 는 limit 밖이어도 끝에 붙인다(사용자 지시 2026-11-23)
+    const rows: RankRow[] = ((data ?? []) as { competitor_name: string; rank: number; rating: number | null; reach: number | null; share: number | null }[])
+      .filter((x) => x.rank <= limit || ["ena", "enaplay", "enadrama"].includes(normName(x.competitor_name)))
+      .map((x) => ({
       rank: x.rank,
       name: OWN_CHANNEL_NAMES[normName(x.competitor_name)] ?? x.competitor_name,
       rating: x.rating,

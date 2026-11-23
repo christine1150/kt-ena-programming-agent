@@ -121,7 +121,7 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
 
   const channelName = CHANNELS.find((c) => c.code === code)?.name ?? code;
   const title = tab === "daily" ? `${channelName} 일일 시청률` : tab === "ranks" ? "전 채널 시청률 순위 · 타깃별 비교" : (TREND_TARGETS.find((t) => t.id === trendTarget)?.title ?? "");
-  const hint = tab === "ranks" ? "타깃별 상위 40개 채널 · 시청률 순" : tab === "trend" ? "최근 4주 · 기준일이 속한 주까지(7일이 끝난 주만)" : null;
+  const hint = tab === "ranks" ? "타깃별 상위 40개 채널 · 시청률 순 (ENA·ENA Play·ENA Drama는 40위 밖이어도 표시)" : tab === "trend" ? "최근 4주 · 기준일이 속한 주까지(7일이 끝난 주만)" : null;
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
