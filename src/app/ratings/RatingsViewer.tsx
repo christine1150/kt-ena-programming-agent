@@ -2,7 +2,7 @@
 
 // 시청률 표 화면 — 일일 시청률(채널별) · 전 채널 순위(타깃 5종 비교) · 채널 순위 추이(최근 4주).
 // 표는 숫자를 굵게·시간대와 채널은 옅은 회색으로 두고, 자사 행만 색을 입혀 한눈에 읽히게 한다. 값은 /api/ratings-view가 저장된 자료를 모아 준 것을 그리기만 한다.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DailyView, RankBoard, TrendWeek } from "@/lib/ratingsView";
 import { shortProgramName } from "@/lib/programAlias";
 import { formatRating } from "@/lib/audienceReport/format";
@@ -137,7 +137,8 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1500px] px-3 pb-8 pt-3 sm:px-6">
+      {/* 순위 탭은 보드 5개를 한 줄에 놓으므로 1920 화면까지 폭을 쓴다(그보다 좁으면 보드 영역이 가로 스크롤) */}
+      <div className={`mx-auto px-3 pb-8 pt-3 sm:px-6 ${tab === "ranks" ? "max-w-[1920px]" : "max-w-[1500px]"}`}>
         {/* 제목·기준일·선택 도구를 한 줄에 모아 표(시간~마지막 시청률)가 한 화면에 보이게 한다(사용자 지시 2026-10-19) */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
           <h1 className="text-xl font-bold leading-tight tracking-tight sm:text-[22px]">{title}</h1>
@@ -344,8 +345,29 @@ function DailyTable({ v }: { v: DailyView }) {
 }
 
 function RankBoards({ boards }: { boards: RankBoard[] }) {
+  // 보드 5개가 한 줄에 다 들어가지 않으면(작은 화면·높은 배율) 가로 스크롤 + 오른쪽 "더 있음" 안내를 보여 준다
+  const ref = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setMore(el.scrollWidth - el.clientWidth - el.scrollLeft > 8);
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    return () => {
+      el.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, [boards]);
   return (
-    <div className="grid grid-flow-col auto-cols-[minmax(330px,1fr)] gap-6 overflow-x-auto pb-2 max-md:snap-x max-md:snap-mandatory max-md:auto-cols-[92%] max-md:gap-3" tabIndex={0} role="region" aria-label="채널별 표(가로 스크롤)">
+    <div className="relative">
+      {more && (
+        <div aria-hidden className="pointer-events-none absolute right-0 top-0 z-[1] flex h-full w-16 items-start justify-end bg-gradient-to-l from-zinc-50 via-zinc-50/80 to-transparent pt-1">
+          <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] font-semibold text-white shadow">다음 표 ›</span>
+        </div>
+      )}
+    <div ref={ref} className="grid grid-flow-col auto-cols-[minmax(300px,1fr)] gap-5 overflow-x-auto pb-3 max-md:snap-x max-md:snap-mandatory max-md:auto-cols-[92%] max-md:gap-3" tabIndex={0} role="region" aria-label="채널별 표(가로 스크롤)">
       {boards.map((b) => (
         <section key={b.key} aria-label={`${b.title} ${b.region}`} className="snap-start">
           <h2 className="text-[19px] font-bold leading-tight">{b.title}</h2>
@@ -384,6 +406,7 @@ function RankBoards({ boards }: { boards: RankBoard[] }) {
           </div>
         </section>
       ))}
+    </div>
     </div>
   );
 }
