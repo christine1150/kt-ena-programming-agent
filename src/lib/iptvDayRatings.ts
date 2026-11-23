@@ -10,7 +10,19 @@ export interface IptvDayRow {
   below_floor: boolean;
 }
 
+/** 닐슨 일일 표에 IPTV 셋톱 열을 붙이는 채널 — skyUHD 는 가구(전국 IPTV STB), ENA Play 는 개인 2049(수도권 셋톱 기반)로 닐슨 첫 열과 같은 단위로 맞춘다(사용자 지시 2026-11-23: ENA Play도 skyUHD와 같은 형식) */
+export const IPTV_DAY_CHANNELS: Record<string, { tvIndexName: string; kind: "household" | "p2049"; head: string }> = {
+  SKYUHD: { tvIndexName: "skyUHD", kind: "household", head: "IPTV 셋톱" },
+  ENA_PLAY: { tvIndexName: "ENA Play", kind: "p2049", head: "IPTV 셋톱 2049" },
+};
+
 export async function loadIptvDayRows(channelCode: string, date: string): Promise<IptvDayRow[]> {
+  const cfg = IPTV_DAY_CHANNELS[channelCode];
+  if (!cfg) return [];
+  if (channelCode !== "SKYUHD") {
+    const { data: tv } = await supabase.from("iptv_tvindex_airings").select("start_minute, end_minute, rating").eq("channel_name", cfg.tvIndexName).eq("target_kind", cfg.kind).eq("broadcast_date", date);
+    return ((tv ?? []) as { start_minute: number; end_minute: number; rating: number | null }[]).map((r) => ({ ...r, below_floor: false }));
+  }
   const { data: stb } = await supabase.from("iptv_stb_ratings").select("start_minute, end_minute, rating, below_floor").eq("channel_code", channelCode).eq("broadcast_date", date);
   if (stb && stb.length > 0) return stb as IptvDayRow[];
   // TV INDEX 는 skyUHD 만 이 화면에 쓴다(채널명 대응은 iptv_channel_map 과 같다)

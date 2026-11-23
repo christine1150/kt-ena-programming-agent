@@ -223,20 +223,21 @@ function KpiBar({ value, max, baseline }: { value: number | null; max: number; b
 type BarMode = "both" | "nielsen" | "iptv";
 
 // 닐슨(유료방송가구, 파랑)과 IPTV 셋톱(초록)을 한 칸에서 반씩 나눠 그린다. 한쪽만 고르면 그 막대 하나가 칸 전체 높이를 쓴다. 두 막대는 같은 눈금(max)을 쓴다.
-function DualBar({ nielsen, iptv, iptvFloor, max, mode }: { nielsen: number | null; iptv: number | null; iptvFloor: boolean; max: number; mode: BarMode }) {
+function DualBar({ nielsen, iptv, iptvFloor, max, mode, digits4 = true, nielsenLabel = "닐슨 유료방송가구" }: { nielsen: number | null; iptv: number | null; iptvFloor: boolean; max: number; mode: BarMode; digits4?: boolean; nielsenLabel?: string }) {
+  const fmt = (x: number | null) => (digits4 ? formatRating(x, "SKYUHD") : r3(x));
   const bar = (value: number | null, color: string, label: string, floor = false) => {
     if (value === null && !floor) return <div className="h-full rounded-sm bg-zinc-100/60" title={`${label} 값 없음`} />;
     const pct = value === null || max <= 0 ? 0 : Math.max(value > 0 ? 1.5 : 0, Math.min(100, (value / max) * 100));
     return (
-      <div className="relative h-full rounded-sm bg-zinc-100" title={floor ? `${label} <0.0001` : `${label} ${formatRating(value, "SKYUHD")}`}>
+      <div className="relative h-full rounded-sm bg-zinc-100" title={floor ? `${label} <0.0001` : `${label} ${fmt(value)}`}>
         <div className="h-full rounded-sm" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
     );
   };
   const both = mode === "both";
   return (
-    <div className={`flex w-full min-w-[120px] flex-col ${both ? "h-[22px] gap-[2px]" : "h-3.5"}`} role="img" aria-label={`유료방송가구 닐슨 ${formatRating(nielsen, "SKYUHD")}, IPTV 셋톱 ${iptvFloor ? "<0.0001" : formatRating(iptv, "SKYUHD")}`}>
-      {mode !== "iptv" && <div className="min-h-0 flex-1">{bar(nielsen, ACCENT, "닐슨 유료방송가구")}</div>}
+    <div className={`flex w-full min-w-[120px] flex-col ${both ? "h-[22px] gap-[2px]" : "h-3.5"}`} role="img" aria-label={`${nielsenLabel} ${fmt(nielsen)}, IPTV 셋톱 ${iptvFloor ? "<0.0001" : fmt(iptv)}`}>
+      {mode !== "iptv" && <div className="min-h-0 flex-1">{bar(nielsen, ACCENT, nielsenLabel)}</div>}
       {mode !== "nielsen" && <div className="min-h-0 flex-1">{bar(iptv, IPTV_GREEN, "IPTV 셋톱", iptvFloor)}</div>}
     </div>
   );
@@ -254,10 +255,13 @@ function DailyTable({ v }: { v: DailyView }) {
   const maxKpi = !showIptv ? maxNielsen : effMode === "both" ? Math.max(maxNielsen, maxIptv) : effMode === "iptv" ? maxIptv : maxNielsen;
   const MODES: { id: BarMode; label: string }[] = [
     { id: "both", label: "둘 다" },
-    { id: "nielsen", label: "유료방송(닐슨)" },
+    { id: "nielsen", label: v.channelCode === "SKYUHD" ? "유료방송(닐슨)" : "닐슨" },
     { id: "iptv", label: "IPTV 셋톱" },
   ];
   const sky = v.channelCode === "SKYUHD";
+  // ENA Play 는 닐슨 첫 열(수도권 2049)과 IPTV 셋톱 2049(수도권)를 같은 단위·3자리로 견준다. skyUHD 는 유료방송가구 4자리.
+  const nielsenName = sky ? "닐슨 유료방송가구" : `닐슨 ${v.columns[0] ?? ""}`.trim();
+  const fmtIptv = (x: number | null | undefined) => (sky ? formatRating(x ?? null, "SKYUHD") : r3(x ?? null));
   return (
     <>
       {showIptv && (
@@ -270,7 +274,7 @@ function DailyTable({ v }: { v: DailyView }) {
               </button>
             ))}
           </div>
-          <span className="inline-flex items-center gap-1 text-[12px] text-zinc-500"><i className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: ACCENT }} />닐슨 유료방송가구</span>
+          <span className="inline-flex items-center gap-1 text-[12px] text-zinc-500"><i className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: ACCENT }} />{nielsenName}</span>
           <span className="inline-flex items-center gap-1 text-[12px] text-zinc-500"><i className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: IPTV_GREEN }} />IPTV 셋톱</span>
         </div>
       )}
@@ -288,12 +292,12 @@ function DailyTable({ v }: { v: DailyView }) {
               ))}
               {showIptv && (
                 <th className="w-[66px] break-keep px-1.5 py-2 text-right text-[11px] leading-tight md:w-[96px] md:px-3 md:text-[13px]" style={{ color: IPTV_GREEN }}>
-                  IPTV 셋톱
+                  {v.iptvHead ?? "IPTV 셋톱"}
                 </th>
               )}
               <th className="w-[52px] px-1.5 py-2 text-right text-[11px] leading-tight md:w-[80px] md:px-3 md:text-[13px]">점유율(%)</th>
               <th className="w-[84px] px-3 py-2 text-right text-[13px] max-md:hidden">시청시간</th>
-              <th className="px-4 py-2 text-[13px] max-md:hidden">{showIptv ? "유료방송가구 시청률 (닐슨·IPTV)" : `KPI 시청률${v.baseline !== null ? ` (평균 ${r3(v.baseline)})` : ""}`}</th>
+              <th className="px-4 py-2 text-[13px] max-md:hidden">{showIptv ? (sky ? "유료방송가구 시청률 (닐슨·IPTV)" : `${v.columns[0] ?? ""} 시청률 (닐슨·IPTV)`) : `KPI 시청률${v.baseline !== null ? ` (평균 ${r3(v.baseline)})` : ""}`}</th>
             </tr>
           </thead>
           <tbody>
@@ -318,13 +322,13 @@ function DailyTable({ v }: { v: DailyView }) {
                 ))}
                 {showIptv && (
                   <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-bold tabular-nums md:px-3" style={{ color: IPTV_GREEN }}>
-                    {r.iptv !== null && r.iptv !== undefined ? formatRating(r.iptv, "SKYUHD") : r.iptvBelowFloor ? "<0.0001" : "—"}
+                    {r.iptv !== null && r.iptv !== undefined ? fmtIptv(r.iptv) : r.iptvBelowFloor ? "<0.0001" : "—"}
                   </td>
                 )}
                 <td className="whitespace-nowrap px-1.5 py-1.5 text-right tabular-nums text-zinc-600 md:px-3">{r2(r.share)}</td>
                 <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-zinc-600 max-md:hidden">{minSec(r.timeSpentSec)}</td>
                 <td className="px-4 py-1.5 max-md:hidden">
-                  {showIptv ? <DualBar nielsen={r.values[0] ?? null} iptv={r.iptv ?? null} iptvFloor={r.iptvBelowFloor === true} max={maxKpi} mode={effMode} /> : <KpiBar value={r.values[0] ?? null} max={maxKpi} baseline={v.baseline} />}
+                  {showIptv ? <DualBar nielsen={r.values[0] ?? null} iptv={r.iptv ?? null} iptvFloor={r.iptvBelowFloor === true} max={maxKpi} mode={effMode} digits4={sky} nielsenLabel={nielsenName} /> : <KpiBar value={r.values[0] ?? null} max={maxKpi} baseline={v.baseline} />}
                 </td>
               </tr>
             ))}
@@ -332,7 +336,7 @@ function DailyTable({ v }: { v: DailyView }) {
         </table>
       </div>
       <p className="mt-2 text-[12px] text-zinc-400">
-        {showIptv ? "막대는 파랑이 닐슨 유료방송가구, 초록이 IPTV 셋톱(두 막대는 같은 눈금)입니다. IPTV는 방영 구간과 절반 이상 겹치는 셋톱 구간 값이며, 가입 가구 기반 보조 자료라 닐슨과 규모가 다릅니다. " : ""}
+        {showIptv ? `막대는 파랑이 ${nielsenName}, 초록이 IPTV 셋톱${sky ? "" : " 2049(수도권, 셋톱 기반 추정)"}(두 막대는 같은 눈금)입니다. IPTV는 방영 구간과 절반 이상 겹치는 셋톱 구간 값이며, ${sky ? "가입 가구" : "셋톱 로그"} 기반 보조 자료라 닐슨과 규모가 다릅니다. ` : ""}
         {v.baseline !== null ? `파란 숫자는 첫 열이 직전 30일 채널 평균(${r3(v.baseline)}) 이상인 방송입니다(막대도 파랑, 평균 아래는 붉은 계열, 세로 눈금이 평균). 점유율·시청시간은 첫 열 타깃 기준입니다. ` : ""}
       </p>
     </>

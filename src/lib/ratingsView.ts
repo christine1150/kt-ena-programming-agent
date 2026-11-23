@@ -3,7 +3,7 @@
 //  · ranks  : 그날 전 채널 시청률 순위 TOP40 — 타깃 5종 비교(닐슨이 매긴 순위 그대로)
 //  · trend  : 최근 4주 채널 순위 추이 — 자사 채널은 닐슨 주간 순위, 타사는 일별 평균으로 순위를 맞춘다
 import { supabase } from "@/lib/supabase";
-import { loadIptvDayRows } from "@/lib/iptvDayRatings";
+import { IPTV_DAY_CHANNELS, loadIptvDayRows } from "@/lib/iptvDayRatings";
 import { findPlanFill, loadPlanDay } from "@/lib/planDayFill";
 import { resolveProgramLevelTargetLabel } from "@/lib/targetResolution";
 
@@ -55,6 +55,8 @@ export interface DailyView {
   hasIptv?: boolean;
   /** IPTV 하루 평균 — 방영 시간의 80% 이상에 STB 값이 있을 때만 */
   iptvDayAvg?: number | null;
+  /** IPTV 열 머리글(채널마다 가구/2049가 달라 서버가 정해 내려준다) */
+  iptvHead?: string;
   rows: DailyRow[];
 }
 
@@ -125,7 +127,7 @@ export async function loadDaily(channelCode: string, date: string): Promise<Dail
   // IPTV 셋톱 시청률(skyUHD, 사용자가 자료를 준 날만) — 닐슨 방영 구간과 가장 많이 겹치는 STB 구간을 그 줄에 붙인다(일간 세부 내역 API와 같은 규칙: 짧은 쪽 기준 절반 이상 겹쳐야 같은 방영).
   let hasIptv = false;
   let iptvDayAvg: number | null = null;
-  if (isSky) {
+  if (IPTV_DAY_CHANNELS[channelCode]) {
     const stbRows = await loadIptvDayRows(channelCode, date);
     if (stbRows.length > 0) {
       hasIptv = true;
@@ -171,7 +173,7 @@ export async function loadDaily(channelCode: string, date: string): Promise<Dail
     themeColor: (ch.theme_color as string | null) ?? null,
     columns: usedTargets.map((c) => c.head),
     baseline,
-    ...(hasIptv ? { hasIptv, iptvDayAvg } : {}),
+    ...(hasIptv ? { hasIptv, iptvDayAvg, iptvHead: IPTV_DAY_CHANNELS[channelCode].head } : {}),
     rows,
   };
 }
