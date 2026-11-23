@@ -14,6 +14,12 @@ export interface IptvDayRow {
 export const IPTV_DAY_CHANNELS: Record<string, { tvIndexName: string; kind: "household" | "p2049"; head: string }> = {
   SKYUHD: { tvIndexName: "skyUHD", kind: "household", head: "IPTV 셋톱" },
   ENA_PLAY: { tvIndexName: "ENA Play", kind: "p2049", head: "IPTV 셋톱 2049" },
+  // 나머지 자사 채널(사용자 지시 2026-11-23): 2049 핵심 채널은 2049, 가구 핵심 채널은 가구 — 닐슨 첫 열(채널 KPI)과 단위를 맞춘다
+  ENA: { tvIndexName: "ENA", kind: "p2049", head: "IPTV 셋톱 2049" },
+  ENA_DRAMA: { tvIndexName: "ENA Drama", kind: "p2049", head: "IPTV 셋톱 2049" },
+  ENA_STORY: { tvIndexName: "ENA Story", kind: "household", head: "IPTV 셋톱 가구" },
+  OLIFE: { tvIndexName: "OLIFE", kind: "household", head: "IPTV 셋톱 가구" },
+  ONCE: { tvIndexName: "ONCE", kind: "household", head: "IPTV 셋톱 가구" },
 };
 
 export async function loadIptvDayRows(channelCode: string, date: string): Promise<IptvDayRow[]> {
