@@ -13,11 +13,11 @@ import FeaturedContentManager from "./FeaturedContentManager";
 // 사용자 지시(2026-09-02): "시청률/주간/월간/연간 순위 업로드 하는 칸을 하나로" — 옛
 // NielsenDailyUploader/NielsenPeriodUploader 두 카드를 NielsenUploader 하나로 합쳤다(서버가
 // 파일마다 분석기간을 보고 자동 분류). 옛 컴포넌트/API는 trash-can/으로 이동.
-import NielsenUploader from "./NielsenUploader";
+// 사용자 지시(2026-11-24): Nielsen 시청률 업로드 + skyUHD 시청률 업로드 → RatingsUploader("시청률 업로드") 하나로,
+// OLIFE EPG 업로드 + 주간 편성표 업로드 → ScheduleUploader("편성표 업로드") 하나로 합쳤다(옛 4개는 trash-can/).
+import RatingsUploader from "./RatingsUploader";
 import MailIngestionManager from "./MailIngestionManager";
-import SkyUhdUploader from "./SkyUhdUploader";
 import TargetGoalsManager from "./TargetGoalsManager";
-import OlifeEpgUploader from "./OlifeEpgUploader";
 // 사용자 지시(2026-09-01, 관리자 화면 중복 점검): "PD 수동 회차 리포트"(드라마 양식)와
 // "PD 수동 오리지널예능 리포트"(예능 양식) 두 카드를 ManualReportUploader 하나로 합쳤다 —
 // 화면·채널 선택·결과 표시가 사실상 같은 코드였고, 같은 테이블(program_manual_reports)에
@@ -30,7 +30,7 @@ import ManualReportUploader from "./ManualReportUploader";
 // 확인)를 엑셀 업로드 기반으로 교체. 옛 컴포넌트는 trash-can/monthly-content-review-2026-09-07/
 // 로 이동(사용자 최종 확인 후 삭제, CLAUDE.md 파일 관리 규칙).
 import MonthlyReferenceTrendUploader from "./MonthlyReferenceTrendUploader";
-import ScheduleGridUploader from "./ScheduleGridUploader";
+import ScheduleUploader from "./ScheduleUploader";
 import OlifeEpisodeCatalogUploader from "./OlifeEpisodeCatalogUploader";
 import DailyNewsManager from "./DailyNewsManager";
 // 사용자 지시(2026-11-15): 주요 뉴스 출연자 이슈 감시 명단(news_cast_roster) 관리
@@ -134,9 +134,7 @@ export default async function AdminPage() {
         {/* 사용자 지시(2026-10-22): 닐슨 메일 자동 수집을 닐슨 시청률 업로드 위로 올린다(설명 문구는 삭제, 상세는 마우스오버). */}
         <AdminSectionHeading title="매일 올리는 자료" />
         <MailIngestionManager />
-        <NielsenUploader />
-        <SkyUhdUploader />
-        <OlifeEpgUploader />
+        <RatingsUploader />
 
         <AdminSectionHeading title="1페이지에 바로 반영되는 내용" description="PD가 수시로 올리거나 고치는 항목 — 올리는 즉시 대시보드 화면이 바뀝니다." />
         <DailyNewsManager />
@@ -146,7 +144,7 @@ export default async function AdminPage() {
         <MonthlyReferenceTrendUploader />
 
         <AdminSectionHeading title="편성표 검토" description="주간 편성표를 올리면 실제 시청률을 매칭해 히트맵·엑셀로 확인할 수 있습니다." />
-        <ScheduleGridUploader />
+        <ScheduleUploader />
 
         <AdminSectionHeading title="기준 정보(가끔 바뀜)" description="채널·목표·경쟁채널처럼 한 번 정하면 오래 쓰는 값입니다." />
         <ChannelMasterUploader />
