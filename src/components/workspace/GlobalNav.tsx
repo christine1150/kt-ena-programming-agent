@@ -81,17 +81,29 @@ function NavInner({ role }: { role: Role | null }) {
                   </li>
                 )}
                 {/* 숫자만 크게 읽는 별도 창(/ratings) — 브리핑과 채널별 분석 사이, 새 탭으로 열어 에이전트 화면과 나란히 본다(사용자 요청 2026-10-19). 지금 보는 기준일을 이어 준다. */}
+                {/* 시청률 표 안에서는(2026-11-23) 현재 화면으로 표시하고, 새 탭을 또 열지 않도록 같은 창 링크로 둔다. */}
                 {item.id === "briefing" && (
                   <li className="shrink-0">
-                    <a
-                      href={`/ratings?tab=daily${resolvedTo ? `&date=${resolvedTo}` : ""}`}
-                      target="_blank"
-                      rel="noopener"
-                      title="시청률 표를 새 창으로 엽니다"
-                      className="block border-b-2 border-transparent px-3 py-2.5 text-[13px] font-medium text-zinc-500 transition hover:text-zinc-800"
-                    >
-                      시청률 표
-                    </a>
+                    {pathname.startsWith("/ratings") ? (
+                      <Link
+                        href="/ratings?tab=daily"
+                        aria-current="page"
+                        title="지금 보고 있는 시청률 표"
+                        className="block border-b-2 border-zinc-900 px-3 py-2.5 text-[13px] font-medium text-zinc-900 transition"
+                      >
+                        시청률 표
+                      </Link>
+                    ) : (
+                      <a
+                        href={`/ratings?tab=daily${resolvedTo ? `&date=${resolvedTo}` : ""}`}
+                        target="_blank"
+                        rel="noopener"
+                        title="시청률 표를 새 창으로 엽니다"
+                        className="block border-b-2 border-transparent px-3 py-2.5 text-[13px] font-medium text-zinc-500 transition hover:text-zinc-800"
+                      >
+                        시청률 표
+                      </a>
+                    )}
                   </li>
                 )}
                 {/* 프로그램 성과(작품 × 채널 비교, 2026-10-22) — 메뉴 항목(NAV_ITEMS) 개편 없이 채널별 분석 옆 보조 진입점으로 둔다. */}
