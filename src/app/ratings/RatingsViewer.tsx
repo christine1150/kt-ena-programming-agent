@@ -126,7 +126,7 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-3 px-3 py-2 sm:px-6">
+        <div className={`mx-auto flex flex-wrap items-center gap-3 px-3 py-2 sm:px-6 ${tab === "ranks" ? "max-w-none" : "max-w-[1500px]"}`}>
           <nav aria-label="시청률 표 보기" className="flex max-w-full items-center gap-1 overflow-x-auto">
             {TABS.map((t) => (
               <Pill key={t.id} active={tab === t.id} onClick={() => setTab(t.id)}>
@@ -138,7 +138,7 @@ export default function RatingsViewer({ initialTab = "daily", initialCode = "ENA
       </header>
 
       {/* 순위 탭은 보드 5개를 한 줄에 놓으므로 1920 화면까지 폭을 쓴다(그보다 좁으면 보드 영역이 가로 스크롤) */}
-      <div className={`mx-auto px-3 pb-8 pt-3 sm:px-6 ${tab === "ranks" ? "max-w-[1920px]" : "max-w-[1500px]"}`}>
+      <div className={`mx-auto px-3 pb-8 pt-3 sm:px-6 ${tab === "ranks" ? "max-w-none" : "max-w-[1500px]"}`}>
         {/* 제목·기준일·선택 도구를 한 줄에 모아 표(시간~마지막 시청률)가 한 화면에 보이게 한다(사용자 지시 2026-10-19) */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
           <h1 className="text-xl font-bold leading-tight tracking-tight sm:text-[22px]">{title}</h1>
