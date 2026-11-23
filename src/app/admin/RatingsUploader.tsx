@@ -35,6 +35,7 @@ type ImagePreview = { fileName: string; rows: ImageRow[]; errors: string[]; warn
 
 type SkyResult = {
   ok: boolean;
+  mode?: string;
   message?: string;
   alert?: string;
   ratingsInserted?: number;
@@ -93,7 +94,8 @@ function skyLine(fileName: string, r: SkyResult, i: number): Line {
     </>
   );
   const period = r.ok && r.dateRange?.from ? `${r.dateRange.from} ~ ${r.dateRange.to}` : "—";
-  return { key: `s${i}-${fileName}`, fileName, kind: r.ok ? (r.ratingsInserted === undefined ? "IPTV 셋톱(CSV)" : "skyUHD") : "—", period, ok: r.ok, body, notes: r.ok ? (r.warnings ?? []) : [] };
+  const kind = !r.ok ? "—" : r.mode === "minute_applied" ? "skyUHD 분당 시청률" : r.ratingsInserted === undefined ? "IPTV 셋톱(CSV)" : "skyUHD";
+  return { key: `s${i}-${fileName}`, fileName, kind, period, ok: r.ok, body, notes: r.ok ? (r.warnings ?? []) : [] };
 }
 
 export default function RatingsUploader() {
@@ -105,6 +107,8 @@ export default function RatingsUploader() {
   const [previews, setPreviews] = useState<ImagePreview[]>([]);
   const [calendarDate, setCalendarDate] = useState("");
   const [applying, setApplying] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasting, setPasting] = useState(false);
   const preview = previews[0] ?? null;
 
   async function postSky(file: File): Promise<{ status: number; body: Record<string, unknown> }> {
@@ -183,6 +187,26 @@ export default function RatingsUploader() {
     setUploading(false);
   }
 
+  // skyUHD 분당 시청률 표를 그대로 복사(Ctrl+V)해 붙여 넣은 경우
+  async function handlePasteApply() {
+    const text = pasteText.trim();
+    if (!text) {
+      setErrorMessage("붙여 넣은 내용이 없습니다. 닐슨 분당 시청률 표를 머리말부터 끝까지 복사해 붙여 넣어 주세요.");
+      return;
+    }
+    setPasting(true);
+    setErrorMessage(null);
+    const res = await fetch("/api/admin/upload/skyuhd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "minute_text", text }),
+    });
+    const body = (await res.json().catch(() => ({ ok: false, message: "응답을 읽지 못했습니다." }))) as SkyResult;
+    setPasting(false);
+    setLines((prev) => [...(prev ?? []), skyLine("붙여 넣은 분당 시청률", body, 400 + (prev?.length ?? 0))]);
+    if (body.ok) setPasteText("");
+  }
+
   function nextPreview() {
     const rest = previews.slice(1);
     setPreviews(rest);
@@ -228,6 +252,10 @@ export default function RatingsUploader() {
         가진 월별 세부 내역 시트 — 파일에 담긴 날짜 구간만 이 파일 내용으로 교체되므로 한 달치만 올려도 다른 달은 그대로 남습니다.
         시청률 칸이 비어 있는 행은 실제 시청률 0으로 반영됩니다(화면에는 빈 칸으로 표시).
         <br />
+        <b>skyUHD 분당 시청률</b>(닐슨, 전체 플랫폼·National·유료방송가구) — 엑셀로 올리거나, 표를 머리말부터 끝(25:59)까지 복사해 붙여넣기 칸에 Ctrl+V 하면
+        분당 값을 저장하고, 그 날짜의 비어 있는 skyUHD 프로그램 시청률을 방영 구간(IPTV 실제 방영 구간이 있으면 그 구간) 분당 평균으로 자동
+        매칭합니다. 닐슨 일일 파일이 나중에 올라와도 자동으로 채웁니다. 이미 시청률이 있는 행은 건드리지 않습니다.
+        <br />
         <b>IPTV 셋톱 시청률 그림</b>(png·jpg·webp) — 방영 시간대·프로그램·시청률(%) 표를 캡처한 그림을 올리면 표를 읽어 미리 보여 줍니다.
         날짜를 확인하고 &ldquo;이 내용으로 반영&rdquo;을 누르면 skyUHD 일간 세부 내역의 IPTV 열에 쓰입니다. [재] 배지가 없는 줄은 &lt;본&gt;으로
         저장됩니다. 그림은 글자 인식을 위해 OpenAI로 전송되므로 읽은 값은 꼭 눈으로 확인해 주세요.
@@ -242,6 +270,30 @@ export default function RatingsUploader() {
         >
           {uploading ? "업로드 중..." : "업로드"}
         </button>
+      </div>
+
+      <div className="mb-4 rounded-xl border border-dashed border-zinc-300 p-3">
+        <label htmlFor="minute-paste" className="mb-1 block text-sm font-medium text-zinc-700">
+          skyUHD 분당 시청률 붙여넣기 <span className="font-normal text-zinc-400">— 닐슨 분당 시청률 표(전체·National·유료방송가구)를 머리말부터 끝(25:59)까지 복사해 Ctrl+V</span>
+        </label>
+        <textarea
+          id="minute-paste"
+          value={pasteText}
+          onChange={(e) => setPasteText(e.target.value)}
+          rows={3}
+          placeholder={"분석조건: 시간대 …\n선택일자: 2026-11-23; …\n번호\t시간대\\변수값\t시청률\n1\t02:00:00 - 02:00:59\t0.00000 …"}
+          className="w-full resize-y rounded-lg border border-zinc-300 p-2 font-mono text-xs"
+        />
+        <div className="mt-2 flex items-center gap-3">
+          <button
+            onClick={handlePasteApply}
+            disabled={pasting || pasteText.trim() === ""}
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          >
+            {pasting ? "반영 중..." : "붙여 넣은 내용 반영"}
+          </button>
+          <span className="text-xs text-zinc-500">저장 후 그 날짜의 skyUHD 프로그램 시청률(비어 있는 행)을 분당 평균으로 자동 매칭해 일간 브리핑에 반영합니다.</span>
+        </div>
       </div>
 
       {progressText && <p className="mb-3 text-sm text-zinc-500">{progressText}</p>}

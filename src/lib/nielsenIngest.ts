@@ -11,6 +11,7 @@ import {
 } from "@/lib/nielsenDaily";
 import { extractFullYearFromFileName, parseNielsenAnnualWorkbook } from "@/lib/nielsenAnnual";
 import { applyOlifeEpgForDate } from "@/lib/olifeEpgStaging";
+import { fillSkyUhdProgramRatings } from "@/lib/skyUhdMinute";
 // 성능 개선(2026-09-17): 적재 직후 Page 1/Page 2 당일 화면용 집계를 미리 계산해 둔다.
 import { refreshDailyDashboardMart } from "@/lib/dailyMartCache";
 import { scheduleBriefingWarmup } from "@/lib/briefingWarmup";
@@ -710,6 +711,12 @@ export async function ingestNielsenDailyFile(
     if (olifeChannelId) {
       await applyOlifeEpgForDate(olifeChannelId, parsed.reportDate).catch(() => null);
     }
+  }
+
+  // 사용자 지시(2026-11-24): skyUHD 분당 시청률을 먼저 올려 둔 날짜는, 닐슨 일일 파일이 나중에 와도 비어 있는 skyUHD 프로그램 행을
+  // 분당 평균으로 자동 매칭한다(분당 자료가 없거나 채울 행이 없으면 아무 일도 하지 않음, 실패해도 본 파일 처리는 그대로 성공).
+  if (!insertError) {
+    await fillSkyUhdProgramRatings(parsed.reportDate).catch(() => null);
   }
 
   // 성능 개선(2026-09-17, 사용자 지시 — "닐슨 일일시청률 자료가 오면 미리 계산 해 두고 반영해서

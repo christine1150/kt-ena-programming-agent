@@ -15,6 +15,8 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/adminAuth";
 import { ingestSkyUhdRatingFile } from "@/lib/skyUhdDispatch";
 import { supabase } from "@/lib/supabase";
+import * as XLSX from "xlsx";
+import { applySkyUhdMinute, looksLikeMinuteMatrix, parseSkyUhdMinuteMatrix, parseSkyUhdMinuteText } from "@/lib/skyUhdMinute";
 import { applySkyUhdStbCsv, isCsvName } from "@/lib/skyUhdStbCsv";
 import {
   buildStbDbRows,
@@ -140,6 +142,24 @@ async function handleImageApply(body: { calendarDate?: unknown; rows?: unknown; 
   });
 }
 
+function minuteResponse(r: Awaited<ReturnType<typeof applySkyUhdMinute>>) {
+  if (!r.ok) return NextResponse.json({ ok: false, message: r.message }, { status: 500 });
+  const filled = r.fills.reduce((s, f) => s + f.filled.length, 0);
+  const empty = r.fills.reduce((s, f) => s + f.empty, 0);
+  const warnings: string[] = [];
+  for (const f of r.fills) {
+    if (f.empty === 0) warnings.push(`${f.date}: 채울 프로그램 행이 없습니다 — 닐슨 일일 파일이 아직 없거나 이미 시청률이 있는 날입니다(닐슨 파일이 나중에 올라오면 자동으로 채웁니다).`);
+    else if (f.filled.length < f.empty) warnings.push(`${f.date}: 비어 있는 ${f.empty}행 중 ${f.filled.length}개 방영만 채웠습니다.`);
+  }
+  return NextResponse.json({
+    ok: true,
+    mode: "minute_applied",
+    message: `분당 시청률 ${r.saved}행 저장(${r.dates.join(", ")}) · 프로그램 ${filled}개 매칭${empty > filled ? ` (비어 있던 ${empty}행 중)` : ""}`,
+    fills: r.fills,
+    warnings,
+  });
+}
+
 export async function POST(request: Request) {
   const admin = await getAdminSession();
   if (!admin) {
@@ -150,6 +170,15 @@ export async function POST(request: Request) {
   if ((request.headers.get("content-type") ?? "").includes("application/json")) {
     const body = await request.json().catch(() => null);
     if (body?.action === "apply_image") return handleImageApply(body);
+    // 표를 그대로 복사해 붙여 넣은 분당 시청률(2026-11-24)
+    if (body?.action === "minute_text") {
+      const raw = typeof body.text === "string" ? body.text : "";
+      if (raw.trim().length === 0) return NextResponse.json({ ok: false, message: "붙여 넣은 내용이 없습니다." }, { status: 400 });
+      if (raw.length > 400_000) return NextResponse.json({ ok: false, message: "붙여 넣은 내용이 너무 깁니다(하루치 표만 붙여 주세요)." }, { status: 413 });
+      const parsed = parseSkyUhdMinuteText(raw);
+      if (!parsed.ok) return NextResponse.json({ ok: false, message: parsed.message }, { status: 422 });
+      return minuteResponse(await applySkyUhdMinute(parsed, "닐슨 분당 시청률 붙여넣기(관리자 업로드)"));
+    }
     return NextResponse.json({ ok: false, message: "요청 형식이 올바르지 않습니다." }, { status: 400 });
   }
 
@@ -180,6 +209,21 @@ export async function POST(request: Request) {
       message: `IPTV 셋톱 시청률 CSV ${r.saved}구간 반영됨 (방송일 ${r.dateRange.from} ~ ${r.dateRange.to}, CSV 전체 ${r.parsed}구간)`,
       warnings,
     });
+  }
+
+  // 닐슨 분당 시청률 엑셀(전체·National·유료방송가구, 02:00~25:59 1440행) — 분당 적재 + 비어 있는 프로그램 행 자동 매칭(2026-11-24)
+  if (/\.xlsx?$/i.test(fileName)) {
+    try {
+      const wb = XLSX.read(buffer, { type: "buffer" });
+      const matrix = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null });
+      if (looksLikeMinuteMatrix(matrix)) {
+        const parsed = parseSkyUhdMinuteMatrix(matrix);
+        if (!parsed.ok) return NextResponse.json({ ok: false, alert: "DATA_QUALITY_ALERT", message: parsed.message }, { status: 422 });
+        return minuteResponse(await applySkyUhdMinute(parsed, `닐슨 분당 시청률 엑셀 관리자 업로드 ${fileName}`));
+      }
+    } catch {
+      // 엑셀 읽기 실패는 아래 기존 skyUHD 파일 경로가 같은 사유로 알려 준다
+    }
   }
 
   const result = await ingestSkyUhdRatingFile(buffer, fileName);
