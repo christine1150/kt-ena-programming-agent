@@ -211,6 +211,8 @@ export function isCleanTranslation(s: string): boolean {
   // 따옴표 안(원제)을 뺀 나머지에 영어 기능어가 남아 있으면 반쪽 번역
   const outside = s.replace(/(['‘"“])[^'’"”]*['’"”]/g, "");
   if (/\b(?:the|and|of|for|with|to|in|at|on)\b/.test(outside)) return false;
+  // 소문자로만 된 영어 낱말이 남아도 반쪽 번역("'치이카와' 5주 연속 reign 종료", 2026-11-24) — tvN·iPhone처럼 대문자가 섞인 고유명은 허용
+  if (/(?<![A-Za-z])[a-z]{3,}(?![A-Za-z])/.test(outside)) return false;
   return true;
 }
 
