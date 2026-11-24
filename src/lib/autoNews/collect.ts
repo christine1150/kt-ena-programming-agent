@@ -92,6 +92,17 @@ export function urlYmd(url: string): string | null {
   const m = path.match(/(?<!\d)(202[5-9])(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/);
   return m ? m[1] + m[2] + m[3] : null;
 }
+/**
+ * 주소 속 날짜가 발행일이 아니라 기사 작성 시작 시각인 매체 — 한국일보 "A2026112015310001023"은 11/20에 쓰기 시작해 11/24 04시에 실린 기획 기사였다
+ * (수동 클리핑 11/24 "정주행 끝나면 구독 해지?"가 그제 이전 기사로 빠졌다)
+ */
+const URL_DATE_IS_DRAFT = /(?:^|\.)hankookilbo\.com$/i;
+/** 주소 속 작성일이 그제 이전이라 묵은 기사로 볼지(국내 기사만 쓴다) */
+export function staleByUrlDate(url: string, now: number): boolean {
+  if (URL_DATE_IS_DRAFT.test(hostOf(url))) return false;
+  const d = urlYmd(url);
+  return !!d && d < kstYmd(now - 86_400_000);
+}
 
 /** 후보 수집 + 분류별 순위. allowTrial이 false면 네이버 키가 없을 때 국내 후보를 받지 않는다(운영 크론용) */
 export async function collectNews(opts: { now?: number; allowTrial?: boolean; withCast?: boolean; roster?: CastEntry[]; recent?: { title: string; url: string }[] } = {}): Promise<CollectResult> {
@@ -110,12 +121,8 @@ export async function collectNews(opts: { now?: number; allowTrial?: boolean; wi
   const [cands, castRaw] = await Promise.all([Promise.all(jobs).then((r) => r.flat()), castJob.then((r) => r.flat())]);
   // 하루 안 기사만 — 검색 API는 오래된 기사도 돌려준다(해외 피드는 OVERSEAS_MAX_AGE_HOURS까지)
   // 국내 기사는 주소 속 작성일(…/2026111835344)이 그제 이전이면 뺀다 — 검색 API 발행 시각이 갱신돼 이틀 전 복면가왕 기사가 다시 실린 사례(2026-11-20)
-  const yesterday = kstYmd(now - 86_400_000);
   const isFresh = (c: NewsCandidate) => {
-    if (c.category !== OVERSEAS_CATEGORY) {
-      const d = urlYmd(c.url);
-      if (d && d < yesterday) return false;
-    }
+    if (c.category !== OVERSEAS_CATEGORY && staleByUrlDate(c.url, now)) return false;
     return !c.publishedAt || now - Date.parse(c.publishedAt) <= (c.category === OVERSEAS_CATEGORY ? OVERSEAS_MAX_AGE_HOURS : 26) * 3_600_000;
   };
   // 어제 게시한 목록과 같은 소식은 다시 싣지 않는다 — 한경협 K-OTT·케이블TV 7609억·복면가왕 일정이 이틀 연속 올라온 사례(2026-11-19).

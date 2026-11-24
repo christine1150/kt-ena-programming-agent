@@ -23,8 +23,11 @@ export const RISE_TERMS = /시청률 (?:상승|급등|자체 최고|돌파)|역�
 
 // 타사 작품 출연자는 이름 명단 없이 본다(사용자 결정 2026-11-15) — 논란 기사는 너무 많아 중대 사안 표현 + 방송 맥락이 함께 있을 때만,
 // 흥행 기사는 '역대·자체 최고' 같은 기록 표현 + 방송 맥락이 함께 있을 때만 싣는다.
-const OTHER_SEVERE = /혐의|입건|송치|기소|구속|음주운전|마약|학폭|폭행|사기|탈세|하차|활동 중단|피소|성추행|성희롱|도박|갑질/;
+// "만취 음주 운전"처럼 띄어 쓴 제목도 같은 범죄로 본다(수동 클리핑 11/24 고경표 경찰 조사 기사가 빠진 사례)
+const OTHER_SEVERE = /혐의|입건|송치|기소|구속|음주 ?운전|만취 ?(?:운전|사고)|마약|학폭|폭행|사기|탈세|하차|활동 중단|피소|성추행|성희롱|도박|갑질/;
 const OTHER_RECORD = /역대 최고|최고 시청률|자체 최고|최고 화제성|화제성 1위|신드롬|역주행/;
+/** 지난 기록을 되짚는 기사("국내 방영 당시 최고 시청률 17%… 추억의 애니메이션 전시회")는 지금 흥행 신호가 아니다(2026-11-24) */
+const PAST_RECORD = /당시|추억의|전시회|그 시절|레전드/;
 const BROADCAST_CONTEXT = /드라마|예능|출연|하차|방송|배우|MC|주연|시청률|화제성/;
 /** 명단 이름이 걸렸을 때 연예인 기사로 볼 근거 낱말(정치·스포츠 동명이인 거르기) */
 const ENT_CONTEXT = /드라마|예능|영화|출연|방송|배우|가수|아이돌|그룹|MC|주연|조연|시청률|화제성|연예|소속사|팬|컴백|앨범|유튜버|크리에이터|활동 중단|자숙|하차|촬영|작품|캐스팅|공연|무대|뮤지컬|래퍼|댄서|개그맨|코미디언|방송인|셰프|프로게이머|마술사/;
@@ -38,8 +41,14 @@ const RISK_BONUS = 3;
  * 중대 범죄 — 사용자 지시(2026-11-15): "음주운전 같은 중대한 범죄는 편성에서 바로 제외해야 하므로 출연자 이슈 맨 위로".
  * 자사·타사 구분보다 앞선다(타사 출연자라도 자사 채널 재방·구매 편성에 걸릴 수 있다).
  */
-export const SEVERE_CRIME = /음주운전|음주 ?사고|뺑소니|마약|투약|대마|성추행|성폭행|성범죄|불법 ?촬영|폭행|상해|학폭|학교폭력|도박|사기|횡령|탈세|입건|송치|기소|구속|체포|실형|징역/;
+export const SEVERE_CRIME = /음주 ?운전|음주 ?사고|만취 ?(?:운전|사고)|뺑소니|마약|투약|대마|성추행|성폭행|성범죄|불법 ?촬영|폭행|상해|학폭|학교폭력|도박|사기|횡령|탈세|입건|송치|기소|구속|체포|실형|징역/;
 const SEVERE_BONUS = 100;
+/**
+ * 수사·재판이 실제로 진행된 기사 — 같은 사건 기사 중 이쪽을 대표로 고른다
+ * ("유재석 '자숙하러 오기 좋다' 농담이 현실로→고경표" 같은 재탕보다 "고경표, 경찰 조사", 수동 클리핑 11/24)
+ */
+const LEGAL_STEP = /경찰 ?(?:조사|출석|소환)|입건|송치|기소|구속|검찰|재판|선고|벌금/;
+const LEGAL_STEP_BONUS = 2;
 /** 지난 사건 이후 활동 재개 표현 */
 const COMEBACK = /딛고|씻(?:는다|고|어)|만에 (?:복귀|컴백)|자숙 (?:끝|후|딛)|(?:복귀|컴백)(?:한다|했다|작|무대)?\s*$/;
 /**
@@ -95,8 +104,9 @@ const nameTokens = (t: string) => new Set((t.match(/[가-힣]{3,4}/g) ?? []).fil
 function sameIncident(a: CastHit, b: CastHit): boolean {
   if (a.signal !== "risk" || b.signal !== "risk") return false;
   // 같은 범죄 낱말(음주운전 등)을 다룬 위험 기사는 한 사건으로 — 제목에 이름이 없는 "음주운전 연예인 출연 제한 국회 청원" 기사가 고경표 기사와 함께 오른 사례(2026-11-18)
-  const ca = a.title.match(SEVERE_CRIME)?.[0];
-  if (ca && ca === b.title.match(SEVERE_CRIME)?.[0]) return true;
+  // 띄어쓰기만 다른 표기("음주 운전"·"음주운전")는 같은 낱말로 본다
+  const ca = a.title.match(SEVERE_CRIME)?.[0].replace(/\s/g, "");
+  if (ca && ca === b.title.match(SEVERE_CRIME)?.[0].replace(/\s/g, "")) return true;
   const ta = nameTokens(a.title);
   for (const w of nameTokens(b.title)) if (ta.has(w)) return true;
   return false;
@@ -126,8 +136,21 @@ export function nameInTitle(title: string, name: string): boolean {
   return new RegExp(`(?<![가-힣])${esc}(?:[이가은는을를의과와도만에]?(?![가-힣]))`).test(title);
 }
 
+/** 제목 속 세 글자 낱말(사람 이름 후보, 뒤 조사 한 글자 허용) */
+const NAME3 = /(?<![가-힣])([가-힣]{3})(?:[이가은는을를의과와도만]?)(?![가-힣])/g;
+const name3Of = (t: string) => [...t.matchAll(NAME3)].map((m) => m[1]);
+/**
+ * 같은 날 다른 기사에서 '방송 맥락 + 중대 범죄'로 확인된 이름 — 명단 밖 출연자의 후속 기사는 제목에 방송 낱말이 없을 때가 많다
+ * ("'만취 음주 운전' 고경표, 경찰 조사…"가 빠지고 "힐링예능 찍고 한 일, … 고경표 만취 사고"에서만 방송 맥락이 보인 사례, 2026-11-24)
+ */
+export function broadcastCrimeNames(titles: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const t of titles) if (BROADCAST_CONTEXT.test(t) && SEVERE_CRIME.test(t)) for (const n of name3Of(t)) out.add(n);
+  return out;
+}
+
 /** 제목이 위험·흥행 신호를 가지는지, 그리고 명단의 누구와 연결되는지 판단. 신호가 없거나 명단과 무관하면 null */
-export function classifyCast(rawTitle: string, roster: CastEntry[]): { signal: CastSignal; entry: CastEntry } | null {
+export function classifyCast(rawTitle: string, roster: CastEntry[], knownCrimeNames?: Set<string>): { signal: CastSignal; entry: CastEntry } | null {
   // '승하차'(교통 기사)가 출연자 '하차'로 잡히지 않게(2026-11-15 시험에서 발견)
   const title = rawTitle.replace(/승하차/g, "승차");
   const risk = RISK_TERMS.test(title);
@@ -143,7 +166,10 @@ export function classifyCast(rawTitle: string, roster: CastEntry[]): { signal: C
   // 명단 밖 — 타사 작품 출연자 일반 규칙(엄격한 조건)
   if (BROADCAST_CONTEXT.test(title)) {
     if (risk && OTHER_SEVERE.test(title)) return { signal: "risk", entry: OTHER_ENTRY };
-    if (rise && OTHER_RECORD.test(title)) return { signal: "rise", entry: OTHER_ENTRY };
+    if (rise && OTHER_RECORD.test(title) && !PAST_RECORD.test(title)) return { signal: "rise", entry: OTHER_ENTRY };
+  } else if (knownCrimeNames && SEVERE_CRIME.test(title) && name3Of(title).some((n) => knownCrimeNames.has(n))) {
+    // 방송 낱말은 없지만 같은 날 방송인 범죄 기사로 확인된 이름의 중대 범죄 후속 기사
+    return { signal: "risk", entry: OTHER_ENTRY };
   }
   return null;
 }
@@ -151,10 +177,11 @@ export function classifyCast(rawTitle: string, roster: CastEntry[]): { signal: C
 /** 후보 기사 → 출연자 이슈 목록(같은 소식 묶기, 점수순, 상한) */
 export function pickCastIssues(cands: NewsCandidate[], roster: CastEntry[], quota: number): CastHit[] {
   const hits: CastHit[] = [];
+  const crimeNames = broadcastCrimeNames(cands.map((c) => c.title));
   for (const c of cands) {
     const title = stripPublisherSuffix(c.title, c.publisher);
     if (isLowValueCastTitle(title)) continue;
-    const cls = classifyCast(title, roster);
+    const cls = classifyCast(title, roster, crimeNames);
     if (!cls) continue;
     if (cls.signal === "risk" && isShowRecapRisk(title)) continue;
     // 지난 사건 뒤 복귀 기사("음주운전 논란 딛고 2년 만에 예능 복귀")는 새 범죄가 아니므로 '편성 제외 검토'가 아니라 '확인 필요',
@@ -162,7 +189,7 @@ export function pickCastIssues(cands: NewsCandidate[], roster: CastEntry[], quot
     const comeback = cls.signal === "risk" && COMEBACK.test(title);
     const signal: CastSignal = comeback && !SEVERE_CRIME.test(title) ? "rise" : cls.signal;
     const severe = signal === "risk" && SEVERE_CRIME.test(title) && !comeback;
-    hits.push({ ...c, title, signal, entry: cls.entry, severe, score: (severe ? SEVERE_BONUS : 0) + SCOPE_WEIGHT[cls.entry.scope] + (signal === "risk" ? RISK_BONUS : 0) });
+    hits.push({ ...c, title, signal, entry: cls.entry, severe, score: (severe ? SEVERE_BONUS + (LEGAL_STEP.test(title) ? LEGAL_STEP_BONUS : 0) : 0) + SCOPE_WEIGHT[cls.entry.scope] + (signal === "risk" ? RISK_BONUS : 0) });
   }
   hits.sort((a, b) => b.score - a.score || (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
   const out: CastHit[] = [];

@@ -1,6 +1,6 @@
 // 주요 뉴스 자동 선정 순수 함수 검사 — 실행: npm run test:auto-news
 import { CATEGORIES, KEY_PEOPLE, OVERSEAS_CATEGORY, kstDayStartIso } from "../src/lib/autoNews/config";
-import { isCleanTranslation, kstYmd, urlYmd } from "../src/lib/autoNews/collect";
+import { isCleanTranslation, kstYmd, staleByUrlDate, urlYmd } from "../src/lib/autoNews/collect";
 import { buildCastQueries, castDisplayTitle, castLabel, isLowValueCastTitle, isShowRecapRisk, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
 import { fullTitleFromHtml, insertCastIssues, stripTitleTags } from "../src/lib/autoNews/collect";
 import { CAST_ROSTER } from "../src/lib/autoNews/roster";
@@ -252,6 +252,47 @@ ok("기수 뒤가 가명이 아닌 나솔 기사는 감점 없음", rankCategory
 ok("한한령 시황은 하루 지나면 다시 싣지 않음", ONE_DAY_TOPICS.some((re) => re.test("中 한한령 해제 기대감에…콘텐츠·엔터 관련주 '강세'") && re.test("한한령 해빙 기대감, 코스닥 녹일까")));
 ok("주소 속 작성일 읽기", urlYmd("https://www.tenasia.co.kr/article/2026111835344") === "20261118" && urlYmd("https://www.newsis.com/view/NISX20261119_0003875521") === "20261119" && urlYmd("http://www.inews24.com/view/2028387") === null && urlYmd("https://deadline.com/2026/11/x-1237229307/") === null);
 ok("KST 날짜", kstYmd(Date.parse("2026-11-19T22:30:00Z")) === "20261120");
+
+// 수동 클리핑 대조(2026-11-24)
+{
+  const NOW24 = Date.parse("2026-11-24T03:00:00Z");
+  ok("한국일보 주소 날짜(작성 시작 시각)는 묵은 기사 판정에 안 씀", !staleByUrlDate("https://www.hankookilbo.com/news/article/A2026112015310001023", NOW24) && staleByUrlDate("https://www.tenasia.co.kr/article/2026112035344", NOW24));
+  const pol = CATEGORIES.find((x) => x.category === "정책")!;
+  const p = rankCategory(["불법 K콘텐츠 유통 '돈줄' 막는다…정부, 광고·결제 차단 추진", "문체부, 암표 거래 의심자 70명 추가 수사 의뢰"].map((t) => c("정책", t)), pol, NOW);
+  ok("불법 K콘텐츠 유통 차단은 정책, 암표 수사는 제외", p.length === 1 && p[0].title.startsWith("불법"));
+  const bs = CATEGORIES.find((x) => x.category === "방송가 소식")!;
+  const b = rankCategory(["'계약결혼' 두 부부 모두 위기…자체 최고 시청률 기록", "'이혼 조사관 홍말금' 첫 방송 시청률 2% 포문", "배우 김가나, 3월 결혼…“평생 함께할 사람”", "김가나 “결혼합니다”", "김가나, '결혼' 깜짝 발표"].map((t) => c(bs.category, t)), bs, NOW);
+  ok("작은따옴표 안 작품명('계약결혼'·'이혼 조사관 홍말금')은 제외어 검사에서 빼고, 결혼 소식은 그대로 제외", b.length === 2 && b.every((x) => /계약결혼|홍말금/.test(x.title)));
+  const ott = CATEGORIES.find((x) => x.category === "OTT")!;
+  const o = rankCategory(["정주행 끝나면 구독 해지?… '보는 곳'에서 '놀이터'로 진화하는 OTT", "주말에 정주행할 넷플릭스 시리즈", "경쾌한 음악·역동적 군무…신나는 '넷플릭스 탄생기'", "12년 전 극장가 뒤흔들었던 '이 영화'…내일 넷플릭스서 사라진다"].map((t) => c("OTT", t)), ott, NOW);
+  ok("구독 해지 분석 기사는 OTT로, 몰아보기·뮤지컬·종료 예정작은 제외", o.length === 1 && o[0].title.startsWith("정주행 끝나면"));
+  const ind = CATEGORIES.find((x) => x.category === "업계동향")!;
+  const col = rankCategory(["[콘텐츠칼럼] 사회적 공론 기구 '미디어발전위원회' 출범을 서둘러야", "[기자수첩] 케이블TV의 겨울", "[포토] 미디어발전위원회 출범식"].map((t) => c(ind.category, t)), ind, NOW);
+  ok("미디어 거버넌스 칼럼은 싣고 다른 칼럼·사진은 제외", col.length === 1 && col[0].title.includes("미디어발전위원회"));
+  const local = pickByRules([{ category: ind.category, quota: 7, ranked: rankCategory(["LG헬로비전, 지역채널 뉴스 AI로 만든다…동네 소식부터 재난 정보까지", "케이블TV, AI로 지역채널 뉴스 만든다", "케이블TV 지역뉴스도 AI 시대…SKB·LG헬로, 제작 방식 바꾼다", "SLL, '르네상스 프로젝트'로 2027년 정조준…8부작 드라마 4편 제작 확정"].map((t) => c(ind.category, t)), ind, NOW) }]);
+  ok("AI 지역뉴스 기사는 하루 1건, SLL 라인업은 선정", local.length === 2 && local.some((x) => x.title.startsWith("SLL")));
+  const yday = "LG헬로비전·CJ ENM, 콘텐츠 사용료 갈등 확산… 채널 송출 중단 현실화하나";
+  const again = (t: string) => ONE_DAY_TOPICS.some((re) => re.test(yday) && re.test(t));
+  ok("CJ ENM·LG헬로 분쟁은 이튿날 다시 안 싣되 결정이 나면 싣는다", again("CJ ENM·LG헬로 법적 공방 본격화…24일 심문에 송출 중단 '갈림길'") && again("LG헬로비전서 tvN SHOW·투니버스 못보나") && !again("법원, CJ ENM 가처분 기각…LG헬로비전 tvN 송출 중단"));
+  const sky = "유료방송 위기..LG헬로 '인적쇄신'·스카이라이프 '합병' 승부수 통할까";
+  const skyAgain = (t: string) => ONE_DAY_TOPICS.some((re) => re.test(sky) && re.test(t));
+  ok("스카이라이프·HCN 합병 해설은 이튿날 다시 안 싣되 이사회 의결은 싣는다", skyAgain("KT스카이라이프·HCN 합병해 시장점유율 10%...유료방송 돌파구 찾는다") && skyAgain("\"매각부터 합병까지\"…지정용號 KT스카이라이프, 사업 구조 '대수술'") && !skyAgain("KT스카이라이프, HCN 흡수합병 이사회 의결"));
+  const kt = CATEGORIES.find((x) => x.category === "KT 및 계열사 소식")!;
+  const k = rankCategory(["KT·행안부, AI로 지역상권 살리고 돌봄 개선 ‘맞손’", "[테크스냅] KT, 육군교육사령부와 미래 국방기술 발전 '맞손'"].map((t) => c(kt.category, t)), kt, NOW);
+  ok("정부 부처 협약(행안부)이 일반 기관 협약보다 앞", k[0].title.includes("행안부"));
+  ok("'CJ 채널'로 쓴 같은 분쟁 기사도 이튿날 다시 안 실음", again("'D-3' LG헬로비전에서 CJ 채널 못보나…\"송출종료 불변\""));
+  // 출연자 이슈
+  const lone = "'만취 음주 운전' 고경표, 경찰 조사…울먹이며 \"무책임한 모습 죄송\"";
+  ok("방송 낱말 없는 범죄 기사 하나만으로는 출연자 이슈 아님(일반인 사건과 구별 못 함)", pickCastIssues([cc(lone)], [], 4).length === 0 && pickCastIssues([cc("만취 음주 운전 30대 남성, 경찰 조사")], [], 4).length === 0);
+  const hit = pickCastIssues([cc(lone), cc("힐링예능 찍고 한 일, 박보검 봉사 vs 고경표 만취 사고 흉흉…두 절친"), cc("박보검, 연탄 봉사 현장 공개")], [], 4);
+  ok("같은 날 방송인 범죄 기사로 확인된 이름이면 띄어 쓴 '음주 운전' 후속 기사도 중대 사안(한 사건 1건)", hit.length === 1 && hit[0].severe && hit[0].title.includes("고경표"));
+  const step = pickCastIssues([{ ...cc("유재석, \"자숙하러 오기 좋다\"…농담이 현실로→고경표 '음주운전'으로 방송가 초비상"), publishedAt: "2026-11-24T02:00:00Z" }, { ...cc("'음주운전' 고경표, 경찰 조사 출석…드라마 하차"), publishedAt: "2026-11-24T01:00:00Z" }], [], 4);
+  ok("같은 사건이면 더 늦은 재탕 기사보다 경찰 조사 기사를 대표로", step.length === 1 && step[0].title.includes("경찰 조사"));
+  ok("따옴표 속 '음주운전'만 같은 다른 날 기사는 다른 소식", !sameStory("'음주운전' 고경표, '핑계고' 시상식 후보 올랐다…방송가 민폐 끼치고도 인기상 명단 등장", "'음주운전' 고경표, 경찰 조사 출석...대리운전 미호출 질문엔 한숨만"));
+  ok("지난 기록을 되짚는 전시회 기사는 출연자 이슈 아님", pickCastIssues([cc("국내 방영 당시 최고 시청률 17%… 역대급 전시회로 찾아오는 '추억의 애니메이션'")], [], 4).length === 0);
+  const pledge = rankCategory(["최유정 “‘미스터트롯4’ 시청률 28% 돌파하면 트로트 도전할 것”", "'계약결혼' 두 부부 모두 위기…자체 최고 시청률 기록"].map((t) => c(bs.category, t)), bs, NOW);
+  ok("시청률 공약 발언 기사는 자체 최고 기록 기사보다 뒤", pledge[0].title.includes("계약결혼"));
+}
 
 // 꼭 보는 거래처 인물(사용자 지시 2026-11-24)
 {

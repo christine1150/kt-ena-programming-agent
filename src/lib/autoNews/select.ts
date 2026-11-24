@@ -5,8 +5,11 @@ import {
   ENA_MAIN_PROGRAMS,
   ENA_RELATED,
   CATEGORIES,
+  CAST_RISK_TERMS,
   CLICKBAIT,
   CLICKBAIT_PENALTY,
+  COLUMN_ALLOWED,
+  COLUMN_TAG,
   GLOBAL_EXCLUDE,
   KEY_PEOPLE,
   KEY_PEOPLE_BOOST,
@@ -116,6 +119,7 @@ interface TitleFeatures {
 const PARTICLE = /(?:으로|에서|에도|까지|부터|은|는|이|가|을|를|도|의|에|로|와|과|서)$/;
 /** 따옴표 안에 흔히 들어가지만 작품명이 아닌 말 — 이것만 같다고 같은 소식으로 보지 않는다 */
 const QUOTED_STOP = new Set(["ai", "ax", "ott", "ip", "k콘텐츠", "1위", "논란", "단독"]);
+const QUOTED_INCIDENT = new RegExp(`^(?:${CAST_RISK_TERMS.source}|음주|만취)`);
 /** 서로 다른 소식에도 흔히 같이 나오는 말 — 주어가 같을 때 이 말만 겹쳐서는 같은 소식으로 보지 않는다 */
 const COMMON_WORDS = new Set(["콘텐츠", "드라마", "글로벌", "플랫폼", "서비스", "시청률", "미디어", "유료방송", "케이블tv", "영업이익", "영업익", "3분기", "4분기", "오리지널", "신규", "본격", "강화", "확대", "출시", "공개", "선보", "나선다", "추진", "시장", "사업", "전략", "올해", "내년", "투자", "공략", "협력", "체결", "최대", "최초", "역대", "예능", "방송", "채널"]);
 const featureCache = new Map<string, TitleFeatures>();
@@ -128,17 +132,21 @@ function featuresOf(title: string): TitleFeatures {
     // 시즌 번호는 뗀다 — '데블스플랜'과 '데블스 플랜3'은 같은 작품(2026-11-18 출연자 이슈에 같은 사건 2건)
     let key = m[1].split(/[:：\-–—]/)[0].toLowerCase().replace(/[^0-9a-z가-힣]/g, "");
     if (/[가-힣]{4,}\d$/.test(key)) key = key.slice(0, -1);
-    if (key.length >= 2 && !QUOTED_STOP.has(key)) quoted.add(key);
+    // '음주운전'·'만취사고'처럼 따옴표로 강조한 사건 낱말은 작품명이 아니다 — 같은 사람의 다른 날 기사(시상식 후보 ↔ 경찰 조사)가 한 소식으로 묶여 빠진 사례(2026-11-24)
+    if (key.length >= 2 && !QUOTED_STOP.has(key) && !QUOTED_INCIDENT.test(key)) quoted.add(key);
   }
   const list = title
     .toLowerCase()
     .replace(/\[[^\]]*\]/g, " ")
+    // "출석...대리운전"처럼 말줄임 점으로 붙은 낱말은 나눈다(숫자 속 점 1.2%는 그대로)
+    .replace(/\.{2,}/g, " ")
     .replace(/(cj|lg|sk|kt)\s+(?=[a-z가-힣])/g, "$1")
     .split(/[^0-9a-z가-힣%.]+/)
     .map((w) => w.replace(/^\.+|\.+$/g, ""))
     .map((w) => (w.length >= 3 ? w.replace(PARTICLE, "") : w))
     .filter((w) => w.length >= 2);
-  const f = { words: new Set(list), head: list[0] ?? "", quoted };
+  // 주어는 사건 낱말('음주운전' 고경표, …)을 건너뛴 첫 단어 — 같은 사람의 다른 날 기사가 '음주운전'을 주어로 삼아 한 소식으로 묶인 사례(2026-11-24)
+  const f = { words: new Set(list), head: list.find((w) => !QUOTED_INCIDENT.test(w)) ?? list[0] ?? "", quoted };
   featureCache.set(title, f);
   return f;
 }
@@ -166,14 +174,20 @@ const TOPIC_CAPS: { re: RegExp; max: number }[] = [{ re: /케이블 ?TV|(?<![A-Z
   // 같은 날 화제성 순위 기사는 작품만 달리 여러 건 나온다(데블스 플랜·장동민 '화제성 1위' 2건, 2026-11-20)
   { re: /화제성 ?1위/, max: 1 },
   // 같은 국회 토론회를 다른 제목으로 쓴 K-FAST 기사 2건(2026-11-20) — 'K-FAST'는 따옴표 안 하이픈에서 잘려 작품명 비교로 못 묶는다
-  { re: /K-?FAST/i, max: 1 }];
+  { re: /K-?FAST/i, max: 1 },
+  // 케이블TV AI 지역뉴스 제작 기사 3건이 "지역채널 뉴스"·"지역뉴스"로 표기가 달라 따로 올랐다(2026-11-24)
+  { re: /지역 ?(?:채널 ?)?뉴스|지역채널/, max: 1 }];
 /**
  * 하루 지나면 같은 주제로 다시 싣지 않는 소식 — 매체마다 제목이 달라 같은 소식 판정으로 못 거르는 것들(한경협 K-OTT 제언, 케이블TV 가계 부담 조사).
  * 어제 게시 목록에 이 표현이 있었다면 오늘 후보 중 같은 표현은 뺀다(2026-11-19: 이틀 연속 올라온 사례)
  */
 export const ONE_DAY_TOPICS: RegExp[] = [/한경협|한국경제인협회|K-OTT|토종 OTT/, /케이블 ?TV (?:사라|없어|소멸|퇴출)|SO 무너|7[56]\d\d억/,
   // 한한령 해제 기대 시황은 11/19·11/20 이틀 연속 실렸다(수동 클리핑 11/20에는 없음)
-  /한한령|한중 (?:FTA|콘텐츠 교류)/];
+  /한한령|한중 (?:FTA|콘텐츠 교류)/,
+  // 이어지는 분쟁·합병 기사는 결정(가처분 인용·기각, 송출 중단 돌입, 이사회 의결 등)이 나온 날만 다시 싣는다 —
+  // CJ ENM·LG헬로 사용료 분쟁, 스카이라이프·HCN 합병 기사가 11/23·11/24 이틀 연속 실렸다(수동 클리핑 11/24에는 없음)
+  /^(?!.*(?:인용|기각|판결|결정|합의|타결|중단됐|중단 돌입|블랙아웃)).*(?:(?:CJ|tvN|투니버스).*(?:LG ?헬로|헬로비전)|(?:LG ?헬로|헬로비전).*(?:CJ|tvN|투니버스))/,
+  /^(?!.*(?:의결|확정|승인|인가|공시|체결|완료)).*(?:스카이라이프.*(?:HCN|합병)|(?:HCN|합병).*스카이라이프)/];
 /** 제목 속 큰 금액·수치("7609억") — 같은 조사·발표를 다룬 기사는 매체마다 제목이 달라도 이 수치가 같다 */
 function bigFigures(title: string): Set<string> {
   const out = new Set<string>();
@@ -230,7 +244,8 @@ export function sameStory(a: string, b: string): boolean {
     // 주어가 같고 주어 말고도 흔하지 않은 3자 이상 단어(제휴사 이름 등)가 겹치면 같은 소식 —
     // "CJ ENM K팝 채널, 샤오미 TV+ 타고…"와 "CJ ENM, 샤오미 스마트TV에 K-콘텐츠…"가 함께 오른 사례(2026-11-20)
     if (headAlike && ratio >= 0.25) {
-      for (const w of A.words) if (w !== A.head && w !== B.head && w.length >= 3 && !/^\d/.test(w) && !COMMON_WORDS.has(w) && B.words.has(w)) return true;
+      // 사건 낱말(음주운전 등)은 같은 사람의 다른 날 기사에도 겹치므로 근거로 쓰지 않는다
+      for (const w of A.words) if (w !== A.head && w !== B.head && w.length >= 3 && !/^\d/.test(w) && !COMMON_WORDS.has(w) && !QUOTED_INCIDENT.test(w) && B.words.has(w)) return true;
     }
   }
   return false;
@@ -280,10 +295,25 @@ export function clusterStories(items: ScoredCandidate[]): ScoredCandidate[] {
   return reps;
 }
 
+/**
+ * 분류 제외어를 볼 제목 — 작은따옴표·꺾쇠 안의 작품명(4자 이상)을 뺀다. '계약결혼'·'이혼 조사관 홍말금'이 결혼·이혼 제외어에 걸려 빠지던 문제(2026-11-24).
+ * 큰따옴표는 발언 인용이라 남긴다(“결혼합니다” 같은 사생활 기사는 계속 뺀다). '결혼'·'열애설'처럼 짧은 강조어도 남긴다
+ */
+export function unquotedTitle(title: string): string {
+  return title.replace(/(?<![0-9A-Za-z가-힣])['‘<《〈「『]([^'‘’<>《》〈〉「」『』]{4,30})['’>》〉」』]/g, " ");
+}
+
+/** 전체 제외 대상인지 — 의견 기사([칼럼]·[기고] 등)라도 미디어 거버넌스 주제면 싣는다(말머리를 떼고 다시 본다) */
+function globallyExcluded(title: string, globalExclude: RegExp): boolean {
+  if (!globalExclude.test(title)) return false;
+  return !(COLUMN_ALLOWED.test(title) && !globalExclude.test(title.replace(COLUMN_TAG, " ")));
+}
+
 /** 분류 하나의 후보를 걸러 점수순으로 정렬한다(대표 기사만) */
-export function rankCategory(cands: NewsCandidate[], cfg: Pick<CategoryConfig, "boost" | "exclude" | "require">, now: number, globalExclude: RegExp = GLOBAL_EXCLUDE): ScoredCandidate[] {
+export function rankCategory(cands: NewsCandidate[], cfg: Pick<CategoryConfig, "boost" | "exclude" | "require" | "excludeOutsideQuotes">, now: number, globalExclude: RegExp = GLOBAL_EXCLUDE): ScoredCandidate[] {
+  const excluded = (t: string) => !!cfg.exclude?.test(cfg.excludeOutsideQuotes ? unquotedTitle(t) : t);
   // 꼭 보는 거래처 인물 기사는 분류별 제외·필수어 규칙을 건너뛴다(사진·부고 같은 전체 제외는 그대로)
-  const kept = cands.filter((c) => !globalExclude.test(c.title) && (mentionsKeyPerson(c) || (!(cfg.exclude?.test(c.title)) && (!cfg.require || cfg.require.test(c.title)))));
+  const kept = cands.filter((c) => !globallyExcluded(c.title, globalExclude) && (mentionsKeyPerson(c) || (!excluded(c.title) && (!cfg.require || cfg.require.test(c.title)))));
   const scored = kept.map((c) => ({ ...c, score: baseScore(c, cfg.boost, now), coverage: 1 }));
   return clusterStories(scored)
     .map((c) => ({ ...c, score: c.score + Math.min(4, c.coverage - 1) }))
@@ -332,12 +362,10 @@ export function pickByRules(pools: RankedPool[]): PublishItem[] {
     for (const r of p.ranked) {
       if (picked.length >= p.quota) break;
       if (r.score <= 0 || (isEna(r.title) && !allowed.has(r.url))) continue;
-      const cap = TOPIC_CAPS.find((t) => t.re.test(r.title));
-      if (cap) {
-        const n = topicCount.get(cap.re) ?? 0;
-        if (n >= cap.max) continue;
-        topicCount.set(cap.re, n + 1);
-      }
+      // 걸리는 주제 상한을 모두 본다("케이블TV, AI로 지역채널 뉴스"는 케이블TV·지역뉴스 둘 다에 걸린다 — 2026-11-24)
+      const caps = TOPIC_CAPS.filter((t) => t.re.test(r.title));
+      if (caps.some((cap) => (topicCount.get(cap.re) ?? 0) >= cap.max)) continue;
+      for (const cap of caps) topicCount.set(cap.re, (topicCount.get(cap.re) ?? 0) + 1);
       picked.push(r);
     }
     return picked.map((r) => ({ category: p.category, title: r.title, url: r.url }));
