@@ -32,6 +32,8 @@ export interface NewsCandidate {
   publisher: string;
   /** ISO 시각(없으면 null) */
   publishedAt: string | null;
+  /** 본문 요약(네이버 검색 description·해외 피드 description) — 거래처 인물 이름 확인에만 쓴다(화면에는 안 나감) */
+  summary?: string;
 }
 
 export interface ScoredCandidate extends NewsCandidate {
@@ -52,9 +54,12 @@ export function decodeEntities(s: string): string {
     .trim();
 }
 
-/** RSS 2.0 item 추출(title·link·pubDate·source) — 형식이 단순해 정규식으로 읽는다 */
-export function parseRssItems(xml: string): { title: string; link: string; pubDate: string | null; source: string | null }[] {
-  const out: { title: string; link: string; pubDate: string | null; source: string | null }[] = [];
+/** 요약문은 앞부분만 보관한다(인물 이름 확인용) */
+export const SUMMARY_MAX = 600;
+
+/** RSS 2.0 item 추출(title·link·pubDate·source·description) — 형식이 단순해 정규식으로 읽는다 */
+export function parseRssItems(xml: string): { title: string; link: string; pubDate: string | null; source: string | null; description: string | null }[] {
+  const out: { title: string; link: string; pubDate: string | null; source: string | null; description: string | null }[] = [];
   for (const m of xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/g)) {
     const body = m[1];
     const pick = (tag: string) => {
@@ -66,7 +71,9 @@ export function parseRssItems(xml: string): { title: string; link: string; pubDa
     if (!title || !link || !/^https?:\/\//i.test(link)) continue;
     const d = pick("pubDate");
     const t = d ? Date.parse(d) : NaN;
-    out.push({ title, link, pubDate: Number.isFinite(t) ? new Date(t).toISOString() : null, source: pick("source") });
+    // description 안의 HTML은 엔티티로 감싸여 오므로 decodeEntities를 두 번 거쳐 태그를 지운다
+    const desc = pick("description");
+    out.push({ title, link, pubDate: Number.isFinite(t) ? new Date(t).toISOString() : null, source: pick("source"), description: desc ? decodeEntities(desc).slice(0, SUMMARY_MAX) || null : null });
   }
   return out;
 }
@@ -229,11 +236,19 @@ export function sameStory(a: string, b: string): boolean {
   return false;
 }
 
+/**
+ * 거래처 인물 기사인지 — 제목, 또는 제목+본문 요약에 이름과 회사·라이선싱 표현이 함께 있으면 해당(사용자 지시 2026-11-24: 본문에 나온 기사도).
+ * 요약은 본문 첫 한두 문장(국내)·피드 요약(해외)이라 긴 본문 뒤쪽에만 나오는 이름은 못 잡는다
+ */
+export function mentionsKeyPerson(c: Pick<NewsCandidate, "title" | "summary">): boolean {
+  return KEY_PEOPLE.test(c.title) || (!!c.summary && KEY_PEOPLE.test(`${c.title} ${c.summary}`));
+}
+
 function baseScore(c: NewsCandidate, boost: [RegExp, number][], now: number): number {
   let s = 0;
   for (const [re, w] of boost) if (re.test(c.title)) s += w;
   // 꼭 보는 거래처 인물 기사는 어느 분류든 맨 앞으로(사용자 지시 2026-11-24)
-  if (KEY_PEOPLE.test(c.title)) s += KEY_PEOPLE_BOOST;
+  if (mentionsKeyPerson(c)) s += KEY_PEOPLE_BOOST;
   if (TRUSTED_PUBLISHERS.test(c.publisher) || TRUSTED_HOSTS.test(c.publisher)) s += 2;
   if (CLICKBAIT.test(c.title)) s -= CLICKBAIT_PENALTY;
   if (ROUNDUP.test(c.title)) s -= ROUNDUP_PENALTY;
@@ -268,7 +283,7 @@ export function clusterStories(items: ScoredCandidate[]): ScoredCandidate[] {
 /** 분류 하나의 후보를 걸러 점수순으로 정렬한다(대표 기사만) */
 export function rankCategory(cands: NewsCandidate[], cfg: Pick<CategoryConfig, "boost" | "exclude" | "require">, now: number, globalExclude: RegExp = GLOBAL_EXCLUDE): ScoredCandidate[] {
   // 꼭 보는 거래처 인물 기사는 분류별 제외·필수어 규칙을 건너뛴다(사진·부고 같은 전체 제외는 그대로)
-  const kept = cands.filter((c) => !globalExclude.test(c.title) && (KEY_PEOPLE.test(c.title) || (!(cfg.exclude?.test(c.title)) && (!cfg.require || cfg.require.test(c.title)))));
+  const kept = cands.filter((c) => !globalExclude.test(c.title) && (mentionsKeyPerson(c) || (!(cfg.exclude?.test(c.title)) && (!cfg.require || cfg.require.test(c.title)))));
   const scored = kept.map((c) => ({ ...c, score: baseScore(c, cfg.boost, now), coverage: 1 }));
   return clusterStories(scored)
     .map((c) => ({ ...c, score: c.score + Math.min(4, c.coverage - 1) }))

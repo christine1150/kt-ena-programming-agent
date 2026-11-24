@@ -6,7 +6,7 @@ import { CATEGORIES, OVERSEAS_CATEGORY, OVERSEAS_FEEDS, OVERSEAS_MAX_AGE_HOURS }
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { CAST_RISK_CATEGORY, buildCastQueries, castLabel, pickCastIssues, type CastEntry } from "./cast";
 import { CAST_ROSTER } from "./roster";
-import { decodeEntities, parseRssItems, ONE_DAY_TOPICS, pickByRules, rankAll, sameStory, stripPublisherSuffix, type NewsCandidate, type PublishItem, type RankedPool } from "./select";
+import { decodeEntities, parseRssItems, ONE_DAY_TOPICS, SUMMARY_MAX, pickByRules, rankAll, sameStory, stripPublisherSuffix, type NewsCandidate, type PublishItem, type RankedPool } from "./select";
 
 const UA = "Mozilla/5.0 (compatible; news-reader)";
 
@@ -38,11 +38,13 @@ async function searchNaver(query: string, category: string, id: string, secret: 
   const text = await fetchText(url, { "X-NCP-APIGW-API-KEY-ID": id, "X-NCP-APIGW-API-KEY": secret });
   if (!text) return [];
   try {
-    const items = (JSON.parse(text).items ?? []) as { title: string; originallink?: string; link: string; pubDate?: string }[];
+    const items = (JSON.parse(text).items ?? []) as { title: string; originallink?: string; link: string; pubDate?: string; description?: string }[];
     return items.map((i) => {
       const link = i.originallink || i.link;
       const t = i.pubDate ? Date.parse(i.pubDate) : NaN;
-      return { category, title: decodeEntities(i.title), url: link, publisher: hostOf(link), publishedAt: Number.isFinite(t) ? new Date(t).toISOString() : null };
+      // description은 본문 첫 한두 문장 — 거래처 인물 이름 확인에 쓴다(2026-11-24)
+      const summary = i.description ? decodeEntities(i.description).slice(0, SUMMARY_MAX) : "";
+      return { category, title: decodeEntities(i.title), url: link, publisher: hostOf(link), publishedAt: Number.isFinite(t) ? new Date(t).toISOString() : null, ...(summary ? { summary } : {}) };
     });
   } catch {
     return [];
@@ -61,7 +63,7 @@ async function fetchOverseas(): Promise<NewsCandidate[]> {
   const all = await Promise.all(
     OVERSEAS_FEEDS.map(async (f) => {
       const xml = await fetchText(f.url);
-      return xml ? parseRssItems(xml).map((i) => ({ category: OVERSEAS_CATEGORY, title: i.title, url: i.link, publisher: f.name, publishedAt: i.pubDate })) : [];
+      return xml ? parseRssItems(xml).map((i) => ({ category: OVERSEAS_CATEGORY, title: i.title, url: i.link, publisher: f.name, publishedAt: i.pubDate, ...(i.description ? { summary: i.description } : {}) })) : [];
     })
   );
   return all.flat();

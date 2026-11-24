@@ -5,7 +5,7 @@ import { buildCastQueries, castDisplayTitle, castLabel, isLowValueCastTitle, isS
 import { fullTitleFromHtml, insertCastIssues, stripTitleTags } from "../src/lib/autoNews/collect";
 import { CAST_ROSTER } from "../src/lib/autoNews/roster";
 import { parseRosterText, rosterToText } from "../src/lib/autoNews/rosterText";
-import { ONE_DAY_TOPICS, decodeEntities, parseRssItems, pickByRules, rankAll, rankCategory, sameStory, stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "../src/lib/autoNews/select";
+import { ONE_DAY_TOPICS, mentionsKeyPerson, decodeEntities, parseRssItems, pickByRules, rankAll, rankCategory, sameStory, stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "../src/lib/autoNews/select";
 
 let pass = 0;
 let fail = 0;
@@ -261,6 +261,16 @@ ok("KST 날짜", kstYmd(Date.parse("2026-11-19T22:30:00Z")) === "20261120");
   const ov = rankCategory([c(OVERSEAS_CATEGORY, "Netflix Renews Hit Drama for Season 3", "Variety"), c(OVERSEAS_CATEGORY, "Paramount's Jonathan Greenberg on International Licensing Push in Asia", "Variety"), c(OVERSEAS_CATEGORY, "Warner Bros. Discovery Taps Jae Chang to Lead APAC Content Licensing", "Deadline"), c(OVERSEAS_CATEGORY, "Paramount Promotes June Choi in North Asia TV Distribution", "Deadline")], { boost: [], exclude: /Promotes/, require: /Netflix/ }, NOW);
   ok("해외 기사에서 세 사람(그린버그·Jae Chang·June Choi)은 분류 제외·필수어와 상관없이 선정", ov.length === 4 && ov.slice(0, 3).every((x) => /Greenberg|Jae Chang|June Choi/.test(x.title)));
   ok("다른 조나단 그린버그(회사·라이선싱 표현 없음)는 해당 없음", !KEY_PEOPLE.test("Jonathan Greenberg's New Book on Politics"));
+  // 본문 요약에만 이름이 나오는 기사(2026-11-24)
+  const body = { ...c("OTT", "K드라마 판권 시장, 글로벌 스튜디오 러브콜 잇따라"), summary: "장재호 파라마운트 스카이댄스 APAC 라이선싱 총괄은 \"한국 드라마 판권 구매를 늘리겠다\"고 밝혔다." };
+  const r2 = rankCategory([c("OTT", "넷플릭스, 광고형 요금제 가입자 확대"), body], ott, NOW);
+  ok("요약문에 장재호+회사가 나오면 제목에 이름이 없어도 맨 앞", r2[0].title.startsWith("K드라마 판권"));
+  ok("요약문에 이름만 있고 회사·라이선싱 표현이 없으면 해당 없음", !mentionsKeyPerson({ title: "주말 드라마 시청률", summary: "배우 장재호가 출연한 드라마가 화제다." }));
+  // 실제 기사(2024-02 선임 기사) 제목·요약 — 제목엔 회사, 요약엔 이름이 있다
+  ok("실제 선임 기사 요약에서 장재호 확인", mentionsKeyPerson({ title: "워너브러더스, 韓 디스커버리 예능 제작 종료…새 대표 체제", summary: "이에 앞으로는 남아시아, 동남아시아 및 한국 콘텐츠 라이선싱 총괄(Head)인 장재호 수석부사장이 한국 대표로" }));
+  ok("동명이인(축구 선수 최준이…)·다른 그린버그(처브)는 해당 없음", !mentionsKeyPerson({ title: "공중 볼 다투는 최준", summary: "최준이 17일 카타르와 평가전 중" }) && !mentionsKeyPerson({ title: "버핏의 '미스터리 종목' 공개됐다", summary: "에번 그린버그가 이끌고 있다. 3월 말 기준 파라마운트 지분도 팔았다." }));
+  const rss = parseRssItems(`<rss><item><title>Asia Licensing Heats Up</title><link>https://v.com/1</link><description>&lt;p&gt;Paramount&amp;#8217;s June Choi said demand is rising.&lt;/p&gt;</description></item></rss>`);
+  ok("해외 피드 요약문 읽기(감싼 HTML 제거)", rss[0]?.description === "Paramount’s June Choi said demand is rising." && mentionsKeyPerson({ title: rss[0].title, summary: rss[0].description ?? undefined }));
 }
 
 ok("정상 번역 통과(원제·HBO맥스 표기)", isCleanTranslation("넷플릭스, 할런 코벤 원작 'The Innocent' 제작 확정…HBO맥스와 경쟁"));
