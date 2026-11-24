@@ -101,7 +101,7 @@ export interface CastHit extends NewsCandidate {
 const NAME_STOP = new Set(["방송가", "드라마", "소속사", "예능에서", "예능서", "출연자", "시청자", "제작진", "음주운전", "초비상", "통편집", "사과문", "기자회견"]);
 const nameTokens = (t: string) => new Set((t.match(/[가-힣]{3,4}/g) ?? []).filter((w) => !NAME_STOP.has(w) && !SEVERE_CRIME.test(w)));
 /** 둘 다 위험 기사이고 같은 이름(3~4자 낱말)을 공유하면 같은 사건으로 본다 — 최예나 표절 의혹·해명 기사 2건이 함께 오른 사례(2026-11-17)로 중대 범죄 밖으로 넓힘 */
-function sameIncident(a: CastHit, b: CastHit): boolean {
+function sameIncident(a: Pick<CastHit, "title" | "signal">, b: Pick<CastHit, "title" | "signal">): boolean {
   if (a.signal !== "risk" || b.signal !== "risk") return false;
   // 같은 범죄 낱말(음주운전 등)을 다룬 위험 기사는 한 사건으로 — 제목에 이름이 없는 "음주운전 연예인 출연 제한 국회 청원" 기사가 고경표 기사와 함께 오른 사례(2026-11-18)
   // 띄어쓰기만 다른 표기("음주 운전"·"음주운전")는 같은 낱말로 본다
@@ -110,6 +110,15 @@ function sameIncident(a: CastHit, b: CastHit): boolean {
   const ta = nameTokens(a.title);
   for (const w of nameTokens(b.title)) if (ta.has(w)) return true;
   return false;
+}
+
+/**
+ * 제목만으로 같은 사건인지 — 둘 다 위험 낱말이 있을 때만(10:30 추가 갱신이 이미 실린 출연자 기사와 비교할 때 쓴다).
+ * "'만취 음주 운전' 고경표, 경찰 조사"가 실린 목록에 "유재석 농담이 현실로→고경표 '음주운전'"을 더하려던 시험 사례(2026-11-24)
+ */
+export function sameIncidentTitle(a: string, b: string): boolean {
+  if (!RISK_TERMS.test(a) || !RISK_TERMS.test(b)) return false;
+  return sameIncident({ title: a, signal: "risk" }, { title: b, signal: "risk" });
 }
 
 /** 검색어: 자사 작품은 출연자 이름별(위험·흥행 두 갈래), 나는 SOLO는 프로그램 단위(일반인 이름을 따로 수집하지 않는다), 타사는 위험만 */

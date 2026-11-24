@@ -3,6 +3,7 @@
 // 해외 기사는 더하지 않는다(번역 LLM을 부르지 않으려고 — 해외 피드는 미국 저녁 시간이라 07:30 이후 새 기사도 적다).
 import { CAST_RISK_CATEGORY, CATEGORIES, ENA_DAILY_MAX, ENA_MAIN_PROGRAMS, ENA_RELATED, OVERSEAS_CATEGORY } from "./config";
 import { ONE_DAY_TOPICS, TOPIC_CAPS, sameStory, type PublishItem } from "./select";
+import { sameIncidentTitle } from "./cast";
 
 /** 한 분류에 더하는 새 기사 상한 — 목록이 아침보다 지나치게 길어지지 않게 */
 export const REFRESH_ADD_MAX = 2;
@@ -28,8 +29,16 @@ function categoryRank(cat: string): number {
  * - 기존 기사는 순서까지 그대로 두고, 새 기사는 분류 끝에 붙인다(중대 사안 출연자 기사는 분류 맨 위 중대 사안들 바로 뒤)
  */
 export function mergeRefresh(current: PublishItem[], fresh: PublishItem[], addMax = REFRESH_ADD_MAX): { items: PublishItem[]; added: PublishItem[] } {
+  // 출연자 이슈는 제목이 달라도 같은 사람·같은 범죄 낱말이면 같은 사건으로 본다(cast.ts sameIncidentTitle)
   const known = (f: PublishItem, list: PublishItem[]) =>
-    list.some((c) => c.url === f.url || (c.category !== OVERSEAS_CATEGORY && (sameStory(bare(c.title), bare(f.title)) || ONE_DAY_TOPICS.some((re) => re.test(bare(c.title)) && re.test(bare(f.title))))));
+    list.some(
+      (c) =>
+        c.url === f.url ||
+        (c.category !== OVERSEAS_CATEGORY &&
+          (sameStory(bare(c.title), bare(f.title)) ||
+            ONE_DAY_TOPICS.some((re) => re.test(bare(c.title)) && re.test(bare(f.title))) ||
+            (c.category === CAST_RISK_CATEGORY && f.category === CAST_RISK_CATEGORY && sameIncidentTitle(bare(c.title), bare(f.title)))))
+    );
   let ena = current.filter((c) => c.category !== CAST_RISK_CATEGORY && isEna(c.title)).length;
   const added: PublishItem[] = [];
   const perCat = new Map<string, number>();

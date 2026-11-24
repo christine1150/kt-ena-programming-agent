@@ -326,6 +326,9 @@ ok("지금 건강 문제 기사는 위험 신호로 선정", !isLowValueCastTitl
   const fresh = [{ category: "KT 및 계열사 소식", title: "KT·행안부, AI로 지역상권 살리고 돌봄 개선 맞손", url: "n1" }, { category: "방송가 소식", title: "'스파크업', 국내 최초 에너지 창업 서바이벌", url: "n2" }, { category: "방송가 소식", title: "'계약결혼' 자체 최고 시청률 기록", url: "n3" }, { category: OVERSEAS_CATEGORY, title: "Imax To Screen Super Bowl", url: "n4" }, { category: "출연자 이슈", title: "고경표, 경찰 조사 (중대 사안 · 편성 제외 검토)", url: "n5" }];
   const m = mergeRefresh(cur, fresh);
   ok("추가 갱신은 기존 기사를 그대로 두고 새 소식만(같은 소식·해외 제외) 분류 끝에 더함", m.added.length === 3 && m.items.slice(0, 2).map((x) => x.url).join() === "u1,n1" && m.items.map((x) => x.url).join() === "u1,n1,u2,n3,n5,u3");
+  const castCur = [{ category: "출연자 이슈", title: "'만취 음주 운전' 고경표, 경찰 조사…울먹이며 \"무책임한 모습 죄송\" (중대 사안 · 편성 제외 검토)", url: "c1" }];
+  const castNew = mergeRefresh(castCur, [{ category: "출연자 이슈", title: "유재석, \"자숙하러 오기 좋다\"…농담이 현실로→고경표 '음주운전'으로… (중대 사안 · 편성 제외 검토)", url: "c2" }, { category: "출연자 이슈", title: "김유정, 2주 연속 화제성 1위 '압도적 퀸'", url: "c3" }]);
+  ok("이미 실린 출연자 사건(고경표)의 다른 제목 기사는 더하지 않음", castNew.added.length === 1 && castNew.added[0].url === "c3");
 }
 
 // 관리자 명단 글 형식
