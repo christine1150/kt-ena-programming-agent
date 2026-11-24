@@ -170,7 +170,7 @@ function latinNames(title: string): Set<string> {
 }
 
 /** 한 분류 안에서 같은 주제를 싣는 최대 건수 */
-const TOPIC_CAPS: { re: RegExp; max: number }[] = [{ re: /케이블 ?TV|(?<![A-Za-z])SO(?![A-Za-z])/, max: 2 }, { re: /K-OTT|토종 OTT/, max: 1 }, { re: /한한령/, max: 1 }, { re: /디즈니\+|디즈니플러스/, max: 2 },
+export const TOPIC_CAPS: { re: RegExp; max: number }[] = [{ re: /케이블 ?TV|(?<![A-Za-z])SO(?![A-Za-z])/, max: 2 }, { re: /K-OTT|토종 OTT/, max: 1 }, { re: /한한령/, max: 1 }, { re: /디즈니\+|디즈니플러스/, max: 2 },
   // 같은 날 화제성 순위 기사는 작품만 달리 여러 건 나온다(데블스 플랜·장동민 '화제성 1위' 2건, 2026-11-20)
   { re: /화제성 ?1위/, max: 1 },
   // 같은 국회 토론회를 다른 제목으로 쓴 K-FAST 기사 2건(2026-11-20) — 'K-FAST'는 따옴표 안 하이픈에서 잘려 작품명 비교로 못 묶는다

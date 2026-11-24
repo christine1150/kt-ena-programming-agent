@@ -4,6 +4,7 @@ import { isCleanTranslation, kstYmd, staleByUrlDate, urlYmd } from "../src/lib/a
 import { buildCastQueries, castDisplayTitle, castLabel, isLowValueCastTitle, isShowRecapRisk, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
 import { fullTitleFromHtml, insertCastIssues, stripTitleTags } from "../src/lib/autoNews/collect";
 import { CAST_ROSTER } from "../src/lib/autoNews/roster";
+import { mergeRefresh } from "../src/lib/autoNews/refresh";
 import { parseRosterText, rosterToText } from "../src/lib/autoNews/rosterText";
 import { ONE_DAY_TOPICS, mentionsKeyPerson, decodeEntities, parseRssItems, pickByRules, rankAll, rankCategory, sameStory, stripPublisherSuffix, titleSimilarity, SAME_STORY, type NewsCandidate } from "../src/lib/autoNews/select";
 
@@ -318,6 +319,14 @@ ok("KST 날짜", kstYmd(Date.parse("2026-11-19T22:30:00Z")) === "20261120");
 
 ok("정상 번역 통과(원제·HBO맥스 표기)", isCleanTranslation("넷플릭스, 할런 코벤 원작 'The Innocent' 제작 확정…HBO맥스와 경쟁"));
 ok("지금 건강 문제 기사는 위험 신호로 선정", !isLowValueCastTitle("배우 김가나, 촬영 중 쓰러져 입원") && classifyCast("배우 김가나, 촬영 중 쓰러져 입원", roster)?.signal === "risk");
+
+// 10:30 추가 갱신(2026-11-24)
+{
+  const cur = [{ category: "KT 및 계열사 소식", title: "KT스카이라이프·HCN 합병해 점유율 10%", url: "u1" }, { category: "방송가 소식", title: "전현무·미미미누, SBS 새 예능 '스파크업' MC 확정", url: "u2" }, { category: OVERSEAS_CATEGORY, title: "넷플릭스 소식", url: "u3" }];
+  const fresh = [{ category: "KT 및 계열사 소식", title: "KT·행안부, AI로 지역상권 살리고 돌봄 개선 맞손", url: "n1" }, { category: "방송가 소식", title: "'스파크업', 국내 최초 에너지 창업 서바이벌", url: "n2" }, { category: "방송가 소식", title: "'계약결혼' 자체 최고 시청률 기록", url: "n3" }, { category: OVERSEAS_CATEGORY, title: "Imax To Screen Super Bowl", url: "n4" }, { category: "출연자 이슈", title: "고경표, 경찰 조사 (중대 사안 · 편성 제외 검토)", url: "n5" }];
+  const m = mergeRefresh(cur, fresh);
+  ok("추가 갱신은 기존 기사를 그대로 두고 새 소식만(같은 소식·해외 제외) 분류 끝에 더함", m.added.length === 3 && m.items.slice(0, 2).map((x) => x.url).join() === "u1,n1" && m.items.map((x) => x.url).join() === "u1,n1,u2,n3,n5,u3");
+}
 
 // 관리자 명단 글 형식
 const pr = parseRosterText("# 주석\n예정 | 크래시2 | 이민기, 곽선영\n지난 | 연애박사 | 추영우\n솔로 | 나는 SOLO\n\n예정 | 크래시2 | 이민기");

@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { buildDailyNews } from "./collect";
 import { kstDayStartIso } from "./config";
 import { loadCastRoster } from "./rosterStore";
+import { mergeRefresh } from "./refresh";
 
 type NewsRow = { category: string; title: string; url: string; display_order: number };
 
@@ -76,4 +77,55 @@ export async function runAutoNews(opts: { now?: number; force?: boolean; dryRun?
   const categories: Record<string, number> = {};
   for (const r of next) categories[r.category] = (categories[r.category] ?? 0) + 1;
   return { ok: true, published: true, count: next.length, translated: built.translated, candidateCount: built.candidateCount, castCount: built.castCount, categories };
+}
+
+/** 오전 추가 갱신이 daily_news_versions.saved_by에 남기는 이름 */
+export const AUTO_NEWS_REFRESH_ACTOR = "auto-news-refresh";
+
+export type AutoNewsRefreshResult =
+  | { ok: true; published: true; added: string[]; count: number; candidateCount: number }
+  | { ok: true; published: false; reason: "no_morning" | "manual_today" | "already_refreshed" | "no_naver_key" | "nothing_new" | "dry_run"; detail: string; preview?: string[] }
+  | { ok: false; message: string };
+
+/**
+ * 오전 추가 갱신(10:30 KST, 사용자 결정 2026-11-24) — 07:30 자동 목록에 그 뒤 나온 새 소식만 더한다(기존 기사는 그대로).
+ * 안전 장치: ① 오늘 07:30 자동 게시가 없었으면 하지 않는다 ② 오늘 관리자(또는 다른 경로)가 목록을 바꿨으면 손대지 않는다 — 사용자가 지운 기사를 되살리지 않으려고
+ * ③ 하루 한 번만 ④ 해외 기사는 더하지 않아 번역 LLM을 부르지 않는다. force는 ①~③을 건너뛴다(확인·수동 재실행용).
+ */
+export async function runAutoNewsRefresh(opts: { now?: number; force?: boolean; dryRun?: boolean } = {}): Promise<AutoNewsRefreshResult> {
+  const now = opts.now ?? Date.now();
+  if (!opts.force) {
+    const { data: today, error } = await supabase.from("daily_news_versions").select("saved_by").gte("saved_at", kstDayStartIso(now));
+    if (error) return { ok: false, message: `보관 기록 조회 실패: ${error.message}` };
+    const by = (today ?? []).map((v) => v.saved_by as string);
+    if (by.includes(AUTO_NEWS_REFRESH_ACTOR)) return { ok: true, published: false, reason: "already_refreshed", detail: "오늘 추가 갱신을 이미 마쳤습니다." };
+    if (!by.includes(AUTO_NEWS_ACTOR)) return { ok: true, published: false, reason: "no_morning", detail: "오늘 07:30 자동 게시가 없어 추가 갱신을 건너뜁니다." };
+    if (by.some((b) => b !== AUTO_NEWS_ACTOR)) return { ok: true, published: false, reason: "manual_today", detail: "오늘 관리자가 목록을 바꿔 추가 갱신을 건너뜁니다." };
+  }
+
+  const { data: curData, error: curErr } = await supabase.from("daily_news_items").select("category, title, url, display_order").order("display_order");
+  if (curErr) return { ok: false, message: `현재 목록 조회 실패: ${curErr.message}` };
+  const current = (curData ?? []) as NewsRow[];
+
+  // 07:30과 같은 기준(어제 목록과 같은 소식 제외)으로 지금 시각 선정을 다시 하고, 지금 목록에 없는 새 소식만 고른다
+  const { roster } = await loadCastRoster();
+  const recent = await loadYesterdayList(now);
+  const built = await buildDailyNews({ now, roster, recent, useLlm: false });
+  if (built.source !== "naver") return { ok: true, published: false, reason: "no_naver_key", detail: "네이버 검색 키가 없어 추가 갱신을 건너뜁니다." };
+  const merged = mergeRefresh(current, built.items);
+  if (merged.added.length === 0) return { ok: true, published: false, reason: "nothing_new", detail: `새로 더할 소식이 없습니다(후보 ${built.candidateCount}건).` };
+  const preview = merged.added.map((r) => `[${r.category}] ${r.title}`);
+  if (opts.dryRun) return { ok: true, published: false, reason: "dry_run", detail: `게시하지 않음 — 새 소식 ${merged.added.length}건을 더하면 ${merged.items.length}건(지금 ${current.length}건)`, preview };
+
+  const next: NewsRow[] = merged.items.map((it, i) => ({ category: it.category, title: it.title, url: it.url, display_order: i }));
+  const ver = await supabase.from("daily_news_versions").insert({ items: current, item_count: current.length, saved_by: AUTO_NEWS_REFRESH_ACTOR, reason: "replace" });
+  if (ver.error) return { ok: false, message: `이전 목록 보관 실패: ${ver.error.message}` };
+  const del = await supabase.from("daily_news_items").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+  if (del.error) return { ok: false, message: `삭제 실패: ${del.error.message}` };
+  const ins = await supabase.from("daily_news_items").insert(next);
+  if (ins.error) {
+    const back = current.length > 0 ? await supabase.from("daily_news_items").insert(current) : { error: null };
+    return { ok: false, message: `삽입 실패: ${ins.error.message} — ${back.error ? "이전 목록을 되돌리지 못했습니다." : "이전 목록으로 되돌렸습니다."}` };
+  }
+  return { ok: true, published: true, added: preview, count: next.length, candidateCount: built.candidateCount };
 }
