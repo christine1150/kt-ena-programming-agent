@@ -141,6 +141,9 @@ function featuresOf(title: string): TitleFeatures {
     // "출석...대리운전"처럼 말줄임 점으로 붙은 낱말은 나눈다(숫자 속 점 1.2%는 그대로)
     .replace(/\.{2,}/g, " ")
     .replace(/(cj|lg|sk|kt)\s+(?=[a-z가-힣])/g, "$1")
+    // "K-콘텐츠"와 "K콘텐츠"는 같은 말 — 둘 다 앞의 K를 떼어 "콘텐츠"로 본다(어제 실린 불법 K콘텐츠 돈줄 차단 기사가 다른 제목으로 다시 오른 사례, 2026-11-25).
+    // 하이픈 표기는 원래 K가 떨어져 나갔으므로("K-웹툰"→"웹툰") 붙여 쓴 표기만 바뀐다. 한 글자 낱말(K팝)은 그대로 둔다
+    .replace(/(?<![a-z])k[-‧·]?\s?(?=[가-힣]{2})/g, "")
     .split(/[^0-9a-z가-힣%.]+/)
     .map((w) => w.replace(/^\.+|\.+$/g, ""))
     .map((w) => (w.length >= 3 ? w.replace(PARTICLE, "") : w))
@@ -156,7 +159,9 @@ function featuresOf(title: string): TitleFeatures {
  * ②③은 매체마다 제목을 다르게 써서 ①로 묶이지 않던 기사(같은 드라마 종영 기사 10여 건 등)를 묶으려고 넣었다(2026-11-15).
  */
 /** 영문 제목의 고유명(대문자로 시작하는 4자 이상 단어) — 회사명·매체명은 서로 다른 기사에도 흔해 뺀다 */
-const NAME_STOP = new Set(["netflix", "amazon", "disney", "warner", "paramount", "variety", "deadline", "hollywood", "apple", "peacock", "sony", "universal", "streaming", "series", "studio", "studios", "media", "global", "first", "season", "movie", "film", "with", "from", "that", "this", "will", "after", "about"]);
+const NAME_STOP = new Set(["netflix", "amazon", "disney", "warner", "paramount", "variety", "deadline", "hollywood", "apple", "peacock", "sony", "universal", "streaming", "series", "studio", "studios", "media", "global", "first", "season", "movie", "film", "with", "from", "that", "this", "will", "after", "about",
+  // 인수 표현은 고유명이 아니다("Al Gore To Purchase …"와 "Netflix Buys … Calls Purchase"가 'Purchase'로 묶인 사례, 2026-11-25)
+  "purchase", "acquisition", "acquires", "acquire", "closes", "deal", "merger", "takeover", "buys"]);
 /** 대형 시리즈 이름(영문·한글) — 같은 날 같은 시리즈 기사는 같은 소식으로 묶는다 */
 const FRANCHISE_KEYS = [/James Bond|\b007\b|제임스 본드/i, /Batman|배트맨/i, /Superman|슈퍼맨/i, /Spider-Man|스파이더맨/i, /Star Wars|스타워즈/i, /Harry Potter|해리 포터/i, /Avengers|어벤져스/i, /Indiana Jones|인디아나 존스/i, /Mission: Impossible|미션 임파서블/i];
 function latinNames(title: string): Set<string> {
@@ -176,7 +181,9 @@ export const TOPIC_CAPS: { re: RegExp; max: number }[] = [{ re: /케이블 ?TV|(
   // 같은 국회 토론회를 다른 제목으로 쓴 K-FAST 기사 2건(2026-11-20) — 'K-FAST'는 따옴표 안 하이픈에서 잘려 작품명 비교로 못 묶는다
   { re: /K-?FAST/i, max: 1 },
   // 케이블TV AI 지역뉴스 제작 기사 3건이 "지역채널 뉴스"·"지역뉴스"로 표기가 달라 따로 올랐다(2026-11-24)
-  { re: /지역 ?(?:채널 ?)?뉴스|지역채널/, max: 1 }];
+  { re: /지역 ?(?:채널 ?)?뉴스|지역채널/, max: 1 },
+  // CJ ENM·LG헬로 사용료 분쟁은 그날 새 전개 한 건만 — 07:30 목록에 갈등 격화·법정 공방 등 3건이 함께 올랐고 수동 클리핑 11/25는 가처분 심문 1건(+이름 없는 SO-PP 갈등 해설 1건)
+  { re: /(?:CJ|tvN|투니버스).*(?:LG ?헬로|헬로비전)|(?:LG ?헬로|헬로비전).*(?:CJ|tvN|투니버스)/, max: 1 }];
 /**
  * 하루 지나면 같은 주제로 다시 싣지 않는 소식 — 매체마다 제목이 달라 같은 소식 판정으로 못 거르는 것들(한경협 K-OTT 제언, 케이블TV 가계 부담 조사).
  * 어제 게시 목록에 이 표현이 있었다면 오늘 후보 중 같은 표현은 뺀다(2026-11-19: 이틀 연속 올라온 사례)
@@ -188,6 +195,43 @@ export const ONE_DAY_TOPICS: RegExp[] = [/한경협|한국경제인협회|K-OTT|
   // CJ ENM·LG헬로 사용료 분쟁, 스카이라이프·HCN 합병 기사가 11/23·11/24 이틀 연속 실렸다(수동 클리핑 11/24에는 없음)
   /^(?!.*(?:인용|기각|판결|결정|합의|타결|중단됐|중단 돌입|블랙아웃)).*(?:(?:CJ|tvN|투니버스).*(?:LG ?헬로|헬로비전)|(?:LG ?헬로|헬로비전).*(?:CJ|tvN|투니버스))/,
   /^(?!.*(?:의결|확정|승인|인가|공시|체결|완료)).*(?:스카이라이프.*(?:HCN|합병)|(?:HCN|합병).*스카이라이프)/];
+/** 제목 속 "12월 7일" 같은 날짜 — 둘 다 날짜를 적었는데 겹치는 날이 없으면 다른 일(다른 작품 첫방 등)이다 */
+function datesOf(title: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of title.matchAll(/(\d{1,2})월 ?(\d{1,2})일/g)) out.add(`${Number(m[1])}/${Number(m[2])}`);
+  return out;
+}
+
+/**
+ * 두 제목에서 겹치는 단어 수(A 기준) — 같은 단어뿐 아니라 한쪽이 다른 쪽의 앞·뒷부분인 낱말("세종"↔"세종행", "기관"↔"중앙행정기관", "단말"↔"단말보험")도 센다.
+ * 매체마다 낱말을 붙여 쓰거나 늘여 써서 어제 실린 소식이 다른 제목으로 다시 오른 사례(KT 요금제·KT 육군 협력·방미통위 세종 이전, 2026-11-25).
+ * 한글로만 된 낱말끼리만 본다 — 영문은 짧은 낱말("on"↔"one")이 서로 걸려 다른 해외 기사가 한 묶음이 된다. 흔한 말(COMMON_WORDS)은 같은 단어일 때만 센다
+ */
+const HANGUL_WORD = /^[가-힣]{2,}$/;
+function sharedWordCount(A: TitleFeatures, B: TitleFeatures): { exact: number; withParts: number; longest: number } {
+  let exact = 0;
+  let withParts = 0;
+  let longest = 0;
+  for (const w of A.words) {
+    if (B.words.has(w)) {
+      exact++;
+      withParts++;
+      longest = Math.max(longest, w.length);
+      continue;
+    }
+    if (!HANGUL_WORD.test(w) || COMMON_WORDS.has(w)) continue;
+    for (const v of B.words) {
+      if (!HANGUL_WORD.test(v) || COMMON_WORDS.has(v) || v.length === w.length) continue;
+      const [s, l] = v.length < w.length ? [v, w] : [w, v];
+      if (l.startsWith(s) || l.endsWith(s)) { withParts++; break; }
+    }
+  }
+  return { exact, withParts, longest };
+}
+
+/** 인수·합병 표현(영문) — 같은 고유명 하나만 겹쳐도 같은 거래로 본다(넷플릭스 래드포드 스튜디오 인수 기사 2건이 해외 분류에 함께 오른 사례, 2026-11-25) */
+const LATIN_DEAL = /acqui|\bbuys?\b|purchase|takeover|merger/i;
+
 /** 제목 속 큰 금액·수치("7609억") — 같은 조사·발표를 다룬 기사는 매체마다 제목이 달라도 이 수치가 같다 */
 function bigFigures(title: string): Set<string> {
   const out = new Set<string>();
@@ -200,6 +244,11 @@ export function sameStory(a: string, b: string): boolean {
   const pa = keyPersonOf(a);
   const pb = keyPersonOf(b);
   if (pa && pb && pa !== pb) return false;
+  // 둘 다 날짜를 적었는데 겹치는 날이 없으면 다른 일 — "'두번째 시그널' 끝나면 '은퇴요원+관리팀' 출격, 2027년 1월 4일 첫방"이
+  // 이미 실린 "'두번째 시그널' 12월 7일 첫 방송"과 같은 소식으로 묶여 추가 갱신에서 빠진 사례(2026-11-25)
+  const da = datesOf(a);
+  const db = datesOf(b);
+  if (da.size > 0 && db.size > 0 && ![...da].some((d) => db.has(d))) return false;
   if (titleSimilarity(a, b) >= SAME_STORY) return true;
   // 같은 큰 수치(7609억 등)를 쓰고 주제어가 하나라도 겹치면 같은 소식 — 케이블TV 가계 부담 기사 3건이 따로 오른 사례(2026-11-18)
   const fa = bigFigures(a);
@@ -219,6 +268,8 @@ export function sameStory(a: string, b: string): boolean {
     for (const w of latinNames(b)) if (na.has(w)) { shared++; longest = Math.max(longest, w.length); }
     // 흔한 제목 단어(Next·Deal 등)만 겹치는 경우를 피하려고 6자 이상 고유명이 하나는 있어야 한다
     if (shared >= 2 && longest >= 6) return true;
+    // 인수·합병 기사는 7자 이상 고유명(인수 대상) 하나만 겹쳐도 같은 거래
+    if (longest >= 7 && LATIN_DEAL.test(a) && LATIN_DEAL.test(b)) return true;
   }
   // 같은 대형 시리즈(제임스 본드 등)를 다룬 해외 기사는 한 소식으로 — 캐스팅 반응·캐스팅 과정 기사 2건이 함께 오른 사례(사용자 지시 2026-11-17 "같은 소식은 1건만")
   for (const re of FRANCHISE_KEYS) if (re.test(a) && re.test(b)) return true;
@@ -235,11 +286,13 @@ export function sameStory(a: string, b: string): boolean {
   }
   const headAlike = A.head.length >= 3 && B.head.length >= 3 && (A.head.startsWith(B.head) || B.head.startsWith(A.head));
   if (headAlike || (A.head && B.words.has(A.head)) || (B.head && A.words.has(B.head))) {
-    let shared = 0;
-    let longest = 0;
-    for (const w of A.words) if (B.words.has(w)) { shared++; longest = Math.max(longest, w.length); }
+    const { exact: shared, withParts, longest } = sharedWordCount(A, B);
+    const minSize = Math.min(A.words.size, B.words.size);
+    // 낱말 앞·뒷부분 겹침("세종"↔"세종행")은 3개·40% 규칙에만 센다 — 2개 규칙에까지 세면 "LG헬로비전 새 수장 … '송출 갈등'"이
+    // "CJ ENM·LG헬로비전 송출중단 법정공방"과 묶인다(2026-11-25 실제 후보 점검)
+    if (withParts >= 3 && withParts / minSize >= 0.4) return true;
     // 겹친 단어가 2개여도 그중 하나가 긴 고유명(국경없는기자회 등)이면 같은 소식으로 본다
-    const ratio = shared / Math.min(A.words.size, B.words.size);
+    const ratio = shared / minSize;
     if ((shared >= 3 && ratio >= 0.4) || (shared >= 2 && longest >= 6 && ratio >= 0.25)) return true;
     // 주어가 같고 주어 말고도 흔하지 않은 3자 이상 단어(제휴사 이름 등)가 겹치면 같은 소식 —
     // "CJ ENM K팝 채널, 샤오미 TV+ 타고…"와 "CJ ENM, 샤오미 스마트TV에 K-콘텐츠…"가 함께 오른 사례(2026-11-20)

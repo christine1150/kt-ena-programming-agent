@@ -1,5 +1,5 @@
 // 주요 뉴스 자동 선정 순수 함수 검사 — 실행: npm run test:auto-news
-import { CATEGORIES, KEY_PEOPLE, OVERSEAS_CATEGORY, kstDayStartIso } from "../src/lib/autoNews/config";
+import { CATEGORIES, CLICKBAIT, KEY_PEOPLE, OVERSEAS_CATEGORY, kstDayStartIso } from "../src/lib/autoNews/config";
 import { isCleanTranslation, kstYmd, staleByUrlDate, urlYmd } from "../src/lib/autoNews/collect";
 import { buildCastQueries, castDisplayTitle, castLabel, isLowValueCastTitle, isShowRecapRisk, classifyCast, nameInTitle, pickCastIssues, type CastEntry } from "../src/lib/autoNews/cast";
 import { fullTitleFromHtml, insertCastIssues, stripTitleTags } from "../src/lib/autoNews/collect";
@@ -329,6 +329,60 @@ ok("지금 건강 문제 기사는 위험 신호로 선정", !isLowValueCastTitl
   const castCur = [{ category: "출연자 이슈", title: "'만취 음주 운전' 고경표, 경찰 조사…울먹이며 \"무책임한 모습 죄송\" (중대 사안 · 편성 제외 검토)", url: "c1" }];
   const castNew = mergeRefresh(castCur, [{ category: "출연자 이슈", title: "유재석, \"자숙하러 오기 좋다\"…농담이 현실로→고경표 '음주운전'으로… (중대 사안 · 편성 제외 검토)", url: "c2" }, { category: "출연자 이슈", title: "김유정, 2주 연속 화제성 1위 '압도적 퀸'", url: "c3" }]);
   ok("이미 실린 출연자 사건(고경표)의 다른 제목 기사는 더하지 않음", castNew.added.length === 1 && castNew.added[0].url === "c3");
+}
+
+// 수동 클리핑 11/25 대조
+{
+  // 어제 실린 소식이 다른 제목으로 다시 오른 사례 — 낱말 앞·뒷부분 겹침, K- 표기
+  ok("붙여 쓴 낱말(단말보험·육군교육사령부·세종행·래드포드스튜디오)도 같은 소식", [
+    ["KT, 구글 AI·단말 보험 합친 월 12만원 요금제 출시", "KT, '초이스 더블'에 구글 AI 플러스 더해…단말보험 할인도"],
+    ["차세대 軍지휘체계 고도화 … KT, 육군교육사령부 협력", "KT, 육군 차세대 지휘통제체계 연구에 AI·클라우드 기술 지원"],
+    ["방미통위 등 중앙행정기관 31곳 세종으로…이전 비용 1.6조원 전망", "방미통위 등 31개 기관 5460명 세종행 확정 고시…내년 1600명 이전"],
+    ["넷플릭스, 98년 역사 래드포드스튜디오 5,100억에 인수 성공", "넷플릭스, 래드포드 스튜디오 센터 3억 8천만 달러 인수"],
+  ].every(([a, b]) => sameStory(a, b)));
+  ok("K-콘텐츠와 K콘텐츠는 같은 말", sameStory("K-콘텐츠 불법 게시물 4억9000만 개…불법 사이트 돈줄 끊는다", "불법 K콘텐츠 유통 '돈줄' 막는다…정부, 광고·결제 차단 추진"));
+  ok("낱말 일부 겹침만 하나 더해진 다른 소식(새 대표 ↔ 송출 법정공방)은 묶지 않음", !sameStory("LG헬로비전 새 수장 김지훈 … '송출 갈등·실적 부진' 이중고 시험대", "CJ ENM·LG헬로비전, 채널 송출중단 하루 전 법정공방···법원 판단은"));
+  ok("둘 다 날짜가 있고 겹치지 않으면 다른 소식(시그널2 첫방 ↔ 후속작 첫방)", !sameStory("'두번째 시그널' 끝나면 '은퇴요원+관리팀' 출격, 2027년 1월 4일 첫방", "작품성으로 승부한다, '두번째 시그널' 12월 7일 첫 방송"));
+  ok("해외 인수 기사는 인수 대상 고유명 하나로 같은 거래", sameStory("Netflix Closes $380 Million Acquisition of Radford Studio Center", "Done Deal! Netflix Buys Radford Studios For Almost $400M; Streamer Calls Purchase “A Meaningful New Investment In California’s Film Industry”"));
+  ok("'Purchase' 같은 인수 표현만 겹치면 다른 거래", !sameStory("Al Gore To Purchase Hometown Paper Carthage Courier", "Done Deal! Netflix Buys Radford Studios For Almost $400M; Streamer Calls Purchase “A Meaningful New Investment In California’s Film Industry”"));
+  // 이름을 감춘 제목
+  const withheld = ["10년 만에 시즌2라니…최고 시청률 15% 찍은 ‘한국 드라마’, 드디어 첫방 코앞", "시대를 초월했다…넷플릭스서 오늘 내려가는 '충격 여운 영화'", "화제성 1위작 끌어내렸다…글로벌 5개국 TOP 10까지 휩쓸며 정상 꿰찬 韓…", "프로그램 강제 하차… \"차에서 펑펑 울었다\" 충격 고백 털어놓은 아나운서"];
+  ok("작품·사람 이름을 감춘 제목은 낚시성", withheld.every((t) => CLICKBAIT.test(t)) && !CLICKBAIT.test("‘크래시2’ 문희, 살아있었다…시청률 4.4% 자체 최고") && !CLICKBAIT.test("'K-드라마' 열풍, 해외 판권 수출 늘어"));
+  ok("이름을 감춘 출연자 기사는 출연자 이슈에서 뺌(중대 범죄는 남김)", isLowValueCastTitle("주연 배우 건강 악화로 '하차'… 내년 방송 앞두고 비상 걸린 한국 드라마") && pickCastIssues([cc("화제성 1위작 끌어내렸다…글로벌 5개국 TOP 10까지 휩쓸며 정상 꿰찬 韓…")], [], 4).length === 0);
+  // 분류 점수
+  const kt = CATEGORIES.find((x) => x.category === "KT 및 계열사 소식")!;
+  const k = rankCategory(["[신세계I&C 인사] 전무 승진…KT·CJ 출신 영입", "\"KT 출신들이 경영 실패해놓고 책임 규명 없이 합병 추진\""].map((t) => c(kt.category, t)), kt, NOW);
+  ok("KT 출신 경영진 책임론은 앞에, 다른 회사의 KT 출신 영입 인사는 뒤", k[0].title.includes("경영 실패") && k[0].score > 0 && k[1].score < k[0].score - 6);
+  const pol = CATEGORIES.find((x) => x.category === "정책")!;
+  const p = rankCategory(["방미통위, 홈쇼핑 재승인 심사 착수", "\"방송·OTT 규제기준, 매체 아닌 기능·영향력 중심으로 바꿔야\""].map((t) => c(pol.category, t)), pol, NOW);
+  ok("방송·OTT 규제 틀 개편 논의는 정책 앞쪽", p[0].title.includes("규제기준"));
+  const ott = CATEGORIES.find((x) => x.category === "OTT")!;
+  const oScore = (t: string) => rankCategory([c(ott.category, t)], ott, NOW)[0]?.score;
+  ok("OTT 신작 공개일 기사 가산(+3), 오늘 내려가는 영화 안내는 제외",
+    oScore("차태현·장혁, 달리며 전국 누빈다… 웨이브 '런 투게더' 12월 4일 공개")! - oScore("차태현·장혁, 달리며 전국 누빈다… 웨이브 '런 투게더'")! === 3 &&
+      oScore("시대를 초월했다…넷플릭스서 오늘 내려가는 '충격 여운 영화'") === undefined);
+  // CJ ENM·LG헬로 분쟁은 한 분류에 1건
+  const sc = (title: string, score: number) => ({ ...c("업계동향", title), score, coverage: 1 });
+  const picked = pickByRules([{ category: "업계동향", quota: 7, ranked: [sc("'채널 송출 중단' LG헬로비전, CJ ENM과 콘텐츠 사용료 갈등 격화", 12), sc("협상 결렬되면 채널 끊어도 될까…결국 법정서 맞붙은 CJ ENM-LG헬로", 11), sc("'블랙아웃' 압박 확산, SO-PP 갈등 속 시청권 보호 필요", 10)] }]);
+  ok("CJ ENM·LG헬로 분쟁 기사는 한 분류에 1건(이름 없는 SO-PP 해설은 따로)", picked.length === 2 && picked[1].title.includes("블랙아웃"));
+  // 10:30 추가 갱신 — ENA 기사 바꾸기·해외 번역 제목과 비교
+  const cur = [
+    { category: "방송가 소식", title: "정문성, ENA '크래시2:분노의 도로'서 강력범죄수사과 형사 역 맡아 팔색 변신", url: "u1" },
+    { category: "방송가 소식", title: "김지원 '닥터X', 2달 연속 한국인 좋아하는 방송 1위", url: "u2" },
+    { category: "방송가 소식", title: "문희, 쇠파이프 피습 후 실종…차량서 여성 시신 (크래시2)", url: "u3" },
+    { category: "정책", title: "방미통위 등 31개 기관 5460명 세종행 확정 고시…내년 1600명 이전", url: "u4" },
+    { category: OVERSEAS_CATEGORY, title: "넷플릭스, 래드포드 스튜디오 센터 3억 8천만 달러 인수", url: "u5" },
+  ];
+  const fresh = [
+    { category: "방송가 소식", title: "‘크래시2’ 문희, 살아있었다…시청률 4.4% 자체 최고 [차트IS]", url: "n1" },
+    { category: "방송가 소식", title: "'크래시2' 심소영, 국수본 형사국장 손미나 역 합류", url: "n2" },
+    { category: "방송가 소식", title: "'니돈내산' 김숙·이준·최미나수, MC 발탁...12월 20일 첫방", url: "n3" },
+    { category: "정책", title: "방미통위 등 중앙행정기관 31곳 세종으로…이전 비용 1.6조원 전망", url: "n4" },
+    { category: "OTT", title: "넷플릭스, 98년 역사 래드포드스튜디오 5,100억에 인수 성공", url: "n5" },
+  ];
+  const m = mergeRefresh(cur, fresh);
+  ok("ENA 상한이 차 있어도 시청률 기록·첫방 날짜 기사가 캐스팅·줄거리 기사 자리를 바꿈(같은 분류는 그 자리에)", m.replaced.length === 2 && m.items.map((x) => x.url).join() === "n1,u2,n3,u4,u5");
+  ok("ENA 캐스팅 기사끼리는 바꾸지 않고, 같은 소식(세종 이전)·해외에 실린 소식(래드포드)은 더하지 않음", m.added.length === 0 && !m.items.some((x) => x.url === "n2"));
 }
 
 // 관리자 명단 글 형식

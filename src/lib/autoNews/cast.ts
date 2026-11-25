@@ -1,7 +1,7 @@
 // 출연자 이슈 분류 — 편성에 영향을 줄 수 있는 출연자 기사만 고른다(순수 함수, 네트워크·DB 없음).
 // 사용자 지시 2026-11-15: 자사 오리지널 드라마·예능(지난 작품+방영 예정작) 출연자의 주요 기사는 반드시, 타사 작품 출연자도 일부,
 // '나는 SOLO' 일반인 출연자 포함. 편성을 늘릴 근거(흥행·화제)와 빼야 할 근거(범죄·논란) 둘 다 대상이다.
-import { CAST_RISK_CATEGORY, CAST_RISK_TERMS } from "./config";
+import { CAST_RISK_CATEGORY, CAST_RISK_TERMS, WITHHELD_SUBJECT } from "./config";
 import { sameStory, stripPublisherSuffix, type NewsCandidate } from "./select";
 
 export type CastScope = "own_upcoming" | "own_past" | "solo" | "other";
@@ -62,7 +62,8 @@ export const CAST_LOW_VALUE = /\[종합\]|★|스타들|들의 (?:공통점|비�
 const ROUNDUP_NAMES = /[가-힣]{2,4}[·,][가-힣]{2,4}[·,][가-힣]{2,4}/;
 export function isLowValueCastTitle(title: string): boolean {
   if (SEVERE_CRIME.test(title)) return false;
-  return CAST_LOW_VALUE.test(title) || ROUNDUP_NAMES.test(title);
+  // 누구·무슨 작품인지 감춘 제목("비상 걸린 한국 드라마", "충격 고백 털어놓은 아나운서", "정상 꿰찬 韓…")은 확인할 대상이 없다(2026-11-25)
+  return CAST_LOW_VALUE.test(title) || ROUNDUP_NAMES.test(title) || WITHHELD_SUBJECT.test(title);
 }
 
 /**

@@ -91,6 +91,8 @@ export type AutoNewsRefreshResult =
  * 오전 추가 갱신(10:30 KST, 사용자 결정 2026-11-24) — 07:30 자동 목록에 그 뒤 나온 새 소식만 더한다(기존 기사는 그대로).
  * 안전 장치: ① 오늘 07:30 자동 게시가 없었으면 하지 않는다 ② 오늘 관리자(또는 다른 경로)가 목록을 바꿨으면 손대지 않는다 — 사용자가 지운 기사를 되살리지 않으려고
  * ③ 하루 한 번만 ④ 해외 기사는 더하지 않아 번역 LLM을 부르지 않는다. force는 ①~③을 건너뛴다(확인·수동 재실행용).
+ * 기존 기사는 그대로 두되, ENA 하루 2건 상한 안에서 캐스팅·줄거리 기사를 시청률 기록·정규 편성 기사로 바꿀 수는 있다(refresh.ts, 2026-11-25).
+ * Vercel 무료 요금제 크론은 정시에 돌지 않는다(11/25 10:30 예약이 11:04에 실행) — GitHub 예약(10:25)도 함께 부르고 먼저 도는 쪽만 반영된다.
  */
 export async function runAutoNewsRefresh(opts: { now?: number; force?: boolean; dryRun?: boolean } = {}): Promise<AutoNewsRefreshResult> {
   const now = opts.now ?? Date.now();
@@ -113,9 +115,13 @@ export async function runAutoNewsRefresh(opts: { now?: number; force?: boolean; 
   const built = await buildDailyNews({ now, roster, recent, useLlm: false });
   if (built.source !== "naver") return { ok: true, published: false, reason: "no_naver_key", detail: "네이버 검색 키가 없어 추가 갱신을 건너뜁니다." };
   const merged = mergeRefresh(current, built.items);
-  if (merged.added.length === 0) return { ok: true, published: false, reason: "nothing_new", detail: `새로 더할 소식이 없습니다(후보 ${built.candidateCount}건).` };
-  const preview = merged.added.map((r) => `[${r.category}] ${r.title}`);
-  if (opts.dryRun) return { ok: true, published: false, reason: "dry_run", detail: `게시하지 않음 — 새 소식 ${merged.added.length}건을 더하면 ${merged.items.length}건(지금 ${current.length}건)`, preview };
+  if (merged.added.length === 0 && merged.replaced.length === 0) return { ok: true, published: false, reason: "nothing_new", detail: `새로 더할 소식이 없습니다(후보 ${built.candidateCount}건).` };
+  // 바꾼 ENA 기사는 "옛 제목 → 새 제목"으로 남긴다(07:30 캐스팅·줄거리 기사 → 시청률 기록·정규 편성 기사)
+  const preview = [
+    ...merged.added.map((r) => `[${r.category}] ${r.title}`),
+    ...merged.replaced.map((r) => `[${r.to.category}] ${r.to.title} (바꿈: ${r.from.title})`),
+  ];
+  if (opts.dryRun) return { ok: true, published: false, reason: "dry_run", detail: `게시하지 않음 — 새 소식 ${merged.added.length}건 더하고 ${merged.replaced.length}건 바꾸면 ${merged.items.length}건(지금 ${current.length}건)`, preview };
 
   const next: NewsRow[] = merged.items.map((it, i) => ({ category: it.category, title: it.title, url: it.url, display_order: i }));
   const ver = await supabase.from("daily_news_versions").insert({ items: current, item_count: current.length, saved_by: AUTO_NEWS_REFRESH_ACTOR, reason: "replace" });
