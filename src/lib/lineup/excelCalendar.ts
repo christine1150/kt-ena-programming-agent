@@ -3,9 +3,9 @@
 // 계산은 화면과 같은 lib/lineup/calendar.ts. 대외비 표시를 머리·바닥글에 넣는다.
 import ExcelJS from "exceljs";
 import { addDays } from "./dates";
-import { barWeekDays, buildCalendar, calRangeOf, dayAirings, monthSegments, type CalLayer, type CalMark, type CalModel } from "./calendar";
+import { barWeekDays, buildCalendar, calRangeOf, dayAirings, monthSegments, type CalLayer, type CalOwnShow, type CalMark, type CalModel } from "./calendar";
 import { hexTint } from "./brand";
-import { GENRE_HEX, conditionText, type LineupQuery } from "./viewModel";
+import { GENRE_HEX, conditionText, textWidth, type LineupQuery } from "./viewModel";
 import type { LineupPayload } from "./types";
 
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
@@ -25,7 +25,7 @@ export function addCalendarSheets(wb: ExcelJS.Workbook, data: LineupPayload, q: 
   const hide = q.hide as CalLayer[];
   const segs = monthSegments(range.from, range.to);
   segs.forEach((seg, idx) => {
-    const model = buildCalendar(data, { from: seg.from, to: seg.to, channels: q.channels, genres: q.genres, hide });
+    const model = buildCalendar(data, { from: seg.from, to: seg.to, channels: q.channels, genres: q.genres, hide, show: q.show as CalOwnShow[] });
     addMonthSheet(wb, data, model, `${seg.ym}`, cond, sourceText, printedAt, idx === segs.length - 1);
   });
   addDaySheet(wb, data, q, range.from, range.to, hide, cond, printedAt);
@@ -109,13 +109,14 @@ function addMonthSheet(wb: ExcelJS.Workbook, data: LineupPayload, model: CalMode
             };
           }
           const head = ws.getCell(r, i + 1);
-          head.value = `${d.kind === "first" && !b.single ? "[첫방] " : ""}${b.title}`;
+          const t = b.shortTitle && textWidth(b.title, 11) > 150 ? b.shortTitle : b.title; // 한 줄을 넘는 제목은 줄임말로
+          head.value = `${d.kind === "first" && !b.single ? "[첫방] " : ""}${t}`;
           head.font = { bold: true, size: 11 };
           head.alignment = { vertical: "middle", wrapText: true };
           const sub = ws.getCell(r + 1, i + 1);
           sub.value = [b.time, b.single ? b.meta : d.episode, b.status !== "confirmed" ? "예정" : "", d.last ? "■ 종영" : ""].filter(Boolean).join(" · ");
           sub.font = { bold: true, size: 10 };
-          if (b.cast) {
+          if (b.cast && (d.opening || b.single)) {
             const cast = ws.getCell(r + 2, i + 1);
             cast.value = b.cast;
             cast.font = { size: 9 };
@@ -176,8 +177,8 @@ function addDaySheet(wb: ExcelJS.Workbook, data: LineupPayload, q: LineupQuery, 
   ws.getCell(1, 1).value = `대외비 · KT ENA 라인업 캘린더 일별 목록 — ${cond}`;
   ws.getCell(1, 1).font = { bold: true, size: 13 };
   ws.mergeCells(2, 1, 2, 9);
-  ws.getCell(2, 1).value = `기간 ${from} ~ ${to} · 출력 ${printedAt} · 회차는 첫방일부터 자리 요일을 센 추정(결방 미반영)`;
-  const head = ["날짜", "요일", "시각", "구분", "방송사", "제목", "회차(추정)", "일정 종류", "날짜 정밀도"];
+  ws.getCell(2, 1).value = `기간 ${from} ~ ${to} · 출력 ${printedAt} · 회차는 첫방일부터 자리 요일을 센 값(결방 미반영)`;
+  const head = ["날짜", "요일", "시각", "구분", "방송사", "제목", "회차", "일정 종류", "날짜 정밀도"];
   const widths = [11, 5, 7, 6, 14, 30, 11, 9, 14];
   head.forEach((h, k) => {
     const c = ws.getCell(4, k + 1);

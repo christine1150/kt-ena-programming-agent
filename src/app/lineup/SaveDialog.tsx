@@ -5,7 +5,7 @@
 // 지금 화면의 조건으로 미리 채워 둔다. 대외비 자료이므로 파일을 외부로 보내지 않도록 안내한다.
 import { useEffect, useRef, useState } from "react";
 import type { Genre } from "@/lib/lineup/types";
-import { CAL_LAYERS, calRangeOf } from "@/lib/lineup/calendar";
+import { CAL_LAYERS, CAL_OWN_SHOW, calRangeOf } from "@/lib/lineup/calendar";
 import { dowLabel, GENRE_LABEL, LENGTHS, lineupSearch, queryRange, type LineupQuery, type ViewMode } from "@/lib/lineup/viewModel";
 
 const GENRES: Genre[] = ["drama", "variety", "business", "other"];
@@ -157,6 +157,14 @@ export default function SaveDialog({
 
           {isCal ? (
             <Field label="표시">
+              {CAL_OWN_SHOW.map((o) => {
+                const on = q.show.includes(o.key);
+                return (
+                  <button key={o.key} type="button" aria-pressed={on} onClick={() => set({ show: on ? q.show.filter((x) => x !== o.key) : [...q.show, o.key] })} className={chip(on)}>
+                    자사 {on ? "✓ " : ""}{o.label}
+                  </button>
+                );
+              })}
               {CAL_LAYERS.map((l) => {
                 const on = !q.hide.includes(l.key);
                 return (

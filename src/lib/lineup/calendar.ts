@@ -7,7 +7,6 @@ import { buildUndated, dowLabel, episodeText, isYearOnly, periodText, runGenre, 
 
 export type CalLayer = "own" | "rival" | "ott" | "event";
 export const CAL_LAYERS: { key: CalLayer; label: string }[] = [
-  { key: "own", label: "자사 구간" },
   { key: "rival", label: "타사 첫방·종영" },
   { key: "ott", label: "OTT 공개일" },
   { key: "event", label: "공휴일·행사" },
@@ -21,7 +20,15 @@ export interface CalQuery {
   channels: string[]; // 기준 자사 채널 코드(비면 ENA)
   genres: Genre[];
   hide: CalLayer[];
+  show?: CalOwnShow[]; // 자사 작품을 어느 방송일까지 그릴지 — 기본 전체. 비면 자사 작품을 그리지 않는다
 }
+/** 자사 방송일 보기: 첫방(첫 월화·첫 수목처럼 이어지는 첫 묶음) · 종영(마지막 묶음) · 전체 방영일 */
+export type CalOwnShow = "first" | "end" | "all";
+export const CAL_OWN_SHOW: { key: CalOwnShow; label: string }[] = [
+  { key: "first", label: "첫방" },
+  { key: "end", label: "종영일" },
+  { key: "all", label: "전체 방영일" },
+];
 
 /** 자사 작품이 실제로 방송되는 하루 — 달력에는 이 날짜 칸에만 그린다(방송 요일·시각 그대로, 쉬는 요일·결방은 그리지 않는다). */
 export interface CalBarDay {
@@ -29,6 +36,7 @@ export interface CalBarDay {
   kind: "first" | "air"; // 첫방일(하루 단위 시작일일 때만) · 그 밖의 방송일
   episode: string; // '5회(추정)' — 첫방일부터 자리 요일을 센 순번(결방은 모른다). 모르면 ''
   last: boolean; // 마지막 방송일(적힌 끝일 때만, 추정이면 false)
+  opening: boolean; // 이 작품의 첫 방송일(출연자는 첫 회에만 적는다 — 회마다 바뀌는 게스트는 별도 관리)
 }
 export interface CalBar {
   key: string;
@@ -36,6 +44,7 @@ export interface CalBar {
   kind: "run" | "gap";
   lane: number; // 1부터. 같은 작품은 주가 바뀌어도 같은 줄, 방송일이 겹치지 않는 작품끼리는 한 줄을 나눠 쓴다
   title: string;
+  shortTitle: string | null; // 줄임말(한 줄을 넘는 제목에 쓴다)
   meta: string; // 기간·회차(툴팁·상세용)
   time: string; // 방송 시각('19:50') — 자리 규칙 그대로
   cast: string;
@@ -54,6 +63,7 @@ export interface CalMark {
   outletName: string;
   color: string | null;
   title: string;
+  shortTitle: string | null;
   ott: boolean;
   approx: boolean;
 }
@@ -160,6 +170,8 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
   const slots = new Map(data.slots.map((s) => [s.id, s]));
   const outlets = new Map(data.outlets.map((o) => [o.id, o]));
   const hide = new Set(q.hide);
+  const show = new Set<CalOwnShow>(q.show ?? ["all"]);
+  if (show.size === 0) hide.add("own");
   const ownCodes = q.channels.length > 0 ? q.channels : ["ENA"];
   const multi = ownCodes.length > 1;
   const inRange = (d: string) => d >= q.from && d <= q.to;
@@ -209,33 +221,43 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
         const hiat = hiatusBySlot.get(slot.id) ?? [];
         const total = r.episodes ?? work?.totalEpisodes ?? null;
         const exact = r.startPrecision === "day"; // 첫방일이 하루 단위로 확실할 때만 회차 순번·첫방 표시
-        const days: CalBarDay[] = [];
+        const every: (CalBarDay & { week: string })[] = []; // 첫방일부터 끝까지 모든 방송일(기간 밖 포함) — 첫방·종영 묶음을 가리기 위해
         let n = 0;
-        let lastAirDay: string | null = null;
         for (let d = startAir; d <= endCap; d = addDays(d, 1)) {
           if (slot.days.length > 0 && slot.days.length < 7 && !slot.days.includes(isoDow(d))) continue;
           if (hiat.some((h) => d >= h.from && d <= h.to)) continue;
           n++;
-          lastAirDay = d;
-          if (d < extStart) continue;
           const no = (r.episodeFrom ?? 1) + n - 1;
-          days.push({ date: d, kind: exact && d === startAir ? "first" : "air", episode: exact && !(total && no > total) ? `${no}회(추정)` : "", last: false });
+          every.push({ date: d, week: mondayOf(d), kind: exact && d === startAir ? "first" : "air", episode: exact && !(total && no > total) ? `${no}회` : "", last: false, opening: d === startAir });
         }
-        if (last.date && !last.estimated && lastAirDay && endCap === last.date) {
-          const ld = days.find((x) => x.date === lastAirDay);
-          if (ld) ld.last = true;
+        const knownEnd = !!last.date && !last.estimated && endCap === last.date && every.length > 0;
+        if (knownEnd) every[every.length - 1].last = true;
+        // 같은 주 안에서 이어지는 방송일 묶음(월화·수목·토일처럼) — 첫방만/종영일 보기는 이 묶음 단위로 고른다
+        const blocks: (typeof every)[] = [];
+        for (const e of every) {
+          const prev = blocks[blocks.length - 1];
+          const lastOfPrev = prev?.[prev.length - 1];
+          if (lastOfPrev && lastOfPrev.week === e.week && addDays(lastOfPrev.date, 1) === e.date) prev.push(e);
+          else blocks.push([e]);
         }
+        const pick = new Set<string>();
+        if (show.has("all")) for (const e of every) pick.add(e.date);
+        else {
+          if (show.has("first") && blocks[0]) for (const e of blocks[0]) pick.add(e.date);
+          if (show.has("end") && knownEnd) for (const e of blocks[blocks.length - 1]) pick.add(e.date);
+        }
+        const days: CalBarDay[] = every.filter((e) => pick.has(e.date) && e.date >= extStart).map((e) => ({ date: e.date, kind: e.kind, episode: e.episode, last: e.last, opening: e.opening }));
         if (days.length === 0) continue;
         bars.push({
-          key: r.id, runId: r.id, kind: "run", lane: 0, title, meta: metaLine(r, slot, work, outletLabel), time: slotTime(slot), cast: castLine(work, genre),
+          key: r.id, runId: r.id, kind: "run", lane: 0, title, shortTitle: work?.shortTitle ?? null, meta: metaLine(r, slot, work, outletLabel), time: slotTime(slot), cast: castLine(work, genre),
           genre, status: r.status, days, single: false,
         });
       } else if ((draw.shape === "diamond" || draw.shape === "dots") && draw.dates) {
         for (const d of draw.dates) {
           if (!inRange(d)) continue;
           bars.push({
-            key: `${r.id}:${d}`, runId: r.id, kind: "run", lane: 0, title, meta: draw.shape === "dots" ? "월 1회" : periodText(r), time: slotTime(slot), cast: castLine(work, genre),
-            genre, status: r.status, days: [{ date: d, kind: "air", episode: "", last: false }], single: true,
+            key: `${r.id}:${d}`, runId: r.id, kind: "run", lane: 0, title, shortTitle: work?.shortTitle ?? null, meta: draw.shape === "dots" ? "월 1회" : periodText(r), time: slotTime(slot), cast: castLine(work, genre),
+            genre, status: r.status, days: [{ date: d, kind: "air", episode: "", last: false, opening: true }], single: true,
           });
         }
       } else if (draw.shape === "bracket") {
@@ -251,7 +273,7 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
     const layer: CalLayer = outlet.ott ? "ott" : "rival";
     if (hide.has(layer)) continue;
     if (outlet.ott && isYearOnly(r)) continue; // 연도만 아는 작품은 달력 아래 목록으로
-    const base = { runId: r.id, outletName: outlet.name, color: outlet.color, title, ott: !!outlet.ott };
+    const base = { runId: r.id, outletName: outlet.name, color: outlet.color, title, shortTitle: work?.shortTitle ?? null, ott: !!outlet.ott };
     if ((draw.shape === "diamond" || draw.shape === "dots") && draw.dates) {
       for (const d of draw.dates) pushMark({ ...base, key: `${r.id}:${d}`, date: d, kind: draw.shape === "dots" ? "air" : "open", approx: false });
     } else if (draw.shape === "bracket") {
@@ -267,7 +289,7 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
         const first = outlet.ott ? r.startDate : firstAirOnOrAfter(r.startDate, slot.days);
         pushMark({ ...base, key: `${r.id}:first`, date: first, kind: outlet.ott ? "open" : "first", approx: false });
         const last = lastAirOf(r, slot);
-        if (last.date && last.date > first) pushMark({ ...base, key: `${r.id}:end`, date: last.date, kind: "end", approx: last.estimated });
+        if (last.date && !last.estimated && last.date > first) pushMark({ ...base, key: `${r.id}:end`, date: last.date, kind: "end", approx: last.estimated });
       }
     }
   }
@@ -284,11 +306,11 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
       // 빈 자리도 그 자리의 방송 요일 칸에만 붉은 점선으로 표시한다
       const days: CalBarDay[] = [];
       for (let d = g.from < extStart ? extStart : g.from; d <= g.to && d <= extEnd; d = addDays(d, 1)) {
-        if (slot.days.length === 0 || slot.days.includes(isoDow(d))) days.push({ date: d, kind: "air", episode: "", last: false });
+        if (slot.days.length === 0 || slot.days.includes(isoDow(d))) days.push({ date: d, kind: "air", episode: "", last: false, opening: false });
       }
       if (days.length === 0) continue;
       gapBars.push({
-        key: `gap:${g.slotId}:${g.from}`, runId: null, kind: "gap", lane: 0, title: `${g.weeks}주 비어있음`, meta: "", time: slotTime(slot), cast: "", genre: "drama", status: "planned", days, single: false,
+        key: `gap:${g.slotId}:${g.from}`, runId: null, kind: "gap", lane: 0, title: `${g.weeks}주 비어있음`, shortTitle: null, meta: "", time: slotTime(slot), cast: "", genre: "drama", status: "planned", days, single: false,
       });
     }
   }
@@ -392,7 +414,7 @@ export function dayAirings(data: LineupPayload, date: string, ownCodes: string[]
     rows.push({
       ...base,
       tag: date === first ? "첫방" : last.date === date && !last.estimated ? "종영" : "",
-      episode: total && no > total ? "" : `${no}회(추정)`,
+      episode: total && no > total ? "" : `${no}회`,
     });
   }
   return rows.sort((a, b) => Number(b.own) - Number(a.own) || (a.minute ?? 99999) - (b.minute ?? 99999) || a.outletName.localeCompare(b.outletName, "ko"));

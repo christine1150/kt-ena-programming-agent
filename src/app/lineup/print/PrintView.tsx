@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LineupPayload } from "@/lib/lineup/types";
 import { buildCompareRows, buildOwnRows, buildUndated, conditionText, LAYOUT, queryRange, type LineupQuery } from "@/lib/lineup/viewModel";
-import { buildCalendar, calendarFetchRange, calRangeOf, monthSegments, type CalLayer } from "@/lib/lineup/calendar";
+import { buildCalendar, calendarFetchRange, calRangeOf, monthSegments, type CalLayer, type CalOwnShow } from "@/lib/lineup/calendar";
 import CalendarView, { CalFootnotes, CalLegend } from "../CalendarView";
 import LineupGrid from "../LineupGrid";
 import UndatedStrip from "../UndatedStrip";
@@ -45,10 +45,10 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
     if (!data || !cal) return [];
     const segs = monthSegments(cal.from, cal.to);
     return segs.map((s, i) => {
-      const m = buildCalendar(data, { from: s.from, to: s.to, channels: q.channels, genres: q.genres, hide: q.hide as CalLayer[] });
+      const m = buildCalendar(data, { from: s.from, to: s.to, channels: q.channels, genres: q.genres, hide: q.hide as CalLayer[], show: q.show as CalOwnShow[] });
       return { ym: s.ym, model: i === segs.length - 1 ? m : { ...m, undated: [] } }; // 날짜 미정 OTT 목록은 마지막 쪽에만
     });
-  }, [data, cal, q.channels, q.genres, q.hide]);
+  }, [data, cal, q.channels, q.genres, q.hide, q.show]);
   const channelNames = data ? q.channels.map((c) => data.outlets.find((o) => o.code === c)?.name ?? c) : q.channels;
   const page = PAGE[q.paper];
   const sources = data

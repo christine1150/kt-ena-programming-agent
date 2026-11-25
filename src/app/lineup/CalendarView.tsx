@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import {
   barWeekDays, dayAirings, type CalBar, type CalMark, type CalModel, type CalWeek, type DayRow, type MarkKind,
 } from "@/lib/lineup/calendar";
-import { GENRE_HEX } from "@/lib/lineup/viewModel";
+import { GENRE_HEX, textWidth } from "@/lib/lineup/viewModel";
 import type { Genre, LineupPayload } from "@/lib/lineup/types";
 import UndatedStrip from "./UndatedStrip";
 
@@ -20,6 +20,7 @@ const onColor = (hex: string | null) => {
   const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
   return lum > 0.55 ? "#1c1d24" : "#ffffff";
 };
+const TITLE_FIT = 124; // 칸 한 줄에 들어가는 제목 폭(px, 15px 글자 기준 대략값)
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 const dowOf = (d: string) => DOW[(new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7];
 
@@ -33,6 +34,7 @@ const MARK_TAIL: Record<MarkKind, (m: CalMark) => string> = {
 function Mark({ m, onSelect, selected }: { m: CalMark; onSelect: (id: string) => void; selected: boolean }) {
   const col = m.color ?? "#666666";
   const label = `${m.outletName} ${m.title} ${MARK_TAIL[m.kind](m)}`;
+  const title = m.shortTitle && textWidth(label, 13) > 150 ? m.shortTitle : m.title;
   const common = "flex w-full min-w-0 items-center gap-1 rounded-[6px] px-1.5 text-left text-[13px] leading-[20px] whitespace-nowrap";
   const sym = m.kind === "first" ? "▶" : m.kind === "end" ? "■" : "◆";
   const ring = selected ? "outline outline-2 outline-offset-1 outline-zinc-900" : "";
@@ -40,20 +42,20 @@ function Mark({ m, onSelect, selected }: { m: CalMark; onSelect: (id: string) =>
     return (
       <button type="button" title={label} onClick={() => onSelect(m.runId)} className={`${common} ${ring} font-semibold`} style={{ background: col, color: onColor(col) }}>
         <span aria-hidden className="shrink-0 text-[10.5px]">{sym}</span>
-        <span className="truncate"><b className="font-extrabold">{m.outletName}</b> {m.title} <b className="font-extrabold">첫방</b></span>
+        <span className="truncate"><b className="font-extrabold">{m.outletName}</b> {title} <b className="font-extrabold">첫방</b></span>
       </button>
     );
   if (m.kind === "end")
     return (
       <button type="button" title={label} onClick={() => onSelect(m.runId)} className={`${common} ${ring} bg-white font-semibold text-zinc-900`} style={{ border: `1.5px solid ${col}`, lineHeight: "17px" }}>
         <span aria-hidden className="shrink-0 text-[10.5px]" style={{ color: col }}>{sym}</span>
-        <span className="truncate"><b className="font-extrabold">{m.outletName}</b> {m.title} {MARK_TAIL.end(m)}</span>
+        <span className="truncate"><b className="font-extrabold">{m.outletName}</b> {title} {MARK_TAIL.end(m)}</span>
       </button>
     );
   return (
     <button type="button" title={label} onClick={() => onSelect(m.runId)} className={`${common} ${ring} bg-zinc-100 font-semibold text-zinc-900`} style={{ borderLeft: `4px solid ${col}` }}>
       <span aria-hidden className="shrink-0 text-[10.5px]" style={{ color: col }}>{sym}</span>
-      <span className="truncate"><b className="font-extrabold">{m.outletName}</b> {m.title} {MARK_TAIL[m.kind](m)}</span>
+      <span className="truncate"><b className="font-extrabold">{m.outletName}</b> {title} {MARK_TAIL[m.kind](m)}</span>
     </button>
   );
 }
@@ -67,6 +69,9 @@ function Bar({ b, week, selectedId, onSelect }: { b: CalBar; week: CalWeek; sele
     <>
       {barWeekDays(b, week.start).map((d) => {
         const pos = { gridColumn: d.col + 1, gridRow: b.lane + 1 } as const;
+        // 칸에 한 줄로 안 들어가는 제목은 줄임말로(줄임말이 등록돼 있을 때)
+        const showFirst = d.kind === "first" && !b.single;
+        const shown = b.shortTitle && textWidth(b.title, 15) > TITLE_FIT - (showFirst ? 46 : 0) ? b.shortTitle : b.title;
         if (b.kind === "gap")
           return (
             <div key={d.date} className="relative z-[1] m-[2px] flex items-center rounded-[8px] px-2 text-[14.5px] font-extrabold" style={{ ...pos, border: "1.5px dashed #c91f31", background: "#c91f310d", color: "#c91f31" }}>
@@ -90,17 +95,17 @@ function Bar({ b, week, selectedId, onSelect }: { b: CalBar; week: CalWeek; sele
             }}
           >
             <span className="block text-[15px] leading-[20px] font-extrabold text-zinc-900" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-              {d.kind === "first" && !b.single && (
+              {showFirst && (
                 <span className="mr-[6px] inline-block rounded-[5px] px-[6px] align-[1px] text-[12.5px] leading-[19px] font-extrabold text-white" style={{ background: col }}>첫방</span>
               )}
-              {b.title}
+              {shown}
             </span>
             <span className="block truncate text-[13.5px] leading-[19px] font-semibold text-zinc-800">
               {[b.time, b.single ? b.meta : d.episode].filter(Boolean).join(" · ")}
               {b.status !== "confirmed" && <span className="ml-1.5 rounded-[4px] border border-dashed border-zinc-500 bg-white px-[4px] text-[11px] font-semibold text-zinc-700">예정</span>}
               {d.last && <span className="ml-1.5 rounded-[5px] border-[1.5px] bg-white px-[6px] text-[12px] leading-[16px] font-extrabold" style={{ color: col, borderColor: col }}>종영</span>}
             </span>
-            {b.cast && <span className="block truncate text-[12.5px] leading-[18px] font-medium text-zinc-800">{b.cast}</span>}
+            {b.cast && (d.opening || b.single) && <span className="block truncate text-[12.5px] leading-[18px] font-medium text-zinc-800">{b.cast}</span>}
           </button>
         );
       })}

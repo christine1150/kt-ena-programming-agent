@@ -339,6 +339,7 @@ export interface LineupQuery {
   dfrom: string | null;
   dto: string | null;
   hide: string[]; // own | rival | ott | event
+  show: string[]; // 자사 방송일 보기: first(첫방) | end(종영일) | all(전체 방영일). 비면 자사 작품을 그리지 않는다
 }
 export const LENGTHS = [3, 6, 8, 12];
 const GENRE_SET = new Set(["drama", "variety", "business", "other"]);
@@ -348,6 +349,7 @@ const listOf = (v: string | null | undefined) => (v ? v.split(",").map((s) => s.
 export function parseLineupQuery(get: (k: string) => string | null | undefined, defaultFrom: string): LineupQuery {
   const viewQ = get("view");
   const view: ViewMode = viewQ === "compare" || viewQ === "list" || viewQ === "calendar" ? viewQ : "own";
+  const showRaw = get("show");
   const isYm = (v: string | null | undefined): v is string => !!v && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
   const isDay = (v: string | null | undefined): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
   const fromQ = get("from");
@@ -369,6 +371,7 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
     dfrom: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dfrom") as string) : null,
     dto: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dto") as string) : null,
     hide: listOf(get("hide")).filter((h) => ["own", "rival", "ott", "event"].includes(h)),
+    show: showRaw === "none" ? [] : listOf(showRaw).filter((h) => ["first", "end", "all"].includes(h)).length > 0 ? listOf(showRaw).filter((h) => ["first", "end", "all"].includes(h)) : ["all"],
   };
 }
 
@@ -390,6 +393,7 @@ export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string): stri
       s.set("dto", q.dto);
     } else if (q.month && (!defaultFrom || q.month !== addMonthsYm(defaultFrom, 1))) s.set("month", q.month);
     if (q.hide?.length) s.set("hide", q.hide.join(","));
+    if (q.show && !(q.show.length === 1 && q.show[0] === "all")) s.set("show", q.show.length ? q.show.join(",") : "none");
   }
   return s.toString();
 }

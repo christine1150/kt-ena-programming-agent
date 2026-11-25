@@ -11,7 +11,7 @@ import LineupGrid from "./LineupGrid";
 import SaveDialog from "./SaveDialog";
 import UndatedStrip from "./UndatedStrip";
 import CalendarView, { CalLegend } from "./CalendarView";
-import { buildCalendar, CAL_LAYERS, CAL_MAX_DAYS, calendarFetchRange, clampRange, monthRangeOf, type CalLayer } from "@/lib/lineup/calendar";
+import { buildCalendar, CAL_LAYERS, CAL_MAX_DAYS, calendarFetchRange, clampRange, monthRangeOf, type CalLayer, type CalOwnShow, CAL_OWN_SHOW } from "@/lib/lineup/calendar";
 import {
   buildCompareRows, buildOwnRows, buildUndated, dowLabel, episodeText, GENRE_LABEL, GENRE_VAR, LAYOUT, LENGTHS, lineupSearch, periodText, runGenre, runTitle, slotLabel, STATUS_LABEL,
   type Density, type Filters, type LineupQuery, type ViewMode,
@@ -94,8 +94,8 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
   const { channels, genres, dows, view } = st;
   const filters: Filters = useMemo(() => ({ channels, genres, dows }), [channels, genres, dows]);
   const calModel = useMemo(
-    () => (data && view === "calendar" ? buildCalendar(data, { from: calRange.from, to: calRange.to, channels, genres, hide: st.hide as CalLayer[] }) : null),
-    [data, view, calRange, channels, genres, st.hide]
+    () => (data && view === "calendar" ? buildCalendar(data, { from: calRange.from, to: calRange.to, channels, genres, hide: st.hide as CalLayer[], show: st.show as CalOwnShow[] }) : null),
+    [data, view, calRange, channels, genres, st.hide, st.show]
   );
   const calOwnCodes = channels.length > 0 ? channels : ["ENA"];
   const grid = useMemo(() => {
@@ -271,6 +271,19 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
             </button>
           ))}
         </div>
+        )}
+        {isCal && (
+          <div className="flex items-center gap-1" role="group" aria-label="자사 방송일">
+            <span className="mr-0.5 text-[13px] text-zinc-600">자사 방송일</span>
+            {CAL_OWN_SHOW.map((o) => {
+              const on = st.show.includes(o.key);
+              return (
+                <button key={o.key} type="button" aria-pressed={on} onClick={() => set({ show: on ? st.show.filter((x) => x !== o.key) : [...st.show, o.key] })} className={chip(on)}>
+                  {on ? "✓ " : ""}{o.label}
+                </button>
+              );
+            })}
+          </div>
         )}
         {isCal && (
           <div className="flex items-center gap-1" role="group" aria-label="표시">
