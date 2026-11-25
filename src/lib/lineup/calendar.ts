@@ -5,7 +5,7 @@ import { addDays, clockLabel, daysBetween, firstAirOnOrAfter, isoDow, lastAirOf,
 export { lastAirOf };
 import type { Genre, LineupPayload, RunDto, RunStatus, SlotDto, WorkDto } from "./types";
 import { holdbackMarks } from "./holdback";
-import { buildUndated, dowLabel, episodeText, isYearOnly, periodText, runGenre, runTitle, slotTime } from "./viewModel";
+import { buildUndated, dowLabel, episodeText, GENRE_HEX, isYearOnly, periodText, runGenre, runTitle, slotTime } from "./viewModel";
 
 export type CalLayer = "own" | "rival" | "ott" | "event";
 export const CAL_LAYERS: { key: CalLayer; label: string }[] = [
@@ -269,7 +269,7 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
     const layer: CalLayer = outlet.ott ? "ott" : "rival";
     if (hide.has(layer)) continue;
     if (outlet.ott && isYearOnly(r)) continue; // 연도만 아는 작품은 달력 아래 목록으로
-    const base = { runId: r.id, outletName: outlet.name, color: outlet.color, title, shortTitle: work?.shortTitle ?? null, ott: !!outlet.ott };
+    const base = { runId: r.id, outletName: outlet.name, color: outlet.ott ? GENRE_HEX[runGenre(r, work, slot)] : outlet.color, title, shortTitle: work?.shortTitle ?? null, ott: !!outlet.ott };
     if ((draw.shape === "diamond" || draw.shape === "dots") && draw.dates) {
       for (const d of draw.dates) pushMark({ ...base, key: `${r.id}:${d}`, date: d, kind: draw.shape === "dots" ? "air" : "open", approx: false });
     } else if (draw.shape === "bracket") {

@@ -254,7 +254,7 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                                 selected={selectedId === r.id}
                                 dim={!!focusIds && !focusIds.has(r.id)}
                                 onSelect={onSelect}
-                                tone={colorBy === "outlet" ? row.outlet?.color ?? null : null}
+                                tone={colorBy === "outlet" && !isOtt ? row.outlet?.color ?? null : null}
                                 rich={isOtt}
                               />
                             );
@@ -275,7 +275,7 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                               dim={!!focusIds && !focusIds.has(r.id)}
                               onSelect={onSelect}
                               footnote={footnotes.get(r.id)}
-                              tone={colorBy === "outlet" ? row.outlet?.color ?? null : null}
+                              tone={colorBy === "outlet" && !isOtt ? row.outlet?.color ?? null : null}
                               ott={isOtt}
                             />
                           );

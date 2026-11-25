@@ -405,7 +405,12 @@ export function Legend({ full = false, byOutlet = false }: { full?: boolean; byO
   const tint = (v: string) => `color-mix(in srgb, ${v} 16%, white)`;
   return (
     <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-zinc-700" aria-label="범례">
-      {byOutlet && <li className="font-medium text-zinc-800">막대 색 = 방송사 로고색</li>}
+      {byOutlet && <li className="font-medium text-zinc-800">막대 색 = 방송사 로고색 (OTT는 장르색)</li>}
+      {byOutlet && (["drama", "variety", "other"] as Genre[]).map((g) => (
+        <li key={g} className="flex items-center gap-1">
+          {sw({ background: tint(GENRE_VAR[g]), border: `1px solid ${GENRE_VAR[g]}`, borderLeftWidth: 4 })}OTT {GENRE_LABEL[g]}
+        </li>
+      ))}
       {!byOutlet && (["drama", "variety", "business"] as Genre[]).map((g) => (
         <li key={g} className="flex items-center gap-1">
           {sw({ background: tint(GENRE_VAR[g]), border: `1px solid ${GENRE_VAR[g]}`, borderLeftWidth: 4 })}

@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import {
   barWeekDays, dayAirings, type CalBar, type CalMark, type CalModel, type CalWeek, type DayRow, type MarkKind,
 } from "@/lib/lineup/calendar";
-import { GENRE_HEX, textWidth } from "@/lib/lineup/viewModel";
+import { GENRE_HEX, GENRE_LABEL, textWidth } from "@/lib/lineup/viewModel";
 import type { Genre, LineupPayload } from "@/lib/lineup/types";
 import UndatedStrip from "./UndatedStrip";
 
@@ -61,7 +61,7 @@ function Mark({ m, onSelect, selected }: { m: CalMark; onSelect: (id: string) =>
       </button>
     );
   return (
-    <button type="button" title={label} onClick={() => onSelect(m.runId)} className={`${common} ${ring} bg-zinc-100 font-semibold text-zinc-900`} style={{ borderLeft: `4px solid ${col}` }}>
+    <button type="button" title={label} onClick={() => onSelect(m.runId)} className={`${common} ${ring} font-semibold text-zinc-900 ${m.ott ? "" : "bg-zinc-100"}`} style={{ borderLeft: `4px solid ${col}`, ...(m.ott ? { background: `color-mix(in srgb, ${col} 16%, white)` } : {}) }}>
       <span aria-hidden className="shrink-0 text-[10.5px]" style={{ color: col }}>{sym}</span>
       <span className="truncate"><b className="font-extrabold">{m.outletName}</b> {title} {MARK_TAIL[m.kind](m)}</span>
     </button>
@@ -206,6 +206,12 @@ export function CalLegend() {
         <span className="rounded-[5px] bg-sky-800 px-2 text-white">▶ 첫방 = 채움</span>
         <span className="rounded-[5px] border-[1.5px] border-sky-800 bg-white px-2">■ 종영 = 테두리</span>
         <span className="rounded-[5px] border-l-4 border-red-600 bg-zinc-100 px-2">◆ 공개일·단발</span>
+      </li>
+      <li className="flex items-center gap-1.5">
+        OTT 장르색:
+        {(["drama", "variety", "other"] as const).map((k) => (
+          <span key={k} className="rounded-[5px] border-l-4 bg-zinc-100 px-2" style={{ borderColor: GENRE_HEX[k] }}>{GENRE_LABEL[k]}</span>
+        ))}
       </li>
       <li>
         <span className="rounded-[5px] bg-white px-2 text-sky-900" style={{ border: "1.5px dashed #0284c7" }}>◇ 23:50~ = 선택한 채널 방영 가능(ENA 방송 종료 + 홀드백)</span>
