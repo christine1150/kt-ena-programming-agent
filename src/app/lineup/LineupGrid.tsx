@@ -191,7 +191,7 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                     <th colSpan={2} className="border-b border-zinc-200 bg-zinc-50 p-0 text-left">
                       <span className="sticky left-0 flex items-center gap-2 px-3 py-1 text-[15px] font-bold text-zinc-900">
                         <span aria-hidden className="inline-block h-3.5 w-1 rounded-sm ring-1 ring-black/10" style={{ background: row.color ?? "var(--border-control)" }} />
-                        <OutletMark logo={row.outlet?.logo ?? null} name={row.label} height={18} />
+                        <OutletMark logo={row.outlet?.logo ?? null} name={row.label} height={18} rival={row.outlet?.side === "rival"} />
                       </span>
                     </th>
                   </tr>
@@ -216,7 +216,7 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                       <span className="min-w-0 flex-1">
                         {/* 경쟁 비교(요일 칩이 있는 줄)는 방송사 로고로 구분한다(그림이 없으면 이름 글자). */}
                         <span className={`block truncate ${row.emphasis ? "font-bold text-zinc-900" : "font-medium text-zinc-800"}`}>
-                          {row.chip !== undefined ? <OutletMark logo={row.outlet?.logo ?? null} name={row.label} height={density === "compact" ? 16 : 18} /> : row.label}
+                          {row.chip !== undefined ? <OutletMark logo={row.outlet?.logo ?? null} name={row.label} height={density === "compact" ? 16 : 18} rival={row.outlet?.side === "rival"} /> : row.label}
                         </span>
                         {row.sublabel && density === "comfy" && <span className="block truncate text-[12.5px] text-zinc-600">{row.sublabel}</span>}
                       </span>
@@ -538,12 +538,20 @@ function Gap({ gap, P, dayPx, alert }: { gap: GapDto; P: (d: string) => number; 
   );
 }
 
-/** 방송사 로고(높이 고정, 원본 비율). 그림을 못 읽으면 이름 글자로 바꾼다. */
-function OutletMark({ logo, name, height }: { logo: string | null; name: string; height: number }) {
+/** 방송사 로고(높이 고정, 원본 비율). 그림을 못 읽으면 이름 글자로 바꾼다.
+ *  사용자 요청(2026-11-25): 타사 로고는 자사(ENA) 로고보다 조금 작게 — 높이·최대 폭을 약 20% 줄인다. */
+function OutletMark({ logo, name, height, rival = false }: { logo: string | null; name: string; height: number; rival?: boolean }) {
   const [broken, setBroken] = useState(false);
   if (!logo || broken) return <>{name}</>;
   return (
     // eslint-disable-next-line @next/next/no-img-element -- 작은 정적 로고(public)라 next/image 최적화가 필요 없다
-    <img src={logo} alt={name} title={name} onError={() => setBroken(true)} className="inline-block w-auto max-w-[72px] object-contain align-middle print:[print-color-adjust:exact]" style={{ height }} />
+    <img
+      src={logo}
+      alt={name}
+      title={name}
+      onError={() => setBroken(true)}
+      className="inline-block w-auto object-contain align-middle print:[print-color-adjust:exact]"
+      style={{ height: rival ? Math.round(height * 0.8) : height, maxWidth: rival ? 58 : 72 }}
+    />
   );
 }
