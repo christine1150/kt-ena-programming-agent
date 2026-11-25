@@ -32,9 +32,22 @@ function NavInner({ role }: { role: Role | null }) {
   const carry = actionExtra.from && actionExtra.ft ? actionExtra : {};
 
   // 라인업 — 보고서와 관리 사이(사용자 요청 2026-10-22). 관리 메뉴가 없는 PD 계정에서도 보이도록, 관리가 없으면 맨 끝에 붙인다(2026-11-04).
-  // 2026-11-24(사용자 결정): 외부 편성센터 사이트 대신 앱 안 라인업 화면(/lineup)을 연다. 외부 사이트는 라인업 화면 머리의 작은 링크로만 남긴다.
+  // 2026-11-24(사용자 결정): 외부 편성센터 사이트 대신 앱 안 라인업 화면(/lineup)을 연다. 외부 사이트는 바로 앞 '외부 편성센터' 메뉴로 연다(2026-11-25).
   const lineupActive = pathname.startsWith("/lineup");
+  // 외부 편성센터(ktena.pages.dev) — 시청률 지도와 라인업 사이, 새 창(사용자 요청 2026-11-25: 라인업 화면 머리에서 옮기고 ↗ 표시는 뺌).
   const lineupLink = (
+    <>
+    <li className="shrink-0">
+      <a
+        href="https://ktena.pages.dev/"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="ENA 콘텐츠 편성센터의 오리지널 라인업을 새 창으로 엽니다"
+        className="block border-b-2 border-transparent px-3 py-2.5 text-[13px] font-medium text-zinc-500 transition hover:text-zinc-800"
+      >
+        외부 편성센터
+      </a>
+    </li>
     <li className="shrink-0">
       <Link
         href="/lineup"
@@ -45,6 +58,7 @@ function NavInner({ role }: { role: Role | null }) {
         라인업
       </Link>
     </li>
+    </>
   );
   const hasAdmin = items.some((i) => i.id === "admin");
 
@@ -67,16 +81,16 @@ function NavInner({ role }: { role: Role | null }) {
                     {item.label}
                   </Link>
                 </li>
-                {/* 시청률 지도(베타) — 보고서 바로 뒤(라인업 앞, 사용자 요청 2026-10-26). 보고서와 같은 권한(view)이라 PD 계정에도 보인다. 시험 공개 화면이라 /beta 아래에 둔다. */}
+                {/* 시청률 지도 — 보고서 바로 뒤(메뉴의 '베타' 표시는 2026-11-25 사용자 요청으로 뺌)(라인업 앞, 사용자 요청 2026-10-26). 보고서와 같은 권한(view)이라 PD 계정에도 보인다. 시험 공개 화면이라 /beta 아래에 둔다. */}
                 {item.id === "reports" && (
                   <li className="shrink-0">
                     <Link
                       href="/beta/geo-map"
                       aria-current={pathname.startsWith("/beta") ? "page" : undefined}
-                      title="나라·도시·테마별 시청률 지도 (베타)"
+                      title="나라·도시·테마별 시청률 지도"
                       className={`block border-b-2 px-3 py-2.5 text-[13px] font-medium transition ${pathname.startsWith("/beta") ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"}`}
                     >
-                      시청률 지도 <span className="ml-0.5 rounded-full bg-[#f1f0f9] px-1.5 py-0.5 text-[10px] font-semibold text-[#5b4bd0]">베타</span>
+                      시청률 지도
                     </Link>
                   </li>
                 )}

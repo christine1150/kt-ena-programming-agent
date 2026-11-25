@@ -26,7 +26,7 @@ interface Props {
 }
 
 const MONTH_NAMES = ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"];
-const FONT = 12;
+const FONT = 14; // 막대 제목 글자 크기(가독성 개선 2026-11-25: 12 → 14px)
 
 export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth, selectedId, onSelect, focusIds, printMode = false, colorBy = "genre" }: Props) {
   const totalDays = dayIndex(data.from, data.to) + 1;
@@ -109,21 +109,21 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
             <div key={m.from} className="absolute inset-y-0 border-l border-zinc-300" style={{ left: `${P(m.from)}%` }} />
           ))}
         </div>
-        <table className="relative z-[1] w-full table-fixed border-separate border-spacing-0 text-[12px]">
+        <table className="relative z-[1] w-full table-fixed border-separate border-spacing-0 text-[14px]">
           <colgroup>
             <col style={{ width: labelWidth }} />
             <col />
           </colgroup>
           <thead className="sticky top-0 z-30 bg-white print:static">
             <tr>
-              <th rowSpan={3} className="sticky left-0 z-40 border-b border-r border-zinc-200 bg-white px-3 text-left align-bottom text-[12px] font-semibold text-zinc-600 print:static">
+              <th rowSpan={3} className="sticky left-0 z-40 border-b border-r border-zinc-200 bg-white px-3 text-left align-bottom text-[14px] font-semibold text-zinc-600 print:static">
                 <span className="block pb-1.5">{rows.some((r) => r.chip) ? "방송사 · 자리" : "채널 · 자리"}</span>
               </th>
-              <th ref={headRef} className="relative h-6 overflow-x-clip border-b border-zinc-200 p-0">
+              <th ref={headRef} className="relative h-7 overflow-x-clip border-b border-zinc-200 p-0">
                 {months.map((m) => (
                   <span
                     key={m.from}
-                    className="absolute top-0 flex h-6 items-center overflow-hidden border-l border-zinc-300 pl-1.5 text-[12px] font-semibold text-zinc-800 whitespace-nowrap"
+                    className="absolute top-0 flex h-7 items-center overflow-hidden border-l border-zinc-300 pl-1.5 text-[14px] font-semibold text-zinc-800 whitespace-nowrap"
                     style={{ left: `${P(m.from)}%`, width: `${P(addDaysIso(m.to, 1)) - P(m.from)}%` }}
                   >
                     {m.label}
@@ -135,13 +135,13 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
               <th className="relative h-5 overflow-x-clip border-b border-zinc-200 p-0 font-normal">
                 {mondays.map((d, i) =>
                   i % weekStep === 0 ? (
-                    <span key={d} className="absolute top-0 h-5 pl-1 text-[11px] leading-5 text-zinc-600 tabular-nums" style={{ left: `${P(d)}%` }}>
+                    <span key={d} className="absolute top-0 h-5 pl-1 text-[12.5px] leading-5 text-zinc-600 tabular-nums" style={{ left: `${P(d)}%` }}>
                       {Number(d.slice(8, 10))}
                     </span>
                   ) : null
                 )}
                 {todayIn && (
-                  <span className="absolute top-0.5 z-10 -translate-x-1/2 rounded bg-zinc-900 px-1 text-[10px] font-semibold leading-4 text-white" style={{ left: `${P(data.today)}%` }}>
+                  <span className="absolute top-0.5 z-10 -translate-x-1/2 rounded bg-zinc-900 px-1 text-[11px] font-semibold leading-4 text-white" style={{ left: `${P(data.today)}%` }}>
                     오늘
                   </span>
                 )}
@@ -156,7 +156,7 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                   const roomNext = next ? dayIndex(h.date, next.date) * dayPx : 999;
                   const showName = roomNext > textWidth(h.name, 11) + 10 && (room > 4 || !prev);
                   return (
-                    <span key={h.date} title={`${h.date} ${h.name}`} className="absolute top-0 flex h-5 items-center gap-0.5 whitespace-nowrap text-[11px] text-zinc-700" style={{ left: `${P(h.date)}%` }}>
+                    <span key={h.date} title={`${h.date} ${h.name}`} className="absolute top-0 flex h-5 items-center gap-0.5 whitespace-nowrap text-[12.5px] text-zinc-700" style={{ left: `${P(h.date)}%` }}>
                       <span aria-hidden className="inline-block size-1.5 rounded-full bg-zinc-700" />
                       {showName ? h.name : <span className="sr-only">{h.name}</span>}
                     </span>
@@ -166,7 +166,7 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                   <span
                     key={e.id}
                     title={`${e.name} ${e.startDate}~${e.endDate}`}
-                    className="absolute top-0.5 h-4 overflow-hidden rounded-sm bg-zinc-800 px-1 text-[10px] leading-4 text-white whitespace-nowrap"
+                    className="absolute top-0.5 h-4 overflow-hidden rounded-sm bg-zinc-800 px-1 text-[11px] leading-4 text-white whitespace-nowrap"
                     style={{ left: `${P(e.startDate)}%`, width: `max(14px, ${P(addDaysIso(e.endDate, 1)) - P(e.startDate)}%)` }}
                   >
                     {e.name}
@@ -181,7 +181,7 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                 return (
                   <tr key={row.key}>
                     <th colSpan={2} className="border-b border-zinc-300 bg-zinc-100 p-0 text-left">
-                      <span className="sticky left-0 inline-block px-3 py-1 text-[12px] font-bold text-zinc-800">{row.label}</span>
+                      <span className="sticky left-0 inline-block px-3 py-1 text-[14px] font-bold text-zinc-800">{row.label}</span>
                     </th>
                   </tr>
                 );
@@ -189,9 +189,9 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                 return (
                   <tr key={row.key}>
                     <th colSpan={2} className="border-b border-zinc-200 bg-zinc-50 p-0 text-left">
-                      <span className="sticky left-0 flex items-center gap-2 px-3 py-1 text-[13px] font-bold text-zinc-900">
+                      <span className="sticky left-0 flex items-center gap-2 px-3 py-1 text-[15px] font-bold text-zinc-900">
                         <span aria-hidden className="inline-block h-3.5 w-1 rounded-sm ring-1 ring-black/10" style={{ background: row.color ?? "var(--border-control)" }} />
-                        <OutletMark logo={row.outlet?.logo ?? null} name={row.label} height={16} />
+                        <OutletMark logo={row.outlet?.logo ?? null} name={row.label} height={18} />
                       </span>
                     </th>
                   </tr>
@@ -209,16 +209,16 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                     <div className="flex h-full items-center gap-1.5 pr-2">
                       <span aria-hidden className="h-full w-1 shrink-0" style={{ background: row.color ?? "transparent" }} />
                       {row.chip !== undefined && (
-                        <span className="inline-flex w-9 shrink-0 justify-center rounded bg-zinc-100 py-0.5 text-[11px] font-semibold text-zinc-700">{row.chip}</span>
+                        <span className="inline-flex w-10 shrink-0 justify-center rounded bg-zinc-100 py-0.5 text-[12.5px] font-semibold text-zinc-700">{row.chip}</span>
                       )}
                       <span className="min-w-0 flex-1">
                         {/* 경쟁 비교(요일 칩이 있는 줄)는 방송사 로고로 구분한다(그림이 없으면 이름 글자). */}
                         <span className={`block truncate ${row.emphasis ? "font-bold text-zinc-900" : "font-medium text-zinc-800"}`}>
-                          {row.chip !== undefined ? <OutletMark logo={row.outlet?.logo ?? null} name={row.label} height={density === "compact" ? 14 : 16} /> : row.label}
+                          {row.chip !== undefined ? <OutletMark logo={row.outlet?.logo ?? null} name={row.label} height={density === "compact" ? 16 : 18} /> : row.label}
                         </span>
-                        {row.sublabel && density === "comfy" && <span className="block truncate text-[11px] text-zinc-600">{row.sublabel}</span>}
+                        {row.sublabel && density === "comfy" && <span className="block truncate text-[12.5px] text-zinc-600">{row.sublabel}</span>}
                       </span>
-                      {row.sublabel && density === "compact" && <span className="shrink-0 text-[11px] text-zinc-600 tabular-nums">{row.sublabel}</span>}
+                      {row.sublabel && density === "compact" && <span className="shrink-0 text-[12.5px] text-zinc-600 tabular-nums">{row.sublabel}</span>}
                     </div>
                   </th>
                   <td className="relative overflow-x-clip border-b border-zinc-200 p-0 align-top" style={{ height }}>
@@ -278,7 +278,7 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
         )}
       </div>
       {printMode && footnotes.size > 0 && (
-        <section className="mt-2 break-inside-avoid-page text-[11px] leading-snug text-zinc-800">
+        <section className="mt-2 break-inside-avoid-page text-[12.5px] leading-snug text-zinc-800">
           <h3 className="mb-0.5 font-bold">막대에 다 쓰지 못한 제목</h3>
           <ol className="columns-3 gap-6">
             {[...footnotes.entries()].map(([id, n]) => {
@@ -366,7 +366,7 @@ function Bar(props: {
         style={{ left: `${left}%`, width: `${widthPct}%`, minWidth: 24, height: rowH, opacity: 1 }}
         title={`${title} · ${periodText(run)}(월 단위) ${episodeText(run, work)}`}
       >
-        <span className="truncate px-1 text-[12px] font-semibold text-zinc-900">
+        <span className="truncate px-1 text-[14px] font-semibold text-zinc-900">
           {shownTitle} <span className="font-normal text-zinc-600">· {periodText(run)} 월 단위</span>
         </span>
         <span aria-hidden className="relative mx-0.5 mb-1.5 block h-2" style={{ borderLeft: `2px solid ${c}`, borderRight: `2px solid ${c}`, opacity: dim ? 0.3 : 1 }}>
@@ -407,24 +407,24 @@ function Bar(props: {
         {!isBox && <span aria-hidden className="w-1 shrink-0" style={{ background: dim ? "transparent" : tone ?? GENRE_VAR[genre] }} />}
         <span className={`flex min-w-0 flex-1 flex-col justify-center px-1.5 ${startsBefore ? "pl-1" : ""}`}>
           {(footnote !== undefined || (mode !== "outside" && mode !== "mark")) && (
-            <span className="flex min-w-0 items-baseline gap-1 leading-4">
-              {startsBefore && <span aria-hidden className="shrink-0 text-[10px] text-zinc-600">◀</span>}
+            <span className="flex min-w-0 items-baseline gap-1 leading-5">
+              {startsBefore && <span aria-hidden className="shrink-0 text-[11px] text-zinc-600">◀</span>}
               {/* 1줄: 제목(굵게)이 먼저 자리를 차지하고 기간·회차(가늘게)는 남는 폭만큼. 2줄: 출연자(드라마 주연·예능 출연자/MC).
                   사용자 요청(2026-11-25): 방영 기간·회차·출연자는 중요하니 드라마·예능 모두 함께 — 편성센터 라인업 모양. */}
               <span className={`max-w-full shrink-0 truncate font-semibold ${isBox ? "font-medium text-zinc-700" : "text-zinc-900"}`}>{footnote ? `[${footnote}] ` : ""}{shownTitle}</span>
-              {mode === "two" && meta && <span className="min-w-0 truncate text-[11px] font-normal text-zinc-700">{meta}</span>}
-              {run.needsReview && <span className="shrink-0 rounded bg-zinc-900 px-1 text-[10px] leading-4 text-white">확인</span>}
+              {mode === "two" && meta && <span className="min-w-0 truncate text-[12.5px] font-normal text-zinc-700">{meta}</span>}
+              {run.needsReview && <span className="shrink-0 rounded bg-zinc-900 px-1 text-[11px] leading-4 text-white">확인</span>}
               {run.startPrecision === "week" && mode !== "two" && <span className="sr-only">주 단위 일정</span>}
             </span>
           )}
-          {mode === "two" && cast2 && <span className="truncate text-[11px] leading-[14px] font-normal text-zinc-700">{cast2}</span>}
+          {mode === "two" && cast2 && <span className="truncate text-[12.5px] leading-[17px] font-normal text-zinc-700">{cast2}</span>}
         </span>
         {d.estimatedFrom && <span aria-hidden className="absolute top-0 right-0 bottom-0 border-r-2 border-dotted border-zinc-500" />}
       </button>
       {outsideW > 0 && (
         <span
           aria-hidden
-          className="pointer-events-none absolute z-[1] truncate rounded-sm bg-white/90 px-1 text-[12px] font-semibold text-zinc-900"
+          className="pointer-events-none absolute z-[1] truncate rounded-sm bg-white/90 px-1 text-[14px] font-semibold text-zinc-900"
           style={{ left: `calc(${right}% + 3px)`, top: (rowH - 18) / 2, lineHeight: "18px", maxWidth: outsideW }}
         >
           {title}
@@ -471,7 +471,7 @@ function Diamonds(props: { run: RunDto; work: WorkDto | undefined; slot: SlotDto
         className={`absolute top-1/2 z-[3] flex -translate-y-1/2 items-center rounded-sm pr-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 ${selected ? "ring-2 ring-zinc-900" : ""}`}
         style={{ left: `calc(${P(dates[0])}% - ${size / 2 + 2}px)`, paddingLeft: size + 6, minHeight: Math.max(size + 4, 18) }}
       >
-        <span className={`truncate whitespace-nowrap rounded-sm bg-white/85 font-semibold text-zinc-900 ${compact ? "text-[11px]" : "text-[12px]"}`}>
+        <span className={`truncate whitespace-nowrap rounded-sm bg-white/85 font-semibold text-zinc-900 ${compact ? "text-[12.5px]" : "text-[14px]"}`}>
           {title}
           {marks.length < dates.length && <span className="ml-0.5 font-normal text-zinc-600">×{dates.length}</span>}
         </span>
@@ -493,7 +493,7 @@ function Gap({ gap, P, dayPx, alert }: { gap: GapDto; P: (d: string) => number; 
       className={`absolute bottom-1 flex justify-center border-b border-dotted ${alert ? "border-red-600" : "border-zinc-500"}`}
       style={{ left: `${left}%`, width: `${right - left}%` }}
     >
-      {px > 56 && <span className={`text-[11px] leading-4 ${alert ? "font-semibold text-red-700" : "text-zinc-600"}`}>{text}</span>}
+      {px > 56 && <span className={`text-[12.5px] leading-4 ${alert ? "font-semibold text-red-700" : "text-zinc-600"}`}>{text}</span>}
     </span>
   );
 }

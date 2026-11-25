@@ -99,12 +99,12 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
 
   const toggle = <T,>(arr: T[], v: T) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   const chip = (on: boolean) =>
-    `rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition ${on ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500"}`;
+    `rounded-full border px-2.5 py-0.5 text-[13px] font-medium transition ${on ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500"}`;
 
   return (
     <div className="mx-auto w-full max-w-[1920px] px-3 pt-3 pb-6 sm:px-5 print:max-w-none print:p-0">
       {/* 인쇄 머리 — 대외비 표시·출력 시각 */}
-      <div className="mb-2 hidden items-baseline justify-between text-[11px] print:flex">
+      <div className="mb-2 hidden items-baseline justify-between text-[12px] print:flex">
         <span className="font-bold">대외비 · KT ENA 라인업 ({from} ~ {to})</span>
         <span>출력 {printedAt}</span>
       </div>
@@ -126,27 +126,26 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
                 set({
                   view: v,
                   sel: null,
-                  density: v === "compare" ? "compact" : "comfy",
                   genres: st.genres,
                 })
               }
-              className={`rounded-md px-3 py-1 text-[13px] font-medium ${st.view === v ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-100"}`}
+              className={`rounded-md px-3 py-1 text-[14px] font-medium ${st.view === v ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-100"}`}
             >
               {label}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-1">
-          <button type="button" aria-label="한 달 앞으로" onClick={() => set({ from: addMonths(st.from, -1) })} className="rounded border border-zinc-300 px-2 py-0.5 text-[13px] hover:bg-zinc-50">
+          <button type="button" aria-label="한 달 앞으로" onClick={() => set({ from: addMonths(st.from, -1) })} className="rounded border border-zinc-300 px-2 py-0.5 text-[14px] hover:bg-zinc-50">
             ◀
           </button>
-          <span className="min-w-[150px] text-center text-[13px] font-semibold text-zinc-800 tabular-nums">
+          <span className="min-w-[150px] text-center text-[14px] font-semibold text-zinc-800 tabular-nums">
             {st.from.replace("-", ".")} ~ {addMonths(st.from, st.len - 1).replace("-", ".")}
           </span>
-          <button type="button" aria-label="한 달 뒤로" onClick={() => set({ from: addMonths(st.from, 1) })} className="rounded border border-zinc-300 px-2 py-0.5 text-[13px] hover:bg-zinc-50">
+          <button type="button" aria-label="한 달 뒤로" onClick={() => set({ from: addMonths(st.from, 1) })} className="rounded border border-zinc-300 px-2 py-0.5 text-[14px] hover:bg-zinc-50">
             ▶
           </button>
-          <button type="button" onClick={() => set({ from: defaultFrom })} className="ml-1 rounded border border-zinc-300 px-2 py-0.5 text-[12px] hover:bg-zinc-50">
+          <button type="button" onClick={() => set({ from: defaultFrom })} className="ml-1 rounded border border-zinc-300 px-2 py-0.5 text-[13px] hover:bg-zinc-50">
             오늘
           </button>
         </div>
@@ -158,15 +157,12 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <a href="https://ktena.pages.dev/" target="_blank" rel="noopener noreferrer" className="text-[12px] text-zinc-600 underline-offset-2 hover:underline">
-            외부 편성센터 ↗
-          </a>
           {data?.canEdit && (
-            <Link href="/lineup/manage" className="rounded border border-zinc-300 px-2.5 py-1 text-[12px] font-medium hover:bg-zinc-50">
+            <Link href="/lineup/manage" className="rounded border border-zinc-300 px-2.5 py-1 text-[13px] font-medium hover:bg-zinc-50">
               자료 관리
             </Link>
           )}
-          <button type="button" onClick={() => setSaveOpen(true)} className="rounded bg-zinc-900 px-2.5 py-1 text-[12px] font-medium text-white hover:bg-zinc-700">
+          <button type="button" onClick={() => setSaveOpen(true)} className="rounded bg-zinc-900 px-2.5 py-1 text-[13px] font-medium text-white hover:bg-zinc-700">
             저장·인쇄
           </button>
         </div>
@@ -174,7 +170,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
 
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 print:hidden">
         <div className="flex flex-wrap items-center gap-1" role="group" aria-label="자사 채널">
-          <span className="mr-0.5 text-[12px] text-zinc-600">{st.view === "compare" ? "기준 채널" : "채널"}</span>
+          <span className="mr-0.5 text-[13px] text-zinc-600">{st.view === "compare" ? "기준 채널" : "채널"}</span>
           {st.view !== "compare" && (
             <button type="button" aria-pressed={st.channels.length === 0} onClick={() => set({ channels: [] })} className={chip(st.channels.length === 0)}>
               라인업 있는 채널 전부
@@ -196,7 +192,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
           })}
         </div>
         <div className="flex items-center gap-1" role="group" aria-label="장르">
-          <span className="mr-0.5 text-[12px] text-zinc-600">장르</span>
+          <span className="mr-0.5 text-[13px] text-zinc-600">장르</span>
           <button type="button" aria-pressed={st.genres.length === 0} onClick={() => set({ genres: [] })} className={chip(st.genres.length === 0)}>
             전체
           </button>
@@ -208,7 +204,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
           ))}
         </div>
         <div className="flex items-center gap-1" role="group" aria-label="요일">
-          <span className="mr-0.5 text-[12px] text-zinc-600">요일</span>
+          <span className="mr-0.5 text-[13px] text-zinc-600">요일</span>
           {DOWS.map((d) => (
             <button key={d} type="button" aria-pressed={st.dows.includes(d)} onClick={() => set({ dows: toggle(st.dows, d) })} className={`${chip(st.dows.includes(d))} px-2`}>
               {dowLabel([d])}
@@ -226,7 +222,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
         )}
       </div>
 
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[12px] text-zinc-700">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[13px] text-zinc-700">
         <p>
           자료 기준:{" "}
           {latest.length === 0
@@ -245,8 +241,8 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
         {st.view !== "list" && <Legend byOutlet={st.view === "compare"} />}
       </div>
 
-      {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800">{error}</p>}
-      {!data && loading && <p className="py-10 text-center text-[13px] text-zinc-600">라인업을 불러오는 중…</p>}
+      {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-[14px] text-red-800">{error}</p>}
+      {!data && loading && <p className="py-10 text-center text-[14px] text-zinc-600">라인업을 불러오는 중…</p>}
       {data && grid && (
         <div className={loading ? "opacity-60 transition-opacity" : undefined}>
           {st.view === "list" ? (
@@ -267,7 +263,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
             />
           )}
           {st.view === "own" && grid.hiddenChannels.length > 0 && (
-            <p className="mt-1.5 text-[12px] text-zinc-600 print:hidden">이 기간 라인업이 없는 채널 {grid.hiddenChannels.length}개: {grid.hiddenChannels.join(", ")}</p>
+            <p className="mt-1.5 text-[13px] text-zinc-600 print:hidden">이 기간 라인업이 없는 채널 {grid.hiddenChannels.length}개: {grid.hiddenChannels.join(", ")}</p>
           )}
         </div>
       )}
@@ -294,7 +290,7 @@ export function Legend({ full = false, byOutlet = false }: { full?: boolean; byO
   const sw = (style: React.CSSProperties) => <span aria-hidden className="inline-block h-3 w-6 rounded-[3px] align-middle" style={style} />;
   const tint = (v: string) => `color-mix(in srgb, ${v} 16%, white)`;
   return (
-    <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-zinc-700" aria-label="범례">
+    <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-zinc-700" aria-label="범례">
       {byOutlet && <li className="font-medium text-zinc-800">막대 색 = 방송사 로고색</li>}
       {!byOutlet && (["drama", "variety", "business"] as Genre[]).map((g) => (
         <li key={g} className="flex items-center gap-1">
@@ -339,11 +335,11 @@ export function Legend({ full = false, byOutlet = false }: { full?: boolean; byO
 
 function EmptyState({ canEdit }: { canEdit: boolean }) {
   return (
-    <div className="rounded-lg border border-dashed border-zinc-300 px-6 py-12 text-center text-[13px] text-zinc-700">
+    <div className="rounded-lg border border-dashed border-zinc-300 px-6 py-12 text-center text-[14px] text-zinc-700">
       <p className="font-semibold">이 기간·조건에 맞는 라인업이 없습니다.</p>
       <p className="mt-1 text-zinc-600">기간을 옮기거나 거르기를 풀어 보세요.{canEdit && " 새 자료는 자료 관리에서 엑셀로 올립니다."}</p>
       {canEdit && (
-        <Link href="/lineup/manage" className="mt-3 inline-block rounded bg-zinc-900 px-3 py-1.5 text-[13px] font-medium text-white">
+        <Link href="/lineup/manage" className="mt-3 inline-block rounded bg-zinc-900 px-3 py-1.5 text-[14px] font-medium text-white">
           자료 관리로 가기
         </Link>
       )}
@@ -370,8 +366,8 @@ export function ListView({ data, filters, onSelect }: { data: LineupPayload; fil
   if (runs.length === 0) return <EmptyState canEdit={data.canEdit} />;
   return (
     <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-      <table className="w-full text-[13px]">
-        <thead className="bg-zinc-50 text-left text-[12px] text-zinc-600">
+      <table className="w-full text-[14px]">
+        <thead className="bg-zinc-50 text-left text-[13px] text-zinc-600">
           <tr>
             <th className="px-3 py-2 font-semibold">기간</th>
             <th className="px-3 py-2 font-semibold">채널·방송사</th>

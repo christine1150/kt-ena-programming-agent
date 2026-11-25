@@ -23,9 +23,9 @@ export const KIND_LABEL: Record<RunDto["runKind"], string> = {
 
 export const LAYOUT = {
   // 막대는 늘 2줄(제목·기간·회차 / 출연자, 사용자 요청 2026-11-25)이라 촘촘도 2줄이 들어가는 높이로 둔다.
-  comfy: { row: 48, bar: 40, event: 16 },
-  compact: { row: 38, bar: 32, event: 14 },
-  label: { own: { comfy: 184, compact: 152 }, compare: { comfy: 224, compact: 192 } },
+  comfy: { row: 56, bar: 48, event: 18 }, // 가독성 개선(2026-11-25): 제목 14px + 둘째 줄 12.5px
+  compact: { row: 46, bar: 40, event: 16 },
+  label: { own: { comfy: 200, compact: 176 }, compare: { comfy: 248, compact: 224 } },
   minWeekPx: 20,
 };
 
@@ -246,7 +246,7 @@ export const LENGTHS = [3, 6, 8, 12];
 const GENRE_SET = new Set(["drama", "variety", "business", "other"]);
 const listOf = (v: string | null | undefined) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 
-/** 주소 쿼리 → 보기 조건. 잘못된 값은 기본값으로(기본: KT ENA, 지난달부터 8개월, 장르 전체, 비교 보기는 촘촘). */
+/** 주소 쿼리 → 보기 조건. 잘못된 값은 기본값으로(기본: KT ENA, 지난달부터 8개월, 장르 전체, 밀도 넉넉). */
 export function parseLineupQuery(get: (k: string) => string | null | undefined, defaultFrom: string): LineupQuery {
   const viewQ = get("view");
   const view: ViewMode = viewQ === "compare" || viewQ === "list" ? viewQ : "own";
@@ -262,7 +262,7 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
     // 장르 기본 = 전체(2026-11-25: 타사 예능·교양 신작이 들어와 경쟁 비교도 전체가 기본). 옛 링크의 genre=all도 전체로 읽는다.
     genres: get("genre") === "all" ? [] : genres,
     dows: listOf(get("dow")).map(Number).filter((d) => d >= 1 && d <= 7),
-    density: densityQ === "compact" || densityQ === "comfy" ? densityQ : view === "compare" ? "compact" : "comfy",
+    density: densityQ === "compact" ? "compact" : "comfy", // 기본 = 넉넉(모든 보기, 사용자 요청 2026-11-25)
     paper: get("paper") === "A3" ? "A3" : "A4",
   };
 }
@@ -276,7 +276,7 @@ export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string): stri
   if (q.channels?.length) s.set("ch", q.channels.join(","));
   if (q.genres?.length) s.set("genre", q.genres.join(","));
   if (q.dows?.length) s.set("dow", q.dows.join(","));
-  if (q.density && q.density !== (q.view === "compare" ? "compact" : "comfy")) s.set("density", q.density);
+  if (q.density === "compact") s.set("density", "compact");
   if (q.paper && q.paper !== "A4") s.set("paper", q.paper);
   return s.toString();
 }

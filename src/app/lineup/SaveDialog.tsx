@@ -68,7 +68,7 @@ export default function SaveDialog({
                 onClick={() =>
                   set({
                     view: v,
-                    density: v === "compare" ? "compact" : q.density,
+                    density: q.density,
                     channels: v === "compare" ? q.channels.slice(0, 1) : q.channels,
                     genres: q.genres,
                   })
