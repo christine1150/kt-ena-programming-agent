@@ -10,6 +10,8 @@ import DetailPanel from "./DetailPanel";
 import LineupGrid from "./LineupGrid";
 import SaveDialog from "./SaveDialog";
 import UndatedStrip from "./UndatedStrip";
+import CalendarView, { CalLegend } from "./CalendarView";
+import { buildCalendar, CAL_LAYERS, CAL_MAX_DAYS, calendarFetchRange, clampRange, monthRangeOf, type CalLayer } from "@/lib/lineup/calendar";
 import {
   buildCompareRows, buildOwnRows, buildUndated, dowLabel, episodeText, GENRE_LABEL, GENRE_VAR, LAYOUT, LENGTHS, lineupSearch, periodText, runGenre, runTitle, slotLabel, STATUS_LABEL,
   type Density, type Filters, type LineupQuery, type ViewMode,
@@ -38,8 +40,17 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
   const pathname = usePathname();
   const [st, setSt] = useState(initial);
   const [reloadKey, setReloadKey] = useState(0);
-  const from = `${st.from}-01`;
-  const to = monthEnd(addMonths(st.from, st.len - 1));
+  const isCal = st.view === "calendar";
+  // 캘린더: 한 달(month) 또는 임의 기간(dfrom~dto, 최대 42일) — 자료는 주 단위로 넓혀 받아 온다.
+  const calRange = useMemo(() => (st.dfrom && st.dto ? clampRange(st.dfrom, st.dto) : { ...monthRangeOf(st.month), clipped: false }), [st.dfrom, st.dto, st.month]);
+  const gridFrom = `${st.from}-01`;
+  const gridTo = monthEnd(addMonths(st.from, st.len - 1));
+  const shownFrom = isCal ? calRange.from : gridFrom;
+  const shownTo = isCal ? calRange.to : gridTo;
+  const fetchRange = isCal ? calendarFetchRange(calRange.from, calRange.to) : { from: gridFrom, to: gridTo };
+  const from = fetchRange.from;
+  const to = fetchRange.to;
+  const [day, setDay] = useState<string | null>(null); // 캘린더에서 고른 날짜(그날 편성 패널)
   const fetchKey = `${from}|${to}|${reloadKey}`;
   // 마지막으로 받은 응답(어느 요청의 것인지 키와 함께) — 키가 다르면 불러오는 중이다. 새 응답이 올 때까지 이전 화면을 흐리게 둔다.
   const [result, setResult] = useState<{ key: string; data: LineupPayload | null; error: string | null }>({ key: "", data: null, error: null });
@@ -82,8 +93,13 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
   const set = useCallback((patch: Partial<InitialState>) => setSt((s) => ({ ...s, ...patch })), []);
   const { channels, genres, dows, view } = st;
   const filters: Filters = useMemo(() => ({ channels, genres, dows }), [channels, genres, dows]);
+  const calModel = useMemo(
+    () => (data && view === "calendar" ? buildCalendar(data, { from: calRange.from, to: calRange.to, channels, genres, hide: st.hide as CalLayer[] }) : null),
+    [data, view, calRange, channels, genres, st.hide]
+  );
+  const calOwnCodes = channels.length > 0 ? channels : ["ENA"];
   const grid = useMemo(() => {
-    if (!data) return null;
+    if (!data || view === "calendar") return null;
     if (view === "compare") return { ...buildCompareRows(data, filters), hiddenChannels: [] as string[] };
     return buildOwnRows(data, filters);
   }, [data, view, filters]);
@@ -106,7 +122,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
     <div className="mx-auto w-full max-w-[1920px] px-3 pt-3 pb-6 sm:px-5 print:max-w-none print:p-0">
       {/* 인쇄 머리 — 대외비 표시·출력 시각 */}
       <div className="mb-2 hidden items-baseline justify-between text-[12px] print:flex">
-        <span className="font-bold">대외비 · KT ENA 라인업 ({from} ~ {to})</span>
+        <span className="font-bold">대외비 · KT ENA 라인업 ({shownFrom} ~ {shownTo})</span>
         <span>출력 {printedAt}</span>
       </div>
       <header className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 print:hidden">
@@ -117,25 +133,58 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
               ["own", "KT ENA"],
               ["compare", "경쟁 비교"],
               ["list", "목록"],
+              ["calendar", "캘린더"],
             ] as [ViewMode, string][]
           ).map(([v, label]) => (
             <button
               key={v}
               role="tab"
               aria-selected={st.view === v}
-              onClick={() =>
+              onClick={() => {
+                setDay(null);
                 set({
                   view: v,
                   sel: null,
                   genres: st.genres,
-                })
-              }
+                });
+              }}
               className={`rounded-md px-3 py-1 text-[14px] font-medium ${st.view === v ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-100"}`}
             >
               {label}
             </button>
           ))}
         </div>
+        {isCal && (
+          <>
+            <div className="flex items-center gap-1">
+              <button type="button" aria-label="한 달 앞으로" onClick={() => { setDay(null); set({ month: addMonths(st.dfrom ? calRange.from.slice(0, 7) : st.month, -1), dfrom: null, dto: null }); }} className="rounded border border-zinc-300 px-2 py-0.5 text-[14px] hover:bg-zinc-50">
+                ◀
+              </button>
+              <span className="min-w-[130px] text-center text-[16px] font-extrabold text-zinc-900 tabular-nums">
+                {st.dfrom ? `${calRange.from.slice(5).replace("-", "/")} ~ ${calRange.to.slice(5).replace("-", "/")}` : `${st.month.slice(0, 4)}년 ${Number(st.month.slice(5))}월`}
+              </span>
+              <button type="button" aria-label="한 달 뒤로" onClick={() => { setDay(null); set({ month: addMonths(st.dfrom ? calRange.from.slice(0, 7) : st.month, 1), dfrom: null, dto: null }); }} className="rounded border border-zinc-300 px-2 py-0.5 text-[14px] hover:bg-zinc-50">
+                ▶
+              </button>
+              <button type="button" onClick={() => { setDay(null); set({ month: addMonths(defaultFrom, 1), dfrom: null, dto: null }); }} className="ml-1 rounded border border-zinc-300 px-2 py-0.5 text-[13px] hover:bg-zinc-50">
+                오늘
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-zinc-700">
+              <span>기간 지정</span>
+              <input type="date" aria-label="시작일" value={calRange.from} onChange={(e) => e.target.value && set({ dfrom: e.target.value, dto: e.target.value > calRange.to ? e.target.value : calRange.to })} className="rounded border border-zinc-300 px-1.5 py-0.5 text-[13px]" />
+              <span>~</span>
+              <input type="date" aria-label="종료일" value={calRange.to} onChange={(e) => e.target.value && set({ dfrom: calRange.from, dto: e.target.value })} className="rounded border border-zinc-300 px-1.5 py-0.5 text-[13px]" />
+              {st.dfrom && (
+                <button type="button" onClick={() => set({ month: calRange.from.slice(0, 7), dfrom: null, dto: null })} className="rounded border border-zinc-300 px-2 py-0.5 hover:bg-zinc-50">
+                  한 달로
+                </button>
+              )}
+              {calRange.clipped && <span className="text-red-700">최대 {CAL_MAX_DAYS / 7}주({CAL_MAX_DAYS}일)까지라 시작일부터 {CAL_MAX_DAYS}일로 잘랐습니다</span>}
+            </div>
+          </>
+        )}
+        {!isCal && (
         <div className="flex items-center gap-1">
           <button type="button" aria-label="한 달 앞으로" onClick={() => set({ from: addMonths(st.from, -1) })} className="rounded border border-zinc-300 px-2 py-0.5 text-[14px] hover:bg-zinc-50">
             ◀
@@ -150,6 +199,8 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
             오늘
           </button>
         </div>
+        )}
+        {!isCal && (
         <div className="flex items-center gap-1" role="group" aria-label="보는 길이">
           {LENGTHS.map((n) => (
             <button key={n} type="button" aria-pressed={st.len === n} onClick={() => set({ len: n })} className={chip(st.len === n)}>
@@ -157,6 +208,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
             </button>
           ))}
         </div>
+        )}
         <div className="ml-auto flex items-center gap-2">
           {data?.canEdit && (
             <Link href="/lineup/manage" className="rounded border border-zinc-300 px-2.5 py-1 text-[13px] font-medium hover:bg-zinc-50">
@@ -171,20 +223,26 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
 
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 print:hidden">
         <div className="flex flex-wrap items-center gap-1" role="group" aria-label="자사 채널">
-          <span className="mr-0.5 text-[13px] text-zinc-600">{st.view === "compare" ? "기준 채널" : "채널"}</span>
-          {st.view !== "compare" && (
+          <span className="mr-0.5 text-[13px] text-zinc-600">{st.view === "compare" || isCal ? "기준 채널" : "채널"}</span>
+          {st.view !== "compare" && !isCal && (
             <button type="button" aria-pressed={st.channels.length === 0} onClick={() => set({ channels: [] })} className={chip(st.channels.length === 0)}>
               라인업 있는 채널 전부
             </button>
           )}
           {ownOutlets.map((o) => {
-            const on = st.view === "compare" ? (st.channels.length ? st.channels : ["ENA"]).includes(o.code) : st.channels.includes(o.code);
+            const on = st.view === "compare" || isCal ? calOwnCodes.includes(o.code) : st.channels.includes(o.code);
             return (
               <button
                 key={o.code}
                 type="button"
                 aria-pressed={on}
-                onClick={() => set({ channels: st.view === "compare" ? [o.code] : toggle(st.channels, o.code) })}
+                onClick={() => {
+                  if (isCal) {
+                    // 캘린더: 여러 자사 채널을 함께 고를 수 있고, 모두 끄면 방금 누른 채널만 남긴다
+                    const next = toggle(calOwnCodes, o.code);
+                    set({ channels: next.length ? next : [o.code] });
+                  } else set({ channels: st.view === "compare" ? [o.code] : toggle(st.channels, o.code) });
+                }}
                 className={chip(on)}
               >
                 {o.name}
@@ -204,6 +262,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
             </button>
           ))}
         </div>
+        {!isCal && (
         <div className="flex items-center gap-1" role="group" aria-label="요일">
           <span className="mr-0.5 text-[13px] text-zinc-600">요일</span>
           {DOWS.map((d) => (
@@ -212,6 +271,20 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
             </button>
           ))}
         </div>
+        )}
+        {isCal && (
+          <div className="flex items-center gap-1" role="group" aria-label="표시">
+            <span className="mr-0.5 text-[13px] text-zinc-600">표시</span>
+            {CAL_LAYERS.map((l) => {
+              const on = !st.hide.includes(l.key);
+              return (
+                <button key={l.key} type="button" aria-pressed={on} onClick={() => set({ hide: on ? [...st.hide, l.key] : st.hide.filter((h) => h !== l.key) })} className={chip(on)}>
+                  {on ? "✓ " : ""}{l.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {st.view !== "list" && (
           <div className="flex items-center gap-1" role="group" aria-label="밀도">
             {(["comfy", "compact"] as Density[]).map((d) => (
@@ -239,11 +312,26 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
                 );
               })}
         </p>
-        {st.view !== "list" && <Legend byOutlet={st.view === "compare"} />}
+        {isCal ? <CalLegend /> : st.view !== "list" && <Legend byOutlet={st.view === "compare"} />}
       </div>
 
       {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-[14px] text-red-800">{error}</p>}
       {!data && loading && <p className="py-10 text-center text-[14px] text-zinc-600">라인업을 불러오는 중…</p>}
+      {data && calModel && (
+        <div className={loading ? "opacity-60 transition-opacity" : undefined}>
+          <CalendarView
+            data={data}
+            model={calModel}
+            density={st.density}
+            selectedRunId={st.sel}
+            onSelectRun={(id) => set({ sel: id })}
+            selectedDay={day}
+            onSelectDay={setDay}
+            ownCodes={calOwnCodes}
+            genres={genres}
+          />
+        </div>
+      )}
       {data && grid && (
         <div className={loading ? "opacity-60 transition-opacity" : undefined}>
           {st.view === "list" ? (

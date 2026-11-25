@@ -5,6 +5,7 @@
 import ExcelJS from "exceljs";
 import type { LineupPayload, OutletDto, RunDto } from "./types";
 import { hexTint } from "./brand";
+import { addCalendarSheets } from "./excelCalendar";
 import {
   addDaysIso, assignLanes, buildCompareRows, buildOwnRows, buildUndated, conditionText, dayIndex, episodeText, GENRE_HEX, GENRE_LABEL, kindLabel, periodText,
   runGenre, runTitle, slotLabel, slotTime, STATUS_LABEL, workNote, type LineupQuery, type Row,
@@ -29,7 +30,10 @@ export async function buildLineupWorkbook(data: LineupPayload, q: LineupQuery, p
   const sources = [...new Map(data.sources.filter((s) => s.kind !== "manual").map((s) => [s.kind, s] as const)).values()];
   const sourceText = sources.map((s) => `${s.title} ${s.asOf}`).join(", ");
 
-  if (q.view === "list") {
+  if (q.view === "calendar") {
+    // 캘린더: 달마다 시트 + '일별 목록'(excelCalendar.ts)
+    addCalendarSheets(wb, data, q, printedAt, sourceText);
+  } else if (q.view === "list") {
     addListSheet(wb, data, q, cond, sourceText, printedAt);
     const own = buildOwnRows(data, filters);
     addGridSheet(wb, data, own.rows, own.runsBySlot, cond, sourceText, printedAt, false);

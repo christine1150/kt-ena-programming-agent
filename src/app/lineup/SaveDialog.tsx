@@ -5,6 +5,7 @@
 // 지금 화면의 조건으로 미리 채워 둔다. 대외비 자료이므로 파일을 외부로 보내지 않도록 안내한다.
 import { useEffect, useRef, useState } from "react";
 import type { Genre } from "@/lib/lineup/types";
+import { CAL_LAYERS, calRangeOf } from "@/lib/lineup/calendar";
 import { dowLabel, GENRE_LABEL, LENGTHS, lineupSearch, queryRange, type LineupQuery, type ViewMode } from "@/lib/lineup/viewModel";
 
 const GENRES: Genre[] = ["drama", "variety", "business", "other"];
@@ -17,7 +18,8 @@ export default function SaveDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   const set = (patch: Partial<LineupQuery>) => setQ((s) => ({ ...s, ...patch }));
   const toggle = <T,>(arr: T[], v: T) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
-  const range = queryRange(q.from, q.len);
+  const isCal = q.view === "calendar";
+  const range = isCal ? calRangeOf(q) : queryRange(q.from, q.len);
   // 인쇄·엑셀 주소 — 시작 월은 늘 싣는다(받는 쪽의 "지난달" 기본값이 날짜에 따라 달라지지 않게). 나머지 기본값은 받는 쪽과 같다.
   const search = new URLSearchParams(lineupSearch(q, "")).toString();
 
@@ -31,6 +33,7 @@ export default function SaveDialog({
   const chip = (on: boolean) =>
     `rounded-full border px-2.5 py-0.5 text-[12px] font-medium ${on ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500"}`;
   const isCompare = q.view === "compare";
+  const multiBase = isCompare || isCal; // 기준 채널(캘린더는 여러 개 선택 가능)
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/30 p-4 pt-16 print:hidden" onClick={onClose}>
@@ -59,6 +62,7 @@ export default function SaveDialog({
                 ["own", "KT ENA"],
                 ["compare", "경쟁 비교"],
                 ["list", "목록"],
+                ["calendar", "캘린더"],
               ] as [ViewMode, string][]
             ).map(([v, label]) => (
               <button
@@ -80,6 +84,19 @@ export default function SaveDialog({
             ))}
           </Field>
 
+          {isCal ? (
+            <Field label="기간">
+              <input type="month" value={q.dfrom ? range.from.slice(0, 7) : q.month} onChange={(e) => e.target.value && set({ month: e.target.value, dfrom: null, dto: null })} className="rounded border border-zinc-300 px-2 py-0.5 text-[13px]" aria-label="달" />
+              <span className="text-zinc-600">한 달 · 또는 기간 지정(최대 6주)</span>
+              <span className="flex w-full items-center gap-1.5">
+                <input type="date" value={range.from} onChange={(e) => e.target.value && set({ dfrom: e.target.value, dto: e.target.value > range.to ? e.target.value : range.to })} className="rounded border border-zinc-300 px-1.5 py-0.5 text-[13px]" aria-label="시작일" />
+                <span>~</span>
+                <input type="date" value={range.to} onChange={(e) => e.target.value && set({ dfrom: range.from, dto: e.target.value })} className="rounded border border-zinc-300 px-1.5 py-0.5 text-[13px]" aria-label="종료일" />
+                {q.dfrom && <button type="button" onClick={() => set({ dfrom: null, dto: null, month: range.from.slice(0, 7) })} className="underline underline-offset-2">한 달로</button>}
+              </span>
+              <span className="w-full text-[12px] text-zinc-600">인쇄·PDF는 달마다 한 쪽, 엑셀은 달마다 시트 하나 + 일별 목록 시트입니다.</span>
+            </Field>
+          ) : (
           <Field label="기간">
             <input
               type="month"
@@ -103,17 +120,24 @@ export default function SaveDialog({
               )}
             </span>
           </Field>
+          )}
 
-          <Field label={isCompare ? "기준 채널" : "채널"}>
-            {!isCompare && (
+          <Field label={multiBase ? "기준 채널" : "채널"}>
+            {!multiBase && (
               <button type="button" aria-pressed={q.channels.length === 0} onClick={() => set({ channels: [] })} className={chip(q.channels.length === 0)}>
                 라인업 있는 채널 전부
               </button>
             )}
             {ownChannels.map((c) => {
-              const on = isCompare ? (q.channels.length ? q.channels : ["ENA"]).includes(c.code) : q.channels.includes(c.code);
+              const on = multiBase ? (q.channels.length ? q.channels : ["ENA"]).includes(c.code) : q.channels.includes(c.code);
               return (
-                <button key={c.code} type="button" aria-pressed={on} onClick={() => set({ channels: isCompare ? [c.code] : toggle(q.channels, c.code) })} className={chip(on)}>
+                <button key={c.code} type="button" aria-pressed={on} onClick={() => {
+                  if (isCal) {
+                    const cur = q.channels.length ? q.channels : ["ENA"];
+                    const next = toggle(cur, c.code);
+                    set({ channels: next.length ? next : [c.code] });
+                  } else set({ channels: isCompare ? [c.code] : toggle(q.channels, c.code) });
+                }} className={chip(on)}>
                   {c.name}
                 </button>
               );
@@ -131,6 +155,18 @@ export default function SaveDialog({
             ))}
           </Field>
 
+          {isCal ? (
+            <Field label="표시">
+              {CAL_LAYERS.map((l) => {
+                const on = !q.hide.includes(l.key);
+                return (
+                  <button key={l.key} type="button" aria-pressed={on} onClick={() => set({ hide: on ? [...q.hide, l.key] : q.hide.filter((h) => h !== l.key) })} className={chip(on)}>
+                    {on ? "✓ " : ""}{l.label}
+                  </button>
+                );
+              })}
+            </Field>
+          ) : (
           <Field label="요일">
             {DOWS.map((d) => (
               <button key={d} type="button" aria-pressed={q.dows.includes(d)} onClick={() => set({ dows: toggle(q.dows, d) })} className={`${chip(q.dows.includes(d))} px-2`}>
@@ -139,6 +175,7 @@ export default function SaveDialog({
             ))}
             {q.dows.length === 0 && <span className="text-[12px] text-zinc-600">전부</span>}
           </Field>
+          )}
 
           {q.view !== "list" && (
             <Field label="인쇄">

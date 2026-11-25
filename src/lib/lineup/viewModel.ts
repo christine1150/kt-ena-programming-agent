@@ -1,7 +1,8 @@
 // 라인업 화면 배치 도우미(그리기 전용, 화면·인쇄·엑셀 공용) — 수치(맞대결·빈 주·자리 점유 끝)는 서버가 계산해 주고, 여기서는 줄·칸·위치만 정한다.
+import { addMonths as addMonthsYm } from "@/lib/lineup/dates";
 import type { CompareBlock, Genre, LineupPayload, OutletDto, RunDto, SlotDto, WorkDto } from "@/lib/lineup/types";
 
-export type ViewMode = "own" | "compare" | "list";
+export type ViewMode = "own" | "compare" | "list" | "calendar";
 export type Density = "comfy" | "compact";
 
 export const GENRE_LABEL: Record<Genre, string> = { drama: "드라마", variety: "예능", business: "사업형", other: "교양·기타" };
@@ -333,6 +334,11 @@ export interface LineupQuery {
   dows: number[];
   density: Density;
   paper: Paper;
+  // 캘린더 보기(2026-11-25) — 한 달(month) 또는 임의 기간(dfrom~dto, 최대 42일), 끈 표시 층(hide)
+  month: string; // YYYY-MM
+  dfrom: string | null;
+  dto: string | null;
+  hide: string[]; // own | rival | ott | event
 }
 export const LENGTHS = [3, 6, 8, 12];
 const GENRE_SET = new Set(["drama", "variety", "business", "other"]);
@@ -341,7 +347,9 @@ const listOf = (v: string | null | undefined) => (v ? v.split(",").map((s) => s.
 /** 주소 쿼리 → 보기 조건. 잘못된 값은 기본값으로(기본: KT ENA, 지난달부터 8개월, 장르 전체, 밀도 넉넉). */
 export function parseLineupQuery(get: (k: string) => string | null | undefined, defaultFrom: string): LineupQuery {
   const viewQ = get("view");
-  const view: ViewMode = viewQ === "compare" || viewQ === "list" ? viewQ : "own";
+  const view: ViewMode = viewQ === "compare" || viewQ === "list" || viewQ === "calendar" ? viewQ : "own";
+  const isYm = (v: string | null | undefined): v is string => !!v && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
+  const isDay = (v: string | null | undefined): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
   const fromQ = get("from");
   const lenQ = Number(get("len"));
   const densityQ = get("density");
@@ -356,6 +364,11 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
     dows: listOf(get("dow")).map(Number).filter((d) => d >= 1 && d <= 7),
     density: densityQ === "compact" ? "compact" : "comfy", // 기본 = 넉넉(모든 보기, 사용자 요청 2026-11-25)
     paper: get("paper") === "A3" ? "A3" : "A4",
+    // 캘린더 기본 월 = 이번 달(기본 시작 월 defaultFrom은 지난달)
+    month: isYm(get("month")) ? (get("month") as string) : addMonthsYm(defaultFrom, 1),
+    dfrom: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dfrom") as string) : null,
+    dto: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dto") as string) : null,
+    hide: listOf(get("hide")).filter((h) => ["own", "rival", "ott", "event"].includes(h)),
   };
 }
 
@@ -370,6 +383,14 @@ export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string): stri
   if (q.dows?.length) s.set("dow", q.dows.join(","));
   if (q.density === "compact") s.set("density", "compact");
   if (q.paper && q.paper !== "A4") s.set("paper", q.paper);
+  if (q.view === "calendar") {
+    // 캘린더는 기간을 주소에 남긴다. 기본 월(이번 달)이면 뺀다. defaultFrom이 비어 있으면(저장·인쇄 창) 늘 싣는다.
+    if (q.dfrom && q.dto) {
+      s.set("dfrom", q.dfrom);
+      s.set("dto", q.dto);
+    } else if (q.month && (!defaultFrom || q.month !== addMonthsYm(defaultFrom, 1))) s.set("month", q.month);
+    if (q.hide?.length) s.set("hide", q.hide.join(","));
+  }
   return s.toString();
 }
 
@@ -389,9 +410,9 @@ export function lastMonth(today: string): string {
 
 /** 조건 한 줄 요약(인쇄 머리·엑셀 제목) — 채널 이름은 호출부가 코드→이름으로 바꿔 넘긴다. */
 export function conditionText(q: LineupQuery, channelNames: string[]): string {
-  const viewName = q.view === "compare" ? "경쟁 비교" : q.view === "list" ? "목록" : "KT ENA";
+  const viewName = q.view === "compare" ? "경쟁 비교" : q.view === "list" ? "목록" : q.view === "calendar" ? "캘린더" : "KT ENA";
   const parts = [viewName];
-  parts.push(q.view === "compare" ? `기준 채널 ${channelNames.length ? channelNames.join("·") : "ENA"}` : channelNames.length ? `채널 ${channelNames.join("·")}` : "라인업 있는 채널 전부");
+  parts.push(q.view === "compare" || q.view === "calendar" ? `기준 채널 ${channelNames.length ? channelNames.join("·") : "ENA"}` : channelNames.length ? `채널 ${channelNames.join("·")}` : "라인업 있는 채널 전부");
   if (q.genres.length) parts.push(`장르 ${q.genres.map((g) => GENRE_LABEL[g]).join("·")}`);
   if (q.dows.length) parts.push(`요일 ${dowLabel([...q.dows].sort())}`);
   return parts.join(" · ");

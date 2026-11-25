@@ -5,6 +5,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LineupPayload } from "@/lib/lineup/types";
 import { buildCompareRows, buildOwnRows, buildUndated, conditionText, LAYOUT, queryRange, type LineupQuery } from "@/lib/lineup/viewModel";
+import { buildCalendar, calendarFetchRange, calRangeOf, monthSegments, type CalLayer } from "@/lib/lineup/calendar";
+import CalendarView, { CalFootnotes, CalLegend } from "../CalendarView";
 import LineupGrid from "../LineupGrid";
 import UndatedStrip from "../UndatedStrip";
 import { Legend, ListView } from "../LineupView";
@@ -13,7 +15,10 @@ import { Legend, ListView } from "../LineupView";
 const PAGE = { A4: { css: "A4 landscape", width: Math.floor(((297 - 16) / 25.4) * 96) }, A3: { css: "A3 landscape", width: Math.floor(((420 - 16) / 25.4) * 96) } };
 
 export default function PrintView({ query: q, autoPrint }: { query: LineupQuery; autoPrint: boolean }) {
-  const { from, to } = queryRange(q.from, q.len);
+  // 캘린더: 한 달(또는 ≤42일 기간)을 달마다 한 쪽으로 — 자료는 주 단위로 넓혀 받는다.
+  const cal = q.view === "calendar" ? calRangeOf(q) : null;
+  const { from: shownFrom, to: shownTo } = cal ?? queryRange(q.from, q.len);
+  const { from, to } = cal ? calendarFetchRange(cal.from, cal.to) : { from: shownFrom, to: shownTo };
   const [state, setState] = useState<{ data: LineupPayload | null; error: string | null; printedAt: string }>({ data: null, error: null, printedAt: "" });
   const printed = useRef(false);
 
@@ -35,7 +40,15 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
 
   const { data, error, printedAt } = state;
   const filters = useMemo(() => ({ channels: q.channels, genres: q.genres, dows: q.dows }), [q.channels, q.genres, q.dows]);
-  const grid = useMemo(() => (data ? (q.view === "compare" ? buildCompareRows(data, filters) : buildOwnRows(data, filters)) : null), [data, q.view, filters]);
+  const grid = useMemo(() => (data && q.view !== "calendar" ? (q.view === "compare" ? buildCompareRows(data, filters) : buildOwnRows(data, filters)) : null), [data, q.view, filters]);
+  const calPages = useMemo(() => {
+    if (!data || !cal) return [];
+    const segs = monthSegments(cal.from, cal.to);
+    return segs.map((s, i) => {
+      const m = buildCalendar(data, { from: s.from, to: s.to, channels: q.channels, genres: q.genres, hide: q.hide as CalLayer[] });
+      return { ym: s.ym, model: i === segs.length - 1 ? m : { ...m, undated: [] } }; // 날짜 미정 OTT 목록은 마지막 쪽에만
+    });
+  }, [data, cal, q.channels, q.genres, q.hide]);
   const channelNames = data ? q.channels.map((c) => data.outlets.find((o) => o.code === c)?.name ?? c) : q.channels;
   const page = PAGE[q.paper];
   const sources = data
@@ -76,12 +89,35 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
             <span className="shrink-0 text-[11px] text-zinc-700 tabular-nums">출력 {printedAt}</span>
           </div>
           <p className="mt-0.5 text-[11px] text-zinc-700">
-            기간 {from} ~ {to}
+            기간 {shownFrom} ~ {shownTo}
             {sources.length > 0 && ` · 자료 기준: ${sources.map((s) => `${s.title} ${s.asOf}`).join(", ")}`}
           </p>
         </header>
         {error && <p className="py-6 text-center text-[13px] text-red-800">{error}</p>}
         {!data && !error && <p className="py-10 text-center text-[13px] text-zinc-600">라인업을 불러오는 중…</p>}
+        {data && cal && (
+          <>
+            <div className="mb-1.5"><CalLegend /></div>
+            {calPages.map((p, i) => (
+              <section key={p.ym} className="mb-3" style={{ breakAfter: i < calPages.length - 1 ? "page" : "auto" }}>
+                <CalendarView
+                  data={data}
+                  model={p.model}
+                  density={q.density}
+                  selectedRunId={null}
+                  onSelectRun={() => {}}
+                  selectedDay={null}
+                  onSelectDay={() => {}}
+                  ownCodes={q.channels.length > 0 ? q.channels : ["ENA"]}
+                  genres={q.genres}
+                  printMode
+                  title={`${p.ym.slice(0, 4)}년 ${Number(p.ym.slice(5))}월`}
+                />
+                <CalFootnotes model={p.model} />
+              </section>
+            ))}
+          </>
+        )}
         {data && grid && (
           <>
             {q.view !== "list" && (

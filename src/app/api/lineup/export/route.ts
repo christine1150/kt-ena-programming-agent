@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { requireActorFor, fail } from "@/lib/idealSchedule/apiUtil";
 import { buildLineupWorkbook } from "@/lib/lineup/excel";
+import { calendarFetchRange, calRangeOf } from "@/lib/lineup/calendar";
 import { loadLineup } from "@/lib/lineup/repo";
 import { lastMonth, parseLineupQuery, queryRange } from "@/lib/lineup/viewModel";
 import { kstToday } from "@/lib/workspace/dates";
@@ -17,11 +18,14 @@ export async function GET(request: Request) {
     const sp = new URL(request.url).searchParams;
     const today = kstToday();
     const q = parseLineupQuery((k) => sp.get(k), lastMonth(today));
-    const { from, to } = queryRange(q.from, q.len);
-    const data = await loadLineup(from, to, today, false);
+    // 캘린더는 한 달(또는 기간 ≤42일)을 주 단위로 넓혀 받는다. 파일 이름·머리는 실제 달력 범위로.
+    const cal = q.view === "calendar" ? calRangeOf(q) : null;
+    const { from, to } = cal ?? queryRange(q.from, q.len);
+    const fetched = cal ? calendarFetchRange(cal.from, cal.to) : { from, to };
+    const data = await loadLineup(fetched.from, fetched.to, today, false);
     const printedAt = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 16).replace("T", " ") + " KST";
     const buf = await buildLineupWorkbook(data, q, printedAt);
-    const viewName = q.view === "compare" ? "경쟁비교" : q.view === "list" ? "목록" : "KT_ENA";
+    const viewName = q.view === "compare" ? "경쟁비교" : q.view === "list" ? "목록" : q.view === "calendar" ? "캘린더" : "KT_ENA";
     const name = encodeURIComponent(`라인업_${viewName}_${from.slice(0, 7)}~${to.slice(0, 7)}.xlsx`);
     return new NextResponse(new Uint8Array(buf), {
       headers: {
