@@ -14,6 +14,7 @@ export type MinuteParse = { ok: true; dates: string[]; rows: MinuteRow[] } | { o
 
 const TIME_RE = /^(\d{1,2}):(\d{2}):\d{2}\s*-\s*\d{1,2}:\d{2}:\d{2}$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+const US_DATE_RE = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/;
 const text = (v: unknown) => String(v ?? "").trim();
 /** 엑셀 날짜 직렬값 → YYYY-MM-DD */
 const serialToIso = (serial: number) => new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000).toISOString().slice(0, 10);
@@ -62,6 +63,10 @@ export function parseSkyUhdMinuteMatrix(matrix: unknown[][]): MinuteParse {
     let date: string | null = null;
     for (const c of r.slice(0, ti)) {
       if (typeof c === "string" && ISO_RE.test(c)) date = c;
+      else if (typeof c === "string" && US_DATE_RE.test(c)) {
+        const [mo, dd, yy] = c.split("/").map(Number);
+        date = `${yy < 100 ? 2000 + yy : yy}-${String(mo).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+      }
       else if (typeof c === "number" && c > 30000 && c < 80000) date = serialToIso(c);
     }
     if (!date) {

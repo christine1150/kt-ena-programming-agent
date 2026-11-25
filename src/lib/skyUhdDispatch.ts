@@ -13,7 +13,9 @@
 // olifeEpgDispatch.ts와 동일)에 따라, 기존에 업로드 라우트 안에 있던 파싱→프로그램 upsert→
 // 기간 삭제→삽입 로직을 여기 하나로 옮기고 양쪽이 이 함수를 공유한다.
 import { supabase } from "@/lib/supabase";
+import * as XLSX from "xlsx";
 import { parseSkyUhdWorkbook } from "@/lib/skyUhd";
+import { applySkyUhdMinute, looksLikeMinuteMatrix, parseSkyUhdMinuteMatrix } from "@/lib/skyUhdMinute";
 import { checkPercentValue } from "@/lib/dataQuality";
 import { programMatchKey, findOrCreateProgramByNormalizedName, applySeasonDateRule } from "@/lib/programNameMatch";
 
@@ -42,6 +44,34 @@ export async function ingestSkyUhdRatingFile(buffer: Buffer, fileName: string): 
   const { data: channel, error: channelError } = await supabase.from("channels").select("id").eq("code", "SKYUHD").maybeSingle();
   if (channelError || !channel) {
     return { kind: "skyuhd", fileName, ok: false, errorStage: "channel", message: "skyUHD 채널 정보를 찾을 수 없습니다. Channel Master를 먼저 업로드해주세요." };
+  }
+
+  // 닐슨 분당 시청률 엑셀(전체·National·유료방송가구, 02:00~25:59 1분 단위, 시트 하나) — 메일로 이 형식이 오면 월별 탭 파일 해석기가
+  // "시청률 시트를 찾을 수 없습니다(시트 목록: Sheet1)"로 거부하던 오류(2026-11-25)를 막는다. 관리자 업로드와 같은 적재(분당 저장 + 빈 프로그램 행 매칭).
+  try {
+    const wb = XLSX.read(buffer, { type: "buffer" });
+    const matrix = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null });
+    if (looksLikeMinuteMatrix(matrix)) {
+      const minute = parseSkyUhdMinuteMatrix(matrix);
+      if (!minute.ok) {
+        await supabase.from("file_uploads").insert({ file_name: fileName, file_type: "skyuhd", status: "error", error_message: minute.message });
+        return { kind: "skyuhd", fileName, ok: false, errorStage: "parse", message: minute.message };
+      }
+      const applied = await applySkyUhdMinute(minute, `닐슨 분당 시청률 엑셀 메일 수신 ${fileName}`);
+      if (!applied.ok) return { kind: "skyuhd", fileName, ok: false, errorStage: "db", message: applied.message };
+      const matched = applied.fills.reduce((n, f) => n + f.filled.length + f.created.length, 0);
+      return {
+        kind: "skyuhd",
+        fileName,
+        ok: true,
+        ratingsInserted: applied.saved,
+        dateRange: { from: minute.dates[0], to: minute.dates[minute.dates.length - 1] },
+        sheetName: wb.SheetNames[0],
+        message: `분당 시청률 ${applied.saved}행 저장(${minute.dates.join(", ")}) · 프로그램 ${matched}개 매칭`,
+      };
+    }
+  } catch {
+    // 엑셀 읽기 실패는 아래 기존 경로가 같은 사유로 알려 준다
   }
 
   const parsed = parseSkyUhdWorkbook(buffer);

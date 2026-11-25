@@ -16,6 +16,8 @@ export interface SeasonStats {
   lastHalfAvg?: number;
   /** 알려진 회차별 값(전부 있을 필요 없음) */
   byEpisode?: Record<number, number>;
+  /** 기준 차이 등 문구 끝에 붙일 주의 */
+  note?: string;
 }
 
 export interface SeasonReference {
@@ -27,8 +29,26 @@ export interface SeasonReference {
   episodes: number;
   source: string;
   p2049: SeasonStats;
-  /** 가구 값은 제공받으면 채운다(없으면 가구 비교는 하지 않는다) */
+  /** 전국 유료가구 기준(없으면 가구 비교는 하지 않는다) */
   household?: SeasonStats;
+}
+
+/** 회차별 값(1회부터 순서대로)에서 평균·최고·최저·전후반 평균을 계산한다 — 값을 손으로 옮겨 적다 틀리지 않게 */
+function statsFrom(eps: number[]): SeasonStats {
+  const m = (xs: number[]) => xs.reduce((x, y) => x + y, 0) / xs.length;
+  const h = Math.floor(eps.length / 2);
+  const max = Math.max(...eps);
+  const min = Math.min(...eps);
+  return {
+    avg: m(eps),
+    max,
+    maxEp: eps.indexOf(max) + 1,
+    min,
+    minEp: eps.indexOf(min) + 1,
+    firstHalfAvg: m(eps.slice(0, h)),
+    lastHalfAvg: m(eps.slice(h)),
+    byEpisode: Object.fromEntries(eps.map((v, i) => [i + 1, v])),
+  };
 }
 
 export const SEASON_REFERENCES: SeasonReference[] = [
@@ -38,8 +58,10 @@ export const SEASON_REFERENCES: SeasonReference[] = [
     prevLabel: "크래시 시즌1",
     aired: "2024-05-13~2024-06-18",
     episodes: 12,
-    source: "사용자 제공 콘텐츠 편성센터 화면(수도권 개인2049, 2026-11-25)",
-    p2049: { avg: 1.244, max: 1.88, maxEp: 12, min: 0.683, minEp: 1, firstHalfAvg: 0.971, lastHalfAvg: 1.517, byEpisode: { 1: 0.683, 12: 1.88 } },
+    // 사용자 제공 엑셀 "회차별 데이터"(2026-11-25) — 수도권·개인(2049) / 전국·가구. 전국·가구의 크래시2 4회 4.412가 DB 전국 유료가구 값과 같아 같은 기준이다.
+    source: "사용자 제공 엑셀(회차별 데이터, 2026-11-25)",
+    p2049: statsFrom([0.683, 0.739, 1.224, 1.144, 1.011, 1.026, 1.146, 1.488, 1.625, 1.526, 1.439, 1.88]),
+    household: statsFrom([2.232, 3.039, 3.801, 4.084, 4.116, 5.035, 5.076, 5.87, 5.427, 6.3, 5.454, 6.619]),
   },
 ];
 
@@ -82,9 +104,13 @@ function compareOne(label: string, code: string, ref: SeasonReference, s: Season
   const sameEp = s.byEpisode?.[k];
   let basisText = "";
   let basisAvg: number | null = null;
+  const firstK = Array.from({ length: k }, (_, i) => s.byEpisode?.[i + 1]);
   if (k === 1 && sameEp !== undefined) {
     basisAvg = sameEp;
     basisText = `${prefix}1회 ${f(sameEp)}`;
+  } else if (k <= ref.episodes && firstK.every((v) => v !== undefined)) {
+    basisAvg = mean(firstK as number[]) as number;
+    basisText = `${prefix}1~${k}회 평균 ${f(basisAvg)}`;
   } else if (k <= Math.floor(ref.episodes / 2) && s.firstHalfAvg !== undefined) {
     basisAvg = s.firstHalfAvg;
     basisText = `${prefix}1~${Math.floor(ref.episodes / 2)}회 평균 ${f(s.firstHalfAvg)}`;
@@ -106,6 +132,8 @@ function compareOne(label: string, code: string, ref: SeasonReference, s: Season
   // ③ 최고 기록 — 시리즈(지난 시즌 포함) 최고 / 이번 시즌 자체 최고
   if (today > s.max) flags.push(`${label} ${f(today)}로 ${prefix}최고(${f(s.max)}, ${s.maxEp}회)를 넘어선 시리즈 최고 시청률`);
   else if (curMaxBefore !== null && today > curMaxBefore) flags.push(`${label} ${f(today)}로 이번 시즌 자체 최고(${prefix}최고는 ${f(s.max)})`);
+  if (s.note && lines.length > 0) lines[lines.length - 1] += `(${s.note})`;
+  if (s.note) for (let i = 0; i < flags.length; i++) flags[i] += `(${s.note})`;
   return { lines, flags };
 }
 
