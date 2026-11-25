@@ -7,6 +7,7 @@ import { splitNames } from "@/lib/lineup/titles";
 import { listChanges, patchRun, type RunPatch } from "@/lib/lineup/repo";
 
 const STATUSES = new Set(["confirmed", "planned", "tentative"]);
+const GENRES = new Set(["drama", "variety", "business", "other"]);
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireActorFor("view");
@@ -29,6 +30,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (typeof body.title === "string") patch.title = body.title.slice(0, 200);
     if (body.shortTitle === null || typeof body.shortTitle === "string") patch.shortTitle = (body.shortTitle as string | null)?.slice(0, 60) ?? null;
     if (typeof body.tentative === "boolean") patch.tentative = body.tentative;
+    if (typeof body.genre === "string") {
+      if (!GENRES.has(body.genre)) return bad("장르 값이 올바르지 않습니다.");
+      patch.genre = body.genre as RunPatch["genre"];
+    }
     if (typeof body.status === "string") {
       if (!STATUSES.has(body.status)) return bad("상태 값이 올바르지 않습니다.");
       patch.status = body.status as RunPatch["status"];

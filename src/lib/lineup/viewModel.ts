@@ -4,7 +4,7 @@ import type { CompareBlock, Genre, LineupPayload, OutletDto, RunDto, SlotDto, Wo
 export type ViewMode = "own" | "compare" | "list";
 export type Density = "comfy" | "compact";
 
-export const GENRE_LABEL: Record<Genre, string> = { drama: "드라마", variety: "예능", business: "사업형", other: "기타" };
+export const GENRE_LABEL: Record<Genre, string> = { drama: "드라마", variety: "예능", business: "사업형", other: "교양·기타" };
 /**
  * 장르 = 채움색(막대는 이 색을 옅게 깐 음영 + 왼쪽 띠·테두리). 2026-11-25 사용자 지시: 앱 차트색(보라·청록)이 안 예뻐서
  * 편성센터 라인업의 드라마 분홍(#E0367F)·예능 남색(#3830E0)을 쓰고, 사업형·기타는 두 색과 어울리는 호박색·모래색으로.
@@ -245,7 +245,7 @@ export const LENGTHS = [3, 6, 8, 12];
 const GENRE_SET = new Set(["drama", "variety", "business", "other"]);
 const listOf = (v: string | null | undefined) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 
-/** 주소 쿼리 → 보기 조건. 잘못된 값은 기본값으로(기본: 자사 라인업, 지난달부터 8개월, 비교 보기는 드라마·촘촘). */
+/** 주소 쿼리 → 보기 조건. 잘못된 값은 기본값으로(기본: KT ENA, 지난달부터 8개월, 장르 전체, 비교 보기는 촘촘). */
 export function parseLineupQuery(get: (k: string) => string | null | undefined, defaultFrom: string): LineupQuery {
   const viewQ = get("view");
   const view: ViewMode = viewQ === "compare" || viewQ === "list" ? viewQ : "own";
@@ -258,8 +258,8 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
     from: fromQ && /^\d{4}-\d{2}$/.test(fromQ) ? fromQ : defaultFrom,
     len: LENGTHS.includes(lenQ) ? lenQ : 8,
     channels: listOf(get("ch")).map((c) => c.toUpperCase()).filter((c) => /^[A-Z_]{2,12}$/.test(c)),
-    // genre=all = 장르 전체(경쟁 비교의 기본값 "드라마"와 구분하려고 따로 적는다)
-    genres: get("genre") === "all" ? [] : genres.length ? genres : view === "compare" ? ["drama"] : [],
+    // 장르 기본 = 전체(2026-11-25: 타사 예능·교양 신작이 들어와 경쟁 비교도 전체가 기본). 옛 링크의 genre=all도 전체로 읽는다.
+    genres: get("genre") === "all" ? [] : genres,
     dows: listOf(get("dow")).map(Number).filter((d) => d >= 1 && d <= 7),
     density: densityQ === "compact" || densityQ === "comfy" ? densityQ : view === "compare" ? "compact" : "comfy",
     paper: get("paper") === "A3" ? "A3" : "A4",
@@ -274,7 +274,6 @@ export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string): stri
   if (q.len && q.len !== 8) s.set("len", String(q.len));
   if (q.channels?.length) s.set("ch", q.channels.join(","));
   if (q.genres?.length) s.set("genre", q.genres.join(","));
-  else if (q.view === "compare") s.set("genre", "all"); // 경쟁 비교는 기본이 드라마라 '전체'를 주소에 남긴다
   if (q.dows?.length) s.set("dow", q.dows.join(","));
   if (q.density && q.density !== (q.view === "compare" ? "compact" : "comfy")) s.set("density", q.density);
   if (q.paper && q.paper !== "A4") s.set("paper", q.paper);

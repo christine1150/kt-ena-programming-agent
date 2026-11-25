@@ -3,7 +3,7 @@
 // 라인업 상세 패널(오른쪽 400px) — 막대를 누르면 열린다. 풀네임·기간(실제 날짜 + 정밀도 원문)·회차·주연·제작진·
 // 같은 시기 맞대결(서버 계산)·출처·변경 이력. 관리자(lineup_edit)만 같은 패널 안에서 고치기·보관.
 import { useEffect, useState } from "react";
-import type { LineupPayload, RunDto } from "@/lib/lineup/types";
+import type { Genre, LineupPayload, RunDto } from "@/lib/lineup/types";
 import { episodeText, GENRE_LABEL, GENRE_VAR, KIND_LABEL, periodText, runGenre, runTitle, slotTime, STATUS_LABEL, dowLabel, workNote } from "@/lib/lineup/viewModel";
 
 interface Change { id: number; action: string; diff: Record<string, { before: unknown; after: unknown }>; actor: string; at: string }
@@ -179,7 +179,7 @@ export default function DetailPanel({ data, run, onClose, onSelect, onSaved }: {
           )}
         </section>
 
-        {data.canEdit && (editing ? <EditForm run={run} title={work?.title ?? ""} shortTitle={work?.shortTitle ?? ""} cast={work?.cast.join(", ") ?? ""} hasWork={!!work} onDone={() => { setEditing(false); onSaved(); }} /> : (
+        {data.canEdit && (editing ? <EditForm run={run} genre={work?.genre ?? genre} title={work?.title ?? ""} shortTitle={work?.shortTitle ?? ""} cast={work?.cast.join(", ") ?? ""} hasWork={!!work} onDone={() => { setEditing(false); onSaved(); }} /> : (
           <div className="flex gap-2 border-t border-zinc-200 pt-3">
             <button type="button" onClick={() => setEditing(true)} className="rounded border border-zinc-300 px-3 py-1.5 text-[13px] font-medium hover:bg-zinc-50">
               고치기
@@ -214,8 +214,9 @@ function ArchiveButton({ run, onDone }: { run: RunDto; onDone: () => void }) {
   );
 }
 
-function EditForm({ run, title, shortTitle, cast, hasWork, onDone }: { run: RunDto; title: string; shortTitle: string; cast: string; hasWork: boolean; onDone: () => void }) {
+function EditForm({ run, genre, title, shortTitle, cast, hasWork, onDone }: { run: RunDto; genre: Genre; title: string; shortTitle: string; cast: string; hasWork: boolean; onDone: () => void }) {
   const [f, setF] = useState({
+    genre,
     title,
     shortTitle,
     cast,
@@ -239,7 +240,7 @@ function EditForm({ run, title, shortTitle, cast, hasWork, onDone }: { run: RunD
         const body: Record<string, unknown> = {
           status: f.status, startDate: f.startDate || null, endDate: f.endDate || null, episodes: f.episodes || null, note: f.note, needsReview: f.needsReview,
         };
-        if (hasWork) Object.assign(body, { title: f.title, shortTitle: f.shortTitle || null, cast: f.cast });
+        if (hasWork) Object.assign(body, { title: f.title, shortTitle: f.shortTitle || null, cast: f.cast, genre: f.genre });
         const r = await fetch(`/api/lineup/runs/${run.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
         const j = await r.json().catch(() => ({}));
         setBusy(false);
@@ -253,6 +254,16 @@ function EditForm({ run, title, shortTitle, cast, hasWork, onDone }: { run: RunD
           <label className="block text-[12px] text-zinc-700">
             제목(풀네임)
             <input className={input} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} required />
+          </label>
+          <label className="block text-[12px] text-zinc-700">
+            장르
+            <select className={input} value={f.genre} onChange={(e) => setF({ ...f, genre: e.target.value as Genre })}>
+              {(["drama", "variety", "business", "other"] as Genre[]).map((g) => (
+                <option key={g} value={g}>
+                  {GENRE_LABEL[g]}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block text-[12px] text-zinc-700">
             줄임말(막대가 좁을 때만)

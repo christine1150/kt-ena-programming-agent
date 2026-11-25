@@ -2,9 +2,12 @@
 // 타사 로고색은 홈 화면 경쟁 선 색(Dashboard.tsx COMPETITOR_BRAND_COLOR, 로고 PNG에서 뽑은 대표색)과 같은 값을 쓴다.
 // 자사 채널 색은 channels.theme_color(DB), 로고는 channels.logo_path · public/channel-logos.
 
-const RIVAL: Record<string, { color: string; logo: string }> = {
+const RIVAL: Record<string, { color: string; logo: string | null }> = {
+  KBS1: { color: "#0679e2", logo: "/competitor-logos/KBS1.png" },
   KBS2: { color: "#e6a800", logo: "/competitor-logos/KBS2.png" },
   MBC: { color: "#1f5fa8", logo: "/competitor-logos/MBC.png" },
+  MBC_GN: { color: "#1f5fa8", logo: null }, // MBC경남 — 지역사 로고 파일 없음, 이름 글자로
+  EBS1: { color: "#2b4a8b", logo: "/competitor-logos/EBS.png" },
   SBS: { color: "#0c6095", logo: "/competitor-logos/SBS.png" },
   TVN: { color: "#e8002a", logo: "/competitor-logos/tvN.png" },
   JTBC: { color: "#d9a21b", logo: "/competitor-logos/JTBC.png" },

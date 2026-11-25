@@ -70,7 +70,7 @@ export default function SaveDialog({
                     view: v,
                     density: v === "compare" ? "compact" : q.density,
                     channels: v === "compare" ? q.channels.slice(0, 1) : q.channels,
-                    genres: v === "compare" && !q.genres.length ? ["drama"] : q.genres,
+                    genres: q.genres,
                   })
                 }
                 className={chip(q.view === v)}

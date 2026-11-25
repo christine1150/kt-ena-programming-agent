@@ -127,7 +127,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
                   view: v,
                   sel: null,
                   density: v === "compare" ? "compact" : "comfy",
-                  genres: v === "compare" && st.view !== "compare" ? ["drama"] : v !== "compare" && st.view === "compare" ? [] : st.genres,
+                  genres: st.genres,
                 })
               }
               className={`rounded-md px-3 py-1 text-[13px] font-medium ${st.view === v ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-100"}`}

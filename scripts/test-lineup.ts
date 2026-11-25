@@ -8,6 +8,7 @@ import { splitTitleEpisodes, titleKey } from "../src/lib/lineup/titles";
 import { parseOwnLineupXlsx, asOfFromFileName } from "../src/lib/lineup/parse/ownSheet";
 import { industrySheetFilter, outletKey, parseIndustryLineupXlsx } from "../src/lib/lineup/parse/industrySheet";
 import { planUpload, type PlanContext } from "../src/lib/lineup/plan";
+import { parseStandardLineupXlsx, parseStartText, splitCast, standardGenre } from "../src/lib/lineup/parse/standardSheet";
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail?: unknown) => {
@@ -141,6 +142,34 @@ const downgrade = planUpload(
 );
 check("덜 정밀한 자료로 날짜를 덮어쓰지 않음", downgrade.actions[0]?.changes.every((c) => c.field !== "end_date") === true, downgrade.actions[0]);
 check("addDays", addDays("2026-12-31", 1) === "2027-01-01");
+
+// ── 표준 양식(한 줄 = 한 작품, 신작 목록) — 가짜 제목 ──
+{
+  const head = ["채널", "프로그램", "편성 구분", "론칭/시작 시기", "요일", "본방 시각", "총 편수", "주요 출연진·진행", "장르", "추가 내용·주의", "출처 URL", "정보 근거", "편성 확정도", "조사 기준일", "정렬용 시작일", "종영일(확인 시)"];
+  const rows = [
+    ["가상방송", "가상 퀴즈쇼", "신작·편성확정", "2026-11-21", "토", "08:30", "", "사람가·사람나(MC) 등", "토크/퀴즈", "", "", "", "확정", "2026-11-25", "", ""],
+    ["가상교육", "가상 다큐", "편성확정·교양", "2026-11-23", "월", "21:55", "5부작", "해외 전문가 등", "다큐멘터리", "11/23~12/21 방송", "", "", "확정", "2026-11-25", "", ""],
+    ["가상방송", "가상 가요제", "행사확정·방송시각점검", "2026-12-24~25", "목·금", "TV 미확인", "2일 특집", "", "음악 특집", "", "", "", "행사 시간≠방송 확정", "2026-11-25", "", ""],
+    ["가상방송", "가상 내년작", "신작·시기확정", "2027 상반기", "미발표", "미발표", "", "미정(모집 중)", "리얼리티", "", "", "", "날짜·시간 미발표", "2026-11-25", "", ""],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "신규");
+  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  const std = parseStandardLineupXlsx(buf, { fileName: "신작_1125.xlsx", outletAliases: new Map([[outletKey("가상방송"), "FAKE"], [outletKey("가상교육"), "EBS1"]]) });
+  const quiz = std.items.find((i) => i.work?.title === "가상 퀴즈쇼");
+  check("표준 양식: 하루 단위·자리·출연진(괄호·'등' 제거)·예능", quiz?.run.startDate === "2026-11-21" && quiz.slot.name === "토 08:30" && quiz.work?.cast.join() === "사람가,사람나" && quiz.work?.genre === "variety" && quiz.run.status === "confirmed", quiz);
+  const docu = std.items.find((i) => i.work?.title === "가상 다큐");
+  check("표준 양식: 메모의 M/D~M/D로 종영일, 다큐 = 교양(기타)", docu?.run.endDate === "2026-12-21" && docu.run.episodes === 5 && docu.work?.genre === "other", docu?.run);
+  const fest = std.items.find((i) => i.work?.title === "가상 가요제");
+  check("표준 양식: 이틀 특집 = 여러 날 행사, 음악 = 예능, 시각 미발표 자리", fest?.run.runKind === "multi_day" && fest.run.airDates?.length === 2 && fest.work?.genre === "variety" && fest.slot.name === "목금 시각 미발표" && fest.run.status === "planned", fest);
+  const next = std.items.find((i) => i.work?.title === "가상 내년작");
+  check("표준 양식: '2027 상반기' = 월 단위 1~6월, 요일 미발표 자리", next?.run.startPrecision === "month" && next.run.startDate === "2027-01-01" && next.run.endDate === "2027-06-30" && next.slot.name === "요일·시각 미발표" && next.work?.cast.length === 0, next);
+  check("표준 양식: 세부 장르는 작품 메모로", (quiz?.work?.note ?? "").includes("세부 장르: 토크/퀴즈"));
+  check("표준 양식: KBS1·EBS의 음악 아닌 프로그램은 교양", standardGenre("토크/퀴즈", "", "KBS1") === "other" && standardGenre("음악 특집", "", "KBS1") === "variety" && standardGenre("토크", "", "SBS") === "variety");
+  check("표준 양식: 시작 시기 읽기", parseStartText("2027").end === "2027-12-31" && parseStartText("2027-01").precision === "month" && parseStartText("2026-12-24~25").end === "2026-12-25");
+  check("표준 양식: 출연진 '미정' → 빈 목록", splitCast("미정(특수부대 예비역 모집)").length === 0);
+}
 
 if (failed > 0) {
   console.error(`\n${failed}개 실패`);

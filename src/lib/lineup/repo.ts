@@ -169,7 +169,7 @@ export async function commitPlan(parsed: ParsedLineup, plan: UploadPlan, opts: C
     if (newWorks.has(key)) continue;
     newWorks.set(key, {
       outlet_id: oid, title: w.title, title_key: w.titleKey, title_tentative: w.tentative, genre: w.genre, total_episodes: w.totalEpisodes,
-      cast_main: w.cast, ott_note: w.ottNote, note: w.credits ? `제작진(원문): ${w.credits}` : null, updated_by: opts.actor,
+      cast_main: w.cast, ott_note: w.ottNote, note: w.note ?? (w.credits ? `제작진(원문): ${w.credits}` : null), updated_by: opts.actor,
     });
   }
   if (newWorks.size > 0) {
@@ -394,6 +394,7 @@ export interface RunPatch {
   title?: string;
   shortTitle?: string | null;
   tentative?: boolean;
+  genre?: Genre;
   status?: RunDto["status"];
   startDate?: string | null;
   endDate?: string | null;
@@ -449,6 +450,7 @@ export async function patchRun(runId: string, patch: RunPatch, actor: string) {
     }
     if (patch.shortTitle !== undefined) wf.short_title = patch.shortTitle?.trim() || null;
     if (patch.tentative !== undefined) wf.title_tentative = patch.tentative;
+    if (patch.genre !== undefined) wf.genre = patch.genre;
     if (patch.cast !== undefined) wf.cast_main = patch.cast;
     if (patch.logline !== undefined) wf.logline = patch.logline?.trim() || null;
     if (Object.keys(wf).length > 0) {

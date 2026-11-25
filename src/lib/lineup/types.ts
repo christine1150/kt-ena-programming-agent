@@ -28,6 +28,7 @@ export interface ParsedWork {
   cast: string[];
   credits: string | null; // 제작사·연출·작가 원문(양식마다 순서가 달라 나누지 않고 원문으로 둔다)
   ottNote: string | null;
+  note?: string | null; // 작품 메모(표준 양식의 세부 장르·추가 내용 등)
 }
 
 export interface ParsedRun {
