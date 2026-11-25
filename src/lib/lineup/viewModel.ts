@@ -22,8 +22,9 @@ export const KIND_LABEL: Record<RunDto["runKind"], string> = {
 };
 
 export const LAYOUT = {
-  comfy: { row: 44, bar: 36, event: 16 },
-  compact: { row: 28, bar: 24, event: 14 },
+  // 막대는 늘 2줄(제목·기간·회차 / 출연자, 사용자 요청 2026-11-25)이라 촘촘도 2줄이 들어가는 높이로 둔다.
+  comfy: { row: 48, bar: 40, event: 16 },
+  compact: { row: 38, bar: 32, event: 14 },
   label: { own: { comfy: 184, compact: 152 }, compare: { comfy: 224, compact: 192 } },
   minWeekPx: 20,
 };

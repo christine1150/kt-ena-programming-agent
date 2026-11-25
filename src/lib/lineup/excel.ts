@@ -170,9 +170,9 @@ function addGridSheet(wb: ExcelJS.Workbook, data: LineupPayload, rows: Row[], ru
         for (let k = c0; k <= end; k++) used.add(k);
         if (end > c0) ws.mergeCells(r, c0, r, end);
         const c = ws.getCell(r, c0);
-        // 화면과 같은 모양: 1줄 '제목(굵게) 기간, 회차(가늘게)', 2줄 '주연 2명(가늘게)'
+        // 화면과 같은 모양: 1줄 '제목(굵게) 기간, 회차(가늘게)', 2줄 '출연자(드라마 주연·예능 출연자/MC, 가늘게)'
         const meta = [periodText(run), episodeText(run, work)].filter(Boolean).join(", ") + (shape === "bracket" ? " (월 단위)" : "");
-        const cast2 = (work?.cast ?? []).slice(0, 2).join(", ");
+        const cast2 = (work?.cast ?? []).slice(0, 6).join(", ");
         const isBox = shape === "box";
         const head = `${run.draw.from < data.from ? "◀ " : ""}${title}${run.needsReview ? " [확인]" : ""}`;
         c.value = {

@@ -315,7 +315,7 @@ function Bar(props: {
   run: RunDto; work: WorkDto | undefined; slot: SlotDto | undefined; data: LineupPayload; P: (d: string) => number; dayPx: number;
   barH: number; rowH: number; density: Density; nextStart: string | null; selected: boolean; dim: boolean; onSelect: (id: string | null) => void; footnote?: number; tone?: string | null;
 }) {
-  const { run, work, slot, data, P, dayPx, barH, rowH, density, nextStart, selected, dim, onSelect, footnote, tone = null } = props;
+  const { run, work, slot, data, P, dayPx, barH, rowH, nextStart, selected, dim, onSelect, footnote, tone = null } = props;
   const d = run.draw!;
   const startsBefore = d.from < data.from;
   const left = P(d.from);
@@ -325,7 +325,8 @@ function Bar(props: {
   const genre = runGenre(run, work, slot);
   const title = runTitle(run, work);
   const short = work?.shortTitle ?? null;
-  const cast2 = (work?.cast ?? []).slice(0, 2).join(", ");
+  // 출연자(드라마 주연·예능 출연자/MC) — 넓으면 여러 명, 막대 폭만큼만 보인다.
+  const cast2 = (work?.cast ?? []).slice(0, 6).join(", ");
   const meta = [periodText(run), episodeText(run, work)].filter(Boolean).join(", ");
   const sub = [meta, cast2].filter(Boolean).join(" · ");
   const isBracket = d.shape === "bracket";
@@ -336,7 +337,7 @@ function Bar(props: {
   // 글자 고르기: 2줄(넉넉·168px+) → 제목 1줄(88px+) → 줄임말/제목 잘라 쓰기(40px+) → 바깥 라벨(다음 막대 전 빈자리) → 표식만
   const inner = px - 12;
   let mode: "two" | "one" | "short" | "outside" | "mark";
-  if (density === "comfy" && px >= 168 && textWidth(title, FONT) <= inner) mode = "two";
+  if (px >= 56) mode = "two"; // 밀도와 관계없이 2줄: 제목 + 기간·회차 / 출연자
   else if (px >= 88 || textWidth(title, FONT) <= inner) mode = "one";
   else if (px >= 40) mode = "short";
   else mode = "outside";
@@ -406,20 +407,17 @@ function Bar(props: {
         {!isBox && <span aria-hidden className="w-1 shrink-0" style={{ background: dim ? "transparent" : tone ?? GENRE_VAR[genre] }} />}
         <span className={`flex min-w-0 flex-1 flex-col justify-center px-1.5 ${startsBefore ? "pl-1" : ""}`}>
           {(footnote !== undefined || (mode !== "outside" && mode !== "mark")) && (
-            <span className="flex min-w-0 items-baseline gap-1">
+            <span className="flex min-w-0 items-baseline gap-1 leading-4">
               {startsBefore && <span aria-hidden className="shrink-0 text-[10px] text-zinc-600">◀</span>}
-              {/* 제목(굵게)이 먼저 자리를 차지하고, 옆의 가는 글씨는 남는 폭만큼만 쓴다(2026-11-25 사용자 요청: 편성센터 라인업 모양). */}
+              {/* 1줄: 제목(굵게)이 먼저 자리를 차지하고 기간·회차(가늘게)는 남는 폭만큼. 2줄: 출연자(드라마 주연·예능 출연자/MC).
+                  사용자 요청(2026-11-25): 방영 기간·회차·출연자는 중요하니 드라마·예능 모두 함께 — 편성센터 라인업 모양. */}
               <span className={`max-w-full shrink-0 truncate font-semibold ${isBox ? "font-medium text-zinc-700" : "text-zinc-900"}`}>{footnote ? `[${footnote}] ` : ""}{shownTitle}</span>
-              {mode === "two" ? (
-                meta && <span className="min-w-0 truncate text-[11px] font-normal text-zinc-700">{meta}</span>
-              ) : (
-                cast2 && mode !== "mark" && mode !== "outside" && <span className="min-w-0 truncate text-[11px] font-normal text-zinc-700">{cast2}</span>
-              )}
+              {mode === "two" && meta && <span className="min-w-0 truncate text-[11px] font-normal text-zinc-700">{meta}</span>}
               {run.needsReview && <span className="shrink-0 rounded bg-zinc-900 px-1 text-[10px] leading-4 text-white">확인</span>}
               {run.startPrecision === "week" && mode !== "two" && <span className="sr-only">주 단위 일정</span>}
             </span>
           )}
-          {mode === "two" && cast2 && <span className="truncate text-[11px] font-normal text-zinc-700">{cast2}</span>}
+          {mode === "two" && cast2 && <span className="truncate text-[11px] leading-[14px] font-normal text-zinc-700">{cast2}</span>}
         </span>
         {d.estimatedFrom && <span aria-hidden className="absolute top-0 right-0 bottom-0 border-r-2 border-dotted border-zinc-500" />}
       </button>
