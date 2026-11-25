@@ -190,6 +190,8 @@ interface OriginalDailyItem {
   schedulingInsight: string | null;
   // 사용자 지시(2026-11-19): 채널이 밝힌 편성 전략(크래시2 21:55 조기 시작·tvN 시그널2 맞대결 등)의 기간별 점검(route.ts, 계획 있는 작품만)
   strategyReview?: StrategyReviewOutput | null;
+  // 사용자 지시(2026-11-25): 지난 시즌(예: 크래시 시즌1) 대비 코멘트 — 더 좋은 성과·최고 기록이면 notable
+  seasonCompare?: { lines: string[]; notable: boolean } | null;
   // 사용자 지시(2026-08-26): "1페이지 <주요 컨텐츠 리뷰>는 PD가 직접 작성한 보고서 내용으로
   // 덮어써서 반영" — 관리자가 올린 회차별 수동 리포트(manual-drama-report 업로드)가 있으면
   // 함께 내려온다. 없으면 null(기존 자동 계산 그대로 표시).
@@ -4819,6 +4821,15 @@ function OriginalContentReportCard({
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {h.seasonCompare && h.seasonCompare.lines.length > 0 && (
+                    <div className={`mt-3 rounded-lg border px-3 py-2 text-[13px] leading-snug ${h.seasonCompare.notable ? "border-emerald-200 bg-emerald-50/60 text-zinc-900" : "border-zinc-200 bg-zinc-50/60 text-zinc-700"}`}>
+                      <p className="text-[10.5px] font-semibold text-zinc-500">지난 시즌 대비</p>
+                      {h.seasonCompare.lines.map((l, i) => (
+                        <p key={i} className={i > 0 && h.seasonCompare!.notable ? "mt-0.5 font-semibold" : "mt-0.5"}>{l}</p>
+                      ))}
                     </div>
                   )}
 

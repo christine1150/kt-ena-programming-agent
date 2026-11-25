@@ -20,6 +20,7 @@ import { loadContentFitTagMaps } from "@/lib/contentFit/tagCache";
 import { buildOriginalProgrammingInsightViaLlm, type OriginalInsightInput } from "@/lib/originalContentInsight";
 import { findStrategyPlan, type StrategyReviewOutput, type StrategyReviewPlan } from "@/lib/review/strategyReviewPlans";
 import { loadStrategyReview } from "@/lib/review/strategyReviewFetch";
+import { loadSeasonCompare } from "@/lib/review/seasonCompareFetch";
 import { roundRatingForDisplay, roundPercentForDisplay } from "@/lib/ratingRounding";
 import { buildEnaOriginalHighlightSentence, buildRerunHighlightSentence } from "@/lib/enaOriginalHighlight";
 import { buildChannelNarrativeViaLlm } from "@/lib/channelNarrativeLlm";
@@ -749,6 +750,8 @@ export async function GET(request: Request) {
       matched_time_spent_share: number | null;
       /** 편성 전략 점검(사용자 지시 2026-11-19) — 계획이 있는 작품만 */
       strategyReview?: StrategyReviewOutput | null;
+      /** 지난 시즌 대비 코멘트(사용자 지시 2026-11-25, 기준표에 등록된 작품만) */
+      seasonCompare?: { lines: string[]; notable: boolean } | null;
     })[];
     weekly: OriginalWeeklyRow[];
   };
@@ -1455,8 +1458,18 @@ export async function GET(request: Request) {
         async (plan) => strategyReviewByProgram.set(plan.id, await loadStrategyReview(supabase, plan, asOfDate))
       )
     );
+    // 사용자 지시(2026-11-25): 크래시2 등 지난 시즌이 있는 작품은 지난 시즌 성과와 견준 코멘트를 붙인다(seasonCompare.ts, 계산만·LLM 없음)
+    const seasonCompareByRow = new Map<string, { lines: string[]; notable: boolean } | null>();
+    await Promise.all(
+      dailyWithManualReport.map(async (row) => {
+        const chId = channels.find((c) => c.code === row.broadcast_channel_code)?.id;
+        if (!chId) return;
+        seasonCompareByRow.set(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`, await loadSeasonCompare(supabase, row.broadcast_channel_code, chId, row.matched_program_name, asOfDate));
+      })
+    );
     const dailyWithSlotBaseline = dailyWithManualReport.map((row) => ({
       ...row,
+      seasonCompare: seasonCompareByRow.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
       slotBaseline: slotBaselineByRowKey.get(`${row.broadcast_channel_code}__${row.matched_start_time}__${row.matched_program_name}`) ?? null,
       strategyReview: strategyReviewByProgram.get(findStrategyPlan(row.broadcast_channel_code, row.matched_program_name, asOfDate)?.id ?? "") ?? null,
     }));
