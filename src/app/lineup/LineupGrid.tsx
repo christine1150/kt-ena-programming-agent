@@ -325,7 +325,9 @@ function Bar(props: {
   const genre = runGenre(run, work, slot);
   const title = runTitle(run, work);
   const short = work?.shortTitle ?? null;
-  const sub = [periodText(run), episodeText(run, work), (work?.cast ?? []).slice(0, 2).join(", ")].filter(Boolean).join(" · ");
+  const cast2 = (work?.cast ?? []).slice(0, 2).join(", ");
+  const meta = [periodText(run), episodeText(run, work)].filter(Boolean).join(", ");
+  const sub = [meta, cast2].filter(Boolean).join(" · ");
   const isBracket = d.shape === "bracket";
   const isBox = d.shape === "box";
   const dashed = run.status !== "confirmed" || run.runKind === "tbd";
@@ -404,14 +406,20 @@ function Bar(props: {
         {!isBox && <span aria-hidden className="w-1 shrink-0" style={{ background: dim ? "transparent" : tone ?? GENRE_VAR[genre] }} />}
         <span className={`flex min-w-0 flex-1 flex-col justify-center px-1.5 ${startsBefore ? "pl-1" : ""}`}>
           {(footnote !== undefined || (mode !== "outside" && mode !== "mark")) && (
-            <span className="flex min-w-0 items-center gap-1">
+            <span className="flex min-w-0 items-baseline gap-1">
               {startsBefore && <span aria-hidden className="shrink-0 text-[10px] text-zinc-600">◀</span>}
-              <span className={`truncate font-semibold ${isBox ? "font-medium text-zinc-700" : "text-zinc-900"}`}>{footnote ? `[${footnote}] ` : ""}{shownTitle}</span>
+              {/* 제목(굵게)이 먼저 자리를 차지하고, 옆의 가는 글씨는 남는 폭만큼만 쓴다(2026-11-25 사용자 요청: 편성센터 라인업 모양). */}
+              <span className={`max-w-full shrink-0 truncate font-semibold ${isBox ? "font-medium text-zinc-700" : "text-zinc-900"}`}>{footnote ? `[${footnote}] ` : ""}{shownTitle}</span>
+              {mode === "two" ? (
+                meta && <span className="min-w-0 truncate text-[11px] font-normal text-zinc-700">{meta}</span>
+              ) : (
+                cast2 && mode !== "mark" && mode !== "outside" && <span className="min-w-0 truncate text-[11px] font-normal text-zinc-700">{cast2}</span>
+              )}
               {run.needsReview && <span className="shrink-0 rounded bg-zinc-900 px-1 text-[10px] leading-4 text-white">확인</span>}
               {run.startPrecision === "week" && mode !== "two" && <span className="sr-only">주 단위 일정</span>}
             </span>
           )}
-          {mode === "two" && <span className="truncate text-[11px] text-zinc-700">{sub}</span>}
+          {mode === "two" && cast2 && <span className="truncate text-[11px] font-normal text-zinc-700">{cast2}</span>}
         </span>
         {d.estimatedFrom && <span aria-hidden className="absolute top-0 right-0 bottom-0 border-r-2 border-dotted border-zinc-500" />}
       </button>
@@ -474,12 +482,12 @@ function Diamonds(props: { run: RunDto; work: WorkDto | undefined; slot: SlotDto
   );
 }
 
-/** 계산된 빈 주 — 'N주 비어 있음'. 자사 드라마 자리가 비면 붉은 글자·밑줄로 눈에 띄게(사용자 요청 2026-11-25). */
+/** 계산된 빈 주 — 'N주 비어있음'. 자사 드라마 자리가 비면 붉은 글자·밑줄로 눈에 띄게(사용자 요청 2026-11-25). */
 function Gap({ gap, P, dayPx, alert }: { gap: GapDto; P: (d: string) => number; dayPx: number; alert: boolean }) {
   const left = P(gap.from);
   const right = P(addDaysIso(gap.to, 1));
   const px = (dayIndex(gap.from, gap.to) + 1) * dayPx;
-  const text = `${gap.weeks}주 비어 있음`;
+  const text = `${gap.weeks}주 비어있음`;
   return (
     <span
       aria-label={text}

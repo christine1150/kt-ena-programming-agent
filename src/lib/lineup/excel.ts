@@ -73,7 +73,7 @@ function addGridSheet(wb: ExcelJS.Workbook, data: LineupPayload, rows: Row[], ru
   ws.getCell(2, 1).font = { size: 10, color: { argb: argb("3F3F46") } };
   // 3행: 범례
   ws.mergeCells(3, 1, 3, lastCol);
-  ws.getCell(3, 1).value = (byOutlet ? "범례: 채움색 = 방송사 로고색" : "범례: 채움색 = 장르(드라마·예능·사업형·기타)") + " · 실선 = 확정 · 점선 = 예정/가안 · ≈ = 주 단위·추정 날짜 · ◆ = 단발·행사 · ● = 월 1회 · 빗금 = 휴방·결방 · 'N주 비어 있음' = 계산된 빈 주(자사 드라마는 붉은 글자)";
+  ws.getCell(3, 1).value = (byOutlet ? "범례: 채움색 = 방송사 로고색" : "범례: 채움색 = 장르(드라마·예능·사업형·기타)") + " · 실선 = 확정 · 점선 = 예정/가안 · ≈ = 주 단위·추정 날짜 · ◆ = 단발·행사 · ● = 월 1회 · 빗금 = 휴방·결방 · 'N주 비어있음' = 계산된 빈 주(자사 드라마는 붉은 글자)";
   ws.getCell(3, 1).font = { size: 9, color: { argb: argb("52525B") } };
 
   // 4~6행: 달 · 주(월요일) · 공휴일
@@ -170,9 +170,18 @@ function addGridSheet(wb: ExcelJS.Workbook, data: LineupPayload, rows: Row[], ru
         for (let k = c0; k <= end; k++) used.add(k);
         if (end > c0) ws.mergeCells(r, c0, r, end);
         const c = ws.getCell(r, c0);
-        const sub = [periodText(run), episodeText(run, work), (work?.cast ?? []).slice(0, 2).join(", ")].filter(Boolean).join(" · ");
+        // 화면과 같은 모양: 1줄 '제목(굵게) 기간, 회차(가늘게)', 2줄 '주연 2명(가늘게)'
+        const meta = [periodText(run), episodeText(run, work)].filter(Boolean).join(", ") + (shape === "bracket" ? " (월 단위)" : "");
+        const cast2 = (work?.cast ?? []).slice(0, 2).join(", ");
         const isBox = shape === "box";
-        c.value = `${run.draw.from < data.from ? "◀ " : ""}${title}${run.needsReview ? " [확인]" : ""}\n${sub}${shape === "bracket" ? " (월 단위)" : ""}`;
+        const head = `${run.draw.from < data.from ? "◀ " : ""}${title}${run.needsReview ? " [확인]" : ""}`;
+        c.value = {
+          richText: [
+            { text: head, font: { size: 9, bold: true, color: { argb: argb("18181B") } } },
+            ...(meta ? [{ text: ` ${meta}`, font: { size: 8, color: { argb: argb("3F3F46") } } }] : []),
+            ...(cast2 ? [{ text: `\n${cast2}`, font: { size: 8, color: { argb: argb("3F3F46") } } }] : []),
+          ],
+        };
         c.alignment = { vertical: "middle", wrapText: true, shrinkToFit: false };
         c.font = { size: 9, bold: true, color: { argb: argb("18181B") } };
         if (isBox && run.runKind === "hiatus") c.fill = { type: "pattern", pattern: "lightUp", fgColor: { argb: argb("D4D4D8") }, bgColor: { argb: "FFFFFFFF" } };
@@ -185,14 +194,14 @@ function addGridSheet(wb: ExcelJS.Workbook, data: LineupPayload, rows: Row[], ru
         c.border = { top: { style, color }, bottom: { style, color }, right: { style, color }, left: { style: isBox ? style : "thick", color } };
         c.note = [title, `${run.startDate ?? "?"} ~ ${run.endDate ?? "?"}`, `${KIND_LABEL[run.runKind]} · ${STATUS_LABEL[run.status]}`].join("\n");
       }
-      // 빈 주(계산값) — 첫 줄에만, 남는 칸에 'N주 비어 있음'. 자사 드라마 자리가 비면 붉은 글자(화면과 같다).
+      // 빈 주(계산값) — 첫 줄에만, 남는 칸에 'N주 비어있음'. 자사 드라마 자리가 비면 붉은 글자(화면과 같다).
       if (lane === lanes.main[0] && row.slot) {
         const alert = row.outlet?.side === "own" && row.slot.defaultGenre === "drama";
         for (const g of data.gaps.filter((x) => x.slotId === row.slot!.id)) {
           const col = colOf(g.from);
           if (used.has(col)) continue;
           const c = ws.getCell(r, col);
-          c.value = `${g.weeks}주 비어 있음`;
+          c.value = `${g.weeks}주 비어있음`;
           c.font = { size: 8, bold: alert, italic: !alert, color: { argb: argb(alert ? "B91C1C" : "696971") } };
         }
       }

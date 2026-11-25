@@ -320,7 +320,7 @@ export function Legend({ full = false, byOutlet = false }: { full?: boolean; byO
             <span aria-hidden className="inline-block size-2.5 rounded-full bg-zinc-700" />월 1회
           </li>
           <li className="flex items-center gap-1">
-            <span aria-hidden className="inline-block h-2.5 w-6 border-b border-dotted border-red-600" /><span className="text-red-700">N주 비어 있음</span>(자사 드라마 빈 자리, 계산)
+            <span aria-hidden className="inline-block h-2.5 w-6 border-b border-dotted border-red-600" /><span className="text-red-700">N주 비어있음</span>(자사 드라마 빈 자리, 계산)
           </li>
           <li>≈ 주 단위·추정 날짜</li>
           <li>◀ 앞에서 이어짐</li>
