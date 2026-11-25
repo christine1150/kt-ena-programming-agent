@@ -2,14 +2,13 @@
 // 자사 막대는 날짜 칸마다 방송 요일 음영(첫방일 가장 진함·방송 요일 진함·쉬는 요일 옅음)으로 칠하고 제목은 첫 칸에서 오른쪽으로 흘려 쓴다. 타사·OTT는 날짜 칸 아래 표식 줄.
 // 계산은 화면과 같은 lib/lineup/calendar.ts. 대외비 표시를 머리·바닥글에 넣는다.
 import ExcelJS from "exceljs";
-import { addDays, daysBetween } from "./dates";
-import { barSegment, buildCalendar, calRangeOf, dayAirings, monthSegments, type CalLayer, type CalMark, type CalModel, type TileKind } from "./calendar";
+import { addDays } from "./dates";
+import { barWeekDays, buildCalendar, calRangeOf, dayAirings, monthSegments, type CalLayer, type CalMark, type CalModel } from "./calendar";
 import { hexTint } from "./brand";
 import { GENRE_HEX, conditionText, type LineupQuery } from "./viewModel";
 import type { LineupPayload } from "./types";
 
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
-const TILE_RATIO: Record<TileKind, number> = { first: 0.5, air: 0.27, rest: 0.06 };
 const argb = (hex: string) => `FF${hex}`;
 const solid = (hex: string): ExcelJS.Fill => ({ type: "pattern", pattern: "solid", fgColor: { argb: argb(hex) } });
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
@@ -42,7 +41,7 @@ function addMonthSheet(wb: ExcelJS.Workbook, data: LineupPayload, model: CalMode
   ws.getCell(1, 1).value = `대외비 · KT ENA 라인업 캘린더 ${name.slice(0, 4)}년 ${Number(name.slice(5))}월 — ${cond}`;
   ws.getCell(1, 1).font = { bold: true, size: 14 };
   ws.mergeCells(2, 1, 2, 7);
-  ws.getCell(2, 1).value = `기간 ${model.from} ~ ${model.to}${sourceText ? ` · 자료 기준: ${sourceText}` : ""} · 출력 ${printedAt} · ▶첫방 ■종영 ◆공개일 · ≈ 주 단위·추정 날짜 · 진한 칸 = 방송 요일, 가장 진한 칸 = 첫방일`;
+  ws.getCell(2, 1).value = `기간 ${model.from} ~ ${model.to}${sourceText ? ` · 자료 기준: ${sourceText}` : ""} · 출력 ${printedAt} · ▶첫방 ■종영 ◆공개일 · ≈ 주 단위·추정 날짜 · 자사는 방송 요일 칸에만 표시, 가장 진한 칸 = 첫방일`;
   ws.getCell(2, 1).font = { size: 10 };
   DOW.forEach((d, i) => {
     const c = ws.getCell(4, i + 1);
@@ -72,71 +71,58 @@ function addMonthSheet(wb: ExcelJS.Workbook, data: LineupPayload, model: CalMode
       if (!d.inRange) c.fill = solid("F4F5F9");
     });
     r++;
-    // 자사 막대 — 줄마다 2행(제목·기간·회차 / 출연자), 칸마다 방송 요일 음영
+    // 자사 작품 — 방송되는 요일 칸에만. 줄마다 3행(제목 / 방송 시각·회차(추정) / 출연자). 첫방일은 가장 진한 칸 + [첫방], 마지막 방송일은 ■ 종영
     for (let lane = 1; lane <= w.laneCount; lane++) {
-      const b = w.bars.find((x) => x.lane === lane && barSegment(x, w.start));
-      for (let rr = 0; rr < 2; rr++) {
+      for (let rr = 0; rr < 3; rr++) {
         for (let i = 0; i < 7; i++) {
           const c = ws.getCell(r + rr, i + 1);
           c.border = border("E4E7EF");
           if (!w.days[i].inRange) c.fill = solid("F4F5F9");
         }
       }
-      if (!b) {
-        r += 2;
-        continue;
-      }
-      const seg = barSegment(b, w.start);
-      if (!seg) {
-        r += 2;
-        continue;
-      }
-      if (b.kind === "gap") {
-        for (let i = seg.c0; i <= seg.c1; i++) {
-          for (let rr = 0; rr < 2; rr++) {
+      ws.getRow(r).height = 30;
+      for (const b of w.bars.filter((x) => x.lane === lane)) {
+        for (const d of barWeekDays(b, w.start)) {
+          const i = d.col;
+          if (b.kind === "gap") {
+            for (let rr = 0; rr < 3; rr++) {
+              const c = ws.getCell(r + rr, i + 1);
+              c.fill = solid("FBE9EB");
+              c.border = border("C91F31", "dashed");
+            }
+            const t = ws.getCell(r, i + 1);
+            t.value = b.title;
+            t.font = { bold: true, color: { argb: argb("C91F31") } };
+            continue;
+          }
+          const hex = GENRE_HEX[b.genre];
+          const col = hex.replace("#", "").toUpperCase();
+          for (let rr = 0; rr < 3; rr++) {
             const c = ws.getCell(r + rr, i + 1);
-            c.fill = solid("FBE9EB");
-            c.border = border("C91F31", "dashed");
+            c.fill = solid(hexTint(hex, d.kind === "first" ? 0.5 : 0.27));
+            const st: ExcelJS.BorderStyle = b.status === "confirmed" ? "thin" : "dashed";
+            c.border = {
+              top: rr === 0 ? { style: st, color: { argb: argb(col) } } : undefined,
+              bottom: rr === 2 ? { style: st, color: { argb: argb(col) } } : undefined,
+              left: { style: "medium", color: { argb: argb(col) } },
+              right: { style: st, color: { argb: argb(col) } },
+            };
+          }
+          const head = ws.getCell(r, i + 1);
+          head.value = `${d.kind === "first" && !b.single ? "[첫방] " : ""}${b.title}`;
+          head.font = { bold: true, size: 11 };
+          head.alignment = { vertical: "middle", wrapText: true };
+          const sub = ws.getCell(r + 1, i + 1);
+          sub.value = [b.time, b.single ? b.meta : d.episode, b.status !== "confirmed" ? "예정" : "", d.last ? "■ 종영" : ""].filter(Boolean).join(" · ");
+          sub.font = { bold: true, size: 10 };
+          if (b.cast) {
+            const cast = ws.getCell(r + 2, i + 1);
+            cast.value = b.cast;
+            cast.font = { size: 9 };
           }
         }
-        const t = ws.getCell(r, seg.c0 + 1);
-        t.value = b.title;
-        t.font = { bold: true, color: { argb: argb("C91F31") } };
-        r += 2;
-        continue;
       }
-      const hex = GENRE_HEX[b.genre];
-      const col = hex.replace("#", "").toUpperCase();
-      for (let i = seg.c0; i <= seg.c1; i++) {
-        const t = seg.tiles[i - seg.c0];
-        for (let rr = 0; rr < 2; rr++) {
-          const c = ws.getCell(r + rr, i + 1);
-          c.fill = solid(hexTint(hex, TILE_RATIO[t]));
-          c.border = {
-            top: rr === 0 ? { style: b.status === "confirmed" ? "thin" : "dashed", color: { argb: argb(col) } } : undefined,
-            bottom: rr === 1 ? { style: b.status === "confirmed" ? "thin" : "dashed", color: { argb: argb(col) } } : undefined,
-            left: i === seg.c0 ? { style: seg.contL ? "hair" : "medium", color: { argb: argb(col) } } : { style: "hair", color: { argb: argb("BBBBBB") } },
-            right: i === seg.c1 ? { style: seg.contR ? "hair" : "thin", color: { argb: argb(col) } } : undefined,
-          };
-        }
-      }
-      const head = ws.getCell(r, seg.c0 + 1);
-      head.value = `${seg.contL ? "◀ " : ""}${seg.hasFirst ? "[첫방] " : ""}${b.title}  ${b.meta}${b.status !== "confirmed" ? " (예정)" : ""}${seg.contR ? " ▶" : ""}`;
-      head.font = { bold: true, size: 11 };
-      head.alignment = { vertical: "middle", wrapText: false };
-      if (b.cast) {
-        const sub = ws.getCell(r + 1, seg.c0 + 1);
-        sub.value = b.cast;
-        sub.font = { size: 10 };
-        sub.alignment = { vertical: "middle", wrapText: false };
-      }
-      if (seg.hasLast && b.lastAir) {
-        const lastCol = daysBetween(w.start, b.lastAir);
-        const c = ws.getCell(r + 1, lastCol + 1);
-        c.value = c.value ? `${c.value}  ■ 종영` : "■ 종영";
-        c.font = { bold: true, size: 10, color: { argb: argb(col) } };
-      }
-      r += 2;
+      r += 3;
     }
     // 타사·OTT 표식 줄 — 칸마다 줄바꿈 목록(첫방·종영은 굵게 대신 기호로)
     let maxLines = 1;

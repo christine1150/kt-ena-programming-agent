@@ -1,11 +1,11 @@
 "use client";
 
 // 라인업 '캘린더' 보기(2026-11-25, docs/lineup/CALENDAR_VIEW_DESIGN.md) — 한 주 = 한 줄(월요일 시작).
-// 자사(기준 채널)는 막대(방송 요일은 진한 음영·쉬는 요일은 옅은 음영·첫방일은 가장 진한 칸 + '첫방' 배지), 타사·OTT는 날짜 칸 표식(▶ 첫방 채움 · ■ 종영 테두리 · ◆ 공개일).
+// 자사(기준 채널)는 방송되는 요일 칸에만(예: 토요일 작품은 토요일 칸, 월화 드라마는 월·화 칸) 제목·방송 시각·회차(추정)·출연자를 쓰고 첫방일은 가장 진한 칸 + '첫방' 배지, 타사·OTT는 날짜 칸 표식(▶ 첫방 채움 · ■ 종영 테두리 · ◆ 공개일).
 // 계산은 lib/lineup/calendar.ts(순수 함수)가 하고 여기는 그리기만 한다. 인쇄(한 달 한 쪽)도 이 컴포넌트를 printMode로 쓴다.
 import { useMemo } from "react";
 import {
-  barSegment, dayAirings, type CalBar, type CalMark, type CalModel, type CalWeek, type DayRow, type MarkKind, type TileKind,
+  barWeekDays, dayAirings, type CalBar, type CalMark, type CalModel, type CalWeek, type DayRow, type MarkKind,
 } from "@/lib/lineup/calendar";
 import { GENRE_HEX } from "@/lib/lineup/viewModel";
 import type { Genre, LineupPayload } from "@/lib/lineup/types";
@@ -20,7 +20,6 @@ const onColor = (hex: string | null) => {
   const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
   return lum > 0.55 ? "#1c1d24" : "#ffffff";
 };
-const TILE_ALPHA: Record<TileKind, number> = { first: 0.5, air: 0.27, rest: 0.06 };
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 const dowOf = (d: string) => DOW[(new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7];
 
@@ -59,56 +58,53 @@ function Mark({ m, onSelect, selected }: { m: CalMark; onSelect: (id: string) =>
   );
 }
 
-function Bar({ b, week, barH, selectedId, onSelect }: { b: CalBar; week: CalWeek; barH: number; selectedId: string | null; onSelect: (id: string) => void }) {
-  const seg = barSegment(b, week.start);
-  if (!seg) return null;
-  const n = seg.c1 - seg.c0 + 1;
-  const style = { gridColumn: `${seg.c0 + 1} / ${seg.c1 + 2}`, gridRow: b.lane + 1, minHeight: barH - 4 } as const;
-  const rad = `${seg.contL ? 0 : 8}px ${seg.contR ? 0 : 8}px ${seg.contR ? 0 : 8}px ${seg.contL ? 0 : 8}px`;
-  if (b.kind === "gap")
-    return (
-      <div className="relative z-[1] m-[2px] flex items-center px-3 text-[15px] font-extrabold" style={{ ...style, borderRadius: rad, border: "1.5px dashed #c91f31", background: "#c91f310d", color: "#c91f31" }}>
-        {b.title}
-        {seg.contR && <span aria-hidden className="absolute top-1.5 right-1.5 text-[10px]">▶</span>}
-      </div>
-    );
+/** 자사 작품 — 방송되는 요일 칸에만 그린다(쉬는 요일·결방은 비워 둠). 칸마다 제목 / 방송 시각·회차(추정) / 출연자. 첫방일은 가장 진한 칸 + 굵은 '첫방' 배지. */
+function Bar({ b, week, selectedId, onSelect }: { b: CalBar; week: CalWeek; selectedId: string | null; onSelect: (id: string) => void }) {
   const col = GENRE_HEX[b.genre as Genre];
   const dash = b.status === "confirmed" ? "solid" : "dashed";
   const selected = selectedId !== null && selectedId === b.runId;
   return (
-    <button
-      type="button"
-      onClick={() => b.runId && onSelect(b.runId)}
-      title={`${b.title} ${b.meta}`}
-      className="relative z-[1] m-[2px] overflow-hidden px-2.5 py-[3px] text-left"
-      style={{
-        ...style,
-        borderRadius: rad,
-        border: `1.5px ${dash} ${col}`,
-        borderLeft: seg.contL ? `1.5px dashed ${col}99` : `5px solid ${col}`,
-        outline: selected ? "2px solid #18181b" : undefined,
-        outlineOffset: selected ? 1 : undefined,
-      }}
-    >
-      <span aria-hidden className="absolute inset-0 z-0 grid" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>
-        {seg.tiles.map((t, i) => (
-          <i key={i} className="block" style={{ background: hexA(col, TILE_ALPHA[t]), borderLeft: i === 0 ? undefined : "1px dashed rgba(0,0,0,.10)" }} />
-        ))}
-      </span>
-      <span className="relative z-[1] block truncate text-[15px] leading-[22px] text-zinc-900" style={{ paddingRight: seg.hasLast ? 62 : 18 }}>
-        {seg.contL && <span aria-hidden className="mx-[3px] text-[10px]" style={{ color: col }}>◀</span>}
-        {seg.hasFirst && (
-          <span className="mr-[7px] inline-block rounded-[5px] px-[7px] align-[1px] text-[12.5px] leading-[19px] font-extrabold text-white" style={{ background: col }}>첫방</span>
-        )}
-        <b className="font-extrabold">{b.title}</b> <span className="text-[13.5px] font-semibold text-zinc-800">{b.meta}</span>
-        {b.status !== "confirmed" && <span className="ml-[7px] rounded-[4px] border border-dashed border-zinc-500 bg-white px-[5px] text-[11.5px] font-semibold text-zinc-700">예정</span>}
-      </span>
-      {b.cast && <span className="relative z-[1] block truncate text-[13.5px] leading-[19px] font-medium text-zinc-800" style={{ paddingRight: seg.hasLast ? 62 : 18 }}>{b.cast}</span>}
-      {seg.hasLast && (
-        <span className="absolute top-1.5 right-5 z-[2] rounded-[5px] border-[1.5px] bg-white px-[7px] text-[12.5px] leading-[17px] font-extrabold" style={{ color: col, borderColor: col }}>종영</span>
-      )}
-      {seg.contR && <span aria-hidden className="absolute top-1.5 right-1.5 z-[2] text-[10px]" style={{ color: col }}>▶</span>}
-    </button>
+    <>
+      {barWeekDays(b, week.start).map((d) => {
+        const pos = { gridColumn: d.col + 1, gridRow: b.lane + 1 } as const;
+        if (b.kind === "gap")
+          return (
+            <div key={d.date} className="relative z-[1] m-[2px] flex items-center rounded-[8px] px-2 text-[14.5px] font-extrabold" style={{ ...pos, border: "1.5px dashed #c91f31", background: "#c91f310d", color: "#c91f31" }}>
+              {b.title}
+            </div>
+          );
+        return (
+          <button
+            key={d.date}
+            type="button"
+            onClick={() => b.runId && onSelect(b.runId)}
+            title={`${b.title} ${b.meta}`}
+            className="relative z-[1] m-[2px] overflow-hidden rounded-[8px] px-2 py-[3px] text-left"
+            style={{
+              ...pos,
+              background: hexA(col, d.kind === "first" ? 0.5 : 0.27),
+              border: `1.5px ${dash} ${col}`,
+              borderLeft: `5px solid ${col}`,
+              outline: selected ? "2px solid #18181b" : undefined,
+              outlineOffset: selected ? 1 : undefined,
+            }}
+          >
+            <span className="block text-[15px] leading-[20px] font-extrabold text-zinc-900" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+              {d.kind === "first" && !b.single && (
+                <span className="mr-[6px] inline-block rounded-[5px] px-[6px] align-[1px] text-[12.5px] leading-[19px] font-extrabold text-white" style={{ background: col }}>첫방</span>
+              )}
+              {b.title}
+            </span>
+            <span className="block truncate text-[13.5px] leading-[19px] font-semibold text-zinc-800">
+              {[b.time, b.single ? b.meta : d.episode].filter(Boolean).join(" · ")}
+              {b.status !== "confirmed" && <span className="ml-1.5 rounded-[4px] border border-dashed border-zinc-500 bg-white px-[4px] text-[11px] font-semibold text-zinc-700">예정</span>}
+              {d.last && <span className="ml-1.5 rounded-[5px] border-[1.5px] bg-white px-[6px] text-[12px] leading-[16px] font-extrabold" style={{ color: col, borderColor: col }}>종영</span>}
+            </span>
+            {b.cast && <span className="block truncate text-[12.5px] leading-[18px] font-medium text-zinc-800">{b.cast}</span>}
+          </button>
+        );
+      })}
+    </>
   );
 }
 
@@ -133,7 +129,7 @@ function Week({
           ))}
         </div>
       )}
-      <div className="relative grid" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gridTemplateRows: `32px repeat(${week.laneCount}, ${barH}px) auto` }}>
+      <div className="relative grid" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gridTemplateRows: `32px repeat(${week.laneCount}, minmax(${barH}px, auto)) auto` }}>
         {week.days.map((d, c) => {
           return (
             <button
@@ -159,7 +155,7 @@ function Week({
           );
         })}
         {week.bars.map((b) => (
-          <Bar key={`${b.key}`} b={b} week={week} barH={barH} selectedId={selectedId} onSelect={onSelectRun} />
+          <Bar key={`${b.key}`} b={b} week={week} selectedId={selectedId} onSelect={onSelectRun} />
         ))}
         {week.days.map((d, c) => (
           <div key={`m${d.date}`} className="z-[1] flex min-h-9 flex-col gap-1 px-1.5 pt-1 pb-1.5" style={{ gridColumn: c + 1, gridRow: markRow }}>
@@ -186,8 +182,7 @@ export function CalLegend() {
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-semibold text-zinc-700" aria-label="범례">
       <li>{sw(0.5)}첫방일(가장 진함 + 배지)</li>
-      <li>{sw(0.27)}방송 요일</li>
-      <li>{sw(0.06)}쉬는 요일</li>
+      <li>{sw(0.27)}방송일 — 방송 요일 칸에만 표시</li>
       <li>점선 테두리 = 예정</li>
       <li>
         <span aria-hidden className="mr-1 inline-block h-3 w-6 rounded-[3px] align-middle" style={{ border: "1.5px dashed #c91f31", background: "#c91f310d" }} />
@@ -225,7 +220,7 @@ export default function CalendarView({
   data: LineupPayload; model: CalModel; density: "comfy" | "compact"; selectedRunId: string | null; onSelectRun: (id: string | null) => void;
   selectedDay: string | null; onSelectDay: (d: string | null) => void; ownCodes: string[]; genres: Genre[]; printMode?: boolean; title?: string;
 }) {
-  const barH = density === "comfy" ? 54 : 46;
+  const barH = density === "comfy" ? 78 : 64; // 칸마다 제목(2줄까지)·시각·출연자
   const day = selectedDay;
   const rows = useMemo(() => (day ? dayAirings(data, day, ownCodes, genres) : []), [data, day, ownCodes, genres]);
   const dayInfo = day ? model.weeks.flatMap((w) => w.days).find((d) => d.date === day) : undefined;
