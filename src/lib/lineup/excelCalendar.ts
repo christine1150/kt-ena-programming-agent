@@ -12,8 +12,8 @@ const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const argb = (hex: string) => `FF${hex}`;
 const solid = (hex: string): ExcelJS.Fill => ({ type: "pattern", pattern: "solid", fgColor: { argb: argb(hex) } });
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
-const MARK_TAIL = (m: CalMark) => (m.kind === "first" ? "첫방" : m.kind === "end" ? (m.approx ? "종영(≈)" : "종영") : m.kind === "open" ? (m.ott ? "공개" : "단발") : "방송");
-const markText = (m: CalMark) => `${m.kind === "first" ? "▶" : m.kind === "end" ? "■" : "◆"} ${m.outletName} ${m.title} ${MARK_TAIL(m)}`;
+const MARK_TAIL = (m: CalMark) => m.kind === "avail" ? "" : (m.kind === "first" ? "첫방" : m.kind === "end" ? (m.approx ? "종영(≈)" : "종영") : m.kind === "open" ? (m.ott ? "공개" : "단발") : "방송");
+const markText = (m: CalMark) => (m.kind === "avail" ? `◇ ${m.outletName} 가능 ${m.note ?? ""} ${m.title}` : `${m.kind === "first" ? "▶" : m.kind === "end" ? "■" : "◆"} ${m.outletName} ${m.title} ${MARK_TAIL(m)}`);
 const border = (hex: string, style: ExcelJS.BorderStyle = "thin"): Partial<ExcelJS.Borders> => ({
   top: { style, color: { argb: argb(hex) } }, bottom: { style, color: { argb: argb(hex) } }, left: { style, color: { argb: argb(hex) } }, right: { style, color: { argb: argb(hex) } },
 });
@@ -25,7 +25,7 @@ export function addCalendarSheets(wb: ExcelJS.Workbook, data: LineupPayload, q: 
   const hide = q.hide as CalLayer[];
   const segs = monthSegments(range.from, range.to);
   segs.forEach((seg, idx) => {
-    const model = buildCalendar(data, { from: seg.from, to: seg.to, channels: q.channels, genres: q.genres, hide, show: q.show as CalOwnShow[] });
+    const model = buildCalendar(data, { from: seg.from, to: seg.to, channels: q.channels, genres: q.genres, hide, show: q.show as CalOwnShow[], can: q.can });
     addMonthSheet(wb, data, model, `${seg.ym}`, cond, sourceText, printedAt, idx === segs.length - 1);
   });
   addDaySheet(wb, data, q, range.from, range.to, hide, cond, printedAt);

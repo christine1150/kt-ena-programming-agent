@@ -29,6 +29,7 @@ const MARK_TAIL: Record<MarkKind, (m: CalMark) => string> = {
   end: (m) => (m.approx ? "종영(≈)" : "종영"),
   open: (m) => (m.ott ? "공개" : "단발"),
   air: () => "방송",
+  avail: () => "",
 };
 
 function Mark({ m, onSelect, selected }: { m: CalMark; onSelect: (id: string) => void; selected: boolean }) {
@@ -38,6 +39,13 @@ function Mark({ m, onSelect, selected }: { m: CalMark; onSelect: (id: string) =>
   const common = "flex w-full min-w-0 items-center gap-1 rounded-[6px] px-1.5 text-left text-[13px] leading-[20px] whitespace-nowrap";
   const sym = m.kind === "first" ? "▶" : m.kind === "end" ? "■" : "◆";
   const ring = selected ? "outline outline-2 outline-offset-1 outline-zinc-900" : "";
+  if (m.kind === "avail")
+    return (
+      <button type="button" title={`${m.outletName} 방영 가능 ${m.note ?? ""} — ${m.title}`} onClick={() => onSelect(m.runId)} className={`${common} ${ring} bg-white font-semibold text-sky-900`} style={{ border: "1.5px dashed #0284c7", lineHeight: "17px" }}>
+        <span aria-hidden className="shrink-0 text-[10.5px] text-sky-600">◇</span>
+        <span className="truncate"><b className="font-extrabold">{m.note}</b> {title}</span>
+      </button>
+    );
   if (m.kind === "first")
     return (
       <button type="button" title={label} onClick={() => onSelect(m.runId)} className={`${common} ${ring} font-semibold`} style={{ background: col, color: onColor(col) }}>
@@ -199,7 +207,10 @@ export function CalLegend() {
         <span className="rounded-[5px] border-[1.5px] border-sky-800 bg-white px-2">■ 종영 = 테두리</span>
         <span className="rounded-[5px] border-l-4 border-red-600 bg-zinc-100 px-2">◆ 공개일·단발</span>
       </li>
-      <li>≈ 주 단위·추정 날짜</li>
+      <li>
+        <span className="rounded-[5px] bg-white px-2 text-sky-900" style={{ border: "1.5px dashed #0284c7" }}>◇ 23:50~ = 선택한 채널 방영 가능(ENA 방송 종료 + 홀드백)</span>
+      </li>
+      <li>≈ 주 단위 날짜</li>
     </ul>
   );
 }
@@ -271,6 +282,16 @@ export default function CalendarView({
           </div>
           {(dayInfo?.holiday || (dayInfo?.events.length ?? 0) > 0) && (
             <p className="mb-1.5 text-[13px] font-semibold text-red-700">{[dayInfo?.holiday, ...(dayInfo?.events ?? [])].filter(Boolean).join(" · ")}</p>
+          )}
+          {(dayInfo?.marks ?? []).some((m) => m.kind === "avail") && (
+            <div className="mb-2 rounded-lg border border-dashed border-sky-500 bg-sky-50 px-2.5 py-1.5 text-[13.5px] text-sky-950">
+              <p className="mb-0.5 font-extrabold">{dayInfo?.marks.find((m) => m.kind === "avail")?.outletName} 방영 가능 시작</p>
+              {(dayInfo?.marks ?? []).filter((m) => m.kind === "avail").map((m) => (
+                <button key={m.key} type="button" onClick={() => onSelectRun(m.runId)} className="block text-left font-semibold hover:underline">
+                  {m.note} · {m.title}
+                </button>
+              ))}
+            </div>
           )}
           {rows.length === 0 ? (
             <p className="py-4 text-center text-[14px] text-zinc-600">이 날짜에 하루 단위로 확인된 편성이 없습니다.<br />(주·월 단위 자료는 달력 위·아래에 따로 있습니다)</p>

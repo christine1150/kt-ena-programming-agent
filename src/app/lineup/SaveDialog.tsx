@@ -155,6 +155,14 @@ export default function SaveDialog({
             ))}
           </Field>
 
+          {isCal && (
+            <Field label="방영 가능">
+              <button type="button" aria-pressed={!q.can} onClick={() => set({ can: null })} className={chip(!q.can)}>안 봄</button>
+              {ownChannels.filter((c) => c.code !== "ENA").map((c) => (
+                <button key={c.code} type="button" aria-pressed={q.can === c.code} onClick={() => set({ can: q.can === c.code ? null : c.code })} className={chip(q.can === c.code)}>{c.name}</button>
+              ))}
+            </Field>
+          )}
           {isCal ? (
             <Field label="표시">
               {CAL_OWN_SHOW.map((o) => {

@@ -1,8 +1,10 @@
 // 라인업 월 단위 캘린더 보기 계산(2026-11-25, docs/lineup/CALENDAR_VIEW_DESIGN.md) — 화면·인쇄·엑셀 공용 순수 함수.
 // 이미 서버가 계산해 준 그리기 구간(run.draw)·빈 주(gaps)를 날짜 칸에 펼치기만 한다. 새 수치를 만들지 않고 DB도 건드리지 않는다.
 // 날짜를 아는 정도를 지킨다: 하루 단위만 날짜 칸에 놓고, 주 단위는 그 주 띠에, 월 단위는 '이 달 예정' 상자에 둔다(추정 날짜는 ≈).
-import { addDays, clockLabel, daysBetween, estimateEnd, firstAirOnOrAfter, isoDow, monthEnd } from "./dates";
+import { addDays, clockLabel, daysBetween, firstAirOnOrAfter, isoDow, lastAirOf, monthEnd } from "./dates";
+export { lastAirOf };
 import type { Genre, LineupPayload, RunDto, RunStatus, SlotDto, WorkDto } from "./types";
+import { holdbackMarks } from "./holdback";
 import { buildUndated, dowLabel, episodeText, isYearOnly, periodText, runGenre, runTitle, slotTime } from "./viewModel";
 
 export type CalLayer = "own" | "rival" | "ott" | "event";
@@ -20,6 +22,7 @@ export interface CalQuery {
   channels: string[]; // 기준 자사 채널 코드(비면 ENA)
   genres: Genre[];
   hide: CalLayer[];
+  can?: string | null; // 방영 가능 일시를 볼 자사 채널 코드(홀드백) — 없으면 표시 안 함
   show?: CalOwnShow[]; // 자사 작품을 어느 방송일까지 그릴지 — 기본 전체. 비면 자사 작품을 그리지 않는다
 }
 /** 자사 방송일 보기: 첫방(첫 월화·첫 수목처럼 이어지는 첫 묶음) · 종영(마지막 묶음) · 전체 방영일 */
@@ -54,7 +57,7 @@ export interface CalBar {
   single: boolean; // 단발·행사·월 1회의 하루짜리 칸
 }
 
-export type MarkKind = "first" | "end" | "open" | "air";
+export type MarkKind = "first" | "end" | "open" | "air" | "avail";
 export interface CalMark {
   key: string;
   date: string;
@@ -66,6 +69,7 @@ export interface CalMark {
   shortTitle: string | null;
   ott: boolean;
   approx: boolean;
+  note?: string; // 방영 가능 시각(23:50~) 같은 덧붙임
 }
 
 export interface CalDay {
@@ -129,14 +133,6 @@ export function monthSegments(from: string, to: string): { ym: string; from: str
     d = addDays(end, 1);
   }
   return out;
-}
-
-/** 마지막 방송일 — 적힌 끝(하루 단위)이면 확정, 그 밖은 회차로 추정(≈). 끝을 모르면 null. */
-export function lastAirOf(run: RunDto, slot: SlotDto): { date: string | null; estimated: boolean } {
-  if (!run.startDate || run.endPrecision === "open") return { date: null, estimated: false };
-  if (run.endDate) return { date: run.endDate, estimated: run.endPrecision !== "day" };
-  if (run.episodes) return { date: estimateEnd(run.startDate, slot.days, run.episodes), estimated: true };
-  return { date: null, estimated: false };
 }
 
 /** 한 주 안에서 이 작품이 방송되는 날들(주 안 칸 번호 포함). 쉬는 요일은 돌려주지 않는다. */
@@ -314,6 +310,16 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
       });
     }
   }
+  // 홀드백: 고른 자사 채널에서 방영 가능해지는 일시(ENA 방송 종료 + 규칙 대기일)
+  if (q.can) {
+    for (const h of holdbackMarks(data, q.can, extStart, extEnd)) {
+      pushMark({
+        key: h.key, date: h.date, kind: "avail", runId: h.runId, outletName: data.outlets.find((o) => o.code === q.can)?.name ?? q.can, color: null,
+        title: [h.title, h.episode].filter(Boolean).join(" "), shortTitle: h.shortTitle ? [h.shortTitle, h.episode].filter(Boolean).join(" ") : null, ott: false, approx: h.time === null,
+        note: h.time ? `${h.time}~` : "ENA 종료 후",
+      });
+    }
+  }
   // 줄 배정 — 방송일이 서로 겹치지 않는 작품끼리는 한 줄을 나눠 쓴다(월화 드라마와 토요일 예능이 같은 줄). 같은 작품은 주가 바뀌어도 같은 줄.
   const all = [...bars, ...gapBars].sort((a, b) => (a.days[0].date < b.days[0].date ? -1 : a.days[0].date > b.days[0].date ? 1 : a.key < b.key ? -1 : 1));
   const laneDates: Set<string>[] = [];
@@ -355,7 +361,7 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
   };
 }
 
-const ORDER: Record<MarkKind, number> = { first: 0, end: 1, open: 2, air: 3 };
+const ORDER: Record<MarkKind, number> = { first: 0, end: 1, open: 2, air: 3, avail: 4 };
 
 export interface DayRow {
   key: string;

@@ -192,6 +192,10 @@ export interface LineupPayload {
   events: EventDto[];
   sources: SourceDto[];
   gaps: GapDto[];
+  /** 홀드백 규칙이 있는 ENA 작품의 본방 방송 길이(분, 실제 방송 기록의 같은 자리 중간값). 없으면 키가 없다 — 홀드백 계산에만 쓴다. */
+  holdbackMinutes?: Record<string, number>;
+  /** 이미 방송된 회차의 실제 종료 분(방송일 0시 기준, 올림): { workId: { 방송일: 분 } } — 있으면 중간값 대신 이 값을 쓴다 */
+  holdbackEnds?: Record<string, Record<string, number>>;
 }
 
 /** 드라마 자리에서 계산으로 찾은 빈 주(자료로 들어온 '미정'과 다르게 약하게 그린다). */

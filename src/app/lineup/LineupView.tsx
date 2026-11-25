@@ -94,8 +94,8 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
   const { channels, genres, dows, view } = st;
   const filters: Filters = useMemo(() => ({ channels, genres, dows }), [channels, genres, dows]);
   const calModel = useMemo(
-    () => (data && view === "calendar" ? buildCalendar(data, { from: calRange.from, to: calRange.to, channels, genres, hide: st.hide as CalLayer[], show: st.show as CalOwnShow[] }) : null),
-    [data, view, calRange, channels, genres, st.hide, st.show]
+    () => (data && view === "calendar" ? buildCalendar(data, { from: calRange.from, to: calRange.to, channels, genres, hide: st.hide as CalLayer[], show: st.show as CalOwnShow[], can: st.can }) : null),
+    [data, view, calRange, channels, genres, st.hide, st.show, st.can]
   );
   const calOwnCodes = channels.length > 0 ? channels : ["ENA"];
   const grid = useMemo(() => {
@@ -283,6 +283,17 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
                 </button>
               );
             })}
+          </div>
+        )}
+        {isCal && (
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="방영 가능 일시">
+            <span className="mr-0.5 text-[13px] text-zinc-600">방영 가능 일시 보기</span>
+            <button type="button" aria-pressed={!st.can} onClick={() => set({ can: null })} className={chip(!st.can)}>안 봄</button>
+            {ownOutlets.filter((o) => o.code !== "ENA").map((o) => (
+              <button key={o.code} type="button" aria-pressed={st.can === o.code} onClick={() => set({ can: st.can === o.code ? null : o.code })} className={chip(st.can === o.code)}>
+                {o.name}
+              </button>
+            ))}
           </div>
         )}
         {isCal && (

@@ -339,6 +339,7 @@ export interface LineupQuery {
   dfrom: string | null;
   dto: string | null;
   hide: string[]; // own | rival | ott | event
+  can: string | null; // 방영 가능 일시를 볼 자사 채널 코드(홀드백, 캘린더)
   show: string[]; // 자사 방송일 보기: first(첫방) | end(종영일) | all(전체 방영일). 비면 자사 작품을 그리지 않는다
 }
 export const LENGTHS = [3, 6, 8, 12];
@@ -371,6 +372,7 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
     dfrom: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dfrom") as string) : null,
     dto: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dto") as string) : null,
     hide: listOf(get("hide")).filter((h) => ["own", "rival", "ott", "event"].includes(h)),
+    can: /^[A-Z_]{2,12}$/.test((get("can") ?? "").toUpperCase()) ? (get("can") as string).toUpperCase() : null,
     show: showRaw === "none" ? [] : listOf(showRaw).filter((h) => ["first", "end", "all"].includes(h)).length > 0 ? listOf(showRaw).filter((h) => ["first", "end", "all"].includes(h)) : ["all"],
   };
 }
@@ -393,6 +395,7 @@ export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string): stri
       s.set("dto", q.dto);
     } else if (q.month && (!defaultFrom || q.month !== addMonthsYm(defaultFrom, 1))) s.set("month", q.month);
     if (q.hide?.length) s.set("hide", q.hide.join(","));
+    if (q.can) s.set("can", q.can);
     if (q.show && !(q.show.length === 1 && q.show[0] === "all")) s.set("show", q.show.length ? q.show.join(",") : "none");
   }
   return s.toString();

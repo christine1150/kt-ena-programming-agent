@@ -45,10 +45,10 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
     if (!data || !cal) return [];
     const segs = monthSegments(cal.from, cal.to);
     return segs.map((s, i) => {
-      const m = buildCalendar(data, { from: s.from, to: s.to, channels: q.channels, genres: q.genres, hide: q.hide as CalLayer[], show: q.show as CalOwnShow[] });
+      const m = buildCalendar(data, { from: s.from, to: s.to, channels: q.channels, genres: q.genres, hide: q.hide as CalLayer[], show: q.show as CalOwnShow[], can: q.can });
       return { ym: s.ym, model: i === segs.length - 1 ? m : { ...m, undated: [] } }; // 날짜 미정 OTT 목록은 마지막 쪽에만
     });
-  }, [data, cal, q.channels, q.genres, q.hide, q.show]);
+  }, [data, cal, q.channels, q.genres, q.hide, q.show, q.can]);
   const channelNames = data ? q.channels.map((c) => data.outlets.find((o) => o.code === c)?.name ?? c) : q.channels;
   const page = PAGE[q.paper];
   const sources = data

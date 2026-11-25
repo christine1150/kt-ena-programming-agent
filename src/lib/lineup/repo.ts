@@ -6,6 +6,8 @@ import { outletBrand } from "./brand";
 import { addDays, daysBetween, drawSpan, effectiveEnd, findGaps, isHeadToHead } from "./dates";
 import { titleKey } from "./titles";
 import { featuredShortMap, resolveShortTitle } from "./shortTitle";
+import { holdbackRuleFor } from "./holdbackRules";
+import { loadHoldbackMinutes } from "./holdbackMinutes";
 import type { CtxRun, PlanContext, UploadPlan } from "./plan";
 import type {
   EventDto, GapDto, Genre, HolidayDto, LineupPayload, OutletDto, ParsedItem, ParsedLineup, RunDto, SlotDto, SourceDto, SourceKind, WorkDto,
@@ -357,6 +359,18 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
   }
   for (const [sid, spans] of bySlot) if (slotById.get(sid)?.default_genre === "drama") gaps.push(...findGaps(sid, spans, from, to));
 
+  // 홀드백 규칙이 있는 ENA 본방 작품의 방송 길이 — 실패해도 라인업은 그대로(시각만 빠진다)
+  const outletCodeById = new Map(outlets.map((o) => [o.id, o.code]));
+  const workById = new Map(works.map((w) => [w.id, w]));
+  const hbTargets = new Map<string, { workId: string; title: string; slotStartMinute: number }>();
+  for (const d of dtos) {
+    const slot = slotById.get(d.slotId);
+    const w = d.workId ? workById.get(d.workId) : undefined;
+    if (!slot || !w || d.runKind !== "series" || slot.start_minute === null || outletCodeById.get(slot.outlet_id) !== "ENA") continue;
+    if (holdbackRuleFor(w.title, w.genre)) hbTargets.set(w.id, { workId: w.id, title: w.title, slotStartMinute: slot.start_minute });
+  }
+  const hb = await loadHoldbackMinutes([...hbTargets.values()]).catch(() => ({ minutes: {}, ends: {} }) as Awaited<ReturnType<typeof loadHoldbackMinutes>>);
+
   return {
     ok: true,
     from,
@@ -379,6 +393,8 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
     ),
     sources: (((sources as { data: unknown[] | null }).data ?? []) as SourceRow[]).map(toSourceDto),
     gaps,
+    holdbackMinutes: hb.minutes,
+    holdbackEnds: hb.ends,
   };
 }
 

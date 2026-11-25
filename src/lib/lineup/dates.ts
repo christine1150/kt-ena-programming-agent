@@ -1,6 +1,6 @@
 // 라인업 날짜 계산 — 순수 함수(서버에서 계산해 화면은 그리기만 한다. docs/lineup/LINEUP_DESIGN.md §3·§4).
 // 날짜는 모두 'YYYY-MM-DD' 문자열(KST 방송일 기준)로 다룬다. 시각 계산을 하지 않으므로 UTC 자정으로 고정해 더하고 뺀다.
-import type { DrawSpan, EndPrecision, GapDto, RunKind, StartPrecision } from "./types";
+import type { DrawSpan, EndPrecision, GapDto, RunDto, RunKind, SlotDto, StartPrecision } from "./types";
 
 const DAY = 86400000;
 const toMs = (d: string) => Date.parse(`${d}T00:00:00Z`);
@@ -223,4 +223,12 @@ export function compareBlockOf(days: number[]): "mon_tue" | "wed_thu" | "weekend
   if (days.every((d) => d === 3 || d === 4)) return "wed_thu";
   if (days.every((d) => d >= 5)) return "weekend";
   return "other";
+}
+
+/** 마지막 방송일 — 적힌 끝(하루 단위)이면 확정, 그 밖은 회차로 추정(≈). 끝을 모르면 null. */
+export function lastAirOf(run: RunDto, slot: SlotDto): { date: string | null; estimated: boolean } {
+  if (!run.startDate || run.endPrecision === "open") return { date: null, estimated: false };
+  if (run.endDate) return { date: run.endDate, estimated: run.endPrecision !== "day" };
+  if (run.episodes) return { date: estimateEnd(run.startDate, slot.days, run.episodes), estimated: true };
+  return { date: null, estimated: false };
 }
