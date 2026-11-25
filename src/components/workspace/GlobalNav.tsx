@@ -31,19 +31,19 @@ function NavInner({ role }: { role: Role | null }) {
   const actionExtra = { from: sp.get("from"), ft: sp.get("ft"), sj: sp.get("sj"), hour: sp.get("hour"), cut: cutParam };
   const carry = actionExtra.from && actionExtra.ft ? actionExtra : {};
 
-  // 오리지널 라인업(ENA 콘텐츠 편성센터, 별도 사이트) — 보고서와 관리 사이, 새 창으로 연다(사용자 요청 2026-10-22).
-  // 관리 메뉴가 없는 PD 계정에서도 보이도록, 관리가 없으면 맨 끝에 붙인다(사용자 요청 2026-11-04).
+  // 라인업 — 보고서와 관리 사이(사용자 요청 2026-10-22). 관리 메뉴가 없는 PD 계정에서도 보이도록, 관리가 없으면 맨 끝에 붙인다(2026-11-04).
+  // 2026-11-24(사용자 결정): 외부 편성센터 사이트 대신 앱 안 라인업 화면(/lineup)을 연다. 외부 사이트는 라인업 화면 머리의 작은 링크로만 남긴다.
+  const lineupActive = pathname.startsWith("/lineup");
   const lineupLink = (
     <li className="shrink-0">
-      <a
-        href="https://ktena.pages.dev/"
-        target="_blank"
-        rel="noopener noreferrer"
-        title="ENA 콘텐츠 편성센터의 오리지널 라인업을 새 창으로 엽니다"
-        className="block border-b-2 border-transparent px-3 py-2.5 text-[13px] font-medium text-zinc-500 transition hover:text-zinc-800"
+      <Link
+        href="/lineup"
+        aria-current={lineupActive ? "page" : undefined}
+        title="자사 오리지널·사업형 라인업과 경쟁사 드라마 라인업"
+        className={`block border-b-2 px-3 py-2.5 text-[13px] font-medium transition ${lineupActive ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"}`}
       >
         라인업
-      </a>
+      </Link>
     </li>
   );
   const hasAdmin = items.some((i) => i.id === "admin");

@@ -18,6 +18,7 @@ export type AdminAction =
   | "schedule_upload" // 주간 편성표 업로드(해당 주의 편성표 행을 교체) — 사용자 결정(2026-10-06): 편성자도 가능
   | "channel_policy_edit" // 채널별 최적화 설정·필수 편성 변경 — 사용자 결정(2026-10-06): 편성자도 가능
   | "competitor_airing_upload" // 경쟁 채널 편성 단위 자료 업로드(ENA PLAY 우선) — 사용자 결정(2026-10-13): PD(편성자)도 가능
+  | "lineup_edit" // 라인업(자사·타사) 입력·수정·업로드·되돌리기 — 사용자 결정(2026-11-24): 관리자만. PD에게 열 때는 아래 표 한 줄만 바꾼다
   | "export"; // 내보내기
 
 const RANK: Record<Role, number> = { viewer: 0, planner: 1, admin: 2 };
@@ -32,6 +33,7 @@ export const MIN_ROLE: Record<AdminAction, Role> = {
   schedule_upload: "planner",
   channel_policy_edit: "planner",
   competitor_airing_upload: "planner",
+  lineup_edit: "admin",
   upload: "admin",
   approve: "admin",
   master_edit: "admin",
