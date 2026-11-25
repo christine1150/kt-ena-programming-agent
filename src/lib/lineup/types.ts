@@ -81,6 +81,7 @@ export interface OutletDto {
   color: string | null; // 로고색 — 자사는 channels.theme_color, 타사는 brand.ts(경쟁 비교 막대 음영·줄 머리 띠)
   logo: string | null; // 로고 그림 경로(public/channel-logos · public/competitor-logos)
   group: "A" | "B" | null; // 자사 채널 묶음
+  ott: boolean; // OTT 플랫폼(방송 요일·시각 자리가 없어 경쟁 비교 맨 아래 'OTT' 묶음에 그린다, 2026-11-25)
   sortOrder: number;
 }
 

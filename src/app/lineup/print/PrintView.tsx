@@ -4,8 +4,9 @@
 // 자료를 받고 글꼴이 준비되면 인쇄 창을 한 번 자동으로 연다(auto=0이면 열지 않음).
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LineupPayload } from "@/lib/lineup/types";
-import { buildCompareRows, buildOwnRows, conditionText, LAYOUT, queryRange, type LineupQuery } from "@/lib/lineup/viewModel";
+import { buildCompareRows, buildOwnRows, buildUndated, conditionText, LAYOUT, queryRange, type LineupQuery } from "@/lib/lineup/viewModel";
 import LineupGrid from "../LineupGrid";
+import UndatedStrip from "../UndatedStrip";
 import { Legend, ListView } from "../LineupView";
 
 // 인쇄 가능한 폭(px, 96dpi) — 용지 가로 길이에서 여백 8mm×2를 뺀 값.
@@ -106,6 +107,7 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
                 colorBy={q.view === "compare" ? "outlet" : "genre"}
               />
             )}
+            {q.view === "compare" && <UndatedStrip data={data} groups={buildUndated(data, filters)} selectedId={null} onSelect={() => {}} />}
           </>
         )}
         <footer className="mt-2 border-t border-zinc-300 pt-1 text-[10px] text-zinc-600">

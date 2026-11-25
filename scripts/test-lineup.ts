@@ -9,6 +9,9 @@ import { parseOwnLineupXlsx, asOfFromFileName } from "../src/lib/lineup/parse/ow
 import { industrySheetFilter, outletKey, parseIndustryLineupXlsx } from "../src/lib/lineup/parse/industrySheet";
 import { planUpload, type PlanContext } from "../src/lib/lineup/plan";
 import { parseStandardLineupXlsx, parseStartText, splitCast, standardGenre } from "../src/lib/lineup/parse/standardSheet";
+import { ottGenre, parseOttCadence, parseOttLineupXlsx, splitOttTitle } from "../src/lib/lineup/parse/ottSheet";
+import { assignLanes, buildCompareRows, buildUndated, kindLabel, periodText, slotLabel } from "../src/lib/lineup/viewModel";
+import type { DrawSpan, LineupPayload, OutletDto, RunDto, SlotDto, WorkDto } from "../src/lib/lineup/types";
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail?: unknown) => {
@@ -169,6 +172,85 @@ check("addDays", addDays("2026-12-31", 1) === "2027-01-01");
   check("표준 양식: KBS1·EBS의 음악 아닌 프로그램은 교양", standardGenre("토크/퀴즈", "", "KBS1") === "other" && standardGenre("음악 특집", "", "KBS1") === "variety" && standardGenre("토크", "", "SBS") === "variety");
   check("표준 양식: 시작 시기 읽기", parseStartText("2027").end === "2027-12-31" && parseStartText("2027-01").precision === "month" && parseStartText("2026-12-24~25").end === "2026-12-25");
   check("표준 양식: 출연진 '미정' → 빈 목록", splitCast("미정(특수부대 예비역 모집)").length === 0);
+}
+
+// ── OTT 양식(한 줄 = 한 작품) — 가짜 제목 ──
+{
+  const head = ["OTT 플랫폼", "작품명", "분류", "확정수준", "공개 시기", "첫 공개일(YYYY-MM-DD)", "공개 시각(KST)", "총 편수", "주요 출연진·패널", "공개 방식·요일", "유통·제작 유형", "확인사항·비고", "근거 URL 1", "근거 URL 2", "자료 확인일"];
+  const rows = [
+    ["가상플러스", "가상 몰아보기 (Fake Binge)", "드라마", "날짜확정", "2026-12-01", "2026-12-01", "", "8부작(2차 확인)", "배우 가·배우 나", "전편 공개", "국내 오리지널", "", "", "", "2026-11-25"],
+    ["가상플러스", "가상 주간극", "드라마", "날짜확정", "2027-01-06", "2027-01-06", "", "8부작", "외국 배우·테스트 이름", "1/6 2화, 이후 매주 수요일", "해외 오리지널", "", "", "", "2026-11-25"],
+    ["가상플러스", "가상 분할극", "드라마", "날짜확정", "2026-12-11", "2026-12-11", "17:00", "22부작", "배우 다", "12/11 1~8화 → 12/18 9~15화 → 12/25 16~22화", "", "", "", "", "2026-11-25"],
+    ["가상TV", "가상 예능", "연애 리얼리티 예능", "월확정", "2026년 12월", "", "", "", "고정출연진 미발표", "상세 날짜 미발표", "", "", "", "", "2026-11-25"],
+    ["가상TV", "가상 연말쇼", "예능", "반기확정", "2027년 상반기", "", "", "", "AK-99 외 미공개", "공개 방식 미정", "", "", "", "", "2026-11-25"],
+    ["가상TV", "가상 미정극(가제)", "시트콤", "제작확정·일정미정", "공개 시기 미발표", "", "", "", "배우 라", "공개 방식 미발표", "", "", "", "", "2026-11-25"],
+    ["가상TV", "가상 다큐", "다큐·음악", "연도확정", "2027년", "", "", "6부작", "", "매주 목요일 17:00", "", "", "", "", "2026-11-25"],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "OTT_전체");
+  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  const ott = parseOttLineupXlsx(buf, { fileName: "OTT.xlsx", outletAliases: new Map([[outletKey("가상플러스"), "OTT_FAKE"], [outletKey("가상TV"), "OTT_FAKE2"]]) });
+  const get = (t: string) => ott.items.find((i) => i.work?.title === t);
+  const binge = get("가상 몰아보기");
+  check("OTT: 전편 공개 = 단발, 원제는 메모로·제목에서 뺌, 편수·출연자(띄어쓰기 유지)", binge?.run.runKind === "single" && binge.run.endDate === "2026-12-01" && binge.run.episodes === 8 && (binge.work?.note ?? "").includes("원제 : Fake Binge") && binge.work?.cast.join() === "배우 가,배우 나", binge);
+  const weekly = get("가상 주간극");
+  check("OTT: 첫날 2화 + 매주 수요일 8부작 → 1/6~2/17 막대", weekly?.run.runKind === "series" && weekly.run.endDate === "2027-02-17" && weekly.run.recurrence === "매주 수요일" && weekly.work?.cast.join() === "외국 배우,테스트 이름", weekly?.run);
+  const split = get("가상 분할극");
+  check("OTT: 날짜가 여럿이면 분할 공개(여러 날 마름모)", split?.run.runKind === "multi_day" && split.run.airDates?.join() === "2026-12-11,2026-12-18,2026-12-25" && split.run.endDate === "2026-12-25" && split.run.episodes === 22, split?.run);
+  const month = get("가상 예능");
+  check("OTT: '2026년 12월' = 월 단위 12/1~12/31, 분류 연애 리얼리티 예능 = 예능, '미발표' 출연진 = 빈 목록", month?.run.startPrecision === "month" && month.run.startDate === "2026-12-01" && month.run.endDate === "2026-12-31" && month.run.startText === "2026년 12월" && month.work?.genre === "variety" && month.work.cast.length === 0, month);
+  const half = get("가상 연말쇼");
+  check("OTT: '2027년 상반기' = 1~6월, '외 미공개' 제거", half?.run.endDate === "2027-06-30" && half.run.startText === "2027년 상반기" && half.work?.cast.join() === "AK-99", half);
+  const none = get("가상 미정극");
+  check("OTT: 일정미정 = 날짜 없음(지어내지 않음), 가제, 시트콤 = 드라마, 확인 필요 아님", none?.run.startDate === null && none.run.startPrecision === "unknown" && none.work?.tentative === true && none.work.genre === "drama" && none.run.needsReview === false, none);
+  const docu = get("가상 다큐");
+  check("OTT: 다큐·음악 = 교양(기타), 매주인데 첫 공개일 없이 연도만 → 월 단위 범위", docu?.work?.genre === "other" && docu.run.startPrecision === "month" && docu.run.endDate === "2027-12-31", docu);
+  check("OTT: 자료 종류 outlet_xlsx·기준일·기간·미정 경고", ott.kind === "outlet_xlsx" && ott.asOf === "2026-11-25" && ott.period?.from === "2026-12-01" && ott.period.to === "2027-12-31" && ott.warnings.some((w) => w.includes("미정")), ott);
+  check("OTT: 분류 → 장르", ottGenre("예능") === "variety" && ottGenre("시트콤") === "drama" && ottGenre("다큐·음악") === "other" && ottGenre("연애 리얼리티 예능") === "variety");
+  check("OTT: 제목 나누기", splitOttTitle("가상 제목 (Fake Title)").title === "가상 제목" && splitOttTitle("가상 제목 (실사)").title === "가상 제목 (실사)" && splitOttTitle("가상극(가제)").tentative === true);
+  check("OTT: 공개 방식 → 형태", parseOttCadence("매주 목요일 17:00", "2026-12-03", null).endPrecision === "open" && parseOttCadence("회차별 공개 방식 추가 확인", "2026-12-02", 10).recurrence === "첫 공개일만 확인" && parseOttCadence("OTT 전편 공개; KBS2 11/27 금 20:30 첫방", "2026-11-20", 6).runKind === "single");
+  check("OTT: 매주 + 종영일이 적혀 있으면 그 날짜", parseOttCadence("매주 수요일 1화, 2027-02-03 종영 예정", "2026-12-02", 10).end === "2027-02-03");
+}
+
+// ── OTT 화면 배치(경쟁 비교 맨 아래 묶음·미정 목록·줄 쌓기) ──
+{
+  const mkOutlet = (id: string, code: string, name: string, ott: boolean, sortOrder: number): OutletDto => ({ id, code, name, side: "rival", color: "#123456", logo: null, group: null, ott, sortOrder });
+  const outlets = [mkOutlet("o1", "TVN", "tvN", false, 10), mkOutlet("o2", "OTT_FAKE", "가상플러스", true, 30)];
+  const slots: SlotDto[] = [
+    { id: "s1", outletId: "o1", name: "월화 22:00", days: [1, 2], startMinute: 1320, timeNote: null, compareBlock: "mon_tue", defaultGenre: "drama", sortOrder: 1 },
+    { id: "s2", outletId: "o2", name: "공개 일정", days: [1, 2, 3, 4, 5, 6, 7], startMinute: null, timeNote: null, compareBlock: "other", defaultGenre: "other", sortOrder: 1 },
+  ];
+  const mkRun = (id: string, slotId: string, draw: DrawSpan | null, extra: Partial<RunDto> = {}): RunDto => ({
+    id, slotId, workId: null, runKind: "single", status: "confirmed", startDate: draw?.from ?? null, startPrecision: draw ? "day" : "unknown", endDate: draw?.to ?? null,
+    endPrecision: draw ? "day" : "unknown", startText: null, endText: null, episodes: null, episodeFrom: null, recurrence: null, airDates: null, label: null, reason: null,
+    note: null, needsReview: false, sourceId: null, sourceCell: null, sourceText: null, updatedAt: "", archived: false, draw, rivals: [], ...extra,
+  });
+  const dia = (d: string): DrawSpan => ({ shape: "diamond", from: d, to: d, estimatedFrom: null, dates: [d] });
+  const runs = [
+    mkRun("r1", "s2", dia("2026-12-01")),
+    mkRun("r2", "s2", dia("2026-12-03")),
+    mkRun("r3", "s2", null, { runKind: "series", workId: "w3" }),
+    mkRun("r4", "s1", { shape: "bar", from: "2026-12-01", to: "2026-12-27", estimatedFrom: null, dates: null }, { runKind: "series" }),
+  ];
+  const works: WorkDto[] = [{ id: "w3", title: "가상 미정극", shortTitle: null, tentative: false, genre: "drama", totalEpisodes: null, cast: [], directors: [], writers: [], producers: [], logline: null, ottNote: null, note: null }];
+  const data = { ok: true, from: "2026-12-01", to: "2027-02-28", today: "2026-12-01", canEdit: false, outlets, slots, works, runs, holidays: [], events: [], sources: [], gaps: [] } as LineupPayload;
+  const f = { channels: [], genres: [], dows: [] };
+  const cmp = buildCompareRows(data, f);
+  const labels = cmp.rows.map((r) => `${r.kind}:${r.label}${r.chip ? `|${r.chip}` : ""}`);
+  check("OTT 배치: 경쟁 비교 맨 아래에 OTT 묶음, 방송사는 요일 묶음에 그대로", labels.join(",") === "group:월화,slot:자사,slot:tvN|월화,group:OTT · 공개 일정,slot:가상플러스|OTT", labels);
+  check("OTT 배치: 요일을 고르면 OTT 묶음은 빠짐", !buildCompareRows(data, { ...f, dows: [1] }).rows.some((r) => r.key === "b:ott"));
+  const und = buildUndated(data, f);
+  check("OTT 배치: 날짜 없는 작품은 플랫폼별 '공개 시기 미정' 목록", und.length === 1 && und[0].outlet.code === "OTT_FAKE" && und[0].runs[0].id === "r3" && buildUndated(data, { ...f, dows: [1] }).length === 0);
+  const yearRun = mkRun("r6", "s2", { shape: "bracket", from: "2027-01-01", to: "2027-12-31", estimatedFrom: null, dates: null }, { runKind: "series", startPrecision: "month", startDate: "2027-01-01", endDate: "2027-12-31", endPrecision: "month", startText: "2027년" });
+  const withYear = { ...data, runs: [...runs, yearRun] } as LineupPayload;
+  const cmpYear = buildCompareRows(withYear, f);
+  const undYear = buildUndated(withYear, f);
+  check("OTT 배치: 공개 연도만 아는 작품은 격자에서 빼고 목록으로(연도 아는 작품이 먼저)", !(cmpYear.runsBySlot.get("s2") ?? []).some((r) => r.id === "r6") && undYear[0]?.runs.map((r) => r.id).join() === "r6,r3" && periodText(yearRun) === "2027년", undYear[0]?.runs.map((r) => r.id));
+  const near = assignLanes([runs[0], runs[1]], { labelDays: () => 10 });
+  const far = assignLanes([runs[0], mkRun("r5", "s2", dia("2027-01-20"))], { labelDays: () => 10 });
+  check("OTT 줄 쌓기: 공개일이 가까우면(제목 글자가 겹치면) 줄을 늘리고 멀면 한 줄", near.main.length === 2 && far.main.length === 1 && near.events.length === 0, { near: near.main.length, far: far.main.length });
+  check("OTT 표기: 자리 글자 없음·형태 말·일정 미정", slotLabel(slots[1], outlets[1]) === "" && slotLabel(slots[0], outlets[0]) === "월화 22:00" && kindLabel(runs[0], true) === "공개일" && kindLabel(runs[2], true) === "공개 시기 미정" && periodText(runs[2]) === "일정 미정");
 }
 
 if (failed > 0) {

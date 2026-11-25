@@ -37,11 +37,11 @@ type WorkRow = {
   id: string; outlet_id: string; title: string; title_key: string; aliases: string[]; short_title: string | null; title_tentative: boolean; genre: Genre;
   total_episodes: number | null; cast_main: string[]; directors: string[]; writers: string[]; producers: string[]; logline: string | null; ott_note: string | null; note: string | null;
 };
-type OutletRow = { id: string; code: string; display_name: string; side: "own" | "rival"; sort_order: number; aliases: string[]; channels: { theme_color: string | null; logo_path: string | null } | null };
+type OutletRow = { id: string; code: string; display_name: string; side: "own" | "rival"; outlet_kind: string | null; sort_order: number; aliases: string[]; channels: { theme_color: string | null; logo_path: string | null } | null };
 type SourceRow = { id: string; source_kind: SourceKind; title: string; as_of: string; file_name: string | null; change_note: string | null; status: "applied" | "rolled_back"; applied_at: string; applied_by: string; summary: Record<string, unknown> };
 
 export async function loadOutlets(): Promise<OutletRow[]> {
-  const { data, error } = await supabase.from("lineup_outlets").select("id, code, display_name, side, sort_order, aliases, channels(theme_color, logo_path)").eq("active", true).order("sort_order");
+  const { data, error } = await supabase.from("lineup_outlets").select("id, code, display_name, side, outlet_kind, sort_order, aliases, channels(theme_color, logo_path)").eq("active", true).order("sort_order");
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OutletRow[];
 }
@@ -263,6 +263,7 @@ const toOutletDto = (o: OutletRow): OutletDto => {
     color: brand.color,
     logo: brand.logo,
     group: o.side === "own" ? (safeGroupA(o.code) ? "A" : "B") : null,
+    ott: o.outlet_kind === "ott",
     sortOrder: o.sort_order,
   };
 };
@@ -280,16 +281,19 @@ const toSourceDto = (s: SourceRow): SourceDto => ({
 
 /** 화면용 — 기간 [from, to]와 겹치는 구간 + 그리기 값·맞대결·빈 주(서버 계산). */
 export async function loadLineup(from: string, to: string, today: string, canEdit: boolean): Promise<LineupPayload> {
-  const [outlets, slots, runs, holidays, events, sources] = await Promise.all([
+  const [outlets, slots, datedRuns, undatedRuns, holidays, events, sources] = await Promise.all([
     loadOutlets(),
     all<SlotRow>((a, b) => supabase.from("lineup_slots").select("id, outlet_id, name, days, start_minute, time_note, compare_block, default_genre, sort_order").is("archived_at", null).order("sort_order").range(a, b)),
     all<RunRow>((a, b) =>
       supabase.from("lineup_runs").select(RUN_COLS).is("archived_at", null).lte("start_date", to).or(`end_date.gte.${addDays(from, -120)},end_date.is.null`).order("start_date").range(a, b)
     ),
+    // 공개 시기를 모르는 작품(OTT '일정미정')은 날짜가 없어 위 조건에 안 걸린다 — 따로 읽어 '공개 시기 미정' 목록에 쓴다.
+    all<RunRow>((a, b) => supabase.from("lineup_runs").select(RUN_COLS).is("archived_at", null).is("start_date", null).not("work_id", "is", null).order("id").range(a, b)),
     supabase.from("public_holidays").select("holiday_date, name").gte("holiday_date", from).lte("holiday_date", to).order("holiday_date"),
     supabase.from("lineup_events").select("id, name, event_kind, start_date, end_date").is("archived_at", null).lte("start_date", to).gte("end_date", from),
     supabase.from("lineup_sources").select("id, source_kind, title, as_of, file_name, change_note, status, applied_at, applied_by, summary").eq("status", "applied").order("applied_at", { ascending: false }).limit(50),
   ]);
+  const runs = [...datedRuns, ...undatedRuns];
   const workIds = [...new Set(runs.map((r) => r.work_id).filter((x): x is string => !!x))];
   const works: WorkRow[] = [];
   for (let i = 0; i < workIds.length; i += 200) {

@@ -4,7 +4,7 @@
 // 같은 시기 맞대결(서버 계산)·출처·변경 이력. 관리자(lineup_edit)만 같은 패널 안에서 고치기·보관.
 import { useEffect, useState } from "react";
 import type { Genre, LineupPayload, RunDto } from "@/lib/lineup/types";
-import { episodeText, GENRE_LABEL, GENRE_VAR, KIND_LABEL, periodText, runGenre, runTitle, slotTime, STATUS_LABEL, dowLabel, workNote } from "@/lib/lineup/viewModel";
+import { episodeText, GENRE_LABEL, GENRE_VAR, kindLabel, periodText, runGenre, runTitle, slotLabel, STATUS_LABEL, workNote } from "@/lib/lineup/viewModel";
 
 interface Change { id: number; action: string; diff: Record<string, { before: unknown; after: unknown }>; actor: string; at: string }
 const FIELD_KO: Record<string, string> = {
@@ -56,7 +56,7 @@ export default function DetailPanel({ data, run, onClose, onSelect, onSaved }: {
         <span aria-hidden className="mt-1 h-10 w-1 shrink-0 rounded-sm" style={{ background: GENRE_VAR[genre] }} />
         <div className="min-w-0 flex-1">
           <p className="text-[12px] text-zinc-600">
-            {outlet?.name} · {slot ? `${dowLabel(slot.days)} ${slotTime(slot)}` : ""} · {GENRE_LABEL[genre]}
+            {[outlet?.name, slot ? slotLabel(slot, outlet) : "", GENRE_LABEL[genre]].filter(Boolean).join(" · ")}
           </p>
           <h2 className="text-[17px] leading-snug font-bold text-zinc-900">{runTitle(run, work)}</h2>
         </div>
@@ -68,13 +68,19 @@ export default function DetailPanel({ data, run, onClose, onSelect, onSaved }: {
         <dl className="grid grid-cols-[72px_1fr] gap-x-3 gap-y-1.5">
           <dt className="text-zinc-600">기간</dt>
           <dd>
-            {run.startDate ?? "모름"} ~ {run.endDate ?? (run.endPrecision === "open" ? "계속" : "모름")}
-            <span className="ml-1 text-zinc-600">({PRECISION_KO[run.startPrecision]}{run.startPrecision !== "day" ? ` · 원문 ${periodText(run)}` : ""})</span>
+            {run.startDate ? (
+              <>
+                {run.startDate} ~ {run.endDate ?? (run.endPrecision === "open" ? "계속" : "모름")}
+                <span className="ml-1 text-zinc-600">({PRECISION_KO[run.startPrecision]}{run.startPrecision !== "day" ? ` · 원문 ${periodText(run)}` : ""})</span>
+              </>
+            ) : (
+              "일정 미정 (공개 시기 발표 전)"
+            )}
             {run.draw?.estimatedFrom && <span className="block text-[12px] text-zinc-600">끝은 회차로 추정했습니다(≈).</span>}
           </dd>
           <dt className="text-zinc-600">형태</dt>
           <dd>
-            {KIND_LABEL[run.runKind]} · {STATUS_LABEL[run.status]}
+            {kindLabel(run, !!outlet?.ott)} · {STATUS_LABEL[run.status]}
             {run.recurrence && <span className="text-zinc-600"> · {run.recurrence}</span>}
           </dd>
           {(episodeText(run, work) || work?.totalEpisodes) && (
@@ -91,7 +97,7 @@ export default function DetailPanel({ data, run, onClose, onSelect, onSaved }: {
           )}
           {work && work.cast.length > 0 && (
             <>
-              <dt className="text-zinc-600">주연</dt>
+              <dt className="text-zinc-600">{genre === "drama" ? "주연" : "출연"}</dt>
               <dd>{work.cast.join(", ")}</dd>
             </>
           )}
@@ -128,6 +134,7 @@ export default function DetailPanel({ data, run, onClose, onSelect, onSaved }: {
         </dl>
         {run.needsReview && <p className="rounded border border-zinc-300 bg-zinc-50 px-3 py-2 text-[12px] text-zinc-700">확인 필요 — 원자료에서 병합되지 않은 칸 등 자동으로 확신하기 어려운 항목입니다.</p>}
 
+        {!outlet?.ott && (
         <section>
           <h3 className="mb-1.5 text-[13px] font-bold text-zinc-900">같은 시기 맞대결 {rivals.length > 0 && <span className="font-normal text-zinc-600">{rivals.length}편</span>}</h3>
           {run.runKind !== "series" || !run.workId ? (
@@ -146,7 +153,7 @@ export default function DetailPanel({ data, run, onClose, onSelect, onSaved }: {
                       <span className="w-14 shrink-0 text-[12px] font-semibold text-zinc-700">{o?.name}</span>
                       <span className="min-w-0 flex-1 truncate font-medium">{runTitle(r, w)}</span>
                       <span className="shrink-0 text-[12px] text-zinc-600 tabular-nums">
-                        {s ? `${dowLabel(s.days)} ${slotTime(s)}` : ""} · {periodText(r)}
+                        {s ? slotLabel(s, o) : ""} · {periodText(r)}
                       </span>
                     </button>
                   </li>
@@ -155,6 +162,7 @@ export default function DetailPanel({ data, run, onClose, onSelect, onSaved }: {
             </ul>
           )}
         </section>
+        )}
 
         {/* 사용자 지시(2026-11-25): 맞대결 기준 문구·출처 칸·'변경 이력' 제목은 빼고, 등록·수정 일시 목록만 둔다. */}
         <section className="border-t border-zinc-100 pt-3">

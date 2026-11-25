@@ -34,11 +34,11 @@ interface Source { id: string; kind: string; title: string; asOf: string; fileNa
 interface Change { id: number; entity: string; entityId: string; action: string; diff: Record<string, { before: unknown; after: unknown }>; actor: string; at: string }
 
 const KIND_KO: Record<string, string> = { create: "새로 생김", update: "바뀜", skip: "건너뜀", review: "확인 필요" };
-const SOURCE_KO: Record<string, string> = { own_xlsx: "KT ENA 라인업", industry_xlsx: "업계 종합본", standard_xlsx: "신작 목록", manual: "직접 수정" };
+const SOURCE_KO: Record<string, string> = { own_xlsx: "KT ENA 라인업", industry_xlsx: "업계 종합본", standard_xlsx: "신작 목록", outlet_xlsx: "OTT 라인업", manual: "직접 수정" };
 const fmt = (v: unknown) => (v === null || v === undefined || v === "" ? "없음" : Array.isArray(v) ? v.join(", ") : String(v));
 
 export default function ManageView({ ownChannels }: { ownChannels: { code: string; name: string }[] }) {
-  const [kind, setKind] = useState<"own" | "industry" | "standard">("own");
+  const [kind, setKind] = useState<"own" | "industry" | "standard" | "ott">("own");
   const [outletCode, setOutletCode] = useState("ENA");
   const [asOf, setAsOf] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -131,10 +131,11 @@ export default function ManageView({ ownChannels }: { ownChannels: { code: strin
         <div className="flex flex-wrap items-end gap-3">
           <label className="block">
             <span className="mb-1 block text-[12px] text-zinc-600">양식</span>
-            <select className={input} value={kind} onChange={(e) => { setKind(e.target.value as "own" | "industry" | "standard"); setPreview(null); }}>
+            <select className={input} value={kind} onChange={(e) => { setKind(e.target.value as "own" | "industry" | "standard" | "ott"); setPreview(null); }}>
               <option value="own">KT ENA 라인업 양식(편성센터)</option>
               <option value="industry">업계 드라마 라인업 종합본</option>
               <option value="standard">신작 목록(한 줄 = 한 작품, 기사·보도자료)</option>
+              <option value="ott">OTT 라인업(플랫폼별 한 줄 = 한 작품)</option>
             </select>
           </label>
           {kind === "own" && (
@@ -162,6 +163,7 @@ export default function ManageView({ ownChannels }: { ownChannels: { code: strin
           </button>
         </div>
         {kind === "industry" && <p className="mt-2 text-[12px] text-zinc-600">업계 종합본은 2026 하반기 시트부터 읽습니다. 자사(ENA) 줄은 자사 라인업 자료에 없는 작품만 넣습니다.</p>}
+        {kind === "ott" && <p className="mt-2 text-[12px] text-zinc-600">OTT 양식은 넷플릭스·티빙·웨이브·쿠팡플레이·Apple TV·디즈니+를 읽습니다. 공개 시기가 안 정해진 작품은 날짜 없이 ‘공개 시기 미정’으로 들어갑니다(날짜를 짐작하지 않음).</p>}
         {msg && <p className={`mt-3 rounded px-3 py-2 ${msg.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{msg.text}</p>}
 
         {preview && (

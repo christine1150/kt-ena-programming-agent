@@ -14,6 +14,13 @@ const RIVAL: Record<string, { color: string; logo: string | null }> = {
   CHANNEL_A: { color: "#ff5a1f", logo: "/competitor-logos/CHANNEL_A.png" },
   MBN: { color: "#fa7915", logo: "/competitor-logos/MBN.png" },
   TV_CHOSUN: { color: "#c8102e", logo: "/competitor-logos/TV_CHOSUN.png" },
+  // OTT 플랫폼(2026-11-25) — 대표 브랜드색(근사값). 로고 그림 파일은 아직 없어 이름 글자로 보인다(public/competitor-logos에 넣고 logo 경로만 채우면 로고로 바뀐다).
+  OTT_NETFLIX: { color: "#e50914", logo: null },
+  OTT_TVING: { color: "#ff153c", logo: null },
+  OTT_WAVVE: { color: "#1351f9", logo: null },
+  OTT_COUPANG: { color: "#0a9bdc", logo: null },
+  OTT_APPLETV: { color: "#1d1d1f", logo: null },
+  OTT_DISNEY: { color: "#113ccf", logo: null },
 };
 
 /** 방송사 코드 → 로고색·로고 파일. 자사는 DB 값(themeColor·logoPath)을 넘긴다. 모르면 null(회색 띠·이름 글자). */

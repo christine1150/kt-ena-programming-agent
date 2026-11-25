@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GapDto, LineupPayload, RunDto, SlotDto, WorkDto } from "@/lib/lineup/types";
 import {
-  addDaysIso, assignLanes, dayIndex, episodeText, GENRE_VAR, LAYOUT, pct, periodText, runGenre, runTitle, textWidth, type Density, type Row,
+  addDaysIso, assignLanes, dayIndex, episodeText, GENRE_VAR, LAYOUT, OTT_CAST_MAX, ottLabelPx, pct, periodText, runGenre, runTitle, textWidth, type Density, type Row,
 } from "@/lib/lineup/viewModel";
 
 interface Props {
@@ -197,7 +197,9 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                   </tr>
                 );
               const runs = row.slot ? runsBySlot.get(row.slot.id) ?? [] : [];
-              const lanes = assignLanes(runs);
+              // OTT 줄(2026-11-25): 공개일 마름모도 옆 제목·출연자 글자 폭만큼 자리를 차지하므로 막대와 같이 줄에 쌓는다.
+              const isOtt = !!row.outlet?.ott;
+              const lanes = assignLanes(runs, isOtt ? { labelDays: (r) => Math.ceil(ottLabelPx(r, r.workId ? works.get(r.workId) : undefined) / Math.max(dayPx, 0.5)) } : undefined);
               const height = lanes.main.length * L.row + (lanes.events.length > 0 ? L.event + 2 : 0);
               return (
                 <tr key={row.key} className={row.emphasis ? "bg-sky-50/40" : undefined}>
@@ -240,7 +242,22 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                           const nextStart = lane[i + 1]?.draw?.from ?? null;
                           const work = r.workId ? works.get(r.workId) : undefined;
                           if (r.draw?.shape === "diamond" || r.draw?.shape === "dots")
-                            return <Diamonds key={r.id} run={r} work={work} slot={row.slot} P={P} dayPx={dayPx} size={12} selected={selectedId === r.id} dim={!!focusIds && !focusIds.has(r.id)} onSelect={onSelect} />;
+                            return (
+                              <Diamonds
+                                key={r.id}
+                                run={r}
+                                work={work}
+                                slot={row.slot}
+                                P={P}
+                                dayPx={dayPx}
+                                size={12}
+                                selected={selectedId === r.id}
+                                dim={!!focusIds && !focusIds.has(r.id)}
+                                onSelect={onSelect}
+                                tone={colorBy === "outlet" ? row.outlet?.color ?? null : null}
+                                rich={isOtt}
+                              />
+                            );
                           return (
                             <Bar
                               key={r.id}
@@ -259,6 +276,7 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                               onSelect={onSelect}
                               footnote={footnotes.get(r.id)}
                               tone={colorBy === "outlet" ? row.outlet?.color ?? null : null}
+                              ott={isOtt}
                             />
                           );
                         })}
@@ -314,8 +332,9 @@ function fillStyle(genre: string, run: RunDto, dim: boolean, tone: string | null
 function Bar(props: {
   run: RunDto; work: WorkDto | undefined; slot: SlotDto | undefined; data: LineupPayload; P: (d: string) => number; dayPx: number;
   barH: number; rowH: number; density: Density; nextStart: string | null; selected: boolean; dim: boolean; onSelect: (id: string | null) => void; footnote?: number; tone?: string | null;
+  ott?: boolean;
 }) {
-  const { run, work, slot, data, P, dayPx, barH, rowH, nextStart, selected, dim, onSelect, footnote, tone = null } = props;
+  const { run, work, slot, data, P, dayPx, barH, rowH, density, nextStart, selected, dim, onSelect, footnote, tone = null, ott = false } = props;
   const d = run.draw!;
   const startsBefore = d.from < data.from;
   const left = P(d.from);
@@ -326,7 +345,7 @@ function Bar(props: {
   const title = runTitle(run, work);
   const short = work?.shortTitle ?? null;
   // 출연자(드라마 주연·예능 출연자/MC) — 넓으면 여러 명, 막대 폭만큼만 보인다.
-  const cast2 = (work?.cast ?? []).slice(0, 6).join(", ");
+  const cast2 = (work?.cast ?? []).slice(0, ott ? OTT_CAST_MAX : 6).join(", ");
   const meta = [periodText(run), episodeText(run, work)].filter(Boolean).join(", ");
   const sub = [meta, cast2].filter(Boolean).join(" · ");
   const isBracket = d.shape === "bracket";
@@ -362,13 +381,18 @@ function Bar(props: {
         onClick={() => onSelect(selected ? null : run.id)}
         aria-label={`${aria} (월 단위 일정)`}
         aria-pressed={selected}
-        className={`absolute top-0 flex flex-col justify-end text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 ${selected ? "ring-2 ring-zinc-900" : ""}`}
+        className={`absolute top-0 flex flex-col justify-end text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 ${ott ? "overflow-visible" : ""} ${selected ? "ring-2 ring-zinc-900" : ""}`}
         style={{ left: `${left}%`, width: `${widthPct}%`, minWidth: 24, height: rowH, opacity: 1 }}
         title={`${title} · ${periodText(run)}(월 단위) ${episodeText(run, work)}`}
       >
-        <span className="truncate px-1 text-[14px] font-semibold text-zinc-900">
-          {shownTitle} <span className="font-normal text-zinc-600">· {periodText(run)} 월 단위</span>
+        {/* OTT 줄은 글자 자리를 줄 쌓기에서 따로 잡아 두었으므로 괄호보다 글자가 길어도 잘라내지 않고 오른쪽으로 보인다. */}
+        <span className={`${ott ? "whitespace-nowrap" : "truncate"} px-1 text-[14px] leading-5 font-semibold text-zinc-900`}>
+          {ott ? title : shownTitle} <span className="font-normal text-zinc-600">· {periodText(run)}{/[년반기]/.test(periodText(run)) ? "" : " 월 단위"}</span>
         </span>
+        {/* 둘째 줄: 회차·출연자 — 넉넉한 줄 높이에서만(촘촘은 높이가 모자라 첫 줄에 회차만). */}
+        {density === "comfy" && (episodeText(run, work) || cast2) && (
+          <span className={`${ott ? "whitespace-nowrap" : "truncate"} px-1 text-[12.5px] leading-[17px] font-normal text-zinc-700`}>{[episodeText(run, work), cast2].filter(Boolean).join(" · ")}</span>
+        )}
         <span aria-hidden className="relative mx-0.5 mb-1.5 block h-2" style={{ borderLeft: `2px solid ${c}`, borderRight: `2px solid ${c}`, opacity: dim ? 0.3 : 1 }}>
           <span className="absolute inset-x-0 top-1/2 block h-0.5 -translate-y-1/2" style={{ background: c }} />
         </span>
@@ -434,12 +458,18 @@ function Bar(props: {
   );
 }
 
-function Diamonds(props: { run: RunDto; work: WorkDto | undefined; slot: SlotDto | undefined; P: (d: string) => number; dayPx: number; size: number; selected: boolean; dim: boolean; onSelect: (id: string | null) => void; compact?: boolean }) {
-  const { run, work, slot, P, dayPx, size, selected, dim, onSelect, compact } = props;
+function Diamonds(props: {
+  run: RunDto; work: WorkDto | undefined; slot: SlotDto | undefined; P: (d: string) => number; dayPx: number; size: number; selected: boolean; dim: boolean;
+  onSelect: (id: string | null) => void; compact?: boolean; tone?: string | null; rich?: boolean;
+}) {
+  const { run, work, slot, P, dayPx, size, selected, dim, onSelect, compact, tone = null, rich = false } = props;
   const d = run.draw!;
   const genre = runGenre(run, work, slot);
-  const c = GENRE_VAR[genre];
+  const c = tone ?? GENRE_VAR[genre];
   const title = runTitle(run, work);
+  // rich(OTT 공개일): 제목(굵게)+공개일·회차(가늘게) / 출연자 2줄 — 방영 기간·회차·출연자는 늘 함께(사용자 요청 2026-11-25)
+  const meta = rich ? [periodText(run), episodeText(run, work)].filter(Boolean).join(", ") : "";
+  const cast = rich ? (work?.cast ?? []).slice(0, OTT_CAST_MAX).join(", ") : "";
   // 기간 밖 방송일(월 1회의 지난 달 등)은 그리지 않는다. 글자는 보이는 첫 방송일에 붙인다.
   const all = d.dates ?? [d.from];
   const inRange = all.filter((x) => P(x) > 0 && P(x) < 100);
@@ -471,10 +501,20 @@ function Diamonds(props: { run: RunDto; work: WorkDto | undefined; slot: SlotDto
         className={`absolute top-1/2 z-[3] flex -translate-y-1/2 items-center rounded-sm pr-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 ${selected ? "ring-2 ring-zinc-900" : ""}`}
         style={{ left: `calc(${P(dates[0])}% - ${size / 2 + 2}px)`, paddingLeft: size + 6, minHeight: Math.max(size + 4, 18) }}
       >
-        <span className={`truncate whitespace-nowrap rounded-sm bg-white/85 font-semibold text-zinc-900 ${compact ? "text-[12.5px]" : "text-[14px]"}`}>
-          {title}
-          {marks.length < dates.length && <span className="ml-0.5 font-normal text-zinc-600">×{dates.length}</span>}
-        </span>
+        {rich ? (
+          <span className="flex min-w-0 flex-col rounded-sm bg-white/85 px-0.5" style={{ maxWidth: 340 }}>
+            <span className="truncate whitespace-nowrap text-[14px] leading-5 font-semibold text-zinc-900">
+              {title}
+              {meta && <span className="ml-1 text-[12.5px] font-normal text-zinc-700">{meta}</span>}
+            </span>
+            {cast && <span className="truncate whitespace-nowrap text-[12.5px] leading-[17px] font-normal text-zinc-700">{cast}</span>}
+          </span>
+        ) : (
+          <span className={`truncate whitespace-nowrap rounded-sm bg-white/85 font-semibold text-zinc-900 ${compact ? "text-[12.5px]" : "text-[14px]"}`}>
+            {title}
+            {marks.length < dates.length && <span className="ml-0.5 font-normal text-zinc-600">×{dates.length}</span>}
+          </span>
+        )}
       </button>
     </>
   );

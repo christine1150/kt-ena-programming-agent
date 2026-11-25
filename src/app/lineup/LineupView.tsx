@@ -9,8 +9,9 @@ import type { Genre, LineupPayload, RunDto } from "@/lib/lineup/types";
 import DetailPanel from "./DetailPanel";
 import LineupGrid from "./LineupGrid";
 import SaveDialog from "./SaveDialog";
+import UndatedStrip from "./UndatedStrip";
 import {
-  buildCompareRows, buildOwnRows, dowLabel, episodeText, GENRE_LABEL, GENRE_VAR, LAYOUT, LENGTHS, lineupSearch, periodText, runGenre, runTitle, slotTime, STATUS_LABEL,
+  buildCompareRows, buildOwnRows, buildUndated, dowLabel, episodeText, GENRE_LABEL, GENRE_VAR, LAYOUT, LENGTHS, lineupSearch, periodText, runGenre, runTitle, slotLabel, STATUS_LABEL,
   type Density, type Filters, type LineupQuery, type ViewMode,
 } from "@/lib/lineup/viewModel";
 
@@ -262,6 +263,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
               colorBy={st.view === "compare" ? "outlet" : "genre"}
             />
           )}
+          {st.view === "compare" && <UndatedStrip data={data} groups={buildUndated(data, filters)} selectedId={st.sel} onSelect={(id) => set({ sel: id })} />}
           {st.view === "own" && grid.hiddenChannels.length > 0 && (
             <p className="mt-1.5 text-[13px] text-zinc-600 print:hidden">이 기간 라인업이 없는 채널 {grid.hiddenChannels.length}개: {grid.hiddenChannels.join(", ")}</p>
           )}
@@ -310,7 +312,7 @@ export function Legend({ full = false, byOutlet = false }: { full?: boolean; byO
         <>
           <li className="flex items-center gap-1">{sw({ background: "var(--surface-muted)", border: "1px solid var(--border-control)" })}수급물</li>
           <li className="flex items-center gap-1">
-            <span aria-hidden className="inline-block size-2.5 rotate-45 bg-zinc-700" />단발·행사
+            <span aria-hidden className="inline-block size-2.5 rotate-45 bg-zinc-700" />단발·행사·OTT 공개일
           </li>
           <li className="flex items-center gap-1">
             <span aria-hidden className="inline-block size-2.5 rounded-full bg-zinc-700" />월 1회
@@ -358,11 +360,16 @@ export function ListView({ data, filters, onSelect }: { data: LineupPayload; fil
       const o = s ? outlets.get(s.outletId) : undefined;
       if (!s || !o) return false;
       if (o.side === "own" && filters.channels.length > 0 && !filters.channels.includes(o.code)) return false;
-      if (filters.dows.length > 0 && !s.days.some((d) => filters.dows.includes(d))) return false;
+      if (filters.dows.length > 0 && (o.ott || !s.days.some((d) => filters.dows.includes(d)))) return false; // OTT는 요일이 없어 요일을 고르면 뺀다
       const g = runGenre(r, r.workId ? works.get(r.workId) : undefined, s);
       return filters.genres.length === 0 || filters.genres.includes(g);
     })
-    .sort((a, b) => ((a.startDate ?? "") < (b.startDate ?? "") ? -1 : (a.startDate ?? "") > (b.startDate ?? "") ? 1 : 0));
+    // 날짜가 없는 작품(OTT 공개 시기 미정)은 맨 뒤로
+    .sort((a, b) => {
+      const x = a.startDate ?? "9999";
+      const y = b.startDate ?? "9999";
+      return x < y ? -1 : x > y ? 1 : 0;
+    });
   if (runs.length === 0) return <EmptyState canEdit={data.canEdit} />;
   return (
     <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
@@ -374,7 +381,7 @@ export function ListView({ data, filters, onSelect }: { data: LineupPayload; fil
             <th className="px-3 py-2 font-semibold">자리</th>
             <th className="px-3 py-2 font-semibold">제목</th>
             <th className="px-3 py-2 font-semibold">회차</th>
-            <th className="px-3 py-2 font-semibold">주연</th>
+            <th className="px-3 py-2 font-semibold">주연·출연</th>
             <th className="px-3 py-2 font-semibold">상태</th>
           </tr>
         </thead>
@@ -388,7 +395,7 @@ export function ListView({ data, filters, onSelect }: { data: LineupPayload; fil
               <tr key={r.id} className="cursor-pointer border-t border-zinc-100 hover:bg-zinc-50" onClick={() => onSelect(r.id)}>
                 <td className="px-3 py-1.5 whitespace-nowrap tabular-nums">{periodText(r)}</td>
                 <td className="px-3 py-1.5 whitespace-nowrap">{o?.name}</td>
-                <td className="px-3 py-1.5 whitespace-nowrap">{s ? `${dowLabel(s.days)} ${slotTime(s)}` : ""}</td>
+                <td className="px-3 py-1.5 whitespace-nowrap">{s ? slotLabel(s, o) : ""}</td>
                 <td className="px-3 py-1.5">
                   <span aria-hidden className="mr-1.5 inline-block size-2 rounded-sm" style={{ background: GENRE_VAR[g] }} />
                   <button type="button" className="text-left font-medium hover:underline" onClick={() => onSelect(r.id)}>

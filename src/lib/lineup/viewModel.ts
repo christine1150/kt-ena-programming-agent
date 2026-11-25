@@ -20,6 +20,20 @@ export const STATUS_LABEL = { confirmed: "확정", planned: "예정", tentative:
 export const KIND_LABEL: Record<RunDto["runKind"], string> = {
   series: "연속 편성", monthly: "월 1회", single: "단발", multi_day: "행사(여러 날)", tbd: "미정 자리", hiatus: "휴방·결방", filler: "수급물",
 };
+/** OTT는 편성이 아니라 공개 — 같은 구간 종류를 공개 방식 말로(2026-11-25). */
+export function kindLabel(run: RunDto, ott: boolean): string {
+  if (!ott) return KIND_LABEL[run.runKind];
+  if (!run.startDate) return "공개 시기 미정";
+  if (run.startPrecision === "month") return "공개 시기만 확인";
+  return ({ series: "연속 공개", single: "공개일", multi_day: "분할 공개" } as Partial<Record<RunDto["runKind"], string>>)[run.runKind] ?? KIND_LABEL[run.runKind];
+}
+
+/** 자리 글자 — 'OTT 공개 일정'처럼 요일·시각이 없는 자리(매일·시각 없음)는 요일을 쓰지 않는다. */
+export function slotLabel(s: SlotDto, o?: OutletDto): string {
+  if (o?.ott) return "";
+  if (s.days.length === 7 && s.startMinute === null) return slotTime(s);
+  return `${dowLabel(s.days)} ${slotTime(s)}`.trim();
+}
 
 export const LAYOUT = {
   // 막대는 늘 2줄(제목·기간·회차 / 출연자, 사용자 요청 2026-11-25)이라 촘촘도 2줄이 들어가는 높이로 둔다.
@@ -60,6 +74,7 @@ export function runGenre(run: RunDto, work: WorkDto | undefined, slot: SlotDto |
 const md = (d: string | null) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "");
 /** 기간 글자 — 정밀도대로(하루 단위 '11/16~12/22', 월 단위 원문 '1~2월', 주 단위 '1월 넷째 주~'). */
 export function periodText(run: RunDto): string {
+  if (!run.startDate) return "일정 미정";
   if (run.startPrecision === "month") return run.startText ?? `${Number(run.startDate?.slice(5, 7))}월~${run.endDate ? `${Number(run.endDate.slice(5, 7))}월` : ""}`;
   const approx = run.startPrecision === "week" ? "≈" : "";
   if (run.runKind === "single") return md(run.startDate);
@@ -158,15 +173,18 @@ export function buildCompareRows(data: LineupPayload, f: Filters): { rows: Row[]
   for (const r of data.runs) {
     const slot = slots.get(r.slotId);
     if (!slot || !runMatches(r, slot, f, works)) continue;
+    // 공개 연도만 아는 OTT 작품은 1년 길이 괄호가 줄만 차지하므로 격자에서 빼고 격자 아래 '공개 시기 미정·연 단위' 목록에 둔다.
+    if (outlets.get(slot.outletId)?.ott && isYearOnly(r)) continue;
     const arr = runsBySlot.get(r.slotId) ?? [];
     arr.push(r);
     runsBySlot.set(r.slotId, arr);
   }
   const ownCodes = f.channels.length > 0 ? f.channels : ["ENA"];
   const genreOk = (s: SlotDto) => f.genres.length === 0 || f.genres.includes(s.defaultGenre);
+  const isOttSlot = (s: SlotDto) => !!outlets.get(s.outletId)?.ott;
   const rows: Row[] = [];
   for (const block of BLOCK_ORDER) {
-    const bs = data.slots.filter((s) => s.compareBlock === block && slotMatchesDow(s, f));
+    const bs = data.slots.filter((s) => !isOttSlot(s) && s.compareBlock === block && slotMatchesDow(s, f));
     const own = bs
       .filter((s) => {
         const o = outlets.get(s.outletId);
@@ -198,7 +216,62 @@ export function buildCompareRows(data: LineupPayload, f: Filters): { rows: Row[]
       rows.push({ key: `s:${s.id}`, kind: "slot", label: o?.name ?? "", sublabel: slotTime(s), chip: dowLabel(s.days), outlet: o, slot: s, color: o?.color ?? null });
     }
   }
+  // OTT 묶음(2026-11-25) — 방송 요일·시각이 없어 요일 묶음에 못 넣는다. 맨 아래에 플랫폼마다 한 줄(공개 일정). 요일을 거르면 요일이 없는 OTT는 뺀다.
+  if (f.dows.length === 0) {
+    const ott = data.slots
+      .filter((s) => isOttSlot(s) && (runsBySlot.get(s.id) ?? []).some((r) => r.draw))
+      .sort((a, b) => (outlets.get(a.outletId)?.sortOrder ?? 0) - (outlets.get(b.outletId)?.sortOrder ?? 0));
+    if (ott.length > 0) {
+      rows.push({ key: "b:ott", kind: "group", label: "OTT · 공개 일정" });
+      for (const s of ott) {
+        const o = outlets.get(s.outletId);
+        rows.push({ key: `s:${s.id}`, kind: "slot", label: o?.name ?? "", chip: "OTT", outlet: o, slot: s, color: o?.color ?? null });
+      }
+    }
+  }
   return { rows, runsBySlot };
+}
+
+/** 공개 연도만 아는 구간(월 단위 정밀도에 길이가 1년 가까이) — 격자에 그려도 1년짜리 줄이라 목록으로 옮긴다. */
+export function isYearOnly(run: RunDto): boolean {
+  return run.startPrecision === "month" && !!run.startDate && !!run.endDate && dayIndex(run.startDate, run.endDate) >= 300;
+}
+
+/** 공개 시기를 모르거나(날짜 없음) 연도만 아는 OTT 작품 — 시간 축에 놓을 수 없어 격자 아래 목록으로 보인다(경쟁 비교·인쇄·엑셀). 요일을 거르면 뺀다. */
+export function buildUndated(data: LineupPayload, f: Filters): { outlet: OutletDto; runs: RunDto[] }[] {
+  if (f.dows.length > 0) return [];
+  const works = new Map(data.works.map((w) => [w.id, w]));
+  const slots = new Map(data.slots.map((s) => [s.id, s]));
+  const outlets = new Map(data.outlets.map((o) => [o.id, o]));
+  const by = new Map<string, RunDto[]>();
+  for (const r of data.runs) {
+    if (r.startDate && !isYearOnly(r)) continue;
+    const s = slots.get(r.slotId);
+    const o = s ? outlets.get(s.outletId) : undefined;
+    if (!s || !o?.ott || !runMatches(r, s, f, works)) continue;
+    by.set(o.id, [...(by.get(o.id) ?? []), r]);
+  }
+  return data.outlets
+    .filter((o) => o.ott && by.has(o.id))
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((o) => ({
+      outlet: o,
+      // 연도를 아는 작품을 먼저, 그다음 날짜 없는 작품. 같은 무리 안은 제목순.
+      runs: (by.get(o.id) as RunDto[]).sort((a, b) => {
+        const x = a.startDate ? 0 : 1;
+        const y = b.startDate ? 0 : 1;
+        return x - y || runTitle(a, works.get(a.workId ?? "")).localeCompare(runTitle(b, works.get(b.workId ?? "")), "ko");
+      }),
+    }));
+}
+
+/** OTT 줄 글자(공개일 마름모·월 단위 괄호 옆 제목·기간·회차 / 출연자)가 차지하는 가로 길이(px, 대략) — 줄 쌓기에 쓴다. 출연자는 4명까지만 쓴다. */
+export const OTT_CAST_MAX = 4;
+export function ottLabelPx(run: RunDto, work: WorkDto | undefined): number {
+  const eps = episodeText(run, work);
+  const line1 = `${runTitle(run, work)} ${[periodText(run), eps].filter(Boolean).join(", ")}`;
+  const line2 = [eps, (work?.cast ?? []).slice(0, OTT_CAST_MAX).join(", ")].filter(Boolean).join(" · ");
+  return Math.min(340, Math.max(textWidth(line1, 14), textWidth(line2, 12.5)) + 30);
 }
 
 export const slotTime = (s: SlotDto) => {
@@ -210,8 +283,27 @@ export const slotTime = (s: SlotDto) => {
 };
 
 /** 한 줄 안 겹침 배치 — 마름모(단발·행사)는 연속 편성과 겹치면 위 얇은 행사 줄로, 연속 편성끼리 겹치면 줄을 늘린다. */
-export function assignLanes(runs: RunDto[]): { main: RunDto[][]; events: RunDto[] } {
+export function assignLanes(runs: RunDto[], opts?: { labelDays?: (r: RunDto) => number }): { main: RunDto[][]; events: RunDto[] } {
   const spans = runs.filter((r) => r.draw);
+  if (opts?.labelDays) {
+    // OTT 줄 — 공개일 마름모·월 단위 괄호도 제목 글자만큼 자리를 차지하므로 막대와 같이 줄에 쌓는다(겹치면 줄을 늘림, 위 행사 줄 없음).
+    const label = opts.labelDays;
+    const end = (r: RunDto) => {
+      const d = r.draw!;
+      if (d.shape !== "diamond" && d.shape !== "bracket") return d.to; // 마름모·월 단위 괄호는 글자가 더 길면 글자만큼 자리를 잡는다
+      const t = addDaysIso(d.from, label(r));
+      return t > d.to ? t : d.to;
+    };
+    const sorted = [...spans].sort((a, b) => (a.draw!.from < b.draw!.from ? -1 : a.draw!.from > b.draw!.from ? 1 : 0));
+    const stacked: RunDto[][] = [];
+    for (const r of sorted) {
+      const lane = stacked.find((l) => l.every((x) => end(x) < r.draw!.from || x.draw!.from > end(r)));
+      if (lane) lane.push(r);
+      else stacked.push([r]);
+    }
+    if (stacked.length === 0) stacked.push([]);
+    return { main: stacked, events: [] };
+  }
   const bars = spans.filter((r) => r.draw!.shape !== "diamond").sort((a, b) => (a.draw!.from < b.draw!.from ? -1 : 1));
   const diamonds = spans.filter((r) => r.draw!.shape === "diamond");
   const lanes: RunDto[][] = [];
