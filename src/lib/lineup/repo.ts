@@ -5,6 +5,7 @@ import { isGroupA } from "@/lib/audienceReport/targetGroups";
 import { outletBrand } from "./brand";
 import { addDays, daysBetween, drawSpan, effectiveEnd, findGaps, isHeadToHead } from "./dates";
 import { titleKey } from "./titles";
+import { featuredShortMap, resolveShortTitle } from "./shortTitle";
 import type { CtxRun, PlanContext, UploadPlan } from "./plan";
 import type {
   EventDto, GapDto, Genre, HolidayDto, LineupPayload, OutletDto, ParsedItem, ParsedLineup, RunDto, SlotDto, SourceDto, SourceKind, WorkDto,
@@ -281,7 +282,7 @@ const toSourceDto = (s: SourceRow): SourceDto => ({
 
 /** 화면용 — 기간 [from, to]와 겹치는 구간 + 그리기 값·맞대결·빈 주(서버 계산). */
 export async function loadLineup(from: string, to: string, today: string, canEdit: boolean): Promise<LineupPayload> {
-  const [outlets, slots, datedRuns, undatedRuns, holidays, events, sources] = await Promise.all([
+  const [outlets, slots, datedRuns, undatedRuns, holidays, events, sources, featuredRows] = await Promise.all([
     loadOutlets(),
     all<SlotRow>((a, b) => supabase.from("lineup_slots").select("id, outlet_id, name, days, start_minute, time_note, compare_block, default_genre, sort_order").is("archived_at", null).order("sort_order").range(a, b)),
     all<RunRow>((a, b) =>
@@ -292,7 +293,15 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
     supabase.from("public_holidays").select("holiday_date, name").gte("holiday_date", from).lte("holiday_date", to).order("holiday_date"),
     supabase.from("lineup_events").select("id, name, event_kind, start_date, end_date").is("archived_at", null).lte("start_date", to).gte("end_date", from),
     supabase.from("lineup_sources").select("id, source_kind, title, as_of, file_name, change_note, status, applied_at, applied_by, summary").eq("status", "applied").order("applied_at", { ascending: false }).limit(50),
+    // 주요 콘텐츠 관리의 표시명(줄임말) — 실패해도 라인업은 그대로(줄임말만 빠진다)
+    supabase.from("featured_content").select("display_name, programs(canonical_name)").not("display_name", "is", null),
   ]);
+  const featuredShort = featuredShortMap(
+    ((featuredRows.data ?? []) as unknown as { display_name: string | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]).flatMap((r) => {
+      const p = Array.isArray(r.programs) ? r.programs[0] : r.programs;
+      return r.display_name && p?.canonical_name ? [{ name: p.canonical_name, displayName: r.display_name }] : [];
+    })
+  );
   const runs = [...datedRuns, ...undatedRuns];
   const workIds = [...new Set(runs.map((r) => r.work_id).filter((x): x is string => !!x))];
   const works: WorkRow[] = [];
@@ -359,7 +368,7 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
     slots: slots.map((s) => ({ id: s.id, outletId: s.outlet_id, name: s.name, days: s.days, startMinute: s.start_minute, timeNote: s.time_note, compareBlock: s.compare_block, defaultGenre: s.default_genre, sortOrder: s.sort_order })),
     works: works.map(
       (w): WorkDto => ({
-        id: w.id, title: w.title, shortTitle: w.short_title, tentative: w.title_tentative, genre: w.genre, totalEpisodes: w.total_episodes, cast: w.cast_main ?? [],
+        id: w.id, title: w.title, shortTitle: w.short_title ?? resolveShortTitle(w.title, featuredShort), tentative: w.title_tentative, genre: w.genre, totalEpisodes: w.total_episodes, cast: w.cast_main ?? [],
         directors: w.directors ?? [], writers: w.writers ?? [], producers: w.producers ?? [], logline: w.logline, ottNote: w.ott_note, note: w.note,
       })
     ),
