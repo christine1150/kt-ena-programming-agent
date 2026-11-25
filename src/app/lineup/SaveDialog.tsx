@@ -121,12 +121,14 @@ export default function SaveDialog({
           </Field>
 
           <Field label="장르">
+            <button type="button" aria-pressed={q.genres.length === 0} onClick={() => set({ genres: [] })} className={chip(q.genres.length === 0)}>
+              전체
+            </button>
             {GENRES.map((g) => (
               <button key={g} type="button" aria-pressed={q.genres.includes(g)} onClick={() => set({ genres: toggle(q.genres, g) })} className={chip(q.genres.includes(g))}>
                 {GENRE_LABEL[g]}
               </button>
             ))}
-            {q.genres.length === 0 && <span className="text-[12px] text-zinc-600">전부</span>}
           </Field>
 
           <Field label="요일">

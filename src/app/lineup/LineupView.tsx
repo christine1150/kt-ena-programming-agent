@@ -197,6 +197,9 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
         </div>
         <div className="flex items-center gap-1" role="group" aria-label="장르">
           <span className="mr-0.5 text-[12px] text-zinc-600">장르</span>
+          <button type="button" aria-pressed={st.genres.length === 0} onClick={() => set({ genres: [] })} className={chip(st.genres.length === 0)}>
+            전체
+          </button>
           {GENRES.map((g) => (
             <button key={g} type="button" aria-pressed={st.genres.includes(g)} onClick={() => set({ genres: toggle(st.genres, g) })} className={chip(st.genres.includes(g))}>
               <span aria-hidden className="mr-1 inline-block size-2 rounded-sm align-middle" style={{ background: GENRE_VAR[g] }} />

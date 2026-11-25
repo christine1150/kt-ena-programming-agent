@@ -253,7 +253,8 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
     from: fromQ && /^\d{4}-\d{2}$/.test(fromQ) ? fromQ : defaultFrom,
     len: LENGTHS.includes(lenQ) ? lenQ : 8,
     channels: listOf(get("ch")).map((c) => c.toUpperCase()).filter((c) => /^[A-Z_]{2,12}$/.test(c)),
-    genres: genres.length ? genres : view === "compare" ? ["drama"] : [],
+    // genre=all = 장르 전체(경쟁 비교의 기본값 "드라마"와 구분하려고 따로 적는다)
+    genres: get("genre") === "all" ? [] : genres.length ? genres : view === "compare" ? ["drama"] : [],
     dows: listOf(get("dow")).map(Number).filter((d) => d >= 1 && d <= 7),
     density: densityQ === "compact" || densityQ === "comfy" ? densityQ : view === "compare" ? "compact" : "comfy",
     paper: get("paper") === "A3" ? "A3" : "A4",
@@ -268,6 +269,7 @@ export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string): stri
   if (q.len && q.len !== 8) s.set("len", String(q.len));
   if (q.channels?.length) s.set("ch", q.channels.join(","));
   if (q.genres?.length) s.set("genre", q.genres.join(","));
+  else if (q.view === "compare") s.set("genre", "all"); // 경쟁 비교는 기본이 드라마라 '전체'를 주소에 남긴다
   if (q.dows?.length) s.set("dow", q.dows.join(","));
   if (q.density && q.density !== (q.view === "compare" ? "compact" : "comfy")) s.set("density", q.density);
   if (q.paper && q.paper !== "A4") s.set("paper", q.paper);
