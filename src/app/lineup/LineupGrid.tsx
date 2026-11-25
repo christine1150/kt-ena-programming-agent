@@ -21,12 +21,14 @@ interface Props {
   focusIds: Set<string> | null;
   /** 인쇄·PDF용(/lineup/print) — 높이 제한·스크롤 없이 그리고, 제목이 다 안 들어간 막대는 번호를 달아 표 아래 각주로 풀네임을 쓴다. */
   printMode?: boolean;
+  /** 막대 음영 기준 — genre: 장르색(KT ENA 보기), outlet: 방송사 로고색(경쟁 비교, 사용자 요청 2026-11-25). */
+  colorBy?: "genre" | "outlet";
 }
 
 const MONTH_NAMES = ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"];
 const FONT = 12;
 
-export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth, selectedId, onSelect, focusIds, printMode = false }: Props) {
+export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth, selectedId, onSelect, focusIds, printMode = false, colorBy = "genre" }: Props) {
   const totalDays = dayIndex(data.from, data.to) + 1;
   const weeks = Math.ceil(totalDays / 7);
   const minTimeline = weeks * LAYOUT.minWeekPx;
@@ -189,7 +191,7 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                     <th colSpan={2} className="border-b border-zinc-200 bg-zinc-50 p-0 text-left">
                       <span className="sticky left-0 flex items-center gap-2 px-3 py-1 text-[13px] font-bold text-zinc-900">
                         <span aria-hidden className="inline-block h-3.5 w-1 rounded-sm ring-1 ring-black/10" style={{ background: row.color ?? "var(--border-control)" }} />
-                        {row.label}
+                        <OutletMark logo={row.outlet?.logo ?? null} name={row.label} height={16} />
                       </span>
                     </th>
                   </tr>
@@ -210,7 +212,10 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                         <span className="inline-flex w-9 shrink-0 justify-center rounded bg-zinc-100 py-0.5 text-[11px] font-semibold text-zinc-700">{row.chip}</span>
                       )}
                       <span className="min-w-0 flex-1">
-                        <span className={`block truncate ${row.emphasis ? "font-bold text-zinc-900" : "font-medium text-zinc-800"}`}>{row.label}</span>
+                        {/* 경쟁 비교(요일 칩이 있는 줄)는 방송사 로고로 구분한다(그림이 없으면 이름 글자). */}
+                        <span className={`block truncate ${row.emphasis ? "font-bold text-zinc-900" : "font-medium text-zinc-800"}`}>
+                          {row.chip !== undefined ? <OutletMark logo={row.outlet?.logo ?? null} name={row.label} height={density === "compact" ? 14 : 16} /> : row.label}
+                        </span>
                         {row.sublabel && density === "comfy" && <span className="block truncate text-[11px] text-zinc-600">{row.sublabel}</span>}
                       </span>
                       {row.sublabel && density === "compact" && <span className="shrink-0 text-[11px] text-zinc-600 tabular-nums">{row.sublabel}</span>}
@@ -226,7 +231,11 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                     )}
                     {lanes.main.map((lane, li) => (
                       <div key={li} className="relative" style={{ height: L.row }}>
-                        {row.slot && li === 0 && (gapsBySlot.get(row.slot.id) ?? []).map((g) => <Gap key={g.from} gap={g} P={P} dayPx={dayPx} />)}
+                        {row.slot &&
+                          li === 0 &&
+                          (gapsBySlot.get(row.slot.id) ?? []).map((g) => (
+                            <Gap key={g.from} gap={g} P={P} dayPx={dayPx} alert={row.outlet?.side === "own" && row.slot?.defaultGenre === "drama"} />
+                          ))}
                         {lane.map((r, i) => {
                           const nextStart = lane[i + 1]?.draw?.from ?? null;
                           const work = r.workId ? works.get(r.workId) : undefined;
@@ -249,6 +258,7 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
                               dim={!!focusIds && !focusIds.has(r.id)}
                               onSelect={onSelect}
                               footnote={footnotes.get(r.id)}
+                              tone={colorBy === "outlet" ? row.outlet?.color ?? null : null}
                             />
                           );
                         })}
@@ -288,10 +298,10 @@ export default function LineupGrid({ data, rows, runsBySlot, density, labelWidth
   );
 }
 
-function fillStyle(genre: string, run: RunDto, dim: boolean) {
-  const c = GENRE_VAR[genre as keyof typeof GENRE_VAR];
+function fillStyle(genre: string, run: RunDto, dim: boolean, tone: string | null) {
+  const c = tone ?? GENRE_VAR[genre as keyof typeof GENRE_VAR];
   const est = run.draw?.estimatedFrom;
-  const base = `color-mix(in srgb, ${c} ${dim ? 5 : 14}%, white)`;
+  const base = `color-mix(in srgb, ${c} ${dim ? 5 : 16}%, white)`;
   return {
     background:
       est && run.draw
@@ -303,9 +313,9 @@ function fillStyle(genre: string, run: RunDto, dim: boolean) {
 
 function Bar(props: {
   run: RunDto; work: WorkDto | undefined; slot: SlotDto | undefined; data: LineupPayload; P: (d: string) => number; dayPx: number;
-  barH: number; rowH: number; density: Density; nextStart: string | null; selected: boolean; dim: boolean; onSelect: (id: string | null) => void; footnote?: number;
+  barH: number; rowH: number; density: Density; nextStart: string | null; selected: boolean; dim: boolean; onSelect: (id: string | null) => void; footnote?: number; tone?: string | null;
 }) {
-  const { run, work, slot, data, P, dayPx, barH, rowH, density, nextStart, selected, dim, onSelect, footnote } = props;
+  const { run, work, slot, data, P, dayPx, barH, rowH, density, nextStart, selected, dim, onSelect, footnote, tone = null } = props;
   const d = run.draw!;
   const startsBefore = d.from < data.from;
   const left = P(d.from);
@@ -342,7 +352,7 @@ function Bar(props: {
 
   if (isBracket) {
     // 월 단위 정밀도 — 막대 대신 범위 괄호(├─┤) + '월 단위' + 원문 기간.
-    const c = GENRE_VAR[genre];
+    const c = tone ?? GENRE_VAR[genre];
     return (
       <button
         type="button"
@@ -369,7 +379,7 @@ function Bar(props: {
       : run.runKind === "hiatus"
         ? { background: "repeating-linear-gradient(135deg, #fff 0 4px, #e4e4e7 4px 6px)", borderColor: "var(--border-control)" }
         : { background: "#fff", borderColor: "var(--border-control)" }
-    : fillStyle(genre, run, dim);
+    : fillStyle(genre, run, dim, tone);
   return (
     <>
       <button
@@ -391,7 +401,7 @@ function Bar(props: {
           ["--est-at" as string]: estAt,
         }}
       >
-        {!isBox && <span aria-hidden className="w-1 shrink-0" style={{ background: dim ? "transparent" : GENRE_VAR[genre] }} />}
+        {!isBox && <span aria-hidden className="w-1 shrink-0" style={{ background: dim ? "transparent" : tone ?? GENRE_VAR[genre] }} />}
         <span className={`flex min-w-0 flex-1 flex-col justify-center px-1.5 ${startsBefore ? "pl-1" : ""}`}>
           {(footnote !== undefined || (mode !== "outside" && mode !== "mark")) && (
             <span className="flex min-w-0 items-center gap-1">
@@ -464,13 +474,30 @@ function Diamonds(props: { run: RunDto; work: WorkDto | undefined; slot: SlotDto
   );
 }
 
-function Gap({ gap, P, dayPx }: { gap: GapDto; P: (d: string) => number; dayPx: number }) {
+/** 계산된 빈 주 — 'N주 비어 있음'. 자사 드라마 자리가 비면 붉은 글자·밑줄로 눈에 띄게(사용자 요청 2026-11-25). */
+function Gap({ gap, P, dayPx, alert }: { gap: GapDto; P: (d: string) => number; dayPx: number; alert: boolean }) {
   const left = P(gap.from);
   const right = P(addDaysIso(gap.to, 1));
   const px = (dayIndex(gap.from, gap.to) + 1) * dayPx;
+  const text = `${gap.weeks}주 비어 있음`;
   return (
-    <span aria-label={`비어 있음 ${gap.weeks}주`} className="absolute bottom-1 flex justify-center border-b border-dotted border-zinc-500" style={{ left: `${left}%`, width: `${right - left}%` }}>
-      {px > 64 && <span className="text-[11px] leading-4 text-zinc-600">비어 있음 {gap.weeks}주</span>}
+    <span
+      aria-label={text}
+      title={`${gap.from} ~ ${gap.to} ${text}`}
+      className={`absolute bottom-1 flex justify-center border-b border-dotted ${alert ? "border-red-600" : "border-zinc-500"}`}
+      style={{ left: `${left}%`, width: `${right - left}%` }}
+    >
+      {px > 56 && <span className={`text-[11px] leading-4 ${alert ? "font-semibold text-red-700" : "text-zinc-600"}`}>{text}</span>}
     </span>
+  );
+}
+
+/** 방송사 로고(높이 고정, 원본 비율). 그림을 못 읽으면 이름 글자로 바꾼다. */
+function OutletMark({ logo, name, height }: { logo: string | null; name: string; height: number }) {
+  const [broken, setBroken] = useState(false);
+  if (!logo || broken) return <>{name}</>;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- 작은 정적 로고(public)라 next/image 최적화가 필요 없다
+    <img src={logo} alt={name} title={name} onError={() => setBroken(true)} className="inline-block w-auto max-w-[72px] object-contain align-middle print:[print-color-adjust:exact]" style={{ height }} />
   );
 }

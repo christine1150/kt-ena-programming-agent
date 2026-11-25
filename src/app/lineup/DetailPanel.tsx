@@ -4,7 +4,7 @@
 // 같은 시기 맞대결(서버 계산)·출처·변경 이력. 관리자(lineup_edit)만 같은 패널 안에서 고치기·보관.
 import { useEffect, useState } from "react";
 import type { LineupPayload, RunDto } from "@/lib/lineup/types";
-import { episodeText, GENRE_LABEL, GENRE_VAR, KIND_LABEL, periodText, runGenre, runTitle, slotTime, STATUS_LABEL, dowLabel } from "@/lib/lineup/viewModel";
+import { episodeText, GENRE_LABEL, GENRE_VAR, KIND_LABEL, periodText, runGenre, runTitle, slotTime, STATUS_LABEL, dowLabel, workNote } from "@/lib/lineup/viewModel";
 
 interface Change { id: number; action: string; diff: Record<string, { before: unknown; after: unknown }>; actor: string; at: string }
 const FIELD_KO: Record<string, string> = {
@@ -19,8 +19,8 @@ export default function DetailPanel({ data, run, onClose, onSelect, onSaved }: {
   const work = run.workId ? works.get(run.workId) : undefined;
   const slot = slots.get(run.slotId);
   const outlet = slot ? outlets.get(slot.outletId) : undefined;
-  const source = data.sources.find((s) => s.id === run.sourceId);
   const genre = runGenre(run, work, slot);
+  const note = workNote(work?.note);
   const [changes, setChanges] = useState<Change[] | null>(null);
   const [editing, setEditing] = useState(false);
 
@@ -101,10 +101,10 @@ export default function DetailPanel({ data, run, onClose, onSelect, onSaved }: {
               <dd>{[work.producers.join(", "), work.directors.join(", "), work.writers.join(", ")].filter(Boolean).join(" / ")}</dd>
             </>
           )}
-          {work?.note && (
+          {note && (
             <>
-              <dt className="text-zinc-600">메모</dt>
-              <dd className="whitespace-pre-wrap">{work.note}</dd>
+              <dt className="text-zinc-600">{note.label}</dt>
+              <dd className="whitespace-pre-wrap">{note.text}</dd>
             </>
           )}
           {work?.logline && (
@@ -154,20 +154,10 @@ export default function DetailPanel({ data, run, onClose, onSelect, onSaved }: {
               })}
             </ul>
           )}
-          <p className="mt-1 text-[11px] text-zinc-600">기준: 같은 요일이 겹치고 시작 시각 차이 60분 이내, 실제(또는 회차로 추정한) 방송 기간이 겹침.</p>
         </section>
 
-        <section>
-          <h3 className="mb-1.5 text-[13px] font-bold text-zinc-900">출처</h3>
-          <p className="text-[12px] text-zinc-700">
-            {source ? `${source.title} · 기준일 ${source.asOf}` : "자료 정보 없음"}
-            {run.sourceCell && <span className="block text-zinc-600">위치 {run.sourceCell}</span>}
-          </p>
-          {run.sourceText && <pre className="mt-1 max-h-24 overflow-auto rounded bg-zinc-50 px-2 py-1 text-[11px] whitespace-pre-wrap text-zinc-700">{run.sourceText}</pre>}
-        </section>
-
-        <section>
-          <h3 className="mb-1.5 text-[13px] font-bold text-zinc-900">변경 이력</h3>
+        {/* 사용자 지시(2026-11-25): 맞대결 기준 문구·출처 칸·'변경 이력' 제목은 빼고, 등록·수정 일시 목록만 둔다. */}
+        <section className="border-t border-zinc-100 pt-3">
           {changes === null ? (
             <p className="text-[12px] text-zinc-600">불러오는 중…</p>
           ) : changes.length === 0 ? (

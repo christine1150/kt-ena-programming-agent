@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     const data = await loadLineup(from, to, today, false);
     const printedAt = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 16).replace("T", " ") + " KST";
     const buf = await buildLineupWorkbook(data, q, printedAt);
-    const viewName = q.view === "compare" ? "경쟁비교" : q.view === "list" ? "목록" : "자사";
+    const viewName = q.view === "compare" ? "경쟁비교" : q.view === "list" ? "목록" : "KT_ENA";
     const name = encodeURIComponent(`라인업_${viewName}_${from.slice(0, 7)}~${to.slice(0, 7)}.xlsx`);
     return new NextResponse(new Uint8Array(buf), {
       headers: {

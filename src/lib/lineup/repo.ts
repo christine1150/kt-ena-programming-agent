@@ -2,6 +2,7 @@
 // 반영(commit)은 묶음 넣기로 호출 수를 줄인다. 모든 변경은 DB 트리거가 lineup_changes에 남긴다(바꾼 사람 = updated_by).
 import { supabase } from "@/lib/supabase";
 import { isGroupA } from "@/lib/audienceReport/targetGroups";
+import { outletBrand } from "./brand";
 import { addDays, daysBetween, drawSpan, effectiveEnd, findGaps, isHeadToHead } from "./dates";
 import { titleKey } from "./titles";
 import type { CtxRun, PlanContext, UploadPlan } from "./plan";
@@ -36,11 +37,11 @@ type WorkRow = {
   id: string; outlet_id: string; title: string; title_key: string; aliases: string[]; short_title: string | null; title_tentative: boolean; genre: Genre;
   total_episodes: number | null; cast_main: string[]; directors: string[]; writers: string[]; producers: string[]; logline: string | null; ott_note: string | null; note: string | null;
 };
-type OutletRow = { id: string; code: string; display_name: string; side: "own" | "rival"; sort_order: number; aliases: string[]; channels: { theme_color: string | null } | null };
+type OutletRow = { id: string; code: string; display_name: string; side: "own" | "rival"; sort_order: number; aliases: string[]; channels: { theme_color: string | null; logo_path: string | null } | null };
 type SourceRow = { id: string; source_kind: SourceKind; title: string; as_of: string; file_name: string | null; change_note: string | null; status: "applied" | "rolled_back"; applied_at: string; applied_by: string; summary: Record<string, unknown> };
 
 export async function loadOutlets(): Promise<OutletRow[]> {
-  const { data, error } = await supabase.from("lineup_outlets").select("id, code, display_name, side, sort_order, aliases, channels(theme_color)").eq("active", true).order("sort_order");
+  const { data, error } = await supabase.from("lineup_outlets").select("id, code, display_name, side, sort_order, aliases, channels(theme_color, logo_path)").eq("active", true).order("sort_order");
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as OutletRow[];
 }
@@ -252,15 +253,19 @@ export async function rollbackSource(sourceId: string, actor: string) {
   return { archived, restored };
 }
 
-const toOutletDto = (o: OutletRow): OutletDto => ({
-  id: o.id,
-  code: o.code,
-  name: o.display_name,
-  side: o.side,
-  color: o.channels?.theme_color ?? null,
-  group: o.side === "own" ? (safeGroupA(o.code) ? "A" : "B") : null,
-  sortOrder: o.sort_order,
-});
+const toOutletDto = (o: OutletRow): OutletDto => {
+  const brand = outletBrand(o.code, o.side, { themeColor: o.channels?.theme_color ?? null, logoPath: o.channels?.logo_path ?? null });
+  return {
+    id: o.id,
+    code: o.code,
+    name: o.display_name,
+    side: o.side,
+    color: brand.color,
+    logo: brand.logo,
+    group: o.side === "own" ? (safeGroupA(o.code) ? "A" : "B") : null,
+    sortOrder: o.sort_order,
+  };
+};
 const safeGroupA = (code: string) => {
   try {
     return isGroupA(code);

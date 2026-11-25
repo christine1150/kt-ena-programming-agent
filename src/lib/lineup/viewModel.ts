@@ -5,8 +5,13 @@ export type ViewMode = "own" | "compare" | "list";
 export type Density = "comfy" | "compact";
 
 export const GENRE_LABEL: Record<Genre, string> = { drama: "드라마", variety: "예능", business: "사업형", other: "기타" };
-/** 장르 = 채움색(자사·타사 같은 문법). 앱 차트 토큰만 쓴다(docs/lineup/LINEUP_DESIGN.md §4). */
-export const GENRE_VAR: Record<Genre, string> = { drama: "var(--chart-4)", variety: "var(--chart-5)", business: "var(--chart-2)", other: "var(--chart-3)" };
+/**
+ * 장르 = 채움색(막대는 이 색을 옅게 깐 음영 + 왼쪽 띠·테두리). 2026-11-25 사용자 지시: 앱 차트색(보라·청록)이 안 예뻐서
+ * 편성센터 라인업의 드라마 분홍(#E0367F)·예능 남색(#3830E0)을 쓰고, 사업형·기타는 두 색과 어울리는 호박색·모래색으로.
+ * 회색은 여전히 '작품 정보 없음'(미정·휴방·수급) 전용이다.
+ */
+export const GENRE_HEX: Record<Genre, string> = { drama: "#e0367f", variety: "#3830e0", business: "#e8930c", other: "#a07c55" };
+export const GENRE_VAR: Record<Genre, string> = GENRE_HEX;
 export const BLOCK_LABEL: Record<CompareBlock, string> = { mon_tue: "월화", wed_thu: "수목", weekend: "주말 (금·토·일)", other: "그 밖" };
 export const BLOCK_ORDER: CompareBlock[] = ["mon_tue", "wed_thu", "weekend", "other"];
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
@@ -181,7 +186,7 @@ export function buildCompareRows(data: LineupPayload, f: Filters): { rows: Row[]
     rows.push({ key: `b:${block}`, kind: "group", label: BLOCK_LABEL[block] });
     if (own.length === 0) {
       const o = data.outlets.find((x) => x.code === ownCodes[0]);
-      rows.push({ key: `e:${block}`, kind: "slot", label: o?.name ?? "자사", sublabel: "-", emphasis: true, empty: true, color: o?.color ?? null });
+      rows.push({ key: `e:${block}`, kind: "slot", label: o?.name ?? "자사", sublabel: "-", outlet: o, emphasis: true, empty: true, color: o?.color ?? null });
     }
     for (const s of own) {
       const o = outlets.get(s.outletId);
@@ -189,7 +194,7 @@ export function buildCompareRows(data: LineupPayload, f: Filters): { rows: Row[]
     }
     for (const s of rival) {
       const o = outlets.get(s.outletId);
-      rows.push({ key: `s:${s.id}`, kind: "slot", label: o?.name ?? "", sublabel: slotTime(s), chip: dowLabel(s.days), outlet: o, slot: s });
+      rows.push({ key: `s:${s.id}`, kind: "slot", label: o?.name ?? "", sublabel: slotTime(s), chip: dowLabel(s.days), outlet: o, slot: s, color: o?.color ?? null });
     }
   }
   return { rows, runsBySlot };
@@ -292,10 +297,18 @@ export function lastMonth(today: string): string {
 
 /** 조건 한 줄 요약(인쇄 머리·엑셀 제목) — 채널 이름은 호출부가 코드→이름으로 바꿔 넘긴다. */
 export function conditionText(q: LineupQuery, channelNames: string[]): string {
-  const viewName = q.view === "compare" ? "경쟁 비교" : q.view === "list" ? "목록" : "자사 라인업";
+  const viewName = q.view === "compare" ? "경쟁 비교" : q.view === "list" ? "목록" : "KT ENA";
   const parts = [viewName];
   parts.push(q.view === "compare" ? `기준 채널 ${channelNames.length ? channelNames.join("·") : "ENA"}` : channelNames.length ? `채널 ${channelNames.join("·")}` : "라인업 있는 채널 전부");
   if (q.genres.length) parts.push(`장르 ${q.genres.map((g) => GENRE_LABEL[g]).join("·")}`);
   if (q.dows.length) parts.push(`요일 ${dowLabel([...q.dows].sort())}`);
   return parts.join(" · ");
+}
+
+/** 작품 메모 표시 — 업로드가 남긴 '제작진(원문): 연출/작가'는 '제작 : 연출 / 작가'로(사용자 지시 2026-11-25). 그 밖은 '메모'. */
+export function workNote(note: string | null | undefined): { label: string; text: string } | null {
+  if (!note?.trim()) return null;
+  const m = note.match(/^제작진\(원문\):\s*([\s\S]*)$/);
+  if (m) return { label: "제작", text: m[1].replace(/\s*\/\s*/g, " / ").trim() };
+  return { label: "메모", text: note.trim() };
 }

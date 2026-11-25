@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     if (!(file instanceof File)) return bad("올릴 엑셀 파일을 선택해 주세요.");
     if (!/\.xlsx$/i.test(file.name)) return bad("엑셀 파일(.xlsx)만 올릴 수 있습니다.");
     if (file.size > MAX_BYTES) return bad("파일이 너무 큽니다(5MB 이하).");
-    if (kind !== "own" && kind !== "industry") return bad("양식을 골라 주세요(자사 라인업 / 업계 종합본).");
+    if (kind !== "own" && kind !== "industry") return bad("양식을 골라 주세요(KT ENA 라인업 / 업계 종합본).");
     const buf = Buffer.from(await file.arrayBuffer());
     if (buf.subarray(0, 8).toString("latin1").startsWith("SCDSA")) return bad("문서보안(DRM)이 걸린 파일입니다. 보안을 해제한 뒤 올려 주세요.");
 

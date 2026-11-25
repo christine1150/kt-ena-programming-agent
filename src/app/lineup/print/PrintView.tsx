@@ -85,7 +85,7 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
           <>
             {q.view !== "list" && (
               <div className="mb-1.5">
-                <Legend full />
+                <Legend full byOutlet={q.view === "compare"} />
               </div>
             )}
             {q.view === "list" ? (
@@ -103,6 +103,7 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
                 onSelect={() => {}}
                 focusIds={null}
                 printMode
+                colorBy={q.view === "compare" ? "outlet" : "genre"}
               />
             )}
           </>

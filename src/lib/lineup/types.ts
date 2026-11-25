@@ -77,7 +77,8 @@ export interface OutletDto {
   code: string;
   name: string;
   side: "own" | "rival";
-  color: string | null; // 자사 채널 브랜드색(줄 머리 띠에만)
+  color: string | null; // 로고색 — 자사는 channels.theme_color, 타사는 brand.ts(경쟁 비교 막대 음영·줄 머리 띠)
+  logo: string | null; // 로고 그림 경로(public/channel-logos · public/competitor-logos)
   group: "A" | "B" | null; // 자사 채널 묶음
   sortOrder: number;
 }

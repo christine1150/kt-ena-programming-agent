@@ -56,7 +56,7 @@ export default function SaveDialog({
           <Field label="보기">
             {(
               [
-                ["own", "자사 라인업"],
+                ["own", "KT ENA"],
                 ["compare", "경쟁 비교"],
                 ["list", "목록"],
               ] as [ViewMode, string][]

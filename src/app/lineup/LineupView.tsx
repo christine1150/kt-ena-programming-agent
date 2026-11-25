@@ -1,6 +1,6 @@
 "use client";
 
-// 라인업 화면(/lineup) — 보기 3개: 자사 라인업(기본) · 경쟁 비교 · 목록. 상태는 모두 주소에 남는다(링크로 공유).
+// 라인업 화면(/lineup) — 보기 3개: KT ENA(자사 라인업, 기본) · 경쟁 비교 · 목록. 상태는 모두 주소에 남는다(링크로 공유).
 // 대외비: 로그인 사용자에게만 보이고(proxy.ts + API 검사), 인쇄 머리에 '대외비'와 출력 시각을 찍는다.
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -113,7 +113,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
         <div role="tablist" aria-label="보기" className="inline-flex rounded-lg border border-zinc-300 p-0.5">
           {(
             [
-              ["own", "자사 라인업"],
+              ["own", "KT ENA"],
               ["compare", "경쟁 비교"],
               ["list", "목록"],
             ] as [ViewMode, string][]
@@ -242,7 +242,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
                 );
               })}
         </p>
-        {st.view !== "list" && <Legend />}
+        {st.view !== "list" && <Legend byOutlet={st.view === "compare"} />}
       </div>
 
       {error && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800">{error}</p>}
@@ -263,6 +263,7 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
               selectedId={st.sel}
               onSelect={(id) => set({ sel: id })}
               focusIds={focusIds}
+              colorBy={st.view === "compare" ? "outlet" : "genre"}
             />
           )}
           {st.view === "own" && grid.hiddenChannels.length > 0 && (
@@ -286,15 +287,16 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
 }
 
 /** 범례 2단(기본 7개 + 더 보기). full이면(인쇄) 모두 펼치고 단추를 숨긴다. */
-export function Legend({ full = false }: { full?: boolean }) {
+export function Legend({ full = false, byOutlet = false }: { full?: boolean; byOutlet?: boolean }) {
   const [open, setOpen] = useState(false);
   const more = full || open;
   const setMore = setOpen;
   const sw = (style: React.CSSProperties) => <span aria-hidden className="inline-block h-3 w-6 rounded-[3px] align-middle" style={style} />;
-  const tint = (v: string) => `color-mix(in srgb, ${v} 14%, white)`;
+  const tint = (v: string) => `color-mix(in srgb, ${v} 16%, white)`;
   return (
     <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-zinc-700" aria-label="범례">
-      {(["drama", "variety", "business"] as Genre[]).map((g) => (
+      {byOutlet && <li className="font-medium text-zinc-800">막대 색 = 방송사 로고색</li>}
+      {!byOutlet && (["drama", "variety", "business"] as Genre[]).map((g) => (
         <li key={g} className="flex items-center gap-1">
           {sw({ background: tint(GENRE_VAR[g]), border: `1px solid ${GENRE_VAR[g]}`, borderLeftWidth: 4 })}
           {GENRE_LABEL[g]}
@@ -318,7 +320,7 @@ export function Legend({ full = false }: { full?: boolean }) {
             <span aria-hidden className="inline-block size-2.5 rounded-full bg-zinc-700" />월 1회
           </li>
           <li className="flex items-center gap-1">
-            <span aria-hidden className="inline-block h-2.5 w-6 border-b border-dotted border-zinc-500" />비어 있음(계산)
+            <span aria-hidden className="inline-block h-2.5 w-6 border-b border-dotted border-red-600" /><span className="text-red-700">N주 비어 있음</span>(자사 드라마 빈 자리, 계산)
           </li>
           <li>≈ 주 단위·추정 날짜</li>
           <li>◀ 앞에서 이어짐</li>

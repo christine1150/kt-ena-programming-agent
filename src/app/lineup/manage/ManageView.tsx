@@ -34,7 +34,7 @@ interface Source { id: string; kind: string; title: string; asOf: string; fileNa
 interface Change { id: number; entity: string; entityId: string; action: string; diff: Record<string, { before: unknown; after: unknown }>; actor: string; at: string }
 
 const KIND_KO: Record<string, string> = { create: "새로 생김", update: "바뀜", skip: "건너뜀", review: "확인 필요" };
-const SOURCE_KO: Record<string, string> = { own_xlsx: "자사 라인업", industry_xlsx: "업계 종합본", manual: "직접 수정" };
+const SOURCE_KO: Record<string, string> = { own_xlsx: "KT ENA 라인업", industry_xlsx: "업계 종합본", manual: "직접 수정" };
 const fmt = (v: unknown) => (v === null || v === undefined || v === "" ? "없음" : Array.isArray(v) ? v.join(", ") : String(v));
 
 export default function ManageView({ ownChannels }: { ownChannels: { code: string; name: string }[] }) {
@@ -132,7 +132,7 @@ export default function ManageView({ ownChannels }: { ownChannels: { code: strin
           <label className="block">
             <span className="mb-1 block text-[12px] text-zinc-600">양식</span>
             <select className={input} value={kind} onChange={(e) => { setKind(e.target.value as "own" | "industry"); setPreview(null); }}>
-              <option value="own">자사 라인업 양식(편성센터)</option>
+              <option value="own">KT ENA 라인업 양식(편성센터)</option>
               <option value="industry">업계 드라마 라인업 종합본</option>
             </select>
           </label>
