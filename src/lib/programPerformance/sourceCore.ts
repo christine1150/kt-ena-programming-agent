@@ -301,10 +301,11 @@ export async function loadCompetitorRows(db: PerfDb, memberKeys: string[], ownNa
   const siblingKeys = new Set<string>();
   if (subtitled.length) {
     const cand = [...new Set(subtitled.map((r) => stripSlotPrefix(normalizeProgramKey(String(r.program_name ?? "")))))];
-    for (let i = 0; i < cand.length; i += 100) {
-      const { data } = await db.from("program_identity").select("key, own_channels").in("key", cand.slice(i, i + 100));
-      // 자사 채널이 따로 편성한 작품만 '다른 작품'으로 본다(부제 표기는 경쟁 채널에만 있고, '미리보기'는 같은 작품의 예고)
-      for (const x of (data ?? []) as { key: string; own_channels: string[] | null }[]) if ((x.own_channels ?? []).length > 0 && !/미리보기$/.test(x.key)) siblingKeys.add(x.key);
+    for (let i = 0; i < cand.length; i += 40) {
+      const { data } = await db.from("program_identity").select("key").in("key", cand.slice(i, i + 40));
+      // 2026-11-27: 작품 식별 표에 따로 있는 이름은 묶음 판정(사람 별칭 + 자동 묶기: 한 회 길이·스페셜 형식 확인)이 이미 '다른 묶음'으로 둔 것이다.
+      // 여기서 다시 끌어오면 스페셜·프리퀄·회차 부제가 본편 성과에 섞인다(신인감독 김연경 시즌2 사용자 지적) — 식별 표에 없는 표기만 부제로 받는다.
+      for (const x of (data ?? []) as { key: string }[]) siblingKeys.add(x.key);
     }
   }
   // 별개 작품(스핀오프·시리즈, 예: 니돈내산 → 독박투어4)을 부제로 잘못 합치지 않게: 부제 표기는 방영 수가 적고(회차 하나의 재방 수준),

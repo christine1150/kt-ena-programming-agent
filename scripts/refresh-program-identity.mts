@@ -26,5 +26,5 @@ if (error) {
 }
 const after = await latestIdentityDate();
 const auto = await applyAutoAliases(db);
-console.log(`이름 변형 자동 묶기 ${auto.added.length}건 추가(체인 정리 ${auto.repointed}건)`);
+console.log(`이름 변형 자동 묶기 ${auto.added.length}건 추가·${auto.removed.length}건 해제(별칭 옮김 ${auto.repointed}건)`);
 console.log(`작품 식별 갱신 완료 (${((Date.now() - t0) / 1000).toFixed(1)}초) 최신 방영일 ${before ?? "-"} → ${after ?? "-"} 결과 ${JSON.stringify(data)}`);
