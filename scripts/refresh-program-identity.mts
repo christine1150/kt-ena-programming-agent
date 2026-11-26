@@ -2,6 +2,7 @@
 // 신작이 검색·프로그램 성과 목록에 나오려면 닐슨 자료가 쌓인 뒤 이 함수가 다시 돌아야 한다.
 // 실행: npx tsx --env-file=.env scripts/refresh-program-identity.mts  (예약 실행은 .github/workflows/refresh-program-identity.yml)
 import { createClient } from "@supabase/supabase-js";
+import { applyAutoAliases } from "../src/lib/purchaseSim/autoAlias";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -24,4 +25,6 @@ if (error) {
   process.exit(1);
 }
 const after = await latestIdentityDate();
+const auto = await applyAutoAliases(db);
+console.log(`이름 변형 자동 묶기 ${auto.added.length}건 추가(체인 정리 ${auto.repointed}건)`);
 console.log(`작품 식별 갱신 완료 (${((Date.now() - t0) / 1000).toFixed(1)}초) 최신 방영일 ${before ?? "-"} → ${after ?? "-"} 결과 ${JSON.stringify(data)}`);

@@ -8,6 +8,7 @@ import { computeContentFit, computeSlotComparison, type ContentFitAiring } from 
 import { matchPlanRow, namesCompatible, normalizePlanRows, planNameKey } from "../src/lib/idealSchedule/planEpisodes";
 import { cleanDisplayName, hasSeasonSibling, trailingSeasonOf, workDisplayName } from "../src/lib/purchaseSim/displayName";
 import { allFirstRunRuleFor } from "../src/lib/broadcastPattern/followRule";
+import { findAutoAliases, type AliasSourceRow } from "../src/lib/purchaseSim/autoAlias";
 import { originalCompareOf, type OriginalSeries } from "../src/lib/programPerformance/originalCompare";
 import { channelDailyMean, channelLineOf, classifyWork, dedupeAirings, describeRow, directionOfRatio, episodeSeries, extremesOf, extremesTextOf, matchesAiringFilter, ratioOf, insightsOf, shareStat, slotLinesOf, slotPartsOf, slotTextOf, trendTextOf, verdictOf, relText, assessmentOf, whereLineOf, shareLineOf, seriesTrendText, pickExtremes, slotLeadOf, periodTrendOf, type WorkAiring } from "../src/lib/programPerformance/metrics";
 import { loadProgramPerformanceWith } from "../src/lib/programPerformance/sourceCore";
@@ -551,6 +552,27 @@ async function main() {
     check("표시 이름: 띄어쓰기 없는 대표 표기는 같은 키의 띄어 쓴 표기로", workDisplayName("현무카세", [{ key: "현무카세", display_name: "현무카세" }, { key: "현무카세", display_name: "현무 카세 <재>" }]) === "현무 카세");
     check("시즌 번호 표시: 다른 시즌이 따로 있는 '크래시2'는 '크래시 시즌2', 번호 없는 '크래시'는 지정대로 '크래시 시즌1'", workDisplayName("크래시2", [{ key: "크래시2", display_name: "크래시2" }], { numberedSeason: hasSeasonSibling("크래시2", ["크래시", "크래시2"]) }) === "크래시 시즌2" && workDisplayName("크래시", [{ key: "크래시", display_name: "크래시" }]) === "크래시 시즌1");
     check("시즌 번호 표시: 형제 시즌이 없거나(서치9) 일차 번호(DAY1)·편 번호 묶음이면 그대로", !hasSeasonSibling("서치9", ["서치9"]) && trailingSeasonOf("2025KGMAWITHIMBANKDAY1") === null && trailingSeasonOf("싱싱장터라이브바른상회2") === null && trailingSeasonOf("심장이뛴다385") === null);
+    {
+      // 이름 변형 자동 묶기(2026-11-27) — 신인감독 김연경 시즌2 사례와 잘못 묶지 말아야 할 경우
+      const R = (key: string, n: number, d0: string, d1: string, ch = ["MBC"], own: string[] = []): AliasSourceRow => ({ key, group_key: key, own_channels: own, comp_channels: ch, airings_total: n, first_date: d0, last_date: d1 });
+      const rows = [
+        R("신인감독김연경", 160, "2025-09-28", "2026-10-05"), R("신인감독김연경2", 48, "2026-10-11", "2026-11-24"),
+        R("신인감독김연경2스페셜", 15, "2026-10-11", "2026-11-22"), R("신인감독김연경2복수혈전", 1, "2026-10-24", "2026-10-24"),
+        R("신인감독김연경다시쓰는스카우팅리포트", 17, "2025-12-17", "2026-01-01"), R("추석특집전지적참견시점", 11, "2025-10-05", "2025-10-08"),
+        R("전지적참견시점", 4282, "2025-01-01", "2026-11-25"), R("서인영의유행꼰대", 69, "2026-10-02", "2026-11-25"), R("서인형의유행꼰대", 1, "2026-10-14", "2026-10-14"),
+        R("연애의참견", 129, "2025-01-01", "2026-02-04"), R("연애의발견", 59, "2025-11-24", "2026-07-07"),
+        R("나는SOLO", 3102, "2025-01-01", "2026-11-25", [], ["ENA"]), R("나는SOLO그후사랑은계속된다", 2118, "2025-01-01", "2026-11-25", [], ["ENA"]),
+        R("MBN스페셜무비", 5, "2025-01-01", "2026-11-01", ["MBN"]), R("MBN스페셜무비롱레그스", 1, "2025-06-01", "2025-06-01", ["MBN"]),
+        R("강철지구", 300, "2025-01-01", "2026-11-01", ["MBN"]), R("강철지구스페셜", 22, "2025-03-01", "2025-05-01", ["TVN"]),
+        R("옛날프로", 50, "2015-01-01", "2016-01-01"), R("옛날프로스페셜", 3, "2025-01-01", "2025-01-02"),
+      ];
+      const got = new Map(findAutoAliases(rows).map((a) => [a.aliasKey, a.groupKey]));
+      check("자동 묶기: 시즌2 부제(스페셜·복수혈전)는 시즌2로, 시즌1 부제는 시즌1로", got.get("신인감독김연경2스페셜") === "신인감독김연경2" && got.get("신인감독김연경2복수혈전") === "신인감독김연경2" && got.get("신인감독김연경다시쓰는스카우팅리포트") === "신인감독김연경", JSON.stringify([...got]));
+      check("자동 묶기: 다른 시즌(…2)은 앞 시즌에 묶지 않는다", !got.has("신인감독김연경2"));
+      check("자동 묶기: 앞 기획 꼬리표(추석특집)·한 글자 오타(서인형) 묶음", got.get("추석특집전지적참견시점") === "전지적참견시점" && got.get("서인형의유행꼰대") === "서인영의유행꼰대");
+      check("자동 묶기: 별개 작품(연애의참견↔발견, 나는SOLO↔그후사랑은계속된다)·영화 편성틀·다른 채널·기간 밖 변형은 묶지 않는다", !got.has("연애의발견") && !got.has("연애의참견") && !got.has("나는SOLO그후사랑은계속된다") && !got.has("MBN스페셜무비롱레그스") && !got.has("강철지구스페셜") && !got.has("옛날프로스페셜"));
+      check("자동 묶기: 이미 별칭이 걸린 키는 건드리지 않는다", !findAutoAliases(rows, new Set(["신인감독김연경2스페셜"])).some((a) => a.aliasKey === "신인감독김연경2스페셜"));
+    }
     check("전부 본방 규칙: OLIFE·ENA Drama 행동과학자(11월 이후)만", !!allFirstRunRuleFor("OLIFE", ["행동과학자의사건파일1"], "2026-11-14") && !!allFirstRunRuleFor("ENA_DRAMA", ["행동과학자의사건파일시즌1"], "2026-11-16") && !allFirstRunRuleFor("ENA_STORY", ["행동과학자의사건파일1"], "2026-11-14") && !allFirstRunRuleFor("OLIFE", ["행동과학자의사건파일1"], "2026-09-01"));
   }
 
