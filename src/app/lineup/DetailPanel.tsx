@@ -222,8 +222,9 @@ function Section({ title, count, hint, children }: { title: string; count?: numb
 function RunRow({ r, info, onSelect, showStart = false }: { r: RunDto; info: { w: WorkDto | undefined; s: SlotDto | undefined; o: OutletDto | undefined; g: Genre }; onSelect: (id: string) => void; showStart?: boolean }) {
   const own = info.o?.side === "own";
   return (
-    <button type="button" onClick={() => onSelect(r.id)} className="flex w-full items-center gap-2 rounded-[4px] py-1.5 pr-1 text-left hover:bg-[var(--lu-hover)]"
-      style={{ borderLeft: `3px solid ${GENRE_FILL[info.g]}`, paddingLeft: 8, background: own ? undefined : "#fff" }}>
+    <button type="button" onClick={() => onSelect(r.id)} className="flex w-full items-center gap-2 rounded-[4px] px-1 py-1.5 text-left hover:bg-[var(--lu-hover)]">
+      {/* 장르 표식 — 목록과 같은 작은 사각형(자사 채움 · 경쟁사 아웃라인) */}
+      <span aria-hidden className="inline-block size-2.5 shrink-0 rounded-[2px]" style={own ? { background: GENRE_FILL[info.g] } : { background: "#fff", border: `1.5px solid ${GENRE_FILL[info.g]}` }} />
       <span className="w-[52px] shrink-0 truncate text-[11.5px] font-semibold text-[var(--lu-text-2)]">{info.o?.name}</span>
       <span className="min-w-0 flex-1 truncate font-semibold">{runTitle(r, info.w)}</span>
       <span className="lu-num shrink-0 text-[11.5px] text-[var(--lu-text-2)]">{showStart ? `${r.startPrecision === "week" ? "≈" : ""}${(r.startDate ?? "").slice(5).replace("-", ".")}` : `${info.s && !info.o?.ott ? `${slotLabel(info.s, info.o)} · ` : ""}${periodDot(r)}`}</span>
