@@ -5,7 +5,7 @@
 // 공개일이 확정된 작품은 타임라인·캘린더에 정확한 날짜로 있고, 월 단위 작품은 타임라인의 범위 괄호로도 보인다.
 import { useMemo, useState } from "react";
 import type { LineupPayload, OutletDto, RunDto } from "@/lib/lineup/types";
-import { episodeText, GENRE_LABEL, ottBucket, OTT_BUCKET_LABEL, runGenre, runMatchesQuery, runTitle, STATUS_LABEL, type Filters, type OttBucket } from "@/lib/lineup/viewModel";
+import { episodeText, GENRE_LABEL, ottBucket, OTT_BUCKET_LABEL, outletSelected, runGenre, runMatchesQuery, runTitle, STATUS_LABEL, type Filters, type OttBucket } from "@/lib/lineup/viewModel";
 import { GENRE_FILL } from "@/lib/lineup/tokens";
 import { cx, Icon } from "./ui";
 
@@ -38,7 +38,7 @@ export default function UndatedStrip({
       const w = works.get(r.workId);
       const g = runGenre(r, w, s);
       if (filters.genres.length > 0 && !filters.genres.includes(g)) continue;
-      if (filters.outlets && filters.outlets.length > 0 && !filters.outlets.includes(o.code)) continue;
+      if (!outletSelected(o, filters)) continue; // OTT 선택(전체·일부·없음, P0-06)
       if (filters.statuses && filters.statuses.length > 0 && !filters.statuses.includes(r.status)) continue;
       out.push({ run: r, outlet: o, bucket: b });
     }
@@ -49,7 +49,7 @@ export default function UndatedStrip({
         a.outlet.sortOrder - b.outlet.sortOrder ||
         runTitle(a.run, works.get(a.run.workId ?? "")).localeCompare(runTitle(b.run, works.get(b.run.workId ?? "")), "ko")
     );
-  }, [data, works, filters.genres, filters.outlets, filters.statuses]);
+  }, [data, works, filters]);
   if (items.length === 0) return null;
 
   // 플랫폼 요약은 방송사 정렬값 순(넷플릭스·디즈니+·티빙·쿠팡플레이·웨이브·Apple TV, 2026-11-26 사용자 지정)
@@ -141,7 +141,7 @@ export default function UndatedStrip({
                       </td>
                       <td className="lu-num px-3 py-1.5 text-[var(--lu-text-2)]">{episodeText(run, w) || "—"}</td>
                       <td className="truncate px-3 py-1.5 text-[var(--lu-text-2)]">{(w?.cast ?? []).slice(0, 4).join(", ")}</td>
-                      <td className="px-3 py-1.5 text-[var(--lu-text-2)]">{STATUS_LABEL[run.status]}</td>
+                      <td className="px-3 py-1.5 text-[var(--lu-text-2)]">{run.status === "tentative" ? STATUS_LABEL.tentative : ""}</td>
                     </tr>
                   );
                 })}

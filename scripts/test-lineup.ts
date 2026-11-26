@@ -11,6 +11,7 @@ import { planUpload, type PlanContext } from "../src/lib/lineup/plan";
 import { parseStandardLineupXlsx, parseStartText, splitCast, standardGenre } from "../src/lib/lineup/parse/standardSheet";
 import { ottGenre, parseOttCadence, parseOttLineupXlsx, splitOttTitle } from "../src/lib/lineup/parse/ottSheet";
 import { holdbackMarks } from "../src/lib/lineup/holdback";
+import { COMPARE_MODES, outletSelected, scopeOf, scopeSel, selIsAll, selIsNone, STATUS_LABEL } from "../src/lib/lineup/viewModel";
 import { airingsOf } from "../src/lib/lineup/airings";
 import { effectiveEnd, headToHeadLevel, isIsoDate, type AirWindow, type GapSpan } from "../src/lib/lineup/dates";
 import { holdbackRuleFor } from "../src/lib/lineup/holdbackRules";
@@ -247,7 +248,9 @@ check("addDays", addDays("2026-12-31", 1) === "2027-01-01");
   const labels = cmp.rows.map((r) => `${r.kind}:${r.label}${r.chip ? `|${r.chip}` : ""}`);
   // 이 묶음에 KT ENA 편성이 없으면 빈 KT ENA 줄을 만들지 않는다(2026-11-26 사용자 요청)
   check("OTT 배치: 경쟁 비교 맨 아래에 OTT 묶음, 방송사는 요일 묶음에 그대로, 편성 없는 KT ENA 줄은 없음", labels.join(",") === "group:월화,slot:tvN|월화,group:OTT · 공개 일정,slot:가상플러스|OTT", labels);
-  check("OTT 배치: 요일을 고르면 OTT 묶음은 빠짐", !buildCompareRows(data, { ...f, dows: [1] }).rows.some((r) => r.key === "b:ott"));
+  // 2차 개선(P0-06): 요일 필터는 TV 방송에만 — OTT 공개 일정은 요일을 골라도 남는다
+  check("OTT 배치: 요일을 골라도 OTT 묶음은 남음(요일은 TV에만)", buildCompareRows(data, { ...f, dows: [1] }).rows.some((r) => r.key === "b:ott"));
+  check("OTT 배치: OTT '없음'이면 OTT 묶음 빠짐, 방송사 '없음'이면 tvN 줄 빠짐", !buildCompareRows(data, { ...f, ott: "none" }).rows.some((r) => r.key === "b:ott") && !buildCompareRows(data, { ...f, tv: "none" }).rows.some((r) => r.label === "tvN"));
   const und = buildUndated(data, f);
   check("OTT 배치: 날짜 없는 작품은 플랫폼별 '공개 시기 미정' 목록", und.length === 1 && und[0].outlet.code === "OTT_FAKE" && und[0].runs[0].id === "r3" && buildUndated(data, { ...f, dows: [1] }).length === 0);
   const yearRun = mkRun("r6", "s2", { shape: "bracket", from: "2027-01-01", to: "2027-12-31", estimatedFrom: null, dates: null }, { runKind: "series", startPrecision: "month", startDate: "2027-01-01", endDate: "2027-12-31", endPrecision: "month", startText: "2027년" });
@@ -425,7 +428,7 @@ check("토큰: 보조 글자 대비(흰 바탕·페이지 바탕 4.5:1 이상), 
 {
   const q = parseLineupQuery((k) => ({ view: "compare", len: "5", st: "planned,bad", out: "tvn,SBS", q: "가상", cmp: "time", empty: "1" } as Record<string, string>)[k], "2026-10");
   const back = new URLSearchParams(lineupSearch(q, "2026-10"));
-  check("주소: 새 조건(상태·방송사·검색·비교 묶음·직접 지정 길이) 읽고 다시 씀", q.len === 5 && q.st.join() === "planned" && q.out.join() === "TVN,SBS" && q.cmp === "time" && q.empty && back.get("cmp") === "time" && back.get("st") === "planned" && back.get("len") === "5" && back.get("q") === "가상", Object.fromEntries(back));
+  check("주소: 새 조건(상태·방송사·검색·비교 묶음·직접 지정 길이) 읽고 다시 씀 — 옛 out=TV코드는 방송사 일부·OTT 없음으로(옛 화면 그대로)", q.len === 5 && q.st.join() === "planned" && JSON.stringify(q.tv) === '["TVN","SBS"]' && q.ott === "none" && back.get("tv") === "TVN,SBS" && back.get("ott") === "none" && !back.has("out") && q.cmp === "time" && q.empty && back.get("cmp") === "time" && back.get("st") === "planned" && back.get("len") === "5" && back.get("q") === "가상", Object.fromEntries(back));
   const cal = parseLineupQuery((k) => ({ view: "calendar" } as Record<string, string>)[k], "2026-10");
   check("주소: 캘린더 기본 = 첫방·종영 + KT ENA 전체 회차, 기본값은 주소에서 뺌, 특집 키 읽음", cal.show.join() === "first,end,all" && !new URLSearchParams(lineupSearch(cal, "2026-10")).has("show") && parseLineupQuery((k) => ({ view: "calendar", show: "first,special" } as Record<string, string>)[k], "2026-10").show.join() === "first,special");
   // 기본 시작 = 오늘이 든 주의 월요일(2026-11-26 사용자 요청)
@@ -498,6 +501,30 @@ check("토큰: 보조 글자 대비(흰 바탕·페이지 바탕 4.5:1 이상), 
   check("P0-08 날짜: 2027-02-29·2026-11-31·2026-13-01 거부, 2028-02-29 허용", !isIsoDate("2027-02-29") && !isIsoDate("2026-11-31") && !isIsoDate("2026-13-01") && isIsoDate("2028-02-29") && isIsoDate("2026-12-31"));
   const badQ = parseLineupQuery((k) => ({ from: "2026-11-31", dfrom: "2027-02-29", dto: "2027-03-05" } as Record<string, string>)[k], "2026-11-23");
   check("P0-08 날짜: 주소의 없는 날짜는 기본값으로", badQ.from === "2026-11-23" && badQ.dfrom === null, { from: badQ.from, dfrom: badQ.dfrom });
+}
+
+// ── 2차 개선: 비교 범위·선택 모델(전체·일부·없음) — 지시문 §4.4·§10 ──
+{
+  const P = (o: Record<string, string>) => parseLineupQuery((k) => o[k], "2026-11-23", "2026-11");
+  const d0 = P({ view: "compare" });
+  check("범위: 기본 = 시장 전체(방송사·OTT 전체), 주소에 안 남음", scopeOf(d0) === "market" && !new URLSearchParams(lineupSearch(d0, "2026-11-23", "2026-11")).has("tv"));
+  check("범위: 프리셋 4종 → 선택 상태", scopeOf({ ...d0, ...scopeSel("tv") }) === "tv" && scopeOf({ ...d0, ...scopeSel("ott") }) === "ott" && scopeOf({ ...d0, ...scopeSel("own") }) === "own" && scopeOf({ ...d0, ...scopeSel("market") }) === "market");
+  check("범위: 개별 채널을 바꾸면 '맞춤'", scopeOf({ tv: ["SBS"], ott: "all" }) === "custom" && scopeOf({ tv: "all", ott: ["OTT_NETFLIX"] }) === "custom");
+  check("선택: 빈 목록은 '없음'(전체와 구분)", selIsNone([]) && !selIsAll([]) && selIsAll("all") && selIsNone("none"));
+  const sbs = { id: "x", code: "SBS", name: "SBS", side: "rival", color: null, logo: null, group: null, ott: false, sortOrder: 1 } as OutletDto;
+  const nf = { ...sbs, code: "OTT_NETFLIX", name: "넷플릭스", ott: true } as OutletDto;
+  const enaO = { ...sbs, code: "ENA", side: "own" } as OutletDto;
+  check("선택: 시장 전체에서 OTT 하나만 고르면 방송사는 그대로 전체(예전 out 배열 충돌 재현 방지)", outletSelected(sbs, { tv: "all", ott: ["OTT_NETFLIX"] }) && outletSelected(nf, { tv: "all", ott: ["OTT_NETFLIX"] }) && !outletSelected({ ...nf, code: "OTT_TVING" } as OutletDto, { tv: "all", ott: ["OTT_NETFLIX"] }));
+  check("선택: 방송사 그룹 전체 해제 후 OTT만 / OTT 해제 후 방송사만 / 모두 해제", !outletSelected(sbs, { tv: "none", ott: "all" }) && outletSelected(nf, { tv: "none", ott: "all" }) && outletSelected(sbs, { tv: "all", ott: "none" }) && !outletSelected(nf, { tv: "all", ott: "none" }) && !outletSelected(sbs, { tv: "none", ott: "none" }));
+  check("선택: KT ENA 채널은 경쟁 선택과 무관하게 참(기준 채널은 따로)", outletSelected(enaO, { tv: "none", ott: "none" }));
+  check("선택: 옛 out 배열도 그대로 읽음", outletSelected(sbs, { outlets: ["SBS"] }) && !outletSelected(nf, { outlets: ["SBS"] }));
+  const old1 = P({ view: "compare", out: "OTT_NETFLIX" });
+  check("옛 주소: out=OTT 코드만 → 방송사 없음 · OTT 그 코드(옛 화면 그대로)", old1.tv === "none" && JSON.stringify(old1.ott) === '["OTT_NETFLIX"]');
+  const rt = P({ view: "compare", tv: "none", ott: "all", nobase: "1", hm: "cast,eps", legend: "1" });
+  const back = new URLSearchParams(lineupSearch(rt, "2026-11-23", "2026-11"));
+  check("주소: OTT 범위·기준 숨김·표시 항목·범례 왕복", rt.tv === "none" && rt.ott === "all" && rt.nobase && rt.hm.join() === "cast,eps" && rt.legend && back.get("tv") === "none" && !back.has("ott") && back.get("nobase") === "1" && back.get("hm") === "cast,eps" && back.get("legend") === "1");
+  check("묶음: 방송사별 추가, 시간대는 '시작 시간대별'로 표기", COMPARE_MODES.some((m) => m.key === "outlet" && m.label === "방송사별") && COMPARE_MODES.find((m) => m.key === "time")?.label === "시작 시간대별" && P({ view: "compare", cmp: "outlet" }).cmp === "outlet");
+  check("상태 문구: 가안 → 미정", STATUS_LABEL.tentative === "미정");
 }
 
 if (failed > 0) {

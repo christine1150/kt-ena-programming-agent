@@ -4,7 +4,7 @@
 // 자사·경쟁사·OTT 모두. 같은 상세 패널을 연다. 인쇄(printMode)는 고정 머리·조절 없이 모든 기본 컬럼.
 import { useEffect, useMemo, useState } from "react";
 import type { LineupPayload, RunDto } from "@/lib/lineup/types";
-import { dateFull, episodeText, GENRE_LABEL, kindLabel, runGenre, runMatchesQuery, runTitle, slotLabel, STATUS_LABEL, type Filters } from "@/lib/lineup/viewModel";
+import { dateFull, episodeText, GENRE_LABEL, kindLabel, outletSelected, runGenre, runMatchesQuery, runTitle, slotLabel, STATUS_LABEL, type Filters } from "@/lib/lineup/viewModel";
 import { GENRE_FILL } from "@/lib/lineup/tokens";
 import { CheckList, cx, Icon, Menu } from "./ui";
 
@@ -57,9 +57,9 @@ export default function ListTable({
       const s = slots.get(r.slotId);
       const o = s ? outlets.get(s.outletId) : undefined;
       if (!s || !o) continue;
-      if (o.side === "own" && filters.channels.length > 0 && !filters.channels.includes(o.code)) continue;
-      if (o.side !== "own" && filters.outlets && filters.outlets.length > 0 && !filters.outlets.includes(o.code)) continue;
-      if (filters.dows.length > 0 && (o.ott || !s.days.some((d) => filters.dows.includes(d)))) continue; // OTT는 요일이 없어 요일을 고르면 뺀다
+      if (o.side === "own" && (filters.showBase === false || (filters.channels.length > 0 && !filters.channels.includes(o.code)))) continue;
+      if (!outletSelected(o, filters)) continue; // 경쟁 방송사·OTT 선택(전체·일부·없음, P0-06)
+      if (filters.dows.length > 0 && !o.ott && !s.days.some((d) => filters.dows.includes(d))) continue; // 요일은 TV 방송에만(OTT는 공개 일정이라 요일과 무관)
       const w = r.workId ? works.get(r.workId) : undefined;
       const g = runGenre(r, w, s);
       if (filters.genres.length > 0 && !filters.genres.includes(g)) continue;
@@ -196,7 +196,8 @@ export default function ListTable({
       case "cast":
         return <span className="text-[var(--lu-text-2)]">{x.cast || "—"}</span>;
       case "status":
-        return <span className={r.status === "confirmed" ? "text-[var(--lu-text)]" : "text-[var(--lu-text-2)]"}>{STATUS_LABEL[r.status]}</span>;
+        // 상태 문구 간소화(2차 개선): 가안만 '미정', 확정·예정은 비운다(막대 실선·점선과 같은 규칙). 원래 상태는 상세 수정 폼·이력·엑셀에 남는다.
+        return <span className="text-[var(--lu-text-2)]">{r.status === "tentative" ? STATUS_LABEL.tentative : ""}</span>;
       case "kind":
         return <span className="text-[var(--lu-text-2)]">{kindLabel(r, x.ott)}</span>;
       case "source":

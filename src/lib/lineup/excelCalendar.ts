@@ -25,7 +25,7 @@ export function addCalendarSheets(wb: ExcelJS.Workbook, data: LineupPayload, q: 
   const hide = q.hide as CalLayer[];
   const segs = monthSegments(range.from, range.to);
   segs.forEach((seg, idx) => {
-    const model = buildCalendar(data, { from: seg.from, to: seg.to, channels: q.channels, genres: q.genres, hide, show: q.show as CalOwnShow[], can: q.can });
+    const model = buildCalendar(data, { from: seg.from, to: seg.to, channels: q.channels, genres: q.genres, hide, show: q.show as CalOwnShow[], can: q.can, tv: q.tv, ott: q.ott, statuses: q.st, showBase: !q.nobase });
     addMonthSheet(wb, data, model, `${seg.ym}`, cond, sourceText, printedAt, idx === segs.length - 1);
   });
   addDaySheet(wb, data, q, range.from, range.to, hide, cond, printedAt);
@@ -114,7 +114,7 @@ function addMonthSheet(wb: ExcelJS.Workbook, data: LineupPayload, model: CalMode
           head.font = { bold: true, size: 11 };
           head.alignment = { vertical: "middle", wrapText: true };
           const sub = ws.getCell(r + 1, i + 1);
-          sub.value = [b.time, b.single ? b.meta : d.episode, b.status !== "confirmed" ? "예정" : "", d.last ? "■ 종영" : ""].filter(Boolean).join(" · ");
+          sub.value = [b.time, b.single ? b.meta : d.episode, b.status === "tentative" ? "미정" : "", d.last ? "■ 종영" : ""].filter(Boolean).join(" · ");
           sub.font = { bold: true, size: 10 };
           if (b.cast && (d.opening || b.single)) {
             const cast = ws.getCell(r + 2, i + 1);
@@ -200,7 +200,7 @@ function addDaySheet(wb: ExcelJS.Workbook, data: LineupPayload, q: LineupQuery, 
     }
   }
   // 주·월 단위·날짜 미정은 날짜 칸에 못 놓으므로 구분해서 아래에 붙인다
-  const model = buildCalendar(data, { from, to, channels: q.channels, genres: q.genres, hide });
+  const model = buildCalendar(data, { from, to, channels: q.channels, genres: q.genres, hide, tv: q.tv, ott: q.ott, statuses: q.st, showBase: !q.nobase });
   for (const w of model.weeks)
     for (const s of w.strip) {
       [w.start, "", "", s.ott ? "OTT" : "타사", s.outletName, s.title, "", "첫방(≈)", "주(그 주 월요일 표시)"].forEach((v, k) => (ws.getCell(r, k + 1).value = v));

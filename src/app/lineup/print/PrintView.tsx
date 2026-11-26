@@ -39,7 +39,7 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
   }, [from, to]);
 
   const { data, error, printedAt } = state;
-  const filters = useMemo(() => ({ channels: q.channels, genres: q.genres, dows: q.dows, statuses: q.st, outlets: q.out }), [q.channels, q.genres, q.dows, q.st, q.out]);
+  const filters = useMemo(() => ({ channels: q.channels, genres: q.genres, dows: q.dows, statuses: q.st, tv: q.tv, ott: q.ott, showBase: !q.nobase }), [q.channels, q.genres, q.dows, q.st, q.tv, q.ott, q.nobase]);
   const grid = useMemo(
     () => (data && q.view !== "calendar" ? (q.view === "compare" ? buildCompareRows(data, filters, q.cmp) : buildOwnRows(data, filters, { showEmpty: q.empty })) : null),
     [data, q.view, filters, q.cmp, q.empty]
@@ -48,10 +48,10 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
     if (!data || !cal) return [];
     const segs = monthSegments(cal.from, cal.to);
     return segs.map((s, i) => {
-      const m = buildCalendar(data, { from: s.from, to: s.to, channels: q.channels, genres: q.genres, hide: q.hide as CalLayer[], show: q.show as CalOwnShow[], can: q.can });
+      const m = buildCalendar(data, { from: s.from, to: s.to, channels: q.channels, genres: q.genres, hide: q.hide as CalLayer[], show: q.show as CalOwnShow[], can: q.can, tv: q.tv, ott: q.ott, statuses: q.st, showBase: !q.nobase });
       return { ym: s.ym, model: i === segs.length - 1 ? m : { ...m, undated: [] } }; // 날짜 미정 OTT 목록은 마지막 쪽에만
     });
-  }, [data, cal, q.channels, q.genres, q.hide, q.show, q.can]);
+  }, [data, cal, q.channels, q.genres, q.hide, q.show, q.can, q.tv, q.ott, q.st, q.nobase]);
   const channelNames = data ? q.channels.map((c) => data.outlets.find((o) => o.code === c)?.name ?? c) : q.channels;
   const page = PAGE[q.paper];
   const sources = data

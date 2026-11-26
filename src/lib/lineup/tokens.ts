@@ -28,7 +28,7 @@ export const UI = {
   cyanOutlineAssist: "#8b9099",
 } as const;
 
-export const STATUS_TEXT: Record<RunStatus, string> = { confirmed: "확정", planned: "예정", tentative: "가안" };
+export const STATUS_TEXT: Record<RunStatus, string> = { confirmed: "확정", planned: "예정", tentative: "미정" };
 
 /** 색 대비(WCAG 2.x) — 토큰 시험에 쓴다. */
 export function contrastRatio(a: string, b: string): number {

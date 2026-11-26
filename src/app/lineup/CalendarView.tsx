@@ -70,6 +70,7 @@ function OwnItem({ bar, day, selected, onSelect, multiOutlet, week = false }: { 
         className={cx("flex w-full min-w-0 items-center gap-1 rounded-[3px] px-1.5 text-left text-[12px] font-semibold", selected && "outline outline-2 outline-offset-1 outline-[var(--lu-text)]")}
         style={{ height: ITEM_H, background: planned ? tint(c, 0.13) : c, color: planned ? UI.text : GENRE_ON[bar.genre], border: planned ? `1.5px dashed ${c}` : undefined }}>
         {multiOutlet && <span className="shrink-0 text-[10.5px] opacity-85">{bar.outletName}</span>}
+        {tag === "첫방" && <Icon name="start" size={11} className="opacity-90" />}
         <span className="min-w-0 flex-1 truncate">{title}</span>
         <span className="shrink-0 text-[10.5px] font-semibold opacity-90">{tag}</span>
       </button>
@@ -82,7 +83,7 @@ function OwnItem({ bar, day, selected, onSelect, multiOutlet, week = false }: { 
       {!week && <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: c, outline: planned ? `1px dashed ${c}` : undefined, outlineOffset: 1 }} />}
       {bar.time && <span className="lu-num shrink-0 text-[11px] text-[var(--lu-text-2)]">{bar.time}</span>}
       <span className="min-w-0 flex-1 truncate font-medium text-[var(--lu-text)]">{title}</span>
-      {day.episode && <span className="lu-num shrink-0 text-[11px] text-[var(--lu-text-2)]">{day.episode}</span>}
+      {day.episode && <span title={day.episode} className="lu-num max-w-[48%] shrink truncate text-[11px] text-[var(--lu-text-2)]">{day.episode}</span>}
     </button>
   );
 }
@@ -116,6 +117,8 @@ function MarkItem({ m, selected, onSelect }: { m: CalMark; selected: boolean; on
     <button type="button" onClick={() => onSelect(m.runId)} title={`${m.outletName} ${m.title} ${MARK_TAG[m.kind](m)}${planned ? " (예정)" : ""}`} aria-label={`${m.outletName} ${m.title} ${MARK_TAG[m.kind](m)}${planned ? " 예정" : ""}`}
       className={cx("flex w-full min-w-0 items-center gap-1 rounded-[3px] bg-white pr-1.5 text-left text-[12px]", ring)}
       style={{ height: ITEM_H, border: `1px ${planned ? "dashed" : "solid"} ${UI.grid}`, borderLeft: `3px solid ${c}`, paddingLeft: 4 }}>
+      {m.kind === "first" && <Icon name="start" size={11} className="text-[var(--lu-text-2)]" />}
+      {m.kind === "open" && m.ott && <span className="shrink-0" style={{ color: g === "business" ? UI.cyanOutlineAssist : c }}><Icon name="diamond" size={9} /></span>}
       <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{m.outletName}</span>
       <span className="min-w-0 flex-1 truncate font-semibold text-[var(--lu-text)]">{title}</span>
       <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{MARK_TAG[m.kind](m)}</span>
@@ -123,13 +126,15 @@ function MarkItem({ m, selected, onSelect }: { m: CalMark; selected: boolean; on
   );
 }
 
-/** 종영 — 점선 테두리만 + 제목을 장르색 글자로(사용자 지시 2026-11-26). 밝은 시안(사업형)은 흰 바탕 대비가 낮아 제목만 어두운 글씨. */
+/** 종영 — 흰 바탕 + 장르색 가는 실선 테두리 + 종료 아이콘, 제목은 장르색 글자. 2차 개선(§7.1): 예정의 점선과 같은 모양을 쓰지 않는다(첫 지시의 점선에서 바꿈).
+ *  밝은 시안(사업형)은 흰 바탕 대비가 낮아 테두리는 보조 회색, 제목은 어두운 글씨. */
 function EndItem({ title, outlet, genre, onClick, selected, tip, approx = false }: { title: string; outlet: string; genre: Genre; onClick: () => void; selected: boolean; tip: string; approx?: boolean }) {
   const c = GENRE_FILL[genre];
   return (
     <button type="button" onClick={onClick} title={tip} aria-label={`${outlet} ${title} 종영`}
       className={cx("flex w-full min-w-0 items-center gap-1 rounded-[3px] bg-white px-1.5 text-left text-[12px]", selected && "outline outline-2 outline-offset-1 outline-[var(--lu-text)]")}
-      style={{ height: ITEM_H, border: `1.5px dashed ${c}` }}>
+      style={{ height: ITEM_H, border: `1px solid ${genre === "business" ? UI.cyanOutlineAssist : c}` }}>
+      <Icon name="end" size={11} className="text-[var(--lu-text-2)]" />
       {outlet && <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{outlet}</span>}
       <span className="min-w-0 flex-1 truncate font-semibold" style={{ color: genre === "business" ? UI.text : c }}>{title}</span>
       <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{approx ? "종영≈" : "종영"}</span>
@@ -184,7 +189,7 @@ export function CalLegend({ vertical = false }: { vertical?: boolean }) {
       <li className="flex items-center gap-1.5">{chip({ background: GENRE_FILL.drama })}KT ENA 첫방·종영·특집</li>
       <li className="flex items-center gap-1.5"><span aria-hidden className="size-1.5 rounded-full bg-[var(--lu-text-2)]" />KT ENA 방송 회차</li>
       <li className="flex items-center gap-1.5">{chip({ background: "#fff", border: `1px solid ${UI.grid}`, borderLeft: `3px solid ${GENRE_FILL.variety}` })}경쟁사·OTT 첫방·공개·종영</li>
-      <li className="flex items-center gap-1.5">{chip({ background: "#fff", border: `1.5px dashed ${GENRE_FILL.drama}` })}<span style={{ color: GENRE_FILL.drama }} className="font-semibold">종영</span>(점선 + 장르색 제목)</li>
+      <li className="flex items-center gap-1.5">{chip({ background: "#fff", border: `1px solid ${GENRE_FILL.drama}` })}<span style={{ color: GENRE_FILL.drama }} className="font-semibold">→| 종영</span>(실선 + 장르색 제목)</li>
       <li className="flex items-center gap-1.5">{chip({ background: "#fff", border: `1px dashed ${UI.text2}` })}예정</li>
       <li className="flex items-center gap-1.5">{chip({ background: "#fff", border: `1px dashed ${UI.accent}` })}방영 가능(홀드백)</li>
       <li className="flex items-center gap-1.5">{chip({ background: UI.hover, border: `1px solid ${UI.line}` })}공휴일·외부 이벤트</li>

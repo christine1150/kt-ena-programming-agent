@@ -7,7 +7,7 @@ import type { Genre, LineupPayload, RunDto, RunStatus, SlotDto, WorkDto } from "
 import { holdbackMarks } from "./holdback";
 import { airingsOf, hasNextRun, hiatusBySlot } from "./airings";
 import { eventsBetween, laneEvents, placeLane, type LaneEvent } from "./events";
-import { buildUndated, dowLabel, episodeText, GENRE_HEX, isYearOnly, periodText, runGenre, runTitle, slotTime } from "./viewModel";
+import { buildUndated, dowLabel, episodeText, outletSelected, type Sel, GENRE_HEX, isYearOnly, periodText, runGenre, runTitle, slotTime } from "./viewModel";
 
 export type CalLayer = "own" | "rival" | "ott" | "event";
 /** 캘린더 '구분'(채널 종류) — 2026-11-26 사용자 지시로 일정 종류와 나눔. event는 이벤트 메뉴에서 따로 켠다. */
@@ -28,6 +28,11 @@ export interface CalQuery {
   hide: CalLayer[];
   can?: string | null; // 방영 가능 일시를 볼 자사 채널 코드(홀드백) — 없으면 표시 안 함
   show?: CalOwnShow[]; // 자사 작품을 어느 방송일까지 그릴지 — 기본 전체. 비면 자사 작품을 그리지 않는다
+  // 공통 조회 조건(2차 개선 P0-06) — 경쟁 비교·목록과 같은 규칙
+  tv?: Sel; // 경쟁 방송사 선택(없음 = 전체)
+  ott?: Sel; // OTT 선택
+  statuses?: RunStatus[]; // 편성 상태(빈 배열·없음 = 전부)
+  showBase?: boolean; // 기준 KT ENA 채널 표시(기본 참)
 }
 /**
  * 캘린더 '일정'(종류) — 모든 채널에 적용: 첫방(KT ENA는 첫 월화처럼 이어지는 첫 묶음 · 경쟁 첫방 · OTT 공개일) · 종영 · 특집(단발·행사·월 1회) ·
@@ -219,6 +224,8 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
     const work = works.get(r.workId);
     const genre = runGenre(r, work, slot);
     if (q.genres.length > 0 && !q.genres.includes(genre)) continue;
+    if (q.statuses && q.statuses.length > 0 && !q.statuses.includes(r.status)) continue;
+    if (outlet.side === "own" ? q.showBase === false : !outletSelected(outlet, q)) continue; // 고른 범위·방송사·OTT만(P0-06)
     const title = runTitle(r, work);
     const draw = r.draw;
 
@@ -387,7 +394,7 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
     to: q.to,
     weeks,
     monthBoxes: monthsInRange.filter((ym) => months.has(ym)).map((ym) => ({ ym, items: months.get(ym) as CalMonthItem[] })),
-    undated: hide.has("ott") ? [] : buildUndated(data, { channels: [], genres: q.genres, dows: [] }),
+    undated: hide.has("ott") ? [] : buildUndated(data, { channels: [], genres: q.genres, dows: [], tv: q.tv, ott: q.ott, statuses: q.statuses }),
   };
 }
 

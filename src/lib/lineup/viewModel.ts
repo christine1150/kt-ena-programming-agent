@@ -5,14 +5,69 @@ import type { CompareBlock, Genre, LineupPayload, OutletDto, RunDto, RunStatus, 
 
 export type ViewMode = "own" | "compare" | "list" | "calendar";
 export type Density = "comfy" | "compact";
-/** 경쟁 비교 묶음 기준(2026-11-26): 동일 요일 · 동시간대 · 동일 장르 · 전체 */
-export type CompareMode = "dow" | "time" | "genre" | "all";
+/** 경쟁 비교 묶음 기준(2차 개선 2026-11-26): 요일별 · 방송사별 · 장르별 · 시작 시간대별 · 전체 펼쳐보기.
+ *  '시작 시간대별'은 시작 시각 한 시간 단위 묶음일 뿐 실제 동시간대 맞대결(상세 패널의 동시간대 경쟁)과 다르다. */
+export type CompareMode = "dow" | "outlet" | "genre" | "time" | "all";
 export const COMPARE_MODES: { key: CompareMode; label: string }[] = [
-  { key: "dow", label: "동일 요일" },
-  { key: "time", label: "동시간대" },
-  { key: "genre", label: "동일 장르" },
-  { key: "all", label: "전체" },
+  { key: "dow", label: "요일별" },
+  { key: "outlet", label: "방송사별" },
+  { key: "genre", label: "장르별" },
+  { key: "time", label: "시작 시간대별" },
+  { key: "all", label: "전체 펼쳐보기" },
 ];
+
+// ── 비교 대상 선택 모델(2차 개선 2026-11-26, 지시문 §4.4) ──
+/** 경쟁 방송사·OTT 선택: 'all' 전체 · 'none' 선택 없음 · 코드 목록(일부). 빈 배열이 '전체'와 '없음'을 함께 뜻하지 않게 나눈다. */
+export type Sel = "all" | "none" | string[];
+/** 비교 범위 프리셋 — 시장 전체 · 방송사 · OTT · KT ENA만. 개별 채널을 바꾸면 'custom'(맞춤). */
+export type Scope = "market" | "tv" | "ott" | "own" | "custom";
+export const SCOPES: { key: Exclude<Scope, "custom">; label: string; short: string }[] = [
+  { key: "market", label: "시장 전체", short: "전체" },
+  { key: "tv", label: "방송사", short: "방송" },
+  { key: "ott", label: "OTT", short: "OTT" },
+  { key: "own", label: "KT ENA만", short: "KT ENA" },
+];
+export const selIsAll = (v: Sel | undefined) => v === undefined || v === "all";
+export const selIsNone = (v: Sel | undefined) => v === "none" || (Array.isArray(v) && v.length === 0);
+/** 비교 범위 — 선택 상태에서 계산(저장하지 않는다) */
+export function scopeOf(q: { tv: Sel; ott: Sel }): Scope {
+  if (selIsAll(q.tv) && selIsAll(q.ott)) return "market";
+  if (selIsAll(q.tv) && selIsNone(q.ott)) return "tv";
+  if (selIsNone(q.tv) && selIsAll(q.ott)) return "ott";
+  if (selIsNone(q.tv) && selIsNone(q.ott)) return "own";
+  return "custom";
+}
+/** 프리셋 → 선택 상태(프리셋을 다시 누르면 그 범위의 전체 대상) */
+export function scopeSel(scope: Exclude<Scope, "custom">): { tv: Sel; ott: Sel } {
+  return scope === "market" ? { tv: "all", ott: "all" } : scope === "tv" ? { tv: "all", ott: "none" } : scope === "ott" ? { tv: "none", ott: "all" } : { tv: "none", ott: "none" };
+}
+/** 이 방송사·OTT가 현재 선택에 들어가는가(자사는 늘 참 — 기준 채널은 channels·showBase로 따로). 옛 outlets 배열도 읽는다. */
+export function outletSelected(o: OutletDto | undefined, f: Pick<Filters, "tv" | "ott" | "outlets">): boolean {
+  if (!o) return false;
+  if (o.side === "own") return true;
+  if (f.tv === undefined && f.ott === undefined && f.outlets && f.outlets.length > 0) return f.outlets.includes(o.code);
+  const sel = o.ott ? f.ott : f.tv;
+  if (selIsAll(sel)) return true;
+  if (selIsNone(sel)) return false;
+  return (sel as string[]).includes(o.code);
+}
+const selText = (v: Sel) => (v === "all" ? "all" : v === "none" ? "none" : v.join(","));
+const parseSel = (raw: string | null | undefined): Sel | undefined => {
+  if (raw === null || raw === undefined || raw === "") return undefined;
+  if (raw === "all") return "all";
+  if (raw === "none") return "none";
+  const list = raw.split(",").map((c) => c.trim().toUpperCase()).filter((c) => /^[A-Z0-9_]{2,16}$/.test(c));
+  return list.length ? list : "none";
+};
+/** 경쟁 방송사 묶음(선택 패널) — 등록된 코드 기준, 모르는 코드는 '유료방송·기타' */
+export const TV_GROUPS: { key: string; label: string; codes: string[] }[] = [
+  { key: "terr", label: "지상파", codes: ["KBS1", "KBS2", "MBC", "SBS", "EBS1"] },
+  { key: "jong", label: "종합편성", codes: ["JTBC", "TV_CHOSUN", "CHANNEL_A", "MBN"] },
+  { key: "pay", label: "유료방송·기타", codes: [] },
+];
+export function tvGroupOf(code: string): string {
+  return TV_GROUPS.find((g) => g.codes.includes(code))?.key ?? "pay";
+}
 
 export const GENRE_LABEL: Record<Genre, string> = { drama: "드라마", variety: "예능", business: "사업형", other: "교양·기타" };
 /**
@@ -49,7 +104,8 @@ export function slotDayTimeOrder(a: SlotDto, b: SlotDto): number {
     a.name.localeCompare(b.name)
   );
 }
-export const STATUS_LABEL = { confirmed: "확정", planned: "예정", tentative: "가안" } as const;
+/** 상태 문구(2차 개선 2026-11-26): 사용자용 '가안'은 '미정'으로. 화면은 확정·예정을 글자로 쓰지 않고 실선·점선으로 구분한다(내부 값은 그대로). */
+export const STATUS_LABEL = { confirmed: "확정", planned: "예정", tentative: "미정" } as const;
 export const KIND_LABEL: Record<RunDto["runKind"], string> = {
   series: "연속 편성", monthly: "월 1회", single: "단발", multi_day: "행사(여러 날)", tbd: "미정 자리", hiatus: "휴방·결방", filler: "수급물",
 };
@@ -233,7 +289,11 @@ export interface Filters {
   genres: Genre[]; // 빈 배열 = 전부
   dows: number[]; // 빈 배열 = 전부
   statuses?: RunStatus[]; // 편성 상태(빈 배열·없음 = 전부)
-  outlets?: string[]; // 경쟁 방송사·OTT 코드(빈 배열·없음 = 전부) — 자사 채널은 channels로 고른다
+  /** @deprecated 옛 주소 out=… — 새 코드는 tv·ott */
+  outlets?: string[];
+  tv?: Sel; // 경쟁 방송사 선택(없음 = 전체)
+  ott?: Sel; // OTT 선택(없음 = 전체)
+  showBase?: boolean; // 경쟁 비교·캘린더에서 기준 KT ENA 채널 표시(기본 참)
 }
 
 function runMatches(run: RunDto, slot: SlotDto, f: Filters, works: Map<string, WorkDto>) {
@@ -330,10 +390,7 @@ export function buildCompareRows(data: LineupPayload, f: Filters, mode: CompareM
     runsBySlot.set(r.slotId, arr);
   }
   const ownCodes = f.channels.length > 0 ? f.channels : ["ENA"];
-  const outletOk = (s: SlotDto) => {
-    const o = outlets.get(s.outletId);
-    return !f.outlets || f.outlets.length === 0 || (!!o && f.outlets.includes(o.code));
-  };
+  const outletOk = (s: SlotDto) => outletSelected(outlets.get(s.outletId), f);
   const isOttSlot = (s: SlotDto) => !!outlets.get(s.outletId)?.ott;
   const hasRuns = (s: SlotDto) => (runsBySlot.get(s.id)?.length ?? 0) > 0;
   const genreOf = (s: SlotDto) => slotGenre(s, runsBySlot.get(s.id) ?? [], works);
@@ -343,7 +400,7 @@ export function buildCompareRows(data: LineupPayload, f: Filters, mode: CompareM
     .filter((s) => {
       const o = outlets.get(s.outletId);
       // 편성 자료가 있는 자리만(드라마 자리는 기간 안 빈 주 계산값이 있으면 남긴다 — 'N주 비어있음'도 자료)
-      return o?.side === "own" && ownCodes.includes(o.code) && genreOk(s) && (hasRuns(s) || (mode === "dow" && s.defaultGenre === "drama" && data.gaps.some((g) => g.slotId === s.id)));
+      return f.showBase !== false && o?.side === "own" && ownCodes.includes(o.code) && genreOk(s) && (hasRuns(s) || (mode === "dow" && s.defaultGenre === "drama" && data.gaps.some((g) => g.slotId === s.id)));
     })
     .sort((a, b) => a.sortOrder - b.sortOrder);
   const rivalAll = base
@@ -351,7 +408,7 @@ export function buildCompareRows(data: LineupPayload, f: Filters, mode: CompareM
     .sort((a, b) => {
       const ca = DAYCHIP_ORDER(a.days);
       const cb = DAYCHIP_ORDER(b.days);
-      if (mode !== "time" && ca !== cb) return ca.localeCompare(cb);
+      if (mode !== "time" && mode !== "outlet" && ca !== cb) return ca.localeCompare(cb);
       if (mode === "time" && (a.startMinute ?? 0) !== (b.startMinute ?? 0)) return (a.startMinute ?? 0) - (b.startMinute ?? 0);
       const oa = outlets.get(a.outletId)?.sortOrder ?? 0;
       const ob = outlets.get(b.outletId)?.sortOrder ?? 0;
@@ -365,6 +422,11 @@ export function buildCompareRows(data: LineupPayload, f: Filters, mode: CompareM
       return { key: `g:${g}`, label: GENRE_LABEL[g], order: ["drama", "variety", "business", "other"].indexOf(g) };
     }
     if (mode === "all") return { key: "all", label: "전체 라인업", order: 0 };
+    if (mode === "outlet") {
+      // 방송사별(2차 개선): 기준 KT ENA 채널이 먼저, 그다음 방송사 정렬값 순
+      const o = outlets.get(s.outletId);
+      return { key: `o:${s.outletId}`, label: o?.name ?? "", order: (o?.side === "own" ? -1000 : 0) + (o?.sortOrder ?? 0) };
+    }
     return { key: `b:${s.compareBlock}`, label: BLOCK_LABEL[s.compareBlock], order: BLOCK_ORDER.indexOf(s.compareBlock) };
   };
   const groups = new Map<string, { label: string; order: number; own: SlotDto[]; rival: SlotDto[] }>();
@@ -390,8 +452,9 @@ export function buildCompareRows(data: LineupPayload, f: Filters, mode: CompareM
       rows.push({ key: `s:${s.id}`, kind: "slot", label: o?.name ?? "", sublabel: slotTime(s), chip: dowLabel(s.days), outlet: o, slot: s, color: o?.color ?? null, genre: genreOf(s) });
     }
   }
-  // OTT 묶음(2026-11-25) — 방송 요일·시각이 없어 요일 묶음에 못 넣는다. 맨 아래에 플랫폼마다 한 줄(공개 일정). 요일을 거르면 요일이 없는 OTT는 뺀다.
-  if (f.dows.length === 0) {
+  // OTT 묶음(2026-11-25) — 방송 요일·시각이 없어 요일 묶음에 못 넣는다. 맨 아래에 플랫폼마다 한 줄(공개 일정).
+  // 요일 필터는 TV 방송 요일에만 적용한다(2차 개선 P0-06: 요일을 고른다고 OTT 전체가 사라지지 않게). OTT는 고른 대상이면 늘 보인다.
+  {
     const ott = data.slots
       .filter((s) => isOttSlot(s) && outletOk(s) && (runsBySlot.get(s.id) ?? []).some((r) => r.draw))
       .sort((a, b) => (outlets.get(a.outletId)?.sortOrder ?? 0) - (outlets.get(b.outletId)?.sortOrder ?? 0));
@@ -516,7 +579,12 @@ export interface LineupQuery {
   show: string[]; // 자사 방송일 보기: first(첫방) | end(종영일) | all(전체 방영일). 비면 자사 작품을 그리지 않는다
   // 2026-11-26 리디자인
   st: RunStatus[]; // 편성 상태 거르기(빈 배열 = 전부)
-  out: string[]; // 경쟁 방송사·OTT 코드 거르기(빈 배열 = 전부)
+  out: string[]; // @deprecated 옛 주소 out — 읽을 때 tv·ott로 바꾸고 다시 쓰지 않는다
+  tv: Sel; // 경쟁 방송사 선택(2차 개선): all · none · 코드 목록
+  ott: Sel; // OTT 선택
+  nobase: boolean; // 경쟁 비교·캘린더에서 기준 KT ENA 채널 숨기기
+  hm: string[]; // 막대에서 뺄 정보(보기 설정): period(방송 기간) · eps(편수) · cast(출연진)
+  legend: boolean; // 범례를 본문 아래에 늘 보이기(보기 설정)
   q: string; // 검색(작품명·출연진·이벤트명)
   cmp: CompareMode; // 경쟁 비교 묶음 기준
   cv: "month" | "week"; // 캘린더 월간·주간
@@ -560,17 +628,35 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
     month: isYm(get("month")) ? (get("month") as string) : defaultMonthOf(defaultFrom, defaultMonth),
     dfrom: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dfrom") as string) : null,
     dto: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dto") as string) : null,
-    hide: listOf(get("hide")).filter((h) => ["own", "rival", "ott", "event"].includes(h)),
+    hide: listOf(get("hide")).filter((h) => ["own", "rival", "ott", "event", "undated"].includes(h)),
     can: /^[A-Z_]{2,12}$/.test((get("can") ?? "").toUpperCase()) ? (get("can") as string).toUpperCase() : null,
     // 캘린더 일정 종류(첫방·종영·특집·전체 회차) — 기본: 첫방·종영 + KT ENA 전체 회차(사용자 지시 2026-11-26)
     show: showRaw === "none" ? [] : listOf(showRaw).filter((h) => SHOW_SET.has(h)).length > 0 ? listOf(showRaw).filter((h) => SHOW_SET.has(h)) : [...DEFAULT_SHOW],
     st: listOf(get("st")).filter((s) => STATUS_SET.has(s)) as RunStatus[],
-    out: listOf(get("out")).map((c) => c.toUpperCase()).filter((c) => /^[A-Z0-9_]{2,16}$/.test(c)),
+    out: [],
+    ...selFromQuery(get),
+    nobase: get("nobase") === "1",
+    hm: listOf(get("hm")).filter((h) => h === "period" || h === "eps" || h === "cast"),
+    legend: get("legend") === "1",
     q: (get("q") ?? "").slice(0, 60),
-    cmp: cmpQ === "time" || cmpQ === "genre" || cmpQ === "all" ? cmpQ : "dow",
+    cmp: cmpQ === "time" || cmpQ === "genre" || cmpQ === "all" || cmpQ === "outlet" ? cmpQ : "dow",
     cv: get("cv") === "week" ? "week" : "month",
     empty: get("empty") === "1",
   };
+}
+/**
+ * 경쟁 대상 선택 읽기 — 새 주소(tv·ott)가 우선. 옛 주소 out=코드들은 그 링크가 보여 주던 화면 그대로 옮긴다:
+ * 옛 규칙은 '목록에 있는 것만' 보였으므로 TV 코드가 없으면 방송사 '없음', OTT 코드가 없으면 OTT '없음'.
+ */
+function selFromQuery(get: (k: string) => string | null | undefined): { tv: Sel; ott: Sel } {
+  const tv = parseSel(get("tv"));
+  const ott = parseSel(get("ott"));
+  if (tv !== undefined || ott !== undefined) return { tv: tv ?? "all", ott: ott ?? "all" };
+  const old = listOf(get("out")).map((c) => c.toUpperCase()).filter((c) => /^[A-Z0-9_]{2,16}$/.test(c));
+  if (old.length === 0) return { tv: "all", ott: "all" };
+  const ottCodes = old.filter((c) => c.startsWith("OTT_"));
+  const tvCodes = old.filter((c) => !c.startsWith("OTT_"));
+  return { tv: tvCodes.length ? tvCodes : "none", ott: ottCodes.length ? ottCodes : "none" };
 }
 /** 캘린더 일정 종류 기본 — 첫방·종영(모든 채널) + KT ENA 전체 회차(사용자 지시 2026-11-26). 특집은 골라서. */
 export const DEFAULT_SHOW = ["first", "end", "all"] as const;
@@ -594,7 +680,11 @@ export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string, defau
   if (q.density === "compact") s.set("density", "compact");
   if (q.paper && q.paper !== "A4") s.set("paper", q.paper);
   if (q.st?.length) s.set("st", q.st.join(","));
-  if (q.out?.length) s.set("out", q.out.join(","));
+  if (q.tv !== undefined && !selIsAll(q.tv)) s.set("tv", selText(q.tv));
+  if (q.ott !== undefined && !selIsAll(q.ott)) s.set("ott", selText(q.ott));
+  if (q.nobase) s.set("nobase", "1");
+  if (q.hm?.length) s.set("hm", q.hm.join(","));
+  if (q.legend) s.set("legend", "1");
   if (q.q?.trim()) s.set("q", q.q.trim());
   if (q.view === "compare" && q.cmp && q.cmp !== "dow") s.set("cmp", q.cmp);
   if (q.empty) s.set("empty", "1");
@@ -652,7 +742,11 @@ export function conditionText(q: LineupQuery, channelNames: string[]): string {
   if (q.dows.length) parts.push(`요일 ${dowLabel([...q.dows].sort())}`);
   if (q.view === "compare" && q.cmp && q.cmp !== "dow") parts.push(`묶음 ${COMPARE_MODES.find((m) => m.key === q.cmp)?.label ?? ""}`);
   if (q.st?.length) parts.push(`상태 ${q.st.map((s) => STATUS_LABEL[s]).join("·")}`);
-  if (q.out?.length) parts.push(`방송사 ${q.out.length}곳`);
+  if (q.view === "compare" || q.view === "calendar" || q.view === "list") {
+    const sc = scopeOf({ tv: q.tv ?? "all", ott: q.ott ?? "all" });
+    parts.push(`범위 ${sc === "custom" ? `맞춤(방송사 ${selIsAll(q.tv) ? "전체" : selIsNone(q.tv) ? "없음" : (q.tv as string[]).length + "곳"} · OTT ${selIsAll(q.ott) ? "전체" : selIsNone(q.ott) ? "없음" : (q.ott as string[]).length + "곳"})` : SCOPES.find((x) => x.key === sc)?.label}`);
+  }
+  if (q.nobase) parts.push("기준 채널 숨김");
   if (q.q?.trim()) parts.push(`검색 '${q.q.trim()}'`);
   return parts.join(" · ");
 }

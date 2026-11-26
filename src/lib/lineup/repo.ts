@@ -283,9 +283,12 @@ const toSourceDto = (s: SourceRow): SourceDto => ({
   appliedAt: s.applied_at, appliedBy: s.applied_by, summary: s.summary ?? {},
 });
 
+/** 기본 라인업 조회에서 제외하는 방송사 코드(자료 관리에서만 조회) */
+export const LINEUP_EXCLUDED_OUTLETS = new Set(["MBC_GN"]);
+
 /** 화면용 — 기간 [from, to]와 겹치는 구간 + 그리기 값·맞대결·빈 주(서버 계산). */
 export async function loadLineup(from: string, to: string, today: string, canEdit: boolean): Promise<LineupPayload> {
-  const [outlets, slots, datedRuns, undatedRuns, holidays, events, sources, featuredRows, eventsExtended] = await Promise.all([
+  const [allOutlets, allSlots, datedRuns, undatedRuns, holidays, events, sources, featuredRows, eventsExtended] = await Promise.all([
     loadOutlets(),
     all<SlotRow>((a, b) => supabase.from("lineup_slots").select("id, outlet_id, name, days, start_minute, time_note, compare_block, default_genre, sort_order").is("archived_at", null).order("sort_order").range(a, b)),
     all<RunRow>((a, b) =>
@@ -301,6 +304,11 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
     supabase.from("featured_content").select("display_name, programs(canonical_name)").not("display_name", "is", null),
     eventsSchemaExtended(),
   ]);
+  // 기본 라인업 조회에서 빼는 방송사(2차 개선 2026-11-26: MBC경남은 KT ENA 편성 경쟁 분석에 필요 없음) — DB·원자료는 그대로, 자료 관리·업로드는 계속 본다.
+  // 여기서 빼면 화면(타임라인·경쟁 비교·캘린더·목록·검색)·인쇄·엑셀이 모두 같은 규칙을 따른다.
+  const outlets = allOutlets.filter((o) => !LINEUP_EXCLUDED_OUTLETS.has(o.code));
+  const keptOutletIds = new Set(outlets.map((o) => o.id));
+  const slots = allSlots.filter((s) => keptOutletIds.has(s.outlet_id));
   const featuredShort = featuredShortMap(
     ((featuredRows.data ?? []) as unknown as { display_name: string | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]).flatMap((r) => {
       const p = Array.isArray(r.programs) ? r.programs[0] : r.programs;

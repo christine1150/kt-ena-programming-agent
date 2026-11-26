@@ -5,9 +5,9 @@
 // 툴바 2줄: ① 기간·길이 · 필터 드롭다운(채널·장르·요일·상태·방송사/OTT·이벤트) · 검색 · 보기 설정 ② 보기별 기준(비교 묶음·캘린더 범위·방영 가능) · 적용 조건 · 범례 · 자료 기준일.
 // 대외비: 로그인 사용자에게만 보이고(proxy.ts + API 검사), 인쇄 머리에 '대외비'와 출력 시각을 찍는다.
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import type { Genre, LineupPayload, RunStatus } from "@/lib/lineup/types";
+import type { Genre, LineupPayload } from "@/lib/lineup/types";
 import DetailPanel from "./DetailPanel";
 import LineupGrid from "./LineupGrid";
 import SaveDialog from "./SaveDialog";
@@ -15,22 +15,36 @@ import UndatedStrip from "./UndatedStrip";
 import ListTable from "./ListTable";
 import EventEditor from "./EventEditor";
 import CalendarView, { CalLegend } from "./CalendarView";
-import { buildCalendar, CAL_LAYERS, CAL_MAX_DAYS, CAL_OWN_SHOW, calendarFetchRange, clampRange, monthRangeOf, type CalLayer, type CalOwnShow } from "@/lib/lineup/calendar";
+import FilterPanel, { type FilterValue } from "./FilterPanel";
+import { buildCalendar, CAL_MAX_DAYS, CAL_OWN_SHOW, calendarFetchRange, clampRange, monthRangeOf, type CalLayer, type CalOwnShow } from "@/lib/lineup/calendar";
 import { addDays, isoDow } from "@/lib/lineup/dates";
-import { laneEvents, type LaneEvent, EVENT_KIND_LABEL, EVENT_KIND_ICON } from "@/lib/lineup/events";
-import { BRAND, GENRE_FILL, UI } from "@/lib/lineup/tokens";
+import { type LaneEvent } from "@/lib/lineup/events";
+import { GENRE_FILL, UI } from "@/lib/lineup/tokens";
 import {
-  addMonthsDate, buildCompareRows, buildOwnRows, COMPARE_MODES, dateDot, dateFull, dowLabel, GENRE_LABEL, LAYOUT, LENGTHS, lineupSearch, MAX_LEN, queryRange, STATUS_LABEL,
-  type Filters, type LineupQuery, type ViewMode,
+  addMonthsDate, buildCompareRows, buildOwnRows, COMPARE_MODES, dateDot, dateFull, dowLabel, GENRE_LABEL, LAYOUT, LENGTHS, lineupSearch, MAX_LEN, queryRange, SCOPES, scopeOf, scopeSel,
+  selIsAll, selIsNone, STATUS_LABEL, type Filters, type LineupQuery, type Scope, type Sel, type ViewMode,
 } from "@/lib/lineup/viewModel";
-import { Btn, CheckList, Icon, Menu, MenuDivider, MenuLabel, OptionRow, Segmented, Tabs } from "./ui";
+import { Btn, Icon, Menu, MenuDivider, MenuLabel, OptionRow, Segmented, Tabs } from "./ui";
 
 export type InitialState = LineupQuery & { sel: string | null };
 
 const GENRES: Genre[] = ["drama", "variety", "business", "other"];
-const DOWS = [1, 2, 3, 4, 5, 6, 7];
 const STALE_DAYS = 30;
 export const DENSITY_COOKIE = "lineup_density";
+/** 자료 기준 종류 — 원자료 종류를 편성 업무 묶음으로(경쟁 예능 등 신작은 '신작 목록' 양식으로 들어온다) */
+const SOURCE_CATS = [
+  { key: "own", label: "KT ENA", kinds: ["own_xlsx"] },
+  { key: "drama", label: "경쟁 방송사 드라마", kinds: ["industry_xlsx"] },
+  { key: "new", label: "경쟁 신작(예능 등)", kinds: ["standard_xlsx", "paste"] },
+  { key: "ott", label: "OTT", kinds: ["outlet_xlsx"] },
+];
+const SCOPE_HINT: Record<Exclude<Scope, "custom">, string> = {
+  market: "기준 KT ENA 채널 + 경쟁 방송사 전체 + OTT 전체",
+  tv: "기준 KT ENA 채널 + 경쟁 방송사 전체(OTT 제외)",
+  ott: "기준 KT ENA 채널 + OTT 전체(경쟁 방송사 제외)",
+  own: "KT ENA 계열 채널 전체(경쟁 방송사·OTT 제외)",
+};
+const Sep = () => <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-[var(--lu-line)]" />;
 const SOURCE_KIND_KO: Record<string, string> = { own_xlsx: "KT ENA 라인업", industry_xlsx: "업계 드라마 종합본", outlet_xlsx: "방송사·OTT 라인업", standard_xlsx: "표준 양식", paste: "붙여넣기", manual: "직접 수정" };
 
 
@@ -114,10 +128,11 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
 
   const set = useCallback((patch: Partial<InitialState>) => setSt((s) => ({ ...s, ...patch })), []);
   const { channels, genres, dows, view } = st;
-  const filters: Filters = useMemo(() => ({ channels, genres, dows, statuses: st.st, outlets: st.out }), [channels, genres, dows, st.st, st.out]);
+  // 공통 조회 조건(P0-06) — 경쟁 비교·캘린더·목록·OTT 미정 목록·인쇄·엑셀이 같은 값을 쓴다
+  const filters: Filters = useMemo(() => ({ channels, genres, dows, statuses: st.st, tv: st.tv, ott: st.ott, showBase: !st.nobase }), [channels, genres, dows, st.st, st.tv, st.ott, st.nobase]);
   const calModel = useMemo(
-    () => (data && view === "calendar" ? buildCalendar(data, { from: calRange.from, to: calRange.to, channels, genres, hide: st.hide as CalLayer[], show: st.show as CalOwnShow[], can: st.can }) : null),
-    [data, view, calRange, channels, genres, st.hide, st.show, st.can]
+    () => (data && view === "calendar" ? buildCalendar(data, { from: calRange.from, to: calRange.to, channels, genres, hide: st.hide.filter((h) => h === "event") as CalLayer[], show: st.show as CalOwnShow[], can: st.can, tv: st.tv, ott: st.ott, statuses: st.st, showBase: !st.nobase }) : null),
+    [data, view, calRange, channels, genres, st.hide, st.show, st.can, st.tv, st.ott, st.st, st.nobase]
   );
   const calOwnCodes = channels.length > 0 ? channels : ["ENA"];
   const grid = useMemo(() => {
@@ -137,22 +152,82 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
     for (const s of data.sources) if (s.kind !== "manual" && !byKind.has(s.kind)) byKind.set(s.kind, s);
     return [...byKind.values()];
   }, [data]);
-  const asOf = latest.reduce<string | null>((m, s) => (!m || s.asOf > m ? s.asOf : m), null);
   const showEvents = !st.hide.includes("event");
-  const calKinds = CAL_LAYERS.filter((l) => l.key !== "event" && !st.hide.includes(l.key));
-  const calKindsLabel = calKinds.length === 3 ? "전체" : calKinds.length === 0 ? "없음" : calKinds.map((l) => l.label).join("·");
-  const calShowLabel = st.show.length === 0 ? "없음" : CAL_OWN_SHOW.filter((o) => st.show.includes(o.key)).map((o) => o.label.replace("(KT ENA)", "").replace("·공개", "").replace("·단발", "")).join("·");
+  const showUndated = !st.hide.includes("undated");
   const panelOpen = !!(data && selected);
 
-  // 적용된 조건(지울 수 있는 칩)
+  // ── 비교 범위·장르·세부 필터(2차 개선 §3·§4) ──
+  const scope = scopeOf(st);
+  const groupACodes = ownOutlets.filter((o) => o.group === "A").map((o) => o.code);
+  const applyScope = (sc: Exclude<Scope, "custom">) => {
+    // 프리셋은 비교 대상만 바꾼다(장르·기간·검색은 그대로). 'KT ENA만' = 계열 채널 전체가 기준. 거기서 다른 범위로 나오면 기준을 ENA로 되돌린다.
+    const wasOwnAll = scope === "own" && groupACodes.length > 1 && groupACodes.every((x) => st.channels.includes(x));
+    set({ ...scopeSel(sc), nobase: false, ...(sc === "own" ? { channels: groupACodes } : wasOwnAll ? { channels: [] } : {}) });
+  };
+  const selCount = (v: Sel, all: number) => (selIsAll(v) ? `전체 ${all}` : selIsNone(v) ? "없음" : `${(v as string[]).length}/${all}`);
+  const customText = `맞춤 범위 — 방송사 ${selCount(st.tv, rivalOutlets.length)} · OTT ${selCount(st.ott, ottOutlets.length)} (필터에서 바꿈)`;
+  const genreSeg: "all" | "drama" | "variety" | null = st.genres.length === 0 ? "all" : st.genres.length === 1 && (st.genres[0] === "drama" || st.genres[0] === "variety") ? st.genres[0] : null;
+  const filterValue: FilterValue = { channels: st.channels, nobase: st.nobase, genres: st.genres, dows: st.dows, st: st.st, tv: st.tv, ott: st.ott, can: st.can };
+  const filterDefaults: FilterValue = { channels: [], nobase: false, genres: [], dows: [], st: [], tv: "all", ott: "all", can: null };
+  const filterCount = [
+    st.view === "own" || st.view === "list" ? st.channels.length > 0 : st.nobase || (scope !== "own" && st.channels.length > 0 && !(st.channels.length === 1 && st.channels[0] === "ENA")), // KT ENA만 프리셋이 정한 채널은 세지 않는다
+    genreSeg === null,
+    !isCal && st.dows.length > 0,
+    st.st.length > 0,
+    st.view !== "own" && scope === "custom",
+    isCal && !!st.can,
+  ].filter(Boolean).length;
+  const lenLabel = st.len === 12 ? "1년" : `${st.len}개월`;
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+  const needRef = useRef(new Map<string, number>());
+
+  // 캘린더 일정 빠른 선택(2차 개선 §7) — 세부 종류는 같은 메뉴 아래
+  const CAL_PRESETS: { key: string; label: string; short: string; patch: Partial<InitialState> }[] = [
+    { key: "basic", label: "기본 일정 — 첫방·종영 + KT ENA 전체 회차", short: "기본", patch: { show: ["first", "end", "all"] } },
+    { key: "firstend", label: "첫방·종영만", short: "첫방·종영", patch: { show: ["first", "end"] } },
+    { key: "own", label: "KT ENA 편성 — 전체 회차·특집", short: "KT ENA 편성", patch: { show: ["first", "end", "special", "all"], tv: "none", ott: "none", nobase: false } },
+    { key: "ott", label: "OTT 공개", short: "OTT 공개", patch: { show: ["first"], tv: "none", ott: "all", nobase: true } },
+  ];
+  const showSet = [...st.show].sort().join(",");
+  const calPreset =
+    scope === "own" && st.show.includes("all") && st.show.includes("special") ? "own" : scope === "ott" && st.nobase && showSet === "first" ? "ott" : showSet === "end,first" ? "firstend" : showSet === "all,end,first" ? "basic" : "custom";
+  const calPresetLabel = CAL_PRESETS.find((p) => p.key === calPreset)?.short ?? "맞춤";
+
+  // 자료 기준 — 종류별 최신 기준일(KT ENA · 경쟁 드라마 · 경쟁 신작 · OTT), 머리 글자는 가장 이른~늦은 날짜
+  const asOfCats = SOURCE_CATS.map((cat) => ({
+    ...cat,
+    asOf: (data?.sources ?? []).filter((x) => cat.kinds.includes(x.kind)).reduce<string | null>((m, x) => (!m || x.asOf > m ? x.asOf : m), null),
+  }));
+  const knownAsOf = asOfCats.map((x) => x.asOf).filter((x): x is string => !!x).sort();
+  const asOfLabel = knownAsOf.length === 0 ? "자료 기준" : knownAsOf[0] === knownAsOf[knownAsOf.length - 1] ? `자료 ${dateDot(knownAsOf[0])}` : `자료 ${dateDot(knownAsOf[0])}–${dateDot(knownAsOf[knownAsOf.length - 1])}`;
+
+  // 적용된 조건(초기화 버튼에 개수)
   const applied: { key: string; label: string; clear: () => void }[] = [];
-  if (st.view !== "compare" && !isCal && st.channels.length > 0) applied.push({ key: "ch", label: `채널 ${st.channels.map((c) => ownOutlets.find((o) => o.code === c)?.name ?? c).join("·")}`, clear: () => set({ channels: [] }) });
+  if ((st.view === "own" || st.view === "list") && st.channels.length > 0) applied.push({ key: "ch", label: `채널 ${st.channels.map((x) => ownOutlets.find((o) => o.code === x)?.name ?? x).join("·")}`, clear: () => set({ channels: [] }) });
   if (st.genres.length > 0) applied.push({ key: "g", label: `장르 ${st.genres.map((g) => GENRE_LABEL[g]).join("·")}`, clear: () => set({ genres: [] }) });
   if (!isCal && st.dows.length > 0) applied.push({ key: "d", label: `요일 ${dowLabel([...st.dows].sort())}`, clear: () => set({ dows: [] }) });
-  if (st.st.length > 0) applied.push({ key: "s", label: `상태 ${st.st.map((s) => STATUS_LABEL[s]).join("·")}`, clear: () => set({ st: [] }) });
-  if (st.out.length > 0) applied.push({ key: "o", label: `방송사·OTT ${st.out.length}곳`, clear: () => set({ out: [] }) });
+  if (st.st.length > 0) applied.push({ key: "s", label: `상태 ${st.st.map((x) => STATUS_LABEL[x]).join("·")}`, clear: () => set({ st: [] }) });
+  if (st.view !== "own" && scope !== "market") applied.push({ key: "scope", label: scope === "custom" ? customText : `범위 ${SCOPES.find((x) => x.key === scope)?.label}`, clear: () => set({ tv: "all", ott: "all" }) });
+  if (st.view !== "own" && st.nobase) applied.push({ key: "nobase", label: "기준 채널 숨김", clear: () => set({ nobase: false }) });
   if (st.q.trim()) applied.push({ key: "q", label: `검색 ‘${st.q.trim()}’`, clear: () => set({ q: "" }) });
-  const resetAll = () => set({ channels: st.view === "compare" || isCal ? st.channels : [], genres: [], dows: [], st: [], out: [], q: "" });
+  const resetAll = () => set({ channels: [], genres: [], dows: [], st: [], tv: "all", ott: "all", nobase: false, q: "" });
+  // 둘째 줄이 넘치면 줄인 모양(길이 단추 → 메뉴, 범위 글자 짧게)으로 — 실제 넘침을 재서 정한다. 세 번째 줄을 만들지 않고 상세 패널을 열어도 넘치지 않게(§3.2).
+  // 넓힐 때는 넘쳤던 폭(needRef)을 기억해 그 폭이 생기면 되돌린다(왕복 깜빡임 방지).
+  const layoutKey = `${st.view}|${st.cv}|${scope === "custom" ? 1 : 0}|${st.st.length > 0 ? 1 : 0}|${st.can ? 1 : 0}|${applied.length > 0 ? 1 : 0}|${!!st.dfrom}`;
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const need = needRef.current.get(layoutKey);
+      if (!compact && el.scrollWidth > el.clientWidth + 1) {
+        needRef.current.set(layoutKey, el.scrollWidth);
+        setCompact(true);
+      } else if (compact && (need === undefined || el.clientWidth >= need)) setCompact(false);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [layoutKey, compact]);
 
   const periodLabel = isCal
     ? isWeek
@@ -178,7 +253,6 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
     else if (isCal) set({ month: defaultMonth, dfrom: null, dto: null });
     else set({ from: defaultFrom });
   };
-  const upcoming = data ? laneEvents(data).filter((e) => e.to >= shownFrom && e.from <= shownTo) : [];
 
   // 화면 높이에서 전역 메뉴(44) + 머리 두 줄(약 86) + 여백·OTT 패널 머리를 뺀 만큼 — 타임라인이 첫 화면을 최대한 쓴다
   const timelineMax = "calc(100vh - 196px)";
@@ -193,41 +267,53 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
           <span>출력 {printedAt}</span>
         </div>
 
-        {/* ── 1줄: 제목 · 보기 탭 · 자료 기준 · 보기 설정(밀도·범례) · 자료 관리 · 저장 ── */}
-        <header className="flex items-end gap-5 border-b border-[var(--lu-line)] print:hidden">
-          <h1 className="pb-2.5 text-[17px] leading-none font-bold text-[var(--lu-text)]">라인업</h1>
+        {/* ── 1줄: 제목 · 보기 탭 · 검색 · 자료 기준 · 보기 설정 · 자료 관리 · 저장 ── */}
+        <header className="flex flex-wrap items-end gap-x-5 gap-y-1 border-b border-[var(--lu-line)] min-[1024px]:flex-nowrap print:hidden">
+          <h1 className="shrink-0 pb-2.5 text-[17px] leading-none font-bold whitespace-nowrap text-[var(--lu-text)]">라인업</h1>
           <Tabs<ViewMode>
             bare
             items={[{ key: "own", label: "KT ENA" }, { key: "compare", label: "경쟁 비교" }, { key: "calendar", label: "캘린더" }, { key: "list", label: "목록" }]}
             value={st.view}
             onChange={(v) => {
               setDay(null);
-              set({ view: v, sel: null, channels: v === "compare" ? st.channels.slice(0, 1) : st.channels });
+              // 화면을 옮겨도 장르·검색·비교 범위는 그대로(지시문 §10). KT ENA 보기의 채널 고르기는 기준 채널과 뜻이 달라 비교 화면으로 갈 때만 첫 채널로 줄인다.
+              set({ view: v, sel: null, channels: v === "compare" && st.view === "own" ? st.channels.slice(0, 1) : st.channels });
             }}
           />
           <div className="ml-auto flex items-center gap-1 pb-1.5">
-            {/* 검색은 머리 줄에 — 둘째 줄(기간·필터)이 좁은 화면에서도 한 줄로 남게(사용자 요청: 상단 높이 축소) */}
             <label className="mr-1 flex h-7 w-[170px] items-center gap-1.5 rounded-[6px] border border-[var(--lu-line)] bg-white px-2 focus-within:border-[var(--lu-accent)] min-[1500px]:w-[220px]">
               <Icon name="search" size={13} className="text-[var(--lu-text-2)]" />
               <input value={st.q} onChange={(e) => set({ q: e.target.value.slice(0, 60) })} placeholder="작품명 · 출연진 검색" aria-label="작품명·출연진 검색" className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-[var(--lu-text-2)]" />
               {st.q && <button type="button" aria-label="검색어 지우기" onClick={() => set({ q: "" })} className="text-[var(--lu-text-2)] hover:text-[var(--lu-text)]"><Icon name="x" size={12} /></button>}
             </label>
-            <Menu size="sm" tone="ghost" label={asOf ? `자료 기준 ${dateDot(asOf)}` : "자료 기준"} align="right" width={340}>
-              <MenuLabel>최근 반영한 자료(종류별 최신)</MenuLabel>
-              {latest.length === 0 && <p className="px-2 py-1.5 text-[12.5px] text-[var(--lu-text-2)]">아직 올린 자료가 없습니다.</p>}
-              <ul>
-                {latest.map((s) => {
-                  const age = data ? daysSince(s.asOf, data.today) : 0;
-                  return (
-                    <li key={s.id} className="rounded-[5px] px-2 py-1.5">
-                      <p className="text-[12.5px] font-semibold text-[var(--lu-text)]">{s.title}</p>
-                      <p className="lu-num text-[11.5px] text-[var(--lu-text-2)]">
-                        {SOURCE_KIND_KO[s.kind] ?? s.kind} · 기준일 {dateFull(s.asOf)} · 반영 {s.appliedAt.slice(0, 10).replaceAll("-", ".")}
-                        {age > STALE_DAYS && <span className="text-[var(--lu-danger)]"> · {age}일 지난 자료</span>}
-                      </p>
-                    </li>
-                  );
-                })}
+            {/* 자료 기준 — 하나의 날짜로 전체가 최신인 것처럼 보이지 않게 범위로, 펼치면 종류별 반영일(지시문 §9.3) */}
+            <Menu size="sm" tone="ghost" label={asOfLabel} title="자료 종류별 반영일" align="right" width={360}>
+              <MenuLabel>자료 종류별 기준일</MenuLabel>
+              <ul className="mb-1">
+                {asOfCats.map((c) => (
+                  <li key={c.key} className="flex items-baseline gap-2 rounded-[5px] px-2 py-1 text-[12.5px]">
+                    <span className="w-[112px] shrink-0 font-semibold text-[var(--lu-text)]">{c.label}</span>
+                    {c.asOf ? (
+                      <span className="lu-num text-[var(--lu-text-2)]">
+                        {dateFull(c.asOf)}
+                        {data && daysSince(c.asOf, data.today) > STALE_DAYS && <span className="text-[var(--lu-danger)]"> · {daysSince(c.asOf, data.today)}일 지남</span>}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--lu-text-2)]">반영 자료 없음</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <MenuDivider />
+              <MenuLabel>최근 반영한 원자료</MenuLabel>
+              <ul className="lu-scroll max-h-[200px] overflow-y-auto">
+                {latest.length === 0 && <li className="px-2 py-1.5 text-[12.5px] text-[var(--lu-text-2)]">아직 올린 자료가 없습니다.</li>}
+                {latest.map((s) => (
+                  <li key={s.id} className="rounded-[5px] px-2 py-1">
+                    <p className="truncate text-[12.5px] font-medium text-[var(--lu-text)]">{s.title}</p>
+                    <p className="lu-num text-[11.5px] text-[var(--lu-text-2)]">{SOURCE_KIND_KO[s.kind] ?? s.kind} · 기준일 {dateFull(s.asOf)} · 반영 {s.appliedAt.slice(0, 10).replaceAll("-", ".")}</p>
+                  </li>
+                ))}
               </ul>
               {data?.canEdit && (
                 <>
@@ -236,25 +322,60 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
                 </>
               )}
             </Menu>
-            <Menu size="sm" tone="ghost" label="보기 설정" align="right" width={st.view === "list" ? 248 : 320} icon={<Icon name="settings" size={13} />}>
-              <MenuLabel>화면 밀도</MenuLabel>
-              <OptionRow radio checked={st.density === "comfy"} onClick={() => set({ density: "comfy" })} label="기본 — 제목 + 기간·편수·출연" />
-              <OptionRow radio checked={st.density === "compact"} onClick={() => set({ density: "compact" })} label="촘촘 — 한 줄" />
-              {st.view === "own" && (
-                <>
+            {/* 보기 설정 — 무엇을 볼지(필터)가 아니라 어떻게 보일지(묶음·밀도·표시 항목) */}
+            <Menu size="sm" tone="ghost" label="보기 설정" align="right" width={st.view === "list" ? 300 : 360} icon={<Icon name="settings" size={13} />}>
+              {(close) => (
+                <div className="space-y-0.5">
+                  {st.view === "compare" && (
+                    <>
+                      <MenuLabel>화면 구성 · 묶음 기준</MenuLabel>
+                      <div className="grid grid-cols-2">
+                        {COMPARE_MODES.map((m) => <OptionRow key={m.key} radio checked={st.cmp === m.key} onClick={() => set({ cmp: m.key })} label={m.label} />)}
+                      </div>
+                      <p className="px-2 pb-1 text-[11px] leading-snug text-[var(--lu-text-2)]">시작 시간대별은 시작 시각 한 시간 단위 묶음입니다. 실제 동시간대 경쟁은 작품을 누르면 상세에서 봅니다.</p>
+                      <MenuDivider />
+                    </>
+                  )}
+                  {st.view !== "list" && (
+                    <>
+                      <MenuLabel>정보 밀도</MenuLabel>
+                      <div className="grid grid-cols-2">
+                        <OptionRow radio checked={st.density === "comfy"} onClick={() => set({ density: "comfy" })} label="표준" />
+                        <OptionRow radio checked={st.density === "compact"} onClick={() => set({ density: "compact" })} label="촘촘하게" />
+                      </div>
+                      <MenuDivider />
+                    </>
+                  )}
+                  <MenuLabel>표시 항목</MenuLabel>
+                  <div className="grid grid-cols-2">
+                    {(st.view === "own" || st.view === "compare") &&
+                      ([["period", "방송 기간"], ["eps", "편수"], ["cast", "출연진"]] as const).map(([k, label]) => {
+                        const on = !st.hm.includes(k);
+                        return <OptionRow key={k} checked={on} onClick={() => set({ hm: on ? [...st.hm, k] : st.hm.filter((x) => x !== k) })} label={label} />;
+                      })}
+                    {st.view !== "list" && <OptionRow checked={showEvents} onClick={() => set({ hide: showEvents ? [...st.hide, "event"] : st.hide.filter((h) => h !== "event") })} label="주요 이벤트" />}
+                    <OptionRow checked={showUndated} onClick={() => set({ hide: showUndated ? [...st.hide, "undated"] : st.hide.filter((h) => h !== "undated") })} label="OTT 공개일 미정" />
+                    {st.view === "own" && <OptionRow checked={st.empty} onClick={() => set({ empty: !st.empty })} label="자료 없는 채널" />}
+                    {st.view !== "list" && <OptionRow checked={st.legend} onClick={() => set({ legend: !st.legend })} label="범례 늘 보기" />}
+                  </div>
+                  {st.view !== "list" && (
+                    <>
+                      <MenuDivider />
+                      <MenuLabel>범례</MenuLabel>
+                      <div className="px-2 pb-1.5">{isCal ? <CalLegend vertical /> : <TimelineLegend full vertical />}</div>
+                    </>
+                  )}
                   <MenuDivider />
-                  <OptionRow checked={st.empty} onClick={() => set({ empty: !st.empty })} label="자료 없는 채널도 보기" />
-                </>
+                  <div className="flex items-center gap-1 px-1 pb-0.5">
+                    <Btn size="sm" tone="ghost" onClick={() => set({ density: "comfy", hm: [], legend: false, empty: false, cmp: "dow", hide: st.hide.filter((h) => h !== "event" && h !== "undated") })}>기본 보기 복원</Btn>
+                    {data?.canEdit && (
+                      <Btn size="sm" tone="ghost" className="ml-auto" onClick={() => { close(); setEventEdit("new"); }}>
+                        <Icon name="plus" size={12} />외부 이벤트 등록
+                      </Btn>
+                    )}
+                  </div>
+                </div>
               )}
-              {st.view !== "list" && (
-                <>
-                  <MenuDivider />
-                  <MenuLabel>범례</MenuLabel>
-                  <div className="px-2 pb-1.5">{isCal ? <CalLegend vertical /> : <TimelineLegend full vertical />}</div>
-                </>
-              )}
-              <MenuDivider />
-              <p className="px-2 pb-1 text-[11.5px] leading-snug text-[var(--lu-text-2)]">보기·필터는 주소에 남아 링크로 공유됩니다. 밀도는 이 브라우저에 기억합니다.</p>
             </Menu>
             {data?.canEdit && (
               <Link href="/lineup/manage" className="inline-flex h-7 items-center rounded-[6px] px-2 text-[12.5px] font-medium text-[var(--lu-text-2)] hover:bg-[var(--lu-hover)] hover:text-[var(--lu-text)]">
@@ -268,15 +389,15 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
           </div>
         </header>
 
-        {/* ── 2줄: 기간 · 길이 · 필터 · 보기별 기준 · 검색 ── */}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 print:hidden">
-          <div className="flex items-center gap-0.5">
+        {/* ── 2줄: 기간 · 길이 | 비교 범위 프리셋 | 장르 | 필터 (2차 개선 §3.2) — 한 줄을 지키고, 좁으면 길이·범위 글자를 줄인다 ── */}
+        <div ref={rowRef} className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 min-[1024px]:flex-nowrap print:hidden">
+          <div className="flex shrink-0 items-center gap-0.5">
             <Btn size="sm" ariaLabel={isWeek ? "이전 주" : "이전 달"} onClick={() => move(-1)} className="w-7 px-0"><Icon name="chevron-left" size={13} /></Btn>
             <span className="lu-num min-w-[124px] px-1 text-center text-[14px] font-semibold text-[var(--lu-text)]">{periodLabel}</span>
             <Btn size="sm" ariaLabel={isWeek ? "다음 주" : "다음 달"} onClick={() => move(1)} className="w-7 px-0"><Icon name="chevron-right" size={13} /></Btn>
             <Btn size="sm" onClick={goToday} className="ml-1">오늘</Btn>
           </div>
-          <span aria-hidden className="mx-0.5 h-4 w-px bg-[var(--lu-line)]" />
+          <Sep />
           {isCal ? (
             <>
               <Segmented<"month" | "week">
@@ -293,7 +414,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
                   } else set({ cv: "month", month: calRange.from.slice(0, 7), dfrom: null, dto: null });
                 }}
               />
-              {!isWeek && (
+              {!isWeek && !compact && (
                 <Menu size="sm" label="직접 지정" active={!!st.dfrom} width={300}>
                   <MenuLabel>기간(최대 {CAL_MAX_DAYS / 7}주)</MenuLabel>
                   <div className="flex items-center gap-1.5 px-2 pb-2">
@@ -308,144 +429,128 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
             </>
           ) : (
             <>
-              <Segmented<number> size="sm" label="보는 길이" items={LENGTHS.map((n) => ({ key: n, label: n === 12 ? "1년" : `${n}개월` }))} value={LENGTHS.includes(st.len) ? st.len : null} onChange={(n) => set({ len: n })} />
-              <Menu size="sm" label="직접 지정" active={!LENGTHS.includes(st.len)} width={280}>
-                <MenuLabel>시작 월 ~ 끝 월(최대 {MAX_LEN}개월)</MenuLabel>
-                <div className="flex items-center gap-1.5 px-2 pb-2">
-                  <input type="month" aria-label="시작 월" value={st.from.slice(0, 7)} onChange={(e) => e.target.value && set({ from: e.target.value })} className="h-8 rounded-[6px] border border-[var(--lu-line)] px-1.5 text-[13px]" />
-                  <span>~</span>
-                  <input
-                    type="month"
-                    aria-label="끝 월"
-                    value={addMonths(st.from.slice(0, 7), st.len - 1)}
-                    onChange={(e) => {
-                      if (!e.target.value) return;
-                      const n = monthsBetween(st.from.slice(0, 7), e.target.value) + 1;
-                      set({ len: Math.max(1, Math.min(MAX_LEN, n)) });
-                    }}
-                    className="h-8 rounded-[6px] border border-[var(--lu-line)] px-1.5 text-[13px]"
-                  />
-                </div>
-              </Menu>
-            </>
-          )}
-          <span aria-hidden className="mx-0.5 h-4 w-px bg-[var(--lu-line)]" />
-          {/* 채널(자사) — 경쟁 비교는 기준 채널 하나, 캘린더는 여러 개(최소 하나), KT ENA·목록은 비면 '라인업 있는 채널 전부' */}
-          <Menu
-            size="sm"
-            label={st.view === "compare" || isCal ? `기준 ${calOwnCodes.map((c) => ownOutlets.find((o) => o.code === c)?.name ?? c).join("·")}` : "채널"}
-            active={st.view !== "compare" && !isCal && st.channels.length > 0}
-            count={st.view !== "compare" && !isCal ? st.channels.length : undefined}
-            width={240}
-          >
-            {st.view === "compare" ? (
-              <CheckList single options={ownOutlets.map((o) => ({ key: o.code, label: <ChannelOpt code={o.code} name={o.name} /> }))} value={calOwnCodes} onChange={(v) => set({ channels: v.slice(-1) })} />
-            ) : isCal ? (
-              <CheckList options={ownOutlets.map((o) => ({ key: o.code, label: <ChannelOpt code={o.code} name={o.name} /> }))} value={calOwnCodes} onChange={(v) => set({ channels: v.length ? v : ["ENA"] })} allLabel="ENA만" />
-            ) : (
-              <CheckList options={ownOutlets.map((o) => ({ key: o.code, label: <ChannelOpt code={o.code} name={o.name} /> }))} value={st.channels} onChange={(v) => set({ channels: v })} allLabel="라인업 있는 채널 전부" />
-            )}
-          </Menu>
-          <Menu size="sm" label="장르" active={st.genres.length > 0} count={st.genres.length} width={200}>
-            <CheckList options={GENRES.map((g) => ({ key: g, label: <span className="flex items-center gap-2"><span aria-hidden className="inline-block size-2.5 rounded-[2px]" style={{ background: GENRE_FILL[g] }} />{GENRE_LABEL[g]}</span> }))} value={st.genres} onChange={(v) => set({ genres: v })} />
-          </Menu>
-          {!isCal && (
-            <Menu size="sm" label="요일" active={st.dows.length > 0} count={st.dows.length} width={180}>
-              <CheckList options={DOWS.map((d) => ({ key: d, label: `${dowLabel([d])}요일` }))} value={st.dows} onChange={(v) => set({ dows: v })} />
-            </Menu>
-          )}
-          <Menu size="sm" label="상태" active={st.st.length > 0} count={st.st.length} width={200}>
-            <CheckList options={(["confirmed", "planned", "tentative"] as RunStatus[]).map((s) => ({ key: s, label: STATUS_LABEL[s] }))} value={st.st} onChange={(v) => set({ st: v })} />
-            <MenuDivider />
-            <p className="px-2 pb-1 text-[11.5px] leading-snug text-[var(--lu-text-2)]">휴방·결방·후속 미정 칸은 상태와 관계없이 남습니다.</p>
-          </Menu>
-          {st.view !== "own" && (
-            <Menu size="sm" label="방송사·OTT" active={st.out.length > 0} count={st.out.length} width={240}>
-              <MenuLabel>경쟁 방송사</MenuLabel>
-              <CheckList options={rivalOutlets.map((o) => ({ key: o.code, label: o.name }))} value={st.out} onChange={(v) => set({ out: v })} />
-              <MenuDivider />
-              <MenuLabel>OTT</MenuLabel>
-              {ottOutlets.map((o) => (
-                <OptionRow key={o.code} checked={st.out.includes(o.code)} onClick={() => set({ out: st.out.includes(o.code) ? st.out.filter((x) => x !== o.code) : [...st.out, o.code] })} label={o.name} />
-              ))}
-            </Menu>
-          )}
-          <Menu size="sm" label="이벤트" active={!showEvents} width={300}>
-            {(close) => (
-              <>
-                <OptionRow checked={showEvents} onClick={() => set({ hide: showEvents ? [...st.hide, "event"] : st.hide.filter((h) => h !== "event") })} label={isCal ? "공휴일·외부 이벤트 보이기" : "타임라인 위 이벤트 띠 보이기"} />
-                <MenuDivider />
-                <MenuLabel>이 기간 이벤트 {upcoming.length}</MenuLabel>
-                <ul className="lu-scroll max-h-[240px] overflow-y-auto">
-                  {upcoming.length === 0 && <li className="px-2 py-1.5 text-[12px] text-[var(--lu-text-2)]">등록된 공휴일·이벤트 없음</li>}
-                  {upcoming.map((ev) => (
-                    <li key={ev.key}>
-                      <button type="button" onClick={() => { close(); setEventEdit(ev); }} className="flex w-full items-center gap-2 rounded-[5px] px-2 py-1.5 text-left text-[12.5px] hover:bg-[var(--lu-hover)]">
-                        <span className="lu-num w-[38px] shrink-0 text-[var(--lu-text-2)]">{dateDot(ev.from)}</span>
-                        <Icon name={EVENT_KIND_ICON[ev.kind] ?? "dot"} size={12} className="text-[var(--lu-text-2)]" />
-                        <span className="min-w-0 flex-1 truncate font-medium text-[var(--lu-text)]">{ev.title}</span>
-                        <span className="shrink-0 text-[11px] text-[var(--lu-text-2)]">{EVENT_KIND_LABEL[ev.kind]}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                {data?.canEdit && (
+              {!compact && <Segmented<number> size="sm" label="보는 길이" items={LENGTHS.map((n) => ({ key: n, label: n === 12 ? "1년" : `${n}개월` }))} value={LENGTHS.includes(st.len) ? st.len : null} onChange={(n) => set({ len: n })} />}
+              <Menu size="sm" label={compact ? lenLabel : "직접 지정"} active={!compact && !LENGTHS.includes(st.len)} width={280}>
+                {(close) => (
                   <>
-                    <MenuDivider />
-                    <button type="button" onClick={() => { close(); setEventEdit("new"); }} className="flex w-full items-center gap-1.5 rounded-[5px] px-2 py-1.5 text-left text-[13px] font-semibold text-[var(--lu-text)] hover:bg-[var(--lu-hover)]">
-                      <Icon name="plus" size={13} /> 외부 이벤트 등록
-                    </button>
+                    {compact && (
+                      <div className="grid grid-cols-4 gap-1 px-2 pt-1 pb-2">
+                        {LENGTHS.map((n) => (
+                          <Btn key={n} size="sm" pressed={st.len === n} onClick={() => { set({ len: n }); close(); }}>{n === 12 ? "1년" : `${n}개월`}</Btn>
+                        ))}
+                      </div>
+                    )}
+                    <MenuLabel>시작 월 ~ 끝 월(최대 {MAX_LEN}개월)</MenuLabel>
+                    <div className="flex items-center gap-1.5 px-2 pb-2">
+                      <input type="month" aria-label="시작 월" value={st.from.slice(0, 7)} onChange={(e) => e.target.value && set({ from: e.target.value })} className="h-8 rounded-[6px] border border-[var(--lu-line)] px-1.5 text-[13px]" />
+                      <span>~</span>
+                      <input
+                        type="month"
+                        aria-label="끝 월"
+                        value={addMonths(st.from.slice(0, 7), st.len - 1)}
+                        onChange={(e) => {
+                          if (!e.target.value) return;
+                          const n = monthsBetween(st.from.slice(0, 7), e.target.value) + 1;
+                          set({ len: Math.max(1, Math.min(MAX_LEN, n)) });
+                        }}
+                        className="h-8 rounded-[6px] border border-[var(--lu-line)] px-1.5 text-[13px]"
+                      />
+                    </div>
                   </>
                 )}
-              </>
-            )}
-          </Menu>
-          {/* 보기별 기준 — 경쟁 비교 묶음 · 캘린더 범위 · 방영 가능 일시 */}
-          {(st.view === "compare" || isCal) && <span aria-hidden className="mx-0.5 h-4 w-px bg-[var(--lu-line)]" />}
-          {st.view === "compare" && (
-            <Menu size="sm" label={<>묶음 <b className="font-semibold">{COMPARE_MODES.find((m) => m.key === st.cmp)?.label}</b></>} title="비교 묶음 기준" width={200}>
-              {(close) => COMPARE_MODES.map((m) => <OptionRow key={m.key} radio checked={st.cmp === m.key} onClick={() => { set({ cmp: m.key }); close(); }} label={m.label} />)}
-            </Menu>
-          )}
-          {isCal && (
-            <>
-              {/* 구분(채널 종류)과 일정(종류)을 따로 고른다(사용자 지시 2026-11-26) */}
-              <Menu size="sm" label={<>구분 <b className="font-semibold">{calKindsLabel}</b></>} title="채널 구분" width={200}>
-                {CAL_LAYERS.filter((l) => l.key !== "event").map((l) => {
-                  const on = !st.hide.includes(l.key);
-                  return <OptionRow key={l.key} checked={on} onClick={() => set({ hide: on ? [...st.hide, l.key] : st.hide.filter((h) => h !== l.key) })} label={l.label} />;
-                })}
-              </Menu>
-              <Menu size="sm" label={<>일정 <b className="font-semibold">{calShowLabel}</b></>} title="일정 종류" width={220}>
-                {CAL_OWN_SHOW.map((o) => {
-                  const on = st.show.includes(o.key);
-                  return <OptionRow key={o.key} checked={on} onClick={() => set({ show: on ? st.show.filter((x) => x !== o.key) : [...st.show, o.key] })} label={o.label} />;
-                })}
-                <MenuDivider />
-                <p className="px-2 pb-1 text-[11.5px] leading-snug text-[var(--lu-text-2)]">첫방·종영·특집은 고른 구분(KT ENA·경쟁 채널·OTT) 모두에 적용됩니다. 전체 회차는 KT ENA 방송일만 있습니다.</p>
-              </Menu>
-              <Menu size="sm" label={st.can ? `방영 가능 · ${ownOutlets.find((o) => o.code === st.can)?.name ?? st.can}` : "방영 가능 일시"} active={!!st.can} width={250}>
-                <MenuLabel>ENA 방송 종료 + 채널별 홀드백 뒤 방영 가능 시점</MenuLabel>
-                <OptionRow radio checked={!st.can} onClick={() => set({ can: null })} label="안 봄" />
-                {ownOutlets.filter((o) => o.code !== "ENA").map((o) => (
-                  <OptionRow key={o.code} radio checked={st.can === o.code} onClick={() => set({ can: o.code })} label={o.name} />
-                ))}
               </Menu>
             </>
           )}
+          <Sep />
+          {/* 비교 범위 프리셋 — 누르면 바로 반영(시장 전체 = 기준 채널 + 경쟁 방송사 전체 + OTT 전체). 개별 채널을 바꾸면 '맞춤' */}
+          {st.view !== "own" && (
+            <>
+              <Segmented<Exclude<Scope, "custom">>
+                size="sm"
+                label="비교 범위"
+                items={SCOPES.map((x) => ({ key: x.key, label: compact ? x.short : x.label, title: SCOPE_HINT[x.key] }))}
+                value={scope === "custom" ? null : scope}
+                onChange={applyScope}
+              />
+              {scope === "custom" && (
+                <span title={customText} className="inline-flex h-7 shrink-0 items-center rounded-[6px] border border-[var(--lu-text)] bg-[var(--lu-text)] px-2 text-[12.5px] font-medium text-white">
+                  맞춤
+                </span>
+              )}
+              <Sep />
+            </>
+          )}
+          <Segmented<"all" | "drama" | "variety">
+            size="sm"
+            label="장르"
+            items={[{ key: "all", label: "전체" }, { key: "drama", label: "드라마" }, { key: "variety", label: "예능" }]}
+            value={genreSeg}
+            onChange={(g) => set({ genres: g === "all" ? [] : [g] })}
+          />
+          <Menu size="sm" label="필터" title="세부 필터 — 기준 채널 · 장르 · 요일 · 상태 · 방송사·OTT" icon={<Icon name="filter" size={13} />} count={filterCount} active={filterCount > 0} width={st.view === "own" ? 300 : 620} align={st.view === "own" ? "left" : "right"}>
+            {(close) => (
+              <FilterPanel
+                view={st.view}
+                value={filterValue}
+                defaults={filterDefaults}
+                ownOutlets={ownOutlets}
+                tvOutlets={rivalOutlets}
+                ottOutlets={ottOutlets}
+                onApply={(v) => set({ ...v })}
+                onClose={close}
+              />
+            )}
+          </Menu>
+          {isCal && (
+            <Menu size="sm" label={<>일정 <b className="font-semibold">{calPresetLabel}</b></>} title="캘린더 일정 종류" width={250}>
+              {(close) => (
+                <>
+                  <MenuLabel>빠른 선택</MenuLabel>
+                  {CAL_PRESETS.map((p) => (
+                    <OptionRow key={p.key} radio checked={calPreset === p.key} onClick={() => { set(p.patch); close(); }} label={p.label} />
+                  ))}
+                  <MenuDivider />
+                  <MenuLabel>일정 종류(세부)</MenuLabel>
+                  {CAL_OWN_SHOW.map((o) => {
+                    const on = st.show.includes(o.key);
+                    return <OptionRow key={o.key} checked={on} onClick={() => set({ show: on ? st.show.filter((x) => x !== o.key) : [...st.show, o.key] })} label={o.label} />;
+                  })}
+                </>
+              )}
+            </Menu>
+          )}
+          {isCal && st.can && (
+            <button type="button" onClick={() => set({ can: null })} title="방영 가능 일시 끄기" className="inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border border-[var(--lu-line)] bg-white px-2 text-[12.5px] font-medium text-[var(--lu-text)] hover:border-[var(--lu-control)]">
+              방영 가능 · {ownOutlets.find((o) => o.code === st.can)?.name ?? st.can}
+              <Icon name="x" size={11} />
+            </button>
+          )}
+          {st.st.length > 0 && (
+            <button type="button" onClick={() => set({ st: [] })} title="주소에 담긴 편성 상태 조건 — 누르면 해제" className="inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border border-dashed border-[var(--lu-control)] px-2 text-[12.5px] text-[var(--lu-text)]">
+              상태 {st.st.map((x) => STATUS_LABEL[x]).join("·")}만
+              <Icon name="x" size={11} />
+            </button>
+          )}
           {applied.length > 0 && (
-            <button type="button" onClick={resetAll} title={`적용 중: ${applied.map((a) => a.label).join(" · ")}`} className="inline-flex h-7 items-center gap-1 rounded-[6px] px-2 text-[12.5px] font-medium text-[var(--lu-text-2)] hover:bg-[var(--lu-hover)] hover:text-[var(--lu-text)]">
+            <button type="button" onClick={resetAll} title={`적용 중: ${applied.map((a) => a.label).join(" · ")}`} className="ml-auto inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] px-2 text-[12.5px] font-medium text-[var(--lu-text-2)] hover:bg-[var(--lu-hover)] hover:text-[var(--lu-text)]">
               <Icon name="x" size={11} />
               조건 초기화 <span className="lu-num">{applied.length}</span>
             </button>
           )}
         </div>
+        {st.legend && st.view !== "list" && <div className="mt-2 print:hidden">{isCal ? <CalLegend /> : <TimelineLegend full />}</div>}
 
         <div className="mt-2.5">
-          {error && <p className="mb-2 rounded-[6px] border border-[#f3c5c1] bg-[#fdf3f2] px-3 py-2 text-[13px] text-[var(--lu-danger)]">{error}</p>}
+          {error && (
+            <div role="alert" className="mb-2 flex flex-wrap items-center gap-x-2 rounded-[6px] border border-[#f3c5c1] bg-[#fdf3f2] px-3 py-2 text-[13px] text-[var(--lu-danger)]">
+              <span className="font-semibold">{error}</span>
+              {data && <span className="lu-num text-[var(--lu-text)]">아래는 이전에 불러온 {dateFull(data.from)} ~ {dateFull(data.to)} 자료입니다(새 기간 자료 아님).</span>}
+              <button type="button" onClick={() => setReloadKey((k) => k + 1)} className="ml-auto underline underline-offset-2">다시 시도</button>
+            </div>
+          )}
           {!data && loading && <p className="py-16 text-center text-[13px] text-[var(--lu-text-2)]">라인업을 불러오는 중…</p>}
           {data && calModel && (
-            <div className={loading ? "opacity-60 transition-opacity" : undefined}>
+            <div className={loading || error ? "opacity-60 transition-opacity" : undefined}>
               <CalendarView
                 data={data}
                 model={calModel}
@@ -461,16 +566,16 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
                 keyOnly={!st.show.includes("all")}
                 onSelectEvent={(ev) => setEventEdit(ev)}
               />
-              {!st.hide.includes("ott") && <UndatedStrip data={data} filters={filters} selectedId={st.sel} onSelect={(id) => set({ sel: id })} />}
+              {showUndated && <UndatedStrip data={data} filters={filters} selectedId={st.sel} onSelect={(id) => set({ sel: id })} />}
             </div>
           )}
           {data && st.view === "list" && (
-            <div className={loading ? "opacity-60 transition-opacity" : undefined}>
+            <div className={loading || error ? "opacity-60 transition-opacity" : undefined}>
               <ListTable data={data} filters={filters} query={st.q} selectedId={st.sel} onSelect={(id) => set({ sel: id })} maxHeight="calc(100vh - 200px)" />
             </div>
           )}
           {data && grid && (
-            <div className={loading ? "opacity-60 transition-opacity" : undefined}>
+            <div className={loading || error ? "opacity-60 transition-opacity" : undefined}>
               {grid.rows.length === 0 ? (
                 <EmptyState canEdit={data.canEdit} onReset={applied.length ? resetAll : undefined} />
               ) : (
@@ -489,6 +594,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
                   showEvents={showEvents}
                   onSelectEvent={(ev) => setEventEdit(ev)}
                   maxHeight={timelineMax}
+                  hideMeta={st.hm}
                 />
               )}
               {st.view === "own" && !st.empty && grid.hiddenChannels.length > 0 && (
@@ -497,7 +603,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
                   <button type="button" onClick={() => set({ empty: true })} className="underline underline-offset-2 hover:text-[var(--lu-text)]">함께 보기</button>
                 </p>
               )}
-              <UndatedStrip data={data} filters={filters} selectedId={st.sel} onSelect={(id) => set({ sel: id })} />
+              {showUndated && <UndatedStrip data={data} filters={filters} selectedId={st.sel} onSelect={(id) => set({ sel: id })} />}
             </div>
           )}
         </div>
@@ -525,15 +631,6 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
         />
       )}
     </div>
-  );
-}
-
-function ChannelOpt({ code, name }: { code: string; name: string }) {
-  return (
-    <span className="flex items-center gap-2">
-      <span aria-hidden className="inline-block h-3 w-[3px] rounded-[1px]" style={{ background: BRAND[code] ?? UI.control }} />
-      {name}
-    </span>
   );
 }
 

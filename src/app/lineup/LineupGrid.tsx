@@ -3,7 +3,7 @@
 // 라인업 타임라인(KT ENA·경쟁 비교 공용) — 2026-11-26 전면 리디자인(docs/lineup/REDESIGN_2026-11.md §3·§4).
 // 한 스크롤 상자 안의 <table> 하나: 머리(월·주·오늘·외부 이벤트 띠)는 위에, 첫 열(채널·요일·시각)은 왼쪽에 붙는다. 인쇄는 머리를 쪽마다 반복.
 // 표현 규칙(사용자 확정 Style 2): 자사 = 장르색 채움(확정) / 옅은 바탕 + 점선(예정), 경쟁사·OTT = 흰 바탕 + 장르색 아웃라인 + 왼쪽 강조선.
-// 장르·소유·상태를 색 하나로 겹쳐 말하지 않는다 — 상태는 실선/점선 + '예정' 글자, 소유는 채움/아웃라인 + 줄 머리 로고.
+// 장르·소유·상태를 색 하나로 겹쳐 말하지 않는다 — 상태는 실선(확정)/점선(예정·미정)으로, 글자는 가안만 '미정'(2차 개선: '예정' 배지 삭제). 소유는 채움/아웃라인 + 줄 머리 로고.
 // 막대 좌표는 실제 날짜 그대로(길이를 늘리지 않는다). 첫방일만 있고 끝·편수가 없으면 막대 대신 시작 표식 + '기간 미정'.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GapDto, Genre, LineupPayload, OutletDto, RunDto, SlotDto, WorkDto } from "@/lib/lineup/types";
@@ -37,6 +37,8 @@ interface Props {
   onSelectEvent?: (ev: LaneEvent) => void;
   /** 화면 높이 제한(px 계산식) */
   maxHeight?: string;
+  /** 막대에서 뺄 정보(보기 설정): period · eps · cast */
+  hideMeta?: string[];
 }
 
 /** 화면 줄 — 자사 보기의 장르·요일 칸 합치기 정보(합칠 줄 수: 첫 줄 n, 덮이는 줄 0) · 요일 묶음 번호(옅은 띠 번갈아) */
@@ -47,7 +49,7 @@ const FONT = 13; // 막대 제목 글자(지시문 §3: 13~14px/600)
 const META = 11.5;
 
 export default function LineupGrid({
-  data, rows, runsBySlot, density, labelWidth, selectedId, onSelect, focusIds, printMode = false, view = "own", months = 8, query = "", showEvents = true, onSelectEvent, maxHeight = "calc(100vh - 250px)",
+  data, rows, runsBySlot, density, labelWidth, selectedId, onSelect, focusIds, printMode = false, view = "own", months = 8, query = "", showEvents = true, onSelectEvent, maxHeight = "calc(100vh - 250px)", hideMeta,
 }: Props) {
   const totalDays = dayIndex(data.from, data.to) + 1;
   const weeks = Math.ceil(totalDays / 7);
@@ -433,6 +435,7 @@ export default function LineupGrid({
                               dim={isDim(r)}
                               onSelect={onSelect}
                               footnote={footnotes.get(r.id)}
+                              hideMeta={hideMeta}
                             />
                           );
                         })}
@@ -543,9 +546,9 @@ function barLook(genre: Genre, own: boolean, status: RunDto["status"]) {
 
 function RunBar(props: {
   run: RunDto; work: WorkDto | undefined; slot: SlotDto | undefined; outlet: OutletDto | undefined; data: LineupPayload; P: (d: string) => number; totalPx: number;
-  barH: number; rowH: number; density: Density; months: number; nextStart: string | null; selected: boolean; dim: boolean; onSelect: (id: string | null) => void; footnote?: number;
+  barH: number; rowH: number; density: Density; months: number; nextStart: string | null; selected: boolean; dim: boolean; onSelect: (id: string | null) => void; footnote?: number; hideMeta?: string[];
 }) {
-  const { run, work, slot, outlet, data, P, totalPx, barH, rowH, density, months, nextStart, selected, dim, onSelect, footnote } = props;
+  const { run, work, slot, outlet, data, P, totalPx, barH, rowH, density, months, nextStart, selected, dim, onSelect, footnote, hideMeta } = props;
   const d = run.draw!;
   const own = outlet?.side === "own";
   const genre = runGenre(run, work, slot);
@@ -559,7 +562,7 @@ function RunBar(props: {
   const eps = episodeText(run, work);
   const castN = months <= 3 ? 5 : 3;
   const cast = (work?.cast ?? []).slice(0, castN).join(", ");
-  const statusWord = run.status === "confirmed" ? "확정" : run.status === "planned" ? "예정" : "가안";
+  const statusWord = run.status === "confirmed" ? "확정" : run.status === "planned" ? "예정" : "미정"; // 낭독·툴팁에만(화면 글자는 가안만 '미정')
   const aria = `${title}, ${outlet?.name ?? ""} ${own ? "KT ENA" : "경쟁사"}, ${GENRE_LABEL[genre]}, ${period}${eps ? `, ${eps}` : ""}, ${statusWord}`;
   const tip = [title, `${outlet?.name ?? ""} · ${GENRE_LABEL[genre]} · ${statusWord}`, [period, eps].filter(Boolean).join(" · "), cast, run.needsReview ? "확인 필요" : ""].filter(Boolean).join("\n");
   const click = () => onSelect(selected ? null : run.id);
@@ -575,7 +578,7 @@ function RunBar(props: {
     const labelW = Math.max(px, Math.min(textWidth(`${title} · ${meta}`, 12.5) + 12, room));
     return (
       <button type="button" onClick={click} aria-label={`${aria} (월 단위 일정)`} aria-pressed={selected} title={`${tip}\n월 단위 발표 — 정확한 날짜 미정`}
-        className={cx("absolute top-0 flex flex-col justify-end overflow-visible text-left", ring, dim && "opacity-35")}
+        className={cx("absolute top-0 flex flex-col justify-end overflow-visible text-left", ring, dim && "opacity-50")}
         style={{ left: `${left}%`, width: `${widthPct}%`, minWidth: 16, height: rowH }}>
         <span className="truncate px-1 text-[12.5px] leading-4 font-semibold text-[var(--lu-text)]" style={{ width: labelW, maxWidth: labelW }}>
           {title} <span className="font-normal text-[var(--lu-text-2)]">· {meta}</span>
@@ -594,7 +597,7 @@ function RunBar(props: {
       run.runKind === "hiatus" ? { className: "lu-hatch", style: { border: `1px solid ${UI.line}` } } : run.runKind === "filler" ? { className: "bg-[var(--lu-page)]", style: { border: `1px solid ${UI.line}` } } : { className: "bg-white", style: { border: `1.5px dashed ${UI.control}` } };
     return (
       <button type="button" onClick={click} aria-label={`${label} ${period}`} aria-pressed={selected} title={`${label}\n${period}`}
-        className={cx("absolute flex items-center overflow-hidden rounded-[4px] px-2 text-left", look.className, ring, dim && "opacity-35")}
+        className={cx("absolute flex items-center overflow-hidden rounded-[4px] px-2 text-left", look.className, ring, dim && "opacity-50")}
         style={{ left: `${left}%`, width: `${widthPct}%`, top: (rowH - barH) / 2, height: barH, ...look.style }}>
         {px > 36 && <span className="truncate text-[12px] font-semibold text-[var(--lu-text-2)]">{label}</span>}
       </button>
@@ -607,14 +610,14 @@ function RunBar(props: {
     const room = (((nextStart ? P(nextStart) : 100) - left) / 100) * totalPx - 8;
     return (
       <button type="button" onClick={click} aria-label={`${aria}, 종료일·편수 미정`} aria-pressed={selected} title={`${tip}\n종료일·편수 미정 — 시작일만 확인`}
-        className={cx("absolute flex items-center gap-1.5 rounded-[3px] text-left", ring, dim && "opacity-35")}
+        className={cx("absolute flex items-center gap-1.5 rounded-[3px] text-left", ring, dim && "opacity-50")}
         style={{ left: `${left}%`, top: (rowH - barH) / 2, height: barH, maxWidth: Math.max(28, Math.min(room, 320)) }}>
         <span aria-hidden className="h-full w-[3px] shrink-0 rounded-[1px]" style={{ background: c }} />
         <span aria-hidden className="size-0 shrink-0 border-y-[5px] border-l-[7px] border-y-transparent" style={{ borderLeftColor: c }} />
         {room > 40 && (
           <span className="flex min-w-0 flex-col leading-tight">
             <span className="truncate text-[12.5px] font-semibold text-[var(--lu-text)]">{title}</span>
-            {density === "comfy" && <span className="lu-num truncate text-[11px] text-[var(--lu-text-2)]">{dateDot(run.startDate)}~ · 기간 미정{!own && run.status !== "confirmed" ? " · 예정" : ""}</span>}
+            {density === "comfy" && <span className="lu-num truncate text-[11px] text-[var(--lu-text-2)]">{dateDot(run.startDate)}~ · 기간 미정</span>}
           </span>
         )}
       </button>
@@ -626,7 +629,8 @@ function RunBar(props: {
   const stripW = look.strip ? 3 : 0;
   const inner = px - 14 - stripW;
   // 글자 고르기 — 제목 먼저, 공간이 줄면 출연 → 편수 → 기간 순으로 뺀다(1년 보기는 제목·기간만)
-  const parts = months >= 12 ? [period] : [period, eps, cast].filter(Boolean);
+  const hm = new Set(hideMeta ?? []);
+  const parts = (months >= 12 ? [hm.has("period") ? "" : period] : [hm.has("period") ? "" : period, hm.has("eps") ? "" : eps, hm.has("cast") ? "" : cast]).filter(Boolean);
   let meta = parts.join(" · ");
   while (parts.length > 0 && textWidth(meta, META) > inner) {
     parts.pop();
@@ -645,7 +649,7 @@ function RunBar(props: {
     if (room >= need) outsideW = need;
   }
   const twoLines = density === "comfy" && !markOnly && meta.length > 0;
-  const showTag = run.status !== "confirmed" && !markOnly && inner - Math.min(titleW, inner) > 34;
+  const showTag = run.status === "tentative" && !markOnly && inner - Math.min(titleW, inner) > 34; // 가안만 '미정'(예정은 점선으로 충분)
   const estAt = d.estimatedFrom ? Math.max(0, Math.min(100, ((P(d.estimatedFrom) - left) / Math.max(widthPct, 0.0001)) * 100)) : null;
   // 상시(끝 열림): 오늘까지 채우고 뒤는 점선 꼬리
   const openAt = extent === "open" ? Math.max(0, Math.min(100, ((P(data.today < d.from ? d.from : data.today) - left) / Math.max(widthPct, 0.0001)) * 100)) : null;
@@ -660,7 +664,7 @@ function RunBar(props: {
         aria-label={aria}
         aria-pressed={selected}
         title={footnote ? `[${footnote}] ${tip}` : tip}
-        className={cx("absolute flex overflow-hidden rounded-[4px] text-left transition-opacity", ring, dim && "opacity-30")}
+        className={cx("absolute flex overflow-hidden rounded-[4px] text-left transition-opacity", ring, dim && "opacity-50")}
         style={{
           left: `${left}%`,
           width: `${widthPct}%`,
@@ -685,7 +689,7 @@ function RunBar(props: {
               {!twoLines && meta && textWidth(shownTitle, FONT) + textWidth(meta, META) + 10 <= inner && (
                 <span className="lu-num truncate" style={{ fontSize: META, color: metaColor }}>{meta}</span>
               )}
-              {showTag && <span className={cx("ml-auto shrink-0 rounded-[3px] border border-dashed px-1 text-[10.5px] leading-[14px] font-semibold", look.onFill ? "border-white/80" : "border-[var(--lu-text-2)] text-[var(--lu-text-2)]")}>{run.status === "planned" ? "예정" : "가안"}</span>}
+              {showTag && <span className={cx("ml-auto shrink-0 rounded-[3px] border border-dashed px-1 text-[10.5px] leading-[14px] font-semibold", look.onFill ? "border-white/80" : "border-[var(--lu-text-2)] text-[var(--lu-text-2)]")}>미정</span>}
               {run.needsReview && inner > 90 && <span className="shrink-0 rounded-[3px] bg-[var(--lu-text)] px-1 text-[10.5px] leading-[14px] text-white">확인</span>}
             </span>
           )}
@@ -739,7 +743,7 @@ function Mark(props: {
         <span
           key={x}
           aria-hidden
-          className={cx("pointer-events-none absolute top-1/2", dim && "opacity-30")}
+          className={cx("pointer-events-none absolute top-1/2", dim && "opacity-50")}
           style={{ left: `${P(x)}%`, width: size, height: size, background: fill, border: `1.5px solid ${edge}`, transform: `translate(-50%, -50%)${isDots ? "" : " rotate(45deg)"}`, borderRadius: isDots ? 9999 : 1, zIndex: i === 0 ? 2 : 1 }}
         />
       ))}
@@ -749,7 +753,7 @@ function Mark(props: {
         aria-label={`${title} ${outlet?.name ?? ""} ${kindWord} ${all.join(", ")}`}
         aria-pressed={selected}
         title={`${title}\n${outlet?.name ?? ""} · ${kindWord} · ${all.map(dateDot).join(", ")}${eps ? `\n${eps}` : ""}${cast ? `\n${cast}` : ""}`}
-        className={cx("absolute top-1/2 z-[3] flex -translate-y-1/2 items-center rounded-[3px] pr-1 text-left", selected && "ring-2 ring-[var(--lu-text)]", dim && "opacity-30")}
+        className={cx("absolute top-1/2 z-[3] flex -translate-y-1/2 items-center rounded-[3px] pr-1 text-left", selected && "ring-2 ring-[var(--lu-text)]", dim && "opacity-50")}
         style={{ left: `calc(${P(dates[0])}% - ${size / 2 + 2}px)`, paddingLeft: size + 6, minHeight: Math.max(size + 4, 18) }}
       >
         <span className="flex min-w-0 flex-col rounded-[3px] bg-white/90 px-0.5" style={{ maxWidth: rich ? 320 : 260 }}>

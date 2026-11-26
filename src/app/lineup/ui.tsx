@@ -44,7 +44,7 @@ export function Btn({
 /** 한 줄 묶음 선택(보기 길이·비교 기준·캘린더 범위) — 붙은 버튼, 하나만 켜진다. */
 export function Segmented<T extends string | number>({ items, value, onChange, label, size = "md" }: { items: { key: T; label: string; title?: string }[]; value: T | null; onChange: (v: T) => void; label: string; size?: "sm" | "md" }) {
   return (
-    <div role="group" aria-label={label} className="inline-flex items-center gap-1">
+    <div role="group" aria-label={label} className="inline-flex shrink-0 items-center gap-1">
       {items.map((it) => (
         <Btn key={String(it.key)} size={size} pressed={value === it.key} onClick={() => onChange(it.key)} title={it.title}>
           {it.label}
@@ -67,7 +67,7 @@ export function Tabs<T extends string>({ items, value, onChange, bare = false }:
             type="button"
             aria-selected={on}
             onClick={() => onChange(it.key)}
-            className={cx("-mb-px border-b-2 pt-1 pb-2 text-[14px] transition-colors", on ? "border-[var(--lu-text)] font-semibold text-[var(--lu-text)]" : "border-transparent font-medium text-[var(--lu-text-2)] hover:text-[var(--lu-text)]")}
+            className={cx("-mb-px border-b-2 pt-1 pb-2 text-[14px] whitespace-nowrap transition-colors", on ? "border-[var(--lu-text)] font-semibold text-[var(--lu-text)]" : "border-transparent font-medium text-[var(--lu-text-2)] hover:text-[var(--lu-text)]")}
           >
             {it.label}
           </button>
@@ -99,7 +99,7 @@ export function Menu({
   }, [open]);
   const close = () => setOpen(false);
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative shrink-0">
       <Btn onClick={() => setOpen((o) => !o)} pressed={active} ariaHaspopup ariaExpanded={open} size={size} tone={active ? "line" : tone} title={title}>
         {icon}
         {label}
@@ -111,7 +111,7 @@ export function Menu({
           role="dialog"
           aria-label={typeof label === "string" ? label : title}
           className={cx("absolute top-[calc(100%+4px)] z-[70] rounded-[8px] border border-[var(--lu-line)] bg-white p-1.5 text-[13px] shadow-[0_8px_24px_rgba(23,24,28,0.10)]", align === "right" ? "right-0" : "left-0")}
-          style={{ width }}
+          style={{ width, maxWidth: "calc(100vw - 32px)" }}
         >
           {typeof children === "function" ? children(close) : children}
         </div>
@@ -199,7 +199,7 @@ export function OutletLogo({ logo, name, height = 16, mono = false, maxWidth = 6
   );
 }
 
-type IconName = EventIcon | "chevron" | "chevron-right" | "chevron-left" | "check" | "search" | "x" | "plus" | "external" | "settings" | "download";
+type IconName = EventIcon | "chevron" | "chevron-right" | "chevron-left" | "check" | "search" | "x" | "plus" | "external" | "settings" | "download" | "filter" | "start" | "end" | "diamond";
 /** 1.5px 선 아이콘(14px 기본) — 이벤트 유형·조작부에만 쓴다(장식용 금지). */
 export function Icon({ name, size = 14, className }: { name: IconName; size?: number; className?: string }) {
   const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -225,6 +225,10 @@ export function Icon({ name, size = 14, className }: { name: IconName; size?: nu
     external: <path d="M9 3h4v4M13 3 7.5 8.5M11.5 9.5V13H3V4.5h3.5" {...p} />,
     settings: (<><path d="M3 5h6M11 5h2M3 11h2M7 11h6" {...p} /><circle cx="10" cy="5" r="1.5" {...p} /><circle cx="6" cy="11" r="1.5" {...p} /></>),
     download: <path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" {...p} />,
+    filter: <path d="M2.5 3.5h11L9.5 8.5v4l-3 1.5v-5.5z" {...p} />,
+    start: <path d="M3.5 3.5v9M6.5 8h7M10.5 5l3 3-3 3" {...p} />,
+    end: <path d="M12.5 3.5v9M2.5 8h7M6.5 5l3 3-3 3" {...p} />,
+    diamond: <path d="M8 2.5 13.5 8 8 13.5 2.5 8z" fill="currentColor" />,
   };
   return (
     <svg aria-hidden viewBox="0 0 16 16" width={size} height={size} className={cx("shrink-0", className)}>
