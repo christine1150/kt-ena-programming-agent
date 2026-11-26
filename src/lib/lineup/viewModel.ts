@@ -26,6 +26,29 @@ export const BLOCK_LABEL: Record<CompareBlock, string> = { mon_tue: "월화", we
 export const BLOCK_ORDER: CompareBlock[] = ["mon_tue", "wed_thu", "weekend", "other"];
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 export const dowLabel = (days: number[]) => days.map((d) => DOW[d - 1]).join("");
+/**
+ * 자사 보기 '요일' 칸 글자 — 같은 글자끼리 한 칸으로 묶는다(2026-11-26 사용자 요청: 요일별·시간별, 월화 드라마는 예외로 '월화' 한 칸).
+ * 사흘 이상 이어지면 '월~금', 요일·시각을 모르는 자리(매일·시각 없음)는 '미정'.
+ */
+export function dayGroupLabel(s: Pick<SlotDto, "days" | "startMinute">): string {
+  const ds = [...s.days].sort((a, b) => a - b);
+  if (ds.length === 7) return s.startMinute === null ? "미정" : "매일";
+  if (ds.length >= 3 && ds.every((d, i) => i === 0 || d === ds[i - 1] + 1)) return `${DOW[ds[0] - 1]}~${DOW[ds[ds.length - 1] - 1]}`;
+  return dowLabel(ds);
+}
+/** 자사 보기 자리 순서 — 요일(월→일, 같은 첫 요일이면 한 요일 자리 먼저) → 시각 → 기존 정렬값. 같은 요일 글자끼리 붙게 요일 묶음 키를 시각보다 앞에 둔다. */
+export function slotDayTimeOrder(a: SlotDto, b: SlotDto): number {
+  const da = [...a.days].sort((x, y) => x - y);
+  const db = [...b.days].sort((x, y) => x - y);
+  return (
+    (da[0] ?? 9) - (db[0] ?? 9) ||
+    da.length - db.length ||
+    da.join("").localeCompare(db.join("")) ||
+    (a.startMinute ?? 1e4) - (b.startMinute ?? 1e4) ||
+    a.sortOrder - b.sortOrder ||
+    a.name.localeCompare(b.name)
+  );
+}
 export const STATUS_LABEL = { confirmed: "확정", planned: "예정", tentative: "가안" } as const;
 export const KIND_LABEL: Record<RunDto["runKind"], string> = {
   series: "연속 편성", monthly: "월 1회", single: "단발", multi_day: "행사(여러 날)", tbd: "미정 자리", hiatus: "휴방·결방", filler: "수급물",
@@ -49,7 +72,9 @@ export const LAYOUT = {
   // 2026-11-26 리디자인: 기본 줄 48px(막대 40px = 제목 13px + 기간·편수·출연 11.5px 두 줄), 촘촘 34px(막대 26px 한 줄).
   comfy: { row: 48, bar: 40, event: 18 },
   compact: { row: 34, bar: 26, event: 14 },
-  label: { own: { comfy: 176, compact: 160 }, compare: { comfy: 212, compact: 196 } },
+  // 자사 보기 줄 머리 = 장르 | 요일 | 시간대 세 칸(2026-11-26 사용자 요청, 옛 편성센터 표 모양). own 폭은 세 칸의 합.
+  label: { own: { comfy: 196, compact: 176 }, compare: { comfy: 212, compact: 196 } },
+  ownCols: { comfy: [64, 56, 76], compact: [58, 50, 68] } as Record<"comfy" | "compact", [number, number, number]>,
   minWeekPx: 18,
 };
 
@@ -198,6 +223,7 @@ export interface Row {
   empty?: boolean;
   // 2026-11-26 리디자인(화면 전용, 엑셀은 쓰지 않는다)
   genre?: Genre; // 자사 보기: 이 자리가 속한 장르 묶음
+  dow?: string; // 자사 보기: '요일' 칸 글자(같은 글자끼리 한 칸으로 합친다)
   groupLabel?: string; // 자사 보기 채널 줄: 'A · 2049 핵심'
   count?: number; // 채널·묶음 안 구간 수
 }
@@ -220,7 +246,7 @@ function runMatches(run: RunDto, slot: SlotDto, f: Filters, works: Map<string, W
 
 const slotMatchesDow = (slot: SlotDto, f: Filters) => f.dows.length === 0 || slot.days.some((d) => f.dows.includes(d));
 
-/** 자사 라인업 줄: 채널 묶음(A·B) > 채널 > 장르 > 자리. 라인업이 없는 채널은 숨긴다(showEmpty면 채널 줄만 '자료 없음'으로 남긴다). */
+/** 자사 라인업 줄: 채널 묶음(A·B) > 채널 > 장르 > 요일 > 시각(자리). 라인업이 없는 채널은 숨긴다(showEmpty면 채널 줄만 '자료 없음'으로 남긴다). */
 export function buildOwnRows(data: LineupPayload, f: Filters, opts?: { showEmpty?: boolean }): { rows: Row[]; runsBySlot: Map<string, RunDto[]>; hiddenChannels: string[] } {
   const works = new Map(data.works.map((w) => [w.id, w]));
   const runsBySlot = new Map<string, RunDto[]>();
@@ -257,9 +283,9 @@ export function buildOwnRows(data: LineupPayload, f: Filters, opts?: { showEmpty
             const top = main.includes(s.defaultGenre) ? s.defaultGenre : main[0] ?? s.defaultGenre;
             return top === g;
           })
-          .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+          .sort(slotDayTimeOrder);
         gs.forEach((s, i) =>
-          groupRows.push({ key: `s:${s.id}`, kind: "slot", label: s.name, sublabel: i === 0 ? GENRE_LABEL[g] : undefined, outlet: o, slot: s, color: o.color, genre: g })
+          groupRows.push({ key: `s:${s.id}`, kind: "slot", label: s.name, sublabel: i === 0 ? GENRE_LABEL[g] : undefined, outlet: o, slot: s, color: o.color, genre: g, dow: dayGroupLabel(s) })
         );
       }
     }
@@ -316,7 +342,8 @@ export function buildCompareRows(data: LineupPayload, f: Filters, mode: CompareM
   const ownAll = base
     .filter((s) => {
       const o = outlets.get(s.outletId);
-      return o?.side === "own" && ownCodes.includes(o.code) && genreOk(s) && (hasRuns(s) || (mode === "dow" && s.defaultGenre === "drama"));
+      // 편성 자료가 있는 자리만(드라마 자리는 기간 안 빈 주 계산값이 있으면 남긴다 — 'N주 비어있음'도 자료)
+      return o?.side === "own" && ownCodes.includes(o.code) && genreOk(s) && (hasRuns(s) || (mode === "dow" && s.defaultGenre === "drama" && data.gaps.some((g) => g.slotId === s.id)));
     })
     .sort((a, b) => a.sortOrder - b.sortOrder);
   const rivalAll = base
@@ -353,10 +380,7 @@ export function buildCompareRows(data: LineupPayload, f: Filters, mode: CompareM
     if (g.own.length === 0 && g.rival.length === 0) continue;
     const count = [...g.own, ...g.rival].reduce((n, s) => n + (runsBySlot.get(s.id)?.filter((r) => r.workId).length ?? 0), 0);
     rows.push({ key, kind: "group", label: g.label, count });
-    if (g.own.length === 0 && mode === "dow") {
-      const o = data.outlets.find((x) => x.code === ownCodes[0]);
-      rows.push({ key: `e:${key}`, kind: "slot", label: o?.name ?? "KT ENA", sublabel: "-", outlet: o, emphasis: true, empty: true, color: o?.color ?? null });
-    }
+    // 이 묶음에 KT ENA 편성이 없으면 KT ENA 줄을 만들지 않는다(2026-11-26 사용자 요청: 편성 자료가 있는 채널 줄만)
     for (const s of g.own) {
       const o = outlets.get(s.outletId);
       rows.push({ key: `s:${s.id}`, kind: "slot", label: o?.name ?? "", sublabel: slotTime(s), chip: dowLabel(s.days), outlet: o, slot: s, emphasis: true, color: o?.color ?? null, genre: genreOf(s) });

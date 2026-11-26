@@ -243,7 +243,8 @@ check("addDays", addDays("2026-12-31", 1) === "2027-01-01");
   const f = { channels: [], genres: [], dows: [] };
   const cmp = buildCompareRows(data, f);
   const labels = cmp.rows.map((r) => `${r.kind}:${r.label}${r.chip ? `|${r.chip}` : ""}`);
-  check("OTT 배치: 경쟁 비교 맨 아래에 OTT 묶음, 방송사는 요일 묶음에 그대로", labels.join(",") === "group:월화,slot:KT ENA,slot:tvN|월화,group:OTT · 공개 일정,slot:가상플러스|OTT", labels);
+  // 이 묶음에 KT ENA 편성이 없으면 빈 KT ENA 줄을 만들지 않는다(2026-11-26 사용자 요청)
+  check("OTT 배치: 경쟁 비교 맨 아래에 OTT 묶음, 방송사는 요일 묶음에 그대로, 편성 없는 KT ENA 줄은 없음", labels.join(",") === "group:월화,slot:tvN|월화,group:OTT · 공개 일정,slot:가상플러스|OTT", labels);
   check("OTT 배치: 요일을 고르면 OTT 묶음은 빠짐", !buildCompareRows(data, { ...f, dows: [1] }).rows.some((r) => r.key === "b:ott"));
   const und = buildUndated(data, f);
   check("OTT 배치: 날짜 없는 작품은 플랫폼별 '공개 시기 미정' 목록", und.length === 1 && und[0].outlet.code === "OTT_FAKE" && und[0].runs[0].id === "r3" && buildUndated(data, { ...f, dows: [1] }).length === 0);

@@ -52,8 +52,9 @@ export default function UndatedStrip({
   }, [data, works, filters.genres, filters.outlets, filters.statuses]);
   if (items.length === 0) return null;
 
+  // 플랫폼 요약은 방송사 정렬값 순(넷플릭스·디즈니+·티빙·쿠팡플레이·웨이브·Apple TV, 2026-11-26 사용자 지정)
   const byPlatform = new Map<string, number>();
-  for (const it of items) byPlatform.set(it.outlet.name, (byPlatform.get(it.outlet.name) ?? 0) + 1);
+  for (const it of [...items].sort((a, b) => a.outlet.sortOrder - b.outlet.sortOrder)) byPlatform.set(it.outlet.name, (byPlatform.get(it.outlet.name) ?? 0) + 1);
   const counts = new Map<OttBucket, number>();
   for (const it of items) counts.set(it.bucket, (counts.get(it.bucket) ?? 0) + 1);
   const shown = items.filter((it) => (bucket === "all" || it.bucket === bucket) && (!q.trim() || runMatchesQuery(it.run, works.get(it.run.workId ?? ""), q)));

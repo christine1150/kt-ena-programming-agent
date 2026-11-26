@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GapDto, Genre, LineupPayload, OutletDto, RunDto, SlotDto, WorkDto } from "@/lib/lineup/types";
 import {
-  addDaysIso, assignLanes, dateDot, dayIndex, episodeText, GENRE_LABEL, LAYOUT, ottLabelPx, pct, periodDot, runExtent, runGenre, runMatchesQuery, runTitle, textWidth,
+  addDaysIso, assignLanes, dateDot, dayIndex, episodeText, GENRE_LABEL, LAYOUT, ottLabelPx, pct, periodDot, runExtent, runGenre, runMatchesQuery, runTitle, slotTime, textWidth,
   type Density, type Row,
 } from "@/lib/lineup/viewModel";
 import { EVENT_KIND_ICON, EVENT_KIND_LABEL, laneEvents, placeLane, type LaneEvent } from "@/lib/lineup/events";
@@ -38,6 +38,9 @@ interface Props {
   /** 화면 높이 제한(px 계산식) */
   maxHeight?: string;
 }
+
+/** 화면 줄 — 자사 보기의 장르·요일 칸 합치기 정보(합칠 줄 수: 첫 줄 n, 덮이는 줄 0) · 요일 묶음 번호(옅은 띠 번갈아) */
+type VRow = Row & { genreSpan?: number; dowSpan?: number; band?: number; dowEnd?: boolean };
 
 const MONTH = ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"];
 const FONT = 13; // 막대 제목 글자(지시문 §3: 13~14px/600)
@@ -150,30 +153,61 @@ export default function LineupGrid({
   const sel = selectedId ? data.runs.find((r) => r.id === selectedId) : null;
   const selGuide = sel?.draw && sel.startDate && sel.startPrecision !== "month" ? { from: sel.startDate, to: sel.endDate ?? null } : null;
 
-  // 화면 줄(접힌 묶음 건너뛰기, 자사 보기는 채널 안 장르 머리를 끼운다)
+  // 화면 줄(접힌 묶음 건너뛰기). 자사 보기는 줄 머리 = 장르 | 요일 | 시간대 세 칸(2026-11-26 사용자 요청, 옛 편성센터 표 모양) —
+  // 채널 안에서 이어지는 같은 장르, 그 안의 같은 요일 글자는 한 칸으로 합친다(rowSpan). 월화 드라마처럼 여러 요일 자리는 '월화' 한 칸.
   const visible = useMemo(() => {
-    const out: (Row & { genreHead?: Genre; parentKey?: string })[] = [];
+    const out: VRow[] = [];
     let parent: string | null = null;
-    let lastGenre: Genre | null = null;
     for (const row of rows) {
       if (view === "own" && row.kind === "group") continue; // A·B 묶음은 채널 줄의 작은 글자로
       if ((view === "own" && row.kind === "subgroup") || (view === "compare" && row.kind === "group")) {
         parent = row.key;
-        lastGenre = null;
         out.push(row);
         continue;
       }
       if (parent && collapsed.has(parent)) continue;
-      if (view === "own" && row.kind === "slot" && row.genre && row.genre !== lastGenre) {
-        out.push({ key: `gh:${row.key}`, kind: "group", label: GENRE_LABEL[row.genre], genreHead: row.genre, parentKey: parent ?? undefined });
-        lastGenre = row.genre;
-      }
-      out.push(row);
+      out.push({ ...row });
+    }
+    if (view === "own") {
+      let g = -1; // 이 장르 칸의 첫 줄
+      let d = -1; // 이 요일 칸의 첫 줄
+      let band = -1;
+      out.forEach((r, i) => {
+        if (r.kind !== "slot") {
+          g = d = -1;
+          return;
+        }
+        if (g >= 0 && out[g].genre === r.genre) {
+          out[g].genreSpan! += 1;
+          r.genreSpan = 0;
+        } else {
+          g = i;
+          r.genreSpan = 1;
+          d = -1;
+          band = -1;
+        }
+        if (d >= 0 && out[d].dow === r.dow) {
+          out[d].dowSpan! += 1;
+          r.dowSpan = 0;
+          r.band = out[d].band;
+        } else {
+          d = i;
+          r.dowSpan = 1;
+          r.band = ++band;
+        }
+      });
+      // 요일 칸의 마지막 줄(아래 선을 조금 진하게)
+      out.forEach((r, i) => {
+        if (r.kind === "slot") r.dowEnd = !(out[i + 1]?.kind === "slot" && out[i + 1].dowSpan === 0);
+      });
     }
     return out;
   }, [rows, view, collapsed]);
 
-  const timelineHeader = view === "compare" ? "방송사 · 편성 슬롯" : "채널 · 편성 슬롯";
+  // 줄 머리 열 — 자사: 장르·요일·시간대 세 칸(붙는 위치 = 앞 칸 폭의 합), 경쟁 비교: 한 칸
+  const labelCols: number[] = view === "own" ? LAYOUT.ownCols[density] : [labelWidth];
+  const stickyAt = (k: number) => labelCols.slice(0, k).reduce((a, b) => a + b, 0);
+  const nLabel = labelCols.length;
 
   return (
     <div
@@ -189,15 +223,30 @@ export default function LineupGrid({
         <table className="relative z-[1] w-full table-fixed border-separate border-spacing-0 text-[13px]">
           <caption className="sr-only">{view === "compare" ? "경쟁 비교 타임라인" : "KT ENA 타임라인"} {data.from} ~ {data.to}</caption>
           <colgroup>
-            <col style={{ width: labelWidth }} />
+            {labelCols.map((w, i) => (
+              <col key={i} style={{ width: w }} />
+            ))}
             <col />
           </colgroup>
           <thead className={cx("z-30 bg-white", !printMode && "sticky top-0 print:static")}>
             {/* 머리 한 줄(사용자 요청 2026-11-26): 달 이름(굵게) + 주 시작일(월요일, 작게)을 같은 줄에 — 달 이름과 겹치는 주 숫자는 뺀다 */}
             <tr>
-              <th scope="col" className={cx("z-40 border-r border-b border-[var(--lu-line)] bg-white px-3 text-left align-middle", !printMode && "sticky left-0 print:static")}>
-                <span className="block truncate text-[12px] font-medium text-[var(--lu-text-2)]">{timelineHeader}</span>
-              </th>
+              {view === "own" ? (
+                ["장르", "요일", "시간대"].map((h, k) => (
+                  <th
+                    key={h}
+                    scope="col"
+                    className={cx("z-40 border-b bg-white px-1 text-center align-middle", k === 2 ? "border-r border-r-[var(--lu-line)]" : "border-r border-r-[var(--lu-grid)]", "border-b-[var(--lu-line)]", !printMode && "sticky print:static")}
+                    style={printMode ? undefined : { left: stickyAt(k) }}
+                  >
+                    <span className="block truncate text-[12px] font-medium text-[var(--lu-text-2)]">{h}</span>
+                  </th>
+                ))
+              ) : (
+                <th scope="col" className={cx("z-40 border-r border-b border-[var(--lu-line)] bg-white px-3 text-left align-middle", !printMode && "sticky left-0 print:static")}>
+                  <span className="block truncate text-[12px] font-medium text-[var(--lu-text-2)]">방송사 · 편성 슬롯</span>
+                </th>
+              )}
               <th ref={headRef} className="relative h-7 overflow-x-clip border-b border-[var(--lu-line)] p-0 font-normal">
                 {monthLabels.map((m) => (
                   <span key={m.from} className="absolute top-0 flex h-7 items-center gap-1 pl-1.5 whitespace-nowrap" style={{ left: `${P(m.from)}%` }}>
@@ -235,7 +284,7 @@ export default function LineupGrid({
             </tr>
             {showEvents && (
               <tr>
-                <th scope="row" title="공휴일 · 외부 일정" className={cx("z-40 border-r border-b border-[var(--lu-line)] bg-white px-3 text-left align-middle font-normal", !printMode && "sticky left-0 print:static")}>
+                <th scope="row" colSpan={nLabel} title="공휴일 · 외부 일정" className={cx("z-40 border-r border-b border-[var(--lu-line)] bg-white px-3 text-left align-middle font-normal", !printMode && "sticky left-0 print:static")}>
                   <span className="block truncate text-[12px] font-semibold text-[var(--lu-text)]">주요 이벤트</span>
                 </th>
                 {/* 이벤트 띠 한 줄(사용자 요청 2026-11-26) — 겹치는 이벤트는 아래 작은 점(누르면 상세) */}
@@ -262,12 +311,12 @@ export default function LineupGrid({
           <tbody>
             {visible.map((row) => {
               // ── 묶음 머리: 자사 채널(접기) · 비교 묶음(접기) · 장르 머리 ──
-              if (row.kind === "subgroup" || (row.kind === "group" && !("genreHead" in row && row.genreHead))) {
+              if (row.kind === "subgroup" || row.kind === "group") {
                 const isChannel = row.kind === "subgroup";
                 const open = !collapsed.has(row.key);
                 return (
                   <tr key={row.key}>
-                    <th colSpan={2} scope="rowgroup" className="border-t border-b border-[var(--lu-line)] bg-[var(--lu-page)] p-0 text-left font-normal">
+                    <th colSpan={nLabel + 1} scope="rowgroup" className="border-t border-b border-[var(--lu-line)] bg-[var(--lu-page)] p-0 text-left font-normal">
                       <div className={cx("flex items-center gap-2 px-2", !printMode && "sticky left-0")} style={{ maxWidth: "100vw", height: isChannel ? 34 : 30 }}>
                         <button
                           type="button"
@@ -293,18 +342,6 @@ export default function LineupGrid({
                   </tr>
                 );
               }
-              if (row.kind === "group" && "genreHead" in row && row.genreHead) {
-                return (
-                  <tr key={row.key}>
-                    <th colSpan={2} scope="rowgroup" className="h-6 border-b border-[var(--lu-grid)] bg-white p-0 text-left font-normal">
-                      <span className={cx("flex items-center gap-1.5 pl-9 text-[11.5px] font-semibold text-[var(--lu-text-2)]", !printMode && "sticky left-0")}>
-                        <span aria-hidden className="inline-block size-2 rounded-[2px]" style={{ background: GENRE_FILL[row.genreHead] }} />
-                        {row.label}
-                      </span>
-                    </th>
-                  </tr>
-                );
-              }
               // ── 자리 줄 ──
               const runs = row.slot ? runsBySlot.get(row.slot.id) ?? [] : [];
               const isOtt = !!row.outlet?.ott;
@@ -312,16 +349,54 @@ export default function LineupGrid({
               const lanes = assignLanes(runs, isOtt ? { labelDays: (r) => Math.ceil(ottLabelPx(r, r.workId ? works.get(r.workId) : undefined) / Math.max(dayPx, 0.5)) } : undefined);
               const height = lanes.main.length * L.row + (lanes.events.length > 0 ? L.event + 4 : 0);
               const lastEnd = own && row.slot?.defaultGenre === "drama" ? runs.reduce<string | null>((m, r) => (r.draw && r.draw.shape !== "diamond" && (!m || r.draw.to > m) ? r.draw.to : m), null) : null;
+              // 자사 보기: 요일 묶음마다 옅은 띠를 번갈아(줄 머리는 불투명 #F7F8FA, 타임라인 칸은 격자가 비치게 반투명)
+              const banded = view === "own" && (row.band ?? 0) % 2 === 1;
+              const rowLine = view === "own" && row.dowEnd ? "border-b-[var(--lu-line)]" : "border-b-[var(--lu-grid)]";
               return (
                 <tr key={row.key}>
-                  <th
-                    scope="row"
-                    className={cx("z-20 border-r border-b border-[var(--lu-grid)] px-0 text-left align-middle font-normal", !printMode && "sticky left-0 print:static", view === "compare" && own ? "bg-[#f8f8fe]" : "bg-white")}
-                    style={{ height }}
-                  >
-                    <SlotLabel row={row} view={view} density={density} />
-                  </th>
-                  <td className="relative overflow-x-clip border-b border-[var(--lu-grid)] p-0 align-top" style={{ height }}>
+                  {view === "own" ? (
+                    <>
+                      {!!row.genreSpan && row.genre && (
+                        <th
+                          rowSpan={row.genreSpan}
+                          scope="rowgroup"
+                          className={cx("z-20 border-r border-b border-r-[var(--lu-grid)] border-b-[var(--lu-line)] bg-white px-1 text-center align-middle", !printMode && "sticky print:static")}
+                          style={{ left: printMode ? undefined : 0, boxShadow: `inset 3px 0 0 ${GENRE_FILL[row.genre]}` }}
+                        >
+                          <span className="block pl-1 text-[12.5px] leading-tight font-semibold break-keep" style={{ color: row.genre === "business" ? UI.text : GENRE_FILL[row.genre] }}>
+                            {GENRE_LABEL[row.genre]}
+                          </span>
+                        </th>
+                      )}
+                      {!!row.dowSpan && (
+                        <th
+                          rowSpan={row.dowSpan}
+                          scope="rowgroup"
+                          className={cx("z-20 border-r border-b border-r-[var(--lu-grid)] border-b-[var(--lu-line)] px-1 text-center align-middle", !printMode && "sticky print:static", banded ? "bg-[var(--lu-page)]" : "bg-white")}
+                          style={printMode ? undefined : { left: stickyAt(1) }}
+                        >
+                          <span className="block text-[13px] font-semibold text-[var(--lu-text)]">{row.dow}</span>
+                        </th>
+                      )}
+                      <th
+                        scope="row"
+                        className={cx("z-20 border-r border-b border-r-[var(--lu-line)] px-1 text-center align-middle font-normal", rowLine, !printMode && "sticky print:static", banded ? "bg-[var(--lu-page)]" : "bg-white")}
+                        style={{ height, left: printMode ? undefined : stickyAt(2) }}
+                      >
+                        <SlotTime slot={row.slot} />
+                        <span className="sr-only">{row.outlet?.name} {GENRE_LABEL[row.genre ?? "other"]} {row.dow}</span>
+                      </th>
+                    </>
+                  ) : (
+                    <th
+                      scope="row"
+                      className={cx("z-20 border-r border-b border-[var(--lu-grid)] px-0 text-left align-middle font-normal", !printMode && "sticky left-0 print:static", own ? "bg-[#f8f8fe]" : "bg-white")}
+                      style={{ height }}
+                    >
+                      <SlotLabel row={row} density={density} />
+                    </th>
+                  )}
+                  <td className={cx("relative overflow-x-clip border-b p-0 align-top", rowLine, banded && "bg-[rgba(23,24,28,0.022)]")} style={{ height }}>
                     {row.empty && <span className="absolute top-1/2 left-3 -translate-y-1/2 text-[12px] text-[var(--lu-text-2)]">{row.kind === "slot" ? "이 묶음에 KT ENA 편성 자료 없음" : ""}</span>}
                     {lanes.events.length > 0 && (
                       <div className="relative" style={{ height: L.event + 4 }}>
@@ -418,21 +493,23 @@ function GuidePill({ left, text }: { left: number; text: string }) {
   );
 }
 
-/** 줄 머리 — 자사 보기: 요일·시각 / 경쟁 비교: [자사 표식] 로고 · 요일 · 시각(경쟁사 로고는 무채색) */
-function SlotLabel({ row, view, density }: { row: Row; view: "own" | "compare"; density: Density }) {
+/** 자사 보기 '시간대' 칸 — 시각(모르면 자리 메모 또는 '미정') + 시각이 아닌 자리 메모(예: 재방)는 아래 작은 글자 */
+function SlotTime({ slot }: { slot: SlotDto | undefined }) {
+  if (!slot) return null;
+  const t = slot.startMinute === null ? "" : slotTime(slot);
+  const note = slot.timeNote && !/\d{1,2}:\d{2}/.test(slot.timeNote) ? slot.timeNote : "";
+  return (
+    <span className="flex flex-col items-center justify-center leading-tight">
+      {t ? <span className="lu-num text-[13px] font-medium text-[var(--lu-text)]">{t}</span> : <span className="text-[12px] text-[var(--lu-text-2)]">{note || "미정"}</span>}
+      {t && note && <span className="text-[11px] text-[var(--lu-text-2)]">{note}</span>}
+    </span>
+  );
+}
+
+/** 줄 머리(경쟁 비교) — [자사 표식] 로고 · 요일 · 시각(경쟁사 로고는 무채색) */
+function SlotLabel({ row, density }: { row: Row; density: Density }) {
   const own = row.outlet?.side === "own";
   const time = row.sublabel && row.sublabel !== "-" ? row.sublabel : "";
-  if (view === "own") {
-    const days = row.slot ? row.label.replace(/\s*\d{1,2}:\d{2}.*$/, "") : row.label;
-    const t = row.slot ? (row.label.match(/\d{1,2}:\d{2}/)?.[0] ?? "") : "";
-    return (
-      <div className="flex h-full items-center gap-2 pr-2 pl-9">
-        <span className="truncate text-[13px] font-semibold text-[var(--lu-text)]">{days}</span>
-        {t && <span className="lu-num text-[13px] text-[var(--lu-text-2)]">{t}</span>}
-        {row.slot?.timeNote && !/\d{1,2}:\d{2}/.test(row.slot.timeNote) && !row.label.includes(row.slot.timeNote) && <span className="text-[11.5px] text-[var(--lu-text-2)]">{row.slot.timeNote}</span>}
-      </div>
-    );
-  }
   const isOtt = !!row.outlet?.ott;
   return (
     <div className="flex h-full items-center gap-2 pr-2">
@@ -492,12 +569,16 @@ function RunBar(props: {
   // ── 월 단위 정밀도: 범위 괄호 + 원문 기간 ──
   if (d.shape === "bracket") {
     const c = GENRE_FILL[genre];
+    const meta = `${period}${/[년반기분]/.test(period) ? "" : " · 월 단위"}${eps ? ` · ${eps}` : ""}`;
+    // 글자가 괄호(한 달 폭)보다 길면 다음 막대 전 빈자리까지 오른쪽으로 이어 쓴다(2026-11-26: '지구마불 세계여행5 · 2027년 5월 · 미정'이 잘리던 것)
+    const room = (((nextStart ? P(nextStart) : 100) - left) / 100) * totalPx - 6;
+    const labelW = Math.max(px, Math.min(textWidth(`${title} · ${meta}`, 12.5) + 12, room));
     return (
       <button type="button" onClick={click} aria-label={`${aria} (월 단위 일정)`} aria-pressed={selected} title={`${tip}\n월 단위 발표 — 정확한 날짜 미정`}
         className={cx("absolute top-0 flex flex-col justify-end overflow-visible text-left", ring, dim && "opacity-35")}
         style={{ left: `${left}%`, width: `${widthPct}%`, minWidth: 16, height: rowH }}>
-        <span className="truncate px-1 text-[12.5px] leading-4 font-semibold text-[var(--lu-text)]">
-          {title} <span className="font-normal text-[var(--lu-text-2)]">· {period}{/[년반기분]/.test(period) ? "" : " · 월 단위"}</span>
+        <span className="truncate px-1 text-[12.5px] leading-4 font-semibold text-[var(--lu-text)]" style={{ width: labelW, maxWidth: labelW }}>
+          {title} <span className="font-normal text-[var(--lu-text-2)]">· {meta}</span>
         </span>
         <span aria-hidden className="relative mx-0.5 mt-1 mb-2 block h-2" style={{ borderLeft: `2px solid ${c}`, borderRight: `2px solid ${c}` }}>
           <span className="absolute inset-x-0 top-1/2 block h-[1.5px] -translate-y-1/2" style={{ background: c }} />
