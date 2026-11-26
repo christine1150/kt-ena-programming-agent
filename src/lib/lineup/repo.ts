@@ -115,117 +115,131 @@ export async function commitPlan(parsed: ParsedLineup, plan: UploadPlan, opts: C
     .single();
   if (srcErr || !src) throw new Error(srcErr?.message ?? "자료 기록을 만들지 못했습니다.");
   const sourceId = (src as { id: string }).id;
+  // 업로드 도중 실패하면 그때까지 반영한 구간을 되돌린다(2차 개선 §9.5: 일부만 반영된 채 남지 않게). DB 트랜잭션이 아니어서
+  // 새로 만든 작품·자리 행은 남을 수 있으나 구간이 없어 화면에는 나오지 않는다.
+  try {
 
-  const todo = plan.actions.filter((a) => {
-    if (a.kind === "same") counts.same++;
-    if (a.kind === "skip") counts.skipped++;
-    if (a.kind === "review") counts.review++;
-    if (a.kind === "review" && opts.includeReview && a.item.outletCode) {
-      counts.reviewApplied++;
-      return true;
-    }
-    return a.kind === "create" || a.kind === "update";
-  });
-
-  // 1) 자리: 없는 것만 묶어서 넣는다.
-  const { data: slotRows, error: slotErr } = await supabase.from("lineup_slots").select("id, outlet_id, name").is("archived_at", null);
-  if (slotErr) throw new Error(slotErr.message);
-  const slotId = new Map(((slotRows ?? []) as { id: string; outlet_id: string; name: string }[]).map((s) => [`${s.outlet_id}|${s.name}`, s.id]));
-  const newSlots = new Map<string, Record<string, unknown>>();
-  for (const a of todo) {
-    const oid = outletIdByCode.get(a.item.outletCode as string);
-    if (!oid) continue;
-    const key = `${oid}|${a.item.slot.name}`;
-    if (slotId.has(key) || newSlots.has(key)) continue;
-    const s = a.item.slot;
-    newSlots.set(key, {
-      outlet_id: oid, name: s.name, days: s.days.length ? s.days : [1, 2, 3, 4, 5, 6, 7], start_minute: s.startMinute, time_note: s.timeNote,
-      compare_block: s.compareBlock, default_genre: s.defaultGenre, sort_order: slotSortOrder(a.item), updated_by: opts.actor,
-    });
-  }
-  if (newSlots.size > 0) {
-    const { data, error } = await supabase.from("lineup_slots").insert([...newSlots.values()]).select("id, outlet_id, name");
-    if (error) throw new Error(`자리 저장 실패: ${error.message}`);
-    for (const s of (data ?? []) as { id: string; outlet_id: string; name: string }[]) slotId.set(`${s.outlet_id}|${s.name}`, s.id);
-  }
-
-  // 2) 작품: 새 작품은 묶어서 넣고, 있는 작품은 바뀐 정보만 고친다.
-  const workId = new Map<string, string>(); // `${outletId}|${titleKey}`
-  const newWorks = new Map<string, Record<string, unknown>>();
-  for (const a of todo) {
-    const w = a.item.work;
-    const oid = outletIdByCode.get(a.item.outletCode as string);
-    if (!w || !oid) continue;
-    const key = `${oid}|${w.titleKey}`;
-    if (a.workId) {
-      workId.set(key, a.workId);
-      const patch: Record<string, unknown> = {};
-      for (const c of a.changes) {
-        if (c.field === "cast") patch.cast_main = c.after;
-        if (c.field === "total_episodes") patch.total_episodes = c.after;
+    const todo = plan.actions.filter((a) => {
+      if (a.kind === "same") counts.same++;
+      if (a.kind === "skip") counts.skipped++;
+      if (a.kind === "review") counts.review++;
+      if (a.kind === "review" && opts.includeReview && a.item.outletCode) {
+        counts.reviewApplied++;
+        return true;
       }
-      if (Object.keys(patch).length > 0) {
-        const { error } = await supabase.from("lineup_works").update({ ...patch, updated_by: opts.actor }).eq("id", a.workId);
-        if (error) throw new Error(`작품 고치기 실패: ${error.message}`);
-      }
-      continue;
-    }
-    if (newWorks.has(key)) continue;
-    newWorks.set(key, {
-      outlet_id: oid, title: w.title, title_key: w.titleKey, title_tentative: w.tentative, genre: w.genre, total_episodes: w.totalEpisodes,
-      cast_main: w.cast, ott_note: w.ottNote, note: w.note ?? (w.credits ? `제작진(원문): ${w.credits}` : null), updated_by: opts.actor,
+      return a.kind === "create" || a.kind === "update";
     });
-  }
-  if (newWorks.size > 0) {
-    const { data, error } = await supabase.from("lineup_works").insert([...newWorks.values()]).select("id, outlet_id, title_key");
-    if (error) throw new Error(`작품 저장 실패: ${error.message}`);
-    for (const w of (data ?? []) as { id: string; outlet_id: string; title_key: string }[]) workId.set(`${w.outlet_id}|${w.title_key}`, w.id);
-  }
 
-  // 3) 구간: 새 구간은 묶어서 넣고, 바뀐 구간은 하나씩 고친다.
-  const inserts: Record<string, unknown>[] = [];
-  for (const a of todo) {
-    const oid = outletIdByCode.get(a.item.outletCode as string);
-    if (!oid) continue;
-    const sid = slotId.get(`${oid}|${a.item.slot.name}`);
-    if (!sid) continue;
-    const wid = a.item.work ? workId.get(`${oid}|${a.item.work.titleKey}`) ?? null : null;
-    const row = runRow(a.item, sid, wid, sourceId, opts.actor);
-    if (a.runId) {
-      const patch: Record<string, unknown> = { source_id: sourceId, source_cell: row.source_cell, source_text: row.source_text, updated_by: opts.actor };
-      const dateFields = new Set(["start_date", "end_date", "start_precision", "end_precision", "air_dates"]);
-      for (const c of a.changes) {
-        if (c.field === "slot") patch.slot_id = sid;
-        else if (c.field === "cast" || c.field === "total_episodes") continue;
-        else patch[c.field] = (row as Record<string, unknown>)[c.field];
-        if (dateFields.has(c.field)) {
-          patch.start_text = row.start_text;
-          patch.end_text = row.end_text;
+    // 1) 자리: 없는 것만 묶어서 넣는다.
+    const { data: slotRows, error: slotErr } = await supabase.from("lineup_slots").select("id, outlet_id, name").is("archived_at", null);
+    if (slotErr) throw new Error(slotErr.message);
+    const slotId = new Map(((slotRows ?? []) as { id: string; outlet_id: string; name: string }[]).map((s) => [`${s.outlet_id}|${s.name}`, s.id]));
+    const newSlots = new Map<string, Record<string, unknown>>();
+    for (const a of todo) {
+      const oid = outletIdByCode.get(a.item.outletCode as string);
+      if (!oid) continue;
+      const key = `${oid}|${a.item.slot.name}`;
+      if (slotId.has(key) || newSlots.has(key)) continue;
+      const s = a.item.slot;
+      newSlots.set(key, {
+        outlet_id: oid, name: s.name, days: s.days.length ? s.days : [1, 2, 3, 4, 5, 6, 7], start_minute: s.startMinute, time_note: s.timeNote,
+        compare_block: s.compareBlock, default_genre: s.defaultGenre, sort_order: slotSortOrder(a.item), updated_by: opts.actor,
+      });
+    }
+    if (newSlots.size > 0) {
+      const { data, error } = await supabase.from("lineup_slots").insert([...newSlots.values()]).select("id, outlet_id, name");
+      if (error) throw new Error(`자리 저장 실패: ${error.message}`);
+      for (const s of (data ?? []) as { id: string; outlet_id: string; name: string }[]) slotId.set(`${s.outlet_id}|${s.name}`, s.id);
+    }
+
+    // 2) 작품: 새 작품은 묶어서 넣고, 있는 작품은 바뀐 정보만 고친다.
+    const workId = new Map<string, string>(); // `${outletId}|${titleKey}`
+    const newWorks = new Map<string, Record<string, unknown>>();
+    for (const a of todo) {
+      const w = a.item.work;
+      const oid = outletIdByCode.get(a.item.outletCode as string);
+      if (!w || !oid) continue;
+      const key = `${oid}|${w.titleKey}`;
+      if (a.workId) {
+        workId.set(key, a.workId);
+        const patch: Record<string, unknown> = {};
+        for (const c of a.changes) {
+          if (c.field === "cast") patch.cast_main = c.after;
+          if (c.field === "total_episodes") patch.total_episodes = c.after;
         }
+        if (Object.keys(patch).length > 0) {
+          const { error } = await supabase.from("lineup_works").update({ ...patch, updated_by: opts.actor }).eq("id", a.workId);
+          if (error) throw new Error(`작품 고치기 실패: ${error.message}`);
+        }
+        continue;
       }
-      const { error } = await supabase.from("lineup_runs").update(patch).eq("id", a.runId);
-      if (error) throw new Error(`구간 고치기 실패: ${error.message}`);
-      counts.updated++;
-    } else {
-      inserts.push(row);
+      if (newWorks.has(key)) continue;
+      newWorks.set(key, {
+        outlet_id: oid, title: w.title, title_key: w.titleKey, title_tentative: w.tentative, genre: w.genre, total_episodes: w.totalEpisodes,
+        cast_main: w.cast, ott_note: w.ottNote, note: w.note ?? (w.credits ? `제작진(원문): ${w.credits}` : null), updated_by: opts.actor,
+      });
     }
-  }
-  for (let i = 0; i < inserts.length; i += 200) {
-    const { error } = await supabase.from("lineup_runs").insert(inserts.slice(i, i + 200));
-    if (error) throw new Error(`구간 저장 실패: ${error.message}`);
-  }
-  counts.created = inserts.length;
+    if (newWorks.size > 0) {
+      const { data, error } = await supabase.from("lineup_works").insert([...newWorks.values()]).select("id, outlet_id, title_key");
+      if (error) throw new Error(`작품 저장 실패: ${error.message}`);
+      for (const w of (data ?? []) as { id: string; outlet_id: string; title_key: string }[]) workId.set(`${w.outlet_id}|${w.title_key}`, w.id);
+    }
 
-  if (opts.archiveMissing && plan.missing.length > 0) {
-    const { error } = await supabase
-      .from("lineup_runs")
-      .update({ archived_at: new Date().toISOString(), updated_by: opts.actor, source_id: sourceId })
-      .in("id", plan.missing.map((m) => m.runId));
-    if (error) throw new Error(`사라진 구간 보관 실패: ${error.message}`);
-    counts.archived = plan.missing.length;
+    // 3) 구간: 새 구간은 묶어서 넣고, 바뀐 구간은 하나씩 고친다.
+    const inserts: Record<string, unknown>[] = [];
+    for (const a of todo) {
+      const oid = outletIdByCode.get(a.item.outletCode as string);
+      if (!oid) continue;
+      const sid = slotId.get(`${oid}|${a.item.slot.name}`);
+      if (!sid) continue;
+      const wid = a.item.work ? workId.get(`${oid}|${a.item.work.titleKey}`) ?? null : null;
+      const row = runRow(a.item, sid, wid, sourceId, opts.actor);
+      if (a.runId) {
+        const patch: Record<string, unknown> = { source_id: sourceId, source_cell: row.source_cell, source_text: row.source_text, updated_by: opts.actor };
+        const dateFields = new Set(["start_date", "end_date", "start_precision", "end_precision", "air_dates"]);
+        for (const c of a.changes) {
+          if (c.field === "slot") patch.slot_id = sid;
+          else if (c.field === "cast" || c.field === "total_episodes") continue;
+          else patch[c.field] = (row as Record<string, unknown>)[c.field];
+          if (dateFields.has(c.field)) {
+            patch.start_text = row.start_text;
+            patch.end_text = row.end_text;
+          }
+        }
+        const { error } = await supabase.from("lineup_runs").update(patch).eq("id", a.runId);
+        if (error) throw new Error(`구간 고치기 실패: ${error.message}`);
+        counts.updated++;
+      } else {
+        inserts.push(row);
+      }
+    }
+    for (let i = 0; i < inserts.length; i += 200) {
+      const { error } = await supabase.from("lineup_runs").insert(inserts.slice(i, i + 200));
+      if (error) throw new Error(`구간 저장 실패: ${error.message}`);
+    }
+    counts.created = inserts.length;
+
+    if (opts.archiveMissing && plan.missing.length > 0) {
+      const { error } = await supabase
+        .from("lineup_runs")
+        .update({ archived_at: new Date().toISOString(), updated_by: opts.actor, source_id: sourceId })
+        .in("id", plan.missing.map((m) => m.runId));
+      if (error) throw new Error(`사라진 구간 보관 실패: ${error.message}`);
+      counts.archived = plan.missing.length;
+    }
+    await supabase.from("lineup_sources").update({ summary: counts }).eq("id", sourceId);
+    return { sourceId, counts };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    let undone = false;
+    try {
+      await rollbackSource(sourceId, opts.actor);
+      undone = true;
+    } catch {
+      /* 되돌리기도 실패 — 아래 메시지로 알린다 */
+    }
+    throw new Error(undone ? `${msg} — 이미 반영한 구간은 되돌렸습니다(자료 기록은 '되돌림'으로 남김).` : `${msg} — 일부가 반영됐을 수 있습니다. 자료 관리에서 이 자료를 되돌려 주세요.`);
   }
-  await supabase.from("lineup_sources").update({ summary: counts }).eq("id", sourceId);
-  return { sourceId, counts };
 }
 
 /** 업로드 한 번을 되돌린다 — 그 자료로 생긴 구간은 보관, 바뀐 구간은 바뀌기 전 값으로. */
@@ -469,14 +483,20 @@ export interface RunPatch {
   note?: string | null;
   archived?: boolean;
   needsReview?: boolean;
+  /** 화면이 읽은 시점의 updated_at — 그사이 다른 사람이 고쳤으면 저장하지 않는다(동시 수정 충돌, 2차 개선 §9.5) */
+  expectedUpdatedAt?: string;
 }
+/** 동시 수정 충돌 — API가 409로 돌려준다 */
+export class RunConflictError extends Error {}
 
 /** 상세 패널의 직접 수정 — 수정 한 번을 'manual' 자료로 남겨, 업로드 되돌리기가 사람이 고친 값을 건드리지 않게 한다. */
 export async function patchRun(runId: string, patch: RunPatch, actor: string) {
-  const { data: run, error } = await supabase.from("lineup_runs").select("id, work_id, start_date, end_date").eq("id", runId).maybeSingle();
+  const { data: run, error } = await supabase.from("lineup_runs").select("id, work_id, start_date, end_date, updated_at").eq("id", runId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!run) throw new Error("구간을 찾지 못했습니다.");
-  const r = run as { id: string; work_id: string | null; start_date: string | null; end_date: string | null };
+  const r = run as { id: string; work_id: string | null; start_date: string | null; end_date: string | null; updated_at: string };
+  if (patch.expectedUpdatedAt && Date.parse(patch.expectedUpdatedAt) !== Date.parse(r.updated_at))
+    throw new RunConflictError("그사이 다른 사람이 이 편성을 고쳤습니다. 화면을 새로 고친 뒤 다시 수정해 주세요.");
   const runFields: Record<string, unknown> = {};
   if (patch.status !== undefined) runFields.status = patch.status;
   // 날짜는 실제로 바뀐 때만 쓴다(P0-04): 같은 값이 다시 오면 기존 정밀도(월·주·상시 등)를 그대로 둔다. 없는 날짜(2026-11-31)는 거부.

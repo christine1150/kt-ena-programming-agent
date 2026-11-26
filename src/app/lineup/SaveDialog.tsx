@@ -5,8 +5,8 @@
 // 지금 화면의 조건으로 미리 채워 둔다. 대외비 자료이므로 파일을 외부로 보내지 않도록 안내한다.
 import { useEffect, useRef, useState } from "react";
 import type { Genre } from "@/lib/lineup/types";
-import { CAL_LAYERS, CAL_OWN_SHOW, calRangeOf } from "@/lib/lineup/calendar";
-import { dowLabel, GENRE_LABEL, LENGTHS, lineupSearch, queryRange, type LineupQuery, type ViewMode } from "@/lib/lineup/viewModel";
+import { CAL_OWN_SHOW, calRangeOf } from "@/lib/lineup/calendar";
+import { dowLabel, GENRE_LABEL, LENGTHS, lineupSearch, queryRange, SCOPES, scopeOf, scopeSel, type LineupQuery, type ViewMode } from "@/lib/lineup/viewModel";
 
 const GENRES: Genre[] = ["drama", "variety", "business", "other"];
 const DOWS = [1, 2, 3, 4, 5, 6, 7];
@@ -144,6 +144,19 @@ export default function SaveDialog({
             })}
           </Field>
 
+          {q.view !== "own" && (
+            <Field label="비교 범위">
+              {SCOPES.map((x) => {
+                const on = scopeOf(q) === x.key;
+                return (
+                  <button key={x.key} type="button" aria-pressed={on} onClick={() => set({ ...scopeSel(x.key), ...(q.hide.some((h) => h === "own" || h === "rival" || h === "ott") ? { hide: q.hide.filter((h) => h === "event" || h === "undated") } : {}) })} className={chip(on)}>
+                    {x.label}
+                  </button>
+                );
+              })}
+              {scopeOf(q) === "custom" && <span className="text-[12px] text-zinc-600">맞춤(화면 필터에서 고른 방송사·OTT)</span>}
+            </Field>
+          )}
           <Field label="장르">
             <button type="button" aria-pressed={q.genres.length === 0} onClick={() => set({ genres: [] })} className={chip(q.genres.length === 0)}>
               전체
@@ -173,14 +186,14 @@ export default function SaveDialog({
                   </button>
                 );
               })}
-              {CAL_LAYERS.map((l) => {
-                const on = !q.hide.includes(l.key);
+              {(() => {
+                const on = !q.hide.includes("event");
                 return (
-                  <button key={l.key} type="button" aria-pressed={on} onClick={() => set({ hide: on ? [...q.hide, l.key] : q.hide.filter((h) => h !== l.key) })} className={chip(on)}>
-                    {on ? "✓ " : ""}{l.label}
+                  <button type="button" aria-pressed={on} onClick={() => set({ hide: on ? [...q.hide, "event"] : q.hide.filter((h) => h !== "event") })} className={chip(on)}>
+                    {on ? "✓ " : ""}공휴일·외부 이벤트
                   </button>
                 );
-              })}
+              })()}
             </Field>
           ) : (
           <Field label="요일">

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { requireActorFor, bad, fail } from "@/lib/idealSchedule/apiUtil";
 import { isIsoDate } from "@/lib/lineup/dates";
 import { splitNames } from "@/lib/lineup/titles";
-import { listChanges, patchRun, type RunPatch } from "@/lib/lineup/repo";
+import { listChanges, patchRun, RunConflictError, type RunPatch } from "@/lib/lineup/repo";
 
 const STATUSES = new Set(["confirmed", "planned", "tentative"]);
 const GENRES = new Set(["drama", "variety", "business", "other"]);
@@ -56,8 +56,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (body.note === null || typeof body.note === "string") patch.note = (body.note as string | null)?.slice(0, 500) || null;
     if (typeof body.archived === "boolean") patch.archived = body.archived;
     if (typeof body.needsReview === "boolean") patch.needsReview = body.needsReview;
+    if (typeof body.expectedUpdatedAt === "string") patch.expectedUpdatedAt = body.expectedUpdatedAt.slice(0, 40);
     return NextResponse.json(await patchRun(id, patch, auth.actor));
   } catch (e) {
+    if (e instanceof RunConflictError) return NextResponse.json({ ok: false, message: e.message }, { status: 409 });
     return fail(e);
   }
 }

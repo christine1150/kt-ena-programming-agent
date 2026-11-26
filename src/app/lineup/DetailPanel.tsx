@@ -266,7 +266,7 @@ function ArchiveButton({ run, onDone }: { run: RunDto; onDone: () => void }) {
       onClick={async () => {
         if (!confirm("이 구간을 보관할까요? 화면에서 빠지고, 자료 관리의 변경 이력에서 되살릴 수 있습니다.")) return;
         setBusy(true);
-        const r = await fetch(`/api/lineup/runs/${run.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ archived: true }) });
+        const r = await fetch(`/api/lineup/runs/${run.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ archived: true, expectedUpdatedAt: run.updatedAt ?? undefined }) });
         setBusy(false);
         const j = await r.json().catch(() => ({}));
         if (!r.ok || !j.ok) alert(j.message ?? "보관하지 못했습니다.");
@@ -308,7 +308,8 @@ function EditForm({ run, genre, title, shortTitle, cast, hasWork, onDone, onCanc
           if (f.cast !== init.cast) body.cast = f.cast;
           if (f.genre !== init.genre) body.genre = f.genre;
         }
-        if (Object.keys(body).length === 0) {
+        if (run.updatedAt) body.expectedUpdatedAt = run.updatedAt; // 동시 수정 충돌 막기(서버가 409)
+        if (Object.keys(body).every((k) => k === "expectedUpdatedAt")) {
           setBusy(false);
           onDone();
           return;
