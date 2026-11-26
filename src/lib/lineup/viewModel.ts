@@ -1,5 +1,5 @@
 // 라인업 화면 배치 도우미(그리기 전용, 화면·인쇄·엑셀 공용) — 수치(맞대결·빈 주·자리 점유 끝)는 서버가 계산해 주고, 여기서는 줄·칸·위치만 정한다.
-import { addMonths as addMonthsYm } from "@/lib/lineup/dates";
+import { addMonths as addMonthsYm, isIsoDate } from "@/lib/lineup/dates";
 import { GENRE_FILL } from "@/lib/lineup/tokens";
 import type { CompareBlock, Genre, LineupPayload, OutletDto, RunDto, RunStatus, SlotDto, WorkDto } from "@/lib/lineup/types";
 
@@ -538,7 +538,7 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
   const view: ViewMode = viewQ === "compare" || viewQ === "list" || viewQ === "calendar" ? viewQ : "own";
   const showRaw = get("show");
   const isYm = (v: string | null | undefined): v is string => !!v && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
-  const isDay = (v: string | null | undefined): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
+  const isDay = (v: string | null | undefined): v is string => isIsoDate(v); // 달력에 있는 날짜만(2026-11-31 거부, P0-08)
   const fromQ = get("from");
   const lenQ = Number(get("len"));
   const densityQ = get("density");

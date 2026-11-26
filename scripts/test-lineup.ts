@@ -11,6 +11,8 @@ import { planUpload, type PlanContext } from "../src/lib/lineup/plan";
 import { parseStandardLineupXlsx, parseStartText, splitCast, standardGenre } from "../src/lib/lineup/parse/standardSheet";
 import { ottGenre, parseOttCadence, parseOttLineupXlsx, splitOttTitle } from "../src/lib/lineup/parse/ottSheet";
 import { holdbackMarks } from "../src/lib/lineup/holdback";
+import { airingsOf } from "../src/lib/lineup/airings";
+import { effectiveEnd, headToHeadLevel, isIsoDate, type AirWindow, type GapSpan } from "../src/lib/lineup/dates";
 import { holdbackRuleFor } from "../src/lib/lineup/holdbackRules";
 import { barWeekDays, buildCalendar, calendarFetchRange, clampRange, dayAirings } from "../src/lib/lineup/calendar";
 import { addMonthsDate, assignLanes, buildCompareRows, buildUndated, EPISODE_TABLE, episodeTable, kindLabel, lineupSearch, ottBucket, parseLineupQuery, periodDot, periodText, queryRange, relatedFor, runExtent, runMatchesQuery, slotLabel, weekStartOf } from "../src/lib/lineup/viewModel";
@@ -349,7 +351,7 @@ check("addDays", addDays("2026-12-31", 1) === "2027-01-01");
   check("홀드백: 방송 길이를 모르면 시각 없이 날짜만(추정 금지)", noDur?.time === null && noDur.date === "2027-01-04");
   check("홀드백: ENA 자신은 계산하지 않음, 규칙 없는 타사 작품은 안 나옴", holdbackMarks(hbData, "ENA", "2027-01-01", "2027-01-31").length === 0 && !holdbackMarks(hbData, "ENA_PLAY", "2027-01-01", "2027-01-31").some((m) => m.workId === "w2"));
   const calHb = buildCalendar(hbData, { ...jan, channels: [], genres: [], hide: [], can: "ENA_PLAY" });
-  check("홀드백: 캘린더 1/4 칸에 가능 표식(◇)과 시각", calHb.weeks[1].days[0].marks.some((m) => m.kind === "avail" && m.note === "22:21~"), calHb.weeks[1].days[0].marks);
+  check("홀드백: 캘린더 1/4 칸에 가능 표식(◇)과 시각", calHb.weeks[1].days[0].marks.some((m) => m.kind === "avail" && m.note === "≈22:21~"), calHb.weeks[1].days[0].marks);
   const cl = clampRange("2027-03-01", "2027-06-01");
   check("캘린더: 기간 지정은 42일까지(길면 자름)·거꾸로 적어도 바로잡음", cl.clipped && cl.to === "2027-04-11" && clampRange("2027-02-05", "2027-02-01").from === "2027-02-01");
   const fr = calendarFetchRange("2027-01-01", "2027-01-31");
@@ -431,6 +433,71 @@ check("토큰: 보조 글자 대비(흰 바탕·페이지 바탕 4.5:1 이상), 
   const wq = parseLineupQuery(() => undefined, "2026-11-23", "2026-11");
   check("기본 시작: 날짜 시작 8개월 = 11/23 ~ 다음 해 7/22, 캘린더 기본 달 = 이번 달", wq.from === "2026-11-23" && queryRange(wq.from, wq.len).to === "2027-07-22" && wq.month === "2026-11" && !new URLSearchParams(lineupSearch(wq, "2026-11-23", "2026-11")).has("from"), queryRange(wq.from, wq.len));
   check("기간: 옛 달 시작(2026-10, 8개월)은 그대로 10/1~5/31, 말일 넘침은 그달 말일로", queryRange("2026-10", 8).to === "2027-05-31" && addMonthsDate("2027-01-31", 1) === "2027-02-28");
+}
+
+// ── 2026-11-26 2차 개선 P0 회귀(외부 검토 재현 사례) ──
+{
+  const sp = (from: string, to: string, extra: Partial<GapSpan> = {}): GapSpan => ({ from, to, ...extra });
+  // P0-01 빈 주: 겹친 구간을 합친 뒤 계산 — A 1/1~1/31, B 1/5~1/10(A 안), C 2/8~ → 공백은 2/1~2/7만
+  const g1 = findGaps("s", [sp("2027-01-01", "2027-01-31"), sp("2027-01-05", "2027-01-10"), sp("2027-02-08", "2027-02-20")], "2026-12-01", "2027-03-31");
+  check("P0-01 빈 주: 중첩 구간 합친 뒤 2/1~2/7 한 건(예전 1/11~2/7 오류)", g1.length === 1 && g1[0].from === "2027-02-01" && g1[0].to === "2027-02-07" && g1[0].confirmed, g1);
+  const g2 = findGaps("s", [sp("2027-01-01", "2027-01-28", { placeholder: true }), sp("2027-03-01", "2027-03-31")], "2026-12-01", "2027-04-30");
+  check("P0-01 빈 주: 앞 편성 끝을 모르면(첫방만 확인) 공백으로 단정하지 않음", g2.length === 0, g2);
+  const g3 = findGaps("s", [sp("2027-01-01", "2027-01-31", { endKnown: false }), sp("2027-03-01", "2027-03-31")], "2026-12-01", "2027-04-30");
+  check("P0-01 빈 주: 앞 편성 끝이 추정이면 '추정 공백'(confirmed=false)", g3.length === 1 && !g3[0].confirmed, g3);
+
+  // P0-02 동시간대: 공통 방송일 · 실제/추정/인접 구분
+  const w = (o: Partial<AirWindow>): AirWindow => ({ days: [1, 2], startMinute: 1290, from: "2027-01-04", to: "2027-02-23", ...o });
+  check("P0-02 맞대결: 시작만 가깝고 길이 모름 → 인접 시간대", headToHeadLevel(w({}), w({ startMinute: 1320 })) === "adjacent");
+  check("P0-02 맞대결: 먼저 시작한 쪽 검증 길이(70분) 안에 뒤 편성 시작 → 추정 중첩", headToHeadLevel(w({ runtime: 70 }), w({ startMinute: 1320 })) === "estimated");
+  check("P0-02 맞대결: 확인된 종료 시각이 서로 안 겹치면 경쟁 아님", headToHeadLevel(w({ endMinute: 1350 }), w({ startMinute: 1350, endMinute: 1420 })) === null);
+  check("P0-02 맞대결: 기간은 겹쳐도 공통 방송일이 휴방뿐이면 경쟁 아님", headToHeadLevel(w({ from: "2027-01-04", to: "2027-01-12" }), w({ from: "2027-01-11", to: "2027-02-23", skip: [{ from: "2027-01-11", to: "2027-01-17" }] })) === null);
+  check("P0-02 맞대결: 시각 미확인 자리는 판정하지 않음", headToHeadLevel(w({ startMinute: null }), w({})) === null);
+  check("P0-02 맞대결: 자정 이후(24:30=1470분) 방송끼리도 비교", headToHeadLevel(w({ startMinute: 1470 }), w({ startMinute: 1480 })) === "adjacent");
+
+  // P0-03 회차: 월화 드라마 1/4 시작, 1/11~1/17 휴방 → 1/18은 3회(월간·그날 일정·홀드백 같은 값)
+  const ena: OutletDto = { id: "o1", code: "ENA", name: "ENA", side: "own", color: null, logo: null, group: "A", ott: false, sortOrder: 1 };
+  const play: OutletDto = { ...ena, id: "o2", code: "ENA_PLAY", name: "ENA PLAY", sortOrder: 2 };
+  const slot: SlotDto = { id: "sl", outletId: "o1", name: "월화 21:30", days: [1, 2], startMinute: 1290, timeNote: null, compareBlock: "mon_tue", defaultGenre: "drama", sortOrder: 1 };
+  const SKIP = [{ from: "2027-01-11", to: "2027-01-17" }];
+  const mk = (o: Partial<RunDto>): RunDto => {
+    const base = { id: "r", slotId: "sl", workId: "wk", runKind: "series", status: "confirmed", startDate: "2027-01-04", startPrecision: "day", endDate: null, endPrecision: "unknown", startText: null, endText: null, episodes: null, episodeFrom: null, recurrence: null, airDates: null, label: null, reason: null, note: null, needsReview: false, sourceId: null, sourceCell: null, sourceText: null, updatedAt: null, archived: false, draw: null, rivals: [], ...o } as RunDto;
+    return { ...base, draw: drawSpan(base, slot.days, "2027-12-31", o.runKind === "hiatus" ? undefined : SKIP) };
+  };
+  const work: WorkDto = { id: "wk", title: "가상 월화극", shortTitle: null, tentative: false, genre: "drama", totalEpisodes: 8, cast: [], directors: [], writers: [], producers: [], logline: null, ottNote: null, note: null };
+  const drama = mk({ id: "d1", episodes: 8 });
+  const hiat = mk({ id: "h1", workId: null, runKind: "hiatus", startDate: "2027-01-11", endDate: "2027-01-17", endPrecision: "day", label: "휴방" });
+  const p3 = { ok: true, from: "2027-01-01", to: "2027-03-31", today: "2026-12-01", canEdit: false, outlets: [ena, play], slots: [slot], works: [work], runs: [drama, hiat], holidays: [], events: [], sources: [], gaps: [], holdbackMinutes: { wk: 60 } } as LineupPayload;
+  const calEp = buildCalendar(p3, { from: "2027-01-01", to: "2027-01-31", channels: [], genres: [], hide: [] }).weeks.flatMap((x) => x.bars).flatMap((b) => b.days).find((d) => d.date === "2027-01-18")?.episode;
+  const dayEp = dayAirings(p3, "2027-01-18", ["ENA"], []).find((r) => r.runId === "d1")?.episode;
+  const air = airingsOf(drama, slot, { work, skip: SKIP, until: "2027-12-31" });
+  check("P0-03 회차: 휴방 뒤 1/18 = 3회 — 월간 캘린더·그날 일정 같은 값(예전 그날 일정 5회)", calEp === "3회" && dayEp === "3회", { calEp, dayEp });
+  check("P0-03 회차: 8편 + 휴방 1주 → 마지막 8회는 2/2(휴방만큼 밀림)", air.length === 8 && air[7].date === "2027-02-02" && air[7].label === "8회", air.map((a) => a.date));
+  check("P0-03 회차: 편수로 정한 그리기 끝도 휴방만큼 늘어남", !!drama.draw && drama.draw.to >= "2027-02-02", drama.draw);
+
+  // P0-05 첫방만 확인: 회차·종영·홀드백을 지어내지 않는다
+  const only = mk({ id: "d2", episodes: null });
+  const onlyWork = { ...work, totalEpisodes: null };
+  check("P0-05 첫방만: 그리기는 배치용(placeholder) 표시", !!only.draw?.placeholder, only.draw);
+  check("P0-05 첫방만: 방송일은 첫 방송 하루(예전: 4주·8회 생성)", airingsOf(only, slot, { work: onlyWork, until: "2027-12-31" }).length === 1);
+  const p5 = { ...p3, works: [onlyWork], runs: [only] } as LineupPayload;
+  const cal5 = buildCalendar(p5, { from: "2027-01-01", to: "2027-02-28", channels: [], genres: [], hide: [] }).weeks.flatMap((x) => x.bars).flatMap((b) => b.days);
+  check("P0-05 첫방만: 캘린더는 첫방 1칸만", cal5.length === 1 && cal5[0].kind === "first", cal5);
+  const hb5 = holdbackMarks(p5, "ENA_PLAY", "2027-01-01", "2027-03-31");
+  check("P0-05 첫방만: 홀드백도 첫 방송분만", hb5.length <= 1, hb5.map((h) => h.enaDate));
+  check("P0-05 effectiveEnd: 끝·편수 모르면 null(임의 27일 없음)", effectiveEnd({ runKind: "series", startDate: "2027-01-04", startPrecision: "day", endDate: null, endPrecision: "unknown", episodes: null, recurrence: null, airDates: null }, [1, 2], "2027-12-31").end === null);
+
+  // P0-07 홀드백: 실제 종료 기록과 추정 구분
+  const hb7 = holdbackMarks({ ...p3, holdbackEnds: { wk: { "2027-01-04": 1352 } } } as LineupPayload, "ENA_PLAY", "2027-01-01", "2027-01-31");
+  const h104 = hb7.find((h) => h.enaDate === "2027-01-04");
+  const h105 = hb7.find((h) => h.enaDate === "2027-01-05");
+  check("P0-07 홀드백: 실제 종료 기록이 있는 회차는 actual, 없는 회차는 추정", !!h104?.actual && h104.time === "22:32" && !!h105 && !h105.actual && h105.time === "22:30", { h104, h105 });
+  check("P0-07 홀드백: 휴방 주에는 방영 가능 표식 없음", !hb7.some((h) => h.enaDate >= "2027-01-11" && h.enaDate <= "2027-01-17"));
+
+  // P0-08 날짜 검증
+  check("P0-08 날짜: 2027-02-29·2026-11-31·2026-13-01 거부, 2028-02-29 허용", !isIsoDate("2027-02-29") && !isIsoDate("2026-11-31") && !isIsoDate("2026-13-01") && isIsoDate("2028-02-29") && isIsoDate("2026-12-31"));
+  const badQ = parseLineupQuery((k) => ({ from: "2026-11-31", dfrom: "2027-02-29", dto: "2027-03-05" } as Record<string, string>)[k], "2026-11-23");
+  check("P0-08 날짜: 주소의 없는 날짜는 기본값으로", badQ.from === "2026-11-23" && badQ.dfrom === null, { from: badQ.from, dfrom: badQ.dfrom });
 }
 
 if (failed > 0) {

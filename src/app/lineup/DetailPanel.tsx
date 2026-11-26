@@ -6,11 +6,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Genre, LineupPayload, OutletDto, RunDto, SlotDto, WorkDto } from "@/lib/lineup/types";
 import {
-  dateFull, episodeText, GENRE_LABEL, kindLabel, periodDot, relatedFor, runGenre, runTitle, slotLabel, STATUS_LABEL, workNote,
+  dateFull, episodeText, GENRE_LABEL, kindLabel, periodDot, relatedFor, runGenre, runTitle, slotLabel, workNote,
 } from "@/lib/lineup/viewModel";
 import { EVENT_KIND_ICON, EVENT_KIND_LABEL, eventsBetween, laneEvents, type LaneEvent } from "@/lib/lineup/events";
 import { GENRE_FILL, GENRE_ON, UI } from "@/lib/lineup/tokens";
-import { Btn, cx, Icon, OutletLogo } from "./ui";
+import { Btn, Icon, OutletLogo } from "./ui";
 
 interface Change { id: number; action: string; diff: Record<string, { before: unknown; after: unknown }>; actor: string; at: string }
 const FIELD_KO: Record<string, string> = {
@@ -58,6 +58,13 @@ export default function DetailPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const levels = run.rivalLevels ?? {};
+  const byId = (id: string) => data.runs.find((r) => r.id === id);
+  const rivalsBy = {
+    overlap: related.rivals.filter((r) => levels[r.id] === "exact" || levels[r.id] === "estimated"),
+    adjacent: related.rivals.filter((r) => !levels[r.id] || levels[r.id] === "adjacent"),
+    family: Object.entries(levels).filter(([, v]) => v === "family").map(([id]) => byId(id)).filter((r): r is RunDto => !!r),
+  };
   const endText = run.endDate ? dateFull(run.endDate) : run.endPrecision === "open" ? "종료 미정(계속)" : run.draw?.estimatedFrom ? "편수로 추정(≈)" : "미정";
   const runRef = (r: RunDto) => {
     const w = r.workId ? works.get(r.workId) : undefined;
@@ -83,9 +90,8 @@ export default function DetailPanel({
           <span className="inline-flex h-5 items-center rounded-[3px] px-1.5 font-semibold" style={own ? { background: GENRE_FILL[genre], color: GENRE_ON[genre] } : { background: "#fff", color: UI.text, border: `1.5px solid ${GENRE_FILL[genre]}` }}>
             {GENRE_LABEL[genre]}
           </span>
-          <span className={cx("inline-flex h-5 items-center rounded-[3px] border px-1.5 font-semibold", run.status === "confirmed" ? "border-[var(--lu-text)] text-[var(--lu-text)]" : "border-dashed border-[var(--lu-text-2)] text-[var(--lu-text-2)]")}>
-            {STATUS_LABEL[run.status]}
-          </span>
+          {/* 상태 배지는 가안(→'미정')만. 확정·예정은 막대 실선·점선으로 충분하다(2026-11-26). 원래 상태는 수정 폼·변경 이력에 남는다. */}
+          {run.status === "tentative" && <span className="inline-flex h-5 items-center rounded-[3px] border border-dashed border-[var(--lu-text-2)] px-1.5 font-semibold text-[var(--lu-text-2)]">미정</span>}
           <span className="text-[var(--lu-text-2)]">{kindLabel(run, !!outlet?.ott)}</span>
           {run.needsReview && <span className="inline-flex h-5 items-center rounded-[3px] bg-[var(--lu-text)] px-1.5 font-semibold text-white">확인 필요</span>}
         </div>
@@ -109,9 +115,26 @@ export default function DetailPanel({
         {run.draw?.estimatedFrom && <p className="mt-2 text-[12px] text-[var(--lu-text-2)]">종영일이 발표되지 않아 편수로 끝을 추정했습니다(≈). 막대 끝의 흐린 부분이 추정 구간입니다.</p>}
 
         {!outlet?.ott && run.runKind === "series" && (
-          <Section title="동시간대 맞대결" count={related.rivals.length} hint="같은 요일 · 시작 ±60분 · 기간 겹침(시각 확인된 자리만)">
-            {related.rivals.length === 0 ? <Empty>{slot?.startMinute === null ? "편성 시각이 확인되지 않아 동시간대 경쟁을 확정하지 않았습니다." : "겹치는 다른 방송사 작품이 없습니다."}</Empty> : related.rivals.map((r) => <RunRow key={r.id} r={r} info={runRef(r)} onSelect={onSelect} />)}
-          </Section>
+          <>
+            {/* 동시간대 경쟁(P0-02): 실제·추정 중첩과 인접 시간대를 나눈다. 공통 방송일이 있는 다른 회사 편성만. */}
+            <Section title="동시간대 경쟁" count={rivalsBy.overlap.length} hint="방송 시간이 겹침 — 실제 종료 시각 또는 실제 방송 기록의 방송 길이로 계산">
+              {rivalsBy.overlap.length === 0 ? (
+                <Empty>{slot?.startMinute === null ? "편성 시각이 확인되지 않아 동시간대 경쟁을 판정하지 않았습니다." : "방송 시간이 겹치는 것으로 확인된 다른 방송사 작품이 없습니다."}</Empty>
+              ) : (
+                rivalsBy.overlap.map((r) => <RunRow key={r.id} r={r} info={runRef(r)} onSelect={onSelect} tag={levels[r.id] === "exact" ? "실제 중첩" : "추정 중첩"} />)
+              )}
+            </Section>
+            {rivalsBy.adjacent.length > 0 && (
+              <Section title="인접 시간대" count={rivalsBy.adjacent.length} hint="시작 시각 ±60분 · 공통 방송일 있음 — 종료 시각을 몰라 겹침은 미확인">
+                {rivalsBy.adjacent.map((r) => <RunRow key={r.id} r={r} info={runRef(r)} onSelect={onSelect} />)}
+              </Section>
+            )}
+            {rivalsBy.family.length > 0 && (
+              <Section title="KT ENA 계열 같은 시간대" count={rivalsBy.family.length} hint="계열 채널끼리 — 경쟁사 집계에서 제외">
+                {rivalsBy.family.map((r) => <RunRow key={r.id} r={r} info={runRef(r)} onSelect={onSelect} />)}
+              </Section>
+            )}
+          </>
         )}
         {related.overlap.length > 0 && (
           <Section title="같은 장르 · 기간 중첩" count={related.overlap.length} hint="시각과 무관하게 방송 기간이 겹치는 같은 장르">
@@ -219,7 +242,7 @@ function Section({ title, count, hint, children }: { title: string; count?: numb
   );
 }
 
-function RunRow({ r, info, onSelect, showStart = false }: { r: RunDto; info: { w: WorkDto | undefined; s: SlotDto | undefined; o: OutletDto | undefined; g: Genre }; onSelect: (id: string) => void; showStart?: boolean }) {
+function RunRow({ r, info, onSelect, showStart = false, tag }: { r: RunDto; info: { w: WorkDto | undefined; s: SlotDto | undefined; o: OutletDto | undefined; g: Genre }; onSelect: (id: string) => void; showStart?: boolean; tag?: string }) {
   const own = info.o?.side === "own";
   return (
     <button type="button" onClick={() => onSelect(r.id)} className="flex w-full items-center gap-2 rounded-[4px] px-1 py-1.5 text-left hover:bg-[var(--lu-hover)]">
@@ -228,7 +251,9 @@ function RunRow({ r, info, onSelect, showStart = false }: { r: RunDto; info: { w
       <span className="w-[52px] shrink-0 truncate text-[11.5px] font-semibold text-[var(--lu-text-2)]">{info.o?.name}</span>
       <span className="min-w-0 flex-1 truncate font-semibold">{runTitle(r, info.w)}</span>
       <span className="lu-num shrink-0 text-[11.5px] text-[var(--lu-text-2)]">{showStart ? `${r.startPrecision === "week" ? "≈" : ""}${(r.startDate ?? "").slice(5).replace("-", ".")}` : `${info.s && !info.o?.ott ? `${slotLabel(info.s, info.o)} · ` : ""}${periodDot(r)}`}</span>
-      {r.status !== "confirmed" && <span className="shrink-0 text-[10.5px] text-[var(--lu-text-2)]">예정</span>}
+      {/* 상태 문구 간소화(2026-11-26): '예정'은 쓰지 않고 가안만 '미정' */}
+      {tag && <span className="shrink-0 rounded-[3px] border border-[var(--lu-line)] px-1 text-[10.5px] text-[var(--lu-text-2)]">{tag}</span>}
+      {r.status === "tentative" && <span className="shrink-0 text-[10.5px] text-[var(--lu-text-2)]">미정</span>}
     </button>
   );
 }
@@ -268,8 +293,26 @@ function EditForm({ run, genre, title, shortTitle, cast, hasWork, onDone, onCanc
         e.preventDefault();
         setBusy(true);
         setMsg(null);
-        const body: Record<string, unknown> = { status: f.status, startDate: f.startDate || null, endDate: f.endDate || null, episodes: f.episodes || null, note: f.note, needsReview: f.needsReview };
-        if (hasWork) Object.assign(body, { title: f.title, shortTitle: f.shortTitle || null, cast: f.cast, genre: f.genre });
+        // 바뀐 항목만 보낸다(P0-04) — 메모·출연만 고쳐도 날짜가 함께 가서 월 단위 일정이 하루 단위로 바뀌던 문제
+        const init = { genre, title, shortTitle, cast, status: run.status, startDate: run.startDate ?? "", endDate: run.endDate ?? "", episodes: run.episodes ? String(run.episodes) : "", note: run.note ?? "", needsReview: run.needsReview };
+        const body: Record<string, unknown> = {};
+        if (f.status !== init.status) body.status = f.status;
+        if (f.startDate !== init.startDate) body.startDate = f.startDate || null;
+        if (f.endDate !== init.endDate) body.endDate = f.endDate || null;
+        if (f.episodes !== init.episodes) body.episodes = f.episodes || null;
+        if (f.note !== init.note) body.note = f.note;
+        if (f.needsReview !== init.needsReview) body.needsReview = f.needsReview;
+        if (hasWork) {
+          if (f.title !== init.title) body.title = f.title;
+          if (f.shortTitle !== init.shortTitle) body.shortTitle = f.shortTitle || null;
+          if (f.cast !== init.cast) body.cast = f.cast;
+          if (f.genre !== init.genre) body.genre = f.genre;
+        }
+        if (Object.keys(body).length === 0) {
+          setBusy(false);
+          onDone();
+          return;
+        }
         const r = await fetch(`/api/lineup/runs/${run.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
         const j = await r.json().catch(() => ({}));
         setBusy(false);

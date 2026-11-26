@@ -140,7 +140,9 @@ export interface RunDto {
   archived: boolean;
   // 서버가 계산해 주는 그리기 값(화면은 그리기만 한다)
   draw: DrawSpan | null;
-  rivals: string[]; // 같은 시기 맞대결 구간 id(같은 요일·시작 ±60분·실제 방송 기간 겹침)
+  rivals: string[]; // 동시간대 경쟁 구간 id — 다른 회사(KT ENA 계열끼리 제외), 공통 방송일이 있는 것만. 수준은 rivalLevels
+  /** 경쟁 수준(P0-02): exact 실제 중첩 · estimated 검증된 방송 길이로 추정한 중첩 · adjacent 인접 시간대(±60분, 중첩 미확인) · family KT ENA 계열 채널끼리 */
+  rivalLevels?: Record<string, "exact" | "estimated" | "adjacent" | "family">;
 }
 
 /** 그리기 구간 — 실제 날짜가 아니라 화면에 그릴 시작·끝(자리 점유 규칙 적용). 글자·패널은 실제 날짜를 쓴다. */
@@ -150,6 +152,8 @@ export interface DrawSpan {
   to: string; // 그리기 끝(포함)
   estimatedFrom: string | null; // 끝을 추정했으면 추정이 시작되는 날(흐림)
   dates: string[] | null; // dots·diamond: 방송일들
+  /** 첫방일만 확인 — to는 줄 배정용 배치 폭일 뿐 편성 기간이 아니다(회차·빈 주·맞대결·홀드백에 쓰지 않음, P0-05) */
+  placeholder?: boolean;
 }
 
 export interface SourceDto {
@@ -226,4 +230,6 @@ export interface GapDto {
   from: string;
   to: string;
   weeks: number;
+  /** 앞 편성 끝·뒤 편성 시작이 모두 하루 단위로 확인된 공백인지(아니면 추정 공백 — 붉은 경고로 그리지 않는다, P0-01) */
+  confirmed: boolean;
 }

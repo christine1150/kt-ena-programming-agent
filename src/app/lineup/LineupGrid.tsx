@@ -769,12 +769,15 @@ function Gap({ gap, P, dayPx, alert }: { gap: GapDto; P: (d: string) => number; 
   const left = P(gap.from);
   const right = P(addDaysIso(gap.to, 1));
   const px = (dayIndex(gap.from, gap.to) + 1) * dayPx;
-  const text = `${gap.weeks}주 비어있음`;
+  // 확인된 공백만 붉은 경고(P0-01). 앞 편성 끝·뒤 편성 시작이 추정이면 회색 '≈N주 공백(추정)'
+  const sure = gap.confirmed !== false;
+  alert = alert && sure;
+  const text = sure ? `${gap.weeks}주 비어있음` : `≈${gap.weeks}주 공백(추정)`;
   return (
     <span
       role="note"
       aria-label={`${text} (${gap.from}~${gap.to}, 자료상 빈 기간)`}
-      title={`${dateDot(gap.from)}–${dateDot(gap.to)} ${text}\n앞뒤 편성 사이 자료상 빈 기간 — 확정 공백인지 확인 필요`}
+      title={`${dateDot(gap.from)}–${dateDot(gap.to)} ${text}\n${sure ? "앞 편성 종영일·뒤 편성 첫방일이 모두 확인된 사이 기간" : "앞 편성 종영 또는 뒤 편성 첫방이 추정(편수·월 단위)이라 공백 길이도 추정"}`}
       className="absolute inset-y-0 flex items-center justify-center"
       style={{ left: `${left}%`, width: `${right - left}%` }}
     >

@@ -138,10 +138,12 @@ function EndItem({ title, outlet, genre, onClick, selected, tip, approx = false 
 }
 
 function GapItem({ bar, onClick }: { bar: CalBar; onClick: () => void }) {
+  // 확인된 공백만 붉게(P0-01) — 추정 공백('≈')은 회색
+  const sure = !bar.title.startsWith("≈");
   return (
-    <button type="button" onClick={onClick} title={`${bar.outletName} ${bar.meta} — 앞뒤 편성 사이 자료상 빈 기간(확정 공백 여부 확인 필요)`}
-      className="flex w-full min-w-0 items-center gap-1 rounded-[3px] px-1 text-left text-[11.5px] font-semibold text-[var(--lu-danger)]" style={{ height: ITEM_H }}>
-      <span aria-hidden className="h-0 w-3 shrink-0 border-t border-dotted border-[var(--lu-danger)]" />
+    <button type="button" onClick={onClick} title={`${bar.outletName} ${bar.meta} — ${sure ? "앞 편성 종영·뒤 편성 첫방이 확인된 사이 기간" : "앞 편성 종영 또는 뒤 편성 첫방이 추정이라 공백도 추정"}`}
+      className={cx("flex w-full min-w-0 items-center gap-1 rounded-[3px] px-1 text-left text-[11.5px] font-semibold", sure ? "text-[var(--lu-danger)]" : "text-[var(--lu-text-2)]")} style={{ height: ITEM_H }}>
+      <span aria-hidden className={cx("h-0 w-3 shrink-0 border-t border-dotted", sure ? "border-[var(--lu-danger)]" : "border-[var(--lu-control)]")} />
       <span className="truncate">{bar.time} {bar.title}</span>
     </button>
   );

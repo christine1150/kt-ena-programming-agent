@@ -217,7 +217,7 @@ function addGridSheet(
           const col = colOf(g.from);
           if (used.has(col)) continue;
           const c = ws.getCell(r, col);
-          c.value = `${g.weeks}주 비어있음`;
+          c.value = g.confirmed === false ? `≈${g.weeks}주 공백(추정)` : `${g.weeks}주 비어있음`;
           c.font = { size: 8, bold: alert, italic: !alert, color: { argb: argb(alert ? "B91C1C" : "696971") } };
         }
       }

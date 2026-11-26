@@ -3,7 +3,7 @@
 import { supabase } from "@/lib/supabase";
 import { isGroupA } from "@/lib/audienceReport/targetGroups";
 import { outletBrand } from "./brand";
-import { addDays, daysBetween, drawSpan, effectiveEnd, findGaps, isHeadToHead } from "./dates";
+import { addDays, daysBetween, drawSpan, effectiveEnd, findGaps, headToHeadLevel, isIsoDate, type GapSpan } from "./dates";
 import { titleKey } from "./titles";
 import { featuredShortMap, resolveShortTitle } from "./shortTitle";
 import { holdbackRuleFor } from "./holdbackRules";
@@ -321,6 +321,15 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
   const slotById = new Map(slots.map((s) => [s.id, s]));
   const horizon = addDays(to, 60);
 
+  // 휴방·결방(자리별) — 편수로 끝을 계산할 때 건너뛴다(P0-03)
+  const skipBySlot = new Map<string, { from: string; to: string }[]>();
+  for (const r of runs) {
+    if (r.run_kind !== "hiatus" || !r.start_date) continue;
+    const slot = slotById.get(r.slot_id);
+    if (!slot) continue;
+    const hd = drawSpan({ runKind: r.run_kind, startDate: r.start_date, startPrecision: r.start_precision, endDate: r.end_date, endPrecision: r.end_precision, episodes: r.episodes, recurrence: r.recurrence, airDates: r.air_dates }, slot.days, horizon);
+    if (hd && !hd.placeholder) skipBySlot.set(r.slot_id, [...(skipBySlot.get(r.slot_id) ?? []), { from: hd.from, to: hd.to }]);
+  }
   // 그리기 구간(자리 점유) — 기간 밖으로 끝난 구간은 뺀다.
   const dtos: RunDto[] = [];
   for (const r of runs) {
@@ -329,7 +338,8 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
     const draw = drawSpan(
       { runKind: r.run_kind, startDate: r.start_date, startPrecision: r.start_precision, endDate: r.end_date, endPrecision: r.end_precision, episodes: r.episodes, recurrence: r.recurrence, airDates: r.air_dates },
       slot.days,
-      horizon
+      horizon,
+      r.run_kind === "hiatus" ? undefined : skipBySlot.get(r.slot_id)
     );
     if (draw && (draw.to < from || draw.from > to)) continue;
     dtos.push({
@@ -340,39 +350,55 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
     });
   }
 
-  // 맞대결 — 실제(또는 회차로 추정한) 방송 기간으로 계산. 작품 구간끼리만.
-  const real = dtos
-    .filter((d) => d.workId && d.startDate && d.runKind === "series")
-    .map((d) => {
-      const slot = slotById.get(d.slotId) as SlotRow;
-      const end = effectiveEnd({ runKind: d.runKind, startDate: d.startDate, startPrecision: d.startPrecision, endDate: d.endDate, endPrecision: d.endPrecision, episodes: d.episodes, recurrence: null, airDates: null }, slot.days, horizon).end;
-      return { dto: d, outletId: slot.outlet_id, days: slot.days, startMinute: slot.start_minute, from: d.startDate as string, to: end ?? (d.startDate as string) };
-    });
-  for (const a of real)
-    for (const b of real) if (a !== b && a.outletId !== b.outletId && isHeadToHead(a, b)) a.dto.rivals.push(b.dto.id);
-
-  // 드라마 자리의 빈 주(연속 편성 사이 7일 이상).
-  const gaps: GapDto[] = [];
-  const bySlot = new Map<string, { from: string; to: string }[]>();
-  for (const d of dtos) {
-    if (!d.draw || (d.draw.shape !== "bar" && d.draw.shape !== "box" && d.draw.shape !== "bracket")) continue;
-    const arr = bySlot.get(d.slotId) ?? [];
-    arr.push({ from: d.draw.from, to: d.draw.to });
-    bySlot.set(d.slotId, arr);
-  }
-  for (const [sid, spans] of bySlot) if (slotById.get(sid)?.default_genre === "drama") gaps.push(...findGaps(sid, spans, from, to));
-
-  // 홀드백 규칙이 있는 ENA 본방 작품의 방송 길이 — 실패해도 라인업은 그대로(시각만 빠진다)
+  // 방송 길이(실제 방송 기록 중간값) — 홀드백과 맞대결 '추정' 판정에 쓴다. ENA 연속 편성 전체(같은 시즌 기록 우선). 실패해도 라인업은 그대로.
   const outletCodeById = new Map(outlets.map((o) => [o.id, o.code]));
+  const outletSideById = new Map(outlets.map((o) => [o.id, o.side]));
   const workById = new Map(works.map((w) => [w.id, w]));
-  const hbTargets = new Map<string, { workId: string; title: string; slotStartMinute: number }>();
+  const hbTargets = new Map<string, { workId: string; title: string; slotStartMinute: number; since: string | null }>();
   for (const d of dtos) {
     const slot = slotById.get(d.slotId);
     const w = d.workId ? workById.get(d.workId) : undefined;
     if (!slot || !w || d.runKind !== "series" || slot.start_minute === null || outletCodeById.get(slot.outlet_id) !== "ENA") continue;
-    if (holdbackRuleFor(w.title, w.genre)) hbTargets.set(w.id, { workId: w.id, title: w.title, slotStartMinute: slot.start_minute });
+    if (holdbackRuleFor(w.title, w.genre) || d.startDate) hbTargets.set(w.id, { workId: w.id, title: w.title, slotStartMinute: slot.start_minute, since: d.startDate });
   }
   const hb = await loadHoldbackMinutes([...hbTargets.values()]).catch(() => ({ minutes: {}, ends: {} }) as Awaited<ReturnType<typeof loadHoldbackMinutes>>);
+
+  // 동시간대 경쟁(P0-02) — 공통 방송일이 있는 편성끼리 수준을 매긴다(실제 중첩 · 길이로 추정한 중첩 · 인접 시간대 · KT ENA 계열끼리).
+  // 끝을 모르는 편성(첫방만 확인)은 첫 방송일 하루로만 본다. 시각을 모르는 자리는 판정하지 않는다.
+  const real = dtos
+    .filter((d) => d.workId && d.startDate && d.runKind === "series" && (d.startPrecision === "day" || d.startPrecision === "week"))
+    .map((d) => {
+      const slot = slotById.get(d.slotId) as SlotRow;
+      const skip = skipBySlot.get(d.slotId);
+      const e = effectiveEnd({ runKind: d.runKind, startDate: d.startDate, startPrecision: d.startPrecision, endDate: d.endDate, endPrecision: d.endPrecision, episodes: d.episodes, recurrence: null, airDates: null }, slot.days, horizon, skip);
+      const runtime = d.workId ? hb.minutes[d.workId] ?? null : null;
+      return { dto: d, outletId: slot.outlet_id, own: outletSideById.get(slot.outlet_id) === "own", days: slot.days, startMinute: slot.start_minute, runtime, skip, from: d.startDate as string, to: e.end ?? (d.startDate as string) };
+    })
+    .filter((x) => x.startMinute !== null);
+  for (const a of real) {
+    for (const b of real) {
+      if (a === b || a.outletId === b.outletId) continue;
+      const level = headToHeadLevel(a, b);
+      if (!level) continue;
+      (a.dto.rivalLevels ??= {})[b.dto.id] = a.own && b.own ? "family" : level;
+      if (!(a.own && b.own)) a.dto.rivals.push(b.dto.id);
+    }
+  }
+
+  // 드라마 자리의 빈 주(P0-01) — 겹친 구간을 합친 뒤 계산, 끝을 모르는 편성 뒤는 비우지 않고, 끝·시작이 추정이면 '추정 공백'.
+  const gaps: GapDto[] = [];
+  const bySlot = new Map<string, GapSpan[]>();
+  for (const d of dtos) {
+    if (!d.draw || (d.draw.shape !== "bar" && d.draw.shape !== "box" && d.draw.shape !== "bracket")) continue;
+    const arr = bySlot.get(d.slotId) ?? [];
+    arr.push({
+      from: d.draw.from, to: d.draw.to, placeholder: !!d.draw.placeholder || d.endPrecision === "open",
+      endKnown: d.draw.shape !== "bracket" && !d.draw.estimatedFrom && d.endPrecision === "day", startKnown: d.draw.shape !== "bracket" && d.startPrecision === "day",
+    });
+    bySlot.set(d.slotId, arr);
+  }
+  for (const [sid, spans] of bySlot) if (slotById.get(sid)?.default_genre === "drama") gaps.push(...findGaps(sid, spans, from, to));
+
 
   return {
     ok: true,
@@ -445,11 +471,13 @@ export async function patchRun(runId: string, patch: RunPatch, actor: string) {
   const r = run as { id: string; work_id: string | null; start_date: string | null; end_date: string | null };
   const runFields: Record<string, unknown> = {};
   if (patch.status !== undefined) runFields.status = patch.status;
-  if (patch.startDate !== undefined) {
+  // 날짜는 실제로 바뀐 때만 쓴다(P0-04): 같은 값이 다시 오면 기존 정밀도(월·주·상시 등)를 그대로 둔다. 없는 날짜(2026-11-31)는 거부.
+  for (const d of [patch.startDate, patch.endDate]) if (d && !isIsoDate(d)) throw new Error(`날짜가 올바르지 않습니다: ${d}`);
+  if (patch.startDate !== undefined && patch.startDate !== r.start_date) {
     runFields.start_date = patch.startDate;
     runFields.start_precision = patch.startDate ? "day" : "unknown";
   }
-  if (patch.endDate !== undefined) {
+  if (patch.endDate !== undefined && patch.endDate !== r.end_date) {
     runFields.end_date = patch.endDate;
     runFields.end_precision = patch.endDate ? "day" : "unknown";
   }
