@@ -5,7 +5,8 @@
 // · ott(한 줄 = 한 작품 OTT 공개 일정 — 플랫폼별, 2026-11-25. 자료 종류는 outlet_xlsx로 기록).
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
-import { requireActorFor, bad, fail } from "@/lib/idealSchedule/apiUtil";
+import { requireActorFor, bad } from "@/lib/idealSchedule/apiUtil";
+import { lineupFail, rejectCrossSite } from "@/lib/lineup/apiGuard";
 import { isIsoDate } from "@/lib/lineup/dates";
 import { parseOwnLineupXlsx } from "@/lib/lineup/parse/ownSheet";
 import { industrySheetFilter, parseIndustryLineupXlsx } from "@/lib/lineup/parse/industrySheet";
@@ -20,6 +21,8 @@ const MAX_BYTES = 5 * 1024 * 1024;
 export async function POST(request: Request) {
   const auth = await requireActorFor("lineup_edit");
   if (auth instanceof NextResponse) return auth;
+  const cross = rejectCrossSite(request);
+  if (cross) return cross;
   try {
     const form = await request.formData();
     const file = form.get("file");
@@ -93,6 +96,6 @@ export async function POST(request: Request) {
       missing: plan.missing,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
-    return fail(e);
+    return lineupFail(e);
   }
 }

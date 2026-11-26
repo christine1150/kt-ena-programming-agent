@@ -1,7 +1,8 @@
 // 라인업 구간 한 건 고치기·보관·되살리기(상세 패널) — 권한 lineup_edit(관리자만, 사용자 결정 2026-11-24).
 // 변경 이력은 DB 트리거가 남기고, 수정 한 번을 'manual' 자료로 기록해 업로드 되돌리기가 사람이 고친 값을 건드리지 않게 한다.
 import { NextResponse } from "next/server";
-import { requireActorFor, bad, fail } from "@/lib/idealSchedule/apiUtil";
+import { requireActorFor, bad } from "@/lib/idealSchedule/apiUtil";
+import { isUuid, lineupFail, rejectCrossSite } from "@/lib/lineup/apiGuard";
 import { isIsoDate } from "@/lib/lineup/dates";
 import { splitNames } from "@/lib/lineup/titles";
 import { listChanges, patchRun, RunConflictError, type RunPatch } from "@/lib/lineup/repo";
@@ -13,17 +14,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const auth = await requireActorFor("view");
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
+  if (!isUuid(id)) return NextResponse.json({ ok: false, message: "잘못된 id입니다." }, { status: 400 });
   try {
     return NextResponse.json({ ok: true, changes: await listChanges({ entityId: id, limit: 10 }) }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
-    return fail(e);
+    return lineupFail(e);
   }
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireActorFor("lineup_edit");
   if (auth instanceof NextResponse) return auth;
+  const cross = rejectCrossSite(request);
+  if (cross) return cross;
   const { id } = await params;
+  if (!isUuid(id)) return NextResponse.json({ ok: false, message: "잘못된 id입니다." }, { status: 400 });
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const patch: RunPatch = {};
@@ -51,7 +56,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (!Number.isInteger(n) || n <= 0 || n > 999) return bad("회차는 1~999 사이 정수로 넣어 주세요.");
       patch.episodes = n;
     }
-    if (typeof body.cast === "string") patch.cast = splitNames(body.cast);
+    if (typeof body.cast === "string") patch.cast = splitNames(body.cast.slice(0, 2000)).slice(0, 30).map((x) => x.slice(0, 40)); // 길이·개수 제한(보안 검토)
     if (body.logline === null || typeof body.logline === "string") patch.logline = (body.logline as string | null)?.slice(0, 1000) ?? null;
     if (body.note === null || typeof body.note === "string") patch.note = (body.note as string | null)?.slice(0, 500) || null;
     if (typeof body.archived === "boolean") patch.archived = body.archived;
@@ -60,6 +65,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json(await patchRun(id, patch, auth.actor));
   } catch (e) {
     if (e instanceof RunConflictError) return NextResponse.json({ ok: false, message: e.message }, { status: 409 });
-    return fail(e);
+    return lineupFail(e);
   }
 }

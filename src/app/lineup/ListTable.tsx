@@ -18,7 +18,7 @@ const COLS: { key: ColKey; label: string; width: number; def: boolean; align?: "
   { key: "end", label: "종료일", width: 104, def: true },
   { key: "eps", label: "편수", width: 64, def: true, align: "right" },
   { key: "cast", label: "출연진", width: 200, def: true },
-  { key: "status", label: "상태", width: 64, def: true },
+  { key: "status", label: "상태", width: 64, def: false }, // 기본 숨김 — 상태는 제목 칸 장르 사각형(실선·점선)으로
   { key: "kind", label: "형태", width: 96, def: false },
   { key: "source", label: "출처 · 기준일", width: 150, def: true },
   { key: "updated", label: "최종 수정", width: 100, def: false },
@@ -172,7 +172,7 @@ export default function ListTable({
       case "title":
         return (
           <span className="flex min-w-0 items-center gap-2">
-            <span aria-hidden className="inline-block size-2.5 shrink-0 rounded-[2px]" style={x.own ? { background: GENRE_FILL[x.genre] } : { background: "#fff", border: `1.5px solid ${GENRE_FILL[x.genre]}` }} />
+            <span aria-hidden className="inline-block size-2.5 shrink-0 rounded-[2px]" style={x.own && x.r.status === "confirmed" ? { background: GENRE_FILL[x.genre] } : { background: x.own ? `${GENRE_FILL[x.genre]}33` : "#fff", border: `1.5px ${x.r.status === "confirmed" ? "solid" : "dashed"} ${GENRE_FILL[x.genre]}` }} title={x.r.status === "confirmed" ? "확정" : x.r.status === "planned" ? "예정" : "미정"} />
             <button type="button" onClick={(e) => { e.stopPropagation(); onSelect(r.id); }} className="truncate text-left font-semibold text-[var(--lu-text)] hover:underline">{x.title || "—"}</button>
             {r.needsReview && <span className="shrink-0 rounded-[3px] bg-[var(--lu-text)] px-1 text-[10.5px] text-white">확인</span>}
           </span>

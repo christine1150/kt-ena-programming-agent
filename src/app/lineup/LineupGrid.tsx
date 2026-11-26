@@ -317,7 +317,7 @@ export default function LineupGrid({
                 const isChannel = row.kind === "subgroup";
                 const open = !collapsed.has(row.key);
                 return (
-                  <tr key={row.key}>
+                  <tr key={row.key} className="print:break-after-avoid">
                     <th colSpan={nLabel + 1} scope="rowgroup" className="border-t border-b border-[var(--lu-line)] bg-[var(--lu-page)] p-0 text-left font-normal">
                       <div className={cx("flex items-center gap-2 px-2", !printMode && "sticky left-0")} style={{ maxWidth: "100vw", height: isChannel ? 34 : 30 }}>
                         <button
@@ -350,18 +350,18 @@ export default function LineupGrid({
               const own = row.outlet?.side === "own";
               const lanes = assignLanes(runs, isOtt ? { labelDays: (r) => Math.ceil(ottLabelPx(r, r.workId ? works.get(r.workId) : undefined) / Math.max(dayPx, 0.5)) } : undefined);
               const height = lanes.main.length * L.row + (lanes.events.length > 0 ? L.event + 4 : 0);
-              const lastEnd = own && row.slot?.defaultGenre === "drama" ? runs.reduce<string | null>((m, r) => (r.draw && r.draw.shape !== "diamond" && (!m || r.draw.to > m) ? r.draw.to : m), null) : null;
+              const lastEnd = own && row.slot?.defaultGenre === "drama" ? runs.reduce<string | null>((m, r) => (r.draw && r.draw.shape !== "diamond" && !r.draw.placeholder && (!m || r.draw.to > m) ? r.draw.to : m), null) : null;
               // 자사 보기: 요일 묶음마다 옅은 띠를 번갈아(줄 머리는 불투명 #F7F8FA, 타임라인 칸은 격자가 비치게 반투명)
               const banded = view === "own" && (row.band ?? 0) % 2 === 1;
               const rowLine = view === "own" && row.dowEnd ? "border-b-[var(--lu-line)]" : "border-b-[var(--lu-grid)]";
               return (
-                <tr key={row.key}>
+                <tr key={row.key} className="print:break-inside-avoid">
                   {view === "own" ? (
                     <>
                       {!!row.genreSpan && row.genre && (
                         <th
                           rowSpan={row.genreSpan}
-                          scope="rowgroup"
+                          scope="row"
                           className={cx("z-20 border-r border-b border-r-[var(--lu-grid)] border-b-[var(--lu-line)] bg-white px-1 text-center align-middle", !printMode && "sticky print:static")}
                           style={{ left: printMode ? undefined : 0, boxShadow: `inset 3px 0 0 ${GENRE_FILL[row.genre]}` }}
                         >
@@ -373,7 +373,7 @@ export default function LineupGrid({
                       {!!row.dowSpan && (
                         <th
                           rowSpan={row.dowSpan}
-                          scope="rowgroup"
+                          scope="row"
                           className={cx("z-20 border-r border-b border-r-[var(--lu-grid)] border-b-[var(--lu-line)] px-1 text-center align-middle", !printMode && "sticky print:static", banded ? "bg-[var(--lu-page)]" : "bg-white")}
                           style={printMode ? undefined : { left: stickyAt(1) }}
                         >
@@ -449,13 +449,13 @@ export default function LineupGrid({
         </table>
         {/* 오늘선 — 막대 위로 1px ENA 블루(누르기는 막지 않음) */}
         {todayIn && (
-          <div aria-hidden className={cx("pointer-events-none absolute inset-y-0 z-[2]", !printMode && "print:hidden")} style={{ left: labelWidth, right: 0 }}>
+          <div aria-hidden className={cx("pointer-events-none absolute inset-y-0 z-0", !printMode && "print:hidden")} style={{ left: labelWidth, right: 0 }}>
             <div className="absolute inset-y-0 w-px bg-[var(--lu-accent)]" style={{ left: `${P(data.today)}%` }} />
           </div>
         )}
         {/* 선택한 작품의 시작·끝 안내선 */}
         {selGuide && !printMode && (
-          <div aria-hidden className="pointer-events-none absolute inset-y-0 z-[2] print:hidden" style={{ left: labelWidth, right: 0 }}>
+          <div aria-hidden className="pointer-events-none absolute inset-y-0 z-0 print:hidden" style={{ left: labelWidth, right: 0 }}>
             <div className="absolute inset-y-0 border-l border-dashed border-[var(--lu-text)]" style={{ left: `${P(selGuide.from)}%` }} />
             {selGuide.to && <div className="absolute inset-y-0 border-l border-dashed border-[var(--lu-text)]" style={{ left: `${P(addDaysIso(selGuide.to, 1))}%` }} />}
           </div>
@@ -539,7 +539,7 @@ function barLook(genre: Genre, own: boolean, status: RunDto["status"]) {
   const c = GENRE_FILL[genre];
   const planned = status !== "confirmed";
   if (own && !planned) return { bg: c, fg: GENRE_ON[genre], border: `1px solid ${c}`, strip: null as string | null, onFill: true };
-  if (own) return { bg: tint(c, 0.13), fg: UI.text, border: `1.5px dashed ${c}`, strip: null, onFill: false };
+  if (own) return { bg: tint(c, 0.13), fg: UI.text, border: `1.5px dashed ${genre === "business" ? UI.cyanOutlineAssist : c}`, strip: null, onFill: false };
   const edge = genre === "business" ? UI.cyanOutlineAssist : c;
   return { bg: "#ffffff", fg: UI.text, border: `${planned ? "1.5px dashed" : "1px solid"} ${edge}`, strip: c, onFill: false };
 }
@@ -578,7 +578,7 @@ function RunBar(props: {
     const labelW = Math.max(px, Math.min(textWidth(`${title} · ${meta}`, 12.5) + 12, room));
     return (
       <button type="button" onClick={click} aria-label={`${aria} (월 단위 일정)`} aria-pressed={selected} title={`${tip}\n월 단위 발표 — 정확한 날짜 미정`}
-        className={cx("absolute top-0 flex flex-col justify-end overflow-visible text-left", ring, dim && "opacity-50")}
+        className={cx("absolute top-0 flex flex-col justify-end overflow-visible text-left", ring, dim && "grayscale opacity-70")}
         style={{ left: `${left}%`, width: `${widthPct}%`, minWidth: 16, height: rowH }}>
         <span className="truncate px-1 text-[12.5px] leading-4 font-semibold text-[var(--lu-text)]" style={{ width: labelW, maxWidth: labelW }}>
           {title} <span className="font-normal text-[var(--lu-text-2)]">· {meta}</span>
@@ -597,7 +597,7 @@ function RunBar(props: {
       run.runKind === "hiatus" ? { className: "lu-hatch", style: { border: `1px solid ${UI.line}` } } : run.runKind === "filler" ? { className: "bg-[var(--lu-page)]", style: { border: `1px solid ${UI.line}` } } : { className: "bg-white", style: { border: `1.5px dashed ${UI.control}` } };
     return (
       <button type="button" onClick={click} aria-label={`${label} ${period}`} aria-pressed={selected} title={`${label}\n${period}`}
-        className={cx("absolute flex items-center overflow-hidden rounded-[4px] px-2 text-left", look.className, ring, dim && "opacity-50")}
+        className={cx("absolute flex items-center overflow-hidden rounded-[4px] px-2 text-left", look.className, ring, dim && "grayscale opacity-70")}
         style={{ left: `${left}%`, width: `${widthPct}%`, top: (rowH - barH) / 2, height: barH, ...look.style }}>
         {px > 36 && <span className="truncate text-[12px] font-semibold text-[var(--lu-text-2)]">{label}</span>}
       </button>
@@ -610,7 +610,7 @@ function RunBar(props: {
     const room = (((nextStart ? P(nextStart) : 100) - left) / 100) * totalPx - 8;
     return (
       <button type="button" onClick={click} aria-label={`${aria}, 종료일·편수 미정`} aria-pressed={selected} title={`${tip}\n종료일·편수 미정 — 시작일만 확인`}
-        className={cx("absolute flex items-center gap-1.5 rounded-[3px] text-left", ring, dim && "opacity-50")}
+        className={cx("absolute flex items-center gap-1.5 rounded-[3px] text-left", ring, dim && "grayscale opacity-70")}
         style={{ left: `${left}%`, top: (rowH - barH) / 2, height: barH, maxWidth: Math.max(28, Math.min(room, 320)) }}>
         <span aria-hidden className="h-full w-[3px] shrink-0 rounded-[1px]" style={{ background: c }} />
         <span aria-hidden className="size-0 shrink-0 border-y-[5px] border-l-[7px] border-y-transparent" style={{ borderLeftColor: c }} />
@@ -625,7 +625,8 @@ function RunBar(props: {
   }
 
   // ── 연속 편성 막대 ──
-  const look = barLook(genre, own, run.status);
+  // 맞대결 강조 중 관련 없는 막대: 불투명도 대신 흰 바탕·회색 글자(대비 유지, 접근성 검토 2026-11-27)
+  const look = dim ? { bg: "#ffffff", fg: UI.text2, border: `1px ${run.status === "confirmed" ? "solid" : "dashed"} ${UI.line}`, strip: null as string | null, onFill: false } : barLook(genre, own, run.status);
   const stripW = look.strip ? 3 : 0;
   const inner = px - 14 - stripW;
   // 글자 고르기 — 제목 먼저, 공간이 줄면 출연 → 편수 → 기간 순으로 뺀다(1년 보기는 제목·기간만)
@@ -654,7 +655,7 @@ function RunBar(props: {
   // 상시(끝 열림): 오늘까지 채우고 뒤는 점선 꼬리
   const openAt = extent === "open" ? Math.max(0, Math.min(100, ((P(data.today < d.from ? d.from : data.today) - left) / Math.max(widthPct, 0.0001)) * 100)) : null;
   const fg = look.fg;
-  const metaColor = look.onFill ? (genre === "business" ? "rgba(23,24,28,0.78)" : "rgba(255,255,255,0.86)") : UI.text2;
+  const metaColor = look.onFill ? (genre === "business" ? "rgba(23,24,28,0.78)" : "#ffffff") : UI.text2; // 채운 막대의 둘째 줄은 흰색 그대로(86%는 대비 3.9:1)
 
   return (
     <>
@@ -664,26 +665,26 @@ function RunBar(props: {
         aria-label={aria}
         aria-pressed={selected}
         title={footnote ? `[${footnote}] ${tip}` : tip}
-        className={cx("absolute flex overflow-hidden rounded-[4px] text-left transition-opacity", ring, dim && "opacity-50")}
+        className={cx("absolute flex overflow-hidden rounded-[4px] text-left", ring)}
         style={{
           left: `${left}%`,
           width: `${widthPct}%`,
           minWidth: 4,
           top: (rowH - barH) / 2,
           height: barH,
-          background: openAt !== null ? (own ? tint(GENRE_FILL[genre], 0.13) : "#fff") : look.bg,
-          border: openAt !== null ? `1.5px dashed ${look.strip ?? GENRE_FILL[genre]}` : look.border,
-          color: fg,
+          background: openAt !== null && !dim ? (own ? tint(GENRE_FILL[genre], 0.13) : "#fff") : look.bg,
+          border: openAt !== null && !dim ? `1.5px dashed ${look.strip ?? (genre === "business" ? UI.cyanOutlineAssist : GENRE_FILL[genre])}` : look.border,
+          color: openAt !== null && !dim ? UI.text : fg,
         }}
       >
         {/* 상시: 오늘까지 채움 */}
-        {openAt !== null && own && <span aria-hidden className="absolute inset-y-0 left-0" style={{ width: `${openAt}%`, background: GENRE_FILL[genre] }} />}
+        {openAt !== null && own && !dim && <span aria-hidden className="absolute bottom-0 left-0 h-[4px]" style={{ width: `${openAt}%`, background: GENRE_FILL[genre] }} />}
         {look.strip && <span aria-hidden className="relative z-[1] w-[3px] shrink-0" style={{ background: look.strip }} />}
         <span className={cx("relative z-[1] flex min-w-0 flex-1 flex-col justify-center", startsBefore ? "pl-1 pr-1.5" : "px-1.5")}>
           {(!markOnly || footnote !== undefined) && (
             <span className="flex min-w-0 items-center gap-1" style={{ lineHeight: "16px" }}>
               {startsBefore && <span aria-hidden className="shrink-0 text-[11px] opacity-80">‹</span>}
-              <span className="truncate font-semibold" style={{ fontSize: density === "compact" ? 12.5 : FONT, color: openAt !== null && own && openAt > 30 ? GENRE_ON[genre] : undefined }}>
+              <span className="truncate font-semibold" style={{ fontSize: density === "compact" ? 12.5 : FONT, color: undefined }}>
                 {footnote ? `[${footnote}] ` : ""}{shownTitle}
               </span>
               {!twoLines && meta && textWidth(shownTitle, FONT) + textWidth(meta, META) + 10 <= inner && (
@@ -694,14 +695,14 @@ function RunBar(props: {
             </span>
           )}
           {twoLines && (
-            <span className="lu-num truncate" style={{ fontSize: META, lineHeight: "14px", color: openAt !== null && own && openAt > 30 ? "rgba(255,255,255,0.86)" : metaColor }}>
+            <span className="lu-num truncate" style={{ fontSize: META, lineHeight: "14px", color: openAt !== null && !dim ? UI.text2 : metaColor }}>
               {meta}
             </span>
           )}
         </span>
         {/* 회차로 추정한 끝: 마지막 구간을 흐리게 + 점선 끝 */}
         {estAt !== null && (
-          <span aria-hidden className="absolute inset-y-0 right-0 z-[2] border-r-2 border-dotted" style={{ left: `${estAt}%`, background: "linear-gradient(to right, rgba(255,255,255,0), rgba(255,255,255,0.55))", borderColor: look.onFill ? "#fff" : UI.text2 }} />
+          <span aria-hidden className="absolute right-0 bottom-0 z-0 h-[4px] border-r-2 border-dotted" style={{ left: `${estAt}%`, background: `repeating-linear-gradient(135deg,${look.onFill ? "rgba(255,255,255,0.9)" : UI.text2} 0 2px,transparent 2px 4px)`, borderColor: look.onFill ? "#fff" : UI.text2 }} />
         )}
       </button>
       {outsideW > 0 && (
@@ -743,7 +744,7 @@ function Mark(props: {
         <span
           key={x}
           aria-hidden
-          className={cx("pointer-events-none absolute top-1/2", dim && "opacity-50")}
+          className={cx("pointer-events-none absolute top-1/2", dim && "grayscale opacity-70")}
           style={{ left: `${P(x)}%`, width: size, height: size, background: fill, border: `1.5px solid ${edge}`, transform: `translate(-50%, -50%)${isDots ? "" : " rotate(45deg)"}`, borderRadius: isDots ? 9999 : 1, zIndex: i === 0 ? 2 : 1 }}
         />
       ))}
@@ -753,7 +754,7 @@ function Mark(props: {
         aria-label={`${title} ${outlet?.name ?? ""} ${kindWord} ${all.join(", ")}`}
         aria-pressed={selected}
         title={`${title}\n${outlet?.name ?? ""} · ${kindWord} · ${all.map(dateDot).join(", ")}${eps ? `\n${eps}` : ""}${cast ? `\n${cast}` : ""}`}
-        className={cx("absolute top-1/2 z-[3] flex -translate-y-1/2 items-center rounded-[3px] pr-1 text-left", selected && "ring-2 ring-[var(--lu-text)]", dim && "opacity-50")}
+        className={cx("absolute top-1/2 z-[3] flex -translate-y-1/2 items-center rounded-[3px] pr-1 text-left", selected && "ring-2 ring-[var(--lu-text)]", dim && "grayscale opacity-70")}
         style={{ left: `calc(${P(dates[0])}% - ${size / 2 + 2}px)`, paddingLeft: size + 6, minHeight: Math.max(size + 4, 18) }}
       >
         <span className="flex min-w-0 flex-col rounded-[3px] bg-white/90 px-0.5" style={{ maxWidth: rich ? 320 : 260 }}>

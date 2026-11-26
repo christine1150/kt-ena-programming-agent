@@ -2,7 +2,7 @@
 // ENA 본방 한 회가 끝나는 시각(= 자리 시작 시각 + ENA 방송 길이) + 규칙의 채널별 대기일 뒤부터 그 채널에서 방영할 수 있다.
 // 방송 길이는 서버가 실제 방송 기록(ratings)의 같은 자리 방송 길이 중간값으로 준다(data.holdbackMinutes). 없으면 시각은 비우고 날짜만 낸다(추정 금지).
 import { addDays } from "./dates";
-import { airingsOf, hasNextRun, hiatusBySlot } from "./airings";
+import { airingsOf, hasNextRun, hasPrevRun, hiatusBySlot } from "./airings";
 import { holdbackRuleFor, type OwnChannel } from "./holdbackRules";
 import type { LineupPayload } from "./types";
 import { runGenre, runTitle } from "./viewModel";
@@ -44,7 +44,7 @@ export function holdbackMarks(data: LineupPayload, channel: string, from: string
     if (rule === null || delay === undefined) continue;
     const minutes = data.holdbackMinutes?.[work.id] ?? null;
     // 방송일·회차는 공통 함수(P0-03·P0-05·P0-07): 휴방·회차 별도 반영, 끝·편수를 모르면 첫 방송 하루만(미래 가상 회차를 만들지 않는다)
-    for (const a of airingsOf(r, slot, { work, skip: hiatusMap.get(slot.id), until: to, continues: hasNextRun(r, data.runs) })) {
+    for (const a of airingsOf(r, slot, { work, skip: hiatusMap.get(slot.id), until: to, continues: hasNextRun(r, data.runs), continued: hasPrevRun(r, data.runs) })) {
       const d = a.date;
       // 이미 방송된 회차는 실제 종료 시각, 아직이면 같은 자리 방송 길이 중간값으로
       const actualEnd = data.holdbackEnds?.[work.id]?.[d] ?? null;

@@ -18,7 +18,7 @@ const GRAY = "8A8A93";
 const HEAD_FILL = "F4F4F5";
 const FIXED_COLS = 3; // 구분 · 채널/방송사 · 자리
 
-const argb = (hex: string) => `FF${hex}`;
+const argb = (hex: string) => `FF${hex.replace("#", "").toUpperCase()}`; // 장르색(#d91d60)도 받게 — 예전엔 FF#d91d60이 되어 채움이 깨졌다(코드 검토 #1)
 const solid = (hex: string): ExcelJS.Fill => ({ type: "pattern", pattern: "solid", fgColor: { argb: argb(hex) } });
 
 export async function buildLineupWorkbook(data: LineupPayload, q: LineupQuery, printedAt: string): Promise<ArrayBuffer> {
@@ -40,7 +40,7 @@ export async function buildLineupWorkbook(data: LineupPayload, q: LineupQuery, p
     addGridSheet(wb, data, own.rows, own.runsBySlot, cond, sourceText, printedAt, false);
   } else {
     const g = q.view === "compare" ? buildCompareRows(data, filters, q.cmp) : buildOwnRows(data, filters, { showEmpty: q.empty });
-    addGridSheet(wb, data, g.rows, g.runsBySlot, cond, sourceText, printedAt, q.view === "compare", q.view === "compare" ? buildUndated(data, filters) : []);
+    addGridSheet(wb, data, g.rows, g.runsBySlot, cond, sourceText, printedAt, q.view === "compare", q.view === "compare" && !q.hide.includes("undated") ? buildUndated(data, filters) : []);
     addListSheet(wb, data, q, cond, sourceText, printedAt);
   }
   return wb.xlsx.writeBuffer() as Promise<ArrayBuffer>;
@@ -175,7 +175,9 @@ function addGridSheet(
           continue;
         }
         let c0 = colOf(run.draw.from < data.from ? data.from : run.draw.from);
-        const c1 = colOf(run.draw.to > data.to ? data.to : run.draw.to);
+        // 첫방만 확인된 편성은 배치 폭(placeholder)을 그리지 않고 시작 주 한 칸만(P0-05와 같게, 코드 검토 #3)
+        const drawTo = run.draw.placeholder ? run.draw.from : run.draw.to;
+        const c1 = colOf(drawTo > data.to ? data.to : drawTo);
         while (c0 <= c1 && used.has(c0)) c0++;
         if (c0 > c1) continue;
         let end = c0;
@@ -184,10 +186,10 @@ function addGridSheet(
         if (end > c0) ws.mergeCells(r, c0, r, end);
         const c = ws.getCell(r, c0);
         // 화면과 같은 모양: 1줄 '제목(굵게) 기간, 회차(가늘게)', 2줄 '출연자(드라마 주연·예능 출연자/MC, 가늘게)'
-        const meta = [periodText(run), episodeText(run, work)].filter(Boolean).join(", ") + (shape === "bracket" && !/[년반기]/.test(periodText(run)) ? " (월 단위)" : "");
+        const meta = [periodText(run), episodeText(run, work), run.draw.placeholder ? "기간 미정" : ""].filter(Boolean).join(", ") + (shape === "bracket" && !/[년반기]/.test(periodText(run)) ? " (월 단위)" : "");
         const cast2 = (work?.cast ?? []).slice(0, 6).join(", ");
         const isBox = shape === "box";
-        const solidFill = ownRow && run.status === "confirmed" && !isBox && shape !== "bracket";
+        const solidFill = ownRow && run.status === "confirmed" && !isBox && shape !== "bracket" && !run.draw.placeholder;
         const fg = solidFill ? (genre === "business" ? "17181C" : "FFFFFF") : "18181B";
         const fg2 = solidFill ? (genre === "business" ? "17181C" : "FFFFFF") : "3F3F46";
         const head = `${run.draw.from < data.from ? "◀ " : ""}${title}${run.needsReview ? " [확인]" : ""}`;
@@ -212,13 +214,14 @@ function addGridSheet(
       }
       // 빈 주(계산값) — 첫 줄에만, 남는 칸에 'N주 비어있음'. 자사 드라마 자리가 비면 붉은 글자(화면과 같다).
       if (lane === lanes.main[0] && row.slot) {
-        const alert = row.outlet?.side === "own" && row.slot.defaultGenre === "drama";
+        const alert = row.outlet?.side === "own" && row.slot.defaultGenre === "drama"; // 추정 공백은 붉게 하지 않는다(아래 g.confirmed)
         for (const g of data.gaps.filter((x) => x.slotId === row.slot!.id)) {
           const col = colOf(g.from);
           if (used.has(col)) continue;
           const c = ws.getCell(r, col);
           c.value = g.confirmed === false ? `≈${g.weeks}주 공백(추정)` : `${g.weeks}주 비어있음`;
-          c.font = { size: 8, bold: alert, italic: !alert, color: { argb: argb(alert ? "B91C1C" : "696971") } };
+          const red = alert && g.confirmed !== false;
+          c.font = { size: 8, bold: red, italic: !red, color: { argb: argb(red ? "B91C1C" : "696971") } };
         }
       }
       r++;
@@ -315,7 +318,8 @@ function addListSheet(wb: ExcelJS.Workbook, data: LineupPayload, q: LineupQuery,
       const s = slots.get(r.slotId);
       const o = s ? outlets.get(s.outletId) : undefined;
       if (!s || !o) return false;
-      if (o.side === "own" && q.channels.length > 0 && !q.channels.includes(o.code)) return false;
+      const ownBase = q.channels.length > 0 ? q.channels : q.view === "compare" || q.view === "calendar" ? ["ENA"] : [];
+      if (o.side === "own" && ownBase.length > 0 && !ownBase.includes(o.code)) return false;
       if (q.dows.length > 0 && !o.ott && !s.days.some((d) => q.dows.includes(d))) return false; // 요일은 TV 방송에만
       if (o.side === "own" ? !!q.nobase && q.view !== "own" : !outletSelected(o, { tv: q.tv, ott: q.ott })) return false;
       if (q.st?.length && r.workId && !q.st.includes(r.status)) return false;

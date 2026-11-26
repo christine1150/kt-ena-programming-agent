@@ -2,17 +2,17 @@
 
 // 라인업 공통 조작부(2026-11-26 전면 리디자인) — 무채색 버튼·묶음 버튼·드롭다운·아이콘·로고.
 // 원칙(지시문 §3·§7): 채도 높은 색은 로고·장르·핵심 인터랙션에만. 알약 모양·그림자·장식 아이콘을 쓰지 않는다(버튼 반경 6px).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useId } from "react";
 import type { EventIcon } from "@/lib/lineup/events";
 
 export const cx = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join(" ");
 
 /** 기본 버튼(32px) — tone: line(흰 바탕 테두리) · solid(검정) · ghost(바탕 없음). pressed면 ENA 블루 옅은 바탕. */
 export function Btn({
-  children, onClick, pressed, tone = "line", size = "md", className, title, ariaLabel, type = "button", disabled, ariaHaspopup, ariaExpanded,
+  children, onClick, pressed, tone = "line", size = "md", className, title, ariaLabel, type = "button", disabled, ariaHaspopup, ariaExpanded, id,
 }: {
   children: React.ReactNode; onClick?: () => void; pressed?: boolean; tone?: "line" | "solid" | "ghost"; size?: "sm" | "md"; className?: string; title?: string; ariaLabel?: string;
-  type?: "button" | "submit"; disabled?: boolean; ariaHaspopup?: boolean; ariaExpanded?: boolean;
+  type?: "button" | "submit"; disabled?: boolean; ariaHaspopup?: boolean; ariaExpanded?: boolean; id?: string;
 }) {
   const base = "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[6px] border font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50";
   const sz = size === "sm" ? "h-7 px-2 text-[12.5px]" : "h-8 px-3 text-[13px]";
@@ -22,13 +22,14 @@ export function Btn({
       : tone === "ghost"
         ? "border-transparent bg-transparent text-[var(--lu-text-2)] hover:bg-[var(--lu-hover)] hover:text-[var(--lu-text)]"
         : pressed
-          ? "border-[var(--lu-accent-line)] bg-[var(--lu-accent-weak)] text-[var(--lu-accent)]"
+          ? "border-[var(--lu-accent-line)] bg-[var(--lu-accent-weak)] font-semibold text-[var(--lu-accent)]"
           : "border-[var(--lu-line)] bg-white text-[var(--lu-text)] hover:bg-[var(--lu-hover)]";
   return (
     <button
+      id={id}
       type={type}
       onClick={onClick}
-      aria-pressed={pressed}
+      aria-pressed={ariaHaspopup ? undefined : pressed}
       aria-label={ariaLabel}
       aria-haspopup={ariaHaspopup || undefined}
       aria-expanded={ariaExpanded}
@@ -44,9 +45,16 @@ export function Btn({
 /** 한 줄 묶음 선택(보기 길이·비교 기준·캘린더 범위) — 붙은 버튼, 하나만 켜진다. */
 export function Segmented<T extends string | number>({ items, value, onChange, label, size = "md" }: { items: { key: T; label: string; title?: string }[]; value: T | null; onChange: (v: T) => void; label: string; size?: "sm" | "md" }) {
   return (
-    <div role="group" aria-label={label} className="inline-flex shrink-0 items-center gap-1">
-      {items.map((it) => (
-        <Btn key={String(it.key)} size={size} pressed={value === it.key} onClick={() => onChange(it.key)} title={it.title}>
+    <div role="group" aria-label={label} className="inline-flex shrink-0 items-center">
+      {items.map((it, i) => (
+        <Btn
+          key={String(it.key)}
+          size={size}
+          pressed={value === it.key}
+          onClick={() => onChange(it.key)}
+          title={it.title}
+          className={cx(i > 0 && "-ml-px", i > 0 && i < items.length - 1 && "rounded-none", items.length > 1 && i === 0 && "rounded-r-none", items.length > 1 && i === items.length - 1 && "rounded-l-none", value === it.key && "relative z-[1]")}
+        >
           {it.label}
         </Btn>
       ))}
@@ -86,21 +94,35 @@ export function Menu({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // 닫을 때 초점을 연 단추로 — 렌더 중 ref를 읽지 않게 id로 찾는다(React 컴파일러 규칙)
+  const triggerId = useId();
+  const close = () => {
+    setOpen(false);
+    document.getElementById(triggerId)?.focus();
+  };
   useEffect(() => {
     if (!open) return;
+    panelRef.current?.querySelector<HTMLElement>("button:not([disabled]),input,select,a[href]")?.focus();
     const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    // Esc는 이 메뉴만 닫고 아래 층(상세 패널 등)으로 넘기지 않는다
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setOpen(false);
+      document.getElementById(triggerId)?.focus();
+    };
     window.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
     };
-  }, [open]);
-  const close = () => setOpen(false);
+  }, [open, triggerId]);
   return (
     <div ref={ref} className="relative shrink-0">
-      <Btn onClick={() => setOpen((o) => !o)} pressed={active} ariaHaspopup ariaExpanded={open} size={size} tone={active ? "line" : tone} title={title}>
+      <Btn id={triggerId} onClick={() => setOpen((o) => !o)} pressed={active} ariaHaspopup ariaExpanded={open} size={size} tone={active ? "line" : tone} title={title}>
         {icon}
         {label}
         {count !== undefined && count > 0 && <span className="lu-num rounded-[4px] bg-[var(--lu-accent)] px-1 text-[11px] leading-4 font-semibold text-white">{count}</span>}
@@ -108,6 +130,7 @@ export function Menu({
       </Btn>
       {open && (
         <div
+          ref={panelRef}
           role="dialog"
           aria-label={typeof label === "string" ? label : title}
           className={cx("absolute top-[calc(100%+4px)] z-[70] rounded-[8px] border border-[var(--lu-line)] bg-white p-1.5 text-[13px] shadow-[0_8px_24px_rgba(23,24,28,0.10)]", align === "right" ? "right-0" : "left-0")}
@@ -148,7 +171,7 @@ export function CheckList<T extends string | number>({
 
 export function OptionRow({ checked, onClick, label, hint, radio = false }: { checked: boolean; onClick: () => void; label: React.ReactNode; hint?: string; radio?: boolean }) {
   return (
-    <button type="button" role={radio ? "menuitemradio" : "menuitemcheckbox"} aria-checked={checked} onClick={onClick} className="flex w-full items-center gap-2 rounded-[5px] px-2 py-1.5 text-left text-[13px] text-[var(--lu-text)] hover:bg-[var(--lu-hover)]">
+    <button type="button" role={radio ? "radio" : "checkbox"} aria-checked={checked} onClick={onClick} className="flex w-full items-center gap-2 rounded-[5px] px-2 py-1.5 text-left text-[13px] text-[var(--lu-text)] hover:bg-[var(--lu-hover)]">
       <span
         aria-hidden
         className={cx("flex size-3.5 shrink-0 items-center justify-center border", radio ? "rounded-full" : "rounded-[3px]", checked ? "border-[var(--lu-accent)] bg-[var(--lu-accent)]" : "border-[var(--lu-control)] bg-white")}

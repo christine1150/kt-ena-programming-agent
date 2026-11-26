@@ -37,10 +37,11 @@ function itemsOf(week: CalWeek, col: number, works: { query: string; matches: (r
   const date = week.days[col].date;
   const out: Item[] = [];
   for (const b of week.bars) {
-    for (const d of barWeekDays(b, week.start)) {
+    const inWeek = barWeekDays(b, week.start);
+    for (const d of inWeek) {
       if (d.col !== col) continue;
       if (b.kind === "gap") {
-        if (d.date === b.days[0].date || d.date === week.start) out.push({ type: "gap", key: `${b.key}:${date}`, bar: b, prio: 5, minute: b.minute });
+        if (d === inWeek[0]) out.push({ type: "gap", key: `${b.key}:${date}`, bar: b, prio: 5, minute: b.minute });
         continue;
       }
       if (works.query && b.runId && !works.matches(b.runId)) continue;
@@ -63,14 +64,14 @@ function OwnItem({ bar, day, selected, onSelect, multiOutlet, week = false }: { 
   const planned = bar.status !== "confirmed";
   const title = bar.shortTitle && textWidth(bar.title, 12.5) > 120 ? bar.shortTitle : bar.title;
   const label = `${multiOutlet ? `${bar.outletName} ` : ""}${bar.title} ${bar.time} ${day.episode} ${tag} ${planned ? "예정" : ""}`;
-  if (tag === "종영") return <EndItem title={title} outlet={multiOutlet ? bar.outletName : ""} genre={bar.genre} onClick={() => bar.runId && onSelect(bar.runId)} selected={selected} tip={`${bar.title}\n${bar.meta}`} />;
   if (tag) {
     return (
       <button type="button" onClick={() => bar.runId && onSelect(bar.runId)} title={`${bar.title}\n${bar.meta}${bar.cast ? `\n${bar.cast}` : ""}`} aria-label={label}
         className={cx("flex w-full min-w-0 items-center gap-1 rounded-[3px] px-1.5 text-left text-[12px] font-semibold", selected && "outline outline-2 outline-offset-1 outline-[var(--lu-text)]")}
-        style={{ height: ITEM_H, background: planned ? tint(c, 0.13) : c, color: planned ? UI.text : GENRE_ON[bar.genre], border: planned ? `1.5px dashed ${c}` : undefined }}>
+        style={{ height: ITEM_H, background: planned ? tint(c, 0.13) : c, color: planned ? UI.text : GENRE_ON[bar.genre], border: planned ? `1.5px dashed ${bar.genre === "business" ? UI.cyanOutlineAssist : c}` : undefined }}>
         {multiOutlet && <span className="shrink-0 text-[10.5px] opacity-85">{bar.outletName}</span>}
         {tag === "첫방" && <Icon name="start" size={11} className="opacity-90" />}
+        {tag === "종영" && <Icon name="end" size={11} className="opacity-90" />}
         <span className="min-w-0 flex-1 truncate">{title}</span>
         <span className="shrink-0 text-[10.5px] font-semibold opacity-90">{tag}</span>
       </button>
@@ -78,14 +79,20 @@ function OwnItem({ bar, day, selected, onSelect, multiOutlet, week = false }: { 
   }
   return (
     <button type="button" onClick={() => bar.runId && onSelect(bar.runId)} title={`${bar.title}\n${bar.meta}`} aria-label={label}
-      className={cx("flex w-full min-w-0 items-center gap-1 rounded-[3px] px-1 text-left text-[12px]", week ? "border-l-[3px]" : "hover:bg-[var(--lu-hover)]", selected && "outline outline-2 outline-offset-1 outline-[var(--lu-text)]")}
-      style={{ height: ITEM_H, ...(week ? { borderLeftColor: c, background: tint(c, 0.08) } : {}) }}>
+      className={cx("flex w-full min-w-0 items-center gap-1 rounded-[3px] px-1 text-left text-[12px]", week ? "" : "hover:bg-[var(--lu-hover)]", selected && "outline outline-2 outline-offset-1 outline-[var(--lu-text)]")}
+      style={{ height: ITEM_H, ...(week ? { background: tint(c, 0.14) } : {}) }}>
       {!week && <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: c, outline: planned ? `1px dashed ${c}` : undefined, outlineOffset: 1 }} />}
       {bar.time && <span className="lu-num shrink-0 text-[11px] text-[var(--lu-text-2)]">{bar.time}</span>}
-      <span className="min-w-0 flex-1 truncate font-medium text-[var(--lu-text)]">{title}</span>
-      {day.episode && <span title={day.episode} className="lu-num max-w-[48%] shrink truncate text-[11px] text-[var(--lu-text-2)]">{day.episode}</span>}
+      <span className="min-w-[3.5em] flex-1 truncate font-medium text-[var(--lu-text)]">{title}</span>
+      {day.episode && <span title={day.episode} className="lu-num max-w-[34%] shrink-0 truncate text-[11px] text-[var(--lu-text-2)]">{shortEpisode(day.episode)}</span>}
     </button>
   );
+}
+
+/** 회차 글자 줄이기 — 회차 편성표 메모의 긴 설명('3회 흑진주 선로선…')은 '3회'·'스페셜 2'까지만 */
+function shortEpisode(ep: string): string {
+  const m = ep.match(/^(\d+회(?:\([^)]*\))?|스페셜\s*\d+회?|특집\s*\d*)/);
+  return m ? m[1] : ep.length > 6 ? `${ep.slice(0, 6)}…` : ep;
 }
 
 const MARK_TAG: Record<string, (m: CalMark) => string> = {
@@ -116,7 +123,7 @@ function MarkItem({ m, selected, onSelect }: { m: CalMark; selected: boolean; on
   return (
     <button type="button" onClick={() => onSelect(m.runId)} title={`${m.outletName} ${m.title} ${MARK_TAG[m.kind](m)}${planned ? " (예정)" : ""}`} aria-label={`${m.outletName} ${m.title} ${MARK_TAG[m.kind](m)}${planned ? " 예정" : ""}`}
       className={cx("flex w-full min-w-0 items-center gap-1 rounded-[3px] bg-white pr-1.5 text-left text-[12px]", ring)}
-      style={{ height: ITEM_H, border: `1px ${planned ? "dashed" : "solid"} ${UI.grid}`, borderLeft: `3px solid ${c}`, paddingLeft: 4 }}>
+      style={{ height: ITEM_H, border: `1px ${planned ? "dashed" : "solid"} ${UI.control}`, borderLeft: `3px solid ${c}`, paddingLeft: 4 }}>
       {m.kind === "first" && <Icon name="start" size={11} className="text-[var(--lu-text-2)]" />}
       {m.kind === "open" && m.ott && <span className="shrink-0" style={{ color: g === "business" ? UI.cyanOutlineAssist : c }}><Icon name="diamond" size={9} /></span>}
       <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{m.outletName}</span>
@@ -182,6 +189,8 @@ function Band({ b, onSelect }: { b: { ev: LaneEvent; col0: number; col1: number;
   );
 }
 
+export type DayFilter = Parameters<typeof dayAirings>[4];
+
 export function CalLegend({ vertical = false }: { vertical?: boolean }) {
   const chip = (style: React.CSSProperties) => <span aria-hidden className="inline-block h-3 w-5 rounded-[2px] align-middle" style={style} />;
   return (
@@ -219,10 +228,12 @@ export function CalFootnotes({ model }: { model: CalModel }) {
 const PRINT_MAX = 4;
 
 export default function CalendarView({
-  data, model, density, selectedRunId, onSelectRun, selectedDay, onSelectDay, ownCodes, genres, printMode = false, title, mode = "month", query = "", onSelectEvent, keyOnly = false,
+  data, model, density, selectedRunId, onSelectRun, selectedDay, onSelectDay, ownCodes, genres, printMode = false, title, mode = "month", query = "", onSelectEvent, keyOnly = false, dayFilter,
 }: {
   data: LineupPayload; model: CalModel; density: "comfy" | "compact"; selectedRunId: string | null; onSelectRun: (id: string | null) => void;
   selectedDay: string | null; onSelectDay: (d: string | null) => void; ownCodes: string[]; genres: Genre[]; printMode?: boolean; title?: string;
+  /** 그날 일정 패널에 넘길 공통 조회 조건(비교 범위·상태·기준 숨김) — 월간 칸과 같은 결과(코드 검토 #5) */
+  dayFilter?: DayFilter;
   mode?: "month" | "week"; query?: string; onSelectEvent?: (ev: LaneEvent) => void; keyOnly?: boolean;
 }) {
   const works = useMemo(() => new Map(data.works.map((w) => [w.id, w])), [data.works]);
@@ -270,7 +281,7 @@ export default function CalendarView({
         )}
       </div>
       {!printMode && day && (
-        <DayPanel data={data} model={model} day={day} ownCodes={ownCodes} genres={genres} onClose={() => onSelectDay(null)} onSelectRun={onSelect} onSelectEvent={onSelectEvent} />
+        <DayPanel dayFilter={dayFilter} data={data} model={model} day={day} ownCodes={ownCodes} genres={genres} onClose={() => onSelectDay(null)} onSelectRun={onSelect} onSelectEvent={onSelectEvent} />
       )}
     </div>
   );
@@ -307,7 +318,7 @@ function MonthWeek({
             <div key={`n${d.date}`} className="pointer-events-none z-[1] flex items-center gap-1.5 px-2 pt-1" style={{ gridColumn: c + 1, gridRow: 1 }}>
               <span
                 className={cx("lu-num inline-flex h-5 min-w-5 items-center justify-center rounded-[4px] px-1 text-[12.5px] font-semibold", isToday && "bg-[var(--lu-text)] text-white")}
-                style={isToday ? undefined : { color: !d.inRange ? "#9aa0a9" : red ? UI.danger : UI.text }}
+                style={isToday ? undefined : { color: !d.inRange ? UI.text2 : red ? UI.danger : UI.text }}
               >
                 {d.date.slice(8) === "01" ? `${Number(d.date.slice(5, 7))}.1` : Number(d.date.slice(8))}
               </span>
@@ -322,7 +333,7 @@ function MonthWeek({
           const items = itemsOf(week, c, matcher, keyOnly);
           const more = items.length - maxItems + (week.bandOverflow[d.date] ?? 0);
           return (
-            <div key={`i${d.date}`} className={cx("z-[1] flex min-w-0 flex-col gap-[2px] px-1 pt-1", !d.inRange && "opacity-55")} style={{ gridColumn: c + 1, gridRow: bandRows + 2 }}>
+            <div key={`i${d.date}`} className={cx("z-[1] flex min-w-0 flex-col gap-[2px] px-1 pt-1", !d.inRange && "opacity-80")} style={{ gridColumn: c + 1, gridRow: bandRows + 2 }}>
               {items.slice(0, maxItems).map((it) =>
                 it.type === "own" ? (
                   <OwnItem key={it.key} bar={it.bar} day={it.day} selected={selectedRunId === it.bar.runId} onSelect={onSelect} multiOutlet={multiOutlet} />
@@ -478,9 +489,9 @@ function WeekGrid({
 
 /** 그날 패널 — 외부 이벤트 · 자사 · 경쟁 방송사 · OTT · 방영 가능. 그룹 안 시각순, 시각 미정은 뒤에 '시각 미정'. */
 function DayPanel({
-  data, model, day, ownCodes, genres, onClose, onSelectRun, onSelectEvent,
-}: { data: LineupPayload; model: CalModel; day: string; ownCodes: string[]; genres: Genre[]; onClose: () => void; onSelectRun: (id: string) => void; onSelectEvent?: (ev: LaneEvent) => void }) {
-  const rows = useMemo(() => dayAirings(data, day, ownCodes, genres), [data, day, ownCodes, genres]);
+  data, model, day, ownCodes, genres, onClose, onSelectRun, onSelectEvent, dayFilter,
+}: { data: LineupPayload; model: CalModel; day: string; ownCodes: string[]; genres: Genre[]; onClose: () => void; onSelectRun: (id: string) => void; onSelectEvent?: (ev: LaneEvent) => void; dayFilter?: DayFilter }) {
+  const rows = useMemo(() => dayAirings(data, day, ownCodes, genres, dayFilter), [data, day, ownCodes, genres, dayFilter]);
   const info = model.weeks.flatMap((w) => w.days).find((d) => d.date === day);
   const avail = (info?.marks ?? []).filter((m) => m.kind === "avail");
   const events = info?.laneEvents ?? [];

@@ -120,7 +120,7 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
                 <CalFootnotes model={p.model} />
               </section>
             ))}
-            {!q.hide.includes("ott") && <UndatedStrip data={data} filters={filters} selectedId={null} onSelect={() => {}} printMode />}
+            {!q.hide.includes("undated") && <UndatedStrip data={data} filters={filters} selectedId={null} onSelect={() => {}} printMode />}
           </>
         )}
         {data && grid && (
@@ -131,7 +131,7 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
               </div>
             )}
             {q.view === "list" ? (
-              <ListView data={data} filters={{ ...filters }} onSelect={() => {}} />
+              <ListView data={data} filters={{ ...filters }} query={q.q} onSelect={() => {}} />
             ) : grid.rows.length === 0 ? (
               <p className="py-10 text-center text-[13px] text-zinc-600">이 조건에 맞는 라인업이 없습니다.</p>
             ) : (
@@ -151,7 +151,7 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
                 showEvents={!q.hide.includes("event")}
               />
             )}
-            {q.view !== "list" && <UndatedStrip data={data} filters={filters} selectedId={null} onSelect={() => {}} printMode />}
+            {q.view !== "list" && !q.hide.includes("undated") && <UndatedStrip data={data} filters={filters} selectedId={null} onSelect={() => {}} printMode />}
           </>
         )}
         <footer className="mt-2 border-t border-zinc-300 pt-1 text-[10px] text-zinc-600">

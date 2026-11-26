@@ -1,7 +1,8 @@
 // 라인업 엑셀로 저장(2026-11-25 사용자 요청) — 저장·인쇄 창에서 고른 조건(보기·기간·채널·장르·요일)으로
 // 편성센터 양식 격자 시트 + 목록 시트를 만든다. 권한: export(편성자 이상 — 로그인한 PD·관리자). 대외비 표시를 파일 안에 넣는다.
 import { NextResponse } from "next/server";
-import { requireActorFor, fail } from "@/lib/idealSchedule/apiUtil";
+import { requireActorFor } from "@/lib/idealSchedule/apiUtil";
+import { lineupFail } from "@/lib/lineup/apiGuard";
 import { buildLineupWorkbook } from "@/lib/lineup/excel";
 import { calendarFetchRange, calRangeOf } from "@/lib/lineup/calendar";
 import { loadLineup } from "@/lib/lineup/repo";
@@ -35,6 +36,6 @@ export async function GET(request: Request) {
       },
     });
   } catch (e) {
-    return fail(e);
+    return lineupFail(e);
   }
 }

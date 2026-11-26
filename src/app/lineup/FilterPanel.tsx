@@ -172,18 +172,18 @@ export default function FilterPanel({
 
 function Sect({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <section>
-      <p className="mb-1 text-[12px] font-semibold text-[var(--lu-text)]">{title}</p>
+    <fieldset>
+      <legend className="mb-1 text-[12px] font-semibold text-[var(--lu-text)]">{title}</legend>
       {hint && <p className="-mt-0.5 mb-1 text-[11px] leading-snug text-[var(--lu-text-2)]">{hint}</p>}
       <div className="space-y-0.5">{children}</div>
-    </section>
+    </fieldset>
   );
 }
 
 function Group({ title, state, onToggle, children }: { title: string; state: "all" | "some" | "none"; onToggle: () => void; children: React.ReactNode }) {
   return (
     <section>
-      <button type="button" onClick={onToggle} aria-pressed={state === "all" ? true : state === "none" ? false : "mixed"} className="mb-0.5 flex items-center gap-2 rounded-[4px] px-1 py-0.5 text-[12px] font-semibold text-[var(--lu-text)] hover:bg-[var(--lu-hover)]">
+      <button type="button" role="checkbox" onClick={onToggle} aria-checked={state === "some" ? "mixed" : state === "all"} className="mb-0.5 flex items-center gap-2 rounded-[4px] px-1 py-0.5 text-[12px] font-semibold text-[var(--lu-text)] hover:bg-[var(--lu-hover)]">
         <Box state={state} />
         {title}
         <span className="text-[11px] font-normal text-[var(--lu-text-2)]">{state === "all" ? "전체" : state === "none" ? "선택 없음" : "일부"}</span>

@@ -22,10 +22,10 @@ export type Sel = "all" | "none" | string[];
 /** 비교 범위 프리셋 — 시장 전체 · 방송사 · OTT · KT ENA만. 개별 채널을 바꾸면 'custom'(맞춤). */
 export type Scope = "market" | "tv" | "ott" | "own" | "custom";
 export const SCOPES: { key: Exclude<Scope, "custom">; label: string; short: string }[] = [
-  { key: "market", label: "시장 전체", short: "전체" },
+  { key: "market", label: "시장 전체", short: "시장" },
   { key: "tv", label: "방송사", short: "방송" },
   { key: "ott", label: "OTT", short: "OTT" },
-  { key: "own", label: "KT ENA만", short: "KT ENA" },
+  { key: "own", label: "KT ENA만", short: "KT ENA만" },
 ];
 export const selIsAll = (v: Sel | undefined) => v === undefined || v === "all";
 export const selIsNone = (v: Sel | undefined) => v === "none" || (Array.isArray(v) && v.length === 0);
@@ -459,11 +459,14 @@ export function buildCompareRows(data: LineupPayload, f: Filters, mode: CompareM
       .filter((s) => isOttSlot(s) && outletOk(s) && (runsBySlot.get(s.id) ?? []).some((r) => r.draw))
       .sort((a, b) => (outlets.get(a.outletId)?.sortOrder ?? 0) - (outlets.get(b.outletId)?.sortOrder ?? 0));
     if (ott.length > 0) {
-      rows.push({ key: "b:ott", kind: "group", label: "OTT · 공개 일정" });
+      const ottRows: Row[] = [{ key: "b:ott", kind: "group", label: "OTT · 공개 일정" }];
       for (const s of ott) {
         const o = outlets.get(s.outletId);
-        rows.push({ key: `s:${s.id}`, kind: "slot", label: o?.name ?? "", chip: "OTT", outlet: o, slot: s, color: o?.color ?? null });
+        ottRows.push({ key: `s:${s.id}`, kind: "slot", label: o?.name ?? "", chip: "OTT", outlet: o, slot: s, color: o?.color ?? null });
       }
+      // 'OTT' 범위(방송사 없음)면 OTT 묶음을 맨 위로 — 범위를 바꾸면 첫 화면이 바로 달라지게(UX 검토 #2)
+      if (selIsNone(f.tv)) rows.unshift(...ottRows);
+      else rows.push(...ottRows);
     }
   }
   return { rows, runsBySlot };
@@ -476,7 +479,6 @@ export function isYearOnly(run: RunDto): boolean {
 
 /** 공개 시기를 모르거나(날짜 없음) 연도만 아는 OTT 작품 — 시간 축에 놓을 수 없어 격자 아래 목록으로 보인다(경쟁 비교·인쇄·엑셀). 요일을 거르면 뺀다. */
 export function buildUndated(data: LineupPayload, f: Filters): { outlet: OutletDto; runs: RunDto[] }[] {
-  if (f.dows.length > 0) return [];
   const works = new Map(data.works.map((w) => [w.id, w]));
   const slots = new Map(data.slots.map((s) => [s.id, s]));
   const outlets = new Map(data.outlets.map((o) => [o.id, o]));
@@ -628,14 +630,14 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
     month: isYm(get("month")) ? (get("month") as string) : defaultMonthOf(defaultFrom, defaultMonth),
     dfrom: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dfrom") as string) : null,
     dto: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dto") as string) : null,
-    hide: listOf(get("hide")).filter((h) => ["own", "rival", "ott", "event", "undated"].includes(h)),
+    hide: listOf(get("hide")).filter((h) => h === "event" || h === "undated"),
     can: /^[A-Z_]{2,12}$/.test((get("can") ?? "").toUpperCase()) ? (get("can") as string).toUpperCase() : null,
     // 캘린더 일정 종류(첫방·종영·특집·전체 회차) — 기본: 첫방·종영 + KT ENA 전체 회차(사용자 지시 2026-11-26)
     show: showRaw === "none" ? [] : listOf(showRaw).filter((h) => SHOW_SET.has(h)).length > 0 ? listOf(showRaw).filter((h) => SHOW_SET.has(h)) : [...DEFAULT_SHOW],
     st: listOf(get("st")).filter((s) => STATUS_SET.has(s)) as RunStatus[],
     out: [],
     ...selFromQuery(get),
-    nobase: get("nobase") === "1",
+    nobase: get("nobase") === "1" || listOf(get("hide")).includes("own"),
     hm: listOf(get("hm")).filter((h) => h === "period" || h === "eps" || h === "cast"),
     legend: get("legend") === "1",
     q: (get("q") ?? "").slice(0, 60),
@@ -652,6 +654,9 @@ function selFromQuery(get: (k: string) => string | null | undefined): { tv: Sel;
   const tv = parseSel(get("tv"));
   const ott = parseSel(get("ott"));
   if (tv !== undefined || ott !== undefined) return { tv: tv ?? "all", ott: ott ?? "all" };
+  // 옛 캘린더 '구분' 주소(hide=rival·ott)도 같은 뜻으로 옮긴다(코드 검토 #6)
+  const oldHide = listOf(get("hide"));
+  if (oldHide.includes("rival") || oldHide.includes("ott")) return { tv: oldHide.includes("rival") ? "none" : "all", ott: oldHide.includes("ott") ? "none" : "all" };
   const old = listOf(get("out")).map((c) => c.toUpperCase()).filter((c) => /^[A-Z0-9_]{2,16}$/.test(c));
   if (old.length === 0) return { tv: "all", ott: "all" };
   const ottCodes = old.filter((c) => c.startsWith("OTT_"));
@@ -708,7 +713,9 @@ export function queryRange(from: string, len: number): { from: string; to: strin
   const y = Number(from.slice(0, 4));
   const m = Number(from.slice(5, 7)) - 1;
   if (from.length === 7) return { from: `${from}-01`, to: new Date(Date.UTC(y, m + len, 0)).toISOString().slice(0, 10) };
-  return { from, to: addDaysIso(addMonthsDate(from, len), -1) };
+  const next = addMonthsDate(from, len);
+  // 말일로 당겨졌으면(1/31 → 2/28) 그날까지 포함, 아니면 전날까지
+  return { from, to: Number(next.slice(8, 10)) !== Number(from.slice(8, 10)) ? next : addDaysIso(next, -1) };
 }
 
 /** 날짜를 n개월 옮긴다(말일 넘침은 그달 말일로). */
@@ -766,7 +773,7 @@ export function relatedFor(data: LineupPayload, run: RunDto): { rivals: RunDto[]
   const myOutlet = mySlot ? outlets.get(mySlot.outletId) : undefined;
   const genre = runGenre(run, run.workId ? works.get(run.workId) : undefined, mySlot);
   const from = run.startDate;
-  const to = run.endDate ?? run.draw?.to ?? run.startDate;
+  const to = run.endDate ?? (run.draw?.placeholder ? run.startDate : run.draw?.to) ?? run.startDate; // 첫방만 확인된 편성은 첫방일까지만(배치 폭은 기간이 아니다)
   const byStart = (a: RunDto, b: RunDto) => ((a.startDate ?? "") < (b.startDate ?? "") ? -1 : 1);
   const rivals = run.rivals.map((id) => data.runs.find((r) => r.id === id)).filter((r): r is RunDto => !!r).sort(byStart);
   const taken = new Set([run.id, ...rivals.map((r) => r.id)]);
@@ -779,7 +786,7 @@ export function relatedFor(data: LineupPayload, run: RunDto): { rivals: RunDto[]
     return !!o && o.id !== myOutlet?.id && !(myOutlet?.side === "own" && o.side === "own");
   });
   const outletOf = (r: RunDto) => outlets.get(slots.get(r.slotId)?.outletId ?? "");
-  const endOf = (r: RunDto) => r.endDate ?? r.draw?.to ?? r.startDate ?? "";
+  const endOf = (r: RunDto) => r.endDate ?? (r.draw?.placeholder ? r.startDate : r.draw?.to) ?? r.startDate ?? "";
   const overlap = others
     .filter((r) => !outletOf(r)?.ott && r.runKind === "series" && runGenre(r, works.get(r.workId ?? ""), slots.get(r.slotId)) === genre && (r.startDate as string) <= to && endOf(r) >= from)
     .sort(byStart)

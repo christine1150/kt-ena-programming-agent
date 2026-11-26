@@ -42,7 +42,7 @@ const SCOPE_HINT: Record<Exclude<Scope, "custom">, string> = {
   market: "기준 KT ENA 채널 + 경쟁 방송사 전체 + OTT 전체",
   tv: "기준 KT ENA 채널 + 경쟁 방송사 전체(OTT 제외)",
   ott: "기준 KT ENA 채널 + OTT 전체(경쟁 방송사 제외)",
-  own: "KT ENA 계열 채널 전체(경쟁 방송사·OTT 제외)",
+  own: "KT ENA 2049 핵심 채널 전체 — ENA·ENA Drama·ENA Play(경쟁 방송사·OTT 제외)",
 };
 const Sep = () => <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-[var(--lu-line)]" />;
 const SOURCE_KIND_KO: Record<string, string> = { own_xlsx: "KT ENA 라인업", industry_xlsx: "업계 드라마 종합본", outlet_xlsx: "방송사·OTT 라인업", standard_xlsx: "표준 양식", paste: "붙여넣기", manual: "직접 수정" };
@@ -69,11 +69,11 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
   const calRange = useMemo(() => {
     if (isWeek) {
       // 주간: dfrom이 속한 주(월~일). dfrom이 없으면(주소에 cv=week만) 그 달 1일이 속한 주
-      const mon = mondayOf(st.dfrom ?? `${st.month}-01`);
+      const mon = mondayOf(st.dfrom ?? (st.month === defaultMonth ? defaultFrom : `${st.month}-01`));
       return { from: mon, to: addDays(mon, 6), clipped: false };
     }
     return st.dfrom && st.dto ? clampRange(st.dfrom, st.dto) : { ...monthRangeOf(st.month), clipped: false };
-  }, [isWeek, st.dfrom, st.dto, st.month]);
+  }, [isWeek, st.dfrom, st.dto, st.month, defaultFrom, defaultMonth]);
   // 시작은 달(그달 1일) 또는 날짜(기본: 이번 주 월요일) — queryRange가 둘 다 처리
   const { from: gridFrom, to: gridTo } = queryRange(st.from, st.len);
   const shownFrom = isCal ? calRange.from : gridFrom;
@@ -135,6 +135,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
     [data, view, calRange, channels, genres, st.hide, st.show, st.can, st.tv, st.ott, st.st, st.nobase]
   );
   const calOwnCodes = channels.length > 0 ? channels : ["ENA"];
+  const dayFilter = useMemo(() => ({ tv: st.tv, ott: st.ott, statuses: st.st, showBase: !st.nobase }), [st.tv, st.ott, st.st, st.nobase]);
   const grid = useMemo(() => {
     if (!data || view === "calendar" || view === "list") return null;
     if (view === "compare") return { ...buildCompareRows(data, filters, st.cmp), hiddenChannels: [] as string[] };
@@ -214,7 +215,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
   const resetAll = () => set({ channels: [], genres: [], dows: [], st: [], tv: "all", ott: "all", nobase: false, q: "" });
   // 둘째 줄이 넘치면 줄인 모양(길이 단추 → 메뉴, 범위 글자 짧게)으로 — 실제 넘침을 재서 정한다. 세 번째 줄을 만들지 않고 상세 패널을 열어도 넘치지 않게(§3.2).
   // 넓힐 때는 넘쳤던 폭(needRef)을 기억해 그 폭이 생기면 되돌린다(왕복 깜빡임 방지).
-  const layoutKey = `${st.view}|${st.cv}|${scope === "custom" ? 1 : 0}|${st.st.length > 0 ? 1 : 0}|${st.can ? 1 : 0}|${applied.length > 0 ? 1 : 0}|${!!st.dfrom}`;
+  const layoutKey = `${st.view}|${st.cv}|${scope === "custom" ? 1 : 0}|${st.st.length > 0 ? 1 : 0}|${st.can ? 1 : 0}|${applied.length > 0 ? 1 : 0}|${!!st.dfrom}|${calPresetLabel}|${filterCount}|${st.can ?? ""}|${scope}`;
   useEffect(() => {
     const el = rowRef.current;
     if (!el) return;
@@ -260,7 +261,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
   return (
     <div className="lu lu-page min-h-[calc(100vh-44px)] print:min-h-0">
       {/* 상세 패널(오른쪽 400px)이 열리면 본문을 비켜 토·일 칸·막대가 가리지 않게(사용자 지시 2026-11-26) */}
-      <div className={`mx-auto w-full max-w-[1920px] px-4 pt-2 pb-6 sm:px-6 print:max-w-none print:p-0 ${panelOpen ? "min-[1024px]:mr-[400px] min-[1024px]:w-auto" : ""}`}>
+      <div className={`mx-auto w-full max-w-[1920px] px-4 pt-2 pb-6 sm:px-6 print:max-w-none print:p-0 ${panelOpen ? "min-[1024px]:mr-[400px] min-[1024px]:w-auto print:mr-0 print:w-full" : ""}`}>
         {/* 인쇄 머리 — 대외비 표시·출력 시각 */}
         <div className="mb-2 hidden items-baseline justify-between text-[12px] print:flex">
           <span className="font-bold">대외비 · KT ENA 라인업 ({shownFrom} ~ {shownTo})</span>
@@ -473,8 +474,8 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
                 onChange={applyScope}
               />
               {scope === "custom" && (
-                <span title={customText} className="inline-flex h-7 shrink-0 items-center rounded-[6px] border border-[var(--lu-text)] bg-[var(--lu-text)] px-2 text-[12.5px] font-medium text-white">
-                  맞춤
+                <span title={customText} className="inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border border-[var(--lu-accent-line)] bg-[var(--lu-accent-weak)] px-2 text-[12.5px] font-semibold text-[var(--lu-accent)]">
+                  맞춤 <span className="lu-num font-medium">방송 {selCount(st.tv, rivalOutlets.length).replace("전체 ", "")} · OTT {selCount(st.ott, ottOutlets.length).replace("전체 ", "")}</span>
                 </span>
               )}
               <Sep />
@@ -540,7 +541,8 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
         </div>
         {st.legend && st.view !== "list" && <div className="mt-2 print:hidden">{isCal ? <CalLegend /> : <TimelineLegend full />}</div>}
 
-        <div className="mt-2.5">
+        <p aria-live="polite" className="sr-only">{loading ? "라인업 불러오는 중" : data ? `${shownFrom}부터 ${shownTo}까지 라인업` : ""}</p>
+        <div className="mt-2.5" aria-busy={loading}>
           {error && (
             <div role="alert" className="mb-2 flex flex-wrap items-center gap-x-2 rounded-[6px] border border-[#f3c5c1] bg-[#fdf3f2] px-3 py-2 text-[13px] text-[var(--lu-danger)]">
               <span className="font-semibold">{error}</span>
@@ -564,6 +566,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
                 mode={isWeek ? "week" : "month"}
                 query={st.q}
                 keyOnly={!st.show.includes("all")}
+                dayFilter={dayFilter}
                 onSelectEvent={(ev) => setEventEdit(ev)}
               />
               {showUndated && <UndatedStrip data={data} filters={filters} selectedId={st.sel} onSelect={(id) => set({ sel: id })} />}
@@ -579,6 +582,8 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
               {grid.rows.length === 0 ? (
                 <EmptyState canEdit={data.canEdit} onReset={applied.length ? resetAll : undefined} />
               ) : (
+                <>
+                <a href="#lu-after-grid" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded-[6px] focus:bg-white focus:px-2 focus:py-1 focus:text-[13px]">타임라인 건너뛰기</a>
                 <LineupGrid
                   data={data}
                   rows={grid.rows}
@@ -596,6 +601,8 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
                   maxHeight={timelineMax}
                   hideMeta={st.hm}
                 />
+                <span id="lu-after-grid" tabIndex={-1} />
+                </>
               )}
               {st.view === "own" && !st.empty && grid.hiddenChannels.length > 0 && (
                 <p className="mt-1.5 text-[12px] text-[var(--lu-text-2)] print:hidden">
@@ -643,9 +650,10 @@ export function TimelineLegend({ full = false, vertical = false }: { full?: bool
         <li key={g} className="flex items-center gap-1.5">{sw({ background: GENRE_FILL[g] })}{GENRE_LABEL[g]}</li>
       ))}
       {!vertical && <li aria-hidden className="h-3 w-px bg-[var(--lu-line)]" />}
-      <li className="flex items-center gap-1.5">{sw({ background: GENRE_FILL.variety })}KT ENA</li>
-      <li className="flex items-center gap-1.5">{sw({ background: "#fff", border: `1px solid ${GENRE_FILL.variety}`, borderLeftWidth: 3 })}경쟁사·OTT</li>
-      <li className="flex items-center gap-1.5">{sw({ background: "#fff", border: `1.5px dashed ${UI.text2}` })}예정</li>
+      <li className="flex items-center gap-1.5">{sw({ background: `linear-gradient(90deg, ${GENRE_FILL.drama} 0 25%, ${GENRE_FILL.variety} 25% 50%, ${GENRE_FILL.business} 50% 75%, ${GENRE_FILL.other} 75%)` })}KT ENA = 장르색 채움</li>
+      <li className="flex items-center gap-1.5">{sw({ background: "#fff", border: `1px solid ${UI.control}`, borderLeft: `3px solid ${UI.text2}` })}경쟁사·OTT = 흰 바탕 + 장르색 테두리</li>
+      <li className="flex items-center gap-1.5">{sw({ background: `${GENRE_FILL.drama}22`, border: `1.5px dashed ${GENRE_FILL.drama}` })}{sw({ background: "#fff", border: `1.5px dashed ${UI.control}` })}예정(점선)</li>
+      <li className="flex items-center gap-1.5"><span className="rounded-[3px] border border-dashed border-[var(--lu-text-2)] px-1 text-[10.5px] leading-[14px] font-semibold">미정</span>가안</li>
       <li className="flex items-center gap-1.5">{sw({ border: `1px solid ${UI.line}`, backgroundImage: "repeating-linear-gradient(135deg,#fff 0 3px,#e3e5e9 3px 5px)" })}휴방·결방</li>
       {full && (
         <>
@@ -677,7 +685,7 @@ function EmptyState({ canEdit, onReset }: { canEdit: boolean; onReset?: () => vo
 }
 
 /** 인쇄(/lineup/print)용 목록 — 화면 목록과 같은 표 */
-export function ListView({ data, filters, onSelect }: { data: LineupPayload; filters: Filters; onSelect: (id: string) => void }) {
-  return <ListTable data={data} filters={filters} onSelect={onSelect} printMode />;
+export function ListView({ data, filters, query = "", onSelect }: { data: LineupPayload; filters: Filters; query?: string; onSelect: (id: string) => void }) {
+  return <ListTable data={data} filters={filters} query={query} onSelect={onSelect} printMode />;
 }
 export { TimelineLegend as Legend };

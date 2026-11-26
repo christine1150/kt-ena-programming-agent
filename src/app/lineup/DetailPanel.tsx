@@ -3,14 +3,14 @@
 // 작품 상세 패널(오른쪽 400px) — 2026-11-26 리디자인(지시문 §6·§9). 타임라인·캘린더·목록이 같은 패널·같은 자료를 쓴다.
 // 제목·채널·장르·상태 / 첫 방송·종영·편성·편수·출연진·제작진 / 동시간대 맞대결·같은 장르 기간 중첩·가까운 첫방·OTT 공개·외부 이벤트 /
 // 자료 출처·기준일 / 변경 이력 / 고치기(관리자). 점수·예측치를 만들지 않고 서버 자료만 보여 준다. 포스터는 만들지 않는다.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Genre, LineupPayload, OutletDto, RunDto, SlotDto, WorkDto } from "@/lib/lineup/types";
 import {
   dateFull, episodeText, GENRE_LABEL, kindLabel, periodDot, relatedFor, runGenre, runTitle, slotLabel, workNote,
 } from "@/lib/lineup/viewModel";
 import { EVENT_KIND_ICON, EVENT_KIND_LABEL, eventsBetween, laneEvents, type LaneEvent } from "@/lib/lineup/events";
 import { GENRE_FILL, GENRE_ON, UI } from "@/lib/lineup/tokens";
-import { Btn, Icon, OutletLogo } from "./ui";
+import { Btn, cx, Icon, OutletLogo } from "./ui";
 
 interface Change { id: number; action: string; diff: Record<string, { before: unknown; after: unknown }>; actor: string; at: string }
 const FIELD_KO: Record<string, string> = {
@@ -36,7 +36,7 @@ export default function DetailPanel({
   const related = useMemo(() => relatedFor(data, run), [data, run]);
   const events = useMemo(() => {
     if (!run.startDate) return [];
-    const to = run.endDate ?? run.draw?.to ?? run.startDate;
+    const to = run.endDate ?? (run.draw?.placeholder ? run.startDate : run.draw?.to) ?? run.startDate;
     return eventsBetween(laneEvents(data), run.startDate, to).slice(0, 10);
   }, [data, run]);
   const source = run.sourceId ? data.sources.find((s) => s.id === run.sourceId) : undefined;
@@ -53,11 +53,25 @@ export default function DetailPanel({
   }, [run.id]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      onClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // 열릴 때 초점을 제목으로, 닫힐 때 연 단추로 되돌린다
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const [opener] = useState<Element | null>(() => (typeof document !== "undefined" ? document.activeElement : null));
+  useEffect(() => {
+    headingRef.current?.focus({ preventScroll: true });
+    return () => {
+      const o = opener as HTMLElement | null;
+      if (o?.isConnected) o.focus({ preventScroll: true });
+    };
+  }, [opener]);
   const levels = run.rivalLevels ?? {};
   const byId = (id: string) => data.runs.find((r) => r.id === id);
   const rivalsBy = {
@@ -85,7 +99,7 @@ export default function DetailPanel({
             <Icon name="x" />
           </button>
         </div>
-        <h2 className="text-[20px] leading-snug font-bold text-[var(--lu-text)]">{runTitle(run, work)}</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="text-[20px] leading-snug font-bold text-[var(--lu-text)] outline-none">{runTitle(run, work)}</h2>
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]">
           <span className="inline-flex h-5 items-center rounded-[3px] px-1.5 font-semibold" style={own ? { background: GENRE_FILL[genre], color: GENRE_ON[genre] } : { background: "#fff", color: UI.text, border: `1.5px solid ${GENRE_FILL[genre]}` }}>
             {GENRE_LABEL[genre]}
@@ -110,25 +124,27 @@ export default function DetailPanel({
           {note && <Field label={note.label}><span className="whitespace-pre-wrap">{note.text}</span></Field>}
           {work?.logline && <Field label="로그라인"><span className="whitespace-pre-wrap">{work.logline}</span></Field>}
           {work?.ottNote && <Field label="OTT">{work.ottNote}</Field>}
-          {run.note && <Field label="메모">{run.note}</Field>}
+          {run.note && <Field label="메모"><LongText text={run.note} /></Field>}
         </dl>
         {run.draw?.estimatedFrom && <p className="mt-2 text-[12px] text-[var(--lu-text-2)]">종영일이 발표되지 않아 편수로 끝을 추정했습니다(≈). 막대 끝의 흐린 부분이 추정 구간입니다.</p>}
 
         {!outlet?.ott && run.runKind === "series" && (
           <>
             {/* 동시간대 경쟁(P0-02): 실제·추정 중첩과 인접 시간대를 나눈다. 공통 방송일이 있는 다른 회사 편성만. */}
-            <Section title="동시간대 경쟁" count={rivalsBy.overlap.length} hint="방송 시간이 겹침 — 실제 종료 시각 또는 실제 방송 기록의 방송 길이로 계산">
-              {rivalsBy.overlap.length === 0 ? (
-                <Empty>{slot?.startMinute === null ? "편성 시각이 확인되지 않아 동시간대 경쟁을 판정하지 않았습니다." : "방송 시간이 겹치는 것으로 확인된 다른 방송사 작품이 없습니다."}</Empty>
+            <Section
+              title="동시간대 경쟁"
+              count={rivalsBy.overlap.length + rivalsBy.adjacent.length}
+              hint={rivalsBy.overlap.length > 0 ? "겹침 = 실제 종료 시각 또는 실제 방송 기록의 방송 길이로 계산 · 인접 = 시작 ±60분(경쟁사 종료 시각 자료 없음)" : "시작 시각 ±60분 · 공통 방송일 있음 — 경쟁사 종료 시각 자료가 없어 겹침은 미확인"}
+            >
+              {rivalsBy.overlap.length + rivalsBy.adjacent.length === 0 ? (
+                <Empty>{slot?.startMinute === null ? "편성 시각이 확인되지 않아 동시간대 경쟁을 판정하지 않았습니다." : "같은 요일 시작 ±60분 안에 방송 기간이 겹치는 다른 방송사 작품이 없습니다."}</Empty>
               ) : (
-                rivalsBy.overlap.map((r) => <RunRow key={r.id} r={r} info={runRef(r)} onSelect={onSelect} tag={levels[r.id] === "exact" ? "실제 중첩" : "추정 중첩"} />)
+                <>
+                  {rivalsBy.overlap.map((r) => <RunRow key={r.id} r={r} info={runRef(r)} onSelect={onSelect} tag={levels[r.id] === "exact" ? "실제 중첩" : "추정 중첩"} />)}
+                  {rivalsBy.adjacent.map((r) => <RunRow key={r.id} r={r} info={runRef(r)} onSelect={onSelect} tag="±60분 · 겹침 미확인" />)}
+                </>
               )}
             </Section>
-            {rivalsBy.adjacent.length > 0 && (
-              <Section title="인접 시간대" count={rivalsBy.adjacent.length} hint="시작 시각 ±60분 · 공통 방송일 있음 — 종료 시각을 몰라 겹침은 미확인">
-                {rivalsBy.adjacent.map((r) => <RunRow key={r.id} r={r} info={runRef(r)} onSelect={onSelect} />)}
-              </Section>
-            )}
             {rivalsBy.family.length > 0 && (
               <Section title="KT ENA 계열 같은 시간대" count={rivalsBy.family.length} hint="계열 채널끼리 — 경쟁사 집계에서 제외">
                 {rivalsBy.family.map((r) => <RunRow key={r.id} r={r} info={runRef(r)} onSelect={onSelect} />)}
@@ -248,13 +264,29 @@ function RunRow({ r, info, onSelect, showStart = false, tag }: { r: RunDto; info
     <button type="button" onClick={() => onSelect(r.id)} className="flex w-full items-center gap-2 rounded-[4px] px-1 py-1.5 text-left hover:bg-[var(--lu-hover)]">
       {/* 장르 표식 — 목록과 같은 작은 사각형(자사 채움 · 경쟁사 아웃라인) */}
       <span aria-hidden className="inline-block size-2.5 shrink-0 rounded-[2px]" style={own ? { background: GENRE_FILL[info.g] } : { background: "#fff", border: `1.5px solid ${GENRE_FILL[info.g]}` }} />
-      <span className="w-[52px] shrink-0 truncate text-[11.5px] font-semibold text-[var(--lu-text-2)]">{info.o?.name}</span>
+      <span title={info.o?.name} className="w-[68px] shrink-0 truncate text-[11.5px] font-semibold text-[var(--lu-text-2)]">{info.o?.name}</span>
       <span className="min-w-0 flex-1 truncate font-semibold">{runTitle(r, info.w)}</span>
       <span className="lu-num shrink-0 text-[11.5px] text-[var(--lu-text-2)]">{showStart ? `${r.startPrecision === "week" ? "≈" : ""}${(r.startDate ?? "").slice(5).replace("-", ".")}` : `${info.s && !info.o?.ott ? `${slotLabel(info.s, info.o)} · ` : ""}${periodDot(r)}`}</span>
       {/* 상태 문구 간소화(2026-11-26): '예정'은 쓰지 않고 가안만 '미정' */}
       {tag && <span className="shrink-0 rounded-[3px] border border-[var(--lu-line)] px-1 text-[10.5px] text-[var(--lu-text-2)]">{tag}</span>}
       {r.status === "tentative" && <span className="shrink-0 text-[10.5px] text-[var(--lu-text-2)]">미정</span>}
     </button>
+  );
+}
+
+/** 긴 메모 — 3줄까지 보이고 '더 보기'로 펼친다(회차 편성표처럼 긴 메모가 관련 정보를 밀어내지 않게) */
+function LongText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 140 || text.split("\n").length > 3;
+  return (
+    <span className="block">
+      <span className={cx("block whitespace-pre-wrap", !open && long && "line-clamp-3")}>{text}</span>
+      {long && (
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="mt-0.5 text-[12px] font-medium text-[var(--lu-text-2)] underline underline-offset-2 hover:text-[var(--lu-text)]">
+          {open ? "접기" : "더 보기"}
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -355,7 +387,7 @@ function EditForm({ run, genre, title, shortTitle, cast, hasWork, onDone, onCanc
         <input type="checkbox" checked={f.needsReview} onChange={(e) => setF({ ...f, needsReview: e.target.checked })} /> 확인 필요 표시
       </label>
       <p className="text-[11.5px] text-[var(--lu-text-2)]">날짜를 고치면 일자 확정으로 저장됩니다. 고친 기록은 수정 이력에 남습니다.</p>
-      {msg && <p className="text-[12px] text-[var(--lu-danger)]">{msg}</p>}
+      {msg && <p role="alert" className="text-[12px] text-[var(--lu-danger)]">{msg}</p>}
       <div className="flex gap-2">
         <Btn type="submit" tone="solid" disabled={busy}>저장</Btn>
         <Btn onClick={onCancel}>취소</Btn>

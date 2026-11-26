@@ -11,6 +11,7 @@ import { planUpload, type PlanContext } from "../src/lib/lineup/plan";
 import { parseStandardLineupXlsx, parseStartText, splitCast, standardGenre } from "../src/lib/lineup/parse/standardSheet";
 import { ottGenre, parseOttCadence, parseOttLineupXlsx, splitOttTitle } from "../src/lib/lineup/parse/ottSheet";
 import { holdbackMarks } from "../src/lib/lineup/holdback";
+import { hasPrevRun } from "../src/lib/lineup/airings";
 import { COMPARE_MODES, outletSelected, scopeOf, scopeSel, selIsAll, selIsNone, STATUS_LABEL } from "../src/lib/lineup/viewModel";
 import { airingsOf } from "../src/lib/lineup/airings";
 import { effectiveEnd, headToHeadLevel, isIsoDate, type AirWindow, type GapSpan } from "../src/lib/lineup/dates";
@@ -252,7 +253,7 @@ check("addDays", addDays("2026-12-31", 1) === "2027-01-01");
   check("OTT 배치: 요일을 골라도 OTT 묶음은 남음(요일은 TV에만)", buildCompareRows(data, { ...f, dows: [1] }).rows.some((r) => r.key === "b:ott"));
   check("OTT 배치: OTT '없음'이면 OTT 묶음 빠짐, 방송사 '없음'이면 tvN 줄 빠짐", !buildCompareRows(data, { ...f, ott: "none" }).rows.some((r) => r.key === "b:ott") && !buildCompareRows(data, { ...f, tv: "none" }).rows.some((r) => r.label === "tvN"));
   const und = buildUndated(data, f);
-  check("OTT 배치: 날짜 없는 작품은 플랫폼별 '공개 시기 미정' 목록", und.length === 1 && und[0].outlet.code === "OTT_FAKE" && und[0].runs[0].id === "r3" && buildUndated(data, { ...f, dows: [1] }).length === 0);
+  check("OTT 배치: 날짜 없는 작품은 플랫폼별 '공개 시기 미정' 목록", und.length === 1 && und[0].outlet.code === "OTT_FAKE" && und[0].runs[0].id === "r3" && buildUndated(data, { ...f, dows: [1] }).length === 1); // 요일은 TV에만 — 공개 시기 미정 OTT 목록은 남는다(2차 개선)
   const yearRun = mkRun("r6", "s2", { shape: "bracket", from: "2027-01-01", to: "2027-12-31", estimatedFrom: null, dates: null }, { runKind: "series", startPrecision: "month", startDate: "2027-01-01", endDate: "2027-12-31", endPrecision: "month", startText: "2027년" });
   const withYear = { ...data, runs: [...runs, yearRun] } as LineupPayload;
   const cmpYear = buildCompareRows(withYear, f);
@@ -525,6 +526,32 @@ check("토큰: 보조 글자 대비(흰 바탕·페이지 바탕 4.5:1 이상), 
   check("주소: OTT 범위·기준 숨김·표시 항목·범례 왕복", rt.tv === "none" && rt.ott === "all" && rt.nobase && rt.hm.join() === "cast,eps" && rt.legend && back.get("tv") === "none" && !back.has("ott") && back.get("nobase") === "1" && back.get("hm") === "cast,eps" && back.get("legend") === "1");
   check("묶음: 방송사별 추가, 시간대는 '시작 시간대별'로 표기", COMPARE_MODES.some((m) => m.key === "outlet" && m.label === "방송사별") && COMPARE_MODES.find((m) => m.key === "time")?.label === "시작 시간대별" && P({ view: "compare", cmp: "outlet" }).cmp === "outlet");
   check("상태 문구: 가안 → 미정", STATUS_LABEL.tentative === "미정");
+}
+
+// ── 2026-11-27 최종 리뷰 반영 회귀 ──
+{
+  const P = (o: Record<string, string>) => parseLineupQuery((k) => o[k], "2026-11-23", "2026-11");
+  check("리뷰: 월말 시작 1/31부터 1개월 = 2/28까지(예전 2/27)", queryRange("2027-01-31", 1).to === "2027-02-28" && queryRange("2026-11-23", 1).to === "2026-12-22");
+  const h = P({ view: "calendar", hide: "rival,ott,own,event" });
+  check("리뷰: 옛 hide=rival·ott·own 주소 → 방송사 없음·OTT 없음·기준 숨김(화면·인쇄·엑셀 같게), event만 남김", h.tv === "none" && h.ott === "none" && h.nobase && h.hide.join() === "event");
+  const slot: SlotDto = { id: "sl", outletId: "o1", name: "월화 21:30", days: [1, 2], startMinute: 1290, timeNote: null, compareBlock: "mon_tue", defaultGenre: "drama", sortOrder: 1 };
+  const mkR = (o: Partial<RunDto>): RunDto => {
+    const b = { id: "r", slotId: "sl", workId: "wk", runKind: "series", status: "confirmed", startDate: "2027-01-04", startPrecision: "day", endDate: null, endPrecision: "unknown", startText: null, endText: null, episodes: null, episodeFrom: null, recurrence: null, airDates: null, label: null, reason: null, note: null, needsReview: false, sourceId: null, sourceCell: null, sourceText: null, updatedAt: null, archived: false, draw: null, rivals: [], ...o } as RunDto;
+    return { ...b, draw: drawSpan(b, slot.days, "2030-12-31") };
+  };
+  const a1 = mkR({ id: "a1", startDate: "2027-01-04", endDate: "2027-01-26", endPrecision: "day" });
+  const a2 = mkR({ id: "a2", startDate: "2027-02-01", endDate: "2027-02-23", endPrecision: "day" });
+  check("리뷰: 같은 작품 뒤 구간은 첫방이 아니다(hasPrevRun)", hasPrevRun(a2, [a1, a2]) && !hasPrevRun(a1, [a1, a2]) && !airingsOf(a2, slot, { until: "2027-12-31", continued: true })[0].first && airingsOf(a1, slot, { until: "2027-12-31" })[0].first);
+  const old = mkR({ id: "o", startDate: "2022-01-03", endPrecision: "open" });
+  check("리뷰: 오래 이어진 상시 편성도 2026-11에 방송일이 있다(예전 1200일 한도)", airingsOf(old, slot, { until: "2026-11-30" }).some((x) => x.date >= "2026-11-01"));
+  const ena: OutletDto = { id: "o1", code: "ENA", name: "ENA", side: "own", color: null, logo: null, group: "A", ott: false, sortOrder: 1 };
+  const sbs: OutletDto = { id: "o2", code: "SBS", name: "SBS", side: "rival", color: null, logo: null, group: null, ott: false, sortOrder: 2 };
+  const rs: SlotDto = { ...slot, id: "rs", outletId: "o2" };
+  const rival = { ...mkR({ id: "rv", workId: "wr", startDate: "2027-01-04", endDate: "2027-01-26", endPrecision: "day" }), slotId: "rs" } as RunDto;
+  const works: WorkDto[] = ["wk", "wr"].map((id) => ({ id, title: "가상", shortTitle: null, tentative: false, genre: "drama", totalEpisodes: null, cast: [], directors: [], writers: [], producers: [], logline: null, ottNote: null, note: null }));
+  const pd = { ok: true, from: "2027-01-01", to: "2027-01-31", today: "2026-12-01", canEdit: false, outlets: [ena, sbs], slots: [slot, rs], works, runs: [a1, rival], holidays: [], events: [], sources: [], gaps: [] } as LineupPayload;
+  check("리뷰: 그날 일정도 비교 범위를 따른다(KT ENA만이면 경쟁사 첫방 빠짐)", dayAirings(pd, "2027-01-04", ["ENA"], []).some((r) => r.runId === "rv") && !dayAirings(pd, "2027-01-04", ["ENA"], [], { tv: "none", ott: "none" }).some((r) => r.runId === "rv"));
+  check("리뷰: 기준 채널 숨김이면 그날 일정에서 KT ENA도 빠짐", !dayAirings(pd, "2027-01-04", ["ENA"], [], { showBase: false }).some((r) => r.runId === "a1"));
 }
 
 if (failed > 0) {

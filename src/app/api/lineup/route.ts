@@ -1,7 +1,8 @@
 // 라인업 조회 API — 로그인 사용자 전부(사용자 결정 2026-11-24: 타사 상세도 로그인 사용자에게 보임).
 // 라인업은 대외비: 응답은 캐시하지 않고, LLM 경로로 보내지 않는다. 그리기 값(자리 점유 끝·맞대결·빈 주)은 서버가 계산한다.
 import { NextResponse } from "next/server";
-import { requireActorFor, bad, fail } from "@/lib/idealSchedule/apiUtil";
+import { requireActorFor, bad } from "@/lib/idealSchedule/apiUtil";
+import { lineupFail } from "@/lib/lineup/apiGuard";
 import { getCurrentSession } from "@/lib/adminAuth";
 import { can, roleOfSession } from "@/lib/admin/permissions";
 import { daysBetween, isIsoDate } from "@/lib/lineup/dates";
@@ -24,6 +25,6 @@ export async function GET(request: Request) {
     const payload = await loadLineup(from, to, kstToday(), can(roleOfSession(session), "lineup_edit"));
     return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
-    return fail(e);
+    return lineupFail(e);
   }
 }

@@ -254,21 +254,39 @@ export async function rollbackSource(sourceId: string, actor: string) {
   const created = new Set(changes.filter((c) => c.action === "create").map((c) => c.entity_id));
   let archived = 0;
   let restored = 0;
-  if (created.size > 0) {
-    const { error: e } = await supabase.from("lineup_runs").update({ archived_at: new Date().toISOString(), updated_by: actor }).in("id", [...created]);
+  // 그 업로드 뒤에 다른 자료(사람의 직접 수정·다른 업로드)가 손댄 구간은 건드리지 않는다(코드 검토 #2) — 현재 source_id가 이 자료인 것만
+  const touchedIds = [...new Set(changes.map((c) => c.entity_id))];
+  const current = new Map<string, { source_id: string | null } & Record<string, unknown>>();
+  for (let i = 0; i < touchedIds.length; i += 200) {
+    const { data, error: e } = await supabase.from("lineup_runs").select("*").in("id", touchedIds.slice(i, i + 200));
     if (e) throw new Error(e.message);
-    archived = created.size;
+    for (const row of (data ?? []) as ({ id: string; source_id: string | null } & Record<string, unknown>)[]) current.set(row.id, row);
   }
+  const ownedNow = (id: string) => current.get(id)?.source_id === sourceId;
+  let skipped = 0;
+  const toArchive = [...created].filter(ownedNow);
+  skipped += created.size - toArchive.length;
+  if (toArchive.length > 0) {
+    const { error: e } = await supabase.from("lineup_runs").update({ archived_at: new Date().toISOString(), updated_by: actor }).in("id", toArchive);
+    if (e) throw new Error(e.message);
+    archived = toArchive.length;
+  }
+  const done = new Set<string>();
   for (const c of changes) {
-    if (c.action === "create" || created.has(c.entity_id)) continue;
+    if (c.action === "create" || created.has(c.entity_id) || done.has(c.entity_id)) continue;
+    if (!ownedNow(c.entity_id)) {
+      skipped++;
+      continue;
+    }
     const patch: Record<string, unknown> = { updated_by: actor };
     for (const [k, v] of Object.entries(c.diff ?? {})) if (k !== "updated_by") patch[k] = v.before;
     const { error: e } = await supabase.from("lineup_runs").update(patch).eq("id", c.entity_id);
     if (e) throw new Error(e.message);
+    done.add(c.entity_id);
     restored++;
   }
   await supabase.from("lineup_sources").update({ status: "rolled_back" }).eq("id", sourceId);
-  return { archived, restored };
+  return { archived, restored, skipped };
 }
 
 const toOutletDto = (o: OutletRow): OutletDto => {
@@ -516,6 +534,20 @@ export async function patchRun(runId: string, patch: RunPatch, actor: string) {
   if (patch.note !== undefined) runFields.note = patch.note;
   if (patch.needsReview !== undefined) runFields.needs_review = patch.needsReview;
   if (patch.archived !== undefined) runFields.archived_at = patch.archived ? new Date().toISOString() : null;
+  const wf: Record<string, unknown> = {};
+  if (r.work_id) {
+    if (patch.title !== undefined && patch.title.trim()) {
+      wf.title = patch.title.trim();
+      wf.title_key = titleKey(patch.title);
+    }
+    if (patch.shortTitle !== undefined) wf.short_title = patch.shortTitle?.trim() || null;
+    if (patch.tentative !== undefined) wf.title_tentative = patch.tentative;
+    if (patch.genre !== undefined) wf.genre = patch.genre;
+    if (patch.cast !== undefined) wf.cast_main = patch.cast;
+    if (patch.logline !== undefined) wf.logline = patch.logline?.trim() || null;
+  }
+  // 바뀐 것이 없으면 '직접 수정' 기록을 남기지 않는다(보안 검토: 빈 PATCH가 감사 기록을 어지럽힘)
+  if (Object.keys(runFields).length === 0 && Object.keys(wf).length === 0) return { ok: true, unchanged: true };
 
   const { data: src, error: srcErr } = await supabase
     .from("lineup_sources")
@@ -526,20 +558,17 @@ export async function patchRun(runId: string, patch: RunPatch, actor: string) {
   const sourceId = (src as { id: string }).id;
 
   if (Object.keys(runFields).length > 0) {
-    const { error: e } = await supabase.from("lineup_runs").update({ ...runFields, source_id: sourceId, updated_by: actor }).eq("id", runId);
+    // 동시 수정: 읽은 시점의 updated_at이 그대로일 때만 쓴다(읽기와 쓰기 사이 경합까지 막는 조건부 갱신)
+    let q = supabase.from("lineup_runs").update({ ...runFields, source_id: sourceId, updated_by: actor }).eq("id", runId);
+    if (patch.expectedUpdatedAt) q = q.eq("updated_at", r.updated_at);
+    const { data: done, error: e } = await q.select("id");
     if (e) throw new Error(e.message);
+    if (patch.expectedUpdatedAt && (done ?? []).length === 0) {
+      await supabase.from("lineup_sources").update({ status: "rolled_back" }).eq("id", sourceId);
+      throw new RunConflictError("그사이 다른 사람이 이 편성을 고쳤습니다. 화면을 새로 고친 뒤 다시 수정해 주세요.");
+    }
   }
   if (r.work_id) {
-    const wf: Record<string, unknown> = {};
-    if (patch.title !== undefined && patch.title.trim()) {
-      wf.title = patch.title.trim();
-      wf.title_key = titleKey(patch.title);
-    }
-    if (patch.shortTitle !== undefined) wf.short_title = patch.shortTitle?.trim() || null;
-    if (patch.tentative !== undefined) wf.title_tentative = patch.tentative;
-    if (patch.genre !== undefined) wf.genre = patch.genre;
-    if (patch.cast !== undefined) wf.cast_main = patch.cast;
-    if (patch.logline !== undefined) wf.logline = patch.logline?.trim() || null;
     if (Object.keys(wf).length > 0) {
       if (wf.title_key) {
         // 제목을 바꾸면 옛 제목 키를 별칭으로 남겨 다음 업로드에서도 같은 작품으로 찾는다.

@@ -9,7 +9,7 @@ import { GENRE_HEX, conditionText, textWidth, type LineupQuery } from "./viewMod
 import type { LineupPayload } from "./types";
 
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
-const argb = (hex: string) => `FF${hex}`;
+const argb = (hex: string) => `FF${hex.replace("#", "").toUpperCase()}`; // 장르색(#d91d60)도 받게 — 예전엔 FF#d91d60이 되어 채움이 깨졌다(코드 검토 #1)
 const solid = (hex: string): ExcelJS.Fill => ({ type: "pattern", pattern: "solid", fgColor: { argb: argb(hex) } });
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 const MARK_TAIL = (m: CalMark) => m.kind === "avail" ? "" : (m.kind === "first" ? "첫방" : m.kind === "end" ? (m.approx ? "종영(≈)" : "종영") : m.kind === "open" ? (m.ott ? "공개" : "단발") : "방송");
@@ -85,14 +85,15 @@ function addMonthSheet(wb: ExcelJS.Workbook, data: LineupPayload, model: CalMode
         for (const d of barWeekDays(b, w.start)) {
           const i = d.col;
           if (b.kind === "gap") {
+            const sure = !b.title.startsWith("≈"); // 추정 공백은 회색(화면과 같게)
             for (let rr = 0; rr < 3; rr++) {
               const c = ws.getCell(r + rr, i + 1);
-              c.fill = solid("FBE9EB");
-              c.border = border("C91F31", "dashed");
+              c.fill = solid(sure ? "FBE9EB" : "F4F4F5");
+              c.border = border(sure ? "C91F31" : "8B9099", "dashed");
             }
             const t = ws.getCell(r, i + 1);
             t.value = b.title;
-            t.font = { bold: true, color: { argb: argb("C91F31") } };
+            t.font = { bold: sure, color: { argb: argb(sure ? "C91F31" : "626770") } };
             continue;
           }
           const hex = GENRE_HEX[b.genre];
@@ -191,7 +192,7 @@ function addDaySheet(wb: ExcelJS.Workbook, data: LineupPayload, q: LineupQuery, 
   const layerHidden = (own: boolean, ott: boolean) => (own ? hide.includes("own") : ott ? hide.includes("ott") : hide.includes("rival"));
   for (let d = from; d <= to; d = addDays(d, 1)) {
     const dow = DOW[(new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7];
-    for (const row of dayAirings(data, d, q.channels, q.genres)) {
+    for (const row of dayAirings(data, d, q.channels, q.genres, { tv: q.tv, ott: q.ott, statuses: q.st, showBase: !q.nobase })) {
       if (layerHidden(row.own, row.ott)) continue;
       [d, dow, row.time, row.own ? "KT ENA" : row.ott ? "OTT" : "타사", row.outletName, row.title, row.episode, row.tag || "방송", "하루"].forEach((v, k) => {
         ws.getCell(r, k + 1).value = v;

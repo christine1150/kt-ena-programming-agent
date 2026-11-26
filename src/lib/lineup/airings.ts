@@ -28,6 +28,12 @@ export function hiatusBySlot(data: Pick<LineupPayload, "runs">): Map<string, { f
   return m;
 }
 
+/** 같은 작품·같은 자리에 앞 구간이 있는지(자료 구간 경계일 뿐 첫방이 아님, 코드 검토 #10) */
+export function hasPrevRun(r: RunDto, runs: RunDto[]): boolean {
+  if (!r.startDate || !r.workId) return false;
+  return runs.some((x) => x.id !== r.id && x.workId === r.workId && x.slotId === r.slotId && !!x.startDate && x.startDate < (r.startDate as string) && x.runKind === r.runKind);
+}
+
 /** 같은 작품·같은 자리에 뒤 구간이 있는지(자료 구간 경계일 뿐 종영이 아님) */
 export function hasNextRun(r: RunDto, runs: RunDto[]): boolean {
   const end = r.endDate ?? r.draw?.to;
@@ -38,7 +44,7 @@ export function hasNextRun(r: RunDto, runs: RunDto[]): boolean {
 export function airingsOf(
   run: RunDto,
   slot: SlotDto,
-  opts: { work?: WorkDto; skip?: { from: string; to: string }[]; until: string; continues?: boolean }
+  opts: { work?: WorkDto; skip?: { from: string; to: string }[]; until: string; continues?: boolean; continued?: boolean }
 ): Airing[] {
   if (run.runKind !== "series" || !run.startDate || (run.startPrecision !== "day" && run.startPrecision !== "week")) return [];
   const days = slot.days.length > 0 && slot.days.length < 7 ? slot.days : [];
@@ -72,12 +78,12 @@ export function airingsOf(
   }
   const out: Airing[] = [];
   let n = 0;
-  for (let d = from0, guard = 0; d <= end && n < maxCount && guard < 1200; d = addDays(d, 1), guard++) {
+  for (let d = from0, guard = 0; d <= end && n < maxCount && guard < 7400; d = addDays(d, 1), guard++) {
     if (!isAir(d)) continue;
     n++;
     const no = exact && !table ? (run.episodeFrom ?? 1) + n - 1 : null;
     const label = table ? table.get(d) ?? "" : no !== null && !(total && no > total) ? `${no}회` : "";
-    out.push({ date: d, no, label, first: !table && exact && n === 1 && (run.episodeFrom ?? 1) <= 1, last: false, estimated });
+    out.push({ date: d, no, label, first: !table && exact && n === 1 && (run.episodeFrom ?? 1) <= 1 && !opts.continued, last: false, estimated });
   }
   if (out.length > 0 && knownLast && !table && !opts.continues) out[out.length - 1].last = true;
   return out;
