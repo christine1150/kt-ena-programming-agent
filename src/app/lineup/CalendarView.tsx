@@ -381,6 +381,18 @@ function WeekGrid({
   const GAP_H = 18;
   // 시간축은 일정이 있는 시각대만 — 빈 시간 묶음은 '⋯' 한 줄로 접는다(낮 시간 공백이 저녁 편성을 화면 밖으로 밀지 않게)
   const hourSet = [...new Set(timed.flat().map((it) => Math.floor((it.minute as number) / 60)))].sort((a, b) => a - b);
+  // 같은 시각대 일정은 나란히 좁히지 않고 시간 순서대로 아래로 쌓는다(사용자 요청 2026-11-27) — 그 시각대 칸 높이를 가장 많이 쌓인 요일에 맞춰 늘린다
+  const STACK = ITEM_H + 2;
+  const perHourMax = new Map<number, number>();
+  for (const items of timed) {
+    const cnt = new Map<number, number>();
+    for (const it of items) {
+      const h = Math.floor((it.minute as number) / 60);
+      cnt.set(h, (cnt.get(h) ?? 0) + 1);
+    }
+    for (const [h, n] of cnt) perHourMax.set(h, Math.max(perHourMax.get(h) ?? 0, n));
+  }
+  const heightOf = (h: number) => Math.max(hourH, (perHourMax.get(h) ?? 0) * STACK + 6);
   const axis: { h: number | null; top: number }[] = [];
   const hourTop = new Map<number, number>();
   let y = 0;
@@ -391,10 +403,14 @@ function WeekGrid({
     }
     hourTop.set(h, y);
     axis.push({ h, top: y });
-    y += hourH;
+    y += heightOf(h);
   });
   const totalH = y;
-  const topOf = (minute: number) => (hourTop.get(Math.floor(minute / 60)) ?? 0) + ((minute % 60) / 60) * hourH;
+  const topOf = (minute: number) => {
+    const h = Math.floor(minute / 60);
+    // 시각 비율 위치는 그 시각대의 기본 높이 안에서만(쌓을 자리를 남긴다)
+    return (hourTop.get(h) ?? 0) + Math.min(((minute % 60) / 60) * hourH, heightOf(h) - (perHourMax.get(h) ?? 1) * STACK);
+  };
   const hasUntimed = untimed.some((x) => x.length > 0);
   const bandRows = Math.max(week.bandRows, 1);
   const cols = "56px repeat(7, minmax(0, 1fr))";
@@ -444,28 +460,21 @@ function WeekGrid({
             )}
           </div>
           {timed.map((items, c) => {
-            // 같은 시각대 겹침 — 22px 안에 시작하는 일정끼리 나란히
-            const placed: { it: Item; top: number; col: number; cols: number }[] = [];
-            let cluster: { it: Item; top: number; col: number; cols: number }[] = [];
-            const flush = () => {
-              const n = cluster.length;
-              cluster.forEach((p, i) => { p.col = i; p.cols = n; });
-              placed.push(...cluster);
-              cluster = [];
-            };
+            // 시작 시각이 가까운 일정은 시간 순서대로 아래 줄에(나란히 좁히지 않는다) — 각 일정은 칸 전체 폭
+            const placed: { it: Item; top: number }[] = [];
+            let bottom = -Infinity;
             for (const it of items) {
-              const top = topOf(it.minute as number);
-              if (cluster.length && top - cluster[0].top >= ITEM_H + 2) flush();
-              cluster.push({ it, top, col: 0, cols: 1 });
+              const top = Math.max(topOf(it.minute as number), bottom + 2);
+              placed.push({ it, top });
+              bottom = top + ITEM_H;
             }
-            flush();
             return (
               <div key={c} className="relative border-l border-[var(--lu-grid)]" style={{ height: totalH }}>
                 {axis.map((a) => (
                   <div key={`${a.h}:${a.top}`} aria-hidden className={cx("absolute inset-x-0 border-t", a.h === null ? "border-dashed border-[var(--lu-line)] bg-[#fafbfc]" : "border-[var(--lu-grid)]")} style={{ top: a.top, height: a.h === null ? GAP_H : undefined }} />
                 ))}
-                {placed.map(({ it, top, col, cols: n }) => (
-                  <div key={it.key} className="absolute px-[2px]" style={{ top: top + 1, left: `${(col / n) * 100}%`, width: `${100 / n}%` }}>
+                {placed.map(({ it, top }) => (
+                  <div key={it.key} className="absolute inset-x-0 px-[2px]" style={{ top: top + 1 }}>
                     {it.type === "own" ? <OwnItem bar={it.bar} day={it.day} selected={selectedRunId === it.bar.runId} onSelect={onSelect} multiOutlet={multiOutlet} week /> : it.type === "mark" ? <MarkItem m={it.mark} selected={selectedRunId === it.mark.runId} onSelect={onSelect} /> : null}
                   </div>
                 ))}
