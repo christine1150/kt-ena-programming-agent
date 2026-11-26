@@ -73,7 +73,7 @@ function OwnItem({ bar, day, selected, onSelect, multiOutlet, week = false }: { 
         {tag === "첫방" && <Icon name="start" size={11} className="opacity-90" />}
         {tag === "종영" && <Icon name="end" size={11} className="opacity-90" />}
         <span className="min-w-0 flex-1 truncate">{title}</span>
-        <span className="shrink-0 text-[10.5px] font-semibold opacity-90">{tag}</span>
+        <span className={cx("shrink-0 font-semibold opacity-90", (tag === "첫방" || tag === "종영") && bar.time ? "lu-num text-[11px]" : "text-[10.5px]")}>{(tag === "첫방" || tag === "종영") && bar.time ? bar.time : tag}</span>
       </button>
     );
   }
@@ -119,7 +119,7 @@ function MarkItem({ m, selected, onSelect }: { m: CalMark; selected: boolean; on
   const c = GENRE_FILL[g];
   const planned = m.status && m.status !== "confirmed";
   const title = m.shortTitle && textWidth(m.title, 12) > 104 ? m.shortTitle : m.title;
-  if (m.kind === "end") return <EndItem title={title} outlet={m.outletName} genre={g} onClick={() => onSelect(m.runId)} selected={selected} tip={`${m.outletName} ${m.title} ${MARK_TAG.end(m)}`} approx={m.approx} />;
+  if (m.kind === "end") return <EndItem title={title} outlet={m.outletName} genre={g} onClick={() => onSelect(m.runId)} selected={selected} tip={`${m.outletName} ${m.title} ${MARK_TAG.end(m)}`} approx={m.approx} time={m.minute != null ? clockLabel(m.minute) : ""} />;
   return (
     <button type="button" onClick={() => onSelect(m.runId)} title={`${m.outletName} ${m.title} ${MARK_TAG[m.kind](m)}${planned ? " (예정)" : ""}`} aria-label={`${m.outletName} ${m.title} ${MARK_TAG[m.kind](m)}${planned ? " 예정" : ""}`}
       className={cx("flex w-full min-w-0 items-center gap-1 rounded-[3px] bg-white pr-1.5 text-left text-[12px]", ring)}
@@ -128,14 +128,14 @@ function MarkItem({ m, selected, onSelect }: { m: CalMark; selected: boolean; on
       {m.kind === "open" && m.ott && <span className="shrink-0" style={{ color: g === "business" ? UI.cyanOutlineAssist : c }}><Icon name="diamond" size={9} /></span>}
       <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{m.outletName}</span>
       <span className="min-w-0 flex-1 truncate font-semibold text-[var(--lu-text)]">{title}</span>
-      <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{MARK_TAG[m.kind](m)}</span>
+      <span className={cx("shrink-0 font-semibold text-[var(--lu-text-2)]", m.kind === "first" && m.minute != null ? "lu-num text-[11px]" : "text-[10.5px]")}>{m.kind === "first" && m.minute != null ? clockLabel(m.minute) : MARK_TAG[m.kind](m)}</span>
     </button>
   );
 }
 
 /** 종영 — 흰 바탕 + 장르색 가는 실선 테두리 + 종료 아이콘, 제목은 장르색 글자. 2차 개선(§7.1): 예정의 점선과 같은 모양을 쓰지 않는다(첫 지시의 점선에서 바꿈).
  *  밝은 시안(사업형)은 흰 바탕 대비가 낮아 테두리는 보조 회색, 제목은 어두운 글씨. */
-function EndItem({ title, outlet, genre, onClick, selected, tip, approx = false }: { title: string; outlet: string; genre: Genre; onClick: () => void; selected: boolean; tip: string; approx?: boolean }) {
+function EndItem({ title, outlet, genre, onClick, selected, tip, approx = false, time = "" }: { title: string; outlet: string; genre: Genre; onClick: () => void; selected: boolean; tip: string; approx?: boolean; time?: string }) {
   const c = GENRE_FILL[genre];
   return (
     <button type="button" onClick={onClick} title={tip} aria-label={`${outlet} ${title} 종영`}
@@ -144,7 +144,7 @@ function EndItem({ title, outlet, genre, onClick, selected, tip, approx = false 
       <Icon name="end" size={11} className="text-[var(--lu-text-2)]" />
       {outlet && <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{outlet}</span>}
       <span className="min-w-0 flex-1 truncate font-semibold" style={{ color: genre === "business" ? UI.text : c }}>{title}</span>
-      <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{approx ? "종영≈" : "종영"}</span>
+      <span className={cx("shrink-0 font-semibold text-[var(--lu-text-2)]", time ? "lu-num text-[11px]" : "text-[10.5px]")}>{time ? `${approx ? "≈" : ""}${time}` : approx ? "종영≈" : "종영"}</span>
     </button>
   );
 }
@@ -195,7 +195,7 @@ export function CalLegend({ vertical = false }: { vertical?: boolean }) {
   const chip = (style: React.CSSProperties) => <span aria-hidden className="inline-block h-3 w-5 rounded-[2px] align-middle" style={style} />;
   return (
     <ul className={vertical ? "grid grid-cols-1 gap-y-1.5 text-[12px] text-[var(--lu-text-2)]" : "flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12px] text-[var(--lu-text-2)]"} aria-label="캘린더 범례">
-      <li className="flex items-center gap-1.5">{chip({ background: GENRE_FILL.drama })}KT ENA 첫방·종영·특집</li>
+      <li className="flex items-center gap-1.5">{chip({ background: GENRE_FILL.drama })}KT ENA 첫방·종영·특집(|→ 첫방 · →| 종영, 오른쪽은 방송 시각)</li>
       <li className="flex items-center gap-1.5"><span aria-hidden className="size-1.5 rounded-full bg-[var(--lu-text-2)]" />KT ENA 방송 회차</li>
       <li className="flex items-center gap-1.5">{chip({ background: "#fff", border: `1px solid ${UI.grid}`, borderLeft: `3px solid ${GENRE_FILL.variety}` })}경쟁사·OTT 첫방·공개·종영</li>
       <li className="flex items-center gap-1.5">{chip({ background: "#fff", border: `1px solid ${GENRE_FILL.drama}` })}<span style={{ color: GENRE_FILL.drama }} className="font-semibold">→| 종영</span>(실선 + 장르색 제목)</li>
