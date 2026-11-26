@@ -297,7 +297,7 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
     // 공개 시기를 모르는 작품(OTT '일정미정')은 날짜가 없어 위 조건에 안 걸린다 — 따로 읽어 '공개 시기 미정' 목록에 쓴다.
     all<RunRow>((a, b) => supabase.from("lineup_runs").select(RUN_COLS).is("archived_at", null).is("start_date", null).not("work_id", "is", null).order("id").range(a, b)),
     supabase.from("public_holidays").select("holiday_date, name").gte("holiday_date", from).lte("holiday_date", to).order("holiday_date"),
-    // 외부 이벤트 — 확장 열(마이그레이션 20261126120000, 승인 대기)이 있으면 함께 읽도록 '*'(없으면 기본 열만 온다)
+    // 외부 이벤트 — 확장 열(마이그레이션 20261126120000, 2026-11-26 운영 적용)이 있으면 함께 읽도록 '*'(없으면 기본 열만 온다)
     supabase.from("lineup_events").select("*").is("archived_at", null).lte("start_date", to).gte("end_date", from).order("start_date"),
     supabase.from("lineup_sources").select("id, source_kind, title, as_of, file_name, change_note, status, applied_at, applied_by, summary").eq("status", "applied").order("applied_at", { ascending: false }).limit(50),
     // 주요 콘텐츠 관리의 표시명(줄임말) — 실패해도 라인업은 그대로(줄임말만 빠진다)
@@ -536,7 +536,7 @@ export async function patchRun(runId: string, patch: RunPatch, actor: string) {
 
 // ── 외부 이벤트(2026-11-26 리디자인, docs/lineup/REDESIGN_2026-11.md §6) ──
 // 기본 열(name·event_kind·start_date·end_date·outlet_ids·note)은 기존 표 그대로 쓴다. 시각·정밀도·상태·중요도·출처 URL·확인일은
-// 확장 마이그레이션(docs/lineup/pending-migrations/20261126120000_lineup_events_extend.sql — 승인 대기, 운영 DB 미적용. 승인되면 supabase/migrations로 옮겨 적용) 뒤에만 저장된다.
+// 확장 마이그레이션(supabase/migrations/20261126120000_lineup_events_extend.sql — 2026-11-26 사용자 승인으로 운영 적용.) 열에 저장된다. 확장 열이 없는 DB에서는 기본 열만 저장한다.
 type EventRow = {
   id: string; name: string; event_kind: string; start_date: string; end_date: string; outlet_ids: string[] | null; note: string | null;
   updated_at?: string | null; updated_by?: string | null;

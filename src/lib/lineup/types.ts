@@ -175,7 +175,7 @@ export interface HolidayDto {
 }
 
 /** 외부 이벤트 유형(2026-11-26 리디자인). 기존 DB 제약이 받는 값은 sports·awards·election·anniversary·industry·other —
- *  movie·national·performance·special·internal은 확장 마이그레이션(20261126120000, 승인 대기) 뒤에 저장된다. 공휴일은 public_holidays(읽기 전용). */
+ *  movie·national·performance·special·internal은 확장 마이그레이션(20261126120000, 2026-11-26 운영 적용)으로 저장된다. 공휴일은 public_holidays(읽기 전용). */
 export type EventKind = "movie" | "election" | "national" | "sports" | "awards" | "performance" | "special" | "internal" | "anniversary" | "industry" | "other";
 export type EventPrecision = "day" | "month" | "quarter" | "half" | "year";
 

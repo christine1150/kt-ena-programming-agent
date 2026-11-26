@@ -1,7 +1,6 @@
--- 보관 위치: docs/lineup/pending-migrations(승인 전이라 supabase/migrations에 두지 않음 — 다른 작업의 db push로 함께 적용되지 않게). 승인되면 supabase/migrations/로 옮긴다.
--- 라인업 외부 이벤트 확장(2026-11-26 라인업 전면 리디자인, docs/lineup/REDESIGN_2026-11.md §6) — ⚠ 승인 대기: 운영 DB에 아직 적용하지 않았다.
+-- 라인업 외부 이벤트 확장(2026-11-26 라인업 전면 리디자인, docs/lineup/REDESIGN_2026-11.md §6) — 사용자 승인(2026-11-26) 후 적용.
 -- 하위 호환: 기존 열·행은 그대로 두고 열만 더한다(모두 기본값이 있어 기존 행이 그대로 유효). 유형 제약은 기존 값을 모두 포함하는 상위 집합으로 바꾼다.
--- 적용 전에도 화면·API는 동작한다(기본 열만 저장하고, 확장 항목은 '승인 후 저장'으로 안내).
+-- 적용 전에도 화면·API는 동작했다(기본 열만 저장). 적용 뒤에는 repo.eventsSchemaExtended()가 참이 되어 확장 항목도 저장한다.
 
 alter table lineup_events drop constraint if exists lineup_events_event_kind_check;
 alter table lineup_events add constraint lineup_events_event_kind_check
