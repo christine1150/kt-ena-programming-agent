@@ -4,7 +4,7 @@
 // 자료를 받고 글꼴이 준비되면 인쇄 창을 한 번 자동으로 연다(auto=0이면 열지 않음).
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LineupPayload } from "@/lib/lineup/types";
-import { buildCompareRows, buildOwnRows, buildUndated, conditionText, LAYOUT, queryRange, type LineupQuery } from "@/lib/lineup/viewModel";
+import { buildCompareRows, buildOwnRows, conditionText, LAYOUT, queryRange, type LineupQuery } from "@/lib/lineup/viewModel";
 import { buildCalendar, calendarFetchRange, calRangeOf, monthSegments, type CalLayer, type CalOwnShow } from "@/lib/lineup/calendar";
 import CalendarView, { CalFootnotes, CalLegend } from "../CalendarView";
 import LineupGrid from "../LineupGrid";
@@ -39,8 +39,11 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
   }, [from, to]);
 
   const { data, error, printedAt } = state;
-  const filters = useMemo(() => ({ channels: q.channels, genres: q.genres, dows: q.dows }), [q.channels, q.genres, q.dows]);
-  const grid = useMemo(() => (data && q.view !== "calendar" ? (q.view === "compare" ? buildCompareRows(data, filters) : buildOwnRows(data, filters)) : null), [data, q.view, filters]);
+  const filters = useMemo(() => ({ channels: q.channels, genres: q.genres, dows: q.dows, statuses: q.st, outlets: q.out }), [q.channels, q.genres, q.dows, q.st, q.out]);
+  const grid = useMemo(
+    () => (data && q.view !== "calendar" ? (q.view === "compare" ? buildCompareRows(data, filters, q.cmp) : buildOwnRows(data, filters, { showEmpty: q.empty })) : null),
+    [data, q.view, filters, q.cmp, q.empty]
+  );
   const calPages = useMemo(() => {
     if (!data || !cal) return [];
     const segs = monthSegments(cal.from, cal.to);
@@ -66,7 +69,7 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
   }, [data, autoPrint]);
 
   return (
-    <div className="bg-zinc-100 py-4 print:bg-white print:py-0">
+    <div className="lu bg-zinc-100 py-4 print:bg-white print:py-0">
       <style>{`@page { size: ${page.css}; margin: 8mm; } @media print { html, body { background: #fff !important; } }`}</style>
       <div className="mx-auto mb-3 flex items-center gap-2 print:hidden" style={{ width: page.width }}>
         <button type="button" onClick={() => window.print()} className="rounded bg-zinc-900 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-zinc-700">
@@ -112,21 +115,23 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
                   genres={q.genres}
                   printMode
                   title={`${p.ym.slice(0, 4)}년 ${Number(p.ym.slice(5))}월`}
+                  query={q.q}
                 />
                 <CalFootnotes model={p.model} />
               </section>
             ))}
+            {!q.hide.includes("ott") && <UndatedStrip data={data} filters={filters} selectedId={null} onSelect={() => {}} printMode />}
           </>
         )}
         {data && grid && (
           <>
             {q.view !== "list" && (
               <div className="mb-1.5">
-                <Legend full byOutlet={q.view === "compare"} />
+                <Legend full />
               </div>
             )}
             {q.view === "list" ? (
-              <ListView data={data} filters={filters} onSelect={() => {}} />
+              <ListView data={data} filters={{ ...filters }} onSelect={() => {}} />
             ) : grid.rows.length === 0 ? (
               <p className="py-10 text-center text-[13px] text-zinc-600">이 조건에 맞는 라인업이 없습니다.</p>
             ) : (
@@ -140,10 +145,13 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
                 onSelect={() => {}}
                 focusIds={null}
                 printMode
-                colorBy={q.view === "compare" ? "outlet" : "genre"}
+                view={q.view === "compare" ? "compare" : "own"}
+                months={q.len}
+                query={q.q}
+                showEvents={!q.hide.includes("event")}
               />
             )}
-            {q.view === "compare" && <UndatedStrip data={data} groups={buildUndated(data, filters)} selectedId={null} onSelect={() => {}} />}
+            {q.view !== "list" && <UndatedStrip data={data} filters={filters} selectedId={null} onSelect={() => {}} printMode />}
           </>
         )}
         <footer className="mt-2 border-t border-zinc-300 pt-1 text-[10px] text-zinc-600">

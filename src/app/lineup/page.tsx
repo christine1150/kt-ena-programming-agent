@@ -2,6 +2,7 @@
 // 주소 쿼리: view=own|compare|list, from=YYYY-MM, len=3|6|8|12, ch=ENA,ENA_PLAY, genre=drama,…, dow=1,2, density=comfy|compact, sel=<구간 id>.
 // 기본: 자사 라인업, 지난달부터 8개월. 저장(엑셀)·인쇄(PDF)는 화면의 '저장·인쇄'에서 조건을 골라 /lineup/print · /api/lineup/export로 연다.
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { kstToday } from "@/lib/workspace/dates";
 import { lastMonth, parseLineupQuery } from "@/lib/lineup/viewModel";
 import LineupView from "./LineupView";
@@ -15,6 +16,8 @@ export default async function LineupPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const defaultFrom = lastMonth(kstToday());
   const q = parseLineupQuery((k) => first(sp[k]), defaultFrom);
+  // 밀도는 주소에 없으면 이 브라우저에 기억한 값(쿠키, 2026-11-26 리디자인)
+  if (!first(sp.density) && (await cookies()).get("lineup_density")?.value === "compact") q.density = "compact";
   const sel = first(sp.sel);
   return <LineupView initial={{ ...q, sel: sel && /^[0-9a-f-]{36}$/.test(sel) ? sel : null }} defaultFrom={defaultFrom} />;
 }

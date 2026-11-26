@@ -8,10 +8,10 @@ import { hexTint } from "./brand";
 import { addCalendarSheets } from "./excelCalendar";
 import {
   addDaysIso, assignLanes, buildCompareRows, buildOwnRows, buildUndated, conditionText, dayIndex, episodeText, GENRE_HEX, GENRE_LABEL, kindLabel, periodText,
-  runGenre, runTitle, slotLabel, slotTime, STATUS_LABEL, workNote, type LineupQuery, type Row,
+  runGenre, runMatchesQuery, runTitle, slotLabel, slotTime, STATUS_LABEL, workNote, type LineupQuery, type Row,
 } from "./viewModel";
 
-// 화면 장르색(GENRE_HEX: 드라마 분홍·예능 남색·사업형 호박·기타 모래)과 그 옅은 음영(16%)을 엑셀 색으로.
+// 화면 장르색(GENRE_HEX: 2026-11-26 D+ — 드라마 #D91D60·예능 #4036E8·사업형 #00C8D2·교양 #676D79)과 그 옅은 음영(16%)을 엑셀 색으로.
 const xl = (hex: string) => ({ border: hex.replace("#", "").toUpperCase(), fill: hexTint(hex, 0.16) });
 const GENRE_XL = { drama: xl(GENRE_HEX.drama), variety: xl(GENRE_HEX.variety), business: xl(GENRE_HEX.business), other: xl(GENRE_HEX.other) };
 const GRAY = "8A8A93";
@@ -24,7 +24,8 @@ const solid = (hex: string): ExcelJS.Fill => ({ type: "pattern", pattern: "solid
 export async function buildLineupWorkbook(data: LineupPayload, q: LineupQuery, printedAt: string): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "KT ENA 편성 AI 에이전트";
-  const filters = { channels: q.channels, genres: q.genres, dows: q.dows };
+  // 상태·방송사/OTT 거르기와 비교 묶음(2026-11-26 리디자인)도 화면과 같게
+  const filters = { channels: q.channels, genres: q.genres, dows: q.dows, statuses: q.st, outlets: q.out };
   const channelNames = q.channels.map((c) => data.outlets.find((o) => o.code === c)?.name ?? c);
   const cond = conditionText(q, channelNames);
   const sources = [...new Map(data.sources.filter((s) => s.kind !== "manual").map((s) => [s.kind, s] as const)).values()];
@@ -38,14 +39,14 @@ export async function buildLineupWorkbook(data: LineupPayload, q: LineupQuery, p
     const own = buildOwnRows(data, filters);
     addGridSheet(wb, data, own.rows, own.runsBySlot, cond, sourceText, printedAt, false);
   } else {
-    const g = q.view === "compare" ? buildCompareRows(data, filters) : buildOwnRows(data, filters);
+    const g = q.view === "compare" ? buildCompareRows(data, filters, q.cmp) : buildOwnRows(data, filters, { showEmpty: q.empty });
     addGridSheet(wb, data, g.rows, g.runsBySlot, cond, sourceText, printedAt, q.view === "compare", q.view === "compare" ? buildUndated(data, filters) : []);
     addListSheet(wb, data, q, cond, sourceText, printedAt);
   }
   return wb.xlsx.writeBuffer() as Promise<ArrayBuffer>;
 }
 
-/** byOutlet: 경쟁 비교 — 막대 음영을 방송사 로고색으로(화면과 같다). */
+/** byOutlet: 경쟁 비교 — 자사는 장르색 채움, 경쟁사는 흰 바탕 + 장르색 테두리(2026-11-26 Style 2, 화면과 같다). */
 function addGridSheet(
   wb: ExcelJS.Workbook, data: LineupPayload, rows: Row[], runsBySlot: Map<string, RunDto[]>, cond: string, sourceText: string, printedAt: string, byOutlet: boolean,
   undated: { outlet: OutletDto; runs: RunDto[] }[] = []
@@ -80,7 +81,7 @@ function addGridSheet(
   ws.getCell(2, 1).font = { size: 10, color: { argb: argb("3F3F46") } };
   // 3행: 범례
   ws.mergeCells(3, 1, 3, lastCol);
-  ws.getCell(3, 1).value = (byOutlet ? "범례: 채움색 = 방송사 로고색" : "범례: 채움색 = 장르(드라마·예능·사업형·기타)") + " · 실선 = 확정 · 점선 = 예정/가안 · ≈ = 주 단위·추정 날짜 · ◆ = 단발·행사 · ● = 월 1회 · 빗금 = 휴방·결방 · 'N주 비어있음' = 계산된 빈 주(자사 드라마는 붉은 글자)";
+  ws.getCell(3, 1).value = (byOutlet ? "범례: 자사 = 장르색 채움 · 경쟁사·OTT = 흰 바탕 + 장르색 테두리" : "범례: 채움색 = 장르(드라마·예능·사업형·교양·기타)") + " · 실선 = 확정 · 점선 = 예정/가안 · ≈ = 주 단위·추정 날짜 · ◆ = 단발·행사 · ● = 월 1회 · 빗금 = 휴방·결방 · 'N주 비어있음' = 계산된 빈 주(자사 드라마는 붉은 글자)";
   ws.getCell(3, 1).font = { size: 9, color: { argb: argb("52525B") } };
 
   // 4~6행: 달 · 주(월요일) · 공휴일
@@ -154,8 +155,9 @@ function addGridSheet(
         const genre = runGenre(run, work, row.slot);
         const title = runTitle(run, work);
         const shape = run.draw.shape;
-        // 경쟁 비교는 방송사 로고색, KT ENA 보기는 장르색
-        const tone = byOutlet && row.outlet?.color ? xl(row.outlet.color) : GENRE_XL[genre];
+        // 2026-11-26 리디자인(Style 2): 자사 = 장르색 채움(예정은 옅은 바탕), 경쟁사·OTT = 흰 바탕 + 장르색 테두리
+        const tone = GENRE_XL[genre];
+        const ownRow = row.outlet?.side === "own";
         if (shape === "diamond" || shape === "dots") {
           const dates = (run.draw.dates ?? [run.draw.from]).filter((d) => d >= data.from && d <= data.to);
           dates.forEach((d, k) => {
@@ -185,20 +187,23 @@ function addGridSheet(
         const meta = [periodText(run), episodeText(run, work)].filter(Boolean).join(", ") + (shape === "bracket" && !/[년반기]/.test(periodText(run)) ? " (월 단위)" : "");
         const cast2 = (work?.cast ?? []).slice(0, 6).join(", ");
         const isBox = shape === "box";
+        const solidFill = ownRow && run.status === "confirmed" && !isBox && shape !== "bracket";
+        const fg = solidFill ? (genre === "business" ? "17181C" : "FFFFFF") : "18181B";
+        const fg2 = solidFill ? (genre === "business" ? "17181C" : "FFFFFF") : "3F3F46";
         const head = `${run.draw.from < data.from ? "◀ " : ""}${title}${run.needsReview ? " [확인]" : ""}`;
         c.value = {
           richText: [
-            { text: head, font: { size: 9, bold: true, color: { argb: argb("18181B") } } },
-            ...(meta ? [{ text: ` ${meta}`, font: { size: 8, color: { argb: argb("3F3F46") } } }] : []),
-            ...(cast2 ? [{ text: `\n${cast2}`, font: { size: 8, color: { argb: argb("3F3F46") } } }] : []),
+            { text: head, font: { size: 9, bold: true, color: { argb: argb(fg) } } },
+            ...(meta ? [{ text: ` ${meta}`, font: { size: 8, color: { argb: argb(fg2) } } }] : []),
+            ...(cast2 ? [{ text: `\n${cast2}`, font: { size: 8, color: { argb: argb(fg2) } } }] : []),
           ],
         };
         c.alignment = { vertical: "middle", wrapText: true, shrinkToFit: false };
-        c.font = { size: 9, bold: true, color: { argb: argb("18181B") } };
+        c.font = { size: 9, bold: true, color: { argb: argb(fg) } };
         if (isBox && run.runKind === "hiatus") c.fill = { type: "pattern", pattern: "lightUp", fgColor: { argb: argb("D4D4D8") }, bgColor: { argb: "FFFFFFFF" } };
         else if (isBox && run.runKind === "filler") c.fill = solid("F4F4F5");
         else if (isBox) c.fill = solid("FFFFFF");
-        else c.fill = solid(tone.fill);
+        else c.fill = solidFill ? solid(GENRE_HEX[genre]) : ownRow ? solid(tone.fill) : solid("FFFFFF");
         const dashed = run.status !== "confirmed" || run.runKind === "tbd" || shape === "bracket";
         const color = { argb: argb(isBox ? GRAY : tone.border) };
         const style: ExcelJS.BorderStyle = dashed ? "dashed" : "thin";
@@ -312,7 +317,11 @@ function addListSheet(wb: ExcelJS.Workbook, data: LineupPayload, q: LineupQuery,
       if (!s || !o) return false;
       if (o.side === "own" && q.channels.length > 0 && !q.channels.includes(o.code)) return false;
       if (q.dows.length > 0 && (o.ott || !s.days.some((d) => q.dows.includes(d)))) return false;
-      const g = runGenre(r, r.workId ? works.get(r.workId) : undefined, s);
+      if (o.side !== "own" && q.out?.length && !q.out.includes(o.code)) return false;
+      if (q.st?.length && r.workId && !q.st.includes(r.status)) return false;
+      const w = r.workId ? works.get(r.workId) : undefined;
+      if (q.q?.trim() && !runMatchesQuery(r, w, q.q)) return false;
+      const g = runGenre(r, w, s);
       return q.genres.length === 0 || q.genres.includes(g);
     })
     // 날짜가 없는 작품(OTT 공개 시기 미정)은 맨 뒤로

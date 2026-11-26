@@ -9,6 +9,7 @@ import { featuredShortMap, resolveShortTitle } from "./shortTitle";
 import { holdbackRuleFor } from "./holdbackRules";
 import { loadHoldbackMinutes } from "./holdbackMinutes";
 import type { CtxRun, PlanContext, UploadPlan } from "./plan";
+import type { EventInput } from "./events";
 import type {
   EventDto, GapDto, Genre, HolidayDto, LineupPayload, OutletDto, ParsedItem, ParsedLineup, RunDto, SlotDto, SourceDto, SourceKind, WorkDto,
 } from "./types";
@@ -284,7 +285,7 @@ const toSourceDto = (s: SourceRow): SourceDto => ({
 
 /** 화면용 — 기간 [from, to]와 겹치는 구간 + 그리기 값·맞대결·빈 주(서버 계산). */
 export async function loadLineup(from: string, to: string, today: string, canEdit: boolean): Promise<LineupPayload> {
-  const [outlets, slots, datedRuns, undatedRuns, holidays, events, sources, featuredRows] = await Promise.all([
+  const [outlets, slots, datedRuns, undatedRuns, holidays, events, sources, featuredRows, eventsExtended] = await Promise.all([
     loadOutlets(),
     all<SlotRow>((a, b) => supabase.from("lineup_slots").select("id, outlet_id, name, days, start_minute, time_note, compare_block, default_genre, sort_order").is("archived_at", null).order("sort_order").range(a, b)),
     all<RunRow>((a, b) =>
@@ -293,10 +294,12 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
     // 공개 시기를 모르는 작품(OTT '일정미정')은 날짜가 없어 위 조건에 안 걸린다 — 따로 읽어 '공개 시기 미정' 목록에 쓴다.
     all<RunRow>((a, b) => supabase.from("lineup_runs").select(RUN_COLS).is("archived_at", null).is("start_date", null).not("work_id", "is", null).order("id").range(a, b)),
     supabase.from("public_holidays").select("holiday_date, name").gte("holiday_date", from).lte("holiday_date", to).order("holiday_date"),
-    supabase.from("lineup_events").select("id, name, event_kind, start_date, end_date").is("archived_at", null).lte("start_date", to).gte("end_date", from),
+    // 외부 이벤트 — 확장 열(마이그레이션 20261126120000, 승인 대기)이 있으면 함께 읽도록 '*'(없으면 기본 열만 온다)
+    supabase.from("lineup_events").select("*").is("archived_at", null).lte("start_date", to).gte("end_date", from).order("start_date"),
     supabase.from("lineup_sources").select("id, source_kind, title, as_of, file_name, change_note, status, applied_at, applied_by, summary").eq("status", "applied").order("applied_at", { ascending: false }).limit(50),
     // 주요 콘텐츠 관리의 표시명(줄임말) — 실패해도 라인업은 그대로(줄임말만 빠진다)
     supabase.from("featured_content").select("display_name, programs(canonical_name)").not("display_name", "is", null),
+    eventsSchemaExtended(),
   ]);
   const featuredShort = featuredShortMap(
     ((featuredRows.data ?? []) as unknown as { display_name: string | null; programs: { canonical_name: string } | { canonical_name: string }[] | null }[]).flatMap((r) => {
@@ -388,11 +391,10 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
     ),
     runs: dtos,
     holidays: (((holidays as { data: { holiday_date: string; name: string }[] | null }).data ?? []) as { holiday_date: string; name: string }[]).map((h): HolidayDto => ({ date: h.holiday_date, name: h.name })),
-    events: (((events as { data: unknown[] | null }).data ?? []) as { id: string; name: string; event_kind: string; start_date: string; end_date: string }[]).map(
-      (e): EventDto => ({ id: e.id, name: e.name, kind: e.event_kind, startDate: e.start_date, endDate: e.end_date })
-    ),
+    events: (((events as { data: unknown[] | null }).data ?? []) as EventRow[]).map(toEventDto),
     sources: (((sources as { data: unknown[] | null }).data ?? []) as SourceRow[]).map(toSourceDto),
     gaps,
+    eventsExtended,
     holdbackMinutes: hb.minutes,
     holdbackEnds: hb.ends,
   };
@@ -494,4 +496,65 @@ export async function patchRun(runId: string, patch: RunPatch, actor: string) {
     }
   }
   return { ok: true };
+}
+
+// ── 외부 이벤트(2026-11-26 리디자인, docs/lineup/REDESIGN_2026-11.md §6) ──
+// 기본 열(name·event_kind·start_date·end_date·outlet_ids·note)은 기존 표 그대로 쓴다. 시각·정밀도·상태·중요도·출처 URL·확인일은
+// 확장 마이그레이션(docs/lineup/pending-migrations/20261126120000_lineup_events_extend.sql — 승인 대기, 운영 DB 미적용. 승인되면 supabase/migrations로 옮겨 적용) 뒤에만 저장된다.
+type EventRow = {
+  id: string; name: string; event_kind: string; start_date: string; end_date: string; outlet_ids: string[] | null; note: string | null;
+  updated_at?: string | null; updated_by?: string | null;
+  all_day?: boolean | null; start_time?: string | null; end_time?: string | null; date_precision?: string | null; status?: string | null; importance?: number | null;
+  work_ids?: string[] | null; source_url?: string | null; verified_at?: string | null; subtype?: string | null;
+};
+const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : null);
+function toEventDto(e: EventRow): EventDto {
+  return {
+    id: e.id, name: e.name, kind: e.event_kind, startDate: e.start_date, endDate: e.end_date, note: e.note, outletIds: e.outlet_ids ?? [], updatedAt: e.updated_at ?? null, updatedBy: e.updated_by ?? null,
+    allDay: e.all_day ?? true, startTime: hhmm(e.start_time), endTime: hhmm(e.end_time), precision: (e.date_precision as EventDto["precision"]) ?? "day",
+    status: (e.status as EventDto["status"]) ?? "confirmed", importance: e.importance ?? 2, workIds: e.work_ids ?? [], sourceUrl: e.source_url ?? null, verifiedAt: e.verified_at ?? null, subtype: e.subtype ?? null,
+  };
+}
+
+/** 확장 열이 DB에 있는지(마이그레이션 적용 여부) — 없으면 false. 실패해도 라인업 읽기는 계속한다. */
+export async function eventsSchemaExtended(): Promise<boolean> {
+  const { error } = await supabase.from("lineup_events").select("id, all_day, importance, source_url").limit(1);
+  return !error;
+}
+
+function eventFields(v: EventInput, extended: boolean, actor: string): Record<string, unknown> {
+  const base: Record<string, unknown> = { name: v.name, event_kind: v.kind, start_date: v.startDate, end_date: v.endDate, outlet_ids: v.outletIds.length ? v.outletIds : null, note: v.note, updated_by: actor };
+  if (!extended) return base;
+  return {
+    ...base, all_day: v.allDay, start_time: v.startTime, end_time: v.endTime, date_precision: v.precision, status: v.status, importance: v.importance, source_url: v.sourceUrl, verified_at: v.verifiedAt,
+  };
+}
+
+/** 외부 이벤트 등록 — 확장 전이면 기본 열만 저장하고, 저장하지 못한 항목을 알려 준다(조용히 버리지 않는다). */
+export async function createEvent(v: EventInput, actor: string): Promise<{ ok: true; id: string; dropped: string[] }> {
+  const extended = await eventsSchemaExtended();
+  const { data, error } = await supabase.from("lineup_events").insert(eventFields(v, extended, actor)).select("id").single();
+  if (error || !data) throw new Error(error?.message ?? "이벤트를 저장하지 못했습니다.");
+  return { ok: true, id: (data as { id: string }).id, dropped: extended ? [] : droppedFields(v) };
+}
+
+/** 외부 이벤트 수정·보관(archived) — 변경 이력은 DB 트리거(lineup_changes, entity='event')가 남긴다. */
+export async function patchEvent(id: string, v: EventInput | null, archived: boolean | undefined, actor: string): Promise<{ ok: true; dropped: string[] }> {
+  const extended = await eventsSchemaExtended();
+  const fields: Record<string, unknown> = v ? eventFields(v, extended, actor) : { updated_by: actor };
+  if (archived !== undefined) fields.archived_at = archived ? new Date().toISOString() : null;
+  const { error } = await supabase.from("lineup_events").update(fields).eq("id", id);
+  if (error) throw new Error(error.message);
+  return { ok: true, dropped: v && !extended ? droppedFields(v) : [] };
+}
+
+function droppedFields(v: EventInput): string[] {
+  const out: string[] = [];
+  if (!v.allDay) out.push("시각");
+  if (v.precision !== "day") out.push("날짜 정밀도");
+  if (v.status !== "confirmed") out.push("상태");
+  if (v.importance !== 2) out.push("중요도");
+  if (v.sourceUrl) out.push("출처 URL");
+  if (v.verifiedAt) out.push("확인일");
+  return out;
 }

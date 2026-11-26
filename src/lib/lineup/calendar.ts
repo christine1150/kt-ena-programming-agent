@@ -5,6 +5,7 @@ import { addDays, clockLabel, daysBetween, firstAirOnOrAfter, isoDow, lastAirOf,
 export { lastAirOf };
 import type { Genre, LineupPayload, RunDto, RunStatus, SlotDto, WorkDto } from "./types";
 import { holdbackMarks } from "./holdback";
+import { eventsBetween, laneEvents, placeLane, type LaneEvent } from "./events";
 import { buildUndated, dowLabel, episodeText, GENRE_HEX, isYearOnly, periodText, runGenre, runTitle, slotTime } from "./viewModel";
 
 export type CalLayer = "own" | "rival" | "ott" | "event";
@@ -55,6 +56,8 @@ export interface CalBar {
   status: RunStatus;
   days: CalBarDay[]; // 방송일 목록(날짜순)
   single: boolean; // 단발·행사·월 1회의 하루짜리 칸
+  minute: number | null; // 방송 시작(방송일 기준 분, 2026-11-26 주간 보기) — 모르면 null(임의 00:00 금지)
+  outletName: string;
 }
 
 export type MarkKind = "first" | "end" | "open" | "air" | "avail";
@@ -70,6 +73,9 @@ export interface CalMark {
   ott: boolean;
   approx: boolean;
   note?: string; // 방영 가능 시각(23:50~) 같은 덧붙임
+  genre?: Genre; // 경쟁사·OTT 아웃라인 색(2026-11-26)
+  minute?: number | null; // 방송 시작 분(모르면 null)
+  status?: RunStatus;
 }
 
 export interface CalDay {
@@ -78,7 +84,11 @@ export interface CalDay {
   holiday: string | null;
   events: string[];
   marks: CalMark[];
+  laneEvents: LaneEvent[]; // 이날 걸친 이벤트(공휴일 묶음 포함, 2026-11-26)
 }
+
+/** 주 안 종일 이벤트 띠(여러 날 이벤트는 실제 기간만큼 이어서) — col0~col1(0=월), row 0부터 */
+export interface CalBand { key: string; ev: LaneEvent; col0: number; col1: number; row: number; contFromPrev: boolean; contToNext: boolean }
 
 export interface CalStripItem { runId: string; outletName: string; color: string | null; title: string; ott: boolean }
 export interface CalWeek {
@@ -87,6 +97,9 @@ export interface CalWeek {
   bars: CalBar[];
   laneCount: number;
   strip: CalStripItem[];
+  bands: CalBand[];
+  bandRows: number;
+  bandOverflow: Record<string, number>; // 날짜 → 띠에 못 그린 이벤트 수(+N)
 }
 export interface CalMonthItem { runId: string; outletName: string; color: string | null; title: string; text: string; ott: boolean; own: boolean }
 export interface CalModel {
@@ -246,14 +259,14 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
         if (days.length === 0) continue;
         bars.push({
           key: r.id, runId: r.id, kind: "run", lane: 0, title, shortTitle: work?.shortTitle ?? null, meta: metaLine(r, slot, work, outletLabel), time: slotTime(slot), cast: castLine(work, genre),
-          genre, status: r.status, days, single: false,
+          genre, status: r.status, days, single: false, minute: slot.startMinute, outletName: outlet.name,
         });
       } else if ((draw.shape === "diamond" || draw.shape === "dots") && draw.dates) {
         for (const d of draw.dates) {
           if (!inRange(d)) continue;
           bars.push({
             key: `${r.id}:${d}`, runId: r.id, kind: "run", lane: 0, title, shortTitle: work?.shortTitle ?? null, meta: draw.shape === "dots" ? "월 1회" : periodText(r), time: slotTime(slot), cast: castLine(work, genre),
-            genre, status: r.status, days: [{ date: d, kind: "air", episode: "", last: false, opening: true }], single: true,
+            genre, status: r.status, days: [{ date: d, kind: "air", episode: "", last: false, opening: true }], single: true, minute: slot.startMinute, outletName: outlet.name,
           });
         }
       } else if (draw.shape === "bracket") {
@@ -269,7 +282,10 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
     const layer: CalLayer = outlet.ott ? "ott" : "rival";
     if (hide.has(layer)) continue;
     if (outlet.ott && isYearOnly(r)) continue; // 연도만 아는 작품은 달력 아래 목록으로
-    const base = { runId: r.id, outletName: outlet.name, color: outlet.ott ? GENRE_HEX[runGenre(r, work, slot)] : outlet.color, title, shortTitle: work?.shortTitle ?? null, ott: !!outlet.ott };
+    const base = {
+      runId: r.id, outletName: outlet.name, color: outlet.ott ? GENRE_HEX[runGenre(r, work, slot)] : outlet.color, title, shortTitle: work?.shortTitle ?? null, ott: !!outlet.ott,
+      genre, minute: outlet.ott ? null : slot.startMinute, status: r.status,
+    };
     if ((draw.shape === "diamond" || draw.shape === "dots") && draw.dates) {
       for (const d of draw.dates) pushMark({ ...base, key: `${r.id}:${d}`, date: d, kind: draw.shape === "dots" ? "air" : "open", approx: false });
     } else if (draw.shape === "bracket") {
@@ -306,7 +322,8 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
       }
       if (days.length === 0) continue;
       gapBars.push({
-        key: `gap:${g.slotId}:${g.from}`, runId: null, kind: "gap", lane: 0, title: `${g.weeks}주 비어있음`, shortTitle: null, meta: "", time: slotTime(slot), cast: "", genre: "drama", status: "planned", days, single: false,
+        key: `gap:${g.slotId}:${g.from}`, runId: null, kind: "gap", lane: 0, title: `${g.weeks}주 비어있음`, shortTitle: null, meta: `${dowLabel(slot.days)} ${slotTime(slot)} · ${g.from.slice(5).replace("-", ".")}–${g.to.slice(5).replace("-", ".")}`,
+        time: slotTime(slot), cast: "", genre: "drama", status: "planned", days, single: false, minute: slot.startMinute, outletName: outlet.name,
       });
     }
   }
@@ -317,6 +334,7 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
         key: h.key, date: h.date, kind: "avail", runId: h.runId, outletName: data.outlets.find((o) => o.code === q.can)?.name ?? q.can, color: null,
         title: [h.title, h.episode].filter(Boolean).join(" "), shortTitle: h.shortTitle ? [h.shortTitle, h.episode].filter(Boolean).join(" ") : null, ott: false, approx: h.time === null,
         note: h.time ? `${h.time}~` : "ENA 종료 후",
+        minute: h.time ? Number(h.time.slice(0, 2)) * 60 + Number(h.time.slice(3, 5)) : null,
       });
     }
   }
@@ -334,9 +352,11 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
   }
 
   const holidays = new Map(data.holidays.map((h) => [h.date, h.name]));
+  const lane = hide.has("event") ? [] : laneEvents(data);
   const weeks: CalWeek[] = [];
   for (let start = mondayOf(q.from); start <= q.to; start = addDays(start, 7)) {
     const days: CalDay[] = [];
+    const weekEnd = addDays(start, 6);
     for (let i = 0; i < 7; i++) {
       const date = addDays(start, i);
       const marks = (marksByDate.get(date) ?? []).sort((a, b) => ORDER[a.kind] - ORDER[b.kind] || a.outletName.localeCompare(b.outletName, "ko"));
@@ -346,10 +366,24 @@ export function buildCalendar(data: LineupPayload, q: CalQuery): CalModel {
         holiday: hide.has("event") ? null : holidays.get(date) ?? null,
         events: hide.has("event") ? [] : data.events.filter((e) => e.startDate <= date && e.endDate >= date).map((e) => e.name),
         marks,
+        laneEvents: eventsBetween(lane, date, date),
       });
     }
+    // 종일 이벤트 띠 — 주 안에서 실제 기간만큼 이어 그린다(최대 2줄, 넘치면 날짜별 +N)
+    const inWeek = eventsBetween(lane, start, weekEnd).map((ev) => {
+      const col0 = daysBetween(start, ev.from < start ? start : ev.from);
+      const col1 = daysBetween(start, ev.to > weekEnd ? weekEnd : ev.to);
+      return { ev, leftPx: col0, widthPx: col1 - col0 + 0.5, col0, col1 };
+    });
+    const { placed, overflow } = placeLane(inWeek, 2, 0.5);
+    const bandOverflow: Record<string, number> = {};
+    for (const o of overflow) for (let c = o.col0; c <= o.col1; c++) bandOverflow[addDays(start, c)] = (bandOverflow[addDays(start, c)] ?? 0) + 1;
+    const bands: CalBand[] = placed.map((p) => ({ key: `${p.ev.key}:${start}`, ev: p.ev, col0: p.col0, col1: p.col1, row: p.row, contFromPrev: p.ev.from < start, contToNext: p.ev.to > weekEnd }));
     const wBars = all.filter((b) => barWeekDays(b, start).length > 0);
-    weeks.push({ start, days, bars: wBars, laneCount: wBars.reduce((m, b) => Math.max(m, b.lane), 0), strip: strips.get(start) ?? [] });
+    weeks.push({
+      start, days, bars: wBars, laneCount: wBars.reduce((m, b) => Math.max(m, b.lane), 0), strip: strips.get(start) ?? [],
+      bands, bandRows: bands.reduce((m, b) => Math.max(m, b.row + 1), 0), bandOverflow,
+    });
   }
 
   return {

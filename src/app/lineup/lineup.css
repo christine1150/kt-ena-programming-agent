@@ -1,0 +1,73 @@
+/* 라인업 디자인 토큰(2026-11-26 전면 리디자인, docs/lineup/REDESIGN_2026-11.md) — Vivid Accent × Monochrome Interface.
+   /lineup 화면(.lu 범위)에서만 쓴다 — 다른 메뉴의 색·글꼴에 영향을 주지 않는다.
+   값의 출처: 장르색 = D+ ENA Modern Pop(사용자 확정), 브랜드색 = ENA BI Design 4th Report(2022-03-16), 무채색 = 사용자 지시문 §4.
+   같은 값을 TS에서도 쓴다(src/lib/lineup/tokens.ts — 엑셀·인쇄·인라인 스타일). 둘을 함께 고친다. */
+.lu {
+  /* 무채색 인터페이스 */
+  --lu-canvas: #ffffff; /* 콘텐츠 배경·경쟁사 막대 */
+  --lu-page: #f7f8fa; /* 전체 배경 */
+  --lu-text: #17181c; /* 기본 글자(흰 바탕 17.9:1) */
+  --lu-text-2: #626770; /* 보조 글자(흰 바탕 5.7:1, #f7f8fa 바탕 5.4:1) */
+  --lu-line: #dadde2; /* 주요 구분선 */
+  --lu-grid: #edeff2; /* 보조 그리드 */
+  --lu-hover: #f2f3f5;
+  --lu-control: #8b9099; /* 입력칸·체크 상자 테두리(흰 바탕 3.2:1 — 비문자 UI 3:1 기준) */
+  /* 인터랙션 */
+  --lu-accent: #3c32e1; /* 브랜드 인터랙션(오늘선·선택·켜진 버튼 글자) */
+  --lu-accent-weak: #eeedfc; /* 켜진 버튼 바탕(글자 #3c32e1 대비 6.6:1) */
+  --lu-accent-line: #c9c6f6;
+  --lu-danger: #b42318; /* 오류·실제 충돌·빈 자리(흰 바탕 6.5:1) */
+  /* 장르(작품 성격) — 자사 막대 채움, 경쟁사 아웃라인 */
+  --lu-g-drama: #d91d60;
+  --lu-g-variety: #4036e8;
+  --lu-g-business: #00c8d2;
+  --lu-g-other: #676d79;
+  --lu-on-drama: #ffffff; /* 4.9:1 */
+  --lu-on-variety: #ffffff; /* 7.2:1 */
+  --lu-on-business: #17181c; /* 8.6:1 — 밝은 시안 위에는 어두운 글씨 */
+  --lu-on-other: #ffffff; /* 5.2:1 */
+  /* 채널 브랜드(로고 계열) — 장르와 별개 */
+  --lu-b-ena: #3c32e1;
+  --lu-b-drama: #ee2a30;
+  --lu-b-play: #00c8d2;
+  --lu-b-story: #7826dc;
+  color: var(--lu-text);
+}
+/* 페이지 바탕은 화면 뿌리에만(겹침 창·패널이 바탕을 덮어쓰지 않게) */
+.lu-page {
+  background: var(--lu-page);
+}
+
+/* 휴방·결방 빗금(흑백 인쇄에서도 구분) */
+.lu-hatch {
+  background-image: repeating-linear-gradient(135deg, #ffffff 0 4px, #e3e5e9 4px 6.5px);
+}
+/* 날짜 숫자는 고정폭 */
+.lu-num {
+  font-variant-numeric: tabular-nums;
+}
+/* 경쟁사 로고는 무채색 */
+.lu-mono-logo {
+  /* 흰 바탕 로고도 회색 상자가 되지 않게 곱하기 혼합 — 색 부분만 무채색으로 */
+  filter: grayscale(1) contrast(1.35);
+  mix-blend-mode: multiply;
+}
+/* 가로 스크롤바를 얇게 — 타임라인·목록 */
+.lu-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #c4c8cf transparent;
+}
+/* 키보드 초점 — 모든 조작부 공통 */
+.lu :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--lu-accent);
+  outline-offset: 1px;
+}
+@media print {
+  .lu-page {
+    background: #ffffff;
+  }
+  .lu * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

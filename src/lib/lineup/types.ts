@@ -170,12 +170,32 @@ export interface HolidayDto {
   name: string;
 }
 
+/** 외부 이벤트 유형(2026-11-26 리디자인). 기존 DB 제약이 받는 값은 sports·awards·election·anniversary·industry·other —
+ *  movie·national·performance·special·internal은 확장 마이그레이션(20261126120000, 승인 대기) 뒤에 저장된다. 공휴일은 public_holidays(읽기 전용). */
+export type EventKind = "movie" | "election" | "national" | "sports" | "awards" | "performance" | "special" | "internal" | "anniversary" | "industry" | "other";
+export type EventPrecision = "day" | "month" | "quarter" | "half" | "year";
+
 export interface EventDto {
   id: string;
   name: string;
   kind: string;
   startDate: string;
   endDate: string;
+  note?: string | null;
+  outletIds?: string[];
+  updatedAt?: string | null;
+  updatedBy?: string | null;
+  // ── 확장 항목(마이그레이션 승인 전에는 비어 있고 기본값으로 읽는다) ──
+  allDay?: boolean;
+  startTime?: string | null; // 'HH:MM'
+  endTime?: string | null;
+  precision?: EventPrecision;
+  status?: RunStatus;
+  importance?: number; // 1 낮음 · 2 보통 · 3 높음
+  workIds?: string[];
+  sourceUrl?: string | null;
+  verifiedAt?: string | null;
+  subtype?: string | null;
 }
 
 export interface LineupPayload {
@@ -192,6 +212,8 @@ export interface LineupPayload {
   events: EventDto[];
   sources: SourceDto[];
   gaps: GapDto[];
+  /** lineup_events 확장 열(시각·중요도·출처 URL 등)이 DB에 있는지 — 마이그레이션 승인 전에는 false(편집 창이 기본 항목만 저장). */
+  eventsExtended?: boolean;
   /** 홀드백 규칙이 있는 ENA 작품의 본방 방송 길이(분, 실제 방송 기록의 같은 자리 중간값). 없으면 키가 없다 — 홀드백 계산에만 쓴다. */
   holdbackMinutes?: Record<string, number>;
   /** 이미 방송된 회차의 실제 종료 분(방송일 0시 기준, 올림): { workId: { 방송일: 분 } } — 있으면 중간값 대신 이 값을 쓴다 */
