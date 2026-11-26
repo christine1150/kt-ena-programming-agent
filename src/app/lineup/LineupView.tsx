@@ -15,12 +15,12 @@ import UndatedStrip from "./UndatedStrip";
 import ListTable from "./ListTable";
 import EventEditor from "./EventEditor";
 import CalendarView, { CalLegend } from "./CalendarView";
-import { buildCalendar, CAL_MAX_DAYS, calendarFetchRange, clampRange, monthRangeOf, type CalLayer, type CalOwnShow } from "@/lib/lineup/calendar";
+import { buildCalendar, CAL_LAYERS, CAL_MAX_DAYS, CAL_OWN_SHOW, calendarFetchRange, clampRange, monthRangeOf, type CalLayer, type CalOwnShow } from "@/lib/lineup/calendar";
 import { addDays, isoDow } from "@/lib/lineup/dates";
 import { laneEvents, type LaneEvent, EVENT_KIND_LABEL, EVENT_KIND_ICON } from "@/lib/lineup/events";
 import { BRAND, GENRE_FILL, UI } from "@/lib/lineup/tokens";
 import {
-  buildCompareRows, buildOwnRows, COMPARE_MODES, dateDot, dateFull, dowLabel, GENRE_LABEL, LAYOUT, LENGTHS, lineupSearch, MAX_LEN, STATUS_LABEL,
+  addMonthsDate, buildCompareRows, buildOwnRows, COMPARE_MODES, dateDot, dateFull, dowLabel, GENRE_LABEL, LAYOUT, LENGTHS, lineupSearch, MAX_LEN, queryRange, STATUS_LABEL,
   type Filters, type LineupQuery, type ViewMode,
 } from "@/lib/lineup/viewModel";
 import { Btn, CheckList, Icon, Menu, MenuDivider, MenuLabel, OptionRow, Segmented, Tabs } from "./ui";
@@ -31,38 +31,19 @@ const GENRES: Genre[] = ["drama", "variety", "business", "other"];
 const DOWS = [1, 2, 3, 4, 5, 6, 7];
 const STALE_DAYS = 30;
 export const DENSITY_COOKIE = "lineup_density";
-const SOURCE_KIND_KO: Record<string, string> = { own_xlsx: "자사 라인업", industry_xlsx: "업계 드라마 종합본", outlet_xlsx: "방송사·OTT 라인업", standard_xlsx: "표준 양식", paste: "붙여넣기", manual: "직접 수정" };
+const SOURCE_KIND_KO: Record<string, string> = { own_xlsx: "KT ENA 라인업", industry_xlsx: "업계 드라마 종합본", outlet_xlsx: "방송사·OTT 라인업", standard_xlsx: "표준 양식", paste: "붙여넣기", manual: "직접 수정" };
 
-/** 캘린더 범위(주요 일정·자사 편성·경쟁 일정·OTT·전체) ↔ 기존 주소 값(show·hide). 인쇄·엑셀이 같은 값을 읽는다. */
-type CalScope = "key" | "own" | "rival" | "ott" | "all";
-const SCOPES: { key: CalScope; label: string; title: string; show: CalOwnShow[]; hide: CalLayer[] }[] = [
-  { key: "key", label: "주요 일정", title: "자사 첫방·종영·특집 + 경쟁 첫방·종영 + OTT 공개 + 외부 이벤트", show: ["first", "end"], hide: [] },
-  { key: "own", label: "자사 편성", title: "자사 전체 방송 회차", show: ["all"], hide: ["rival", "ott"] },
-  { key: "rival", label: "경쟁 일정", title: "경쟁 방송사 첫방·종영", show: [], hide: ["ott"] },
-  { key: "ott", label: "OTT", title: "OTT 공개일", show: [], hide: ["rival"] },
-  { key: "all", label: "전체 일정", title: "자사 전체 회차 + 경쟁 + OTT", show: ["all"], hide: [] },
-];
-function scopeOf(show: string[], hide: string[]): CalScope | null {
-  const h = hide.filter((x) => x !== "event").sort().join(",");
-  const s = [...show].sort().join(",");
-  return SCOPES.find((x) => [...x.show].sort().join(",") === s && [...x.hide].sort().join(",") === h)?.key ?? null;
-}
 
 const addMonths = (ym: string, n: number) => {
   const y = Number(ym.slice(0, 4));
   const m = Number(ym.slice(5, 7)) - 1 + n;
   return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
 };
-const monthEnd = (ym: string) => {
-  const y = Number(ym.slice(0, 4));
-  const m = Number(ym.slice(5, 7));
-  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
-};
 const monthsBetween = (a: string, b: string) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
 const daysSince = (d: string, today: string) => Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${d}T00:00:00Z`)) / 86400000);
 const mondayOf = (d: string) => addDays(d, 1 - isoDow(d));
 
-export default function LineupView({ initial, defaultFrom }: { initial: InitialState; defaultFrom: string }) {
+export default function LineupView({ initial, defaultFrom, defaultMonth }: { initial: InitialState; defaultFrom: string; defaultMonth: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const [st, setSt] = useState(initial);
@@ -79,8 +60,8 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
     }
     return st.dfrom && st.dto ? clampRange(st.dfrom, st.dto) : { ...monthRangeOf(st.month), clipped: false };
   }, [isWeek, st.dfrom, st.dto, st.month]);
-  const gridFrom = `${st.from}-01`;
-  const gridTo = monthEnd(addMonths(st.from, st.len - 1));
+  // 시작은 달(그달 1일) 또는 날짜(기본: 이번 주 월요일) — queryRange가 둘 다 처리
+  const { from: gridFrom, to: gridTo } = queryRange(st.from, st.len);
   const shownFrom = isCal ? calRange.from : gridFrom;
   const shownTo = isCal ? calRange.to : gridTo;
   const fetchRange = isCal ? calendarFetchRange(calRange.from, calRange.to) : { from: gridFrom, to: gridTo };
@@ -116,11 +97,11 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
 
   // 주소 동기화(공유 가능한 상태)
   useEffect(() => {
-    const q = new URLSearchParams(lineupSearch({ ...st, paper: undefined }, defaultFrom));
+    const q = new URLSearchParams(lineupSearch({ ...st, paper: undefined }, defaultFrom, defaultMonth));
     if (st.sel) q.set("sel", st.sel);
     const s = q.toString();
     router.replace(s ? `${pathname}?${s}` : pathname, { scroll: false });
-  }, [st, pathname, router, defaultFrom]);
+  }, [st, pathname, router, defaultFrom, defaultMonth]);
   const [saveOpen, setSaveOpen] = useState(false);
 
   // 인쇄 머리의 출력 시각 — 서버·브라우저 첫 그림이 같도록 인쇄할 때만 채운다.
@@ -158,7 +139,10 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
   }, [data]);
   const asOf = latest.reduce<string | null>((m, s) => (!m || s.asOf > m ? s.asOf : m), null);
   const showEvents = !st.hide.includes("event");
-  const scope = scopeOf(st.show, st.hide);
+  const calKinds = CAL_LAYERS.filter((l) => l.key !== "event" && !st.hide.includes(l.key));
+  const calKindsLabel = calKinds.length === 3 ? "전체" : calKinds.length === 0 ? "없음" : calKinds.map((l) => l.label).join("·");
+  const calShowLabel = st.show.length === 0 ? "없음" : CAL_OWN_SHOW.filter((o) => st.show.includes(o.key)).map((o) => o.label.replace("(KT ENA)", "").replace("·공개", "").replace("·단발", "")).join("·");
+  const panelOpen = !!(data && selected);
 
   // 적용된 조건(지울 수 있는 칩)
   const applied: { key: string; label: string; clear: () => void }[] = [];
@@ -176,30 +160,33 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
       : st.dfrom
         ? `${dateFull(calRange.from)} — ${dateDot(calRange.to)}`
         : `${st.month.slice(0, 4)}년 ${Number(st.month.slice(5))}월`
-    : `${st.from.replace("-", ".")} — ${addMonths(st.from, st.len - 1).replace("-", ".")}`;
+    : st.from.length === 7
+      ? `${st.from.replace("-", ".")} — ${addMonths(st.from, st.len - 1).replace("-", ".")}`
+      : `${dateFull(gridFrom)} — ${dateFull(gridTo)}`;
   const move = (dir: -1 | 1) => {
     setDay(null);
     if (isWeek) {
       const mon = addDays(calRange.from, dir * 7);
       set({ dfrom: mon, dto: addDays(mon, 6), month: mon.slice(0, 7) });
     } else if (isCal) set({ month: addMonths(st.dfrom ? calRange.from.slice(0, 7) : st.month, dir), dfrom: null, dto: null });
-    else set({ from: addMonths(st.from, dir) });
+    else set({ from: st.from.length === 7 ? addMonths(st.from, dir) : addMonthsDate(st.from, dir) });
   };
   const goToday = () => {
     setDay(null);
     const today = data?.today ?? new Date().toISOString().slice(0, 10);
     if (isWeek) set({ dfrom: mondayOf(today), dto: addDays(mondayOf(today), 6), month: today.slice(0, 7) });
-    else if (isCal) set({ month: addMonths(defaultFrom, 1), dfrom: null, dto: null });
+    else if (isCal) set({ month: defaultMonth, dfrom: null, dto: null });
     else set({ from: defaultFrom });
   };
-  const upcoming = useMemo(() => (data ? laneEvents(data).filter((e) => e.to >= shownFrom && e.from <= shownTo) : []), [data, shownFrom, shownTo]);
+  const upcoming = data ? laneEvents(data).filter((e) => e.to >= shownFrom && e.from <= shownTo) : [];
 
   // 화면 높이에서 전역 메뉴(44) + 머리 두 줄(약 86) + 여백·OTT 패널 머리를 뺀 만큼 — 타임라인이 첫 화면을 최대한 쓴다
   const timelineMax = "calc(100vh - 196px)";
 
   return (
     <div className="lu lu-page min-h-[calc(100vh-44px)] print:min-h-0">
-      <div className="mx-auto w-full max-w-[1920px] px-4 pt-2 pb-6 sm:px-6 print:max-w-none print:p-0">
+      {/* 상세 패널(오른쪽 400px)이 열리면 본문을 비켜 토·일 칸·막대가 가리지 않게(사용자 지시 2026-11-26) */}
+      <div className={`mx-auto w-full max-w-[1920px] px-4 pt-2 pb-6 sm:px-6 print:max-w-none print:p-0 ${panelOpen ? "min-[1024px]:mr-[400px] min-[1024px]:w-auto" : ""}`}>
         {/* 인쇄 머리 — 대외비 표시·출력 시각 */}
         <div className="mb-2 hidden items-baseline justify-between text-[12px] print:flex">
           <span className="font-bold">대외비 · KT ENA 라인업 ({shownFrom} ~ {shownTo})</span>
@@ -219,6 +206,12 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
             }}
           />
           <div className="ml-auto flex items-center gap-1 pb-1.5">
+            {/* 검색은 머리 줄에 — 둘째 줄(기간·필터)이 좁은 화면에서도 한 줄로 남게(사용자 요청: 상단 높이 축소) */}
+            <label className="mr-1 flex h-7 w-[170px] items-center gap-1.5 rounded-[6px] border border-[var(--lu-line)] bg-white px-2 focus-within:border-[var(--lu-accent)] min-[1500px]:w-[220px]">
+              <Icon name="search" size={13} className="text-[var(--lu-text-2)]" />
+              <input value={st.q} onChange={(e) => set({ q: e.target.value.slice(0, 60) })} placeholder="작품명 · 출연진 검색" aria-label="작품명·출연진 검색" className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-[var(--lu-text-2)]" />
+              {st.q && <button type="button" aria-label="검색어 지우기" onClick={() => set({ q: "" })} className="text-[var(--lu-text-2)] hover:text-[var(--lu-text)]"><Icon name="x" size={12} /></button>}
+            </label>
             <Menu size="sm" tone="ghost" label={asOf ? `자료 기준 ${dateDot(asOf)}` : "자료 기준"} align="right" width={340}>
               <MenuLabel>최근 반영한 자료(종류별 최신)</MenuLabel>
               {latest.length === 0 && <p className="px-2 py-1.5 text-[12.5px] text-[var(--lu-text-2)]">아직 올린 자료가 없습니다.</p>}
@@ -319,15 +312,15 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
               <Menu size="sm" label="직접 지정" active={!LENGTHS.includes(st.len)} width={280}>
                 <MenuLabel>시작 월 ~ 끝 월(최대 {MAX_LEN}개월)</MenuLabel>
                 <div className="flex items-center gap-1.5 px-2 pb-2">
-                  <input type="month" aria-label="시작 월" value={st.from} onChange={(e) => e.target.value && set({ from: e.target.value })} className="h-8 rounded-[6px] border border-[var(--lu-line)] px-1.5 text-[13px]" />
+                  <input type="month" aria-label="시작 월" value={st.from.slice(0, 7)} onChange={(e) => e.target.value && set({ from: e.target.value })} className="h-8 rounded-[6px] border border-[var(--lu-line)] px-1.5 text-[13px]" />
                   <span>~</span>
                   <input
                     type="month"
                     aria-label="끝 월"
-                    value={addMonths(st.from, st.len - 1)}
+                    value={addMonths(st.from.slice(0, 7), st.len - 1)}
                     onChange={(e) => {
                       if (!e.target.value) return;
-                      const n = monthsBetween(st.from, e.target.value) + 1;
+                      const n = monthsBetween(st.from.slice(0, 7), e.target.value) + 1;
                       set({ len: Math.max(1, Math.min(MAX_LEN, n)) });
                     }}
                     className="h-8 rounded-[6px] border border-[var(--lu-line)] px-1.5 text-[13px]"
@@ -416,21 +409,20 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
           )}
           {isCal && (
             <>
-              <Menu size="sm" label={<>범위 <b className="font-semibold">{SCOPES.find((x) => x.key === scope)?.label ?? "사용자 지정"}</b></>} title="캘린더 범위" width={300}>
-                {(close) =>
-                  SCOPES.map((x) => (
-                    <OptionRow
-                      key={x.key}
-                      radio
-                      checked={scope === x.key}
-                      onClick={() => {
-                        set({ show: [...x.show], hide: [...x.hide, ...(showEvents ? [] : ["event"])] });
-                        close();
-                      }}
-                      label={<span className="flex flex-col"><span>{x.label}</span><span className="text-[11.5px] text-[var(--lu-text-2)]">{x.title}</span></span>}
-                    />
-                  ))
-                }
+              {/* 구분(채널 종류)과 일정(종류)을 따로 고른다(사용자 지시 2026-11-26) */}
+              <Menu size="sm" label={<>구분 <b className="font-semibold">{calKindsLabel}</b></>} title="채널 구분" width={200}>
+                {CAL_LAYERS.filter((l) => l.key !== "event").map((l) => {
+                  const on = !st.hide.includes(l.key);
+                  return <OptionRow key={l.key} checked={on} onClick={() => set({ hide: on ? [...st.hide, l.key] : st.hide.filter((h) => h !== l.key) })} label={l.label} />;
+                })}
+              </Menu>
+              <Menu size="sm" label={<>일정 <b className="font-semibold">{calShowLabel}</b></>} title="일정 종류" width={220}>
+                {CAL_OWN_SHOW.map((o) => {
+                  const on = st.show.includes(o.key);
+                  return <OptionRow key={o.key} checked={on} onClick={() => set({ show: on ? st.show.filter((x) => x !== o.key) : [...st.show, o.key] })} label={o.label} />;
+                })}
+                <MenuDivider />
+                <p className="px-2 pb-1 text-[11.5px] leading-snug text-[var(--lu-text-2)]">첫방·종영·특집은 고른 구분(KT ENA·경쟁 채널·OTT) 모두에 적용됩니다. 전체 회차는 KT ENA 방송일만 있습니다.</p>
               </Menu>
               <Menu size="sm" label={st.can ? `방영 가능 · ${ownOutlets.find((o) => o.code === st.can)?.name ?? st.can}` : "방영 가능 일시"} active={!!st.can} width={250}>
                 <MenuLabel>ENA 방송 종료 + 채널별 홀드백 뒤 방영 가능 시점</MenuLabel>
@@ -447,11 +439,6 @@ export default function LineupView({ initial, defaultFrom }: { initial: InitialS
               조건 초기화 <span className="lu-num">{applied.length}</span>
             </button>
           )}
-          <label className="ml-auto flex h-7 w-[148px] items-center min-[1500px]:w-[220px] gap-1.5 rounded-[6px] border border-[var(--lu-line)] bg-white px-2 focus-within:border-[var(--lu-accent)]">
-            <Icon name="search" size={13} className="text-[var(--lu-text-2)]" />
-            <input value={st.q} onChange={(e) => set({ q: e.target.value.slice(0, 60) })} placeholder="작품명 · 출연진 검색" aria-label="작품명·출연진 검색" className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-[var(--lu-text-2)]" />
-            {st.q && <button type="button" aria-label="검색어 지우기" onClick={() => set({ q: "" })} className="text-[var(--lu-text-2)] hover:text-[var(--lu-text)]"><Icon name="x" size={12} /></button>}
-          </label>
         </div>
 
         <div className="mt-2.5">
@@ -559,7 +546,7 @@ export function TimelineLegend({ full = false, vertical = false }: { full?: bool
         <li key={g} className="flex items-center gap-1.5">{sw({ background: GENRE_FILL[g] })}{GENRE_LABEL[g]}</li>
       ))}
       {!vertical && <li aria-hidden className="h-3 w-px bg-[var(--lu-line)]" />}
-      <li className="flex items-center gap-1.5">{sw({ background: GENRE_FILL.variety })}자사</li>
+      <li className="flex items-center gap-1.5">{sw({ background: GENRE_FILL.variety })}KT ENA</li>
       <li className="flex items-center gap-1.5">{sw({ background: "#fff", border: `1px solid ${GENRE_FILL.variety}`, borderLeftWidth: 3 })}경쟁사·OTT</li>
       <li className="flex items-center gap-1.5">{sw({ background: "#fff", border: `1.5px dashed ${UI.text2}` })}예정</li>
       <li className="flex items-center gap-1.5">{sw({ border: `1px solid ${UI.line}`, backgroundImage: "repeating-linear-gradient(135deg,#fff 0 3px,#e3e5e9 3px 5px)" })}휴방·결방</li>

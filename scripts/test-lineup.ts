@@ -13,7 +13,7 @@ import { ottGenre, parseOttCadence, parseOttLineupXlsx, splitOttTitle } from "..
 import { holdbackMarks } from "../src/lib/lineup/holdback";
 import { holdbackRuleFor } from "../src/lib/lineup/holdbackRules";
 import { barWeekDays, buildCalendar, calendarFetchRange, clampRange, dayAirings } from "../src/lib/lineup/calendar";
-import { assignLanes, buildCompareRows, buildUndated, kindLabel, lineupSearch, ottBucket, parseLineupQuery, periodDot, periodText, relatedFor, runExtent, runMatchesQuery, slotLabel } from "../src/lib/lineup/viewModel";
+import { addMonthsDate, assignLanes, buildCompareRows, buildUndated, EPISODE_TABLE, episodeTable, kindLabel, lineupSearch, ottBucket, parseLineupQuery, periodDot, periodText, queryRange, relatedFor, runExtent, runMatchesQuery, slotLabel, weekStartOf } from "../src/lib/lineup/viewModel";
 import { BRAND, contrastRatio, GENRE_FILL, GENRE_ON, UI } from "../src/lib/lineup/tokens";
 import { laneEvents, mergeHolidays, parseEventInput, placeLane } from "../src/lib/lineup/events";
 import type { DrawSpan, LineupPayload, OutletDto, RunDto, SlotDto, WorkDto } from "../src/lib/lineup/types";
@@ -243,7 +243,7 @@ check("addDays", addDays("2026-12-31", 1) === "2027-01-01");
   const f = { channels: [], genres: [], dows: [] };
   const cmp = buildCompareRows(data, f);
   const labels = cmp.rows.map((r) => `${r.kind}:${r.label}${r.chip ? `|${r.chip}` : ""}`);
-  check("OTT 배치: 경쟁 비교 맨 아래에 OTT 묶음, 방송사는 요일 묶음에 그대로", labels.join(",") === "group:월화,slot:자사,slot:tvN|월화,group:OTT · 공개 일정,slot:가상플러스|OTT", labels);
+  check("OTT 배치: 경쟁 비교 맨 아래에 OTT 묶음, 방송사는 요일 묶음에 그대로", labels.join(",") === "group:월화,slot:KT ENA,slot:tvN|월화,group:OTT · 공개 일정,slot:가상플러스|OTT", labels);
   check("OTT 배치: 요일을 고르면 OTT 묶음은 빠짐", !buildCompareRows(data, { ...f, dows: [1] }).rows.some((r) => r.key === "b:ott"));
   const und = buildUndated(data, f);
   check("OTT 배치: 날짜 없는 작품은 플랫폼별 '공개 시기 미정' 목록", und.length === 1 && und[0].outlet.code === "OTT_FAKE" && und[0].runs[0].id === "r3" && buildUndated(data, { ...f, dows: [1] }).length === 0);
@@ -368,6 +368,24 @@ check("addDays", addDays("2026-12-31", 1) === "2027-01-01");
   const evData = { ...data, holidays: [{ date: "2027-02-06", name: "설날 연휴" }, { date: "2027-02-07", name: "설날" }, { date: "2027-02-08", name: "설날 연휴" }, { date: "2027-02-09", name: "대체공휴일" }], events: [{ id: "e1", name: "가상 시상식", kind: "awards", startDate: "2027-02-05", endDate: "2027-02-05" }] } as LineupPayload;
   const lane = laneEvents(evData);
   check("이벤트: 이어지는 설 공휴일 4일 → 설 연휴 한 구간(2/6~2/9), 등록 이벤트는 따로", lane.length === 2 && lane[1].title === "설 연휴" && lane[1].from === "2027-02-06" && lane[1].to === "2027-02-09" && lane[0].kind === "awards", lane.map((e) => [e.title, e.from, e.to]));
+  // 일정 종류(2026-11-26): 첫방만 고르면 종영·특집이 빠지고, 특집을 고르면 월 1회·단발이 나온다
+  const onlyFirst = buildCalendar(data, { ...jan, channels: [], genres: [], hide: [], show: ["first"] });
+  const allMarks = (m: ReturnType<typeof buildCalendar>) => m.weeks.flatMap((w) => w.days.flatMap((d) => d.marks));
+  check("일정 종류: 첫방만 — 경쟁 첫방·OTT 공개는 있고 종영·자사 월 1회는 없음", allMarks(onlyFirst).some((m) => m.runId === "c2" && m.kind === "first") && allMarks(onlyFirst).some((m) => m.runId === "c4") && !allMarks(onlyFirst).some((m) => m.kind === "end") && !onlyFirst.weeks.flatMap((w) => w.bars).some((b) => b.runId === "c7"));
+  const onlySpecial = buildCalendar(data, { ...jan, channels: [], genres: [], hide: [], show: ["special"] });
+  check("일정 종류: 특집만 — 자사 월 1회는 있고 경쟁 첫방은 없음", onlySpecial.weeks.flatMap((w) => w.bars).some((b) => b.runId === "c7") && !allMarks(onlySpecial).some((m) => m.runId === "c2"));
+  // 회차 별도(재방·재편집이 섞인 편성): 메모의 '회차 편성표:' 줄을 날짜별 회차로, 첫방·종영 표시 없음
+  const tblRun = { ...runs[0], id: "c9", recurrence: EPISODE_TABLE, note: "회차 편성표: 1/4 17회 · 1/5 스페셜 2 · 1/11 16회\n설명 줄 1/12 무시" } as RunDto;
+  const tbl = episodeTable(tblRun);
+  check("회차 별도: 편성표 줄만 읽고 연도는 기간 안에서", tbl?.get("2027-01-04") === "17회" && tbl?.get("2027-01-05") === "스페셜 2" && tbl?.size === 3, tbl && [...tbl.entries()]);
+  const tblCal = buildCalendar({ ...data, runs: [tblRun] } as LineupPayload, { ...jan, channels: [], genres: [], hide: [] });
+  const tblDays = tblCal.weeks.flatMap((w) => w.bars).filter((b) => b.runId === "c9").flatMap((b) => b.days);
+  check("회차 별도: 캘린더 회차 = 편성표, 첫방·종영 표시 없음, 편성표에 없는 날은 빈 회차", tblDays[0]?.episode === "17회" && tblDays[1]?.episode === "스페셜 2" && tblDays.every((d) => d.kind === "air" && !d.last) && tblDays.some((d) => d.episode === ""), tblDays.slice(0, 4));
+  // 이어지는 편성(장수 예능 자료 구간 경계): 중간 회차부터 시작하면 첫방 아님, 같은 자리 뒤 구간이 있으면 종영 아님
+  const contA = { ...runs[0], id: "c10", episodeFrom: 161 } as RunDto;
+  const contB = { ...runs[0], id: "c11", startDate: "2027-02-22", endDate: null, endPrecision: "open" } as RunDto;
+  const contDays = buildCalendar({ ...data, runs: [contA, contB] } as LineupPayload, { from: "2027-01-01", to: "2027-02-28", channels: [], genres: [], hide: [] }).weeks.flatMap((w) => w.bars).filter((b) => b.runId === "c10").flatMap((b) => b.days);
+  check("이어지는 편성: 중간 회차 시작은 첫방 아님 · 같은 자리 뒤 구간이 있으면 종영 아님", contDays.length > 0 && contDays.every((d) => d.kind === "air" && !d.last), contDays.slice(0, 2));
   const febEv = buildCalendar(evData, { from: "2027-02-01", to: "2027-02-28", channels: [], genres: [], hide: [] });
   const bands = febEv.weeks.flatMap((w) => w.bands).filter((b) => b.ev.title === "설 연휴");
   check("캘린더 종일 띠: 주를 넘는 연휴는 두 주에 이어 그림(앞 주 끝 이어짐·다음 주 이어받음)", bands.length === 2 && bands[0].contToNext && bands[0].col0 === 5 && bands[0].col1 === 6 && bands[1].contFromPrev && bands[1].col0 === 0 && bands[1].col1 === 1, bands.map((b) => [b.col0, b.col1, b.contFromPrev, b.contToNext]));
@@ -406,7 +424,12 @@ check("토큰: 보조 글자 대비(흰 바탕·페이지 바탕 4.5:1 이상), 
   const back = new URLSearchParams(lineupSearch(q, "2026-10"));
   check("주소: 새 조건(상태·방송사·검색·비교 묶음·직접 지정 길이) 읽고 다시 씀", q.len === 5 && q.st.join() === "planned" && q.out.join() === "TVN,SBS" && q.cmp === "time" && q.empty && back.get("cmp") === "time" && back.get("st") === "planned" && back.get("len") === "5" && back.get("q") === "가상", Object.fromEntries(back));
   const cal = parseLineupQuery((k) => ({ view: "calendar" } as Record<string, string>)[k], "2026-10");
-  check("주소: 캘린더 기본 = 주요 일정(자사 첫방·종영), 기본값은 주소에서 뺌", cal.show.join() === "first,end" && !new URLSearchParams(lineupSearch(cal, "2026-10")).has("show") && parseLineupQuery((k) => ({ view: "calendar", show: "all" } as Record<string, string>)[k], "2026-10").show.join() === "all");
+  check("주소: 캘린더 기본 = 첫방·종영 + KT ENA 전체 회차, 기본값은 주소에서 뺌, 특집 키 읽음", cal.show.join() === "first,end,all" && !new URLSearchParams(lineupSearch(cal, "2026-10")).has("show") && parseLineupQuery((k) => ({ view: "calendar", show: "first,special" } as Record<string, string>)[k], "2026-10").show.join() === "first,special");
+  // 기본 시작 = 오늘이 든 주의 월요일(2026-11-26 사용자 요청)
+  check("기본 시작: 2026-11-26(목) → 그 주 월요일 11/23, 일요일 11/29도 11/23", weekStartOf("2026-11-26") === "2026-11-23" && weekStartOf("2026-11-29") === "2026-11-23" && weekStartOf("2026-11-30") === "2026-11-30");
+  const wq = parseLineupQuery(() => undefined, "2026-11-23", "2026-11");
+  check("기본 시작: 날짜 시작 8개월 = 11/23 ~ 다음 해 7/22, 캘린더 기본 달 = 이번 달", wq.from === "2026-11-23" && queryRange(wq.from, wq.len).to === "2027-07-22" && wq.month === "2026-11" && !new URLSearchParams(lineupSearch(wq, "2026-11-23", "2026-11")).has("from"), queryRange(wq.from, wq.len));
+  check("기간: 옛 달 시작(2026-10, 8개월)은 그대로 10/1~5/31, 말일 넘침은 그달 말일로", queryRange("2026-10", 8).to === "2027-05-31" && addMonthsDate("2027-01-31", 1) === "2027-02-28");
 }
 
 if (failed > 0) {

@@ -144,6 +144,34 @@ export function runMatchesQuery(run: RunDto, work: WorkDto | undefined, q: strin
   return hay.some((h) => h.includes(k));
 }
 
+/**
+ * 회차를 첫방부터 세지 않는 연속 편성(재방·재편집이 섞인 트렌드 다큐 도시락, 회차를 모르는 장수 예능의 이어지는 편성 등, 2026-11-26).
+ * recurrence가 이 값이면 첫방부터 회차를 세지 않고, 메모의 '회차 편성표: 11/01 17회 · 11/08 17회 · …' 줄을 날짜별 회차로 읽는다.
+ * 첫방·종영 표시도 하지 않는다(자료가 시작된 날일 뿐 작품의 첫방이 아니다).
+ */
+export const EPISODE_TABLE = "회차 별도";
+export function episodeTable(run: RunDto): Map<string, string> | null {
+  if (run.recurrence !== EPISODE_TABLE || !run.startDate) return null;
+  const out = new Map<string, string>();
+  const line = (run.note ?? "").split("\n").find((l) => l.startsWith("회차 편성표:"));
+  if (!line) return out;
+  const y0 = Number(run.startDate.slice(0, 4));
+  const to = run.endDate ?? run.draw?.to ?? `${y0 + 1}-12-31`;
+  for (const part of line.slice("회차 편성표:".length).split("·")) {
+    const m = part.trim().match(/^(\d{1,2})\/(\d{1,2})\s+(.+)$/);
+    if (!m) continue;
+    const md = `${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+    for (const y of [y0, y0 + 1]) {
+      const d = `${y}-${md}`;
+      if (d >= run.startDate && d <= to) {
+        out.set(d, m[3].trim());
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 /** OTT 공개 시기 정밀도(공개 예정 패널 묶음) — 원문을 그대로 두고 단위만 가른다. 날짜를 지어내지 않는다. */
 export type OttBucket = "year" | "half" | "quarter" | "month" | "day" | "none";
 export const OTT_BUCKET_LABEL: Record<OttBucket, string> = { year: "연도 단위", half: "반기 단위", quarter: "분기 단위", month: "월 단위", day: "공개일 확정", none: "미정" };
@@ -327,7 +355,7 @@ export function buildCompareRows(data: LineupPayload, f: Filters, mode: CompareM
     rows.push({ key, kind: "group", label: g.label, count });
     if (g.own.length === 0 && mode === "dow") {
       const o = data.outlets.find((x) => x.code === ownCodes[0]);
-      rows.push({ key: `e:${key}`, kind: "slot", label: o?.name ?? "자사", sublabel: "-", outlet: o, emphasis: true, empty: true, color: o?.color ?? null });
+      rows.push({ key: `e:${key}`, kind: "slot", label: o?.name ?? "KT ENA", sublabel: "-", outlet: o, emphasis: true, empty: true, color: o?.color ?? null });
     }
     for (const s of g.own) {
       const o = outlets.get(s.outletId);
@@ -477,8 +505,11 @@ const STATUS_SET = new Set(["confirmed", "planned", "tentative"]);
 const GENRE_SET = new Set(["drama", "variety", "business", "other"]);
 const listOf = (v: string | null | undefined) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 
-/** 주소 쿼리 → 보기 조건. 잘못된 값은 기본값으로(기본: KT ENA, 지난달부터 8개월, 장르 전체, 밀도 넉넉). */
-export function parseLineupQuery(get: (k: string) => string | null | undefined, defaultFrom: string): LineupQuery {
+/**
+ * 주소 쿼리 → 보기 조건. 잘못된 값은 기본값으로(기본: KT ENA, 오늘이 든 주의 월요일부터 8개월, 장르 전체, 밀도 넉넉).
+ * defaultFrom: 'YYYY-MM-DD'(이번 주 월요일, 2026-11-26~) 또는 옛 방식 'YYYY-MM'(지난달). defaultMonth: 캘린더 기본 달(이번 달).
+ */
+export function parseLineupQuery(get: (k: string) => string | null | undefined, defaultFrom: string, defaultMonth?: string): LineupQuery {
   const viewQ = get("view");
   const view: ViewMode = viewQ === "compare" || viewQ === "list" || viewQ === "calendar" ? viewQ : "own";
   const showRaw = get("show");
@@ -491,7 +522,8 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
   const cmpQ = get("cmp");
   return {
     view,
-    from: fromQ && /^\d{4}-\d{2}$/.test(fromQ) ? fromQ : defaultFrom,
+    // 시작: 달('YYYY-MM' — 그달 1일) 또는 날짜('YYYY-MM-DD' — 오늘 기준 주 시작 등)
+    from: fromQ && (/^\d{4}-(0[1-9]|1[0-2])$/.test(fromQ) || isDay(fromQ)) ? fromQ : defaultFrom,
     // 3·6·8·12개월 + 직접 지정(1~24개월)
     len: Number.isInteger(lenQ) && lenQ >= 1 && lenQ <= MAX_LEN ? lenQ : 8,
     channels: listOf(get("ch")).map((c) => c.toUpperCase()).filter((c) => /^[A-Z_]{2,12}$/.test(c)),
@@ -500,14 +532,14 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
     dows: listOf(get("dow")).map(Number).filter((d) => d >= 1 && d <= 7),
     density: densityQ === "compact" ? "compact" : "comfy", // 기본 = 넉넉(모든 보기, 사용자 요청 2026-11-25)
     paper: get("paper") === "A3" ? "A3" : "A4",
-    // 캘린더 기본 월 = 이번 달(기본 시작 월 defaultFrom은 지난달)
-    month: isYm(get("month")) ? (get("month") as string) : addMonthsYm(defaultFrom, 1),
+    // 캘린더 기본 월 = 이번 달
+    month: isYm(get("month")) ? (get("month") as string) : defaultMonthOf(defaultFrom, defaultMonth),
     dfrom: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dfrom") as string) : null,
     dto: isDay(get("dfrom")) && isDay(get("dto")) ? (get("dto") as string) : null,
     hide: listOf(get("hide")).filter((h) => ["own", "rival", "ott", "event"].includes(h)),
     can: /^[A-Z_]{2,12}$/.test((get("can") ?? "").toUpperCase()) ? (get("can") as string).toUpperCase() : null,
-    // 캘린더 기본 = 주요 일정(자사 첫방·종영, 2026-11-26 리디자인). 전체 회차는 '자사 편성'·'전체 일정'에서.
-    show: showRaw === "none" ? [] : listOf(showRaw).filter((h) => ["first", "end", "all"].includes(h)).length > 0 ? listOf(showRaw).filter((h) => ["first", "end", "all"].includes(h)) : [...DEFAULT_SHOW],
+    // 캘린더 일정 종류(첫방·종영·특집·전체 회차) — 기본: 첫방·종영 + KT ENA 전체 회차(사용자 지시 2026-11-26)
+    show: showRaw === "none" ? [] : listOf(showRaw).filter((h) => SHOW_SET.has(h)).length > 0 ? listOf(showRaw).filter((h) => SHOW_SET.has(h)) : [...DEFAULT_SHOW],
     st: listOf(get("st")).filter((s) => STATUS_SET.has(s)) as RunStatus[],
     out: listOf(get("out")).map((c) => c.toUpperCase()).filter((c) => /^[A-Z0-9_]{2,16}$/.test(c)),
     q: (get("q") ?? "").slice(0, 60),
@@ -516,12 +548,18 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
     empty: get("empty") === "1",
   };
 }
-/** 캘린더 자사 방송일 기본 보기 — 주요 일정(첫방·종영). */
-export const DEFAULT_SHOW = ["first", "end"] as const;
+/** 캘린더 일정 종류 기본 — 첫방·종영(모든 채널) + KT ENA 전체 회차(사용자 지시 2026-11-26). 특집은 골라서. */
+export const DEFAULT_SHOW = ["first", "end", "all"] as const;
+const SHOW_SET = new Set(["first", "end", "special", "all"]);
+/** 캘린더 기본 달 — 명시값, 아니면 시작이 날짜면 그 달, 옛 방식(지난달 'YYYY-MM')이면 다음 달. */
+function defaultMonthOf(defaultFrom: string, defaultMonth?: string): string {
+  if (defaultMonth) return defaultMonth;
+  return defaultFrom.length === 7 ? addMonthsYm(defaultFrom, 1) : defaultFrom.slice(0, 7);
+}
 const isDefaultShow = (show: string[]) => show.length === DEFAULT_SHOW.length && DEFAULT_SHOW.every((x) => show.includes(x));
 
 /** 보기 조건 → 주소 쿼리 문자열(기본값은 뺀다). */
-export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string): string {
+export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string, defaultMonth?: string): string {
   const s = new URLSearchParams();
   if (q.view && q.view !== "own") s.set("view", q.view);
   if (q.from && q.from !== defaultFrom) s.set("from", q.from);
@@ -542,7 +580,7 @@ export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string): stri
     if (q.dfrom && q.dto) {
       s.set("dfrom", q.dfrom);
       s.set("dto", q.dto);
-    } else if (q.month && (!defaultFrom || q.month !== addMonthsYm(defaultFrom, 1))) s.set("month", q.month);
+    } else if (q.month && (!defaultFrom || q.month !== defaultMonthOf(defaultFrom, defaultMonth))) s.set("month", q.month);
     if (q.hide?.length) s.set("hide", q.hide.join(","));
     if (q.can) s.set("can", q.can);
     if (q.show && !isDefaultShow(q.show)) s.set("show", q.show.length ? q.show.join(",") : "none");
@@ -551,11 +589,27 @@ export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string): stri
   return s.toString();
 }
 
-/** 시작 월·길이 → 날짜 범위. */
+/** 시작·길이 → 날짜 범위. 시작이 달이면 그달 1일 ~ len개월 뒤 말일, 날짜면 그날 ~ len개월 뒤 전날. */
 export function queryRange(from: string, len: number): { from: string; to: string } {
   const y = Number(from.slice(0, 4));
   const m = Number(from.slice(5, 7)) - 1;
-  return { from: `${from}-01`, to: new Date(Date.UTC(y, m + len, 0)).toISOString().slice(0, 10) };
+  if (from.length === 7) return { from: `${from}-01`, to: new Date(Date.UTC(y, m + len, 0)).toISOString().slice(0, 10) };
+  return { from, to: addDaysIso(addMonthsDate(from, len), -1) };
+}
+
+/** 날짜를 n개월 옮긴다(말일 넘침은 그달 말일로). */
+export function addMonthsDate(d: string, n: number): string {
+  const y = Number(d.slice(0, 4));
+  const m = Number(d.slice(5, 7)) - 1 + n;
+  const day = Number(d.slice(8, 10));
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m, Math.min(day, last))).toISOString().slice(0, 10);
+}
+
+/** 오늘이 든 주의 월요일 — 타임라인 기본 시작(사용자 요청 2026-11-26: 오늘 기준 앞으로의 라인업이 오른쪽으로 보이게). */
+export function weekStartOf(today: string): string {
+  const dow = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7;
+  return addDaysIso(today, -dow);
 }
 
 /** 지난달(YYYY-MM) — 기본 시작 월. */
@@ -603,7 +657,8 @@ export function relatedFor(data: LineupPayload, run: RunDto): { rivals: RunDto[]
     if (taken.has(r.id) || !r.workId || !r.startDate) return false;
     const s = slots.get(r.slotId);
     const o = s ? outlets.get(s.outletId) : undefined;
-    return !!o && o.id !== myOutlet?.id;
+    // 자사 작품의 관련 목록은 경쟁사·OTT만(다른 KT ENA 채널 편성은 뺀다)
+    return !!o && o.id !== myOutlet?.id && !(myOutlet?.side === "own" && o.side === "own");
   });
   const outletOf = (r: RunDto) => outlets.get(slots.get(r.slotId)?.outletId ?? "");
   const endOf = (r: RunDto) => r.endDate ?? r.draw?.to ?? r.startDate ?? "";

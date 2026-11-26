@@ -105,6 +105,23 @@ export default function LineupGrid({
     }
     return out;
   }, [data.from, data.to]);
+  // 화면에 쓰는 달 이름 — 기간이 달 중간에서 시작해 첫 달 칸이 좁으면(예: 11/23~) 그 달 이름은 빼고, 연도 표시는 다음 달로 넘긴다
+  const monthLabels = useMemo(() => {
+    let pendingYear: string | null = null;
+    const out: { label: string; year: string | null; from: string }[] = [];
+    for (const m of monthCols) {
+      const w = ((pct(data.from, totalDays, addDaysIso(m.to, 1)) - pct(data.from, totalDays, m.from)) / 100) * tlWidth;
+      const year: string | null = m.year ?? pendingYear;
+      const need = textWidth(m.label, 13) + (year ? textWidth(year, 11) + 4 : 0) + 12;
+      if (w < need) {
+        pendingYear = year;
+        continue;
+      }
+      pendingYear = null;
+      out.push({ label: m.label, year, from: m.from });
+    }
+    return out;
+  }, [monthCols, data.from, totalDays, tlWidth]);
   const mondays = useMemo(() => {
     const out: string[] = [];
     let d = data.from;
@@ -124,8 +141,8 @@ export default function LineupGrid({
       const spanPx = ((P(addDaysIso(ev.to, 1)) - P(ev.from)) / 100) * tlWidth;
       return { ev, leftPx, spanPx, widthPx: Math.max(spanPx, textWidth(ev.title, 12) + 26) };
     });
-    const r = placeLane(items, 2, 4);
-    return { ...r, rows: Math.max(1, r.placed.reduce((m, p) => Math.max(m, p.row + 1), 0)) };
+    const r = placeLane(items, 1, 4);
+    return { ...r, rows: 1 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showEvents, data, tlWidth, totalDays]);
 
@@ -176,32 +193,33 @@ export default function LineupGrid({
             <col />
           </colgroup>
           <thead className={cx("z-30 bg-white", !printMode && "sticky top-0 print:static")}>
+            {/* 머리 한 줄(사용자 요청 2026-11-26): 달 이름(굵게) + 주 시작일(월요일, 작게)을 같은 줄에 — 달 이름과 겹치는 주 숫자는 뺀다 */}
             <tr>
-              <th rowSpan={2} scope="col" className={cx("z-40 border-r border-b border-[var(--lu-line)] bg-white px-3 text-left align-bottom", !printMode && "sticky left-0 print:static")}>
-                <span className="block pb-1.5 text-[12px] font-medium text-[var(--lu-text-2)]">{timelineHeader}</span>
+              <th scope="col" className={cx("z-40 border-r border-b border-[var(--lu-line)] bg-white px-3 text-left align-middle", !printMode && "sticky left-0 print:static")}>
+                <span className="block truncate text-[12px] font-medium text-[var(--lu-text-2)]">{timelineHeader}</span>
               </th>
-              <th ref={headRef} className="relative h-8 overflow-x-clip p-0">
-                {monthCols.map((m) => (
-                  <span
-                    key={m.from}
-                    className="absolute top-0 flex h-8 items-end gap-1 overflow-hidden pb-1 pl-2 whitespace-nowrap"
-                    style={{ left: `${P(m.from)}%`, width: `${P(addDaysIso(m.to, 1)) - P(m.from)}%` }}
-                  >
-                    <span className="text-[14px] font-semibold text-[var(--lu-text)]">{m.label}</span>
-                    {m.year && <span className="lu-num text-[12px] font-medium text-[var(--lu-text-2)]">{m.year}</span>}
+              <th ref={headRef} className="relative h-7 overflow-x-clip border-b border-[var(--lu-line)] p-0 font-normal">
+                {monthLabels.map((m) => (
+                  <span key={m.from} className="absolute top-0 flex h-7 items-center gap-1 pl-1.5 whitespace-nowrap" style={{ left: `${P(m.from)}%` }}>
+                    <span className="text-[13px] font-semibold text-[var(--lu-text)]">{m.label}</span>
+                    {m.year && <span className="lu-num text-[11px] font-medium text-[var(--lu-text-2)]">{m.year}</span>}
                   </span>
                 ))}
-              </th>
-            </tr>
-            <tr>
-              <th className="relative h-6 overflow-x-clip border-b border-[var(--lu-line)] p-0 font-normal">
-                {mondays.map((d, i) =>
-                  i % weekStep === 0 ? (
-                    <span key={d} className="lu-num absolute top-0 h-6 -translate-x-1/2 text-[11px] leading-6 text-[var(--lu-text-2)]" style={{ left: `${P(d)}%` }}>
+                {mondays.map((d, i) => {
+                  if (i % weekStep !== 0) return null;
+                  const x = (P(d) / 100) * tlWidth;
+                  // 달 이름 자리와 겹치면 뺀다(달 시작 직후 · 다음 달 시작 직전)
+                  const clash = monthLabels.some((m) => {
+                    const xm = (P(m.from) / 100) * tlWidth;
+                    const w = textWidth(m.label, 13) + (m.year ? textWidth(m.year, 11) + 4 : 0) + 14;
+                    return (x >= xm && x - xm < w + 6) || (xm > x && xm - x < 12);
+                  });
+                  return clash ? null : (
+                    <span key={d} className="lu-num absolute top-0 h-7 -translate-x-1/2 text-[11px] leading-7 text-[var(--lu-text-2)]" style={{ left: `${P(d)}%` }}>
                       {Number(d.slice(8, 10))}
                     </span>
-                  ) : null
-                )}
+                  );
+                })}
                 {todayIn && (
                   <span className="lu-num absolute top-[3px] z-10 -translate-x-1/2 rounded-[4px] bg-[var(--lu-accent)] px-1.5 text-[11px] leading-[18px] font-semibold text-white" style={{ left: `${P(data.today)}%` }}>
                     {dateDot(data.today)}
@@ -217,13 +235,13 @@ export default function LineupGrid({
             </tr>
             {showEvents && (
               <tr>
-                <th scope="row" className={cx("z-40 border-r border-b border-[var(--lu-line)] bg-white px-3 text-left font-normal", !printMode && "sticky left-0 print:static")}>
-                  <span className="block text-[12.5px] font-semibold text-[var(--lu-text)]">주요 이벤트</span>
-                  {density === "comfy" && <span className="block text-[11px] text-[var(--lu-text-2)]">공휴일 · 외부 일정</span>}
+                <th scope="row" title="공휴일 · 외부 일정" className={cx("z-40 border-r border-b border-[var(--lu-line)] bg-white px-3 text-left align-middle font-normal", !printMode && "sticky left-0 print:static")}>
+                  <span className="block truncate text-[12px] font-semibold text-[var(--lu-text)]">주요 이벤트</span>
                 </th>
-                <th className="relative overflow-x-clip border-b border-[var(--lu-line)] p-0 font-normal" style={{ height: lane.rows * 22 + 8 }}>
+                {/* 이벤트 띠 한 줄(사용자 요청 2026-11-26) — 겹치는 이벤트는 아래 작은 점(누르면 상세) */}
+                <th className="relative h-7 overflow-x-clip border-b border-[var(--lu-line)] p-0 font-normal">
                   {lane.placed.map((p) => (
-                    <EventChip key={p.ev.key} ev={p.ev} left={(p.leftPx / tlWidth) * 100} spanPct={(p.spanPx / tlWidth) * 100} top={4 + p.row * 22} onClick={onSelectEvent} />
+                    <EventChip key={p.ev.key} ev={p.ev} left={(p.leftPx / tlWidth) * 100} spanPct={(p.spanPx / tlWidth) * 100} top={3} onClick={onSelectEvent} />
                   ))}
                   {lane.overflow.map((o) => (
                     <button
@@ -232,7 +250,7 @@ export default function LineupGrid({
                       title={`${o.ev.title} (${EVENT_KIND_LABEL[o.ev.kind] ?? "이벤트"}) ${o.ev.from}${o.ev.to !== o.ev.from ? `~${o.ev.to}` : ""}`}
                       aria-label={`${o.ev.title} ${o.ev.from}`}
                       onClick={() => onSelectEvent?.(o.ev)}
-                      className="absolute bottom-0.5 size-2 -translate-x-1/2 rounded-full bg-[var(--lu-text-2)]"
+                      className="absolute bottom-px size-1.5 -translate-x-1/2 rounded-full bg-[var(--lu-text-2)]"
                       style={{ left: `${(o.leftPx / tlWidth) * 100}%` }}
                     />
                   ))}
@@ -304,7 +322,7 @@ export default function LineupGrid({
                     <SlotLabel row={row} view={view} density={density} />
                   </th>
                   <td className="relative overflow-x-clip border-b border-[var(--lu-grid)] p-0 align-top" style={{ height }}>
-                    {row.empty && <span className="absolute top-1/2 left-3 -translate-y-1/2 text-[12px] text-[var(--lu-text-2)]">{row.kind === "slot" ? "이 묶음에 자사 편성 자료 없음" : ""}</span>}
+                    {row.empty && <span className="absolute top-1/2 left-3 -translate-y-1/2 text-[12px] text-[var(--lu-text-2)]">{row.kind === "slot" ? "이 묶음에 KT ENA 편성 자료 없음" : ""}</span>}
                     {lanes.events.length > 0 && (
                       <div className="relative" style={{ height: L.event + 4 }}>
                         {lanes.events.map((r) => (
@@ -411,6 +429,7 @@ function SlotLabel({ row, view, density }: { row: Row; view: "own" | "compare"; 
       <div className="flex h-full items-center gap-2 pr-2 pl-9">
         <span className="truncate text-[13px] font-semibold text-[var(--lu-text)]">{days}</span>
         {t && <span className="lu-num text-[13px] text-[var(--lu-text-2)]">{t}</span>}
+        {row.slot?.timeNote && !/\d{1,2}:\d{2}/.test(row.slot.timeNote) && !row.label.includes(row.slot.timeNote) && <span className="text-[11.5px] text-[var(--lu-text-2)]">{row.slot.timeNote}</span>}
       </div>
     );
   }
@@ -421,16 +440,16 @@ function SlotLabel({ row, view, density }: { row: Row; view: "own" | "compare"; 
       <span className="flex w-[64px] shrink-0 items-center">
         <OutletLogo logo={row.outlet?.logo ?? null} name={row.label} height={density === "compact" ? 13 : 15} mono={!own} maxWidth={60} className="text-[13px]" />
       </span>
-      {own && <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-accent)]">자사</span>}
       {isOtt ? (
         <span className="text-[12px] text-[var(--lu-text-2)]">공개 일정</span>
       ) : (
         <>
           {row.chip && <span className={cx("shrink-0 text-[12.5px] font-semibold", own ? "text-[var(--lu-text)]" : "text-[var(--lu-text-2)]")}>{row.chip}</span>}
           {time && <span className="lu-num shrink-0 text-[12.5px] text-[var(--lu-text-2)]">{time}</span>}
+          {row.slot?.timeNote && !/\d{1,2}:\d{2}/.test(row.slot.timeNote) && !(row.slot.name ?? "").includes(row.slot.timeNote) && <span className="shrink-0 text-[11.5px] text-[var(--lu-text-2)]">{row.slot.timeNote}</span>}
         </>
       )}
-      <span className="sr-only">{own ? "자사" : "경쟁사"} {row.label}</span>
+      <span className="sr-only">{own ? "KT ENA" : "경쟁사"} {row.label}</span>
     </div>
   );
 }
@@ -464,7 +483,7 @@ function RunBar(props: {
   const castN = months <= 3 ? 5 : 3;
   const cast = (work?.cast ?? []).slice(0, castN).join(", ");
   const statusWord = run.status === "confirmed" ? "확정" : run.status === "planned" ? "예정" : "가안";
-  const aria = `${title}, ${outlet?.name ?? ""} ${own ? "자사" : "경쟁사"}, ${GENRE_LABEL[genre]}, ${period}${eps ? `, ${eps}` : ""}, ${statusWord}`;
+  const aria = `${title}, ${outlet?.name ?? ""} ${own ? "KT ENA" : "경쟁사"}, ${GENRE_LABEL[genre]}, ${period}${eps ? `, ${eps}` : ""}, ${statusWord}`;
   const tip = [title, `${outlet?.name ?? ""} · ${GENRE_LABEL[genre]} · ${statusWord}`, [period, eps].filter(Boolean).join(" · "), cast, run.needsReview ? "확인 필요" : ""].filter(Boolean).join("\n");
   const click = () => onSelect(selected ? null : run.id);
   const ring = selected ? "ring-2 ring-[var(--lu-text)] ring-offset-1" : "";
@@ -601,7 +620,7 @@ function RunBar(props: {
         )}
       </button>
       {outsideW > 0 && (
-        <span aria-hidden className="pointer-events-none absolute z-[1] truncate px-1 text-[12.5px] font-semibold text-[var(--lu-text)]" style={{ left: `calc(${right}% + 2px)`, top: (rowH - 18) / 2, lineHeight: "18px", maxWidth: outsideW }}>
+        <span aria-hidden className="pointer-events-none absolute z-[2] truncate rounded-[3px] bg-white px-1 text-[12.5px] font-semibold text-[var(--lu-text)]" style={{ left: `calc(${right}% + 2px)`, top: (rowH - 18) / 2, lineHeight: "18px", maxWidth: outsideW }}>
           {title}
         </span>
       )}

@@ -81,7 +81,7 @@ function addGridSheet(
   ws.getCell(2, 1).font = { size: 10, color: { argb: argb("3F3F46") } };
   // 3행: 범례
   ws.mergeCells(3, 1, 3, lastCol);
-  ws.getCell(3, 1).value = (byOutlet ? "범례: 자사 = 장르색 채움 · 경쟁사·OTT = 흰 바탕 + 장르색 테두리" : "범례: 채움색 = 장르(드라마·예능·사업형·교양·기타)") + " · 실선 = 확정 · 점선 = 예정/가안 · ≈ = 주 단위·추정 날짜 · ◆ = 단발·행사 · ● = 월 1회 · 빗금 = 휴방·결방 · 'N주 비어있음' = 계산된 빈 주(자사 드라마는 붉은 글자)";
+  ws.getCell(3, 1).value = (byOutlet ? "범례: KT ENA = 장르색 채움 · 경쟁사·OTT = 흰 바탕 + 장르색 테두리" : "범례: 채움색 = 장르(드라마·예능·사업형·교양·기타)") + " · 실선 = 확정 · 점선 = 예정/가안 · ≈ = 주 단위·추정 날짜 · ◆ = 단발·행사 · ● = 월 1회 · 빗금 = 휴방·결방 · 'N주 비어있음' = 계산된 빈 주(KT ENA 드라마는 붉은 글자)";
   ws.getCell(3, 1).font = { size: 9, color: { argb: argb("52525B") } };
 
   // 4~6행: 달 · 주(월요일) · 공휴일
@@ -345,7 +345,7 @@ function addListSheet(wb: ExcelJS.Workbook, data: LineupPayload, q: LineupQuery,
       })
       .join(", ");
     const values = [
-      r.startDate ?? "", r.endDate ?? "", r.startDate ? PREC[r.startPrecision] : "일정 미정", o.side === "own" ? "자사" : o.ott ? "OTT" : "타사", o.name, slotLabel(s, o),
+      r.startDate ?? "", r.endDate ?? "", r.startDate ? PREC[r.startPrecision] : "일정 미정", o.side === "own" ? "KT ENA" : o.ott ? "OTT" : "타사", o.name, slotLabel(s, o),
       GENRE_LABEL[runGenre(r, w, s)], runTitle(r, w), episodeText(r, w), (w?.cast ?? []).join(", "), kindLabel(r, o.ott), STATUS_LABEL[r.status],
       rivals, [workNote(w?.note), workNote(r.note)].filter((n): n is { label: string; text: string } => !!n).map((n) => `${n.label} : ${n.text}`).join(" / "), r.sourceCell ?? "", r.needsReview ? "확인" : "",
     ];

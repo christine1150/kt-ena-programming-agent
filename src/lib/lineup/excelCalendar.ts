@@ -41,7 +41,7 @@ function addMonthSheet(wb: ExcelJS.Workbook, data: LineupPayload, model: CalMode
   ws.getCell(1, 1).value = `대외비 · KT ENA 라인업 캘린더 ${name.slice(0, 4)}년 ${Number(name.slice(5))}월 — ${cond}`;
   ws.getCell(1, 1).font = { bold: true, size: 14 };
   ws.mergeCells(2, 1, 2, 7);
-  ws.getCell(2, 1).value = `기간 ${model.from} ~ ${model.to}${sourceText ? ` · 자료 기준: ${sourceText}` : ""} · 출력 ${printedAt} · ▶첫방 ■종영 ◆공개일 · ≈ 주 단위·추정 날짜 · 자사는 방송 요일 칸에만 표시, 가장 진한 칸 = 첫방일`;
+  ws.getCell(2, 1).value = `기간 ${model.from} ~ ${model.to}${sourceText ? ` · 자료 기준: ${sourceText}` : ""} · 출력 ${printedAt} · ▶첫방 ■종영 ◆공개일 · ≈ 주 단위·추정 날짜 · KT ENA 작품은 방송 요일 칸에만 표시, 가장 진한 칸 = 첫방일`;
   ws.getCell(2, 1).font = { size: 10 };
   DOW.forEach((d, i) => {
     const c = ws.getCell(4, i + 1);
@@ -193,7 +193,7 @@ function addDaySheet(wb: ExcelJS.Workbook, data: LineupPayload, q: LineupQuery, 
     const dow = DOW[(new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7];
     for (const row of dayAirings(data, d, q.channels, q.genres)) {
       if (layerHidden(row.own, row.ott)) continue;
-      [d, dow, row.time, row.own ? "자사" : row.ott ? "OTT" : "타사", row.outletName, row.title, row.episode, row.tag || "방송", "하루"].forEach((v, k) => {
+      [d, dow, row.time, row.own ? "KT ENA" : row.ott ? "OTT" : "타사", row.outletName, row.title, row.episode, row.tag || "방송", "하루"].forEach((v, k) => {
         ws.getCell(r, k + 1).value = v;
       });
       r++;
@@ -208,7 +208,7 @@ function addDaySheet(wb: ExcelJS.Workbook, data: LineupPayload, q: LineupQuery, 
     }
   for (const b of model.monthBoxes)
     for (const it of b.items) {
-      [`${b.ym}`, "", "", it.own ? "자사" : it.ott ? "OTT" : "타사", it.outletName, it.title, "", "예정", `월(${it.text})`].forEach((v, k) => (ws.getCell(r, k + 1).value = v));
+      [`${b.ym}`, "", "", it.own ? "KT ENA" : it.ott ? "OTT" : "타사", it.outletName, it.title, "", "예정", `월(${it.text})`].forEach((v, k) => (ws.getCell(r, k + 1).value = v));
       r++;
     }
   for (const g of model.undated)

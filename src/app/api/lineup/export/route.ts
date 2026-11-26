@@ -5,7 +5,7 @@ import { requireActorFor, fail } from "@/lib/idealSchedule/apiUtil";
 import { buildLineupWorkbook } from "@/lib/lineup/excel";
 import { calendarFetchRange, calRangeOf } from "@/lib/lineup/calendar";
 import { loadLineup } from "@/lib/lineup/repo";
-import { lastMonth, parseLineupQuery, queryRange } from "@/lib/lineup/viewModel";
+import { parseLineupQuery, queryRange, weekStartOf } from "@/lib/lineup/viewModel";
 import { kstToday } from "@/lib/workspace/dates";
 
 export const maxDuration = 60;
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   try {
     const sp = new URL(request.url).searchParams;
     const today = kstToday();
-    const q = parseLineupQuery((k) => sp.get(k), lastMonth(today));
+    const q = parseLineupQuery((k) => sp.get(k), weekStartOf(today), today.slice(0, 7));
     // 캘린더는 한 달(또는 기간 ≤42일)을 주 단위로 넓혀 받는다. 파일 이름·머리는 실제 달력 범위로.
     const cal = q.view === "calendar" ? calRangeOf(q) : null;
     const { from, to } = cal ?? queryRange(q.from, q.len);

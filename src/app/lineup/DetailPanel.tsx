@@ -17,7 +17,7 @@ const FIELD_KO: Record<string, string> = {
   start_date: "시작", end_date: "종료", episodes: "편수", status: "상태", slot_id: "자리", archived_at: "보관", note: "메모", needs_review: "확인 필요", start_precision: "시작 정밀도", end_precision: "종료 정밀도",
 };
 const PRECISION_KO: Record<string, string> = { day: "일자 확정", week: "주 단위", month: "월 단위", unknown: "미정", open: "계속" };
-const SOURCE_KIND_KO: Record<string, string> = { own_xlsx: "자사 라인업 엑셀", industry_xlsx: "업계 드라마 종합본", outlet_xlsx: "방송사 라인업", standard_xlsx: "표준 양식", paste: "붙여넣기", manual: "직접 수정" };
+const SOURCE_KIND_KO: Record<string, string> = { own_xlsx: "KT ENA 라인업 엑셀", industry_xlsx: "업계 드라마 종합본", outlet_xlsx: "방송사 라인업", standard_xlsx: "표준 양식", paste: "붙여넣기", manual: "직접 수정" };
 
 export default function DetailPanel({
   data, run, onClose, onSelect, onSaved, onSelectEvent,
@@ -72,7 +72,7 @@ export default function DetailPanel({
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <OutletLogo logo={outlet?.logo ?? null} name={outlet?.name ?? ""} height={15} mono={!own} maxWidth={72} className="text-[13px]" />
-            <span className="text-[12px] text-[var(--lu-text-2)]">{own ? "자사" : outlet?.ott ? "OTT" : "경쟁사"}</span>
+            <span className="text-[12px] text-[var(--lu-text-2)]">{own ? "" : outlet?.ott ? "OTT" : "경쟁사"}</span>
           </span>
           <button type="button" onClick={onClose} aria-label="상세 닫기" className="flex size-7 items-center justify-center rounded-[6px] text-[var(--lu-text-2)] hover:bg-[var(--lu-hover)]">
             <Icon name="x" />

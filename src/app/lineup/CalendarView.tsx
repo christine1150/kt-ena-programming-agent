@@ -63,6 +63,7 @@ function OwnItem({ bar, day, selected, onSelect, multiOutlet, week = false }: { 
   const planned = bar.status !== "confirmed";
   const title = bar.shortTitle && textWidth(bar.title, 12.5) > 120 ? bar.shortTitle : bar.title;
   const label = `${multiOutlet ? `${bar.outletName} ` : ""}${bar.title} ${bar.time} ${day.episode} ${tag} ${planned ? "예정" : ""}`;
+  if (tag === "종영") return <EndItem title={title} outlet={multiOutlet ? bar.outletName : ""} genre={bar.genre} onClick={() => bar.runId && onSelect(bar.runId)} selected={selected} tip={`${bar.title}\n${bar.meta}`} />;
   if (tag) {
     return (
       <button type="button" onClick={() => bar.runId && onSelect(bar.runId)} title={`${bar.title}\n${bar.meta}${bar.cast ? `\n${bar.cast}` : ""}`} aria-label={label}
@@ -110,6 +111,7 @@ function MarkItem({ m, selected, onSelect }: { m: CalMark; selected: boolean; on
   const c = GENRE_FILL[g];
   const planned = m.status && m.status !== "confirmed";
   const title = m.shortTitle && textWidth(m.title, 12) > 104 ? m.shortTitle : m.title;
+  if (m.kind === "end") return <EndItem title={title} outlet={m.outletName} genre={g} onClick={() => onSelect(m.runId)} selected={selected} tip={`${m.outletName} ${m.title} ${MARK_TAG.end(m)}`} approx={m.approx} />;
   return (
     <button type="button" onClick={() => onSelect(m.runId)} title={`${m.outletName} ${m.title} ${MARK_TAG[m.kind](m)}${planned ? " (예정)" : ""}`} aria-label={`${m.outletName} ${m.title} ${MARK_TAG[m.kind](m)}${planned ? " 예정" : ""}`}
       className={cx("flex w-full min-w-0 items-center gap-1 rounded-[3px] bg-white pr-1.5 text-left text-[12px]", ring)}
@@ -117,6 +119,20 @@ function MarkItem({ m, selected, onSelect }: { m: CalMark; selected: boolean; on
       <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{m.outletName}</span>
       <span className="min-w-0 flex-1 truncate font-semibold text-[var(--lu-text)]">{title}</span>
       <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{MARK_TAG[m.kind](m)}</span>
+    </button>
+  );
+}
+
+/** 종영 — 점선 테두리만 + 제목을 장르색 글자로(사용자 지시 2026-11-26). 밝은 시안(사업형)은 흰 바탕 대비가 낮아 제목만 어두운 글씨. */
+function EndItem({ title, outlet, genre, onClick, selected, tip, approx = false }: { title: string; outlet: string; genre: Genre; onClick: () => void; selected: boolean; tip: string; approx?: boolean }) {
+  const c = GENRE_FILL[genre];
+  return (
+    <button type="button" onClick={onClick} title={tip} aria-label={`${outlet} ${title} 종영`}
+      className={cx("flex w-full min-w-0 items-center gap-1 rounded-[3px] bg-white px-1.5 text-left text-[12px]", selected && "outline outline-2 outline-offset-1 outline-[var(--lu-text)]")}
+      style={{ height: ITEM_H, border: `1.5px dashed ${c}` }}>
+      {outlet && <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{outlet}</span>}
+      <span className="min-w-0 flex-1 truncate font-semibold" style={{ color: genre === "business" ? UI.text : c }}>{title}</span>
+      <span className="shrink-0 text-[10.5px] font-semibold text-[var(--lu-text-2)]">{approx ? "종영≈" : "종영"}</span>
     </button>
   );
 }
@@ -163,9 +179,10 @@ export function CalLegend({ vertical = false }: { vertical?: boolean }) {
   const chip = (style: React.CSSProperties) => <span aria-hidden className="inline-block h-3 w-5 rounded-[2px] align-middle" style={style} />;
   return (
     <ul className={vertical ? "grid grid-cols-1 gap-y-1.5 text-[12px] text-[var(--lu-text-2)]" : "flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12px] text-[var(--lu-text-2)]"} aria-label="캘린더 범례">
-      <li className="flex items-center gap-1.5">{chip({ background: GENRE_FILL.drama })}자사 첫방·종영·특집</li>
-      <li className="flex items-center gap-1.5"><span aria-hidden className="size-1.5 rounded-full bg-[var(--lu-text-2)]" />자사 방송 회차</li>
+      <li className="flex items-center gap-1.5">{chip({ background: GENRE_FILL.drama })}KT ENA 첫방·종영·특집</li>
+      <li className="flex items-center gap-1.5"><span aria-hidden className="size-1.5 rounded-full bg-[var(--lu-text-2)]" />KT ENA 방송 회차</li>
       <li className="flex items-center gap-1.5">{chip({ background: "#fff", border: `1px solid ${UI.grid}`, borderLeft: `3px solid ${GENRE_FILL.variety}` })}경쟁사·OTT 첫방·공개·종영</li>
+      <li className="flex items-center gap-1.5">{chip({ background: "#fff", border: `1.5px dashed ${GENRE_FILL.drama}` })}<span style={{ color: GENRE_FILL.drama }} className="font-semibold">종영</span>(점선 + 장르색 제목)</li>
       <li className="flex items-center gap-1.5">{chip({ background: "#fff", border: `1px dashed ${UI.text2}` })}예정</li>
       <li className="flex items-center gap-1.5">{chip({ background: "#fff", border: `1px dashed ${UI.accent}` })}방영 가능(홀드백)</li>
       <li className="flex items-center gap-1.5">{chip({ background: UI.hover, border: `1px solid ${UI.line}` })}공휴일·외부 이벤트</li>
@@ -468,7 +485,7 @@ function DayPanel({
   return (
     <aside
       aria-label="그날 일정"
-      className="lu-scroll fixed top-[52px] right-0 bottom-0 z-50 w-[360px] overflow-y-auto border-l border-[var(--lu-line)] bg-white p-4 shadow-[-8px_0_24px_rgba(23,24,28,0.06)] min-[1440px]:sticky min-[1440px]:top-3 min-[1440px]:z-0 min-[1440px]:max-h-[calc(100vh-120px)] min-[1440px]:shrink-0 min-[1440px]:rounded-[8px] min-[1440px]:border min-[1440px]:shadow-none print:hidden"
+      className="lu-scroll fixed top-[52px] right-0 bottom-0 z-50 w-[340px] overflow-y-auto border-l border-[var(--lu-line)] bg-white p-4 shadow-[-8px_0_24px_rgba(23,24,28,0.06)] min-[1024px]:sticky min-[1024px]:top-3 min-[1024px]:z-0 min-[1024px]:max-h-[calc(100vh-120px)] min-[1024px]:shrink-0 min-[1024px]:rounded-[8px] min-[1024px]:border min-[1024px]:shadow-none print:hidden"
     >
       <div className="mb-3 flex items-start justify-between gap-2">
         <div>
@@ -484,7 +501,7 @@ function DayPanel({
           ))}
         </PanelGroup>
       )}
-      <DayGroup title="자사 편성" rows={own} onSelect={onSelectRun} empty="이날 하루 단위로 확인된 자사 편성 없음" />
+      <DayGroup title="KT ENA 편성" rows={own} onSelect={onSelectRun} empty="이날 하루 단위로 확인된 KT ENA 편성 없음" />
       <DayGroup title="경쟁 방송사" rows={rival} onSelect={onSelectRun} />
       <DayGroup title="OTT 공개" rows={ott} onSelect={onSelectRun} />
       {avail.length > 0 && (

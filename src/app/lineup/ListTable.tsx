@@ -183,7 +183,6 @@ export default function ListTable({
         return (
           <span className={x.own ? "font-semibold text-[var(--lu-text)]" : "text-[var(--lu-text-2)]"}>
             {x.outlet}
-            {x.own && <span className="ml-1 text-[10.5px] font-semibold text-[var(--lu-accent)]">자사</span>}
           </span>
         );
       case "slot":

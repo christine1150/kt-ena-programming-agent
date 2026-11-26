@@ -100,7 +100,7 @@ export default function SaveDialog({
           <Field label="기간">
             <input
               type="month"
-              value={q.from}
+              value={q.from.slice(0, 7)}
               onChange={(e) => e.target.value && set({ from: e.target.value })}
               className="rounded border border-zinc-300 px-2 py-0.5 text-[13px]"
               aria-label="시작 월"
@@ -115,7 +115,7 @@ export default function SaveDialog({
               {range.from} ~ {range.to}
               {q.from !== defaultFrom && (
                 <button type="button" onClick={() => set({ from: defaultFrom })} className="ml-2 underline underline-offset-2">
-                  지난달부터로
+                  이번 주부터로
                 </button>
               )}
             </span>
@@ -169,7 +169,7 @@ export default function SaveDialog({
                 const on = q.show.includes(o.key);
                 return (
                   <button key={o.key} type="button" aria-pressed={on} onClick={() => set({ show: on ? q.show.filter((x) => x !== o.key) : [...q.show, o.key] })} className={chip(on)}>
-                    자사 {on ? "✓ " : ""}{o.label}
+                    {on ? "✓ " : ""}{o.label}
                   </button>
                 );
               })}

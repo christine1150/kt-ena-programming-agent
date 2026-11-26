@@ -4,7 +4,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { kstToday } from "@/lib/workspace/dates";
-import { lastMonth, parseLineupQuery } from "@/lib/lineup/viewModel";
+import { parseLineupQuery, weekStartOf } from "@/lib/lineup/viewModel";
 import LineupView from "./LineupView";
 
 export const metadata: Metadata = { title: "라인업" };
@@ -14,10 +14,13 @@ const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v
 
 export default async function LineupPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
-  const defaultFrom = lastMonth(kstToday());
-  const q = parseLineupQuery((k) => first(sp[k]), defaultFrom);
+  // 기본 시작 = 오늘이 든 주의 월요일(사용자 요청 2026-11-26: 오늘 기준 앞으로의 라인업이 오른쪽으로 보이게), 캘린더 기본 = 이번 달
+  const today = kstToday();
+  const defaultFrom = weekStartOf(today);
+  const defaultMonth = today.slice(0, 7);
+  const q = parseLineupQuery((k) => first(sp[k]), defaultFrom, defaultMonth);
   // 밀도는 주소에 없으면 이 브라우저에 기억한 값(쿠키, 2026-11-26 리디자인)
   if (!first(sp.density) && (await cookies()).get("lineup_density")?.value === "compact") q.density = "compact";
   const sel = first(sp.sel);
-  return <LineupView initial={{ ...q, sel: sel && /^[0-9a-f-]{36}$/.test(sel) ? sel : null }} defaultFrom={defaultFrom} />;
+  return <LineupView initial={{ ...q, sel: sel && /^[0-9a-f-]{36}$/.test(sel) ? sel : null }} defaultFrom={defaultFrom} defaultMonth={defaultMonth} />;
 }
