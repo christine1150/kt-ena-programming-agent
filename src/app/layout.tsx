@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Noto_Sans_KR } from "next/font/google";
 import localFont from "next/font/local";
 import { SERVICE_NAME } from "@/lib/ui/pageTitles";
 import PageTimingBeacon from "@/components/PageTimingBeacon";
+import AccessBeacon from "@/components/AccessBeacon";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -59,6 +60,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </main>
         {/* 고도화 계획 E1: 화면·API 체감 속도 계측(화면에 그리는 것 없음, 익명) */}
         <PageTimingBeacon />
+        {/* 로그인 없이 세션으로 들어온 사람도 그날 접속 기록이 남게(하루 1회) */}
+        <AccessBeacon />
       </body>
     </html>
   );
