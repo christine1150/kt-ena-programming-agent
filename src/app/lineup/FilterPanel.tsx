@@ -92,7 +92,7 @@ export default function FilterPanel({
             </div>
           </Sect>
           {view !== "calendar" && (
-            <Sect title="요일" hint="TV 방송에만 적용 · OTT 공개는 요일과 무관하게 남습니다">
+            <Sect title="요일">
               <div className="flex gap-1">
                 {DOWS.map((n) => (
                   <Chip key={n} on={d.dows.includes(n)} onClick={() => setD({ ...d, dows: d.dows.includes(n) ? d.dows.filter((x) => x !== n) : [...d.dows, n].sort() })} square>
@@ -157,7 +157,7 @@ export default function FilterPanel({
       </div>
       <div className="flex items-center gap-1.5 border-t border-[var(--lu-grid)] px-2 pt-2 pb-1">
         <Btn size="sm" tone="ghost" onClick={() => setD(defaults)}>
-          <Icon name="x" size={11} />
+          <Icon name="reset" size={11} />
           기본 조건 복원
         </Btn>
         <span className="ml-auto" />

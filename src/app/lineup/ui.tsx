@@ -222,7 +222,7 @@ export function OutletLogo({ logo, name, height = 16, mono = false, maxWidth = 6
   );
 }
 
-type IconName = EventIcon | "chevron" | "chevron-right" | "chevron-left" | "check" | "search" | "x" | "plus" | "external" | "settings" | "download" | "filter" | "start" | "end" | "diamond";
+type IconName = EventIcon | "chevron" | "chevron-right" | "chevron-left" | "check" | "search" | "x" | "plus" | "external" | "settings" | "download" | "filter" | "start" | "end" | "diamond" | "reset";
 /** 1.5px 선 아이콘(14px 기본) — 이벤트 유형·조작부에만 쓴다(장식용 금지). */
 export function Icon({ name, size = 14, className }: { name: IconName; size?: number; className?: string }) {
   const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -251,6 +251,7 @@ export function Icon({ name, size = 14, className }: { name: IconName; size?: nu
     filter: <path d="M2.5 3.5h11L9.5 8.5v4l-3 1.5v-5.5z" {...p} />,
     start: <path d="M3.5 3.5v9M6.5 8h7M10.5 5l3 3-3 3" {...p} />,
     end: <path d="M12.5 3.5v9M2.5 8h7M6.5 5l3 3-3 3" {...p} />,
+    reset: <path d="M3 3.5v3.5h3.5M3.4 7A5 5 0 1 1 4.5 11.2" {...p} />,
     diamond: <path d="M8 2.5 13.5 8 8 13.5 2.5 8z" fill="currentColor" />,
   };
   return (
