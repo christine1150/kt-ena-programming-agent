@@ -3,7 +3,7 @@ import { addMonths as addMonthsYm, isIsoDate } from "@/lib/lineup/dates";
 import { GENRE_FILL } from "@/lib/lineup/tokens";
 import type { CompareBlock, Genre, LineupPayload, OutletDto, RunDto, RunStatus, SlotDto, WorkDto } from "@/lib/lineup/types";
 
-export type ViewMode = "own" | "compare" | "list" | "calendar";
+export type ViewMode = "own" | "compare" | "list" | "calendar" | "airing"; // airing = 방영표(2026-11-27)
 export type Density = "comfy" | "compact";
 /** 경쟁 비교 묶음 기준(2차 개선 2026-11-26): 요일별 · 방송사별 · 장르별 · 시작 시간대별 · 전체 펼쳐보기.
  *  '시작 시간대별'은 시작 시각 한 시간 단위 묶음일 뿐 실제 동시간대 맞대결(상세 패널의 동시간대 경쟁)과 다르다. */
@@ -591,6 +591,7 @@ export interface LineupQuery {
   cmp: CompareMode; // 경쟁 비교 묶음 기준
   cv: "month" | "week"; // 캘린더 월간·주간
   empty: boolean; // 자료 없는 자사 채널도 보이기
+  amb: boolean; // 방영표: 오전(12시 전) 사업형 편성도 넣기(기본 뺌)
 }
 export const LENGTHS = [3, 6, 8, 12];
 /** 직접 지정 기간 상한(개월) */
@@ -605,7 +606,7 @@ const listOf = (v: string | null | undefined) => (v ? v.split(",").map((s) => s.
  */
 export function parseLineupQuery(get: (k: string) => string | null | undefined, defaultFrom: string, defaultMonth?: string): LineupQuery {
   const viewQ = get("view");
-  const view: ViewMode = viewQ === "compare" || viewQ === "list" || viewQ === "calendar" ? viewQ : "own";
+  const view: ViewMode = viewQ === "compare" || viewQ === "list" || viewQ === "calendar" || viewQ === "airing" ? viewQ : "own";
   const showRaw = get("show");
   const isYm = (v: string | null | undefined): v is string => !!v && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
   const isDay = (v: string | null | undefined): v is string => isIsoDate(v); // 달력에 있는 날짜만(2026-11-31 거부, P0-08)
@@ -644,6 +645,7 @@ export function parseLineupQuery(get: (k: string) => string | null | undefined, 
     cmp: cmpQ === "time" || cmpQ === "genre" || cmpQ === "all" || cmpQ === "outlet" ? cmpQ : "dow",
     cv: get("cv") === "week" ? "week" : "month",
     empty: get("empty") === "1",
+    amb: get("amb") === "1",
   };
 }
 /**
@@ -705,6 +707,11 @@ export function lineupSearch(q: Partial<LineupQuery>, defaultFrom: string, defau
     if (q.show && !isDefaultShow(q.show)) s.set("show", q.show.length ? q.show.join(",") : "none");
     if (q.cv === "week") s.set("cv", "week");
   }
+  if (q.view === "airing") {
+    // 방영표는 한 달 단위 — 캘린더와 같은 기본 월 규칙
+    if (q.month && (!defaultFrom || q.month !== defaultMonthOf(defaultFrom, defaultMonth))) s.set("month", q.month);
+    if (q.amb) s.set("amb", "1");
+  }
   return s.toString();
 }
 
@@ -742,8 +749,14 @@ export function lastMonth(today: string): string {
 
 /** 조건 한 줄 요약(인쇄 머리·엑셀 제목) — 채널 이름은 호출부가 코드→이름으로 바꿔 넘긴다. */
 export function conditionText(q: LineupQuery, channelNames: string[]): string {
-  const viewName = q.view === "compare" ? "경쟁 비교" : q.view === "list" ? "목록" : q.view === "calendar" ? "캘린더" : "KT ENA";
+  const viewName = q.view === "compare" ? "경쟁 비교" : q.view === "list" ? "목록" : q.view === "calendar" ? "캘린더" : q.view === "airing" ? "방영표" : "KT ENA";
   const parts = [viewName];
+  if (q.view === "airing") {
+    parts.push(`${channelNames[0] ?? "ENA"} ${Number(q.month.slice(5, 7))}월`);
+    if (q.genres.length) parts.push(`장르 ${q.genres.map((g) => GENRE_LABEL[g]).join("·")}`);
+    parts.push(q.amb ? "오전 사업형 포함" : "오전 사업형 제외");
+    return parts.join(" · ");
+  }
   parts.push(q.view === "compare" || q.view === "calendar" ? `기준 채널 ${channelNames.length ? channelNames.join("·") : "ENA"}` : channelNames.length ? `채널 ${channelNames.join("·")}` : "라인업 있는 채널 전부");
   if (q.genres.length) parts.push(`장르 ${q.genres.map((g) => GENRE_LABEL[g]).join("·")}`);
   if (q.dows.length) parts.push(`요일 ${dowLabel([...q.dows].sort())}`);

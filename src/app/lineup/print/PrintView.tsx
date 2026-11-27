@@ -2,21 +2,27 @@
 
 // 라인업 인쇄 화면 — 용지(A4·A3 가로) 폭에 맞춘 고정 폭으로 그려 화면 미리보기와 인쇄 결과가 같다.
 // 자료를 받고 글꼴이 준비되면 인쇄 창을 한 번 자동으로 연다(auto=0이면 열지 않음).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { LineupPayload } from "@/lib/lineup/types";
 import { buildCompareRows, buildOwnRows, conditionText, LAYOUT, queryRange, type LineupQuery } from "@/lib/lineup/viewModel";
-import { buildCalendar, calendarFetchRange, calRangeOf, monthSegments, type CalLayer, type CalOwnShow } from "@/lib/lineup/calendar";
+import { buildCalendar, calendarFetchRange, calRangeOf, monthRangeOf, monthSegments, type CalLayer, type CalOwnShow } from "@/lib/lineup/calendar";
+import { buildAiringTable } from "@/lib/lineup/airingTable";
+import AiringTableView from "../AiringTableView";
 import CalendarView, { CalFootnotes, CalLegend } from "../CalendarView";
 import LineupGrid from "../LineupGrid";
 import UndatedStrip from "../UndatedStrip";
 import { Legend, ListView } from "../LineupView";
 
 // 인쇄 가능한 폭(px, 96dpi) — 용지 가로 길이에서 여백 8mm×2를 뺀 값.
-const PAGE = { A4: { css: "A4 landscape", width: Math.floor(((297 - 16) / 25.4) * 96) }, A3: { css: "A3 landscape", width: Math.floor(((420 - 16) / 25.4) * 96) } };
+const PAGE = {
+  A4: { css: "A4 landscape", width: Math.floor(((297 - 16) / 25.4) * 96), height: Math.floor(((210 - 16) / 25.4) * 96) },
+  A3: { css: "A3 landscape", width: Math.floor(((420 - 16) / 25.4) * 96), height: Math.floor(((297 - 16) / 25.4) * 96) },
+};
 
 export default function PrintView({ query: q, autoPrint }: { query: LineupQuery; autoPrint: boolean }) {
   // 캘린더: 한 달(또는 ≤42일 기간)을 달마다 한 쪽으로 — 자료는 주 단위로 넓혀 받는다.
-  const cal = q.view === "calendar" ? calRangeOf(q) : null;
+  // 방영표는 한 달(month) — 자료 범위는 월간 캘린더와 같게
+  const cal = q.view === "calendar" ? calRangeOf(q) : q.view === "airing" ? { ...monthRangeOf(q.month), clipped: false } : null;
   const { from: shownFrom, to: shownTo } = cal ?? queryRange(q.from, q.len);
   const { from, to } = cal ? calendarFetchRange(cal.from, cal.to) : { from: shownFrom, to: shownTo };
   const [state, setState] = useState<{ data: LineupPayload | null; error: string | null; printedAt: string }>({ data: null, error: null, printedAt: "" });
@@ -41,22 +47,37 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
   const { data, error, printedAt } = state;
   const filters = useMemo(() => ({ channels: q.channels, genres: q.genres, dows: q.dows, statuses: q.st, tv: q.tv, ott: q.ott, showBase: !q.nobase }), [q.channels, q.genres, q.dows, q.st, q.tv, q.ott, q.nobase]);
   const grid = useMemo(
-    () => (data && q.view !== "calendar" ? (q.view === "compare" ? buildCompareRows(data, filters, q.cmp) : buildOwnRows(data, filters, { showEmpty: q.empty })) : null),
+    () => (data && q.view !== "calendar" && q.view !== "airing" ? (q.view === "compare" ? buildCompareRows(data, filters, q.cmp) : buildOwnRows(data, filters, { showEmpty: q.empty })) : null),
     [data, q.view, filters, q.cmp, q.empty]
   );
+  const airModel = useMemo(
+    () => (data && q.view === "airing" ? buildAiringTable(data, { month: q.month, channel: q.channels[0] ?? "ENA", genres: q.genres, includeMorningBusiness: q.amb }) : null),
+    [data, q.view, q.month, q.channels, q.genres, q.amb]
+  );
   const calPages = useMemo(() => {
-    if (!data || !cal) return [];
+    if (!data || !cal || q.view !== "calendar") return [];
     const segs = monthSegments(cal.from, cal.to);
     return segs.map((s, i) => {
       const m = buildCalendar(data, { from: s.from, to: s.to, channels: q.channels, genres: q.genres, hide: q.hide as CalLayer[], show: q.show as CalOwnShow[], can: q.can, tv: q.tv, ott: q.ott, statuses: q.st, showBase: !q.nobase });
       return { ym: s.ym, model: i === segs.length - 1 ? m : { ...m, undated: [] } }; // 날짜 미정 OTT 목록은 마지막 쪽에만
     });
-  }, [data, cal, q.channels, q.genres, q.hide, q.show, q.can, q.tv, q.ott, q.st, q.nobase]);
+  }, [data, cal, q.view, q.channels, q.genres, q.hide, q.show, q.can, q.tv, q.ott, q.st, q.nobase]);
   const channelNames = data ? q.channels.map((c) => data.outlets.find((o) => o.code === c)?.name ?? c) : q.channels;
   const page = PAGE[q.paper];
   const sources = data
     ? [...new Map(data.sources.filter((s) => s.kind !== "manual").map((s) => [s.kind, s] as const)).values()]
     : [];
+
+  // 방영표는 편성센터 방영표처럼 한 장에 — 넘치면 시트를 줄인다(줄인 만큼 폭을 넓혀 줄인 뒤에도 용지 폭을 다 쓴다)
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(1);
+  useLayoutEffect(() => {
+    const el = sheetRef.current;
+    if (!el || !airModel) return;
+    // 용지 폭에서 잰 높이로 한 번만 정한다 — 줄이면 폭이 넓어져 높이는 더 줄 뿐이라 늘 한 장에 들어간다(다시 재면 왕복할 수 있음)
+    const h = el.scrollHeight;
+    setFit(h > page.height ? Math.max(0.6, Math.floor((page.height / h) * 100) / 100) : 1);
+  }, [airModel, page.height]);
 
   useEffect(() => {
     if (!data || !autoPrint || printed.current) return;
@@ -82,7 +103,7 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
           {q.paper} 가로 미리보기 · PDF는 인쇄 창에서 대상을 ‘PDF로 저장’으로 고르세요. 인쇄 설정의 ‘배경 그래픽’을 켜면 색이 그대로 나옵니다.
         </span>
       </div>
-      <div className="mx-auto bg-white p-0 shadow print:shadow-none" style={{ width: page.width }}>
+      <div ref={sheetRef} className="mx-auto bg-white p-0 shadow print:shadow-none" style={fit < 1 ? { width: Math.floor(page.width / fit), zoom: fit } : { width: page.width }}>
         <header className="mb-2 border-b-2 border-zinc-900 pb-1.5">
           <div className="flex items-baseline justify-between gap-3">
             <h1 className="text-[16px] font-bold text-zinc-900">
@@ -98,7 +119,8 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
         </header>
         {error && <p className="py-6 text-center text-[13px] text-red-800">{error}</p>}
         {!data && !error && <p className="py-10 text-center text-[13px] text-zinc-600">라인업을 불러오는 중…</p>}
-        {data && cal && (
+        {data && airModel && <AiringTableView data={data} model={airModel} selectedRunId={null} onSelectRun={() => {}} query={q.q} printMode />}
+        {data && cal && q.view === "calendar" && (
           <>
             <div className="mb-1.5"><CalLegend /></div>
             {calPages.map((p, i) => (

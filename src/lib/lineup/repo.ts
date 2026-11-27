@@ -471,6 +471,7 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
     eventsExtended,
     holdbackMinutes: hb.minutes,
     holdbackEnds: hb.ends,
+    skips: Object.fromEntries(skipBySlot),
   };
 }
 

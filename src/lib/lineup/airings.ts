@@ -22,7 +22,9 @@ export interface Airing {
 }
 
 /** 자리별 휴방·결방 구간 */
-export function hiatusBySlot(data: Pick<LineupPayload, "runs">): Map<string, { from: string; to: string }[]> {
+export function hiatusBySlot(data: Pick<LineupPayload, "runs" | "skips">): Map<string, { from: string; to: string }[]> {
+  // 서버가 준 목록이 있으면 그것(조회 기간 앞 결방 포함 — 예: 12월 화면에서 11/7 결방을 빼면 12월 회차가 하나씩 밀린다)
+  if (data.skips) return new Map(Object.entries(data.skips));
   const m = new Map<string, { from: string; to: string }[]>();
   for (const r of data.runs) if (r.runKind === "hiatus" && r.draw) m.set(r.slotId, [...(m.get(r.slotId) ?? []), { from: r.draw.from, to: r.draw.to }]);
   return m;

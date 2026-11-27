@@ -19,6 +19,7 @@ export default function SaveDialog({
   const set = (patch: Partial<LineupQuery>) => setQ((s) => ({ ...s, ...patch }));
   const toggle = <T,>(arr: T[], v: T) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   const isCal = q.view === "calendar";
+  const isAir = q.view === "airing"; // 방영표 — 한 채널 · 한 달, 인쇄·PDF만
   const range = isCal ? calRangeOf(q) : queryRange(q.from, q.len);
   // 인쇄·엑셀 주소 — 시작 월은 늘 싣는다(받는 쪽의 "지난달" 기본값이 날짜에 따라 달라지지 않게). 나머지 기본값은 받는 쪽과 같다.
   const search = new URLSearchParams(lineupSearch(q, "")).toString();
@@ -63,6 +64,7 @@ export default function SaveDialog({
                 ["compare", "경쟁 비교"],
                 ["list", "목록"],
                 ["calendar", "캘린더"],
+                ["airing", "방영표"],
               ] as [ViewMode, string][]
             ).map(([v, label]) => (
               <button
@@ -73,7 +75,7 @@ export default function SaveDialog({
                   set({
                     view: v,
                     density: q.density,
-                    channels: v === "compare" ? q.channels.slice(0, 1) : q.channels,
+                    channels: v === "airing" ? [q.channels[0] ?? "ENA"] : v === "compare" ? q.channels.slice(0, 1) : q.channels,
                     genres: q.genres,
                   })
                 }
@@ -84,7 +86,12 @@ export default function SaveDialog({
             ))}
           </Field>
 
-          {isCal ? (
+          {isAir ? (
+            <Field label="기간">
+              <input type="month" value={q.month} onChange={(e) => e.target.value && set({ month: e.target.value })} className="rounded border border-zinc-300 px-2 py-0.5 text-[13px]" aria-label="달" />
+              <span className="text-zinc-600">한 달 · A4 가로 한 장</span>
+            </Field>
+          ) : isCal ? (
             <Field label="기간">
               <input type="month" value={q.dfrom ? range.from.slice(0, 7) : q.month} onChange={(e) => e.target.value && set({ month: e.target.value, dfrom: null, dto: null })} className="rounded border border-zinc-300 px-2 py-0.5 text-[13px]" aria-label="달" />
               <span className="text-zinc-600">한 달 · 또는 기간 지정(최대 6주)</span>
@@ -123,16 +130,17 @@ export default function SaveDialog({
           )}
 
           <Field label={multiBase ? "기준 채널" : "채널"}>
-            {!multiBase && (
+            {!multiBase && !isAir && (
               <button type="button" aria-pressed={q.channels.length === 0} onClick={() => set({ channels: [] })} className={chip(q.channels.length === 0)}>
                 라인업 있는 채널 전부
               </button>
             )}
             {ownChannels.map((c) => {
-              const on = multiBase ? (q.channels.length ? q.channels : ["ENA"]).includes(c.code) : q.channels.includes(c.code);
+              const on = isAir ? (q.channels[0] ?? "ENA") === c.code : multiBase ? (q.channels.length ? q.channels : ["ENA"]).includes(c.code) : q.channels.includes(c.code);
               return (
                 <button key={c.code} type="button" aria-pressed={on} onClick={() => {
-                  if (isCal) {
+                  if (isAir) set({ channels: [c.code] });
+                  else if (isCal) {
                     const cur = q.channels.length ? q.channels : ["ENA"];
                     const next = toggle(cur, c.code);
                     set({ channels: next.length ? next : [c.code] });
@@ -144,7 +152,7 @@ export default function SaveDialog({
             })}
           </Field>
 
-          {q.view !== "own" && (
+          {q.view !== "own" && !isAir && (
             <Field label="비교 범위">
               {SCOPES.map((x) => {
                 const on = scopeOf(q) === x.key;
@@ -195,6 +203,12 @@ export default function SaveDialog({
                 );
               })()}
             </Field>
+          ) : isAir ? (
+            <Field label="표시">
+              <button type="button" aria-pressed={q.amb} onClick={() => set({ amb: !q.amb })} className={chip(q.amb)}>
+                {q.amb ? "✓ " : ""}오전(12시 전) 사업형 포함
+              </button>
+            </Field>
           ) : (
           <Field label="요일">
             {DOWS.map((d) => (
@@ -232,9 +246,13 @@ export default function SaveDialog({
           >
             인쇄 · PDF로 저장
           </a>
-          <a href={`/api/lineup/export?${search}`} className="rounded border border-zinc-300 px-3 py-1.5 text-[13px] font-medium hover:bg-zinc-50" download>
-            엑셀로 저장
-          </a>
+          {isAir ? (
+            <span className="text-[12px] text-zinc-600">방영표는 인쇄·PDF로 저장합니다(엑셀은 캘린더 보기로).</span>
+          ) : (
+            <a href={`/api/lineup/export?${search}`} className="rounded border border-zinc-300 px-3 py-1.5 text-[13px] font-medium hover:bg-zinc-50" download>
+              엑셀로 저장
+            </a>
+          )}
         </div>
         <p className="mt-2 text-[12px] leading-relaxed text-zinc-600">
           PDF는 새 창의 인쇄 화면에서 대상(프린터)을 ‘PDF로 저장’으로 고르면 됩니다. 엑셀은 편성센터 라인업과 같은 모양(주 칸 × 자리, 막대 = 병합 칸)과 목록 시트로 내려받습니다.

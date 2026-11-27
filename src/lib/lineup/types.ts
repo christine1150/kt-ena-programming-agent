@@ -224,6 +224,8 @@ export interface LineupPayload {
   holdbackMinutes?: Record<string, number>;
   /** 이미 방송된 회차의 실제 종료 분(방송일 0시 기준, 올림): { workId: { 방송일: 분 } } — 있으면 중간값 대신 이 값을 쓴다 */
   holdbackEnds?: Record<string, Record<string, number>>;
+  /** 자리별 휴방·결방 구간(서버 계산) — 조회 기간 앞의 결방도 담아 회차를 셀 때 건너뛴다(runs에는 기간 밖 결방이 빠짐) */
+  skips?: Record<string, { from: string; to: string }[]>;
 }
 
 /** 드라마 자리에서 계산으로 찾은 빈 주(자료로 들어온 '미정'과 다르게 약하게 그린다). */

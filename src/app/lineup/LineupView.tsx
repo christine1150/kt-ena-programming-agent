@@ -16,6 +16,8 @@ import ListTable from "./ListTable";
 import EventEditor from "./EventEditor";
 import CalendarView, { CalLegend } from "./CalendarView";
 import FilterPanel, { type FilterValue } from "./FilterPanel";
+import AiringTableView from "./AiringTableView";
+import { buildAiringTable } from "@/lib/lineup/airingTable";
 import { buildCalendar, CAL_MAX_DAYS, CAL_OWN_SHOW, calendarFetchRange, clampRange, monthRangeOf, type CalLayer, type CalOwnShow } from "@/lib/lineup/calendar";
 import { addDays, isoDow } from "@/lib/lineup/dates";
 import { type LaneEvent } from "@/lib/lineup/events";
@@ -65,6 +67,10 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
   const [eventEdit, setEventEdit] = useState<LaneEvent | "new" | null>(null);
   const isCal = st.view === "calendar";
   const isWeek = isCal && st.cv === "week";
+  // 방영표(2026-11-27): 한 채널 · 한 달. 달 이동·자료 범위는 월간 캘린더와 같다.
+  const isAir = st.view === "airing";
+  const isMonthly = isCal || isAir;
+  const airChannel = st.channels[0] ?? "ENA";
   // 캘린더: 한 달(month) · 주간(dfrom=월요일~dto=일요일) · 임의 기간(dfrom~dto, 최대 42일) — 자료는 주 단위로 넓혀 받아 온다.
   const calRange = useMemo(() => {
     if (isWeek) {
@@ -72,13 +78,13 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
       const mon = mondayOf(st.dfrom ?? (st.month === defaultMonth ? defaultFrom : `${st.month}-01`));
       return { from: mon, to: addDays(mon, 6), clipped: false };
     }
-    return st.dfrom && st.dto ? clampRange(st.dfrom, st.dto) : { ...monthRangeOf(st.month), clipped: false };
-  }, [isWeek, st.dfrom, st.dto, st.month, defaultFrom, defaultMonth]);
+    return st.dfrom && st.dto && !isAir ? clampRange(st.dfrom, st.dto) : { ...monthRangeOf(st.month), clipped: false };
+  }, [isWeek, isAir, st.dfrom, st.dto, st.month, defaultFrom, defaultMonth]);
   // 시작은 달(그달 1일) 또는 날짜(기본: 이번 주 월요일) — queryRange가 둘 다 처리
   const { from: gridFrom, to: gridTo } = queryRange(st.from, st.len);
-  const shownFrom = isCal ? calRange.from : gridFrom;
-  const shownTo = isCal ? calRange.to : gridTo;
-  const fetchRange = isCal ? calendarFetchRange(calRange.from, calRange.to) : { from: gridFrom, to: gridTo };
+  const shownFrom = isMonthly ? calRange.from : gridFrom;
+  const shownTo = isMonthly ? calRange.to : gridTo;
+  const fetchRange = isMonthly ? calendarFetchRange(calRange.from, calRange.to) : { from: gridFrom, to: gridTo };
   const from = fetchRange.from;
   const to = fetchRange.to;
   const [day, setDay] = useState<string | null>(null);
@@ -134,10 +140,14 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
     () => (data && view === "calendar" ? buildCalendar(data, { from: calRange.from, to: calRange.to, channels, genres, hide: st.hide.filter((h) => h === "event") as CalLayer[], show: st.show as CalOwnShow[], can: st.can, tv: st.tv, ott: st.ott, statuses: st.st, showBase: !st.nobase }) : null),
     [data, view, calRange, channels, genres, st.hide, st.show, st.can, st.tv, st.ott, st.st, st.nobase]
   );
+  const airModel = useMemo(
+    () => (data && isAir ? buildAiringTable(data, { month: calRange.from.slice(0, 7), channel: airChannel, genres, includeMorningBusiness: st.amb }) : null),
+    [data, isAir, calRange.from, airChannel, genres, st.amb]
+  );
   const calOwnCodes = channels.length > 0 ? channels : ["ENA"];
   const dayFilter = useMemo(() => ({ tv: st.tv, ott: st.ott, statuses: st.st, showBase: !st.nobase }), [st.tv, st.ott, st.st, st.nobase]);
   const grid = useMemo(() => {
-    if (!data || view === "calendar" || view === "list") return null;
+    if (!data || view === "calendar" || view === "list" || view === "airing") return null;
     if (view === "compare") return { ...buildCompareRows(data, filters, st.cmp), hiddenChannels: [] as string[] };
     return buildOwnRows(data, filters, { showEmpty: st.empty });
   }, [data, view, filters, st.cmp, st.empty]);
@@ -159,6 +169,8 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
 
   // ── 비교 범위·장르·세부 필터(2차 개선 §3·§4) ──
   const scope = scopeOf(st);
+  // 비교 범위(경쟁 방송사·OTT)를 쓰는 보기 — KT ENA 타임라인과 방영표는 KT ENA만 본다
+  const usesScope = st.view !== "own" && !isAir;
   const groupACodes = ownOutlets.filter((o) => o.group === "A").map((o) => o.code);
   const applyScope = (sc: Exclude<Scope, "custom">) => {
     // 프리셋은 비교 대상만 바꾼다(장르·기간·검색은 그대로). 'KT ENA만' = 계열 채널 전체가 기준. 거기서 다른 범위로 나오면 기준을 ENA로 되돌린다.
@@ -175,7 +187,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
     genreSeg === null,
     !isCal && st.dows.length > 0,
     st.st.length > 0,
-    st.view !== "own" && scope === "custom",
+    usesScope && scope === "custom",
     isCal && !!st.can,
   ].filter(Boolean).length;
   const lenLabel = st.len === 12 ? "1년" : `${st.len}개월`;
@@ -209,8 +221,8 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
   if (st.genres.length > 0) applied.push({ key: "g", label: `장르 ${st.genres.map((g) => GENRE_LABEL[g]).join("·")}`, clear: () => set({ genres: [] }) });
   if (!isCal && st.dows.length > 0) applied.push({ key: "d", label: `요일 ${dowLabel([...st.dows].sort())}`, clear: () => set({ dows: [] }) });
   if (st.st.length > 0) applied.push({ key: "s", label: `상태 ${st.st.map((x) => STATUS_LABEL[x]).join("·")}`, clear: () => set({ st: [] }) });
-  if (st.view !== "own" && scope !== "market") applied.push({ key: "scope", label: scope === "custom" ? customText : `범위 ${SCOPES.find((x) => x.key === scope)?.label}`, clear: () => set({ tv: "all", ott: "all" }) });
-  if (st.view !== "own" && st.nobase) applied.push({ key: "nobase", label: "기준 채널 숨김", clear: () => set({ nobase: false }) });
+  if (usesScope && scope !== "market") applied.push({ key: "scope", label: scope === "custom" ? customText : `범위 ${SCOPES.find((x) => x.key === scope)?.label}`, clear: () => set({ tv: "all", ott: "all" }) });
+  if (usesScope && st.nobase) applied.push({ key: "nobase", label: "기준 채널 숨김", clear: () => set({ nobase: false }) });
   if (st.q.trim()) applied.push({ key: "q", label: `검색 ‘${st.q.trim()}’`, clear: () => set({ q: "" }) });
   const resetAll = () => set({ channels: [], genres: [], dows: [], st: [], tv: "all", ott: "all", nobase: false, q: "" });
   // 둘째 줄이 넘치면 줄인 모양(길이 단추 → 메뉴, 범위 글자 짧게)으로 — 실제 넘침을 재서 정한다. 세 번째 줄을 만들지 않고 상세 패널을 열어도 넘치지 않게(§3.2).
@@ -230,7 +242,9 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
     return () => ro.disconnect();
   }, [layoutKey, compact]);
 
-  const periodLabel = isCal
+  const periodLabel = isAir
+    ? `${calRange.from.slice(0, 4)}년 ${Number(calRange.from.slice(5, 7))}월`
+    : isCal
     ? isWeek
       ? `${dateFull(calRange.from)} — ${dateDot(calRange.to)}`
       : st.dfrom
@@ -244,14 +258,14 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
     if (isWeek) {
       const mon = addDays(calRange.from, dir * 7);
       set({ dfrom: mon, dto: addDays(mon, 6), month: mon.slice(0, 7) });
-    } else if (isCal) set({ month: addMonths(st.dfrom ? calRange.from.slice(0, 7) : st.month, dir), dfrom: null, dto: null });
+    } else if (isMonthly) set({ month: addMonths(calRange.from.slice(0, 7), dir), dfrom: null, dto: null });
     else set({ from: st.from.length === 7 ? addMonths(st.from, dir) : addMonthsDate(st.from, dir) });
   };
   const goToday = () => {
     setDay(null);
     const today = data?.today ?? new Date().toISOString().slice(0, 10);
     if (isWeek) set({ dfrom: mondayOf(today), dto: addDays(mondayOf(today), 6), month: today.slice(0, 7) });
-    else if (isCal) set({ month: defaultMonth, dfrom: null, dto: null });
+    else if (isMonthly) set({ month: defaultMonth, dfrom: null, dto: null });
     else set({ from: defaultFrom });
   };
 
@@ -273,10 +287,12 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
           <h1 className="shrink-0 pb-2.5 text-[17px] leading-none font-bold whitespace-nowrap text-[var(--lu-text)]">라인업</h1>
           <Tabs<ViewMode>
             bare
-            items={[{ key: "own", label: "KT ENA" }, { key: "compare", label: "경쟁 비교" }, { key: "calendar", label: "캘린더" }, { key: "list", label: "목록" }]}
+            items={[{ key: "own", label: "KT ENA" }, { key: "compare", label: "경쟁 비교" }, { key: "calendar", label: "캘린더" }, { key: "airing", label: "방영표" }, { key: "list", label: "목록" }]}
             value={st.view}
             onChange={(v) => {
               setDay(null);
+              // 방영표는 한 채널 — 고른 채널이 KT ENA 채널이 아니면(또는 없으면) ENA
+              if (v === "airing") return set({ view: v, sel: null, channels: [st.channels[0] ?? "ENA"] });
               // 화면을 옮겨도 장르·검색·비교 범위는 그대로(지시문 §10). KT ENA 보기의 채널 고르기는 기준 채널과 뜻이 달라 비교 화면으로 갈 때만 첫 채널로 줄인다.
               set({ view: v, sel: null, channels: v === "compare" && st.view === "own" ? st.channels.slice(0, 1) : st.channels });
             }}
@@ -324,6 +340,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
               )}
             </Menu>
             {/* 보기 설정 — 무엇을 볼지(필터)가 아니라 어떻게 보일지(묶음·밀도·표시 항목) */}
+            {!isAir && (
             <Menu size="sm" tone="ghost" label="보기 설정" align="right" width={st.view === "list" ? 300 : 360} icon={<Icon name="settings" size={13} />}>
               {(close) => (
                 <div className="space-y-0.5">
@@ -378,6 +395,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
                 </div>
               )}
             </Menu>
+            )}
             {data?.canEdit && (
               <Link href="/lineup/manage" className="inline-flex h-7 items-center rounded-[6px] px-2 text-[12.5px] font-medium text-[var(--lu-text-2)] hover:bg-[var(--lu-hover)] hover:text-[var(--lu-text)]">
                 자료 관리
@@ -428,7 +446,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
                 </Menu>
               )}
             </>
-          ) : (
+          ) : isAir ? null : (
             <>
               {!compact && <Segmented<number> size="sm" label="보는 길이" items={LENGTHS.map((n) => ({ key: n, label: n === 12 ? "1년" : `${n}개월` }))} value={LENGTHS.includes(st.len) ? st.len : null} onChange={(n) => set({ len: n })} />}
               <Menu size="sm" label={compact ? lenLabel : "직접 지정"} active={!compact && !LENGTHS.includes(st.len)} width={280}>
@@ -462,9 +480,22 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
               </Menu>
             </>
           )}
-          <Sep />
+          {!isAir && <Sep />}
           {/* 비교 범위 프리셋 — 누르면 바로 반영(시장 전체 = 기준 채널 + 경쟁 방송사 전체 + OTT 전체). 개별 채널을 바꾸면 '맞춤' */}
-          {st.view !== "own" && (
+          {isAir && (
+            <>
+              {/* 방영표 채널 — 한 번에 한 채널(편성센터 방영표처럼) */}
+              <Segmented<string>
+                size="sm"
+                label="채널"
+                items={ownOutlets.filter((o) => o.group === "A" || o.code === airChannel).map((o) => ({ key: o.code, label: o.name }))}
+                value={airChannel}
+                onChange={(c) => set({ channels: [c], sel: null })}
+              />
+              <Sep />
+            </>
+          )}
+          {usesScope && (
             <>
               <Segmented<Exclude<Scope, "custom">>
                 size="sm"
@@ -488,10 +519,16 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
             value={genreSeg}
             onChange={(g) => set({ genres: g === "all" ? [] : [g] })}
           />
+          {isAir && (
+            <Btn size="sm" pressed={st.amb} onClick={() => set({ amb: !st.amb })} title="12시 전에 시작하는 사업형 편성(협찬·유료 재방 블록)은 기본으로 뺍니다">
+              오전 사업형 포함
+            </Btn>
+          )}
+          {!isAir && (
           <Menu size="sm" label="필터" title="세부 필터 — 기준 채널 · 장르 · 요일 · 상태 · 방송사·OTT" icon={<Icon name="filter" size={13} />} count={filterCount} active={filterCount > 0} width={st.view === "own" ? 300 : 620} align={st.view === "own" ? "left" : "right"}>
             {(close) => (
               <FilterPanel
-                view={st.view}
+                view={st.view as Exclude<ViewMode, "airing">}
                 value={filterValue}
                 defaults={filterDefaults}
                 ownOutlets={ownOutlets}
@@ -502,6 +539,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
               />
             )}
           </Menu>
+          )}
           {isCal && (
             <Menu size="sm" label={<>일정 <b className="font-semibold">{calPresetLabel}</b></>} title="캘린더 일정 종류" width={250}>
               {(close) => (
@@ -539,7 +577,7 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
             </button>
           )}
         </div>
-        {st.legend && st.view !== "list" && <div className="mt-2 print:hidden">{isCal ? <CalLegend /> : <TimelineLegend full />}</div>}
+        {st.legend && st.view !== "list" && !isAir && <div className="mt-2 print:hidden">{isCal ? <CalLegend /> : <TimelineLegend full />}</div>}
 
         <p aria-live="polite" className="sr-only">{loading ? "라인업 불러오는 중" : data ? `${shownFrom}부터 ${shownTo}까지 라인업` : ""}</p>
         <div className="mt-2.5" aria-busy={loading}>
@@ -570,6 +608,11 @@ export default function LineupView({ initial, defaultFrom, defaultMonth }: { ini
                 onSelectEvent={(ev) => setEventEdit(ev)}
               />
               {showUndated && <UndatedStrip data={data} filters={filters} selectedId={st.sel} onSelect={(id) => set({ sel: id })} />}
+            </div>
+          )}
+          {data && airModel && (
+            <div className={loading || error ? "opacity-60 transition-opacity" : undefined}>
+              <AiringTableView data={data} model={airModel} selectedRunId={st.sel} onSelectRun={(id) => set({ sel: id })} query={st.q} />
             </div>
           )}
           {data && st.view === "list" && (
