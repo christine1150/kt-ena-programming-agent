@@ -119,7 +119,7 @@ export default function PrintView({ query: q, autoPrint }: { query: LineupQuery;
         </header>
         {error && <p className="py-6 text-center text-[13px] text-red-800">{error}</p>}
         {!data && !error && <p className="py-10 text-center text-[13px] text-zinc-600">라인업을 불러오는 중…</p>}
-        {data && airModel && <AiringTableView data={data} model={airModel} selectedRunId={null} onSelectRun={() => {}} query={q.q} printMode />}
+        {data && airModel && <AiringTableView data={data} model={airModel} selectedRunId={null} onSelectRun={() => {}} query={q.q} printMode layoutWidth={page.width} />}
         {data && cal && q.view === "calendar" && (
           <>
             <div className="mb-1.5"><CalLegend /></div>

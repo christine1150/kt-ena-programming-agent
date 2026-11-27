@@ -14,6 +14,8 @@ export interface AiringItem {
   key: string;
   runId: string;
   title: string;
+  /** 줄임말(한 줄에 안 들어갈 때만 화면이 쓴다, 마우스오버는 풀네임) */
+  shortTitle: string | null;
   /** '(6)' · '(스페셜 2)' · '' */
   ep: string;
   kind: "air" | "hiatus";
@@ -93,7 +95,7 @@ export function buildAiringTable(
     const genre = runGenre(r, work, slot);
     if (!shown(r, genre, slot.startMinute)) continue;
     const title = work ? (work.tentative ? `${work.title}(가제)` : work.title) : "";
-    const base = { runId: r.id, title, kind: "air" as const, reason: null, status: r.status, genre };
+    const base = { runId: r.id, title, shortTitle: work?.shortTitle ?? null, kind: "air" as const, reason: null, status: r.status, genre };
     // 단발·행사·월 1회 — 등록된 방송일 그대로
     if (r.draw.shape === "dots" || r.draw.shape === "diamond") {
       const lastKnown = r.endPrecision === "day" && !!r.endDate && !hasNextRun(r, data.runs);
@@ -128,7 +130,7 @@ export function buildAiringTable(
     for (let d = r.startDate; d <= end; d = addDays(d, 1)) {
       if (slot.days.length > 0 && !slot.days.includes(isoDow(d))) continue;
       put(d, slot.startMinute, {
-        key: `${r.id}:${d}`, runId: around?.id ?? r.id, title: work?.title ?? slot.name, ep: "", kind: "hiatus", first: false, last: false,
+        key: `${r.id}:${d}`, runId: around?.id ?? r.id, title: work?.title ?? slot.name, shortTitle: work?.shortTitle ?? null, ep: "", kind: "hiatus", first: false, last: false,
         reason: r.reason, status: r.status, genre, single: false,
       });
     }

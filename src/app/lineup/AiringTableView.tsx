@@ -3,9 +3,9 @@
 // 방영표 보기(2026-11-27 사용자 지시) — 편성센터 월간 '오리지널 타이틀 방영 일정' PDF 모양을 앱 안에서.
 // 주마다 [시간 | 월~금] [시간 | 토·일], 그 주에 방송이 있는 시각만 줄. 첫방 = 파랑, 최종회 = 노랑, 결방 = 빨강(칸 바탕 + 글자로도 표시).
 // 계산은 lib/lineup/airingTable.ts(순수 함수), 여기는 그리기만 한다. 화면·인쇄(A4 가로) 같은 컴포넌트.
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { airingTime, type AiringBlock, type AiringItem, type AiringModel } from "@/lib/lineup/airingTable";
-import { runMatchesQuery } from "@/lib/lineup/viewModel";
+import { runMatchesQuery, textWidth } from "@/lib/lineup/viewModel";
 import type { LineupPayload } from "@/lib/lineup/types";
 import { cx } from "./ui";
 
@@ -33,7 +33,7 @@ export function AiringLegend({ className }: { className?: string }) {
 }
 
 export default function AiringTableView({
-  data, model, selectedRunId, onSelectRun, query = "", printMode = false,
+  data, model, selectedRunId, onSelectRun, query = "", printMode = false, layoutWidth,
 }: {
   data: LineupPayload;
   model: AiringModel;
@@ -41,7 +41,24 @@ export default function AiringTableView({
   onSelectRun: (id: string) => void;
   query?: string;
   printMode?: boolean;
+  /** 인쇄: 용지 폭(px) — 칸 폭을 재지 않고 이 값으로 정한다(한 장 맞춤 계산이 줄임말 반영 전 높이를 재지 않게) */
+  layoutWidth?: number;
 }) {
+  // 칸 폭 — 제목(+회차)이 한 줄을 넘으면 줄임말로(사용자 지시 2026-11-27, 마우스오버는 풀네임)
+  const timeCol = printMode ? 46 : 52;
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [measured, setMeasured] = useState(0);
+  const hasGrid = model.weeks.some((w) => w.weekday.times.length > 0 || w.weekend.times.length > 0); // 빈 달 → 자료 있는 달로 옮기면 표가 새로 생겨 다시 잰다
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el || layoutWidth) return;
+    const ro = new ResizeObserver(() => setMeasured(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [layoutWidth, hasGrid]);
+  const gridW = layoutWidth ? layoutWidth - 2 : measured;
+  const colW = gridW > 0 ? (gridW - timeCol * 2) / 7 : 0;
+  const font = printMode ? 11.5 : 12.5;
   const runs = useMemo(() => new Map(data.runs.map((r) => [r.id, r])), [data.runs]);
   const works = useMemo(() => new Map(data.works.map((w) => [w.id, w])), [data.works]);
   const matches = (id: string) => {
@@ -69,8 +86,9 @@ export default function AiringTableView({
       ) : (
         <div className="overflow-hidden rounded-[8px] border border-[var(--lu-line)] bg-white">
           <div
+            ref={gridRef}
             className={cx("grid", printMode ? "text-[11.5px]" : "text-[12.5px]")}
-            style={{ gridTemplateColumns: `${printMode ? 46 : 52}px repeat(5, minmax(0, 1fr)) ${printMode ? 46 : 52}px repeat(2, minmax(0, 1fr))` }}
+            style={{ gridTemplateColumns: `${timeCol}px repeat(5, minmax(0, 1fr)) ${timeCol}px repeat(2, minmax(0, 1fr))` }}
           >
             {/* 요일 머리 */}
             {["시간", ...DOW.slice(0, 5), "시간", ...DOW.slice(5)].map((d, i) => (
@@ -86,7 +104,7 @@ export default function AiringTableView({
               </div>
             ))}
             {model.weeks.map((w) => (
-              <WeekRows key={w.start} week={w} today={data.today} selectedRunId={selectedRunId} onSelectRun={onSelectRun} printMode={printMode} matches={matches} />
+              <WeekRows key={w.start} week={w} today={data.today} selectedRunId={selectedRunId} onSelectRun={onSelectRun} printMode={printMode} matches={matches} room={colW > 0 ? colW - 14 : 0} font={font} />
             ))}
           </div>
         </div>
@@ -100,7 +118,7 @@ export default function AiringTableView({
 }
 
 function WeekRows({
-  week, today, selectedRunId, onSelectRun, printMode, matches,
+  week, today, selectedRunId, onSelectRun, printMode, matches, room, font,
 }: {
   week: AiringModel["weeks"][number];
   today: string;
@@ -108,6 +126,9 @@ function WeekRows({
   onSelectRun: (id: string) => void;
   printMode: boolean;
   matches: (id: string) => boolean;
+  /** 칸 안 글자 폭(px, 0 = 아직 모름 → 풀네임) */
+  room: number;
+  font: number;
 }) {
   const dateHead = (b: AiringBlock, sat0: boolean) =>
     b.days.map((d, i) => {
@@ -141,7 +162,7 @@ function WeekRows({
     return (
       <div key={key} className={cx("flex flex-col border-b border-l border-[var(--lu-grid)]", printMode ? "min-h-[22px]" : "min-h-[40px]", divider && "border-r-2 border-r-[var(--lu-line)]", !day.inMonth && "bg-[#fcfcfd]")}>
         {list.map((it) => (
-          <Entry key={it.key} it={it} selected={selectedRunId === it.runId} onSelect={onSelectRun} printMode={printMode} dim={!matches(it.runId)} />
+          <Entry key={it.key} it={it} selected={selectedRunId === it.runId} onSelect={onSelectRun} printMode={printMode} dim={!matches(it.runId)} room={room} font={font} />
         ))}
       </div>
     );
@@ -167,14 +188,19 @@ function WeekRows({
   );
 }
 
-function Entry({ it, selected, onSelect, printMode, dim }: { it: AiringItem; selected: boolean; onSelect: (id: string) => void; printMode: boolean; dim: boolean }) {
+function Entry({ it, selected, onSelect, printMode, dim, room, font }: { it: AiringItem; selected: boolean; onSelect: (id: string) => void; printMode: boolean; dim: boolean; room: number; font: number }) {
   const tone = it.kind === "hiatus" ? AIRING_TONE.hiatus : it.last ? AIRING_TONE.last : it.first ? AIRING_TONE.first : null;
   const sub = it.kind === "hiatus" ? `결방${it.reason ? ` · ${it.reason}` : ""}` : it.last ? "최종회" : it.first ? "첫방" : it.status === "tentative" ? "미정" : it.single ? "특집" : "";
   const label = `${it.title} ${it.ep}`.trim();
+  // 풀네임(+회차)이 한 줄을 넘으면 줄임말 — 등록된 줄임말, 없으면 부제 앞(‘미스틱 : …’ → ‘미스틱’), 그래도 길면 한 줄에서 '…'(마우스오버는 풀네임)
+  const epW = it.ep ? textWidth(it.ep, font) + 4 : 0;
+  const over = room > 0 && textWidth(it.title, font) + epW > room;
+  const head = it.title.split(/\s+[:：\-–]\s+/)[0];
+  const shown = !over ? it.title : it.shortTitle ?? (head !== it.title ? head : it.title);
   const body = (
     <>
-      <span className={cx("line-clamp-2 font-medium", printMode ? "leading-[1.2]" : "leading-[1.3]", it.kind === "hiatus" && "line-through decoration-1")} style={{ color: tone?.text ?? "var(--lu-text)" }}>
-        {it.title}
+      <span className={cx(over ? "max-w-full truncate" : "line-clamp-2", "font-medium", printMode ? "leading-[1.2]" : "leading-[1.3]", it.kind === "hiatus" && "line-through decoration-1")} style={{ color: tone?.text ?? "var(--lu-text)" }}>
+        {shown}
         {it.ep && <span className="lu-num ml-1 font-normal">{it.ep}</span>}
       </span>
       {sub && <span className="text-[11px] leading-tight font-semibold" style={{ color: tone?.text ?? "var(--lu-text-2)" }}>{sub}</span>}
