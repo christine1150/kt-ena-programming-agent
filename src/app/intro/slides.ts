@@ -10,7 +10,10 @@ export type Slide =
   | { kind: "cover"; title: string; subtitle: string; img?: string; notes?: string; only15?: boolean }
   | { kind: "comic"; scene: string; step: "intro" | "problem" | "solution" | "happy"; imgs: string[]; alt: string; lines: Line[]; punch?: string; notes?: string; only15?: boolean }
   | { kind: "live"; scene: string; title: string; point: string; url: string; focusText?: string; fallback: string; notes?: string; only15?: boolean }
-  | { kind: "closing"; title: string; items: { who: string; what: string }[]; footer: string; notes?: string; only15?: boolean };
+  | { kind: "closing"; title: string; items: { who: string; what: string; img?: string }[]; footer: string; notes?: string; only15?: boolean };
+
+/** 실제 화면 장 위 띠에 앉는 노트북 고양이(배경 없는 그림) */
+export const LIVE_CAT = "live-cat.webp";
 
 const S1 = "장면 1 · 아침 7시 반의 불안";
 const S2 = "장면 2 · 어제 성적표";
@@ -157,7 +160,7 @@ export const SLIDES: Slide[] = [
   // ── 장면 5 ─────────────────────────────
   {
     kind: "comic", scene: S5, step: "problem", imgs: ["s5-problem.webp"],
-    alt: "운행 담당이 첫방 버튼 앞에서 얼어붙고, 편성 PD는 발을 동동",
+    alt: "주조정실의 운행 담당은 잠긴 자물쇠 생각에 버튼 앞에서 얼어붙고, 편성 PD는 방송국을 가리키며 발을 동동",
     lines: [
       { who: "운행 담당", text: "이 드라마 첫방이 언제야? 나 홀드백 어긴 건 아니겠지?" },
       { who: "편성 PD", text: "ENA 첫방일은 알겠는데, 대체 우리 채널은 언제 틀 수 있는 거야!?" },
@@ -239,12 +242,12 @@ export const SLIDES: Slide[] = [
     kind: "closing",
     title: "내일 아침, 딱 하나만 해 보세요",
     items: [
-      { who: "편성 PD", what: "브리핑 → 프로그램 성과에서 내 채널 작품 검색" },
-      { who: "콘텐츠 마케터", what: "주요 뉴스 '출연자 이슈' → 프로그램 성과 → 보고서" },
-      { who: "심의 담당", what: "주요 뉴스 '정책' 칸" },
-      { who: "운행 담당", what: "라인업 캘린더의 첫방 ↦ · 종영 ⇥ · 파란 점선" },
-      { who: "재제작 담당", what: "프로그램 성과 '본방 외' + 라인업 종영일" },
-      { who: "OAP 담당", what: "라인업 맨 윗줄 이벤트 띠와 방송 순서" },
+      { who: "편성 PD", what: "브리핑 → 프로그램 성과에서 내 채널 작품 검색", img: "staff-pd.webp" },
+      { who: "콘텐츠 마케터", what: "주요 뉴스 '출연자 이슈' → 프로그램 성과 → 보고서", img: "staff-marketer.webp" },
+      { who: "심의 담당", what: "주요 뉴스 '정책' 칸", img: "staff-review.webp" },
+      { who: "운행 담당", what: "라인업 캘린더의 첫방 ↦ · 종영 ⇥ · 파란 점선", img: "staff-ops.webp" },
+      { who: "재제작 담당", what: "프로그램 성과 '본방 외' + 라인업 종영일", img: "staff-remake.webp" },
+      { who: "OAP 담당", what: "라인업 맨 윗줄 이벤트 띠와 방송 순서", img: "staff-oap.webp" },
     ],
     footer: "접속: 사내 계정으로 로그인 · 자세한 설명은 나눠 드린 리플렛",
   },

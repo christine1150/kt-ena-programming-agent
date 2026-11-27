@@ -4,7 +4,7 @@
 // 키: → / PageDown / Space 다음 · ← / PageUp 이전 · Home·End · F 전체 화면 · C 실제 화면↔캡처 · N 발표 메모 · P 실제 화면 모두 미리 불러오기 · R 실제 화면 새로고침
 // 실제 화면 안을 클릭한 뒤에도 PageDown/PageUp(발표용 리모컨)과 Esc(발표 화면으로 돌아오기)는 발표가 받는다.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SLIDES, type Slide } from "./slides";
+import { LIVE_CAT, SLIDES, type Slide } from "./slides";
 
 const W = 1920;
 const H = 1080;
@@ -143,7 +143,9 @@ function ClosingSlide({ s }: { s: Extract<Slide, { kind: "closing" }> }) {
       <h2 className="font-black" style={{ fontSize: 76, color: "#1d1d1f", fontFamily: "var(--font-pretendard)" }}>{s.title}</h2>
       <div className="mt-14 grid flex-1 grid-cols-2 gap-x-10 gap-y-8">
         {s.items.map((it) => (
-          <div key={it.who} className="flex items-center gap-6 rounded-[28px] bg-white px-10 shadow-sm">
+          <div key={it.who} className="flex items-center gap-6 rounded-[28px] bg-white shadow-sm" style={{ padding: it.img ? "0 40px 0 20px" : "0 40px" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {it.img && <img src={`/intro/comics/${it.img}`} alt="" className="shrink-0 object-contain" style={{ height: 170, width: 140 }} draggable={false} />}
             <span className="shrink-0 rounded-2xl px-5 py-2 font-bold text-white" style={{ fontSize: 30, background: BLUE }}>{it.who}</span>
             <span className="font-semibold leading-snug" style={{ fontSize: 34, color: "#2b2b2b" }}>{it.what}</span>
           </div>
@@ -156,7 +158,9 @@ function ClosingSlide({ s }: { s: Extract<Slide, { kind: "closing" }> }) {
 
 function LiveBar({ s, capture }: { s: Extract<Slide, { kind: "live" }>; capture: boolean }) {
   return (
-    <div className="flex items-center gap-6 px-10" style={{ height: LIVE_BAR, background: "#1d1d2b" }}>
+    <div className="flex items-center gap-6 pl-6 pr-10" style={{ height: LIVE_BAR, background: "#1d1d2b" }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={`/intro/comics/${LIVE_CAT}`} alt="" className="shrink-0" style={{ height: 80 }} draggable={false} />
       <span className="shrink-0 rounded-full px-4 py-1.5 font-bold" style={{ fontSize: 22, color: "#fff", background: capture ? "#6b6b7b" : "#e53950" }}>
         {capture ? "캡처 화면" : "● 실제 화면"}
       </span>
@@ -247,10 +251,11 @@ export default function IntroDeck({ short }: { short: boolean }) {
 
   // 만화 그림은 열자마자 전부 받아 둔다 — 실제 화면(iframe)을 미리 불러오는 요청에 밀려 그림이 늦게 뜨는 일을 막음
   useEffect(() => {
-    const srcs = new Set<string>();
+    const srcs = new Set<string>([LIVE_CAT]);
     for (const s of SLIDES) {
       if (s.kind === "comic") s.imgs.forEach((i) => srcs.add(i));
       if (s.kind === "cover" && s.img) srcs.add(s.img);
+      if (s.kind === "closing") s.items.forEach((it) => it.img && srcs.add(it.img));
     }
     srcs.forEach((src) => { const im = new Image(); im.src = `/intro/comics/${src}`; });
   }, []);
