@@ -15,25 +15,25 @@ export type Slide =
 /** 실제 화면 장 위 띠에 앉는 비서 고양이 — 장마다 cat으로 주제에 맞는 포즈(신문·커피·책·달력·슬레이트·서류 가방), 없으면 노트북 */
 export const LIVE_CAT = "live-cat.webp";
 
-const S1 = "장면 1 · 아침 7시 반의 불안";
-const S2 = "장면 2 · 어제 성적표";
-const S3 = "장면 3 · 이 작품, 통할까?";
-const S4 = "장면 4 · 다음 달엔 뭘 틀지?";
-const S5 = "장면 5 · 우리 채널은 언제 틀 수 있어?";
-const S6 = "장면 6 · 달력 전쟁";
-const S7 = "장면 7 · 보고하래!";
+const S1 = "S#1 · 아침 7시 반의 불안";
+const S2 = "S#2 · 어제 성적표";
+const S3 = "S#3 · 이 작품, 통할까?";
+const S4 = "S#4 · 다음 달엔 뭘 틀지?";
+const S5 = "S#5 · 우리 채널은 언제 틀 수 있어?";
+const S6 = "S#6 · 달력 전쟁";
+const S7 = "S#7 · 보고하래!";
 
 export const SLIDES: Slide[] = [
   {
     kind: "cover",
     title: "도와줘, 편성 비서!",
-    subtitle: "KT ENA AI 편성비서 — 내일 아침부터 이렇게 씁니다",
+    subtitle: "KT ENA AI 편성비서",
     img: "00-character.webp",
     notes: "인사. '오늘은 기능 설명 대신, 우리가 매일 겪는 곤란한 순간 7가지를 보여 드리겠습니다.'",
   },
   {
     kind: "comic",
-    scene: "오프닝",
+    scene: "",
     step: "intro",
     imgs: ["00-night.webp"],
     alt: "여러분이 자는 동안 비서가 하는 일 4컷 — 새벽 3~4시 후보 줄 세우기·지난주 변화 찾기, 5시 20분 편성표 확인, 7시 닐슨 메일 지키기, 7시 반 뉴스 스크랩",

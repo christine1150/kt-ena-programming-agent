@@ -3,7 +3,7 @@
 // 「도와줘, 편성 비서!」 발표 화면(2026-11-27) — 1920×1080 무대를 창 크기에 맞춰 줄이고, 만화·실제 화면(iframe)·마무리 장을 넘긴다.
 // 키: → / PageDown / Space 다음 · ← / PageUp 이전 · Home·End · F 전체 화면 · C 실제 화면↔캡처 · N 발표 메모 · P 실제 화면 모두 미리 불러오기 · R 실제 화면 새로고침
 // 실제 화면 안을 클릭한 뒤에도 PageDown/PageUp(발표용 리모컨)과 Esc(발표 화면으로 돌아오기)는 발표가 받는다.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LIVE_CAT, SLIDES, type Slide } from "./slides";
 
 const W = 1920;
@@ -11,14 +11,22 @@ const H = 1080;
 const BLUE = "#3c32e1";
 const CREAM = "#fff8ec";
 const LIVE_BAR = 92;
+const MX = 100; // 표지·만화 띠·마무리 장이 함께 쓰는 좌우 여백(글자 왼쪽 선을 한 줄로 맞춘다)
 const LIVE_ZOOM = 1.2; // 실제 화면을 1600px 폭으로 그려 1.2배 키운다(큰 화면에서 글자가 읽히게)
 
+// 이야기 흐름을 알려 주는 '곤란해!'·'해결!'만 띄운다 — '비서 등장' 같은 건 중요하지 않아 뺐다(2026-11-27)
 const STEP_LABEL: Record<string, { text: string; color: string; bg: string }> = {
-  intro: { text: "편성 비서", color: BLUE, bg: "#ecebfd" },
   problem: { text: "곤란해!", color: "#c2185b", bg: "#fde7ef" },
-  solution: { text: "비서 등장", color: BLUE, bg: "#ecebfd" },
   happy: { text: "해결!", color: "#0f8a5f", bg: "#e3f6ee" },
 };
+
+// KT Flow 글꼴(public/ena-design/fonts) — 한 패밀리에 굵기 500/700/900을 매겨 font-bold·font-black이 진짜 굵은 글꼴 파일로 가게 한다(가짜 굵게 방지)
+const FONT_CSS = `
+@font-face { font-family: 'KT Flow'; font-weight: 500; src: url('/ena-design/fonts/KTFLOW-MEDIUM.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'KT Flow'; font-weight: 700; src: url('/ena-design/fonts/KTFLOW-BOLD.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'KT Flow'; font-weight: 900; src: url('/ena-design/fonts/KTFLOW-BLACK.ttf') format('truetype'); font-display: swap; }
+`;
+const FONT_STACK = "'KT Flow', var(--font-pretendard), var(--font-noto-sans-kr), sans-serif";
 
 /** iframe 문서에서 글자로 요소를 찾아 그 위치로 스크롤한다(자료가 늦게 그려지므로 몇 번 다시 본다). */
 function scrollToText(doc: Document, text: string): boolean {
@@ -74,23 +82,24 @@ function ComicImage({ src, alt, compact }: { src: string; alt: string; compact?:
 
 function SceneChip({ scene, step }: { scene: string; step?: string }) {
   const s = step ? STEP_LABEL[step] : null;
+  if (!scene && !s) return null;
   return (
     <div className="flex items-center gap-3">
-      <span className="rounded-full bg-white/90 px-5 py-2 font-semibold shadow-sm" style={{ fontSize: 26, color: "#3b3b3b" }}>{scene}</span>
-      {s && <span className="rounded-full px-5 py-2 font-extrabold" style={{ fontSize: 26, color: s.color, background: s.bg }}>{s.text}</span>}
+      {scene && <span className="rounded-full bg-white/90 px-5 py-2 font-bold shadow-sm" style={{ fontSize: 26, color: "#3b3b3b" }}>{scene}</span>}
+      {s && <span className="rounded-full px-5 py-2 font-bold" style={{ fontSize: 26, color: s.color, background: s.bg }}>{s.text}</span>}
     </div>
   );
 }
 
 function CoverSlide({ s }: { s: Extract<Slide, { kind: "cover" }> }) {
   return (
-    <div className="flex h-full w-full items-center" style={{ background: CREAM, padding: "0 120px" }}>
+    <div className="flex h-full w-full items-center" style={{ background: CREAM, padding: `0 ${MX}px` }}>
       <div className="flex-1">
-        <div className="font-semibold" style={{ fontSize: 34, color: BLUE }}>KT ENA 사내 소개</div>
-        <h1 className="mt-6 font-black leading-[1.05] tracking-tight" style={{ fontSize: 150, color: "#1d1d1f", fontFamily: "var(--font-pretendard)" }}>
+        <div className="font-bold" style={{ fontSize: 38, color: BLUE }}>KT ENA 콘텐츠편성센터</div>
+        <h1 className="mt-6 font-black leading-[1.05] tracking-tight" style={{ fontSize: 150, color: "#1d1d1f" }}>
           도와줘,<br /><span style={{ color: BLUE }}>편성 비서!</span>
         </h1>
-        <p className="mt-10" style={{ fontSize: 40, color: "#4a4a4a" }}>{s.subtitle}</p>
+        <p className="mt-10 font-medium" style={{ fontSize: 40, color: "#4a4a4a" }}>{s.subtitle}</p>
       </div>
       {s.img && (
         <div style={{ width: 680, height: 760 }}>
@@ -108,7 +117,7 @@ function ComicSlide({ s }: { s: Extract<Slide, { kind: "comic" }> }) {
   const lineSize = s.lines.length >= 3 ? 34 : 40;
   return (
     <div className="relative flex h-full w-full flex-col" style={{ background: CREAM }}>
-      <div className="absolute left-10 top-8 z-10"><SceneChip scene={s.scene} step={s.step} /></div>
+      <div className="absolute top-8 z-10" style={{ left: MX }}><SceneChip scene={s.scene} step={s.step} /></div>
       <div className="min-h-0 flex-1" style={{ padding: four ? "100px 60px 20px" : "90px 60px 16px" }}>
         {four ? (
           <div className="grid h-full grid-cols-2 grid-rows-2 gap-6">
@@ -119,15 +128,16 @@ function ComicSlide({ s }: { s: Extract<Slide, { kind: "comic" }> }) {
         )}
       </div>
       {hasBand && (
-        <div className="flex flex-col justify-center gap-4" style={{ height: bandH, padding: "0 80px 36px" }}>
+        // 이름표 칸은 가장 긴 이름표에 맞춰(max-content) 한 줄로 정렬 — 대사 글자가 같은 선에서 시작한다
+        <div className="grid items-center" style={{ height: bandH, padding: `0 ${MX}px 36px`, gridTemplateColumns: "max-content 1fr", columnGap: 28, rowGap: 18, alignContent: "center" }}>
           {s.lines.map((l, i) => (
-            <div key={i} className="flex items-start gap-5">
-              <span className="shrink-0 rounded-2xl px-5 py-2 font-bold text-white" style={{ fontSize: lineSize - 10, background: l.who === "편성 비서" ? BLUE : "#2b2b2b", marginTop: 4 }}>{l.who}</span>
-              <span className="font-bold leading-snug" style={{ fontSize: lineSize, color: "#1d1d1f" }}>“{l.text}”</span>
-            </div>
+            <Fragment key={i}>
+              <span className="rounded-2xl px-6 py-2 text-center font-bold text-white" style={{ fontSize: lineSize - 10, background: l.who === "편성 비서" ? BLUE : "#2b2b2b" }}>{l.who}</span>
+              <span className="font-bold leading-snug" style={{ fontSize: lineSize, color: "#1d1d1f", wordBreak: "keep-all" }}>“{l.text}”</span>
+            </Fragment>
           ))}
           {s.punch && (
-            <div className="self-center rounded-full px-10 py-4 font-black" style={{ fontSize: 50, color: "#fff", background: s.step === "happy" ? "#0f8a5f" : BLUE }}>
+            <div className="rounded-full px-10 py-4 text-center font-black" style={{ gridColumn: "1 / -1", justifySelf: "center", fontSize: 50, color: "#fff", background: s.step === "happy" ? "#0f8a5f" : BLUE }}>
               {s.punch}
             </div>
           )}
@@ -139,19 +149,22 @@ function ComicSlide({ s }: { s: Extract<Slide, { kind: "comic" }> }) {
 
 function ClosingSlide({ s }: { s: Extract<Slide, { kind: "closing" }> }) {
   return (
-    <div className="flex h-full w-full flex-col" style={{ background: CREAM, padding: "90px 120px" }}>
-      <h2 className="font-black" style={{ fontSize: 76, color: "#1d1d1f", fontFamily: "var(--font-pretendard)" }}>{s.title}</h2>
+    <div className="flex h-full w-full flex-col" style={{ background: CREAM, padding: `90px ${MX}px` }}>
+      <h2 className="font-black" style={{ fontSize: 76, color: "#1d1d1f" }}>{s.title}</h2>
       <div className="mt-14 grid flex-1 grid-cols-2 gap-x-10 gap-y-8">
         {s.items.map((it) => (
-          <div key={it.who} className="flex items-center gap-6 rounded-[28px] bg-white shadow-sm" style={{ padding: it.img ? "0 40px 0 20px" : "0 40px" }}>
+          // 카드마다 '그림 | 직군 이름표 위, 할 일 아래' — 이름표 길이가 달라도 글자 시작선이 같다
+          <div key={it.who} className="flex items-center gap-7 rounded-[28px] bg-white shadow-sm" style={{ padding: "0 44px 0 24px" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {it.img && <img src={`/intro/comics/${it.img}`} alt="" className="shrink-0 object-contain" style={{ height: 170, width: 140 }} draggable={false} />}
-            <span className="shrink-0 rounded-2xl px-5 py-2 font-bold text-white" style={{ fontSize: 30, background: BLUE }}>{it.who}</span>
-            <span className="font-semibold leading-snug" style={{ fontSize: 34, color: "#2b2b2b" }}>{it.what}</span>
+            <div className="min-w-0 flex-1">
+              <span className="inline-block rounded-2xl px-5 py-1.5 font-bold text-white" style={{ fontSize: 30, background: BLUE }}>{it.who}</span>
+              <div className="mt-3 font-medium leading-snug" style={{ fontSize: 34, color: "#2b2b2b", wordBreak: "keep-all" }}>{it.what}</div>
+            </div>
           </div>
         ))}
       </div>
-      <p className="mt-12 text-center" style={{ fontSize: 32, color: "#6d6455" }}>{s.footer}</p>
+      <p className="mt-12 text-center font-medium" style={{ fontSize: 32, color: "#6d6455" }}>{s.footer}</p>
     </div>
   );
 }
@@ -261,6 +274,11 @@ export default function IntroDeck({ short }: { short: boolean }) {
     srcs.forEach((src) => { const im = new Image(); im.src = `/intro/comics/${src}`; });
   }, []);
 
+  // KT Flow 굵기 3종을 미리 받아 첫 장에서 글꼴이 바뀌어 보이는 일을 줄인다
+  useEffect(() => {
+    for (const w of [500, 700, 900]) void document.fonts.load(`${w} 40px "KT Flow"`);
+  }, []);
+
   useEffect(() => {
     window.history.replaceState(null, "", `#${idx + 1}`);
     // 실제 화면 안에 포커스가 남아 있으면 숨겨진 iframe이 키를 삼켜 발표가 멈춘다 — 장이 바뀔 때마다 발표로 되돌린다
@@ -311,7 +329,8 @@ export default function IntroDeck({ short }: { short: boolean }) {
   const capture = captureSet.has(idx);
 
   return (
-    <div className="fixed inset-0 overflow-hidden select-none" style={{ background: "#111", fontFamily: "var(--font-pretendard), var(--font-noto-sans-kr), sans-serif" }}>
+    <div className="fixed inset-0 overflow-hidden select-none" style={{ background: "#111", fontFamily: FONT_STACK }}>
+      <style>{FONT_CSS}</style>
       <div
         ref={stageRef}
         tabIndex={-1}

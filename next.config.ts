@@ -7,7 +7,11 @@ const nextConfig: NextConfig = {
   },
   // 소개 발표 만화 그림은 한 시간 동안 다시 묻지 않고 쓴다 — 실제 화면(iframe)을 불러오는 동안 그림 재확인 요청이 밀려 늦게 뜨던 문제
   async headers() {
-    return [{ source: "/intro/comics/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=3600" }] }];
+    // KT Flow 글꼴(3종 약 2.4MB)도 같은 이유로 하루 동안 다시 묻지 않는다(2026-11-27)
+    return [
+      { source: "/intro/comics/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=3600" }] },
+      { source: "/ena-design/fonts/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=86400" }] },
+    ];
   },
 };
 
