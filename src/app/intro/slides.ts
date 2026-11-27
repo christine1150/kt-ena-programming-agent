@@ -7,7 +7,7 @@
 export type Line = { who: string; text: string };
 
 export type Slide =
-  | { kind: "cover"; title: string; subtitle: string; img?: string; notes?: string; only15?: boolean }
+  | { kind: "cover"; org: string; title: string; subtitle: string; img?: string; notes?: string; only15?: boolean }
   | { kind: "comic"; scene: string; step: "intro" | "problem" | "solution" | "happy"; imgs: string[]; alt: string; lines: Line[]; punch?: string; notes?: string; only15?: boolean }
   | { kind: "live"; scene: string; title: string; point: string; url: string; focusText?: string; fallback: string; cat?: string; notes?: string; only15?: boolean }
   | { kind: "closing"; title: string; items: { who: string; what: string; img?: string }[]; footer: string; notes?: string; only15?: boolean };
@@ -26,6 +26,7 @@ const S7 = "S#7 · 보고하래!";
 export const SLIDES: Slide[] = [
   {
     kind: "cover",
+    org: "KT ENA 콘텐츠편성센터",
     title: "도와줘, 편성 비서!",
     subtitle: "KT ENA AI 편성비서",
     img: "00-character.webp",

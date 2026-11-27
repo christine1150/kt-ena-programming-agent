@@ -4,6 +4,7 @@
 // 키: → / PageDown / Space 다음 · ← / PageUp 이전 · Home·End · F 전체 화면 · C 실제 화면↔캡처 · N 발표 메모 · P 실제 화면 모두 미리 불러오기 · R 실제 화면 새로고침
 // 실제 화면 안을 클릭한 뒤에도 PageDown/PageUp(발표용 리모컨)과 Esc(발표 화면으로 돌아오기)는 발표가 받는다.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { applyPatch, diffOf, exportText, loadEdits, saveEdits, slideId, type Edits, type Patch } from "./edits";
 import { LIVE_CAT, SLIDES, type Slide } from "./slides";
 
 const W = 1920;
@@ -54,15 +55,110 @@ function withPreload(prev: Set<number>, at: number, slides: Slide[]): Set<number
   return next.size === prev.size ? prev : next;
 }
 
-function useStageScale() {
-  const fit = () => Math.min(window.innerWidth / W, window.innerHeight / H);
-  const [scale, setScale] = useState(fit);
+/** inset: 오른쪽 편집 패널이 차지하는 폭 — 그만큼 뺀 자리에 무대를 맞춘다 */
+function useStageScale(inset: number) {
+  const [scale, setScale] = useState(() => Math.min((window.innerWidth - inset) / W, window.innerHeight / H));
   useEffect(() => {
-    const onResize = () => setScale(fit());
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+    const fit = () => setScale(Math.min((window.innerWidth - inset) / W, window.innerHeight / H));
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [inset]);
   return scale;
+}
+
+const PANEL_W = 420;
+
+const FIELD = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-[14px] leading-snug text-neutral-900 outline-none focus:border-[#3c32e1] focus:ring-2 focus:ring-[#3c32e1]/20";
+
+function Field({ label, value, onChange, multiline }: { label: string; value: string; onChange: (v: string) => void; multiline?: boolean }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[12px] font-bold text-neutral-500">{label}</span>
+      {multiline ? (
+        <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={Math.min(6, Math.max(2, Math.ceil(value.length / 26)))} className={`${FIELD} resize-y`} />
+      ) : (
+        <input value={value} onChange={(e) => onChange(e.target.value)} className={FIELD} />
+      )}
+    </label>
+  );
+}
+
+/** 오른쪽 글자 편집 패널 — 지금 장의 글자를 칸으로 보여 주고, 고치는 즉시 화면에 반영된다 */
+function EditPanel({ pos, total, orig, patch, changedCount, onPatch, onResetSlide, onResetAll, onCopy, copied, onClose }: {
+  pos: number; total: number; orig: Slide; patch: Patch; changedCount: number;
+  onPatch: (fn: (p: Patch) => Patch) => void; onResetSlide: () => void; onResetAll: () => void; onCopy: () => void; copied: boolean; onClose: () => void;
+}) {
+  const set = (k: "org" | "subtitle" | "punch" | "title" | "point" | "footer" | "notes", v: string) => onPatch((p) => ({ ...p, [k]: v }));
+  const setLine = (i: number, k: "who" | "text", v: string) =>
+    onPatch((p) => { const lines = [...(p.lines ?? [])]; lines[i] = { ...lines[i], [k]: v }; return { ...p, lines }; });
+  const setItem = (i: number, k: "who" | "what", v: string) =>
+    onPatch((p) => { const items = [...(p.items ?? [])]; items[i] = { ...items[i], [k]: v }; return { ...p, items }; });
+  const kindLabel = orig.kind === "cover" ? "표지" : orig.kind === "closing" ? "마무리" : orig.kind === "live" ? "실제 화면" : orig.scene || "밤사이 일과";
+  const dirty = diffOf(orig, patch).length > 0;
+
+  return (
+    <aside className="select-text fixed bottom-0 right-0 top-0 z-50 flex flex-col border-l border-neutral-200 bg-neutral-50 text-neutral-900" style={{ width: PANEL_W, fontFamily: FONT_STACK }}>
+      <div className="flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-3">
+        <div>
+          <div className="text-[16px] font-black">글자 편집</div>
+          <div className="text-[12px] text-neutral-500">{pos} / {total} · {kindLabel}{dirty ? " · 수정됨" : ""}</div>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-lg border border-neutral-300 px-3 py-1.5 text-[13px] font-bold hover:bg-neutral-100">닫기 (E)</button>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-3 overflow-auto px-4 py-4">
+        {orig.kind === "cover" && (
+          <>
+            <Field label="맨 위 글" value={patch.org ?? orig.org} onChange={(v) => set("org", v)} />
+            <Field label="부제" value={patch.subtitle ?? orig.subtitle} onChange={(v) => set("subtitle", v)} />
+          </>
+        )}
+        {orig.kind === "comic" && (
+          <>
+            {orig.lines.map((l, i) => (
+              <div key={i} className="space-y-2 rounded-xl border border-neutral-200 bg-white p-3">
+                <Field label={`대사 ${i + 1} · 이름표`} value={patch.lines?.[i]?.who ?? l.who} onChange={(v) => setLine(i, "who", v)} />
+                <Field label={`대사 ${i + 1} · 말`} value={patch.lines?.[i]?.text ?? l.text} onChange={(v) => setLine(i, "text", v)} multiline />
+              </div>
+            ))}
+            {orig.punch !== undefined && <Field label="한 줄 결론 (색 띠)" value={patch.punch ?? orig.punch} onChange={(v) => set("punch", v)} multiline />}
+            {orig.lines.length === 0 && orig.punch === undefined && <p className="text-[13px] text-neutral-500">이 장에는 고칠 글자가 없습니다(그림만).</p>}
+          </>
+        )}
+        {orig.kind === "live" && (
+          <>
+            <Field label="화면 위 제목" value={patch.title ?? orig.title} onChange={(v) => set("title", v)} />
+            <Field label="오른쪽 한 줄" value={patch.point ?? orig.point} onChange={(v) => set("point", v)} multiline />
+          </>
+        )}
+        {orig.kind === "closing" && (
+          <>
+            <Field label="제목" value={patch.title ?? orig.title} onChange={(v) => set("title", v)} />
+            {orig.items.map((it, i) => (
+              <div key={i} className="space-y-2 rounded-xl border border-neutral-200 bg-white p-3">
+                <Field label={`카드 ${i + 1} · 직군`} value={patch.items?.[i]?.who ?? it.who} onChange={(v) => setItem(i, "who", v)} />
+                <Field label={`카드 ${i + 1} · 할 일`} value={patch.items?.[i]?.what ?? it.what} onChange={(v) => setItem(i, "what", v)} multiline />
+              </div>
+            ))}
+            <Field label="아래 안내" value={patch.footer ?? orig.footer} onChange={(v) => set("footer", v)} multiline />
+          </>
+        )}
+        <Field label="발표 메모 (N 키로 화면에 띄움)" value={patch.notes ?? orig.notes ?? ""} onChange={(v) => set("notes", v)} multiline />
+      </div>
+
+      <div className="space-y-2 border-t border-neutral-200 bg-white px-4 py-3">
+        <p className="text-[12px] leading-snug text-neutral-500">고친 글은 이 브라우저에 저장됩니다. 다른 컴퓨터에서 발표하거나 사이트에 영구 반영하려면 &lsquo;수정 내용 복사&rsquo; 후 Claude에게 붙여 주세요.</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={onCopy} disabled={changedCount === 0} className="flex-1 rounded-lg bg-[#3c32e1] px-3 py-2 text-[13px] font-bold text-white disabled:opacity-40">
+            {copied ? "복사했습니다" : `수정 내용 복사 (${changedCount}장)`}
+          </button>
+          <button type="button" onClick={onResetSlide} disabled={!dirty} className="rounded-lg border border-neutral-300 px-3 py-2 text-[13px] font-bold disabled:opacity-40">이 장 되돌리기</button>
+        </div>
+        <button type="button" onClick={onResetAll} disabled={changedCount === 0} className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-[12px] font-bold text-neutral-600 disabled:opacity-40">모든 장 원래대로</button>
+      </div>
+    </aside>
+  );
 }
 
 function ComicImage({ src, alt, compact }: { src: string; alt: string; compact?: boolean }) {
@@ -95,7 +191,7 @@ function CoverSlide({ s }: { s: Extract<Slide, { kind: "cover" }> }) {
   return (
     <div className="flex h-full w-full items-center" style={{ background: CREAM, padding: `0 ${MX}px` }}>
       <div className="flex-1">
-        <div className="font-bold" style={{ fontSize: 38, color: BLUE }}>KT ENA 콘텐츠편성센터</div>
+        <div className="font-bold" style={{ fontSize: 38, color: BLUE }}>{s.org}</div>
         <h1 className="mt-6 font-black leading-[1.05] tracking-tight" style={{ fontSize: 150, color: "#1d1d1f" }}>
           도와줘,<br /><span style={{ color: BLUE }}>편성 비서!</span>
         </h1>
@@ -238,8 +334,15 @@ function LiveFrame({ s, active, reloadKey, onDeckKey }: LiveFrameProps) {
 }
 
 export default function IntroDeck({ short }: { short: boolean }) {
-  const slides = useMemo(() => SLIDES.filter((s) => !(short && s.only15)), [short]);
-  const scale = useStageScale();
+  // 글자 편집(오른쪽 패널): 고친 글은 브라우저에 저장해 두고 원본 장 위에 덮어 보여 준다
+  const [edits, setEdits] = useState<Edits>(loadEdits);
+  const [panel, setPanel] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const slides = useMemo(
+    () => SLIDES.filter((s) => !(short && s.only15)).map((s) => applyPatch(s, edits[slideId(s)])),
+    [short, edits],
+  );
+  const scale = useStageScale(panel ? PANEL_W : 0);
   // 브라우저에서만 그려지므로(IntroDeckClient, ssr:false) 처음 상태를 주소의 #번호에서 바로 읽는다
   const [idx, setIdx] = useState(() => hashIndex(slides.length) ?? 0);
   const [notes, setNotes] = useState(false);
@@ -300,6 +403,7 @@ export default function IntroDeck({ short }: { short: boolean }) {
         if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen();
         break;
       case "n": case "N": setNotes((v) => !v); break;
+      case "e": case "E": setPanel((v) => !v); break;
       case "c": case "C":
         setCaptureSet((prev) => { const n = new Set(prev); if (n.has(idx)) n.delete(idx); else n.add(idx); return n; });
         break;
@@ -315,7 +419,13 @@ export default function IntroDeck({ short }: { short: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (["ArrowRight", "ArrowLeft", "PageDown", "PageUp", " ", "Enter", "Backspace", "Home", "End", "Escape", "f", "F", "n", "N", "c", "C", "p", "P", "r", "R"].includes(e.key)) {
+      // 편집 칸에 글자를 치는 중에는 발표 키(←→·스페이스·F·N 등)를 가로채지 않는다
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
+        if (e.key === "Escape") { e.preventDefault(); t.blur(); stageRef.current?.focus(); }
+        return;
+      }
+      if (["ArrowRight", "ArrowLeft", "PageDown", "PageUp", " ", "Enter", "Backspace", "Home", "End", "Escape", "f", "F", "n", "N", "c", "C", "p", "P", "r", "R", "e", "E"].includes(e.key)) {
         e.preventDefault();
         handleKey(e.key);
       }
@@ -324,12 +434,36 @@ export default function IntroDeck({ short }: { short: boolean }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleKey]);
 
+  // 고친 글은 바뀔 때마다 브라우저에 저장
+  useEffect(() => { saveEdits(edits); }, [edits]);
+
   const cur = slides[idx];
   const isLive = cur.kind === "live";
   const capture = captureSet.has(idx);
+  const curId = slideId(cur);
+  const orig = SLIDES.find((s) => slideId(s) === curId) ?? SLIDES[0];
+  const changedCount = SLIDES.filter((s) => diffOf(s, edits[slideId(s)]).length > 0).length;
+
+  const patchSlide = (fn: (p: Patch) => Patch) => setEdits((prev) => ({ ...prev, [curId]: fn(prev[curId] ?? {}) }));
+  const resetSlide = () => setEdits((prev) => { const n = { ...prev }; delete n[curId]; return n; });
+  const resetAll = () => { if (window.confirm("모든 장에서 고친 글을 원래대로 되돌립니다. 계속할까요?")) setEdits({}); };
+  const copyEdits = () => {
+    const text = exportText(SLIDES, edits);
+    const done = () => { setCopied(true); window.setTimeout(() => setCopied(false), 2000); };
+    navigator.clipboard.writeText(text).then(done, () => {
+      // 클립보드 권한이 막힌 환경 — 임시 칸에 넣고 복사
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      done();
+    });
+  };
 
   return (
-    <div className="fixed inset-0 overflow-hidden select-none" style={{ background: "#111", fontFamily: FONT_STACK }}>
+    <div className="fixed bottom-0 left-0 top-0 overflow-hidden select-none" style={{ right: panel ? PANEL_W : 0, background: "#111", fontFamily: FONT_STACK }}>
       <style>{FONT_CSS}</style>
       <div
         ref={stageRef}
@@ -370,14 +504,31 @@ export default function IntroDeck({ short }: { short: boolean }) {
       </div>
 
       {/* 마우스용 조작(평소엔 흐리게) */}
-      <div className="fixed bottom-3 right-4 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 text-[13px] text-white opacity-25 transition hover:opacity-100">
+      <div className="absolute bottom-3 right-4 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 text-[13px] text-white opacity-25 transition hover:opacity-100">
         <button type="button" onClick={() => go(-1)} className="px-2" aria-label="이전 장">◀</button>
         <span className="tabular-nums">{idx + 1} / {slides.length}{short ? " · 10분 판" : ""}</span>
         <button type="button" onClick={() => go(1)} className="px-2" aria-label="다음 장">▶</button>
         {isLive && <button type="button" onClick={() => handleKey("c")} className="rounded-full bg-white/15 px-2">{capture ? "실제 화면" : "캡처"}</button>}
         <button type="button" onClick={() => handleKey("n")} className="rounded-full bg-white/15 px-2">메모</button>
+        <button type="button" onClick={() => handleKey("e")} className="rounded-full bg-white/15 px-2">글자 편집</button>
         <button type="button" onClick={() => handleKey("f")} className="rounded-full bg-white/15 px-2">전체 화면</button>
       </div>
+
+      {panel && (
+        <EditPanel
+          pos={idx + 1}
+          total={slides.length}
+          orig={orig}
+          patch={edits[curId] ?? {}}
+          changedCount={changedCount}
+          onPatch={patchSlide}
+          onResetSlide={resetSlide}
+          onResetAll={resetAll}
+          onCopy={copyEdits}
+          copied={copied}
+          onClose={() => setPanel(false)}
+        />
+      )}
     </div>
   );
 }
