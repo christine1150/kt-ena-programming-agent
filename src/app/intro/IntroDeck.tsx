@@ -303,6 +303,24 @@ function LiveFrame({ s, active, reloadKey, onDeckKey }: LiveFrameProps) {
     tick();
   }, [s.focusText]);
 
+  // clickTab: 화면 안의 탭(예: 브리핑 '주간'·'월간')을 대신 눌러 준다 — 사이트가 '가장 최근 리뷰' 날짜를 스스로 잡으므로 날짜를 주소에 박지 않는다.
+  // 탭은 자료를 다 받은 뒤에야 나타나므로 나타날 때까지 기다린다(이미 선택된 탭은 다시 누르지 않는다).
+  const runClick = useCallback(() => {
+    const doc = ref.current?.contentDocument;
+    if (!doc || !s.clickTab) return;
+    let tries = 0;
+    const tick = () => {
+      const tab = Array.from(doc.querySelectorAll<HTMLElement>('[role="tab"]')).find((e) => (e.textContent ?? "").trim() === s.clickTab);
+      if (tab) {
+        if (tab.getAttribute("aria-selected") !== "true") tab.click();
+        return;
+      }
+      if (++tries > 120) return;
+      window.setTimeout(tick, 500);
+    };
+    tick();
+  }, [s.clickTab]);
+
   const onLoad = useCallback(() => {
     const doc = ref.current?.contentDocument;
     if (!doc) return;
@@ -313,8 +331,9 @@ function LiveFrame({ s, active, reloadKey, onDeckKey }: LiveFrameProps) {
         keyRef.current(e.key);
       }
     });
+    runClick();
     runFocus();
-  }, [runFocus]);
+  }, [runClick, runFocus]);
 
   useEffect(() => { if (active) runFocus(); }, [active, runFocus]);
 
@@ -405,6 +424,8 @@ export default function IntroDeck({ short }: { short: boolean }) {
       case "n": case "N": setNotes((v) => !v); break;
       case "e": case "E": setPanel((v) => !v); break;
       case "c": case "C":
+        // 캡처가 없는(바뀐 화면) 장은 예비 캡처로 바꾸지 않는다
+        if (slides[idx].kind !== "live" || (slides[idx] as Extract<Slide, { kind: "live" }>).capture === false) break;
         setCaptureSet((prev) => { const n = new Set(prev); if (n.has(idx)) n.delete(idx); else n.add(idx); return n; });
         break;
       case "p": case "P":
@@ -498,7 +519,7 @@ export default function IntroDeck({ short }: { short: boolean }) {
           <div className="absolute bottom-6 left-1/2 w-[1500px] -translate-x-1/2 rounded-3xl px-10 py-7 text-white shadow-2xl" style={{ background: "rgba(20,20,30,.92)", fontSize: 28, lineHeight: 1.5 }}>
             <div className="mb-2 font-bold" style={{ color: "#c9c6ff", fontSize: 22 }}>발표 메모 (N으로 닫기)</div>
             {cur.notes ?? "메모 없음"}
-            {isLive && <div className="mt-3" style={{ color: "#9a9ab0", fontSize: 22 }}>C 캡처로 전환 · R 실제 화면 새로고침 · 실제 화면 안에서는 PageDown/PageUp으로 넘기고, Esc로 발표로 돌아오기</div>}
+            {isLive && <div className="mt-3" style={{ color: "#9a9ab0", fontSize: 22 }}>{cur.capture === false ? "" : "C 캡처로 전환 · "}R 실제 화면 새로고침 · 실제 화면 안에서는 PageDown/PageUp으로 넘기고, Esc로 발표로 돌아오기</div>}
           </div>
         )}
       </div>
@@ -508,8 +529,7 @@ export default function IntroDeck({ short }: { short: boolean }) {
         <button type="button" onClick={() => go(-1)} className="px-2" aria-label="이전 장">◀</button>
         <span className="tabular-nums">{idx + 1} / {slides.length}{short ? " · 10분 판" : ""}</span>
         <button type="button" onClick={() => go(1)} className="px-2" aria-label="다음 장">▶</button>
-        {isLive && <button type="button" onClick={() => handleKey("c")} className="rounded-full bg-white/15 px-2">{capture ? "실제 화면" : "캡처"}</button>}
-        <button type="button" onClick={() => handleKey("n")} className="rounded-full bg-white/15 px-2">메모</button>
+        {/* 캡처·메모 단추는 뺐다(2026-11-27) — 키보드 C·N은 그대로 동작 */}
         <button type="button" onClick={() => handleKey("e")} className="rounded-full bg-white/15 px-2">글자 편집</button>
         <button type="button" onClick={() => handleKey("f")} className="rounded-full bg-white/15 px-2">전체 화면</button>
       </div>
