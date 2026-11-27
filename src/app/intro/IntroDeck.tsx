@@ -245,6 +245,16 @@ export default function IntroDeck({ short }: { short: boolean }) {
     return () => window.removeEventListener("hashchange", onHash);
   }, [moveTo, slides.length]);
 
+  // 만화 그림은 열자마자 전부 받아 둔다 — 실제 화면(iframe)을 미리 불러오는 요청에 밀려 그림이 늦게 뜨는 일을 막음
+  useEffect(() => {
+    const srcs = new Set<string>();
+    for (const s of SLIDES) {
+      if (s.kind === "comic") s.imgs.forEach((i) => srcs.add(i));
+      if (s.kind === "cover" && s.img) srcs.add(s.img);
+    }
+    srcs.forEach((src) => { const im = new Image(); im.src = `/intro/comics/${src}`; });
+  }, []);
+
   useEffect(() => {
     window.history.replaceState(null, "", `#${idx + 1}`);
     // 실제 화면 안에 포커스가 남아 있으면 숨겨진 iframe이 키를 삼켜 발표가 멈춘다 — 장이 바뀔 때마다 발표로 되돌린다
