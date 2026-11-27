@@ -38,6 +38,8 @@ export function hasPrevRun(r: RunDto, runs: RunDto[]): boolean {
 export function hasNextRun(r: RunDto, runs: RunDto[]): boolean {
   const end = r.endDate ?? r.draw?.to;
   if (!end || !r.workId) return false;
+  // 뒤 구간이 조회 기간 밖(예: 12월 화면에서 1/6에 시작하는 이어지는 편성)이면 runs에 없으니 서버가 계산한 표시를 쓴다
+  if (r.continuesLater) return true;
   return runs.some((x) => x.id !== r.id && x.workId === r.workId && x.slotId === r.slotId && !!x.startDate && x.startDate > end);
 }
 

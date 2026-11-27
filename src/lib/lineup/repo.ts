@@ -320,7 +320,7 @@ export const LINEUP_EXCLUDED_OUTLETS = new Set(["MBC_GN"]);
 
 /** 화면용 — 기간 [from, to]와 겹치는 구간 + 그리기 값·맞대결·빈 주(서버 계산). */
 export async function loadLineup(from: string, to: string, today: string, canEdit: boolean): Promise<LineupPayload> {
-  const [allOutlets, allSlots, datedRuns, undatedRuns, holidays, events, sources, featuredRows, eventsExtended] = await Promise.all([
+  const [allOutlets, allSlots, datedRuns, undatedRuns, holidays, events, sources, featuredRows, eventsExtended, laterRuns] = await Promise.all([
     loadOutlets(),
     all<SlotRow>((a, b) => supabase.from("lineup_slots").select("id, outlet_id, name, days, start_minute, time_note, compare_block, default_genre, sort_order").is("archived_at", null).order("sort_order").range(a, b)),
     all<RunRow>((a, b) =>
@@ -335,6 +335,10 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
     // 주요 콘텐츠 관리의 표시명(줄임말) — 실패해도 라인업은 그대로(줄임말만 빠진다)
     supabase.from("featured_content").select("display_name, programs(canonical_name)").not("display_name", "is", null),
     eventsSchemaExtended(),
+    // 기간 뒤에 시작하는 구간(작품·자리만) — 기간 끝 무렵 끝나는 구간이 실제로는 이어지는지 판단(종영 오표시 방지)
+    all<{ slot_id: string; work_id: string; start_date: string }>((a, b) =>
+      supabase.from("lineup_runs").select("slot_id, work_id, start_date").is("archived_at", null).gt("start_date", to).not("work_id", "is", null).order("start_date").range(a, b)
+    ),
   ]);
   // 기본 라인업 조회에서 빼는 방송사(2차 개선 2026-11-26: MBC경남은 KT ENA 편성 경쟁 분석에 필요 없음) — DB·원자료는 그대로, 자료 관리·업로드는 계속 본다.
   // 여기서 빼면 화면(타임라인·경쟁 비교·캘린더·목록·검색)·인쇄·엑셀이 모두 같은 규칙을 따른다.
@@ -387,6 +391,10 @@ export async function loadLineup(from: string, to: string, today: string, canEdi
       endDate: r.end_date, endPrecision: r.end_precision, startText: r.start_text, endText: r.end_text, episodes: r.episodes, episodeFrom: r.episode_from,
       recurrence: r.recurrence, airDates: r.air_dates, label: r.label, reason: r.reason, note: r.note, needsReview: r.needs_review, sourceId: r.source_id,
       sourceCell: r.source_cell, sourceText: r.source_text, updatedAt: r.updated_at, archived: !!r.archived_at, draw, rivals: [],
+      continuesLater: (() => {
+        const end = r.end_date ?? draw?.to;
+        return !!end && !!r.work_id && laterRuns.some((x) => x.slot_id === r.slot_id && x.work_id === r.work_id && x.start_date > end);
+      })(),
     });
   }
 

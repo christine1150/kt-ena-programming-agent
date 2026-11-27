@@ -143,6 +143,8 @@ export interface RunDto {
   rivals: string[]; // 동시간대 경쟁 구간 id — 다른 회사(KT ENA 계열끼리 제외), 공통 방송일이 있는 것만. 수준은 rivalLevels
   /** 경쟁 수준(P0-02): exact 실제 중첩 · estimated 검증된 방송 길이로 추정한 중첩 · adjacent 인접 시간대(±60분, 중첩 미확인) · family KT ENA 계열 채널끼리 */
   rivalLevels?: Record<string, "exact" | "estimated" | "adjacent" | "family">;
+  /** 같은 작품·같은 자리의 뒤 구간이 조회 기간 뒤에 있음(서버 계산) — 기간 끝에 걸친 구간 경계를 '종영'으로 잘못 찍지 않게 */
+  continuesLater?: boolean;
 }
 
 /** 그리기 구간 — 실제 날짜가 아니라 화면에 그릴 시작·끝(자리 점유 규칙 적용). 글자·패널은 실제 날짜를 쓴다. */
