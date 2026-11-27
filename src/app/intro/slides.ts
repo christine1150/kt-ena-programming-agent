@@ -9,10 +9,10 @@ export type Line = { who: string; text: string };
 export type Slide =
   | { kind: "cover"; title: string; subtitle: string; img?: string; notes?: string; only15?: boolean }
   | { kind: "comic"; scene: string; step: "intro" | "problem" | "solution" | "happy"; imgs: string[]; alt: string; lines: Line[]; punch?: string; notes?: string; only15?: boolean }
-  | { kind: "live"; scene: string; title: string; point: string; url: string; focusText?: string; fallback: string; notes?: string; only15?: boolean }
+  | { kind: "live"; scene: string; title: string; point: string; url: string; focusText?: string; fallback: string; cat?: string; notes?: string; only15?: boolean }
   | { kind: "closing"; title: string; items: { who: string; what: string; img?: string }[]; footer: string; notes?: string; only15?: boolean };
 
-/** 실제 화면 장 위 띠에 앉는 노트북 고양이(배경 없는 그림) */
+/** 실제 화면 장 위 띠에 앉는 비서 고양이 — 장마다 cat으로 주제에 맞는 포즈(신문·커피·책·달력·슬레이트·서류 가방), 없으면 노트북 */
 export const LIVE_CAT = "live-cat.webp";
 
 const S1 = "장면 1 · 아침 7시 반의 불안";
@@ -58,7 +58,7 @@ export const SLIDES: Slide[] = [
   },
   {
     kind: "live", scene: S1, title: "브리핑 › 주요 뉴스", point: "'출연자 이슈'와 '정책' 칸만 보면 끝",
-    url: "/", focusText: "주요 뉴스", fallback: "news.png",
+    url: "/", focusText: "주요 뉴스", fallback: "news.png", cat: "live-cat-news.webp",
     notes: "가운데 '출연자 이슈'(감시 명단에 등록된 출연자만), 왼쪽 아래 '정책'. 기사 제목을 누르면 새 창으로 원문.",
   },
   {
@@ -80,17 +80,17 @@ export const SLIDES: Slide[] = [
   },
   {
     kind: "live", scene: S2, title: "브리핑 › 오늘의 시청률", point: "7개 채널 어제 성적과 순위 ▲▼가 한 화면에",
-    url: "/", fallback: "briefing.png",
+    url: "/", fallback: "briefing.png", cat: "live-cat-coffee.webp",
     notes: "카드마다 시청률·순위·목표 달성률. 파란 줄은 평소보다 잘 나온 방송.",
   },
   {
     kind: "live", scene: S2, title: "브리핑 › 동시간대 순위", point: "경쟁사 프로그램 사이에서 우리 작품이 몇 위인지",
-    url: "/", focusText: "드라마·예능", fallback: "ranking.png", only15: true,
+    url: "/", focusText: "드라마·예능", fallback: "ranking.png", cat: "live-cat-book.webp", only15: true,
     notes: "수도권 2049 기준 전 채널 1~20위. ENA 칸이 파랗게 표시됨.",
   },
   {
     kind: "live", scene: S2, title: "시청률 표", point: "숫자만 크게 — 옆 창에 띄워 두고 보세요",
-    url: "/ratings?tab=daily", fallback: "ratings.png", only15: true,
+    url: "/ratings?tab=daily", fallback: "ratings.png", cat: "live-cat-book.webp", only15: true,
     notes: "메뉴 '시청률 표'는 새 창으로 열림. 평균 넘은 방송은 파란색.",
   },
   {
@@ -116,12 +116,12 @@ export const SLIDES: Slide[] = [
   },
   {
     kind: "live", scene: S3, title: "프로그램 성과 › 크래시2", point: "채널마다 평균보다 잘했는지 — 맨 위 한 줄이 결론",
-    url: "/program-performance?group=" + encodeURIComponent("크래시2"), fallback: "perf-crash2.png",
+    url: "/program-performance?group=" + encodeURIComponent("크래시2"), fallback: "perf-crash2.png", cat: "live-cat-book.webp",
     notes: "맨 위 문장: 'ENA·ENA Drama에서는 평균보다 높지만, ENA Play에서는 평균에 못 미칩니다.' 괄호 %는 채널 평균 대비. '본방 / 본방 외' 버튼으로 재방 성적만 따로(재제작 담당).",
   },
   {
     kind: "live", scene: S3, title: "프로그램 성과 › 나솔사계", point: "경쟁 채널 동시방송까지 같은 표에서 비교",
-    url: "/program-performance?group=" + encodeURIComponent("나는SOLO그후사랑은계속된다"), fallback: "perf-nasol.png", only15: true,
+    url: "/program-performance?group=" + encodeURIComponent("나는SOLO그후사랑은계속된다"), fallback: "perf-nasol.png", cat: "live-cat-book.webp", only15: true,
     notes: "SBS Plus 동시방송 행. 아래 그래프에서 회차별 흐름(기사용 추이).",
   },
   {
@@ -143,7 +143,7 @@ export const SLIDES: Slide[] = [
   },
   {
     kind: "live", scene: S4, title: "라인업", point: "자사·경쟁사 첫방·종영과 출연진을 한 장에",
-    url: "/lineup", fallback: "lineup.png",
+    url: "/lineup", fallback: "lineup.png", cat: "live-cat-calendar.webp",
     notes: "작품 막대를 누르면 오른쪽 상세: 첫 방송·종영·주연·동시간대 경쟁·같은 장르 기간 중첩.",
   },
   {
@@ -173,7 +173,7 @@ export const SLIDES: Slide[] = [
   },
   {
     kind: "live", scene: S5, title: "라인업 › 캘린더 · 방영 가능(ENA Drama)", point: "파란 점선 칸 = 우리 채널에서 틀 수 있는 날",
-    url: "/lineup?view=calendar&month=2026-12&can=ENA_DRAMA", fallback: "holdback.png",
+    url: "/lineup?view=calendar&month=2026-12&can=ENA_DRAMA", fallback: "holdback.png", cat: "live-cat-calendar.webp",
     notes: "'◇ ≈23:03~ 크래시2 9회' 같은 점선 칸. 오른쪽 위 '방영 가능 · ENA Drama'를 다른 채널로 바꿔 보기. 첫방일은 작품을 누르면 상세에.",
   },
   {
@@ -200,7 +200,7 @@ export const SLIDES: Slide[] = [
   },
   {
     kind: "live", scene: S6, title: "라인업 › 12월 캘린더", point: "이벤트 · 첫방 ↦ · 종영 ⇥ · 방송 순서가 한 달력에",
-    url: "/lineup?view=calendar&month=2026-12", fallback: "calendar.png",
+    url: "/lineup?view=calendar&month=2026-12", fallback: "calendar.png", cat: "live-cat-clapper.webp",
     notes: "25일 성탄절·1.1 신정(이벤트 띠), 첫방 ↦·종영 ⇥ 아이콘과 방송 시각, 자사 큰 일정은 진한 칸. '목록'·'저장·인쇄'로 한 장 출력.",
   },
   {
@@ -223,7 +223,7 @@ export const SLIDES: Slide[] = [
   },
   {
     kind: "live", scene: S7, title: "보고서", point: "Word 다운로드 · PDF 저장 · PPT 미리보기",
-    url: "/audience-report/portfolio", fallback: "report.png",
+    url: "/audience-report/portfolio", fallback: "report.png", cat: "live-cat-briefcase.webp",
     notes: "처음 만들 때 30초~1분 걸림 — 발표 전에 'P'로 미리 불러 두기. 채널별 분석 화면에도 W·P 버튼.",
   },
   {

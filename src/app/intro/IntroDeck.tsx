@@ -160,7 +160,7 @@ function LiveBar({ s, capture }: { s: Extract<Slide, { kind: "live" }>; capture:
   return (
     <div className="flex items-center gap-6 pl-6 pr-10" style={{ height: LIVE_BAR, background: "#1d1d2b" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`/intro/comics/${LIVE_CAT}`} alt="" className="shrink-0" style={{ height: 80 }} draggable={false} />
+      <img src={`/intro/comics/${s.cat ?? LIVE_CAT}`} alt="" className="shrink-0" style={{ height: 80 }} draggable={false} />
       <span className="shrink-0 rounded-full px-4 py-1.5 font-bold" style={{ fontSize: 22, color: "#fff", background: capture ? "#6b6b7b" : "#e53950" }}>
         {capture ? "캡처 화면" : "● 실제 화면"}
       </span>
@@ -256,6 +256,7 @@ export default function IntroDeck({ short }: { short: boolean }) {
       if (s.kind === "comic") s.imgs.forEach((i) => srcs.add(i));
       if (s.kind === "cover" && s.img) srcs.add(s.img);
       if (s.kind === "closing") s.items.forEach((it) => it.img && srcs.add(it.img));
+      if (s.kind === "live" && s.cat) srcs.add(s.cat);
     }
     srcs.forEach((src) => { const im = new Image(); im.src = `/intro/comics/${src}`; });
   }, []);
