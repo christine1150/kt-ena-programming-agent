@@ -24,6 +24,8 @@ export const UI = {
   accentWeak: "#eeedfc",
   accentLine: "#c9c6f6",
   danger: "#b42318",
+  /** 캘린더 토요일 글자(사용자 지시 2026-11-27: 토 파랑·일 빨강) — 브랜드 남색(accent)과 구분되는 파랑, 흰 바탕 5.6:1 */
+  saturday: "#1d5fd1",
   /** 밝은 시안 아웃라인은 흰 바탕 대비가 낮아(2.1:1) 경쟁사 사업형 막대는 중립 테두리 + 시안 강조선으로 보완한다. */
   cyanOutlineAssist: "#8b9099",
 } as const;

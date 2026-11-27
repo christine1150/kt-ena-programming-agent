@@ -254,7 +254,7 @@ export default function CalendarView({
           <div className="overflow-hidden rounded-[8px] border border-[var(--lu-line)] bg-white">
             <div className="grid grid-cols-7 border-b border-[var(--lu-line)]">
               {DOW.map((d, i) => (
-                <div key={d} className={cx("py-2 text-center text-[12px] font-medium", i === 6 ? "text-[var(--lu-danger)]" : "text-[var(--lu-text-2)]")}>{d}</div>
+                <div key={d} className={cx("py-2 text-center text-[12px] font-medium", i === 6 ? "text-[var(--lu-danger)]" : i === 5 ? "text-[var(--lu-saturday)]" : "text-[var(--lu-text-2)]")}>{d}</div>
               ))}
             </div>
             {model.weeks.map((w) => (
@@ -318,7 +318,7 @@ function MonthWeek({
             <div key={`n${d.date}`} className="pointer-events-none z-[1] flex items-center gap-1.5 px-2 pt-1" style={{ gridColumn: c + 1, gridRow: 1 }}>
               <span
                 className={cx("lu-num inline-flex h-5 min-w-5 items-center justify-center rounded-[4px] px-1 text-[12.5px] font-semibold", isToday && "bg-[var(--lu-text)] text-white")}
-                style={isToday ? undefined : { color: !d.inRange ? UI.text2 : red ? UI.danger : UI.text }}
+                style={isToday ? undefined : { color: !d.inRange ? UI.text2 : red ? UI.danger : c === 5 ? UI.saturday : UI.text }}
               >
                 {d.date.slice(8) === "01" ? `${Number(d.date.slice(5, 7))}.1` : Number(d.date.slice(8))}
               </span>
@@ -422,8 +422,8 @@ function WeekGrid({
         {week.days.map((d, c) => (
           <button key={d.date} type="button" onClick={() => onSelectDay(selectedDay === d.date ? null : d.date)} aria-pressed={selectedDay === d.date}
             className={cx("flex items-baseline justify-center gap-1.5 border-l border-[var(--lu-grid)] py-2 hover:bg-[var(--lu-hover)]", selectedDay === d.date && "shadow-[inset_0_-2px_0_var(--lu-accent)]")}>
-            <span className={cx("text-[12px]", c === 6 || d.holiday ? "text-[var(--lu-danger)]" : "text-[var(--lu-text-2)]")}>{DOW[c]}</span>
-            <span className={cx("lu-num rounded-[4px] px-1 text-[15px] font-semibold", d.date === data.today ? "bg-[var(--lu-text)] text-white" : c === 6 || d.holiday ? "text-[var(--lu-danger)]" : "text-[var(--lu-text)]")}>{Number(d.date.slice(8))}</span>
+            <span className={cx("text-[12px]", c === 6 || d.holiday ? "text-[var(--lu-danger)]" : c === 5 ? "text-[var(--lu-saturday)]" : "text-[var(--lu-text-2)]")}>{DOW[c]}</span>
+            <span className={cx("lu-num rounded-[4px] px-1 text-[15px] font-semibold", d.date === data.today ? "bg-[var(--lu-text)] text-white" : c === 6 || d.holiday ? "text-[var(--lu-danger)]" : c === 5 ? "text-[var(--lu-saturday)]" : "text-[var(--lu-text)]")}>{Number(d.date.slice(8))}</span>
           </button>
         ))}
       </div>
